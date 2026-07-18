@@ -1,0 +1,327 @@
+---
+title: "Item 31：避免默认捕获模式"
+type: A
+section: Chapter 6 · Lambda Expressions
+order: 31
+description: 对齐 Effective Modern C++ Item 31：分析默认引用捕获的悬空风险、默认值捕获隐式复制 this 指针的对象寿命风险，以及非局部静态对象并未被捕获的共享状态问题。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch06.html"
+draft: false
+---
+
+import {
+  EmcppCaptureDependencyReviewMap,
+  EmcppReferenceCaptureLifetimeFlowMap,
+  EmcppValueCaptureRealityMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-31-avoid-default-capture-modes";
+
+<Objectives>
+
+- 能分析 default capture modes（默认捕获模式）如何隐藏 closure dependencies，并复现 reference capture dangling（引用捕获悬空）
+- 能解释 `[=]` 对成员访问实际执行 value capture this pointer（值捕获 this 指针），而不是复制成员值
+- 能判断 non-local static objects（非局部静态对象）为何不被 capture，并设计显式快照或共享状态方案
+
+</Objectives>
+
+## 从“capture list 是依赖清单”开始
+
+lambda expression 产生 closure object；每个 capture 通常成为 closure class 的 data member 或间接依赖。`[&]` 和 `[=]` 看起来简洁，却把“用了哪些外部名字、按何种 ownership/lifetime policy 使用”藏在整个 body 中。
+
+<Term def="让 compiler 对所有被使用的可捕获局部变量统一选择按引用或按值，而不逐项列名的 lambda capture syntax。">
+  default capture mode
+</Term>
+
+先预测 lambda 被复制、存储并延迟调用后，各 dependency 是否仍有效。只有在创建表达式的当下读 body，无法完成 lifetime review；capture list 应像 function parameter list 一样显式说明边界。
+
+<EmcppCaptureDependencyReviewMap />
+
+## 默认引用捕获隐藏悬空条件
+
+一个过滤器工厂把 closure 存入长寿命容器：
+
+```cpp
+using FilterContainer = std::vector<std::function<bool(int)>>;
+FilterContainer filters;
+
+void addDivisorFilter() {
+    auto divisor = computeDivisor();
+    filters.emplace_back(
+        [&](int value) { return value % divisor == 0; }
+    );
+}
+```
+
+<Term def="closure 保存对外部对象的 reference，但该对象 lifetime 先结束，后续调用读取失效实体。">
+  reference capture dangling
+</Term>
+
+创建 lambda 时 divisor 有效；`emplace_back` 复制或移动 closure 并不会延长 divisor lifetime。函数返回时 local divisor 被销毁，container 中的 closure 仍保存 reference，后来调用产生 undefined behavior。
+
+<EmcppReferenceCaptureLifetimeFlowMap />
+
+## 立即调用安全不代表可存储安全
+
+```cpp
+auto divisor = computeDivisor();
+auto isDivisible = [&](int value) { return value % divisor == 0; };
+bool now = isDivisible(42); // valid while divisor lives
+```
+
+<Term def="closure 的全部调用都发生在被引用对象 lifetime 内，且 closure 不逃逸该作用域的使用约束。">
+  non-escaping reference capture
+</Term>
+
+reference capture 不是一律错误；算法接受短期 callback 且不保存它时可能合理。问题在于 `[&]` 没有指出 closure 依赖 divisor 的 lifetime，未来把 callback 放入 queue、thread、member 或 return value 时，reviewer 很难发现新 escape path。
+
+显式 `[&divisor]` 仍可能悬空，但风险至少出现在 capture list；更稳妥的是按值捕获需要的 snapshot。
+
+<Callout
+  type="trap"
+  title="陷阱：lambda 在创建时能读 divisor，所以存进 vector 也安全"
+>
+  closure storage 不会延长 referenced local 的
+  lifetime。必须比较“最后一次可能调用 closure”的时间与 divisor
+  destruction，而不是只检查 capture expression 执行时。
+</Callout>
+
+## 显式值捕获表达真正快照
+
+```cpp
+void addDivisorFilter() {
+    auto divisor = computeDivisor();
+    filters.emplace_back(
+        [divisor](int value) { return value % divisor == 0; }
+    );
+}
+```
+
+<Term def="closure 创建时复制指定 local value，使 closure data member 拥有独立 lifetime 的依赖策略。">
+  explicit value snapshot
+</Term>
+
+现在 divisor 的副本属于 closure object；closure 被复制/移动时，其 data member 也遵循正常 value semantics。capture list 同时告诉读者 filter 固化了创建时 divisor，而不是观察后续变化。
+
+若复制昂贵或需要 shared live state，可显式捕获 `shared_ptr`、reference wrapper 或 stable owner handle，并把 lifetime contract 写进类型。默认 `[&]` 不应替代 ownership design。
+
+## 默认值捕获也不是“全部做快照”
+
+`[=]` 只会 copy 可捕获的 automatic local variables。它常给人“body 中所有外部数据都冻结”的错觉；class members、global variables 和 static locals 的语义不同。
+
+<Term def="[=] 对被 odr-use 的 automatic local variables 生成值 data members，但不会复制任意可见外部状态。">
+  local-only value capture
+</Term>
+
+```cpp
+auto limit = computeLimit();
+auto below = [=](int value) { return value < limit; };
+```
+
+这里 limit 确实被复制。但把相同语法放进 member function，名字可能实际依赖 `this`。
+
+## 成员变量不是可独立捕获的 local
+
+```cpp
+class Widget {
+public:
+    void addFilter() const {
+        filters.emplace_back(
+            [=](int value) { return value % divisor_ == 0; }
+        );
+    }
+
+private:
+    int divisor_ = 1;
+};
+```
+
+<Term def="lambda body 访问 data member 时，通过隐式 this 指针定位 owning object，而不是把 member 当作 local 变量。">
+  member-through-this access
+</Term>
+
+`divisor_` 实际是 `this->divisor_`。lambda 不能单独捕获 member 名称；为了让 body 工作，compiler 将 `this` pointer 按值放进 closure。closure 拥有的是地址副本，不拥有 Widget，也没有 divisor\_ 的 snapshot。
+
+## 按值捕获 this 指针仍可能悬空
+
+<Term def="[=] 或显式 this capture 把对象地址复制进 closure，但不延长 pointee object lifetime 的行为。">
+  value-captured this pointer
+</Term>
+
+若 Widget 在 stored filter 调用前销毁，closure 中 `this` 变成 dangling pointer；若 Widget 仍活着但 divisor\_ 改变，filter 会读取新值。这两点都与“按值快照 member”的直觉相反。
+
+```cpp
+auto widget = std::make_unique<Widget>();
+widget->addFilter();
+widget.reset();
+// invoking the stored filter now dereferences a dead this pointer
+```
+
+<Callout type="trap" title="陷阱：[=] 会复制 lambda body 中读到的每个成员">
+  class data member 通过 this 访问；C++11/14 的 [=] 隐式复制 this
+  pointer，而不是 member value。对象销毁后 pointer 悬空，对象修改后读取的也是新
+  member value。
+</Callout>
+
+## 用 local snapshot 或 init capture 断开对象依赖
+
+C++11 可先复制 member 到 local，再显式捕获：
+
+```cpp
+void Widget::addFilter() const {
+    auto divisorCopy = divisor_;
+    filters.emplace_back(
+        [divisorCopy](int value) {
+            return value % divisorCopy == 0;
+        }
+    );
+}
+```
+
+C++14 可用 generalized/init capture：
+
+```cpp
+filters.emplace_back(
+    [divisor = divisor_](int value) {
+        return value % divisor == 0;
+    }
+);
+```
+
+<Term def="在 capture list 中初始化新的 closure data member，使其从 member/expression 获得独立值与名称。">
+  member init-capture snapshot
+</Term>
+
+这两种写法都让 closure 不再需要 Widget lifetime。若语义要求观察 live Widget，应显式捕获有 ownership 的 `shared_ptr`/`weak_ptr`，而不是隐式 this。
+
+## 非局部静态对象根本不会被捕获
+
+global variables、namespace-scope objects 与 static locals 具有 static storage duration，不属于 lambda 的可捕获 automatic locals：
+
+```cpp
+int globalLimit = 10;
+
+auto below = [=](int value) {
+    return value < globalLimit;
+};
+
+globalLimit = 100;
+bool result = below(50); // reads 100, not captured 10
+```
+
+<Term def="具有 static storage duration、可直接由名称访问且不进入 lambda capture data members 的全局、命名空间或 static local 对象。">
+  non-local static object
+</Term>
+
+即便 capture list 写 `[=]`，globalLimit 也没有被复制；lambda 调用时直接读取共享对象当前值。因此 default value capture 既可能隐藏 this pointer，也可能隐藏未 capture 的外部 mutable state。
+
+<EmcppValueCaptureRealityMap />
+
+## 显式快照静态状态
+
+若业务语义需要创建时快照，先将 static/global value 复制到 local，再捕获 local：
+
+```cpp
+auto limitSnapshot = globalLimit;
+auto below = [limitSnapshot](int value) {
+    return value < limitSnapshot;
+};
+```
+
+<Term def="把共享静态状态读取到 automatic local，再将该 local 值存入 closure 的两阶段冻结方法。">
+  static-state snapshot
+</Term>
+
+若业务需要 live state，则应让共享性显式，例如捕获 configuration handle 或在 body 中调用命名查询函数，并处理同步。`[=]` 不会为 concurrent global access 提供复制或 synchronization。
+
+## 显式捕获仍需做 lifetime review
+
+避免 default capture modes 不代表 `[&x]` 自动安全，也不代表 `[x]` 一定便宜。显式 capture 的价值是把 closure dependencies 收敛到一个可审查位置。
+
+<Term def="对每个 capture 检查 ownership、被捕获对象 lifetime、closure escape path、mutation visibility 与 copy/move cost 的审查过程。">
+  capture lifetime audit
+</Term>
+
+1. closure 是否 return、存入 member/container、提交线程或异步 queue？
+2. reference capture 的 referent 是否活到最后一次 invocation？
+3. value capture 是 snapshot 还是意外复制 pointer/handle？
+4. member access 是否隐式依赖 this owner？
+5. global/static state 是 live dependency 还是应物化快照？
+
+先画出 closure 与 owner 的 lifetime，再选择 capture；不要从 `[&]` 的短小或 `[=]` 的“值”字面含义直接得出安全结论。
+
+## 小结
+
+- default capture modes 隐藏 closure 使用的外部依赖及其 ownership/lifetime policy
+- `[&]` 的 reference capture dangling 常在 closure 逃逸局部作用域后发生，创建时有效并不足够
+- 显式 reference 仍需 lifetime proof；显式 value capture 可让 local snapshot 随 closure 存活
+- `[=]` 只复制可捕获 automatic locals，不代表 body 所见全部状态的快照
+- data member 通过 `this` 访问；默认值捕获实际 value capture this pointer，不复制 member value
+- copied this pointer 不延长 object lifetime，对象销毁后会悬空，对象修改后读取 live member
+- non-local static objects 不进入 capture，`[=]` lambda 仍直接读取当前 global/static state
+- 用 local/init capture 固化 member/static snapshot，并通过 capture lifetime audit 逐项验证依赖
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 31"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch06.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="default capture mode">
+    对使用到的局部变量统一按引用或按值捕获。
+  </GlossaryItem>
+  <GlossaryItem term="reference capture dangling">
+    closure 中引用晚于 referent lifetime。
+  </GlossaryItem>
+  <GlossaryItem term="non-escaping reference capture">
+    closure 不活过所引用作用域的约束。
+  </GlossaryItem>
+  <GlossaryItem term="explicit value snapshot">
+    把指定 local value 存入 closure。
+  </GlossaryItem>
+  <GlossaryItem term="local-only value capture">
+    [=] 只复制可捕获 automatic locals。
+  </GlossaryItem>
+  <GlossaryItem term="member-through-this access">
+    成员访问实际通过 owning object pointer。
+  </GlossaryItem>
+  <GlossaryItem term="value-captured this pointer">
+    closure 复制对象地址而不拥有对象。
+  </GlossaryItem>
+  <GlossaryItem term="member init-capture snapshot">
+    在 capture list 中复制成员值。
+  </GlossaryItem>
+  <GlossaryItem term="non-local static object">
+    不进入 capture 的 static-duration object。
+  </GlossaryItem>
+  <GlossaryItem term="static-state snapshot">
+    经 local value 固化共享静态状态。
+  </GlossaryItem>
+  <GlossaryItem term="capture lifetime audit">
+    逐项审查 closure 依赖和寿命。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：addDivisorFilter 用 `[&]` 把 closure 存入全局 vector。** 绘制 lifetime 并修复。
+
+<Answer question="悬空发生在哪个时间点？">
+  创建与 emplace 时 divisor 仍活着；addDivisorFilter 返回时 local divisor
+  销毁，closure 的 reference 从此悬空；后来 invocation 才触发未定义行为。若
+  filter 语义是固定创建时除数，改为 `[divisor]`
+  显式值捕获；若必须观察共享对象，则捕获具有明确 owner lifetime 的
+  handle，并证明其活到最后调用。
+</Answer>
+
+2. **问题 2：member function 内 `[=]` 使用 divisor\_。** 解释 closure 真正存了什么，并设计不依赖 Widget lifetime 的写法。
+
+<Answer question="为什么不是 divisor_ 的值副本？">
+  divisor_ 不是 local，它是 `this->divisor_`；[=] 隐式复制 this pointer。closure
+  调用时通过该 pointer 读取 live member，对象销毁后 pointer 悬空。C++11 先令
+  `auto copy=divisor_` 再 `[copy]`；C++14 用
+  `[divisor=divisor_]` init capture，让 closure data member 真正拥有 snapshot。
+</Answer>
+
+3. **问题 3：`[=]` lambda 使用 globalLimit，创建后 globalLimit 改变。** 判断结果并写出 snapshot 与 live-state 两种明确设计。
+
+  <Answer question="非局部静态对象是否进入 capture？">globalLimit 具有 static storage duration，不是可捕获 local，[=] 不复制它；lambda 调用时读取修改后的当前值。snapshot 设计先复制到 `limitSnapshot` local 并显式捕获该值；live-state 设计可直接调用命名 configuration accessor 或捕获同步 handle，使共享和线程安全策略可见，不能把 `[=]` 当同步或冻结机制。</Answer>
+</Exercises>

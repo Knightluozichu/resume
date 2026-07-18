@@ -1,0 +1,156 @@
+---
+title: "第30章 Shader的组织和复用"
+type: C
+section: "Unity 3D ShaderLab · 组织与优化"
+order: 30
+description: "沿郭浩瑜第一版正式目录掌握cginc、UsePass、关键字、multi_compile、变体爆炸。"
+demo: true
+math: true
+sourceUrl: "https://search.worldcat.org/title/Unity-3D-Shaderlab/oclc/933550649"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { Usl30OrganizationReusePipelineLab, Usl30OrganizationReuseCompareLab, Usl30OrganizationReuseEvidenceLab } from "@/components/mdx/unity-shaderlab/diagrams/usl-30-organization-reuse";
+
+<Objectives>
+- 能解释cginc、UsePass和关键字在Unity内置渲染链中的职责
+- 能实现本章最小实验，并区分Shader程序、脚本绑定与固定渲染状态
+- 能验收变体爆炸，保存画面、Frame Debugger、GPU事件和失败反例
+</Objectives>
+
+## 先预测，再观察
+
+先预测顶点、片元、深度、Draw次数或帧时间会如何变化，再只调整一个变量观察变化。把共享数学放入cginc，把稳定Pass命名后通过UsePass复用，再设计互斥关键字集合。统计multi_compile生成的变体数、实际使用数和平台差异，避免复用隐藏依赖。 本章用<Term def="保存共享函数、结构、宏和常量的Cg包含文件。">cginc</Term>、<Term def="按Shader名和Pass名复用已命名Pass的ShaderLab指令。">UsePass</Term>、<Term def="在脚本和材质中选择Shader功能分支的编译或运行开关。">关键字</Term>、<Term def="为关键字组合生成多个Shader变体的编译指令。">multi_compile</Term>、<Term def="关键字组合乘积导致构建时间、包体和加载成本快速增长。">变体爆炸</Term>建立对象、阶段、状态与证据之间的联系。
+
+<Usl30OrganizationReusePipelineLab />
+
+## 第一版权威目录定位
+
+本页一一对应郭浩瑜《Unity 3D ShaderLab开发实战详解》第一版第30章 Shader的组织和复用。书目记录确认人民邮电出版社2014年出版、ISBN 9787115338907；完整目录确认全书5篇33章。本书基于当时Unity内置渲染管线，涉及固定管线、Cg、VertexLit和Surface Shader时保留历史语境，现代Unity项目需另做版本映射。
+
+### 原章核心小节
+
+1. UnityCG.cginc
+2. 自定义cginc
+3. UsePass
+4. 自定义关键字
+5. multi_compile
+6. DX11兼容问题
+
+### 五个核心对象
+
+1. **cginc**：保存共享函数、结构、宏和常量的Cg包含文件。
+2. **UsePass**：按Shader名和Pass名复用已命名Pass的ShaderLab指令。
+3. **关键字**：在脚本和材质中选择Shader功能分支的编译或运行开关。
+4. **multi_compile**：为关键字组合生成多个Shader变体的编译指令。
+5. **变体爆炸**：关键字组合乘积导致构建时间、包体和加载成本快速增长。
+
+## 数据流与公式
+
+把共享数学放入cginc，把稳定Pass命名后通过UsePass复用，再设计互斥关键字集合。统计multi_compile生成的变体数、实际使用数和平台差异，避免复用隐藏依赖。 先画出应用脚本、材质属性、SubShader选择、Pass执行、顶点阶段、光栅化、片元阶段和固定状态的生产者到消费者链，再把本章对象放到对应位置。
+
+$$
+variants=prod options_i
+$$
+
+$$
+reuse=include(functions)+UsePass(passes)
+$$
+
+$$
+buildCostpropto variants
+$$
+
+$$
+loadedsubseteq compiled
+$$
+
+公式中的位置、方向、深度、颜色和时间必须标注空间、范围与单位。片元函数输出只是候选颜色，最终结果仍经过裁剪、深度、模板、混合、目标格式与颜色编码。
+
+## 最小实现
+
+```shaderlab
+#pragma multi_compile __ FEATURE_A FEATURE_B
+```
+
+实现顺序固定为常量输出、输入可视化、核心公式、应用侧绑定和固定状态。先确认材质没有变粉、实际SubShader和Pass正确，再判断画面差异是否来自程序计算。
+
+<Usl30OrganizationReuseCompareLab />
+
+## 脚本与材质契约
+
+```csharp
+var material = renderer.sharedMaterial;
+material.SetFloat("_DebugMode", debugMode);
+material.SetTexture("_MainTex", sourceTexture);
+Debug.Assert(material.shader.isSupported);
+```
+
+脚本侧保存Unity版本、渲染路径、相机、灯光、网格布局、材质关键字、纹理导入设置和RenderTexture格式。Shader侧列出Properties、uniform、Tags、LightMode与固定状态，二者缺一都不能复现实验。
+
+## 边界、精度与性能
+
+测试零向量、退化UV、负缩放、近远裁剪面、透明交叉、纹理边缘、相机进入体积、多光源重叠和高过度绘制。性能实验固定目标设备、分辨率、VSync和场景，先判断CPU还是GPU受限，再定位具体Draw、Pass与Shader阶段。
+
+```text
+unity: exact editor and player version
+pipeline: Built-in / named rendering path
+scene: fixed mesh, camera, lights and textures
+state: queue, depth, stencil, cull, blend and target
+evidence: reference image, frame debugger, GPU capture, CPU/GPU ms
+failure: smallest replayable counterexample
+```
+
+<Usl30OrganizationReuseEvidenceLab />
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定输入与路径"><Usl30OrganizationReusePipelineLab /></Step>
+  <Step title="逐阶段实现与比较"><Usl30OrganizationReuseCompareLab /></Step>
+  <Step title="捕获画面与性能"><Usl30OrganizationReuseEvidenceLab /></Step>
+</Stepper>
+
+1. 用最小网格和常量颜色确认Shader、SubShader、Pass与Draw可执行。
+2. 可视化位置、UV、法线、深度、模板或光照项，确认范围和空间。
+3. 打开本章核心效果，保存基线、候选、中间缓冲和参数。
+4. 构造边界与失败输入，用Frame Debugger和GPU捕获解释差异。
+
+## 验收证书
+
+证书包含源码版本、Unity与图形API、脚本绑定、资源哈希、关键字、Pass状态、参考图、GPU事件、CPU/GPU帧时间与失败反例。把每个布尔功能都做成独立关键字，十几个开关产生无法管理的变体组合。 修复后必须用同一输入重放，并指出变化发生在哪个阶段。
+
+## 常见误区
+
+<Callout type="trap" title="把语法当成执行链">把每个布尔功能都做成独立关键字，十几个开关产生无法管理的变体组合。</Callout>
+
+<Callout type="trap" title="只看最终画面">画面相似不证明实际SubShader、Pass、空间、深度、混合和性能等价。必须保存中间视图、固定状态和帧捕获。</Callout>
+
+## 本章回顾
+
+本页覆盖cginc、UsePass、关键字、multi_compile、变体爆炸。掌握标准是能画出生产者到消费者链，写出最小实现，说明脚本和材质契约，再用正确性、边界、精度与性能证据复现结论。
+
+<Exercises>
+**问题1：cginc与UsePass如何连接？**
+<Answer>保存共享函数、结构、宏和常量的Cg包含文件。 按Shader名和Pass名复用已命名Pass的ShaderLab指令。 回答时要标注实际Pass、空间和输入来源。</Answer>
+
+**问题2：怎样调试关键字？**
+<Answer>先输出常量，再把相关中间值映射为颜色或缓冲；随后核对脚本绑定、固定状态、Frame Debugger与GPU事件。</Answer>
+
+**问题3：如何验收变体爆炸？**
+<Answer>关键字组合乘积导致构建时间、包体和加载成本快速增长。 同时保存正常例、边界例、失败反例和CPU/GPU计时。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="cginc" definition="保存共享函数、结构、宏和常量的Cg包含文件。" />
+  <GlossaryItem term="UsePass" definition="按Shader名和Pass名复用已命名Pass的ShaderLab指令。" />
+  <GlossaryItem term="关键字" definition="在脚本和材质中选择Shader功能分支的编译或运行开关。" />
+  <GlossaryItem term="multi_compile" definition="为关键字组合生成多个Shader变体的编译指令。" />
+  <GlossaryItem term="变体爆炸" definition="关键字组合乘积导致构建时间、包体和加载成本快速增长。" />
+  <GlossaryItem term="可复现实验" definition="固定源码、Unity版本、渲染路径、资源、状态、设备与捕获后可再次得到同一结论的实验。" />
+</Glossary>
+
+<Attribution adaptedFrom="郭浩瑜 · Unity 3D ShaderLab开发实战详解 · 第30章 Shader的组织和复用" adaptedUrl="https://search.worldcat.org/title/Unity-3D-Shaderlab/oclc/933550649" />

@@ -1,0 +1,225 @@
+---
+title: "第6章 循环"
+type: C
+section: "たのしいRuby 第5版 · Ruby的基础"
+order: 6
+description: "按重复来源选择times、for、while、until、each或loop，掌握block作用域、Enumerator、break/next返回值与可证明终止。"
+demo: true
+math: false
+sourceUrl: "https://tanoshiiruby.github.io/5/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RubyLoopChoiceLab, RubyForEachScopeLab, RubyLoopControlLab } from "@/components/mdx/ruby-programming/diagrams/loops";
+
+<Objectives>
+
+- 能比较times、for、while、until、each和loop的驱动源、作用域、返回值与终止条件
+- 能分析break、next、redo和return离开的控制边界，并避免遗漏cleanup或无限重试
+- 能实现有界遍历、状态循环与Enumerator pipeline，并写出progress invariant和测试矩阵
+
+</Objectives>
+
+## 从“重复几次”究竟由谁决定开始
+
+循环语法看起来相近，但驱动重复的source不同：Integer决定次数，collection决定元素，condition决定是否继续，外部event决定何时break。<Term def="循环次数或下一项由计数、集合、状态条件还是外部事件提供的选择。">iteration driver contract</Term>决定最清晰的构造。
+
+先预测：处理Array时用`while index < items.length`与`items.each`有什么实质差异？前者由caller维护index与边界，后者让Array的`each`拥有 traversal；除非确实需要随机访问或跨项状态，each更少出现off-by-one和越界。
+
+## 循环的基础
+
+任何循环都要回答初始状态、每轮读取/修改什么、何时终止、异常时资源如何释放、循环expression返回什么。<Term def="每轮开始和结束都成立，并能证明状态持续向终止推进的约束。">loop progress invariant</Term>把“应该会停”变成可审查证据。
+
+Count loop的variant可以是剩余次数；逐行读取的progress来自source消耗一个record；重试循环则需要attempt上限或deadline。若找不到单调progress measure，就必须明确它是service event loop，并提供shutdown signal、backpressure和supervision。
+
+## 循环时的注意事项
+
+遍历mutable collection时修改同一结构会改变未来元素集合。删除Array元素使用`delete_if`/`reject!`等专用API，或先收集操作再提交；不要在`each`内部按index删除。Hash遍历时增删key同样可能报错或产生难推理行为。
+
+循环体打开file、socket或lock时，cleanup不能只放在正常break之后；使用block-form resource API或ensure。每轮错误是跳过、重试、终止还是累计，必须写成policy，不能笼统`rescue StandardError; next`。
+
+循环的可观测性也要有上界。逐项打印会把O(n)计算变成I/O瓶颈并淹没有效日志；记录总数、成功/跳过/失败计数、耗时分布和少量脱敏样本。长循环定期检查cancel/deadline，但检查频率本身要纳入cost。Benchmark时使用真实分布，区分iterator dispatch、block工作、allocation与I/O，不能只凭“for更像底层所以更快”下结论。
+
+批处理需要决定partial success语义：中途第501项失败时，是rollback前500项、保留并返回resume token，还是进入dead-letter集合。循环只负责重复，transaction和checkpoint属于更高层protocol；把它们明确传入，避免一个局部`next`悄悄改变业务一致性。
+
+<Callout type="trap" title="只要循环体里有break，就不会无限循环">
+Break可能位于永远不可达的branch，或依赖不会变化的状态。写出initial state、progress update和terminal predicate，并测试无匹配、异常和最大输入路径。
+</Callout>
+
+## 实现循环的方法
+
+Ruby倾向让对象提供iteration method：Integer有`times`，Range有`each`，Array/Hash实现Enumerable协议。选择method时先表达意图，再考虑performance；`map`表示一对一变换，`select`表示过滤，`reduce`表示聚合，普通`each`表示side effect traversal。
+
+```ruby
+records = %w[ready invalid ready]
+
+summary = records.each_with_object(Hash.new(0)) do |status, counts|
+  counts[status] += 1
+end
+
+p summary
+```
+
+外部accumulator可用，但`each_with_object`把owner和返回值放进调用结构。大量chain会创建intermediate collections时可用lazy Enumerator，不过要理解何时真正求值、错误在哪一步出现以及source能否重复遍历。
+
+## times方法
+
+`n.times`把0到n-1依次yield给block，返回n。n为0或负数时block不执行。<Term def="固定次数循环的index从0开始、执行恰好max(n,0)次并返回receiver。">times count contract</Term>适合重试attempt、生成固定元素和小规模实验。
+
+```ruby
+attempts = 3
+success = false
+
+attempts.times do |index|
+  puts "attempt #{index + 1}/#{attempts}"
+  success = perform_once
+  break if success
+end
+
+raise "all attempts failed" unless success
+```
+
+重试还需delay、deadline、可重试异常集合与idempotency；times只提供次数。生产代码不要无差别重试认证失败、参数错误或非幂等写入。测试第1次成功、中间成功、全部失败和执行抛异常。
+
+## for语句
+
+`for item in items`内部使用`items.each`，但loop variable不会像block parameter那样限制在block scope；循环结束后`item`仍可能在surrounding scope可见。<Term def="for循环变量复用外围local binding，而each block parameter拥有block-local作用域。">for variable scope</Term>是两种写法最容易忽略的差异。
+
+```ruby
+item = :before
+for item in [:a, :b]
+  # work
+end
+p item # :b
+
+item = :before
+[:a, :b].each do |entry|
+  # entry is block-local
+end
+p item # :before
+```
+
+Ruby社区通常偏好each，因为scope、chain和自定义Enumerable更统一；for在强调传统syntax或简单Range时仍可读。不要仅机械替换，重构时检查外围是否依赖loop variable残留值。
+
+### 普通的for语句
+
+原书区分Ruby的for与其他语言的初始化/条件/更新三段式for。Ruby没有C式`for (i=0; i<n; i++)`；该需求用`n.times`、Range each或while。先确定driver，避免把另一语言的surface syntax强搬进Ruby。
+
+<RubyForEachScopeLab />
+
+<Stepper>
+  <Step title="切换for、each、loop与Enumerator"><RubyForEachScopeLab /></Step>
+  <Step title="检查Scope">在循环前后读取同名local，记录for与block parameter对binding的影响。</Step>
+  <Step title="把Traversal变Enumerator"><RubyForEachScopeLab /></Step>
+</Stepper>
+
+## while语句
+
+`while condition`在每轮前检查；若初始falsey，body执行0次。适合状态在body中推进且终止predicate明确的场景。Assignment与condition混写容易触发误读，应先读取/转换，再判断。
+
+```ruby
+index = 0
+total = 0
+
+while index < values.length
+  total += values.fetch(index)
+  index += 1
+end
+
+p total
+```
+
+这里invariant是`0 <= index <= values.length`，variant是`values.length - index`，每轮减少1。若values在循环中增长，原证明失效；snapshot或固定上界必须写明。
+
+## until语句
+
+`until done?`在condition falsey时执行，相当于`while !done?`。适合positive终止名称，例如“直到queue为空”；复杂组合或double negative改用while加命名predicate。
+
+Polling until还需sleep/backoff和deadline，否则会busy loop占满CPU。等待外部event优先使用blocking I/O、condition variable或event API；until不是同步原语，也不能避免race。
+
+## each方法
+
+`each`由receiver定义yield什么：Array给元素，Hash通常给key/value，Range给序列值，IO给line。<Term def="receiver通过each规定yield值、顺序、终止和无block时Enumerator行为的协议。">each yield protocol</Term>支撑Enumerable的map/select/find等方法。
+
+没有block时许多each返回Enumerator，可后续`with_index`、`lazy`或由外部`next`驱动。Enumerator可能一次性消耗IO，也可能可rewind；API必须说明。不要默认任何enumerable都能求size或重复遍历。
+
+<RubyLoopChoiceLab />
+
+<Stepper>
+  <Step title="切换times、each、while与until"><RubyLoopChoiceLab /></Step>
+  <Step title="选择Driver">给固定次数、Array、socket读取、deadline重试分别写最自然构造和progress evidence。</Step>
+  <Step title="注入空输入和初始终止"><RubyLoopChoiceLab /></Step>
+</Stepper>
+
+## loop方法
+
+`loop do ... end`表达没有自然precondition的重复，通常内部用break结束。它比`while true`更Ruby化，也会在没有block时返回Enumerator。Event loop、读取直到EOF和搜索直到找到可用loop，但必须有shutdown/error path。
+
+```ruby
+result = loop do
+  line = input.gets
+  break :eof if line.nil?
+  next if line.strip.empty?
+  break line if valid?(line)
+end
+
+p result
+```
+
+Break的argument成为loop expression result，因此上例可区分`:eof`与找到的line。若只靠nil表示两种情况，caller会失去证据。
+
+## 循环控制：break与next
+
+`break`退出最近loop/iterator invocation；`next`结束当前iteration并进入下一轮；`redo`不重新获取下一项而重做当前iteration；`return`退出enclosing method。<Term def="控制语句究竟离开当前迭代、整个循环还是所在方法的层级。">control exit boundary</Term>决定cleanup和result。
+
+<RubyLoopControlLab />
+
+<Stepper>
+  <Step title="切换break、next、redo和return"><RubyLoopControlLab /></Step>
+  <Step title="画Exit层级">标出block、iterator method、outer loop与enclosing method，逐项画出控制跳转。</Step>
+  <Step title="给break加入Result"><RubyLoopControlLab /></Step>
+</Stepper>
+
+Nested loops中break只退出最近一层；需要退出多层时提取method并return、使用catch/throw的明确protocol，或重构为find组合。Redo尤其危险，必须有独立attempt/deadline变化，否则同一输入永久重跑。
+
+<Callout type="trap" title="next等价于从方法return">
+Next只跳过当前iteration，方法继续；return离开整个method。资源与transaction cleanup取决于离开的边界，重构时要测试循环后的代码是否执行。
+</Callout>
+
+## 本章回顾：按driver与exit boundary选循环
+
+1. Count、collection、condition与event对应不同iteration driver；每个循环都要有progress或shutdown证明。
+2. Times固定次数，for与each遍历receiver但变量scope不同，while/until按condition驱动。
+3. Each协议产生Enumerator并支撑Enumerable；是否有序、可重复和有size由receiver决定。
+4. Loop适合显式break的开放重复，break还可提供loop expression result。
+5. Break、next、redo与return离开不同边界；异常、cleanup和nested loop必须按边界测试。
+
+<Exercises>
+
+**问题 1：怎样证明一个while循环会终止？**
+
+<Answer>写出initial invariant和非负variant，证明每轮保持invariant且variant严格接近0，terminal predicate在0时成立。再测试空输入、最大输入、body异常和迭代中source被修改。</Answer>
+
+**问题 2：把for改成each时为何要检查作用域？**
+
+<Answer>For variable在surrounding local scope中可见并可能覆盖已有binding；each block parameter是block-local。重构前搜索循环后的同名变量读取，测试旧值、空集合和多元素集合。</Answer>
+
+**问题 3：一个读取循环怎样区分EOF、跳过空行和找到结果？**
+
+<Answer>Loop中对`gets == nil`用`break :eof`，空行用`next`，有效行用`break result`。返回Symbol/result union或value object，避免一个nil承担多种状态；测试三条exit path和I/O异常。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="iteration driver contract" definition="重复由计数、集合、条件或外部事件驱动的选择。" />
+  <GlossaryItem term="loop progress invariant" definition="每轮保持并推动状态到终止的约束。" />
+  <GlossaryItem term="times count contract" definition="Times从0 yield固定次数并返回receiver的规则。" />
+  <GlossaryItem term="for variable scope" definition="For循环变量复用外围local binding的作用域规则。" />
+  <GlossaryItem term="each yield protocol" definition="Receiver通过each规定yield与Enumerator行为的协议。" />
+  <GlossaryItem term="control exit boundary" definition="控制语句离开迭代、循环或方法的层级。" />
+</Glossary>
+
+<Attribution adaptedFrom="たのしいRuby 第5版 / Ruby基础教程（第5版），第6章 循环" adaptedUrl="https://tanoshiiruby.github.io/5/" />

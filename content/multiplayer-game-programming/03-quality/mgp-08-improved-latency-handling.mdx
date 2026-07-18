@@ -1,0 +1,228 @@
+---
+title: "第8章 改进延迟处理（Improved Latency Handling）"
+type: A
+section: "Multiplayer Game Programming · 延迟隐藏与校正"
+order: 8
+description: "插值、客户端预测、服务器校正和回滚分别解决不同观察者的时间问题，组合时必须保留权威历史和输入序号。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/multiplayer-game-programming-architecting-networked-9780134034331"
+draft: false
+---
+
+import {
+  Mgp08ImprovedLatencyHandlingMapLab,
+  Mgp08ImprovedLatencyHandlingExperimentLab,
+  Mgp08ImprovedLatencyHandlingEvidenceLab,
+} from "@/components/mdx/multiplayer-game-programming/diagrams/mgp-08-improved-latency-handling";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释延迟隐藏与校正的核心机制，并把它放回全书13章与附录A的主线
+- 能比较正常、边界、失败和恢复样本，指出首个状态或时间偏离点
+- 能实现最小C++或协议实验，记录网络身份、版本、所有权与预算
+- 能设计证据回答“服务器始终裁决事实；输入序号使校正可重放；插值与回滚历史有明确时间窗口和内存上限。”是否成立
+
+</Objectives>
+
+## 直觉：先找唯一事实
+
+插值、客户端预测、服务器校正和回滚分别解决不同观察者的时间问题，组合时必须保留权威历史和输入序号。 真正的难点不是让一次理想样本跑通，而是让消息身份、世界版本、状态权威和时间预算在丢包、乱序、重复与断线后仍可解释。先预测：如果只保存最终成功画面，本页最可能隐藏哪一种分歧？
+
+<Mgp08ImprovedLatencyHandlingMapLab />
+
+## 权威目录定位
+
+本页依据 Addison-Wesley / InformIT 官方书目与官方目录样章锁定范围。英文标题用于一对一追踪，中文正文为独立教学重构；现代平台差异、安全强化和可观察性补充会明确披露：
+
+- The Dumb Terminal Client
+- Client Side Interpolation
+- Client Side Prediction
+- Server Side Rewind
+- Summary
+- Review Questions
+- Additional Readings
+
+本页逐项覆盖7个公开目录条目，并纳入同一套正常、边界、失败与恢复验收。
+
+## 核心概念与所有权
+
+<Term def="只显示服务器状态并等待权威结果、不在本地推演输入的客户端模型。">哑终端客户端</Term>、
+<Term def="在有意延迟的渲染时间上，用相邻权威快照平滑远端对象。">客户端插值</Term>、
+<Term def="本地立即应用自己的输入以隐藏到服务器往返延迟的技术。">客户端预测</Term>、
+<Term def="收到权威状态后回到确认基线并重放未确认本地输入的过程。">服务器校正</Term>、
+<Term def="按事件发生时刻查询或重建历史状态，以裁决延迟到达动作的技术。">服务器回滚</Term>。每个概念都要回答：谁创建输入，谁拥有可变状态，哪个序号或版本拒绝旧结果，断线后由谁恢复。
+
+| # | 概念 | 工程含义 |
+| -: | --- | --- |
+| 1 | 哑终端客户端 | 只显示服务器状态并等待权威结果、不在本地推演输入的客户端模型。 |
+| 2 | 客户端插值 | 在有意延迟的渲染时间上，用相邻权威快照平滑远端对象。 |
+| 3 | 客户端预测 | 本地立即应用自己的输入以隐藏到服务器往返延迟的技术。 |
+| 4 | 服务器校正 | 收到权威状态后回到确认基线并重放未确认本地输入的过程。 |
+| 5 | 服务器回滚 | 按事件发生时刻查询或重建历史状态，以裁决延迟到达动作的技术。 |
+
+## 机制拆解
+
+### 1. 先用哑终端建立延迟基线
+
+等待服务器后再显示本地动作最简单且权威清晰，但输入响应至少承担一个往返时间。这个版本是重要对照组：预测方案必须证明手感改善，同时没有改变服务器裁决和最终状态。
+
+先预测：若省略这一层，哪一个序号、所有权或时间预算会最先失真？
+
+### 2. 自身预测与远端插值解决不同问题
+
+本地玩家需要立即响应，所以预测自己的运动；远端对象没有本地输入，通常在稍晚的渲染时间上插值两个已知快照。把两者混用会造成外推爆炸，或让本地输入额外增加插值延迟。
+
+先预测：若省略这一层，哪一个序号、所有权或时间预算会最先失真？
+
+### 3. 校正和回滚都依赖有界历史
+
+客户端以服务器确认的输入序号为基线，丢弃已确认输入并重放剩余输入。服务器为命中判定保留带时间戳的历史变换，但回滚窗口必须有上限，并验证客户端时间，防止高延迟或伪造时间获得无限优势。
+
+先预测：若省略这一层，哪一个序号、所有权或时间预算会最先失真？
+
+## 六阶段证据链
+
+可操作链条是：保存输入序号 → 本地预测自身 → 缓存远端快照 → 插值显示远端 → 权威基线校正 → 历史回滚裁决。正常样本证明能力，边界样本证明预算，失败样本证明拒绝，恢复样本证明状态与资源重新收敛。
+
+<Stepper>
+  <Step title="1. 保存输入序号与本地预测自身">
+    固定协议版本、网络种子、输入序号与状态所有者，运行正常和边界样本。
+    <Mgp08ImprovedLatencyHandlingMapLab />
+  </Step>
+  <Step title="2. 缓存远端快照与插值显示远端">
+    注入延迟、抖动、丢包、重复或责任节点中断，要求在首偏离点停止。
+    <Mgp08ImprovedLatencyHandlingExperimentLab />
+  </Step>
+  <Step title="3. 权威基线校正与历史回滚裁决">
+    清除故障后重放相同输入，核对世界摘要、对象数量、消息债务与资源租约。
+    <Mgp08ImprovedLatencyHandlingEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小实现骨架
+
+以下代码是独立复现实验骨架，不复制原书代码。序号比较必须处理回绕，生产实现还需补齐平台错误、认证、容量与资源清理。
+
+```cpp
+struct NetworkEvidence {
+  std::uint32_t sequence;
+  std::uint32_t worldVersion;
+  std::uint64_t objectId;
+  double sentAtMs;
+  double appliedAtMs;
+};
+
+bool accepts(const NetworkEvidence& next, const NetworkEvidence& current) {
+  return next.objectId == current.objectId &&
+         next.worldVersion >= current.worldVersion;
+}
+```
+
+证据记录把目录、时序与状态摘要放在一起：
+
+```yaml
+book: Multiplayer Game Programming
+page: mgp-08-improved-latency-handling
+official_entries: 7
+sample: normal | boundary | failure | recovery
+protocol_version: fixed
+network_seed: fixed
+state_owner: explicit
+first_divergence: null
+```
+
+故障脚本一次只改变一个变量：
+
+```text
+baseline -> inject(delay | jitter | loss | duplicate | disconnect)
+observe -> stop_at_first_divergence
+recover -> replay_same_version_seed_and_input
+assert -> one_authority && converged_state && no_orphan_resource
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：对本地和远端对象统一使用插值缓冲，让自己的操作也平白增加延迟。** 必须保存消息序号、世界版本和首次拒绝原因，而不是只看最终画面。
+</Callout>
+
+<Callout type="trap">
+  **误区二：服务器无限信任客户端时间并无限回滚，使高延迟或伪造时间戳获得不公平命中。** 必须加入边界、失败与恢复样本，证明错误没有跨入下一阶段。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 网络与输入变化 | 预期状态 | 通过条件 |
+| --- | --- | --- | --- |
+| 正常 | 合法版本、顺序、身份与容量 | 六阶段完成 | 权威摘要与对象身份一致 |
+| 边界 | 临界延迟、抖动、回绕或满载 | 达到预算不越界 | 队列有界且无永久饥饿 |
+| 失败 | 丢包、重复、畸形、断线或节点失效 | 首偏离点停止 | 明确拒绝、回滚或接管 |
+| 恢复 | 清除故障后重放同一输入 | 收敛到正常轨迹 | 无双权威、幽灵对象和资源泄漏 |
+
+<Mgp08ImprovedLatencyHandlingEvidenceLab />
+
+本页签发不变量是：**服务器始终裁决事实；输入序号使校正可重放；插值与回滚历史有明确时间窗口和内存上限。** 单次演示、平均延迟或最终截图不能替代序号、版本、首偏离点和恢复证据。
+
+## 练习
+
+<Exercises>
+
+**问题 1** 为什么不能只以最终世界状态正确作为验收？
+
+<Answer>
+  最终状态会隐藏重复副作用、旧版本覆盖、瞬时双权威和资源泄漏。必须比较消息序号、对象身份、状态所有者、时间预算与首偏离点。
+</Answer>
+
+**问题 2** 如何把本页公开目录变成可执行学习证据？
+
+<Answer>
+  先按公开顺序建立目录追踪表，再为每个主题写出输入、状态、输出、失败与恢复条件。本页重点包括：The Dumb Terminal Client、Client Side Interpolation、Client Side Prediction、Server Side Rewind、Summary、Review Questions；其余条目已在上方逐项列出并纳入验收。
+</Answer>
+
+**问题 3** 本页的最小通过条件是什么？
+
+<Answer>
+  服务器始终裁决事实；输入序号使校正可重放；插值与回滚历史有明确时间窗口和内存上限。 并且相同协议版本、网络种子和输入可重放正常、边界、失败与恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **哑终端客户端**：只显示服务器状态并等待权威结果、不在本地推演输入的客户端模型。
+- **客户端插值**：在有意延迟的渲染时间上，用相邻权威快照平滑远端对象。
+- **客户端预测**：本地立即应用自己的输入以隐藏到服务器往返延迟的技术。
+- **服务器校正**：收到权威状态后回到确认基线并重放未确认本地输入的过程。
+- **服务器回滚**：按事件发生时刻查询或重建历史状态，以裁决延迟到达动作的技术。
+- 六阶段机制链已经映射到正常、边界、失败和恢复证据。
+- 官方目录逐项追踪，现代补充不会冒充原书正式分节。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="哑终端客户端">只显示服务器状态并等待权威结果、不在本地推演输入的客户端模型。</GlossaryItem>
+  <GlossaryItem term="客户端插值">在有意延迟的渲染时间上，用相邻权威快照平滑远端对象。</GlossaryItem>
+  <GlossaryItem term="客户端预测">本地立即应用自己的输入以隐藏到服务器往返延迟的技术。</GlossaryItem>
+  <GlossaryItem term="服务器校正">收到权威状态后回到确认基线并重放未确认本地输入的过程。</GlossaryItem>
+  <GlossaryItem term="服务器回滚">按事件发生时刻查询或重建历史状态，以裁决延迟到达动作的技术。</GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Josh Glazer、Sanjay Madhav 著，Addison-Wesley Professional，第一版，2015年10月出版、版权年2016，384页，eBook ISBN 9780134034331，印刷版 ISBN 9780134034300；InformIT官方书目与官方Pearson目录样章确认13章、附录A及112个公开目录条目。正文为独立教学重构。"
+  adaptedUrl="https://www.informit.com/store/multiplayer-game-programming-architecting-networked-9780134034331"
+/>

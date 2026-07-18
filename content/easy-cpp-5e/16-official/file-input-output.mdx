@@ -1,0 +1,232 @@
+---
+title: "Lesson 16：文件输入输出"
+type: A
+section: Easy C++（第5版）· 持久化与流
+order: 16
+description: 对齐原书 Lesson 16「ファイルの入出力」：掌握 ifstream/ofstream、路径、打开模式、格式化与逐行读取、流状态、资源关闭和往返校验。
+demo: false
+math: false
+sourceUrl: "https://www.sbcr.jp/product/4797392593/"
+draft: false
+---
+
+import {
+  EcpFileIoPipelineMap,
+  EcpFileIoRoundTripLab,
+  EcpFileIoStateFlow,
+} from "@/components/mdx/easy-cpp-5e/diagrams/file-input-output";
+
+<Objectives>
+
+- 能解释文件路径、打开模式、文件流、缓冲区与磁盘内容之间的关系
+- 能实现文本文件写入、格式化读取和逐行解析，并检查每次打开与转换状态
+- 能设计往返、缺失文件、权限失败、截断与追加实验，区分 EOF、格式错误和 I/O 错误
+
+</Objectives>
+
+## 为什么文件成功打开只是第一项证据
+
+终端输入输出与文件输入输出都使用流模型，但文件增加了路径、权限、打开模式、持久化和外部修改。程序能构造一个流对象，不代表路径正确、写入已落盘或内容格式符合读取契约。
+
+<Term def="文件系统中可持久保存字节序列的命名资源；程序通过路径和打开模式访问。">文件</Term>
+
+<Term def="把文件字节序列接入 C++ 流接口的对象，输入流读取，输出流写入。">文件流</Term>
+
+文件 I/O 的证据链至少包含：解析后的路径、打开结果、每次格式化操作状态、关闭/刷新结果、重新读取后的内容。只看“程序没报错”无法证明数据完整。
+
+<EcpFileIoPipelineMap />
+
+## ofstream 把值格式化为文件字符
+
+`std::ofstream` 用于输出文件。构造时传路径会尝试打开；成功后 `<<` 与 cout 类似，把值格式化为字符写入流缓冲区。
+
+<Term def="面向文件写入的输出流类型，通常由 std::ofstream 表示。">文件输出流</Term>
+
+```cpp
+#include <fstream>
+
+std::ofstream output{"scores.txt"};
+if (!output) {
+    std::cerr << "cannot open scores.txt for writing\n";
+    return 1;
+}
+
+output << "Mina 92\n";
+output << "Kai 85\n";
+```
+
+流对象离开作用域会关闭文件，关闭前缓冲数据会尝试写出。对关键数据，还应在写后检查 `output` 状态；磁盘满、设备错误等可能在打开成功后才发生。
+
+## 打开模式决定保留还是覆盖旧内容
+
+输出流默认通常创建文件并截断旧内容。`std::ios::app` 让每次写入追加到末尾，`std::ios::binary` 禁止某些平台文本转换，`std::ios::in/out` 指明读写方向。
+
+<Term def="打开文件时指定读写方向、追加、截断、二进制等行为的标志组合。">打开模式</Term>
+
+```cpp
+std::ofstream log{"events.log", std::ios::app};
+if (!log) {
+    return 1;
+}
+log << "application started\n";
+```
+
+追加适合日志，不适合需要原子替换的配置。更新关键文件时，常见策略是写临时文件、确认成功后再重命名，避免进程中断留下半份内容。
+
+<Callout type="trap" title="陷阱：ofstream 默认会保留旧内容并从末尾继续写">
+  默认输出模式通常会截断已有文件。需要追加必须显式 `ios::app`；运行破坏性实验前使用临时目录，并先记录预期旧内容是否保留。
+</Callout>
+
+## ifstream 从文件字符解析目标类型
+
+`std::ifstream` 用于读取。格式化提取 `>>` 跳过前导空白，并按目标类型解析；读取失败可能是正常 EOF、格式不匹配或底层 I/O 错误。
+
+<Term def="面向文件读取的输入流类型，通常由 std::ifstream 表示。">文件输入流</Term>
+
+```cpp
+std::ifstream input{"scores.txt"};
+if (!input) {
+    std::cerr << "cannot open scores.txt for reading\n";
+    return 1;
+}
+
+std::string name;
+int score = 0;
+while (input >> name >> score) {
+    std::cout << name << ": " << score << '\n';
+}
+```
+
+循环把“完整读取一条 name/score 记录”作为继续条件。若文件末尾正常结束，提取失败使循环停止；若中间出现 `Kai unknown`，也会停止，但原因是格式错误。退出后应检查 `input.eof()` 与 `input.bad()`，并记录当前记录号。
+
+## getline 读取整行，解析器处理字段
+
+名字可能含空格时，`>> name` 只读一个词。可以先用 `std::getline` 取得原始行，再用 `std::istringstream` 或明确分隔规则解析。
+
+```cpp
+#include <sstream>
+
+std::string line;
+int lineNumber = 0;
+while (std::getline(input, line)) {
+    ++lineNumber;
+    std::istringstream record{line};
+
+    std::string name;
+    int score = 0;
+    if (!(record >> name >> score)) {
+        std::cerr << "invalid record at line " << lineNumber << '\n';
+        continue;
+    }
+}
+```
+
+保留原始行与行号能给出可定位错误。若格式允许空格、转义和引号，应使用 CSV/JSON 等成熟解析器，而不是用空格切分冒充完整格式。
+
+## 流状态是一组可查询事实
+
+流维护 good、eof、fail、bad 等状态，用于区分正常结束、格式失败和输入输出错误。`fail` 表示上一次格式化或操作失败，`bad` 表示更严重的底层错误，`eof` 表示尝试读取时到达文件末尾。它们可能同时成立。
+
+<Term def="文件流记录最近操作是否成功、是否到达末尾及是否发生格式或底层错误的标志集合。">流状态</Term>
+
+<EcpFileIoStateFlow />
+
+不要写 `while (!input.eof())` 再读取：EOF 只有在一次读取尝试越过末尾后才设置，这种结构常多处理一次旧值。应把读取操作本身放进条件：`while (input >> value)` 或 `while (getline(input,line))`。
+
+<Callout type="trap" title="陷阱：while (!eof()) 能保证每轮都有新记录">
+  eof 在失败读取后才出现，循环体可能使用上轮残留值。让“成功读到完整记录”成为循环条件，退出后再区分正常 EOF 与其他失败。
+</Callout>
+
+## 相对路径取决于进程工作目录
+
+`"scores.txt"` 不是相对源文件，而是相对程序运行时当前工作目录。IDE、测试工具和终端可能设置不同目录，导致“本机能用、换入口找不到”。
+
+```cpp
+#include <filesystem>
+
+std::cout << std::filesystem::current_path() << '\n';
+```
+
+诊断路径问题时输出解析后的绝对路径。生产程序应从命令行、配置或平台目录 API 获得路径，不要假设可执行文件旁边总可写。
+
+## 文本格式需要版本与边界规则
+
+把两列写成 `name score` 看似简单，但名字含空格、分隔符、换行或非法编码时如何处理？文件契约应规定字段顺序、分隔/转义、数值范围、字符编码和版本。
+
+解析后仍要验证业务约束，例如 score 在 0 到 100；成功转成 int 只证明语法像整数。未知字段是拒绝、忽略还是保留，也应由兼容策略决定。
+
+## 写入完成不等于永久落盘
+
+`flush` 把 C++ 流缓冲提交给操作系统，`close` 结束文件句柄，但操作系统和硬件仍可能缓存。普通练习无需手工调用系统同步；关键事务则要使用数据库、原子替换和平台持久化协议。
+
+显式 `output.close()` 后可以检查状态，适合在同一作用域立即重新打开文件。更常见的做法是缩小流对象作用域，让 RAII 自动关闭，再进入读取阶段。
+
+## 二进制文件不是直接 dump 任意对象
+
+二进制模式只改变流的文本转换行为，不会自动定义对象序列化格式。直接写类对象内存会携带 padding、字节序、指针值和编译器布局，跨版本不可移植。
+
+稳定二进制格式应逐字段编码，规定字节序、长度和版本，并验证输入大小。需要成熟兼容性时使用经过验证的序列化库或格式。
+
+## 往返测试验证写入与读取契约一致
+
+<EcpFileIoRoundTripLab />
+
+先预测写入两条记录后文件的确切文本，再关闭、重新打开、解析到新对象，比较字段。然后分别测试空文件、缺失文件、非法分数、半条记录和追加模式，确认每个失败路径有明确分类。
+
+## 三步建立文件证据链
+
+<Stepper>
+  <Step title="第一步：固定路径、模式与格式">
+    写出解析后路径、覆盖/追加策略、字段顺序、编码和范围；打开后立即检查流，并限制文件对象作用域。
+
+    <EcpFileIoPipelineMap />
+  </Step>
+  <Step title="第二步：让读取驱动循环">
+    用成功提取完整记录或 getline 成功作为条件，保留行号；退出后区分 EOF、格式失败和 bad I/O。
+
+    <EcpFileIoStateFlow />
+  </Step>
+  <Step title="第三步：做往返与故障实验">
+    先预测确切文件内容，再写入、关闭、重读并比较；覆盖缺失、权限、截断、追加、非法字段和半记录。
+
+    <EcpFileIoRoundTripLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 文件流把持久字节资源接入流接口，路径、模式、状态与格式都是契约的一部分
+- ofstream 默认可能截断，追加需显式 app；关键替换应考虑临时文件和原子重命名
+- ifstream 的格式化读取会因 EOF、格式或底层错误停止，读取操作本身应作为循环条件
+- 相对路径基于工作目录，格式转换成功后仍要验证字段范围与跨字段不变量
+- 往返测试连接写入与读取，二进制模式不等于可移植对象序列化
+
+<Exercises>
+  1. **问题 1：判断模式。** 默认 ofstream 与 ios::app 对已有文件分别有什么风险和用途？
+
+  <Answer question="默认输出和追加模式如何选择？">默认输出通常截断旧内容，适合完整重写但可能意外丢数据；ios::app 保留旧内容并在末尾追加，适合日志。关键配置更新应写临时文件、验证后原子替换，而不是直接覆盖半成品。</Answer>
+
+  2. **问题 2：修正循环。** 为什么 `while(!input.eof())` 会多处理旧值，正确结构是什么？
+
+  <Answer question="文件读取循环为何应以读取成功为条件？">eof 在一次读取尝试失败后才设置，循环先检查会进入多余一轮并使用旧值。写 `while(input >> value)` 或 `while(getline(input,line))`，只有成功产生新记录才执行循环体，退出后再分类状态。</Answer>
+
+  3. **问题 3：设计往返。** 两条姓名/分数记录的最小往返测试包含哪些证据？
+
+  <Answer question="文件往返测试应验证什么？">固定临时绝对路径和模式，预测确切文本；写入后检查状态并关闭；重新打开解析为新对象，比较记录数、字段和值；再测试空、半记录、非法分数和缺失文件，确认错误分类。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="文件">文件系统中持久保存字节序列的命名资源。</GlossaryItem>
+  <GlossaryItem term="文件流">把文件字节连接到 C++ 流接口的对象。</GlossaryItem>
+  <GlossaryItem term="文件输出流">用于格式化并写入文件的 std::ofstream。</GlossaryItem>
+  <GlossaryItem term="打开模式">指定读写、追加、截断和二进制行为的标志。</GlossaryItem>
+  <GlossaryItem term="文件输入流">用于从文件读取并解析值的 std::ifstream。</GlossaryItem>
+  <GlossaryItem term="流状态">记录成功、EOF、格式失败与底层错误的状态集合。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="やさしいC++ 第5版, Lesson 16 ファイルの入出力"
+  adaptedUrl="https://www.sbcr.jp/product/4797392593/"
+/>

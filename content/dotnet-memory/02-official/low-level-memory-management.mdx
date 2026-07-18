@@ -1,0 +1,200 @@
+---
+title: "Chapter 2：底层内存管理（Low-Level Memory Management）"
+type: A
+section: Pro .NET 内存管理（第2版）· 硬件与操作系统约束
+order: 2
+description: 对齐原书第 2 章：沿着虚拟地址、页表、物理页和 CPU 缓存的访问链，理解保留、提交、驻留、局部性与缓存行如何约束 .NET GC 的分段和压缩设计。
+demo: false
+math: false
+sourceUrl: "https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_2"
+draft: false
+---
+
+import {
+  DnmAddressTranslationMap,
+  DnmCacheLocalityLab,
+  DnmReserveCommitLab,
+} from "@/components/mdx/dotnet-memory/diagrams/low-level-memory-management";
+
+<Objectives>
+
+- 能描述一个进程虚拟地址经过 TLB、页表、物理页和 CPU 缓存到达数据的路径，并判断页缺失与缓存未命中的责任层
+- 能比较连续、跨行和离散访问触达的缓存行数量，分析空间局部性、预取与数据布局对托管代码吞吐的影响
+- 能区分地址空间保留、内存提交和页面驻留三种口径，解释为什么虚拟大小、提交量与工作集不能互相替代
+
+</Objectives>
+
+## 为什么 GC 设计离不开硬件和操作系统
+
+托管运行时屏蔽了手动释放，却没有创造一套脱离计算机的内存。对象地址仍要被 CPU 翻译，页面仍由操作系统映射，数据仍按缓存行进入核心。GC 需要向操作系统申请大块地址空间、提交可用页面、扫描对象图、读取对象头，并在压缩时移动存活对象；每一步都会受到分页、内存带宽和缓存层次的约束。
+
+<Term def="操作系统为进程提供的逻辑地址视图；同一数值在不同进程可映射到不同物理页，连续虚拟区间也不要求物理页连续。">虚拟内存</Term>
+
+本章的目标不是让应用开发者重写内存管理器，而是让高层症状能落到正确层：地址空间不足不一定等于 RAM 用完，已提交不一定等于当前驻留，缓存未命中也不一定与 GC 次数相关。只有先区分这些机制，后续的 GC 分区、分配和压缩策略才有因果解释。
+
+<DnmAddressTranslationMap />
+
+## 虚拟地址由页号和页内偏移组成
+
+<Term def="虚拟内存与物理内存映射的固定粒度单元；页表把虚拟页号映射到物理页框，并附带权限和驻留状态。">内存页</Term>
+
+CPU 发出的地址通常可以拆成虚拟页号和页内偏移。页大小决定低位中有多少位原样保留；页表只需把高位的虚拟页号翻译成物理页框号，再拼回原偏移。连续的两个虚拟页可以映射到完全不相邻的物理页，因此进程获得连续对象区间，并不要求系统先找到同样大的连续 RAM。
+
+```text
+virtual address = [ virtual page number | page offset ]
+                         page table lookup       │ unchanged
+physical address = [ physical frame number | page offset ]
+```
+
+<Term def="CPU 缓存近期虚拟页到物理页翻译结果的硬件结构；命中可避免重复遍历多级页表。">TLB</Term>
+
+直接为每次读取遍历多级页表成本太高，CPU 使用 TLB 缓存最近的翻译。TLB 未命中不代表页面不存在：硬件或操作系统可以完成页表遍历并填充 TLB。只有页表表明页面未映射、未驻留或权限不允许时，才进入页错误处理；操作系统可能建立映射、从文件/交换区调页，或把非法访问转成进程异常。
+
+<Callout type="trap" title="陷阱：把 TLB miss、page fault 和 cache miss 当成同一件事">
+  TLB miss 是地址翻译缓存未命中，page fault 是页表状态要求操作系统介入，cache miss 是目标数据未在当前 CPU 缓存层。三者可能连锁发生，但证据、代价和优化手段不同，不能用一个“内存慢”概括。
+</Callout>
+
+## 保留、提交与驻留是三个不同承诺
+
+<Term def="在进程虚拟地址空间中占用一段范围，防止其他映射使用；仅保留地址通常还没有为每一页承诺后备存储。">地址空间保留</Term>
+
+运行时可以先保留较大的连续虚拟区间，再按需要提交其中一部分。保留解决的是“未来能否维持连续地址布局”；提交表示操作系统承诺这些页面可以获得 RAM 或等价后备存储；驻留表示页面此刻实际位于物理内存工作集中。平台 API 和统计名称不同，但这三个层次的包含关系很重要。
+
+<Term def="操作系统承诺为一段虚拟页提供可用后备存储，使进程能够合法访问；提交页面当前仍可能不驻留在 RAM。">内存提交</Term>
+
+<Term def="一个进程当前实际驻留在物理内存中的页面集合；工作集会随访问、系统压力和页面置换动态变化。">工作集</Term>
+
+<DnmReserveCommitLab />
+
+假设运行时保留 4 GB、提交 1 GB、当前驻留 640 MB：不能说程序“已经使用 4 GB RAM”，也不能说未驻留的 384 MB 已提交页面完全免费。保留量消耗地址空间，提交量消耗系统承诺，驻留量参与当前 RAM 竞争。诊断时必须记录工具展示的是哪一种口径。
+
+64 位进程拥有很大的虚拟地址空间，使 GC 能保留大段区域并逐步提交，但地址空间仍会受平台限制、映射碎片、容器与运行时策略影响。32 位进程则更容易先撞到连续虚拟区间或地址空间上限，即使机器还有可用物理内存。
+
+```csharp
+using System.Diagnostics;
+
+using Process process = Process.GetCurrentProcess();
+process.Refresh();
+
+Console.WriteLine($"working set: {process.WorkingSet64:N0}");
+Console.WriteLine($"private bytes: {process.PrivateMemorySize64:N0}");
+Console.WriteLine($"virtual size: {process.VirtualMemorySize64:N0}");
+```
+
+这三个跨平台属性来自操作系统进程统计，语义和可用精度可能随平台不同；它们也不等于 GC 托管堆大小。它们的教学意义是迫使观察者注明口径。要解释 .NET 堆，应把进程指标与 GC committed、heap size、fragmentation 和各代大小放在同一时间窗口，而不是挑一个最大数字下结论。
+
+## 缓存层次把“读一个字段”变成“搬一条线”
+
+<Term def="CPU 以固定粒度在内存与缓存间传输的连续字节块；现代通用处理器常见 64 字节，但目标平台应以实测或文档为准。">缓存行</Term>
+
+CPU 核心远快于主内存。L1 缓存容量小、延迟低，L2 更大更慢，最后级缓存通常由多个核心共享，再往外才是 DRAM。应用访问一个 8 字节字段时，硬件通常把包含它的整条缓存行带入缓存；随后访问邻近字段可能命中同一行，访问遥远或随机地址则更容易触发新的缓存行传输。
+
+<Term def="程序在短时间内重复访问相同数据或相邻地址的倾向；时间局部性复用旧数据，空间局部性利用同一缓存行中的邻近数据。">数据局部性</Term>
+
+<DnmCacheLocalityLab />
+
+图中的 `long` 是 8 字节，假定缓存行是 64 字节，因此连续读 64 个元素理论上只覆盖 8 条线；步长为 8 个元素时，每次恰好跨到下一条线，64 次读取覆盖 64 条线。离散访问还会削弱硬件预取。真实结果受缓存容量、替换、对齐、预取器和并发干扰影响，必须用目标硬件基准验证。
+
+```csharp
+static long SumRows(long[,] matrix)
+{
+    long sum = 0;
+    for (int row = 0; row < matrix.GetLength(0); row++)
+        for (int col = 0; col < matrix.GetLength(1); col++)
+            sum += matrix[row, col];
+    return sum;
+}
+
+static long SumColumns(long[,] matrix)
+{
+    long sum = 0;
+    for (int col = 0; col < matrix.GetLength(1); col++)
+        for (int row = 0; row < matrix.GetLength(0); row++)
+            sum += matrix[row, col];
+    return sum;
+}
+```
+
+.NET 多维数组按行优先布局，`SumRows` 的内层循环连续推进最后一个维度，通常比按列跨越整行更有空间局部性。但不要只凭源码宣布快多少：先预热 JIT，使用足够大的矩阵，隔离分配，重复采样并检查结果一致。否则 JIT、计时噪声和死代码消除都可能伪造结论。
+
+## 指令缓存和间接调用也参与成本
+
+数据不是唯一进入缓存的内容。JIT 生成的机器码进入指令缓存；热路径调用少量紧凑方法，更容易保留在 L1 指令缓存。大量间接/虚调用、分散的冷分支和过度膨胀的生成代码可能增加指令获取与分支预测压力。原书把这一点连接到运行时设计：GC 自身也要在有限暂停预算内执行大量高度优化的扫描循环。
+
+不过，“虚调用会 miss”不是逐次确定规律。现代 JIT 可以内联、去虚拟化和基于类型反馈优化；CPU 也有分支预测与间接目标预测。正确做法是把调用结构当作假设，再用反汇编、硬件计数器和基准确认，而不是为了缓存直觉提前破坏接口设计。
+
+<Callout type="trap" title="陷阱：为了局部性把所有代码改成数组和大方法">
+  局部性是性能约束，不是取消抽象的许可证。先用剖析定位热路径，再在保持正确性和可维护性的前提下调整数据布局、批处理或虚调用边界；冷路径的微观布局通常不值得牺牲清晰契约。
+</Callout>
+
+## 这些底层约束如何塑造 .NET GC
+
+理解硬件之后，GC 的若干设计选择就不再像任意规则：
+
+1. **大段保留、按需提交**：减少频繁向操作系统申请小块内存，并为连续托管堆布局留下空间。
+2. **快速顺序分配**：在线性区域移动分配指针，比每次向通用系统分配器请求对象更便宜。
+3. **压缩存活对象**：消除部分碎片的同时，让相近分配的对象重新靠拢，可能改善后续遍历局部性。
+4. **分代假设**：频繁只扫描较小的年轻区域，避免每次都读取整个长期存活集合。
+5. **并行 GC**：利用多个核心处理不同堆区域，但最终仍受共享内存带宽限制，核心数翻倍不会保证速度翻倍。
+
+这些是动机，不是所有版本和模式下的完整实现。第 5 章会介绍 SOH、LOH、POH 与堆段，第 6 章解释分配上下文，第 7–11 章再进入触发、标记、计划、压缩和不同 GC 模式。
+
+## 三步定位底层责任层
+
+<Stepper>
+  <Step title="第一步：沿地址翻译链定位">
+    从虚拟地址开始，依次区分 TLB 命中、页表映射、页面驻留和数据缓存。先预测异常发生在哪一层，再选择页错误、TLB 或缓存计数器验证。
+
+    <DnmAddressTranslationMap />
+  </Step>
+  <Step title="第二步：用缓存行审查访问模式">
+    把元素大小、访问步长和缓存行宽度写出来，估算每轮触达多少条线；再对连续、跨行和离散模式做同负载基准，避免只凭大 O 或源码形状判断。
+
+    <DnmCacheLocalityLab />
+  </Step>
+  <Step title="第三步：给每个内存数字标口径">
+    同时记录虚拟保留、系统提交、当前工作集与 GC 堆指标。观察变化方向和时间窗口，再判断是地址空间、系统承诺、页面置换还是托管对象保留问题。
+
+    <DnmReserveCommitLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 虚拟地址通过 TLB 和页表映射到物理页，页内偏移保持不变；TLB miss、page fault 与 cache miss 属于不同责任层
+- 地址空间保留、内存提交和当前工作集描述三种不同承诺，任何单一进程数字都不能直接等同于 GC 堆或 RAM 消耗
+- CPU 以缓存行为数据传输粒度，连续布局和稳定访问顺序通常能提高空间局部性与预取效果
+- 指令缓存、间接调用和共享内存带宽同样约束运行时，但优化结论必须由目标平台上的基准与计数器证明
+- GC 的大段保留、按需提交、顺序分配、压缩和分代策略，都可以从操作系统与硬件成本得到设计动机
+
+<Exercises>
+  1. **问题 1：区分三类未命中。** 一个托管数组读取变慢，采样显示 TLB miss 上升，但 page fault 基本不变。能否断言数据被换出到磁盘？下一步看什么？
+
+  <Answer question="TLB miss 上升为什么不等于页面换出？">不能。TLB miss 只表示地址翻译缓存没有对应条目，页表遍历后页面仍可能正常驻留；page fault 不变反而不支持频繁调页。下一步检查工作集跨度、页大小、访问随机性、数据缓存 miss 和硬件预取，再用同负载基准判断访问布局。</Answer>
+
+  2. **问题 2：解释三个内存数字。** 进程显示虚拟大小 8 GB、private bytes 1.5 GB、working set 900 MB，为什么不能说它占了 8 GB RAM？
+
+  <Answer question="虚拟大小、提交/私有量和工作集如何区分？">虚拟大小包含保留或映射的地址范围，不要求全部获得物理页；private bytes 更接近进程私有提交承诺，但平台语义需核对；working set 才描述当前驻留页面。还要单独看 GC 堆提交与保留，三个数字不能互相替代。</Answer>
+
+  3. **问题 3：预测缓存行。** 假设 `long` 为 8 字节、缓存行为 64 字节，连续读取 64 个元素与每隔 8 个元素读取 64 次，理想情况下分别至少触达多少条缓存行？
+
+  <Answer question="如何从元素宽度和步长估算缓存行数？">一条 64 字节线容纳 8 个 long，连续 64 个元素覆盖至少 8 条线；步长 8 个元素恰好每次跨一条线，64 次覆盖至少 64 条线。实际还受起始对齐、缓存容量和预取影响，估算用于提出可测假设。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="虚拟内存">由操作系统提供、通过页表映射到物理存储的进程逻辑地址空间。</GlossaryItem>
+  <GlossaryItem term="内存页">虚拟到物理映射的固定粒度单元。</GlossaryItem>
+  <GlossaryItem term="TLB">缓存近期虚拟页到物理页翻译的 CPU 结构。</GlossaryItem>
+  <GlossaryItem term="地址空间保留">占用虚拟地址范围而不必立即为每页提交后备存储。</GlossaryItem>
+  <GlossaryItem term="内存提交">操作系统承诺虚拟页可获得 RAM 或等价后备存储。</GlossaryItem>
+  <GlossaryItem term="工作集">进程当前驻留在物理内存中的页面集合。</GlossaryItem>
+  <GlossaryItem term="缓存行">CPU 在主存与缓存层之间传输数据的连续字节块。</GlossaryItem>
+  <GlossaryItem term="数据局部性">短时间内复用相同数据或访问邻近地址的倾向。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Pro .NET Memory Management, Second Edition, Chapter 2 Low-Level Memory Management"
+  adaptedUrl="https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_2"
+/>

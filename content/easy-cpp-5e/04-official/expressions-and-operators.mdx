@@ -1,0 +1,191 @@
+---
+title: "Lesson 4：表达式与运算符"
+type: A
+section: Easy C++（第5版）· 基础语法
+order: 4
+description: 对齐原书 Lesson 4「式と演算子」：从操作数、运算符和结果建立表达式模型，掌握算术、赋值、优先级、结合性、整数除法与类型转换。
+demo: false
+math: false
+sourceUrl: "https://www.sbcr.jp/product/4797392593/"
+draft: false
+---
+
+import {
+  EcpExpressionsConversionLab,
+  EcpExpressionsEvaluationMap,
+  EcpExpressionsPrecedenceFlow,
+} from "@/components/mdx/easy-cpp-5e/diagrams/expressions-and-operators";
+
+<Objectives>
+
+- 能解释表达式中操作数、运算符、类型和结果值的关系
+- 能为混合算术表达式绘制分组树，区分优先级、结合性与求值顺序
+- 能分析并预测整数除法、余数、复合赋值和显式转换的结果与信息损失
+
+</Objectives>
+
+## 为什么一行算式也需要结构图
+
+`total = price * count + fee;` 看起来像从左到右读的一行文字，编译器却必须先确定每个符号作用于哪些值、子表达式产生什么类型、最终结果如何转换并写回变量。表达式的意义来自语法分组和类型规则，不来自空格，也不总等于人眼的阅读顺序。
+
+写成 `price*count+fee`、`price * count + fee` 或加入更多空格，语法分组都不会变化；空格只服务读者。括号能改变或强调分组，中间变量则进一步为子结果命名并提供观察点。三者职责不同：排版改善可读性，括号表达结构，命名把结构连接到业务含义。审查公式时应先画出分组，再逐个确认类型，最后才讨论结果数值。
+
+<Term def="由字面量、变量、函数调用和运算符组合而成，可计算出一个值、对象或副作用的程序结构。">表达式</Term>
+
+<Term def="参与运算的值或子表达式，例如 a + b 中的 a 与 b。">操作数</Term>
+
+<Term def="规定对一个或多个操作数执行何种操作的符号或关键字。">运算符</Term>
+
+<EcpExpressionsEvaluationMap />
+
+## 算术运算首先受操作数类型约束
+
+算术运算符中的加、减、乘、除和余数分别使用 `+ - * / %`。两个 `int` 相除执行整数除法，小数部分被截去；只要运算前至少一个操作数是浮点类型，通常会进行浮点除法。
+
+```cpp
+int a = 7;
+int b = 2;
+
+int whole = a / b;           // 3
+int remainder = a % b;       // 1
+double ratio1 = a / b;       // 3.0：先整数除法
+double ratio2 = 1.0 * a / b; // 3.5：先转为浮点运算
+```
+
+变量 `ratio1` 是 `double`，并不意味着右侧倒回去使用浮点除法。赋值目标只在右侧表达式已经算出后接收转换结果；`a / b` 先得到整数 3，再转换成 3.0。必须在运算发生前改变操作数类型。
+
+<Callout type="trap" title="陷阱：结果变量是 double，所以除法自动保留小数">
+  右侧子表达式按自身操作数类型计算，左侧类型不会重写已经发生的整数除法。先让至少一个操作数成为 `double`，再执行 `/`。
+</Callout>
+
+## 优先级决定默认分组
+
+乘除通常比加减优先，所以 `2 + 3 * 4` 被分组为 `2 + (3 * 4)`，结果是 14。括号可以显式改变分组，`(2 + 3) * 4` 得 20。代码涉及业务公式时，即使默认优先级正确，也可以用少量括号表达意图。
+
+<Term def="当表达式没有括号时，决定不同运算符先形成哪个子表达式的语法规则。">运算符优先级</Term>
+
+```cpp
+double subtotal = unitPrice * quantity;
+double discount = subtotal * discountRate;
+double payable = subtotal - discount + shipping;
+```
+
+把中间概念命名往往比一行超长表达式更好：可逐步打印、复用和验证，也不会迫使读者同时记忆多层优先级。括号解决语法分组，命名还解决领域含义。
+
+<EcpExpressionsPrecedenceFlow />
+
+## 结合性只处理同层分组
+
+当相同优先级运算符连续出现，结合性决定默认分组。例如减法左结合：`10 - 3 - 2` 等价于 `(10 - 3) - 2`，结果为 5；赋值右结合：`a = b = 0` 等价于 `a = (b = 0)`。
+
+结合性不等于操作数一定按相同方向求值。优先级和结合性是语法树规则，求值顺序是运行时何时计算各子表达式的规则。初学阶段最安全的做法是避免在同一表达式中多次修改并读取同一变量，把副作用拆成独立语句。
+
+```cpp
+int index = 0;
+int current = values[index];
+++index;
+```
+
+这种写法比把多个 `index++` 塞进一次调用更容易证明。表达式越依赖隐式顺序，越难调试，也越容易跨语言版本或重构后改变行为。
+
+<Callout type="trap" title="陷阱：优先级高就一定最先在运行时求值">
+  优先级决定表达式如何分组，不是所有子表达式的时间顺序。存在函数调用或自增等副作用时，应拆成多条语句，明确每次状态变化。
+</Callout>
+
+## 赋值修改已有对象
+
+赋值运算符中的简单赋值 `x = value` 先计算右侧，再按左侧类型转换并写入对象。复合赋值 `x += y` 表达“读取 x、与 y 相加、把结果写回 x”，其意图比 `x = x + y` 更紧凑，但仍包含读取、运算、转换和写回四步。
+
+```cpp
+int score = 10;
+score += 5;  // 15
+score *= 2;  // 30
+```
+
+赋值表达式本身也有结果，因此链式赋值可以成立；但不要为了少写一行把复杂计算与多对象写入混在一起。一个语句修改的状态越多，失败时越难判断哪一项已经变化。
+
+## 自增与自减要看使用场景
+
+`++i` 与 `i++` 都会把 `i` 增加 1；区别在表达式结果：前置形式产生更新后的值，后置形式保留更新前的值供当前更大表达式使用。若只需要“把 i 加一”，单独写 `++i;`，不要利用旧值制造额外认知负担。
+
+```cpp
+int i = 3;
+int before = i++; // before=3, i=4
+int after = ++i;  // i=5, after=5
+```
+
+对迭代器等用户定义类型，前置形式还可能避免保存旧副本；但本课的第一原则是语义清楚：只有确实需要旧值时才用后置结果。
+
+## 类型转换改变表示边界
+
+隐式转换由上下文触发，例如把 `int` 与 `double` 相加时，整数通常先转换为浮点表示。显式转换则由程序员说明意图，现代 C++ 使用 `static_cast<T>(value)` 比 C 风格强制转换更容易搜索与审查。
+
+<Term def="把一个值按目标类型的表示和规则产生新值的过程，可能保留、改变或丢失信息。">类型转换</Term>
+
+```cpp
+int sum = 7;
+int count = 2;
+double average = static_cast<double>(sum) / count;
+int truncated = static_cast<int>(average);
+```
+
+显式不等于安全，只是意图更明确。将超范围值转入较小整数、将负数转为无符号、将浮点截断为整数，都要先写出允许范围和舍入策略。若需求是四舍五入，应使用相应数学操作，而不是把截断伪装成舍入。
+
+<EcpExpressionsConversionLab />
+
+## 三步验证一个业务公式
+
+<Stepper>
+  <Step title="第一步：画出表达式结构">
+    对 `price * count + fee` 标出操作数、运算符、子表达式类型和最终赋值，确认目标类型不会反向改变右侧计算。
+
+    <EcpExpressionsEvaluationMap />
+  </Step>
+  <Step title="第二步：检查分组与副作用">
+    用括号或中间变量明确业务公式，把自增、函数调用和赋值等副作用拆开，避免把优先级误作求值顺序。
+
+    <EcpExpressionsPrecedenceFlow />
+  </Step>
+  <Step title="第三步：实验转换边界">
+    依次运行整数除法、浮点除法、double 到 int 和负数到无符号的最小样例，先预测，再记录信息是否丢失。
+
+    <EcpExpressionsConversionLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 表达式由操作数和运算符形成，子表达式先按自身类型计算，再把结果交给外层
+- 整数除法会截去小数；目标变量是 double 也不能恢复右侧已经丢失的信息
+- 优先级决定不同运算符的默认分组，结合性处理同层连续运算；二者都不等于完整求值顺序
+- 赋值包含右侧计算、目标类型转换和写回；复合赋值与自增仍然会修改状态
+- 显式转换表达意图但不保证值域安全，转换前必须检查范围与业务舍入规则
+
+<Exercises>
+  1. **问题 1：预测除法。** `double result = 7 / 2;` 的值是什么，如何最小修改得到 3.5？
+
+  <Answer question="double result = 7 / 2 为什么不是 3.5？">两个操作数都是 int，先执行整数除法得到 3，再转换成 double 的 3.0。可写 `7.0 / 2`、`7 / 2.0` 或 `static_cast<double>(7) / 2`，让转换发生在除法之前。</Answer>
+
+  2. **问题 2：区分规则。** `10 - 3 - 2` 的结合性如何分组？这是否证明所有表达式都从左到右求值？
+
+  <Answer question="减法的左结合与求值顺序有什么区别？">减法同优先级且左结合，所以语法分组是 `(10 - 3) - 2`，结果 5。但结合性只定义语法树，不是所有操作数副作用的时间保证；含自增或函数调用时应拆语句明确顺序。</Answer>
+
+  3. **问题 3：审计转换。** `static_cast<int>(19.75)` 得什么？为什么显式写出也不代表业务正确？
+
+  <Answer question="显式转换 19.75 到 int 的结果和风险是什么？">结果为 19，小数部分被截去。static_cast 只让转换意图明确，不判断需求是截断、四舍五入还是拒绝非整数；程序仍需根据业务规则检查范围并选择正确算法。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="表达式">可计算出值、对象或副作用的程序结构。</GlossaryItem>
+  <GlossaryItem term="操作数">被运算符读取或作用的值及子表达式。</GlossaryItem>
+  <GlossaryItem term="运算符">规定对操作数执行何种操作的符号或关键字。</GlossaryItem>
+  <GlossaryItem term="运算符优先级">没有括号时决定不同运算符默认分组的规则。</GlossaryItem>
+  <GlossaryItem term="类型转换">按目标类型表示规则产生新值的过程，可能丢失信息。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="やさしいC++ 第5版, Lesson 4 式と演算子"
+  adaptedUrl="https://www.sbcr.jp/product/4797392593/"
+/>

@@ -1,0 +1,197 @@
+---
+title: "Chapter 25. Interoperating with WinRT Components"
+type: C
+section: "CLR via C# 4e · Core Facilities"
+order: 25
+description: "覆盖WinRT type system与CLR projections、framework映射、异步API、stream/buffer数据传输和跨语言C#组件设计。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcWinrtAsyncDataLab, CvcWinrtComponentLab, CvcWinrtProjectionLab } from "@/components/mdx/clr-via-csharp/diagrams/interoperating-winrt-components";
+
+<Objectives>
+
+- 能描述WinRT metadata/ABI type rules与CLR projection如何提供语言友好的表面而保持同一组件身份
+- 能实现WinRT async、stream与buffer到Task/Stream/managed data的错误、取消、长度和释放协议
+- 能设计C# WinRT component的合法public surface、activation、跨语言测试与部署边界
+
+</Objectives>
+
+## 为什么Projection不是普通Wrapper
+
+Windows Runtime定义跨语言ABI、metadata、runtime classes、interfaces、async/collection/foundation types；每种语言projection把它呈现为熟悉语法。.NET consumer看到Task-like await、events、generic-looking collections和DateTime/Uri映射，不代表底层就是相同CLR type。调试interop必须同时记录projected surface与WinRT ABI/metadata identity。
+
+先预测：WinRT event `+=`底层是否只保存普通delegate；IAsyncOperation是否本身就是Task；Stream adapter是否总copy；IBuffer Capacity与Length是否同义；所有C# public generic types能否暴露成WinRT component；HRESULT如何变exception；component能否假设caller都是C#。后文从projection、async/data和component surface回答。
+
+<Term def="同一WinRT metadata/ABI contract在C#、C++、JavaScript等语言中映射为各自自然类型和语法的机制。">language projection boundary</Term>
+
+## CLR Projections and WinRT Component Type System Rules
+
+CLR projection读取.winmd metadata，把WinRT runtime class/interface/method/event映射到managed Type/member。WinRT public signatures受有限type system约束，不是任意CLR types都可穿越；generic、inheritance、overload、exception和collection rules由WinRT metadata定义。Private implementation可用完整C#/.NET，public ABI必须合法。
+
+```csharp
+// Consuming a projected WinRT API from C#; exact API availability depends on target Windows SDK.
+Windows.Storage.StorageFolder folder =
+    Windows.Storage.ApplicationData.Current.LocalFolder;
+Windows.Storage.StorageFile file =
+    await folder.CreateFileAsync("state.json", CreationCollisionOption.ReplaceExisting);
+```
+
+Projection可能把WinRT method改成熟悉name/interface，reflection看到managed projection不一定直接等于ABI declaration。诊断保存runtime class name、interface IID/method, winmd version、package/SDK与apartment/thread。
+
+<Term def="跨语言公开contract只能使用WinRT metadata允许的types、members、inheritance与overload形状。">WinRT public surface</Term>
+
+## WinRT Type System Core Concepts
+
+Runtime class可activation并实现interfaces；interface identity基于GUID/version；metadata描述signatures；HRESULT表示ABI failure；reference counting管理COM identity/lifetime；apartment/agility影响thread access。Projection把HRESULT翻译exception，把event token翻译`+=/-=`，把async interface变awaitable，但ownership/thread rules仍存在。
+
+Nullability、string、array和collection都按WinRT rules。Consumer不应把projected object跨线程任意使用，先查agility/marshaling；UI对象通常thread-affine。Event subscription必须remove，token/projection会root listener/component。
+
+## Framework Projections
+
+Framework projection将WinRT `IStringable`、collections、DateTime/TimeSpan、Uri、exceptions等映射为.NET熟悉表面（具体映射随平台/工具链）。Projected collection可能实现`IList<T>`/`IEnumerable<T>`，但每次access跨ABI，cost/mutation/events不等同本地List。不要因interface相同就假设O(1)、snapshot或thread-safe。
+
+<Stepper>
+  <Step title="切换WinRT type、collection、foundation value与event projection"><CvcWinrtProjectionLab /></Step>
+  <Step title="建立双层签名表">并排记录.winmd/ABI type与C# projected Type/member、identity、thread和ownership。</Step>
+  <Step title="跨语言验证">C#、C++/WinRT及目标consumer分别调用，比较null、collection mutation、event和exception。</Step>
+</Stepper>
+
+<Callout type="trap" title="Projected API看起来像普通.NET API，所以成本与线程规则也相同">
+调用仍可跨COM ABI/apartment，collection accessor可能remote/proxy，event有token lifetime。以WinRT contract和测量为准，不以C#语法判断。
+</Callout>
+
+## Calling Asynchronous WinRT APIs from .NET Code
+
+WinRT用IAsyncAction/`IAsyncOperation<T>`及带progress variants表示异步。Projection让C# `await`，adapter可转Task，但原operation有status/error/cancel。Cancellation是否支持取决API；取消请求不保证外部side effect撤销。HRESULT/COM error映射Exception，保留operation context。
+
+```csharp
+IAsyncOperation<StorageFile> operation =
+    folder.GetFileAsync("state.json");
+
+StorageFile file = await operation.AsTask(cancellationToken);
+Console.WriteLine(file.Path);
+```
+
+不要sync wait `.Result`，UI apartment可能deadlock。Async operation只能按contractawait一次/多次（adapter语义需确认），progress callback thread需marshal。Timeout由Task composition触发cancel后仍要observe operation completion/error，避免abandoned work。
+
+<Term def="WinRT async status/error/cancellation/progress与.NET await/Task完成语义之间的转换协议。">WinRT async projection</Term>
+
+## Interoperating Between WinRT Streams and .NET Streams
+
+WinRT提供IInputStream/IOutputStream/IRandomAccessStream，.NET adapters呈现Stream。Adapter需保留CanRead/CanWrite/CanSeek、position、length、flush、dispose ownership。转换可能包装同一native object而非copy；Dispose一个view是否关闭底层要按API。Concurrent reads/writes和thread affinity不自动安全。
+
+Large data用streaming与bounded buffer，正确处理partial read：一次ReadAsync不保证填满请求。Seekable与nonseekable分支明确。不要为方便ReadAllBytes导致unbounded memory。
+
+## Passing Blocks of Data Between the CLR and WinRT
+
+Arrays、IBuffer与streams用于blocks。IBuffer有Capacity和Length；capacity是storage上限，length是有效data。Projection可能copy、pin或共享native buffer，必须查adapter contract；不能在owner释放后继续Span/pointer。跨ABI明确element type、byte order、offset/count和mutation。
+
+```csharp
+using IBuffer buffer = await FileIO.ReadBufferAsync(file);
+uint logicalLength = buffer.Length;
+
+byte[] managed = new byte[logicalLength];
+using (DataReader reader = DataReader.FromBuffer(buffer))
+{
+    reader.ReadBytes(managed);
+}
+
+ProcessValidatedPayload(managed);
+```
+
+读取不可信长度前设上限并checked conversion uint->int。Sensitive buffer clear/Dispose，native/shared view不假设GC管理。High-throughput测copy count，再决定IBufferByteAccess等unsafe path，并严格控制lifetime。
+
+<Term def="Array、IBuffer或stream跨CLR/WinRT时对logical length、capacity、copy/share、mutation与释放的协议。">WinRT data ownership</Term>
+
+<Stepper>
+  <Step title="切换async action/operation、stream与buffer"><CvcWinrtAsyncDataLab /></Step>
+  <Step title="填写Data ledger">记录ABI/projected type、length/capacity、copy/share、position、owner、thread、cancel和Dispose。</Step>
+  <Step title="注入边界故障">Partial read、huge length、cancel-after-side-effect、apartment change和early Dispose逐项验证。</Step>
+</Stepper>
+
+<Callout type="trap" title="IBuffer Capacity就是有效数据长度">
+Capacity只表示storage上限，Length才是有效bytes。按Capacity读取会包含未初始化/旧数据或越界协议，必须携带logical length。
+</Callout>
+
+## Defining WinRT Components in C#
+
+C# WinRT component公开runtime classes/interfaces必须通过winmd export validation，只用legal public types，遵循constructor/activation、overload、async、event与generic restrictions。Private methods可用完整.NET。Public error通过HRESULT projection，不能把任意custom Exception type当跨语言contract。
+
+```csharp
+public sealed class PayloadDecoder
+{
+    public PayloadDecoder() { }
+
+    public IAsyncOperation<string> DecodeAsync(IBuffer payload) =>
+        DecodeCoreAsync(payload).AsAsyncOperation();
+
+    private async Task<string> DecodeCoreAsync(IBuffer payload)
+    {
+        byte[] bytes = ReadBounded(payload);
+        await Task.Yield();
+        return Encoding.UTF8.GetString(bytes);
+    }
+}
+```
+
+Component设计围绕跨语言最小surface：primitive/foundation/DTO-like runtime classes、粗粒度async、明确events/tokens、bounded arrays/buffers。不要公开C#-specific delegates、Task、unsupported generics，使用projected WinRT equivalents。Activation factory/package registration/Windows App SDK deployment按目标平台工具链验证。
+
+<Term def="Runtime class如何被注册/定位/创建，以及其apartment、package和version满足哪些条件的协议。">WinRT activation contract</Term>
+
+## Cross-Language Testing and Versioning
+
+只写C# unit tests不够。至少一个非C# consumer验证metadata names、overloads、collections、async/cancel、events、errors和null。API evolution保持interface immutable/新增versioned interface，runtime class逐步实现；不要修改已发布IID contract。Package/SDK compatibility矩阵覆盖最低OS。
+
+Performance测试跨ABI call frequency、marshaling/copies、UI thread、large buffers。Chatty property loop可改batch method。Telemetry记录HRESULT + projected exception + operation id，不只Message。
+
+<Stepper>
+  <Step title="切换public surface、async、data transfer与activation"><CvcWinrtComponentLab /></Step>
+  <Step title="运行Winmd validator">检查所有public signatures、runtime class activation、interface version和metadata export。</Step>
+  <Step title="执行Consumer matrix">C#与至少一个其它projection在目标OS/package上跑async/error/event/buffer/version测试。</Step>
+</Stepper>
+
+## Modern .NET and Windows Context
+
+本章写于Windows 8/.NET Framework时期。现代C#调用WinRT通常通过C#/WinRT、Windows SDK/Windows App SDK生成projections，项目配置和可用API不同；不能复制旧`Windows.winmd` reference流程。核心不变：ABI metadata、projection、async/data ownership与cross-language contract。实现时以目标SDK官方文档和generated projection为准。
+
+非Windows跨平台core应把WinRT放adapter，domain不依赖projected types。Feature/OS version用ApiInformation或平台guard，提供fallback。CI无法覆盖Windows capability时，至少在Windows runner执行component integration。
+
+## 本章回顾：看到C#表面，也要验证WinRT ABI
+
+1. Projection把WinRT metadata/ABI映射为C#自然surface，不消除identity、apartment和lifetime。
+2. Framework collection/value/event映射不保证本地List式成本或线程语义。
+3. WinRT async映射await/Task，但cancel、progress、HRESULT与side effects仍按原operation contract。
+4. Stream/IBuffer传输明确capacity/length、partial read、copy/share、owner和Dispose。
+5. C# WinRT component的public surface受WinRT type rules，必须winmd和跨语言consumer验收。
+
+<Exercises>
+
+**问题 1：WinRT async在Cancellation后仍创建了文件，是Bug吗？**
+
+<Answer>Cancellation是request，不保证撤销已提交side effect。查API contract/status；即使Task呈cancelled也要observe underlying completion，使用unique temp/idempotency和cleanup/compensation。UI不能sync wait。测试cancel发生在开始、I/O中、commit后各阶段。</Answer>
+
+**问题 2：怎样判断Stream adapter是否会关闭底层WinRT stream？**
+
+<Answer>查看具体adapter ownership contract并做integration test：创建两个views，Dispose一个后访问另一个/underlying；记录leave-open选项（若有）。不要猜wrapper语义。由单一owner统一Dispose，borrowed view不越过owner lifetime。</Answer>
+
+**问题 3：C# class为何不能直接把`Task<MyDto>`作为WinRT public method return？**
+
+<Answer>WinRT public metadata只允许其type system和async interfaces；Task/C# arbitrary DTO不是直接ABI contract。公开`IAsyncOperation<T>`且T为WinRT合法类型，内部Task转AsAsyncOperation；运行winmd validator并从其它language projection调用验证。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="language projection boundary" definition="WinRT ABI在各语言中映射为自然surface的边界。" />
+  <GlossaryItem term="WinRT public surface" definition="Public metadata必须遵循的WinRT type/member规则。" />
+  <GlossaryItem term="WinRT async projection" definition="IAsync*与Task/await完成取消错误之间的映射。" />
+  <GlossaryItem term="WinRT data ownership" definition="Array/IBuffer/stream的长度、copy/share与释放协议。" />
+  <GlossaryItem term="WinRT activation contract" definition="Runtime class的注册定位创建、apartment和版本条件。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 25: Interoperating with WinRT Components" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

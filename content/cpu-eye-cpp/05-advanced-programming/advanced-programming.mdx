@@ -1,0 +1,268 @@
+---
+title: "第5章：高级编程"
+type: A
+section: CPU眼里的C/C++ · 官方第5章
+order: 5
+description: 对齐原书第5章 5.1-5.9：从虚拟内存和进程地址映射延伸到 volatile、常量、系统调用、大小端、上下文与锁的机器边界。
+demo: false
+math: false
+sourceUrl: "https://www.tup.com.cn/booksCenter/bookcatalog?id=09954301"
+draft: false
+---
+
+import {
+  CpuEyeBoundarySemanticsMap,
+  CpuEyeContextLockProtocolMap,
+  CpuEyeVirtualAddressMappingMap,
+} from "@/components/mdx/cpu-eye-cpp/diagrams/advanced-programming";
+
+<Objectives>
+
+- 能绘制虚拟内存、进程与地址映射从 virtual address 到 physical/file backing 的翻译路径
+- 能区分 volatile、常量、系统调用和大端小端各自的语言、ABI 与硬件边界
+- 能分析线程上下文切换和锁竞争中的原子操作、内存序、阻塞与唤醒状态
+
+</Objectives>
+
+## 从“CPU 地址为何不是内存条位置”开始
+
+用户程序中的 pointer 通常是当前进程 virtual address。CPU load/store 先经过 address translation 和 permission check，再进入 cache/memory hierarchy；映射缺失时触发 fault，由 kernel 决定分配 frame、读取 file-backed page、建立 copy-on-write，或向进程报告错误。高级编程的核心不是背一张固定地址图，而是追踪“当前执行上下文、翻译表、权限与 backing”四个条件。
+
+<Term def="进程使用的地址抽象，由 MMU 和操作系统映射到物理页、文件或其他 backing。">
+  虚拟内存
+</Term>
+
+先预测两个进程打印出的同一个数值地址是否指向同一物理页，再用 `/proc` maps、debugger 或系统 tracing 验证。相同 virtual address、相同 bytes 和相同 object identity 是三件不同的事。
+
+## 5.1 CPU眼里的虚拟内存
+
+virtual memory 为每个 process 提供独立 address space、page-level permissions、按需加载和共享映射。地址空间很大不表示等量 RAM 已分配；未触碰 anonymous pages 可能只保留 mapping metadata，file-backed pages 可按需读入，clean pages 还能丢弃后重载。
+
+<Term def="把 virtual page number 映射到 physical frame 与访问权限的分层数据结构。">
+  页表
+</Term>
+
+```cpp
+auto* region = static_cast<std::byte*>(
+    std::malloc(256 * 1024 * 1024)
+);
+// Obtaining a large virtual range does not prove every page is resident.
+```
+
+TLB cache 最近使用的 translations；TLB miss 不等于 page fault，它可能只需硬件 page-table walk。page fault 也不一定是错误：demand paging、copy-on-write 和 stack growth 都可通过 fault 完成；permission violation 或无合法 mapping 才通常转成进程异常信号。
+
+## 5.2 坐井观天的进程
+
+<Term def="一个进程可直接寻址的 virtual mappings、权限与用户态执行状态集合。">
+  进程地址空间
+</Term>
+
+进程像“坐井观天”：普通 pointer 只能表达自己的 address space。另一个 process 即使拥有数值相同的 pointer，也会通过另一套 page tables 翻译。进程隔离阻止用户态直接读写 kernel 和其他 process pages；跨进程通信必须经过 shared memory、pipe/socket、file 或受控 kernel API。
+
+fork 后 parent/child 初始看见近似相同 mappings，通常借 copy-on-write 共享 physical pages；任一方写入时才复制。shared library code pages 可被多个 processes 映射到不同或相同 virtual ranges，backing frame 仍可能共享。因此“地址不同必然不是同一物理内存”“地址相同必然共享”都不成立。
+
+ASLR 让 executable、library、heap 和 stack base 在不同 run 中变化，降低固定地址攻击。debug/crash symbolization 必须结合 module load address 与 build ID，不能只保存裸 virtual address。
+
+## 5.3 CPU眼里的地址映射
+
+<Term def="用 page tables 将 virtual page 转为 physical frame，并保留 offset 完成最终访问的过程。">
+  地址映射
+</Term>
+
+virtual address 可拆为 virtual page number 与 page offset。TLB hit 直接提供 frame translation；miss 触发 page-table walk。entry 还携带 readable/writable/executable、user/kernel、present 等 attributes。得到 physical address 后，cache hierarchy 通常按 cache line 处理访问。
+
+<CpuEyeVirtualAddressMappingMap />
+
+```text
+virtual address -> TLB -> page tables -> physical frame + offset
+                            |
+                            +-> fault -> kernel policy -> map/load/reject
+```
+
+memory-mapped file 让 file offset 通过 mapping 参与地址翻译；dirty shared page 最终可回写 file，private mapping 写入则通常 copy-on-write。DMA/IOMMU 又有 device address translation，不应把 CPU pointer 直接交给任意 device 当 physical address。
+
+<Callout type="trap" title="陷阱：malloc 成功就代表物理内存已经完整到位">
+  allocator 返回的是可用 virtual range 与分配契约。OS 可延迟提供 physical
+  frames，首次触碰才发生 minor/major fault；overcommit policy
+  还会影响后续失败。需要区分 virtual size、resident set、committed memory 与实际
+  page activity。
+</Callout>
+
+## 5.4 CPU眼里的volatile
+
+<Term def="要求实现把对该 glvalue 的访问作为可观察操作处理的限定；不自动提供原子性或线程 happens-before。">
+  volatile
+</Term>
+
+在 C++ 中，volatile 常用于 memory-mapped I/O、与 signal handler 交互的受限对象或实现定义的硬件场景，使 compiler 不随意合并/删除指定 accesses。它不保证一次宽访问不可撕裂，不提供 cache coherence 指令，不建立跨线程 ordering，也不把 `counter++` 变成 atomic read-modify-write。
+
+```cpp
+volatile std::uint32_t* status = deviceStatusRegister();
+while ((*status & readyMask) == 0U) {
+    // Each access may need to reach the device-defined location.
+}
+```
+
+hardware register 还需要 platform-specific barriers、width/alignment 和 accessor API；标准 volatile 本身不足以描述所有 device semantics。线程共享数据应使用 `std::atomic` 或 mutex。`volatile bool ready` 在测试中“看起来能用”仍有 data race，行为未定义。
+
+## 5.5 CPU眼里的常量
+
+<Term def="通过某个表达式不能修改对象的类型约束；不等同于编译期常量，也不固定存储区域。">
+  const 对象
+</Term>
+
+`const` 约束 mutation interface，`constexpr` 要求值可用于 constant evaluation 的相应上下文；literal、immediate operand、read-only data 和 runtime const object 是不同层。compiler 可把已知 value constant-fold 进 instructions，也可为取地址的 const object 分配 storage。
+
+```cpp
+constexpr int tileSize = 16;
+const int runtimeLimit = readLimit();
+int tiles = runtimeLimit / tileSize;
+```
+
+`tileSize` 很可能成为 immediate/shift optimization，`runtimeLimit` 仍需 runtime load。const member function 限制通过 `this` 的 mutation，但 `mutable` member、aliased non-const path 和 synchronization 规则仍需单独分析。把真正 const object 强行 cast 后修改会越过语言 contract，若存于 read-only page 还可能 fault。
+
+## 5.6 CPU眼里的系统调用
+
+<Term def="用户态通过受控 ISA/ABI 入口请求内核执行文件、内存、进程或设备操作的边界。">
+  系统调用
+</Term>
+
+library function 不等于 system call。`std::fread` 可在 user-space buffer 满足请求，allocator fast path 也可不进 kernel；真正 syscall wrapper 按 kernel ABI 放置 number/arguments，执行特权边界 instruction，kernel 验证 pointers、permissions 和 resources，完成后返回 result/error。
+
+```cpp
+std::array<std::byte, 4096> buffer{};
+const auto count = ::read(fd, buffer.data(), buffer.size());
+if (count < 0) {
+    // Inspect errno immediately; the wrapper converted kernel error form.
+}
+```
+
+边界切换需要保存足够 user context、进入 kernel stack、执行 validation，可能阻塞并触发 scheduler；但 batching、buffering、async I/O 和 vDSO 等机制可避开或摊薄某些 transitions。优化 I/O 应先 trace syscall count、sizes 和 wait time，不只看函数名。
+
+## 5.7 CPU眼里的大端、小端
+
+<Term def="多字节数值在递增内存地址中的 byte 排列次序；little-endian 低有效字节在低地址，big-endian 相反。">
+  字节序
+</Term>
+
+数值 `0x12345678` 的四个 bytes 是 `12 34 56 78`。little-endian memory 从低地址看到 `78 56 34 12`，big-endian 则看到 `12 34 56 78`。endianness 描述 byte order，不等于每个 byte 内 bit printing 顺序，也不影响单 byte character。
+
+<CpuEyeBoundarySemanticsMap />
+
+network protocols 常规定 network byte order，file formats 也应显式声明。序列化不能直接 dump native struct：除了 endian，还有 padding、alignment、enum width 和 ABI layout。应逐字段使用 fixed-width types 与 encode/decode helpers，边界处转换一次，内部保持 host representation。
+
+## 5.8 CPU眼里的上下文
+
+<Term def="让执行流暂停后可恢复的 program counter、stack pointer、registers、address-space 与调度状态。">
+  线程上下文
+</Term>
+
+thread context switch 通常保存 outgoing registers/PC/SP，选择 runnable thread，切换必要的 address-space or protection state，再恢复 incoming context。并非每次 switch 都完整清空 cache/TLB；同 process threads 可共享 address space，CPU 也有 tagged TLB 等优化，但 working-set interference 仍会造成 cache effects。
+
+interrupt、exception、syscall 和 scheduler preemption 都可能改变执行层次，却不都意味着换到另一个 thread。profiling 时要区分 on-CPU time、runnable wait、blocked wait 与 interrupt/kernel time，单看 wall-clock 无法说明函数在 CPU 上执行了多久。
+
+context 也包含 language runtime state，例如 thread-local storage base、signal mask 或 floating-point/vector state，具体保存策略可 lazy/eager。crash dump 的 register context 必须匹配 faulting thread 和 instruction address。
+
+## 5.9 CPU眼里的锁
+
+<Term def="在同一时刻只允许一个 owner 进入临界区，并通过 acquire/release 建立共享数据可见性的同步对象。">
+  互斥锁
+</Term>
+
+mutex fast path 常用 atomic compare/exchange 尝试从 unlocked 变为 locked；成功后 acquire semantics 约束后续 accesses，unlock 的 release semantics 发布临界区 writes。竞争时 implementation 可先 spin，再通过 futex/parking 等机制进入 kernel wait；unlock 可能唤醒 waiter。
+
+<CpuEyeContextLockProtocolMap />
+
+```cpp
+std::mutex mutex;
+std::vector<int> queue;
+
+void publish(int value) {
+    std::lock_guard lock(mutex);
+    queue.push_back(value);
+}
+```
+
+atomic instruction 本身只解决 lock word transition；完整 mutex 还包含 owner protocol、memory ordering、wait queue、priority 和 failure policy。过大的 critical section 增加 contention，过细的多锁增加 ordering/deadlock complexity。先用 tracing 量 lock hold time、wait time 和 contention count，再决定 sharding、lock-free、copy-on-write 或减少共享状态。
+
+<Callout type="trap" title="陷阱：加了volatile就不需要锁，或锁只是一个原子指令">
+  volatile 不建立线程 happens-before，shared non-atomic access 仍 data
+  race。mutex 的 uncontended fast path 可能很短，contended path 却涉及
+  spinning、parking、scheduler 和 wakeup；正确性依赖整个协议与所有访问都遵守同一
+  synchronization rule。
+</Callout>
+
+## 高级边界验证协议
+
+1. 记录 process/thread、virtual mapping、permissions、resident pages 与 backing source。
+2. 区分 TLB miss、minor fault、major fault 和 protection fault。
+3. 对 volatile access 写清 hardware/platform contract，并确认是否另需 barrier。
+4. 对 constant 区分 const、constexpr、immediate value 与 read-only storage。
+5. 用 system trace 对齐 library call、actual syscall、blocking 与 return error。
+6. 序列化逐字段声明 width 与 endian，不复制 native object layout。
+7. 性能记录 on-CPU、runnable、blocked 和 context switches。
+8. 锁记录 atomic fast path、hold/wait time、memory order 与 wake path。
+
+## 小结
+
+- 虚拟内存把进程地址映射到 physical/file backing，virtual size 不等于 resident RAM
+- 坐井观天的进程只直接解释自己的 address space，相同地址数值不证明共享
+- 地址映射经过 TLB/page tables，page fault 既可能是正常 demand paging 也可能是非法访问
+- volatile 保留特定可观察访问，但不提供 atomicity、thread ordering 或 mutual exclusion
+- 常量需区分 const、constexpr、folded value 和 read-only storage
+- 系统调用通过受控 kernel ABI 边界，library wrapper 不保证每次都进入 kernel
+- 大端小端描述多字节 byte order，协议和文件必须显式 encode/decode
+- 上下文切换保存恢复执行状态，需区分 on-CPU 与各种 wait time
+- 锁由原子状态、acquire/release、竞争等待和调度唤醒共同构成
+
+<Attribution
+  adaptedFrom="CPU眼里的C/C++，第5章 高级编程"
+  adaptedUrl="https://www.tup.com.cn/booksCenter/bookcatalog?id=09954301"
+/>
+
+<Glossary>
+  <GlossaryItem term="虚拟内存">
+    进程地址到物理页或其他 backing 的抽象。
+  </GlossaryItem>
+  <GlossaryItem term="页表">
+    记录 virtual page 翻译和权限的数据结构。
+  </GlossaryItem>
+  <GlossaryItem term="进程地址空间">
+    进程可直接寻址的 mappings 与权限集合。
+  </GlossaryItem>
+  <GlossaryItem term="地址映射">
+    把 virtual page 翻译为 physical frame 的过程。
+  </GlossaryItem>
+  <GlossaryItem term="volatile">保留特定可观察访问的类型限定。</GlossaryItem>
+  <GlossaryItem term="const 对象">经相应表达式不可修改的对象。</GlossaryItem>
+  <GlossaryItem term="系统调用">用户态请求内核服务的受控边界。</GlossaryItem>
+  <GlossaryItem term="字节序">多字节值在递增地址中的 byte 排列。</GlossaryItem>
+  <GlossaryItem term="线程上下文">
+    暂停恢复执行所需的寄存器和调度状态。
+  </GlossaryItem>
+  <GlossaryItem term="互斥锁">提供排他访问和同步可见性的对象。</GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：为什么两个进程中的同值指针不能直接证明共享？** 画出各自 page table、physical frame 与 file/shared backing。
+
+<Answer question="地址共享要看哪些证据？">
+  pointer 数值只在当前 address space 中解释。两个 page-table entries 可指向不同
+  frames；不同 virtual addresses 也可映射同一 shared frame/file offset。用
+  mapping type、inode/offset、page metadata 或受控 shared-memory experiment
+  验证，并区分 copy-on-write 写入后的分离。
+</Answer>
+
+2. **问题 2：volatile status、constexpr mask 和 read syscall 分别保证什么？** 标出 compiler、CPU 与 kernel 三层边界。
+
+<Answer question="为什么三者不能互相替代？">
+  volatile 要求保留规定 accesses，但不提供线程同步；constexpr mask 可在 compile
+  time 折叠，却不读取 device state；read wrapper 通过 syscall ABI 请求 kernel
+  验证并传输数据，可能 blocking 或返回 error。device access 还可能需要 platform
+  barriers，shared thread state 应用 atomic/mutex。
+</Answer>
+
+3. **问题 3：两个线程争用 mutex 时发生了什么？** 从 atomic fast path、spin/park、context switch、release 和 wake 复原状态。
+
+  <Answer question="怎样证明瓶颈来自锁竞争？">记录 try-acquire 成败、owner hold time、wait duration、spin CPU time、parking syscall 和 wake latency。unlock 的 release 发布临界区 writes，成功 acquire 后 waiter 才按同步规则观察。若大部分时间 blocked，缩短或分片 critical section；若自旋耗尽 CPU，调整等待策略。任何优化都要保持所有 shared accesses 通过同一同步协议。</Answer>
+</Exercises>

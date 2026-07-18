@@ -1,0 +1,434 @@
+---
+title: "6.5 Reductions：归约、复杂度边界与线性规划"
+type: B
+section: "上下文"
+order: 28
+description: "按官方6.5重建transform-solve-lift归约合同、上界与下界传播、线性规划标准形、单纯形、强对偶、指派问题及二人零和博弈。"
+demo: true
+math: true
+sourceUrl: "https://algs4.cs.princeton.edu/65reductions/"
+draft: false
+---
+
+import { Algs4ReductionMap, Algs4ReductionContractLab, Algs4UpperBoundLab, Algs4LowerBoundLab, Algs4DistinctnessDecisionTreeLab, Algs4LinearProgrammingLab, Algs4StandardFormLab, Algs4SimplexPivotLab, Algs4PrimalDualLab, Algs4AssignmentLab, Algs4ZeroSumGameLab, Algs4ReductionCertificateLab } from "@/components/mdx/algorithms-4e/diagrams/reductions";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释reductions、problem equivalence、upper bounds、lower bounds与resource-preserving reduction direction
+- 能计算reduction overhead、comparison-tree depth、linear-program objective、duality gap与mixed-strategy payoff
+- 能实现transform-solve-lift pipeline、LP standard-form conversion、simplex pivot skeleton与certificate verifier
+- 能分析element distinctness下界、simplex degeneracy、weak/strong duality、assignment integrality与minimax equality
+- 能设计matching-to-flow、maximum-flow-to-LP、assignment-to-LP和zero-sum-game-to-LP的正确性证书
+
+</Objectives>
+
+## 从“我已经有一个求解器，能否借来解决新问题”开始
+
+归约（<Term def="把problem X instance有效转换为problem Y instance，并从Y的solution恢复X的solution，同时证明正确性与资源开销。">归约</Term>，reductions）是算法设计中的复用接口。它不是说两个问题“看起来相似”，而是给出一条可执行、可证明、可计费的链：
+
+$$
+x\in X
+\xrightarrow{f}
+y=f(x)\in Y
+\xrightarrow{\operatorname{solve}_Y}
+b
+\xrightarrow{g}
+a\in \operatorname{Sol}_X(x)
+$$
+
+先预测：若从二分图构造flow network只需O(E+V)，maxflow用时T，但从integral flow恢复matching要扫描O(E)，能否把总复杂度直接写成T？不能。完整上界必须包括instance transformation与answer recovery。
+
+<Algs4ReductionMap />
+
+归约让一个成熟solver覆盖一族应用，也让问题按computational resources形成equivalence classes。若X有效归约到Y，记作 $X\le_R Y$：直觉是“Y至少足以表达X”。符号方向总是从待解决的source problem指向被调用的target problem。
+
+## 6.5.1 Transform-solve-lift归约合同
+
+一个algorithmic reduction至少承担四项义务：
+
+1. **Instance map**：对每个valid X instance构造valid Y instance。
+2. **Answer map**：Y的返回值必须足以恢复X的合法答案。
+3. **Correctness**：YES/NO、objective value或witness关系被保留。
+4. **Resource accounting**：构造规模、构造时间、solver时间和恢复时间都有界。
+
+<Algs4ReductionContractLab />
+
+若 $f$ 用时 $T_f(n)$，构造后的instance size是 $m(n)$，Y solver用时 $T_Y(m)$，恢复用时 $T_g(n,m)$，则：
+
+$$
+T_X(n)
+\le
+T_f(n)+T_Y(m(n))+T_g(n,m(n))
+$$
+
+这条式子也解释为何“polynomial-time reduction”不仅要求map可计算，还要求output size不发生指数爆炸。若f显式产生 $2^n$ 个constraints，即使Y有linear-time solver，也不能推出X是polynomial time。
+
+```ts
+function solveX(instanceX: X): AnswerX {
+  const instanceY = reduceInstance(instanceX);
+  const answerY = solveY(instanceY);
+  const answerX = liftAnswer(instanceX, instanceY, answerY);
+  assert(verifiesX(instanceX, answerX));
+  return answerX;
+}
+```
+
+<Callout type="trap" title="只写“调用Y算法”就算完成归约">
+若没有说明instance如何编码、Y solution如何恢复、invalid/edge cases如何处理以及size如何增长，就无法证明correctness，也无法继承复杂度上界。
+</Callout>
+
+## 6.5.2 Upper bounds：把X交给已知算法Y
+
+上界（<Term def="证明存在某算法在给定resource function之内解决问题；归约常通过调用已知target solver建立该界。">上界</Term>，upper bounds）回答“至多需要多少资源”。要给X建立upper bound，应构造 $X\le_R Y$，再调用Y的已知算法。
+
+<Algs4UpperBoundLab />
+
+Official 6.5列出许多经典upper-bound reductions：
+
+- Bipartite matching reduces to maxflow：source-left、left-right、right-sink全设unit capacity。
+- PERT scheduling reduces to topological sort and DAG longest paths。
+- Nonnegative undirected shortest paths reduce to directed shortest paths：每条edge换成two directed arcs。
+- Euclidean MST reduces to Delaunay triangulation后再运行sparse-graph MST。
+- Maximum flow、assignment problem and zero-sum games都可reduce to linear programming。
+
+以matching为例，原图 $G=(L\cup R,E)$ 转换后增加s、t与 $|L|+|R|$ 条边。若使用Ford-Fulkerson且每次unit augmentation增加matching size 1，最多augment $\min(|L|,|R|)$ 次；更强的Hopcroft-Karp直接在bipartite graph上达到 $O(E\sqrt V)$。归约给出可用上界，但不保证是该special problem的最优算法。
+
+### 归约可以复合
+
+若 $X\le_R Y$ 且 $Y\le_R Z$，可将两个maps串联得到 $X\le_R Z$。但size growth也要复合：
+
+$$
+m_Z(n)=m_{Y\to Z}\bigl(m_{X\to Y}(n)\bigr)
+$$
+
+例如activity scheduling先转DAG longest paths，再通过negating weights转DAG shortest paths；每一步都需保持acyclicity和path semantics。复合使抽象可复用，也会放大中间representation。
+
+## 6.5.3 Lower bounds：从已知困难问题把硬度传入X
+
+下界（<Term def="证明任何属于指定computation model的algorithm都至少需要某数量资源。">下界</Term>，lower bounds）回答“至少需要多少资源”。方向与upper-bound intuition容易混淆。
+
+要证明X至少和已知困难问题H一样难，需要：
+
+$$
+H\le_R X
+$$
+
+因为若X存在更快algorithm，H就能通过reduction同样变快，和H的known lower bound矛盾。
+
+<Algs4LowerBoundLab />
+
+反方向 $X\le_R H$ 只表示可借H solver给X建立upper bound。归约箭头本身不带“快”或“慢”；结论取决于source、target以及已知事实放在哪一侧。
+
+<Callout type="trap" title="把lower-bound reduction箭头画反">
+“X可归约到sorting”说明sorting能解决X，不足以证明X需要sorting的Ω(n log n)。要把sorting或另一known-hard problem归约到X，才能把下界传给X。
+</Callout>
+
+## 6.5.4 Element distinctness的Θ(N log N)
+
+Element distinctness问N个totally ordered values中是否有duplicate。Sorting后扫描相邻元素给出O(N log N) upper bound。Comparison-tree lower bound则说明不能在该model中做得更快。
+
+若输入all distinct，algorithm必须区分N!种strict order。Binary comparison tree至少有N!个对应leaves，所以depth：
+
+$$
+h\ge \lceil\log_2(N!)\rceil
+=\Theta(N\log N)
+$$
+
+<Algs4DistinctnessDecisionTreeLab />
+
+更结构化的argument是：若某correct distinctness algorithm从未比较sorted order中相邻的 $a_i,a_{i+1}$，把后者改成前者时所有comparison outcomes可保持不变，但answer应从distinct变为duplicate，矛盾。Algorithm执行的comparisons还可形成order constraints；对distinct input做topological order就恢复sorting，因此sorting lower bound被传入。
+
+这个结论依赖computation model。Comparison tree、linear decision tree、algebraic decision tree允许的primitive不同；不能把一个model的lower bound无条件搬到hashing、bounded integers或word RAM。
+
+## 6.5.5 Linear programming：用线性不等式表达选择
+
+线性规划（<Term def="在线性等式或不等式约束下，最大化或最小化线性objective function的问题。">线性规划</Term>，linear programming）把连续variables、constraints与objective统一成一个optimization language。Official 6.5采用standard-form primal：
+
+$$
+\begin{aligned}
+\text{maximize}\quad & c^\mathsf{T}x\\
+\text{subject to}\quad & Ax\le b\\
+& x\ge 0
+\end{aligned}
+$$
+
+<Algs4LinearProgrammingLab />
+
+以图中例子为例：
+
+$$
+\begin{aligned}
+\max\quad & 3x_1+2x_2\\
+x_1+x_2 &\le 4\\
+2x_1+x_2 &\le 5\\
+x_1,x_2 &\ge 0
+\end{aligned}
+$$
+
+Feasible region是convex polyhedron。Linear objective的equal-value sets是parallel hyperplanes；沿improving direction移动，最后接触一个face。若bounded optimum存在，则至少一个basic feasible solution，也就是某vertex，达到optimum。
+
+Linear programming比linear equations多了inequality和objective；它能表达resource allocation、flows、fractional matching、scheduling和game strategies。它不能直接要求variable取integer；integer linear programming是表达能力更强、复杂度也显著不同的问题。
+
+## 6.5.6 General LP如何归约到standard form
+
+Official bare-bones `LinearProgramming.java`处理 $Ax\le b, x\ge0$ 且 $b\ge0$，因此origin是初始basic feasible solution。General LP要先归一化：
+
+- $a^\mathsf{T}x\ge b$ 乘以-1变成 $-a^\mathsf{T}x\le-b$。
+- Equality拆成two opposite inequalities。
+- Unrestricted variable $x_j$ 换成 $x_j^+-x_j^-$，两者nonnegative。
+- Minimization objective乘以-1转maximization。
+- Constraint加slack variable把inequality变equation。
+
+<Algs4StandardFormLab />
+
+```java
+// a_i x <= b_i becomes a_i x + s_i = b_i, s_i >= 0
+for (int i = 0; i < m; i++) {
+    tableau[i][n + i] = 1.0;
+    tableau[i][m + n] = b[i];
+}
+```
+
+若某 $b_i$ negative，origin不feasible，不能直接使用该实现的初始basis。完整simplex通常用Phase I寻找feasible basis，或给出infeasibility certificate；Phase II再优化original objective。
+
+## 6.5.7 Simplex algorithm：沿basic feasible vertices换basis
+
+单纯形算法（<Term def="在线性规划polyhedron的相邻basic feasible solutions之间pivot，直到没有improving reduced cost的算法。">单纯形算法</Term>，simplex algorithm）由George Dantzig提出，可看作Gaussian elimination扩展到inequalities。
+
+<Algs4SimplexPivotLab />
+
+一个tableau pivot包含：
+
+1. 选择positive reduced cost的entering column q。
+2. 对 $a_{iq}>0$ 的rows计算ratio $b_i/a_{iq}$，最小者是leaving row p。
+3. 以 $a_{pq}$ 为pivot做Gauss-Jordan elimination。
+4. 更新basis，保持new right-hand side nonnegative。
+
+```java
+int q = bland();          // entering variable
+int p = minRatioRule(q);  // leaving variable
+if (p == -1) throw new ArithmeticException("unbounded");
+pivot(p, q);
+basis[p] = q;
+```
+
+Ratio test为空表示存在improving ray，LP unbounded。若Phase I找不到feasible basis，则infeasible。Fundamental theorem总结为：LP若feasible则有basic feasible solution；若有finite optimum则有basic optimal solution；没有optimal solution时要么infeasible，要么unbounded。
+
+### Degeneracy、cycling与实际性能
+
+Degenerate pivot可能objective不增加，因为多个constraints在same vertex tight。某些pivot rules可能循环；Bland's rule以最小index选entering/leaving variable可避免cycling。Floating arithmetic还会让“接近0”的coefficient改变ratio eligibility，所以production solver使用tolerance、scaling与稳定factorization。
+
+Simplex worst case可走exponentially many pivots，不能把常见实践性能当polynomial guarantee。Official page同时强调其巨大工程影响以及实践中often少量pivots的现象；理论worst case与实际behavior必须分开陈述。
+
+## 6.5.8 Primal、dual与strong duality
+
+上面的primal有dual：
+
+$$
+\begin{aligned}
+\text{minimize}\quad & b^\mathsf{T}y\\
+\text{subject to}\quad & A^\mathsf{T}y\ge c\\
+& y\ge 0
+\end{aligned}
+$$
+
+对任意primal feasible x和dual feasible y：
+
+$$
+c^\mathsf{T}x
+\le
+y^\mathsf{T}Ax
+\le
+y^\mathsf{T}b
+=b^\mathsf{T}y
+$$
+
+这是weak duality：任意dual value都是primal upper bound。若找到两边feasible且objective equal的pair，立即证明二者optimal。
+
+<Algs4PrimalDualLab />
+
+Strong duality说明primal bounded and feasible时，dual也bounded and feasible，且optimal values equal。Simplex实际上同时维护primal basis与dual price information；reduced costs可解释为constraint shadow prices。
+
+Complementary slackness进一步给出局部证书：
+
+$$
+y_i\bigl(b_i-(Ax)_i\bigr)=0,
+\qquad
+x_j\bigl((A^\mathsf{T}y)_j-c_j\bigr)=0
+$$
+
+Positive dual price意味着对应primal resource constraint tight；positive primal variable意味着对应dual inequality tight。Verifier只需matrix-vector products和nonnegativity checks，不必复跑simplex。
+
+## 6.5.9 Maximum flow reduce to linear programming
+
+对每条directed edge e建variable $f_e$。Capacity是：
+
+$$
+0\le f_e\le c_e
+$$
+
+每个internal vertex加入flow-conservation equality；objective最大化source net outflow。Equality可按standard-form rule拆成two inequalities，upper bound可通过slack表达。因此maximum flow是LP special case。
+
+但专用maxflow算法利用network matrix结构，通常比general LP solver更简单、更快。Reduction证明expressiveness和upper bound，不意味着implementation必须采用generic simplex。
+
+Maxflow-mincut theorem也可视作该LP的strong duality。Primal是flow，dual的0/1 vertex labels诱导s-t cut；equal objective的flow/cut pair是combinatorial primal-dual certificate。
+
+## 6.5.10 Assignment problem and zero-sum games
+
+### Assignment problem
+
+指派问题（<Term def="在n乘n cost或weight matrix中选一个permutation，使每行每列恰选一次并优化total objective。">指派问题</Term>，assignment problem）可写为：
+
+$$
+\begin{aligned}
+\min\quad & \sum_{i,j} c_{ij}x_{ij}\\
+\sum_j x_{ij} &= 1 && \text{for every row }i\\
+\sum_i x_{ij} &= 1 && \text{for every column }j\\
+x_{ij} &\ge 0
+\end{aligned}
+$$
+
+<Algs4AssignmentLab />
+
+LP没有显式写 $x_{ij}\in\{0,1\}$，但Birkhoff-von Neumann theorem说明doubly stochastic polytope的extreme points正是permutation matrices，所以optimal basic solution可取integral。这个integrality来自constraint matrix结构，不是所有LP都有的性质。
+
+Official section列出三条implementation路线：reduce to LP；Hungarian algorithm；以及successive shortest paths。当前`AssignmentProblem.java`的successive shortest paths worst-case为 $O(n^3\log n)$，dense variant为 $O(n^3)$。专用结构再次带来比generic solver更清晰的边界。
+
+### Two-person zero-sum games
+
+零和博弈（<Term def="一方payoff恰为另一方loss的two-player game；双方选择mixed strategies优化worst-case expected payoff。">零和博弈</Term>，zero-sum games）用payoff matrix M表示。Row player选distribution p，column player选distribution q；expected payoff是：
+
+$$
+p^\mathsf{T}Mq
+$$
+
+<Algs4ZeroSumGameLab />
+
+若为每个matrix entry加constant K，optimal mixed strategies不变，game value增加K，因此可先让all entries positive。Official reduction把normalized probabilities改写成nonnegative variables，再由LP primal/dual求两个players策略；最后按variable sum归一化。
+
+Minimax theorem：
+
+$$
+\max_p\min_q p^\mathsf{T}Mq
+=
+\min_q\max_p p^\mathsf{T}Mq
+$$
+
+左边是row player能保证的value，右边是column player能限制的value。二者相等正是对应LP的strong duality。Pure strategy可能没有saddle point，但mixed strategy总能在finite zero-sum game中达到equilibrium。
+
+## 6.5.11 Reductions的边界与常见失败
+
+归约结论必须附带model和promise：
+
+- Undirected negative-weight shortest path不能简单换two directed arcs，否则每条negative edge立刻形成negative 2-cycle。
+- Fractional LP assignment依赖integrality theorem恢复discrete matching；一般integer requirement不能忽略。
+- Numeric LP solution需检查tolerance，不能用bit-exact equality判dual gap。
+- Reduction只保留指定objective或decision answer；它不自动保留all solutions、uniqueness或approximation ratio。
+- Oracle call count也属于成本；binary search reduction需乘以search iterations。
+- Randomized solver的error probability会随多次calls组合，需放大success probability。
+
+<Algs4ReductionCertificateLab />
+
+一个可信reduction certificate应记录source/target sizes、construction invariants、target witness、lifted witness以及objective relation。Mutation test要覆盖missing edge、extra constraint、wrong sign、answer lift mismatch和overflow。
+
+```ts
+assert(target.vertices === source.vertices + 2);
+assert(everyAllowedEdgeWasCopied(source, target));
+assert(isIntegralUnitFlow(flow));
+const matching = flowEdges
+  .filter(edge => edge.kind === "left-right" && edge.flow === 1)
+  .map(edge => [edge.from, edge.to]);
+assert(isMatching(source, matching));
+assert(matching.length === flow.value);
+```
+
+## 6.5.12 逐步运行路线
+
+<Stepper>
+  <Step title="先写完整归约合同" description="标明source instance、target instance、target solver、answer lift、correctness invariant与总成本。">
+    <Algs4ReductionContractLab />
+    <Algs4ReductionMap />
+  </Step>
+  <Step title="按结论选择箭头方向" description="Upper bound让X调用Y；lower bound把known-hard H送入X，不能互换。">
+    <Algs4UpperBoundLab />
+    <Algs4LowerBoundLab />
+  </Step>
+  <Step title="把general LP变成可启动的standard form" description="处理greater-than、equality、free variables、slacks与Phase I feasibility。">
+    <Algs4StandardFormLab />
+    <Algs4LinearProgrammingLab />
+  </Step>
+  <Step title="用pivot与primal-dual证书验收" description="检查feasibility、objective movement、unbounded case、dual feasibility和zero gap。">
+    <Algs4SimplexPivotLab />
+    <Algs4PrimalDualLab />
+  </Step>
+  <Step title="验证离散与博弈应用" description="Assignment依赖integral extreme points，zero-sum minimax依赖LP strong duality。">
+    <Algs4AssignmentLab />
+    <Algs4ZeroSumGameLab />
+    <Algs4ReductionCertificateLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Reductions由instance map、target solve、answer lift、correctness proof和resource accounting组成。
+- Upper bounds通过 $X\le_R Y$ 借用Y的algorithm；lower bounds通过 $H\le_R X$ 传递H的known hardness。
+- Element distinctness在comparison-tree model中有Θ(N log N) matching bounds。
+- Linear programming在linear constraints下优化linear objective，bounded optimum可在basic feasible solution取得。
+- Simplex algorithm通过pivot在adjacent bases之间移动，但要处理infeasible、unbounded、degeneracy与cycling。
+- Weak duality给upper bound，strong duality与zero gap提供optimality certificate。
+- Maximum flow是LP special case；专用network algorithm仍可利用更多结构。
+- Assignment LP因Birkhoff-von Neumann integrality得到permutation solution。
+- Two-person zero-sum games reduce to LP，minimax equality对应strong duality。
+- Reduction方向、computation model、numeric tolerance与representation growth都属于结论的一部分。
+
+<Exercises>
+
+1. 将nonnegative undirected shortest paths归约为directed shortest paths，写出instance size、transform cost、answer lift，并说明negative edge为何破坏这个reduction。
+2. 用sorting给element distinctness建立O(N log N) upper bound，再用comparison tree的N! leaves证明Ω(N log N) lower bound，明确两个argument各自的方向。
+3. 将minimize $2x-y$、constraint $x-y=3$、free variable y转换成只含nonnegative variables和less-than-or-equal constraints的standard form。
+4. 对3×3 assignment matrix构造LP，解释为何row/column sums只给fractional feasible region，但extreme-point integrality允许恢复permutation；再写一个primal-dual certificate checklist。
+
+<Answer>
+
+对每条undirected edge $\{u,v\}$ 建u到v与v到u的two arcs，weights相同；vertex count不变、arc count为2E，construction O(E)，directed path删掉arc orientation pair identity即可恢复undirected path。Nonnegative weights下不存在由single edge产生的beneficial cycle。若weight negative，two opposite arcs组成negative cycle，target instance的shortest-path semantics不再对应source simple path。
+
+</Answer>
+
+<Answer>
+
+Upper bound方向是distinctness reduce to sorting：sort后linear scan adjacent values，总时间O(N log N)。Lower bound直接分析distinctness comparison tree，或把sorting information recovery reduce to distinctness execution；all-distinct inputs的N! orders需要N! leaves，所以depth至少log₂(N!)，即Ω(N log N)。两者在同一comparison model中匹配为Θ(N log N)。
+
+</Answer>
+
+<Answer>
+
+先令free y等于 $y^+-y^-$，其中两者nonnegative。Equality拆成 $x-y^++y^-\le3$ 与 $-x+y^+-y^-\le-3$。Minimize $2x-y$ 可改为maximize $-2x+y^+-y^-$。若x也unrestricted，同样写成 $x^+-x^-$；若x已声明nonnegative则保留。负right-hand side意味着bare-bones origin basis不可直接启动，需要Phase I或再做可行基变换。
+
+</Answer>
+
+<Answer>
+
+为每个cell建nonnegative $x_{ij}$，每row sum与每column sum均为1，objective为cost weighted sum。Constraints单独允许fractional doubly stochastic matrices，但该polytope的extreme points是permutation matrices，所以linear objective存在integral optimum。Certificate检查所有variables nonnegative、row/column sums、selected objective；dual检查row/column prices满足每个cell inequality；两边objective equal证明optimal，再验证positive primal cells组成permutation。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="归约">将source problem实例映射到target problem并可恢复答案的可证明转换。</GlossaryItem>
+  <GlossaryItem term="上界">由某个具体algorithm证明problem所需resource至多为何。</GlossaryItem>
+  <GlossaryItem term="下界">在指定computation model中证明任何algorithm至少需要的resource。</GlossaryItem>
+  <GlossaryItem term="线性规划">在线性constraints组成的feasible region上优化linear objective。</GlossaryItem>
+  <GlossaryItem term="单纯形算法">通过basis pivot沿polyhedron vertices寻找optimal LP solution的方法。</GlossaryItem>
+  <GlossaryItem term="指派问题">为rows与columns建立一一对应并优化total cost或weight的问题。</GlossaryItem>
+  <GlossaryItem term="零和博弈">双方收益互为相反数、以mixed strategy优化worst-case expected payoff的博弈。</GlossaryItem>
+  <GlossaryItem term="对偶性">Primal和dual LP之间的bound关系；strong duality使optimal values相等。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Algorithms, 4th Edition · Section 6.5 Reductions"
+  href="https://algs4.cs.princeton.edu/65reductions/"
+  author="Robert Sedgewick and Kevin Wayne"
+  license="本章按官方6.5页面、lecture structure及LinearProgramming、AssignmentProblem、TwoPersonZeroSumGame配套实现，重构reductions、upper/lower bounds、element distinctness、LP standard form、simplex、duality、assignment与zero-sum games；代码为教学化摘写与重新组织。"
+/>

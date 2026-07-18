@@ -1,395 +1,340 @@
 ---
-title: 二叉树的公共父节点
+title: "面试题68：树中两个节点的最低公共祖先"
 type: C
-section: 树
-order: 6
-description: 在二叉树中找两个节点的最近公共祖先（LCA）。
+section: "第7章 两个面试案例"
+order: 80
+description: "先按二叉搜索树、父指针树与普通多叉树澄清结构，再用根到目标的回溯路径忠实还原作者的严格公共父节点算法。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/68_CommonParentInTree/CommonParentInTree.cpp"
 draft: false
 ---
 
-{/* 知识点清单：树递归、最近公共祖先、返回路径信息、边界终止条件；原书章节：面试题68。 */}
+import { CommonParentDecisionMap, CommonParentTreeDiagram, CommonParentPathLab, CommonParentConventionDiagram, CommonParentOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/common-parent-in-tree";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用递归判断“目标是否在某子树”并返回最早满足的公共祖先。
-- 能处理节点不存在、重复值或退化树时的边界行为。
-- 能给出 C++ 与 TypeScript 的稳定实现。
+- 能解释树的结构信息为何决定最低公共祖先的算法
+- 能计算普通多叉树两条根路径的最后公共节点
+- 能实现作者路径回溯与现代成员校验版本
+- 能分析严格公共父节点、含自身祖先、重复值和树外节点边界
+- 能设计覆盖三种树结构与四组官方测试的验证矩阵
 
 </Objectives>
 
-## 直觉引入
+## 从“这棵树到底有什么信息”开始
 
-两个节点的最近公共祖先，本质上是“在树上寻找第一个汇合点”。
-递归遍历时，每个节点只需要回答两个问题：
+“**树中两个节点的最低公共祖先**”看似是固定算法题，实际第一句话应是询问树的结构。它是二叉搜索树吗？节点有父指针吗？只有从根到孩子的单向连接吗？目标节点保证在树中吗？“祖先”是否允许节点自身？
 
-- 在我的左子树能不能找到 `p`/`q`？
-- 在我的右子树能不能找到 `p`/`q`？
+这些答案会改变可用信息和最优路径。直接写常见的二叉树递归LCA，只覆盖了其中一种定义，也完全没有还原作者源码中的普通多叉树与路径列表。原章的核心面试能力是<Term def="在选择算法前确认树是否有序、是否有父指针、孩子数量和目标成员保证。">结构澄清</Term>。
 
-当一个节点本身就是 `p` 或 `q`，它天然是“候选”。左/右各有一侧命中时，这个节点就是最近公共祖先。
+<CommonParentDecisionMap />
 
-## 算法思路
+先预测作者的链式测试：1连到2，2连到3，3连到4，4连到5，查询节点5与4。常见“祖先可包含自身”的LCA会返回4，但作者期望3。原因不是源码偶然出错，而是作者保存的路径不包含目标节点，求的是严格位于两个目标上方的公共父节点。
 
-1. 递归函数 `dfs(node)` 返回当前子树里“最近公共祖先”指针。
-2. 若 `node` 为空，返回 `null`。
-3. 若 `node` 等于 `p` 或 `q`，返回 `node`。
-4. 递归查找左、右子树。
-5. 若左右均非空，当前节点即 LCA；否则返回非空的一侧。
+## 三种结构，三条解题路线
 
-### 图示（4 幅）
+### 二叉搜索树利用大小关系
 
-#### 图 1：题目示意树（`p = 5`, `q = 4`）
+若是二叉搜索树，设两个目标键的较小者为low、较大者为high。从根向下：
 
-<figure className="mdx-figure not-prose mx-auto my-6 max-w-[860px]">
-  <div className="rounded-card border border-border bg-elevated p-4">
-    <svg viewBox="0 0 860 320" role="img" aria-label="二叉树示例解剖图：节点3为根，p=5，q=4，p/q汇合点为5" className="mx-auto block h-auto w-full max-w-[860px]">
-      <rect x="8" y="8" width="844" height="304" rx="8" fill="var(--bg)" stroke="var(--border)" />
-      <text x="32" y="32" fontSize="12" fill="var(--text-secondary)">树结构解剖（输入：p=5，q=4）</text>
+1. 当前键同时大于high，两个目标都在左子树，向左。
+2. 当前键同时小于low，两个目标都在右子树，向右。
+3. 当前键落在low与high之间，两个目标从这里分居两侧，当前节点就是汇合点。
 
-      <line x1="430" y1="72" x2="330" y2="132" stroke="var(--text-secondary)" strokeWidth="2" />
-      <line x1="430" y1="72" x2="530" y2="132" stroke="var(--text-secondary)" strokeWidth="2" />
-      <line x1="330" y1="188" x2="250" y2="248" stroke="var(--text-secondary)" strokeWidth="2" />
-      <line x1="330" y1="188" x2="410" y2="248" stroke="var(--text-secondary)" strokeWidth="2" />
-      <line x1="530" y1="188" x2="450" y2="248" stroke="var(--text-secondary)" strokeWidth="2" />
-      <line x1="530" y1="188" x2="610" y2="248" stroke="var(--text-secondary)" strokeWidth="2" />
-      <line x1="410" y1="248" x2="380" y2="306" stroke="var(--text-secondary)" strokeWidth="2" />
-      <line x1="410" y1="248" x2="440" y2="306" stroke="var(--text-secondary)" strokeWidth="2" />
+这就是“**二叉搜索树利用大小关系**”。不必遍历无关分支，时间O(h)，迭代额外空间O(1)。但它依赖有序性、键的比较规则和目标确实属于同一棵树；普通树不能套用。
 
-      <g>
-        <ellipse cx="430" cy="52" rx="36" ry="20" fill="var(--border)" opacity="0.28" />
-        <circle cx="430" cy="52" r="28" fill="var(--bg)" stroke="var(--accent)" strokeWidth="2.5" />
-        <text x="430" y="57" textAnchor="middle" fontSize="13" fill="var(--text-primary)">3</text>
-        <text x="430" y="26" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">根</text>
-      </g>
-
-      <g>
-        <ellipse cx="330" cy="132" rx="36" ry="20" fill="#4b6ea8" opacity="0.16" />
-        <circle cx="330" cy="132" r="28" fill="var(--bg)" stroke="var(--text-primary)" strokeWidth="2.2" />
-        <text x="330" y="136" textAnchor="middle" fontSize="13" fill="var(--text-primary)">5</text>
-        <rect x="272" y="96" width="56" height="18" rx="9" fill="#f6c66d" opacity="0.95" />
-        <text x="300" y="110" textAnchor="middle" fontSize="10" fill="#3d2b00">p</text>
-      </g>
-
-      <g>
-        <ellipse cx="530" cy="132" rx="36" ry="20" fill="var(--border)" opacity="0.2" />
-        <circle cx="530" cy="132" r="28" fill="var(--bg)" stroke="var(--text-secondary)" strokeWidth="2" />
-        <text x="530" y="136" textAnchor="middle" fontSize="13" fill="var(--text-primary)">1</text>
-      </g>
-
-      <g>
-        <circle cx="250" cy="248" r="24" fill="var(--bg)" stroke="var(--text-secondary)" strokeWidth="2" />
-        <text x="250" y="253" textAnchor="middle" fontSize="12" fill="var(--text-primary)">6</text>
-      </g>
-      <g>
-        <circle cx="410" cy="248" r="24" fill="var(--bg)" stroke="var(--text-primary)" strokeWidth="2" />
-        <text x="410" y="252" textAnchor="middle" fontSize="12" fill="var(--text-primary)">2</text>
-      </g>
-      <g>
-        <circle cx="450" cy="248" r="24" fill="var(--bg)" stroke="var(--text-secondary)" strokeWidth="2" />
-        <text x="450" y="252" textAnchor="middle" fontSize="12" fill="var(--text-primary)">0</text>
-      </g>
-      <g>
-        <circle cx="610" cy="248" r="24" fill="var(--bg)" stroke="var(--text-secondary)" strokeWidth="2" />
-        <text x="610" y="252" textAnchor="middle" fontSize="12" fill="var(--text-primary)">8</text>
-      </g>
-
-      <g>
-        <ellipse cx="380" cy="306" rx="26" ry="16" fill="var(--bg)" stroke="var(--text-secondary)" strokeWidth="1.6" />
-        <text x="380" y="310" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">7</text>
-      </g>
-      <g>
-        <ellipse cx="440" cy="306" rx="30" ry="16" fill="#f6c66d" opacity="0.95" />
-        <text x="440" y="310" textAnchor="middle" fontSize="11" fill="#3d2b00">4</text>
-        <rect x="450" y="292" width="56" height="18" rx="9" fill="#f6c66d" opacity="0.95" />
-        <text x="478" y="305" textAnchor="middle" fontSize="10" fill="#3d2b00">q</text>
-      </g>
-
-      <rect x="72" y="56" width="220" height="34" rx="8" fill="var(--bg-elevated)" stroke="var(--accent)" />
-      <text x="182" y="73" textAnchor="middle" fontSize="12" fill="var(--text-primary)">p=5 与 q=4 的第一汇合点是：5</text>
-      <line x1="182" y1="90" x2="300" y2="124" stroke="var(--accent)" strokeWidth="2" />
-      <line x1="182" y1="90" x2="440" y2="286" stroke="var(--accent)" strokeWidth="2" strokeDasharray="4 3" />
-      <text x="182" y="102" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">上层祖先</text>
-      <text x="182" y="112" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">从根到叶找汇合</text>
-
-      <rect x="632" y="70" width="194" height="78" rx="8" fill="var(--bg-elevated)" stroke="var(--border)" />
-      <text x="729" y="92" textAnchor="middle" fontSize="11" fill="var(--text-primary)">节点角色</text>
-      <text x="641" y="114" fontSize="10" fill="var(--text-primary)">- 黄色：p / q 节点</text>
-      <text x="641" y="130" fontSize="10" fill="var(--text-primary)">- 灰蓝：普通节点</text>
-      <text x="641" y="146" fontSize="10" fill="var(--text-primary)">- 中心箭头：向上汇合方向</text>
-      <text x="641" y="162" fontSize="10" fill="var(--text-primary)">- 红框：候选焦点</text>
-    </svg>
-  </div>
-  <figcaption className="mt-2 text-center text-xs text-secondary">
-    解剖视角先读结构：树根到叶。p=5 和 q=4 在节点 5 处第一次相遇（LCA）。
-  </figcaption>
-</figure>
-
-#### 图 2：递归回溯返回路径
-
-<figure className="mdx-figure not-prose mx-auto my-6 max-w-[860px]">
-  <div className="rounded-card border border-border bg-elevated p-4">
-    <svg viewBox="0 0 860 360" role="img" aria-label="递归回溯过程解剖图：dfs 从叶子向上返回命中信息" className="mx-auto block h-auto w-full max-w-[860px]">
-      <rect x="8" y="8" width="844" height="344" rx="8" fill="var(--bg)" stroke="var(--border)" />
-      <text x="32" y="31" fontSize="12" fill="var(--text-secondary)">递归回溯解剖：先算子树，再把命中信息向上抬给父节点</text>
-
-      <line x1="430" y1="68" x2="290" y2="128" stroke="var(--text-secondary)" strokeWidth="2" />
-      <line x1="430" y1="68" x2="570" y2="128" stroke="var(--text-secondary)" strokeWidth="2" />
-      <circle cx="430" cy="48" r="26" fill="var(--bg-elevated)" stroke="var(--text-primary)" strokeWidth="2.4" />
-      <text x="430" y="53" textAnchor="middle" fontSize="12" fill="var(--text-primary)">dfs(3)</text>
-
-      <line x1="290" y1="156" x2="230" y2="220" stroke="var(--text-secondary)" strokeWidth="2" />
-      <line x1="290" y1="156" x2="350" y2="220" stroke="var(--text-secondary)" strokeWidth="2" />
-      <line x1="570" y1="156" x2="510" y2="220" stroke="var(--text-secondary)" strokeWidth="2" />
-      <line x1="570" y1="156" x2="630" y2="220" stroke="var(--text-secondary)" strokeWidth="2" />
-      <circle cx="290" cy="146" r="24" fill="var(--bg-elevated)" stroke="var(--text-primary)" strokeWidth="2" />
-      <text x="290" y="151" textAnchor="middle" fontSize="12" fill="var(--text-primary)">dfs(5)</text>
-      <circle cx="570" cy="146" r="24" fill="var(--bg-elevated)" stroke="var(--text-secondary)" strokeWidth="2" />
-      <text x="570" y="151" textAnchor="middle" fontSize="12" fill="var(--text-primary)">dfs(1)</text>
-
-      <line x1="230" y1="248" x2="180" y2="302" stroke="var(--text-secondary)" strokeWidth="2" />
-      <line x1="230" y1="248" x2="260" y2="302" stroke="var(--text-secondary)" strokeWidth="2" />
-      <line x1="350" y1="248" x2="380" y2="302" stroke="var(--text-secondary)" strokeWidth="2" />
-      <line x1="510" y1="248" x2="470" y2="302" stroke="var(--text-secondary)" strokeWidth="2" />
-      <line x1="630" y1="248" x2="600" y2="302" stroke="var(--text-secondary)" strokeWidth="2" />
-      <circle cx="230" cy="248" r="20" fill="var(--bg)" stroke="var(--text-secondary)" strokeWidth="2" />
-      <text x="230" y="252" textAnchor="middle" fontSize="11" fill="var(--text-primary)">dfs(6)</text>
-      <circle cx="350" cy="248" r="20" fill="var(--bg)" stroke="var(--text-primary)" strokeWidth="2" />
-      <text x="350" y="252" textAnchor="middle" fontSize="11" fill="var(--text-primary)">dfs(2)</text>
-      <circle cx="510" cy="248" r="20" fill="var(--bg)" stroke="var(--text-secondary)" strokeWidth="2" />
-      <text x="510" y="252" textAnchor="middle" fontSize="11" fill="var(--text-primary)">dfs(0)</text>
-      <circle cx="630" cy="248" r="20" fill="var(--bg)" stroke="var(--text-secondary)" strokeWidth="2" />
-      <text x="630" y="252" textAnchor="middle" fontSize="11" fill="var(--text-primary)">dfs(8)</text>
-
-      <circle cx="260" cy="302" r="20" fill="var(--bg)" stroke="var(--text-secondary)" strokeWidth="2" />
-      <text x="260" y="306" textAnchor="middle" fontSize="11" fill="var(--text-primary)">dfs(7)</text>
-      <circle cx="380" cy="302" r="20" fill="#f7d07a" stroke="var(--text-primary)" strokeWidth="2.2" />
-      <text x="380" y="306" textAnchor="middle" fontSize="11" fill="#3f2e00">dfs(4)</text>
-
-      <rect x="640" y="56" width="204" height="248" rx="10" fill="var(--bg-elevated)" stroke="var(--border)" />
-      <text x="742" y="78" textAnchor="middle" fontSize="11" fill="var(--text-primary)">返回值解剖标签</text>
-      <rect x="650" y="90" width="184" height="28" rx="6" fill="var(--bg)" stroke="var(--text-secondary)" />
-      <text x="742" y="108" textAnchor="middle" fontSize="10" fill="var(--text-primary)">dfs(6) = null</text>
-      <rect x="650" y="124" width="184" height="28" rx="6" fill="var(--bg)" stroke="var(--text-secondary)" />
-      <text x="742" y="142" textAnchor="middle" fontSize="10" fill="var(--text-primary)">dfs(7) = null</text>
-      <rect x="650" y="158" width="184" height="36" rx="6" fill="var(--bg)" stroke="var(--accent)" />
-      <text x="742" y="176" textAnchor="middle" fontSize="10" fill="var(--text-primary)">dfs(4) = 4</text>
-      <text x="742" y="186" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">左=null，右=4</text>
-      <rect x="650" y="200" width="184" height="36" rx="6" fill="var(--bg)" stroke="var(--accent)" />
-      <text x="742" y="218" textAnchor="middle" fontSize="10" fill="var(--text-primary)">dfs(2) = 4</text>
-      <text x="742" y="228" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">left=null，right=4</text>
-      <rect x="650" y="242" width="184" height="36" rx="6" fill="var(--bg)" stroke="var(--accent)" />
-      <text x="742" y="260" textAnchor="middle" fontSize="10" fill="var(--text-primary)">dfs(5) = 4</text>
-      <text x="742" y="270" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">left=null，right=4</text>
-      <rect x="650" y="278" width="184" height="42" rx="6" fill="var(--bg)" stroke="var(--text-secondary)" />
-      <text x="742" y="297" textAnchor="middle" fontSize="10" fill="var(--text-primary)">dfs(1) = null</text>
-      <text x="742" y="308" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">0 和 8 都 null</text>
-      <text x="742" y="332" textAnchor="middle" fontSize="10" fill="var(--accent)">dfs(3) = 4（最终）</text>
-
-      <path d="M290 172 L430 168 L430 68" fill="none" stroke="var(--accent)" strokeWidth="2.2" strokeDasharray="3 2" />
-      <path d="M430 68 L430 146" fill="none" stroke="var(--text-secondary)" strokeWidth="1.4" />
-      <text x="390" y="200" fontSize="10" fill="var(--text-secondary)">返回值向上传递</text>
-    </svg>
-  </div>
-  <figcaption className="mt-2 text-center text-xs text-secondary">
-    关键行为：只要子树返回命中值，就向上层抬升；空分支则携带 `null`。
-  </figcaption>
-</figure>
-
-#### 图 3：左右都命中的判定逻辑
-
-<figure className="mdx-figure not-prose mx-auto my-6 max-w-[780px]">
-  <div className="rounded-card border border-border bg-elevated p-4">
-    <svg viewBox="0 0 780 220" role="img" aria-label="左右分支都命中时返回当前节点示意" className="mx-auto block h-auto w-full max-w-[780px]">
-      <rect x="8" y="8" width="764" height="204" rx="8" fill="var(--bg)" stroke="var(--border)" />
-      <text x="32" y="32" fontSize="12" fill="var(--text-secondary)">判断规则（核心条件）</text>
-
-      <rect x="300" y="48" width="180" height="46" rx="8" fill="var(--bg-elevated)" stroke="var(--text-primary)" />
-      <text x="390" y="72" textAnchor="middle" fontSize="13" fill="var(--text-primary)">当前节点 x</text>
-      <text x="390" y="88" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">dfs(x)</text>
-
-      <rect x="130" y="134" width="190" height="46" rx="8" fill="var(--bg-elevated)" stroke="var(--accent)" />
-      <text x="225" y="157" textAnchor="middle" fontSize="11" fill="var(--text-primary)">left = left != null</text>
-      <text x="225" y="172" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">找到左侧目标</text>
-      <rect x="460" y="134" width="190" height="46" rx="8" fill="var(--bg-elevated)" stroke="var(--accent)" />
-      <text x="555" y="157" textAnchor="middle" fontSize="11" fill="var(--text-primary)">right = right != null</text>
-      <text x="555" y="172" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">找到右侧目标</text>
-
-      <line x1="390" y1="94" x2="225" y2="134" stroke="var(--text-secondary)" strokeWidth="2" />
-      <line x1="390" y1="94" x2="555" y2="134" stroke="var(--text-secondary)" strokeWidth="2" />
-      <line x1="225" y1="180" x2="390" y2="180" stroke="var(--accent)" strokeWidth="2.4" />
-      <line x1="555" y1="180" x2="390" y2="180" stroke="var(--accent)" strokeWidth="2.4" />
-      <polygon points="382,176 390,168 398,176" fill="var(--accent)" />
-
-      <rect x="280" y="188" width="220" height="40" rx="8" fill="var(--bg-elevated)" stroke="var(--accent)" />
-      <text x="390" y="210" textAnchor="middle" fontSize="12" fill="var(--text-primary)">左右均命中 → 返回 x</text>
-      <text x="390" y="222" textAnchor="middle" fontSize="11" fill="var(--accent)">=> 最近公共祖先（LCA）</text>
-    </svg>
-  </div>
-  <figcaption className="mt-2 text-center text-xs text-secondary">
-    左右子树都返回命中时才是汇合点；否则返回非空一侧。
-  </figcaption>
-</figure>
-
-#### 图 4：重复值不是同一节点（按引用/指针比较）
-
-<figure className="mdx-figure not-prose mx-auto my-6 max-w-[860px]">
-  <div className="rounded-card border border-border bg-elevated p-4">
-    <svg viewBox="0 0 860 240" role="img" aria-label="重复值示例解剖：值=2 但两条引用路径不同，必须按引用判等" className="mx-auto block h-auto w-full max-w-[860px]">
-      <rect x="8" y="8" width="844" height="224" rx="8" fill="var(--bg)" stroke="var(--border)" />
-      <text x="32" y="32" fontSize="12" fill="var(--text-secondary)">同值误区：值为 2 的两个节点不是同一引用</text>
-
-      <line x1="300" y1="110" x2="210" y2="166" stroke="var(--text-secondary)" strokeWidth="2" />
-      <line x1="300" y1="110" x2="390" y2="166" stroke="var(--text-secondary)" strokeWidth="2" />
-      <line x1="390" y1="110" x2="470" y2="166" stroke="var(--text-secondary)" strokeWidth="2" />
-      <line x1="390" y1="110" x2="560" y2="166" stroke="var(--text-secondary)" strokeWidth="2" />
-
-      <g>
-        <circle cx="300" cy="110" r="30" fill="var(--bg-elevated)" stroke="var(--text-primary)" strokeWidth="2" />
-        <text x="300" y="115" textAnchor="middle" fontSize="13" fill="var(--text-primary)">1</text>
-      </g>
-
-      <g>
-        <rect x="178" y="164" width="64" height="28" rx="6" fill="var(--bg)" stroke="#d96c6c" />
-        <text x="210" y="182" textAnchor="middle" fontSize="10" fill="#d96c6c">A 分支</text>
-        <circle cx="210" cy="206" r="24" fill="#f9ebeb" stroke="#d96c6c" strokeWidth="2" />
-        <text x="210" y="210" textAnchor="middle" fontSize="12" fill="#7a2222">2a</text>
-      </g>
-      <g>
-        <rect x="348" y="164" width="64" height="28" rx="6" fill="var(--bg)" stroke="#d96c6c" />
-        <text x="380" y="182" textAnchor="middle" fontSize="10" fill="#d96c6c">B 分支</text>
-        <circle cx="380" cy="206" r="24" fill="#f9ebeb" stroke="#d96c6c" strokeWidth="2" />
-        <text x="380" y="210" textAnchor="middle" fontSize="12" fill="#7a2222">2b</text>
-      </g>
-
-      <g>
-        <rect x="468" y="164" width="64" height="28" rx="6" fill="var(--bg)" stroke="#2f8f5f" />
-        <text x="500" y="182" textAnchor="middle" fontSize="10" fill="#2f8f5f">引用 A</text>
-        <ellipse cx="500" cy="206" rx="24" ry="16" fill="#ebf8ef" stroke="#2f8f5f" strokeWidth="2" />
-        <text x="500" y="209" textAnchor="middle" fontSize="10" fill="#1b5a3b">p</text>
-      </g>
-      <g>
-        <rect x="580" y="164" width="64" height="28" rx="6" fill="var(--bg)" stroke="#2f8f5f" />
-        <text x="612" y="182" textAnchor="middle" fontSize="10" fill="#2f8f5f">引用 B</text>
-        <ellipse cx="612" cy="206" rx="24" ry="16" fill="#ebf8ef" stroke="#2f8f5f" strokeWidth="2" />
-        <text x="612" y="209" textAnchor="middle" fontSize="10" fill="#1b5a3b">q</text>
-      </g>
-
-      <text x="210" y="236" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">p === 2a ? true</text>
-      <text x="380" y="236" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">q === 2b ? true</text>
-
-      <rect x="560" y="48" width="276" height="56" rx="8" fill="var(--bg-elevated)" stroke="var(--accent)" />
-      <text x="698" y="70" textAnchor="middle" fontSize="11" fill="var(--text-primary)">关键规则</text>
-      <text x="570" y="86" fontSize="10" fill="var(--text-primary)">比较必须是引用/身份相等</text>
-      <text x="570" y="99" fontSize="10" fill="var(--text-secondary)">值相等仅说明“看起来一样”，不能代替同一节点。</text>
-    </svg>
-  </div>
-  <figcaption className="mt-2 text-center text-xs text-secondary">
-    即便值都为 `2`，`p` 与 `q` 分别只对应 `2a` 与 `2b` 这两个不同节点。
-  </figcaption>
-</figure>
-
-<TreeDiagram />
-
-## 思考引导
-
-### 1) 先问问题，不先并集
-公共父节点不是“值一样就一致”，而是“两条路径的最早汇合点”。先确认树是否有父引用，决定是否回溯。
-
-### 2) 识别不变式
-从目标节点到根的路径形成有序祖先链，两个链的第一个公共元素即答案。
-
-### 3) 为什么它一定成立
-树有唯一根到叶路径。将两条链对齐后，后续同步扫描可找出最近公共点，这比盲目遍历节点集高效且稳定。
-
-### 4) 常见误区
-把节点值相同误判为公共节点，或者遗漏空节点边界会产生伪解。
-
-### 5) 你能找到一个反例吗
-两个树段共享某数值但无同一引用，能暴露“值比较误导”。
-
-### 6) 迁移到下一题
-版本归并、调用链比对都可抽象为路径交汇问题。先判断是否存在唯一父路径。
-## 代码对照
-
-<CodeTabs>
-  <Tab label="C++">
 ```cpp
-struct TreeNode {
-    int val;
-    TreeNode* left;
-    TreeNode* right;
-    TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
-};
+const BstNode* lowestCommonAncestor(
+    const BstNode* root,
+    const BstNode* first,
+    const BstNode* second) {
+    if (!root || !first || !second)
+        return nullptr;
 
-class Solution {
-public:
-    TreeNode* lowestCommonAncestor(TreeNode* root, TreeNode* p, TreeNode* q) {
-        if (!root || root == p || root == q) {
-            return root;
+    const int low =
+        std::min(first->value, second->value);
+    const int high =
+        std::max(first->value, second->value);
+
+    const BstNode* current = root;
+    while (current) {
+        if (current->value > high) {
+            current = current->left;
+        } else if (current->value < low) {
+            current = current->right;
+        } else {
+            return current;
         }
-
-        auto left = lowestCommonAncestor(root->left, p, q);
-        auto right = lowestCommonAncestor(root->right, p, q);
-
-        if (left && right) {
-            return root;
-        }
-        return left ? left : right;
     }
-};
-```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-class TreeNode {
-    val: number;
-    left: TreeNode | null;
-    right: TreeNode | null;
-    constructor(val: number) {
-        this.val = val;
-        this.left = null;
-        this.right = null;
-    }
-}
-
-function lowestCommonAncestor(
-    root: TreeNode | null,
-    p: TreeNode | null,
-    q: TreeNode | null,
-): TreeNode | null {
-    if (!root || root === p || root === q) {
-        return root;
-    }
-
-    const left = lowestCommonAncestor(root.left, p, q);
-    const right = lowestCommonAncestor(root.right, p, q);
-
-    if (left && right) return root;
-    return left || right;
+    return nullptr;
 }
 ```
-  </Tab>
-</CodeTabs>
 
-## 常见误区
+若题目要求作者式“严格父节点”，且一个目标恰好是另一个的祖先，上面的含自身版本还需调整。面试中不能只说LCA三个字，必须用祖先与后代样例固定定义。
 
-<Callout type="trap">
-  <strong>现象 →</strong> 结果总是返回根节点。
-  <strong>原因 →</strong> 忘了“左右都命中才是 LCA”，而不是只要当前节点非空就返回。
-  <strong>修复 →</strong> 按规则返回：若左右都非空返回当前，否则返回非空一侧。
+### 有父指针时转化为链表公共节点
+
+若每个节点都有parent，目标到根分别形成两条单链。“**有父指针时转化为链表公共节点**”：可以记录两条上行路径再比较，也可以先计算深度，让较深节点先上移深度差，然后两个指针同步向父亲移动，首次相同处就是答案。
+
+```cpp
+const ParentNode* commonAncestor(
+    const ParentNode* first,
+    const ParentNode* second) {
+    if (!first || !second)
+        return nullptr;
+
+    auto depth = [](const ParentNode* node) {
+        std::size_t result = 0;
+        for (; node; node = node->parent)
+            ++result;
+        return result;
+    };
+
+    std::size_t leftDepth = depth(first);
+    std::size_t rightDepth = depth(second);
+    while (leftDepth > rightDepth) {
+        first = first->parent;
+        --leftDepth;
+    }
+    while (rightDepth > leftDepth) {
+        second = second->parent;
+        --rightDepth;
+    }
+    while (first != second) {
+        first = first->parent;
+        second = second->parent;
+    }
+    return first;
+}
+```
+
+两条父链的尾部是共同的根侧后缀，和链表第一个公共节点同构。时间O(h)，额外空间O(1)。若两节点来自不同树，两个指针最终同时成为nullptr；若要严格父节点，可从first->parent与second->parent开始。
+
+### 普通树保存根到节点的路径
+
+作者面对的是没有parent的普通树：TreeNode只有m_nValue和m_vChildren，可有任意数量孩子。无法从目标向上走，只能从根分别找到目标，保存两条祖先路径，再取最后一个相同节点。这就是“**普通树保存根到节点的路径**”。
+
+<CommonParentTreeDiagram />
+
+Test1中根1的孩子是2、3；2的孩子是4、5；4的孩子是6、7；5的孩子是8、9、10。查询6与8时，路径分别是1、2、4和1、2、5，最后公共节点为2。
+
+## 路径回溯如何只保留成功分支
+
+GetNodePath进行深度优先搜索。当前根就是目标时直接返回true；否则先把当前节点压入path，再依次递归孩子。某个孩子找到目标就停止继续搜索；所有孩子都失败时，弹出刚压入的当前节点并返回false。
+
+这种“选择节点、递归尝试、失败撤销”的方式称为<Term def="深度优先搜索中先把当前节点加入路径，若其子树找不到目标再将它移除。">路径回溯</Term>。函数返回true时，path里只留下根到目标之前的节点，不含目标自身。
+
+```cpp
+bool GetNodePath(
+    const TreeNode* root,
+    const TreeNode* target,
+    std::list<const TreeNode*>& path) {
+    if (root == target)
+        return true;
+
+    path.push_back(root);
+    bool found = false;
+
+    auto child = root->m_vChildren.begin();
+    while (!found
+           && child < root->m_vChildren.end()) {
+        found = GetNodePath(
+            *child, target, path);
+        ++child;
+    }
+
+    if (!found)
+        path.pop_back();
+    return found;
+}
+
+const TreeNode* GetLastCommonNode(
+    const std::list<const TreeNode*>& path1,
+    const std::list<const TreeNode*>& path2) {
+    auto first = path1.begin();
+    auto second = path2.begin();
+    const TreeNode* last = nullptr;
+
+    while (first != path1.end()
+           && second != path2.end()) {
+        if (*first == *second)
+            last = *first;
+        ++first;
+        ++second;
+    }
+    return last;
+}
+
+const TreeNode* GetLastCommonParent(
+    const TreeNode* root,
+    const TreeNode* node1,
+    const TreeNode* node2) {
+    if (!root || !node1 || !node2)
+        return nullptr;
+
+    std::list<const TreeNode*> path1;
+    GetNodePath(root, node1, path1);
+    std::list<const TreeNode*> path2;
+    GetNodePath(root, node2, path2);
+    return GetLastCommonNode(path1, path2);
+}
+```
+
+上面保持作者逻辑和接口。它假设递归收到的孩子指针非空，且结构确实是无环树；如果m_vChildren含nullptr会解引用空指针，如果输入是有环图则可能无限递归。工程版本应在递归入口检查root，并对非树结构使用visited集合。
+
+## 两条路径为什么只需同步扫描
+
+根到任意节点的路径唯一，因此两条路径的公共部分必然是从根开始的一段<Term def="两条根路径从起点开始连续相同的节点序列，分叉后不会再次相交。">公共前缀</Term>。同步从path1和path2开头比较，每次相同就更新pLast；首次不同之后，在合法树中不会再次出现同一节点。
+
+<CommonParentPathLab />
+
+作者循环在不同时没有break，而是继续前进。对合法树不会影响答案，因为两条根路径一旦分叉便不能重新汇合；若能重新汇合，输入实际是共享子节点的有向无环图，不再满足树的唯一父节点性质。现代实现可以在首次不同时break，让这个不变式更清楚。
+
+比较使用节点指针而不是m_nValue，这是<Term def="通过对象地址或稳定ID判断是否为同一个树节点，而不是只比较节点保存的值。">节点身份</Term>。两个不同节点即使都存数字2，也不是公共节点。作者的算法比较指针是正确的，但测试辅助函数只比较结果值；若树中允许重复值，测试可能把错误节点误判为通过，应改为直接比较pResult与pExpected。
+
+## 最低公共祖先与严格公共父节点
+
+作者文件名和函数名使用CommonParent，GetNodePath又在命中目标前返回，明确排除了目标自身。由此形成<Term def="答案必须是目标节点真正的父辈，目标自身不能作为自己的祖先参与比较。">严格公共父节点</Term>语义。
+
+<CommonParentConventionDiagram />
+
+链1到2到3到4到5中，查询5与4：
+
+- 节点5的祖先路径是1、2、3、4。
+- 节点4的祖先路径是1、2、3。
+- 最后公共节点是3，正是作者Test2的期望。
+
+常见LCA定义允许节点作为自身祖先，则答案会是4。现有旧页面采用“root等于p或q就返回root”的二叉递归，得到的是含自身LCA，既改变了约定，也改变了树结构。重建后的页面同时讲清两种定义，但作者代码与官方测试以严格父节点为准。
+
+<Callout type="trap" title="看到 LCA 就直接套二叉树左右递归">
+作者的TreeNode是孩子vector，不是left/right二叉节点；源码方案是两次路径搜索。套用另一种递归即使某些样例答案相同，也没有覆盖普通多叉树、结构澄清和严格父节点语义。
 </Callout>
 
-## 小结
+## 缺失节点、根节点与相同节点
 
-- 递归天然体现“先查子树，后合并”，非常适配公共祖先这类汇合点问题。
+GetLastCommonParent先拒绝空根或空目标。目标不在树中时，GetNodePath会逐层回溯，把path恢复为空；空路径与任何路径都没有公共节点，因此返回nullptr。作者虽然忽略两个布尔返回值，最终结果仍是nullptr，但显式检查found会更清楚。
 
-<Callout type="tip">
-  <strong>复习提醒：</strong> 若题目允许一方不存在，在入口先预检可避免返回错误的根节点。
+如果查询目标之一就是根，命中时路径为空。由于作者不把目标放入路径，根不可能成为自己的严格父节点，结果为nullptr。查询两个相同的非根节点时，两条路径相同，返回该节点的父亲；查询根与根仍返回nullptr。
+
+```cpp
+const TreeNode* strictCommonParent(
+    const TreeNode* root,
+    const TreeNode* first,
+    const TreeNode* second) {
+    if (!root || !first || !second)
+        return nullptr;
+
+    std::vector<const TreeNode*> left;
+    std::vector<const TreeNode*> right;
+    if (!getAncestorPath(
+            root, first, left)
+        || !getAncestorPath(
+            root, second, right)) {
+        return nullptr;
+    }
+
+    const TreeNode* last = nullptr;
+    const std::size_t common =
+        std::min(left.size(), right.size());
+    for (std::size_t i = 0;
+         i < common && left[i] == right[i];
+         ++i) {
+        last = left[i];
+    }
+    return last;
+}
+```
+
+现代版本应让getAncestorPath在入口处理空指针，并明确它在命中目标前返回、不把目标压入vector。两次搜索最坏各访问整棵树，时间O(n)；两条路径和递归栈都至多O(h)。在极度退化的链上h等于n，递归可能栈溢出，可改为显式栈DFS。
+
+## 四组官方测试逐项复现
+
+<CommonParentOfficialCaseLab />
+
+Test1检查普通分叉多叉树中不同子树的公共父节点2。Test2把树退化成单链，专门锁定“节点4不能作为自身父节点”，所以5与4返回3。Test3创建独立节点6但不连接进树，验证树外目标返回nullptr。Test4把根和两个目标都设为nullptr，验证入口防御。
+
+测试仍有两个局限。第一，Test函数用节点值比较结果与期望，重复值时不可靠；第二，各测试创建节点后没有调用DestroyTree，示例进程结束时由操作系统回收，但长期测试应释放内存。它们不改变算法答案，却是代码审查时应指出的工程问题。
+
+验证还应增加：两节点相同、其中一个是根、孩子vector含空指针、重复值但不同身份、极深链，以及非法共享子节点结构。测试的目的不仅是得到一个值，还要证明输入契约和算法假设一致。
+
+<Callout type="trap" title="按节点值判断公共节点或测试结果">
+树中可以存在相同值的不同对象。路径比较和断言都应使用指针或稳定节点ID；按m_nValue比较会把两个不同分支上的同值节点混为一谈。
 </Callout>
+
+## 先澄清结构再选择算法
+
+“**先澄清树的结构再选择算法**”可以整理为固定面试流程：
+
+<Stepper>
+  <Step title="盘点可用结构">
+    <CommonParentDecisionMap />
+    区分二叉搜索树、父指针树与只有孩子的普通树。
+  </Step>
+  <Step title="复原作者多叉树">
+    <CommonParentTreeDiagram />
+    沿6与8两条分支看到公共前缀1、2和后续分叉。
+  </Step>
+  <Step title="回溯生成祖先路径">
+    <CommonParentPathLab />
+    找到目标时保留成功分支，失败分支逐层弹出。
+  </Step>
+  <Step title="固定祖先定义">
+    <CommonParentConventionDiagram />
+    用链式样例区分含自身LCA与作者严格公共父节点。
+  </Step>
+  <Step title="覆盖官方边界">
+    <CommonParentOfficialCaseLab />
+    同时验证分叉树、退化链、树外节点与空输入。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 最低公共祖先没有脱离结构的唯一模板，首先要询问有序性、父指针、孩子数量和成员保证。
+2. 二叉搜索树可利用大小关系单路下行，首个落在两目标值区间的节点就是汇合点。
+3. 有父指针时可转化为两条链表，先对齐深度再同步向根移动。
+4. 作者处理没有父指针的普通多叉树，分别保存根到两个目标之前的祖先路径。
+5. GetNodePath通过压入、递归和失败弹出实现路径回溯。
+6. 两条根路径的公共部分必为公共前缀，最后相同节点就是最低公共父节点。
+7. 作者路径排除目标自身，因此5与4在链上返回3，而常见含自身LCA会返回4。
+8. 算法按节点身份比较正确，作者测试按值比较则可能在重复值树中误报。
+9. 两次搜索时间O(n)，路径与递归栈空间O(h)；空输入或树外节点返回nullptr。
+
+<Exercises>
+
+**问题 1：为什么查询节点6与8时作者返回2？**
+
+<Answer>目标6的祖先路径是1、2、4，目标8的祖先路径是1、2、5。两条路径的公共前缀为1、2，最后一个相同节点是2。</Answer>
+
+**问题 2：为什么链上查询5与4不返回4？**
+
+<Answer>作者在当前根等于目标时立即返回true，未把目标自身压入路径。节点4的路径只有1、2、3，因此严格公共父节点是3；返回4属于允许节点作为自身祖先的另一种LCA定义。</Answer>
+
+**问题 3：有父指针时为什么可以转化为链表公共节点？**
+
+<Answer>每个节点沿parent到根形成唯一单链，两条链一旦相交，之后到根的部分全部相同。对齐深度后同步上移，第一次身份相同的节点就是最近汇合点。</Answer>
+
+**问题 4：目标不在树中时作者为何仍返回nullptr？**
+
+<Answer>搜索失败会把沿途压入的节点全部弹出，目标对应路径最终为空。空路径与另一条路径没有可同步比较的元素，GetLastCommonNode保留nullptr。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="结构澄清">写算法前确认树的有序性、父指针、孩子数量和输入保证。</GlossaryItem>
+  <GlossaryItem term="路径回溯">递归尝试分支，失败时撤销当前路径节点的搜索方式。</GlossaryItem>
+  <GlossaryItem term="公共前缀">两条根路径从根开始连续相同、直到分叉的节点序列。</GlossaryItem>
+  <GlossaryItem term="节点身份">用地址或稳定ID判断两个引用是否指向同一对象。</GlossaryItem>
+  <GlossaryItem term="严格公共父节点">不允许目标自身作为祖先，答案必须真正位于目标上方。</GlossaryItem>
+</Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题68"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/68_CommonParentInTree/CommonParentInTree.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

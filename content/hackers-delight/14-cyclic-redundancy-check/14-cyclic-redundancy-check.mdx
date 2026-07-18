@@ -1,0 +1,339 @@
+---
+title: "Chapter 14 · Cyclic Redundancy Check"
+type: C
+section: "HD2 · 校验与曲线"
+order: 14
+description: "按Hacker's Delight第二版第14章重建CRC导论、GF(2)多项式理论、错误检测保证及CRC-32逐bit/反射/查表实践。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/hackers-delight-9780321842688"
+draft: false
+---
+
+import { HD14PolynomialDivisionLab, HD14XorArithmeticLab, HD14CodewordSyndromeLab, HD14BurstGuaranteeLab, HD14LinearityLab, HD14ParameterModelLab, HD14BitwiseRegisterLab, HD14ReflectionLab, HD14LookupTableLab, HD14StreamingLab, HD14CheckVectorLab, HD14CRCVsCorrectionLab, HD14CRCCertificateLab } from "@/components/mdx/hackers-delight/diagrams/14-cyclic-redundancy-check";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释cyclic redundancy check为何是error detection而不是error correction或cryptographic authentication
+- 能计算GF(2) polynomial division、augmented message、remainder与syndrome
+- 能实现CRC-32的MSB-first、reflected bitwise和256-entry table variants
+- 能分析generator degree对single-bit、odd-weight与burst error detection guarantees的影响
+- 能设计包含width、poly、init、RefIn、RefOut、XorOut、check和residue的可互操作CRC contract
+
+</Objectives>
+
+## 从“多附加32个bits能保证什么”开始
+
+先预测：sender在message后附加32-bit CRC，receiver发现checksum不匹配。它能知道哪一bit错了吗？通常不能。<Term def="把message视为GF(2) polynomial，附加对generator division所得remainder，用于检测传输或存储错误的code。">循环冗余校验</Term>（cyclic redundancy check，CRC）主要回答“received codeword是否满足预定polynomial constraint”，不是“如何修复”。
+
+CRC常用于data transmission与storage。检测到nonzero syndrome后，protocol可丢弃frame、发negative acknowledgment并retransmit；若没有recovery path，CRC仍只提供detection signal。
+
+<HD14CRCVsCorrectionLab />
+
+CRC也不是cryptographic hash或message authentication code。Because operation is linear，attacker可有意修改message并相应修改CRC。它擅长对付noise、burst corruption与accidental faults，不提供adversarial integrity。
+
+## 14.1 Introduction
+
+CRC Introduction（CRC导论）先建立codeword、check bits、syndrome与recovery path的共同语言，再进入polynomial proof。
+
+### A complete codeword has data and check bits
+
+设message有$k$ bits，generator degree为$r$。Sender生成$r$ check bits并附在message后，transmitted codeword有$k+r$ bits。Receiver用same generator验证remainder或known residue。
+
+直觉上，generator像binary long division的divisor，但arithmetic发生在<Term def="只有zero和one两个elements、addition与subtraction都等于XOR且没有carry的finite field。">二元有限域</Term> $\operatorname{GF}(2)$。每个bit是polynomial coefficient；bit position就是$x$的power。
+
+例如bit string 101101表示
+
+$$
+x^5+x^3+x^2+1.
+$$
+
+在GF(2)中one plus one equalszero，因此polynomial add与subtract完全相同：
+
+$$
+A(x)+B(x)
+=
+A(x)-B(x)
+=
+A(x)\oplus B(x).
+$$
+
+<HD14XorArithmeticLab />
+
+Long division无需比较numeric magnitude，只看current highest coefficient是否one；若one，就XOR appropriately shifted generator。
+
+### CRC detects disagreement, not location
+
+Valid codeword的remainder满足protocol-specific expected value。Simple augmented model期望zero；real parameterized models可能以fixed residue表示valid framed codeword。Nonzero or unexpected<Term def="Received polynomial除generator后的remainder，用于指示error pattern是否落在code的undetectable set。">错误伴随式</Term>（syndrome）意味着corruption detected。
+
+<HD14CodewordSyndromeLab />
+
+Same syndrome可能对应many error patterns，所以CRC一般不能定位error。Chapter 15将讨论专门设计为correction的Hamming and SEC-DED codes。
+
+## 14.2 Theory
+
+CRC Theory（CRC理论）把bit-string operation化为GF(2) polynomial division，并从error polynomial推导可检测与不可检测集合。
+
+### Encoding is polynomial remainder construction
+
+令message polynomial为$M(x)$，degree-$r$ generator为$G(x)$。先附加$r$ zeros，相当于multiply by $x^r$。计算
+
+$$
+R(x)
+=
+\bigl(M(x)x^r\bigr)\bmod G(x),
+\qquad
+\deg R\lt r.
+$$
+
+Transmit
+
+$$
+T(x)
+=
+M(x)x^r+R(x).
+$$
+
+GF(2)中plus与minus相同，所以$T(x)$可以被$G(x)$整除：
+
+$$
+T(x)\bmod G(x)=0.
+$$
+
+<HD14PolynomialDivisionLab />
+
+```c
+static uint32_t polynomial_remainder(uint32_t dividend,
+                                     uint32_t generator) {
+    unsigned generator_degree = floor_log2(generator);
+    while (dividend != 0u &&
+           floor_log2(dividend) >= generator_degree) {
+        unsigned shift = floor_log2(dividend) - generator_degree;
+        dividend ^= generator << shift;
+    }
+    return dividend;
+}
+```
+
+Toy function要求dividend与shifted generator fit inword。Production CRC streams bits throughfixed-width register，而不是先构造可能very wide augmented integer。
+
+### Received syndrome depends only on the error polynomial
+
+若channel添加error pattern $E(x)$，receiver得到$T(x)+E(x)$。Because $T$被generator整除：
+
+$$
+\bigl(T(x)+E(x)\bigr)\bmod G(x)
+=
+E(x)\bmod G(x).
+$$
+
+CRC detects error exactly when$E(x)$不是$G(x)$的multiple。Undetected set由generator algebra决定，与original message无关。
+
+<HD14LinearityLab />
+
+<Term def="CRC remainder mapping在zero init和zero final mask下满足remainder of M XOR E等于two remainders XOR的性质。">CRC线性</Term>解释了syndrome analysis，也说明CRC不抗intentional forgery。Nonzero initialization与final XOR把mapping变成affine；比较two messages时要先移除fixed offsets。
+
+### Generator structure determines guarantees
+
+不是所有degree-$r$ polynomials equally good。Generator highest和constant coefficients应为one，才能保持declared degree并检测low-end behavior。常见guarantees包括：
+
+- Single-bit error $E(x)=x^j$不会被含multiple terms的generator整除，因此all single-bit errors detected。
+- 若$G(x)$含factor $x+1$，all odd-weight error patterns detected，因为它们在$x=1$处value one。
+- Double-bit detection取决于$G(x)$是否divides $x^k+1$，因此与maximum protected length有关。
+- Degree-$r$ generator检测all nonzero bursts whose span不超过$r$。
+
+<Term def="First and last corrupted bits之间span有限、内部bits可任意的contiguous error pattern。">突发错误</Term>可写成
+
+$$
+E(x)=x^jB(x),
+$$
+
+其中$B$ first和last coefficients为one。若burst span不超过$r$，$B$ degree低于$G$且nonzero，不可能被$G$整除。
+
+<HD14BurstGuaranteeLab />
+
+对longer random bursts，undetected probability常近似$2^{-r}$，但这是model-based probability，不是adversarial guarantee。Polynomial selection还要匹配frame length与desired Hamming distance；只看width不够。
+
+### Why the code is called cyclic
+
+在fixed-length cyclic code中，codeword polynomial乘$x$并modulo $x^n-1$相当于cyclic shift coefficients。若original codeword由generator约束，shifted word仍在same code under appropriate generator relation。Cyclic algebra让LFSR、streaming division与efficient table computation自然对应。
+
+## 14.3 Practice
+
+CRC Practice（CRC实践）把same algebra落实为parameter tuple、bitwise reference、reflected orientation、lookup table与streaming API。
+
+### CRC identity is a parameter tuple, not a short name
+
+<Term def="完整指定CRC variant的width、polynomial、initial register、input/output reflection、final XOR、check与residue values。">CRC参数组</Term>至少包含：
+
+- `Width`：register bits和generator degree。
+- `Poly`：省略leading one的normal truncated generator。
+- `Init`：processing开始时register state。
+- `RefIn`：each input byte是否按least-significant bit first处理。
+- `RefOut`：final register orientation。
+- `XorOut`：returned value前的final XOR mask。
+- `Check`：ASCII `123456789`的canonical result。
+- `Residue`：complete valid codeword再次processing后的fixed remainder。
+
+<HD14ParameterModelLab />
+
+CRC-32/ISO-HDLC常用tuple是width 32、poly `04C11DB7`、init `FFFFFFFF`、RefIn true、RefOut true、XorOut `FFFFFFFF`，check `CBF43926`，catalog residue `DEBB20E3`。只说“CRC-32”可能仍有ambiguity，因为other variants可共享width甚至polynomial。
+
+### MSB-first and reflected implementations are the same model in different orientations
+
+Normal MSB-first registerleft shifts，uses truncated polynomial `0x04C11DB7`。Reflected LSB-first registerright shifts，usesbit-reversed 32-bit constant `0xEDB88320`。
+
+<Term def="按least-significant input bit first并right shift register实现CRC，使用normal truncated polynomial的bit-reversed constant。">反射实现</Term>不是machine byte endianness的synonym。It specifies bit processing orientation within protocol bytes and register equations。
+
+<HD14ReflectionLab />
+
+```c
+static uint32_t crc32_iso_hdlc_bitwise(const uint8_t *data,
+                                       size_t length) {
+    uint32_t crc = UINT32_MAX;
+    for (size_t index = 0; index < length; ++index) {
+        crc ^= data[index];
+        for (unsigned bit = 0; bit < 8u; ++bit) {
+            uint32_t mask = 0u - (crc & 1u);
+            crc = (crc >> 1u) ^ (UINT32_C(0xEDB88320) & mask);
+        }
+    }
+    return ~crc;
+}
+```
+
+Use explicit length，not NUL terminator；binary payload can contain zero bytes。Unsigned arithmetic makesright shift logical andwrap defined。
+
+<HD14BitwiseRegisterLab />
+
+### A byte table composes eight LFSR steps
+
+Bitwise loop executeseight conditional polynomial steps per byte。Because transition islinear，precompute all 256 effects ofone byte：
+
+```c
+static void crc32_make_table(uint32_t table[256]) {
+    for (unsigned byte = 0; byte < 256u; ++byte) {
+        uint32_t crc = byte;
+        for (unsigned bit = 0; bit < 8u; ++bit) {
+            uint32_t mask = 0u - (crc & 1u);
+            crc = (crc >> 1u) ^ (UINT32_C(0xEDB88320) & mask);
+        }
+        table[byte] = crc;
+    }
+}
+```
+
+<HD14LookupTableLab />
+
+Runtime update becomes
+
+```c
+static uint32_t crc32_update_table(uint32_t state,
+                                   const uint8_t *data,
+                                   size_t length,
+                                   const uint32_t table[256]) {
+    for (size_t index = 0; index < length; ++index) {
+        uint8_t slot = (uint8_t)(state ^ data[index]);
+        state = (state >> 8u) ^ table[slot];
+    }
+    return state;
+}
+```
+
+Table consumes1024 bytes and one lookup per input byte。Slicing-by-N或carry-less multiplication可处理multiple bytes per iteration，但constants must be generated from exact polynomial/orientation and verified against reference。
+
+### Streaming must preserve the unfinalized register
+
+CRC update isincremental。Initialize once，feed all chunks into same internal state，applyRefOut/XorOut only when finalizing。If every chunk separately complements result and then uses that visible checksum asnext state，composition breaks。
+
+<HD14StreamingLab />
+
+API应分成`init`、`update`、`finalize`，并明确whether returned state is raw or finalized。Empty message也有defined CRC，因为Init与XorOut may be nonzero。
+
+### Check vectors catch parameter mismatches
+
+<Term def="固定message及其expected CRC，用于验证parameter tuple、bit orientation和implementation interoperability的known-answer test。">校验向量</Term>首选ASCII `123456789`，因为catalog为each variant给出check value。CRC-8/SMBUS with poly07 givesF4；CRC-32/ISO-HDLC givesCBF43926。
+
+<HD14CheckVectorLab />
+
+One vector不足以覆盖streaming bugs。Test suite还应包含empty input、embedded zero byte、all byte values、split at every boundary、bitwise-versus-table differential tests，以及append checksum后的expected residue。
+
+<Callout type="trap" title="Polynomial相同就一定是同一个CRC">
+Init、RefIn、RefOut、XorOut与augmentation convention都可改变result。修法是用complete parameter tuple、123456789 check和residue共同identify implementation。
+</Callout>
+
+<Callout type="trap" title="CRC通过就说明数据可信且可纠错">
+CRC只能在selected error model下以high probability检测accidental corruption，不能抵抗intentional modification，也通常不提供error location。修法是adversarial场景用MAC/signature，correction场景用ECC或retransmission protocol。
+</Callout>
+
+## 一条CRC implementation的验收链
+
+<Stepper>
+<Step title="固定parameter tuple与bit mapping">
+写明width、normal poly、Init、RefIn、RefOut、XorOut、augmentation、check和residue，区分bit orientation与byte endianness。
+
+<HD14ParameterModelLab />
+</Step>
+<Step title="保留bitwise reference并派生fast path">
+先用GF(2) register实现one bit at a time，再从same reflected polynomial生成table，streaming过程中不重复finalize。
+
+<HD14BitwiseRegisterLab />
+</Step>
+<Step title="known-answer与differential tests闭环">
+验证123456789、empty、embedded zero、all splits、valid residue，并让bitwise、table与trusted implementation逐message一致。
+
+<HD14CRCCertificateLab />
+</Step>
+</Stepper>
+
+<HD14CRCCertificateLab />
+
+## 小结
+
+Chapter 14 Cyclic Redundancy Check先明确CRC是error detection code。Message bits映射为GF(2) polynomial，append generator degree数量的zeros，division remainder成为check bits；valid augmented codeword被generator整除，received syndrome只取决于error polynomial。
+
+CRC theory把detection guarantee归结为generator factors和frame length：可保证single-bit、特定double-bit、odd-weight与bounded burst errors，long random burst miss probability约随$2^{-r}$下降。CRC linearity同时排除了cryptographic integrity。
+
+CRC practice要求完整parameter tuple。CRC-32/ISO-HDLC的normal polynomial与reflected constant描述same model的different bit orientations；bitwise reference、256-entry table、streaming state、check vector和residue共同建立interoperability certificate。
+
+<Exercises>
+
+**问题 1**：为什么augmented codeword $T(x)=M(x)x^r+R(x)$能被generator整除？
+
+<Answer>
+R是Mx的r次方除G的remainder，因此Mx的r次方等于某个quotient乘G再加R。GF(2)中加减相同，再加一次R会cancel remainder，T只剩quotient乘G，所以remainder为zero。
+</Answer>
+
+**问题 2**：degree-four generator为什么保证检测span不超过four的所有nonzero burst errors？
+
+<Answer>
+Burst可写成x的j次方乘B，B的first与last coefficients为one。Span不超过four使B degree低于four；nonzero lower-degree polynomial不能被degree-four generator整除，x的j次方也不引入generator factor，因此syndrome nonzero。
+</Answer>
+
+**问题 3**：`0x04C11DB7`与`0xEDB88320`为何都出现在CRC-32 implementation中？
+
+<Answer>
+前者是省略leading one的normal polynomial，用于MSB-first left-shifting orientation；后者是其32-bit reversal，用于LSB-first reflected right-shifting orientation。它们可实现same parameter model，但不能混用shift direction。
+</Answer>
+
+**问题 4**：把message分成three chunks计算CRC时，什么时候应用initial value和final XOR？
+
+<Answer>
+Initial value只在first chunk之前装入一次。Each chunk继续更新same raw register；all chunks结束后才执行output reflection convention和XorOut。Canonical check、one-shot result与all possible chunk splits应一致。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="循环冗余校验">把message视为GF(2) polynomial，附加对generator division所得remainder，用于检测传输或存储错误的code。</GlossaryItem>
+<GlossaryItem term="二元有限域">只有zero和one两个elements、addition与subtraction都等于XOR且没有carry的finite field。</GlossaryItem>
+<GlossaryItem term="错误伴随式">Received polynomial除generator后的remainder，用于指示error pattern是否落在code的undetectable set。</GlossaryItem>
+<GlossaryItem term="CRC线性">CRC remainder mapping在zero init和zero final mask下满足remainder of M XOR E等于two remainders XOR的性质。</GlossaryItem>
+<GlossaryItem term="突发错误">First and last corrupted bits之间span有限、内部bits可任意的contiguous error pattern。</GlossaryItem>
+<GlossaryItem term="CRC参数组">完整指定CRC variant的width、polynomial、initial register、input/output reflection、final XOR、check与residue values。</GlossaryItem>
+<GlossaryItem term="反射实现">按least-significant input bit first并right shift register实现CRC，使用normal truncated polynomial的bit-reversed constant。</GlossaryItem>
+<GlossaryItem term="校验向量">固定message及其expected CRC，用于验证parameter tuple、bit orientation和implementation interoperability的known-answer test。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Hacker's Delight, Second Edition, Chapter 14 · Cyclic Redundancy Check" adaptedUrl="https://www.informit.com/store/hackers-delight-9780321842688" />

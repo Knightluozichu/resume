@@ -1,97 +1,125 @@
-/**
- * <RubFinalReviewDiagram>：Ruby 基础教程总复习——知识串联图。
- *
- * 四层结构：对象模型 → 核心语法 → 类与模块 → 元编程与实战。
- *
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * viewBox 720×420，四周留白 >=32，字号 >=11。
- */
+"use client";
 
-const VIEW_W = 720;
-const VIEW_H = 420;
+import { RubyOfficialLab } from "./official-lab";
 
-const accent = "var(--accent)";
-const success = "var(--success)";
-const warning = "var(--warning)";
-const danger = "var(--danger)";
-const primary = "var(--text-primary)";
-const secondary = "var(--text-secondary)";
-const border = "var(--border)";
-const elevated = "var(--bg-elevated)";
+const partReviewCases = [
+  {
+    label: "第1-3章",
+    fields: [
+      ["能力", "从解释器、对象和容器走到完整命令行程序"],
+      ["综合证明", "实现带参数、输入、输出和错误状态的小命令"],
+      ["回查", "执行环境不确定先回第1章；对象/API不确定回第2章"],
+    ],
+  },
+  {
+    label: "第4-11章",
+    fields: [
+      ["能力", "用作用域、分支、循环、方法、类、块与异常组织行为"],
+      ["综合证明", "画出接收者、方法查找、块调用和异常传播链"],
+      ["回查", "状态错回4-8章；控制或清理错回5-7、10-11章"],
+    ],
+  },
+  {
+    label: "第12-21章",
+    fields: [
+      ["能力", "为核心类选择正确表示、API、编码和资源边界"],
+      ["综合证明", "完成文本/文件管线并覆盖Unicode、时间与回调失败"],
+      ["回查", "数据形状回12-16章；IO/文件/编码/时间/Proc回17-21章"],
+    ],
+  },
+  {
+    label: "第22-23章",
+    fields: [
+      ["能力", "把整书语义组合为可交付的数据处理工具"],
+      ["综合证明", "CSV到SQLite的版本化导入、查询、验证和回滚"],
+      ["回查", "解析回22章；来源、导入和检索闭环回23章"],
+    ],
+    alert: "终局复盘仍保留23个章节坐标。任何综合项目失败，都应能回指到一个或多个具体官方章节。",
+  },
+] as const;
 
-export function RubFinalReviewDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img" aria-label="Ruby 基础教程知识串联图。四层结构：对象模型（一切皆对象）、核心语法（字符串控制流）、类与模块（继承 Mixin 块）、元编程与实战（动态方法 Gems）。"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <text x={VIEW_W / 2} y={28} textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>
-            Ruby 全书知识串联
-          </text>
-          <text x={VIEW_W / 2} y={46} textAnchor="middle" fontSize="11" fill={secondary}>
-            对象模型 → 核心语法 → 类与模块 → 元编程与实战
-          </text>
+const failureCases = [
+  {
+    label: "对象状态",
+    fields: [
+      ["症状", "变量遮蔽、共享可变对象、错误receiver或class/module边界"],
+      ["最小证据", "object_id、class、作用域、ancestors与状态转移"],
+      ["相关章节", "4、7、8、9、12-15"],
+    ],
+  },
+  {
+    label: "控制分派",
+    fields: [
+      ["症状", "分支漏项、循环不终止、块未调用、异常被吞或Proc提前返回"],
+      ["最小证据", "调用者/接收者、参数、块、返回值、异常类与ensure路径"],
+      ["相关章节", "5-11、21"],
+    ],
+  },
+  {
+    label: "数据解释",
+    fields: [
+      ["症状", "数值精度、索引、Hash默认值、正则过匹配、字符乱码"],
+      ["最小证据", "类型、bytes/encoding、normalized form、match与边界样本"],
+      ["相关章节", "12-16、19、22"],
+    ],
+  },
+  {
+    label: "资源边界",
+    fields: [
+      ["症状", "文件泄漏、部分写入、时区漂移、回调悬挂或数据库半导入"],
+      ["最小证据", "owner、open/closed状态、transaction、deadline与rollback"],
+      ["相关章节", "10、17-23"],
+    ],
+    alert: "同一故障可能跨两类：坏编码导致错误分支属于数据解释加控制分派；导入异常后出现半库属于控制分派加资源边界。",
+  },
+] as const;
 
-          {/* Layer 1: 对象模型 */}
-          <rect x={40} y={64} width={640} height={68} rx="8" fill={accent} fillOpacity="0.06" stroke={accent} strokeWidth="1.4" strokeOpacity="0.5" />
-          <text x={60} y={86} fontSize="13" fontWeight="700" fill={accent}>第1层：对象模型</text>
-          <text x={60} y={104} fontSize="11" fill={primary}>一切皆对象（5.class → Integer）</text>
-          <text x={60} y={120} fontSize="11" fill={primary}>变量 = 引用 · 四种作用域（局部/实例/类/全局）· Object → BasicObject 继承链</text>
-          <text x={480} y={100} fontSize="11" fontWeight="600" fill={accent}>obj → String</text>
-          <text x={480} y={116} fontSize="11" fontWeight="600" fill={accent}>→ Class → Object</text>
+const capstoneCases = [
+  {
+    label: "输入",
+    fields: [
+      ["契约", "参数、stdin、CSV来源、版本、编码和尺寸限制"],
+      ["故障注入", "缺参、空文件、坏编码、quoted newline和checksum错误"],
+      ["通过证据", "拒绝原因明确，raw provenance可重建"],
+    ],
+  },
+  {
+    label: "转换",
+    fields: [
+      ["契约", "对象形状、normalization、匹配规则与错误隔离"],
+      ["故障注入", "nil、重复key、异常字符、歧义正则和溢出"],
+      ["通过证据", "original/canonical并存，accepted/rejected可核对"],
+    ],
+  },
+  {
+    label: "持久化",
+    fields: [
+      ["契约", "schema、index、prepared values、transaction和activation"],
+      ["故障注入", "首行/中途/末行失败、磁盘满与验证失败"],
+      ["通过证据", "candidate回滚，live版本与查询结果不变"],
+    ],
+  },
+  {
+    label: "查询交付",
+    fields: [
+      ["契约", "输入grammar、match mode、limit、stable order与status"],
+      ["故障注入", "0/1/many结果、wildcard、数据库忙、cancel和shutdown"],
+      ["通过证据", "结果可追到dataset/hash/schema，状态可自动判断"],
+    ],
+    alert: "Capstone必须同时验证正常、错误、中断、重复执行和回滚；只展示一次成功查询不算全书验收。",
+  },
+] as const;
 
-          {/* 箭头 */}
-          <line x1={360} y1={132} x2={360} y2={146} stroke={secondary} strokeWidth="1.4" markerEnd="url(#rub-fr-arrow)" />
-
-          {/* Layer 2: 核心语法 */}
-          <rect x={40} y={146} width={640} height={68} rx="8" fill={success} fillOpacity="0.06" stroke={success} strokeWidth="1.4" strokeOpacity="0.5" />
-          <text x={60} y={168} fontSize="13" fontWeight="700" fill={success}>第2层：核心语法</text>
-          <text x={60} y={186} fontSize="11" fill={primary}>字符串（可变/插值/freeze）· Symbol（不可变/唯一）</text>
-          <text x={60} y={202} fontSize="11" fill={primary}>控制流（if/unless/case-when）· 迭代器（each/times/map）· 只有 nil 和 false 为假</text>
-          <text x={520} y={184} fontSize="11" fontWeight="600" fill={success}>"#&#123;&#125;"</text>
-          <text x={520} y={200} fontSize="11" fontWeight="600" fill={success}>each &#123;&#125;</text>
-
-          {/* 箭头 */}
-          <line x1={360} y1={214} x2={360} y2={228} stroke={secondary} strokeWidth="1.4" markerEnd="url(#rub-fr-arrow)" />
-
-          {/* Layer 3: 类与模块 */}
-          <rect x={40} y={228} width={640} height={68} rx="8" fill={warning} fillOpacity="0.06" stroke={warning} strokeWidth="1.4" strokeOpacity="0.5" />
-          <text x={60} y={250} fontSize="13" fontWeight="700" fill={warning}>第3层：类与模块</text>
-          <text x={60} y={268} fontSize="11" fill={primary}>类（initialize/attr_accessor/单继承）· 模块（命名空间 + Mixin）</text>
-          <text x={60} y={284} fontSize="11" fill={primary}>块/Proc/Lambda（yield 调用 · Proc 对象化 · Lambda 严格参数）· include/prepend/extend</text>
-          <text x={500} y={266} fontSize="11" fontWeight="600" fill={warning}>class Dog</text>
-          <text x={500} y={282} fontSize="11" fontWeight="600" fill={warning}>&lt; Animal</text>
-
-          {/* 箭头 */}
-          <line x1={360} y1={296} x2={360} y2={310} stroke={secondary} strokeWidth="1.4" markerEnd="url(#rub-fr-arrow)" />
-
-          {/* Layer 4: 元编程与实战 */}
-          <rect x={40} y={310} width={640} height={68} rx="8" fill={danger} fillOpacity="0.06" stroke={danger} strokeWidth="1.4" strokeOpacity="0.5" />
-          <text x={60} y={332} fontSize="13" fontWeight="700" fill={danger}>第4层：元编程与实战</text>
-          <text x={60} y={350} fontSize="11" fill={primary}>Open Class · define_method · method_missing · send</text>
-          <text x={60} y={366} fontSize="11" fill={primary}>Gems（包管理）· Bundler（Gemfile + lock 版本锁定）· Rails = 元编程的极致应用</text>
-          <text x={500} y={348} fontSize="11" fontWeight="600" fill={danger}>method_missing</text>
-          <text x={500} y={364} fontSize="11" fontWeight="600" fill={danger}>bundle exec</text>
-
-          {/* 底部总结 */}
-          <line x1={32} y1={392} x2={VIEW_W - 32} y2={392} stroke={border} strokeWidth="1" strokeDasharray="4 3" />
-          <text x={VIEW_W / 2} y={410} textAnchor="middle" fontSize="11" fill={secondary}>
-            对象模型是地基 · 块是灵魂 · 模块解决多重继承 · 元编程让 Rails 成为可能
-          </text>
-
-          <defs>
-            <marker id="rub-fr-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-              <path d="M0 0 L6 3 L0 6 z" fill="var(--text-secondary)" />
-            </marker>
-          </defs>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        Ruby 全书四层知识串联：对象模型打底、核心语法操作、类与模块抽象、元编程拓展边界。
-      </figcaption>
-    </figure>
-  );
+export function RubyFinalPartReviewLab() {
+  return <RubyOfficialLab cases={partReviewCases} caption="四部分把23章收敛为可回查的综合能力。" tone="cyan" />;
 }
+
+export function RubyFailureModelLab() {
+  return <RubyOfficialLab cases={failureCases} caption="对象状态、控制分派、数据解释与资源边界是全书统一故障索引。" tone="rose" />;
+}
+
+export function RubyCapstoneGateLab() {
+  return <RubyOfficialLab cases={capstoneCases} caption="从输入到查询交付的四段门禁完成第五版终局验收。" tone="emerald" />;
+}
+
+export const RubFinalReviewDiagram = RubyFinalPartReviewLab;

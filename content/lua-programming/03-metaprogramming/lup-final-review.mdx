@@ -1,307 +1,186 @@
 ---
-title: "总复习"
-type: B
-section: "元编程与C交互"
-order: 9
-description: "Lua 全书总复习：四层知识串联、从类型值到元编程的递进关系与 Lua 嵌入式定位。"
+title: "Programming in Lua 4e · 总复习"
+type: C
+section: "Programming in Lua 4e · 总复习"
+order: 34
+description: "按四Part复盘Programming in Lua第四版33章，以representation、control、lifetime、isolation故障模型和Lua/C capstone完成终局验收。"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.lua.org/pil/"
 draft: false
 ---
 
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { LupFinalReviewDiagram } from "@/components/mdx/lua-programming/diagrams/lup-final-review";
+import { PilFinalPartReviewLab, PilFailureModelLab, PilCapstoneGateLab } from "@/components/mdx/lua-programming/diagrams/lup-final-review";
 
 <Objectives>
 
-- 能将全书四大板块的知识串联为完整的能力图谱
-- 能解释核心递进链：类型值→表达式语句→函数闭包协程→元表C API
-- 能回答：Lua 为什么选择"极简核心 + 元编程扩展"的设计？
+- 能解释四个Part与33章如何共同形成representation、program、mechanism和native能力，并从空白重建关键协议
+- 能推导representation、control、lifetime与isolation四类故障模型的证据链，定位Lua/C问题并给出最小复现
+- 能设计跨Lua与C的config、pipeline、scheduler或extension capstone，验证success、error、cancel、GC和shutdown
 
 </Objectives>
 
-## 直觉引入
+## 为什么总复习要从Failure Model而不是目录背诵开始
 
-你已经学完了 Lua 全书十章——从 8 种基本类型到 C API。现在把这些碎片拼成完整的拼图。
+完成33章后，最有价值的能力不是按顺序背标题，而是看到bug就知道该画哪张图。`#table`结果异常属于representation；coroutine拿到错误resume值属于control；registry ref泄漏属于lifetime；两个OS threads同时进入一个state属于isolation。目录提供覆盖坐标，故障模型把知识变成调试方法。
 
-Lua 的设计哲学是"提供机制而非策略"。它只给你最少的构建块：8 种类型、1 种数据结构（table）、函数作为一等公民、元表扩展机制、C API 嵌入机制。这些构建块看似简单，但组合起来足以实现任何编程范式——OOP 用元表，函数式用闭包，并发用协程，性能用 C 扩展。
+先预测：serialization丢失shared identity属于哪类；`luaL_error`跳过native cleanup属于哪两类；sandbox开放debug属于哪类；`select`返回readable却只收到partial body属于representation还是control；full userdata被GC但external pointer泄漏要追哪个owner。先分类，再决定读哪章和收集什么证据。
 
-## 概念讲解
+<Term def="Four-model review lens用representation、control、lifetime和isolation四种模型统一定位Lua与C边界故障。">four-model review lens</Term>能把33章从线性目录压缩成可执行诊断索引。
 
-### 核心递进链
+## Four Parts终局复盘
 
-<Term def="递进链是全书四大板块的依赖关系：类型值是地基，表达式语句是骨架，函数闭包协程是结构，元表C API是扩展。">
-
-全书的知识不是孤立的——每个板块都建立在前一个板块的基础上。类型与值解决"数据怎么表示"。表达式与语句解决"数据怎么操作"。函数闭包协程解决"逻辑怎么封装和控制"。元表与 C API 解决"行为怎么扩展和嵌入"。
-
-</Term>
-
-### 四层知识串联
-
-1. **类型值层**：8 种基本类型、table 是唯一数据结构、动态类型语义
-2. **表达式语句层**：运算符体系、local 声明、if/while/for 控制结构
-3. **函数闭包协程层**：函数一等公民、多返回值、闭包 upvalue、协程 resume/yield
-4. **元表 C API 层**：__index 继承、运算符重载、虚拟栈、C 函数注册
-
-### Lua 设计哲学
-
-**提供机制而非策略**：Lua 不预设编程范式——它提供元表让你自己实现 OOP，提供闭包让你自己实现函数式，提供协程让你自己实现并发。语言核心极简（约 20000 行 C 代码），但扩展能力无限。
-
-### 知识在实践中的映射
-
-| 实践场景 | 对应知识 | 所属板块 |
-|---------|---------|---------|
-| 存储游戏配置 | table 字典 | 类型与值 |
-| 条件渲染 UI | if-elseif-else | 语句 |
-| 批量处理数据 | for + ipairs | 语句 |
-| 封装工具函数 | local function | 函数 |
-| 私有状态封装 | 闭包 upvalue | 闭包 |
-| 分步加载数据 | 协程 yield/resume | 协程 |
-| 实现游戏对象 | 元表 __index + OOP | 元表 |
-| 向量运算 | __add 等元方法 | 元表 |
-| 性能关键路径 | C API 注册函数 | C API |
-
-## 交互Demo
-
-<LupFinalReviewDiagram />
+<PilFinalPartReviewLab />
 
 <Stepper>
-
-<Step title="第一步：类型值是地基">
-
-一切从值开始。Lua 有 8 种基本类型，table 是唯一数据结构。理解动态类型语义（值有类型，变量没有）和真值规则（只有 nil 和 false 为假）是一切的基础。table 承载数组、字典、对象、模块——掌握 table 就掌握了 Lua 的数据组织。
-
-</Step>
-
-<Step title="第二步：表达式语句是骨架">
-
-运算符让值动起来：`~=` 不等于、`//` 向下取整、`and/or` 短路求值。local 声明局部变量（默认全局是陷阱）。if-elseif-else 分支、while/repeat/for 循环。数值 for 和泛型 for 两种形式。Lua 没有 continue/switch/++——极简但有 goto 和 table 查找替代。
-
-</Step>
-
-<Step title="第三步：函数闭包协程是结构">
-
-函数是一等公民——可赋值、传递、返回。多返回值和可变参数让函数更灵活。闭包捕获 upvalue 实现私有状态和迭代器。协程通过 resume/yield 在单线程内协作切换——不需要锁、可预测。这些是 Lua 的"高阶能力"。
-
-</Step>
-
-<Step title="第四步：元表 C API 是扩展">
-
-元表通过 __index 实现继承、元方法重载运算符——这是 Lua OOP 的基础。C API 通过虚拟栈与 Lua 交换数据——这是 Lua 嵌入式定位的核心。学完这一步，你就理解了 Lua 的完整能力图谱：从值到元编程，从脚本到嵌入式扩展。
-
-</Step>
-
+  <Step title="切换Basics、Real Programs、Lua-isms和C API"><PilFinalPartReviewLab /></Step>
+  <Step title="从空白写Part Proof">Basics重做Eight Queens，Real Programs重做pipeline，Lua-isms重做scheduler，C API重做resource module。</Step>
+  <Step title="做Cross-Part Trace">选择一个value从Lua source、table/module、coroutine到C stack/userdata，再返回result/error，标每层contract。</Step>
 </Stepper>
 
-## 代码对照
+## Representation：Value、Table、String与Graph
+
+Chapters 1–8建立Lua 5.3 value model：integer/float、immutable byte strings、table identity/sequence、multiple results与scope。Chapters 9–19把它扩展到closure state、pattern grammar、data structures和serialization graph。Chapters 27–33要求C stack conversion、userdata layout和message schema保持同一语义。
+
+<Term def="Representation proof同时说明type、identity、shape、range、encoding与aliasing，并用独立checker验证转换前后不变量。">representation proof</Term>不能只展示输出看起来正确。
 
 ```lua
--- 全书知识串联：用 Lua 实现一个事件驱动的游戏对象系统
+local shared = { score = 7 }
+local graph = { left = shared, right = shared }
+graph.self = graph
 
--- Layer 1: 类型与值
-local EventBus = {}           -- table 作为模块
-EventBus.__index = EventBus   -- Layer 4: 元表 __index
-
--- Layer 3: 函数 + 闭包
-function EventBus.new()
-    -- 闭包封装私有状态
-    local handlers = {}       -- 私有（upvalue）
-    local instance = setmetatable({}, EventBus)  -- Layer 4: 元表
-    instance._handlers = handlers
-    return instance
-end
-
--- Layer 3: 可变参数 + 多返回值
-function EventBus:on(event, handler)
-    self._handlers[event] = self._handlers[event] or {}
-    table.insert(self._handlers[event], handler)
-    return self  -- 链式调用
-end
-
-function EventBus:emit(event, ...)
-    local handlers = self._handlers[event]
-    if not handlers then return end
-
-    -- Layer 2: for 循环 + ipairs
-    for _, handler in ipairs(handlers) do
-        handler(...)  -- 转发可变参数
-    end
-end
-
--- Layer 4: 用元表实现 OOP
-local GameObject = {}
-GameObject.__index = GameObject
-
-function GameObject.new(name, x, y)
-    local obj = setmetatable({
-        name = name,
-        x = x or 0,
-        y = y or 0,
-        events = EventBus.new(),  -- 组合
-    }, GameObject)
-    return obj
-end
-
--- Layer 3: 冒号语法（隐式 self）
-function GameObject:move(dx, dy)
-    -- Layer 2: 算术运算
-    self.x = self.x + dx
-    self.y = self.y + dy
-    self.events:emit("moved", self.x, self.y)  -- 多返回值传递
-    return self
-end
-
--- Layer 4: 运算符重载
-function GameObject.__eq(a, b)
-    return a.name == b.name
-end
-
-function GameObject.__tostring(obj)
-    -- Layer 1: 字符串连接
-    return string.format("%s(%d,%d)", obj.name, obj.x, obj.y)
-end
-
--- Layer 3: 协程实现分帧动画
-function GameObject:animate(frames)
-    local co = coroutine.create(function()
-        for i, frame in ipairs(frames) do
-            self.events:emit("frame", frame)
-            coroutine.yield()  -- 每帧挂起
-        end
-    end)
-    return co
-end
-
--- 使用（全书知识综合）
-local player = GameObject.new("Player", 0, 0)
-
--- 事件监听（闭包回调）
-player.events:on("moved", function(x, y)
-    print("移动到:", x, y)
-end)
-
--- 移动（运算符 + 方法调用）
-player:move(10, 20)
-player:move(5, -5)
-print(player)  -- Player(15,15)
-
--- 协程动画
-local animCo = player:animate({"idle", "walk", "jump"})
-while coroutine.status(animCo) ~= "dead" do
-    coroutine.resume(animCo)  -- 每帧推进一步
-end
+-- A correct graph serializer needs IDs/back-references:
+-- decoded.left == decoded.right and decoded.self == decoded.
+assert(graph.left == graph.right and graph.self == graph)
 ```
 
-## 常见误区
+Sequence holes、NaN、embedded zero、cyclic/shared tables和integer overflow是终局测试集。Pattern与Unicode要区分bytes、code points和graphemes；data-only跨state message明确拒绝function/thread/userdata或定义替代ID。
 
-<Callout type="trap">
+## Control：Function、Error、Iterator与Coroutine
 
-**误区：用其他语言的思维学 Lua**
+Functions/multiple results定义call protocol，protected call定义error status，generic for定义iterator triple，coroutine定义resume/yield双向数据。Metamethod、module loader和C callback也只是更复杂的control transfer。每次都问：当前running frame是谁、谁拥有下一次resume/call、结果在哪、error穿过哪些boundary。
 
-Lua 的设计哲学与 Python/Java 完全不同。没有 class 关键字（用元表），没有 continue/switch（用 goto/table），没有丰富标准库（用 C 扩展）。用其他语言的思维写 Lua 会处处碰壁。学 Lua 要理解"极简核心 + 元编程扩展"的设计思路——这不是缺陷，而是哲学选择。
+<Term def="Control-transfer ledger记录caller/callee、running frame、arguments、yielded/final results、protected status与下一owner。">control-transfer ledger</Term>能区分业务false与resume false、yield与return、readiness与operation completion。
 
+```lua
+local co = coroutine.create(function()
+  local ok, payload = coroutine.yield({ kind = "read", id = 9 })
+  if not ok then error(payload, 0) end
+  return #payload
+end)
+
+local started, request = coroutine.resume(co)
+assert(started and request.kind == "read")
+local finished, size = coroutine.resume(co, true, "data")
+assert(finished and size == 4 and coroutine.status(co) == "dead")
+```
+
+<Callout type="trap" title="只要pcall/resume首Boolean为True，业务一定成功">
+它只表示执行没有raise；Lua function仍可正常返回`nil,error`或`false`。先解码execution status，再按业务result schema解码，不能合并两层协议。
 </Callout>
 
-<Callout type="trap">
+## Lifetime：Closure、GC、Registry与Native Resource
 
-**误区：忽视 local 导致全局污染**
+Closure/upvalue、weak table、finalizer、coroutine stack、registry reference、full userdata和directory/parser handle都在回答“谁让对象继续可达，谁在何时关闭”。GC回收Lua memory，不保证及时释放稀缺native resource；explicit close、idempotent finalizer和state shutdown必须共享一套owner state machine。
 
-全书反复强调：Lua 变量默认全局，必须用 local 声明局部。这是 Lua 最常见的 bug 来源——全局变量被意外覆盖，性能下降（全局访问通过哈希查找），代码难以维护。所有变量都用 local，这是 Lua 编程的第一铁律。
+<Term def="Lifetime closure proof列出所有reachability roots、native owners、open/closed transitions与success/error/cancel/GC/shutdown terminal paths。">lifetime closure proof</Term>要求每条资源边最终归零。
 
+Registry ref、iterator closure和upvalue table都是GC roots；light userdata不是owner。C continuation、foreign callback和late async completion需要stable ID/generation，避免在resource释放后恢复旧task。
+
+## Isolation：Environment、Sandbox、Thread与State
+
+Environment决定name lookup与load capability，debug library可越过正常privacy；同一Lua state内threads共享heap/registry/GC，不构成memory isolation。Independent states才可放到不同OS workers，但仍需serialize messages，且host C functions可能重新引入process-wide authority。
+
+<Term def="Isolation capability proof列出每个environment/state/process可达的Lua libraries、host closures、native services、queues与resource limits。">isolation capability proof</Term>验证最小权限和单一state owner。
+
+打开少量libraries不等于sandbox；还需instruction/wall time、memory、I/O、output、queue和native call limits。敌对code或native extension需要process/OS boundary。
+
+<PilFailureModelLab />
+
+<Stepper>
+  <Step title="切换Representation、Control、Lifetime和Isolation"><PilFailureModelLab /></Step>
+  <Step title="分类十个Bug">对alias loss、wrong resume tuple、iterator leak、debug escape、partial send、OOM、double close、cross-state pointer等逐个选主模型和次模型。</Step>
+  <Step title="收集最小Evidence">每类只采集对应ledger：value/graph、frame/status、root/owner或capability/topology，避免无目标日志。</Step>
+</Stepper>
+
+## C API终局Stack与Resource Contract
+
+C API从虚拟栈开始：positive/negative index、push/query/rotate、protected call。向两个方向扩展时仍保持守恒：C调用Lua声明nargs/nresults，Lua调用C由C返回result count；continuation跨yield保存explicit context；userdata按metatable identity检查layout；resources在owner frame清理后才raise。
+
+```c
+static int l_checked_ratio(lua_State *L) {
+  lua_Number numerator = luaL_checknumber(L, 1);
+  lua_Number denominator = luaL_checknumber(L, 2);
+  if (denominator == 0) return luaL_argerror(L, 2, "must be non-zero");
+  lua_pushnumber(L, numerator / denominator);
+  return 1; /* result count, not status */
+}
+```
+
+审查每个helper时写`entry top -> consumed -> produced/error`。触发Lua代码的gettable/metamethod/callback不跨不可重入native lock。Custom allocator、registry refs和userdata close全部绑定目标state及其owner thread。
+
+<Callout type="trap" title="Full Userdata被GC后，其中所有Native资源都会自动释放">
+GC只回收userdata block并按metatable调用__gc。External malloc、file、socket或library handle必须由idempotent close/finalizer显式释放；light userdata更没有per-object finalizer。
 </Callout>
+
+## Capstone：从Config到Native Extension
+
+选择一个capstone，但必须跨至少三个Part。推荐四类：受控Lua config；pattern/iterator streaming pipeline；coroutine event scheduler；userdata-based native extension。每个项目写source/schema、control protocol、owner graph、capability surface和failure matrix。
+
+<Term def="Capstone acceptance matrix用正常、错误、超时/取消、GC、OOM、并发与shutdown场景共同验收跨Part系统。">capstone acceptance matrix</Term>避免demo只验证happy path。
+
+<PilCapstoneGateLab />
+
+<Stepper>
+  <Step title="切换Config、Pipeline、Scheduler和Extension"><PilCapstoneGateLab /></Step>
+  <Step title="写四份Contract">分别写data schema、call/yield protocol、resource owner graph和environment/state capability list。</Step>
+  <Step title="执行Acceptance Matrix">逐项注入wrong type、Lua error、partial I/O、cancel、GC、OOM、late callback和shutdown，保留独立evidence。</Step>
+</Stepper>
+
+## 终局Acceptance Checklist
+
+1. 能从空白实现Eight Queens并解释92个N=8 solutions的独立证据。
+2. 能写pattern/iterator/module pipeline并处理bytes、errors与serialization identity。
+3. 能画metamethod/environment/GC/coroutine/reflection的调用与capability边界。
+4. 能逐行推导C stack top，区分C result count、Lua execution status与业务result。
+5. 能实现userdata/resource close、registry root、continuation与independent-state message cleanup。
+6. 能在不看页面时把一个故障归入四模型，找到对应chapter并设计最小reproducer。
+
+## 本章回顾：33章最终收敛为四种可证明能力
+
+1. Representation证明value、identity、shape、encoding与aliasing。
+2. Control证明caller、frame、arguments、yield/result、error status与scheduler owner。
+3. Lifetime证明roots、resource owner、terminal paths和close ordering。
+4. Isolation证明environment、library、state、OS owner、message与resource limits。
+5. 四Part分别提供基础语义、完整程序、Lua机制与native边界，任何一层都不能被抽样摘要替代。
+6. Capstone用success/error/cancel/GC/OOM/concurrency/shutdown矩阵完成全书验收。
 
 <Exercises>
 
-**问题 1**：描述 Lua 全书四大板块的递进关系，并解释 Lua"提供机制而非策略"的设计哲学。
+**问题 1：Serialization后shared Table变成两个Copies，属于哪类故障，如何证明？**
 
-<Answer>
+<Answer>主类是representation/aliasing。构造`left`和`right`共享同一table且有self-cycle的graph，编码需ID/back-reference；解码后独立断言`left==right`和`self==root`，并限制depth/bytes。</Answer>
 
-四大板块的递进关系：
-1. **类型与值**（地基）：8 种基本类型，table 是唯一数据结构，动态类型语义
-2. **表达式与语句**（骨架）：运算符体系，local 声明，if/while/for 控制结构
-3. **函数闭包协程**（结构）：函数一等公民，多返回值，闭包 upvalue，协程 resume/yield
-4. **元表与 C API**（扩展）：__index 继承，运算符重载，虚拟栈，C 函数注册
+**问题 2：XML Callback里直接luaL_error导致Parser Handle泄漏，怎样按四模型修复？**
 
-每层建立在前层基础上：表达式操作值，语句控制表达式，函数封装语句，元表扩展函数，C API 嵌入整个语言。
+<Answer>Control上不能long-jump穿过foreign frame；lifetime上outer owner必须清理。Callback用pcall捕获并复制error、stop parser，返回outer C frame后free parser/unref handlers，再raise。</Answer>
 
-"提供机制而非策略"的设计哲学：Lua 不预设编程范式。它提供元表让你自己实现 OOP（而非内置 class），提供闭包让你自己实现函数式（而非内置 map/filter），提供协程让你自己实现并发（而非内置线程），提供 C API 让你自己扩展功能（而非丰富标准库）。语言核心极简（约 20000 行 C 代码），但扩展能力无限。这让 Lua 保持小巧、快速、可嵌入——这是它作为嵌入式脚本语言的核心价值。
+**问题 3：一个完整Coroutine Native Scheduler需要哪些验收项？**
 
-</Answer>
-
-**问题 2**：如果你要用 Lua 为游戏引擎编写一个配置系统，全书哪些知识会被用到？
-
-<Answer>
-
-游戏配置系统的实现用到全书所有四个板块的知识：
-
-**类型与值层**：
-- table 存储配置数据（`{difficulty = "hard", maxPlayers = 4}`）
-- 字符串/数字/布尔值表示配置项
-- nil 表示未设置的配置项（可用默认值）
-
-**表达式与语句层**：
-- `~=` 检查配置值不等于特定值
-- `and/or` 为配置项设默认值（`difficulty = difficulty or "normal"`）
-- if-elseif-else 根据配置分支
-- for + pairs 遍历配置表
-
-**函数闭包协程层**：
-- local function 封装配置读写逻辑
-- 闭包封装配置缓存（私有状态）
-- 协程实现配置热重载（分步加载）
-- 冒号语法实现配置对象方法
-
-**元表与 C API 层**：
-- 元表 __index 实现配置继承（子配置继承默认配置）
-- __newindex 拦截配置修改（验证/触发回调）
-- __tostring 生成配置摘要
-- C API 将性能关键的配置解析用 C 实现
-
-```lua
--- 示例：带继承和验证的配置系统
-local Config = {}
-Config.__index = Config
-
-function Config.new(defaults)
-    return setmetatable({
-        values = {},
-        defaults = defaults or {},
-    }, Config)
-end
-
--- __index 实现继承：找不到时查 defaults
--- 冒号语法 + 闭包 + table 操作——全书知识综合
-```
-
-</Answer>
+<Answer>Data有typed wait/result schema；control有single resumer与resume tuple；lifetime有task/root/socket/continuation owner；isolation有state OS owner与library capability。测试partial I/O、fairness、timeout、cancel、error traceback、late completion、OOM和shutdown。</Answer>
 
 </Exercises>
 
+## 术语表
+
 <Glossary>
-
-<GlossaryItem term="核心递进链">
-
-全书四大板块的依赖关系：类型值（地基）→ 表达式语句（骨架）→ 函数闭包协程（结构）→ 元表C API（扩展）。每层建立在前层基础上。
-
-</GlossaryItem>
-
-<GlossaryItem term="提供机制而非策略">
-
-Lua 的设计哲学。语言只提供最小化的构建块（8 种类型、table、函数一等公民、元表、C API），不预设编程范式。让开发者自由组合实现 OOP、函数式、并发等。这让 Lua 保持极简、快速、可嵌入。
-
-</GlossaryItem>
-
-<GlossaryItem term="极简核心 + 元编程扩展">
-
-Lua 的架构策略。语言核心约 20000 行 C 代码，只提供最基本的机制。通过元表（元方法重载运算符、__index 继承）实现元编程扩展，通过 C API 嵌入宿主程序。核心小但扩展能力强。
-
-</GlossaryItem>
-
-<GlossaryItem term="知识串联">
-
-将各章碎片知识整合为完整能力图谱。实际项目跨多个板块——游戏对象系统用 table 存数据、for 循环处理、闭包封装事件、元表实现 OOP、协程做动画。串联理解才能应对真实需求。
-
-</GlossaryItem>
-
+  <GlossaryItem term="four-model review lens" definition="用representation、control、lifetime和isolation统一诊断Lua/C故障。" />
+  <GlossaryItem term="representation proof" definition="证明type、identity、shape、range、encoding与aliasing不变量的证据。" />
+  <GlossaryItem term="control-transfer ledger" definition="记录caller/frame/arguments/yield/results/status与next owner的账本。" />
+  <GlossaryItem term="lifetime closure proof" definition="列出roots、owners、state transitions和所有terminal cleanup的证明。" />
+  <GlossaryItem term="isolation capability proof" definition="列出environment/state/process可达能力与limits的隔离证明。" />
+  <GlossaryItem term="capstone acceptance matrix" definition="以正常、错误、取消、GC、OOM、并发和shutdown验收系统的矩阵。" />
 </Glossary>
+
+<Attribution adaptedFrom="Programming in Lua, Fourth Edition, complete-book review" adaptedUrl="https://www.lua.org/pil/" />

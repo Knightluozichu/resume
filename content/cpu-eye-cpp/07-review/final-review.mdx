@@ -1,0 +1,231 @@
+---
+title: "最终复盘：从现象回到证据链"
+type: A
+section: CPU眼里的C/C++ · 最终复盘
+order: 7
+description: 串联官方六章，用对象、函数、内存和并发故障复盘语言语义、ABI、机器指令与操作系统证据，并形成可执行诊断流程。
+demo: false
+math: false
+sourceUrl: "https://www.tup.com.cn/booksCenter/bookcatalog?id=09954301"
+draft: false
+---
+
+import {
+  CpuEyeFailureDiagnosisMap,
+  CpuEyeFinalEvidenceMatrixMap,
+  CpuEyeFinalKnowledgeGraphMap,
+} from "@/components/mdx/cpu-eye-cpp/diagrams/final-review";
+
+<Objectives>
+
+- 能解释官方六章如何连接 source semantics、ABI、executable、address space 与 observable behavior
+- 能分析对象、函数、内存和并发故障，选择对应的 compiler、debugger、sanitizer 与 system evidence
+- 能设计从复现、分层假设、最小实验、反证到修复回归的完整诊断流程
+
+</Objectives>
+
+## 从“机器现象不能替代语言前提”开始
+
+地址非空、load 成功、某次没有 crash、某个 build 只有一条 instruction，都不能单独证明 C/C++ 程序正确。最终复盘要先问 object 是否存活、type/access 是否允许、control path 是否满足 invariant、threads 是否有 happens-before，再下钻 ABI、instruction 和 OS behavior。
+
+<Term def="从源码约束到运行观测逐层可追溯，任何结论都能指出所依赖证据与适用条件。">
+  端到端证据链
+</Term>
+
+先预测一个 crash 的最可能层次，再刻意寻找能推翻它的证据。好的诊断不是堆工具输出，而是每个 evidence 都对应一个 hypothesis，并明确“支持、反驳或尚不能判断”。
+
+## 六章如何组成一条链
+
+<CpuEyeFinalKnowledgeGraphMap />
+
+第 1 章提供 compiler/executable/assembly/loader 基础；第 2 章建立 variable、branch、pointer、array 与 conversion 的 machine model；第 3 章把状态跨 function ABI 传递并用 backtrace 恢复；第 4 章加入 object lifetime、dispatch、template 与 allocation；第 5 章扩到 mapping、kernel boundary、endianness、context 和 lock；第 6 章要求把这些规则组织为可反证回答。
+
+<Term def="编译器用于表示数据依赖和控制流、再逐步优化并降低为目标机器码的中间形式。">
+  编译器中间表示
+</Term>
+
+```text
+source contract -> compiler IR -> target ABI/object -> loader mappings
+                -> thread context -> instructions/memory -> observation
+```
+
+任一 arrow 都可能改变表面形状：variable 变 SSA value，function 被 inline，virtual call 被 devirtualize，page 尚未 resident，mutex fast path 没进 kernel。变化不等于语义丢失，而是实现选择了不同 evidence form。
+
+## 案例一：优化后变量与函数消失
+
+```cpp
+int calculate(int input) {
+    int doubled = input * 2;
+    return doubled + 1;
+}
+```
+
+language 层只要求 return result；`doubled` 的名字和独立 address 不可观察时，optimizer 可 constant/strength fold、register allocate 或完全合并。若 `calculate` 被 inline，symbol/call frame 也可消失。debugger 显示 optimized out 是 location information 的限制，不是程序未执行必要语义。
+
+<Term def="值只在编译器数据流中存在而没有独立内存位置，常由SSA和寄存器分配表达。">
+  无地址值
+</Term>
+
+验证时比较 O0/O2，但性能结论以 representative optimized build 为准；加 `escape(&doubled)` 只用于控制实验，不应当作“阻止优化”的生产修复。真正 debug 可用 optimized debug info、trace point 或显式 observable logging。
+
+## 案例二：指针偶尔正常、偶尔崩溃
+
+先画 owner、allocation、pointee lifetime、bounds 和 all aliases。use-after-free address 可能仍映射且保存旧 bytes，因此 CPU load 成功；下一次 allocator reuse 或 page unmap 才暴露。数组越界也可能覆盖邻近 object 而不触发 protection fault。
+
+```cpp
+std::span<const std::byte> view;
+{
+    std::vector<std::byte> bytes(64);
+    view = bytes;
+} // view now dangles
+```
+
+<Term def="对象 lifetime 已结束但仍被 pointer、reference、span 或 iterator 访问的错误。">
+  悬空访问
+</Term>
+
+修复不是“判空”或“加 volatile”，而是让 owner lifetime 覆盖 borrower，或转移/共享 ownership。ASan 验证 heap/stack lifetime，UBSan 检查部分未定义操作，allocator trace 确认 reuse；回归测试要覆盖 original invalidation path。
+
+<Callout type="trap" title="陷阱：崩溃点就是写坏内存的源头">
+  corruption 常在更早的 out-of-bounds/use-after-free 发生，直到 later
+  dereference、return 或 allocator check 才 crash。保留 first-failure sanitizer
+  evidence、raw backtrace 和 allocation history，不只修最后 faulting
+  instruction。
+</Callout>
+
+## 案例三：调用目标和对象状态不符合预期
+
+检查 static type、dynamic type、construction/destruction stage、slicing 与 function pointer signature。constructor 内 virtual call 按当前已构造层次 dispatch；按值传 base 会切掉 derived identity；错误 cast function pointer 会破坏 ABI contract。
+
+<CpuEyeFailureDiagnosisMap />
+
+主流 ABI 可从 object vptr、vtable slot 和 target symbol 验证，但先承认 vtable layout implementation-specific。若 optimized build direct call，检查 final、whole-program analysis 或 profile 是否让 compiler 去虚化；不要误判成“virtual 没生效”。
+
+大对象 return 还应检查 hidden destination 与 copy elision。constructor counter 为零可能是标准保证或优化，不表示 return object 未构造。用 lifecycle logs 时要避免日志本身改变 optimization 和 timing，必要时查看 IR/assembly 交叉验证。
+
+## 案例四：多线程偶发旧值或卡顿
+
+<Term def="一个线程的操作按语言内存模型保证对另一个线程可见和有序的关系。">
+  happens-before
+</Term>
+
+`volatile bool ready` 不建立 happens-before；一个 thread 普通写、另一个 thread 普通读且并发就是 data race。mutex/atomic 才能定义同步。正确性先用 TSan、lock ownership 和 all shared accesses 检查，性能再区分 lock hold、spin、park、runnable wait 和 scheduler wake latency。
+
+```cpp
+std::atomic<bool> ready{false};
+Payload payload;
+
+// publisher
+payload = makePayload();
+ready.store(true, std::memory_order_release);
+
+// consumer
+if (ready.load(std::memory_order_acquire)) {
+    consume(payload);
+}
+```
+
+release/acquire 配对可发布前序 payload writes，但前提是 consumer 观察到对应 value，并且其他 accesses 遵守 protocol。不要默认所有 atomic 都需要 seq_cst，也不要为追求弱序而跳过证明。mutex 常更易表达 multi-field invariant。
+
+<Callout type="trap" title="陷阱：问题概率很低，所以多跑几次没出现就算修复">
+  data race、lifetime 和 scheduling bugs 对 timing 敏感。修复应消除违反的
+  invariant，并用 sanitizer/stress/targeted schedule
+  验证；“一万次没复现”只是弱证据，不能替代同步与 lifetime 证明。
+</Callout>
+
+## 证据矩阵：问题决定工具
+
+<CpuEyeFinalEvidenceMatrixMap />
+
+object/type 问题先查 source rule 和 lifetime，再看 layout；function 问题查 signature、calling convention、return/unwind；memory 问题查 bounds/owner、virtual mapping、resident/fault；concurrency 问题查 happens-before、atomic/lock ABI 与 scheduling。不是所有问题都需要性能 counter，也不是所有 crash 都靠 assembly 最快解决。
+
+<Term def="把一个现象拆成互斥或可检验的语言、ABI、机器与系统原因，并为每个原因指定证据。">
+  分层假设
+</Term>
+
+crash dump 至少保存 build ID、module addresses、fault context 和 raw stack；performance record 保存 workload、input、CPU、build flags 与 baseline；Compiler Explorer record 保存 permalink/config；并发 trace 保存 thread IDs、timestamps、lock events 与 scheduler states。
+
+## 修复闭环
+
+1. 复现：固定 input、binary、environment 和 expected/actual behavior。
+2. 定界：确认最早违反的 invariant，不从最后症状直接猜根因。
+3. 分层：列 language、ABI/compiler、ISA/CPU、OS/runtime hypotheses。
+4. 取证：每个实验只改变一个条件，保留 raw evidence。
+5. 反证：主动更换 optimization/compiler/target 或 timing，推翻过强结论。
+6. 修复：优先恢复 type/lifetime/ownership/synchronization contract。
+7. 回归：加入能在旧实现失败的 test/sanitizer/trace assertion。
+8. 收束：记录适用平台、剩余风险和 performance impact。
+
+```text
+symptom -> earliest broken invariant -> layered hypotheses
+        -> controlled evidence -> minimal contract repair -> regression proof
+```
+
+性能修复还要保留 before/after measurement，正确性修复要证明 invalid path 不再成立。禁止用禁用 optimizer、扩大 sleep、吞掉 fault 或保留 dangling storage 来掩盖问题，这些只改变症状概率。
+
+## 最终自测
+
+读到一个 C++ 结论时，应能立即追问：对象是谁、活多久、谁拥有；表达式的 static/dynamic type；ABI target 是什么；optimizer 可以删除什么；effective address 如何形成；mapping/permission 是否成立；threads 如何同步；哪种工具能提供直接证据。
+
+如果答案只包含“通常”“底层就是”“肯定更快”，需要补条件与反例。能把不确定处转成最小可复现实验，并把 observation 限定到正确层次，才真正掌握 CPU 视角。
+
+## 小结
+
+- 官方六章共同形成 source contract 到 runtime observation 的端到端证据链
+- optimized variable/function 消失通常是无地址值、inline 或 as-if rule 的结果
+- 指针偶发成功不证明合法，owner、bounds、lifetime 与 mapping 必须分层检查
+- virtual/function-pointer 目标要结合 type、construction stage、ABI 与 devirtualization evidence
+- volatile 不修复 data race，atomic/mutex 通过 happens-before 定义可见性
+- 诊断先找最早 broken invariant，再选择对应层的工具，不从最后 crash 点倒推全部原因
+- 修复闭环包含复现、定界、分层、取证、反证、修复、回归和边界记录
+- 最终能力是提出可检验问题、收集直接证据并拒绝过度泛化
+
+<Attribution
+  adaptedFrom="CPU眼里的C/C++，第1-6章综合复盘"
+  adaptedUrl="https://www.tup.com.cn/booksCenter/bookcatalog?id=09954301"
+/>
+
+<Glossary>
+  <GlossaryItem term="端到端证据链">
+    源码约束到运行观测的可追溯链。
+  </GlossaryItem>
+  <GlossaryItem term="编译器中间表示">
+    优化和降低机器码前的数据控制流形式。
+  </GlossaryItem>
+  <GlossaryItem term="无地址值">
+    只存在于数据流而无独立内存位置的值。
+  </GlossaryItem>
+  <GlossaryItem term="悬空访问">
+    对象寿命结束后通过旧 view 继续访问。
+  </GlossaryItem>
+  <GlossaryItem term="happens-before">
+    跨线程可见性和顺序的语言保证。
+  </GlossaryItem>
+  <GlossaryItem term="分层假设">
+    按语言 ABI 机器系统拆分的可检验原因。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：optimized crash dump 中少了一层函数，怎样判断是 inline、tail call 还是 unwind 失败？** 给出证据顺序。
+
+<Answer question="缺帧诊断需要哪些直接证据？">
+  先锁定 build ID 与 raw PCs，使用匹配 symbols/unwind metadata；查看 call site
+  的 optimized assembly/inline info，tail jump 是否复用 frame；再检查
+  frame-pointer/unwind coverage 和 stack corruption。inline/tail call 是合法
+  code shape，unwind failure 是诊断数据问题，三者不能仅凭 backtrace 行数区分。
+</Answer>
+
+2. **问题 2：一个 pointer 非空、地址已映射但读取仍是 bug，如何证明并修复？** 覆盖 language、allocator、OS 三层。
+
+<Answer question="映射存在为何不恢复对象合法性？">
+  language 层追踪 pointee lifetime/bounds/type，若 owner 已释放就是
+  dangling；allocator 可能尚未复用 block，所以旧 bytes 仍在；OS mapping 以 page
+  为粒度仍存在，CPU load 可以成功。用 ASan/allocation trace 证明
+  invalidation，修复 owner/borrow relationship 或复制 value，并加入旧路径回归。
+</Answer>
+
+3. **问题 3：volatile ready 改为 atomic 后是否自动正确？** 写出 payload 发布协议和验证方法。
+
+  <Answer question="atomic flag 的正确性还依赖什么？">publisher 先完成 payload writes，再 release-store ready；consumer acquire-load 观察到 true 后才能读 payload，且 payload 不能有其他无同步 writers。若 invariant 涉及多个状态或复位，mutex/state machine 可能更清晰。用 TSan 检查其余 races，用 stress/trace 验证 transitions；仅把 type 换成 atomic 而不定义 protocol 仍可能有逻辑错误。</Answer>
+</Exercises>

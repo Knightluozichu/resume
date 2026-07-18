@@ -1,0 +1,270 @@
+---
+title: "Chapter 14：深入 Cargo 与 Crates.io（More About Cargo and Crates.io）"
+type: A
+section: Rust 程序设计语言 · 构建、发布与多包协作
+order: 14
+description: 对齐官方第 14 章：release profiles、文档和公开 API、crates.io 发布/yank、Cargo workspace、binary 安装与自定义子命令。
+demo: false
+math: false
+sourceUrl: "https://doc.rust-lang.org/book/ch14-00-more-about-cargo.html"
+draft: false
+---
+
+import {
+  RplCargoProfileLab,
+  RplCargoWorkspaceLab,
+  RplCratePublishLab,
+} from "@/components/mdx/rust-programming-language/diagrams/more-about-cargo-and-crates-io";
+
+<Objectives>
+
+- 能比较并配置 dev/release profile，解释局部覆盖、优化等级、构建反馈与运行性能之间的取舍
+- 能设计 crate 的文档、公开 API 与发布门禁，区分 publish、版本升级、yank 和 secret 撤销的真实效果
+- 能实现多 package workspace 的成员与显式依赖图，并判断共享 Cargo.lock/target、`-p` 选择、install 和 custom command 的边界
+
+</Objectives>
+
+## 为什么 Cargo 不只是 build 命令的包装
+
+Cargo 同时管理编译配置、依赖解析、artifact、测试、文档、打包、registry 发布、workspace 协调和工具扩展。若只记命令名称，很容易把互不等价的边界混在一起：release profile 不是“上线环境变量”，workspace member 不是依赖，yank 不是删除，cargo install 也不是把 library 加进当前项目。
+
+<Term def="Cargo 中一组可独立配置的编译选项集合；dev 与 release 有不同默认目标。">构建 profile</Term>
+
+本章用三条链路组织这些能力：源代码怎样被不同 profile 编译；library 怎样成为可发现、可验证且不可随意覆盖的公开 artifact；多个 package 怎样共享解析与构建缓存而保持依赖声明明确。
+
+## Dev 与 release 是两套独立配置
+
+`cargo build` 使用 dev profile，默认 `opt-level = 0`，偏向快速反馈和调试；`cargo build --release` 使用 release profile，默认 `opt-level = 3`，花更多编译时间换取长期运行的优化 artifact。输出分别位于 target/debug 与 target/release。
+
+```toml
+[profile.dev]
+opt-level = 1
+
+[profile.release]
+opt-level = 3
+```
+
+<Term def="在 Cargo.toml 的 profile 区段中只改写指定键，未声明的键继续继承该 profile 默认值。">profile 局部覆盖</Term>
+
+给 dev 写 `opt-level = 1` 不会把它变成 release，也不会影响 release。优化等级越高通常编译越慢、生成代码运行越快，但具体变化受依赖图、增量编译、代码形状与硬件影响。性能测试必须使用与交付一致的 release profile，不能拿 debug 基准推断生产吞吐。
+
+<RplCargoProfileLab />
+
+先预测修改 dev 的 opt-level 是否会改变 `cargo build --release`，再切换 profile。观察命令、artifact 目录与配置集合始终绑定，而不是由一个全局“优化开关”控制。
+
+<Callout type="trap" title="陷阱：在 dev 结果上做性能结论">
+  默认 dev 几乎不优化，release 默认高优化。先固定 profile、features、目标平台和输入，再 benchmark；为缩短本地反馈而调 dev 不应悄悄改变交付 profile。
+</Callout>
+
+## 文档注释是公开 API 的可执行入口
+
+<Term def="以三斜线写在 public item 前、支持 Markdown 并由 rustdoc 生成 HTML 的说明。">文档注释</Term>
+
+```rust
+/// Adds one to the given number.
+///
+/// # Examples
+///
+/// ```
+/// let answer = my_crate::add_one(5);
+/// assert_eq!(answer, 6);
+/// ```
+pub fn add_one(value: i32) -> i32 {
+    value + 1
+}
+```
+
+`cargo doc --open` 生成并打开当前 crate 及依赖的文档。常见小节应由 API 契约决定：Examples 展示最短用法；Panics 说明何时 panic；Errors 说明 Result 失败种类与条件；Safety 说明调用 unsafe API 时调用者必须维护的不变量。
+
+<Term def="cargo test 自动编译和运行文档代码块，使示例与当前 API 保持同步的测试。">doc test</Term>
+
+示例不仅给人看，也会作为 doc tests 进入测试结果。仅生成 HTML 不证明示例可运行；`cargo test` 才能发现重命名、签名变化或错误断言导致的文档漂移。
+
+<Term def="以 //! 写在 crate root 或 module 内，描述包含该注释的整体 item，而不是下一个定义。">容器文档</Term>
+
+`//!` 常放在 src/lib.rs 顶部，解释 crate 目的和高层组织；`///` 面向紧随其后的 function/type。两者服务的阅读层级不同，不能只给每个函数一句注释却没有 crate 入口地图。
+
+## pub use 让公共表面独立于内部目录
+
+<Term def="用 pub use 在更方便的位置再次公开 item，使用户路径不必暴露内部模块层级。">公开重导出</Term>
+
+```rust
+pub use self::kinds::{PrimaryColor, SecondaryColor};
+pub use self::utils::mix;
+```
+
+内部可按维护职责组织为 kinds/utils，用户却能写 `use art::{mix, PrimaryColor}`。重导出不复制实现，而是设计稳定的 discoverable API surface；也可把依赖类型纳入本 crate 的公开协议。若公开签名泄露深层路径，用户会与内部重构耦合。
+
+## 发布前先把 package 做成可验证 artifact
+
+<Term def="Cargo.toml package 区段中用于识别和发现发布物的信息，如 name、version、description 与 license。">package metadata</Term>
+
+crates.io 名称按先到先得分配且必须唯一；发布至少需要有意义的 description 与 license/license-file，并应设置正确 version、edition、repository 等信息。SPDX expression 可表达 `MIT OR Apache-2.0` 之类组合，license-file 则指向自定义许可正文。
+
+<Term def="cargo login 保存、用于认证 registry 发布操作的 secret；泄漏后必须在服务端撤销并轮换。">registry token</Term>
+
+token 通常存入用户 Cargo credentials，不应进入仓库、构建日志或教学示例。`cargo package` 可在不上传的情况下检查将包含的文件、metadata 和打包后编译；正式发布前还应运行 test、doc test，并检查生成 package，避免把本地未跟踪 secret 或缺失资源带进永久版本。
+
+<RplCratePublishLab />
+
+切换必需 metadata 与文档证据，比较 package、publish、yank。registry 接受发布只代表格式门槛通过，不代表 API 易用或示例可靠。
+
+## publish 上传的是不可覆盖的版本
+
+<Term def="把当前 package 的一个具体 version 打包、验证并上传 registry 的操作；同一版本不能覆盖。">cargo publish</Term>
+
+发布后任何项目都可把该 crate 声明为依赖。版本内容不能常规删除或用同号覆盖，这保证依赖构建可重复；修复必须按 Semantic Versioning 更新 Cargo.toml version，再发布新版本。发布前的 dry run 和 package inspection 因此不是可选装饰。
+
+<Term def="根据公共 API 兼容性决定 major、minor、patch 版本变化的约定，用于向依赖方表达升级风险。">语义化版本</Term>
+
+SemVer 不替你判断每个改动是否 breaking，但迫使发布者明确承诺。删除公开 item、改变 trait bound 或行为契约可能影响下游，即使本 crate 自测通过，也应从用户视角审查。
+
+## yank 阻止新选择，但不删除历史
+
+<Term def="标记 registry 上某版本不再供新依赖解析选择，同时保留源码和已有 lock 的可构建性。">yank</Term>
+
+`cargo yank --vers 1.0.1` 后，已有 Cargo.lock 指向该版本的项目仍可构建，新生成 lock 不再选择它；`--undo` 可撤销。yank 不能删除误传代码，更不能清除已经泄漏的 token。secret 泄漏必须立即在提供方撤销/轮换，再视需要发布修复版本或联系 registry 支持。
+
+<Callout type="trap" title="陷阱：把 yank 当成远程删除或 secret 修复">
+  yank 的设计目标是保护新解析同时维持旧 lock，不会抹除 package 内容。敏感信息一旦发布，应先轮换凭证；不能等待 yank，也不能复用同一 version 覆盖。
+</Callout>
+
+## Workspace 协调相关 package，而不是合并 crate
+
+<Term def="由一个根 Cargo.toml 管理、共同开发的多个相关 package 集合，共享 lock 与 target。">Cargo workspace</Term>
+
+虚拟 workspace 根没有 `[package]`，用 `[workspace]` 声明 resolver 和 members：
+
+```toml
+[workspace]
+resolver = "3"
+members = ["adder", "add_one", "add_two"]
+```
+
+<Term def="列入 workspace members、仍拥有自己 Cargo.toml、targets 与直接依赖声明的 package。">workspace member</Term>
+
+每个 member 仍是独立 package，可包含 library 或 binary crate。workspace 让经常一起修改的组件共享解析和 artifact，但不会让一个 member 自动看见另一个 member 的 symbol 或 dependency。
+
+## Package 间依赖必须显式写 path
+
+<Term def="在 member 的 dependencies 中以本地 path 指向另一个 package，明确建立 crate 构建边。">path dependency</Term>
+
+```toml
+# adder/Cargo.toml
+[dependencies]
+add_one = { path = "../add_one" }
+add_two = { path = "../add_two" }
+```
+
+把两个 package 都列为 members 不等于 adder 依赖 add_one。Cargo 只按 manifest 中的边排序构建。类似地，若 add_one 声明 rand，adder 不能仅因同处 workspace 就 `use rand`；adder 直接使用它时也必须在自己的 dependencies 中声明。
+
+<Term def="workspace 根唯一的 Cargo.lock，为所有 member 协调兼容依赖版本，但不替代各自声明。">共享 Cargo.lock</Term>
+
+<Term def="workspace 根唯一的 target 目录，让相关 member 复用依赖 artifact，减少重复构建。">共享 target</Term>
+
+共享 lock 倾向把兼容要求解析到同一版本；若版本要求不兼容，仍可能同时存在多个版本。共享 target 是构建缓存布局，不意味着所有命令都默认作用于每个 package。
+
+## -p 明确命令的 package 作用域
+
+<Term def="通过 Cargo 的 -p 选项从 workspace 中选择一个 package 来 run、test 或 publish。">package 选择</Term>
+
+根目录 `cargo test` 会运行 workspace 的所有 member tests；`cargo test -p add_one` 只选择 add_one（及所需依赖）；运行特定 binary 用 `cargo run -p adder`。发布 workspace 也必须逐个 package 执行，不能把整个 workspace 当成一个 registry version。
+
+<RplCargoWorkspaceLab />
+
+选择 package、命令和全 workspace 范围，观察显式 path dependency、根 lock/target 与 `-p` 的职责。共享解析不等于共享直接依赖。
+
+<Callout type="trap" title="陷阱：把 workspace membership 当依赖声明">
+  members 只定义协调集合。任何 crate 间调用都需要目标 package manifest 中的 path/version dependency；外部 crate 也必须由每个直接使用它的 package 声明。
+</Callout>
+
+## cargo install 安装 binary，不修改当前依赖
+
+<Term def="从 registry 构建并把 package 的 binary targets 安装到本地 bin 目录的命令。">cargo install</Term>
+
+只有含 binary target 的 package 可安装；默认 rustup 环境通常写入 `$HOME/.cargo/bin`，该目录必须在 PATH 中才能直接运行。`cargo install ripgrep` 最终安装的 executable 名可为 `rg`，package 名与 binary 名不必相同。
+
+<Term def="由 src/main.rs 或显式 bin 配置产生、可执行且能被 cargo install 安装的 target。">binary target</Term>
+
+install 面向开发者工具，不替代操作系统包管理，也不会把 crate 加到当前 Cargo.toml。项目依赖仍用 `[dependencies]` 和 Cargo 的解析流程。
+
+## cargo-* 可执行文件扩展命令空间
+
+<Term def="PATH 中命名为 cargo-something 的 executable，可通过 cargo something 调用并出现在 cargo --list。">Cargo 自定义子命令</Term>
+
+Cargo 无需内置每种工作流。若 PATH 中存在 `cargo-audit`，输入 `cargo audit` 会路由到该 executable；可用 cargo install 分发这些扩展。命名约定提供统一入口，但第三方命令不是 Cargo 核心安全保证，仍需评估来源、版本与权限。
+
+## 三步建立可发布 Cargo 链路
+
+<Stepper>
+  <Step title="第一步：固定构建配置与证据">
+    分开 dev 反馈和 release 交付，局部覆盖 profile；测试、benchmark 与最终 artifact 使用明确命令和相同 features/target。
+
+    <RplCargoProfileLab />
+  </Step>
+  <Step title="第二步：把 crate 变成用户可用 package">
+    补 crate/item docs、doc tests、pub use 和 metadata；在 publish 前检查 package 内容、license、版本兼容性与 token 安全。
+
+    <RplCratePublishLab />
+  </Step>
+  <Step title="第三步：在 workspace 中保持依赖显式">
+    members 共享 lock/target，每个 package 独立声明 path/registry 依赖；用全 workspace gate 与 `-p` 局部反馈配合，发布时逐包排序。
+
+    <RplCargoWorkspaceLab />
+  </Step>
+</Stepper>
+
+**Cargo 工作空间** 共享 lock/target 却保持 member package/dependency 独立；**Cargo 自定义命令** 则把 PATH 中的 cargo-subcommand 暴露为 cargo subcommand，但不改变 package graph。
+
+## 小结
+
+- dev/release profiles 独立配置；局部覆盖只改指定键，性能验证必须使用交付 profile
+- `///` 文档 public item，`//!` 文档 crate/module；代码示例由 cargo test 作为 doc tests 执行，pub use 可稳定用户路径
+- crates.io 发布要求唯一名称和 metadata；version 不可覆盖，修复通过 SemVer 新版本表达
+- yank 只阻止新解析选择，不删除内容且保留旧 lock；secret 泄漏必须立即撤销和轮换
+- workspace member 共享根 Cargo.lock 与 target，但 package 间 path dependency 和外部直接依赖仍需各自显式声明
+- cargo install 只安装 binary 工具；PATH 中 cargo-* executable 可扩展为 Cargo 子命令
+
+<Exercises>
+  1. **问题 1：评审 profile。** 团队用 `cargo build` 的执行时间证明 iterator 重构让线上更快，同时把 dev opt-level 改成 2。证据哪里不充分，应怎样重测？
+
+  <Answer question="profile 与性能证据如何对齐？">cargo build 使用 dev，改 dev opt-level 只改变开发 artifact，不能代表线上 release。应固定与交付一致的 release profile、features、target、编译器和代表性输入，对重构前后做重复 benchmark，并检查算法与分配是否等价；同时记录开发 profile 调整只用于反馈速度，避免混淆两套配置。</Answer>
+
+  2. **问题 2：处理错误发布。** 1.0.1 有严重 bug 且误含 token。yank 能解决哪些问题，不能解决什么，正确动作顺序是什么？
+
+  <Answer question="yank、修复版本和 secret 轮换各自负责什么？">先立即在凭证提供方撤销并轮换 token，因为已发布内容不能靠 yank 擦除。yank 1.0.1 可阻止新 lock 选择它，但已有 lock 仍能构建且源码保留。修复代码和删除 secret 后按 SemVer 发布新版本，并通知受影响用户升级；必要时联系 registry 支持，但不能同号覆盖 1.0.1。</Answer>
+
+  3. **问题 3：修复 workspace 依赖。** adder 与 add_one 都是 members，add_one 使用 rand；adder 直接 `use add_one` 和 `use rand` 却编译失败。根 lock 已有 rand，为什么仍失败？
+
+  <Answer question="共享 lock 为什么不授予依赖可见性？">members 只进入协调集合，adder 仍需在自己的 Cargo.toml 以 path 声明 add_one。根 Cargo.lock 只记录解析结果，不替每个 package 声明直接依赖；adder 直接 use rand 时也必须声明 rand。修复 manifest 后 Cargo 才建立构建边，并可复用 lock 中兼容版本和根 target artifact。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="构建 profile">一组独立的 Cargo 编译选项，dev/release 有不同默认目标。</GlossaryItem>
+  <GlossaryItem term="profile 局部覆盖">只改写 profile 指定键并保留其余默认配置。</GlossaryItem>
+  <GlossaryItem term="文档注释">由 rustdoc 处理、描述后续 public item 的三斜线注释。</GlossaryItem>
+  <GlossaryItem term="doc test">cargo test 编译和执行的文档代码示例。</GlossaryItem>
+  <GlossaryItem term="容器文档">以 //! 描述所在 crate 或 module 整体的注释。</GlossaryItem>
+  <GlossaryItem term="公开重导出">用 pub use 为用户提供稳定且较短的公共路径。</GlossaryItem>
+  <GlossaryItem term="package metadata">registry 识别、许可和发现 package 所需的 manifest 信息。</GlossaryItem>
+  <GlossaryItem term="registry token">认证发布操作、必须保密且泄漏后轮换的 secret。</GlossaryItem>
+  <GlossaryItem term="cargo publish">上传不可同号覆盖的具体 package version 的操作。</GlossaryItem>
+  <GlossaryItem term="语义化版本">按兼容性用 major/minor/patch 表达升级风险的规则。</GlossaryItem>
+  <GlossaryItem term="yank">阻止新解析选择某版本但保留源码和旧 lock 可用性。</GlossaryItem>
+  <GlossaryItem term="Cargo workspace">共享 lock/target、共同开发多个相关 package 的集合。</GlossaryItem>
+  <GlossaryItem term="workspace member">加入协调集合但保留自身 manifest 与 targets 的 package。</GlossaryItem>
+  <GlossaryItem term="path dependency">package manifest 中指向另一本地 package 的显式依赖。</GlossaryItem>
+  <GlossaryItem term="共享 Cargo.lock">为所有 member 记录统一依赖解析的根 lock 文件。</GlossaryItem>
+  <GlossaryItem term="共享 target">集中 workspace 编译 artifact 的根输出目录。</GlossaryItem>
+  <GlossaryItem term="package 选择">用 -p 指定 workspace 命令目标 package 的机制。</GlossaryItem>
+  <GlossaryItem term="cargo install">构建并安装 registry package binary targets 的命令。</GlossaryItem>
+  <GlossaryItem term="binary target">可执行、可被 install 安装的 Cargo target。</GlossaryItem>
+  <GlossaryItem term="Cargo 自定义子命令">通过 PATH 中 cargo-* executable 扩展的命令入口。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Rust Programming Language, Chapter 14 More About Cargo and Crates.io"
+  adaptedUrl="https://doc.rust-lang.org/book/ch14-00-more-about-cargo.html"
+/>

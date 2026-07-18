@@ -1,183 +1,293 @@
 ---
-title: 下一步学什么
-type: A
-section: 继续前进
+title: "第13章 下一步去哪里"
+type: C
+section: "算法图解（第2版）"
 order: 13
-description: 算法决策框架——面对新问题时，先识别结构再匹配算法家族。
+description: "沿线性回归、倒排索引、傅里叶、并行与MapReduce、概率结构、哈希与密码学、线性规划规划后续路线。"
 demo: true
 math: false
-sourceUrl: https://www.manning.com/books/grokking-algorithms-second-edition
+sourceUrl: "https://livebook.manning.com/book/grokking-algorithms-second-edition/chapter-13"
 draft: false
 ---
 
-{/* 知识点清单：算法决策框架/复杂度速查/图算法/机器学习/NP完全/后续学习路径；原书章节：Where to go next。 */}
+import { TopicRouteMap, RegressionIndexDiagram, ScaleAndSketchLab, HashCryptoOptimizationLab } from "@/components/mdx/grokking-algorithms-2e/diagrams/where-to-go-next";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用「问题结构 → 数据特征 → 算法家族」三步框架为新问题匹配候选算法。
-- 能查阅复杂度速查表，快速估算一个算法在当前数据量下是否可行。
-- 能回答：学完本书 13 章后，每一类算法的核心前提、看家本领和致命弱点分别是什么。
+- 能解释本章10组后续主题各自解决的问题，并按预测、检索、规模、安全或优化选择路线
+- 能实现一元线性回归与倒排索引，区分连续值拟合和关键词文档检索
+- 能描述傅里叶、并行算法与MapReduce的数据流，分析串行部分和通信开销
+- 能比较Bloom过滤器、HyperLogLog、SHA与局部敏感哈希的输出、误差和安全目标
+- 能解释Diffie-Hellman共享秘密协商与线性规划模型，并指出认证和整数约束边界
 
 </Objectives>
 
-## 先玩一遍
+## 从房价预测与关键词检索开始
 
-你学完了二分查找、选择排序、递归、快速排序、散列表、BFS、Dijkstra、树、平衡树、贪心、DP 和 KNN——共十二种武器。最后一章要做的不是再学一种，而是把这些武器摆到桌上，对照它们各自擅长的问题形状，形成一副「看到问题就知道该掏哪把刀」的直觉地图。
+先预测：同样处理大量数据，“根据3000平方英尺预测房价”和“找出包含hi的网页”需要同一种算法吗？前者要从连续数据拟合关系，后者要预先建立词到文档的反向映射。
 
-<AlgorithmPlayground
-  mode="next-steps"
-  title="下一步学什么 · 交互动画"
-  focus="学算法的终点不是记住每种算法，而是看到问题形状就能喊出候选策略。"
-/>
+<RegressionIndexDiagram />
 
-<Callout type="tip">
-  <strong>猜一猜：</strong>浏览下面这张「算法决策地图」——当你面对一个新问题时，
-  先判断它是排序、搜索、路径、优化还是分类，然后沿着决策分支找到对应算法家族。
-</Callout>
+原书最后一章不是前12章速查表，而是10组概念入口。它先讲线性回归和倒排索引，再走向傅里叶变换、并行算法、MapReduce、Bloom过滤器与HyperLogLog、SHA、局部敏感哈希、Diffie-Hellman和线性规划；最后让读者按兴趣与问题领域选择路线。
 
-## 分步动画
+<TopicRouteMap />
 
-<AlgorithmNextStepsDiagram />
+这些小节给出“它解决什么问题”的地图，不替代完整课程、成熟库或安全规范。本页在保留原章直觉的同时，把每个主题最容易误用的边界补齐。
+
+## 线性回归
+
+<Term def="用直线或更高维超平面拟合连续目标与特征关系的统计学习方法。">线性回归</Term>用直线或超平面拟合数据。原章以房屋面积和售价为例：在散点间拟合一条趋势线，再把3000平方英尺代入，得到一个起始价格预测。
+
+一元模型写成 `y = intercept + slope * x`。下面用最小二乘闭式公式拟合斜率和截距；生产使用还要划分训练/验证数据、检查异常值与残差，并给出误差区间，不能把一条线当成因果证明。
+
+```python
+from statistics import fmean
+
+def fit_line(xs: list[float], ys: list[float]) -> tuple[float, float]:
+    if len(xs) != len(ys) or len(xs) < 2:
+        raise ValueError("need paired observations")
+    x_mean = fmean(xs)
+    y_mean = fmean(ys)
+    denominator = sum((x - x_mean) ** 2 for x in xs)
+    if denominator == 0:
+        raise ValueError("x values need variation")
+    slope = sum(
+        (x - x_mean) * (y - y_mean) for x, y in zip(xs, ys)
+    ) / denominator
+    intercept = y_mean - slope * x_mean
+    return intercept, slope
+
+areas = [1200, 1800, 2400, 3200]
+prices = [240000, 315000, 390000, 510000]
+intercept, slope = fit_line(areas, prices)
+predicted_3000 = intercept + slope * 3000
+```
+
+多特征时，输入从一个面积数值变成面积、卧室数、地段等向量，直线推广为超平面。线性模型适合建立可解释基线；若关系明显非线性、误差分布或外推范围不合理，就要改特征、模型或评估假设。
+
+## 倒排索引
+
+<Term def="从词项映射到包含该词项的文档列表或位置列表的数据结构。">倒排索引</Term>从词映射到包含它的文档。普通文档存储回答“这个页面有哪些词”，倒排索引把方向反过来，回答“这个词在哪些页面”。搜索引擎使用倒排索引，不必为每次查询重新扫描所有网页。
+
+```python
+import re
+from collections import defaultdict
+
+def tokenize(text: str) -> list[str]:
+    return re.findall(r"[a-z0-9]+", text.lower())
+
+def build_inverted_index(
+    documents: dict[str, str]
+) -> dict[str, list[str]]:
+    postings: dict[str, set[str]] = defaultdict(set)
+    for document_id, text in documents.items():
+        for term in tokenize(text):
+            postings[term].add(document_id)
+    return {
+        term: sorted(document_ids)
+        for term, document_ids in postings.items()
+    }
+
+documents = {
+    "doc1": "hi algorithm",
+    "doc2": "algorithm music",
+    "doc3": "hi music",
+}
+index = build_inverted_index(documents)
+assert index["hi"] == ["doc1", "doc3"]
+```
+
+真实搜索还要存词频、位置、字段、文档长度与更新信息，以支持短语查询和相关性排序。分词规则依赖语言；删除或修改文档时也要更新posting list。索引用额外存储和构建成本换取低延迟查询。
 
 <Stepper>
-  <Step title="看输入结构——问题属于哪一型">
-    算法从来不是凭空选的——问题结构决定候选集。数据有序吗（二分查找 / BST）？
-    数据间有关系吗（图）？需要最优解还是近似就行（精确 vs 贪心）？
-    第一步永远是先画数据结构，再看它像哪种经典问题。
-    <AlgorithmPlayground mode="next-steps" title="下一步 · 问题识别" currentStep={1} />
-  </Step>
-  <Step title="执行关键动作——按前提条件过滤候选">
-    每种算法都有铁打的前提：Dijkstra 禁负权，BST 要可比较键，
-    贪心要贪心选择性质，DP 要有重叠子问题，KNN 维度不能太高。
-    拿到一个看似匹配的算法名后，第一件事是检查它的前提条件你的数据是否满足。
-    <AlgorithmPlayground mode="next-steps" title="下一步 · 前提筛查" currentStep={2} />
-  </Step>
-  <Step title="收缩问题规模——复杂度估算决定可行性">
-    算法通过前提筛查后，查复杂度速查表（见下方表格），
-    代入你的数据量 n 估算运行时间或内存。如果 n=10⁷ 而算法是 O(n²)，
-    不用试——换算法或降数据量。O(n log n) 对 10⁶ 可行，O(2ⁿ) 对 n &gt; 30 不可行。
-    <AlgorithmPlayground mode="next-steps" title="下一步 · 复杂度验证" currentStep={3} />
-  </Step>
-  <Step title="读出结论——你的算法工具箱全景">
-    回头看这 13 章，你掌心的不是一堆名词，而是一个「问题 → 结构 → 算法」的决策框架。
-    后续该学的方向：更多图算法（Bellman-Ford、A*）、字符串匹配（KMP）、
-    更高级的数据结构（跳表、B 树、并查集）、以及机器学习算法的数学根基。
-    <AlgorithmPlayground mode="next-steps" title="下一步 · 全景地图" currentStep={4} />
-  </Step>
+  <Step title="先判断输出是连续值还是文档集合"><TopicRouteMap />房价预测输出数值，关键词查询输出文档候选；问题输出先决定算法家族。</Step>
+  <Step title="回归先拟合再验证"><RegressionIndexDiagram />用训练数据拟合直线或超平面，在未参与拟合的数据上测量预测误差。</Step>
+  <Step title="索引先分词再反向聚合">把每篇文档切成规范词项，将每个词项映射到包含它的文档编号集合。</Step>
+  <Step title="查询后仍要排序与过滤">倒排索引快速给候选文档，相关性、权限、时效和短语位置仍需后续阶段处理。</Step>
 </Stepper>
 
-## 核心概念
-
-<Term def="一种思考框架：面对新问题时，先识别输入结构和约束条件，再按问题形状匹配对应的算法家族，最后用复杂度估算确认可行性。">算法决策框架</Term>
-是你读完本书后最该带走的东西。它不是一个具体算法，而是一种思维习惯——遇到问题不是先写代码，而是先画数据、想结构、查前提、算复杂度。这个习惯的价值远大于背下任何一种算法的实现。
-
-<Term def="描述算法的时间需求如何随输入规模增长的语言，用于预测在真实数据量下算法是否可行。">复杂度</Term>
-在本书中充当的不是理论课的考点，而是工程决策的算盘。O(n²) 对 n=1000 是百万级操作——几毫秒；对 n=10⁶ 是万亿级——不可接受。下面这张速查表把本书所有算法的前提、时间和空间整理在一起，供你决策时查阅。
-
-### 算法复杂度速查表
-
-| 算法 | 前提条件 | 平均时间 | 最坏时间 | 空间 | 核心局限 |
-|---|---|---|---|---|---|
-| 二分查找 | 必须有序数组、随机访问 | O(log n) | O(log n) | O(1) | 不支持动态插入 |
-| 选择排序 | 无 | O(n²) | O(n²) | O(1) | n 较大时太慢 |
-| 快速排序 | 无 | O(n log n) | O(n²)（已有序时） | O(log n) | 最坏情况退化 |
-| 散列表 | 好的哈希函数 + 低负载因子 | O(1) | O(n)（冲突严重时） | O(n) | 不保证有序遍历 |
-| BFS | 无权图 / 无向或有向 | O(V+E) | O(V+E) | O(V) | 不支持带权边 |
-| Dijkstra | 非负权图 | O((V+E) log V) | O((V+E) log V) | O(V) | 负权边失效 |
-| BST（不平衡） | 键可比较 | O(log n) | O(n)（退化时） | O(n) | 插入顺序决定形状 |
-| 平衡树 | 键可比较 | O(log n) | O(log n) | O(n) | 维护开销（旋转/变色） |
-| 贪心（近似） | 无严格前提（只求近似） | O(n²)（集合覆盖） | O(n²) | O(n) | 不保证最优 |
-| 贪心（精确） | 贪心选择性质 + 最优子结构 | 取决于问题 | 同左 | 取决于问题 | 只适用特定问题 |
-| 动态规划 | 最优子结构 + 重叠子问题 | O(nW)（背包） | O(nW) | O(nW) 可优化到 O(W) | W 大时仍慢（伪多项式） |
-| KNN（预测） | 特征需缩放、维度不宜过高 | O(n·d) 或 O(log n)（索引加速） | O(n·d) | O(n·d)（存训练集） | 预测慢 + 维数灾难 |
-
-> 注：V=顶点数，E=边数，n=元素数，W=背包容量，d=特征维度。
-
-## 后续学习方向
-
-学完这 13 章，你有了算法思维的地基。往哪个方向盖楼，取决于你面对的问题类型。
-
-**图算法方向**：你已经看了 BFS（无权最短）和 Dijkstra（非负权最短）。
-下一步可以看 Bellman-Ford（处理负权边）、A*（启发式搜索，游戏寻路标配）、
-最小生成树（Prim/Kruskal）、拓扑排序。图算法是地图、社交网络、路由协议的数学底座。
-
-**字符串匹配方向**：散列表处理了「查是否存在」，但「查在哪里出现」需要字符串算法。
-KMP（Knuth-Morris-Pratt）是入门，Boyer-Moore 是工业标准，
-Trie 树处理前缀搜索（自动补全），后缀数组处理全文搜索。
-
-**机器学习方向**：KNN 是门槛。下一步是线性回归（预测数值）、
-逻辑回归（二分类）、决策树（可解释性强）、随机森林（集成学习）。
-这些算法的数学核心——梯度下降、损失函数——会在你掌握基本概率和线性代数后变得清晰。
-
-**数据结构方向**：你已经掌握了数组、链表、散列表、树、堆（Dijkstra 中暗含）。
-进阶数据结构包括 B 树（数据库索引的底层）、跳表（替代平衡树的概率化方案）、
-并查集（处理动态连通性）、Bloom Filter（概率性集合，内存极省）。
-
-**理论根基**：如果你对«为什么贪心有时对有时不对»或«NP 完全到底意味着什么»有更深的好奇，
-可以读算法导论（CLRS）的相关章节。NP 完全性的证明并非神秘——它只是在说：
-如果这个问题有快速算法，那所有同类问题都有——而学界普遍认为没有。
-
-## 常见误区
-
-- **现象 →** 学完这本书觉得「算法都会了」，上手新题还是先写代码后分析。**原因 →** 知识是散的，没有形成决策框架。**修法 →** 下次拿到问题，强制自己先走完三步：画数据写约束 → 查前提匹配算法 → 算复杂度。走完三遍这个流程就是本能了。
-
-- **现象 →** 背住复杂度表就以为能做决策，没考虑常数因子和工程细节。**原因 →** 复杂度省略了常数。同样是 O(n log n)，归并排序的常数可能比快排大 2-3 倍——小 n 时归并反而慢。**修法 →** n 较小时（几百以内）以实测为准，大数据量时复杂度决定一切。实用主义的折中：先按复杂度筛选，再小规模基准测试。
-
-- **现象 →** 以为学更多算法就能解决所有问题。**原因 →** 算法的力量有边界——NP 完全问题在 n 较大时不是靠换算法能解决的。**修法 →** 学会识别 NP 完全问题的特征（所有组合都要试 / 问题规模 n 小时可能枚举），及时切换到近似算法或启发式方法，不要钻精确解的牛角尖。
-
-<Callout type="trap">
-  <strong>现象 →</strong> 用「这个算法 O(n log n) 最快」作为唯一选型标准。<strong>原因 →</strong>{" "}
-  忽略了前提条件——Dijkstra 是 O((V+E) log V)，但你的图有负权边，选了它就跑出错误答案。<strong>修法 →</strong>{" "}
-  算法选型三问，按顺序：①前提满足吗？②复杂度在目标数据量下可行吗？③工程约束（内存上限、延迟要求）能接受吗？
+<Callout type="trap" title="回归线相关就证明面积导致价格">
+线性回归描述关联并用于预测，不自动建立因果关系。地段、装修和时间等遗漏变量可能同时影响面积与售价；外推到训练范围之外也可能失真。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 看书时每个算法都懂，合上书面对现实问题不知道用哪个。<strong>原因 →</strong>{" "}
-  现实问题不会贴标签说 «请用 DFS» ——它只会给你数据、约束、目标。<strong>修法 →</strong>{" "}
-  练习将现实问题翻译成数据结构语言：这是找路径（图 BFS/Dijkstra）、还是多阶段决策（DP）、
-  还是覆盖最大化（贪心近似）？翻译对了，算法自然就出来了。
+## 傅里叶变换
+
+<Term def="把时域或空间域信号表示为不同频率成分幅度与相位的变换。">傅里叶变换</Term>把信号分解成频率成分。时域波形难以直接看出低音、高音或周期噪声，频域表示能显示各频率贡献；图像也可按空间频率分析平滑区域与细节。
+
+傅里叶变换用于音频压缩与信号分析，但“做一次变换”本身不会自动压缩。压缩系统通常还要利用人类感知、量化不重要系数并熵编码；有损阶段带来不可逆误差。快速傅里叶变换是高效计算离散傅里叶变换的一族算法，常见复杂度为 `O(n log n)`。
+
+## 并行算法
+
+<Term def="把可独立或可协调的工作分配给多个处理器同时执行的算法。">并行算法</Term>把工作拆到多个处理器。数组分块求和、图像分块处理或批量模型推理都可能并行，但不是把核心数乘上去就得到同比加速。
+
+并行加速受串行部分与通信开销限制。若程序比例 `s` 必须串行，使用 `p` 个处理器的理想加速上界可用Amdahl形式理解：`1 / (s + (1-s)/p)`。同步、数据复制、缓存竞争、负载不均和任务调度还会进一步降低实际收益。
+
+## MapReduce
+
+<Term def="以map产生中间键值对、按键分组并由reduce聚合的分布式批处理模型。">MapReduce</Term>包含map和reduce两个阶段，中间还有按键分区、排序与shuffle。map把输入转换为中间键值对，reduce按键聚合中间结果。
+
+经典词频例子中，每个文档可独立map；系统把相同单词的1发送到同一reduce，再求和：
+
+```python
+from collections import defaultdict
+
+def map_words(document: str) -> list[tuple[str, int]]:
+    return [(word, 1) for word in tokenize(document)]
+
+def reduce_counts(
+    pairs: list[tuple[str, int]]
+) -> dict[str, int]:
+    grouped: dict[str, list[int]] = defaultdict(list)
+    for key, value in pairs:
+        grouped[key].append(value)
+    return {
+        key: sum(values)
+        for key, values in grouped.items()
+    }
+
+mapped = [
+    pair
+    for document in documents.values()
+    for pair in map_words(document)
+]
+assert reduce_counts(mapped) == {"hi": 2, "algorithm": 2, "music": 2}
+```
+
+这个本地模拟省略了分布式系统最昂贵的部分：shuffle网络传输、失败重试、数据倾斜和落盘。MapReduce适合可分区的大规模批处理，不是低延迟交互查询的默认答案。
+
+## Bloom过滤器与HyperLogLog
+
+<Term def="用位数组和多个哈希函数做近似成员查询、允许假阳性的概率数据结构。">Bloom过滤器</Term>用于回答“元素可能存在还是肯定不存在”。插入时把多个哈希位置设为1；查询时只要某一位为0，就确定未插入，若全部为1则只表示“可能存在”。
+
+Bloom过滤器允许假阳性但不允许假阴性，这一结论有条件：使用同一哈希方案、只做正确插入与查询、位数组未损坏且不直接清位删除。标准Bloom过滤器清除共享位会制造假阴性；若需要删除，应使用计数Bloom等变体并遵守其计数规则。
+
+<Term def="用很小内存近似估计不同元素数量的概率基数统计算法。">HyperLogLog</Term>近似统计不同元素数量。它对哈希值前导零等统计特征做分桶估计，不存储所有原元素，因此可在流式数据中低内存估算独立用户数。输出带统计误差，不能列出这些用户，也不能回答某个具体用户是否出现。
+
+<ScaleAndSketchLab />
+
+<Stepper>
+  <Step title="把信号从时间域转到频率域"><ScaleAndSketchLab />傅里叶变换揭示频率成分；若用于压缩，还要明确量化、编码与失真指标。</Step>
+  <Step title="拆分并行工作并测真实加速">先测串行比例、任务粒度、通信和同步，再决定线程、进程、GPU或分布式执行。</Step>
+  <Step title="用map、shuffle、reduce表达批处理">map独立产生键值对，shuffle聚合同键数据，reduce完成计数或汇总。</Step>
+  <Step title="按查询类型选择概率结构">成员查询用Bloom过滤器，独立计数用HyperLogLog；两者都不能替代原始记录存储。</Step>
+</Stepper>
+
+<Callout type="trap" title="Bloom返回存在就可以直接信任">
+“可能存在”可能是假阳性，仍需访问权威存储确认；“肯定不存在”才可安全跳过后续查询。删除、并发更新和参数不一致还会破坏原有保证。
 </Callout>
 
-## 小结与练习
+## SHA与局部敏感哈希
 
-- 算法决策框架：看数据结构 → 猜问题类型 → 按前提过滤候选算法 → 查复杂度估算可行性。
-- 复杂度速查表是决策的算盘——每种算法都附有前提、时间和致命弱点。
-- 12 种算法覆盖了搜索、排序、图、优化、机器学习五个领域的基础武器。
-- 后续可选方向：更多图算法、字符串匹配、机器学习算子、高级数据结构、NP 完全理论。
+<Term def="把任意长度输入映射为固定长度摘要的一族密码学哈希算法。">SHA算法</Term>生成固定长度摘要。密码学哈希追求原像困难、第二原像困难和抗碰撞等性质，输入微小变化应显著改变摘要。SHA不是加密：摘要不可用密钥正常解密回原文，也不提供保密性。
+
+文件完整性可比较可信渠道提供的摘要；数字签名通常对消息摘要签名，但完整安全方案还涉及算法版本、密钥与证书。密码存储不能只做一次快速SHA，应使用带盐、专为口令设计且成本可调的口令哈希方案。
+
+<Term def="让相似输入以较高概率落入同一桶、用于近似相似搜索的哈希方法。">局部敏感哈希</Term>寻找近似相似项。它与SHA目标几乎相反：SHA希望相近输入的摘要也不可预测地不同，LSH希望相似向量更可能碰撞，以快速生成候选，再做精确距离验证。
+
+## Diffie-Hellman密钥交换
+
+<Term def="让双方在公开信道上基于各自私有值协商同一共享秘密的密钥交换协议。">Diffie-Hellman密钥交换</Term>在公开信道协商共享秘密。双方交换公开值，各自用私有值计算出相同结果；窃听者看到公开参数与公开值，但在所选困难问题假设下难以恢复共享秘密。
+
+协商结果通常送入密钥派生函数，再用于认证加密，而不是直接当消息或密码。基本Diffie-Hellman不认证通信对端，中间人可分别与双方建立秘密；实际协议必须结合签名、证书、预共享密钥或其他身份认证。
+
+## 线性规划
+
+<Term def="在线性等式或不等式约束下，最大化或最小化线性目标函数的优化模型。">线性规划</Term>在线性约束下优化线性目标。例如工厂决定两种产品产量，目标是最大利润，约束是工时、原料和需求上限；变量、目标与约束都保持线性。
+
+连续变量模型可用成熟求解器高效处理大量实际问题。若产量必须取整数，模型变成整数线性规划，求解难度可能显著增加；若目标或约束非线性，也需要其他优化方法。建模时先写变量、目标、约束和单位，再选择求解器。
+
+<HashCryptoOptimizationLab />
+
+<Stepper>
+  <Step title="先区分安全哈希与相似哈希"><HashCryptoOptimizationLab />SHA让相近输入摘要无明显关系；LSH故意让相似输入更可能同桶。</Step>
+  <Step title="把摘要用于正确安全目标">完整性、签名与口令存储需要不同协议；SHA摘要本身不提供加密或身份认证。</Step>
+  <Step title="给密钥交换补上认证">Diffie-Hellman只解决共享秘密协商，必须认证公开值和通信对端以防中间人。</Step>
+  <Step title="把资源分配写成线性模型">明确连续或整数变量、线性目标和每条约束；整数要求不能偷偷忽略。</Step>
+</Stepper>
+
+<Callout type="trap" title="哈希、加密与密钥交换可以互换">
+三者目标不同：哈希生成摘要，加密用密钥保护可恢复明文，密钥交换协商密钥材料。把SHA当加密或把未认证Diffie-Hellman当完整安全信道都会留下设计漏洞。
+</Callout>
+
+## 按问题领域选择路线
+
+后续学习应按问题领域选择路线：
+
+- 连续预测与可解释基线：深入统计、线性代数、回归诊断和机器学习评估。
+- 全文检索：深入分词、posting压缩、BM25、向量检索与混合排序。
+- 音频图像与科学计算：学习复数、采样、卷积、FFT和数字信号处理。
+- 大规模计算：学习并发正确性、分布式存储、数据分区、容错和流处理。
+- 概率数据结构：学习误差界、参数选择、合并语义与线上监控。
+- 安全系统：从经过审查的协议和库入手，系统学习认证、密钥管理与威胁模型。
+- 运筹优化：学习线性规划对偶、整数规划、网络流与求解器建模。
+
+本章每个入口都能扩展成一门课。最有效的顺序是先选一个正在解决的问题，写清所需输出、允许误差、数据规模、延迟和安全约束，再沿对应路线深入并用成熟实现验证。
+
+## 原章概念回查
+
+线性回归用直线或超平面拟合数据。倒排索引从词映射到包含它的文档，搜索引擎使用倒排索引。
+
+傅里叶变换把信号分解成频率成分，傅里叶变换用于音频压缩与信号分析。并行算法把工作拆到多个处理器，并行加速受串行部分与通信开销限制。
+
+MapReduce包含map和reduce两个阶段；map把输入转换为中间键值对，reduce按键聚合中间结果。
+
+Bloom过滤器允许假阳性但不允许假阴性，HyperLogLog近似统计不同元素数量。SHA生成固定长度摘要，局部敏感哈希寻找近似相似项。
+
+Diffie-Hellman在公开信道协商共享秘密。线性规划在线性约束下优化线性目标。后续学习应按问题领域选择路线。
+
+## 本章回顾
+
+1. 线性回归为连续值关系建立直线或超平面基线。
+2. 倒排索引把词项映射到文档列表，加速关键词检索。
+3. 傅里叶变换提供频域表示，压缩还需量化与编码。
+4. 并行加速受串行比例、通信、同步和负载均衡约束。
+5. MapReduce以map、shuffle、reduce处理可分区批任务。
+6. Bloom过滤器做近似成员查询，阳性需要权威存储确认。
+7. HyperLogLog用小内存近似不同元素数量。
+8. SHA是固定长度密码学摘要，不是可逆加密。
+9. LSH用概率碰撞生成相似候选，与SHA安全目标不同。
+10. Diffie-Hellman协商秘密但本身不认证对端。
+11. 线性规划要求目标和约束线性，整数变量会改变问题类别。
+12. 后续学习路线应由真实问题、误差、规模、延迟和安全要求决定。
 
 <Exercises>
-  <Answer question="你面对一个 500 万节点的地图，要为汽车导航找最快路线。走决策框架找合适算法。">
-    地图是图结构（节点=路口、边=道路）。边权是行驶时间，全是正数。前提满足→ Dijkstra（或 A* 加启发式更快）。复杂度 O((V+E) log V) ≈ 500 万 × log 500 万 ≈ 亿级操作，现代 CPU 在几秒内完成。前提满足 + 复杂度可行 = Dijkstra 是正确答案。
-  </Answer>
-  <Answer question="你需要在 10 万篇文章中快速搜索某个关键词是否出现过，但不需要知道位置。选哪种算法或数据结构？">
-    需求是 «存在性查询» 且 «不需要位置» → 散列表（关键词做键）或 Bloom Filter（极省内存 + 可接受微小误判）。散列表 O(1) 查询，10 万键绰绰有余。Bloom Filter 用更少内存但不支持删除且有小概率误报。
-  </Answer>
+
+**问题 1：用户搜索“hi algorithm”时，倒排索引怎样得到同时包含两个词的文档？**
+
+<Answer>分别读取 `hi` 的posting list和 `algorithm` 的posting list，再求交集。示例中前者为doc1、doc3，后者为doc1、doc2，交集只有doc1；若是OR查询则求并集，短语查询还需词位置。</Answer>
+
+**问题 2：8核机器上程序仍有20%必须串行，不计额外开销时理想加速上限是多少？**
+
+<Answer>按Amdahl形式，8核加速约为 `1 / (0.2 + 0.8/8) = 1/0.3`，约3.33倍，不是8倍。通信、同步与负载不均只会让实际值更低。</Answer>
+
+**问题 3：Bloom过滤器回答“可能存在”，系统能否直接返回用户记录存在？**
+
+<Answer>不能，因为可能是假阳性。它适合先过滤肯定不存在的查询；对可能存在仍要访问权威数据库确认。若实现支持删除，还要使用正确变体，避免清共享位造成假阴性。</Answer>
+
+**问题 4：双方直接使用未认证Diffie-Hellman建立聊天信道，主要风险是什么？**
+
+<Answer>中间人可截获双方公开值，分别与两端完成密钥交换，再解密、修改并转发消息；两端各自拥有加密信道却连错了对象。需要签名、证书、预共享密钥等方式认证交换内容和对端身份。</Answer>
+
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="算法决策框架">
-    面对新问题时的思维流程：识别输入数据结构 → 判断问题类型（搜索/排序/路径/优化/分类）→ 按前提条件过滤候选算法 → 依据复杂度速查表确认可行性。
-  </GlossaryItem>
-  <GlossaryItem term="复杂度">
-    描述算法的时间需求或空间需求如何随输入规模（n）增长的表示方式，用于在实际编码前估算并预测算法在目标数据量下的可行性。
-  </GlossaryItem>
-  <GlossaryItem term="复杂度速查表">
-    汇总本书所有算法的前置条件、平均/最坏时间复杂度、空间复杂度和核心局限的表格，提供快速比对和选型参考。
-  </GlossaryItem>
-  <GlossaryItem term="NP 完全问题">
-    一类不存在已知多项式时间精确算法的问题。面对此类问题，应转向近似算法（如贪心近似）或启发式搜索，放弃精确最优的追求。
-  </GlossaryItem>
-  <GlossaryItem term="图算法">
-    在节点和边构成的图结构上运行的算法家族。BFS（无权最短路径）、Dijkstra（非负权最短路径）、Bellman-Ford（允许负权）、A*（启发式）均属此类。
-  </GlossaryItem>
-  <GlossaryItem term="机器学习">
-    让计算机从数据中自动发现模式的方法论。KNN 是本书介绍的入门算法。后续方向包括线性回归、逻辑回归、决策树、随机森林、深度学习等。
-  </GlossaryItem>
+  <GlossaryItem term="线性回归">用直线或超平面拟合连续目标与特征关系的方法。</GlossaryItem>
+  <GlossaryItem term="倒排索引">从词项映射到包含它的文档或位置列表的数据结构。</GlossaryItem>
+  <GlossaryItem term="傅里叶变换">把时域或空间域信号表示为频率成分幅度与相位的变换。</GlossaryItem>
+  <GlossaryItem term="并行算法">把可协调工作分配给多个处理器同时执行的算法。</GlossaryItem>
+  <GlossaryItem term="MapReduce">map产生键值对、shuffle分组、reduce聚合的分布式批处理模型。</GlossaryItem>
+  <GlossaryItem term="Bloom过滤器">允许假阳性的近似成员查询概率数据结构。</GlossaryItem>
+  <GlossaryItem term="HyperLogLog">小内存近似统计不同元素数量的概率算法。</GlossaryItem>
+  <GlossaryItem term="SHA算法">把任意长度输入映射为固定长度密码学摘要的一族算法。</GlossaryItem>
+  <GlossaryItem term="局部敏感哈希">让相似输入较可能同桶、用于近似相似搜索的方法。</GlossaryItem>
+  <GlossaryItem term="Diffie-Hellman密钥交换">在公开信道上基于双方私有值协商共享秘密的协议。</GlossaryItem>
+  <GlossaryItem term="线性规划">在线性约束下优化线性目标函数的模型。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Grokking Algorithms, Second Edition"
-  adaptedUrl="https://www.manning.com/books/grokking-algorithms-second-edition"
+  adaptedFrom="Grokking Algorithms, Second Edition, Chapter 13: Where to go next"
+  adaptedUrl="https://livebook.manning.com/book/grokking-algorithms-second-edition/chapter-13"
 />

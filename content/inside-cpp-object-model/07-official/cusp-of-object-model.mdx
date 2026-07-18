@@ -1,0 +1,332 @@
+---
+title: "第7章：对象模型边缘"
+type: A
+section: Inside the C++ Object Model · Chapter 7
+order: 7
+description: 对齐原书第7章 On the Cusp of the Object Model：模板实例化与名称解析、异常处理运行时、RTTI 安全转换，以及动态库和共享内存边界。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/inside-the-c-plus-plus-object-model-9780201834543"
+draft: false
+---
+
+import {
+  IcoExceptionRuntimeMap,
+  IcoRttiBoundaryMap,
+  IcoTemplateInstantiationMap,
+} from "@/components/mdx/inside-cpp-object-model/diagrams/cusp-of-object-model";
+
+<Objectives>
+
+- 能推导 template definition、name resolution、member function instantiation 与延迟 error reporting 的阶段边界
+- 能解释 exception handling support 如何定位 active try、匹配 catch type、构造 thrown object 并执行 stack unwinding
+- 能比较 dynamic_cast pointer/reference、typeid、dynamic shared libraries 与 shared memory 下的类型身份和 ABI 边界
+
+</Objectives>
+
+## 从“哪些决议必须推迟”开始
+
+前六章多在解释 compiler 怎样把已知 class hierarchy 映射为固定 layout/call/lifetime protocol。第 7 章转向更晚发生的决策：template 直到 actual type 出现才形成 specialization；exception 直到 throw 才选择 handler；RTTI 直到 runtime 才检查 dynamic relation。先预测这三者各把什么信息推迟到何时，再判断代价和 ABI 边界。
+
+<Term def="位于基本 class layout 之外、通过 compile-time instantiation 或 runtime metadata 扩展泛型、异常与动态类型能力的机制集合。">
+  cusp of the object model
+</Term>
+
+## 7.1 Templates
+
+<Term def="以 type/value/template parameters 描述一族 declarations，并在使用上下文中形成具体 specialization 的语言机制。">
+  templates
+</Term>
+
+<IcoTemplateInstantiationMap />
+
+### Template Instantiation
+
+<Term def="用实际 template arguments 形成 specialization，并在需要 definition 时生成相应 class/member/function 语义与代码的过程。">
+  template instantiation
+</Term>
+
+template 不是未经检查的 textual macro。definition 先被 parse；non-dependent names 通常在 definition context 绑定；dependent expressions 等到 point of instantiation 才结合 actual types 解析。implicit instantiation 由 use 触发，explicit instantiation 可集中 code emission，specialization 则提供另一份定义。
+
+```cpp
+template <typename Range>
+auto sum(const Range& range) {
+    typename Range::value_type result{};
+    for (const auto& value : range) {
+        result += value;
+    }
+    return result;
+}
+```
+
+`Range::value_type` 依赖 template parameter，需要 `typename` 告诉 parser 它是 type；`operator+=` 是否有效要到具体 Range/value type 才判断。不同 translation units 形成的同一 specialization 必须 ODR-equivalent，linker/ABI 可通过 COMDAT、weak symbol 等合并实现代码。
+
+### Error Reporting within a Template
+
+<Term def="definition-time 错误立即诊断，dependent operation 的错误延迟到 substitution/instantiation context，并携带 specialization trace。">
+  template error reporting
+</Term>
+
+延迟检查会产生长 diagnostic chain，但责任位置仍可分类：template 本身语法错误；candidate substitution failure；selected specialization body 不满足 requirement；linkage/ODR 错误。现代 concepts/requires 可把 requirement 提前命名，减少“在 body 深处才报错”。
+
+### Name Resolution within a Template
+
+<Term def="non-dependent names 在 template definition context 解析，dependent names 在实例化点结合 actual types 与关联查找解析的两阶段模型。">
+  name resolution within a template
+</Term>
+
+错误地依赖某个 compiler 的单阶段 lookup 会造成 portability bug。需要从 dependent base 取 member 时常写 `this->member` 或 qualified name，让 lookup 延迟；unqualified non-dependent helper 则不会因 instantiation namespace 新增同名 overload 自动改绑。
+
+### Member Function Instantiation
+
+<Term def="class template 的 member definition 通常在该 member 被需要时才实例化，未使用 member 不因 class specialization 存在就全部生成。">
+  member function instantiation
+</Term>
+
+这让 class template 可包含只对某些 T 有效的 optional operations，只要它们不被使用；但 interface constraints 应尽量明确。code size 取决于 distinct specializations、inline 与 linker folding，不是“template 一定膨胀”或“完全零成本”的单一结论。
+
+<Callout type="trap" title="陷阱：template就是编译前字符串替换">
+  template definition 有 scope、lookup、overload、access、ODR 和 type system
+  语义。把它当 macro 会误判 dependent name、diagnostic timing、specialization
+  identity 与 emitted code，也会错过 concepts/explicit instantiation
+  的设计工具。
+</Callout>
+
+## 7.2 Exception Handling
+
+<Term def="throw 创建 exception object，runtime 搜索匹配 handler、展开中间 frames，并以 RAII 销毁已构造 automatic objects 的控制流机制。">
+  exception handling support
+</Term>
+
+<IcoExceptionRuntimeMap />
+
+### A Quick Review of Exception Handling
+
+`try` 标记 handler region，`throw` 终止当前 normal path，`catch` 按声明顺序尝试 type match。handler 可处理、转换或 `throw;` rethrow 当前 exception。destructor 在 unwinding 中必须可靠，通常不应再抛出逃逸 exception。
+
+```cpp
+try {
+    loadScene(path);
+} catch (const ParseError& error) {
+    report(error);
+} catch (const std::exception& error) {
+    fallback(error);
+}
+```
+
+derived handler 应放在 compatible base handler 前，否则前者不可达。catch by `const&` 保留 dynamic exception object 并避免 value slicing；catch by value 会初始化新的 parameter object，可能截去 derived state。
+
+### Determine if the Throw Occurred within a try Block
+
+<Term def="runtime 根据当前 instruction/call-site metadata 与 active frames，判断 throw point 被哪些 try regions 覆盖并寻找 handler。">
+  determine active try region
+</Term>
+
+常见 zero-cost exception ABI 在 normal path 主要保留 metadata，throw path 由 personality routine/table 驱动搜索与 cleanup；其他 implementation 可选不同策略。语言保证 behavior，不保证“try 永远零成本”或 table layout。
+
+### Compare the Type against Each Catch Clause
+
+<Term def="按 exception dynamic type、public base conversions、pointer 或 exact categories 等规则，依 handler 顺序选择第一个可匹配 catch parameter。">
+  catch type matching
+</Term>
+
+handler matching 不等同普通 overload resolution。runtime 使用 type metadata 检查关系，并在 catch base reference 时给出正确 base view。`catch(...)` 是最终兜底，不提供具体 type。异常跨不兼容 runtime/DSO boundary 会面临 type identity、allocator 和 unwinder ABI 风险。
+
+### What Happens When an Actual Object Is Thrown
+
+<Term def="throw operand 用来初始化独立 exception object；该对象跨 stack unwinding 存活，直到最后一个 handler/rethrow chain 结束。">
+  thrown exception object
+</Term>
+
+```cpp
+struct DetailedError : std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
+
+void parse() {
+    DetailedError error("bad token");
+    throw error;
+}
+```
+
+exception object 不是对 local `error` 的悬空引用；runtime 在专用 storage 中 copy/move-initialize 它，随后 local frames unwind。catch base by value 会 slicing catch parameter，不改变 exception object 的原始 dynamic type；rethrow 应使用 `throw;`，写 `throw error;` 会创建新的 throw operand/对象语义。
+
+<Callout type="trap" title="陷阱：catch到base后rethrow变量等于原异常继续传播">
+  `throw;` rethrows 当前 exception object；`throw error;` 以 catch variable 为新
+  operand，可能 slicing、改变 dynamic type 与 stack context。polymorphic errors
+  通常 catch by const reference，并用 bare rethrow 保留身份。
+</Callout>
+
+## 7.3 Runtime Type Identification
+
+<Term def="通过 typeid 与 checked dynamic cast，在运行期查询 polymorphic object 的 dynamic type 或验证 hierarchy conversion。">
+  runtime type identification
+</Term>
+
+<IcoRttiBoundaryMap />
+
+### Introducing a Type-Safe Downcast
+
+`static_cast<Derived*>(base)` 假设 programmer 已证明 dynamic object 兼容；若假设错，后续使用产生 undefined behavior。type-safe downcast 使用 `dynamic_cast` 检查 polymorphic hierarchy，并完成 multiple/virtual inheritance 必要 pointer adjustment。
+
+<Term def="以 runtime hierarchy metadata 检查 base-to-derived 或 cross-cast 关系，成功时返回调整后目标 view 的转换。">
+  type-safe dynamic cast
+</Term>
+
+### A Type-Safe Dynamic Cast: References Are Not Pointers
+
+pointer cast 有自然的空失败值，所以失败返回 `nullptr`；reference 必须绑定 object，没有 null state，因此失败抛 `std::bad_cast`。接口应根据失败是否为普通分支选择 pointer/reference form，不靠 exception 捕获实现常规 probe loop。
+
+```cpp
+if (auto* circle = dynamic_cast<Circle*>(shape)) {
+    circle->setRadius(2.0);
+}
+
+Circle& required = dynamic_cast<Circle&>(*shape); // 失败抛 bad_cast
+```
+
+source class 需要 polymorphic 才能从 runtime representation 取得 dynamic identity（除特定规则外）。`dynamic_cast<void*>` 可从 polymorphic base view 得到 most-derived object address，但仍不是 serialization/ownership mechanism。
+
+### Typeid Operator
+
+<Term def="返回 std::type_info identity；对 polymorphic glvalue 表达式报告 dynamic type，对其他适用表达式主要报告 static type。">
+  typeid operator
+</Term>
+
+`typeid(*pointer)` 在 pointer 指向 polymorphic object 时查询 dynamic type；若 pointer 为 null，该 polymorphic dereference context 抛 `std::bad_typeid`。不要把 `type_info::name()` 当稳定用户协议，其文本和跨 DSO identity 属于 implementation/ABI 范围。
+
+## 7.4 Efficient, but Inflexible?
+
+<Term def="C++ 常见对象模型用预先固定的 layout、virtual slots 与静态 ABI 换取快速访问和分派，但不支持运行期任意改变 class shape。">
+  efficient but inflexible
+</Term>
+
+virtual table slot set 通常在 compilation/linkage 前确定，runtime 可以换 dynamic object，却不能像动态语言那样向既有 class 随意添加 method/field。固定 representation 带来 constant offset 与 O(1) slot dispatch，也把 binary compatibility 责任推给 library boundary。
+
+### Dynamic Shared Libraries
+
+<Term def="在独立编译/装载模块间共享 C++ class、RTTI、exception 与 allocator contract 时必须一致的 ABI 边界。">
+  dynamic shared libraries
+</Term>
+
+更改 virtual order、base layout、member layout、compiler flags 或 standard library ABI 可能破坏 binary compatibility。plugin interface 常用 versioned C facade、opaque handle/pImpl、显式 create/destroy 在同一 module 配对，并约束 exception 不跨 boundary。若直接暴露 C++ hierarchy，就要固定 compiler/ABI、visibility、RTTI 和 ownership policy。
+
+### Shared Memory
+
+<Term def="多个进程映射同一 bytes，但各自 virtual address、code image、vtable/type_info 与 allocator state 可能不同的 storage boundary。">
+  shared memory
+</Term>
+
+把 polymorphic object 原样放进 shared memory 通常无效：vptr 是 process-local code/data address，raw pointers 受 ASLR/mapping base 影响，mutex/allocator 也可能非 process-shared。共享格式应使用 offsets、stable IDs、versioned standard-layout records 与显式 synchronization；每个 process 在本地重建 behavior objects。
+
+## 第7章验证清单
+
+1. template 标出 non-dependent definition-time lookup 与 dependent instantiation-time lookup。
+2. 记录 specialization request、point of instantiation、member 是否真正 odr-used/emitted。
+3. diagnostic 分为 definition、substitution、instantiation body 与 ODR/linkage。
+4. exception 路径依次检查 exception object、active try、catch matching、unwind cleanups。
+5. catch polymorphic error 用 const reference，bare rethrow 保留原 exception identity。
+6. dynamic_cast pointer 失败为 null，reference 失败为 bad_cast，并验证 adjustment。
+7. typeid 区分 static/dynamic query 和 null polymorphic dereference。
+8. DSO/shared memory 不传裸 vptr/type_info/raw pointer，使用版本化 ABI 与稳定数据表示。
+
+## 小结
+
+- templates 通过 definition/instantiation 两阶段把 dependent type work 延迟到 actual arguments
+- template error reporting 的延迟来自 dependent operation，而非无类型字符串替换
+- exception runtime 创建独立 thrown object，搜索 active try/catch 并沿途执行 RAII cleanup
+- pointer/reference dynamic_cast 使用相同 type graph，但失败协议分别是 null 与 bad_cast
+- typeid 对 polymorphic glvalue 可报告 dynamic type，其 name/identity 仍有 ABI 边界
+- 固定 object layout/vtable 让访问高效，也限制 runtime 改变 class shape 的灵活性
+- dynamic shared libraries 必须版本化 compiler ABI、RTTI、exception 和 ownership contract
+- shared memory 应存 offsets/IDs/versioned records，不存 process-local vptr 和 raw pointers
+
+<Attribution
+  adaptedFrom="Inside the C++ Object Model, First Edition, Chapter 7: On the Cusp of the Object Model"
+  adaptedUrl="https://www.informit.com/store/inside-the-c-plus-plus-object-model-9780201834543"
+/>
+
+<Glossary>
+  <GlossaryItem term="cusp of the object model">
+    扩展基本对象布局的泛型与运行期机制边缘。
+  </GlossaryItem>
+  <GlossaryItem term="templates">
+    由参数形成一族 declarations 和 specializations。
+  </GlossaryItem>
+  <GlossaryItem term="template instantiation">
+    以实际参数形成并按需发射 specialization。
+  </GlossaryItem>
+  <GlossaryItem term="template error reporting">
+    按 definition/substitution/instantiation 延迟诊断。
+  </GlossaryItem>
+  <GlossaryItem term="name resolution within a template">
+    non-dependent 早绑定、dependent 晚绑定的名称解析。
+  </GlossaryItem>
+  <GlossaryItem term="member function instantiation">
+    class-template member 被需要时才实例化。
+  </GlossaryItem>
+  <GlossaryItem term="exception handling support">
+    throw、handler search 与 stack unwinding runtime。
+  </GlossaryItem>
+  <GlossaryItem term="determine active try region">
+    由 throw point 和 frame metadata 找 handler region。
+  </GlossaryItem>
+  <GlossaryItem term="catch type matching">
+    按 runtime type relation 选择第一个 handler。
+  </GlossaryItem>
+  <GlossaryItem term="thrown exception object">
+    跨 unwind 存活的独立异常对象。
+  </GlossaryItem>
+  <GlossaryItem term="runtime type identification">
+    运行期查询或验证 dynamic type relation。
+  </GlossaryItem>
+  <GlossaryItem term="type-safe dynamic cast">
+    检查 hierarchy 并返回调整后 target view。
+  </GlossaryItem>
+  <GlossaryItem term="typeid operator">
+    取得 static 或 polymorphic dynamic type_info。
+  </GlossaryItem>
+  <GlossaryItem term="efficient but inflexible">
+    固定布局/槽换取高效但限制 runtime 变形。
+  </GlossaryItem>
+  <GlossaryItem term="dynamic shared libraries">
+    必须维护 C++ ABI/RTTI/ownership 的模块边界。
+  </GlossaryItem>
+  <GlossaryItem term="shared memory">
+    跨进程共享 bytes 但不共享本地地址身份的边界。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：追踪一次 template 错误。** `sum<Range>` 中 non-dependent helper 可见，但 `Range::value_type` 缺失且某个未调用 member 也非法；判断各问题何时报、是否生成代码。
+
+<Answer question="怎样按阶段解释template diagnostic？">
+  non-dependent helper 在 definition context 绑定，后续 instantiation namespace
+  同名函数不自动替换。`Range::value_type` 是 dependent name，在 sum
+  specialization instantiation 时解析；缺失会产生 substitution/instantiation
+  diagnostic。class template 中未 odr-used member 通常不实例化其
+  body，因此其对该 T 的非法 operation 不必立即报错。explicit constraints 可把
+  requirement 提前到 candidate boundary。
+</Answer>
+
+2. **问题 2：展开一次 derived exception。** local `DetailedError` 被 throw，经两层 RAII frame，到 `catch(const std::exception&)` 后 bare rethrow；列出对象身份、matching 和 destruction。
+
+<Answer question="throw对象怎样跨越local lifetime？">
+  throw operand copy/move-initialize runtime-owned exception object，随后原
+  local 与中间 automatic objects 按 frame unwind 逆序销毁。handler search 识别
+  active try，并以 public base relation 让 std::exception const-reference 绑定到
+  exception object's base view，不 slicing。bare `throw;` 继续传播同一 exception
+  object；最终 handler chain 结束后才销毁它。若写 `throw error;`，会以 catch
+  expression 创建新的 throw semantics。
+</Answer>
+
+3. **问题 3：设计跨边界 plugin。** 说明为什么不能把 polymorphic object bytes/vptr 放进 shared memory，也不能无约束跨 DSO 抛 C++ exception；给出稳定接口与数据格式。
+
+  <Answer question="怎样保留对象模型效率又建立稳定边界？">
+    DSO 使用 versioned C ABI factory、opaque handle 和同 module destroy，payload 用 size+
+    version 的 plain records；内部可继续用 C++ vtable。exception 在 module 内转换为 typed
+    status/error payload，allocator ownership 不跨边界。shared memory 只存 relative offsets、
+    stable type IDs、versioned standard-layout data 与 process-shared synchronization；每个
+    process 映射后构造本地 behavior/view，绝不复用 vptr、type_info address 或 raw pointer。
+  </Answer>
+</Exercises>

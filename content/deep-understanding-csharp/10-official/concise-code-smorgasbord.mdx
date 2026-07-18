@@ -1,0 +1,153 @@
+---
+title: "Chapter 10. A smörgåsbord of features for concise code"
+type: C
+section: "C# in Depth 4e · C# 6"
+order: 10
+description: "覆盖using static、initializer增强、null conditional与exception filters，把简洁语法还原为name lookup、construction、null flow和exception ownership。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-10"
+draft: false
+---
+
+import { DcsExceptionFilterLab, DcsNullConditionalFlowLab, DcsScopeAndInitializerLab } from "@/components/mdx/deep-understanding-csharp/diagrams/concise-code-smorgasbord";
+
+<Objectives>
+
+- 能解释using static和initializer增强分别改变name lookup与construction步骤，判断何时简洁反而隐藏owner或failure point
+- 能设计null conditional chain的short-circuit、nullable result与parentheses边界，并为每个null hop写出可观测测试
+- 能区分exception filter evaluation、stack unwinding与catch body执行时机，并实现清楚的handler ownership
+
+</Objectives>
+
+## 为什么简洁语法仍要展开成执行模型
+
+C# 6把几种高频意图压进更短语法：导入static members、初始化indexer或已有child、沿member chain传播null、在catch前筛选异常。它们共同减少ceremony，却作用于完全不同阶段。评审时必须展开成四个问题：名字从哪解析、对象何时创建和赋值、哪一段会short-circuit、谁真正拥有异常。
+
+先预测：`using static`是否导入nested types；nested initializer是否创建child；`a?.B.C`是否保护所有可能为null的hop；filter返回false时当前catch是否先unwind。把答案写下，再进入实验。正确结论分别是“只导入符合规则的static members、不是通用nested-type import”“不会创建已有child”“只保护当前conditional receiver且后续链需按语法分析”“不会选中该handler，会继续搜索”。
+
+<Term def="简写扩大unqualified name lookup后，当前文件中可见且可能冲突的成员集合。">lookup surface</Term>
+
+## Using static directives
+
+`using static System.Math;`让`Sqrt`、`PI`等static members可用unqualified name访问。它适合数学DSL、assertion helpers或一组非常稳定且语义鲜明的operations；若导入多个拥有同名成员的types，overload resolution与ambiguity会变得不直观。关键不是“能不能少写Math”，而是reader能否立即知道owner与semantics。
+
+Extension methods也可能随static import进入候选集合，但普通static member与extension lookup有不同规则。不要用大量imports构造隐形global vocabulary。对于security、time、random、serialization等owner本身就是重要信息的API，保留qualified call通常更清楚。
+
+### Scope review checklist
+
+评审import时同时检查本文件现有calls和未来可合理新增的calls：同名member是否会产生ambiguity，method group是否会因overload改变binding，qualified owner是否承载domain信息。把这些写进review checklist，才能避免“今天能编译”被误当成长期可维护性证明。
+
+```csharp
+using static System.Math;
+
+double Hypotenuse(double x, double y) => Sqrt(Pow(x, 2) + Pow(y, 2));
+// Review question: is Math still obvious at every call site in this file?
+```
+
+## Object and collection initializer enhancements
+
+C# 6允许index initializer：`new Dictionary<string, int> { ["apples"] = 3 }`。这与collection initializer的`Add`调用并不总是等价；indexer assignment可能覆盖existing key，而`Add`可能因duplicate key抛异常。Nested initializer可以配置已有property/indexer返回的对象，不代表自动new child。
+
+Initializer仍是“先构造对象，再按source order执行assignments/Add/indexer calls”。Setter、Add或indexer任何一步抛异常，整个expression失败，partially initialized instance通常不会赋给左侧variable，但constructor/setters已发生的外部副作用不会回滚。Resource-owning object更要避免在initializer中混入不可逆操作。
+
+<Term def="constructor、setter、Add与indexer共同定义对象从未构造到可用状态的顺序、验证与失败规则。">construction contract</Term>
+
+<Stepper>
+  <Step title="切换qualified、using static、index与nested initializer"><DcsScopeAndInitializerLab /></Step>
+  <Step title="展开compiler-visible operations">列出name candidates、constructor、每个setter/Add/indexer的source order以及可能抛出的异常。</Step>
+  <Step title="用collision与failure injection验收">增加同名static member、null child、duplicate key和throwing setter，确认结果与回滚假设。</Step>
+</Stepper>
+
+<Callout type="trap" title="Initializer看起来像一个atomic object literal">
+它是有顺序的construction与calls，不是transaction。中途失败不会撤销constructor、event、I/O或已经执行的setter side effects；需要atomicity时应在factory内先验证，再一次发布完整对象。
+</Callout>
+
+## The null conditional operator
+
+`?.`和`?[]`只在receiver为null时跳过member/index access并产生null；非null时仍会执行member，member自身可以抛出其他异常。若最终member是non-nullable value type，conditional access把结果提升为nullable value。`customer?.Orders?[0].Total`中每个可能为null的receiver都要显式标出，index out of range也不会被吞掉。
+
+Conditional chain受syntax约束。连续member access通常属于同一chain，但parentheses、assignment或后续ordinary access可能终止传播；`(customer?.Address).City`会在Address结果为null时重新发生ordinary access。Delegate invocation的`Changed?.Invoke(...)`表达“若没有subscriber则不调用”，但不处理subscriber内部异常，也不等于event delivery guarantee。
+
+```csharp
+decimal? firstTotal = customer?.Orders?.FirstOrDefault()?.Total;
+string city = customer?.Address?.City ?? "unknown";
+Changed?.Invoke(this, EventArgs.Empty);
+```
+
+<Term def="从conditional receiver开始，按语法连续传播null并跳过后续access或invocation的表达式范围。">conditional access chain</Term>
+
+<Stepper>
+  <Step title="切换receiver、member、parentheses与delegate"><DcsNullConditionalFlowLab /></Step>
+  <Step title="逐hop标注type与evaluation">写出每个receiver的nullable状态、是否evaluate argument/index、最终result type及coalescing policy。</Step>
+  <Step title="构造null matrix而非只跑happy path">分别令root、intermediate、collection item和delegate为null，再注入member exception与bad index。</Step>
+</Stepper>
+
+Null conditional适合“absence是预期状态”的navigation。若null意味着corrupted invariant，静默传播会把fault推迟到更远处，应在boundary validate并抛带context的异常。简洁语法不能替代domain null policy。
+
+## Exception filters
+
+`catch (HttpRequestException ex) when (IsTransient(ex))`把type match与diagnostic predicate组合。Filter在选择handler时执行；返回false会继续搜索外层或后续handlers。与进入catch后再`if`并`throw;`相比，未选中handler前不执行它的body，runtime能保留更接近原始throw point的debugging状态。
+
+```csharp
+try
+{
+    await SendAsync(request, cancellationToken);
+}
+catch (HttpRequestException ex) when (ex.StatusCode is >= 500)
+{
+    await retryQueue.EnqueueAsync(request, ex, cancellationToken);
+}
+```
+
+Filter应快速、确定、尽量无副作用。Filter自身抛出的异常通常被视为filter false并继续search，这会隐藏predicate fault，因此需要独立测试和metrics。不要在filter里修改business state、执行network I/O或依赖会变化的global state。
+
+<Term def="catch type与when predicate共同声明当前handler愿意负责的failure subset。">diagnostic filter</Term>
+
+<Term def="一个layer是否能恢复、转换、补充上下文或终止某类failure的明确责任。">exception ownership</Term>
+
+<Stepper>
+  <Step title="切换type miss、false、true与filter throw"><DcsExceptionFilterLab /></Step>
+  <Step title="画出handler search与unwind时序">先type match，再evaluate filter，选中后才unwind并进入body；false继续搜索。</Step>
+  <Step title="验证ownership而非只验证catch次数">测试transient/permanent/cancellation/filter fault，检查retry、stack、telemetry与outer handler。</Step>
+</Stepper>
+
+<Callout type="trap" title="Exception filter适合顺手记录日志或更新状态">
+Filter可能执行多次、返回false或自身失败，且处在handler选择阶段。把它保持为pure-ish predicate；日志与状态改变放进已选中的catch body，filter故障另设监控。
+</Callout>
+
+## 本章回顾：为每个短语法恢复它压缩的模型
+
+1. Using static缩短名字但扩大lookup surface，owner可读性与collision必须显式评估。
+2. Enhanced initializers是ordered calls，不是atomic literals；nested initializer也不会凭空创建child。
+3. Null conditional传播由syntax和每个receiver决定，不吞掉非null相关异常。
+4. Exception filters在unwind前选择ownership，false表示“本handler不负责”。
+5. Concision只有在边界、failure和tests仍清楚时才是改进。
+
+<Exercises>
+
+**问题 1：一个文件导入Math和自定义Metrics的static members后出现同名Round，应如何决策？**
+
+<Answer>先列lookup candidates和每个Round的domain semantics。若owner决定含义，恢复Math.Round或Metrics.Round qualification；只在高度局部、无collision且团队词汇稳定时保留using static。添加compile-time collision case和review rule，不能依赖reader猜overload。</Answer>
+
+**问题 2：把`order?.Customer.Address.City`改成“绝不抛NullReferenceException”的正确测试是什么？**
+
+<Answer>先决定哪些absence合法，再对每个合法nullable hop使用conditional access，例如`order?.Customer?.Address?.City`，最终用`??`或nullable result表达policy。测试order/customer/address分别null、City getter抛业务异常、以及parentheses变体；后两者不应被错误吞掉。</Answer>
+
+**问题 3：只重试HTTP 5xx且不处理cancellation，filter与验收怎样写？**
+
+<Answer>Catch HttpRequestException并用side-effect-light filter检查5xx；OperationCanceledException不匹配，让调用者拥有cancellation。测试500进入retry、400继续外抛、cancellation保持原类型、filter dependency失败可观测且不会误重试，并检查stack/context。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="lookup surface" definition="Unqualified lookup可见的成员集合及其collision范围。" />
+  <GlossaryItem term="construction contract" definition="对象构造、赋值、验证与失败的有序规则。" />
+  <GlossaryItem term="conditional access chain" definition="由conditional syntax控制的null short-circuit范围。" />
+  <GlossaryItem term="diagnostic filter" definition="在catch body前筛选handler适用failure的predicate。" />
+  <GlossaryItem term="exception ownership" definition="某layer对一类failure能否恢复或转换的责任。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# in Depth, Fourth Edition, Chapter 10: A smörgåsbord of features for concise code" adaptedUrl="https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-10" />

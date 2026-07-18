@@ -1,0 +1,6 @@
+"use client";
+import { OfficialDavSeriesLab } from "./official-dav-series-lab";
+const props={unitTitle:"卷I 第8章 深入理解Surface系统",focus:"连接Activity绘制、Surface对象迁移、GraphicBuffer传输与SurfaceFlinger合成",nodes:["第8章 深入理解Surface系统","8.1 概述","8.2 一个Activity的显示","8.2.1 Activity的创建","8.2.2 Activity的UI绘制","8.2.3 关于Activity的总结","8.3 初识Surface","8.3.1 和Surface有关的流程总结","8.3.2 Surface之乾坤大挪移","8.3.3 乾坤大挪移的JNI层分析","8.3.4 Surface和画图","8.3.5 初识Surface小结","8.4 深入分析Surface","8.4.1 与Surface相关的基础知识介绍","8.4.2 SurfaceComposerClient分析","8.4.3 SurfaceControl分析","8.4.4 writeToParcel和Surface对象的创建","8.4.5 lockCanvas和unlockCanvasAndPost分析","8.4.6 GraphicBuffer介绍","8.4.7 深入分析Surface的总结","8.5 SurfaceFlinger分析","8.5.1 SurfaceFlinger的诞生","8.5.2 SurfaceFlinger工作线程分析","8.5.3 Transaction分析","8.5.4 关于SurfaceFlinger的总结","8.6 拓展思考","8.6.1 Surface系统的CB对象分析","8.6.2 ViewRoot的你问我答","8.6.3 LayerBuffer分析","8.7 本章小结"],versions:["卷I / Android 2.2","卷II / Android 4.0.1","卷III / Android 4.2.2"]};
+export function DavSeriesPipelineLab(){return <OfficialDavSeriesLab mode="pipeline" {...props}/>;}
+export function DavSeriesExperimentLab(){return <OfficialDavSeriesLab mode="experiment" {...props}/>;}
+export function DavSeriesEvidenceLab(){return <OfficialDavSeriesLab mode="evidence" {...props}/>;}

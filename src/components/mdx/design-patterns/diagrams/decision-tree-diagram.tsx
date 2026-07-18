@@ -80,8 +80,18 @@ function toRows(names: string[]): Array<[string, string | null]> {
 
 export function DecisionTreeDiagram() {
   const panels = [
-    { ...PANELS[0], names: CREATIONAL, hints: CREATIONAL_HINTS, color: success },
-    { ...PANELS[1], names: STRUCTURAL, hints: STRUCTURAL_HINTS, color: warning },
+    {
+      ...PANELS[0],
+      names: CREATIONAL,
+      hints: CREATIONAL_HINTS,
+      color: success,
+    },
+    {
+      ...PANELS[1],
+      names: STRUCTURAL,
+      hints: STRUCTURAL_HINTS,
+      color: warning,
+    },
     { ...PANELS[2], names: BEHAVIORAL, hints: BEHAVIORAL_HINTS, color: accent },
   ];
 
@@ -143,45 +153,47 @@ export function DecisionTreeDiagram() {
           ))}
 
           {/* ===== 三个分类节点 + 连线到面板 ===== */}
-          {(["创建对象", "组合类与对象", "对象间通信"] as const).map((label, i) => {
-            const cx = NODE_CENTERS[i];
-            const color = panels[i].color;
-            return (
-              <g key={`node-${i}`}>
-                {/* 分类节点 */}
-                <rect
-                  x={cx - NODE_W / 2}
-                  y={NODE_Y}
-                  width={NODE_W}
-                  height={NODE_H}
-                  rx="8"
-                  fill={color}
-                  fillOpacity="0.1"
-                  stroke={color}
-                  strokeWidth="1.8"
-                />
-                <text
-                  x={cx}
-                  y={NODE_Y + 19}
-                  textAnchor="middle"
-                  fontSize="12"
-                  fontWeight="700"
-                  fill={color}
-                >
-                  {label}
-                </text>
-                {/* 分类节点 → 面板 连线 */}
-                <line
-                  x1={cx}
-                  y1={NODE_BOTTOM}
-                  x2={cx}
-                  y2={PANEL_Y}
-                  stroke={border}
-                  strokeWidth="1.6"
-                />
-              </g>
-            );
-          })}
+          {(["创建对象", "组合类与对象", "对象间通信"] as const).map(
+            (label, i) => {
+              const cx = NODE_CENTERS[i];
+              const color = panels[i].color;
+              return (
+                <g key={`node-${i}`}>
+                  {/* 分类节点 */}
+                  <rect
+                    x={cx - NODE_W / 2}
+                    y={NODE_Y}
+                    width={NODE_W}
+                    height={NODE_H}
+                    rx="8"
+                    fill={color}
+                    fillOpacity="0.1"
+                    stroke={color}
+                    strokeWidth="1.8"
+                  />
+                  <text
+                    x={cx}
+                    y={NODE_Y + 19}
+                    textAnchor="middle"
+                    fontSize="12"
+                    fontWeight="700"
+                    fill={color}
+                  >
+                    {label}
+                  </text>
+                  {/* 分类节点 → 面板 连线 */}
+                  <line
+                    x1={cx}
+                    y1={NODE_BOTTOM}
+                    x2={cx}
+                    y2={PANEL_Y}
+                    stroke={border}
+                    strokeWidth="1.6"
+                  />
+                </g>
+              );
+            },
+          )}
 
           {/* ===== 三个面板（模式名 + 判断问题） ===== */}
           {panels.map((p, pi) => {

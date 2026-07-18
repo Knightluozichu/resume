@@ -1,0 +1,121 @@
+---
+title: "第6章 对象引用、可变性与回收"
+type: C
+section: "流畅Python 2e · Part I 数据结构"
+order: 6
+description: "按《Fluent Python, 2nd Edition》第6章重建：对象引用、可变性与回收、身份、相等性与别名、浅复制与深复制、可变参数默认值、del与垃圾回收。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/fluent-python-2nd/9781492056348/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { FlpObjectReferencesModelLab, FlpObjectReferencesBoundaryLab, FlpObjectReferencesEvidenceLab } from "@/components/mdx/fluent-python/diagrams/flp-object-references";
+
+<Objectives>
+- 能解释对象引用、可变性与回收的核心协议与适用边界
+- 能区分身份、相等性与别名和浅复制与深复制的责任与失败方式
+- 能实现并复现可变参数默认值到del与垃圾回收的最小实验
+</Objectives>
+
+## 从一个错误直觉开始
+
+先预测：只记住对象引用、可变性与回收的语法，是否足以写出可靠实现？不够。真正需要掌握的是对象、协议、状态和失败路径怎样协作。<Term def="对象引用、可变性与回收的起点是变量不是盒子，而是绑定到对象的名字。赋值复制引用而不复制对象，函数参数也采用共享传参，因此可变参数可能被被调函数原地改变。">对象引用、可变性与回收</Term>不是孤立技巧，而是把调用方意图映射到可测试行为的模型。
+
+<FlpObjectReferencesModelLab />
+
+## 核心模型与责任
+
+对象引用、可变性与回收的起点是变量不是盒子，而是绑定到对象的名字。赋值复制引用而不复制对象，函数参数也采用共享传参，因此可变参数可能被被调函数原地改变。 <Term def="身份、相等性与别名要分层判断：is比较是否同一对象，双等号委托值相等协议。None等单例用is，业务值用相等；两个名字指向同一可变对象时，任一修改都能被另一名字观察。">身份、相等性与别名</Term>
+
+这一章的阅读方法是先写出输入和不变量，再观察解释器或标准库采取哪条路径，最后用反例确认边界。这样学习得到的是可迁移的判断，而不是只能复述示例。
+
+## 机制一：第一条执行链
+
+身份、相等性与别名要分层判断：is比较是否同一对象，双等号委托值相等协议。None等单例用is，业务值用相等；两个名字指向同一可变对象时，任一修改都能被另一名字观察。 <Term def="浅复制只复制最外层容器，内部元素仍共享；深复制递归复制对象图并用memo处理循环。复制策略必须匹配聚合边界，不要默认deepcopy就能正确复制数据库连接或共享缓存。">浅复制与深复制</Term>
+
+```python
+a = {'items': []}
+b = a
+b['items'].append('shared')
+assert a is b and a == b
+```
+
+运行后记录对象身份、返回类型和异常位置；再改变一个输入，确认变化来自协议本身，而不是偶然的实现细节。
+
+## 机制二：状态、类型与协作
+
+浅复制只复制最外层容器，内部元素仍共享；深复制递归复制对象图并用memo处理循环。复制策略必须匹配聚合边界，不要默认deepcopy就能正确复制数据库连接或共享缓存。 <Term def="可变参数默认值在函数定义时只创建一次，导致多次调用和多个实例共享状态。默认使用None哨兵，再在函数内部创建新容器，并在接收外部可变集合时决定是防御性复制还是明确共享。">可变参数默认值</Term>
+
+<FlpObjectReferencesBoundaryLab />
+
+```python
+def append_item(item, bucket=None):
+    if bucket is None:
+        bucket = []
+    bucket.append(item)
+    return bucket
+```
+
+评审这段代码时，先问调用端依赖什么能力，再问实现是否扩大了共享状态或静默吞掉错误。接口越小，替换和测试通常越直接。
+
+## 机制三：边界条件与成本
+
+可变参数默认值在函数定义时只创建一次，导致多次调用和多个实例共享状态。默认使用None哨兵，再在函数内部创建新容器，并在接收外部可变集合时决定是防御性复制还是明确共享。 <Term def="del与垃圾回收针对引用而非对象；引用计数归零或循环垃圾被探测后对象才可能回收。weakref允许观察对象而不延长生命周期，但finalizer时机不能承担关键业务提交。">del与垃圾回收</Term>
+
+del与垃圾回收针对引用而非对象；引用计数归零或循环垃圾被探测后对象才可能回收。weakref允许观察对象而不延长生命周期，但finalizer时机不能承担关键业务提交。 <Term def="用可复现实验判断对象引用、可变性与回收实现是否保持协议、不变量与失败语义。">对象引用、可变性与回收验证边界</Term>
+
+```python
+from copy import copy, deepcopy
+original = [['A'], ['B']]
+shallow = copy(original)
+deep = deepcopy(original)
+original[0].append('shared only with shallow')
+```
+
+<FlpObjectReferencesEvidenceLab />
+
+## 分步验证
+
+<Stepper>
+  <Step title="建立模型"><FlpObjectReferencesModelLab /></Step>
+  <Step title="施加边界"><FlpObjectReferencesBoundaryLab /></Step>
+  <Step title="收集证据">分别运行正常输入、边界输入和失败输入，记录返回值、对象身份、异常类型与资源状态；只有证据支持不变量时才接受实现。</Step>
+</Stepper>
+
+## 代码实验与诊断
+
+把三段代码保存为同一最小实验，先运行原始版本，再只改变一个维度。至少检查：公开结果是否稳定、失败是否在正确边界暴露、是否产生意外别名或资源泄漏、类型提示与运行时行为是否一致。观察变化后写出因果解释，而不是只记录输出。
+
+## 常见误区
+
+<Callout type="trap" title="只会对象引用、可变性与回收的写法就等于掌握本章">
+语法只能让示例运行；若没有写出输入、所有权、不变量和失败路径，换成真实数据后仍会出现隐蔽错误。应以协议和可复现实验验收。
+</Callout>
+
+<Callout type="trap" title="可变参数默认值在所有场景都更优">
+任何抽象都有适用成本。要比较数据规模、可变性、并发、可观察性与团队维护需求，再根据证据选择；本章给的是判断工具，不是无条件规则。
+</Callout>
+
+## 本章回顾
+
+官方核心单元核对：对象引用、可变性与回收；身份、相等性与别名；浅复制与深复制；可变参数默认值；del与垃圾回收。这些单元共同回答对象引用、可变性与回收如何从语言机制落到工程边界；下一步应能在没有范例答案时画出执行链、实现最小版本并解释反例。
+
+<Exercises>
+**问题 1：如何解释“对象引用、可变性与回收”？**<Answer>对象引用、可变性与回收的起点是变量不是盒子，而是绑定到对象的名字。赋值复制引用而不复制对象，函数参数也采用共享传参，因此可变参数可能被被调函数原地改变。</Answer>
+**问题 2：身份、相等性与别名与浅复制与深复制应怎样协作？**<Answer>身份、相等性与别名要分层判断：is比较是否同一对象，双等号委托值相等协议。None等单例用is，业务值用相等；两个名字指向同一可变对象时，任一修改都能被另一名字观察。 浅复制只复制最外层容器，内部元素仍共享；深复制递归复制对象图并用memo处理循环。复制策略必须匹配聚合边界，不要默认deepcopy就能正确复制数据库连接或共享缓存。</Answer>
+**问题 3：如何验收del与垃圾回收？**<Answer>del与垃圾回收针对引用而非对象；引用计数归零或循环垃圾被探测后对象才可能回收。weakref允许观察对象而不延长生命周期，但finalizer时机不能承担关键业务提交。 编写正常、边界和失败三组输入，比较返回类型、对象状态和异常位置，并确认没有依赖未声明的全局状态。</Answer>
+</Exercises>
+
+## 术语表
+<Glossary>
+  <GlossaryItem term="对象引用、可变性与回收" definition="对象引用、可变性与回收的起点是变量不是盒子，而是绑定到对象的名字。" />
+  <GlossaryItem term="身份、相等性与别名" definition="身份、相等性与别名要分层判断：is比较是否同一对象，双等号委托值相等协议。" />
+  <GlossaryItem term="浅复制与深复制" definition="浅复制只复制最外层容器，内部元素仍共享；深复制递归复制对象图并用memo处理循环。" />
+  <GlossaryItem term="可变参数默认值" definition="可变参数默认值在函数定义时只创建一次，导致多次调用和多个实例共享状态。" />
+  <GlossaryItem term="del与垃圾回收" definition="del与垃圾回收针对引用而非对象；引用计数归零或循环垃圾被探测后对象才可能回收。" />
+  <GlossaryItem term="对象引用、可变性与回收验证边界" definition="验证对象引用、可变性与回收协议、不变量和失败路径的边界。" />
+</Glossary>
+
+<Attribution adaptedFrom="Fluent Python, 2nd Edition, Chapter 6: 对象引用、可变性与回收" adaptedUrl="https://www.oreilly.com/library/view/fluent-python-2nd/9781492056348/" />

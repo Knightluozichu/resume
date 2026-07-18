@@ -400,7 +400,12 @@ export function DpIteratorDiagram() {
             markerEnd="url(#iter-holds-arrow)"
           />
           <text
-            x={(CONCRETE_COLLECTION.x + CONCRETE_COLLECTION.w + CONCRETE_ITERATOR.x) / 2}
+            x={
+              (CONCRETE_COLLECTION.x +
+                CONCRETE_COLLECTION.w +
+                CONCRETE_ITERATOR.x) /
+              2
+            }
             y={holdsY - 10}
             textAnchor="middle"
             fontSize="11"

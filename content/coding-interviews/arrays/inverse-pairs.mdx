@@ -1,130 +1,397 @@
 ---
-title: 数组中的逆序对
+title: "面试题51：数组中的逆序对"
 type: C
-section: 数组
-order: 8
-description: 借助归并排序在合并阶段计数，达到 O(n log n) 求逆序对总数。
+section: "第5章 优化时间和空间效率"
+order: 56
+description: "把逆序对拆成左右内部与跨段三类，递归排好两半后从后向前归并，并一次累计右段全部剩余元素。"
 demo: true
 math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/51_InversePairs/InversePairs.cpp"
 draft: false
 ---
 
-{/* 知识点清单：分治、归并计数、长整型计数；原书章节：数组中的逆序对。 */}
+import { InversePairDecompositionDiagram, InversePairReverseMergeLab, InversePairBufferSwapMap, InversePairContractDiagram, InversePairsOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/inverse-pairs";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能在归并排序框架下解释“跨左右数组产生的逆序对数”。
-- 能用 64 位返回大规模计数并规避溢出。
-- 能处理重复元素时不重复计数。
+- 能解释逆序对定义中的下标顺序、严格大于和相等值边界
+- 能计算两个有序半段从尾部归并时每轮新增的跨段对数
+- 能实现作者data与copy交替的归并计数及64位工程版本
+- 能分析非空零长度、输入改写、递归边界和int计数溢出
+- 能设计覆盖作者8组用例与暴力参考对拍的测试
 
 </Objectives>
 
-## 直觉引入
+## 从“顺序”和“大小”同时满足开始
 
-逆序对 `(i, j)` 要求 `i<j` 且 `nums[i] > nums[j]`，  
-纯暴力 O(n²) 只是重算大量子序列。  
-在归并排序里，局部有序后很容易“一次性”算出跨越两侧的逆序对。
+先预测：数组1、2、1、2、1中，相等的两个1不构成答案；逆序必须是前面元素严格大于后面元素。具体三对是下标1的2与下标2、4的1，以及下标3的2与下标4的1。
 
-## 概念讲解
+对数组A，<Term def="满足下标i小于j且A[i]严格大于A[j]的有序下标对。">逆序对</Term>定义为：
 
-当左半有序、右半有序时，若 `left[i] > right[j]`，则 `left[i..mid]` 与 `right[j]` 形成逆序对，数量是 `mid - i + 1`。
-这比逐个比较快很多。
+$$
+\operatorname{inv}(A)
+=
+\left|
+\left\{
+(i,j)\mid
+0\le i<j<n,\ A_i>A_j
+\right\}
+\right|.
+$$
 
-## 思考引导
+题目要求**数组中的逆序对**总数。两重循环可直接枚举所有下标对，时间O(n平方)；要优化，必须利用一次比较代表一整批比较结果。
 
-### 1) 先问问题，不先计数
-你在数的是“多少逆序对”，不是列举多少个错序。题目问的是统计规模，必须让计数在结构上可批量汇总。
+## 分治拆成三类
 
-### 2) 识别不变式
-归并阶段左段和右段各自有序。每次取左端大于右端时，左段中从当前下标到末尾都会形成逆序对，可一次加总。
+把区间从中点分成左半L和右半R。任意逆序对只可能属于三类：两个下标都在L；两个都在R；前下标在L而后下标在R。前两类分别称为<Term def="两个下标都落在同一个递归半段中的逆序对，由子调用负责统计。">内部逆序</Term>，第三类称为<Term def="前一个元素来自左半段、后一个元素来自右半段的逆序对。">跨段逆序</Term>。
 
-### 3) 为什么它一定成立
-有序子数组意味着右段某元素与左段剩余元素之间的比较结果是连续区间一致的，不能再逐个对比。
+$$
+\operatorname{inv}(A)
+=
+\operatorname{inv}(L)
++
+\operatorname{inv}(R)
++
+\operatorname{cross}(L,R).
+$$
 
-### 4) 常见误区
-把统计当作排序附属步骤，最终却拿到了正确排序但错乱计数。计数逻辑必须和分治边界同步更新。
+<InversePairDecompositionDiagram />
 
-### 5) 你能找到一个反例吗
-[1,3,2,3,1] 的逆序对可检验“只加 1”与“加剩余长度”的差别。小样本能放大统计思路错误。
+递归先统计左右内部逆序，同时把两半各自排成升序。这样归并时不再逐个枚举跨段下标对，而能借助有序性批量计数。
 
-### 6) 迁移到下一题
-凡是跨分割线要统计配对关系的题，都先看是否可在“有序合并”里批量计算，不要在外层写两重循环。
-## 交互 Demo
+## 为什么作者从后向前合并
 
-你可以看到每次合并时，左侧较大元素落后于右侧时一次性累加多个计数。
+设左半和右半都升序，i指向左半最大剩余元素，j指向右半最大剩余元素，indexCopy从输出区间尾部向前写。
 
-<QuickSortDiagram />
+若data[i]大于data[j]，那么右半从起点到j的所有剩余元素都不大于data[j]，因此也都严格小于data[i]。data[i]与这整段元素形成逆序对，可一次加入：
+
+$$
+\operatorname{add}
+=
+j-(\operatorname{mid}+1)+1
+=
+j-\operatorname{start}-\operatorname{length}.
+$$
+
+这就是原书的“**一次累计一段逆序对**”。随后把较大的data[i]写到输出尾部并左移i。
+
+若data[i]小于或等于data[j]，无法据此断言data[i]大于右段其他元素；先把右侧更大元素写入输出尾部并左移j，不增加计数。相等时也走该分支，因为定义要求严格大于。
+
+<InversePairReverseMergeLab />
+
+示例左段1、4、7，右段2、3、6。第一次比较7与6，7大于右段全部3个剩余值，一次加3；之后4大于3时再加2，总跨段数5。
+
+## 批量计数为什么不重不漏
+
+把左侧某元素写入输出时，它大于的右侧剩余元素全部仍未写入，这些配对第一次被统计；之后该左元素离开，不会再重复。
+
+右侧已经写入输出的元素都大于或等于当前左元素，否则此前比较时就会由左元素胜出，所以它们不与当前左元素构成遗漏的逆序对。
+
+这种借助有序连续区间、一次加上整段大小的动作称为<Term def="利用两个半段已有顺序，用一次比较同时确定一个元素与另一段多个元素的配对结果。">批量计数</Term>。它把跨段统计与归并放在同一线性扫描中。
+
+## 忠实还原作者入口与递归
+
+入口复制一份数组，然后调用InversePairsCore。递归调用时故意交换data与copy参数；子层把有序结果写回本层将要读取的data，当前层再归并写入copy。
 
 ```cpp
-#include <vector>
+int InversePairsCore(
+    int* data,
+    int* copy,
+    int start,
+    int end);
 
-class Solution {
-public:
-    long long mergeCount(std::vector<int>& nums, int l, int r, std::vector<int>& tmp) {
-        if (l >= r) return 0;
-        int m = l + (r - l) / 2;
-        long long cnt = mergeCount(nums, l, m, tmp) + mergeCount(nums, m + 1, r, tmp);
-
-        int i = l, j = m + 1, k = l;
-        while (i <= m && j <= r) {
-            if (nums[i] <= nums[j]) {
-                tmp[k++] = nums[i++];
-            } else {
-                cnt += (m - i + 1);
-                tmp[k++] = nums[j++];
-            }
-        }
-        while (i <= m) tmp[k++] = nums[i++];
-        while (j <= r) tmp[k++] = nums[j++];
-        for (int p = l; p <= r; ++p) nums[p] = tmp[p];
-        return cnt;
+int InversePairs(int* data, int length) {
+    if (data == nullptr || length < 0) {
+        return 0;
     }
 
-    long long inversePairs(std::vector<int>& nums) {
-        if (nums.empty()) return 0;
-        std::vector<int> tmp(nums.size());
-        return mergeCount(nums, 0, (int)nums.size() - 1, tmp);
+    int* copy = new int[length];
+    for (int i = 0; i < length; ++i) {
+        copy[i] = data[i];
     }
-};
-```
 
-```typescript
-function inversePairs(nums: number[]): number {
-  if (!nums.length) return 0;
-  const arr = [...nums];
-  const tmp = new Array<number>(arr.length);
-
-  const mergeCount = (l: number, r: number): number => {
-    if (l >= r) return 0;
-    const m = Math.floor((l + r) / 2);
-    let count = mergeCount(l, m) + mergeCount(m + 1, r);
-
-    let i = l, j = m + 1, k = l;
-    while (i <= m && j <= r) {
-      if (arr[i] <= arr[j]) tmp[k++] = arr[i++];
-      else {
-        count += m - i + 1;
-        tmp[k++] = arr[j++];
-      }
-    }
-    while (i <= m) tmp[k++] = arr[i++];
-    while (j <= r) tmp[k++] = arr[j++];
-    for (let p = l; p <= r; p++) arr[p] = tmp[p];
+    const int count =
+        InversePairsCore(
+            data, copy, 0, length - 1);
+    delete[] copy;
     return count;
-  };
+}
 
-  return mergeCount(0, arr.length - 1);
+int InversePairsCore(
+    int* data,
+    int* copy,
+    int start,
+    int end) {
+    if (start == end) {
+        copy[start] = data[start];
+        return 0;
+    }
+
+    const int length =
+        (end - start) / 2;
+    const int mid = start + length;
+
+    const int left = InversePairsCore(
+        copy, data, start, mid);
+    const int right = InversePairsCore(
+        copy, data, mid + 1, end);
+
+    int i = mid;
+    int j = end;
+    int indexCopy = end;
+    int count = 0;
+
+    while (i >= start && j >= mid + 1) {
+        if (data[i] > data[j]) {
+            copy[indexCopy--] = data[i--];
+            count += j - mid;
+        } else {
+            copy[indexCopy--] = data[j--];
+        }
+    }
+
+    while (i >= start) {
+        copy[indexCopy--] = data[i--];
+    }
+    while (j >= mid + 1) {
+        copy[indexCopy--] = data[j--];
+    }
+    return left + right + count;
 }
 ```
 
-<Callout type="trap">
-  <strong>现象 →</strong> 结果为负数。  
-  <strong>原因 →</strong> 用 `int` 累加逆序对在大规模下溢出。  
-  <strong>修复 →</strong> 计数用 `long long` / `number`（含风险说明）。
+j减mid与源码的j减start再减length完全相同，因为mid等于start加length。保留源码表达式有助于逐行核对，使用mid则更直接显示“右段剩余数量”。
+
+## data与copy为何反复换角色
+
+若每层递归都读data、写copy，子调用结束后还要把有序结果从copy复制回data，父层才能读取。作者改为调用InversePairsCore(copy, data, ...)，让读写角色在层级间交替。
+
+<InversePairBufferSwapMap />
+
+这种<Term def="递归每深入一层就交换源数组与目标数组角色，使父层直接读取子层已排序结果。">缓冲区换位</Term>省掉每层显式整段回拷，但阅读难度更高。关键不变式是：Core返回时，start到end的有序结果位于它的copy参数中。
+
+入口最初把data复制到copy，保证无论递归层级从哪个缓冲区读取，叶子都有对应原值。顶层最终完整有序结果位于局部copy，函数只取计数后将它释放。
+
+## 原输入并非保持不变
+
+虽然顶层归并写入局部copy，但顶层两个子调用的copy参数是原始data；它们会把各自有序半段写回原数组。因此长度大于2时，调用后data通常变成“两个分别有序的半段”，而不是原顺序，也不一定是全局有序。
+
+<InversePairContractDiagram />
+
+<Callout type="trap" title="看到入口另建copy就断言输入只读">
+递归参数交替后，子层会把结果写入原data。若调用方要求输入保持不变，应先把输入复制到独立工作数组，再让算法只修改工作副本。
 </Callout>
 
+现代接口接收const视图并内部复制工作数组，可以明确保证调用者输入不变；作者裸指针接口没有这个契约。
+
+## 零长度非空指针的递归漏洞
+
+入口只拒绝length小于0，而不是小于或等于0。作者Test8传nullptr与0，被空指针条件拦截；但若传一个非空地址和length等于0，函数会分配零长度copy并调用Core的区间0到负1。
+
+Core基例只判断start等于end，无法处理start大于end，随后继续构造非法区间并可能越界或无限递归。稳健入口应使用data为空或length小于等于0返回0，Core也可用start大于或等于end作为基例。
+
+<Callout type="trap" title="以为Test8已经覆盖所有空数组表示">
+Test8只覆盖nullptr加0；非空哨兵地址加0长度走的是另一条路径。测试输入语义要按指针与长度组合检查，不能只看“长度都是0”。
+</Callout>
+
+负length被源码拒绝。C++现代容器长度使用size_t，不存在负值，但要在从外部有符号协议转换前验证，避免负数变成巨大无符号值。
+
+## 计数为什么必须使用64位
+
+严格递减数组的每个下标对都是逆序对，长度n时达到最大值：
+
+$$
+\operatorname{inv}_{\max}(n)
+=
+\frac{n(n-1)}{2}.
+$$
+
+作者返回int并用int保存left、right、count。32位有符号int下，n等于65537的最大逆序数已经超过上界，递归相加会溢出。旧页指出要用long long是正确工程建议，但需要明确作者源码本身仍是int。
+
+归并排序递推为：
+
+$$
+T(n)=2T(n/2)+O(n)
+=O(n\log n),
+\qquad
+S(n)=O(n)+O(\log n).
+$$
+
+主辅助数组占O(n)，递归栈O(log n)，总额外空间仍为O(n)。
+
+左右子区间的内部计数彼此独立，数据规模很大时可以并行递归；但父层必须等两半都排序完成后才能统计跨段逆序。最终结果仍按“左计数加右计数加跨段计数”归约。并行化不会改变比较规则，且每个任务写入的缓冲区区间必须互不重叠；否则为了提速引入的数据竞争会同时破坏排序结果与计数。
+
+## 64位且不改输入的实现
+
+下面用vector复制输入，用单个缓冲区做常见的从前向后归并。方向与作者不同但计数原理等价：当左当前值大于右当前值时，左段从i到mid都大于该右值，一次加mid减i加1。
+
+```cpp
+#include <cstdint>
+#include <span>
+#include <vector>
+
+std::int64_t mergeCount(
+    std::vector<int>& values,
+    std::vector<int>& buffer,
+    std::size_t left,
+    std::size_t right) {
+    if (right - left <= 1) {
+        return 0;
+    }
+    const std::size_t mid =
+        left + (right - left) / 2;
+    std::int64_t count =
+        mergeCount(values, buffer, left, mid) +
+        mergeCount(values, buffer, mid, right);
+
+    std::size_t i = left;
+    std::size_t j = mid;
+    std::size_t out = left;
+    while (i < mid && j < right) {
+        if (values[i] <= values[j]) {
+            buffer[out++] = values[i++];
+        } else {
+            count += static_cast<std::int64_t>(
+                mid - i);
+            buffer[out++] = values[j++];
+        }
+    }
+    while (i < mid) {
+        buffer[out++] = values[i++];
+    }
+    while (j < right) {
+        buffer[out++] = values[j++];
+    }
+    for (std::size_t p = left;
+         p < right;
+         ++p) {
+        values[p] = buffer[p];
+    }
+    return count;
+}
+
+std::int64_t inversePairs(
+    std::span<const int> input) {
+    std::vector<int> values(
+        input.begin(), input.end());
+    std::vector<int> buffer(values.size());
+    return mergeCount(
+        values, buffer, 0, values.size());
+}
+```
+
+半开区间允许空输入自然满足right减left为0，无需构造end等于负1。计数转换在加法前完成，避免先以窄类型计算再赋给64位。
+
+## 作者8组测试逐项还原
+
+1. 1、2、3、4、7、6、5期望3，三对都在尾部7、6、5中。
+2. 6、5、4、3、2、1期望15，覆盖长度6最大计数。
+3. 1、2、3、4、5、6期望0，覆盖完全有序。
+4. 单元素1期望0，直接递归基例。
+5. 两元素1、2期望0。
+6. 两元素2、1期望1。
+7. 1、2、1、2、1期望3，证明相等元素不计。
+8. nullptr、长度0期望0，由入口空指针分支返回。
+
+<InversePairsOfficialCaseLab />
+
+作者测试会把输入数组交给函数，之后不再核对数组内容，因此没有发现输入被部分排序；也没有覆盖非空零长度或计数超过int。
+
+```cpp
+#include <cassert>
+#include <cstdint>
+#include <vector>
+
+void testInversePairs() {
+    const std::vector<int> a{
+        1, 2, 3, 4, 7, 6, 5};
+    assert(inversePairs(a) == 3);
+
+    const std::vector<int> descending{
+        6, 5, 4, 3, 2, 1};
+    assert(inversePairs(descending) == 15);
+
+    const std::vector<int> ascending{
+        1, 2, 3, 4, 5, 6};
+    assert(inversePairs(ascending) == 0);
+
+    const std::vector<int> equal{
+        1, 2, 1, 2, 1};
+    assert(inversePairs(equal) == 3);
+    assert(inversePairs({}) == 0);
+}
+```
+
+随机短数组可用双重循环参考实现对拍；同时保存输入副本，确认现代接口不修改调用者数据。大规模降序数组用于验证64位计数公式，不应再用O(n平方)参考实现。
+
+<Stepper>
+  <Step title="先按定义枚举小样本">
+    <InversePairDecompositionDiagram />
+    把总数拆为左内部、右内部和跨段三部分。
+  </Step>
+  <Step title="从两个有序半段尾部比较">
+    <InversePairReverseMergeLab />
+    左值更大时一次加入右段全部剩余数量。
+  </Step>
+  <Step title="跟踪data与copy角色">
+    <InversePairBufferSwapMap />
+    子调用交换源目标缓冲区，父层直接读取有序半段。
+  </Step>
+  <Step title="核对接口与数值边界">
+    <InversePairContractDiagram />
+    检查零长度非空指针、输入改写、相等值和int溢出。
+  </Step>
+  <Step title="执行8组作者测试">
+    <InversePairsOfficialCaseLab />
+    覆盖升降序、单双元素、重复值与空指针。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 逆序对要求前下标更小且前值严格更大，相等不计。
+2. 总数分解为左右内部逆序与跨段逆序三部分。
+3. 归并排序让两个半段有序，从而一次累计一段逆序对。
+4. 作者从后向前合并；左最大值胜出时加右段全部剩余数。
+5. 递归交换data和copy角色，减少逐层回拷但会改写原输入。
+6. 非空指针配零长度未被源码入口正确拒绝，Core不支持空区间。
+7. 最大计数是n乘n减1再除2，大数组必须使用64位。
+8. 作者8组测试覆盖相等值与nullptr，但未覆盖输入保持和计数溢出。
+
+<Exercises>
+
+**问题 1：左段1、4、7与右段2、3、6归并时，为什么7胜过6要一次加3？**
+
+<Answer>右段升序且j指向最大剩余值6；7大于6就必然也大于右段剩余2和3，因此形成7与2、3、6三对。</Answer>
+
+**问题 2：相等元素为什么走不计数分支？**
+
+<Answer>逆序定义使用严格大于。左值等于右值不构成逆序对，作者反向归并时把右值先写入输出，不增加count。</Answer>
+
+**问题 3：作者建立copy后，为什么原data仍可能被修改？**
+
+<Answer>递归调用交换data与copy参数；顶层子调用把自己的有序结果写入其copy参数，而该参数正是顶层原data，所以原数组的左右半段会被排序。</Answer>
+
+**问题 4：长度0为什么nullptr安全而非空指针不安全？**
+
+<Answer>入口条件先检查data是否为空，nullptr直接返回；非空指针且length为0不满足length小于0，会调用区间0到负1，而Core只有start等于end基例，无法处理空区间。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="逆序对">前下标更小但前值严格大于后值的一对元素。</GlossaryItem>
+  <GlossaryItem term="内部逆序">两个下标都在同一递归半段内的逆序对。</GlossaryItem>
+  <GlossaryItem term="跨段逆序">前元素在左半段、后元素在右半段的逆序对。</GlossaryItem>
+  <GlossaryItem term="批量计数">利用半段有序性，用一次比较确定一整段配对数量。</GlossaryItem>
+  <GlossaryItem term="缓冲区换位">递归层间交换源数组与目标数组角色的实现技巧。</GlossaryItem>
+</Glossary>
+
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题51"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/51_InversePairs/InversePairs.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

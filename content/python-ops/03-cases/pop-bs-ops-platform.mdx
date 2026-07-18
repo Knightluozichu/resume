@@ -1,0 +1,126 @@
+---
+title: "第13章 从零开始打造B/S自动化运维平台"
+type: C
+section: "Python自动化运维 · 案例篇"
+order: 13
+description: "按刘天斯原书第13章重建：B/S自动化运维平台、平台功能与系统架构、数据库字典与模型、系统环境部署、前端加载、数据传输与功能扩展。"
+demo: true
+math: false
+sourceUrl: "https://github.com/yorkoliu/pyauto"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PopBsOpsPlatformModelLab, PopBsOpsPlatformBoundaryLab, PopBsOpsPlatformEvidenceLab } from "@/components/mdx/python-ops/diagrams/pop-bs-ops-platform";
+
+<Objectives>
+- 能解释B/S自动化运维平台的执行链与运维价值
+- 能区分平台功能与系统架构和数据库字典与模型的责任与失败语义
+- 能实现并复现系统环境部署到前端加载、数据传输与功能扩展的安全实验
+</Objectives>
+
+## 从一次运维变更开始
+
+先预测：脚本在一台测试机成功，是否就能安全用于批量生产？不能。还要说明目标、权限、超时、部分失败、证据和回滚。<Term def="B/S自动化运维平台把资产、任务、执行器和浏览器界面连成闭环。Web进程只接受和查询任务，实际命令由隔离worker执行；每次变更绑定用户、审批、目标和结果。">B/S自动化运维平台</Term>必须落进可观察的执行链。
+
+<PopBsOpsPlatformModelLab />
+
+## 核心模型与责任
+
+B/S自动化运维平台把资产、任务、执行器和浏览器界面连成闭环。Web进程只接受和查询任务，实际命令由隔离worker执行；每次变更绑定用户、审批、目标和结果。 <Term def="平台功能与系统架构包含身份认证、资产选择、任务定义、队列、执行节点、状态流和审计。同步HTTP请求不应等待长任务，任务ID是前端查询和取消的稳定句柄。">平台功能与系统架构</Term>
+
+本章按照原书核心模块建立最小实验，再用现代Python和安全默认重写边界。工具版本可以变化，但目标选择、输入验证、结果聚合和审计证据不能消失。
+
+## 机制一：采集或控制入口
+
+平台功能与系统架构包含身份认证、资产选择、任务定义、队列、执行节点、状态流和审计。同步HTTP请求不应等待长任务，任务ID是前端查询和取消的稳定句柄。 <Term def="数据库字典与模型至少区分User、Host、Job、Execution和Artifact。状态迁移用约束防止completed回到running，命令参数与输出摘要不可变保存，秘密只保留引用。">数据库字典与模型</Term>
+
+```python
+from enum import StrEnum
+class JobState(StrEnum):
+    QUEUED = 'queued'
+    RUNNING = 'running'
+    SUCCEEDED = 'succeeded'
+    FAILED = 'failed'
+    CANCELED = 'canceled'
+```
+
+运行前固定测试目标与时间窗，运行后保存结构化结果、耗时和异常类型。不要把打印了几行输出当成成功，也不要让示例凭据进入源码。
+
+## 机制二：状态、网络与批量
+
+数据库字典与模型至少区分User、Host、Job、Execution和Artifact。状态迁移用约束防止completed回到running，命令参数与输出摘要不可变保存，秘密只保留引用。 <Term def="系统环境部署把Django、数据库、队列、静态资源和worker分别配置。健康检查覆盖依赖，迁移和回滚有顺序，Web与worker使用不同最小权限账户。">系统环境部署</Term>
+
+<PopBsOpsPlatformBoundaryLab />
+
+```python
+class Job(models.Model):
+    creator = models.ForeignKey(User, on_delete=models.PROTECT)
+    command = models.JSONField()
+    state = models.CharField(max_length=16, choices=JobState)
+    created_at = models.DateTimeField(auto_now_add=True)
+```
+
+批量任务要先预览匹配目标，再限制并发并逐目标汇总。成功、失败、超时和未返回是不同状态；只展示总成功率会掩盖关键主机失败。
+
+## 机制三：证据与恢复
+
+系统环境部署把Django、数据库、队列、静态资源和worker分别配置。健康检查覆盖依赖，迁移和回滚有顺序，Web与worker使用不同最小权限账户。 <Term def="前端加载、数据传输与功能扩展使用分页资产、结构化任务schema和增量状态。WebSocket或轮询只传状态变化，前端展示部分失败，不把批量任务简化成单一绿色结果。">前端加载、数据传输与功能扩展</Term>
+
+前端加载、数据传输与功能扩展使用分页资产、结构化任务schema和增量状态。WebSocket或轮询只传状态变化，前端展示部分失败，不把批量任务简化成单一绿色结果。 <Term def="验证从零开始打造B/S自动化运维平台的授权、结果和失败路径。">从零开始打造B/S自动化运维平台验收边界</Term>
+
+```python
+@require_POST
+def create_job(request):
+    payload = validate_job(request.body)
+    authorize(request.user, payload['targets'])
+    job = Job.objects.create(creator=request.user, command=payload)
+    enqueue(job.id)
+    return JsonResponse({'job_id': job.id}, status=202)
+```
+
+<PopBsOpsPlatformEvidenceLab />
+
+## 分步验收
+
+<Stepper>
+  <Step title="建立执行链"><PopBsOpsPlatformModelLab /></Step>
+  <Step title="注入边界"><PopBsOpsPlatformBoundaryLab /></Step>
+  <Step title="证明可恢复">用正常、超时、权限拒绝和部分失败四组输入运行；核对状态、日志、临时资源与回滚点，并保留可复查证据。</Step>
+</Stepper>
+
+## 实战验证清单
+
+在隔离环境执行三段代码：先只读采集，再模拟一台目标超时，最后验证失败不会改变未授权对象。记录命令或API参数、开始结束时间、目标清单、返回码、标准错误、制品摘要和回滚结果。涉及网络扫描、远程命令或配置发布时，必须使用经过批准的测试资产。
+
+## 常见误区
+
+<Callout type="trap" title="只要B/S自动化运维平台能运行就可以批量">
+单机成功没有证明目标选择、并发预算、部分失败和回滚。扩大范围前必须完成预览、限流、逐主机结果与停止条件。
+</Callout>
+
+<Callout type="trap" title="原书工具API可以原样用于今天的生产">
+原书出版于2014年，部分工具和安全默认已经变化。应保留架构思想，依据当前官方文档迁移API、主机密钥、TLS、权限和依赖版本。
+</Callout>
+
+## 本章回顾
+
+官方核心单元核对：B/S自动化运维平台；平台功能与系统架构；数据库字典与模型；系统环境部署；前端加载、数据传输与功能扩展。本章把原书模块放进现代运维闭环：先授权与预览，再执行与收集，最后判断、审计和恢复。
+
+<Exercises>
+**问题 1：如何解释“B/S自动化运维平台”的执行链？**<Answer>B/S自动化运维平台把资产、任务、执行器和浏览器界面连成闭环。Web进程只接受和查询任务，实际命令由隔离worker执行；每次变更绑定用户、审批、目标和结果。 平台功能与系统架构包含身份认证、资产选择、任务定义、队列、执行节点、状态流和审计。同步HTTP请求不应等待长任务，任务ID是前端查询和取消的稳定句柄。</Answer>
+**问题 2：数据库字典与模型与系统环境部署如何协作？**<Answer>数据库字典与模型至少区分User、Host、Job、Execution和Artifact。状态迁移用约束防止completed回到running，命令参数与输出摘要不可变保存，秘密只保留引用。 系统环境部署把Django、数据库、队列、静态资源和worker分别配置。健康检查覆盖依赖，迁移和回滚有顺序，Web与worker使用不同最小权限账户。</Answer>
+**问题 3：如何验收前端加载、数据传输与功能扩展？**<Answer>前端加载、数据传输与功能扩展使用分页资产、结构化任务schema和增量状态。WebSocket或轮询只传状态变化，前端展示部分失败，不把批量任务简化成单一绿色结果。 增加正常、超时、权限拒绝和部分失败输入，核对目标、返回码、证据和回滚。</Answer>
+</Exercises>
+
+## 术语表
+<Glossary>
+  <GlossaryItem term="B/S自动化运维平台" definition="B/S自动化运维平台把资产、任务、执行器和浏览器界面连成闭环。" />
+  <GlossaryItem term="平台功能与系统架构" definition="平台功能与系统架构包含身份认证、资产选择、任务定义、队列、执行节点、状态流和审计。" />
+  <GlossaryItem term="数据库字典与模型" definition="数据库字典与模型至少区分User、Host、Job、Execution和Artifact。" />
+  <GlossaryItem term="系统环境部署" definition="系统环境部署把Django、数据库、队列、静态资源和worker分别配置。" />
+  <GlossaryItem term="前端加载、数据传输与功能扩展" definition="前端加载、数据传输与功能扩展使用分页资产、结构化任务schema和增量状态。" />
+  <GlossaryItem term="从零开始打造B/S自动化运维平台验收边界" definition="验证从零开始打造B/S自动化运维平台的授权、结果和失败路径。" />
+</Glossary>
+
+<Attribution adaptedFrom="刘天斯《Python自动化运维：技术与最佳实践》第13章 从零开始打造B/S自动化运维平台" adaptedUrl="https://github.com/yorkoliu/pyauto" />

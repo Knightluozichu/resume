@@ -1,0 +1,133 @@
+---
+title: "第10章 Unsafe Rust 与外部函数接口"
+type: C
+section: "精通Rust 2e · 并发与底层"
+order: 10
+description: "按 原书第10章 Unsafe Rust and Foreign Function Interfaces 一比一重建核心知识：安全与 Unsafe 契约、从 Rust 调用 C、从 C 调用 Rust、外部 C/C++ 库、Python 与 Node 原生扩展。"
+demo: true
+math: false
+sourceUrl: "https://www.packtpub.com/en-us/product/mastering-rust-9781789346572"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { MrsUnsafeFfiModelLab, MrsUnsafeFfiBoundaryLab, MrsUnsafeFfiEvidenceLab } from "@/components/mdx/mastering-rust-2e/diagrams/mrs-unsafe-ffi";
+
+<Objectives>
+- 能解释安全与 Unsafe 契约与从 Rust 调用 C在本章执行链中的责任
+- 能区分从 C 调用 Rust和外部 C/C++ 库的适用边界与失败语义
+- 能实现并复现一个围绕Python 与 Node 原生扩展的最小实验
+</Objectives>
+
+## 先做预测
+
+先回答：示例能够编译并运行，是否已经证明设计正确？不能。编译成功只说明当前程序满足类型与语法约束，还要验证输入边界、失败路径、资源生命周期、并发或外部系统条件。<Term def="unsafe只开放解引用裸指针、调用unsafe函数、访问可变静态等额外能力，不关闭借用检查；每个unsafe块都必须附带调用者可验证的不变量。">安全与 Unsafe 契约</Term>是本章的起点，<Term def="extern声明ABI，调用前要核对整数宽度、布局、空指针、字符串终止和错误码；链接成功不代表跨语言语义正确。">从 Rust 调用 C</Term>则把起点放进可重复的工程过程。
+
+<MrsUnsafeFfiModelLab />
+
+## 原书章节骨架
+
+Packt 官方目录把本章组织为安全与 Unsafe 契约、从 Rust 调用 C、从 C 调用 Rust、外部 C/C++ 库、Python 与 Node 原生扩展。这里保留原书问题顺序，再把2019年前后的案例放到当前Rust工程语境中理解：概念不因crate版本变化而失效，但命令、依赖和框架API必须以当前项目锁定版本的官方文档为准。
+
+官方核心单元核对：安全与Unsafe契约；从Rust调用C；从C调用Rust；外部C与C++库；PyO3扩展；Node原生扩展。
+
+<Term def="导出函数需要稳定ABI和符号，不能让panic穿越FFI边界；所有权转交、释放函数与线程规则必须写入头文件契约。">从 C 调用 Rust</Term>不是孤立语法。它承接安全与 Unsafe 契约给出的目标，并通过从 Rust 调用 C进入真实项目。阅读代码时要沿着输入、所有权或状态、动作、结果和证据五个节点追踪，而不是只记函数名。
+
+```rust
+unsafe extern "C" {
+    fn abs(input: std::ffi::c_int) -> std::ffi::c_int;
+}
+
+let value = unsafe { abs(-42) };
+assert_eq!(value, 42);
+```
+
+## 机制一：从类型到行为
+
+unsafe只开放解引用裸指针、调用unsafe函数、访问可变静态等额外能力，不关闭借用检查；每个unsafe块都必须附带调用者可验证的不变量。 extern声明ABI，调用前要核对整数宽度、布局、空指针、字符串终止和错误码；链接成功不代表跨语言语义正确。 两者协作时，先写出谁拥有数据、谁可以修改、失败由谁处理，再决定具体API。这样可以把编译器诊断还原为契约冲突，而不是把错误信息当成需要逐条消除的噪声。
+
+<Term def="绑定层只负责原始表示，安全包装层验证长度、生命周期和状态机；C++异常、模板与名称改编通常需要C适配层。">外部 C/C++ 库</Term>进一步约束运行行为。它说明“类型正确”与“协议正确”是两层证据：前者由编译器帮助证明，后者还需要测试、时间线和边界输入。
+
+<MrsUnsafeFfiBoundaryLab />
+
+```rust
+#[unsafe(no_mangle)]
+pub extern "C" fn checked_add(a: i32, b: i32, out: *mut i32) -> bool {
+    let Some(sum) = a.checked_add(b) else { return false };
+    if out.is_null() { return false; }
+    unsafe { out.write(sum) };
+    true
+}
+```
+
+## 机制二：失败、资源与边界
+
+导出函数需要稳定ABI和符号，不能让panic穿越FFI边界；所有权转交、释放函数与线程规则必须写入头文件契约。 绑定层只负责原始表示，安全包装层验证长度、生命周期和状态机；C++异常、模板与名称改编通常需要C适配层。 失败实验至少覆盖正常、空值或零长度、上限附近、显式错误和资源中断。涉及线程、网络、数据库、GUI或FFI时，还要加入超时、取消、部分完成与关闭路径。
+
+不要把原书示例的依赖版本直接复制到新项目。先固定Rust edition与最小支持版本，再查询维护中的crate文档和迁移说明；保留原书要讲的架构边界，按当前API重写适配层。
+
+```rust
+unsafe fn slice_from_raw<'a>(ptr: *const u8, len: usize) -> &'a [u8] {
+    // SAFETY: caller guarantees a valid readable allocation for len bytes.
+    unsafe { std::slice::from_raw_parts(ptr, len) }
+}
+```
+
+## 机制三：可复现证据
+
+<Term def="PyO3和Node扩展框架降低绑定样板，但解释器锁、运行时线程、对象生命周期和错误转换仍是跨边界责任。">Python 与 Node 原生扩展</Term>负责把本章收束成证据。PyO3和Node扩展框架降低绑定样板，但解释器锁、运行时线程、对象生命周期和错误转换仍是跨边界责任。 一次可靠验收要保存输入、工具链、依赖锁定、命令、退出状态、关键输出和失败样本。性能结论还要记录release构建、样本数与环境噪声；并发结论则要记录任务边界、超时和关闭结果。
+
+<MrsUnsafeFfiEvidenceLab />
+
+## 分步实验
+
+<Stepper>
+  <Step title="建立模型"><MrsUnsafeFfiModelLab /></Step>
+  <Step title="注入边界"><MrsUnsafeFfiBoundaryLab /></Step>
+  <Step title="保留证据"><MrsUnsafeFfiEvidenceLab /></Step>
+</Stepper>
+
+## 验收清单
+
+1. 在隔离目录运行三段示例，先预测结果和所有权变化，再记录实际编译诊断。
+2. 为主路径增加一个正常测试和至少三个边界测试，错误断言检查类别与上下文，而不只匹配整段文本。
+3. 清理构建产物后重跑，确认没有依赖本地缓存、环境变量或未声明工具。
+4. 若章节涉及外部系统，使用本地测试服务或临时数据库，设置时间预算并验证资源最终释放。
+
+## 常见误区
+
+<Callout type="trap" title="把编译通过当成章节验收">
+编译器不能证明业务输入完整、超时合理、协议有背压或外部副作用已回滚。必须补充失败测试与可观察证据。
+</Callout>
+
+<Callout type="trap" title="把2019年的crate API当成固定标准">
+本书核心结构值得保留，但框架和工具API会变化。新代码应锁定版本、查阅维护中的官方文档，并把迁移集中在适配边界。
+</Callout>
+
+## 本章回顾
+
+本章按照官方目录逐项覆盖安全与 Unsafe 契约、从 Rust 调用 C、从 C 调用 Rust、外部 C/C++ 库、Python 与 Node 原生扩展。核心方法是先用类型表达资源与能力，再用运行期协议约束超时、顺序和外部失败，最后用测试、日志或调试记录证明结果可重复。
+
+<Exercises>
+**问题 1：如何解释安全与 Unsafe 契约与从 Rust 调用 C的协作？**
+<Answer>unsafe只开放解引用裸指针、调用unsafe函数、访问可变静态等额外能力，不关闭借用检查；每个unsafe块都必须附带调用者可验证的不变量。 extern声明ABI，调用前要核对整数宽度、布局、空指针、字符串终止和错误码；链接成功不代表跨语言语义正确。</Answer>
+
+**问题 2：从 C 调用 Rust和外部 C/C++ 库的边界是什么？**
+<Answer>导出函数需要稳定ABI和符号，不能让panic穿越FFI边界；所有权转交、释放函数与线程规则必须写入头文件契约。 绑定层只负责原始表示，安全包装层验证长度、生命周期和状态机；C++异常、模板与名称改编通常需要C适配层。</Answer>
+
+**问题 3：怎样验收Python 与 Node 原生扩展？**
+<Answer>PyO3和Node扩展框架降低绑定样板，但解释器锁、运行时线程、对象生命周期和错误转换仍是跨边界责任。 使用正常、边界、错误和资源中断输入，保存工具链、命令、退出状态和可复查输出。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="安全与 Unsafe 契约" definition="unsafe只开放解引用裸指针、调用unsafe函数、访问可变静态等额外能力，不关闭借用检查" />
+  <GlossaryItem term="从 Rust 调用 C" definition="extern声明ABI，调用前要核对整数宽度、布局、空指针、字符串终止和错误码" />
+  <GlossaryItem term="从 C 调用 Rust" definition="导出函数需要稳定ABI和符号，不能让panic穿越FFI边界" />
+  <GlossaryItem term="外部 C/C++ 库" definition="绑定层只负责原始表示，安全包装层验证长度、生命周期和状态机" />
+  <GlossaryItem term="Python 与 Node 原生扩展" definition="PyO3和Node扩展框架降低绑定样板，但解释器锁、运行时线程、对象生命周期和错误转换仍是跨边界责任。" />
+  <GlossaryItem term="章节验收边界" definition="用输入、失败、资源、证据和迁移约束验证章节核心。" />
+</Glossary>
+
+<Attribution adaptedFrom="Mastering Rust, Second Edition · 原书第10章 Unsafe Rust and Foreign Function Interfaces" adaptedUrl="https://www.packtpub.com/en-us/product/mastering-rust-9781789346572" />

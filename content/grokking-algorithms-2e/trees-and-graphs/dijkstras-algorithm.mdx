@@ -1,180 +1,287 @@
 ---
-title: 狄克斯特拉算法
-type: B
-section: 树与图
-order: 7
-description: 带权图最短路径——松弛操作和贪心锁定。
+title: "第9章 Dijkstra算法"
+type: C
+section: "算法图解（第2版）"
+order: 9
+description: "从带权路径与四步松弛循环出发，掌握成本表、父节点表、钢琴交换、负权限制和两种Python实现。"
 demo: true
-math: true
-sourceUrl: https://www.manning.com/books/grokking-algorithms-second-edition
+math: false
+sourceUrl: "https://livebook.manning.com/book/grokking-algorithms-second-edition/chapter-9"
 draft: false
 ---
 
-{/* 知识点清单：狄克斯特拉算法 / 带权图 / 松弛操作 / 贪心策略 / 优先队列 / 负权边问题；原书章节：Chapter 7 — Dijkstra's Algorithm。 */}
+import { WeightedPathDiagram, DijkstraTraceLab, PianoTradeMap, NegativeEdgeDiagram } from "@/components/mdx/grokking-algorithms-2e/diagrams/dijkstras-algorithm";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能手走一遍狄克斯特拉算法的完整过程，标注每轮锁定哪个节点、更新了哪些邻居的代价。
-- 能推导松弛公式，解释为什么已锁定节点的代价不会再被更新。
-- 能回答：为什么狄克斯特拉算法不能处理负权边？出现负权边时会发生什么？
+- 能区分BFS的最少边数与带权图的最低总成本，并判断Dijkstra的适用前提
+- 能计算每轮最低成本未处理节点，执行松弛并更新成本表与父节点表
+- 能复现钢琴交换示例，写出最低成本和完整交换路径
+- 能解释负权边为何破坏已处理节点最优性，并比较Bellman-Ford的职责
+- 能实现散列表扫描版与优先队列版Dijkstra，分析复杂度并恢复最短路径
 
 </Objectives>
 
-## 直觉引入
+## 从最少段到最低总成本开始
 
-打开手机地图，输入起点和终点。地图不会让你绕遍全城来比较每条路——它高效地算出一条最短路径。你自己开车时面对路网也不会这样傻：你知道有些路更短有些路更长，你会优先探索看起来代价最小的方向。
+先预测：从Start到Finish，上方路线只有两段，下方路线有三段。若每段道路耗时不同，边数较少的路线一定更快吗？
 
-狄克斯特拉算法就是导航引擎的心脏。它面对一张<strong>带权重的图</strong>——每条边不是「走一秒」，而是有具体的长度（10 公里、3 分钟、5 块钱）——然后一步步找出从起点到所有节点的最短路径。它的策略很朴素：每次从「还没确定最短路径的节点」里挑一个当前代价最小的，锁定它，再用它的好消息去<strong>松弛</strong>它的邻居。
+<WeightedPathDiagram />
 
-这章解决的核心问题：在有不同边权重的图上，如何找到真实的「最省代价」路径？BFS 只能找到边数最少的路，但带权图里「边少 ≠ 代价低」。
+第6章的BFS回答“哪条路经过的边最少”。本章给每条边附上距离、时间、价格等数值，形成<Term def="每条边都携带数值成本，路径成本是沿途边权之和的图。">加权图</Term>。上图上方两段共7分钟，下方三段共6分钟；BFS会选前者，Dijkstra会选后者。加权图的边带有成本，目标不再是数边，而是最小化边权总和。
 
-## 概念讲解
+<Term def="从一个指定起点到图中各可达节点的最低总权重问题。">单源最短路径</Term>要求从起点同时求到多个节点的最小成本。Dijkstra寻找非负权图最短路径：图可以有向或无向，也可以有环；真正的前提是从起点可达、参与计算的边权都不能为负。零权边允许存在。
 
-### 带权图与最短路径问题
+## 使用Dijkstra算法
 
-<Term def="每条边都标有一个数值权重（距离、时间、费用等）的图。最短路径是权重之和最小的路径。">带权图</Term>是现实世界问题的最自然建模方式。道路长度不同、红绿灯等待时间不同、过路费不同——这些差异由边上的权重来体现。
+原章把流程压成四步：
 
-<Term def="每次都选当前看起来最优的选项，不回溯。狄克斯特拉的贪心体现在「每次锁定代价最小的未处理节点」。">贪心策略</Term>是狄克斯特拉的决策哲学。它不事先规划整条路径，而是每一步都做当下最好的选择：在未锁定的节点中，选一个当前已知代价最小的。这个节点一旦锁定，它的最短路径就确定了——不会再被后续更新推翻。
+1. 找出<Term def="尚未最终确定、但当前从起点估计成本最低的节点。">最低成本未处理节点</Term>。
+2. 检查该节点的所有邻居。
+3. 若经过当前节点更便宜，就更新邻居成本和父节点。
+4. 将当前节点标为已处理，回到第一步。
 
-<DijkstraDiagram />
+节点成本是从起点到该节点的当前最小已知代价。初始化时起点为0，直接邻居可写成对应边权，其他节点为无穷大；算法发现更短路线后，成本只会下降。父节点表用于恢复路径：每当邻居成本被改小，同时把当前节点记为这个邻居的新父节点。
 
-看图：每个节点旁标注了从起点出发的当前最短代价。绿色是已锁定节点（代价已确定，不再变化），橙色是当前被选中锁定的节点。虚线标注了松弛操作——邻居代价可能被当前节点更新。
-
-### 松弛：狄克斯特拉的核心操作
-
-<Term def="检查是否可以通过当前节点找到一条到邻居的更短路径。公式：如果 dist[current] + weight(current, neighbor) < dist[neighbor]，则更新 dist[neighbor]。">松弛</Term>这个名字很形象——绷紧的绳子被「松一松」，看能不能找到更短的路径。每次锁定一个节点后，检查它的所有邻居：如果「走到当前节点 + 从当前节点走到邻居」的总代价小于邻居已知的代价，就更新邻居的代价并记录当前节点为邻居的前驱。
-
-狄克斯特拉算法的流程：
-1. 初始化：起点代价为 0，其他所有节点代价为无穷大（∞）。所有节点都是未锁定状态。
-2. 从未锁定节点中选出当前代价最小的，锁定它。
-3. 对刚锁定节点的每个邻居执行松弛：尝试用「锁定节点代价 + 边权重」更新邻居的代价。
-4. 重复 2–3，直到所有节点都被锁定（或目标节点被锁定时可提前结束）。
-
-## 数学推导
-
-### 符号表
-
-| 符号 | 含义 |
-|------|------|
-| s | 起点 |
-| d[v] | 从起点到节点 v 的当前已知最短代价 |
-| w(u, v) | 从节点 u 到节点 v 的边的权重 |
-| S | 已锁定（最短路径已确定）的节点集合 |
-| relax(u, v) | 如果 d[u] + w(u, v) &lt; d[v]，则 d[v] = d[u] + w(u, v) |
-
-### 松弛公式与正确性直觉
-
-松弛操作的核心公式：
-
-$$d[v] = \min(d[v],\; d[u] + w(u, v))$$
-
-这个式子在说：我们已知从起点到 u 的最好路径代价是 d[u]，从 u 到 v 有一条权重为 w(u, v) 的边。那么可以凑出一条新路线：「到 u 的好路径」+「u→v 这一步」，总代价是 d[u] + w(u, v)。如果这个新路线比已知的 d[v] 更短，就更新 d[v]。
-
-为什么锁定操作是安全的？因为所有边的权重都 ≥ 0：
-- 每个被锁定的节点 u 是当前 S 之外代价最小的。
-- 如果存在一条更短的路径到达 u，那条路径必须经过另一个未锁定节点 x。
-- 但由于所有权重 ≥ 0，从起点到 x 的代价 ≤ 从起点经过 x 再到 u 的代价。
-- 所以 d[x] ≤ d[u]——但这和我们选 u 为最小代价矛盾。
-
-因此锁定节点的最短路径已经确定，后续不会被打脸。这个证明在出现负权边时就崩塌了。
-
-### 为什么负权边会毁掉狄克斯特拉
-
-设图：起点 s，节点 A，边 s→A 权重 5，边 A→s 权重 -10。按照狄克斯特拉：
-1. 锁定 s（代价 0），松弛 A：d[A] = 0 + 5 = 5。
-2. 锁定 A（代价 5），因为它是唯一的未锁定节点。
-3. 松弛 s（已锁定，跳过）。
-
-但我们知道：s→A→s 绕一圈只花 -5 的代价，可以无限绕圈让代价降到 -∞。更致命的是：即使不绕圈，狄克斯特拉锁定了 A 之后就不会再更新它的代价——即使后来发现更短的路径也来不及了。这就是狄克斯特拉的硬限制：<strong>所有边权重必须 ≥ 0</strong>。
-
-$$
-\text{狄克斯特拉适用前提：对所有边 } (u, v),\ w(u, v) \geq 0
-$$
-
-这个式子在说：只要你承诺每走一条边代价都不会减少（可以增加或不变），狄克斯特拉就能保证每一步的贪心选择都是全局正确的。如果存在负权边，需要贝尔曼-福特算法（Bellman-Ford）。
-
-### 时间复杂度分析
-
-用优先队列（最小堆）实现时，每次取出最小代价节点是 O(log V)，每个节点被取一次（V 次操作）；每条边触发一次可能的松弛和堆更新（E 次操作）。总复杂度：O((V+E) log V)。如果图很稠密（E ≈ V²），可退化到 O(V²) 用朴素数组实现。
-
-## 交互 Demo
-
-拖动滑块观察狄克斯特拉算法的「选最小 → 锁定 → 松弛邻居」循环。注意每个节点旁的代价值如何被逐步压低。
-
-<AlgorithmPlayground mode="dijkstra" currentStep={0} title="狄克斯特拉算法 · 交互动画" focus="核心观察：每次锁定当前代价最小的未锁定节点，再用它去松弛邻居。已锁定节点（绿色）的代价永不再变。" />
-
-<Callout type="tip">
-  <strong>猜一猜：</strong>如果在动画的图中加入一条负权边，当算法锁定某个节点后，它的邻居代价可能被后来的节点更新得更低——但已锁定节点却不能反悔了。这会导致什么结果？
-</Callout>
-
-## 分步动画
+<DijkstraTraceLab />
 
 <Stepper>
-  <Step title="初始化：起点代价为 0">
-    动画开始时，所有节点旁显示的数字是当前已知从起点出发的最小代价。起点的代价是 0（当前位置，不需要走），其他所有节点的代价都是无穷大（∞，还没有发现任何路径）。所有节点都是灰色——未锁定状态。
-    <AlgorithmPlayground mode="dijkstra" currentStep={0} title="狄克斯特拉 · 第 1 步：初始化" />
-  </Step>
-  <Step title="选最小未锁定节点并锁定">
-    在所有未锁定节点中，选出当前代价最小的那个。第一轮自然是起点（代价 0）。这个节点被锁定后变成绿色——意味着从起点到它的最短路径已经确定，不会再被改变。观察它的代价数字和其他节点的区别。
-    <AlgorithmPlayground mode="dijkstra" currentStep={1} title="狄克斯特拉 · 第 2 步：锁定最小代价节点" />
-  </Step>
-  <Step title="松弛邻居：好消息传出去">
-    对刚锁定节点的每一个邻居执行松弛：计算「锁定节点代价 + 这条边的权重」。如果这个值小于邻居当前的代价，就更新邻居的代价，并把邻居的「前驱节点」设为当前锁定节点。动画里邻居的代价数字会降低，箭头会更新指向。
-    <AlgorithmPlayground mode="dijkstra" currentStep={2} title="狄克斯特拉 · 第 3 步：松弛邻居" />
-  </Step>
-  <Step title="重复直到全部锁定">
-    继续循环：在未锁定节点中选代价最小的，锁定它，松弛它的邻居。每次锁定前，注意比较所有未锁定节点的代价——狄克斯特拉总是选最小的。当目标节点被锁定或所有节点都锁定后，算法结束。通过追踪前驱节点链，可以反向重建最短路径。
-    <AlgorithmPlayground mode="dijkstra" currentStep={3} title="狄克斯特拉 · 第 4 步：重复直到全部锁定" />
-  </Step>
+  <Step title="初始化三张表"><WeightedPathDiagram />用邻接散列表保存图，用成本表保存当前最小已知代价，用父节点表保存该代价对应的前驱；已处理集合开始为空。</Step>
+  <Step title="选择成本最低的未处理节点"><DijkstraTraceLab />第一次选B，因为成本2小于A的6。非负边保证未来绕经更远节点不会再把B降到2以下。</Step>
+  <Step title="检查邻居并松弛">逐条计算“当前成本加边权”。候选值更小时，同时改成本和父节点；否则保留旧记录。</Step>
+  <Step title="标记处理并重复">B处理后选A，再选Finish。目标被选为最低成本节点时，它的最短成本已经确定，可以提前结束。</Step>
 </Stepper>
 
-## 常见误区
+## 松弛如何传播更便宜的路线
 
-<Callout type="trap">
-  <strong>现象 →</strong> 图中有负权边，狄克斯特拉给出错误结果。<strong>原因 →</strong> 狄克斯特拉的核心假设是「每加一条边，代价不会减少」。一旦锁定一个节点就不再撤销——但如果存在负权边，后面发现的路径可能回过来把已锁定节点的代价压低，而算法已经不能再改了。<strong>修法 →</strong> 存在负权边时用贝尔曼-福特算法（O(VE)）或 SPFA。检测负权回路可以用贝尔曼-福特多跑一轮看是否还有松弛发生。
+<Term def="比较经过当前节点的新路径与邻居旧成本，并在更小时更新成本和前驱。">松弛</Term>操作比较：
+
+$$
+\operatorname{candidate}=d[u]+w(u,v),\qquad
+\text{若 }\operatorname{candidate}\lt d[v]\text{，则更新 }d[v].
+$$
+
+其中 `d[u]` 是起点到当前节点 `u` 的已知最小成本，`w(u,v)` 是边成本。松弛操作比较新路径与旧成本；更新邻居成本和父节点必须是同一个原子逻辑。只改成本会丢失路线，只改父节点则会让父链与成本不一致。
+
+原书示例从Start出发：直达A成本6、直达B成本2。选择B后，`2+3=5` 改善A，`2+5=7` 首次到达Finish；再处理A，`5+1=6` 又改善Finish。最终父链是 `Finish ← A ← B ← Start`，反转后得到 `Start → B → A → Finish`，总成本6。
+
+<Callout type="trap" title="节点第一次被发现时就是最短">
+这是BFS在等权图中的性质，不是一般带权图性质。A最初成本6，后来经过B降到5；Dijkstra只有在节点成为最低成本未处理节点并被取出时，才把它最终确定。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 用普通队列替代优先队列实现狄克斯特拉，性能退化。<strong>原因 →</strong> 狄克斯特拉的贪心选择要求「每次取最小代价节点」，普通队列是 FIFO 不会自动维护最小。如果每次取都要全量扫描找最小，每次取最低代价节点是 O(V)，总复杂度 O(V²)。<strong>修法 →</strong> 用最小堆实现的优先队列，取最小值 O(log V)，更新 O(log V)，总复杂 O((V+E) log V)。
+## 术语：方向、权重、成本与已处理
+
+加权边常带方向：`A→B` 有价格不代表 `B→A` 也存在或价格相同。无向加权边通常在邻接表中写成两个方向。路径是边序列，路径成本是各边权之和；“最短”只是传统名称，优化量也可以是时间或费用。
+
+“已处理”不是“已经看见”。节点可能多次进入成本表或最小堆，但处理完成后节点不再重复选择。扫描版显式维护集合；懒删除最小堆版允许旧条目留在堆中，弹出时若条目成本大于最新成本就跳过。
+
+## 钢琴交换示例
+
+原章的“Trading for a piano”把物品当节点，把完成一次交换还需补的钱当边权。Rama手中有一本书，可以补5美元换唱片，或0美元换海报；唱片可通向贝斯和架子鼓，海报也有不同价格的同类交换，最后由乐器换到钢琴。
+
+<PianoTradeMap />
+
+<Stepper>
+  <Step title="把交换网络建成加权图"><PianoTradeMap />书、唱片、海报、贝斯、架子鼓和钢琴都是节点；一条有向边表示允许交换，边权是额外花费。</Step>
+  <Step title="先处理零成本海报">海报成本最低，松弛后贝斯成本30、架子鼓成本35；它们只是当前候选，不是最终答案。</Step>
+  <Step title="再处理五美元唱片">唱片把贝斯改进为20、架子鼓改进为25，并把两者父节点改成唱片。</Step>
+  <Step title="比较到钢琴的两条尾边">经贝斯总计40，经架子鼓总计35；父链恢复出“书→唱片→架子鼓→钢琴”。</Step>
+</Stepper>
+
+钢琴交换示例说明，贪心选择的是“从起点累计成本最低的未处理节点”，不是“当前边最便宜”。如果只选眼前最小边，可能进入后续代价很高的分支；成本表始终比较完整前缀路径。
+
+## 负权边
+
+负权可以表示返利、汇率收益或能量回收，但它会破坏Dijkstra证明所需的单调性。负权边会破坏已处理节点最优性：一个当前看来更远的节点，可能通过负边回到已处理节点并给出更低成本。
+
+<NegativeEdgeDiagram />
+
+图中Start直达A成本2、到B成本5，B再以-10到A。Dijkstra先处理A并把2当成最终值；之后处理B才发现到A的候选成本是-5。这个反例没有环，更没有负权环，所以“只有负权环才有问题”是错误判断。Dijkstra不能处理负权边。
+
+<Term def="可处理负权边，并能检测从起点可达负权环的单源最短路径算法。">Bellman-Ford算法</Term>可处理负权边：它反复对全部边松弛，若不存在可达负权环，可得到有限最短距离；额外一轮仍能更新则说明存在可达负权环。若负权环位于通往目标的可达区域，沿环反复行走会让成本无限下降，此时没有有限最短路径。
+
+<Callout type="trap" title="Dijkstra只要求图中没有负权环">
+条件还不够。上图是无环图，Dijkstra仍失败；只要存在可达负权边，就不应使用Dijkstra。没有负权环是Bellman-Ford获得有限答案的重要条件。
 </Callout>
 
-## 小结与练习
+## 实现：散列表记录图、成本和父节点
 
-- 狄克斯特拉算法 = 贪心（每次锁定最小代价节点）+ 松弛（用锁定节点的信息更新邻居代价）。
-- 核心前提：所有边权重 ≥ 0。负权边会破坏贪心选择的正确性。
-- 时间复杂度 O((V+E) log V)（优先队列实现），BFS 是其所有边权重相等时的特例。
-- 松弛公式 d[v] = min(d[v], d[u] + w(u, v)) 是核心操作，每次锁定后对邻居执行。
+原书用散列表记录图、成本和父节点。下面先建立与原章一致的Start、A、B、Finish网络：
+
+```python
+graph = {
+    "start": {"a": 6, "b": 2},
+    "a": {"finish": 1},
+    "b": {"a": 3, "finish": 5},
+    "finish": {},
+}
+
+infinity = float("inf")
+costs = {"a": 6, "b": 2, "finish": infinity}
+parents = {"a": "start", "b": "start", "finish": None}
+processed: set[str] = set()
+```
+
+扫描版每轮遍历成本表，选择成本最低的未处理节点。它直接对应原书四步，适合先验证状态变化：
+
+```python
+def find_lowest_cost_node(
+    costs: dict[str, float], processed: set[str]
+) -> str | None:
+    best_node = None
+    best_cost = float("inf")
+    for node, cost in costs.items():
+        if node not in processed and cost < best_cost:
+            best_node = node
+            best_cost = cost
+    return best_node
+
+node = find_lowest_cost_node(costs, processed)
+while node is not None:
+    cost = costs[node]
+    for neighbor, weight in graph[node].items():
+        candidate = cost + weight
+        if candidate < costs[neighbor]:
+            costs[neighbor] = candidate
+            parents[neighbor] = node
+    processed.add(node)
+    node = find_lowest_cost_node(costs, processed)
+
+assert costs["finish"] == 6
+assert parents == {"a": "b", "b": "start", "finish": "a"}
+```
+
+若有 `V` 个节点和 `E` 条边，朴素扫描找最低成本共花 `O(V²)`，遍历邻边共花 `O(E)`，总计 `O(V²+E)`。对于稠密图，这个版本简单且可能足够；对于稀疏大图，优先队列可加速最低成本节点选择。
+
+## 优先队列与路径恢复
+
+<Term def="总是先弹出当前最小键值元素的数据结构；Dijkstra以距离作为优先级。">最小优先队列</Term>通常由二叉堆实现。Python的 `heapq` 没有直接的decrease-key，常用做法是每次改善都压入新条目，弹出旧成本时跳过：
+
+```python
+from heapq import heappop, heappush
+
+def dijkstra(
+    graph: dict[str, dict[str, float]], start: str
+) -> tuple[dict[str, float], dict[str, str | None]]:
+    distances = {node: float("inf") for node in graph}
+    parents: dict[str, str | None] = {node: None for node in graph}
+    distances[start] = 0
+    heap: list[tuple[float, str]] = [(0, start)]
+
+    while heap:
+        current_cost, node = heappop(heap)
+        if current_cost != distances[node]:
+            continue
+        for neighbor, weight in graph[node].items():
+            if weight < 0:
+                raise ValueError("Dijkstra requires non-negative weights")
+            candidate = current_cost + weight
+            if candidate < distances[neighbor]:
+                distances[neighbor] = candidate
+                parents[neighbor] = node
+                heappush(heap, (candidate, neighbor))
+    return distances, parents
+
+def restore_path(
+    parents: dict[str, str | None], start: str, target: str
+) -> list[str]:
+    path: list[str] = []
+    node: str | None = target
+    while node is not None:
+        path.append(node)
+        if node == start:
+            return list(reversed(path))
+        node = parents[node]
+    return []
+
+distances, parent_table = dijkstra(graph, "start")
+assert distances["finish"] == 6
+assert restore_path(parent_table, "start", "finish") == [
+    "start", "b", "a", "finish"
+]
+```
+
+<Stepper>
+  <Step title="先验证边权契约"><NegativeEdgeDiagram />加载图时拒绝负权；不要等算法输出异常后才猜输入是否满足前提。</Step>
+  <Step title="初始化距离与父节点">起点距离设0，其余为无穷大，父节点为空；把起点以优先级0压入最小堆。</Step>
+  <Step title="弹出并跳过过期条目"><DijkstraTraceLab />若弹出成本不等于距离表最新值，它是某次改善前留下的旧条目，直接跳过。</Step>
+  <Step title="松弛、入堆并回溯">改善邻居时同步写距离和父节点并压入新条目；结束后沿父链逆向走到起点，再反转。</Step>
+</Stepper>
+
+邻接表加二叉堆的常见复杂度是 `O((V+E) log V)`，连通图中常简写为 `O(E log V)`；空间是 `O(V+E)`，懒删除时堆里可能暂存多个同节点条目。若只关心一个目标，可在目标以最新最小成本弹出时结束，而不是在它第一次入堆时结束。
+
+<Callout type="trap" title="普通FIFO队列也能代替最小堆">
+FIFO只保证先入先出，不能保证每轮拿到累计成本最低的节点。等权图可用BFS；一般非负加权图要使用最低成本扫描或最小优先队列。
+</Callout>
+
+## 为什么非负权时选择安全
+
+设Dijkstra将要处理的节点为 `u`，它在所有未处理节点中暂定成本最小。假设还存在一条更短路径到 `u`。沿该路径从起点前进，取第一个未处理节点 `x`，它的前驱 `y` 已处理，因此处理 `y` 时已经松弛了边 `y→x`。
+
+由于后续边权都非负，到 `x` 的路径前缀成本不会大于整条假设路径成本；于是 `d[x]` 应小于 `d[u]`，与“`u` 是最低成本未处理节点”矛盾。因此选中时 `d[u]` 已是最短距离。负权边会让“路径继续延伸时成本不会下降”失效，这正是前述反例能推翻A的原因。
+
+## 原章概念回查
+
+加权图的边带有成本，Dijkstra寻找非负权图最短路径。节点成本是从起点到该节点的当前最小已知代价，父节点表用于恢复路径。
+
+算法选择成本最低的未处理节点，检查该节点所有邻居；松弛操作比较新路径与旧成本，更新邻居成本和父节点，处理完成后节点不再重复选择。
+
+钢琴交换示例把交换成本建成边权。负权边会破坏已处理节点最优性，Dijkstra不能处理负权边，Bellman-Ford可处理负权边。
+
+实现中用散列表记录图、成本和父节点；在更大的稀疏图中，优先队列可加速最低成本节点选择。
+
+## 本章回顾
+
+1. BFS找最少边数，Dijkstra找非负权图的最低权重和。
+2. 成本表保存当前最小已知代价，父节点表保存对应路径。
+3. 每轮选择成本最低的未处理节点。
+4. 松弛比较 `d[u]+w(u,v)` 与 `d[v]`。
+5. 成本改善时必须同步更新父节点。
+6. 非负权保证节点被处理时距离已经最终确定。
+7. 钢琴交换的最低成本链是书、唱片、架子鼓、钢琴，共35美元。
+8. 一条负权边就足以让Dijkstra失败，不需要负权环。
+9. Bellman-Ford可处理负权边并检测可达负权环。
+10. 扫描版直观但需 `O(V²+E)` 时间。
+11. 邻接表加二叉堆通常需 `O((V+E) log V)` 时间。
+12. 目标第一次入队不代表完成，只有以最新最低成本弹出时才能提前结束。
 
 <Exercises>
-  <Answer question="手动走一遍狄克斯特拉：起点 A，边 A→B 权重 4，A→C 权重 2，B→D 权重 3，C→B 权重 1，C→D 权重 5。写出每轮的锁定顺序和节点的最终代价。">
-    初始化 d[A]=0, d[B]=∞, d[C]=∞, d[D]=∞。锁定 A（0）→ 松弛：d[B]=4, d[C]=2。未锁定最小是 C（2）→ 锁定 C → 松弛：d[B]=min(4, 2+1)=3, d[D]=min(∞, 2+5)=7。未锁最小是 B（3）→ 锁定 B → 松弛：d[D]=min(7, 3+3)=6。锁定 D（6）。最终：A=0, B=3, C=2, D=6。
-  </Answer>
-  <Answer question="推导：如果图中存在一条负权边但没有负权回路，狄克斯特拉一定错吗？">
-    不一定。如果狄克斯特拉在负权边的终点被锁定之前，先通过其他路径更新了该节点的代价并且那个路径的总代价恰好比「经过负权边过来的路径」更大，锁定后就不会再被更新，答案是错的。但如果负权边不影响锁定的先后顺序（很罕见），碰巧也能正确。不过实际中不应该依赖这种「碰巧」——有负权边就该换贝尔曼-福特。
-  </Answer>
-  <Answer question="怎样改造 BFS 让它变成狄克斯特拉？">
-    BFS 的队列换成优先队列（最小堆）。BFS 的「距离加 1」换成「当前代价 + 边权重」。BFS 的「首次访问即最短」（无权成立）换成「只有锁定才确定最短」（贪心 + 非负保证）。改造后 BFS 就是狄克斯特拉在所有边权重 = 1 时的特例。
-  </Answer>
+
+**问题 1：图有A→B成本4、A→C成本2、C→B成本1、B→D成本3、C→D成本5。写出处理顺序、最终成本和A到D路径。**
+
+<Answer>先处理A=0，得到B=4、C=2；处理C=2，把B降为3并令父节点为C，把D设为7；处理B=3，把D降为6并令父节点为B；最后处理D=6。顺序是A、C、B、D，父链D←B←C←A，路径A→C→B→D，总成本6。</Answer>
+
+**问题 2：为什么Start→A为2、Start→B为5、B→A为-10时，图没有环仍不能用Dijkstra？**
+
+<Answer>Dijkstra先把A以2处理并认为最终确定，之后才处理B并发现经B到A的成本为-5。负边让较晚路径的总成本下降到已处理节点之下，直接破坏贪心证明；是否存在环与这个失败无关。</Answer>
+
+**问题 3：最小堆里同一节点出现成本9和成本6两个条目，应删除哪一个？**
+
+<Answer>无需在堆内部搜索删除。距离表保存最新值6；成本6的条目弹出时正常松弛邻居，成本9的旧条目后来弹出时与距离表不等，直接跳过。这是懒删除策略。</Answer>
+
+**问题 4：只需要起点到目标的路径，什么时候可以安全提前结束？**
+
+<Answer>当目标以等于距离表最新值的最低成本条目从优先队列弹出时，可以结束；非负权保证此时距离最终确定。目标第一次被发现或第一次入堆时仍可能被其他路线改善，不能结束。</Answer>
+
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="狄克斯特拉算法">
-    用贪心策略在非负权图上找单源最短路径的算法。每次锁定代价最小的未处理节点，再用松弛操作更新邻居代价。时间复杂度 O((V+E) log V)。详见「概念讲解」和「数学推导」节。
-  </GlossaryItem>
-  <GlossaryItem term="松弛">
-    检查通过当前节点能否找到到邻居的更短路径：如果 d[u] + w(u, v) &lt; d[v]，更新 d[v]。这是狄克斯特拉的核心操作。详见「数学推导」节。
-  </GlossaryItem>
-  <GlossaryItem term="带权图">
-    每条边标有权重的图。权重可以是距离、时间、费用等。狄克斯特拉处理带权图，BFS 只能处理无权图（或所有边权重相等的特例）。详见「概念讲解」节。
-  </GlossaryItem>
-  <GlossaryItem term="贪心策略">
-    每次都做当下看起来最优的选择，不回溯。狄克斯特拉的贪心体现在「从未锁定节点中选代价最小的锁定」。在非负权图上，这个贪心选择恰好是全局最优的。详见「概念讲解」节。
-  </GlossaryItem>
+  <GlossaryItem term="加权图">每条边带有数值成本，路径成本为沿途边权之和的图。</GlossaryItem>
+  <GlossaryItem term="单源最短路径">从指定起点求到各可达节点最低总成本的问题。</GlossaryItem>
+  <GlossaryItem term="最低成本未处理节点">尚未最终确定且当前暂定成本最小的节点。</GlossaryItem>
+  <GlossaryItem term="松弛">用经过当前节点的候选路径尝试降低邻居成本并更新父节点。</GlossaryItem>
+  <GlossaryItem term="成本表">记录起点到每个节点当前最小已知代价的映射。</GlossaryItem>
+  <GlossaryItem term="父节点表">记录每个当前最优代价所对应前驱节点的映射。</GlossaryItem>
+  <GlossaryItem term="已处理节点">以最低暂定成本选中、最短距离已最终确定的节点。</GlossaryItem>
+  <GlossaryItem term="Bellman-Ford算法">可处理负权边并检测从起点可达负权环的最短路径算法。</GlossaryItem>
+  <GlossaryItem term="最小优先队列">按最小优先级弹出元素的数据结构，Dijkstra以距离作为优先级。</GlossaryItem>
+  <GlossaryItem term="懒删除">允许过期堆条目暂留，弹出时依据最新距离跳过的策略。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Grokking Algorithms, Second Edition"
-  adaptedUrl="https://www.manning.com/books/grokking-algorithms-second-edition"
+  adaptedFrom="Grokking Algorithms, Second Edition, Chapter 9: Dijkstra's algorithm"
+  adaptedUrl="https://livebook.manning.com/book/grokking-algorithms-second-edition/chapter-9"
 />

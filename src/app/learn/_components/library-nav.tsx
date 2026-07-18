@@ -3,18 +3,14 @@
 import { useId, useMemo, useState } from "react";
 import { usePathname } from "next/navigation";
 
-import type { LearningPathTree } from "@/lib/content";
+import type { LibraryNavigationTree } from "@/lib/content";
 
 import { BookNavItem } from "./book-nav-item";
 import { ChapterNav } from "./chapter-nav";
 
 type NavMode = "books" | "paths";
 
-export function LibraryNav({
-  paths,
-}: {
-  paths: LearningPathTree;
-}) {
+export function LibraryNav({ paths }: { paths: LibraryNavigationTree }) {
   const pathname = usePathname();
   const currentBookSlug = pathname.split("/")[2] ?? null;
   const instanceId = useId().replace(/:/g, "");
@@ -112,10 +108,7 @@ export function LibraryNav({
           </p>
 
           {filteredBooks.length > 0 ? (
-            <nav
-              aria-label="全部图书目录"
-              className="flex flex-col gap-1"
-            >
+            <nav aria-label="全部图书目录" className="flex flex-col gap-1">
               {filteredBooks.map((book) => {
                 const expanded =
                   bookExpanded[book.bookSlug] ??

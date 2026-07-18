@@ -11,6 +11,7 @@ draft: false
 ---
 
 import { RtwMaterialsDiagram } from "@/components/mdx/ray-tracing-weekend/diagrams/rtw-materials";
+import { RtwStepFlowDiagram } from "@/components/mdx/ray-tracing-weekend/diagrams/rtw-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
@@ -38,6 +39,28 @@ import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercis
 ### 材质与命中记录绑定
 球创建时传入材质指针，求交命中后写入 `rec.mat_ptr`。ray_color 拿到 rec 后调 `rec.mat_ptr->scatter(...)`，材质只关心 rec 里的法线、交点、front_face，与几何体类型解耦。
 
+### scatter 的返回值定义路径是否继续
+
+`scatter` 返回 `true` 并不表示“这次反射一定更亮”，它只表示材质为当前入射光采样出了一条下一跳射线。`attenuation` 是这条路径的<Term def="路径吞吐量：从相机沿一条递归路径传播的颜色权重。每次 scatter 的 attenuation 都与已有权重逐分量相乘，表示该材质过滤后还能继续贡献的能量。">路径吞吐量</Term>乘子：红色墙会让后续任何天空、金属或玻璃的贡献都先乘上红色比例；多次弹射后，权重自然变小。
+
+把递归写成数学式会更清楚。若当前命中材质给出衰减 $\boldsymbol{\alpha}$ 与下一条射线 $r'$，则当前估计颜色是：
+
+$$
+L(r)=\boldsymbol{\alpha}\odot L(r',\mathrm{depth}-1)
+$$
+
+其中 $\odot$ 是 RGB 逐分量乘法，不是点积。若 `scatter` 返回 `false`，材质没有给出下一跳，路径就在此终止并返回黑色；这为以后“完全吸收”的表面提供了明确语义。它不是异常情况，也不应回退去采样天空背景。
+
+### 一条路径只采样一个散射方向
+
+真实表面会向许多方向散射光，但这个小型路径追踪器不会在一次命中时复制成成百上千条子射线。它选择一个随机方向、让这条路径继续；同一像素跨许多样本重复该过程并取平均。<Term def="蒙特卡洛路径估计：每次命中只随机选择一条散射方向，单样本有噪点；对同一像素累积许多独立路径后，平均值逼近所有可能光路的期望贡献。">蒙特卡洛路径估计</Term>正是“少量递归代码也能得到间接光”的原因。
+
+因此 `scattered` 的方向和 `attenuation` 的权重必须成对设计。漫反射可用法线附近的随机方向配合反照率；金属可用镜面反射加扰动；玻璃在反射和折射中按概率选一个。若随机选方向却忘记更新对应权重，平均值会系统性偏亮或偏暗，而不是单纯增加噪点。
+
+### 指针所有权与命中记录的不变量
+
+<Term def="材质所有权：场景中的几何体持有共享材质对象，命中记录只借用该对象的可共享指针。只要场景仍存在，rec.mat_ptr 就必须非空且指向命中几何绑定的同一材质。">材质所有权</Term>解释了为何示例使用 `shared_ptr<material>`。多个球可以共享同一个漫反射对象，避免复制；更重要的是，`hit_record` 只在 `hit` 成功时写入 `mat_ptr`，于是 `ray_color` 可以把“命中成功意味着材质可调用”当作不变量。若某个几何体忘记赋材质，问题应在构建场景时被发现，而不是在深层递归中解引用空指针。
+
 ## 交互Demo
 
 > 猜一猜：把金属的 fuzz 模糊度从 0 调到 1，反射会从「镜子」变成什么？
@@ -46,12 +69,18 @@ import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercis
 
 <Stepper>
 <Step title="第一步：命中带材质">
+<RtwStepFlowDiagram caption="材质调用第 1 步：几何对象在命中记录上交出自己的材质。" stage={1} stages={["命中记录保存材质指针", "scatter 计算衰减与新射线", "递归返回路径颜色"]} />
+
 球在创建时绑定材质指针；射线命中球后，hit_record 里 mat_ptr 指向该球材质。
 </Step>
 <Step title="第二步：调 scatter">
+<RtwStepFlowDiagram caption="材质调用第 2 步：统一接口让不同散射模型接入同一条光路。" stage={2} stages={["命中记录保存材质指针", "scatter 计算衰减与新射线", "递归返回路径颜色"]} />
+
 ray_color 调用 rec.mat_ptr->scatter(r, rec, attenuation, scattered)，材质用法线与入射方向算出衰减色和新方向。
 </Step>
 <Step title="第三步：递归着色">
+<RtwStepFlowDiagram caption="材质调用第 3 步：当前衰减色乘上下一跳射线的结果。" stage={3} stages={["命中记录保存材质指针", "scatter 计算衰减与新射线", "递归返回路径颜色"]} />
+
 返回 attenuation * ray_color(scattered, depth-1)。颜色被逐层衰减、方向被逐层弹射，最终累加出像素颜色。
 </Step>
 </Stepper>
@@ -90,6 +119,43 @@ world.add(make_shared<sphere>(point3(0,-100.5,-1), 100,
 
 `attenuation * ray_color(...)` 是关键：颜色逐层相乘衰减，深处的贡献被前面材质的色调过滤。
 
+下面是最小的漫反射实现。`near_zero` 分支处理“随机向量刚好抵消法线”的退化情形，避免生成长度接近零、没有确定方向的射线：
+
+```cpp
+class lambertian : public material {
+public:
+  explicit lambertian(const color& albedo) : albedo(albedo) {}
+
+  bool scatter(const ray&, const hit_record& rec,
+               color& attenuation, ray& scattered) const override {
+    auto direction = rec.normal + random_unit_vector();
+    if (direction.near_zero()) direction = rec.normal;
+    scattered = ray(rec.p, direction);
+    attenuation = albedo;
+    return true;
+  }
+
+private:
+  color albedo;
+};
+```
+
+也可以用一个刻意“吞光”的材质测试返回值约定。它不产生伪造的散射方向，调用者只会得到终止路径的黑色：
+
+```cpp
+class absorbing_material : public material {
+public:
+  bool scatter(const ray&, const hit_record&, color&, ray&) const override {
+    return false;
+  }
+};
+
+// 将一个测试球绑到 absorbing_material 后，它应遮住背景，
+// 而不是变成天空色或访问未初始化的 scattered。
+```
+
+这两个极端案例共同检验接口：一个材质必须同时写出衰减和新射线再返回 `true`；另一个材质只要返回 `false`，递归就必须停止。金属和玻璃只是把第一种情况的方向生成方式替换掉。
+
 ## 常见误区
 
 <Callout type="trap">
@@ -107,24 +173,40 @@ world.add(make_shared<sphere>(point3(0,-100.5,-1), 100,
 ## 练习
 
 <Exercises>
-**问题**：scatter 接口的输入和输出各是什么？attenuation 和 scattered 分别起什么作用？
+**问题 1**：scatter 接口的输入和输出各是什么？attenuation 和 scattered 分别起什么作用？
 
 <Answer>
 输入：入射射线 r_in 和命中记录 rec（含法线、交点、front_face）。输出：attenuation（衰减色，表示光被材质吸收后剩余的颜色比例）和 scattered（散射后的新射线，决定光接下来往哪走）。ray_color 用 attenuation 乘以散射光的递归颜色，实现逐层调色与弹射。
 </Answer>
 
-**问题**：为什么把材质指针放进 hit_record，而不是在 ray_color 里判断物体类型再选材质？
+**问题 2**：为什么把材质指针放进 hit_record，而不是在 ray_color 里判断物体类型再选材质？
 
 <Answer>
 放进 hit_record 让材质与几何体解耦：球只负责求交并把自己绑定的 mat_ptr 写入 rec，ray_color 只调 rec.mat_ptr->scatter，无需知道命中的是球还是别的。这样加新几何体或新材质都互不影响，符合开放-封闭原则，递归代码保持不变。
 </Answer>
+
+**问题 3**：`scatter` 随机选出一条新方向而不是同时递归所有可能方向，会丢失能量吗？为什么增加 `samples_per_pixel` 能改善结果？
+
+<Answer>
+单条路径只是所有可能散射方向中的一个蒙特卡洛样本，当然带有随机误差；但它配合正确的方向分布和 attenuation 权重时，统计平均是对完整散射积分的估计，不会系统性丢失能量。增加 samples_per_pixel 会得到更多独立路径，平均值更稳定、噪点降低，但不能修复错误的权重或错误的散射分布。
+</Answer>
 </Exercises>
+
+## 小结
+
+- `scatter=true` 必须同时提供 attenuation 与 scattered；`false` 明确表示路径在该表面被终止。
+- attenuation 是沿路径逐分量相乘的吞吐量，不是直接写入屏幕的表面颜色。
+- 单条路径只采样一个方向，多样本平均才近似完整的散射积分。
+- 几何体把材质写入成功的 hit_record，递归层只依赖这份契约，不依赖几何类型。
 
 <Glossary>
 <GlossaryItem term="材质">描述光线击中表面后如何弹射与衰减的抽象，核心方法 scatter 输出衰减色与散射光线。</GlossaryItem>
 <GlossaryItem term="衰减">attenuation，光被材质吸收后剩余的颜色比例，逐层相乘决定远处贡献被过滤的程度。</GlossaryItem>
 <GlossaryItem term="散射光线">scattered，材质弹射后继续追踪的新射线，方向由材质类型（漫反射/金属/电介质）决定。</GlossaryItem>
 <GlossaryItem term="材质指针">存于 hit_record 的 mat_ptr，把命中点与材质绑定，使 ray_color 无需关心几何体类型。</GlossaryItem>
+<GlossaryItem term="路径吞吐量">从相机沿一条递归路径传播的颜色权重。每次 scatter 的 attenuation 都与已有权重逐分量相乘。</GlossaryItem>
+<GlossaryItem term="蒙特卡洛路径估计">每次命中只随机选择一条散射方向，跨多个独立路径平均后逼近所有可能光路的期望贡献。</GlossaryItem>
+<GlossaryItem term="材质所有权">场景中的几何体持有共享材质对象，命中记录共享该指针；成功命中时 mat_ptr 必须可安全调用。</GlossaryItem>
 </Glossary>
 
 <Attribution adaptedFrom="Ray Tracing in One Weekend (Peter Shirley)" adaptedUrl="https://raytracing.github.io/books/RayTracingInOneWeekend.html" />

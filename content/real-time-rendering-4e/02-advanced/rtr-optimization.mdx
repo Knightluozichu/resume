@@ -1,122 +1,208 @@
 ---
-title: "渲染优化与加速"
+title: "管线优化、空间查询与实时系统"
 type: B
 section: "计算机图形学与渲染"
 order: 8
-description: "剔除、合批、LOD、带宽优化的完整流程"
+description: "承载官方 Ch18-25 中优化、加速、相交、高效着色、XR、未来与碰撞检测的系统方法"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://www.realtimerendering.com/"
 draft: false
 ---
 
-import { RtrOptimizationDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-optimization";
+import { RtrOptimizationDiagram, RtrAccelerationDiagram, RtrRealtimeSystemsDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-optimization";
+import { RtrStepFlowDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能列出渲染优化的四个步骤及其顺序
-- 能解释Draw Call为什么是CPU瓶颈
-- 能区分视锥剔除、遮挡剔除和背面剔除
-- 能回答：什么时候用前向渲染，什么时候用延迟渲染？
+
+- 能从 CPU/GPU/present 时间线与工作量缩放实验定位瓶颈，而不是套固定优化顺序
+- 能为 visibility、ray query 和 collision 选择空间结构与稳健 intersection test
+- 能比较 forward+/deferred、early-Z、GPU-driven、VRS/foveation 等高效着色策略
+- 能设计 VR/AR 延迟、碰撞隧穿、加速结构更新和未来特性的回归门槛
+
 </Objectives>
 
-## 直觉引入
+## 直觉：优化是可证伪的假设
 
-想象一个仓库管理员。如果每次只取一件货（一个Draw Call），1000件货要跑1000趟。如果合并同类货一次取（合批），可能50趟就够了。如果远处的小货不取（LOD+剔除），可能只要20趟。
+先预测：draw count 减半后帧时间一定减半吗？三角形减半一定改善 GPU 吗？若瓶颈是 fragment、memory、present 或 simulation，答案都是否定的。优化先提出“哪个资源受限”的假设，再用只改变一个工作量维度的实验验证。
 
-渲染优化的本质就是：少做事（剔除）、合并做事（合批）、分级做事（LOD）、高效做事（带宽优化）。核心原则：先Profile再优化，80%的问题来自20%的代码。
-
-## 概念讲解
-
-### 渲染优化四步法
+RTR4 的 Ch18 Pipeline Optimization、Ch19 Acceleration Algorithms、Ch20 Efficient Shading、Ch21 Virtual and Augmented Reality、Ch22 Intersection Test Methods、Ch24 The Future、Ch25 Collision Detection 共同说明：实时系统不是技巧清单，而是测量、数据结构、数值稳健性与延迟约束的组合。
 
 <RtrOptimizationDiagram />
 
-优化按顺序进行：
-1. <Term def="视锥剔除是丢弃相机视锥外物体的操作，是最基本的剔除策略">剔除</Term>：视锥剔除+遮挡剔除+背面剔除
-2. <Term def="合批是将多个Draw Call合并为一个，减少CPU到GPU的提交开销">合批</Term>：静态合批+动态合批+GPU Instancing
-3. <Term def="LOD是根据距离切换不同细节层次模型的技术，远处用低面数模型">LOD</Term>：Mesh LOD+Shader LOD+纹理LOD（Mipmap）
-4. 带宽优化：纹理压缩+G-Buffer精简+前向vs延迟渲染选择
+## Ch18 Pipeline Optimization：先看重叠时间线
 
-<Term def="Draw Call是CPU向GPU提交一次绘制命令，每个Draw Call都有CPU端开销">Draw Call</Term>是CPU瓶颈的主要来源——GPU画得快但CPU提交得慢。
+CPU simulation/record、GPU queues 和 present 可以重叠。稳态 frame time 更接近：
 
-## 交互Demo
+$$
+T_{frame}\approx\max(T_{CPU},T_{GPU},T_{present})+T_{serialized},
+$$
 
-<Stepper>
-<Step title="第一步：剔除优先">先做视锥剔除（不渲染看不见的），再做遮挡剔除（被前面挡住的也不渲染），最后背面剔除（背面不渲染）。层层过滤减少Draw Call。</Step>
-<Step title="第二步：合批与LOD">
-合并相同材质的物体减少Draw Call。根据距离切换LOD级别——远处用低模、低分辨率着色器。观察性能提升。
-<RtrOptimizationDiagram />
-</Step>
-<Step title="第三步：带宽与前向vs延迟">前向渲染适合少量光源，延迟渲染适合多光源但G-Buffer占带宽。纹理压缩减少显存占用。根据场景特点选择策略。</Step>
-</Stepper>
+不是简单相加。同步 readback、resource hazard、queue wait 和 frame pacing 会制造 serialized 区间；平均 FPS 又会隐藏 P95/P99 hitch 与 input-to-photon latency。
 
-## 代码对照
+<Term def="通过一次只缩放一种工作量并观察时间斜率，验证 pixels、vertices、draws、bandwidth 或 synchronization 是否构成瓶颈的方法">控制变量性能实验</Term>例如：降分辨率只改善 pixel/fill/bandwidth 候选；替换空 fragment shader 隔离 shading；减少 draw 但保持 geometry 检查 submission；关闭 pass 检查 dependency。GPU counter 是证据补充，最终以时间和正确输出为准。
 
-```glsl
-// 渲染优化关键代码示例
+优化没有固定“剔除→合批→LOD→带宽”顺序。culling 也有 traversal/latency 成本，batching 会降低 culling 粒度或增加 shader 分支，LOD 可能受 memory/streaming 限制。每项都要用目标场景和设备验证净收益。
 
-// 1. GPU Instancing (减少Draw Call)
-// OpenGL: glDrawArraysInstanced(GL_TRIANGLES, 0, vertexCount, instanceCount)
-// 着色器中获取实例属性
-#version 330 core
-layout(location = 0) in vec3 aPos;
-layout(location = 3) in mat4 instanceMatrix; // 实例矩阵
+## Ch19 Acceleration Algorithms：减少候选，不改变答案
 
-void main() {
-    gl_Position = projection * view * instanceMatrix * vec4(aPos, 1.0);
-}
+<RtrAccelerationDiagram />
 
-// 2. 剔除在CPU端完成
-// 视锥剔除: 检查包围球是否在视锥内
-bool inFrustum(BoundingSphere sphere, Frustum frustum) {
-    for(int i = 0; i < 6; i++) {
-        if(dot(frustum.planes[i], sphere.center) + sphere.radius < 0)
-            return false; // 在裁剪面外
-    }
-    return true;
-}
+<Term def="以包围体、空间分区或排序结构减少 visibility、intersection 与 collision 候选集合的数据结构">空间加速结构</Term>包括 BVH、k-d tree、octree、uniform/hierarchical grid、BSP、scene hierarchy 与 sweep-and-prune。选择取决于对象分布、静态/动态比例、query 类型、更新频率和 memory locality。
 
-// 3. LOD选择
-int selectLOD(float distance) {
-    if(distance < 10.0)  return 0; // 高精度
-    if(distance < 30.0)  return 1; // 中精度
-    if(distance < 80.0)  return 2; // 低精度
-    return -1; // 太远不渲染
+- BVH 让对象可重叠，适合 ray/collision；build quality、refit degradation 与 traversal order 影响效率；
+- grid 对均匀分布与邻域查询简单并行，尺度差异大时需要层次/哈希；
+- scene graph 擅长 transform/bounds 层次，但逻辑父子关系不一定是最佳空间层次；
+- occlusion/HZB 用上一帧或层次 depth 拒绝不可见 bounds，需要保守性并处理 camera jump。
+
+<Term def="先以便宜包围体或空间结构产生可能相交对，再对候选执行精确形状测试的两阶段查询架构">宽相位与窄相位</Term>同时用于 collision 和 visibility。宽相位必须保守：false positive 只增加成本，false negative 会漏物体或穿透。
+
+## Ch22 Intersection Test Methods：数值约定属于算法
+
+AABB slab test 对每轴求 ray 参数区间并相交：
+
+$$
+t_{near}=\max_i\min\left(\frac{b_i^- - o_i}{d_i},\frac{b_i^+ - o_i}{d_i}\right),
+\quad
+t_{far}=\min_i\max\left(\frac{b_i^- - o_i}{d_i},\frac{b_i^+ - o_i}{d_i}\right).
+$$
+
+命中条件还要结合 `tMin/tMax`、零方向、NaN/Inf 与边界包含规则。triangle intersection 可用 barycentric/Möller-Trumbore 类方法；共享边需要 watertight 约定，否则相邻三角形在大坐标、细长形状或 grazing ray 下产生裂缝。
+
+```cpp
+Hit intersectAabb(Ray r, Bounds b) {
+    Vec3 t0 = (b.min - r.origin) * safeReciprocal(r.direction);
+    Vec3 t1 = (b.max - r.origin) * safeReciprocal(r.direction);
+    Vec3 lo = min(t0, t1);
+    Vec3 hi = max(t0, t1);
+    float nearT = max(r.tMin, maxComponent(lo));
+    float farT  = min(r.tMax, minComponent(hi));
+    return {nearT <= farT, nearT, farT};
 }
 ```
+
+<Term def="在浮点误差、共享边、退化输入与尺度变化下仍保持一致命中/未命中语义的相交实现属性">稳健相交</Term>不能靠统一 `epsilon=0.001` 获得。epsilon 应与量纲和误差分析相关；测试要包含零面积、平行、共面、切触、共享边、极大/极小坐标及 CPU/GPU 一致性。
+
+## Ch20 Efficient Shading：减少不可见与重复着色
+
+early depth/stencil 能在 fragment shader 前拒绝遮挡样本，但 `discard`、depth write、side effects 或某些 pipeline state 会限制 early testing。depth prepass 在高 overdraw/昂贵 shader 时可能收益大，在 tile-based GPU 或简单场景则可能重复 geometry/bandwidth。
+
+<Term def="由 GPU 基于场景数据生成、压缩并间接提交可见绘制或 mesh/task 工作，减少 CPU submission 与细粒度对象开销的管线">GPU-driven rendering</Term>通常结合 compute culling、LOD、indirect arguments、bindless/resource indexing 与 meshlet。它把瓶颈移到 GPU scan/compaction、memory、synchronization 和 visibility latency，不是免费合批。
+
+forward+ / clustered shading 先构建 tile/cluster light lists，再 forward shade，兼顾 MSAA/透明与多灯；deferred 存 G-buffer 后屏幕空间照明，带宽和材质表示是主要代价。deferred 并非“不支持 MSAA”，而是多样本 G-buffer/边缘着色更昂贵；透明通常仍需 forward path。
+
+variable rate shading、checkerboard、dynamic resolution 与 temporal upscaling 减少 shading samples；它们必须用 motion、细线、UI、透明和高频 specular 场景验证重建误差。wave/subgroup 优化还需考虑 divergence、lane occupancy 与平台 subgroup size。
+
+## Ch21 Virtual and Augmented Reality：预算以 motion-to-photon 结束
+
+<Term def="从用户头部或控制器运动发生，到显示器发出对应更新光子的端到端延迟">Motion-to-photon latency</Term>包含 sensing、prediction、simulation、render、queue、scanout/display。降低 GPU time 但增加 frame queue，可能提高吞吐却恶化体验。
+
+VR 需要 stereo views、lens distortion、high refresh、pose prediction、late update/timewarp；foveated rendering 根据 gaze/视野分配 shading rate，但 gaze latency 和过渡可见性需要控制。AR 还要处理 camera calibration、world tracking、real-virtual occlusion、exposure/color matching 与透视显示限制。
+
+异步 reprojection 能在 missed frame 时更新姿态，不能恢复错误 animation、disocclusion 或完整视差。测试要记录 motion-to-photon、dropped/reprojected frames、pose error 与舒适性场景，不只看平均 GPU ms。
+
+## Ch25 Collision Detection：离散帧之间也要安全
+
+collision pipeline 通常是 bounds update → broad phase pairs → narrow phase contacts/distance → manifold → solver/event。AABB/sphere/OBB/k-DOP 是不同成本的 bounds；convex pair 可用 SAT 或 GJK，EPA 求穿透深度，复杂 mesh 常由 BVH 加速 primitive test。
+
+<Term def="在一个时间步内求运动形状首次接触时间，防止高速物体跨过薄障碍而离散检测不到的技术">连续碰撞检测</Term>处理 tunneling。保守推进、swept volume 或针对形状的 time-of-impact solver 都需处理旋转、加速度、容差和最大迭代。
+
+离散检测只看 $t_0,t_1$，即使两端都不重叠，中间仍可能碰撞。CCD 不是所有对象都开：常按速度、尺寸、重要性和形状选择，保留 fallback，并用能量/penetration/TOI 误差验收。
+
+## Ch24 The Future：把趋势变成可验证能力
+
+<RtrRealtimeSystemsDiagram />
+
+未来方向包括更统一的 raster/ray/compute pipelines、virtualized geometry、neural reconstruction/material/compression、GPU-driven work generation、better sampling/reuse，以及显示与感知驱动渲染。它们不是确定时间表；评估新特性应问：
+
+- 它替代/新增哪种 representation、work queue 与 hardware dependency？
+- 质量相对 reference 的 bias、failure mode 和 temporal behavior 是什么？
+- build/training/content pipeline、memory、power、latency 与 fallback 成本是什么？
+- 多平台如何 feature detect、分层降级并保持相同内容语义？
+
+## 三步实时系统验收
+
+<Stepper>
+<Step title="第一步：建立时间线与候选漏斗">
+
+标出 CPU/GPU/present overlap、wait、broad-phase/culling input/output、draw/ray/contact counts 与 XR pose timestamps。
+
+<RtrStepFlowDiagram caption="先量化工作从哪里产生、在哪里被拒绝、在哪里等待。" stage={1} stages={["Map：timeline、queues、candidate funnel、queries、pose/display"]} />
+
+</Step>
+<Step title="第二步：单维度缩放和退化测试">
+
+分别缩放 pixels、draws、triangles、lights、rays、colliders 和 velocity；加入平行/共面/高速、camera jump 与 XR missed frame。
+
+<RtrStepFlowDiagram caption="时间斜率与边界输入共同验证瓶颈和算法稳健性。" stage={2} stages={["Map：timeline、queues、candidate funnel、queries、pose/display", "Stress：controlled scaling、degenerate geometry、motion、platform states"]} />
+
+</Step>
+<Step title="第三步：质量、延迟与回退门槛">
+
+比较 reference output/contact，记录 P50/P95/P99、false negative、TOI、motion-to-photon、memory/power，并强制测试 fallback。
+
+<RtrStepFlowDiagram caption="新技术只有在正确、稳定、低延迟且可降级时才算可用。" stage={3} stages={["Map：timeline、queues、candidate funnel、queries、pose/display", "Stress：controlled scaling、degenerate geometry、motion、platform states", "Validate：reference、percentiles、robustness、latency、fallback"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**误区：优化就是减少三角形数量。**
-三角形数量通常是GPU瓶颈，但很多时候瓶颈在CPU（Draw Call太多）或带宽（纹理太大）。先Profile确定瓶颈：CPU瓶颈就合批，GPU瓶颈就减三角形，带宽瓶颈就压缩纹理。盲目减三角形可能完全无效。
+**现象 →** 见到 draw 多就合批，见到三角形多就减面。**原因 →** 用计数代替瓶颈证据。**修法 →** 结合 CPU/GPU timeline，单独缩放 draws/vertices/pixels/bandwidth 并观察时间斜率。
 </Callout>
 
 <Callout type="trap">
-**误区：延迟渲染一定比前向渲染好。**
-延迟渲染的优势是光照成本与光源数量基本无关（在G-Buffer上做光照）。但劣势是：1）G-Buffer占大量带宽；2）不支持半透明（需要前向Pass补充）；3）不支持MSAA。光源少时前向渲染反而更快。
+**现象 →** 用固定 epsilon 修所有相交，或宽相位偶尔漏高速物体。**原因 →** 忽略量纲、浮点误差与 swept bounds。**修法 →** 明确边界包含/误差模型，增加退化与尺度测试；高速对象使用 conservative bounds/CCD。
 </Callout>
 
+<Callout type="trap">
+**现象 →** VR 平均 90 FPS 却仍有明显眩晕和跳帧。**原因 →** 平均吞吐掩盖 queue、P99 和 motion-to-photon。**修法 →** 以 pose-to-display timeline、dropped/reprojected frames 与延迟分位数作为门槛。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题 1**：渲染优化的四个步骤是什么？为什么按这个顺序？
+
+**问题 1：如何证明 draw-call submission 是瓶颈？**
 
 <Answer>
-剔除→合批→LOD→带宽优化。顺序原因：剔除最便宜（CPU端判断，直接跳过渲染），收益最大；合批减少Draw Call（CPU瓶颈），中等成本；LOD减少GPU工作量（三角形和着色复杂度），需要预制作模型；带宽优化最复杂（涉及渲染管线架构选择），放在最后。先做收益大成本小的优化。
+固定像素、三角形和 shader 工作，改变 draw 数/recording threads/state changes；同时记录 CPU render thread、driver/API、GPU bubbles 与 frame time。若 CPU 与端到端时间随 draws 近线性变化且 GPU 工作近似不变，才支持该结论。
 </Answer>
 
-**问题 2**：前向渲染和延迟渲染各适合什么场景？
+**问题 2：BVH refit 何时应转为 rebuild？**
 
 <Answer>
-前向渲染：每个物体在每个光源下逐一计算着色，适合少量光源（1-4个）的场景。优势是支持半透明和MSAA，劣势是光源多时光照计算量 = 物体数 × 光源数。延迟渲染：先渲染几何到G-Buffer（位置/法线/颜色），再在屏幕空间统一做光照，适合多光源（4个以上）场景。优势是光照成本只与屏幕像素数×光源数相关（与物体数无关），劣势是不支持半透明、不支持MSAA、G-Buffer占带宽大。
+refit 只更新 bounds，拓扑不变；大形变会让 sibling bounds 重叠增大、遍历候选恶化。跟踪 SAH proxy、node visits、ray/contact tests 与 build cost，当累计 traversal 损失超过 rebuild 摊销成本时重建。
 </Answer>
+
+**问题 3：怎样测试 ray-triangle 共享边是否 watertight？**
+
+<Answer>
+用大量射线覆盖相邻三角形共享边/顶点，扫描方向、尺度、平移和浮点精度；要求至少一侧一致命中且不出现可见裂缝，并比较 CPU/GPU、winding、backface 与 t-range 约定。
+</Answer>
+
+**问题 4：离散碰撞为何会 tunneling？**
+
+<Answer>
+高速物体在两个采样时刻都位于薄墙两侧且无重叠，中间路径却穿过墙。使用 swept broad-phase 与 CCD/TOI 求首次接触，或限制时间步/速度；回归应扫描速度、墙厚、旋转和 timestep。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+Ch18-25 的共同方法是：用时间线和控制变量定位成本，用保守空间结构减少候选，用稳健相交保证答案，用着色与 XR 技术分配有限样本，并让碰撞和未来能力都有边界、回退与分位数门槛。没有一种优化顺序适合所有帧。
+
 <Glossary>
-<GlossaryItem term="视锥剔除">丢弃相机视锥外物体的操作，是最基本也是收益最大的剔除策略。</GlossaryItem>
-<GlossaryItem term="合批">将多个Draw Call合并为一个，减少CPU到GPU的提交开销，是解决CPU瓶颈的关键手段。</GlossaryItem>
-<GlossaryItem term="LOD">细节层次技术，根据距离切换不同精度模型，远处用低面数模型减少GPU工作量。</GlossaryItem>
-<GlossaryItem term="Draw Call">CPU向GPU提交的一次绘制命令，每个Draw Call都有CPU端开销，是CPU瓶颈的主要来源。</GlossaryItem>
+<GlossaryItem term="控制变量性能实验">一次只缩放一种工作量并观察时间响应的瓶颈验证方法。</GlossaryItem>
+<GlossaryItem term="空间加速结构">以包围体、分区或排序减少查询候选的数据结构。</GlossaryItem>
+<GlossaryItem term="宽相位与窄相位">先保守产生候选对，再执行精确形状测试的查询架构。</GlossaryItem>
+<GlossaryItem term="稳健相交">在浮点、边界和退化输入下仍保持一致命中语义的实现属性。</GlossaryItem>
+<GlossaryItem term="GPU-driven rendering">由 GPU 生成并提交可见工作以减少 CPU submission 的管线。</GlossaryItem>
+<GlossaryItem term="Motion-to-photon latency">用户运动到显示对应光子的端到端延迟。</GlossaryItem>
+<GlossaryItem term="连续碰撞检测">求时间步内首次接触以防高速穿透的技术。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="实时渲染第4版" adaptedUrl="https://www.realtimerendering.com/" />
+<Attribution adaptedFrom="Real-Time Rendering 4e, Chapters 18-25: Pipeline Optimization, Acceleration Algorithms, Efficient Shading, Virtual and Augmented Reality, Intersection Test Methods, The Future, Collision Detection" adaptedUrl="https://www.realtimerendering.com/" />

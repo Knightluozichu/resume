@@ -1,0 +1,317 @@
+---
+title: "Project Auditor 与 Deep Profiling"
+type: C
+section: "项目审计、深度分析与自动化"
+order: 1
+description: "按Unity 6官方指南第78—79页复现官方单元 10，建立可测量、可反证、可回归的性能证据。"
+demo: true
+math: false
+draft: false
+sourceUrl: "https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Prof10ProjectAuditorDeepProfilingMapLab,
+  Prof10ProjectAuditorDeepProfilingExperimentLab,
+  Prof10ProjectAuditorDeepProfilingEvidenceLab,
+} from "@/components/mdx/profiling-unity-games/diagrams/prof-10-project-auditor-deep-profiling";
+
+<Objectives>
+
+- 能解释官方单元 10在官方Unity 6性能分析流程中的位置与责任边界
+- 能复现“运行审计 → 按类别分流 → 修复高置信问题 → 启用Roslyn → 复位静态状态 → 连续重进验证”并保存可比较的中间证据
+- 能设计一个反证实验，判断“关闭Domain Reload前，所有静态字段、事件和单例都必须在每次进入Play Mode时得到确定复位，并通过连续多次运行与场景重载证明。”是否成立
+
+</Objectives>
+
+## 问题：怎样证明掌握的是官方单元 10，而不是记住几个工具名？
+
+先预测：如果只看到最终帧率或一张截图，不知道设备、构建、场景、输入和采样方式，能否判断修改真的有效？不能。性能结果是测试上下文与程序行为共同产生的，脱离上下文的数字既不能复现，也不能指导下一步。
+
+Project Auditor在运行前扫描设置、资源和代码风险，把可静态证明的问题从Profile会话中移除。Domain Reload优化只有在静态状态能可靠复位后才安全，Roslyn分析结果应先清零。
+
+<Prof10ProjectAuditorDeepProfilingMapLab />
+
+## 官方目录边界
+
+本页严格对应Unity Technologies的《Ultimate guide to profiling Unity games (Unity 6 edition)》第78—79页。以下目录项必须在实现、实验或证据中出现：
+
+- **Project Auditor**
+- **Project Issues**
+- **Code area**
+- **Domain Reload**
+- **Use Roslyn Analyzers**
+- **Enter Play Mode settings**
+
+本站以中文重新组织解释、代码和实验，不逐字复制原文。API示例以Unity 6思路为准；具体包版本和目标平台能力仍要在项目清单中固定。
+
+## 核心模型与不可变条件
+
+Project Auditor在运行前扫描设置、资源和代码风险，把可静态证明的问题从Profile会话中移除。Domain Reload优化只有在静态状态能可靠复位后才安全，Roslyn分析结果应先清零。
+
+本单元的不可变条件是：**关闭Domain Reload前，所有静态字段、事件和单例都必须在每次进入Play Mode时得到确定复位，并通过连续多次运行与场景重载证明。** 只要输入条件、观测边界或结果合同有一项改变，就不能把两次测量直接相减。先解释变化来源，再决定是否建立新的基线。
+
+## 五个必须落到证据的术语
+
+<Term def="扫描Unity项目设置资源和代码问题的分析包">Project Auditor</Term>
+
+它在本单元中不是孤立名词，而要落到“运行审计 → 按类别分流 → 修复高置信问题 → 启用Roslyn → 复位静态状态 → 连续重进验证”的数据链，并能由一次保存的采样或状态记录验证。
+
+<Term def="审计器汇总并按规则分类的项目风险列表">Project Issues</Term>
+
+它在本单元中不是孤立名词，而要落到“运行审计 → 按类别分流 → 修复高置信问题 → 启用Roslyn → 复位静态状态 → 连续重进验证”的数据链，并能由一次保存的采样或状态记录验证。
+
+<Term def="在C#语法和语义层执行静态规则检查的工具">Roslyn分析器</Term>
+
+它在本单元中不是孤立名词，而要落到“运行审计 → 按类别分流 → 修复高置信问题 → 启用Roslyn → 复位静态状态 → 连续重进验证”的数据链，并能由一次保存的采样或状态记录验证。
+
+<Term def="进入Play Mode时重建托管域并重置静态状态的过程">Domain Reload</Term>
+
+它在本单元中不是孤立名词，而要落到“运行审计 → 按类别分流 → 修复高置信问题 → 启用Roslyn → 复位静态状态 → 连续重进验证”的数据链，并能由一次保存的采样或状态记录验证。
+
+<Term def="在无域重载时主动恢复静态字段与事件初始状态">静态复位</Term>
+
+它在本单元中不是孤立名词，而要落到“运行审计 → 按类别分流 → 修复高置信问题 → 启用Roslyn → 复位静态状态 → 连续重进验证”的数据链，并能由一次保存的采样或状态记录验证。
+
+## 从输入到结论的诊断链
+
+主链为：**运行审计 → 按类别分流 → 修复高置信问题 → 启用Roslyn → 复位静态状态 → 连续重进验证**。每个节点保存构建提交、设备ID、场景检查点、帧号或快照ID、当前预算、实际值和首个异常。下一节点只消费上一节点已验证的事实，不能用“感觉更流畅”跨过中间归因。
+
+### 1. Project Auditor
+
+Project Auditor能发现项目设置、资源导入、Shader、代码和其他类别中的已知风险。结果是候选问题，不是运行时热点；按严重度、可信度和目标平台筛选。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 2. Project Issues
+
+优先修复规则明确、行为可验证且影响目标平台的问题。对有意保留的例外写抑制理由、责任人和复查日期，避免团队把报告噪声全部忽略。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 3. Code area
+
+Code区域依赖Roslyn Analyzers识别脚本问题，包括关闭Domain Reload前需要复位的静态变量。先在Preferences启用分析，再逐项按手册修复。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 4. Domain Reload
+
+默认Domain Reload会重置托管静态状态，代价是进入Play Mode更慢。关闭后速度提升，但脚本必须自己清理静态字段、委托、缓存和单例。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 5. Use Roslyn Analyzers
+
+SubsystemRegistration阶段可作为静态复位入口，但它不是自动正确。复位函数必须覆盖所有静态拥有者，并避免在对象尚未创建时访问场景依赖。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 6. Enter Play Mode settings
+
+验证应连续进入和退出Play Mode至少三次，切换场景、触发事件并检查订阅数量、静态集合长度和对象实例ID。只验证第一次运行没有意义。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 7. Project Auditor
+
+Project Auditor结果应进入CI或冲刺检查点，按新增问题而非历史总量设置门。升级Unity或包版本后规则集合可能改变，要记录工具版本。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 8. Project Issues
+
+静态审计与运行时Profiler互补：前者提前消除已知配置和代码风险，后者测量真实工作。不能用审计零问题证明帧预算已经通过。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+<Prof10ProjectAuditorDeepProfilingExperimentLab />
+
+## Deep Profiling：在已知边界内增加细节
+
+本单元还对应官方目录中的 **Deep profiling**、**When to use deep profiling**、**Using deep profiling**、**Top-to-bottom approach**、**Deep profile only when necessary**、**Deep profiling in automated processes** 与 **Deep profiling on low-spec hardware**。
+
+Deep Profiling会在大量托管函数入口和出口插入标记，给出完整调用树，也会显著增加CPU时间和Profiler内存。调用层级深的代码会承担更多标记开销，因此Deep数据适合回答“宽标记内部调用了什么”，不适合与普通采样直接比较绝对耗时。
+
+顶向下流程先用普通Unity Profiler锁定线程、系统和一个宽标记，再判断Allocation Call Stacks、手工ProfilerMarker或原生采样是否已足够。只有信息仍不足时才短时开启Deep；找到首个可修改调用路径后立即关闭，并在普通目标构建上复验真实收益。
+
+Player构建需要预先打开Deep Profiling Support，自动流程可使用命令行开关，但必须限制场景和帧数。低规格硬件上的环形缓冲区可能被样本填满；可以评估Profiler.maxUsedMemory，也要把新增内存计入设备风险。设备无法承受时，优先使用局部插桩。
+
+```csharp
+using Unity.Profiling;
+
+static readonly ProfilerMarker NarrowMarker =
+    new("Inventory.RebuildVisibleRows");
+
+void RebuildVisibleRows()
+{
+    using (NarrowMarker.Auto())
+        model.Rebuild(viewport);
+}
+```
+
+Deep模式的退出证据包括：问题路径、调用树截图或原始数据、局部标记位置、关闭Deep后的普通采样，以及相同输入下的性能和正确性对照。没有普通模式复验，Deep结论不得进入发布门。
+
+## 三步复现与分步观察
+
+<Stepper>
+  <Step title="1. 冻结输入与预算合同">
+    记录设备、构建、场景、画质、目标帧率、预热和输入脚本；写出本页要证明的唯一假设以及反证条件。
+    <Prof10ProjectAuditorDeepProfilingMapLab />
+  </Step>
+  <Step title="2. 采集、分流并只改一个变量">
+    沿“运行审计 → 按类别分流 → 修复高置信问题 → 启用Roslyn → 复位静态状态 →
+    连续重进验证”保存中间值，在首个越界节点停止下钻；一次只修改一个主要因素。
+    <Prof10ProjectAuditorDeepProfilingExperimentLab />
+  </Step>
+  <Step title="3. 同输入复验并签发证据">
+    恢复相同热状态和场景检查点，重放基线输入；同时核对帧、内存、画面或玩法副作用。
+    <Prof10ProjectAuditorDeepProfilingEvidenceLab />
+  </Step>
+</Stepper>
+
+## 可执行实现骨架
+
+下面的代码只承担本单元的数据所有权或测量边界。真正项目应把阈值放入版本化配置，并让证据文件引用同一个配置哈希。
+
+```csharp
+static class SessionState
+{
+    public static int Score;
+    public static event Action? OnReset;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+    static void ResetStatics()
+    {
+        Score = 0;
+        OnReset = null;
+    }
+}
+```
+
+每次采集都保存结构化元数据，避免报告与原始文件失联：
+
+```json
+{
+  "chapter": "prof-10-project-auditor-deep-profiling",
+  "officialPages": "第78—79页",
+  "chain": [
+    "运行审计",
+    "按类别分流",
+    "修复高置信问题",
+    "启用Roslyn",
+    "复位静态状态",
+    "连续重进验证"
+  ],
+  "device": "target-low-tier-01",
+  "build": "commit-and-unity-version",
+  "scenario": "fixed-checkpoint",
+  "baseline": "capture-before.data",
+  "candidate": "capture-after.data",
+  "normal": true,
+  "boundary": true,
+  "failureReplay": true
+}
+```
+
+自动门输出必须同时保留通过值和拒绝原因，而不是只给一个绿色图标：
+
+```text
+PASS context=device+build+scene+quality+input
+PASS chain=运行审计 -> 按类别分流 -> 修复高置信问题 -> 启用Roslyn -> 复位静态状态 -> 连续重进验证
+PASS invariant=关闭Domain Reload前，所有静态字段、事件和单例都必须在每次进入Play Mode时得到确定复位，并通过连续多次运行与场景重载证明。
+REJECT missing-raw-data | changed-context | hidden-quality-loss | unreplayed-failure
+```
+
+## 两个必须主动制造的失败样本
+
+<Callout type="trap" title="官方边界或测量上下文丢失">
+  为了缩短进入Play Mode时间直接关闭Domain
+  Reload，导致第二次运行继承旧分数、事件订阅和对象引用，出现只在编辑器复现的幽灵状态。
+  先保存错误结论、首个偏离节点和原始数据，再恢复官方目录边界与相同测试条件复验。
+</Callout>
+
+<Callout type="trap" title="数字改善但工作被转移或结果改变">
+  故意降低画质、跳过玩法工作、扩大永久缓存或把任务推迟到下一帧。若主指标改善但GPU、内存、热量、图像或玩法合同变差，发布门必须拒绝。
+</Callout>
+
+## 证据矩阵与签发标准
+
+| 维度   | 正常样本       | 边界样本           | 失败样本           | 签发条件       |
+| ------ | -------------- | ------------------ | ------------------ | -------------- |
+| 上下文 | 固定设备与构建 | 最低档或长时间运行 | 故意改变一项条件   | 差异可解释     |
+| 主链   | 六节点均有记录 | 预算附近输入       | 在首个节点注入偏差 | 能定位首因     |
+| 结果   | 达到性能合同   | 无长尾越界         | 主动制造回归       | 同输入可复验   |
+| 副作用 | 画面玩法一致   | 生命周期完整       | 降质或转移成本     | 所有门同时通过 |
+
+<Prof10ProjectAuditorDeepProfilingEvidenceLab />
+
+## 练习：把官方单元 10变成可审计交付
+
+<Exercises>
+
+**问题 1** 写出“运行审计”到“连续重进验证”每一步的输入、观测工具、阈值和输出。
+
+<Answer>
+  每一步都要引用同一测试上下文，输出必须包含数值、原始文件和下一步选择理由；不能只写工具名称。
+</Answer>
+
+**问题 2** 主动制造“为了缩短进入Play Mode时间直接关闭Domain Reload，导致第二次运行继承旧分数、事件订阅和对象引用，出现只在编辑器复现的幽灵状态。”，保存错误结论与首个偏离节点，再用同一输入证明修复。
+
+<Answer>
+  合格答案包含错误样本、上下文差异、反证实验、修复后原始数据以及性能和正确性双重结果。
+</Answer>
+
+**问题 3** 为不可变条件“关闭Domain Reload前，所有静态字段、事件和单例都必须在每次进入Play Mode时得到确定复位，并通过连续多次运行与场景重载证明。”设计正常、预算边界和失败三组测试。
+
+<Answer>
+  三组测试只改变计划中的输入，统一记录构建、设备、帧或快照ID、预算、实际值、首个异常和复验状态。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- 是否能逐项指出本页覆盖的官方目录项，而没有用通用性能建议替代？
+- 是否沿“运行审计 → 按类别分流 → 修复高置信问题 → 启用Roslyn → 复位静态状态 → 连续重进验证”保存了可追溯中间证据？
+- 是否区分定位工具的干扰与发布构建的真实预算？
+- 是否主动制造失败，并在相同输入下证明修复没有转移成本？
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="Project Auditor">
+    扫描Unity项目设置资源和代码问题的分析包。
+  </GlossaryItem>
+  <GlossaryItem term="Project Issues">
+    审计器汇总并按规则分类的项目风险列表。
+  </GlossaryItem>
+  <GlossaryItem term="Roslyn分析器">
+    在C#语法和语义层执行静态规则检查的工具。
+  </GlossaryItem>
+  <GlossaryItem term="Domain Reload">
+    进入Play Mode时重建托管域并重置静态状态的过程。
+  </GlossaryItem>
+  <GlossaryItem term="静态复位">
+    在无域重载时主动恢复静态字段与事件初始状态。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Unity Technologies《Ultimate guide to profiling Unity games (Unity 6 edition)》，2025，93页"
+  adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+/>

@@ -1,0 +1,170 @@
+---
+title: "Chapter 2: .NET Resource Management (Items 11-17)"
+type: C
+section: "Effective C# · 资源与构造"
+order: 2
+description: "完整覆盖第3版Item 11-17：GC与resource ownership、成员/静态初始化、去重构造逻辑、allocation、构造期virtual dispatch和标准Dispose模式。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-sharp-covers-c-sharp-6.0-50-specific-ways-9780134579443"
+draft: false
+---
+
+import { EcsLifetimeOwnershipLab, EcsInitializationPathLab, EcsConstructionSafetyLab } from "@/components/mdx/effective-csharp/diagrams/resource-management";
+
+<Objectives>
+
+- 能区分GC managed-memory reclamation与file/socket/native handle的deterministic release，并写出每个resource的owner
+- 能设计member、constructor、static与lazy initialization的单一truth path，验证所有public construction entries保持invariant
+- 能分析constructor virtual dispatch、unnecessary allocation和错误Dispose/finalizer模式，并以phase与ownership修正
+
+</Objectives>
+
+## 为什么Resource问题首先是Ownership问题
+
+GC回答“某块managed memory是否仍reachable”，不回答“file handle何时关闭”“谁归还pool lease”或“borrowed service能否被当前对象释放”。因此本章把allocation、initialization和cleanup看作同一条lifecycle：创建前定义valid state，使用时保持owner，结束时由owner确定性释放。
+
+先预测：GC最终会回收对象，是否意味着file handle可以不Dispose；class保存一个`IDisposable` field，是否必然拥有它；有Dispose是否必然需要finalizer？三个答案都是否。
+
+<Term def="创建、接收或被明确转移resource后，负责其lifetime、并发访问与最终释放的主体。">resource owner</Term>
+
+## Managed Memory与Deterministic Resource（Item 11）
+
+### Item 11: Understand .NET Resource Management
+
+GC通过reachability回收managed memory并压缩部分heap；非托管handle、socket lease、subscription和pooled buffer不由GC按业务时机释放。不要以`GC.Collect()`作为正常资源管理，也不要仅因对象大就随意置null；先缩短真实reference lifetime并用memory/profile evidence验证。
+
+Owned `IDisposable` field应由container级联释放；borrowed dependency由外部scope拥有，当前类型不得擅自Dispose。这个区分比“字段是否实现IDisposable”更重要。
+
+<Stepper>
+  <Step title="切换managed、owned、borrowed、native与pooled资源"><EcsLifetimeOwnershipLab /></Step>
+  <Step title="写出owner transfer和scope end">标明谁创建、是否转移ownership、并发访问由谁序列化，以及正常/异常/cancel时何处释放。</Step>
+  <Step title="注入partial failure与double cleanup">在第二个resource创建失败、operation取消及Dispose重复调用时，确认已取得的资源都释放且borrowed对象仍可用。</Step>
+</Stepper>
+
+## Initialization只有一个Source of Truth（Items 12-14）
+
+### Item 12: Prefer Member Initializers to Assignment Statements
+
+与constructor参数无关、每条construction path相同的safe default放在field/property initializer，减少overload漏赋值。Required domain state仍由constructor/required member验证；不要为了追求initializer把I/O或复杂failure藏到field expression。
+
+### Item 13: Use Proper Initialization for Static Class Members
+
+简单static value用inline initializer；必须顺序化、校验或捕获runtime condition时用static constructor，但它最多运行一次，失败会让type在当前runtime context持续不可用。External I/O与可重试startup更适合host composition或`Lazy<T>`配显式failure policy。
+
+### Item 14: Minimize Duplicate Initialization Logic
+
+让public constructors链到一个canonical constructor，或让factory调用同一private creation path。重复assignment会在新增field时产生“某个overload忘了初始化”的silent invalid state。现代primary constructor、required/init member可减少样板，但仍需一处定义invariant。
+
+```csharp
+public sealed class Report
+{
+    private readonly List<Line> _lines = [];
+    public Report(string name) : this(name, SystemClock.Instance) { }
+
+    internal Report(string name, IClock clock)
+    {
+        Name = string.IsNullOrWhiteSpace(name)
+            ? throw new ArgumentException("A name is required.", nameof(name))
+            : name;
+        CreatedAt = clock.UtcNow;
+    }
+}
+```
+
+<Term def="所有public constructors/factories最终经过同一validation与assignment路径，使新增invariant不会在某个入口遗漏。">canonical construction path</Term>
+
+<Stepper>
+  <Step title="切换member、constructor、static、lazy与duplicate路径"><EcsInitializationPathLab /></Step>
+  <Step title="标出execution order和failure lifetime">明确initializer、base constructor、body、object initializer及static trigger的顺序，记录失败后能否重试。</Step>
+  <Step title="遍历所有public entries">对每个constructor/factory执行valid、invalid与dependency-failure cases，证明最终invariant一致。</Step>
+</Stepper>
+
+<Callout type="trap" title="所有初始化都移到field initializer最简洁">
+Initializer适合同一safe default；依赖参数的validation、可重试I/O和多resource acquisition需要显式construction/composition path，否则execution order与partial failure会被隐藏。
+</Callout>
+
+## Allocation、Construction与Cleanup（Items 15-17）
+
+### Item 15: Avoid Creating Unnecessary Objects
+
+先以allocation profile确认hot path，再减少temporary string、closure、boxing或重复materialization。Cache只适合immutable或有清晰eviction/tenant boundary的结果，pool只适合创建昂贵且ownership可严格归还的resource；无界cache与错误pool比原allocation更危险。
+
+```csharp
+byte[] buffer = ArrayPool<byte>.Shared.Rent(4096);
+try { ReadFrame(buffer); }
+finally { ArrayPool<byte>.Shared.Return(buffer, clearArray: true); }
+```
+
+### Item 16: Never Call Virtual Functions in Constructors
+
+Base constructor运行时derived fields尚未完成初始化，virtual call却可dispatch到derived override，暴露partial object。Constructor只建立自身invariant；需要polymorphic activation时，使用factory在完整构造后调用显式`Start`，或把variation作为constructor collaborator注入。
+
+### Item 17: Implement the Standard Dispose Pattern
+
+Sealed type拥有managed disposable resource时通常实现简单、幂等的`Dispose`并级联owner fields。可继承type使用public nonvirtual `Dispose()`加protected virtual `Dispose(bool)`；直接native handle优先交给`SafeHandle`，避免自己编写脆弱finalizer。Async cleanup用`IAsyncDisposable`，但不要让Dispose承担必须成功的business commit。
+
+```csharp
+public sealed class ExportSession(Stream output) : IDisposable
+{
+    private Stream? _output = output;
+
+    public void Dispose()
+    {
+        Interlocked.Exchange(ref _output, null)?.Dispose();
+    }
+}
+```
+
+<Term def="多次调用产生与一次调用相同的最终released state，不重复释放、不重新进入业务动作。">idempotent disposal</Term>
+
+<Term def="包装native handle并由runtime提供可靠finalization语义的抽象，application owner仍应确定性Dispose。">SafeHandle boundary</Term>
+
+<Term def="对象已分配但derived fields、external resources或invariant尚未完全建立的构造中间状态。">partial object</Term>
+
+<Stepper>
+  <Step title="切换constructor、factory、allocation与dispose案例"><EcsConstructionSafetyLab /></Step>
+  <Step title="分离create、activate、use与release">每一阶段只访问已建立的state；activation失败时factory释放已拥有资源，未发布partial object。</Step>
+  <Step title="用profile和fault injection验收">确认优化降低真实allocation；模拟constructor/Start/Dispose异常并验证无leak、无double-dispose、无borrowed-resource damage。</Step>
+</Stepper>
+
+<Callout type="trap" title="有Dispose就必须再写finalizer">
+大多数类型不应自写finalizer。Owned managed disposables由Dispose级联，native handle优先SafeHandle提供fallback；只有直接持有未包装native resource时才考虑application finalizer。
+</Callout>
+
+## 本章回顾：从创建到释放只有一条可证明的Lifecycle
+
+1. GC回收managed memory；resource owner负责scarce/native/leased resource的及时释放。
+2. Member initializer承载共同safe default，canonical constructor承载参数validation，static I/O移到hosted composition。
+3. 所有public construction entries必须建立同一invariant并具有明确失败语义。
+4. Allocation optimization需要profile；cache/pool同时引入lifetime与eviction contract。
+5. Constructor不得virtual dispatch；对象完整后再activate。
+6. Dispose按ownership级联并幂等，native fallback优先SafeHandle。
+
+<Exercises>
+
+**问题 1：一个类接收DI提供的HttpClient并自行创建FileStream，应如何释放？**
+
+<Answer>HttpClient是borrowed dependency，由DI scope/host拥有，当前类不Dispose；FileStream由当前类创建并保存，因此当前类实现IDisposable/IAsyncDisposable并级联释放它。测试正常完成、operation异常、取消和重复Dispose，确认FileStream关闭且HttpClient仍可被scope内其他consumer使用。</Answer>
+
+**问题 2：五个constructor重复设置defaults，static constructor还访问远程配置，如何重构？**
+
+<Answer>共同常量default放member initializer，constructors链到一个canonical path统一参数validation；远程配置在host startup获取并作为typed options注入，而非放进只能运行一次且失败会poison type的static constructor。逐个public entry运行相同invariant suite。</Answer>
+
+**问题 3：可继承类型直接持有native handle并在constructor调用virtual Start，有哪些问题？**
+
+<Answer>Virtual Start会在derived state未初始化时dispatch；raw handle让finalization和异常cleanup脆弱。改用SafeHandle封装native resource，constructor只建立valid state，factory完成构造后显式Start；public Dispose调用protected virtual Dispose(bool)，幂等并由derived先清自身owned fields再调用base。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="resource owner" definition="负责resource lifetime、并发使用与最终释放的主体。" />
+  <GlossaryItem term="canonical construction path" definition="所有public creation entries共享的唯一validation与assignment路径。" />
+  <GlossaryItem term="partial object" definition="construction尚未完成全部state与invariant的对象。" />
+  <GlossaryItem term="idempotent disposal" definition="重复Dispose仍安全到达同一released state。" />
+  <GlossaryItem term="SafeHandle boundary" definition="用runtime支持的handle wrapper承担native fallback finalization。" />
+</Glossary>
+
+<Attribution adaptedFrom="Effective C#, Third Edition, Chapter 2: .NET Resource Management, Items 11-17" adaptedUrl="https://www.informit.com/store/effective-c-sharp-covers-c-sharp-6.0-50-specific-ways-9780134579443" />

@@ -1,0 +1,313 @@
+---
+title: "第4章：函数语义"
+type: A
+section: Inside the C++ Object Model · Chapter 4
+order: 4
+description: 对齐原书第4章 The Semantics of Function：成员调用变换、名称改编、虚函数在多重/虚继承下的调整、成员函数指针与 inline 展开。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/inside-the-c-plus-plus-object-model-9780201834543"
+draft: false
+---
+
+import {
+  IcoMemberInvocationMap,
+  IcoMemberPointerInlineMap,
+  IcoVirtualDispatchAdjustmentMap,
+} from "@/components/mdx/inside-cpp-object-model/diagrams/semantics-of-function";
+
+<Objectives>
+
+- 能推导 nonstatic、static 与 virtual member invocation 的 hidden this、symbol resolution 和 runtime dispatch 路径
+- 能解释 virtual functions under multiple inheritance / virtual inheritance 时 slot lookup、thunk 与 this adjustment 的分工
+- 能分析 pointer-to-member functions 的 ABI 表示、调用效率，以及 inline formal arguments / local variables 的语义约束
+
+</Objectives>
+
+## 从 `obj.fn()` 里面没有一份 fn 开始
+
+member function code 通常在 program text 中只有共享实现；object 只保存 data 和必要的 runtime metadata。先预测同一个 `Point::move` 被一百万个对象调用时 object size 是否随函数数量增长，再看 symbol table 与 optimized assembly：调用语法表达 class scope 和隐式对象参数，不表达“函数驻留在对象里”。
+
+<Term def="member function 调用根据 static type、是否 static/virtual、object view 与 ABI 规则转换成可执行调用的不同形式。">
+  varieties of member invocation
+</Term>
+
+<IcoMemberInvocationMap />
+
+## 4.1 Varieties of Member Invocation
+
+### Nonstatic Member Functions
+
+<Term def="需要一个隐式 object parameter 才能访问 nonstatic state，但 function code 由同一 class 的实例共享。">
+  nonstatic member function
+</Term>
+
+概念上，compiler 为 nonstatic call 加入 `this`，并把未限定 member access 改写为通过 `this` 访问。真实 ABI 决定 `this` 放在哪个 register/stack slot、是否需要 base adjustment。
+
+```cpp
+class Point3d {
+public:
+    double magnitude() const;
+
+private:
+    double x_;
+    double y_;
+    double z_;
+};
+
+double length(const Point3d& point) {
+    return point.magnitude();
+}
+```
+
+`const` member function 的 hidden object parameter 具有只读 view 语义；它不创建 object copy。overload resolution 在 compile time 选出 signature，随后 compiler/linker 需要为该 function 提供唯一 symbol identity。
+
+### Name Mangling
+
+<Term def="把 namespace、class、function name、parameter types 与 cv/ref qualifiers 等签名信息编码进链接符号的 ABI 机制。">
+  name mangling
+</Term>
+
+C++ 支持 overload，但传统 linker 主要按 symbol name 区分定义，所以 implementation 对签名做 name mangling。编码格式属于 ABI，不是跨 compiler 的标准文本。`extern "C"` 可选择 C language linkage，但不能让 overload、member function 或 C++ object ABI 自动变成 C API。
+
+### Virtual Member Functions
+
+<Term def="通过 base pointer/reference 调用时，可根据 dynamic type 选择 final overrider 的成员函数。">
+  virtual member function
+</Term>
+
+常见 lowering 可理解为：从 object view 读取 vptr，以该 virtual function 的 slot index 取得 target，再把适当 `this` 传给 target。slot identity 在 class hierarchy 中保持语义对应，override 替换 target，不改变 caller 使用的 interface contract。
+
+### Static Member Functions
+
+<Term def="位于 class scope 但没有 hidden this、不能直接访问 nonstatic member、也不参与 virtual dispatch 的函数。">
+  static member function
+</Term>
+
+static member 可通过 `Type::fn()` 调用；即使写成 `object.fn()`，也不会把 object address 传入。它适合 factory、class-scoped utility 或访问 static state。不能声明为 virtual，因为没有 object dynamic identity 供 dispatch 使用。
+
+<Callout type="trap" title="陷阱：用object语法调用static member就会传this">
+  `object.staticFn()` 的 member lookup 使用 object static type，但 selected
+  function 仍没有 hidden this。若 object expression
+  含副作用，语言仍可能要求求值；不要由表面点号推导 runtime receiver。
+</Callout>
+
+## 4.2 Virtual Member Functions
+
+<IcoVirtualDispatchAdjustmentMap />
+
+`Base* view` 调用 virtual function 时，至少有两个问题：哪个 final overrider 被选中，以及 incoming Base view 如何变成该 body 所需的 object address。single inheritance 中 adjustment 常为零或固定；multiple/virtual inheritance 让这两步更明显。
+
+```cpp
+struct Drawable {
+    virtual void draw() const = 0;
+};
+
+struct Transformable {
+    virtual void reset() = 0;
+};
+
+struct Sprite final : Drawable, Transformable {
+    void draw() const override {}
+    void reset() override {}
+};
+
+Sprite sprite;
+Transformable* transformView = &sprite;
+transformView->reset();
+```
+
+### Virtual Functions under Multiple Inheritance
+
+<Term def="在多重继承的某个 base view 上查找 virtual slot，并把 incoming base pointer 调整为 overrider 所需 this 的调用机制。">
+  virtual functions under multiple inheritance
+</Term>
+
+`Transformable*` 可能指向 Sprite 内第二个 base subobject，不等于 most-derived address。常见 ABI 在对应 vtable slot 放 thunk：先对 `this` 做固定 adjustment，再跳到 `Sprite::reset`。这样同一个 function body 不必为每种 incoming base view 复制业务逻辑。
+
+<Term def="由 compiler 生成的小型适配代码，负责 this 或返回指针调整后再进入真正 function body。">
+  adjustment thunk
+</Term>
+
+covariant return 也可能需要 result adjustment：overrider 返回 `Derived*`，caller contract 要 `Base*`。不能仅看 target function address判断完整虚调用成本。
+
+### Virtual Functions under Virtual Inheritance
+
+<Term def="通过 shared virtual-base view 进行 virtual dispatch，并借助 runtime layout metadata 调整到 final overrider object view 的机制。">
+  virtual functions under virtual inheritance
+</Term>
+
+virtual base 在不同 most-derived types 中位置可变，adjustment 不一定是编译期常量。ABI 可把 vcall/virtual-base offset 放入 table metadata，由 thunk/load 在 runtime 恢复目标 `this`。这增加 dependency loads，也让 constructor/destructor phase 的 table state 更复杂。
+
+qualified call 如 `view->Base::fn()` 显式抑制 virtual dispatch，直接选 Base implementation；对 concrete `final` object，optimizer 也可能 devirtualize。前者是语言语义改变，后者是在结果不变时消除动态路径，不能混为一谈。
+
+<Callout type="trap" title="陷阱：vtable slot里的地址总能直接当普通函数调用">
+  multiple/virtual inheritance 下，slot 可能指向 thunk 而非最终 body；还可能需要
+  result adjustment。只有同时理解 incoming base view、slot contract 和 ABI
+  metadata，才能解释真正 target 与 this。
+</Callout>
+
+## 4.3 Function Efficiency
+
+<Term def="在同一语义 workload 下比较 direct、nonstatic、virtual、adjusted virtual 与 inline 调用的指令、分支和代码尺寸成本。">
+  function efficiency
+</Term>
+
+ordinary nonstatic call 与 free function 的主要区别常只是 hidden `this`，优化后可相同。virtual call 通常多 target load 与 indirect branch，并可能阻碍 inline；multiple/virtual inheritance 还可能有 adjustment。实际成本取决于 branch prediction、target diversity、working set 与 devirtualization。
+
+benchmark 要让各版本做相同工作、阻止 call 被完全消除，并分别观察 instruction count、branch misses、I-cache 和 wall time。若 function body 很大，dispatch 开销可忽略；若 body 只有一两条指令，indirect call 和 missed inline 才可能主导。
+
+## 4.4 Pointer-to-Member Functions
+
+<Term def="类型为 R (C::*)(Args...) 的 class-relative callable representation；应用时必须结合兼容 object，并可能携带 this adjustment 或 virtual slot 信息。">
+  pointer-to-member functions
+</Term>
+
+<IcoMemberPointerInlineMap />
+
+```cpp
+struct Controller {
+    void start(int mode);
+    virtual void stop();
+};
+
+void (Controller::*action)(int) = &Controller::start;
+Controller controller;
+(controller.*action)(2);
+```
+
+nonvirtual member function pointer 可能包含 code pointer 与 adjustment；pointer-to-virtual-member functions 还可能编码 virtual slot，由应用时 object 的 dynamic table 选 target。因此它的 size 可能大于普通 function pointer，不能安全塞进 `void*`、整数或跨 ABI wire format。
+
+<Term def="member-function pointer 表示 virtual slot，应用到 object 后再进行动态查表而不是固定绑定某个 overrider 的实现方式。">
+  pointer-to-virtual-member functions
+</Term>
+
+pointer-to-member functions under multiple inheritance 还要把 supplied object view 调整到声明 class 或 overrider 所需 view。转换规则由语言限制，表示由 ABI 决定。runtime-selected member pointer 通常比直接 call 多 representation decode/adjustment，但若 target set 稳定，processor/optimizer 仍可能预测或去间接化。
+
+pointer-to-member efficiency 应与 virtual interface、`std::function`、variant dispatch 或 switch 在真实 target distribution 下比较。仅打印 `sizeof` 不能代表 call latency；要看应用时执行的 loads、adds、indirect branches 和 inlining loss。
+
+## 4.5 Inline Functions
+
+<Term def="允许 compiler 在 call site 展开 function body 的声明/优化属性；它不保证展开，也不改变函数语言语义。">
+  inline function
+</Term>
+
+inline expansion 需要正确映射 formal arguments 和 local variables。actual argument 必须按语言规定求值，不能因为 body 多次引用 formal parameter 就重复执行有副作用的 expression；compiler 可建立 temporary/SSA value。每个 inline site 的 local variable 也必须保持独立 scope、lifetime 和 address identity。
+
+```cpp
+inline int clampIncrement(int value, int low, int high) {
+    int next = value + 1;
+    return next < low ? low : (next > high ? high : next);
+}
+
+int result = clampIncrement(readValue(), 0, 100);
+```
+
+这里 `readValue()` 只能按一次 argument evaluation 参与调用；local `next` 可被 optimizer 消成 SSA value，但其语义不能与别的 call site 混合。inline 可暴露 constant propagation 和 dead-code elimination，也可能复制 body 导致 code bloat、I-cache pressure 和更慢 build。
+
+<Term def="inline expansion 时把 actual arguments 映射为只按调用语义求值的内部值，并为每个 call site 保持 local variable 独立语义。">
+  formal arguments and local variables
+</Term>
+
+现代 `inline` 还承担 ODR 上允许多个 translation units 出现一致 definition 的作用，是否实际 inline 由 optimizer 决定。hot tiny body、known target 和 profile 支持展开；cold/large body 应保留 call boundary。最终以 optimized output 和 profile 验证。
+
+## 第4章验证清单
+
+1. 为每个 call 标注 nonstatic/static/virtual/qualified/direct。
+2. 写出 hidden this 的 static type、cv/ref qualifiers 与必要 base adjustment。
+3. 把 overload resolution、name mangling 和 runtime dispatch 分成三个阶段。
+4. 对 virtual call 分别记录 slot selection、final overrider 与 this/result adjustment。
+5. multiple inheritance 检查 secondary-base thunk，virtual inheritance 检查 runtime metadata。
+6. member-function pointer 不当 raw code pointer，记录 size、encoding 与 application path。
+7. benchmark 同时看 direct/virtual/member-pointer 的 branch、inline 和 code-size 影响。
+8. inline expansion 验证 actual argument 单次求值、local scope 与 I-cache tradeoff。
+
+## 小结
+
+- nonstatic member function 通过 hidden this 工作，function code 不复制进每个 object
+- name mangling 为 overload/linkage 提供 ABI symbol identity，不是 runtime dispatch
+- static member 没有 this，virtual member 才使用 dynamic object identity
+- virtual call 要同时解决 slot target 与 this adjustment
+- multiple inheritance 常用 thunk 适配 secondary-base view，virtual inheritance 可能需要 runtime offset
+- function efficiency 取决于 body、target diversity、branch prediction、inline 与 instruction cache
+- pointer-to-member functions 可编码 target、adjustment 或 virtual slot，绝非通用 raw pointer
+- inline 必须保持 formal argument 与 local variable 语义，收益和 code growth 都需测量
+
+<Attribution
+  adaptedFrom="Inside the C++ Object Model, First Edition, Chapter 4: The Semantics of Function"
+  adaptedUrl="https://www.informit.com/store/inside-the-c-plus-plus-object-model-9780201834543"
+/>
+
+<Glossary>
+  <GlossaryItem term="varieties of member invocation">
+    成员函数按 receiver 与决议时机形成的调用类别。
+  </GlossaryItem>
+  <GlossaryItem term="nonstatic member function">
+    通过 hidden this 访问实例状态的共享函数实现。
+  </GlossaryItem>
+  <GlossaryItem term="name mangling">
+    把 C++ 签名编码为 ABI 链接符号。
+  </GlossaryItem>
+  <GlossaryItem term="virtual member function">
+    按 dynamic type 选择 final overrider 的函数。
+  </GlossaryItem>
+  <GlossaryItem term="static member function">
+    位于 class scope 但没有 hidden this 的函数。
+  </GlossaryItem>
+  <GlossaryItem term="virtual functions under multiple inheritance">
+    经 base view 查槽并调整 this 的多继承虚调用。
+  </GlossaryItem>
+  <GlossaryItem term="adjustment thunk">
+    编译器生成的 this/result 适配入口。
+  </GlossaryItem>
+  <GlossaryItem term="virtual functions under virtual inheritance">
+    依赖共享虚基布局元数据的虚调用。
+  </GlossaryItem>
+  <GlossaryItem term="function efficiency">
+    按真实调用、分支和代码尺寸比较函数成本。
+  </GlossaryItem>
+  <GlossaryItem term="pointer-to-member functions">
+    结合 object 才能调用的 class-relative callable。
+  </GlossaryItem>
+  <GlossaryItem term="pointer-to-virtual-member functions">
+    以 virtual slot 延迟选择 overrider 的成员指针。
+  </GlossaryItem>
+  <GlossaryItem term="inline function">
+    允许在 call site 展开且具 ODR 语义的函数。
+  </GlossaryItem>
+  <GlossaryItem term="formal arguments and local variables">
+    inline 展开中仍须保持的参数求值与局部状态语义。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：展开四类调用。** 对同一 class 的 nonstatic、static、virtual 和 overloaded member，写出 target 选择时机、是否有 this、是否需要 name mangling 与可能的 runtime load。
+
+<Answer question="四类调用的编译期和运行期职责如何分开？">
+  overload resolution 都先按 static types 在 compile time 选 signature，name
+  mangling 为最终 definition 形成 ABI symbol。static call 没有 this；nonstatic
+  direct call 传 hidden this 并静态选 target。virtual call 的 interface/slot
+  仍由 static type 确定，但 final overrider 由 dynamic table 选择，除非 compiler
+  有证据 devirtualize。点号语法本身不能判断是否传 receiver。
+</Answer>
+
+2. **问题 2：追踪多重继承虚调用。** `SecondaryBase*` 指向 `Derived` 的第二 base subobject，并调用 Derived override；画出 incoming address、vptr/slot、thunk、adjusted this 与 body。
+
+<Answer question="为什么slot target可能不是最终函数body？">
+  incoming pointer 只指向 secondary base subobject。该 view 的 vptr 找到保持相同
+  virtual contract 的 slot，slot 可指向 compiler thunk；thunk 用 ABI 固定/记录的
+  offset 把 Base* 恢复成 Derived*，再跳到 body。virtual inheritance 时 offset
+  可能从 runtime metadata 读取。若有 covariant return，还可能在返回时反向调整
+  result view。
+</Answer>
+
+3. **问题 3：比较 member pointer 与 inline。** 为 direct call、nonvirtual member pointer、virtual member pointer、inline tiny function 设计同 workload benchmark，并列出必须检查的 assembly/profile 证据。
+
+  <Answer question="怎样避免只用sizeof或源码行数判断函数成本？">
+    记录 callable representation size 只是第一步；还要看应用时 this adjustment、slot
+    load、indirect branch、devirtualization 与 inline 是否发生。benchmark 固定 target
+    distribution 和 body work，阻止 dead-code elimination，测 branch misses、instructions、
+    I-cache 与 wall time。inline 还要确认 actual argument 只求值一次、local scope
+    正确，并比较 code growth 对整体 hot set 的影响。
+  </Answer>
+</Exercises>

@@ -1,0 +1,327 @@
+---
+title: "Chapter 6：枚举与模式匹配（Enums and Pattern Matching）"
+type: A
+section: Rust 程序设计语言 · 代数数据与控制流
+order: 6
+description: 对齐官方第 6 章：用携带不同数据的枚举表达互斥状态，以 Option 显式建模缺失值，并掌握 match、捕获模式、if let 与 let...else 的控制流保证。
+demo: false
+math: false
+sourceUrl: "https://doc.rust-lang.org/book/ch06-00-enums.html"
+draft: false
+---
+
+import {
+  RplEnumVariantLab,
+  RplOptionBoundaryLab,
+  RplPatternControlLab,
+} from "@/components/mdx/rust-programming-language/diagrams/enums-and-pattern-matching";
+
+<Objectives>
+
+- 能区分 struct 与 enum 的建模职责，用带数据的枚举变体表达“多种形状中恰好一种”
+- 能分析 `Option<T>` 如何把值存在或缺失写进类型，并在取出内部值前显式处理 `Some` 与 `None`
+- 能实现穷尽的 `match`，使用模式绑定和捕获分支，并根据分支数量选择 `if let` 或 `let...else`
+
+</Objectives>
+
+## 为什么 enum 要表达互斥状态
+
+struct 表达“一个值同时拥有这些字段”，enum 表达“一个值只能是这些变体中的一个”。例如 IP 地址要么是 IPv4，要么是 IPv6；若把两者都做成可选 struct 字段，就会产生“两个都存在”或“两个都缺失”的无效组合。枚举的 tag 在运行时标识当前变体，静态类型则保证值始终属于已声明集合。
+
+<Term def="由 enum 关键字定义、列出有限个互斥变体的自定义类型；任一实例在某一时刻只属于一个变体。">枚举</Term>
+
+最简单的枚举只区分身份：
+
+```rust
+enum IpAddrKind {
+    V4,
+    V6,
+}
+
+let four = IpAddrKind::V4;
+let six = IpAddrKind::V6;
+```
+
+<Term def="枚举声明中的一种可能状态，通过 EnumName::Variant 构造；所有变体共享同一个枚举静态类型。">枚举变体</Term>
+
+`IpAddrKind::V4` 和 `IpAddrKind::V6` 都是 `IpAddrKind`。函数接收一个 `IpAddrKind` 就能接受任一变体，同时编译器知道所有合法状态的封闭集合。
+
+## 变体可以直接携带不同形状的数据
+
+枚举比“kind 字段加外部 payload”更强之处，是每个变体可以拥有不同数量、不同类型和不同命名方式的数据：
+
+<Term def="直接存放在某个枚举变体中的值；只有该变体的模式匹配成功后，数据才会被绑定和使用。">关联数据</Term>
+
+```rust
+enum IpAddr {
+    V4(u8, u8, u8, u8),
+    V6(String),
+}
+
+let home = IpAddr::V4(127, 0, 0, 1);
+let loopback = IpAddr::V6(String::from("::1"));
+```
+
+V4 变体像四字段 tuple struct，V6 变体像单字段 tuple struct，但二者不需要额外声明类型，且共同构成 `IpAddr`。更复杂的消息协议可以在同一 enum 中混合无数据、命名字段和 tuple 数据：
+
+```rust
+enum Message {
+    Quit,
+    Move { x: i32, y: i32 },
+    Write(String),
+    ChangeColor(i32, i32, i32),
+}
+
+impl Message {
+    fn call(&self) {
+        // 根据当前变体执行行为
+    }
+}
+```
+
+枚举和结构体一样可以拥有 `impl` 块。方法接收的是整个 enum；方法内部仍需通过模式匹配区分变体，才能访问某个变体独有的数据。
+
+<RplEnumVariantLab />
+
+先预测每个变体会显示哪种 payload 形状，再切换四种 Message 变体，比较构造器、payload 形状和匹配后的行为。关键约束不是“所有变体字段一致”，而是每个变体可以精确声明自己需要的数据，其他状态根本不存在那些字段。
+
+<Callout type="trap" title="陷阱：用多个 bool 和可选字段模拟 enum">
+  `is_quit`、`is_move` 与若干可选 payload 会允许互相矛盾的组合，还迫使每个使用点重复验证。若状态互斥，应把合法组合提升为枚举变体，让非法组合无法构造。
+</Callout>
+
+## Option 把“可能没有值”纳入类型系统
+
+Rust 标准库用一个通用枚举表达可选值：
+
+```rust
+enum Option<T> {
+    None,
+    Some(T),
+}
+```
+
+<Term def="标准库提供的可选值枚举；值要么由 Some 携带，要么是 None，不允许把缺失状态伪装成普通 T。">Option</Term>
+
+<Term def="Option 中表示值存在的变体，携带一个 T 类型的内部值。">Some</Term>
+
+<Term def="Option 中表示值不存在的无数据变体；其具体泛型类型需要由上下文或注解确定。">None</Term>
+
+`Option<T>` 已在 prelude 中，不需要导入；`Some` 和 `None` 也可直接使用。编译器常能从 `Some(5)` 推断 `Option<i32>`，但单独的 `None` 没有内部值提供线索，必要时要注解：
+
+```rust
+let present = Some(5);              // Option<i32>
+let absent: Option<i32> = None;
+
+let x: i32 = 5;
+let y: Option<i32> = Some(5);
+// let sum = x + y;                 // 编译错误：i32 与 Option<i32> 不同
+```
+
+Rust 没有让普通引用或普通数值静默携带 null 的设计。`Option<T>` 与 `T` 是不同静态类型；在使用内部 T 前，程序必须处理值缺失的路径。这不会消灭业务上的“没有值”，而是消灭忘记检查的隐式路径。
+
+<RplOptionBoundaryLab />
+
+勾选值是否存在，再观察 `plus_one` 结果。`Some(5)` 不是 5 本身；模式成功后绑定内部 i32 才能加一，`None` 则保持 None。
+
+<Callout type="trap" title="陷阱：为了取得 Some 而随处调用 unwrap">
+  `unwrap` 把 None 转成 panic，并没有完成缺失路径设计。只有不变量已在更早边界证明时才适合直接解包；普通业务分支应使用 match、if let、组合子或传播机制明确处理 None。
+</Callout>
+
+## match 同时匹配形状、绑定数据并产生值
+
+<Term def="把一个值依次与多个模式臂比较的控制流表达式；第一个匹配 arm 执行，所有 arm 的结果类型必须兼容。">match 表达式</Term>
+
+<Term def="描述值结构并可绑定其中组成部分的语法形状，例如 Coin::Quarter(state) 或 Some(value)。">模式</Term>
+
+下面的函数把硬币变体映射为美分值，并在 quarter 分支取出州信息：
+
+```rust
+#[derive(Debug)]
+enum UsState {
+    Alabama,
+    Alaska,
+}
+
+enum Coin {
+    Penny,
+    Nickel,
+    Dime,
+    Quarter(UsState),
+}
+
+fn value_in_cents(coin: Coin) -> u8 {
+    match coin {
+        Coin::Penny => 1,
+        Coin::Nickel => 5,
+        Coin::Dime => 10,
+        Coin::Quarter(state) => {
+            println!("State quarter from {state:?}!");
+            25
+        }
+    }
+}
+```
+
+每个 `pattern => expression` 是一个 arm，arm 之间用逗号分隔。单表达式不需要花括号；多条语句用块，块的尾表达式成为该 arm 的值。`Coin::Quarter(state)` 先检查 tag，再把关联的 `UsState` 绑定到局部变量 state。
+
+<Term def="match 必须覆盖被检查类型的全部可能值；遗漏任何未由其他模式覆盖的情况都会在编译期报错。">穷尽性</Term>
+
+穷尽性是 `match` 的核心保证。新增一个 enum 变体后，所有依赖完整分类的 match 都会暴露遗漏；这把“新增状态后哪些逻辑需要更新”转换成编译器可定位的任务。
+
+## 用 match 处理 Option 的两条路径
+
+官方 `plus_one` 示例展示了 matching `Option<T>`：
+
+```rust
+fn plus_one(x: Option<i32>) -> Option<i32> {
+    match x {
+        None => None,
+        Some(i) => Some(i + 1),
+    }
+}
+
+assert_eq!(plus_one(Some(5)), Some(6));
+assert_eq!(plus_one(None), None);
+```
+
+`Some(i)` 绑定内部值，函数计算后重新包装为 Some；None arm 保留缺失。若删掉 None arm，编译器会报告 non-exhaustive patterns。`Option<T>` 因而把缺失路径从注释约定提升为必须处理的类型事实。
+
+## 捕获模式处理剩余值，`_` 明确忽略
+
+枚举集合可以逐个列举，但整数等类型无法合理写出每个值。最后一个 arm 常用变量模式捕获此前未匹配的任意值：
+
+<Term def="用变量名匹配此前未覆盖的任意值，并把该值绑定到变量；必须放在更具体模式之后。">捕获模式</Term>
+
+```rust
+let dice_roll = 9;
+match dice_roll {
+    3 => add_fancy_hat(),
+    7 => remove_fancy_hat(),
+    other => move_player(other),
+}
+```
+
+变量 `other` 可以匹配任何值，因此若放在最前面，后续 arm 永远不可达。若剩余值不需要使用，用 `_`：
+
+```rust
+match dice_roll {
+    3 => add_fancy_hat(),
+    7 => remove_fancy_hat(),
+    _ => reroll(),
+}
+```
+
+若剩余情况连动作都不需要，用 unit 值 `()` 作为 arm 表达式。`_ => ()` 明确表示“其余值被考虑过，但有意不做事”，不同于忘记分支。
+
+<Callout type="trap" title="陷阱：过早写 `_` 掩盖新增变体">
+  对封闭 enum，宽泛 `_` 会让未来新增变体自动落入旧默认行为，编译器无法提醒业务逻辑缺失。只有剩余状态确实语义相同且无需读取时才使用 `_`；关键领域状态更适合显式列举。
+</Callout>
+
+## if let 压缩只关心一个模式的 match
+
+<Term def="只在一个模式匹配时执行代码块的简洁控制流；可带 else 合并所有不匹配情况，但不提供 match 的显式穷尽提醒。">if let</Term>
+
+如果只想在值是 `Some(3)` 时执行动作，完整 match 会包含一个只做 `()` 的 arm：
+
+```rust
+let config_max = Some(3u8);
+
+if let Some(max) = config_max {
+    println!("The maximum is configured to be {max}");
+} else {
+    println!("No maximum configured");
+}
+```
+
+`if let PATTERN = EXPRESSION` 在模式成功时绑定变量并进入块；else 等价于 match 的所有其他分支。代价是失去穷尽性检查：当 enum 增加变体时，代码不会自动要求逐项重新判断。选择标准是“是否只关心一个模式”，而不是单纯追求行数最少。
+
+## let...else 让失败路径提前离开
+
+<Term def="把一个可反驳模式绑定到后续主路径的语句；不匹配时执行必须发散的 else 块，例如 return、break、continue 或 panic。">let...else</Term>
+
+当函数主路径需要内部值，而失败只应提前返回时，`let...else` 避免增加缩进：
+
+```rust
+fn describe(maybe_name: Option<String>) {
+    let Some(name) = maybe_name else {
+        println!("missing name");
+        return;
+    };
+
+    println!("name length = {}", name.len());
+}
+```
+
+成功匹配后，name 在语句之后的外层作用域可用。else 必须 diverge，不能正常落回后续代码，否则后续路径无法保证 name 已绑定。`if let` 适合“匹配时做一件事”，`let...else` 适合“失败提前离开，成功继续主流程”。
+
+<RplPatternControlLab />
+
+在三种模式控制流间切换，并切换输入是否匹配。比较它们的静态保证：match 强制穷尽，if let 合并其余路径，let...else 则要求失败路径终止当前主流程。
+
+## 三步完成枚举控制流设计
+
+<Stepper>
+  <Step title="第一步：把合法状态做成变体">
+    识别领域中互斥的状态，为每个状态只携带它实际需要的数据。避免 kind 与 payload 分离后出现矛盾组合。
+
+    <RplEnumVariantLab />
+  </Step>
+  <Step title="第二步：让缺失成为显式边界">
+    可能不存在的值使用 `Option<T>`，并在从 Option 进入普通 T 之前决定 None 的业务语义：保留、回退、提前返回或传播。
+
+    <RplOptionBoundaryLab />
+  </Step>
+  <Step title="第三步：按控制流保证选择语法">
+    完整分类用 match；只关心一个模式用 if let；失败应提前离开且成功绑定供后续使用时用 let...else。不要用宽泛默认分支掩盖重要状态。
+
+    <RplPatternControlLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- enum 表达有限个互斥变体，且每个变体可携带自己的 tuple、命名字段或无数据形状；枚举也能定义方法
+- `Option<T>` 由 `Some(T)` 与 `None` 构成，使缺失值与普通 T 成为不同类型，使用内部值前必须处理缺失路径
+- match 是表达式，模式既检查形状又绑定数据；穷尽性检查确保所有可能值都有处理路径
+- 捕获变量保留剩余值，`_` 忽略剩余值，`()` 表示有意不执行动作；宽泛默认分支要谨慎使用
+- if let 适合单模式分支，let...else 适合失败提前发散、成功绑定继续主路径
+
+<Exercises>
+  1. **问题 1：重构无效状态。** 一个网络地址 struct 含 `kind`、`v4: Option<[u8; 4]>` 和 `v6: Option<String>`。它能产生哪些无效组合，如何用 enum 消除？
+
+  <Answer question="带数据的枚举变体如何消除无效状态？">原 struct 允许 kind 与 payload 不一致、v4/v6 同时存在、或两者同时缺失。改为 `enum IpAddr { V4([u8; 4]), V6(String) }` 后，每个值只能选择一个 tag，并且构造该变体时必须提供对应数据；其他变体的数据在该状态下根本不存在。</Answer>
+
+  2. **问题 2：完成匹配。** 为 `Option<i32>` 写一个函数：Some 中的正数加倍，零或负数保持原值，None 返回 Some(0)。为什么不能把 `Some(value)` 放在更具体 guard 或模式之前？
+
+  <Answer question="match arm 的顺序和穷尽性如何共同工作？">可写 `match input { Some(value) if value > 0 => Some(value * 2), Some(value) => Some(value), None => Some(0) }`。arm 按顺序选择第一个匹配项；宽泛 Some(value) 若在前，会吞掉所有 Some，使正数分支不可达。三个 arm 覆盖正数 Some、其余 Some 与 None，因此穷尽。</Answer>
+
+  3. **问题 3：选择控制流。** 解析请求后必须取得 `Some(user_id)` 才能继续，否则立即返回错误；另一个统计函数只在状态为 Active 时加一。两处分别选什么语法？
+
+  <Answer question="if let 与 let...else 的选择依据是什么？">请求处理用 `let Some(user_id) = maybe_id else { return Err(...); };`，失败路径发散，user_id 在后续主流程可用。统计函数只关心一个匹配动作，用 `if let Status::Active = status { count += 1; }`；若未来必须分别处理每个状态，则改用穷尽 match。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="枚举">列出有限个互斥变体的自定义类型。</GlossaryItem>
+  <GlossaryItem term="枚举变体">枚举的一种可能状态，通过枚举名限定构造。</GlossaryItem>
+  <GlossaryItem term="关联数据">由特定枚举变体直接携带、匹配后才能访问的数据。</GlossaryItem>
+  <GlossaryItem term="Option">用 Some 或 None 显式表达值存在与缺失的标准库枚举。</GlossaryItem>
+  <GlossaryItem term="Some">Option 中携带一个 T 值的变体。</GlossaryItem>
+  <GlossaryItem term="None">Option 中表示没有值的变体。</GlossaryItem>
+  <GlossaryItem term="match 表达式">按顺序将值与模式 arm 比较并产生结果的控制流表达式。</GlossaryItem>
+  <GlossaryItem term="模式">描述值的结构、常量或变体并可绑定组成部分的语法。</GlossaryItem>
+  <GlossaryItem term="穷尽性">match 必须覆盖被检查类型所有可能值的编译期要求。</GlossaryItem>
+  <GlossaryItem term="捕获模式">匹配剩余任意值并把它绑定到变量的模式。</GlossaryItem>
+  <GlossaryItem term="if let">只处理一个目标模式、可带 else 的简洁控制流。</GlossaryItem>
+  <GlossaryItem term="let...else">成功绑定供后续使用、失败块必须发散的模式绑定语句。</GlossaryItem>
+</Glossary>
+
+## 来源与边界
+
+本章结构、术语和示例边界对齐 *The Rust Programming Language, Rust 2024 Edition* 官方 Chapter 6 的 [Enums and Pattern Matching](https://doc.rust-lang.org/book/ch06-00-enums.html)、[Defining an Enum](https://doc.rust-lang.org/book/ch06-01-defining-an-enum.html)、[The match Control Flow Construct](https://doc.rust-lang.org/book/ch06-02-match.html) 与 [Concise Control Flow with if let and let...else](https://doc.rust-lang.org/book/ch06-03-if-let.html)。交互实验和练习为本站重构，用于验证类型与控制流约束，不替代官方原文。
+
+<Attribution
+  adaptedFrom="The Rust Programming Language, Chapter 6 Enums and Pattern Matching"
+  adaptedUrl="https://doc.rust-lang.org/book/ch06-00-enums.html"
+/>

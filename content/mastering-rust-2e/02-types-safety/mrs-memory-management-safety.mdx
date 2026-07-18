@@ -1,0 +1,130 @@
+---
+title: "第5章 内存管理与安全"
+type: C
+section: "精通Rust 2e · 类型与安全"
+order: 5
+description: "按 原书第5章 Memory Management and Safety 一比一重建核心知识：程序与内存、分配策略、内存管理陷阱、内存安全三要素、Rust 指针类型。"
+demo: true
+math: false
+sourceUrl: "https://www.packtpub.com/en-us/product/mastering-rust-9781789346572"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { MrsMemoryManagementSafetyModelLab, MrsMemoryManagementSafetyBoundaryLab, MrsMemoryManagementSafetyEvidenceLab } from "@/components/mdx/mastering-rust-2e/diagrams/mrs-memory-management-safety";
+
+<Objectives>
+- 能解释程序与内存与分配策略在本章执行链中的责任
+- 能区分内存管理陷阱和内存安全三要素的适用边界与失败语义
+- 能实现并复现一个围绕Rust 指针类型的最小实验
+</Objectives>
+
+## 先做预测
+
+先回答：示例能够编译并运行，是否已经证明设计正确？不能。编译成功只说明当前程序满足类型与语法约束，还要验证输入边界、失败路径、资源生命周期、并发或外部系统条件。<Term def="程序通过栈帧、静态区和堆组织不同生命周期的数据；讨论性能前要先回答值在哪里、由谁拥有以及何时释放。">程序与内存</Term>是本章的起点，<Term def="栈分配快速且遵循作用域，堆分配支持动态大小和跨作用域所有权；Box、Rc与Arc表达不同所有权关系，不只是分配便利函数。">分配策略</Term>则把起点放进可重复的工程过程。
+
+<MrsMemoryManagementSafetyModelLab />
+
+## 原书章节骨架
+
+Packt 官方目录把本章组织为程序与内存、分配策略、内存管理陷阱、内存安全三要素、Rust 指针类型。这里保留原书问题顺序，再把2019年前后的案例放到当前Rust工程语境中理解：概念不因crate版本变化而失效，但命令、依赖和框架API必须以当前项目锁定版本的官方文档为准。
+
+官方核心单元核对：程序与内存；内存管理；分配策略；内存管理陷阱；内存安全；内存安全三要素；Rust指针类型。
+
+<Term def="悬垂指针、重复释放、释放后使用、泄漏与数据竞争来自生命周期或别名规则失守；Rust安全子集通过所有权和借用静态排除其中大部分。">内存管理陷阱</Term>不是孤立语法。它承接程序与内存给出的目标，并通过分配策略进入真实项目。阅读代码时要沿着输入、所有权或状态、动作、结果和证据五个节点追踪，而不是只记函数名。
+
+```rust
+fn first(bytes: &[u8]) -> Option<u8> {
+    bytes.first().copied()
+}
+
+let owned = Box::new([1_u8, 2, 3]);
+assert_eq!(first(&owned[..]), Some(1));
+```
+
+## 机制一：从类型到行为
+
+程序通过栈帧、静态区和堆组织不同生命周期的数据；讨论性能前要先回答值在哪里、由谁拥有以及何时释放。 栈分配快速且遵循作用域，堆分配支持动态大小和跨作用域所有权；Box、Rc与Arc表达不同所有权关系，不只是分配便利函数。 两者协作时，先写出谁拥有数据、谁可以修改、失败由谁处理，再决定具体API。这样可以把编译器诊断还原为契约冲突，而不是把错误信息当成需要逐条消除的噪声。
+
+<Term def="访问有效内存、遵守初始化与布局、满足别名和同步规则共同构成安全边界；只证明指针非空远远不够。">内存安全三要素</Term>进一步约束运行行为。它说明“类型正确”与“协议正确”是两层证据：前者由编译器帮助证明，后者还需要测试、时间线和边界输入。
+
+<MrsMemoryManagementSafetyBoundaryLab />
+
+```rust
+use std::rc::Rc;
+let shared = Rc::new(String::from("config"));
+let reader = Rc::clone(&shared);
+assert_eq!(Rc::strong_count(&reader), 2);
+```
+
+## 机制二：失败、资源与边界
+
+悬垂指针、重复释放、释放后使用、泄漏与数据竞争来自生命周期或别名规则失守；Rust安全子集通过所有权和借用静态排除其中大部分。 访问有效内存、遵守初始化与布局、满足别名和同步规则共同构成安全边界；只证明指针非空远远不够。 失败实验至少覆盖正常、空值或零长度、上限附近、显式错误和资源中断。涉及线程、网络、数据库、GUI或FFI时，还要加入超时、取消、部分完成与关闭路径。
+
+不要把原书示例的依赖版本直接复制到新项目。先固定Rust edition与最小支持版本，再查询维护中的crate文档和迁移说明；保留原书要讲的架构边界，按当前API重写适配层。
+
+```rust
+use std::cell::RefCell;
+let state = RefCell::new(vec![1]);
+state.borrow_mut().push(2);
+assert_eq!(&*state.borrow(), &[1, 2]);
+```
+
+## 机制三：可复现证据
+
+<Term def="引用、Box、Rc、Arc、Cell、RefCell和裸指针各自编码所有权、共享与可变性；选择依据是语义证据，不是为了让借用检查器安静。">Rust 指针类型</Term>负责把本章收束成证据。引用、Box、Rc、Arc、Cell、RefCell和裸指针各自编码所有权、共享与可变性；选择依据是语义证据，不是为了让借用检查器安静。 一次可靠验收要保存输入、工具链、依赖锁定、命令、退出状态、关键输出和失败样本。性能结论还要记录release构建、样本数与环境噪声；并发结论则要记录任务边界、超时和关闭结果。
+
+<MrsMemoryManagementSafetyEvidenceLab />
+
+## 分步实验
+
+<Stepper>
+  <Step title="建立模型"><MrsMemoryManagementSafetyModelLab /></Step>
+  <Step title="注入边界"><MrsMemoryManagementSafetyBoundaryLab /></Step>
+  <Step title="保留证据"><MrsMemoryManagementSafetyEvidenceLab /></Step>
+</Stepper>
+
+## 验收清单
+
+1. 在隔离目录运行三段示例，先预测结果和所有权变化，再记录实际编译诊断。
+2. 为主路径增加一个正常测试和至少三个边界测试，错误断言检查类别与上下文，而不只匹配整段文本。
+3. 清理构建产物后重跑，确认没有依赖本地缓存、环境变量或未声明工具。
+4. 若章节涉及外部系统，使用本地测试服务或临时数据库，设置时间预算并验证资源最终释放。
+
+## 常见误区
+
+<Callout type="trap" title="把编译通过当成章节验收">
+编译器不能证明业务输入完整、超时合理、协议有背压或外部副作用已回滚。必须补充失败测试与可观察证据。
+</Callout>
+
+<Callout type="trap" title="把2019年的crate API当成固定标准">
+本书核心结构值得保留，但框架和工具API会变化。新代码应锁定版本、查阅维护中的官方文档，并把迁移集中在适配边界。
+</Callout>
+
+## 本章回顾
+
+本章按照官方目录逐项覆盖程序与内存、分配策略、内存管理陷阱、内存安全三要素、Rust 指针类型。核心方法是先用类型表达资源与能力，再用运行期协议约束超时、顺序和外部失败，最后用测试、日志或调试记录证明结果可重复。
+
+<Exercises>
+**问题 1：如何解释程序与内存与分配策略的协作？**
+<Answer>程序通过栈帧、静态区和堆组织不同生命周期的数据；讨论性能前要先回答值在哪里、由谁拥有以及何时释放。 栈分配快速且遵循作用域，堆分配支持动态大小和跨作用域所有权；Box、Rc与Arc表达不同所有权关系，不只是分配便利函数。</Answer>
+
+**问题 2：内存管理陷阱和内存安全三要素的边界是什么？**
+<Answer>悬垂指针、重复释放、释放后使用、泄漏与数据竞争来自生命周期或别名规则失守；Rust安全子集通过所有权和借用静态排除其中大部分。 访问有效内存、遵守初始化与布局、满足别名和同步规则共同构成安全边界；只证明指针非空远远不够。</Answer>
+
+**问题 3：怎样验收Rust 指针类型？**
+<Answer>引用、Box、Rc、Arc、Cell、RefCell和裸指针各自编码所有权、共享与可变性；选择依据是语义证据，不是为了让借用检查器安静。 使用正常、边界、错误和资源中断输入，保存工具链、命令、退出状态和可复查输出。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="程序与内存" definition="程序通过栈帧、静态区和堆组织不同生命周期的数据" />
+  <GlossaryItem term="分配策略" definition="栈分配快速且遵循作用域，堆分配支持动态大小和跨作用域所有权" />
+  <GlossaryItem term="内存管理陷阱" definition="悬垂指针、重复释放、释放后使用、泄漏与数据竞争来自生命周期或别名规则失守" />
+  <GlossaryItem term="内存安全三要素" definition="访问有效内存、遵守初始化与布局、满足别名和同步规则共同构成安全边界" />
+  <GlossaryItem term="Rust 指针类型" definition="引用、Box、Rc、Arc、Cell、RefCell和裸指针各自编码所有权、共享与可变性" />
+  <GlossaryItem term="章节验收边界" definition="用输入、失败、资源、证据和迁移约束验证章节核心。" />
+</Glossary>
+
+<Attribution adaptedFrom="Mastering Rust, Second Edition · 原书第5章 Memory Management and Safety" adaptedUrl="https://www.packtpub.com/en-us/product/mastering-rust-9781789346572" />

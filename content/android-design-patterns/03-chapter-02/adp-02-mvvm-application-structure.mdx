@@ -1,0 +1,284 @@
+---
+title: "第2章 MVVM 模式应用构成"
+description: "依照todo-mvvm-databinding样例逐步构造View、ViewModel、绑定、导航和消息边界"
+type: C
+section: "第I部：理解应用设计"
+order: 3
+draft: false
+math: false
+sourceUrl: "https://peaks.cc/books/architecture_patterns"
+demo: true
+---
+
+import {
+  Adp02MvvmApplicationStructureArchitectureLab,
+  Adp02MvvmApplicationStructureCounterexampleLab,
+  Adp02MvvmApplicationStructureEvidenceLab,
+} from "@/components/mdx/android-design-patterns/diagrams/adp-02-mvvm-application-structure";
+
+# 第2章 MVVM 模式应用构成
+
+本页依据PEAKS最终商品页、官方样章完整目录和书中指定样例仓库重构。正式书由日高正博、小西裕介、藤原聖、吉岡毅、今井智章合著，2018年1月31日发行，224页；本课程严格保留出版时的Android技术语境。
+
+本页位于 **第I部 アプリの設計を知る**。 依照todo-mvvm-databinding样例逐步构造View、ViewModel、绑定、导航和消息边界。核心任务是用2017版Android Architecture Blueprints的同一TODO规格，解释ViewModel如何暴露可观察状态而不持有View引用。先把结论写成可被反例推翻的预测，再阅读机制与案例。
+
+<Objectives>
+
+- 能解释“第2章 MVVM 模式应用构成”全部正式目录节点，并画出角色、依赖方向、状态所有权和生命周期。
+- 能比较至少两种设计选择，说明收益、代价、团队前提和不可采用的反例。
+- 能设计旋转、后台、迟到回调、空数据或协作冲突实验，验证“ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界”。
+- 能写出包含版本、代码快照、状态轨迹、测试结果、回退条件和责任人的交接记录。
+
+</Objectives>
+
+## 从一个可证伪的问题开始
+
+先预测：如果只更换类名或框架，而没有改变责任、依赖方向和状态所有者，把Context、Fragment或Snackbar直接塞进ViewModel会恢复对View的隐式依赖，旋转后产生陈旧引用、重复事件或无法单测的分支。把预测落实为同一输入下的两条运行轨迹，不要把“能编译”“页面能打开”当成架构正确。
+
+本书的核心不是宣布唯一正确架构，而是建立讨论土台。项目规模、Android生命周期、既有代码、交付期限和团队结构都会改变最合适的选择。为此，本页始终保留业务控制变量，只修改一个设计因素，观察变更扩散、测试隔离、恢复行为和认知成本。
+
+验收不变量是：ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界。若结论无法由代码快照、调用/状态轨迹、失败注入和团队交付事实共同支持，就只能记为待验证假设。
+
+## 核心词汇与2018年边界
+
+<Term def="ViewModel是本页第1个核心概念；必须同时说明职责、依赖方向、生命周期、失败反例与可观察证据">
+  ViewModel
+</Term>
+、
+<Term def="Data Binding是本页第2个核心概念；必须同时说明职责、依赖方向、生命周期、失败反例与可观察证据">
+  Data Binding
+</Term>
+、
+<Term def="Presentation Model是本页第3个核心概念；必须同时说明职责、依赖方向、生命周期、失败反例与可观察证据">
+  Presentation Model
+</Term>
+、
+<Term def="Navigator是本页第4个核心概念；必须同时说明职责、依赖方向、生命周期、失败反例与可观察证据">
+  Navigator
+</Term>
+、
+<Term def="Snackbar事件是本页第5个核心概念；必须同时说明职责、依赖方向、生命周期、失败反例与可观察证据">
+  Snackbar事件
+</Term>
+
+以上词汇都要回答五个问题：谁拥有状态、谁可以修改、Android生命周期如何影响它、失败从哪里传播、怎样证明恢复正确。Compose、Flow、Hilt、Navigation Compose以及后来的Jetpack最佳实践可作为迁移对照，但不能改写2018年正式目录的含义。
+
+## 原书目录逐节点重构
+
+### 第I部 アプリの設計を知る
+
+该部标题是正式目录层级，不是装饰。它规定本页是在建立共同基础、读取真实案例，还是评估新组件。
+
+### 2.1 基本コンセプト
+
+把“基本コンセプト”放回用2017版Android Architecture Blueprints的同一TODO规格，解释ViewModel如何暴露可观察状态而不持有View引用这条因果链，明确输入、状态所有者、输出和停止条件。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界作为验收不变量。
+
+本节要把“2.1 基本コンセプト”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+
+### 2.2 セットアップ
+
+把“セットアップ”放回用2017版Android Architecture Blueprints的同一TODO规格，解释ViewModel如何暴露可观察状态而不持有View引用这条因果链，明确输入、状态所有者、输出和停止条件。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界作为验收不变量。
+
+本节要把“2.2 セットアップ”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+
+### 2.3 サンプルアプリの設計
+
+固定新增、编辑、删除、列表、详情、统计和持久化行为，使架构比较只改变职责分配而不改变业务题目。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界作为验收不变量。
+
+本节要把“2.3 サンプルアプリの設計”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+
+### 2.4 MVPアーキテクチャとの比較
+
+Presenter接收用户意图并调用数据边界，再通过窄View契约显式渲染；测试应验证调用次序、空态、错误态和分离后的迟到回调。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界作为验收不变量。
+
+本节要把“2.4 MVPアーキテクチャとの比較”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+
+### 2.5 TODOアプリの仕様
+
+固定新增、编辑、删除、列表、详情、统计和持久化行为，使架构比较只改变职责分配而不改变业务题目。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界作为验收不变量。
+
+本节要把“2.5 TODOアプリの仕様”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+
+### 2.6 プロジェクトの基本構成
+
+把“プロジェクトの基本構成”放回用2017版Android Architecture Blueprints的同一TODO规格，解释ViewModel如何暴露可观察状态而不持有View引用这条因果链，明确输入、状态所有者、输出和停止条件。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界作为验收不变量。
+
+本节要把“2.6 プロジェクトの基本構成”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+
+### 2.7 ViewModelの役割を理解する
+
+ViewModel暴露可观察页面状态，不持有具体View；View通过绑定或观察更新，瞬时导航与持久状态必须分开建模。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界作为验收不变量。
+
+本节要把“2.7 ViewModelの役割を理解する”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+
+### 2.8 データバインディングを使ってViewを設定する
+
+布局声明状态到控件属性的映射，减少命令式查找与赋值；验收要覆盖空值、解绑、重建和重复观察。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界作为验收不变量。
+
+本节要把“2.8 データバインディングを使ってViewを設定する”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+
+### 2.9 フラグメントで画面を構築する
+
+把“フラグメントで画面を構築する”放回用2017版Android Architecture Blueprints的同一TODO规格，解释ViewModel如何暴露可观察状态而不持有View引用这条因果链，明确输入、状态所有者、输出和停止条件。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界作为验收不变量。
+
+本节要把“2.9 フラグメントで画面を構築する”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+
+### 2.10 Navigatorでアクションを処理する
+
+导航是一次性副作用，不属于可持续页面状态；集中边界可验证参数、返回栈、深链和旋转后不重复执行。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界作为验收不变量。
+
+本节要把“2.10 Navigatorでアクションを処理する”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+
+### 2.11 ViewModelの生成と生存期間
+
+ViewModel暴露可观察页面状态，不持有具体View；View通过绑定或观察更新，瞬时导航与持久状态必须分开建模。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界作为验收不变量。
+
+本节要把“2.11 ViewModelの生成と生存期間”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+
+### 2.12 ViewModelにユーザー操作を伝える
+
+ViewModel暴露可观察页面状态，不持有具体View；View通过绑定或观察更新，瞬时导航与持久状态必须分开建模。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界作为验收不变量。
+
+本节要把“2.12 ViewModelにユーザー操作を伝える”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+
+### 2.13 Snackbarで学ぶViewとViewModel間メッセージングの難しさ
+
+ViewModel暴露可观察页面状态，不持有具体View；View通过绑定或观察更新，瞬时导航与持久状态必须分开建模。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界作为验收不变量。
+
+本节要把“2.13 Snackbarで学ぶViewとViewModel間メッセージングの難しさ”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+
+### 2.14 MVVMパターンの背景にあるもの
+
+ViewModel暴露可观察页面状态，不持有具体View；View通过绑定或观察更新，瞬时导航与持久状态必须分开建模。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界作为验收不变量。
+
+本节要把“2.14 MVVMパターンの背景にあるもの”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+
+## 完整节点清单与覆盖门
+
+本页承担下列14个目录或检索节点；正文、图解、实验和题目必须都能反向定位这些节点：
+
+- 2.1 基本コンセプト
+- 2.2 セットアップ
+- 2.3 サンプルアプリの設計
+- 2.4 MVPアーキテクチャとの比較
+- 2.5 TODOアプリの仕様
+- 2.6 プロジェクトの基本構成
+- 2.7 ViewModelの役割を理解する
+- 2.8 データバインディングを使ってViewを設定する
+- 2.9 フラグメントで画面を構築する
+- 2.10 Navigatorでアクションを処理する
+- 2.11 ViewModelの生成と生存期間
+- 2.12 ViewModelにユーザー操作を伝える
+- 2.13 Snackbarで学ぶViewとViewModel間メッセージングの難しさ
+- 2.14 MVVMパターンの背景にあるもの
+
+<Adp02MvvmApplicationStructureArchitectureLab />
+
+## 分步推导：从结构到运行事实
+
+<Stepper>
+  <Step title="先画责任与依赖">
+    固定业务输入，标明Android组件、Presenter/ViewModel/Store、数据边界与团队所有者。箭头表示调用或数据流，不能只画文件夹。
+    <Adp02MvvmApplicationStructureArchitectureLab />
+  </Step>
+  <Step title="再制造单变量反例">
+    保持样例不变，只改变生命周期、异步到达顺序、共享状态或团队协作中的一个变量。先写预测，再运行，不在看到结果后补理由。
+    <Adp02MvvmApplicationStructureCounterexampleLab />
+  </Step>
+  <Step title="最后关闭证据门">
+    对照正常与失败轨迹，确认业务不变量、释放、恢复、回退和责任人。缺一项就不能把“偏好”升级为“决策”。
+    <Adp02MvvmApplicationStructureEvidenceLab />
+  </Step>
+</Stepper>
+
+## 可复现实验与记录格式
+
+以下三个片段分别固定版本/结构、运行轨迹和证据表。它们是实验协议，不是要求照抄的生产模板：
+
+```bash
+git clone https://github.com/googlesamples/android-architecture.git
+git checkout todo-mvvm-databinding
+```
+
+```xml
+<variable name="viewmodel" type="TasksViewModel" />
+<TextView android:text="@{viewmodel.emptyLabel}" />
+```
+
+```java
+public void onTaskClicked(Task task) { navigator.openTaskDetails(task.getId()); }
+```
+
+动手试：用同一TODO或章节案例分别运行正常、旋转/重建、后台、迟到成功、迟到失败五条路径。每条路径记录输入、对象实例、线程/调度、状态前后值、UI结果和释放点。若是团队案例，再增加变更文件数、评审往返和回退耗时。
+
+<Callout type="trap" title="把模式名当成证据">
+  类叫ViewModel、Presenter或Store并不证明满足该模式。必须检查依赖方向、状态写权限、生命周期和运行轨迹；否则只是重新命名原来的耦合。
+</Callout>
+
+<Callout type="trap" title="用现代结论覆盖历史版本">
+  本页对应2018年成书与2017年前后样例。现代Android方案可放在迁移备注中比较，但不能替换正式节点、作者当时的约束或样例行为。
+</Callout>
+
+## 独立证据门
+
+<Adp02MvvmApplicationStructureEvidenceLab />
+
+证据包至少包含：正式目录映射、来源URL、出版前代码提交、角色与依赖图、生命周期轨迹、一个单变量失败实验、测试输出、业务/团队指标、停止条件、回退步骤和复核人。图和代码必须使用相同角色命名，否则无法交叉验证。
+
+## 练习
+
+<Exercises>
+
+**问题 1：为什么本页必须以同一业务规格作为控制变量？**
+
+<Answer>
+  只有业务输入、功能和数据语义不变，观察到的差异才能归因于职责分配、依赖方向或生命周期策略；否则无法判断是架构还是需求变化造成结果。
+</Answer>
+
+**问题 2：怎样构造“把Context、Fragment或Snackbar直接塞进ViewModel会恢复对View的隐式依赖，旋转后产生陈旧引用、重复事件或无法单测的分支”的最小反例？**
+
+<Answer>
+  固定版本、样例数据和操作序列，只引入一次旋转、后台、迟到回调、共享写入或协作冲突；比较对象身份、状态轨迹、UI结果、释放与最终业务事实。
+</Answer>
+
+**问题 3：何时可以认为“第2章 MVVM 模式应用构成”已完成独立交接？**
+
+<Answer>
+  当另一位读者无需口头补充即可按版本记录复现实验，解释全部目录节点，观察正常与失败轨迹，并依据“ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界”独立得到同一通过或不通过结论。
+</Answer>
+
+</Exercises>
+
+## 本章回顾
+
+“第2章 MVVM 模式应用构成”的核心不是记忆名词，而是用2017版Android Architecture Blueprints的同一TODO规格，解释ViewModel如何暴露可观察状态而不持有View引用。最终结论必须同时经受平台生命周期、失败路径、既有代码和团队协作四类约束；把Context、Fragment或Snackbar直接塞进ViewModel会恢复对View的隐式依赖，旋转后产生陈旧引用、重复事件或无法单测的分支就是本页必须保留的反证边界。
+
+<Glossary>
+  <GlossaryItem term="ViewModel">
+    ViewModel用于解释“用2017版Android Architecture
+    Blueprints的同一TODO规格，解释ViewModel如何暴露可观察状态而不持有View引用”。掌握标准不是记住名称，而是能画出责任与状态轨迹、构造单变量反例，并用“ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界”完成验收。
+  </GlossaryItem>
+  <GlossaryItem term="Data Binding">
+    Data Binding用于解释“用2017版Android Architecture
+    Blueprints的同一TODO规格，解释ViewModel如何暴露可观察状态而不持有View引用”。掌握标准不是记住名称，而是能画出责任与状态轨迹、构造单变量反例，并用“ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界”完成验收。
+  </GlossaryItem>
+  <GlossaryItem term="Presentation Model">
+    Presentation Model用于解释“用2017版Android Architecture
+    Blueprints的同一TODO规格，解释ViewModel如何暴露可观察状态而不持有View引用”。掌握标准不是记住名称，而是能画出责任与状态轨迹、构造单变量反例，并用“ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界”完成验收。
+  </GlossaryItem>
+  <GlossaryItem term="Navigator">
+    Navigator用于解释“用2017版Android Architecture
+    Blueprints的同一TODO规格，解释ViewModel如何暴露可观察状态而不持有View引用”。掌握标准不是记住名称，而是能画出责任与状态轨迹、构造单变量反例，并用“ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界”完成验收。
+  </GlossaryItem>
+  <GlossaryItem term="Snackbar事件">
+    Snackbar事件用于解释“用2017版Android Architecture
+    Blueprints的同一TODO规格，解释ViewModel如何暴露可观察状态而不持有View引用”。掌握标准不是记住名称，而是能画出责任与状态轨迹、构造单变量反例，并用“ViewModel不知道具体Activity或Fragment；用户动作进入ViewModel，状态通过绑定更新View，导航与短暂消息有独立边界”完成验收。
+  </GlossaryItem>
+</Glossary>
+
+[← 上一页：第1章 Android 应用的基本构成](/learn/android-design-patterns/02-chapter-01/adp-01-android-app-basic-structure) · [下一页：第3章 MVP 模式应用构成 →](/learn/android-design-patterns/04-chapter-03/adp-03-mvp-application-structure)
+
+<Attribution
+  adaptedFrom="日高正博、小西裕介、藤原聖、吉岡毅、今井智章《Android アプリ設計パターン入門》2018年正式版"
+  adaptedUrl="https://peaks.cc/books/architecture_patterns"
+/>

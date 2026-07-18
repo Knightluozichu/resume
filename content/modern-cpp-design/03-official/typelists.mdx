@@ -1,0 +1,257 @@
+---
+title: "第3章：Typelists"
+type: A
+section: Modern C++ Design · Part I Techniques
+order: 3
+description: 对齐第一版第3章 Typelists：类型链定义与线性化、Length/TypeAt/IndexOf、Append/Erase/NoDuplicates/Replace、继承偏序，以及 scatter/linear hierarchy 与 tuple 类生成。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+draft: false
+---
+
+import {
+  McdTypelistAlgorithmMap,
+  McdTypelistAnatomyMap,
+  McdTypelistHierarchyMap,
+} from "@/components/mdx/modern-cpp-design/diagrams/typelists";
+
+<Objectives>
+
+- 能解释 the need for typelists，并手工展开 Head/Tail/NullType 的递归表示与线性化构造
+- 能实现 Length、TypeAt、IndexOf、Append、Erase、NoDuplicates、Replace 与 inheritance ordering，说明每个终止特化
+- 能设计 typelist 驱动的 scatter hierarchy、tuple class 与 linear hierarchy，并判断生成结构的 layout、歧义和编译成本
+
+</Objectives>
+
+## 为什么需要 Typelists：The Need for Typelists
+
+普通 container 保存“同一种元素类型的多个值”；generic component 常需要保存“多个不同类型本身”。Functor 要记录参数签名，Abstract Factory 要记录 product family，multimethod dispatcher 要记录参与类型。**The Need for Typelists** 就是把这组类型变成编译器可遍历、查询和改写的数据结构。
+
+<Term def="只存在于编译期、由一系列类型组成且可被模板元算法查询与变换的有序类型序列。">
+  Typelist
+</Term>
+
+Typelist 不创建对象，不保存 bytes，也不能在运行时 `push_back`。它的输出通常是另一个类型、一个 integral constant，或由类型序列生成的一套 class hierarchy。今天常用 parameter pack 表示同一概念，但“把类型当数据”的模型没有改变。
+
+## Defining Typelists
+
+**Defining Typelists** 使用二元节点：`Head` 保存当前类型，`Tail` 指向余下 Typelist；`NullType` 是终点。这个结构故意模仿 singly linked list，使模板 specialization 能写出递归算法。
+
+```cpp
+struct NullType {};
+
+template<class H, class T>
+struct Typelist {
+    using Head = H;
+    using Tail = T;
+};
+
+using UiTypes = Typelist<Button,
+                Typelist<Window,
+                Typelist<Dialog, NullType>>>;
+```
+
+<Term def="Typelist 节点中当前保存的类型；元算法在每一层先处理 Head。">
+  Head
+</Term>
+
+<Term def="Typelist 节点中余下的类型链；递归算法沿 Tail 前进直到 NullType。">
+  Tail
+</Term>
+
+<McdTypelistAnatomyMap />
+
+`NullType` 必须与真实 element type 区分；若业务列表本身可能包含 `NullType`，termination 语义就含混。现代 parameter pack 通过空包 specialization 终止，不再需要 sentinel，但仍必须明确 empty sequence 的结果。
+
+## Linearizing Typelist Creation
+
+嵌套写法随着长度增长很难读。**Linearizing Typelist Creation** 在书中通过 `TYPELIST_1` 到 `TYPELIST_N` 宏把线性参数展开为嵌套节点。宏是当时缺少 variadic templates 的工程折衷：它不能检查类型数量以外的语义，且上限固定。
+
+现代写法可直接定义 `template<class... Ts> struct TypeList {};`，或用 alias 将 parameter pack 转为旧 Head/Tail 结构。迁移时不要只替换语法：若后续算法依赖 `Head/Tail`，需要一起改为 pack specialization 或提供兼容 adapter。
+
+<Callout type="trap" title="陷阱：宏让类型列表看起来线性，所以算法也是 O(1)">
+  宏只改善输入外观。Length、TypeAt 与 Erase 仍按模板层递归，编译器要实例化每一层；运行时成本为零不等于编译成本为零。
+</Callout>
+
+## Calculating Length 与 Indexed Access
+
+**Calculating Length** 是最小递归例子：普通节点的长度为 `1 + Length<Tail>`，`NullType` 特化返回 0。值在编译期产生，不需要任何 object。
+
+<Term def="通过对每个 Head 计一并沿 Tail 递归、在 NullType 返回零得到的类型序列长度。">
+  Length
+</Term>
+
+```cpp
+template<class List> struct Length;
+
+template<class H, class T>
+struct Length<Typelist<H, T>> {
+    static constexpr std::size_t value = 1 + Length<T>::value;
+};
+
+template<>
+struct Length<NullType> {
+    static constexpr std::size_t value = 0;
+};
+```
+
+**Indexed Access** 的 `TypeAt<List, i>` 在 `i == 0` 返回 Head，否则转成 `TypeAt<Tail, i - 1>`。越界时没有匹配特化，形成编译错误；`TypeAtNonStrict` 则可在越界时返回 caller-supplied default。两种 contract 都合理，但必须由 API 名和诊断明确。
+
+<Term def="按零基索引沿 Tail 递归并返回对应 Head 的类型元函数；严格版本对越界形成编译错误。">
+  TypeAt
+</Term>
+
+## Searching Typelists
+
+**Searching Typelists** 的 `IndexOf<List,T>` 比较当前 Head：相同返回 0；否则递归查询 Tail，找到则加 1，未找到返回 -1。这里的难点是不能对 -1 继续加 1，否则“未找到”会变成合法位置。
+
+<Term def="返回目标类型第一次出现位置、未出现时返回负哨兵的编译期线性搜索。">
+  IndexOf
+</Term>
+
+`IndexOf` 的 equality 是 exact type equality；`const Widget`、`Widget&` 与 `Widget` 不同。若业务想按 normalized type 搜索，应在入口明确 remove_cvref，而不是悄悄改变所有 typelist 算法的语义。
+
+## Appending to Typelists
+
+**Appending to Typelists** 不修改原列表，而是产生新类型。`Append<NullType, X>` 形成一个节点；`Append<Typelist<H,T>, X>` 保留 H，并递归 append 到 T。若 X 本身是 Typelist，可以 splice 整条序列，contract 需区分“添加一个 element type”和“连接两个 lists”。
+
+<Term def="保留原序列顺序并在末尾接入一个类型或另一条类型序列，产生新 Typelist 的元函数。">
+  Append
+</Term>
+
+## Erasing a Type from a Typelist
+
+**Erasing a Type from a Typelist** 在第一个 matching Head 处返回 Tail，其余层重建原 Head。`EraseAll` 则匹配时继续递归，不匹配时保留节点。两个函数只差一处递归选择，却表达完全不同的 duplicate contract。
+
+```cpp
+template<class List, class T> struct Erase;
+template<class T> struct Erase<NullType, T> { using Result = NullType; };
+
+template<class T, class Tail>
+struct Erase<Typelist<T, Tail>, T> { using Result = Tail; };
+
+template<class Head, class Tail, class T>
+struct Erase<Typelist<Head, Tail>, T> {
+    using Result = Typelist<Head, typename Erase<Tail, T>::Result>;
+};
+```
+
+## Erasing Duplicates 与 Replacing an Element
+
+**Erasing Duplicates**（`NoDuplicates`）先去重 Tail，再从结果中删掉当前 Head 的后续副本，最后把 Head 接回；因此保留第一次出现顺序。若先删 Head 再递归，可能改变 survivor choice。元算法的顺序就是语义，不只是实现细节。
+
+<Term def="从类型序列中移除重复类型并保留每种类型第一次出现顺序的变换。">
+  NoDuplicates
+</Term>
+
+**Replacing an Element in a Typelist** 与 Erase 类似：遇到第一个 old type 时用 new type 构造节点并停止，`ReplaceAll` 则继续。替换后可能产生 duplicate，是否再运行 NoDuplicates 由 caller contract 决定，不能在 Replace 内隐式做。
+
+<Term def="把第一个或全部目标类型替换为另一类型并保持其余次序的类型序列变换。">
+  Replace
+</Term>
+
+<McdTypelistAlgorithmMap />
+
+## Partially Ordering Typelists
+
+当列表同时含 `Base` 与 `Derived`，dispatcher 通常要先尝试更具体的 Derived。**Partially Ordering Typelists** 根据 inheritance relation 交换次序，使 derived classes 出现在 bases 之前；互不相关类型保持某种稳定顺序。
+
+<Term def="依据派生关系把更具体类型放在基类之前、而对无继承关系元素只保持部分约束的排序。">
+  inheritance partial order
+</Term>
+
+这不是全序：两个 sibling 没有自然先后。算法若依赖 input order 保持稳定，应写测试；ambiguous/private inheritance 与 conversion operator 也不能简单等同 public base relation。现代实现使用 `std::is_base_of` 加明确 accessibility contract。
+
+## Class Generation with Typelists
+
+**Class Generation with Typelists** 把列表的每个类型映射成一个 `Unit<T>`，再按结构组合。**scatter hierarchy** 让生成类同时继承 `Unit<T1>、Unit<T2>...`；每种 T 对应一个 sibling base，适合 heterogeneous tuple 和“每类型一个字段”。
+
+<Term def="把 Typelist 的每个元素映射为并列 Unit base，生成拥有一组异构单元的多继承层次。">
+  scatter hierarchy
+</Term>
+
+当列表重复同一类型，两个 `Unit<T>` base 会歧义。Loki 通过 indexed wrapper 或不同中间类型区分位置；访问 tuple field 也要决定按 type 还是按 index。按 type 访问在 duplicate 存在时天然不唯一。
+
+**tuple class** 在书中由 scatter hierarchy 生成 storage，再提供 `Field<T>`/`Field<i>` 访问。它展示“类型列表是 schema，hierarchy 是 materialized representation”：列表顺序、duplicate 与 Unit layout 都影响最终 object。
+
+**linear hierarchy** 则生成 `Unit<T1, Unit<T2, Unit<T3, Root>>>` 的链，每个 Unit 只连接下一个，适合 ordered handlers、chain of responsibility 或逐层 policy decoration。
+
+<Term def="沿 Typelist 顺序把 Unit 递归嵌套成单链继承结构，每一层持有或继承下一层。">
+  linear hierarchy
+</Term>
+
+<McdTypelistHierarchyMap />
+
+<Callout type="trap" title="陷阱：生成的 class hierarchy 运行时零成本，所以可以无限扩大">
+  大列表会增加模板实例、debug symbol、错误回溯、object layout 与 code size；scatter hierarchy 还受 base ambiguity 和 ABI 约束。用编译时间、binary size 与 layout test 同时验收，不能只看运行时 benchmark。
+</Callout>
+
+先预测：`Typelist<Base, Derived>` 直接生成 dispatcher 时，若先测试 Base，Derived object 也会命中 Base 分支，具体处理器永远不可达。先做 inheritance partial order 不只是优化，而是 correctness requirement。
+
+<Stepper>
+  <Step title="第一步：写出表示与终止点">
+    手工展开三层 Head/Tail 链，标记 NullType；再为 empty、one-element、duplicate 与 out-of-range 定义 contract。
+
+    <McdTypelistAnatomyMap />
+
+  </Step>
+  <Step title="第二步：验证每个元算法的递归式">
+    对 Length、TypeAt、IndexOf、Append、Erase、NoDuplicates、Replace 分别写推进分支和终止特化，并在纸上追踪 Result 类型。
+
+    <McdTypelistAlgorithmMap />
+
+  </Step>
+  <Step title="第三步：把序列物化为类结构">
+    选择 scatter 或 linear hierarchy，检查 duplicate、访问方式、派生顺序、layout 与 compilation cost；生成结果必须服务具体组件协议。
+
+    <McdTypelistHierarchyMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- Typelist 满足对有序异构类型集合的编译期表示需求，Head/Tail/NullType 给出递归数据结构
+- 线性化宏只改善书写，现代 parameter pack 改善表达；两者都需要明确 empty 与 bounds contract
+- Length、TypeAt、IndexOf 将链表算法搬到模板实例化，推进分支和终止特化同等重要
+- Append、Erase、NoDuplicates、Replace 产生新类型，执行顺序决定 duplicate 与 survivor 语义
+- inheritance partial order 把 Derived 放在 Base 前，是类型 dispatcher 的 correctness 基础
+- scatter hierarchy 生成并列 Unit，适合 tuple；linear hierarchy 生成有序链，适合 handler pipeline
+- 运行时零分派不代表免费：编译时间、code size、layout、歧义和 ABI 都是设计成本
+
+<Exercises>
+  1. **问题 1：手工推导元算法。** 对 `Typelist<int, Typelist<double, Typelist<int, NullType>>>` 计算 Length、TypeAt&lt;1&gt;、IndexOf&lt;int&gt;、NoDuplicates 的结果。
+
+  <Answer question="四个结果分别是什么？">Length 为 3；TypeAt 1 是 double；IndexOf int 返回第一次出现位置 0；NoDuplicates 先去重 Tail 再移除后续 int，结果为 `Typelist<int, Typelist<double, NullType>>`，保留第一次出现顺序。</Answer>
+
+  2. **问题 2：选择 scatter 或 linear hierarchy。** 配置对象要为每种 type 保存一个值；middleware 要按顺序逐层处理 request，分别选择结构并说明原因。
+
+  <Answer question="两种场景怎样映射？">异构配置需要每 type 一个并列 storage unit，适合 scatter hierarchy/tuple，并要处理 duplicate 与按 type/index 访问。middleware 强调顺序和 next delegation，适合 linear hierarchy；列表顺序就是处理顺序，Root 定义链尾行为。</Answer>
+
+  3. **问题 3：修复继承分派顺序。** 输入列表为 Base、Sibling、Derived，dispatcher 按顺序 dynamic_cast；说明应建立哪些偏序约束。
+
+  <Answer question="为什么不能简单按原顺序？">Derived 必须在 Base 前，否则 Derived object 先命中 Base；Sibling 与二者若无继承关系则没有天然顺序，可保持稳定输入顺序。先用 base-of relation 建 partial order，再生成 dispatcher，并为 ambiguous/private inheritance 单独定义可访问性约束。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Typelist">在编译期保存有序类型序列并供模板元算法处理的类型结构。</GlossaryItem>
+  <GlossaryItem term="Head">当前 Typelist 节点承载的元素类型。</GlossaryItem>
+  <GlossaryItem term="Tail">当前节点之后的剩余类型链。</GlossaryItem>
+  <GlossaryItem term="Length">沿 Tail 递归计算类型序列长度的元函数。</GlossaryItem>
+  <GlossaryItem term="TypeAt">按零基索引返回对应元素类型的元函数。</GlossaryItem>
+  <GlossaryItem term="IndexOf">返回目标类型第一次出现位置的编译期搜索。</GlossaryItem>
+  <GlossaryItem term="Append">在类型序列末端追加元素或另一列表的变换。</GlossaryItem>
+  <GlossaryItem term="NoDuplicates">移除重复类型并保留首次出现顺序的变换。</GlossaryItem>
+  <GlossaryItem term="Replace">替换一个或全部目标类型的序列变换。</GlossaryItem>
+  <GlossaryItem term="inheritance partial order">以派生类先于基类为约束的类型偏序。</GlossaryItem>
+  <GlossaryItem term="scatter hierarchy">把每个类型映射成并列 Unit base 的生成结构。</GlossaryItem>
+  <GlossaryItem term="linear hierarchy">按列表顺序把 Unit 嵌套为单链继承结构。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Modern C++ Design, First Edition, Chapter 3: Typelists"
+  adaptedUrl="https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+/>

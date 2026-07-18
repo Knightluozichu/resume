@@ -1,0 +1,232 @@
+---
+title: "1.4 Analysis of Algorithms：从计时实验到成本模型"
+type: B
+section: "基础"
+order: 3
+description: "按官方1.4以ThreeSum贯穿科学方法、观察、数学模型、doubling ratio、更快算法、输入依赖与内存分析。"
+demo: true
+math: true
+sourceUrl: "https://algs4.cs.princeton.edu/14analysis/"
+draft: false
+---
+
+import { Algs4ScientificMethodCycle, Algs4DoublingRatioLab, Algs4ThreeSumFrequencyLab, Algs4GrowthModelLab, Algs4FasterAlgorithmLab, Algs4MemoryModelLab } from "@/components/mdx/algorithms-4e/diagrams/analysis-of-algorithms";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释科学方法如何把可重复observations连接到algorithm performance hypothesis
+- 能计算ThreeSum frequency count、doubling ratio、growth exponent与近似memory usage
+- 能实现受控time trial、doubling experiment和cubic/fast ThreeSum对照
+- 能分析measurement noise、input dependence、integer overflow与duplicate preconditions
+- 能设计包含time model、input model、cost model和falsification test的性能验收
+
+</Objectives>
+
+## 从“跑了0.6秒”开始追问
+
+算法分析（<Term def="以实验观察和数学模型预测algorithm在不同input sizes、data distributions与machines上的resource usage。">算法分析</Term>，analysis of algorithms）不等于把loop数换成Big-O。一次运行0.6秒只描述一个program、一个input、一个machine和一个时刻；要预测N翻倍、输入分布改变或implementation替换后的结果，必须提出可检验模型。
+
+先预测ThreeSum在N从1000翻到2000时会慢2倍、4倍还是8倍。若dominant work与N的三次方成正比，ratio趋近8；但小N计时可能被JVM warm-up、timer resolution和I/O淹没。正确做法不是挑一个“像8”的结果，而是控制实验、连续doubling、观察稳定区间并用新数据尝试推翻hypothesis。
+
+官方1.4按 **Scientific method、Observations、Mathematical models、Designing faster algorithms、Coping with dependence on inputs、Memory usage** 展开，并用 `ThreeSum`、`Stopwatch`、`DoublingRatio` 和 `ThreeSumFast` 建立完整证据链。
+
+<Algs4ScientificMethodCycle />
+
+## 1.4.1 Scientific method：模型必须允许被证伪
+
+科学方法（<Term def="观察、提出hypothesis、从hypothesis导出prediction，再以新experiments验证或否定的循环。">科学方法</Term>，scientific method）要求experiment可重放，measurements可比较，hypothesis足够具体。对running time，常用模型是：
+
+$$
+T(N)\sim aN^b
+$$
+
+其中N是明确的input-size measure，a吸收machine、language与implementation constants，b描述dominant growth。符号 `~` 表示ratio趋近1，不是所有N都精确相等。若observations持续偏离，应该修正模型或input definition，而不是把偏差归为“电脑不稳定”。
+
+Time experiment至少记录source revision、JVM/flags、machine load、input generator与seed、warm-up、repetitions和aggregation方式。只计核心algorithm还是包含file I/O也必须说明。Official `Stopwatch` 测wall-clock；它适合end-to-end observation，但会包含scheduling与其他system effects。
+
+## 1.4.2 Observations：用doubling experiment找稳定信号
+
+观察（<Term def="在受控inputs和environment下取得的timing、operation counts与memory measurements。">观察</Term>，observations）先回答“实际发生了什么”。Official `DoublingRatio.timeTrial` 生成N个随机六位整数，只计 `ThreeSum.count`，然后输出当前time与前一size的ratio。
+
+```java
+public static double timeTrial(int n) {
+    int[] a = new int[n];
+    for (int i = 0; i < n; i++)
+        a[i] = StdRandom.uniformInt(-1_000_000, 1_000_000);
+
+    Stopwatch timer = new Stopwatch();
+    int ignored = ThreeSum.count(a);
+    return timer.elapsedTime();
+}
+```
+
+若time model是 `aN^b`，doubling消去coefficient：
+
+$$
+\frac{T(2N)}{T(N)}\sim 2^b,
+\qquad
+b\approx\log_2\!\left(\frac{T(2N)}{T(N)}\right)
+$$
+
+<Algs4DoublingRatioLab />
+
+Official sample在足够大N后ratio接近8，支持cubic hypothesis。小time四舍五入为0时ratio无意义；随机inputs也让每轮work outcome和cache behavior略不同。应重复多次，使用median或distribution，并让test足够长以超过timer granularity。
+
+<Callout type="trap" title="用一次Stopwatch结果证明复杂度">
+Wall-clock同时受到JIT compilation、GC、OS scheduling、CPU frequency与background load影响。复杂度是随N变化的model；单点time既不能估计exponent，也不能区分constant optimization与growth-class change。
+</Callout>
+
+## 1.4.3 Mathematical models：先数关键operation
+
+数学模型（<Term def="由input parameters和operation frequencies组成，用近似表达resource usage并预测未测规模。">数学模型</Term>，mathematical models）把code structure变成可核查count。ThreeSum使用indices `i < j < k`，每个合法triple做一次sum-equality test，因此frequency恰为：
+
+$$
+\binom{N}{3}
+=\frac{N(N-1)(N-2)}{6}
+\sim\frac{N^3}{6}
+$$
+
+<Algs4ThreeSumFrequencyLab />
+
+```java
+for (int i = 0; i < n; i++)
+    for (int j = i + 1; j < n; j++)
+        for (int k = j + 1; k < n; k++)
+            if (a[i] + a[j] + a[k] == 0)
+                count++;
+```
+
+成本模型（<Term def="选定对running time具有代表性的basic operation，并以其frequency近似总cost。">成本模型</Term>，cost model）在这里选sum comparison。Assignment、loop increments和bounds checks也发生，但同属cubic leading order；若要预测constant a，可对各instruction frequency和machine cost进一步建模。
+
+增长数量级（<Term def="忽略lower-order terms与constant factors，按dominant function对resource growth分类。">增长数量级</Term>，order of growth）帮助比较scalability，却不能替代contract。Logarithmic、linear、N log N、quadratic、cubic在N小时差距不明显，规模增大后迅速分离。
+
+<Algs4GrowthModelLab />
+
+## 1.4.4 Designing faster algorithms：改变operation count结构
+
+设计更快算法（designing faster algorithms）不是把同一triple loop写得更短，而是利用ordering重构problem。`ThreeSumFast` 先sort，再枚举i/j，用binary search找 `-(a[i]+a[j])`，并要求found index大于j，避免同一triple重复计数。
+
+```java
+Arrays.sort(a);
+if (containsDuplicates(a))
+    throw new IllegalArgumentException("array contains duplicate integers");
+
+for (int i = 0; i < n; i++) {
+    for (int j = i + 1; j < n; j++) {
+        int k = Arrays.binarySearch(a, -(a[i] + a[j]));
+        if (k > j) count++;
+    }
+}
+```
+
+Pair count是quadratic，每次binary search logarithmic，加sorting后：
+
+$$
+T_{fast}(N)=O(N\log N)+O(N^2\log N)=O(N^2\log N)
+$$
+
+<Algs4FasterAlgorithmLab />
+
+这是真正的growth improvement，但新preconditions必须进入correctness comparison。Current official code拒绝duplicates；原始ThreeSum按index triples可处理duplicates。两者都明确忽略integer overflow，`-(a[i] + a[j])` 也可能overflow。若生产需求允许任意int与duplicates，应使用long intermediate并设计multiplicity-aware counting，不能只比较sample counts。
+
+<Callout type="trap" title="只对比输出相同的无重复小样本">
+`ThreeSumFast` 在distinct samples上与cubic oracle一致，不证明它满足更宽input contract。验收必须加入duplicates、Integer.MIN/MAX、all-zero、no-solution和多解cases，并明确是按indices还是按value triples计数。
+</Callout>
+
+## 1.4.5 Coping with dependence on inputs
+
+Input dependence说明同一N不一定同一time。Quicksort后续会依赖partition quality，symbol-table search依赖key distribution，graph algorithms依赖V/E structure。ThreeSum的triple enumeration count固定，但matches数量影响count increments和branch behavior；faster version还受sort/binary-search path与duplicates policy影响。
+
+Input model（<Term def="规定size parameters、value ranges、distribution、ordering、duplicates与adversarial possibilities的实验和分析前提。">输入模型</Term>）必须显式。Average-case claim要给probability distribution；expected time要说明randomness来自input还是algorithm；worst case则对所有合法inputs成立。Random test generator用于sampling，不自动代表真实workload。
+
+处理dependence的实用方式包括：报告best/average/worst bounds；按多个structure parameters建模；对真实traces与synthetic adversarial cases分层；用operation counts分离algorithm变化与machine noise。
+
+## 1.4.6 Memory usage：把objects、references与alignment计入模型
+
+内存使用（<Term def="algorithm执行期间由primitive values、references、arrays、objects、padding与reachable auxiliary structures占用的space。">内存使用</Term>，memory usage）也需要cost model。Primitive sizes、reference width、object header、array header与8-byte alignment决定近似bytes；linked representation还为每个item支付node overhead。
+
+<Algs4MemoryModelLab />
+
+在一个简化64-bit model中，可写：
+
+$$
+M(N)\approx M_{header}+N\cdot M_{item}+M_{padding}
+$$
+
+但reference array只包含references，不包含被引用objects；shared objects不能重复全算，reachable graph也可能有cycles。Compressed ordinary object pointers、JVM implementation与alignment会改变常数，最终应使用profiler或instrumentation验证。Space complexity关心随N增长，capacity strategy则同时影响constant factor与峰值。
+
+## 统一验收：让measurement与model相互约束
+
+<Stepper>
+  <Step title="固定experiment与input model">
+    <Algs4ScientificMethodCycle />
+    记录machine、runtime、revision、seed、size definition、distribution与计时边界。
+  </Step>
+  <Step title="取得重复doubling observations">
+    <Algs4DoublingRatioLab />
+    跳过timer-resolution区间，重复测量并报告ratio distribution与稳定区间。
+  </Step>
+  <Step title="从code推导operation frequency">
+    <Algs4ThreeSumFrequencyLab />
+    写出合法indices集合，推导exact count、leading term与basic-operation choice。
+  </Step>
+  <Step title="用新algorithm改变growth">
+    <Algs4FasterAlgorithmLab />
+    同时比较operation model、output oracle、duplicates与overflow contract。
+  </Step>
+  <Step title="独立核查space model">
+    <Algs4MemoryModelLab />
+    画reachable object graph，区分inline values、references、headers、capacity与peak allocation。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. Analysis of algorithms通过scientific method在observations与mathematical models间循环。
+2. Doubling ratio消去coefficient，可由稳定ratio估计power-law exponent。
+3. ThreeSum的sum tests是C(N,3)，leading term为N^3/6。
+4. Order of growth用于scalability分类，不能替代constants、preconditions与实际measurements。
+5. ThreeSumFast把growth降为N^2 log N，但当前官方实现要求distinct ints且忽略overflow。
+6. Input dependence必须由明确distribution、structure或worst-case quantifier表达。
+7. Memory usage要计objects、references、headers、alignment与capacity，并以目标runtime测量校验。
+
+<Exercises>
+
+**问题 1：doubling ratio稳定在约4，power-law exponent b约是多少？**
+
+<Answer>`b = log2(4) = 2`，支持quadratic dominant model。仍需检查更大N、重复测量和residuals，确认不是两个不同terms在有限区间偶然产生ratio 4。</Answer>
+
+**问题 2：N=10时ThreeSum执行多少次sum test？**
+
+<Answer>合法indices满足i小于j小于k，数量是C(10,3)=10×9×8/6=120，因此恰做120次sum-equality test。</Answer>
+
+**问题 3：为什么ThreeSumFast不能直接替代ThreeSum处理任意int array？**
+
+<Answer>Current fast code拒绝duplicates，而且两者都可能发生int arithmetic overflow。它改变了合法input contract；要替代必须定义duplicates的index multiplicity并使用足够宽的intermediate arithmetic。</Answer>
+
+**问题 4：object array长度100，为什么不能只算array header加100个references就声称是完整memory？**
+
+<Answer>那只计算reference container；每个referenced object的header、fields与padding另占空间，且objects可能shared。应遍历reachable graph、去重identity并考虑VM layout和peak temporary allocations。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="算法分析">以实验和数学模型预测algorithm resource usage的过程。</GlossaryItem>
+  <GlossaryItem term="科学方法">观察、假设、预测与验证组成的可证伪循环。</GlossaryItem>
+  <GlossaryItem term="观察">在受控环境和inputs下得到的timing、counts与memory evidence。</GlossaryItem>
+  <GlossaryItem term="数学模型">以input parameters与operation frequencies近似resource behavior的表达。</GlossaryItem>
+  <GlossaryItem term="成本模型">选取代表性basic operation并按frequency估算总cost的约定。</GlossaryItem>
+  <GlossaryItem term="增长数量级">由dominant function描述resource随规模增长的类别。</GlossaryItem>
+  <GlossaryItem term="输入模型">规定size、distribution、ordering、duplicates与adversarial scope的前提。</GlossaryItem>
+  <GlossaryItem term="内存使用">reachable data、auxiliary objects、capacity与runtime layout占用的space。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Algorithms, 4th Edition · Section 1.4 Analysis of Algorithms"
+  href="https://algs4.cs.princeton.edu/14analysis/"
+  author="Robert Sedgewick and Kevin Wayne"
+  license="原书、官方页面与Java示例版权归Robert Sedgewick、Kevin Wayne及Addison-Wesley所有；本页依据作者官方1.4 synopsis及ThreeSum、ThreeSumFast、DoublingRatio、Stopwatch代码独立重构教学内容"
+/>

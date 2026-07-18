@@ -1,196 +1,188 @@
 ---
-title: "总复习"
+title: "CLR via C# 4e · 30章总复习"
 type: A
-section: "高级CLR"
-order: 3
-description: "CLR via C# 全书总复习：四大板块知识串联、核心因果链与综合应用场景。"
+section: "CLR via C# 4e · 总复习"
+order: 31
+description: "以load、execute、retain、coordinate四条证据链串联第四版30章，并用真实故障与最终验收门验证迁移能力。"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
 draft: false
 ---
 
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { CvcFinalReviewDiagram } from "@/components/mdx/clr-via-csharp/diagrams/cvc-final-review";
+import { CvcRuntimeMechanismLab, CvcIncidentTriageLab, CvcAcceptanceGateLab } from "@/components/mdx/clr-via-csharp/diagrams/cvc-final-review";
 
 <Objectives>
 
-- 能将全书四大板块的知识串联为完整的 CLR 运行时图景
-- 能解释核心因果链：执行模型 → 类型系统 → 内存管理 → 高级机制
-- 能回答：一个 C# 对象从创建到回收的完整生命周期中，CLR 做了什么？
+- 能绘制load、execute、retain、coordinate四条跨章证据链，并从现象定位到30章中的责任单元
+- 能分析错误实现、内存滞留、慢或卡住任务及边界故障，选择最低成本且有区分力的证据
+- 能设计包含解释、实现、诊断与迁移的最终验收，证明CLR知识可用于陌生生产问题
 
 </Objectives>
 
-## 直觉引入
+## 从生产症状开始重建Runtime Evidence Graph
 
-你已经学完了全书十章——从 CLR 执行模型到反射与特性。现在把这些碎片拼成完整的拼图。
+前三十章已经给出局部机制。最终任务是把程序集身份、类型、调用、对象图、异常、加载、序列化、线程、异步和同步连接成 <Term def="把运行时状态、生产者、消费者和可观测证据连接起来，用于从症状反推机制的跨章节图。">runtime evidence graph</Term>。图中的节点不是书名术语，而是可验证状态：实际加载了哪个assembly；调用目标是哪张method table；对象被哪条root path保留；work在queue、running还是waiting；permit或lock由谁持有。
 
-想象一个 `Dog` 对象的完整生命周期。你写 `class Dog`，C# 编译器把它编译成 IL 和元数据存入程序集。CLR 加载程序集，从元数据构建 Dog 的类型对象（含方法表）。你调用 `new Dog()`，CLR 在 GC 堆的 Gen0 分配内存，写入类型指针，调用构造函数。你调用 `dog.Speak()`，JIT 将 Speak 的 IL 编译为机器码，通过方法表分派到 Dog 的实现。你不再需要 dog 了，GC 从根出发遍历引用图，发现 dog 不可达，回收它的内存。如果 dog 有 Finalizer，先调用 Finalizer 再回收。
+一个生产故障往往跨Part：plugin加载成功但调用旧方法，涉及assembly identity、type loading、reflection与exception；event subscriber让cache对象无法回收，涉及delegate、event、GC roots与lifetime；request timeout但CPU很低，涉及async I/O、thread pool、blocking和synchronization。只背单章定义会把这些问题误判为“CLR偶发”。
 
-这条链路贯穿了全书所有知识——执行模型（IL/JIT）、类型系统（类型对象/方法表）、内存管理（GC 堆/分代/回收）、异常处理（构造函数中的异常）、异步（dog 的方法可能是 async）。理解这条链路，你就理解了 CLR。
+先预测：如果只给出MissingMethodException、heap持续增长或CPU低但p99升高，哪一份证据最先改变你的判断？把预测写下来，再与后面的identity、root path和latency timeline对照；看完结果才补原因不算诊断能力。
 
-## 概念讲解
+## 四条重复出现的机制链
 
-### 核心因果链
-
-<Term def="因果链是 CLR 四大板块之间的依赖关系：执行模型是地基，类型系统建立在地基上，内存管理依赖类型系统，高级机制综合前三者。">
-
-全书的知识不是孤立的——每个板块都建立在前一个板块的基础上。执行模型解释"代码怎么跑起来的"——IL 编译、JIT、程序集加载。类型系统解释"对象长什么样"——类型对象、方法表、值类型 vs 引用类型。内存管理解释"对象怎么生灭"——GC 分代、Finalizer、Dispose。高级机制解释"运行时的高级能力"——async 状态机、反射元数据查询。
-
-</Term>
-
-### 对象的完整生命周期
-
-一个 `Dog` 对象从创建到回收，CLR 全程参与：
-
-1. **编译期**：C# 编译器将 `class Dog` 编译为 IL + 元数据，存入程序集
-2. **加载期**：CLR 加载程序集，读取元数据，构建 Dog 的类型对象（方法表、字段布局）
-3. **创建期**：`new Dog()` → GC 在 Gen0 分配内存 → 写入类型指针 → 调用构造函数
-4. **执行期**：`dog.Speak()` → JIT 编译 Speak 的 IL → 通过方法表分派到 Dog.Speak
-5. **回收期**：GC 从根遍历 → dog 不可达 → 如果有 Finalizer 先调用 → 回收内存
-
-## 交互Demo
-
-<CvcFinalReviewDiagram />
+<CvcRuntimeMechanismLab />
 
 <Stepper>
-
-<Step title="编译与加载：IL + 元数据 + 类型对象">
-
-你写 `class Dog : Animal`，编译器生成程序集（IL + 元数据）。CLR 加载程序集时读取元数据，构建 Dog 的类型对象——包含方法表（Speak 指向 Dog 的实现，因为 override）、字段布局（Name 的偏移量）、基类指针（指向 Animal 的类型对象）。所有 Dog 实例共享这个类型对象。
-
-</Step>
-
-<Step title="创建与执行：GC 分配 + JIT 编译">
-
-`new Dog()` 在 GC 堆 Gen0 分配内存。内存头部写入类型指针（指向 Dog 类型对象）。调用构造函数初始化字段。`dog.Speak()` 首次调用时，JIT 将 Speak 的 IL 编译为机器码——通过 dog 的类型指针找到方法表中的 Speak 地址。如果 Speak 是虚方法且 Dog 重写了，地址指向 Dog.Speak（多态）。
-
-</Step>
-
-<Step title="内存管理：分代回收 + Dispose">
-
-dog 是引用类型，分配在 GC 堆。Gen0 回收时如果 dog 仍被引用，晋升到 Gen1。如果 dog 持有非托管资源（如文件句柄），应实现 IDisposable——用 using 块主动 Dispose 释放资源，调用 GC.SuppressFinalize 取消 Finalizer。如果忘了 Dispose，Finalizer 作为安全网在 GC 回收时调用。
-
-</Step>
-
-<Step title="高级机制：async + 反射">
-
-如果 dog.SpeakAsync() 是 async 方法，编译器生成状态机——await 时保存状态交还控制权，异步完成后从状态恢复。反射可以 `typeof(Dog).GetMethod("Speak")` 在运行时查询方法信息，`Activator.CreateInstance(typeof(Dog))` 动态创建实例。DI 容器、序列化器、ORM 都依赖反射操作未知类型。
-
-</Step>
-
+  <Step title="切换Load、Execute、Retain、Coordinate"><CvcRuntimeMechanismLab /></Step>
+  <Step title="把30章放进四条链">每章至少归入一条主链并写交叉边：reflection同时连接load/execute，delegate连接execute/retain，serialization连接load/boundary。</Step>
+  <Step title="给每条链指定Evidence">Load用identity/binding；execute用IL/stack/dispatch；retain用allocation/root；coordinate用queue/thread/wait timeline。</Step>
 </Stepper>
 
-## 代码对照
+### Load：从Assembly Bytes到Type Identity
+
+Part I解释managed module、assembly、manifest、strong name和部署；Part IV的hosting、AppDomain、assembly loading、reflection、serialization及WinRT把同一identity问题推到动态边界。`Assembly.FullName`相同不代表来自同一路径或同一load context，type显示名相同也可能不具赋值兼容性。
+
+复习时构造三类失败：依赖缺失、版本/签名不匹配、同名type来自不同identity。保存应用基目录、probing/load context、requested与actual identity、module MVID、caller member reference。若没有“请求者-请求内容-实际产物”的三元组，所谓binding修复只是猜测。
+
+### Execute：从IL到Dispatch与Exception State
+
+Part II的method、parameter、property、event、generic、interface定义call contract；Part III的delegate和attribute改变动态调用与metadata；Part IV的reflection执行未知type。JIT将IL变为native code，但错误目标可能在更早的overload resolution、generic instantiation、virtual/interface dispatch或reflection binding产生。
+
+Exception不是日志字符串，而是执行状态和failure boundary。Catch必须明确能恢复的invariant，finally/using负责cleanup，包装时保留inner exception和上下文。不要用catch-all继续未知状态，也不要把expected cancellation记录成系统fault。
 
 ```csharp
-// 一个 Dog 对象的完整生命周期——贯穿全书知识
-
-// === 编译期：C# → IL + 元数据 ===
-public class Dog : Animal, IDisposable
+public static object InvokeChecked(object target, MethodInfo method, object?[] args)
 {
-    public string Name { get; init; }
-    private FileStream? _file;  // 非托管资源包装
+    if (!method.DeclaringType!.IsInstanceOfType(target))
+        throw new ArgumentException("Target identity does not satisfy declaring type");
 
-    public Dog(string name, string logPath)
+    try { return method.Invoke(target, args)!; }
+    catch (TargetInvocationException ex) when (ex.InnerException is not null)
     {
-        Name = name;
-        _file = new FileStream(logPath, FileMode.Append);  // 可能抛异常
+        ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+        throw;
     }
-
-    public override void Speak() => Console.WriteLine($"{Name} says Woof");
-
-    public async Task SpeakAsync()
-    {
-        await Task.Delay(1000);  // async 状态机
-        Speak();
-    }
-
-    public void Dispose()
-    {
-        _file?.Dispose();
-        GC.SuppressFinalize(this);
-    }
-
-    ~Dog() => _file?.Dispose();  // Finalizer 安全网
 }
-
-// === 运行期：CLR 全程管理 ===
-using var dog = new Dog("Rex", "log.txt");  // GC Gen0 分配 + 构造
-
-// JIT 编译 Speak（首次调用）→ 方法表分派到 Dog.Speak
-dog.Speak();  // 输出：Rex says Woof
-
-// async 状态机：await 暂停 → 1秒后恢复
-await dog.SpeakAsync();
-
-// 反射：运行时查询类型信息
-Type dogType = dog.GetType();  // Dog
-MethodInfo speakMethod = dogType.GetMethod("Speak");
-speakMethod.Invoke(dog, null);  // 动态调用
-
-// using 块结束 → Dispose() → 释放文件句柄
-// GC 后续回收 dog 内存（Gen0 → 如果存活晋升）
 ```
 
-这段代码串联了全书核心知识：类型系统（继承 Animal、实现 IDisposable）、执行模型（JIT 编译）、内存管理（GC 分配、Dispose、Finalizer）、异常处理（构造函数中的异常）、异步（async 状态机）、反射（GetMethod、Invoke）。
+### Retain：从Allocation到Root、Generation与Cleanup
 
-## 常见误区
+Value/reference、array、string、delegate、nullable决定allocation与reference shape；managed heap/GC章解释root、generation、finalization、pinning和large object；hosting/loading又可能延长整个type/assembly graph生命周期。<Term def="从存活对象沿field、delegate、handle、static、thread或loader引用回到GC root的保留因果路径。">memory retention path</Term>比“Gen2很大”更能定位owner。
 
-<Callout type="trap">
+先区分high allocation rate与retention：前者看allocation stack/bytes per operation，后者比较多次full collection后的survivors/root path。Dispose释放外部资源但不让managed object自动不可达；finalizer是延迟安全网而非主清理；event/static cache/Timer/Task continuation都可能形成意外root。
 
-**误区：学完每章就够了，不需要串联**
+### Coordinate：从Work Classification到Result与Visibility
 
-每章的知识是碎片——串联起来才是完整的运行时图景。不理解执行模型就不知道类型对象从哪来，不理解类型系统就不知道 GC 怎么遍历引用图，不理解 GC 就不知道 async 的内存开销。综合面试题和实际性能问题往往跨多个板块——一个死锁可能涉及异步（async 状态机）、类型系统（SynchronizationContext 的线程关联）、内存管理（Task 对象的 GC 压力）。
+Part V先区分CPU-bound、I/O-bound，再讨论primitive和hybrid synchronization。核心是 <Term def="从接收工作、排队、执行、完成或取消，到观察结果、释放permit和关闭资源的连续责任链。">ownership chain</Term>：谁接受work；queue是否bounded；谁观察result/exception；谁发cancel；谁release；shutdown如何拒绝新work、drain和await。
 
+Task是operation result，不等于thread；async组合等待，不保证并行；I/O completion期间无需占一条waiting thread；lock保护state invariant，不保护“代码看起来像一段”。Monitor condition必须在同一lock内用while重检predicate，Semaphore permit只有acquire成功后才release，ReaderWriterLockSlim要用真实ratio和critical-section成本验证。
+
+```csharp
+public static async Task<T> WithPermitAsync<T>(
+    SemaphoreSlim gate,
+    Func<CancellationToken, Task<T>> body,
+    CancellationToken token)
+{
+    await gate.WaitAsync(token); // 成功后才拥有permit
+    try { return await body(token); }
+    finally { gate.Release(); }
+}
+```
+
+## 从现象反推章节与第一份证据
+
+<CvcIncidentTriageLab />
+
+<Stepper>
+  <Step title="切换四类生产症状"><CvcIncidentTriageLab /></Step>
+  <Step title="做Competing Hypotheses表">每个症状写至少三个候选原因，以及能最快排除其中两个的证据；先采证再改参数。</Step>
+  <Step title="闭合Owner与Invariant">证据指向具体assembly、object root、queue、thread、lock或boundary owner，并写修复前后不变量。</Step>
+</Stepper>
+
+### Case A：Wrong Implementation或Missing Method
+
+先固定runtime type、assembly identity、load context和method token/签名，再判断是编译引用漂移、动态加载、interface/virtual dispatch、reflection overload还是serialization重建了不同type。不要把同名type当同一type，也不要用删除bin目录替代原因说明。
+
+修复验收包括：旧/新版本矩阵、明确加载策略、重复加载检测、失败消息包含requested/actual identity、rollback后仍可启动。若plugin boundary可独立卸载，还要证明没有static/event/thread让load context滞留。
+
+### Case B：Memory持续上升
+
+把“内存高”拆成allocation rate、live managed heap、native resource、committed/reserved和working set。抓至少两个时间点的heap，强制full collection只用于诊断对比，不作为生产修复。对增长type查看root path；若根来自event、cache、Timer或pending Task，回到ownership chain解除订阅、加capacity/expiry或完成operation。
+
+<Term def="把总耗时拆为queue、running CPU、I/O wait、lock/permit wait和continuation delay以区分瓶颈的时间模型。">latency decomposition</Term>也适用于GC pause：先证明请求时间实际落在pause、allocation pressure或suspension，而不是只看到同一时间窗口有GC事件。
+
+### Case C：请求慢、CPU低、Queue增长
+
+这通常更像pool starvation、sync-over-async、lock convoy、blocked synchronous I/O或unbounded admission，而非CPU算力不足。关联request id与enqueue/start/await/complete时间，采集pool worker/injection、running/waiting stacks、lock owner和I/O duration。把总延迟按latency decomposition拆开，才能判断要改async边界、capacity、critical section还是外部deadline。
+
+### Case D：Serialization或Interop边界故障
+
+Runtime serialization必须固定schema identity、field/version规则、type allow-list、reference/cycle策略和不可信输入限制；WinRT/native边界还要固定ABI、marshalling、apartment/thread affinity、ownership与HRESULT/exception转换。Round-trip成功不代表兼容，至少测试old reader/new writer、new reader/old writer、missing/unknown field、invalid payload和partial failure。
+
+```csharp
+public sealed record BoundaryProbe(
+    string ProducerVersion,
+    string ConsumerVersion,
+    byte[] Payload,
+    string ExpectedOutcome,
+    string EvidenceId);
+```
+
+## Cross-Part综合实验
+
+设计一个可热更新的telemetry plugin：host通过独立load context加载assembly，reflection发现attribute标记的handler；handler接受nullable/enum payload，异步写入bounded stream；event发布completion；shutdown取消、drain并卸载plugin。这个实验触及identity、types、delegate/attribute、nullable、exception、GC/loading/reflection/serialization、I/O、threading和synchronization。
+
+注入以下故障：plugin版本不匹配；handler构造抛异常；subscriber忘记退订；payload schema缺field；stream写入超时；Semaphore等待时取消；shutdown与reload竞态。每次只改变一个刺激，保存binding log、exception chain、root path或timeline，并证明修复没有引入permit leak、unbounded queue或load-context retention。
+
+## 最终Acceptance Gate
+
+<Term def="在发布前同时验证目录完整、章节满分、导航题库对应、静态检查和跨章迁移能力的停止条件。">deployment acceptance gate</Term>不是“本地能打开”。内容侧要求导学+30章+总复习恰好32页，每页质量100，一级目录覆盖100%；学习侧要求每页2题且chapter key有效；工程侧要求MDX、types、lint、引用、排序和构建门全部通过；行为侧要求综合实验能解释、实现、诊断和迁移。
+
+<CvcAcceptanceGateLab />
+
+<Stepper>
+  <Step title="切换Explain、Implement、Diagnose、Transfer"><CvcAcceptanceGateLab /></Step>
+  <Step title="执行Structural Gates">核对32 pages、64 questions、30 official manifest units、section order、zero stale references和all score 100。</Step>
+  <Step title="执行Runtime Transfer Gate">随机抽一个陌生incident，必须写出hypotheses、first evidence、owner/invariant、fix、rollback与before/after proof。</Step>
+</Stepper>
+
+<Callout type="trap" title="把ThreadPool或GC参数调大，指标下降就算找到根因">
+参数变化可能只移动queue、pause或memory成本。没有latency decomposition、root path、running/waiting stack或controlled comparison，相关性不能证明因果。先定位owner和限制，再决定是否调参。
 </Callout>
 
-<Callout type="trap">
-
-**误区：CLR 知识只对框架开发者有用**
-
-应用开发者也需要 CLR 知识。不理解值类型/引用类型，会在热路径上意外装箱。不理解 GC 分代，会创建过多大对象触发 Full GC。不理解 async 状态机，会写出死锁代码。不理解异常的栈展开，会吞掉关键异常。CLR 知识不是"高级选修"——它是写出高效、正确 C# 代码的前提。
-
+<Callout type="trap" title="30章都达到分数，书就自动可部署">
+章节分数之外还可能有旧抽样页、重复导航、缺失题目、stale import、MDX/TypeScript错误或未登记section。最终门必须验证页面集合、题库AST、引用零残留和全局检查；部署只发生在全部225本完成后的全库门之后。
 </Callout>
+
+## 本章回顾：掌握标准
+
+对任一问题，先说出runtime state和competing hypotheses；再选择能区分原因的最小证据；接着定位owner、boundary与invariant；修复同时覆盖success、fault、cancel、pressure/race和shutdown；最后把同一模型迁移到不同领域。能完成这一链条，才说明第四版30章从知识点变成了工程判断力。
 
 <Exercises>
 
-**问题 1**：描述一个 `Dog` 对象从 `new Dog()` 到被 GC 回收的完整过程中，CLR 做了哪些工作。
+**问题 1：一个Plugin LoadContext无法卸载，怎样跨章定位？**
 
-<Answer>
+<Answer>先保留WeakReference并触发诊断性full GC确认确实存活，再查root path。常见根是host static/event delegate、Timer、thread、AsyncLocal、pending Task或native handle。对应检查assembly/load context、delegate/event、thread lifetime和GC章节；停止新work、取消/drain、退订、Dispose并清除host引用，再证明WeakReference失活及重复reload内存稳定。</Answer>
 
-完整过程：\n\n1. **创建**：\n   - CLR 在 GC 堆的 Gen0 分配内存（大小由 Dog 的字段布局决定，从类型对象获取）\n   - 内存头部写入类型指针（指向 Dog 的类型对象）\n   - 同步索引块初始化（用于锁/哈希码）\n   - 调用 Dog 构造函数初始化字段\n   - 如果构造函数抛异常，CLR 自动回收已分配的内存\n\n2. **使用**：\n   - `dog.Speak()` 首次调用时，JIT 将 Speak 的 IL 编译为机器码\n   - 通过 dog 的类型指针找到 Dog 类型对象的方法表\n   - 在方法表中查找 Speak 地址（虚方法分派，指向 Dog 的 override 实现）\n   - 执行机器码\n\n3. **可达性检查**：\n   - GC 从根（栈变量、静态字段、寄存器）出发遍历引用图\n   - 如果 dog 被某个根引用链到达，标记为存活\n   - 如果 dog 不可达，标记为可回收\n\n4. **Finalizer 检查**（如果有）：\n   - Dog 有 ~Dog() Finalizer\n   - GC 不直接回收，将 dog 移入 freachable 队列\n   - 终结器线程调用 ~Dog()（释放文件句柄）\n   - dog 从 freachable 队列移除\n   - 下一次 GC 才真正回收内存\n\n5. **如果已 Dispose**：\n   - Dispose 释放了文件句柄\n   - GC.SuppressFinalize(this) 取消了 Finalizer\n   - dog 不需要进 freachable 队列\n   - 一次 GC 即可回收内存\n\n6. **分代晋升**：\n   - Gen0 回收时如果 dog 存活，晋升到 Gen1\n   - Gen1 回收时如果 dog 存活，晋升到 Gen2\n   - Gen2 回收成本最高（Full GC）
+**问题 2：请求p99升高但CPU与GC都不高，第一轮证据是什么？**
 
-</Answer>
+<Answer>按request关联enqueue/start、CPU running、I/O await、lock/permit wait、continuation和complete，形成latency decomposition；同时采pool queue/worker injection、waiting stacks与lock owner。它能区分pool starvation、sync I/O、外部I/O、lock convoy和admission queue，优先级高于盲调MinThreads或GC mode。</Answer>
 
-**问题 2**：全书四大板块如何串联？给出一个跨板块的实际场景。
+**问题 3：什么结果才允许这本书进入最终全库发布门？**
 
-<Answer>
-
-四大板块的串联关系：\n1. 执行模型（IL/JIT）是地基——定义代码如何运行\n2. 类型系统建立在地基上——类型对象由 CLR 加载元数据构建\n3. 内存管理依赖类型系统——GC 遍历引用图需要类型信息确定字段布局\n4. 高级机制综合前三者——async 依赖线程池（执行模型）+ 状态机内存（内存管理）；反射操作元数据（执行模型）+ 类型对象（类型系统）\n\n跨板块的实际场景——**异步日志系统**：\n\n```csharp\npublic class AsyncLogger : IDisposable\n&#123;\n    private readonly ConcurrentQueue&lt;string&gt; _queue = new();\n    private readonly FileStream _stream;\n\n    public AsyncLogger(string path)\n    &#123;\n        _stream = new FileStream(path, FileMode.Append);  // 非托管资源\n    &#125;\n\n    public async Task LogAsync(string message)\n    &#123;\n        _queue.Enqueue(message);\n        await FlushAsync();  // async 状态机\n    &#125;\n\n    private async Task FlushAsync()\n    &#123;\n        while (_queue.TryDequeue(out var msg))\n        &#123;\n            await _stream.WriteLineAsync(msg);  // 异步 I/O\n        &#125;\n    &#125;\n\n    public void Dispose()\n    {\n        _stream.Dispose();\n        GC.SuppressFinalize(this);\n    }\n\n    ~AsyncLogger() => _stream.Dispose();\n}\n```\n\n涉及的知识：\n\n- **执行模型**：`async/await` 被编译器转换为状态机，JIT 编译状态机的 MoveNext 方法\n- **类型系统**：AsyncLogger 继承 IDisposable，ConcurrentQueue&lt;string&gt; 是泛型集合避免装箱\n- **内存管理**：FileStream 是非托管资源包装，必须 Dispose 释放；GC 管理 AsyncLogger 和 ConcurrentQueue 的堆内存\n- **异常处理**：FileStream 构造可能抛 FileNotFoundException，WriteLineAsync 可能抛 IOException\n- **异步**：await 不阻塞线程，I/O 完成端口通知线程池\n- **反射**：DI 容器通过反射发现 AsyncLogger 的构造函数并注入依赖\n\n一个简单的日志类串联了全书所有核心知识——这就是为什么 CLR 知识是一个整体，不是孤立的碎片。
-
-</Answer>
+<Answer>官方5部分30章全部独立覆盖，导学和总复习形成32个active pages且逐页100；64道题与chapter keys一一对应；旧抽样页/题/图零引用；section导航正确；MDX、TypeScript、ESLint、diff及AST验证全部通过。还需完成一个跨Part incident transfer。之后只标记本书完成，仍需等待225本全局门才push和部署。</Answer>
 
 </Exercises>
 
+## 术语表
+
 <Glossary>
-
-<GlossaryItem term="核心因果链">
-
-全书四大板块的依赖关系：执行模型（IL/JIT）是地基 → 类型系统（类型对象/方法表）建立在地基上 → 内存管理（GC/Dispose）依赖类型系统 → 高级机制（async/反射）综合前三者。每个板块的知识都建立在前一个板块的基础上。
-
-</GlossaryItem>
-
-<GlossaryItem term="对象生命周期">
-
-一个 CLR 对象从创建到回收的完整过程：编译期（C# → IL + 元数据）→ 加载期（CLR 构建类型对象）→ 创建期（GC 堆分配 + 构造函数）→ 执行期（JIT 编译 + 方法分派）→ 回收期（GC 遍历引用图 + Finalizer/Dispose + 内存回收）。
-
-</GlossaryItem>
-
-<GlossaryItem term="四大板块">
-
-全书按 CLR 核心职责分为：CLR 基础（执行模型）、类型设计（类型系统）、内存 GC（自动内存管理）、高级 CLR（异步与反射）。四者形成因果链，不可跳过。
-
-</GlossaryItem>
-
+  <GlossaryItem term="runtime evidence graph" definition="用状态、生产消费关系与证据连接30章的诊断图。" />
+  <GlossaryItem term="memory retention path" definition="从存活对象回溯到GC root的引用与owner因果路径。" />
+  <GlossaryItem term="ownership chain" definition="工作从接收、执行、完成到取消、释放与关闭的责任链。" />
+  <GlossaryItem term="latency decomposition" definition="将总延迟拆成queue、CPU、I/O、同步和continuation时间。" />
+  <GlossaryItem term="deployment acceptance gate" definition="目录、质量、导航题库、静态检查和迁移能力的联合发布门。" />
 </Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapters 1-30 integrated review" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

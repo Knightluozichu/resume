@@ -1,0 +1,256 @@
+---
+title: "第12章：Generics"
+type: C
+section: "Essential C# 7.0 · Abstraction and Reuse"
+order: 12
+description: "掌握object collection问题、generic types/methods、constraints、type inference、variance与runtime constructed types。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-csharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7ConstraintInferenceLab, Ec7ObjectGenericCollectionLab, Ec7VarianceRuntimeLab } from "@/components/mdx/essential-csharp-7/diagrams/generics";
+
+<Objectives>
+
+- 能比较object-based与generic collections在type check、cast、boxing和failure时机上的差异
+- 能设计generic type/method及where constraints，并解释argument-based type inference与constraint checking
+- 能判断covariance、contravariance、invariance转换，并描述open/closed constructed types的runtime identity
+
+</Objectives>
+
+## 为什么泛型不是把object换成T
+
+`object`确实能引用几乎任何value，但它把“这个容器只存订单”“这个算法要求可比较”从compiler contract降成runtime约定。caller必须cast，错误type可能很晚才失败，value types还会boxing。generic parameter则让同一算法在每个constructed type上保留具体type事实。
+
+先预测：non-generic object collection何时发现string混进int；boxed int读取需要什么；`Max(3, 7)`如何推断T；constraint是否参与推断；`IEnumerable<Cat>`能否给`IEnumerable<Animal>`；`List<Cat>`为何不能；`Cache<int>`和`Cache<string>`是否共享static field。然后逐层验证。
+
+<Term def="把允许的element/argument type写入compile-time contract，使错误在使用点前被拒绝的保证。">generic type safety</Term>
+
+## C# without Generics: object, Casts, and Boxing
+
+旧式collection以object存储，Add接受任何reference或boxed value。读取时caller必须知道actual type并explicit cast；错误元素可在存入很久后才抛`InvalidCastException`。value type进入object会boxing，读取还要unbox。
+
+```csharp
+var items = new System.Collections.ArrayList();
+items.Add(42);       // boxes Int32
+items.Add("forty"); // accepted
+
+int first = (int)items[0];
+int second = (int)items[1]; // runtime InvalidCastException
+```
+
+`List<int>`把element type写入API，`Add("forty")`无法compile，indexer直接返回int，通常没有每项boxing。泛型的主要收益是contract，不应只描述为performance trick。
+
+<Stepper>
+  <Step title="切换object与generic collections">
+    <Ec7ObjectGenericCollectionLab />
+  </Step>
+  <Step title="比较store与read boundary">
+    object collection在Add放宽、read cast收紧；generic collection在Add时compile-time验证。
+  </Step>
+  <Step title="记录representation与failure">
+    value进入object产生box，wrong cast在runtime失败；generic element保留具体type。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="object能存所有类型，所以比generic API更通用">
+它只是把type rule交给运行时和文档。真正generic API让caller选择T，同时compiler在整个调用链保持一致性，既通用又有证据。
+</Callout>
+
+## Introducing Generic Types and Type Parameters
+
+generic type declaration使用type parameter占位，例如`Buffer<T>`；caller提供type argument形成closed constructed type `Buffer<Order>`。body只能使用对任意合法T都成立的operations，除非constraint增加能力。type parameter name通常用T或语义名如TKey/TValue。
+
+<Term def="generic definition与具体type arguments组合形成可实例化、具有独立type identity的closed type。">constructed type</Term>
+
+```csharp
+public sealed class Buffer<T>
+{
+    private readonly T[] items;
+    private int count;
+
+    public Buffer(int capacity)
+    {
+        if (capacity <= 0) throw new ArgumentOutOfRangeException(nameof(capacity));
+        items = new T[capacity];
+    }
+
+    public void Add(T item)
+    {
+        if (count == items.Length) throw new InvalidOperationException("full");
+        items[count++] = item;
+    }
+
+    public T Get(int index)
+    {
+        if (index < 0 || index >= count) throw new ArgumentOutOfRangeException(nameof(index));
+        return items[index];
+    }
+}
+
+var numbers = new Buffer<int>(4);
+var names = new Buffer<string>(4);
+```
+
+`Buffer<int>`与`Buffer<string>`不是assignment-compatible siblings；它们来自同一definition但拥有不同closed identity。T可能是class、struct、interface、enum或另一个constructed type，除非constraints限制。
+
+## Constraints: Capabilities Required by the Body
+
+`where` constraint告诉compiler允许哪些type arguments，也让generic body可安全使用相应members。常见C# 7 constraints有`class`、`struct`、specific base class、interfaces与`new()`。多个constraints有顺序和组合规则，`new()`放在最后；`struct`已包含可构造value semantics，不能与class混用。
+
+<Term def="where clause对type argument施加的category、base/interface或constructor requirement，并赋予body相应能力。">constraint contract</Term>
+
+```csharp
+public static T Max<T>(T left, T right)
+    where T : IComparable<T>
+{
+    return left.CompareTo(right) >= 0 ? left : right;
+}
+
+public sealed class Factory<T>
+    where T : class, new()
+{
+    public T Create() => new T();
+}
+```
+
+constraint应表达algorithm真正需求，不要为方便随意要求class或parameterless constructor。过强constraint排除合法types；过弱则body无法compile或被迫dynamic/casts。
+
+<Stepper>
+  <Step title="切换none、class、struct、interface与new constraints">
+    <Ec7ConstraintInferenceLab />
+  </Step>
+  <Step title="观察body获得的能力">
+    interface constraint允许调用其members；new允许构造；无constraint只能依赖object-level事实。
+  </Step>
+  <Step title="核对call-site rejection与inference">
+    先由arguments推断candidate type，再检查constraints；constraint本身不是return-driven inference提示。
+  </Step>
+</Stepper>
+
+## Generic Methods and Type Inference
+
+method可在non-generic或generic type中声明自己的type parameters。调用可显式写`Max<int>(3, 7)`，也可由argument expressions推断为`Max(3, 7)`。C# type inference主要依据arguments和parameter shapes，不用return target单独猜T，constraints通常在推断后验证。
+
+```csharp
+public static void Swap<T>(ref T left, ref T right)
+{
+    T temporary = left;
+    left = right;
+    right = temporary;
+}
+
+int x = 1, y = 2;
+Swap(ref x, ref y); // T inferred as int
+```
+
+若arguments给出冲突type、只有return位置包含T或lambda inference不足，需显式type arguments或调整API。inference是call-site convenience，不改变runtime type safety。
+
+## Covariance: Producers Can Widen
+
+covariant type parameter以`out`标在generic interface/delegate declaration，只能出现在output-safe positions。若Cat隐式reference-converts到Animal，则`IEnumerable<Cat>`可转为`IEnumerable<Animal>`：consumer只读取Animal，不可能塞入Dog破坏Cat sequence。
+
+<Term def="producer-only out parameter允许constructed interface/delegate沿type argument的reference conversion同向转换。">variance direction</Term>
+
+```csharp
+IEnumerable<Cat> cats = LoadCats();
+IEnumerable<Animal> animals = cats;
+
+foreach (Animal animal in animals)
+    Console.WriteLine(animal.Name);
+```
+
+variance只适用于interface/delegate声明的variant parameters，并依赖reference conversion；value type arguments如`IEnumerable<int>`不会因此转为`IEnumerable<object>`，因为boxing不是variance reference conversion。
+
+## Contravariance: Consumers Can Narrow
+
+contravariant parameter以`in`标记，只能用于input-safe positions。一个能处理任何Animal的`Action<Animal>`当然能用于“需要处理Cat”的位置，因此可赋给`Action<Cat>`；方向与type hierarchy表面相反。
+
+```csharp
+Action<Animal> printAnimal = animal => Console.WriteLine(animal.Name);
+Action<Cat> printCat = printAnimal;
+printCat(new Cat());
+```
+
+同时读写T的mutable container通常必须invariant。`List<Cat>`若能转成`List<Animal>`，target就可Add(new Dog())，破坏原list只含Cat的contract，因此compiler拒绝。
+
+<Stepper>
+  <Step title="切换covariant、contravariant与invariant cases">
+    <Ec7VarianceRuntimeLab />
+  </Step>
+  <Step title="标出producer或consumer position">
+    out只生产T，in只消费T；读写双向的List保持invariant。
+  </Step>
+  <Step title="切换open/closed runtime types">
+    查看generic definition与具体arguments形成的metadata identity和per-closed-type static state。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="Cat继承Animal，所以对应的mutable lists也能转换">
+generic constructed types不会自动复制type argument的继承关系。mutable List若协变会允许写入Dog；只有声明安全variance的interface/delegate转换才成立。
+</Callout>
+
+## Generic Internals and Runtime Identity
+
+.NET generics保留runtime type arguments，不像纯text substitution。`typeof(List<>)`表示open generic definition，`typeof(List<int>)`是closed constructed type，可实例化。reflection可读取generic definition/arguments；`is List<int>`在runtime检查具体constructed type。
+
+<Term def="尚含unbound parameters的generic definition与提供全部arguments后可实例化closed type之间的metadata边界。">open generic identity</Term>
+
+```csharp
+Type open = typeof(Dictionary<,>);
+Type closed = typeof(Dictionary<string, int>);
+
+Console.WriteLine(closed.IsGenericType);                       // True
+Console.WriteLine(closed.GetGenericTypeDefinition() == open); // True
+```
+
+CLR通常可在reference-type instantiations间共享部分native code，而value-type instantiations常需specialized code；这是implementation/performance细节，程序语义仍把每个closed type视为具体identity。generic type中的static field按closed constructed type分别存在。
+
+```csharp
+public static class Counter<T>
+{
+    public static int Value;
+}
+
+Counter<int>.Value = 1;
+Counter<string>.Value = 7;
+Console.WriteLine(Counter<int>.Value); // 1
+```
+
+## 本章回顾：把Type规则贯穿Compile与Runtime
+
+1. object collection延迟type error并引入casts/boxing；generic API在compile time保持element contract。
+2. generic definition接受type parameters，具体arguments形成独立closed constructed types。
+3. constraints同时限制call site并赋予body可用能力；type inference主要来自arguments。
+4. covariance用于producer out，contravariance用于consumer in，mutable read/write containers保持invariant。
+5. CLR保留generic metadata identity，open definition、closed type与per-constructed static state必须区分。
+
+<Exercises>
+
+**问题 1：为什么把ArrayList改成generic List不仅是性能优化？**
+
+<Answer>ArrayList的Add接受任意object，wrong type在读取cast时才失败，int还需boxing/unboxing；`List<int>`把element contract带入Add、indexer、enumeration和调用链，wrong type无法compile，读取直接得到int。allocation降低是收益之一，主要改进是failure从runtime迁到compile time。</Answer>
+
+**问题 2：如何为generic Max方法选择constraint并解释inference顺序？**
+
+<Answer>算法只需要比较两个T，因此使用`where T : IComparable<T>`，不额外要求class/new。调用`Max(3,7)`由两个argument推断T=int，再验证int满足constraint；constraints不是凭return target推断T的来源。冲突arguments时显式type arguments或先统一转换。</Answer>
+
+**问题 3：为何producer interface可协变而mutable List不可？**
+
+<Answer>IEnumerable的T声明out，只生产T，读取Cat当Animal安全；List既读又写，若把`List<Cat>`转成`List<Animal>`就能Add Dog，破坏原Cat contract，因此invariant。相反，`Action<Animal>`作为consumer可赋给`Action<Cat>`，因为能处理任意Animal的函数也能处理Cat。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="generic type safety" definition="把允许type写入compile-time contract并在调用链保持一致。" />
+  <GlossaryItem term="constructed type" definition="generic definition与具体type arguments组成的closed runtime type。" />
+  <GlossaryItem term="constraint contract" definition="where clause限制arguments并赋予generic body可用能力。" />
+  <GlossaryItem term="variance direction" definition="producer out同向、consumer in反向的安全reference conversion规则。" />
+  <GlossaryItem term="open generic identity" definition="unbound definition与提供全部arguments的closed type之间的metadata边界。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 12: Generics" adaptedUrl="https://www.informit.com/store/essential-c-sharp-7.0-9781509303618" />

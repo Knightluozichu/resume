@@ -1,99 +1,313 @@
 ---
-title: 二叉树的深度
+title: "面试题55（一）：二叉树的深度"
 type: C
-section: 树
-order: 13
-description: 求二叉树节点数中的最大深度。
+section: "第6章 面试中的各项能力"
+order: 62
+description: "按根到叶最长路径上的节点数定义树深，以空树为0，自底向上组合左右子树深度。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/55_01_TreeDepth/TreeDepth.cpp"
 draft: false
 ---
 
-{/* 知识点清单：树高度、递归取 max、迭代 BFS 两种方法；原书章节：面试题55-II。 */}
+import { TreeDepthPathDiagram, TreeDepthRecurrenceLab, TreeDepthCallStackDiagram, TreeDepthContractMap, TreeDepthOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/tree-depth";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能区分“深度”和“高度”在代码中的定义。
-- 能写出递归与迭代至少一种。
-- 能给出边界与复杂度分析。
+- 能解释作者按节点数定义二叉树深度及空树基例
+- 能计算一棵分叉树自叶到根的每个递归返回值
+- 能实现递归、层序遍历与显式栈三种求深度方式
+- 能分析节点数与边数、树高、栈溢出、环和共享子树边界
+- 能设计覆盖作者5种树形并与迭代实现对拍的测试
 
 </Objectives>
 
-## 直觉引入
+## 从“1到7这条路径有多长”开始
 
-树的最大深度就是从根到最远叶子经过的节点数。
-递归最直接：当前节点深度 = 1 + max(左子树、右子树)。
+先预测：作者Test1中根1的左孩子是2，右孩子是3；2连接4和5，5再连接7；3连接右孩子6。最长根到叶路径是1、2、5、7。
 
-## 算法思路
+题目把从根到<Term def="没有左右孩子的终止节点；根到它的路径构成一条完整向下路径。">叶节点</Term>依次经过的节点组成一条路径，并把最长路径上的节点数量定义为**二叉树的深度**。因此这条路径深度为4，不是3。
 
-1. 空节点深度 0。
-2. 非空节点深度 = `1 + max(depth(left), depth(right))`。
+<TreeDepthPathDiagram />
 
-<TreeDiagram />
+这种以节点数为单位的约定称为<Term def="以根到叶路径所含节点数量衡量深度，空树为0、单节点树为1。">节点计数深度</Term>。若另一套接口按边数定义高度，同一条路径会记为3；两种约定都可用，但不能在基例和测试中混用。
 
-## 思考引导
+## 从根问题拆成两个子问题
 
-### 1) 先问问题，不先求高度
-树深是“最深单路径长度”，对你更关注的是最坏场景风险。平均值容易误导。
+非空树的最长路径必定从根开始，然后进入左子树或右子树，不能同时走两侧。于是先求左右两个<Term def="与原问题结构相同但输入规模更小的左右子树深度计算。">子问题</Term>，再选更大的结果并为当前根加1。
 
-### 2) 识别不变式
-每个节点深度由其左右子树深度的最大值 + 1。递归返回后更新全局最大值。
+这正是作者概念“**左右子树深度的较大值加1**”。空指针没有节点，深度为0；非空节点的结果是max(leftDepth, rightDepth)加1。
 
-### 3) 为什么它一定成立
-最深路径一定可拆分成某节点 + 左或右子树中的最深路径。该结构不依赖遍历次序。
+若两个子树同深，选哪一侧都得到相同数值。若只需要深度，不需要返回具体路径，就无需记录父指针或节点列表。
 
-### 4) 常见误区
-混淆“层数”与“边数”定义，导致空树/单节点树边界 off by one。
+<TreeDepthRecurrenceLab />
 
-### 5) 你能找到一个反例吗
-空树和单节点树就是最稳健的边界测试，能验证你是否返回 0 或 1 的定义一致。
+图中叶节点4、7、6都从两个空子树得到0并返回1；节点5返回2，节点2返回3，节点3返回2，根1最终返回4。
 
-### 6) 迁移到下一题
-性能建模、依赖树风险评估都优先看最坏深度，先定义基准后再实现统计函数。
-## 代码对照
+## 忠实还原作者递归
 
-<CodeTabs>
-  <Tab label="C++">
+作者函数只接收const根指针，没有全局状态，也不会修改树。
+
 ```cpp
-struct TreeNode {
-    int val;
-    TreeNode* left;
-    TreeNode* right;
-    TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
-};
-
-class Solution {
-public:
-    int maxDepth(TreeNode* root) {
-        if (!root) return 0;
-        return 1 + std::max(maxDepth(root->left), maxDepth(root->right));
+int TreeDepth(
+    const BinaryTreeNode* pRoot) {
+    if (pRoot == nullptr) {
+        return 0;
     }
-};
-```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-class TreeNode {
-    val: number;
-    left: TreeNode | null;
-    right: TreeNode | null;
-    constructor(val: number) {
-        this.val = val;
-        this.left = null;
-        this.right = null;
-    }
-}
 
-function maxDepth(root: TreeNode | null): number {
-    if (!root) return 0;
-    return 1 + Math.max(maxDepth(root.left), maxDepth(root.right));
+    int nLeft =
+        TreeDepth(pRoot->m_pLeft);
+    int nRight =
+        TreeDepth(pRoot->m_pRight);
+
+    return (nLeft > nRight)
+        ? (nLeft + 1)
+        : (nRight + 1);
 }
 ```
-  </Tab>
-</CodeTabs>
+
+源码先完整计算左深度，再计算右深度，最后取较大值。这种先取得孩子结果、再计算父结果的模式称为<Term def="先完成左右子树递归，再在当前节点组合返回值的自底向上处理方式。">后序汇总</Term>。它与“用一个全局最大值在遍历时更新”是不同实现。
+
+旧页写“递归返回后更新全局最大值”，但作者没有全局变量。局部返回值让函数可重入：两个调用各自只依赖参数和子调用结果，不会共享一份容易忘记清零的历史状态。
+
+<TreeDepthCallStackDiagram />
+
+正确性可用结构归纳说明。空树返回0，与定义一致；假设左右子树函数都返回真实深度，任何根到叶路径只能经过其中一棵子树，最长者就是两者较大值，再加当前根节点1。因此当前树也返回真实深度。
+
+## 节点数与边数不要差一
+
+<Callout type="trap" title="把路径边数当成作者的节点数">
+作者Test4的单节点树期望1，Test5空树期望0。若把叶节点返回0、空树也返回0，就无法区分二者，并会让所有非空树结果少1。
+</Callout>
+
+按节点数定义时，空树0、叶节点1、根加一层。按边数定义时，常把空树记为-1、叶节点记为0，或者额外约定空树0。若调用方只说“高度”，应先确认单位，再写基例。
+
+作者返回int。深度不会超过节点数，但极端树若节点数超过int上限，返回值也无法表示；更早出现的现实风险通常是递归栈耗尽。
+
+只返回一个整数时，父节点无需知道最深路径经过了哪些具体节点。若产品还要展示路径，可以让递归同时返回深度和路径，父节点选择更深一侧后把当前节点放到路径前端；但每层复制vector会把斜树成本放大到O(n平方)。更稳妥的做法是第一次只求左右深度并记录每个节点选中的孩子，第二次从根沿选择指针走到叶；或返回目标叶指针，再通过父指针逆向恢复。左右同深时还要规定稳定选择左侧、右侧或字典序较小路径，否则测试结果可能随实现细节变化。
+
+树深也不同于二叉树直径。深度路径必须从当前根出发，只能选择左或右一侧，所以递推取较大值；直径允许从某个左侧叶子经过祖先走到右侧叶子，候选长度才会组合左右两侧。把nLeft与nRight相加再加1写进TreeDepth，得到的是“经过当前节点的最长叶间路径候选”，既不是当前子树深度，也还不是全树直径，因为全树直径还需和两个子树内部直径比较。
+
+## 时间看节点，空间看树高
+
+每个非空节点被调用一次，每个空子指针也只触发常数工作，所以时间复杂度O(n)。算法不能因为某一侧已经很深就跳过另一侧，因为未检查的一侧可能更深。
+
+空间不是O(1)。未返回的函数调用保存在<Term def="递归尚未完成时保存参数、返回位置与局部变量的调用栈空间。">递归栈</Term>中，峰值等于树高h，因此辅助空间O(h)。
+
+平衡树的h约为O(log n)，纯左链或纯右链的h等于n。作者Test2和Test3都构造5节点单链，验证左右方向对称；生产中若树可能有数十万层，递归版可能在得出答案前栈溢出。
+
+<TreeDepthContractMap />
+
+const只限制当前函数通过该指针修改节点，不保证其他线程不会并发改树。计算期间结构应保持稳定，否则一次遍历可能看到不一致的左右关系。
+
+如果同一棵不可变树会被频繁询问深度，可以在节点或树对象中缓存计算结果，使后续查询O(1)。缓存把一次O(n)遍历换成持久空间，前提是树结构确实不会变化；插入、删除或替换任意子树后，修改路径上所有祖先的缓存都要失效。可变树若只更新一条根到叶路径，可沿父指针自底向上重算到结果不再变化；没有父指针或修改批量很大时，重新全树计算往往更简单可靠。
+
+并发环境下，缓存还要解决发布与一致性。两个线程同时首次计算虽通常得到同一数值，但无同步写共享字段仍是数据竞争；加锁、一次初始化或不可变快照都可以建立清晰边界。作者的纯函数版本不保存结果，牺牲重复查询速度，却天然避免缓存失效和共享写状态。
+
+## 层序遍历按层计数
+
+广度优先搜索可以用队列逐层处理。每完成队列当前层的全部节点，depth加1；空树仍返回0。
+
+```cpp
+#include <queue>
+
+int TreeDepthByLevel(
+    const BinaryTreeNode* root) {
+    if (root == nullptr) {
+        return 0;
+    }
+
+    std::queue<const BinaryTreeNode*> nodes;
+    nodes.push(root);
+    int depth = 0;
+
+    while (!nodes.empty()) {
+        const std::size_t levelSize =
+            nodes.size();
+        for (std::size_t i = 0;
+             i < levelSize;
+             ++i) {
+            const BinaryTreeNode* node =
+                nodes.front();
+            nodes.pop();
+            if (node->m_pLeft != nullptr) {
+                nodes.push(node->m_pLeft);
+            }
+            if (node->m_pRight != nullptr) {
+                nodes.push(node->m_pRight);
+            }
+        }
+        ++depth;
+    }
+    return depth;
+}
+```
+
+该版本时间仍为O(n)。队列峰值是某一层的最大宽度w，空间O(w)；完全二叉树的最后一层可接近n的一半。它避免调用栈过深，但不一定比递归更省内存。
+
+如果业务还需要每层节点、最大宽度或层序序列，BFS可顺便产生这些数据；只求深度且树高受控时，作者递归更直接。
+
+## 显式栈保存节点与层数
+
+深度优先也能改为迭代。栈中同时保存节点和该节点所在层，弹出时更新当前最大层。
+
+```cpp
+#include <algorithm>
+#include <stack>
+#include <utility>
+
+int TreeDepthIterative(
+    const BinaryTreeNode* root) {
+    if (root == nullptr) {
+        return 0;
+    }
+
+    std::stack<
+        std::pair<
+            const BinaryTreeNode*, int>> pending;
+    pending.push({root, 1});
+    int answer = 0;
+
+    while (!pending.empty()) {
+        const auto [node, depth] =
+            pending.top();
+        pending.pop();
+        answer = std::max(answer, depth);
+
+        if (node->m_pLeft != nullptr) {
+            pending.push(
+                {node->m_pLeft, depth + 1});
+        }
+        if (node->m_pRight != nullptr) {
+            pending.push(
+                {node->m_pRight, depth + 1});
+        }
+    }
+    return answer;
+}
+```
+
+显式栈把内存放到堆管理容器中，避免受限的程序调用栈，但最坏仍需O(h)或更多待处理节点。它还便于加入深度上限：若depth超过安全阈值可提前报告，而不是继续递归直到崩溃。
+
+深度上限不应伪装成真实答案。若接口因安全策略最多接受10000层，超出时应返回错误状态或抛出约定异常，而不是静默返回10000；否则调用方无法区分“深度恰好达到上限”和“结果被截断”。同样，遍历被取消或内存分配失败也应与正常整数深度分开表达。作者示例面向内存中的可信小树，因此直接返回int；服务边界上的实现需要额外的资源预算与错误通道。
+
+## 输入必须是真正的树
+
+作者假设左右指针形成有限、无环、每个节点只有一个父路径的二叉树。若某个孩子指回祖先，递归不会到达空指针，BFS和显式栈也会无限重复。
+
+若两个父节点共享同一子树，结构是有向无环图而不是树。作者函数仍可能终止，但会重复计算共享部分；“根到叶最长路径”仍可定义，却不再是标准树的复杂度模型。对未知图结构应维护访问状态并使用图算法。
+
+<Callout type="trap" title="用访问集合掩盖树结构损坏">
+在明确的二叉树接口中，出现重复节点或环通常是上游所有权错误。遍历层加集合可以防死循环，但也会改变共享节点的路径语义；应先决定要容错还是要尽早拒绝坏结构。
+</Callout>
+
+## 作者5组测试逐项还原
+
+1. Test1是7节点普通分叉树，最长路径1、2、5、7，期望4。
+2. Test2是1到5的纯左链，期望5。
+3. Test3是1到5的纯右链，期望5。
+4. Test4只有根节点1，期望1。
+5. Test5传入nullptr，空树深度为0。
+
+<TreeDepthOfficialCaseLab />
+
+这5组同时覆盖左右不等深、两个极端方向、最小非空树和空树。作者没有单独测试完美平衡树，但Test1已经包含左右分支并要求选择更深一侧。
+
+```cpp
+#include <cassert>
+
+void testTreeDepth(
+    const BinaryTreeNode* ordinary,
+    const BinaryTreeNode* leftChain,
+    const BinaryTreeNode* rightChain,
+    const BinaryTreeNode* single) {
+    assert(TreeDepth(ordinary) == 4);
+    assert(TreeDepth(leftChain) == 5);
+    assert(TreeDepth(rightChain) == 5);
+    assert(TreeDepth(single) == 1);
+    assert(TreeDepth(nullptr) == 0);
+
+    assert(TreeDepth(ordinary) ==
+           TreeDepthByLevel(ordinary));
+    assert(TreeDepth(ordinary) ==
+           TreeDepthIterative(ordinary));
+}
+```
+
+随机对拍可按概率生成有限树，同时用递归、BFS和显式栈求深度，三者应一致。生成器必须设最大层数或节点预算，避免测试数据自身无限扩张。
+
+还可做结构性质测试：给任意树外包一层新根并把原树放在一侧，新树深度应等于原深度加1；左右子树互换不应改变深度。
+
+另一组性质来自单调性：在任意叶节点下新增一个孩子，深度只可能保持不变或增加1，绝不减少；若该叶本就在某条最长路径上，结果必须增加1。删除一棵非最长分支不应改变结果，删除所有最长分支之一则要看是否还有同深替代路径。这些性质比固定示例更容易捕获错误地取较小值、错误地相加或遗漏某侧递归。
+
+<Stepper>
+  <Step title="确认最长根到叶路径">
+    <TreeDepthPathDiagram />
+    作者按路径节点数计深度，Test1答案为4。
+  </Step>
+  <Step title="自底向上计算返回值">
+    <TreeDepthRecurrenceLab />
+    空树给0，非空节点取左右较大值再加1。
+  </Step>
+  <Step title="理解递归栈中的汇总">
+    <TreeDepthCallStackDiagram />
+    每层只返回子树深度，不依赖全局最大值。
+  </Step>
+  <Step title="核对复杂度与结构前提">
+    <TreeDepthContractMap />
+    时间O(n)，空间O(h)，输入必须有限无环。
+  </Step>
+  <Step title="执行作者5组测试">
+    <TreeDepthOfficialCaseLab />
+    普通树、左右单链、单节点和空树覆盖主要边界。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 二叉树的深度是根到叶最长路径上的节点数。
+2. 空树深度为0，单节点树深度为1，明确了节点计数基例。
+3. 非空树返回左右子树深度的较大值加1。
+4. 作者使用局部递归返回值，没有全局最大值。
+5. 递归通过后序汇总自底向上组合，正确性可用结构归纳证明。
+6. 时间O(n)，递归栈O(h)；斜树可能导致栈溢出。
+7. BFS按层计数，显式DFS保存节点层数，均可避免函数递归。
+8. 作者5组测试覆盖普通树、左右单链、单节点和空树。
+
+<Exercises>
+
+**问题 1：为什么作者Test1的深度是4而不是3？**
+
+<Answer>作者按节点数计路径长度。最长路径1、2、5、7包含4个节点；3只是这4个节点之间的边数。</Answer>
+
+**问题 2：为什么不能把左右子树深度相加再加1？**
+
+<Answer>根到叶路径离开根后只能进入一棵子树。相加会计算一条从左叶经过根到右叶的路径，那是树的直径候选，不是根到叶深度。</Answer>
+
+**问题 3：递归版时间O(n)，为何空间不是O(n)固定结论？**
+
+<Answer>同时存活的调用只沿一条根到当前节点路径，峰值由树高h决定，所以是O(h)。平衡树为O(log n)，斜树才退化为O(n)。</Answer>
+
+**问题 4：递归、BFS和显式DFS应如何选择？**
+
+<Answer>树高受控且只求深度时递归最简；极深树用显式DFS避免调用栈溢出；还需层级数据或宽度时用BFS。三者都应遵守空树0和节点计数定义。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="叶节点">左右孩子都为空的路径终止节点。</GlossaryItem>
+  <GlossaryItem term="节点计数深度">最长根到叶路径包含的节点数量。</GlossaryItem>
+  <GlossaryItem term="子问题">对左右子树求深度的同构小规模问题。</GlossaryItem>
+  <GlossaryItem term="后序汇总">先取得孩子结果，再在父节点组合返回值。</GlossaryItem>
+  <GlossaryItem term="递归栈">尚未返回的函数调用占用的栈空间，峰值由树高决定。</GlossaryItem>
+</Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题55（一）"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/55_01_TreeDepth/TreeDepth.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

@@ -1,211 +1,268 @@
 ---
-title: 替换空格
+title: "面试题5：替换空格"
 type: C
-section: 字符串
-order: 1
-description: 逆序双指针原地替换空格，将 O(n^2) 的前向移动优化为 O(n) 的后向复制，避免内存重叠冲突。
+section: "第2章 面试需要的基础知识"
+order: 6
+description: "先统计最终长度，再用读写双指针从后向前把空格原地展开为%20，守住容量与终止符边界。"
 demo: true
-math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviews
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/05_ReplaceSpaces/ReplaceSpaces.cpp"
 draft: false
 ---
 
-{/* 知识点清单：原地修改 / 逆序复制 / 双指针 / 内存重叠 / 复杂度优化；原书章节：面试题5：替换空格。 */}
+import { ExpansionLayoutDiagram, CapacityFormulaMap, BackwardTraceLab, ReplacementTestLab } from "@/components/mdx/coding-interviews/diagrams/replace-spaces";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能解释在原地替换扩容数组中，从后往前复制比从前往后复制效率更高的原因。
-- 能描述双指针 P1（源指针）和 P2（目标指针）在遇到空格时的协作机制。
-- 能实现 C++（在原字符串上 resize 并修改）和 TypeScript（通过字符数组模拟原地修改）的 `replace-spaces` 算法，并防范边界越界及空间不足等坑点。
+- 能解释前向搬移为何可能退化为`O(n²)`，后向复制为何是`O(n)`
+- 能计算新字符串可见长度和包含结尾`\0`的最小缓冲区容量
+- 能实现两个指针从后向前复制，并把一个空格安全展开为`%20`
+- 能分析空指针、缺失终止符、容量不足和无符号下溢边界
+- 能设计开头、结尾、连续、单个、全部和零个空格的测试
 
 </Objectives>
 
-## 直觉引入
+## 从`We are happy.`开始
 
-想象一下，你在一条狭窄的走廊里排了一整排课桌，现在需要在某些课桌之间塞入更大的置物架（置物架比课桌之间的原间距更宽）。
+先预测：把空格替换成`%20`时，若从左向右写，第一次把`%`写进空格位置后，原来位于右侧的字符应该放到哪里？若缓冲区中直接展开，每遇到一个空格都要把后缀整体右移两格；多个靠前空格会反复搬动同一批字符。
 
-如果你从走廊的第一张课桌开始，把它们往后推来腾出空间，那么当你移动第一张桌子时，它会撞到后面的桌子。为了挪开后面的桌子，你得把后面所有的桌子都往后挪一次。每放一个置物架，你都要把后面所有的桌子整体挪动一遍，累得气喘吁吁。
+这道“替换空格”要求把字符数组中的每个空格替换为`"%20"`。作者接口接收可写`char[]`和缓冲区总长度，数组预留了扩展空间。核心不是调用现成字符串替换，而是证明在同一缓冲区中如何不覆盖尚未读取的字符。
 
-但如果你先走到走廊的最末端，计算好所有置物架塞入后，最后一张桌子应该在的新位置，然后直接从最后一张桌子开始，一步到位地把它们移到最终的目标位置。由于你是从后往前挪，每次移动桌子时，后面的空间都是已经腾好的，绝对不会发生任何碰撞。这章我们要解决的核心问题就是：如何在计算机内存的紧凑队列中，以最优雅、不打架的方式完成这种 <Term def="向数组或紧凑内存结构中插入比原元素更宽的新数据时，需要为新数据腾出空间的扩容填充操作。">带扩容的元素替换</Term>。
+原字符串可见长度为`originalLength`，空格数为`spaces`。每个空格原占1个字符，替换后占3个字符，所以净增2；新可见长度为`originalLength + 2 * spaces`。C字符串还必须保存结尾`\0`，实际需要的槽位比新可见长度多1。
 
-## 概念讲解
+<CapacityFormulaMap />
 
-在很多编程语言中，字符串的空格替换（例如将 `" "` 替换为 `"%20"`）是一个非常经典的问题。在网络编程中，如果 URL 中包含空格等特殊字符，可能导致服务器端解析错误，因此需要将其转换为 URL 安全的转义字符。
+<Term def="字符数组实际可写槽位总数，包括可见字符、替换后扩展区域和结尾终止符。">缓冲区容量</Term>是算法成立的前提。容量不足时必须在开始后向写之前返回失败，避免写出边界或只改一半。
 
-### 传统前向移位：$O(n^2)$ 的碰撞代价
+## 为什么前向移动会重复工作
 
-如果我们从前往后遍历字符串，每当遇到一个空格：
-1. 我们需要将空格后面的所有字符都向后移动 2 个位置（因为 `" "` 占 1 字符，而 `"%20"` 占 3 字符，净增 2 字符）。
-2. 然后在空出的位置写入 `"%"`、`"2"`、`"0"`。
+假设字符串长度为`n`，前面有多个空格。左到右遇到第一个空格时，要把几乎整个后缀右移两位；遇到第二个空格，又移动大部分后缀。最坏情况下，总搬移量形成`n + (n-1) + ...`量级，时间退化到`O(n²)`。
 
-假设字符串长度为 $n$，其中包含 $k$ 个空格。每次遇到空格，都需要移动剩余的字符。在最坏情况下（例如空格都在前面），总的时间复杂度会退化为 $O(n^2)$。频繁的内存复制会导致极大的性能浪费。
+若另建输出数组，左到右追加当然可以`O(n)`，但额外空间是`O(n)`。原题刻意给出扩展后的原缓冲区，要求利用已有空间实现常数额外状态。
 
-### 逆序双指针：$O(n)$ 零碰撞的艺术
+后向方案先扫描得到最终边界，让<Term def="从原字符串结尾向前读取、把字符直接写入扩展后最终位置的复制策略。">后向复制</Term>直接把每个字符放到最终位置。写入发生在尚未读取区域的右侧，已写内容和待读内容不会冲突。
 
-为了避免前向移动时的重复搬运与 <Term def="指在同一个数组/内存空间中，读写指针操作的内存块有交叉，导致先写入的数据覆盖了尚未读取的源数据。">内存重叠</Term>，我们可以采用**逆序双指针（Backward Copying）**策略。其核心步骤如下：
+<ExpansionLayoutDiagram />
 
-1. **统计空格数**：扫描一遍原字符串，计算空格总数 `space_count`。
-2. **计算新长度**：新长度为 `original_length + 2 * space_count`。
-3. **分配/扩容空间**：在 C++ 中，直接调用 `s.resize(new_length)` 扩容；在 JavaScript/TypeScript 中，由于字符串是不可变的，我们可以初始化一个新字符数组。
-4. **设置双指针**：
-   - 指针 `P1` 指向原字符串的末尾。
-   - 指针 `P2` 指向新字符串的末尾。
-5. **从后往前填充**：
-   - 若 `s[P1]` 不是空格：直接复制 `s[P2] = s[P1]`，然后 `P1` 和 `P2` 各向前移动 1 步。
-   - 若 `s[P1]` 是空格：在 `P2` 处逆序写入 `'0'`、`'2'`、`'%'`，即 `s[P2] = '0'`, `s[P2-1] = '2'`, `s[P2-2] = '%'`。随后 `P1` 向前移动 1 步，`P2` 向前移动 3 步。
-6. **循环终止条件**：当 `P1` 减小到 0 以下，或者 `P1` 与 `P2` 重合时，说明所有的空格都已被完美替换，算法提前结束。
+## 两个指针各守一条边界
 
-由于每个字符在整个过程中最多只被读取 1 次，写入 1 次，因此时间复杂度被大幅优化为 $O(n)$。
+<Term def="指向原字符串当前尚未处理字符的下标，初始位于原结尾终止符。">读指针</Term>从原可见长度开始，因此第一次读取的是`\0`；<Term def="指向扩展后字符串下一待写位置的下标，初始位于新结尾终止符位置。">写指针</Term>从新可见长度开始。先复制终止符，保证最终字符串仍正确结束。
 
-## 交互 Demo
+普通字符只需写一次，两个指针各左移1。遇到空格时，从右向左依次写`'0'`、`'2'`、`'%'`；内存正序读出就是`%20`。读指针左移1，写指针左移3。
 
-猜一猜：如果原字符串中没有空格（如 `"WeAreHappy."`），双指针的移动会有什么不同？`P1` 和 `P2` 会不会重合？
+循环只在`write > read`时需要实际复制。当两个指针相遇，说明剩余前缀没有扩展差额，原字符已经处在最终位置。写成`read >= 0`也能工作，但会做额外的原位复制；使用有符号下标时两种条件都容易表达。
 
-点击下方控制按钮，一步步体验逆序双指针原位替换空格的动态过程：
+<BackwardTraceLab />
 
-<ReplaceSpacesDiagram />
+<Term def="C字符串末尾值为零的字符，用来标记可见文本结束，不属于可见长度。">空字符终止符</Term>不能漏掉。若只从`originalLength-1`开始复制可见字符，却没有在`newLength`写`\0`，后续`strlen`和输出函数会继续读取旧内存，产生乱码或越界。
 
-## 代码对照
+## 容量安全的C++实现
 
-原地替换算法的难点在于严格控制指针的递减和边界判断，尤其是在 C++ 的原地修改中，避免访问超出 resize 后的安全内存。
+官方代码先统计实际长度和空格数，再比较新长度与传入容量，最后从两个末尾下标回写。下面用`std::span<char>`让容量与指针一起传入，并补齐缺失终止符与算术溢出检查：
 
-以下是 C++ 与 TypeScript 的具体实现对比：
-
-<CodeTabs>
-  <Tab label="C++">
 ```cpp
-#include <string>
+#include <cstddef>
+#include <limits>
+#include <span>
 
-class Solution {
-public:
-    void replaceSpace(std::string& s) {
-        if (s.empty()) {
-            return;
-        }
-
-        int originalLength = s.length();
-        int spaceCount = 0;
-        for (char c : s) {
-            if (c == ' ') {
-                spaceCount++;
-            }
-        }
-
-        // 扩容原字符串以容纳 "%20"（每个空格新增 2 个额外字符位置）
-        s.resize(originalLength + spaceCount * 2);
-        int newLength = s.length();
-
-        // 设置双指针分别指向原末尾和新末尾
-        int p1 = originalLength - 1;
-        int p2 = newLength - 1;
-
-        // 从后往前复制并替换，当 p1 与 p2 重合时可以提前结束
-        while (p1 >= 0 && p2 > p1) {
-            if (s[p1] == ' ') {
-                s[p2--] = '0';
-                s[p2--] = '2';
-                s[p2--] = '%';
-            } else {
-                s[p2--] = s[p1];
-            }
-            p1--;
-        }
-    }
-};
-```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-function replaceSpace(s: string): string {
-    if (!s) {
-        return "";
+bool replace_spaces(std::span<char> buffer) {
+    if (buffer.empty()) {
+        return false;
     }
 
-    const originalChars = s.split("");
-    let spaceCount = 0;
-    for (const char of originalChars) {
-        if (char === " ") {
-            spaceCount++;
+    std::size_t original_length = 0;
+    std::size_t spaces = 0;
+    while (original_length < buffer.size() &&
+           buffer[original_length] != '\0') {
+        if (buffer[original_length] == ' ') {
+            ++spaces;
         }
+        ++original_length;
     }
 
-    const originalLength = originalChars.length;
-    const newLength = originalLength + spaceCount * 2;
-    
-    // JS/TS 字符串是不可变的，使用字符数组模拟原地扩容修改
-    const resultChars = new Array<string>(newLength);
+    if (original_length == buffer.size()) {
+        return false; // 容量内没有终止符
+    }
+    if (spaces > (std::numeric_limits<std::size_t>::max()
+                  - original_length) / 2) {
+        return false;
+    }
 
-    let p1 = originalLength - 1;
-    let p2 = newLength - 1;
+    const std::size_t new_length = original_length + spaces * 2;
+    if (new_length >= buffer.size()) {
+        return false; // 还需要buffer[new_length]存放'\0'
+    }
 
-    // 从后往前复制
-    while (p1 >= 0) {
-        if (originalChars[p1] === " ") {
-            resultChars[p2--] = "0";
-            resultChars[p2--] = "2";
-            resultChars[p2--] = "%";
+    std::ptrdiff_t read =
+        static_cast<std::ptrdiff_t>(original_length);
+    std::ptrdiff_t write =
+        static_cast<std::ptrdiff_t>(new_length);
+
+    while (read >= 0 && write > read) {
+        if (buffer[read] == ' ') {
+            buffer[write--] = '0';
+            buffer[write--] = '2';
+            buffer[write--] = '%';
         } else {
-            resultChars[p2--] = originalChars[p1];
+            buffer[write--] = buffer[read];
         }
-        p1--;
+        --read;
     }
-
-    return resultChars.join("");
+    return true;
 }
 ```
-  </Tab>
-</CodeTabs>
 
-## 常见误区
+这里`new_length >= buffer.size()`才是容量不足，因为`buffer[new_length]`要保存终止符。若把条件写成只在`new_length > capacity`时失败，当二者相等就会写到最后一个合法下标之后。
 
-<Callout type="trap">
-  <strong>现象 →</strong> 在 C++ 中执行替换时，直接报段错误（Segment Fault）或未定义行为。
-  <strong>原因 →</strong> 忘记调用 `s.resize()` 对原字符串进行扩容，导致双指针 P2 指向了一个超出原字符串范围的内存空间，产生了越界写操作。
-  <strong>修法 →</strong> 在扫描空格数后，务必调用 `s.resize(originalLength + spaceCount * 2)` 进行物理扩容，然后再进行双指针回退复制。
+作者源码的空输入判断形如`str == nullptr && length <= 0`。健壮接口应分别拒绝空指针或非正容量，逻辑是“或”；否则空指针配正长度仍会进入扫描。`std::span`把空指针与长度组合封装起来，但空span仍需判断。
+
+<Callout type="trap" title="新长度等于容量时刚好装满">
+新长度只数可见字符，下标`newLength`还要写`\0`。容量等于新长度意味着没有终止符槽，必须返回失败；需要至少`newLength + 1`个字符槽。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 替换后的字符串末尾多出乱码或空字符，或者替换位置错乱。
-  <strong>原因 →</strong> 扩容长度计算公式写错，例如误写成 `originalLength + spaceCount * 3`。因为 `"%20"` 长度是 3，很多人会乘以 3，但实际上空格本身已经占了 1 个字符，因此每个空格只需额外增加 2 个字符位置。
-  <strong>修法 →</strong> 严格使用新长度公式：`newLength = originalLength + spaceCount * 2`。
+## 不可变字符串语言的实现边界
+
+JavaScript与TypeScript字符串不可原地修改。可以使用结果字符数组后向填充，算法仍展示相同读写关系，但额外空间是`O(n)`，不能声称原地`O(1)`：
+
+```ts
+function replaceSpaces(text: string): string {
+  let spaces = 0;
+  for (const char of text) {
+    if (char === " ") spaces += 1;
+  }
+
+  const output = new Array<string>(text.length + spaces * 2);
+  let read = text.length - 1;
+  let write = output.length - 1;
+
+  while (read >= 0) {
+    if (text[read] === " ") {
+      output[write--] = "0";
+      output[write--] = "2";
+      output[write--] = "%";
+    } else {
+      output[write--] = text[read];
+    }
+    read -= 1;
+  }
+  return output.join("");
+}
+```
+
+若只需要得到新字符串，正向构建通常更自然；这里保留后向版本用于对应原题缓冲区推理。语言的字符串模型改变空间结论，不能把C++的“原地”标签原样复制到不可变字符串。
+
+`%20`在本题中是固定替换标记，不等于完整URL编码器。真实URL应区分路径、查询、表单编码和字符集，使用平台标准库；某些表单编码会把空格写成`+`，保留字符的规则也不同。面试题训练缓冲区扩展，不应被包装成通用网络安全方案。
+
+<Callout type="trap" title="调用replaceAll就完整解决URL编码">
+普通字符串替换只能处理空格，不能正确处理百分号、非ASCII字符和路径/查询上下文。生产URL编码要使用对应组件的标准编码API，本题只讨论`%20`的原地展开算法。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 程序陷入死循环，或者双指针未正常终止。
-  <strong>原因 →</strong> 在 `s[p1] == ' '` 分支中，只修改了字符，忘记对 `p2` 进行 3 次自减，或者在循环中漏掉了 `p1--` 导致无限循环。
-  <strong>修法 →</strong> 在填充 `"%20"` 时，每一次写入必须配合 `p2--`（共 3 次），且在每次循环的末尾必须无条件进行 `p1--` 递减操作。
-</Callout>
+## 正确性与复杂度
 
-## 小结与练习
+后向循环保持不变式：`write`右侧已经是最终输出后缀，`read`左侧和尚未读取的原前缀仍保持完整，且待写边界不在待读边界左侧。普通字符消耗1个源槽和1个目标槽，空格消耗1个源槽并生成3个目标槽，正好解释两指针距离变化。
 
-- 原地替换带扩容元素时，前向移动会产生 $O(n^2)$ 的时间复杂度，而**逆序双指针后向复制**可将其优化为 $O(n)$。
-- 在不需要额外空间的情况下，双指针协作从后往前填充可以实现 <Term def="算法执行不需要额外辅助空间（或者只依赖 O(1) 的常数级别辅助变量），直接在输入数据的内存上进行修改。">原地修改</Term>，时间复杂度为 $O(n)$，空间复杂度为 $O(1)$。
-- 循环终止的最佳条件是 `p1 >= 0 && p2 > p1`，当两指针重合时可提前收工。
+第一次扫描读取每个字符一次；第二次后向复制再次读取每个原字符，并写出每个结果字符。工作量与输入和输出长度之和成正比，在每个空格最多展开固定3字符时可记为`O(n)`。额外只保存长度、计数和两个下标，为`O(1)`。
+
+若替换串长度不是固定3，而由输入决定，复杂度应写成`O(n + outputLength)`。若缓冲区容量由不可信整数传入，还要检查乘法和加法溢出；否则一个很小的回绕`newLength`会绕过容量检查。
+
+## 测试覆盖位置、密度和容量
+
+## 失败原子性、字节语义与接口设计
+
+两遍算法还有一个容易忽略的收益：第一遍能在任何写入发生前算出所需容量。若容量不足、输入未终止或长度算术溢出，函数可以返回失败并保持原缓冲区不变。调用者随后分配更大空间重试，不必猜测哪些字符已经被改写。
+
+更实用的接口可返回所需槽位数，而不是只有布尔值。例如先调用查询模式得到`required = newLength + 1`，再提供足够缓冲区执行；这与许多C API的长度协商方式一致。若仍使用布尔结果，错误枚举至少应区分空输入、缺失终止符和容量不足，方便日志与恢复。
+
+后向复制与`memmove`处理重叠区域的方向选择相似：目标区域起点位于源区域右侧时，从尾部复制可以防止覆盖未读源字节。但这里不只是移动同一段字节，空格还要展开成三个新字节，所以不能用一次`memmove`完成全部替换；可以把连续普通片段批量移动，但会增加实现复杂度，只有测量证明有收益才值得。
+
+原题的`char`算法按字节识别ASCII空格`0x20`，并写ASCII字符`%20`。UTF-8中普通非ASCII字符由多个字节组成，逐字节原样后向复制仍能保持其字节序，因为每个字节的相对顺序不变；但它不会识别全角空格、不换行空格等其他Unicode空白。需求若说“所有空白字符”，就必须按Unicode码点或分词规则解析，不能继续用`char == ' '`。
+
+同理，缓冲区可能含嵌入的零字节。C字符串语义把第一个`\0`当结束，后续字节不属于文本，算法不会处理它们。若数据是长度明确的二进制片段，接口应接收实际长度而非扫描终止符，并重新定义哪些字节需要替换。
+
+两个指针的安全关系还依赖最终长度不小于原长度。当前替换把1字节扩为3字节，写指针初始不会在读指针左侧；若改成“把多个字符压缩成一个”，应从前向后写，后向方案反而可能覆盖待读内容。方向由源目标区域的相对位置决定，不是双指针题一律从后开始。
+
+线程安全方面，函数独占可写缓冲区是隐含前提。另一个线程若同时读取，可能看见终止符已移动而中间尚未全部填充的瞬态；另一个写线程则会直接造成数据竞争。需要外部同步或先在私有缓冲区构造，再原子发布结果。
+
+作者九组测试依次覆盖：空格在中间、开头、结尾；连续两个空格；空指针；空字符串；单个空格；没有空格；全部是空格。工程补充还应验证容量恰好足够、少一个槽、容量内无`\0`和算术边界。
+
+```cpp
+#include <array>
+#include <cassert>
+#include <cstring>
+
+void test_replace_spaces() {
+    std::array<char, 32> middle{};
+    std::strcpy(middle.data(), "hello world");
+    assert(replace_spaces(middle));
+    assert(std::strcmp(middle.data(), "hello%20world") == 0);
+
+    std::array<char, 16> adjacent{};
+    std::strcpy(adjacent.data(), "a  b");
+    assert(replace_spaces(adjacent));
+    assert(std::strcmp(adjacent.data(), "a%20%20b") == 0);
+
+    std::array<char, 4> too_small{};
+    std::strcpy(too_small.data(), "a ");
+    const auto before = too_small;
+    assert(!replace_spaces(too_small));
+    assert(too_small == before);
+}
+```
+
+容量不足测试还确认函数在开始回写前失败，输入保持原样。这比只断言返回`false`更强：调用者可以在失败后安全重试更大缓冲区。
+
+<ReplacementTestLab />
+
+<Stepper>
+  <Step title="先统计空格与最终容量"><CapacityFormulaMap />新可见长度净增`2 * spaces`，总槽位还要包含结尾`\0`。</Step>
+  <Step title="把读写指针放到两个末尾"><ExpansionLayoutDiagram />读指针指向原终止符，写指针指向新终止符，已写区域位于未读区域右侧。</Step>
+  <Step title="从后向前复制或展开"><BackwardTraceLab />普通字符写1格，空格逆序写0、2、%三格，直到两个边界相遇。</Step>
+  <Step title="覆盖位置、密度和失败"><ReplacementTestLab />测试开头、结尾、连续、全空格、无空格、空输入与容量不足，并检查失败不改数据。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 前向原地展开会反复移动后缀，最坏可能`O(n²)`。
+2. 每个空格替换为`%20`后净增2，新可见长度是原长度加两倍空格数。
+3. 缓冲区还需一个`\0`槽，`newLength`等于容量仍是不够。
+4. 两个指针从后向前复制，普通字符写1格，空格逆序写3格。
+5. 后向复制保持未读前缀不被覆盖，时间`O(n)`、额外空间`O(1)`。
+6. C字符串必须在容量内找到终止符；空指针、容量和算术溢出都要在写入前检查。
+7. 不可变字符串语言需要新结果存储，算法思路相同但空间不是`O(1)`。
+8. 本题的固定`%20`替换不等于完整URL编码。
 
 <Exercises>
-  <Answer question="如果本题要求将空格替换为 '%20'，且不允许使用任何额外数组（即便在 JS/TS 中），你应该如何实现？">
-    在 JavaScript/TypeScript 中，字符串是只读的，无法在底层内存上进行原地修改。如果必须在原字符串上操作且不能在 JS 层使用辅助数组，通常需要通过 C++ 编写 WebAssembly 模块来导出内存，或者只能接受使用数组带来的额外空间开销。
-  </Answer>
-  <Answer question="如果我们将双指针回退的终止条件写成 `p1 >= 0`，与 `p1 >= 0 && p2 > p1` 相比，有什么性能上的细微差别？">
-    `p2 > p1` 是一种剪枝优化。如果 P1 和 P2 重合，说明当前及前面的字符都已经不需要移动（因为前面已经没有空格需要替换了）。使用 `p2 > p1` 作为条件，可以避免做无意义的原位复制，能小幅提升算法的运行效率。
-  </Answer>
+
+**问题 1：原长度13、空格2个，最小缓冲区容量是多少？**
+
+<Answer>新可见长度为`13 + 2*2 = 17`，还要一个`\0`，所以最少18个字符槽。容量17只能放可见内容，无法形成合法C字符串。</Answer>
+
+**问题 2：为什么遇到空格时要按0、2、%的顺序写？**
+
+<Answer>写指针从右向左移动。先把字符0放在替换片段最右侧，再放2，最后放%，内存从低到高读出才是`%20`。若按正序写，结果会变成`02%`。</Answer>
+
+**问题 3：`write > read`为何可以作为提前结束条件？**
+
+<Answer>两指针相遇表示尚未处理前缀的源位置与最终位置一致，前面不再有扩展差额；这些字符已经在正确位置，无需继续原位复制。若实现只用`read >= 0`也可正确，但会多做复制。</Answer>
+
+**问题 4：TypeScript版本为什么不能声称原地`O(1)`空间？**
+
+<Answer>JavaScript字符串不可写，函数创建长度等于输出的新字符数组，再`join`成字符串，额外存储随输出长度增长，是`O(n)`。后向填充只复用了推理方式，没有复用原字符串缓冲区。</Answer>
+
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="带扩容的元素替换">
-    向数组或紧凑内存结构中插入比原元素更宽的新数据时，需要为新数据腾出空间的扩容填充操作。详见「直觉引入」节。
-  </GlossaryItem>
-  <GlossaryItem term="内存重叠">
-    指在同一个数组/内存空间中，读写指针操作的内存块有交叉，导致先写入的数据覆盖了尚未读取的源数据。详见「概念讲解」节。
-  </GlossaryItem>
-  <GlossaryItem term="原地修改">
-    算法执行不需要额外辅助空间（或者只依赖 $O(1)$ 的常数级别辅助变量），直接在输入数据的内存上进行修改。详见「小结与练习」节。
-  </GlossaryItem>
+  <GlossaryItem term="缓冲区容量">字符数组可写槽位总数，包括可见内容、扩展区和终止符。</GlossaryItem>
+  <GlossaryItem term="后向复制">从源末尾向前读取并直接写入扩展后最终位置的策略。</GlossaryItem>
+  <GlossaryItem term="读指针">指向原字符串当前尚未处理字符的下标。</GlossaryItem>
+  <GlossaryItem term="写指针">指向扩展后字符串下一待写位置的下标。</GlossaryItem>
+  <GlossaryItem term="空字符终止符">C字符串末尾值为零、标记可见文本结束的字符。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+  adaptedFrom="《剑指Offer（第2版）》面试题5及何海涛官方源码 ReplaceSpaces.cpp"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/05_ReplaceSpaces/ReplaceSpaces.cpp"
 />

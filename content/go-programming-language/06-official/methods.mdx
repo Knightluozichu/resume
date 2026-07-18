@@ -1,0 +1,235 @@
+---
+title: "第6章：Methods"
+type: C
+section: "Go 程序设计语言 · Receiver、组合与封装"
+order: 6
+description: "对齐原书第 6 章：method declarations、pointer receivers、struct embedding、method values/expressions、IntSet 与 encapsulation。"
+demo: true
+math: false
+sourceUrl: "https://www.gopl.io/"
+draft: false
+---
+
+import {
+  GoplEmbeddingPromotionLab,
+  GoplIntSetMethodLab,
+  GoplReceiverMethodSetLab,
+} from "@/components/mdx/go-programming-language/diagrams/methods";
+
+<Objectives>
+
+- 能解释 method declaration、receiver 与 method set，判断 value/pointer receiver、addressability、mutation 和 interface satisfaction
+- 能分析 struct embedding 的 selector promotion、method conflict 与 method value/expression 的 receiver binding
+- 能实现 zero-value-ready IntSet，设计 Add/Has/Union/String API，并用 package encapsulation 守住 representation invariant
+
+</Objectives>
+
+## 为什么 Methods 是“行为归属 + representation boundary”
+
+method 把 operation 绑定到 named type，使 caller 通过 `value.Op()` 阅读 domain behavior。它不会引入 class hierarchy；真正的语义来自 receiver copy/alias、method set、embedding composition 与 package export boundary。
+
+<Term def="在 function name 前加入 receiver parameter 的 declaration；receiver type 必须是同一 package 定义的 named base type T 或 *T，method name 在该 type 的 namespace 中。">receiver method</Term>
+
+先预测：变量 `p Point` 能否调用 pointer-receiver `p.ScaleBy(2)`，Point 是否因此自动满足要求 ScaleBy 的 interface，embedding 两个都有 Distance 的 types 会选哪一个，以及 `set.Has` 和 `(*IntSet).Has` 的 function types 有何不同。
+
+## 6.1 Method Declarations：receiver 建立行为 namespace
+
+method declaration 与 function 相似，但 name 前有 receiver。receiver name 通常是 type 名首字母并在同一 type 的 methods 中保持一致，不使用 `this/self`。receiver 可是任何 local named type，不仅是 struct；不能给 imported type 或 unnamed pointer/interface 声明 method。
+
+```go
+type Point struct { X, Y float64 }
+
+func (p Point) Distance(q Point) float64 {
+    return math.Hypot(q.X-p.X, q.Y-p.Y)
+}
+
+func Distance(p, q Point) float64 {
+    return math.Hypot(q.X-p.X, q.Y-p.Y)
+}
+```
+
+`p.Distance(q)` 把 receiver 放在 method selector 中，与 package function `geometry.Distance(p,q)` 可同时存在。value receiver 接收 copy；fields 包含 pointer/slice/map 时 copy 仍共享 referenced state。method name 只需在 receiver type 上唯一，不同 types 可各自定义 Distance。
+
+## 6.2 Methods with a Pointer Receiver：mutation 与 method set
+
+需要修改 receiver 或避免复制大 value 时使用 `*T` receiver。习惯上若一个 type 的部分 methods 使用 pointer receiver，其余也常统一使用 pointer receiver，减少 method-set surprise；small immutable value types 可用 value receivers。
+
+<Term def="T 的 method set 只含 receiver T 的 methods；*T 的 method set 同时含 T 与 *T methods。addressable T 调用 *T method 的自动取址只属于 call syntax，不改变 interface method set。">pointer receiver method set</Term>
+
+<Stepper>
+  <Step title="切换 Point/*Point 与 value/pointer method">
+    <GoplReceiverMethodSetLab />
+  </Step>
+  <Step title="关闭 addressability 观察 call sugar">
+    addressable variable `p.ScaleBy` 可改写为 `(&p).ScaleBy`；temporary/map element 等不可取址 expression 不能得到这层自动转换。
+  </Step>
+  <Step title="比较 direct call 与 interface satisfaction">
+    interface assignment 只按 method set：若 ScaleBy 只有 *Point receiver，则 Point 不满足，*Point 满足。
+  </Step>
+</Stepper>
+
+```go
+func (p *Point) ScaleBy(factor float64) {
+    p.X *= factor
+    p.Y *= factor
+}
+
+p := Point{1, 2}
+p.ScaleBy(2)       // compiler uses (&p).ScaleBy(2)
+pp := &p
+fmt.Println(pp.Distance(Point{})) // compiler dereferences for value receiver
+```
+
+nil pointer 也可作为 receiver 进入 method，是否安全取决于 body。某些 linked structure 用 nil 表示 empty state并在 method 首先判断；普通 struct mutator 解引用 nil 会 panic。API 必须明确 nil receiver 是有效状态还是 programmer error。
+
+<Callout type="trap" title="因为 p.ScaleBy 能编译，就认为 Point 实现了 interface">
+method call 会对 addressable value 自动取址；interface satisfaction 不会。用 compile-time assertion `var _ Scaler = (*Point)(nil)` 固定真正 intended implementing type。
+</Callout>
+
+## 6.3 Composing Types by Struct Embedding：promotion 不是继承
+
+anonymous field 可写 named type 或 pointer to named type。embedded field 的 fields/methods 可通过 outer selector promotion 使用，但 storage 仍是 nested field，outer/inner types 也没有 subtype relationship。literal 必须按完整 nested shape 构造。
+
+<Term def="embedded field 的 field/method 可由 outer value 的 selector 直接访问；若同一最浅 depth 有多个同名候选，selector ambiguous，必须显式指定 embedded path。">promoted method</Term>
+
+<Stepper>
+  <Step title="给 outer type embedding Point">
+    <GoplEmbeddingPromotionLab />
+  </Step>
+  <Step title="加入第二个同名 Distance source">
+    同一 depth 冲突不会按 declaration order 选择；`cp.Distance` ambiguous，改写 `cp.Point.Distance` 或 `cp.Vector.Distance`。
+  </Step>
+  <Step title="追踪 outer value 与 pointer method set">
+    embedding T 与 *T 对 outer T/*T 的 promoted method sets 影响不同；用 compile-time interface assertions 验证，不靠直觉。
+  </Step>
+</Stepper>
+
+```go
+type ColoredPoint struct {
+    Point
+    Color color.RGBA
+}
+
+red := ColoredPoint{Point: Point{1, 1}, Color: color.RGBA{R: 255, A: 255}}
+red.ScaleBy(2)
+fmt.Println(red.Distance(Point{}))
+```
+
+embedding 适合组合 reusable behavior/representation，但 promotion 过深会隐藏 ownership。public API 若依赖许多隐式 promoted methods，新增 embedded type 可能产生冲突；关键 boundary 可显式 forwarding method，稳定 outer contract。
+
+## 6.4 Method Values and Expressions：绑定或显式 receiver
+
+selector `p.Distance` 是 method value：它把 receiver p 绑定进 function value，结果只接收原 method 的普通 parameters。`Point.Distance` 是 method expression：把 receiver 变成第一个显式 parameter。pointer method expression 写 `(*Point).ScaleBy`。
+
+<Term def="method value `x.M` 捕获 receiver 并返回不再含 receiver parameter 的 function；method expression `T.M` 或 `(*T).M` 返回把 receiver 作为第一个 parameter 的 function。">method value and expression</Term>
+
+```go
+distanceFromOrigin := Point{}.Distance
+fmt.Println(distanceFromOrigin(Point{3, 4}))
+
+distance := Point.Distance
+fmt.Println(distance(Point{}, Point{3, 4}))
+
+scale := (*Point).ScaleBy
+scale(&p, 2)
+```
+
+method value 捕获 receiver value 的时机很重要：value receiver 通常复制当时 value，pointer receiver 保存 pointer alias。将它放进 delayed callback/queue 时，应明确 snapshot 还是 live mutable object。method expression 适合需要批量应用不同 receivers 的 table/adapter。
+
+## 6.5 Example: Bit Vector Type：IntSet 的 zero value 设计
+
+原书用 `IntSet` 展示 methods 如何封装 representation。non-negative integer x 映射到 word index `x / wordSize` 与 bit `x % wordSize`；`[]uint` 按需增长。nil words 的 zero value 自然表示 empty set，因此无需 constructor 即可 Add/Has。
+
+<Stepper>
+  <Step title="Add/Remove candidate 并观察 uint words">
+    <GoplIntSetMethodLab />
+  </Step>
+  <Step title="定位 word 与 bit">
+    `word, bit := x/64, uint(x%64)` 是示意；真实实现可用 `strconv.IntSize` 匹配 uint width，不能硬编码跨平台 assumption。
+  </Step>
+  <Step title="切换 method value/expression 调用">
+    `has := set.Has` 绑定 receiver；`has := (*IntSet).Has` 要求 caller 显式传 `&set`。
+  </Step>
+</Stepper>
+
+```go
+type IntSet struct { words []uint }
+
+func (s *IntSet) Has(x int) bool {
+    word, bit := x/wordSize, uint(x%wordSize)
+    return word < len(s.words) && s.words[word]&(1<<bit) != 0
+}
+
+func (s *IntSet) Add(x int) {
+    word, bit := x/wordSize, uint(x%wordSize)
+    for word >= len(s.words) { s.words = append(s.words, 0) }
+    s.words[word] |= 1 << bit
+}
+```
+
+`UnionWith` 逐 word OR，短 set 缺失 words 按 zero；`String` 按 ascending bit 输出稳定 representation。完整 API 还可有 Len、Remove、Clear、Copy。负数 input 应 reject 或 document unsupported，不能让 division/index 产生隐式 panic。
+
+Copy 必须 deep-copy words，不能只复制 slice descriptor。String/Elements 不应暴露 writable internal slice；返回新 slice 或 iterator/callback。mutating methods 用 pointer receiver，read-only methods 也可统一 pointer receiver。IntSet 本身不是 concurrency-safe，package contract 必须说明。
+
+## 6.6 Encapsulation：package boundary 守住 invariant
+
+identifier 首字母决定 package export。unexported fields 让 package 控制 construction/mutation，constructor 可验证 invariant，methods 提供 stable behavior。Go getter 通常命名 `Owner()` 而非 `GetOwner()`；setter 只有在 mutation 合理时才提供。
+
+<Term def="通过 unexported representation、validated constructors 与 controlled methods，保证 type 的合法状态、ownership 与 mutation rules 不被 package 外代码绕过。">encapsulation invariant</Term>
+
+encapsulation 不只隐藏 fields，还降低 callers 与 representation 的耦合。若 getter 返回 internal slice/map/pointer，caller 仍可绕过 invariant；应返回 copy、read-only view pattern 或 domain operations。constructor 不是必需形式，若 zero value 合法且状态简单，直接 declaration 更符合 Go 风格。
+
+```go
+type Counter struct { values map[string]int }
+
+func (c *Counter) Snapshot() map[string]int {
+    result := make(map[string]int, len(c.values))
+    for key, value := range c.values { result[key] = value }
+    return result
+}
+```
+
+封装也不自动提供 thread safety。若 methods 可并发调用，type 应内置 mutex/atomic 或明确要求 external synchronization；copy 含 mutex 的 value 通常错误，应使用 pointer并通过 vet copylocks 检查。
+
+<Callout type="trap" title="unexported field 却返回原始 []byte/map">
+caller 可直接修改 backing storage，等于绕过 private field。按成本与语义返回 defensive copy、immutable string、iterator，或提供受控 mutation methods。
+</Callout>
+
+## 本章回顾：method set 决定可调用边界
+
+1. method declaration 把 operation 绑定到 local named receiver type；value receiver 复制，pointer receiver 表达 mutation/identity。
+2. T 与 *T method sets 不同；addressable call sugar 不参与 interface satisfaction。
+3. struct embedding 提供 selector promotion，冲突显式选 path，它不是继承。
+4. method value 绑定 receiver，method expression 暴露 receiver；delayed callback 要判断 snapshot/alias。
+5. IntSet 用 methods 封装 bit-vector representation，encapsulation 通过 package boundary 守住 invariants 与 ownership。
+
+<Exercises>
+
+**问题 1：为什么 `var _ Scaler = Point{}` 失败而 `var _ Scaler = (*Point)(nil)` 成功，即使 `p.ScaleBy(2)` 可调用？**
+
+<Answer>ScaleBy声明在`*Point`上，所以Point method set不含ScaleBy，*Point method set包含value/pointer receiver methods。变量p是addressable时method call语法自动改写为`(&p).ScaleBy(2)`，但interface satisfaction只看method set，不做自动取址。因此assertion应绑定真正实现者*Point。</Answer>
+
+**问题 2：把 `set.Has` 放进任务队列与把 `(*IntSet).Has` 放进队列，receiver ownership 有何不同？**
+
+<Answer>`set.Has`是method value，已绑定receiver；若Has是pointer receiver，它保存指向set的alias，执行时观察live state并需同步/lifetime保证。`(*IntSet).Has`是method expression，function type第一个参数是*IntSet，任务提交或执行方显式选择receiver。二者都不自动snapshot；要快照需deep-copywords并绑定copy。</Answer>
+
+**问题 3：如何把 IntSet 扩展为 public concurrent-safe API 而不泄露 representation？**
+
+<Answer>先决定type内部用RWMutex还是owner模型，并让所有methods遵守同一locking contract；禁止copy含mutex的value，使用pointer。Add/Remove/Union维护non-negative与wordwidth invariants，Has/Len/String在read lock下读取。Elements/Snapshot返回新slice，不暴露words；Copy在锁内deep-copy。zero value仍应可用，并用race test验证并发contract。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="receiver method" definition="带 receiver parameter、绑定到 local named type 的 function declaration。" />
+  <GlossaryItem term="pointer receiver method set" definition="T 与 *T 可用于 interface satisfaction 的 methods 集合规则。" />
+  <GlossaryItem term="promoted method" definition="embedded field method 通过 outer selector 使用的 composition 机制。" />
+  <GlossaryItem term="method value and expression" definition="分别绑定 receiver 或把 receiver 暴露为首参数的 function value。" />
+  <GlossaryItem term="encapsulation invariant" definition="由 package 私有 representation 与受控 methods 保证的合法状态。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Go Programming Language, Chapter 6: Methods"
+  adaptedUrl="https://www.gopl.io/"
+/>

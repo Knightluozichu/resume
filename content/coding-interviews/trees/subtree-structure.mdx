@@ -1,256 +1,271 @@
 ---
-title: 树的子结构
+title: "面试题26：树的子结构"
 type: C
-section: 树
-order: 2
-description: 掌握二叉树先序遍历递归检查及子结构精确等值匹配判定。
+section: "第3章 高质量的代码"
+order: 28
+description: "外层遍历主树寻找同值候选根，内层同步覆盖模板树左右分支，并区分子结构、完整子树与空树边界。"
 demo: true
-math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviews
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/26_SubstructureInTree/SubstructureInTree.cpp"
 draft: false
 ---
 
-{/* 知识点清单：先序遍历 / 递归匹配 / 浮点数等值判定 / 防御性编程；原书章节：面试题26：树的子结构。 */}
+import { SubtreeCandidateSearchDiagram, SubtreeMatchBoundaryMap, SubstructureVsSubtreeDiagram, SubtreeOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/subtree-structure";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释『子结构 (Subtree Structure)』与『子树 (Subtree)』的本质区别，并指出其对递归终止条件设计的影响。
-- 能熟练运用<Term id="双重递归" def="在二叉树的主函数中做先序遍历，寻找与子树根节点值匹配的候选节点，再调用辅助匹配函数。">先序遍历与双重递归</Term>的设计模式求解本题。
-- 理解为何浮点数不能直接用 `==` 运算符进行等值判断，并写出带有<Term id="精度容差" def="基于绝对误差小于阈值（通常为 1e-8）实现的浮点数安全等值比较逻辑。">精度容差 (Epsilon)</Term>的等值比较辅助函数。
-- 能说出该算法在最坏情况与平均情况下的时间复杂度及空间复杂度，并独立写出 C++ 和 TypeScript 的健壮实现。
+- 能解释外层候选搜索与内层同步匹配承担的不同职责
+- 能计算B为空、A为空、值不同与左右分支组合的返回结果
+- 能实现作者双重递归和严格小于1e-7的浮点比较
+- 能分析子结构与完整子树的边界、复杂度和栈深
+- 能设计覆盖作者九组普通树、斜树和空树组合的测试
 
 </Objectives>
 
-## 直觉引入
+## 从“根值相同为什么还不够”开始
 
-想象一下，你是一位建筑设计师，手里有一份庞大且复杂的别墅设计蓝图（树 $A$）。某天，客户递给你一张小巧的卫浴套间设计图纸（树 $B$），问你：**这栋别墅的某个局部区域，是不是完全按照这个卫浴套间的图纸设计的？**
+先预测：树A根为8，左孩子也是8；树B根为8、左孩子为9。A的根值等于B根，但A根的左孩子是8，不是9，所以根位置匹配失败；继续搜索A的左孩子8，若它的左孩子是9，则这个新位置可能成功。
 
-为了验证这件事，你会怎么做？
+因此判断树的子结构需要两层工作：**先定位相同根节点**，再从该位置**再比较左右子树**。值相同只说明它是<Term def="主树A中值与模板树B根相等、值得启动局部结构比较的节点。">候选根</Term>，并不能证明形状和值都覆盖B。
 
-你可能会拿着这张套间图纸作为“印章”或“漏字板”，在别墅的蓝图上四处比对：
-1. 首先，你在别墅蓝图上寻找任何一个标记为“卫浴入口”的房间（主树 $A$ 的先序遍历，寻找与树 $B$ 根节点值相同的节点）。
-2. 一旦在别墅蓝图的某个位置找到了对应的入口，你就把套间图纸重叠铺上去，逐个检查里面的洗手盆、马桶、浴缸的摆放和墙体结构是否完全一致（递归检验子结构匹配 `doesTree1HaveTree2`）。
-3. 只要套间图纸上的所有设施与别墅蓝图对应位置完全重合，你就可以确信，这里确实包含该卫浴子结构。至于别墅在套间门外是否还延伸出了花园、卧室或厨房（树 $A$ 在匹配区域下方还有子孙节点），你完全不用在意——因为套间图纸并没有对门外的空间提出要求。
+<SubtreeCandidateSearchDiagram />
 
-这就是计算机科学中判定**树的子结构**的物理直觉：通过“在主树中寻找匹配的根”加上“以该点为根的局部重叠形状比对”，在二叉树中寻找是否包含另一棵小树的结构。
+外层HasSubtree遍历A的每个可能位置；内层DoesTree1HaveTree2从一个候选根开始，同时沿A和B的左、右边检查。这种两个树指针锁步向下的过程称为<Term def="从已确定候选根开始，让A与B的对应左右分支成对向下比较。">同步匹配</Term>。
 
-## 概念讲解
+## 外层搜索与内层匹配不可混成一个空规则
 
-判定树的子结构在实现上面临两个核心难点：**双重递归逻辑的设计**与**递归终止边界的判定**。
+外层收到空A或空B时返回false。空A没有候选位置；作者约定“**空树不是任意树的子结构**”，所以空B也不是有效查询目标。
 
-### 1. 双重递归设计模式
+内层则恰好相反：当B变为空，表示模板这一分支的所有节点已经匹配完，应返回true，即使A对应位置还继续有子孙。只有B未空而A先空，才说明A不够深并返回false。
 
-我们需要编写两个相互配合的递归函数：
+<SubtreeMatchBoundaryMap />
 
-1. **主函数 `isSubStructure(A, B)`**：负责在树 $A$ 中做遍历。如果当前节点 $A$ 匹配了 $B$ 的根节点，尝试调用辅助函数判定；若不匹配，则递归去 $A$ 的左子树和右子树中继续寻找可能匹配的子结构起点。
-   $$\text{isSubStructure}(A, B) = \text{doesTree1HaveTree2}(A, B) \cup \text{isSubStructure}(A.\text{left}, B) \cup \text{isSubStructure}(A.\text{right}, B)$$
-2. **辅助函数 `doesTree1HaveTree2(R, B)`**：负责在起点确定后，同步向下遍历两棵树，判定 $R$ 是否**完全包含** $B$ 的所有结构。
+这两个“B为空”处于不同语义层：外层判断题目是否提出一棵有效模板，内层判断有效模板的某条分支是否已经完成。为了让双空时内层成功，必须先检查B为空，再检查A为空；交换顺序会把两个分支同时结束误判为失败。
 
-```
-树 A：                  树 B：
-      8 (A0)                 8 (B0)
-    /   \                   / \
-   8     7                 9   2
-  / \
- 9   2
-```
+<Callout type="trap" title="让外层和内层共用同一个空树返回值">
+外层B为空按题意返回false，内层B耗尽表示模板分支已全部覆盖而返回true。把二者抽成同一卫语句会使正常叶节点匹配失败，或把空B错误当成任意树的子结构。
+</Callout>
 
-### 2. 核心递归边界的精细设计
+## 子结构不是完整子树
 
-在辅助匹配函数 `doesTree1HaveTree2(R, B)` 中，递归终止条件的判定至关重要：
-- **$B$ 为空时**：说明树 $B$ 上的所有节点都已经顺利比对完毕，并且在之前的比对中都相匹配。应当直接返回 **`true`**。
-- **$R$ 为空但 $B$ 不为空时**：说明树 $A$ 的对应分支已经遍历结束，而树 $B$ 还有未匹配的节点，结构不一致。返回 **`false`**。
-- **两者值不相等时**：节点值冲突，结构不匹配，返回 **`false`**。
+把B的全部节点和值能在A某个局部一一对应称为<Term def="B的所有节点和值在A某个候选位置得到对应，但A可以在B结束处继续延伸。">子结构</Term>。B走到空就完成了自己的约束，A多出的后代不影响成功。
 
-#### 『子结构』与『子树』的终止条件差异
+完整子树要求候选A分支与B完全相同；B为空时A也必须为空。两者只差一个终止条件，却表达完全不同的问题。
 
-| 概念 | 定义 | $B$ 遍历到 null 时，$R$ 仍有子节点 | 边界判定公式 |
-| :--- | :--- | :--- | :--- |
-| **子结构 (Subtree Structure)** | 局部形状完全契合即可，不要求延伸到叶节点 | 判定为 **匹配成功** (`return true`) | `if (B == null) return true;` |
-| **子树 (Subtree)** | 必须完全一致，直到双方都延伸到叶节点为止 | 判定为 **匹配失败** (`return false`) | `if (B == null) return R == null;` |
+<SubstructureVsSubtreeDiagram />
 
-### 3. 浮点数等值判定：防范精度陷阱
+例如B只有根8和左孩子9，A候选8还多一个右孩子2。本题视为子结构，因为B没有要求右侧必须为空；完整子树比较则失败。需求文档必须明确“包含局部结构”还是“某棵完整子树相等”。
 
-如果二叉树的节点值是浮点数（如 `double` 或 `float`），直接在代码中使用 `A.val == B.val` 会带来严重的精度陷阱。由于计算机在二进制表示浮点数时存在舍入误差，两个本应相等的数字在比较时可能会因为末尾的微小差异被误判为不相等。
+## 忠实实现作者的双重递归
 
-因此，我们需要实现一个带精度容差的比较函数：
-$$\text{equal}(a, b) = |a - b| < 10^{-8}$$
+作者节点值为double，Equal把差值限制在负0.0000001与正0.0000001之间，即严格绝对误差小于1e-7。不是现有页面曾写的1e-8。
 
-## 交互 Demo
-
-点击下方控制按钮进行单步调试，观察算法如何利用先序遍历在树 A 中扫描，以及在遇到可能匹配的节点时，如何触发递归的局部形状比对：
-
-<SubtreeStructureDiagram />
-
-## 代码对照
-
-在编写实现时，需要额外防范**主函数中的空节点过滤**。如果直接传入的 $A$ 或 $B$ 本身就是空树，根据题目常规约定（如剑指 Offer 或 LeetCode），空树不能是任何树的子结构，直接返回 `false`。
-
-以下是 C++（带 double 类型与精度比较）和 TypeScript（带防御性空检查）的具体实现对照：
-
-<CodeTabs>
-  <Tab label="C++ (浮点数精度兼容)">
 ```cpp
+struct BinaryTreeNode {
+    double value;
+    BinaryTreeNode* left = nullptr;
+    BinaryTreeNode* right = nullptr;
+};
+
+bool equalValue(double first, double second) {
+    const double difference = first - second;
+    return difference > -0.0000001 &&
+           difference <  0.0000001;
+}
+
+bool matchesFrom(BinaryTreeNode* root1,
+                 BinaryTreeNode* root2) {
+    if (root2 == nullptr) return true;
+    if (root1 == nullptr) return false;
+    if (!equalValue(root1->value, root2->value)) return false;
+
+    return matchesFrom(root1->left, root2->left) &&
+           matchesFrom(root1->right, root2->right);
+}
+
+bool hasSubtree(BinaryTreeNode* root1,
+                BinaryTreeNode* root2) {
+    bool result = false;
+    if (root1 != nullptr && root2 != nullptr) {
+        if (equalValue(root1->value, root2->value)) {
+            result = matchesFrom(root1, root2);
+        }
+        if (!result) {
+            result = hasSubtree(root1->left, root2);
+        }
+        if (!result) {
+            result = hasSubtree(root1->right, root2);
+        }
+    }
+    return result;
+}
+```
+
+外层顺序是当前候选、左子树、右子树，属于先序搜索。找到成功位置后，后续分支不再执行；这种<Term def="某个候选或子树已成功后停止访问其余分支，避免无意义递归。">短路遍历</Term>既保持真假结果，也避免继续访问不需要的节点。
+
+内层左右必须使用逻辑与：B的左约束和右约束都要满足。外层三个位置使用逻辑或：当前、左子树、右子树中任一成功即可。把这两个运算混淆，会把“只匹配一侧”误判为完整覆盖。
+
+## 浮点容差的原书边界与工程升级
+
+作者的<Term def="把两个浮点数差值绝对量限制在阈值内，以近似相等替代直接等号。">精度容差</Term>是固定绝对阈值1e-7，适合示例量级。差值恰好等于正负1e-7时，因为条件是严格大于与严格小于，结果为false。
+
+固定绝对误差对极大值可能过严，对接近零的值则语义较直观。工程比较常结合绝对容差和相对容差：
+
+```cpp
+#include <algorithm>
 #include <cmath>
 
-struct TreeNode {
-    double val;
-    TreeNode* left;
-    TreeNode* right;
-    TreeNode(double x) : val(x), left(nullptr), right(nullptr) {}
-};
-
-class Solution {
-public:
-    bool isSubStructure(TreeNode* A, TreeNode* B) {
-        if (A == nullptr || B == nullptr) {
-            return false;
-        }
-        
-        bool result = false;
-        // 1. 如果当前节点的值与 B 的根节点相等，尝试判断是否包含该子结构
-        if (equal(A->val, B->val)) {
-            result = doesTree1HaveTree2(A, B);
-        }
-        
-        // 2. 若当前位置不匹配或匹配失败，递归遍历 A 的左子树与右子树继续寻找起点
-        return result || isSubStructure(A->left, B) || isSubStructure(A->right, B);
+bool nearlyEqual(double first, double second,
+                 double absoluteTolerance = 1e-7,
+                 double relativeTolerance = 1e-12) {
+    if (first == second) return true;
+    if (!std::isfinite(first) || !std::isfinite(second)) {
+        return false;
     }
-
-private:
-    // 判定从 R 开始的子树是否包含以 B 为根的子结构
-    bool doesTree1HaveTree2(TreeNode* R, TreeNode* B) {
-        // B 遍历完毕，说明结构已经完全被包含，匹配成功
-        if (B == nullptr) {
-            return true;
-        }
-        // B 未遍历完但 R 为空，说明 A 树该分支不够深，匹配失败
-        if (R == nullptr) {
-            return false;
-        }
-        // 节点值不相等，匹配失败
-        if (!equal(R->val, B->val)) {
-            return false;
-        }
-        
-        // 递归检查左右子树是否对应匹配
-        return doesTree1HaveTree2(R->left, B->left) && 
-               doesTree1HaveTree2(R->right, B->right);
-    }
-    
-    // 浮点数安全等值比较，容忍 1e-8 精度误差
-    bool equal(double num1, double num2) {
-        return std::fabs(num1 - num2) < 1e-8;
-    }
-};
-```
-  </Tab>
-  <Tab label="TypeScript (防御性空检查)">
-```typescript
-class TreeNode {
-  val: number;
-  left: TreeNode | null = null;
-  right: TreeNode | null = null;
-  constructor(val: number) { this.val = val; }
-}
-
-// 浮点数等值判断，防止精度丢失
-function isEquals(num1: number, num2: number): boolean {
-  return Math.abs(num1 - num2) < 1e-8;
-}
-
-// 主函数：遍历树 A 寻找与 B 匹配的起点
-function isSubStructure(A: TreeNode | null, B: TreeNode | null): boolean {
-  // 防御性检查：根据常规约定，空树不能是任何树的子结构
-  if (A === null || B === null) {
-    return false;
-  }
-  
-  let result = false;
-  
-  // 若根节点值相等，触发递归子结构匹配
-  if (isEquals(A.val, B.val)) {
-    result = doesTree1HaveTree2(A, B);
-  }
-  
-  // 前序遍历 A 树，只要在当前节点、左子树或右子树中有一处匹配即可
-  return result || isSubStructure(A.left, B) || isSubStructure(A.right, B);
-}
-
-// 辅助判定函数：校验以 R 为起点的树是否包含树 B
-function doesTree1HaveTree2(R: TreeNode | null, B: TreeNode | null): boolean {
-  // 树 B 遍历结束，说明全部节点匹配成功
-  if (B === null) return true;
-  // B 未结束但 A 分支已断，匹配失败
-  if (R === null) return false;
-  // 节点值不同，匹配失败
-  if (!isEquals(R.val, B.val)) return false;
-  
-  // 递归检查左右子节点是否同时匹配
-  return doesTree1HaveTree2(R.left, B.left) && doesTree1HaveTree2(R.right, B.right);
+    const double difference = std::fabs(first - second);
+    const double scale =
+        std::max(std::fabs(first), std::fabs(second));
+    return difference < absoluteTolerance ||
+           difference < relativeTolerance * scale;
 }
 ```
-  </Tab>
-</CodeTabs>
 
-## 常见误区
+这段是工程扩展，不应冒充作者源码。它明确处理同号无穷相等、NaN不相等和数值尺度。比较策略会改变“节点值相同”的定义，必须在建树、索引和匹配中保持一致。
 
-<Callout type="trap">
-  <strong>现象 →</strong> 辅助匹配函数 `doesTree1HaveTree2` 在遇到 $B$ 为空和 $R$ 为空时，返回逻辑写反，或者将 `B == null` 时也判定为失败。
-  <strong>原因 →</strong> 混淆了『匹配完毕』和『树已中断』的逻辑定义。在子结构校验中，树 $B$ 是我们的“模板模板”，当模板中的所有节点都成功比对到末尾（即 $B$ 变为 `null`）时，说明前面的比对畅通无阻，这正是**成功匹配**的终点信号。
-  <strong>修法 →</strong> 确保 `if (B == null) return true;` 优先于 `if (R == null) return false;` 触发。
+若节点值是整数、字符串或业务对象，应注入等价谓词，而不是保留浮点容差。字符串通常按精确值比较；对象可能只比较主键，也可能要求全部字段相等，契约不同会改变候选数量和复杂度。
+
+## 最坏复杂度从重复候选产生
+
+设A有N个节点，B有M个节点。外层最多访问A的N个候选位置；每个候选值与B根相同且局部匹配到很深才失败时，内层可能检查O(M)节点，总时间最坏O(NM)。
+
+典型最坏例是两棵退化链，所有节点值都相同，而B最后一个位置与A对应值或方向不同。A的许多起点都会触发接近完整的B匹配。若根值分布稀疏，只有少数候选进入内层，实际工作接近O(N)加匹配成本，但不能把平均值无条件写成O(N)。
+
+外层递归深度最多是A高度hA，内层最多是B高度hB；一次候选匹配期间两类调用栈叠加，峰值O(hA+hB)。极端斜树可达O(N+M)，平衡树则接近对数高度。
+
+可把外层改为显式栈，避免A的深递归；内层仍可能深。若需要大量重复查询，可为树做结构哈希或序列化加空标记，但浮点近似相等不满足简单精确哈希，优化前要重新定义等价关系。
+
+容差相等还可能不具传递性：a与b差一点、b与c差一点都在阈值内，a与c却可能超过阈值。它适合一次局部比较，却不适合作为无序集合键或并查集合并规则。若要为候选根建立索引，应先把数值量化到明确区间，或使用业务提供的离散ID；否则索引筛掉的候选可能与逐点比较结果不一致。
+
+批量查询时可以为每个A节点缓存“值加左右结构”的精确签名，先快速排除不可能候选，再用原算法确认。但子结构允许A在B叶端继续延伸，不能直接拿完整子树哈希判等；签名必须支持模板通配结束，或只作为否定过滤器。优化若改变空分支语义，就不再是同一道题。
+
+当A高度很大而B较小，可用显式栈遍历候选，并让内层使用成对节点栈，彻底避免系统递归栈。迭代版仍要保持“B空成功、A先空失败、左右都匹配”的顺序；控制流改写不能改变逻辑边界。
+
+## 树结构、图结构与共享节点
+
+算法假设A和B都是有限无环二叉树。若孩子指针形成环，递归不会终止；若同一节点被多个父节点共享，结构实际是有向无环图，函数可能重复访问同一子图，复杂度分析也会变化。
+
+对不可信结构可先检测环，或由拥有容器保证树不变量。unique_ptr左右孩子自然表达唯一所有权树；测试中使用裸指针时，销毁函数也必须避免共享节点重复释放。
+
+算法只读节点，不修改结构，适合并发只读；但若另一线程同时替换孩子或销毁节点，仍会数据竞争和悬空。不可变树、读锁或生命周期快照才是完整保证。
+
+返回bool不暴露匹配位置。若产品需要展示证据，可返回第一个候选根指针，或收集全部匹配根；后者不能在第一次成功后短路，时间和内存都要重新评估。
+
+<Callout type="trap" title="只比较值序列，不比较左右方向">
+左孩子9与右孩子9的先序值可能相同，但子结构要求对应方向一致。内层必须分别比较left与left、right与right，不能把孩子当成无序集合。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 输入为包含极小浮点数节点值的二叉树时，算法时而运行正确，时而漏判或错判。
-  <strong>原因 →</strong> 直接使用了 `R->val == B->val` 进行节点值判断，忽略了浮点数表示时的截断和舍入误差。
-  <strong>修法 →</strong> 坚决使用 `std::fabs(a - b) < 1e-8` 或等效的精度容差比较函数进行数值等值判断。
-</Callout>
+## 作者九组测试怎样覆盖形状
 
-<Callout type="trap">
-  <strong>现象 →</strong> 算法在运行中抛出空指针解引用错误（如 C++ 中的 Segfault 或 TS 中的 Cannot read properties of null）。
-  <strong>原因 →</strong> 在主函数中递归调用时，如直接写 `isSubStructure(A->left, B)` 却忘记在函数入口或调用前检查主树指针是否为空。
-  <strong>修法 →</strong> 在主函数的第一行坚决写入 `if (A == nullptr || B == nullptr) return false;` 作为无可动摇的防御防线。
-</Callout>
+Test1在普通分叉树中成功，B为8的左右孩子9和2；Test2把A对应2改成3，验证值冲突失败。Test3和Test4是只有左孩子的斜树，分别验证匹配与末端值不同。
 
-## 小结与练习
+Test5是只有右孩子的匹配斜树；Test6让B在某层多出左孩子3，而A只有右链，验证方向和缺失分支失败。Test7到Test9分别是A空、B空、两者都空，全部返回false。
 
-- 判定『树的子结构』依赖**主遍历函数**（寻找候选根节点）与**辅助匹配函数**（做重合校验）的双重递归配合。
-- 关键递归终止逻辑：`B == null` 返回 `true`，而 `R == null` 返回 `false`。
-- 对于浮点数类型（如 `double` / `float`）的节点值比对，应使用 **精度容差法** 规避计算机浮点数舍入误差带来的错误。
-- 算法的 worst-case 时间复杂度为 **$O(N \times M)$**（当大部分节点值均与 B 的根匹配时），平均时间复杂度为 **$O(N)$**。
+<SubtreeOfficialCaseLab />
+
+自动测试应断言九组结果，并单独检查容差边界：
+
+```cpp
+#include <cassert>
+
+void testSubstructure() {
+    BinaryTreeNode a9{9};
+    BinaryTreeNode a2{2};
+    BinaryTreeNode aLeft8{8, &a9, &a2};
+    BinaryTreeNode a7{7};
+    BinaryTreeNode aRoot8{8, &aLeft8, &a7};
+
+    BinaryTreeNode b9{9};
+    BinaryTreeNode b2{2};
+    BinaryTreeNode b8{8, &b9, &b2};
+
+    assert(hasSubtree(&aRoot8, &b8));
+    b2.value = 3;
+    assert(!hasSubtree(&aRoot8, &b8));
+    b2.value = 2;
+
+    assert(!hasSubtree(nullptr, &b8));
+    assert(!hasSubtree(&aRoot8, nullptr));
+    assert(!hasSubtree(nullptr, nullptr));
+
+    assert(equalValue(1.0, 1.0 + 0.00000005));
+    assert(!equalValue(1.0, 1.0 + 0.0000002));
+}
+```
+
+还应构造B叶节点对应A有额外孩子的案例，确认子结构成功；再用完整子树函数对同一案例断言失败。这样能直接锁定B为空时的终止语义。
+
+树值重复时，测试要确保第一个候选失败后外层继续搜索后续同值候选。只测试根位置成功会掩盖错误的“匹配一次失败就直接返回false”实现。
+
+## 正确性证明
+
+内层按B节点数归纳。B为空时所有约束已满足；B非空而A为空或值不同必失败；值相同且两侧模板都能匹配时，当前B整棵结构被A覆盖。因此matchesFrom准确判断固定候选。
+
+外层对A做先序遍历。当前候选匹配、左子树存在候选、右子树存在候选三种可能覆盖A全部节点；逻辑或在任一成功时返回true，全部失败才返回false。因此hasSubtree存在且仅存在某候选能覆盖B时成功。
+
+外层对空B返回false落实题目约定。结合内层正确性、候选覆盖完整性和终止条件，算法对有限无环二叉树返回正确答案。
+
+<Stepper>
+  <Step title="先在A中定位同值候选"><SubtreeCandidateSearchDiagram />当前候选失败后继续左、右子树，不能因一次同值失败就停止。</Step>
+  <Step title="按内外层解释空节点"><SubtreeMatchBoundaryMap />外层空B无效，内层B耗尽成功；A先耗尽才是结构不足。</Step>
+  <Step title="区分子结构与完整子树"><SubstructureVsSubtreeDiagram />子结构允许A在B叶子后继续延伸，完整子树要求双方同时结束。</Step>
+  <Step title="用九组形状和空树封口"><SubtreeOfficialCaseLab />普通树、左右斜树、缺失分支和三种空组合覆盖双重递归。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 树的子结构需要外层先定位相同根节点，内层再比较左右子树。
+2. 候选根值相同只是启动条件，不代表局部形状已经匹配。
+3. 外层空B返回false，内层B耗尽返回true，两个语义不能混用。
+4. 子结构允许A在B结束处继续有后代，完整子树不允许。
+5. 作者double比较使用严格绝对差小于1e-7。
+6. 外层当前、左、右用逻辑或，内层左右对应分支用逻辑与。
+7. 最坏时间O(NM)，递归栈峰值O(hA+hB)。
+8. 九组官方测试覆盖分叉树、左右斜树、结构缺口和空树。
 
 <Exercises>
-  <Answer question="给定树 A 的根节点为 8，其左孩子为 8，右孩子为 7，左孩子的左孩子为 9；树 B 根节点为 8，其左孩子为 9。B 是否是 A 的子结构？如果是，第一匹配点是在 A 的哪个节点？">
-    是。树 B 是树 A 的子结构。
-    虽然以 A 根节点 8 开始的比对会因为左侧子树不匹配（A 根的左孩子是 8，而 B 根的左孩子是 9，二者不等）而失败，但主函数接着前序遍历 A，在 A 的左孩子（节点 8）处再次尝试匹配。此时以 A 的左孩子为起点的子树中包含左孩子 9，这与树 B 完全吻合。
-    因此，匹配成功，第一匹配起点是树 A 的**左子节点 8**。
-  </Answer>
-  <Answer question="如果本题的逻辑由『树的子结构』变为『树的子树（Subtree）』判定（即树 B 必须与树 A 的某棵完整子树完全相同，一直延伸到叶节点），该如何修改辅助匹配函数？">
-    需要修改辅助匹配函数的终止判定逻辑。当树 B 的节点遍历完毕变为 `null` 时，树 A 的对应节点 $R$ 也必须同时变为 `null`，不能再有其他子孙节点。
-    修改方式为：将辅助匹配函数中的 `if (B == null) return true;` 改为 `if (B == null) return R == null;`。
-  </Answer>
-  <Answer question="在最坏情况下，『树的子结构』算法时间复杂度为 O(N * M)，这在什么树结构与数值特征下会触发？">
-    在树 A 与树 B 退化为单链表偏斜树，且两棵树的所有节点值都完全相同的情况下触发。
-    例如：树 A 是由 $N$ 个值为 1 的节点组成的右斜树，树 B 是由 $M$ 个值为 1 的节点组成的右斜树。此时，对于树 A 中的前 $N-M+1$ 个节点，主函数都会调用辅助匹配函数对其进行深度为 $M$ 的完全比对，从而每次比对都需要耗费 $O(M)$ 的时间，总时间复杂度退化至 $O(N \times M)$。
-  </Answer>
+
+**问题 1：为什么内层必须先判断B为空？**
+
+<Answer>B为空表示模板当前分支已全部匹配，应成功；此时A也可能为空。若先把A为空判成失败，双方同时结束的正常叶节点会被误判，因此B完成条件必须优先。</Answer>
+
+**问题 2：当前A节点与B根同值但匹配失败后，外层应做什么？**
+
+<Answer>继续在A的左子树和右子树搜索其他同值候选。重复值可能让前一个候选形状不合、后一个候选成功；不能把局部失败当成全树失败。</Answer>
+
+**问题 3：怎样把子结构判断改成完整子树判断？**
+
+<Answer>内层在B为空时要求A也为空，即双方对应分支必须同时结束；其他值比较和左右同步递归保持不变。外层仍搜索A的每个候选根。</Answer>
+
+**问题 4：最坏O(NM)在什么输入上出现？**
+
+<Answer>A和B都退化成长链，许多节点值与B根相同，每个候选都匹配到接近B末尾才因最后值或方向失败。A的O(N)个候选各做接近O(M)比较。</Answer>
+
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="子结构">
-    指树 B 的结构和节点值与树 A 的某一部分局部契合。即使树 B 的叶节点在树 A 中对应位置还有下属的子孙节点，也视作包含匹配成功。详见「直觉引入」与「概念讲解」节。
-  </GlossaryItem>
-  <GlossaryItem term="精度容差">
-    指在比对浮点数（float 或 double）时，由于计算机存储精度受限存在截断误差，不直接使用等号比较，而是通过判断两数差值绝对值小于极小常数（如 1e-8）来判定数值相等。详见「概念讲解」节。
-  </GlossaryItem>
-  <GlossaryItem term="双重递归">
-    指在树的匹配问题中，外层使用递归前序遍历树 A 寻找待匹配子结构的候选根节点，内层对找到的每个候选节点触发另一重递归（用于做两棵子树各分支的同步重叠比对）的设计方法。详见「概念讲解」节。
-  </GlossaryItem>
+  <GlossaryItem term="候选根">A中值与B根相等、值得启动局部结构比较的节点。</GlossaryItem>
+  <GlossaryItem term="同步匹配">从候选根开始成对比较A与B对应左右分支的过程。</GlossaryItem>
+  <GlossaryItem term="子结构">B全部节点在A局部得到对应，但A可以继续延伸的关系。</GlossaryItem>
+  <GlossaryItem term="精度容差">以差值阈值定义浮点数近似相等的策略。</GlossaryItem>
+  <GlossaryItem term="短路遍历">成功后停止访问其余候选分支的求值方式。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题26"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/26_SubstructureInTree/SubstructureInTree.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

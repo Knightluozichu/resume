@@ -1,0 +1,155 @@
+---
+title: "材质、皮肤、毛发与表面细节：10篇复现"
+type: B
+section: "GPU Pro 1-7 · 光照与材质"
+order: 6
+description: "以出版社目录和现代GPU证据复现10篇GPU Pro核心技术。"
+demo: true
+math: true
+sourceUrl: "https://www.routledge.com/GPU-Pro-Advanced-Rendering-Techniques-1st-Edition/Engel/p/book/9780429108426"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GpoMaterialShadingMapLab, GpoMaterialShadingTradeoffLab, GpoMaterialShadingEvidenceLab } from "@/components/mdx/gpu-pro/diagrams/gpo-material-shading";
+
+<Objectives>
+- 能解释预积分着色、多层材质与各向异性的生产者到消费者关系
+- 能绘制原篇方案、历史GPU载体和现代实现之间的等价或近似边界
+- 能判断材质证书是否包含正确性、兼容、性能和失败重放证据
+</Objectives>
+
+## 先预测，再建立证据
+
+先预测：如果只把原篇API名替换成现代接口，哪些数学关系、数据顺序、精度和性能假设可能已经悄悄改变？皮肤、fur、TressFX、Ptex、decal、wrinkle、老化与shader生成都要求从美术参数追到采样、BRDF/散射和辅助Pass。 本页用<Term def="把昂贵积分离线压入LUT并在运行时按少量参数查询。">预积分着色</Term>、<Term def="按覆盖、Fresnel和能量关系组合皮肤、毛发、涂层或老化层。">多层材质</Term>、<Term def="反射随切线方向变化，常用于毛发和拉丝表面。">各向异性</Term>、<Term def="以Ptex、vector displacement、decal或程序变化补充几何与材质。">表面细节</Term>、<Term def="检查参数语义、能量、轮廓、法线、LOD和目标平台成本。">材质证书</Term>固定范围与验收语言。
+
+<GpoMaterialShadingMapLab />
+
+## 官方范围与唯一归属
+
+来源：[GPU Pro 1 publisher TOC](https://www.routledge.com/GPU-Pro-Advanced-Rendering-Techniques-1st-Edition/Engel/p/book/9780429108426) · [GPU Pro 2 publisher TOC](https://www.routledge.com/product/isbn/9781568817187) · [GPU Pro 4 publisher TOC](https://www.routledge.com/GPU-Pro-4-Advanced-Rendering-Techniques/Engel/p/book/9780429165177) · [GPU Pro 5 publisher TOC](https://www.routledge.com/GPU-Pro-5-Advanced-Rendering-Techniques/Engel/p/book/9781482208634) · [GPU Pro 6 publisher TOC](https://www.routledge.com/GPU-Pro-6-Advanced-Rendering-Techniques/Engel/p/book/9781482264616)。以下原篇只在本主题拥有一个主归属；其他页面可以引用，但不得重复计入覆盖。
+
+### GPU Pro 1 · 2篇
+
+- **GPO-V1-08 · NPR Effects Using the Geometry Shader**：用geometry shader生成NPR轮廓或笔触，验证拓扑边界、视角稳定和线宽。
+- **GPO-V1-20 · Screen-Space Subsurface Scattering**：以预积分或屏幕扩散近似皮肤散射，检查厚度、阴影、色能量和不同尺度。
+
+### GPU Pro 2 · 4篇
+
+- **GPO-V2-02 · Practical and Realistic Facial Wrinkles Animation**：由表情权重驱动局部皱纹位移/法线并控制叠加、接缝和动画稳定。
+- **GPO-V2-04 · Pre-Integrated Skin Shading**：以预积分或屏幕扩散近似皮肤散射，检查厚度、阴影、色能量和不同尺度。
+- **GPO-V2-05 · Implementing Fur Using Deferred Shading**：在deferred或shell路径生成毛层，核对排序、阴影、过度绘制和LOD。
+- **GPO-V2-08 · Volume Decals**：用体积投影修改已有表面，验证深度重建、裁剪、法线空间和混合通道。
+
+### GPU Pro 4 · 1篇
+
+- **GPO-V4-05 · Real-Time Ptex and Vector Displacement**：按面索引采样Ptex并叠加vector displacement，处理边界过滤、LOD和缓存。
+
+### GPU Pro 5 · 2篇
+
+- **GPO-V5-03 · Particle-Based Simulation of Material Aging**：以粒子或场驱动磨损、污渍与暴露累积，验证守恒、遮罩和时间尺度。
+- **GPO-V5-09 · TressFX: Advanced Real-Time Hair Rendering**：按毛发切线和多重高光评估各向异性，并验证透明、阴影和抗锯齿。
+
+### GPU Pro 6 · 1篇
+
+- **GPO-V6-26 · Semantic Based Shader Generation Using Shader Shaker**：从语义图生成shader与诊断，验证类型、依赖、变体和错误定位。
+
+## 核心模型与不变量
+
+皮肤、fur、TressFX、Ptex、decal、wrinkle、老化与shader生成都要求从美术参数追到采样、BRDF/散射和辅助Pass。 先从输入、输出、坐标或数据域、迭代顺序和误差判据写模型，再讨论API迁移。任何优化都必须能指出它保持、近似或放弃了哪条关系。
+
+$$
+material = baseLayer + detailLayer + coatLayer
+$$
+
+$$
+energyOut <= energyIn + emission
+$$
+
+$$
+specular = D * F * G / denominator
+$$
+
+$$
+quality = appearanceMatch - temporalArtifacts
+$$
+
+公式中的量必须给出范围、单位、空间、精度和生产者。画面相似不代表算法等价；数值一致也不代表带宽、时序和设备边界相同。
+
+## 最小现代探针
+
+```hlsl
+surface = DecodeMaterial(textures, parameters, tangentFrame);
+```
+
+探针只暴露一个变量或阶段。先用常量、解析输入和小规模CPU参考确认正确，再逐步恢复纹理、变体、并行和时间复用。
+
+<GpoMaterialShadingTradeoffLab />
+
+## 历史载体到现代路径
+
+```text
+original: volume + article + API/hardware assumptions
+invariant: equation + data dependency + boundary
+reference: CPU, analytic, offline, or original trend
+modern: shader/compute path + explicit translation
+proof: intermediate buffers + image/numeric diff + GPU capture
+```
+
+迁移报告必须区分完全等价、受控近似和不可直接迁移。旧式fragment pass、DirectX 9、OpenGL ES、CUDA或OpenCL接口可以变化，但读写重叠、同步、采样边界和精度不能被省略。
+
+## 性能、兼容与失败边界
+
+固定设备、驱动、分辨率、场景、帧阶段和统计窗口，分别报告CPU提交、GPU时间、外存流量、显存峰值和画质误差。对移动、桌面和多GPU路径使用各自真实设备，不用名称推断快慢。
+
+```json
+{"source":"official article id","correctness":"reference diff","compatibility":"api and device matrix","performance":"end-to-end metrics","failure":"minimal replay"}
+```
+
+<GpoMaterialShadingEvidenceLab />
+
+## 三步复现实验
+
+<Stepper>
+  <Step title="还原原篇问题与假设"><GpoMaterialShadingMapLab /></Step>
+  <Step title="建立参考与现代双路径"><GpoMaterialShadingTradeoffLab /></Step>
+  <Step title="捕获边界、失败和成本"><GpoMaterialShadingEvidenceLab /></Step>
+</Stepper>
+
+1. 固定卷号、篇名、来源、原始平台和输入输出。
+2. 写出核心不变量、CPU或离线参考以及现代GPU路径。
+3. 构造正常、边界、退化和超容量输入，保存中间证据。
+4. 在目标设备重放，记录图像或数值误差和端到端成本。
+
+## 常见误区
+
+<Callout type="trap" title="范围或身份错误">只在正面固定灯光调材质，掠射角、阴影和不同曝光立即失真。</Callout>
+
+<Callout type="trap" title="证据或边界缺失">毛发或位移只更新可见颜色，深度、阴影和运动向量轮廓不一致。</Callout>
+
+## 练习
+
+<Exercises>
+**问题1：如何从预积分着色建立最小可核查实验？**
+<Answer>固定官方篇章身份，列出输入、输出和一条核心关系；先用解析或CPU参考验证单阶段，再加入GPU并保存中间缓冲和误差。</Answer>
+
+**问题2：怎样证明现代实现没有偷换多层材质？**
+<Answer>对相同输入比较历史模型与现代路径的数据顺序、精度、边界和中间量；差异必须标记为等价、近似或不支持，并给出容差。</Answer>
+
+**问题3：材质证书至少包含什么？**
+<Answer>包含来源与版本、参考结果、实现配置、正确性差异、兼容矩阵、GPU捕获、端到端指标以及最小失败配置和修复重放。</Answer>
+</Exercises>
+
+## 本章回顾
+
+材质、皮肤、毛发与表面细节页承载10篇唯一原文；每篇都回到问题、不变量、现代实现、边界和证据。
+
+<Glossary>
+  <GlossaryItem term="预积分着色" definition="把昂贵积分离线压入LUT并在运行时按少量参数查询。" />
+  <GlossaryItem term="多层材质" definition="按覆盖、Fresnel和能量关系组合皮肤、毛发、涂层或老化层。" />
+  <GlossaryItem term="各向异性" definition="反射随切线方向变化，常用于毛发和拉丝表面。" />
+  <GlossaryItem term="表面细节" definition="以Ptex、vector displacement、decal或程序变化补充几何与材质。" />
+  <GlossaryItem term="材质证书" definition="检查参数语义、能量、轮廓、法线、LOD和目标平台成本。" />
+</Glossary>
+
+<Attribution adaptedFrom="GPU Pro 1-7 official A K Peters/CRC Press tables of contents" adaptedUrl="https://www.routledge.com/GPU-Pro-Advanced-Rendering-Techniques-1st-Edition/Engel/p/book/9780429108426" />

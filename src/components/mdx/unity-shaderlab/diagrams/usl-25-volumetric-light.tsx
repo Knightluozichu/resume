@@ -1,0 +1,42 @@
+import { UnityShaderLab, type UnityShaderSnapshot } from "./official-lab";
+
+const SNAPSHOTS=[
+  {
+    "label": "输入",
+    "stage": "体积光",
+    "action": "固定Unity版本、场景、材质和资源",
+    "evidence": "保存资源哈希与参数",
+    "warning": "只累加亮度而不更新透射率，高密度区域无限发白且不遮挡背景。"
+  },
+  {
+    "label": "结构",
+    "stage": "Ray Marching",
+    "action": "检查SubShader、Pass、标签和空间",
+    "evidence": "显示阶段输入与中间值",
+    "warning": "先确认实际执行路径，再解释最终颜色。"
+  },
+  {
+    "label": "计算",
+    "stage": "相位函数",
+    "action": "逐项打开本章公式或效果",
+    "evidence": "保存正常图与差分图",
+    "warning": "所有方向、深度和颜色都要标注空间与范围。"
+  },
+  {
+    "label": "状态",
+    "stage": "光源可见性",
+    "action": "核对深度、模板、混合和目标",
+    "evidence": "保存Frame Debugger与GPU事件",
+    "warning": "Shader代码不能独自决定全部渲染状态。"
+  },
+  {
+    "label": "验收",
+    "stage": "步长",
+    "action": "重放正确例、边界例和失败例",
+    "evidence": "记录CPU/GPU时间与画质",
+    "warning": "只累加亮度而不更新透射率，高密度区域无限发白且不遮挡背景。"
+  }
+] as const satisfies ReadonlyArray<UnityShaderSnapshot>;
+export function Usl25VolumetricLightPipelineLab(){return <UnityShaderLab title="第25章 体积光：执行链" mode="transparent" snapshots={SNAPSHOTS} initial={0}/>;}
+export function Usl25VolumetricLightCompareLab(){return <UnityShaderLab title="第25章 体积光：对照实验" mode="transparent" snapshots={SNAPSHOTS} initial={2}/>;}
+export function Usl25VolumetricLightEvidenceLab(){return <UnityShaderLab title="第25章 体积光：验收证书" mode="transparent" snapshots={SNAPSHOTS} initial={4}/>;}

@@ -1,0 +1,232 @@
+---
+title: "第2章 互联网（The Internet）"
+type: A
+section: "Multiplayer Game Programming · 互联网分层与NAT"
+order: 2
+description: "端到端游戏消息会逐层封装、路由和复用，NAT 又改变可达性；排障必须定位到具体层和具体地址映射。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/multiplayer-game-programming-architecting-networked-9780134034331"
+draft: false
+---
+
+import {
+  Mgp02InternetMapLab,
+  Mgp02InternetExperimentLab,
+  Mgp02InternetEvidenceLab,
+} from "@/components/mdx/multiplayer-game-programming/diagrams/mgp-02-internet";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释互联网分层与NAT的核心机制，并把它放回全书13章与附录A的主线
+- 能比较正常、边界、失败和恢复样本，指出首个状态或时间偏离点
+- 能实现最小C++或协议实验，记录网络身份、版本、所有权与预算
+- 能设计证据回答“每个故障都能定位到一层责任；地址与端口映射有证据；消息过期与重复策略不依赖理想网络。”是否成立
+
+</Objectives>
+
+## 直觉：先找唯一事实
+
+端到端游戏消息会逐层封装、路由和复用，NAT 又改变可达性；排障必须定位到具体层和具体地址映射。 真正的难点不是让一次理想样本跑通，而是让消息身份、世界版本、状态权威和时间预算在丢包、乱序、重复与断线后仍可解释。先预测：如果只保存最终成功画面，本页最可能隐藏哪一种分歧？
+
+<Mgp02InternetMapLab />
+
+## 权威目录定位
+
+本页依据 Addison-Wesley / InformIT 官方书目与官方目录样章锁定范围。英文标题用于一对一追踪，中文正文为独立教学重构；现代平台差异、安全强化和可观察性补充会明确披露：
+
+- Origins: Packet Switching
+- The TCP/IP Layer Cake
+- The Physical Layer
+- The Link Layer
+- The Network Layer
+- The Transport Layer
+- The Application Layer
+- NAT
+- Summary
+- Review Questions
+- Additional Readings
+
+本页逐项覆盖11个公开目录条目，并纳入同一套正常、边界、失败与恢复验收。
+
+## 核心概念与所有权
+
+<Term def="把数据拆成独立分组，经共享链路逐跳转发并在端点重组的通信方式。">分组交换</Term>、
+<Term def="把物理传输、链路交付、跨网路由、端到端传输和应用语义分开的协议结构。">TCP/IP分层</Term>、
+<Term def="网络层承载源地址、目的地址和上层负载的尽力而为传输单元。">IP数据报</Term>、
+<Term def="在同一主机地址上区分传输层通信端点的编号。">端口</Term>、
+<Term def="网关把内部地址端口改写成外部地址端口并维护返回路径的状态。">NAT映射</Term>。每个概念都要回答：谁创建输入，谁拥有可变状态，哪个序号或版本拒绝旧结果，断线后由谁恢复。
+
+| # | 概念 | 工程含义 |
+| -: | --- | --- |
+| 1 | 分组交换 | 把数据拆成独立分组，经共享链路逐跳转发并在端点重组的通信方式。 |
+| 2 | TCP/IP分层 | 把物理传输、链路交付、跨网路由、端到端传输和应用语义分开的协议结构。 |
+| 3 | IP数据报 | 网络层承载源地址、目的地址和上层负载的尽力而为传输单元。 |
+| 4 | 端口 | 在同一主机地址上区分传输层通信端点的编号。 |
+| 5 | NAT映射 | 网关把内部地址端口改写成外部地址端口并维护返回路径的状态。 |
+
+## 机制拆解
+
+### 1. 分层是责任边界
+
+物理层传比特，链路层在一跳内交付帧，网络层跨网选择路径，传输层在端点之间复用并提供不同可靠性，应用层定义游戏消息含义。一次超时不能笼统归因于“网络差”；要记录丢失发生在哪层可见的证据。
+
+先预测：若省略这一层，哪一个序号、所有权或时间预算会最先失真？
+
+### 2. 尽力而为意味着应用必须定义失败
+
+IP不承诺送达、顺序或唯一性。UDP把这些性质暴露给应用，TCP则以字节流和重传隐藏部分问题，但会引入队头阻塞。游戏协议仍要定义消息边界、过期时间、幂等性和断线后的状态恢复。
+
+先预测：若省略这一层，哪一个序号、所有权或时间预算会最先失真？
+
+### 3. NAT改变的是可达性，不只是地址
+
+私网端点主动发送后，网关才通常建立短寿命映射；不同映射与过滤策略使外部主机不能假设可直接回连。实验必须同时记录内外地址、映射寿命、保活间隔和中继回退，不能把本机直连成功当成互联网可用。
+
+先预测：若省略这一层，哪一个序号、所有权或时间预算会最先失真？
+
+## 六阶段证据链
+
+可操作链条是：应用形成消息 → 传输层分段 → 网络层寻址 → 链路逐跳交付 → NAT改写映射 → 端点解封装验证。正常样本证明能力，边界样本证明预算，失败样本证明拒绝，恢复样本证明状态与资源重新收敛。
+
+<Stepper>
+  <Step title="1. 应用形成消息与传输层分段">
+    固定协议版本、网络种子、输入序号与状态所有者，运行正常和边界样本。
+    <Mgp02InternetMapLab />
+  </Step>
+  <Step title="2. 网络层寻址与链路逐跳交付">
+    注入延迟、抖动、丢包、重复或责任节点中断，要求在首偏离点停止。
+    <Mgp02InternetExperimentLab />
+  </Step>
+  <Step title="3. NAT改写映射与端点解封装验证">
+    清除故障后重放相同输入，核对世界摘要、对象数量、消息债务与资源租约。
+    <Mgp02InternetEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小实现骨架
+
+以下代码是独立复现实验骨架，不复制原书代码。序号比较必须处理回绕，生产实现还需补齐平台错误、认证、容量与资源清理。
+
+```cpp
+struct NetworkEvidence {
+  std::uint32_t sequence;
+  std::uint32_t worldVersion;
+  std::uint64_t objectId;
+  double sentAtMs;
+  double appliedAtMs;
+};
+
+bool accepts(const NetworkEvidence& next, const NetworkEvidence& current) {
+  return next.objectId == current.objectId &&
+         next.worldVersion >= current.worldVersion;
+}
+```
+
+证据记录把目录、时序与状态摘要放在一起：
+
+```yaml
+book: Multiplayer Game Programming
+page: mgp-02-internet
+official_entries: 11
+sample: normal | boundary | failure | recovery
+protocol_version: fixed
+network_seed: fixed
+state_owner: explicit
+first_divergence: null
+```
+
+故障脚本一次只改变一个变量：
+
+```text
+baseline -> inject(delay | jitter | loss | duplicate | disconnect)
+observe -> stop_at_first_divergence
+recover -> replay_same_version_seed_and_input
+assert -> one_authority && converged_state && no_orphan_resource
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：把TCP/IP各层画成名词堆叠，却无法指出一次游戏包在每层新增和消费了什么信息。** 必须保存消息序号、世界版本和首次拒绝原因，而不是只看最终画面。
+</Callout>
+
+<Callout type="trap">
+  **误区二：只在同一局域网验证连接，忽略NAT映射寿命、过滤策略和中继回退。** 必须加入边界、失败与恢复样本，证明错误没有跨入下一阶段。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 网络与输入变化 | 预期状态 | 通过条件 |
+| --- | --- | --- | --- |
+| 正常 | 合法版本、顺序、身份与容量 | 六阶段完成 | 权威摘要与对象身份一致 |
+| 边界 | 临界延迟、抖动、回绕或满载 | 达到预算不越界 | 队列有界且无永久饥饿 |
+| 失败 | 丢包、重复、畸形、断线或节点失效 | 首偏离点停止 | 明确拒绝、回滚或接管 |
+| 恢复 | 清除故障后重放同一输入 | 收敛到正常轨迹 | 无双权威、幽灵对象和资源泄漏 |
+
+<Mgp02InternetEvidenceLab />
+
+本页签发不变量是：**每个故障都能定位到一层责任；地址与端口映射有证据；消息过期与重复策略不依赖理想网络。** 单次演示、平均延迟或最终截图不能替代序号、版本、首偏离点和恢复证据。
+
+## 练习
+
+<Exercises>
+
+**问题 1** 为什么不能只以最终世界状态正确作为验收？
+
+<Answer>
+  最终状态会隐藏重复副作用、旧版本覆盖、瞬时双权威和资源泄漏。必须比较消息序号、对象身份、状态所有者、时间预算与首偏离点。
+</Answer>
+
+**问题 2** 如何把本页公开目录变成可执行学习证据？
+
+<Answer>
+  先按公开顺序建立目录追踪表，再为每个主题写出输入、状态、输出、失败与恢复条件。本页重点包括：Origins: Packet Switching、The TCP/IP Layer Cake、The Physical Layer、The Link Layer、The Network Layer、The Transport Layer；其余条目已在上方逐项列出并纳入验收。
+</Answer>
+
+**问题 3** 本页的最小通过条件是什么？
+
+<Answer>
+  每个故障都能定位到一层责任；地址与端口映射有证据；消息过期与重复策略不依赖理想网络。 并且相同协议版本、网络种子和输入可重放正常、边界、失败与恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **分组交换**：把数据拆成独立分组，经共享链路逐跳转发并在端点重组的通信方式。
+- **TCP/IP分层**：把物理传输、链路交付、跨网路由、端到端传输和应用语义分开的协议结构。
+- **IP数据报**：网络层承载源地址、目的地址和上层负载的尽力而为传输单元。
+- **端口**：在同一主机地址上区分传输层通信端点的编号。
+- **NAT映射**：网关把内部地址端口改写成外部地址端口并维护返回路径的状态。
+- 六阶段机制链已经映射到正常、边界、失败和恢复证据。
+- 官方目录逐项追踪，现代补充不会冒充原书正式分节。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="分组交换">把数据拆成独立分组，经共享链路逐跳转发并在端点重组的通信方式。</GlossaryItem>
+  <GlossaryItem term="TCP/IP分层">把物理传输、链路交付、跨网路由、端到端传输和应用语义分开的协议结构。</GlossaryItem>
+  <GlossaryItem term="IP数据报">网络层承载源地址、目的地址和上层负载的尽力而为传输单元。</GlossaryItem>
+  <GlossaryItem term="端口">在同一主机地址上区分传输层通信端点的编号。</GlossaryItem>
+  <GlossaryItem term="NAT映射">网关把内部地址端口改写成外部地址端口并维护返回路径的状态。</GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Josh Glazer、Sanjay Madhav 著，Addison-Wesley Professional，第一版，2015年10月出版、版权年2016，384页，eBook ISBN 9780134034331，印刷版 ISBN 9780134034300；InformIT官方书目与官方Pearson目录样章确认13章、附录A及112个公开目录条目。正文为独立教学重构。"
+  adaptedUrl="https://www.informit.com/store/multiplayer-game-programming-architecting-networked-9780134034331"
+/>

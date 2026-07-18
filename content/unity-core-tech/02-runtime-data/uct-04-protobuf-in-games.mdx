@@ -1,0 +1,228 @@
+---
+title: "第 4 章 Protobuf 在游戏中的运用：协议、生成与 Unity 接入"
+type: A
+section: "Unity 3D 实战核心技术详解 · 数学与数据"
+order: 4
+description: "按原书第4章覆盖 Protobuf 消息定义、结构体编写、转换工具制作与 Unity 运行时接入。"
+demo: true
+math: false
+sourceUrl: "https://m.bookschina.com/7380713.htm"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Uct04ProtobufInGamesMapLab,
+  Uct04ProtobufInGamesExperimentLab,
+  Uct04ProtobufInGamesEvidenceLab,
+} from "@/components/mdx/unity-core-tech/diagrams/uct-04-protobuf-in-games";
+
+<Objectives>
+
+- 能解释字段编号、线格式和生成代码之间的兼容契约
+
+- 能实现从 proto 文件到 C# 类型再到 Unity 字节流的可重复工具链
+
+- 能分析截帧、版本演进和默认值造成的协议故障
+
+</Objectives>
+
+## 问题：为什么客户端和服务器都能成功编译同名字段，线上仍可能解析成完全不同的数据？
+
+先预测：只比较字段名称是否足以判断 Protobuf 兼容？不足。二进制线格式依赖字段编号和 wire type，名称主要服务源码。原书第四章从消息结构体定义、编写 proto、制作转换工具到 Unity 使用，真正主线是建立唯一 schema 和可追溯代码生成链。
+
+<Uct04ProtobufInGamesMapLab />
+
+## 原书边界与目录小节
+
+本页严格对应完整目录中的以下单元；这些单元只在本页计算原章覆盖，现代扩展不替代原书位置：
+
+- **Protobuf消息结构体定义**
+- **编写Protobuf结构体**
+- **Protobuf转换工具制作**
+- **Protobuf文件在Unity中的运用**
+
+书籍身份由图书馆题录核对，章节边界由完整目录核对。本站重新组织解释、代码、实验和证据，不逐字复制原文；导读与总复习不重复计入十四个正文章。
+
+## 从 Schema 到可演进二进制契约
+
+proto 消息由字段编号、类型、重复规则和嵌套关系定义。字段编号发布后不得复用；删除字段应 reserved，新增可选字段要设计旧端默认行为。枚举零值、数值有符号编码和 packed repeated 都会影响边界数据。
+
+生成代码是 schema 的派生物，不应手工修改。工具链固定 protoc 版本、插件版本、输入目录、命令和输出哈希，并在构建时检查生成文件是否与 proto 同步。这样客户端与服务器能从同一提交重建类型。
+
+Unity 侧将消息序列化为 byte 数组只是内层协议，网络流还需要长度前缀、消息 ID、压缩或校验等帧层。TCP 没有消息边界，直接把一次 Receive 当一条 Protobuf 会在粘包和半包时失败。
+
+解析失败要记录协议版本、消息 ID、声明长度、实际长度和十六进制前缀，不能把全部异常吞成网络断开。Protobuf 提供结构兼容而不是加密、认证或传输可靠性，这些责任必须由其他层承担。
+
+<Uct04ProtobufInGamesExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="Protobuf 线格式中标识字段的稳定数字，发布后不可随意复用。">
+  字段编号
+</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="决定字段值在二进制流中编码与跳过方式的底层类别。">线类型</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="用固定编译器和插件把 proto schema 转为语言类型的过程。">
+  代码生成
+</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="在字节流外层提供长度、类型和完整性边界的传输单元。">消息帧</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="新版本消息中旧版本不认识但应能安全跳过或保留的数据。">未知字段</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+这些术语组成一份最小领域模型。读者需要为每个对象写出所有者、生命周期、正常值、边界值和故意失败后的第一条可观察信号，才能把概念转成工程判断。
+
+## 关键对象与数据流
+
+唯一 proto 仓库经过固定 protoc 生成 C# 和服务端代码，构建产物记录 schema 哈希；发送端先序列化消息，再写入消息 ID 与长度前缀；接收端先重组完整帧，之后按类型解析。输出包括领域对象、协议指标和失败字节样本。
+
+每次实验只改变一个输入，先保存版本、参数与预期，再比较输出、日志、内存或帧时间。最终结果偶然正确但中间契约不符合预测，仍不能签发，因为隐藏缓存、默认值或执行顺序可能掩盖根因。
+
+## 三步可重复实验
+
+动手前先预测：改变当前步骤的一项输入后，哪个对象、数值、像素、状态或版本标记应最先变化？固定 Unity 版本、目标平台、资产提交和测试场景。
+
+<Stepper>
+  <Step title="固定 Schema 与生成器">
+    <Uct04ProtobufInGamesMapLab />
+
+定义登录请求，保留字段编号并记录 protoc 版本；删除字段时使用 reserved，禁止把旧编号分配给新语义。
+
+```protobuf
+syntax = "proto3";
+message LoginRequest {
+  string account = 1;
+  bytes credential = 2;
+  uint32 client_version = 3;
+}
+```
+
+  </Step>
+  <Step title="建立帧边界">
+    <Uct04ProtobufInGamesExperimentLab />
+
+在 Protobuf 载荷外写固定字节序的长度和消息 ID，分多次投喂接收缓冲，确认半包不会提前解析、粘包能循环拆出多帧。
+
+```csharp
+byte[] payload = request.ToByteArray();
+writer.WriteUInt32((uint)payload.Length);
+writer.WriteUInt16(LoginRequestId);
+writer.WriteBytes(payload);
+```
+
+  </Step>
+  <Step title="回放版本演进">
+    <Uct04ProtobufInGamesEvidenceLab />
+
+用旧客户端解析带新增字段的新消息，再用新客户端解析缺少字段的旧消息；保存默认值、未知字段和失败载荷。
+
+```csharp
+LoginRequest parsed = LoginRequest.Parser.ParseFrom(payload);
+Debug.Assert(parsed.Account.Length > 0);
+Debug.Log(Convert.ToHexString(payload.AsSpan(0, Math.Min(16, payload.Length))));
+```
+
+  </Step>
+</Stepper>
+
+## 正常、边界与故障注入
+
+正常样本证明主路径，边界样本说明适用范围，故障样本证明诊断检查确实会在最早契约处拒绝。三类样本必须使用同一观测方式，避免只为成功路径保留证据。
+
+<Callout type="trap">
+  **因果陷阱**：重排或复用字段编号会让同一字节被解释为不同语义，字段名相同也救不了兼容性。
+</Callout>
+
+<Callout type="trap">
+  **边界陷阱**：把 TCP
+  单次读取当一条消息会把半包报成解析失败，也会丢掉一包中的后续消息。
+</Callout>
+
+## 从原书版本迁移到当前 Unity
+
+书中可能基于较早 proto2 或插件版本，现代项目可用 proto3 与当前 Google.Protobuf；迁移必须逐字段记录 required、optional、默认值和未知字段差异。
+
+Unity 的 IL2CPP、代码裁剪与 AOT 会影响反射或动态注册路径，发布前要在目标平台验证生成类型保留和解析，不只在编辑器运行。
+
+迁移账本使用五列：原书载体、稳定不变量、当前实现、不可等价处、重放证据。允许 API、插件和渲染管线变化，不允许用新名词删除原章问题或把编辑器成功当成目标平台成功。
+
+## 验收证据
+
+验收包含 schema 提交与哈希、生成命令和版本、客户端服务器生成文件一致性、半包粘包测试、旧新版本双向解析矩阵、错误载荷十六进制样本及目标平台 IL2CPP 结果。
+
+证据包还要记录文件路径、构建版本、设备、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不是看过。
+
+<Uct04ProtobufInGamesEvidenceLab />
+
+## 小结
+
+- 字段编号才是线格式的稳定身份
+- 生成代码必须能从唯一 schema 重建
+- Protobuf 载荷外仍需要消息帧
+- 兼容性必须由旧新版本双向回放证明
+
+<Exercises>
+
+**问题 1** 第 4 章 Protobuf 在游戏中的运用的关键输入和输出分别是什么？
+
+<Answer>
+  唯一 proto 仓库经过固定 protoc 生成 C# 和服务端代码，构建产物记录 schema
+  哈希；发送端先序列化消息，再写入消息 ID
+  与长度前缀；接收端先重组完整帧，之后按类型解析。输出包括领域对象、协议指标和失败字节样本。
+</Answer>
+
+**问题 2** 本章最有诊断价值的故障注入是什么？
+
+<Answer>
+  重排或复用字段编号会让同一字节被解释为不同语义，字段名相同也救不了兼容性。需要保存失败输入和第一条偏离信号，再修复后重放。
+</Answer>
+
+**问题 3** 迁移到当前 Unity 时必须保留什么？
+
+<Answer>
+  书中可能基于较早 proto2 或插件版本，现代项目可用 proto3 与当前
+  Google.Protobuf；迁移必须逐字段记录 required、optional、默认值和未知字段差异。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="字段编号">
+    Protobuf 线格式中标识字段的稳定数字，发布后不可随意复用。
+  </GlossaryItem>
+  <GlossaryItem term="线类型">
+    决定字段值在二进制流中编码与跳过方式的底层类别。
+  </GlossaryItem>
+  <GlossaryItem term="代码生成">
+    用固定编译器和插件把 proto schema 转为语言类型的过程。
+  </GlossaryItem>
+  <GlossaryItem term="消息帧">
+    在字节流外层提供长度、类型和完整性边界的传输单元。
+  </GlossaryItem>
+  <GlossaryItem term="未知字段">
+    新版本消息中旧版本不认识但应能安全跳过或保留的数据。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="姜雪伟《Unity 3D实战核心技术详解》目录与书籍身份资料"
+  adaptedUrl="https://m.bookschina.com/7380713.htm"
+/>

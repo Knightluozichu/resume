@@ -1,0 +1,235 @@
+---
+title: "第 3 章 Vue.js 3的设计思路"
+type: A
+section: "Vue.js设计与实现 · 框架设计概览"
+order: 3
+description: "Vue 3由响应系统、渲染器、组件和编译器协作：状态触发组件副作用，组件产出VNode，渲染器提交宿主变更，编译器提供优化信息。 本页按权威目录独立教学重构。"
+demo: true
+math: false
+sourceUrl: "https://time.geekbang.org/column/article/740758"
+draft: false
+---
+
+import {
+  Vdi03Vue3DesignThinkingMapLab,
+  Vdi03Vue3DesignThinkingExperimentLab,
+  Vdi03Vue3DesignThinkingEvidenceLab,
+} from "@/components/mdx/vuejs-design-implementation/diagrams/vdi-03-vue3-design-thinking";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释第 3 章 Vue.js 3的设计思路的核心机制，并把它放回6篇18章的实现主线
+- 能实现本页最小算法，比较正常、边界、失败和恢复轨迹
+- 能指出依赖、VNode、组件实例、AST或请求状态的唯一所有者
+- 能设计证据回答“任一状态更新都能追踪到effect、组件render、VNode比较和宿主提交，模块边界不循环持有无关状态。”是否成立
+
+</Objectives>
+
+## 直觉：从输入、状态到提交
+
+Vue 3由响应系统、渲染器、组件和编译器协作：状态触发组件副作用，组件产出VNode，渲染器提交宿主变更，编译器提供优化信息。 本书不是对最终源码逐行翻译，而是从规范与最小模型逐步构造框架。只看最终DOM会隐藏错误依赖、重复移动、陈旧任务和激活错位；先画输入、状态所有者、调度点、输出和清理责任。
+
+<Vdi03Vue3DesignThinkingMapLab />
+
+## 权威目录定位
+
+作者授权数字版前言明确全书分为6篇18章，作者GitHub仓库提供配套代码。本页依照公开完整目录逐项覆盖 **6** 个条目；目录名称仅用于追踪，正文为独立教学重构。
+
+- 3.1 声明式地描述UI
+- 3.2 初识渲染器
+- 3.3 组件的本质
+- 3.4 模板的工作原理
+- 3.5 Vue.js是各个模块组成的有机整体
+- 3.6 总结
+
+## 核心概念与所有权
+
+<Term def="把虚拟节点映射到宿主平台元素并负责挂载、更新和卸载的模块。">
+  渲染器
+</Term>
+、<Term def="拥有状态、输入、生命周期并能产出子树的UI抽象。">组件</Term>、
+<Term def="把模板解析、转换并生成为渲染函数的编译模块。">模板编译器</Term>、
+<Term def="描述元素、组件、文本或片段类型、属性和子节点的虚拟节点。">
+  VNode
+</Term>
+、
+<Term def="响应系统、渲染器、组件和编译器通过稳定接口共同完成UI更新。">
+  模块协作
+</Term>
+。每个概念都要回答：谁创建输入，哪个结构保存状态，何种操作可以修改，错误如何传播，生命周期结束后谁清理。
+
+|   # | 概念       | 精确定义                                                   |
+| --: | ---------- | ---------------------------------------------------------- |
+|   1 | 渲染器     | 把虚拟节点映射到宿主平台元素并负责挂载、更新和卸载的模块。 |
+|   2 | 组件       | 拥有状态、输入、生命周期并能产出子树的UI抽象。             |
+|   3 | 模板编译器 | 把模板解析、转换并生成为渲染函数的编译模块。               |
+|   4 | VNode      | 描述元素、组件、文本或片段类型、属性和子节点的虚拟节点。   |
+|   5 | 模块协作   | 响应系统、渲染器、组件和编译器通过稳定接口共同完成UI更新。 |
+
+## 机制拆解
+
+### 1. 建立机制边界
+
+UI可以用模板或渲染函数声明，二者最终都要生成VNode。VNode不是DOM副本，而是渲染器需要的最小描述，包括类型、属性、子节点、key和编译器标记。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+### 2. 处理关键算法
+
+组件本质上是能产出VNode子树的抽象；有状态组件还拥有实例与生命周期。渲染器只依赖宿主操作，因此同一组件模型可渲染到DOM、Canvas或其他平台。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+### 3. 签发失败与恢复
+
+模板编译器把静态结构和动态绑定变成render函数，响应系统在render执行时收集依赖。状态变化后调度组件更新，新的VNode与旧子树比较并提交最小宿主变更，形成完整闭环。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+## 三阶段可视化推演
+
+<Stepper>
+  <Step title="1. 建立最小模型">
+    固定运行时、输入和初始状态，先预测数据结构与执行顺序。
+    <Vdi03Vue3DesignThinkingMapLab />
+  </Step>
+  <Step title="2. 注入算法边界">
+    只改变一个变量，观察分支切换、重复key、请求乱序、非法模板或激活不匹配的首偏离点。
+    <Vdi03Vue3DesignThinkingExperimentLab />
+  </Step>
+  <Step title="3. 清除故障并重放">
+    用相同输入恢复，核对依赖集合、任务队列、宿主节点、组件实例和请求状态是否收敛。
+    <Vdi03Vue3DesignThinkingEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小可运行实验
+
+```js
+const vnode = { type: "button", props: { onClick }, children: "Add" };
+const renderer = createRenderer({ createElement, insert, setElementText });
+renderer.render(vnode, container);
+```
+
+保存结构化证据，不以一次console输出或最终截图替代过程：
+
+```yaml
+book: Vue.js设计与实现
+page: vdi-03-vue3-design-thinking
+sample: normal | boundary | failure | recovery
+runtime: pinned
+input_fixture: fixed
+first_divergence: null
+cleanup_complete: true
+```
+
+故障注入一次只改变一个变量：
+
+```text
+baseline -> inject(one_fault) -> stop_at_first_divergence
+recover -> replay_same_input
+assert -> precise_dependency && stable_identity && ordered_tasks && no_retained_resource
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：把模板、响应式和DOM更新看成三个独立黑盒，无法解释一次状态写入的调用链。**
+  必须保存输入、执行轨迹和首偏离点，而不是只比较最终结果。
+</Callout>
+
+<Callout type="trap">
+  **误区二：把VNode等同真实DOM并在业务代码中直接修改，破坏渲染器的所有权。**
+  必须加入失败与恢复样本，并检查依赖、节点、任务和状态是否清理。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 变化                 | 预期         | 证据           |
+| ---- | -------------------- | ------------ | -------------- |
+| 正常 | 合法输入与稳定身份   | 主链完成     | 输出与轨迹一致 |
+| 边界 | 空值、重复或极限序列 | 有界退化     | 不越界、不重复 |
+| 失败 | 异常、乱序、非法结构 | 首偏离点停止 | 错误显式传播   |
+| 恢复 | 清除故障后同输入重放 | 收敛到正常   | 无旧依赖和资源 |
+
+<Vdi03Vue3DesignThinkingEvidenceLab />
+
+本页签发不变量：**任一状态更新都能追踪到effect、组件render、VNode比较和宿主提交，模块边界不循环持有无关状态。**
+
+## 练习
+
+<Exercises>
+
+**问题 1** 第 3 章 Vue.js 3的设计思路的核心主张是什么？
+
+<Answer>
+  Vue
+  3由响应系统、渲染器、组件和编译器协作：状态触发组件副作用，组件产出VNode，渲染器提交宿主变更，编译器提供优化信息。
+</Answer>
+
+**问题 2** 如何把本页目录变成可执行证据？
+
+<Answer>
+  按公开顺序建立追踪表，至少覆盖3.1 声明式地描述UI、3.2 初识渲染器、3.3
+  组件的本质、3.4 模板的工作原理、3.5 Vue.js是各个模块组成的有机整体、3.6
+  总结，并为每组条目记录输入、状态、输出、失败与恢复条件。
+</Answer>
+
+**问题 3** 本页怎样签发？
+
+<Answer>
+  任一状态更新都能追踪到effect、组件render、VNode比较和宿主提交，模块边界不循环持有无关状态。
+  同一运行时与输入必须能重放正常、边界、失败和恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **渲染器**：把虚拟节点映射到宿主平台元素并负责挂载、更新和卸载的模块。
+- **组件**：拥有状态、输入、生命周期并能产出子树的UI抽象。
+- **模板编译器**：把模板解析、转换并生成为渲染函数的编译模块。
+- **VNode**：描述元素、组件、文本或片段类型、属性和子节点的虚拟节点。
+- **模块协作**：响应系统、渲染器、组件和编译器通过稳定接口共同完成UI更新。
+- 官方目录、最小实现、故障注入与恢复证据已经放进同一验收链。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="渲染器">
+    把虚拟节点映射到宿主平台元素并负责挂载、更新和卸载的模块。
+  </GlossaryItem>
+  <GlossaryItem term="组件">
+    拥有状态、输入、生命周期并能产出子树的UI抽象。
+  </GlossaryItem>
+  <GlossaryItem term="模板编译器">
+    把模板解析、转换并生成为渲染函数的编译模块。
+  </GlossaryItem>
+  <GlossaryItem term="VNode">
+    描述元素、组件、文本或片段类型、属性和子节点的虚拟节点。
+  </GlossaryItem>
+  <GlossaryItem term="模块协作">
+    响应系统、渲染器、组件和编译器通过稳定接口共同完成UI更新。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="霍春阳著，人民邮电出版社，2022年1月，501页，ISBN 9787115583864。作者授权数字版前言确认6篇18章的结构与逐章范围，作者GitHub仓库提供配套代码，公开完整目录用于二三级条目追踪；正文为独立教学重构。"
+  adaptedUrl="https://time.geekbang.org/column/article/740758"
+/>
+
+配套代码：https://github.com/HcySunYang/code-for-vue-3-book

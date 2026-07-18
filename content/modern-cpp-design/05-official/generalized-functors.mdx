@@ -1,0 +1,285 @@
+---
+title: "第5章：广义仿函数"
+type: A
+section: Modern C++ Design · Part II Components
+order: 5
+description: 对齐第一版第5章 Generalized Functors：Command、C++ callable、Functor/Handler 擦除、转发 operator、复制、类型转换、成员函数、binding/chaining、转发与堆成本及 undo/redo。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+draft: false
+---
+
+import {
+  McdCommandRigidityMap,
+  McdFunctorCompositionMap,
+  McdFunctorErasureMap,
+} from "@/components/mdx/modern-cpp-design/diagrams/generalized-functors";
+
+<Objectives>
+
+- 能解释 Command pattern 在真实 callable 多样性下的样板压力，并区分签名擦除与对象多态
+- 能实现 Functor wrapper、FunctorImpl、FunctorHandler、clone 与 forwarding operator，处理普通函数、函数对象和成员函数
+- 能设计 argument/return conversion、binding、chaining 与 undo/redo，并评估 indirect call、copy、heap allocation 和 lifetime 成本
+
+</Objectives>
+
+## 为什么 Command 需要广义 callable
+
+**The Command Design Pattern** 把“请求”封装成对象，使 invoker 不依赖 receiver 的具体操作，并支持 queue、log、undo。经典 GoF 实现通常定义 `Command::Execute()` virtual interface，每个动作一个派生类。这解决耦合，却为简单函数也引入命名 class。
+
+<Term def="把请求及其接收者、参数或撤销状态封装成可存储和延迟执行对象的行为模式。">
+  Command
+</Term>
+
+**Command in the Real World** 面对的不只 `Command*`：UI callback 可能是 free function，timer 可能调用 object member，algorithm 可能接 lambda/functor，script bridge 还可能带转换。一个 scheduler 真正想固定的是 `R(Args...)` contract，而不是强迫所有来源继承同一 base。
+
+<McdCommandRigidityMap />
+
+## C++ Callable Entities
+
+官方目录的 **C++ Callable Entities** 包括普通函数、函数指针、重载函数、pointer to member function、拥有 `operator()` 的 function object，以及现代 lambda。它们的 concrete types、存储和调用语法不同，却可以共享相同有效 signature。
+
+<Term def="可通过函数调用语法或 invoke 规则执行的函数、成员函数指针、函数对象或 lambda。">
+  callable entity
+</Term>
+
+“都能调用”不等于能放进同一个 container：`vector<F>` 要求单一 F；virtual base 要求修改或包裹每个 callable；template owner 会把 F 暴露到 owner type。Generalized Functor 的目标是 type erasure：保留 signature，隐藏具体 callable type。
+
+## The Functor Class Template Skeleton
+
+**The Functor Class Template Skeleton** 对外是 value-like `Functor<R, TList>`，内部持有 abstract `FunctorImpl<R, TList>`。旧书用 Typelist 表示参数；现代可用 `template<class> class Function` 对函数类型 partial-specialize，或直接用 `R, Args...`。
+
+<Term def="以固定调用签名拥有一个擦除实现对象、可复制并暴露统一 operator() 的值语义包装器。">
+  generalized Functor
+</Term>
+
+```cpp
+template<class R, class... Args>
+struct FunctorImpl {
+    virtual ~FunctorImpl() = default;
+    virtual R invoke(Args... args) = 0;
+    virtual std::unique_ptr<FunctorImpl> clone() const = 0;
+};
+
+template<class R, class... Args>
+class Functor {
+public:
+    R operator()(Args... args) const;
+    Functor(const Functor& rhs) : impl_(rhs.impl_->clone()) {}
+private:
+    std::unique_ptr<FunctorImpl<R, Args...>> impl_;
+};
+```
+
+wrapper 负责 ownership、copy/move 与 public call；interface 只定义 erased contract。若把所有 constructor/callable cases 塞进 wrapper，任何新增来源都会重新制造 do-it-all interface。
+
+## Implementing the Forwarding Functor::operator()
+
+**Implementing the Forwarding Functor::operator()** 看似只调用 `impl_->invoke(args...)`，实则决定 parameter passing、constness、reference preservation 和 return handling。原书为有限参数个数生成 overload；现代 variadic template 使用 forwarding references 时还要防止把可重复调用 wrapper 变成一次性 move source。
+
+<Term def="Functor 的公共调用操作，把固定签名参数送入擦除接口，并把返回值按 contract 传回调用者。">
+  forwarding operator
+</Term>
+
+```cpp
+template<class R, class... Args>
+R Functor<R, Args...>::operator()(Args... args) const {
+    if (!impl_) throw std::bad_function_call{};
+    if constexpr (std::is_void_v<R>) {
+        impl_->invoke(std::forward<Args>(args)...);
+    } else {
+        return impl_->invoke(std::forward<Args>(args)...);
+    }
+}
+```
+
+这里 `Args...` 是 wrapper signature，不是任意调用点重新 deduction 的 universal references。若 signature 是 `std::string`，每次 call 按值；若是 `const std::string&`，wrapper 不拥有参数。API 必须先定义签名语义，再谈 perfect forwarding。
+
+<Callout type="trap" title="陷阱：无条件 std::forward 就是完美且安全">
+  forward 只保留声明的 value category；若 wrapper 设计为多次调用，却把内部保存参数 move 掉，第二次调用状态已改变。签名、captured state 与调用次数 contract 必须一起设计。
+</Callout>
+
+## Handling Functors
+
+**Handling Functors** 使用 `FunctorHandler<ParentFunctor, Fun>` 保存 concrete `Fun`，实现 erased `invoke` 和 `clone`。handler template 在构造 wrapper 时实例化，之后 caller 只看到统一 Functor type。
+
+<Term def="保存具体 callable 并实现擦除接口 invoke/clone 的派生模板，把静态类型适配到统一 Functor。">
+  FunctorHandler
+</Term>
+
+```cpp
+template<class F, class R, class... Args>
+class FunctorHandler final : public FunctorImpl<R, Args...> {
+public:
+    explicit FunctorHandler(F fun) : fun_(std::move(fun)) {}
+    R invoke(Args... args) override {
+        return std::invoke(fun_, std::forward<Args>(args)...);
+    }
+    std::unique_ptr<FunctorImpl<R, Args...>> clone() const override {
+        return std::make_unique<FunctorHandler>(*this);
+    }
+private:
+    F fun_;
+};
+```
+
+handler 使 concrete callable 不泄漏，但 copyable Functor 要求 F 可复制或另定义 shared/move-only semantics。现代 `std::function` 要求 target copyable；C++23 `std::move_only_function` 为独占 callable 提供不同 contract。
+
+<McdFunctorErasureMap />
+
+## Build One, Get One Free：clone 带来的值语义
+
+**Build One, Get One Free** 的“赠品”是：既然 virtual interface 已经存在，为 handler 增加 virtual `clone`，Functor copy constructor 就能复制未知 concrete target。caller 得到普通 value semantics，无需知道目标类型。
+
+<Term def="通过 erased implementation 的 virtual clone 在不知道 concrete callable type 时复制目标，从而维持 wrapper 值语义。">
+  virtual clone
+</Term>
+
+复制语义不是总正确：closure 捕获 socket、mutex 或 unique ownership 时无法合理 clone。设计应明确 copy、shared-copy 还是 move-only；为“像函数指针一样方便”强行深拷贝资源，会制造隐藏成本和错误 ownership。
+
+## Argument and Return Type Conversions
+
+**Argument and Return Type Conversions** 允许 compatible callable 进入较宽或较窄 wrapper signature。例如 target 接受 `Base*`，Functor 可公开 `Derived*`；target 返回 `Derived*`，wrapper 可返回 `Base*`。adapter handler 在边界执行标准 conversion。
+
+<Term def="在 Functor 公共签名与 concrete callable 签名之间进行受约束的参数和返回类型适配。">
+  callable conversion
+</Term>
+
+转换必须保证每次 call 都成立；narrowing、temporary lifetime 和 reference covariance 尤其危险。modern constructor 可用 `std::is_invocable_r_v<R,F&,Args...>`/concept 限制，而不是在深层 invoke 才报模板错误。
+
+## Handling Pointers to Member Functions
+
+**Handling Pointers to Member Functions** 需要同时保存 object/receiver 与 member pointer，因为 `&Window::close` 单独不能调用。handler 可以保存 pointer/reference/shared owner，或先 bind receiver 形成 nullary/unary callable。
+
+<Term def="由接收对象与 member function pointer 共同组成、通过 invoke 规则执行的 callable 适配。">
+  member-function handler
+</Term>
+
+receiver storage 决定 lifetime：raw pointer 要求外部活得更久；reference_wrapper 不拥有；shared_ptr 延长 lifetime 但可能形成 cycle；weak_ptr 需要 expired policy。callback crash 往往不是调用语法问题，而是 receiver 已销毁。
+
+## Binding
+
+**Binding** 固定一个或多个参数并返回 arity 更小的新 Functor。书中的 `BinderFirst` 把 `F(A,B)->R` 与保存的 A 组合成 `G(B)->R`。bound argument 按值、引用还是 pointer 保存会改变 copy 与 lifetime。
+
+<Term def="预先保存 callable 的部分实参，生成参数更少的新 callable 的适配操作。">
+  binding
+</Term>
+
+现代 lambda 通常比 `std::bind` 更透明：capture 明确、placeholder 少、diagnostic 更好。但 bind 的设计价值仍在于“签名可以通过 callable composition 改写”。要特别检查 reference binding：`std::ref` 是显式 non-owning contract，不会自动延长对象生命。
+
+## Chaining Requests
+
+**Chaining Requests** 把两个 Functors 组合为一个：按序执行 first/second，可选择返回最后结果、收集结果或在 first 失败时短路。它把 invoker 看到的仍保持为一个 command，却允许 pipeline composition。
+
+<Term def="把多个 callable 的执行顺序与错误/返回策略封装成一个新 callable 的组合操作。">
+  request chaining
+</Term>
+
+<McdFunctorCompositionMap />
+
+chaining 的 correctness 包括 exception policy、partial side effects 与 reentrancy。first 成功 second 失败时是否 rollback？两个 functors 捕获同一 state 时能否重入？这些不是 type erasure 自动解决的，composition operator 必须定义。
+
+## Real-World Issues I：The Cost of Forwarding Functions
+
+**The Cost of Forwarding Functions** 包括 wrapper call、virtual dispatch、不能内联 concrete target、参数复制和 branch prediction。相比 I/O 或大算法可能无关紧要，在每 element hot loop 则可能成为瓶颈。template direct-call 保留 inline，erased Functor 保留 ABI/存储统一，二者是 trade-off。
+
+<Term def="统一 callable 边界产生的额外函数层、间接分派、参数传递与失去跨边界内联机会。">
+  forwarding cost
+</Term>
+
+小 target 的 indirect call 可能比实际工作还贵；大 target 工作占主导。benchmark 必须阻止 optimizer 删除调用，并分别比较 direct template、function pointer、`std::function`、move-only wrapper 和目标实现。
+
+## Real-World Issues II：Heap Allocation
+
+**Heap Allocation** 来自每个 handler 通过 base pointer 拥有。copy 又 clone 一次 allocation。Small-object optimization 可在 wrapper 内放一块 aligned buffer，target 足够小且满足 move/noexcept 条件时原地构造，大 target 才上 heap。
+
+<Term def="为擦除 handler 动态取得存储的成本，包括分配延迟、失败、局部性与复制时重新分配。">
+  handler heap allocation
+</Term>
+
+SOO 不是免费：buffer 增大每个 wrapper，manager function 复杂，alignment 与 exception safety 更难。若 commands 长期存储且创建少，heap 可能可接受；若高频创建短小 callbacks，SOO/arena 才值得测。
+
+<Callout type="trap" title="陷阱：Functor 是零开销模板抽象">
+  concrete handler 的生成用模板，但 wrapper 到 handler 通常仍是 runtime type erasure：virtual/indirect call、clone 和 heap 都可能存在。它换来统一类型与值语义，不应与纯 compile-time Policy 混为一谈。
+</Callout>
+
+## Implementing Undo and Redo with Functor
+
+**Implementing Undo and Redo with Functor** 把 do 与 undo 都表达为 callable，并在执行前捕获足够 prior state。成功 do 后压入 undo stack；undo 执行逆操作并把 command 移到 redo stack；新 command 通常清空 redo branch。
+
+<Term def="命令执行时保存可恢复状态或逆操作，使历史栈能够撤销并重新执行请求的协议。">
+  reversible command
+</Term>
+
+仅保存“反向函数”未必够：删除文件的 undo 需要内容/路径，转账的 undo 要处理外部幂等与并发版本。command history 的 memory budget、失败语义和 transaction boundary 必须显式设计。
+
+先预测：把每次鼠标移动都存成一个 heap-allocated command，undo 很细但 allocation/history 爆炸；把一段 drag 合并成从起点到终点的 command，语义更贴近用户且成本更低。这是 command granularity，不是 Functor API 能替你决定的。
+
+<Stepper>
+  <Step title="第一步：固定 signature，不固定来源">
+    列出 free function、member function、stateful object 与 lambda，定义 invoker 真正需要的 R/Args/lifetime/copy contract。
+
+    <McdCommandRigidityMap />
+
+  </Step>
+  <Step title="第二步：实现擦除与值语义">
+    wrapper 拥有 interface，handler 保存 concrete callable；验证 invoke、clone、empty state、exception、receiver lifetime 和 move/copy semantics。
+
+    <McdFunctorErasureMap />
+
+  </Step>
+  <Step title="第三步：组合并测量边界">
+    为 bind/chain/undo 定义 state 与失败策略，再比较 indirect call、allocation、copy、history memory 和真实端到端收益。
+
+    <McdFunctorCompositionMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- Command 把请求对象化，generalized Functor 进一步按 signature 统一不同 C++ callable entities
+- Functor wrapper 提供 value-like API，FunctorImpl 定义 erased contract，FunctorHandler 保存 concrete target
+- forwarding operator 的参数类别来自签名；无条件 forward 不能替代 lifetime/call-count 设计
+- virtual clone 带来未知 target 的 copy，但 move-only/shared target 应选择不同语义
+- argument/return conversion 与 member handler 必须约束可调用性和 receiver lifetime
+- binding 改写 arity，chaining 改写执行序列，undo/redo 增加状态与事务协议
+- forwarding/indirect call 和 heap allocation 是统一类型的真实代价，应按 call workload 与 storage pattern 测量
+
+<Exercises>
+  1. **问题 1：选择 wrapper 语义。** callback 捕获 unique socket，scheduler 要把它放入队列但从不复制；说明为何 copyable Functor 不合适以及替代 contract。
+
+  <Answer question="应怎样保存 move-only callback？">virtual clone 无法合理复制 unique socket，强制 shared ownership 又改变资源语义。应使用 move-only type-erased wrapper（如 move_only_function 或自定义只移动 Functor），队列也通过 move 接收；文档明确 callback 消费时机与取消时如何释放 target。</Answer>
+
+  2. **问题 2：绑定成员函数。** UI callback 保存 raw `Window*` 和 `&Window::close`，Window 可能先销毁；给出三种 lifetime 方案与取舍。
+
+  <Answer question="receiver lifetime 怎样编码？">若 owner 保证 callback 先注销，可用 raw/reference 并以 invariant 测试；shared_ptr 延长 Window lifetime 但要防 callback cycle；weak_ptr 在调用时 lock，expired 时 no-op/error。选择应由关闭后的行为 contract 决定，不能只修调用语法。</Answer>
+
+  3. **问题 3：审计 undo command。** 文本编辑器每个按键一个 command，history 内存快速增长；设计合并与失败策略。
+
+  <Answer question="怎样降低历史成本而保留语义？">把连续相邻输入在时间/光标条件满足时合并成一个 insertion command，保存起点与整段文本；光标移动、selection 或外部编辑打断合并。do 成功才入 undo 栈，新 command 清 redo；undo/redo 失败要保持栈位置和文档版本一致，并设 history byte budget。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Command">把请求及执行所需状态封装成可存储对象的模式。</GlossaryItem>
+  <GlossaryItem term="callable entity">可通过函数调用或 invoke 规则执行的函数、成员指针或函数对象。</GlossaryItem>
+  <GlossaryItem term="generalized Functor">按固定签名擦除 concrete callable type 的值式包装器。</GlossaryItem>
+  <GlossaryItem term="forwarding operator">把公共签名参数转送给擦除实现的调用操作。</GlossaryItem>
+  <GlossaryItem term="FunctorHandler">保存具体 callable 并实现 invoke/clone 的擦除适配器。</GlossaryItem>
+  <GlossaryItem term="virtual clone">通过 virtual construction 复制未知 concrete target 的协议。</GlossaryItem>
+  <GlossaryItem term="callable conversion">在 wrapper 签名和 target 签名间执行受约束类型适配。</GlossaryItem>
+  <GlossaryItem term="member-function handler">共同保存 receiver 与 member pointer 的调用适配。</GlossaryItem>
+  <GlossaryItem term="binding">预先固定部分参数并生成更小 arity callable 的操作。</GlossaryItem>
+  <GlossaryItem term="request chaining">把多个 callable 顺序与错误策略组合成一个 callable。</GlossaryItem>
+  <GlossaryItem term="forwarding cost">擦除边界的函数层、间接调用和参数传递成本。</GlossaryItem>
+  <GlossaryItem term="handler heap allocation">为擦除 target 动态取得存储及复制时重分配的成本。</GlossaryItem>
+  <GlossaryItem term="reversible command">保存逆操作或先前状态、可进入 undo/redo 历史的命令。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Modern C++ Design, First Edition, Chapter 5: Generalized Functors"
+  adaptedUrl="https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+/>

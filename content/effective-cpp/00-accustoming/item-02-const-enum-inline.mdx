@@ -1,0 +1,382 @@
+---
+title: "Item 2：以 const、enum、inline 替换 #define"
+type: A
+section: Chapter 1 · Accustoming Yourself to C++
+order: 2
+description: 对齐 Effective C++ 第三版 Item 2：用有类型、有作用域的 const/constexpr、enum 与 inline template 替换对象式和函数式宏，并正确处理 linkage、ODR-use 与少数预处理需求。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppConstantLinkageMap,
+  EcppMacroExpansionMap,
+  EcppMacroReplacementMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-02-const-enum-inline";
+
+<Objectives>
+
+- 能比较对象式宏与 const、constexpr、enum 常量在类型、作用域、符号和链接上的差异
+- 能实现 inline function template 替换函数式宏，验证参数单次求值、运算符优先级和诊断位置
+- 能设计跨两个翻译单元的常量测试，判断内部链接、inline variable 与 ODR-use 是否满足预期
+
+</Objectives>
+
+## 从“编译器为什么不知道宏的名字”开始
+
+预处理器在 C++ 编译器建立类型和符号之前做 token 替换。
+
+<Term def="由预处理器把名称直接替换为 token 序列，不参与 C++ 类型、作用域和名称查找的宏。">
+  对象式宏
+</Term>
+
+例如：
+
+```cpp
+#define ASPECT_RATIO 1.653
+```
+
+编译错误和调试信息中可能只出现 `1.653`，而不是 `ASPECT_RATIO`。宏没有类型，也不遵守 namespace 或 class 作用域。
+
+<Term def="编译前按 token 规则处理 include、条件分支和宏展开的阶段。">
+  预处理阶段
+</Term>
+
+Item 2 的核心不是少打一个 `#`，而是尽量让名称进入编译器掌握的语言世界。
+
+<EcppMacroReplacementMap />
+
+## 对象式宏优先替换为有类型常量
+
+<Term def="具有静态类型、作用域和名称，可由编译器检查并通常不可修改的对象或值。">
+  const 常量
+</Term>
+
+原书以 `const double` 替代宏：
+
+```cpp
+const double aspectRatio = 1.653;
+```
+
+现代头文件若需要一个跨翻译单元共享身份的编译期常量，可写：
+
+```cpp
+inline constexpr double aspectRatio{1.653};
+inline constexpr std::string_view applicationName{"Renderer"};
+```
+
+<Term def="要求可在常量表达式中使用，并在满足条件时于编译期求值的声明说明符。">
+  constexpr
+</Term>
+
+与
+
+<Term def="C++17 起允许在多个翻译单元中相同定义、整个程序仍表示同一实体的变量。">
+  inline variable
+</Term>
+
+是原书原则在现代 C++ 的直接延伸。不要机械把所有宏替换为 namespace `const` 而忽略身份和链接需求。
+
+## 字符串常量避免裸指针语义
+
+<Term def="指向字符串字面量的只读字符指针，保留 C 接口但不表达长度和值语义。">
+  const char pointer
+</Term>
+
+比 `#define AUTHOR_NAME "Scott"` 更有类型，但现代只读接口常用 `std::string_view`，它同时携带长度且不取得所有权。需要独立拥有内容时使用 `std::string`。
+
+```cpp
+inline constexpr std::string_view authorName{"Scott Meyers"};
+
+void print_author(std::string_view name);
+```
+
+<Term def="不拥有字符存储、以指针和长度表示只读字符序列的轻量值。">
+  string_view
+</Term>
+
+仍有借用生命周期：不能返回指向已销毁临时 string 的 view。替换宏后获得类型系统，不代表生命周期自动正确。
+
+## class 专属常量与 enum hack
+
+<Term def="属于类而非某个对象、由所有实例共享的常量成员。">class 常量</Term>
+
+原书时代常见：
+
+```cpp
+class GamePlayer {
+public:
+    static const int NumTurns = 5;
+    int scores[NumTurns];
+};
+```
+
+若程序 ODR-use 该成员，例如取地址，旧语言规则可能要求源文件再提供定义。现代可写 `inline static constexpr int NumTurns{5};`。
+
+<Term def="对变量取地址、绑定引用或以其他方式要求其作为有存储实体存在的使用。">
+  ODR-use
+</Term>
+
+决定“类内初值已经编译”是否足够。
+
+<Term def="在旧式 C++ 中用匿名 enum 提供类作用域编译期整数，且无法取得其地址的技巧。">
+  enum hack
+</Term>
+
+```cpp
+class GamePlayer {
+public:
+    enum { NumTurns = 5 };
+    int scores[NumTurns];
+};
+```
+
+它解释历史模板代码与元编程风格，现代新代码通常优先 `static constexpr`。条款要求理解替代关系，不要求复古写法成为默认。
+
+## linkage 决定“有几个常量”
+
+<Term def="名称在一个翻译单元内部、跨翻译单元或整个程序中指向实体的连接规则。">
+  linkage
+</Term>
+
+头文件中的普通 namespace `const` 传统上具有 internal linkage，每个翻译单元可能有一份实体；`inline constexpr` 可表示一个程序级实体。若只用值，两者结果常相同；若比较地址、注册身份或把引用作为模板参数，差异就可观察。
+
+<EcppConstantLinkageMap />
+
+<Term def="一个源文件连同其递归包含头文件经过预处理后形成的编译单位。">
+  翻译单元
+</Term>
+
+必须用至少两个 `.cpp` 测试头文件常量，单文件无法暴露重复定义或身份错误。
+
+```cpp
+// constants.hpp
+inline constexpr int protocolVersion{7};
+
+// a.cpp / b.cpp
+const int* version_from_a() { return &protocolVersion; }
+const int* version_from_b() { return &protocolVersion; }
+```
+
+断言两个地址相同，证明需求与实现一致；若身份不重要，则测试值和链接成功即可。
+
+<Callout type="trap">
+  **现象**：把头文件宏替换为非 inline
+  的外部变量定义，单元测试通过，完整链接却出现 multiple
+  definition。**原因**：只考虑类型，没有考虑多个翻译单元与
+  ODR。**修法**：区分声明、定义、internal linkage 与 inline
+  variable，并做双翻译单元测试。
+</Callout>
+
+## 函数式宏的重复求值
+
+<Term def="看似函数调用、实际由预处理器把参数 token 代入宏体的宏。">
+  函数式宏
+</Term>
+
+经典最大值宏即使加满括号，仍可能重复求值：
+
+```cpp
+#define CALL_WITH_MAX(a, b) f((a) > (b) ? (a) : (b))
+
+int x = 5;
+int y = 0;
+CALL_WITH_MAX(++x, y);      // x 可能增加两次
+CALL_WITH_MAX(++x, y + 10); // x 可能只增加一次
+```
+
+<Term def="同一实参表达式因宏体多次出现而执行多次，副作用次数依赖分支。">
+  重复求值
+</Term>
+
+括号只能修复优先级，不能修复次数、类型和名称查找。
+
+<EcppMacroExpansionMap />
+
+## inline function template 保留效率与语义
+
+<Term def="可接受多种类型并建议编译器在调用点展开，同时仍遵守函数求值与类型规则的模板。">
+  inline function template
+</Term>
+
+```cpp
+template<class T>
+inline void callWithMax(const T& left, const T& right)
+{
+    f(left > right ? left : right);
+}
+```
+
+函数实参在进入函数前各求值一次；参数和返回类型受检查；名称可放入 namespace；调试器能识别函数。`inline` 不是强制展开，而是允许多处相同定义并向优化器表达候选。
+
+<Term def="编译器把函数调用替换为函数体以减少调用开销的优化决定，不由 inline 关键字强制。">
+  内联展开
+</Term>
+
+现代泛型最大值还要处理不同类型、引用悬空与比较投影；不要为了模仿宏随意返回 `const T&` 指向临时值。
+
+## 运算符优先级与 token 污染
+
+<Term def="宏参数代入表达式后与调用点运算符重新组合，导致结果结构改变的问题。">
+  宏优先级陷阱
+</Term>
+
+`#define SQUARE(x) x * x` 在 `SQUARE(a + b)` 下展开为 `a + b * a + b`。即使写成 `((x) * (x))`，副作用仍存在。
+
+<Term def="宏名称不受 namespace 限制，在预处理范围内可能意外替换正常标识符的现象。">
+  token 污染
+</Term>
+
+系统头中的 `min/max` 宏是常见例子。语言函数可通过作用域、重载和 ADL 正常解析，宏做不到。
+
+<Callout type="trap">
+  **现象**：宏经过全面加括号后被认定安全。**原因**：只修复优先级，未处理重复求值、类型、作用域、诊断和临时引用。**修法**：函数行为改为
+  inline/template；用带副作用实参测试单次求值。
+</Callout>
+
+## 哪些场景仍需要预处理器
+
+<Term def="在编译 C++ 语义之前按平台、能力或构建配置选择不同 token 的机制。">
+  条件编译
+</Term>
+
+include guard、`#if` 平台适配、编译器属性封装、字符串化和 token paste 有时确实只能在预处理阶段完成。条款是“宁可以语言实体替换”，不是“所有 #define 都违法”。
+
+```cpp
+#if defined(_WIN32)
+  #define LIB_EXPORT __declspec(dllexport)
+#else
+  #define LIB_EXPORT [[gnu::visibility("default")]]
+#endif
+```
+
+<Term def="把不可避免的预处理差异限制在小头文件或适配层，并向其余代码暴露正常 C++ 接口。">
+  宏隔离层
+</Term>
+
+可以让平台宏只决定属性，业务代码继续使用类型与函数。宏名采用项目级前缀，并在可能时 `#undef`，降低污染。
+
+## 迁移与验证顺序
+
+<Term def="把宏的调用点、类型、作用域、链接和副作用逐一固定后，再替换为语言实体的过程。">
+  宏迁移
+</Term>
+
+先搜索定义与全部调用，分类为常量、类常量、函数行为或真正预处理。记录是否取地址、跨翻译单元、传递副作用表达式、依赖字符串化。再选择替代物并保持测试。
+
+先预测：对 `CALL_WITH_MAX(++x, y)` 和 `CALL_WITH_MAX(++x, y + 10)` 手工展开，写出 x 的增量；替换为函数模板后重新预测。运行计数器测试，确认每个实参只求值一次。
+
+- 常量测试覆盖值、类型、作用域和必要的地址身份。
+- class 常量同时测试普通使用与 ODR-use。
+- 函数宏测试副作用、混合类型、异常和返回生命周期。
+- 两个翻译单元共同 include 头文件并链接。
+- 条件编译在每个目标平台至少编译一个分支。
+
+## 迁移失败模式
+
+第一类失败是“值正确、身份错误”。把宏改成头文件 namespace `const` 后，每个翻译单元都可能持有独立对象；普通比较看不出来，但地址注册、引用模板参数或跨模块缓存会分裂。先写清是否需要统一身份，再选择 internal linkage 或 inline variable。
+
+第二类失败是“单文件正确、完整程序错误”。类内 `static const` 的整数初值可满足数组界限，却在取地址时暴露缺失定义；非 inline 外部变量则会造成重复定义。测试必须包含编译、两个翻译单元链接和实际 ODR-use，不能只运行头文件单测。
+
+第三类失败是“宏副作用消失，却引入引用生命周期”。函数模板若为避免复制返回 `const T&`，而调用点传入临时量，结果可能在完整表达式后悬空。替换宏时要重新设计返回值语义，而不是逐 token 模仿展开结果。小型值通常直接返回值，并让优化器处理复制消除。
+
+迁移完成后保留一张对照表：旧宏职责、替代实体、作用域、linkage、是否可取地址、实参求值次数和失败测试。它比“宏数量减少”更能证明条款真正落实。
+
+## 小结
+
+- 对象式宏不参与类型、作用域和符号系统，优先改为 const/constexpr
+- 类内整数历史上可用 enum hack，现代通常用 inline static constexpr
+- linkage 与 ODR-use 决定头文件常量需要怎样声明和定义
+- 函数式宏的括号不能解决重复求值，inline function template 才能恢复函数语义
+- 条件编译等真正文本处理可以保留，但应隔离并减少污染
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 2"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="对象式宏">
+    由预处理器直接替换为 token 序列的名称。
+  </GlossaryItem>
+  <GlossaryItem term="预处理阶段">
+    在 C++ 类型检查前处理 include、条件与宏的阶段。
+  </GlossaryItem>
+  <GlossaryItem term="const 常量">
+    有类型、作用域和名称且不可修改的对象或值。
+  </GlossaryItem>
+  <GlossaryItem term="constexpr">
+    允许对象或函数参与常量表达式求值的说明符。
+  </GlossaryItem>
+  <GlossaryItem term="inline variable">
+    允许头文件多处相同定义表示同一程序实体的变量。
+  </GlossaryItem>
+  <GlossaryItem term="const char pointer">
+    指向只读字符的裸指针，不携带长度与所有权。
+  </GlossaryItem>
+  <GlossaryItem term="string_view">
+    以指针长度表示、不拥有字符存储的只读值。
+  </GlossaryItem>
+  <GlossaryItem term="class 常量">
+    属于类并由所有实例共享的常量成员。
+  </GlossaryItem>
+  <GlossaryItem term="ODR-use">
+    要求变量作为有存储实体存在的使用方式。
+  </GlossaryItem>
+  <GlossaryItem term="enum hack">
+    用匿名 enum 提供类作用域编译期整数的旧式技巧。
+  </GlossaryItem>
+  <GlossaryItem term="linkage">
+    名称在翻译单元和程序中连接到实体的规则。
+  </GlossaryItem>
+  <GlossaryItem term="翻译单元">
+    源文件及其递归头文件预处理后的编译单位。
+  </GlossaryItem>
+  <GlossaryItem term="函数式宏">参数 token 被代入宏体的伪函数宏。</GlossaryItem>
+  <GlossaryItem term="重复求值">同一宏实参因多次代入而执行多次。</GlossaryItem>
+  <GlossaryItem term="inline function template">
+    保留函数和类型语义的可内联函数模板。
+  </GlossaryItem>
+  <GlossaryItem term="内联展开">优化器用函数体替换调用的决定。</GlossaryItem>
+  <GlossaryItem term="宏优先级陷阱">
+    宏展开后调用点运算符改变表达式结构的问题。
+  </GlossaryItem>
+  <GlossaryItem term="token 污染">
+    宏不受 namespace 限制而替换正常标识符的现象。
+  </GlossaryItem>
+  <GlossaryItem term="条件编译">
+    预处理阶段按平台或配置选择 token 的机制。
+  </GlossaryItem>
+  <GlossaryItem term="宏隔离层">
+    把不可避免宏限制在适配头并暴露正常 C++ 接口的边界。
+  </GlossaryItem>
+  <GlossaryItem term="宏迁移">
+    分类宏职责并以保持语义的语言实体替换的过程。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：迁移常量宏。** 头文件含数字、字符串和 class 数组长度三个宏，分别选择现代替代并说明 linkage 测试。
+
+<Answer question="数字、字符串和类数组长度宏应如何替换？">
+  跨翻译单元共享身份的数字用 inline constexpr；只读字面量接口可用 inline
+  constexpr string_view，若需所有权用 string；class 数组长度用 inline static
+  constexpr size_t。用两个 cpp 同时 include 并链接，按需求比较值或地址；对 class
+  常量增加取地址的 ODR-use 测试。
+</Answer>
+
+2. **问题 2：修复函数宏。** 展开一个带 `++` 实参的 max 宏，证明括号为何不足，并写出模板替代的测试。
+
+<Answer question="为什么全面加括号仍不能让 max 宏安全？">
+  括号只能保持优先级，宏体中的参数若出现两次，`++x`
+  仍会按分支求值一或两次；宏也没有类型、作用域和正常诊断。用 inline function
+  template 接收 const reference
+  或按合适值语义接收，调用前实参各求值一次；计数器类型记录转换和比较次数，断言副作用一次。
+</Answer>
+
+3. **问题 3：判断宏是否应保留。** 为平台导出属性、日志函数和编译期开关分别决定保留、隔离或替换方案。
+
+  <Answer question="哪些宏需求应保留，哪些应替换？">平台导出属性需要预处理选择，可留在带前缀的宏隔离头；日志行为应以正常函数或模板实现，宏最多只负责注入 `__FILE__`/`__LINE__` 并立刻转发；真正裁剪代码的编译期开关可用 #if，但若只是运行配置或类型选择，优先 constexpr if、常量或策略类型。每个条件分支都要在对应配置编译。</Answer>
+</Exercises>

@@ -1,0 +1,357 @@
+---
+title: "Item 44：将与模板参数无关的代码抽离 templates"
+type: A
+section: Chapter 7 · Templates and Generic Programming
+order: 44
+description: 对齐 Effective C++ 第三版 Item 44：识别 template instantiation 的 code bloat，把 SquareMatrix 的尺寸无关 inversion 算法抽入共同基类，并在二进制体积、常量优化、对象布局与类型安全之间测量权衡。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppMatrixFactoringMap,
+  EcppTemplateCodeBloatMap,
+  EcppTemplateFactoringTradeoffMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-44-factor-template-parameter-independent-code";
+
+<Objectives>
+
+- 能分析 type 与 non-type template parameters 产生的重复实例化，并用 binary evidence 判断 code bloat
+- 能设计 SquareMatrix common base，把只依赖元素类型的 inversion core 与静态尺寸 wrapper 分离
+- 能比较运行参数、基类状态和保留专用实例三种方案的体积、布局与性能权衡
+
+</Objectives>
+
+## 从两份几乎相同的 invert 开始
+
+```cpp
+template<class T, std::size_t N>
+class SquareMatrix {
+public:
+    void invert();
+private:
+    std::array<T, N * N> values_;
+};
+
+SquareMatrix<double, 5> small;
+SquareMatrix<double, 10> large;
+small.invert();
+large.invert();
+```
+
+若 `invert` 完整定义在 class template 中，compiler 通常为 `SquareMatrix<double, 5>` 和 `SquareMatrix<double, 10>` 分别实例化函数。算法结构相同，区别主要是 N。
+
+<Term def="template 针对不同 arguments 生成重复或近似机器码，导致程序 text 增大的现象。">
+  code bloat
+</Term>
+
+<Term def="值而非类型作为模板形参，如矩阵维度、容量或策略枚举。">
+  non-type template parameter
+</Term>
+
+Item 44 的原则是 Factor parameter-independent code out of templates（抽离与模板参数无关的代码）。
+
+<EcppTemplateCodeBloatMap />
+
+先预测：两个 N 不同的 invert 是否一定会被 linker 合并？不能把 optional optimization 当作设计保证，必须查看最终 binary。
+
+## 实例化不是免费复制
+
+<Term def="compiler 为一组具体 template arguments 形成函数或类实体的过程。">
+  template instantiation footprint
+</Term>
+
+header-only templates 容易让重算法在多个参数组合、translation units 和 build variants 中出现。COMDAT/weak symbols 与 identical code folding 可能消除部分重复，但不同常量嵌入、debug info、exception tables 或 optimization decisions 都可能阻止合并。
+
+<Term def="linker 比较完全相同函数体并让多个 symbols 共享一段 text 的可选优化。">
+  identical code folding
+</Term>
+
+<Term def="可执行文件中存放机器指令、受 instruction cache 影响的区域。">
+  binary text section
+</Term>
+
+```text
+nm -S --size-sort app | grep 'SquareMatrix.*invert'
+size app
+```
+
+工程判断应记录 symbol 数量、text bytes、链接 map 和真实热点，而不是仅凭 source 看起来重复。
+
+## 把尺寸从代码维度降为数据
+
+若 inversion algorithm 只需要元素类型 T、尺寸 n 和连续数据 pointer，可把 N 变成 runtime argument。
+
+```cpp
+template<class T>
+class SquareMatrixBase {
+protected:
+    static void invert(std::size_t n, T* data) {
+        // one inversion implementation per T
+    }
+};
+
+template<class T, std::size_t N>
+class SquareMatrix : private SquareMatrixBase<T> {
+public:
+    void invert() {
+        SquareMatrixBase<T>::invert(N, values_.data());
+    }
+
+private:
+    std::array<T, N * N> values_;
+};
+```
+
+<Term def="保存多个模板实例共有重实现、只对真正影响算法的参数模板化的基类。">
+  common base class
+</Term>
+
+<Term def="仍保留编译期尺寸和 public API、只把工作转交共享 core 的轻量派生模板。">
+  static thin wrapper
+</Term>
+
+现在所有 `SquareMatrix<double, N>` 共用 `SquareMatrixBase<double>::invert`，wrapper 仍能提供固定 storage、编译期边界和 N 特定 API。
+
+<EcppMatrixFactoringMap />
+
+## 参数无关不是“完全不含参数”
+
+抽离的判断是算法结构是否因参数改变，而不是源码是否提到参数。N 可作为 loop bound 传给同一算法；T 影响 arithmetic、precision 和 operations，因此 core 仍按 T 模板化。
+
+<Term def="只改变运行数据或边界、不会改变算法控制与所需操作集合的模板维度。">
+  data-like template dimension
+</Term>
+
+<Term def="改变可用 operations、表示、精度或算法选择，仍值得保留为模板维度的参数。">
+  behavior-shaping template dimension
+</Term>
+
+```cpp
+template<class T, std::size_t N, StorageOrder Order>
+class Matrix;
+```
+
+N 可能适合降为 runtime size；T 通常保留；Order 若导致完全不同访问算法，可能保留 specialization。必须逐参数审计。
+
+<Callout type="trap" title="陷阱：为了减少实例数把所有参数都运行时化">
+  过度抽离会失去类型安全、固定大小布局、常量传播和专用指令机会。Item 44
+  要移除无关参数造成的重复，不是取消 generic programming。
+</Callout>
+
+## 共同基类可以无状态
+
+上例把 n 与 data pointer 作为函数参数，base 不增加每个 matrix object 的 state。
+
+<Term def="共享算法通过调用参数获得上下文，不在 base subobject 保存尺寸和指针。">
+  stateless factoring core
+</Term>
+
+优点是对象布局仍等于数组 storage，copy/move 不需修复内部 pointer。代价是每次调用传递 n/data，且 runtime n 可能降低 unrolling。
+
+```cpp
+SquareMatrixBase<T>::invert(N, values_.data());
+```
+
+thin wrapper 通常可 inline，参数传递开销往往消失；但 heavy core 继续是单份 out-of-line code。
+
+## 也可以让 base 保存上下文
+
+```cpp
+template<class T>
+class SquareMatrixBase {
+protected:
+    SquareMatrixBase(std::size_t n, T* data) : n_(n), data_(data) {}
+    void invert();
+private:
+    std::size_t n_;
+    T* data_;
+};
+```
+
+<Term def="共同 base 保存运行尺寸和数据位置，使共享成员函数无需重复接收上下文。">
+  stateful factoring base
+</Term>
+
+这种 API 简洁，但每个 object 额外保存 n/pointer；copy/move 后 data\_ 必须仍指向新对象自己的 storage，容易产生 self-pointer bug。
+
+<Term def="对象移动或复制后，内部指针仍指向旧对象成员存储的错误。">
+  embedded self-pointer hazard
+</Term>
+
+对于大量小矩阵，额外 bytes 可能比节省的 text 更贵。对象体积、cache locality 和特殊成员复杂度必须计入。
+
+<EcppTemplateFactoringTradeoffMap />
+
+## 抽离也可能损失常量优化
+
+`N=4` 的专用实例可能完全展开 loops、使用固定 SIMD shuffle；把 N 变成 runtime argument 后 optimizer 未必跨 out-of-line boundary 恢复常量。
+
+<Term def="compiler 根据编译期已知尺寸传播常量、展开循环和选择专用指令的机会。">
+  constant-size optimization
+</Term>
+
+<Term def="减少 binary text 后提高热点指令留在 instruction cache 中概率的收益。">
+  instruction-cache benefit
+</Term>
+
+这形成真实 tradeoff：更少 text 改善 I-cache 与部署体积，专用实例可能提升单次计算。用 benchmark matrix 覆盖常见 N、冷启动、热点 throughput 和 binary size。
+
+<Callout type="trap" title="陷阱：源码更少就证明 binary 更小或更快">
+  compiler 可能 inline shared core 回每个 wrapper，也可能 linker
+  已合并旧实现。反过来，runtime size 可能阻止向量化。必须检查优化后的
+  symbols、assembly 与 workload benchmark。
+</Callout>
+
+## type parameters 也会制造可抽离重复
+
+`vector<int*>`、`vector<const int*>` 和不同 object pointer types 的 storage/move mechanics 很相似。库实现可让 typed wrapper 复用 pointer-sized untyped core。
+
+```cpp
+class RawPointerVectorCore {
+protected:
+    void pushPointer(void* value);
+    void* pointerAt(std::size_t index) const;
+};
+
+template<class T>
+class PointerVector : private RawPointerVectorCore {
+public:
+    void push(T* value) { pushPointer(value); }
+    T* at(std::size_t i) const {
+        return static_cast<T*>(pointerAt(i));
+    }
+};
+```
+
+<Term def="用非模板或更少参数的底层表示共享实现，由 typed wrapper 恢复静态类型。">
+  type-erased implementation core
+</Term>
+
+<Term def="在共享低层实现外保留参数检查、转换和 public 泛型接口的薄层。">
+  typed safety wrapper
+</Term>
+
+这种技术必须严守 cv、ownership、alignment 和 alias rules；不能为了减代码体积破坏类型语义。
+
+## 不要把业务不同强行合并
+
+两个 instantiations 机器码相似，不代表 contract 相同。整数 overflow、floating NaN、complex conjugation、allocator propagation 或 exception guarantee 可能要求不同实现。
+
+<Term def="不同参数组合在行为、异常或数值规则上必须保持的差异。">
+  parameter-specific semantic contract
+</Term>
+
+抽离前列出 preconditions、postconditions、exception safety 与 precision；共享 core 必须接收足够 policy 信息，而不是偷偷采用一种参数语义。
+
+## 一套可执行的抽离流程
+
+1. 从 symbol/map 报告找出大且重复的 template instantiations。
+2. 列出每个 template parameter 对 operations、layout、control flow 的实际影响。
+3. 把 data-like dimension 改为 runtime argument，保留 behavior-shaping dimensions。
+4. 选择 stateless core、stateful base 或非成员 helper，并记录 object layout。
+5. 保留 thin typed wrapper，集中 casts、bounds 和 invariants。
+6. 对比 text size、compile/link time、hot benchmarks 和全部 contract tests。
+
+<Term def="以二进制证据定位重复、按参数影响拆分并通过性能回归确认的流程。">
+  template factoring workflow
+</Term>
+
+先预测 5x5 与 10x10 double matrices 会共享哪些 symbols，再比较抽离前后的 map file，避免只看总 executable size 被资源段噪声干扰。
+
+## 小结
+
+- template 每组 arguments 都可能生成实体，参数无关的重实现会造成 code bloat
+- non-type parameter 若只提供数据边界，可降为共享 core 的 runtime argument
+- common base 只按真正影响算法的 T 实例化，static wrappers 保留固定尺寸类型安全
+- stateless core 不增加对象布局，stateful base 可能引入额外 state 与 self-pointer 风险
+- 抽离和常量专用优化存在 tradeoff，必须同时测量 binary text 与真实热点
+- type-erased core 可共享相似 type instantiations，但 typed wrapper 必须守住语义
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 44"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="code bloat">
+    模板近似机器码重复导致的 text 增长。
+  </GlossaryItem>
+  <GlossaryItem term="non-type template parameter">
+    以值作为模板形参。
+  </GlossaryItem>
+  <GlossaryItem term="template instantiation footprint">
+    具体实例占用的代码和元数据。
+  </GlossaryItem>
+  <GlossaryItem term="identical code folding">
+    链接器合并完全相同函数体的优化。
+  </GlossaryItem>
+  <GlossaryItem term="binary text section">
+    可执行文件的机器指令区域。
+  </GlossaryItem>
+  <GlossaryItem term="common base class">
+    承载跨实例共享重实现的基类。
+  </GlossaryItem>
+  <GlossaryItem term="static thin wrapper">
+    保留静态接口并转发共享 core 的轻层。
+  </GlossaryItem>
+  <GlossaryItem term="data-like template dimension">
+    只改变运行数据边界的模板维度。
+  </GlossaryItem>
+  <GlossaryItem term="behavior-shaping template dimension">
+    改变 operations 或算法的参数。
+  </GlossaryItem>
+  <GlossaryItem term="stateless factoring core">
+    不保存对象上下文的共享算法。
+  </GlossaryItem>
+  <GlossaryItem term="stateful factoring base">
+    保存尺寸和数据位置的共同基类。
+  </GlossaryItem>
+  <GlossaryItem term="embedded self-pointer hazard">
+    特殊成员后内部指针指向旧存储。
+  </GlossaryItem>
+  <GlossaryItem term="constant-size optimization">
+    固定尺寸带来的展开和向量化机会。
+  </GlossaryItem>
+  <GlossaryItem term="instruction-cache benefit">
+    较小 text 提升指令缓存命中。
+  </GlossaryItem>
+  <GlossaryItem term="type-erased implementation core">
+    用统一低层表示共享实现。
+  </GlossaryItem>
+  <GlossaryItem term="typed safety wrapper">
+    恢复静态类型和不变量的薄包装。
+  </GlossaryItem>
+  <GlossaryItem term="parameter-specific semantic contract">
+    参数组合必须保留的行为差异。
+  </GlossaryItem>
+  <GlossaryItem term="template factoring workflow">
+    证据驱动的模板抽离和回归流程。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：重构 SquareMatrix。** 5、10、20 三种 double 尺寸重复生成 invert，仍要保留固定 storage 类型。
+
+<Answer question="怎样抽离且保留类型安全？">
+  建立只按 T 模板化的 SquareMatrixBase 静态 core，接收 n 与 data
+  pointer；SquareMatrix 的 N-specific wrapper 保存 array，并转发 N/data。用每种
+  N 的数值、奇异矩阵和异常测试证明行为相同，再检查 symbols 只保留一份 heavy
+  double core。
+</Answer>
+
+2. **问题 2：在 stateless 与 stateful base 间选择。** 对象有百万个，但 invert 调用较少。
+
+<Answer question="哪种方案更可能合适，如何证明？">
+  优先 stateless core，避免每个对象增加 size/pointer 和 copy/move
+  修复成本；调用时传 n/data。记录 sizeof、总 resident memory、text bytes 和
+  invert benchmark。只有参数传递或上下文准备成为可测热点，才考虑 stateful
+  base，并补 self-pointer 特殊成员测试。
+</Answer>
+
+3. **问题 3：抽离后 4x4 热路径变慢。** binary 明显缩小，但 SIMD 展开消失。
+
+  <Answer question="怎样兼顾体积和热点？">保留通用 shared runtime-size core，同时为经 profile 证明的 4x4 提供专用 specialization/fast path；其他 N 继续共享。用 code-size budget、4x4 throughput、其他尺寸与数值一致性回归设门禁，避免为所有尺寸重新复制算法。</Answer>
+</Exercises>

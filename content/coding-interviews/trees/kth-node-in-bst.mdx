@@ -1,127 +1,381 @@
 ---
-title: 二叉搜索树的第 K 大结点
+title: "面试题54：二叉搜索树的第k大节点（源码按第k小）"
 type: C
-section: 树
-order: 12
-description: 利用 BST 中序特性查找第 k 小（或第 k 大）节点。
+section: "第6章 面试中的各项能力"
+order: 61
+description: "以中序遍历和引用计数器寻找二叉搜索树升序序列中的第k个节点，并辨明题面第k大与作者源码第k小的差异。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/54_KthNodeInBST/KthNodeInBST.cpp"
 draft: false
 ---
 
-{/* 知识点清单：BST 中序递增序列、计数器剪枝、迭代与递归；原书章节：面试题54。 */}
+import { KthNodeBstOrderDiagram, KthNodeTraversalLab, KthNodeCounterFlowDiagram, KthNodeContractMap, KthNodeOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/kth-node-in-bst";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能把第 k 个最小节点转化为中序遍历计数问题。
-- 能处理 k 非法（`k <= 0` 或超界）的边界。
-- 能给出可返回节点值的 C++ 与 TypeScript 实现。
+- 能解释二叉搜索树中序访问为何形成升序排名
+- 能计算引用参数k在递归返回过程中的每次递减
+- 能实现作者递归版、迭代版与真正第k大版本
+- 能分析题面语义冲突、非法k、越界、树高和重复键约定
+- 能设计覆盖作者5种树形28个断言并检查提前停止的测试
 
 </Objectives>
 
-## 直觉引入
+## 从“第1个到底是5还是11”开始
 
-BST 的中序遍历是升序。
-要找第 `k` 个结点，只要顺序数一遍即可，不用额外排序。
+先预测：二叉搜索树根为8，左子树是6、5、7，右子树是10、9、11。如果题目说“二叉搜索树的第k大节点”，k等于1通常应想到最大值11；但作者仓库的函数对k等于1返回5。
 
-## 算法思路
+原因在于源码使用左子树、根、右子树的<Term def="先访问左子树，再访问根节点，最后访问右子树的深度优先遍历次序。">中序遍历</Term>。对二叉搜索树，这个次序得到5、6、7、8、9、10、11，作者从最小端开始计数。
 
-1. 中序遍历左子树。
-2. 命中一个节点就把计数器减一。
-3. 计数器变 0 时返回该节点。
-4. 继续遍历右子树。
+<KthNodeBstOrderDiagram />
 
-<TreeDiagram />
+因此本章必须同时保留两层事实：
 
-## 思考引导
+1. 作者题面注释写的是“第k大的结点”，质量清单也称“二叉搜索树的第k大节点”。
+2. 可执行源码和全部断言实际求升序中的第k个，也就是第k小节点。
 
-### 1) 先问问题，不先遍历到最后
-第 k 大/小节点来自“有序性”而非纯搜索。你先问 BST 是否允许中序计数提前终止。
+本页以源码和测试定义主算法，同时单独给出真正第k大应如何改。这样既不掩盖原材料矛盾，也不把相反遍历冒充作者实现。
 
-### 2) 识别不变式
-中序访问次数是有序排名。访问计数达到 k 时可立即返回，无需遍历全部节点。
+## 中序顺序就是节点排名
 
-### 3) 为什么它一定成立
-BST 中序保证严格递增，访问顺序就是从小到大顺序列表；第 k 个即为答案。
+二叉搜索树满足左子树键小于当前键、右子树键大于当前键。递归访问左子树会先输出所有较小键，随后输出当前键，再由右子树输出所有较大键。由归纳可知整棵树的中序结果是<Term def="二叉搜索树按中序访问得到的非降或严格升序节点排列。">有序节点序列</Term>。
 
-### 4) 常见误区
-若不剪枝会退化为全遍历；若 k 从 1 开始或从 0 开始理解错，也会偏移。
+在作者的唯一键测试树中，序列严格递增。只需沿该序列数节点，**计数到第k个节点**时返回，不必把全部值复制到数组，也不必额外排序。
 
-### 5) 你能找到一个反例吗
-k=1 或 k=树大小 时最能检验边界和计数起点是否一致。
+以k等于4为例，访问5前k为4，处理后减为3；访问6前为3，处理后减为2；访问7前为2，处理后减为1；访问8时发现k等于1，8就是答案。
 
-### 6) 迁移到下一题
-Top-k 查询、排名系统都可复用“有序结构的提前终止”思路，节省无效遍历。
-## 代码对照
+<KthNodeTraversalLab />
 
-<CodeTabs>
-  <Tab label="C++">
+这里k采用从1开始的<Term def="规定k=1代表序列第一个节点、k=2代表第二个节点的接口含义。">排名语义</Term>。k等于0不是第一个，而是非法输入。
+
+## 为什么k必须按引用传递
+
+每个递归调用都属于同一次中序序列扫描。左子树访问了多少节点，根和右子树必须接着使用剩余排名，而不是重新从原始k开始。
+
+作者让核心函数接收unsigned int引用。这个跨层共享并持续递减的变量称为<Term def="由所有递归层共同读写、每访问一个有效节点就减少1的剩余排名状态。">共享计数器</Term>。
+
+如果k按值传递，左子树内部的递减不会反馈给父调用。父节点仍以旧k判断，多个子树会各自从头计数，结果错误。另一种正确设计是让递归函数同时返回“是否命中”和“已访问数量”，但结构更复杂。
+
+<KthNodeCounterFlowDiagram />
+
+target也承担停止信号。左子树已经找到目标时，父层不再处理当前节点；当前节点命中后，不再进入右子树。这种<Term def="目标节点一旦找到，就沿调用栈直接回传并跳过其余尚未访问分支。">提前终止</Term>避免遍历剩余较大节点。
+
+## 忠实还原作者递归
+
+外层KthNode负责检查空根和k等于0，保证核心函数拿到非空节点与正计数。
+
 ```cpp
-struct TreeNode {
-    int val;
-    TreeNode* left;
-    TreeNode* right;
-    TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
-};
+const BinaryTreeNode* KthNodeCore(
+    const BinaryTreeNode* pRoot,
+    unsigned int& k);
 
-class Solution {
-public:
-    TreeNode* kthNode(TreeNode* root, int k) {
-        int cnt = k;
-        TreeNode* ans = nullptr;
-        inOrder(root, cnt, ans);
-        return ans;
+const BinaryTreeNode* KthNode(
+    const BinaryTreeNode* pRoot,
+    unsigned int k) {
+    if (pRoot == nullptr || k == 0) {
+        return nullptr;
+    }
+    return KthNodeCore(pRoot, k);
+}
+
+const BinaryTreeNode* KthNodeCore(
+    const BinaryTreeNode* pRoot,
+    unsigned int& k) {
+    const BinaryTreeNode* target = nullptr;
+
+    if (pRoot->m_pLeft != nullptr) {
+        target =
+            KthNodeCore(pRoot->m_pLeft, k);
     }
 
-private:
-    void inOrder(TreeNode* node, int& k, TreeNode*& ans) {
-        if (!node || !ans) return;
-        inOrder(node->left, k, ans);
+    if (target == nullptr) {
+        if (k == 1) {
+            target = pRoot;
+        }
+        --k;
+    }
+
+    if (target == nullptr &&
+        pRoot->m_pRight != nullptr) {
+        target =
+            KthNodeCore(pRoot->m_pRight, k);
+    }
+    return target;
+}
+```
+
+访问当前节点时先判断k是否为1，再执行递减。命中节点后k变为0，但target已经非空；所有父层的target检查会阻止再次递减，所以unsigned不会在正常路径下从0下溢。
+
+若k大于节点总数，每个节点都访问一次，k只减去节点数，最终仍为正，target保持空并返回nullptr。k等于0则在外层被拒绝，从不进入核心。
+
+核心函数本身会直接解引用pRoot，不能对它单独传nullptr。这个前置条件由外层与“只有子指针非空才递归”的两个判断共同维持。
+
+## 旧页提前退出条件为何错误
+
+旧页示例写成“节点为空或答案为空时返回”。但答案初始本来就是nullptr，所以第一次调用便会返回，整个函数永远不访问树。
+
+正确条件应是“节点为空或答案已经非空时返回”：
+
+```cpp
+void inOrder(
+    const BinaryTreeNode* node,
+    unsigned int& k,
+    const BinaryTreeNode*& answer) {
+    if (node == nullptr ||
+        answer != nullptr) {
+        return;
+    }
+
+    inOrder(node->m_pLeft, k, answer);
+    if (answer != nullptr) {
+        return;
+    }
+
+    if (k == 1) {
+        answer = node;
+        return;
+    }
+    --k;
+    inOrder(node->m_pRight, k, answer);
+}
+```
+
+<Callout type="trap" title="把未找到误写成已经找到">
+提前退出判断中的极性不能凭感觉写。answer为空表示还要继续搜索，answer非空才表示目标已经找到；应至少用一棵单节点树验证第一次调用不会直接退出。
+</Callout>
+
+这个修正版与作者target局部返回值的控制流等价，但作者原写法无需额外answer引用。
+
+## 题面第k大与源码第k小
+
+<KthNodeContractMap />
+
+作者TestA对完整树依次断言k为1到7时返回5到11。纯左链和纯右链也都断言1到5升序返回。因此“源码按第k小”不是推测，而是28个断言中的明确行为。
+
+<Callout type="trap" title="只看题面文字忽略测试方向">
+若按“第k大”实现右、根、左，k=1会返回11，与作者TestA1期望5冲突。复刻仓库时应按左、根、右；若产品需求明确要第k大，则应改函数名、遍历方向和全部期望值。
+</Callout>
+
+真正寻找第k大只需镜像遍历：先右子树，再当前节点，最后左子树。共享计数器和提前终止逻辑保持不变。
+
+```cpp
+const BinaryTreeNode* KthLargestCore(
+    const BinaryTreeNode* node,
+    unsigned int& k) {
+    if (node == nullptr) {
+        return nullptr;
+    }
+
+    if (const BinaryTreeNode* target =
+            KthLargestCore(
+                node->m_pRight, k)) {
+        return target;
+    }
+
+    if (k == 1) {
+        return node;
+    }
+    --k;
+    return KthLargestCore(
+        node->m_pLeft, k);
+}
+
+const BinaryTreeNode* KthLargest(
+    const BinaryTreeNode* root,
+    unsigned int k) {
+    if (root == nullptr || k == 0) {
+        return nullptr;
+    }
+    return KthLargestCore(root, k);
+}
+```
+
+对示例树，这个版本k等于1返回11，k等于4返回8，k等于7返回5。不要只改函数名而保留中序方向。
+
+## 复杂度不是永远O(log n)
+
+设树高为h。找到第k小节点前，算法需要沿路径下降并完成前k次中序访问，时间可写为O(h加k)，最坏仍为O(n)。当k接近节点数，几乎整棵树都会被访问。
+
+递归栈空间为O(h)。平衡树高度O(log n)，极端左链或右链高度O(n)。作者专门构造TestB纯左链和TestC纯右链，既验证次序，也覆盖最深递归形态。
+
+普通二叉搜索树节点没有子树大小，无法仅凭一次键比较确定排名在哪棵子树。若节点额外维护左子树节点数leftSize，可以在每层比较k与leftSize加1，以O(h)时间选择方向；这属于顺序统计树扩展，不是作者结构。
+
+是否值得维护leftSize取决于查询与修改比例。只做一次排名查询时，中序计数不改变节点结构，也没有额外持久存储；若同一棵树要回答大量不同k，反复遍历前缀会重复工作，子树大小能把每次查询降为沿一条根到叶路径。代价是插入、删除和旋转时必须同步更新沿途计数，任何一次漏更新都会让后续排名静默出错。
+
+也可以只做一次完整中序遍历，把节点指针缓存为数组。预处理时间和空间均为O(n)，之后第k小可O(1)读取，但树发生结构或键值修改后缓存必须失效。作者方案适合临时查询且树只读；缓存适合稳定快照上的高频查询；带子树大小的平衡树适合查询与更新都频繁的长期结构。三者返回语义相同，生命周期与维护成本不同。
+
+递归期间也要求树不被并发修改。若另一线程改变左右指针，共享计数器看到的访问序列可能既不是修改前也不是修改后的有效中序结果。工程接口应使用不可变快照、读锁或明确的单线程所有权；const指针只禁止当前函数写节点，并不能自动阻止其他执行路径修改同一棵树。
+
+迭代中序可以显式维护栈，避免程序调用栈，但辅助空间仍为O(h)。
+
+```cpp
+#include <stack>
+
+const BinaryTreeNode* KthNodeIterative(
+    const BinaryTreeNode* root,
+    unsigned int k) {
+    if (root == nullptr || k == 0) {
+        return nullptr;
+    }
+
+    std::stack<const BinaryTreeNode*> path;
+    const BinaryTreeNode* current = root;
+    while (current != nullptr ||
+           !path.empty()) {
+        while (current != nullptr) {
+            path.push(current);
+            current = current->m_pLeft;
+        }
+
+        current = path.top();
+        path.pop();
         if (--k == 0) {
-            ans = node;
-            return;
+            return current;
         }
-        inOrder(node->right, k, ans);
+        current = current->m_pRight;
     }
-};
-```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-class TreeNode {
-    val: number;
-    left: TreeNode | null;
-    right: TreeNode | null;
-    constructor(val: number) {
-        this.val = val;
-        this.left = null;
-        this.right = null;
-    }
-}
-
-function kthNode(root: TreeNode | null, k: number): number | null {
-    let rank = k;
-    let result: number | null = null;
-
-    const dfs = (node: TreeNode | null) => {
-        if (!node || result !== null) return;
-        dfs(node.left);
-        if (--rank === 0) {
-            result = node.val;
-            return;
-        }
-        dfs(node.right);
-    };
-
-    dfs(root);
-    return result;
+    return nullptr;
 }
 ```
-  </Tab>
-</CodeTabs>
+
+迭代版在访问节点时先递减再检查0，与作者“先检查1再递减”等价。k初始为0仍必须在入口拦截，否则unsigned前减会下溢。
+
+## 重复键与“第k个”的含义
+
+作者测试所有键唯一，BinaryTreeNode也没有记录重复次数。若某个BST实现允许重复键，中序仍可非递减，但必须先决定重复节点放左还是放右。
+
+排名可以按“节点个数”计，也可以按“不同键值”计。作者算法每访问一个节点就减k，属于按节点计数；两个值相同的节点仍占两个排名。若需求按不同值排名，需要在遍历中记住前一键并跳过重复，或改变数据结构。
+
+因此“BST中序有序”足以支持按节点排名，却不能替调用方决定重复语义。页面和接口应把这一点写清，不能默认所有BST库都采用同样规则。
+
+## 作者5组树形与28个断言
+
+作者main依次调用TestA到TestE：
+
+1. TestA是7节点完整平衡树。k为0和8返回空，k为1到7依次返回5到11，共9个断言。
+2. TestB是5、4、3、2、1构成的纯左链。k为1到5返回1到5，0和6返回空，共7个断言。
+3. TestC是1、2、3、4、5构成的纯右链。k为1到5仍返回1到5，0和6返回空，共7个断言。
+4. TestD只有节点1。k为1返回该节点，0和2返回空，共3个断言。
+5. TestE为空树。k为0和1都返回空，共2个断言。
+
+合计9加7加7加3加2等于28。平衡、左斜、右斜、单节点、空树都覆盖，合法排名的首尾和越界两侧也覆盖。
+
+<KthNodeOfficialCaseLab />
+
+下面用紧凑断言复现最关键路径。完整移植时应保留作者对每个合法k逐一验证，而不只抽查中间值。
+
+```cpp
+#include <cassert>
+
+void testKthNode(
+    const BinaryTreeNode* balanced,
+    const BinaryTreeNode* leftChain,
+    const BinaryTreeNode* rightChain,
+    const BinaryTreeNode* single) {
+    assert(KthNode(balanced, 0) == nullptr);
+    for (unsigned int k = 1;
+         k <= 7;
+         ++k) {
+        const BinaryTreeNode* node =
+            KthNode(balanced, k);
+        assert(node != nullptr);
+        assert(node->m_nValue ==
+               static_cast<int>(k) + 4);
+    }
+    assert(KthNode(balanced, 8) == nullptr);
+
+    for (unsigned int k = 1;
+         k <= 5;
+         ++k) {
+        assert(KthNode(leftChain, k)
+                   ->m_nValue ==
+               static_cast<int>(k));
+        assert(KthNode(rightChain, k)
+                   ->m_nValue ==
+               static_cast<int>(k));
+    }
+
+    assert(KthNode(single, 1)
+               ->m_nValue == 1);
+    assert(KthNode(single, 2) == nullptr);
+    assert(KthNode(nullptr, 0) == nullptr);
+    assert(KthNode(nullptr, 1) == nullptr);
+}
+```
+
+随机对拍可先生成一组唯一整数，随机打乱插入BST，再把原值排序成参考序列。对每个合法k，作者函数返回值应等于参考序列下标k减1；对0和节点数加1应返回空。这样能同时检验树形变化和排名方向。
+
+还可给节点访问函数加计数，断言k等于1时不访问整棵树，从而验证提前终止真实发生，而不是仅在结果上碰巧正确。
+
+<Stepper>
+  <Step title="把BST展开成升序排名">
+    <KthNodeBstOrderDiagram />
+    左、根、右得到有序节点序列，k从1开始。
+  </Step>
+  <Step title="共享并递减剩余排名">
+    <KthNodeCounterFlowDiagram />
+    左子树消费的节点数必须通过引用反馈给父层。
+  </Step>
+  <Step title="手算k等于4的访问过程">
+    <KthNodeTraversalLab />
+    访问到8时命中，并停止9、10、11的遍历。
+  </Step>
+  <Step title="区分第k大和源码第k小">
+    <KthNodeContractMap />
+    作者断言按升序；真正第k大需要反向中序。
+  </Step>
+  <Step title="执行5种树形28个断言">
+    <KthNodeOfficialCaseLab />
+    平衡、双向单链、单节点与空树共同覆盖边界。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 二叉搜索树中序遍历形成有序节点序列，可直接按访问次数排名。
+2. k通过引用成为共享计数器，访问当前节点时从1开始判断。
+3. target非空后停止当前节点和右子树处理，实现提前终止。
+4. 作者题面写第k大，但源码和28个断言实际返回第k小。
+5. 真正第k大使用右、根、左；不能只改函数名。
+6. k等于0、空树或k超过节点数都返回nullptr。
+7. 时间为O(h加k)、栈空间O(h)，斜树最坏达到O(n)。
+8. 旧页把answer为空写成退出条件，会在第一次调用就错误返回。
+
+<Exercises>
+
+**问题 1：示例树中KthNode(root, 4)为何返回8？**
+
+<Answer>中序序列为5、6、7、8、9、10、11。k从1起算，第4个节点是8；共享计数器依次从4减到1，并在访问8时命中。</Answer>
+
+**问题 2：为什么k必须按引用传给左右子树？**
+
+<Answer>左子树已经访问的节点要从剩余排名中扣除，根和右子树必须继续使用同一状态。按值传递会让每层各自从原k计数，破坏全树统一排名。</Answer>
+
+**问题 3：作者函数在k等于1时返回5还是11？若产品真要第1大呢？**
+
+<Answer>作者函数按左、根、右返回最小值5。产品若要求第1大，应改用右、根、左并返回11，同时更新函数名、说明和测试期望。</Answer>
+
+**问题 4：为什么复杂度不能笼统写成O(log n)？**
+
+<Answer>普通节点没有子树大小，算法要实际访问前k个中序节点，时间O(h加k)；斜树高度和k都可能接近n。只有平衡且带排名元数据的顺序统计树才能把任意排名查询稳定到O(log n)。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="中序遍历">按左子树、根、右子树访问二叉树的次序。</GlossaryItem>
+  <GlossaryItem term="有序节点序列">BST中序产生的按键值非降排列节点序列。</GlossaryItem>
+  <GlossaryItem term="共享计数器">所有递归层共同递减的剩余排名k。</GlossaryItem>
+  <GlossaryItem term="提前终止">命中目标后跳过尚未访问的节点并沿调用栈回传。</GlossaryItem>
+  <GlossaryItem term="排名语义">k从1还是0起算，以及按节点还是不同键计数的接口约定。</GlossaryItem>
+</Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题54"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/54_KthNodeInBST/KthNodeInBST.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

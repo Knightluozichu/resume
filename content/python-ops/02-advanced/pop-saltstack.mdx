@@ -1,0 +1,124 @@
+---
+title: "第10章 集中化管理平台Saltstack详解"
+type: C
+section: "Python自动化运维 · 高级篇"
+order: 10
+description: "按刘天斯原书第10章重建：SaltStack集中化管理、远程执行与模块、grains静态事实、pillar安全数据、state声明式配置。"
+demo: true
+math: false
+sourceUrl: "https://github.com/yorkoliu/pyauto"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PopSaltstackModelLab, PopSaltstackBoundaryLab, PopSaltstackEvidenceLab } from "@/components/mdx/python-ops/diagrams/pop-saltstack";
+
+<Objectives>
+- 能解释SaltStack集中化管理的执行链与运维价值
+- 能区分远程执行与模块和grains静态事实的责任与失败语义
+- 能实现并复现pillar安全数据到state声明式配置的安全实验
+</Objectives>
+
+## 从一次运维变更开始
+
+先预测：脚本在一台测试机成功，是否就能安全用于批量生产？不能。还要说明目标、权限、超时、部分失败、证据和回滚。<Term def="SaltStack集中化管理由master、minion、事件总线和状态系统组成。接受minion key前核对身份，目标表达式先预览；返回数据要关联job ID、minion和函数。">SaltStack集中化管理</Term>必须落进可观察的执行链。
+
+<PopSaltstackModelLab />
+
+## 核心模型与责任
+
+SaltStack集中化管理由master、minion、事件总线和状态系统组成。接受minion key前核对身份，目标表达式先预览；返回数据要关联job ID、minion和函数。 <Term def="远程执行与模块适合即时查询和操作，命令模块不是默认选择。执行范围、超时和批次要受控，长期配置转成state，避免临时命令成为无人记录的真实状态。">远程执行与模块</Term>
+
+本章按照原书核心模块建立最小实验，再用现代Python和安全默认重写边界。工具版本可以变化，但目标选择、输入验证、结果聚合和审计证据不能消失。
+
+## 机制一：采集或控制入口
+
+远程执行与模块适合即时查询和操作，命令模块不是默认选择。执行范围、超时和批次要受控，长期配置转成state，避免临时命令成为无人记录的真实状态。 <Term def="grains静态事实描述操作系统、CPU和自定义标签，适合目标匹配但不存秘密。自定义grain来源需可信，变更后刷新并验证，不能让节点自行声明高权限角色。">grains静态事实</Term>
+
+```python
+# 先预览目标，再执行只读函数
+salt -C 'G@roles:web and E@app0[1-2]' test.version --out=json
+```
+
+运行前固定测试目标与时间窗，运行后保存结构化结果、耗时和异常类型。不要把打印了几行输出当成成功，也不要让示例凭据进入源码。
+
+## 机制二：状态、网络与批量
+
+grains静态事实描述操作系统、CPU和自定义标签，适合目标匹配但不存秘密。自定义grain来源需可信，变更后刷新并验证，不能让节点自行声明高权限角色。 <Term def="pillar安全数据由master按目标编译后发送给minion，适合分层配置与秘密。仍要最小化暴露、加密后端和审计读取；pillar.get使用明确默认值避免缺失键产生错误配置。">pillar安全数据</Term>
+
+<PopSaltstackBoundaryLab />
+
+```python
+# top.sls
+base:
+  'G@roles:web':
+    - match: compound
+    - nginx
+# pillar.get('service:port', 8080) 提供显式默认值
+```
+
+批量任务要先预览匹配目标，再限制并发并逐目标汇总。成功、失败、超时和未返回是不同状态；只展示总成功率会掩盖关键主机失败。
+
+## 机制三：证据与恢复
+
+pillar安全数据由master按目标编译后发送给minion，适合分层配置与秘密。仍要最小化暴露、加密后端和审计读取；pillar.get使用明确默认值避免缺失键产生错误配置。 <Term def="state声明式配置通过SLS和requisite表达资源及依赖。先test模式查看变化，文件使用模板和校验，服务只在配置变化后watch重载，失败保持旧配置。">state声明式配置</Term>
+
+state声明式配置通过SLS和requisite表达资源及依赖。先test模式查看变化，文件使用模板和校验，服务只在配置变化后watch重载，失败保持旧配置。 <Term def="验证集中化管理平台Saltstack详解的授权、结果和失败路径。">集中化管理平台Saltstack详解验收边界</Term>
+
+```python
+/etc/nginx/conf.d/site.conf:
+  file.managed:
+    - source: salt://nginx/site.conf.j2
+    - template: jinja
+    - check_cmd: nginx -t -c
+nginx:
+  service.running:
+    - watch:
+      - file: /etc/nginx/conf.d/site.conf
+```
+
+<PopSaltstackEvidenceLab />
+
+## 分步验收
+
+<Stepper>
+  <Step title="建立执行链"><PopSaltstackModelLab /></Step>
+  <Step title="注入边界"><PopSaltstackBoundaryLab /></Step>
+  <Step title="证明可恢复">用正常、超时、权限拒绝和部分失败四组输入运行；核对状态、日志、临时资源与回滚点，并保留可复查证据。</Step>
+</Stepper>
+
+## 实战验证清单
+
+在隔离环境执行三段代码：先只读采集，再模拟一台目标超时，最后验证失败不会改变未授权对象。记录命令或API参数、开始结束时间、目标清单、返回码、标准错误、制品摘要和回滚结果。涉及网络扫描、远程命令或配置发布时，必须使用经过批准的测试资产。
+
+## 常见误区
+
+<Callout type="trap" title="只要SaltStack集中化管理能运行就可以批量">
+单机成功没有证明目标选择、并发预算、部分失败和回滚。扩大范围前必须完成预览、限流、逐主机结果与停止条件。
+</Callout>
+
+<Callout type="trap" title="原书工具API可以原样用于今天的生产">
+原书出版于2014年，部分工具和安全默认已经变化。应保留架构思想，依据当前官方文档迁移API、主机密钥、TLS、权限和依赖版本。
+</Callout>
+
+## 本章回顾
+
+官方核心单元核对：SaltStack集中化管理；远程执行与模块；grains静态事实；pillar安全数据；state声明式配置。本章把原书模块放进现代运维闭环：先授权与预览，再执行与收集，最后判断、审计和恢复。
+
+<Exercises>
+**问题 1：如何解释“SaltStack集中化管理”的执行链？**<Answer>SaltStack集中化管理由master、minion、事件总线和状态系统组成。接受minion key前核对身份，目标表达式先预览；返回数据要关联job ID、minion和函数。 远程执行与模块适合即时查询和操作，命令模块不是默认选择。执行范围、超时和批次要受控，长期配置转成state，避免临时命令成为无人记录的真实状态。</Answer>
+**问题 2：grains静态事实与pillar安全数据如何协作？**<Answer>grains静态事实描述操作系统、CPU和自定义标签，适合目标匹配但不存秘密。自定义grain来源需可信，变更后刷新并验证，不能让节点自行声明高权限角色。 pillar安全数据由master按目标编译后发送给minion，适合分层配置与秘密。仍要最小化暴露、加密后端和审计读取；pillar.get使用明确默认值避免缺失键产生错误配置。</Answer>
+**问题 3：如何验收state声明式配置？**<Answer>state声明式配置通过SLS和requisite表达资源及依赖。先test模式查看变化，文件使用模板和校验，服务只在配置变化后watch重载，失败保持旧配置。 增加正常、超时、权限拒绝和部分失败输入，核对目标、返回码、证据和回滚。</Answer>
+</Exercises>
+
+## 术语表
+<Glossary>
+  <GlossaryItem term="SaltStack集中化管理" definition="SaltStack集中化管理由master、minion、事件总线和状态系统组成。" />
+  <GlossaryItem term="远程执行与模块" definition="远程执行与模块适合即时查询和操作，命令模块不是默认选择。" />
+  <GlossaryItem term="grains静态事实" definition="grains静态事实描述操作系统、CPU和自定义标签，适合目标匹配但不存秘密。" />
+  <GlossaryItem term="pillar安全数据" definition="pillar安全数据由master按目标编译后发送给minion，适合分层配置与秘密。" />
+  <GlossaryItem term="state声明式配置" definition="state声明式配置通过SLS和requisite表达资源及依赖。" />
+  <GlossaryItem term="集中化管理平台Saltstack详解验收边界" definition="验证集中化管理平台Saltstack详解的授权、结果和失败路径。" />
+</Glossary>
+
+<Attribution adaptedFrom="刘天斯《Python自动化运维：技术与最佳实践》第10章 集中化管理平台Saltstack详解" adaptedUrl="https://github.com/yorkoliu/pyauto" />

@@ -1,0 +1,317 @@
+---
+title: "Item 38：理解不同线程句柄的析构行为"
+type: A
+section: Chapter 7 · The Concurrency API
+order: 38
+description: 对齐 Effective Modern C++ Item 38：比较 std::thread、promise/packaged_task future 与 std::async future 的析构语义，解释 shared state 最后引用规则和 temporary future 隐式串行化。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch07.html"
+draft: false
+---
+
+import {
+  EmcppDiscardedAsyncFutureFlowMap,
+  EmcppFutureSharedStateOwnershipMap,
+  EmcppHandleDestructorBehaviorMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-38-thread-handle-destructor-behavior";
+
+<Objectives>
+
+- 能比较 thread handle destructor behavior（线程句柄析构行为），解释 joinable thread terminates（thread 析构终止）的条件
+- 能绘制 future shared state（future 共享状态）中 provider、consumer 与最后引用的生命周期
+- 能判断 async future destructor（async future 析构）何时等待，并复现 temporary future 导致的隐式串行化
+
+</Objectives>
+
+## 从“handle 不是 execution 本体”开始
+
+`std::thread` 与 `std::future` 都可被口语称为线程/任务句柄，但它们代表不同资源：thread object 直接关联底层执行线程；future 关联一个 communication shared state，task 只是该 state 的 provider 之一。
+
+<Term def="程序用于观察、等待或管理并发执行的对象；具体析构语义由 handle 类型与关联资源决定。">
+  concurrency handle
+</Term>
+
+先预测四类 handle 离开 scope 时是 terminate、wait、仅释放引用，还是完全不执行 deferred task。
+
+<EmcppHandleDestructorBehaviorMap />
+
+## std::thread 的 destructor 不会自动等待
+
+Item 37 已证明：joinable `std::thread` 析构直接 `std::terminate`，既不隐式 join，也不隐式 detach。
+
+```cpp
+void launch() {
+    std::thread worker(doWork);
+} // terminate: worker is still joinable
+```
+
+<Term def="std::thread 仍关联底层线程时析构，为避免隐式阻塞或悬空 detach 而强制终止程序。">
+  thread-termination destructor
+</Term>
+
+worker 即使已经返回，thread object 未 join/detach 仍 joinable。thread 析构规则只查看 association，不查看 future/shared-state 引用计数。
+
+## future 指向独立 shared state
+
+future 的典型结构包含三方：provider 产生 value/exception；shared state 保存 outcome 与 readiness；consumer future 读取、等待或共享结果。
+
+<Term def="位于 provider 与 future consumer 之间，保存 value/exception、ready flag 与同步信息的独立状态对象。">
+  future shared state
+</Term>
+
+```cpp
+std::promise<int> promise;
+std::future<int> result = promise.get_future();
+
+promise.set_value(42);
+return result.get();
+```
+
+promise 和 future 都是 handles，shared state 的 lifetime 可超过任一局部 handle，并由关联引用共同管理。
+
+<EmcppFutureSharedStateOwnershipMap />
+
+## 普通 future destructor 通常只释放引用
+
+来自 `std::promise` 或 `std::packaged_task` 的 future 析构一般不会等待 provider 执行完成，也不会 terminate。它释放 consumer 对 shared state 的 reference；若这是最后引用，state 被销毁。
+
+<Term def="future handle 销毁时减少 shared-state ownership，而不默认 join provider thread 的普通行为。">
+  future reference release
+</Term>
+
+```cpp
+std::promise<int> promise;
+auto future = promise.get_future();
+
+future = {}; // releases consumer handle; does not wait for a worker
+```
+
+provider 若在没有设置结果前被销毁，会向仍存在的 consumer state 写入 broken-promise exception；这与 consumer future destructor 阻塞是两个方向的协议。
+
+<Callout type="trap" title="陷阱：所有 future 析构都像 thread.join 一样等待">
+  promise/packaged_task 等普通 shared state 的 future destructor
+  通常只是释放引用。等待特例与 std::async 创建的特定 async shared state
+  相关，不能按类型名 future 一概而论。
+</Callout>
+
+## std::async 创建的 shared state 有特例
+
+当 shared state 由 `std::async` 创建、实际 policy 为 `std::launch::async`，且当前销毁的是该 state 的最后一个 future reference 时，destructor 可能等待 task 完成。
+
+<Term def="由 std::async 创建且采用 async policy 的 shared state，在最后 future reference 释放前等待关联 task 完成的规则。">
+  last-async-future wait
+</Term>
+
+三个条件缺一不可：
+
+1. state 来源是 `std::async`，不是 promise/packaged_task。
+2. 执行实际采用 async policy，不是 deferred。
+3. 被销毁 handle 是最后一个关联 future/shared_future reference。
+
+这比“future destructor blocks”精确得多。
+
+## move future 会移动最后等待点
+
+```cpp
+auto outer = std::future<void>{};
+{
+    auto local = std::async(std::launch::async, doWork);
+    outer = std::move(local);
+} // local is invalid; no last-reference wait here
+
+// outer destruction may be the waiting point
+```
+
+<Term def="future move 转移 shared-state consumer association，使 moved-from handle invalid，并把最后引用析构点移到新 owner。">
+  future-handle ownership transfer
+</Term>
+
+等待不是绑定变量名 local，而是绑定 shared state 的最后 reference。移动和 `shared_future` 复制都会改变哪个 scope 最后释放状态。
+
+## shared_future 让多个 consumers 共享引用
+
+```cpp
+auto future = std::async(std::launch::async, compute);
+std::shared_future<int> first = future.share();
+auto second = first;
+```
+
+<Term def="可复制的 future consumer handle，多个实例共同引用同一 shared state 并可重复读取结果。">
+  shared-future references
+</Term>
+
+销毁 first 通常不会等待，因为 second 仍持有 state；最后一个 shared_future 销毁时才满足“last reference”条件。审查阻塞点必须追踪所有 copies，而不是只看 async 调用附近。
+
+## 丢弃 async temporary 会在分号等待
+
+```cpp
+std::async(std::launch::async, firstTask);
+std::async(std::launch::async, secondTask);
+```
+
+每个返回 future 是 temporary，也是对应 async state 的最后引用；完整表达式末尾的分号销毁它，destructor 等待 task 完成。第二行只能在 firstTask 完成后启动，代码意外串行。
+
+<Term def="未保存 std::async 返回 future，使 temporary 在完整表达式末尾成为最后引用并等待 task 的现象。">
+  discarded-future serialization
+</Term>
+
+<EmcppDiscardedAsyncFutureFlowMap />
+
+<Callout type="trap" title="陷阱：忽略 async 返回值就是 fire-and-forget">
+  对 launch::async，temporary future 析构可能等待；连续语句会串行。真正
+  fire-and-forget 需要明确 owner、错误通道和 shutdown contract，不能靠丢弃
+  handle。
+</Callout>
+
+## 命名多个 futures 才能表达重叠
+
+```cpp
+auto first = std::async(std::launch::async, firstTask);
+auto second = std::async(std::launch::async, secondTask);
+
+first.get();
+second.get();
+```
+
+<Term def="保存所有 async result handles，让 tasks 可同时运行，并在明确同步点取得 value/exception 的结构。">
+  named-future overlap
+</Term>
+
+这既允许 overlap，也让 exception 在 get 时交付。若只在析构等待而从不 get，task exception 可能永远不被观察；handle lifetime 与 outcome consumption 必须同时设计。
+
+## deferred future destructor 不会触发 task
+
+```cpp
+{
+    auto lazy = std::async(std::launch::deferred, doWork);
+} // doWork never runs
+```
+
+<Term def="deferred shared state 在未 get/wait 就失去最后 future 时被丢弃，callable 不执行的行为。">
+  abandoned deferred computation
+</Term>
+
+因此默认 async|deferred policy 的 future 析构可能等待 async task，也可能静默放弃 deferred task。Item 36 的显式 policy 对析构可预测性同样重要。
+
+## “特殊规则”不等于通用安全网
+
+async future 的最后引用等待可减少后台 task 越过所有 handles 后继续运行，但它不自动保证 captured references 有效：references 可能在 future 前销毁，或者 task 内部把 work 再转交别处。
+
+<Term def="通过 declaration/member order 确保 async task 所引用对象的 lifetime 至少覆盖 future 的最后等待点。">
+  future-guarded dependency lifetime
+</Term>
+
+```cpp
+struct Session {
+    Data data;                 // constructed first, destroyed last
+    std::future<void> worker;  // destroyed first, may wait
+};
+```
+
+C++ members 逆声明顺序析构；future 应声明在 dependencies 之后，使 future 先析构等待，再销毁 data。顺序写反会先销毁 data 再等待 worker，仍可能 use-after-lifetime。
+
+## 析构等待会影响 latency 与 deadlock
+
+<Term def="scope exit 或 member destruction 隐式等待 async task，使原本看似无阻塞的 cleanup path 增加延迟或锁依赖。">
+  destructor wait boundary
+</Term>
+
+若销毁 future 时持有 task 需要的 mutex，last-reference wait 可 deadlock。若发生在 UI thread 或 noexcept destructor chain，长尾 task 会导致响应冻结。应在可控位置显式 get/wait，并在等待前释放冲突资源；析构等待只作为兜底，不能替代同步设计。
+
+## 句柄析构审查清单
+
+<Term def="根据 handle 类型、state 来源、policy、最后引用位置与 dependency order 推导 scope-exit 行为的检查流程。">
+  handle-destruction audit
+</Term>
+
+1. handle 是 std::thread、future 还是 shared_future？
+2. shared state 来自 promise、packaged_task 还是 std::async？
+3. launch policy 实际是 async 还是 deferred？
+4. 当前 handle 是否最后 reference，是否经过 move/share？
+5. 析构点是否持有 task 所需 locks，是否允许阻塞？
+6. task dependencies 是否晚于 future 销毁，exception 是否通过 get 被观察？
+
+先画 shared-state ownership 和 destruction order，再预测等待；不能从变量类型一行直接下结论。
+
+## 小结
+
+- std::thread 与 future 都是 handles，但 thread 直接关联执行线程，future 关联 communication shared state
+- joinable std::thread destructor 调用 terminate；普通 future destructor 通常只释放 shared-state reference
+- async future 等待特例要求 state 来自 std::async、实际 async policy、且销毁最后 future reference
+- future move/shared_future copies 会改变 last-reference destruction point
+- 丢弃 launch::async temporary 会在分号析构等待，使连续 async calls 意外串行
+- 命名 futures 可允许任务重叠并在 get 时交付异常；deferred future 被放弃则任务完全不执行
+- future member 应先于其 dependencies 析构，member declaration order 必须支持等待后的安全销毁
+- 显式同步点优于依赖 destructor wait；等待前还要检查 locks、latency 与 outcome consumption
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 38"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch07.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="concurrency handle">
+    观察或管理并发资源的对象。
+  </GlossaryItem>
+  <GlossaryItem term="thread-termination destructor">
+    joinable thread 析构终止程序。
+  </GlossaryItem>
+  <GlossaryItem term="future shared state">
+    provider 与 consumer 间的结果状态。
+  </GlossaryItem>
+  <GlossaryItem term="future reference release">
+    future 析构释放状态引用。
+  </GlossaryItem>
+  <GlossaryItem term="last-async-future wait">
+    最后 async future 析构等待。
+  </GlossaryItem>
+  <GlossaryItem term="future-handle ownership transfer">
+    move 改变最后状态 owner。
+  </GlossaryItem>
+  <GlossaryItem term="shared-future references">
+    多个可复制 consumer 共享状态。
+  </GlossaryItem>
+  <GlossaryItem term="discarded-future serialization">
+    丢弃 temporary 导致隐式串行。
+  </GlossaryItem>
+  <GlossaryItem term="named-future overlap">
+    保存 handles 允许 tasks 重叠。
+  </GlossaryItem>
+  <GlossaryItem term="abandoned deferred computation">
+    未等待便放弃的延迟计算。
+  </GlossaryItem>
+  <GlossaryItem term="future-guarded dependency lifetime">
+    用 future 等待保护依赖寿命。
+  </GlossaryItem>
+  <GlossaryItem term="destructor wait boundary">
+    析构隐式等待形成的阻塞边界。
+  </GlossaryItem>
+  <GlossaryItem term="handle-destruction audit">
+    推导句柄析构语义的检查流程。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：比较 joinable thread、promise future 和最后一个 async future 的析构。** 写出三条结果及原因。
+
+<Answer question="为什么不能统一说句柄析构会等待？">
+  joinable std::thread 析构 terminate；它不自动等待。promise future 通常只释放
+  consumer 对 shared state 的 reference，不等待 provider。由 std::async
+  创建、实际采用 async policy 且当前是最后 reference 的 future 析构才等待
+  task。资源类型、state 来源和 ownership 条件不同，所以不能统一。
+</Answer>
+
+2. **问题 2：连续两行丢弃 `std::async(launch::async, ...)` 返回值。** 推导为何串行并修复。
+
+<Answer question="分号处发生什么？">
+  第一行 temporary future 在完整表达式末尾析构，它是 async state 的最后
+  reference，因此等待 firstTask；第二行只能随后启动。将两个 futures
+  分别命名并先完成两次 launch，再在明确位置 get/wait，可让 tasks overlap 并交付
+  exceptions。不能把丢弃返回值当 fire-and-forget。
+</Answer>
+
+3. **问题 3：Session 含 Data 与读取它的 async future。** 设计 member order，并分析持锁析构风险。
+
+  <Answer question="如何让依赖晚于等待点销毁？">成员按声明逆序析构，应先声明 Data、后声明 future；析构时 future 先销毁并等待 worker，再销毁 Data。更稳妥是在 Session destructor 的可控位置显式 wait/get。等待前必须释放 worker 需要的 mutex，否则 last-async-future wait 会 deadlock；还要消费 exception，不能只依赖隐式析构等待。</Answer>
+</Exercises>

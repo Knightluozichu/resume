@@ -1,140 +1,253 @@
 ---
-title: 算法简介
+title: "第1章 算法简介"
 type: A
-section: 算法核心直觉
+section: "算法图解（第2版）"
 order: 1
-description: 学会二分查找——把「翻书查词」的直觉变成精确的搜索策略。
+description: "从简单查找到二分查找，完整建立有序前提、low/high闭区间、命中与缺失返回、循环不变量，以及O(1)到O(n!)的增长率语言。"
 demo: true
 math: false
-sourceUrl: https://www.manning.com/books/grokking-algorithms-second-edition
+sourceUrl: "https://livebook.manning.com/book/grokking-algorithms-second-edition/chapter-1"
 draft: false
 ---
 
-{/* 知识点清单：算法 / 二分查找 / 时间复杂度 O(log n) / 搜索空间；原书章节：Chapter 1 — Introduction to Algorithms。 */}
+import { IntroductionToAlgorithmsDiagram, BinarySearchTraceLab, BinarySearchContractLab, AlgorithmGrowthLab } from "@/components/mdx/grokking-algorithms-2e/diagrams/introduction-to-algorithms";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能画出二分查找每一步搜索空间的缩小过程。
-- 能回答：为什么二分查找比线性查找快？n 从 100 变成 1,000,000 时，两者分别多走了几步？
-- 能判断：给定一个输入结构，二分查找用不用得上？
+- 能解释算法性能与问题求解的区别，并说出二分查找依赖有序列表的原因
+- 能写出low、high、mid闭区间实现，处理命中、猜小、猜大、空列表和目标不存在
+- 能绘制候选区间逐轮减半的轨迹，并用循环不变量验证边界更新没有漏项
+- 能计算简单查找与二分查找的最坏比较次数，比较O(1)到O(n!)的增长率
+- 能判断排序后二分是否值得，并分析旅行商穷举为何随城市数迅速失去可行性
 
 </Objectives>
 
-## 直觉引入
+## 从四十亿到三十二步开始
 
-想象你手里有一本厚厚的英汉词典，你想查「serendipity」这个词。你不会从第一页开始一页一页翻——你会随手翻开中间，看一眼当前页的单词。如果当前页的单词按字母顺序排在「serendipity」之前，你就把前半本书扔掉；如果排在之后，你就把后半本书扔掉。每次翻一次，待查的页数就少一半。
+先预测：在40亿个排好序的号码中找一个号码，简单查找最坏要检查40亿次；二分查找大约要多少次？
 
-这就是<strong>二分查找</strong>的直觉——每一次比较，都让「问题规模」砍掉一半。没有这个策略，你只能在词典里从头翻到尾，翻到天荒地老。
+答案约为32次，因为`2³²`已经超过40亿。第1章用这个差距建立全书的两条坐标：一条是“算法是否解决问题”，另一条是“输入扩大后还能否及时解决”。<Term def="一组有限、明确、可执行的指令，把合法输入转换成规定输出。">算法</Term>是一组完成任务的指令；同一问题常有多种算法，结果相同但增长率可能完全不同。
 
-这章解决的核心问题是：面对有序数据，怎样用最少的比较次数锁定目标？没有二分查找，你只能接受「查一个词翻整本书」的低效。
+问题求解先问输入、输出和前提。性能分析再问输入规模`n`增加时，比较、移动或存储等关键操作怎样增长。第1章不要求用秒表背某台电脑的数字，而是学习用大O语言比较增长。
 
-## 概念讲解
+## 二分查找的前提与契约
 
-### 什么是算法
+<Term def="元素按同一比较规则单调排列，可据中间值判断目标只可能位于哪一侧的数据序列。">有序列表</Term>是<Term def="在有序、可按下标访问的序列中反复检查中点并排除一半候选的查找算法。">二分查找</Term>的核心前提。若数据无序，中间值比目标小并不能推出目标在右边。
 
-<Term def="解决特定问题的一串明确步骤，每一步都让问题规模缩小。">算法</Term>不是神秘的数学公式，它就是一套「做什么、按什么顺序做」的指令。做饭有菜谱，查字典有翻页策略，导航有路径规划——这些背后都是算法。
+二分查找接收一个有序列表和目标`item`，输出一个命中下标；若目标不存在，返回`None`。重复元素存在时，原始版本只保证返回**任意一个**命中位置，不自动保证最左或最右位置。若业务要求首个命中，契约和边界更新都要改变。
 
-算法好坏的关键指标是<strong>时间复杂度</strong>。别被这个词吓到，它只是回答一个问题：当数据量变大时，算法的执行时间会怎样增长？
+<Term def="当前仍可能包含目标的下标范围。">查找区间</Term>采用闭区间`[low, high]`：
 
-### 二分查找：让搜索空间对半砍
+- `low=0`指向第一个元素；
+- `high=len(list)-1`指向最后一个元素；
+- 只要`low<=high`，区间中仍至少有一个候选；
+- 当`low>high`，区间为空，目标不存在。
 
-<Term def="在有序数组中反复取中间值比较，每次砍掉一半候选，时间复杂度 O(log n)。">二分查找</Term>的前提是<strong>数据必须有序</strong>。如果字典里的词是乱序的，翻中间这招就不灵了——你无法判断目标在前半本还是后半本。
+```python
+from collections.abc import Sequence
+from typing import TypeVar
 
-二分查找的每一步只做三件事：
-1. 取当前搜索区间的中间位置。
-2. 把中间值与目标比较。
-3. 如果中间值太大，砍掉右半区；如果太小，砍掉左半区；如果相等——命中。
+T = TypeVar("T")
 
-关键概念是<Term def="算法在运行过程中还剩下多少候选元素需要检查。每一步都应让这个空间显著缩小。">搜索空间</Term>。二分查找每步让搜索空间减半，这就是它快的原因：即使有 10 亿条数据，最多也只需要约 30 次比较。
+def binary_search(values: Sequence[T], item: T) -> int | None:
+    low = 0
+    high = len(values) - 1
 
-<BinarySearchDiagram />
+    while low <= high:
+        mid = low + (high - low) // 2
+        guess = values[mid]
 
-看图理解：每次比较后，灰色区域（已排除）立刻翻倍，白色区域（待搜索）立刻减半。时间复杂度 O(log n) 的直观含义就是：数据量翻 2 倍，多走 1 步；数据量翻 1000 倍，多走约 10 步。而线性查找 O(n) 意味着：数据翻几倍，步数也翻几倍。
+        if guess == item:
+            return mid
+        if guess < item:
+            low = mid + 1
+        else:
+            high = mid - 1
 
-### 时间复杂度的直觉
+    return None
+```
 
-<Term def="描述算法运行时间随输入规模增长的速度。O(log n) 表示增长很慢，O(n²) 表示增长极快。">时间复杂度</Term>用大 O 记号表示。它不关心具体跑多少秒——那取决于 CPU 快慢——它只关心「增长速度」。
+这个实现还隐含“元素与目标可使用同一全序规则比较”。数组或Python序列提供按下标随机访问；若在只能顺序移动的链表上每次寻找中点，`O(log n)`次比较不代表整体仍是`O(log n)`访问成本。
 
-为什么二分查找是 O(log n)？因为每次砍一半：n 个元素 → n/2 → n/4 → … → 1。这个「砍了多少次才到 1」的次数就是 log₂n。对于 n = 1,000,000，log₂n ≈ 20——也就是说，从一百万条数据里找一条，最多只要 20 步。
+<IntroductionToAlgorithmsDiagram />
 
-## 交互 Demo
+## 一次完整查找：目标13
 
-先用动画感受二分查找的「砍半」动作。少背术语，先观察图里搜索区间怎样一步步收缩。
+在`[1,2,...,15]`中找13。第一次`low=0, high=14, mid=7`，猜到8，太小，因此`low=8`。第二次猜12，仍太小，`low=12`。第三次猜14，太大，`high=12`。第四次只剩下标12，猜13并命中。
 
-<AlgorithmPlayground mode="binary-search" currentStep={0} title="二分查找 · 交互动画" focus="每一步都让搜索空间砍掉一半——注意看灰色区域如何迅速扩张。" />
+<Term def="循环每轮开始和结束都成立、用于连接局部更新与最终结果的命题。">循环不变量</Term>是：如果目标存在，那么它一定位于闭区间`[low,high]`。当`guess<item`时，有序性说明`low..mid`全部不可能，故更新为`mid+1`不会漏掉目标；另一侧同理。
 
-<Callout type="tip">
-  <strong>猜一猜：</strong>把步骤滑块从第 1 步推到第 2 步时，搜索区间会向左砍还是向右砍？为什么？
-</Callout>
-
-## 分步动画
+<BinarySearchTraceLab />
 
 <Stepper>
-  <Step title="看有序数组">
-    二分查找的第一个前提：数组必须有序。动画里你会看到一排从小到大排列的数字。在无序数据上，二分查找会给出错误答案——它依赖「左小右大」的排序来决策砍哪一半。确认数据有序后，下一步才能开始找中点。
-    <AlgorithmPlayground mode="binary-search" currentStep={0} title="二分查找 · 第 1 步：看有序数组" />
-  </Step>
-  <Step title="取中点比较">
-    算法取当前搜索区间的中间位置（用左右边界算出来），把中间值与你要找的目标值做比较。如果中间值等于目标——直接命中，搜索结束。动画里中间元素会高亮，注意观察它和目标值的大小关系。
-    <AlgorithmPlayground mode="binary-search" currentStep={1} title="二分查找 · 第 2 步：取中点比较" />
-  </Step>
-  <Step title="砍掉一半搜索空间">
-    如果中间值比目标大，说明目标一定在左半区——右侧元素全部比目标大，直接扔掉。反之砍掉左半区。动画里被砍掉的区间会变成灰色，表示「已排除」。这一步是二分查找的精华——一次比较，消除一半可能。
-    <AlgorithmPlayground mode="binary-search" currentStep={2} title="二分查找 · 第 3 步：砍掉一半搜索空间" />
-  </Step>
-  <Step title="命中目标">
-    重复「取中点 → 比较 → 砍半」的过程，直到搜索区间缩小到只剩一个元素，或者中间值刚好命中目标。当动画显示命中时，数一数总共走了几步——你会发现，即使数组很长，步数也多不到哪去。
-    <AlgorithmPlayground mode="binary-search" currentStep={3} title="二分查找 · 第 4 步：命中目标" />
-  </Step>
+  <Step title="初始化闭区间"><BinarySearchTraceLab />选择初始区间，核对空列表时`high=-1`会让循环直接退出。</Step>
+  <Step title="计算中点并比较">使用`low+(high-low)//2`得到区间内下标，记录`guess`与目标的三向比较结果。</Step>
+  <Step title="排除已证明不可能的一半">猜小设`low=mid+1`，猜大设`high=mid-1`；加减1是因为中点已经比较完毕。</Step>
+  <Step title="验证命中或空区间">命中返回下标；若`low>high`，由不变量可知全部候选都已排除，返回`None`。</Step>
 </Stepper>
 
-## 常见误区
+## 四种分支必须全部可达
 
-<Callout type="trap">
-  <strong>现象 →</strong> 在无序数组上直接用二分查找。<strong>原因 →</strong> 二分查找依赖「左半区元素都小于中间值」这个性质，无序数据不满足此前提。<strong>修法 →</strong> 先排序（成本 O(n log n)），再二分查找。如果只查一次，排序 + 二分还不如直接线性扫描；但如果要反复查很多次，排序一次后每次 O(log n) 就很划算。
+新手常只用“目标正好在中间”的样例，导致缺失路径和边界错误没有暴露。至少测试：空列表、单元素命中、单元素缺失、首元素、末元素、中间元素和目标位于范围外。
+
+```python
+def test_binary_search_boundaries() -> None:
+    assert binary_search([], 7) is None
+    assert binary_search([7], 7) == 0
+    assert binary_search([7], 8) is None
+    assert binary_search([1, 3, 5, 7, 9], 1) == 0
+    assert binary_search([1, 3, 5, 7, 9], 9) == 4
+    assert binary_search([1, 3, 5, 7, 9], 4) is None
+```
+
+<BinarySearchContractLab />
+
+<Stepper>
+  <Step title="先测命中"><BinarySearchContractLab />切换命中分支，确认返回位置确实保存目标，而不是只断言下标非空。</Step>
+  <Step title="分别测猜小与猜大">选择目标使第一次中点分别过小和过大，观察左右边界是否严格越过mid。</Step>
+  <Step title="测最后一个候选">用单元素或末端目标确认循环条件是`low<=high`，不是会提前退出的`low<high`。</Step>
+  <Step title="测不存在">让目标落在间隙与范围外，确认区间最终为空且函数返回`None`。</Step>
+</Stepper>
+
+<Callout type="trap" title="把循环写成low小于high">
+闭区间在`low==high`时仍有一个候选。此时提前退出会漏查最后一项。闭区间版本用`low<=high`；若改用半开区间，初始化、循环条件和更新必须成套改变。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 认为 O(log n) 在任何场景下都比 O(n) 快。<strong>原因 →</strong> 大 O 记号忽略了常数因子。当 n 很短（比如 n &lt; 10），二分查找的「取中点、比较、更新边界」这些操作的开销可能比线性扫描还大。<strong>修法 →</strong> 对于很小的 n，直接线性扫描反而更简单、更快。大 O 告诉你的是「增长趋势」，不是「绝对快慢」。
+## 简单查找与二分查找
+
+<Term def="从序列开头逐项比较，直到命中或遍历结束的查找方法。">简单查找</Term>每次只排除一个元素：
+
+```python
+from collections.abc import Sequence
+
+def linear_search(values: Sequence[int], item: int) -> int | None:
+    for index, value in enumerate(values):
+        if value == item:
+            return index
+    return None
+```
+
+最坏情况下，简单查找比较`n`次，二分查找每次把候选数至多减半。经过`k`次仍有至多`n/2^k`个候选；令它不超过1：
+
+$$
+\frac{n}{2^k}\le1
+\quad\Longrightarrow\quad
+k\ge\log_2n.
+$$
+
+对非空长度`n`的闭区间实现，最坏比较次数可写成`⌊log₂n⌋+1`。因此8个元素最坏可能比较4次，而不是把“8连续减半三次得到1”误当成已经检查完最后一项。
+
+若数据尚未排序且只查一次，先排序`O(n log n)`再二分通常不如直接线性查找`O(n)`。若同一份静态数据要查很多次，排序成本可以被后续大量`O(log n)`查询摊薄。算法选择必须把预处理、查询次数和更新频率一起计算。
+
+## 大O记法比较增长率
+
+<Term def="用输入规模的函数上界描述运行代价增长速度的渐近记号。">大O记法</Term>不等于精确秒数，也不等于平均时间。第1章用它给出算法在输入扩大时的<Term def="在所有同规模合法输入中运行代价最大的情形。">最坏情况</Term>上界，让调用者知道性能不会差到哪里。
+
+<Term def="输入规模增加时资源函数变化的速度，决定算法能否扩展到大数据。">增长率</Term>比某次小样本计时更稳定：
+
+| 记号 | 直觉 | 典型例子 |
+|---|---|---|
+| `O(1)` | 输入变大，关键步骤仍有固定上界 | 数组按下标读取 |
+| `O(log n)` | 输入翻倍只多约一步 | 二分查找 |
+| `O(n)` | 输入翻倍，步骤约翻倍 | 简单查找 |
+| `O(n log n)` | 每层处理全部元素，共对数层 | 高效比较排序 |
+| `O(n²)` | 两层规模为n的工作 | 选择排序 |
+| `O(n!)` | 枚举所有排列 | 旅行商穷举 |
+
+<Term def="运行步骤上界不随输入规模增长的复杂度。">常数时间</Term>写作`O(1)`；<Term def="每一步消除固定比例候选而产生的复杂度。">对数时间</Term>写作`O(log n)`；<Term def="步骤数与输入规模同阶增长的复杂度。">线性时间</Term>写作`O(n)`；<Term def="随排列数量增长、每增加一个输入都乘上新因子的复杂度。">阶乘时间</Term>写作`O(n!)`。
+
+<AlgorithmGrowthLab />
+
+<Stepper>
+  <Step title="固定输入规模"><AlgorithmGrowthLab />选择一种增长率，先说明n代表元素数、城市数还是其他可计量规模。</Step>
+  <Step title="选择关键操作">明确计数的是比较、数组访问还是路线评估；大O必须依附代价模型。</Step>
+  <Step title="比较输入放大">分别代入`n=10、100、1000`，观察对数、线性、平方和阶乘如何拉开差距。</Step>
+  <Step title="补充常数与前提">用大O筛掉增长过快方案，再检查排序前提、预处理成本和实际常数。</Step>
+</Stepper>
+
+<Callout type="trap" title="O(log n)表示任何输入都刚好执行log₂n步">
+大O描述渐近上界，忽略常数与低阶项。命中位置不同会提前返回，具体比较次数取整；数据结构若不支持常数时间随机访问，还会增加定位中点的成本。
 </Callout>
 
-## 小结与练习
+## 旅行商问题：阶乘爆炸
 
-- 算法是一串让问题规模逐步缩小的明确步骤。
-- 二分查找每次比较砍掉一半候选，时间复杂度 O(log n)，前提是数据有序。
-- 时间复杂度描述增长速度，不是绝对秒数：O(log n) 增长极慢，O(n²) 增长极快。
-- 先画数据结构，再选算法——不是所有问题都适合二分查找。
+<Term def="给定若干城市及两两路程，寻找访问每城一次并回到起点的最短巡回路线。">旅行商问题</Term>若用最直接方法枚举城市访问顺序，需要检查约`n!`种排列。城市从10增加到11，候选不是只多10%，而是乘以11：
+
+$$
+10!=3{,}628{,}800,
+\qquad
+11!=39{,}916{,}800.
+$$
+
+这一例子不是要求第1章解决NP困难问题，而是让读者看到“算法增长率”比“电脑再快一点”更关键。若算法每秒检查一百万条路线，20个城市的`20!`仍远超可接受范围；必须利用问题结构、近似算法或约束规模，而不是只优化循环语法。
+
+<Callout type="trap" title="电脑速度翻倍就能拯救阶乘算法">
+处理规模增加1时，`n!`会乘以`n+1`。固定倍数硬件升级很快被下一次规模增长吞没；先改变算法或接受近似，再谈常数优化。
+</Callout>
+
+## 原章概念回查：一句话必须带条件
+
+算法是一组完成任务的指令，但只有输入域、输出约定和结束条件明确时，指令才可执行。二分查找要求有序列表，因为比较中点后必须用顺序关系证明某一侧全部不可能；若只知道数据“通常有序”，算法仍可能排除真正答案。
+
+在闭区间实现中，low和high标记剩余查找区间。每轮先检查中间元素，再根据比较结果严格越过`mid`；所以每一步排除一半候选，而不是把中点留到下一轮重复检查。目标不存在时，两个边界最终交错，空区间本身就是完整搜索失败的证据。
+
+二分查找`O(log n)`，简单查找`O(n)`。大O记法描述增长率，大O给出最坏情况运行时间上界，却不会告诉你某次命中恰好用了几步。常见运行时间`O(1)、O(log n)、O(n)、O(n log n)、O(n²)`形成从易扩展到快速恶化的阶梯；还应继续记住旅行商问题与`O(n!)`，因为阶乘增长展示了“换更快机器”不能替代“换算法”。
+
+把这些句子连起来，得到本章的决策顺序：先检查数据是否有序和可随机访问，再证明边界更新正确，最后用最坏增长率判断规模是否可承受。缺少任何一层，`O(log n)`都只是脱离前提的标签。
+
+## 本章回顾：先保证正确，再比较增长
+
+1. 算法是一组有限明确指令，同一问题可有不同性能的解法。
+2. 二分查找要求有序、可比较且可高效按下标访问的序列。
+3. `low`和`high`维护仍可能命中的闭区间。
+4. 中点猜小设`low=mid+1`，猜大设`high=mid-1`。
+5. 命中返回下标，`low>high`时返回`None`。
+6. 循环不变量证明边界更新没有排除可能目标。
+7. 简单查找每步排除一个候选，最坏`O(n)`。
+8. 二分查找每步排除约一半，最坏`O(log n)`。
+9. 大O描述增长上界，不是精确秒数或每次运行步数。
+10. 常见增长率从`O(1)`、`O(log n)`直到`O(n!)`差距巨大。
+11. 排序后二分是否划算取决于查询次数和数据更新频率。
+12. 旅行商穷举展示阶乘增长为何无法靠固定倍硬件升级解决。
 
 <Exercises>
-  <Answer question="在 1 到 1,000,000 的有序数组中用二分查找找 500,000，大约需要多少步？">
-    最多约 20 步（log₂(1,000,000) ≈ 20）。即使数组有一百万条数据，二分查找 20 次比较就能找到目标。
-  </Answer>
-  <Answer question="一个数组有 8 个元素，用二分查找最多需要比较几次？">
-    最多 3 次。8 → 4 → 2 → 1，三次砍半后只剩一个元素。
-  </Answer>
-  <Answer question="如果数据经常插入和删除，二分查找还适用吗？">
-    二分查找依赖有序数组，但有序数组的插入和删除成本高（O(n)）。频繁变动的数据考虑用二叉搜索树等结构，它既有类似二分查找的搜索效率，又能高效插入删除。
-  </Answer>
+
+**问题 1：长度8的有序数组，闭区间二分查找最坏比较几次？写出一个达到最坏值的目标。**
+
+<Answer>最坏是`⌊log₂8⌋+1=4`次。例如数组`[1,2,3,4,5,6,7,8]`按向下取整中点查8：依次检查4、6、7、8，共4次。若目标恰在第一中点则只需1次。</Answer>
+
+**问题 2：数据量从100增到1,000,000，简单查找和二分查找的最坏比较数怎样变化？**
+
+<Answer>简单查找从100次增到1,000,000次，增加999,900次。闭区间二分最坏从`⌊log₂100⌋+1=7`次增到`⌊log₂1,000,000⌋+1=20`次，只增加13次。</Answer>
+
+**问题 3：一份无序数据只查询一次，为什么“排序后二分”通常不划算？如果查询十万次呢？**
+
+<Answer>一次查询时，排序`O(n log n)`加二分`O(log n)`比直接扫描`O(n)`代价更高。数据稳定且查询十万次时，一次排序可被摊薄，后续每次只需`O(log n)`；还应把插入更新和内存结构成本计入。</Answer>
+
+**问题 4：旅行商穷举从10个城市增加到12个城市，候选路线放大多少倍？**
+
+<Answer>`12!/10!=11×12=132`，只增加两个城市就放大132倍。这说明阶乘增长对规模极敏感，固定倍硬件加速无法持续抵消。</Answer>
+
 </Exercises>
 
-## 名词解释
-
 <Glossary>
-  <GlossaryItem term="算法">
-    解决特定问题的一串明确步骤。本章核心：算法不是背公式，而是每一步都让搜索空间有规则地变小。详见「概念讲解」节。
-  </GlossaryItem>
-  <GlossaryItem term="二分查找">
-    在有序数组中反复取中间值与目标比较，每次砍掉一半搜索空间。时间复杂度 O(log n)，前提是数据必须有序。详见「概念讲解」节。
-  </GlossaryItem>
-  <GlossaryItem term="时间复杂度">
-    用大 O 记号描述算法随输入规模增长的速度。O(log n) 表示输入翻倍只多走一步，O(n²) 表示输入翻 10 倍要走 100 倍步子。详见「概念讲解」节。
-  </GlossaryItem>
-  <GlossaryItem term="搜索空间">
-    算法在运行过程中剩下的候选范围。好算法的每一步都会让搜索空间显著缩小——二分查找每次砍半，线性查找每次只缩一个。详见「概念讲解」节。
-  </GlossaryItem>
+  <GlossaryItem term="算法">把合法输入转换为规定输出的一组有限明确指令。</GlossaryItem>
+  <GlossaryItem term="有序列表">按同一规则单调排列、可据中点排除一侧的数据序列。</GlossaryItem>
+  <GlossaryItem term="二分查找">反复检查有序序列中点并排除一半候选的算法。</GlossaryItem>
+  <GlossaryItem term="查找区间">当前仍可能包含目标的下标范围。</GlossaryItem>
+  <GlossaryItem term="循环不变量">循环每轮前后保持成立并支撑正确性证明的命题。</GlossaryItem>
+  <GlossaryItem term="简单查找">从头逐项比较直到命中或遍历结束的方法。</GlossaryItem>
+  <GlossaryItem term="大O记法">描述资源消耗渐近增长上界的记号。</GlossaryItem>
+  <GlossaryItem term="最坏情况">同规模合法输入上的最大运行代价。</GlossaryItem>
+  <GlossaryItem term="增长率">资源函数随输入规模增加而变化的速度。</GlossaryItem>
+  <GlossaryItem term="常数时间">运行步骤上界不随输入规模增长的复杂度。</GlossaryItem>
+  <GlossaryItem term="对数时间">每一步消除固定比例候选产生的复杂度。</GlossaryItem>
+  <GlossaryItem term="线性时间">步骤数与输入规模同阶增长的复杂度。</GlossaryItem>
+  <GlossaryItem term="阶乘时间">运行代价随排列数量增长的复杂度。</GlossaryItem>
+  <GlossaryItem term="旅行商问题">寻找访问所有城市一次并返回起点的最短巡回路线问题。</GlossaryItem>
 </Glossary>
 
-<Attribution
-  adaptedFrom="Grokking Algorithms, Second Edition"
-  adaptedUrl="https://www.manning.com/books/grokking-algorithms-second-edition"
-/>
+<Attribution source="Grokking Algorithms, Second Edition, Chapter 1: Introduction to algorithms（Aditya Y. Bhargava, Manning, 2024）">
+本章按官方目录重建二分查找、运行时间、大O常见增长率、最坏情况与旅行商问题，并补充闭区间不变量和边界测试以验证实现。
+</Attribution>

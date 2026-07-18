@@ -1,0 +1,288 @@
+---
+title: "Chapter 16：无畏并发（Fearless Concurrency）"
+type: A
+section: Rust 程序设计语言 · Threads、消息传递与共享状态
+order: 16
+description: 对齐官方第 16 章：OS threads 与 join、move 生命周期、mpsc ownership、Arc/Mutex 共享状态，以及 Send/Sync 类型契约和 deadlock 边界。
+demo: false
+math: false
+sourceUrl: "https://doc.rust-lang.org/book/ch16-00-concurrency.html"
+draft: false
+---
+
+import {
+  RplChannelOwnershipLab,
+  RplSharedStateLab,
+  RplThreadJoinLab,
+} from "@/components/mdx/rust-programming-language/diagrams/fearless-concurrency";
+
+<Objectives>
+
+- 能实现 `thread::spawn`、move capture 与 `JoinHandle::join` 的完成协议，并分析 join 位置对生命周期、顺序和重叠执行的影响
+- 能设计 mpsc 多生产者单消费者链路，比较 `recv`、`try_recv`、receiver iteration、所有权转移和 channel 关闭条件
+- 能构建 `Arc<Mutex<T>>` 共享状态，解释 MutexGuard、poison、Send/Sync 与 Rc/RefCell 的线程边界，并识别类型系统仍不排除的 deadlock
+
+</Objectives>
+
+## 为什么无畏并发不等于无需设计并发
+
+Rust 把许多数据竞争、悬空借用和跨线程不安全类型变成编译错误，让重构时仍由 ownership/type system 守住内存安全边界。这就是“fearless”的来源；它不保证 scheduler 顺序、不会 deadlock、总有高吞吐，也不替你选择 message passing 或 shared state。
+
+<Term def="程序的多个部分可独立推进，执行时间可能交错但不一定同时占用不同处理器。">并发</Term>
+
+<Term def="多个计算在同一时刻真正运行，通常利用多个 processor core。">并行</Term>
+
+本章为简洁常用 concurrency 泛指二者。Rust 标准库提供 threads、channels、Mutex/Arc 等不同工具，语言层通过 Send/Sync marker 把可跨线程的类型能力连接起来。低层语言允许按问题选模型，也要求明确完成、关闭、锁和错误协议。
+
+## OS thread 的 1:1 模型和不确定调度
+
+<Term def="由 std::thread 创建、一个 Rust thread 对应一个操作系统 thread 的执行单元。">1:1 thread</Term>
+
+`thread::spawn` 接收 closure，并返回 handle。main 与 worker 的输出顺序由 OS scheduler 决定，sleep 只增加切换机会，不是同步原语。main 返回时，未完成的 spawned threads 会被终止，不能依赖“通常来得及”。
+
+<Term def="启动新 thread 执行 closure、立即把 JoinHandle 返回给调用方的函数。">thread spawn</Term>
+
+```rust
+use std::thread;
+
+let handle = thread::spawn(|| {
+    for index in 1..10 {
+        println!("worker {index}");
+    }
+});
+
+for index in 1..5 {
+    println!("main {index}");
+}
+
+handle.join().unwrap();
+```
+
+<Term def="拥有 spawned thread 完成状态的 handle；join 会阻塞当前 thread 直到目标结束并返回其结果。">JoinHandle</Term>
+
+<Term def="在两个执行流之间建立完成依赖；调用位置决定等待发生在并发窗口之前还是之后。">join 完成边</Term>
+
+不 join 无完成保证；spawn 后立即 join 会让 main 等 worker 完成，效果近似串行；main 工作后再 join，既保留重叠窗口又确保进程退出前收尾。join 返回 Result，因为 worker 可能 panic；直接 unwrap 是教学简化，服务程序应定义 panic/失败策略。
+
+## move closure 把输入生命周期交给 worker
+
+<Term def="把 closure 使用的外部值按所有权放入 closure，使 spawned thread 不借用可能先结束的 stack frame。">thread move capture</Term>
+
+```rust
+let values = vec![1, 2, 3];
+let handle = thread::spawn(move || {
+    println!("{values:?}");
+});
+handle.join().unwrap();
+```
+
+普通 closure 只打印 values 时会倾向不可变借用，但 spawn 的 thread 可能比当前函数活得久，compiler 无法证明 reference 始终有效。move 把 Vec owner 转给 worker，main 此后不能使用它。move 不是复制，也不允许两个线程同时拥有同一非共享 value。
+
+<RplThreadJoinLab />
+
+先预测 join 前置、后置和缺失分别会怎样，再切换 move。图中 timeline 只是一种可能调度，唯一稳定证据来自 ownership 与 join 完成边。
+
+<Callout type="trap" title="陷阱：用 sleep 猜测 thread 已完成">
+  sleep 只暂停当前 thread，不建立 happens-before 或完成保证，机器负载变化就会失效。保存 JoinHandle 并 join，或用 channel/同步 primitive 明确表达依赖。
+</Callout>
+
+## Race condition 与 deadlock 是不同失败维度
+
+<Term def="多个执行流以不一致顺序访问共享资源，使结果依赖不可预测 interleaving 的错误。">race condition</Term>
+
+<Term def="多个执行流形成循环等待，任何一方都无法取得所需资源并继续的活性失败。">deadlock</Term>
+
+ownership 和 Send/Sync 能排除大量 data race 与 invalid reference，却不能证明业务操作顺序正确。互斥锁顺序 A->B 与 B->A 仍可编译并 deadlock；channel 两端都等待对方也可能停滞。安全性（不会非法访问）与活性（最终会推进）必须分别验证。
+
+## Channel 通过发送来转移 value ownership
+
+<Term def="线程把 value 放入通信通道、另一线程取得 value，避免同时共享可变内存的并发模型。">消息传递</Term>
+
+<Term def="标准库提供的 multiple producer single consumer channel，包含 transmitter 和 receiver 两端。">mpsc channel</Term>
+
+```rust
+use std::sync::mpsc;
+use std::thread;
+
+let (tx, rx) = mpsc::channel();
+thread::spawn(move || {
+    let message = String::from("hi");
+    tx.send(message).unwrap();
+});
+
+let received = rx.recv().unwrap();
+```
+
+<Term def="channel 的发送端；send 取得 message 所有权，receiver 已 drop 时返回 Err。">transmitter</Term>
+
+<Term def="channel 的单一消费端；根据 API 阻塞等待、立即轮询或迭代所有消息。">receiver</Term>
+
+send 接收 message by value，成功后 sender 再访问原 String 会 E0382。ownership transfer 排除发送后并发修改或 drop 同一 value 的可能；receiver 成为新 owner。send 本身返回 Result，因为另一端可能已关闭。
+
+## recv、try_recv 与 iteration 表达不同等待策略
+
+<Term def="等待直到收到一条 message 或所有发送端关闭，并以 Result 返回的阻塞 receive。">recv 阻塞</Term>
+
+<Term def="立即返回当前 message、Empty 或 Disconnected 状态，不阻塞当前 thread 的 receive。">try_recv 轮询</Term>
+
+`recv` 适合当前 thread 没有其他工作；`try_recv` 适合周期检查并继续别的工作，但手写忙轮询可能浪费 CPU。Receiver 还能作为 iterator：每条消息产生一次 item，队列排空且 channel closed 后结束。
+
+<Term def="任一 receiver drop，或所有 transmitter 都 drop 后形成的终止状态；剩余操作以 error/iteration end 观察。">channel 关闭</Term>
+
+mpsc 通过 clone transmitter 建立多个 producer，仍只有一个 receiver。只 drop 原始 tx 不够，只要任何 clone 存活，receiver iteration 就不能确认不会再来消息，可能继续等待。生命周期协议必须覆盖所有 sender owners。
+
+<RplChannelOwnershipLab />
+
+调整 producer 和尚未 drop 的 tx，再比较 recv、try_recv 与 iteration。观察“队列暂时为空”和“channel 永久关闭”不是同一状态。
+
+<Callout type="trap" title="陷阱：保留一个无用 tx 导致 receiver 永不结束">
+  receiver 的 for loop 只有在队列耗尽且全部 transmitter drop 后才结束。创建 producer 后审计每个 tx clone 的 owner 和退出路径，不要把发送端长期留在协调者作用域。
+</Callout>
+
+## Mutex 用 guard 把 lock/unlock 绑定到借用
+
+<Term def="一次只允许一个 thread 访问内部 T 的 mutual exclusion 容器；访问前必须 lock。">Mutex</Term>
+
+```rust
+use std::sync::Mutex;
+
+let value = Mutex::new(5);
+{
+    let mut guard = value.lock().unwrap();
+    *guard = 6;
+} // guard Drop，自动 unlock
+```
+
+<Term def="lock 成功后返回、Deref 到内部 T 并在 Drop 时自动释放 mutex 的 RAII guard。">MutexGuard</Term>
+
+内部 T 不能绕过 lock 直接访问。MutexGuard 同时借用 mutex 并代表独占权限，DerefMut 允许修改；guard 作用域结束自动 unlock，避免忘记释放。锁应尽量只覆盖需要保护的不变量，持锁执行 I/O 或长计算会把并发工作串行化。
+
+<Term def="持锁 thread panic 后 mutex 记录的不一致风险；后续 lock 返回 PoisonError 让调用方选择恢复策略。">mutex poison</Term>
+
+示例用 unwrap 在 poison 时继续 panic，生产系统可能检查 inner state、修复或终止更大边界。poison 是风险信号，不等于操作系统 lock 永久无法释放；MutexGuard unwind 时仍会 Drop/unlock。
+
+## 多 thread shared ownership 需要 Arc，不是 Rc
+
+<Term def="以 atomic reference count 支持跨 thread 多 owner 的 smart pointer，API 类似 Rc。">Arc</Term>
+
+`Mutex<T>` 只有一个 owner 时，循环第一次 move 进 worker 后就不能给第二个 worker。Rc 虽支持多 owner，却不实现 Send/Sync：它的非原子计数不能被并发更新。正确组合是 `Arc<Mutex<T>>`：
+
+```rust
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+let counter = Arc::new(Mutex::new(0));
+let mut handles = Vec::new();
+
+for _ in 0..10 {
+    let counter = Arc::clone(&counter);
+    handles.push(thread::spawn(move || {
+        *counter.lock().unwrap() += 1;
+    }));
+}
+
+for handle in handles {
+    handle.join().unwrap();
+}
+assert_eq!(*counter.lock().unwrap(), 10);
+```
+
+<Term def="用不可分割更新维护 Arc strong_count 的机制，使 clone/drop 可在多 thread 并发执行。">atomic reference count</Term>
+
+Arc 只保护自己的 count，不自动保护 T 的 mutation；Mutex 只互斥访问，不创建多 owner。两者组合分别解决 lifetime 与 access。原子操作有成本，所以单线程仍优先 Rc。
+
+## Send 与 Sync 把线程能力写进类型图
+
+<Term def="表示该类型 value 的所有权可以安全转移到另一个 thread 的 marker trait。">Send marker</Term>
+
+<Term def="表示 shared reference 可以安全跨 thread 使用；等价地，该类型的共享引用满足 Send。">Sync marker</Term>
+
+几乎所有只由 Send/Sync 字段组成的类型会自动获得相应 marker。Rc 既非 Send 也非 Sync；RefCell 因运行时借用计数非线程安全而非 Sync；Mutex 在适当 T bound 下提供 Sync。`thread::spawn` 的 trait bounds 把这些事实变成 compile-time gate。
+
+marker 没有 methods，但 unsafe 手动实现意味着你向 compiler 承诺所有内部 invariants 在并发下成立。普通业务类型应依赖自动推导和标准 primitives；自定义底层并发结构需要 unsafe 证明与专门工具，不能为消除错误随意 `unsafe impl Send`。
+
+<RplSharedStateLab />
+
+切换 Rc/Arc、guard scope 和双锁顺序。注意 Arc/Mutex/Send/Sync 能让合法共享代码通过，却不会因“编译成功”消除 contention 或 deadlock。
+
+<Callout type="trap" title="陷阱：Arc 与 Mutex 能编译就等于并发正确">
+  类型系统排除不安全跨线程访问，不证明锁粒度、顺序、公平性和活性。定义全局 lock order，缩短 guard，避免持锁调用未知代码，并用 stress/timeout/observability 验证进展。
+</Callout>
+
+## 三步建立 thread 完成与数据协议
+
+<Stepper>
+  <Step title="第一步：先画 owner 与完成边">
+    每个 spawn 标出 move 进去的 value 和返回的 JoinHandle；把 join 放在真正需要结果、但仍能保留最大安全重叠的位置，禁止以 sleep 替代完成协议。
+
+    <RplThreadJoinLab />
+  </Step>
+  <Step title="第二步：为 message 定义 move、close 与 receive 策略">
+    明确谁 clone tx、谁 drop 最后一份、receiver 是否允许阻塞以及断连如何处理；send 后不再使用 value，iteration 结束必须由所有 sender 生命周期证明。
+
+    <RplChannelOwnershipLab />
+  </Step>
+  <Step title="第三步：共享状态分开 lifetime、access 与活性">
+    Arc 管多 owner，MutexGuard 管独占访问，Send/Sync 管类型能力；另行定义 lock order、guard scope、poison 和 worker panic 策略。
+
+    <RplSharedStateLab />
+  </Step>
+</Stepper>
+
+**Send trait** 约束 ownership 是否可跨 thread move，**Sync trait** 约束 shared reference 是否可跨 thread share；二者把 **所有权与数据竞争** 的排除规则带入并发边界，但不证明 liveness。
+
+## 小结
+
+- thread 调度无顺序保证；spawn 返回 JoinHandle，join 位置同时决定完成保证和并发窗口，move 把输入 owner 转给 worker
+- mpsc send 会 move message；recv 阻塞、try_recv 立即返回、receiver iteration 在队列耗尽且所有 tx drop 后结束
+- Mutex 强制先 lock 再访问，MutexGuard 以 Drop 自动 unlock；poison 把持锁 panic 风险显式交给调用方
+- Arc 提供跨 thread atomic 多 owner，Mutex 提供互斥 mutation；Rc/RefCell 不具备相同线程能力
+- Send 表示 value 可跨 thread move，Sync 表示 shared reference 可跨 thread；通常由字段自动推导，手动实现是 unsafe 承诺
+- 编译成功可排除大量 data race 和 dangling access，但 deadlock、contention、错误顺序与业务 race 仍需设计和验证
+
+<Exercises>
+  1. **问题 1：修复 thread 生命周期。** worker 借用 main 中的 Vec，main sleep 100ms 后退出。为什么不可靠，怎样同时保证值有效和 worker 完成？join 放哪里影响什么？
+
+  <Answer question="move 与 join 分别解决哪个问题？">sleep 不建立时序保证。用 move closure 把 Vec 所有权转给 worker，避免借用比 stack frame 活得久；保存 JoinHandle 并 join，保证 main 退出前 worker 完成。spawn 后立即 join 会串行化；先做 main 的独立工作、真正需要 worker 结果时再 join，可保留重叠窗口。</Answer>
+
+  2. **问题 2：诊断 channel hang。** 两个 producer 都发送完，receiver 的 `for value in rx` 却不结束；协调线程还持有原始 tx。为什么，recv/try_recv 又如何不同？
+
+  <Answer question="channel 何时被确定关闭？">只要原始 tx 或任一 clone 仍存活，receiver 就不能知道不会再来消息，队列排空后 iteration 会等待。drop 协调线程的无用 tx，并让每个 producer 退出时释放 clone。recv 阻塞到消息或断连；try_recv 立即区分当前 Empty 与永久 Disconnected，不能把暂时空当关闭。</Answer>
+
+  3. **问题 3：评审共享 counter。** `Rc<Mutex<i32>>` 为何不能进 worker，换成 Arc 后为什么仍可能 deadlock 或低吞吐？
+
+  <Answer question="Arc、Mutex、Send/Sync 与活性各负责什么？">Rc 的非原子 count 不满足 Send/Sync，不能跨 thread；Arc 以原子 count 支持多 owner，Mutex 以 guard 互斥访问 T。换成 Arc 与 Mutex 的组合后排除了不安全共享，但多个锁取得顺序不一致仍可循环等待，guard 持有过久也会串行化。应统一 lock order、缩短 scope、处理 poison 并做活性/压力验证。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="并发">多个执行部分可独立交错推进的计算方式。</GlossaryItem>
+  <GlossaryItem term="并行">多个计算在同一时刻利用多个处理单元运行。</GlossaryItem>
+  <GlossaryItem term="1:1 thread">一个 Rust thread 对应一个 OS thread 的模型。</GlossaryItem>
+  <GlossaryItem term="thread spawn">启动 closure 并返回 JoinHandle 的函数。</GlossaryItem>
+  <GlossaryItem term="JoinHandle">代表 spawned thread 并可 join 等待其完成的 owner。</GlossaryItem>
+  <GlossaryItem term="join 完成边">调用方等待目标 thread 结束的同步关系。</GlossaryItem>
+  <GlossaryItem term="thread move capture">把环境 value 所有权转入 worker closure。</GlossaryItem>
+  <GlossaryItem term="race condition">结果依赖执行流不一致访问顺序的错误。</GlossaryItem>
+  <GlossaryItem term="deadlock">执行流循环等待资源、整体无法继续的活性失败。</GlossaryItem>
+  <GlossaryItem term="消息传递">通过发送 value 在 thread 间转移数据的模型。</GlossaryItem>
+  <GlossaryItem term="mpsc channel">多 transmitter、单 receiver 的标准 channel。</GlossaryItem>
+  <GlossaryItem term="transmitter">拥有 send 能力并转移 message 的 channel 端。</GlossaryItem>
+  <GlossaryItem term="receiver">单一取得 channel message 的消费端。</GlossaryItem>
+  <GlossaryItem term="recv 阻塞">等待消息或断连的 blocking receive。</GlossaryItem>
+  <GlossaryItem term="try_recv 轮询">立即返回消息、暂空或断连的 receive。</GlossaryItem>
+  <GlossaryItem term="channel 关闭">端点全部失去对应能力后的终止状态。</GlossaryItem>
+  <GlossaryItem term="Mutex">通过 lock 一次只允许一个 thread 访问 T 的容器。</GlossaryItem>
+  <GlossaryItem term="MutexGuard">Deref 到 T 并在 Drop 时自动 unlock 的 guard。</GlossaryItem>
+  <GlossaryItem term="mutex poison">持锁 panic 后提示内部不变量可能损坏的状态。</GlossaryItem>
+  <GlossaryItem term="Arc">以 atomic count 支持跨 thread 多 owner 的 pointer。</GlossaryItem>
+  <GlossaryItem term="atomic reference count">并发安全维护 Arc owner 数的不可分割更新。</GlossaryItem>
+  <GlossaryItem term="Send marker">表示 value ownership 可安全跨 thread 转移的 trait。</GlossaryItem>
+  <GlossaryItem term="Sync marker">表示 shared reference 可安全跨 thread 使用的 trait。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Rust Programming Language, Chapter 16 Fearless Concurrency"
+  adaptedUrl="https://doc.rust-lang.org/book/ch16-00-concurrency.html"
+/>

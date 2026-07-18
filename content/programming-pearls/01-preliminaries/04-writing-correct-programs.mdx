@@ -1,0 +1,383 @@
+---
+title: "Column 4 · Writing Correct Programs：让证明参与程序设计"
+type: C
+section: "Part I · Preliminaries"
+order: 3
+description: "按第二版Column 4重建binary search challenge、程序书写与理解、loop invariant证明、correctness principles及program verification在设计、测试和维护中的角色。"
+demo: true
+math: true
+sourceUrl: "https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+draft: false
+---
+
+import { PP2BinarySearchChallengeLab, PP2SearchContractLab, PP2SearchInvariantLab, PP2MidpointOverflowLab, PP2BoundaryMutationLab, PP2VerificationTriangleLab, PP2VariantLab, PP2CounterexampleLab, PP2ProofCodeMap, PP2VerificationRolesLab, PP2CorrectnessCertificateLab } from "@/components/mdx/programming-pearls/diagrams/04-writing-correct-programs";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释binary search为何短小却难写正确，以及specification、loop invariant、partial correctness与total correctness的关系
+- 能计算closed interval的midpoint、remaining candidates、loop variant与worst-case comparison count
+- 能实现避免integer overflow的exact binary search、first-occurrence search和boundary-focused test oracle
+- 能分析off-by-one mutation、duplicate semantics、empty input、absence result与proof-model assumptions
+- 能设计precondition/postcondition、initialization-maintenance-termination proof、minimal counterexamples和correctness certificate
+
+</Objectives>
+
+## 从“二十行代码为什么仍值得证明”开始
+
+Binary search已有两千多年思想史，程序却直到电子计算时代仍频繁写错。困难不在“每次折半”这个口号，而在每个细节必须彼此一致：区间是closed还是half-open，`high`初值是`n - 1`还是`n`，循环条件是否含等号，更新是否越过`mid`，未找到返回什么，duplicates允许返回哪一个位置。
+
+先预测：在`[1, 3, 5, 7]`中寻找7时，若代码使用closed interval，却把循环写成`low < high`，最后一个候选是否一定会被检查？再预测空数组、单元素失败、目标落在两元素之间时，同一程序会怎样结束。
+
+<PP2BinarySearchChallengeLab />
+
+Program Verification（<Term def="依据明确specification，用逻辑论证程序的每条路径保持invariants并满足postcondition的活动。">Program Verification</Term>）不是在代码写完后附加一篇数学作文。本栏的核心方法是：先写contract，再寻找能从precondition走向postcondition的invariant，最后让代码直接实现证明中的状态变化。
+
+## 4.1 The Challenge of Binary Search
+
+给定nondecreasing array $a[0\ldots n-1]$和target $t$，最朴素的exact-search contract是：
+
+$$
+\operatorname{sorted}(a)
+\Longrightarrow
+\begin{cases}
+a[r]=t, & r\ge 0,\\
+\forall i\in[0,n),\ a[i]\ne t, & r=-1.
+\end{cases}
+$$
+
+Specification（<Term def="由precondition、postcondition、inputs、outputs和failure semantics组成的可检查behavior contract。">Specification</Term>）必须先回答四件事：
+
+1. **Precondition**：array按nondecreasing order排序，`n`与storage一致。
+2. **Success**：若返回nonnegative index $r$，则$r$在bounds内且$a[r]=t$。
+3. **Failure**：返回`-1`当且仅当target不存在。
+4. **Duplicates**：本版允许返回任意一个equal occurrence；first或last occurrence属于另一个contract。
+
+<PP2SearchContractLab />
+
+若输入未排序，binary search不是“偶尔变慢”，而是推理前提失效。若caller需要insertion point，返回`-1`也不够；应改写postcondition并实现`lower_bound`。Correctness只对**声明过的contract**有意义。
+
+<Callout type="trap" title="样例返回正确就证明算法正确">
+一个successful middle-element case只经过one branch。它没有检查empty input、singleton、first/last element、absent target、duplicates、overflow或non-shrinking interval。Testing能发现反例，却不能从有限样例推出all valid inputs的正确性。
+</Callout>
+
+## 4.2 Writing the Program
+
+先选择closed candidate interval $[low,high]$。它表示：如果target存在，至少一个possible occurrence仍在这个区间中。
+
+```cpp
+#include <cstddef>
+#include <span>
+
+int binary_search_exact(std::span<const int> a, int target) {
+    std::ptrdiff_t low = 0;
+    std::ptrdiff_t high = static_cast<std::ptrdiff_t>(a.size()) - 1;
+
+    while (low <= high) {
+        const std::ptrdiff_t mid = low + (high - low) / 2;
+        if (a[mid] < target) {
+            low = mid + 1;
+        } else if (a[mid] > target) {
+            high = mid - 1;
+        } else {
+            return static_cast<int>(mid);
+        }
+    }
+    return -1;
+}
+```
+
+这段程序的每个符号都来自representation decision：
+
+- `low = 0`与`high = n - 1`建立full closed interval。
+- `low <= high`表示one remaining candidate仍须检查。
+- `mid`位于active interval内。
+- 若`a[mid]`较小，sortedness证明index不大于`mid`的位置都不可能命中，因此new `low`是`mid + 1`。
+- 对称地，较大分支把`high`设为`mid - 1`。
+- Equality直接满足success postcondition。
+- 循环结束时`low > high`，candidate interval empty，满足absence postcondition。
+
+<PP2ProofCodeMap />
+
+### Midpoint不是纯代数问题
+
+数学上：
+
+$$
+\frac{low+high}{2}=low+\frac{high-low}{2}.
+$$
+
+bounded integer machine上，`low + high`可能先overflow；右式只在valid bounds下计算nonnegative difference，风险更小。Signed overflow在C++中甚至是undefined behavior，不只是得到一个负数。
+
+<PP2MidpointOverflowLab />
+
+这也说明formal reasoning必须包含machine model。若证明假设unbounded integers，而implementation使用fixed-width signed integers，证明与程序之间仍有gap。
+
+## 4.3 Understanding the Program：找出loop invariant
+
+Loop Invariant（<Term def="在loop initialization后成立，并由每次iteration保持，从而连接precondition与termination state的predicate。">Loop Invariant</Term>）不是泛泛的“数组有序”。本程序需要的核心命题是：
+
+$$
+I(low,high):
+\bigl(\exists i\in[0,n),\ a[i]=t\bigr)
+\Longrightarrow
+\bigl(\exists j\in[low,high],\ a[j]=t\bigr).
+$$
+
+换句话说，如果target存在，active interval从未丢掉all occurrences。它允许duplicates，也不承诺保留first occurrence；这与“任一命中”的contract完全一致。
+
+<PP2SearchInvariantLab />
+
+### Initialization
+
+循环前`low = 0`、`high = n - 1`。Every valid array index都位于initial interval，因此target若存在，至少一个occurrence在其中。空数组时`high = -1`，loop不执行；absence postcondition直接成立。
+
+### Maintenance
+
+设invariant在iteration入口成立，且`mid`位于active interval。
+
+- 若$a[mid] < t$，因array sorted，对所有$i\le mid$都有$a[i]\le a[mid] < t$。Discard $[low,mid]$不会丢掉target，故`low = mid + 1`保持invariant。
+- 若$a[mid] > t$，对所有$i\ge mid$都有$a[i]\ge a[mid] > t$。Discard $[mid,high]$安全，故`high = mid - 1`保持invariant。
+- 若$a[mid]=t$，返回`mid`，success postcondition成立。
+
+### Termination
+
+只证明invariant，得到的是Partial Correctness（<Term def="若程序终止，则result满足postcondition；它本身不保证程序一定结束。">Partial Correctness</Term>）。还需证明loop会终止。
+
+定义nonnegative loop variant：
+
+$$
+V=high-low+1.
+$$
+
+每个non-returning branch都排除`mid`，new interval size严格小于old size：
+
+$$
+0\le V_{k+1}<V_k.
+$$
+
+Nonnegative integer不可能无限strictly decrease，因此loop必然结束。Termination与partial correctness合并，得到Total Correctness（<Term def="程序对每个满足precondition的input都会终止，并在终止时满足postcondition。">Total Correctness</Term>）。
+
+<PP2VariantLab />
+
+<PP2VerificationTriangleLab />
+
+## 4.4 Boundary choices必须形成一个整体
+
+Closed interval方案不是唯一正确方案。Half-open interval $[low,high)$同样可证，但它需要`high = n`、loop condition `low < high`和不同的updates。错误通常来自把两套conventions各拿一半。
+
+<PP2BoundaryMutationLab />
+
+常见mutations及其证伪：
+
+| Mutation | Minimal state | Failure |
+|---|---|---|
+| `high = n` with closed interval | empty或last boundary | 可能读取`a[n]` |
+| `while (low < high)` | `low == high` | 最后一个candidate未检查 |
+| `low = mid` | two candidates, target right | interval可能不缩小 |
+| `high = mid` | two candidates, target left | interval可能不缩小 |
+| return `low` on failure | target absent between values | 把insertion point误报为exact match |
+
+Counterexample（<Term def="满足claimed precondition但使implementation违反postcondition或termination claim的具体最小input。">Counterexample</Term>）越小，越容易定位是哪条proof obligation断裂。
+
+<PP2CounterexampleLab />
+
+## 4.5 Duplicates改变的是specification
+
+Exact search遇到equal `a[mid]`立即return，只保证某个occurrence。若需要first occurrence，success condition必须改成：
+
+$$
+a[r]=t\quad\land\quad(r=0\ \lor\ a[r-1]<t).
+$$
+
+对应实现不在equality时立即结束，而把right boundary继续左移：
+
+```cpp
+int first_occurrence(std::span<const int> a, int target) {
+    std::ptrdiff_t low = 0;
+    std::ptrdiff_t high = static_cast<std::ptrdiff_t>(a.size());
+    while (low < high) {
+        const std::ptrdiff_t mid = low + (high - low) / 2;
+        if (a[mid] < target) low = mid + 1;
+        else high = mid;
+    }
+    if (low == static_cast<std::ptrdiff_t>(a.size()) || a[low] != target) return -1;
+    return static_cast<int>(low);
+}
+```
+
+这里采用half-open interval，invariant更接近“answer若存在，则first valid position位于`[low, high]` boundary search space”。不要把这段的`high = mid`复制回前面的closed exact-search；相同语句在不同contract与interval representation中有不同意义。
+
+## 4.6 Complexity从variant直接读出
+
+每次iteration把candidate count至多减半。对$n > 0$：
+
+$$
+C(n)\le \lfloor\log_2 n\rfloor+1,
+\qquad
+T(n)=\Theta(\log n),
+\qquad
+S(n)=\Theta(1).
+$$
+
+Big-O不是correctness proof。一个non-terminating mutation不能因为“设计意图是logarithmic”而获得$O(\log n)$；先证明variant严格下降，才有资格计算iteration bound。
+
+## 4.7 Principles
+
+Column 4可提炼为一套可复用程序书写原则：
+
+1. **Understand the problem before writing code.** 把valid input、success、failure和ambiguity写成contract。
+2. **Choose a representation that makes the proof local.** Interval convention应让candidate meaning一句话可说清。
+3. **Derive code from invariants.** Branch不是经验模板，而是由sortedness证明可discard的region。
+4. **Prove progress separately from preservation.** Invariant负责不丢正确答案，variant负责一定结束。
+5. **Keep specification and implementation at the same machine model.** Bounds、overflow、types和memory safety都属于正确性。
+6. **Use counterexamples and tests to attack assumptions.** Proof、static analysis、tests与runtime checks覆盖不同failure classes。
+7. **Treat changed semantics as a new problem.** Any occurrence、first occurrence、last occurrence与insertion point需要不同postconditions。
+
+## 4.8 The Roles of Program Verification
+
+Verification的价值不只是一张“已证明”证书。
+
+<PP2VerificationRolesLab />
+
+### Design
+
+寻找invariant会迫使作者先决定state representation。若很难说明active interval的含义，通常代码的bound convention也尚未统一。Proof activity在运行前就能排除整类off-by-one choices。
+
+### Documentation
+
+高价值comment应写“为什么discard这一侧安全”，而不是把`low = mid + 1`翻译成自然语言。Contract与invariant让reviewer不必模拟all executions，也让API callers知道sortedness和duplicate policy。
+
+### Testing
+
+证明揭示应测试的boundaries：empty、singleton success/failure、first、last、absent below/above/between、duplicates以及near-limit indexes。Mutation testing可故意删除`+1`、改loop relation或改initial high，确认suite能杀死这些bugs。
+
+```ts
+const cases = [
+  { a: [],                 t: 4, want: -1 },
+  { a: [4],                t: 4, want: 0 },
+  { a: [4],                t: 3, want: -1 },
+  { a: [1, 3, 5, 7],       t: 1, want: 0 },
+  { a: [1, 3, 5, 7],       t: 7, want: 3 },
+  { a: [1, 3, 5, 7],       t: 4, want: -1 },
+  { a: [1, 3, 3, 3, 5],    t: 3, wantAny: [1, 2, 3] },
+];
+```
+
+Property oracle可与linear search比较：若binary search返回$r\ge0$，检查bounds与equality；若返回`-1`，linear scan也必须找不到。不要让test重复implementation的同一错误逻辑。
+
+### Maintenance
+
+一次看似微小的semantic change，例如“返回任一duplicate”改为“返回first duplicate”，会改变invariant、equality branch和tests。Maintenance时应重新检查受影响proof chain，而不是只新增一个flag。
+
+### Proof不会替代现实系统测试
+
+证明只覆盖model中的assumptions。它通常不会自动证明caller传入memory有效、array在search期间未被concurrently mutated、comparator满足strict weak ordering、compiler与hardware无故障、resource limits合理。Tests、sanitizers、static analysis、fuzzing和production observability仍不可缺少。
+
+<Callout type="trap" title="形式证明以后就不需要测试">
+证明可以覆盖all states of an explicit model；测试可暴露model遗漏、integration mismatch、integer representation、compiler/runtime behavior与environment faults。二者不是替代关系：证明收紧设计，测试挑战证明没有建模的现实边界。
+</Callout>
+
+## 4.9 Correctness certificate
+
+一份可审计certificate应把claim绑定到exact code revision：
+
+- **Contract**：sorted input、interval bounds、duplicate和failure semantics明确。
+- **Initialization**：initial state建立invariant。
+- **Maintenance**：每个branch使用sortedness并保持candidate claim。
+- **Progress**：variant nonnegative且strictly decreases。
+- **Termination**：empty interval或successful return导出postcondition。
+- **Machine safety**：midpoint、index type、empty array与casts无overflow/out-of-bounds。
+- **Counterexamples**：boundary suite与mutations覆盖各proof obligation。
+- **Scope**：concurrency、memory validity和environment assumptions显式记录。
+
+<PP2CorrectnessCertificateLab />
+
+## 4.10 逐步运行路线
+
+<Stepper>
+  <Step title="先固定contract与区间语义" description="声明sortedness、exact result、absence与duplicate policy，再选择closed interval。">
+    <PP2SearchContractLab />
+    <PP2BinarySearchChallengeLab />
+  </Step>
+  <Step title="把程序逐行映射到候选区间" description="让initial bounds、midpoint、branch updates和return都对应一条可检查理由。">
+    <PP2ProofCodeMap />
+    <PP2MidpointOverflowLab />
+  </Step>
+  <Step title="证明invariant的建立与保持" description="每次discard前使用sortedness，确保target若存在仍留在active interval。">
+    <PP2SearchInvariantLab />
+    <PP2VerificationTriangleLab />
+  </Step>
+  <Step title="用variant和反例检查termination" description="证明candidate count严格下降，并让最小输入击穿错误boundary mutations。">
+    <PP2VariantLab />
+    <PP2BoundaryMutationLab />
+    <PP2CounterexampleLab />
+  </Step>
+  <Step title="把验证用于测试与维护" description="从proof obligations生成tests、mutation set与revision-bound correctness certificate。">
+    <PP2VerificationRolesLab />
+    <PP2CorrectnessCertificateLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Binary search的难点是contract、interval convention、loop condition与updates必须一致。
+- Specification先固定sortedness、success、failure和duplicate semantics。
+- Closed interval invariant保证target若存在，至少一个occurrence仍在active interval。
+- Initialization、maintenance和termination把global claim拆为local proof obligations。
+- Loop variant $high-low+1$严格下降，补足partial correctness所缺的termination。
+- Safe midpoint避免`low + high`在bounded integer arithmetic中的overflow。
+- Any occurrence、first occurrence和insertion point是不同contracts，不能混用updates。
+- Minimal counterexamples比large random examples更快暴露off-by-one与non-progress。
+- Verification参与design、documentation、testing和maintenance，但不替代现实machine与integration tests。
+- Correctness certificate必须绑定exact implementation、machine assumptions与boundary evidence。
+
+<Exercises>
+
+1. 对closed-interval exact binary search，完整证明初始化、两个non-returning branches的invariant maintenance，以及variant严格下降。再给出最坏comparison count。
+2. 将程序修改为返回last occurrence。写出postcondition、half-open或closed invariant、代码，并说明为什么遇到equality不能立即return。
+3. 为三个mutations构造最小反例：`while (low < high)`、`low = mid`、initial `high = n`。逐个指出违反safety、postcondition还是termination。
+4. 设计一套verification pipeline，覆盖spec review、static analysis、property testing、mutation testing与runtime assumptions。说明proof覆盖什么、仍有哪些out-of-model risks。
+
+<Answer>
+
+Initial interval `[0,n-1]`包含every valid index，因此target若存在仍在其中。若`a[mid]`较小，sortedness证明indexes不大于mid均不等于target，设置`low=mid+1`保持claim；较大分支对称。Variant `high-low+1`初始nonnegative，每个non-returning branch排除mid并严格下降，故终止。Termination时interval empty，invariant蕴含target不存在。每次至多保留一半，nonempty input comparisons最多为`floor(log2(n))+1`。
+
+</Answer>
+
+<Answer>
+
+Postcondition为返回`r=-1`当且仅当target absent；否则`a[r]=target`且`r=n-1`或`a[r+1]>target`。可使用half-open boundary search：当`a[mid] <= target`时记录candidate并向右令`low=mid+1`，否则`high=mid`；结束后验证candidate equality。Equality不能立即return，因为右侧可能仍有equal elements；invariant必须保留possible last occurrence。
+
+</Answer>
+
+<Answer>
+
+`while(low<high)`在one-element `[4]`寻找4时可能zero iterations并误报absence，违反postcondition。`low=mid`在`[1,3]`寻找3时，state `[0,1]`产生mid 0，new low仍为0，variant不降，违反termination。Closed interval使用`high=n`时，empty input初始`[0,0]`或搜索大于last value时可能读取`a[n]`，违反memory safety。每个反例只保留触发broken obligation所需的最少elements。
+
+</Answer>
+
+<Answer>
+
+Pipeline先review pre/postconditions、interval和machine model；static analysis检查bounds、casts与overflow paths；property test对sorted random arrays与linear oracle比较；mutation test修改relation、`+1/-1`和initial bounds并要求suite fail；sanitizers检查memory behavior；runtime记录invalid precondition与latency。Proof覆盖declared sequential model中all valid inputs的partial/total correctness，但不自动覆盖concurrent mutation、dangling storage、broken comparator、compiler/hardware faults、resource exhaustion与caller contract violations。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Program Verification">依据specification证明程序保持invariants、终止并满足postcondition的活动。</GlossaryItem>
+  <GlossaryItem term="Specification">定义valid inputs、outputs、success、failure及behavior obligations的contract。</GlossaryItem>
+  <GlossaryItem term="Loop Invariant">循环开始前建立、每轮保持，并用于从termination state导出result的predicate。</GlossaryItem>
+  <GlossaryItem term="Partial Correctness">程序若终止就满足postcondition的性质，不包含termination guarantee。</GlossaryItem>
+  <GlossaryItem term="Total Correctness">Partial correctness加上对all valid inputs的termination guarantee。</GlossaryItem>
+  <GlossaryItem term="Counterexample">满足前提却使claimed correctness或termination不成立的具体input。</GlossaryItem>
+  <GlossaryItem term="Loop Variant">取值于well-founded set且每次iteration严格下降、用于证明termination的measure。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Programming Pearls, Second Edition · Column 4 Writing Correct Programs"
+  href="https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+  author="Jon Bentley"
+  license="本章按Pearson官方第二版目录与Column 4的binary search challenge、writing and understanding the program、principles及roles of program verification主线重构；代码、machine-integer分析、交互图与correctness certificate为教学化重写。"
+/>

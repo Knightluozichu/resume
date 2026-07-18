@@ -1,0 +1,239 @@
+---
+title: "Chapter 11 · Hash Tables"
+type: C
+section: "CLRS4 · 数据结构"
+order: 11
+description: "按CLRS第四版第11章重建直接寻址、链式散列、除法/乘法/全域散列、开放寻址探测与生产负载、删除和相等性实践。"
+demo: true
+math: true
+sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+draft: false
+---
+
+import { CLRS4DirectAddressLab, CLRS4ChainingLab, CLRS4LoadFactorLab, CLRS4DivisionHashLab, CLRS4MultiplicationHashLab, CLRS4UniversalHashLab, CLRS4ProbeSequenceLab, CLRS4PrimaryClusterLab, CLRS4TombstoneLab, CLRS4HashCertificateLab } from "@/components/mdx/introduction-to-algorithms/diagrams/11-hash-tables";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释直接寻址、链式散列与开放寻址怎样表示动态集合并处理冲突
+- 能计算负载因子、期望链长、探测次数和扩容后的容量需求
+- 能实现除法/乘法散列、链式表、双重散列探测和tombstone删除
+- 能分析简单均匀散列、全域散列与开放寻址均匀探测假设的保证边界
+- 能设计包含hash/equality一致性、键稳定性、负载阈值与攻击模型的散列表证书
+
+</Objectives>
+
+## 从“键能不能直接当地址”开始
+
+先预测：若键只可能是0到11，查找键6最直接的方法是什么？用键6访问数组槽6，无需搜索。困难出现在键宇宙巨大而实际存储集合很小：无法为每个可能键分配槽，必须把大宇宙压缩到有限bucket。
+
+<CLRS4DirectAddressLab />
+
+## 11.1 Direct-address tables
+
+<Term def="为键宇宙中的每个可能键分配唯一数组槽，搜索、插入和删除都直接访问T[k]的表。">直接寻址表</Term>适用于较小宇宙$U=\{0,\ldots,m-1\}$。槽`T[k]`保存键$k$对应记录或nil：
+
+```text
+DIRECT-ADDRESS-SEARCH(T, k): return T[k]
+DIRECT-ADDRESS-INSERT(T, x): T[x.key] = x
+DIRECT-ADDRESS-DELETE(T, x): T[x.key] = NIL
+```
+
+三项操作均为$\Theta(1)$，并可携带satellite data。若只关心集合成员关系，可用bit vector把每个键压成一位；若一个键允许多条记录，则槽需要指向链表或其他容器。
+
+空间成本为$\Theta(|U|)$而不是$\Theta(n)$。手机号、64位ID等宇宙远大于实际元素数$n$，直接寻址不可行；散列通过允许多个键映射同一槽，把空间降到与表容量$m$相关。
+
+## 11.2 Hash tables
+
+### Chaining and collisions
+
+<Term def="用函数h把大键宇宙映射到m个槽，并通过链或探测处理不同键映射到同一槽的动态集合结构。">散列表</Term>使用$h:U\to\{0,\ldots,m-1\}$。当$x\ne y$却有$h(x)=h(y)$时发生collision；键宇宙大于槽数时，鸽巢原理说明冲突不可完全避免。
+
+链式散列让每槽保存一个链表，所有映射到该槽的记录都在链中。插入头部为$\Theta(1)$；搜索和删除成本取决于链长，已有节点handle时链内删除可常数完成。
+
+<CLRS4ChainingLab />
+
+<Term def="表中元素数n与槽数m之比α=n/m；它刻画平均每槽负载并控制散列表期望操作成本。">负载因子</Term>：
+
+$$
+\alpha=\frac nm.
+$$
+
+<CLRS4LoadFactorLab />
+
+在simple uniform hashing假设下，每个键独立等概率落入$m$个槽，链长期望为$\alpha$。不成功搜索检查一个完整期望链，$\Theta(1+\alpha)$；成功搜索平均检查目标前约半条链，同样为$\Theta(1+\alpha)$。若维持$m=\Theta(n)$，则$\alpha=\Theta(1)$，获得期望常数操作。
+
+“期望O(1)”不是每次常数：所有键仍可能落到一个槽，最坏搜索$\Theta(n)$。保证依赖散列函数、键分布或随机选择函数；生产表还需扩容策略把负载保持在设计范围。
+
+<Callout type="trap" title="有hash函数就自动均匀">
+函数能把键压到槽域，不代表对实际键集分布均匀。低位规律、攻击者构造和不一致规范化都可制造长链。修法是分析键模式，随机化函数或使用带抗攻击种子的散列。
+</Callout>
+
+## 11.3 Hash functions
+
+<Term def="把任意键确定性映射到表槽索引的函数；优良设计应快速并让目标键集尽量均匀分散。">散列函数</Term>首先要对相等键给相同值。若键是字符串或复合对象，必须定义规范化和字段顺序，使hash与equality完全一致。
+
+### Division method
+
+除法法：
+
+$$
+h(k)=k\bmod m.
+$$
+
+<CLRS4DivisionHashLab />
+
+若$m$是2的幂，结果只取键的低位，低位规律会直接造成聚集。常选不接近2幂或10幂的素数，减少常见周期与$m$共享因子；但素数不是均匀性的充分条件，仍要看键集。
+
+### Multiplication method
+
+选择常数$0\lt A\lt1$，取$kA$小数部分并缩放：
+
+$$
+h(k)=\left\lfloor m(kA-\lfloor kA\rfloor)\right\rfloor.
+$$
+
+<CLRS4MultiplicationHashLab />
+
+乘法法对$m$选择较不敏感，硬件上常配合2幂容量提取乘积位。$A$可选接近黄金比例共轭的常数，但固定函数仍可能被知道实现的攻击者构造碰撞。
+
+### Universal hashing
+
+全域散列从函数族$\mathcal H$中随机选择$h$，要求任意固定不同键$x,y$满足：
+
+$$
+\Pr_{h\in\mathcal H}\{h(x)=h(y)\}\le\frac1m.
+$$
+
+<CLRS4UniversalHashLab />
+
+随机选择发生在看到键集之前，使任意固定输入难以强迫大量冲突。常见族对素数域使用$h_{a,b}(k)=((ak+b)\bmod p)\bmod m$，其中$a$非零、$b$随机。这里的随机性保证collision概率，不是密码学不可逆性；保存秘密seed可增强对抗哈希洪泛。
+
+## 11.4 Open addressing
+
+### Probe sequences
+
+<Term def="所有记录都存于表数组本身，碰撞时按h(k,0),h(k,1),…探测其他槽，直到找到键或可用槽的方法。">开放寻址</Term>要求$n\le m$，因此$\alpha\le1$。每个键的probe sequence应覆盖所有槽，否则即使表有空位也可能插入失败。
+
+```cpp
+int find_slot(const Table& table, Key key) {
+    for (int i = 0; i < table.capacity(); ++i) {
+        int slot = probe(key, i, table.capacity());
+        if (table[slot].empty()) return NOT_FOUND;
+        if (table[slot].occupied() && table[slot].key == key) return slot;
+    }
+    return NOT_FOUND;
+}
+```
+
+<CLRS4ProbeSequenceLab />
+
+Linear probing使用$(h'(k)+i)\bmod m$，缓存局部性好，却产生primary clustering：连续占用段越长，更多初始槽会探入该段并继续扩张。
+
+<CLRS4PrimaryClusterLab />
+
+Quadratic probing用二次偏移缓解primary clustering，但不同键共享初始槽仍有secondary clustering，且参数必须保证足够槽可达。Double hashing用$h_1(k)+ih_2(k)$，若步长与$m$互素则遍历全表，探测模式更接近独立。
+
+### Expected probes and deletion
+
+在uniform hashing近似下，不成功搜索期望探测数至多：
+
+$$
+\frac1{1-\alpha},
+$$
+
+成功搜索约为$\frac1\alpha\ln\frac1{1-\alpha}$。当$\alpha$接近1，成本急剧上升；即使仍是公式上的常数，也可能不可接受。因此开放寻址通常在0.7至0.9前扩容，阈值随探测策略和缓存目标调整。
+
+删除不能直接写EMPTY。某键可能因早期槽占用而被插入更后位置，搜索遇到中途EMPTY会错误停止。应写DELETED tombstone：搜索继续，插入可复用最早tombstone。
+
+<CLRS4TombstoneLab />
+
+tombstone过多会拉长失败搜索，表需在扩容或重建时清理。也可用backward-shift deletion在特定探测方案中移动后续键，但必须证明不破坏每个键的可达区间。
+
+<Callout type="trap" title="删除后槽直接变EMPTY">
+EMPTY表示该probe sequence从未越过此处，搜索可停止；删除元素却不能证明后面没有键。修法是使用DELETED并继续搜索，或实现经过证明的后移删除。
+</Callout>
+
+## 11.5 Practical considerations
+
+### Equality, resizing, and adversaries
+
+实践考量首先是hash/equality contract：若`a == b`，必须有`hash(a) == hash(b)`；反向不要求成立。键入表后若参与hash的字段变化，记录仍留在旧槽，正常查找将失联，因此键应不可变或修改前先删除再插入。
+
+扩容通常选择新容量并重新散列所有$n$个元素，单次$\Theta(n)$。按几何倍数扩容可摊还常数insert，但实时系统要考虑暂停峰值，可分批迁移旧表。收缩阈值应低于扩容阈值，避免容量在边界来回振荡。
+
+```text
+INSERT-WITH-RESIZE(T, x)
+1  if projected_load(T, x) exceeds threshold
+2      allocate a larger table T'
+3      reinsert every occupied record using T' capacity and probe policy
+4  insert x and update size
+```
+
+字符串散列要处理编码、字节顺序和长度分隔；组合字段时要避免`("ab","c")`与`("a","bc")`形成同一未分隔字节流。浮点NaN、负零和自定义等价关系也必须与hash政策一致。
+
+当键来自不可信网络，公开固定散列可能遭受hash-flooding，让期望常数表退化为线性。可使用每进程随机seed、全域族或密码学强度的keyed hash；代价是更高计算成本与跨进程不可复现，需按威胁模型选择。
+
+<CLRS4HashCertificateLab />
+
+<Stepper>
+<Step title="先定义键等价">
+固定规范化、equality与hash字段，禁止入表后原地修改参与散列的字段。
+
+<CLRS4HashCertificateLab />
+</Step>
+<Step title="再选择冲突策略">
+链式表按链长分析；开放寻址验证完整probe sequence、负载阈值和tombstone语义。
+
+<CLRS4ProbeSequenceLab />
+</Step>
+<Step title="最后验证分布和退化">
+监控负载、最大链或探测分位数，覆盖扩容、删除、攻击键集和随机seed复现。
+
+<CLRS4LoadFactorLab />
+</Step>
+</Stepper>
+
+## 小结
+
+Chapter 11 Hash Tables从直接寻址的唯一槽扩展到大键宇宙。链式散列把冲突保存在bucket链中，在simple uniform hashing且$\alpha=n/m$受控时，期望搜索$\Theta(1+\alpha)$。除法和乘法法依赖键模式，全域散列通过随机函数族限制任意固定键对碰撞概率。
+
+开放寻址把记录留在数组，用线性、二次或双重散列生成probe sequence；成本随$\alpha$接近1快速上升，删除必须保留tombstone或正确后移。实践中还要保证hash/equality一致、键不可变、扩容可控，并按攻击模型选择随机seed。所谓O(1)是带模型和负载条件的期望，不是无条件最坏保证。
+
+<Exercises>
+
+**问题 1**：链式散列表有$n=80$个键、$m=40$个槽，simple uniform hashing下不成功搜索期望成本是什么？
+
+<Answer>
+负载因子$\alpha=n/m=2$，不成功搜索检查对应bucket的完整链，期望链长2，加上计算散列和定位槽的常数工作，总成本$\Theta(1+\alpha)=\Theta(3)=\Theta(1)$。
+</Answer>
+
+**问题 2**：为何double hashing的第二步长通常要求与表容量互素？
+
+<Answer>
+probe序列按固定步长在模$m$环上移动，可达槽数为$m/\gcd(h_2(k),m)$。只有最大公约数为1时才能遍历全部$m$个槽，否则可能在有空槽时仍循环于真子集。
+</Answer>
+
+**问题 3**：开放寻址删除后直接写EMPTY会制造什么反例？
+
+<Answer>
+键B与A共享早期probe槽，因A占用而被放到后面。删除A并写EMPTY后，搜索B从同一路径出发在该EMPTY处停止，错误报告不存在。写DELETED可让搜索继续到B。
+</Answer>
+
+**问题 4**：对象入散列表后修改参与hash的字段为什么危险？
+
+<Answer>
+对象物理位置仍按旧hash决定，新查询按新hash从另一bucket或probe序列开始，无法到达它；旧键查询又可能不再equality相等。应让键不可变，或先按旧键删除、修改后重新插入。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="直接寻址表">为键宇宙中的每个可能键分配唯一数组槽，搜索、插入和删除都直接访问T[k]的表。</GlossaryItem>
+<GlossaryItem term="散列表">用函数h把大键宇宙映射到m个槽，并通过链或探测处理不同键映射到同一槽的动态集合结构。</GlossaryItem>
+<GlossaryItem term="负载因子">表中元素数n与槽数m之比α=n/m；它刻画平均每槽负载并控制散列表期望操作成本。</GlossaryItem>
+<GlossaryItem term="散列函数">把任意键确定性映射到表槽索引的函数；优良设计应快速并让目标键集尽量均匀分散。</GlossaryItem>
+<GlossaryItem term="开放寻址">所有记录都存于表数组本身，碰撞时按h(k,0),h(k,1),…探测其他槽，直到找到键或可用槽的方法。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Chapter 11 · Hash Tables" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

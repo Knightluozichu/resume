@@ -3,135 +3,364 @@ title: "Vulkan 学习指南 全书学习地图"
 type: A
 section: "计算机图形学与渲染"
 order: 0
-description: "十章脉络——从显式 API 到完整渲染管线的路径"
+description: "以 Khronos Vulkan Guide 和 Vulkan 1.4 教程为基线，从能力协商到现代提交呈现的十单元路径"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://docs.vulkan.org/guide/latest/"
 draft: false
 ---
 
-import { VkgLearningMapDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-learning-map";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  VkgLearningMapDiagram,
+  VkgSubmissionChainDiagram,
+} from "@/components/mdx/vulkan-guide/diagrams/vkg-learning-map";
+import { VkgStepFlowDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能说出 Vulkan 相对 OpenGL 的「显式」体现在哪
-- 能描述 Vulkan 程序的五大初始化步骤
-- 能解释命令缓冲与队列的提交模型
-- 能回答：为什么 Vulkan 代码量大但性能高？
+
+- 能解释 Vulkan 的显式控制如何转化为能力、内存、资源状态、命令和同步责任
+- 能描述从 loader/instance 到 device、swapchain、dynamic rendering、submit2 和 present 的依赖链
+- 能比较 binary semaphore、timeline semaphore 与 fence 在 WSI、GPU 和 CPU 同步中的边界
+- 能实现不使用每帧 queueWaitIdle 的现代首帧骨架，并列出验证与回归证据
+
 </Objectives>
 
 ## 直觉引入
 
-如果说 OpenGL 是「自动挡」（驱动帮你猜很多事），Vulkan 就是「手动挡」：你要自己选设备、自己分配内存、自己录命令、自己管同步。麻烦，但你能精确控制每一步，没有驱动的隐式开销，性能天花板更高。
+Vulkan 不是“OpenGL 去掉全局状态”这么简单。它要求应用先证明设备支持哪些 feature、extension、format 和 queue，再把内存、资源访问、图像 layout、pipeline、command buffer 和同步关系写成明确对象。驱动少猜一步，应用就多承担一步正确性责任。
 
-Vulkan 的哲学是「显式」：把过去驱动偷偷做的事全部暴露给你——内存怎么分、资源何时同步、命令怎么录。代码量大得多，但换来的是可预测的高性能和跨平台一致行为。
+显式控制也不自动等于更快。若每帧 vkQueueWaitIdle、为每个 buffer 单独 vkAllocateMemory、使用覆盖所有阶段的 barrier，或频繁重建 pipeline，Vulkan 完全可能比成熟 OpenGL 实现更慢。它提供的是更直接的控制和并行机会；性能仍要由队列利用率、CPU/GPU 时间和内存行为证明。
 
-## 概念讲解
+## 现行官方基线
 
-### 与 OpenGL 的区别
-<Term def="驱动不做隐式状态管理与同步、一切由应用显式指定的 API 风格">显式 API</Term>：OpenGL 是状态机，驱动隐式管理同步与内存；Vulkan 无全局状态，对象显式创建，同步由你负责。
+Khronos 现行 Vulkan Tutorial 以 Vulkan 1.4、dynamic rendering、timeline semaphore、现代 C++ 与 Slang 为教学基线；Vulkan Guide 则覆盖版本/Profiles、能力查询、WSI、同步、内存、shader 资源映射、动态状态和扩展。当前路径保留 C API、GLSL/SPIR-V 和 legacy render pass 的理解价值，但现代主线采用：
 
-### 五大初始化步骤
-1. <Term def="Vulkan 与应用连接的根对象">实例</Term>（Instance）：初始化 Vulkan 库。
-2. <Term def="选择 GPU 并创建逻辑设备">物理/逻辑设备</Term>：选显卡、建队列。
-3. <Term def="管理可呈现图像的缓冲队列">交换链</Term>：创建可显示的图像。
-4. <Term def="描述完整渲染流程的不可变对象">图形管线</Term>：编译着色器、管线状态。
-5. <Term def="预录制绘制命令供反复提交">命令缓冲</Term>：录命令、提交到队列、呈现。
+- vkGetPhysicalDevice*2 与 pNext feature 链做能力协商；
+- dynamic rendering 描述当前附件，不把 VkRenderPass 当所有绘制的必选对象；
+- synchronization2 用 VkDependencyInfo/Vk*Barrier2 表达阶段、访问和 layout；
+- vkQueueSubmit2 统一提交结构；
+- timeline semaphore 表达应用内部单调进度，WSI acquire/present 仍使用 binary semaphore；
+- validation layer 与 VK_EXT_debug_utils 作为开发期证据，不作为发布正确性的替代。
 
-### 提交模型
-<Term def="预录制的 GPU 命令序列">命令缓冲</Term>录制好后提交到<Term def="GPU 执行命令的通道">队列</Term>，GPU 异步执行；同步靠栅栏与信号量显式控制。
+## 显式 API 的五类责任
 
-## 交互Demo
+<Term def="把过去由驱动推断的设备能力、内存、资源状态、命令和同步决策交给应用声明的 API 模型">显式 API</Term>至少包含五类责任：
 
-> 猜一猜：Vulkan 画一个三角形，初始化代码比 OpenGL 多多少？
+1. **能力**：实例版本、设备 feature、extension、format、limit 和 queue family 都要先查询再启用。
+2. **内存**：buffer/image 创建与 memory allocation/binding 分开，应用选择 memory type、对齐和 suballocation。
+3. **资源状态**：image layout、queue family ownership 和读写访问必须与实际用途一致。
+4. **工作描述**：pipeline/layout、descriptor、dynamic rendering attachment 和 command buffer 明确表达工作。
+5. **同步**：执行依赖、内存 availability/visibility、layout transition 和 host/device 生命周期由应用建立。
+
+Vulkan 的对象多，不是为了增加仪式，而是把生命周期和并行边界外显。每个对象都应有创建证据、所有者、销毁顺序和重建策略。
+
+## 能力协商先于设备创建
+
+<Term def="查询版本、属性、feature、extension、format 和 queue family，再只启用满足路径需求的集合">能力协商</Term>把“这块 GPU 大概支持”变成结构化契约。
+
+```cpp
+uint32_t loaderVersion = VK_API_VERSION_1_0;
+if (vkEnumerateInstanceVersion) {
+  VK_CHECK(vkEnumerateInstanceVersion(&loaderVersion));
+}
+
+VkApplicationInfo appInfo{
+  .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+  .pApplicationName = "remuse-vulkan",
+  .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
+  .pEngineName = "learning-renderer",
+  .engineVersion = VK_MAKE_VERSION(1, 0, 0),
+  .apiVersion = std::min(loaderVersion, VK_API_VERSION_1_4),
+};
+
+VkInstanceCreateInfo instanceInfo{
+  .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+  .pApplicationInfo = &appInfo,
+  .enabledLayerCount = validationLayerCount,
+  .ppEnabledLayerNames = validationLayers,
+  .enabledExtensionCount = instanceExtensionCount,
+  .ppEnabledExtensionNames = instanceExtensions,
+};
+VK_CHECK(vkCreateInstance(&instanceInfo, nullptr, &instance));
+
+// 对每个 VkPhysicalDevice 查询 properties/features/queues/extensions/formats，
+// 只有全部必需断言通过后才构造 VkDeviceCreateInfo 的 pNext feature 链。
+```
+
+实例 apiVersion 不能替代物理设备 apiVersion；设备版本也不能替代 extension/feature/format 查询。启用未支持 feature 属于创建错误，查询到却未加入 device create pNext 也不能使用。
+
+## 第一帧不是固定五步
 
 <VkgLearningMapDiagram />
 
-<Stepper>
-<Step title="第一步：初始化">
-创建 Instance、选物理设备、建逻辑设备与队列、建交换链，搭好 GPU 通信骨架。
-</Step>
-<Step title="第二步：建管线">
-创建渲染通道、编译图形管线（着色器+固定状态），描述完整渲染流程。
-</Step>
-<Step title="第三步：录命令渲染">
-录制命令缓冲（begin→draw→end）、提交到队列、等待栅栏、呈现交换链图像，循环渲染。
-</Step>
-</Stepper>
+一个可呈现三角形通常需要：
 
-## 代码对照
+1. loader、instance、surface 和验证/调试入口；
+2. 物理设备能力合同、graphics/present queue family 和逻辑设备；
+3. swapchain format/present mode/extent/image views；
+4. memory allocator、vertex/index/uniform buffer 与 image；
+5. shader 编译为<Term def="Vulkan shader 模块消费的标准中间表示，可由 GLSL、HLSL、Slang 等前端产生">SPIR-V</Term>，建立 descriptor/pipeline layout；
+6. graphics pipeline 与 dynamic state；
+7. command pool/buffer 和每帧资源；
+8. layout/access barrier、dynamic rendering、bind/draw 命令；
+9. acquire/submit/present 同步；
+10. resize/out-of-date、device lost、验证与性能回归。
 
-Vulkan 程序骨架（C，伪代码）：
+这些不是严格线性步骤，而是依赖图：pipeline 依赖 shader/layout/附件格式；frame command 依赖当前 swapchain image；资源复用依赖上一次 GPU 工作完成；swapchain 重建又会使尺寸/格式相关资源失效。
 
-```c
-// 1. 实例
-VkInstance instance;
-VkInstanceCreateInfo ci = { .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO };
-vkCreateInstance(&ci, NULL, &instance);
+## 十个权威核心单元与现有十章
 
-// 2. 物理设备 + 逻辑设备
-VkPhysicalDevice physical;
-vkEnumeratePhysicalDevices(instance, &count, &physical);
-VkDevice device;
-VkDeviceQueueCreateInfo qci = { /* queue family */ };
-VkDeviceCreateInfo dci = { .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-                           .queueCreateInfoCount = 1, .pQueueCreateInfos = &qci };
-vkCreateDevice(physical, &dci, NULL, &device);
+当前十页以“学习地图 + 八个实现专题 + 总复习”承载十个官方单元：
 
-// 3. 交换链
-createSwapchain(device, &swapchain);          // 含图像、格式、呈现模式
+1. **架构、版本、验证与 SPIR-V**：基础章建立 loader/instance、显式模型、验证层和 shader 中间表示。
+2. **实例、设备、feature 与 queue**：实例设备章实现物理设备评分、队列族和 device feature 链。
+3. **WSI、surface、swapchain、acquire/present**：交换链章处理格式、present mode、extent、图像所有权与重建。
+4. **内存、buffer、image、transfer 与所有权**：纹理/着色器和命令章共同承担 allocation/binding、staging copy 和 queue ownership。
+5. **shader、descriptor、push constant 与资源映射**：纹理着色器章建立 SPIR-V 到 pipeline layout 的接口。
+6. **graphics pipeline、dynamic state 与 dynamic rendering**：图形管线章把现代 rendering attachment 与 pipeline format 接口纳入创建。
+7. **command pool/buffer、submit 与 threading**：命令章解释 pool 的线程外部同步、录制状态和 secondary command buffer。
+8. **synchronization2、barrier、timeline/binary semaphore 与 fence**：基础与命令章共同建立执行/内存依赖。
+9. **attachment、layout、load/store 与 legacy render pass**：渲染通道章以 dynamic rendering 为主线，再解释 legacy subpass 的局部依赖价值。
+10. **compute、ray tracing、mesh、descriptor indexing 与 VRS**：高级章按 extension/feature/limit 契约选择，不把扩展名称等同于可用路径。
 
-// 4. 图形管线
-createRenderPass(device, &renderPass);
-createGraphicsPipeline(device, renderPass, &pipeline); // 着色器+状态
+## 资源状态是同步的一部分
 
-// 5. 命令缓冲与渲染循环
-recordCommandBuffer(cmd, pipeline, swapchain);
-while (!done) {
-  vkAcquireNextImageKHR(...);                  // 取图像
-  vkQueueSubmit(queue, submitInfo, fence);     // 提交命令
-  vkQueueWaitIdle(queue);                      // 显式同步
-  vkQueuePresentKHR(queue, &presentInfo);      // 呈现
+<Term def="某个 buffer/image 子资源当前可由哪些队列、阶段和访问类型使用，以及 image 所处 layout 的组合">资源状态</Term>不能只用 image layout 表示。一个 barrier 至少回答：
+
+- 前一个访问在哪些 pipeline stage、以何种 access 发生；
+- 后一个访问在哪些 stage、以何种 access 发生；
+- image 子资源范围和 old/new layout；
+- 是否发生 queue family ownership transfer。
+
+过宽的 ALL_COMMANDS + MEMORY_READ/WRITE 可能正确但让 GPU 无谓等待；过窄则产生数据竞争。validation 能发现部分错误，不能证明 barrier 最优，也不能覆盖所有跨帧算法意图。
+
+## 现代录制：barrier2 + dynamic rendering
+
+下面的骨架省略 pipeline/descriptor 创建，但展示正确顺序。oldLayout 必须由 swapchain image 的实际历史决定：首次可从 UNDEFINED 丢弃旧内容，后续通常从 PRESENT_SRC_KHR 转入。
+
+```cpp
+void recordFrame(
+    VkCommandBuffer cmd,
+    VkImage swapImage,
+    VkImageView swapView,
+    VkImageLayout oldLayout,
+    VkExtent2D extent) {
+  VK_CHECK(vkBeginCommandBuffer(cmd, &beginInfo));
+
+  VkImageMemoryBarrier2 toColor{
+    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+    .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+    .srcAccessMask = VK_ACCESS_2_NONE,
+    .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+    .dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+    .oldLayout = oldLayout,
+    .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    .image = swapImage,
+    .subresourceRange = colorRange,
+  };
+  VkDependencyInfo beforeRendering{
+    .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+    .imageMemoryBarrierCount = 1,
+    .pImageMemoryBarriers = &toColor,
+  };
+  vkCmdPipelineBarrier2(cmd, &beforeRendering);
+
+  VkRenderingAttachmentInfo color{
+    .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+    .imageView = swapView,
+    .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+    .clearValue = clearColor,
+  };
+  VkRenderingInfo rendering{
+    .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+    .renderArea = {{0, 0}, extent},
+    .layerCount = 1,
+    .colorAttachmentCount = 1,
+    .pColorAttachments = &color,
+  };
+  vkCmdBeginRendering(cmd, &rendering);
+  vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+  vkCmdSetViewport(cmd, 0, 1, &viewport);
+  vkCmdSetScissor(cmd, 0, 1, &scissor);
+  vkCmdDraw(cmd, 3, 1, 0, 0);
+  vkCmdEndRendering(cmd);
+
+  // 第二个 barrier 把 COLOR_ATTACHMENT_WRITE 转为呈现所需状态。
+  transitionColorToPresent(cmd, swapImage);
+  VK_CHECK(vkEndCommandBuffer(cmd));
 }
 ```
 
-每一步都对应一个 Vulkan 对象，显式创建显式管理。
+dynamic rendering 省掉 VkRenderPass/VkFramebuffer 对象，不省同步。附件 load/store/layout 和 pipeline rendering formats 仍需与实际图像一致。
+
+## Acquire、Submit2 与 Present
+
+<VkgSubmissionChainDiagram />
+
+<Term def="建立前后操作的执行顺序、内存可用性与可见性，并约束资源何时可安全复用的关系">同步依赖</Term>不能只记“fence 给 CPU、semaphore 给 GPU”：
+
+- binary semaphore 只有未 signal/signal 的一次性状态，WSI acquire/present 使用它；
+- timeline semaphore 有单调递增值，适合应用内部跨提交、跨队列进度；
+- fence 由 queue submission signal，host 等待/查询，用于复用 command pool、per-frame buffer 等 CPU 管理资源；
+- pipeline barrier 在命令流内部建立 execution/memory dependency 和 layout transition；
+- queue submit 的 wait stage 决定等待阻塞到哪一类后续操作，不能无脑全部 ALL_COMMANDS。
+
+```cpp
+VkSemaphoreSubmitInfo acquireWait{
+  .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+  .semaphore = imageAvailable[frameIndex], // binary, acquire signal
+  .value = 0,
+  .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+};
+VkCommandBufferSubmitInfo commandInfo{
+  .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+  .commandBuffer = commandBuffers[frameIndex],
+};
+VkSemaphoreSubmitInfo signals[] = {
+  {
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+    .semaphore = renderFinished[imageIndex], // binary, present wait
+    .value = 0,
+    .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+  },
+  {
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+    .semaphore = frameTimeline,
+    .value = ++frameValue,
+    .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+  },
+};
+VkSubmitInfo2 submit{
+  .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+  .waitSemaphoreInfoCount = 1,
+  .pWaitSemaphoreInfos = &acquireWait,
+  .commandBufferInfoCount = 1,
+  .pCommandBufferInfos = &commandInfo,
+  .signalSemaphoreInfoCount = 2,
+  .pSignalSemaphoreInfos = signals,
+};
+VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, frameFence[frameIndex]));
+
+VkPresentInfoKHR present{
+  .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+  .waitSemaphoreCount = 1,
+  .pWaitSemaphores = &renderFinished[imageIndex],
+  .swapchainCount = 1,
+  .pSwapchains = &swapchain,
+  .pImageIndices = &imageIndex,
+};
+VkResult result = vkQueuePresentKHR(presentQueue, &present);
+```
+
+renderFinished 按 swapchain image 管理能避免在呈现引擎尚未消费 wait 时过早复用。swapchain teardown 仍要确保所有相关 present 操作结束。每帧开始只等待当前 frame slot 的 fence/timeline，再重置该 slot 的 command pool；不要用 vkQueueWaitIdle 把全部 frames-in-flight 串行化。
+
+## 分步建立可验证首帧
+
+先预测：validation layer 全绿、三角形也出现，是否足以证明同步正确且性能合理？
+
+<Stepper>
+<Step title="第一步：建立能力与资源契约">
+<VkgStepFlowDiagram
+  caption="第 1 步：只有查询、启用与格式探针都成立，设备和资源创建才有依据。"
+  stage={1}
+  stages={["能力协商并建立资源所有权", "录制资源状态与 rendering 命令", "提交同步、呈现并保存回归证据"]}
+/>
+
+记录 loader/instance/device 版本、feature/extension/format/limit、queue family 和内存类型；创建资源时保存 owner queue、subresource 和最后状态。
+</Step>
+<Step title="第二步：录制准确依赖">
+<VkgStepFlowDiagram
+  caption="第 2 步：barrier2、dynamic rendering、pipeline/descriptor 和 draw 共同描述 GPU 工作。"
+  stage={2}
+  stages={["能力协商并建立资源所有权", "录制资源状态与 rendering 命令", "提交同步、呈现并保存回归证据"]}
+/>
+
+对每个读写声明 producer/consumer stage、access 和 layout；beginRendering 的 attachment format 与 pipeline 创建信息一致；命令缓冲生命周期属于对应 pool/thread。
+</Step>
+<Step title="第三步：验证正确性与并行度">
+<VkgStepFlowDiagram
+  caption="第 3 步：validation、固定像素、时间线进度和 CPU/GPU 时间共同证明首帧。"
+  stage={3}
+  stages={["能力协商并建立资源所有权", "录制资源状态与 rendering 命令", "提交同步、呈现并保存回归证据"]}
+/>
+
+全绿 validation 只证明已覆盖规则未报错；还要测试 resize/out-of-date、资源复用、跨帧图像、device lost 路径，并确认没有 queueWaitIdle 造成 GPU 空洞。
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** 以为 Vulkan 比 OpenGL「更先进」所以学 Vulkan 就抛弃 OpenGL。
-**原因 →** 误把 API 风格当优劣，忽略 Vulkan 的代码量与复杂度代价。
-**修法 →** 按需选择：要极致性能与跨平台一致行为、团队有能力管理复杂度才上 Vulkan；快速原型或学习图形学仍可从 OpenGL 开始，Vulkan 是进阶。
+**现象 →** 每帧 acquire、submit 后调用 vkQueueWaitIdle，画面正确但 CPU/GPU 无法重叠。
+**原因 →** 用全队列空闲代替 per-frame 生命周期同步，把所有 frames-in-flight 串行化。
+**修法 →** 为 frame slot 使用 fence/timeline，WSI 使用 binary semaphore；只等待即将复用的 slot，teardown/诊断才使用 waitIdle。
 </Callout>
 
 <Callout type="trap">
-**现象 →** 跳过同步直接提交命令，画面撕裂或崩溃。
-**原因 →** Vulkan 无隐式同步，图像未就绪就绘制、未画完就呈现都会出错。
-**修法 →** 用信号量协调「取图像→绘制→呈现」的顺序，用栅栏等 CPU 端命令完成，显式管理每个资源的生命周期。
+**现象 →** 使用 vkCmdBeginRendering 后删除所有 render pass dependency，却出现附件读写竞争。
+**原因 →** dynamic rendering 只动态描述附件，不自动建立外部同步，也不替代 barrier。
+**修法 →** 用 synchronization2 明确前后 stage/access/layout；跨 queue 时再处理 semaphore 与 ownership transfer。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 只看 API 版本就启用 feature，vkCreateDevice 失败或后续命令触发 validation。
+**原因 →** 核心版本、extension、feature bit、format property 和 limit 是不同层证据，且查询到还必须在 pNext 中启用。
+**修法 →** 把路径需求写成命名断言，逐项查询并只启用支持集合；输出失败原因与设备报告。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：Vulkan 的「显式」体现在哪几个方面？它和 OpenGL 状态机模型有何不同？
+**问题 1**：为什么 dynamic rendering 不能替代 synchronization2？从写 swapchain image 到 present 至少要表达哪些状态？
 
 <Answer>
-显式体现在：无全局状态、对象显式创建；内存分配由应用管；同步（栅栏/信号量）由应用负责；命令预录制到命令缓冲再提交。OpenGL 是状态机，驱动隐式管理状态与同步、有全局当前上下文；Vulkan 把这些隐式行为全部暴露给应用，代码量大但可预测、无驱动隐式开销。
+dynamic rendering 描述本次 rendering 的附件、load/store 和 render area，不建立前后命令的 execution/memory dependency。写 swapchain image 前要把实际 old layout 转到 COLOR_ATTACHMENT_OPTIMAL，目标 stage/access 覆盖颜色附件写；结束后再把颜色写同步到呈现所需状态并转 PRESENT_SRC_KHR。跨提交还要由 semaphore 建立 acquire、graphics、present 顺序。
 </Answer>
 
-**问题**：为什么 Vulkan 代码量大但性能高？
+**问题 2**：binary semaphore、timeline semaphore 和 fence 在一帧中分别适合什么？为什么 present wait 不能直接换成 timeline semaphore？
 
 <Answer>
-代码量大因为应用要显式做很多 OpenGL 里驱动偷做的事（选设备、分配内存、管同步、录命令、建管线）。性能高因为没有了驱动的隐式状态检查与同步开销，应用能精确控制资源生命周期与并行度，多线程录制命令缓冲、预编译管线，CPU 开销低且行为可预测，跨平台一致。
+WSI 的 vkAcquireNextImageKHR signal 和 vkQueuePresentKHR wait 使用 binary semaphore；应用内部可用 timeline semaphore 的递增值表达跨提交/队列进度；fence 由 submission signal，host 等待后安全复用 frame slot 的 pool 和 CPU 数据。WSI 接口按规范接收 binary semaphore 语义，不能把 present wait 任意替换为 timeline。
+</Answer>
+
+**问题 3**：validation 全绿但 GPU 利用率低，列出三个可能仍然错误或低效的设计和对应证据。
+
+<Answer>
+可能每帧 queueWaitIdle 导致串行，可看 CPU/GPU 时间线空洞；barrier 使用 ALL_COMMANDS/MEMORY_READ_WRITE 过宽，可用同步可视化和逐步收窄比较；资源逐个 allocation 或频繁 pipeline 重建造成 CPU/内存开销，可记录 allocation/pipeline 数和帧尖峰。validation 主要检查规则正确性，不证明算法意图和性能最优。
 </Answer>
 </Exercises>
 
+## 小结
+
+- Vulkan 显式控制覆盖能力、内存、资源状态、工作描述和同步，不自动保证高性能。
+- 第一帧是依赖图，不是固定五步；pipeline、resource、swapchain image 和 frame slot 生命周期相互约束。
+- 现代主线使用 dynamic rendering、synchronization2、submit2 和 timeline 进度，legacy render pass 作为专题保留。
+- WSI acquire/present 使用 binary semaphore，应用进度可用 timeline，host 复用资源用 fence/timeline。
+- validation、固定图像、resize/out-of-date、资源复用和 CPU/GPU 时间共同构成首帧验收。
+
 <Glossary>
-<GlossaryItem term="显式 API">驱动不做隐式状态管理与同步、一切由应用显式指定的 API 风格，Vulkan 的核心特征。</GlossaryItem>
-<GlossaryItem term="实例">Vulkan 与应用连接的根对象，初始化 Vulkan 库。</GlossaryItem>
-<GlossaryItem term="命令缓冲">预录制的 GPU 命令序列，提交到队列异步执行，可反复重用。</GlossaryItem>
-<GlossaryItem term="同步原语">栅栏（Fence，CPU 等 GPU）与信号量（Semaphore，GPU 内部顺序），Vulkan 同步靠它们显式管理。</GlossaryItem>
+<GlossaryItem term="显式 API">把设备能力、内存、资源状态、命令和同步决策交给应用声明的 API 模型。</GlossaryItem>
+<GlossaryItem term="能力协商">查询版本、属性、feature、extension、format 和 queue family，再启用满足路径需求的集合。</GlossaryItem>
+<GlossaryItem term="SPIR-V">Vulkan shader module 消费的标准中间表示，可由 GLSL、HLSL、Slang 等前端生成。</GlossaryItem>
+<GlossaryItem term="资源状态">buffer/image 子资源的 owner queue、pipeline stage、access 类型和 image layout 组合。</GlossaryItem>
+<GlossaryItem term="同步依赖">建立执行顺序、内存可用性/可见性，并约束资源何时可安全复用的关系。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Vulkan 学习指南" adaptedUrl="" />
+<Attribution
+  adaptedFrom="Khronos Vulkan Guide, Vulkan 1.4 Tutorial, and Vulkan Specification"
+  adaptedUrl="https://docs.vulkan.org/guide/latest/"
+/>

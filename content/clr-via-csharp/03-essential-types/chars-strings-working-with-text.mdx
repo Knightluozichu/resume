@@ -1,0 +1,220 @@
+---
+title: "Chapter 14. Chars, Strings, and Working with Text"
+type: C
+section: "CLR via C# 4e · Essential Types"
+order: 14
+description: "从UTF-16 char、Unicode scalar/grapheme到immutable string、比较/interning、StringBuilder、format/parse、encoding/Base64与SecureString边界。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcStringSemanticsLab, CvcTextConversionLab, CvcUnicodeUnitLab } from "@/components/mdx/clr-via-csharp/diagrams/chars-strings-working-with-text";
+
+<Objectives>
+
+- 能区分UTF-16 code unit、Unicode scalar、grapheme cluster和encoded bytes并安全切片
+- 能设计ordinal/cultural comparison、interning与StringBuilder策略，验证正确性和allocation
+- 能实现显式culture的format/parse与严格encoding/decoding，并判断Base64和SecureString不提供哪些安全保证
+
+</Objectives>
+
+## 为什么“Character”至少有四种含义
+
+.NET `char`是16-bit UTF-16 code unit，不保证一个char就是一个Unicode scalar，更不保证一个user-perceived character。Emoji可由surrogate pair组成，带音标字母可由多个scalars组成grapheme cluster，编码成UTF-8后又变成若干bytes。若按`string.Length`截用户名、日志或协议payload，可能切断surrogate/cluster或错误计算byte limit。
+
+先预测：`"😀".Length`是否为1；两个视觉相同的字符串是否code-unit equal；`ToUpper()`是否适合作security key normalization；interned string是否会自动回收；StringBuilder是否总比`+`快；Base64是否加密；SecureString是否能消除进程内明文。后文把text unit、comparison和boundary conversion分开。
+
+<Term def="UTF-16 code units、Unicode scalars、grapheme clusters和encoded bytes各自独立的计数与切片单位。">text unit boundary</Term>
+
+## Characters
+
+`char`可表示单个UTF-16 code unit，`char.IsLetter`等基于Unicode category但一次只接收code unit。Supplementary scalar需要high/low surrogate组合；现代.NET用`Rune`表示scalar并从string/span枚举。用户光标/删除通常按grapheme cluster，使用`StringInfo`/text-element APIs和UI framework segmentation。
+
+```csharp
+string text = "A😀e\u0301";
+Console.WriteLine(text.Length); // UTF-16 code units
+
+foreach (Rune rune in text.EnumerateRunes())
+    Console.WriteLine($"U+{rune.Value:X} {rune}");
+
+TextElementEnumerator elements = StringInfo.GetTextElementEnumerator(text);
+while (elements.MoveNext())
+    Console.WriteLine(elements.GetTextElement());
+```
+
+Protocol按bytes限制时先选择encoding再`GetByteCount`；database/UI按grapheme限制时用相应segmentation。Unicode normalization把canonical equivalent sequences统一为Form C/D等，但不能当安全identifier全部方案；homoglyph、case与locale仍需单独policy。
+
+<Stepper>
+  <Step title="切换UTF-16 unit、scalar、grapheme与bytes"><CvcUnicodeUnitLab /></Step>
+  <Step title="建立长度矩阵">对ASCII、surrogate、combining mark、ZWJ emoji记录四种长度和每种合法切片点。</Step>
+  <Step title="验证边界">在UI输入、database column和UTF-8 protocol分别按真实unit限制，做round-trip与截断测试。</Step>
+</Stepper>
+
+<Callout type="trap" title="String.Length就是用户看到的字符数">
+Length统计UTF-16 code units。Supplementary scalar占2，combining sequence/ZWJ emoji可占更多；用户可见单位应按grapheme segmentation。
+</Callout>
+
+## The System.String Type and Constructing Strings
+
+String是sealed immutable reference type，内部表示UTF-16 sequence。Literal由compiler写入metadata并可能intern；可从char array、repeated char、pointer/encoding bytes等构造。Byte到string必须显式Encoding，不能逐byte cast char。Null与empty不同，whitespace又是业务分类，API要说明允许哪种。
+
+Constructor或factory应验证输入encoding与lifetime。Native pointer/Span转换必须知道length、terminator和ownership；不要假设所有native text UTF-16或null-terminated。跨边界最好传byte length或span，避免扫描越界。
+
+## Strings Are Immutable and Other String Operations
+
+Substring、Replace、ToUpper等返回新string，原实例不变；runtime可在结果等于原值时复用引用，但consumer不能依赖。Immutability使string安全共享、hash稳定，却让循环拼接可能产生大量中间对象。Index/range仍按UTF-16 code units，不能自动保护Unicode cluster。
+
+常见operations有search、split、trim、pad、copy；每个都要选择StringComparison或culture。当处理path/URL/header时，应使用domain parser而非普通string manipulation，避免escaping/canonicalization漏洞。Null check与empty处理先在boundary统一。
+
+<Term def="String内容创建后不改变，所有变换产生新逻辑值，从而允许安全共享与稳定hash。">string immutability</Term>
+
+## Comparing Strings
+
+Ordinal comparison按UTF-16 code units，适合protocol token、identifier、file extension规则（注意OS path规则另有平台差异）与security-sensitive key；OrdinalIgnoreCase使用culture-insensitive case folding。Current/Invariant/指定culture comparison用于linguistic sort/search，但可能随culture/Unicode tables变化，不适合持久身份。
+
+```csharp
+bool sameHeader = string.Equals(
+    supplied,
+    "Content-Type",
+    StringComparison.OrdinalIgnoreCase);
+
+int displayOrder = StringComparer
+    .Create(CultureInfo.GetCultureInfo("zh-CN"), ignoreCase: false)
+    .Compare(leftName, rightName);
+```
+
+Dictionary/HashSet必须使用与业务equality相同的StringComparer。不要先`ToLower()`再ordinal比较：会分配、受culture影响且可能改变长度。Normalization、case folding和confusable detection分别解决不同问题，登录名/域名应遵循专用标准。
+
+## String Interning and String Pooling
+
+Compiler通常intern相同literal，使references可能相等；`String.Intern`把equal string加入runtime intern pool并返回canonical reference，`IsInterned`查询。Intern pool可能长期保留内容，外部高基数字符串主动intern会导致memory retention。Reference equality永远不能替代value comparison，因为equal runtime-created strings不一定intern。
+
+<Term def="Runtime为选定相等字符串保留canonical reference的机制，不改变value equality且可能扩大lifetime。">intern pool lifetime</Term>
+
+“String pooling”可指literal/intern复用，也可指应用自建dedup cache。自建pool需bounded eviction、tenant/security隔离和measure；很多字符串短命时，pool dictionary本身更贵。只有profile显示大量重复长生命周期值才考虑。
+
+<Stepper>
+  <Step title="切换ordinal、culture、intern与immutable semantics"><CvcStringSemanticsLab /></Step>
+  <Step title="填写比较策略">为identifier、display sort、search、protocol和path分别记录comparer、normalization和版本稳定要求。</Step>
+  <Step title="制造等值非同引用">分别用literal、runtime construction和Intern生成内容相等字符串，证明ReferenceEquals不可作为业务判断。</Step>
+</Stepper>
+
+<Callout type="trap" title="Interning后可以用ReferenceEquals加速所有String比较">
+只有进入同一intern pool的值才可能同引用；未intern的equal strings仍不同。业务必须用正确StringComparer，intern仅在测量证明收益且lifetime受控时采用。
+</Callout>
+
+## Examining a String's Characters and Text Elements
+
+Index/foreach overstring得到char code units；`EnumerateRunes`得到scalars；`StringInfo`/text element enumerator接近graphemes。选择单位由操作决定：UTF-16 parser可按char，Unicode category按Rune，UI cursor按grapheme，wire limit按bytes。不要在一条流程中混单位而不记录offset转换。
+
+Search match index通常是UTF-16 offset，传给byte slicing前必须重新encode prefix或维护mapping。Normalization可改变code-unit count，offset不能跨normalize前后直接复用。测试包含surrogates、combining sequences、variation selectors和invalid byte fallback。
+
+## Constructing a String Efficiently
+
+少量固定拼接由compiler/JIT优化成`string.Concat`，interpolation可用handler减少boxing；不要机械替换。循环、未知次数append或多字段format适合StringBuilder；最终一次ToString。已知最终length可设置capacity，减少growth/copy，但过大capacity会浪费memory。
+
+## Constructing a StringBuilder Object and StringBuilder Members
+
+StringBuilder是mutable buffer，有Capacity、Length、Append、AppendLine、AppendFormat、Insert、Remove、Replace和indexer。它不thread-safe，不应跨并发requests共享；ToString产生immutable snapshot，后续builder修改不影响旧string。Clear保留capacity，长期缓存巨大builder可能保留large char buffer。
+
+```csharp
+var builder = new StringBuilder(capacity: 256);
+foreach (OrderLine line in lines)
+{
+    builder.Append(line.Sku)
+        .Append(',')
+        .Append(line.Quantity.ToString(CultureInfo.InvariantCulture))
+        .AppendLine();
+}
+string csv = builder.ToString();
+```
+
+Benchmark必须包含最终ToString与真实input size。Protocol output更适合直接写TextWriter/IBufferWriter避免巨大中间string；日志用structured fields而不是手工builder。Sensitive text放builder仍是managed mutable memory，清理不能提供绝对证明。
+
+## Obtaining a String Representation of an Object: ToString
+
+Object.ToString默认返回type name；value types/records常override。ToString用于诊断和用户展示，不应作为machine-stable serialization。实现`IFormattable`/`ISpanFormattable`可接受format/provider，避免ambient culture。不要输出secret、token、PII；日志renderer仍可能调用ToString。
+
+## Specific Formats and Cultures
+
+Numeric/date/time有standard/custom format strings。User-facing使用明确user culture，wire/log/database使用InvariantCulture和标准格式，如DateTimeOffset `O`、数字round-trip。CultureInfo.CurrentCulture是ambient mutable context，background job/跨机器可能不同；boundary不要隐式继承。
+
+<Term def="Format与Parse共同约定grammar、culture、rounding、timezone和失败方式的双向文本协议。">text round-trip contract</Term>
+
+## Formatting Multiple Objects into a Single String
+
+Composite formatting/interpolation把多个objects按format/provider组合。Object-based params可能boxing value types，现代interpolated string handler可优化；先正确再测。Format string若来自不可信输入，限制grammar和输出长度，避免异常或资源消耗。Localizable message的placeholder顺序/名称在所有culture保持一致。
+
+## Providing Your Own Custom Formatter
+
+实现`ICustomFormatter`与`IFormatProvider`可集中domain format，例如redacted account id或unit-aware value。Formatter必须处理未知types/format fallback，避免递归再次调用同provider。公共protocol优先显式serializer，custom formatter适合展示层，不把安全redaction只寄托在caller记得传provider。
+
+## Parsing a String to Obtain an Object: Parse
+
+Parse对无效输入抛Format/Overflow，TryParse返回false并设置out。Public untrusted input通常TryParse，随后domain validation；内部必须成功的固定配置可Parse快速失败。Styles/culture要显式；DateTime还需kind/timezone/offset，decimal需允许的sign/group/scale。Parse成功不代表业务合法。
+
+<Stepper>
+  <Step title="切换format、parse、encode与decode"><CvcTextConversionLab /></Step>
+  <Step title="定义round-trip corpus">覆盖culture、边界数值、timezone、Unicode、invalid input、fallback和canonical output。</Step>
+  <Step title="验证双向协议">检查Format->Parse恢复语义值，Encode->Decode恢复text，并对非canonical input定义接受/拒绝。</Step>
+</Stepper>
+
+## Encodings: Converting Between Characters and Bytes
+
+Encoding把Unicode scalar sequence表示成UTF-8/UTF-16等bytes。选择UTF-8等只是开始，还要定义BOM、fallback、invalid sequence、normalization和framing。默认replacement fallback会把坏bytes变`�`并丢失证据；安全protocol常使用throwing fallback并拒绝invalid input。
+
+`Encoding.UTF8.GetByteCount`先算长度，`GetBytes/GetString`执行转换。不要用system ANSI/default encoding跨机器；原书时代`Encoding.Default`更常见，现代跨平台系统应显式UTF-8或协议指定encoding。
+
+## Encoding and Decoding Streams of Characters and Bytes
+
+多字节sequence可能跨read buffer，不能每块独立`GetString`，应使用StreamReader/Writer或stateful Encoder/Decoder保存partial bytes/surrogate state。Flush时处理残片并按fallback决定错误。Byte framing先于text parsing：消息长度、delimiter和BOM必须在正确层处理。
+
+## Base-64 String Encoding and Decoding
+
+Base64把binary映射为ASCII text，增加约33%大小，适合JSON/header中的小binary；不是encryption、hash或compression。不同variant有standard/base64url、padding规则，protocol必须指定。Decode前限制input length并处理invalid format，避免内存放大。
+
+## Secure Strings
+
+SecureString试图让secret以可清除/受保护buffer存在，并限制明文窗口；现代.NET已不推荐把它当通用安全方案，跨平台支持与最终API解密需求限制收益。Ordinary string immutable且无法可靠立即清除，secret应尽量不进入string：从secure input直接到受控char/byte buffer，缩短lifetime，避免log/dump，并依赖OS credential vault/isolated process。
+
+<Term def="Secret在input、managed buffer、native call、log、dump和清理之间暴露明文的最小时间与范围。">secret plaintext window</Term>
+
+任何进程内使用都可能在某时刻有明文；memory zeroing不能抵抗已被debugger/dump/compromised process读取。安全目标是减少copies、scope和privilege，使用外部secret manager与short-lived tokens，不宣称某个string type彻底解决。
+
+## 本章回顾：Text必须带Unit、Culture和Encoding
+
+1. Char是UTF-16 unit，Rune是scalar，grapheme是用户字符，bytes属于encoding；长度与切片不可混用。
+2. String immutable且value comparison应选ordinal或culture；interning不改变equality并扩大lifetime。
+3. StringBuilder适合测量证明的多步构造，固定少量拼接不必机械替换。
+4. Format/Parse与Encode/Decode都需显式grammar、culture/fallback和round-trip tests。
+5. Base64只是binary-to-text；SecureString不能消除进程明文，secret安全靠缩小window和权限边界。
+
+<Exercises>
+
+**问题 1：用户名限制10个字符，应按什么长度？**
+
+<Answer>先定义产品含义：用户可见字符通常按grapheme clusters，database/wire还需分别验证UTF-16/UTF-8 byte limit。Normalize到指定form并做confusable/case/identifier policy；不要直接Substring(0,10)切code units。用emoji、combining mark和ZWJ corpus验收。</Answer>
+
+**问题 2：协议数字为何在部分机器出现逗号小数点？**
+
+<Answer>代码继承CurrentCulture进行format/parse，部署culture不同。Wire协议固定InvariantCulture与明确format/styles，最好使用typed serializer；对旧样本做round-trip corpus。User display另用用户culture，不能共享同一隐式路径。</Answer>
+
+**问题 3：怎样从网络分块安全解码UTF-8？**
+
+<Answer>先按byte framing聚合消息，使用StreamReader或stateful Decoder跨块保存partial multibyte sequence，配置throwing/replacement fallback符合协议；结束时flush并处理残片。不要每次read独立GetString。限制总bytes并测试每个可能切分点与invalid sequence。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="text unit boundary" definition="Code unit、scalar、grapheme与byte各自的计数切片边界。" />
+  <GlossaryItem term="string immutability" definition="String内容不原地变化、变换产生新值的共享语义。" />
+  <GlossaryItem term="intern pool lifetime" definition="Canonical string引用的runtime池与潜在长期保留。" />
+  <GlossaryItem term="text round-trip contract" definition="Format/Parse约定的grammar、culture与恢复语义。" />
+  <GlossaryItem term="secret plaintext window" definition="Secret以明文出现的最小时间、内存与权限范围。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 14: Chars, Strings, and Working with Text" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

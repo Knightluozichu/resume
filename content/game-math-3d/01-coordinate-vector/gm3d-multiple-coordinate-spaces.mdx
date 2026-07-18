@@ -1,0 +1,172 @@
+---
+title: "第3章 多个坐标空间"
+type: C
+section: "3D数学基础 · 坐标与向量"
+order: 3
+description: "区分世界、物体、相机与直立空间，并用基向量解释嵌套空间变换。"
+demo: true
+math: true
+sourceUrl: "https://gamemath.com/book/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { Gm3dMultipleCoordinateSpacesConceptLab, Gm3dMultipleCoordinateSpacesTransformLab, Gm3dMultipleCoordinateSpacesEvidenceLab } from "@/components/mdx/game-math-3d/diagrams/gm3d-multiple-coordinate-spaces";
+
+<Objectives>
+- 能解释世界空间与物体空间在三维程序中的职责和约定
+- 能推导相机空间到基向量的关键关系并检查前提
+- 能实现嵌套变换的最小实验，用反例和残差完成验收
+</Objectives>
+
+## 先做预测
+
+先预测：改变坐标手性、组合顺序、时间步或退化输入时，数值和画面最先在哪里分叉。区分世界、物体、相机与直立空间，并用基向量解释嵌套空间变换。 本页用<Term def="场景共享的全局参考系，适合比较不同对象的位置。">世界空间</Term>、<Term def="以模型自身原点和轴为参考，便于复用网格与局部动画。">物体空间</Term>、<Term def="以观察者为原点，把可见性与投影问题统一到视线方向。">相机空间</Term>、<Term def="一组独立方向定义坐标轴，坐标是向量在该基下的分量。">基向量</Term>和<Term def="局部空间沿父子层级逐层组合到世界或相机空间。">嵌套变换</Term>把原书直觉变成可运行证据。
+
+<Gm3dMultipleCoordinateSpacesConceptLab />
+
+## 原书章节定位
+
+本页一一对应第二版“第3章 多个坐标空间”。作者官网给出完整在线目录和正文；站内不重新编排原书章节，而是在同一章内补充公式推导、交互图、工程实现、失败模式与复现实验。
+
+### 原书小节覆盖
+
+1. Why Multiple Coordinate Spaces
+2. World Space
+3. Object Space
+4. Camera Space
+5. Upright Space
+6. Basis Vectors
+7. Coordinate Space Transformations
+8. Nested Coordinate Spaces
+
+### 五个核心抓手
+
+1. **世界空间**：场景共享的全局参考系，适合比较不同对象的位置。
+2. **物体空间**：以模型自身原点和轴为参考，便于复用网格与局部动画。
+3. **相机空间**：以观察者为原点，把可见性与投影问题统一到视线方向。
+4. **基向量**：一组独立方向定义坐标轴，坐标是向量在该基下的分量。
+5. **嵌套变换**：局部空间沿父子层级逐层组合到世界或相机空间。
+
+## 从空间与约定开始
+
+任何三维公式都先写对象类型、来源空间、目标空间、单位和约定。场景共享的全局参考系，适合比较不同对象的位置。 以模型自身原点和轴为参考，便于复用网格与局部动画。 若只保存三个或四个浮点数而丢失语义，错误通常会延迟到渲染、碰撞或插值阶段才显现。
+
+$$
+\mathcal C=(\text{object type},\text{source space},\text{target space},\text{units},\text{convention})
+$$
+
+工程接口应让非法组合尽早失败：点与方向不能随意相加，局部法线不能直接与世界光向量点积，度数不能静默传入弧度API。先画出原点和基向量，再检查结果，比只盯最终像素更可解释。
+
+## 可核查推导
+
+$$
+\mathbf p_W=\mathbf t_{OW}+p_x\mathbf i_O+p_y\mathbf j_O+p_z\mathbf k_O
+$$
+
+物体坐标不是另一个点，而是同一几何点相对于物体基的三个系数。将三个系数乘对应世界基向量并加世界原点，就得到世界坐标；父子层级重复同一过程。 推导时每一步标明使用了定义、正交性、单位化、线性、连续性还是近似；若条件被非均匀缩放、退化图元或有限时间步破坏，就必须切换算法或返回显式状态。
+
+```python
+def local_to_world(point, basis, origin):
+    return tuple(origin[r] + sum(point[c]*basis[c][r] for c in range(3)) for r in range(3))
+
+identity=((1,0,0),(0,1,0),(0,0,1))
+assert local_to_world((1,2,3), identity, (10,0,0)) == (11,2,3)
+```
+
+手算、代码和交互图应在一个非对称样例上得到一致结果。单位矩阵、零角度和原点只能做冒烟测试，因为它们经常让转置、符号和顺序错误互相抵消。
+
+## 几何机制与数据流
+
+**世界空间**：场景共享的全局参考系，适合比较不同对象的位置。
+
+**物体空间**：以模型自身原点和轴为参考，便于复用网格与局部动画。
+
+**相机空间**：以观察者为原点，把可见性与投影问题统一到视线方向。
+
+数据流必须能逐段记录：输入对象先按约定进入数学表示，经变换或求解得到中间状态，再由渲染、物理或工具消费。每个中间状态保留空间标签和残差，才能区分源数据错误、公式错误与下游显示错误。
+
+<Gm3dMultipleCoordinateSpacesTransformLab />
+
+## 数值误差与边界
+
+**基向量**：一组独立方向定义坐标轴，坐标是向量在该基下的分量。
+
+**嵌套变换**：局部空间沿父子层级逐层组合到世界或相机空间。
+
+边界集至少覆盖零长度、平行、共面、极小尺度、负尺度、角度跨界、时间步变化和浮点接近阈值。相对误差与绝对误差要按量纲选用，不能让一个全局epsilon同时承担位置、角度和点积判断。
+
+$$
+e_{abs}=\|\hat{\mathbf y}-\mathbf y\|,\qquad e_{rel}=\frac{e_{abs}}{\max(\|\mathbf y\|,s_{min})}
+$$
+
+```python
+experiment={"normal":"non-symmetric input","boundary":"degenerate or near threshold","counterexample":"把局部方向当作世界方向直接参与寻路或物理计算。","replay":"fixed inputs and conventions"}
+assert set(experiment)=={"normal","boundary","counterexample","replay"}
+```
+
+## 工程案例
+
+枪口特效应先从武器骨骼局部空间变到角色空间，再到世界空间；调试时同时画出每一级原点和三条基轴，能定位到底是哪一级方向或尺度错误。 报告同时保存输入、空间约定、参数、关键中间值、残差与调试图层。若重放后结论改变，先比较约定和数据版本，再比较算法实现。
+
+<Gm3dMultipleCoordinateSpacesEvidenceLab />
+
+```python
+evidence=[("世界空间","definition"),("相机空间","derivation"),("嵌套变换","replay")]
+assert len({name for name,_ in evidence})==3
+```
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定约定"><Gm3dMultipleCoordinateSpacesConceptLab /></Step>
+  <Step title="改变参数"><Gm3dMultipleCoordinateSpacesTransformLab /></Step>
+  <Step title="保存证据"><Gm3dMultipleCoordinateSpacesEvidenceLab /></Step>
+</Stepper>
+
+1. 选一个非对称、可手算的正常样例，记录所有空间、单位和正方向。
+2. 一次只改变一个参数，比较公式、代码与交互图的中间状态。
+3. 加入退化或近阈值输入，确认返回状态与容差策略一致。
+4. 固定输入与时间步重放，保存残差、失败原因和未覆盖范围。
+
+## 验收证书
+
+$$
+\operatorname{accept}=\text{conventions fixed}\land\text{invariants hold}\land\text{error within budget}\land\text{replay succeeds}
+$$
+
+验收证书拒绝“看起来差不多”。它必须回答用了哪套手性和向量约定、哪个不变量被检查、误差预算是多少、退化输入如何返回，以及另一台机器怎样从输入重建结果。
+
+## 常见误区
+
+<Callout type="trap" title="约定或边界被隐藏">把局部方向当作世界方向直接参与寻路或物理计算。 修复时先让空间、单位、参数范围与退化状态显式化。</Callout>
+
+<Callout type="trap" title="只验收最终画面">父节点带非均匀缩放后仍把旋转子矩阵当作正交矩阵求逆。 应同时检查中间数值、不变量、调试图和可重放反例。</Callout>
+
+## 本章回顾
+
+本章覆盖世界空间、物体空间、相机空间、基向量、嵌套变换。真正掌握的标准是：能从定义推到公式，能把公式落到代码，能通过可交互图解释参数变化，并能在反例下给出稳定且可复现的失败结果。
+
+<Exercises>
+**问题1：世界空间与物体空间怎样协作？**
+<Answer>场景共享的全局参考系，适合比较不同对象的位置。 以模型自身原点和轴为参考，便于复用网格与局部动画。 回答时必须补充对象、空间和约定。</Answer>
+
+**问题2：如何推导并检查相机空间？**
+<Answer>物体坐标不是另一个点，而是同一几何点相对于物体基的三个系数。将三个系数乘对应世界基向量并加世界原点，就得到世界坐标；父子层级重复同一过程。 再用一个非对称小样例对照手算与代码。</Answer>
+
+**问题3：怎样验收嵌套变换？**
+<Answer>局部空间沿父子层级逐层组合到世界或相机空间。 使用正常、边界和反例输入，保存残差与重放证据。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="世界空间" definition="场景共享的全局参考系，适合比较不同对象的位置。" />
+  <GlossaryItem term="物体空间" definition="以模型自身原点和轴为参考，便于复用网格与局部动画。" />
+  <GlossaryItem term="相机空间" definition="以观察者为原点，把可见性与投影问题统一到视线方向。" />
+  <GlossaryItem term="基向量" definition="一组独立方向定义坐标轴，坐标是向量在该基下的分量。" />
+  <GlossaryItem term="嵌套变换" definition="局部空间沿父子层级逐层组合到世界或相机空间。" />
+  <GlossaryItem term="可重放证据" definition="绑定输入、约定、参数、中间状态、残差和失败原因的验收记录。" />
+</Glossary>
+
+<Attribution adaptedFrom="Fletcher Dunn and Ian Parberry · 3D Math Primer for Graphics and Game Development, 2nd Edition · 第3章 多个坐标空间" adaptedUrl="https://gamemath.com/book/" />

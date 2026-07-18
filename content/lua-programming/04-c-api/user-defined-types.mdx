@@ -1,0 +1,225 @@
+---
+title: "Chapter 31. User-Defined Types in C"
+type: C
+section: "Programming in Lua 4e · The C API"
+order: 31
+description: "使用full userdata、metatable和C closures构造Lua自定义类型，支持对象方法、数组索引，并区分light userdata的非拥有语义。"
+demo: true
+math: false
+sourceUrl: "https://www.lua.org/pil/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PilUserdataLifecycleLab, PilUserdataDispatchLab, PilPointerOwnershipLab } from "@/components/mdx/lua-programming/diagrams/user-defined-types";
+
+<Objectives>
+
+- 能解释full userdata的Lua-owned memory、metatable identity、uservalue与external handle所有权，并验证closed状态
+- 能实现对象方法和array-style __index/__newindex/__len分发，检查self、key、bounds与method namespace
+- 能设计inline、owned、borrowed和light userdata表示，验证GC、generation、thread affinity与use-after-free边界
+
+</Objectives>
+
+## 为什么User-Defined Type首先是一份Ownership声明
+
+Lua table能模拟对象，但C library常要暴露native vector、file handle或parser context。Full userdata提供由Lua GC持有的一块opaque memory，并可附加独立metatable；它解决“Lua value如何承载native representation”，却不会自动决定结构中pointer指向资源的owner。
+
+先预测：userdata storage本身和其中`malloc`出的buffer是否同一生命周期；只检查`lua_isuserdata`能否区分两个模块类型；`object:method(x)`在C入口有几个arguments；`object[0]`是否应接受；light userdata被GC时是否执行per-object finalizer；borrowed pointer的external owner先销毁后如何拒绝访问。
+
+<Term def="Userdata ownership contract声明Lua拥有的storage、外部resource owner、type identity、closed transition、thread affinity和最终释放路径。">userdata ownership contract</Term>必须先于metamethod设计。
+
+## Userdata
+
+Lua 5.3的`lua_newuserdata(L,size)`分配aligned raw block并把full userdata压栈。C用返回pointer初始化结构；未初始化对象不能暴露给可能raise的Lua调用。Full userdata有独立metatable和一个uservalue，可把Lua-side references/metadata与native block关联。
+
+<Term def="Full userdata storage是由目标Lua state分配、由GC跟踪并与该userdata value同寿命的固定大小native block。">full userdata storage</Term>适合inline struct或存放一个明确owner pointer。Flexible array需检查`sizeof + count * element` overflow。
+
+```c
+typedef struct NumberArray {
+  size_t length;
+  int closed;
+  double values[];
+} NumberArray;
+
+static int l_array_new(lua_State *L) {
+  lua_Integer requested = luaL_checkinteger(L, 1);
+  if (requested < 0 || (lua_Unsigned)requested > 1000000)
+    return luaL_argerror(L, 1, "length out of range");
+  size_t length = (size_t)requested;
+  if (length > (SIZE_MAX - sizeof(NumberArray)) / sizeof(double))
+    return luaL_error(L, "allocation overflow");
+
+  NumberArray *array = lua_newuserdata(
+    L, sizeof(NumberArray) + length * sizeof(double));
+  array->length = length;
+  array->closed = 0;
+  memset(array->values, 0, length * sizeof(double));
+  luaL_setmetatable(L, "remuse.NumberArray");
+  return 1;
+}
+```
+
+这里elements内联在userdata block中，无需另一次free；若struct只存external pointer，`__gc`/close必须释放并置NULL。所有method先验证type与`closed==0`。
+
+<PilUserdataLifecycleLab />
+
+<Stepper>
+  <Step title="切换Allocate、Type、Use和Collect"><PilUserdataLifecycleLab /></Step>
+  <Step title="画Memory Ownership">标userdata block、external allocations、uservalue references、metatable与native owner，区分谁由GC直接回收。</Step>
+  <Step title="注入Lifecycle错误">覆盖constructor中途raise、double close、method-after-close、GC without explicit close和state shutdown。</Step>
+</Stepper>
+
+## Type Identity与Validation
+
+`lua_isuserdata`同时接受full与light userdata，不能证明具体类型。`luaL_checkudata(L,index,"remuse.NumberArray")`比较registry中命名metatable identity并返回block pointer；失败raise准确argument error。`luaL_testudata`适合可选分支而不raise。
+
+Metatable name是C registry key，应加module/version namespace并只在初始化时创建。不要根据可伪造普通field如`type="array"`做native cast。跨不同Lua runtime/state的userdata pointer不能搬运。
+
+## Metatables
+
+`luaL_newmetatable`首次创建命名metatable并留在top，后续返回已有table。初始化常把`__index`指向metatable自身并注册methods，再定义`__len`、`__tostring`、`__gc`等。Constructor用`luaL_setmetatable`把正确table附到新userdata。
+
+```c
+static NumberArray *check_array(lua_State *L, int index) {
+  NumberArray *array = luaL_checkudata(L, index, "remuse.NumberArray");
+  if (array->closed) luaL_error(L, "NumberArray is closed");
+  return array;
+}
+
+static int l_array_len(lua_State *L) {
+  NumberArray *array = check_array(L, 1);
+  lua_pushinteger(L, (lua_Integer)array->length);
+  return 1;
+}
+
+static const luaL_Reg array_methods[] = {
+  {"new", l_array_new}, {"__len", l_array_len}, {NULL, NULL}
+};
+
+static void create_array_metatable(lua_State *L) {
+  if (luaL_newmetatable(L, "remuse.NumberArray")) {
+    luaL_setfuncs(L, array_methods, 0);
+    lua_pushvalue(L, -1); lua_setfield(L, -2, "__index");
+  }
+  lua_pop(L, 1);
+}
+```
+
+生产API通常把constructor放module table而非metatable，示例只展示registration机制。Metatable可被Lua code访问/修改时要决定是否隐藏或保护`__metatable`字段；这不是native pointer lifetime的替代。
+
+<Term def="Metatable type identity通过registry中唯一table的对象身份把Lua value绑定到C layout和method contract。">metatable type identity</Term>比名称字符串field更可靠。
+
+## Object-Oriented Access
+
+Colon call `object:resize(n)`等价于`object.resize(object,n)`；C method的self在index 1。把`__index`设为methods/metatable后，missing field查找method closure。每个method先`check_array(L,1)`，再验证其余arguments，最后return result count。
+
+如果允许per-instance Lua fields，Lua 5.3可把table放进userdata的uservalue，并在custom `__index`中先查methods再查uservalue；setter写uservalue。必须防止字段名覆盖native methods，或明确覆盖优先级。
+
+<PilUserdataDispatchLab />
+
+<Stepper>
+  <Step title="切换Method、Read Index、Write Index和Length"><PilUserdataDispatchLab /></Step>
+  <Step title="模拟C Frames">分别画colon/dot call、numeric key和bad key的arguments 1..n，确认self type与return count。</Step>
+  <Step title="验证Namespace Policy">测试method name、instance field、integer key、unknown string和metatable mutation，保证lookup顺序稳定。</Step>
+</Stepper>
+
+<Callout type="trap" title="只要Value是Userdata就能Cast为目标Struct">
+Light userdata和别的full userdata也满足宽泛检查。必须用luaL_checkudata/testudata验证命名metatable identity，再检查layout version与closed状态。
+</Callout>
+
+## Array Access
+
+要支持`array[i]`和`array[i]=v`，`__index`接收self/key，`__newindex`接收self/key/value。Lua惯例从1开始；转换integer后检查`1 <= i <= length`，再映射C的`values[i-1]`。不能把negative或超大Lua integer先cast为`size_t`再比较。
+
+<Term def="Indexed userdata dispatch先按key类型区分numeric element与string method，再做integer conversion、1-based bounds和value schema校验。">indexed userdata dispatch</Term>避免一个`__index`混淆两个namespace。
+
+```c
+static int l_array_index(lua_State *L) {
+  NumberArray *array = check_array(L, 1);
+  if (lua_type(L, 2) == LUA_TNUMBER) {
+    lua_Integer index = luaL_checkinteger(L, 2);
+    if (index < 1 || (lua_Unsigned)index > array->length)
+      return luaL_error(L, "index out of bounds");
+    lua_pushnumber(L, array->values[(size_t)index - 1]);
+    return 1;
+  }
+  luaL_getmetatable(L, "remuse.NumberArray");
+  lua_pushvalue(L, 2);
+  lua_rawget(L, -2);
+  return 1;
+}
+
+static int l_array_newindex(lua_State *L) {
+  NumberArray *array = check_array(L, 1);
+  lua_Integer index = luaL_checkinteger(L, 2);
+  lua_Number value = luaL_checknumber(L, 3);
+  if (index < 1 || (lua_Unsigned)index > array->length)
+    return luaL_error(L, "index out of bounds");
+  array->values[(size_t)index - 1] = value;
+  return 0;
+}
+```
+
+注册时将`__index`设为dispatch function而不是metatable自身，并注册`__newindex`。`__pairs`可提供遍历协议，但iterator必须保持userdata reachable并检测closed。
+
+## Light Userdata
+
+Light userdata只把`void *`编码成Lua value，创建不分配per-object block，不被GC拥有，也没有每个value独立metatable。它适合作为registry private key、host-managed identity token或短期借用handle，不适合单独表达可回收对象。
+
+<Term def="Light userdata token是没有per-object storage和GC ownership的pointer identity，其有效期完全由外部owner保证。">light userdata token</Term>需要generation/closed validation以抵抗地址复用。若Lua脚本能长期持有borrowed token，external owner销毁后必须让lookup失败，而不是解引用悬空pointer。
+
+<PilPointerOwnershipLab />
+
+<Stepper>
+  <Step title="切换Inline、Owned、Borrowed和Light表示"><PilPointerOwnershipLab /></Step>
+  <Step title="画Pointer Lifetime">从Lua value追到userdata block、pointer、external object和owner generation，标每个close/GC transition。</Step>
+  <Step title="测试Use-after-free">让external owner先销毁、地址复用、late callback和state close发生，验证lookup只用stable ID/generation且不解引用旧token。</Step>
+</Stepper>
+
+<Callout type="trap" title="Light Userdata被GC时会自动Free Pointer">
+它只是pointer-sized value，没有per-object finalizer或ownership。需要自动释放就用full userdata包装owner state，定义idempotent close/__gc；借用场景则用owner ID和generation验证。
+</Callout>
+
+## Security、Reentrancy与ABI
+
+Metamethod执行Lua/C code，method不应持有禁止重入的native lock再触发任意Lua callback。Layout变化需要module/runtime版本一致；旧userdata不能按新struct强制解释。Bounds与size arithmetic在cast前检查，错误前释放temporary native resources。
+
+不要向不可信脚本暴露raw pointer地址或任意light userdata转native API。Capability由可调用methods与owner policy定义，而不是“拿到一个指针就全权访问”。
+
+## 本章回顾：Lua Type Identity必须绑定Native Lifetime
+
+1. Full userdata是Lua GC拥有的固定block，block内pointer资源仍需单独声明owner。
+2. LuaL_checkudata按metatable identity验证layout，随后还要检查closed/version/thread状态。
+3. Colon method把self放index 1；metatable的__index连接对象和C closures。
+4. Array-style dispatch区分integer element与string method，先有符号bounds check再转换C index。
+5. Uservalue可保存instance Lua data；lookup优先级与method覆盖规则必须明确。
+6. Light userdata没有per-object storage或GC ownership，只适合外部保证生命周期的identity token。
+
+<Exercises>
+
+**问题 1：Full Userdata内存会自动释放，为什么External Pointer仍可能泄漏？**
+
+<Answer>GC只回收userdata block本身。若block里保存另一次malloc、file或library handle，必须由idempotent close/__gc释放并置closed/NULL；constructor中途失败也要归还已获得资源。</Answer>
+
+**问题 2：怎样让array[i]和array:method()共用__index？**
+
+<Answer>Custom __index先检查key type：integer走1-based bounds后返回element；string用raw lookup查询受控methods table；其它类型返回nil或raise。每条路径先luaL_checkudata并检查closed。</Answer>
+
+**问题 3：Borrowed Native Object为何最好用ID加Generation而不是裸Light Pointer？**
+
+<Answer>Owner销毁与地址复用后裸pointer可能指向新对象或无效内存。ID+generation通过host registry重新lookup，mismatch就返回closed/stale错误，不会解引用悬空地址。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="userdata ownership contract" definition="声明storage、resource owner、type、closed、thread和释放路径的协议。" />
+  <GlossaryItem term="full userdata storage" definition="由Lua state分配并由GC跟踪的固定大小native block。" />
+  <GlossaryItem term="metatable type identity" definition="以registry唯一metatable对象身份绑定C layout与method contract。" />
+  <GlossaryItem term="indexed userdata dispatch" definition="区分numeric elements和string methods并执行bounds/schema检查的分发。" />
+  <GlossaryItem term="light userdata token" definition="无per-object storage和GC owner、由外部保证有效期的pointer identity。" />
+</Glossary>
+
+<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 31: User-Defined Types in C" adaptedUrl="https://www.lua.org/pil/" />

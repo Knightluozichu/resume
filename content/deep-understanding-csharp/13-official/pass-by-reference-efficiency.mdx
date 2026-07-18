@@ -1,0 +1,159 @@
+---
+title: "Chapter 13. Improving efficiency with more pass by reference"
+type: C
+section: "C# in Depth 4e · C# 7+"
+order: 13
+description: "覆盖ref回顾、ref locals/returns、in、readonly structs、ref/in extensions与ref-like structs，以alias、copy、lifetime和measurement证明优化。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-13"
+draft: false
+---
+
+import { DcsAliasMutationLab, DcsCopyCostLab, DcsRefLifetimeLab } from "@/components/mdx/deep-understanding-csharp/diagrams/pass-by-reference-efficiency";
+
+<Objectives>
+
+- 能解释value copy与managed alias的差异，推导ref local/ref return的write-through behavior和lifetime限制
+- 能分析in parameter、readonly struct/member与defensive copy的关系，用benchmark和generated-code evidence验证真实收益
+- 能设计ref/in extension与ref-like struct API，写出escape、async、boxing、storage和version boundaries的验收矩阵
+
+</Objectives>
+
+## 为什么Pass by Reference首先是正确性与Lifetime问题
+
+“避免复制大struct”只是ref features的一种用途。`ref`改变的是expression是否代表一个value还是一个storage location的alias；一旦alias可写，修改会穿透到original storage，一旦alias逃逸，referent lifetime必须足够长。Performance优化建立在这套correctness proof之上，不能反过来用“更快”跳过alias与escape分析。
+
+先预测：property能否作为任意ref argument；ref return能否返回普通local；`in`是否保证call-site零复制；readonly field调用mutable struct method是否可能产生defensive copy；Span的backing array在heap上是否就允许Span本身存进class field。答案分别是“通常不能、不能、不能保证、可能、不能”。
+
+<Term def="不保存独立value，而是指向一个可识别storage location并按权限读取或写入的managed reference。">managed alias</Term>
+
+## Recap: What do you know about ref?
+
+C#早期的`ref`/`out` parameters就允许callee访问caller variable storage。`ref`要求调用前definitely assigned且可读写；`out`允许未初始化但callee必须赋值。Argument必须是可按引用传递的variable，普通property调用是method access而不是stable variable location，所以通常不能直接作为ref argument。
+
+Value assignment `x = y`复制当前value；ref assignment `x = ref y`让x指向y的storage。两者在syntax与review上必须区分。Aliasing还会影响线程安全和invariants：绕过owner method直接write-through可能让validation、notification或locking失效。
+
+## Ref locals and ref returns
+
+Ref local保存alias，ref return把callee选中的storage alias交给caller。Return expression必须有足够escape scope，例如array element或对象field可能安全，普通stack local不安全。Caller可选择按value接收copy，也可用`ref`保持alias；API contract必须说明可写性与storage invalidation。
+
+```csharp
+static ref int FindSlot(int[] values, int index) => ref values[index];
+
+ref int slot = ref FindSlot(buffer, 2);
+slot = 99;                 // writes buffer[2]
+int snapshot = FindSlot(buffer, 2); // copies the current value
+```
+
+<Stepper>
+  <Step title="切换value、ref local、ref return与ref readonly"><DcsAliasMutationLab /></Step>
+  <Step title="画出storage graph">标出每个variable自己的storage、ref referent、write permission与可能invalidating operation。</Step>
+  <Step title="用mutation和escape compile tests验收">修改alias观察original，尝试return local/property/temp，并确认compiler拒绝unsafe lifetime。</Step>
+</Stepper>
+
+<Callout type="trap" title="Ref return只是避免一次copy，不改变封装">
+Writable alias可绕过property setter、validation与synchronization，长期持有还可能与collection mutation冲突。只在storage ownership清楚、lifetime稳定且write-through就是API意图时暴露。
+</Callout>
+
+## in parameters (C# 7.2)
+
+`in` parameter声明callee只读访问argument，并允许按reference传递以减少large struct copy。Call-site的`in` modifier可省略，因此compiler可能为rvalue、conversion result或property value创建temporary。它表达的是callee view readonly，不是“编译器保证绝无任何copy”。
+
+即使parameter本身readonly，调用non-readonly instance member时也可能复制receiver以防method修改original。优化前应看struct size、call frequency、JIT behavior与member declarations。Small structs by value可能更快、更易inline；API加in还会影响overload/signature和compatibility。
+
+```csharp
+static decimal Total(in PriceQuote quote) => quote.Price * quote.Quantity;
+
+var total1 = Total(in quote);        // explicit variable alias
+var total2 = Total(CreateQuote());   // a temporary may be introduced
+```
+
+<Term def="Compiler为维护readonly receiver语义而创建struct副本，再在副本上调用可能修改实例的member。">defensive copy</Term>
+
+<Stepper>
+  <Step title="切换by value、in variable、in expression与readonly"><DcsCopyCostLab /></Step>
+  <Step title="记录call-site与member semantics">区分variable/rvalue、struct size、readonly declarations、virtual/interface calls和hot-path frequency。</Step>
+  <Step title="以benchmark与disassembly闭环">同时测time、allocations/codegen并保留correctness tests；没有稳定差异就选更简单contract。</Step>
+</Stepper>
+
+## Declaring structs as readonly (C# 7.2)
+
+`readonly struct`承诺实例fields不可在构造后被修改，instance fields需readonly，properties通常只读。这让compiler和reader知道instance methods不应修改state，并减少从readonly storage访问时的defensive copies。它不使referenced objects immutable：readonly struct内的List reference仍可指向mutable list。
+
+Modern C#还允许标记individual readonly members，这是本书之后的补充；第四版本章核心是C# 7.2 readonly struct与in配合。Public mutable struct本身容易产生copy-and-mutate confusion，若value semantics成立，优先让整个type immutable/readonly。
+
+<Term def="从readonly variable、field或in parameter调用non-readonly struct member时，receiver为保护原值可能被复制。">readonly receiver boundary</Term>
+
+## Extension methods with ref or in parameters (C# 7.2)
+
+Extension method的first parameter可用`ref`或`in`修饰特定struct receiver，使`counter.Increment()`能够write-through，或让large readonly value以alias访问。它把mutation包装成method-call外观，因此API命名必须强烈表达修改，例如`Advance`、`NormalizeInPlace`，不能用像query的名字隐藏write。
+
+Generic、reference-type receiver与language version对ref/in extensions有约束。Library发布前应验证目标LangVersion、metadata signature和普通instance methods的冲突。Extension lookup convenience不能替代owner type的invariant control。
+
+## Ref-like structs (C# 7.2)
+
+`ref struct`用于只能安全存在于stack-like scope的values，典型是`Span<T>`/`ReadOnlySpan<T>`这样的memory views。Compiler限制boxing、ordinary class fields、array elements、capture以及C# 7.2时代跨`await`/`yield`使用，以防view逃出referent lifetime或被搬到heap object。
+
+```csharp
+static int Sum(ReadOnlySpan<int> values)
+{
+    int total = 0;
+    foreach (int value in values) total += value;
+    return total;
+}
+
+Span<int> scratch = stackalloc int[16];
+```
+
+Ref-like不等于backing storage一定在stack：Span可view array、native memory或stackalloc。限制针对view value和lifetime proof。后续C#版本逐步放宽某些场景，但每次放宽仍受ref safety规则约束；学习本章时以C# 7.2 baseline为准，现代项目再按实际compiler文档验证。
+
+<Term def="Compiler计算一个ref或ref-like value可以安全被返回、赋值或捕获到多大范围的lifetime上界。">ref escape scope</Term>
+
+<Term def="类型不能被box或存入普通heap locations，并受capture、async和iterator限制的lifetime contract。">stack-only contract</Term>
+
+<Stepper>
+  <Step title="切换array、stackalloc、field与async capture"><DcsRefLifetimeLab /></Step>
+  <Step title="标注referent与view的独立lifetime">Backing storage在哪里、谁owner、view能活多久、是否跨method/suspension，一项项写出。</Step>
+  <Step title="编译escape matrix并做runtime边界测试">尝试field、lambda、boxing、return、await和slice，记录compiler/version结果及合法path行为。</Step>
+</Stepper>
+
+<Callout type="trap" title="使用in、ref和Span就一定更快">
+Temporary、defensive copy、larger code、alias inhibition或API complexity都可能抵消收益。先建立correctness和lifetime proof，再对真实payload与JIT做benchmark；无法复现收益就不要保留复杂度。
+</Callout>
+
+## 本章回顾：Alias Proof先于Performance Claim
+
+1. Ref local/return代表storage alias，value local代表snapshot copy，mutation semantics完全不同。
+2. In提供readonly by-reference intent，但call-site temporary和defensive copy仍需分析。
+3. Readonly struct帮助表达immutable value semantics，并给compiler更强的copy信息。
+4. Ref/in extensions可把alias行为包装为instance syntax，命名与invariant ownership必须清楚。
+5. Ref-like structs以compile-time restrictions维护lifetime safety；优化必须由measurement证明。
+
+<Exercises>
+
+**问题 1：一个API返回List内部元素的writable ref，应先问什么？**
+
+<Answer>确认storage是否稳定、collection resize/reorder是否使alias失效、caller是否可绕过validation/locking，以及alias可持有多久。优先返回value或受控mutation method；若确需ref，限制scope、document invalidation，测试resize、concurrency与write-through invariant。</Answer>
+
+**问题 2：把32-byte struct parameter改成in后怎样证明收益？**
+
+<Answer>覆盖variable、rvalue、property和interface/member call sites，确保struct/member readonly避免defensive copies。用代表性JIT/runtime做BenchmarkDotNet与disassembly，对比throughput、code size和copies；同时跑semantic tests。只有稳定收益且API compatibility可接受才保留。</Answer>
+
+**问题 3：设计stackalloc parser时如何证明Span没有逃逸？**
+
+<Answer>列出buffer owner、每个slice的ref escape scope和所有return/capture/await paths。Parser在同步scope内消费并返回owned value，而非返回指向stackalloc的Span。加入compile-negative examples与boundary tests，modern version放宽也不能跨越实际referent lifetime。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="managed alias" definition="指向已有storage location并按权限读写的reference variable。" />
+  <GlossaryItem term="defensive copy" definition="为保持readonly语义而创建的struct receiver副本。" />
+  <GlossaryItem term="readonly receiver boundary" definition="Readonly storage调用member时决定是否copy的边界。" />
+  <GlossaryItem term="ref escape scope" definition="Ref或ref-like value可安全传播的最大lifetime范围。" />
+  <GlossaryItem term="stack-only contract" definition="禁止boxing/heap storage并限制capture与suspension的type contract。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# in Depth, Fourth Edition, Chapter 13: Improving efficiency with more pass by reference" adaptedUrl="https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-13" />

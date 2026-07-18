@@ -1,0 +1,335 @@
+---
+title: "Chapter 18：面向对象编程特性（Object-Oriented Programming Features）"
+type: A
+section: Rust 程序设计语言 · 封装、Trait Object 与状态建模
+order: 18
+description: 对齐官方第 18 章：Rust 对对象、封装、继承与多态的取舍，trait object GUI 与动态分派，以及传统状态模式和 type-state 的编译期重构。
+demo: false
+math: false
+sourceUrl: "https://doc.rust-lang.org/book/ch18-00-oop.html"
+draft: false
+---
+
+import {
+  RplEncapsulationInvariantLab,
+  RplStatePatternLab,
+  RplTraitObjectDispatchLab,
+} from "@/components/mdx/rust-programming-language/diagrams/object-oriented-programming-features";
+
+<Objectives>
+
+- 能解释 Rust 如何用 struct/enum、impl、module privacy 和 public methods 组合数据、行为与封装，并设计可维护 representation invariant 的 API
+- 能比较 generic trait bound 与 trait object 的同构/异构集合、静态/动态分派、开放扩展和性能取舍，并判断 dyn compatibility 错误
+- 能实现 blog state pattern 的 ownership transition，再改写为 type-state API，使非法状态或转换在编译期不可表达
+
+</Objectives>
+
+## 为什么不该用“有没有 class”判断 Rust 是否面向对象
+
+“面向对象”没有唯一判定表。有的定义强调数据与方法组合，有的要求封装、继承、subtyping、message passing 或 runtime polymorphism。Rust 混合了过程式、函数式、泛型和面向对象特性：它没有 class inheritance，却能用 struct/enum 承载数据、impl 定义方法、module visibility 隐藏实现、trait 抽象行为，并用 trait object 做运行时多态。
+
+<Term def="把相关数据与操作这些数据的行为组织成一个可交互单元的程序建模概念。">object</Term>
+
+Rust 通常仍称 struct、enum 和 trait，而不泛化叫 object，因为术语差异能提醒我们：这里没有隐式 base-class layout、字段继承或所有方法都走 virtual dispatch。应先问需要哪一种能力，再选择语言工具，而不是把别的语言 class 层级逐字翻译。
+
+## 18.1 对象、封装、继承与多态
+
+### 数据与行为：struct/enum 加 impl
+
+struct 和 enum 定义数据形状，impl block 把 associated functions 与 methods 关联到类型。方法 receiver `self`、`&self`、`&mut self` 同时表达 ownership 与访问能力。按“object 包含 data 与对其操作的 procedures”这一常见定义，Rust 满足面向对象特征。
+
+```rust
+pub struct AveragedCollection {
+    list: Vec<i32>,
+    average: f64,
+}
+
+impl AveragedCollection {
+    pub fn average(&self) -> f64 {
+        self.average
+    }
+}
+```
+
+### 封装让不变量只有一个维护入口
+
+<Term def="隐藏 representation details，只暴露调用方可依赖的 public contract，使内部变化不会扩散。">encapsulation</Term>
+
+Rust item 默认 private，`pub` 逐层开放 module、type 和 method。`AveragedCollection` 可公开类型，却让 `list`、cached `average` 与 `update_average` 私有；外部只能调用 `add`、`remove`、`average`。这样所有写路径都会在修改 list 后更新 cache。
+
+<Term def="一个值在所有可观察稳定时刻都必须满足的内部一致性条件，例如 cached average 等于 list 的实际平均值。">representation invariant</Term>
+
+```rust
+impl AveragedCollection {
+    pub fn add(&mut self, value: i32) {
+        self.list.push(value);
+        self.update_average();
+    }
+
+    pub fn remove(&mut self) -> Option<i32> {
+        let removed = self.list.pop();
+        if removed.is_some() {
+            self.update_average();
+        }
+        removed
+    }
+
+    fn update_average(&mut self) { /* recompute cache */ }
+}
+```
+
+如果 list public，调用方可以 push 而不更新 average，还会绑定 Vec 的具体 API；私有后，内部改成 HashSet、增量统计或延迟计算，只要 public signatures 与语义保持，调用方无需变化。封装不是自动正确：public method 仍可能忘记维护不变量，测试应覆盖空集合、连续 add/remove 和替换 representation 后的契约。
+
+### Rust 不提供 struct inheritance
+
+<Term def="子类型自动取得父类型字段和行为，并可在 parent interface 位置替代 parent 的机制。">inheritance</Term>
+
+Rust 没有让一个 struct 自动继承另一个 struct 字段与 method implementation 的语言机制。若目的是 <Term def="让多个类型共享已有实现，减少重复行为代码的设计目标。">code reuse</Term>，可以用 trait default methods、generic helper、composition、delegation 或 macro；若目的是 substitutability，则用 generics/trait bounds 或 trait objects。
+
+默认 trait method 类似有限的行为复用，但不继承 storage。composition 明确 owner 与 component lifetime，避免深 class hierarchy 把不相关字段和 methods 强加给子类型。Rust 的选择不是“拒绝复用”，而是把代码复用与 subtype relation 分开建模。
+
+### 多态不等于继承
+
+<Term def="不同 concrete values 可通过同一抽象 interface 被替换使用、调用共同能力的性质。">subtype polymorphism</Term>
+
+<Term def="用 generic type parameter 表示多种类型，再用 trait bound 限制其必须提供哪些能力的静态多态。">bounded parametric polymorphism</Term>
+
+`fn notify(item: &impl Summary)` 或 `fn notify<T: Summary>(item: &T)` 在编译期为 concrete T 生成代码；`&dyn Summary` 则在 runtime 通过 trait object 选择实现。二者都由 compiler 检查 trait contract，但 collection 形状、dispatch 和优化机会不同。
+
+<Callout type="trap" title="陷阱：没有继承就没有多态或复用">
+  Rust 把需求拆开：trait default methods、composition 和 helpers 处理行为复用；generic bounds 处理静态多态；trait objects 处理开放集合的 runtime 多态。为了复用两个 methods 建立父子字段层级，反而可能把不适用行为耦合进类型。
+</Callout>
+
+## 18.2 Trait object 抽象共同行为
+
+官方 GUI 示例要求 Screen 保存 Button、TextField，以及 library 发布后用户新定义的 SelectBox。enum 适合 compiler 已知的封闭类型集合；开放扩展时 library 无法预先列完 variants，只知道每项必须响应 `draw`。
+
+<Term def="由指向 concrete value 的 pointer 与运行时方法表构成、通过 dyn Trait 暴露共同行为的动态抽象值。">trait object</Term>
+
+<Term def="显式表示通过 trait object 进行动态分派的关键字，要求后接可动态使用的 trait。">dyn keyword</Term>
+
+```rust
+pub trait Draw {
+    fn draw(&self);
+}
+
+pub struct Screen {
+    pub components: Vec<Box<dyn Draw>>,
+}
+
+impl Screen {
+    pub fn run(&self) {
+        for component in &self.components {
+            component.draw();
+        }
+    }
+}
+```
+
+trait object 必须放在某种 pointer 后，因为 concrete values 大小可能不同；`Box<dyn Draw>` 给 Vec 一个固定 pointer size，并拥有 allocation。概念上该 pointer 携带 data address 与 vtable address，所以常称 <Term def="同时携带 data pointer 与 metadata pointer、宽于普通地址的 pointer representation。">fat pointer</Term>。
+
+<Term def="单个 collection 在 runtime 保存多种 concrete element types，但每项都满足同一 trait contract。">heterogeneous collection</Term>
+
+```rust
+struct SelectBox { options: Vec<String> }
+impl Draw for SelectBox { fn draw(&self) { /* select UI */ } }
+
+struct Button { label: String }
+impl Draw for Button { fn draw(&self) { /* button UI */ } }
+
+let screen = Screen {
+    components: vec![
+        Box::new(SelectBox { options: vec!["Yes".into()] }),
+        Box::new(Button { label: "OK".into() }),
+    ],
+};
+screen.run();
+```
+
+library 不知道 SelectBox concrete type，也不需要 downcast；只依赖 Draw message。若把 String 放入 components，coercion 到 trait object 时就因 String 未实现 Draw 报 E0277，不会等到 runtime 才发现 method missing。这与动态语言 duck typing 的行为导向相似，但能力检查仍是 compile-time。
+
+### 泛型与 trait object 的选择
+
+```rust
+pub struct GenericScreen<T: Draw> {
+    pub components: Vec<T>,
+}
+```
+
+GenericScreen 的一个实例只能有一个 concrete T，适合同构 collection。compiler 执行 <Term def="为实际 generic arguments 生成 concrete specialized code，使调用目标在编译期可知的过程。">monomorphization</Term>，形成 <Term def="compiler 在编译期知道 method target，可直接调用并有机会 inline 的分派方式。">static dispatch</Term>。
+
+Trait object 支持同一 Vec 混合 Button 与 SelectBox，形成 <Term def="method target 到 runtime 才通过 vtable metadata 选择的分派方式。">dynamic dispatch</Term>。它增加一次间接 lookup，并可能阻止 inline 和部分优化；实际成本应在热点 benchmark，而不是仅凭“virtual call”拒绝可扩展设计。
+
+<Term def="trait 能否被 dyn 使用的一组规则，例如方法 receiver 和返回类型必须允许 runtime vtable 表达。">dyn compatibility</Term>
+
+泛型 method、返回裸 Self 等成员可能让 trait 不能形成统一 vtable entry。遇到 dyn compatibility error，应先判断该 method 是否真的需要通过 object 调用；可加 `where Self: Sized` 将它排除、改成关联类型/erased return，或保留 generic API，不应用 unsafe 绕过。
+
+<Callout type="trap" title="陷阱：trait object 会把类型检查推迟到运行时">
+  compiler 仍验证每个 concrete value 实现目标 trait，并验证 trait dyn-compatible。推迟的只是“当前 item 的 concrete method address”，不是 method 是否存在、参数签名是否匹配或 memory safety。
+</Callout>
+
+## 18.3 用 Rust 实现状态模式
+
+<Term def="context 持有当前 state object，并把依赖状态的行为和 transition 委托给它的行为设计模式。">state pattern</Term>
+
+blog workflow 有 Draft、PendingReview、Published：new 从 Draft 开始；request_review 进入 review；approve 才发布；只有 Published 可见 content。传统实现让 Post 始终是同一个 public type，private `state` 保存 `Option<Box<dyn State>>`。
+
+<Term def="实现共同 State trait、负责当前状态行为与下一个状态选择的 concrete value。">state object</Term>
+
+```rust
+pub struct Post {
+    state: Option<Box<dyn State>>,
+    content: String,
+}
+
+trait State {
+    fn request_review(self: Box<Self>) -> Box<dyn State>;
+    fn approve(self: Box<Self>) -> Box<dyn State>;
+
+    fn content<'a>(&self, _post: &'a Post) -> &'a str {
+        ""
+    }
+}
+```
+
+transition method 接收 `self: Box<Self>`，消费旧 state owner 并返回新 boxed state。Draft 的 request_review 返回 PendingReview；PendingReview 的 approve 返回 Published；不合法动作可返回 self，成为 no-op。
+
+<Term def="业务对象从一个合法状态移动到另一个状态，并相应改变可用行为的过程。">state transition</Term>
+
+Post 不能直接从 borrowed field 移走 Box，因此先 `take`：
+
+```rust
+pub fn request_review(&mut self) {
+    if let Some(state) = self.state.take() {
+        self.state = Some(state.request_review());
+    }
+}
+```
+
+<Term def="把 Option 中的 value 移出并在原位留下 None，使 owner 能消费字段后再写回 replacement 的转换技巧。">Option take transition</Term>
+
+临时 None 是 ownership 搬运的实现细节，method 返回前必须恢复 Some；若 transition 中 panic，Post 可能留下异常状态，因此更复杂设计可用 replacement helper、Result 或不同 representation。`Post::content` 调 `state.content(self)`，只有 Published override 返回内部字符串。
+
+<Term def="context 把工作交给当前 state object，而不在自身用 if/match 列举每个 concrete state 的方式。">delegation</Term>
+
+enum 也能表达三个状态，并以 match 穷尽；<Term def="用 enum variants 表示有限状态集合，并在操作位置显式 match 行为和转换的建模方式。">enum state</Term> 适合状态集合封闭、希望全局看到 transition table 的系统。trait-state 把每个状态行为集中在对应 impl，新增 concrete state 较开放，但相邻 state 彼此知道 transition target，可能产生 coupling，Post 的 take/delegate methods 也有重复。
+
+### 把状态编码进类型
+
+传统 state object 对错误动作通常只能 no-op、panic 或 Result；调用者仍能写 `draft.approve()`。这是 <Term def="非法动作在编译后仍可调用，只能由运行时 state value 决定忽略、报错或转换的模型。">runtime invalid transition</Term>。
+
+Rust 可让状态成为不同 public types：
+
+```rust
+pub struct DraftPost { content: String }
+pub struct PendingReviewPost { content: String }
+pub struct Post { content: String }
+
+impl DraftPost {
+    pub fn request_review(self) -> PendingReviewPost {
+        PendingReviewPost { content: self.content }
+    }
+}
+
+impl PendingReviewPost {
+    pub fn approve(self) -> Post {
+        Post { content: self.content }
+    }
+}
+
+impl Post {
+    pub fn content(&self) -> &str { &self.content }
+}
+```
+
+<Term def="用不同 static types 表示业务状态，并只在每种类型上定义合法操作的 API 设计模式。">type-state pattern</Term>
+
+<Term def="transition method 消费旧状态 self 并返回新状态 type，旧 binding 此后不能继续使用。">consuming transition</Term>
+
+DraftPost 有 add_text/request_review，没有 content/approve；PendingReviewPost 有 approve/reject；Published Post 才有 content。调用错误 method 会直接编译失败，正是 <Term def="通过 type constructors 和 method availability，让违反业务不变量的组合无法构造或调用。">invalid state unrepresentable</Term>。
+
+代价是 caller 必须重新绑定变化后的类型，异构保存多状态、序列化和 runtime 恢复更复杂；若 workflow 由外部数据动态决定，enum + validation 可能更直观。传统 state pattern 隐藏状态变化、保持稳定 Post handle；type-state 把 protocol 暴露在 signature 中、换取 compile-time proof。选择取决于状态集合是否封闭、非法 transition 风险、API 使用者和 runtime 持久化需求。
+
+<Callout type="trap" title="陷阱：type-state 在所有状态机中都更高级">
+  type-state 擅长短而静态的 construction/workflow protocol，却会让动态 collection、数据库恢复、插件状态和分支合流需要 enum 或 erasure。目标是把高价值不变量放进类型，不是让每个 runtime 状态都生成一种 Rust type。
+</Callout>
+
+## 三步从不变量走到可扩展行为
+
+<Stepper>
+  <Step title="第一步：先封闭能破坏表示的写路径">
+    列出 list 与 cached average 必须同时变化的不变量，先预测 direct-field 与 public-method 两种操作结果，再切换实验。用 contract tests 证明内部 representation 可替换。
+
+    <RplEncapsulationInvariantLab />
+  </Step>
+  <Step title="第二步：按集合开放度选择 dispatch">
+    固定 concrete type 且在热点调用时优先 generic；需要用户扩展、异构 collection 时评估 dyn trait。加入 String、混合 Button/SelectBox，观察 compile gate 与 vtable 路径变化。
+
+    <RplTraitObjectDispatchLab />
+  </Step>
+  <Step title="第三步：决定错误 transition 在哪里失败">
+    需要稳定 Post handle 时用 runtime state/enum 并返回明确 Result；protocol 短且误用代价高时用 consuming type-state。逐个尝试 add、review、approve、reject，比较 no-op 与 compile error。
+
+    <RplStatePatternLab />
+  </Step>
+</Stepper>
+
+把 workflow state 拆成 DraftPost、PendingReviewPost 与 Post 的 consuming transitions，就是用 **类型状态** 在 compile time 删除非法 method/transition；dyn State 则保留 runtime flexibility。
+
+## 小结
+
+- Rust 用 struct/enum 数据、impl 行为和 module privacy 实现对象与封装，但不提供 struct/class inheritance
+- 行为复用、静态多态和 runtime substitutability 分别可由 default trait/composition、generic bounds、trait objects 承担
+- generic collection 同构并使用 static dispatch；trait object 通过 data pointer + vtable 支持开放异构 collection 和 dynamic dispatch
+- compiler 仍检查 dyn value 实现 trait；dyn compatibility 决定 trait 哪些 methods 能进入统一 runtime interface
+- 传统 state pattern 用 Option take 消费并替换 boxed state，隐藏具体状态但非法 transition 留到 runtime
+- type-state 让不同状态拥有不同 methods，通过 consuming transition 使非法状态不可表达，但动态存储与恢复成本更高
+
+<Exercises>
+  1. **问题 1：修复缓存失真 API。** `AveragedCollection` 公开了 `list` 和只读 `average()`，调用方 push 后平均值错误。只把 average field 设 private 为什么不够？应怎样设计和测试边界？
+
+  <Answer question="封装如何维护 representation invariant？">问题写路径来自 public list，而不是 average field。应把 list 与 cached average 都设 private，只公开 add/remove 等能同步更新 cache 的操作和只读 average；对 empty、连续修改、remove missing 与内部容器替换做 contract tests。这样调用方依赖行为语义，不依赖 Vec representation。</Answer>
+
+  2. **问题 2：选择 GUI collection。** library 要让下游 crate 加入未知组件，Screen 同时保存 Button 与 SelectBox；另一个 hot loop 永远只处理 Sprite。两处都用 Box dyn Draw 是否合理？
+
+  <Answer question="何时选 generic，何时选 trait object？">开放 GUI 需要下游扩展和单个异构 collection，Box dyn Draw 合理，compiler 仍检查 Draw 并在 runtime 动态分派。Sprite hot loop concrete type 固定，generic 或直接 Vec Sprite 可 monomorphize、inline 且布局更直接。不要全局统一抽象；按集合开放度、异构需求和 profile 选择。</Answer>
+
+  3. **问题 3：重构发布流程。** 业务要求 Draft 才能 add_text，Review 可 reject 或 approve，Published 才能 content；还要从数据库恢复任意状态。纯 type-state 与 enum/runtime state 各有什么边界，怎样组合？
+
+  <Answer question="compile-time protocol 与 runtime persistence 怎样衔接？">交互式构建链可用 DraftPost、PendingReviewPost、Post 的 consuming methods，让错误 method 编译失败；数据库输入本质是 runtime data，应先解析成 validated enum 或版本化 record，再在边界按 variant 构造对应 typed value。若服务层必须把任意状态放在同一 collection，可保留 enum/trait-object domain model，并让高风险局部操作通过 typed command 或 constructor 获得 proof。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="object">组合相关数据和操作行为的程序建模单元。</GlossaryItem>
+  <GlossaryItem term="encapsulation">隐藏 representation，只暴露稳定 public contract。</GlossaryItem>
+  <GlossaryItem term="representation invariant">内部值在稳定时刻必须始终满足的一致性条件。</GlossaryItem>
+  <GlossaryItem term="inheritance">子类型自动取得父类型字段和行为的机制。</GlossaryItem>
+  <GlossaryItem term="code reuse">多个类型共享已有实现、减少重复行为代码的目标。</GlossaryItem>
+  <GlossaryItem term="subtype polymorphism">不同 concrete value 可经共同 interface 替换使用的性质。</GlossaryItem>
+  <GlossaryItem term="bounded parametric polymorphism">generic parameter 加 trait bound 的静态多态。</GlossaryItem>
+  <GlossaryItem term="trait object">由 data pointer 和 vtable metadata 表示的动态 trait 抽象。</GlossaryItem>
+  <GlossaryItem term="dyn keyword">显式声明 trait object 动态分派的关键字。</GlossaryItem>
+  <GlossaryItem term="fat pointer">同时携带地址和 metadata 的宽 pointer。</GlossaryItem>
+  <GlossaryItem term="heterogeneous collection">可保存多个 concrete element types 的统一 collection。</GlossaryItem>
+  <GlossaryItem term="monomorphization">为实际 generic arguments 生成 specialized code 的过程。</GlossaryItem>
+  <GlossaryItem term="static dispatch">编译期已知 method target 的直接分派。</GlossaryItem>
+  <GlossaryItem term="dynamic dispatch">runtime 经 vtable 决定 method target 的间接分派。</GlossaryItem>
+  <GlossaryItem term="dyn compatibility">trait 能否形成统一 runtime vtable interface 的规则。</GlossaryItem>
+  <GlossaryItem term="state pattern">context 把状态相关行为委托给 state object 的模式。</GlossaryItem>
+  <GlossaryItem term="state object">封装当前状态行为与 transition 规则的 concrete value。</GlossaryItem>
+  <GlossaryItem term="state transition">业务值从一个合法状态移动到另一个状态的过程。</GlossaryItem>
+  <GlossaryItem term="Option take transition">用 take 移出旧 boxed state、留下 None 再写回新状态的技巧。</GlossaryItem>
+  <GlossaryItem term="delegation">context 把操作交给当前 state implementation 的方式。</GlossaryItem>
+  <GlossaryItem term="enum state">用 variants 和 match 表达封闭状态集合的模型。</GlossaryItem>
+  <GlossaryItem term="runtime invalid transition">错误动作可调用但由 runtime 决定 no-op、报错或转换的模型。</GlossaryItem>
+  <GlossaryItem term="type-state pattern">用不同 static types 与 method set 编码业务状态的模式。</GlossaryItem>
+  <GlossaryItem term="consuming transition">消费旧 self 并返回新状态 type 的转换。</GlossaryItem>
+  <GlossaryItem term="invalid state unrepresentable">通过类型构造让违反不变量的状态无法表示。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Rust Programming Language, Chapter 18 Object-Oriented Programming Features"
+  adaptedUrl="https://doc.rust-lang.org/book/ch18-00-oop.html"
+/>

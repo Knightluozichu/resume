@@ -1,0 +1,308 @@
+---
+title: "面试题13：机器人的运动范围"
+type: C
+section: "第2章 面试需要的基础知识"
+order: 14
+description: "从原点遍历数位和不超过阈值的连通格子，用永久访问标记去重，并比较深度优先与广度优先实现。"
+demo: true
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/13_RobotMove/RobotMove.cpp"
+draft: false
+---
+
+import { DigitSumConstraintDiagram, RobotReachabilityGridDiagram, ReachabilityVisitStateMap, RobotMovingCountLab } from "@/components/mdx/coding-interviews/diagrams/robot-moving-count";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释坐标数位和约束与从原点连通可达是两个独立条件
+- 能计算任意非负行列坐标的十进制数位和
+- 能实现带永久访问标记的深度优先或广度优先网格遍历
+- 能分析矩阵规模、数位计算、访问数组和递归深度的复杂度
+- 能设计多行列、单行、单列、单格、零阈值和非法参数测试
+
+</Objectives>
+
+## 从坐标合法不等于能够到达开始
+
+先预测：阈值`k=1`时，坐标`(100,0)`的数位和是1，看起来满足进入条件；机器人从`(0,0)`出发，真的一定能走到那里吗？若中间所有路径都被超阈值格子隔断，“格子合法”和“格子可达”还是同一件事吗？
+
+“机器人的运动范围”给出`m`行`n`列网格，机器人从`(0,0)`开始，每次可向左、右、上、下移动一格。只有行坐标各位数字之和加列坐标各位数字之和不大于`k`，才能进入该格，问题要求统计机器人实际能够到达多少格。
+
+<Term def="把一个非负整数的十进制各位数字相加得到的值，例如35的数位和为3+5=8。">数位之和</Term>与坐标大小不单调。作者示例中`(35,37)`的总数位和为18，阈值18时可进入；`(35,38)`为19，不能进入。十进制进位还会让`99→100`的数位和从18降为1，所以不能用坐标大小直接代替逐位计算。
+
+<DigitSumConstraintDiagram />
+
+满足数位约束只是“允许进入”，从起点存在一条全部合法的四邻接路径才是<Term def="从起点沿合法邻接移动能够实际访问到的格子。">可达格子</Term>。所有允许格子可能包含与原点隔开的区域，不能扫描全图后把约束成立的格子直接相加。
+
+## 把问题看成隐式图的连通分量
+
+每个合法格子是一个顶点，上下左右合法邻居之间有边；题目求包含`(0,0)`的<Term def="图中任意两点可通过边互相到达的一组顶点；这里特指包含原点的可达区域。">连通分量</Term>大小。无需预先构造所有边，只要从原点搜索时按坐标生成四个邻居。
+
+作者使用递归<Term def="沿一个分支持续深入，无法继续后再处理其他分支的图搜索方式。">深度优先搜索</Term>。每次先检查边界、数位和与访问状态，首次到达就标记并计数1，再累加四个方向返回的数量。这也常被书中归入“回溯或广度优先搜索”的网格解法，但这里的`visited`不会在递归返回时撤销。
+
+<RobotReachabilityGridDiagram />
+
+为什么不撤销？因为一个格子一旦从原点被发现，它已经属于目标连通分量，之后从其他路径再次到达只会重复计数和形成环。`visited`表示“全局已计数”，而上一题矩阵路径的`visited`表示“当前候选路径占用”；同名数组承载的语义不同，更新策略也相反。
+
+<ReachabilityVisitStateMap />
+
+## 忠实实现作者的四方向 DFS
+
+数位和函数反复取末位并除以10。`0`的循环不执行，结果自然为0。入口先拒绝负阈值和非正行列，然后分配访问数组；从`(0,0)`开始，未实际到达的格子不会被扫描。
+
+```cpp
+#include <cstddef>
+#include <limits>
+#include <stdexcept>
+#include <vector>
+
+int digitSum(int number) {
+    int sum = 0;
+    while (number > 0) {
+        sum += number % 10;
+        number /= 10;
+    }
+    return sum;
+}
+
+class RobotRange {
+public:
+    std::size_t movingCount(int threshold, int rows, int cols) {
+        if (threshold < 0 || rows <= 0 || cols <= 0) return 0;
+
+        const auto r = static_cast<std::size_t>(rows);
+        const auto c = static_cast<std::size_t>(cols);
+        if (r > std::numeric_limits<std::size_t>::max() / c) {
+            throw std::length_error("grid is too large");
+        }
+
+        threshold_ = threshold;
+        rows_ = rows;
+        cols_ = cols;
+        visited_.assign(r * c, 0);
+        return dfs(0, 0);
+    }
+
+private:
+    std::size_t dfs(int row, int col) {
+        if (row < 0 || row >= rows_ ||
+            col < 0 || col >= cols_) {
+            return 0;
+        }
+        const auto pos =
+            static_cast<std::size_t>(row) *
+            static_cast<std::size_t>(cols_) +
+            static_cast<std::size_t>(col);
+        if (visited_[pos] ||
+            digitSum(row) + digitSum(col) > threshold_) {
+            return 0;
+        }
+
+        visited_[pos] = 1;
+        return 1 + dfs(row - 1, col)
+                 + dfs(row, col - 1)
+                 + dfs(row + 1, col)
+                 + dfs(row, col + 1);
+    }
+
+    int threshold_ = 0;
+    int rows_ = 0;
+    int cols_ = 0;
+    std::vector<unsigned char> visited_;
+};
+```
+
+标记必须发生在递归扩展之前。若先递归邻居、回来才标记，两个相邻合法格会互相调用形成无限递归。`rows * cols`在分配前也要防止整数乘法溢出；作者接收普通`int`且面试规模很小，工程接口不能默认任何尺寸都可安全相乘。
+
+<Callout type="trap" title="像路径题一样在DFS返回时撤销visited">
+本题统计的是全局可达连通分量，不是在寻找一条不可复用格子的路径。撤销会让同一格从不同方向反复进入和重复计数，网格中的环还会导致递归爆炸；首次发现后应永久标记。
+</Callout>
+
+## BFS 避免深递归栈
+
+<Term def="按与起点的边数距离逐层扩展，通常用队列保存待处理顶点的图搜索方式。">广度优先搜索</Term>得到相同可达集合。它把合法且未访问的邻居放入队列，循环弹出并扩展。访问标记应在入队时设置，而不是出队时设置，否则同一格可能被多个父节点重复入队，占用额外内存。
+
+```cpp
+#include <array>
+#include <queue>
+#include <utility>
+
+std::size_t movingCountBfs(int threshold, int rows, int cols) {
+    if (threshold < 0 || rows <= 0 || cols <= 0) return 0;
+
+    std::vector<unsigned char> visited(
+        static_cast<std::size_t>(rows) *
+        static_cast<std::size_t>(cols), 0);
+    std::queue<std::pair<int, int>> pending;
+
+    auto tryPush = [&](int row, int col) {
+        if (row < 0 || row >= rows || col < 0 || col >= cols ||
+            digitSum(row) + digitSum(col) > threshold) {
+            return;
+        }
+        const auto pos =
+            static_cast<std::size_t>(row) *
+            static_cast<std::size_t>(cols) +
+            static_cast<std::size_t>(col);
+        if (visited[pos]) return;
+        visited[pos] = 1;
+        pending.emplace(row, col);
+    };
+
+    tryPush(0, 0);
+    std::size_t count = 0;
+    constexpr std::array directions{
+        std::pair{-1, 0}, std::pair{1, 0},
+        std::pair{0, -1}, std::pair{0, 1}
+    };
+
+    while (!pending.empty()) {
+        const auto [row, col] = pending.front();
+        pending.pop();
+        ++count;
+        for (const auto [dr, dc] : directions) {
+            tryPush(row + dr, col + dc);
+        }
+    }
+    return count;
+}
+```
+
+DFS 与 BFS 都遍历同一连通分量，时间上界相同。DFS 代码贴近作者，递归深度在狭长网格或大可达区域中可能达到`O(RC)`并耗尽线程栈；BFS 使用堆上的队列，峰值取决于搜索前沿宽度，通常更适合大网格。
+
+## 为什么首次发现一次恰好等于答案
+
+先证明不会多计。代码只有在坐标位于边界内、数位和满足阈值且`visited`为假时才增加1；这个格又是从已可达父格的一个合法邻居扩展而来，所以每个被计数格都有一条从原点延伸出的合法路径。标记在计数前设置，之后所有重复到达都返回0，因此同一坐标最多贡献一次。
+
+再证明不会漏计。对任意真正可达格，取一条从原点到它的合法路径。起点会被搜索发现；若路径前`i`个格已被发现，第`i+1`个格是其四邻居之一且满足约束，扩展该父格时就会被发现。按路径长度归纳，终点最终一定进入访问集合。于是算法计数集合与题目可达集合完全相同。
+
+这个证明也解释了检查顺序：邻格必须由已可达格生成，不能在全图中独立判断；`visited`必须在首次发现时设置，不能等所有邻居处理完；计数只能和首次设置标记绑定，不能在每条入边上累加。
+
+若入口格`(0,0)`不满足约束，搜索返回0。对于题目允许的非负阈值，原点数位和固定为0，因此总满足；负阈值在入口被作为非法参数直接返回0。这两个规则共同覆盖“机器人不能进入任何格”的情况。
+
+## 四方向能否裁成只向右和向下
+
+一些实现只扩展右、下两个方向，用网格对称性减少常数。这样的优化不能仅凭“起点在左上角”决定：可达性的定义允许四方向，而数位和在十进制进位处并不单调，某个格的可行路径是否总能改写成坐标单调路径需要独立证明。
+
+作者源码明确探索上、左、下、右四方向，这是最直接符合题意的基线。它依靠全局访问标记去掉往返与环，因此即使多两个方向，每条合法格仍只扩展一次，渐进复杂度不会变。没有完成等价证明时，删方向属于改变搜索图，而不是普通微优化。
+
+若采用两方向版本，应至少在大量行列尺寸与阈值上同四方向 BFS 交叉验证，并特别覆盖`9→10`、`19→20`、`99→100`等数位和突变边界。测试不能代替数学证明，但能暴露“看起来单调”的错误假设；书籍复刻以作者四方向契约为准。
+
+类似地，也不能因为网格关于主对角线对称就只计算一半后乘2：矩形行列可能不同，对角线格不能重复计数，边界截断后的可达形状也需要单独处理。保持一次完整图遍历通常更清晰可靠。
+
+## 数位和成本与缓存策略
+
+若每次检查都重新对行列做除10循环，单次坐标判断成本与十进制位数`D`成正比，访问全网格的宽松上界是`O(RC·D)`。访问标记保证每个合法格最多扩展一次，但同一个非法邻居可能从多个方向被检查，常数仍受`digitSum`影响。
+
+可以预先计算所有行与列的数位和：`rowSums[r]`和`colSums[c]`分别占`O(R+C)`空间，搜索时判断变成常数。顺序生成时还可利用`digitSum(x+1)=digitSum(x)+1-9t`，其中`t`是`x`末尾连续9的个数；例如99到100减去18再加1。
+
+缓存是性能优化，不改变搜索语义。若网格很稀疏、阈值很小，只访问少量格子，预计算全部行列可能反而做了多余工作；可按需记忆坐标数位和。选择时比较可达区域大小、坐标位数和内存预算。
+
+总体上，访问数组占`O(RC)`。DFS 另有最坏`O(RC)`调用栈，BFS 队列最坏也可容纳`O(RC)`格。若网格尺寸巨大而可达区域很小，可用哈希集合只记录已访问坐标，把空间改为与实际访问数`V`相关，但每次查找常数更高。
+
+## 超大网格要区分逻辑尺寸与可分配尺寸
+
+即使`rows`和`cols`各自能放入`int`，乘积也可能超过`size_t`或系统可分配内存。先转为无符号宽类型再检查`rows > max / cols`，才能避免乘法已经溢出后再判断；随后`vector`仍可能因内存不足抛出异常，接口要决定向上传播还是转成错误结果。
+
+当逻辑网格极大但阈值很小，密集`R×C`访问位图不合理。哈希集合可只存实际发现的坐标，队列也只含搜索前沿；坐标对可编码为64位键或结构体哈希。此时复杂度按实际可达数`V`描述更有意义，时间约为`O(V·D)`的平均哈希成本，空间`O(V)`。
+
+稀疏结构不等于可以取消边界。邻居`row+1`、`col+1`在最大整数处可能溢出，先确认当前坐标严格小于末边界再加一最安全；负方向则先检查大于0。作者使用小型`int`测试没有触发这些问题，通用接口仍应把坐标算术纳入契约。
+
+返回类型也应容纳最大可能答案。`int`在超大网格中可能装不下格子数，现代实现使用`size_t`或明确宽度的无符号整数；序列化、跨语言接口再约定上限。正确搜索后把计数截断回32位仍是错误结果。
+
+## 为什么不能只统计所有满足阈值的格子
+
+坐标数位和并不随坐标单调增加，十进制进位会产生远处的低数位和“岛屿”。阈值很小时，原点附近可达区域可能被一整条不合法带阻断；阻断带另一侧即使有满足阈值的格子，机器人也无法穿越。
+
+因此条件应按顺序理解：先从一个已可达格沿边走到邻格，再检查邻格是否允许进入。全图过滤只回答“哪些顶点合法”，搜索才回答“哪些合法顶点与原点连通”。官方问题问后者。
+
+<Callout type="trap" title="数位和不超k就直接计入答案">
+合法格可能与原点不连通。特别是十进制进位后，远处坐标数位和会骤降，但机器人仍不能跨过中间超阈值屏障；必须从(0,0)做连通遍历。
+</Callout>
+
+## 官方九组测试锁定坐标与尺寸边界
+
+作者`Test1`验证阈值5、10行10列返回21，`Test2`验证阈值15、20行20列返回359。单行测试`k=10, 1×100`返回29而`1×10`返回10，能发现只用个位或误认为数位和单调的实现。
+
+单列测试`k=15, 100×1`返回79，`10×1`返回10；它们与单行共同验证行列计算对称。`1×1`在阈值15和0时都返回1，因为原点数位和为0；负阈值`-10`返回0。
+
+```cpp
+#include <cassert>
+
+void testRobotRange() {
+    RobotRange solver;
+    assert(solver.movingCount(5, 10, 10) == 21);
+    assert(solver.movingCount(15, 20, 20) == 359);
+    assert(solver.movingCount(10, 1, 100) == 29);
+    assert(solver.movingCount(10, 1, 10) == 10);
+    assert(solver.movingCount(15, 100, 1) == 79);
+    assert(solver.movingCount(15, 10, 1) == 10);
+    assert(solver.movingCount(15, 1, 1) == 1);
+    assert(solver.movingCount(0, 1, 1) == 1);
+    assert(solver.movingCount(-10, 10, 10) == 0);
+}
+
+void crossCheckSearches(int k, int rows, int cols) {
+    RobotRange dfs;
+    assert(dfs.movingCount(k, rows, cols) ==
+           movingCountBfs(k, rows, cols));
+}
+```
+
+随机小网格可以让 DFS 与 BFS 互为预言机，再用独立显式图遍历核查。还应重复调用同一个`RobotRange`对象，确认每次入口重新初始化`visited`、阈值和尺寸；成员状态残留会让第二次调用少计格子。
+
+<RobotMovingCountLab />
+
+<Stepper>
+  <Step title="先计算坐标进入条件"><DigitSumConstraintDiagram />逐位相加行列坐标，比较总和与阈值，注意十进制进位并不单调。</Step>
+  <Step title="只从原点扩展连通区域"><RobotReachabilityGridDiagram />合法格还必须沿一条全合法四邻接路径从(0,0)到达。</Step>
+  <Step title="首次到达就永久标记"><ReachabilityVisitStateMap />visited阻止环和重复计数，本题递归返回时不撤销。</Step>
+  <Step title="用多维与单轴结果回归"><RobotMovingCountLab />官方计数覆盖普通网格、长单行列、单格、零阈值和负阈值。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 机器人的运动范围是从原点可达且坐标数位和不超过阈值的连通区域。
+2. 数位之和按十进制各位计算，随坐标增长并不单调。
+3. 合法格不一定是可达格，必须从`(0,0)`进行图搜索。
+4. DFS 和 BFS 都可遍历同一连通分量，访问标记在首次发现时永久设置。
+5. 本题visited表示全局已计数，不能像矩阵路径回溯那样撤销。
+6. 普通实现最坏访问`RC`个格，空间为`O(RC)`，递归DFS还有栈深风险。
+7. 数位和可按需计算、预计算行列缓存或利用进位关系增量更新。
+8. 官方九组测试覆盖二维、单行、单列、单格、零阈值与非法阈值。
+
+<Exercises>
+
+**问题 1：为什么阈值0、1×1网格的答案是1？**
+
+<Answer>起点(0,0)的行列数位和都是0，总和0不大于阈值0。网格有效且机器人一开始就在该格，因此它属于可达集合并计数1。</Answer>
+
+**问题 2：本题为什么不能在DFS回退时清除visited？**
+
+<Answer>visited表示格子已经从原点可达并计入全局答案，而不是当前路径占用。清除会让其他邻居再次进入同一格，形成环和重复计数；每个可达格只应首次扩展一次。</Answer>
+
+**问题 3：DFS 与 BFS 的结果为什么相同？**
+
+<Answer>两者从同一起点出发，使用相同合法邻接规则，并持续扩展所有首次发现顶点。访问顺序不同，但最终闭包都是包含原点的同一连通分量，所以计数相同。</Answer>
+
+**问题 4：预计算rowSums和colSums何时可能不划算？**
+
+<Answer>阈值很小或网格巨大时，实际只访问原点附近少量格子，预计算全部R+C个坐标会做大量无用工作并占额外空间。此时按需计算或记忆访问过的坐标更合适。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="数位之和">非负整数十进制各位数字的总和。</GlossaryItem>
+  <GlossaryItem term="可达格子">从原点沿全部合法的四邻接移动实际能够进入的格子。</GlossaryItem>
+  <GlossaryItem term="连通分量">图中通过边互相可达的一组顶点，本题统计包含原点的分量。</GlossaryItem>
+  <GlossaryItem term="深度优先搜索">沿分支深入后再回到其他分支的图遍历方式。</GlossaryItem>
+  <GlossaryItem term="广度优先搜索">使用队列按离起点边数逐层扩展的图遍历方式。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="《剑指Offer（第2版）》面试题13及何海涛官方源码 RobotMove.cpp"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/13_RobotMove/RobotMove.cpp"
+/>

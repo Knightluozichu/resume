@@ -1,0 +1,223 @@
+---
+title: "Chapter 30. Techniques for Writing C Functions"
+type: C
+section: "Programming in Lua 4e · The C API"
+order: 30
+description: "掌握C function中的array/table转换、binary-safe string buffer、registry引用、upvalue与共享状态设计。"
+demo: true
+math: false
+sourceUrl: "https://www.lua.org/pil/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PilCContainerLab, PilRegistryLifecycleLab, PilCClosureStateLab } from "@/components/mdx/lua-programming/diagrams/c-function-techniques";
+
+<Objectives>
+
+- 能解释Lua table与C array、Lua string与C bytes的边界差异，并验证density、length、capacity与stack delta
+- 能实现luaL_Buffer字符串构造和registry reference生命周期，处理embedded zero、growth limit、lookup与unref
+- 能设计C closure private/shared upvalues，比较process static、per-state registry和per-instance table的隔离范围
+
+</Objectives>
+
+## 为什么C Function技巧首先是State Placement
+
+C extension经常需要处理数组、拼接字符串和跨调用保存callback。错误通常不是某个API不会用，而是把状态放错生命周期：把Lua string当NUL结尾C string，把stack index保存到下一次调用，把registry reference忘记unref，或用process-global static给多个Lua states共享可变数据。
+
+先预测：table含1、2、4三个integer keys时`lua_rawlen`是否代表“元素个数”；`lua_seti`调用后value还在top吗；包含零字节的Lua string用`strlen`得到什么；registry ref会不会阻止GC；`lua_close`后ref是否还能用；两个C closures各捕获integer值与共同捕获一张table时，修改传播有何不同。
+
+<Term def="Extension state placement按临时stack、closure、state registry、native owner和process范围选择存储位置，使lifetime与sharing边界一致。">extension state placement</Term>决定GC reachability、线程规则与清理责任。
+
+## Array Manipulation
+
+Lua没有独立array type，table的1..n integer keys只是约定。`lua_rawlen`给出长度边界，不等于通用table的元素总数；含holes时`#`/raw length的border不应被当作业务schema。C function若要求dense array，应逐项读取1..n并拒绝nil、错误类型和超过limit的n。
+
+<Term def="Dense array boundary要求输入table在1..n连续存在、每项满足元素schema，并限制n与输出容量。">dense array boundary</Term>先验证再转换。`lua_geti`把值push到top，`lua_seti`消费top value；目标table index应先`lua_absindex`，避免push改变negative coordinate。
+
+```c
+static int l_scale_array(lua_State *L) {
+  luaL_checktype(L, 1, LUA_TTABLE);
+  lua_Number factor = luaL_checknumber(L, 2);
+  size_t length = lua_rawlen(L, 1);
+  if (length > 100000) return luaL_error(L, "array too large");
+
+  lua_createtable(L, (int)length, 0);
+  for (size_t i = 1; i <= length; ++i) {
+    int isnum = 0;
+    lua_geti(L, 1, (lua_Integer)i);
+    lua_Number value = lua_tonumberx(L, -1, &isnum);
+    lua_pop(L, 1);
+    if (!isnum) return luaL_error(L, "non-number at index %d", (int)i);
+    lua_pushnumber(L, value * factor);
+    lua_seti(L, -2, (lua_Integer)i);
+  }
+  return 1;
+}
+```
+
+输出table可用`lua_createtable(L,n,0)`提供容量提示但不改变语义。Size转换到C `int`或native buffer前检查range；不要让恶意length触发overflow或超大预分配。
+
+## String Manipulation
+
+Lua string是immutable byte sequence，长度可含embedded zero。读取用`luaL_checklstring`/`lua_tolstring`同时取得pointer与length；比较或复制使用length-aware API。Pointer属于Lua，在对应value生命周期外不能保存。
+
+逐片拼接不应反复创建中间Lua strings。`luaL_Buffer`在C侧累计pieces，`luaL_buffinit`初始化，`luaL_addchar`、`luaL_addlstring`、`luaL_addvalue`追加，`luaL_pushresult`最终push一个Lua string。Buffer API有自己的stack约束，不要在未完成buffer时随意破坏其内部状态。
+
+```c
+static int l_escape_tabs(lua_State *L) {
+  size_t length = 0;
+  const char *input = luaL_checklstring(L, 1, &length);
+  if (length > 1024 * 1024) return luaL_error(L, "input too large");
+
+  luaL_Buffer buffer;
+  luaL_buffinit(L, &buffer);
+  for (size_t i = 0; i < length; ++i) {
+    unsigned char byte = (unsigned char)input[i];
+    if (byte == '\t') luaL_addlstring(&buffer, "\\t", 2);
+    else luaL_addchar(&buffer, (char)byte);
+  }
+  luaL_pushresult(&buffer);
+  return 1;
+}
+```
+
+<Term def="Binary-safe string boundary始终携带pointer与explicit length，并限制输入输出增长而不依赖NUL terminator。">binary-safe string boundary</Term>也要求定义encoding：bytes、UTF-8 code units与用户可见characters不是同一计数单位。
+
+<PilCContainerLab />
+
+<Stepper>
+  <Step title="切换Read/Write Array与Read/Build String"><PilCContainerLab /></Step>
+  <Step title="验证Container Schema">覆盖holes、mixed keys、zero length、embedded zero、oversize与integer conversion，逐步记录top delta。</Step>
+  <Step title="测量Growth">比较repeated concatenation与luaL_Buffer的allocation/peak bytes，设置input/output和element上限。</Step>
+</Stepper>
+
+<Callout type="trap" title="lua_rawlen就是Table中Key的数量">
+它针对sequence border/对象raw length，不统计任意hash keys；含holes的table不能由rawlen证明dense。业务array需要明确1..n schema并逐项验证。
+</Callout>
+
+## Storing State in C Functions
+
+状态可能是callback、native handle、configuration或counter。Stack只适合当前activation；C static生命周期过宽，默认跨state共享且可能有数据竞争。Lua-owned registry和upvalues随state受GC管理，更贴近模块实例，但native资源仍需finalizer/owner和state-close策略。
+
+选择问题依次是：谁共享、存活多久、谁释放、从哪个thread访问、是否需要Lua GC保持对象可达。不要用raw `lua_State *`或stack index作为长期通用handle。
+
+## The registry
+
+Registry位于`LUA_REGISTRYINDEX`，同一global state及其coroutines共享，用于C代码保存Lua values。它是公共命名空间：库不能随便使用短string keys。私有static地址配合`lua_rawgetp/rawsetp`可作为collision-resistant key；动态对象常用`luaL_ref`生成integer reference。
+
+<Term def="Registry reference lifecycle包括创建GC root、保存owner可见ref、按需lookup、最后luaL_unref且不再使用旧ref。">registry reference lifecycle</Term>必须在同一state内完成。`luaL_ref`会消费top value；`lua_rawgeti`把引用值push回来；`luaL_unref`允许槽位复用，所以释放后的整数不是稳定generation handle。
+
+```c
+typedef struct CallbackRef { lua_State *L; int ref; } CallbackRef;
+
+static int save_callback(lua_State *L, int index, CallbackRef *out) {
+  luaL_checktype(L, index, LUA_TFUNCTION);
+  lua_pushvalue(L, index);
+  out->ref = luaL_ref(L, LUA_REGISTRYINDEX);
+  out->L = L;
+  return 1;
+}
+
+static void release_callback(CallbackRef *callback) {
+  if (callback->L != NULL && callback->ref != LUA_NOREF) {
+    luaL_unref(callback->L, LUA_REGISTRYINDEX, callback->ref);
+    callback->ref = LUA_NOREF;
+    callback->L = NULL;
+  }
+}
+```
+
+实际owner必须保证`release_callback`发生在`lua_close`之前并回到state所属thread；state close后不能再调用API。Registry root会阻止callback GC，遗漏unref就是Lua-side leak。
+
+<PilRegistryLifecycleLab />
+
+<Stepper>
+  <Step title="切换Store、Lookup、Use和Release"><PilRegistryLifecycleLab /></Step>
+  <Step title="建立Reference Ledger">记录state identity、ref、native owner、created/released generation，覆盖nil、duplicate release和close ordering。</Step>
+  <Step title="做GC与Reuse测试">强制GC证明有ref时对象存活、unref后可回收；创建新ref验证旧整数可能复用且不可接受late callback。</Step>
+</Stepper>
+
+## Upvalues
+
+`lua_pushcclosure(L,f,n)`消费top上的n个values并创建C closure，函数中用`lua_upvalueindex(i)`访问。每个closure持有自己的upvalue values，适合绑定factor、config table或userdata handle；它们由Lua保持可达，随closure一起回收。
+
+Upvalue index是pseudo-index，不能参与普通stack rotate。若upvalue是full userdata，可通过metatable和`__gc`管理native handle；light userdata只保存pointer identity，不自动拥有或释放对象。
+
+## Shared upvalues
+
+多个C closures分别捕获一个number时得到独立values。若需要共享mutable state，先创建一张table，再对每个closure push同一table value作为upvalue；它们通过字段读写同一个Lua object。这比process static明确支持per-module-instance隔离。
+
+<Term def="Shared upvalue table是被多个C closures捕获的同一Lua table，用显式字段承载模块实例的共享可变状态。">shared upvalue table</Term>还能存version、closed flag和registry/native handle owner信息。
+
+```c
+static int l_next(lua_State *L) {
+  lua_getfield(L, lua_upvalueindex(1), "count");
+  lua_Integer count = lua_tointeger(L, -1) + 1;
+  lua_pop(L, 1);
+  lua_pushinteger(L, count);
+  lua_setfield(L, lua_upvalueindex(1), "count");
+  lua_pushinteger(L, count);
+  return 1;
+}
+
+int luaopen_counter(lua_State *L) {
+  lua_newtable(L);
+  int state = lua_absindex(L, -1);
+  lua_pushinteger(L, 0); lua_setfield(L, state, "count");
+  lua_newtable(L);
+  lua_pushvalue(L, state); lua_pushcclosure(L, l_next, 1);
+  lua_setfield(L, -2, "next");
+  lua_remove(L, state);
+  return 1;
+}
+```
+
+<PilCClosureStateLab />
+
+<Stepper>
+  <Step title="切换C Static、Registry、Upvalue和Shared Table"><PilCClosureStateLab /></Step>
+  <Step title="画Sharing Graph">标每个Lua state、module table、C closure、upvalue table和native resource，验证没有隐式process-global共享。</Step>
+  <Step title="测试Two Instances">在两个states和同一state两个module instances中递增、GC、close，确认隔离、共享与cleanup符合设计。</Step>
+</Stepper>
+
+<Callout type="trap" title="Light Userdata Upvalue会让Native Object自动存活">
+Light userdata只是pointer value，不参与资源所有权，也没有自己的__gc。需要Lua拥有生命周期时使用full userdata或registry/native owner，并验证late callback与close ordering。
+</Callout>
+
+## 本章回顾：状态范围必须匹配共享范围
+
+1. Lua table不是天然dense C array；rawlen、holes、mixed keys与size limit都要按schema验证。
+2. Lua strings是带length的bytes；luaL_Buffer避免反复中间拼接并保持binary-safe。
+3. Stack只活在当前调用，process static范围过宽；跨调用state应选择registry、upvalue或显式native owner。
+4. Registry reference是同一state内的GC root，创建后必须在close前unref并拒绝旧ref复用。
+5. C closure upvalue保存private state，full/light userdata具有不同ownership语义。
+6. 多个closures共享同一upvalue table可构造隔离的module instance state。
+
+<Exercises>
+
+**问题 1：为什么lua_rawlen不能证明Input是Dense Array？**
+
+<Answer>Table可能有holes和额外hash keys，raw length只给出sequence border/长度语义。应定义n来源，逐项检查1..n非nil且type/range正确，并限制n；若禁止额外keys还要单独遍历验证。</Answer>
+
+**问题 2：Registry Callback Reference何时释放最安全？**
+
+<Answer>由明确native owner在operation取消/完成或owner销毁时、且lua_close之前、在state所属线程调用luaL_unref；随后把ref标为LUA_NOREF并拒绝late completion。</Answer>
+
+**问题 3：两个C Functions怎样共享Counter但不污染另一个Lua State？**
+
+<Answer>为module instance创建state table，把同一table分别push并捕获为两个C closures的upvalue；字段更新彼此可见，而另一个state/module instance拥有另一张table。避免mutable process static。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="extension state placement" definition="按临时、closure、state、native和process范围选择扩展状态位置。" />
+  <GlossaryItem term="dense array boundary" definition="验证1..n连续元素、schema与容量限制的Lua/C数组边界。" />
+  <GlossaryItem term="binary-safe string boundary" definition="始终携带pointer和length并限制增长的字符串转换边界。" />
+  <GlossaryItem term="registry reference lifecycle" definition="创建GC root、lookup使用、unref并拒绝旧ref的完整生命周期。" />
+  <GlossaryItem term="shared upvalue table" definition="多个C closures捕获同一table形成的模块实例共享状态。" />
+</Glossary>
+
+<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 30: Techniques for Writing C Functions" adaptedUrl="https://www.lua.org/pil/" />

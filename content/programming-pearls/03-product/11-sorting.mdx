@@ -1,0 +1,457 @@
+---
+title: "Column 11 · Sorting：从可证明的划分到可测量的排序"
+type: B
+section: "Part III · The Product"
+order: 10
+description: "按第二版Column 11重建Insertion Sort、Lomuto simple Quicksort、two-way partition、random pivot、small-subarray cutoff、library baseline与sorting principles。"
+demo: true
+math: true
+sourceUrl: "https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+draft: false
+---
+
+import { PP2SortDecisionLab, PP2InsertionInvariantLab, PP2InsertionCostLab, PP2LomutoPartitionLab, PP2QuicksortTreeLab, PP2TwoWayPartitionLab, PP2RandomPivotLab, PP2CutoffLab, PP2BenchmarkLab, PP2StabilityLab, PP2SortCertificateLab } from "@/components/mdx/programming-pearls/diagrams/11-sorting";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释Sorting contract、Insertion Sort sorted-prefix invariant，以及library sort为何是默认起点
+- 能计算inversion-sensitive insertion cost、Quicksort recursion depth、expected comparisons与原书benchmark model
+- 能实现Simple Quicksort的Lomuto partition、two-way partition、random pivot与cutoff plus final insertion pass
+- 能分析sorted、reverse、all-equal、duplicate-heavy与nearly-sorted inputs对time、stack、stability和swaps的影响
+- 能设计sorting principles驱动的correctness oracle、adversarial suite、library baseline、measurement matrix与release certificate
+
+</Objectives>
+
+## 从“直接调用库函数”开始
+
+如何把records排成order？Column 11的第一答案不是手写算法，而是use a library sort function。Library通常已经处理了types、comparators、adversarial cases、portability与多年调优。只有当existing sort难以接入、不能表达required order，或measurement证明它不满足constraint时，才进入本栏的手写路径。
+
+先预测：面对10,000个almost-sorted records，应先写Quicksort、Insertion Sort，还是先测system library？改变data shape与constraint，观察first candidate如何变化。
+
+<PP2SortDecisionLab />
+
+Sorting（<Term def="将records按comparison/key定义的total or weak order重新排列，同时满足permutation、ordering以及可能的stability和resource contract。">Sorting</Term>）的完整postcondition至少包含：
+
+1. Ordered：相邻records不违反comparator。
+2. Permutation：output与input拥有相同multiset，既不丢也不复制。
+3. Stability若required：equal keys保持original relative order。
+4. Resource envelope：time、extra memory与stack depth满足target workload。
+
+只检查“看起来有序”会漏掉duplicate loss；只看big-O会漏掉comparator calls、cache、function-call overhead与bad recursion depth。
+
+## 11.1 Insertion Sort
+
+Insertion Sort（<Term def="维护sorted prefix，并把next record向左sift到正确位置的incremental stable sorting algorithm。">Insertion Sort</Term>）像card player整理手牌。对array `x[n]`，开始时`x[0..0]`已排序；每轮把`x[i]`插入`x[0..i]`，于是boundary向右推进。
+
+原书用四行状态表示过程：
+
+```text
+3 | 1 4 2
+1 3 | 4 2
+1 3 4 | 2
+1 2 3 4 |
+```
+
+<PP2InsertionInvariantLab />
+
+第一版最接近definition：
+
+```cpp
+void isort1(int x[], int n) {
+    for (int i = 1; i < n; ++i) {
+        // invariant: x[0..i-1] is sorted
+        for (int j = i; j > 0 && x[j - 1] > x[j]; --j) {
+            swap(x[j - 1], x[j]);
+        }
+    }
+}
+```
+
+Correctness来自two-level invariant。Outer loop开始时prefix sorted；inner loop把new value越过所有larger predecessors，且不改变其他records的relative order。结束时`x[0..i]` sorted。Outer loop终止后整个array sorted。
+
+原书接着做两次局部调优。`isort2`把inner-loop swap function展开；`isort3`发现被插入的`t`在每次swap中不变，于是保存一次、只右移larger records：
+
+```cpp
+void isort3(int x[], int n) {
+    for (int i = 1; i < n; ++i) {
+        int t = x[i];
+        int j = i;
+        while (j > 0 && x[j - 1] > t) {
+            x[j] = x[j - 1];
+            --j;
+        }
+        x[j] = t;
+    }
+}
+```
+
+若input有$I$个inversions，shift count与$I$同阶：
+
+$$
+T(n,I)=\Theta(n+I).
+$$
+
+Random permutation的expected inversions约$n(n-1)/4$，所以average与worst case均为$\Theta(n^2)$；almost-sorted data若$I=O(n)$，同一program近似linear。这正是11.3最后cleanup pass成立的原因。
+
+<PP2InsertionCostLab />
+
+原书400 MHz Pentium II上的models分别约为$11.9n^2$、$3.8n^2$、$3.2n^2$ nanoseconds。`isort3`排1,000 integers只需few milliseconds，10,000约one third second，但million integers接近one hour。Absolute times早已过时，仍有效的是：algorithmic quadratic wall不会被小常数消除；对small或nearly sorted input，simple tight loop却很有竞争力。
+
+<Callout type="trap" title="Insertion Sort一定慢，永远不该用">
+Big-O省略了input disorder与setup cost。对small partitions、already-nearly-sorted arrays或需要stable in-place behavior的场景，Insertion Sort可能是正确finisher；错误是把它直接扩展到large random input。
+</Callout>
+
+## 11.2 A Simple Quicksort
+
+Simple Quicksort（<Term def="选择pivot，将active subarray划成lower与upper regions，再递归排序两侧的divide-and-conquer algorithm。">Simple Quicksort</Term>）来自C. A. R. Hoare 1962年的Quicksort。原书从八个integers开始：
+
+```text
+55 41 59 26 53 58 97 93
+```
+
+以55为pivot完成partition后，可得到：
+
+```text
+41 26 53 | 55 | 59 58 97 93
+```
+
+只要独立sort左右两侧，whole array就sorted。一次linear partition为许多records建立了global relation；相比之下，Insertion Sort一次sift只让one more prefix element到位。
+
+### Lomuto partition invariant
+
+Partition（<Term def="围绕pivot重排active range，使left region满足lower relation、right region满足upper relation，并返回可安全缩小递归问题的boundary。">Partition</Term>）采用Nico Lomuto的one-way scan。令pivot为`x[l]`，scan `i`从`l+1`到`u`，boundary `m`保持：
+
+```text
+x[l+1..m]   <  x[l]
+x[m+1..i-1] >= x[l]
+x[i..u]        unknown
+```
+
+<PP2LomutoPartitionLab />
+
+完整的`qsort1`很短，但每一行都承担proof obligation：
+
+```cpp
+void qsort1(int x[], int l, int u) {
+    if (l >= u) return;
+
+    int m = l;
+    for (int i = l + 1; i <= u; ++i) {
+        if (x[i] < x[l]) {
+            swap(x[++m], x[i]);
+        }
+    }
+
+    swap(x[l], x[m]);
+    // x[l..m-1] < x[m] <= x[m+1..u]
+    qsort1(x, l, m - 1);
+    qsort1(x, m + 1, u);
+}
+```
+
+Final pivot swap不能省。若保留pivot在`x[l]`却递归`(l,m)`，pivot为strict maximum时subproblem不缩小，会infinite recursion。交换后pivot固定在final position `m`，two recursive ranges都strictly smaller，因此同时证明partial correctness与termination。
+
+### Average and worst shape
+
+若每层pivot都接近middle：
+
+$$
+T(n)=2T(n/2)+\Theta(n)=\Theta(n\log n).
+$$
+
+若每层pivot都是minimum或maximum：
+
+$$
+T(n)=T(n-1)+\Theta(n)=\Theta(n^2),
+$$
+
+stack depth也从expected $O(\log n)$恶化为$O(n)$。`qsort1`总选first element，因此already sorted input直接触发worst shape；大量equal keys也会全部落在同一侧。
+
+<PP2QuicksortTreeLab />
+
+## 11.3 Better Quicksorts
+
+Better Quicksorts（<Term def="在simple partition framework上改善sentinel、scan direction、pivot choice、small-subarray handling与inner-loop cost的Quicksort variants。">Better Quicksorts</Term>）不是一次神奇替换，而是四层可独立验证的改进。
+
+### Improvement 1：sentinel Lomuto
+
+原书Problem 2给出Bob Sedgewick的reverse scan。`x[l]`既是pivot也作sentinel，inner scan不再单独检查lower bound，loop结束时pivot已随最后一次swap进入boundary：
+
+```cpp
+void qsort2(int x[], int l, int u) {
+    if (l >= u) return;
+    int i = u + 1;
+    int m = u + 1;
+    do {
+        do { --i; } while (x[i] < x[l]);
+        swap(x[--m], x[i]);
+    } while (i > l);
+    qsort2(x, l, m - 1);
+    qsort2(x, m + 1, u);
+}
+```
+
+Sentinel optimization必须和its invariant一起移动；只删除bound check而没有guaranteed stopper会读出array。原书measurement从`qsort1`约$60n\log_2n$降到`qsort2`约$56n\log_2n$ nanoseconds，属于small constant improvement。
+
+### Improvement 2：two-way partition
+
+One-way scan遇到all-equal values会形成`0`与`n-1`的split。Two-way partition让`i`从left、`j`从right扫描，交换misplaced pair；equal values会被两边共同消费：
+
+```cpp
+void qsort3(int x[], int l, int u) {
+    if (l >= u) return;
+    int t = x[l];
+    int i = l;
+    int j = u + 1;
+
+    for (;;) {
+        do { ++i; } while (i <= u && x[i] < t);
+        do { --j; } while (x[j] > t);
+        if (i > j) break;
+        swap(x[i], x[j]);
+    }
+
+    swap(x[l], x[j]);
+    qsort3(x, l, j - 1);
+    qsort3(x, j + 1, u);
+}
+```
+
+<PP2TwoWayPartitionLab />
+
+Two-way code更快且驯服all-equal degeneration，但boundary details明显更delicate。Tests必须覆盖empty、one element、two equal、all equal、sorted、reverse sorted、pivot duplicate与alternating values。若duplicate concentration极高，原书Problem 11的fat pivot把array分成`less / equal / greater`三区，直接跳过equal middle region。
+
+### Improvement 3：random pivot
+
+所有前述versions若always choose first record，仍会被sorted input击中。进入partition前执行：
+
+```cpp
+swap(x[l], x[randint(l, u)]);
+```
+
+Random Pivot（<Term def="从active range均匀选择pivot position，使expected partition balance由algorithm randomness保障，而非假设input random。">Random Pivot</Term>）把expected bound建立在random-number call上，而不是建立在data distribution上。对任何fixed input，expected runtime为$\Theta(n\log n)$。`randint`必须覆盖closed range `[l,u]`且绝不out of bounds；偏差或overflow会破坏performance argument甚至memory safety。
+
+对distinct keys，standard randomized analysis给出expected comparisons：
+
+$$
+\mathbb{E}[C_n]
+=2(n+1)H_n-4n
+\sim 2n\ln n.
+$$
+
+<PP2RandomPivotLab />
+
+Randomization不是worst-case guarantee。若system要求deterministic latency，可以采用introspective fallback、Heapsort或显式depth limit；Column 14会给出worst-case $O(n\log n)$的Heapsort。
+
+### Improvement 4：small subarrays and one cleanup pass
+
+Quicksort在tiny ranges上支付recursion、random generator与partition setup。Sedgewick的做法是在range size小于Cutoff时直接return，不逐个用Insertion Sort处理每个range；整个Quicksort结束后，array由globally ordered small clumps组成，再运行one `isort3` cleanup。
+
+Cutoff（<Term def="停止递归partition并把small ranges留给final Insertion Sort的empirically selected size threshold。">Cutoff</Term>）在原书system上near 50，但不是portable constant：
+
+```cpp
+void qsort4(int x[], int l, int u, int cutoff) {
+    if (u - l < cutoff) return;
+
+    swap(x[l], x[randint(l, u)]);
+    int t = x[l];
+    int i = l;
+    int j = u + 1;
+
+    for (;;) {
+        do { ++i; } while (i <= u && x[i] < t);
+        do { --j; } while (x[j] > t);
+        if (i > j) break;
+        int temp = x[i]; x[i] = x[j]; x[j] = temp;
+    }
+    swap(x[l], x[j]);
+    qsort4(x, l, j - 1, cutoff);
+    qsort4(x, j + 1, u, cutoff);
+}
+
+qsort4(x, 0, n - 1, measured_cutoff);
+isort3(x, n);
+```
+
+<PP2CutoffLab />
+
+`qsort4`还只inline inner-loop swap，因为other swaps不在hot loop，展开收益negligible。每个change都应单独benchmark，避免把randomization、partition scheme与compiler effects混成一个unexplained result。
+
+### 原书benchmark ladder
+
+原书对random integers报告如下models：
+
+| Program | Lines of C | Nanoseconds |
+|---|---:|---:|
+| C library `qsort` | 3 | $137n\log_2n$ |
+| Quicksort 1 | 9 | $60n\log_2n$ |
+| Quicksort 2 | 9 | $56n\log_2n$ |
+| Quicksort 3 | 14 | $44n\log_2n$ |
+| Quicksort 4 + isort3 | 15 + 5 | $36n\log_2n$ |
+| C++ library `sort` | 1 | $30n\log_2n$ |
+
+<PP2BenchmarkLab />
+
+在该machine上sort one million random integers约0.6 seconds for C++ `sort`到2.7 seconds for C `qsort`。C `qsort`的flexible interface对每次comparison做function call；C++ template `sort(x,x+n)`可inline comparator并且code最短。这里最重要的sorting principle是：home-made versions展示derivation与measurement，但fastest measured result仍来自library。
+
+<Callout type="trap" title="随机主元后Quicksort就有worst-case n log n保证">
+Random pivot提供expected guarantee，不是deterministic worst-case guarantee；poor randomness、adversarial control或strict tail-latency requirement都要额外策略。还必须限制stack，例如总是递归smaller side并iteration处理larger side。
+</Callout>
+
+## 11.4 Principles
+
+Sorting Principles（<Term def="把library reuse、precise contract、algorithmic scale、local tuning、invariants与target measurement组合成排序选择的工程准则。">Sorting Principles</Term>）可整理为六条。
+
+### Use a library when it meets the contract
+
+System library同时节省programmer time与maintenance risk。先写comparator、stability、memory与latency requirement，再建立library baseline。只有evidence显示gap，才维护custom sort。
+
+### Match algorithm to scale and shape
+
+Insertion Sort适合small/nearly sorted data；large general input需要$n\log n$ family。External files、small integer universe、stable records或expensive keys还可能指向merge、radix、key indexing或decorate-sort-undecorate，而不是本栏Quicksort。
+
+### Derive code from invariants
+
+`m`,`i`,`j`不是pointer choreography。它们代表已经classified regions。每次comparison/swap都必须preserve region predicate，并使unknown region shrinking。Final pivot placement同时建立postcondition与termination measure。
+
+### Separate algorithm changes from code tuning
+
+从$n^2$到$n\log n$是dominant speedup；inline swap、sentinel与cutoff是在正确algorithm之后取得constant factors。先profile与benchmark，再修改hot operation。
+
+### Treat the comparator and stability as part of correctness
+
+Comparator若不满足strict weak ordering，可让sort result undefined或inconsistent。Stability（<Term def="equal-key records在output中保持其input relative order的sorting property。">Stability</Term>）不是美学属性，而是multi-key pipelines常依赖的contract。
+
+<PP2StabilityLab />
+
+### Measure distributions, not one random array
+
+Benchmark matrix至少覆盖sizes、random、sorted、reverse、organ-pipe、all-equal、few-unique、nearly sorted与real traces；记录median、tail、comparisons、moves、allocations与max stack。每个candidate必须先通过same correctness oracle。
+
+## 11.5 Problems
+
+原书Problems把本栏扩展为design space，而不是让读者只复写code：
+
+- Minimum/maximum/mean无需full sort；median可用selection；mode则依赖domain与representation。Sorting可能被overused，也可能是canonicalization的恰当primitive。
+- Experiment选择cutoff，应做parameter sweep、warmup、multiple seeds、multiple shapes与confidence interval，不应把one machine的50写成universal truth。
+- Worst-case stack可通过“递归smaller partition、loop处理larger partition”限制为$O(\log n)$。
+- Fat pivot适合duplicate-heavy data；Quickselect只递归包含rank `k`的一侧，expected linear time。
+- Sort-selection guide还需考虑space、programmer time、generality、stability、input properties与Column 1的special integer constraints。
+
+<PP2SortCertificateLab />
+
+Production oracle可写成：
+
+```cpp
+bool valid_sort(const vector<Record>& before,
+                const vector<Record>& after,
+                Comparator less) {
+    if (before.size() != after.size()) return false;
+    for (size_t i = 1; i < after.size(); ++i) {
+        if (less(after[i], after[i - 1])) return false;
+    }
+    return multiset_fingerprint(before) == multiset_fingerprint(after);
+}
+```
+
+Fingerprint只适合fast test pass；release-critical tests应使用independent reference sort或exact multiset to avoid collision masking。
+
+## 11.6 Further Reading
+
+原书把Donald Knuth的*The Art of Computer Programming, Volume 3: Sorting and Searching*作为definitive detailed reference：mathematical analysis、important algorithms、variations与exercises。第二版于1998更新；MIX assembly显老，但implementation principles仍有效。
+
+Robert Sedgewick的第三版*Algorithms*提供更modern treatment，Parts 1–4覆盖Fundamentals、Data Structures、Sorting与Searching，并分别有C、C++和Java editions。Further reading的目的不是收集更多algorithm names，而是学习如何把proof、machine model与industrial implementation放在一起。
+
+## 本栏实验路径
+
+<Stepper>
+  <Step title="先定义sorting contract" description="确定library是否满足order、stability、memory与latency，再选择first candidate。">
+    <PP2SortDecisionLab />
+    <PP2StabilityLab />
+  </Step>
+  <Step title="建立sorted-prefix invariant" description="逐步插入3,1,4,2，并把work与inversions联系起来。">
+    <PP2InsertionInvariantLab />
+    <PP2InsertionCostLab />
+  </Step>
+  <Step title="推导Simple Quicksort" description="跟踪Lomuto regions、final pivot position与balanced/skewed recursion shape。">
+    <PP2LomutoPartitionLab />
+    <PP2QuicksortTreeLab />
+  </Step>
+  <Step title="构造Better Quicksorts" description="比较two-way scan、random pivot与small-range cutoff的独立作用。">
+    <PP2TwoWayPartitionLab />
+    <PP2RandomPivotLab />
+    <PP2CutoffLab />
+  </Step>
+  <Step title="用measurement关闭决策" description="重放原书benchmark ladder，并检查correctness、adversarial、stack与library evidence。">
+    <PP2BenchmarkLab />
+    <PP2SortCertificateLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Sorting首先是ordered permutation contract；stability、memory、stack与comparator同样属于correctness。
+- Library sort是默认起点，custom code需要constraint或measurement证明。
+- Insertion Sort维护sorted prefix，work与inversions相关；small或nearly sorted input上很有效。
+- 原书三版Insertion Sort通过inline swap与shift saved value把constant model从$11.9n^2$降到$3.2n^2$ nanoseconds。
+- Simple Quicksort用Lomuto partition维护lower/scanned/unknown regions，final pivot swap保证postcondition和termination。
+- Balanced partitions给$\Theta(n\log n)$，extreme pivots给$\Theta(n^2)$与linear stack。
+- Better Quicksorts依次采用sentinel、two-way partition、random pivot、cutoff、one final insertion pass与hot-loop inline swap。
+- Random pivot保证任意fixed input上的expected $n\log n$，不提供deterministic worst-case guarantee。
+- 原书benchmark中C++ library `sort`约$30n\log_2n$ nanoseconds，快于hand-made与C `qsort` candidates。
+- Sorting principles要求先换algorithm，再调hot code，并用target distributions而非one friendly case测量。
+- Adversarial suite至少覆盖sorted、reverse、all equal、few unique、nearly sorted与boundary sizes。
+- Release certificate要同时证明ordered、permutation、stability requirement、stack bound与target performance。
+
+<Exercises>
+
+1. 对array `[55,41,59,26,53,58,97,93]`手工执行Lomuto partition。列出每次`m`变化、final pivot index，并说明为何递归ranges严格缩小。
+2. 一个array有$n=100{,}000$，其中99% values相等。比较one-way Lomuto、two-way partition与three-way fat pivot的recursion shape、comparisons和stack risk；给出推荐。
+3. 为target service选择cutoff。设计benchmark matrix、metrics、warmup、seeds、acceptance rule与rollback rule，避免把noise当成speedup。
+4. 修改Quicksort，使worst-case stack为$O(\log n)$：每次只递归smaller partition，larger partition用loop继续。说明time worst case为何仍可能是$O(n^2)$。
+
+<Answer>
+
+Pivot是55。Scan 41时`m`由0到1并交换自身；59不变；26使`m=2`并与59交换；53使`m=3`并与59交换；58、97、93均不变。Scan结束形如`55,41,26,53,59,58,97,93`，再交换indices 0与3，pivot落在3。Left range `[0,2]`与right `[4,7]`均不含pivot且长度小于original `[0,7]`，因此递归measure严格下降。
+
+</Answer>
+
+<Answer>
+
+One-way strict-lower Lomuto会把equal values几乎全部留在one side，递归近似`n-1,n-2,...`，产生quadratic comparisons与linear stack。Two-way scan从both ends消费equals，通常得到较balanced splits，风险显著下降；但仍反复partition equal records。Three-way fat pivot一次形成`less/equal/greater`，中间99%直接完成，不再递归，是该distribution的推荐。仍应以real record move cost与library implementation做baseline。
+
+</Answer>
+
+<Answer>
+
+Matrix覆盖sizes 16到production maximum，random/sorted/reverse/all-equal/few-unique/nearly-sorted与real traces；每组使用固定且记录的multiple seeds。先warm process/cache，交错candidate order，记录median、p95、comparisons、moves、allocations和max stack。对cutoff 2..128做coarse-to-fine sweep，并在independent holdout workloads复测。Acceptance要求correctness全过、target weighted p95改善超过noise confidence bound且无stack/memory regression；rollback在任何adversarial correctness failure或tail regression超budget时触发。
+
+</Answer>
+
+<Answer>
+
+Partition后比较left/right lengths，recursive call只处理smaller side；函数返回后把`l`或`u`改为larger side boundaries并继续while。每个active recursive frame对应至少halving的smaller side，所以最多$\lfloor\log_2 n\rfloor+1$ frames。若pivot每次极端，smaller side为空、loop仍逐次缩小larger side，stack为constant，但每次仍scan almost whole remaining array，因此sum为$n+(n-1)+\cdots+1=\Theta(n^2)$。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Sorting">按comparator重排records，并保持ordered permutation与required resource/stability contract。</GlossaryItem>
+  <GlossaryItem term="Insertion Sort">维护sorted prefix、向左sift next record的incremental stable sort。</GlossaryItem>
+  <GlossaryItem term="Simple Quicksort">围绕pivot划分range并递归排序two sides的divide-and-conquer sort。</GlossaryItem>
+  <GlossaryItem term="Partition">把active range分类成pivot左右regions并返回safe recursive boundary的过程。</GlossaryItem>
+  <GlossaryItem term="Better Quicksorts">通过scan、pivot、cutoff与hot-loop策略改进simple version的一组Quicksort variants。</GlossaryItem>
+  <GlossaryItem term="Random Pivot">从active range均匀选pivot，使expected balance独立于input arrangement。</GlossaryItem>
+  <GlossaryItem term="Cutoff">把small subarrays留给final Insertion Sort的measured recursion threshold。</GlossaryItem>
+  <GlossaryItem term="Sorting Principles">结合library reuse、invariants、scale、tuning与measurement的sorting engineering rules。</GlossaryItem>
+  <GlossaryItem term="Stability">equal-key records在output中保留input relative order的性质。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Programming Pearls, Second Edition · Column 11 Sorting"
+  href="https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+  author="Jon Bentley"
+  license="本章按Pearson官方第二版目录与Column 11正文，重建三版Insertion Sort、Lomuto Simple Quicksort、sentinel/two-way/randomized/cutoff Better Quicksorts、原书benchmark、principles、problems与further reading；现代contract、property oracle、tail metrics与release certificate为教学化扩展。"
+/>

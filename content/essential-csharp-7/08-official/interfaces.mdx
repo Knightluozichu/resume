@@ -1,0 +1,271 @@
+---
+title: "第8章：Interfaces"
+type: C
+section: "Essential C# 7.0 · Object-Oriented Foundations"
+order: 8
+description: "掌握interface contract、多态、显式/隐式实现、interface casts、多接口继承、extensions、versioning及class/attribute边界。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-c-sharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7ImplementationCastLab, Ec7InterfaceDispatchLab, Ec7InterfaceEvolutionLab } from "@/components/mdx/essential-csharp-7/diagrams/interfaces";
+
+<Objectives>
+
+- 能解释interface如何定义capability contract并通过不同implementations实现runtime polymorphism
+- 能比较implicit/explicit member implementation以及class-interface conversions的可见性和失败路径
+- 能设计interface inheritance、extensions与versioning策略，并区分interface、base class和attribute用途
+
+</Objectives>
+
+## 为什么interface应描述能力而不是对象家谱
+
+class inheritance回答“这个type是什么”，interface更适合回答“这个value能做什么”。EmailSender、SmsSender和测试Fake没有共同state hierarchy，却都能履行`Send` contract；业务code依赖`IMessageSender`，就能在不改调用流程的前提下替换implementation。
+
+先预测：interface variable调用method时选哪个body；implicit implementation是否能通过class variable调用；explicit implementation为何必须先cast；一个class能实现多少interfaces；给已发布C# 7 interface新增member会发生什么；attribute能否替代callable interface。随后逐项验证static surface、runtime type与version consequence。
+
+<Term def="一组公开member requirements，implementing type承诺为interface consumers提供一致observable behavior。">interface contract</Term>
+
+## Introducing Interfaces
+
+interface declaration定义members的shape，不在C# 7中保存per-instance fields、运行instance constructors或提供后续版本的default interface method body。members隐式属于public contract，implementing class必须以compatible member满足。命名通常用`I`前缀表达capability，如`IDisposable`、`IComparable<T>`。
+
+```csharp
+public interface IMessageSender
+{
+    void Send(string destination, string body);
+}
+
+public sealed class EmailSender : IMessageSender
+{
+    public void Send(string destination, string body)
+    {
+        if (string.IsNullOrWhiteSpace(destination))
+            throw new ArgumentException(nameof(destination));
+        Console.WriteLine($"email to {destination}: {body}");
+    }
+}
+```
+
+signature一致只是最低要求。interface documentation还应说明preconditions、postconditions、exceptions、side effects、thread safety与lifetime；否则两个implementations虽然compile，都可能让consumer行为不一致。
+
+## Polymorphism through Interfaces
+
+class value可隐式转换为它实现的interface reference，identity不变。interface variable只暴露contract members；调用时runtime根据actual implementing type选择implementation。caller因此无需`if sender is EmailSender`分支即可得到不同behavior。
+
+<Term def="consumer通过同一interface surface调用，而runtime value提供各自implementation behavior的可替换执行方式。">interface polymorphism</Term>
+
+<Stepper>
+  <Step title="切换Email、SMS与Fake implementation">
+    <Ec7InterfaceDispatchLab />
+  </Step>
+  <Step title="保持consumer static type不变">
+    variable始终是IMessageSender，只有injected runtime object变化。
+  </Step>
+  <Step title="比较external effect与test evidence">
+    production adapters执行I/O，fake记录call；两者都必须遵守Send contract。
+  </Step>
+</Stepper>
+
+```csharp
+static void Notify(IMessageSender sender, string destination)
+{
+    if (sender == null) throw new ArgumentNullException(nameof(sender));
+    sender.Send(destination, "build complete");
+}
+
+Notify(new EmailSender(), "ada@example.com");
+Notify(new SmsSender(), "+10000000000");
+```
+
+interface polymorphism改善dependency inversion，但接口过大时fake和每个implementation都被迫实现无关members。按consumer need拆成小而cohesive capabilities，避免“万能service”interface。
+
+## Implicit and Explicit Member Implementation
+
+implicit implementation使用public class member匹配interface member，该member同时出现在class与interface surface。explicit implementation写成`ReturnType IContract.Member(...)`，不写public/private modifier，只能通过相应interface static type调用。它可隐藏不适合class主surface的member，或解决两个interfaces有相同signature但需要不同semantics的冲突。
+
+<Term def="interface member由public class member直接满足，或由仅经interface reference可见的qualified member满足的方式。">implementation visibility</Term>
+
+```csharp
+public interface ITextFormatter { string Format(); }
+public interface IJsonFormatter { string Format(); }
+
+public sealed class Report : ITextFormatter, IJsonFormatter
+{
+    string ITextFormatter.Format() => "plain report";
+    string IJsonFormatter.Format() => "{\"kind\":\"report\"}";
+}
+
+var report = new Report();
+string text = ((ITextFormatter)report).Format();
+string json = ((IJsonFormatter)report).Format();
+```
+
+explicit implementation并非private member：它属于public interface contract，只是class-typed expression无法按class member name访问。若两个interface contracts其实语义相同，一个public implicit member通常更简单。
+
+<Stepper>
+  <Step title="切换implicit、interface与两个explicit calls">
+    <Ec7ImplementationCastLab />
+  </Step>
+  <Step title="读取variable static type">
+    class static type显示public implicit members；interface static type显示该contract，包括explicit implementation。
+  </Step>
+  <Step title="确认dispatch target与语义">
+    同名interfaces可有不同explicit bodies，但必须分别满足各自documented contract。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="explicit interface implementation是private，所以外部不能调用">
+它不能通过class expression直接调用，却可由任何持有该interface reference的consumer调用。它是qualified interface surface，不是普通private member。
+</Callout>
+
+## Converting between the Implementing Class and Its Interfaces
+
+implementing class到其interface是implicit upcast；同一object可同时有多个interface references。interface到具体class或另一个interface需要runtime evidence：explicit cast不兼容时抛`InvalidCastException`，`as`失败返回null，declaration pattern把test与typed variable合并。
+
+```csharp
+IMessageSender sender = new EmailSender();
+
+if (sender is EmailSender email)
+{
+    Console.WriteLine(email.ServerName);
+}
+
+IDisposable disposable = sender as IDisposable;
+if (disposable != null)
+    disposable.Dispose();
+```
+
+一个interface reference能否转成另一个interface，取决于runtime object是否同时实现，不取决于两个interface names是否相近。conversion不创建wrapper或copy，只改变static view。若consumer总要downcast到concrete class，interface可能缺少必要capability或抽象层放错位置。
+
+## Interface Inheritance and Multiple Capabilities
+
+interface可继承一个或多个interfaces，derived interface contract是所有inherited members的union。class仍只能继承一个base class，但可实现多个interfaces；这让capabilities可正交组合，而无需制造复杂class hierarchy。
+
+<Term def="derived interface聚合多个base interface member requirements，implementer必须同时满足其contract union。">contract composition</Term>
+
+```csharp
+public interface IReadable
+{
+    string Read(string key);
+}
+
+public interface IWritable
+{
+    void Write(string key, string value);
+}
+
+public interface IRepository : IReadable, IWritable
+{
+}
+
+public sealed class MemoryRepository : IRepository
+{
+    public string Read(string key) { /* lookup */ return ""; }
+    public void Write(string key, string value) { /* store */ }
+}
+```
+
+若base interfaces声明相同member signature，single implementation可能同时满足；若semantics冲突，可explicitly implement。组合前要验证contract含义兼容，不能只因signature一致就假设同一operation。
+
+## Extension Methods on Interfaces
+
+extension method可把第一个`this` parameter声明为interface type，从而为所有implementations提供基于public contract的helper。它是static compile-time call，不会新增required member、instance state或virtual slot，也不能访问implementation private data。
+
+```csharp
+public static class SenderExtensions
+{
+    public static void SendAudit(this IMessageSender sender, string destination)
+    {
+        if (sender == null) throw new ArgumentNullException(nameof(sender));
+        sender.Send(destination, "audit");
+    }
+}
+
+IMessageSender sender = new EmailSender();
+sender.SendAudit("ops@example.com");
+```
+
+若implementation后来添加同名applicable instance member，instance member优先，行为可能变化。因此extension names应具体，且核心contract operation仍应直接进入interface。
+
+## Interface Versioning
+
+C# 7 interface member一旦发布，就成为每个implementation必须满足的binary/source contract。新增required member会使现有implementations无法重新compile，也可能导致旧binary在加载/调用时出问题。删除、改signature或改变semantics同样破坏consumer。
+
+<Term def="已发布interface的member set与behavior承诺如何在不破坏existing implementers/consumers前提下演进。">interface versioning</Term>
+
+安全策略包括：设计小而稳定的v1 contract；用新derived/sibling interface表达新增capability；以extension method提供可由旧surface实现的optional helper；通过adapter支持旧实现；为breaking redesign发布新major version。后续C#加入default interface implementations，但不属于C# 7规则，不能用来解释本章代码。
+
+<Callout type="trap" title="给interface增加一个method，再给extension default实现就兼容了">
+extension method不是interface member implementation，runtime/interface dispatch不会把它当required member。旧implementations仍未实现新增contract；C# 7需要新interface、adapter或breaking version。
+</Callout>
+
+## Interfaces Compared with Classes and Attributes
+
+abstract/base class可持有instance state、constructors、protected members与shared implementation，但占用single class inheritance slot；interface表达可多重组合的capability contract，不拥有C# 7 instance implementation state。选择依据是是否需要共同identity/state/lifecycle，而不是“interface更松耦合”口号。
+
+attribute把metadata附到assembly、type、member或parameter，供compiler/tool/reflection读取，例如serialization marker。它不建立callable polymorphic surface，也不保证decorated type执行behavior。需要“能保存”用`ISaveable`；需要“标记给工具”用attribute；需要共享state和template behavior考虑base class。
+
+<Stepper>
+  <Step title="切换interface、base class、attribute、extension与derived interface">
+    <Ec7InterfaceEvolutionLab />
+  </Step>
+  <Step title="匹配需求到model">
+    callable capability、shared state、metadata、helper与contract composition分别对应不同机制。
+  </Step>
+  <Step title="检查version consequence">
+    记录新增member会影响implementers还是只新增helper，并在支持的language version下验证。
+  </Step>
+</Stepper>
+
+```csharp
+[AttributeUsage(AttributeTargets.Class)]
+public sealed class AuditedAttribute : Attribute { }
+
+[Audited]
+public sealed class FileRepository : IRepository
+{
+    public string Read(string key) { return ""; }
+    public void Write(string key, string value) { }
+}
+```
+
+上例attribute只提供metadata；真正Read/Write能力来自IRepository。consumer若需要behavior，应依赖interface而不是检查attribute后猜method存在。
+
+## 本章回顾：Capability、Visibility与Evolution
+
+1. interface定义capability contract，implementations必须同时满足signature和documented behavior。
+2. interface reference保留object identity，并按runtime implementation实现polymorphism。
+3. implicit member在class/interface surface可见；explicit member只经qualified interface view可见。
+4. interface inheritance组合contracts，extension只提供static helper，不能增加required member。
+5. C# 7 interface演进必须保护existing implementers；class与attribute解决不同state/metadata问题。
+
+<Exercises>
+
+**问题 1：什么情况下应使用explicit interface implementation？**
+
+<Answer>当member只对interface consumers有意义、不应污染class主surface，或两个interfaces具有同名signature但semantics不同，需要分别实现时使用。调用者必须持有/cast到对应interface。若semantics相同且class users也需要该operation，一个public implicit member更直观。</Answer>
+
+**问题 2：怎样为已发布的C# 7接口增加能力而不破坏旧实现？**
+
+<Answer>不要直接新增required member。定义derived或sibling interface表示新capability，让新consumers进行pattern check；若能力完全可由旧public surface实现，可发布extension helper；也可提供adapter并发布major version。CI要同时编译旧implementations和新consumers，不能假设后续default interface feature存在。</Answer>
+
+**问题 3：如何在interface、abstract class和attribute之间选择？**
+
+<Answer>多个无关types需提供可调用capability且要可多重组合时用interface；需要共享instance state、construction、protected implementation和template behavior时考虑abstract class，并接受single inheritance；只需给tools/reflection附metadata时用attribute。attribute不保证behavior，interface不应承担共享storage。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="interface contract" definition="implementing types向consumers承诺的一组public members与observable behavior。" />
+  <GlossaryItem term="interface polymorphism" definition="同一interface call按runtime implementing type执行不同behavior。" />
+  <GlossaryItem term="implementation visibility" definition="implicit public或explicit qualified member在不同static views中的可见规则。" />
+  <GlossaryItem term="contract composition" definition="derived interface聚合多个base interfaces的member requirements。" />
+  <GlossaryItem term="interface versioning" definition="在existing implementers/consumers约束下演进已发布contract。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 8: Interfaces" adaptedUrl="https://www.informit.com/store/essential-csharp-7.0-9781509303618" />

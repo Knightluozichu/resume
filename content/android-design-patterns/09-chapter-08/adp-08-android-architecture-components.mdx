@@ -1,0 +1,229 @@
+---
+title: "第8章 Android Architecture Components"
+description: "在2017/2018边界内解释Lifecycles、ViewModel、LiveData及其与MVVM和Flux的组合"
+type: C
+section: "第III部：思考设计"
+order: 9
+draft: false
+math: false
+sourceUrl: "https://peaks.cc/books/architecture_patterns"
+demo: true
+---
+
+import {
+  Adp08AndroidArchitectureComponentsArchitectureLab,
+  Adp08AndroidArchitectureComponentsCounterexampleLab,
+  Adp08AndroidArchitectureComponentsEvidenceLab,
+} from "@/components/mdx/android-design-patterns/diagrams/adp-08-android-architecture-components";
+
+# 第8章 Android Architecture Components
+
+本页依据PEAKS最终商品页、官方样章完整目录和书中指定样例仓库重构。正式书由日高正博、小西裕介、藤原聖、吉岡毅、今井智章合著，2018年1月31日发行，224页；本课程严格保留出版时的Android技术语境。
+
+本页位于 **第III部 設計を考える**。 在2017/2018边界内解释Lifecycles、ViewModel、LiveData及其与MVVM和Flux的组合。核心任务是用生命周期感知组件移除Activity/Fragment中的手工转发，让ViewModel跨配置变更保存页面状态，让LiveData只向活跃观察者分发。先把结论写成可被反例推翻的预测，再阅读机制与案例。
+
+<Objectives>
+
+- 能解释“第8章 Android Architecture Components”全部正式目录节点，并画出角色、依赖方向、状态所有权和生命周期。
+- 能比较至少两种设计选择，说明收益、代价、团队前提和不可采用的反例。
+- 能设计旋转、后台、迟到回调、空数据或协作冲突实验，验证“观察者的活跃状态由Lifecycle决定；配置变更不重建ViewModel业务状态，最终销毁会释放作用域，LiveData只承载可观察数据而非任意事件总线”。
+- 能写出包含版本、代码快照、状态轨迹、测试结果、回退条件和责任人的交接记录。
+
+</Objectives>
+
+## 从一个可证伪的问题开始
+
+先预测：如果只更换类名或框架，而没有改变责任、依赖方向和状态所有者，把本章现代化为Compose、Flow、Hilt或Navigation会破坏版本忠实度；把LiveData用于不可重放的一次性动作又会在旋转后重复消费。把预测落实为同一输入下的两条运行轨迹，不要把“能编译”“页面能打开”当成架构正确。
+
+本书的核心不是宣布唯一正确架构，而是建立讨论土台。项目规模、Android生命周期、既有代码、交付期限和团队结构都会改变最合适的选择。为此，本页始终保留业务控制变量，只修改一个设计因素，观察变更扩散、测试隔离、恢复行为和认知成本。
+
+验收不变量是：观察者的活跃状态由Lifecycle决定；配置变更不重建ViewModel业务状态，最终销毁会释放作用域，LiveData只承载可观察数据而非任意事件总线。若结论无法由代码快照、调用/状态轨迹、失败注入和团队交付事实共同支持，就只能记为待验证假设。
+
+## 核心词汇与2018年边界
+
+<Term def="Lifecycle是本页第1个核心概念；必须同时说明职责、依赖方向、生命周期、失败反例与可观察证据">
+  Lifecycle
+</Term>
+、
+<Term def="LifecycleObserver是本页第2个核心概念；必须同时说明职责、依赖方向、生命周期、失败反例与可观察证据">
+  LifecycleObserver
+</Term>
+、
+<Term def="ViewModel是本页第3个核心概念；必须同时说明职责、依赖方向、生命周期、失败反例与可观察证据">
+  ViewModel
+</Term>
+、
+<Term def="LiveData是本页第4个核心概念；必须同时说明职责、依赖方向、生命周期、失败反例与可观察证据">
+  LiveData
+</Term>
+、
+<Term def="活跃观察者是本页第5个核心概念；必须同时说明职责、依赖方向、生命周期、失败反例与可观察证据">
+  活跃观察者
+</Term>
+
+以上词汇都要回答五个问题：谁拥有状态、谁可以修改、Android生命周期如何影响它、失败从哪里传播、怎样证明恢复正确。Compose、Flow、Hilt、Navigation Compose以及后来的Jetpack最佳实践可作为迁移对照，但不能改写2018年正式目录的含义。
+
+## 原书目录逐节点重构
+
+### 第III部 設計を考える
+
+该部标题是正式目录层级，不是装饰。它规定本页是在建立共同基础、读取真实案例，还是评估新组件。
+
+### 8.1 Android Architecture Componentsとは
+
+把“Android Architecture Componentsとは”放回用生命周期感知组件移除Activity/Fragment中的手工转发，让ViewModel跨配置变更保存页面状态，让LiveData只向活跃观察者分发这条因果链，明确输入、状态所有者、输出和停止条件。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以观察者的活跃状态由Lifecycle决定；配置变更不重建ViewModel业务状态，最终销毁会释放作用域，LiveData只承载可观察数据而非任意事件总线作为验收不变量。
+
+本节要把“8.1 Android Architecture Componentsとは”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+
+### 8.2 Architecture Componentsの中心：Lifecyclesコンポーネント
+
+逐一记录create、start、stop、配置变更和最终destroy，确认订阅、缓存、实例复用与释放都发生在正确边界。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以观察者的活跃状态由Lifecycle决定；配置变更不重建ViewModel业务状态，最终销毁会释放作用域，LiveData只承载可观察数据而非任意事件总线作为验收不变量。
+
+本节要把“8.2 Architecture Componentsの中心：Lifecyclesコンポーネント”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+
+### 8.3 ViewModelはActivityより長いライフサイクルをもつ
+
+ViewModel暴露可观察页面状态，不持有具体View；View通过绑定或观察更新，瞬时导航与持久状态必须分开建模。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以观察者的活跃状态由Lifecycle决定；配置变更不重建ViewModel业务状态，最终销毁会释放作用域，LiveData只承载可观察数据而非任意事件总线作为验收不变量。
+
+本节要把“8.3 ViewModelはActivityより長いライフサイクルをもつ”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+
+### 8.4 Observerパターンを実現するLiveData
+
+只有处于活跃状态的LifecycleOwner接收最新数据；旋转和后台恢复要区分可重放状态与只消费一次的动作。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以观察者的活跃状态由Lifecycle决定；配置变更不重建ViewModel业务状态，最终销毁会释放作用域，LiveData只承载可观察数据而非任意事件总线作为验收不变量。
+
+本节要把“8.4 Observerパターンを実現するLiveData”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+
+### 8.5 想定するアーキテクチャ
+
+把“想定するアーキテクチャ”放回用生命周期感知组件移除Activity/Fragment中的手工转发，让ViewModel跨配置变更保存页面状态，让LiveData只向活跃观察者分发这条因果链，明确输入、状态所有者、输出和停止条件。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以观察者的活跃状态由Lifecycle决定；配置变更不重建ViewModel业务状态，最终销毁会释放作用域，LiveData只承载可观察数据而非任意事件总线作为验收不变量。
+
+本节要把“8.5 想定するアーキテクチャ”落实到一个可观察的协作协议：谁发起、谁拥有事实、谁只渲染、何时取消、失败后能否重试、团队如何独立修改。比较时保持业务样本与输入不变，只改变一个架构边界，并保存前后状态与调用轨迹。
+
+#### 8.5.1 Android Architecture ComponentsとMVVM
+
+ViewModel暴露可观察页面状态，不持有具体View；View通过绑定或观察更新，瞬时导航与持久状态必须分开建模。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以观察者的活跃状态由Lifecycle决定；配置变更不重建ViewModel业务状态，最终销毁会释放作用域，LiveData只承载可观察数据而非任意事件总线作为验收不变量。
+
+**核查点：** 记录该节点的主体、依赖、状态、生命周期、异常出口和一条失败证据；若只有类图而没有运行轨迹，本节点不算掌握。
+
+#### 8.5.2 Architecture ComponentsとFlux
+
+所有意图和结果都写成Action，经Dispatcher进入Store计算新状态，再由View观察；日志应能从Action重建状态变化。 本节点不能只给结论：先预测正常轨迹，再注入旋转、后台、迟到回调、空数据或协作冲突中的一个变量，最后以观察者的活跃状态由Lifecycle决定；配置变更不重建ViewModel业务状态，最终销毁会释放作用域，LiveData只承载可观察数据而非任意事件总线作为验收不变量。
+
+**核查点：** 记录该节点的主体、依赖、状态、生命周期、异常出口和一条失败证据；若只有类图而没有运行轨迹，本节点不算掌握。
+
+## 完整节点清单与覆盖门
+
+本页承担下列7个目录或检索节点；正文、图解、实验和题目必须都能反向定位这些节点：
+
+- 8.1 Android Architecture Componentsとは
+- 8.2 Architecture Componentsの中心：Lifecyclesコンポーネント
+- 8.3 ViewModelはActivityより長いライフサイクルをもつ
+- 8.4 Observerパターンを実現するLiveData
+- 8.5 想定するアーキテクチャ
+- 8.5.1 Android Architecture ComponentsとMVVM
+- 8.5.2 Architecture ComponentsとFlux
+
+<Adp08AndroidArchitectureComponentsArchitectureLab />
+
+## 分步推导：从结构到运行事实
+
+<Stepper>
+  <Step title="先画责任与依赖">
+    固定业务输入，标明Android组件、Presenter/ViewModel/Store、数据边界与团队所有者。箭头表示调用或数据流，不能只画文件夹。
+    <Adp08AndroidArchitectureComponentsArchitectureLab />
+  </Step>
+  <Step title="再制造单变量反例">
+    保持样例不变，只改变生命周期、异步到达顺序、共享状态或团队协作中的一个变量。先写预测，再运行，不在看到结果后补理由。
+    <Adp08AndroidArchitectureComponentsCounterexampleLab />
+  </Step>
+  <Step title="最后关闭证据门">
+    对照正常与失败轨迹，确认业务不变量、释放、恢复、回退和责任人。缺一项就不能把“偏好”升级为“决策”。
+    <Adp08AndroidArchitectureComponentsEvidenceLab />
+  </Step>
+</Stepper>
+
+## 可复现实验与记录格式
+
+以下三个片段分别固定版本/结构、运行轨迹和证据表。它们是实验协议，不是要求照抄的生产模板：
+
+```java
+getLifecycle().addObserver(presenter);
+viewModel.items.observe(this, this::render);
+```
+
+```text
+Activity#1 create -> ViewModel A -> rotate -> Activity#2 -> ViewModel A -> finish -> onCleared
+```
+
+```text
+2018 boundary: Lifecycle + ViewModel + LiveData; exclude Compose + Flow + Hilt
+```
+
+动手试：用同一TODO或章节案例分别运行正常、旋转/重建、后台、迟到成功、迟到失败五条路径。每条路径记录输入、对象实例、线程/调度、状态前后值、UI结果和释放点。若是团队案例，再增加变更文件数、评审往返和回退耗时。
+
+<Callout type="trap" title="把模式名当成证据">
+  类叫ViewModel、Presenter或Store并不证明满足该模式。必须检查依赖方向、状态写权限、生命周期和运行轨迹；否则只是重新命名原来的耦合。
+</Callout>
+
+<Callout type="trap" title="用现代结论覆盖历史版本">
+  本页对应2018年成书与2017年前后样例。现代Android方案可放在迁移备注中比较，但不能替换正式节点、作者当时的约束或样例行为。
+</Callout>
+
+## 独立证据门
+
+<Adp08AndroidArchitectureComponentsEvidenceLab />
+
+证据包至少包含：正式目录映射、来源URL、出版前代码提交、角色与依赖图、生命周期轨迹、一个单变量失败实验、测试输出、业务/团队指标、停止条件、回退步骤和复核人。图和代码必须使用相同角色命名，否则无法交叉验证。
+
+## 练习
+
+<Exercises>
+
+**问题 1：为什么本页必须以同一业务规格作为控制变量？**
+
+<Answer>
+  只有业务输入、功能和数据语义不变，观察到的差异才能归因于职责分配、依赖方向或生命周期策略；否则无法判断是架构还是需求变化造成结果。
+</Answer>
+
+**问题 2：怎样构造“把本章现代化为Compose、Flow、Hilt或Navigation会破坏版本忠实度；把LiveData用于不可重放的一次性动作又会在旋转后重复消费”的最小反例？**
+
+<Answer>
+  固定版本、样例数据和操作序列，只引入一次旋转、后台、迟到回调、共享写入或协作冲突；比较对象身份、状态轨迹、UI结果、释放与最终业务事实。
+</Answer>
+
+**问题 3：何时可以认为“第8章 Android Architecture Components”已完成独立交接？**
+
+<Answer>
+  当另一位读者无需口头补充即可按版本记录复现实验，解释全部目录节点，观察正常与失败轨迹，并依据“观察者的活跃状态由Lifecycle决定；配置变更不重建ViewModel业务状态，最终销毁会释放作用域，LiveData只承载可观察数据而非任意事件总线”独立得到同一通过或不通过结论。
+</Answer>
+
+</Exercises>
+
+## 本章回顾
+
+“第8章 Android Architecture Components”的核心不是记忆名词，而是用生命周期感知组件移除Activity/Fragment中的手工转发，让ViewModel跨配置变更保存页面状态，让LiveData只向活跃观察者分发。最终结论必须同时经受平台生命周期、失败路径、既有代码和团队协作四类约束；把本章现代化为Compose、Flow、Hilt或Navigation会破坏版本忠实度；把LiveData用于不可重放的一次性动作又会在旋转后重复消费就是本页必须保留的反证边界。
+
+<Glossary>
+  <GlossaryItem term="Lifecycle">
+    Lifecycle用于解释“用生命周期感知组件移除Activity/Fragment中的手工转发，让ViewModel跨配置变更保存页面状态，让LiveData只向活跃观察者分发”。掌握标准不是记住名称，而是能画出责任与状态轨迹、构造单变量反例，并用“观察者的活跃状态由Lifecycle决定；配置变更不重建ViewModel业务状态，最终销毁会释放作用域，LiveData只承载可观察数据而非任意事件总线”完成验收。
+  </GlossaryItem>
+  <GlossaryItem term="LifecycleObserver">
+    LifecycleObserver用于解释“用生命周期感知组件移除Activity/Fragment中的手工转发，让ViewModel跨配置变更保存页面状态，让LiveData只向活跃观察者分发”。掌握标准不是记住名称，而是能画出责任与状态轨迹、构造单变量反例，并用“观察者的活跃状态由Lifecycle决定；配置变更不重建ViewModel业务状态，最终销毁会释放作用域，LiveData只承载可观察数据而非任意事件总线”完成验收。
+  </GlossaryItem>
+  <GlossaryItem term="ViewModel">
+    ViewModel用于解释“用生命周期感知组件移除Activity/Fragment中的手工转发，让ViewModel跨配置变更保存页面状态，让LiveData只向活跃观察者分发”。掌握标准不是记住名称，而是能画出责任与状态轨迹、构造单变量反例，并用“观察者的活跃状态由Lifecycle决定；配置变更不重建ViewModel业务状态，最终销毁会释放作用域，LiveData只承载可观察数据而非任意事件总线”完成验收。
+  </GlossaryItem>
+  <GlossaryItem term="LiveData">
+    LiveData用于解释“用生命周期感知组件移除Activity/Fragment中的手工转发，让ViewModel跨配置变更保存页面状态，让LiveData只向活跃观察者分发”。掌握标准不是记住名称，而是能画出责任与状态轨迹、构造单变量反例，并用“观察者的活跃状态由Lifecycle决定；配置变更不重建ViewModel业务状态，最终销毁会释放作用域，LiveData只承载可观察数据而非任意事件总线”完成验收。
+  </GlossaryItem>
+  <GlossaryItem term="活跃观察者">
+    活跃观察者用于解释“用生命周期感知组件移除Activity/Fragment中的手工转发，让ViewModel跨配置变更保存页面状态，让LiveData只向活跃观察者分发”。掌握标准不是记住名称，而是能画出责任与状态轨迹、构造单变量反例，并用“观察者的活跃状态由Lifecycle决定；配置变更不重建ViewModel业务状态，最终销毁会释放作用域，LiveData只承载可观察数据而非任意事件总线”完成验收。
+  </GlossaryItem>
+</Glossary>
+
+[← 上一页：第7章 团队与架构](/learn/android-design-patterns/08-chapter-07/adp-07-team-and-architecture) · [下一页：おわりに（后记） →](/learn/android-design-patterns/10-afterword/adp-afterword)
+
+<Attribution
+  adaptedFrom="日高正博、小西裕介、藤原聖、吉岡毅、今井智章《Android アプリ設計パターン入門》2018年正式版"
+  adaptedUrl="https://peaks.cc/books/architecture_patterns"
+/>

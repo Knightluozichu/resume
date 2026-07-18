@@ -1,0 +1,335 @@
+---
+title: "Item 30：熟悉完美转发的失败场景"
+type: A
+section: Chapter 5 · Rvalue References, Move Semantics, and Perfect Forwarding
+order: 30
+description: 对齐 Effective Modern C++ Item 30：复现花括号初始化器、0/NULL、仅声明静态常量成员、重载函数名、模板名与位域的 perfect forwarding failures，并给出类型物化与引用边界修复。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch05.html"
+draft: false
+---
+
+import {
+  EmcppForwardingDeductionFailureFlowMap,
+  EmcppForwardingFailureFamilyMap,
+  EmcppForwardingStorageBoundaryMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-30-perfect-forwarding-failure-cases";
+
+<Objectives>
+
+- 能区分 perfect forwarding failure cases（完美转发失败场景）中的“无法推导 T”“推导出错误 T”与“reference boundary 不合法”
+- 能复现 braced initializers（花括号初始化器）、overloaded function names（重载函数名）和 template names（模板名）为何在 wrapper 中失去目标类型上下文
+- 能解释 static const member（静态常量成员）的 ODR-use 与 bitfields（位域）的不可寻址约束，并写出可编译修复
+
+</Objectives>
+
+## 从“完美保留不等于万能接受”开始
+
+perfect forwarding 的承诺很窄：对一个已经有可推导类型的 argument，尽量保留其 cv、reference 与 value category。它不承诺所有能直接传给 target function 的语法都能先穿过 generic wrapper。
+
+```cpp
+template<typename T>
+void fwd(T&& param) {
+    f(std::forward<T>(param));
+}
+```
+
+<Term def="forwarding wrapper 无法重现 direct call 行为的输入集合，根因包括 deduction、类型语义与 reference binding 边界。">
+  perfect forwarding failure cases
+</Term>
+
+先预测 direct `f(argument)` 与 `fwd(argument)` 是否都能编译，再沿两阶段定位：第一阶段能否从 argument 推导 T；第二阶段能否以 reference 形式绑定并转发该实体。
+
+<EmcppForwardingFailureFamilyMap />
+
+## 失败一：花括号初始化器没有普通表达式类型
+
+假设 target 明确接收 vector：
+
+```cpp
+void f(const std::vector<int>& values);
+
+f({1, 2, 3});    // OK: target type is vector<int>
+fwd({1, 2, 3});  // error: cannot deduce T
+```
+
+<Term def="由大括号包围的 initializer list 语法；它不是一般意义上带有单一静态类型的 expression。">
+  braced initializer
+</Term>
+
+direct call 中，`f` 的 parameter type 提供目标上下文，compiler 知道要尝试构造 `std::vector<int>`。进入 `fwd` 前却必须先仅根据 `{1,2,3}` 推导 T；braced initializers 通常没有可供 function-template deduction 使用的普通表达式类型，因此第一阶段失败，target `f` 根本还未参与。
+
+## initializer_list 是有规则的例外而非自动答案
+
+`auto` 对 braced initializer 有专门 deduction 规则，可推导 `std::initializer_list<int>`：
+
+```cpp
+auto values = {1, 2, 3};
+fwd(values); // T is now deducible
+```
+
+<Term def="compiler 在特定 auto 或 matching initializer_list parameter 场景中为大括号元素建立的轻量只读序列类型。">
+  initializer-list materialization
+</Term>
+
+这项修复的本质是先 materialize a typed object，再交给 forwarding wrapper。若 target 需要 vector，也可显式写 `std::vector<int>{1,2,3}`。不要误以为所有 `{...}` 都天然是 `initializer_list`；它依赖语言规定的目标上下文。
+
+<Callout type="trap" title="陷阱：{1,2,3} 的类型就是 initializer_list<int>">
+  braced-init-list 本身不是普通 expression。auto 和 initializer_list parameter
+  有专门规则，但 generic T&& deduction 没有足够上下文；修复要显式物化类型。
+</Callout>
+
+## 失败二：0 与 NULL 保留了整数类型
+
+Item 8 已说明 null pointer 应使用 `nullptr`。perfect forwarding 会把错误写法的类型忠实保留下来：
+
+```cpp
+void f(Widget* pointer);
+
+f(0);          // direct conversion may treat 0 as null pointer constant
+fwd(0);        // T deduces as int; forwards int
+fwd(nullptr);  // T deduces as std::nullptr_t; pointer intent survives
+```
+
+<Term def="0 或实现定义 NULL 所表达的历史空指针语法，在 template deduction 中通常先表现为 integral type。">
+  null-literal type mismatch
+</Term>
+
+这里 deduction 成功，却得到业务上错误的 T。forwarding 不能保留“调用者脑中的 pointer intent”，只能保留 language type；使用 `nullptr` 才把空指针语义编码进 `std::nullptr_t`。
+
+## 失败三：仅声明 static const integral member
+
+C++ 中 class 内的 integral `static const` member 可带 initializer，并在某些 value contexts 中作为 compile-time constant 使用：
+
+```cpp
+class Widget {
+public:
+    static const std::size_t MinVals = 28;
+};
+
+void f(std::size_t value);
+
+f(Widget::MinVals);    // may compile without separate storage
+fwd(Widget::MinVals);  // may link-fail: reference requires definition
+```
+
+<Term def="在 class definition 中声明并初始化、但未在某个 translation unit 提供存储定义的 integral static const data member。">
+  declaration-only static const member
+</Term>
+
+direct value call 可由 compiler 将 28 直接传播到 parameter，不一定需要对象地址。`fwd` 的 parameter 是 reference；绑定 reference 构成 ODR-use，需要一个真实 storage entity 和地址。若只在 class 内声明而没有 definition，编译可能成功，链接阶段却找不到符号。
+
+## ODR-use 把常量值变成存储需求
+
+<Term def="对实体的使用要求程序中存在一个可链接定义，典型情形包括绑定引用或取得地址。">
+  ODR-use storage requirement
+</Term>
+
+C++11/14 修复方式是在一个 source file 提供 definition，通常不再写 initializer：
+
+```cpp
+const std::size_t Widget::MinVals;
+```
+
+也可先把值复制到 ordinary local，再转发 local；现代语言中的 inline static data member 可解决多定义组织问题，但核心诊断仍是：wrapper 将原本的 value boundary 改成了 reference boundary。
+
+## 失败四：重载函数名不是单个函数对象
+
+```cpp
+void processVal(int value);
+void processVal(int value, int priority);
+
+void f(void (*function)(int));
+
+f(processVal);    // target parameter selects one overload
+fwd(processVal);  // error: which processVal type should T be?
+```
+
+<Term def="同名多个函数形成的候选集合；在没有目标函数指针类型时，它不对应唯一可推导 argument type。">
+  overloaded function name
+</Term>
+
+direct call 的 target signature `void(*)(int)` 提供 disambiguation context。generic wrapper 的 T 必须在查看 target body 之前确定；`processVal` 代表 overload set，没有唯一类型，所以 deduction 失败。
+
+```cpp
+using ProcessFunction = void (*)(int);
+ProcessFunction function = processVal;
+fwd(function);
+```
+
+显式 function pointer variable 或 `static_cast<ProcessFunction>(processVal)` 都是在 wrapper 之前补回目标类型。
+
+## 函数模板名同样需要具体 specialization
+
+```cpp
+template<typename T>
+void workOnVal(T value);
+
+f(workOnVal);    // target context may select workOnVal<int>
+fwd(workOnVal);  // no single function/template specialization type
+```
+
+<Term def="代表一族可实例化函数的名称；必须先确定 template arguments 和目标函数类型才能成为具体 function pointer。">
+  function template name
+</Term>
+
+template names 与 overloaded function names 的失败机制一致：argument 不是一个唯一 typed function entity。修复时显式选择 specialization，并赋给目标 function pointer type：
+
+```cpp
+using ProcessFunction = void (*)(int);
+ProcessFunction function = workOnVal<int>;
+fwd(function);
+```
+
+<EmcppForwardingDeductionFailureFlowMap />
+
+## 失败五：位域不是可独立寻址对象
+
+bitfields（位域）允许多个字段共享一个 storage unit，语言不提供指向单个位域的普通 pointer。因而 non-const reference 不能绑定 bitfield：
+
+```cpp
+struct IPv4Header {
+    std::uint32_t version : 4;
+    std::uint32_t headerLength : 4;
+    std::uint32_t totalLength : 16;
+};
+
+void f(std::uint32_t value);
+
+IPv4Header header{};
+f(header.totalLength);    // copies the value
+fwd(header.totalLength);  // cannot bind forwarding reference
+```
+
+<Term def="以若干 bits 存储在共享 allocation unit 中、不能被普通 pointer 独立寻址的数据成员。">
+  non-addressable bitfield
+</Term>
+
+forwarding reference 对 lvalue 试图形成 non-const lvalue reference，但 bitfield 没有独立地址。direct value parameter 只需读取并复制数值，所以可工作。
+
+## 位域修复是显式复制到 ordinary object
+
+```cpp
+auto length = static_cast<std::uint32_t>(header.totalLength);
+fwd(length);
+```
+
+<Term def="先读取 bitfield value 并存入具有独立地址的 local object，再把 local 交给 forwarding boundary。">
+  bitfield value materialization
+</Term>
+
+这会有意放弃“引用原位域”的幻想，因为该引用在语言模型中不存在。若只需值，复制正是正确语义；若 target 想修改字段，应设计 setter 或接收整个 owner object，而不是试图转发 bitfield reference。
+
+<EmcppForwardingStorageBoundaryMap />
+
+<Callout
+  type="trap"
+  title="陷阱：给 forwarding parameter 加 const 就能完整转发位域"
+>
+  const reference 可能绑定由 bitfield 值产生的 temporary，但这已不是对原 field
+  的 identity-preserving forwarding。若语义是传值，应显式物化普通对象，让 copy
+  边界清楚可见。
+</Callout>
+
+## direct call 与 wrapper call 的上下文不同
+
+<Term def="target function parameter 为 conversion、overload selection 或 initializer construction 提供的期望类型信息。">
+  target-type context
+</Term>
+
+braced list、overload set 和 function template name 在 direct call 中可借 target-type context 变成具体类型；wrapper 的 template deduction 先发生，target function 藏在 body 内，无法反向为 T 提供信息。这不是 forwarding 实现不够聪明，而是 two-phase type boundary 的必然结果。
+
+static const member 与 bitfield 则属于另一组：T 可能可知，但 wrapper 需要先建立 reference parameter，暴露了 storage/identity 限制。把所有失败都归为“推导失败”会导致错误修复。
+
+## 建立固定诊断顺序
+
+<Term def="依次检查 argument 是否有唯一类型、T 是否表达正确意图、reference 是否可绑定及 target conversion 是否仍成立的排错流程。">
+  forwarding boundary checklist
+</Term>
+
+1. argument 是普通 expression，还是 braced syntax/overload set/template family？
+2. 若能推导，T 是否正确表达 pointer、array、function 等意图？
+3. forwarding parameter 绑定是否触发 ODR-use 或需要可寻址 object？
+4. `std::forward<T>` 后 target overload/conversion 是否与 direct call 相同？
+5. 修复应物化 typed value、disambiguate callable，还是重新设计 value/reference boundary？
+
+先按阶段找出信息在哪里丢失，再写最小修复；不要在 wrapper 内堆叠 casts 猜测调用者意图。
+
+## 小结
+
+- perfect forwarding 只能保留已存在且可推导的类型/category，不能让所有 direct-call 语法穿过 wrapper
+- braced initializers 无普通 expression type；先显式构造目标对象或用 auto 的 initializer_list 特殊规则物化类型
+- 0/NULL 在 deduction 中是 integral，使用 nullptr 才能保留空指针意图
+- declaration-only static const member 在 direct value call 中可能无需 storage，绑定 forwarding reference 会触发 ODR-use
+- overloaded function names 与 template names 没有唯一函数类型；需 function pointer type、cast 或显式 specialization
+- bitfields 不可独立寻址，不能绑定 forwarding lvalue reference；先复制到 ordinary object
+- direct target-type context 无法反向参与 wrapper 的 T deduction，应按 deduction、storage、target 三阶段诊断
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 30"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch05.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="perfect forwarding failure cases">
+    wrapper 无法复现 direct call 的输入边界。
+  </GlossaryItem>
+  <GlossaryItem term="braced initializer">
+    没有普通单一类型的大括号初始化语法。
+  </GlossaryItem>
+  <GlossaryItem term="initializer-list materialization">
+    先为花括号元素建立 typed object。
+  </GlossaryItem>
+  <GlossaryItem term="null-literal type mismatch">
+    0/NULL 推导为整数而非 pointer intent。
+  </GlossaryItem>
+  <GlossaryItem term="declaration-only static const member">
+    有类内声明值但无独立存储定义的成员。
+  </GlossaryItem>
+  <GlossaryItem term="ODR-use storage requirement">
+    引用或取址要求实体存在定义。
+  </GlossaryItem>
+  <GlossaryItem term="overloaded function name">
+    未经上下文消歧的函数候选集合。
+  </GlossaryItem>
+  <GlossaryItem term="function template name">
+    未选择具体 specialization 的函数族。
+  </GlossaryItem>
+  <GlossaryItem term="non-addressable bitfield">
+    无法由普通 pointer 独立寻址的位域。
+  </GlossaryItem>
+  <GlossaryItem term="bitfield value materialization">
+    将位域数值复制到普通 local object。
+  </GlossaryItem>
+  <GlossaryItem term="target-type context">
+    direct target signature 提供的期望类型信息。
+  </GlossaryItem>
+  <GlossaryItem term="forwarding boundary checklist">
+    按类型、绑定和 target 阶段排错的清单。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：解释 `f({1,2,3})` 成功而 `fwd({1,2,3})` 失败。** 写出两种不在 wrapper 内猜类型的修复。
+
+<Answer question="target-type context 在哪里丢失？">
+  direct f 的 vector parameter 为 braced list 提供目标构造类型；fwd 必须在进入 body
+  前从 list 单独推导 T，但 list 不是普通 typed expression。可显式传
+  `std::vector<int>{1,2,3}`，或先用 `auto values={1,2,3}` 物化
+  initializer_list 再转发。两者都在调用边界给出唯一类型。
+</Answer>
+
+2. **问题 2：将 overloaded processVal 和 function template workOnVal 传入 forwarding wrapper。** 分析失败点并修复。
+
+<Answer question="怎样消除 callable 歧义？">
+  overload set 与 template family 都不对应唯一 function type，T 无法推导；direct
+  target 的 function-pointer parameter 原本可提供消歧上下文。先声明准确的
+  `using Fn = void(*)(int)`，再令 Fn variable 分别绑定 processVal 或
+  `workOnVal<int>`，将该 variable 传入 wrapper；也可使用同类型 static_cast。关键是在 deduction 前选定具体 callable。
+</Answer>
+
+3. **问题 3：static const MinVals 与 bitfield 都能传给 value function，却不能直接 forwarding。** 区分两者根因并写出修复。
+
+  <Answer question="storage 与 addressability 分别如何失败？">MinVals 的值可被 direct call 常量传播，但 forwarding reference 形成 ODR-use，需要类外 definition 提供 storage；修复是定义成员或复制到 local。bitfield 有存储但不是可独立寻址 object，non-const reference 无法绑定；修复是读取并转换到 ordinary local 后传值。前者缺链接定义，后者受语言对象模型限制，不能用同一个“加定义”方案处理。</Answer>
+</Exercises>

@@ -1,140 +1,347 @@
 ---
-title: 流程控制
+title: 第 4 章：循环、数组、枚举与树枝机制
 type: A
-section: C++基础
-order: 2
-description: 条件分支、循环与跳转——if/switch/while/for 在游戏菜单、主循环、遍历实体中的具体应用。
+section: Timber!!! 项目
+order: 4
+description: 对齐官方第 3 版第 4 章：用循环、std::array、switch、enum class 与函数实现树枝槽位移位、随机生成和精灵同步。
 demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
 draft: false
 ---
 
-import { BcgFlowDiagram } from "@/components/mdx/beginning-cpp-game/diagrams/bcg-flow-diagram";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  BcgpBranchMechanicMap,
+  BcgpFunctionContractMap,
+  BcgpLoopInvariantMap,
+} from "@/components/mdx/beginning-cpp-game-programming/diagrams/flow-control";
 
 <Objectives>
-- 能区分 if/else 与 switch 的适用场景并正确选用
-- 能说明 while 与 for 的本质区别，并用于游戏主循环与实体遍历
-- 能用 break/continue 写出早退与过滤逻辑
+
+- 能解释 `while` 与 `for` 的退出条件、索引边界和循环不变量，判断反向移位为何必须从高索引开始
+- 能实现以 `std::array` 和 `enum class` 表示的树枝槽位，用 `switch` 完整映射 Left/Right/None
+- 能设计把数组修改与随机依赖显式传入的函数，测试树枝生长前后状态和精灵同步不变量
+
 </Objectives>
 
-## 顺序是底盘，控制是方向盘
+## 从“一次砍树后每根枝条去哪里”开始
 
-程序默认从上到下顺序执行，但游戏需要判断和重复：血量归零要结束游戏、玩家没退出就反复刷新画面、有十个敌人要逐个更新。这些靠流程控制结构实现。
+第 3 章已经能开始、暂停并显示时间。第 4 章开始
 
-<BcgFlowDiagram />
+<Term def="把输入、状态变换、规则判定和可观察结果组合成玩家可反复操作的玩法规则。">
+  实现游戏机制
+</Term>
+：玩家每砍一次树，已有枝条向下移动一个槽位，顶部生成新枝条，最底部枝条决定下一章的碰撞危险。
 
-## 分支：if/else 与 switch
+如果只移动精灵坐标，逻辑很快会依赖“画面恰好在哪里”。更稳妥的模型是固定数量的槽位数组，每个槽保存 Left、Right 或 None；精灵只是数组状态的视觉投影。
 
-`if/else` 适合范围判断和复杂条件：
+<BcgpBranchMechanicMap />
 
-```cpp
-if (hp <= 0) {
-  state = GAME_OVER;
-} else if (hp < 20) {
-  showWarning();  // 低血量警告
-}
-```
+## while 循环：状态驱动的外层生命周期
 
-`switch` 适合对一个整型/字符的多个离散等值分发。游戏菜单是典型场景：
-
-```cpp
-switch (choice) {
-  case '1': startGame(); break;
-  case '2': openSettings(); break;
-  case '3': quit(); break;
-  default:  cout << "无效选项";
-}
-```
-
-<Callout type="tip">
-菜单选项用 switch 比一长串 `if (choice=='1')...` 更清晰，新增选项只需加一个 case。但 switch 只能判等值、case 必须常量，判断区间或浮点仍需 if。
-</Callout>
-
-## 循环：while 与 for
-
-`while` 适合**次数不确定、靠状态退出**的循环。游戏主循环就是它：
+<Term def="条件为真时反复执行循环体的控制结构，适合迭代次数由窗口或游戏状态决定的过程。">
+  while 循环
+</Term>
+继续控制主游戏循环，因为玩家何时关闭窗口无法预先知道。循环条件要在每次迭代前重新检查，循环体中处理关闭请求、阶段转换、更新和绘制。
 
 ```cpp
 while (window.isOpen()) {
-  processInput();
-  update();
-  render();
+    while (window.pollEvent(event)) {
+        if (event.type == sf::Event::Closed)
+            window.close();
+    }
+
+    if (!window.isOpen())
+        break;
+
+    updateGame();
+    drawGame();
 }
 ```
 
-循环次数事先未知，由玩家是否关窗口决定，没有自然的计数器。
+书中此时刚开始学习函数，示例把阶段命名出来；实际定义需要放在调用前声明。外层 `while` 的不变量包括窗口对象有效、必需资源已加载、游戏状态满足枚举和值域约束。退出后不再绘制。
 
-`for` 适合**已知次数**的计数循环。遍历敌人列表是典型：
+无限循环 `while (true)` 也可配合内部退出，但会把生命周期条件藏在多个分支。窗口状态本身就是清楚条件时，直接写在循环头更易审查。
+
+## for 循环：索引、推进与边界
+
+<Term def="把初始化、继续条件和推进表达式集中书写的循环，适合遍历固定槽位和执行已知次数的更新。">
+  for 循环
+</Term>
+用来遍历树枝数组。正确性不来自“通常写小于
+size”，而来自三个问题：进入循环体时索引是否有效、每次是否朝退出推进、退出时是否恰好处理完目标区间。
+
+<Term def="每次循环体开始前成立，并在一次迭代后继续成立的事实；结合退出条件可证明没有越界且结果完整。">
+  循环不变量
+</Term>
+在正向绘制中可表述为“索引前的所有槽位已同步，索引及之后尚未处理”；在反向移位中则是“当前索引之后的目标槽已保存原前驱值，未处理前缀仍保持旧数据”。
+
+<BcgpLoopInvariantMap />
 
 ```cpp
-for (int i = 0; i < enemies.size(); ++i) {
-  enemies[i].update(dt);
+for (std::size_t index{0}; index < branches.size(); ++index) {
+    // branches[index] is valid here
+    updateBranchSprite(index);
 }
 ```
 
-次数已知（= 列表长度），有明确的计数变量，用 for 意图更清晰。C++11 起的范围 for 更简洁：`for (auto& e : enemies) e.update(dt);`
+不要写 `index <= branches.size()`，最后一次会访问不存在的 `size()` 索引。范围 `for` 适合只需元素本身的遍历；同步精灵还需要同一索引，所以显式索引更直接。
 
-一句话：次数已知用 for，状态驱动用 while。
-
-## 跳转：break 与 continue
-
-`break` 立即跳出整个循环；`continue` 跳过本次剩余、直接进下次循环判断。
-
-```cpp
-for (auto* e : enemies) {
-  if (!e->isAlive()) continue;     // 死的跳过
-  if (e->isInvincible()) continue; // 无敌的跳过
-  player.attack(e);
-  break;                            // 找到第一个能打的就停
-}
-```
-
-`continue` 用来过滤不符合条件的，避免深层嵌套 if；`break` 用来「找到即停」避免无谓遍历。
+`break` 只退出当前循环或 `switch`，`continue` 跳过本次余下语句。它们不是坏语法，但每个跳转都要重新检查资源清理与不变量；树枝更新很短，不需要用多个跳转隐藏数据流。
 
 <Callout type="trap">
-switch 里的 break 是「结束 case」不是跳出外层循环，新手常混淆。另外嵌套循环里 break 只破一层，要一次跳出多层得用标志位或提取成函数后 return。
+  **现象**：遍历六个槽位时偶尔访问第七项。**原因**：条件写成 `index <= size`，把元素数量误当最后索引。**修法**：半开区间统一为 `[0, size)`，循环体入口断言 `index < size`，并测试空集合、单元素和完整数组。
 </Callout>
 
-## 在游戏中的应用
+## 数组：固定槽位就是固定容量
 
-- **菜单选择**：switch 按选项分发
-- **游戏主循环**：while 玩家未退出
-- **遍历实体**：for 逐个更新/绘制
-- **状态判断**：if 血量归零、if 碰撞发生
-- **早退优化**：break 找到目标即停、continue 跳过无效项
+<Term def="相同元素类型按连续索引组织的固定大小集合；原生数组长度属于类型，但接口中容易退化为指针。">
+  数组
+</Term>
+适合枝条槽位，因为屏幕同时只展示固定数量。
+<Term def="标准库对固定长度数组的值类型封装，提供 size、迭代器、边界检查 at 和整体赋值等接口。">
+  std::array
+</Term>
+比原生数组更容易传入函数并保留长度。
 
-这些结构能互相嵌套：循环里套分支，分支里套循环，组合出复杂游戏逻辑。
+```cpp
+#include <array>
+#include <cstddef>
+
+enum class BranchSide {
+    Left,
+    Right,
+    None
+};
+
+constexpr std::size_t branchCount{6};
+using Branches = std::array<BranchSide, branchCount>;
+
+Branches branches{
+    BranchSide::None,
+    BranchSide::None,
+    BranchSide::None,
+    BranchSide::None,
+    BranchSide::None,
+    BranchSide::None
+};
+```
+
+初始化明确让首帧没有危险枝条。`std::array<BranchSide, 6> branches{};` 会值初始化元素，而枚举底层零是否对应期望状态取决于枚举定义；把 `None` 写成首个枚举值或显式列出，契约更清楚。
+
+若枝条数量将由关卡动态决定，可改用 `std::vector`，但此时分配失败、容量变化和引用失效成为新问题。当前固定设计不需要提前引入动态容器。
+
+## enum class：状态只能是三种之一
+
+<Term def="作用域枚举类型，枚举名不会泄漏到外层且不会隐式转换为整数，适合表达有限互斥游戏状态。">
+  enum class
+</Term>
+阻止把任意整数当枝条方向，也避免 `Left` 与其他模块枚举冲突。`BranchSide::None`
+是真实状态，不能靠魔法数字 -1 表示。
+
+状态数组只存业务事实，不存角度或纹理指针。左枝和右枝如何旋转属于映射层；换资源或坐标系时不需要改碰撞规则。
+
+序列化枚举时不要直接写底层整数并假设版本永远稳定。为文件格式定义明确编码和未知值处理；本章状态只存在于当前进程。
+
+## 反向移位：覆盖顺序决定结果
+
+<Term def="在玩家成功砍树后，将每个旧枝条状态复制到下一个更低槽位，并在顶部插入新状态的变换。">
+  树枝生长
+</Term>
+需要从尾部向前复制。若从索引 1 正向开始写 `branches[1] = branches[0]`，下一步
+`branches[2] = branches[1]` 读到的已经是新值，最终多个槽都复制了原首项。
+
+```cpp
+void shiftBranches(Branches& branches, BranchSide newTop)
+{
+    for (std::size_t index{branches.size() - 1}; index > 0; --index)
+        branches[index] = branches[index - 1];
+
+    branches[0] = newTop;
+}
+```
+
+因为 `branchCount` 编译期大于零，`size() - 1` 合法。若函数接受可空动态范围，必须先处理空集合。反向循环以 `index > 0` 停止，避免无符号 `size_t` 从 0 再减一回绕到巨大值。
+
+<Callout type="trap">
+  **现象**：一次移位后所有枝条方向都与顶部相同。**原因**：从低索引向高索引原地复制，源槽在被后续读取前已经覆盖。**修法**：从尾部反向移动，或构造新数组后一次提交；用
+  `L,R,N` 固定输入断言结果为 `new,L,R`。
+</Callout>
+
+## switch：把每个枚举状态映射完整
+
+<Term def="按一个整型或枚举表达式的离散值选择 case 分支的控制结构，适合穷举有限状态映射。">
+  switch
+</Term>
+把 BranchSide
+映射为精灵位置和旋转。编译器警告可帮助发现新增枚举值未处理；不要为了消除警告写吞掉所有值的
+`default`，除非确实有未知值策略。
+
+```cpp
+for (std::size_t index{0}; index < branches.size(); ++index) {
+    const float y{150.0F + static_cast<float>(index) * 110.0F};
+
+    switch (branches[index]) {
+    case BranchSide::Left:
+        branchSprites[index].setPosition(220.0F, y);
+        branchSprites[index].setRotation(180.0F);
+        break;
+    case BranchSide::Right:
+        branchSprites[index].setPosition(1060.0F, y);
+        branchSprites[index].setRotation(0.0F);
+        break;
+    case BranchSide::None:
+        break;
+    }
+}
+```
+
+`None` 不绘制，而不是把旧精灵移到一个巨大负坐标。绘制阶段应检查状态：
+
+```cpp
+for (std::size_t index{0}; index < branches.size(); ++index)
+    if (branches[index] != BranchSide::None)
+        window.draw(branchSprites[index]);
+```
+
+这样可见性只有一个来源。若 Left 和 Right 使用同一纹理镜像，旋转原点必须先按纹理边界设置，否则旋转会改变意外位置。映射测试同时检查逻辑状态、位置、角度和是否提交绘制。
+
+## 函数：把机制命名为可测试契约
+
+<Term def="有名字、参数和返回类型的可调用代码单元，用于封装一项机制并限定输入、修改范围和结果。">
+  函数
+</Term>
+让主循环保留“处理输入、更新树枝、同步精灵、绘制”的层次。函数不是只为减少行数；它把前置条件和后置条件变成独立测试目标。
+
+<Term def="函数形参以引用绑定调用者对象；非常量引用允许修改原对象，const 引用只读且避免复制。">
+  引用传递
+</Term>
+在 `shiftBranches(Branches& branches, ...)` 中明确数组会变，而 `newTop`
+是小枚举值，按值传递最简单。随机引擎若由选择函数推进，也通过非常量引用传入，避免隐藏全局状态。
+
+```cpp
+#include <random>
+
+BranchSide chooseBranch(std::mt19937& engine)
+{
+    std::uniform_int_distribution<int> choice{0, 4};
+
+    switch (choice(engine)) {
+    case 0:
+        return BranchSide::Left;
+    case 1:
+        return BranchSide::Right;
+    default:
+        return BranchSide::None;
+    }
+}
+
+// On a successful chop:
+shiftBranches(branches, chooseBranch(randomEngine));
+```
+
+分布让空枝概率为 3/5，左右各 1/5；这只是玩法参数，应命名或配置。更易测试的设计把纯移位函数与随机选择函数分开：移位测试直接传 Left/Right/None，随机测试只检查范围和可复现性。
+
+<BcgpFunctionContractMap />
+
+## 组合成每帧数据流
+
+输入阶段只在合法 Playing 状态和按键边沿产生“成功砍树”命令；机制阶段执行一次移位并更新分数；同步阶段遍历状态数组设置精灵；绘制阶段跳过 None 并画其余枝条。任何一帧都不在 draw 时修改数组。
+
+若一帧收到多条输入事件，要先规定是逐条执行、合并为一次，还是按时间戳排队；Timber 的一次砍树应只提交一次状态变换。可以让输入阶段产生 `chopRequested` 命令，更新阶段消费后立即清除。这样事件重放、自动测试和未来联网同步都能检查“一个命令对应一次移位”，而不会让渲染帧数偷偷决定机制次数。
+
+数组和精灵数组大小必须相同，可从同一个 `branchCount` 声明。树枝纹理加载失败时不进入游戏；随机引擎跨帧存活。重启把全部槽设为 None，再同步精灵，不能仅把分数归零。
+
+测试从具体转换开始：`[Left, Right, None, Left, None, Right]` 插入 None 后应变为 `[None, Left, Right, None, Left, None]`；连续移位六次后最初状态全部离开数组。然后检查每个状态映射和渲染提交数量。
+
+> 先预测：用 `for (std::size_t i = branches.size() - 1; i >= 0; --i)` 反向遍历会发生什么？`size_t` 无符号，i 到 0 后再减会回绕，`i >= 0` 永远为真并最终越界；应以 `i > 0` 处理移位目标。
 
 ## 小结
 
-- if/else 做范围与复杂条件，switch 做离散等值分发
-- while 状态驱动循环（主循环），for 计数循环（遍历）
-- break 跳出循环，continue 跳过本次
-- 游戏逻辑由分支与循环嵌套组合而成
-
-<Attribution
-  adaptedFrom="Beginning C++ Game Programming (Michael Dawson)"
-  adaptedUrl="https://www.packtpub.com/"
-/>
-
-<Glossary>
-<GlossaryItem term="分支结构">
-根据条件选择执行路径的流程控制，C++ 中主要是 if/else（范围与复杂条件）和 switch（离散等值分发）。
-</GlossaryItem>
-<GlossaryItem term="循环结构">
-重复执行一段代码的流程控制，while 适合次数不确定的状态驱动循环，for 适合已知次数的计数循环。
-</GlossaryItem>
-<GlossaryItem term="break">
-立即跳出当前循环或 switch case 的跳转语句，常用于「找到即停」的早退优化。
-</GlossaryItem>
-<GlossaryItem term="continue">
-跳过循环体剩余语句、直接进入下一次条件判断的跳转语句，常用于过滤不符合条件的元素。
-</GlossaryItem>
-</Glossary>
+- `while` 管状态驱动的窗口生命周期，`for` 管固定槽位遍历；二者都要写出范围、推进和退出
+- `std::array` 保留固定长度和值语义，适合 Timber 的固定树枝槽位
+- `enum class BranchSide` 把 Left/Right/None 变成有限合法状态，避免魔法整数
+- 树枝原地移位必须从尾部向前复制，无符号反向循环以 `index > 0` 停止
+- `switch` 完整映射枚举；None 在绘制阶段跳过，不靠魔法坐标隐藏旧精灵
+- 函数通过值与引用表达读取和修改范围，纯移位与随机选择分开后更容易测试
 
 <Exercises>
-  <Answer question="游戏菜单选项该用 if 还是 switch？为什么？">用 switch。菜单是按选项值（'1'/'2'/'3'）离散分发，switch 每个 case 对应一个选项，结构清晰、新增选项只加一个 case。switch 只能判等值且 case 必须常量，正好匹配菜单场景。若选项判断涉及范围则仍需 if。</Answer>
-  <Answer question="为什么游戏主循环用 while 而遍历敌人列表用 for？本质区别是什么？">本质区别：for 适合已知次数的计数循环，while 适合次数不确定、靠状态退出的循环。主循环次数由玩家是否关窗口决定，事先未知、无自然计数器，用 while 自然。遍历敌人列表次数已知（=列表长度）、有计数变量，用 for 意图更清晰。一句话：次数已知用 for，状态驱动用 while。</Answer>
+
+**问题 1** 数组初值为 `[Left, None, Right, Left]`，顶部插入 Right 后结果是什么？解释正向原地复制为何错误。
+
+<Answer>
+
+正确结果是 `[Right, Left, None, Right]`，原末尾 Left 离开可见槽。应从索引 3 到 1 依次复制旧前驱，再写索引 0。若正向先写索引 1 为旧索引 0，下一步读取索引 1 时已经是 Left，污染索引 2，随后污染更多槽位，无法保留原序列。
+
+</Answer>
+
+**问题 2** 为 BranchSide 的 switch 与绘制阶段列出最小测试，怎样证明 None 不会显示上一帧残留精灵？
+
+<Answer>
+
+分别输入 Left、Right、None：Left/Right 断言目标位置、旋转和一次绘制提交；None 断言零提交。再先把同一槽设为 Left 并同步，下一帧改 None，验证即使精灵对象仍保留旧变换，绘制过滤仍不提交它。这样可见性由逻辑状态唯一决定，不依赖把对象移出屏幕。
+
+</Answer>
+
+**问题 3** 为什么 `shiftBranches` 接收数组非常量引用、枚举按值，而随机引擎也用非常量引用？如何拆分后测试？
+
+<Answer>
+
+数组需要原地修改，所以使用非常量引用；枚举很小且函数不需修改调用者变量，按值最清楚；随机引擎调用后序列状态会推进，必须绑定同一引擎对象。测试把两步拆开：给 shiftBranches 传固定新枚举，精确断言数组；给 chooseBranch 注入固定种子，检查结果合法且序列可重复。
+
+</Answer>
+
 </Exercises>
+
+<Glossary>
+
+<GlossaryItem term="实现游戏机制">
+  把输入、状态变换、规则判定和结果组合成玩家可反复操作并可验证的玩法规则。
+</GlossaryItem>
+
+<GlossaryItem term="while 循环">
+  条件为真时反复执行，适合窗口存活或阶段状态决定迭代次数的过程。
+</GlossaryItem>
+
+<GlossaryItem term="for 循环">
+  集中书写初始化、继续条件和推进，适合索引遍历和已知次数更新。
+</GlossaryItem>
+
+<GlossaryItem term="循环不变量">
+  每次迭代前成立并被循环体保持的事实，与退出条件一起证明边界和结果。
+</GlossaryItem>
+
+<GlossaryItem term="数组">
+  相同元素类型按连续索引组织的固定大小集合，索引合法范围是零到元素数之前。
+</GlossaryItem>
+
+<GlossaryItem term="std::array">
+  标准库固定长度数组值类型，保留大小并提供迭代器、整体赋值和边界检查接口。
+</GlossaryItem>
+
+<GlossaryItem term="enum class">
+  有作用域且不隐式转整数的枚举，适合表达有限互斥游戏状态。
+</GlossaryItem>
+
+<GlossaryItem term="树枝生长">
+  成功砍树后旧枝条向下移动一槽并在顶部生成新方向状态的机制。
+</GlossaryItem>
+
+<GlossaryItem term="switch">
+  按一个离散整数或枚举值选择 case 的控制结构，适合完整映射 BranchSide。
+</GlossaryItem>
+
+<GlossaryItem term="函数">
+  用名字、参数和返回类型封装一项机制，并限定输入、修改范围与结果的代码单元。
+</GlossaryItem>
+
+<GlossaryItem term="引用传递">
+  形参绑定调用者对象的传递方式，非常量引用允许修改，const 引用只读并避免复制。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 4"
+  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+/>

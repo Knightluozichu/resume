@@ -1,0 +1,125 @@
+---
+title: "第7章 系统批量运维管理器Fabric详解"
+type: C
+section: "Python自动化运维 · 高级篇"
+order: 7
+description: "按刘天斯原书第7章重建：Fabric批量运维、fab参数与fabfile、环境、角色与网关、文件打包上传与校验、LNMP部署与代码发布。"
+demo: true
+math: false
+sourceUrl: "https://github.com/yorkoliu/pyauto"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PopFabricModelLab, PopFabricBoundaryLab, PopFabricEvidenceLab } from "@/components/mdx/python-ops/diagrams/pop-fabric";
+
+<Objectives>
+- 能解释Fabric批量运维的执行链与运维价值
+- 能区分fab参数与fabfile和环境、角色与网关的责任与失败语义
+- 能实现并复现文件打包上传与校验到LNMP部署与代码发布的安全实验
+</Objectives>
+
+## 从一次运维变更开始
+
+先预测：脚本在一台测试机成功，是否就能安全用于批量生产？不能。还要说明目标、权限、超时、部分失败、证据和回滚。<Term def="Fabric批量运维把SSH命令封装成可组合任务。原书基于Fabric 1的fabfile与env，现代Fabric使用Connection和task；迁移时要逐项验证角色、网关、sudo和失败传播。">Fabric批量运维</Term>必须落进可观察的执行链。
+
+<PopFabricModelLab />
+
+## 核心模型与责任
+
+Fabric批量运维把SSH命令封装成可组合任务。原书基于Fabric 1的fabfile与env，现代Fabric使用Connection和task；迁移时要逐项验证角色、网关、sudo和失败传播。 <Term def="fab参数与fabfile定义任务入口、主机和参数。任务函数保持幂等，把配置与密钥从源码移出，并让每台主机返回结构化结果；命令字符串只拼接经过引用的值。">fab参数与fabfile</Term>
+
+本章按照原书核心模块建立最小实验，再用现代Python和安全默认重写边界。工具版本可以变化，但目标选择、输入验证、结果聚合和审计证据不能消失。
+
+## 机制一：采集或控制入口
+
+fab参数与fabfile定义任务入口、主机和参数。任务函数保持幂等，把配置与密钥从源码移出，并让每台主机返回结构化结果；命令字符串只拼接经过引用的值。 <Term def="环境、角色与网关把目标分组及跳板拓扑显式化。角色不能代替资产清单，动态主机需来自受信库存；并行发布限制批次，避免错误同时扩散到全部节点。">环境、角色与网关</Term>
+
+```python
+from fabric import task
+@task
+def uptime(c):
+    result = c.run('uptime', hide=True, warn=True)
+    if result.failed:
+        raise RuntimeError(result.stderr)
+    print(result.stdout.strip())
+```
+
+运行前固定测试目标与时间窗，运行后保存结构化结果、耗时和异常类型。不要把打印了几行输出当成成功，也不要让示例凭据进入源码。
+
+## 机制二：状态、网络与批量
+
+环境、角色与网关把目标分组及跳板拓扑显式化。角色不能代替资产清单，动态主机需来自受信库存；并行发布限制批次，避免错误同时扩散到全部节点。 <Term def="文件打包上传与校验应生成版本化归档和SHA-256摘要，上传到临时目录，校验后解压到新版本目录。失败时旧版本软链接保持不变。">文件打包上传与校验</Term>
+
+<PopFabricBoundaryLab />
+
+```python
+from fabric import Connection
+connection = Connection(host='app01', user='deploy', gateway='jump.example')
+connection.put('release.tar.gz', remote='/tmp/release.tar.gz.part')
+connection.run('sha256sum /tmp/release.tar.gz.part')
+```
+
+批量任务要先预览匹配目标，再限制并发并逐目标汇总。成功、失败、超时和未返回是不同状态；只展示总成功率会掩盖关键主机失败。
+
+## 机制三：证据与恢复
+
+文件打包上传与校验应生成版本化归档和SHA-256摘要，上传到临时目录，校验后解压到新版本目录。失败时旧版本软链接保持不变。 <Term def="LNMP部署与代码发布要分开基础设施和应用发布。安装包、模板、健康检查、切换与回滚形成事务式流程；Fabric负责编排，不应把不可恢复数据库迁移隐藏在普通发布任务中。">LNMP部署与代码发布</Term>
+
+LNMP部署与代码发布要分开基础设施和应用发布。安装包、模板、健康检查、切换与回滚形成事务式流程；Fabric负责编排，不应把不可恢复数据库迁移隐藏在普通发布任务中。 <Term def="验证系统批量运维管理器Fabric详解的授权、结果和失败路径。">系统批量运维管理器Fabric详解验收边界</Term>
+
+```python
+@task
+def release(c, version):
+    target = f'/srv/app/releases/{version}'
+    c.run(f'mkdir -p {target}')
+    c.run(f'tar -xzf /tmp/{version}.tar.gz -C {target}')
+    c.run(f'ln -sfn {target} /srv/app/current')
+    c.run('curl --fail http://127.0.0.1/health')
+```
+
+<PopFabricEvidenceLab />
+
+## 分步验收
+
+<Stepper>
+  <Step title="建立执行链"><PopFabricModelLab /></Step>
+  <Step title="注入边界"><PopFabricBoundaryLab /></Step>
+  <Step title="证明可恢复">用正常、超时、权限拒绝和部分失败四组输入运行；核对状态、日志、临时资源与回滚点，并保留可复查证据。</Step>
+</Stepper>
+
+## 实战验证清单
+
+在隔离环境执行三段代码：先只读采集，再模拟一台目标超时，最后验证失败不会改变未授权对象。记录命令或API参数、开始结束时间、目标清单、返回码、标准错误、制品摘要和回滚结果。涉及网络扫描、远程命令或配置发布时，必须使用经过批准的测试资产。
+
+## 常见误区
+
+<Callout type="trap" title="只要Fabric批量运维能运行就可以批量">
+单机成功没有证明目标选择、并发预算、部分失败和回滚。扩大范围前必须完成预览、限流、逐主机结果与停止条件。
+</Callout>
+
+<Callout type="trap" title="原书工具API可以原样用于今天的生产">
+原书出版于2014年，部分工具和安全默认已经变化。应保留架构思想，依据当前官方文档迁移API、主机密钥、TLS、权限和依赖版本。
+</Callout>
+
+## 本章回顾
+
+官方核心单元核对：Fabric批量运维；fab参数与fabfile；环境、角色与网关；文件打包上传与校验；LNMP部署与代码发布。本章把原书模块放进现代运维闭环：先授权与预览，再执行与收集，最后判断、审计和恢复。
+
+<Exercises>
+**问题 1：如何解释“Fabric批量运维”的执行链？**<Answer>Fabric批量运维把SSH命令封装成可组合任务。原书基于Fabric 1的fabfile与env，现代Fabric使用Connection和task；迁移时要逐项验证角色、网关、sudo和失败传播。 fab参数与fabfile定义任务入口、主机和参数。任务函数保持幂等，把配置与密钥从源码移出，并让每台主机返回结构化结果；命令字符串只拼接经过引用的值。</Answer>
+**问题 2：环境、角色与网关与文件打包上传与校验如何协作？**<Answer>环境、角色与网关把目标分组及跳板拓扑显式化。角色不能代替资产清单，动态主机需来自受信库存；并行发布限制批次，避免错误同时扩散到全部节点。 文件打包上传与校验应生成版本化归档和SHA-256摘要，上传到临时目录，校验后解压到新版本目录。失败时旧版本软链接保持不变。</Answer>
+**问题 3：如何验收LNMP部署与代码发布？**<Answer>LNMP部署与代码发布要分开基础设施和应用发布。安装包、模板、健康检查、切换与回滚形成事务式流程；Fabric负责编排，不应把不可恢复数据库迁移隐藏在普通发布任务中。 增加正常、超时、权限拒绝和部分失败输入，核对目标、返回码、证据和回滚。</Answer>
+</Exercises>
+
+## 术语表
+<Glossary>
+  <GlossaryItem term="Fabric批量运维" definition="Fabric批量运维把SSH命令封装成可组合任务。" />
+  <GlossaryItem term="fab参数与fabfile" definition="fab参数与fabfile定义任务入口、主机和参数。" />
+  <GlossaryItem term="环境、角色与网关" definition="环境、角色与网关把目标分组及跳板拓扑显式化。" />
+  <GlossaryItem term="文件打包上传与校验" definition="文件打包上传与校验应生成版本化归档和SHA-256摘要，上传到临时目录，校验后解压到新版本目录。" />
+  <GlossaryItem term="LNMP部署与代码发布" definition="LNMP部署与代码发布要分开基础设施和应用发布。" />
+  <GlossaryItem term="系统批量运维管理器Fabric详解验收边界" definition="验证系统批量运维管理器Fabric详解的授权、结果和失败路径。" />
+</Glossary>
+
+<Attribution adaptedFrom="刘天斯《Python自动化运维：技术与最佳实践》第7章 系统批量运维管理器Fabric详解" adaptedUrl="https://github.com/yorkoliu/pyauto" />

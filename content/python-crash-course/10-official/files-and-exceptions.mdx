@@ -1,0 +1,222 @@
+---
+title: "第10章：Files and Exceptions"
+type: C
+section: "Part I · Basics"
+order: 10
+description: "用pathlib读写文件，以窄异常边界处理失败，并通过JSON保存和恢复用户数据。"
+demo: true
+math: false
+sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
+draft: false
+---
+
+import {
+  PccExceptionFlowLab,
+  PccJsonPersistenceLab,
+  PccPathResolutionLab,
+} from "@/components/mdx/python-crash-course/diagrams/files-and-exceptions";
+
+<Objectives>
+
+- 能解释Path、relative/absolute path与working directory，实现在UTF-8下read_text/write_text
+- 能设计窄`try/except/else`边界，区分FileNotFoundError、ZeroDivisionError与unexpected bug
+- 能实现JSON load/validate/save流程，分析missing、corrupt、schema drift并完成refactoring
+
+</Objectives>
+
+## 为什么文件I/O必须同时处理位置、内容和失败
+
+内存中的变量在进程结束后消失，file让数据跨运行保存；但I/O引入三个新边界：路径解析到哪里，bytes如何解码为text，外部状态何时可能缺失或损坏。只写happy path会让一个working directory变化或半写文件破坏整个程序。
+
+第三版使用`pathlib.Path`代替手工open/close样板。Path object负责组合路径，`read_text()`、`write_text()`执行一次性text I/O。先预测同一relative path从两个cwd启动会读取同一文件吗，以及JSON语法正确是否等于业务字段完整。
+
+<Term def="用Path对象表示并组合filesystem位置，再通过明确方法执行I/O的边界。">path boundary</Term>
+
+## Reading from a File with pathlib
+
+<Stepper>
+  <Step title="选择relative、script-relative、absolute或write场景">
+    <PccPathResolutionLab />
+  </Step>
+  <Step title="分离path construction与I/O">
+    创建Path不会证明文件存在；read_text才访问filesystem并可能raise。
+  </Step>
+  <Step title="记录resolved path、encoding与权限">
+    错误消息输出实际路径，统一UTF-8，并区分not found、permission和decode失败。
+  </Step>
+</Stepper>
+
+<Term def="不以root开头、必须相对于进程working directory或显式base解析的路径。">relative path resolution</Term>
+
+```python
+from pathlib import Path
+
+path = Path("data/pi_digits.txt")
+contents = path.read_text(encoding="utf-8")
+print(contents.rstrip())
+
+for line in contents.splitlines():
+    print(line)
+```
+
+`read_text()`一次读取全部内容，适合本书小文件；大文件应stream lines，避免把全部bytes放进memory。`splitlines()`去掉line separators并兼容不同平台newline。`rstrip()`只用于展示时去掉末尾空白，不应无条件改写领域数据。
+
+### relative与absolute path选择
+
+relative path便于项目迁移，但依赖base。命令行输入通常相对cwd；随module分发的resource可相对`Path(__file__).resolve().parent`；用户配置目录应使用平台API；测试传入temporary path最可控。absolute path明确但不可移植，不能把开发机目录硬编码进源码。
+
+打印Path前可用`resolve()`帮助诊断，但不存在路径的解析行为要按平台理解。真正读写前仍应由operation产生具体exception，不用先`exists()`再访问造成check-then-use race。
+
+## Writing to a File
+
+`path.write_text(text, encoding="utf-8")`创建或覆盖text file并返回写入字符数。parent directory必须存在；覆盖是否允许、失败后旧文件是否保留，都应写进contract。追加日志与替换配置是不同场景，不要用同一个helper隐藏mode。
+
+```python
+from pathlib import Path
+
+output = Path("output/guest.txt")
+output.parent.mkdir(parents=True, exist_ok=True)
+written = output.write_text("Ada Lovelace\n", encoding="utf-8")
+print(f"wrote {written} characters to {output.resolve()}")
+```
+
+持久配置更安全的策略是先写同目录temporary file，flush并成功关闭后原子replace目标；直接覆盖时进程中断可能留下truncated file。本书示例保持简单，但要知道“write_text返回”才是本次write完成的第一份证据。
+
+<Term def="先完成新内容写入，再以原子replace切换目标，避免读者看到半写文件的提交策略。">atomic file replacement</Term>
+
+## Exceptions：把可恢复失败变成显式分支
+
+exception沿call stack传播，直到匹配handler；无人处理则打印traceback并终止当前路径。`try`应只包预期可能失败的最小语句，`except SpecificError`处理能恢复的情况，`else`放依赖成功结果的逻辑，`finally`用于无论成功失败都必须清理的资源。
+
+<Stepper>
+  <Step title="切换成功、缺失、除零与unexpected bug">
+    <PccExceptionFlowLab />
+  </Step>
+  <Step title="识别exception owner">
+    filesystem负责FileNotFoundError，division负责ZeroDivisionError；handler只在能选择retry/skip/default时捕获。
+  </Step>
+  <Step title="保持unexpected traceback可见">
+    TypeError等programming error不应被bare except转成“文件不存在”，否则根因与line evidence丢失。
+  </Step>
+</Stepper>
+
+<Term def="只围绕一个明确可能失败operation，捕获具体exception并保留其他错误传播的处理边界。">narrow exception boundary</Term>
+
+```python
+from pathlib import Path
+
+def count_words(path: Path) -> int:
+    try:
+        contents = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        raise FileNotFoundError(f"cannot read book: {path.resolve()}")
+    else:
+        return len(contents.split())
+```
+
+重新raise并增加context能保留原exception chain；简单CLI也可打印友好消息并continue处理其他files。选择取决于这一层是否拥有恢复策略。library通常不替application决定“静默跳过”。
+
+### Failing Silently只适用于明确可选项
+
+`except FileNotFoundError: pass`会让失败无输出。只有“文件确实可选且缺失等同无操作”时合理，并最好通过return status或metric留下可观察性。required input被静默跳过会产生不完整结果，远比立即失败难诊断。
+
+捕获`Exception`也许适合最外层request boundary记录并隔离单个任务，但内部仍应分类、记录traceback并明确失败outcome；bare `except:`还会捕获KeyboardInterrupt/SystemExit，通常更危险。
+
+## Analyzing Text
+
+`contents.split()`按任意whitespace产生words，适合粗略count；真实语言分析要处理punctuation、Unicode normalization和tokenization。`text.lower().count("the")`会把`then`也计入，至少比较word tokens或使用regex boundary。
+
+分析pipeline应分为read、decode、normalize、tokenize、aggregate。每层接收和返回明确type，测试可用小string而不访问filesystem；I/O wrapper只负责Path与exceptions。这就是refactoring把外部边界与pure logic分开的价值。
+
+## Storing Data with JSON
+
+`json.dumps(value)`把Python基础结构编码为JSON string，`json.loads(text)`解码；第三版示例再用Path读写。JSON支持object、array、string、number、boolean、null，不会自动保存任意class instance、tuple identity或datetime。
+
+<Stepper>
+  <Step title="选择first run、valid、corrupt或schema drift">
+    <PccJsonPersistenceLab />
+  </Step>
+  <Step title="分开处理read、decode与schema validation">
+    FileNotFoundError表示没有文件，JSONDecodeError表示语法损坏，missing field表示domain schema不满足。
+  </Step>
+  <Step title="只在明确decision后写回">
+    corrupt input先保留evidence，不自动用空dict覆盖；migration必须可测试并记录version。
+  </Step>
+</Stepper>
+
+<Term def="JSON语法解码后，对required fields、types、ranges与version再次验证的领域边界。">persistence schema</Term>
+
+```python
+import json
+from pathlib import Path
+
+def load_profile(path: Path) -> dict | None:
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return None
+    profile = json.loads(raw)
+    if not isinstance(profile, dict) or "username" not in profile:
+        raise ValueError("profile.username is required")
+    return profile
+
+def save_profile(path: Path, profile: dict) -> None:
+    payload = json.dumps(profile, ensure_ascii=False, indent=2)
+    path.write_text(payload, encoding="utf-8")
+```
+
+### Remembering generated data across runs
+
+first run没有文件时询问用户并save，subsequent run load后确认是不是同一用户。若用户否认，不能直接展示旧数据；要重新采集或选择不同identity。文件名、record owner和privacy是persistence contract的一部分。
+
+并发写同一file会lost update或corruption。单用户练习可忽略，multi-process系统需要lock、database或atomic replace。JSON方便学习schema，不替代transactional storage。
+
+## Refactoring：让职责可以单独验证
+
+初版常把prompt、load、decode、greet、save全写在一个function。refactor为`load_profile`、`validate_profile`、`save_profile`和application flow后，每个function有单一failure boundary。pure validation用dictionary unit tests，I/O用temporary directory integration tests。
+
+重构前后behavior应由tests保护：missing file走first-run、valid profile欢迎用户、corrupt JSON不被覆盖、schema缺失给明确path、write后能round-trip。只把代码移动到functions而没有contract和tests，不算完成refactor。
+
+<Callout type="trap" title="先exists再read就不会有FileNotFoundError">
+检查与读取之间文件仍可能被删除，且permission/decode失败依旧存在。直接执行read并处理具体exception，错误消息带resolved path；exists只用于UI提示，不是正确性保证。
+</Callout>
+
+<Callout type="trap" title="JSON能loads就说明数据有效">
+loads只证明JSON syntax有效，不证明required fields、types、ranges和schema version。解码后仍需persistence schema validation，corrupt与schema drift要分开反馈。
+</Callout>
+
+## 本章回顾：外部状态的三层证据
+
+1. Path boundary明确relative base、absolute location、encoding和I/O operation。
+2. write需决定parent、覆盖与atomic replacement，成功返回才是完成证据。
+3. narrow exception boundary只捕获能恢复的具体失败，unexpected traceback保持可见。
+4. JSON流程分read、decode、schema validation和save，missing/corrupt/drift不同。
+5. refactoring把I/O与pure logic分开，让失败路径可独立测试。
+
+<Exercises>
+
+**问题 1：同一relative Path在VS Code与终端读取不同文件，如何定位？**
+
+<Answer>分别打印Path.cwd、script absolute path和target.resolve，确认relative path以cwd为base。若resource随代码分发，用`Path(__file__).resolve().parent / ...`；若由用户从CLI传入，记录cwd并保留其语义。不要硬编码开发机absolute path。</Answer>
+
+**问题 2：为什么try应只包read_text，而word count放else？**
+
+<Answer>这样FileNotFoundError handler只拥有filesystem read失败；split/count中的TypeError等unexpected bug不会被误报成文件缺失。else只在read成功后运行依赖contents的逻辑，traceback保持准确。</Answer>
+
+**问题 3：设计JSON profile load的四个测试。**
+
+<Answer>missing file返回None并走first-run；valid JSON和完整schema返回dict；truncated JSON抛JSONDecodeError且文件不被覆盖；syntax valid但缺username抛带field path的ValueError。再做save/load round-trip并使用temporary directory隔离filesystem。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="path boundary" definition="用Path构造位置并显式执行filesystem I/O的边界。" />
+  <GlossaryItem term="relative path resolution" definition="relative path依据cwd或显式base得到实际位置的过程。" />
+  <GlossaryItem term="atomic file replacement" definition="先完成临时写入再原子替换目标的提交策略。" />
+  <GlossaryItem term="narrow exception boundary" definition="只包明确operation并捕获具体可恢复exception的处理边界。" />
+  <GlossaryItem term="persistence schema" definition="JSON解码后对required fields、types与version的领域验证。" />
+</Glossary>
+
+<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 10: Files and Exceptions" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />

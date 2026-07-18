@@ -1,0 +1,349 @@
+---
+title: "第11章 提升性能，保障安全"
+description: "依据Manning原版与电子工业出版社中文版完整目录：测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证"
+type: C
+section: "RabbitMQ实战：高效部署分布式消息队列（RabbitMQ 2.7 / 2015）"
+draft: false
+math: false
+sourceUrl: "https://livebook.manning.com/book/rabbitmq-in-action/table-of-contents"
+demo: true
+order: 0
+---
+
+import {
+  Rmq11PerformanceSecurityTopologyLab,
+  Rmq11PerformanceSecurityDeliveryLab,
+  Rmq11PerformanceSecurityEvidenceLab,
+} from "@/components/mdx/rabbitmq-practice/diagrams/rmq-11-performance-security";
+
+# 第11章 提升性能，保障安全
+
+本课程对应Alvaro Videla、Jason J. W. Williams著《RabbitMQ实战：高效部署分布式消息队列》，汪佳南译，电子工业出版社2015年10月出版，332页，ISBN 9787121271649；原版RabbitMQ in Action由Manning于2012年4月出版。官方第8章样章明确以RabbitMQ 2.7.0为当时最新版本，本课程据此固定版本边界。
+
+全书正式分母为12章和附录A、B、C，不把后来出现的quorum queue、stream queue、现代federation、Kubernetes operator或新CLI倒灌进原书。本页逐项覆盖17个目录节点，最终交付吞吐延迟矩阵、内存进程预算、绑定复杂度测试、证书链、SSL监听配置与双向连接证据。
+
+<Objectives>
+
+- 能解释“第11章 提升性能，保障安全”的17个目录节点，并绘制connection、channel、exchange、binding、queue与consumer边界。
+- 能比较正常、压力、断线、节点故障和客户端重启轨迹，判断confirm、ack、持久化与业务完成点。
+- 能设计并复现吞吐延迟矩阵、内存进程预算、绑定复杂度测试、证书链、SSL监听配置与双向连接证据，用吞吐、分位延迟、ready/unacked、日志和消息ID对账支持结论。
+- 能分析“为吞吐关闭持久化和确认后称为优化，或只加密链路却不验证证书主体、私钥权限和客户端身份”为何失败，并写出停止、恢复、回退与责任交接条件。
+
+</Objectives>
+
+## 从一条AMQP消息的旅程开始
+
+先预测：生产者打开connection和channel后声明哪些交换器、队列与绑定，basic.publish如何按exchange type和routing key选择队列，broker何时发送publisher confirm，消费者何时收到delivery并basic.ack。随后预测连接中断、队列主节点故障或消费者处理一半崩溃时，消息处于ready、unacked、已重投还是未知状态。观察前必须留下预测。
+
+RabbitMQ 2.7的可靠性不是单开关。durable控制交换器与队列定义是否跨broker重启，delivery_mode控制消息是否请求持久化，publisher confirm描述发布到broker的确认，consumer ack描述处理后的确认，经典镜像队列描述队列副本。五者边界必须分别验证。
+
+## 核心词汇与版本边界
+
+<Term def="消息持久化是“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”中的第1个RabbitMQ 2.7概念，定义必须同时给出AMQP状态、故障边界和可观测证据">
+  消息持久化
+</Term>
+、
+<Term def="消息确认是“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”中的第2个RabbitMQ 2.7概念，定义必须同时给出AMQP状态、故障边界和可观测证据">
+  消息确认
+</Term>
+、
+<Term def="路由绑定是“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”中的第3个RabbitMQ 2.7概念，定义必须同时给出AMQP状态、故障边界和可观测证据">
+  路由绑定
+</Term>
+、
+<Term def="Erlang进程是“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”中的第4个RabbitMQ 2.7概念，定义必须同时给出AMQP状态、故障边界和可观测证据">
+  Erlang进程
+</Term>
+、
+<Term def="SSL证书是“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”中的第5个RabbitMQ 2.7概念，定义必须同时给出AMQP状态、故障边界和可观测证据">
+  SSL证书
+</Term>
+构成本页词汇。每个词都要回答：由谁声明，属于哪个vhost，在哪个channel发生，改变什么broker或客户端状态，断线与重试后会留下什么，以及RabbitMQ
+2.7之后哪些变化不属于本书。
+
+<Rmq11PerformanceSecurityTopologyLab />
+
+## 原书目录逐节点重构
+
+### 对速度的需求
+
+**目录节点 1/17。** “对速度的需求”服务于“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“本章输入与版本契约”进入“对速度的需求”，再到“消息持久化”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”验收。
+
+#### 消息持久化
+
+**目录节点 2/17。** “消息持久化”服务于“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“对速度的需求”进入“消息持久化”，再到“消息确认”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”验收。
+
+#### 消息确认
+
+**目录节点 3/17。** “消息确认”服务于“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“消息持久化”进入“消息确认”，再到“路由算法和绑定规则”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”验收。
+
+#### 路由算法和绑定规则
+
+**目录节点 4/17。** “路由算法和绑定规则”服务于“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“消息确认”进入“路由算法和绑定规则”，再到“投递消息”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”验收。
+
+#### 投递消息
+
+**目录节点 5/17。** “投递消息”服务于“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“路由算法和绑定规则”进入“投递消息”，再到“内存使用率和进程限制”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”验收。
+
+### 内存使用率和进程限制
+
+**目录节点 6/17。** “内存使用率和进程限制”服务于“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“投递消息”进入“内存使用率和进程限制”，再到“内存使用率”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”验收。
+
+#### 内存使用率
+
+**目录节点 7/17。** “内存使用率”服务于“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“内存使用率和进程限制”进入“内存使用率”，再到“Erlang进程计数”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”验收。
+
+#### Erlang进程计数
+
+**目录节点 8/17。** “Erlang进程计数”服务于“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“内存使用率”进入“Erlang进程计数”，再到“SSL连接”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”验收。
+
+### SSL连接
+
+**目录节点 9/17。** “SSL连接”服务于“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“Erlang进程计数”进入“SSL连接”，再到“SSL证书”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”验收。
+
+#### SSL证书
+
+**目录节点 10/17。** “SSL证书”服务于“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“SSL连接”进入“SSL证书”，再到“设置证书颁发机构”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”验收。
+
+#### 设置证书颁发机构
+
+**目录节点 11/17。** “设置证书颁发机构”服务于“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“SSL证书”进入“设置证书颁发机构”，再到“生成根证书”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”验收。
+
+#### 生成根证书
+
+**目录节点 12/17。** “生成根证书”服务于“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“设置证书颁发机构”进入“生成根证书”，再到“生成服务器端证书”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”验收。
+
+#### 生成服务器端证书
+
+**目录节点 13/17。** “生成服务器端证书”服务于“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“生成根证书”进入“生成服务器端证书”，再到“生成客户端证书”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”验收。
+
+#### 生成客户端证书
+
+**目录节点 14/17。** “生成客户端证书”服务于“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“生成服务器端证书”进入“生成客户端证书”，再到“启用RabbitMQ的SSL监听器”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”验收。
+
+#### 启用RabbitMQ的SSL监听器
+
+**目录节点 15/17。** “启用RabbitMQ的SSL监听器”服务于“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“生成客户端证书”进入“启用RabbitMQ的SSL监听器”，再到“测试你的RabbitMQ SSL设置”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”验收。
+
+#### 测试你的RabbitMQ SSL设置
+
+**目录节点 16/17。** “测试你的RabbitMQ SSL设置”服务于“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“启用RabbitMQ的SSL监听器”进入“测试你的RabbitMQ SSL设置”，再到“总结”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”验收。
+
+### 总结
+
+**目录节点 17/17。** “总结”服务于“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“测试你的RabbitMQ SSL设置”进入“总结”，再到“本章输出与消息对账”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”验收。
+
+## 机制模型：拓扑、路由与确认
+
+connection承担TCP与认证，channel在一条连接上复用AMQP会话；channel级协议错误可能关闭channel而不是整个节点。交换器不存储消息，它依据direct、fanout、topic或headers规则把发布路由到绑定队列；无匹配路由的消息是否可感知取决于mandatory等机制，不能默认为已入队。
+
+队列保存ready消息并跟踪已投递未确认消息。消费者确认意味着客户端声明处理完成，断线前未确认消息通常会重新排队，因此业务处理必须能识别重复。prefetch约束未确认在途量，过大可能造成单消费者囤积，过小可能限制吞吐；实验要同时看吞吐、尾延迟与公平性。
+
+持久化与复制需要分别证明。消息写入持久队列并标记persistent，仍不等于每次确认都完成磁盘同步；publisher confirm提供broker侧可观察边界。RabbitMQ 2.7经典镜像队列与当代quorum queue不同，本页只讨论原书策略和当时故障语义。
+
+## 最小可重放实验
+
+```text
+book=RabbitMQ实战：高效部署分布式消息队列（RabbitMQ 2.7 / 2015）
+unit=rmq-11-performance-security
+baseline=RabbitMQ 2.7.0 / AMQP 0-9-1
+focus=测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证
+artifact=吞吐延迟矩阵、内存进程预算、绑定复杂度测试、证书链、SSL监听配置与双向连接证据
+```
+
+```python
+# 伪代码：发布确认、消费处理和业务对账是三个独立边界。
+channel.confirm_delivery()
+channel.basic_publish(exchange, routing_key, body, properties)
+for delivery in consume(queue, prefetch=16):
+    apply_idempotently(delivery.message_id, delivery.body)
+    reconcile_business_result(delivery.message_id)
+    channel.basic_ack(delivery.delivery_tag)
+```
+
+```text
+evidence = rabbitmq/erlang/client version and vhost configuration
+         + exchange/binding/queue/consumer topology snapshot
+         + message-id/routing-key/confirm/delivery-tag/ack trace
+         + throughput/p50/p95/p99/ready/unacked/memory/process metrics
+         + disconnect/node/restart fault injection and final reconciliation
+```
+
+## 三步交互实验
+
+<Stepper>
+  <Step title="1. 建立交换器、绑定与队列拓扑">
+    选择正式目录节点和交换器类型，改变路由键，观察消息命中哪些队列与消费者。
+    <Rmq11PerformanceSecurityTopologyLab />
+  </Step>
+  <Step title="2. 改变持久化、确认与故障条件">
+    切换durable、persistent、publisher confirm、manual
+    ack和经典镜像，比较吞吐、重复与故障存活边界。
+    <Rmq11PerformanceSecurityDeliveryLab />
+  </Step>
+  <Step title="3. 通过端到端证据门">
+    目录、版本、拓扑、轨迹、故障和消息对账六类材料齐全后才接受结论。
+    <Rmq11PerformanceSecurityEvidenceLab />
+  </Step>
+</Stepper>
+
+<Callout type="trap">
+  **语义陷阱。**
+  为吞吐关闭持久化和确认后称为优化，或只加密链路却不验证证书主体、私钥权限和客户端身份。先写清发布确认点、消费处理点、ack点和最终业务不变量，再选择配置。
+</Callout>
+
+<Callout type="trap">
+  **版本陷阱。** 原书以RabbitMQ
+  2.7.0为基线，经典镜像队列、旧插件目录和rabbitmqadmin均有时代语境；当代RabbitMQ结果可作迁移差异，不能证明本书行为。
+</Callout>
+
+<Callout type="warning">
+  节点停止、网络隔离、磁盘故障、队列清空、权限变更、证书轮换和插件卸载只在隔离RabbitMQ
+  2.7环境演练。先备份配置与消息样本并规定停止上界。
+</Callout>
+
+## 独立证据与生产交接
+
+目录证据保存Manning 12章3附录与中文版节点映射；环境证据保存Erlang、RabbitMQ 2.7、客户端、节点名、cookie、vhost和插件；拓扑证据保存交换器、绑定、队列属性、消费者与经典镜像策略；运行证据保存消息生成规则、吞吐、分位延迟、ready/unacked、内存和Erlang进程。
+
+性能判断固定消息大小、路由键分布、交换器类型、绑定数量、持久化、confirm、ack与副本语义。关闭可靠性换来的吞吐不是等价优化。平均值会隐藏磁盘刷写、垃圾回收、消费者停顿和节点切换，必须保留P95/P99与队列积压。
+
+恢复判断从消息集合结束。节点重启、连接恢复、队列重新可见、Shovel继续运行或插件重新加载都只是阶段；还要核对每个message_id的出现次数、业务结果和未确认状态，并确认旧节点、旧消费者或旧脚本不再错误操作。
+
+## 本章回顾
+
+重新完成“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”：固定RabbitMQ 2.7和原书目录，从AMQP拓扑推导状态与确认边界，通过基线、压力与故障实验测量，最后交付吞吐延迟矩阵、内存进程预算、绑定复杂度测试、证书链、SSL监听配置与双向连接证据。只有“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”与反例都可独立重放，本页才算完成。
+
+## 复习与运行验收
+
+<Exercises>
+**问题 1**：为什么“第11章 提升性能，保障安全”必须覆盖17个目录节点？
+<Answer>这些节点共同组成“测量持久化、确认、路由绑定和投递路径的性能，控制内存与Erlang进程，并建立RabbitMQ 2.7 SSL双向认证”的拓扑、状态与证据链；漏项会使吞吐延迟矩阵、内存进程预算、绑定复杂度测试、证书链、SSL监听配置与双向连接证据无法独立复现。</Answer>
+
+**问题 2**：本页最小不变量是什么？
+
+<Answer>
+  性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证。需要版本、拓扑、confirm/ack轨迹、指标、故障与消息对账共同证明。
+</Answer>
+
+**问题 3**：怎样构造最小反例？
+
+<Answer>
+  固定消息、vhost、交换器、队列与路由键，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一，再比较broker状态与最终消息集合。
+</Answer>
+
+**问题 4**：为什么不能直接用当代RabbitMQ替代本章实验？
+
+<Answer>
+  原书以RabbitMQ
+  2.7.0为基线；队列类型、插件布局、CLI、安全和集群行为后来均有变化，新版本只能作为差异材料。
+</Answer>
+
+**问题 5**：如何验证性能结论？
+
+<Answer>
+  固定消息大小、路由分布、拓扑与可靠语义，重复测吞吐、P50/P95/P99、ready/unacked、内存、进程、网络和磁盘，并独立对账。
+</Answer>
+
+**问题 6**：独立交接需要什么？
+
+<Answer>需要完整目录映射、版本环境、AMQP拓扑、吞吐延迟矩阵、内存进程预算、绑定复杂度测试、证书链、SSL监听配置与双向连接证据、负载、故障、对账、停止、恢复、回退和责任人。</Answer>
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="消息持久化">
+    消息持久化在本页对应RabbitMQ 2.7与AMQP
+    0-9-1中的具体对象、方法或状态；适用范围由“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”和故障反例共同限定。
+  </GlossaryItem>
+  <GlossaryItem term="消息确认">
+    消息确认在本页对应RabbitMQ 2.7与AMQP
+    0-9-1中的具体对象、方法或状态；适用范围由“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”和故障反例共同限定。
+  </GlossaryItem>
+  <GlossaryItem term="路由绑定">
+    路由绑定在本页对应RabbitMQ 2.7与AMQP
+    0-9-1中的具体对象、方法或状态；适用范围由“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”和故障反例共同限定。
+  </GlossaryItem>
+  <GlossaryItem term="Erlang进程">
+    Erlang进程在本页对应RabbitMQ 2.7与AMQP
+    0-9-1中的具体对象、方法或状态；适用范围由“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”和故障反例共同限定。
+  </GlossaryItem>
+  <GlossaryItem term="SSL证书">
+    SSL证书在本页对应RabbitMQ 2.7与AMQP
+    0-9-1中的具体对象、方法或状态；适用范围由“性能比较固定消息、拓扑与可靠语义；内存与进程有上界；证书链、服务端身份、客户端身份和监听端口可独立验证”和故障反例共同限定。
+  </GlossaryItem>
+</Glossary>
+
+[← 上一页：第10章 监控](/learn/rabbitmq-practice/10-monitoring/rmq-10-monitoring) · [下一页：第12章 聪明的Rabbit：扩展RabbitMQ →](/learn/rabbitmq-practice/12-extending-rabbitmq/rmq-12-extending-rabbitmq)
+
+<Attribution
+  adaptedFrom="Alvaro Videla、Jason J. W. Williams《RabbitMQ实战》"
+  adaptedUrl="https://livebook.manning.com/book/rabbitmq-in-action/table-of-contents"
+/>

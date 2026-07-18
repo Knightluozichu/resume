@@ -1,182 +1,250 @@
 ---
-title: 贪心算法
+title: "第10章 贪心算法"
 type: C
-section: 策略与规划
+section: "算法图解（第2版）"
 order: 10
-description: 局部最优选择，逐步逼近全局目标——当贪心成立时有最优子结构。
+description: "从教室调度的精确贪心，到0/1背包反例与集合覆盖近似，建立局部选择、证明和困难问题识别框架。"
 demo: true
 math: false
-sourceUrl: https://www.manning.com/books/grokking-algorithms-second-edition
+sourceUrl: "https://livebook.manning.com/book/grokking-algorithms-second-edition/chapter-10"
 draft: false
 ---
 
-{/* 知识点清单：贪心算法/最优子结构/集合覆盖/NP完全/近似算法/调度问题；原书章节：Greedy algorithms。 */}
+import { ClassroomScheduleDiagram, KnapsackChoiceLab, SetCoverLab, NpSearchSpaceDiagram } from "@/components/mdx/grokking-algorithms-2e/diagrams/greedy-algorithms";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用集合覆盖的例子解释为什么「每一步选局部最优」也能逼近全局目标。
-- 能说出贪心策略成立的两个必要条件：贪心选择性质 + 最优子结构。
-- 能回答：当问题不是 NP 完全时，贪心能不能替代动态规划——以及什么情况不能。
+- 能解释贪心算法每一步选择局部最优，并区分精确贪心、近似贪心和启发式
+- 能实现最早结束活动调度，并用交换论证说明它为何得到最多不冲突活动
+- 能构造0/1背包反例，判断按价值或价值密度贪心何时失败
+- 能实现集合覆盖的精确枚举与贪心近似，计算每轮新增覆盖
+- 能识别NP完全问题的线索，比较穷举、近似与启发式的成本和保证
 
 </Objectives>
 
-## 先玩一遍
+## 从一间教室开始
 
-贪心算法是一种「只管眼前」的策略。每一步它选中看起来最有利的那个选项，然后永不回头。听起来像赌博——但有些问题天生就允许这样：每步的局部最优叠加起来恰好也是全局最优。
+先预测：只有一间教室，美术、英语、数学、计算机和音乐课的时间互相重叠。为了安排尽可能多的课程，应优先选最早开始、持续最短，还是最早结束的课？
 
-<AlgorithmPlayground
-  mode="greedy"
-  title="贪心算法 · 交互动画"
-  focus="贪心的每一步都是当前看来最好的选择——永远不反悔。"
-/>
+<ClassroomScheduleDiagram />
 
-<Callout type="tip">
-  <strong>猜一猜：</strong>把步骤滑块推到下一格，贪心从候选人里挑出了覆盖最多未被覆盖元素的电台，
-  还是选了一个「看起来最便宜」的？注意每一步选择后未被覆盖的区域如何缩小。
-</Callout>
+<Term def="每一步只依据当前状态选择看起来最好的可行选项，随后继续处理剩余问题的策略。">贪心算法</Term>每一步选择局部最优。它不枚举所有决策序列，也通常不撤销已选方案。关键不在“动作看起来聪明”，而在这个局部规则是否有证明，或至少有明确的近似质量。
 
-## 分步动画
+原章先给出<Term def="从若干有起止时间的活动中，选择数量最多且互不重叠活动的问题。">区间调度</Term>：教室调度选择最早结束活动。美术最早在10点结束；选中后，英语与它冲突而被排除，数学可以接上；随后计算机与数学冲突，音乐可以接上，最终得到美术、数学、音乐三门课。
 
-<GreedyAlgorithmDiagram />
+## 教室调度：精确贪心
+
+选择后删除所有冲突活动，再对剩余活动重复“结束时间最早”规则。实现时不必真的删除列表；按结束时间排序后，只接受开始时间不早于上一个已选活动结束时间的项目：
+
+```python
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class Activity:
+    name: str
+    start: float
+    end: float
+
+def schedule_most(activities: list[Activity]) -> list[Activity]:
+    chosen: list[Activity] = []
+    current_end = float("-inf")
+    for activity in sorted(activities, key=lambda item: item.end):
+        if activity.start >= current_end:
+            chosen.append(activity)
+            current_end = activity.end
+    return chosen
+
+classes = [
+    Activity("美术", 9.0, 10.0),
+    Activity("英语", 9.5, 10.5),
+    Activity("数学", 10.0, 11.0),
+    Activity("计算机", 10.5, 11.5),
+    Activity("音乐", 11.0, 12.0),
+]
+assert [item.name for item in schedule_most(classes)] == [
+    "美术", "数学", "音乐"
+]
+```
+
+为什么不是“最早开始”或“持续最短”？最早开始的长课可能堵住后面多门短课；持续最短的课可能位于时间轴中间，同时冲突两侧选择。最早结束直接把后续可用时间窗口留得最大。
 
 <Stepper>
-  <Step title="看输入结构——集合覆盖的几何直觉">
-    某个广播电台覆盖若干州——画成圆圈和点。目标是用最少的电台覆盖全部州。
-    暴力枚举需要检查 2^n 种子集（n 个电台），当 n 约 50 时，宇宙年龄都不够算。
-    这正是 NP 完全问题的特征——但贪心近似可以在 n² 内给出不差的答案。
-    <AlgorithmPlayground mode="greedy" title="贪心算法 · 集合覆盖全景" currentStep={1} />
-  </Step>
-  <Step title="执行关键动作——每一步选中覆盖最多未覆盖元素的电台">
-    第 k 步时，贪心扫描所有剩余电台，计算每个电台能新覆盖的州数，
-    选中那个覆盖最多的，把它加入答案集，然后把它覆盖的州从「未覆盖列表」中划掉。
-    关键：不回溯、不比较不同组合的全局效果，只看当前这一步谁最猛。
-    <AlgorithmPlayground mode="greedy" title="贪心算法 · 每步选择" currentStep={2} />
-  </Step>
-  <Step title="收缩问题规模——未覆盖集合逐轮缩小">
-    每选一个电台，未覆盖的州就少一批。当所有州都被覆盖时结束。
-    贪心选择次数的上限近似 ln(k)×OPT，其中 k 是最大覆盖集的元素数，
-    OPT 是最优解需要的电台数。这个近似比在理论上被证明是最可能达到的（除非 P=NP）。
-    <AlgorithmPlayground mode="greedy" title="贪心算法 · 覆盖进度" currentStep={3} />
-  </Step>
-  <Step title="读出结论——贪心回答的不是「最优」，而是「不差」">
-    对于集合覆盖这种 NP 完全问题，贪心给的是近似解而非最优解。
-    但有些问题（如 Dijkstra 最短路径、最小生成树、哈夫曼编码），贪心却是精确最优——
-    因为它们满足「贪心选择」+「最优子结构」两条性质。
-    <AlgorithmPlayground mode="greedy" title="贪心算法 · 结果评估" currentStep={4} />
-  </Step>
+  <Step title="按结束时间排序"><ClassroomScheduleDiagram />先看结束时刻，不按开始时刻、持续时长或课程名称排序。</Step>
+  <Step title="选择最早结束活动">选美术，并把它的结束时刻10点记为当前边界；这是本轮局部最优。</Step>
+  <Step title="跳过全部冲突活动">英语在10点前开始，不能选择；数学从10点开始，与已选美术兼容。</Step>
+  <Step title="在剩余区间重复">边界推进到11点，跳过计算机并选择音乐，得到最大数量的不冲突课程。</Step>
 </Stepper>
 
-## 核心概念
+<Term def="把某个最优解的首个选择替换为贪心选择，并证明目标值不会变差的方法。">交换论证</Term>可证明这个规则精确：取任意最优方案，其第一门课若不是最早结束的美术，就把第一门替换成美术。美术结束不晚于原第一门，因此原方案后面的课仍然可行，课程数不减少。于是至少存在一个最优方案以贪心选择开头；去掉冲突活动后，剩余问题仍是同类区间调度，可以递归应用同一论证。
 
-<Term def="每一步做当前看起来最优的选择，不再回溯，最终得到一个可接受（甚至最优）的解。">贪心算法</Term>
-是一种策略范式，不是具体算法。它回答「如果我只顾眼前利益、永不反悔，能走到哪里？」。
-贪心不保证最优——除非问题本身经过数学证明满足两个条件（见下）。但当精确求解太慢时，贪心近似常常是工程中唯一可行的选择。
-
-<Term def="问题的最优解包含子问题的最优解——这是动态规划和贪心都依赖的性质。">最优子结构</Term>
-是贪心和动态规划共同的立身之本。如果一个问题的全局最优解可以由局部最优决策「拼起来」，那问题就有最优子结构。有最优子结构 ≠ 贪心一定对——还需要「贪心选择性质」。
-
-<Term def="局部最优选择能通向全局最优，不需要回溯比较其他选择。">贪心选择性质</Term>
-是区分「能用贪心」和「必须用 DP」的界限。集合覆盖问题没有贪心选择性质（选当前最多的电台可能堵死后续更好的组合），所以贪心只能给近似。Dijkstra 有贪心选择性质（每次锁定最近节点就是全局最优的一步），所以贪心给精确解。
-
-<Term def="无法在多项式时间内精确求解的问题类别，但可以在多项式时间内验证一个猜测。">NP 完全</Term>
-是理解「为什么有时候必须用近似算法」的关键背景。旅行商问题、集合覆盖都属此类——精确求解是指数级时间。面对 NP 完全问题，贪心策略不是「偷懒」，而是唯一现实的出路：在合理时间内拿到足够好的答案。
-
-## 代码拆解：集合覆盖的贪心实现
-
-贪心的代码结构非常清晰——三步走：扫描未覆盖元素、挑最佳候选、标记已覆盖。下面拆开讲每一步的逻辑重点。
-
-**第一步——维护「未覆盖集」**。用一个集合存储还没被覆盖的元素。每选中一个电台，就把它覆盖的元素从未覆盖集中移除。当集合变空时算法结束。
-
-```python
-states_needed = set(["mt", "wa", "or", "id", "nv", "ut", "ca", "az"])
-stations = {
-    "kone":   {"id", "nv", "ut"},
-    "ktwo":   {"wa", "id", "mt"},
-    "kthree": {"or", "nv", "ca"},
-    "kfour":  {"nv", "ut"},
-    "kfive":  {"ca", "az"},
-}
-final_stations = set()
-```
-
-**第二步——每轮挑出覆盖最多未覆盖元素的候选**。这是贪心的核心「度量」：
-每个候选站只算它和未覆盖集的交集。不关心它之前覆盖过什么，也不考虑「选了这个会不会堵住后面的组合」。
-这是贪心最激进也最脆弱的地方——它在做一个不可逆的局部决策。
-
-```python
-while states_needed:
-    best_station = None
-    states_covered = set()
-    for station, states_for_station in stations.items():
-        covered = states_needed & states_for_station
-        if len(covered) > len(states_covered):
-            best_station = station
-            states_covered = covered
-    states_needed -= states_covered
-    final_stations.add(best_station)
-```
-
-**第三步——时间复杂度分析**。while 循环最多跑 n 趟（每个电台最多被选一次），
-每趟扫描 m 个剩余电台计算交集。总复杂度约 O(nm)。对比暴力穷举的 O(2^n)，
-贪心把一个不可能完成的任务变成了秒出的答案——代价是「最优」可能差一点。
-
-## 常见误区
-
-- **现象 →** 以为贪心在所有问题上都给最优解。**原因 →** 教科书先讲贪心最优的例子（Dijkstra、MST），容易形成「贪心=最优」的错觉。**修法 →** 记住一条铁律：贪心给最优需要满足「贪心选择性质」，不是所有问题都有。集合覆盖就是反面教材——贪心只能近似。
-
-- **现象 →** 在硬币找零问题上，以为贪心总能给最优。**原因 →** 人民币面额 {1,5,10,20,50,100} 恰好让贪心最优，但并非所有面额组合都如此。**修法 →** 试面额 {1,3,4}，找零 6。贪心 pick 4+1+1=3 枚，最优是 3+3=2 枚。
-
-- **现象 →** 看到 NP 完全就放弃，不知道还有近似算法这条路。**原因 →** 把「NP 完全」理解成「无解」，其实是无「多项式时间精确解」。**修法 →** 贪心、局部搜索、遗传算法——近似解法才是处理 NP 完全问题的工程标准答案。不求最优，求满意。
-
-<Callout type="trap">
-  <strong>现象 →</strong> 对一个问题试了贪心发现有效，就直接宣布「贪心给最优」，没有做任何理论验证。<strong>原因 →</strong>{" "}
-  把「通过测试用例」等同为「数学正确」。贪心失效的极端情况往往不在随手构造的例子里。<strong>修法 →</strong>{" "}
-  真正的验证需要证明两件事：(1) 贪心选择性质成立，(2) 最优子结构成立。不能靠跑几个用例替代。
+<Callout type="trap" title="局部最优天然等于全局最优">
+教室调度成功是因为“最早结束”可用交换论证证明安全，不是因为所有局部选择都能拼成全局最优。换成最早开始或持续最短就可能失败。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 在需要精确最优的场景用贪心近似替代。<strong>原因 →</strong>{" "}
-  贪心实现简单，忽略了一旦给近似解意味着可能和最优差几个数量级。<strong>修法 →</strong>{" "}
-  对 NP 完全问题，先算贪心近似比（该问题已知的最差情况差距多大），再决定是否接受这个误差范围。
+## 背包问题：局部最优可能失败
+
+原章随后用背包提醒：局部最优不总能得到全局最优。<Term def="容量有限，每件物品只能整件选择或不选择，目标是最大化总价值的问题。">0/1背包</Term>的决策互相耦合，因为一件物品会占用容量并改变后续所有组合。
+
+<KnapsackChoiceLab />
+
+容量4 kg时，若先拿价值最高的音响，得到3000美元；但笔记本3 kg、2000美元与吉他1 kg、1500美元可以同时装入，总价值3500美元。背包按价值或价值密度贪心可能失败：另一组容量10 kg的例子中，A为6 kg、价值30，B和C各5 kg、价值24；密度最高的A先被选后只剩4 kg，最终价值30，而B+C价值48。
+
+若物品可分割，价值密度从高到低装入的<Term def="物品允许取任意比例，以单位重量价值作为选择依据的背包问题。">分数背包</Term>可以用贪心得到精确最优；0/1背包不能把剩余容量用下一件的一部分填满，下一章将用动态规划系统处理。
+
+<Stepper>
+  <Step title="先写清可分割性"><KnapsackChoiceLab />“可切一部分”与“整件拿或不拿”是两个不同问题，不能共享同一正确性结论。</Step>
+  <Step title="测试最高价值规则">用音响对比笔记本加吉他；单件最贵并不代表组合总价值最高。</Step>
+  <Step title="测试最高密度规则">用A对比B加C；最高密度物品可能留下无法使用的容量。</Step>
+  <Step title="标明结论的作用域">分数背包可证明密度贪心最优；0/1背包的同一规则只是启发式，可能偏离最优。</Step>
+</Stepper>
+
+## 集合覆盖问题
+
+<Term def="给定一个待覆盖元素全集和若干子集，选择尽量少的子集覆盖全部元素的问题。">集合覆盖问题</Term>把广播电台映射到它能覆盖的州。全集是 `mt, wa, or, id, nv, ut, ca, az`，每个电台覆盖其中一部分；目标是选择最少电台覆盖全部州。
+
+精确集合覆盖需要枚举子集。若有 `n` 个候选电台，<Term def="一个集合的全部子集构成的集合，其中n个元素对应2的n次方个子集。">幂集</Term>包含 `2^n` 个子集；每个电台只有选或不选两种状态，组合数随候选数指数增长。
+
+<NpSearchSpaceDiagram />
+
+下面的精确版本按子集大小从小到大搜索，第一次覆盖全集时得到最少电台。它适合小输入和测试贪心结果，不适合几十上百个候选：
+
+```python
+from itertools import combinations
+
+def exact_set_cover(
+    needed: set[str], stations: dict[str, set[str]]
+) -> list[str] | None:
+    names = list(stations)
+    for count in range(1, len(names) + 1):
+        for group in combinations(names, count):
+            covered = set().union(*(stations[name] for name in group))
+            if needed <= covered:
+                return list(group)
+    return [] if not needed else None
+```
+
+集合覆盖属于NP完全问题是原章的直觉说法。更精确地区分：询问“是否能用不超过 `k` 个集合完成覆盖”的决策版是NP完全；寻找最少集合的优化版是NP困难。到目前为止，没有已知算法能对一般输入在多项式时间内保证求出精确最优解，但这不是已经证明 `P≠NP`。
+
+## 近似算法
+
+<Term def="以多项式时间求可行解，并对与最优解的差距给出某种质量保证的算法。">近似算法</Term>用可接受精度换运行时间。集合覆盖的经典贪心规则是：每轮选择覆盖最多未覆盖元素的集合，然后从剩余元素中删除已覆盖部分，直到没有未覆盖元素。
+
+<SetCoverLab />
+
+```python
+def greedy_set_cover(
+    needed: set[str], stations: dict[str, set[str]]
+) -> list[str]:
+    uncovered = set(needed)
+    chosen: list[str] = []
+
+    while uncovered:
+        best_station = None
+        best_new_cover: set[str] = set()
+        for station, covered_states in stations.items():
+            new_cover = uncovered & covered_states
+            if len(new_cover) > len(best_new_cover):
+                best_station = station
+                best_new_cover = new_cover
+
+        if best_station is None:
+            raise ValueError(f"cannot cover: {sorted(uncovered)}")
+        chosen.append(best_station)
+        uncovered -= best_new_cover
+    return chosen
+```
+
+守卫条件很重要：若剩余州没有任何电台覆盖，`best_station` 会保持为空；不检查会无限循环或把空值放进答案。重复覆盖不算新增收益，比较指标必须是 `uncovered & covered_states`，而不是电台覆盖集的总大小。
+
+对含 `m` 个待覆盖元素的一般集合覆盖，经典贪心有调和数尺度的近似保证，常写为不超过 `H_m` 倍最优，而 `H_m` 不大于 `ln(m)+1`。这说明结果集合数有界，但不意味着每个实例都恰好达到该上界，也不意味着在任何附加约束下仍保留同一保证。
+
+<Stepper>
+  <Step title="先建立未覆盖全集"><NpSearchSpaceDiagram />明确必须覆盖的每个元素，并验证候选集合的并集确实包含全集。</Step>
+  <Step title="计算每个候选的新增覆盖"><SetCoverLab />只计算候选集合与未覆盖集的交集，已经覆盖的元素不再贡献得分。</Step>
+  <Step title="选择最大新增覆盖并删除">把最佳集合加入答案，从剩余元素中删除已覆盖部分，然后重新计算下一轮得分。</Step>
+  <Step title="同时记录时间与质量">用小规模精确枚举校验贪心差距；大规模使用理论近似界或业务基线评估是否可接受。</Step>
+</Stepper>
+
+## 识别困难问题的线索
+
+识别NP完全问题的线索包括：自然解法需要枚举所有组合或排列；输入只增加一点，搜索空间就翻倍或阶乘增长；问题可改写成“从候选中挑一个子集满足全部约束”；它与已知的集合覆盖、旅行商、团或背包决策问题结构相似。
+
+这些只是预警，不是分类证明。正式证明一个问题NP完全通常需要先说明候选解可在多项式时间验证，再从已知NP完全问题做多项式时间归约。不能因为自己的实现很慢，就宣布问题NP完全；也不能因为某些实例很快，就否定最坏情况困难性。
+
+<Term def="在多项式时间内可验证候选解，且所有NP问题都可在多项式时间归约到它的决策问题。">NP完全问题</Term>并不等于“绝对无解”。小输入可以穷举，特殊结构可能有精确多项式算法，参数化算法可在某个小参数上有效，实际大输入还可使用近似、局部搜索、分支限界或求解器。
+
+<Term def="追求实际可用结果但不一定附带可证明最坏质量界的求解规则。">启发式</Term>与近似算法应区分：近似算法通常承诺可证明的质量界，启发式可能只靠经验表现。旅行商与集合覆盖都可用近似或启发式，但具体保证依赖问题版本，例如一般旅行商与满足三角不等式的度量旅行商并不相同。
+
+<Callout type="trap" title="看到组合爆炸就能判定NP完全">
+指数级穷举只是线索。可能存在尚未想到的多项式算法，也可能问题不在NP内；NP完全结论需要验证条件和归约证明。
 </Callout>
 
-## 小结与练习
+<Callout type="trap" title="贪心跑得快就可以直接上线">
+贪心解需要证明或明确近似保证。若业务要求精确最优，要先确认贪心是否精确；若接受近似，要说明最坏差距、不可覆盖输入、平局规则和约束变化后的保证。
+</Callout>
 
-- 贪心 = 每一步选局部最优，不回头，最终得到一个也许最优、也许近似的答案。
-- 贪心成立两条件：贪心选择性质（局部最优通向全局）+ 最优子结构（子问题最优可拼）。
-- 集合覆盖是 NP 完全问题，贪心给近似解，近似比有理论保证。
-- Dijkstra 和 MST 具备贪心选择性质，贪心给精确最优——这是幸运，不是贪心的本事。
+## 原章概念回查
+
+贪心算法每一步选择局部最优。教室调度选择最早结束活动，选择后删除所有冲突活动；这个规则可证明精确。
+
+局部最优不总能得到全局最优，背包按价值或价值密度贪心可能失败。集合覆盖问题的精确集合覆盖需要枚举子集，幂集包含2^n个子集，集合覆盖属于NP完全问题。
+
+近似算法用可接受精度换运行时间：每轮选择覆盖最多未覆盖元素的集合，从剩余元素中删除已覆盖部分。识别NP完全问题的线索不能替代正式证明。
+
+旅行商与集合覆盖都可用近似或启发式；贪心解需要证明或明确近似保证。
+
+## 本章回顾
+
+1. 贪心算法逐步固定当前局部最优选择。
+2. 教室调度按结束时间排序并选择最早结束的兼容活动。
+3. 交换论证证明最早结束规则能得到最多活动。
+4. 局部最优是否导向全局最优必须逐题证明。
+5. 0/1背包按总价值或价值密度选择都可能失败。
+6. 分数背包才可直接用密度贪心得到精确最优。
+7. n个候选集合形成2^n个可能子集。
+8. 集合覆盖决策版是NP完全问题，优化版是NP困难。
+9. 集合覆盖贪心每轮最大化新增覆盖。
+10. 近似算法换取速度，同时保留可说明的质量界。
+11. 启发式可能实用，但不一定有最坏情况保证。
+12. 困难问题可按规模和约束选择穷举、精确求解器、参数化、近似或启发式。
 
 <Exercises>
-  <Answer question="改代码：把贪心度量从「覆盖最多未覆盖元素」改成「覆盖最少未覆盖元素」，结果会怎样？">
-    贪心会选择最没用的站来凑数，会先用完 kfour（仅覆盖 2 个州），再用 kfive（2 个），以此类推。最终选中的电台数可能远多于最优解——这证明了贪心度量必须精心设计，不能随便换。
-  </Answer>
-  <Answer question="为什么集合覆盖问题的贪心近似能被证明「接近最优可能的形式」？">
-    因为已经证明：不存在多项式时间算法能给出比贪心更好近似比的保证，除非 P=NP。换句话说，贪心在对集合覆盖的近似这件事上已经是理论极限——不是为了省事，是没有更好的路。
-  </Answer>
+
+**问题 1：为什么区间调度选“最早结束”可证明最优，而选“持续最短”不行？**
+
+<Answer>最早结束活动可替换任意最优方案的第一个活动而不让后续空间变少，所以课程数不降；这给出交换论证。持续最短活动可能位于时间轴中间，同时与前后两个本可共存的活动冲突，没有同样的安全替换性质。</Answer>
+
+**问题 2：容量10 kg，A为6 kg价值30，B、C各5 kg价值24。价值密度贪心得多少，最优是多少？**
+
+<Answer>A密度5，高于B、C的4.8，所以密度贪心先选A，剩余4 kg无法放入B或C，总价值30。最优选B和C，正好10 kg，总价值48。这说明0/1背包不能照搬分数背包的密度规则。</Answer>
+
+**问题 3：集合覆盖贪心循环中，没有候选能覆盖剩余元素时应该怎样处理？**
+
+<Answer>应立即报告输入不可覆盖，并给出剩余元素；不能继续循环，也不能加入空候选。实现前还可检查所有候选集合的并集是否包含全集，以更早发现数据契约错误。</Answer>
+
+**问题 4：“代码需要枚举所有子集，所以这个问题是NP完全”是否成立？**
+
+<Answer>不成立。枚举只是当前算法，不能证明不存在更快算法。NP完全需要说明决策问题属于NP，并通过多项式时间归约证明NP困难；组合爆炸只能作为进一步检查问题结构的线索。</Answer>
+
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="贪心算法">
-    一种策略范式：每一步根据当前信息做出看似最优的选择，不做回溯。对某些问题给精确最优，对另一些给近似解。
-  </GlossaryItem>
-  <GlossaryItem term="最优子结构">
-    一个问题的最优解可以由它的子问题的最优解「拼合」而成。这是动态规划和贪心共同的必要前提。
-  </GlossaryItem>
-  <GlossaryItem term="贪心选择性质">
-    局部最优选择可以安全地固定下来，不需要考虑其他可能——因为这条选择一定出现在某个全局最优解中。拥有此性质的问题贪心即最优。
-  </GlossaryItem>
-  <GlossaryItem term="NP 完全">
-    一类「猜容易、算难」的问题：验证一个候选解很快，但找到最优解在最坏情况下需要指数时间。集合覆盖、旅行商均在此列。
-  </GlossaryItem>
-  <GlossaryItem term="近似算法">
-    不求最优、求足够好的算法。通常附有近似比——保证结果不会比最优差超过某个倍数的证明。
-  </GlossaryItem>
+  <GlossaryItem term="贪心算法">每一步固定当前看起来最优可行选择并继续处理剩余问题的策略。</GlossaryItem>
+  <GlossaryItem term="区间调度">从有起止时间的活动中选择最多互不重叠活动的问题。</GlossaryItem>
+  <GlossaryItem term="交换论证">用贪心选择替换某个最优解选择且不让目标变差的证明方法。</GlossaryItem>
+  <GlossaryItem term="0/1背包">每件物品只能整件选或不选的容量约束最大价值问题。</GlossaryItem>
+  <GlossaryItem term="分数背包">允许取物品任意比例、可按价值密度贪心求解的问题。</GlossaryItem>
+  <GlossaryItem term="集合覆盖问题">用尽量少的候选子集覆盖给定全集的问题。</GlossaryItem>
+  <GlossaryItem term="幂集">一个集合全部子集组成的集合，n个元素对应2的n次方个子集。</GlossaryItem>
+  <GlossaryItem term="近似算法">多项式时间求可行解并提供某种可证明质量保证的算法。</GlossaryItem>
+  <GlossaryItem term="NP完全问题">属于NP且所有NP问题都可多项式归约到它的决策问题。</GlossaryItem>
+  <GlossaryItem term="启发式">追求实际效果但不一定附带最坏情况质量证明的求解规则。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Grokking Algorithms, Second Edition"
-  adaptedUrl="https://www.manning.com/books/grokking-algorithms-second-edition"
+  adaptedFrom="Grokking Algorithms, Second Edition, Chapter 10: Greedy algorithms"
+  adaptedUrl="https://livebook.manning.com/book/grokking-algorithms-second-edition/chapter-10"
 />

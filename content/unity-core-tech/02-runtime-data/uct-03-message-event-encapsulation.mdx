@@ -1,0 +1,218 @@
+---
+title: "第 3 章 消息事件封装：类型、监听与分发"
+type: A
+section: "Unity 3D 实战核心技术详解 · 数学与数据"
+order: 3
+description: "按原书第3章实现消息类型定义、订阅生命周期、参数边界和可诊断事件分发。"
+demo: true
+math: false
+sourceUrl: "https://m.bookschina.com/7380713.htm"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Uct03MessageEventEncapsulationMapLab,
+  Uct03MessageEventEncapsulationExperimentLab,
+  Uct03MessageEventEncapsulationEvidenceLab,
+} from "@/components/mdx/unity-core-tech/diagrams/uct-03-message-event-encapsulation";
+
+<Objectives>
+
+- 能解释消息 ID、载荷类型、发送者和接收者之间的契约
+
+- 能实现可订阅、可取消、可重入保护的消息分发器
+
+- 能分析重复监听、失效对象和异常吞噬造成的隐性故障
+
+</Objectives>
+
+## 问题：为什么一个全局事件中心能快速解耦代码，也能同样快速制造无法追踪的调用关系？
+
+先预测：只要发布者不直接引用接收者，系统就一定低耦合吗？不是。若消息名靠字符串、载荷靠 object、订阅不归属生命周期、异常被吞掉，依赖只是从代码引用转移到了运行时。原书第三章把消息类型定义与监听分发放在一起，要求先固定协议，再管理执行。
+
+<Uct03MessageEventEncapsulationMapLab />
+
+## 原书边界与目录小节
+
+本页严格对应完整目录中的以下单元；这些单元只在本页计算原章覆盖，现代扩展不替代原书位置：
+
+- **消息类型定义和封装**
+- **消息事件的监听与分发**
+
+书籍身份由图书馆题录核对，章节边界由完整目录核对。本站重新组织解释、代码、实验和证据，不逐字复制原文；导读与总复习不重复计入十四个正文章。
+
+## 把隐式调用改造成显式协议
+
+消息类型应具有稳定标识、明确载荷和所有者。枚举适合封闭集合，泛型事件适合编译期绑定载荷，结构化消息还能携带 correlationId、时间戳和来源。字符串加 object 虽灵活，却把拼写与类型错误推迟到运行时。
+
+订阅返回可释放令牌，或要求成对调用 Subscribe 与 Unsubscribe。MonoBehaviour 通常在 OnEnable 订阅、OnDisable 取消，但常驻服务与场景对象的生命周期不同，必须由组合根明确所有权，不能依赖销毁时侥幸清理。
+
+同步分发简单但允许监听者重入、修改订阅表和抛异常。实现时对监听列表做快照，定义异常策略与顺序语义；跨线程消息先进入线程安全队列，再由主线程在固定阶段泵出，避免 Unity 对象被后台线程访问。
+
+可诊断分发器记录消息类型、发送者、接收者数量、耗时、递归深度和失败监听者。性能优化只有在证据表明分配或查找成为瓶颈后才做；优先保证无重复监听、无悬挂引用和确定执行顺序。
+
+<Uct03MessageEventEncapsulationExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="消息标识、载荷类型、语义、顺序与错误策略的共同定义。">消息契约</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="代表一次监听关系并能确定释放该关系的对象。">订阅令牌</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="在调用监听者前复制当前列表，隔离分发期间的增删操作。">分发快照</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="处理一个消息时再次进入同一分发路径，可能改变顺序或形成递归。">
+  重入
+</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="在 Unity 主线程固定阶段消费跨线程消息队列的边界。">主线程泵</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+这些术语组成一份最小领域模型。读者需要为每个对象写出所有者、生命周期、正常值、边界值和故意失败后的第一条可观察信号，才能把概念转成工程判断。
+
+## 关键对象与数据流
+
+发布者构造强类型消息并交给总线，总线读取订阅快照、记录链路信息并按策略调用监听者；后台来源只入队，主线程泵负责真正分发。输出是业务状态变化以及可追溯日志，取消订阅后监听计数必须立即下降。
+
+每次实验只改变一个输入，先保存版本、参数与预期，再比较输出、日志、内存或帧时间。最终结果偶然正确但中间契约不符合预测，仍不能签发，因为隐藏缓存、默认值或执行顺序可能掩盖根因。
+
+## 三步可重复实验
+
+动手前先预测：改变当前步骤的一项输入后，哪个对象、数值、像素、状态或版本标记应最先变化？固定 Unity 版本、目标平台、资产提交和测试场景。
+
+<Stepper>
+  <Step title="定义强类型协议">
+    <Uct03MessageEventEncapsulationMapLab />
+
+为金币变化消息定义不可变载荷和语义，不用 object 数组；让编译器保证监听者取得正确字段。
+
+```csharp
+public readonly record struct GoldChanged(int Before, int After, string Reason);
+public interface IMessageHandler<T> { void Handle(in T message); }
+```
+
+  </Step>
+  <Step title="验证订阅生命周期">
+    <Uct03MessageEventEncapsulationExperimentLab />
+
+反复启停同一组件并检查监听数量始终为零或一；销毁场景后发布消息，确认没有 MissingReferenceException 和悬挂回调。
+
+```csharp
+private IDisposable subscription;
+void OnEnable() => subscription = bus.Subscribe<GoldChanged>(OnGoldChanged);
+void OnDisable() => subscription?.Dispose();
+```
+
+  </Step>
+  <Step title="注入重入与异常">
+    <Uct03MessageEventEncapsulationEvidenceLab />
+
+让一个监听者再次发布同类消息，另一个监听者故意抛错；验证递归上限、异常隔离、其余监听者策略和链路日志。
+
+```csharp
+foreach (var handler in handlers.ToArray())
+{
+    try { handler(message); }
+    catch (Exception ex) { logger.Record(message, handler, ex); }
+}
+```
+
+  </Step>
+</Stepper>
+
+## 正常、边界与故障注入
+
+正常样本证明主路径，边界样本说明适用范围，故障样本证明诊断检查确实会在最早契约处拒绝。三类样本必须使用同一观测方式，避免只为成功路径保留证据。
+
+<Callout type="trap">
+  **因果陷阱**：只订阅不取消会让失效场景对象被总线持有，既重复响应又阻止垃圾回收。
+</Callout>
+
+<Callout type="trap">
+  **边界陷阱**：捕获所有异常却不记录消息与监听者，会把业务故障伪装成偶发无响应。
+</Callout>
+
+## 从原书版本迁移到当前 Unity
+
+C# event、UnityEvent、ScriptableObject Event Channel 和第三方消息总线都是载体选择；原书稳定不变量是消息协议、监听所有权与分发顺序。
+
+现代异步或响应式库可以提供调度和取消，但不能自动解决主线程边界、背压、重入与观测性，迁移必须逐项补证据。
+
+迁移账本使用五列：原书载体、稳定不变量、当前实现、不可等价处、重放证据。允许 API、插件和渲染管线变化，不允许用新名词删除原章问题或把编辑器成功当成目标平台成功。
+
+## 验收证据
+
+验收包含消息协议表、订阅计数曲线、场景卸载后零回调证明、重入上限测试、异常监听者日志、跨线程队列延迟和连续发布分配数据。
+
+证据包还要记录文件路径、构建版本、设备、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不是看过。
+
+<Uct03MessageEventEncapsulationEvidenceLab />
+
+## 小结
+
+- 解耦首先依赖强类型消息契约
+- 每次订阅都必须有明确释放者
+- 分发期间的重入、增删和异常需要定义语义
+- 没有链路日志的事件中心不可维护
+
+<Exercises>
+
+**问题 1** 第 3 章 消息事件封装的关键输入和输出分别是什么？
+
+<Answer>
+  发布者构造强类型消息并交给总线，总线读取订阅快照、记录链路信息并按策略调用监听者；后台来源只入队，主线程泵负责真正分发。输出是业务状态变化以及可追溯日志，取消订阅后监听计数必须立即下降。
+</Answer>
+
+**问题 2** 本章最有诊断价值的故障注入是什么？
+
+<Answer>
+  只订阅不取消会让失效场景对象被总线持有，既重复响应又阻止垃圾回收。需要保存失败输入和第一条偏离信号，再修复后重放。
+</Answer>
+
+**问题 3** 迁移到当前 Unity 时必须保留什么？
+
+<Answer>
+  C# event、UnityEvent、ScriptableObject Event Channel
+  和第三方消息总线都是载体选择；原书稳定不变量是消息协议、监听所有权与分发顺序。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="消息契约">
+    消息标识、载荷类型、语义、顺序与错误策略的共同定义。
+  </GlossaryItem>
+  <GlossaryItem term="订阅令牌">
+    代表一次监听关系并能确定释放该关系的对象。
+  </GlossaryItem>
+  <GlossaryItem term="分发快照">
+    在调用监听者前复制当前列表，隔离分发期间的增删操作。
+  </GlossaryItem>
+  <GlossaryItem term="重入">
+    处理一个消息时再次进入同一分发路径，可能改变顺序或形成递归。
+  </GlossaryItem>
+  <GlossaryItem term="主线程泵">
+    在 Unity 主线程固定阶段消费跨线程消息队列的边界。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="姜雪伟《Unity 3D实战核心技术详解》目录与书籍身份资料"
+  adaptedUrl="https://m.bookschina.com/7380713.htm"
+/>

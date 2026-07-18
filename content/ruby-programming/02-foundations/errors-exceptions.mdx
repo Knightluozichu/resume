@@ -1,0 +1,198 @@
+---
+title: "第10章 错误处理与异常"
+type: C
+section: "たのしいRuby 第5版 · Ruby的基础"
+order: 10
+description: "区分正常absence与异常失败，掌握begin/rescue/else/ensure、限定捕获、异常类、raise与有界retry，保留cause和cleanup证据。"
+demo: true
+math: false
+sourceUrl: "https://tanoshiiruby.github.io/5/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RubyFailureTaxonomyLab, RubyExceptionLifecycleLab, RubyExceptionRecoveryLab } from "@/components/mdx/ruby-programming/diagrams/errors-exceptions";
+
+<Objectives>
+
+- 能区分正常absence、非法输入、暂态故障和不变量破坏，并为caller选择返回值或异常
+- 能实现窄范围begin/rescue/else/ensure，保证资源释放且不遮蔽原始异常
+- 能设计限定异常类、cause-preserving re-raise与有界retry，并验证幂等和失败预算
+
+</Objectives>
+
+## 从“所有失败都rescue”这个反模式开始
+
+异常不是把所有不顺利情况统一成一个false。Search无结果可能是正常domain value，参数格式错误需要caller修复，网络timeout可能重试，不变量破坏则要停止边界并保存证据。<Term def="按可预期结果、调用错误、暂态环境失败与程序不变量失败分类信号和恢复责任。">failure taxonomy contract</Term>先于rescue syntax。
+
+先预测：`rescue StandardError; nil`会带来什么？它把NoMethodError、配置错误、磁盘失败和合法missing都压成nil，caller无法决定重试、告警还是显示空结果。异常处理的第一目标不是“程序继续跑”，而是让正确owner作出有证据的决定。
+
+## 关于错误处理
+
+Method contract应说明成功shape、正常absence、会抛哪些domain/standard exceptions、是否可重试、失败后state是否改变。<Term def="失败由哪一层转换、记录、重试、回滚或展示，并且只处理自己能真正恢复的情况。">error ownership boundary</Term>防止每层重复log/rescue。
+
+底层I/O知道path和system error，中层知道业务operation，CLI知道stderr与exit status。每层可添加context并保留cause，但只在能恢复、转成稳定domain error或建立process boundary时rescue。不要把programming error伪装成空数据。
+
+<RubyFailureTaxonomyLab />
+
+<Stepper>
+  <Step title="切换四类Failure"><RubyFailureTaxonomyLab /></Step>
+  <Step title="建立Failure表">记录signal class/value、retryability、idempotency、state change、log owner和caller action。</Step>
+  <Step title="拆掉万能rescue"><RubyFailureTaxonomyLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="Rescue StandardError后返回nil能让系统更健壮">
+它会把真实缺陷和环境故障伪装成absence，破坏告警与恢复。只捕获能处理的specific classes；其余交给更高boundary，并保留backtrace和cause。
+</Callout>
+
+## 异常处理：begin、rescue与else
+
+`begin`包围可能失败的最小operation，`rescue`按exception class匹配，`else`只在begin body无异常时执行。<Term def="Protected region只包含预期会抛目标异常的操作，避免误捕获后续无关缺陷。">narrow rescue region</Term>是正确性关键。
+
+```ruby
+def load_integer(path)
+  text = File.read(path)
+rescue Errno::ENOENT => error
+  raise ConfigError, "config missing: #{path}", error.backtrace
+else
+  Integer(text.strip, 10)
+end
+```
+
+上例rescue只围绕File.read；Integer conversion放else，因此其ArgumentError不会被ENOENT rescue影响。Ruby 2.3构造cause的API细节与现代Ruby不同，直接在rescue中raise新异常会自动形成cause链；若手工backtrace需谨慎。更常见写法是在一个明确boundary保留`raise ConfigError, message`并让`exception.cause`指向原错误。
+
+多个rescue从具体到宽泛排列。Bare `rescue`默认捕获StandardError及subclasses，不捕获Exception下的全部严重控制异常；不要`rescue Exception`吞掉Interrupt、SystemExit等process signals。
+
+## 异常处理的写法
+
+Method body可直接带rescue/else/ensure，等价于隐式begin，适合整个method就是一个窄operation；复杂method使用显式begin缩小范围。Rescue variable保存exception，可读取class、message、backtrace和cause。
+
+```ruby
+def parse_record(line)
+  JSON.parse(line)
+rescue JSON::ParserError => error
+  raise InvalidRecord, "invalid JSON record", error.backtrace
+end
+```
+
+错误message应带operation identity、非敏感input locator和期望，不要把token/password/完整payload写日志。Exception对象可以携带structured fields，避免caller解析message字符串。自定义异常在本章后面说明。
+
+<RubyExceptionLifecycleLab />
+
+<Stepper>
+  <Step title="切换begin、rescue、else和ensure"><RubyExceptionLifecycleLab /></Step>
+  <Step title="缩小Protected region">给每一行标可能异常class，确保rescue只覆盖目标operation。</Step>
+  <Step title="让else内部失败"><RubyExceptionLifecycleLab /></Step>
+</Stepper>
+
+## ensure后处理
+
+Ensure无论成功、异常、return/break等control exit都会运行，适合close、unlock、restore state与删除temp resource。<Term def="Cleanup在所有离开路径执行，同时不改变原operation结果或遮蔽原失败的约束。">cleanup preservation contract</Term>要求ensure尽量简单可靠。
+
+```ruby
+lock.lock
+begin
+  update_shared_state
+ensure
+  lock.unlock
+end
+```
+
+优先使用提供block lifecycle的API，如`File.open {}`、Mutex#synchronize；它们封装setup/ensure。Ensure中return会覆盖method正常返回和异常，几乎总是错误；ensure再次raise也可能mask原异常。Cleanup失败若必须记录，保留primary exception并在boundary报告secondary evidence。
+
+## retry重试
+
+在rescue中`retry`重新执行对应begin body。它必须有attempt上限或deadline、只捕获transient class、backoff/jitter、可取消、observability和idempotency策略。<Term def="重试只针对暂态且可安全重复的operation，并受次数/时间预算控制。">bounded retry contract</Term>防止无限循环与重复写。
+
+```ruby
+attempt = 0
+begin
+  attempt += 1
+  client.fetch(key)
+rescue Timeout::Error => error
+  raise if attempt >= 3
+  sleep(0.05 * (2 ** (attempt - 1)))
+  retry
+end
+```
+
+该示例为教学简化：production sleep注入clock/sleeper以便测试，增加jitter，尊重overall deadline。POST/charge等side effect在不确定响应后重试可能重复执行，需要idempotency key或transaction protocol。Invalid input、authentication failure和programming error不重试。
+
+## rescue修饰符
+
+`expression rescue fallback`写法紧凑，却容易捕获StandardError并隐藏哪一步失败，precedence也常被误读。只在非常局部、fallback安全且错误证据确实不需要的probe使用；配置、I/O、解析和业务操作优先完整rescue并限定class。
+
+例如`Integer(text) rescue nil`会把任何StandardError压成nil；更清楚写`Integer(text, 10)`并只rescue ArgumentError，或者使用明确parser method返回Result。<Term def="Fallback只针对一个已知失败类且不会掩盖其它缺陷的最小表达式范围。">rescue modifier boundary</Term>极窄。
+
+<RubyExceptionRecoveryLab />
+
+<Stepper>
+  <Step title="切换raise、re-raise、retry和modifier"><RubyExceptionRecoveryLab /></Step>
+  <Step title="跟踪Evidence">记录exception class/message/backtrace/cause、attempt、state change与最终owner。</Step>
+  <Step title="让Retry操作不幂等"><RubyExceptionRecoveryLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="Retry可以修复任何偶发错误">
+Retry只对暂态、可安全重复的operation有效。必须限定exception、attempt/deadline、backoff与idempotency；否则会把永久故障变成负载放大器或重复副作用。
+</Callout>
+
+## 异常处理语法的补充与指定需要捕捉的异常
+
+一个rescue可列多个相关classes：`rescue IOError, SystemCallError => error`，但组合前确认恢复策略相同。Class matching使用inheritance，因此先写specific rescue；最后宽泛StandardError仅在process/job boundary统一报告与转换status。
+
+Re-raise当前异常写裸`raise`，保留class/message/backtrace；`raise error`在某些情形会改变backtrace起点，目标版本需验证。添加context时raise domain error并保留cause。不要同一异常每层都log，通常最终处理owner记录一次，intermediate layer只augment。
+
+Rescue中访问外部服务、执行复杂template或序列化任意对象可能再次失败。Error path也要有测试和资源预算；最低可靠报告可退化为class、safe message、operation id和backtrace locator。
+
+## 异常类
+
+自定义业务异常通常继承StandardError，而不是Exception。建立小而有意义的hierarchy，如`ConfigError < StandardError`、`InvalidRecord < StandardError`、`TransientFetchError < StandardError`；caller按可恢复policy捕获，不按每个底层library class散布逻辑。
+
+<Term def="异常类层次按caller可采取的恢复动作分组，而不是机械复制内部实现细节。">exception hierarchy contract</Term>让依赖可替换。Exception可添加只读structured fields，如path、record_index、attempt，但避免携带巨大/敏感payload。
+
+Equality、serialization与cross-process传输不是Exception默认承诺；跨job boundary应转成明确error record。测试自定义异常的class、fields、cause和message，不依赖完整backtrace文本。
+
+## 主动抛出异常
+
+`raise ArgumentError, "..."`用于caller违反参数contract；`raise StateError`用于object不允许的transition；bare `raise`在rescue中重新抛当前exception。<Term def="只有当前method无法履行已声明contract且正常返回值不足以表达时才raise。">raise decision boundary</Term>避免用异常做普通循环控制。
+
+Guard clause在副作用前验证并raise，使失败保持state不变。若部分副作用已发生，需要transaction/compensation并把partial state写进error context。Library不要随意`exit`；CLI adapter把domain exceptions映射成stderr与status，process boundary才决定退出。
+
+## 本章回顾：只恢复真正拥有的失败
+
+1. 先区分正常absence、invalid input、transient failure与invariant violation，再选择value或exception。
+2. Rescue region保持窄，else承载success-only work，ensure负责不遮蔽原结果的cleanup。
+3. 只捕获能处理的specific classes；re-raise保留backtrace/cause，domain error添加安全context。
+4. Retry需要transient、bounded、backoff、cancel与idempotency；rescue modifier只用于极窄fallback。
+5. Exception hierarchy按caller recovery action设计，raise表示当前method无法履行contract。
+
+<Exercises>
+
+**问题 1：怎样把`rescue StandardError; nil`重构为可诊断边界？**
+
+<Answer>列出实际operation会抛的classes与caller action，只捕获能恢复/转换的specific class；正常missing用显式value。添加operation context并保留cause，其余异常上抛到统一boundary记录。测试missing、invalid、I/O、programming error。</Answer>
+
+**问题 2：一个安全retry loop需要哪些条件？**
+
+<Answer>限定transient exception，使用attempt/deadline预算、backoff/jitter、cancel signal与metrics；operation必须idempotent或带idempotency key。测试第1次成功、中间成功、耗尽、非重试异常、超时与不确定副作用。</Answer>
+
+**问题 3：如何保证ensure不遮蔽原异常？**
+
+<Answer>Cleanup保持最小，不在ensure return；若cleanup也可能失败，捕获secondary error并在保留primary exception/cause的结构中报告。优先使用成熟block-form API，并测试operation失败加cleanup失败的组合。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="failure taxonomy contract" definition="按失败性质分配信号与恢复责任的约定。" />
+  <GlossaryItem term="error ownership boundary" definition="只有能真正恢复或转换的层处理异常。" />
+  <GlossaryItem term="narrow rescue region" definition="Protected region只包含会抛目标异常的操作。" />
+  <GlossaryItem term="cleanup preservation contract" definition="Cleanup覆盖所有exit且不遮蔽原结果或异常。" />
+  <GlossaryItem term="bounded retry contract" definition="Retry受预算控制且仅用于暂态幂等operation。" />
+  <GlossaryItem term="rescue modifier boundary" definition="Modifier fallback只覆盖一个已知失败的极窄范围。" />
+  <GlossaryItem term="exception hierarchy contract" definition="异常类按caller可采取的恢复动作分组。" />
+  <GlossaryItem term="raise decision boundary" definition="Method无法履行contract且返回值不足时才raise。" />
+</Glossary>
+
+<Attribution adaptedFrom="たのしいRuby 第5版 / Ruby基础教程（第5版），第10章 错误处理与异常" adaptedUrl="https://tanoshiiruby.github.io/5/" />

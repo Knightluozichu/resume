@@ -13,7 +13,9 @@ interface TemplateInstantiationDiagramProps {
   step?: 1 | 2 | 3 | 4;
 }
 
-export function TemplateInstantiationDiagram({ step = 1 }: TemplateInstantiationDiagramProps) {
+export function TemplateInstantiationDiagram({
+  step = 1,
+}: TemplateInstantiationDiagramProps) {
   const accent = "var(--accent)";
   const primary = "var(--text-primary)";
   const secondary = "var(--text-secondary)";
@@ -26,12 +28,7 @@ export function TemplateInstantiationDiagram({ step = 1 }: TemplateInstantiation
   const cx = w / 2;
 
   const stageColors = [good, warn, accent, accent];
-  const stageLabels = [
-    "① 模板声明",
-    "② 函数调用",
-    "③ 隐式推导",
-    "④ 生成实例",
-  ];
+  const stageLabels = ["① 模板声明", "② 函数调用", "③ 隐式推导", "④ 生成实例"];
   const stageDescriptions = [
     "用户写 template<typename T>\nT max(T a, T b) { …… }",
     "编译器遇到 max(3, 7);\n——模板还未生成代码",
@@ -63,7 +60,14 @@ export function TemplateInstantiationDiagram({ step = 1 }: TemplateInstantiation
           aria-label="模板实例化四阶段：声明→调用→推导→生成实例的编译期展开过程"
           className="mx-auto block h-auto w-full max-w-[820px]"
         >
-          <text x={cx} y="28" fontSize="14" fontWeight="700" fill={primary} textAnchor="middle">
+          <text
+            x={cx}
+            y="28"
+            fontSize="14"
+            fontWeight="700"
+            fill={primary}
+            textAnchor="middle"
+          >
             模板实例化的四阶段过程
           </text>
 
@@ -80,7 +84,11 @@ export function TemplateInstantiationDiagram({ step = 1 }: TemplateInstantiation
                   width={box.w}
                   height={box.h}
                   rx="10"
-                  fill={isActive ? `${color}${color === accent ? "1A" : "0F"}` : "transparent"}
+                  fill={
+                    isActive
+                      ? `${color}${color === accent ? "1A" : "0F"}`
+                      : "transparent"
+                  }
                   stroke={isActive ? color : border}
                   strokeWidth={isActive ? 2 : 1}
                 />
@@ -142,81 +150,173 @@ export function TemplateInstantiationDiagram({ step = 1 }: TemplateInstantiation
           })}
 
           {/* Step indicator */}
-          <rect x={cx - 160} y={topY + 90} width="320" height="28" rx="6" fill={accent} fillOpacity="0.06" stroke={border} />
-          <text x={cx} y={topY + 109} fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">
+          <rect
+            x={cx - 160}
+            y={topY + 90}
+            width="320"
+            height="28"
+            rx="6"
+            fill={accent}
+            fillOpacity="0.06"
+            stroke={border}
+          />
+          <text
+            x={cx}
+            y={topY + 109}
+            fontSize="11"
+            fill={accent}
+            textAnchor="middle"
+            fontFamily="monospace"
+          >
             {step === 1 && "当前阶段：模板声明——只写了蓝图，还没生成任何代码"}
-            {step === 2 && "当前阶段：遇到调用点——编译器发现 max(3,7)，决定实例化"}
-            {step === 3 && "当前阶段：自动推导——T=int，签名 max(int,int) 匹配调用"}
-            {step === 4 && "当前阶段：实例化完成——编译器生成了 int max(int,int) 并调用"}
+            {step === 2 &&
+              "当前阶段：遇到调用点——编译器发现 max(3,7)，决定实例化"}
+            {step === 3 &&
+              "当前阶段：自动推导——T=int，签名 max(int,int) 匹配调用"}
+            {step === 4 &&
+              "当前阶段：实例化完成——编译器生成了 int max(int,int) 并调用"}
           </text>
 
           {/* Bottom: code pane showing current state */}
           <g transform={`translate(40, ${topY + 140})`}>
-            <rect x="0" y="0" width={w - 80} height="90" rx="8" fill="var(--code-bg)" stroke={border} />
+            <rect
+              x="0"
+              y="0"
+              width={w - 80}
+              height="90"
+              rx="8"
+              fill="var(--code-bg)"
+              stroke={border}
+            />
 
             {step >= 1 && (
-              <text x="16" y="22" fontSize="10" fill={step >= 1 ? good : secondary} fontFamily="monospace">
+              <text
+                x="16"
+                y="22"
+                fontSize="10"
+                fill={step >= 1 ? good : secondary}
+                fontFamily="monospace"
+              >
                 template&lt;typename T&gt;
               </text>
             )}
             {step >= 1 && (
-              <text x="16" y="40" fontSize="10" fill={step >= 1 ? good : secondary} fontFamily="monospace">
-                T max(T a, T b) {'{'} return a &gt; b ? a : b; {'}'}
+              <text
+                x="16"
+                y="40"
+                fontSize="10"
+                fill={step >= 1 ? good : secondary}
+                fontFamily="monospace"
+              >
+                T max(T a, T b) {"{"} return a &gt; b ? a : b; {"}"}
               </text>
             )}
 
             {step >= 2 && (
-              <text x="16" y="62" fontSize="10" fill={step >= 2 ? warn : secondary} fontFamily="monospace">
-                int main() {'{'} int x = max(3, 7); {'}'}  // ← 调用点
+              <text
+                x="16"
+                y="62"
+                fontSize="10"
+                fill={step >= 2 ? warn : secondary}
+                fontFamily="monospace"
+              >
+                int main() {"{"} int x = max(3, 7); {"}"} &#47;&#47; ← 调用点
               </text>
             )}
 
             {/* Step 4: show generated code */}
             {step >= 4 && (
-              <text x="420" y="22" fontSize="10" fill={accent} fontFamily="monospace">
+              <text
+                x="420"
+                y="22"
+                fontSize="10"
+                fill={accent}
+                fontFamily="monospace"
+              >
                 {`// 编译器生成的实例：`}
               </text>
             )}
             {step >= 4 && (
-              <text x="420" y="40" fontSize="10" fill={accent} fontFamily="monospace">
+              <text
+                x="420"
+                y="40"
+                fontSize="10"
+                fill={accent}
+                fontFamily="monospace"
+              >
                 {`int max(int a, int b) { return a > b ? a : b; }`}
               </text>
             )}
             {step >= 4 && (
-              <text x="420" y="62" fontSize="10" fill={accent} fontFamily="monospace">
+              <text
+                x="420"
+                y="62"
+                fontSize="10"
+                fill={accent}
+                fontFamily="monospace"
+              >
                 {`// 被插入到调用点，等价于 int x = max_int(a, b)`}
               </text>
             )}
 
             {step >= 3 && step < 4 && (
-              <text x="420" y="22" fontSize="10" fill={accent} fontFamily="monospace">
+              <text
+                x="420"
+                y="22"
+                fontSize="10"
+                fill={accent}
+                fontFamily="monospace"
+              >
                 {`// 推导：实参 int,int → 模板参数 T = int`}
               </text>
             )}
             {step >= 3 && step < 4 && (
-              <text x="420" y="40" fontSize="10" fill={accent} fontFamily="monospace">
+              <text
+                x="420"
+                y="40"
+                fontSize="10"
+                fill={accent}
+                fontFamily="monospace"
+              >
                 {`// 签名匹配：int max(int, int)`}
               </text>
             )}
             {step >= 3 && step < 4 && (
-              <text x="420" y="62" fontSize="10" fill={accent} fontFamily="monospace">
+              <text
+                x="420"
+                y="62"
+                fontSize="10"
+                fill={accent}
+                fontFamily="monospace"
+              >
                 {`// 编译器现在去生成 int 版本的 max →`}
               </text>
             )}
           </g>
 
           <defs>
-            <marker id="arrowAccent" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+            <marker
+              id="arrowAccent"
+              markerWidth="10"
+              markerHeight="8"
+              refX="9"
+              refY="4"
+              orient="auto"
+            >
               <polygon points="0,1 8,4 0,7" fill={accent} />
             </marker>
           </defs>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        {step === 1 && "阶段一：模板只是一个蓝图——只有 template 声明，没有任何类型确定、没有任何代码生成。"}
-        {step === 2 && "阶段二：编译器在调用点 max(3,7) 发现需要该模板，决定进行实例化。"}
-        {step === 3 && "阶段三：编译器从实参类型 int 推导模板参数 T = int——全自动，无需人为指定。"}
-        {step === 4 && "阶段四：编译器生成了一份 int max(int,int) 的代码，并将其插入调用点——等价于你手写了一版 int 特化。"}
+        {step === 1 &&
+          "阶段一：模板只是一个蓝图——只有 template 声明，没有任何类型确定、没有任何代码生成。"}
+        {step === 2 &&
+          "阶段二：编译器在调用点 max(3,7) 发现需要该模板，决定进行实例化。"}
+        {step === 3 &&
+          "阶段三：编译器从实参类型 int 推导模板参数 T = int——全自动，无需人为指定。"}
+        {step === 4 &&
+          "阶段四：编译器生成了一份 int max(int,int) 的代码，并将其插入调用点——等价于你手写了一版 int 特化。"}
       </figcaption>
     </figure>
   );

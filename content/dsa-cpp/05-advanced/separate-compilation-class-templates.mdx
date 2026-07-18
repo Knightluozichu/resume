@@ -1,0 +1,286 @@
+---
+title: "附录A 类模板的分离编译：定义可见性与实例化归属"
+type: C
+section: "高级数据结构与附录"
+order: 12
+description: "依据第3版官方MemoryCell三文件示例，重建类模板跨翻译单元时的定义可见性、隐式与显式实例化、链接诊断及发布边界。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+draft: false
+---
+
+import { DsaTemplateVisibilityMap, DsaTemplateBuildStageLab, DsaTemplatePackagingModelLab, DsaExplicitInstantiationMatrix, DsaTemplateDiagnosticLab, DsaTemplateOwnershipFlow } from "@/components/mdx/dsa-cpp/diagrams/separate-compilation-class-templates";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释类模板为何不能机械照搬普通类的声明与定义分离方式
+- 能计算每个translation unit在实例化点实际可见的声明、定义与具体类型
+- 能实现包含模型与显式实例化两种可链接的组织方案
+- 能分析compile error、undefined reference与duplicate definition的不同根因
+- 能设计模板库的code-generation ownership、supported-type contract与回归验证
+
+</Objectives>
+
+## 从“两个源文件都编译成功，为何最后仍失败”开始
+
+类模板的分离编译（<Term def="让class template的声明、定义、具体specializations与consumer分处不同文件，同时保证需要的实体在正确translation unit被生成。">类模板的分离编译</Term>，separate compilation of class templates）最容易制造一种错觉：`MemoryCell.cpp` 能编译，`TestMemoryCell.cpp` 也能编译，因此程序应该完整。实际上两次编译只证明各自translation unit内部成立；链接器还要找到 `MemoryCell<int>` 和 `MemoryCell<std::string>` 的具体成员定义。
+
+先预测：头文件声明 `read`，实现文件定义 `read`，测试文件调用 `MemoryCell<int>::read`，三者都在同一项目目录中，编译器会不会自动跨文件寻找模板定义？不会。每个源文件先独立预处理，编译器只看该translation unit包含进来的tokens；项目结构与文件名不会建立语义上的“自动查找实现”关系。
+
+第3版附录 A 的标题是 **Separate Compilation Of Class Templates**。作者公开的官方示例正好由 `MemoryCell.h`、`MemoryCell.cpp`、`TestMemoryCell.cpp` 三个文件构成：头文件只有class template声明，实现文件只有generic member definitions，测试文件使用 `int` 和 `string`。这组最小反例把问题定位在definition visibility与instantiation ownership，而不是数据结构算法本身。
+
+<DsaTemplateVisibilityMap />
+
+## A.1 普通类直觉在哪一步失效
+
+普通非模板类可以把member declaration放在头文件，把唯一member definition放入 `.cpp`。Consumer编译时知道函数signature，implementation translation unit则无条件生成那一个确定函数的machine code，链接器最后把调用与定义连接。
+
+Class template不同。`MemoryCell<Object>::read` 不是一个函数，而是一族潜在函数；在 `Object` 未确定前，compiler既不知道完整symbol，也不能检查所有依赖 `Object` 的operations。模板定义本质上是生成具体实体的recipe。模板声明与定义可见性（<Term def="在需要形成concrete specialization的point of instantiation，compiler是否同时拥有template declaration、definition及template arguments。">模板声明与定义可见性</Term>，template declaration and definition visibility）决定哪个translation unit有能力执行这份recipe。
+
+官方 `MemoryCell.h` 提供data member与三个member declarations：
+
+```cpp
+#ifndef MEMORY_CELL_H
+#define MEMORY_CELL_H
+
+template <typename Object>
+class MemoryCell {
+public:
+    explicit MemoryCell(const Object& initialValue = Object());
+    const Object& read() const;
+    void write(const Object& x);
+
+private:
+    Object storedValue;
+};
+
+#endif
+```
+
+这足以让consumer知道 `MemoryCell<int>` 的object layout、constructor signature和member calls是否合法，却不包含constructor、`read`、`write` 的body。实例化点（<Term def="program要求某个template specialization形成定义、完成semantic checks或产生code的上下文位置。">实例化点</Term>，point of instantiation）能看见多少信息，取决于预处理后的单个translation unit，而不是仓库里有哪些文件。
+
+## A.2 官方三文件示例如何走到链接错误
+
+官方 `MemoryCell.cpp` 包含头文件并给出generic definitions：
+
+```cpp
+#include "MemoryCell.h"
+
+template <typename Object>
+MemoryCell<Object>::MemoryCell(const Object& initialValue)
+    : storedValue(initialValue) {}
+
+template <typename Object>
+const Object& MemoryCell<Object>::read() const {
+    return storedValue;
+}
+
+template <typename Object>
+void MemoryCell<Object>::write(const Object& x) {
+    storedValue = x;
+}
+```
+
+单独编译此文件时，compiler看到了recipe，却没有任何具体 `Object` 请求。它可以完整解析non-dependent syntax，但没有理由替未来无限多种types生成members。于是 `MemoryCell.o` 可能不含测试程序需要的具体symbols。
+
+测试文件则只包含头文件：
+
+```cpp
+#include <iostream>
+#include <string>
+#include "MemoryCell.h"
+
+int main() {
+    MemoryCell<int> m1;
+    MemoryCell<std::string> m2("hello");
+    m1.write(37);
+    m2.write(m2.read() + " world");
+    std::cout << m1.read() << '\n' << m2.read() << '\n';
+}
+```
+
+这里 `int` 和 `std::string` 已确定，consumer可以形成class layout并生成对concrete members的调用；但member bodies不可见，所以它不能隐式生成这些bodies。两个object files都能产生，最后才暴露符号缺口：
+
+```bash
+c++ -std=c++17 -c MemoryCell.cpp
+c++ -std=c++17 -c TestMemoryCell.cpp
+c++ MemoryCell.o TestMemoryCell.o -o test-memory-cell
+# undefined reference to MemoryCell<int>::MemoryCell(...)
+# undefined reference to MemoryCell<std::string>::read() const
+```
+
+链接期未定义引用（<Term def="consumer object记录了对external symbol的调用，但参与link的objects与libraries中没有可匹配definition。">链接期未定义引用</Term>）说明declaration足够、调用已形成，却没有translation unit负责发出所需concrete definition。它与“compiler不认识类型或语法”不是同一类失败。
+
+<DsaTemplateBuildStageLab />
+
+<Callout type="trap" title="把#include当作链接器搜索路径">
+`#include "MemoryCell.h"` 只是预处理阶段的文本包含；它不会让compiler稍后去扫描 `MemoryCell.cpp`，也不会让linker从源文件临时生成缺失specialization。Build system必须显式编译源文件，而模板实例化还必须满足definition visibility与具体type请求同时出现。
+</Callout>
+
+## A.3 方案一：包含模型让consumer完成隐式实例化
+
+隐式实例化（<Term def="consumer使用concrete template arguments且definition可见时，由compiler按需要形成class或member specialization。">隐式实例化</Term>）最常见的组织方式是让完整模板定义随头文件可见。可以直接把短members写在class definition内，也可以将definitions放入 `.tpp` 或 `.ipp`，然后在头文件末尾包含它：
+
+```cpp
+// MemoryCell.h
+template <typename Object>
+class MemoryCell {
+public:
+    explicit MemoryCell(const Object& initialValue = Object());
+    const Object& read() const;
+    void write(const Object& x);
+private:
+    Object storedValue;
+};
+
+#include "MemoryCell.tpp"
+```
+
+```cpp
+// MemoryCell.tpp
+template <typename Object>
+MemoryCell<Object>::MemoryCell(const Object& value)
+    : storedValue(value) {}
+
+template <typename Object>
+const Object& MemoryCell<Object>::read() const {
+    return storedValue;
+}
+
+template <typename Object>
+void MemoryCell<Object>::write(const Object& value) {
+    storedValue = value;
+}
+```
+
+包含模型（<Term def="把template definitions纳入每个consumer translation unit，使所用specializations能在实例化点隐式生成的发布方式。">包含模型</Term>）保持type set开放：只要 `Object` 满足被实例化member实际要求，consumer可使用新type而无需修改library source。多个translation units可能都生成同一specialization，toolchain通常以template linkage与COMDAT-style folding合并；标准层面的前提仍是各处definition token一致、name lookup一致，不能依赖不同宏让同一template拥有不同bodies。
+
+它的成本是header依赖和编译时间增加，implementation changes会触发更多consumer重编译；收益是optimizer可见bodies，新增type无需library owner预先登记。`.tpp` 只是组织文件，不是独立编译单元：若它只单独参与build却没有被header包含，问题仍未解决。
+
+<DsaTemplatePackagingModelLab />
+
+## A.4 方案二：显式实例化让library拥有代码生成
+
+显式实例化（<Term def="在template definition可见处写出concrete template arguments，强制该translation unit形成指定specialization的definition。">显式实例化</Term>，explicit instantiation）适合library只承诺有限types，或希望把code generation集中在一个translation unit。把下列definitions写在官方 `MemoryCell.cpp` 的generic member definitions之后：
+
+```cpp
+#include <string>
+
+template class MemoryCell<int>;
+template class MemoryCell<std::string>;
+```
+
+`template class MemoryCell<int>;` 是explicit instantiation definition：当前translation unit同时看见generic definitions和concrete argument，因此负责发出可链接成员。Consumer仍只需declarations，但支持范围变成closed set。若测试程序新增 `MemoryCell<double>` 而library未增加对应line并重编译，就会再次出现undefined reference。
+
+显式实例化可以细到单个member，例如只生成 `template const int& MemoryCell<int>::read() const;`。这在某些members对 `Object` 有额外operations要求时很重要：实例化整个class可能迫使更多member bodies接受semantic checks，member-level清单则把binary surface收窄。反过来，`extern template class MemoryCell<int>;` 只是explicit instantiation declaration，用来抑制当前位置的implicit generation；它不生成definition，必须另有恰好一个owner提供explicit instantiation definition。
+
+<DsaExplicitInstantiationMatrix />
+
+<Callout type="trap" title="把显式实例化误当成显式特化">
+Explicit instantiation沿用generic implementation，只指定“请生成哪些arguments”；explicit specialization则为特定arguments提供不同implementation。二者的syntax、ODR责任与维护目的不同，不能用一个空specialization代替缺失实例化。
+</Callout>
+
+## A.5 选择方案就是选择发布契约
+
+两种正确方案不是纯粹的format偏好。包含模型把template recipe发布给consumer，supported types近似开放，ABI还会受consumer compiler flags、macros与toolchain影响。显式实例化模型只发布声明和有限concrete symbols，codegen集中、增量编译边界清楚，但新增type属于library feature request。
+
+不要同时无计划地混用。若header已经包含definitions，每个consumer可隐式实例化；library又显式生成同一types通常可借助linkage规则工作，但会增加重复工作，并让“谁拥有codegen”难以审计。更清晰的做法是明确一条policy：开放模板在header公开definition；封闭模板在实现文件维护explicit list，并让tests核对每个承诺type。
+
+<DsaTemplateOwnershipFlow />
+
+`MemoryCell` 还展示了实例化是按需发生的。Default argument `Object()` 要求 `Object` 可被相应表达式构造，但只有调用无实参constructor时这个路径才真正相关；`write` 需要assignment，`read` 返回const reference并要求cell仍存活。模板“能声明”不表示每个member对每个type都可用，验收应针对实际instantiated members与operation requirements。
+
+## A.6 从错误阶段反推可见性与所有权
+
+诊断时先保留分阶段build，不要只运行一条长命令。Compile error通常说明当前translation unit看见definition后，某个dependent operation对具体type无效；undefined reference通常说明调用形成但concrete code未发出；duplicate definition则需要检查full specializations、non-inline helpers、宏导致的ODR差异或多个strong owners。
+
+<DsaTemplateDiagnosticLab />
+
+一个可复核流程是：
+
+```bash
+c++ -std=c++17 -c MemoryCell.cpp -o MemoryCell.o
+c++ -std=c++17 -c TestMemoryCell.cpp -o TestMemoryCell.o
+nm -C MemoryCell.o | grep 'MemoryCell<'
+nm -C TestMemoryCell.o | grep 'MemoryCell<'
+c++ MemoryCell.o TestMemoryCell.o -o test-memory-cell
+./test-memory-cell
+```
+
+预期成功输出是 `37` 与 `hello world`。`nm -C` 不是语言标准的一部分，但能把object-level证据显示出来：definition object是否包含 `MemoryCell<int>` 与 `MemoryCell<std::string>`，consumer object是否只有未解析引用。还要在clean build中验证，避免旧object file掩盖实例化清单缺失。
+
+## 统一验收：从实例化点追到最终符号
+
+<Stepper>
+  <Step title="列出translation units与include结果">
+    <DsaTemplateVisibilityMap />
+    对每个source记录预处理后能见的template declarations、definitions和concrete uses。
+  </Step>
+  <Step title="保留compile与link阶段">
+    <DsaTemplateBuildStageLab />
+    分别生成objects，再单独link；不要把链接错误笼统记成compile failure。
+  </Step>
+  <Step title="确定唯一code-generation policy">
+    <DsaTemplatePackagingModelLab />
+    决定由consumer通过包含模型生成，还是由library通过显式清单生成。
+  </Step>
+  <Step title="核对承诺的concrete types">
+    <DsaExplicitInstantiationMatrix />
+    每个public supported type都必须有definition visibility或明确explicit owner。
+  </Step>
+  <Step title="检查symbols并clean rebuild">
+    <DsaTemplateDiagnosticLab />
+    用demangled symbol inventory验证owner，删除旧objects后重建并运行行为测试。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. Separate compilation of class templates的核心不是文件后缀，而是实例化点的definition visibility。
+2. 官方 `MemoryCell.cpp` 只有generic definitions，没有concrete request时不会自动替测试程序生成所有specializations。
+3. Inclusion model把definitions带到consumers，由各自完成implicit instantiation并保持type set开放。
+4. Explicit instantiation在definition可见的owner translation unit集中生成有限types。
+5. Compile success只证明单个translation unit成立；undefined reference说明最终缺少可匹配concrete symbol。
+6. `extern template` 不生成code，explicit specialization也不是explicit instantiation的替代品。
+7. 可靠验收必须分阶段构建、核对demangled symbols、clean rebuild并运行具体type tests。
+
+<Exercises>
+
+**问题 1：为什么只把 `MemoryCell.cpp` 加入build target仍可能链接失败？**
+
+<Answer>该translation unit看见generic member definitions，却没有 `int` 或 `std::string` 的concrete instantiation request；consumer看见concrete uses，却看不见member definitions。两边的信息没有在同一个实例化点汇合，因此没有object负责发出所需symbols。</Answer>
+
+**问题 2：一个开放给任意满足要求类型使用的header-only library更适合哪种方案？**
+
+<Answer>使用包含模型：把definitions直接放在header或由header包含 `.tpp`，让consumer在concrete type可知时隐式实例化。这样新type无需library预先列入清单，但必须管理编译时间、宏一致性和ODR。</Answer>
+
+**问题 3：显式实例化了 `int` 与 `std::string` 后，consumer新增 `double` 会发生什么？**
+
+<Answer>若consumer只看见declarations，它通常能编译出对 `MemoryCell<double>` members的调用，但library object没有对应definitions，最终链接失败。应在owner source增加 `template class MemoryCell<double>;` 并重建，或改变发布模型让definitions对consumer可见。</Answer>
+
+**问题 4：怎样证明错误不是旧object file被偶然链接成功所掩盖？**
+
+<Answer>执行clean rebuild，分别编译每个translation unit；用demangled symbol inventory检查owner object确实含承诺specializations，再链接并运行 `int`、`string` 及unsupported-type negative test。只看一次增量build结果不足以证明契约完整。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="类模板的分离编译">让模板声明、定义、实例化与consumer跨文件协作且最终可链接。</GlossaryItem>
+  <GlossaryItem term="模板声明与定义可见性">实例化点能否同时看见生成concrete entity所需的完整template definition。</GlossaryItem>
+  <GlossaryItem term="实例化点">程序要求具体specialization完成检查或生成定义的上下文位置。</GlossaryItem>
+  <GlossaryItem term="隐式实例化">definition可见时由concrete use触发的按需template生成。</GlossaryItem>
+  <GlossaryItem term="显式实例化">由owner translation unit按具体arguments强制生成specialization。</GlossaryItem>
+  <GlossaryItem term="包含模型">通过header或其包含的实现片段把template definitions发布给consumers。</GlossaryItem>
+  <GlossaryItem term="链接期未定义引用">object已有symbol调用，但所有链接输入都没有匹配definition。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Data Structures and Algorithm Analysis in C++, 3rd Edition · Appendix A Separate Compilation Of Class Templates"
+  href="https://users.cs.fiu.edu/~weiss/dsaa_c++3/code/"
+  author="Mark Allen Weiss"
+  license="原书与官方示例代码版权归作者及 Pearson/Addison-Wesley 所有；本附录依据官方完整目录及作者公开的 MemoryCell.h、MemoryCell.cpp、TestMemoryCell.cpp 独立重构教学内容"
+/>

@@ -1,47 +1,5 @@
-/**
- * <GlrFramebufferDiagram>
- *
- * FBO离屏渲染：创建→附加纹理→渲染→采样结果
- */
-
-export function GlrFramebufferDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox="0 0 720 400" role="img" aria-label="FBO离屏渲染：创建→附加纹理→渲染→采样结果" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x="360" y="30" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">帧缓冲(FBO)离屏渲染</text>
-<rect x="180" y="62" width="360" height="36" rx="8" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" strokeWidth="1.2" />
-<text x="360" y="78" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--text-primary)">glGenFramebuffers</text>
-<text x="360" y="92" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">生成FBO</text>
-<line x1="360" y1="98" x2="360" y2="112" stroke="var(--text-secondary)" strokeWidth="1.5" markerEnd="url(#arrow)" />
-<rect x="180" y="112" width="360" height="36" rx="8" fill="var(--success)" fillOpacity="0.1" stroke="var(--success)" strokeWidth="1.2" />
-<text x="360" y="128" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--text-primary)">附加纹理</text>
-<text x="360" y="142" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">颜色附件</text>
-<line x1="360" y1="148" x2="360" y2="162" stroke="var(--text-secondary)" strokeWidth="1.5" markerEnd="url(#arrow)" />
-<rect x="180" y="162" width="360" height="36" rx="8" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" strokeWidth="1.2" />
-<text x="360" y="178" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--text-primary)">附加Renderbuffer</text>
-<text x="360" y="192" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">深度附件</text>
-<line x1="360" y1="198" x2="360" y2="212" stroke="var(--text-secondary)" strokeWidth="1.5" markerEnd="url(#arrow)" />
-<rect x="180" y="212" width="360" height="36" rx="8" fill="var(--success)" fillOpacity="0.1" stroke="var(--success)" strokeWidth="1.2" />
-<text x="360" y="228" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--text-primary)">检查完整性</text>
-<text x="360" y="242" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">GL_FRAMEBUFFER_COMPLETE</text>
-<line x1="360" y1="248" x2="360" y2="262" stroke="var(--text-secondary)" strokeWidth="1.5" markerEnd="url(#arrow)" />
-<rect x="180" y="262" width="360" height="36" rx="8" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" strokeWidth="1.2" />
-<text x="360" y="278" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--text-primary)">离屏渲染</text>
-<text x="360" y="292" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">输出到纹理</text>
-<line x1="360" y1="298" x2="360" y2="312" stroke="var(--text-secondary)" strokeWidth="1.5" markerEnd="url(#arrow)" />
-<rect x="180" y="312" width="360" height="36" rx="8" fill="var(--success)" fillOpacity="0.1" stroke="var(--success)" strokeWidth="1.2" />
-<text x="360" y="328" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--text-primary)">采样结果</text>
-<text x="360" y="342" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">后处理/阴影</text>
-
-          <defs>
-            <marker id="glr-framebuffer-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-              <path d="M0 0 L6 3 L0 6 z" fill="var(--text-secondary)" />
-            </marker>
-          </defs>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">FBO离屏渲染：创建→附加纹理→渲染→采样结果</figcaption>
-    </figure>
-  );
-}
+import type { ReactNode } from "react";
+function Frame({caption,children}:{caption:string;children:ReactNode}){return <figure className="mdx-figure not-prose mx-auto my-6"><div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div><figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption></figure>}
+export function GlrFramebufferDiagram(){const items=[["Shader outputs","locations"],["Draw routing","attachments"],["Fragment ops","tests + blend"],["Sample storage","color/depth/stencil"],["Resolve/read","next consumer"]];return <Frame caption="最终像素由输出路由、逐样本操作、附件存储和 resolve 共同决定。"><div role="img" aria-label="帧缓冲输出链" className="grid gap-2 md:grid-cols-5">{items.map(([a,b],i)=><div key={a} className="grid min-h-24 content-center rounded-control border border-border bg-bg/45 p-3 text-center"><span className="text-xs font-bold text-accent">0{i+1}</span><strong className="mt-1 text-xs text-primary">{a}</strong><span className="mt-2 text-xs text-secondary">{b}</span></div>)}</div></Frame>}
+export function GlrFragmentOpsDiagram(){const ops=["coverage/scissor","stencil test + op","depth test + write","blend/logic op","color/depth/stencil masks"];return <Frame caption="实现可提前执行部分测试，但可观察写入必须符合这些依赖和掩码。"><div role="img" aria-label="OpenGL 逐片段操作链" className="flex flex-wrap items-center justify-center gap-2">{ops.map((x,i)=><div key={x} className="flex items-center gap-2"><span className="rounded-control border border-border bg-bg/45 px-3 py-2 text-xs font-semibold text-primary">{x}</span>{i<ops.length-1?<span className="text-accent">→</span>:null}</div>)}</div></Frame>}
+export function GlrMsaaResolveDiagram(){const samples=["S0","S1","S2","S3"];return <Frame caption="MSAA 先保存多个覆盖/颜色/深度样本，再按数据语义 resolve 到单样本目标。"><div role="img" aria-label="四倍多重采样 resolve" className="grid items-center gap-4 md:grid-cols-[1fr_auto_1fr]"><div className="grid grid-cols-2 gap-2">{samples.map((x,i)=><span key={x} className={`grid aspect-square place-items-center rounded-control border border-border text-xs font-bold ${i<3?'bg-accent/15 text-accent':'bg-bg text-secondary'}`}>{x}</span>)}</div><strong className="text-center text-accent">resolve →</strong><div className="grid aspect-square max-h-40 place-items-center rounded-control border border-border bg-accent/10 text-sm font-bold text-primary">pixel</div></div></Frame>}

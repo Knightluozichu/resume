@@ -1,0 +1,235 @@
+---
+title: "第8章：对象工厂"
+type: A
+section: Modern C++ Design · Part II Components
+order: 8
+description: 对齐第一版第8章 Object Factories：运行时创建需求、类与对象、注册式 Factory、Type Identifiers、泛化、重复/未知/线程/卸载细节、CloneFactory 及与其他通用组件的组合。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+draft: false
+---
+
+import {
+  McdCloneFactoryMap,
+  McdFactoryNeedMap,
+  McdFactoryRegistryMap,
+} from "@/components/mdx/modern-cpp-design/diagrams/object-factories";
+
+<Objectives>
+
+- 能解释 the need for object factories，并把 runtime identifier 到 creator 的映射与 concrete product 集合解耦
+- 能实现注册、注销、创建、重复和未知 ID 策略，处理 creator signature、ownership、exception、thread 与 plugin lifetime
+- 能设计 CloneFactory、prototype 和 schema-driven creation，并组合 Functor、Singleton、Typelist 等通用组件而不隐藏依赖
+
+</Objectives>
+
+## 为什么需要 Object Factories
+
+**The Need for Object Factories** 出现在 concrete type 只能运行时决定时：配置写着 renderer 名称，network message 携带 message kind，plugin 注册新 decoder。caller 只依赖 abstract product，却不能写 `new AbstractProduct`，也不应拥有所有 derived headers 与 central switch。
+
+<Term def="根据运行时 identifier 选择已注册 creator 并返回抽象 product owner 的组件。">
+  Object Factory
+</Term>
+
+```cpp
+std::unique_ptr<Shape> createShape(std::string_view kind) {
+    if (kind == "circle") return std::make_unique<Circle>();
+    if (kind == "polygon") return std::make_unique<Polygon>();
+    throw UnknownShape(kind);
+}
+```
+
+这个 switch 对两个类型足够清楚；Factory 的收益在 product 集合由独立 module/plugin 扩展时。不要为了两个固定分支引入全局 registry。扩展边界、部署方式和 ownership 是决定因素，不是 pattern 名称。
+
+<McdFactoryNeedMap />
+
+## Object Factories in C++：Classes and Objects
+
+**Object Factories in C++: Classes and Objects** 要区分 compile-time class 与 runtime object。C++ class 本身不是普通值，无法把“某个 class”直接放进 `map`; registry 保存的是能构造该 class object 的 callable，或 prototype object。
+
+<Term def="把无法作为运行时值直接存储的 concrete class，转换为可存储 creator callable 或 prototype object 的表示步骤。">
+  class-to-creator mapping
+</Term>
+
+creator 的统一 signature 决定 factory 能提供哪些参数。无参数 `Product*()` 最简单；`Product*(Context&, Config)` 更实用；参数若因 product 而异，需要 typed config、builder、variant 或二阶段初始化。用 `void*`/property bag 泛化会失去类型安全。
+
+## Implementing an Object Factory
+
+**Implementing an Object Factory** 通常参数化四件事：abstract product、identifier type、creator type、unknown-ID policy。registry 是 associative map；`Register` 插入，`Unregister` 删除，`CreateObject` lookup 后调用 creator。
+
+<Term def="保存 identifier 到 creator 的关联表，并提供受控 register/unregister/create 操作的注册式实现。">
+  creator registry
+</Term>
+
+```cpp
+template<class Product, class Id, class... Args>
+class Factory {
+public:
+    using Creator = std::function<std::unique_ptr<Product>(Args...)>;
+
+    bool registerCreator(Id id, Creator creator) {
+        return creators_.emplace(std::move(id), std::move(creator)).second;
+    }
+
+    std::unique_ptr<Product> create(const Id& id, Args... args) const {
+        auto found = creators_.find(id);
+        if (found == creators_.end()) throw UnknownType{id};
+        return found->second(std::forward<Args>(args)...);
+    }
+private:
+    std::map<Id, Creator> creators_;
+};
+```
+
+返回 `unique_ptr<Product>` 把 ownership 写入类型；若 product 要由 plugin-specific deleter 销毁，creator 应返回带 deleter的 owner 或 factory 提供 Destroy contract。裸 `Product*` 会把谁 delete、在哪个 module delete 留给习惯。
+
+## Type Identifiers
+
+**Type Identifiers** 可以是 integer enum、string、UUID、`std::type_index` 或 explicit schema key。identifier 的作用域决定选择：进程内 RTTI key 方便，跨版本持久化则必须稳定、版本化且不依赖 mangled name。
+
+<Term def="在 factory 所定义范围内稳定指代某类 creator/product 的可比较键。">
+  Type Identifier
+</Term>
+
+string 对配置友好但需 normalization/namespace；small integer 紧凑却需要中央分配；UUID 降低碰撞协调但不可读；type_index 只适合同进程类型身份。plugin 应使用 `vendor.product.version` 或 UUID，并在 registration 时验证冲突。
+
+<Callout type="trap" title="陷阱：typeid(T).name() 是免费的全局稳定 ID">
+  name 格式和跨构建稳定性不受标准保证，DSO 卸载还牵涉 RTTI lifetime。它可做日志提示，不应直接成为磁盘、网络或长期配置协议。
+</Callout>
+
+## Generalization
+
+**Generalization** 将 Factory 从特定 `Shape/string/function pointer` 提升为 templates：Product、Identifier、Creator、error policy、container、threading 都可替换。Generalized Functor 使 stateful lambda/member callback 也能作为 Creator。
+
+<Term def="把 product、key、creator signature 与失败/容器策略参数化，使同一注册算法服务不同领域。">
+  Factory generalization
+</Term>
+
+泛化边界应服务真实变体。把 map allocator、comparison、lock、error 全暴露为十个 public template parameters 会把实现细节传播到 ABI 和 diagnostics。通常固定 sensible defaults，只开放 product/key/signature 与明确 extension policies。
+
+## Minutiae：重复、未知、异常与重入
+
+官方目录的 **Minutiae** 是 Factory 正确性的主体：重复 registration 是 reject、replace 还是 version coexist？unknown ID 是 throw、null、fallback 还是 diagnostic object？creator 抛异常时 registry 是否保持？creator 内能否 reenter factory？
+
+<Term def="围绕 registration 冲突、unknown lookup、异常、线程、重入、注销和诊断的边界规则。">
+  Factory minutiae
+</Term>
+
+注册与 lookup 并发时可用 shared mutex 或 immutable snapshot/copy-on-write；不能持 registry lock 调 creator，因为 creator 可能慢、递归注册或调用另一个 Factory。先在锁内复制/取得稳定 callable owner，解锁后执行。
+
+<McdFactoryRegistryMap />
+
+plugin unload 更难：registry entry 的 callable code 位于 plugin，已创建 product 的 vtable/destructor 也位于 plugin。unregister 只能阻止新创建，不能证明没有 in-flight creator 或 live products。需要 module lease/reference count，直到 entries、calls、objects 全归零才卸载代码。
+
+<Callout type="trap" title="陷阱：Unregister 成功即可 dlclose plugin">
+  其他线程可能已经复制 creator，已有 objects 仍要调用 plugin destructor/vtable。卸载协议必须追踪 registration、in-flight call 与 live product 三类引用，并阻止新 lease 后等待 drain。
+</Callout>
+
+## Clone Factories
+
+**Clone Factories** 根据 source object's dynamic type 或 registered prototype 创建副本。普通 Factory 的 creator 通常从参数构造；CloneFactory 的 callback 接受 base reference/pointer 并返回 preserving dynamic type 的 clone。
+
+<Term def="按 prototype 或 source dynamic type 查找 copier/clone operation，并产生同类新对象的工厂。">
+  CloneFactory
+</Term>
+
+```cpp
+template<class Base>
+class CloneFactory {
+public:
+    using Copier = std::function<std::unique_ptr<Base>(const Base&)>;
+
+    template<class Derived>
+    void registerType() {
+        copiers_[std::type_index(typeid(Derived))] = [](const Base& source) {
+            return std::make_unique<Derived>(dynamic_cast<const Derived&>(source));
+        };
+    }
+};
+```
+
+dynamic_cast 失败说明 key/source contract 被破坏；copy constructor 是否复制 external handle、identity、observer links 仍由 Derived 定义。很多 domain 更适合 virtual `clone()`，registry 的价值在不能修改 products 或需要 external clone policy 时。
+
+<McdCloneFactoryMap />
+
+## Using Object Factories with Other Generic Components
+
+**Using Object Factories with Other Generic Components** 展示全书积木：Generalized Functor 作为 Creator；SingletonHolder 可提供 process registry；Typelist 可在 compile time 批量注册 built-in products；SmartPtr 表达 returned ownership；SmallObjAllocator 可服务高频 product allocation。
+
+<Term def="把 creator、registry lifetime、类型清单、返回所有权和分配策略分别交给前述通用组件并保持边界清晰。">
+  Factory composition
+</Term>
+
+组合不是越多越好。将 Factory 做成 Singleton 隐藏 dependency，也使 tests 共用 registry；自动静态 registration 遇到 initialization order 和 dead stripping；custom allocator 还可能跨 module 错配 deallocation。composition root 显式创建 factory、按模块注册通常更可控。
+
+## Factory / CloneFactory Quick Facts
+
+**Factory Class Template Quick Facts**：identifier 选择 creator，不选择业务逻辑；register 决定 extension boundary；returned owner 决定 lifetime；unknown/duplicate/thread/unload policies 必须明确。
+
+**CloneFactory Class Template Quick Facts**：key 必须与 source dynamic type 一致；clone semantics 由 product 定义；prototype state 需要 ownership/version；若能在 base 添加 virtual clone，简单 virtual constructor 可能比 registry 更直接。
+
+先预测：在安全敏感 parser 中，network ID 直接查 factory 并创建任意 plugin object，会把输入变成 code-selection channel。应先做 allowlist、schema/version/size validation 和 resource budget，再调用 creator；Factory 解耦不等于输入可信。
+
+<Stepper>
+  <Step title="第一步：证明运行时扩展需求">
+    列出 concrete types 何时可知、由谁发布、是否跨 module；固定产品集合用 switch 可能更清楚，plugin/schema 扩展才引入 registry。
+
+    <McdFactoryNeedMap />
+
+  </Step>
+  <Step title="第二步：定义 registry 生命周期">
+    选择 ID、creator signature、owner、duplicate/unknown/exception/thread policies；调用 creator 前释放 registry lock，并追踪 plugin lease。
+
+    <McdFactoryRegistryMap />
+
+  </Step>
+  <Step title="第三步：选择构造还是克隆语义">
+    默认构造用 Factory，复制 dynamic object 用 CloneFactory/virtual clone，反序列化另加 schema validation；测试 type preservation 与 failure cleanup。
+
+    <McdCloneFactoryMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- Object Factory 把 runtime ID 映射到 creator，适合 concrete product 集合由配置、数据或 plugin 扩展的场景
+- class 不能直接作为 runtime value，registry 保存 callable 或 prototype；creator signature 决定可表达的 construction contract
+- Type Identifier 的稳定范围必须匹配进程内、配置、磁盘或网络用途
+- generalization 应开放真实变化点，不把容器和锁等所有实现细节传播到 public type
+- duplicate、unknown、exception、thread、reentrancy 和 plugin unload 是 Factory minutiae 的关键
+- CloneFactory 从 prototype/source dynamic type 复制，普通 Factory 从 ID/参数构造；clone semantics 仍由 product 决定
+- Functor、Singleton、Typelist、SmartPtr、allocator 可组合，但每个组合都引入 lifetime/initialization/ABI 约束
+
+<Exercises>
+  1. **问题 1：设计 decoder plugin registry。** key 来自配置，creator 接 Context/Config，product 在 plugin 外长期使用；定义 ID、owner 与 unload gate。
+
+  <Answer question="registry contract 应包含什么？">ID 用 namespaced versioned string/UUID，creator 签名返回带 module lease/deleter 的 unique owner；register 拒绝冲突或显式版本并存。unregister 后先阻止新 lookup，等待 in-flight creators 与 live products 归零，再卸载 plugin code；不能只删除 map entry。</Answer>
+
+  2. **问题 2：避免持锁调用 creator。** creator 可能递归创建依赖产品，说明 deadlock 路径和安全调用顺序。
+
+  <Answer question="lookup 与 invoke 怎样分离？">shared/exclusive lock 内只查找并复制一个拥有稳定 module lease 的 Creator；确认 entry 未注销后释放锁，再调用 creator。这样 creator 可 reenter registry，不持全局锁执行慢代码；注销需标记 draining 并等待已复制 leases 结束。</Answer>
+
+  3. **问题 3：选择 CloneFactory 或 virtual clone。** 所有 product 都可修改 base interface，且 clone 语义固定；另一个系统 products 来自第三方不可修改，比较选择。
+
+  <Answer question="两种场景的最小方案是什么？">可修改且每类只有一种 clone 语义时，在 base 提供 virtual `clone()` 最直接，dynamic dispatch 已由 object 持有。第三方类型不可改或同一类型有多种 external copy policy 时，CloneFactory registry 适合；key/cast、registration 与 plugin lifetime 成为新增成本。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Object Factory">按运行时 ID 查 creator 并返回抽象 product owner 的组件。</GlossaryItem>
+  <GlossaryItem term="class-to-creator mapping">把 concrete class 转为可存储 callable 或 prototype 的表示。</GlossaryItem>
+  <GlossaryItem term="creator registry">保存 ID 到 creator 关联并提供注册、注销和创建操作的表。</GlossaryItem>
+  <GlossaryItem term="Type Identifier">在 factory 范围内稳定指代 creator/product 的键。</GlossaryItem>
+  <GlossaryItem term="Factory generalization">把 product、ID、signature 与关键 policies 参数化的过程。</GlossaryItem>
+  <GlossaryItem term="Factory minutiae">重复、未知、异常、线程、重入、注销与诊断等边界规则。</GlossaryItem>
+  <GlossaryItem term="CloneFactory">按 prototype/source dynamic type 查找复制操作的工厂。</GlossaryItem>
+  <GlossaryItem term="Factory composition">与 Functor、lifetime、typelist、owner、allocator 组件组合的集成。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Modern C++ Design, First Edition, Chapter 8: Object Factories"
+  adaptedUrl="https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+/>

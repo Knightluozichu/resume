@@ -1,0 +1,153 @@
+---
+title: "附录A 重要代码片段"
+type: C
+section: "Shader开发实战 · 引擎落地"
+order: 19
+description: "沿Practical Shader Development正式目录掌握切线生成、UV退化、Gram-Schmidt、cubemap封装、支持代码证书。"
+demo: true
+math: true
+sourceUrl: "https://link.springer.com/book/10.1007/978-1-4842-4457-9"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PsdAppendixCodeSnippetsPipelineLab, PsdAppendixCodeSnippetsCompareLab, PsdAppendixCodeSnippetsEvidenceLab } from "@/components/mdx/shader-practice/diagrams/psd-appendix-a-code-snippets";
+
+<Objectives>
+- 能解释切线生成、UV退化和Gram-Schmidt在渲染数据流中的作用
+- 能推导本页公式并用GLSL、应用状态或引擎材质实现最小实验
+- 能复现支持代码证书，以参考图、GPU捕获、边界输入和反例验收
+</Objectives>
+
+## 从画面开始
+
+先预测顶点、片元、深度和帧时间会如何变化，再只调整一个参数观察变化。切线计算对每个三角形求位置边和UV边，解线性关系得到切线与副切线并累积到顶点，最后对法线正交化并计算手性。ofxEasyCubemap封装纹理加载和天空盒绘制，使第10、11章不被非Shader胶水代码淹没。 本页用<Term def="由三角形位置与UV梯度计算每顶点切线并累积正交化的过程。">切线生成</Term>、<Term def="三角形UV面积接近零、无法稳定求切线的情况。">UV退化</Term>、<Term def="从切线中去除法线分量以获得正交基的步骤。">Gram-Schmidt</Term>、<Term def="负责加载六面纹理、绑定采样状态和绘制天空盒的辅助类。">cubemap封装</Term>、<Term def="记录代码版本、输入假设和章节调用点的附录验收信息。">支持代码证书</Term>建立对象、阶段、状态和证据之间的联系。
+
+<PsdAppendixCodeSnippetsPipelineLab />
+
+## 第一版权威目录定位
+
+本页一一对应Kyle Halladay《Practical Shader Development: Vertex and Fragment Shaders for Game Developers》第一版附录A 重要代码片段。Springer/Apress正式目录确认2019年第一版、18章、附录代码、ISBN 978-1-4842-4456-2和XXI+381页；清华大学出版社官方样章确认2021中文第一版《Shader开发实战》、ISBN 9787302583349及对应中文目录。
+
+### 原书小节覆盖
+
+1. A.1 计算网格切线
+2. A.2 ofxEasyCubemap类
+
+### 核心对象
+
+1. **切线生成**：由三角形位置与UV梯度计算每顶点切线并累积正交化的过程。
+2. **UV退化**：三角形UV面积接近零、无法稳定求切线的情况。
+3. **Gram-Schmidt**：从切线中去除法线分量以获得正交基的步骤。
+4. **cubemap封装**：负责加载六面纹理、绑定采样状态和绘制天空盒的辅助类。
+5. **支持代码证书**：记录代码版本、输入假设和章节调用点的附录验收信息。
+
+## 数据流与公式
+
+切线计算对每个三角形求位置边和UV边，解线性关系得到切线与副切线并累积到顶点，最后对法线正交化并计算手性。ofxEasyCubemap封装纹理加载和天空盒绘制，使第10、11章不被非Shader胶水代码淹没。 前15章以OpenGL 4.1、GLSL和openFrameworks为实验环境；第16至18章再映射到Unity、UE4与Godot。所有代码都要把可编程Shader与应用侧资源绑定、Draw状态、深度和混合分开记录。
+
+$$
+r=1/(du_1dv_2-du_2dv_1)
+$$
+
+$$
+t=r(dv_2e_1-dv_1e_2)
+$$
+
+$$
+t'=normalize(t-n(n\cdot t))
+$$
+
+$$
+w=sign((n\times t')\cdot b)
+$$
+
+公式中的位置、方向、颜色、深度和时间必须标注空间、范围与单位。片元输出只是候选颜色，最终结果还经过裁剪、深度、模板、混合与颜色编码。
+
+## 最小实现
+
+```glsl
+vec3 tangent=normalize(tAccum-normal*dot(normal,tAccum));
+float handedness=sign(dot(cross(normal,tangent),bAccum));
+```
+
+实现顺序固定为常量输出、输入可视化、核心公式、应用状态和优化。先验证Shader编译与链接，再检查属性位置、uniform、纹理单元和Framebuffer；只有画面与状态都正确后才比较性能。
+
+<PsdAppendixCodeSnippetsCompareLab />
+
+## 应用与引擎侧契约
+
+```cpp
+shader.begin();
+shader.setUniform1f("time", elapsedSeconds);
+shader.setUniformTexture("mainTex", texture, 0);
+mesh.draw();
+shader.end();
+```
+
+应用侧保存网格布局、索引、纹理格式、采样器、矩阵顺序、混合与深度状态。引擎章节则把同一概念映射到Material、节点图或ShaderMaterial；语法可以变化，输入空间与合成语义不能靠猜。
+
+## 边界、精度与性能
+
+测试零向量、退化UV、负缩放、近远裁剪面、透明交叉、纹理边缘、大世界坐标、长时间运行和高过度绘制。性能实验固定硬件、分辨率、VSync与场景，先判断CPU还是GPU受限，再用捕获定位具体Draw和Shader阶段。
+
+```text
+renderer: OpenGL 4.1 / named engine and version
+scene: fixed mesh, camera, lights, textures
+state: depth, cull, blend, target
+evidence: image diff, frame capture, CPU/GPU ms
+counterexample: smallest reproducible failure
+```
+
+<PsdAppendixCodeSnippetsEvidenceLab />
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定输入和状态"><PsdAppendixCodeSnippetsPipelineLab /></Step>
+  <Step title="逐阶段实现与比较"><PsdAppendixCodeSnippetsCompareLab /></Step>
+  <Step title="捕获画面和性能"><PsdAppendixCodeSnippetsEvidenceLab /></Step>
+</Stepper>
+
+1. 用最小网格与常量颜色验证Shader编译、链接和Draw状态。
+2. 可视化位置、UV、法线、深度或光照项，确认范围和空间。
+3. 打开本章核心效果并保存基线与候选画面。
+4. 构造边界与失败输入，用GPU捕获和计时解释差异。
+
+## 验收证书
+
+证书包含源码与编译版本、应用绑定、资源哈希、状态、参考图、GPU事件、CPU与GPU帧时间和失败反例。UV面积为零仍直接除行列式，产生NaN并污染整个共享顶点的切线。 修复后必须重放同一输入并说明差异来自哪个阶段。
+
+## 常见误区
+
+<Callout type="trap" title="把语法当原理">UV面积为零仍直接除行列式，产生NaN并污染整个共享顶点的切线。</Callout>
+
+<Callout type="trap" title="只看最终画面">画面相似不证明空间、深度、混合和性能等价。必须保存中间调试视图、固定状态和GPU捕获。</Callout>
+
+## 本章回顾
+
+本页覆盖切线生成、UV退化、Gram-Schmidt、cubemap封装、支持代码证书。掌握标准是能画出数据流，写出最小实现，说明应用或引擎状态，再用边界、精度与性能证据复现结论。
+
+<Exercises>
+**问题1：切线生成与UV退化如何连接？**
+<Answer>由三角形位置与UV梯度计算每顶点切线并累积正交化的过程。 三角形UV面积接近零、无法稳定求切线的情况。 回答时标注阶段和输入来源。</Answer>
+
+**问题2：怎样调试Gram-Schmidt？**
+<Answer>先输出常量，再把相关中间值映射为颜色；随后核对应用绑定、固定状态和GPU事件。</Answer>
+
+**问题3：如何验收支持代码证书？**
+<Answer>记录代码版本、输入假设和章节调用点的附录验收信息。 同时保存正常例、边界例、失败反例和CPU/GPU计时。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="切线生成" definition="由三角形位置与UV梯度计算每顶点切线并累积正交化的过程。" />
+  <GlossaryItem term="UV退化" definition="三角形UV面积接近零、无法稳定求切线的情况。" />
+  <GlossaryItem term="Gram-Schmidt" definition="从切线中去除法线分量以获得正交基的步骤。" />
+  <GlossaryItem term="cubemap封装" definition="负责加载六面纹理、绑定采样状态和绘制天空盒的辅助类。" />
+  <GlossaryItem term="支持代码证书" definition="记录代码版本、输入假设和章节调用点的附录验收信息。" />
+  <GlossaryItem term="可复现实验" definition="固定源码、应用状态、资源、硬件和捕获后可再次得到同一结论的实验。" />
+</Glossary>
+
+<Attribution adaptedFrom="Kyle Halladay · Practical Shader Development · 附录A 重要代码片段" adaptedUrl="https://link.springer.com/book/10.1007/978-1-4842-4457-9" />

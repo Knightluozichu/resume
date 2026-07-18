@@ -1,68 +1,220 @@
-/**
- * <GplFinalReviewDiagram>：全书知识串联：类型系统→函数→接口→goroutine→channel→select→包→测试的完整体系。
- *
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * 全部 DESIGN token 配色，无裸 hex、无阴影。
- * viewBox 720×420，四周留白 >=32，字号 >=11。
- */
+"use client";
 
-const VIEW_W = 720;
-const VIEW_H = 420;
+import { useState } from "react";
 
-const accent = "var(--accent)";
-const success = "var(--success)";
-const warning = "var(--warning)";
-const danger = "var(--danger)";
-const primary = "var(--text-primary)";
-const secondary = "var(--text-secondary)";
-const border = "var(--border)";
-const elevated = "var(--bg-elevated)";
+const serviceStages = [
+  {
+    label: "数据边界",
+    chapters: "Ch1-4",
+    input: "HTTP / JSON / config",
+    contract: "named types + slice/map ownership + explicit shape",
+    output: "validated Request and immutable Config",
+    evidence: "table tests cover zero, empty, invalid UTF-8 and unknown fields",
+  },
+  {
+    label: "抽象边界",
+    chapters: "Ch5-7",
+    input: "Request + context",
+    contract: "function error policy + method set + consumer interface",
+    output: "Loader result or classified error",
+    evidence: "fake Loader proves success, timeout and typed-nil paths",
+  },
+  {
+    label: "并发边界",
+    chapters: "Ch8-9",
+    input: "bounded jobs",
+    contract: "one close owner + cancellation + protected shared invariant",
+    output: "exactly one Result per accepted job",
+    evidence: "race, cancellation and backpressure tests all pass",
+  },
+  {
+    label: "工程边界",
+    chapters: "Ch10-11",
+    input: "package graph + observable behavior",
+    contract: "internal ownership + deterministic oracle + measured baseline",
+    output: "reproducible binary and test report",
+    evidence: "go list/build/test/race/bench outputs are archived",
+  },
+  {
+    label: "运行时边界",
+    chapters: "Ch12-13",
+    input: "runtime type or foreign memory",
+    contract: "narrow adapter + limits + lifetime owner + safe fallback",
+    output: "typed domain value",
+    evidence: "nil/cycle/checkptr/cgo boundary tests pass",
+  },
+];
 
-export function GplFinalReviewDiagram() {
+export function GoplEndToEndServiceReviewLab() {
+  const [selected, setSelected] = useState(2);
+  const stage = serviceStages[selected];
+
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="全书知识串联图。从类型系统到函数、接口、并发编程和测试的完整 Go 体系。"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <text x={VIEW_W / 2} y={34} textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>{`全书知识串联`}</text>
-          <text x={VIEW_W / 2} y={54} textAnchor="middle" fontSize="11" fill={secondary}>{`从类型系统到并发编程的完整 Go 体系`}</text>
-          <rect x={280} y={170} width={160} height={56} rx="8" fill={accent} fillOpacity="0.1" stroke={accent} strokeWidth="1.6" />
-          <text x={360} y={194} textAnchor="middle" fontSize="13" fontWeight="700" fill={accent}>{`核心知识`}</text>
-          <text x={360} y={212} textAnchor="middle" fontSize="10" fill={secondary}>{`全书串联`}</text>
-          <rect x={285} y={60} width={150} height={40} rx="6" fill={elevated} stroke="var(--accent)" strokeWidth="1.2" />
-          <text x={360} y={80} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">{`类型与变量`}</text>
-          <text x={360} y={94} textAnchor="middle" fontSize="9" fill={secondary}>{`值类型/引用类型/零值`}</text>
-          <line x1={360} y1={198} x2={360} y2={78} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          <rect x={440.88457268119896} y={120} width={150} height={40} rx="6" fill={elevated} stroke="var(--success)" strokeWidth="1.2" />
-          <text x={515.884572681199} y={140} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--success)">{`函数与 defer`}</text>
-          <text x={515.884572681199} y={154} textAnchor="middle" fontSize="9" fill={secondary}>{`多返回值/LIFO/闭包`}</text>
-          <line x1={360} y1={198} x2={515.884572681199} y2={138} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          <rect x={440.88457268119896} y={240} width={150} height={40} rx="6" fill={elevated} stroke="var(--warning)" strokeWidth="1.2" />
-          <text x={515.884572681199} y={260} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--warning)">{`接口`}</text>
-          <text x={515.884572681199} y={274} textAnchor="middle" fontSize="9" fill={secondary}>{`隐式实现/小接口`}</text>
-          <line x1={360} y1={198} x2={515.884572681199} y2={258} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          <rect x={285} y={300} width={150} height={40} rx="6" fill={elevated} stroke="var(--danger)" strokeWidth="1.2" />
-          <text x={360} y={320} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--danger)">{`goroutine+channel`}</text>
-          <text x={360} y={334} textAnchor="middle" fontSize="9" fill={secondary}>{`GMP/CSP 通信`}</text>
-          <line x1={360} y1={198} x2={360} y2={318} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          <rect x={129.11542731880107} y={240.00000000000006} width={150} height={40} rx="6" fill={elevated} stroke="var(--accent)" strokeWidth="1.2" />
-          <text x={204.11542731880107} y={260.00000000000006} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">{`select`}</text>
-          <text x={204.11542731880107} y={274.00000000000006} textAnchor="middle" fontSize="9" fill={secondary}>{`多路复用/超时`}</text>
-          <line x1={360} y1={198} x2={204.11542731880107} y2={258.00000000000006} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          <rect x={129.11542731880104} y={120} width={150} height={40} rx="6" fill={elevated} stroke="var(--success)" strokeWidth="1.2" />
-          <text x={204.11542731880104} y={140} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--success)">{`包与测试`}</text>
-          <text x={204.11542731880104} y={154} textAnchor="middle" fontSize="9" fill={secondary}>{`module/表驱动`}</text>
-          <line x1={360} y1={198} x2={204.11542731880104} y2={138} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          <text x={VIEW_W / 2} y={400} textAnchor="middle" fontSize="11" fill={secondary}>{`类型是地基 · 接口是多态 · CSP 并发是杀手特性 · 测试是工程保障`}</text>
-
-        </svg>
+      <div className="rounded-card border border-border bg-elevated p-4 sm:p-5">
+        <div className="grid grid-cols-2 border border-border sm:grid-cols-5" role="group" aria-label="全书服务链阶段">
+          {serviceStages.map((item, index) => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => setSelected(index)}
+              className={`min-h-12 border-border px-2 text-xs sm:text-sm ${index < serviceStages.length - 1 ? "border-r" : ""} ${selected === index ? "bg-primary text-bg" : "bg-bg text-primary hover:bg-elevated"}`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-5 grid gap-3 lg:grid-cols-[0.72fr_1.28fr]">
+          <section className="border border-cyan-500/40 bg-cyan-500/10 p-4">
+            <span className="text-xs text-secondary">{stage.chapters}</span>
+            <strong className="mt-2 block text-lg text-primary">{stage.label}</strong>
+            <p className="mt-3 text-sm leading-7 text-secondary">input: {stage.input}</p>
+          </section>
+          <section className="grid gap-3 sm:grid-cols-3">
+            <div className="border border-border bg-bg p-3">
+              <span className="text-xs text-secondary">contract</span>
+              <strong className="mt-2 block text-sm leading-6 text-primary">{stage.contract}</strong>
+            </div>
+            <div className="border border-border bg-bg p-3">
+              <span className="text-xs text-secondary">output</span>
+              <strong className="mt-2 block text-sm leading-6 text-primary">{stage.output}</strong>
+            </div>
+            <div className="border border-emerald-500/40 bg-emerald-500/10 p-3">
+              <span className="text-xs text-secondary">proof</span>
+              <strong className="mt-2 block text-sm leading-6 text-primary">{stage.evidence}</strong>
+            </div>
+          </section>
+        </div>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
-        全书知识串联：类型系统→函数→接口→goroutine→channel→select→包→测试的完整体系。
+        用一个有边界的抓取服务串联官方 13 章：每一段都交付 contract、output 和可复查证据。
+      </figcaption>
+    </figure>
+  );
+}
+
+const failures = [
+  {
+    label: "typed nil",
+    symptom: "err != nil, but the wrapped pointer is nil",
+    root: "interface dynamic type is *LoadError while dynamic value is nil",
+    chapters: "Ch6 method set -> Ch7 dynamic pair -> Ch11 regression",
+    check: "return literal nil on success and test both constructor paths",
+  },
+  {
+    label: "goroutine leak",
+    symptom: "request returned, upstream sender remains blocked",
+    root: "consumer exited without cancellation or drain; close owner is unclear",
+    chapters: "Ch5 closure -> Ch8 lifecycle/select -> Ch11 cancel test",
+    check: "cancel context, wait for done, repeat under timeout and race",
+  },
+  {
+    label: "slice race",
+    symptom: "parallel requests corrupt a shared byte buffer",
+    root: "copied slice headers still alias one backing array",
+    chapters: "Ch4 alias -> Ch9 happens-before/Mutex -> Ch11 race",
+    check: "transfer ownership or copy, then run go test -race -count=100",
+  },
+  {
+    label: "reflection panic",
+    symptom: "decoder panics on nil pointer, cycle or unsettable value",
+    root: "Kind dispatch skipped validity, addressability and recursion limits",
+    chapters: "Ch4 shape -> Ch7 interface -> Ch12 reflection -> Ch11 fuzz",
+    check: "guard IsValid/CanSet, bound depth and fuzz hostile shapes",
+  },
+  {
+    label: "cgo lifetime",
+    symptom: "foreign code retains a Go pointer after the call",
+    root: "allocation and retention owner were never made explicit",
+    chapters: "Ch13 cgo/unsafe -> Ch10 build tags -> Ch11 boundary test",
+    check: "copy into C-owned memory, pair allocation/free and test failure paths",
+  },
+];
+
+export function GoplFailureEvidenceReviewLab() {
+  const [selected, setSelected] = useState(0);
+  const failure = failures[selected];
+
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="rounded-card border border-border bg-elevated p-4 sm:p-5">
+        <div className="grid gap-4 lg:grid-cols-[0.72fr_1.28fr]">
+          <section className="border border-border bg-bg p-4">
+            <label className="block text-sm text-primary">
+              failure signature
+              <select
+                value={selected}
+                onChange={(event) => setSelected(Number(event.target.value))}
+                className="mt-2 min-h-11 w-full border border-border bg-elevated px-3 text-sm text-primary"
+              >
+                {failures.map((item, index) => <option key={item.label} value={index}>{item.label}</option>)}
+              </select>
+            </label>
+            <p className="mt-4 text-sm leading-7 text-secondary">symptom: {failure.symptom}</p>
+          </section>
+          <section className="grid gap-3 sm:grid-cols-3">
+            <div className="border border-rose-500/40 bg-rose-500/10 p-3">
+              <span className="text-xs text-secondary">root cause</span>
+              <strong className="mt-2 block text-sm leading-6 text-primary">{failure.root}</strong>
+            </div>
+            <div className="border border-violet-500/40 bg-violet-500/10 p-3">
+              <span className="text-xs text-secondary">chapter rollback</span>
+              <strong className="mt-2 block text-sm leading-6 text-primary">{failure.chapters}</strong>
+            </div>
+            <div className="border border-emerald-500/40 bg-emerald-500/10 p-3">
+              <span className="text-xs text-secondary">verification</span>
+              <strong className="mt-2 block text-sm leading-6 text-primary">{failure.check}</strong>
+            </div>
+          </section>
+        </div>
+      </div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">
+        从故障表象回退到最小前置章节，再用第 11 章的自动化证据锁住修复。
+      </figcaption>
+    </figure>
+  );
+}
+
+const releaseGates = [
+  "package graph is reproducible",
+  "behavior and failure tests pass",
+  "race and cancellation paths pass",
+  "benchmark/profile support the change",
+  "reflection/unsafe/cgo boundaries are isolated",
+];
+
+export function GoplReleaseReadinessReviewLab() {
+  const [checked, setChecked] = useState([true, true, false, false, false]);
+  const passed = checked.filter(Boolean).length;
+
+  function toggle(index: number) {
+    setChecked((current) => current.map((value, itemIndex) => itemIndex === index ? !value : value));
+  }
+
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="rounded-card border border-border bg-elevated p-4 sm:p-5">
+        <div className="grid gap-4 lg:grid-cols-[1.12fr_0.88fr]">
+          <section className="space-y-3 border border-border bg-bg p-4">
+            {releaseGates.map((gate, index) => (
+              <label key={gate} className="flex min-h-11 items-center gap-3 border border-border px-3 text-sm text-primary">
+                <input type="checkbox" checked={checked[index]} onChange={() => toggle(index)} className="h-4 w-4 accent-[var(--accent)]" />
+                {gate}
+              </label>
+            ))}
+          </section>
+          <section className={`border p-4 ${passed === releaseGates.length ? "border-emerald-500/40 bg-emerald-500/10" : "border-amber-500/40 bg-amber-500/10"}`}>
+            <span className="text-xs text-secondary">release decision</span>
+            <strong className="mt-2 block text-xl text-primary">{passed}/{releaseGates.length} {passed === releaseGates.length ? "ready" : "blocked"}</strong>
+            <div className="mt-5 grid grid-cols-5 gap-2">
+              {checked.map((value, index) => <div key={releaseGates[index]} className={`min-h-20 border p-2 text-center text-xs ${value ? "border-emerald-500/40 bg-bg text-primary" : "border-border bg-bg text-secondary"}`}>0{index + 1}<span className="mt-2 block">{value ? "pass" : "open"}</span></div>)}
+            </div>
+            <p className="mt-4 text-sm leading-7 text-secondary">页面读完不等于可发布。五类证据必须来自同一提交和同一工具链。</p>
+          </section>
+        </div>
+      </div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">
+        发布门禁把语言知识转换为工程结论：能构建、行为正确、并发可证、性能有据、边界受控。
       </figcaption>
     </figure>
   );

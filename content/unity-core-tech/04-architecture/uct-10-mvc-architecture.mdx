@@ -1,0 +1,236 @@
+---
+title: "第 10 章 MVC 架构设计：窗口、控制、状态与管理器"
+type: A
+section: "Unity 3D 实战核心技术详解 · 架构与热更新"
+order: 10
+description: "按原书第10章还原 MVC 代码模块、事件案例、窗口继承、控制与状态类、窗口管理器及完整案例。"
+demo: true
+math: false
+sourceUrl: "https://m.bookschina.com/7380713.htm"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Uct10MvcArchitectureMapLab,
+  Uct10MvcArchitectureExperimentLab,
+  Uct10MvcArchitectureEvidenceLab,
+} from "@/components/mdx/unity-core-tech/diagrams/uct-10-mvc-architecture";
+
+<Objectives>
+
+- 能解释 Model、View、Controller 在 Unity UI 中的数据所有权
+
+- 能设计窗口基类、子类、控制类、状态类和管理器的生命周期
+
+- 能分析事件循环、隐藏窗口和全局管理器造成的架构泄漏
+
+</Objectives>
+
+## 问题：为什么给每个窗口都起名为 View、Controller 和 Model，并不能证明项目采用了 MVC？
+
+先预测：类名分成三层，依赖是否就自动单向？不会。MVC 的证据是 Model 不依赖具体窗口，View 只呈现和收集意图，Controller 协调用例，窗口管理器只管理生命周期而不吞并业务。原书第十章逐项给出模块、事件、基类、子类、控制、状态和管理器，必须按职责链复现。
+
+<Uct10MvcArchitectureMapLab />
+
+## 原书边界与目录小节
+
+本页严格对应完整目录中的以下单元；这些单元只在本页计算原章覆盖，现代扩展不替代原书位置：
+
+- **MVC代码模块设计**
+- **事件实现案例**
+- **窗口基类**
+- **窗口子类**
+- **控制类**
+- **状态类**
+- **窗口管理器**
+- **MVC案例**
+
+书籍身份由图书馆题录核对，章节边界由完整目录核对。本站重新组织解释、代码、实验和证据，不逐字复制原文；导读与总复习不重复计入十四个正文章。
+
+## 从类名分层到可测试的窗口用例
+
+Model 保存领域状态和规则，不引用 MonoBehaviour 视图；View 把按钮、文本和动画封装为输入输出端口；Controller 订阅 View 意图，调用 Model 或服务，再把新状态推回 View。事件连接层次，但消息方向和生命周期仍要明确。
+
+WindowBase 统一 Open、Close、Bind、Unbind 和动画阶段，不负责具体业务。Window 子类声明控件引用与渲染方法；Control 类拥有一次窗口会话，State 类是可序列化或可比较的纯数据，从而能在无场景测试中验证逻辑。
+
+WindowManager 根据窗口 ID 创建、缓存、排序和销毁实例，处理模态栈、输入焦点和返回键。缓存窗口必须区分隐藏与关闭：隐藏对象仍可能订阅事件、运行动画或持有大资源，不能只 SetActive(false) 就认为生命周期结束。
+
+完整案例从用户点击开始，View 发意图，Controller 验证并调用服务，Model 产生新 State，View 渲染，管理器只在打开关闭边界介入。日志以 correlationId 串起这条链，避免事件中心让调用来源消失。
+
+<Uct10MvcArchitectureExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="保存领域状态与规则且不依赖具体 Unity 视图的层。">Model</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="呈现状态并把用户操作转换为意图的界面边界。">View</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="协调视图意图、领域规则与外部服务的一次用例执行者。">Controller</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="可比较、可记录并能完整驱动一次视图渲染的数据快照。">窗口状态</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="只负责窗口创建、层级、焦点、缓存与销毁的生命周期服务。">
+  窗口管理器
+</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+这些术语组成一份最小领域模型。读者需要为每个对象写出所有者、生命周期、正常值、边界值和故意失败后的第一条可观察信号，才能把概念转成工程判断。
+
+## 关键对象与数据流
+
+WindowManager 打开窗口并注入 Controller，View 发出用户意图，Controller 调用 Model 或服务并生成新 State，View 以幂等方式渲染；关闭时按相反顺序取消订阅、停止任务、释放资源并归还缓存。输出是界面状态与完整用例轨迹。
+
+每次实验只改变一个输入，先保存版本、参数与预期，再比较输出、日志、内存或帧时间。最终结果偶然正确但中间契约不符合预测，仍不能签发，因为隐藏缓存、默认值或执行顺序可能掩盖根因。
+
+## 三步可重复实验
+
+动手前先预测：改变当前步骤的一项输入后，哪个对象、数值、像素、状态或版本标记应最先变化？固定 Unity 版本、目标平台、资产提交和测试场景。
+
+<Stepper>
+  <Step title="定义窗口端口">
+    <Uct10MvcArchitectureMapLab />
+
+让 View 只暴露意图事件与 Render 方法；用纯数据 WindowState 驱动文本、按钮可用性和加载状态。
+
+```csharp
+public interface IShopView
+{
+    event Action<int> BuyRequested;
+    void Render(ShopState state);
+}
+```
+
+  </Step>
+  <Step title="回放一次购买用例">
+    <Uct10MvcArchitectureExperimentLab />
+
+以成功、余额不足和请求取消三种服务结果执行 Controller，断言 Model 与 State，不加载 Unity 场景。
+
+```csharp
+public async Task BuyAsync(int itemId, CancellationToken token)
+{
+    view.Render(state with { Loading = true });
+    var result = await service.BuyAsync(itemId, token);
+    view.Render(model.Apply(result));
+}
+```
+
+  </Step>
+  <Step title="验证窗口栈和清理">
+    <Uct10MvcArchitectureEvidenceLab />
+
+打开主窗、模态确认框和提示，逐层返回；检查焦点、排序、订阅数、异步取消和资源句柄归零。
+
+```csharp
+public void Close(WindowId id)
+{
+    var window = stack.Remove(id);
+    window.Unbind();
+    window.CancelPendingWork();
+    cache.Release(window);
+}
+```
+
+  </Step>
+</Stepper>
+
+## 正常、边界与故障注入
+
+正常样本证明主路径，边界样本说明适用范围，故障样本证明诊断检查确实会在最早契约处拒绝。三类样本必须使用同一观测方式，避免只为成功路径保留证据。
+
+<Callout type="trap">
+  **因果陷阱**：Controller
+  直接查找场景对象和修改控件，会让业务无法脱离场景测试，View 边界名存实亡。
+</Callout>
+
+<Callout type="trap">
+  **边界陷阱**：隐藏窗口不取消订阅和异步任务，会在再次打开时重复响应，并持有已经失效的状态。
+</Callout>
+
+## 从原书版本迁移到当前 Unity
+
+uGUI、UI Toolkit 或第三方 MVVM 改变 View 实现，但 Model、用例协调、状态快照和窗口生命周期仍是原书架构的稳定问题。
+
+依赖注入与响应式库可减少样板代码，却不能让 WindowManager 变成全局服务定位器；迁移后仍要画出依赖方向并做无场景测试。
+
+迁移账本使用五列：原书载体、稳定不变量、当前实现、不可等价处、重放证据。允许 API、插件和渲染管线变化，不允许用新名词删除原章问题或把编辑器成功当成目标平台成功。
+
+## 验收证据
+
+验收包含 MVC 依赖图、窗口基类契约、子类示例、Controller 无场景测试、State 快照、模态栈回放、订阅与资源清理计数，以及成功和失败用例的相关 ID 日志。
+
+证据包还要记录文件路径、构建版本、设备、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不是看过。
+
+<Uct10MvcArchitectureEvidenceLab />
+
+## 小结
+
+- MVC 由依赖和数据所有权证明，不由类名证明
+- View 呈现状态，Controller 协调用例，Model 保存规则
+- WindowBase 与 WindowManager 只承担生命周期通用逻辑
+- 关闭窗口必须清理订阅、任务与资源
+
+<Exercises>
+
+**问题 1** 第 10 章 MVC 架构设计的关键输入和输出分别是什么？
+
+<Answer>
+  WindowManager 打开窗口并注入 Controller，View 发出用户意图，Controller 调用
+  Model 或服务并生成新 State，View
+  以幂等方式渲染；关闭时按相反顺序取消订阅、停止任务、释放资源并归还缓存。输出是界面状态与完整用例轨迹。
+</Answer>
+
+**问题 2** 本章最有诊断价值的故障注入是什么？
+
+<Answer>
+  Controller 直接查找场景对象和修改控件，会让业务无法脱离场景测试，View
+  边界名存实亡。需要保存失败输入和第一条偏离信号，再修复后重放。
+</Answer>
+
+**问题 3** 迁移到当前 Unity 时必须保留什么？
+
+<Answer>
+  uGUI、UI Toolkit 或第三方 MVVM 改变 View 实现，但
+  Model、用例协调、状态快照和窗口生命周期仍是原书架构的稳定问题。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Model">
+    保存领域状态与规则且不依赖具体 Unity 视图的层。
+  </GlossaryItem>
+  <GlossaryItem term="View">
+    呈现状态并把用户操作转换为意图的界面边界。
+  </GlossaryItem>
+  <GlossaryItem term="Controller">
+    协调视图意图、领域规则与外部服务的一次用例执行者。
+  </GlossaryItem>
+  <GlossaryItem term="窗口状态">
+    可比较、可记录并能完整驱动一次视图渲染的数据快照。
+  </GlossaryItem>
+  <GlossaryItem term="窗口管理器">
+    只负责窗口创建、层级、焦点、缓存与销毁的生命周期服务。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="姜雪伟《Unity 3D实战核心技术详解》目录与书籍身份资料"
+  adaptedUrl="https://m.bookschina.com/7380713.htm"
+/>

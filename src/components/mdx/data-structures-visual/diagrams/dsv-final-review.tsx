@@ -1,72 +1,123 @@
-/**
- * <DsvFinalReviewDiagram>：大话数据结构全书知识串联图（dsv-final-review 章）。
- *
- * 中心节点「数据结构选择」，向外辐射三大主线：
- *   存储方式（数组→链表→树→图）、查找效率（O(n)→O(log n)→O(1)）、排序算法（O(n²)→O(n log n)）。
- * 底部总结栏点出全书核心思想。
- *
- * 纯静态展示，无交互。Server Component。
- */
+"use client";
 
-const VIEW_W = 720;
-const VIEW_H = 420;
+import { DsvOfficialLab } from "./official-lab";
 
-const accent = "var(--accent)";
-const success = "var(--success)";
-const warning = "var(--warning)";
-const danger = "var(--danger)";
-const primary = "var(--text-primary)";
-const secondary = "var(--text-secondary)";
-const border = "var(--border)";
+const reviewCases = [
+  {
+    label: "第1-2章",
+    fields: [
+      ["能力", "把问题写成ADT、算法契约与复杂度模型"],
+      ["综合证明", "区分逻辑/物理结构，给出上下界和可证伪测试"],
+      ["回查", "语义不清回第1章；成本或正确性不清回第2章"],
+    ],
+  },
+  {
+    label: "第3-5章",
+    fields: [
+      ["能力", "组织线性数据、受限访问与字符串匹配"],
+      ["综合证明", "在顺序/链式、栈/队列、朴素/KMP间作选择"],
+      ["回查", "位置操作回第3章；访问纪律回第4章；匹配回第5章"],
+    ],
+  },
+  {
+    label: "第6-7章",
+    fields: [
+      ["能力", "处理层次、网络、遍历、连通、路径与调度"],
+      ["综合证明", "选择表示法并验证树/图算法不变量"],
+      ["回查", "层次与编码回第6章；网络与路径回第7章"],
+    ],
+  },
+  {
+    label: "第8-9章",
+    fields: [
+      ["能力", "按静态/动态、有序/散列、稳定/空间约束选算法"],
+      ["综合证明", "用统一数据和oracle比较查找与排序候选"],
+      ["回查", "定位失败回第8章；重排与外存失败回第9章"],
+    ],
+    alert: "综合题失败必须能回指具体官方章节及其不变量，不能只给出一个复杂度标签。",
+  },
+] as const;
+
+const decisionCases = [
+  {
+    label: "序列",
+    fields: [
+      ["需求", "按位置访问、局部插删、撤销或缓冲"],
+      ["候选", "顺序表、链表、栈、队列、串"],
+      ["关键取舍", "连续性、移动、指针、访问纪律和匹配成本"],
+    ],
+  },
+  {
+    label: "层次",
+    fields: [
+      ["需求", "父子关系、优先级、编码或层次遍历"],
+      ["候选", "树、二叉树、线索树、森林、赫夫曼树"],
+      ["关键取舍", "形态、遍历、路径长度、链接与递归栈"],
+    ],
+  },
+  {
+    label: "网络",
+    fields: [
+      ["需求", "连通、最小代价、最短路径、依赖与工期"],
+      ["候选", "邻接矩阵/表、DFS/BFS、MST、最短路、DAG"],
+      ["关键取舍", "稀疏度、权值、方向、负边与环"],
+    ],
+  },
+  {
+    label: "索引重排",
+    fields: [
+      ["需求", "动态查找、范围、有序输出、稳定排序或外存"],
+      ["候选", "BST/AVL/B树/散列与七类排序"],
+      ["关键取舍", "更新率、最坏界、稳定性、内存、比较和I/O"],
+    ],
+    alert: "先用硬约束排除候选，再按真实工作负载测量；平均复杂度不能替代最坏输入和资源边界。",
+  },
+] as const;
+
+const capstoneCases = [
+  {
+    label: "建模",
+    fields: [
+      ["契约", "实体、关系、操作频率、规模、正确性与资源限制"],
+      ["故障注入", "空数据、重复ID、断边、环和非法权值"],
+      ["通过证据", "ADT、表示不变量和拒绝策略完整"],
+    ],
+  },
+  {
+    label: "构建",
+    fields: [
+      ["契约", "导入、索引、图/树结构和owner生命周期"],
+      ["故障注入", "中途失败、内存不足、重复执行和部分更新"],
+      ["通过证据", "结构可验证、失败可回滚、重建结果确定"],
+    ],
+  },
+  {
+    label: "查询算法",
+    fields: [
+      ["契约", "查找、路径、调度、排名与稳定输出"],
+      ["故障注入", "0/1/many结果、不可达、负边、退化树和重复key"],
+      ["通过证据", "结果经oracle与结构不变量双重验证"],
+    ],
+  },
+  {
+    label: "性能交付",
+    fields: [
+      ["契约", "规模曲线、p99、峰值空间、I/O和版本化结果"],
+      ["故障注入", "逆序、全等、稠密/稀疏、坏散列和超内存"],
+      ["通过证据", "决策记录可复现，约束变化时能重新选型"],
+    ],
+    alert: "Capstone同时验收正常、退化、失败、恢复和规模增长；一次成功演示不等于全书通过。",
+  },
+] as const;
 
 export function DsvFinalReviewDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} role="img" aria-label="大话数据结构全书知识串联图。中心是「数据结构选择」，三条主线向外辐射：存储方式演进（数组→链表→BST→堆→图）、查找效率跃迁（O(n)顺序→O(log n)二分→O(1)哈希）、排序算法进化（O(n²)冒泡→O(n log n)快排归并堆排）。底部总结：没有最好的数据结构，只有最适合场景的数据结构。" className="mx-auto block h-auto w-full max-w-[720px]">
-          {/* 标题 */}
-          <text x={VIEW_W / 2} y="36" textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>
-            全书知识串联图
-          </text>
-          <text x={VIEW_W / 2} y="58" textAnchor="middle" fontSize="12" fill={secondary}>
-            三条主线汇聚于「数据结构选择」
-          </text>
+  return <DsvOfficialLab cases={reviewCases} caption="九个官方章节收敛为四组可回查的综合能力。" tone="cyan" />;
+}
 
-          {/* 中心节点 */}
-          <ellipse cx={VIEW_W / 2} cy="210" rx="90" ry="32" fill={accent} fillOpacity="0.12" stroke={accent} strokeWidth="2" />
-          <text x={VIEW_W / 2} y="206" textAnchor="middle" fontSize="13" fontWeight="700" fill={accent}>数据结构选择</text>
-          <text x={VIEW_W / 2} y="222" textAnchor="middle" fontSize="11" fill={secondary}>按操作频率选结构</text>
+export function DsvStructureDecisionLab() {
+  return <DsvOfficialLab cases={decisionCases} caption="从关系形态与工作负载反推结构和算法候选。" tone="rose" />;
+}
 
-          {/* ===== 主线一：存储演进（左侧） ===== */}
-          <line x1={VIEW_W / 2 - 90} y1="210" x2="200" y2="130" stroke={success} strokeWidth="1.4" strokeOpacity="0.5" />
-          <rect x="48" y="100" width="180" height="60" rx="8" fill={success} fillOpacity="0.06" stroke={success} strokeWidth="1" strokeOpacity="0.4" />
-          <text x="138" y="120" textAnchor="middle" fontSize="12" fontWeight="700" fill={success}>主线一：存储演进</text>
-          <text x="60" y="138" fontSize="11" fill={primary}>数组(连续) → 链表(链式)</text>
-          <text x="60" y="154" fontSize="11" fill={primary}>→ BST → 堆 → 图</text>
-
-          {/* ===== 主线二：查找跃迁（右侧） ===== */}
-          <line x1={VIEW_W / 2 + 90} y1="210" x2="520" y2="130" stroke={warning} strokeWidth="1.4" strokeOpacity="0.5" />
-          <rect x="492" y="100" width="180" height="60" rx="8" fill={warning} fillOpacity="0.06" stroke={warning} strokeWidth="1" strokeOpacity="0.4" />
-          <text x="582" y="120" textAnchor="middle" fontSize="12" fontWeight="700" fill={warning}>主线二：查找跃迁</text>
-          <text x="504" y="138" fontSize="11" fill={primary}>O(n) 顺序 → O(log n)</text>
-          <text x="504" y="154" fontSize="11" fill={primary}>二分/BST → O(1) 哈希</text>
-
-          {/* ===== 主线三：排序进化（底部） ===== */}
-          <line x1={VIEW_W / 2} y1="242" x2={VIEW_W / 2} y2="290" stroke={danger} strokeWidth="1.4" strokeOpacity="0.5" />
-          <rect x="200" y="290" width="320" height="56" rx="8" fill={danger} fillOpacity="0.06" stroke={danger} strokeWidth="1" strokeOpacity="0.4" />
-          <text x="360" y="310" textAnchor="middle" fontSize="12" fontWeight="700" fill={danger}>主线三：排序进化</text>
-          <text x="216" y="328" fontSize="11" fill={primary}>O(n²) 冒泡/选择/插入 → O(n log n) 快排/归并/堆排</text>
-
-          {/* 底部总结 */}
-          <rect x="48" y="370" width={VIEW_W - 96} height="36" rx="8" fill={accent} fillOpacity="0.06" stroke={accent} strokeWidth="1.4" strokeOpacity="0.4" />
-          <text x={VIEW_W / 2} y="393" textAnchor="middle" fontSize="12" fontWeight="700" fill={accent}>
-            全书核心：没有最好的数据结构，只有最适合场景的数据结构
-          </text>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        三条主线串联全书：存储从线性到树到图，查找从 O(n) 到 O(1)，排序从 O(n²) 到 O(n log n)。所有知识汇聚于「根据操作频率选择数据结构」。
-      </figcaption>
-    </figure>
-  );
+export function DsvCapstoneGateLab() {
+  return <DsvOfficialLab cases={capstoneCases} caption="建模、构建、查询与性能交付构成终局验收链。" tone="emerald" />;
 }

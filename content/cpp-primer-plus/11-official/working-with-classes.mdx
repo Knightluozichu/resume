@@ -1,0 +1,268 @@
+---
+title: "Chapter 11：Working with Classes"
+type: A
+section: C++ Primer Plus 6e · 运算符、友元与类转换
+order: 11
+description: 对齐第6版 Chapter 11：以向量类掌握运算符重载、成员与非成员选择、friend 对称操作、类类型转换和 explicit 边界。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+draft: false
+---
+
+import {
+  EppConversionPolicyLab,
+  EppFriendSymmetryFlow,
+  EppOperatorDispatchMap,
+} from "@/components/mdx/cpp-primer-plus/diagrams/working-with-classes";
+
+<Objectives>
+
+- 能解释重载表达式到成员/非成员函数调用的映射，并判断不可改变的优先级、结合性和元数规则
+- 能设计向量类的 `+`、`-`、标量乘与输出运算，比较 member versus nonmember 并限制 friend 访问
+- 能复现转换构造函数、`explicit` 和转换运算符参与重载解析的差异，选择可审计的类转换策略
+
+</Objectives>
+
+## 为什么熟悉的符号也必须服从类契约
+
+运算符重载（operator overloading）让用户定义类型沿用 `a + b`、`out << value` 等表达式形式，编译器再把它们映射到函数调用。它改善的是领域表达，不会自动赋予合理语义。若 `Vector + Vector` 突然修改左值，或比较运算不满足一致关系，熟悉语法反而掩盖缺陷。
+
+<Term def="为至少含一个用户定义类型操作数的既有 C++ 运算符提供函数实现，使表达式参与普通候选解析。">
+  运算符重载
+</Term>
+
+先写代数或状态契约，再决定是否值得提供符号：`+` 通常返回新值而不改操作数，`+=` 修改左操作数并返回其引用，`==` 应与对象可观察语义一致。语法短不等于前置条件可以省略。
+
+## 重载只能选择函数，不能改写语法规则
+
+重载不能创造新符号，不能改变优先级、结合性和操作数数量，也不能让纯内置类型表达式改走自定义实现。`.`、`.*`、`::`、`?:`、`sizeof` 等运算符不能由普通用户代码重载。重载函数可作为成员或非成员，但两种形式的显式参数数量不同。
+
+```cpp
+class Vector {
+public:
+    Vector(double x, double y) : x_{x}, y_{y} {}
+
+    Vector operator+(const Vector& rhs) const {
+        return Vector{x_ + rhs.x_, y_ + rhs.y_};
+    }
+
+    Vector& operator+=(const Vector& rhs) {
+        x_ += rhs.x_;
+        y_ += rhs.y_;
+        return *this;
+    }
+
+private:
+    double x_;
+    double y_;
+};
+```
+
+成员 `a.operator+(b)` 中左操作数由 `this` 隐式提供，函数只有一个显式参数；非成员 `operator+(a,b)` 有两个显式参数。`const` 使运算可用于 const 对象并承诺不修改左值。
+
+<EppOperatorDispatchMap />
+
+<Callout type="trap" title="陷阱：重载后可以改变运算符优先级或短路行为">
+  `a + b * c` 的分组仍由语言语法决定。重载的 `&&`/`||` 是普通函数调用，不能依赖内置逻辑运算的短路求值来保护指针或索引；需要短路语义时写清楚控制流。
+</Callout>
+
+## 成员与非成员的选择取决于左操作数
+
+会修改当前对象的 `+=`、`[]`、赋值和调用运算通常自然地成为成员；需要两个操作数同等转换机会的二元算术和比较通常适合非成员。某些运算符受语言约束必须是成员，例如赋值、下标、函数调用和成员访问箭头。
+
+<Term def="以左操作数为隐式 this、只能让其余显式操作数参与参数转换的重载形式。">
+  成员运算符
+</Term>
+
+<Term def="把所有操作数写成显式参数，可为左右两侧提供更对称转换机会的命名空间级重载形式。">
+  非成员运算符
+</Term>
+
+若 Vector 只有成员 `Vector::operator*(double)`，表达式 `v * 2.0` 可用，但 `2.0 * v` 的左操作数是 double，无法查找 Vector 成员。增加非成员重载能保持自然操作数顺序，并可委托给已有实现。
+
+```cpp
+class Vector {
+public:
+    Vector operator*(double scale) const;
+    friend Vector operator*(double scale, const Vector& value);
+};
+
+Vector operator*(double scale, const Vector& value) {
+    return value * scale;
+}
+```
+
+这里的 friend function 仍是非成员：没有 `this`，调用也不写 `value.operator*`。它只是被类声明授予访问 private 成员的权限。本例实际通过 public member 委托，甚至可以不需要 friend；只有确有最窄私有访问需求时才授予。
+
+## friend 解决访问，不负责建立语义
+
+friend functions 常用于输出运算，因为 `std::ostream` 必须位于左侧，不能给标准库类型补一个 Vector 成员。重载应返回流引用以支持链式输出，并只读取稳定的可观察状态。
+
+<Term def="由类显式授予私有成员访问权、但不属于类成员且没有 this 指针的函数。">
+  友元函数
+</Term>
+
+```cpp
+#include <ostream>
+
+class Vector {
+public:
+    friend std::ostream& operator<<(std::ostream& out, const Vector& value);
+
+private:
+    double x_;
+    double y_;
+};
+
+std::ostream& operator<<(std::ostream& out, const Vector& value) {
+    return out << '(' << value.x_ << ", " << value.y_ << ')';
+}
+```
+
+friend 不是“关闭封装”。授权面越大，private representation 的变化就越难；因此先尝试 public observations，必要时只授予具体函数，不把整个外部模块设为 friend。
+
+<EppFriendSymmetryFlow />
+
+<Callout type="trap" title="陷阱：friend function 是可以通过对象调用的特殊成员">
+  friend 声明只影响访问检查。函数仍在其命名空间中，没有隐式 this，也不进入 virtual dispatch；应按普通非成员函数考虑声明位置、ADL、转换和 ODR。
+</Callout>
+
+## 向量类要区分表示与语义
+
+二维向量可用直角坐标 `(x,y)` 存储，也可接受极坐标 `(magnitude, angle)` 输入。若同时缓存两套表示，每次修改都要维护一致性；更稳妥的设计是选一套规范表示，其他形式在边界转换。
+
+```cpp
+#include <cmath>
+
+class Vector {
+public:
+    static Vector fromPolar(double magnitude, double radians) {
+        return Vector{magnitude * std::cos(radians),
+                      magnitude * std::sin(radians)};
+    }
+
+    double magnitude() const {
+        return std::hypot(x_, y_);
+    }
+
+private:
+    Vector(double x, double y) : x_{x}, y_{y} {}
+    double x_;
+    double y_;
+};
+```
+
+命名 factory 把单位和方向写在调用点，避免两个 double 构造参数无法区分含义。运算符重载应基于规范表示实现，再通过测试验证零向量、负分量、大值和浮点误差策略。
+
+## 单参数构造函数是一条输入转换边
+
+可由一个实参调用且未标记 `explicit` 的构造函数可充当 converting constructor。编译器可能在赋值、参数传递或运算符候选匹配时创建临时对象。便利的代价是调用点看不见类型和单位变化。
+
+<Term def="允许从源类型创建类对象、可在隐式转换序列中被使用的单参数或具有默认尾参的构造函数。">
+  转换构造函数
+</Term>
+
+<Term def="禁止构造函数或转换函数参与多数隐式转换，要求调用点显式写出目标类型意图的说明符。">
+  explicit
+</Term>
+
+```cpp
+class Distance {
+public:
+    explicit Distance(double meters) : meters_{meters} {}
+    double meters() const { return meters_; }
+
+private:
+    double meters_;
+};
+
+void travel(Distance distance);
+
+travel(Distance{3.5});  // unit and conversion are visible
+```
+
+`explicit` 不禁止直接初始化，只禁止 `travel(3.5)` 这类隐式路径。对货币、单位、资源句柄等语义强类型，默认显式通常更可审计。
+
+## 转换运算符决定对象如何流向其他类型
+
+`operator double() const` 可以把对象转为 double，但也会把内部含义扩散到算术和重载解析。转换函数没有显式返回类型；目标类型写在 operator 名称中。若信息可能丢失、单位可能混淆或候选会歧义，优先命名 observation，如 `meters()`。
+
+<Term def="以 operator TargetType 形式定义从类对象到目标类型的转换成员函数。">
+  转换运算符
+</Term>
+
+```cpp
+class Distance {
+public:
+    explicit operator double() const { return meters_; }
+    double meters() const { return meters_; }
+private:
+    double meters_;
+};
+```
+
+转换构造函数和转换运算符同时存在时，两个方向都可能扩大候选集。一次隐式转换序列不会无限串联多个用户定义转换，但歧义仍可能发生；应从 API 所需的少数合法边中选择，而非追求“任何类型都能自动互转”。
+
+先预测四种策略下 `travel(3.5)` 或提取 double 是否通过，再切换实验面板核对。记录调用点可见性、单位证据与重载候选数量，而不只记录“编译成功”。
+
+<EppConversionPolicyLab />
+
+## 三步审计类的运算与转换表面
+
+<Stepper>
+  <Step title="第一步：把表达式还原成候选函数">
+    为每个运算符写出成员和非成员等价调用，核对左操作数、const、元数和不可改变的语法规则。
+
+    <EppOperatorDispatchMap />
+  </Step>
+  <Step title="第二步：验证对称性与访问授权">
+    测试 `v * scalar`、`scalar * v` 和流输出，区分非成员需求与 friend 私有访问需求。
+
+    <EppFriendSymmetryFlow />
+  </Step>
+  <Step title="第三步：收缩隐式转换图">
+    枚举每条 source-to-target 边，比较 implicit、explicit 与 named operation，并制造一次重载歧义验证边界。
+
+    <EppConversionPolicyLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- operator overloading 把既有表达式映射到函数，不能改变优先级、结合性、元数或内置短路语义
+- member versus nonmember 的核心差异是左操作数是否成为隐式 this，以及两侧获得的转换机会
+- friend functions 是非成员，只获得明确授予的访问权，不自动拥有合理语义
+- 向量类应选择规范表示，让算术重载保持值语义与对称性
+- class conversions 是 API 图上的边；`explicit` 和命名 observation 让单位、损失和意图在调用点可见
+
+<Exercises>
+  1. **问题 1：设计有理数运算。** `Rational + Rational`、`Rational += Rational` 和 `int + Rational` 分别选成员还是非成员？
+
+  <Answer question="三个运算怎样分配责任？">`+=` 修改左值，做成员并返回 Rational&；`+` 可做非成员，复制左值后调用 +=，让左右操作数获得对称转换；`int + Rational` 需要非成员，因为左侧 int 无 Rational 成员。若 int 到 Rational 的转换是 explicit，则提供明确 overload 或要求调用点构造。</Answer>
+
+  2. **问题 2：审计流输出。** `operator<<` 为什么通常是非成员，它一定要 friend 吗？
+
+  <Answer question="输出运算的左操作数与访问权如何分开判断？">左侧必须是 ostream 才能写 `out << value`，因此不能是 value 的成员，只能是非成员；若 value 提供足够 public observations，就无需 friend。只有输出确实需要最窄 private 表示时才声明具体函数为 friend，并返回 ostream& 支持链式输出。</Answer>
+
+  3. **问题 3：修复单位转换。** `void setTimeout(Duration)` 被 `setTimeout(5)` 意外调用，怎样让单位和意图可见？
+
+  <Answer question="隐式构造边应怎样收缩？">把 `Duration(int)` 标为 explicit，并要求 `setTimeout(Duration::seconds(5))` 或 `setTimeout(Duration{5})`；若支持毫秒和秒，优先命名 factory。再测试不同 overload，确认裸 int 不再生成临时对象，也没有 conversion operator 把 Duration 静默退化为数值。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="运算符重载">为含用户定义类型的既有运算符提供函数实现。</GlossaryItem>
+  <GlossaryItem term="成员运算符">以左操作数为隐式 this 的运算符成员函数。</GlossaryItem>
+  <GlossaryItem term="非成员运算符">把所有操作数写为显式参数的命名空间级重载。</GlossaryItem>
+  <GlossaryItem term="友元函数">获类授权访问 private、但仍不属于类成员的函数。</GlossaryItem>
+  <GlossaryItem term="转换构造函数">可从源类型建立类对象并可能参与隐式转换的构造函数。</GlossaryItem>
+  <GlossaryItem term="explicit">要求多数转换在调用点显式写出目标类型的说明符。</GlossaryItem>
+  <GlossaryItem term="转换运算符">从类对象生成目标类型值的特殊成员函数。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++ Primer Plus, Sixth Edition, Chapter 11 Working with Classes"
+  adaptedUrl="https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+/>

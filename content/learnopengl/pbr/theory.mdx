@@ -1,14 +1,16 @@
 ---
-title: PBR 理论
+title: PBR 理论、微表面 BRDF 与能量分配
 type: B
 section: PBR
 order: 1
 description: 从微表面模型和能量守恒出发，看懂渲染方程和 Cook-Torrance BRDF 里的每一项（法线分布 D、几何遮蔽 G、菲涅尔 F）各自在算什么，以及金属/非金属的工作流差异——能手推简化版反射率方程，说清每个希腊字母代表什么物理量。
 demo: true
 math: true
-sourceUrl: https://learnopengl-cn.github.io/07%20PBR/01%20Theory/
+sourceUrl: https://learnopengl.com/PBR/Theory
 draft: false
 ---
+
+import { PbrBrdfContractDiagram } from "@/components/mdx/learnopengl/diagrams/theory";
 
 {/* B 数学型章（HEL-162，PBR 篇第 1 篇·开篇）：原书「PBR 理论 Theory」。重心是数学推导（spec B 列）：从微表面模型和能量守恒两条物理约束出发，推出渲染方程→Cook-Torrance BRDF 的 D/G/F 三项，每项给出公式+几何直觉+图。承接高级光照篇（已学 Blinn-Phong·shadow·bloom·deferred），沿用「光与材质」类比库。B 型段式：概念讲解(§3 必) + 数学推导(§4 核心) + 代码对照(§6 必，GLSL D/G/F) + 误区(§7 必) + 小结含推导题(§8 必)。主 viz = 8 张 Server SVG diagram。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -19,7 +21,7 @@ draft: false
 <Objectives>
 
 - 能说出微表面模型的核心假设和**能量守恒**约束：表面由无数微小镜面组成，出去的光不超过进来的光（$k_s + k_d = 1$）
-- 能手推 Cook-Torrance BRDF 的**反射率方程**：说清 $D$（法线分布）、$G$（几何遮蔽）、$F$（菲涅尔）三项各自在算什么物理量，以及分母 $4(\omega_o \cdot n)(\omega_i \cdot n)$ 的归一化意义
+- 能推导并手写 Cook-Torrance BRDF 的**反射率方程**：说清 $D$（法线分布）、$G$（几何遮蔽）、$F$（菲涅尔）三项各自在算什么物理量，以及分母 $4(\omega_o \cdot n)(\omega_i \cdot n)$ 的归一化意义
 - 能回答：一块粗糙度 0.8 的红色塑料球和一块粗糙度 0.2 的金球，谁有漫反射、谁的 F0 是 albedo 颜色？两者的 NDF 峰形有什么区别？
 
 </Objectives>
@@ -78,9 +80,31 @@ $$f_r = k_d \frac{c}{\pi} + k_s \frac{DFG}{4(\omega_o \cdot n)(\omega_i \cdot n)
 
 <CookTorranceSplitDiagram />
 
+## 单步确认：BRDF 每一项各管什么
+
+公式很长时，先按因果顺序检查它，而不是把 D、G、F 当成三个可以随意调的高光旋钮。
+
+<Stepper>
+  <Step title="先让镜面与漫反射不抢同一份能量">
+    <PbrBrdfContractDiagram step={1} />
+
+    对不透明 PBR 工作流，先由 Fresnel 得到 `kS`，再把剩余能量给非金属的漫反射。金属的 `metallic=1` 会使 `kD` 归零。
+  </Step>
+  <Step title="用 D、G、F 表达微表面镜面反射">
+    <PbrBrdfContractDiagram step={2} />
+
+    粗糙度主要影响 D 与 G，观察角主要影响 F。三项描述不同物理原因，不能用其中任意一项替代另两项。
+  </Step>
+  <Step title="把 BRDF 放回反射率方程">
+    <PbrBrdfContractDiagram step={3} />
+
+    对点光或方向光，积分离散为逐灯求和；对环境光，下一节 IBL 用预积分近似半球积分。两者仍遵守同一 BRDF。
+  </Step>
+</Stepper>
+
 ## 法线分布函数 D：有多少微面对齐了半程向量
 
-$D$（<Term def="Normal Distribution Function：给定半程向量 h 和粗糙度 alpha，返回微表面中法线恰好对齐 h 方向的那些微面所占的统计密度。D 越大 = 越多微面能把光反射到你眼里 = 高光越亮。常用实现是 GGX/Trowbridge-Reitz。">NDF，法线分布函数</Term>）回答一个问题：**在所有微面中，法线恰好朝向半程向量 $h$ 的有多大比例？** 只有那些法线对齐 $h$ 的微面才能把入射光精确反射到你的眼睛方向——$D$ 越大，这种微面越多，高光越亮。
+$D$（<Term def="Normal Distribution Function：给定半程向量 h 和粗糙度 alpha，返回微表面中法线恰好对齐 h 方向的那些微面所占的统计密度。D 越大 = 越多微面能把光反射到你眼里 = 高光越亮。常用实现是 GGX/Trowbridge-Reitz。">NDF（法线分布函数）</Term>）回答一个问题：**在所有微面中，法线恰好朝向半程向量 $h$ 的有多大比例？** 只有那些法线对齐 $h$ 的微面才能把入射光精确反射到你的眼睛方向——$D$ 越大，这种微面越多，高光越亮。
 
 > 猜一猜：下面三张图分别对应粗糙度 0.1、0.5、1.0。你觉得哪一张的 NDF 曲线最「尖」（集中在正中间）、哪一张最「平」（分散到两侧）？尖的对应什么样的高光？
 
@@ -253,7 +277,7 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
 
 ## 常见误区
 
-<Callout type="warn">
+<Callout type="trap">
 
 **把粗糙度和金属度搞混**
 
@@ -261,7 +285,7 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
 
 </Callout>
 
-<Callout type="warn">
+<Callout type="trap">
 
 **以为菲涅尔只在掠射角才有用**
 
@@ -269,7 +293,7 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
 
 </Callout>
 
-<Callout type="warn">
+<Callout type="trap">
 
 **忘记能量守恒导致场景过亮**
 
@@ -332,7 +356,7 @@ $\alpha$ 越小，$D$ 越大——光滑表面在完美对齐位置的密度极�
 <Attribution
   title="PBR - 理论"
   author="Joey de Vries"
-  url="https://learnopengl-cn.github.io/07%20PBR/01%20Theory/"
+  url="https://learnopengl.com/PBR/Theory"
   license="CC BY-NC 4.0"
 />
 

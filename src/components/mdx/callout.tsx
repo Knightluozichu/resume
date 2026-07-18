@@ -1,5 +1,5 @@
 /**
- * <Callout type="tip|warn|trap|info|warning|insight|success|danger">：提示 / 警告 / 误区框。
+ * <Callout type="tip|warn|trap|info|note|warning|insight|success|danger">：提示 / 警告 / 误区框。
  *
  * Server Component（纯展示）。DESIGN 语义色「仅小面积」约束：
  * 语义色只用在左边框（2px）与图标上，背景统一 --bg-elevated（不做大面积语义色块）。
@@ -7,6 +7,7 @@
  *  - warn    → 黄 --warning
  *  - trap    → 红 --danger
  *  - info    → 蓝 --accent
+ *  - note    → 蓝 --accent (alias for info)
  *  - insight → 蓝 --accent
  *  - warning → 黄 --warning (alias for warn)
  *  - success → 绿 --success (alias for tip)
@@ -14,7 +15,16 @@
  *
  * 颜色/间距/圆角全部走 DESIGN token（硬规则 5）。
  */
-type CalloutType = "tip" | "warn" | "trap" | "info" | "warning" | "insight" | "success" | "danger";
+type CalloutType =
+  | "tip"
+  | "warn"
+  | "trap"
+  | "info"
+  | "note"
+  | "warning"
+  | "insight"
+  | "success"
+  | "danger";
 
 const CONFIG: Record<
   CalloutType,
@@ -60,12 +70,25 @@ const CONFIG: Record<
       </>
     ),
   },
+  note: {
+    label: "说明",
+    colorClass: "text-accent",
+    icon: (
+      <>
+        <circle cx="8" cy="8" r="6.25" />
+        <path d="M8 7.5v3.25M8 5.25v.25" strokeLinecap="round" />
+      </>
+    ),
+  },
   insight: {
     label: "洞察",
     colorClass: "text-accent",
     icon: (
       <>
-        <path d="M8 1.75a4.5 4.5 0 0 0-2.5 8.25v1.5h5v-1.5A4.5 4.5 0 0 0 8 1.75Z" strokeLinejoin="round" />
+        <path
+          d="M8 1.75a4.5 4.5 0 0 0-2.5 8.25v1.5h5v-1.5A4.5 4.5 0 0 0 8 1.75Z"
+          strokeLinejoin="round"
+        />
         <path d="M6.5 13.25h3" strokeLinecap="round" />
       </>
     ),
@@ -86,7 +109,11 @@ const CONFIG: Record<
     icon: (
       <>
         <circle cx="8" cy="8" r="6.25" />
-        <path d="M5.5 8.5 7 10l3.5-3.5" strokeLinecap="round" strokeLinejoin="round" />
+        <path
+          d="M5.5 8.5 7 10l3.5-3.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </>
     ),
   },
@@ -104,9 +131,11 @@ const CONFIG: Record<
 
 export function Callout({
   type = "tip",
+  title,
   children,
 }: {
   type?: CalloutType;
+  title?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const { label, colorClass, icon } = CONFIG[type];
@@ -127,7 +156,9 @@ export function Callout({
         {icon}
       </svg>
       <div className="min-w-0 flex-1 text-primary">
-        <p className={`mb-1 text-xs font-semibold ${colorClass}`}>{label}</p>
+        <p className={`mb-1 text-xs font-semibold ${colorClass}`}>
+          {title ?? label}
+        </p>
         {children}
       </div>
     </aside>

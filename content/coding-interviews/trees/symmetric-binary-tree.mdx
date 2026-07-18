@@ -1,289 +1,275 @@
 ---
-title: 对称的二叉树
+title: "面试题28：对称的二叉树"
 type: C
-section: 树
-order: 4
-description: 掌握如何通过前序遍历与对称前序遍历的双指针协同，检查二叉树是否关于根节点镜像对称。
+section: "第4章 解决面试题的思路"
+order: 30
+description: "让同一棵树按根左右与根右左同步遍历，逐对核对值和空位置，识别深层、偏斜及全同值结构差异。"
 demo: true
-math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviews
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/28_SymmetricalBinaryTree/SymmetricalBinaryTree.cpp"
 draft: false
 ---
 
-{/* 知识点清单：双指针递归、对称前序遍历、BFS队列迭代、局部对称性误区、值同形异陷阱；原书章节：面试题28：对称的二叉树。 */}
+import { SymmetricTraversalDiagram, MirrorPairBoundaryMap, SymmetricShapeCounterexampleDiagram, SymmetricOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/symmetric-binary-tree";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 深刻理解对称二叉树的物理结构特征：不仅左右子节点值相等，且下层子树须呈轴对称。
-- 掌握『前序遍历』与『对称前序遍历』（即根-右-左）相结合的双指针镜像判定原理。
-- 能够熟练使用递归法（DFS）以及借助辅助队列的迭代法（BFS）实现对称性比对。
-- 熟知局部判断误区、空指针解引用以及结构值同形异（值相同但结构不同）等典型算法陷阱并掌握其规避方法。
-- 能够编写包含空树、单节点树等特殊边界场景在内的健壮（防御性）代码。
+- 能解释普通前序与对称前序怎样产生镜像节点对
+- 能计算双空、单空、值不同和深层交叉分支的返回结果
+- 能实现作者root与root双指针递归及等价迭代版本
+- 能分析空节点、全同值、树高、队列空间和只读契约
+- 能设计覆盖作者十组值差、结构差、斜树和空树测试
 
 </Objectives>
 
-## 直觉引入
+## 从“左右孩子值相等够不够”开始
 
-在日常生活中，我们经常能见到镜像对称的物体，比如振翅的蝴蝶、展开的书本，或是完美的折纸。如果我们沿着它们的中线将它们对折，左右两边能够完全重合。
+先预测：根1的左右孩子都为2；左侧2只有右孩子3，右侧2也只有右孩子3。两侧值序列看起来相同，这棵树对称吗？不对称。左侧的内侧右孩子应该对应右侧的内侧左孩子，而那里为空。
 
-在计算机科学中，如果一棵二叉树沿着它的根节点轴线“对折”后，左半部分的结构和节点值能与右半部分完全重合，这棵树就是一棵**对称的二叉树**：
+对称的二叉树要求沿根轴折叠后，结构和节点值都重合。每次比较的不是同一父节点下两个随意孩子，而是<Term def="沿根轴处于互为反射位置、必须同时存在且值相同的两个节点。">镜像节点对</Term>。
 
-```
-       对称二叉树 (Symmetric)：           非对称二叉树 (Asymmetric)：
-               8                                    8
-             /   \                                /   \
-            6     6                              6     6
-           / \   / \                            / \   / \
-          5   7 7   5                          5   7 5   7
-```
+<SymmetricTraversalDiagram />
 
-仔细观察对称二叉树，我们会发现：
-1. 它的根节点的值是唯一的，无需比较。
-2. 左子树根节点（左侧的 `6`）和右子树根节点（右侧的 `6`）必须相等。
-3. 左子树根节点的**左孩子**（值为 `5`）应当与右子树根节点的**右孩子**（值为 `5`）对称相合（外侧节点匹配）。
-4. 左子树根节点的**右孩子**（值为 `7`）应当与右子树根节点的**左孩子**（值为 `7`）对称相合（内侧节点匹配）。
+左半树按根、左、右访问，右半树按根、右、左访问；作者甚至直接让两个指针都从root开始，以这两种方向同步遍历整棵树。原书要点就是“**前序遍历与对称前序遍历**”的结果连同空位置完全一致。
 
-这种“外侧对准外侧，内侧对准内侧”的交叉配对特性，构成了检测对称二叉树的算法基石。
+## 对称前序不是简单倒序
 
-## 概念讲解
+<Term def="按根节点、右子树、左子树顺序访问，用于与普通根左右遍历形成镜像配对。">对称前序遍历</Term>的递归方向与普通前序相反。对一对节点p、q，下一层必须**同时比较左-右与右-左**：
 
-为了高效检测二叉树的对称性，我们通常采用**双指针协同遍历**的思路。
+1. p.left 与 q.right 是两棵半树的外侧配对。
+2. p.right 与 q.left 是两棵半树的内侧配对。
 
-### 1. 对称前序遍历（Symmetric Preorder Traversal）
+把第一组称为<Term def="左半树更左分支与右半树更右分支之间的镜像比较。">外侧配对</Term>，第二组称为<Term def="左半树更右分支与右半树更左分支之间的镜像比较。">内侧配对</Term>。两组都成功，当前节点对才对称。
 
-我们知道，常规的前序遍历（Preorder Traversal）访问顺序是：**根节点 $\rightarrow$ 左子树 $\rightarrow$ 右子树**。
-如果我们定义一种相反的、专门用来做镜像匹配的遍历方式，称为**对称前序遍历**，其访问顺序则是：**根节点 $\rightarrow$ 右子树 $\rightarrow$ 左子树**。
+普通前序值序列再整体反转并不能替代对称前序。根位置、层级和空分支会丢失，重复值尤其容易让错误序列相等。正确方法在遍历过程中直接维持节点对关系。
 
-当一棵二叉树是对称的，那么**对它进行前序遍历和对称前序遍历，所得到的节点访问序列必须是完全一样的**（包括其中空节点的位置）。
+## 空节点是结构的一部分
 
-### 2. 双指针递归比对 (DFS)
+作者边界按顺序处理：p与q都为空返回true；仅一个为空返回false；两者值不同返回false；其余情况递归两组交叉孩子。只有先判断空，才能安全读取value。
 
-递归是最直接的实现方式。我们可以构造一个辅助函数 `check(p, q)`，其中指针 `p` 在左子树里进行常规前序遍历，指针 `q` 在右子树里进行对称前序遍历。
+<MirrorPairBoundaryMap />
 
-#### 递归的判定原则：
-1. **递归基（两个节点都为空）**：若 `!p && !q`，说明已经越过叶子节点，返回 `true`。
-2. **结构不对称**：若 `!p || !q`（一个空，一个非空），说明左右子树在此处的拓扑结构不一致，返回 `false`。
-3. **数值不对称**：若 `p->val != q->val`，说明节点值不同，返回 `false`。
-4. **深入递归**：若当前对称，则必须同时满足两个条件：
-   - 比较外侧节点：`check(p->left, q->right)`
-   - 比较内侧节点：`check(p->right, q->left)`
-   - 返回它们的逻辑与（AND）结果。
+空树调用isSymmetrical(root, root)，也就是比较null与null，因此返回true。单节点先比较根值，再递归两组null/null，也返回true。这符合“空结构和单点都关于自身轴对称”的定义。
 
-### 3. 迭代法：BFS 双向队列比对
+把遍历中明确保留的空孩子位置称为<Term def="用于表达某方向没有节点、使相同值序列仍能区分不同树形的占位信息。">空位标记</Term>。原书概念“**空节点必须参与比较**”不是要求真的构造空节点对象，而是控制流必须区分双空和单空。
 
-除了使用递归栈，我们同样可以借助辅助队列（或双栈）来移除递归深度限制，用迭代法（BFS）来进行逐层成对比对。
+<Callout type="trap" title="跳过所有空节点后只比较value序列">
+两棵偏斜方向不同的半树可能产生相同非空值序列。缺少空位后无法知道3位于left还是right，会把同向偏斜误判成镜像偏斜。
+</Callout>
 
-#### 迭代步骤：
-1. 初始化一个队列。如果根节点为空，直接返回 `true`。
-2. 将根节点的左、右孩子（即使可能为 `null`）成对压入队列中：`q.push(root->left)`，`q.push(root->right)`。
-3. 当队列不为空时，每次**连续取出两个节点** `u` 和 `v`：
-   - 如果 `u` 和 `v` 都为空，说明这对节点对称，继续进行下一对节点的比对。
-   - 如果只有一个为空，或者它们的值不相等，立即判定该树不对称，返回 `false`。
-   - 按照镜像配对原则将下一层节点成对入队：
-     - 先入队外侧对：`u->left` 和 `v->right`
-     - 再入队内侧对：`u->right` 和 `v->left`
-4. 遍历完成若未发生冲突，返回 `true`。
+## 忠实实现作者root与root递归
 
-## 交互 Demo
+作者外层不是传root.left与root.right，而是把同一个root传给两个参数。第一层值必相等，下一层才形成root.left/root.right；这个写法让空树自然走双空成功。
 
-在下方的交互面板中切换“对称二叉树”与“非对称二叉树”，并使用单步控制观察算法如何进行指针比较和结果判定：
-
-<SymmetricBinaryTreeDiagram />
-
-## 代码对照
-
-对称二叉树判定在 C++ 和 TypeScript 中的具体实现代码如下：
-
-<CodeTabs>
-  <Tab label="C++ (递归与迭代)">
 ```cpp
-#include <queue>
-
-struct TreeNode {
-    int val;
-    TreeNode *left;
-    TreeNode *right;
-    TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
+struct BinaryTreeNode {
+    int value;
+    BinaryTreeNode* left = nullptr;
+    BinaryTreeNode* right = nullptr;
 };
 
-class Solution {
-public:
-    // 1. 递归版本 (DFS)
-    bool isSymmetric(TreeNode* root) {
-        if (root == nullptr) {
-            return true;
-        }
-        return check(root->left, root->right);
-    }
-
-    // 2. 迭代版本 (BFS 队列)
-    bool isSymmetricIterative(TreeNode* root) {
-        if (root == nullptr) {
-            return true;
-        }
-
-        std::queue<TreeNode*> q;
-        q.push(root->left);
-        q.push(root->right);
-
-        while (!q.empty()) {
-            // 每次成对取出两个节点
-            TreeNode* u = q.front(); q.pop();
-            TreeNode* v = q.front(); q.pop();
-
-            // 两者均为空，对称
-            if (u == nullptr && v == nullptr) {
-                continue;
-            }
-            // 结构不匹配或值不匹配，不对称
-            if (u == nullptr || v == nullptr || u->val != v->val) {
-                return false;
-            }
-
-            // 成对地将镜像节点入队
-            q.push(u->left);   // 左的左孩子
-            q.push(v->right);  // 右的右孩子（外侧对）
-
-            q.push(u->right);  // 左的右孩子
-            q.push(v->left);   // 右的左孩子（内侧对）
-        }
-
+bool isSymmetrical(BinaryTreeNode* first,
+                   BinaryTreeNode* second) {
+    if (first == nullptr && second == nullptr) {
         return true;
     }
-
-private:
-    // 辅助递归函数，比较两棵树是否互为镜像
-    bool check(TreeNode* p, TreeNode* q) {
-        // 递归基：皆为空
-        if (p == nullptr && q == nullptr) {
-            return true;
-        }
-        // 结构错位
-        if (p == nullptr || q == nullptr) {
-            return false;
-        }
-        // 值不相等
-        if (p->val != q->val) {
-            return false;
-        }
-        // 递归检查外侧与内侧
-        return check(p->left, q->right) && check(p->right, q->left);
+    if (first == nullptr || second == nullptr) {
+        return false;
     }
-};
-```
-  </Tab>
-  <Tab label="TypeScript (递归与迭代)">
-```typescript
-class TreeNode {
-  val: number;
-  left: TreeNode | null = null;
-  right: TreeNode | null = null;
-  constructor(val: number) { this.val = val; }
+    if (first->value != second->value) {
+        return false;
+    }
+
+    return isSymmetrical(first->left, second->right) &&
+           isSymmetrical(first->right, second->left);
 }
 
-/**
- * 1. 递归版本
- */
-function isSymmetric(root: TreeNode | null): boolean {
-  if (root === null) return true;
-  return check(root.left, root.right);
-}
-
-function check(p: TreeNode | null, q: TreeNode | null): boolean {
-  if (p === null && q === null) return true;
-  if (p === null || q === null) return false;
-  return (
-    p.val === q.val &&
-    check(p.left, q.right) &&
-    check(p.right, q.left)
-  );
-}
-
-/**
- * 2. 迭代版本 (使用辅助数组作为双端队列)
- */
-function isSymmetricIterative(root: TreeNode | null): boolean {
-  if (root === null) return true;
-
-  const queue: (TreeNode | null)[] = [root.left, root.right];
-
-  while (queue.length > 0) {
-    // 成对弹出
-    const u = queue.shift()!;
-    const v = queue.shift()!;
-
-    if (u === null && v === null) continue;
-    if (u === null || v === null || u.val !== v.val) return false;
-
-    // 成对放入镜像节点
-    queue.push(u.left, v.right);  // 外侧对
-    queue.push(u.right, v.left);  // 内侧对
-  }
-
-  return true;
+bool isSymmetrical(BinaryTreeNode* root) {
+    return isSymmetrical(root, root);
 }
 ```
-  </Tab>
-</CodeTabs>
 
-## 常见误区
+也可直接返回isMirror(root->left, root->right)，空root先返回true。两种入口等价；忠实阅读源码时应知道作者利用了同根首层，而不是误以为函数在比较两棵独立输入树。
 
-<Callout type="trap">
-  <strong>现象 →</strong> 误认为只要每个节点的左孩子值等于右孩子值（<code>node->left->val == node->right->val</code>），这棵树就是对称的。
-  <strong>原因 →</strong> 混淆了局部对称与全局镜像对称。局部对称只检查了单一父节点下的邻近孩子，而真正的对称二叉树是一个全局镜像关系。左子树的深层结构（如左下角）必须与右子树的深层结构（如右下角）跨子树匹配。
-  <strong>修法 →</strong> 坚决使用双指针协同遍历，确保递归或入队路径始终在 <code>p->left</code> 与 <code>q->right</code> 之间建立镜像关联。
+逻辑与具有短路行为：外侧失败后不再比较内侧，值或结构冲突能尽早返回。最坏仍访问每个节点常数次，时间O(n)；递归调用栈O(h)，斜树h=n。
+
+## 迭代版必须成对保存节点
+
+作者只提供递归版。工程迭代可以用队列保存节点对，每次取出一对，执行同样的双空、单空、值差判断，再按外侧和内侧成对加入：
+
+```cpp
+#include <queue>
+#include <utility>
+
+bool isSymmetricalIterative(BinaryTreeNode* root) {
+    using Pair =
+        std::pair<BinaryTreeNode*, BinaryTreeNode*>;
+    std::queue<Pair> pending;
+    pending.push({root, root});
+
+    while (!pending.empty()) {
+        auto [first, second] = pending.front();
+        pending.pop();
+
+        if (first == nullptr && second == nullptr) {
+            continue;
+        }
+        if (first == nullptr || second == nullptr ||
+            first->value != second->value) {
+            return false;
+        }
+
+        pending.push({first->left, second->right});
+        pending.push({first->right, second->left});
+    }
+    return true;
+}
+```
+
+使用pair比把单个节点依次压入队列更不容易打乱奇偶数量。队列中允许null，只在取出后按对解释；若容器API不接受null，可以存可选指针或在入队前直接比较空状态。
+
+迭代时间O(n)，辅助空间与待比较节点对数量相关，最坏O(n)。用栈代替队列仍正确，变成深度优先；关键是每次弹出和压入都保持镜像配对。
+
+## 全值相同为什么仍可能不对称
+
+作者Test9和Test10所有节点值都是5。Test9左右分支向外镜像偏斜，结果true；Test10某一侧的最后节点方向改成同向，结果false。任何只看value的算法在两组输入上得到相同信息。
+
+<SymmetricShapeCounterexampleDiagram />
+
+结构序列化可用“值、左、右”并写入空标记，然后比较普通前序与对称前序序列。递归双指针其实是在不显式构造两个序列的情况下在线比较，能在首次冲突处停止，空间也只需遍历状态。
+
+若节点值本身重复或全部相同，地址不需要相等：镜像两侧本来就是不同节点。应比较业务值相等和结构对应，不能要求first==second；只有作者入口第一层同根地址相同。
+
+## 与“镜像一棵树再比较”方法的关系
+
+可以复制root的镜像，再判断原树与镜像副本结构和值相等；逻辑正确，但需要O(n)新节点和一次额外比较。若原地镜像后比较，原树已被修改，无法再同时作为对照，除非先复制或镜像两次恢复。
+
+直接双指针对读输入，不分配节点，也不修改树，是更合适的判定。它与上一题镜像变换共享交叉方向规则，但一个是只读比较，一个是写入交换，副作用契约不同。
+
+若树含父指针，判定只沿left/right，不应比较parent，否则左右两侧父地址天然不同。若业务要求比较其他字段，应注入等价谓词并保持镜像位置规则不变。
+
+<Callout type="trap" title="每个父节点只比较自己的left值与right值">
+全局对称是跨根轴关系。深层外侧节点属于不同父节点，局部兄弟比较覆盖不到；必须从根两侧成对向下，持续比较left/right与right/left。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 在读取 <code>p.left</code> 或 <code>p.val</code> 时，代码由于空指针解引用抛出 Crash。
-  <strong>原因 →</strong> 缺少足够的边界防护。在对二叉树指针进行各种向下取值的操作之前，没有拦截并判断该指针是否为空。
-  <strong>修法 →</strong> 在访问任何成员属性前，必须设置完整的递归基拦截条件，即：<code>if (!p || !q) return p == q;</code>（如果两者至少有一个为 <code>null</code>，那么只有在两者都为 <code>null</code> 的情况下才成立）。
-</Callout>
+## 作者十组测试如何逐层加压
 
-<Callout type="trap">
-  <strong>现象 →</strong> 忽略了空节点的位置（即只将非空节点连线），导致形状不同的偏斜二叉树被错误判定为对称。
-  <strong>原因 →</strong> 值同形异陷阱。例如一棵树的所有节点值均为 <code>1</code>，左子树只有左节点，右子树也只有左节点。如果遍历时跳过或漏掉了 <code>null</code> 节点的显式比对，纯节点值序列的比对可能返回真，但实际结构并不对称。
-  <strong>修法 →</strong> 在迭代法的队列里，必须同时将 <code>null</code> 节点压入并参与比较；或者在递归法中直接利用 <code>!p || !q</code> 的结构差异拦截。
-</Callout>
+Test1是完整对称树；Test2只改第二层右值6为9，验证浅层值冲突；Test3删掉一个最外侧5，验证结构冲突。Test4构造四层镜像斜树，要求深层true；Test5把对应2改成6，深层值false；Test6缺少一侧最深节点，深层结构false。
 
-## 小结与练习
+Test7单节点true，Test8空树true。Test9和Test10所有值都为5，分别验证镜像偏斜true与同向偏斜false。这十组组合同时锁定值、结构、深度和空边界。
 
-- 判断对称二叉树的时间复杂度为 **$O(N)$**（$N$ 为树的节点总数），因为整个过程中每个节点最多被访问一次。
-- 空间复杂度在递归法下为 **$O(H)$**（$H$ 为树的高度），在退化树上退化为 **$O(N)$**；在迭代法下为 **$O(N)$**（主要是由于队列需存储最宽一层的节点数）。
+<SymmetricOfficialCaseLab />
+
+自动测试可构造核心六类并让递归与迭代交叉校验：
+
+```cpp
+#include <cassert>
+
+void testSymmetrical() {
+    BinaryTreeNode n5a{5}, n7a{7}, n7b{7}, n5b{5};
+    BinaryTreeNode n6a{6, &n5a, &n7a};
+    BinaryTreeNode n6b{6, &n7b, &n5b};
+    BinaryTreeNode n8{8, &n6a, &n6b};
+
+    assert(isSymmetrical(&n8));
+    assert(isSymmetricalIterative(&n8));
+
+    n6b.value = 9;
+    assert(!isSymmetrical(&n8));
+    n6b.value = 6;
+
+    n6b.right = nullptr;
+    assert(!isSymmetrical(&n8));
+    n6b.right = &n5b;
+
+    BinaryTreeNode only{1};
+    assert(isSymmetrical(&only));
+    assert(isSymmetrical(nullptr));
+
+    BinaryTreeNode a3{5}, b3{5};
+    BinaryTreeNode a2{5, &a3, nullptr};
+    BinaryTreeNode b2{5, &b3, nullptr};
+    BinaryTreeNode root{5, &a2, &b2};
+    assert(!isSymmetrical(&root));
+}
+```
+
+最后一组两侧都向左，所有值相同，专门验证空位置。完整移植时还应保留作者Test4到Test6的深链，防止实现只检查固定层数。
+
+属性测试可生成随机树T，构造独立镜像M，再把新根的左右分别接T和M，结果必对称；随机删除M中一个非对称位置，结果通常应false。删除前要确保不是删除一对同时为空的位置。
+
+## 输入契约与工程边界
+
+算法假设有限无环二叉树。孩子指针成环会无限递归；共享DAG节点可能被多个镜像路径重复比较，仍可能得到真假，但时间分析和“树”语义改变。容器应保证每个非根节点唯一父节点。
+
+并发只读安全取决于节点生命周期和是否有写线程。若另一线程镜像或删除子树，比较可能看到混合结构或悬空地址；需读锁、不可变树或快照。
+
+对极深树应使用显式栈/队列，避免调用栈溢出。迭代容器也要设置资源上限，恶意超宽树可能占用大量内存；流式处理无法在不保存对应镜像边界的情况下完全避免状态。
+
+泛型节点应把“值相等”抽成等价谓词。若value是浮点数，NaN与容差策略要先定义；若是业务对象，可能只比较ID，也可能要求版本和状态都相同。结构对称与字段等价是两条独立条件，不能因为对象地址不同就判失败，也不能因为主键相同就忽略方向。
+
+批量查询可为子树计算结构摘要，但普通摘要通常区分left与right；判断镜像时需要比较左摘要与右侧的镜像摘要。可为每个节点同时缓存正向摘要和镜像摘要，根的正向摘要等于镜像摘要时再做逐节点确认。哈希只能快速筛选，碰撞时仍不能替代精确比较。
+
+若树节点带parent指针，镜像判定通常不沿parent，否则递归会回到祖先形成环；parent也不应要求两侧地址相等。遍历边集合必须限定为left和right，输入契约与比较字段都应显式写出。
+
+## 正确性证明
+
+对镜像节点对所覆盖的节点数归纳。双空表示两侧结构同时结束，正确；单空或值不同必不对称。两者非空同值时，整对对称当且仅当外侧子对与内侧子对都对称，递归恰好检查这两个必要且充分条件。
+
+入口比较root与root。根值自然相同，下一层转为root.left与root.right；空root走双空true。由递归对子对的正确性，最终返回值与整棵树是否沿根轴对称完全一致。
+
+<Stepper>
+  <Step title="先画出镜像节点对"><SymmetricTraversalDiagram />外侧对应left/right，内侧对应right/left，不能按同方向比较。</Step>
+  <Step title="按双空与单空处理边界"><MirrorPairBoundaryMap />空节点必须参与比较，之后才能安全读取value和孩子。</Step>
+  <Step title="用全同值反例检查结构"><SymmetricShapeCounterexampleDiagram />非空值序列相同仍可能方向不同，空位标记决定答案。</Step>
+  <Step title="跑完十组官方树形"><SymmetricOfficialCaseLab />浅层、深层、空树和全同值用例覆盖所有递归分支。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 对称的二叉树要求结构和值沿根轴同时镜像。
+2. 前序遍历与对称前序遍历按根左右和根右左同步进行。
+3. 每层同时比较左-右与右-左两组镜像节点对。
+4. 双空成功、单空失败，空节点必须参与比较。
+5. 作者入口比较root与root，因此空树和单节点都返回true。
+6. 全部节点值相同也可能因空位方向不同而不对称。
+7. 递归时间O(n)、栈O(h)，迭代队列最坏O(n)空间。
+8. 十组官方测试覆盖浅深值差、结构差、空树和同值陷阱。
 
 <Exercises>
-  <Answer question="二叉树的对称性（Symmetric Tree）判定，与判断两棵树是否是镜像关系（Is Mirror）在算法本质上有何联系？">
-    **本质完全相同**。判断二叉树是否对称，其物理定义就是**判断其左子树与右子树是否互为镜像**。也就是说，`isSymmetric(root)` 在根节点有效时，实质上就是在求解 `isMirror(root->left, root->right)`。这两个问题的核心逻辑和比对方向在双指针层面上完全重合。
-  </Answer>
-  <Answer question="除了使用队列（BFS）实现迭代判定，我们能否使用辅助栈（DFS）来实现对称树迭代？如果能，压栈的顺序是怎样的？">
-    **能**。使用辅助栈可以实现迭代的深度优先搜索（DFS）镜像判定。基本思想依然是“成对弹出，成对压入”。
-    - 每次从栈中弹出两个节点 `u` 和 `v` 进行比对。
-    - 比对成功后，将子节点成对压入栈中：压入 `(u->left, v->right)` 以及 `(u->right, v->left)`。
-    虽然栈的弹出顺序（DFS）与队列（BFS）不同，但这完全不影响对称性判定的正确性，因为每个对称节点的镜像比对只取决于其本身及对应镜像节点的值与拓扑，与它们的遍历次序无关。
-  </Answer>
-  <Answer question="给定一棵二叉树：根节点为 1，左孩子为 2，右孩子为 2。左孩子 2 的左侧无节点、右孩子为 3；右孩子 2 的左侧无节点、右孩子为 3。这棵树是对称的吗？为什么？">
-    **不对称**。
-    - 左子树的右孩子（值为 `3`）应当与右子树的**左孩子**（此处为空 `null`）进行对称匹配，然而两者一个为 `3`，一个为空。
-    - 同样，左子树的左孩子（此处为空 `null`）应当与右子树的**右孩子**（值为 `3`）比对。
-    - 结构和数值均不匹配。这棵树虽然左右子树结构类似且数值相同（都长在右侧），但它是非对称的（发生了顺移，而非镜像）。
-  </Answer>
+
+**问题 1：为什么左侧left要与右侧right比较？**
+
+<Answer>它们位于根轴两侧的外侧镜像位置。折叠后左半树更左的分支覆盖右半树更右的分支；同理左侧right对应右侧left。</Answer>
+
+**问题 2：空树为什么被作者判为对称？**
+
+<Answer>入口把root同时传给两个参数。空树变成null/null，双空边界返回true；从几何定义看，空结构沿任何轴都与自身重合。</Answer>
+
+**问题 3：全值相同的树怎样证明仍可能不对称？**
+
+<Answer>让左右半树都只向左延伸。所有非空比较值都相同，但左半树的left应对应右半树的right，后者为空，出现单空对并返回false。</Answer>
+
+**问题 4：迭代队列为什么要保存节点对而不是单节点？**
+
+<Answer>对称性是两个镜像位置之间的关系。pair让每次弹出都保留对应语义，并按外侧、内侧继续生成新对；单节点队列若入队顺序错一位就会比较错误对象。</Answer>
+
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="对称前序遍历">
-    指先访问根节点，再访问右子树，最后访问左子树的遍历方法，专门用于与常规前序遍历（根-左-右）结合来检测二叉树的对称镜像关系。详见「概念讲解」节。
-  </GlossaryItem>
-  <GlossaryItem term="双指针比对">
-    指使用两个相互独立的遍历指针同步在一棵或多棵树的不同部分移动，交叉进行节点存在性与数值匹配的控制流设计。详见「概念讲解」节。
-  </GlossaryItem>
-  <GlossaryItem term="值同形异">
-    指不同子树中的节点值虽然恰好相等，但因为空节点（null）的排布不同而导致二叉树的几何空间拓扑结构完全不对称的现象。详见「常见误区」节。
-  </GlossaryItem>
+  <GlossaryItem term="镜像节点对">沿根轴互为反射位置、必须结构和值对应的两个节点。</GlossaryItem>
+  <GlossaryItem term="对称前序遍历">按根、右、左顺序访问，用于与普通根、左、右遍历配对。</GlossaryItem>
+  <GlossaryItem term="空位标记">表达某个left或right方向没有节点的结构占位信息。</GlossaryItem>
+  <GlossaryItem term="外侧配对">左半树left与右半树right之间的镜像比较。</GlossaryItem>
+  <GlossaryItem term="内侧配对">左半树right与右半树left之间的镜像比较。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题28"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/28_SymmetricalBinaryTree/SymmetricalBinaryTree.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

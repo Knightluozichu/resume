@@ -1,0 +1,215 @@
+---
+title: "步骤3 函数的连续调用"
+type: B
+section: "第1阶段 · 自动微分"
+order: 3
+description: "步骤3 函数的连续调用覆盖3个权威目录层级，以可执行框架合同、数学推导、交互实验和失败对照重建核心。"
+demo: true
+math: true
+sourceUrl: "https://www.oreilly.co.jp/books/9784873119069/toc.html"
+draft: false
+---
+
+import {
+  Dl2Step03FunctionChainMapLab,
+  Dl2Step03FunctionChainExperimentLab,
+  Dl2Step03FunctionChainEvidenceLab,
+} from "@/components/mdx/deep-learning-from-scratch-2/diagrams/dl2-step-03-function-chain";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释步骤3 函数的连续调用新增的接口、对象关系、数学规则和适用边界
+- 能计算四个核心方程中的forward值、shape、局部导数或参数更新
+- 能复现三个互动视图，并定位第一条图连接、数值、梯度或模式证据分叉
+- 能判断“Variable保存数据与梯度，Function保存输入输出关系；反向传播沿creator链逆序执行，解析梯度必须通过中心差分。”是否成立
+
+</Objectives>
+
+## 为什么先冻结框架合同
+
+<Term def="Variable是本页第1个核查坐标，用于连接框架接口、数值状态、计算图和失败边界。">
+  Variable
+</Term>
+、
+<Term def="Function是本页第2个核查坐标，用于连接框架接口、数值状态、计算图和失败边界。">
+  Function
+</Term>
+、
+<Term def="creator是本页第3个核查坐标，用于连接框架接口、数值状态、计算图和失败边界。">
+  creator
+</Term>
+、
+<Term def="计算图是本页第4个核查坐标，用于连接框架接口、数值状态、计算图和失败边界。">
+  计算图
+</Term>
+、
+<Term def="证据重放是本页第5个核查坐标，用于连接框架接口、数值状态、计算图和失败边界。">
+  证据重放
+</Term>
+共同构成本页坐标。步骤3
+函数的连续调用沿“输入合同、前向状态、反向规则、独立测试”扩展DeZero，并保持Variable保存数据与梯度，Function保存输入输出关系；反向传播沿creator链逆序执行，解析梯度必须通过中心差分。
+
+自制框架的难点不是写出一个能返回数字的函数，而是让自然Python表达式、动态图、反向传播、内存和模式在同一合同下工作。实验先冻结Python/NumPy版本、输入与参数数组、对象身份、随机种子和上一版测试，再预测新能力应最先改变的中间量。
+
+每次forward保存输出值、shape、dtype、creator和generation；每次backward保存上游梯度、局部导数、输入梯度和参数梯度。若最终损失下降但对象连接、梯度累加或模式切换错误，训练结果不能采信。修复后清空grad、图、优化器与循环状态，从原始输入完整重放。
+
+## 数学骨架
+
+$$
+y=f(x)
+$$
+
+$$
+f'(x)\approx\frac{f(x+h)-f(x-h)}{2h}
+$$
+
+$$
+\bar{x}=\bar{y}\frac{\partial y}{\partial x}
+$$
+
+$$
+\epsilon=\frac{|g_a-g_n|}{|g_a|+|g_n|+10^{-12}}
+$$
+
+方程进入代码前先声明输入输出shape、轴和对象所有权。解析梯度与中心差分比较相对误差，参数更新后用新forward独立重算；高阶、GPU或时序模式还要记录是否建图、设备和状态边界。
+
+## 核心机制
+
+1. Function调用先标准化输入，再执行forward，包装输出并设置creator；backward按输入顺序返回局部梯度。
+2. 函数连续调用形成动态图，必须用对象身份连接而不是复制数值，否则回溯会失去来源。
+3. 自动微分框架先把数值包装成Variable，再让每次Function调用同时产生输出和计算图边。数据流与梯度流方向相反，creator是从结果回溯产生它的函数的入口。
+4. Function.forward只负责数值变换，backward只负责局部导数。复杂复合函数不需要重新推导整体公式，只要局部规则正确并按拓扑逆序组合。
+5. 数值微分计算昂贵且受步长影响，却是最透明的局部真值。每个新函数先在标量或极小数组上比较解析梯度与中心差分，再进入长图。
+6. 实现必须保存输入输出shape、dtype、creator、grad以及执行顺序。若反向值错误，先定位最早局部节点，不用最终训练损失掩盖。
+
+## DeZero实现合同
+
+1. **对象合同：** Variable只承载数据、梯度与图连接，Function负责数值变换与局部导数；便利API最终委托核心函数，不能绕过creator设置。
+2. **shape合同：** forward与backward逐轴对称。前向广播、求和、转置或reshape后，反向必须恢复每个输入的原shape，并对重复路径累加。
+3. **顺序合同：** 动态图按实际运行创建，反向按generation拓扑逆序；同一函数只处理一次，同一变量可从多条路径接收贡献。
+4. **模式合同：** no_grad、create_graph、train/test与设备上下文使用成对进入和恢复，异常退出也不能污染全局状态。
+5. **资源合同：** 不需要的中间梯度及时释放，weakref打破循环引用；保存加载、CPU/GPU和DataLoader都保留稳定键、dtype与样本身份。
+6. **测试合同：** 每个新函数至少有forward例、解析backward、数值梯度、shape边界和失败样本；上一版本测试必须继续通过。
+
+## 权威目录逐项讲解
+
+### 步骤3 函数的连续调用
+
+Function调用先标准化输入，再执行forward，包装输出并设置creator；backward按输入顺序返回局部梯度。 函数连续调用形成动态图，必须用对象身份连接而不是复制数值，否则回溯会失去来源。 验收时保存输入、输出、creator或状态、局部梯度和失败边界，并核对“Variable保存数据与梯度，Function保存输入输出关系；反向传播沿creator链逆序执行，解析梯度必须通过中心差分。”是否成立。
+
+先预测该单元改变后最早变化的是对象连接、forward值、shape、generation、内存、梯度还是模式，再运行固定小样本。若末端结果合理但首个证据没有出现，应停止并从上一个通过测试的DeZero版本重放。
+
+### 3.1 Exp函数的实现
+
+Function调用先标准化输入，再执行forward，包装输出并设置creator；backward按输入顺序返回局部梯度。 函数连续调用形成动态图，必须用对象身份连接而不是复制数值，否则回溯会失去来源。 验收时保存输入、输出、creator或状态、局部梯度和失败边界，并核对“Variable保存数据与梯度，Function保存输入输出关系；反向传播沿creator链逆序执行，解析梯度必须通过中心差分。”是否成立。
+
+先预测该单元改变后最早变化的是对象连接、forward值、shape、generation、内存、梯度还是模式，再运行固定小样本。若末端结果合理但首个证据没有出现，应停止并从上一个通过测试的DeZero版本重放。
+
+### 3.2 函数的连续调用
+
+Function调用先标准化输入，再执行forward，包装输出并设置creator；backward按输入顺序返回局部梯度。 函数连续调用形成动态图，必须用对象身份连接而不是复制数值，否则回溯会失去来源。 验收时保存输入、输出、creator或状态、局部梯度和失败边界，并核对“Variable保存数据与梯度，Function保存输入输出关系；反向传播沿creator链逆序执行，解析梯度必须通过中心差分。”是否成立。
+
+先预测该单元改变后最早变化的是对象连接、forward值、shape、generation、内存、梯度还是模式，再运行固定小样本。若末端结果合理但首个证据没有出现，应停止并从上一个通过测试的DeZero版本重放。
+
+## 三步交互实验
+
+先预测单变量变化会最早影响对象图、forward、shape、梯度还是独立测试，再切换基线、边界和失败模式。
+
+<Stepper>
+  <Step title="画出对象与计算图">
+    标出Variable、Function、creator、参数、数据或循环状态的所有权与连接。
+    <Dl2Step03FunctionChainMapLab />
+  </Step>
+  <Step title="运行单变量实验">
+    固定输入、参数和上一版代码，只改变一个接口、shape、模式或设备条件。
+    <Dl2Step03FunctionChainExperimentLab />
+  </Step>
+  <Step title="核对独立证据">
+    比较forward、解析/数值梯度、对象存活、更新与重放测试，定位第一处分叉。
+    <Dl2Step03FunctionChainEvidenceLab />
+  </Step>
+</Stepper>
+
+## 常见失败与边界
+
+<Callout type="trap">
+  **便利接口绕过核心图：**
+  运算结果数值正确，但输出未设置creator，后续backward在中途停止。所有运算符和包装函数必须委托Function调用。
+</Callout>
+
+<Callout type="trap">
+  **只看训练终点：**
+  错误广播、梯度覆盖、旧缓存、错误模式或测试泄漏可能暂时得到较低损失；必须核对最早中间证据。
+</Callout>
+
+<Callout type="tip">
+  **最小重放顺序：**
+  在标量或极小数组上先手算forward与局部导数，再做中心差分、组合图和长训练。首错出现后清空全部派生状态。
+</Callout>
+
+## 本章回顾
+
+步骤3 函数的连续调用沿“输入合同、前向状态、反向规则、独立测试”扩展DeZero，并保持Variable保存数据与梯度，Function保存输入输出关系；反向传播沿creator链逆序执行，解析梯度必须通过中心差分。 验收底线是：Variable保存数据与梯度，Function保存输入输出关系；反向传播沿creator链逆序执行，解析梯度必须通过中心差分。。完成标准是能预测首个中间变化、重放实现、解释失败样本，并证明新能力没有破坏此前测试。
+
+<Glossary>
+
+<GlossaryItem term="Variable">
+  “Variable”对应“冻结输入与版本”：记录对象身份、shape、前向缓存、局部梯度、模式和数值容差；仅有最终输出不足以证明框架正确。
+</GlossaryItem>
+
+<GlossaryItem term="Function">
+  “Function”对应“执行forward”：记录对象身份、shape、前向缓存、局部梯度、模式和数值容差；仅有最终输出不足以证明框架正确。
+</GlossaryItem>
+
+<GlossaryItem term="creator">
+  “creator”对应“保存图与shape”：记录对象身份、shape、前向缓存、局部梯度、模式和数值容差；仅有最终输出不足以证明框架正确。
+</GlossaryItem>
+
+<GlossaryItem term="计算图">
+  “计算图”对应“执行backward”：记录对象身份、shape、前向缓存、局部梯度、模式和数值容差；仅有最终输出不足以证明框架正确。
+</GlossaryItem>
+
+<GlossaryItem term="证据重放">
+  “证据重放”对应“核对数值梯度”：记录对象身份、shape、前向缓存、局部梯度、模式和数值容差；仅有最终输出不足以证明框架正确。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+1. 如何为步骤3 函数的连续调用建立最小可手算的forward/backward测试？
+
+<Answer>
+固定一个标量或极小数组、对象身份和上一版实现，按“冻结输入与版本 -> 执行forward -> 保存图与shape -> 执行backward -> 核对数值梯度 -> 独立重放测试”保存中间证据。手算四个方程，并用中心差分比较解析梯度；shape、creator、generation和模式都应符合合同。
+</Answer>
+
+2. 如何证明新便利接口没有绕过DeZero计算图或改变梯度？
+
+<Answer>
+  让核心函数与便利写法共享同一输入，逐项比较输出、creator链、generation、解析梯度和数值梯度。两条路径必须在容差内一致，并继续通过所有旧测试。
+</Answer>
+
+3. 为“Variable保存数据与梯度，Function保存输入输出关系；反向传播沿creator链逆序执行，解析梯度必须通过中心差分。”构造失败样本并指出停止位置。
+
+<Answer>
+  可以故意断开creator、覆盖梯度、交换shape轴、复用旧图、忘记恢复模式或混用CPU/GPU。运行前预测第一条被破坏的证据，在该处停止，清空grad、缓存、优化器和状态后重放。
+</Answer>
+
+</Exercises>
+
+<Attribution
+  adaptedFrom="斋藤康毅著、郑明智译《深度学习入门2：自制框架》，人民邮电出版社，2023年3月，ISBN 9787115607515；原版《ゼロから作るDeep Learning ❸》，O'Reilly Japan，2020年4月20日，552页，ISBN 9784873119069 · 基于官方5阶段、60步骤、207个编号小节与3个附录完整目录的独立教学重构"
+  adaptedUrl="https://www.oreilly.co.jp/books/9784873119069/toc.html"
+/>

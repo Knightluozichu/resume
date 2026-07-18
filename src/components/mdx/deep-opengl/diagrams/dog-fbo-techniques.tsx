@@ -49,10 +49,10 @@ export function DogFboTechniquesDiagram() {
 
           {/* 说明 */}
           <rect x="40" y="290" width="640" height="86" rx="8" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="360" y="312" textAnchor="middle" fontSize="10.5" fontWeight="700" fill="var(--text-primary)">FBO 本身不存数据，是挂载附件的容器</text>
+          <text x="360" y="312" textAnchor="middle" fontSize="10.5" fontWeight="700" fill="var(--text-primary)">FBO 本身不存像素；完整性由附件格式、尺寸、采样与 draw buffers 共同决定</text>
           <text x="60" y="332" fontSize="10" fill="var(--text-secondary)">创建：genFramebuffers → bind → 挂颜色纹理 + 深度 renderbuffer → checkFramebufferStatus</text>
           <text x="60" y="350" fontSize="10" fill="var(--text-secondary)">渲染到纹理：绑 FBO + viewport(纹理尺寸) + 画场景 → 解绑回 null + viewport(canvas) + 全屏四边形后处理</text>
-          <text x="60" y="368" fontSize="10" fill="var(--accent)">切换渲染目标务必同步 viewport；ping-pong 用两个 FBO 交替读写做多遍模糊</text>
+          <text x="60" y="368" fontSize="10" fill="var(--accent)">禁止采样正在写入的附件；切换目标同步 viewport；多遍处理用不同纹理 ping-pong</text>
 
           <defs>
             <marker id="fboArrow" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto">
@@ -61,7 +61,43 @@ export function DogFboTechniquesDiagram() {
           </defs>
         </svg>
       </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">FBO 离屏渲染场景到纹理，后处理着色器加工后画到屏幕</figcaption>
+      <figcaption className="mt-2 text-center text-sm text-secondary">FBO 把兼容附件组成离屏目标，后处理必须在不同读写纹理之间传递</figcaption>
+    </figure>
+  );
+}
+
+const COMPLETENESS_ROWS = [
+  ["附件存在", "至少有有效附件，且图像层级/层索引有效"],
+  ["格式可渲染", "颜色、深度、模板格式满足目标 API 与扩展能力"],
+  ["尺寸与采样", "附件尺寸非零，相关完整性规则与 sample 数一致"],
+  ["输出映射", "drawBuffers 只引用已挂接且可写的颜色附件"],
+  ["无反馈环", "当前 draw 使用的采样纹理不能同时作为被写附件"],
+] as const;
+
+export function DogFboCompletenessDiagram() {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
+        <div
+          role="img"
+          aria-label="FBO 完整性与绘制前的五项检查"
+          className="grid gap-2"
+        >
+          {COMPLETENESS_ROWS.map(([title, detail], index) => (
+            <div
+              key={title}
+              className="grid min-h-14 grid-cols-[2rem_8rem_1fr] items-center gap-3 rounded-control border border-border bg-bg/40 p-3"
+            >
+              <span className="font-mono text-xs text-secondary">{index + 1}</span>
+              <strong className="text-sm text-accent">{title}</strong>
+              <span className="text-xs leading-5 text-secondary">{detail}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">
+        FRAMEBUFFER_COMPLETE 只证明附件组合可作为目标，读写反馈和 pass 状态仍需单独检查
+      </figcaption>
     </figure>
   );
 }

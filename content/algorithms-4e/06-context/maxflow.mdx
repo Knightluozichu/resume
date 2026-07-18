@@ -1,0 +1,365 @@
+---
+title: "6.4 Maximum Flow：残量网络、增广路径与最小割证书"
+type: B
+section: "上下文"
+order: 27
+description: "按官方6.4重建flow feasibility、FlowEdge双向残量、Edmonds-Karp增广、bottleneck更新、maxflow-mincut证明、二分图匹配归约与primal-dual证书。"
+demo: true
+math: true
+sourceUrl: "https://algs4.cs.princeton.edu/64maxflow/"
+draft: false
+---
+
+import { Algs4FlowNetworkMap, Algs4FlowFeasibilityLab, Algs4ResidualEdgeLab, Algs4ResidualNetworkLab, Algs4AugmentingPathLab, Algs4EdmondsKarpLab, Algs4MinCutLab, Algs4MaxflowMincutLab, Algs4BipartiteMatchingLab, Algs4MaxflowCostLab, Algs4MaxflowCertificateLab } from "@/components/mdx/algorithms-4e/diagrams/maxflow";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释maximum flow、flow feasibility、residual networks、augmenting paths与minimum s-t cut
+- 能计算forward/backward residual capacity、path bottleneck、flow value、vertex excess与cut capacity
+- 能实现FlowEdge双向更新、BFS shortest augmenting path、Edmonds-Karp循环和source-side cut提取
+- 能分析backward cancellation、floating tolerance、parallel edges、O(VE(E+V))边界与integrality
+- 能设计capacity/conservation primal checks、residual reachability和maxflow-mincut theorem dual certificate
+
+</Objectives>
+
+## 从“走错的流量能不能撤回来”开始
+
+最大流（<Term def="在capacitated directed network中，从source送到sink的maximum feasible flow value。">最大流</Term>，maximum flow）不是简单找一条widest path。Flow可同时走many paths，而且early path choice可能占用后续更重要的capacity。
+
+先预测：若第一次把5 units送过edge u→v，后来发现更好solution需要把其中2 units改走另一branch，algorithm是否必须从头重算？不必。Residual network提供v→u的backward capacity 5，让下一条增广路径撤销一部分旧flow。
+
+一个flow state必须先可行，再谈optimal。Flow value是source net outflow，也等于sink net inflow。
+
+<Algs4FlowNetworkMap />
+
+## 6.4.1 Flow network与feasible flow
+
+Flow network \(G=(V,E)\) 有source s、sink t。每条directed edge \(e=(v,w)\) 有nonnegative capacity \(c(e)\) 与flow \(f(e)\)。
+
+Capacity constraint：
+
+$$
+0\le f(e)\le c(e)
+$$
+
+对每个internal vertex \(v\ne s,t\)，flow conservation：
+
+$$
+\sum_{e:\,e.to=v}f(e)
+=
+\sum_{e:\,e.from=v}f(e)
+$$
+
+Flow value：
+
+$$
+|f|
+=\sum_{e:\,e.from=s}f(e)-\sum_{e:\,e.to=s}f(e)
+$$
+
+Official `FlowNetwork`把同一`FlowEdge` object加入both endpoints的adjacency lists，因为residual traversal必须从tail和head都能看到它。Parallel edges与self-loops允许；遍历all edges时要避免把同一edge重复计数。
+
+<Algs4FlowFeasibilityLab />
+
+<Callout type="trap" title="只检查source outflow等于sink inflow">
+Global totals相等仍可能在internal vertex产生flow或丢flow。Feasibility必须逐edge检查capacity，逐internal vertex检查zero excess，再核对source/sink balance。
+</Callout>
+
+## 6.4.2 FlowEdge：一个original edge，两种residual directions
+
+对original edge \(e=v\to w\)：
+
+$$
+c_f(v,w)=c(e)-f(e)
+$$
+
+是forward residual capacity，可继续增加flow；
+
+$$
+c_f(w,v)=f(e)
+$$
+
+是backward residual capacity，可取消已有flow。
+
+<Algs4ResidualEdgeLab />
+
+Official API以destination endpoint表达direction：
+
+```java
+double residualCapacityTo(int vertex) {
+    if      (vertex == v) return flow;              // backward
+    else if (vertex == w) return capacity - flow;   // forward
+    else throw new IllegalArgumentException();
+}
+
+void addResidualFlowTo(int vertex, double delta) {
+    if      (vertex == v) flow -= delta;
+    else if (vertex == w) flow += delta;
+    else throw new IllegalArgumentException();
+}
+```
+
+同一edge不需要显式创建two residual edge objects，但algorithm概念上必须看到both directions。Residual update后仍要保证flow在0和capacity之间；official code把距离boundary \(10^{-10}\) 内的value snap到0或capacity。
+
+## 6.4.3 Residual networks：当前flow还能怎样改变
+
+残量网络（<Term def="由所有positive forward/backward residual arcs组成，描述从current feasible flow出发仍可执行的合法增减。">残量网络</Term>，residual networks）记作 \(G_f\)。
+
+<Algs4ResidualNetworkLab />
+
+Residual path不等于original directed path。若path从w沿backward arc到v，augmentation会减少original \(v\to w\) flow。Cancellation是Ford-Fulkerson correctness的关键；没有backward arcs，greedy first path可永久锁死suboptimal decision。
+
+Residual adjacency在official implementation中遍历`G.adj(v)`，对incident edge取`other(v)`，再问`residualCapacityTo(w)`。只有strictly positive residual capacity的arc可搜索。
+
+<Callout type="trap" title="Residual BFS只沿original from-to方向">
+这样无法撤销旧flow，Ford-Fulkerson会依赖path order并可能停在非最大可行流。每条edge在head端都必须暴露capacity等于current flow的backward residual arc。
+</Callout>
+
+## 6.4.4 Augmenting path与bottleneck
+
+增广路径（<Term def="Residual network中从s到t、每条arc residual capacity positive的directed path。">增广路径</Term>，augmenting paths）P可增加的maximum amount是bottleneck：
+
+$$
+\Delta=\min_{e\in P}c_f(e)
+$$
+
+沿P每个forward residual arc增加 \(\Delta\)，每个backward residual arc减少 \(\Delta\)。至少一条residual arc被saturate，flow value增加 \(\Delta\)。
+
+<Algs4AugmentingPathLab />
+
+```java
+double bottle = Double.POSITIVE_INFINITY;
+for (int v = t; v != s; v = edgeTo[v].other(v))
+    bottle = Math.min(bottle, edgeTo[v].residualCapacityTo(v));
+
+for (int v = t; v != s; v = edgeTo[v].other(v))
+    edgeTo[v].addResidualFlowTo(v, bottle);
+value += bottle;
+```
+
+Augmentation保持feasibility：bottleneck不超过任何arc residual，所以edge bounds不破；path internal vertices获得一入一出equal delta，conservation不变；source净outflow与sink净inflow各增加delta。
+
+## 6.4.5 Ford-Fulkerson与Edmonds-Karp
+
+Ford-Fulkerson framework反复：
+
+1. 在residual network找任意s→t path。
+2. 求bottleneck。
+3. Augment。
+4. 无path时stop。
+
+Path strategy影响termination与complexity。Official `FordFulkerson.java`用BFS找fewest-edge residual path，也就是Edmonds-Karp：
+
+```java
+Queue<Integer> queue = new Queue<>();
+queue.enqueue(s);
+marked[s] = true;
+while (!queue.isEmpty() && !marked[t]) {
+    int v = queue.dequeue();
+    for (FlowEdge e : G.adj(v)) {
+        int w = e.other(v);
+        if (e.residualCapacityTo(w) > 0 && !marked[w]) {
+            edgeTo[w] = e;
+            marked[w] = true;
+            queue.enqueue(w);
+        }
+    }
+}
+```
+
+<Algs4EdmondsKarpLab />
+
+BFS一次O(E+V)。Edmonds-Karp augmentation count O(VE)，total：
+
+$$
+O\bigl(VE(E+V)\bigr)
+$$
+
+Connected/sparse conventions下常写O(VE²)。Official section概括为 \(E^2V\)，current class documentation给更完整 \(EV(E+V)\)。Extra `marked`、`edgeTo`与queue O(V)。
+
+<Algs4MaxflowCostLab />
+
+If all capacities/initial flows areintegers，bottleneck integer，all intermediate flows保持integer，得到integral maxflow。Official floating implementation说明：若integer arithmetic exact且maxflow不超过 \(2^{52}\)，double能精确表示这些integers；一般real capacities需审慎tolerance。
+
+## 6.4.6 Minimum s-t cut：任何cut都是flow上界
+
+最小s-t割（<Term def="把vertices分成s所在S与t所在T，最小化所有directed edges from S to T的capacity sum。">最小s-t割</Term>，minimum s-t cut）\((S,T)\) 的capacity：
+
+$$
+c(S,T)=\sum_{e:\,e.from\in S,\ e.to\in T}c(e)
+$$
+
+对任意feasible flow：
+
+$$
+|f|\le c(S,T)
+$$
+
+Proof：Internal flows在S内cancel，net离开S的flow等于flow value；S→T edges各不超过capacity，T→S flow只会减少net crossing。所以每个cut都给primal flow的upper bound。
+
+## 6.4.7 无augmenting path时，final BFS给出min cut
+
+Algorithm终止时，令S为residual network中从s reachable的vertices，T为其余vertices。T含sink，因为无augmenting path。
+
+<Algs4MinCutLab />
+
+对every original edge crossing S→T，forward residual必须0，否则head也reachable，所以它saturated。对every edge crossing T→S，backward residual必须0，否则tail可被reached，所以其flow为0。
+
+因此：
+
+$$
+|f|
+=f(S,T)-f(T,S)
+=c(S,T)
+$$
+
+Feasible flow达到某cut upper bound，二者同时optimal。
+
+## 6.4.8 Maxflow-mincut theorem与双证书
+
+最大流最小割定理（<Term def="任意s-t flow network中maximum feasible flow value等于minimum s-t cut capacity。">最大流最小割定理</Term>，maxflow-mincut theorem）给出比“algorithm停止”更强的可检验证据。
+
+<Algs4MaxflowMincutLab />
+
+Certificate由两部分组成：
+
+- Primal：每条edge flow、capacity bounds、all internal conservation、reported value。
+- Dual：vertex set S，满足s in S、t outside S，cut capacity等于reported value。
+
+Verifier不必重跑maxflow；只需O(E+V)检查feasibility、partition与equality，就能证明optimal。Official `check()`正是先`isFeasible`，再核对source/sink cut membership，最后sum crossing capacities并与value比较。
+
+## 6.4.9 Bipartite matching reduction
+
+二分图匹配（<Term def="在bipartite graph中选择pairwise vertex-disjoint edges，使selected edge count最大。">二分图匹配</Term>，bipartite matching）可归约为unit-capacity maxflow：
+
+1. 新建source s，向每个left vertex连capacity 1。
+2. 每条allowed left-right edge设capacity 1。
+3. 每个right vertex向sink t连capacity 1。
+
+<Algs4BipartiteMatchingLab />
+
+Integral maxflow中的unit flow left→right edges形成matching：left/source edge与right/sink edge capacity 1阻止重复使用vertex。反过来，size-k matching可构造value-k flow，所以maximum values equal。
+
+这个归约展示maxflow不只是routing：edge-disjoint paths、vertex-disjoint paths（vertex splitting）、baseball elimination、image segmentation等都可编码为capacity constraints。
+
+## 6.4.10 Modeling boundaries与failure modes
+
+建模前需明确：
+
+- Directed vs undirected：undirected capacity通常转two directed edges，但semantics要确认。
+- Lower bounds/demands：普通FlowEdge只处理0 lower bound。
+- Multiple sources/sinks：加super-source/super-sink。
+- Vertex capacities：split each vertex into in/out with capacity edge。
+- Costs：minimum-cost flow不是plain maxflow。
+- Gains/losses：conservation equation要变，不能直接套用。
+
+FlowNetwork允许parallel edges和self-loops。Verifier必须按edge identity而不是endpoint pair聚合更新，否则parallel flows会被错误合并。
+
+Floating residual comparison `> 0`可能把tiny numerical noise当path。Official edge snaps near boundary，feasibility/check使用epsilon；production应根据capacity scale定义tolerance或使用integer/rational units。
+
+## 6.4.11 Independent certificate
+
+```ts
+for (const edge of edges)
+  assert(0 <= edge.flow && edge.flow <= edge.capacity);
+
+for (const vertex of internalVertices)
+  assert(nearlyEqual(inflow(vertex), outflow(vertex)));
+
+assert(cut.has(source) && !cut.has(sink));
+const cutCapacity = edges
+  .filter(e => cut.has(e.from) && !cut.has(e.to))
+  .reduce((sum, e) => sum + e.capacity, 0);
+assert(nearlyEqual(flowValue, cutCapacity));
+```
+
+<Algs4MaxflowCertificateLab />
+
+Mutation tests应覆盖capacity violation、internal leak、wrong reported value、cut未分离s/t、wrong cut membership、missing parallel edge与backward residual update sign。只检查no augmenting path不够，因为candidate initial flow可能本身infeasible。
+
+## 6.4.12 逐步运行路线
+
+<Stepper>
+  <Step title="先验收flow feasibility" description="逐edge检查0至capacity，逐internal vertex检查conservation，并核对source/sink value。">
+    <Algs4FlowFeasibilityLab />
+  </Step>
+  <Step title="构造双向residual能力" description="Forward为capacity-flow，backward为flow；两种方向共享同一FlowEdge state。">
+    <Algs4ResidualEdgeLab />
+    <Algs4ResidualNetworkLab />
+  </Step>
+  <Step title="BFS并按bottleneck增广" description="记录edgeTo，取path minimum residual，按direction增加或撤销flow。">
+    <Algs4AugmentingPathLab />
+    <Algs4EdmondsKarpLab />
+  </Step>
+  <Step title="从final reachability提取cut" description="No residual s-t path时，marked set是S，crossing S-to-T edges必须saturated。">
+    <Algs4MinCutLab />
+  </Step>
+  <Step title="以primal-dual equality验收" description="Feasible flow value等于separating cut capacity，即同时证明maxflow和mincut optimal。">
+    <Algs4MaxflowMincutLab />
+    <Algs4MaxflowCertificateLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Maximum flow要求capacity constraints与internal flow conservation。
+- Residual networks为每条original edge提供forward unused capacity与backward cancellable flow。
+- Augmenting paths在residual network中连接s到t，bottleneck是minimum residual capacity。
+- Official FordFulkerson使用BFS shortest augmenting paths，即Edmonds-Karp。
+- No augmenting path时final BFS marked set给minimum s-t cut的source side。
+- Maxflow-mincut theorem说明maximum flow value等于minimum cut capacity。
+- Feasible flow与equal-capacity cut组成O(E+V)可验的optimality certificate。
+- Unit-capacity network把bipartite matching归约为integral maxflow。
+- Parallel edges、floating tolerance与model transformation必须写进contract。
+
+<Exercises>
+
+1. Edge u→v capacity 12、flow 7；计算two residual directions。若augmenting path沿v→u走3，更新后的flow与residual capacities是多少？
+2. 给出一个4-vertex network与feasible flow，逐internal vertex计算excess，并构造一个capacity violation和一个conservation violation。
+3. 证明final residual reachable set S的every S→T edge saturated、every T→S edge flow zero，从而推导flow value等于cut capacity。
+4. 将three-left/three-right bipartite graph转成flow network，说明integrality为何让unit flows一一对应matching edges，并设计certificate。
+
+<Answer>
+
+Forward u→v residual为12-7=5，backward v→u residual为7。沿backward方向augment 3会把original flow减为4；new forward residual为8，new backward residual为4。Capacity与nonnegative flow仍满足。
+
+</Answer>
+
+<Answer>
+
+对每条edge列`flow/capacity`，internal excess定义inflow-outflow，feasible时全为0，source excess为negative value、sink为positive value。把某edge flow设为capacity+1制造capacity violation；只改变一条进入internal vertex的flow而不改其outgoing，制造nonzero excess。两类checks必须独立。
+
+</Answer>
+
+<Answer>
+
+若S→T edge仍有forward residual，tail从s reachable会使head也reachable，矛盾；故flow=capacity。若T→S edge有positive flow，就有S方向可走的backward residual，从reachable head到T-side tail，矛盾；故flow=0。Net flow leaving S为flow value，也等于S→T capacity sum。
+
+</Answer>
+
+<Answer>
+
+Source到每个left、allowed left-right、每个right到sink都设capacity1。Integer capacities让augment bottlenecks与flows保持integer；left/source与right/sink unit capacity确保每个vertex最多参与one selected edge。Certificate检查selected edges属于graph、endpoints unique，并用matching size对应feasible flow value；equal-size cut证明maximum。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="最大流">Source-to-sink feasible flow中value maximum者。</GlossaryItem>
+  <GlossaryItem term="可行流">满足capacity bounds、internal conservation和source/sink balance的flow assignment。</GlossaryItem>
+  <GlossaryItem term="残量网络">表示current flow仍可forward增加或backward撤销的positive-capacity arcs。</GlossaryItem>
+  <GlossaryItem term="增广路径">Residual graph中从source到sink的positive-capacity path。</GlossaryItem>
+  <GlossaryItem term="瓶颈容量">Augmenting path上minimum residual capacity。</GlossaryItem>
+  <GlossaryItem term="最小s-t割">Separating source/sink且crossing capacity minimum的vertex partition。</GlossaryItem>
+  <GlossaryItem term="最大流最小割定理">Maximum flow value等于minimum cut capacity的primal-dual equality。</GlossaryItem>
+  <GlossaryItem term="二分图匹配">选择endpoint-disjoint bipartite edges的optimization problem。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Algorithms, 4th Edition · Section 6.4 Maximum Flow"
+  href="https://algs4.cs.princeton.edu/64maxflow/"
+  author="Robert Sedgewick and Kevin Wayne"
+  license="本章按官方6.4及当前FlowEdge、FlowNetwork、FordFulkerson实现重构feasibility、forward/backward residuals、BFS shortest augmentation、bottleneck、final marked cut、optimality check与bipartite matching；代码为教学化摘写与重新组织。"
+/>

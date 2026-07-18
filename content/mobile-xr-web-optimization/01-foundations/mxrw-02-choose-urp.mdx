@@ -1,0 +1,279 @@
+---
+title: "选择 URP：性能、视觉质量与跨平台伸缩"
+type: C
+section: "渲染基础、测量与热适应"
+order: 1
+description: "按 Unity 6 官方指南第 9—10 页复现 URP 的性能、视觉质量与跨平台伸缩边界。"
+demo: true
+math: false
+draft: false
+sourceUrl: "https://unity.com/resources/mobile-xr-web-game-performance-optimization-unity-6"
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Mxrw02ChooseUrpMapLab,
+  Mxrw02ChooseUrpExperimentLab,
+  Mxrw02ChooseUrpEvidenceLab,
+} from "@/components/mdx/mobile-xr-web-optimization/diagrams/mxrw-02-choose-urp";
+
+<Objectives>
+
+- 能解释官方单元 2在Unity 6官方跨平台优化流程中的责任与前后依赖
+- 能复现“平台需求 → URP资产 → 质量预设 → 目标构建 → 视觉回归 → 预算签发”并保存目标设备中间证据
+- 能设计失败实验，判断“每个目标设备档位都绑定明确URP Asset、视觉合同和帧预算，切档后管线、Renderer和质量设置保持一致。”是否成立
+
+</Objectives>
+
+## 问题：怎样证明掌握的是官方单元 2，而不是背下一组技巧？
+
+先预测：若只报告修改后FPS，没有设备、构建、场景、输入、热状态和画面合同，另一位开发者能否证明收益来自这次修改？不能。跨平台优化首先是受控实验，其次才是技巧选择。
+
+Unity推荐移动、XR和Web项目使用URP，因为它面向可扩展渲染并允许按设备配置管线资产。选择URP不是自动优化，必须把纹理、阴影、光照与渲染比例写成可测质量档。
+
+<Mxrw02ChooseUrpMapLab />
+
+## 官方目录边界
+
+本页严格对应Unity Technologies《Optimize your game performance for mobile, XR, and the web in Unity》Unity 6版第9—10页。以下目录项必须进入实现或证据：
+
+- **Choose URP for performance and visual quality**
+- **Rendering optimization**
+- **Render pipeline asset**
+- **URP quality presets**
+- **Mobile and tetherless XR**
+
+本站重新组织中文讲解、代码和实验，不逐字复制原文。平台API和包能力随Unity与设备版本变化，实际项目要固定版本并保存迁移差异。
+
+## 核心模型与不可变条件
+
+Unity推荐移动、XR和Web项目使用URP，因为它面向可扩展渲染并允许按设备配置管线资产。选择URP不是自动优化，必须把纹理、阴影、光照与渲染比例写成可测质量档。
+
+不可变条件是：**每个目标设备档位都绑定明确URP Asset、视觉合同和帧预算，切档后管线、Renderer和质量设置保持一致。** 如果测试上下文、视觉或玩法结果发生变化，就不能把两次数字直接相减。先解释变化，再决定是否建立新基线。
+
+## 五个必须落到证据的术语
+
+<Term def="面向多平台高性能与可扩展性的通用渲染管线">URP</Term>
+
+它必须落到“平台需求 → URP资产 → 质量预设 → 目标构建 → 视觉回归 → 预算签发”的证据链，不能只作为术语记忆。
+
+<Term def="保存渲染功能和质量参数的管线配置资产">Render Pipeline Asset</Term>
+
+它必须落到“平台需求 → URP资产 → 质量预设 → 目标构建 → 视觉回归 → 预算签发”的证据链，不能只作为术语记忆。
+
+<Term def="为一组设备绑定的渲染和内容参数集合">质量预设</Term>
+
+它必须落到“平台需求 → URP资产 → 质量预设 → 目标构建 → 视觉回归 → 预算签发”的证据链，不能只作为术语记忆。
+
+<Term def="控制内部渲染分辨率相对显示分辨率的比例">Render Scale</Term>
+
+它必须落到“平台需求 → URP资产 → 质量预设 → 目标构建 → 视觉回归 → 预算签发”的证据链，不能只作为术语记忆。
+
+<Term def="规定画面功能与允许差异的可回归结果">视觉合同</Term>
+
+它必须落到“平台需求 → URP资产 → 质量预设 → 目标构建 → 视觉回归 → 预算签发”的证据链，不能只作为术语记忆。
+
+## 从输入到发布的证据链
+
+主链为：**平台需求 → URP资产 → 质量预设 → 目标构建 → 视觉回归 → 预算签发**。每个节点保存平台、设备、浏览器或运行时、Unity与包版本、构建提交、场景检查点、预算、实际值和首个异常。后一节点只消费前一节点已验证事实。
+
+### 1. 选择边界
+
+URP为移动、无绳XR和Web提供统一可扩展基础，但项目已有自定义Built-in Shader和后处理时要评估迁移成本。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 2. 管线资产
+
+URP Asset集中管理HDR、MSAA、Render Scale、阴影、深度与不透明纹理等开关，每项都影响GPU或带宽。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 3. 质量分级
+
+最低档优先稳定帧与内存，中档保持默认视觉，高档开放增强功能；档位由设备测试而不是型号字符串猜测。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 4. Renderer一致性
+
+管线资产与Renderer Data必须成对验证，Renderer Feature或后处理不能因切档丢失依赖。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 5. 目标构建
+
+Editor中的相对变化可用于迭代，最终帧时间、图像与内存必须在移动设备、浏览器或头显Player中测量。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 6. 视觉回归
+
+固定相机和光照保存截图或关键缓冲哈希，分辨率、阴影和光照变化都作为有意权衡记录。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 7. 维护成本
+
+多个URP Asset会扩大测试组合；只有能自动绑定、回放和比较的档位才进入项目标准。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+<Mxrw02ChooseUrpExperimentLab />
+
+## 三步复现与分步观察
+
+<Stepper>
+  <Step title="1. 冻结平台合同与输入">
+    固定设备或浏览器、构建、场景、画质、预热、输入和结果合同，写出唯一假设及反证条件。
+    <Mxrw02ChooseUrpMapLab />
+  </Step>
+  <Step title="2. 找首因并只改一个变量">
+    沿“平台需求 → URP资产 → 质量预设 → 目标构建 → 视觉回归 →
+    预算签发”保存中间值，在首个越界点停止下钻；一次只修改一个主要因素。
+    <Mxrw02ChooseUrpExperimentLab />
+  </Step>
+  <Step title="3. 同输入复验并签发">
+    恢复相同热状态和检查点，重放基线输入，同时检查性能、内存、画面、玩法与维护副作用。
+    <Mxrw02ChooseUrpEvidenceLab />
+  </Step>
+</Stepper>
+
+## 可执行实现骨架
+
+```csharp
+public sealed class QualityTierController : MonoBehaviour
+{
+    [SerializeField] UniversalRenderPipelineAsset[] tiers = default!;
+
+    public void Apply(int tier)
+    {
+        var asset = tiers[Mathf.Clamp(tier, 0, tiers.Length - 1)];
+        QualitySettings.renderPipeline = asset;
+    }
+}
+```
+
+每份采集都保存结构化上下文，报告与原始文件必须通过ID互相引用：
+
+```json
+{
+  "chapter": "mxrw-02-choose-urp",
+  "officialPages": "第9—10页",
+  "chain": [
+    "平台需求",
+    "URP资产",
+    "质量预设",
+    "目标构建",
+    "视觉回归",
+    "预算签发"
+  ],
+  "platform": "mobile-web-or-xr",
+  "device": "representative-target",
+  "build": "commit-unity-packages",
+  "scenario": "fixed-checkpoint",
+  "normal": true,
+  "boundary": true,
+  "failureReplay": true
+}
+```
+
+自动门必须保留数值、结果合同和拒绝原因：
+
+```text
+PASS context=platform+device+build+scene+quality+input
+PASS chain=平台需求 -> URP资产 -> 质量预设 -> 目标构建 -> 视觉回归 -> 预算签发
+PASS invariant=每个目标设备档位都绑定明确URP Asset、视觉合同和帧预算，切档后管线、Renderer和质量设置保持一致。
+REJECT changed-context | hidden-quality-loss | shifted-cost | missing-failure-replay
+```
+
+## 两个必须主动制造的失败样本
+
+<Callout type="trap" title="官方边界或测试上下文丢失">
+  只把项目从Built-in转换到URP就宣称优化完成，未测Shader迁移、阴影、后处理和目标设备帧时间。
+  保存错误结论、首个偏离节点和原始数据，再恢复官方边界与相同条件复验。
+</Callout>
+
+<Callout type="trap" title="数字变好但结果或维护成本恶化">
+  故意降低画质、跳过玩法工作、扩大永久缓存或增加难以维护的平台分支。若主指标改善但视觉、行为、内存、热量或发布可靠性变差，发布门必须拒绝。
+</Callout>
+
+## 证据矩阵与签发标准
+
+| 维度       | 正常样本         | 边界样本           | 失败样本         | 签发条件       |
+| ---------- | ---------------- | ------------------ | ---------------- | -------------- |
+| 平台上下文 | 代表设备固定构建 | 最低规格或长时运行 | 故意改变一项条件 | 差异可解释     |
+| 主证据链   | 六节点均记录     | 接近预算输入       | 首个节点注入偏差 | 能定位首因     |
+| 性能结果   | 达到预算         | 无长尾越界         | 主动制造回归     | 同输入可复验   |
+| 正确性     | 视觉玩法一致     | 生命周期完整       | 降质或转移成本   | 所有门同时通过 |
+
+<Mxrw02ChooseUrpEvidenceLab />
+
+## 练习：把官方单元 2变成可审计交付
+
+<Exercises>
+
+**问题 1** 写出“平台需求”到“预算签发”每一步的输入、观测工具、阈值和输出。
+
+<Answer>
+  每一步都引用同一测试上下文，输出包含数值、原始文件与下一动作理由，不能只写工具或设置名称。
+</Answer>
+
+**问题 2** 主动制造“只把项目从Built-in转换到URP就宣称优化完成，未测Shader迁移、阴影、后处理和目标设备帧时间。”，保存错误结论与首个偏离节点，再用同一输入证明修复。
+
+<Answer>
+  合格答案包含故障上下文、反证实验、修复后原始数据，以及性能和正确性双重结果。
+</Answer>
+
+**问题 3** 为“每个目标设备档位都绑定明确URP Asset、视觉合同和帧预算，切档后管线、Renderer和质量设置保持一致。”设计正常、预算边界和失败三组测试。
+
+<Answer>
+  三组测试只改变计划输入，统一记录平台、构建、设备、帧或快照ID、预算、实际值、首个异常和复验状态。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- 是否逐项覆盖本页官方目录，而没有用通用建议替代？
+- 是否沿“平台需求 → URP资产 → 质量预设 → 目标构建 → 视觉回归 → 预算签发”保存可追溯中间证据？
+- 是否在真实移动、浏览器或XR目标中验证，而非只看Editor？
+- 是否主动制造失败，并证明优化没有转移成本或破坏结果？
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="URP">
+    面向多平台高性能与可扩展性的通用渲染管线。
+  </GlossaryItem>
+  <GlossaryItem term="Render Pipeline Asset">
+    保存渲染功能和质量参数的管线配置资产。
+  </GlossaryItem>
+  <GlossaryItem term="质量预设">
+    为一组设备绑定的渲染和内容参数集合。
+  </GlossaryItem>
+  <GlossaryItem term="Render Scale">
+    控制内部渲染分辨率相对显示分辨率的比例。
+  </GlossaryItem>
+  <GlossaryItem term="视觉合同">
+    规定画面功能与允许差异的可回归结果。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Unity Technologies《Optimize your game performance for mobile, XR, and the web in Unity》(Unity 6 edition)，2024，101页"
+  adaptedUrl="https://unity.com/resources/mobile-xr-web-game-performance-optimization-unity-6"
+/>

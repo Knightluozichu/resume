@@ -1,0 +1,305 @@
+---
+title: "Chapter 11：编写自动化测试（Writing Automated Tests）"
+type: A
+section: Rust 程序设计语言 · 行为验证与测试组织
+order: 11
+description: 对齐官方第 11 章：编写 test function 与断言，验证 panic 和 Result，控制 cargo test 的并发、输出、过滤与忽略，并区分 unit 与 integration tests。
+demo: false
+math: false
+sourceUrl: "https://doc.rust-lang.org/book/ch11-00-testing.html"
+draft: false
+---
+
+import {
+  RplAssertionOutcomeLab,
+  RplTestOrganizationLab,
+  RplTestRunnerLab,
+} from "@/components/mdx/rust-programming-language/diagrams/writing-automated-tests";
+
+<Objectives>
+
+- 能实现遵循 arrange/act/assert 的 test function，并判断 `assert!`、相等断言、custom message、`should_panic` 与 Result test 的适用边界
+- 能分析 `cargo test` 与 test binary 参数，复现并发、输出捕获、名称过滤和 ignored tests 的执行集合
+- 能设计 unit 与 integration test 目录和可见性，验证 private 实现、public API、共享 fixture 与 binary/library crate 边界
+
+</Objectives>
+
+## 为什么类型正确仍不等于行为正确
+
+类型系统能拒绝 String 传入整数函数、悬空引用和许多无效状态，却不能证明 `add_two(3)` 的结果一定是 5 而不是 13。自动化测试把业务意图写成可重复执行的样例和断言，在代码变化后持续检查已知行为。测试能揭示 bug 的存在，不能证明所有 bug 都不存在，因此测试设计要围绕关键契约、边界和失败路径，而不是追求“跑过一些代码”。
+
+<Term def="由 test attribute 标记、被 Rust test harness 发现并执行，用 setup、调用和 assertion 验证行为的函数。">test function</Term>
+
+## 测试函数通过 panic 或返回值报告结果
+
+<Term def="写在函数前的 `#[test]` 元数据，告诉测试构建把该函数登记到 test harness。">test attribute</Term>
+
+```rust
+pub fn add(left: u64, right: u64) -> u64 {
+    left + right
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_adds() {
+        let result = add(2, 2);
+        assert_eq!(result, 4);
+    }
+}
+```
+
+一个测试通常按三段思考：arrange 所需数据和环境，act 调用被测代码，assert 检查结果。普通 test function 正常结束即通过，执行中任何 panic 都让该测试失败；test harness 汇总 passed、failed、ignored、measured 和 filtered out。
+
+<Term def="Cargo 在 test profile 构建出的运行器，发现 `#[test]` 函数、安排执行、捕获输出并汇总成功或失败。">test harness</Term>
+
+`cargo test` 会先编译测试 binary，再运行 unit、integration 和 doc tests。每个测试的名称包含 module path，精确命名有助于失败定位和筛选。
+
+## cfg(test) 只在测试构建包含模块
+
+<Term def="条件编译属性：只有 test configuration 启用时才编译其后的测试模块及 helper，普通 cargo build 不包含。">cfg(test)</Term>
+
+unit tests 与源码同文件，因此 `#[cfg(test)] mod tests` 避免生产 artifact 携带测试代码和测试专用依赖。`use super::*` 只是普通 module path 导入；tests child module 由 Rust 可见性规则访问 parent 中包括 private 的 items。
+
+## assert、assert_eq 和 assert_ne 选择失败证据
+
+<Term def="检查布尔表达式为 true 的宏；false 时调用 panic，并可附加 format 风格上下文。">assert 宏</Term>
+
+```rust
+assert!(larger.can_hold(&smaller));
+assert!(!smaller.can_hold(&larger));
+
+assert_eq!(add_two(2), 4);
+assert_ne!(transform(input), input);
+```
+
+`assert!` 适合谓词；`assert_eq!` 与 `assert_ne!` 在失败时同时打印 left/right，比手写 `assert!(left == right)` 更容易诊断。相等宏要求值实现 PartialEq，并用 Debug 输出失败值，自定义类型通常 derive 两者。
+
+<Term def="比较 left/right 相等或不等，并在失败时打印两侧 Debug 值的 assert_eq!/assert_ne! 宏。">相等断言</Term>
+
+## Custom failure message 记录契约上下文
+
+断言宏的必需参数后可附加 format string 与值：
+
+```rust
+let result = greeting("Carol");
+assert!(
+    result.contains("Carol"),
+    "greeting should contain requested name; actual={result:?}"
+);
+```
+
+<Term def="断言失败时额外格式化的领域上下文，解释预期契约并展示关键输入或实际结果。">custom failure message</Term>
+
+消息应解释“哪个契约在什么输入下失败”，不要只重复 `assertion failed`。同时断言稳定语义：若问候前缀未定，只检查必须包含 name，避免把实现文案锁死成脆弱快照。
+
+<RplAssertionOutcomeLab />
+
+先预测四种测试模式如何判定通过，再调节 actual/expected 或 panic message。普通断言失败通过 panic 报告，Result test 则可返回 Err；两者最终都由 harness 统一标记。
+
+<Callout type="trap" title="陷阱：只断言函数没有 panic">
+  正常结束只能说明该输入未触发 panic，不能证明结果符合意图。除非“不得 panic”就是完整契约，否则必须验证返回值、状态变化或外部可观察效果。
+</Callout>
+
+## should_panic 验证契约违规路径
+
+<Term def="标记测试必须发生 panic 才通过的属性；可用 expected 子串约束 panic 原因。">should_panic</Term>
+
+```rust
+#[test]
+#[should_panic(expected = "less than or equal to 100")]
+fn greater_than_100() {
+    Guess::new(200);
+}
+```
+
+只有 `#[should_panic]` 太宽松：setup 中无关 unwrap panic 也会让测试误通过。`expected` 要求 panic message 包含指定子串，使测试更可能命中目标分支。子串选择应稳定且足以区分“过小”和“过大”等不同契约。
+
+<Callout type="trap" title="陷阱：should_panic 不写 expected 就认为已验证原因">
+  它只验证测试体某处 panic。缩短测试体、避免无关 fallible setup，并加 expected 子串；更复杂场景可显式捕获目标调用结果，但不要把任意 panic 当成正确失败。
+</Callout>
+
+## Test function 也可以返回 Result
+
+<Term def="返回 Result 类型的 test function；Ok(()) 表示通过、Err(E) 表示失败，并允许测试体使用问号传播。">Result test</Term>
+
+```rust
+#[test]
+fn loads_fixture() -> Result<(), String> {
+    let value = parse_fixture()?;
+    if value == 4 {
+        Ok(())
+    } else {
+        Err(format!("expected 4, got {value}"))
+    }
+}
+```
+
+Result test 适合 setup/act 有多步 fallible operation，问号能保留第一个错误。它不能与 should_panic 组合；若目标是返回 Err，不要在目标 Result 上写 `?`，而应 `assert!(result.is_err())` 或匹配具体 error。
+
+## cargo test 参数分属 Cargo 与 test binary
+
+<Term def="`cargo test` 后、`--` 前由 Cargo 解释，`--` 后传给生成的 test binary 的命令行分界。">测试参数分隔符</Term>
+
+```bash
+cargo test api:: -- --test-threads=1 --show-output
+```
+
+名称 filter `api::` 是 cargo test 的筛选输入；`--test-threads` 和 `--show-output` 属于 test binary。分别查看 `cargo test --help` 与 `cargo test -- --help`，不要把参数放错边界。
+
+## 默认并行要求测试隔离共享状态
+
+<Term def="test harness 默认用多个线程同时执行测试；共享文件名、工作目录、环境变量或全局状态会造成相互干扰。">并行测试</Term>
+
+默认并行缩短反馈时间。两个测试若都写 `test-output.txt`，结果可能取决于调度顺序；应使用每测试唯一临时目录、注入环境或隔离资源。`--test-threads=1` 可帮助诊断或暂时串行，但不应掩盖可消除的状态耦合。
+
+成功测试的 stdout 默认捕获，失败测试会显示相关输出；`--show-output` 同时显示成功输出。输出通常用于诊断，不应替代 assertion。
+
+## 过滤和 ignored tests 控制反馈环
+
+<Term def="给 cargo test 传名称或子串，只运行完整 test path 中匹配者，其余计为 filtered out。">名称过滤</Term>
+
+```bash
+cargo test one_hundred
+cargo test add
+cargo test --test integration_test
+```
+
+一个子串可匹配多个测试或整个 module path；`--test integration_test` 选择某个 integration test crate。局部迭代用 filter 提速，提交前仍需跑完整 suite，避免只证明当前关注路径。
+
+<Term def="由 `#[ignore]` 标记、默认不运行的耗时测试；可用 `--ignored` 单独运行或 `--include-ignored` 全量包含。">ignored test</Term>
+
+ignored 适合明确昂贵且仍被计划执行的测试，不是永久屏蔽 flaky failure。CI 应有独立作业定期运行 ignored tests，否则它们会静默腐化。
+
+<RplTestRunnerLab />
+
+输入名称 filter，调节 threads、输出和 ignored 模式，观察真正运行集合和命令。特别检查 `--` 后参数位置，以及默认并行时测试是否拥有独立 fixture。
+
+<Callout type="trap" title="陷阱：开发时只跑筛选测试就提交">
+  filter 提供快速反馈，但跨模块回归不会被自动覆盖。采用“局部筛选循环 + 变更完成后全量 cargo test + CI 独立 ignored 作业”的分层门禁。
+</Callout>
+
+## Unit tests 验证模块内部
+
+<Term def="与被测源码同 crate、通常位于 src 文件内 cfg(test) child module 的小范围测试，可访问 private items。">unit test</Term>
+
+```rust
+fn internal_adder(left: u64, right: u64) -> u64 {
+    left + right
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn internal() {
+        assert_eq!(internal_adder(2, 2), 4);
+    }
+}
+```
+
+Rust 允许 child test module 访问 ancestor private item。这适合定位复杂内部算法，但若测试紧贴实现细节，重构会产生不必要改动；优先测试稳定行为，只有内部不变量难从 public API 覆盖时才直接测 private function。
+
+## Integration tests 以外部 crate 身份验证公共 API
+
+<Term def="位于项目根 tests 目录、每个顶层文件独立编译成 crate，只能通过 library crate public API 进行验证的测试。">integration test</Term>
+
+```text
+adder/
+├── src/lib.rs
+└── tests/
+    ├── common/mod.rs
+    └── api_flow.rs
+```
+
+```rust
+// tests/api_flow.rs
+use adder::add_two;
+mod common;
+
+#[test]
+fn public_contract() {
+    common::setup();
+    assert_eq!(add_two(2), 4);
+}
+```
+
+tests 顶层文件各自是 crate，因此必须 `use adder::...`，不需要 cfg(test)，也看不到 private item。共享 helper 放 `tests/common/mod.rs`；若放 `tests/common.rs`，Cargo 会把它也当独立 integration test crate 并显示 0 tests。
+
+只有 binary `src/main.rs`、没有 library crate 的项目无法从 integration crate import 业务函数。这也是薄 main + 可复用 lib 结构的重要理由。
+
+<RplTestOrganizationLab />
+
+切换 unit/integration 并尝试访问 private function。unit 是模块树 child，integration 是真实外部客户端；两类测试提供不同证据，不能互相完全替代。
+
+## 三步建立测试证据
+
+<Stepper>
+  <Step title="第一步：把契约变成精确断言">
+    arrange 最小数据，act 只执行目标行为，assert 选择谓词、相等值、预期 panic 原因或 Result error；失败消息带关键上下文。
+
+    <RplAssertionOutcomeLab />
+  </Step>
+  <Step title="第二步：控制执行集合而不降低覆盖">
+    局部用名称 filter 快速迭代，共享状态问题用隔离优先、串行辅助诊断；明确输出捕获和 ignored 作业，完成后跑全量。
+
+    <RplTestRunnerLab />
+  </Step>
+  <Step title="第三步：按可见性分层组织">
+    unit test 快速验证模块及必要 private 不变量，integration test 只走 public API 验证组合契约；可测试逻辑放 lib，main 保持薄。
+
+    <RplTestOrganizationLab />
+  </Step>
+</Stepper>
+
+完整 test workflow 还包括 **测试过滤**、ignored tests、thread count 与 captured output；它们共同决定哪些 tests 实际执行以及 failure evidence 是否可见。
+
+## 小结
+
+- test function 由 `#[test]` 登记，普通测试 panic 即失败；断言应验证业务结果并提供可诊断上下文
+- assert_eq/assert_ne 打印两侧值；should_panic 最好加 expected，Result test 可用问号并以 Err 报告失败
+- cargo test 默认并行并捕获成功输出，Cargo 与 runner 参数以 `--` 分隔；过滤和 ignored 管理反馈时间
+- unit tests 位于 cfg(test) child module，可访问 private items；integration tests 的每个顶层文件是独立外部 crate，只能调用 public API
+- 测试层级、执行策略和断言证据共同构成回归门禁，局部筛选不能替代最终全量 suite
+
+<Exercises>
+  1. **问题 1：修复误通过。** 一个 `#[should_panic]` 测试在 fixture 的 unwrap 处 panic，目标 Guess::new 根本没执行却通过。如何让测试准确？
+
+  <Answer question="should_panic 如何绑定目标失败原因？">先让 fixture setup 不依赖无关 unwrap，或在目标调用前完成并显式处理 setup Result；给属性加 `expected = "目标契约稳定子串"`，并保持测试体只含最小目标调用。这样无关 panic 的消息不匹配，测试会失败而不是误通过。</Answer>
+
+  2. **问题 2：解释命令。** `cargo test api -- --test-threads=1 --show-output` 中各参数由谁处理，会运行和显示什么？
+
+  <Answer question="测试参数分隔符如何划分职责？">api 在分隔符前，作为名称子串过滤匹配完整 test path；分隔符后的参数交给 test binary：线程数 1 让选中测试串行，show-output 让成功测试 stdout 也显示。未匹配测试计入 filtered out，ignored 仍默认跳过。</Answer>
+
+  3. **问题 3：选择测试层级。** 要验证 private parser 的边界分支，以及验证多个 public modules 组成的完整 API 流程，应分别放哪里？
+
+  <Answer question="unit 与 integration tests 提供什么不同证据？">private parser 可在同源文件的 `#[cfg(test)] mod tests` 中作为 unit test，通过 super 访问；完整 public 流程放项目根 tests 顶层文件，作为独立 crate import library public API。前者定位内部行为，后者证明外部用户真实可用路径。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="test function">由测试运行器发现并执行、通过 setup/act/assert 验证行为的函数。</GlossaryItem>
+  <GlossaryItem term="test attribute">把函数登记为测试的 `#[test]` 元数据。</GlossaryItem>
+  <GlossaryItem term="test harness">构建并调度测试、捕获输出和汇总结果的运行器。</GlossaryItem>
+  <GlossaryItem term="cfg(test)">只在测试 configuration 中编译 item 的条件属性。</GlossaryItem>
+  <GlossaryItem term="assert 宏">布尔条件为 false 时 panic 的断言宏。</GlossaryItem>
+  <GlossaryItem term="相等断言">比较相等/不等并在失败时打印两侧值的宏。</GlossaryItem>
+  <GlossaryItem term="custom failure message">断言失败时输出的领域契约和诊断上下文。</GlossaryItem>
+  <GlossaryItem term="should_panic">要求测试发生指定 panic 的测试属性。</GlossaryItem>
+  <GlossaryItem term="Result test">以 Ok 通过、Err 失败并可使用问号的测试函数。</GlossaryItem>
+  <GlossaryItem term="测试参数分隔符">区分 Cargo 参数与 test binary 参数的 `--`。</GlossaryItem>
+  <GlossaryItem term="并行测试">test harness 默认多线程执行彼此应隔离的测试。</GlossaryItem>
+  <GlossaryItem term="名称过滤">按完整测试路径中的子串选择执行集合。</GlossaryItem>
+  <GlossaryItem term="ignored test">默认跳过、需显式命令执行的测试。</GlossaryItem>
+  <GlossaryItem term="unit test">同 crate 内验证模块及可选 private 行为的测试。</GlossaryItem>
+  <GlossaryItem term="integration test">作为独立 crate 通过 public API 验证组合行为的测试。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Rust Programming Language, Chapter 11 Writing Automated Tests"
+  adaptedUrl="https://doc.rust-lang.org/book/ch11-00-testing.html"
+/>

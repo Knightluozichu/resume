@@ -37,8 +37,8 @@ export function DogRenderingOptimizationDiagram() {
           <text x="360" y="282" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text-primary)">三大优化方向</text>
           <text x="60" y="304" fontSize="10" fill="var(--accent)">1. 减 draw call：批处理（同材质合并 VBO）· 实例化（同几何副本）</text>
           <text x="60" y="324" fontSize="10" fill="var(--accent)">2. 排状态：按 shader→纹理→其他分组，减少 useProgram/bindTexture 切换</text>
-          <text x="60" y="344" fontSize="10" fill="var(--accent)">3. 降带宽：纹理图集 · 压缩纹理(ETC/ASTC) · 剔除(视锥/遮挡) · LOD</text>
-          <text x="60" y="364" fontSize="10" fill="var(--text-secondary)">目标：让 GPU 忙于画图，而非等 CPU 下命令</text>
+          <text x="60" y="344" fontSize="10" fill="var(--accent)">3. 降工作量：压缩/降分辨率 · 剔除 · LOD；图集主要减少绑定并扩大批次</text>
+          <text x="60" y="364" fontSize="10" fill="var(--text-secondary)">目标：让 CPU、GPU、带宽与功耗都落在目标帧预算内</text>
 
           <defs>
             <marker id="roArrow" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto">
@@ -47,7 +47,43 @@ export function DogRenderingOptimizationDiagram() {
           </defs>
         </svg>
       </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">合并 draw call、按状态分组绘制、纹理图集降带宽三大优化方向</figcaption>
+      <figcaption className="mt-2 text-center text-sm text-secondary">合并提交、状态排序和降低实际顶点片元/带宽工作量是三类不同优化</figcaption>
+    </figure>
+  );
+}
+
+const BOTTLENECKS = [
+  ["CPU 提交", "降低 draw 数、缓存状态、实例化/批处理", "主线程与提交线程时间"],
+  ["顶点/几何", "视锥/遮挡剔除、LOD、索引与顶点布局", "处理顶点/图元数量"],
+  ["片元", "降低覆盖、shader 成本、透明层和分辨率", "片元调用与 GPU 时间"],
+  ["带宽", "压缩格式、附件位宽、mip、减少 load/store", "读写字节与缓存命中"],
+  ["同步", "移除 readback/finish，延迟查询结果", "CPU/GPU 空洞与等待时间"],
+] as const;
+
+export function DogBottleneckDecisionDiagram() {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
+        <div
+          role="img"
+          aria-label="渲染五类瓶颈、对应优化动作和验收计数器"
+          className="grid gap-2"
+        >
+          {BOTTLENECKS.map(([kind, action, evidence]) => (
+            <div
+              key={kind}
+              className="grid min-h-16 gap-2 rounded-control border border-border bg-bg/40 p-3 md:grid-cols-[7rem_1.4fr_1fr] md:items-center"
+            >
+              <strong className="text-sm text-accent">{kind}</strong>
+              <span className="text-xs leading-5 text-primary">{action}</span>
+              <span className="text-xs leading-5 text-secondary">证据：{evidence}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">
+        优化动作必须与瓶颈类别和可量化证据对应，不能只看平均 FPS
+      </figcaption>
     </figure>
   );
 }

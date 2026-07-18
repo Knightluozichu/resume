@@ -45,18 +45,31 @@ export function StrcpyBufferDiagram({ step = 3 }: StrcpyBufferDiagramProps) {
           aria-label="strcpy 缓冲区溢出风险示意图"
           className="mx-auto block h-auto w-full max-w-[640px]"
         >
-          <text x={24} y={28} fontSize="13" fontWeight="700" fill={primary} fontFamily="monospace">
-            char dest[8];  strcpy(dest, "Hi!");
+          <text
+            x={24}
+            y={28}
+            fontSize="13"
+            fontWeight="700"
+            fill={primary}
+            fontFamily="monospace"
+          >
+            char dest[8]; strcpy(dest, &quot;Hi!&quot;);
           </text>
 
           <text x={24} y={52} fontSize="11" fill={secondary}>
-            源串 "Hi!" 只有 4 字节；若源更长而 dest 只有 8 字节……
+            源串 &quot;Hi!&quot; 只有 4 字节；若源更长而 dest 只有 8 字节……
           </text>
 
           {/* 源字符串 */}
           <g opacity={highlight(1)}>
-            <text x={startX} y={rowY - 12} fontSize="11" fontWeight="600" fill={accent}>
-              源 src = "Hi!"
+            <text
+              x={startX}
+              y={rowY - 12}
+              fontSize="11"
+              fontWeight="600"
+              fill={accent}
+            >
+              源 src = &quot;Hi!&quot;
             </text>
             {src.map((ch, i) => (
               <g key={`src-${i}`}>
@@ -71,7 +84,15 @@ export function StrcpyBufferDiagram({ step = 3 }: StrcpyBufferDiagramProps) {
                   stroke={accent}
                   strokeWidth="1.5"
                 />
-                <text x={startX + i * cellW + (cellW - 4) / 2} y={rowY + 28} textAnchor="middle" fontSize="14" fontWeight="700" fill={primary} fontFamily="monospace">
+                <text
+                  x={startX + i * cellW + (cellW - 4) / 2}
+                  y={rowY + 28}
+                  textAnchor="middle"
+                  fontSize="14"
+                  fontWeight="700"
+                  fill={primary}
+                  fontFamily="monospace"
+                >
                   {ch}
                 </text>
               </g>
@@ -80,11 +101,22 @@ export function StrcpyBufferDiagram({ step = 3 }: StrcpyBufferDiagramProps) {
 
           {/* 目标缓冲区 */}
           <g opacity={highlight(2)}>
-            <text x={startX} y={rowY + 72} fontSize="11" fontWeight="600" fill={step >= 3 ? danger : accent}>
+            <text
+              x={startX}
+              y={rowY + 72}
+              fontSize="11"
+              fontWeight="600"
+              fill={step >= 3 ? danger : accent}
+            >
               目标 dest[8]（合法下标 0–7）
             </text>
             {destCells.map((cell, i) => {
-              const show = step >= 3 ? overflowChars[i] : step >= 2 && i < 4 ? src[i] : "?";
+              const show =
+                step >= 3
+                  ? overflowChars[i]
+                  : step >= 2 && i < 4
+                    ? src[i]
+                    : "?";
               const overflow = step >= 3 && i >= 4 && i < 9;
               return (
                 <g key={`dest-${i}`}>
@@ -110,7 +142,13 @@ export function StrcpyBufferDiagram({ step = 3 }: StrcpyBufferDiagramProps) {
                   >
                     {show}
                   </text>
-                  <text x={startX + i * cellW + (cellW - 4) / 2} y={rowY + 140} textAnchor="middle" fontSize="9" fill={secondary}>
+                  <text
+                    x={startX + i * cellW + (cellW - 4) / 2}
+                    y={rowY + 140}
+                    textAnchor="middle"
+                    fontSize="9"
+                    fill={secondary}
+                  >
                     {cell.label}
                   </text>
                 </g>
@@ -119,15 +157,35 @@ export function StrcpyBufferDiagram({ step = 3 }: StrcpyBufferDiagramProps) {
           </g>
 
           {step >= 2 && (
-            <text x={startX + 4 * cellW} y={rowY + 58} fontSize="20" fill={accent}>
+            <text
+              x={startX + 4 * cellW}
+              y={rowY + 58}
+              fontSize="20"
+              fill={accent}
+            >
               →
             </text>
           )}
 
           {/* 步骤说明卡 */}
           <g opacity={highlight(1)}>
-            <rect x={24} y={248} width={180} height={64} rx="8" fill={bg} stroke={step === 1 ? accent : border} strokeWidth={step === 1 ? 2 : 1} />
-            <text x={40} y={272} fontSize="12" fontWeight="700" fill={step === 1 ? accent : primary}>
+            <rect
+              x={24}
+              y={248}
+              width={180}
+              height={64}
+              rx="8"
+              fill={bg}
+              stroke={step === 1 ? accent : border}
+              strokeWidth={step === 1 ? 2 : 1}
+            />
+            <text
+              x={40}
+              y={272}
+              fontSize="12"
+              fontWeight="700"
+              fill={step === 1 ? accent : primary}
+            >
               ① 目标太小
             </text>
             <text x={40} y={292} fontSize="10" fill={secondary}>
@@ -136,8 +194,23 @@ export function StrcpyBufferDiagram({ step = 3 }: StrcpyBufferDiagramProps) {
           </g>
 
           <g opacity={highlight(2)}>
-            <rect x={230} y={248} width={180} height={64} rx="8" fill={bg} stroke={step === 2 ? accent : border} strokeWidth={step === 2 ? 2 : 1} />
-            <text x={246} y={272} fontSize="12" fontWeight="700" fill={step === 2 ? accent : primary}>
+            <rect
+              x={230}
+              y={248}
+              width={180}
+              height={64}
+              rx="8"
+              fill={bg}
+              stroke={step === 2 ? accent : border}
+              strokeWidth={step === 2 ? 2 : 1}
+            />
+            <text
+              x={246}
+              y={272}
+              fontSize="12"
+              fontWeight="700"
+              fill={step === 2 ? accent : primary}
+            >
               ② strcpy 无检查
             </text>
             <text x={246} y={292} fontSize="10" fill={secondary}>
@@ -146,8 +219,23 @@ export function StrcpyBufferDiagram({ step = 3 }: StrcpyBufferDiagramProps) {
           </g>
 
           <g opacity={highlight(3)}>
-            <rect x={436} y={248} width={180} height={64} rx="8" fill={bg} stroke={step === 3 ? danger : border} strokeWidth={step === 3 ? 2 : 1} />
-            <text x={452} y={272} fontSize="12" fontWeight="700" fill={step === 3 ? danger : primary}>
+            <rect
+              x={436}
+              y={248}
+              width={180}
+              height={64}
+              rx="8"
+              fill={bg}
+              stroke={step === 3 ? danger : border}
+              strokeWidth={step === 3 ? 2 : 1}
+            />
+            <text
+              x={452}
+              y={272}
+              fontSize="12"
+              fontWeight="700"
+              fill={step === 3 ? danger : primary}
+            >
               ③ 越界覆盖
             </text>
             <text x={452} y={292} fontSize="10" fill={secondary}>
@@ -157,13 +245,16 @@ export function StrcpyBufferDiagram({ step = 3 }: StrcpyBufferDiagramProps) {
 
           <text x={24} y={336} fontSize="11" fill={secondary}>
             {step === 1 && "先确认目标缓冲区够不够大——strcpy 不会帮你检查。"}
-            {step === 2 && "strcpy 从 src 逐字节复制，直到遇到 \\0，不管 dest 剩多少空间。"}
-            {step === 3 && "超长源串会写出 dest 边界，覆盖相邻内存——安全替代：strncpy / strlcpy / snprintf。"}
+            {step === 2 &&
+              "strcpy 从 src 逐字节复制，直到遇到 \\0，不管 dest 剩多少空间。"}
+            {step === 3 &&
+              "超长源串会写出 dest 边界，覆盖相邻内存——安全替代：strncpy / strlcpy / snprintf。"}
           </text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        strcpy 不检查目标长度。源串比目标缓冲区长时会发生缓冲区溢出——经典安全漏洞来源。
+        strcpy
+        不检查目标长度。源串比目标缓冲区长时会发生缓冲区溢出——经典安全漏洞来源。
       </figcaption>
     </figure>
   );

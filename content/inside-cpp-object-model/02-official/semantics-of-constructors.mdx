@@ -1,0 +1,309 @@
+---
+title: "第2章：构造函数语义"
+type: A
+section: Inside the C++ Object Model · Chapter 2
+order: 2
+description: 对齐原书第2章 The Semantics of Constructors：默认构造与拷贝构造的合成条件、程序变换、返回值优化和成员初始化列表。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/inside-the-c-plus-plus-object-model-9780201834543"
+draft: false
+---
+
+import {
+  IcoCopyConstructionDecisionMap,
+  IcoDefaultConstructorSynthesisMap,
+  IcoInitializationTransformationMap,
+} from "@/components/mdx/inside-cpp-object-model/diagrams/semantics-of-constructors";
+
+<Objectives>
+
+- 能判断 compiler 何时必须为 member、base、virtual function 与 virtual base 生成 default construction 工作
+- 能比较 bitwise copy semantics 与 nontrivial memberwise initialization，并推导 vptr、virtual base 对 copy constructor 的影响
+- 能分析 explicit、argument、return value initialization 与 member initialization list 的程序变换和优化边界
+
+</Objectives>
+
+## 从“编译器暗中做了什么”开始
+
+constructor 的隐藏动作不是任意魔法，而是语言语义要求的程序变换。先预测下面空 constructor 是否真的“什么也不做”：若 class 含有需要默认构造的 member/base，或 implementation 必须建立 virtual representation，即使 user 看不到语句，生成代码仍有职责。
+
+<Term def="当程序需要某个特殊成员函数且用户未提供时，由编译器隐式声明并在需要时形成定义的过程。">
+  constructor synthesis
+</Term>
+
+需要区分三个层次：函数被 implicitly declared、函数被 odr-used 后需要 definition、该 definition 是 trivial 还是 nontrivial。口语里“编译器给每个类一个默认构造函数”太粗糙：有些类没有可调用的 default constructor，有些隐式 default constructor 不做 observable work，有些则必须调用 subobject constructor 或设置实现元数据。
+
+## 2.1 Default Constructor Construction
+
+<IcoDefaultConstructorSynthesisMap />
+
+<Term def="不接收参数或所有参数都有默认值、可在无实参时构造对象的构造函数；隐式版本是否可用和是否平凡取决于类组成。">
+  default constructor construction
+</Term>
+
+### Member Class Object with Default Constructor
+
+若 `Widget` 含有 class-type member `Name name_`，而 `Name` 需要 default constructor，compiler 形成的 `Widget::Widget()` 必须调用它。调用顺序按 member declaration order，不按 constructor body 中第一次使用的顺序。
+
+```cpp
+struct Name {
+    Name();
+};
+
+struct Widget {
+    Name name;
+    int count;
+};
+
+Widget widget; // name 被构造；count 的值取决于初始化形式，不因合成构造而一律清零
+```
+
+<Term def="按 base 与 nonstatic data member 的语言顺序，对每个 subobject 执行其默认初始化要求。">
+  memberwise default initialization
+</Term>
+
+compiler 只补语义要求的工作，不替 programmer 猜业务初值。`int count` 没有 default member initializer 时，default-initialization 与 value-initialization 的结果还要按具体语境判断。安全设计应显式写 `int count = 0;`，不要依赖“对象看起来刚分配”的偶然 bytes。
+
+### Base Class with Default Constructor
+
+derived constructor 在进入自己的 member initialization 与 body 前，必须完成 direct base construction。多个 direct bases 按 base-specifier list 顺序；随后 members 按 declaration order。若 required base default constructor 不可访问或被删除，derived default constructor 也可能被定义为 deleted。
+
+### Class with a Virtual Function
+
+polymorphic object 在 construction 的每个 subobject phase 都必须表现为当前正在构造的 class，而不是尚未完成的 most-derived class。常见 implementation 会设置适合当前 phase 的 vptr，使 constructor 中的 virtual call 不越过尚未建立的 derived invariant。
+
+<Term def="常见 ABI 中由对象持有、指向其当前 class virtual table 的实现指针；其具体位置与数量不是语言标准固定布局。">
+  vptr initialization
+</Term>
+
+这不是“constructor 开始时一次写好最终 vptr”那么简单。base constructor 运行时要呈现 base virtual behavior；进入 derived construction 后再切换为 derived representation。第 5 章会完整展开这条序列。
+
+### Class with a Virtual Base Class
+
+virtual base 在 most-derived object 中只有一个共享 subobject，因此应由 most-derived constructor 负责构造。中间 base 可以在 initializer list 写 virtual-base initializer，但当它作为更大 derived object 的 subobject 构造时，那份请求不会重复构造 shared virtual base。
+
+<Term def="在虚继承图中由 most-derived object 只保存一份、被多条继承路径共同引用的基类子对象。">
+  virtual base subobject
+</Term>
+
+<Callout type="trap" title="陷阱：隐式默认构造函数会把所有成员清零">
+  synthesis 的目标是满足 subobject 和 virtual semantics，不是 blanket
+  zero-fill。scalar member 是否为零取决于
+  zero-initialization、value-initialization、default member initializer
+  等规则。需要零值就把它写进 declaration 或 initializer list。
+</Callout>
+
+## 2.2 Copy Constructor Construction
+
+<Term def="用同类型对象初始化新对象的特殊成员函数；隐式版本通常按 base 和 member 逐个复制。">
+  copy constructor construction
+</Term>
+
+<IcoCopyConstructionDecisionMap />
+
+### Default Memberwise Initialization
+
+没有 user-declared copy constructor 时，隐式 copy 的语义是按顺序复制 direct bases 和 nonstatic members。对 scalar member 是值复制；对 class member 则调用该 member 的 copy constructor。所谓 memberwise 是语义描述，不意味着生成代码一定逐字段，也不意味着一定调用 `memcpy`。
+
+<Term def="隐式拷贝按 base subobject 与 nonstatic member 的声明结构逐个应用各自复制语义。">
+  default memberwise initialization
+</Term>
+
+### Bitwise Copy Semantics
+
+<Term def="对象表示可按字节复制而不破坏目标对象语义的情形；它要求没有必须执行的非平凡 subobject 或动态表示修复。">
+  bitwise copy semantics
+</Term>
+
+对足够简单、trivially copyable 的对象，compiler 可以把 memberwise result lower 成 block copy 或寄存器 load/store。关键是“结果等价”，不是源码层授予任意对象 `memcpy` 权限。owner pointer、self-reference、mutex、virtual base 等都可能让 raw bytes 不表达正确独立对象。
+
+```cpp
+struct Plain {
+    int id;
+    double weight;
+};
+
+struct Record {
+    std::string name;
+    Plain payload;
+};
+
+Plain a{1, 2.0};
+Plain b = a;   // implementation 可用位级等价复制
+Record r2 = r1; // 必须满足 string 的 copy semantics
+```
+
+### Bitwise Copy Semantics - Not：Resetting the Virtual Table Pointer
+
+以下条件会要求 nontrivial copy work：base/member 有 nontrivial copy constructor；class 使用 virtual function，需要让 target object 保持正确 vptr；class 含 virtual base，需要按 most-derived 结构处理共享 subobject。原书把前者称为 resetting the virtual table pointer，把后者称为 handling the virtual base class subobject。user-declared copy constructor 则直接把复制 policy 交给 user body，并仍由语言安排 bases/members 的初始化入口。
+
+不能把 source object 的 vptr 当普通业务 bytes 无脑复制。source 可能通过 base view 参与 copy，而 target 的动态身份由正在构造的 class 决定；implementation 要建立 target 应有的 virtual table pointer。virtual base 也必须避免沿多条路径重复复制。
+
+## 2.3 Program Transformation Semantics
+
+<IcoInitializationTransformationMap />
+
+<Term def="编译器把源码中的对象初始化、传参与返回转换为显式构造目标、隐藏参数或直接结果存储，同时保持语言可观察行为。">
+  program transformation semantics
+</Term>
+
+### Explicit Initialization
+
+`X target(source)` 与 `X target = source` 都可能选择 copy constructor；后者的语法不能据此理解为先 default construct 再 assignment。initialization 建立新 lifetime，assignment 修改已经存在的 object，两者必须分开推导。
+
+### Argument Initialization
+
+by-value parameter 是被初始化的 parameter object。概念上 caller 提供 initializer，callee 使用独立 object；ABI 可决定由谁提供 storage、是否通过 registers 传递，language/optimizer 也可能消除不必要 temporary。若只需观察且不需要独立 value，`const X&` 可改变接口语义和 copy 成本，但也引入 alias/lifetime 约束。
+
+### Return Value Initialization
+
+原书重点讨论 compiler 如何把 return object 写入 caller 提供的 hidden result storage，以及 named return value optimization。现代 C++ 进一步规定某些 prvalue 情形直接构造最终对象，不再把“临时对象复制后再优化掉”作为正确心智模型。
+
+```cpp
+Widget makeWidget() {
+    Widget result;
+    return result; // NRVO 可能成立
+}
+
+Widget makeDirect() {
+    return Widget{}; // 现代规则下可直接构造返回目标
+}
+
+Widget first = makeWidget();
+Widget second = makeDirect();
+```
+
+<Term def="编译器把具名局部返回对象直接构造在调用方结果存储中的允许优化。">
+  named return value optimization
+</Term>
+
+user-level optimization 可以改变 API，例如返回值改输出参数或避免不必要 by-value parameter；但现代 compiler 的 elision 往往已经让自然 return-by-value 更清晰且同样高效。优化前先测量，并检查改变后是否扩大 alias、破坏 exception safety 或让 ownership 更模糊。
+
+### The Copy Constructor: To Have or To Have Not
+
+只有当 class 的 copy policy 不是正确 memberwise copy 时才手写 copy constructor，例如 deep copy、reference rebinding policy 或禁止复制。无必要的 user-declared copy 会让类型失去 trivial property、阻碍 move generation 或增加 maintenance。现代代码优先 Rule of Zero：让 member owners 自己表达资源语义。
+
+## 2.4 Member Initialization List
+
+<Term def="在 constructor body 之前直接选择 base 与 member constructor 的语法；执行顺序由 base/member 声明决定。">
+  member initialization list
+</Term>
+
+initializer list 能直接构造 const member、reference member、无 default constructor 的 member，并避免“先默认构造、再 assignment”。但它的书写顺序不控制执行顺序。
+
+```cpp
+class BufferView {
+public:
+    BufferView(std::size_t size, const std::byte* data)
+        : size_(size), end_(data + size_), begin_(data) {}
+
+private:
+    const std::size_t size_;
+    const std::byte* begin_;
+    const std::byte* end_;
+};
+```
+
+实际顺序是 `size_`、`begin_`、`end_`，因为 declaration order 如此；list 把 `end_` 写在 `begin_` 前也不能改变。示例中 `end_` 只依赖 parameter `data` 与已完成的 `size_`，所以结果可推导。若 initializer 依赖一个声明在自己之后的 member，就会读取尚未初始化的状态。
+
+<Callout type="trap" title="陷阱：initializer list 从左到右执行">
+  virtual bases、direct bases、members 分别按语言规定顺序构造，members 始终按
+  class declaration order。让 list 顺序与 declaration 对齐可以减少误读和
+  warning，但真正修复是 消除对尚未构造 member 的依赖。
+</Callout>
+
+## 第2章验证清单
+
+1. 区分 implicit declaration、需要 definition 与 nontrivial generated work。
+2. 标出 member class object、base、virtual function、virtual base 各触发什么 default construction。
+3. 明确 scalar members 是否有 initializer，不假设 synthesis 自动清零。
+4. 对 copy path 逐个检查 base/member 的 copy semantics。
+5. 判断 vptr 与 virtual base 是否阻止 naive bitwise copy。
+6. 分开 explicit initialization、argument initialization、return value initialization 与 assignment。
+7. 在当前 C++ standard mode 下检查 mandatory elision、optional NRVO 和 ABI lowering。
+8. 让 member initializer list 与 declaration order 对齐，并检查依赖方向。
+
+## 小结
+
+- constructor synthesis 只生成语言语义要求的工作，不承诺初始化所有业务状态
+- member class object、base、virtual representation 和 virtual base 会让 default construction 变得 nontrivial
+- default memberwise initialization 是逐 subobject 的语义，bitwise copy 只是可能的等价 lowering
+- nontrivial member/base、vptr 修复与 virtual base 处理会阻止无条件 raw byte copy
+- explicit、argument 和 return value initialization 都在建立新对象，不应与 assignment 混淆
+- NRVO 是具名返回对象的允许优化，现代 prvalue 还存在保证 copy elision 的情形
+- 无必要手写 copy constructor 会损失 triviality 并增加特殊成员函数耦合
+- member initialization list 直接构造 subobject，但实际顺序由 base/member declaration 决定
+
+<Attribution
+  adaptedFrom="Inside the C++ Object Model, First Edition, Chapter 2: The Semantics of Constructors"
+  adaptedUrl="https://www.informit.com/store/inside-the-c-plus-plus-object-model-9780201834543"
+/>
+
+<Glossary>
+  <GlossaryItem term="constructor synthesis">
+    编译器按需形成特殊成员函数定义。
+  </GlossaryItem>
+  <GlossaryItem term="default constructor construction">
+    无实参建立对象的默认构造语义。
+  </GlossaryItem>
+  <GlossaryItem term="memberwise default initialization">
+    按语言顺序默认初始化各 subobject。
+  </GlossaryItem>
+  <GlossaryItem term="vptr initialization">
+    建立当前 construction phase 的虚表指针状态。
+  </GlossaryItem>
+  <GlossaryItem term="virtual base subobject">
+    most-derived object 中唯一共享的虚基类实例。
+  </GlossaryItem>
+  <GlossaryItem term="copy constructor construction">
+    用同类型对象建立新对象的复制构造语义。
+  </GlossaryItem>
+  <GlossaryItem term="default memberwise initialization">
+    按 base/member 应有语义逐个复制。
+  </GlossaryItem>
+  <GlossaryItem term="bitwise copy semantics">
+    对象表示允许等价字节复制的条件。
+  </GlossaryItem>
+  <GlossaryItem term="program transformation semantics">
+    把初始化映射为构造目标与隐藏存储的编译器变换。
+  </GlossaryItem>
+  <GlossaryItem term="named return value optimization">
+    具名局部返回对象直接构造到结果存储。
+  </GlossaryItem>
+  <GlossaryItem term="member initialization list">
+    在 body 前直接构造 base 和 member 的语法。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：判定隐式默认构造的工作。** 给一个含 `std::string` member、polymorphic base、virtual base 和未初始化 `int` 的 derived class，列出 compiler 必须安排的动作与不会替你做的动作。
+
+<Answer question="哪些动作来自语言语义，哪些不能假设？">
+  most-derived constructor 先构造 virtual base，再按 base-specifier 顺序构造
+  direct bases，随后按 declaration order 构造 members；string default
+  constructor 必须调用，常见 ABI 还会在相应 phase 建立 vptr。未初始化 int
+  不因这些合成动作自动得到 0。constructor body 最后运行。virtual base 只由
+  most-derived 路径构造一次，中间 base 不能重复执行。
+</Answer>
+
+2. **问题 2：判断能否位拷贝。** 分别分析只含两个整数的 `Plain`、含 `std::string` 的 `Record`、含 virtual function 的 `Shape`、含 virtual base 的 `Node`。
+
+<Answer question="为什么memberwise语义不能直接等同memcpy？">
+  Plain 若满足 trivially copyable 条件，可 lower 成 byte/register copy。Record
+  必须调用 string copy 以建立独立资源状态；Shape 的 target virtual
+  representation 必须与正在构造的类型一致，不能盲抄 source vptr；Node 的共享
+  virtual base 必须按 most-derived structure 复制一次。memberwise
+  描述结果，implementation 只有在结果等价时才能选 raw copy。
+</Answer>
+
+3. **问题 3：审计一次返回值与初始化列表。** 对具名局部返回、直接 prvalue 返回、by-value 参数和依赖后声明 member 的 initializer，分别写出语义对象、可选优化和潜在错误。
+
+  <Answer question="怎样区分语义、允许优化与初始化顺序bug？">
+    具名局部可做 NRVO，但需按具体函数确认；直接 prvalue 在现代适用规则下构造最终
+    result；by-value parameter 建立 parameter object，ABI 可消除或重排 storage，但
+    const-reference 会改变 alias/lifetime contract。initializer 始终按 declaration
+    order，若前置 member 读取后声明 member，就是语义 bug，调整 list 文本顺序无效；应调整
+    member declaration 或移除依赖。
+  </Answer>
+</Exercises>

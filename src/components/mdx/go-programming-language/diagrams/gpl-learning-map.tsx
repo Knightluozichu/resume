@@ -1,96 +1,48 @@
-/**
- * <GplLearningMapDiagram>：Go 程序设计语言全书四大板块与十章结构。
- *
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * 全部 DESIGN token 配色，无裸 hex、无阴影。
- * viewBox 720×420，四周留白 >=32，字号 >=11。
- */
+"use client";
 
-const VIEW_W = 720;
-const VIEW_H = 420;
+import { useState } from "react";
 
-const accent = "var(--accent)";
-const success = "var(--success)";
-const warning = "var(--warning)";
-const danger = "var(--danger)";
-const primary = "var(--text-primary)";
-const secondary = "var(--text-secondary)";
-const border = "var(--border)";
-const elevated = "var(--bg-elevated)";
+const stages = [
+  { name: "程序与数据", chapters: ["1 Tutorial", "2 Program Structure", "3 Basic Data Types", "4 Composite Types"], evidence: "能追踪 value、type、scope、ownership 与 encoding" },
+  { name: "抽象边界", chapters: ["5 Functions", "6 Methods", "7 Interfaces"], evidence: "能设计 call/error/receiver/behavior contracts" },
+  { name: "并发证明", chapters: ["8 Goroutines & Channels", "9 Shared Variables"], evidence: "能证明 lifecycle、backpressure 与 happens-before" },
+  { name: "工程与边界", chapters: ["10 Packages & Go Tool", "11 Testing", "12 Reflection", "13 Low-Level"], evidence: "能建立 build/test/runtime/ABI evidence" },
+];
 
-export function GplLearningMapDiagram() {
+export function GoplOfficialChapterMapLab() {
+  const [stage, setStage] = useState(0);
+  const selected = stages[stage];
+
   return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="Go 程序设计语言全书学习地图。四大板块：基础语法、核心机制、并发编程、高级主题。"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <text x={VIEW_W / 2} y={34} textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>{`
-            Go 程序设计语言 全书学习地图
-          `}</text>
-          <text x={VIEW_W / 2} y={54} textAnchor="middle" fontSize="11" fill={secondary}>{`
-            基础语法 · 核心机制 · 并发编程 · 高级主题
-          `}</text>
-          <rect x={36} y={76} width={100} height={52} rx="8" fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeWidth="1.4" strokeOpacity="0.5" />
-          <text x={86} y={96} textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">{`基础语法`}</text>
-          <text x={86} y={114} textAnchor="middle" fontSize="10" fill={secondary}>{`2 章`}</text>
-          <rect x={60} y={76} width={110} height={52} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-          <text x={115} y={98} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`学习地图`}</text>
-          <text x={115} y={116} textAnchor="middle" fontSize="10" fill={secondary}>{`第 1 章`}</text>
-          <rect x={190} y={76} width={110} height={52} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-          <text x={245} y={98} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`类型变量`}</text>
-          <text x={245} y={116} textAnchor="middle" fontSize="10" fill={secondary}>{`第 2 章`}</text>
-          <line x1={86} y1={128} x2={86} y2={142} stroke={secondary} strokeWidth="1.4" markerEnd="url(#lm-arrow-0)" />
-          <rect x={36} y={159} width={100} height={52} rx="8" fill="var(--success)" fillOpacity="0.12" stroke="var(--success)" strokeWidth="1.4" strokeOpacity="0.5" />
-          <text x={86} y={179} textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--success)">{`核心机制`}</text>
-          <text x={86} y={197} textAnchor="middle" fontSize="10" fill={secondary}>{`2 章`}</text>
-          <rect x={60} y={159} width={110} height={52} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-          <text x={115} y={181} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`函数`}</text>
-          <text x={115} y={199} textAnchor="middle" fontSize="10" fill={secondary}>{`第 3 章`}</text>
-          <rect x={190} y={159} width={110} height={52} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-          <text x={245} y={181} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`接口`}</text>
-          <text x={245} y={199} textAnchor="middle" fontSize="10" fill={secondary}>{`第 4 章`}</text>
-          <line x1={86} y1={211} x2={86} y2={225} stroke={secondary} strokeWidth="1.4" markerEnd="url(#lm-arrow-1)" />
-          <rect x={36} y={242} width={100} height={52} rx="8" fill="var(--warning)" fillOpacity="0.12" stroke="var(--warning)" strokeWidth="1.4" strokeOpacity="0.5" />
-          <text x={86} y={262} textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--warning)">{`并发编程`}</text>
-          <text x={86} y={280} textAnchor="middle" fontSize="10" fill={secondary}>{`3 章`}</text>
-          <rect x={60} y={242} width={110} height={52} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-          <text x={115} y={264} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`goroutine`}</text>
-          <text x={115} y={282} textAnchor="middle" fontSize="10" fill={secondary}>{`第 5 章`}</text>
-          <rect x={190} y={242} width={110} height={52} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-          <text x={245} y={264} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`channel`}</text>
-          <text x={245} y={282} textAnchor="middle" fontSize="10" fill={secondary}>{`第 6 章`}</text>
-          <rect x={320} y={242} width={110} height={52} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-          <text x={375} y={264} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`select`}</text>
-          <text x={375} y={282} textAnchor="middle" fontSize="10" fill={secondary}>{`第 7 章`}</text>
-          <line x1={86} y1={294} x2={86} y2={308} stroke={secondary} strokeWidth="1.4" markerEnd="url(#lm-arrow-2)" />
-          <rect x={36} y={325} width={100} height={52} rx="8" fill="var(--danger)" fillOpacity="0.12" stroke="var(--danger)" strokeWidth="1.4" strokeOpacity="0.5" />
-          <text x={86} y={345} textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--danger)">{`高级主题`}</text>
-          <text x={86} y={363} textAnchor="middle" fontSize="10" fill={secondary}>{`3 章`}</text>
-          <rect x={60} y={325} width={110} height={52} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-          <text x={115} y={347} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`包模块`}</text>
-          <text x={115} y={365} textAnchor="middle" fontSize="10" fill={secondary}>{`第 8 章`}</text>
-          <rect x={190} y={325} width={110} height={52} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-          <text x={245} y={347} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`测试`}</text>
-          <text x={245} y={365} textAnchor="middle" fontSize="10" fill={secondary}>{`第 9 章`}</text>
-          <rect x={320} y={325} width={110} height={52} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-          <text x={375} y={347} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`总复习`}</text>
-          <text x={375} y={365} textAnchor="middle" fontSize="10" fill={secondary}>{`第 10 章`}</text>
-          <defs>
-            <marker id="lm-arrow-0" markerWidth="8" markerHeight="8" refX="4" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 z" fill="var(--text-secondary)" /></marker>
-            <marker id="lm-arrow-1" markerWidth="8" markerHeight="8" refX="4" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 z" fill="var(--text-secondary)" /></marker>
-            <marker id="lm-arrow-2" markerWidth="8" markerHeight="8" refX="4" refY="3" orient="auto"><path d="M0 0 L6 3 L0 6 z" fill="var(--text-secondary)" /></marker>
-          </defs>
-          <line x1={32} y1={396} x2={VIEW_W - 32} y2={396} stroke={border} strokeWidth="1" strokeDasharray="4 3" />
+    <figure className="mdx-figure not-prose mx-auto my-6"><div className="rounded-card border border-border bg-elevated p-4 sm:p-5"><div className="grid grid-cols-4 border border-border" role="group" aria-label="Go official chapter stages">{stages.map((item, index) => <button key={item.name} type="button" onClick={() => setStage(index)} className={`min-h-12 text-xs sm:text-sm ${index < 3 ? "border-r border-border" : ""} ${stage === index ? "bg-primary text-bg" : "text-primary hover:bg-bg"}`}>{index + 1}. {item.name}</button>)}</div><div className="mt-5 grid gap-4 lg:grid-cols-[0.76fr_1.24fr]"><section className="border border-border bg-bg p-4"><span className="text-xs text-secondary">selected stage</span><strong className="mt-2 block text-lg text-primary">{selected.name}</strong><p className="mt-3 text-sm leading-7 text-secondary">{selected.evidence}</p></section><section className="grid gap-3 sm:grid-cols-2">{selected.chapters.map((chapter, index) => <div key={chapter} className="min-h-24 border border-cyan-500/40 bg-cyan-500/10 p-3 text-sm text-primary"><span className="text-xs text-secondary">chapter gate {index + 1}</span><strong className="mt-2 block">{chapter}</strong></div>)}</section></div></div><figcaption className="mt-2 text-center text-sm text-secondary">官方 13 章不是 8 个主题卡片：程序/数据 → 抽象 → 并发 → 工程/运行时边界依次建立可验证能力。</figcaption></figure>
+  );
+}
 
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        Go 程序设计语言全书四大板块与十章结构。
-      </figcaption>
-    </figure>
+const dependencyMap = [
+  { chapter: "1–4 程序与数据", needs: "none", unlocks: "函数参数、receiver copy、interface dynamic value" },
+  { chapter: "5 Functions", needs: "scope、composite values、error", unlocks: "methods、closures、defer/panic" },
+  { chapter: "6–7 Methods & Interfaces", needs: "named types、pointers、functions", unlocks: "consumer contracts与dynamic dispatch" },
+  { chapter: "8–9 Concurrency", needs: "closures、interfaces、ownership", unlocks: "channel lifecycle与shared invariant proof" },
+  { chapter: "10–11 Tooling & Testing", needs: "package/contracts/concurrency", unlocks: "reproducible build和behavior evidence" },
+  { chapter: "12–13 Runtime Boundaries", needs: "types、interfaces、tests", unlocks: "reflection/unsafe/cgo受限实现" },
+];
+
+export function GoplLearningDependencyLab() {
+  const [selected, setSelected] = useState(3);
+  const item = dependencyMap[selected];
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6"><div className="rounded-card border border-border bg-elevated p-4 sm:p-5"><div className="grid gap-4 lg:grid-cols-[0.86fr_1.14fr]"><section className="border border-border bg-bg p-4"><label className="block text-sm text-primary">dependency checkpoint<select value={selected} onChange={(event) => setSelected(Number(event.target.value))} className="mt-2 min-h-11 w-full border border-border bg-elevated px-3 text-sm text-primary">{dependencyMap.map((entry, index) => <option key={entry.chapter} value={index}>{entry.chapter}</option>)}</select></label></section><section className="border border-violet-500/40 bg-violet-500/10 p-4"><div className="grid gap-3 sm:grid-cols-3"><div className="border border-border bg-bg p-3"><span className="text-xs text-secondary">requires</span><strong className="mt-2 block text-sm text-primary">{item.needs}</strong></div><div className="border border-border bg-bg p-3"><span className="text-xs text-secondary">current</span><strong className="mt-2 block text-sm text-primary">{item.chapter}</strong></div><div className="border border-border bg-bg p-3"><span className="text-xs text-secondary">unlocks</span><strong className="mt-2 block text-sm text-primary">{item.unlocks}</strong></div></div><p className="mt-4 text-sm leading-7 text-secondary">依赖图用于决定学习顺序和故障回退点：interface nil问题回到method set/dynamic pair，并发泄漏回到function closure/channel ownership，而不是只重读当前标题。</p></section></div></div><figcaption className="mt-2 text-center text-sm text-secondary">每一阶段都消费前序 contract并产出下一阶段可使用的 proof；薄弱基础会在并发和low-level边界放大。</figcaption></figure>
+  );
+}
+
+export function GoplLearningGateLab() {
+  const [outline, setOutline] = useState(true);
+  const [quality, setQuality] = useState(true);
+  const [practice, setPractice] = useState(false);
+  const [verification, setVerification] = useState(false);
+  const gates = [outline, quality, practice, verification];
+  const passed = gates.filter(Boolean).length;
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6"><div className="rounded-card border border-border bg-elevated p-4 sm:p-5"><div className="grid gap-4 lg:grid-cols-[0.82fr_1.18fr]"><section className="space-y-3 border border-border bg-bg p-4">{[[outline, setOutline, "official outline understood"], [quality, setQuality, "chapter score and review"], [practice, setPractice, "exercise implemented"], [verification, setVerification, "tests/race/build evidence"]].map(([value, setter, label]) => <label key={String(label)} className="flex min-h-11 items-center gap-3 border border-border px-3 text-sm text-primary"><input type="checkbox" checked={value as boolean} onChange={(event) => (setter as (value: boolean) => void)(event.target.checked)} className="h-4 w-4 accent-[var(--accent)]" />{String(label)}</label>)}</section><section className={`border p-4 ${passed === 4 ? "border-emerald-500/40 bg-emerald-500/10" : "border-amber-500/40 bg-amber-500/10"}`}><strong className="text-lg text-primary">gate {passed}/4 · {passed === 4 ? "ready to advance" : "evidence incomplete"}</strong><div className="mt-4 grid grid-cols-4 gap-2">{gates.map((value, index) => <div key={index} className={`min-h-20 border p-3 text-center text-sm ${value ? "border-emerald-500/40 bg-bg text-primary" : "border-border bg-bg text-secondary"}`}>0{index + 1}<span className="mt-2 block">{value ? "pass" : "open"}</span></div>)}</div><p className="mt-4 text-sm leading-7 text-secondary">阅读完成不等于掌握。每章至少留下目录覆盖、概念解释、可运行练习和对应verification；并发/unsafe章节还需race/checkptr或边界测试。</p></section></div></div><figcaption className="mt-2 text-center text-sm text-secondary">学习路径的最小验收是“理解 + 实现 + 证据”，不是页面浏览进度。</figcaption></figure>
   );
 }

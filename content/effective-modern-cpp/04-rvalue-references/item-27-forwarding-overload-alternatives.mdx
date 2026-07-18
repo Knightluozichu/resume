@@ -1,0 +1,338 @@
+---
+title: "Item 27：熟悉 forwarding-reference 重载的替代方案"
+type: A
+section: Chapter 5 · Rvalue References, Move Semantics, and Perfect Forwarding
+order: 27
+description: 对齐 Effective Modern C++ Item 27：比较不同函数名、const reference、按值、tag dispatch 与 enable_if 约束五种方案，并完整实现不劫持 copy/move 的 Person forwarding constructor。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch05.html"
+draft: false
+---
+
+import {
+  EmcppConstrainedConstructorGateMap,
+  EmcppForwardingAlternativeTradeoffMap,
+  EmcppTagDispatchFlowMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-27-forwarding-overload-alternatives";
+
+<Objectives>
+
+- 能比较 alternatives to universal reference overloading（通用引用重载替代方案）的正确性、接口清晰度与运行成本
+- 能实现 tag dispatch（标签分派），让 integral 与 name-like arguments 在实现层分流而不参与贪婪重载竞争
+- 能设计使用 enable_if、decay、is_base_of 与 is_constructible 的 constrained forwarding constructor（受约束转发构造函数）
+
+</Objectives>
+
+## 从“没有万能替代方案”开始
+
+Item 26 证明 forwarding reference 几乎可为任意输入生成 exact match，因此不适合与具体 overload 无约束地并列。Item 27 不要求放弃 forwarding，而是先回答两个问题：API 的输入域是否真的需要无限泛化？效率收益是否足以抵偿 overload 复杂度？
+
+<Term def="用不同函数名、const reference、按值、标签分派或候选约束替代无约束 forwarding overload 的设计集合。">
+  forwarding overload alternatives
+</Term>
+
+先预测下面五种方案在“正确调用能进入、错误调用尽早退出、调用者能读懂意图、对象能高效存储”四个维度的结果，再选择最窄且足够的机制。尤其要把 const reference or value（const 引用或按值）当作两种独立成本模型比较，而不是笼统视为“都没有 forwarding”。
+
+<EmcppForwardingAlternativeTradeoffMap />
+
+## 方案一：不同函数名直接分离业务域
+
+最直接的修复是 abandon overloading（放弃重载）：姓名和索引本来表达不同业务含义，就让名称体现差异。
+
+```cpp
+void logAndAddName(const std::string& name);
+void logAndAddNameIndex(int index);
+```
+
+<Term def="以不同 API 名称表达不同业务输入域，使编译器无需从重叠候选中推断调用意图。">
+  distinct-name domain split
+</Term>
+
+优点是调用点自解释、错误信息短、不会出现 `short` 被 forwarding template 抢走后在函数体深处失败。代价是 API 名称变多，而且 constructor 无法采用不同名称，所以它不能直接解决 `Person(T&&)` 与 copy/move constructors 的冲突。
+
+当参数代表的不是同一概念时，不要为了“名字统一”强迫 overload。`name` 和 `index` 只是最终都能找到姓名，不意味着它们属于同一个类型域。
+
+## 方案二：const reference 换取简单稳定
+
+对已知类型的只读输入，C++98 风格的 `const T&` 往往已经足够：
+
+```cpp
+void logAndAdd(const std::string& name) {
+    auto now = std::chrono::system_clock::now();
+    log(now, "logAndAdd");
+    names.emplace(name);
+}
+```
+
+<Term def="以 const lvalue reference 接受左值、右值和可转换值，避免 forwarding template 进入候选集合。">
+  const-reference boundary
+</Term>
+
+它不会劫持整数 overload，也没有 template instantiation 带来的深层 diagnostics。传入 `std::string` lvalue 时只在容器中复制一次；传入 rvalue 时，由于 parameter 本身是 lvalue expression，`emplace(name)` 仍复制；传入 string literal 时通常先构造 temporary string，再复制进容器，因此可能比 perfect forwarding 多一次构造或复制。
+
+这里的关键不是宣称 `const reference` 总是最快，而是量化损失：若函数不是热点、字符串很短、接口稳定性更重要，多一次移动/复制往往比脆弱 overload set 更便宜。
+
+<Callout
+  type="trap"
+  title="陷阱：看到 temporary 或 copy 就立刻改成 forwarding reference"
+>
+  先用 profile 和对象语义确认成本。无约束 forwarding overload
+  会扩大可接受类型、改变候选排序并恶化错误位置；它的设计成本可能远高于一次廉价
+  move。
+</Callout>
+
+## 方案三：按值适合确定要持有副本的参数
+
+如果函数必然把一个已知 copyable/movable type 存进对象或容器，可以在边界接收 value，再统一 move：
+
+```cpp
+void logAndAdd(std::string name) {
+    auto now = std::chrono::system_clock::now();
+    log(now, "logAndAdd");
+    names.emplace(std::move(name));
+}
+```
+
+<Term def="在 API 边界构造独立 parameter object，再把它移动到最终存储位置的 ownership-transfer 模式。">
+  by-value sink parameter
+</Term>
+
+调用者传 lvalue 时发生一次 copy 构造 parameter，再发生一次 move 到容器；传 rvalue 时 parameter 可由 move 构造或 copy elision 建立，再 move 到容器。与 `const reference` 相比，lvalue 路径可能多一次 move；与 forwarding 相比，类型域被严格限定为可构造 `std::string` 的输入，接口更容易推理。
+
+按值并非普遍替代：不可复制类型、昂贵 move、只读不存储的参数都可能不合适。但对于“函数无论如何都需要拥有一份值”的 sink，它把 copy/move 成本显式放在边界，是很实用的折中。
+
+## 方案四：标签分派把分类移到实现层
+
+若必须保留统一 `logAndAdd` 名称，又希望整数走索引路径、其他值保留 forwarding，可以只保留一个 public template，由 type trait 生成 tag：
+
+```cpp
+template<typename T>
+void logAndAdd(T&& value) {
+    logAndAddImpl(
+        std::forward<T>(value),
+        std::is_integral<
+            typename std::remove_reference<T>::type
+        >()
+    );
+}
+```
+
+<Term def="把 compile-time predicate 编码成 true_type 或 false_type 参数，再由 implementation overload 选择路径。">
+  tag dispatch
+</Term>
+
+public overload set 不再同时包含 `int` 和 greedy forwarding template，因此 `short` 不会先选错候选。`remove_reference` 必不可少：当传入 integer lvalue 时，`T` 会推导为引用类型，而 `is_integral<int&>` 是 false；去除引用后才得到预期的 integral classification。
+
+<EmcppTagDispatchFlowMap />
+
+## true_type 处理所有 integral variants
+
+```cpp
+template<typename T>
+void logAndAddImpl(T&& name, std::false_type) {
+    auto now = std::chrono::system_clock::now();
+    log(now, "logAndAdd");
+    names.emplace(std::forward<T>(name));
+}
+
+void logAndAddImpl(int index, std::true_type) {
+    logAndAdd(nameFromIndex(index));
+}
+```
+
+<Term def="is_integral 为真时选择的 marker type，用于把 short、int、long 等整数统一路由到 index path。">
+  integral true tag
+</Term>
+
+`false_type` implementation 才执行真正 forwarding；`true_type` implementation 接收 `int`，完成合法的 integral conversion 后查姓名，再调用 public entry。`nameFromIndex` 返回的字符串在第二次进入时得到 false tag，最终被转发进容器，不会无限递归。
+
+这个设计把“类型分类”和“值处理”分为两步。它保留统一 API，也能扩展 enum、string-like 等分类；代价是实现层函数变多，读者必须跟踪 tag。若分类规则只是两个本来就不同的业务命令，不同函数名仍更清楚。
+
+## 标签分派不直接解决 constructor 劫持
+
+constructor 名称由类名固定，不能改成不同函数名；同时 copy/move constructors 已存在于同一个 overload set。把 forwarding constructor 内部再做 tag dispatch 已经太晚，因为劫持发生在 constructor 被选中之前。
+
+<Term def="在 overload resolution 的 immediate context 中让不合格 template 不参与候选，而不是进入 body 后再报错。">
+  candidate constraint
+</Term>
+
+因此 constructor 需要 constrain templates（约束模板）：先排除 `Person` 自身及其派生类型，让 copy/move 路径重新成为唯一合理候选。
+
+## enable_if 在候选边界关闭 forwarding constructor
+
+C++11/14 可用 `enable_if` 将条件编码进 template parameter：
+
+```cpp
+class Person {
+public:
+    template<
+        typename T,
+        typename = typename std::enable_if<
+            !std::is_base_of<
+                Person,
+                typename std::decay<T>::type
+            >::value
+        >::type
+    >
+    explicit Person(T&& name)
+        : name_(std::forward<T>(name)) {}
+
+private:
+    std::string name_;
+};
+```
+
+<Term def="当 compile-time condition 为 true 时提供 type，否则 substitution failure 将 template 从候选集合移除。">
+  enable-if candidate gate
+</Term>
+
+对 mutable `Person` lvalue，`T` 推导为 reference；`decay` 去掉 reference 与 cv 后得到 `Person`，`is_base_of<Person, Person>` 为 true，取反后 gate 关闭，copy constructor 不再被 template 抢占。对 `SpecialPerson`，规范化后仍是 Person-derived，gate 同样关闭，base subobject construction 会选择正确的 Person copy/move path。
+
+<EmcppConstrainedConstructorGateMap />
+
+## 为什么要先 decay 再做 is_base_of
+
+<Term def="移除 reference 与 cv qualifiers，并执行类似按值传参的 array/function adjustment，得到适合 type-trait 比较的规范类型。">
+  decay normalization
+</Term>
+
+若直接检查 `is_base_of<Person, T>`，lvalue 调用中的 `T` 可能是 `Person&` 或 `const SpecialPerson&`；reference type 不是 class type，无法表达真正的继承关系。`decay<T>::type` 将这些形式规范为 `Person` 或 `SpecialPerson`，self-family exclusion 才覆盖 mutable/const、lvalue/rvalue 和整个 derived hierarchy。
+
+这里只用 `!is_same<Person, decay_t<T>>` 仍不够，因为它仅排除 Person 本身，derived-to-base construction 依旧会被 forwarding constructor 精确绑定。原问题涉及继承层次，所以约束必须使用 `is_base_of`。
+
+## 再约束目标类型可构造性
+
+排除 Person family 后，`int`、widget、file handle 等无关类型仍可能进入 template，并在 `name_` 初始化处产生很长的错误。把真实语义也放入候选边界：
+
+```cpp
+template<
+    typename T,
+    typename D = typename std::decay<T>::type,
+    typename = typename std::enable_if<
+        !std::is_base_of<Person, D>::value &&
+        std::is_constructible<std::string, T&&>::value
+    >::type
+>
+explicit Person(T&& name)
+    : name_(std::forward<T>(name)) {}
+```
+
+<Term def="检查目标对象能否从给定 argument type/value category 直接构造，用于表达 forwarding body 的真实前置条件。">
+  constructibility constraint
+</Term>
+
+这样有三条清晰路径：Person/derived 交给 copy/move；可构造 string 的值进入 forwarding constructor；其他类型没有这个候选。现代 C++ 可用 `enable_if_t`、`decay_t`、`is_base_of_v` 与 `is_constructible_v` 缩短写法，C++20 则可用 concepts/requires 表达同一边界。
+
+## 错误信息也是 API 设计的一部分
+
+无约束 forwarding constructor 对错误输入的 diagnostics 往往落在 `basic_string` 的内部模板，调用者难以看出 Person 只接受姓名。`is_constructible` constraint 能让“不满足构造条件”在 overload 边界显现；必要时还可提供 deleted overload、named factory 或 concise static assertion，但 assertion 不能代替候选约束。
+
+<Callout
+  type="trap"
+  title="陷阱：在 constructor body 里 static_assert 就能防止 copy 劫持"
+>
+  body 中的 assertion 只有在 forwarding constructor
+  已经胜出后才执行。它可以改善一部分错误文字，却不能让 compiler 回头选择
+  copy/move；self/derived exclusion 必须参与候选形成。
+</Callout>
+
+<Term def="让编译失败发生在最接近违反接口契约的位置，并指出缺失条件而非暴露深层实现细节。">
+  diagnostic locality
+</Term>
+
+## 按输入域选择方案而不是机械套模板
+
+可以用一套固定顺序做决策：
+
+1. 输入代表不同业务命令时，优先不同函数名。
+2. 只读且性能不敏感时，优先 `const reference`。
+3. 明确要持有已知类型副本时，评估按值加 move。
+4. 必须统一函数名且分类是 compile-time type property 时，采用 tag dispatch。
+5. constructor 或确需 forwarding 的 overload set，用 constraints 精确缩小候选域。
+
+<Term def="先定义合法输入集合和各自语义，再选择参数传递与 overload 技术的 API 设计方法。">
+  domain-first overload design
+</Term>
+
+最终验证表至少包含：string literal、mutable/const string lvalue、string rvalue、short/int/long、Person mutable/const copy、Person move、derived copy/move、不可构造类型。每一格都要记录 selected overload、copy/move 次数和失败位置，而不只检查运行结果。
+
+## 小结
+
+- forwarding overload alternatives 包括不同函数名、const reference、按值、tag dispatch 和 constrained template
+- 不同函数名最清晰，适合本来就不同的业务输入域，但 constructor 无法改名
+- const reference 以潜在额外 temporary/copy 换稳定候选；按值适合确定要持有副本的已知类型
+- tag dispatch 用 `true_type/false_type` 在实现层分类，避免 `short` 与 forwarding template 直接竞争
+- constructor 劫持发生在 body 之前，必须用 enable_if 等 candidate constraint 排除 Person 与 derived types
+- `decay` 先规范化 cv/reference，`is_base_of` 才能覆盖 self 与整个继承层次
+- `is_constructible<string, T&&>` 让 template 只接受真正可构造姓名的输入，并改善 diagnostic locality
+- 先定义 API 输入域，再选择最窄的机制；只有必要时才支付 perfect forwarding 的复杂度
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 27"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch05.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="forwarding overload alternatives">
+    避免无约束转发重载的五类方案。
+  </GlossaryItem>
+  <GlossaryItem term="distinct-name domain split">
+    用不同 API 名称隔离业务输入域。
+  </GlossaryItem>
+  <GlossaryItem term="const-reference boundary">
+    用 const reference 建立稳定类型边界。
+  </GlossaryItem>
+  <GlossaryItem term="by-value sink parameter">
+    按值接收后移动到最终存储。
+  </GlossaryItem>
+  <GlossaryItem term="tag dispatch">以类型标签选择实现路径。</GlossaryItem>
+  <GlossaryItem term="integral true tag">
+    标识整数参数的 true_type 分支。
+  </GlossaryItem>
+  <GlossaryItem term="candidate constraint">
+    在候选形成阶段排除错误类型。
+  </GlossaryItem>
+  <GlossaryItem term="enable-if candidate gate">
+    通过 enable_if 开关模板候选。
+  </GlossaryItem>
+  <GlossaryItem term="decay normalization">
+    去除 cv/reference 后再检查类型关系。
+  </GlossaryItem>
+  <GlossaryItem term="constructibility constraint">
+    用目标可构造性表达真实契约。
+  </GlossaryItem>
+  <GlossaryItem term="diagnostic locality">
+    让错误靠近违反契约的调用点。
+  </GlossaryItem>
+  <GlossaryItem term="domain-first overload design">
+    从合法输入域出发选择重载机制。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：日志接口接收姓名或数据库索引。** 比较不同函数名、const reference、按值与 tag dispatch，写出选型依据。
+
+<Answer question="什么时候应保留统一函数名？">
+  若姓名与索引是两个明确业务命令，`logAndAddName` 和 `logAndAddNameIndex`
+  最清晰；若只有姓名且只读，const reference 足够；若必然持有 string
+  副本，按值可把 ownership
+  成本显式化。只有兼容性要求必须保留同名入口、且分类确由 type property
+  决定时，才用 tag dispatch。选择时同时记录调用点清晰度、lvalue/rvalue 的
+  copy/move 次数和错误位置。
+</Answer>
+
+2. **问题 2：为 short lvalue 推导 tag dispatch 全流程。** 解释为什么必须 remove_reference，以及为什么不会重演 Item 26 的 body failure。
+
+<Answer question="short 参数经过哪些类型变化？">
+  public entry 中 T 推导为 short lvalue reference；remove_reference 后得到
+  short，is_integral 生成 true_type，于是调用 index implementation。short
+  在该实现调用处正常转换成 int，再由 nameFromIndex 得到 string；string
+  第二次进入 public entry 时生成 false_type 并被转发。公开候选集合中不再有并列的
+  int overload，所以没有先由 greedy template 抢走再在 string body 失败的路径。
+</Answer>
+
+3. **问题 3：设计并验证 Person forwarding constructor。** 写出约束，并判断 mutable/const Person、SpecialPerson 与 string literal 分别走哪条路径。
+
+  <Answer question="self derived 与 name-like inputs 如何分流？">先令 D 为 decay 后的 T；约束要求 `!is_base_of<Person, D>` 且 string 可从原始 T value category 构造。mutable/const Person 和 SpecialPerson 都被 forwarding candidate 排除，分别交给 copy/move 或 derived-to-base special-member path；string literal 不是 Person-derived 且可构造 string，因此进入 forwarding constructor；unrelated int 同时因不可构造 string 被移除。测试还应覆盖 Person rvalue、const derived reference 和显式错误类型的诊断位置。</Answer>
+</Exercises>

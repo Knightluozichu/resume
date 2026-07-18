@@ -1,0 +1,181 @@
+---
+title: "第5章 距离场"
+type: C
+section: "几何数据结构 · 包围与距离"
+order: 2
+description: "学习距离场计算与表示、传播和投影方法，并把它们用于变形与建模。"
+demo: true
+math: true
+sourceUrl: "https://www.routledge.com/Geometric-Data-Structures-for-Computer-Graphics/Langetepe-Zachmann/p/book/9780367453862"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GdscgDistanceFieldsObjectLab, GdscgDistanceFieldsQueryLab, GdscgDistanceFieldsEvidenceLab } from "@/components/mdx/geometric-data-structures/diagrams/gdscg-distance-fields";
+
+<Objectives>
+- 能解释距离场、有符号距离与传播方法的对象和不变量
+- 能推导本页复杂度或几何谓词，并用交互图追踪构建、查询与更新
+- 能实现最小实验，以精确基线、边界输入和反例验收等值面
+</Objectives>
+
+## 先做预测
+
+先预测结果，再观察结构变化并解释偏差。降低网格分辨率或让两个表面距离小于一个体素，预测距离误差、符号泄漏和零等值面拓扑。再改变插值方法，判断梯度方向和球追踪步长是否仍安全。 本页用<Term def="为域内每个位置记录到目标集合最短距离的标量场。">距离场</Term>、<Term def="在封闭表面内外赋予相反符号，并以零等值面表示表面。">有符号距离</Term>、<Term def="从已知边界距离向邻域按局部更新规则扩散近似最短距离。">传播方法</Term>、<Term def="把几何或较高维距离函数投影到离散网格和基函数表示。">投影方法</Term>、<Term def="距离场中取固定数值的一组位置，零等值面通常恢复原表面。">等值面</Term>建立从对象、表示、查询到证书的完整链路。
+
+<GdscgDistanceFieldsObjectLab />
+
+## 第一版权威目录定位
+
+本页一一对应Elmar Langetepe与Gabriel Zachmann在A K Peters出版的2006年第一版《Geometric Data Structures for Computer Graphics》第5章 距离场。出版社页面确认第一版、两位作者、362页和正式10章目录；作者所在研究组同时给出原书信息、ISBN 9781568812359、目录以及第7章材料。
+
+### 原书小节覆盖
+
+1. 5.1 Computation and Representation of Distance Fields
+2. 5.1.1 Propagation Method
+3. 5.1.2 Projection of Distance Functions
+4. 5.2 Applications of Distance Fields
+5. 5.2.1 Morphing
+6. 5.2.2 Modeling
+
+### 核心对象
+
+1. **距离场**：为域内每个位置记录到目标集合最短距离的标量场。
+2. **有符号距离**：在封闭表面内外赋予相反符号，并以零等值面表示表面。
+3. **传播方法**：从已知边界距离向邻域按局部更新规则扩散近似最短距离。
+4. **投影方法**：把几何或较高维距离函数投影到离散网格和基函数表示。
+5. **等值面**：距离场中取固定数值的一组位置，零等值面通常恢复原表面。
+
+## 查询与表示契约
+
+先固定数据域、维数、闭开边界、查询输出和数值语义。树高或节点数不是独立目标；只有候选完备、结果无重复、复杂度含输出规模且数值分支一致时，结构才算正确。
+
+$$
+d(x,S)=\inf_{y\in S}\|x-y\|
+$$
+
+$$
+|d(x,S)-d(z,S)|\le\|x-z\|
+$$
+
+$$
+\|\nabla d(x)\|=1
+$$
+
+$$
+S_r=\{x\mid d_s(x)=r\}
+$$
+
+欧氏距离场满足1-Lipschitz性质，精确有符号距离在光滑区域的梯度模长为一。离散传播从种子单元出发松弛邻居，投影则在有限表示中近似距离函数。形态偏移可取不同等值面，两个场的插值可生成变形，但拓扑变化与采样误差必须显式检查。 每个剪枝判断都应能回答两个问题：被排除的集合是什么，以及哪个不变量证明它不含答案。
+
+## 可核查构建与查询
+
+先对小网格逐体素穷举最近三角形作为基线，再实现多源队列传播。每个体素保存距离、符号来源和最近特征，查询时用三线性插值并限制步长。建模操作后重新检查符号一致性与零面封闭性。
+
+
+```python
+def query_with_trace(root, request):
+    stack, hits, trace = [root], [], []
+    while stack:
+        node = stack.pop()
+        trace.append(node.id)
+        if node.disjoint(request):
+            continue
+        if node.is_leaf:
+            hits.extend(node.exact_matches(request))
+        else:
+            stack.extend(node.children)
+    return sorted(set(hits)), trace
+```
+
+通用骨架必须由本章的具体不变量实例化：区域不相交、包围体不重叠、空邻域、证书未失效或静态块版本有效。不能把候选生成误写成最终答案，叶节点仍需执行本章定义的精确测试。
+
+<GdscgDistanceFieldsQueryLab />
+
+## 复杂度与工程取舍
+
+复杂度报告分离构建、查询、更新、内存和输出规模。平均值之外记录P95与最坏样例；同时保存访问节点、候选对象和精确谓词次数，这样才能判断瓶颈来自树质量、数据分布还是数值回退。
+
+```python
+metrics = {
+    "build_ms": 0.0,
+    "visited_nodes": 0,
+    "candidates": 0,
+    "exact_tests": 0,
+    "update_ms": 0.0,
+}
+assert set(metrics) == {"build_ms", "visited_nodes", "candidates", "exact_tests", "update_ms"}
+```
+
+只在结果集合与基线一致后比较性能。构建更慢可能换来大量查询收益，更新更便宜也可能逐渐恶化结构；因此工作负载中的查询次数、更新比例和生命周期必须写入报告。
+
+## 边界、退化与反例
+
+开放曲面没有天然内外符号；尖角和中轴附近距离不可微；离散传播依赖邻域模板，可能产生各向异性。若把近似值当严格下界用于球追踪，会越过表面。
+
+```python
+audit = {
+    "normal": "representative geometry",
+    "boundary": "closed-open convention",
+    "degenerate": "duplicate or co-located input",
+    "baseline": "brute-force exact result",
+}
+assert all(audit.values())
+```
+
+<GdscgDistanceFieldsEvidenceLab />
+
+## 图形学应用
+
+把两个封闭模型转为同一网格上的有符号距离场，做平滑并、偏移和形变。用采样点最近距离、零面Hausdorff近似和符号分类三项共同验收。 应用层还要记录从世界坐标到结构坐标的变换，避免把坐标系错误误判为数据结构错误。
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定对象与边界"><GdscgDistanceFieldsObjectLab /></Step>
+  <Step title="执行构建与查询"><GdscgDistanceFieldsQueryLab /></Step>
+  <Step title="保存反例与证书"><GdscgDistanceFieldsEvidenceLab /></Step>
+</Stepper>
+
+1. 用五到十个对象手算结构，标出节点覆盖、邻接或证书。
+2. 执行一个正常查询和一个恰落在边界的查询，逐节点记录剪枝理由。
+3. 删除一个一般位置或静态假设，构造首个失败样例。
+4. 与穷举答案逐项比较，再扩大规模测构建、查询、更新和内存。
+
+## 验收证书
+
+验收包包含原始输入、结构参数、节点或图邻接、查询日志、候选集合、精确结果、复杂度计数和失败反例。先检测封闭与定向；开放表面使用无符号距离或显式窄带语义。 任何无法重放的截图或孤立耗时都不能替代证书。
+
+## 常见误区
+
+<Callout type="trap" title="正确性前提被省略">开放网格仍用奇偶射线决定全域符号，裂缝附近产生大片错误内区。</Callout>
+
+<Callout type="trap" title="只看平均耗时">先检测封闭与定向；开放表面使用无符号距离或显式窄带语义。 同时保留最坏输入、内存和更新尾延迟。</Callout>
+
+## 本章回顾
+
+本页覆盖距离场、有符号距离、传播方法、投影方法、等值面。掌握标准是能从查询契约选择表示，推导剪枝或邻近条件，实现构建与更新，并用精确基线、退化输入和复杂度计数形成可重放证书。
+
+<Exercises>
+**问题1：距离场与有符号距离如何协作？**
+<Answer>为域内每个位置记录到目标集合最短距离的标量场。 在封闭表面内外赋予相反符号，并以零等值面表示表面。 回答时必须写出对象域和边界约定。</Answer>
+
+**问题2：怎样核查传播方法的查询结果？**
+<Answer>保存访问轨迹与候选集合，再与穷举或精确谓词给出的结果逐项比较；复杂度必须包含输出规模。</Answer>
+
+**问题3：如何验收等值面？**
+<Answer>距离场中取固定数值的一组位置，零等值面通常恢复原表面。 同时保存正常例、边界例、退化例和最坏工作负载。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="距离场" definition="为域内每个位置记录到目标集合最短距离的标量场。" />
+  <GlossaryItem term="有符号距离" definition="在封闭表面内外赋予相反符号，并以零等值面表示表面。" />
+  <GlossaryItem term="传播方法" definition="从已知边界距离向邻域按局部更新规则扩散近似最短距离。" />
+  <GlossaryItem term="投影方法" definition="把几何或较高维距离函数投影到离散网格和基函数表示。" />
+  <GlossaryItem term="等值面" definition="距离场中取固定数值的一组位置，零等值面通常恢复原表面。" />
+  <GlossaryItem term="几何证书" definition="足以重放构建、查询、更新和数值判断的一组输入、轨迹与不变量。" />
+</Glossary>
+
+<Attribution adaptedFrom="Elmar Langetepe, Gabriel Zachmann · Geometric Data Structures for Computer Graphics, First Edition · 第5章 距离场" adaptedUrl="https://www.routledge.com/Geometric-Data-Structures-for-Computer-Graphics/Langetepe-Zachmann/p/book/9780367453862" />

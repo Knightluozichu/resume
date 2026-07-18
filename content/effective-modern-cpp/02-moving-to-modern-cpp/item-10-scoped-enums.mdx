@@ -1,0 +1,371 @@
+---
+title: "Item 10：优先使用作用域枚举"
+type: A
+section: Chapter 3 · Moving to Modern C++
+order: 10
+description: 对齐 Effective Modern C++ Item 10：比较 scoped 与 unscoped enum 的名称作用域和隐式转换，控制 enumerator pollution，并用明确 underlying type 支持前置声明、ABI 与依赖隔离。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch03.html"
+draft: false
+---
+
+import {
+  EmcppEnumConversionGateMap,
+  EmcppEnumDeclarationLayoutMap,
+  EmcppEnumeratorScopeMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-10-scoped-enums";
+
+<Objectives>
+
+- 能比较 scoped enums（作用域枚举）与 unscoped enums（非作用域枚举）的 name lookup，解释 enumerator pollution（枚举名污染）
+- 能判断枚举到整数、bool 和 overload 参数的隐式转换路径，并用 explicit conversion 保持类型边界
+- 能设计 enum forward declaration（前置声明）与 underlying type（底层类型）契约，分析对象布局、ABI 和编译依赖
+
+</Objectives>
+
+## 从“枚举成员是否逃出类型边界”开始
+
+Item 10 的原则是 Prefer scoped enums to unscoped enums（优先使用作用域枚举）。传统 enum 的 enumerators 会进入枚举所在的外围 scope；`enum class` 把名称留在 enum 自身作用域，并阻止无意的整数转换。
+
+<Term def="enumerators 只能通过枚举类型名称限定访问，并默认不隐式转换为整数的枚举。">
+  scoped enum
+</Term>
+
+<Term def="enumerators 注入外围作用域，并可隐式转换到整数类型的传统枚举。">
+  unscoped enum
+</Term>
+
+先预测下面第二个 `white`：传统 enum 已经在同一 scope 创建了该名称，因此变量声明冲突。
+
+```cpp
+enum Color { black, white, red };
+
+auto white = false; // error: name already used by enumerator
+```
+
+改成 `enum class`，enumerators 只能写成 `Color::white`，外围 `white` 仍可用于其他概念。
+
+<EmcppEnumeratorScopeMap />
+
+## unscoped enum 造成 enumerator pollution
+
+```cpp
+enum Status { pending, running, stopped };
+enum JobState { queued, running, failed }; // collision: running
+```
+
+<Term def="传统枚举把 enumerator names 注入 enclosing scope，造成重名、含义模糊和 API 扩展冲突。">
+  enumerator pollution
+</Term>
+
+在大型 header 中，`pending`、`running`、`success` 这类通用词很快耗尽命名空间。调用点也缺少类型上下文：只看到 `running`，不能立即知道它来自 Job、Thread 还是 Transfer。
+
+```cpp
+enum class Status { pending, running, stopped };
+enum class JobState { queued, running, failed };
+
+auto status = Status::running;
+auto job = JobState::running;
+```
+
+<Term def="通过 EnumType::enumerator 明确携带所属类型，使名称可重复且调用点可读。">
+  qualified enumerator access
+</Term>
+
+<Callout type="trap" title="陷阱：给传统 enumerator 加长前缀就等于 scoped enum">
+  `status_running` 只能降低名称冲突，仍会进入外围
+  scope，并保留到整数的隐式转换。命名约定不是语言 边界，compiler
+  无法据此阻止跨枚举或数值误用。
+</Callout>
+
+## scoped enum 阻止隐式整数转换
+
+传统 enum 的值可隐式转换成 integral types，继而进入 arithmetic、comparison 或 unrelated overload：
+
+```cpp
+enum Color { black, white, red };
+
+Color color = red;
+if (color < 14.5) { // allowed through numeric conversions
+    // semantically suspicious
+}
+```
+
+<Term def="unscoped enumerator 自动提升到整数并继续参与数值运算或重载匹配的路径。">
+  implicit enum-to-integer conversion
+</Term>
+
+`enum class` 默认关闭这条路径：
+
+```cpp
+enum class Color { black, white, red };
+
+Color color = Color::red;
+// if (color < 14.5) {} // error
+```
+
+<Term def="枚举值不能自动越过类型边界进入整数运算，必须由调用者显式说明转换意图。">
+  strong enum typing
+</Term>
+
+这能在编译期暴露把状态、权限或单位枚举误当计数的 bug。
+
+## 显式转换应集中在协议边界
+
+确实需要写入 wire、日志或数组 index 时，可转换到明确的 underlying type：
+
+```cpp
+enum class Permission : std::uint8_t {
+    read = 1,
+    write = 2,
+};
+
+auto raw = static_cast<std::uint8_t>(Permission::write);
+```
+
+<Term def="在 serialization、索引或底层 API 边界把 scoped enum 明确转换成其数值表示。">
+  explicit enum extraction
+</Term>
+
+转换点应可搜索并测试，而不是让 enum 在任意 expression 中静默退化为整数。
+
+<EmcppEnumConversionGateMap />
+
+## 两种枚举都拥有 underlying type
+
+每个 enum object 都由某种 integral type 存储。underlying type 决定 `sizeof`、alignment、可表示范围，以及跨 ABI/wire 边界的布局。
+
+<Term def="实际保存枚举值的 integral type，决定枚举对象的表示范围和布局。">
+  underlying type
+</Term>
+
+```cpp
+enum class Permission : std::uint8_t {
+    read = 1,
+    write = 2,
+};
+
+static_assert(sizeof(Permission) == sizeof(std::uint8_t));
+```
+
+若未指定，scoped enum 的默认 underlying type 是 int。unscoped enum 的实现可根据 enumerator 范围选择合适类型，除非声明中明确指定。
+
+<Term def="在冒号后显式写出枚举存储整数类型，使声明、布局与范围稳定。">
+  fixed enum representation
+</Term>
+
+固定宽度不自动保证 serialization endianness 或 schema compatibility；它只锁定本地表示的宽度与范围。
+
+## forward declaration 依赖已知布局
+
+compiler 要处理指向 enum 的 pointer/reference，甚至某些包含 enum member 的声明时，需要知道其大小。C++11 允许枚举前置声明，只要 underlying type 可确定。
+
+```cpp
+enum class Status; // underlying type defaults to int
+
+void update(Status status);
+```
+
+<Term def="在不给出 enumerators 的情况下先声明 enum type，以降低 header 对完整定义的依赖。">
+  enum forward declaration
+</Term>
+
+unscoped enum 若要前置声明，必须指定 underlying type：
+
+```cpp
+enum Color : std::uint8_t;
+
+void paint(Color color);
+```
+
+<Term def="前置声明与最终定义必须使用相同 underlying type 的一致性约束。">
+  enum declaration-definition contract
+</Term>
+
+<EmcppEnumDeclarationLayoutMap />
+
+## 前置声明减少重编译扩散
+
+若 public header 只需要函数参数或 member declaration，不需要读取 enumerators，可只包含 forward declaration；完整 enum definition 放在更窄的 header。
+
+<Term def="通过只暴露 enum 类型和稳定布局，避免 enumerator 变化触发无关 translation units 重编译。">
+  enum dependency isolation
+</Term>
+
+```cpp
+// status_fwd.h
+enum class Status : std::uint8_t;
+
+// status.h
+enum class Status : std::uint8_t {
+    pending,
+    running,
+    stopped,
+};
+```
+
+新增 enumerator 不改变 forward header；只依赖类型身份的代码不必重新解析完整列表。前提是 declaration 和 definition 的 underlying type 完全一致。
+
+## tuple index 是 unscoped enum 的少数便利场景
+
+原书给出 tuple fields：传统 enum 可隐式转成 compile-time index。
+
+```cpp
+using UserInfo = std::tuple<std::string, std::string, std::size_t>;
+
+enum UserInfoFields {
+    uiName,
+    uiEmail,
+    uiReputation,
+};
+
+auto email = std::get<uiEmail>(userInfo);
+```
+
+<Term def="利用 unscoped enumerator 的整数常量身份充当 template index 的局部技术。">
+  tuple-index enum
+</Term>
+
+scoped enum 需要显式转换：
+
+```cpp
+enum class UserInfoField : std::size_t {
+    name,
+    email,
+    reputation,
+};
+
+auto email = std::get<
+    static_cast<std::size_t>(UserInfoField::email)
+>(userInfo);
+```
+
+这种 verbosity 可以用受约束的 `to_underlying` helper 或具名 accessor 收敛。是否保留 unscoped enum，要比较局部简洁与全局类型安全，而不是机械禁用。
+
+<Callout
+  type="trap"
+  title="陷阱：tuple index 方便，所以所有协议枚举都应 unscoped"
+>
+  compile-time index 是狭窄场景。状态、权限、命令和错误码更常跨 API
+  传播，名称污染与隐式数值转换的 风险远高于少写一次 cast；可用 helper 保留
+  scoped enum。
+</Callout>
+
+## 不要把 underlying value 当成合法枚举验证
+
+```cpp
+auto status = static_cast<Status>(255);
+```
+
+<Term def="确认外部整数只映射到协议允许的 enumerators，而不是仅能装入 underlying type。">
+  enumerator domain validation
+</Term>
+
+能转换并不代表值在业务枚举集合内。解析 wire/database input 时应使用 switch、lookup table 或 parser 返回 optional/result，拒绝未知值或显式保留 unknown 分支。
+
+## scoped enum 的回归矩阵
+
+<Term def="覆盖名称隔离、隐式转换拒绝、underlying layout、前置声明和外部值验证的测试集合。">
+  scoped enum contract matrix
+</Term>
+
+1. 两个 enum 可拥有同名 enumerator，外围 scope 不冲突。
+2. compile-fail test 证明不能隐式传给 integer overload。
+3. static assertion 固定 underlying type、size 与 alignment 要求。
+4. forward declaration header 可独立编译，definition 类型一致。
+5. serializer 显式转换并覆盖全部 enumerators。
+6. parser 对未知 underlying value 有明确策略。
+
+```cpp
+static_assert(std::is_same_v<
+    std::underlying_type_t<Permission>,
+    std::uint8_t
+>);
+```
+
+先预测 name lookup、conversion sequence 与 storage representation，再让 compiler 和 tests 固定契约。
+
+## 小结
+
+- unscoped enum 把 enumerators 注入外围 scope，形成 enumerator pollution
+- scoped enum 使用 `EnumType::value` 限定访问，允许不同 enum 安全复用同名成员
+- unscoped enum 可隐式转换到整数；enum class 提供 strong typing，数值边界需要 explicit extraction
+- 两种 enum 都有 underlying type；scoped enum 未指定时默认 int
+- scoped enum 可直接 forward declare；unscoped enum 前置声明必须明确 underlying type
+- 固定 representation 支持布局与依赖隔离，但 wire schema 仍需版本、字节序和合法值验证
+- tuple template index 是 unscoped enum 的便利例外，可用 helper 在 scoped enum 上收敛转换
+- 外部整数能 cast 成 enum 不等于属于合法 enumerator domain
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 10"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch03.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="scoped enum">名称受限且不隐式转整数的枚举。</GlossaryItem>
+  <GlossaryItem term="unscoped enum">
+    名称外泄且可隐式转整数的枚举。
+  </GlossaryItem>
+  <GlossaryItem term="enumerator pollution">
+    枚举成员污染外围作用域。
+  </GlossaryItem>
+  <GlossaryItem term="qualified enumerator access">
+    通过 enum type 限定访问成员。
+  </GlossaryItem>
+  <GlossaryItem term="implicit enum-to-integer conversion">
+    传统枚举自动进入数值语境的转换。
+  </GlossaryItem>
+  <GlossaryItem term="strong enum typing">
+    阻止无意整数转换的类型边界。
+  </GlossaryItem>
+  <GlossaryItem term="explicit enum extraction">
+    在协议边界显式取出数值表示。
+  </GlossaryItem>
+  <GlossaryItem term="underlying type">保存枚举值的整数类型。</GlossaryItem>
+  <GlossaryItem term="fixed enum representation">
+    显式固定枚举存储类型。
+  </GlossaryItem>
+  <GlossaryItem term="enum forward declaration">
+    不列出成员而预先声明枚举类型。
+  </GlossaryItem>
+  <GlossaryItem term="enum declaration-definition contract">
+    声明与定义底层类型一致的约束。
+  </GlossaryItem>
+  <GlossaryItem term="enum dependency isolation">
+    用前置声明减少头文件依赖。
+  </GlossaryItem>
+  <GlossaryItem term="tuple-index enum">
+    作为 tuple 编译期索引的枚举。
+  </GlossaryItem>
+  <GlossaryItem term="enumerator domain validation">
+    验证整数属于合法枚举集合。
+  </GlossaryItem>
+  <GlossaryItem term="scoped enum contract matrix">
+    作用域、转换、布局与解析测试表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：迁移两个含 running 成员的传统枚举。** 调用点还把枚举传给 int API。
+
+<Answer question="迁移步骤和编译失败如何处理？">
+  分别改成 scoped enum，并把调用点限定为 Status running 与 JobState
+  running。原先传 int 的位置会
+  compile-fail；判断它是真正协议边界还是误用。边界处显式转换到固定 underlying
+  type，误用则改 API 接收 enum。测试名称隔离和整数 overload 拒绝。
+</Answer>
+
+2. **问题 2：设计可前置声明的 8-bit 权限枚举。** 要求 public header 不包含完整 enumerators。
+
+<Answer question="声明、定义和验证怎样组织？">
+  forward header 声明 scoped Permission 并指定 uint8 underlying type；definition
+  header 使用相同类型 定义成员。static assertion 固定 underlying type 和
+  size，独立编译 forward-only consumer；serializer
+  仍需显式处理字节序、版本和未知值。
+</Answer>
+
+3. **问题 3：tuple field index 想保留简洁语法。** 比较 unscoped enum 与 scoped enum helper。
+
+  <Answer question="如何选择？">仅限局部 implementation、名称不会外泄且只作 compile-time index 时，unscoped enum 可接受；跨 header/API 时优先 scoped enum，并用 constexpr to-underlying helper 或具名 accessor 封装转换。测试每个 index 对应 tuple 字段，防止字段顺序变化后静默读错类型相同的列。</Answer>
+</Exercises>

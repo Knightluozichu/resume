@@ -1,0 +1,151 @@
+---
+title: "Chapter 4. Patterns in functional programming"
+type: C
+section: "Functional C# 1e · Core concepts"
+order: 4
+description: "覆盖Map、ForEach、Bind、Where、Option与IEnumerable组合及abstraction levels，以function shape和container effect重建核心FP patterns。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-4"
+draft: false
+---
+
+import { CfpAbstractionLevelLab, CfpBindFlatteningLab, CfpCoreOperatorsLab } from "@/components/mdx/csharp-functional-programming/diagrams/patterns-in-functional-programming";
+
+<Objectives>
+
+- 能比较Map、ForEach、Bind与Where的function shape、structure result和effect semantics，判断错误combinator
+- 能推导nested container与Bind flattening，设计Option、IEnumerable及cross-context组合的层级
+- 能分析primitive combinator、domain workflow与effect adapter三个abstraction levels，重构混杂pipeline
+
+</Objectives>
+
+## 为什么先按Function Shape学习Pattern
+
+Map、Bind、Where不是神秘术语，而是反复出现的function/container shapes。看到`F<T>`时先问传入function返回plain value、bool、effect还是另一个`F<R>`，就能推导result structure。背extension names不如掌握shape，因为Option、IEnumerable、Task-like等contexts都复用这些关系。
+
+先预测：ForEach是否等于Map；Map一个返回Option的function是否自动flatten；Where是否改变inner value type；Option和IEnumerable能否不决定outer context直接Bind；使用LINQ query syntax是否自动遵守monad laws。答案都是否。
+
+<Term def="由container shape和传入function signature共同决定Map、Bind、Where或effect traversal的选择规则。">combinator shape</Term>
+
+## Applying a function to a structure’s inner values
+
+Map接收`T -> R`，在不改变structure kind的前提下把`F<T>`转成`F<R>`。IEnumerable Map是Select，对每个element产生R；Option Map只在Some时调用，None保持None。Map不负责flatten，也不应执行与result无关的effect。
+
+```csharp
+Option<Customer> customer = FindCustomer(id);
+Option<EmailAddress> email = customer.Map(value => value.Email);
+
+IEnumerable<decimal> totals = orders.Select(CalculateTotal);
+```
+
+<Term def="在保留outer structure/effect kind时，把inner value通过T-to-R function转换的operation。">structure-preserving map</Term>
+
+<Stepper>
+  <Step title="切换Map、ForEach、Bind与Where"><CfpCoreOperatorsLab /></Step>
+  <Step title="为每个operator写arrow types">标container、input function和result；若shape对不上，先改model而不是加cast。</Step>
+  <Step title="跑Some/None与empty/many cases">观察function调用次数、result structure、side effect次数与deferred execution。</Step>
+</Stepper>
+
+## Performing side effects with ForEach
+
+ForEach遍历inner values执行side effect，返回void/Unit或原structure外的completion；它不是pure Map。把logging、DB write塞进Select会产生“result被忽略”的伪Map，execution timing还可能因deferred sequence变化。
+
+Effect应该在pipeline terminal/boundary集中。Core先Map出commands，shell再ForEach解释；这样decision可test，effect次数和failure policy可审计。若需要收集每次effect outcome，返回Result values再sequence/traverse，不要用void丢信息。
+
+<Term def="在container values上执行external effect的terminal traversal，必须明确次数、ordering和failure ownership。">effectful traversal</Term>
+
+## Chaining functions with Bind
+
+当function是`T -> F<R>`时，Map会得到`F<F<R>>`；Bind先Map再flatten一层，得到`F<R>`。Option Bind让None short-circuit，IEnumerable Bind/SelectMany把每个element产生的sequences串平。Flatten只适用于同类或有明确定义的composed context。
+
+```csharp
+Option<Customer> customer = FindCustomer(id);
+Option<Order> latest = customer.Bind(value => FindLatestOrder(value.Id));
+
+IEnumerable<Line> lines = orders.SelectMany(order => order.Lines);
+```
+
+<Stepper>
+  <Step title="切换nested Map、Bind、sequence与cross-context"><CfpBindFlatteningLab /></Step>
+  <Step title="画出每一层F">把Option、IEnumerable、Task等outer/inner写在type tree上，只flatten当前combinator承诺的一层。</Step>
+  <Step title="验证short-circuit与cardinality">None是否跳过next，empty/many产生多少items，function是否deferred/repeated执行。</Step>
+</Stepper>
+
+<Callout type="trap" title="看到Nested Generic就调用Bind直到只剩一个">
+Layers可能代表不同effects：Task&lt;Option&lt;T&gt;&gt;同时包含asynchrony和absence。盲目flatten会丢semantic owner；需要Traverse、transformer-like helper或明确分阶段composition。
+</Callout>
+
+## Filtering values with Where
+
+Where接收`T -> bool`，保留满足predicate的values。IEnumerable可能从many变few/empty；Option Where在Some不满足时变None。它不解释为何被过滤，因此validation failure需要Either而不是Where，否则caller只能看到absence。
+
+Predicate应尽量pure。若predicate调用remote service，enumeration次数会放大I/O并造成time-dependent membership。先materialize facts或把effectful decision建模为traversal/result，再纯filter。
+
+## Combining Option and IEnumerable with Bind
+
+Cross-context组合必须选择shape。例如`Option<IEnumerable<T>>`表示整个sequence可能不存在；`IEnumerable<Option<T>>`表示每个element可能缺失。二者的Map/Bind行为、fallback与cardinality不同。先写domain sentence，再决定outer container。
+
+```csharp
+IEnumerable<Order> orders = customerOption
+    .Map(customer => repository.FindOrders(customer.Id))
+    .IfNone(Enumerable.Empty<Order>());
+```
+
+把None转empty sequence是policy，会丢“customer missing”和“customer has no orders”的区别；只在consumer确实等价时做。否则保留Option到更外层或转Either error。
+
+<Term def="多个containers/effects嵌套时，哪一种语义拥有outer layer以及何处允许转换/flatten的决策。">context layering</Term>
+
+## Coding at different levels of abstraction
+
+Good pipeline的每一步处在相近level：`Validate -> Price -> Reserve -> Respond`表达domain workflow；内部才用Map/Bind/Where。若一行是business action，下一行是`SelectMany` plumbing，再下一行直接SQL，reader会不断切换mental model。
+
+Named combinators可隐藏已证明的mechanics，不能隐藏effect。Effect adapters清楚标I/O，domain functions用业务名，generic primitives留在library layer。Composition root负责把三层接起来。
+
+<Term def="一段function/pipeline同时谈domain workflow、generic structure或external effect中的哪一层语义。">abstraction level</Term>
+
+<Stepper>
+  <Step title="切换primitive、domain、effect与mixed levels"><CfpAbstractionLevelLab /></Step>
+  <Step title="给每行标level">Mechanics、domain decision、effect adapter分别着色，连续pipeline尽量保持一个主要level。</Step>
+  <Step title="抽named function并复测">重构前后比较types、effect count、short-circuit、fault和可读的business sequence。</Step>
+</Stepper>
+
+<Callout type="trap" title="LINQ Query Syntax会自动让任何Container成为正确Monad">
+Query syntax依赖Select/SelectMany/Where pattern，不验证laws、effects或failure policy。能编译只证明method shape匹配；identity/associativity与domain semantics仍需tests。
+</Callout>
+
+## 本章回顾：先看Arrow，再选Combinator
+
+1. Map用T-to-R保持structure，ForEach执行effect，Where按predicate过滤。
+2. Bind处理T-to-F-of-R并flatten同一context的一层。
+3. Option与IEnumerable组合前先决定outer semantic和absence/cardinality policy。
+4. Deferred execution会影响function/effect次数，所有operator都要测empty/Some/None/repeat。
+5. Domain、combinator与effect layers应各自清楚，再由composition连接。
+
+<Exercises>
+
+**问题 1：为什么在Select里调用SendEmail是危险信号？**
+
+<Answer>Select语义是Map并返回新sequence，SendEmail是effect；deferred/repeated enumeration会重复发送且result可能被忽略。先Map成EmailCommand，materialize/validate后由shell terminal ForEach执行，测试0/1/many、retry和failure。</Answer>
+
+**问题 2：`Option<IEnumerable<Order>>`和`IEnumerable<Option<Order>>`如何选？**
+
+<Answer>前者表示整个orders source可能不存在，如customer missing；后者表示sequence存在但每项解析可能缺失。写出None owner、cardinality和fallback，再选outer layer；不要把两者都默认为empty sequence。</Answer>
+
+**问题 3：怎样证明自定义Bind实现不是只会编译？**
+
+<Answer>验证left/right identity和associativity的observable result/effect laws，覆盖Some/None或empty/many；检查function调用次数与deferred behavior。若context含effects，laws按其定义的equivalence检查，不能只比较reference。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="combinator shape" definition="Container与function signature共同决定operator的规则。" />
+  <GlossaryItem term="structure-preserving map" definition="以T-to-R转换inner value并保留outer kind。" />
+  <GlossaryItem term="effectful traversal" definition="对container values执行external effects的terminal operation。" />
+  <GlossaryItem term="context layering" definition="Nested containers中outer semantics与flatten policy。" />
+  <GlossaryItem term="abstraction level" definition="Code当前表达domain、structure或effect的语义层。" />
+</Glossary>
+
+<Attribution adaptedFrom="Functional Programming in C#, First Edition, Chapter 4: Patterns in functional programming" adaptedUrl="https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-4" />

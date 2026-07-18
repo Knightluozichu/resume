@@ -1,0 +1,347 @@
+---
+title: "Chapter 10：泛型、Trait 与生命周期（Generic Types, Traits, and Lifetimes）"
+type: A
+section: Rust 程序设计语言 · 静态抽象与引用关系
+order: 10
+description: 对齐官方第 10 章：从消除重复推导泛型函数、类型和方法，以 trait/trait bounds 表达行为契约，并用生命周期参数与省略规则验证返回引用和借用结构体。
+demo: false
+math: false
+sourceUrl: "https://doc.rust-lang.org/book/ch10-00-generics.html"
+draft: false
+---
+
+import {
+  RplGenericInstantiationLab,
+  RplLifetimeRelationLab,
+  RplTraitContractLab,
+} from "@/components/mdx/rust-programming-language/diagrams/generic-types-traits-and-lifetimes";
+
+<Objectives>
+
+- 能设计泛型函数、struct、enum 与 method，并分析 trait bound 和 monomorphization 对可用操作与运行时成本的影响
+- 能实现 trait、默认方法和条件 impl，判断 `impl Trait`、bound/where clause、orphan rule 与 blanket impl 的适用边界
+- 能推导函数和借用 struct 的生命周期关系，解释省略规则与 static lifetime，并判断返回引用何时会悬空
+
+</Objectives>
+
+## 为什么抽象不能丢失静态证明
+
+两段代码若只有输入值不同，提取普通函数；若算法相同但具体类型不同，类型参数可以再消除一层重复。但“适用于多个类型”不代表函数体可对 T 做任何事。Rust 用泛型表达可替换的类型，用 trait bounds 证明这些类型拥有算法所需行为，用生命周期参数证明引用关系；三者共同让复用不牺牲编译期检查。
+
+<Term def="在定义中代表一个或多个具体类型的占位参数，使同一函数、类型或方法可由不同静态类型实例化。">泛型类型参数</Term>
+
+## 从重复算法提取泛型函数
+
+先把两段最大值循环提取成 `largest(&[i32])`，再观察 i32 与 char 版本只有类型不同。直接把类型替换为 T 仍无法编译，因为编译器不知道任意 T 是否支持 `>`：
+
+```rust
+fn largest<T: PartialOrd>(list: &[T]) -> &T {
+    let mut largest = &list[0];
+    for item in list {
+        if item > largest {
+            largest = item;
+        }
+    }
+    largest
+}
+```
+
+<Term def="加在泛型参数上的行为约束，只有实现指定 trait 的具体类型才能实例化该泛型代码。">trait bound</Term>
+
+`PartialOrd` 是函数体使用 `>` 的静态依据。签名同时表达输入是 T slice、输出借用同一个 T，以及 T 必须可比较。若算法还需要复制返回值，可增加 Copy；不要为了“以后也许会用”添加无关 bounds，它会拒绝本可支持的类型。
+
+## 泛型 struct、enum 和 method 描述类型关系
+
+```rust
+struct Point<T, U> {
+    x: T,
+    y: U,
+}
+
+enum Outcome<T, E> {
+    Success(T),
+    Failure(E),
+}
+
+impl<T, U> Point<T, U> {
+    fn x(&self) -> &T {
+        &self.x
+    }
+
+    fn mixup<X, Y>(self, other: Point<X, Y>) -> Point<T, Y> {
+        Point { x: self.x, y: other.y }
+    }
+}
+```
+
+一个 `Point<T>` 会约束 x/y 同型；`Point<T,U>` 明确允许不同类型。impl 后必须重新声明 T/U，方法自己的 X/Y 只在该 method 中存在。`mixup` 的结果类型把 self.x 的 T 与 other.y 的 Y 关系写进签名，调用点无需读实现也能预测 move 后的类型。
+
+`impl Point<f32>` 可只为 f32 版本增加 `distance_from_origin`；`impl<T> Point<T>` 中的方法对所有 `Point<T>` 可用。方法集合可按具体类型和 bounds 条件出现，而不是每个实例在运行时检查类型。
+
+## Monomorphization 生成具体类型代码
+
+<Term def="编译器扫描实际泛型实例，把 T 等参数替换为具体类型并生成静态专用代码的过程。">monomorphization</Term>
+
+`Option<i32>` 与 `Option<f64>` 在源码共享定义，编译器为实际使用类型生成相当于两个具体 enum 的代码。泛型抽象通常没有动态分派成本，代价更偏向编译时间和二进制代码尺寸。
+
+<RplGenericInstantiationLab />
+
+先预测 function、struct、enum 和 method 选择具体类型后会生成什么签名，再切换类型。图中具体化名称只是解释模型，真实编译器内部命名不同；关键是运行时面对已知布局与操作。
+
+<Callout type="trap" title="陷阱：写泛型 largest 后假定所有 T 都能比较">
+  泛型只引入未知类型，不自动赋予能力。编译器只允许函数体使用无约束 T 普遍拥有的操作；比较、格式化、clone 等必须由对应 trait bound 证明。
+</Callout>
+
+## Trait 把共享行为写成契约
+
+<Term def="声明一组可由不同类型实现的方法行为，用于抽象共享能力并约束泛型参数。">trait</Term>
+
+```rust
+pub trait Summary {
+    fn summarize_author(&self) -> String;
+
+    fn summarize(&self) -> String {
+        format!("(Read more from {}...)", self.summarize_author())
+    }
+}
+
+pub struct SocialPost {
+    pub username: String,
+}
+
+impl Summary for SocialPost {
+    fn summarize_author(&self) -> String {
+        format!("@{}", self.username)
+    }
+}
+```
+
+<Term def="trait 中带方法体的共享实现；具体类型可直接采用或提供同签名方法覆盖。">默认实现</Term>
+
+trait 可只列签名，也可给默认方法。默认方法能调用同 trait 中要求实现的方法；类型实现必需部分后自动获得共享行为。覆盖默认方法时不能从覆盖体直接调用同一方法的默认版本。
+
+调用 trait method 时，trait 本身通常也要在 scope 中；方法能否解析既取决于类型实现，也取决于名称可见性。
+
+## Orphan rule 保证实现唯一可判定
+
+<Term def="实现 trait 时，trait 或被实现类型至少一个必须属于当前 crate 的一致性规则，避免两个外部 crate 提供冲突实现。">orphan rule</Term>
+
+当前 crate 可为自己的 `SocialPost` 实现标准库 Display，也可为标准库 `Vec<T>` 实现本地 Summary；不能为外部 Vec 实现外部 Display。否则不同依赖都可能声明同一 `(trait, type)` 实现，编译器无法稳定选择。
+
+<RplTraitContractLab />
+
+切换 coherence 场景，尝试让 trait/type 都成为外部定义。orphan rule 不是限制复用的任意规则，而是让依赖组合后的方法语义仍唯一。
+
+<Callout type="trap" title="陷阱：直接为外部类型实现外部 trait">
+  需要适配时可定义本地 newtype 包装外部类型，再为本地 wrapper 实现外部 trait；wrapper 也能收紧 API 和不变量。不要通过 fork 依赖或隐藏冲突绕过 coherence。
+</Callout>
+
+## impl Trait 与泛型 bound 表达不同类型关系
+
+```rust
+fn notify(item: &impl Summary) {
+    println!("{}", item.summarize());
+}
+
+fn notify_bound<T: Summary>(item: &T) {
+    println!("{}", item.summarize());
+}
+```
+
+单参数时二者等价。两个 `&impl Summary` 参数可各自是不同具体类型；两个 `&T` 且共用一个 T 时强制同型。多个能力用 `T: Summary + Display`，复杂签名移到 where clause：
+
+```rust
+fn compare_and_notify<T, U>(left: &T, right: &U)
+where
+    T: Summary + Display,
+    U: Clone + Debug,
+{
+    // body 可使用 bounds 证明的操作
+}
+```
+
+<Term def="在函数参数或返回位置写 impl Trait，隐藏具体类型名称并承诺其实现指定 trait 的语法。">impl Trait</Term>
+
+返回 `impl Summary` 会隐藏但固定一个具体返回类型；不同分支不能一个返回 NewsArticle、另一个返回 SocialPost。需要运行时异构分派时等 Chapter 18 的 trait objects。
+
+## 条件 impl 与 blanket impl 扩展能力
+
+<Term def="只当泛型实参满足指定 bounds 时才存在的 impl 块，因此某些方法只对合格具体类型可见。">条件实现</Term>
+
+```rust
+impl<T> Pair<T> {
+    fn new(x: T, y: T) -> Self {
+        Self { x, y }
+    }
+}
+
+impl<T: Display + PartialOrd> Pair<T> {
+    fn cmp_display(&self) {
+        println!("larger value is available and displayable");
+    }
+}
+```
+
+所有 `Pair<T>` 都有 new，只有同时实现 Display 与 PartialOrd 的 T 才让 `Pair<T>` 获得 cmp_display。标准库还广泛使用 blanket implementation，例如“所有实现 Display 的 T 自动实现 ToString”。
+
+<Term def="对所有满足某组 bounds 的类型统一实现另一个 trait 的泛型实现。">blanket implementation</Term>
+
+在 trait 实验切换 conditional，观察方法集合如何由 T 的能力静态决定；bound 不只是限制调用方，也决定 impl body 可以安全调用哪些方法。
+
+## 生命周期防止引用比 owner 活得更久
+
+<Term def="一个引用保持有效并可被使用的区间；所有引用都有生命周期，多数由编译器推断。">生命周期</Term>
+
+```rust
+let reference;
+{
+    let value = 5;
+    // reference = &value;
+} // value 在此 drop
+// println!("{reference}");
+```
+
+若允许 reference 逃出内层，使用时 owner 已不存在。borrow checker 比较值作用域与引用使用区间，拒绝 `value does not live long enough`。
+
+<Term def="指向已结束生命周期或已释放存储的引用；Rust 通过借用与生命周期分析在编译期阻止。">悬空引用</Term>
+
+## 生命周期标注描述关系，不延长作用域
+
+<Term def="以撇号开头的泛型参数，用于在签名中说明多个输入和输出引用的有效期关系。">生命周期参数</Term>
+
+```rust
+fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+    if x.len() > y.len() { x } else { y }
+}
+```
+
+返回值可能来自 x 或 y，因此 `'a` 在调用点被实例化为两个输入重叠的较短有效区间。标注没有让短输入活得更久，只让编译器据此限制结果使用。若函数总返回 x，正确签名可写 `fn first<'a>(x: &'a str, y: &str) -> &'a str`，因为 y 与输出无关。
+
+返回函数内新建局部值的引用无法靠任何 lifetime annotation 修复；owner 在 return 前 drop，正确方案是返回拥有值。
+
+<RplLifetimeRelationLab />
+
+调节 x/y 结束时间和结果使用时间，比较 longest、只返回 first、elided 单输入和 static literal。先预测可用区间再观察 E0597 边界。
+
+<Callout type="trap" title="陷阱：看到 lifetime 错误就加 static">
+  `'static` 声明引用可覆盖整个程序，只适用于确实拥有该存储期的数据，如字符串字面量或有意泄漏/全局存储。普通局部借用不因标注改变所有权；应修复 owner 范围、返回拥有值或重新设计关系。
+</Callout>
+
+## 借用字段让 struct 不能比来源活得久
+
+```rust
+struct ImportantExcerpt<'a> {
+    part: &'a str,
+}
+
+impl<'a> ImportantExcerpt<'a> {
+    fn announce_and_return_part(&self, announcement: &str) -> &str {
+        println!("{announcement}");
+        self.part
+    }
+}
+```
+
+`ImportantExcerpt<'a>` 的实例不能比 part 来源活得久。impl 后声明 `'a`，类型名后使用 `'a`。方法返回值由 `&self` 省略规则绑定，不需要重复写显式 lifetime。
+
+## Lifetime elision 覆盖常见签名
+
+<Term def="编译器按三条确定性规则为常见函数和方法签名补全生命周期关系，从而省略重复标注。">lifetime elision</Term>
+
+省略规则只分析签名：第一，每个输入引用得到自己的 lifetime；第二，若只有一个输入 lifetime，把它赋给所有输出引用；第三，方法有 `&self`/`&mut self` 时，把 self lifetime 赋给输出。若应用完仍不能决定，如 `longest(x: &str, y: &str) -> &str`，必须显式说明关系。
+
+<Term def="表示引用可在整个程序期间有效的特殊生命周期；字符串字面量天然具有该生命周期。">static lifetime</Term>
+
+```rust
+let message: &'static str = "stored in the program binary";
+```
+
+static 不是“永不 drop 的所有值”的通用标签；它描述引用目标确实在整个程序可用。错误建议 static 时，先检查是否在制造悬空关系。
+
+## 类型参数、bounds 与 lifetimes 可以组合
+
+```rust
+use std::fmt::Display;
+
+fn longest_with_announcement<'a, T>(
+    x: &'a str,
+    y: &'a str,
+    announcement: T,
+) -> &'a str
+where
+    T: Display,
+{
+    println!("Announcement: {announcement}");
+    if x.len() > y.len() { x } else { y }
+}
+```
+
+`'a` 证明返回借用与两个字符串输入的关系，T 表达公告值类型，Display 证明格式化能力。编译器在 compile time 同时验证这些约束并具体化实际类型。
+
+## 三步建立静态抽象
+
+<Stepper>
+  <Step title="第一步：从真实重复提取类型参数">
+    先识别算法只差值还是只差类型；用最少 T/U 表达字段和返回关系，再为函数体实际操作增加最窄 trait bounds。
+
+    <RplGenericInstantiationLab />
+  </Step>
+  <Step title="第二步：把共享能力与实现归属写清">
+    trait 定义行为，默认方法复用公共逻辑；选择 impl Trait、共用 T 或 where clause 表达参数关系，并检查 orphan/conditional/blanket impl。
+
+    <RplTraitContractLab />
+  </Step>
+  <Step title="第三步：从返回引用反推来源关系">
+    标记输出可能借自哪些输入，写出最小 lifetime 联系；验证 owner 是否覆盖结果最后使用。能由 elision 唯一推导时省略，不能推导时显式标注。
+
+    <RplLifetimeRelationLab />
+  </Step>
+</Stepper>
+
+**生命周期省略** 只按固定规则补全常见 input/output relation；无法唯一推导时仍需显式 annotation，而 static lifetime 也不会延长局部 owner。
+
+## 小结
+
+- 泛型消除只差类型的重复，但可用操作由 trait bounds 证明；struct/enum/method 的类型参数还能表达字段和返回关系
+- monomorphization 为实际具体类型生成静态代码，通常没有运行时类型分派成本
+- trait 定义共享行为和默认实现；orphan rule 保证实现一致，条件与 blanket impl 按 bounds 扩展能力
+- impl Trait 适合简洁参数或隐藏单一返回类型，共用泛型 T 可强制参数同型，复杂约束用 where clause
+- lifetime annotation 描述输入/输出引用关系而不延长值；elision 推导常见模式，static 只适用于真实程序级存储期
+
+<Exercises>
+  1. **问题 1：补全 largest。** 为什么 `fn largest<T>(list: &[T]) -> &T` 中写 `item > largest` 会失败，最窄修复是什么？若改为返回 T 还可能需要什么？
+
+  <Answer question="泛型函数体如何获得可用操作？">无约束 T 不保证实现比较运算。增加 `T: PartialOrd` 可让引用比较成立，并仍返回借用。若要按值返回某个元素，必须解决从 slice 取值的所有权，常见是再要求 T: Copy 后解引用复制，或要求 Clone 并显式 clone，不能从借用 slice 任意 move。</Answer>
+
+  2. **问题 2：判断实现合法性。** 当前 crate 能否为自己的 Post 实现 std::fmt::Display、为 `Vec<T>` 实现本地 Summary、为 `Vec<T>` 实现 Display？
+
+  <Answer question="orphan rule 怎样判定 trait implementation 归属？">Post 是本地类型，因此可实现外部 Display；Summary 是本地 trait，因此可实现到外部 Vec。Vec 与 Display 都属于外部 crate，第三种违反 orphan/coherence rule。需要该行为可定义本地 newtype 包装 Vec 后实现 Display。</Answer>
+
+  3. **问题 3：推导 longest。** `longest<'a>(x: &'a str, y: &'a str) -> &'a str` 的返回引用实际能活多久？为什么知道 x 的内容更长也不能在 y drop 后使用结果？
+
+  <Answer question="同一生命周期参数表达的是相等还是共同下界？">调用点把 `'a` 约束为两个输入都有效的重叠区间，实际是较短 lifetime。函数签名允许实现返回 x 或 y，编译器不根据运行时字符串长度证明分支结果，因此 y drop 后不能继续用结果。若实现永远返回 x，应把输出只绑定 x，y 使用独立或省略 lifetime。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="泛型类型参数">由具体类型实例化、用于复用定义的类型占位参数。</GlossaryItem>
+  <GlossaryItem term="trait bound">证明泛型类型具备函数体所需行为的约束。</GlossaryItem>
+  <GlossaryItem term="monomorphization">编译期为实际具体类型生成专用代码的过程。</GlossaryItem>
+  <GlossaryItem term="trait">由多个类型实现的共享行为契约。</GlossaryItem>
+  <GlossaryItem term="默认实现">trait 提供、实现者可采用或覆盖的方法体。</GlossaryItem>
+  <GlossaryItem term="orphan rule">要求 trait 或 type 至少一个属于当前 crate 的一致性规则。</GlossaryItem>
+  <GlossaryItem term="impl Trait">以实现某 trait 的未命名具体类型描述参数或单一返回类型的语法。</GlossaryItem>
+  <GlossaryItem term="条件实现">仅对满足 bounds 的具体泛型类型存在的 impl。</GlossaryItem>
+  <GlossaryItem term="blanket implementation">为所有满足 bounds 的类型统一实现 trait。</GlossaryItem>
+  <GlossaryItem term="生命周期">引用保持有效并可使用的区间。</GlossaryItem>
+  <GlossaryItem term="悬空引用">目标 owner 已结束但仍被持有或使用的无效引用。</GlossaryItem>
+  <GlossaryItem term="生命周期参数">在签名中描述多个引用有效期关系的泛型参数。</GlossaryItem>
+  <GlossaryItem term="lifetime elision">按确定性规则推导常见引用签名生命周期的机制。</GlossaryItem>
+  <GlossaryItem term="static lifetime">引用目标在整个程序期间有效的特殊生命周期。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Rust Programming Language, Chapter 10 Generic Types, Traits, and Lifetimes"
+  adaptedUrl="https://doc.rust-lang.org/book/ch10-00-generics.html"
+/>

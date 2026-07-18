@@ -1,0 +1,485 @@
+---
+title: "Column 8 · Algorithm Design Techniques：从三次方穷举到线性扫描"
+type: B
+section: "Part II · Performance"
+order: 7
+description: "按第二版Column 8重建maximum sum subvector问题、simple cubic algorithm、两种quadratic algorithms、divide-and-conquer、scanning algorithm、实测性能与设计原则。"
+demo: true
+math: true
+sourceUrl: "https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+draft: false
+---
+
+import { PP2MaximumSubarrayLab, PP2CubicWorkLab, PP2QuadraticReuseLab, PP2PrefixSumLab, PP2DivideConquerLab, PP2RecurrenceTreeLab, PP2ScanningStateLab, PP2ComplexityRaceLab, PP2ConstantFactorLab, PP2TechniqueLadderLab, PP2AlgorithmCertificateLab } from "@/components/mdx/programming-pearls/diagrams/08-algorithm-design-techniques";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释maximum sum subvector的精确定义，以及simple、quadratic、divide-and-conquer与scanning algorithms如何逐步减少重复工作
+- 能计算候选区间数量、cubic additions、prefix range sum、divide-and-conquer recurrence与linear lower bound
+- 能实现两种quadratic algorithms、crossing combine、Kadane-style scan及all-negative contract
+- 能分析loop invariant、case split、asymptotic class、constant factor、crossover point与benchmark evidence
+- 能设计oracle tests、growth experiment、performance table、correctness certificate与production algorithm choice
+
+</Objectives>
+
+## 从“负数到底该不该留在区间里”开始
+
+输入一个包含$N$个real numbers的vector，输出任意contiguous subvector能取得的maximum sum。原书示例：
+
+```text
+31  -41  59  26  -53  58  97  -93  -23  84
+```
+
+最佳区间是$X[3..7]$，总和$59+26-53+58+97=187$。其中`-53`不能单独贡献好结果，却连接了左右更大的positive gains。
+
+先预测：看到一个negative element时是否应立即切断区间？若所有elements都为negative，答案应该是largest negative element，还是empty subvector的0？先在图中移动$L,U$，再观察绿色optimal range。
+
+<PP2MaximumSubarrayLab />
+
+Column 8把这一题用作Algorithm Design Techniques（<Term def="通过保存state、预处理、分治、扫描与下界证明，系统改变问题求解结构而非只改局部指令的算法设计方法。">Algorithm Design Techniques</Term>）实验台。重点不是记住最终七行code，而是看清每次加速回答了哪个新问题。
+
+本章采用原书contract：
+
+- Subvector必须contiguous。
+- Empty subvector合法，sum为0。
+- 因此all-negative input返回0。
+- Input order不可修改。
+- 先只求maximum sum；若要返回indices，state需相应扩展。
+
+精确定义为：
+
+$$
+\operatorname{MaxSum}(X)
+=
+\max\left(
+0,
+\max_{1\le L\le U\le N}
+\sum_{i=L}^{U}X_i
+\right).
+$$
+
+这个empty-range约定不是minor detail。它决定initial value、base case、loop invariant与tests。Production API若改成“必须选one element”，四种实现都要统一改变，不能只修最后一个algorithm。
+
+## 8.1 The Problem and a Simple Algorithm
+
+Simple Algorithm（<Term def="枚举每个L和U，并从头累加X[L..U]的直接基线；结构清楚但执行三次方数量级的work。">Simple Algorithm</Term>）按定义逐字翻译：
+
+```cpp
+double max_sum_cubic(std::span<const double> x) {
+    double best = 0.0;
+    for (std::size_t left = 0; left < x.size(); ++left) {
+        for (std::size_t right = left; right < x.size(); ++right) {
+            double sum = 0.0;
+            for (std::size_t i = left; i <= right; ++i) {
+                sum += x[i];
+            }
+            best = std::max(best, sum);
+        }
+    }
+    return best;
+}
+```
+
+Candidate intervals共有：
+
+$$
+\sum_{L=1}^{N}(N-L+1)
+=
+\frac{N(N+1)}{2}
+=
+\Theta(N^2).
+$$
+
+但每个interval又重新读取并相加其elements。总addition count是all interval lengths之和：
+
+$$
+\sum_{k=1}^{N}k(N-k+1)
+=
+\frac{N(N+1)(N+2)}{6}
+=
+\Theta(N^3).
+$$
+
+<PP2CubicWorkLab />
+
+原始程序的价值有三点：
+
+- 它是specification的executable form，容易人工审查。
+- 它可作为small random tests的oracle。
+- 它暴露真正的重复：相邻candidate sums反复读取同一elements。
+
+它不该被嘲笑后删除。把fast implementation与slow trusted oracle做differential testing，往往比直接为subtle scan手写几十个expected values更可靠。
+
+<Callout type="trap" title="候选区间只有平方个，所以程序就是平方时间">
+枚举对象数量不等于总cost。若每个候选还花与区间长度成正比的时间，平均区间长度也是Θ(N)，最终是Θ(N³)。分析必须同时数“执行多少次”和“每次多贵”。
+</Callout>
+
+## 8.2 Two Quadratic Algorithms
+
+原书指出许多programmers都觉得cubic baseline有一个“obvious”改进，但不同人想到的往往是两种不同方法。它们都让range sum变成constant-time update，同时仍检查$\Theta(N^2)$个$(L,U)$ pairs。
+
+### Algorithm 2：save the previous sum
+
+固定$L$后，$X[L..U]$只比$X[L..U-1]$多一个element：
+
+$$
+S(L,U)=S(L,U-1)+X_U.
+$$
+
+```cpp
+double max_sum_quadratic(std::span<const double> x) {
+    double best = 0.0;
+    for (std::size_t left = 0; left < x.size(); ++left) {
+        double sum = 0.0;
+        for (std::size_t right = left; right < x.size(); ++right) {
+            sum += x[right];
+            best = std::max(best, sum);
+        }
+    }
+    return best;
+}
+```
+
+<PP2QuadraticReuseLab />
+
+这里的核心不是“删掉one loop”，而是Save State（<Term def="保留上一子问题的结果，用constant-time增量更新替代从头重算；是dynamic programming的简单形式。">Save State</Term>）。Inner loop invariant：
+
+> 在更新`best`之前，`sum`精确等于当前`x[left..right]`之和；`best`覆盖此前见过的所有candidate intervals。
+
+### Algorithm 2b：preprocess cumulative sums
+
+另一条路径先构造Cumulative Array（<Term def="令C[i]保存前i个inputs之和，使任意contiguous range sum能由两个prefix values相减得到。">Cumulative Array</Term>）：
+
+$$
+C_0=0,\qquad
+C_i=C_{i-1}+X_i,
+\qquad
+S(L,U)=C_U-C_{L-1}.
+$$
+
+```cpp
+std::vector<double> prefix(x.size() + 1, 0.0);
+for (std::size_t i = 0; i < x.size(); ++i) {
+    prefix[i + 1] = prefix[i] + x[i];
+}
+
+double best = 0.0;
+for (std::size_t left = 0; left < x.size(); ++left) {
+    for (std::size_t right = left; right < x.size(); ++right) {
+        best = std::max(best, prefix[right + 1] - prefix[left]);
+    }
+}
+```
+
+<PP2PrefixSumLab />
+
+两种Quadratic Algorithms（<Term def="检查所有起止位置对，但将每个range sum降为constant-time update或query，因此总cost为Θ(N²)。">Quadratic Algorithms</Term>）的tradeoff不同：
+
+| Design | Time | Extra space | Reuse scope | Risk |
+|---|---:|---:|---|---|
+| Running sum | $\Theta(N^2)$ | $\Theta(1)$ | 当前fixed $L$ | state reset位置错误 |
+| Cumulative array | $\Theta(N^2)$ | $\Theta(N)$ | 任意range query | index offset与overflow |
+
+Prefix preprocessing在需要many range-sum queries时更通用；只求one maximum时，running sum更省space。两者都碰到更深的barrier：只要逐个inspect所有intervals，就不可能突破quadratic。
+
+## 8.3 A Divide-and-Conquer Algorithm
+
+把vector在midpoint分成$A=X[L..M]$与$B=X[M+1..U]$。Whole interval的maximum只有三类：
+
+1. 完全位于$A$，记为$M_A$。
+2. 完全位于$B$，记为$M_B$。
+3. Crosses boundary，记为$M_C$。
+
+<PP2DivideConquerLab />
+
+$M_A,M_B$递归求解。Crossing interval必须由$A$的best suffix与$B$的best prefix组成：
+
+$$
+M_C
+=
+\max_{L\le i\le M}\sum_{k=i}^{M}X_k
++
+\max_{M+1\le j\le U}\sum_{k=M+1}^{j}X_k.
+$$
+
+从boundary向两侧各scan一次即可在$\Theta(U-L+1)$内算出$M_C$。
+
+```cpp
+double max_sum_divide(std::span<const double> x, int left, int right) {
+    if (left > right) return 0.0;
+    if (left == right) return std::max(0.0, x[left]);
+
+    const int mid = left + (right - left) / 2;
+    double sum = 0.0;
+    double best_left_suffix = 0.0;
+    for (int i = mid; i >= left; --i) {
+        sum += x[i];
+        best_left_suffix = std::max(best_left_suffix, sum);
+    }
+
+    sum = 0.0;
+    double best_right_prefix = 0.0;
+    for (int i = mid + 1; i <= right; ++i) {
+        sum += x[i];
+        best_right_prefix = std::max(best_right_prefix, sum);
+    }
+
+    return std::max({
+        best_left_suffix + best_right_prefix,
+        max_sum_divide(x, left, mid),
+        max_sum_divide(x, mid + 1, right),
+    });
+}
+```
+
+Divide-and-Conquer Algorithm（<Term def="将size N问题递归分成约N/2的同类子问题，再以linear crossing computation合并答案的设计。">Divide-and-Conquer Algorithm</Term>）满足：
+
+$$
+T(N)=2T(N/2)+\Theta(N)=\Theta(N\log N).
+$$
+
+<PP2RecurrenceTreeLab />
+
+Correctness proof也按三类完成。任一optimal interval相对于boundary必属left、right、crossing之一；recursive calls给出前两类最优，suffix加prefix给出第三类最优，取max因此没有漏解。
+
+Base case必须匹配contract。One negative element返回0而不是该negative value；empty interval同样返回0。若API要求non-empty answer，base case与crossing initial values都要改成negative infinity或actual element，并处理indices。
+
+## 8.4 A Scanning Algorithm
+
+分治已经不再枚举所有intervals，但combine仍在每个recursion level重复scan。能否只从left到right看一遍？
+
+设处理完$X[1..I]$后维护：
+
+- `MaxSoFar`：prefix $X[1..I]$中任意subvector的maximum sum。
+- `MaxEndingHere`：以position $I$结尾，或选择empty subvector时的maximum sum。
+
+加入$X_{I+1}$时，best ending interval只有两个choices：extend previous best ending interval，或在negative debt出现时选择empty重新开始：
+
+$$
+\operatorname{MaxEndingHere}_{i}
+=
+\max\left(0,\operatorname{MaxEndingHere}_{i-1}+X_i\right),
+$$
+
+$$
+\operatorname{MaxSoFar}_{i}
+=
+\max\left(\operatorname{MaxSoFar}_{i-1},\operatorname{MaxEndingHere}_{i}\right).
+$$
+
+```cpp
+double max_sum_scan(std::span<const double> x) {
+    double best = 0.0;
+    double ending = 0.0;
+    for (double value : x) {
+        ending = std::max(0.0, ending + value);
+        best = std::max(best, ending);
+    }
+    return best;
+}
+```
+
+<PP2ScanningStateLab />
+
+Scanning Algorithm（<Term def="从left到right扩展已解决prefix，只携带global best与best ending state，每个input执行constant work的线性算法。">Scanning Algorithm</Term>）的loop invariant：
+
+> 每轮结束后，`ending`是所有以当前位置结束的legal candidates之最大值，`best`是整个已读prefix的maximum subarray sum。
+
+Initialization在empty prefix上两者均为0。Maintenance由上面two-choice recurrence保证。Termination时prefix等于whole input，所以`best`就是specification答案。
+
+Time为$\Theta(N)$，extra space为$\Theta(1)$。更重要的是它达到matching lower bound：任何correct algorithm都必须inspect每个input，因为一个未读位置可被改成arbitrarily large positive value并改变答案。因此：
+
+$$
+T(N)=\Theta(N)
+\quad\text{且}\quad
+T(N)=\Omega(N),
+$$
+
+linear scan在asymptotic意义上optimal。
+
+<Callout type="trap" title="扫描遇到负数就一定要重置">
+重置条件不是“当前element为负”，而是running ending sum降到0以下。示例中的`-53`仍被59和26积累的credit覆盖，所以继续保留后才能得到187。判断依据是state总和，不是单个element的sign。
+</Callout>
+
+## 8.5 What Does It Matter?
+
+只写big-O仍不足以做engineering decision。Bentley在VAX-11/750上实现并计时四个primary algorithms，得到近似cost models：
+
+| Algorithm | C lines | Measured model |
+|---|---:|---:|
+| Cubic | 8 | $3.4N^3$ microseconds |
+| Quadratic running sum | 7 | $13N^2$ microseconds |
+| Divide and conquer | 14 | $46N\log_2N$ microseconds |
+| Linear scan | 7 | $33N$ microseconds |
+
+<PP2ComplexityRaceLab />
+
+原始数据展示了growth classes的实际后果：
+
+| $N$ | Cubic | Quadratic | Divide | Linear |
+|---:|---:|---:|---:|---:|
+| $10^2$ | 3.4 s | 130 ms | 30 ms | 3.3 ms |
+| $10^3$ | 0.94 h | 13 s | 0.45 s | 33 ms |
+| $10^4$ | 39 days | 22 min | 6.1 s | 0.33 s |
+| $10^5$ | 108 years | 1.5 days | 1.3 min | 3.3 s |
+
+第二版official preview用更新platform把相同lesson概括为：size 100,000时，第一个program约15 days，最终program约5 milliseconds。绝对数字会随machine变，growth gap不会。
+
+### The tyranny of asymptotics
+
+Bentley故意给linear code最差constant、给cubic code最好constant：
+
+- Fine-tuned FORTRAN cubic algorithm on Cray-1：$3.0N^3$ nanoseconds。
+- BASIC linear algorithm on TRS-80：$19{,}500{,}000N$ nanoseconds。
+
+Linear program的per-unit constant慢约6.5 million倍，crossover仍只在$N\approx2500$，两者约50 seconds。之后asymptotic growth不可逆转地支配结果。
+
+<PP2ConstantFactorLab />
+
+这不是说constants永远不重要。Small inputs、tight latency或same complexity class内，constants可能决定winner。正确流程是：
+
+1. 用asymptotic class排除growth不可行的design。
+2. 用cost model估crossover与target-size runtime。
+3. 在representative data和same contract下测量。
+4. 同时报告setup、memory、worst case与distribution。
+
+## 8.6 Principles
+
+### 从真实历史看设计过程
+
+问题源于Ulf Grenander的two-dimensional pattern recognition：maximum-sum subarray作为digitized picture中某类pattern的maximum-likelihood estimator。2D version太慢，他先简化为one dimension寻找结构。
+
+Grenander得到quadratic Algorithm 2。1977年他把问题告诉Michael Shamos，Shamos overnight构造$O(N\log N)$ divide-and-conquer。几天后Shamos在seminar讲述问题，statistician Jay Kadane约一分钟内给出linear scan。历史提醒我们：
+
+- “Obvious”取决于观察problem的representation。
+- 一个看似best possible的bound需要proof，不是直觉。
+- 更快solution常来自换question，而非更勤奋地优化原loops。
+- Simplified model可以揭露原problem的structure，但不自动解决2D source problem。
+
+### 六种可迁移技术
+
+<PP2TechniqueLadderLab />
+
+1. **Save state to avoid recomputation**：Algorithms 2与4保存刚算过的信息。
+2. **Preprocess into a data structure**：Algorithm 2b用cumulative array换constant-time range sums。
+3. **Divide and conquer**：把whole solution分成left、right、crossing three exhaustive cases。
+4. **Scan a solved prefix**：问“如何从$X[1..I-1]$扩展到$X[1..I]$？”
+5. **Use cumulatives for ranges**：Year-to-date totals可相减得到March-to-October sales。
+6. **Prove lower bounds**：Linear upper bound配$\Omega(N)$ lower bound，才知道搜索结束。
+
+这些techniques在real systems中的影响远超toy problem。原专栏举例：FFT把Fourier analysis由$O(N^2)$降到$O(N\log N)$；linear-time graph partition heuristic把IC layout从hours降至minutes；plane sweep让VLSI artwork processing由all-pairs quadratic降至$O(N\log N)$，使million-figure designs可处理。
+
+### Correctness and measurement certificate
+
+<PP2AlgorithmCertificateLab />
+
+一个可交付的algorithm claim至少包含：
+
+- **Contract**：empty/non-empty、numeric type、overflow、NaN与returned indices。
+- **Oracle**：small inputs与cubic baseline differential comparison。
+- **Invariants**：running sum、crossing combine或scan state的精确定义。
+- **Cases**：empty、one value、all negative、all positive、ties与large magnitude。
+- **Complexity**：operation count或recurrence，不只看loop数量。
+- **Lower bound**：说明是否仍有asymptotic improvement空间。
+- **Benchmark**：same input、same output、multiple sizes与growth-ratio check。
+
+```text
+for N in {16, 32, 64, 128, ...}:
+    generate deterministic and adversarial inputs
+    compare every fast answer with cubic oracle on small N
+    measure median elapsed after warmup
+    report T(2N) / T(N), memory, compiler, CPU, and contract
+```
+
+若ratio接近8、4、略大于2、2，可分别与cubic、quadratic、$N\log N$、linear growth对照。Single timing point无法区分class，也可能只测到timer noise或setup。
+
+## 8.7 逐步运行路线
+
+<Stepper>
+  <Step title="锁定problem contract与oracle" description="在原书ten-value input上选择range，确认187、empty subvector与all-negative行为。">
+    <PP2MaximumSubarrayLab />
+    <PP2CubicWorkLab />
+  </Step>
+  <Step title="消除range-sum重算" description="分别保存running sum与预处理cumulative array，比较space、reuse scope与index risks。">
+    <PP2QuadraticReuseLab />
+    <PP2PrefixSumLab />
+  </Step>
+  <Step title="按left、crossing、right分治" description="验证three cases exhaustive，并从recurrence tree读出每层linear work。">
+    <PP2DivideConquerLab />
+    <PP2RecurrenceTreeLab />
+  </Step>
+  <Step title="把已解prefix扩展一格" description="跟踪MaxEndingHere与MaxSoFar，用loop invariant证明linear scan。">
+    <PP2ScanningStateLab />
+    <PP2TechniqueLadderLab />
+  </Step>
+  <Step title="用实测和下界签发结论" description="比较VAX models、极端constant factors与production evidence checklist。">
+    <PP2ComplexityRaceLab />
+    <PP2ConstantFactorLab />
+    <PP2AlgorithmCertificateLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Maximum subarray允许negative interior values；原书example的$X[3..7]$总和为187。
+- Simple Algorithm枚举$\Theta(N^2)$ intervals并重算每个sum，total为$\Theta(N^3)$。
+- 两种Quadratic Algorithms分别save running state与preprocess cumulative sums。
+- Divide-and-Conquer Algorithm把答案分为left、right、crossing，得到$\Theta(N\log N)$。
+- Scanning Algorithm携带MaxEndingHere与MaxSoFar，每个element只处理一次。
+- Empty subvector contract使all-negative answer为0，并贯穿initialization与base cases。
+- Linear scan与$\Omega(N)$ input-inspection lower bound匹配，asymptotically optimal。
+- VAX measurements与Cray/TRS-80反例说明growth class最终压过巨大constant disadvantage。
+- Algorithm design不是删除loops的技巧，而是识别recomputation、preprocessing、case decomposition、prefix extension与lower bounds。
+- Correctness oracle、invariants、growth tests和representative benchmark必须共同支撑performance claim。
+
+<Exercises>
+
+1. 将linear scan扩展为返回`{sum, left, right}`。定义empty range的indices，写出loop invariant，并处理multiple optimal ranges的tie policy。
+2. 对$N=10^6$，用原书VAX models估算四种algorithms的runtime。再计算当time budget从one second增至one minute时，各class支持的maximum $N$大约扩大多少。
+3. 把contract改为non-empty maximum subarray。说明cubic、quadratic、divide-and-conquer与scan各自的initialization/base case变化，并为all-negative input设计tests。
+4. 设计一个experiment区分quadratic与$N\log N$ implementation。列出input sizes、oracle、warmup、repetitions、reported metrics与判断规则。
+
+<Answer>
+
+除`ending`与`best`外，维护`candidate_left`、`best_left`与`best_right`。当`ending + value`不大于0且contract偏好empty时，将`ending`归零并令`candidate_left=i+1`；当新`ending`超过`best`时复制当前range。Invariant是`ending`及其indices表示以当前位置结尾或empty的最佳candidate，`best`及indices表示已读prefix全局最佳。可定义empty为`left=0,right=-1`；tie policy必须明确选择earliest、shortest或first observed，并把strict comparison统一实现。
+
+</Answer>
+
+<Answer>
+
+$N=10^6$时models分别是$3.4\times10^{12}$ seconds、$1.3\times10^7$ seconds、约916 seconds与33 seconds，对应约108,000 years、150 days、15 minutes和33 seconds。Budget乘60时，cubic支持规模约乘$\sqrt[3]{60}\approx3.9$，quadratic约乘$\sqrt{60}\approx7.7$，linear乘60；$N\log N$略小于60倍，需要numerical solve。结论是machine time增加不能等价补偿bad growth。
+
+</Answer>
+
+<Answer>
+
+Non-empty contract将best初始化为first element或negative infinity。Cubic/quadratic不再允许默认0覆盖negative sums；divide base case对one element直接返回该value，crossing suffix/prefix也从实际boundary element起；scan可用`ending=max(value, ending+value)`与`best=max(best, ending)`，从first element初始化。Tests至少含`[-8,-3,-5] -> -3`、one negative、one positive、mixed、ties与empty input policy。
+
+</Answer>
+
+<Answer>
+
+选择geometric sizes，例如$2^{10}$到$2^{22}$，先在small sizes与cubic oracle逐项比answer；对large sizes使用same generated distributions和seed。Release build预热后多次计时，报告median、spread、peak memory与$T(2N)/T(N)$。Quadratic ratio趋近4；$N\log N$ ratio趋近$2(1+1/\log_2N)$。Size范围必须让algorithm time明显高于timer noise但不触发swap或thermal throttling，并单独记录setup。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Algorithm Design Techniques">通过state、preprocessing、divide and conquer、scan与lower bound改变求解结构的方法。</GlossaryItem>
+  <GlossaryItem term="Simple Algorithm">按定义枚举所有起止位置并重新累加每个range的三次方baseline。</GlossaryItem>
+  <GlossaryItem term="Save State">保留previous result并增量更新，避免重复计算的dynamic-programming technique。</GlossaryItem>
+  <GlossaryItem term="Cumulative Array">保存prefix sums，使任意contiguous range sum可由two entries相减得到的结构。</GlossaryItem>
+  <GlossaryItem term="Quadratic Algorithms">仍枚举所有interval pairs，但让每个sum只花constant time的算法。</GlossaryItem>
+  <GlossaryItem term="Divide-and-Conquer Algorithm">递归解左右halves并用crossing case合并的$N\log N$方法。</GlossaryItem>
+  <GlossaryItem term="Scanning Algorithm">扩展solved prefix并携带minimal auxiliary state的linear method。</GlossaryItem>
+  <GlossaryItem term="Lower Bound">证明任何correct solution至少需要某一数量级resources的限制。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Programming Pearls, Second Edition · Column 8 Algorithm Design Techniques"
+  href="https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+  author="Jon Bentley"
+  license="本章按Pearson官方第二版目录、O’Reilly官方内容预览与1984 Communications of the ACM原始专栏，重建maximum subvector、四类algorithms、VAX timings、Cray/TRS asymptotic experiment、history与principles；现代C++ interfaces、oracle workflow与certificate为教学化扩展。"
+/>

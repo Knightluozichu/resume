@@ -1,0 +1,231 @@
+---
+title: "第3章 Berkeley套接字（Berkeley Sockets）"
+type: A
+section: "Multiplayer Game Programming · Berkeley套接字"
+order: 3
+description: "套接字API是有生命周期和错误语义的状态机；正确性取决于地址、部分收发、阻塞策略和资源释放。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/multiplayer-game-programming-architecting-networked-9780134034331"
+draft: false
+---
+
+import {
+  Mgp03BerkeleySocketsMapLab,
+  Mgp03BerkeleySocketsExperimentLab,
+  Mgp03BerkeleySocketsEvidenceLab,
+} from "@/components/mdx/multiplayer-game-programming/diagrams/mgp-03-berkeley-sockets";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释Berkeley套接字的核心机制，并把它放回全书13章与附录A的主线
+- 能比较正常、边界、失败和恢复样本，指出首个状态或时间偏离点
+- 能实现最小C++或协议实验，记录网络身份、版本、所有权与预算
+- 能设计证据回答“消息边界由协议而非调用次数定义；每个句柄只有一个生命周期所有者；平台差异不泄漏到游戏逻辑。”是否成立
+
+</Objectives>
+
+## 直觉：先找唯一事实
+
+套接字API是有生命周期和错误语义的状态机；正确性取决于地址、部分收发、阻塞策略和资源释放。 真正的难点不是让一次理想样本跑通，而是让消息身份、世界版本、状态权威和时间预算在丢包、乱序、重复与断线后仍可解释。先预测：如果只保存最终成功画面，本页最可能隐藏哪一种分歧？
+
+<Mgp03BerkeleySocketsMapLab />
+
+## 权威目录定位
+
+本页依据 Addison-Wesley / InformIT 官方书目与官方目录样章锁定范围。英文标题用于一对一追踪，中文正文为独立教学重构；现代平台差异、安全强化和可观察性补充会明确披露：
+
+- Creating Sockets
+- API Operating System Differences
+- Socket Address
+- UDP Sockets
+- TCP Sockets
+- Blocking and Non-Blocking I/O
+- Additional Socket Options
+- Summary
+- Review Questions
+- Additional Readings
+
+本页逐项覆盖10个公开目录条目，并纳入同一套正常、边界、失败与恢复验收。
+
+## 核心概念与所有权
+
+<Term def="操作系统提供的网络通信端点句柄及其协议状态。">套接字</Term>、
+<Term def="由地址族、IP地址和端口等字段构成的端点标识。">套接字地址</Term>、
+<Term def="以数据报为单位发送和接收、默认不保证交付与顺序的端点。">UDP套接字</Term>、
+<Term def="提供有序可靠字节流并具有监听、连接和关闭状态的端点。">TCP套接字</Term>、
+<Term def="调用在暂时无法推进时立即返回，由事件循环稍后继续处理的模式。">非阻塞I/O</Term>。每个概念都要回答：谁创建输入，谁拥有可变状态，哪个序号或版本拒绝旧结果，断线后由谁恢复。
+
+| # | 概念 | 工程含义 |
+| -: | --- | --- |
+| 1 | 套接字 | 操作系统提供的网络通信端点句柄及其协议状态。 |
+| 2 | 套接字地址 | 由地址族、IP地址和端口等字段构成的端点标识。 |
+| 3 | UDP套接字 | 以数据报为单位发送和接收、默认不保证交付与顺序的端点。 |
+| 4 | TCP套接字 | 提供有序可靠字节流并具有监听、连接和关闭状态的端点。 |
+| 5 | 非阻塞I/O | 调用在暂时无法推进时立即返回，由事件循环稍后继续处理的模式。 |
+
+## 机制拆解
+
+### 1. API差异必须隔离
+
+Windows 的 Winsock 初始化、错误码获取和句柄类型与类Unix平台不同。把这些差异封装在薄适配层中，上层只接触统一的创建、地址转换、发送、接收和关闭契约；否则平台条件分支会渗入协议状态机。
+
+先预测：若省略这一层，哪一个序号、所有权或时间预算会最先失真？
+
+### 2. UDP保留消息边界，TCP只提供字节流
+
+一次UDP接收对应一个数据报，但数据报仍可能丢失、重复或被截断。TCP的send和recv都可能只推进部分字节，一次接收不等于一条消息。长度前缀、最大帧长和累计缓冲区必须由应用协议明确管理。
+
+先预测：若省略这一层，哪一个序号、所有权或时间预算会最先失真？
+
+### 3. 非阻塞不是忽略错误
+
+EWOULDBLOCK表示当前没有进展，不等于连接失败；连接重置、不可达和对端关闭则需要不同转换。事件循环应为读写就绪、超时和取消定义单一状态迁移，并保证任何路径都只关闭一次句柄。
+
+先预测：若省略这一层，哪一个序号、所有权或时间预算会最先失真？
+
+## 六阶段证据链
+
+可操作链条是：初始化平台API → 创建套接字 → 绑定或连接地址 → 循环处理部分I/O → 解释错误与就绪 → 关闭并回收资源。正常样本证明能力，边界样本证明预算，失败样本证明拒绝，恢复样本证明状态与资源重新收敛。
+
+<Stepper>
+  <Step title="1. 初始化平台API与创建套接字">
+    固定协议版本、网络种子、输入序号与状态所有者，运行正常和边界样本。
+    <Mgp03BerkeleySocketsMapLab />
+  </Step>
+  <Step title="2. 绑定或连接地址与循环处理部分I/O">
+    注入延迟、抖动、丢包、重复或责任节点中断，要求在首偏离点停止。
+    <Mgp03BerkeleySocketsExperimentLab />
+  </Step>
+  <Step title="3. 解释错误与就绪与关闭并回收资源">
+    清除故障后重放相同输入，核对世界摘要、对象数量、消息债务与资源租约。
+    <Mgp03BerkeleySocketsEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小实现骨架
+
+以下代码是独立复现实验骨架，不复制原书代码。序号比较必须处理回绕，生产实现还需补齐平台错误、认证、容量与资源清理。
+
+```cpp
+struct NetworkEvidence {
+  std::uint32_t sequence;
+  std::uint32_t worldVersion;
+  std::uint64_t objectId;
+  double sentAtMs;
+  double appliedAtMs;
+};
+
+bool accepts(const NetworkEvidence& next, const NetworkEvidence& current) {
+  return next.objectId == current.objectId &&
+         next.worldVersion >= current.worldVersion;
+}
+```
+
+证据记录把目录、时序与状态摘要放在一起：
+
+```yaml
+book: Multiplayer Game Programming
+page: mgp-03-berkeley-sockets
+official_entries: 10
+sample: normal | boundary | failure | recovery
+protocol_version: fixed
+network_seed: fixed
+state_owner: explicit
+first_divergence: null
+```
+
+故障脚本一次只改变一个变量：
+
+```text
+baseline -> inject(delay | jitter | loss | duplicate | disconnect)
+observe -> stop_at_first_divergence
+recover -> replay_same_version_seed_and_input
+assert -> one_authority && converged_state && no_orphan_resource
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：假设一次send或recv会处理完整消息，导致分片、粘连或短写时状态错位。** 必须保存消息序号、世界版本和首次拒绝原因，而不是只看最终画面。
+</Callout>
+
+<Callout type="trap">
+  **误区二：把暂时不可读和永久错误合并处理，形成忙轮询、误断线或重复关闭。** 必须加入边界、失败与恢复样本，证明错误没有跨入下一阶段。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 网络与输入变化 | 预期状态 | 通过条件 |
+| --- | --- | --- | --- |
+| 正常 | 合法版本、顺序、身份与容量 | 六阶段完成 | 权威摘要与对象身份一致 |
+| 边界 | 临界延迟、抖动、回绕或满载 | 达到预算不越界 | 队列有界且无永久饥饿 |
+| 失败 | 丢包、重复、畸形、断线或节点失效 | 首偏离点停止 | 明确拒绝、回滚或接管 |
+| 恢复 | 清除故障后重放同一输入 | 收敛到正常轨迹 | 无双权威、幽灵对象和资源泄漏 |
+
+<Mgp03BerkeleySocketsEvidenceLab />
+
+本页签发不变量是：**消息边界由协议而非调用次数定义；每个句柄只有一个生命周期所有者；平台差异不泄漏到游戏逻辑。** 单次演示、平均延迟或最终截图不能替代序号、版本、首偏离点和恢复证据。
+
+## 练习
+
+<Exercises>
+
+**问题 1** 为什么不能只以最终世界状态正确作为验收？
+
+<Answer>
+  最终状态会隐藏重复副作用、旧版本覆盖、瞬时双权威和资源泄漏。必须比较消息序号、对象身份、状态所有者、时间预算与首偏离点。
+</Answer>
+
+**问题 2** 如何把本页公开目录变成可执行学习证据？
+
+<Answer>
+  先按公开顺序建立目录追踪表，再为每个主题写出输入、状态、输出、失败与恢复条件。本页重点包括：Creating Sockets、API Operating System Differences、Socket Address、UDP Sockets、TCP Sockets、Blocking and Non-Blocking I/O；其余条目已在上方逐项列出并纳入验收。
+</Answer>
+
+**问题 3** 本页的最小通过条件是什么？
+
+<Answer>
+  消息边界由协议而非调用次数定义；每个句柄只有一个生命周期所有者；平台差异不泄漏到游戏逻辑。 并且相同协议版本、网络种子和输入可重放正常、边界、失败与恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **套接字**：操作系统提供的网络通信端点句柄及其协议状态。
+- **套接字地址**：由地址族、IP地址和端口等字段构成的端点标识。
+- **UDP套接字**：以数据报为单位发送和接收、默认不保证交付与顺序的端点。
+- **TCP套接字**：提供有序可靠字节流并具有监听、连接和关闭状态的端点。
+- **非阻塞I/O**：调用在暂时无法推进时立即返回，由事件循环稍后继续处理的模式。
+- 六阶段机制链已经映射到正常、边界、失败和恢复证据。
+- 官方目录逐项追踪，现代补充不会冒充原书正式分节。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="套接字">操作系统提供的网络通信端点句柄及其协议状态。</GlossaryItem>
+  <GlossaryItem term="套接字地址">由地址族、IP地址和端口等字段构成的端点标识。</GlossaryItem>
+  <GlossaryItem term="UDP套接字">以数据报为单位发送和接收、默认不保证交付与顺序的端点。</GlossaryItem>
+  <GlossaryItem term="TCP套接字">提供有序可靠字节流并具有监听、连接和关闭状态的端点。</GlossaryItem>
+  <GlossaryItem term="非阻塞I/O">调用在暂时无法推进时立即返回，由事件循环稍后继续处理的模式。</GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Josh Glazer、Sanjay Madhav 著，Addison-Wesley Professional，第一版，2015年10月出版、版权年2016，384页，eBook ISBN 9780134034331，印刷版 ISBN 9780134034300；InformIT官方书目与官方Pearson目录样章确认13章、附录A及112个公开目录条目。正文为独立教学重构。"
+  adaptedUrl="https://www.informit.com/store/multiplayer-game-programming-architecting-networked-9780134034331"
+/>

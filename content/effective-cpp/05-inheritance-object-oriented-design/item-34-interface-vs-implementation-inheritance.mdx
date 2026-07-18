@@ -1,0 +1,508 @@
+---
+title: "Item 34：区分接口继承和实现继承"
+type: A
+section: Chapter 6 · Inheritance and Object-Oriented Design
+order: 34
+description: 对齐 Effective C++ 第三版 Item 34：用 pure virtual、impure virtual 与 non-virtual 分别表达只继承接口、接口加默认实现、接口加强制实现，并避免派生类无意继承错误默认行为。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppAccidentalDefaultInheritanceMap,
+  EcppExplicitDefaultReuseMap,
+  EcppFunctionInheritanceSemanticsMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-34-interface-vs-implementation-inheritance";
+
+<Objectives>
+
+- 能区分 pure virtual、impure virtual、non-virtual 分别传递的接口与实现继承契约
+- 能复现 Airplane subtype 无意继承错误 default implementation，并改成显式复用
+- 能设计 pure virtual body、protected helper 或 NVI wrapper，在强制选择与代码复用间保持清晰边界
+
+</Objectives>
+
+## 从同一个 virtual 关键字的三种意图开始
+
+继承层次中，derived 总会继承 base 的 public interface；是否继承 implementation，则由函数声明形式决定。
+
+```cpp
+class Shape {
+public:
+    virtual ~Shape() = default;
+
+    virtual void draw() const = 0;
+    virtual void reportError(std::string_view message);
+    int objectId() const noexcept;
+};
+```
+
+<Term def="derived 获得 base operation 的名称、参数、返回值与行为契约，客户可经 base 调用。">
+  inheritance of interface
+</Term>
+
+<Term def="derived 可直接使用 base 提供的 function body 或算法步骤。">
+  inheritance of implementation
+</Term>
+
+Item 34 的原则是 Differentiate inheritance of interface and inheritance of implementation（区分接口继承和实现继承）。三个 functions 看似只差 `=0`/virtual，实际表达三种不同政策。
+
+<EcppFunctionInheritanceSemanticsMap />
+
+## pure virtual：只要求接口
+
+`draw() = 0` 表示 Shape 只知道“每个 concrete shape 必须可绘制”，没有对所有形状都合理的默认算法。
+
+<Term def="声明 polymorphic interface 且要求 concrete derived 提供 override 的虚函数。">
+  pure virtual function
+</Term>
+
+```cpp
+class Circle : public Shape {
+public:
+    void draw() const override;
+};
+```
+
+未实现 draw 的 derived 仍是 abstract，不能实例化。错误在 compile time 暴露。
+
+<Term def="仍含至少一个未实现 pure virtual operation、不能直接构造对象的 class。">
+  abstract derived class
+</Term>
+
+pure virtual 适合“所有 subtype 都必须做，但 base 不能安全替它们决定如何做”。
+
+## impure virtual：接口加默认实现
+
+`reportError` 是普通 virtual（原书称 impure virtual）：base 声明接口并提供可继承 default body。
+
+<Term def="有 base implementation、derived 可选择 override 或直接继承的虚函数。">
+  impure virtual function
+</Term>
+
+```cpp
+void Shape::reportError(std::string_view message) {
+    defaultLogger().write(message);
+}
+```
+
+<Term def="derived 未提供 override 时由 virtual dispatch 自动采用的 base function body。">
+  inherited default implementation
+</Term>
+
+只有当默认对每个合法 subtype 都安全时，才应允许“什么也不写”代表接受默认。
+
+## non-virtual：接口加强制实现
+
+`objectId()` 是 non-virtual：所有 Shape 客户都获得接口，所有 derived 都必须使用同一 base implementation。
+
+<Term def="静态绑定且在 public inheritance 中同时传递接口与不可定制实现的成员函数。">
+  non-virtual function
+</Term>
+
+```cpp
+int Shape::objectId() const noexcept {
+    return objectId_;
+}
+```
+
+<Term def="base 声明某项行为在全部 subtype 中保持一致，不提供 override customization point。">
+  invariant implementation policy
+</Term>
+
+derived 若声明同名函数只会 hiding/redefinition，无法改变经 Base reference 的静态绑定，Item 36 会深入。
+
+## 三种声明是设计决策，不是默认语法
+
+<Term def="class author 为每个 operation 明确选择是否强制 override、允许默认或禁止定制。">
+  inheritance policy decision
+</Term>
+
+- pure virtual：继承接口，不自动继承实现。
+- impure virtual：继承接口和可覆盖默认实现。
+- non-virtual：继承接口和强制统一实现。
+
+<Term def="函数声明本身使 derived author 能看出必须实现、可选实现或不可定制。">
+  declaration-level intent
+</Term>
+
+不要把“未来可能会 override”当成把所有函数设 virtual 的理由，也不要因少写代码给所有 virtual 提供默认。
+
+## Airplane 默认飞行的隐藏风险
+
+假设 ModelA 与 ModelB 使用同一飞行算法，于是在 base 提供 default：
+
+```cpp
+class Airplane {
+public:
+    virtual void fly(const Airport& destination) {
+        defaultFly(destination);
+    }
+};
+
+class ModelA : public Airplane {};
+class ModelB : public Airplane {};
+```
+
+<Term def="derived 不写任何声明就获得 base virtual body 的隐式选择。">
+  silent default adoption
+</Term>
+
+后来 ModelC 使用完全不同协议，但作者忘记 override：
+
+```cpp
+class ModelC : public Airplane {
+    // 忘记 override fly，仍然可以实例化
+};
+```
+
+代码编译并调用错误 defaultFly；接口没有迫使 ModelC author 确认默认是否适用。
+
+<Term def="default implementation 对部分 subtype 不合法，却因遗漏 override 被自动继承的错误。">
+  accidental implementation inheritance
+</Term>
+
+<EcppAccidentalDefaultInheritanceMap />
+
+<Callout type="trap">
+  **现象**：多数 subtype 共用算法，就让 base virtual
+  提供默认。**原因**：未来例外 subtype 忘记 override
+  仍可编译，静默执行不适用算法。**修法**：若每个 subtype 必须确认，使用 pure
+  virtual，并把共享 body 放进显式 helper。
+</Callout>
+
+## pure virtual 加 helper 强迫显式选择
+
+```cpp
+class Airplane {
+public:
+    virtual ~Airplane() = default;
+    virtual void fly(const Airport& destination) = 0;
+
+protected:
+    void defaultFly(const Airport& destination);
+};
+```
+
+ModelA/B 明确选择默认：
+
+```cpp
+void ModelA::fly(const Airport& destination) {
+    defaultFly(destination);
+}
+
+void ModelB::fly(const Airport& destination) {
+    defaultFly(destination);
+}
+```
+
+ModelC 必须写 custom implementation，否则保持 abstract。
+
+<Term def="不属于 public polymorphic interface、只供 derived 显式复用的 base implementation。">
+  protected implementation helper
+</Term>
+
+<Term def="derived override 代码明确调用共享 helper，表明作者已选择默认算法。">
+  explicit default reuse
+</Term>
+
+<EcppExplicitDefaultReuseMap />
+
+重复一行 forwarding 的成本远低于错误飞行协议。
+
+## pure virtual 也可以拥有 definition
+
+C++ 允许为 pure virtual function 提供 out-of-class body；它仍是 pure，concrete derived 仍必须 override。
+
+<Term def="标记 `=0` 的 virtual 在 class 外提供可由 qualified call 使用的函数体。">
+  pure virtual definition
+</Term>
+
+```cpp
+class Airplane {
+public:
+    virtual void fly(const Airport& destination) = 0;
+};
+
+void Airplane::fly(const Airport& destination) {
+    defaultFlightProtocol(destination);
+}
+
+void ModelA::fly(const Airport& destination) {
+    Airplane::fly(destination);
+}
+```
+
+<Term def="derived 通过 `Base::function` 显式调用 pure virtual 的 base body，不进行 virtual dispatch。">
+  qualified pure-body call
+</Term>
+
+这种写法把 interface 与 optional implementation 放在同一名字下；protected helper 往往更直观，也可限制外部直接调用。
+
+## pure virtual destructor 必须有 definition
+
+destructor 即使 pure virtual，派生对象销毁链仍会调用 base destructor，因此必须提供 body。
+
+<Term def="使 class abstract、同时仍需在派生析构链执行定义的纯虚析构函数。">
+  pure virtual destructor
+</Term>
+
+```cpp
+class Interface {
+public:
+    virtual ~Interface() = 0;
+};
+
+Interface::~Interface() = default;
+```
+
+<Term def="pure declaration 仍有运行期或链接期路径需要 base implementation 的规则。">
+  required pure-function body
+</Term>
+
+普通 pure virtual 无需 body，除非显式 qualified use；destructor 是结构性例外。
+
+## default implementation 必须满足所有 subtype
+
+impure virtual 合理条件是：默认对所有当前与可预见 derived 都正确，只是某些 derived 能提供更佳/特化行为。
+
+<Term def="无论 derived 是否 override，base default 都满足 base contract 和 subtype invariant 的性质。">
+  universally safe default
+</Term>
+
+例如日志 hook 的 default no-op 是否安全取决于审计要求；如果所有操作必须记录，no-op 就不是合法默认。
+
+<Term def="default body 只为了方便，却无法证明对所有 subtype 满足 correctness contract 的气味。">
+  convenience-only virtual default
+</Term>
+
+默认应由 contract 证明，不由“多数实现相同”投票决定。
+
+<Callout type="trap">
+  **现象**：用 no-op 作为所有 virtual hooks
+  默认，减少派生类代码。**原因**：遗漏实现从 compile error 变成 silent behavior
+  loss。**修法**：必需行为用 pure virtual；真正 optional 且 no-op 合法时才提供
+  no-op default。
+</Callout>
+
+## non-virtual 用于固定算法和不变量
+
+当 base 必须统一执行前置检查、锁、统计或后置验证，可用 non-virtual public function 包装 virtual hook。
+
+<Term def="public non-virtual operation 固定流程，并调用 private/protected virtual customization hook 的模式。">
+  non-virtual interface pattern
+</Term>
+
+```cpp
+class Task {
+public:
+    Result<void, Error> run() {
+        validate();
+        auto result = doRun();
+        record(result);
+        return result;
+    }
+
+private:
+    virtual Result<void, Error> doRun() = 0;
+};
+```
+
+<Term def="所有 subtype 必须经过且不能 override 的公共控制流程。">
+  fixed public algorithm
+</Term>
+
+Item 35 会进一步比较 NVI、strategy 和 function objects；这里强调 non-virtual 表达“implementation 不可替换”。
+
+## access 与 virtual 是两个维度
+
+virtual function 不必 public。public non-virtual API + private virtual hook 可分离“谁能调用”和“谁能定制”。
+
+<Term def="public/protected/private 决定调用访问，virtual/non-virtual 决定动态实现选择，两者相互独立。">
+  access-dispatch orthogonality
+</Term>
+
+<Term def="只能由 base control flow 调用，但允许 derived override 的 private virtual function。">
+  private virtual hook
+</Term>
+
+derived 可以 override private virtual，即使不能直接调用它；access 检查与 overriding 是不同机制。
+
+## default helper 也要有稳定 contract
+
+shared implementation 不是“内部随便写”。ModelA/B 依赖 defaultFly 的前置、后置、异常和性能。
+
+<Term def="derived 显式复用 helper 时可以依赖的输入、结果、失败与副作用承诺。">
+  reusable implementation contract
+</Term>
+
+helper 改动可能影响多个 subtypes，需要共享 contract tests；若 subtypes 开始在 helper 前后堆补丁，可能应抽 strategy/composition。
+
+<Term def="多个 derived 对同一 protected body 产生隐式耦合，修改需同步验证的范围。">
+  inherited implementation coupling
+</Term>
+
+实现复用仍是 dependency，不是免费抽象。
+
+## override/final 让政策可检查
+
+所有 intended overrides 使用 `override`；不允许进一步定制时使用 `final`。
+
+<Term def="由 compiler 验证 derived function 真正覆盖 base virtual 的说明符。">
+  override verification
+</Term>
+
+<Term def="禁止后续 derived 再 override 某 virtual 或禁止 class 再被继承的说明符。">
+  final customization boundary
+</Term>
+
+这不能替代选择 pure/impure/nonvirtual，但能防 signature 漂移和越界定制。
+
+## 用 subtype 选择矩阵验收声明
+
+先预测新增 subtype 忘记声明 function 时会发生 compile error、继承 default 还是固定 base behavior，再验证：
+
+- pure virtual：每个 concrete factory 都必须提供 override，遗漏 compile fail。
+- impure virtual：default 对每个 subtype 运行 base contract suite，证明 universally safe。
+- non-virtual：经 base/derived static type 调用结果一致，不允许同名 redefinition。
+- Airplane A/B 显式调用 helper，C 使用 custom implementation。
+- pure virtual body 只通过 qualified call 复用，virtual dispatch 仍要求 override。
+- pure virtual destructor 有 definition 且经 base owner 完整销毁。
+- NVI 前后检查在所有 derived hook 成功、失败、异常路径执行。
+- override/final compile tests 捕获签名和扩展政策变化。
+
+<Term def="按 operation 记录 interface required、default availability、override policy 与 subtype 证据的表。">
+  interface-implementation inheritance matrix
+</Term>
+
+每个 function declaration 都应能对应一条明确 policy，而不是“先 virtual 再说”。
+
+## 小结
+
+- pure virtual 表示继承 interface，concrete derived 必须实现
+- impure virtual 表示继承 interface 与可选 default implementation，遗漏 override 会静默采用默认
+- non-virtual 表示继承 interface 与强制统一 implementation，不应被 derived 重定义
+- default 不对所有 subtype 安全时，用 pure virtual 强迫选择，并以 protected helper 显式复用
+- pure virtual 可有 definition；derived 仍须 override，pure virtual destructor 则必须有 body
+- NVI 以 non-virtual public algorithm 固定流程、virtual hook 定制步骤
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 34"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="inheritance of interface">
+    derived 获得 base operation 与行为契约。
+  </GlossaryItem>
+  <GlossaryItem term="inheritance of implementation">
+    derived 直接复用 base function body。
+  </GlossaryItem>
+  <GlossaryItem term="pure virtual function">
+    要求 concrete derived override 的接口声明。
+  </GlossaryItem>
+  <GlossaryItem term="abstract derived class">
+    仍有 pure operation、不可实例化的 derived。
+  </GlossaryItem>
+  <GlossaryItem term="impure virtual function">
+    带可继承默认实现的普通 virtual。
+  </GlossaryItem>
+  <GlossaryItem term="inherited default implementation">
+    未 override 时自动采用的 base body。
+  </GlossaryItem>
+  <GlossaryItem term="non-virtual function">
+    静态绑定且实现不可多态替换的操作。
+  </GlossaryItem>
+  <GlossaryItem term="invariant implementation policy">
+    全部 subtype 使用统一 base 实现的政策。
+  </GlossaryItem>
+  <GlossaryItem term="inheritance policy decision">
+    选择强制、可选或禁止定制的决策。
+  </GlossaryItem>
+  <GlossaryItem term="declaration-level intent">
+    函数声明直接表达 derived 责任。
+  </GlossaryItem>
+  <GlossaryItem term="silent default adoption">
+    derived 无声明即接受默认实现。
+  </GlossaryItem>
+  <GlossaryItem term="accidental implementation inheritance">
+    例外 subtype 遗漏 override 后继承错误默认。
+  </GlossaryItem>
+  <GlossaryItem term="protected implementation helper">
+    仅供 derived 显式复用的 base body。
+  </GlossaryItem>
+  <GlossaryItem term="explicit default reuse">
+    override 明确调用共享 helper。
+  </GlossaryItem>
+  <GlossaryItem term="pure virtual definition">
+    pure virtual 的可选 out-of-class body。
+  </GlossaryItem>
+  <GlossaryItem term="qualified pure-body call">
+    以 Base::function 显式调用 pure body。
+  </GlossaryItem>
+  <GlossaryItem term="pure virtual destructor">
+    仍需定义并参与析构链的纯虚析构。
+  </GlossaryItem>
+  <GlossaryItem term="required pure-function body">
+    pure operation 仍需实现的结构性情况。
+  </GlossaryItem>
+  <GlossaryItem term="universally safe default">
+    对全部 subtype 都满足契约的默认实现。
+  </GlossaryItem>
+  <GlossaryItem term="convenience-only virtual default">
+    只为少写代码而无通用正确性的默认。
+  </GlossaryItem>
+  <GlossaryItem term="non-virtual interface pattern">
+    public nonvirtual 流程调用 virtual hook。
+  </GlossaryItem>
+  <GlossaryItem term="fixed public algorithm">
+    所有 subtype 必经的不可覆盖流程。
+  </GlossaryItem>
+  <GlossaryItem term="access-dispatch orthogonality">
+    访问控制与 virtual dispatch 相互独立。
+  </GlossaryItem>
+  <GlossaryItem term="private virtual hook">
+    base 控制调用但 derived 可 override 的 hook。
+  </GlossaryItem>
+  <GlossaryItem term="reusable implementation contract">
+    derived 可依赖的 helper 行为保证。
+  </GlossaryItem>
+  <GlossaryItem term="inherited implementation coupling">
+    多个 subtype 对共享 base body 的依赖。
+  </GlossaryItem>
+  <GlossaryItem term="override verification">
+    compiler 检查真实覆盖关系。
+  </GlossaryItem>
+  <GlossaryItem term="final customization boundary">
+    禁止进一步 override/inheritance 的边界。
+  </GlossaryItem>
+  <GlossaryItem term="interface-implementation inheritance matrix">
+    接口与实现继承政策验证表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：修复 Airplane 默认实现。** ModelA/B 共用 default，ModelC 必须自定义，但当前忘记 override 仍可编译。
+
+<Answer question="怎样既复用默认又强迫每个机型确认？">
+  将 public fly 声明 pure virtual；把共享算法放 protected defaultFly。ModelA/B
+  各自 override fly 并显式转调 defaultFly，ModelC override custom
+  algorithm。未来新 model 未实现保持 abstract、factory compile fail。对 default
+  helper 和每个 model 跑 flight contract tests，避免 silent default adoption。
+</Answer>
+
+2. **问题 2：为 Shape 三个操作选声明。** draw 无通用实现；reportError 有对所有 shape 安全默认；objectId 必须统一，分别选择。
+
+<Answer question="三种 operation 应怎样表达接口与实现政策？">
+  draw 用 pure virtual，强制 concrete shape 实现；reportError 用 impure
+  virtual，base default 必须通过全部 subtype 契约，允许特化；objectId 用
+  non-virtual，固定统一 identity algorithm，不允许 derived 改写。所有 override
+  标记 override，必要的固定边界标 final，并对遗漏行为做 compile tests。
+</Answer>
+
+3. **问题 3：设计固定流程与可变步骤。** Task::run 必须统一验证、审计和错误转换，但执行算法随 subtype 变化。
+
+  <Answer question="NVI 怎样分离继承接口与实现定制？">public run 设 non-virtual，负责 validate、锁/计时、调用 hook、审计与统一错误映射；private/protected `doRun` 设 pure virtual 或有安全默认的 impure virtual。客户只调用固定 run interface，derived 只 override hook。测试每个 hook 成功/失败/异常时前后步骤和 invariant 都执行。</Answer>
+</Exercises>

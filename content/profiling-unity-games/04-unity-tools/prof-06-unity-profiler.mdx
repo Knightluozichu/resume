@@ -1,0 +1,297 @@
+---
+title: "Unity Profiler：连接、采集与读图"
+type: C
+section: "Unity 分析工具"
+order: 1
+description: "按Unity 6官方指南第45—51页复现官方单元 6，建立可测量、可反证、可回归的性能证据。"
+demo: true
+math: false
+draft: false
+sourceUrl: "https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Prof06UnityProfilerMapLab,
+  Prof06UnityProfilerExperimentLab,
+  Prof06UnityProfilerEvidenceLab,
+} from "@/components/mdx/profiling-unity-games/diagrams/prof-06-unity-profiler";
+
+<Objectives>
+
+- 能解释官方单元 6在官方Unity 6性能分析流程中的位置与责任边界
+- 能复现“构建连接 → 确认目标 → 模块筛选 → Highlights概览 → Timeline下钻 → 保存数据”并保存可比较的中间证据
+- 能设计一个反证实验，判断“每份采样必须标明连接目标、构建、启用模块、VSync状态、帧范围和标记配置；任何热点都能从总帧追到线程与项目责任域。”是否成立
+
+</Objectives>
+
+## 问题：怎样证明掌握的是官方单元 6，而不是记住几个工具名？
+
+先预测：如果只看到最终帧率或一张截图，不知道设备、构建、场景、输入和采样方式，能否判断修改真的有效？不能。性能结果是测试上下文与程序行为共同产生的，脱离上下文的数字既不能复现，也不能指导下一步。
+
+Unity Profiler负责把引擎语义和项目标记放到同一时间轴。正确使用包括确认连接目标、限制模块、区分编辑器与Player、识别VSync等待，并用Standalone Profiler降低编辑器干扰。
+
+<Prof06UnityProfilerMapLab />
+
+## 官方目录边界
+
+本页严格对应Unity Technologies的《Ultimate guide to profiling Unity games (Unity 6 edition)》第45—51页。以下目录项必须在实现、实验或证据中出现：
+
+- **Unity Profiler**
+- **Get started with profiling in Unity**
+- **Unity Profiler tips**
+- **Disable the VSync and Others markers in the CPU Profiler module**
+- **Disable VSync in the build**
+- **Know when to profile in Play mode or Editor mode**
+- **Use Standalone Profiler**
+- **Using the Memory Profiler module**
+- **Highlights module**
+
+本站以中文重新组织解释、代码和实验，不逐字复制原文。API示例以Unity 6思路为准；具体包版本和目标平台能力仍要在项目清单中固定。
+
+## 核心模型与不可变条件
+
+Unity Profiler负责把引擎语义和项目标记放到同一时间轴。正确使用包括确认连接目标、限制模块、区分编辑器与Player、识别VSync等待，并用Standalone Profiler降低编辑器干扰。
+
+本单元的不可变条件是：**每份采样必须标明连接目标、构建、启用模块、VSync状态、帧范围和标记配置；任何热点都能从总帧追到线程与项目责任域。** 只要输入条件、观测边界或结果合同有一项改变，就不能把两次测量直接相减。先解释变化来源，再决定是否建立新的基线。
+
+## 五个必须落到证据的术语
+
+<Term def="记录Unity运行时各模块时间与计数器的分析工具">Unity Profiler</Term>
+
+它在本单元中不是孤立名词，而要落到“构建连接 → 确认目标 → 模块筛选 → Highlights概览 → Timeline下钻 → 保存数据”的数据链，并能由一次保存的采样或状态记录验证。
+
+<Term def="在Unity 6中汇总关键性能指标和预算状态的概览模块">
+  Highlights模块
+</Term>
+
+它在本单元中不是孤立名词，而要落到“构建连接 → 确认目标 → 模块筛选 → Highlights概览 → Timeline下钻 → 保存数据”的数据链，并能由一次保存的采样或状态记录验证。
+
+<Term def="脱离主编辑器进程运行以减少编辑器干扰的Profiler">
+  Standalone Profiler
+</Term>
+
+它在本单元中不是孤立名词，而要落到“构建连接 → 确认目标 → 模块筛选 → Highlights概览 → Timeline下钻 → 保存数据”的数据链，并能由一次保存的采样或状态记录验证。
+
+<Term def="在项目代码中标记可命名测量范围的API">ProfilerMarker</Term>
+
+它在本单元中不是孤立名词，而要落到“构建连接 → 确认目标 → 模块筛选 → Highlights概览 → Timeline下钻 → 保存数据”的数据链，并能由一次保存的采样或状态记录验证。
+
+<Term def="Profiler当前连接并接收数据的Editor或Player实例">采样目标</Term>
+
+它在本单元中不是孤立名词，而要落到“构建连接 → 确认目标 → 模块筛选 → Highlights概览 → Timeline下钻 → 保存数据”的数据链，并能由一次保存的采样或状态记录验证。
+
+## 从输入到结论的诊断链
+
+主链为：**构建连接 → 确认目标 → 模块筛选 → Highlights概览 → Timeline下钻 → 保存数据**。每个节点保存构建提交、设备ID、场景检查点、帧号或快照ID、当前预算、实际值和首个异常。下一节点只消费上一节点已验证的事实，不能用“感觉更流畅”跨过中间归因。
+
+### 1. Unity Profiler
+
+建立Development Build并连接目标Player后，第一步不是录制，而是核对Profiler下拉框中的设备和进程。多实例环境要用设备名、进程ID和构建号共同确认。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 2. Get started with profiling in Unity
+
+Highlights模块适合快速判断是否超出CPU或GPU预算及哪些高层指标异常。它是入口而非结论，异常必须回到对应模块和时间轴验证。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 3. Unity Profiler tips
+
+CPU Usage的Timeline保留线程和时序，Hierarchy便于聚合排序。用Timeline找异常帧与同步关系，再用Hierarchy比较Self、Total、Calls和GC Alloc。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 4. Disable the VSync and Others markers in the CPU Profiler module
+
+VSync和Others标记可在CPU模块中关闭显示以减少噪声，但过滤不会改变运行。用于测上限时在构建中关闭VSync，且把这个条件写入证据。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 5. Disable VSync in the build
+
+Editor Play Mode适合快速迭代和验证标记是否出现，却混入编辑器布局、序列化和资源刷新成本。正式预算判断应在目标Player和代表设备上完成。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 6. Know when to profile in Play mode or Editor mode
+
+Standalone Profiler将采集界面与项目Editor分离，能降低编辑器自身活动干扰，也适合编辑器需要重启时保留连接。采样仍要控制模块和帧数。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 7. Use Standalone Profiler
+
+Memory模块给出随时间变化的高层总量，适合找峰值和GC事件；对象引用与快照差异要交给Memory Profiler包，两个工具的粒度不同。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 8. Using the Memory Profiler module
+
+保存原始数据时记录有效帧起止、预热区间和异常事件。截图只适合沟通，不足以支持后续Profile Analyzer比较或重新解释。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+<Prof06UnityProfilerExperimentLab />
+
+## 三步复现与分步观察
+
+<Stepper>
+  <Step title="1. 冻结输入与预算合同">
+    记录设备、构建、场景、画质、目标帧率、预热和输入脚本；写出本页要证明的唯一假设以及反证条件。
+    <Prof06UnityProfilerMapLab />
+  </Step>
+  <Step title="2. 采集、分流并只改一个变量">
+    沿“构建连接 → 确认目标 → 模块筛选 → Highlights概览 → Timeline下钻 →
+    保存数据”保存中间值，在首个越界节点停止下钻；一次只修改一个主要因素。
+    <Prof06UnityProfilerExperimentLab />
+  </Step>
+  <Step title="3. 同输入复验并签发证据">
+    恢复相同热状态和场景检查点，重放基线输入；同时核对帧、内存、画面或玩法副作用。
+    <Prof06UnityProfilerEvidenceLab />
+  </Step>
+</Stepper>
+
+## 可执行实现骨架
+
+下面的代码只承担本单元的数据所有权或测量边界。真正项目应把阈值放入版本化配置，并让证据文件引用同一个配置哈希。
+
+```csharp
+using Unity.Profiling;
+
+static readonly ProfilerMarker LoadMarker = new("Streaming.LoadChunk");
+
+async Awaitable LoadChunkAsync(string id)
+{
+    using (LoadMarker.Auto())
+        await loader.LoadAsync(id);
+}
+
+// Capture target, enabled modules and VSync state beside the .data file.
+```
+
+每次采集都保存结构化元数据，避免报告与原始文件失联：
+
+```json
+{
+  "chapter": "prof-06-unity-profiler",
+  "officialPages": "第45—51页",
+  "chain": [
+    "构建连接",
+    "确认目标",
+    "模块筛选",
+    "Highlights概览",
+    "Timeline下钻",
+    "保存数据"
+  ],
+  "device": "target-low-tier-01",
+  "build": "commit-and-unity-version",
+  "scenario": "fixed-checkpoint",
+  "baseline": "capture-before.data",
+  "candidate": "capture-after.data",
+  "normal": true,
+  "boundary": true,
+  "failureReplay": true
+}
+```
+
+自动门输出必须同时保留通过值和拒绝原因，而不是只给一个绿色图标：
+
+```text
+PASS context=device+build+scene+quality+input
+PASS chain=构建连接 -> 确认目标 -> 模块筛选 -> Highlights概览 -> Timeline下钻 -> 保存数据
+PASS invariant=每份采样必须标明连接目标、构建、启用模块、VSync状态、帧范围和标记配置；任何热点都能从总帧追到线程与项目责任域。
+REJECT missing-raw-data | changed-context | hidden-quality-loss | unreplayed-failure
+```
+
+## 两个必须主动制造的失败样本
+
+<Callout type="trap" title="官方边界或测量上下文丢失">
+  Profiler仍连接Editor却以为在看真机，或隐藏VSync和Others后忘记它们只是显示过滤，从而把等待成本解释成消失。
+  先保存错误结论、首个偏离节点和原始数据，再恢复官方目录边界与相同测试条件复验。
+</Callout>
+
+<Callout type="trap" title="数字改善但工作被转移或结果改变">
+  故意降低画质、跳过玩法工作、扩大永久缓存或把任务推迟到下一帧。若主指标改善但GPU、内存、热量、图像或玩法合同变差，发布门必须拒绝。
+</Callout>
+
+## 证据矩阵与签发标准
+
+| 维度   | 正常样本       | 边界样本           | 失败样本           | 签发条件       |
+| ------ | -------------- | ------------------ | ------------------ | -------------- |
+| 上下文 | 固定设备与构建 | 最低档或长时间运行 | 故意改变一项条件   | 差异可解释     |
+| 主链   | 六节点均有记录 | 预算附近输入       | 在首个节点注入偏差 | 能定位首因     |
+| 结果   | 达到性能合同   | 无长尾越界         | 主动制造回归       | 同输入可复验   |
+| 副作用 | 画面玩法一致   | 生命周期完整       | 降质或转移成本     | 所有门同时通过 |
+
+<Prof06UnityProfilerEvidenceLab />
+
+## 练习：把官方单元 6变成可审计交付
+
+<Exercises>
+
+**问题 1** 写出“构建连接”到“保存数据”每一步的输入、观测工具、阈值和输出。
+
+<Answer>
+  每一步都要引用同一测试上下文，输出必须包含数值、原始文件和下一步选择理由；不能只写工具名称。
+</Answer>
+
+**问题 2** 主动制造“Profiler仍连接Editor却以为在看真机，或隐藏VSync和Others后忘记它们只是显示过滤，从而把等待成本解释成消失。”，保存错误结论与首个偏离节点，再用同一输入证明修复。
+
+<Answer>
+  合格答案包含错误样本、上下文差异、反证实验、修复后原始数据以及性能和正确性双重结果。
+</Answer>
+
+**问题 3** 为不可变条件“每份采样必须标明连接目标、构建、启用模块、VSync状态、帧范围和标记配置；任何热点都能从总帧追到线程与项目责任域。”设计正常、预算边界和失败三组测试。
+
+<Answer>
+  三组测试只改变计划中的输入，统一记录构建、设备、帧或快照ID、预算、实际值、首个异常和复验状态。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- 是否能逐项指出本页覆盖的官方目录项，而没有用通用性能建议替代？
+- 是否沿“构建连接 → 确认目标 → 模块筛选 → Highlights概览 → Timeline下钻 → 保存数据”保存了可追溯中间证据？
+- 是否区分定位工具的干扰与发布构建的真实预算？
+- 是否主动制造失败，并在相同输入下证明修复没有转移成本？
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="Unity Profiler">
+    记录Unity运行时各模块时间与计数器的分析工具。
+  </GlossaryItem>
+  <GlossaryItem term="Highlights模块">
+    在Unity 6中汇总关键性能指标和预算状态的概览模块。
+  </GlossaryItem>
+  <GlossaryItem term="Standalone Profiler">
+    脱离主编辑器进程运行以减少编辑器干扰的Profiler。
+  </GlossaryItem>
+  <GlossaryItem term="ProfilerMarker">
+    在项目代码中标记可命名测量范围的API。
+  </GlossaryItem>
+  <GlossaryItem term="采样目标">
+    Profiler当前连接并接收数据的Editor或Player实例。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Unity Technologies《Ultimate guide to profiling Unity games (Unity 6 edition)》，2025，93页"
+  adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+/>

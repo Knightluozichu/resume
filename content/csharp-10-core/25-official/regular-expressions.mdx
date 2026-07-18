@@ -1,0 +1,232 @@
+---
+title: "Chapter 25. Regular Expressions"
+type: C
+section: "C# 10 Nutshell · Text"
+order: 25
+description: "覆盖Regex语法、编译与选项、转义/字符集/量词、贪婪回溯、断言锚点分组以及替换拆分和工程recipes，建立timeout门禁。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch25.html"
+draft: false
+---
+
+import { CtcRegexEngineLab, CtcRegexExtractionLab, CtcRegexPatternLab } from "@/components/mdx/csharp-10-core/diagrams/regular-expressions";
+
+<Objectives>
+
+- 能解释.NET回溯引擎、compiled/reuse/options与timeout，分析near-miss输入的复杂度
+- 能写出escape、set、quantifier、assertion、anchor和named group组合，并判断边界与Unicode语义
+- 能实现有界match/replace/split recipe，复现catastrophic backtracking、空匹配和捕获歧义
+
+</Objectives>
+
+## 为什么Regex必须同时测试“几乎匹配”的输入
+
+有效样例通常沿一条成功路径快速完成，明显无效输入也可能立即失败；最危险的是长前缀成功、末尾才失败的near-miss，它让回溯引擎枚举大量候选分割。Production regex不仅要匹配正确，还要对invalid、near-valid和最大长度输入在deadline内失败。
+
+先预测：lazy quantifier一定比greedy快吗；`^...$`永远绑定整个string且不接受末尾换行吗；Compiled消除回溯吗；capturing group重复时只保留一次capture吗；Regex.Split永远不返回空片段吗。答案都是否。
+
+<Term def="对valid、invalid、near-miss和最大长度corpus记录结果、captures、elapsed与timeout的正则验收。">regex adversarial corpus</Term>
+
+## Regular Expression Basics
+
+Regex pattern由literal、character class、quantifier、alternation、group和assertion组成。Regex.Match从可行起点搜索，Regex.IsMatch只问是否存在；若业务要求整个input匹配，使用明确anchors并验证newline/options。Match.Success、Index、Length、Value与Groups描述结果，Matches可惰性推进。
+
+.NET传统engine是backtracking NFA：pattern驱动尝试，遇到alternation/quantifier保存状态，后续失败再回退。Pattern通常应是开发者审核的可信代码；用户输入若只是literal，先Regex.Escape，不能直接当pattern执行。
+
+```csharp
+static readonly Regex OrderLine = new(
+    @"\A(?<id>[A-Z]{2}-\d{6})\s+(?<amount>\d+(?:\.\d{2})?)\z",
+    RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
+    matchTimeout: TimeSpan.FromMilliseconds(100));
+
+static bool TryParseOrder(string input, out string id, out decimal amount)
+{
+    id = ""; amount = 0;
+    Match match = OrderLine.Match(input);
+    if (!match.Success) return false;
+    id = match.Groups["id"].Value;
+    return decimal.TryParse(match.Groups["amount"].Value,
+        NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture, out amount);
+}
+```
+
+Regex只验证词法shape，decimal range、business id和canonical form仍由typed parser/domain验证。
+
+## Compiled Regular Expressions
+
+默认pattern解析为内部instructions并解释执行；RegexOptions.Compiled生成CIL再由JIT编译，构造/startup和memory成本更高，热调用可能更快。它不改变pattern语义，也不消除bad backtracking。复用长期Regex实例，或依赖static method cache；大量动态pattern会thrash cache和放大编译成本。
+
+现代.NET还提供source-generated regex，在build time生成可查看代码并改善startup/AOT，但C# 10/.NET 6代码仍以实例/static cache和Compiled为主。选择必须在真实pattern、input分布、warm-up和部署模式benchmark。
+
+<Stepper>
+  <Step title="切换interpreted、compiled、backtracking与nonbacktracking"><CtcRegexEngineLab /></Step>
+  <Step title="记录execution profile">比较construction、first match、steady-state、allocation、code size和near-miss timeout。</Step>
+  <Step title="验证部署能力">在目标runtime/JIT/AOT检查Compiled或source-generated路径，保留语义一致fallback。</Step>
+</Stepper>
+
+<Callout type="trap" title="RegexOptions.Compiled能修复灾难性回溯">
+Compiled只改变执行形式，指数候选路径仍存在。重写pattern、限制输入、使用timeout，并在兼容时选择nonbacktracking/atomic结构。
+</Callout>
+
+<Term def="每次匹配都有显式TimeSpan和输入长度上限，超时被分类处理而非无限重试。">regex execution budget</Term>
+
+## RegexOptions
+
+Options可在constructor/API或inline group设置。IgnoreCase受culture影响，protocol identifier常配CultureInvariant或显式ASCII class；Multiline改变`^/$`按行，Singleline让`.`匹配newline；IgnorePatternWhitespace允许布局/comment但character class内规则不同；ExplicitCapture只保留named/explicit groups。
+
+RightToLeft改变搜索方向，不是简单reverse pattern。ECMAScript限制/改变部分语义。NonBacktracking在.NET 7+提供线性时间兼容子集，但不支持所有backreference/lookaround等构造；即使使用也限制input和trusted pattern。
+
+## Character Escapes
+
+Regex语法和C# string语法是两层escaping：普通字符串中regex `\d`写成`"\\d"`，verbatim string写`@"\d"`。`\n`、`\t`、`\uFFFF`、`\x`表示字符；`\d/\w/\s`是classes，语义可受Unicode/ECMAScript影响。要匹配用户literal片段用Regex.Escape，不自己replace少数字符。
+
+Replacement string又有独立`$1`、`${name}`、`$$`语法；用户replacement作为literal时不能直接拼接，优先MatchEvaluator返回原字符串。
+
+## Character Sets
+
+`[abc]`匹配一个集合字符，`[^...]`否定，`a-z`范围按code point规则；class subtraction如`[\p{L}-[A-Z]]`表达Unicode类别差集。`\p{Lu}`等Unicode category比ASCII范围广。Case-insensitive与culture会改变集合匹配。
+
+Dot通常不匹配`\n`，Singleline改变它；Windows CRLF中`\r`仍需考虑。业务若只允许ASCII，写明确`[A-Za-z0-9]`，不要把`\w`误当ASCII identifier。
+
+## Quantifiers
+
+`?`、`*`、`+`、`{m,n}`量化前一atom/group。Bounds必须符合业务最大值；无界quantifier配合unbounded input会放大工作和output。Nested ambiguous quantifiers如`(a+)+`在末尾失败时可产生指数回溯。
+
+量化捕获组会产生多个Capture，Group.Value通常是最后一次成功capture；需要所有迭代看Group.Captures。Quantifier作用范围用noncapturing group `(?:...)`明确。
+
+## Greedy Versus Lazy Quantifiers
+
+Greedy先尽量多消费再回退，lazy `*?/+?/{m,n}?`先少消费再扩展。两者都backtrack，lazy不是性能开关；若终止delimiter常出现，lazy可能合适，若suffix明确则negated class如`[^<]*`通常更直接。
+
+Atomic group `(?>...)`放弃内部backtracking states，可消除不必要回退，但若后续成功依赖重新分配字符会改变结果。先证明语言语义再使用。
+
+<Stepper>
+  <Step title="切换character set、greedy、lazy与atomic"><CtcRegexPatternLab /></Step>
+  <Step title="展开backtracking tree">对短near-miss逐步记录quantifier消费、保存state、suffix失败与回退分支。</Step>
+  <Step title="重写并压测">用bounded/negated class、atomic或lookaround消除歧义，在长度倍增corpus比较增长曲线。</Step>
+</Stepper>
+
+<Term def="同一input segment可被nested quantifiers/alternatives以多种方式划分，导致大量回溯路径。">quantifier ambiguity</Term>
+
+## Zero-Width Assertions
+
+Zero-width assertion验证当前位置但不消费字符，包括anchors、word boundary和lookaround。`\b`是word/nonword边界，不是backspace（character class中语义又不同）。Assertions可把“最后字符必须满足条件”表达为检查，避免外层nested quantifier。
+
+多个assertions组合相当于当前位置的AND条件，但每个仍可能有内部成本。Capture在positive lookaround中可见，negative assertion的capture语义不要用作数据输出。
+
+## Lookahead and Lookbehind
+
+Positive/negative lookahead `(?=...)/(?!...)`检查右侧，lookbehind `(?<=...)/(?<!...)`检查左侧。.NET支持的lookbehind能力与其他engine不同，跨语言pattern不可假设兼容。Lookaround常用于password规则或边界条件，但多个全串lookahead会重复扫描。
+
+若业务需要完整parser、嵌套结构或详细错误，regex assertion堆叠会难以维护，改用typed parser。测试lookaround位于start/end、empty和Unicode边界。
+
+## Anchors
+
+`^/$`受Multiline影响，且`$`可匹配string末尾或末尾`\n`之前；`\A/\z`绑定绝对开始/结束，`\Z`允许最终newline；`\G`从上一次match结束继续，适合连续tokenizer。`\b/\B`按word边界判断。
+
+Validation通常用`\A...\z`避免options/newline歧义。Tokenizer用`\G`并检查每次match长度大于0和最终position等于input.Length，否则会跳过未知字符或空匹配无限循环。
+
+## Groups
+
+Capturing `(...)`按编号和名称保存，noncapturing `(?:...)`只分组；named `(?<name>...)`提高extract稳定性，backreference `\k<name>`要求后文与capture文本相同。Alternation优先级低，`^(cat|dog)$`与`^cat|dog$`语义不同。
+
+.NET还支持balancing groups等高级构造，但复杂pattern需comment、unit/adversarial tests和owner。Group.Success区分未参与与成功空capture；Captures保留重复历史。
+
+```csharp
+static readonly Regex Assignment = new(
+    @"\G\s*(?<name>[A-Za-z_][A-Za-z0-9_]*)\s*=\s*(?<value>[^;,]*)(?<sep>[;,]|\z)",
+    RegexOptions.CultureInvariant | RegexOptions.ExplicitCapture,
+    TimeSpan.FromMilliseconds(100));
+
+static Dictionary<string, string> ParseAssignments(string input)
+{
+    var result = new Dictionary<string, string>(StringComparer.Ordinal);
+    int position = 0;
+    foreach (Match match in Assignment.Matches(input))
+    {
+        if (!match.Success || match.Length == 0 || match.Index != position) break;
+        result.Add(match.Groups["name"].Value, match.Groups["value"].Value.Trim());
+        position += match.Length;
+    }
+    if (position != input.Length) throw new FormatException($"invalid at {position}");
+    return result;
+}
+```
+
+## Replacing and Splitting Text
+
+Regex.Replace可使用replacement template或MatchEvaluator。Evaluator能typed parse/escape并限制输出；对不可信input设置timeout、max input、max replacements和max output。Replacement可能命中empty position，engine会推进但结果常意外。
+
+Regex.Split把matches作为delimiter；capturing groups会把delimiter captures也放进result，前后/连续delimiter会产生empty segments。Count/startat overload控制工作，若只按固定char/string拆分优先String.Split更简单更快。
+
+<Stepper>
+  <Step title="切换assertion、group、replace与split"><CtcRegexExtractionLab /></Step>
+  <Step title="记录output contract">列matches/captures、empty behavior、delimiter保留、replacement escaping、count和输出上限。</Step>
+  <Step title="执行边界corpus">覆盖empty、all delimiter、captured delimiter、zero-width、near-miss、超时和替换膨胀。</Step>
+</Stepper>
+
+<Callout type="trap" title="只要Pattern正确，用户输入就不会造成Regex DoS">
+近似匹配输入可触发大量回溯。Pattern需审核，输入限长，每次调用设timeout，并测试长度倍增下的失败时间。
+</Callout>
+
+## Regular Expressions Recipes
+
+实用recipe从契约而不是pattern开始：允许字符/长度、whole input还是search、culture/Unicode、captures、timeout和near-miss。简单literal/search/split优先string/Span API；CSV、HTML、JSON、嵌套括号用专用parser，不用单个regex模拟完整grammar。
+
+Recipe例：extract log field用named groups和absolute anchors；批量redact用MatchEvaluator与输出上限；tokenizer用`\G`确保无gap；重复word用named capture/backreference；文件扩展名用Path API而非regex。每个pattern旁保留说明、valid/invalid/near-miss tests和benchmark。
+
+```csharp
+static string RedactSecrets(string input)
+{
+    if (input.Length > 64_000) throw new ArgumentException("input too large");
+    int replacements = 0;
+    return SecretPair.Replace(input, match =>
+    {
+        if (++replacements > 100) throw new FormatException("too many secrets");
+        return $"{match.Groups["key"].Value}=<redacted>";
+    });
+}
+```
+
+Timeout catch记录pattern id、input length和elapsed，不记录secret input；通常fail closed/跳过该记录，不自动用更长timeout重试攻击输入。
+
+<Term def="Pattern owner同时维护语义说明、valid/invalid/near-miss测试、timeout、输入/输出上限和性能基线。">regex recipe contract</Term>
+
+## 本章回顾：Regex既是语言，也是受预算约束的程序
+
+1. 回溯引擎对near-miss最敏感，Compiled不改变复杂度。
+2. Options、escapes、Unicode和anchors会改变语言边界，validation需绝对锚点。
+3. Greedy/lazy都可能回溯；减少歧义、限长和timeout共同防护。
+4. Assertions/groups负责位置与数据提取，captures和empty semantics必须测试。
+5. Replace/Split会放大输出或保留delimiter，recipe要有count/output budget。
+
+<Exercises>
+
+**问题 1：如何判断Pattern存在灾难性回溯？**
+
+<Answer>检查nested quantifiers/overlapping alternatives和可被多种方式划分的segment；构造长成功前缀加失败suffix的near-miss，长度倍增测elapsed。重写为bounded/negated class、atomic/lookaround或兼容的nonbacktracking，并始终设timeout。</Answer>
+
+**问题 2：Validation为什么优先使用\A与\z？**
+
+<Answer>它们固定绝对string开始/结束，不受Multiline影响，也避免`$`在最终newline前成功的语义。仍需明确options、input length、timeout，并在empty、末尾换行和多行输入测试。</Answer>
+
+**问题 3：Regex.Replace处理不可信文本需要哪些上限？**
+
+<Answer>Pattern可信且审核，input bytes/chars限长，调用有timeout，匹配/替换次数和最终output长度有上限；Evaluator不执行不可信代码并正确escape。Timeout/overflow分类失败且日志redact原文。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="regex adversarial corpus" definition="Valid、invalid、near-miss和最大输入验收集。" />
+  <GlossaryItem term="regex execution budget" definition="每次match的输入上限与显式timeout。" />
+  <GlossaryItem term="quantifier ambiguity" definition="同一segment存在大量候选划分导致回溯。" />
+  <GlossaryItem term="regex recipe contract" definition="Pattern语义、测试和资源上限的owner契约。" />
+  <GlossaryItem term="capture-output contract" definition="Groups/Captures、empty、replace和split输出规则。" />
+</Glossary>
+
+<Term def="明确每个named group是否必需、重复captures、空匹配和替换/拆分如何生成输出。">capture-output contract</Term>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 25: Regular Expressions" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch25.html" />

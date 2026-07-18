@@ -1,0 +1,253 @@
+---
+title: "Appendix C Bitcoin Improvement Proposals"
+type: C
+section: "Mastering Bitcoin（第3版）"
+order: 18
+description: "解释BIP作为设计文档、标准跟踪、流程和信息载体的作用，并区分提案、实现、部署与激活。"
+demo: true
+math: true
+sourceUrl: "https://github.com/bitcoinbook/bitcoinbook/tree/third_edition_print1"
+draft: false
+---
+
+import {
+  Mbt3AppendixCBipsFlowLab,
+  Mbt3AppendixCBipsExperimentLab,
+  Mbt3AppendixCBipsEvidenceLab,
+} from "@/components/mdx/mastering-bitcoin/diagrams/mbt3-appendix-c-bips";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释BIP、提案状态、规范各自负责的对象、验证规则和信任边界
+- 能推导价值、哈希或签名约束、状态转移与发布门禁四组表达式
+- 能实现并运行三段最小代码，追踪正常、边界和单故障样本
+- 能设计独立复核并证明“能从一个BIP编号追踪规范、讨论、实现、测试、部署和激活状态，并明确哪些步骤产生共识效力。”
+
+</Objectives>
+
+## 为什么从可验证状态开始
+
+BIP记录问题、设计、兼容性与部署讨论，但编号或合并不等于共识激活。读者必须跟踪BIP类型、状态、实现版本、网络信号与全节点执行，避免把文档流程误写成链上治理。
+
+比特币最容易被界面和术语掩盖：钱包余额是UTXO视图，地址是脚本编码，交易哈希只是候选对象标识，矿工出块也不代表全节点必须接受。要判断实现是否正确，必须追踪前状态、被引用输出、规范序列化、脚本与签名、节点策略、区块承诺、累计工作量和后状态。只保存最终余额或区块高度，会漏掉错误网络、冲突交易、脚本失败、重组与索引视图滞后。
+
+本页先手算最小实例，再运行工具。正常样本证明主路径；边界样本取零值、最大金额、恰好费用、最短证明或时间锁边界；单故障样本只改变网络前缀、字节、签名、outpoint、脚本、target或确认中的一项。三组样本共享源码标签、节点、创世状态和观察点，使首个差异可以归因，而不是靠重复广播或刷新页面碰运气。
+
+每次实验生成机器可读证据：官方印刷标签、软件提交、网络与创世哈希、输入原文、解析对象、验证结果、错误、前后UTXO或链状态和确认区块。独立复核者从空目录重放，若字段缺失、节点未同步或结果绑定到不同哈希，门禁明确失败。涉及密钥的示例只使用公开测试向量、regtest或signet，不把教学代码连接真实资产。
+
+官方标题层级还要转成可检查任务：章标题定义端到端目标，节标题定义机制与对象，小节标题定义算法、字段、异常或部署选择。每个标题至少对应一个输入、一个不变量、一个可观察结果和一个失败样本；多个标题可以共享实验环境，但不能因主题相近而合并掉独立语义。这样既保留原书结构，也让读者能从目录逐项证明掌握程度。
+
+## 版次、对象与验收合同
+
+<Term def="BIP是Appendix C Bitcoin Improvement Proposals的第1个复核坐标，必须绑定对象、协议、状态和失败证据。">
+  BIP
+</Term>
+、
+<Term def="提案状态是Appendix C Bitcoin Improvement Proposals的第2个复核坐标，必须绑定对象、协议、状态和失败证据。">
+  提案状态
+</Term>
+、
+<Term def="规范是Appendix C Bitcoin Improvement Proposals的第3个复核坐标，必须绑定对象、协议、状态和失败证据。">
+  规范
+</Term>
+、
+<Term def="实现是Appendix C Bitcoin Improvement Proposals的第4个复核坐标，必须绑定对象、协议、状态和失败证据。">
+  实现
+</Term>
+、
+<Term def="激活是Appendix C Bitcoin Improvement Proposals的第5个复核坐标，必须绑定对象、协议、状态和失败证据。">
+  激活
+</Term>
+共同构成本页复核坐标。解释BIP作为设计文档、标准跟踪、流程和信息载体的作用，并区分提案、实现、部署与激活。
+
+本书锁定Andreas M. Antonopoulos、David A. Harding《Mastering Bitcoin: Programming the Open Blockchain》第3版，O'Reilly Media，2023年，402页，ISBN 9781098150082。官方GitHub标签 third_edition_print1 对应第三版首印，公开前言、14章和附录A至C的完整源码，按二至五级标题解析得到333个正式节点；O'Reilly页面交叉核对作者、2023年、402页与ISBN。学习地图和总复习不计入原书分母。本文按CC BY-SA 4.0来源做独立中文教学重构，不复制原书正文。
+
+<Callout type="info">
+  **验收命题：**
+  能从一个BIP编号追踪规范、讨论、实现、测试、部署和激活状态，并明确哪些步骤产生共识效力。
+</Callout>
+
+## 核心约束与推导
+
+$$
+\sum value(inputs)=\sum value(outputs)+fee
+$$
+
+$$
+H_i=hash(H_{i-1} \Vert merkle(T_i) \Vert metadata_i)
+$$
+
+$$
+S_{t+1}=apply(S_t,T_t), \quad valid(T_t,S_t)=1
+$$
+
+$$
+gate=source \times version \times replay \times boundary \times failureEvidence
+$$
+
+前两式对应本页的密码、交易、费用、网络、区块或二层核心不变量。状态转移式要求候选对象先通过当前状态验证，再原子地产生后状态；失败保留原状态。证据门禁使用乘法语义，来源、版本、重放、边界或失败证据任一缺失，整条结论都不能发布。
+
+## 三段可运行骨架
+
+```typescript
+type Evidence = {
+  version: string;
+  before: string;
+  input: string;
+  after?: string;
+  error?: string;
+};
+
+function evidenceGate(run: Evidence) {
+  const complete = Boolean(
+    run.version && run.before && run.input && (run.after || run.error),
+  );
+  return { complete, page: "mbt3-appendix-c-bips", run };
+}
+```
+
+```python
+def apply_candidate(state, candidate, verify):
+    if not verify(state, candidate):
+        return {"accepted": False, "state": state, "reason": "invalid"}
+    next_state = state.copy()
+    next_state.update(candidate["changes"])
+    return {"accepted": True, "state": next_state, "reason": None}
+```
+
+```python
+def verify_value_conservation(inputs, outputs, fee):
+    if len(inputs) != len({item["outpoint"] for item in inputs}):
+        return False
+    return sum(item["value"] for item in inputs) == sum(outputs) + fee
+```
+
+第一段把成功与失败放进同一证据结构；第二段证明拒绝路径不污染原状态；第三段验证本页最小协议对象。生产系统必须使用成熟密码、序列化和节点库，并补充资源限制、并发、持久化、超时、隐私与密钥隔离。
+
+## 正式标题逐项讲解
+
+### Appendix C Bitcoin Improvement Proposals
+
+“Appendix C Bitcoin Improvement Proposals”位于本页正式标题坐标 1/1。BIP是公开设计与协调文档，可为标准跟踪、流程或信息类型。提案状态说明文档进度，是否实现、部署和激活还需分别查证。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能从一个BIP编号追踪规范、讨论、实现、测试、部署和激活状态，并明确哪些步骤产生共识效力。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+## 正常、边界与故障矩阵
+
+| 样本   | 只改变的变量                    | 预期结果               | 必存证据                     |
+| ------ | ------------------------------- | ---------------------- | ---------------------------- |
+| 正常   | 有效UTXO、脚本、费用与网络      | 状态转移并达到确认条件 | 原始对象、前后状态、区块哈希 |
+| 边界   | 零值、最大值、恰好阈值或时间锁  | 按明确规则接受或拒绝   | 边界值、判断分支、资源成本   |
+| 单故障 | 网络、字节、签名、引用或PoW一项 | 首个无效规则处拒绝     | 错误、首差、原状态与回退点   |
+
+先写出预期字节、栈、金额或哈希，再运行节点和解析器。若钱包、区块浏览器与本地节点给出不同答案，以固定网络上的原始交易、被花费输出、区块头和本地共识验证为坐标；第三方展示不能覆盖本地可验证事实。
+
+## 三步交互实验
+
+<Stepper>
+  <Step title="追踪交易与证明">
+    先预测当前阶段的输入、验证依据与后状态，再拖动阶段滑块定位首个分叉。
+    <Mbt3AppendixCBipsFlowLab />
+  </Step>
+  <Step title="改变费用与确认条件">
+    一次只调整输入数、费率或确认阈值，观察重量、传播与最终性怎样变化。
+    <Mbt3AppendixCBipsExperimentLab />
+  </Step>
+  <Step title="注入单一故障">
+    注入网络、签名、脚本、区块链接或证据故障，要求门禁在提交前拒绝并给出回退点。
+    <Mbt3AppendixCBipsEvidenceLab />
+  </Step>
+</Stepper>
+
+## 常见失败与回退
+
+<Callout type="trap">
+  **把地址当账户、哈希当确认：**
+  地址提示锁定脚本，交易哈希标识序列化对象；二者都不证明UTXO未花费、脚本成功或交易已进入累计工作量链。
+</Callout>
+
+<Callout type="trap">
+  **把策略拒绝当共识无效：**
+  尘埃、最低中继费和内存池限制可能只是节点策略。复核必须区分序列化、脚本和区块共识规则与本地中继策略。
+</Callout>
+
+<Callout type="tip">
+  **回退顺序：** 第三版标签 -> 网络与创世哈希 -> 字节序和序列化 -> UTXO与价值 -> 脚本和签名 -> 节点策略 -> 区块PoW与链选择 -> 钱包或二层视图。首个差异未解释前不比较余额。
+</Callout>
+
+## 本章回顾
+
+解释BIP作为设计文档、标准跟踪、流程和信息载体的作用，并区分提案、实现、部署与激活。 BIP记录问题、设计、兼容性与部署讨论，但编号或合并不等于共识激活。读者必须跟踪BIP类型、状态、实现版本、网络信号与全节点执行，避免把文档流程误写成链上治理。 掌握标准是能从一个BIP编号追踪规范、讨论、实现、测试、部署和激活状态，并明确哪些步骤产生共识效力。。独立复核必须从官方第三版标签、固定测试网络和原始协议对象重放正常、边界与单故障样本。
+
+<Glossary>
+
+<GlossaryItem term="BIP">
+  “BIP”定位Appendix C Bitcoin Improvement
+  Proposals的第1类证据；定义包含输入、验证规则、状态变化、网络版本与拒绝路径。
+</GlossaryItem>
+
+<GlossaryItem term="提案状态">
+  “提案状态”定位Appendix C Bitcoin Improvement
+  Proposals的第2类证据；定义包含输入、验证规则、状态变化、网络版本与拒绝路径。
+</GlossaryItem>
+
+<GlossaryItem term="规范">
+  “规范”定位Appendix C Bitcoin Improvement
+  Proposals的第3类证据；定义包含输入、验证规则、状态变化、网络版本与拒绝路径。
+</GlossaryItem>
+
+<GlossaryItem term="实现">
+  “实现”定位Appendix C Bitcoin Improvement
+  Proposals的第4类证据；定义包含输入、验证规则、状态变化、网络版本与拒绝路径。
+</GlossaryItem>
+
+<GlossaryItem term="激活">
+  “激活”定位Appendix C Bitcoin Improvement
+  Proposals的第5类证据；定义包含输入、验证规则、状态变化、网络版本与拒绝路径。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+1. 如何为Appendix C Bitcoin Improvement Proposals建立最小可重放基线？
+
+<Answer>
+  固定官方第三版标签、节点版本、网络、创世哈希、前状态、输入、验证规则和确认条件，保存解析、判断、输出与拒绝原因。
+</Answer>
+
+2. 如何证明“能从一个BIP编号追踪规范、讨论、实现、测试、部署和激活状态，并明确哪些步骤产生共识效力。”不是一次偶然成功？
+
+<Answer>
+  先手算最小对象，再对同一合同执行正常、边界和单故障样本；由独立节点读取原始交易、区块和后状态，逐项一致才通过。
+</Answer>
+
+3. 修复Appendix C Bitcoin Improvement Proposals后怎样回归？
+
+<Answer>
+  先重放原失败，再运行相邻边界与正常基线，按版本、网络、序列化、UTXO、脚本、签名、策略和链选择定位首个差异，全部不变量通过后发布。
+</Answer>
+
+</Exercises>
+
+## 前后导航
+
+- [上一页：Appendix B Errata to the Bitcoin Whitepaper](/learn/mastering-bitcoin/17-appendix-b-whitepaper-errata/mbt3-appendix-b-whitepaper-errata)
+- [下一页：《Mastering Bitcoin》第3版全书总复习](/learn/mastering-bitcoin/19-review/mbt3-official-final-review)
+
+<Attribution
+  adaptedFrom="Andreas M. Antonopoulos、David A. Harding《Mastering Bitcoin: Programming the Open Blockchain》第3版，O'Reilly Media，2023年，402页，ISBN 9781098150082 · 官方第三版源码采用CC BY-SA 4.0 · 基于333个正式标题节点的独立中文教学重构"
+  adaptedUrl="https://github.com/bitcoinbook/bitcoinbook/tree/third_edition_print1"
+/>

@@ -1,0 +1,177 @@
+---
+title: "Chapter 14. Concise code in C# 7"
+type: C
+section: "C# in Depth 4e · C# 7+"
+order: 14
+description: "覆盖local methods、out variables、numeric literals、throw expressions、default literals、C# 7.2 named arguments/private protected及C# 7.3小特性。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-14"
+draft: false
+---
+
+import { DcsApiSurfaceLab, DcsExpressionConcisionLab, DcsLocalFunctionBoundaryLab } from "@/components/mdx/deep-understanding-csharp/diagrams/concise-code-csharp-7";
+
+<Objectives>
+
+- 能设计local function与out variable的scope和execution timing，区分eager validation、deferred work与definite assignment
+- 能解释numeric separators、throw expression和default literal压缩了什么type/failure context，并写出消除ambiguity的版本
+- 能分析named arguments、private protected与C# 7.3 minor features对source contract、accessibility和LangVersion matrix的影响
+
+</Objectives>
+
+## 为什么Concise Code仍要暴露Timing、Type与API Contract
+
+本章特性看起来彼此零散，统一主线却很明确：把已经存在的意图放到更接近使用点的位置。Local function把helper贴近owner method，out variable把declaration贴近Try call，throw/default把statement级意图带进expression，named arguments把parameter meaning带到call site。每次缩短都要检查被隐藏的execution timing、target type和source compatibility。
+
+先预测：iterator local function中的validation是否在outer method被调用时执行；out variable是否只活在if true branch；digit separator是否影响literal value；`default`是否在任何overload中都能推断；parameter rename是否对使用named argument的source consumer无影响；private protected是否等于protected或internal。答案都不能靠“看起来如此”判断。
+
+<Term def="Public wrapper先检查arguments和invariants，再把真正deferred iterator/async work交给local function的边界。">eager validation boundary</Term>
+
+## Local methods
+
+Local function声明在method body内部，可capture enclosing locals、递归、使用generic type parameters，并拥有普通method-like parameter/return syntax。相较lambda，它不一定需要delegate conversion，名称和recursive call更自然；相较private helper，它的visibility与concept ownership限制在一个method内。
+
+最重要的timing pattern是wrapper先validate，再返回local iterator或Task。若validation直接写在iterator body中，调用method只创建enumerable，异常要到第一次MoveNext才发生；拆成outer validation + local iterator，可让bad argument在API call时立刻失败。
+
+```csharp
+static IEnumerable<string> ReadLines(string path)
+{
+    if (path is null) throw new ArgumentNullException(nameof(path));
+    return Iterator();
+
+    IEnumerable<string> Iterator()
+    {
+        using var reader = File.OpenText(path);
+        while (reader.ReadLine() is { } line) yield return line;
+    }
+}
+```
+
+<Stepper>
+  <Step title="切换local eager、lambda、out variable与discard"><DcsLocalFunctionBoundaryLab /></Step>
+  <Step title="标记declaration、invocation与actual execution">对ordinary、iterator和async local function分别写出validation、capture与failure时点。</Step>
+  <Step title="用call-before-enumeration测试验收">只调用不iterate/await，确认哪些异常应立即发生；再执行deferred body检查cleanup与capture。</Step>
+</Stepper>
+
+<Callout type="trap" title="把代码移进local function不会改变错误出现时机">
+Iterator和async execution具有deferred/suspension semantics。Validation放在inner body可能推迟到enumeration/await；若API承诺eager validation，应由ordinary outer method先检查再返回deferred work。
+</Callout>
+
+## Out variables
+
+C# 7允许在argument位置声明`out int value`，类型也可用`out var value`推断。变量scope通常属于enclosing block，而不只是if true branch；但definite assignment和business validity仍由control flow决定。TryParse返回false时out variable也会被赋default，这不意味着它是有效parse result。
+
+Discard `out _`明确忽略output，适合只关心success的call。大量out parameters通常暴露API shape问题；tuple或nominal result能更清楚表达相关outputs和invalid states。Concision不应让scope比需要的更宽，必要时增加block缩小lifetime。
+
+```csharp
+if (int.TryParse(text, out int count) && count >= 0)
+{
+    Use(count);
+}
+
+bool isGuid = Guid.TryParse(candidate, out _);
+```
+
+## Improvements to numeric literals
+
+C# 7加入binary literals `0b...`和digit separators `_`，让bit masks、large quantities和grouped identifiers更可读。Separators不改变numeric value或type inference；suffix、range和checked context仍决定literal type与overflow。Grouping应按domain，而不是机械每三位：bit fields常按4或8位分组，money/IDs有自己的规则。
+
+Literal readability需要与runtime unit配对。`60_000`若代表milliseconds，应通过name/type表达单位；separator只帮助视觉扫描，不能创建unit safety。
+
+<Term def="通过base prefix、digit grouping、suffix与上下文共同让literal的value、unit和intended type可审核。">literal intent</Term>
+
+## Throw expressions
+
+C# 7允许在部分expression contexts使用throw，例如null-coalescing右侧、conditional arm或expression-bodied member。它把invalid input policy放在value construction附近，适合constructor assignment和guarded mapping。Exception type、message/context与ownership仍要设计，短syntax不是随意抛generic Exception的许可。
+
+```csharp
+public Customer(string name)
+{
+    Name = name ?? throw new ArgumentNullException(nameof(name));
+}
+
+public string DisplayName =>
+    profile?.Name ?? throw new InvalidOperationException("Profile has no name.");
+```
+
+<Term def="Expression无法产生contract所需value时，以throw作为明确的non-returning failure branch。">expression failure path</Term>
+
+## Default literals (C# 7.1)
+
+`default` literal从target type获得含义，替代重复的`default(T)`、`default(CancellationToken)`。在assignment、return和typed argument中通常清楚；若overload resolution缺少唯一target，仍需写出`default(Type)`或cast。对于reference/value nullable semantics，default只产生type的零值，不保证domain-valid。
+
+<Term def="Expression自身省略type，由assignment、return、parameter或conversion context唯一确定其static type。">target-typed default</Term>
+
+<Stepper>
+  <Step title="切换throw、default、numeric与tuple comparison"><DcsExpressionConcisionLab /></Step>
+  <Step title="恢复target type与failure branch">对每个短expression写出完整typed equivalent、可能异常和version requirement。</Step>
+  <Step title="制造overload与boundary cases">加入ambiguous overload、numeric range、checked context、null/default domain validation，确认编译与运行结果。</Step>
+</Stepper>
+
+## Nontrailing named arguments (C# 7.2)
+
+早期named arguments后通常要求后续也named；C# 7.2允许named argument出现在正确position时，后面继续positional arguments。它适合突出一个不明显的boolean/quantity，但混合风格过多会降低扫描性。Name必须对应parameter，参数重命名可能破坏source recompilation，即使CLR signature不含parameter name作为调用identity。
+
+Named arguments是source-level dependency。Public library要把parameter names纳入compatibility review；callers也不应把每个显然位置都重复命名。优先为容易混淆或optional values提供意义。
+
+<Term def="Caller把parameter name写入source后形成的可读性收益与rename compatibility依赖。">call-site naming contract</Term>
+
+## Private protected access (C# 7.2)
+
+`private protected`表示“同一assembly内的derived types”可访问，是`protected`与`internal`条件的intersection。`protected internal`则更接近union：same assembly或derived access。两个词序相似但boundary相反，设计framework hooks时要用consumer matrix验证。
+
+<Term def="Member只对同assembly且继承当前type的code开放，表达protected与internal的交集。">accessibility intersection</Term>
+
+## Minor improvements in C# 7.3
+
+C# 7.3继续补齐小边界，例如更丰富的generic constraints（`unmanaged`、`System.Enum`、`System.Delegate`）、tuple equality、stackalloc initializer和部分overload/ref场景改进。它们必须和project `LangVersion`、compiler SDK及runtime/library availability分开验证；syntax来自compiler，某些types/APIs来自target framework。
+
+第四版以当时C# 7.3为已发布背景。Modern compiler可能拥有更多相似特性，维护教材时应保留每项first-version label，不能把“现在可编译”误写成“C# 7本来就支持”。
+
+<Stepper>
+  <Step title="切换named、nontrailing、private protected与7.3"><DcsApiSurfaceLab /></Step>
+  <Step title="建立source/access/version matrix">列caller assembly、inheritance、parameter positions/names、LangVersion与target framework。</Step>
+  <Step title="用consumer projects验收">旧compiler、same/other assembly、derived/non-derived与named-call recompilation都进入CI fixture。</Step>
+</Stepper>
+
+<Callout type="trap" title="这些都是小语法，所以升级LangVersion不会影响contract">
+Named arguments依赖parameter names，access modifiers改变可见面，minor features依赖compiler/runtime matrix。升级前要编译真实consumer并检查public API、generated code与deployment target。
+</Callout>
+
+## 本章回顾：把省略掉的信息补进Review与Tests
+
+1. Local functions可隔离implementation并恢复eager validation，但要显式分析deferred execution。
+2. Out variables贴近call，却不代表result总有效；scope和success condition仍需清楚。
+3. Numeric separators改善阅读，不提供unit或range safety。
+4. Throw/default expressions依赖failure policy与target typing，ambiguous context需恢复显式type。
+5. Named arguments、accessibility和minor versions都是source/build contracts，而非纯排版糖。
+
+<Exercises>
+
+**问题 1：一个返回IEnumerable的API为什么在null参数时没有立即抛错？**
+
+<Answer>若参数检查写在iterator body，method call只返回state machine，检查到首次MoveNext才执行。改为ordinary outer method先validate，再返回local iterator。测试“只调用不enumerate”即抛ArgumentNullException，并验证early-break时resource cleanup。</Answer>
+
+**问题 2：Public method改parameter name前如何评估影响？**
+
+<Answer>搜索/编译使用named arguments的source consumers；binary callers可能继续工作，但recompile会找不到旧name。把parameter names纳入API diff，必要时保留旧overload/facade或发major version，并用old-source/new-binary matrix验证。</Answer>
+
+**问题 3：怎样证明`private protected`满足插件hook边界？**
+
+<Answer>建立四格matrix：same assembly derived应可访问；same assembly non-derived、other assembly derived、other assembly non-derived都应被拒绝。若外部derived也应访问，应选择protected而非private protected。用独立consumer projects做compile-positive/negative tests。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="eager validation boundary" definition="Outer call立即验证，再把deferred work交给local function。" />
+  <GlossaryItem term="literal intent" definition="Literal的base、grouping、suffix、unit与target type意图。" />
+  <GlossaryItem term="expression failure path" definition="Expression以throw明确表示无法产生所需value的branch。" />
+  <GlossaryItem term="target-typed default" definition="由context唯一确定type的default literal。" />
+  <GlossaryItem term="call-site naming contract" definition="Named argument对parameter name产生的source dependency。" />
+  <GlossaryItem term="accessibility intersection" definition="Private protected要求same assembly且derived的访问边界。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# in Depth, Fourth Edition, Chapter 14: Concise code in C# 7" adaptedUrl="https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-14" />

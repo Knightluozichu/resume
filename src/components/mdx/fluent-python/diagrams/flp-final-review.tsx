@@ -1,78 +1,10 @@
-/**
- * <FlpFinalReviewDiagram>：流畅的 Python 总复习——四大能力自检。
- *
- * 把全书四大板块凝练为「你能做到什么」的四象限自检卡。
- *
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * 全部 DESIGN token 配色，无裸 hex、无阴影。
- * viewBox 720×400，四周留白 ≥32，字号 ≥11。
- */
-
-const VIEW_W = 720;
-const VIEW_H = 400;
-
-const accent = "var(--accent)";
-const success = "var(--success)";
-const warning = "var(--warning)";
-const danger = "var(--danger)";
-const primary = "var(--text-primary)";
-const secondary = "var(--text-secondary)";
-const border = "var(--border)";
-
-const CARDS = [
-  { x: 40, y: 80, w: 294, h: 124, color: accent, title: "数据模型", items: ["实现特殊方法让类型融入语言", "len/for/+ 都走 dunder", "用内置函数不直接调 __xx__"] },
-  { x: 386, y: 80, w: 294, h: 124, color: success, title: "数据结构", items: ["按容器/扁平、可变/不可变选型", "推导式替代 map+filter", "避 [[0]]*n 共享引用陷阱"] },
-  { x: 40, y: 220, w: 294, h: 124, color: warning, title: "函数与对象", items: ["函数即值：赋值/传参/返回", "类型提示渐进式、静态检查", "Protocol 看形状、ABC 看血缘"] },
-  { x: 386, y: 220, w: 294, h: 124, color: danger, title: "高级特性", items: ["闭包捕获变量而非值", "装饰器 = greet = timer(greet)", "生成器惰性、O(1) 内存"] },
+import { FluentPythonOfficialLab, type FluentPythonCase } from "./official-lab";
+const cases: FluentPythonCase[] = [
+  { label: "全书协议复盘", input: "全书协议复盘从调用语法追到特殊方法、类型协议和资源生命周期，不以记住API数量为目标。", mechanism: "阶段1：建立依赖与边界", evidence: "完成实现、反例与复述 1", invariant: "对象模型证据要求解释身份、相等、可变性、哈希、切片和运算符怎样维护一致不变量。" },
+  { label: "对象模型证据", input: "对象模型证据要求解释身份、相等、可变性、哈希、切片和运算符怎样维护一致不变量。", mechanism: "阶段2：建立依赖与边界", evidence: "完成实现、反例与复述 2", invariant: "函数与类型证据要求用一等函数、闭包、装饰器和渐进类型建立可替换且可检查的行为边界。" },
+  { label: "函数与类型证据", input: "函数与类型证据要求用一等函数、闭包、装饰器和渐进类型建立可替换且可检查的行为边界。", mechanism: "阶段3：建立依赖与边界", evidence: "完成实现、反例与复述 3", invariant: "并发控制证据要求区分线程、进程、Future和协程的调度、取消、超时、背压与故障传播。" },
+  { label: "并发控制证据", input: "并发控制证据要求区分线程、进程、Future和协程的调度、取消、超时、背压与故障传播。", mechanism: "阶段4：建立依赖与边界", evidence: "完成实现、反例与复述 4", invariant: "元编程边界要求先尝试property、descriptor、init_subclass和类装饰器，再证明是否真的需要元类。" },
 ];
-
-export function FlpFinalReviewDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="流畅的Python总复习：数据模型、数据结构、函数与对象、高级特性四大能力自检卡。"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          {/* 主标题 */}
-          <text x={VIEW_W / 2} y={32} textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>
-            总复习：四大能力自检
-          </text>
-          <text x={VIEW_W / 2} y={52} textAnchor="middle" fontSize="11" fill={secondary}>
-            每条都能脱口而出并写出代码，才算把书读「流畅」
-          </text>
-
-          {/* 四象限卡片 */}
-          {CARDS.map((c) => (
-            <g key={c.title}>
-              <rect x={c.x} y={c.y} width={c.w} height={c.h} rx="10" fill={c.color} fillOpacity="0.06" stroke={c.color} strokeWidth="1.4" strokeOpacity="0.55" />
-              <text x={c.x + 18} y={c.y + 26} fontSize="14" fontWeight="700" fill={c.color}>
-                {c.title}
-              </text>
-              <line x1={c.x + 16} y1={c.y + 36} x2={c.x + c.w - 16} y2={c.y + 36} stroke={border} strokeWidth="1" />
-              {c.items.map((it, i) => (
-                <text key={i} x={c.x + 18} y={c.y + 60 + i * 22} fontSize="11" fill={primary}>
-                  · {it}
-                </text>
-              ))}
-            </g>
-          ))}
-
-          {/* 底部总结 */}
-          <line x1={32} y1={358} x2={VIEW_W - 32} y2={358} stroke={border} strokeWidth="1" strokeDasharray="4 3" />
-          <text x={VIEW_W / 2} y={378} textAnchor="middle" fontSize="11" fill={secondary}>
-            主线：数据模型立心 → 数据结构筑基 → 函数对象塑形 → 高级特性升华
-          </text>
-          <text x={VIEW_W / 2} y={394} textAnchor="middle" fontSize="11" fill={secondary}>
-            Pythonic 的本质：顺应数据模型，用协议与语法糖而非造轮子
-          </text>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        流畅的 Python 全书四大能力自检。
-      </figcaption>
-    </figure>
-  );
-}
+export function FlpFinalReviewModelLab(){return <FluentPythonOfficialLab title="《流畅的 Python》第2版总复习：结构" caption="按依赖定位学习任务。" cases={cases} tone="cyan" />;}
+export function FlpFinalReviewBoundaryLab(){return <FluentPythonOfficialLab title="《流畅的 Python》第2版总复习：边界" caption="把语法放回协议与失败路径。" cases={cases} tone="amber" initial={1} />;}
+export function FlpFinalReviewEvidenceLab(){return <FluentPythonOfficialLab title="《流畅的 Python》第2版总复习：证据" caption="以实现、反例和复述验收。" cases={cases} tone="emerald" initial={2} />;}

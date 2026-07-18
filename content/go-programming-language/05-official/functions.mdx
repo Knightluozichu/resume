@@ -1,0 +1,276 @@
+---
+title: "第5章：Functions"
+type: C
+section: "Go 程序设计语言 · 调用、错误与控制转移"
+order: 5
+description: "对齐原书第 5 章：declarations、recursion、multiple returns、errors、function values、closures、variadic、defer、panic 与 recover。"
+demo: true
+math: false
+sourceUrl: "https://www.gopl.io/"
+draft: false
+---
+
+import {
+  GoplDeferPanicRecoverLab,
+  GoplFunctionClosureLab,
+  GoplRecursiveCallLab,
+} from "@/components/mdx/go-programming-language/diagrams/functions";
+
+<Objectives>
+
+- 能解释 function declaration/signature、recursion 与 multiple return values，设计终止条件和 value/error propagation
+- 能实现 function values、anonymous functions、closures 与 variadic APIs，分析 lexical capture、nil function 与 Go language version
+- 能区分 defer、panic、recover 和 ordinary error，推导 argument evaluation、LIFO cleanup、stack unwinding 与 package boundary
+
+</Objectives>
+
+## 为什么 Functions 同时定义数据流和失败流
+
+function boundary 把 inputs、outputs、side effects、failure 和 cleanup 压进一个 contract。原书第 5 章从 declaration 走到 recursion/errors，再把 function 本身当 value，最后讨论 defer/panic/recover 的非局部控制转移。
+
+<Term def="function name 或 function type 所确定的 parameter types、result types 与 variadic property；它不包含 parameter/result names，也不包含 body。">function signature</Term>
+
+先预测：递归函数出错时应该在哪一层加 context，closure 捕获的是变量还是创建时的值，defer 的 arguments 在注册还是执行时求值，以及 recover 能否从另一个 goroutine 截获 panic。
+
+## 5.1 Function Declarations：signature、parameters 与 results
+
+function declaration 包含 name、parameter list、optional result list 和 body。相邻同 type parameters 可合并书写；results 可命名，但过度依赖 naked return 会让长函数难读。Go arguments 按 value 传递，pointer/slice/map/function/channel value 的复制仍可能指向共享 state。
+
+```go
+func hypot(x, y float64) float64 {
+    return math.Sqrt(x*x + y*y)
+}
+
+func split(path string) (dir, file string) {
+    i := strings.LastIndex(path, "/")
+    return path[:i+1], path[i+1:]
+}
+```
+
+function type 的 zero value 是 nil，只能与 nil 比较；调用 nil function 会 panic。signature 相同的 declared/anonymous functions 可赋给同一 variable。API review 要明确 inputs 是否被保存、mutated 或并发使用，而不是只看“传值”。
+
+## 5.2 Recursion：每次调用拥有独立 frame
+
+Go 支持 recursion；每次调用创建独立 parameters/locals/return continuation。正确 recursive algorithm 必须有 base case，并让每次调用朝它推进。树、graph、nested JSON/HTML 等 recursive data 要额外处理 cycles、depth limit 与 total work budget。
+
+<Term def="recursive function 从 root call 展开的 frames/branches；每个 node 对应一次调用，depth 与 branching factor 决定 stack 和总工作量。">recursive call tree</Term>
+
+<Stepper>
+  <Step title="调整 factorial depth 与 injected error">
+    <GoplRecursiveCallLab />
+  </Step>
+  <Step title="沿 call stack 下行并沿 return path 回传">
+    每层拥有自己的 n；base case 返回后逐层组合结果。若 child 返回 error，parent 决定 wrap context 或直接传播。
+  </Step>
+  <Step title="给不可信 recursive input 加 budgets">
+    限制 depth、visited nodes、decoded bytes 与 cycles，避免合法 syntax 触发 stack exhaustion 或 exponential work。
+  </Step>
+</Stepper>
+
+```go
+func visit(links []string, seen map[string]bool, depth int) error {
+    if depth > 64 { return fmt.Errorf("link depth exceeded") }
+    for _, link := range links {
+        if seen[link] { continue }
+        seen[link] = true
+        children, err := extract(link)
+        if err != nil { return fmt.Errorf("extract %s: %w", link, err) }
+        if err := visit(children, seen, depth+1); err != nil { return err }
+    }
+    return nil
+}
+```
+
+## 5.3 Multiple Return Values：value 与 evidence 一起返回
+
+function 可返回多个 values，常见 contract 是 `(value, error)`、`(value, bool)` 或 `(n, error)`。caller 必须接收全部 results 或用 blank identifier 显式丢弃。调用 multiple-result function 可直接成为另一个匹配 parameters 的 call arguments，但可读性优先。
+
+multiple results 让 data 与 validity evidence 保持原子，例如 map lookup 的 ok、parse 的 consumed bytes/error。named results 在 deferred closure 需要观察/修改 return value 时有用，但应保持函数短小并显式 return，避免 hidden mutation。
+
+## 5.4 Errors：ordinary failure 是 value protocol
+
+Go 的 `error` 是 interface，nil 表示 success，non-nil 表示 failure。expected failures 应返回 error，不用 panic。caller 可按 contract 选择：加 context 后传播、对 transient failure 有界 retry、在 top-level command 记录并退出、对独立 item 记录并继续，或在有明确理由时忽略。
+
+<Term def="callee 以 non-nil error 描述 ordinary failure，caller 通过 propagation、classification、retry、logging 或 translation 处理；nil/non-nil 与 value validity 必须共同定义。">error value protocol</Term>
+
+```go
+resp, err := http.Get(url)
+if err != nil {
+    return fmt.Errorf("fetch %q: %w", url, err)
+}
+defer resp.Body.Close()
+
+data, err := io.ReadAll(resp.Body)
+if err != nil { return nil, fmt.Errorf("read %q: %w", url, err) }
+return data, nil
+```
+
+error message 应包含 operation/context 且由内向外组成完整句子，不重复 log 每层。wrap 保留 cause，让边界通过 `errors.Is/As` 分类，而不是解析 message。`io.EOF` 表示正常 stream end；有些 Reader 可同时返回 `n > 0` 和 non-nil error，caller 先消费 bytes 再处理 error。
+
+retry 必须受 context/deadline、attempt、backoff 与 idempotency 约束；permission/config/validation error 通常不可 retry。library 不应调用 `log.Fatal` 结束整个 process，termination 属于 main/top-level policy。
+
+<Callout type="trap" title="既返回 partial value 又让 caller 猜它是否可用">
+若 `(value, err)` 在 err 非 nil 时仍可能含有有效 partial data，必须文档化并用 type/state 表达；否则约定 error 时 value 不可用，避免 caller 因偶然内容继续执行。
+</Callout>
+
+## 5.5 Function Values：把行为作为 data
+
+function values 可赋值、传参、返回，用于 callbacks、traversal、sorting、HTTP handlers 与 dependency injection。它们不可比较，只能与 nil 比较。higher-order API 还应说明 callback 调用次数、顺序、同步/异步、是否可重入以及 panic/error policy。
+
+```go
+func add1(r rune) rune { return r + 1 }
+fmt.Println(strings.Map(add1, "HAL-9000"))
+
+func square(n int) int { return n * n }
+var op func(int) int = square
+```
+
+用 function value 替代巨大 switch 可开放行为扩展，但不要隐藏 critical control flow。callback 捕获 mutable state 时，应把 ownership 和 concurrency 明确写进 surrounding type。
+
+## 5.6 Anonymous Functions：closure 与 lexical environment
+
+function literal 在 expression 中创建 anonymous function。它可引用 enclosing function 的 variables；code 与 captured lexical environment 组成 closure。捕获的是 variable binding，不是自动 snapshot，所以后续 mutation 会被 closure 观察，closure 也可能延长 variable lifetime。
+
+<Term def="anonymous function 与其引用的 lexical variables 组成的运行时环境；captured variables 可在 outer function 返回后继续存活并携带 mutable state。">closure environment</Term>
+
+<Stepper>
+  <Step title="切换 function value 并修改 captured delta">
+    <GoplFunctionClosureLab />
+  </Step>
+  <Step title="区分 stateless function 与 stateful closure">
+    square/negate 只需要 input；adder 还读取 captured delta。返回 closure 后 delta lifetime 随 closure 延长。
+  </Step>
+  <Step title="切换 module language version 观察 loop binding">
+    原书初版语义是每个 loop 共享 iteration variable；Go 1.22+ module 改为每次迭代新 variables。跨版本必须检查 go.mod。
+  </Step>
+</Stepper>
+
+递归 anonymous function 必须先声明 variable 再 assignment，因为 short declaration 的 variable 在右侧 function literal 内尚不可见：
+
+```go
+var visitAll func([]string)
+visitAll = func(items []string) {
+    for _, item := range items {
+        fmt.Println(item)
+        visitAll(children(item))
+    }
+}
+```
+
+原书初版的 loop capture warning 对旧 module language version 仍重要；现代 [Go 1.22 release notes](https://go.dev/doc/go1.22) 规定由 `for` 声明的 variables 在每次迭代重新创建。迁移或阅读旧代码时以 `go.mod` language version 为准；即使新语义修复经典 capture，closure 内共享 pointer/map/slice 仍需独立同步。
+
+## 5.7 Variadic Functions：调用端展开，函数端接收 slice
+
+最后一个 parameter 写 `name ...T` 形成 variadic function，可接收零个或多个 T arguments；函数体内 name 是 `[]T`。已有 slice 用 `f(values...)` 展开。`func(...int)` 与 `func([]int)` 是不同 function types。
+
+```go
+func sum(values ...int) int {
+    total := 0
+    for _, value := range values { total += value }
+    return total
+}
+
+values := []int{1, 2, 3}
+fmt.Println(sum(values...))
+```
+
+variadic 适合 homogeneous optional inputs，不适合用 `...any` 逃避 type design。是否保存 variadic slice/elements 要文档化；caller backing array 可能被共享。格式化 API 的 format string 与 arguments 需要 vet/static checks。
+
+## 5.8 Deferred Function Calls：注册现在，执行在退出时
+
+`defer f(args)` 在执行 defer statement 时立即求值 function value 与 arguments，但实际 call 在 surrounding function 返回时执行。多个 deferred calls 按 LIFO 顺序；normal return、explicit return 与 panic unwinding 都会执行。
+
+<Term def="函数 normal return 或 panic 时，按 LIFO 执行已注册 deferred calls 的过程；每个 defer 的 callee/arguments 在注册点求值。">deferred unwinding</Term>
+
+```go
+func readFile(name string) ([]byte, error) {
+    file, err := os.Open(name)
+    if err != nil { return nil, err }
+    defer file.Close()
+    return io.ReadAll(file)
+}
+```
+
+resource acquire 成功后立即 defer release，能覆盖多个 return paths。长 loop 中 defer 到 outer function return 才执行，可能积累 files/locks；把每次迭代提取成 helper，或显式 close/unlock。deferred closure 可读取 named result 实现 tracing，但不要悄悄吞改 errors。
+
+## 5.9 Panic：异常内部状态的 stack signal
+
+`panic(value)` 停止当前 function normal flow，开始沿当前 goroutine stack unwinding，同时执行 deferred calls。runtime 在 out-of-bounds、nil dereference 等条件也会 panic。panic 适合不可恢复 invariant violation 或 package 内部简化深层控制流，不适合普通 invalid input/network failure。
+
+对 public/library boundary，documented API 应返回 errors。startup constant template/regexp parse 失败可使用 Must/panic，因为它表示开发或部署 artifact 错误，继续运行没有合理意义。
+
+## 5.10 Recover：只在受控 deferred boundary 转换
+
+`recover()` 只有在同一 goroutine 正在 panic，且由 deferred function 直接调用时才取得 panic value 并停止 unwinding；其他位置返回 nil。一个 goroutine 不能 recover 另一个 goroutine 的 panic。恢复后中间 frames 已被丢弃，不会从 panic statement 下一行继续。
+
+<Stepper>
+  <Step title="选择 panic depth 与 recovery boundary">
+    <GoplDeferPanicRecoverLab />
+  </Step>
+  <Step title="按 LIFO 执行每个 frame 的 defer">
+    cleanup 必须能在 partially initialized state 下运行；defer 自身再次 panic 会改变 failure evidence。
+  </Step>
+  <Step title="只转换预期内部 panic">
+    boundary 应识别 package-private panic type，再转成 error；未知 runtime panic 应重新 panic，保留 stack 与 bug signal。
+  </Step>
+</Stepper>
+
+```go
+func Parse(input string) (result Result, err error) {
+    defer func() {
+        if value := recover(); value != nil {
+            if parseErr, ok := value.(parsePanic); ok {
+                err = parseErr.err
+                return
+            }
+            panic(value)
+        }
+    }()
+    return parseInternal(input), nil
+}
+```
+
+recover 不是“catch all and continue”。HTTP server/worker boundary 可防止单请求拖垮 process，但必须记录 request context/stack、释放资源并返回失败；未知 invariant panic 若盲目吞掉，state 可能已损坏。
+
+<Callout type="trap" title="在 helper 中直接调用 recover">
+recover 必须由 deferred function 直接调用才生效；多包一层普通 helper 常得到 nil。把 boundary 写成显式 deferred closure，并只处理自己定义的 panic category。
+</Callout>
+
+## 本章回顾：普通失败与异常展开分轨
+
+1. declaration/signature 定义 call shape；recursion 用独立 frames，并需 base case 与 work budgets。
+2. multiple returns 让 value 与 error/ok evidence 一起传递；ordinary failure 使用 error value protocol。
+3. function values 与 closures 把行为和 lexical environment 作为 data，loop capture 要结合 module language version。
+4. variadic function 在 body 接收 slice；defer 注册时求 arguments、退出时 LIFO 调用。
+5. panic 展开同一 goroutine stack，recover 只在 direct deferred boundary 选择性转换，不替代 errors。
+
+<Exercises>
+
+**问题 1：recursive crawler 怎样同时保留根因、URL context 和 bounded work？**
+
+<Answer>function接收context、seen set、depth/node/byte budgets；进入前检查cancel和limits，访问过的URL跳过。child返回error时用`fmt.Errorf("crawl %s: %w", url, err)`加当前context并保留cause，top-level通过errors.Is/As分类；普通网络失败不panic，retry还需idempotency、deadline与backoff。</Answer>
+
+**问题 2：返回一组 closures 处理 range items 时，怎样兼容原书语义和 Go 1.22+？**
+
+<Answer>先读go.mod language version：旧语义下iteration variable每轮复用，应在loop body显式`item := item`或把item作为factory parameter；go1.22+每轮新建variables。无论版本，若item包含共享pointer/map/slice，closure仍共享其指向state，需定义snapshot/copy与concurrency contract，并测试每个closure输出。</Answer>
+
+**问题 3：parser 内部使用 panic 简化深层退出时，public Parse boundary 应如何 recover？**
+
+<Answer>只panic一个package-private typed value；Parse用deferredclosure直接recover，识别该type后转换为documentederror并保证result无效。未知panic立即re-panic，保留runtimebug和stack。所有acquiredresources在各层用defer清理；recover只管同一goroutine，不能作为expectedvalidationfailure或跨goroutine错误通道。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="function signature" definition="parameter/result types 与 variadic property 定义的调用形状。" />
+  <GlossaryItem term="recursive call tree" definition="recursive calls 展开的 frames 与 branches。" />
+  <GlossaryItem term="error value protocol" definition="callee 返回 error，caller 分类、传播、重试或转换普通失败。" />
+  <GlossaryItem term="closure environment" definition="anonymous function 携带其引用的 lexical variables。" />
+  <GlossaryItem term="deferred unwinding" definition="函数退出时按 LIFO 执行已注册 deferred calls。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Go Programming Language, Chapter 5: Functions"
+  adaptedUrl="https://www.gopl.io/"
+/>

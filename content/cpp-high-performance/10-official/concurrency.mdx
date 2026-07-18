@@ -1,0 +1,285 @@
+---
+title: "第10章：并发"
+type: A
+section: C++ High Performance · Chapter 10
+order: 10
+description: 对齐第一版第10章 Concurrency：并发与并行、共享内存同步、thread/task库、原子与memory orders、lock-free queue，以及contention/affinity/false sharing。
+demo: false
+math: false
+sourceUrl: "https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
+draft: false
+---
+
+import {
+  ChpAtomicLockFreeContentionMap,
+  ChpConcurrencyParallelismMap,
+  ChpSharedStateTaskMap,
+} from "@/components/mdx/cpp-high-performance/diagrams/concurrency";
+
+<Objectives>
+
+- 能区分concurrency与parallelism，并解释time slicing、oversubscription和任务粒度对吞吐的影响
+- 能设计mutex/condition variable/task同步协议，识别data race与deadlock
+- 能推导atomic memory orders和SPSC lock-free queue的happens-before，再诊断contention、affinity与false sharing
+
+</Objectives>
+
+## 从“同时推进”不等于“同时执行”开始
+
+concurrency表示多个活动的lifetime重叠、系统能在它们之间推进；parallelism表示多个工作在不同execution resources上同时执行。单核通过time slicing也能并发，多核程序也可能因一把锁而没有有效并行。并发首先服务响应与结构，并行才以更多hardware缩短work。
+
+<Term def="多个活动在重叠时间内推进，允许scheduler交错执行，即使任一时刻只有一个core真正运行。">
+  concurrency
+</Term>
+
+<Term def="多个计算在不同core或execution units上同时执行，以增加throughput或降低完成时间。">
+  parallelism
+</Term>
+
+先预测工作是CPU-bound、memory-bound、I/O-bound还是lock-bound，再决定threads数量和partition。CPU-bound tasks通常围绕available cores，blocking tasks可能需要不同模型；threads超过可运行资源会oversubscribe，增加context switch、cache displacement与scheduler overhead。
+
+<ChpConcurrencyParallelismMap />
+
+time slice结束、线程blocking或更高优先级任务出现时，scheduler可切换线程。context switch保存/恢复execution state，但更大的成本常是working-set cache变冷和迁移到另一core。不能把“thread数量越多越快”当成公式；需画scaling curve并记录run queue、switches和utilization。
+
+## shared memory与data races
+
+shared memory让threads直接访问同一object，通信低延迟，却要求同步lifetime与mutation。C++ data race发生在不同threads访问同一memory location、至少一个write、且访问非atomic并没有happens-before ordering；data race导致undefined behavior，不只是偶尔读到旧值。
+
+<Term def="两个线程对同一memory location发生冲突访问、至少一个写且没有happens-before关系，并且访问不是合规atomic同步。">
+  data race
+</Term>
+
+mutex把一组invariants放进critical section。所有访问共享invariant的路径都必须使用同一协议；只给writer加锁、reader不加仍是race。锁的范围应覆盖状态从old invariant到new invariant的完整transition，但不在锁内执行不可控callback、I/O或长计算。
+
+```cpp
+class Catalog {
+public:
+    void update(Key key, Value value) {
+        std::lock_guard lock(mutex_);
+        entries_.insert_or_assign(std::move(key), std::move(value));
+        ++version_;
+    }
+
+    Snapshot snapshot() const {
+        std::lock_guard lock(mutex_);
+        return Snapshot{entries_, version_};
+    }
+
+private:
+    mutable std::mutex mutex_;
+    Map entries_;
+    std::uint64_t version_ = 0;
+};
+```
+
+snapshot复制可能很贵，可用immutable state + atomic shared owner等设计降低read lock，但首先要保留lifetime和publication语义。把每个field改atomic也不能自动形成跨字段一致snapshot；invariant是设计单位，不是变量数量。
+
+## deadlock与锁顺序
+
+deadlock常来自循环等待：thread A持有M1等M2，thread B持有M2等M1。统一global lock ordering、用`std::scoped_lock`一次获取多个mutex、减少nested locking能破坏循环条件。调用unknown code时持锁可能引入看不见的反向锁顺序。
+
+<Term def="一组线程永久等待彼此持有的resource，形成无法自行打破的等待环。">
+  deadlock
+</Term>
+
+`try_lock`/timeout可以避免永久等待，却可能形成livelock或复杂rollback，不等于修复协议。thread sanitizer可发现部分race与lock issue，但不能证明所有interleavings正确。写出lock ownership table、critical invariants与ordering rules，再做stress和fault injection。
+
+<Callout type="trap" title="陷阱：程序跑了很多次没出错就说明没有data race">
+  undefined behavior可能因compiler
+  optimization、timing或hardware才显现；测试只能发现执行到的interleaving。共享访问要由mutex、atomic或message-passing
+  contract静态解释，再用TSan与stress补证。
+</Callout>
+
+## thread support library与tasks
+
+C++ thread support library提供`std::thread`、mutex、locks、condition variables、future/promise与`std::async`等。raw thread直接表达execution thread和join/detach lifetime；task表达“产生一个result/error的工作”，调度可交给pool/runtime。每任务创建thread对短任务常不划算，但具体成本依赖OS/runtime，不能写死微秒。
+
+condition variable允许线程sleep直到state predicate可能成立。wait必须与mutex和predicate loop配合，因为notification不是queued data，且允许spurious wakeup。producer应在同一mutex下修改predicate state，再notify；consumer醒来后重新检查。
+
+```cpp
+std::optional<Job> Queue::take() {
+    std::unique_lock lock(mutex_);
+    ready_.wait(lock, [this] { return closed_ || !jobs_.empty(); });
+
+    if (jobs_.empty()) return std::nullopt;
+    Job job = std::move(jobs_.front());
+    jobs_.pop_front();
+    return job;
+}
+```
+
+<Term def="把等待线程挂起，并在其他线程通知后重新竞争mutex和检查predicate的同步原语。">
+  condition variable
+</Term>
+
+future传递value或exception并表示completion，promise设置结果；async的launch policy会影响立即新线程还是deferred execution，不能假定固定调度。task graph需要处理cancellation、backpressure、exception aggregation和shutdown，不能只展示happy path。
+
+<ChpSharedStateTaskMap />
+
+线程池复用workers并限制并行度，但unbounded queue会把过载变成memory/latency问题。bounded queue或admission control提供backpressure；长blocking task与短CPU task混在一个固定pool会产生head-of-line blocking。设计时按resource class分池或采用work-stealing/task runtime，并测queue latency与utilization。
+
+## atomic support与C++ memory model
+
+atomic object保证其atomic operations没有data race，并按memory order参与线程间ordering。C++ memory model描述sequenced-before、synchronizes-with与happens-before，决定一个thread的writes何时对另一个thread可见。cache coherence直觉不能替代语言模型，compiler也会重排普通operations。
+
+<Term def="由语言定义的线程间可见性与排序规则，包括happens-before、atomic modification order和允许的memory orders。">
+  C++ memory model
+</Term>
+
+`memory_order_seq_cst`提供最强的全局单序直觉；release store之前的writes可由读取该value的acquire load同步看到；relaxed只保证该atomic自身原子性和modification order，不发布其他普通data。memory order是correctness proof的一部分，不是“调小会更快”的旋钮。
+
+```cpp
+Payload payload;
+std::atomic<bool> ready{false};
+
+// Producer
+payload = buildPayload();
+ready.store(true, std::memory_order_release);
+
+// Consumer
+if (ready.load(std::memory_order_acquire)) {
+    consume(payload); // payload write happens-before this read
+}
+```
+
+若producer后来复用payload，单个ready flag不够；protocol需定义state transitions与exclusive ownership。acquire必须读取release sequence中的相应value才能建立synchronizes-with。用relaxed polling再读ordinary payload会形成race，即使某台x86机器看起来工作。
+
+## lock-free programming不是“没有等待”
+
+lock-free表示system-wide progress：某个operation会完成，不保证每个thread在有限步骤完成；wait-free才是per-thread bound。CAS loop在contention下可能反复失败，仍消耗CPU和coherence traffic。lock-free data structure还要解决ABA与memory reclamation，后者往往比pointer update更难。
+
+<Term def="不依赖互斥锁并保证系统整体持续取得进展的并发算法；单个线程仍可能重试或饥饿。">
+  lock-free
+</Term>
+
+SPSC ring buffer是边界较清楚的lock-free queue：single producer独占write index，single consumer独占read index；producer以release发布新write position，consumer acquire读取；反向index同理用于确认slot已释放。该算法不能直接推广到MPMC。
+
+```cpp
+template <class T, std::size_t N>
+class SpscQueue {
+public:
+    bool push(T value) {
+        const auto write = write_.load(std::memory_order_relaxed);
+        const auto next = (write + 1) % N;
+        if (next == read_.load(std::memory_order_acquire)) return false;
+        slots_[write] = std::move(value);
+        write_.store(next, std::memory_order_release);
+        return true;
+    }
+
+    bool pop(T& value) {
+        const auto read = read_.load(std::memory_order_relaxed);
+        if (read == write_.load(std::memory_order_acquire)) return false;
+        value = std::move(slots_[read]);
+        read_.store((read + 1) % N, std::memory_order_release);
+        return true;
+    }
+
+private:
+    std::array<T, N> slots_{};
+    std::atomic<std::size_t> write_{0};
+    std::atomic<std::size_t> read_{0};
+};
+```
+
+这个教学版本要求`T`的producer/consumer操作适配slot lifetime，capacity实际为N-1，且对象构造策略简化。通用queue需处理non-default-constructible T、exceptions、shutdown和cache layout。MPMC还需per-slot sequence或其他protocol，不能只把producer数量增加。
+
+<Callout type="trap" title="陷阱：把mutex换成CAS就自动lock-free且更快">
+  progress property需要对完整algorithm证明；CAS
+  retry在高contention下可能比blocking
+  lock消耗更多coherence和CPU。还要处理ABA、reclamation、exception和shutdown。优先成熟结构，并与sharding、batching和普通锁实测。
+</Callout>
+
+## contention、thread affinity与false sharing
+
+contention表示多个threads竞争同一lock、atomic、queue、allocator或memory bandwidth。降低方法常比lock-free简单：shard state、per-thread buffer后reduce、batch updates、缩短critical section、减少共享write。先看wait time与scaling curve，不能仅凭CPU 100%判断工作有效。
+
+<Term def="多个执行者竞争同一同步点、cache line或有限硬件资源，导致等待、重试或吞吐不再随线程数扩展。">
+  contention
+</Term>
+
+thread affinity把thread限制在特定CPU，可保持cache/NUMA locality并减少migration，也可能妨碍scheduler load balancing、与容器CPU quota冲突或把threads固定到SMT siblings。部署topology与workload改变后结论会漂移，必须记录pinning policy并提供unbound baseline。
+
+false sharing发生在threads修改逻辑上独立但位于同一coherence block的data，cache line在cores间ping-pong。用padding/alignment或per-thread arrays分离writers；不要硬编码所有机器line size为64，也不要给每个read-only object盲目填充。
+
+<ChpAtomicLockFreeContentionMap />
+
+`std::hardware_destructive_interference_size`若实现提供，可表达避免干扰的建议尺寸，但仍需核对platform。perf counters、cache-to-cache分析与per-core scaling可帮助区分false sharing、true sharing和memory-bandwidth saturation。
+
+## 第10章实验协议
+
+1. 对CPU、I/O与mixed tasks分别画threads到throughput/latency的scaling curve。
+2. 用TSan验证共享snapshot实现，故意移除reader lock观察race evidence。
+3. 构造双锁反序案例，再用global order或scoped_lock消除等待环。
+4. 为condition variable测试spurious wakeup、notify-before-wait、close与shutdown。
+5. 对release/acquire publication写positive test，并比较错误relaxed版本的语言证据。
+6. 对SPSC queue测试wraparound、full/empty、producer/consumer速度差和shutdown。
+7. 比较mutex queue、SPSC ring与batching，记录throughput、p99、CPU和retries。
+8. 对per-thread counters比较packed、padded、affinity与unbound，采集cache-to-cache事件。
+
+## 小结
+
+- concurrency是活动交错推进，parallelism是同时执行；time slicing本身不会增加CPU算力
+- shared memory访问必须由mutex、atomic或message protocol建立happens-before
+- mutex保护invariant，统一lock ordering或scoped_lock避免deadlock
+- condition variable等待predicate；task/future表达结果，但调度、异常和backpressure仍需设计
+- atomic只保证指定对象和memory-order语义，release/acquire可安全发布普通data
+- lock-free保证system-wide progress，不保证无重试；queue正确性依赖producer/consumer模型
+- contention可来自lock、atomic、allocator、cache line或bandwidth
+- affinity与padding是部署相关优化，必须用topology和scaling evidence验证
+
+<Attribution
+  adaptedFrom="C++ High Performance, First Edition, Chapter 10: Concurrency"
+  adaptedUrl="https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
+/>
+
+<Glossary>
+  <GlossaryItem term="concurrency">多个活动在重叠时间内交错推进。</GlossaryItem>
+  <GlossaryItem term="parallelism">
+    多个工作在不同执行资源上同时运行。
+  </GlossaryItem>
+  <GlossaryItem term="data race">
+    无happens-before的冲突非原子访问。
+  </GlossaryItem>
+  <GlossaryItem term="deadlock">
+    线程形成resource等待环而永久停滞。
+  </GlossaryItem>
+  <GlossaryItem term="condition variable">
+    通知后重新检查共享predicate的睡眠同步原语。
+  </GlossaryItem>
+  <GlossaryItem term="C++ memory model">
+    语言定义的线程可见性、排序和原子规则。
+  </GlossaryItem>
+  <GlossaryItem term="lock-free">
+    保证系统整体持续进展的非阻塞算法属性。
+  </GlossaryItem>
+  <GlossaryItem term="contention">
+    多个执行者竞争同一同步或硬件资源的状态。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：condition variable消费者偶尔永久等待，怎样审计协议？** 覆盖predicate、mutex和shutdown。
+
+<Answer question="wait/notify的正确性来自哪里？">
+  shared queue/closed
+  predicate必须始终在同一mutex下读写；consumer用`wait(lock,predicate)`循环处理spurious
+  wakeup，producer先持锁修改state，再notify。notification本身不存储业务事实，因此notify-before-wait也要由predicate保留。shutdown设置closed并notify_all，consumer在empty+closed时退出。用随机延迟、空队列关闭和多consumer
+  stress验证。
+</Answer>
+
+2. **问题 2：release/acquire flag为何能发布payload，而relaxed flag不能？** 写出happens-before链。
+
+<Answer question="同步链包含哪些边？">
+  producer中payload普通writes sequenced-before
+  ready.store(release)；consumer的ready.load(acquire)若读到该release写入的true，则store
+  synchronizes-with load；传递后payload writes happens-before consume
+  reads，因此无race。relaxed只保证ready自身原子，不建立payload可见性边。若payload会再次被修改，还需新的state/ownership
+  handshake，单次flag不能保护复用。
+</Answer>
+
+3. **问题 3：SPSC queue扩展为两个producer为什么不能只复用同一write index？** 说明progress、slot ownership和reclamation。
+
+  <Answer question="SPSC证明依赖哪些独占条件？">SPSC假设只有producer写write index和对应free slot，因此relaxed local load及单次release publish成立。两个producer可能同时读取同一write、写同一slot并覆盖，单个index CAS即使成功也还需reservation/publish顺序和per-slot readiness。应采用经验证MPMC算法的per-slot sequence，或给producers加锁/shard queues；同时定义T构造析构、full/backpressure和shutdown，不从教学SPSC直接改几行。</Answer>
+</Exercises>

@@ -1,0 +1,184 @@
+---
+title: "Chapter 13. Working with asynchronous computations"
+type: C
+section: "Functional C# 1e · Advanced techniques"
+order: 13
+description: "覆盖Task composition、Traverse/Sequence与Task+Either effects，显式处理启动、并发上限、ordering、cancellation和fault taxonomy。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-13"
+draft: false
+---
+
+import { CfpAsyncLifecycleLab, CfpAsyncValidationLab, CfpTraversePolicyLab } from "@/components/mdx/csharp-functional-programming/diagrams/asynchronous-computations";
+
+<Objectives>
+
+- 能区分async function、cold invocation与hot Task，分析start、await、fault和cancellation的observable lifecycle
+- 能设计Sequence/Traverse的sequential、parallel与bounded执行策略，写出ordering和failure contract
+- 能实现Task与Either的组合helper，判断transport fault、cancellation、validation和business rejection属于哪一层
+
+</Objectives>
+
+## 为什么Async的难点不是少写Callback
+
+`async/await`改善了控制流语法，但没有替你决定工作何时启动、可否重复、并发多少、错误如何分类、取消是否传播。`Task&lt;T&gt;`既是未来结果也是正在运行/已完成工作的handle；调用返回Task的function与持有一个Task语义不同。函数式组合的目标是让这些effect仍能Map/Bind，同时不掩盖lifecycle policy。
+
+先预测：创建Task变量一定启动工作吗；两个await同一Task会执行两次吗；`Select(async ...)`会自动限制并发吗；`Task.WhenAll`遇一项失败会取消其他项吗；把validation Left放进faulted Task是否更统一。答案都是否。
+
+<Term def="从invocation开始到successful、faulted或canceled terminal state的异步工作可观察生命周期。">task lifecycle contract</Term>
+
+## Asynchronous computations
+
+Async method通常在调用时同步执行到第一个incomplete await，并返回一个hot Task；再次调用method会创建另一份工作，而再次await同一个Task只观察同一份工作。API要区分`Func&lt;CancellationToken, Task&lt;T&gt;&gt;` recipe与`Task&lt;T&gt;` handle。前者可控制何时开始并传token，后者可能在composition前已经运行。
+
+```csharp
+async Task<Either<Error, Customer>> LoadCustomer(
+    CustomerId id,
+    CancellationToken token)
+{
+    var row = await gateway.Find(id, token).ConfigureAwait(false);
+    return row is null
+        ? Left(Error.CustomerNotFound)
+        : Right(Map(row));
+}
+```
+
+Async composition的Bind需要await outer value，再调用next function；若outer canceled/faulted，不应执行next。Library code通常避免依赖captured synchronization context，application UI boundary则可能需要回到dispatcher。不要机械添加`Task.Run`包装I/O，它占用thread-pool却不改变remote latency；CPU-bound work是否offload由caller context和capacity policy决定。
+
+<Term def="把CancellationToken从入口传到每个可取消I/O并保持canceled terminal state，不翻译为普通业务失败。">cancellation propagation</Term>
+
+<Stepper>
+  <Step title="切换cold function、hot task、cancel与fault"><CfpAsyncLifecycleLab /></Step>
+  <Step title="画出真正启动点">标method invocation、同步前缀、first incomplete await、terminal completion和每个token owner。</Step>
+  <Step title="用lifecycle tests验收">分别重复invoke与重复await，注入pre-cancel/mid-I/O cancel/fault，断言next未误执行且cause保留。</Step>
+</Stepper>
+
+<Callout type="trap" title="所有Async代码都应该Task.Run">
+网络/数据库API本身可异步等待，Task.Run只额外排队并消耗thread-pool。它适合明确CPU-bound且caller允许offload的边界，不是让同步I/O自动可扩展的装饰器。
+</Callout>
+
+## Failure, cancellation, and timeout taxonomy
+
+Timeout可能来自client deadline、HTTP stack、database command或自定义race；它不总等于cancellation，也不必然retryable。建立matrix记录source、exception/outcome、是否side effect committed、retry budget和external code。Cancellation表示caller不再需要结果，通常向上传播；domain validation是成功完成的Task中的Left；unexpected infrastructure fault保留fault channel和cause。
+
+Retry包围的是重新调用function，不是重新await同一faulted Task。每次attempt创建新resource/token child，并以idempotency key防止unknown completion重复effect。Backoff需要jitter、deadline和max attempts；若outer request已取消，retry loop立刻停止。Telemetry按operation id串联attempts，同时保留每次duration/outcome。
+
+## Traversables: working with lists of elevated values
+
+Map async function overlist得到`IEnumerable&lt;Task&lt;A&gt;&gt;`，但多数caller想要`Task&lt;IReadOnlyList&lt;A&gt;&gt;`。Sequence把结构翻转；Traverse等价于Map后Sequence。Type transformation不决定execution policy：eager LINQ projection可能先启动全部tasks，sequential loop一次一个，bounded worker限制in-flight count。
+
+```csharp
+async Task<IReadOnlyList<B>> TraverseBounded<A, B>(
+    IEnumerable<A> source,
+    int capacity,
+    Func<A, CancellationToken, Task<B>> map,
+    CancellationToken token)
+{
+    using var gate = new SemaphoreSlim(capacity);
+    var tasks = source.Select(async (item, index) =>
+    {
+        await gate.WaitAsync(token);
+        try { return (index, Value: await map(item, token)); }
+        finally { gate.Release(); }
+    });
+    return (await Task.WhenAll(tasks))
+        .OrderBy(x => x.index).Select(x => x.Value).ToArray();
+}
+```
+
+Policy需说明output是否保持input order、first fault后是否停止启动新项、已启动项是否cancel、多个fault如何呈现、empty list返回什么。`Task.WhenAll`不会自动撤销已开始的external effects；fail-fast只是caller较早得到failure。对rate-limited service，应使用bounded scheduler/Channel并观察queue length，而非一次创建十万tasks再用WhenAll。
+
+<Term def="把可遍历结构中的每个value提升为effect，并将list-of-effects翻转为effect-of-list的组合。">Traverse operation</Term>
+
+<Stepper>
+  <Step title="切换sequential、parallel、bounded与failure"><CfpTraversePolicyLab /></Step>
+  <Step title="写execution contract">声明start policy、capacity、result order、fault aggregation、cancel behavior和empty input。</Step>
+  <Step title="做capacity与ordering测试">记录in-flight peak、start/end sequence、fault index和token，证明上限及输出顺序符合约定。</Step>
+</Stepper>
+
+<Callout type="trap" title="Task.WhenAll就是安全的Parallel Traverse">
+WhenAll只是等待给定tasks；tasks可能早已无限制启动。它也不定义rate limit、idempotency或side-effect rollback。先控制创建/启动，再聚合完成结果。
+</Callout>
+
+## Independent validation versus dependent async work
+
+若每项validation彼此独立，可并行执行并accumulate all typed errors；若下一步需要前一步产生的id，则必须Bind顺序执行。把dependent chain硬改为WhenAll会缺少input，把independent checks写成Bind则只返回第一个错误且增加latency。Applicative与monadic composition表达的是dependency graph，execution scheduler再决定并发。
+
+对批量command还需定义partial success：all-or-nothing transaction、每项result、或accepted job。不要用一个exception代表“其中一项业务失败”；返回indexed outcomes并保留input identity。若要求atomic remote effects，单机Task composition无法提供distributed transaction，应采用reservation/saga/idempotent compensation等protocol。
+
+## Combining asynchrony and validation (or any other two monadic effects)
+
+`Task&lt;Either&lt;Error,A&gt;&gt;`有两层effect：Task表达尚未完成/fault/cancel，Either表达完成后的expected domain outcome。普通Task Bind只解一层；若每个service function都返回stacked type，需要TaskEither helper：await outer，Left直接返回，Right才调用next。Map只变A，MapLeft只变domain error，RecoverFault只处理约定infrastructure fault。
+
+```csharp
+async Task<Either<E, B>> BindAsync<E, A, B>(
+    Task<Either<E, A>> source,
+    Func<A, Task<Either<E, B>>> next)
+{
+    var outcome = await source.ConfigureAwait(false);
+    return outcome.Match(
+        Left: error => Task.FromResult(Left<E, B>(error)),
+        Right: next);
+}
+```
+
+Stack order取决于semantics。`Either&lt;E,Task&lt;A&gt;&gt;`可在async work创建前立即拒绝，但一旦Right，later Task仍可fault；`Task&lt;Either&lt;E,A&gt;&gt;`更常用于远程workflow。Validation accumulation与Task cancellation组合时，要明确一项fault是否阻止其他validation，是否保留已完成errors。不要创建“万能Effect”把所有channels压成字符串。
+
+<Term def="同时保留异步completion channel与expected domain outcome，并提供跨两层Map/Bind的组合边界。">Task-Either stack</Term>
+
+<Stepper>
+  <Step title="切换valid、invalid、fault与compose"><CfpAsyncValidationLab /></Step>
+  <Step title="建立two-layer outcome table">列Task success/fault/cancel与Either Right/Left，明确每格是否retry、log和对外映射。</Step>
+  <Step title="用effect trace验收">验证Left不调用next、cancel不变Left、fault保留cause、Right链按顺序执行且不会重复invoke。</Step>
+</Stepper>
+
+## Concurrency budgets and structured ownership
+
+每个并发operation都应属于一个scope：request、batch或background worker。Scope拥有deadline、token、capacity和terminal join，退出前处理所有children，避免fire-and-forget泄露。若确需后台任务，交给durable queue/hosted service并持久化ownership，不把未观察Task丢在request thread上。
+
+Capacity从下游限制推导：DB pool、HTTP rate limit、CPU cores、memory per item。Metrics记录queue wait、in-flight、duration、fault/cancel/retry和downstream saturation。Load test逐步增加source size，观察bounded traverse峰值稳定；unit test通过fake scheduler验证语义，二者不可互相替代。
+
+## Production gate: prove every terminal path
+
+发布前覆盖success、domain Left、timeout before send、cancel during I/O、fault after remote commit、retry exhausted和process shutdown。每个path断言resource disposed、child tasks observed、token propagated、idempotency key stable、external response与internal cause分离。对batch还要验证empty/one/many、input order与duplicate identity。
+
+API review逐个标注function还是hot Task，是否允许multiple invocation，是否线程安全，哪个layer捕获exception。只要这些问题仍靠“大家知道”，composition就没有形成contract。
+
+## 本章回顾：类型保留Effect，Policy决定执行
+
+1. Async function invocation与Task handle不同；重复调用和重复await的effect count不同。
+2. Cancellation、domain rejection、timeout与unexpected fault需要独立语义。
+3. Traverse翻转list/effect结构，但sequential、parallel和bounded policy必须另行声明。
+4. Task-Either stack保留transport lifecycle与domain outcome两层，helper只能减少样板不能抹平层次。
+5. Concurrency必须有scope、capacity、deadline、idempotency和terminal-path evidence。
+
+<Exercises>
+
+**问题 1：怎样证明Bounded Traverse最多只运行N项？**
+
+<Answer>Mapper进入/退出时以Interlocked维护current/peak，并用barrier让多项重叠；输入数大于N，断言peak等于或小于N、每项恰好一次、结果按contract排序。再注入fault/cancel，验证permit总释放且未启动项符合stop policy。</Answer>
+
+**问题 2：Validation Left为何不应放进Faulted Task？**
+
+<Answer>Left是expected completed outcome，可被caller显示或组合；fault表示async operation未正常产出domain result，通常触发告警/重试。混合会丢失taxonomy，使业务拒绝污染错误率，也让catch承担domain branching。</Answer>
+
+**问题 3：Fault后Retry为什么必须重新调用Function？**
+
+<Answer>Task是单次工作的terminal handle，重新await仍得到同一fault。Retry需新attempt、新resource并遵守deadline/idempotency；记录共同operation id和独立attempt id，遇caller cancellation立即停止。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="task lifecycle contract" definition="Async work从启动到terminal completion的可观察契约。" />
+  <GlossaryItem term="cancellation propagation" definition="Token贯穿边界并保留canceled语义。" />
+  <GlossaryItem term="Traverse operation" definition="把list-of-effects翻转为effect-of-list的组合。" />
+  <GlossaryItem term="Task-Either stack" definition="同时保留async与domain outcome的两层effect。" />
+  <GlossaryItem term="concurrency budget" definition="由下游容量限定的in-flight工作上限与ownership。" />
+</Glossary>
+
+<Term def="由资源、deadline和下游capacity决定并发工作数量、排队与取消策略的显式上限。">concurrency budget</Term>
+
+<Attribution adaptedFrom="Functional Programming in C#, First Edition, Chapter 13: Working with asynchronous computations" adaptedUrl="https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-13" />

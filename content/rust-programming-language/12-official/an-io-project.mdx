@@ -1,0 +1,337 @@
+---
+title: "Chapter 12：I/O 项目：构建命令行程序（An I/O Project）"
+type: A
+section: Rust 程序设计语言 · 端到端命令行工程
+order: 12
+description: 对齐官方第 12 章，以 minigrep 串联命令行参数、文件读取、职责拆分、Result 错误边界、TDD 搜索、环境变量以及 stdout/stderr 协议。
+demo: false
+math: false
+sourceUrl: "https://doc.rust-lang.org/book/ch12-00-an-io-project.html"
+draft: false
+---
+
+import {
+  RplCliBoundaryLab,
+  RplMinigrepArchitectureLab,
+  RplSearchTddLab,
+} from "@/components/mdx/rust-programming-language/diagrams/an-io-project";
+
+<Objectives>
+
+- 能实现从 shell 参数到 `Config::build` 的输入边界，区分 Cargo 参数、程序参数、无效 Unicode 和可恢复的用法错误
+- 能设计薄 `main` 与可测试 library 的职责边界，通过 `Result`、问号运算符、stderr 和退出码建立完整失败协议
+- 能按 RED/GREEN/REFACTOR 实现区分大小写的逐行搜索，并解释返回切片的生命周期为何连接到 contents
+
+</Objectives>
+
+## 为什么本章不是 grep API 教程，而是一次工程闭环
+
+minigrep 接受查询字符串和文件路径，读取文本，输出包含查询的行。功能很小，却把前十一章的模块、String/Vec、所有权、错误处理、生命周期与测试放进同一条可运行链路。真正目标不是复制成熟 grep 的正则、并行或性能，而是建立一个命令行程序应有的边界：输入可校验、核心逻辑可测试、错误可传播、输出可组合。
+
+<Term def="由 shell 启动、从参数和环境接收配置、通过标准流与退出状态和调用者交互的程序。">命令行程序</Term>
+
+最小成功路径是：shell 解析命令行，Cargo 把双横线后的值传给 minigrep，程序构建配置，读取文件，按行匹配，把结果写到 stdout，并以状态 0 结束。任一边界失败都应停止后续工作，把诊断写到 stderr，并以非零状态退出。
+
+## 接受命令行参数：先识别三层解释器
+
+<Term def="由 std::env::args 返回的进程参数序列；第一项通常是程序调用名，后续项才是用户参数。">进程参数</Term>
+
+```console
+$ cargo run -- body poem.txt
+```
+
+shell 先处理引号、变量展开和重定向；Cargo 处理 `run` 以及 `--` 之前的选项；生成的 minigrep 只看到 `--` 后的 `body` 与 `poem.txt`。因此 `--` 不会出现在 `env::args()` 结果中。收集后通常得到：
+
+```rust
+use std::env;
+
+let args: Vec<String> = env::args().collect();
+// ["target/debug/minigrep", "body", "poem.txt"]
+```
+
+`collect` 能生成多种集合，所以这里显式标注 `Vec<String>`。`args[0]` 是程序名，查询和路径位于 1、2。直接索引只是教学初稿：参数不足时会触发越界 panic，泄漏面向开发者的实现细节。
+
+<Term def="把 Cargo 自身选项与目标程序参数分开的双横线；分隔符本身不会传给目标程序。">Cargo 参数分隔符</Term>
+
+### args 与 args_os 的 Unicode 边界
+
+<Term def="平台原生的命令行字符串类型；在参数可能不是有效 Unicode 时由 args_os 产生。">OsString 参数</Term>
+
+`env::args()` 要求每个参数都能转换成有效 Unicode，否则会 panic。路径工具若必须接收平台允许但非 Unicode 的文件名，应改用 `env::args_os()` 与 `OsString`/`PathBuf`。本章为聚焦结构而选择 `String`，这不是所有 CLI 都应忽略的平台边界。
+
+## 用 Config::build 把无结构输入变成配置
+
+<Term def="把未验证的参数与环境状态转换成有字段名、有不变量且可供核心逻辑消费的 Config。">配置边界</Term>
+
+tuple 虽能返回 query/path，却没有表达两个值的角色。`Config` 用字段名建立语义，并让“参数至少三个”成为构建成功后的不变量：
+
+```rust
+pub struct Config {
+    pub query: String,
+    pub file_path: String,
+    pub ignore_case: bool,
+}
+
+impl Config {
+    pub fn build(args: &[String]) -> Result<Config, &'static str> {
+        if args.len() < 3 {
+            return Err("not enough arguments");
+        }
+
+        Ok(Config {
+            query: args[1].clone(),
+            file_path: args[2].clone(),
+            ignore_case: std::env::var("IGNORE_CASE").is_ok(),
+        })
+    }
+}
+```
+
+名称从 `new` 改成 `build` 是接口信号：许多 Rust API 的 `new` 预期不会失败，而这里返回 `Result`。两个小 String 各 clone 一次，换来 Config 独立拥有数据、无需给整个程序传播参数切片生命周期；这是有意识的局部成本，不是见到 clone 就判定设计失败。
+
+<RplCliBoundaryLab />
+
+先预测 0、1、2 个程序参数分别会产生哪个 Config 结果，再改变参数数量观察 args 索引。用法错误属于外部输入，应返回 `Err` 让顶层决定提示和退出，而不是由深层代码 panic。
+
+## 文件读取也只是一个可传播的边界
+
+<Term def="读取整个 UTF-8 文件并返回 I/O Result 的标准库便捷函数。">read_to_string</Term>
+
+`fs::read_to_string(file_path)` 同时完成打开、读取和 UTF-8 解码，返回 `std::io::Result<String>`。文件不存在、无权限、读取中断或内容不是有效 UTF-8 都可能失败。初稿用 `expect` 能快速验证 happy path，但固定消息抹平了具体 I/O 原因，也让核心函数自行终止进程。
+
+当文件很大、不是 UTF-8 或必须流式处理时，应选择 `File`、`BufReader` 或字节 API；本章一次读入整个小文件，是项目范围内的明确简化。
+
+## 薄 main 与 library crate 分开机制和策略
+
+<Term def="只负责解析外部输入、组装配置、调用 library 并处理顶层失败的短入口函数。">薄 main</Term>
+
+随着程序增长，main 同时解析参数、读文件、搜索和打印，会让所有变量堆在一个作用域，无法直接单元测试，也让错误策略散落。官方给出的 binary 项目拆分原则是：
+
+- `main.rs` 负责调用参数解析、设置配置、调用 `run`，并把最终错误转换成诊断与退出码
+- `lib.rs` 承担可复用任务逻辑，返回值而不是自行终止进程
+- 复杂参数解析继续提取为函数或类型；搜索函数只处理字符串，不依赖 shell、文件系统或全局输出
+
+<Term def="把参数解析、I/O、业务搜索和进程策略放进不同函数或 crate，使每层只有一个变化原因。">职责分离</Term>
+
+这种拆分不是为了制造文件数量。它把“机制”和“策略”分开：`run` 知道如何读取与搜索，main 决定错误如何展示、进程如何退出。纯 `search` 可直接传字符串测试，不必启动 binary 或创建临时文件。
+
+## 用 Result 建立两类失败通道
+
+<Term def="构建配置时返回 Ok(Config) 或静态错误描述，使调用者能把用法错误转换成 CLI 响应。">Config::build</Term>
+
+Config 构建失败时，main 需要成功值继续执行，因此可用 `unwrap_or_else` 提取 Ok，或在 Err 分支打印并退出。`run` 的成功值只是 unit，main 只关心它是否失败，因此 `if let Err(error)` 更直接：
+
+```rust
+use std::{env, process};
+use minigrep::{run, Config};
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    let config = Config::build(&args).unwrap_or_else(|err| {
+        eprintln!("Problem parsing arguments: {err}");
+        process::exit(1);
+    });
+
+    if let Err(err) = run(config) {
+        eprintln!("Application error: {err}");
+        process::exit(1);
+    }
+}
+```
+
+<Term def="执行文件读取和搜索并返回 Result 的 library 函数；错误经问号运算符交给 main。">run 边界</Term>
+
+```rust
+use std::{error::Error, fs};
+
+pub fn run(config: Config) -> Result<(), Box<dyn Error>> {
+    let contents = fs::read_to_string(config.file_path)?;
+    let results = if config.ignore_case {
+        search_case_insensitive(&config.query, &contents)
+    } else {
+        search(&config.query, &contents)
+    };
+
+    for line in results {
+        println!("{line}");
+    }
+    Ok(())
+}
+```
+
+<Term def="能装入不同具体 Error 实现的动态 trait object，用于本章简化 run 的统一错误返回类型。">Box dyn Error</Term>
+
+`Box<dyn Error>` 让 `run` 暂时不必枚举每种失败类型；`?` 在 I/O 失败时转换并提前返回，main 统一决定人类可读消息和状态 1。真实应用可能改用领域 error enum 保留可匹配的上下文；本章 trait object 的重点是先建立传播边界。
+
+<RplMinigrepArchitectureLab />
+
+切换配置失败、文件失败和成功场景，注意后续阶段是否执行，以及 stream/exit status 如何变化。函数内返回 `Err` 与进程最终退出不是同一动作，只有 main 把两者连接起来。
+
+## 以 TDD 驱动 search 的公开契约
+
+<Term def="先写会因目标行为缺失而失败的测试，再写最小实现使其通过，最后在绿色保护下重构的循环。">TDD 循环</Term>
+
+本章的四步节奏是：写测试并确认按预期原因失败；写刚好足够的实现；在测试持续通过时重构；重复。先让测试失败很关键，否则无法区分“实现正确”与“测试从未观察到目标行为”。
+
+```rust
+#[test]
+fn case_sensitive() {
+    let query = "duct";
+    let contents = "\
+Rust:
+safe, fast, productive.
+Pick three.";
+
+    assert_eq!(
+        vec!["safe, fast, productive."],
+        search(query, contents),
+    );
+}
+```
+
+`unimplemented!()` 先证明测试确实执行；返回空 Vec 后，失败应从 panic 变成预期行与空结果不相等。GREEN 阶段只需遍历 `contents.lines()`、用 `line.contains(query)` 判断并 push 匹配行：
+
+```rust
+pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+    let mut results = Vec::new();
+    for line in contents.lines() {
+        if line.contains(query) {
+            results.push(line);
+        }
+    }
+    results
+}
+```
+
+<Term def="从 contents 每一行产生借用切片、用 contains 判断子串并返回匹配行的纯函数。">逐行搜索</Term>
+
+这不是正则，也不是单词边界搜索：`body` 会匹配 nobody 与 somebody；大小写敏感；结果保持原行顺序。明确这些语义比函数名看起来像 grep 更重要。
+
+## 返回切片的生命周期来自 contents
+
+<Term def="把返回 Vec 中每个字符串切片的有效期连接到 contents，而不是 query 的生命周期关系。">搜索生命周期</Term>
+
+签名中的 `'a` 不延长任何数据。返回行是 `contents` 内部的切片，所以它们不能比 contents 活得更久；query 只参与比较，不是返回值来源。若省略标注，两个输入引用让编译器无法判断输出借用哪一个，因此需要显式说明。这个设计避免为每个匹配行分配新 String，也要求调用者在使用结果期间保留 contents。
+
+<RplSearchTddLab />
+
+在 RED/GREEN/REFACTOR 间切换并改变查询。REFACTOR 可把循环改成 `contents.lines().filter(...).collect()`，但测试、返回类型、顺序和借用关系都不应改变。
+
+## 环境变量只配置策略，不污染搜索函数
+
+<Term def="环境变量存在时启用的布尔配置；本章只检查是否设置，不解释变量文本值。">IGNORE_CASE 开关</Term>
+
+本章以第二轮 TDD 新增 `search_case_insensitive`。测试用混合大小写 query `rUsT`，应匹配 `Rust:` 与 `Trust me.`。实现先把 query 转成小写，再逐行比较 `line.to_lowercase().contains(&query)`；返回的仍是原始行切片，而不是小写副本。
+
+```rust
+pub fn search_case_insensitive<'a>(
+    query: &str,
+    contents: &'a str,
+) -> Vec<&'a str> {
+    let query = query.to_lowercase();
+    contents
+        .lines()
+        .filter(|line| line.to_lowercase().contains(&query))
+        .collect()
+}
+```
+
+`env::var("IGNORE_CASE").is_ok()` 表示变量只要存在即为 true，哪怕值是 `0` 或 `false`。若产品需要解析布尔文本，就必须定义并测试另一套配置协议。重要的是把全局环境读取限制在 Config 构建处，纯搜索函数显式接收策略，测试不会依赖共享进程环境。
+
+## stdout、stderr 与退出状态共同构成 CLI 协议
+
+<Term def="承载成功数据的标准输出流，可被管道或重定向交给下一个程序处理。">stdout</Term>
+
+<Term def="承载诊断信息的标准错误流，stdout 被重定向时仍可独立显示或收集。">stderr</Term>
+
+`println!` 只写 stdout，`eprintln!` 写 stderr。若把缺少参数的错误也写 stdout，`cargo run > output.txt` 会把错误混进本应只含匹配结果的数据文件。改用 stderr 后，屏幕仍显示诊断，而 output.txt 保持空；成功执行时 stdout 可被安全重定向。
+
+<Term def="进程交给 shell 的整数结果；0 表示成功，非零值让脚本无需解析文本即可检测失败。">退出状态</Term>
+
+stream 不能替代退出码：脚本可能丢弃 stderr，但仍应检测到状态 1；退出码也不能替代 stream，因为用户需要知道如何修复失败。稳定的 CLI 同时保证成功数据、错误诊断和机器可判定状态。
+
+## 三个常见陷阱
+
+<Callout type="trap" title="陷阱 1：用 args 索引 panic 报告用法错误">
+  参数不足来自用户输入，不是程序内部不变量破坏。先验证长度并返回 Result，再由 main 给出用法提示和非零退出码；不要把 index out of bounds 与 backtrace 暴露给用户。
+</Callout>
+
+<Callout type="trap" title="陷阱 2：让 search 自己读文件或打印">
+  这样测试必须准备文件并捕获全局输出，搜索算法与 I/O 一起变化。让 run 管 I/O，search 只接收 `&str` 并返回匹配切片，才能用最小 fixture 直接断言。
+</Callout>
+
+<Callout type="trap" title="陷阱 3：错误也写 stdout 或失败仍返回 0">
+  重定向会污染成功数据，自动化脚本也可能把失败当成功。诊断使用 eprintln，顶层失败调用 `process::exit(1)`；成功结果才写 stdout。
+</Callout>
+
+## 三步复刻 minigrep 工程链路
+
+<Stepper>
+  <Step title="第一步：固定输入与配置不变量">
+    明确 query/path 的位置、args[0] 与 Cargo 双横线，选择 args 或 args_os；让 `Config::build` 在读取索引前验证参数，并集中读取 IGNORE_CASE。
+
+    <RplCliBoundaryLab />
+  </Step>
+  <Step title="第二步：拆开进程策略与可测试机制">
+    main 只把 Config/run 的 Err 映射到 stderr 和状态 1；run 负责文件 I/O 与策略选择；search 只处理字符串，所有 I/O 错误通过 Result 返回。
+
+    <RplMinigrepArchitectureLab />
+  </Step>
+  <Step title="第三步：用失败测试驱动搜索语义">
+    先证明测试会因缺失实现失败，再实现逐行 contains；新增大小写不敏感测试后扩展策略，最后在测试绿色时重构为 iterator。
+
+    <RplSearchTddLab />
+  </Step>
+</Stepper>
+
+minigrep 的主线正是 **模块化与错误处理**：Config/build、run、pure search 与 thin main 分离后，configuration error、I/O error、stderr 和 exit status 才能独立验证。
+
+## 小结
+
+- shell、Cargo 与程序分别解释不同部分的命令行；`env::args` 的首项是程序名，非 Unicode 输入需要 args_os
+- Config 把未验证参数和环境变量转换成有不变量的配置；小量 clone 换取清楚所有权是合理取舍
+- 薄 main 处理外部策略，library 返回 Result；问号传播错误，main 用 stderr 和非零状态形成稳定 CLI 协议
+- search 以 TDD 明确逐行子串语义，返回切片借用 contents；区分大小写策略由显式配置选择
+- 文件读取、搜索、输出与退出各有边界，组合起来才是可测试、可诊断、可被 shell 复用的命令行程序
+
+<Exercises>
+  1. **问题 1：修复参数边界。** 当前代码直接读取 `args[1]` 和 `args[2]`，无参数时 panic；文件路径还可能包含非 Unicode 字节。应如何分层修改？
+
+  <Answer question="参数不足与非 Unicode 分别在哪一层解决？">Config 构建应先检查参数数量并返回 Result，main 把 Err 输出到 stderr 后以非零状态退出。若产品必须支持平台原生非 Unicode 路径，采集层改用 env::args_os 与 OsString/PathBuf，并让 Config 使用相应类型；不能只捕获索引 panic，因为那既没有修复 Unicode 边界，也没有形成用户协议。</Answer>
+
+  2. **问题 2：解释生命周期。** 为什么 `search` 的返回类型必须与 contents 的生命周期关联，而 query 不需要同一个标注？
+
+  <Answer question="搜索结果究竟借用了谁？">每个返回 &str 都是 contents 某一行的切片，调用者使用结果时 contents 必须仍有效；query 只被 contains 临时读取，不贡献返回数据。因此命名生命周期把 contents 和 Vec 内切片相连即可。标注不延长 contents，只让编译器验证结果不会逃逸；若同时绑定 query 会施加不必要约束。</Answer>
+
+  3. **问题 3：验证 CLI 协议。** 缺少参数时执行 `minigrep > output.txt`，怎样的屏幕、文件和退出状态才正确？文件读取失败又应由哪一层产生和处理错误？
+
+  <Answer question="失败时三个外部信号应如何配合？">缺少参数的诊断应通过 eprintln 留在 stderr 并显示，stdout 被重定向的 output.txt 应为空，进程状态应非零。文件失败由 run 中 read_to_string 产生，问号把具体 I/O error 传播给 main；main 再写 stderr 并退出 1。run 不应自行 panic 或决定进程策略。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="命令行程序">通过参数、环境、标准流和退出状态与 shell 交互的程序。</GlossaryItem>
+  <GlossaryItem term="进程参数">env::args 产生、首项通常为程序名的参数序列。</GlossaryItem>
+  <GlossaryItem term="Cargo 参数分隔符">把 Cargo 选项与目标程序参数分开的双横线。</GlossaryItem>
+  <GlossaryItem term="OsString 参数">可表示平台原生、未必有效 Unicode 的参数值。</GlossaryItem>
+  <GlossaryItem term="配置边界">把原始输入转换成满足不变量的 Config 的边界。</GlossaryItem>
+  <GlossaryItem term="read_to_string">一次读取并解码 UTF-8 文件，返回 io::Result 的函数。</GlossaryItem>
+  <GlossaryItem term="薄 main">只协调输入、library 调用、顶层错误和退出策略的入口。</GlossaryItem>
+  <GlossaryItem term="职责分离">让参数、I/O、搜索与进程策略分别承担单一职责。</GlossaryItem>
+  <GlossaryItem term="Config::build">以 Result 表达配置构建成功或用法错误的函数。</GlossaryItem>
+  <GlossaryItem term="run 边界">执行 I/O 与搜索并把失败传播给 main 的 library 边界。</GlossaryItem>
+  <GlossaryItem term="Box dyn Error">统一承载多种 Error 实现的动态错误 trait object。</GlossaryItem>
+  <GlossaryItem term="TDD 循环">RED、GREEN、REFACTOR 重复推进实现的开发循环。</GlossaryItem>
+  <GlossaryItem term="逐行搜索">逐行检查 query 并返回匹配行切片的纯逻辑。</GlossaryItem>
+  <GlossaryItem term="搜索生命周期">把返回切片有效期连接到 contents 的借用关系。</GlossaryItem>
+  <GlossaryItem term="IGNORE_CASE 开关">变量存在时选择大小写不敏感搜索的配置。</GlossaryItem>
+  <GlossaryItem term="stdout">只承载成功结果、可供管道和重定向消费的标准流。</GlossaryItem>
+  <GlossaryItem term="stderr">与成功数据分离、专门承载诊断的标准流。</GlossaryItem>
+  <GlossaryItem term="退出状态">供 shell 和脚本机器判定成功或失败的整数结果。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Rust Programming Language, Chapter 12 An I/O Project: Building a Command Line Program"
+  adaptedUrl="https://doc.rust-lang.org/book/ch12-00-an-io-project.html"
+/>

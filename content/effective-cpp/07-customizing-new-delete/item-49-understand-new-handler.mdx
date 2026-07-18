@@ -1,0 +1,351 @@
+---
+title: "Item 49：理解 new-handler 的行为"
+type: A
+section: Chapter 8 · Customizing new and delete
+order: 49
+description: 对齐 Effective C++ 第三版 Item 49：解释 operator new 内存不足时调用 new-handler 并重试的循环，列出 handler 的合法退出策略，并用 RAII 与 class-specific operator new 安全安装和恢复处理器。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppClassSpecificNewHandlerMap,
+  EcppNewHandlerFailureLoopMap,
+  EcppNewHandlerOptionsMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-49-understand-new-handler";
+
+<Objectives>
+
+- 能解释 operator new 内存不足时读取、调用 new-handler 并重复 allocation 的完整控制流
+- 能设计不会空转的 handler，在释放 reserve、切换策略、抛 bad_alloc 与终止之间做明确选择
+- 能实现 RAII 恢复的 class-specific new-handler，并分析异常、nothrow 与多线程边界
+
+</Objectives>
+
+## 从 allocation 失败之后开始
+
+```cpp
+void* memory = ::operator new(hugeSize);
+```
+
+当底层无法满足请求，throwing `operator new` 不一定立刻抛异常。它先查看当前 new-handler；若存在便调用它，然后重试 allocation。
+
+<Term def="allocation function 无法取得请求 storage 时，由实现调用的无参数处理函数。">
+  new-handler
+</Term>
+
+<Term def="安装全局 new-handler 并返回先前处理器的标准库函数。">
+  std::set_new_handler
+</Term>
+
+Item 49 的原则是 Understand the behavior of the new-handler（理解 new-handler 行为）。
+
+```cpp
+using Handler = std::new_handler; // void (*)()
+Handler old = std::set_new_handler(handleOutOfMemory);
+```
+
+<Term def="当前 allocation 请求无法从可用资源取得 storage 的状态。">
+  out of memory
+</Term>
+
+<EcppNewHandlerFailureLoopMap />
+
+先预测：handler 若什么也不做直接返回，会发生一次 bad_alloc 还是无限调用？throwing operator new 会重试，因此失败条件不变时会忙循环。
+
+## handler 必须改变条件或离开控制流
+
+有效 handler 通常只能做以下几类事情。
+
+<Term def="预留到紧急时刻才释放、为关键失败路径提供最后少量可用 storage 的内存。">
+  emergency memory reserve
+</Term>
+
+```cpp
+std::unique_ptr<std::byte[]> reserve;
+
+void releaseReserve() {
+    reserve.reset();
+}
+```
+
+释放 reserve 让下一次 allocation 可能成功。handler 也可安装另一个 handler，形成降级链；或把 handler 设为 null，让下一次失败抛 `std::bad_alloc`。
+
+<Term def="标准 throwing allocation 无法满足请求且没有 handler 可恢复时抛出的异常。">
+  std::bad_alloc
+</Term>
+
+handler 可直接 throw bad_alloc 或其派生异常；若系统不可恢复，也可 terminate/abort。关键是不在条件未变时正常返回。
+
+<EcppNewHandlerOptionsMap />
+
+<Callout type="trap" title="陷阱：handler 只记录日志然后返回">
+  日志不会释放内存或改变 handler。operator new
+  立即重试、再次失败、再次记录，形成高 CPU
+  和日志风暴。记录后必须抛异常、终止或切换策略。
+</Callout>
+
+## handler 自己不能依赖普通动态分配
+
+out-of-memory 路径中再构造 string、扩展 vector、格式化堆日志或锁一个会分配的 tracing system，都可能递归进入同一 handler。
+
+<Term def="new-handler 内部再次动态分配并触发自身，导致递归失败或死循环的风险。">
+  allocation recursion hazard
+</Term>
+
+handler 应使用预分配数据、固定 buffer、低层无分配输出，逻辑保持短小。它还可能在任意 allocation site 被调用，不应假设具体业务上下文。
+
+<Term def="失败处理路径预先准备资源，运行时不再依赖可能失败的 allocator。">
+  allocation-free failure path
+</Term>
+
+## set_new_handler 操作的是全局状态
+
+```cpp
+auto previous = std::set_new_handler(releaseReserve);
+// allocations now observe releaseReserve
+std::set_new_handler(previous);
+```
+
+<Term def="对当前程序 allocation 行为生效、可被不同调用点共同观察的处理器状态。">
+  global handler state
+</Term>
+
+手工恢复容易在 exception、early return 或后续维护中遗漏。应使用 RAII。
+
+```cpp
+class NewHandlerHolder {
+public:
+    explicit NewHandlerHolder(std::new_handler handler) noexcept
+        : old_(std::set_new_handler(handler)) {}
+
+    ~NewHandlerHolder() { std::set_new_handler(old_); }
+
+    NewHandlerHolder(const NewHandlerHolder&) = delete;
+    NewHandlerHolder& operator=(const NewHandlerHolder&) = delete;
+
+private:
+    std::new_handler old_;
+};
+```
+
+<Term def="构造时安装新策略、析构时无条件恢复旧策略的作用域对象。">
+  new-handler RAII guard
+</Term>
+
+## class-specific new-handler
+
+标准只有全局 handler API，但 class 可在自己的 `operator new` 中临时安装专属策略。
+
+```cpp
+class Widget {
+public:
+    static std::new_handler setNewHandler(std::new_handler handler) noexcept {
+        return std::exchange(currentHandler_, handler);
+    }
+
+    static void* operator new(std::size_t size) {
+        NewHandlerHolder guard(currentHandler_);
+        return ::operator new(size);
+    }
+
+private:
+    static inline std::new_handler currentHandler_ = nullptr;
+};
+```
+
+<Term def="只在某个 class allocation 路径临时生效的 out-of-memory 策略。">
+  class-specific new-handler
+</Term>
+
+`Widget::operator new` 安装 Widget handler，委托 global `::operator new` 执行标准重试循环；返回或抛异常时 guard 恢复原 handler。
+
+<EcppClassSpecificNewHandlerMap />
+
+<Term def="自定义 class allocation function 转交标准 global allocation function 复用其契约。">
+  global allocation delegation
+</Term>
+
+## 用 CRTP 复用 class 支持
+
+多个 classes 需要相同机制时，可抽成 mixin。
+
+```cpp
+template<class T>
+class NewHandlerSupport {
+public:
+    static std::new_handler setNewHandler(std::new_handler h) noexcept {
+        return std::exchange(handler_, h);
+    }
+
+    static void* operator new(std::size_t size) {
+        NewHandlerHolder guard(handler_);
+        return ::operator new(size);
+    }
+
+private:
+    static inline std::new_handler handler_ = nullptr;
+};
+
+class Widget : public NewHandlerSupport<Widget> {};
+```
+
+<Term def="以 derived type 作为模板参数，为每个 class 生成独立静态 handler storage 的 mixin。">
+  CRTP new-handler support
+</Term>
+
+每个 T specialization 拥有自己的 handler，不会把 Widget 与 Image 的 policy 混在同一个 static variable。
+
+## operator new 与 new expression 不同
+
+`new Widget` 包含两步：先调用 allocation function 取得 raw storage，再调用 Widget constructor。new-handler 只处理第一步内存取得失败。
+
+<Term def="调用 allocation function 后在返回 storage 上执行 constructor 的完整语言表达式。">
+  new expression
+</Term>
+
+<Term def="只负责返回适当大小和对齐 raw storage、不构造对象的函数。">
+  allocation function
+</Term>
+
+constructor 抛出的业务异常不会触发 new-handler；语言会调用匹配 delete 释放刚取得的 storage，然后传播 constructor exception。
+
+## nothrow new 的边界
+
+```cpp
+Widget* widget = new (std::nothrow) Widget;
+```
+
+<Term def="allocation 失败时返回 null 而非向调用者传播 bad_alloc 的 placement 形式。">
+  nothrow new
+</Term>
+
+nothrow 只约束 allocation failure 的最终表现，不保证整个 new expression 不抛：Widget constructor 仍可抛异常。且底层 nothrow allocation 的具体 handler 交互应按实现与标准契约测试，不能把它当成无失败路径。
+
+<Callout type="trap" title="陷阱：nothrow new 表示整条语句绝不抛异常">
+  storage 成功后 constructor 仍会执行并可抛。若调用方需要完全错误码式 API，应把
+  construction exception policy 也纳入边界，而不是只检查 pointer 是否为空。
+</Callout>
+
+## class-specific 临时安装有并发风险
+
+`std::set_new_handler` 修改 global state。线程 A 为 Widget 临时安装 handler 时，线程 B 的无关 allocation 也可能观察到它；多个 class allocation 并发更会相互覆盖。
+
+<Term def="多个线程临时修改同一 global handler，导致无关 allocation 观察错误策略的竞争。">
+  handler installation race
+</Term>
+
+简单 mutex 若覆盖 global handler 作用域可序列化安装，但 handler/allocator 与锁的交互需避免 deadlock。现代系统更常把 class-specific failure policy放入显式 allocator/resource，而不是频繁切换 process-global hook。
+
+<Term def="通过对象或参数显式传递 allocation policy，避免修改进程全局 handler 的架构。">
+  allocator-scoped failure policy
+</Term>
+
+## 测试内存不足不能只靠真实耗尽
+
+真实 OOM 不稳定，还可能触发操作系统 overcommit 或杀进程。应为 allocation layer 加可控 failure injection。
+
+<Term def="在指定 allocation 次数或大小主动返回失败，用来稳定覆盖 handler 路径的测试机制。">
+  allocation failure injection
+</Term>
+
+测试矩阵包括：无 handler 抛 bad_alloc；handler 释放 reserve 后重试成功；handler 直接抛；class handler 异常后恢复旧 handler；constructor exception 与 allocation failure 分离；并发策略不串线。
+
+先预测每个 handler 被调用次数和最终 global handler，再执行 injection test，防止意外无限循环。
+
+## 小结
+
+- throwing operator new 失败时调用当前 new-handler，handler 返回后会重试 allocation
+- handler 必须释放资源、切换/卸载 handler、抛异常或终止，不能在条件不变时返回
+- failure path 应避免普通动态分配，防止递归进入 handler
+- set_new_handler 操作 global state，RAII guard 保证成功和异常路径恢复
+- class-specific operator new 可临时安装专属 handler并委托 global operator new
+- nothrow 只处理 allocation failure，constructor 仍可抛；临时全局安装还需处理线程竞争
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 49"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="new-handler">
+    allocation 失败时调用的处理函数。
+  </GlossaryItem>
+  <GlossaryItem term="std::set_new_handler">
+    安装并返回全局处理器的函数。
+  </GlossaryItem>
+  <GlossaryItem term="out of memory">
+    无法取得请求 storage 的状态。
+  </GlossaryItem>
+  <GlossaryItem term="emergency memory reserve">
+    失败时释放的预留内存。
+  </GlossaryItem>
+  <GlossaryItem term="std::bad_alloc">
+    throwing allocation 的失败异常。
+  </GlossaryItem>
+  <GlossaryItem term="allocation recursion hazard">
+    handler 内分配再次触发自身的风险。
+  </GlossaryItem>
+  <GlossaryItem term="allocation-free failure path">
+    不依赖普通 allocator 的失败路径。
+  </GlossaryItem>
+  <GlossaryItem term="global handler state">
+    所有 allocation 可观察的处理器状态。
+  </GlossaryItem>
+  <GlossaryItem term="new-handler RAII guard">
+    作用域安装并恢复 handler 的对象。
+  </GlossaryItem>
+  <GlossaryItem term="class-specific new-handler">
+    只服务某类 allocation 的策略。
+  </GlossaryItem>
+  <GlossaryItem term="global allocation delegation">
+    class new 转交全局 new。
+  </GlossaryItem>
+  <GlossaryItem term="CRTP new-handler support">
+    按 derived class 生成独立 handler 的 mixin。
+  </GlossaryItem>
+  <GlossaryItem term="new expression">
+    分配 storage 并构造对象的完整表达式。
+  </GlossaryItem>
+  <GlossaryItem term="allocation function">
+    只取得 raw storage 的函数。
+  </GlossaryItem>
+  <GlossaryItem term="nothrow new">
+    allocation 失败返回 null 的形式。
+  </GlossaryItem>
+  <GlossaryItem term="handler installation race">
+    并发切换全局 handler 的竞争。
+  </GlossaryItem>
+  <GlossaryItem term="allocator-scoped failure policy">
+    显式绑定 allocator 的失败策略。
+  </GlossaryItem>
+  <GlossaryItem term="allocation failure injection">
+    可控触发分配失败的测试机制。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：设计一个释放 reserve 后只重试一次的 handler。** 若仍失败应抛 bad_alloc。
+
+<Answer question="怎样避免 handler 无限循环？">
+  首次调用释放预分配 reserve，并把 global handler 切换为一个直接抛 bad_alloc
+  的后继，或设为 null；返回后 operator new
+  重试。成功则继续，仍失败便由后继结束。用 failure injection
+  验证调用次数、reserve 状态和 handler 恢复。
+</Answer>
+
+2. **问题 2：实现 Widget class-specific handler。** global allocation 成功或抛异常后都必须恢复旧策略。
+
+<Answer question="RAII 和 operator new 如何协作？">
+  Widget 保存 static handler；operator new 构造 NewHandlerHolder
+  临时安装它，再调用 global operator new。holder destructor 在 return 和
+  exception unwind 时恢复旧 handler。删除 holder
+  copy，测试成功、bad_alloc、handler 自抛和 constructor exception 四条路径。
+</Answer>
+
+3. **问题 3：两个线程分别分配 Widget 与 Image，各有不同 class handler。** 审查设计。
+
+  <Answer question="为什么简单临时安装不够，怎样改造？">set_new_handler 是 process-global，两个作用域会互相覆盖，无关 allocation 也可能看到错误策略。可用覆盖完整安装/分配/恢复区间的专用同步，但需审计 handler 锁与递归；更稳健是显式 allocator或 memory_resource 把 failure policy 绑定对象，消除全局切换。</Answer>
+</Exercises>

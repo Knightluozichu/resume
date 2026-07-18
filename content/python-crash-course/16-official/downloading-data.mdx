@@ -1,0 +1,265 @@
+---
+title: "第16章：Downloading Data"
+type: C
+section: "Part II · Projects · Data Visualization"
+order: 16
+description: "从CSV天气记录与GeoJSON地震features提取可信数据，处理缺值并构建时间序列和全球地图。"
+demo: true
+math: false
+sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
+draft: false
+---
+
+import {
+  PccCsvSchemaLab,
+  PccGeoJsonMapLab,
+  PccWeatherSeriesLab,
+} from "@/components/mdx/python-crash-course/diagrams/downloading-data";
+
+<Objectives>
+
+- 能分析CSV headers与row schema，实现datetime、temperature转换和missing-data处理
+- 能设计对齐的weather highs/lows时间序列，比较station数据并验证shading与source范围
+- 能实现GeoJSON feature提取，区分properties和coordinates顺序，并用Plotly scatter_geo编码earthquake magnitude
+
+</Objectives>
+
+## 为什么 Downloading Data 的第一步不是画图
+
+外部文件有自己的contract：delimiter、headers、encoding、date format、missing value和nested schema。绘图库收到错误数据仍可能生成漂亮图，因此链路必须分成read、parse、validate、transform、visualize。每层保留row/feature位置，错误才可定位到source，而不是只得到“plot失败”。
+
+先预测：CSV列重排后硬编码index会读到什么；某天缺少low temperature时两条series是否仍能直接`fill_between`；GeoJSON coordinates中的第一个数字是latitude还是longitude。写下答案再操作交互图，观察schema证据如何决定处理策略。
+
+<Term def="CSV文件中headers、required columns、每列type与missing policy组成的输入约定。">CSV schema</Term>
+
+本章下载的weather与earthquake数据是snapshot。为了复现结果，记录source URL、下载日期、file hash或至少filename，不让同名远程文件变化后悄悄改变图形。
+
+## The CSV File Format
+
+CSV用row表达records，但“逗号分隔”不等于可以`line.split(',')`：quoted field内部可能含comma、newline或escaped quote。使用standard library `csv.reader`处理语法，再由application schema解释fields。
+
+```python
+from pathlib import Path
+import csv
+
+path = Path("weather_data/sitka_weather_2021_simple.csv")
+lines = path.read_text(encoding="utf-8").splitlines()
+reader = csv.reader(lines)
+header_row = next(reader)
+for index, column_header in enumerate(header_row):
+    print(index, column_header)
+```
+
+先打印headers而非直接假设`DATE=2, TMAX=4, TMIN=5`。NOAA不同dataset可能增加station metadata或调整列顺序。更稳健做法是按name建立mapping，并显式检查required fields都存在。
+
+## Extracting and Reading Data
+
+`datetime.strptime(value, "%Y-%m-%d")`把string转换为date-aware object；temperatures用`int()`。两者失败意义不同：date format drift与missing/invalid numeric value应分别记录。row number从header后的第2行开始，错误消息包含file、row和column。
+
+<Term def="把原始string转换为typed value并把syntax、missing和range错误分类的位置。">parse boundary</Term>
+
+```python
+from datetime import datetime
+
+date_index = header_row.index("DATE")
+high_index = header_row.index("TMAX")
+low_index = header_row.index("TMIN")
+
+dates, highs, lows = [], [], []
+for row_number, row in enumerate(reader, start=2):
+    try:
+        current_date = datetime.strptime(row[date_index], "%Y-%m-%d")
+        high = int(row[high_index])
+        low = int(row[low_index])
+    except (ValueError, IndexError) as error:
+        print(f"skip row {row_number}: {error}")
+        continue
+    dates.append(current_date)
+    highs.append(high)
+    lows.append(low)
+```
+
+三个lists必须在同一成功分支append，保证每个index代表同一天。若先append date/high，再因low missing而continue，长度或对齐会破坏。生产系统应把skipped row count纳入质量报告，避免“成功生成图”却静默丢掉大量数据。
+
+<Stepper>
+  <Step title="切换valid、missing与reordered CSV">
+    <PccCsvSchemaLab />
+  </Step>
+  <Step title="先验证headers再读取rows">
+    required columns缺失应立即终止并列出actual headers；row-level missing则按明确policy skip或保留None。
+  </Step>
+  <Step title="验证typed collections对齐">
+    每次append后维持`len(dates) == len(highs) == len(lows)`，并记录first/last date与skip count。
+  </Step>
+</Stepper>
+
+## Plotting Weather Data
+
+highs与lows共享dates作为x-axis。两个line分别编码daily high与low，`fill_between(dates, highs, lows, facecolor="blue", alpha=0.1)`显示daily range。shading有意义的前提是同一index属于同一date且`high >= low`；数据错误不能用图层覆盖。
+
+<Term def="共享同一ordered key、每个index代表同一观察对象的多组数据序列。">aligned series</Term>
+
+```python
+import matplotlib.pyplot as plt
+
+fig, ax = plt.subplots()
+ax.plot(dates, highs, color="red", alpha=0.5)
+ax.plot(dates, lows, color="blue", alpha=0.5)
+ax.fill_between(dates, highs, lows, facecolor="blue", alpha=0.1)
+ax.set_title("Daily High and Low Temperatures, 2021", fontsize=20)
+ax.set_xlabel("")
+fig.autofmt_xdate()
+ax.set_ylabel("Temperature (F)")
+```
+
+`fig.autofmt_xdate()`旋转日期labels减少重叠，title应包含station、period和unit。若source是Celsius却label写Fahrenheit，曲线形状看似合理但语义错误。metadata也是data contract的一部分。
+
+<Stepper>
+  <Step title="比较station与daily range shading">
+    <PccWeatherSeriesLab />
+  </Step>
+  <Step title="检查同一axis的比较条件">
+    两座城市若使用不同y limits，不能凭视觉高度比较温差；并排或叠加时保持unit与scale一致。
+  </Step>
+  <Step title="解释缺测如何显示">
+    skip产生date gap；若用None保留位置，line可断开。禁止未经说明用0填补temperature，因为0是有效measurement。
+  </Step>
+</Stepper>
+
+## Downloading Your Own Weather Data
+
+从NOAA等服务选择station、date range与fields，先保存raw download，再生成normalized derivative。不要直接手改raw CSV修复问题；写transform脚本并记录skipped/converted rows，才能重跑和审计。
+
+两个station比较前检查period overlap、timezone、unit与measurement definition。例如daily max来自不同local-day boundary会带来系统差异。visualization展示observations，不自动消除collection bias。
+
+```python
+assert dates == sorted(dates)
+assert len(dates) == len(highs) == len(lows)
+assert all(high >= low for high, low in zip(highs, lows))
+print(dates[0], dates[-1], len(dates))
+```
+
+这组invariants比只看plot更早发现交换TMAX/TMIN、日期乱序或partial append。重复date是否允许取决于dataset grain；若每station/day应唯一，就在transform阶段检测duplicate key。
+
+## JSON and GeoJSON Structure
+
+JSON parser只保证syntax合法，不保证domain shape。GeoJSON `FeatureCollection`通常含`features` list；每个Feature有`properties` metadata和`geometry`。Point geometry的`coordinates`顺序是`[longitude, latitude]`，与口语常说的lat/lon相反。
+
+<Term def="包含geometry与properties、作为GeoJSON可独立定位和描述的数据对象。">GeoJSON feature</Term>
+
+```python
+import json
+
+path = Path("eq_data/eq_data_30_day_m1.geojson")
+all_eq_data = json.loads(path.read_text(encoding="utf-8"))
+all_eq_dicts = all_eq_data["features"]
+
+magnitudes, longitudes, latitudes, titles = [], [], [], []
+for feature_index, eq_dict in enumerate(all_eq_dicts):
+    properties = eq_dict["properties"]
+    coordinates = eq_dict["geometry"]["coordinates"]
+    magnitudes.append(float(properties["mag"]))
+    titles.append(str(properties["title"]))
+    longitudes.append(float(coordinates[0]))
+    latitudes.append(float(coordinates[1]))
+```
+
+提取前验证root type、features list、geometry type为Point、coordinates至少两个numbers，以及magnitude是否null。真实feed可能包含`mag: null`；直接float会失败。选择skip、特殊编码或单独报告，不能把null变0并当作真实零级地震。
+
+### Readable JSON as a schema inspection tool
+
+书中把minified file通过`json.dumps(data, indent=4)`写成readable version，目的是看清nesting，不是生产转换的必需步骤。大文件不要每次完整pretty-print；抽取首个feature、keys和schema summary更高效。
+
+```python
+readable = Path("eq_data/readable_eq_data.geojson")
+readable.write_text(json.dumps(all_eq_data, indent=4), encoding="utf-8")
+```
+
+readable copy仍是同一data snapshot。不要在其中手改后忘记source；必要时保存raw hash和transform command。
+
+## Mapping Global Earthquake Data
+
+Plotly Express `scatter_geo`把longitude/latitude定位，`size=magnitudes`编码强度，`color=magnitudes`提供第二视觉channel，`hover_name=titles`提供细节。size必须非negative；极端magnitude可通过`size_max`限制显示，但不能让大marker完全遮住附近events。
+
+<Term def="把longitude/latitude映射到地图位置，并用size、color和hover编码属性的规则。">geospatial encoding</Term>
+
+```python
+import plotly.express as px
+
+fig = px.scatter_geo(
+    lat=latitudes,
+    lon=longitudes,
+    size=magnitudes,
+    color=magnitudes,
+    hover_name=titles,
+    color_continuous_scale="Viridis",
+    labels={"color": "Magnitude"},
+    projection="natural earth",
+    title="Global Earthquakes",
+)
+fig.write_html("global_earthquakes.html")
+```
+
+颜色尺度应与连续magnitude匹配，并提供legend title。hover text来自properties title，不应包含未经escape的任意HTML。地图projection改变形状和距离感知，但不改变经纬度data；选择时说明目标是全球overview而非精确测距。
+
+<Stepper>
+  <Step title="选择feature并检查nested fields">
+    <PccGeoJsonMapLab />
+  </Step>
+  <Step title="验证coordinates顺序和range">
+    longitude应在[-180, 180]，latitude在[-90, 90]；交换后部分点仍可能落在合法范围，因此还要抽样核对known location。
+  </Step>
+  <Step title="区分location与magnitude channels">
+    lon/lat只定位；size/color编码magnitude；hover提供title。关闭magnitude encoding后点仍应在同一位置。
+  </Step>
+</Stepper>
+
+## Error Budgets and Data Quality Report
+
+一个可交付pipeline至少报告：source identity、raw record count、accepted count、skipped count及原因、date/coordinate range、missing magnitude数量和output path。若skip比例超过阈值应fail，而不是无条件出图。阈值属于project policy，例如教学样本可允许少量missing temperature，但金融或安全数据需要更严格。
+
+CSV与GeoJSON共用同一原则：parser处理syntax，schema validation处理shape与types，domain validation处理`high >= low`、coordinate range等规则，plot只消费validated records。把这些阶段写成小functions，就能对malformed fixtures测试，而不依赖网络下载。
+
+<Callout type="trap" title="CSV每行都有相同列数，所以可以固定index">
+列数相同不代表顺序不变。先按header name定位required columns；header缺失立即失败，row缺值按policy处理并保留row number。
+</Callout>
+
+<Callout type="trap" title="GeoJSON coordinates通常按latitude、longitude书写">
+Point coordinates规范顺序是longitude、latitude。交换后地图可能仍显示点，却落在错误地区；验证range并抽样核对known locations。
+</Callout>
+
+## 本章回顾：外部数据要经过可审计边界
+
+1. csv/json library处理文件syntax，application schema解释headers、fields与types。
+2. datetime和temperature在parse boundary转换，missing rows必须统计且保持series对齐。
+3. weather highs/lows共享dates，shading只连接同一观察日的合法值。
+4. GeoJSON Feature分离properties与geometry，Point coordinates为lon/lat。
+5. scatter_geo用position、size、color和hover编码earthquake data，输出仍需质量报告。
+
+<Exercises>
+
+**问题 1：CSV某行缺少TMIN时，如何避免high/low与date错位？**
+
+<Answer>在try中完成date、high、low全部转换，只有三者成功才一起append；失败记录file、row、column与reason，并按policy skip整条record。每轮后维持三个lists长度相等，最终报告skip count与日期范围，不能先append部分字段。</Answer>
+
+**问题 2：比较两个weather stations前应验证哪些条件？**
+
+<Answer>核对period overlap、timezone/local-day definition、temperature unit、headers与measurement source；保证dates有序且high/low对齐、high不低于low。使用同一axis scale或明确标注差异，缺值显示gap或按已声明方法处理，禁止默认为0。</Answer>
+
+**问题 3：如何验证Earthquake GeoJSON到地图的提取链路？**
+
+<Answer>验证FeatureCollection和features shape、geometry为Point、properties.mag/title存在且type合法；coordinates[0]作longitude、[1]作latitude并检查range，再抽样known location。map位置只由lon/lat决定，size/color编码magnitude，hover显示title，accepted加skipped等于raw count。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="CSV schema" definition="headers、required columns、types与missing policy组成的输入约定。" />
+  <GlossaryItem term="parse boundary" definition="把raw strings转为typed values并分类syntax、missing与range错误的位置。" />
+  <GlossaryItem term="aligned series" definition="共享ordered key且同一index表示同一观察对象的多组数据。" />
+  <GlossaryItem term="GeoJSON feature" definition="同时包含geometry与properties的可定位数据对象。" />
+  <GlossaryItem term="geospatial encoding" definition="把lon/lat映射到位置，并用size、color、hover编码属性的规则。" />
+</Glossary>
+
+<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 16: Downloading Data" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />

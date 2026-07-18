@@ -42,7 +42,7 @@ export const RuntimeSubsystemsDiagram: FC = () => (
         游戏引擎运行时子系统分类
       </h4>
       <p className="mt-1 text-xs leading-5 text-secondary">
-        所有子系统围绕游戏循环核心协作。外圈是"帧内高频系统"（每帧必跑），内圈是"按需系统"（触发时才跑）。
+        所有子系统围绕游戏循环核心协作。外圈是&quot;帧内高频系统&quot;（每帧必跑），内圈是&quot;按需系统&quot;（触发时才跑）。
       </p>
     </figcaption>
 
@@ -136,12 +136,32 @@ export const RuntimeSubsystemsDiagram: FC = () => (
 
         {/* Legend */}
         <g transform="translate(24, 412)">
-          <rect x="0" y="0" width="10" height="10" rx="2" className="fill-accent-glow stroke-accent" strokeWidth="1" />
-          <text x="16" y="9" className="fill-secondary text-[10px]">高频系统（每帧必跑）</text>
+          <rect
+            x="0"
+            y="0"
+            width="10"
+            height="10"
+            rx="2"
+            className="fill-accent-glow stroke-accent"
+            strokeWidth="1"
+          />
+          <text x="16" y="9" className="fill-secondary text-[10px]">
+            高频系统（每帧必跑）
+          </text>
         </g>
         <g transform="translate(184, 412)">
-          <rect x="0" y="0" width="10" height="10" rx="2" className="fill-elevated stroke-warning" strokeWidth="1" />
-          <text x="16" y="9" className="fill-secondary text-[10px]">按需系统（触发时运行）</text>
+          <rect
+            x="0"
+            y="0"
+            width="10"
+            height="10"
+            rx="2"
+            className="fill-elevated stroke-warning"
+            strokeWidth="1"
+          />
+          <text x="16" y="9" className="fill-secondary text-[10px]">
+            按需系统（触发时运行）
+          </text>
         </g>
       </svg>
     </div>

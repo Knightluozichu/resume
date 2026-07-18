@@ -1,0 +1,194 @@
+---
+title: "Chapter 18. Reflection and Metadata"
+type: C
+section: "C# 10 Nutshell · Metadata and Dynamic"
+order: 18
+description: "覆盖类型与成员反射、程序集和属性元数据、动态代码生成、程序集/泛型发射及IL解析，建立身份、执行副作用与AOT兼容边界。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch18.html"
+draft: false
+---
+
+import { CtcDynamicEmissionLab, CtcMetadataInspectionLab, CtcReflectionBindingLab } from "@/components/mdx/csharp-10-core/diagrams/reflection-and-metadata";
+
+<Objectives>
+
+- 能分析Type、MemberInfo、BindingFlags与generic identity，判断唯一成员并安全激活或调用
+- 能区分assembly/attribute metadata读取与用户代码执行，设计trim和AOT保留策略
+- 能实现expression、DynamicMethod、TypeBuilder和IL parser，并验证signature、stack与token边界
+
+</Objectives>
+
+## 为什么Reflection不是“按字符串找到方法”
+
+反射操作精确的runtime Type identity、member signature、visibility和load context。名字只是候选条件；overload、generic arity、ref/out、indexer、explicit interface和继承隐藏都会改变结果。读取metadata也可能升级为执行代码，例如实例化attribute、调用property getter或constructor。
+
+先预测：`GetMethod("Run")`总能返回唯一方法吗；typeof(List&lt;&gt;)与typeof(List&lt;int&gt;)相等吗；读取custom attribute一定不会执行构造器吗；Reflection.Emit在所有AOT环境可用吗；IL metadata token跨module可直接复用吗。答案都是否。
+
+<Term def="以assembly/load context、type构造形态、member signature和visibility唯一确定反射目标的规则。">reflection binding contract</Term>
+
+## Reflecting and Activating Types
+
+Type可来自typeof、object.GetType、generic parameter、Assembly.GetType或Type.GetType。区分generic type definition、constructed type、array/pointer/by-ref type；FullName对某些generic parameter或dynamic type可能为空。Assignable判断用IsAssignableFrom/IsAssignableTo，不靠名称比较。
+
+Activator.CreateInstance适合已验证constructor contract，频繁调用可缓存compiled delegate/factory。Nonpublic activation突破封装且在trim/AOT下难保留。Constructor执行任意代码，插件discover阶段不应随意实例化。
+
+```csharp
+static Func<IServiceProvider, IPlugin> BuildFactory(Type candidate)
+{
+    if (!typeof(IPlugin).IsAssignableFrom(candidate) || candidate.IsAbstract)
+        throw new InvalidOperationException("not a concrete plugin");
+
+    ConstructorInfo ctor = candidate.GetConstructor(new[] { typeof(IServiceProvider) })
+        ?? throw new MissingMethodException(candidate.FullName, ".ctor(IServiceProvider)");
+
+    var services = Expression.Parameter(typeof(IServiceProvider), "services");
+    var body = Expression.Convert(Expression.New(ctor, services), typeof(IPlugin));
+    return Expression.Lambda<Func<IServiceProvider, IPlugin>>(body, services).Compile();
+}
+```
+
+Factory cache key使用Type实例或包含load context的identity；仅按AssemblyQualifiedName缓存可能阻止collectible context卸载或混淆副本。
+
+## Reflecting and Invoking Members
+
+MemberInfo派生为MethodInfo、ConstructorInfo、PropertyInfo、FieldInfo、EventInfo等。BindingFlags需明确Instance/Static、Public/NonPublic、DeclaredOnly、FlattenHierarchy和IgnoreCase；默认GetMembers包含public且受继承规则影响。Overload应按parameter types、generic arity和calling convention筛选。
+
+MethodInfo.Invoke参数放object array，value type可能boxing，ref/out结果写回array。目标方法异常被TargetInvocationException包装，业务日志应保留InnerException和member identity。PropertyInfo.GetValue会执行getter，Event add/remove也是方法调用，不能当无副作用metadata。
+
+```csharp
+MethodInfo open = handlerType.GetMethods(BindingFlags.Instance | BindingFlags.Public)
+    .Single(m => m.Name == "Handle" && m.IsGenericMethodDefinition &&
+                 m.GetGenericArguments().Length == 1 &&
+                 m.GetParameters() is [{ ParameterType.IsGenericParameter: true }]);
+
+MethodInfo closed = open.MakeGenericMethod(message.GetType());
+try { closed.Invoke(handler, new[] { message }); }
+catch (TargetInvocationException ex) when (ex.InnerException is not null)
+{
+    ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+}
+```
+
+Hot path用CreateDelegate或compiled expression避免反复binder/boxing，但先benchmark。不要缓存来自collectible ALC的Type/MethodInfo到host static。
+
+<Stepper>
+  <Step title="切换Type、Constructor、Method与Property"><CtcReflectionBindingLab /></Step>
+  <Step title="填写binding key">记录assembly/context、declaring type、name、static/instance、generic arity、parameters和visibility。</Step>
+  <Step title="制造歧义与副作用">加入overload、hidden member、explicit interface、throwing getter和另一ALC副本，验证选择与错误传播。</Step>
+</Stepper>
+
+<Callout type="trap" title="反射只读取结构，不会执行代码">
+Activator、MethodInfo.Invoke、PropertyInfo.GetValue和实例化attribute都会执行目标代码。Metadata-only inspection与execution path必须分开。
+</Callout>
+
+## Reflecting Assemblies
+
+Assembly reflection读取manifest identity、modules、references、types、resources和custom attributes。GetTypes可能因某些dependency无法加载而抛ReflectionTypeLoadException；保留Types中非null项并逐个记录LoaderExceptions。执行环境加载assembly会运行module/type initialization的后续路径，不适合审查不可信artifact。
+
+只读分析可用System.Reflection.Metadata/PEReader或MetadataLoadContext，在独立resolver universe中读取metadata，不执行代码。它返回的Type对象属于metadata context，不能与runtime Type混用或实例化。Assembly.Location在single-file/dynamic场景不可靠。
+
+<Term def="只解析PE与metadata tables而不激活类型或执行attribute/constructor的检查模式。">metadata-only inspection</Term>
+
+## Working with Attributes
+
+AttributeUsage定义targets、AllowMultiple与Inherited。GetCustomAttributes会实例化attribute并执行constructor/property setter；CustomAttributeData只暴露constructor、typed arguments和named arguments，更适合扫描、工具和不可信metadata。Inherited行为在type/member类别上不同，显式指定inherit并测试。
+
+Attribute参数只能使用metadata可表示的常量类型、Type、enum及其数组。Attribute表达声明性metadata，不放network/file lookup。若attribute驱动serializer/router/DI，启动时一次扫描、验证冲突并编译dispatch table。
+
+<Stepper>
+  <Step title="切换assembly、attribute data、instance与trim/AOT"><CtcMetadataInspectionLab /></Step>
+  <Step title="分离inspect与execute">Discovery只读CustomAttributeData，validation通过后才实例化或创建delegate。</Step>
+  <Step title="验证deployment shape">在trimmed/AOT测试产物中枚举所需type/member，缺失时给出确定fallback或build-time失败。</Step>
+</Stepper>
+
+<Callout type="trap" title="开发机反射成功就能保证Trim/AOT产物成功">
+Linker只能静态看到部分访问。按字符串或动态generic构造的成员可能被裁剪，动态代码也可能禁用；需要annotations、descriptor或source generation和真实发布测试。
+</Callout>
+
+<Term def="通过DynamicallyAccessedMembers、DynamicDependency、descriptor或source generation声明部署时必须保留的metadata。">metadata preservation contract</Term>
+
+## Dynamic Code Generation
+
+从高到低可选择compiled expression tree、delegate CreateDelegate、DynamicMethod和Reflection.Emit。高层方案保留类型检查且更容易interpreter fallback；raw IL控制最强，也最容易产生stack/type错误。`RuntimeFeature.IsDynamicCodeSupported/Compiled`用于能力判断，API可带RequiresDynamicCode/RequiresUnreferencedCode警告。
+
+DynamicMethod生成临时method，ILGenerator.Emit写opcodes、locals、labels和exception blocks。每条路径evaluation stack必须平衡，ret类型匹配signature；verifiability和访问权限受runtime规则限制。Cache generated delegate时考虑Type/ALC lifetime。
+
+## Emitting Assemblies and Types
+
+AssemblyBuilder/ModuleBuilder/TypeBuilder定义dynamic assembly、module、type、fields、constructors和methods；先定义成员并emit body，最后CreateTypeInfo bake。Baked后不能随意新增成员。RunAndCollect支持collectible dynamic assembly，但任何Type/instance/delegate root仍阻止回收。
+
+```csharp
+AssemblyBuilder assembly = AssemblyBuilder.DefineDynamicAssembly(
+    new AssemblyName("Generated.Models"), AssemblyBuilderAccess.RunAndCollect);
+ModuleBuilder module = assembly.DefineDynamicModule("main");
+TypeBuilder type = module.DefineType("Generated.Counter", TypeAttributes.Public);
+FieldBuilder value = type.DefineField("_value", typeof(int), FieldAttributes.Private);
+MethodBuilder get = type.DefineMethod("Get", MethodAttributes.Public, typeof(int), Type.EmptyTypes);
+ILGenerator il = get.GetILGenerator();
+il.Emit(OpCodes.Ldarg_0);
+il.Emit(OpCodes.Ldfld, value);
+il.Emit(OpCodes.Ret);
+Type counterType = type.CreateType()!;
+```
+
+生产生成器需稳定命名、deterministic cache key、并发单次生成与failure cleanup。若类型shape可在build time知道，source generator通常更适合trim/AOT和调试。
+
+## Emitting Generic Methods and Types
+
+DefineGenericParameters返回GenericTypeParameterBuilder，可设置ReferenceType/NotNullableValueType/DefaultConstructor constraints及base/interface constraints。Emitted member引用generic parameter的constructed members时常需TypeBuilder.GetMethod/GetConstructor把definition member映射到constructed type。
+
+Generic constraints必须与emit IL假设一致；调用constrained virtual method可能需要`constrained.` prefix。测试reference/value type、constraint violation、nested generic和异常路径，不能只用一个string样例。
+
+## Parsing IL
+
+MethodBody.GetILAsByteArray给出method body bytes，解析器按single-byte或0xFE two-byte opcode表读取operand。OperandType决定后续宽度：branch target、integer、floating、local/argument index或metadata token。Token只能由原Module结合generic type/method arguments解析，跨module数值没有意义。
+
+Branch target以指令后offset为基准；switch包含多个relative targets。ExceptionHandlingClauses、locals、max stack和init locals来自MethodBody。Dynamic/AOT/native method可能没有IL body。解析不可信PE先验证bounds，不能让malformed operand越界。
+
+<Stepper>
+  <Step title="切换expression、DynamicMethod、TypeBuilder与IL parser"><CtcDynamicEmissionLab /></Step>
+  <Step title="验证emit invariant">对每条control-flow path记录stack height/type、branch target、exception region和return signature。</Step>
+  <Step title="做能力与字节负测">禁用dynamic-code路径，输入truncated opcode、bad token、switch overflow，并验证source-generated/interpreted fallback。</Step>
+</Stepper>
+
+<Term def="逐条指令验证operand bounds、control-flow target和evaluation stack高度/类型一致的发射门禁。">IL verification ledger</Term>
+
+## 本章回顾：Metadata、Binding与Execution必须分层
+
+1. Type/member反射依赖完整identity和signature，字符串名字不足以唯一绑定。
+2. Assembly与CustomAttributeData可只读metadata；activation/getter/attribute instance会执行代码。
+3. Reflection caches可能阻止collectible ALC回收，部署还要处理trim/AOT保留。
+4. Dynamic code优先typed expression/delegate，raw IL必须验证stack与control flow。
+5. IL token只在所属Module与generic context中有意义，parser必须做bounds检查。
+
+<Exercises>
+
+**问题 1：如何安全发现带HandlerAttribute的插件类型？**
+
+<Answer>在metadata-only或受控ALC中枚举types，处理ReflectionTypeLoadException；用CustomAttributeData读取参数，不实例化attribute。验证type具体、实现contract、constructor唯一和attribute无冲突后，才在执行阶段创建factory/delegate。</Answer>
+
+**问题 2：怎样让反射路由兼容trimmed发布？**
+
+<Answer>优先source generator在build time生成dispatch table；否则在入口Type参数上用DynamicallyAccessedMembers或DynamicDependency声明所需constructors/methods，并在真实PublishTrimmed/AOT产物测试。无法保留时给明确unsupported错误。</Answer>
+
+**问题 3：一个IL parser最先验证哪些边界？**
+
+<Answer>每次读取opcode/operand前检查剩余长度，按OperandType计算宽度；branch/switch target必须落在method body有效指令边界，token用原Module和generic context解析。再做control-flow stack height/type合并与exception region检查。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="reflection binding contract" definition="用完整identity、signature与visibility绑定成员。" />
+  <GlossaryItem term="metadata-only inspection" definition="不执行目标代码地读取PE/metadata。" />
+  <GlossaryItem term="metadata preservation contract" definition="Trim/AOT产物保留反射所需成员的声明。" />
+  <GlossaryItem term="IL verification ledger" definition="Opcode、operand、control flow与stack验证记录。" />
+  <GlossaryItem term="reflection execution boundary" definition="从读取metadata切换到activation/invocation的显式边界。" />
+</Glossary>
+
+<Term def="只有完成identity、signature、权限与输入验证后，才允许activation、getter或Invoke执行目标代码。">reflection execution boundary</Term>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 18: Reflection and Metadata" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch18.html" />

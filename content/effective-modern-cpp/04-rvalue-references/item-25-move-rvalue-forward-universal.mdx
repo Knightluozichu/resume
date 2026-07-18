@@ -1,0 +1,362 @@
+---
+title: "Item 25：右值引用用 move，forwarding reference 用 forward"
+type: A
+section: Chapter 5 · Rvalue References, Move Semantics, and Perfect Forwarding
+order: 25
+description: 对齐 Effective Modern C++ Item 25：在 rvalue-reference 参数最后一次使用时 std::move，在 forwarding reference 最后一次使用时 std::forward，并区分 reference return 与 local return 的 RVO/implicit move 规则。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch05.html"
+draft: false
+---
+
+import {
+  EmcppLastUseTimelineMap,
+  EmcppReferenceConsumptionRuleMap,
+  EmcppReturnRvoDecisionMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-25-move-rvalue-forward-universal";
+
+<Objectives>
+
+- 能实现 move on rvalue references（右值引用使用 move），解释 named parameter 为什么需要显式恢复 rvalue
+- 能实现 forward on universal references（通用引用使用 forward），保持 lvalue/rvalue/const caller 语义
+- 能分析 last use（最后一次使用）与 return value optimization（返回值优化/RVO）边界，避免过早消费或阻止 elision
+
+</Objectives>
+
+## 从“声明类别决定恢复方式，生命周期决定恢复时机”开始
+
+Item 25 的原则是 Use std::move on rvalue references, std::forward on universal references（右值引用用 move，forwarding reference 用 forward）。Item 23/24 已说明 named reference expression 是 lvalue；本条决定如何在消费点恢复正确 category。
+
+<Term def="对普通 rvalue-reference parameter 在资源消费点无条件产生 rvalue expression。">
+  move on rvalue references
+</Term>
+
+<Term def="对 forwarding/universal-reference parameter 按 deduced type 恢复 caller category。">
+  forward on universal references
+</Term>
+
+```cpp
+void consume(Widget&& widget) {
+    storage.push_back(std::move(widget));
+}
+
+template<typename T>
+void relay(T&& widget) {
+    storage.push_back(std::forward<T>(widget));
+}
+```
+
+先预测：第一条只能由 rvalue caller 进入，第二条对 lvalue caller copy/borrow、对 rvalue caller move。
+
+<EmcppReferenceConsumptionRuleMap />
+
+## rvalue-reference parameter 已证明 caller 提供可消费值
+
+ordinary `Widget&&` 不能直接绑定 lvalue，进入函数意味着 caller 已提供 temporary、xvalue 或显式 move。
+
+<Term def="API 入口只接受 caller 标记为可牺牲资源的 rvalue，因此可在消费点无条件 move。">
+  rvalue consumption permission
+</Term>
+
+```cpp
+void setName(std::string&& name) {
+    storedName = std::move(name);
+}
+```
+
+name 作为 named expression 是 lvalue；没有 std::move 会调用 copy assignment。move 恢复入口承诺，而不是擅自消费 lvalue caller。
+
+## forwarding reference 必须保留 caller 选择
+
+```cpp
+template<typename T>
+void setName(T&& name) {
+    storedName = std::forward<T>(name);
+}
+```
+
+<Term def="forwarding wrapper 不统一消费参数，而是让 downstream 收到 caller 原始 lvalue/rvalue/cv category。">
+  category-preserving relay
+</Term>
+
+若改成 std::move，lvalue caller 也会被转成 rvalue并可能被掏空；若直接传 name，rvalue caller 又被降成 lvalue并 copy。std::forward 是两者之间的条件行为。
+
+<Callout
+  type="trap"
+  title="陷阱：forwarding reference 既然可能是 rvalue，就统一 std::move 最快"
+>
+  forwarding reference 也可绑定 mutable/const lvalue。无条件 move 会改变 caller
+  ownership，属于 API 语义破坏； 必须用 deduced T 决定是否恢复 rvalue。
+</Callout>
+
+## 只在 last use 处 move 或 forward
+
+一个 parameter 可能在函数内使用多次。move/forward 给 downstream 消费权限，之后 source value 只能按 moved-from contract 使用。
+
+<Term def="函数中最后一个需要参数当前 value 的表达式；此后只析构、赋新值或允许 moved-from 操作。">
+  last use
+</Term>
+
+```cpp
+void publish(Message&& message) {
+    validate(message);
+    audit(message);
+    queue.push(std::move(message)); // last use of current value
+}
+```
+
+<EmcppLastUseTimelineMap />
+
+过早 move 后 validate/audit 可能看到空 payload；从不 move 则 queue 深 copy。last-use analysis 是值类别工具的时间维度。
+
+## forwarding parameter 多次使用也只最后 forward
+
+```cpp
+template<typename T>
+void publish(T&& message) {
+    validate(message); // named lvalue: non-consuming observation
+    audit(message);
+    queue.push(std::forward<T>(message)); // final category-preserving use
+}
+```
+
+<Term def="先以 named lvalue 观察 forwarding parameter，只在最终 sink 恢复 original category。">
+  deferred perfect forwarding
+</Term>
+
+若前两个 callees 本身需要 category，不能简单 forward 三次；rvalue caller 可能在第一次就被消费。应重构成 single sink、复制必要 observation 或明确各 callee 不消费。
+
+<Callout type="trap" title="陷阱：perfect forwarding 就是每次使用都 forward">
+  对 rvalue caller，多次 forward 会多次暴露消费权限；第一个 callee
+  可能移动资源，后续看到 moved-from value。 perfect
+  指保留语义，不是无限重复转发。
+</Callout>
+
+## return rvalue-reference parameter 需要 move
+
+```cpp
+Matrix operator+(Matrix&& left, const Matrix& right) {
+    left += right;
+    return std::move(left);
+}
+```
+
+<Term def="函数返回 by value 时，从 rvalue-reference parameter 显式恢复 rvalue 以构造结果。">
+  rvalue-reference return transfer
+</Term>
+
+left 是 reference parameter，不是函数自己的 local object，不满足 NRVO candidate；直接 `return left` 在本条讨论的 C++11/14 语义下可能 copy，std::move 表达最后一次资源交付。
+
+## return forwarding reference 需要 forward
+
+```cpp
+template<typename T>
+Fraction reduceAndCopy(T&& fraction) {
+    fraction.reduce();
+    return std::forward<T>(fraction);
+}
+```
+
+<Term def="返回 by value 时按 caller category copy lvalue argument 或 move rvalue argument。">
+  forwarding-reference return transfer
+</Term>
+
+lvalue caller 仍拥有 source，结果 copy；rvalue caller 允许 move。forward 位于该 parameter current value 的 last use。
+
+## local return object 应保留 RVO
+
+```cpp
+Widget makeWidget() {
+    Widget result;
+    configure(result);
+    return result;
+}
+```
+
+<Term def="compiler 允许把 named local object 直接构造在 caller return storage，完全省略 copy/move。">
+  return value optimization
+</Term>
+
+RVO/NRVO 条件通常要求 return expression 是 local object name。添加 `std::move(result)` 改变 expression，可能阻止 elision并强制 move。
+
+<Term def="return std::move(local) 使 expression 不再是直接 local name，可能失去 NRVO。">
+  move-blocked NRVO
+</Term>
+
+```cpp
+Widget makeWidget() {
+    Widget result;
+    return std::move(result); // usually worse
+}
+```
+
+## compiler 在 RVO 不发生时会尝试 implicit move
+
+C++11 对符合 move-eligible 条件的 local return object 提供特殊处理：即使 source expression 是 name，overload resolution 可先按 rvalue 尝试。
+
+<Term def="return local 无法 elide 时，语言自动把合格 source 当作 rvalue 尝试 move constructor。">
+  implicit return move
+</Term>
+
+因此 plain `return result` 同时保留最佳 RVO 和 fallback move；手写 std::move 没有收益。
+
+<EmcppReturnRvoDecisionMap />
+
+## by-value parameter return 也不要机械 move
+
+```cpp
+Widget normalize(Widget value) {
+    value.normalize();
+    return value;
+}
+```
+
+<Term def="函数参数属于 move-eligible return expression，可由语言在 return 时尝试移动。">
+  parameter implicit move
+</Term>
+
+parameter 不可 NRVO，但 plain return 可触发 implicit move。跨语言版本细节需以 target standard 验证；默认仍优先 plain return，除非类型/规则证据显示需要显式转换。
+
+## 多分支 local returns 仍先写 plain names
+
+```cpp
+Widget choose(bool first) {
+    Widget left;
+    Widget right;
+    return first ? left : right; // conditional expression may block NRVO
+}
+```
+
+<Term def="复杂 return expression/多个不同 locals 使 NRVO 条件无法满足的控制流。">
+  non-elidable return shape
+</Term>
+
+可重构为单一 result local、分支修改它后 return result。不要用 std::move 掩盖 return shape；先给 optimizer 合法 elision 结构。
+
+## const local 也会限制 fallback move
+
+```cpp
+const Widget result = build();
+return result;
+```
+
+<Term def="const local 即使进入 rvalue return treatment，也无法绑定普通 non-const move constructor。">
+  const return-move barrier
+</Term>
+
+RVO 可仍然消除 operation，但若无法 elide则可能 copy。无需 const 的 return local 不应加 const。
+
+## move/forward rule 不是 ownership 全部
+
+forwarding reference 可能被 downstream 保存 reference；rvalue reference 可能只是观察不消费。函数签名、名称与文档仍要说明 borrowing/consuming/storage contract。
+
+<Term def="value-category 恢复只决定 overload 输入，不自动定义 downstream 是否保存或消费资源。">
+  transfer contract separation
+</Term>
+
+工具使用正确是必要条件，不是完整 API ownership proof。
+
+## last-use 与 return 验收矩阵
+
+<Term def="覆盖参数类别、多次使用、copy/move counts、RVO 与 const return 的测试集合。">
+  move-forward return matrix
+</Term>
+
+1. rvalue-reference sink 最后一次使用 move。
+2. forwarding sink 对 lvalue copy、对 rvalue move。
+3. 多次使用时前序 observers 看到完整 value。
+4. return local 不含 std::move，并以 compiler flags/assembly/counters 验证 elision。
+5. 关闭 elision 时 plain return 仍 implicit move。
+6. reference parameter return 按 move/forward 规则交付。
+7. const local fallback 行为明确。
+
+先区分 local object 与 reference parameter，再标 last use；同一个 std::move 在两种 return context 中可能一对一错。
+
+## 小结
+
+- ordinary rvalue-reference parameter 只接受可消费 rvalue，last use 处 std::move
+- forwarding/universal-reference parameter 可能绑定 lvalue/rvalue，last use 处 std::forward
+- named parameters 在 body 中是 lvalue；恢复 category 不能早于最后一次需要当前 value 的操作
+- 多次 forward 可能多次暴露消费权限，不是 perfect forwarding
+- return rvalue-reference parameter 用 move，return forwarding parameter 用 forward
+- named local return 保留 RVO；不要 `return std::move(local)` 阻止 NRVO
+- RVO 未发生时，move-eligible local/by-value parameter 通常获得 implicit move fallback
+- const local/reference 会限制普通 move candidate
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 25"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch05.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="move on rvalue references">
+    右值引用在消费点无条件 move。
+  </GlossaryItem>
+  <GlossaryItem term="forward on universal references">
+    通用引用按推导类型 forward。
+  </GlossaryItem>
+  <GlossaryItem term="rvalue consumption permission">
+    入口证明 caller 可牺牲资源。
+  </GlossaryItem>
+  <GlossaryItem term="category-preserving relay">
+    透明保留 caller value category。
+  </GlossaryItem>
+  <GlossaryItem term="last use">参数当前值的最后使用位置。</GlossaryItem>
+  <GlossaryItem term="deferred perfect forwarding">
+    最终 sink 才恢复 caller category。
+  </GlossaryItem>
+  <GlossaryItem term="rvalue-reference return transfer">
+    从 rvalue reference 参数交付返回值。
+  </GlossaryItem>
+  <GlossaryItem term="forwarding-reference return transfer">
+    按 caller category 返回 value。
+  </GlossaryItem>
+  <GlossaryItem term="return value optimization">
+    直接在 caller storage 构造返回对象。
+  </GlossaryItem>
+  <GlossaryItem term="move-blocked NRVO">
+    显式 move 阻止命名返回优化。
+  </GlossaryItem>
+  <GlossaryItem term="implicit return move">
+    不可 elide 时语言自动尝试 move。
+  </GlossaryItem>
+  <GlossaryItem term="parameter implicit move">
+    按值参数 return 的移动资格。
+  </GlossaryItem>
+  <GlossaryItem term="non-elidable return shape">
+    无法满足 NRVO 的表达式结构。
+  </GlossaryItem>
+  <GlossaryItem term="const return-move barrier">
+    const 限制 fallback move。
+  </GlossaryItem>
+  <GlossaryItem term="transfer contract separation">
+    值类别与 ownership contract 分离。
+  </GlossaryItem>
+  <GlossaryItem term="move-forward return matrix">
+    最后使用和返回优化测试表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：publish 先 validate/audit，再写 queue。** 参数是 Message rvalue reference。
+
+<Answer question="std::move 应放在哪里？">
+  validate/audit 以 named lvalue 读取完整 message；queue insertion 是 current
+  value 的 last use，在此 std move。若提前 move，后续 observer 可能看到
+  moved-from payload；若不 move，queue copy。用事件/copy-move counters
+  验证顺序和只消费一次。
+</Answer>
+
+2. **问题 2：generic setName 接受 T forwarding reference。** lvalue caller 不得被掏空。
+
+<Answer question="为什么用 forward 而不是 move？">
+  T 保存 caller category：lvalue 要继续拥有 source，downstream 应 copy；rvalue
+  可被消费，应 move。最后一次 使用时 std forward with T 条件恢复两种语义。用
+  mutable lvalue、const lvalue、rvalue 三组 overload/counter tests 固定行为。
+</Answer>
+
+3. **问题 3：makeWidget 写 return std::move(result)。** 修复并解释 fallback。
+
+  <Answer question="为什么 plain return 更优？">result 是同 return type 的 local，plain name 允许 NRVO 直接在 caller storage 构造；若 optimizer 不做 elision，语言对 move-eligible local 自动尝试 move。显式 std move 可能破坏 NRVO，只剩一次 move。删除 cast，用正常/禁用 elision builds 和 counters 验证两条路径。</Answer>
+</Exercises>

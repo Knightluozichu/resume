@@ -1,0 +1,405 @@
+---
+title: "5.5 Data Compression：RLE、Huffman、LZW与可逆证书"
+type: B
+section: "字符串"
+order: 23
+description: "按官方5.5重建二进制输入输出、定长码、游程编码、prefix-free与Huffman、LZW字典同步、压缩极限、错误检测和byte-exact round-trip证书。"
+demo: true
+math: true
+sourceUrl: "https://algs4.cs.princeton.edu/55compression/"
+draft: false
+---
+
+import { Algs4CompressionContractMap, Algs4BinaryStreamLab, Algs4FixedLengthCodeLab, Algs4RunLengthLab, Algs4PrefixCodeLab, Algs4HuffmanMergeLab, Algs4HuffmanStreamLab, Algs4LzwDictionaryLab, Algs4CompressionComparisonLab, Algs4CompressionLimitLab, Algs4ErrorDetectionLab, Algs4CompressionCertificateLab } from "@/components/mdx/algorithms-4e/diagrams/data-compression";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释data compression、binary input and output、codeword framing、prefix-free与lossless round trip
+- 能计算fixed-width bits、run counts、Huffman weighted path length、LZW code stream和header-adjusted ratio
+- 能实现游程编码、霍夫曼压缩、LZW压缩及其对应expand路径
+- 能分析RLE overflow、Huffman trie header、LZW special case、universal compression不可能性与corruption传播
+- 能设计byte-exact round trip、malformed framing、size accounting、compression limits and error detection的独立验收
+
+</Objectives>
+
+## 从“变小不是正确性，可逆才是”开始
+
+数据压缩（<Term def="把source representation编码成通常更短的bitstream，并由decoder按明确framing恢复数据；lossless模式要求byte-exact recovery。">数据压缩</Term>，data compression）减少存储空间与传输时间，但“输出比输入小”不是correctness contract。Lossless compressor必须满足：
+
+$$
+\forall x\in D,\qquad \operatorname{expand}(\operatorname{compress}(x))=x
+$$
+
+先预测：`ABRACADABRA!` 的Huffman payload可能远短于12个raw bytes，最终file就一定更短吗？不一定。Decoder还要拿到code trie与original length；短message上header会压过payload savings。LZW也要把每个code按固定width写出并用EOF framing结束。
+
+因此评估同时包含四件事：round trip、format completeness、total encoded bits和malformed input behavior。压缩率只是最后一个指标。
+
+<Algs4CompressionContractMap />
+
+## 5.5.1 Binary input and output：算法先从bit framing开始
+
+普通text I/O以characters、tokens或lines为单位；压缩器必须读写单个bits和non-byte-width integers。二进制输入输出（<Term def="按bit、fixed-width integer或byte序列读取与写入，并由format定义field order、width、padding和termination。">二进制输入输出</Term>，binary input and output）由官方`BinaryStdIn`、`BinaryStdOut`提供。
+
+若alphabet含R个symbols，fixed-length code至少需要：
+
+$$
+W=\lceil \lg R\rceil
+$$
+
+bits才能区分每个symbol。DNA alphabet `ACTG` 有R=4，只需2 bits，而extended ASCII的R=256需要8 bits。
+
+<Algs4FixedLengthCodeLab />
+
+`BinaryStdOut.write(value, W)`写value的W个low-order significant bits，顺序由format约定；最后不足一个byte的buffer在close时补padding。Decoder不能仅凭padding bits判断真实结束位置，所以format必须提供original length、EOF codeword或外层byte length。
+
+```java
+BinaryStdOut.write(value, W);       // exactly W bits
+int restored = BinaryStdIn.readInt(W);
+if (restored != value) throw new IllegalStateException();
+BinaryStdOut.close();               // flush final partial byte
+```
+
+<Algs4BinaryStreamLab />
+
+<Callout type="trap" title="把compressed payload当成自描述byte array">
+Bitstream里的field width、tree/dictionary、original length、EOF与padding都必须有contract。只保存payload，decoder通常无法判断codeword边界、停止位置或所用model。
+</Callout>
+
+## 5.5.2 Run-length encoding：用run counts替代重复bits
+
+游程编码（<Term def="把连续相同symbol的run替换为length；官方binary版本隐含0/1交替并输出8-bit counts。">游程编码</Term>，run-length encoding）对长重复区特别有效。官方binary `RunLength`不写每个run的bit value，而约定：
+
+- First count永远代表0-run。
+- 后续counts交替表示1-run、0-run、1-run。
+- 每个count用8 bits，范围0至255。
+
+所以input以1开头时，stream first count必须是0；例如 `1111` 编成counts `[0,4]`。若忘了leading zero，decoder会输出四个0。
+
+```java
+char run = 0;
+boolean old = false;
+while (!BinaryStdIn.isEmpty()) {
+    boolean bit = BinaryStdIn.readBoolean();
+    if (bit != old) {
+        BinaryStdOut.write(run, 8);
+        run = 1;
+        old = !old;
+    } else {
+        if (run == 255) {
+            BinaryStdOut.write(run, 8);
+            BinaryStdOut.write(0, 8);
+            run = 0;
+        }
+        run++;
+    }
+}
+BinaryStdOut.write(run, 8);
+```
+
+<Algs4RunLengthLab />
+
+连续run超过255时输出`255,0`：第一个count结束current bit，zero-length opposite run让decoder toggle两次，再继续同一种bit。这个0不是无用padding，而是保持implicit alternating parity的format token。
+
+若input有r个encoded runs，compressed size为 \(8r\) bits。Raw input有N bits，因此只有：
+
+$$
+8r\lt N
+$$
+
+时该format真正缩小。Alternating bits使r接近N，RLE会膨胀约8倍；黑白扫描图、sparse bitmap或preprocessed runs才适合。
+
+Expand从bit false开始，对每个8-bit count输出对应数量，再toggle：
+
+```java
+boolean bit = false;
+while (!BinaryStdIn.isEmpty()) {
+    int run = BinaryStdIn.readInt(8);
+    for (int i = 0; i < run; i++) BinaryStdOut.write(bit);
+    bit = !bit;
+}
+```
+
+Certificate要覆盖empty input、starts-with-one、zero-length run、exact 255、more-than-255和alternating worst case。
+
+## 5.5.3 Variable-length codes：必须能唯一切分
+
+频繁symbol应使用short codeword，稀有symbol使用long codeword。但variable-length payload没有分隔符，必须保证unique decoding。Prefix-free code（<Term def="任一codeword都不是另一个codeword的prefix，因此沿binary trie到leaf即可立即切分。">前缀码</Term>）提供instantaneous decoding。
+
+<Algs4PrefixCodeLab />
+
+若A编码为0而B编码为01，读到0时decoder不知道应立即输出A还是等待1形成B。Prefix-free code消除这种歧义。Codeword lengths \(l_1,\ldots,l_R\) 必须满足Kraft-McMillan inequality：
+
+$$
+\sum_{i=1}^{R}2^{-l_i}\le 1
+$$
+
+Binary trie的leaf就是codeword；leaf不能有descendant，所以结构天然prefix-free。Fixed-length code也是prefix-free，但没有利用frequency。
+
+给定symbol i出现frequency \(f_i\)，code trie T的payload bits是weighted external path length：
+
+$$
+B(T)=\sum_i f_i\,d_T(i)
+$$
+
+Huffman要在所有prefix-free binary tries中最小化这个值。
+
+## 5.5.4 Huffman compression：反复合并两个最小frequency tries
+
+霍夫曼压缩（<Term def="按symbol frequencies反复合并two minimum-weight tries，生成optimal prefix-free code并随stream传输decode trie。">霍夫曼压缩</Term>，Huffman compression）先统计8-bit alphabet frequencies，再为每个nonzero symbol创建single-node trie。Priority queue每次取two minimum roots，合成weight sum的新parent，直到只剩一棵tree。
+
+```java
+MinPQ<Node> pq = new MinPQ<>();
+for (char c = 0; c < R; c++)
+    if (freq[c] > 0) pq.insert(new Node(c, freq[c], null, null));
+
+while (pq.size() > 1) {
+    Node left = pq.delMin();
+    Node right = pq.delMin();
+    pq.insert(new Node('\0', left.freq + right.freq, left, right));
+}
+Node root = pq.delMin();
+```
+
+<Algs4HuffmanMergeLab />
+
+给left edge标0、right edge标1，root-to-leaf path就是code。最小frequency symbols被放到deep positions。Optimality可用greedy exchange与induction：
+
+1. 某棵optimal full trie可把two least-frequent symbols交换到maximum-depth sibling leaves而不增加cost。
+2. 合并这两个leaves为weight sum的pseudo-symbol，得到smaller optimal subproblem。
+3. Huffman反复执行同一choice，因此得到minimum weighted path length。
+
+Tie breaking可能产生不同code table，但payload total bits仍可相同；encoder与decoder通过serialized trie共享exact choice。
+
+### Stream format不是只有payload
+
+官方compress依次写：
+
+1. Preorder trie：internal node写0，leaf写1再写8-bit symbol。
+2. Original byte length：32-bit integer。
+3. 每个input symbol的variable-length code bits。
+
+有R个distinct symbols时，full binary trie有R leaves和R-1 internal nodes，所以tree header需要：
+
+$$
+B_{\mathrm{trie}}=(2R-1)+8R=10R-1
+$$
+
+bits。Total是tree header、32-bit length和payload之和。
+
+<Algs4HuffmanStreamLab />
+
+Decoder先递归恢复trie，再读length；每个output symbol从root读bits直到leaf。Length不是可选优化：它告诉decoder应输出多少bytes，也处理最后byte padding。Official code对empty input没有独立format branch，production wrapper必须定义empty-stream representation；single-symbol tree也要保证decoder按length重复leaf symbol。
+
+<Callout type="trap" title="只比较Huffman payload与raw input">
+Trie header和original length都属于compressed file。对short或high-entropy input，payload虽短，total仍可能更大；评估必须包含全部framing并说明alphabet unit。
+</Callout>
+
+## 5.5.5 LZW compression：固定宽code描述可变长phrases
+
+LZW压缩（<Term def="以longest dictionary prefix替换input phrase，并由encoder/decoder按相同规则同步扩展dictionary的dictionary-based compressor。">LZW压缩</Term>，LZW compression）与Huffman方向相反：
+
+- Huffman：variable-length codewords表示fixed-length symbols。
+- LZW：fixed-length codewords表示variable-length strings。
+
+官方实现使用extended ASCII：
+
+- Codes 0至255：single-character strings。
+- Code 256：EOF。
+- Next available code从257开始。
+- W=12 bits，所以最多L=4096 entries。
+
+Encoder在remaining input中找dictionary longest prefix s，写出s的12-bit code；若还有next character且dictionary未满，加入 `s + nextCharacter`。
+
+```java
+while (input.length() > 0) {
+    String s = st.longestPrefixOf(input);
+    BinaryStdOut.write(st.get(s), 12);
+    int t = s.length();
+    if (t < input.length() && code < 4096)
+        st.put(input.substring(0, t + 1), code++);
+    input = input.substring(t);
+}
+BinaryStdOut.write(256, 12);
+```
+
+<Algs4LzwDictionaryLab />
+
+Decoder不接收dictionary；它从same 256 single-character entries开始。输出previous phrase `val` 后读next codeword，加入 `val + firstChar(nextPhrase)`，因此与encoder lockstep。
+
+```java
+String val = st[BinaryStdIn.readInt(12)];
+while (true) {
+    BinaryStdOut.write(val);
+    int codeword = BinaryStdIn.readInt(12);
+    if (codeword == 256) break;
+    String s = st[codeword];
+    if (codeword == nextCode) s = val + val.charAt(0);
+    if (nextCode < 4096) st[nextCode++] = val + s.charAt(0);
+    val = s;
+}
+```
+
+`codeword == nextCode` 是关键special case：encoder刚加入的phrase尚未在decoder table中出现，但它必然是 `val + val.firstChar`。忽略它会让 `ABABABA` 或repetitive patterns解码失败。
+
+Official fixed-width stream的codeword count为C时，总payload为 \(12C\) bits。Dictionary满后停止增长，不reset；实际formats可能动态增宽、clear或freeze，但encoder/decoder必须使用相同policy。当前Java代码反复substring，在现代Java可能产生quadratic copying；production实现应以cursor或streaming trie扫描，而不是把此API成本误当LZW理论成本。
+
+## 5.5.6 Workload决定谁能压缩
+
+<Algs4CompressionComparisonLab />
+
+- RLE利用long same-bit runs。
+- Huffman利用single-symbol frequency skew，但不建模symbol order。
+- LZW利用repeated phrases与context，frequency相同的strings也可能有不同ratio。
+- Already-compressed、encrypted或random-like data通常无可利用redundancy，header只会膨胀。
+
+Benchmark应报告raw bits、header bits、payload bits、total bits、compress/expand throughput、peak memory和round-trip result。不能只挑最适合某算法的一条sample。
+
+Pipeline可组合transform，例如先把image pixels变成differences，再RLE或dictionary-code；但每一步都要versioned framing。Repeated compression不保证继续变小。
+
+## 5.5.7 Compression limits：不存在让所有files都严格变小的lossless算法
+
+压缩极限与错误检测（compression limits and error detection）首先要区分两件事：压缩利用source redundancy；错误控制增加redundancy来发现或纠正channel damage。它们目标相反但都依赖明确bit model。
+
+对所有n-bit strings，inputs数量是 \(2^n\)。所有length小于n的bitstrings总数：
+
+$$
+\sum_{k=0}^{n-1}2^k=2^n-1
+$$
+
+若lossless compressor让每个n-bit input都变短，就要把 \(2^n\) 个inputs injectively映射到只有 \(2^n-1\) 个outputs，违反pigeonhole principle。因此至少一个input不能缩短；考虑all lengths与self-delimiting format时，一些inputs必然膨胀。
+
+<Algs4CompressionLimitLab />
+
+这个论证不否认useful compression。Real workloads不是uniform all bitstrings；text、images和telemetry有统计结构。Compressor把common inputs缩短，代价是rare/incompressible inputs不变或变长。
+
+## 5.5.8 Error detection：round trip不能证明stored stream未损坏
+
+Compression/decompression在clean channel上的round trip只证明codec互逆。Bit flip可能：
+
+- 改变Huffman trie，使后续payload全部错位。
+- 改变original length，导致truncation或overrun。
+- 改变LZW codeword，使dictionary从该点永久不同步。
+- 在RLE中把一个count变成很大run。
+
+<Algs4ErrorDetectionLab />
+
+最简单even parity能检测odd number of bit flips，不能检测even flips，也不能纠正位置。若每bit以three copies发送、channel独立flip probability为p，majority decoder错误概率：
+
+$$
+P_{\mathrm{wrong}}=3p^2(1-p)+p^3=3p^2-2p^3
+$$
+
+它在 $0\lt p\lt 1/2$ 时低于p，但传输率降为one third。Checksums/CRC用于检测，Reed-Solomon等error-correcting codes加入结构化冗余用于burst errors。Compression format至少应有length bounds、checksum或外层authenticated framing，且decoder必须限制allocation和expansion ratio。
+
+## 5.5.9 Independent certificate：可逆、完整、受限
+
+压缩器的独立证书不能由candidate decoder单独自证。至少包括：
+
+1. **Byte-exact round trip**：`referenceExpand(candidateCompress(x))`与x完全相等。
+2. **Cross implementation**：candidate encoder与reference decoder、reference encoder与candidate decoder交叉。
+3. **Framing**：tree/length/EOF/padding都存在且consume exactly expected bits。
+4. **Malformed streams**：truncated header、impossible code、oversized length、missing EOF必须拒绝。
+5. **Size accounting**：ratio包含headers，不只payload。
+6. **Resource bounds**：declared length与expansion work有上限，避免decompression bomb。
+
+```ts
+for (const input of corpus) {
+  const stream = candidate.compress(input);
+  assertBytesEqual(reference.expand(stream), input);
+  assert(stream.totalBits === stream.headerBits + stream.payloadBits);
+}
+for (const mutation of malformedStreams)
+  assertRejects(() => candidate.expand(mutation));
+```
+
+<Algs4CompressionCertificateLab />
+
+Corpus要含empty、one symbol、all 256 byte values、long runs、alternating bits、repeated phrases、random-like bytes和large input。Mutation应命中每个field boundary，而不是只随机flip。
+
+## 5.5.10 逐步运行路线
+
+<Stepper>
+  <Step title="固定bitstream contract" description="列出symbol unit、field order、width、padding、length或EOF以及empty-stream语义。">
+    <Algs4BinaryStreamLab />
+  </Step>
+  <Step title="验证RLE parity与overflow" description="从0-run开始，覆盖starts-with-one、255 boundary与alternating expansion。">
+    <Algs4RunLengthLab />
+  </Step>
+  <Step title="建立Huffman trie与完整stream" description="按minimum frequencies合并，验证prefix-free code、serialized trie、length与payload。">
+    <Algs4HuffmanMergeLab />
+    <Algs4HuffmanStreamLab />
+  </Step>
+  <Step title="同步LZW dictionary" description="追踪longest prefix、new phrase、EOF与codeword-equals-next special case。">
+    <Algs4LzwDictionaryLab />
+  </Step>
+  <Step title="检验极限与损坏" description="包含all framing计算ratio，并以round trip、malformed mutations和integrity field验收。">
+    <Algs4CompressionLimitLab />
+    <Algs4CompressionCertificateLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Data compression的首要contract是lossless byte-exact round trip，而不是输出总比输入小。
+- Binary input and output按bit和fixed-width fields工作；length、EOF、padding与model属于format。
+- Run-length encoding隐含0/1交替并用8-bit counts；leading zero run与255 overflow的zero count不可漏。
+- Prefix-free code允许沿trie即时切分；Huffman compression最小化frequency-weighted code length。
+- Huffman stream必须携带preorder trie、original length和payload，header需计入ratio。
+- LZW compression以12-bit codes表示variable-length phrases，encoder/decoder同步建dictionary并处理next-code special case。
+- Counting argument证明universal strict compression不可能；workload redundancy决定收益。
+- Error detection与compression责任不同；损坏可放大，需checksum/CRC或更强外层integrity。
+- Independent certificate检查cross-decoding、framing、malformed rejection、total size与resource bounds。
+
+<Exercises>
+
+1. 用官方8-bit binary RLE编码以1开头的260个连续1，并解释每个zero count为什么需要存在；再算raw与compressed bits。
+2. Frequencies为A:5、B:2、C:1、D:1，逐步构造一棵Huffman trie，给出一组codes并计算weighted payload length、tree header与32-bit length后的total。
+3. 手工追踪LZW对 `ABABABA` 的encoder dictionary additions和12-bit codewords，再从空扩展dictionary解码，指出special case出现在哪里。
+4. 设计跨实现压缩certificate，覆盖empty、single-symbol、all-byte-values、random data、truncated trie、wrong original length、missing EOF与oversized expansion。
+
+<Answer>
+
+First count代表zero-run，所以input以1开头先写0。One-run超过255时写255，然后写zero-length zero-run 0，使decoder从1切到0再切回1；余下5个1写5，counts为`[0,255,0,5]`。Raw为260 bits，compressed为4×8=32 bits。
+
+</Answer>
+
+<Answer>
+
+先合并C1与D1得node2，再合并B2与node2得node4，最后与A5合并得root9。一组codes可为A=0、B=10、C=110、D=111，payload为5×1+2×2+1×3+1×3=15 bits。R=4时trie header为10R-1=39 bits，再加32-bit length，total为86 bits；短message上大于9 raw bytes的72 bits。
+
+</Answer>
+
+<Answer>
+
+Initial entries含A和B，next code是257。Encoder emit A并加AB=257，emit B并加BA=258，随后emit AB并加ABA=259；remaining ABA会触发已有或new phrase sequence，最后写EOF 256。Decoder读到尚未安装但等于next index的code时，以`val + val.firstChar`构造phrase，再安装同一entry；完整code trace应得到原string。
+
+</Answer>
+
+<Answer>
+
+为candidate/reference各准备encoder与decoder，执行两个方向的cross round trip并比较bytes。另解析stream检查field bit counts、EOF和no trailing garbage。Malformed cases必须返回typed error而非partial success；declared output length、dictionary entries与work设置上限。Size report包含model/header、payload与padding，random data允许膨胀但不能失真。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="数据压缩">利用representation redundancy减少total encoded bits的可逆或有损变换。</GlossaryItem>
+  <GlossaryItem term="二进制输入输出">以bit与fixed-width fields而非text token操作stream的I/O contract。</GlossaryItem>
+  <GlossaryItem term="定长码">每个alphabet symbol使用相同number of bits的prefix-free code。</GlossaryItem>
+  <GlossaryItem term="游程编码">用连续相同symbols的lengths替换其逐项representation。</GlossaryItem>
+  <GlossaryItem term="前缀码">没有codeword是另一codeword prefix的instantaneous code。</GlossaryItem>
+  <GlossaryItem term="Huffman树">反复合并minimum-frequency tries得到的optimal prefix-code trie。</GlossaryItem>
+  <GlossaryItem term="霍夫曼压缩">用symbol frequency生成variable-length prefix codes并传输decode trie。</GlossaryItem>
+  <GlossaryItem term="LZW压缩">以fixed-width codewords替换longest dictionary phrases的adaptive dictionary codec。</GlossaryItem>
+  <GlossaryItem term="压缩极限">由counting与source entropy约束的lossless encoding下界。</GlossaryItem>
+  <GlossaryItem term="错误检测">以额外redundancy发现transmission或storage corruption的机制。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Algorithms, 4th Edition · Section 5.5 Data Compression"
+  href="https://algs4.cs.princeton.edu/55compression/"
+  author="Robert Sedgewick and Kevin Wayne"
+  license="本章按官方5.5及当前BinaryStdIn/Out、RunLength、Huffman、LZW实现重构bit framing、8-bit runs、serialized Huffman trie、12-bit LZW、counting limit与error-control边界；代码为教学化摘写与重新组织。"
+/>

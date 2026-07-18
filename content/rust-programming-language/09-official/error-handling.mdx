@@ -1,0 +1,286 @@
+---
+title: "Chapter 9：错误处理（Error Handling）"
+type: A
+section: Rust 程序设计语言 · 失败建模与传播
+order: 9
+description: 对齐官方第 9 章：区分可恢复错误与 panic，理解 unwind/abort 和 backtrace，使用 Result、match、expect 与问号运算符传播错误，并建立 panic 决策和验证类型。
+demo: false
+math: false
+sourceUrl: "https://doc.rust-lang.org/book/ch09-00-error-handling.html"
+draft: false
+---
+
+import {
+  RplPanicStrategyLab,
+  RplPropagationLab,
+  RplResultRecoveryLab,
+} from "@/components/mdx/rust-programming-language/diagrams/error-handling";
+
+<Objectives>
+
+- 能区分可恢复失败与程序不变量破坏，分析 panic 的 unwind/abort、backtrace 和安全停止行为
+- 能实现 `Result<T,E>` 的分类恢复，判断 `match`、组合子、`unwrap` 与 `expect` 各自表达的契约
+- 能设计 `?` 错误传播和 `From` 转换边界，并用自定义类型把重复运行时验证集中到构造入口
+
+</Objectives>
+
+## 为什么错误机制要表达“谁有能力决策”
+
+失败不只是一段消息。调用方能否重试、换数据源、提示用户或降级，决定了底层函数应返回信息还是替调用方终止。Rust 不用同一异常机制模糊两类情况：预期可能发生且上层有策略的失败用 `Result<T,E>`，代表 bug、契约破坏或无法继续维持不变量的状态用 panic。
+
+<Term def="正常运行中可能发生、调用方可依据错误信息重试、降级、报告或选择终止的失败。">可恢复错误</Term>
+
+<Term def="表示程序 bug、契约或不变量已破坏且当前控制流无法可靠继续的失败，通常触发 panic。">不可恢复错误</Term>
+
+返回 Result 保留选项，是可能失败函数的默认设计；panic 则替所有上层作出“无法恢复”的最终决定。边界应从错误来源和调用方上下文共同判断，而不能简单把“严重”映射成 panic。
+
+## panic 停止当前正常控制流
+
+<Term def="由 panic! 宏或越界等运行时检查触发的不可恢复失败；输出位置和消息后按配置 unwind 或 abort。">panic</Term>
+
+```rust
+fn main() {
+    panic!("critical invariant was broken");
+}
+
+let values = vec![1, 2, 3];
+// values[99]; // 边界检查触发 panic，避免越界读取
+```
+
+panic 可能由显式宏触发，也可能来自 index 越界等安全检查。停止访问非法内存比继续未定义行为更安全，但这不意味着用户输错索引就应 panic；若越界是正常输入，应改用 Vec::get 返回 Option。
+
+## Unwind 与 abort 是终止策略，不是恢复策略
+
+<Term def="panic 默认策略：沿调用栈逐帧退出并清理已构造值，再结束线程或进程。">stack unwinding</Term>
+
+<Term def="panic 可选策略：立即终止进程而不逐帧运行清理，通常减小二进制及展开支持成本。">abort on panic</Term>
+
+```toml
+[profile.release]
+panic = "abort"
+```
+
+unwind 会运行沿途 Drop，成本高于立即 abort；abort 由操作系统最终回收进程内存，但不会执行普通逐帧清理。两者都不会返回业务错误给调用方，也不应被当成事务回滚机制。若外部资源需要一致性，设计显式提交协议，而不是依赖 panic 路径。
+
+<RplPanicStrategyLab />
+
+先预测 abort 模式是否仍会逐帧 Drop，再切换策略与 backtrace。实验将“如何停止”“能否定位”“能否由业务恢复”拆成三件事。
+
+<Term def="从 panic 点向调用方列出的函数调用链；设置 RUST_BACKTRACE 可帮助定位第一个属于自己代码的 frame。">backtrace</Term>
+
+`RUST_BACKTRACE=1` 显示回溯，通常从顶部向下找到第一个项目源码 frame；完整信息依赖 debug symbols。panic 输出行可能在标准库或依赖中，真正传入非法值的项目调用点常要靠 backtrace 定位。
+
+<Callout type="trap" title="陷阱：把 catch_unwind 当成通用异常恢复">
+  本章的默认设计不是跨层捕获 panic 后继续业务。panic 可能意味着状态不变量已损坏，且 abort 配置下根本不会 unwind。库的预期失败应返回 Result；panic 捕获只适合明确隔离边界并理解 UnwindSafe 约束的高级场景。
+</Callout>
+
+## Result 把成功值和错误值都写进返回类型
+
+<Term def="标准库泛型枚举，Ok(T) 携带成功值，Err(E) 携带可恢复错误；调用方必须选择如何处理。">Result</Term>
+
+```rust
+enum Result<T, E> {
+    Ok(T),
+    Err(E),
+}
+
+use std::fs::File;
+let opened: Result<File, std::io::Error> = File::open("hello.txt");
+```
+
+T 与 E 可按操作变化。File::open 成功提供 File handle，失败提供 `io::Error`，后者保留失败种类和系统上下文。Result 与其 variants 在 prelude 中，无需写 `Result::Ok`。
+
+## 对不同 Err 做不同恢复
+
+<Term def="std::io::Error 对失败类别的分类视图，例如 NotFound 与 PermissionDenied，可驱动不同恢复策略。">ErrorKind</Term>
+
+```rust
+use std::fs::File;
+use std::io::ErrorKind;
+
+let file = match File::open("hello.txt") {
+    Ok(file) => file,
+    Err(error) => match error.kind() {
+        ErrorKind::NotFound => match File::create("hello.txt") {
+            Ok(created) => created,
+            Err(create_error) => panic!("cannot create file: {create_error:?}"),
+        },
+        _ => panic!("cannot open file: {error:?}"),
+    },
+};
+```
+
+这里仅 NotFound 可通过 create 恢复；PermissionDenied 不能伪装成“新建即可”，File::create 自己也可能失败。实际库函数更常把未处理错误继续返回，而不是直接 panic；嵌套 match 也可用 Chapter 13 的 closure/Result combinator 重写，但错误分类语义不能丢失。
+
+<RplResultRecoveryLab />
+
+切换文件存在、缺失、无权限和创建失败，观察每个 Err 是否有可靠恢复动作。恢复不是“给所有 Err 一个默认值”，而是保留真实错误并只处理能够证明的分支。
+
+<Callout type="trap" title="陷阱：把所有 I/O Err 都降级为空内容">
+  空文件、文件不存在、无权限和磁盘故障是不同事实。宽泛 fallback 会把数据丢失或配置错误伪装成合法空值。只在产品语义明确允许时降级，并记录原错误和所选策略。
+</Callout>
+
+## unwrap 与 expect 都会把 Err 转成 panic
+
+<Term def="Result 的便捷方法：Ok 时取出 T，Err 时使用默认上下文 panic。">unwrap</Term>
+
+<Term def="Result 的便捷方法：Ok 时取出 T，Err 时附加调用方提供的不变量说明后 panic。">expect</Term>
+
+```rust
+let home: std::net::IpAddr = "127.0.0.1"
+    .parse()
+    .expect("hardcoded loopback address should be valid");
+```
+
+expect 不是恢复，也不比 unwrap 更不会崩溃；优势是说明“为什么作者认为 Err 不可能”。示例、原型和测试可用 unwrap/expect 保持焦点或让测试立即失败。生产代码中只有前置逻辑已证明不变量时才适合 expect，且消息应描述假设而不是简单重复错误。
+
+## 传播让更有上下文的调用方处理错误
+
+<Term def="当前函数不消费错误决策，而是把 Err 返回给调用方，使上层根据更完整的业务上下文恢复或终止。">错误传播</Term>
+
+手写传播会在每个 fallible call 上 match：Ok 取值继续，Err 立即 `return Err(error)`。这种模式清楚但重复，问号运算符提供相同控制流的紧凑表达。
+
+```rust
+use std::fs::File;
+use std::io::{self, Read};
+
+fn read_username_from_file() -> Result<String, io::Error> {
+    let mut file = File::open("hello.txt")?;
+    let mut username = String::new();
+    file.read_to_string(&mut username)?;
+    Ok(username)
+}
+```
+
+<Term def="放在 Result 或 Option 后的传播运算符；成功时取出内部值，失败时从当前兼容函数提前返回 residual。">问号运算符</Term>
+
+对 Result，`expression?` 的 Ok(T) 变成 T，Err(E) 从整个函数提前返回。对 Option，Some(T) 变成 T，None 提前返回 None；不能在返回 Result 的函数中随意对 Option 使用问号，边界 residual 必须兼容。
+
+## 问号会通过 From 转换错误类型
+
+<Term def="标准转换 trait；问号运算符可调用 From::from，把底层错误转换为当前函数声明的统一错误类型。">From 错误转换</Term>
+
+```rust
+#[derive(Debug)]
+enum AppError {
+    Io(std::io::Error),
+    Parse(std::num::ParseIntError),
+}
+
+impl From<std::io::Error> for AppError {
+    fn from(error: std::io::Error) -> Self {
+        AppError::Io(error)
+    }
+}
+```
+
+若函数返回 `Result<Config, AppError>`，File::open 的 `io::Error` 可以经 `From` 变为 AppError 后返回。`?` 没有吞掉上下文，它要求存在合法转换；多种底层错误可由一个领域错误枚举统一表达。
+
+<RplPropagationLab />
+
+选择 open/read/parse 失败点和函数返回边界。只有兼容 Result 边界能接受 Err residual；任一步失败都跳过后续成功路径，经过 From 后交给调用方。
+
+<Callout type="trap" title="陷阱：在返回 unit 的函数里加问号期待自动记录错误">
+  `?` 的动作是提前返回，不是打印日志。`fn main()` 默认返回 `()`，不能接收 Result residual；可改成 `fn main() -> Result<(), Box<dyn Error>>` 并以 `Ok(())` 结束，或在 main 明确 match 后转成退出码和用户消息。
+</Callout>
+
+## 何时选择 panic
+
+返回 Result 是 fallible API 的默认选择，因为调用方总能把 Err 升级成 panic，反向却无法恢复已经终止的控制流。以下情况可以合理 panic/expect：
+
+- 示例、原型和测试中，失败应立即暴露且完整策略尚不是演示重点
+- 输入由源码常量或更早验证保证，编译器无法证明但人工可证明 Err 不可能，expect 消息记录该依据
+- 调用方违反已文档化契约，或程序进入矛盾/无效状态且无法可靠继续
+
+来自用户、网络、磁盘或外部服务的坏数据通常是可恢复输入，不是程序员 bug。库代码尤其不应轻易替应用选择退出。
+
+## 用验证类型让不变量只检查一次
+
+<Term def="隐藏原始字段并只通过检查过的构造器创建，使类型本身证明后续代码所需不变量。">验证类型</Term>
+
+```rust
+pub struct Guess {
+    value: i32,
+}
+
+impl Guess {
+    pub fn new(value: i32) -> Self {
+        if !(1..=100).contains(&value) {
+            panic!("Guess must be between 1 and 100, got {value}");
+        }
+        Self { value }
+    }
+
+    pub fn value(&self) -> i32 {
+        self.value
+    }
+}
+```
+
+private field 阻止外部绕过构造器。官方示例把非法 Guess 视为调用方契约 bug，因此构造器 panic；面向用户解析的构造器也可改为 `Result<Guess, ValidationError>`。核心不是固定用 panic，而是让所有实例都经过单一验证入口，函数签名接收 Guess 后无需重复检查范围。
+
+## 三步建立错误边界
+
+<Stepper>
+  <Step title="第一步：分类失败与终止语义">
+    判断这是正常环境/输入失败，还是契约与不变量破坏；前者默认 Result，后者才考虑 panic。再按部署目标选择 unwind 或 abort，并保留可定位信息。
+
+    <RplPanicStrategyLab />
+  </Step>
+  <Step title="第二步：保留错误种类并只恢复可证明分支">
+    match Ok/Err 和具体 ErrorKind。恢复动作本身也可能失败，不能用宽泛默认值隐藏权限、损坏或持久化错误。
+
+    <RplResultRecoveryLab />
+  </Step>
+  <Step title="第三步：把处理权传播到合适层级">
+    为函数声明领域 Result，使用 From 汇总底层错误，再用问号缩短早返回。应用边界最终转为重试、提示、退出码或明确 panic。
+
+    <RplPropagationLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 可恢复错误用 Result 保留上层选项；panic 表示当前控制流不可可靠继续，通常对应 bug 或契约/不变量破坏
+- unwind 逐帧清理，abort 立即终止；backtrace 帮助找到项目调用点，但两种 panic 策略都不是业务恢复
+- Result 的 Ok/Err 同时携带成功与错误信息；按 ErrorKind 选择恢复，unwrap/expect 都会在 Err 时 panic
+- 问号从 Ok/Some 取值，从 Err/None 提前返回，并可经 From 转换错误；所在函数返回类型必须与 residual 兼容
+- 验证类型把不变量集中在构造入口；面向调用方 bug 可 panic，面向外部输入更适合返回验证 Result
+
+<Exercises>
+  1. **问题 1：选择边界。** 配置文件不存在、硬编码 IP 解析失败、公开函数收到违反文档范围的值，分别更适合 Result、expect 还是 panic，为什么？
+
+  <Answer question="恢复能力与契约来源如何决定错误机制？">配置缺失通常由环境造成且应用可提示/创建/选择默认值，应返回 Result；经人工确认的硬编码 IP 可 expect，并在消息中记录“常量应有效”的不变量；公开函数的范围若是明确程序员契约且无法构造有效结果，可 panic，但面向用户输入的同一范围应在解析边界返回验证错误。</Answer>
+
+  2. **问题 2：解释问号。** 函数返回 `Result<Data, AppError>`，内部 `File::open(path)?` 产生 `io::Error`。编译通过需要什么，Err 时发生什么？
+
+  <Answer question="问号如何跨错误类型提前返回？">需要 `AppError: From<io::Error>` 或等价可用转换。Ok(File) 被取出供后续使用；Err(io_error) 经 From::from 转成 AppError，包装为 Err 并从整个函数立即返回，后续语句不执行。</Answer>
+
+  3. **问题 3：修正恢复分支。** 打开文件失败后无条件 create 会掩盖什么，怎样保持 NotFound 恢复同时保留真实错误？
+
+  <Answer question="为什么应按 ErrorKind 分支？">无条件 create 会把 PermissionDenied、路径非法、资源耗尽等不同失败误当成缺失，并可能用第二个错误覆盖第一个。应 match error.kind()，只对 NotFound 尝试 create；create 的 Err 单独返回，其余 open Err 原样传播或转换后传播。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="可恢复错误">调用方可依据上下文重试、降级或报告的预期失败。</GlossaryItem>
+  <GlossaryItem term="不可恢复错误">表示 bug 或不变量破坏、当前路径无法可靠继续的失败。</GlossaryItem>
+  <GlossaryItem term="panic">输出失败信息后按 unwind 或 abort 停止正常控制流的机制。</GlossaryItem>
+  <GlossaryItem term="stack unwinding">panic 时逐帧退出并运行清理的默认策略。</GlossaryItem>
+  <GlossaryItem term="abort on panic">panic 时立即终止、不逐帧清理的策略。</GlossaryItem>
+  <GlossaryItem term="backtrace">从 panic 点回溯调用关系的函数栈列表。</GlossaryItem>
+  <GlossaryItem term="Result">用 Ok(T) 或 Err(E) 表达成功值与可恢复错误的枚举。</GlossaryItem>
+  <GlossaryItem term="ErrorKind">对 I/O 错误类别的枚举视图。</GlossaryItem>
+  <GlossaryItem term="unwrap">Ok 时取值、Err 时使用默认消息 panic 的方法。</GlossaryItem>
+  <GlossaryItem term="expect">Ok 时取值、Err 时附带调用方不变量说明 panic 的方法。</GlossaryItem>
+  <GlossaryItem term="错误传播">把 Err 留给拥有更多上下文的调用方处理。</GlossaryItem>
+  <GlossaryItem term="问号运算符">成功取值、失败从兼容函数提前返回的传播语法。</GlossaryItem>
+  <GlossaryItem term="From 错误转换">把底层错误转换为当前边界统一错误类型的标准机制。</GlossaryItem>
+  <GlossaryItem term="验证类型">只能经验证入口创建、由类型身份证明不变量的类型。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Rust Programming Language, Chapter 9 Error Handling"
+  adaptedUrl="https://doc.rust-lang.org/book/ch09-00-error-handling.html"
+/>

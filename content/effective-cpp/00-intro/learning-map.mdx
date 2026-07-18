@@ -1,73 +1,289 @@
 ---
-title: Effective C++ 学习地图
+title: "Effective C++ 第三版学习地图"
 type: A
-section: 资源管理
+section: 全书导航
 order: 0
-description: 全书 55 条条款的四大板块概览与推荐学习路径，回答 C++ 高效编程的核心准则。
+description: 对齐第三版九章与 55 个 Items：从语言联邦和对象语义，经 RAII、接口、实现、继承与模板，走到 new/delete、warnings、标准库和 Boost。
 demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
 draft: false
 ---
 
-import { EfcBookMap } from "@/components/mdx/effective-cpp/diagrams/efc-book-map";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  EcppChapterEvidenceMap,
+  EcppNineChapterJourneyMap,
+  EcppPrincipleDependencyMap,
+} from "@/components/mdx/effective-cpp/diagrams/learning-map";
 
 <Objectives>
 
-- 能说出全书四大板块各自要解决什么问题、彼此如何衔接
-- 能复述从语言习惯到模板元编程的推荐学习路径及其递进逻辑
-- 能回答：为什么 Scott Meyers 说「视 C++ 为一个语言联邦」？
+- 能说出第三版九章、55 个 Items 的范围、核心问题和前后依赖，不再使用旧四板块压缩目录
+- 能设计对象语义、ownership、接口、实现、多态、generic 与 allocation 递进的个人学习路径
+- 能使用预测、最小复现、正反测试和真实代码迁移证据验收每个 Item
 
 </Objectives>
 
-## 全书地图
+## 从“55 条不是零散技巧”开始
 
-当你打开 Effective C++，面对 55 条条款，第一件事不是逐条背诵，而是理解它们背后的组织逻辑。Scott Meyers 把 C++ 高效编程的经验整理成一条从语言习惯到模板元编程的递进链——先学会正确使用语言，再管理资源，再设计类与继承，最后驾驭模板与底层机制。
+Effective C++ 第三版把 55 个具体建议组织为九章。它们共同回答一个问题：怎样让 C++ 程序的正确性由对象生命周期、类型系统和明确 contract 承担，而不是依赖开发者每次都足够谨慎。
 
-<EfcBookMap />
+<Term def="以第三版九章和 55 个官方 Items 为唯一顺序来源的学习结构。">
+  第三版九章路线
+</Term>
 
-全书分为四大板块。第一板块「习惯 C++ 与构造析构」（条款 1-12）解决「怎么正确用 C++」——把 C++ 视为语言联邦，用 const 和 inline 替代 #define，保证对象初始化，正确处理构造、析构与赋值。这是地基，后续所有条款都建立在这套习惯上。
+旧学习地图把全书压成四块，会让实现细节、new/delete 与杂项失去准确位置。当前路线逐 Item 保留原书边界。
 
-第二板块「<Term def="Resource Acquisition Is Initialization，把资源生命周期绑定到对象生命周期，构造获取析构释放。">资源管理</Term>」（条款 13-17）解决「资源怎么不泄漏」——核心是 RAII 模式，用对象管理资源，配合智能指针实现自动释放。这一板块把手动管理的负担交给类型系统。
+<Term def="一条只解决一个核心设计问题，并给出可验证行为准则的原书单元。">
+  Item 学习单元
+</Term>
 
-第三板块「设计与继承」（条款 18-40）解决「类和类型层次怎么设计」——从接口设计的防误用原则，到成员封装、const 正确性，再到 public 继承的 is-a 关系和 NVI 模式。这一板块是面向对象 C++ 的设计核心。
+<EcppNineChapterJourneyMap />
 
-第四板块「模板与杂项」（条款 41-55）解决「如何泛化和掌控底层」——从模板的隐式接口和 typename 双重含义，到模板元编程（TMP）、type traits、定制 new/delete，最后到 Boost 与标准库。
+## 第一章 Items 1-4：适应 C++
 
-<Callout type="tip">
-<strong>建议 →</strong> 每学完一个板块，挑一条条款动手写代码验证。比如学完资源管理，用 RAII 封装一个文件句柄类；学完继承，设计一个 NVI 模式的多态基类。条款是经验，只有动手才能内化。
+先理解 C++ 是 C、Object-Oriented C++、Template C++ 与 STL 组成的
+
+<Term def="不同子语言拥有不同抽象、传参和性能准则的复合语言模型。">
+  语言联邦
+</Term>
+。
+
+Items 2-4 用 const、enum、inline 和完整初始化替代脆弱预处理/未初始化状态。
+
+```cpp
+class Session {
+public:
+    explicit Session(Id id) : id_(id), active_(false) {}
+private:
+    const Id id_;
+    bool active_;
+};
+```
+
+<Term def="对象在 constructor body 执行前就建立所有成员有效值的状态。">
+  完整初始化
+</Term>
+
+验收点：宏是否泄漏作用域；const 是否贯穿接口；成员、base、static objects 是否在首次使用前确定初始化。
+
+## 第二章 Items 5-12：构造、析构与赋值
+
+compiler 会生成 default/copy/destructor/assignment，但生成不等于语义正确。需要明确禁止 copy、让 polymorphic base destructor virtual、避免 destructor 抛异常、理解 constructor/destructor 期间 virtual dispatch，并让 assignment 返回 `*this`、处理 self-assignment、复制所有 members/bases。
+
+<Term def="compiler 在满足条件时隐式声明或定义的构造、复制、赋值和析构函数。">
+  编译器生成函数
+</Term>
+
+<Term def="对象复制后所有 base 与成员状态都符合原对象 contract。">
+  完整复制语义
+</Term>
+
+```cpp
+class UniqueHandle {
+public:
+    UniqueHandle(const UniqueHandle&) = delete;
+    UniqueHandle& operator=(const UniqueHandle&) = delete;
+};
+```
+
+<Callout type="trap" title="陷阱：没有写 copy 就表示对象不可复制">
+  compiler 可能生成 copy operations。先定义 ownership/value semantics，再显式
+  default、delete 或实现，不把默认行为当设计结论。
 </Callout>
 
-## 核心概念
+## 第三章 Items 13-17：资源管理
 
-推荐学习路径是一条递进链：先读习惯 C++ 与构造析构，掌握语言的基本准则；再读资源管理，学会用对象管理资源；接着读设计与继承，掌握面向对象的设计原则；然后读模板与泛型，理解编译期多态；最后以杂项收口，涵盖 inline、转型、异常安全和标准库。
+资源取得后立即交给对象，destructor 覆盖 normal return、early return 和 exception。unique/shared/weak ownership 必须与业务生命周期一致；new/delete family 配对；独立语句建立 smart pointer，避免求值顺序中的泄漏窗口。
 
-这条顺序背后的逻辑是——语言习惯是地基，资源管理是安全网，类设计是骨架，继承是骨架之间的关节，模板是骨架的泛化，杂项是工程实践的补丁。跳过任何一块都会断层：没有 RAII 就写不出异常安全的代码，没有封装就没有正确的继承，没有继承理解就无法设计模板化的类型层次。
+<Term def="资源获取与管理对象初始化绑定，作用域结束自动执行配对释放。">
+  RAII
+</Term>
 
-<Callout type="trap">
-<strong>现象 →</strong> 跳过资源管理直接学模板，结果模板代码充满内存泄漏。<strong>原因 →</strong> 模板大量使用动态资源，没有 RAII 基础就无法保证异常安全。<strong>修法 →</strong> 按板块顺序学习，先把 RAII 和智能指针吃透，再进入模板世界。
+<Term def="谁延长资源生命、谁负责最终释放、谁只是短期观察的明确协议。">
+  ownership contract
+</Term>
+
+```cpp
+auto file = std::unique_ptr<FILE, FileCloser>(
+    std::fopen(path.c_str(), "rb"));
+if (!file) throw FileError{};
+```
+
+## 第四章 Items 18-25：设计与声明
+
+接口应让正确使用自然、错误使用困难；class 设计就是 type 设计；默认 pass-by-reference-to-const；不返回 local/temporary handle；data private；能用 non-member non-friend 就减小访问面；对称转换放 non-member；为 user type 提供 non-throwing swap。
+
+<Term def="通过类型、构造和函数边界让非法状态或调用无法表达的接口。">
+  易正确接口
+</Term>
+
+<Term def="只有最少必要代码能访问 representation，从而减少不变量破坏面。">
+  封装访问面
+</Term>
+
+## 第五章 Items 26-31：实现
+
+延迟变量定义到真正需要且能初始化的位置；减少 casts；不要泄漏 internal handles；异常安全用 RAII、copy-and-swap 或 transaction；审慎 inline；通过 Pimpl、interface 和依赖反转降低 compilation dependency。
+
+<Term def="操作失败后保证不泄漏，并按 basic/strong/no-throw 层级约束状态。">
+  异常安全保证
+</Term>
+
+<Term def="header 变化造成的 recompilation fan-out 和 binary coupling。">
+  编译依赖
+</Term>
+
+## 第六章 Items 32-40：继承与面向对象设计
+
+public inheritance 必须满足 is-a 与 substitutability。区分 interface inheritance 和 implementation inheritance；virtual alternatives 包括 NVI、strategy 与 function wrapper；不要重定义 inherited nonvirtual 或 default parameter；composition 表达 has-a/implemented-in-terms-of；private/multiple inheritance 只有语义和成本证据充分才用。
+
+<Term def="derived 可在所有 base client 中替换 base，并保持其行为 contract。">
+  is-a substitutability
+</Term>
+
+<Term def="public nonvirtual wrapper 统一检查和流程，private virtual hook 提供变化点。">
+  NVI
+</Term>
+
+<EcppPrincipleDependencyMap />
+
+<Callout type="trap" title="陷阱：为了复用代码先建立继承">
+  代码复用不证明 is-a。先做 substitutability
+  test；若只是拥有部件或复用机制，composition 往往更准确。
 </Callout>
 
-## 小结与练习
+## 第七章 Items 41-48：模板与泛型编程
 
-- 全书 55 条条款分四大板块：习惯奠基、资源管控、设计封装、模板延伸
-- 推荐路径：习惯→资源→设计→继承→模板→杂项，顺序由依赖关系决定
-- 每个板块的核心：习惯=正确使用语言，资源=RAII 自动释放，设计=封装与接口，模板=编译期泛化
-- C++ 是语言联邦：C、OO、Template、STL 四种子语言各有高效准则
+templates 的 implicit interface 由 valid expressions 构成，compile-time polymorphism 在实例化/重载阶段发生。掌握 typename、dependent base lookup、parameter-independent factoring、member templates、hidden friends、traits/tag dispatch 与 TMP。
 
-<Exercises>
-  <Answer question="为什么 Scott Meyers 说「视 C++ 为一个语言联邦」？">C++ 不是单一范式语言，而是 C（过程式）、Object-Oriented C++（面向对象）、Template C++（泛型）、STL（标准库）四个子语言的联邦。不同子语言的高效编程准则不同——C 中 pass-by-value 常更高效，OO C++ 中 pass-by-reference-to-const 更好，STL 中迭代器按值传递更合适。把 C++ 当联邦而非单一语言，才能在不同语境下选对准则。</Answer>
-  <Answer question="全书四大板块各自解决什么问题？为什么是递进而非并列？">习惯 C++ 与构造析构解决「怎么正确用语言」，资源管理解决「资源怎么不泄漏」，设计与继承解决「类和类型层次怎么设计」，模板与杂项解决「如何泛化和掌控底层」。它们递进：语言习惯是地基、资源管理是安全网、类设计是骨架、继承是关节、模板是泛化——后一块都以前一块为前提，跳级会断层。</Answer>
-</Exercises>
+<Term def="由泛型代码必须成立的完整 expressions 组成、无需共同 base 的契约。">
+  隐式接口
+</Term>
 
-## 名词解释
+<Term def="通过 traits 抽取类型事实，再用 tags/overloads 在编译期选择实现。">
+  traits 分派
+</Term>
+
+先预测 template error 位于 deduction、lookup、substitution 还是 conversion，再读诊断，不把“模板报错很长”当成无法定位。
+
+## 第八章 Items 49-52：定制 new 和 delete
+
+理解 new-handler 失败循环；只在 usage errors、statistics、performance、clustering 或 alignment 有证据时替换；自定义函数遵守 zero request、handler、alignment、derived size 和 null delete；placement new 必须有 matching placement delete 处理 constructor failure。
+
+<Term def="allocation 失败后调用当前处理器并重试，直至成功、抛异常或终止的控制流。">
+  new-handler 循环
+</Term>
+
+<Term def="placement allocation 与构造失败释放函数按额外参数类型对应。">
+  placement 配对
+</Term>
+
+## 第九章 Items 53-55：杂项
+
+warnings 是潜在语义/portability 信号；标准库提供 ownership、containers、algorithms 和 vocabulary；TR1/Boost 展示库设施从 peer review 到 standardization 的演进。
+
+<Term def="不同 compilers 与 libraries 共同构建，覆盖诊断和标准扩展差异。">
+  可移植性矩阵
+</Term>
+
+<Term def="通过社区同行评审和多平台实践磨炼库设计，再为标准化提供证据。">
+  库标准化路径
+</Term>
+
+## 两条推荐路线
+
+**系统学习路线**：1-12 对象语义 → 13-17 ownership → 18-31 接口/实现 → 32-40 多态 → 41-48 generic → 49-55 底层与工程。
+
+**问题驱动路线**：泄漏先读 13-17/29；继承 bug 读 32-40；模板诊断读 41-48；allocator bug 读 49-52。问题解决后回到系统路线补前置。
+
+<Term def="以原书依赖顺序逐章建立完整模型的学习方式。">系统学习路线</Term>
+
+<Term def="从当前故障进入相关 Items，再回补其前置 contract 的学习方式。">
+  问题驱动路线
+</Term>
+
+## 每个 Item 的验收方法
+
+<EcppChapterEvidenceMap />
+
+至少保留三类 evidence：错误代码确实复现；语言机制修复后行为改变；负例被 compiler/test 拒绝。仅能复述条款不算掌握。
+
+<Term def="证明问题、修复和迁移能力的代码、诊断、测试与审查记录。">
+  条款证据链
+</Term>
+
+## 小结
+
+- 第三版按九章组织 55 Items，不能压缩成丢失边界的四块目录
+- 学习依赖从对象语义、ownership、接口、实现、多态走向 generic 与 allocation
+- 每条 Item 用预测、最小复现、语言机制修复、正反测试和真实迁移验收
+- 系统路线建立完整模型，问题路线解决故障后必须回补前置
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Items 1-55"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
 
 <Glossary>
-  <GlossaryItem term="语言联邦">Scott Meyers 的观点：C++ 是 C、Object-Oriented C++、Template C++、STL 四种子语言的联邦，不同子语言有不同的高效编程准则。</GlossaryItem>
-  <GlossaryItem term="资源管理">通过 RAII 模式把资源的获取和释放绑定到对象的生命周期，利用析构函数和栈展开保证资源不泄漏。</GlossaryItem>
-  <GlossaryItem term="RAII">Resource Acquisition Is Initialization，资源获取即初始化。构造函数获取资源，析构函数释放资源，把释放时机交给类型系统而非人的记忆。</GlossaryItem>
-  <GlossaryItem term="推荐学习路径">由习惯→资源→设计→继承→模板→杂项递进而成的学习链，顺序由各板块之间的依赖关系决定，跳级会导致知识断层。</GlossaryItem>
+  <GlossaryItem term="第三版九章路线">
+    九章 55 Items 的官方学习结构。
+  </GlossaryItem>
+  <GlossaryItem term="Item 学习单元">单一核心问题及可验证准则。</GlossaryItem>
+  <GlossaryItem term="语言联邦">C++ 多子语言及不同准则模型。</GlossaryItem>
+  <GlossaryItem term="完整初始化">
+    constructor body 前建立成员有效值。
+  </GlossaryItem>
+  <GlossaryItem term="编译器生成函数">隐式声明/定义的特殊成员。</GlossaryItem>
+  <GlossaryItem term="完整复制语义">
+    复制所有 base/member 并保持 contract。
+  </GlossaryItem>
+  <GlossaryItem term="RAII">资源获取绑定 owner 初始化。</GlossaryItem>
+  <GlossaryItem term="ownership contract">
+    拥有、释放和观察的生命周期协议。
+  </GlossaryItem>
+  <GlossaryItem term="易正确接口">让非法状态和调用难以表达。</GlossaryItem>
+  <GlossaryItem term="封装访问面">
+    能访问 representation 的最小代码集合。
+  </GlossaryItem>
+  <GlossaryItem term="异常安全保证">失败后资源和状态的层级承诺。</GlossaryItem>
+  <GlossaryItem term="编译依赖">header 变化造成的重编译和耦合。</GlossaryItem>
+  <GlossaryItem term="is-a substitutability">
+    derived 保持 base 合约的替换性。
+  </GlossaryItem>
+  <GlossaryItem term="NVI">nonvirtual wrapper 加 virtual hook。</GlossaryItem>
+  <GlossaryItem term="隐式接口">template 所需有效表达式集合。</GlossaryItem>
+  <GlossaryItem term="traits 分派">类型信息抽取与静态实现选择。</GlossaryItem>
+  <GlossaryItem term="new-handler 循环">分配失败处理与重试流程。</GlossaryItem>
+  <GlossaryItem term="placement 配对">
+    额外参数匹配的失败释放路径。
+  </GlossaryItem>
+  <GlossaryItem term="可移植性矩阵">多工具链和库的构建组合。</GlossaryItem>
+  <GlossaryItem term="库标准化路径">评审实践到标准设施的演进。</GlossaryItem>
+  <GlossaryItem term="系统学习路线">按依赖顺序建立完整模型。</GlossaryItem>
+  <GlossaryItem term="问题驱动路线">故障切入后回补前置的方式。</GlossaryItem>
+  <GlossaryItem term="条款证据链">复现、修复、测试和迁移证据。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Effective C++ (Scott Meyers)" adaptedUrl="https://www.oreilly.com/" />
+<Exercises>
+  1. **问题 1：为有裸资源和继承 bug 的旧模块选路线。** 说明先后 Items 和 evidence。
+
+<Answer question="怎样安排而不跳过前置？">
+  先用 Items 13-17 建 ownership inventory 和 RAII，Item 29 验证异常路径；再用
+  Items 32-40 做 substitutability、virtual/nonvirtual/default binding
+  审查。每步保留失败注入、析构计数、base-view dispatch tests，最后回补 Items
+  5-12 的 special member contract。
+</Answer>
+
+2. **问题 2：判断是否掌握 Item 37。** 学习者能背“不要重定义默认参数”。
+
+<Answer question="还需要哪些证据？">
+  先预测 Shape pointer 和 Derived pointer 调同一 virtual body 分别传什么
+  default；写最小程序复现静态 default/动态 body；用 NVI 或显式参数重构；测试不同
+  static views 和 header 版本。能解释并迁移到真实 API 才算掌握。
+</Answer>
+
+3. **问题 3：制定四周学习计划。** 每周必须有跨章节产出。
+
+  <Answer question="怎样按依赖组织？">第一周 Items 1-17，产出 value/ownership review；第二周 18-31，产出接口与异常安全重构；第三周 32-40，产出多态 contract tests；第四周 41-55，产出 generic/allocator/toolchain audit。每周三次最小复现、一次真实代码迁移和一次复盘。</Answer>
+</Exercises>

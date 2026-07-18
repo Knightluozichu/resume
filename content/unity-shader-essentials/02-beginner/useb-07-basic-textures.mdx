@@ -1,0 +1,158 @@
+---
+title: "第7章 基础纹理"
+type: C
+section: "Unity Shader精要 · 初级篇"
+order: 7
+description: "掌握单张纹理、纹理属性、凹凸映射、切线空间法线与遮罩纹理的采样和空间契约。"
+demo: true
+math: true
+sourceUrl: "https://www.cnblogs.com/xiaowangba/p/6314640.html"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { UsebBasicTexturesPipelineLab, UsebBasicTexturesCompareLab, UsebBasicTexturesEvidenceLab } from "@/components/mdx/unity-shader-essentials/diagrams/useb-07-basic-textures";
+
+<Objectives>
+- 能解释纹理坐标、采样器和高度纹理在Unity渲染链中的位置
+- 能推导本页公式并实现最小Shader，用调试视图比较中间值
+- 能复现遮罩纹理，用Frame Debugger、边界场景和性能数据验收
+</Objectives>
+
+## 从效果开始
+
+先预测画面、Draw Call和中间缓冲会如何变化，再调整一个参数观察变化。纹理值需要经过缩放偏移和采样器过滤。法线贴图常把负一到一编码到零到一，采样后要解码并归一化；切线空间方案要求构造TBN基，把光线或法线变到同一空间。遮罩通道的语义、色彩空间和压缩格式必须记录，否则采样值会被错误校正。 本页用<Term def="把表面位置映射到纹理采样域的二维参数。">纹理坐标</Term>、<Term def="规定过滤、寻址和纹理读取行为的GPU状态。">采样器</Term>、<Term def="以标量高度及其差分近似表面凹凸的纹理。">高度纹理</Term>、<Term def="在顶点切线、副切线和法线基中编码的局部法线。">切线空间法线</Term>、<Term def="用一个或多个通道控制材质局部强度、区域或混合权重的纹理。">遮罩纹理</Term>串联视觉目标、GPU数据流、渲染状态和验收证据。
+
+<UsebBasicTexturesPipelineLab />
+
+## 第一版权威目录定位
+
+本页一一对应冯乐乐《Unity Shader入门精要》第一版第7章 基础纹理。作者发布的完整目录明确列出5篇20章，人民邮电出版社书目记录确认2016年第一版、ISBN 9787115423054和369页，作者GitHub保存随书源代码与勘误入口。
+
+### 原书小节覆盖
+
+1. 7.1 单张纹理
+2. 7.2 凹凸映射
+3. 7.2.1 高度纹理
+4. 7.2.2 法线纹理
+5. 7.2.3 切线空间计算
+6. 7.3 渐变纹理
+7. 7.4 遮罩纹理
+
+### 核心对象
+
+1. **纹理坐标**：把表面位置映射到纹理采样域的二维参数。
+2. **采样器**：规定过滤、寻址和纹理读取行为的GPU状态。
+3. **高度纹理**：以标量高度及其差分近似表面凹凸的纹理。
+4. **切线空间法线**：在顶点切线、副切线和法线基中编码的局部法线。
+5. **遮罩纹理**：用一个或多个通道控制材质局部强度、区域或混合权重的纹理。
+
+## 数据流与公式
+
+任何Shader效果都先写清五项契约：输入属性来自哪里，当前值位于哪个坐标或色彩空间，可编程阶段输出什么，ShaderLab状态如何合并结果，以及目标平台和Unity版本是什么。
+
+$$
+uv'=uv\cdot ST_{xy}+ST_{zw}
+$$
+
+$$
+n_t=2T-1
+$$
+
+$$
+TBN=[t,b,n]
+$$
+
+$$
+C=lerp(C_a,C_b,mask)
+$$
+
+纹理值需要经过缩放偏移和采样器过滤。法线贴图常把负一到一编码到零到一，采样后要解码并归一化；切线空间方案要求构造TBN基，把光线或法线变到同一空间。遮罩通道的语义、色彩空间和压缩格式必须记录，否则采样值会被错误校正。 公式不是孤立记忆项；每个向量都标注空间，每个颜色都标注线性或sRGB，每个深度都标注设备、NDC或观察距离，每个纹理通道都标注数据语义。
+
+## 最小Shader实现
+
+```hlsl
+float3 tangentNormal = UnpackNormal(tex2D(_BumpMap, i.uv));
+float3 worldNormal = normalize(mul(tangentNormal, i.tangentToWorld));
+float mask = tex2D(_Mask, i.uv).r;
+```
+
+实现顺序固定为常量颜色、输入可视化、核心公式、材质参数和优化。每新增一个步骤都保留开关，这样画面异常时可以二分定位。编译成功只证明语法和部分类型成立，不证明空间、状态或色彩处理正确。
+
+<UsebBasicTexturesCompareLab />
+
+## Unity侧设置与渲染状态
+
+```csharp
+var material = renderer.sharedMaterial;
+material.SetFloat("_DebugMode", debugMode);
+material.EnableKeyword(debugMode > 0 ? "DEBUG_VIEW" : "BASELINE_VIEW");
+Debug.Assert(material.shader.isSupported);
+```
+
+材质、相机和光源属于实验输入，不能只保存Shader文件。用Frame Debugger检查实际选择的SubShader和Pass、关键字变体、渲染队列、RenderTarget、深度写入和混合；用Profiler或GPU捕获确认成本来自提交、顶点、片元还是带宽。
+
+## 边界与平台差异
+
+测试零向量、负缩放、非统一缩放、UV边界、透明物体交叉、近远裁剪面、HDR亮度、不同纹理导入设置和移动精度。原书以Unity 5时代内置管线为语境；迁移到当前Unity、URP或HDRP时，应把概念映射和API替换单独记录，不能把新管线行为倒写成原书内容。
+
+```text
+scene: fixed reference scene
+unity: exact editor version
+pipeline: built-in or named SRP
+platform: graphics API and GPU
+evidence: image diff + frame events + timings
+```
+
+<UsebBasicTexturesEvidenceLab />
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定输入与参考图"><UsebBasicTexturesPipelineLab /></Step>
+  <Step title="逐阶段打开效果"><UsebBasicTexturesCompareLab /></Step>
+  <Step title="保存状态与性能"><UsebBasicTexturesEvidenceLab /></Step>
+</Stepper>
+
+1. 建立只有一个网格、一个相机和一个主光的参考场景，保存Unity版本与平台。
+2. 输出UV、法线、深度或光照项等中间值，确认数据空间和范围。
+3. 启用本章核心效果，用Frame Debugger逐Pass检查输入、状态和目标。
+4. 构造边界与失败场景，比较参考图、像素差异、Draw Call和GPU时间。
+
+## 验收证书
+
+验收包至少包含Shader与脚本、材质参数、测试场景、参考图和候选图、Frame Debugger事件、编译关键字、目标平台、帧时间与反例。把法线纹理按普通颜色纹理以sRGB读取，解码后的方向产生系统性偏差。 修复后必须重放同一输入，确认画面和性能变化都能由证据解释。
+
+## 常见误区
+
+<Callout type="trap" title="只看最终截图">把法线纹理按普通颜色纹理以sRGB读取，解码后的方向产生系统性偏差。</Callout>
+
+<Callout type="trap" title="忽略版本与状态">同一段HLSL在不同Unity版本、渲染管线、关键字和纹理导入设置下可能走不同Pass或解释不同数据。修复时把版本、平台、状态和资源设置纳入实验输入。</Callout>
+
+## 本章回顾
+
+本页覆盖纹理坐标、采样器、高度纹理、切线空间法线、遮罩纹理。掌握标准是能从视觉目标画出数据流，写出最小实现，逐阶段可视化中间值，再用渲染状态、边界样例和性能数据完成复现。
+
+<Exercises>
+**问题1：纹理坐标与采样器如何连接？**
+<Answer>把表面位置映射到纹理采样域的二维参数。 规定过滤、寻址和纹理读取行为的GPU状态。 回答时标注执行阶段和输入空间。</Answer>
+
+**问题2：如何调试高度纹理？**
+<Answer>先输出常量，再把相关中间值映射为颜色；逐项关闭纹理、光照和状态，最后用Frame Debugger确认实际Pass。</Answer>
+
+**问题3：如何验收遮罩纹理？**
+<Answer>用一个或多个通道控制材质局部强度、区域或混合权重的纹理。 同时保存正常图、边界图、失败反例、状态记录和性能基线。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="纹理坐标" definition="把表面位置映射到纹理采样域的二维参数。" />
+  <GlossaryItem term="采样器" definition="规定过滤、寻址和纹理读取行为的GPU状态。" />
+  <GlossaryItem term="高度纹理" definition="以标量高度及其差分近似表面凹凸的纹理。" />
+  <GlossaryItem term="切线空间法线" definition="在顶点切线、副切线和法线基中编码的局部法线。" />
+  <GlossaryItem term="遮罩纹理" definition="用一个或多个通道控制材质局部强度、区域或混合权重的纹理。" />
+  <GlossaryItem term="Shader实验单" definition="记录Unity版本、目标平台、场景、材质、源码、截图和性能的一页式证据。" />
+</Glossary>
+
+<Attribution adaptedFrom="冯乐乐 · Unity Shader入门精要 · 第7章 基础纹理" adaptedUrl="https://www.cnblogs.com/xiaowangba/p/6314640.html" />

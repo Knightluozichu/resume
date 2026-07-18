@@ -1,0 +1,188 @@
+---
+title: "第6章 Voronoi图"
+type: C
+section: "几何数据结构 · 邻近关系"
+order: 1
+description: "从二维定义、Delaunay对偶和构造算法扩展到三维、约束变体、最近邻、马赛克与自然邻域插值。"
+demo: true
+math: true
+sourceUrl: "https://www.routledge.com/Geometric-Data-Structures-for-Computer-Graphics/Langetepe-Zachmann/p/book/9780367453862"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GdscgVoronoiDiagramsObjectLab, GdscgVoronoiDiagramsQueryLab, GdscgVoronoiDiagramsEvidenceLab } from "@/components/mdx/geometric-data-structures/diagrams/gdscg-voronoi-diagrams";
+
+<Objectives>
+- 能解释Voronoi单元、Delaunay三角剖分与空圆性质的对象和不变量
+- 能推导本页复杂度或几何谓词，并用交互图追踪构建、查询与更新
+- 能实现最小实验，以精确基线、边界输入和反例验收自然邻域插值
+</Objectives>
+
+## 先做预测
+
+先预测结果，再观察结构变化并解释偏差。拖动一个站点穿过四点近共圆配置，预测Delaunay边翻转与Voronoi顶点变化。再加入约束线段，判断普通欧氏最近邻和可见最近邻在哪些区域分离。 本页用<Term def="离某个站点不远于任何其他站点的空间区域。">Voronoi单元</Term>、<Term def="连接共享Voronoi边或面的站点形成的对偶复形。">Delaunay三角剖分</Term>、<Term def="Delaunay单形存在通过其顶点且内部不含其他站点的圆或球。">空圆性质</Term>、<Term def="加入可见性、障碍或必须保留的几何约束后的邻近分区。">约束Voronoi图</Term>、<Term def="按插入查询点后从相邻Voronoi单元借得的面积或体积分配权重。">自然邻域插值</Term>建立从对象、表示、查询到证书的完整链路。
+
+<GdscgVoronoiDiagramsObjectLab />
+
+## 第一版权威目录定位
+
+本页一一对应Elmar Langetepe与Gabriel Zachmann在A K Peters出版的2006年第一版《Geometric Data Structures for Computer Graphics》第6章 Voronoi图。出版社页面确认第一版、两位作者、362页和正式10章目录；作者所在研究组同时给出原书信息、ISBN 9781568812359、目录以及第7章材料。
+
+### 原书小节覆盖
+
+1. 6.1 Definitions and Properties
+2. 6.1.1 Voronoi Diagram in 2D
+3. 6.1.2 Delaunay Triangulation in 2D
+4. 6.2 Computation
+5. 6.3 Generalization
+6. 6.3.1 Voronoi and Delaunay in 3D
+7. 6.3.2 Constrained Voronoi Diagrams
+8. 6.3.3 Types of Generalizations
+9. 6.4 Applications
+10. 6.4.1 Nearest Neighbor
+11. 6.5 Voronoi Diagrams in Computer Graphics
+12. 6.5.1 Mosaics
+13. 6.5.2 Natural Neighbor Interpolation
+
+### 核心对象
+
+1. **Voronoi单元**：离某个站点不远于任何其他站点的空间区域。
+2. **Delaunay三角剖分**：连接共享Voronoi边或面的站点形成的对偶复形。
+3. **空圆性质**：Delaunay单形存在通过其顶点且内部不含其他站点的圆或球。
+4. **约束Voronoi图**：加入可见性、障碍或必须保留的几何约束后的邻近分区。
+5. **自然邻域插值**：按插入查询点后从相邻Voronoi单元借得的面积或体积分配权重。
+
+## 查询与表示契约
+
+先固定数据域、维数、闭开边界、查询输出和数值语义。树高或节点数不是独立目标；只有候选完备、结果无重复、复杂度含输出规模且数值分支一致时，结构才算正确。
+
+$$
+V_i=\{x\mid\|x-p_i\|\le\|x-p_j\|,\forall j\}
+$$
+
+$$
+orient(a,b,c)=\det(b-a,c-a)
+$$
+
+$$
+MST(P)\subseteq DG(P)
+$$
+
+$$
+f(x)=\sum_i\lambda_i(x)f_i,\quad\sum_i\lambda_i=1
+$$
+
+Voronoi单元由站点两两垂直平分半空间相交而成；共享边的站点在Delaunay图中相连。二维一般位置下，空圆性质决定局部边翻转。计算可用增量插入、分治或扫线，三维把圆提升为球。自然邻域权重非负且和为一，可保持常量场。 每个剪枝判断都应能回答两个问题：被排除的集合是什么，以及哪个不变量证明它不含答案。
+
+## 可核查构建与查询
+
+小规模基线直接裁剪所有半平面，主实现用增量Delaunay并以方向和圆内谓词决定拓扑。每次插入记录冲突三角形、空腔边界和新单形；最后从对偶关系生成Voronoi边。约束版本必须验证约束边没有被穿越。
+
+
+```python
+def query_with_trace(root, request):
+    stack, hits, trace = [root], [], []
+    while stack:
+        node = stack.pop()
+        trace.append(node.id)
+        if node.disjoint(request):
+            continue
+        if node.is_leaf:
+            hits.extend(node.exact_matches(request))
+        else:
+            stack.extend(node.children)
+    return sorted(set(hits)), trace
+```
+
+通用骨架必须由本章的具体不变量实例化：区域不相交、包围体不重叠、空邻域、证书未失效或静态块版本有效。不能把候选生成误写成最终答案，叶节点仍需执行本章定义的精确测试。
+
+<GdscgVoronoiDiagramsQueryLab />
+
+## 复杂度与工程取舍
+
+复杂度报告分离构建、查询、更新、内存和输出规模。平均值之外记录P95与最坏样例；同时保存访问节点、候选对象和精确谓词次数，这样才能判断瓶颈来自树质量、数据分布还是数值回退。
+
+```python
+metrics = {
+    "build_ms": 0.0,
+    "visited_nodes": 0,
+    "candidates": 0,
+    "exact_tests": 0,
+    "update_ms": 0.0,
+}
+assert set(metrics) == {"build_ms", "visited_nodes", "candidates", "exact_tests", "update_ms"}
+```
+
+只在结果集合与基线一致后比较性能。构建更慢可能换来大量查询收益，更新更便宜也可能逐渐恶化结构；因此工作负载中的查询次数、更新比例和生命周期必须写入报告。
+
+## 边界、退化与反例
+
+重复点、三点共线、四点共圆和无限单元破坏唯一性；浮点圆内测试的符号错误会产生非流形拓扑。必须为退化输入选择一致的符号扰动或精确谓词。
+
+```python
+audit = {
+    "normal": "representative geometry",
+    "boundary": "closed-open convention",
+    "degenerate": "duplicate or co-located input",
+    "baseline": "brute-force exact result",
+}
+assert all(audit.values())
+```
+
+<GdscgVoronoiDiagramsEvidenceLab />
+
+## 图形学应用
+
+最近邮局查询用单元定位，马赛克以站点颜色填充单元，自然邻域插值恢复散点标量场。验收同时检查对偶邻接、Euler关系、空圆证书和插值权重和。 应用层还要记录从世界坐标到结构坐标的变换，避免把坐标系错误误判为数据结构错误。
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定对象与边界"><GdscgVoronoiDiagramsObjectLab /></Step>
+  <Step title="执行构建与查询"><GdscgVoronoiDiagramsQueryLab /></Step>
+  <Step title="保存反例与证书"><GdscgVoronoiDiagramsEvidenceLab /></Step>
+</Stepper>
+
+1. 用五到十个对象手算结构，标出节点覆盖、邻接或证书。
+2. 执行一个正常查询和一个恰落在边界的查询，逐节点记录剪枝理由。
+3. 删除一个一般位置或静态假设，构造首个失败样例。
+4. 与穷举答案逐项比较，再扩大规模测构建、查询、更新和内存。
+
+## 验收证书
+
+验收包包含原始输入、结构参数、节点或图邻接、查询日志、候选集合、精确结果、复杂度计数和失败反例。使用自适应精确方向和圆内谓词，并为真退化情况规定确定性扰动。 任何无法重放的截图或孤立耗时都不能替代证书。
+
+## 常见误区
+
+<Callout type="trap" title="正确性前提被省略">直接用浮点行列式处理近共圆四点，不同插入顺序产生互相矛盾的边翻转。</Callout>
+
+<Callout type="trap" title="只看平均耗时">使用自适应精确方向和圆内谓词，并为真退化情况规定确定性扰动。 同时保留最坏输入、内存和更新尾延迟。</Callout>
+
+## 本章回顾
+
+本页覆盖Voronoi单元、Delaunay三角剖分、空圆性质、约束Voronoi图、自然邻域插值。掌握标准是能从查询契约选择表示，推导剪枝或邻近条件，实现构建与更新，并用精确基线、退化输入和复杂度计数形成可重放证书。
+
+<Exercises>
+**问题1：Voronoi单元与Delaunay三角剖分如何协作？**
+<Answer>离某个站点不远于任何其他站点的空间区域。 连接共享Voronoi边或面的站点形成的对偶复形。 回答时必须写出对象域和边界约定。</Answer>
+
+**问题2：怎样核查空圆性质的查询结果？**
+<Answer>保存访问轨迹与候选集合，再与穷举或精确谓词给出的结果逐项比较；复杂度必须包含输出规模。</Answer>
+
+**问题3：如何验收自然邻域插值？**
+<Answer>按插入查询点后从相邻Voronoi单元借得的面积或体积分配权重。 同时保存正常例、边界例、退化例和最坏工作负载。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="Voronoi单元" definition="离某个站点不远于任何其他站点的空间区域。" />
+  <GlossaryItem term="Delaunay三角剖分" definition="连接共享Voronoi边或面的站点形成的对偶复形。" />
+  <GlossaryItem term="空圆性质" definition="Delaunay单形存在通过其顶点且内部不含其他站点的圆或球。" />
+  <GlossaryItem term="约束Voronoi图" definition="加入可见性、障碍或必须保留的几何约束后的邻近分区。" />
+  <GlossaryItem term="自然邻域插值" definition="按插入查询点后从相邻Voronoi单元借得的面积或体积分配权重。" />
+  <GlossaryItem term="几何证书" definition="足以重放构建、查询、更新和数值判断的一组输入、轨迹与不变量。" />
+</Glossary>
+
+<Attribution adaptedFrom="Elmar Langetepe, Gabriel Zachmann · Geometric Data Structures for Computer Graphics, First Edition · 第6章 Voronoi图" adaptedUrl="https://www.routledge.com/Geometric-Data-Structures-for-Computer-Graphics/Langetepe-Zachmann/p/book/9780367453862" />

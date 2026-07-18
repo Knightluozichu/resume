@@ -1,0 +1,303 @@
+---
+title: "第9章 Searching Strings by Prefix：按前缀搜索字符串"
+type: B
+section: "排序、集合与搜索"
+order: 8
+description: "从排序指针数组、连续存储和 Front Coding 出发，逐步构造 LPFC、压缩 Trie、Patricia blind search 与面向外存的 String B-Tree。"
+demo: true
+math: true
+sourceUrl: "https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+draft: false
+---
+
+import { PaePrefixRangeLab, PaePointerLocalityDiagram, PaeFrontCodingLab, PaeInterpolationSearchLab, PaeCompactedTrieDiagram, PaePatriciaBlindSearchLab, PaeStringBTreeMap } from "@/components/mdx/advanced-algorithm-engineering/diagrams/searching-strings-by-prefix";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释前缀结果为何形成连续词典区间并计算两条边界
+- 能分析字符串指针数组、连续块和 Front Coding 的 I/O 差异
+- 能实现插值搜索与保局部性的前端编码
+- 能比较压缩 Trie 与 Patricia 树的结构和查询过程
+- 能设计内存索引、压缩字符串与 String B-Tree 的分层方案
+
+</Objectives>
+
+## 从搜索框自动补全开始
+
+searching strings by prefix（<Term def="预处理含 n 个字符串、总长 N 的字典 D，使给定模式 P 后能计数或返回所有以 P 开头的字符串。">按前缀搜索字符串</Term>）是自动补全的核心。模式长度为 p，结果数为 nocc，结果字符串总长为 Nocc；查询时间不能随整个字典线性增长。
+
+前缀搜索不同于精确搜索：哈希可以迅速判断完整键是否存在，却不能直接返回一个有序前缀区间。它也不同于子串搜索；第10章会把文本的每个后缀当作字符串，把子串出现归约为后缀集合上的前缀搜索。
+
+先预测在有序词典 ace、acid、act、actor、atlas、atom、attenuate、auto 中查询 at。所有命中项从 atlas 到 auto 连续出现，因为任何不以 at 开头的字符串若夹在两条命中之间，会违反第一个 mismatch 字符决定的词典序。
+
+<PaePrefixRangeLab />
+
+因此只需找两个插入位置：P 给出左边界 l；P# 给出右边界之后的位置，其中 # 是大于所有真实字符的逻辑哨兵。结果是 A[l,r]，计数为 r-l+1。实现时不必真的拼接最大字符，可以写一个 comparator，把“前缀耗尽”分别解释为下界和上界。
+
+## 字符串指针数组：逻辑连续不等于物理连续
+
+array of string pointers（<Term def="按所指字符串词典序排列的指针数组 A；字符串正文可位于任意位置。">字符串指针数组</Term>）只重排固定宽度指针，正文 S 可以散落在磁盘。对 P、P# 各做一次间接二分；每一步比较最坏扫描 p 个字符。
+
+$$
+T_{\mathrm{pointer}}
+=
+O(p\log n),
+\qquad
+IO_{\mathrm{pointer}}
+=
+O\left(\frac{p}{B}\log n\right)
+$$
+
+空间是 N+(1+w)n 字节：N 个正文字符、n 个分隔符和 n 个 w 字节指针。找到 A[l,r] 后，指针在 A 中连续，却可能指向 nocc 个不同页面，所以报告结果最坏至少产生 Omega(nocc) 次 I/O。
+
+<PaePointerLocalityDiagram />
+
+<Callout type="trap" title="把有序指针误当成有序正文">
+排序 A 只保证词典顺序，不保证 S 的物理布局。若 API 返回完整字符串，必须把正文页面读取计入成本；只统计边界二分会严重低估短前缀和热点补全的尾延迟。
+</Callout>
+
+### 连续存放并对每个磁盘块采样
+
+把字符串按词典序连续写入 S，每 B 个字符左右形成一块，只在 A 中保存每块首串。先在样本集合 D_B 中找候选块，再顺序扫描块内字符串。
+
+$$
+IO_{\mathrm{contiguous}}
+=
+O\left(
+\frac{p}{B}\log\frac{N}{B}
++\frac{N_{\mathrm{occ}}}{B}
+\right)
+$$
+
+样本数至多 N/B，输出完整字符串正好按字节顺扫。靠近的二分候选还更容易命中缓存。这个两级布局把“索引谁”和“怎样存全部字符串”分开，后续每个改进都只替换其中一层。
+
+## Front Coding：利用相邻字符串的公共前缀
+
+对有序相邻的前一字符串与当前字符串，令 ell(i) 为两者最长公共前缀长度，suffix(i) 为当前字符串去掉该前缀后的剩余部分。Front Coding 保存二元组：
+
+$$
+s_i
+\longmapsto
+(\ell_i,\widehat{s}_i)
+$$
+
+公共前缀原需 Theta(ell_i log sigma) 位，现在只编码整数 ell_i 并保留差异后缀。URL、路径和自然语言词典往往具有很高前缀重复率。
+
+<PaeFrontCodingLab />
+
+解码第 i 串要从前串复制 ell_i 个字符再附加后缀。如果依赖链一直回到块首，随机读取单串可能重建许多无关字符串。Front Coding with bucketing 让每块第一串不压缩，其余串只依赖块内前驱；二分比较块首无需解码，报告时边扫边解码。
+
+```text
+FrontCode(sortedStrings):
+  previous = ""
+  for current in sortedStrings:
+    l = longestCommonPrefix(previous, current)
+    emit (l, current[l..])
+    previous = current
+```
+
+较大块减少未压缩块首和内存指针，压缩更好；但扫描与依赖链更长。极端序列 a、aa、aaa 等能让一个压缩页展开为 Theta(B^2) 个字符，所以“压缩页只有 B 字节”不代表解码只需 O(B) CPU。
+
+## 插值搜索：让分布决定候选范围
+
+interpolation search（<Term def="按键在整体值域中的相对位置直接定位候选 bin，再仅在该 bin 内二分。">插值搜索</Term>）改进样本指针层。把等长逻辑字符串看作 sigma 进制整数；短串在末尾补全局最小逻辑字符，从而保持词典序。
+
+对递增整数 X[1,m]，把 [x_1,x_m] 均分为 m 个值域 bin，辅助数组 I[i] 指向每个 bin 在 X 中的首尾位置。查询 y 先常数时间算候选 bin，再在其中二分。
+
+<PaeInterpolationSearchLab />
+
+令相邻键最大 gap 与最小 gap 之比为 Delta，则任一 bin 的元素数不超过 Delta：
+
+$$
+T_{\mathrm{interp}}
+=
+O(\log\min\{\Delta,m\})
+$$
+
+它从不比普通二分的 O(log m) 更差，但额外需要 O(m) 辅助空间。键独立均匀时，Delta 以高概率为 O(log m)，查询可达 O(log log m)；真实字符串通常不均匀，不能把这个分布结论写成无条件保证。
+
+随机置换可以把任意静态键集打散，但前缀区间依赖词典序，置换后的查找和原序范围恢复必须单独设计。工程上更常把插值搜索用于分布可控的采样层，而非直接替代全部前缀索引。
+
+## 保局部性的前端编码：限制单串解码依赖
+
+locality-preserving front coding（<Term def="仅在有限向后窗口足以重建当前串时使用前端编码，否则复制完整串，以空间小幅增加换取最优局部解码。">保局部性的前端编码</Term>，LPFC）逐串检查：向后扫描最多 c|s_i| 个压缩字符，若其中包含足够的复制点并能重建 s_i，就输出普通二元组；否则把 s_i 完整复制为 (0,s_i)。
+
+```text
+LPFCEncode(current, encodedPrefix, c):
+  inspect at most c * length(current) previous encoded characters
+  if current can be reconstructed from that window:
+    emit front-coded pair
+  else:
+    emit (0, current)
+```
+
+令 epsilon=2/(c-2)，原章证明：
+
+$$
+\mathrm{LPFC}(D)
+\le
+(1+\epsilon)\mathrm{FC}(D)
+$$
+
+而任意字符串 s_i 的解码 I/O 为：
+
+$$
+O\left(
+\frac{|s_i|}{\epsilon B}
+\right)
+$$
+
+直觉是复制串分成“稀疏”起点和随后按 2/c 几何缩短的拥挤链；每条链总长可向之前足量的 FC 字符收费。它不再依赖固定块大小，可让上层索引直接指向不压缩复制串，在近 FC 空间下保证局部读取。
+
+## 压缩 Trie：把空间从总字符数降到字符串数
+
+普通 Trie 每条边一个字符。沿模式 P 向下走；若能拼出 P，目标节点所有后代叶就是结果。节点出边若用链表，分支最坏 O(sigma)；排序数组是 O(log sigma)；第8章的静态完美哈希可只保存存在的边并给出 O(1) 最坏分支。
+
+未压缩 Trie 节点数最坏 O(N)。把每条单孩子路径收缩成一条长边，就得到 compacted trie（<Term def="把 Trie 中所有单孩子路径收缩为字符串切片边，使节点和边总数降为 O(n)。">压缩Trie</Term>）。边标签不复制正文，只存 (string-id,begin,end) 三元组。
+
+<PaeCompactedTrieDiagram />
+
+每个内部节点至少有两个孩子，所以内部节点、边和叶总数都是 O(n)。模式搜索在节点比较首字符、在长边比较切片：
+
+$$
+T_{\mathrm{compacted}}
+=
+O(p+n_{\mathrm{occ}})
+$$
+
+结构空间 O(n)，但解析边标签仍需要 N 大小的字符串存储。若 Trie 和相关正文都在内存，这把样本层搜索从 O(log(N/B)) 降为与字典规模无关的 O(p)；若每条长边正文都在磁盘，沿 p 字符可能产生 O(p) 次随机 I/O。
+
+## Patricia 树：盲走后只访问一条完整字符串
+
+Patricia trie（<Term def="只保留压缩 Trie 每条边的首字符，并在内部节点保存其代表前缀长度；通过 blind search 恢复词典位置。">Patricia树</Term>）进一步丢掉长边标签，仅保留边首字符和节点对应前缀长度。结构仍为 O(n)，且与字符串长度无关。
+
+blind search 分三阶段：
+
+1. 只比较边首字符向下，走到某个有趣叶 l；
+2. 读取 l 指向的唯一完整字符串 s，计算 LCP(P,s)=ell；
+3. 从 l 向上找跨越深度 ell 的边，用 mismatch 字符决定 P 位于该子树左侧还是右侧。
+
+<PaePatriciaBlindSearchLab />
+
+```text
+BlindSearch(P):
+  leaf = descend using only Patricia edge initials
+  s = fetch the single dictionary string at leaf
+  l = longestCommonPrefix(P, s)
+  edge = climb until depth(parent) < l <= depth(child)
+  return side of edge decided by the mismatch characters
+```
+
+<Callout type="trap" title="把盲下行到的叶直接当作答案">
+Patricia 已丢弃长边内部字符，盲下行可能跳过真正 mismatch。叶 l 只是校准串；必须读取它算 LCP，再按节点深度回溯定位。省掉第二、三阶段会对边内分歧返回错误位置。
+</Callout>
+
+若 Patricia 全驻内存，结构遍历 O(p) CPU 且不产生 I/O；只需读取一条磁盘字符串完成校准，约 O(p/B) I/O。对 P 与 P# 各做一次 blind search，就得到前缀结果范围。
+
+把内存中的 Patricia 与磁盘上的 LPFC 结合，上层每个样本只占 O(1) 结构空间，下层接近 FC(D) 压缩空间；有趣串可在与自身长度成正比的 I/O 内解码。若 n 放不进内存，但 N/B 不超过 M，就只索引每个磁盘桶的首串，最后额外扫描一个候选桶。
+
+## 超大字典：String B-Tree 与树页面布局
+
+当 N 达到 Omega(MB)，整个 Patricia 或每块首串索引也无法驻内存。把大 Patricia 直接按节点写盘，查询可能每走一步都换页。
+
+String B-Tree 把排序字符串指针分成每块 Theta(B) 项；每个叶块内建一棵能装进单页的 Patricia，并用每块首尾字符串递归建立 B 叉路由层。每访问一页，就在页内 Patricia 上做 blind search，选择下一块。
+
+<PaeStringBTreeMap />
+
+避免在每层从 P[0] 重算 LCP 后，前缀查询的最优 I/O 为：
+
+$$
+O\left(
+\frac{p}{B}
++\log_B n
++\frac{N_{\mathrm{occ}}}{B}
+\right)
+$$
+
+第一项读取模式，第二项走 B 树层级，第三项是不可避免的结果输出。若要跳到模式未比较位置，原章的最优版本要求字符串支持随机字符访问，普通 LPFC 不能直接插入，因为它往往需从复制点顺序解码。
+
+另一方向是 Tree Packing：保留一棵 Patricia，重新安排节点到 B 节点页面。Min-Max 自底向上合并子页，优化最坏根到叶换页数；已知叶访问概率时，distribution-aware 动态规划按热路径优化期望 I/O。平衡树页面化只省 log B 因子，而极不平衡树的好布局相对逐节点随机放置可接近 B 倍，物理布局不是末端微优化。
+
+## 用边界、结果与页面轨迹共同验收
+
+正确性用排序数组作为预言机：lower_bound(P) 与 upper_bound(prefix) 生成期望区间，再逐项核对所有返回串都以 P 开头且区间外相邻项不匹配。覆盖空模式、空串、重复串、前缀链、Unicode、多字节字符、最大/最小字符和无结果。
+
+压缩层做往返测试：FC、LPFC 随机定位每条串都必须还原原字节；块首、复制点和跨页整数编码要单独测。索引层记录比较字符数、访问正文串数、随机/顺序页面数、解码字节、输出字节和 P 的重复扫描量。
+
+性能报告必须同时给 n、N、p、nocc、Nocc、B、M、压缩比、索引常驻大小与 P50/P99 I/O。自动补全往往由短前缀产生巨量结果；若 UI 只取 top-k，还应把排名/截断与“完整前缀枚举”分开报告。
+
+<Stepper>
+  <Step title="先把前缀变成连续范围">
+    <PaePrefixRangeLab />
+    用 P 与逻辑 P# 找左右词典边界，并验证边界外相邻项。
+  </Step>
+  <Step title="让逻辑顺序落实到物理块">
+    <PaePointerLocalityDiagram />
+    正文按词典序连续存放，索引块首，结果才能顺序扫描。
+  </Step>
+  <Step title="压缩相邻公共前缀并控制依赖">
+    <PaeFrontCodingLab />
+    普通 FC 降空间，分块或 LPFC 负责限制随机单串的解码链。
+  </Step>
+  <Step title="以 O(n) 结构执行 blind search">
+    <PaePatriciaBlindSearchLab />
+    盲下行、读取一串算 LCP、回溯 mismatch 边，恢复准确词典位置。
+  </Step>
+  <Step title="索引超过内存时分页路由">
+    <PaeStringBTreeMap />
+    每页 Patricia 负责 B 叉路由，避免逐节点随机 I/O 和模式重扫。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 所有以 P 开头的有序字符串形成连续区间，可由 P 与 P# 两次位置搜索确定。
+2. 字符串指针数组二分需 O(p log n)，散落正文使报告结果至少 nocc 次随机 I/O。
+3. 词典序连续存储和块首采样把结果读取变成 Nocc/B 次顺扫。
+4. Front Coding 保存相邻 LCP 长度与剩余后缀，块首切断解码依赖。
+5. 插值搜索按值域定位 bin，时间为 O(log min(Delta,m))。
+6. LPFC 只在有限窗口可解码时压缩，以 (1+epsilon)FC(D) 空间保证局部访问。
+7. 压缩 Trie 收缩单孩子路径，以 O(n) 结构支持 O(p+nocc) 查询。
+8. Patricia 只保留边首字符和深度，blind search 只需一条完整字符串校准。
+9. String B-Tree 把 Patricia 路由表嵌入磁盘页，达到模式、层级和输出三项 I/O 界。
+10. Tree Packing 根据最坏路径或访问分布优化不平衡树的页面布局。
+
+<Exercises>
+
+**问题 1：有序词典 atlas、atom、attenuate、auto 查询前缀 at，边界为何只需两次搜索？**
+
+<Answer>at 的 lower_bound 落在atlas；把前缀耗尽视为大于任意后续字符的上界搜索落在auto之后。共享at的字符串在词典序中连续，所以两个位置之间恰是全部结果。</Answer>
+
+**问题 2：Front Coding 为什么不能保证任意单串 O(|s|) 解码？**
+
+<Answer>当前串依赖前串，前串又可能继续依赖更早串；没有块首或复制点时，随机读取第i串可能从很远处开始重建。LPFC 用有限向后窗口决定压缩或完整复制，才把依赖长度与当前串长度绑定。</Answer>
+
+**问题 3：压缩 Trie 已有长边标签，为何 Patricia 还要删掉它们？**
+
+<Answer>长边标签通常引用磁盘正文，沿模式解析多条边可能产生与p成正比的随机I/O。Patricia只用边首字符盲走，最后访问一条完整字符串算LCP并回溯，结构遍历可留在内存。</Answer>
+
+**问题 4：String B-Tree 为什么要避免每层重扫模式？**
+
+<Answer>若每个B树节点都从P首字符重新计算LCP，p/B成本会乘上树高。把上一层已匹配长度传下去后，每个模式字符总体只读一次，查询降为p/B+log_B n，再加不可避免的Nocc/B输出。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="按前缀搜索字符串">返回或计数所有以模式 P 开头的字典字符串。</GlossaryItem>
+  <GlossaryItem term="字符串指针数组">按所指字符串词典序排列、正文可散布的间接索引。</GlossaryItem>
+  <GlossaryItem term="插值搜索">先按值域比例定位候选 bin，再在局部有序段内搜索。</GlossaryItem>
+  <GlossaryItem term="保局部性的前端编码">以少量复制串限制依赖链、保证局部解码的 Front Coding 变体。</GlossaryItem>
+  <GlossaryItem term="压缩Trie">收缩所有单孩子路径、长边引用原字符串切片的 Trie。</GlossaryItem>
+  <GlossaryItem term="Patricia树">只保留压缩 Trie 边首字符和节点前缀长度的 O(n) 索引。</GlossaryItem>
+  <GlossaryItem term="String B-Tree">每个磁盘页以内存 Patricia 作为路由表的字符串 B 树。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Pearls of Algorithm Engineering · Chapter 9 Searching Strings by Prefix"
+  href="https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+  author="Paolo Ferragina"
+  license="原书版权归作者与 Cambridge University Press 所有；本章依据官方目录与作者课程资料独立重构教学内容"
+/>

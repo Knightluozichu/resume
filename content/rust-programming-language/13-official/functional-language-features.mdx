@@ -1,0 +1,309 @@
+---
+title: "Chapter 13：函数式语言特性：迭代器与闭包（Iterators and Closures）"
+type: A
+section: Rust 程序设计语言 · 惰性数据管线与行为参数化
+order: 13
+description: 对齐官方第 13 章：闭包捕获与 Fn traits、Iterator 状态机、惰性 adapter/consumer、minigrep 迭代器重构，以及零成本抽象的性能边界。
+demo: false
+math: false
+sourceUrl: "https://doc.rust-lang.org/book/ch13-00-functional-features.html"
+draft: false
+---
+
+import {
+  RplClosureCaptureLab,
+  RplIteratorRefactorLab,
+  RplIteratorStateLab,
+} from "@/components/mdx/rust-programming-language/diagrams/functional-language-features";
+
+<Objectives>
+
+- 能分析闭包对环境的不可变借用、可变借用和所有权捕获，并判断其满足 `Fn`、`FnMut` 或 `FnOnce` 的原因
+- 能实现 Iterator 的 `next` 状态机，区分惰性 adapter、消费器以及 `iter`、`iter_mut`、`into_iter` 的 Item/所有权
+- 能比较并改造 minigrep 的参数与搜索管线，解释去 clone、返回惰性 iterator 和零成本抽象各自改变的语义与性能边界
+
+</Objectives>
+
+## 为什么函数式写法仍受所有权和具体成本约束
+
+Rust 借鉴了把函数当值、对序列组合变换等函数式思想，但没有把它们放在所有权系统之外。闭包是“代码 + 被捕获环境”的具体匿名类型；迭代器是带内部状态、按 `next` 协议逐项产出的类型。编译器能单态化和内联这些抽象，却仍会严格检查借用、move、分配与生命周期。
+
+<Term def="用函数值、行为参数和序列变换表达计算，同时尽量减少不必要可变状态的编程方式。">函数式风格</Term>
+
+本章的核心不是把所有 for 改成一长串方法，而是识别三件事：行为何时执行、数据由谁拥有、consumer 最终要求什么结果。只有把这三件事说清楚，惰性与零成本才不是口号。
+
+## Closure 是可保存并能捕获环境的匿名函数
+
+<Term def="可以保存到变量或作为参数传递，并能使用定义处作用域中值的匿名函数对象。">闭包</Term>
+
+函数项不能隐式捕获定义处局部变量，closure 可以。`Option::unwrap_or_else` 接收一个延迟执行的 closure：Some 时完全不调用，None 时才计算 fallback。
+
+```rust
+fn giveaway(&self, preference: Option<ShirtColor>) -> ShirtColor {
+    preference.unwrap_or_else(|| self.most_stocked())
+}
+```
+
+这里 `||` 表示没有参数，闭包体不可变借用了 `self`。标准库无需认识 Inventory，只要求传入对象满足它声明的调用 trait。
+
+### 闭包类型由第一次使用锁定
+
+<Term def="编译器从局部调用点推导 closure 参数和返回类型；一个 closure 值最终只有一组具体类型。">闭包类型推导</Term>
+
+```rust
+let add_one = |x: u32| -> u32 { x + 1 };
+let add_one_short = |x| x + 1;
+
+let identity = |x| x;
+let text = identity(String::from("hello"));
+// let number = identity(5); // 前一次调用已把参数锁定为 String
+```
+
+闭包通常位于狭窄上下文，省略标注仍能推导；这不代表同一个闭包像泛型函数一样可接受任意类型。公开函数的签名则需要稳定接口，通常显式写出参数/返回类型和 trait bound。
+
+## 捕获权限由闭包体的最小需求决定
+
+<Term def="闭包从定义环境取得所需值或引用的过程，可为不可变借用、可变借用或所有权。">环境捕获</Term>
+
+若闭包只打印 list，编译器捕获 `&list`；若 push，捕获 `&mut list`，从定义到最后使用期间会阻止其他冲突借用；若闭包把 list 交给消费函数，则必须捕获并移出所有权。规则与普通函数参数的读、改、move 一致，只是参数由编译器隐式放入 closure 对象。
+
+<Term def="强制 closure 把使用到的环境值按所有权放入自身，常用于线程等可能比当前栈帧活得更久的边界。">move 捕获</Term>
+
+`move || println!("{list:?}")` 会让闭包拥有 list，使外层不能再用；但闭包体只读这份所有权，仍可多次调用。反过来，不写 move 的闭包也可能因 `consume(list)` 把值移出而只能调用一次。move 控制“如何捕获”，Fn trait 取决于“调用时怎样使用捕获值”。
+
+<RplClosureCaptureLab />
+
+先预测切换 move 是否一定改变 Fn trait，再改变闭包体和调用次数。观察外层所有权可用性与闭包可调用次数并不总是同步。
+
+## FnOnce、FnMut、Fn 是递增能力集合
+
+<Term def="所有 closure 至少实现的调用 trait；若调用体移出捕获值，通常只能调用一次。">FnOnce</Term>
+
+<Term def="允许多次调用且可修改捕获环境的 trait；调用方必须持有可变 closure。">FnMut</Term>
+
+<Term def="允许多次调用且不改变捕获环境的 trait；也适用于不捕获环境的 closure 和函数项。">Fn</Term>
+
+三者是加法关系：满足 Fn 的 closure 也满足 FnMut 与 FnOnce；满足 FnMut 的也满足 FnOnce；只满足 FnOnce 的不能交给需要重复调用的 API。API 应声明执行策略所需的最宽边界：
+
+```rust
+impl<T> Option<T> {
+    pub fn unwrap_or_else<F>(self, fallback: F) -> T
+    where
+        F: FnOnce() -> T,
+    {
+        match self {
+            Some(value) => value,
+            None => fallback(),
+        }
+    }
+}
+```
+
+fallback 最多调用一次，所以 FnOnce 已足够，并同时接纳另外两类 closure。`sort_by_key` 会在排序中反复调用 key closure，因而要求 FnMut。用外部计数器递增可以满足；每次把同一个 String move 进 Vec 会在第一次调用后耗尽，只满足 FnOnce，不能用于 sort_by_key。
+
+<Callout type="trap" title="陷阱：看到 move 就断言 closure 只实现 FnOnce">
+  move 只把捕获值的所有权放入 closure。若调用体只读或借用内部值，它仍可能实现 Fn；只有调用体把捕获值移出，才不能安全重复调用。
+</Callout>
+
+## Iterator 把序列推进封装成 next 协议
+
+<Term def="定义关联 Item 类型并通过 next 逐项返回 Some、耗尽后返回 None 的标准 trait。">Iterator trait</Term>
+
+```rust
+pub trait Iterator {
+    type Item;
+    fn next(&mut self) -> Option<Self::Item>;
+}
+```
+
+<Term def="Iterator 实现为每次迭代产出的元素定义的关联类型，一个实现只能选择一种 Item。">Item 关联类型</Term>
+
+<Term def="推进 iterator 内部游标并返回下一项或 None 的唯一必需方法。">next 状态机</Term>
+
+`next` 接收 `&mut self`，因为每次调用都会改变“走到哪里”的状态。对 `[1,2,3]` 的 iterator 连续调用得到 Some(&1)、Some(&2)、Some(&3)、None。for loop 会取得 iterator 并在内部反复推进，因此使用者通常不直接管理 mutable iterator。
+
+## iter、iter_mut、into_iter 决定 Item 所有权
+
+<Term def="从集合产生 Item 为共享引用的 iterator，迭代结束后集合仍由原 owner 持有。">iter 借用</Term>
+
+<Term def="从集合产生 Item 为可变引用的 iterator，可逐项修改但不取得元素所有权。">iter_mut 借用</Term>
+
+<Term def="消费集合并产生拥有的 Item；迭代后原集合通常已被 move，不能继续使用。">into_iter 所有权</Term>
+
+选择不由语法偏好决定，而由后续操作决定：只观察用 iter，需要原地修改用 iter_mut，要把 Shoe 等非 Copy 值收进新集合则用 into_iter。adapter 会继承上游 Item 形状，所以 filter closure 可能接到引用的引用，理解 source ownership 能避免盲目加 `*` 或 clone。
+
+## Adapter 惰性组装，consumer 才触发工作
+
+<Term def="接收一个 iterator 并返回新 iterator 的方法，如 map 和 filter；创建时不遍历输入。">惰性 adapter</Term>
+
+<Term def="取得 iterator 所有权并拉取元素以产生最终值或副作用的方法，如 collect、sum、for 与 next。">iterator consumer</Term>
+
+```rust
+let source = vec![1, 2, 3];
+let pipeline = source.iter().map(|value| value + 1);
+// closure 尚未执行
+let output: Vec<_> = pipeline.collect();
+assert_eq!(output, vec![2, 3, 4]);
+```
+
+只写 `map` 会触发 unused must use 警告，因为 adapter 没被消费，closure 一次也不执行。`sum` 消费 iterator 后，原 iterator 不能再用。惰性意味着 consumer 可以只拉取部分元素、短路或边产生边输出；也意味着副作用发生时机由消费方式决定。
+
+<RplIteratorStateLab />
+
+组合 map/filter 后先不要点击 next，确认 pipeline 没有处理元素；再逐次推进。切换 iter/iter_mut/into_iter，比较相同序列协议下不同的 Item 和集合所有权。
+
+## filter closure 把外部策略接进通用遍历
+
+<Term def="把定义处变量借入 iterator adapter 的 closure，用它定制每项保留或变换规则。">捕获式 adapter</Term>
+
+```rust
+fn shoes_in_size(shoes: Vec<Shoe>, shoe_size: u32) -> Vec<Shoe> {
+    shoes
+        .into_iter()
+        .filter(|shoe| shoe.size == shoe_size)
+        .collect()
+}
+```
+
+into_iter 把 Shoe 所有权交给 pipeline，filter closure 不可变捕获 `shoe_size`，collect 只把通过的 Shoe 放入新 Vec。遍历机制来自 Iterator，领域策略来自 closure，返回集合由 consumer 决定。
+
+<Callout type="trap" title="陷阱：把 adapter 当成立即执行的集合 API">
+  map/filter 只构造新 iterator。若没有 collect、sum、for、next 等 consumer，closure 不运行，外部状态也不会改变；依赖 adapter 副作用尤其容易误判执行时机。
+</Callout>
+
+## 用 iterator 重构 Config：不收集，也不 clone
+
+<Term def="把 env::args 直接移交给 Config::build，按 next 取得拥有的 String，而不先构造 Vec。">参数 iterator 重构</Term>
+
+第 12 章先把 args 收集为 Vec，再借用 slice，Config 为独立拥有 query/path 只能 clone。现在让 build 拥有任意产出 String 的 iterator：
+
+```rust
+impl Config {
+    pub fn build(
+        mut args: impl Iterator<Item = String>,
+    ) -> Result<Config, &'static str> {
+        args.next(); // 跳过程序名
+
+        let query = args.next().ok_or("Didn't get a query string")?;
+        let file_path = args.next().ok_or("Didn't get a file path")?;
+
+        Ok(Config {
+            query,
+            file_path,
+            ignore_case: std::env::var("IGNORE_CASE").is_ok(),
+        })
+    }
+}
+
+let config = Config::build(std::env::args())?;
+```
+
+输入值已由 iterator 拥有，next 直接把 String move 进 Config，消除了临时 Vec 和两次 clone。接口接收 `impl Iterator<Item = String>`，测试也能传 `vec![...].into_iter()`，无需伪造真实进程参数。
+
+## 用 filter/collect 重构 search，再决定是否保持惰性
+
+<Term def="用 lines、filter 和 collect 表达搜索目标，删除手动 mutable results 与 push。">搜索 pipeline 重构</Term>
+
+```rust
+pub fn search<'a>(query: &str, contents: &'a str) -> Vec<&'a str> {
+    contents
+        .lines()
+        .filter(|line| line.contains(query))
+        .collect()
+}
+```
+
+这与 for/push 版本有相同公开返回类型和匹配顺序，重点是把“保留满足谓词的行”直接写进结构。若进一步删除 collect 并返回 `impl Iterator<Item = &'a str>`，语义会变化：run 的 for 可以在发现首条匹配时立即打印，而不是等待全部结果进入 Vec；调用者也获得选择 consumer 的权力。
+
+惰性返回不是无条件更好。它把具体 iterator 类型隐藏在 impl Trait 后，也把 contents 的借用持续到消费结束；若调用者需要多次遍历、随机访问或跨边界长期保存，拥有的 Vec 可能更合适。
+
+<RplIteratorRefactorLab />
+
+切换参数输入和搜索返回策略，观察临时集合、clone、结果缓冲与首条输出时机。这里展示的是所有权和执行时机的结构成本，真实吞吐仍要测量。
+
+## 循环与 iterator 的性能：先定义可比问题
+
+<Term def="高层抽象在优化后不引入本可避免的额外运行时开销，同时不用的能力不付成本。">零成本抽象</Term>
+
+官方用同一 Sherlock Holmes 文本与 query 比较 for 版和 iterator 版 search，给出的两个基准约为 19.6 ms 与 19.2 ms/iter，结论是同一数量级，而不是“方法链天然更快”。具体泛型 pipeline 可被单态化、closure 内联，编译器还能展开循环、消除部分边界检查，最终机器码可接近手写循环。
+
+但零成本不覆盖业务选择：`to_lowercase` 仍会分配，collect 仍会建立 Vec，返回 lazy iterator 会改变首条输出与借用时长，debug 与 release 也不可混比。应在等价语义、release 配置、代表性输入和稳定统计下 benchmark。
+
+<Callout type="trap" title="陷阱：引用零成本就跳过基准与分配分析">
+  零成本说明 abstraction 本身可被优化，不保证任意 adapter 顺序、clone、collect 或 Unicode 转换免费。先保证语义相同，再用 release benchmark 和 allocation evidence 判断热点。
+</Callout>
+
+## 三步建立 closure/iterator 推理链
+
+<Stepper>
+  <Step title="第一步：从闭包体反推捕获和调用 trait">
+    标出闭包读取、修改或移出的每个环境值，再判断是否需要 move 和能调用几次；API trait bound 只声明执行策略真正需要的最宽能力。
+
+    <RplClosureCaptureLab />
+  </Step>
+  <Step title="第二步：沿 Item 追踪惰性 pipeline">
+    从 iter/iter_mut/into_iter 确定 Item，逐个写出 adapter 的输入输出；找到最终 consumer，才能确定 closure 何时执行以及 iterator 何时耗尽。
+
+    <RplIteratorStateLab />
+  </Step>
+  <Step title="第三步：在测试保护下改变所有权和消费方式">
+    Config 从借用 slice 改为拥有 Args，search 从 loop 改 filter/collect；若再返回 lazy iterator，补测首条输出、借用范围和 consumer 行为，并用 release 基准验证性能。
+
+    <RplIteratorRefactorLab />
+  </Step>
+</Stepper>
+
+Iterator pipeline 中 map/filter 等 **迭代器适配器** 保持 lazy，collect/for/sum 等 **消费适配器** 才反复调用 next 并产生最终结果或 side effects。
+
+## 小结
+
+- closure 是带捕获环境的匿名具体类型；类型由使用点推导并锁定，捕获可为共享借用、可变借用或所有权
+- move 决定捕获所有权，调用体决定 Fn/FnMut/FnOnce；三种 trait 是递增能力集合，API 应选真正需要的约束
+- Iterator 只要求 Item 与 next；adapter 惰性产生新 iterator，consumer 才拉取并决定最终值、短路或副作用时机
+- iter/iter_mut/into_iter 决定 Item 与集合所有权；捕获式 filter 把领域策略组合进通用序列推进
+- minigrep 可直接消费 args iterator 去掉 Vec/clone，并以 filter/collect 去掉手动可变结果；返回 lazy iterator 还会改变输出时机
+- 零成本来自单态化与优化，不会消除算法、分配和 consumer 选择的实际成本，性能结论必须建立在等价基准上
+
+<Exercises>
+  1. **问题 1：判断 closure trait。** `move || println!("{name}")` 和 `|| sink(name)` 分别如何捕获、能否多次调用，为什么不能只看 move 关键字？
+
+  <Answer question="捕获方式与 Fn trait 如何分别推导？">第一段用 move 取得 name 所有权，但调用体只借用它格式化，仍可能实现 Fn 并多次调用，只是外层 name 已不可用。第二段即使没写 move，调用体也必须取得 name 并把它移出 closure 环境，因此只实现 FnOnce。move 决定值怎样进入环境，体内读改移决定调用 trait。</Answer>
+
+  2. **问题 2：定位惰性 bug。** 代码 `values.iter().map(|v| counter += 1);` 后 counter 仍为 0；应如何修复，若只需前三项又该选什么 consumer？
+
+  <Answer question="adapter 为什么没有执行 closure？">map 只返回惰性 iterator，没有 consumer 就不拉取元素，closure 不执行。要取得所有结果可 collect 或用 for；只需前三项可追加 take(3) 后 collect/for，或调用三次 next。consumer 决定实际处理多少项和副作用何时发生，不能靠创建 pipeline 推断已执行。</Answer>
+
+  3. **问题 3：评审 minigrep 重构。** 把 Config 改为接收 iterator 消除了什么；把 search 从 Vec 返回改为 iterator 又改变了什么，如何验证没有不当性能结论？
+
+  <Answer question="两个 iterator 重构的收益和语义是否相同？">Config 拥有 Args 后 next 直接 move String，消除临时 Vec 和 query/path clone，错误仍按缺失位置返回。search 返回 iterator 则不仅换写法，还取消结果 Vec、推迟工作并允许首条命中立即输出，同时延长 contents 借用并把消费选择交给调用方。应补行为测试并在等价 release workload 上测吞吐、延迟与分配，不能仅凭零成本断言更快。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="函数式风格">以函数值和序列变换表达计算并减少非必要可变状态。</GlossaryItem>
+  <GlossaryItem term="闭包">能保存、传递并捕获定义环境的匿名函数对象。</GlossaryItem>
+  <GlossaryItem term="闭包类型推导">从局部使用确定 closure 唯一具体参数和返回类型。</GlossaryItem>
+  <GlossaryItem term="环境捕获">closure 以借用或所有权取得外部值的过程。</GlossaryItem>
+  <GlossaryItem term="move 捕获">强制把使用的环境值按所有权放入 closure。</GlossaryItem>
+  <GlossaryItem term="FnOnce">允许至少调用一次，移出捕获值时只能调用一次的 trait。</GlossaryItem>
+  <GlossaryItem term="FnMut">可多次调用并允许改变捕获环境的 trait。</GlossaryItem>
+  <GlossaryItem term="Fn">可多次调用且不改变捕获环境的 trait。</GlossaryItem>
+  <GlossaryItem term="Iterator trait">以 Item 和 next 定义逐项序列协议的 trait。</GlossaryItem>
+  <GlossaryItem term="Item 关联类型">Iterator 每次 next 所产生元素的固定类型。</GlossaryItem>
+  <GlossaryItem term="next 状态机">推进 iterator 游标并返回 Some 或 None 的方法。</GlossaryItem>
+  <GlossaryItem term="iter 借用">产生共享引用 Item 且保留集合所有权的迭代方式。</GlossaryItem>
+  <GlossaryItem term="iter_mut 借用">产生可变引用 Item 并逐项修改集合的迭代方式。</GlossaryItem>
+  <GlossaryItem term="into_iter 所有权">消费集合并产生拥有 Item 的迭代方式。</GlossaryItem>
+  <GlossaryItem term="惰性 adapter">组合 iterator 变换但不立即遍历输入的方法。</GlossaryItem>
+  <GlossaryItem term="iterator consumer">真正拉取 iterator 并产生结果或副作用的操作。</GlossaryItem>
+  <GlossaryItem term="捕获式 adapter">以捕获外部变量的 closure 定制 adapter 行为。</GlossaryItem>
+  <GlossaryItem term="参数 iterator 重构">让 Config 直接拥有 Args 并通过 next 移入字段。</GlossaryItem>
+  <GlossaryItem term="搜索 pipeline 重构">用 lines/filter/collect 表达搜索并移除手动 push。</GlossaryItem>
+  <GlossaryItem term="零成本抽象">抽象在优化后不引入本可避免运行时开销的原则。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Rust Programming Language, Chapter 13 Functional Language Features: Iterators and Closures"
+  adaptedUrl="https://doc.rust-lang.org/book/ch13-00-functional-features.html"
+/>

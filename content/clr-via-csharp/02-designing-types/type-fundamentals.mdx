@@ -1,0 +1,178 @@
+---
+title: "Chapter 4. Type Fundamentals"
+type: C
+section: "CLR via C# 4e · Designing Types"
+order: 4
+description: "从System.Object、类型转换、namespace/assembly身份到对象布局和方法表，建立编译期类型与运行期类型的统一模型。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcCastingDecisionLab, CvcObjectModelLab, CvcRuntimeIdentityLab } from "@/components/mdx/clr-via-csharp/diagrams/type-fundamentals";
+
+<Objectives>
+
+- 能描述引用类型实例、值类型值、装箱对象与System.Object公共语义之间的关系
+- 能比较implicit/explicit cast、is pattern和as operator的检查时机与失败契约
+- 能分析namespace、assembly、runtime Type和instance identity，诊断跨加载边界的类型不兼容
+
+</Objectives>
+
+## 为什么类型不只是一个名字
+
+源代码里写下`Customer`时，编译器看到的是当前namespace/import与reference集合中的符号；metadata把它编码成TypeDef或TypeRef；loader把reference解析到具体assembly；CLR再为已加载类型建立method table/type handle并管理实例。任何一层不同，都可能出现“名字看起来一样却不能赋值”的结果。掌握类型基础，就是持续区分静态声明、运行时真实类型、存储形态与身份边界。
+
+先预测：值类型是否真的“继承”Object；`object x = 42`之后`x`是否仍指向栈上的42；`as`失败为何不抛异常；两个插件各自加载同一contract DLL后，FullName相同的接口是否兼容；重写`Equals`是否会改变`ReferenceEquals`。把每个答案标注为compile、load、storage或dispatch问题。
+
+<Term def="由定义程序集、类型名称、泛型实参和加载上下文共同确定的运行时类型身份。">runtime type identity</Term>
+
+## All Types Are Derived from System.Object
+
+CLR类型系统让所有类型都能使用`System.Object`定义的基本协议：`Equals`、`GetHashCode`、`GetType`、`ToString`以及受保护的`MemberwiseClone`/finalization机制。引用类型沿继承链最终到Object；值类型从`System.ValueType`再到Object，在需要Object/interface引用时通过boxing产生堆对象。因此“所有类型派生自Object”描述的是类型系统与可调用协议，不代表所有值始终以Object引用存储。
+
+```csharp
+int value = 42;
+object boxed = value;          // 分配盒子并复制42
+value = 100;
+
+Console.WriteLine(boxed);      // 42，盒子不是原局部变量的别名
+Console.WriteLine(boxed.GetType() == typeof(int)); // True
+```
+
+`GetType`非virtual，CLR直接从对象头/type handle返回真实运行时类型；不能伪装为base type。`ToString`与`Equals`可virtual dispatch。把对象放入`object`变量只改变静态可见surface，不改变实例真实类型。对value type调用Object virtual method时，JIT可能借助constrained call避免不必要boxing，但语义仍要符合override。
+
+<Term def="引用类型堆对象中支持GC、同步与运行时类型分派的头部及方法表关联。">object header contract</Term>
+
+<Stepper>
+  <Step title="切换reference、value、boxed与Object"><CvcObjectModelLab /></Step>
+  <Step title="追踪每次赋值">为局部、字段、数组元素和接口变量标注存储位置、复制内容、是否分配及谁能观察后续修改。</Step>
+  <Step title="验证Object协议">分别调用GetType、Equals、ReferenceEquals、GetHashCode和ToString，记录静态选择与运行期分派。</Step>
+</Stepper>
+
+## Casting Between Types
+
+Reference conversion不复制对象，只改变某个引用允许观察的静态类型。Derived-to-base implicit conversion总是安全，因为derived实例包含base contract；base-to-derived explicit cast要求实际对象兼容，否则抛`InvalidCastException`。转换`null`到任意reference type仍是`null`，不会因为目标类型不同而分配对象。
+
+```csharp
+static decimal Total(IEnumerable<OrderLine> lines)
+{
+    decimal total = 0;
+    foreach (OrderLine line in lines)
+        total += line.UnitPrice * line.Quantity;
+    return total;
+}
+
+object candidate = LoadContract();
+Order? order = candidate as Order;
+if (order is null)
+    throw new ContractException($"Expected Order, got {candidate.GetType()}");
+```
+
+Numeric conversion与reference cast不是同一种机制。`(long)(object)42`会失败，因为盒中真实值是`Int32`，unbox要求精确值类型；应先`(int)`unbox再数值转换。User-defined conversion又是静态选择的方法调用，不基于对象运行时派生关系。诊断时先写出source static type、runtime type、conversion category和failure mode。
+
+<Term def="对现有对象引用进行运行时兼容检查，而不改变对象身份或复制对象的类型转换。">reference cast</Term>
+
+## Casting with the C# is and as Operators
+
+`is`执行运行时类型测试；现代pattern形式把测试和局部变量绑定成一个原子操作，避免先检查后重复cast。`as`只适用于reference/nullable conversion，失败返回`null`；因此它适合“类型不匹配是预期分支”的协议，不适合把必需contract错误静默吞成后续NullReferenceException。
+
+```csharp
+static string Render(object value) => value switch
+{
+    Money money when money.Currency == "CNY" => $"¥{money.Amount:F2}",
+    Money money => $"{money.Currency} {money.Amount:F2}",
+    DateTime timestamp => timestamp.ToString("O"),
+    null => "<null>",
+    _ => value.ToString() ?? value.GetType().FullName ?? "<unknown>",
+};
+```
+
+`is`也能处理constant、property、relational和list patterns，但pattern成功仍不意味着业务contract满足全部约束。类型测试过多通常说明多态surface不足或数据协议没有封装；另一方面，在serializer、message router和边界adapter中，显式closed set分支可能比virtual hierarchy更清楚。
+
+<Stepper>
+  <Step title="切换implicit、explicit、is与as"><CvcCastingDecisionLab /></Step>
+  <Step title="列出失败契约">对每个转换写明不兼容是compile error、exception、false还是null，并说明caller如何处理。</Step>
+  <Step title="移除偶然cast">把可由generic constraint、interface或polymorphic method表达的分支重构掉，只保留真实边界检查。</Step>
+</Stepper>
+
+<Callout type="trap" title="先用is检查，再explicit cast就永远安全">
+若共享变量可在两次操作间改变，或检查与cast针对不同表达式，仍可能失败。优先使用`value is Target target`一次完成测试与绑定。
+</Callout>
+
+## Namespaces and Assemblies
+
+Namespace组织源代码名称并减少冲突，但它不是文件夹、部署包或访问边界。一个namespace可跨多个assemblies，一个assembly也可包含多个namespaces。`internal`以assembly为边界而非namespace；using directive只影响名称解析，不加载assembly、不复制代码，也不建立版本依赖。
+
+<Term def="源代码与API名称的逻辑分组，不承担运行时部署、版本或安全身份。">namespace scope</Term>
+
+Assembly-qualified type name把namespace-qualified type、defining assembly identity结合起来。Generic constructed type还包含每个type argument的identity。Plugin/serializer/DI按字符串恢复类型时，必须定义版本与允许列表；直接信任外部assembly-qualified name会放大加载与代码执行风险。
+
+```csharp
+Type type = typeof(Dictionary<string, int>);
+Console.WriteLine(type.FullName);
+Console.WriteLine(type.Assembly.FullName);
+Console.WriteLine(type.AssemblyQualifiedName);
+
+foreach (Type argument in type.GenericTypeArguments)
+    Console.WriteLine($"arg {argument} from {argument.Assembly.GetName().Name}");
+```
+
+同名assembly文件也可能位于不同load context。Type identity不仅是字符串，还与loader建立的运行时universe相关。跨context共享contract时，应让host的contract assembly只加载一次，插件上下文返回null委托default；否则接口名相同也无法cast。
+
+<Callout type="trap" title="Namespace和类名完全相同，所以两个Type必然相等">
+Defining assembly identity、generic arguments和load context都参与运行时身份。FullName相同只是必要信息之一，不是assignment compatibility证明。
+</Callout>
+
+## How Things Relate at Run Time
+
+加载类型时，CLR根据metadata构建内部数据结构，包含base type、interfaces、fields布局、generic dictionary和method slots。每个reference object带有通向其method table/type handle的信息，GC据此识别实例大小与引用字段，virtual dispatch据此选择override。Static fields通常按closed generic type与load context拥有独立存储，不能假设进程中每个source declaration只有一份全局状态。
+
+<Term def="引用在运行期经对象真实类型的方法槽选择override实现，而非只按变量静态类型调用。">virtual dispatch path</Term>
+
+Instance field属于对象布局；static field属于运行时类型；thread-static/async-local又有不同存储owner。Type constructor在runtime决定的首次使用点执行，失败可能把类型永久置于当前context的初始化失败状态。要诊断“某类型为何行为不同”，同时画出object instance、runtime Type、defining assembly、load context和static state。
+
+Interface dispatch通常经接口map定位实现；value type通过constrained call可避免boxing。Delegate保存target与method；reflection `MethodInfo.Invoke`最终仍要解析目标、参数和调用入口。不同语法最终汇合到少数运行时结构，但每条入口的检查与开销不同。
+
+<Stepper>
+  <Step title="切换namespace、assembly、Type与instance"><CvcRuntimeIdentityLab /></Step>
+  <Step title="画运行时对象图">标出变量静态类型、对象真实类型、method table、assembly/load context、static fields和GC roots。</Step>
+  <Step title="制造身份冲突">在两个load contexts加载contract副本，打印AssemblyQualifiedName、Assembly实例和context，复现无法cast后修复共享规则。</Step>
+</Stepper>
+
+## 本章回顾：Static View不等于Runtime Reality
+
+1. 所有类型参与Object协议，但value type只有boxing后才成为带对象头的引用对象。
+2. Reference cast不复制对象；implicit、explicit、is与as分别表达不同保证和失败方式。
+3. Namespace只组织名称，assembly与load context才参与版本、部署和runtime type identity。
+4. 对象真实类型驱动GetType、virtual/interface dispatch与GC布局；变量静态类型限制编译期surface。
+5. 类型问题要同时记录static type、runtime type、defining assembly、load context和storage owner。
+
+<Exercises>
+
+**问题 1：为什么`(long)(object)42`抛异常，而`(long)42`成功？**
+
+<Answer>后者是编译器/JIT支持的Int32到Int64 numeric conversion；前者先把Int32装箱，unbox操作要求目标值类型与盒中exact type一致，不能把Int32盒直接当Int64盒。正确做法是`(long)(int)boxed`，先精确unbox再做数值转换。</Answer>
+
+**问题 2：插件对象声称实现IPlugin却无法cast，应收集什么证据？**
+
+<Answer>分别打印host与plugin看到的IPlugin Type、AssemblyQualifiedName、Assembly对象、Location和AssemblyLoadContext；再打印实例GetType。若插件私有加载了contract副本，即使FullName相同也属于不同runtime identity。让自定义context对contract返回null并共享host版本，再做版本兼容检查。</Answer>
+
+**问题 3：何时用is pattern，何时应改成virtual/interface设计？**
+
+<Answer>Serializer、协议边界、closed union或adapter需要显式识别外部类型时，pattern清楚且失败可控。若核心业务反复按可扩展子类分支，新增类型必须修改多处switch，则应把稳定操作放进interface/virtual contract。选择依据是变化owner与closed/open set，不是语法偏好。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="runtime type identity" definition="定义assembly、类型名、泛型实参与load context共同确定的身份。" />
+  <GlossaryItem term="object header contract" definition="引用对象支持类型分派、GC和同步的运行时头部关系。" />
+  <GlossaryItem term="reference cast" definition="检查引用兼容性而不复制或改变对象身份的转换。" />
+  <GlossaryItem term="namespace scope" definition="仅用于名称组织的逻辑范围。" />
+  <GlossaryItem term="virtual dispatch path" definition="按对象真实类型和virtual slot选择override的调用路径。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 4: Type Fundamentals" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

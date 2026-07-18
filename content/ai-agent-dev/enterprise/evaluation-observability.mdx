@@ -2,13 +2,232 @@
 title: 评估与可观测性
 type: D
 section: 企业级应用
-order: 1
-description: 读完能说清为什么 Agent 上线后必须能"看见"和"度量"，掌握 trace/span 可观测、LLM-as-judge 与离线 eval 等评估方法的取舍，并理解改动后怎么用回归测试确认没变差。
+order: 11
+description: >-
+  读完能说清为什么 Agent 上线后必须能"看见"和"度量"，掌握 trace/span 可观测、LLM-as-judge 与离线 eval
+  等评估方法的取舍，并理解改动后怎么用回归测试确认没变差。
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
 draft: false
 ---
+
+import {
+  OfficialAiAgentDevEvaluationObservabilityMapLab,
+  OfficialAiAgentDevEvaluationObservabilityExperimentLab,
+  OfficialAiAgentDevEvaluationObservabilityEvidenceLab,
+} from "@/components/mdx/ai-agent-dev/diagrams/evaluation-observability";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+{/* OFFICIAL_COURSE_ENHANCEMENT */}
+
+<Objectives>
+
+- 能解释评估与可观测性的输入、核心结构、状态变化和输出合同
+- 能绘制并修改评估与可观测性的最小模型，比较至少一种替代方案
+- 能复现正常、边界和单故障样本，定位第一条证据分叉
+- 能根据成本与风险判断方案适用范围，并完成清理重建
+
+</Objectives>
+
+## 为什么只记结论不足以掌握评估与可观测性
+
+学习“评估与可观测性”时，第一步不是记住结论，而是冻结输入、上下文、版本和成功标准。只有这些条件明确，评估与可观测性的含义才不会随着样例变化。正文已有的概念说明要与结构图、运行轨迹和失败样本互相印证，不能只凭最终输出看似正确就宣布完成。
+
+结构分析从小特上岗了，可你看不见它在干什么开始：列出参与者、职责、连接方向、生命周期和所有权，再沿正常路径追踪数据或控制流。每一条边都要说明为什么存在、谁创建、谁消费、谁负责清理；如果边界被跨越，必须能在证据中找到第一处异常。
+
+机制验证要把为什么 Agent 上线后必须能「看见」和「量得出」写成可以执行的条件。正常样本证明主路径，恰好边界样本验证等号和空值，单故障样本只破坏一个假设。三类样本使用同一份观察指标，避免因为测试口径变化而把偶然结果误认成规律。
+
+成本分析同时记录时间、空间、延迟、耦合、可维护性和不可逆操作。trace 与 span：把一次运行的每一步都记下来不是一句“可能失败”，而是可复现输入、预期停点、实际轨迹、错误分类与清理步骤。任何自动重试都要有次数、预算和幂等边界。
+
+方案比较不能只列优点。需要给出直接实现、当前方案和至少一个替代方案，逐项比较复杂度、扩展点、故障隔离和团队认知成本。当问题规模很小或变化轴稳定时，更简单的实现往往更好；模式与框架必须由真实变化压力证明。
+
+实现阶段把大结论拆成可检查的中间产物：配置快照、结构清单、状态转移、输入输出样本、日志摘要和测试结果。每个产物带来源与生成命令，下一阶段只消费已通过门禁的版本，避免旧缓存或隐式默认值污染结论。
+
+解释结果时必须区分相关性与因果性、接口承诺与实现细节、设计意图与运行事实。对“三种评估方法：怎么判断 Agent 答得好不好（对比取舍）”的判断要由独立证据支持，并明确适用范围；一旦输入分布、版本、硬件或组织边界改变，就重新运行最小实验。
+
+复盘从首个分叉开始，而不是从最后一个报错倒推。先比较冻结输入，再比较第一份结构化中间产物，随后检查状态、约束和副作用。这样可以把复杂系统的排错范围收缩到一个阶段，避免在多个层次同时修改造成新的不确定性。
+
+迁移到真实项目时，先选择一个最小但有代表性的切片，保存改造前基线，再逐步引入“评估与可观测性”中的机制。每一步只改变一个变量并保留回滚点；性能、正确性、安全性和可理解性至少各有一项可量化指标。
+
+最终验收要求读者能脱离页面重新画出结构、口述关键链路、实现最小版本、构造一个反例并解释失败位置。若只能复述名词而不能预测中间状态，说明知识仍停留在识记层，需要回到图示和实验重新验证。
+
+本页用<Term def="评估与可观测性连接评估与可观测性的机制、边界与可复查证据。">评估与可观测性</Term>、
+
+<Term def="小特上岗了，可你看不见它在干什么连接评估与可观测性的机制、边界与可复查证据。">
+  小特上岗了，可你看不见它在干什么
+</Term>
+、
+<Term def="为什么 Agent 上线后必须能「看见」和「量得出」连接评估与可观测性的机制、边界与可复查证据。">
+  为什么 Agent 上线后必须能「看见」和「量得出」
+</Term>
+、
+<Term def="trace 与 span：把一次运行的每一步都记下来连接评估与可观测性的机制、边界与可复查证据。">
+  trace 与 span：把一次运行的每一步都记下来
+</Term>
+、
+<Term def="三种评估方法：怎么判断 Agent 答得好不好（对比取舍）连接评估与可观测性的机制、边界与可复查证据。">
+  三种评估方法：怎么判断 Agent 答得好不好（对比取舍）
+</Term>
+建立统一坐标。先预测这些概念在结构图和运行轨迹中的位置，再操作实验控件；如果结果与预测不一致，停止在首个分叉，不要用后续补丁掩盖早期错误。
+
+## 权威目录与核心概念逐项对照
+
+- 评估与可观测性
+- 小特上岗了，可你看不见它在干什么
+- 为什么 Agent 上线后必须能「看见」和「量得出」
+- trace 与 span：把一次运行的每一步都记下来
+- 三种评估方法：怎么判断 Agent 答得好不好（对比取舍）
+- 回归与监控：改完一版，怎么确认没把别的地方改坏
+- 动手玩：当一回裁判，再当一回回归探长
+- 动手一：答得准，就一定得高分吗
+
+## 三视图实验：结构、变量与证据
+
+<Stepper>
+  <Step title="第一步：冻结结构并先预测">
+    先预测参与者、连接方向与关键状态，再点击结构节点核对。
+    <OfficialAiAgentDevEvaluationObservabilityMapLab />
+  </Step>
+  <Step title="第二步：只改变一个变量">
+    保持其他条件不变，移动覆盖率或风险滑块，观察门禁变化。
+    <OfficialAiAgentDevEvaluationObservabilityExperimentLab />
+  </Step>
+  <Step title="第三步：注入单故障并保存证据">
+    注入一个边界故障，记录第一处偏离、拒绝原因和恢复条件。
+    <OfficialAiAgentDevEvaluationObservabilityEvidenceLab />
+  </Step>
+</Stepper>
+
+<Callout type="trap">
+  <strong>误区：</strong>
+  看到最终结果正确就认为机制正确。中间状态可能已经偏离，只是被后续默认值或重试偶然修补。应保存首个结构化产物并逐阶段比较。
+</Callout>
+
+<Callout type="trap">
+  <strong>误区：</strong>
+  为了使用模式或框架而制造抽象。若变化轴、失败边界和替代方案没有写清，新增层次只会扩大认知成本和故障面。
+</Callout>
+
+## 可复现的最小实现
+
+先把决策记录写成机器可读结构：
+
+```json
+{
+  "unit": "评估与可观测性",
+  "inputFrozen": true,
+  "scenario": "normal | boundary | single-fault",
+  "firstDivergence": null,
+  "cleanupRequired": true
+}
+```
+
+再用同一条执行链处理三类样本：
+
+```ts
+type Evidence = { stage: string; expected: string; actual: string };
+
+function verify(sample: unknown, expected: readonly Evidence[]) {
+  const trace = runFromCleanState(sample);
+  return expected.find((item, index) => trace[index]?.actual !== item.expected);
+}
+```
+
+最后保存回归门禁，禁止失败样本静默通过：
+
+```text
+normal      -> complete, invariant preserved
+boundary    -> complete or explicit rejection
+singleFault -> stop at first divergence, no stale output
+```
+
+用统一评分解释实验结果：
+
+$$
+Q = C_{correct} + C_{trace} + C_{recover} - R_{residual}
+$$
+
+$$
+C_{coverage} = \frac{N_{verified}}{N_{official}}
+$$
+
+$$
+R_{residual} = P(failure) \times I(impact)
+$$
+
+$$
+Accept = (C_{coverage} \ge 0.90) \land (R_{residual} \le R_{budget})
+$$
+
+## 本章回顾
+
+- 评估与可观测性必须绑定冻结输入和明确成功标准。
+- 小特上岗了，可你看不见它在干什么必须能画成结构并沿边追踪责任。
+- 为什么 Agent 上线后必须能「看见」和「量得出」要由正常、边界和单故障样本共同验证。
+- trace 与 span：把一次运行的每一步都记下来必须保存第一处偏离和清理重建步骤。
+- 三种评估方法：怎么判断 Agent 答得好不好（对比取舍）决定方案是否可以进入下一阶段。
+
+<Exercises>
+
+**问题 1**：为“评估与可观测性”写出最小输入合同，并指出一个不能省略的边界条件。
+
+<Answer>
+  输入合同至少包含样本身份、版本、配置、成功标准和清理方式；边界条件必须能改变结构或状态，而不是只换一段描述。
+</Answer>
+
+**问题 2**：构造一个只破坏“为什么 Agent 上线后必须能「看见」和「量得出」”的单故障样本，第一条预期证据是什么？
+
+<Answer>
+  先冻结正常轨迹，只改变该条件；第一条证据应是最早依赖它的结构化中间产物，而不是最终错误消息。
+</Answer>
+
+**问题 3**：什么情况下不应采用本页方案？
+
+<Answer>
+  当变化轴稳定、直接实现更清晰、额外层次无法降低风险或提供独立测试边界时，应选择更简单方案并记录重新评估触发条件。
+</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="评估与可观测性">
+    评估与可观测性用于描述“评估与可观测性”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  </GlossaryItem>
+  <GlossaryItem term="小特上岗了，可你看不见它在干什么">
+    小特上岗了，可你看不见它在干什么用于描述“评估与可观测性”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  </GlossaryItem>
+  <GlossaryItem term="为什么 Agent 上线后必须能「看见」和「量得出」">
+    为什么 Agent
+    上线后必须能「看见」和「量得出」用于描述“评估与可观测性”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  </GlossaryItem>
+  <GlossaryItem term="trace 与 span：把一次运行的每一步都记下来">
+    trace 与
+    span：把一次运行的每一步都记下来用于描述“评估与可观测性”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  </GlossaryItem>
+  <GlossaryItem term="三种评估方法：怎么判断 Agent 答得好不好（对比取舍）">
+    三种评估方法：怎么判断 Agent
+    答得好不好（对比取舍）用于描述“评估与可观测性”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="站内工程专题《AI Agent 开发实战》，依据Anthropic《Building effective agents》及生产评估资料，2026-07-18核定 · 独立教学重构"
+  adaptedUrl="https://www.anthropic.com/engineering/building-effective-agents"
+/>
 
 {/* D 对比型·企业级应用篇第 1 章（篇5「企业级应用」开篇）：小特要上岗给真实用户干活了——前面几篇把它的脑子、机制、知识、协作都讲了，这一篇讲「落地到生产」最先要解决的两件事：能不能「看见」它每一步干了啥（可观测），能不能「度量」它干得好不好（评估）。重心在概念讲解(§3)四概念 + 三 viz + 方案对比（§3.3 三种评估法取舍 + §6 代码 + §7 选错坑）。数学整节删(math:false)。知识点清单：① 为什么要评估 + 可观测（Agent 是黑盒、非确定性，上线后不知道答得好不好/错在哪步/为什么慢贵，盲飞）= 概念讲解(§3.1) + Glossary；② trace / span 可观测（一次运行串成一条 trace，每步是一个 span 带名字/耗时/io，回放定位慢在哪贵在哪）= <TraceTimelineDiagram /> anime 逐 span 点亮旗舰图 + 代码 §6a + Glossary；③ 评估方法对比（LLM-as-judge vs 离线 eval vs 关键指标，各有取舍）= <LLMJudgeDemo />(裁判多维打分) + <EvalRegressionDemo />(离线eval逐题) + 代码 §6b + Glossary；④ 回归与监控（改动后跑离线 eval 看有没有变差=回归，上线后持续监控成功率/延迟/成本）= <EvalRegressionDemo />(前后对比突出回归) + Glossary。主隐喻：小特上岗，你得能看见它每一步、能打分判断好坏、出错能回放定位、改动后能确认没变差。 */}
 

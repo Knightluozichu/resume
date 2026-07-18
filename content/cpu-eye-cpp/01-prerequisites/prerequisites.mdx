@@ -1,0 +1,239 @@
+---
+title: "第1章：预备知识"
+type: A
+section: CPU眼里的C/C++ · 官方第1章
+order: 1
+description: 对齐原书第1章 1.1-1.3：使用 Compiler Explorer 建立源码—汇编—机器码证据链，追踪可执行文件的虚拟内存加载，并用寄存器和间接寻址读懂简单函数。
+demo: false
+math: false
+sourceUrl: "https://www.tup.com.cn/booksCenter/bookcatalog?id=09954301"
+draft: false
+---
+
+import {
+  CpuEyeCompilerExplorerFlowMap,
+  CpuEyeExecutableLoadMemoryMap,
+  CpuEyeStackInstructionAnatomyMap,
+} from "@/components/mdx/cpu-eye-cpp/diagrams/prerequisites";
+
+<Objectives>
+
+- 能复现 Compiler Explorer 实验并对齐 C/C++ source、assembly、machine code 和 runtime output
+- 能绘制 CPU眼里的程序运行路径，解释 executable、virtual memory、code/data/BSS、heap/stack 与 thread context
+- 能分析 CPU眼里的汇编语言中 `rax/rip/rbp/rsp`、push/pop 和 register-indirect addressing 的状态变化
+
+</Objectives>
+
+## 从“CPU 不执行 C++ 源码”开始
+
+CPU 取指、译码、执行的是 machine instructions。C/C++ source 表达程序员意图，compiler 把它转换为特定 ISA 的 instructions，再由 linker 组织成 executable image；operating system loader 建立进程地址空间和线程上下文，CPU 才获得第一条可执行指令地址。
+
+<Term def="CPU 可直接取指和执行的二进制编码；assembly mnemonic 是其可读表示。">
+  CPU 指令
+</Term>
+
+先预测 `return 0;` 在目标平台会修改哪个 return-value register，再让工具给出 evidence；不要把某次 x86-64 输出误写成所有 ABI 的语言规则。
+
+## 1.1 工具介绍：Compiler Explorer
+
+Compiler Explorer 把 source line 与 generated assembly 用颜色关联，可切换 compiler/version、optimization flags、target architecture，并查看 binary bytes 或直接运行程序。
+
+<Term def="在线编译与源码—汇编关联工具，用于比较 compiler、version、flags 和 target 对 code generation 的影响。">
+  Compiler Explorer
+</Term>
+
+```cpp
+int add(int left, int right) {
+    return left + right;
+}
+```
+
+同一函数至少比较 `-O0` 与 `-O2`：前者便于看 stack frame 和局部变量，后者展示 register allocation、dead-code elimination 与 inline 后的真实 optimized path。
+
+<CpuEyeCompilerExplorerFlowMap />
+
+## 工具输出不是语言规范
+
+<Term def="函数参数、返回值、callee-saved registers 与 stack alignment 在特定平台上的二进制调用约定。">
+  ABI calling convention
+</Term>
+
+x86-64 SysV 常用 `eax/rax` 放整数 return value，但 Windows x64、ARM64 和不同类型有各自规则。实验记录必须包含 compiler、version、target、flags 和 source；否则 assembly screenshot 无法复现。
+
+<Callout type="trap" title="陷阱：看到一段汇编就能证明 C++ 标准要求这样实现">
+  汇编只证明一个 implementation/ABI/optimization configuration。语言层结论要区分
+  standard semantics 与当前 code generation evidence。
+</Callout>
+
+## 1.2 可执行文件保存了什么
+
+compiler/linker 把 instructions、initialized data、symbols/relocations 与 metadata 组织到 executable。source 中硬编码的 plaintext secret 很可能直接出现在 binary data 中，删除 variable name 或 debug info 不会自动隐藏 value。
+
+<Term def="包含可加载代码、数据和映射元数据，由 operating system 创建进程映像的二进制文件。">
+  executable image
+</Term>
+
+```cpp
+const char* password = "do-not-embed-secrets";
+```
+
+可用 `strings`/hex viewer 验证 binary 是否含 literal。真正 secret 应来自受控 runtime configuration/credential service，而不是依赖编译隐藏。
+
+## loader 建立虚拟地址空间
+
+现代 OS 不要求把整个 executable 连续复制到一块 physical memory。loader 按 segment permissions 把 file-backed pages 映射进 process virtual address space；MMU/page tables 在访问时把 virtual addresses 转换到 physical frames。
+
+<Term def="每个进程看到的连续地址抽象，由 page tables/MMU 映射到 physical memory 或 backing storage。">
+  虚拟内存
+</Term>
+
+<Term def="按 executable metadata 创建 virtual mappings、初始化 process/thread state 并转交入口点的系统组件。">
+  program loader
+</Term>
+
+<CpuEyeExecutableLoadMemoryMap />
+
+## code、data、BSS、heap 与 stack
+
+functions 通常位于 executable code/text mapping；initialized globals 位于 data；zero/uninitialized globals 用 BSS 描述，文件不必存一大段零。heap 与 stack 是 runtime 可增长区域，局部变量、global、dynamic allocation 和 function address 因而相距很远。
+
+<Term def="executable 中记录零初始化 static storage 大小、load 时由系统提供零页而无需保存全部零字节的区域。">
+  BSS
+</Term>
+
+```cpp
+int globalValue;
+
+int main() {
+    int localValue = 1;
+    auto* heapValue = new int(2);
+    delete heapValue;
+}
+```
+
+地址实验只展示一次 process layout；ASLR 会改变绝对地址。应比较 region 和 mapping permissions，而不是背固定数值。
+
+## 从 thread context 开始执行
+
+OS scheduler 保存/恢复 thread context。x86-64 的 `rip` 指向下一条 instruction，`rsp` 指向当前 stack top；当 context 被恢复，CPU 从 `rip` 所在 virtual address fetch。
+
+<Term def="使线程暂停后可恢复的 registers、instruction pointer、stack pointer 与系统调度状态集合。">
+  线程上下文
+</Term>
+
+书中用 main 首地址解释入口很直观，但真实 native process 常先进入 runtime startup code，由它准备 arguments/runtime，再调用 main。教学模型与真实入口层次要区分。
+
+## 1.3 汇编阅读：先追踪状态
+
+不需要背完整 ISA。先把 instruction 翻译成“读哪个 register/memory、写哪个位置、哪些 flags 改变”。`mov` 搬运，`add` 做 read-modify-write，brackets 表示 dereference effective address。
+
+<Term def="由 base register、index、scale 与 displacement 计算地址，再读写该地址内容的访问方式。">
+  register-indirect addressing
+</Term>
+
+`QWORD PTR [rbp-8]` 可读作：以 `rbp-8` 为 address，访问 8-byte object。它对应高级语言中基址加偏移后的 dereference，而不是“变量天生住在 rbp”。
+
+<CpuEyeStackInstructionAnatomyMap />
+
+## push/pop 与 stack frame
+
+在典型未优化 frame-pointer code 中，`push rbp` 保存 caller frame base 并移动 rsp，`mov rbp,rsp` 建立 current frame anchor；epilogue 恢复 rbp/rsp 并返回。
+
+<Term def="一次 function invocation 在 stack 上用于 return address、saved registers、locals 与 spill slots 的逻辑区域。">
+  stack frame
+</Term>
+
+<Callout type="trap" title="陷阱：每个函数都必然出现 push rbp 和 mov rbp,rsp">
+  optimization 可省略 frame pointer、inline 整个函数或把 locals 放
+  registers。该序列是理解 frame 的常见样本，不是每个 build 的固定模板。
+</Callout>
+
+## 为什么简单加法仍有大量 memory traffic
+
+`-O0` 为可调试性把 locals 频繁 spill 到 stack，一次 `a += 2` 可能包含多次 loads/stores；`-O2` 可把 a 保留 register，甚至 constant-fold。CPU 视角的重要洞察是 data movement 常比 arithmetic 更支配成本，但必须在 optimized representative code 上测量。
+
+<Term def="register 不足、debug-friendly code 或 calling convention 使 temporary/local 被写入 stack memory 的行为。">
+  register spill
+</Term>
+
+## 最小实验协议
+
+1. 固定 source、compiler version、target ABI 与 flags。
+2. 先预测 return register、memory regions 和 frame changes。
+3. 对比 `-O0/-O2`，标出被删除、合并、inline 的 operations。
+4. 用 binary/`strings` 检查 instructions 与 literals。
+5. 用 debugger/maps 验证 addresses 所属 region，不背绝对地址。
+6. 每条结论注明“language guarantee”或“implementation evidence”。
+
+<Term def="记录配置、预测、assembly/binary/runtime evidence 与结论适用边界的可复现实验模板。">
+  CPU 视角证据链
+</Term>
+
+## 小结
+
+- Compiler Explorer 用 source-linked assembly 比较 compiler/version/flags，但输出不是语言规范
+- executable 保存 loadable instructions/data；hard-coded secret 可直接暴露在 binary
+- loader 建立 process virtual memory，code/data/BSS/heap/stack 具有不同来源与 lifetime
+- virtual address 空白不等于等量 physical memory 已占用，MMU/page tables 按需映射
+- thread context 的 instruction pointer/stack pointer 让 scheduler 恢复执行
+- 汇编先追踪 register/memory 状态；brackets 表示 indirect addressing
+- push/pop frame 是常见未优化模型，优化可省略 frame、spill 或整个 call
+- 所有实验同时保留 configuration 与 language/implementation 边界
+
+<Attribution
+  adaptedFrom="CPU眼里的C/C++，第1章 预备知识"
+  adaptedUrl="https://www.tup.com.cn/booksCenter/bookcatalog?id=09954301"
+/>
+
+<Glossary>
+  <GlossaryItem term="CPU 指令">处理器直接执行的机器编码。</GlossaryItem>
+  <GlossaryItem term="Compiler Explorer">
+    源码与生成代码关联实验工具。
+  </GlossaryItem>
+  <GlossaryItem term="ABI calling convention">
+    平台二进制调用约定。
+  </GlossaryItem>
+  <GlossaryItem term="executable image">
+    可被 loader 映射的代码数据映像。
+  </GlossaryItem>
+  <GlossaryItem term="虚拟内存">进程地址到物理资源的映射抽象。</GlossaryItem>
+  <GlossaryItem term="program loader">
+    建立进程映像与初始上下文的组件。
+  </GlossaryItem>
+  <GlossaryItem term="BSS">零初始化 static storage 描述区域。</GlossaryItem>
+  <GlossaryItem term="线程上下文">
+    恢复线程所需的寄存器与调度状态。
+  </GlossaryItem>
+  <GlossaryItem term="register-indirect addressing">
+    寄存器计算地址后的间接访问。
+  </GlossaryItem>
+  <GlossaryItem term="stack frame">一次函数调用的栈上逻辑区域。</GlossaryItem>
+  <GlossaryItem term="register spill">值从寄存器暂存到栈内存。</GlossaryItem>
+  <GlossaryItem term="CPU 视角证据链">
+    配置预测和多层输出组成的实验记录。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：用 Compiler Explorer 比较 add 函数的 O0/O2。** 记录哪些结论是 ABI evidence，哪些是 C++ semantics。
+
+<Answer question="怎样避免从一次汇编过度推论？">
+  固定 compiler/version/target/flags；先确认函数返回值语义属于
+  C++，rax/eax、frame shape 与具体 instructions 属于 ABI/implementation。O0 可能
+  stack spill，O2 可 register-only/inline。至少换一个 compiler 或 target
+  反证固定 instruction 假设。
+</Answer>
+
+2. **问题 2：global、local、new object 与 function address 为什么相距很远？** 绘制 load/runtime 路径。
+
+<Answer question="四类地址分别来自哪里？">
+  function 映射到 executable code；global 位于 data/BSS；new object 来自 runtime
+  heap allocator；local 位于当前 stack frame 或被优化进 register。它们属于不同
+  virtual mappings，ASLR 改变绝对地址；MMU 再把访问 pages 映射到 physical
+  frames，因此巨大虚拟空白不代表物理内存浪费。
+</Answer>
+
+3. **问题 3：解释 `add QWORD PTR [rbp-8],2`。** 写出状态变化并说明优化后为何可能消失。
+
+  <Answer question="这条 instruction 做了哪些微操作？">effective address 为 rbp-8；读取 8-byte value，加 2，再写回同一地址，是 atomicity 未承诺的 memory read-modify-write。O0 常把 local 放 frame 便于调试；O2 可把值留 register、constant-fold 或 inline 后消除 storage，因此 instruction 不是源语言固定翻译。</Answer>
+</Exercises>

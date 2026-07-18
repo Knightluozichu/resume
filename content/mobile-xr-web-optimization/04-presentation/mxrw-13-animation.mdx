@@ -1,0 +1,282 @@
+---
+title: "动画：骨骼、可见性、绑定与层级成本"
+type: C
+section: "UI、音频与动画"
+order: 3
+description: "按 Unity 6 官方指南第 76—78 页复现骨骼、可见性、绑定与层级成本。"
+demo: true
+math: false
+draft: false
+sourceUrl: "https://unity.com/resources/mobile-xr-web-game-performance-optimization-unity-6"
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Mxrw13AnimationMapLab,
+  Mxrw13AnimationExperimentLab,
+  Mxrw13AnimationEvidenceLab,
+} from "@/components/mdx/mobile-xr-web-optimization/diagrams/mxrw-13-animation";
+
+<Objectives>
+
+- 能解释官方单元 13在Unity 6官方跨平台优化流程中的责任与前后依赖
+- 能复现“Rig选择 → 曲线绑定 → 可见性 → 层级约束 → 多角色基准 → 动画回归”并保存目标设备中间证据
+- 能设计失败实验，判断“角色动画外观、根运动和事件时序保持一致，不可见对象按设计停更，绑定和层级成本随角色数受控。”是否成立
+
+</Objectives>
+
+## 问题：怎样证明掌握的是官方单元 13，而不是背下一组技巧？
+
+先预测：若只报告修改后FPS，没有设备、构建、场景、输入、热状态和画面合同，另一位开发者能否证明收益来自这次修改？不能。跨平台优化首先是受控实验，其次才是技巧选择。
+
+动画优化从Rig类型、可见更新、曲线与绑定开始。Generic通常比Humanoid轻，简单运动可不用Animator；深层约束和Rigging要按目标角色数量测量。
+
+<Mxrw13AnimationMapLab />
+
+## 官方目录边界
+
+本页严格对应Unity Technologies《Optimize your game performance for mobile, XR, and the web in Unity》Unity 6版第76—78页。以下目录项必须进入实现或证据：
+
+- **Use generic rather than humanoid rigs**
+- **Use alternatives for simple animation**
+- **Avoid scale curves**
+- **Update only when visible**
+- **Optimize workflow**
+- **Separate animating hierarchies**
+- **Minimize binding costs**
+- **Avoid using component-based constraints on deep hierarchies**
+- **Consider performance implications of animation rigging**
+
+本站重新组织中文讲解、代码和实验，不逐字复制原文。平台API和包能力随Unity与设备版本变化，实际项目要固定版本并保存迁移差异。
+
+## 核心模型与不可变条件
+
+动画优化从Rig类型、可见更新、曲线与绑定开始。Generic通常比Humanoid轻，简单运动可不用Animator；深层约束和Rigging要按目标角色数量测量。
+
+不可变条件是：**角色动画外观、根运动和事件时序保持一致，不可见对象按设计停更，绑定和层级成本随角色数受控。** 如果测试上下文、视觉或玩法结果发生变化，就不能把两次数字直接相减。先解释变化，再决定是否建立新基线。
+
+## 五个必须落到证据的术语
+
+<Term def="不使用Humanoid重定向映射的通用骨骼动画类型">Generic Rig</Term>
+
+它必须落到“Rig选择 → 曲线绑定 → 可见性 → 层级约束 → 多角色基准 → 动画回归”的证据链，不能只作为术语记忆。
+
+<Term def="通过Avatar实现人形重定向的动画类型">Humanoid Rig</Term>
+
+它必须落到“Rig选择 → 曲线绑定 → 可见性 → 层级约束 → 多角色基准 → 动画回归”的证据链，不能只作为术语记忆。
+
+<Term def="将动画曲线解析并写入对象属性的运行时工作">绑定成本</Term>
+
+它必须落到“Rig选择 → 曲线绑定 → 可见性 → 层级约束 → 多角色基准 → 动画回归”的证据链，不能只作为术语记忆。
+
+<Term def="控制Animator在不可见时是否更新和应用变换的设置">Culling Mode</Term>
+
+它必须落到“Rig选择 → 曲线绑定 → 可见性 → 层级约束 → 多角色基准 → 动画回归”的证据链，不能只作为术语记忆。
+
+<Term def="用约束Job扩展角色姿态控制的Unity包与工作流">Animation Rigging</Term>
+
+它必须落到“Rig选择 → 曲线绑定 → 可见性 → 层级约束 → 多角色基准 → 动画回归”的证据链，不能只作为术语记忆。
+
+## 从输入到发布的证据链
+
+主链为：**Rig选择 → 曲线绑定 → 可见性 → 层级约束 → 多角色基准 → 动画回归**。每个节点保存平台、设备、浏览器或运行时、Unity与包版本、构建提交、场景检查点、预算、实际值和首个异常。后一节点只消费前一节点已验证事实。
+
+### 1. Rig类型
+
+无需人形重定向时优先Generic，Humanoid用于确有跨骨架复用需要的角色，并比较CPU与内存。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 2. 简单动画
+
+少量旋转、浮动或颜色变化可由轻量脚本或Shader完成，避免为单属性创建复杂状态机。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 3. Scale曲线
+
+缩放动画会扩大变换与物理风险，能用其他视觉手段时避免；必须使用则验证层级传播。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 4. 可见更新
+
+选择合适Culling Mode，离屏角色仍需玩法逻辑时把逻辑与骨骼呈现分离。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 5. 层级
+
+把动画层级与不需要动画的对象分离，减少变换传播和绑定对象数量。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 6. 约束
+
+深层component约束和Animation Rigging增加Job与同步成本，只为可见或关键角色启用。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 7. 规模测试
+
+单角色正常不代表群体可扩展；按目标同屏数量测Animator、Skinning、Jobs和GPU顶点成本。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+<Mxrw13AnimationExperimentLab />
+
+## 三步复现与分步观察
+
+<Stepper>
+  <Step title="1. 冻结平台合同与输入">
+    固定设备或浏览器、构建、场景、画质、预热、输入和结果合同，写出唯一假设及反证条件。
+    <Mxrw13AnimationMapLab />
+  </Step>
+  <Step title="2. 找首因并只改一个变量">
+    沿“Rig选择 → 曲线绑定 → 可见性 → 层级约束 → 多角色基准 →
+    动画回归”保存中间值，在首个越界点停止下钻；一次只修改一个主要因素。
+    <Mxrw13AnimationExperimentLab />
+  </Step>
+  <Step title="3. 同输入复验并签发">
+    恢复相同热状态和检查点，重放基线输入，同时检查性能、内存、画面、玩法与维护副作用。
+    <Mxrw13AnimationEvidenceLab />
+  </Step>
+</Stepper>
+
+## 可执行实现骨架
+
+```csharp
+void ConfigureAnimator(Animator animator, bool gameplayCritical)
+{
+    animator.cullingMode = gameplayCritical
+        ? AnimatorCullingMode.AlwaysAnimate
+        : AnimatorCullingMode.CullCompletely;
+}
+
+// Keep gameplay state outside culled presentation-only animators.
+```
+
+每份采集都保存结构化上下文，报告与原始文件必须通过ID互相引用：
+
+```json
+{
+  "chapter": "mxrw-13-animation",
+  "officialPages": "第76—78页",
+  "chain": [
+    "Rig选择",
+    "曲线绑定",
+    "可见性",
+    "层级约束",
+    "多角色基准",
+    "动画回归"
+  ],
+  "platform": "mobile-web-or-xr",
+  "device": "representative-target",
+  "build": "commit-unity-packages",
+  "scenario": "fixed-checkpoint",
+  "normal": true,
+  "boundary": true,
+  "failureReplay": true
+}
+```
+
+自动门必须保留数值、结果合同和拒绝原因：
+
+```text
+PASS context=platform+device+build+scene+quality+input
+PASS chain=Rig选择 -> 曲线绑定 -> 可见性 -> 层级约束 -> 多角色基准 -> 动画回归
+PASS invariant=角色动画外观、根运动和事件时序保持一致，不可见对象按设计停更，绑定和层级成本随角色数受控。
+REJECT changed-context | hidden-quality-loss | shifted-cost | missing-failure-replay
+```
+
+## 两个必须主动制造的失败样本
+
+<Callout type="trap" title="官方边界或测试上下文丢失">
+  为一个只旋转的道具使用完整Humanoid
+  Animator与深层约束，场景对象增加后主线程动画成本线性爆炸。
+  保存错误结论、首个偏离节点和原始数据，再恢复官方边界与相同条件复验。
+</Callout>
+
+<Callout type="trap" title="数字变好但结果或维护成本恶化">
+  故意降低画质、跳过玩法工作、扩大永久缓存或增加难以维护的平台分支。若主指标改善但视觉、行为、内存、热量或发布可靠性变差，发布门必须拒绝。
+</Callout>
+
+## 证据矩阵与签发标准
+
+| 维度       | 正常样本         | 边界样本           | 失败样本         | 签发条件       |
+| ---------- | ---------------- | ------------------ | ---------------- | -------------- |
+| 平台上下文 | 代表设备固定构建 | 最低规格或长时运行 | 故意改变一项条件 | 差异可解释     |
+| 主证据链   | 六节点均记录     | 接近预算输入       | 首个节点注入偏差 | 能定位首因     |
+| 性能结果   | 达到预算         | 无长尾越界         | 主动制造回归     | 同输入可复验   |
+| 正确性     | 视觉玩法一致     | 生命周期完整       | 降质或转移成本   | 所有门同时通过 |
+
+<Mxrw13AnimationEvidenceLab />
+
+## 练习：把官方单元 13变成可审计交付
+
+<Exercises>
+
+**问题 1** 写出“Rig选择”到“动画回归”每一步的输入、观测工具、阈值和输出。
+
+<Answer>
+  每一步都引用同一测试上下文，输出包含数值、原始文件与下一动作理由，不能只写工具或设置名称。
+</Answer>
+
+**问题 2** 主动制造“为一个只旋转的道具使用完整Humanoid Animator与深层约束，场景对象增加后主线程动画成本线性爆炸。”，保存错误结论与首个偏离节点，再用同一输入证明修复。
+
+<Answer>
+  合格答案包含故障上下文、反证实验、修复后原始数据，以及性能和正确性双重结果。
+</Answer>
+
+**问题 3** 为“角色动画外观、根运动和事件时序保持一致，不可见对象按设计停更，绑定和层级成本随角色数受控。”设计正常、预算边界和失败三组测试。
+
+<Answer>
+  三组测试只改变计划输入，统一记录平台、构建、设备、帧或快照ID、预算、实际值、首个异常和复验状态。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- 是否逐项覆盖本页官方目录，而没有用通用建议替代？
+- 是否沿“Rig选择 → 曲线绑定 → 可见性 → 层级约束 → 多角色基准 → 动画回归”保存可追溯中间证据？
+- 是否在真实移动、浏览器或XR目标中验证，而非只看Editor？
+- 是否主动制造失败，并证明优化没有转移成本或破坏结果？
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="Generic Rig">
+    不使用Humanoid重定向映射的通用骨骼动画类型。
+  </GlossaryItem>
+  <GlossaryItem term="Humanoid Rig">
+    通过Avatar实现人形重定向的动画类型。
+  </GlossaryItem>
+  <GlossaryItem term="绑定成本">
+    将动画曲线解析并写入对象属性的运行时工作。
+  </GlossaryItem>
+  <GlossaryItem term="Culling Mode">
+    控制Animator在不可见时是否更新和应用变换的设置。
+  </GlossaryItem>
+  <GlossaryItem term="Animation Rigging">
+    用约束Job扩展角色姿态控制的Unity包与工作流。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Unity Technologies《Optimize your game performance for mobile, XR, and the web in Unity》(Unity 6 edition)，2024，101页"
+  adaptedUrl="https://unity.com/resources/mobile-xr-web-game-performance-optimization-unity-6"
+/>

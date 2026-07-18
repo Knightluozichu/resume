@@ -1,36 +1,47 @@
 import type { ReviewQuestion } from "./types";
-
-export const sxxFinalReviewQuestions: ReviewQuestion[] = [
+export const sxxFinalReviewQuestions: ReviewQuestion[]=[
   {
-    id: "sxx-final-review-1",
-    chapter: "sxx-final-review",
-    level: 1,
-    question: `ShaderX 全书三大知识层次是什么？它们之间的依赖关系如何？`,
-    answer: `基础层（顶点/像素着色器、光照模型）→ 技术层（阴影、后处理、环境渲染）→ 高级层（程序化纹理、性能优化）。依赖关系是递进的：基础层的着色器编程能力是技术层的工具（阴影需要顶点投影、后处理需要像素采样），技术层的经验是高级层优化的前提（性能优化需要理解阴影和后处理实现才能找到瓶颈）。`,
-    tags: ["知识体系", "层次依赖"],
+    "id": "sxx-official-final-review-1",
+    "chapter": "sxx-official-final-review",
+    "level": 1,
+    "question": "ShaderX全系列总验收的四个门禁是什么？",
+    "answer": "身份、覆盖、教学和运行证据。",
+    "tags": [
+      "总验收",
+      "门禁"
+    ]
   },
   {
-    id: "sxx-final-review-2",
-    chapter: "sxx-final-review",
-    level: 2,
-    question: `从 GPU 接收顶点数据到最终像素输出，ShaderX 全书知识如何串联？`,
-    answer: `1) 顶点着色器（基础层）——MVP变换和顶点变形，输出插值数据；2) 像素着色器（基础层）——采样纹理（或程序化噪声，高级层），用Cook-Torrance BRDF计算光照；3) 阴影映射（技术层）——光照乘以PCF阴影因子；4) 环境渲染（技术层）——天空盒/IBL提供环境光；5) 雾效（技术层）——距离混合雾色；6) 后处理（技术层）——Bloom、色调映射；7) 性能优化（高级层）——全程mad/rsqrt优化ALU、合并纹理优化带宽、消除动态分支。每个环节依赖前一个输出。`,
-    tags: ["渲染管线", "知识串联"],
+    "id": "sxx-official-final-review-2",
+    "chapter": "sxx-official-final-review",
+    "level": 2,
+    "question": "为什么主题高分不能抵消漏篇？",
+    "answer": "329篇身份与唯一归属是硬门禁，内容分数不能替代目录完整性。",
+    "tags": [
+      "覆盖守恒",
+      "评分"
+    ]
   },
   {
-    id: "sxx-final-review-3",
-    chapter: "sxx-final-review",
-    level: 3,
-    question: `如果渲染画面出现「阴影区域有条纹状噪点」，如何用全书知识体系定位和解决？`,
-    answer: `条纹状噪点是典型「阴影痤疮」（Shadow Acne），属于技术层阴影映射问题。定位：1) 确认现象——阴影区域出现规则条纹状自阴影，深度比较在表面自身产生错误遮挡判断；2) 原因——Shadow Map深度精度不足，浮点误差导致部分像素错误判定为被遮挡；3) 解决——增加阴影偏移，特别是斜率相关偏移 bias = baseBias * (1-N·L)；4) 进阶——正面剔除渲染Shadow Map减少自阴影，或用VSM/PCSS替代；5) 验证——条纹消失且不产生彼得潘宁。需基础层（法线N·L）和技术层（Shadow Map偏移）知识组合。`,
-    tags: ["阴影痤疮", "问题诊断", "综合应用"],
+    "id": "sxx-official-final-review-3",
+    "chapter": "sxx-official-final-review",
+    "level": 3,
+    "question": "随机抽检如何区分等价与换题？",
+    "answer": "比较原篇问题、不变量、参考路径、现代实现和相同输入的中间证据。",
+    "tags": [
+      "随机抽检",
+      "现代迁移"
+    ]
   },
   {
-    id: "sxx-final-review-4",
-    chapter: "sxx-final-review",
-    level: 4,
-    question: `为什么说 ShaderX 的价值在于技术的组合应用而非单章掌握？如何系统性地将全书技术整合到一个渲染项目中？`,
-    answer: `单章技术（阴影、Bloom、程序化纹理）只是工具——真正能力是把它们组合成完整渲染管线，理解每个环节如何影响其他环节。例如程序化噪声频率影响阴影偏移需求，HDR色调映射影响光照强度设定。整合方法：1) 架构设计——按渲染管线阶段规划Shader结构（前向/延迟渲染选择），确定每阶段的输入输出；2) 逐步集成——从基础光照开始，逐步加入阴影（调bias）、后处理（调HDR阈值）、程序化纹理（调噪声参数）；3) 性能贯穿——每加一个功能用Profiler检查，避免最后大改架构；4) 参数联动——建立各技术参数间的约束关系（如Bloom阈值与光照强度、噪声频率与Shadow bias）；5) 验证——在不同场景和光照条件下测试鲁棒性。系统整合是把知识转化为能力的关键步骤。`,
-    tags: ["组合应用", "渲染管线", "系统整合"],
-  },
+    "id": "sxx-official-final-review-4",
+    "chapter": "sxx-official-final-review",
+    "level": 4,
+    "question": "怎样证明一次ShaderX修复真正闭环？",
+    "answer": "修复前重放失败，修复后在相同设备与输入验证正确性、兼容和性能均未回退。",
+    "tags": [
+      "闭环",
+      "失败重放"
+    ]
+  }
 ];

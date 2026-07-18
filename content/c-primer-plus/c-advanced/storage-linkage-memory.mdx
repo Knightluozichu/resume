@@ -3,22 +3,23 @@ title: 存储类、链接和内存管理
 type: A
 section: C高级主题
 order: 12
-description: 掌握 auto/static/extern/register 存储类、内部/外部链接、malloc/free 动态内存与内存泄漏，理解栈/堆/静态区内存模型
+description: 区分作用域、链接与存储期，掌握C11存储类和类型限定符，并安全使用malloc/calloc/realloc/free
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/c-primer-plus-9780321928429"
 draft: false
 ---
 
+import { CPrimerStorageOwnershipDiagram } from "@/components/mdx/c-primer-plus/diagrams/storage-linkage-memory";
 
 
 
 
 <Objectives>
 
-- 能说明 auto、static、extern、register 四种存储类在作用域、存储位置和生命周期上的差异，并解释块内 static 为何「记住」上次值
-- 能画出栈、堆、静态区、BSS、代码段的大致布局，并说明局部变量与 malloc 分配内存在哪、何时释放
-- 能写出 malloc/free 成对使用的最小示例，并回答：忘记 free 会怎样？free 后继续解引用指针会怎样？
+- 能分别判断一个声明的作用域、链接和存储期，并解释 static、extern、_Thread_local 与 register 改变了哪一轴
+- 能比较 const、volatile、restrict、_Atomic 的契约，说明 volatile 为什么不能替代原子同步
+- 能在计算分配字节数前检查乘法溢出，并写出 malloc/calloc/realloc/free 失败与清理路径
 
 </Objectives>
 
@@ -30,9 +31,17 @@ draft: false
 
 这一章把 C 的存储类、链接规则，以及栈/堆/静态区的内存模型讲清楚。搞懂这些，多文件项目、全局状态、动态数组才会可控。
 
-## 四种存储类：作用域与生命周期
+<CPrimerStorageOwnershipDiagram />
 
-C 用 <Term def="关键字 auto、static、extern、register，决定变量的存储位置、默认初值、作用域和链接属性。">存储类（storage class）</Term> 描述变量在内存中的「户口」。函数内不写修饰符的局部变量默认是 **auto**。
+## 存储类：不要与作用域、链接、存储期混成一件事
+
+C11 的存储类说明符包括 `typedef`、`extern`、`static`、`_Thread_local`、`auto`、`register`。<Term def="声明说明符中的一类关键字，主要参与决定对象的存储期和标识符链接；作用域仍由声明出现的语法位置决定。">存储类（storage class）</Term> 不能单独回答“名字在哪可见、对象何时存在、不同声明是否同一实体”三个问题：
+
+- **作用域**看声明位置：块、文件、函数原型或 label 的函数作用域
+- **链接**看声明是否与其他作用域或翻译单元中的声明表示同一实体
+- **存储期**看对象生存时间：自动、静态、线程或分配存储期
+
+函数体内不写存储类说明符的普通局部对象具有自动存储期。`typedef` 声明类型别名而不声明对象，本章重点放在影响对象生存期和链接的其余说明符。
 
 <StorageClassDiagram />
 
@@ -46,7 +55,7 @@ void demo(void) {
 /* count 已销毁，内存可被复用 */
 ```
 
-<Term def="进入块时分配（通常在栈上），离开块时自动释放；未显式初始化时内容不确定。">auto 变量</Term> 只在声明它的 `{}` 内可见。每次进入函数，栈上重新划一块；函数返回，这块就「还回去」。
+<Term def="进入关联块时开始一次对象实例的生存期，正常离开块后结束；名字具有块作用域且无链接。实现常用调用栈或寄存器承载。">auto 变量</Term> 只在声明点之后的包含块内可见。每次递归进入同一块也会产生独立实例；实现可以使用机器栈、寄存器或完全优化掉对象。未初始化自动对象具有不确定值，在赋值前读取可能产生未定义行为。
 
 ### static：活过整个程序
 
@@ -58,7 +67,7 @@ void counter(void) {
 }
 ```
 
-<Term def="存储在静态区，程序启动时分配、退出时释放；块内 static 仅初始化一次，下次进入块仍保留上次值。">static 变量</Term> 若在函数内声明，作用域仍是该函数，但**生命周期是整个程序**。`calls` 不会在每次调用时归零——这就是 static 的「记忆」。
+<Term def="对象具有静态存储期；块内 static 名字仍只有块作用域且无链接，初始化在程序启动前完成一次。">static 变量</Term> 若在函数块内声明，名字仍是块作用域，但对象的生存期贯穿整个程序。`calls` 不会在每次调用时归零；未显式初始化的静态存储期对象会先按规则零初始化。
 
 文件作用域的 static（见下文链接）还限制名字只在本 `.c` 可见。
 
@@ -76,7 +85,11 @@ extern int shared;     /* 声明：链接到 file_a 的那份 */
 
 ### register：建议放寄存器
 
-<Term def="提示编译器把变量放在 CPU 寄存器以加速访问；C11 起 register 变量取地址 &x 受限，现代编译器常自动优化，关键字已少见。">register</Term> 对局部变量使用，语义接近 auto，只是多一个「尽量别放栈上」的提示。初学阶段知道即可，不必刻意使用。
+<Term def="用于块作用域对象或函数形参的存储类说明符；对象具有自动存储期，不能对其使用一元取地址运算符。是否放进CPU寄存器由实现决定。">register</Term> 不保证寄存器分配，现代优化器会自行决定。它真正可观察的限制是不能对该对象应用 `&`；因此通常没有必要主动使用。
+
+### _Thread_local：每个线程一份对象
+
+C11 的 <Term def="让对象具有线程存储期：每个线程拥有独立实例，实例生存覆盖该线程执行期间。可与 static 或 extern 组合以表达链接。">_Thread_local</Term> 只能用于对象声明。文件作用域可写 `_Thread_local int error_code;`；块作用域使用时还必须与 `static` 或 `extern` 组合。线程存储期不等于原子访问：每线程独立对象通常无需共享同步，但若把其地址交给其他线程，仍要遵守对象生存期和并发访问规则。
 
 ## 链接：谁能跨文件看见这个名字
 
@@ -92,9 +105,50 @@ extern int shared;     /* 声明：链接到 file_a 的那份 */
 
 头文件惯用法：`extern int foo;` 放 `.h`；`int foo = 0;` 只在一个 `.c` 里定义，避免重复定义链接错误。
 
-## 进程内存布局：代码、静态、堆、栈
+## 类型限定符：const、volatile、restrict 与 _Atomic
 
-程序跑起来后，操作系统给它一块虚拟地址空间。C 程序员最常打交道的是下面几个区域：
+存储类描述对象生存与链接，<Term def="附着在类型上的 const、volatile、restrict、_Atomic 等限定，用于约束允许的访问方式或并发语义。">类型限定符（type qualifier）</Term> 则描述如何访问对象：
+
+### const：禁止经该左值修改
+
+```c
+void print_values(size_t count, const int *values);
+```
+
+`const int *` 表示不能经 values 修改所指 int。若原对象本来不是 const，它仍可能通过其他非 const 左值改变；若对象定义时就是 const，强制去掉限定并修改它会产生未定义行为。const 是类型检查契约，不等于“编译期常量”，也不自动提供线程安全。
+
+### volatile：每次访问都有可观察意义
+
+<Term def="告诉实现对该限定左值的访问属于可观察行为，常用于实现定义的内存映射I/O或 volatile sig_atomic_t 信号通信；不提供线程同步。">volatile</Term> 要求实现按抽象机规则保留相关访问，适合硬件寄存器等实现定义场景。它**不能**修复多线程数据竞争，也不能建立 happens-before；多个线程同时读写普通 volatile 对象仍可能是未定义行为。
+
+### restrict：受约束的别名承诺
+
+```c
+void add_arrays(size_t count,
+                int *restrict out,
+                const int *restrict left,
+                const int *restrict right);
+```
+
+<Term def="用于指针派生类型的限定符，在相应执行块期间承诺受访问对象只通过符合restrict关联规则的指针表达式访问；违反承诺会产生未定义行为。">restrict</Term> 让实现可以假设 out、left、right 所访问数组不以违约方式重叠，从而进行向量化等优化。它不是运行时检查；调用者若传入不满足契约的重叠区域，后果不是“变慢”而是行为未定义。
+
+### _Atomic：标准原子对象与操作
+
+```c
+#include <stdatomic.h>
+
+atomic_uint completed = 0;
+
+void mark_complete(void) {
+    atomic_fetch_add_explicit(&completed, 1u, memory_order_relaxed);
+}
+```
+
+<Term def="C11 原子类型限定符；通过 stdatomic.h 的操作访问可获得不可分割更新，并按所选 memory_order 参与线程间排序。">_Atomic</Term> 或 `atomic_uint` 创建原子对象。示例计数器只要求更新不丢失，使用 relaxed 顺序；若该变量还发布其他数据，则必须按通信协议选择 acquire/release 等顺序。原子性解决特定对象的竞争，不自动让一组复合操作成为事务。
+
+## 典型进程内存布局：实现模型，不是 C 标准分区
+
+托管操作系统和常见 ABI 往往把进程虚拟地址空间组织成下面这些区域；嵌入式、分段架构或优化后的程序可以完全不同。可移植 C 代码应依据存储期和分配 API 推理，不能依赖段名、地址顺序或栈增长方向。
 
 <MemoryRegionsDiagram />
 
@@ -103,10 +157,10 @@ extern int shared;     /* 声明：链接到 file_a 的那份 */
 | 代码段 | 机器指令 | 加载时固定 |
 | .data | 有初值的全局/static | 程序整个生命期 |
 | .bss | 未初始化全局/static（零初始化） | 程序整个生命期 |
-| 堆 | `malloc` 得到的块 | 程序员 `free` |
-| 栈 | 局部 auto、参数、返回地址 | 进入/离开函数自动 |
+| 动态分配区（常称堆） | `malloc` 族返回的块 | 程序调用 `free` |
+| 调用栈（若 ABI 使用） | 部分自动对象、保存的调用状态 | 实现随调用进入/返回管理 |
 
-<Term def={'运行时向堆申请指定字节数，成功返回 void* 指针，失败返回 NULL；需包含 stdlib.h 头文件。'}>malloc</Term> 从堆划内存，大小在运行时决定；对应释放是 <Term def="把 malloc/calloc/realloc 得到的指针归还堆；释放后不得再解引用该指针。">free</Term>。
+<Term def={'申请指定字节数的未初始化存储，成功返回满足基本对齐要求的 void*，失败返回空指针；需包含 stdlib.h。'}>malloc</Term> 返回具有分配存储期的块；对应释放是 <Term def="结束 malloc/calloc/realloc 所得动态块的分配存储期；参数可为空指针，否则必须是尚未释放的当前块起始指针。">free</Term>。这里习惯称“堆”，但 C 标准按分配函数和存储期定义行为，不要求某种堆数据结构。
 
 ## malloc / free 生命周期
 
@@ -117,7 +171,7 @@ extern int shared;     /* 声明：链接到 file_a 的那份 */
 <Stepper>
   <Step title="第一步：malloc 申请">
     <MallocFreeDiagram step={1} />
-    `int *p = malloc(n * sizeof *p);` 向堆要 `n` 个 int 的空间。务必检查 `p == NULL`。
+    先验证 n 不超过 SIZE_MAX / sizeof *p，再调用 malloc。乘法若先溢出，malloc 可能成功返回一个远小于预期的块，仅检查空指针也救不了越界。
   </Step>
   <Step title="第二步：通过指针使用">
     <MallocFreeDiagram step={2} />
@@ -125,11 +179,11 @@ extern int shared;     /* 声明：链接到 file_a 的那份 */
   </Step>
   <Step title="第三步：free 释放">
     <MallocFreeDiagram step={3} />
-    `free(p);` 把块还给堆。之后不要把 `p` 当有效指针用（可置 `p = NULL` 防误用）。
+    `free(p)` 结束块的分配存储期。free(NULL) 无操作；非空参数必须是当前块起始指针且尚未释放。把 p 置空只能防该变量误用，其他别名仍会悬空。
   </Step>
   <Step title="第四步：忘记 free → 泄漏">
     <MallocFreeDiagram step={4} />
-    丢失唯一指针却不 free，堆块永远无法回收。短程序可能无感，服务器/嵌入式长跑会耗尽内存。
+    在进程仍运行时丢失最后一个可达指针，程序无法再把该块交给 free。操作系统通常会在进程退出时回收资源，但长时间运行的程序仍会持续失去可用内存。
   </Step>
 </Stepper>
 
@@ -137,11 +191,17 @@ extern int shared;     /* 声明：链接到 file_a 的那份 */
 
 ```c
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 int main(void) {
-    int n = 5, i;
-    int *arr = malloc(n * sizeof *arr);
+    size_t n = 5, i;
+    int *arr;
+    if (n > SIZE_MAX / sizeof *arr) {
+        fputs("size overflow\n", stderr);
+        return 1;
+    }
+    arr = malloc(n * sizeof *arr);
     if (arr == NULL) {
         fprintf(stderr, "malloc failed\n");
         return 1;
@@ -158,6 +218,30 @@ int main(void) {
 ```
 
 `sizeof *arr` 比 `sizeof(int)` 更安全：若以后改指针类型，字节数自动跟着变。
+
+### calloc 与 realloc：初始化和扩容不是同一件事
+
+`calloc(count, size)` 为 count 个元素申请存储，并把所有字节初始化为零；这不应被泛化为“所有类型都获得语义上的零值”，例如空指针的对象表示不要求全零位。`realloc` 则尝试改变现有块大小，可能原地扩展，也可能搬到新地址：
+
+```c
+#include <stdint.h>
+#include <stdlib.h>
+
+int grow_ints(int **buffer, size_t new_count) {
+    int *resized;
+
+    if (new_count == 0 || new_count > SIZE_MAX / sizeof **buffer)
+        return 0;
+    resized = realloc(*buffer, new_count * sizeof **buffer);
+    if (resized == NULL)
+        return 0;              /* 原来的 *buffer 仍有效 */
+
+    *buffer = resized;
+    return 1;
+}
+```
+
+不要直接写 `buffer = realloc(buffer, bytes)`：失败返回 NULL 会覆盖唯一旧指针并泄漏原块。成功后旧指针值可能已经失效，必须使用返回的新指针。扩大的新增区域未初始化；若需要零值，要由程序显式初始化。示例拒绝零长度，避开不同标准版本和实现对 `realloc(p, 0)` 的特殊处理。
 
 ## 代码详解：static 计数与跨文件共享
 
@@ -180,7 +264,7 @@ int main(void) {
 }
 ```
 
-`count` 存在静态区，只初始化一次，三次调用递增。
+count 具有静态存储期，只初始化一次，三次调用递增；具体放入哪个目标文件段由实现决定。
 
 ### 场景二：文件私有 helper（内部链接）
 
@@ -197,38 +281,45 @@ int public_api(int x) { return helper(x) + 1; }
 
 ```c
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 
 int main(void) {
-    int n, i, *data;
+    size_t n, i;
+    int *data;
     printf("多少个整数？");
-    if (scanf("%d", &n) != 1 || n <= 0)
+    if (scanf("%zu", &n) != 1 || n == 0 ||
+        n > SIZE_MAX / sizeof *data)
         return 1;
     data = malloc(n * sizeof *data);
     if (data == NULL)
         return 1;
-    for (i = 0; i < n; i++)
-        scanf("%d", data + i);
+    for (i = 0; i < n; i++) {
+        if (scanf("%d", data + i) != 1) {
+            free(data);
+            return 1;
+        }
+    }
     /* ... 使用 data ... */
     free(data);
     return 0;
 }
 ```
 
-编译期不知道 `n`，栈上 `int data[n]`（VLA，C99）可替代，但堆分配更通用，且大小几乎不受栈限制。
+编译期不知道 n 时，支持 VLA 的实现可以使用块作用域变长数组，但 C11 允许实现不提供 VLA，且大对象可能超出实现的自动存储资源。动态分配同样受 SIZE_MAX、实现上限和可用内存约束，并非“大小几乎不受限制”；选择依据应是容量上限、所需生存期和清理责任。
 
 ## 容易踩的坑
 
 <Callout type="trap">
   **现象**：函数返回局部数组指针，调用方一用就崩溃或乱码。
-  **原因**：`int ar[100]; return ar;` 返回的是**栈上**数组地址，函数结束栈帧销毁，指针悬空。
+  **原因**：`int ar[100]; return ar;` 返回指向自动存储期对象的指针；离开声明块后对象生存期结束。是否物理位于机器栈不影响该规则。
   **修法**：返回动态分配内存（调用方负责 free），或由调用方传入缓冲区；不要返回指向 auto 局部变量的指针。
 </Callout>
 
 <Callout type="trap">
   **现象**：`free(p);` 之后仍 `printf("%d", *p);`，有时还能打印「旧值」，有时直接崩。
   **原因**：**use-after-free** 是未定义行为。堆管理器可能把块交给下次 malloc，旧值不可靠。
-  **修法**：`free(p); p = NULL;` 释放后置空；需要时再 malloc 新块。
+  **修法**：先让所有使用者停止访问，再 free，并清理仍保存该地址的别名。`p = NULL` 只保护 p 这个变量，不能修复其他悬空指针；同一块再次 free 也是未定义行为。
 </Callout>
 
 <Callout type="trap">
@@ -245,14 +336,15 @@ int main(void) {
 
 ## 小结
 
-- 存储类决定作用域、存储位置、生命周期：auto 块内栈；static 静态区且可跨调用保留；extern 声明外部定义；register 少用
-- 链接：文件 static → 内部链接；普通全局 → 外部链接，全程序一份
-- 内存模型：代码 + .data + .bss + 堆（malloc）+ 栈（auto）；堆栈相向增长
-- malloc/free 必须成对；检查 NULL；free 后勿解引用；勿返回指向栈局部的指针
+- 作用域、链接、存储期是三条独立轴；存储类说明符只参与其中部分规则
+- static 可赋予静态存储期或内部链接；extern 引用外部定义；_Thread_local 让每线程拥有独立实例
+- const 管修改路径，volatile 管可观察访问，restrict 是别名承诺，_Atomic 才提供标准原子操作
+- .data、.bss、调用栈和堆是常见实现模型，不是可移植 C 可以依赖的地址布局
+- 动态分配先查字节数溢出，再检查返回值；realloc 用临时指针；每个块只释放一次且释放后所有别名失效
 
 <Exercises>
 
-**练习 1（问答型）** 块内 `static int x = 0;` 与块内 `int x = 0;` 每次进入块时，`x` 的值分别会怎样？
+**问题 1（问答型）** 块内 `static int x = 0;` 与块内 `int x = 0;` 每次进入块时，`x` 的值分别会怎样？
 
 <Answer>
 
@@ -260,7 +352,7 @@ int main(void) {
 
 </Answer>
 
-**练习 2（改代码型）** 下面程序泄漏了内存，指出问题并改正。
+**问题 2（改代码型）** 下面程序泄漏了内存，指出问题并改正。
 
 ```c
 #include <stdlib.h>
@@ -274,11 +366,17 @@ void process(int n) {
 
 <Answer>
 
-在 `return` 前加 **`free(buf);`**。若有多处 return，每条路径都要 free，或用单一出口：
+在 return 前加 free；同时先拒绝非正长度并检查字节数乘法，否则负数转换为 size_t 或乘法回绕会造成错误分配。若有多条成功后的退出路径，每条都必须结束所有权：
 
 ```c
+#include <stdint.h>
+#include <stdlib.h>
+
 void process(int n) {
-    int *buf = malloc(n * sizeof(int));
+    int *buf;
+    if (n <= 0 || (size_t)n > SIZE_MAX / sizeof *buf)
+        return;
+    buf = malloc((size_t)n * sizeof *buf);
     if (buf == NULL) return;
     /* 使用 buf ... */
     free(buf);
@@ -287,7 +385,7 @@ void process(int n) {
 
 </Answer>
 
-**练习 3（综合实现型）** 写程序：用 `malloc` 创建长度为 10 的 int 数组，填入 0..9，打印后释放。必须检查 malloc 是否失败。
+**问题 3（综合实现型）** 写程序：用 `malloc` 创建长度为 10 的 int 数组，填入 0..9，打印后释放。必须检查 malloc 是否失败。
 
 <Answer>
 
@@ -320,15 +418,15 @@ int main(void) {
 <Glossary>
 
 <GlossaryItem term="存储类（storage class）">
-  auto、static、extern、register 等关键字，描述变量存储位置、默认初值、作用域与链接。详见 StorageClassDiagram。
+  声明说明符中的 typedef、extern、static、_Thread_local、auto、register，主要参与决定对象存储期和标识符链接；作用域由声明位置决定。详见 StorageClassDiagram。
 </GlossaryItem>
 
 <GlossaryItem term="auto 变量">
-  块内局部变量默认类别；栈上分配，块结束销毁；未初始化内容不确定。
+  块内普通局部对象的默认类别，具有自动存储期、块作用域和无链接。实现可以使用调用栈、寄存器或优化消除对象。
 </GlossaryItem>
 
 <GlossaryItem term="static 变量">
-  静态存储期：程序启动到退出；块内 static 仅初始化一次；文件 static 内部链接。
+  块内 static 对象具有静态存储期但名字仍是块作用域；文件作用域 static 标识符具有内部链接。
 </GlossaryItem>
 
 <GlossaryItem term="extern">
@@ -336,7 +434,11 @@ int main(void) {
 </GlossaryItem>
 
 <GlossaryItem term="register">
-  提示编译器把变量放在 CPU 寄存器以加速访问；C11 起 register 变量取地址受限，现代编译器常自动优化，关键字已少见。
+  用于自动存储期对象的存储类说明符，不保证物理寄存器分配；不能对该对象使用一元取地址运算符。
+</GlossaryItem>
+
+<GlossaryItem term="_Thread_local">
+  C11 线程存储期说明符，每个线程拥有独立对象实例。块作用域使用时须与 static 或 extern 组合；线程局部不等于原子同步。
 </GlossaryItem>
 
 <GlossaryItem term="链接（linkage）">
@@ -352,23 +454,39 @@ int main(void) {
 </GlossaryItem>
 
 <GlossaryItem term="栈（stack）">
-  存放 auto 局部变量、参数、返回地址；函数调用时向下增长，返回时自动回收。
+  常见 ABI 用来保存部分自动对象和调用状态的区域。C 标准不要求自动对象一定入栈，也不规定栈存在或增长方向。
 </GlossaryItem>
 
 <GlossaryItem term="堆（heap）">
-  malloc/calloc/realloc 分配的内存区；手动 free，生命周期可跨越多个函数。
+  对 malloc/calloc/realloc 所管理动态区域的常用实现称呼。C 标准依据分配存储期和 API 定义行为，不规定具体堆结构。
 </GlossaryItem>
 
 <GlossaryItem term="BSS 段">
-  未显式初始化的全局/static 变量；启动时零填充。详见 MemoryRegionsDiagram。
+  常见目标文件格式用于存放部分零初始化静态对象的段名，不是 C 抽象机概念。静态存储期对象的零初始化规则不依赖 BSS 是否存在。
 </GlossaryItem>
 
 <GlossaryItem term="malloc">
-  堆上分配字节；返回 void* 或 NULL。见 MallocFreeDiagram。
+  申请指定字节数的未初始化存储，成功返回适当对齐的 void 指针，失败返回空指针。元素数乘以元素大小必须先防溢出。
 </GlossaryItem>
 
 <GlossaryItem term="free">
-  释放 malloc 族得到的指针；释放后指针变悬空，不得解引用。
+  结束 malloc 族动态块的存储期。free(NULL) 无操作；其他参数必须是尚未释放的当前块起始指针，释放后所有别名都不得访问该块。
+</GlossaryItem>
+
+<GlossaryItem term="类型限定符（type qualifier）">
+  const、volatile、restrict、_Atomic 等附着于类型的限定，分别表达修改、可观察访问、别名和原子并发语义。
+</GlossaryItem>
+
+<GlossaryItem term="volatile">
+  让经该限定左值的访问成为可观察行为，常用于实现定义的设备或信号场景；不提供原子性，也不能修复线程数据竞争。
+</GlossaryItem>
+
+<GlossaryItem term="restrict">
+  指针别名契约，允许实现基于受约束访问路径进行优化。调用者违反关联规则会产生未定义行为，并非运行时检查失败。
+</GlossaryItem>
+
+<GlossaryItem term="_Atomic">
+  C11 原子类型限定符；配合 stdatomic.h 操作提供不可分割访问，并按 memory_order 参与线程间排序。
 </GlossaryItem>
 
 <GlossaryItem term="内存泄漏">
@@ -377,4 +495,4 @@ int main(void) {
 
 </Glossary>
 
-<Attribution />
+<Attribution title="C Primer Plus, Sixth Edition, Chapter 12: Storage Classes, Linkage, and Memory Management" url="https://www.informit.com/store/c-primer-plus-9780321928429" />

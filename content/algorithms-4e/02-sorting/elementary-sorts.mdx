@@ -1,0 +1,263 @@
+---
+title: "2.1 Elementary Sorts：选择、插入与希尔排序"
+type: B
+section: "排序"
+order: 5
+description: "按官方2.1从排序契约与成本模型出发，推导选择排序、插入排序、排序可视化、稳定性和Shellsort的正确性与输入敏感成本。"
+demo: true
+math: true
+sourceUrl: "https://algs4.cs.princeton.edu/21elementary/"
+draft: false
+---
+
+import { Algs4SortContractMap, Algs4SelectionScanLab, Algs4InsertionInversionLab, Algs4SortingBarsLab, Algs4StabilityCounterexampleLab, Algs4ShellsortResidueLab, Algs4ElementaryCostModelLab } from "@/components/mdx/algorithms-4e/diagrams/elementary-sorts";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释elementary sorts共享的Comparable、total order、原地性与稳定性契约
+- 能计算选择排序比较次数、插入排序逆序数成本及Shellsort gap序列
+- 能实现selection sort、insertion sort和Knuth increments版本的Shellsort
+- 能分析有序、逆序、重复key、昂贵交换和不合法comparator等边界输入
+- 能设计结合排序可视化、property oracle与operation counter的独立验收
+
+</Objectives>
+
+## 从“比较便宜，但搬动很贵”开始
+
+初级排序（<Term def="以选择、相邻插入及其跨步扩展建立排序契约、正确性不变量和成本模型的一组基础算法。">初级排序</Term>，elementary sorts）不是只为记住三段循环。假设仓库中的箱子只需读标签就能比较，却要用叉车才能交换；选择排序固定做平方级比较，却只做线性次交换，可能优于会频繁搬动的插入排序。再假设输入几乎有序，插入排序只消去很少的逆序，成本又可能接近线性。
+
+先预测数组已经升序时，选择排序会不会因为“看见有序”而提前结束。官方实现不会：第i轮仍扫描整个后缀来证明当前位置是剩余最小项。插入排序则在第一次相邻比较失败时停止内循环。因此算法名称相近，成本对input order的敏感性却完全不同。
+
+官方2.1依次讨论 **Rules of the game、Selection sort、Insertion sort、Visualizing sorting algorithms、Shellsort**。贯穿它们的是同一sort contract：输出必须非降序、必须是输入的permutation，并在声明稳定时保留equal keys的相对次序。
+
+<Algs4SortContractMap />
+
+## 2.1.1 Rules of the game：先固定排序契约
+
+排序契约（<Term def="规定key的全序关系、输入输出permutation、非降序结果、额外空间与可选稳定性要求。">排序契约</Term>，sorting contract）把“如何排”与“什么叫排对”分开。Java `Comparable` 的 `compareTo` 必须表达total order：reflexive、antisymmetric、transitive；null或不兼容类型应失败，而不是给出随意顺序。
+
+官方交换式实现通常只通过 `less` 与 `exch` 观察和改动数据：
+
+```java
+private static boolean less(Comparable v, Comparable w) {
+    return v.compareTo(w) < 0;
+}
+
+private static void exch(Object[] a, int i, int j) {
+    Object swap = a[i];
+    a[i] = a[j];
+    a[j] = swap;
+}
+```
+
+成本模型（<Term def="为排序选择比较、交换或array access作为basic operations，并按输入参数统计次数。">成本模型</Term>，sorting cost model）不能只写Big-O。对交换式算法分别数compares和exchanges，才能回答“比较贵还是搬动贵”；不使用交换的实现则常数array accesses。原地排序（in-place）只用常数local storage或很小的调用栈，不再分配一份N项副本。
+
+正确性oracle至少包含两个独立检查。第一，逐相邻项验证非降序；第二，对输入和输出建立frequency map，验证没有丢失、复制或改写元素。只跑 `isSorted` 无法发现一个错误实现把所有元素都改成最小值。
+
+## 2.1.2 Selection sort：固定最小前缀
+
+选择排序（<Term def="每轮扫描未排序后缀选出最小项，并把它交换到当前边界的原地排序。">选择排序</Term>，selection sort）维护不变量：进入第i轮时，`a[0..i)` 已是全局最小的i项且有序；扫描 `a[i..N)` 找到minimum后交换到i，不变量扩大一项。
+
+```java
+public static void sort(Comparable[] a) {
+    int n = a.length;
+    for (int i = 0; i < n; i++) {
+        int min = i;
+        for (int j = i + 1; j < n; j++)
+            if (less(a[j], a[min])) min = j;
+        exch(a, i, min);
+        assert isSorted(a, 0, i);
+    }
+    assert isSorted(a);
+}
+```
+
+<Algs4SelectionScanLab />
+
+第i轮比较 `N-i-1` 次，输入排列不会改变总数：
+
+$$
+C_{\mathrm{selection}}(N)
+=\sum_{i=0}^{N-1}(N-i-1)
+=\frac{N(N-1)}{2}
+\sim\frac{N^2}{2}
+$$
+
+当前官方loop执行N次 `exch`，其中最后一轮以及某些minimum已在i处的轮次是self-exchange；若只计真正搬动，可以跳过 `min == i`，但比较仍是平方级。算法额外空间为Theta(1)，通常不稳定：远距离交换可能让两个相等key颠倒原相对次序。
+
+<Algs4StabilityCounterexampleLab />
+
+<Callout type="trap" title="把交换少直接等同于运行快">
+选择排序的优势是交换上界低，不是所有机器上都更快。若比较昂贵、数组已近乎有序或cache行为占主导，它固定的N平方比较会压过搬动优势。决策必须把operation count与每种operation的实际成本分开。
+</Callout>
+
+## 2.1.3 Insertion sort：逆序数就是搬动量
+
+插入排序（<Term def="从左到右把当前项通过相邻交换插入已排序前缀，使前缀逐项扩大的原地稳定排序。">插入排序</Term>，insertion sort）维护另一种不变量：进入第i轮前 `a[0..i)` 已有序；当前项向左跨过所有更大项，停止时 `a[0..i]` 有序。严格 `less(a[j], a[j-1])` 不交换equal keys，因此官方版本稳定。
+
+```java
+public static void sort(Comparable[] a) {
+    int n = a.length;
+    for (int i = 1; i < n; i++) {
+        for (int j = i; j > 0 && less(a[j], a[j - 1]); j--)
+            exch(a, j, j - 1);
+        assert isSorted(a, 0, i);
+    }
+    assert isSorted(a);
+}
+```
+
+逆序（<Term def="满足i小于j但a[i]大于a[j]的一对indices，用来量化输入离有序状态的距离。">逆序</Term>，inversion）把“几乎有序”变成精确参数：
+
+$$
+I(A)=\left|\{(i,j)\mid i\lt j,\ a_i\gt a_j\}\right|
+$$
+
+每次相邻逆序交换恰好消去一个逆序，也不会新建其他逆序，所以插入排序的exchanges恰等于I。每轮成功交换对应一次true compare，最后还可能有一次停止比较，因此：
+
+$$
+I(A)\le C_{\mathrm{insertion}}(A)\le I(A)+N-1
+$$
+
+<Algs4InsertionInversionLab />
+
+升序输入有I等于0，使用N-1次比较、0次交换；逆序且keys distinct时I等于 `N(N-1)/2`，比较和交换都约为N平方的一半。随机distinct排列平均每对有一半概率逆序，因此平均比较与交换都约为N平方的四分之一。若I只是不超过cN，算法就是linear scale，正是它适合部分有序大数组的原因。
+
+<Callout type="trap" title="为了少分支而交换相等key">
+把strict less改成less-or-equal会让equal items不断左移，稳定性立即失效；若comparator本身不满足transitivity，sortedness也可能没有一致含义。微优化前必须把total-order与stability contract加入测试。
+</Callout>
+
+## 2.1.4 Sorting visualization：看见移动，但仍要证明
+
+排序可视化（<Term def="以柱高表示key并按算法快照标出已确认区域、扫描位置和数据移动的解释方法。">排序可视化</Term>，sorting visualization）把每个key画成一根竖条。选择排序的左侧短条逐轮固定，右侧仍保留原来的混乱；插入排序的左侧始终有序，但每次插入会让局部柱条连续右移。
+
+<Algs4SortingBarsLab />
+
+图像适合发现“minimum是否真的进入边界”“插入是否跨过equal key”“某轮是否漏扫”，却不是correctness proof。两个不同输入可能产生相似图形，低分辨率还会把相等与接近的key混在一起。验收需要把visual trace和machine-checkable invariant绑定：每帧检查prefix、每次交换检查permutation、终帧检查全序。
+
+稳定性（<Term def="排序后所有equal-key records仍保持输入中的相对先后次序。">稳定性</Term>，stability）对只画key高度的图尤其容易被隐藏。应给equal keys附加原始标签，例如2A与2B；如果高度相等但标签顺序逆转，结果虽然nondecreasing，却不满足stable contract。
+
+## 2.1.5 Shellsort：先跨远距离，再用局部插入收尾
+
+希尔排序（<Term def="按递减gap对各同余子序列做插入排序，最终以gap 1得到全局有序结果。">希尔排序</Term>，Shellsort）扩展插入排序：先允许相距h的项交换，让远离目标位置的项大步移动；再逐渐缩小h。数组若从任意起点每隔h取出的subsequence都已排序，就称为h有序。
+
+h有序（<Term def="对每个residue r，序列a[r]、a[r+h]、a[r+2h]依次非降序的数组性质。">h有序</Term>，h-sorted）可以看成h条交错的sorted subsequences。任意以1结尾的gap sequence最终都能完成排序，因为1-sorted恰好就是全局sorted。
+
+```java
+public static void sort(Comparable[] a) {
+    int n = a.length;
+    int h = 1;
+    while (h < n / 3) h = 3 * h + 1;
+
+    while (h >= 1) {
+        for (int i = h; i < n; i++)
+            for (int j = i; j >= h && less(a[j], a[j - h]); j -= h)
+                exch(a, j, j - h);
+        h /= 3;
+    }
+}
+```
+
+<Algs4ShellsortResidueLab />
+
+官方实现使用Knuth increments：
+
+$$
+h_k=\frac{3^k-1}{2}=1,4,13,40,121,\ldots
+$$
+
+较大gap迅速减少长距离逆序，使后续较小gap面对partially sorted input。前一次h-sorted经过下一次gap insertion后，不必保留旧h-sorted，但最终gap 1建立全局顺序。官方2.1给出的性质是比较次数受N乘gap数量的小常数倍控制，并给出该increment sequence的上界：
+
+$$
+C_{\mathrm{shell}}(N)=O\!\left(N^{3/2}\right)
+$$
+
+这个bound不表示每个input都恰好N的3/2次方，也不说明Shellsort稳定。Gap大于1时相等keys可跨过彼此，因此通常不稳定。它原地、代码短，在中等规模实践中可用，但其性能高度依赖increment sequence；不能把某个sequence的结论外推给所有gap设计。
+
+## 2.1.6 Cost experiment：让算法与输入模型一起被比较
+
+`SortCompare` 对每个trial生成相同长度的random array，分别调用命名sort并累计wall time。公平实验应让两个算法获得相同input copies，排除生成和I/O时间，先warm up JVM，并报告多次分布而非只给一个ratio。Random doubles只代表一种input model，不代表近乎有序、重复key多或交换昂贵的业务数据。
+
+<Algs4ElementaryCostModelLab />
+
+选择排序的比较数只由N决定；插入排序还由I决定；Shellsort还由gap sequence与各gap后的局部disorder决定。Operation counter可验证数学模型，wall clock用于评估实现常数，两者角色不同。若计时结果与operation counts矛盾，应先检查JIT、GC、cache、allocation和复制边界，而不是直接否定推导。
+
+可靠的property test应覆盖empty、single item、already sorted、reverse、all equal、duplicate labels、random、organ-pipe以及adversarial comparator。结果与标准库sort或独立stable oracle比对，同时验证permutation、sortedness、稳定性声明、extra allocation和operation counts。
+
+## 统一验收：从契约到可复现实验
+
+<Stepper>
+  <Step title="固定total order与结果oracle">
+    <Algs4SortContractMap />
+    分开验证nondecreasing、permutation、null policy与stable requirement，不能只观察打印结果。
+  </Step>
+  <Step title="证明选择排序prefix不变量">
+    <Algs4SelectionScanLab />
+    每轮确认左侧是全局最小prefix，并核对累计比较与交换次数。
+  </Step>
+  <Step title="用逆序数核对插入成本">
+    <Algs4InsertionInversionLab />
+    对每次相邻交换确认逆序数恰减1，终点I为0且equal labels次序不变。
+  </Step>
+  <Step title="逐gap验证h-sorted">
+    <Algs4ShellsortResidueLab />
+    每轮分别遍历所有residue subsequences，最后用h等于1推出全局sorted。
+  </Step>
+  <Step title="对齐operation count与计时">
+    <Algs4ElementaryCostModelLab />
+    固定input copies、warm-up和trial protocol，分别报告比较、交换、array access与时间分布。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. Elementary sorts共享total order、sorted permutation、space与stability契约。
+2. Selection sort每轮选择剩余minimum，固定做N平方除2次比较与线性交换。
+3. Insertion sort维护有序前缀，交换次数恰等于input inversions，部分有序时接近线性。
+4. Sorting visualization揭示移动模式，但正确性仍依赖prefix、permutation与order invariants。
+5. Stability必须用带identity的equal keys检查；官方插入排序稳定，选择排序与Shellsort通常不稳定。
+6. Shellsort通过递减gaps建立h-sorted subsequences，最终gap 1完成全局排序。
+7. SortCompare式实验必须固定input model与测量边界，并与operation-count模型交叉验证。
+
+<Exercises>
+
+**问题 1：长度8的数组，选择排序官方loop总共比较多少次、调用多少次exch？输入已经升序会改变答案吗？**
+
+<Answer>比较次数是8乘7除2等于28，loop对每个i调用一次exch，因此是8次，其中可能包含self-exchange。升序输入不会减少扫描，答案不变。</Answer>
+
+**问题 2：数组 `3, 1, 2, 2` 有多少个逆序？官方插入排序会交换多少次，并是否保持两个2的先后？**
+
+<Answer>逆序是3与1、3与第一个2、3与第二个2，共3个；相邻交换恰为3次。内循环只在严格小于时交换，所以两个equal 2不互换，保持稳定。</Answer>
+
+**问题 3：为什么一次4-sort完成后还必须执行1-sort？**
+
+<Answer>4-sorted只保证四条同余子序列各自有序，不保证不同residue之间的相邻项有序。Gap 1把整个数组视为一条subsequence，1-sorted才等价于全局sorted。</Answer>
+
+**问题 4：交换成本远大于比较成本时应直接断言选择排序最快吗？**
+
+<Answer>不能直接断言，但选择排序是强候选，因为交换次数线性。仍需给出N、输入分布、比较与交换实际成本，并与插入和其他低写入算法做同input operation count及计时实验。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="初级排序">用选择、插入和Shellsort建立基础排序模型的一组算法。</GlossaryItem>
+  <GlossaryItem term="排序契约">规定total order、sorted permutation、space与稳定性要求的接口语义。</GlossaryItem>
+  <GlossaryItem term="成本模型">以比较、交换或array access作为basic operations的计数模型。</GlossaryItem>
+  <GlossaryItem term="选择排序">反复选择未排序后缀minimum并交换到边界的原地排序。</GlossaryItem>
+  <GlossaryItem term="插入排序">通过相邻交换把当前项插入有序前缀的稳定原地排序。</GlossaryItem>
+  <GlossaryItem term="逆序">indices先后与keys顺序相反的一对元素。</GlossaryItem>
+  <GlossaryItem term="排序可视化">以柱高和状态颜色展示排序快照及数据移动的方法。</GlossaryItem>
+  <GlossaryItem term="稳定性">equal keys在输出中保留输入相对次序的性质。</GlossaryItem>
+  <GlossaryItem term="h有序">每条按固定gap抽取的同余子序列都非降序的性质。</GlossaryItem>
+  <GlossaryItem term="希尔排序">按递减gap反复做h-insertion，最终以gap 1完成的原地排序。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Algorithms, 4th Edition · Section 2.1 Elementary Sorts"
+  href="https://algs4.cs.princeton.edu/21elementary/"
+  author="Robert Sedgewick and Kevin Wayne"
+  license="原书、官方页面与Java示例版权归Robert Sedgewick、Kevin Wayne及Addison-Wesley所有；本页依据作者官方2.1 synopsis及Selection、Insertion、Shell、SortCompare当前代码独立重构教学内容"
+/>

@@ -1,0 +1,301 @@
+---
+title: "面试题12：矩阵中的路径"
+type: C
+section: "第2章 面试需要的基础知识"
+order: 13
+description: "从任意起点按四邻接匹配字符串，以访问标记限制单条路径，并在分支失败时撤销选择完成回溯。"
+demo: true
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/12_StringPathInMatrix/StringPathInMatrix.cpp"
+draft: false
+---
+
+import { MatrixPathBoardDiagram, BacktrackingStateMap, VisitedRollbackDiagram, MatrixPathTraceLab } from "@/components/mdx/coding-interviews/diagrams/matrix-path";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释字符串下标、当前坐标和访问集合如何共同定义搜索状态
+- 能计算二维坐标到一维矩阵存储的下标并检查四方向边界
+- 能实现匹配、标记、递归探索和失败撤销组成的回溯算法
+- 能分析路径长度、矩阵规模、分支数和递归栈带来的复杂度
+- 能设计成功、字符不匹配、格子复用、超长目标、单格和空输入测试
+
+</Objectives>
+
+## 从 BFCE 路径为何成立开始
+
+先预测：在作者的3行4列矩阵中，`B→F→C→E`每一步如何移动？目标`ABFB`前三个字符可以走`A→B→F`，为什么最后一个`B`不能回到已经经过的格子？
+
+```text
+A B T G
+C F C S
+J D E H
+```
+
+“矩阵中的路径”要求从任意格开始，每一步只能进入**上下左右相邻格子**，路径依次包含目标字符串全部字符，同一个格子在一条路径中不能重复进入。`BFCE`可从第一行第二列`B`开始，向下到`F`、向右到`C`、向下到`E`，所以存在。
+
+<MatrixPathBoardDiagram />
+
+路径不是矩阵内存的一段连续字符，也不能走对角线。矩阵在作者接口中按行展开为一维数组，坐标`(row,col)`对应`row * cols + col`；邻接关系仍由行列坐标判断，不能拿一维下标加减1后忘记跨行边界。
+
+## 搜索状态必须包含三个维度
+
+一次递归需要知道当前行列、即将匹配的字符串下标，以及哪些格子已经被本条路径使用。这三部分构成<Term def="决定当前递归分支后续可选动作与结果所需的全部信息。">搜索状态</Term>。只记录坐标不知道要匹配哪个字符，只记录字符串下标不知道从哪里继续，只记录二者又可能错误复用旧格子。
+
+作者从矩阵每个格子尝试作为起点，因为目标首字符可能出现多次，真正可行的路径不一定从第一次出现的位置开始。核心函数依次拒绝越界、字符不等和已访问格；匹配成功后推进目标下标，并尝试左、上、右、下四个方向。
+
+这种“选择一个候选、继续搜索、失败后恢复再试下一候选”的方法叫<Term def="深度优先尝试候选选择，并在当前选择无法完成目标时恢复状态、转向其他分支。">回溯法</Term>。
+
+<BacktrackingStateMap />
+
+终止条件必须和下标语义一致。若`index`表示当前待匹配字符，可以在确认当前格等于`word[index]`后，用`index + 1 == word.size()`判断完成；也可以像作者一样先递增`pathLength`，在下一层看到字符串结束符时返回成功。两种写法都正确，混用会产生少匹配或越界读取。
+
+## 访问标记只属于当前路径
+
+匹配当前格后，要设置<Term def="记录某个矩阵格是否已被当前递归路径占用，防止同一路径重复进入。">访问标记</Term>。它防止`ABFB`沿`A→B→F`后回到同一个`B`，也防止两个格之间来回移动无限延长路径。
+
+若四个方向都无法完成剩余字符串，当前选择失败，返回上一层前必须执行<Term def="递归分支失败时恢复进入该分支前修改的状态，使其他候选在相同前提下继续搜索。">撤销选择</Term>：把当前格恢复为未访问。否则第一个失败起点会永久封禁格子，后续起点和兄弟分支即使有合法路径也无法使用它。
+
+<VisitedRollbackDiagram />
+
+成功分支可以立即返回，但工程实现仍可在返回前统一撤销，使求解器对象保持干净，便于重复调用、调试和枚举所有路径。访问限制的语义是“同一条候选路径不能复用”，不是“整次搜索中一个格只能看一次”。
+
+下面用`std::vector<unsigned char>`管理标记内存。它在所有返回路径上自动释放，避免作者源码找到路径后提前`return true`而跳过`delete[] visited`造成的泄漏。
+
+```cpp
+#include <span>
+#include <string_view>
+#include <vector>
+
+class MatrixPathSolver {
+public:
+    bool hasPath(std::span<const char> matrix,
+                 std::size_t rows,
+                 std::size_t cols,
+                 std::string_view word) {
+        if (rows == 0 || cols == 0 ||
+            matrix.size() != rows * cols) {
+            return false;
+        }
+        if (word.empty()) return true;
+        if (word.size() > matrix.size()) return false;
+
+        matrix_ = matrix;
+        rows_ = rows;
+        cols_ = cols;
+        word_ = word;
+        visited_.assign(matrix.size(), 0);
+
+        for (std::size_t row = 0; row < rows_; ++row) {
+            for (std::size_t col = 0; col < cols_; ++col) {
+                if (dfs(static_cast<int>(row),
+                        static_cast<int>(col), 0)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+private:
+    bool dfs(int row, int col, std::size_t index) {
+        if (row < 0 || col < 0 ||
+            row >= static_cast<int>(rows_) ||
+            col >= static_cast<int>(cols_)) {
+            return false;
+        }
+
+        const auto pos =
+            static_cast<std::size_t>(row) * cols_ +
+            static_cast<std::size_t>(col);
+        if (visited_[pos] || matrix_[pos] != word_[index]) {
+            return false;
+        }
+        if (index + 1 == word_.size()) return true;
+
+        visited_[pos] = 1;
+        const bool found =
+            dfs(row, col - 1, index + 1) ||
+            dfs(row - 1, col, index + 1) ||
+            dfs(row, col + 1, index + 1) ||
+            dfs(row + 1, col, index + 1);
+        visited_[pos] = 0;
+        return found;
+    }
+
+    std::span<const char> matrix_;
+    std::string_view word_;
+    std::vector<unsigned char> visited_;
+    std::size_t rows_ = 0;
+    std::size_t cols_ = 0;
+};
+```
+
+这里先用有符号`row/col`做四方向运算，再检查非负，避免无符号下标从0减1后绕回极大值。只有通过边界检查才转换为`size_t`并计算线性位置。
+
+<Callout type="trap" title="visited一旦设为true就永不恢复">
+这会把“当前路径不可复用”错误扩大成“所有路径永久不可用”。回溯分支失败后必须撤销本层标记；只有在使用另一种全局可达性问题时，永久访问集合才可能正确。
+</Callout>
+
+## 正确性来自穷举所有合法下一步
+
+外层循环覆盖每个可能起点。对一个匹配起点，递归只进入边界内、字符匹配且未被当前路径使用的格子，因此产生的每条候选都满足路径规则。每层枚举左、上、右、下四种合法方向，任何完整路径的下一步必在其中，不会漏解。
+
+当字符串最后一个字符匹配时返回真，说明路径坐标序列长度等于目标长度，每个位置字符对应且无重复格；所以不会误报。若所有起点及其所有合法分支都失败，因为搜索已经穷举所有可能路径，所以矩阵中不存在目标路径。
+
+设矩阵有`R×C`个格，目标长度为`L`。起点最多`R C`个，第一步后因为前一格已访问，内部节点至多继续三个未立即回退方向，粗略上界可写`O(RC · 3^(L-1))`，更宽松也常写`O(RC · 4^L)`。边界、字符不匹配和访问限制通常会大幅剪掉分支，但最坏仍是指数级。
+
+访问数组占`O(RC)`空间，递归深度最多`L`，调用栈`O(L)`。若允许临时修改矩阵，可把当前字符替换为哨兵并在返回前恢复，省去访问数组，但会改变输入、要求字符域中存在安全哨兵，而且并发读取不再安全。
+
+## 剪枝必须保持答案集合不变
+
+不改变正确性的提前排除称为<Term def="利用必要条件在展开递归前排除不可能成功的状态或整个输入。">剪枝</Term>。最直接的必要条件是目标长度不能超过格子总数，因为路径不能复用格子。还可以比较字符频次：若目标中某字符需求量超过矩阵拥有量，必定无解。
+
+为了减少分支，可比较目标首尾字符在矩阵中的频次；若末字符更少，反转目标字符串后再搜索。路径可以反向行走，四邻接关系对称，所以存在正向路径当且仅当存在反向路径。让稀有字符作为起点能减少外层命中和早期分叉，但这只是性能优化，不改变返回值。
+
+```cpp
+#include <algorithm>
+#include <array>
+#include <string>
+
+bool frequencyAllows(std::span<const char> matrix,
+                     std::string_view word) {
+    std::array<std::size_t, 256> available{};
+    std::array<std::size_t, 256> required{};
+    for (unsigned char ch : matrix) ++available[ch];
+    for (unsigned char ch : word) ++required[ch];
+    for (std::size_t i = 0; i < available.size(); ++i) {
+        if (required[i] > available[i]) return false;
+    }
+    return true;
+}
+
+std::string rarerEndFirst(std::span<const char> matrix,
+                          std::string word) {
+    const auto firstCount =
+        std::count(matrix.begin(), matrix.end(), word.front());
+    const auto lastCount =
+        std::count(matrix.begin(), matrix.end(), word.back());
+    if (lastCount < firstCount) {
+        std::reverse(word.begin(), word.end());
+    }
+    return word;
+}
+```
+
+频次满足只是必要条件，不是充分条件；矩阵可能有足够字符却无法按邻接顺序连接。不能因为计数通过就直接返回真，仍要回溯验证空间排列。
+
+<Callout type="trap" title="字符都够就一定存在路径">
+频次只忽略了位置关系。两个所需字符可能相隔很远，或唯一通路要求重复经过同一格；计数筛选只能返回“仍有可能”，不能替代四邻接路径搜索。
+</Callout>
+
+## 接口契约决定空字符串答案
+
+作者接口先拒绝空矩阵、非法行列和空字符串指针；非空矩阵配空C字符串时，核心函数看到结束符会返回真，但官方测试没有覆盖这一点。现代接口应明确约定：通常空字符串由空路径匹配，返回真；空矩阵寻找非空字符串返回假；矩阵尺寸与扁平存储长度不一致返回错误或假。
+
+空字符串与空指针不是同一概念。`string_view{}`是长度0的合法目标，`const char* == nullptr`是没有字符串对象。把二者都写成“空”会让调用者无法预期行为。若业务要求路径至少含一个格，可以明确把空目标定义为假，但测试必须锁定该决定。
+
+作者使用`new bool[rows * cols]`并在普通失败结束时释放，却在找到路径后从循环内直接返回，未释放数组。RAII 容器不仅简化代码，更重要的是让成功、失败、异常每个出口都遵守相同资源生命周期。
+
+## 官方测试覆盖路径长度与复用约束
+
+官方`Test1`验证`BFCE`成功，`Test2`验证另一矩阵中的`SEE`成功，`Test3`用`ABFB`验证同一`B`格不能复用。5行8列矩阵再测试两条长路径成功，以及字符近似但邻接不成立、目标多一个尾字符时失败。
+
+全`A`的3行4列矩阵对长度12返回真，对长度13返回假，精确卡住“每格最多用一次”的容量边界。单格`A`找`A`为真、找`B`为假，最后空指针与0尺寸返回假。
+
+```cpp
+#include <cassert>
+#include <string_view>
+
+void testMatrixPath() {
+    MatrixPathSolver solver;
+    constexpr std::string_view board = "ABTGCFCSJDEH";
+
+    assert(solver.hasPath(
+        std::span(board.data(), board.size()), 3, 4, "BFCE"));
+    assert(!solver.hasPath(
+        std::span(board.data(), board.size()), 3, 4, "ABFB"));
+
+    constexpr std::string_view allA = "AAAAAAAAAAAA";
+    assert(solver.hasPath(
+        std::span(allA.data(), allA.size()), 3, 4,
+        "AAAAAAAAAAAA"));
+    assert(!solver.hasPath(
+        std::span(allA.data(), allA.size()), 3, 4,
+        "AAAAAAAAAAAAA"));
+
+    constexpr std::string_view one = "A";
+    assert(solver.hasPath(
+        std::span(one.data(), one.size()), 1, 1, "A"));
+    assert(!solver.hasPath(
+        std::span(one.data(), one.size()), 1, 1, "B"));
+}
+```
+
+属性测试可以在小矩阵上用显式路径枚举器作为预言机，并随机生成目标。还应重复调用同一个求解器，确保上次成功或失败没有残留访问标记；这能直接发现“早返回不清理”或“成员数组未重置”的状态污染。
+
+<MatrixPathTraceLab />
+
+## 短路求值与返回路径的状态管理
+
+四个递归调用用逻辑或连接时会短路：左方向成功后，上、右、下不再执行。这正是“只判断是否存在”所需的提前结束，但撤销当前格不能只写在`if (!found)`里；若求解器对象会复用，成功返回也应恢复本层标记。示例把四方向结果先存入`found`，随后无条件清除`visited[pos]`，再返回结果，因此成功和失败出口对外状态一致。
+
+作者代码只在`!hasPath`时撤销。对一次性布尔查询，它找到答案后立即退出，逻辑结果正确；但访问数组也因外层提前返回而泄漏。把资源所有权与搜索状态恢复分开看更清楚：RAII 负责内存必释放，无条件撤销负责对象可重复调用，两者解决不同问题。
+
+若接口还要返回实际坐标路径，可维护一个`vector<Position> path`：匹配格子时`push_back`，失败回退时`pop_back`，完整匹配时复制或移动该路径给调用者。若要枚举所有路径，成功后也不能停止，更不能保留访问标记；应记录当前答案后继续撤销并探索兄弟分支。
+
+返回一条路径与只返回布尔值的渐进搜索上界相同，但输出所有路径可能本身就是指数数量，任何算法都必须为这些结果付出相应时间和存储。需求先限定“存在、任意一条、最短一条还是全部”，才能决定何时短路以及保存多少状态。
+
+<Stepper>
+  <Step title="枚举所有匹配首字符的起点"><MatrixPathBoardDiagram />路径可以从任意格开始，BFCE从第一行第二列的B进入。</Step>
+  <Step title="检查边界、字符和访问状态"><BacktrackingStateMap />三个条件都满足才占用当前格并推进目标下标。</Step>
+  <Step title="失败时撤销当前选择"><VisitedRollbackDiagram />四个方向都失败就恢复visited，让兄弟分支和后续起点重新使用该格。</Step>
+  <Step title="用长度与复用案例回归"><MatrixPathTraceLab />成功路径、ABFB复用失败、12与13个A、单格和空输入覆盖关键出口。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 矩阵中的路径可从任意格开始，每步只能进入上下左右相邻格子。
+2. 搜索状态由当前坐标、目标字符串下标和本路径访问集合共同组成。
+3. 回溯法先匹配并标记格子，再递归尝试四方向，失败时撤销选择。
+4. 访问标记与撤销选择保证同一路径不复用格子，同时不阻塞其他分支。
+5. 最坏时间随目标长度指数增长，访问数组为`O(RC)`，递归栈为`O(L)`。
+6. 长度、字符频次和稀有端点优化都是必要条件剪枝，不能代替邻接搜索。
+7. 空字符串、空矩阵与尺寸不匹配必须在接口契约中分别定义。
+8. RAII 标记容器修复作者成功早返回路径上的手工内存泄漏风险。
+
+<Exercises>
+
+**问题 1：为什么`ABFB`不能复用第一次经过的`B`格？**
+
+<Answer>题目限制同一条路径每格最多进入一次。走A到B再到F后，唯一相邻B若就是已访问的旧格，visited检查会拒绝它；字符相同不代表可以重复使用同一坐标。</Answer>
+
+**问题 2：为什么失败返回前必须把visited恢复为false？**
+
+<Answer>该标记只说明当前递归分支已占用格子。分支失败后它不再属于候选路径；不恢复会让兄弟方向和其他起点错误认为格子永久不可用，从而漏掉合法路径。</Answer>
+
+**问题 3：长度为L的搜索为何常写成指数级？**
+
+<Answer>每匹配一个字符后最多尝试四个方向，排除立即回到上一格后内部通常至多三个新方向，递归树深度为L。最坏节点数按3的L级增长，再乘RC个起点；字符不匹配只改善实际情况。</Answer>
+
+**问题 4：反转目标字符串为何不会改变存在性？**
+
+<Answer>四邻接关系是对称的：若坐标序列从首字符走到末字符合法，把同一序列倒序就从末字符走回首字符，仍相邻且不重复。因此可让出现更少的端点先搜索以减少分支。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="搜索状态">决定当前分支后续选择所需的坐标、字符串下标与访问集合。</GlossaryItem>
+  <GlossaryItem term="回溯法">深度优先尝试选择，失败时恢复状态后探索其他候选的方法。</GlossaryItem>
+  <GlossaryItem term="访问标记">记录当前路径已经使用的矩阵格，阻止重复进入同一坐标。</GlossaryItem>
+  <GlossaryItem term="撤销选择">分支失败时恢复本层修改，让其他分支从相同父状态继续。</GlossaryItem>
+  <GlossaryItem term="剪枝">利用必要条件提前排除不可能成功的状态或输入。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="《剑指Offer（第2版）》面试题12及何海涛官方源码 StringPathInMatrix.cpp"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/12_StringPathInMatrix/StringPathInMatrix.cpp"
+/>

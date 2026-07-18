@@ -1,116 +1,231 @@
 ---
-title: "自然效果渲染"
+title: "自然效果：GPU Gems 1 第 1-8 章复现"
 type: B
 section: "计算机图形学与渲染"
 order: 1
-description: "用程序化噪声和光照模型渲染水、火、毛发等自然现象"
+description: "逐章复现水面、焦散、皮肤、角色动画、改进 Perlin 噪声、火焰、草地与光学衍射"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects"
 draft: false
 ---
 
-import { GpgNaturalEffectsDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-natural-effects";
+import { GpgNaturalEffectsDiagram, GpgNaturalChapterMatrixDiagram, GpgSignalToImageDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-natural-effects";
+import { GpgStepFlowDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能解释水面、火焰、毛发三种自然效果的着色器核心思路
-- 能修改噪声参数控制效果的外观与动态
-- 能回答：为什么程序化噪声是自然效果渲染的通用工具？
-- 能将「扰动源 + 映射 + 光照」三步法应用到新的自然效果
+
+- 能描述 GPU Gems 1 第 1-8 章各自解决的问题、输入输出与不可替代核心
+- 能推导水面波、法线、焦散投影、噪声连续性与衍射颜色的最小模型
+- 能比较皮肤着色、blend shape、粒子火焰和草地 billboard 的几何/外观职责
+- 能设计现代 shader/compute 复现，并用数值、图像、时序和性能证据验收八章
+
 </Objectives>
 
-## 直觉引入
+## 直觉：八章不是同一个“噪声效果”
 
-大自然是最难伪造的。一个完美光滑的水面看起来像塑料，而真实水面有细碎的波纹、高光闪烁和透明折射。为什么？因为真实世界的表面充满「无序」——风吹出涟漪，热气搅动火焰，毛发各自朝向略有不同。
+自然效果 Part 同时处理连续表面、光传输、半透明材质、角色变形、随机场、粒子体积、海量植被和波动光学。噪声只在部分问题中提供信号，不能替代几何、可见性或能量模型。
 
-GPU 渲染自然效果的秘诀不是建更精细的模型，而是用数学函数（噪声）模拟这种无序，再叠加物理光照让它融入场景。
+先预测：水面顶点看起来正确但焦散位置漂移，应先调噪声还是验证水面导数和折射光线与接收面的交点？应验证后者，因为焦散是光线聚散结果。
 
-## 概念讲解
-
-### 三种自然效果的策略
+<Term def="把自然现象拆成驱动场、几何/密度状态、光学响应和时间演化，并分别给出可验证合同的复现方式">自然效果分层模型</Term>是八章共享的方法，而非某个统一 shader。
 
 <GpgNaturalEffectsDiagram />
 
-<Term def="程序化噪声是用数学函数生成的伪随机图案，可在 GPU 上实时计算，无需预存纹理">
-程序化噪声
-</Term>
+## 八章原始问题与唯一承载
 
-水面靠顶点位移加法线扰动模拟波纹；火焰靠滚动噪声纹理加色温渐变模拟燃烧；毛发靠多层壳渲染加各向异性高光模拟发丝。三者的共同骨架是：生成扰动源、映射到几何或颜色、叠加光照。
+<GpgNaturalChapterMatrixDiagram />
 
-<Term def="菲涅尔效应是掠射角下反射率增大的物理现象，水面和玻璃的真实感主要来自它">
-菲涅尔效应
-</Term>
+### Ch1 Effective Water Simulation from Physical Models
 
-## 交互Demo
+水面用多组方向波叠加高度或位移。深水色散关系可写成 $\omega^2=gk$；简化高度场：
 
-<Stepper>
-<Step title="第一步：生成扰动源">
-用正弦波叠加（Gerstner 波）或 Perlin 噪声生成一个随时间变化的标量场。这是所有自然效果的起点——水面用高度场，火焰用密度场，毛发用偏移场。
-<GpgNaturalEffectsDiagram />
-</Step>
-<Step title="第二步：映射到几何或颜色">
-把扰动映射到可见属性：水面把高度场变成法线扰动，火焰把密度场映射成红黄渐变，毛发把偏移场变成壳层位置。映射函数决定了效果的「性格」。
-</Step>
-<Step title="第三步：叠加光照模型">
-最后叠上物理光照让效果融入场景。水面用菲涅尔反射加折射，火焰用加色混合发光，毛发用各向异性高光。没有光照这一步，效果像贴图而不像真实物体。
-</Step>
-</Stepper>
+$$
+h(\mathbf x,t)=\sum_i A_i\sin(\mathbf k_i\cdot\mathbf x-\omega_i t+\phi_i).
+$$
 
-## 代码对照
+解析偏导给切线/法线，比对高度做屏幕导数更稳定。原章还强调反射、折射与波面一致；现代实现可用 compute 频谱或 tessellation，但要保留相位速度、振幅和法线不变量。
 
 ```glsl
-// 水面着色器核心：Gerstner 波 + 菲涅尔
-vec3 gerstnerWave(vec2 pos, vec2 dir, float steepness,
-                  float wavelength, float time, inout vec3 tangent) {
-    float k = 6.28318 / wavelength;
-    float c = sqrt(9.8 / k);
-    vec2 d = normalize(dir);
-    float f = k * dot(d, pos) - c * time;
-    float a = steepness / k;
-    tangent += vec3(
-        -d.x * d.x * (steepness * sin(f)),
-        -d.x * d.y * (steepness * sin(f)),
-        d.x * (steepness * cos(f))
-    );
-    return vec3(d.x * (a * cos(f)), a * sin(f), d.y * (a * cos(f)));
+float h = 0.0; vec2 grad = vec2(0.0);
+for (int i=0; i<waveCount; ++i) {
+  float phase = dot(k[i], x) - omega[i] * time + phi[i];
+  h += A[i] * sin(phase);
+  grad += A[i] * k[i] * cos(phase);
 }
-// 菲涅尔：掠射角反射增强
-float fresnel = pow(1.0 - dot(normal, viewDir), 5.0);
-vec3 color = mix(refractColor, reflectColor, fresnel);
+vec3 normal = normalize(vec3(-grad.x, 1.0, -grad.y));
 ```
+
+### Ch2 Rendering Water Caustics
+
+焦散来自折射光线在接收面上的面积压缩。水面点经 Snell 定律得到折射方向，再与池底相交；相邻水面微元投影面积越小，辐照度越高。折射满足：
+
+$$
+n_1\sin\theta_1=n_2\sin\theta_2.
+$$
+
+现代实现可 rasterize 光束网格、splat 能量或离线/实时 photon-like accumulation。必须做能量归一化、全反射边界和时序稳定测试，不能只滚动一张亮斑贴图。
+
+### Ch3 Skin in the "Dawn" Demo
+
+皮肤不是普通 Lambert。原章用多层纹理、法线细节、specular 与近似次表面效果塑造 Dawn。核心是区分表皮镜面与皮下扩散，并由厚度/区域 mask 控制参数。
+
+<Term def="光进入介质后在表面下散射并从附近位置离开的现象；实时皮肤通常用多尺度模糊、预积分或屏幕空间近似">次表面散射</Term>不能被常数 ambient 代替。现代复现需在线性颜色空间比较未模糊/多尺度 diffuse、独立 specular 和耳缘透射。
+
+### Ch4 Animation in the "Dawn" Demo
+
+角色动画结合骨骼蒙皮和 facial blend shapes。线性 blend shape：
+
+$$
+\mathbf p'=\mathbf p_0+\sum_j w_j(\mathbf p_j-\mathbf p_0).
+$$
+
+权重范围、组合冲突、法线/切线变形和 CPU/GPU 数据布局都是合同。现代 compute/vertex 路径要与 CPU 对少量顶点比较，并检查极端表情和骨骼+表情叠加顺序。
+
+### Ch5 Implementing Improved Perlin Noise
+
+改进 Perlin noise 使用格点伪随机梯度、平滑 fade 和插值。改进 fade：
+
+$$
+f(t)=6t^5-15t^4+10t^3
+$$
+
+在格点端点一、二阶导数为零，减少视觉接缝。<Term def="由格点梯度与到采样点位移做点积，再用平滑权重插值得到的连续伪随机场">梯度噪声</Term>不是独立随机 texel；验收要检查周期、均值、梯度连续性和频谱。现代 hash/texture 实现必须保持梯度集合和插值定义。
+
+```glsl
+float fade(float t) { return t*t*t*(t*(t*6.0-15.0)+10.0); }
+float noise3(vec3 p) {
+  ivec3 cell = ivec3(floor(p));
+  vec3 f = fract(p), u = fade(f);
+  return trilerpGradientDots(cell, f, u);
+}
+```
+
+### Ch6 Fire in the "Vulcan" Demo
+
+火焰用粒子/切片表示随时间变化的密度与温度，再做发光颜色、soft intersection 和 alpha/additive 合成。它不是物理燃烧模拟；核心是高填充率下的粒子组织、动画纹理和视觉层次。
+
+<Term def="用大量面向相机的四边形或体切片近似参与介质，每个元素携带年龄、尺寸、密度和温度等状态的渲染方法">粒子体积近似</Term>要验证排序/预乘 Alpha、overdraw、深度软化和低帧率下时间积分。
+
+### Ch7 Rendering Countless Blades of Waving Grass
+
+草地以 cluster/billboard 减少几何，按距离 LOD，顶点阶段叠加低频风与局部弯曲。根部固定、叶尖位移增大可用高度权重 $s$：
+
+$$
+\Delta\mathbf p=s^q\,\mathbf w(\mathbf x,t).
+$$
+
+必须检查 silhouette、视角 pop、alpha coverage、阴影与 overdraw。现代 instancing/mesh shader 只是载体升级，内容密度与风场相干性仍是核心。
+
+### Ch8 Simulating Diffraction
+
+衍射由微结构尺度与可见光波长相近产生方向性色散。光栅近似满足：
+
+$$
+d(\sin\theta_i+\sin\theta_o)=m\lambda.
+$$
+
+<Term def="表面周期微结构使不同波长在不同方向发生相长/相消干涉，从而产生彩虹色高光的波动光学现象">衍射</Term>不同于薄膜干涉或普通 RGB Fresnel。现代 shader 可按方向求允许波长并映射光谱颜色，需检查周期、级次、视角与能量上限。
+
+<GpgSignalToImageDiagram />
+
+## 现代复现的共同数据流
+
+八章可组织为三类管线：surface（water/skin/diffraction）、deformation（Dawn/grass）、field/volume（noise/fire/caustics）。每类都要明确坐标域、时间步、过滤和合成。
+
+```cpp
+for (Frame frame : testSequence) {
+  updateFields(frame.time);        // waves, noise, wind, particles
+  deformGeometry();                // water, blend shapes, grass
+  renderOpticalResponse();         // skin, caustics, diffraction, fire
+  captureIntermediatesAndTiming();
+  compareWithOracle(frame);
+}
+```
+
+原书效果受当时硬件限制，现代实现不应伪称像素完全一致；应证明核心趋势：波相位与法线一致、焦散随曲率聚焦、噪声连续、动画权重可控、火/草时序稳定、衍射随波长分离。
+
+## 三步八章验收
+
+<Stepper>
+<Step title="第一步：单章最小探针">
+
+每章固定一个可手算输入：单波、平面折射、单灯皮肤、两个 blend target、一个 noise cell、十粒子、单草簇、单光栅周期。
+
+<GpgStepFlowDiagram caption="最小输入让八种不同模型各自可证。" stage={1} stages={["Probe：one controlled input per original chapter"]} />
+
+</Step>
+<Step title="第二步：现代 GPU 双路径">
+
+用 CPU/解析参考与 shader/compute 实现比较中间量，记录从旧 Cg/纹理 pass 到现代资源接口的翻译。
+
+<GpgStepFlowDiagram caption="现代接口不能替代原章关系的独立参考。" stage={2} stages={["Probe：one controlled input per original chapter", "Reproduce：oracle + modern GPU + translation notes"]} />
+
+</Step>
+<Step title="第三步：边界、时序与性能">
+
+扫描振幅、折射临界角、动画极值、噪声格点、粒子 overdraw、草 LOD 和衍射周期；保存图像序列和 GPU 计时。
+
+<GpgStepFlowDiagram caption="自然效果必须在运动和尺度变化中稳定。" stage={3} stages={["Probe：one controlled input per original chapter", "Reproduce：oracle + modern GPU + translation notes", "Validate：boundaries、temporal images、error、GPU cost"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**误区：用一张噪声纹理贴图代替程序化噪声。**
-预存纹理虽然简单，但无法随时间无缝变化且占显存。程序化噪声可实时计算、无平铺痕迹、可任意缩放。除非性能极度受限，优先用程序化方案。
+**现象 →** 用一张滚动 noise 纹理同时解释水、焦散、火和草。
+**原因 →** 把共同扰动信号误当成各章的几何与光学模型。
+**修法 →** 分别保留波面导数、折射聚焦、介质合成和根叶形变合同，noise 只作输入之一。
 </Callout>
 
 <Callout type="trap">
-**误区：水面只做颜色不做法线扰动。**
-只调水面颜色的波纹是「假」的——光照不会随波变化。真正的水面感来自法线扰动导致的高光闪烁，颜色变化是次要的。
+**现象 →** Dawn 皮肤换成现代 PBR 后宣布 Ch3/4 都已复现。
+**原因 →** 混淆皮肤外观与 blend shape/蒙皮动画，且未验证次表面趋势。
+**修法 →** 外观、几何变形分开做 CPU/GPU 探针，再在角色场景组合验收。
 </Callout>
 
+<Callout type="trap">
+**现象 →** 火焰和草地静态截图漂亮，运动时闪烁或 LOD 跳变。
+**原因 →** 只验收单帧，忽略随机场相干、alpha coverage 和时间积分。
+**修法 →** 固定相机轨迹和时间序列，比较帧间差、频谱、coverage 与 GPU overdraw。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题 1**：水面、火焰、毛发三种效果的「扰动源」分别是什么？
+
+**问题 1：Ch1 水面和 Ch2 焦散为何必须共享波面定义？**
 
 <Answer>
-水面用高度场（Gerstner 波/正弦波叠加），映射为顶点位移和法线扰动；火焰用密度场（3D 噪声），映射为颜色渐变和透明度；毛发用偏移场，映射为壳层位置和法线插值。
+焦散折射方向来自水面位置与法线；若水面渲染和焦散使用不同高度/导数，亮斑不会与可见波峰同步。应由同一波参数或纹理产生几何、法线和折射输入。
 </Answer>
 
-**问题 2**：为什么自然效果渲染的第三步「叠加光照」不可省略？
+**问题 2：Improved Perlin Noise 的“improved”怎样验收？**
 
 <Answer>
-没有光照，效果只是彩色图案而非真实物体。光照让效果与场景互动——水面的菲涅尔反射让它随视角变化，火焰的加色混合让它发光照亮周围，毛发的各向异性高光让它有丝绸质感。光照是连接「效果」与「场景」的桥梁。
+在格点边界检查 fade 的一、二阶连续性，比较旧/新梯度集合的轴向伪影与频谱；固定 seed 检查周期和确定性，而不是只看一张云纹理。
 </Answer>
+
+**问题 3：给八章设计一个综合场景。**
+
+<Answer>
+让 Dawn 角色站在有波浪/焦散的水边，周围有风草和粒子火，皮肤使用分层着色，光盘表面显示衍射；所有扰动共享可记录时间轴。分别显示波导数、焦散能量、blend 权重、noise cell、粒子密度、草 LOD 和衍射波长附件。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+GPU Gems 1 第 1-8 章涵盖八种不同问题。完整复现要保留波、折射、皮肤层、角色变形、梯度噪声、粒子介质、植被 LOD 和衍射的独立核心，再用现代 GPU 路径和时序证据组合，而不是用“程序化噪声”一词抹平边界。
+
 <Glossary>
-<GlossaryItem term="程序化噪声">用数学函数实时生成的伪随机图案，无需预存纹理，可无缝平铺和缩放。</GlossaryItem>
-<GlossaryItem term="菲涅尔效应">光线在掠射角下反射率增大的物理现象，是水面和玻璃真实感的关键。</GlossaryItem>
-<GlossaryItem term="Gerstner 波">一种水面波形数学模型，波的峰尖而谷平，比正弦波更接近真实海浪。</GlossaryItem>
-<GlossaryItem term="壳渲染">毛发渲染技术，用多层同心壳从内到外插值法线，模拟发丝体积感。</GlossaryItem>
+<GlossaryItem term="自然效果分层模型">把驱动场、状态、光学响应和时间演化分开验证的模型。</GlossaryItem>
+<GlossaryItem term="次表面散射">光在表面下传播并从邻近位置离开的介质散射。</GlossaryItem>
+<GlossaryItem term="梯度噪声">对格点梯度点积进行平滑插值得到的连续伪随机场。</GlossaryItem>
+<GlossaryItem term="粒子体积近似">用粒子面片或切片近似动态参与介质的渲染方式。</GlossaryItem>
+<GlossaryItem term="衍射">周期微结构按波长和方向产生干涉色散的现象。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="GPU Gems 系列" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3" />
+<Attribution adaptedFrom="GPU Gems 1, Part I: Natural Effects, Chapters 1-8" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems/part-i-natural-effects" />

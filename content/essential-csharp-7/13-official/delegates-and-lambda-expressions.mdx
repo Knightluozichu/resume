@@ -1,0 +1,232 @@
+---
+title: "第13章：Delegates and Lambda Expressions"
+type: C
+section: "Essential C# 7.0 · Functional Building Blocks"
+order: 13
+description: "掌握delegate声明/调用、method-group conversion、multicast invocation、lambda expression/statement、closure与anonymous methods。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-csharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7ClosureCaptureLab, Ec7DelegateBindingLab, Ec7MulticastInvocationLab } from "@/components/mdx/essential-csharp-7/diagrams/delegates-and-lambda-expressions";
+
+<Objectives>
+
+- 能解释delegate signature、method-group conversion、target method/receiver与invocation的完整绑定过程
+- 能分析multicast delegate的combine/remove、调用顺序、返回值与异常传播行为
+- 能比较expression/statement lambda、anonymous method与closure capture，并判断变量生命周期和loop风险
+
+</Objectives>
+
+## 为什么可执行行为也需要一个Type
+
+普通method由调用点直接写死name；delegate把“以后要调用的行为”变成可存储、传递、组合的typed value。sort可接收comparison，retry可接收operation，UI可保存callback。compiler仍检查parameters和return type，runtime再调用保存的method/receiver。
+
+先预测：instance method赋给delegate后object是否仍被引用；overloaded method group如何选择；两个delegates相加会返回几个结果；第二个handler抛异常后第三个是否执行；lambda捕获factor=2后factor改为4，调用看到哪个值；for-loop创建多个closures是否各有i。随后读取binding、invocation list和capture timeline。
+
+<Term def="parameters、return type以及可被赋给该callable value的method shape共同形成的类型安全调用约定。">delegate contract</Term>
+
+## Introducing Delegates and Invocation
+
+delegate type继承`System.MulticastDelegate`的runtime支持，但由专门syntax声明。variable可为null，也可引用一个或多个compatible methods；调用syntax像method。调用前应建立non-null contract，或使用null-conditional invocation。
+
+```csharp
+public delegate int Transformer(int value);
+
+static int Double(int value) => value * 2;
+
+Transformer transform = Double;
+int result = transform(4);       // 8
+int same = transform.Invoke(4);  // equivalent explicit call
+```
+
+delegate invocation会同步执行target，除非target自身启动async work；delegate keyword不自动创建thread。parameters的ref/out及return都必须与delegate signature compatible。
+
+## Declaring Delegate Types and Method Groups
+
+method group如`Double`尚不是一个value；在有target delegate type的context中，compiler做overload resolution并创建delegate。static target只需method；instance target还保存receiver reference，因此delegate活着时receiver也可能保持reachable。
+
+<Term def="delegate保存的具体method与instance receiver组合；static method没有receiver，instance binding会保持object reference。">target-receiver pair</Term>
+
+<Stepper>
+  <Step title="切换static、instance、lambda与mismatch binding">
+    <Ec7DelegateBindingLab />
+  </Step>
+  <Step title="核对signature与overload selection">
+    parameter/return conversions必须compatible；method group借target delegate type选择candidate。
+  </Step>
+  <Step title="检查receiver lifetime与invocation">
+    instance delegate保存scaler reference；static delegate不保存object，调用都使用相同typed syntax。
+  </Step>
+</Stepper>
+
+```csharp
+public sealed class Scaler
+{
+    private readonly int factor;
+    public Scaler(int factor) { this.factor = factor; }
+    public int Scale(int value) => value * factor;
+}
+
+var scaler = new Scaler(4);
+Transformer transform = scaler.Scale;
+Console.WriteLine(transform(3)); // 12
+```
+
+.NET提供常用generic delegates：`Action`表示无return，`Func<...>`最后一个type argument是return，`Predicate<T>`返回bool。domain-specific delegate name可承载更清楚的语义和parameter names；不要为每个callback重复造无意义type。
+
+<Callout type="trap" title="保存instance method只保存code address，不影响object生命周期">
+delegate还保存receiver，形成strong reference。长期缓存callback可能意外延长整个object graph生命周期；释放订阅和callback ownership必须明确。
+</Callout>
+
+## Multicast Delegates and Invocation Lists
+
+delegates是immutable values，`+`/`+=`组合产生包含ordered invocation list的新delegate，`-`/`-=`移除匹配的最后一段sub-list。默认调用按顺序同步执行每个target。void callbacks最直观；非void multicast只把最后一个成功target的return交给caller，前面的results被忽略。
+
+<Term def="multicast delegate中按combine顺序保存的target-receiver entries及其remove、return和failure规则。">invocation list</Term>
+
+```csharp
+Transformer pipeline = value => value + 1;
+pipeline += value => value * 3;
+
+int result = pipeline(5); // first returns 6 (discarded), last returns 15
+
+Delegate[] targets = pipeline.GetInvocationList();
+```
+
+某个target抛exception时，default invocation立即停止，后续targets不执行，exception传播给caller。若必须隔离每个callback，caller要GetInvocationList后逐项try/catch并定义results/errors aggregation；不能假设multicast自动容错。
+
+<Stepper>
+  <Step title="切换combine、remove、throw与manual inspection">
+    <Ec7MulticastInvocationLab />
+  </Step>
+  <Step title="逐项读取ordered targets">
+    combine保留顺序，remove匹配最后occurrence；delegate本身immutable。
+  </Step>
+  <Step title="记录return和failure policy">
+    默认只见最后return且异常停止；需要聚合时显式逐target调用。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="multicast delegate会收集所有返回值并继续执行失败后的targets">
+默认调用只返回最后一个成功target的值；中途exception会停止list。结果收集和failure isolation必须由caller显式实现。
+</Callout>
+
+## Lambda Expressions and Target Conversion
+
+lambda是anonymous function syntax，不独立声明一个名为lambda的runtime type；它需要target conversion到compatible delegate或expression tree。expression lambda右侧单expression并隐式return，statement lambda使用block并显式return（若非void）。parameter types可由target推断，也可显式写出。
+
+<Term def="lambda syntax在target delegate context下进行parameter/return checking并生成可调用representation的转换。">lambda conversion</Term>
+
+```csharp
+Func<int, int> square = value => value * value;
+
+Func<int, int> normalize = value =>
+{
+    if (value < 0) return 0;
+    return value > 100 ? 100 : value;
+};
+
+Action<string> write = message => Console.WriteLine(message);
+```
+
+lambda overload resolution可能依赖target delegate signatures。若多个overloads接收相似`Func` types，显式parameter type、cast或named method可消除ambiguity。简单expression适合lambda；复杂validation、复用和诊断通常用named method更清楚。
+
+## Closures Capture Variables, Not Snapshots
+
+lambda引用outer local/parameter时形成closure。compiler通常把captured variables提升到一个共享object，delegate保存它；调用读取变量当前值，而非delegate creation时value snapshot。修改发生在创建后、调用前，closure会观察新值。
+
+<Term def="anonymous function与被捕获outer variables共享的延长生命周期storage及其creation/invocation时间语义。">closure lifetime</Term>
+
+```csharp
+int factor = 2;
+Func<int, int> scale = value => value * factor;
+
+Console.WriteLine(scale(3)); // 6
+factor = 4;
+Console.WriteLine(scale(3)); // 12
+```
+
+capture可能让large object、service或UI长期存活，也可能引入multi-thread shared mutable state。只捕获必要的小型immutable values；若需要snapshot，在每轮/创建前复制到新的local，并确认该local的scope真正独立。
+
+<Stepper>
+  <Step title="切换expression、statement、anonymous与loop capture">
+    <Ec7ClosureCaptureLab />
+  </Step>
+  <Step title="分开creation time与invocation time">
+    delegate创建不执行body；调用时读取captured variable当前state。
+  </Step>
+  <Step title="检查scope与lifetime">
+    for-loop共享一个i时创建per-iteration local snapshot；同时避免closure意外保活receiver/object graph。
+  </Step>
+</Stepper>
+
+```csharp
+var actions = new List<Action>();
+for (int i = 0; i < 3; i++)
+{
+    int snapshot = i;
+    actions.Add(() => Console.WriteLine(snapshot));
+}
+
+foreach (Action action in actions) action(); // 0, 1, 2
+```
+
+C# 5以后foreach iteration variable具有每轮独立语义，但普通for的i仍在loop外同一declaration；显式snapshot能让intent清楚。capture的并发读写需要同步，closure不会自动线程安全。
+
+## Anonymous Methods
+
+anonymous method使用`delegate` syntax，是lambda之前的anonymous function形式，支持statement body和capture。多数新代码lambda更简洁，但阅读旧代码、某些省略parameter list的场景仍会遇到anonymous method。
+
+```csharp
+Transformer doubleValue = delegate(int value)
+{
+    return value * 2;
+};
+```
+
+它和lambda都可转换为delegate，也共享closure风险。不要把anonymous method与anonymous type混淆：前者是行为，后者是编译器生成的data shape。
+
+## Delegate API Design and Testing
+
+callback API应说明同步/异步、调用次数、顺序、null、exception、thread和lifetime ownership。接受delegate的方法若立即调用一次，capture风险较小；若长期保存，必须提供remove/dispose机制。外部不可信callbacks需要隔离策略。
+
+测试矩阵包括：null/empty callback；static与instance binding；overload match；multicast order/remove；middle exception；closure修改前后；loop snapshots；receiver是否可释放。只断言最后result无法覆盖invocation list副作用。
+
+## 本章回顾：Behavior也有Type、State与Lifetime
+
+1. delegate contract规定parameters/return，method group在target context选择compatible method。
+2. instance delegate保存method与receiver，可能延长object lifetime。
+3. multicast delegates不可变且有ordered invocation list，默认返回最后结果、遇异常停止。
+4. lambda分expression/statement forms，经target conversion成为delegate；anonymous method是旧式等价语法。
+5. closure捕获variable storage而非snapshot，必须审计调用时间、loop scope和并发/lifetime。
+
+<Exercises>
+
+**问题 1：如何判断一个method group能否赋给Transformer delegate？**
+
+<Answer>从target delegate读取parameter数量/modes/types和return type，再对method group做overload resolution，确认存在唯一compatible candidate。static target只保存method；instance target还保存receiver。不能只看method name，mismatch应在compile time拒绝，并测试实际invocation input/output。</Answer>
+
+**问题 2：怎样可靠执行multicast callbacks并收集每个结果？**
+
+<Answer>默认delegate调用只返回最后target结果，且中途异常停止。需要全部结果时调用GetInvocationList，逐项cast到目标delegate并在各自try/catch中执行，记录顺序、result/error并定义是否继续。combine/remove仍按immutable invocation-list规则处理。</Answer>
+
+**问题 3：为什么closure在factor修改后得到新结果，如何避免for-loop共享i？**
+
+<Answer>closure捕获variable storage而不是创建时value，调用时读取当前factor，所以2改4后结果变化。普通for的i是同一variable，循环内先声明`int snapshot = i`，让每个delegate捕获不同local。还要检查captured receiver/object是否被长期保活及并发读写。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="delegate contract" definition="可赋method与调用所需parameters/return shape的类型安全约定。" />
+  <GlossaryItem term="target-receiver pair" definition="delegate保存的method和可选instance receiver组合。" />
+  <GlossaryItem term="invocation list" definition="multicast delegate按顺序保存的targets及remove/return/failure规则。" />
+  <GlossaryItem term="lambda conversion" definition="anonymous function在target context下检查并生成callable representation。" />
+  <GlossaryItem term="closure lifetime" definition="captured variable storage被delegate共享并可能延长存活的周期。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 13: Delegates and Lambda Expressions" adaptedUrl="https://www.informit.com/store/essential-c-sharp-7.0-9781509303618" />

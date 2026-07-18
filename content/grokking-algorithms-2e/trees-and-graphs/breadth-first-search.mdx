@@ -1,135 +1,288 @@
 ---
-title: 广度优先搜索
+title: "第6章 广度优先搜索"
 type: C
-section: 树与图
+section: "算法图解（第2版）"
 order: 6
-description: BFS——队列逐层扩散，找到最短路径边数。
+description: "从公交换乘与社交关系建立图模型，用队列实现BFS无权最短路径，再学习有向图上的拓扑排序。"
 demo: true
 math: false
-sourceUrl: https://www.manning.com/books/grokking-algorithms-second-edition
+sourceUrl: "https://livebook.manning.com/book/grokking-algorithms-second-edition/chapter-6"
 draft: false
 ---
 
-{/* 知识点清单：广度优先搜索(BFS) / 队列 / 图 / 无权最短路径 / O(V+E) / 层级遍历；原书章节：Chapter 6 — Breadth-First Search。 */}
+import { GraphDirectionDiagram, BfsShortestPathDiagram, MangoSellerQueueLab, TopologicalSortLab } from "@/components/mdx/grokking-algorithms-2e/diagrams/breadth-first-search";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能画出 BFS 的队列变化过程，标注每层节点和访问顺序。
-- 能解释为什么 BFS 能保证找到无权图的最短路径（最少边数）。
-- 能回答：BFS 和 DFS 在什么场景下分别更好？
+- 能解释节点、边、邻接关系以及有向图与无向图的区别
+- 能用散列表邻接表实现图，并绘制BFS队列的入队与出队轨迹
+- 能证明BFS为何回答路径是否存在并找到无权图的最少边数路径
+- 能实现已搜索集合和父节点记录，处理环、重复发现与路径重建
+- 能分析BFS的O(V+E)复杂度，并实现有向无环图的拓扑排序
 
 </Objectives>
 
-## 直觉引入
+## 从最少换乘路线开始
 
-往平静的池塘里扔一颗石子，涟漪从中心一圈一圈向外扩散。第一圈紧挨着落水点，第二圈比第一圈远一步，第三圈又远一步——每一圈都均匀地覆盖了同等距离的所有水面。
+先预测：从Twin Peaks乘公交到Golden Gate Bridge，目标是换乘次数最少。你会先检查所有“一班车直达”的站点，再检查“两班车可达”的站点，还是沿任意一条线路一路坐到底？
 
-广度优先搜索就是图上的涟漪。你从一个起点出发，先探索所有「距离 1 步」的节点，然后所有「距离 2 步」的节点，然后「距离 3 步」……一圈一圈往外推。因为你是在发现距离更远的节点之前先把当前距离的所有节点都处理完，所以第一次遇到某个节点时经过的边数就是最短的。
+<Term def="由节点和连接节点的边构成，用于表达对象及其关系的数据结构。">图</Term>不是坐标曲线。图由节点和边组成：<Term def="图中表示对象、状态或位置的基本单元。">节点</Term>可以是车站、人物或单词状态，<Term def="连接两个节点并表示关系或可达动作的结构。">边</Term>可以是公交线路、社交关系或一次编辑。
 
-这章解决的核心问题：在一个无权图（每条边权重相同）里，如何找到从起点到任意节点的最短路径（最少边数）？社交网络里的「几度人脉」、迷宫里的「最短脱出路径」，全是这个问题。
+<Term def="一个节点直接连接到哪些其他节点的关系。">邻接关系</Term>表示连接。公交换乘、拼写纠正、社交网络、网页爬取都能先建模为图，再根据“最短”究竟指边数、距离还是费用选择算法。
 
-## 概念讲解
+<GraphDirectionDiagram />
 
-### 什么是 BFS
+## 有向图、无向图与邻接表
 
-<Term def="从起点出发，逐层向外探索图中节点的搜索算法。用队列管理待访问节点，保证先访问距离近的、再访问距离远的。时间复杂度 O(V+E)。">广度优先搜索（BFS）</Term>的核心数据结构是<Term def="先进先出(FIFO)的线性数据结构。BFS 用它保证「先发现的节点先处理」，从而逐层推进。">队列</Term>。为什么非要用队列？因为队列的自然属性——先进入的先出来——恰好和「先处理近的再处理远的」这个需求完美吻合。
+<Term def="每条边带方向，只允许从起点沿箭头到终点的图。">有向图</Term>中的“you关注alice”不自动推出“alice关注you”。<Term def="每条边可双向通行，连接关系对两个端点对称的图。">无向图</Term>中的“车站A与B相连”意味着两边都能到达；实现时通常在两个节点的邻居列表里都保存对方。
 
-BFS 的算法过程：
-1. 把起点加入队列，标记为已访问。
-2. 从队列头部取出一个节点。
-3. 检查这个节点的所有邻居：如果邻居没被访问过，标记它、记录它的父节点（用于最终重建路径）、把它加入队列尾部。
-4. 重复 2–3，直到队列为空。
+<Term def="为每个节点保存直接邻居集合的图表示。">邻接表</Term>适合稀疏图。用散列表表示邻接表，就是把节点名称映射到邻居列表：
 
-<Term def="由节点（顶点）和连接节点的边组成的数据结构。BFS 处理的是无权图——每条边的成本相同。">图</Term>是 BFS 的主场。图中的节点叫顶点（V = vertices），连接叫边（E = edges）。BFS 会访问每个顶点一次、每条边至多两次（从两端各看一次），所以时间复杂度是 O(V+E)。
+```python
+graph: dict[str, list[str]] = {
+    "you": ["alice", "bob", "claire"],
+    "alice": ["peggy"],
+    "bob": ["anuj", "peggy"],
+    "claire": ["thom", "jonny"],
+    "anuj": [],
+    "peggy": [],
+    "thom": [],
+    "jonny": [],
+}
 
-<BfsDiagram />
+assert graph["you"] == ["alice", "bob", "claire"]
+```
 
-看图：数字标注了 BFS 的访问顺序。注意同一层的节点（相同颜色）在被访问前，上一层的所有节点都已处理完毕。这就是「队列一层层往外推」的效果。
-
-### BFS 为什么能找最短路径？
-
-关键在于：「第一次发现」就是最短。BFS 先探索距离 1 的节点，再距离 2 的，再距离 3 的……如果节点 X 在第 3 层被首次发现，那它不可能在第 2 层就被发现过（否则轮不到第 3 层）。因此从起点到 X 的最短路径长度就是 3 条边。
-
-这个「第一次发现即最短」的性质只在 <strong>无权图</strong> 上成立。如果边的权重不同，先被发现的节点不一定路径代价更小——狄克斯特拉算法就是为这个场景而生的。
-
-## 交互 Demo
-
-拖动滑块观察队列的「入队—出队」节奏和节点的逐层扩散。注意每一层的所有节点都被访问完之后，才会进入下一层。
-
-<AlgorithmPlayground mode="bfs" currentStep={0} title="广度优先搜索 · 交互动画" focus="核心观察：队列的入队顺序决定了访问顺序。同一层的节点颜色相同。看队列尾部不断加新节点、头部不断弹出处理完的节点。" />
-
-<Callout type="tip">
-  <strong>猜一猜：</strong>如果把动画里的队列换成栈（后进先出），访问顺序会变成什么样？那是深度优先搜索（DFS）的行为。
-</Callout>
-
-## 分步动画
+这个图是有向的：字典中保存 `you → alice` 不会自动添加 `alice → you`。节点即使没有出边，也显式映射到空列表，能让遍历契约更清楚；实现也可以用 `graph.get(node, [])` 兼容缺省叶节点。
 
 <Stepper>
-  <Step title="起点入队">
-    BFS 的一开始，只有起点节点被标记为「已访问」并放入队列。动画里这个节点会被高亮，它是整个探索的源头。队列里只有一个元素——这是所有后续扩散的起点。没有起点就没有涟漪。
-    <AlgorithmPlayground mode="bfs" currentStep={0} title="BFS · 第 1 步：起点入队" />
-  </Step>
-  <Step title="弹出队首，探索所有邻居">
-    从队列头部取出一个节点（现在是起点），逐一检查它的所有直接邻居。每一个还没被访问过的邻居都被标记、记录来源（它的「父节点」就是当前节点）、然后加入队列尾部。动画里注意邻居被发现的顺序——它们现在在队列里排队等着被处理。
-    <AlgorithmPlayground mode="bfs" currentStep={1} title="BFS · 第 2 步：探索邻居并入队" />
-  </Step>
-  <Step title="逐层推进：队列是保障">
-    队列继续弹出队首节点、探索它的邻居、新邻居入队。因为上一层的所有邻居都在上一轮被一次性加入了队列，且比下一层加入得更早，所以 FIFO 队列自然保证了「上层的全处理完才会轮到下层」。动画里颜色相同的节点就是同一层。
-    <AlgorithmPlayground mode="bfs" currentStep={2} title="BFS · 第 3 步：逐层推进" />
-  </Step>
-  <Step title="队列为空：搜索完成">
-    当所有能到达的节点都被访问过、没有新节点进入队列时，队列变空，BFS 结束。如果图中还有未访问的节点，说明它们和起点不连通（没有路径可达）。此时通过记录下的父节点链，可以逆向重建从起点到任意访问过的节点的最短路径。
-    <AlgorithmPlayground mode="bfs" currentStep={3} title="BFS · 第 4 步：搜索完成" />
-  </Step>
+  <Step title="列出节点"><GraphDirectionDiagram />先确定人物、车站或状态是什么，不要把属性误当成独立节点。</Step>
+  <Step title="定义边的语义">说明边表示关注、通行、依赖还是一步变换，并判断关系是否有方向。</Step>
+  <Step title="写成邻接表">为每个节点列出直接邻居；无向边在两个端点中各保存一次。</Step>
+  <Step title="检查孤立与叶节点">确保无邻居节点仍能被表示，避免遍历访问缺失键时中断。</Step>
 </Stepper>
 
-## 常见误区
-
-<Callout type="trap">
-  <strong>现象 →</strong> 用 BFS 找带权图的最短路径，结果路径的「边数最少」但不是「代价最低」。<strong>原因 →</strong> BFS 的「最短」指的是经过的边数最少，假设每条边的代价相同。如果边有权重差异（高速公路 10 公里 vs 小路 2 公里），BFS 给出的答案可能远不是最优。<strong>修法 →</strong> 带权图的最短路径用狄克斯特拉算法（下章）。BFS 是狄克斯特拉在所有边权重相等时的特例。
+<Callout type="trap" title="一条关系在邻接表里出现一次，所以它一定是无向边">
+出现次数是实现细节，方向来自业务语义。无向图通常把一条边写成两个邻接项；有向图只记录箭头方向。建模错误会改变可达性和最短路径答案。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 图中存在环，BFS 无限循环或反复访问同一节点。<strong>原因 →</strong> 忘记标记已访问节点。BFS 需要维护一个 `visited` 集合，节点入队时立刻标记，防止同一个节点被多次加入队列。<strong>修法 →</strong> 邻居入队前先检查 `visited`，且标记的时机是「即将入队时」而非「出队处理时」——否则同一节点可能被多次入队浪费队列空间。
+## BFS回答两个问题
+
+<Term def="使用先进先出队列，从起点按边数逐层探索图的算法。">广度优先搜索</Term>回答：
+
+1. 从起点到目标是否存在路径？
+2. 若存在，在每条边成本相同的图上，哪条路径经过的边最少？
+
+广度优先搜索回答是否存在路径，只要搜索结束前命中目标即可。广度优先搜索寻找无权图最短路径，则依赖更强的层次不变量：距离0的起点先处理，所有距离1节点先于距离2节点，所有距离2节点先于距离3节点。
+
+<Term def="由若干相邻边首尾相接形成的节点序列。">路径</Term>描述怎样从起点走到终点；<Term def="在本章无权模型中经过边数最少的可达路径。">最短路径</Term>不等同于公里数、时间或费用最低。若边权不同，BFS首次发现的路径只保证边数少，应改用适合权重条件的算法。
+
+<BfsShortestPathDiagram />
+
+## 队列保证先近后远
+
+<Term def="只能从尾部加入、从头部移除的先进先出容器。">队列</Term>是BFS的顺序保证。队列是先进先出：先发现的节点先处理。把节点加入队尾叫<Term def="把元素添加到队列尾部。">入队</Term>，移除队首叫<Term def="从队列头部取出最早加入的元素。">出队</Term>。
+
+邻居按发现顺序进入队列。起点的一度邻居先全部入队，它们必然排在任何二度邻居之前，因此算法先检查一度关系再检查二度关系。即使同层内部顺序随邻接列表顺序变化，层与层的距离顺序不会被打乱。
+
+<MangoSellerQueueLab />
+
+原章的芒果销售商示例把“是否为销售商”写成一个谓词。BFS从 `you` 的一度关系开始，若无人命中，再检查二度关系。示例中用名字是否以字母m结尾只是教学规则；真实程序应使用可靠业务字段。
+
+<Stepper>
+  <Step title="起点进入队列"><BfsShortestPathDiagram />把距离0节点入队并立即标记已发现，初始化父节点为空。</Step>
+  <Step title="队首出队并检查"><MangoSellerQueueLab />只处理最早发现的节点；若目标谓词命中，可立即停止。</Step>
+  <Step title="发现新邻居">按邻接表顺序扫描，未发现邻居立即标记、记录父节点并加入队尾。</Step>
+  <Step title="重复至命中或为空">命中时沿父节点重建路径；队列空仍未命中表示起点不可达目标。</Step>
+</Stepper>
+
+## 实现芒果销售商搜索与路径重建
+
+<Term def="记录已经发现或处理过的节点，避免重复入队和环路的集合。">已搜索集合</Term>必须在节点**入队时**更新。若等到出队才标记，同一节点可能被多个前驱重复加入队列，占用额外时间和空间。
+
+<Term def="记录节点第一次由哪个前驱发现，用于从终点逆向恢复最短路径的映射。">父节点映射</Term>只在第一次发现节点时写入。因为BFS按距离递增发现节点，这个第一次前驱对应一条最少边数路径。
+
+```python
+from collections import deque
+from collections.abc import Callable, Mapping, Sequence
+
+Graph = Mapping[str, Sequence[str]]
+
+def bfs_find(
+    graph: Graph,
+    start: str,
+    matches: Callable[[str], bool],
+) -> tuple[str, list[str]] | None:
+    queue = deque([start])
+    searched = {start}
+    parent: dict[str, str | None] = {start: None}
+
+    while queue:
+        person = queue.popleft()
+        if person != start and matches(person):
+            path: list[str] = []
+            current: str | None = person
+            while current is not None:
+                path.append(current)
+                current = parent[current]
+            return person, list(reversed(path))
+
+        for neighbor in graph.get(person, []):
+            if neighbor in searched:
+                continue
+            searched.add(neighbor)
+            parent[neighbor] = person
+            queue.append(neighbor)
+
+    return None
+
+result = bfs_find(graph, "you", lambda name: name.endswith("m"))
+assert result == ("thom", ["you", "claire", "thom"])
+```
+
+已搜索集合避免重复处理，也就是已搜索集合防止环导致无限循环。若 `peggy` 同时是 `alice` 和 `bob` 的邻居，她只会在第一次发现时入队；后来的边仍会被检查，但不会制造第二份队列条目。
+
+<Callout type="trap" title="节点出队后再加入已搜索集合也一样">
+在菱形图中，两个同层父节点可能先后发现同一子节点。若发现时不标记，子节点会重复入队；更密集的图会放大队列。正确时机是首次入队之前或同时。
 </Callout>
 
-## 小结与练习
+## 为什么第一次发现就是最少边数
 
-- BFS = 队列 + 逐层扩散。先处理距离近的，再处理距离远的。无权图上首次遇到即最短路径。
-- 时间复杂度 O(V+E)：每个顶点访问一次，每条边至多被检查两次。
-- BFS 适合无权图最短路径、层级遍历（二叉树层序）、社交网络「N 度人脉」。
-- 带权图最短路径 ≠ BFS，需要下一章的狄克斯特拉。
+BFS维护不变量：队列中的节点按非递减距离排列。处理距离 `d` 的节点时，新发现邻居的距离是 `d+1`；队列中已经存在的节点距离不大于 `d+1`，以后才发现的节点距离不会小于它。
+
+所以某节点第一次被发现为距离 `d` 时，不可能存在更短但尚未探索的路径。若存在长度小于 `d` 的路径，它的前驱会处在更早层，早已把该节点发现。这一证明依赖每条边都计作一步；权重不同会破坏“边数层级等于总代价层级”。
+
+发现目标后，如果只要布尔答案即可立即返回；如果要路径，沿父节点从目标回到起点，再反转序列。若要所有节点的最短边数，不要在第一次目标命中时退出，继续处理队列即可得到距离表。
+
+## 时间与空间复杂度
+
+设可达子图有 `V` 个节点、`E` 条边。每个节点因已搜索集合最多入队和出队一次，贡献 `O(V)`；扫描邻接表时，每条有向边检查一次，无向边通常在两个方向各出现一次，仍是 `O(E)`。因此BFS时间复杂度O(V+E)。
+
+邻接表占 `O(V+E)` 空间；队列、已搜索集合、父节点和距离表各最多保存 `O(V)` 项。BFS可能在宽图中同时保存整个前沿，所以内存峰值取决于层宽。DFS可有不同前沿形态，但不能用普通深度优先顺序替代BFS的无权最短路径保证。
+
+## 拓扑排序：让依赖先于被依赖者
+
+第2版还引入<Term def="把有向无环图节点排成线性顺序，使每条边的起点都出现在终点之前。">拓扑排序</Term>。它不是按数值大小排序，而是暴露依赖关系。例如“需求→设计→实现→测试”要求前置工作先出现。
+
+<Term def="没有有向环的有向图，简称DAG。">有向无环图</Term>才存在完整拓扑序。Kahn算法统计每个节点的<Term def="指向某节点的有向边数量。">入度</Term>，把所有入度为0的节点加入队列；每取出一个节点，就删除它的出边并降低后继入度。新变成0的节点继续入队。
+
+<TopologicalSortLab />
+
+```python
+from collections import deque
+from collections.abc import Mapping, Sequence
+
+def topological_sort(graph: Mapping[str, Sequence[str]]) -> list[str]:
+    nodes = set(graph)
+    for neighbors in graph.values():
+        nodes.update(neighbors)
+
+    indegree = dict.fromkeys(nodes, 0)
+    for neighbors in graph.values():
+        for neighbor in neighbors:
+            indegree[neighbor] += 1
+
+    queue = deque(node for node in nodes if indegree[node] == 0)
+    order: list[str] = []
+
+    while queue:
+        node = queue.popleft()
+        order.append(node)
+        for neighbor in graph.get(node, []):
+            indegree[neighbor] -= 1
+            if indegree[neighbor] == 0:
+                queue.append(neighbor)
+
+    if len(order) != len(nodes):
+        raise ValueError("graph contains a directed cycle")
+    return order
+```
+
+多个节点同时入度为0时可能产生多个合法顺序；拓扑排序不承诺唯一。若处理结束后输出节点数少于总节点数，剩余节点构成或依赖某个有向环，任何线性顺序都无法满足全部边。
+
+Kahn算法同样逐节点、逐边处理：初始化入度扫描全部邻接项，之后每条边只在前驱输出时再访问一次，所以时间也是 `O(V+E)`，入度表、队列与输出占 `O(V)` 附加空间。它和BFS都使用队列，但排序候选由“入度变为0”决定，而BFS候选由“从当前层首次发现”决定，不能因为容器相同就把两个算法混为一谈。
+
+<Stepper>
+  <Step title="统计所有节点入度"><TopologicalSortLab />把只出现在邻居列表中的叶节点也纳入，逐边累加终点入度。</Step>
+  <Step title="入度为零者入队">这些节点没有未完成前置依赖，可以作为当前合法候选。</Step>
+  <Step title="输出并移除出边">每输出一个节点就降低后继入度，新变为零的后继加入队列。</Step>
+  <Step title="比较输出数量">全部输出即得到拓扑序；若仍有节点，报告有向环而不是返回残缺顺序。</Step>
+</Stepper>
+
+<Callout type="trap" title="任何有向图都能拓扑排序">
+有向环表示一组相互等待的依赖，没有节点能先开始。拓扑排序要求DAG；检测到输出数量不足时必须显式报告环。
+</Callout>
+
+## 原章概念回查
+
+图由节点和边组成，先区分有向图与无向图，再用邻接关系表示连接；程序中常用散列表表示邻接表。
+
+广度优先搜索回答是否存在路径，也能在每条边成本相同的条件下寻找最少边数路线，即广度优先搜索寻找无权图最短路径。芒果销售商示例先检查一度关系再检查二度关系。
+
+队列是先进先出，BFS反复执行入队与出队；邻居按发现顺序进入队列。已搜索集合避免重复处理，已搜索集合防止环导致无限循环。
+
+BFS时间复杂度O(V+E)，因为每个可达节点至多入队一次，每条邻接边只被常数次检查。第2版还用拓扑排序展示有向无环图如何暴露依赖。
+
+## 本章回顾
+
+1. 图用节点表示对象，用边表示关系或一步动作。
+2. 有向边只沿箭头可达，无向边允许双向通行。
+3. 邻接表把每个节点映射到直接邻居集合。
+4. BFS用先进先出队列按边数逐层探索。
+5. BFS既能判断可达，也能给出无权图最少边数路径。
+6. 节点第一次发现时应立即加入已搜索集合。
+7. 父节点映射记录第一次发现关系并支持路径重建。
+8. 有环图若没有去重，会重复处理甚至无限循环。
+9. BFS时间为 `O(V+E)`，辅助状态最多为 `O(V)`。
+10. 边权不同后，BFS的最少边数不等于最小总代价。
+11. 拓扑排序让每条依赖边的起点先于终点。
+12. 只有有向无环图存在覆盖全部节点的拓扑序。
 
 <Exercises>
-  <Answer question="对一个完全二叉树（每层全满，深度为 4），BFS 的访问顺序是怎样的？">
-    根节点 → 第 2 层全部两个节点（左到右）→ 第 3 层全部四个节点 → 第 4 层全部八个节点。BFS 的访问顺序正好是二叉树的层序遍历。
-  </Answer>
-  <Answer question="在一个有 1000 个顶点、5000 条边的图上跑 BFS，大约需要多少步？">
-    时间复杂度 O(V+E) ≈ 1000 + 5000 = 6000 步级别的操作量。每个顶点访问一次，每条边在其两端的顶点处理时各被检查一次。
-  </Answer>
-  <Answer question="把 BFS 的队列换成栈，算法变成什么了？在什么场景下用栈更好？">
-    队列换成栈就变成了深度优先搜索（DFS）。DFS 适合于：迷宫全部路径探索、拓扑排序、判断连通性（不在乎最短距离时）。DFS 空间 O(V 深度)，BFS 空间 O(V 宽度)——树很宽时 BFS 内存开销更大。
-  </Answer>
+
+**问题 1：为什么BFS要在入队时而不是出队时标记节点？**
+
+<Answer>多个已出队父节点可能在同一轮发现同一邻居。入队时标记能让后续父节点跳过它，保证每个节点只入队一次；出队时才标记会制造重复队列项和冗余处理。</Answer>
+
+**问题 2：BFS找到经过2条边的路线和经过3条边但总路程更短的路线，会返回哪条？**
+
+<Answer>普通BFS返回最先发现的2边路线，因为本章“最短”定义为边数最少。若边表示不同距离或费用，应使用满足权重条件的最短路径算法，不能把BFS结果解释为总路程最低。</Answer>
+
+**问题 3：无向图有V个节点、E条边，邻接表保存2E个邻接项，为什么仍写O(V+E)？**
+
+<Answer>每条无向边只带来两个方向的常数倍存储与检查，复杂度忽略固定系数2，所以节点初始化与邻接扫描总计仍为 `O(V+E)`。</Answer>
+
+**问题 4：Kahn拓扑排序输出数量少于节点总数说明什么？**
+
+<Answer>说明剩余子图中没有入度为0的节点，至少存在一个有向环；环中节点彼此等待，无法形成满足全部依赖边的完整线性顺序。算法应报告错误而非返回残缺结果。</Answer>
+
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="广度优先搜索（BFS）">
-    从起点出发，用队列逐层向外探索图的算法。无权图上首次遇到一个节点时经过的边数就是最短路径。时间 O(V+E)。详见「概念讲解」节。
-  </GlossaryItem>
-  <GlossaryItem term="队列">
-    先进先出（FIFO）的线性数据结构。BFS 用它保证「同层节点全部处理完再处理下一层」的访问顺序。详见「概念讲解」节。
-  </GlossaryItem>
-  <GlossaryItem term="图">
-    由顶点（V）和边（E）组成的数据结构。本章关注无权图（所有边成本相同）。社交网络、迷宫、网页链接都是图。详见「概念讲解」节。
-  </GlossaryItem>
-  <GlossaryItem term="O(V+E)">
-    图的搜索算法标准时间复杂度：每个顶点访问一次（V），每条边至多被检查两次（2E，从两端各一次）。统称 O(V+E)。详见「概念讲解」节。
-  </GlossaryItem>
+  <GlossaryItem term="图">由节点和边组成、用于表达对象关系的数据结构。</GlossaryItem>
+  <GlossaryItem term="节点">图中表示对象、位置或状态的单元。</GlossaryItem>
+  <GlossaryItem term="边">连接节点并表示关系或可达动作的结构。</GlossaryItem>
+  <GlossaryItem term="邻接关系">一个节点与哪些节点直接相连的关系。</GlossaryItem>
+  <GlossaryItem term="有向图">边带方向、只能沿箭头通行的图。</GlossaryItem>
+  <GlossaryItem term="无向图">边可双向通行、关系对端点对称的图。</GlossaryItem>
+  <GlossaryItem term="邻接表">为每个节点保存直接邻居集合的图表示。</GlossaryItem>
+  <GlossaryItem term="广度优先搜索">用先进先出队列从起点逐层探索图的算法。</GlossaryItem>
+  <GlossaryItem term="路径">由相邻边首尾连接形成的节点序列。</GlossaryItem>
+  <GlossaryItem term="最短路径">本章中经过边数最少的可达路径。</GlossaryItem>
+  <GlossaryItem term="队列">从尾部加入、从头部移除的先进先出容器。</GlossaryItem>
+  <GlossaryItem term="入队">把元素添加到队列尾部。</GlossaryItem>
+  <GlossaryItem term="出队">从队首取出最早加入的元素。</GlossaryItem>
+  <GlossaryItem term="已搜索集合">记录已发现节点并防止重复入队的集合。</GlossaryItem>
+  <GlossaryItem term="父节点映射">记录首次发现前驱并用于重建路径的映射。</GlossaryItem>
+  <GlossaryItem term="拓扑排序">让DAG每条边起点先于终点的线性排列。</GlossaryItem>
+  <GlossaryItem term="有向无环图">不包含有向环的有向图。</GlossaryItem>
+  <GlossaryItem term="入度">指向某节点的有向边数量。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Grokking Algorithms, Second Edition"
-  adaptedUrl="https://www.manning.com/books/grokking-algorithms-second-edition"
+  adaptedFrom="Grokking Algorithms, Second Edition, Chapter 6: Breadth-first search"
+  adaptedUrl="https://livebook.manning.com/book/grokking-algorithms-second-edition/chapter-6"
 />

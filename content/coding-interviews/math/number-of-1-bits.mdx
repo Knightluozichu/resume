@@ -1,0 +1,251 @@
+---
+title: "面试题15：二进制中1的个数"
+type: C
+section: "第2章 面试需要的基础知识"
+order: 16
+description: "用无符号掩码扫描固定宽度位型，并证明n与n减1按位与每轮清除最低位1，安全处理负数位表示。"
+demo: true
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/15_NumberOf1InBinary/NumberOf1InBinary.cpp"
+draft: false
+---
+
+import { BitMaskSweepDiagram, ClearLowestOneDiagram, BitCountMethodMap, BitCountTestLab } from "@/components/mdx/coding-interviews/diagrams/number-of-1-bits";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释“整数中1的个数”实际统计的是固定宽度二进制位型
+- 能计算掩码左移扫描和清除最低置位两种方法的中间状态
+- 能实现对32位正数、零与负数位型都定义明确的无符号版本
+- 能分析按位扫描的O(W)与清位算法的O(K)复杂度差异
+- 能设计零、普通正数、全低位1、全1和仅符号位1的测试
+
+</Objectives>
+
+## 从 10 与负 1 的位型开始
+
+先预测：十进制10的低8位是`00001010`，答案2很直观；若输入`-1`，答案是1、无限多，还是取决于整数使用多少位？题目问“二进制中1的个数”时，必须先确定数学整数还是机器位型。
+
+作者按32位`int`测试：`0xFFFFFFFF`预期32，`0x80000000`预期1。因此本题统计的是固定<Term def="整数对象使用的二进制位数量，例如uint32_t固定为32位。">位宽</Term>内的<Term def="一个二进制位置上值为1的状态，也常称set bit。">置位</Term>数量，也叫<Term def="一个固定宽度位串中值为1的位数。">汉明重量</Term>，不是给负数写一个带负号的数学二进制文本。
+
+现代接口应把位型写成`std::uint32_t`，从而明确宽度与无符号移位规则。若业务入口是`std::int32_t`，可转换为`uint32_t`后统计其低32位表示。这样“负数与无符号整数”的关系由类型表达，而不是依赖平台恰好使用某种`int`宽度。
+
+<BitMaskSweepDiagram />
+
+## 方法一让无符号掩码移动
+
+作者`NumberOf1_Solution1`不右移输入，而让`unsigned int flag`从1开始每轮左移。`n & flag`非零时，对应位置是1。无符号左移会按固定宽度丢弃最高位；当唯一的1移出位宽后`flag`变0，循环结束。
+
+<Term def="用特定位为1、其余位为0的位串，通过按位与选择或检测目标位置。">掩码</Term>始终只有一个1，所以它每轮只检查一个位置。对32位类型恰好循环32次，无论输入有几个1，也无论原始入口是正数还是负数。
+
+```cpp
+#include <cstdint>
+
+unsigned countByMask(std::uint32_t value) {
+    unsigned count = 0;
+    for (std::uint32_t mask = 1; mask != 0; mask <<= 1) {
+        if ((value & mask) != 0) ++count;
+    }
+    return count;
+}
+
+unsigned countByClearing(std::uint32_t value) {
+    unsigned count = 0;
+    while (value != 0) {
+        value &= value - 1;
+        ++count;
+    }
+    return count;
+}
+```
+
+扫描掩码的时间是`O(W)`，`W`为位宽，空间`O(1)`。固定32位时它在渐进意义上也是常数，但写`O(W)`更能说明推广到64位或任意宽位串时的工作量。
+
+<Callout type="trap" title="直接右移有符号负数直到变0">
+负数有符号右移的高位填充值容易依赖语言与实现；若采用算术右移，高位不断补1，`while(n)`可能永不结束。应先转换到固定宽度无符号类型，或像作者第一解那样移动无符号掩码。
+</Callout>
+
+## n 与 n 减 1 为何清掉最低位 1
+
+设无符号`n`最低的1右侧有若干0。执行`n-1`时，这个最低1变成0，它右侧所有0因借位变成1，更高位保持不变。再做按位与：更高位与自身相同，最低1位置与0得到0，右侧原本是0，与任何值仍为0。因此**最右边的1变成0**，其他原有1不变。
+
+<ClearLowestOneDiagram />
+
+例如`11010000 - 1 = 11001111`，两者按位与得到`11000000`。每执行一次`n&(n-1)`，置位数严格减少1；值最终变0，所以循环次数恰好等于原位型中1的个数。这既是终止性证明，也是正确性证明。
+
+若`K`是置位数量，清位算法时间`O(K)`、空间`O(1)`。稀疏位型只有少数1时，它比扫描全部`W`位更少；全1位型仍执行`W`轮。
+
+输入0时循环根本不进入，因此不会计算`0-1`。对无符号类型，即使计算也按模回绕有定义；但算法仍应保留`while(value != 0)`前置条件，因为它直接表达“还有置位才清除”。
+
+## 用循环不变量完整证明计数
+
+清位循环可维护两个量：`count`是已经从原值清掉的1数量，`value`保留尚未清掉的所有原始1。每轮开始时，两者之和等于输入的汉明重量。`value &= value-1`恰好让剩余置位少1，随后`count`加1，所以总和不变。
+
+循环终止时`value=0`，剩余置位数为0，不变量立即给出`count`等于原输入置位数。每轮又严格减少一个非负整数度量，因此最多`W`轮终止。这同时证明部分正确性与终止性，不需要依赖若干二进制样例归纳。
+
+掩码方案也有对应不变量：进入第`i`轮前，`count`等于已经检查的低`i`位中1的个数，`mask`仅在第`i`位为1。检查后左移，直到掩码越过最高位变0，全部`W`位恰好检查一次。
+
+这两个证明解释了为什么结果类型与输入数值大小无关。算法从不把位串解释成十进制绝对值，只追踪有限位置集合；同一32位模式无论由有符号还是无符号入口提供，转换后都应得到相同计数。
+
+## 有符号最小值为何必须先转换
+
+作者第二解参数是`int n`，循环内写`n = (n - 1) & n`。对32位最小负数`0x80000000`，数学上的`n-1`低于`int`可表示范围，有符号溢出在 C++ 中是未定义行为。测试期望1并不能让该表达式变得安全。
+
+<Term def="常见有符号整数编码：负数位型可看作对应无符号值减去2的位宽次方。">二进制补码</Term>直观解释了`-1`为何全是1、最小负数为何只有最高位1，但实现应把运算放在`uint32_t`上。标准无符号减法与按位运算都有明确的模`2^32`语义。
+
+```cpp
+#include <bit>
+#include <cstdint>
+#include <type_traits>
+
+unsigned countSignedBits(std::int32_t value) {
+    return countByClearing(
+        static_cast<std::uint32_t>(value));
+}
+
+unsigned countStandard(std::uint32_t value) {
+    return std::popcount(value);
+}
+
+template <class Unsigned>
+requires std::is_unsigned_v<Unsigned>
+unsigned countGeneric(Unsigned value) {
+    unsigned count = 0;
+    while (value != 0) {
+        value &= value - Unsigned{1};
+        ++count;
+    }
+    return count;
+}
+```
+
+C++20 的`std::popcount`直接表达意图，并可映射到硬件人口计数指令。面试中仍要解释清位原理，因为题目考查位运算；生产代码若标准库可用，优先使用经过平台优化的标准接口。
+
+<BitCountMethodMap />
+
+<Callout type="trap" title="在signed int上照抄n&(n-1)">
+普通负数可能暂时得到预期结果，但`INT_MIN-1`会有符号溢出。先固定目标位宽并转换为无符号类型，再执行清位公式，才能让所有位型都有定义。
+</Callout>
+
+## 查表、硬件指令与数据相关时间
+
+在大量数据上，可把每个字节的256种汉明重量预先存表，32位值拆成4个字节后查表相加。它固定做4次查询，适用于没有硬件指令的环境；代价是小型只读表和内存访问。更宽向量还可使用 SIMD 或平台人口计数指令批量处理。
+
+`std::popcount`只接受无符号整数类型，这是标准库主动避免负数宽度歧义的设计信号。编译器会根据目标架构和编译选项选择单条指令、内建序列或库实现；使用标准接口既清晰又保留平台优化空间。
+
+清最低位算法的循环次数等于`K`，运行路径依赖输入中1的数量。在普通面试和业务代码里这是优势；在需要隐藏密钥位型特征的密码场景，数据相关分支与时长可能形成侧信道。此时应采用经过审计的常数时间库或固定轮数方案，不能只凭渐进复杂度决定。
+
+硬件`popcount`是否严格常数时间也应由目标平台文档和安全库保证，而不是臆测。算法题答案负责正确计数；安全敏感实现还要把微架构、编译器变换和观测模型纳入契约。
+
+## 宽度、表示与接口契约
+
+“`-1`有多少个1”没有脱离宽度的唯一答案：8位是8个，32位是32个，64位是64个。函数接收`int`时，`sizeof(int)`由平台决定；题目官方结果隐含32位。使用`int32_t/uint32_t`能把该前提写进类型。
+
+十六进制常量也需要注意类型。`0xFFFFFFFF`通常不能放入32位`int`，未加后缀时会选择能容纳它的无符号类型；再传给`int`涉及不可表示值转换。测试应直接写`UINT32_C(0xFFFFFFFF)`或`std::uint32_t{0xFFFFFFFFu}`，避免让调用转换决定位型。
+
+如果 API 的语义是“统计序列化协议字段中的1”，协议本身应指定16、32或64位和字节序；位计数不受字节序影响，但从字节流组装整数会受影响。若输入是任意长度字节数组，可逐字节使用查表或`popcount`累加，复杂度按字节数线性。
+
+返回值上限只需表示位宽，例如32位输入最多返回32，`unsigned`足够。泛型大位集则应使用`size_t`累计，防止总位数超过窄返回类型。
+
+## 相关位技巧来自同一清位性质
+
+正无符号数若只有一个1，就是2的整数次幂。执行`value & (value-1)`会把唯一1清掉，结果为0；因此`value != 0 && (value & (value-1)) == 0`可判断2的幂。前面的非零条件不可省，否则0也会误判。
+
+两个固定位型有多少位不同，可先异或：`a ^ b`在差异位置为1，再统计其汉明重量。这可计算权限位变化数、编码汉明距离或把一个整数变成另一个所需翻转位数。
+
+清除最低位1也能枚举一个集合位掩码的所有非空子集：`subset = (subset - 1) & mask`。它与本题公式形似但目的不同，循环变量是子集而不是简单计数；理解借位和按位与后，这些技巧不再需要孤立背诵。
+
+## 官方六组测试锁定 32 位语义
+
+作者依次测试0返回0、1返回1、10返回2、`0x7FFFFFFF`返回31、`0xFFFFFFFF`返回32、`0x80000000`返回1。后三项分别覆盖符号位为0的31个低位1、全32位1、仅最高位1。
+
+源码的测试输出用`%p`打印整数参数，格式要求与实参类型不匹配；这与算法结果无关，但现代测试应使用`PRIx32`或流输出，避免可变参数格式错误。更重要的是测试入口直接使用无符号32位常量。
+
+```cpp
+#include <cassert>
+#include <cstdint>
+#include <limits>
+
+void testBitCounts() {
+    struct Case {
+        std::uint32_t value;
+        unsigned expected;
+    };
+    constexpr Case cases[] = {
+        {0u, 0},
+        {1u, 1},
+        {10u, 2},
+        {UINT32_C(0x7FFFFFFF), 31},
+        {UINT32_C(0xFFFFFFFF), 32},
+        {UINT32_C(0x80000000), 1},
+    };
+
+    for (const auto& test : cases) {
+        assert(countByMask(test.value) == test.expected);
+        assert(countByClearing(test.value) == test.expected);
+        assert(countStandard(test.value) == test.expected);
+    }
+
+    assert(countSignedBits(-1) == 32);
+    assert(countSignedBits(
+        std::numeric_limits<std::int32_t>::min()) == 1);
+}
+```
+
+还应随机生成32位值，让两种手写方案与`std::popcount`交叉验证。边界测试要在未开启会掩盖问题的未定义行为假设下运行，并启用整数/未定义行为检测器，才能暴露有符号`INT_MIN-1`错误。
+
+<BitCountTestLab />
+
+<Stepper>
+  <Step title="先固定32位无符号位型"><BitMaskSweepDiagram />用单比特掩码检查每一位，负数入口先转换为uint32_t。</Step>
+  <Step title="证明清除最低位1"><ClearLowestOneDiagram />减一改变最低1及其右侧，按位与后恰好少一个置位。</Step>
+  <Step title="按位宽与置位数比较方案"><BitCountMethodMap />掩码扫描做W轮，清位做K轮，标准库可使用硬件优化。</Step>
+  <Step title="用符号边界位型回归"><BitCountTestLab />零、10、31个1、全1和仅最高位1覆盖32位核心边界。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 二进制中1的个数是固定宽度位型的汉明重量。
+2. 无符号单比特掩码左移可安全扫描全部`W`位，时间`O(W)`。
+3. `n&(n-1)`让最右边的1变成0，每轮只减少一个置位。
+4. 清位算法循环次数等于置位数`K`，时间`O(K)`、空间`O(1)`。
+5. 有符号负数右移可能不终止，`INT_MIN-1`还会溢出，位运算应先转无符号。
+6. 负数结果依赖位宽，官方32位语义下`-1`有32个1、最小负数有1个1。
+7. C++20 `std::popcount`适合生产代码，手写清位用于解释核心性质。
+8. 同一性质还能判断2的幂、计算异或后的汉明距离和枚举子集。
+
+<Exercises>
+
+**问题 1：为什么`n&(n-1)`只清除最低位1？**
+
+<Answer>减一使最低位1变0、其右侧0全变1，更高位不变。与原n按位与后，右侧因原本为0仍是0，最低位因另一侧为0被清掉，更高位保持原值。</Answer>
+
+**问题 2：为什么不能把负数不断右移直到0？**
+
+<Answer>有符号负数常采用算术右移，高位持续补1，值可能稳定在负1而永不变0；语言规则也可能不同。转换成固定宽度无符号后右移补0，或移动无符号掩码，终止性才明确。</Answer>
+
+**问题 3：如何用本题技巧判断一个数是否是2的幂？**
+
+<Answer>正的2次幂位型只有一个1，清除最低位1后变0。因此条件是value非0且(value & (value-1))等于0；必须排除0，因为0本身没有置位。</Answer>
+
+**问题 4：32位整数a和b有多少位不同？**
+
+<Answer>先计算a异或b，只有不同位置得到1；再对异或结果调用popcount或清最低位1算法。所得汉明重量就是需要翻转的位数。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="位宽">整数位型包含的二进制位数量，例如uint32_t为32位。</GlossaryItem>
+  <GlossaryItem term="置位">二进制位置的值为1，也称set bit。</GlossaryItem>
+  <GlossaryItem term="汉明重量">固定位串中值为1的位数。</GlossaryItem>
+  <GlossaryItem term="掩码">通过特定位置为1的位串选择、检测或修改目标位。</GlossaryItem>
+  <GlossaryItem term="二进制补码">常见有符号整数编码，使负数位型可按模2的位宽次方理解。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="《剑指Offer（第2版）》面试题15及何海涛官方源码 NumberOf1InBinary.cpp"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/15_NumberOf1InBinary/NumberOf1InBinary.cpp"
+/>

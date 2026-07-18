@@ -6,9 +6,11 @@ order: 3
 description: 掌握C++标准算法库——find/sort/count/accumulate/copy/transform等核心算法，理解迭代器如何将算法与容器解耦
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/c-plus-plus-primer-9780321714114"
 draft: false
 ---
+
+import { CppGenericAlgorithmContractDiagram } from "@/components/mdx/cpp-primer-5e/diagrams/generic-algorithms";
 
 {/* C 实战型（C++ Primer §10 改编）：泛型算法概述 + 只读算法 + 写算法 + 排序定制 + lambda。
    重心在 Stepper §5 + 代码对照 §6，概念讲解 §3 压缩，数学省略(math:false)。
@@ -23,13 +25,13 @@ draft: false
 
 <Objectives>
 
-- 能正确使用 `find`/`count`/`accumulate`/`equal` 操作任意顺序容器——通过迭代器范围 `[begin, end)` 传递，理解算法只认迭代器不认容器的设计思想
-- 能用 `sort`/`unique`/`stable_sort` 配合自定义谓词完成排序与去重——并且能独立写出一个 lambda 表达式作为 `sort` 的第三个参数实现降序排列
+- 能实现用 `find`/`count`/`accumulate`/`equal` 操作不同顺序容器——通过迭代器范围 `[begin, end)` 传递，并核对算法要求的迭代器能力
+- 能比较并使用 `sort`/`unique`/`stable_sort` 配合自定义谓词完成排序与去重——并独立写出 lambda 作为 `sort` 的第三个参数实现降序排列
 - 能改出：把一段 `for` 循环里逐个检查并删除特定元素的代码，改写为 `remove_if` + lambda + `erase` 的惯用写法（erase-remove idiom）
 
 </Objectives>
 
-## 为什么 100 种容器不能有 100 种算法？
+## 直觉：为什么 100 种容器不能有 100 种算法？
 
 你已经学了六种容器——每种都有自己的一套操作接口。如果要在 `vector` 里找一个值，你会写一个循环；要在 `list` 里找同样的值，再写一个循环——除了容器名字变了，代码几乎一模一样。难道每学一种新容器，就要把排序、查找、计数这些"工序"重写一遍？
 
@@ -39,7 +41,7 @@ draft: false
 
 ## 算法不认识容器——只认迭代器
 
-C++ 标准库提供超过 100 个 <Term def="作用于序列元素上的标准函数模板。通过迭代器范围 [begin, end) 接收数据，不依赖具体容器类型。包括查找（find）、排序（sort）、计数（count）、累加（accumulate）、复制（copy）、变换（transform）等。定义在头文件 <algorithm> 和 <numeric> 中。">泛型算法（generic algorithm）</Term>——它们被设计成与容器类型完全无关。算法不是容器的成员函数，也不接受容器作为参数——它们只认识一样东西：<Term def="一对迭代器组成的左闭右开区间 [begin, end)。begin 指向第一个元素，end 指向最后一个元素之后的位置（尾后迭代器）。所有标准算法都通过迭代器范围来接收数据——这就是算法与容器解耦的关键。">迭代器范围（iterator range）</Term>。
+C++ 标准库提供大量 <Term def="作用于序列元素的标准函数模板。通过左闭右开的迭代器范围接收数据，不依赖具体容器类型；不同算法会要求不同的迭代器能力。主要定义在 algorithm 与 numeric 头文件。">泛型算法（generic algorithm）</Term>——它们被设计成与容器类型解耦。算法不是容器的成员函数，也不直接拥有容器——它们依靠 <Term def="一对迭代器组成的左闭右开区间。first 指向首元素，last 指向尾元素之后的位置；空范围满足 first 等于 last。">迭代器范围（iterator range）</Term> 与迭代器能力工作。并非每个算法适用于每个容器，例如 `sort` 需要随机访问，`list` 必须使用成员 `sort`。
 
 <AlgorithmArchitectureDiagram />
 
@@ -64,7 +66,7 @@ C++ 标准库提供超过 100 个 <Term def="作用于序列元素上的标准�
 int main() {
     std::vector<int> v = {3, 7, 1, 9, 2, 7, 4, 8};
 
-    // 手写循环——3 行，只对 vector 有效
+    // 手写循环——逻辑可泛化，但这里仍要自行维护边界与步进
     auto it_manual = v.begin();
     while (it_manual != v.end() && *it_manual != 7)
         ++it_manual;
@@ -78,6 +80,79 @@ int main() {
 ```
 
 `find` 接受三个参数：前两个定义搜索范围 `[begin, end)`，第三个是要找的值。它从 `begin` 开始逐个比对，找到就返回指向该元素的迭代器，找不到就返回 `end`。
+
+## 官方 Chapter 10 的完整算法契约
+
+泛型并不意味着“任何算法都能接任何迭代器”。每个算法声明最低能力，调用者提供满足能力的范围、操作和输出位置；算法通常只重排或改写元素，不会替容器插入或删除元素。
+
+<CppGenericAlgorithmContractDiagram />
+
+### 迭代器类别与算法参数模式
+
+<Term def="按可读写、单遍或多遍、前进或后退、随机跳转等能力划分的迭代器层级。算法只要求完成任务所需的最低类别。">迭代器类别（iterator categories）</Term> 从能力上分为五类：输入迭代器可读且通常只保证单遍；输出迭代器可写且通常只保证单遍；前向迭代器可多遍向前；双向迭代器还能递减；随机访问迭代器支持常数时间跳转、距离与下标。`forward_list` 只有前向能力，`list` 是双向能力，`vector`、`deque`、`array` 与 `string` 提供随机访问。
+
+常见算法参数模式可以据此阅读：
+
+- `alg(first, last, otherArgs)`：一个输入范围，结果通过返回值或原范围表达。
+- `alg(first, last, dest, otherArgs)`：一个输入范围加一个输出起点；`dest` 必须有效或是插入迭代器。
+- `alg(first1, last1, first2, otherArgs)`：第二个范围只给起点，调用者必须保证它足够长。
+- `alg(first1, last1, first2, last2, otherArgs)`：两个范围边界都明确；某些重载在较新标准才提供，使用时要核对项目语言版本。
+
+算法把违反能力要求变成编译错误：`std::sort(list.begin(), list.end())` 失败，因为双向迭代器没有随机跳转；这不是容器名字被特殊禁止，而是能力契约不满足。
+
+### 插入、流与反向迭代器
+
+插入迭代器有三种：`back_inserter` 调用 `push_back`，`front_inserter` 调用 `push_front`，`inserter(c, pos)` 在指定位置反复调用 `insert` 并维护插入位置。输出顺序很重要：`front_inserter` 连续写入会反转元素顺序。
+
+```cpp
+std::list<int> values;
+std::copy(src.begin(), src.end(), std::back_inserter(values));
+
+std::vector<int> middle = {1, 4};
+std::copy(src.begin(), src.end(), std::inserter(middle, middle.begin() + 1));
+```
+
+`istream_iterator<T>` 把格式化输入适配为输入迭代器，`ostream_iterator<T>` 把赋值适配为输出；反向迭代器让 `rbegin()` 到 `rend()` 以相反方向遍历，但 `reverse_iterator::base()` 指向的是反向迭代器所指元素的**后一个**正向位置：
+
+```cpp
+std::istream_iterator<int> in(std::cin), eof;
+std::vector<int> numbers(in, eof);
+std::copy(numbers.rbegin(), numbers.rend(),
+          std::ostream_iterator<int>(std::cout, " "));
+```
+
+### lambda、bind 与参数重排
+
+lambda 最适合短小的局部操作；已有函数的参数顺序不符合算法谓词时，`std::bind` 可以绑定固定实参并重排占位参数：
+
+```cpp
+#include <functional>
+using std::placeholders::_1;
+
+bool at_least(const std::string &word, std::size_t size) {
+    return word.size() >= size;
+}
+
+auto firstLong = std::find_if(words.begin(), words.end(),
+                              std::bind(at_least, _1, 6));
+```
+
+bind 默认按值保存绑定实参；要绑定不可拷贝对象或要求被调函数接收普通引用时，使用 `std::ref`/`std::cref` 明确包装。现代代码中 lambda 往往更易读，但理解 bind 有助于读懂 C++11 代码和参数重排。
+
+### 容器特定算法
+
+<Term def="利用容器内部结构提供的成员算法。list 与 forward_list 的 sort、merge、remove、reverse 和 unique 能直接重连节点，而非覆盖元素值。">容器特定算法（container-specific algorithms）</Term> 对链表尤其重要。泛型 `remove` 只把保留元素移到前面并返回新末尾，不能缩短容器；`list::remove` 会真正删除节点。`list::sort`、`merge`、`splice` 通过重连节点工作，不要求随机访问，也不复制节点中的值。
+
+```cpp
+std::list<int> a = {3, 1, 2, 2};
+std::list<int> b = {6, 4, 5};
+a.sort();
+a.unique();
+b.sort();
+a.merge(b); // a: 1 2 3 4 5 6，b 为空
+```
+
+`forward_list` 提供相应的单链表成员操作以及 `splice_after`。使用成员版本还是泛型版本，不只是语法选择：前者能改变节点结构和容器大小，后者只能通过迭代器读写现有元素。
 
 ## Stepper：算法怎么一步步执行？
 
@@ -223,7 +298,7 @@ std::vector<int> v2;
 std::fill_n(std::back_inserter(v2), 5, 42);  // v2: {42, 42, 42, 42, 42}
 ```
 
-第二段使用了 <Term def="一种特殊的迭代器适配器，把赋值操作转换为 push_back 调用。当你往 back_inserter(v) 写值时，等价于 v.push_back(value)。解决了目标容器空间不够的问题。头文件 <iterator>。">插入迭代器（back_inserter）</Term>——它把"往迭代器写入"的操作自动转换为 `push_back`，解决目标不够大的问题。
+第二段使用了 <Term def="把写入操作转换为容器插入操作的迭代器适配器。back_inserter 调用 push_back，front_inserter 调用 push_front，inserter 在指定位置调用 insert。定义在 iterator 头文件。">插入迭代器（insert iterator）</Term>——它把“往迭代器写入”转换为容器插入，解决目标范围尚未创建元素的问题。
 
 ### copy——整段搬运
 
@@ -284,9 +359,9 @@ std::transform(src.begin(), src.end(), src.begin(),
 
 ## 排序定制：sort、unique、stable_sort
 
-### sort——快速排序
+### sort——随机访问范围排序
 
-`sort(begin, end)` 对区间进行升序排序——默认用 `<` 比较。要求迭代器是 <Term def="支持随机访问的迭代器类型——可以对迭代器做 +n、-n、[] 等操作，像指针一样直接跳到任意位置。vector、deque、array、string 的迭代器是 RandomAccess；list、forward_list 的迭代器不是（只能 ++/--）。std::sort 要求 RandomAccess 迭代器。">随机访问迭代器（RandomAccess Iterator）</Term>——这意味着 `vector`/`deque`/`array`/`string` 可用，`list` 不可用（要用 `list::sort`）。这一节用「快速排序」作通俗讲法，但标准库实现通常是内省排序 introsort——以快排为主、必要时切换到堆排序，以此保证最坏情况仍是 O(n log n)。
+`sort(begin, end)` 对区间进行升序排序——默认用 `<` 比较。要求迭代器是 <Term def="支持常数时间跳转、距离、比较和下标访问的迭代器。vector、deque、array 与 string 提供随机访问；list 只有双向能力，forward_list 只有前向能力。">随机访问迭代器（RandomAccess Iterator）</Term>——这意味着 `vector`/`deque`/`array`/`string` 可用，`list` 不可用（要用 `list::sort`）。标准规定复杂度和排序结果，不规定必须使用快排或 introsort；具体实现可自由选择满足要求的算法。
 
 ```cpp
 std::vector<int> v = {5, 2, 8, 1, 9, 3, 6, 4, 7};
@@ -294,7 +369,7 @@ std::sort(v.begin(), v.end());
 // v: {1, 2, 3, 4, 5, 6, 7, 8, 9}
 ```
 
-用 Stepper 看排序一个数组时，内部在发生什么：
+下面 Stepper 用快速排序的一次可能执行路径解释“比较、分区、递归”如何产生有序结果。它是教学模型，不是对某个标准库 `std::sort` 内部步骤或 pivot 选择的承诺：
 
 <Stepper>
 
@@ -374,14 +449,14 @@ std::sort(students.begin(), students.end(),
 ```cpp
 std::vector<int> v = {1, 2, 2, 3, 3, 3, 4, 5, 5};
 auto new_end = std::unique(v.begin(), v.end());
-// v 内容现在是 {1, 2, 3, 4, 5, ???, ???, ???, ???}
-// new_end 指向第一个"垃圾"元素
+// [v.begin(), new_end) 是 {1, 2, 3, 4, 5}
+// [new_end, v.end()) 中的元素仍有效，但值未指定
 
-v.erase(new_end, v.end());  // 真正删除末尾的"垃圾"
+v.erase(new_end, v.end());  // 删除新逻辑末尾之后的元素
 // v: {1, 2, 3, 4, 5}
 ```
 
-<Term def="对值相等的元素保持它们原始的前后顺序。stable_sort 在排序时如果两个元素值相等，它们在结果中的相对顺序与排序前一致。sort 不保证稳定——相等的元素顺序可能被交换。">稳定排序（stable_sort）</Term> 与 `sort` 的唯一区别——相等的元素保持原序：
+<Term def="对比较结果等价的元素保持原始相对顺序的排序。stable_sort 提供稳定性，sort 不保证；两者的复杂度与额外存储条件也可能不同。">稳定排序（stable_sort）</Term> 的关键语义是等价元素保持原序，不能把它和 `sort` 的全部差异简化为函数名不同：
 
 ```cpp
 // 假设有多个 Student score=90——stable_sort 保持他们的原始顺序
@@ -393,7 +468,7 @@ std::stable_sort(students.begin(), students.end(),
 
 ## lambda 表达式：就地生成一个函数
 
-你已经见过几次了——`[](int x) { return x > 0; }` 这种写在代码中间的"函数"。这是 <Term def="一种就地定义匿名函数的语法——写在需要函数对象的地方，无需单独命名。形式为 [capture](params) -> ret {body}，其中 capture 指定如何访问外部变量（按值 =、按引用 &）。编译器将 lambda 展开为一个匿名函数对象类（闭包）。C++11 引入。">lambda 表达式（lambda expression）</Term>——C++11 引入的语法糖，让你在需要函数对象的地方当场写一个"匿名函数"。
+你已经见过几次了——`[](int x) { return x > 0; }` 这种写在代码中间的"函数"。这是 <Term def="一种就地定义匿名函数对象的语法，由捕获列表、参数列表、可选返回类型和函数体组成。捕获决定闭包如何保存外部变量，C++11 引入。">lambda 表达式（lambda expression）</Term>——C++11 引入的语法糖，让你在需要函数对象的地方当场写一个"匿名函数"。
 
 <LambdaSyntaxDiagram />
 
@@ -420,27 +495,27 @@ std::for_each(v.begin(), v.end(),
 ```
 
 <Callout type="warn">
-  **lambda 不是函数指针**——它是编译器生成的一个匿名类的**对象**。每个 lambda 有自己独一无二的类型——不能把两个不同的 lambda 赋给同一个变量（除非用 `std::function`）。
+  lambda 表达式产生闭包对象，每个 lambda 有独立类型。没有捕获的 lambda 可隐式转换为兼容的函数指针；带捕获的 lambda 不能。不同 lambda 不能直接赋给同一个具体闭包类型变量，需要模板、`std::function` 或其他类型擦除接口统一承载。
 </Callout>
 
 ## 容易踩的坑
 
 <Callout type="trap">
   **现象**：`copy(src.begin(), src.end(), dst.begin())` 运行崩溃或数据错乱——有时正常有时不正常。
-  **原因**：`copy` 不会检查目标是否有足够空间——它只是机械地把元素写入 `dst.begin()` 开始的连续位置。如果 `dst` 是空的 vector，写入的是野指针指向的内存——未定义行为。
+  **原因**：`copy` 不会检查目标是否有足够空间。如果 `dst` 是空 vector，`dst.begin()` 等于尾后迭代器，第一次写入就解引用无效位置，行为未定义；这不应简化成某个固定的“野指针”实现。
   **修法**：目标为空时用 `std::back_inserter(dst)` 代替 `dst.begin()`，或者调用前 `dst.resize(src.size())`。
 </Callout>
 
 <Callout type="trap">
-  **现象**：`unique` 调用后打印容器——末尾有一堆重复的"垃圾"值。元素没被删掉。
-  **原因**：`unique` 只把重复元素"挪"到末尾、返回新逻辑末尾的迭代器——它**不删除**元素。它不知道容器到底多长，也不调用容器的 `erase`。
+  **现象**：`unique` 调用后容器大小没有变化，新逻辑末尾之后仍有元素。
+  **原因**：`unique` 把每组相邻等价元素压缩到前部并返回新逻辑末尾，它不调用容器的 `erase`；尾部元素保持有效但值未指定，不应继续解释其内容。
   **修法**：配合 `erase` 使用——标准写法：`v.erase(std::unique(v.begin(), v.end()), v.end())`——先 `unique` 重排再 `erase` 真删。这叫做 **erase-unique idiom**。
 </Callout>
 
 <Callout type="trap">
-  **现象**：lambda 里修改了外部变量，出了 lambda 变量值没变。
-  **原因**：用了 `[=]` 按值捕获——lambda 内部操作的是外部变量的**副本**，不是原变量。副本的修改不会影响外部。
-  **修法**：需要在 lambda 里修改外部变量并能看到结果——用 `[&]` 按引用捕获，或 `[&var]` 只按引用捕获目标变量。
+  **现象**：在 `[=]` lambda 中修改捕获变量时直接编译失败；加上 `mutable` 后能修改，但外部变量仍不变。
+  **原因**：C++11 中闭包的调用运算符默认是 const，按值捕获成员不能修改；`mutable` 只允许修改闭包内部副本，不会改变外部对象。
+  **修法**：只需内部状态时用 `[value]() mutable`；需要把结果写回外部时用 `[&value]`，并确保闭包调用期间引用对象仍然存活。
 </Callout>
 
 <Callout type="trap">
@@ -451,7 +526,7 @@ std::for_each(v.begin(), v.end(),
 
 ## 小结
 
-- 泛型算法与容器解耦——通过迭代器范围 `[begin, end)` 接收数据，同一算法可作用于 vector/list/deque/array 等任何提供迭代器的容器；`find`/`count` 等只读算法不改数据，`fill`/`copy`/`transform` 等写算法需要目标空间足够
+- 泛型算法与容器解耦——通过迭代器范围 `[begin, end)` 接收数据；只要迭代器能力满足算法要求，同一算法就能复用。`find`/`count` 等只读算法不改数据，`fill`/`copy`/`transform` 等写算法需要有效目标
 - `sort` 对 RandomAccess 迭代器区间 O(n log n) 排序——接受可选的第三个参数（谓词）自定义排序规则；`unique` 只压缩重复不删除——配合 `erase` 完成真正的去重操作
 - lambda 是就地定义的匿名函数——`[capture](params) -> ret { body }`；`[=]` 按值捕获外部变量（副本）、`[&]` 按引用捕获（共享）；lambda 作为谓词传入算法——大幅减少独立函数定义
 - 写算法不自动扩容——`copy`/`transform` 写入时目标容器空间必须足够，否则用 `back_inserter` 自动 push_back；`fill_n` 同理——n 个位置必须有效
@@ -459,7 +534,7 @@ std::for_each(v.begin(), v.end(),
 
 <Exercises>
 
-**练习 1（改代码型）** 下面代码试图从一个 vector 中删除所有负数——但不只一个 bug。找出所有问题并写出修正后的代码。
+**问题 1（改代码型）** 下面代码试图从一个 vector 中删除所有负数——但不只一个 bug。找出所有问题并写出修正后的代码。
 
 ```cpp
 #include <vector>
@@ -500,7 +575,7 @@ int main() {
 
 </Answer>
 
-**练习 2（独立实现题）** 写一个函数 `top_n`，输入一个 `vector<Student>` 和整数 `n`，返回成绩（score）最高的 n 个学生——按成绩从高到低排列。用 `sort` + lambda 完成排序。
+**问题 2（独立实现题）** 写一个函数 `top_n`，输入一个 `vector<Student>` 和整数 `n`，返回成绩（score）最高的 n 个学生——按成绩从高到低排列。用 `sort` + lambda 完成排序。
 
 ```cpp
 struct Student {
@@ -530,9 +605,11 @@ std::vector<Student> top_n(std::vector<Student> students, int n) {
             return a.score > b.score;  // 降序：a > b 时 a 排 b 前
         });
 
-    // 取前 n 个（n 太大时取全部）
+    // 把 n 限制在合法半开区间 [0, size]
+    if (n <= 0)
+        return {};
     if (n > static_cast<int>(students.size()))
-        n = students.size();
+        n = static_cast<int>(students.size());
 
     return std::vector<Student>(students.begin(), students.begin() + n);
 }
@@ -553,7 +630,7 @@ int main() {
 
 </Answer>
 
-**练习 3（选型题）** 对于以下三个场景，应该用哪个标准算法？各用一句话说明原因。
+**问题 3（选型题）** 对于以下三个场景，应该用哪个标准算法？各用一句话说明原因。
 
 - **A**：有一个 `vector<string>`，需要把所有长度超过 10 的单词替换为 `"[LONG]"`。
 - **B**：检查一个 `vector<int>` 是否所有元素都为正数——返回 `bool`。
@@ -569,7 +646,7 @@ int main() {
 
 </Exercises>
 
-<Attribution />
+<Attribution source="C++ Primer, Fifth Edition, Chapter 10: Generic Algorithms" />
 
 ## 名词解释
 
@@ -591,8 +668,8 @@ int main() {
   遍历序列的过程中会修改元素值的算法。包括 fill（填充同一值）、copy（复制整段）、replace（条件替换）、transform（逐元素变换）。其中 copy/transform 涉及目标位置——需要目标区间有足够空间，否则用 back_inserter 自动扩容。详见本章「写算法」一节和 AlgorithmExecutionDiagram。
 </GlossaryItem>
 
-<GlossaryItem term="插入迭代器（back_inserter）">
-  一种特殊的迭代器适配器，把往某个位置写入值的操作自动转换为 push_back(value)。当你写 *back_inserter(v) = 42 时，等价于 v.push_back(42)。解决了目标容器空间不够的问题。定义在 iterator 中。详见本章「copy——整段搬运」小节的代码示例。
+<GlossaryItem term="插入迭代器（insert iterator）">
+  把写入转换为容器插入的输出迭代器适配器。back_inserter 调用 push_back，front_inserter 调用 push_front，inserter 在指定位置调用 insert。定义在 iterator 头文件。详见「插入、流与反向迭代器」。
 </GlossaryItem>
 
 <GlossaryItem term="lambda 表达式（lambda expression）">
@@ -608,7 +685,15 @@ int main() {
 </GlossaryItem>
 
 <GlossaryItem term="随机访问迭代器（RandomAccess Iterator）">
-  能像指针一样「一跳到任意位置」的迭代器——可以 it+n、it-n、it[k] 直接跳转，而不必一步步挪。vector/deque/array/string 的迭代器是这种；list/forward_list 只能一步步 ++/--。std::sort 需要随机访问能力（要快速跳到中点、跳到任意分区位置），所以不能用于 list，list 只能用自带的 sort 成员函数。详见本章「sort」小节。
+  支持常数时间跳转、距离、比较和下标访问的迭代器。vector/deque/array/string 提供这种能力；list 只有双向能力，forward_list 只有向前能力。std::sort 要求随机访问，因此 list 使用成员 sort。详见「sort」小节。
+</GlossaryItem>
+
+<GlossaryItem term="迭代器类别（iterator categories）">
+  按可读写、单遍或多遍、前进或后退、随机跳转等能力划分的层级。输入与输出迭代器支持单遍读写，前向可多遍，双向可递减，随机访问可常数时间跳转。算法只要求最低必要类别。
+</GlossaryItem>
+
+<GlossaryItem term="容器特定算法（container-specific algorithms）">
+  利用节点结构实现的成员算法。list 与 forward_list 的 sort、merge、remove、reverse、unique 和 splice 系列会重连或删除节点，与只改写现有元素的泛型算法语义不同。
 </GlossaryItem>
 
 </Glossary>

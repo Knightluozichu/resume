@@ -1,0 +1,265 @@
+---
+title: "第 26 章 模块"
+type: A
+section: "JavaScript高级程序设计（第4版） · 模块、Worker与工程"
+order: 26
+description: "模块系统建立文件级作用域、依赖图和单例实例；ES模块的静态链接与实时绑定改变装载、循环依赖和部署方式。"
+demo: true
+math: false
+sourceUrl: "https://uat.store.wiley.com/en-us/professional-javascript-for-web-developers-4th-edition-p-9781119366577"
+draft: false
+---
+
+import {
+  Jpg26ModulesMapLab,
+  Jpg26ModulesExperimentLab,
+  Jpg26ModulesEvidenceLab,
+} from "@/components/mdx/javascript-pro-guide/diagrams/jpg-26-modules";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释第 26 章 模块的核心机制，并把它放回28章与4个附录的主线
+- 能比较正常、边界、失败和恢复样本，指出首个执行或状态偏离点
+- 能实现最小JavaScript实验，记录浏览器版本、输入、任务顺序与资源所有权
+- 能设计证据回答“依赖图无隐式全局；循环依赖不读取未初始化绑定；动态模块版本与入口一致且失败可恢复。”是否成立
+
+</Objectives>
+
+## 直觉：先画执行与所有权
+
+模块系统建立文件级作用域、依赖图和单例实例；ES模块的静态链接与实时绑定改变装载、循环依赖和部署方式。 真正的难点不是让一次示例得到预期输出，而是让绑定、对象、任务、权限和资源在异常、取消、重复与版本切换后仍可解释。先预测：若只保存最终截图，最可能隐藏哪一种陈旧状态？
+
+<Jpg26ModulesMapLab />
+
+## 权威目录定位
+
+本页依据 Wiley 第4版官方31页目录样章与中文版公开完整目录锁定范围。目录名称用于一对一追踪，正文为独立教学重构；新浏览器差异、安全与可观察性补充会明确披露：
+
+- 26.1 理解模块模式
+- 26.1.1 模块标识符
+- 26.1.2 模块依赖
+- 26.1.3 模块加载
+- 26.1.4 入口
+- 26.1.5 异步依赖
+- 26.1.6 动态依赖
+- 26.1.7 静态分析
+- 26.1.8 循环依赖
+- 26.2 凑合的模块系统
+- 26.3 使用ES6之前的模块加载器
+- 26.3.1 CommonJS
+- 26.3.2 异步模块定义
+- 26.3.3 通用模块定义
+- 26.3.4 模块加载器终将没落
+- 26.4 使用ES6模块
+- 26.4.1 模块标签及定义
+- 26.4.2 模块加载
+- 26.4.3 模块行为
+- 26.4.4 模块导出
+- 26.4.5 模块导入
+- 26.4.6 模块转移导出
+- 26.4.7 工作者模块
+- 26.4.8 向后兼容
+- 26.5 小结
+
+本页逐项覆盖 **25** 个公开目录条目，并纳入正常、边界、失败和恢复验收。
+
+## 核心概念与所有权
+
+<Term def="用闭包和对象在无原生模块时隐藏状态并暴露公共接口的模式。">
+  模块模式
+</Term>
+、<Term def="import或export from中定位依赖模块的字符串标识。">模块说明符</Term>
+、<Term def="可在执行前分析、链接并确定导入导出的模块关系。">静态依赖</Term>、
+<Term def="导入名称持续指向导出模块绑定、而非复制某次值的语义。">实时绑定</Term>
+、
+<Term def="按需异步加载模块并返回模块命名空间Promise的表达式。">
+  动态import
+</Term>
+。每个概念都要回答：谁创建输入，状态保存在哪里，哪个任务或版本可修改它，结束后由谁清理。
+
+|   # | 概念       | 工程含义                                                 |
+| --: | ---------- | -------------------------------------------------------- |
+|   1 | 模块模式   | 用闭包和对象在无原生模块时隐藏状态并暴露公共接口的模式。 |
+|   2 | 模块说明符 | import或export from中定位依赖模块的字符串标识。          |
+|   3 | 静态依赖   | 可在执行前分析、链接并确定导入导出的模块关系。           |
+|   4 | 实时绑定   | 导入名称持续指向导出模块绑定、而非复制某次值的语义。     |
+|   5 | 动态import | 按需异步加载模块并返回模块命名空间Promise的表达式。      |
+
+## 机制拆解
+
+### 1. 旧模块模式解决全局污染
+
+IIFE通过闭包隐藏私有变量并返回公共API，CommonJS和AMD进一步定义依赖与加载。理解这些模式有助于迁移遗留代码，但新浏览器代码应优先使用原生ES模块。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+### 2. ES模块先链接后执行
+
+静态import必须位于顶层，使工具能分析依赖、树摇和循环；导入是只读实时绑定，模块默认严格模式且每个URL通常只实例化一次。循环依赖可链接，但过早读取未初始化绑定仍会失败。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+### 3. 动态加载是异步边界
+
+import()适合路由或大功能分块，错误包括下载、解析和求值失败。部署必须保证入口与分块版本一致，缓存策略不能让旧入口请求已删除的新哈希；预加载要由测量驱动。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+## 六阶段证据链
+
+可操作链条是：声明导出接口 → 解析模块说明符 → 构建依赖图 → 实例化实时绑定 → 按拓扑求值 → 缓存或按需加载。正常样本证明能力，边界样本证明预算，失败样本证明拒绝，恢复样本证明任务、状态和资源重新收敛。
+
+<Stepper>
+  <Step title="1. 声明导出接口与解析模块说明符">
+    固定浏览器版本、输入、初始DOM与时钟，运行正常和边界样本。
+    <Jpg26ModulesMapLab />
+  </Step>
+  <Step title="2. 构建依赖图与实例化实时绑定">
+    注入异常、取消、重复事件、权限拒绝或旧缓存，要求在首偏离点停止。
+    <Jpg26ModulesExperimentLab />
+  </Step>
+  <Step title="3. 按拓扑求值与缓存或按需加载">
+    清除故障后重放相同输入，核对输出、任务队列、DOM摘要、监听器与资源数量。
+    <Jpg26ModulesEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小可运行实验
+
+以下代码用于独立观察本页机制；生产实现还需加入输入验证、兼容策略、权限、取消与清理。
+
+```js
+// counter.js
+export let count = 0;
+export const increment = () => {
+  count += 1;
+};
+// consumer.js
+const module = await import("./counter.js");
+module.increment();
+console.assert(module.count === 1);
+```
+
+证据记录把目录、运行时与状态摘要放在一起：
+
+```yaml
+book: JavaScript高级程序设计（第4版）
+page: jpg-26-modules
+official_entries: 25
+sample: normal | boundary | failure | recovery
+browser_version: fixed
+input_fixture: fixed
+first_divergence: null
+cleanup_complete: true
+```
+
+故障脚本一次只改变一个变量：
+
+```text
+baseline -> inject(exception | cancel | duplicate | denied | stale-cache)
+observe -> stop_at_first_divergence
+recover -> replay_same_runtime_and_input
+assert -> one_state_owner && stable_output && no_stale_task && no_resource_leak
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：把导入值当快照，在导出模块更新后假设本地不会变化。**
+  必须保存输入、任务顺序、状态摘要与首次拒绝原因，而不是只看最终页面。
+</Callout>
+
+<Callout type="trap">
+  **误区二：入口HTML和分块采用不一致缓存策略，发布后出现模块404。**
+  必须加入边界、失败与恢复样本，证明错误没有跨入下一阶段。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 输入与环境变化                   | 预期状态       | 通过条件                     |
+| ---- | -------------------------------- | -------------- | ---------------------------- |
+| 正常 | 合法输入、权限、顺序与版本       | 六阶段完成     | 输出和状态摘要一致           |
+| 边界 | 空值、极限容量、重复事件或慢任务 | 达到预算不越界 | 主线程与内存有界             |
+| 失败 | 异常、取消、拒权、断网或旧产物   | 首偏离点停止   | 明确传播、回滚或降级         |
+| 恢复 | 修复后重放同一输入               | 收敛到正常轨迹 | 无陈旧任务、监听器和资源泄漏 |
+
+<Jpg26ModulesEvidenceLab />
+
+本页签发不变量是：**依赖图无隐式全局；循环依赖不读取未初始化绑定；动态模块版本与入口一致且失败可恢复。** 单次成功、平均耗时或最终截图不能替代运行时版本、执行轨迹、首偏离点与清理证据。
+
+## 练习
+
+<Exercises>
+
+**问题 1** 为什么不能只以最终页面结果正确作为验收？
+
+<Answer>
+  最终结果会隐藏重复副作用、旧任务覆盖、错误吞没和资源泄漏。必须比较输入、执行顺序、状态所有者、首偏离点与清理结果。
+</Answer>
+
+**问题 2** 如何把本页公开目录变成可执行学习证据？
+
+<Answer>
+  按公开顺序建立追踪表，为每组条目写出输入、状态、输出、失败与恢复条件。本页重点包括：26.1
+  理解模块模式、26.1.1 模块标识符、26.1.2 模块依赖、26.1.3 模块加载、26.1.4
+  入口、26.1.5 异步依赖、26.1.6 动态依赖、26.1.7
+  静态分析；其余条目已在上方逐项列出。
+</Answer>
+
+**问题 3** 本页的最小通过条件是什么？
+
+<Answer>
+  依赖图无隐式全局；循环依赖不读取未初始化绑定；动态模块版本与入口一致且失败可恢复。
+  并且相同浏览器版本、输入与初始状态可以重放正常、边界、失败和恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **模块模式**：用闭包和对象在无原生模块时隐藏状态并暴露公共接口的模式。
+- **模块说明符**：import或export from中定位依赖模块的字符串标识。
+- **静态依赖**：可在执行前分析、链接并确定导入导出的模块关系。
+- **实时绑定**：导入名称持续指向导出模块绑定、而非复制某次值的语义。
+- **动态import**：按需异步加载模块并返回模块命名空间Promise的表达式。
+- 六阶段机制链已经映射到正常、边界、失败与恢复证据。
+- 官方目录逐项追踪，现代补充不会冒充原书正式分节。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="模块模式">
+    用闭包和对象在无原生模块时隐藏状态并暴露公共接口的模式。
+  </GlossaryItem>
+  <GlossaryItem term="模块说明符">
+    import或export from中定位依赖模块的字符串标识。
+  </GlossaryItem>
+  <GlossaryItem term="静态依赖">
+    可在执行前分析、链接并确定导入导出的模块关系。
+  </GlossaryItem>
+  <GlossaryItem term="实时绑定">
+    导入名称持续指向导出模块绑定、而非复制某次值的语义。
+  </GlossaryItem>
+  <GlossaryItem term="动态import">
+    按需异步加载模块并返回模块命名空间Promise的表达式。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Matt Frisbie 著，李松峰译，人民邮电出版社，2020年9月，866页，ISBN 9787115545381；英文原版 Professional JavaScript for Web Developers, 4th Edition，Wiley，2019年10月，1200页，印刷版 ISBN 9781119366447、电子版 ISBN 9781119366577。Wiley官方31页目录样章与中文版公开目录确认28章、4个附录和757个二三级目录条目。正文为独立教学重构。"
+  adaptedUrl="https://uat.store.wiley.com/en-us/professional-javascript-for-web-developers-4th-edition-p-9781119366577"
+/>

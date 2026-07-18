@@ -1,0 +1,196 @@
+---
+title: "Chapter 4: Working with LINQ (Items 29-44)"
+type: C
+section: "Effective C# · LINQ与执行边界"
+order: 4
+description: "完整覆盖第3版Item 29-44：iterator、query composition、function parameter、extension resolution、lazy/deferred execution、capture、IEnumerable/IQueryable与cardinality。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-sharp-covers-c-sharp-6.0-50-specific-ways-9780134579443"
+draft: false
+---
+
+import { EcsSequencePipelineLab, EcsQueryCompositionLab, EcsExecutionBoundaryLab } from "@/components/mdx/effective-csharp/diagrams/working-with-linq";
+
+<Objectives>
+
+- 能设计iterator与composable sequence API，区分query construction、enumeration和materialization的成本与ownership
+- 能推导query syntax到method calls、delegate到expression tree及extension resolution，判断实际执行位置与失败时机
+- 能分析captured resource、IEnumerable/IQueryable、cardinality和bound variable，复现重复执行与provider差异
+
+</Objectives>
+
+## 为什么LINQ问题总在Enumeration时暴露
+
+`Where`与`Select`看似已经“得到结果”，多数时候只是创建可枚举pipeline。真正的I/O、callback、exception、resource use和closure read发生在terminal operation或`foreach`。因此设计LINQ API必须把construction、execution、materialization三种时刻写成contract。
+
+先预测：返回`IEnumerable<T>`是否意味着已经有collection；把loop改成query syntax是否一定只执行一次；同一lambda用于`IEnumerable`和`IQueryable`是否必然同语义？答案都是否。
+
+<Term def="只记录source与operators、直到enumeration或terminal operation才逐项求值的sequence contract。">deferred sequence</Term>
+
+## Sequence Production与Composition（Items 29-33）
+
+### Item 29: Prefer Iterator Methods to Returning Collections
+
+当consumer可能只取前几项、source很大或可流式生成时，iterator用`yield return`避免先构建完整collection。若API承诺stable snapshot、随机访问或单次I/O结果，则明确materialize并返回read-only collection；不要仅为“看起来LINQ”改变语义。
+
+### Item 30: Prefer Query Syntax to Loops
+
+Query syntax适合join、group、multiple from等关系表达，method syntax适合短pipeline和只存在于method form的operators。选择依据是意图是否清楚，不是统一风格；两者最终映射到method calls，performance由source/provider与operators决定。
+
+### Item 31: Create Composable APIs for Sequences
+
+返回`IEnumerable<T>`/`IQueryable<T>`让caller继续filter、project、order，而不是在helper里固定`ToList`、print或mutation。Composition boundary仍应定义enumeration count、cancellation、ordering和resource lifetime，不能把所有责任推给caller。
+
+### Item 32: Decouple Iterations from Actions, Predicates, and Functions
+
+把traversal与predicate/action/function分开，复用同一iteration policy并便于测试。Callback应尽量pure；若有side effect或fault，method name和contract必须说明短路、ordering、exception传播及是否可能重复调用。
+
+### Item 33: Generate Sequence Items as Requested
+
+On-demand generation支持大序列或无限序列，让consumer用`Take`控制工作量。每次enumeration通常重新生成；涉及random/time/external data时，需决定是live semantics还是先capture seed/snapshot。
+
+```csharp
+public static IEnumerable<int> Fibonacci()
+{
+    var (left, right) = (0, 1);
+    while (true)
+    {
+        yield return left;
+        (left, right) = (right, checked(left + right));
+    }
+}
+```
+
+<Stepper>
+  <Step title="切换iterator、query、composable API与generation"><EcsSequencePipelineLab /></Step>
+  <Step title="标出construction与first MoveNext">写出method call时执行什么、第一次和第N次enumeration执行什么、何时结束resource scope。</Step>
+  <Step title="用Take与double enumeration验收">只取前三项并记录producer count，再枚举两次确认是recompute还是snapshot，匹配公开contract。</Step>
+</Stepper>
+
+<Callout type="trap" title="Iterator永远比返回List节省资源">
+Iterator可能把database reader或file保持到enumeration结束，也可能被重复枚举导致重复I/O。Snapshot需求明确或resource必须立即关闭时，边界materialization更安全。
+</Callout>
+
+## Query Binding与Evaluation Policy（Items 34-40）
+
+### Item 34: Loosen Coupling by Using Function Parameters
+
+把policy作为`Func`/`Predicate`参数，让sequence algorithm不依赖具体业务class。Function parameter是显式dependency，便于测试不同策略；若参数数量膨胀或彼此共享state，则提升为named policy object而非继续堆lambda。
+
+### Item 35: Never Overload Extension Methods
+
+原书强调避免让同名extension因static type、namespace或type inference选中意外版本。现代实践仍应让语义不同的operations使用不同名称，尤其不能让`IEnumerable<T>`与`IQueryable<T>`同名自定义extension暗中改变执行位置。
+
+### Item 36: Understand How Query Expressions Map to Method Calls
+
+`from x in source where p select f`映射到`source.Where(...).Select(...)`；source的可用members决定绑定到`Enumerable`还是`Queryable`。理解mapping才能判断lambda被编译成delegate还是expression tree，以及provider能否翻译。
+
+### Item 37: Prefer Lazy Evaluation to Eager Evaluation in Queries
+
+Lazy query可组合、可短路、避免不需要的work，并能看到enumeration时的最新source。若需要consistent snapshot、关闭resource、避免重复remote call或跨thread transfer，则在明确boundary `ToList`/`ToArray`，不是盲目延迟。
+
+### Item 38: Prefer Lambda Expressions to Methods
+
+短、局部、单用途behavior用lambda贴近query；复杂branch、复用policy、需要独立文档/测试或容易抛异常时用named method。Lambda不是“更函数式”的保证，capture与side effect仍需审计。
+
+### Item 39: Avoid Throwing Exceptions in Functions and Actions
+
+在per-element callback里用exception表示预期invalid data，会让整个pipeline在远离construction处中断。预期分支用filter、Try/Result或validation projection；真正broken invariant/dependency failure仍应抛出并由boundary处理，不能吞掉。
+
+### Item 40: Distinguish Early from Deferred Execution
+
+`Where`/`Select`通常deferred；`ToList`、`Count`、`First`等terminal operator触发执行。一次`Count()`后再`foreach`可能执行两次；先决定需要live query还是snapshot，再把materialization放在ownership和consistency boundary。
+
+```csharp
+var query = orders.Where(order => order.Total > minimum); // construction
+var snapshot = query.ToList();                            // execution now
+```
+
+<Term def="把deferred pipeline执行并固化成collection/snapshot的显式位置，同时终止上游resource与provider ownership。">materialization boundary</Term>
+
+<Term def="compiler根据source static type把query clauses绑定到Enumerable delegates或Queryable expression-tree operators的过程。">query binding</Term>
+
+<Stepper>
+  <Step title="切换function、extension、mapping、lazy与terminal场景"><EcsQueryCompositionLab /></Step>
+  <Step title="展开成method chain并标记terminal">把query syntax手动写成operators，记录每个lambda是delegate还是expression tree，以及哪个operator开始执行。</Step>
+  <Step title="记录enumeration和fault次数">加counter/fake provider，执行Count再foreach；确认I/O、callback、exception次数符合snapshot/live policy。</Step>
+</Stepper>
+
+<Callout type="trap" title="Lazy evaluation总是更高效且更新鲜">
+Lazy可短路，但重复enumeration会重复CPU/I/O，mutable source还可能得到跨时刻结果。Efficiency与consistency都要靠实际terminal operations和source ownership判断。
+</Callout>
+
+## Resource、Provider、Cardinality与Closure（Items 41-44）
+
+### Item 41: Avoid Capturing Expensive Resources
+
+Iterator或lambda若capture stream、DbContext、large graph，会把lifetime延长到enumeration甚至publisher lifetime。要么iterator内部拥有并`using`到enumeration结束，要么在resource scope内materialize；不能返回一个依赖已Dispose context的deferred query。
+
+### Item 42: Distinguish between IEnumerable and IQueryable Data Sources
+
+`IEnumerable<T>`在process内执行compiled delegates；`IQueryable<T>`构建expression tree交给provider翻译。Provider只支持有限nodes，performance取决于generated command、indexes、round trips与materialization point。测试必须检查translation和command，不只检查in-memory结果。
+
+### Item 43: Use Single() and First() to Enforce Semantic Expectations on Queries
+
+`Single`断言exactly one，0或many都fault；`First`断言at least one且需要明确ordering；`SingleOrDefault`/`FirstOrDefault`还要处理default ambiguity。选择terminal operator就是选择cardinality contract，不能用`First`掩盖duplicate invariant violation。
+
+### Item 44: Avoid Modifying Bound Variables
+
+Lambda capture的是variable storage，不是每次看到的value snapshot；deferred execution或循环注册callback时，之后修改会改变结果。用loop-local copy、immutable input或parameter传值，并避免多个queries共享可变threshold造成time-dependent behavior。
+
+```csharp
+var predicates = new List<Func<int, bool>>();
+foreach (var limit in new[] { 10, 20, 30 })
+{
+    var captured = limit;
+    predicates.Add(value => value > captured);
+}
+```
+
+<Term def="lambda/iterator保留external variable storage或resource reference，使其lifetime与读值时机延伸到实际执行。">capture lifetime</Term>
+
+<Term def="用Single、First及其OrDefault变体明确声明zero/one/many中哪些数量被API接受。">cardinality contract</Term>
+
+<Stepper>
+  <Step title="切换resource、provider、cardinality与bound variable"><EcsExecutionBoundaryLab /></Step>
+  <Step title="标记谁在何时读取什么">画出resource owner、provider translator、terminal operator和captured storage，区分construction value与execution value。</Step>
+  <Step title="注入dispose、translation和0/1/many">提前Dispose resource、使用unsupported expression、测试0/1/2 rows并修改bound variable，确认每种failure可解释。</Step>
+</Stepper>
+
+## 本章回顾：Composition结束于明确的Execution Boundary
+
+1. Iterator与on-demand generation让consumer控制工作量，但也把resource lifetime延伸到enumeration。
+2. Query syntax映射到method calls；source static type决定delegate或expression-tree binding。
+3. Function parameter和extension可降低耦合，但必须保留resolution、fault与side-effect contract。
+4. Lazy与eager不是优劣标签；materialization boundary同时决定cost、snapshot与resource release。
+5. IQueryable需要translation/command evidence，不能用in-memory test替代。
+6. Single/First表达cardinality，capture读取execution-time storage；两者都必须测试边界值。
+
+<Exercises>
+
+**问题 1：一个方法从DbContext返回IEnumerable，caller稍后枚举时报disposed，应如何修复？**
+
+<Answer>先决定ownership：若方法拥有DbContext并必须在返回前关闭，就在scope内执行query并返回read-only snapshot；若要stream，则返回由iterator/async iterator拥有context lifetime的明确API，并支持cancellation/disposal。测试partial enumeration、exception和double enumeration，不能返回依赖已释放context的deferred query。</Answer>
+
+**问题 2：同一filter在List与EF provider上结果一致，是否足以证明正确？**
+
+<Answer>不足。List路径执行delegate，EF路径翻译expression tree；还需检查generated SQL/command、server/client execution、indexes、round trips、ordering与unsupported nodes。用provider integration test验证translation，并在materialization boundary后才允许明确的local-only function。</Answer>
+
+**问题 3：Count后foreach、First代替Single、循环capture分别隐藏了什么contract？**
+
+<Answer>Count后foreach可能重复enumeration/I/O；First只保证至少一个，会隐藏duplicate invariant且无ordering时结果不稳定；循环capture可能让所有lambda读取最终storage。分别以single materialization、正确cardinality operator和loop-local immutable copy修复，并测试enumeration count与0/1/many。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="deferred sequence" definition="enumeration前只保存source与operators的sequence contract。" />
+  <GlossaryItem term="materialization boundary" definition="执行pipeline并固化snapshot，同时收束上游ownership的位置。" />
+  <GlossaryItem term="query binding" definition="按source static type把query clauses绑定到Enumerable或Queryable operators。" />
+  <GlossaryItem term="capture lifetime" definition="closure保留变量storage/resource并延迟到execution读取的生命周期。" />
+  <GlossaryItem term="cardinality contract" definition="terminal operator对zero、one与many结果数量的语义承诺。" />
+</Glossary>
+
+<Attribution adaptedFrom="Effective C#, Third Edition, Chapter 4: Working with LINQ, Items 29-44" adaptedUrl="https://www.informit.com/store/effective-c-sharp-covers-c-sharp-6.0-50-specific-ways-9780134579443" />

@@ -1,0 +1,259 @@
+---
+title: "第7章 图"
+type: C
+section: "大话数据结构 · 树与图"
+order: 7
+description: "从图术语与五种存储开始，实现DFS/BFS，并分别推导Prim/Kruskal、Dijkstra/Floyd、拓扑排序和关键路径的前置条件与证据。"
+demo: true
+math: false
+sourceUrl: "https://www.tup.tsinghua.edu.cn/bookscenter/bookcatalog?id=08952301"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { DsvGraphRepresentationLab, DsvGraphTraversalLab, DsvGraphAlgorithmLab } from "@/components/mdx/data-structures-visual/diagrams/graphs";
+
+<Objectives>
+
+- 能描述有向/无向、顶点、边、度、路径、环、连通、生成树与网，并验证图输入schema
+- 能比较五种图存储，实现覆盖非连通图的DFS/BFS并证明visited、frontier和父边不变量
+- 能分析MST、最短路、拓扑排序和关键路径的目标与前置条件，选择并验证Prim/Kruskal、Dijkstra/Floyd
+
+</Objectives>
+
+## 从“一个元素可以连接多个任意元素”开始
+
+树限制每个非根结点只有一个父结点，图取消这条限制，用顶点表示对象、边表示任意成对关系。道路可有方向和距离，依赖有方向但未必有权，人际关系可能无向；算法是否正确首先取决于图schema，而不是函数名。
+
+官方第7章覆盖图的定义、顶点、边与连通性，图的抽象数据类型，邻接矩阵、邻接表、十字链表、邻接多重表、边集数组，深度优先遍历与广度优先遍历，最小生成树Prim/Kruskal，最短路径Dijkstra/Floyd，拓扑排序和关键路径。
+
+先预测：Dijkstra接收负边会怎样；最小生成树是否保证任意两点路径都最短；拓扑排序输出不足`V`个顶点意味着什么；非连通无向图能否有一棵覆盖全部顶点的生成树。
+
+## 图的定义、顶点、边与连通性
+
+<Term def="由非空顶点集合V与顶点对组成的边集合E构成的结构，记作G=(V,E)。">图</Term>可为空边但通常顶点集非空。<Term def="图中保存对象的基本单位。">顶点</Term>以稳定ID标识；<Term def="连接两个顶点并可带方向、权值和属性的关系。">边</Term>的identity决定是否允许平行边。
+
+无向边`{u,v}`两端对称，顶点度为关联边数；有向边`<u,v>`从u指向v，分别计算出度和入度。带权图也称网，权可表示距离、成本或时间，但不同含义不能在同一算法中随意相加。
+
+<Term def="相邻边首尾连接形成的顶点序列；长度可指边数或权值和。">路径</Term>若首尾相同形成回路/环。简单路径不重复顶点，简单环除首尾外不重复。无向图任意两顶点有路径即连通；极大连通子图是连通分量。有向图还区分强连通与弱连通。
+
+<Term def="包含连通无向图全部顶点且无环的极小连通子图，恰有V-1条边。">生成树</Term>不是原图唯一。非连通图对应生成森林；MST要求连通无向带权图。
+
+## 图的抽象数据类型
+
+图ADT提供add/remove vertex、add/remove edge、adjacent、neighbors、vertex/edge count与traverse。<Term def="定义顶点、边、方向、权值、重复/自环策略及图操作而隐藏具体存储的契约。">图ADT</Term>必须固定：顶点ID范围、无向边是否存一次或两条arc、无边如何表示、删除顶点是否级联删边。
+
+解析输入先验证端点存在、权值范围、重复边合并策略和计数无溢出；在temporary graph完成后检查无向对称/入出边索引一致，再commit。边权0可能合法，不能用0同时表示“无边”。
+
+## 图的存储结构
+
+<DsvGraphRepresentationLab />
+
+<Stepper>
+  <Step title="切换四类图表示"><DsvGraphRepresentationLab /></Step>
+  <Step title="按密度和操作选择">比较has-edge、neighbors、遍历、边排序、删除边、入边枚举和内存预算。</Step>
+  <Step title="做表示往返">edge list -> target representation -> edge list，规范化后比较方向、权、重复和顶点集。</Step>
+</Stepper>
+
+### 邻接矩阵
+
+<Term def="用V乘V矩阵记录每对顶点是否有边或对应权值。">邻接矩阵</Term>判边常数时间，枚举一个顶点邻边需扫描整行。无向矩阵对称；主对角线是否0取决于距离初始化而非自环存在，最好用独立present bit或不可混淆的INF。
+
+### 邻接表
+
+<Term def="为每个顶点保存一个邻接边/弧记录列表的稀疏表示。">邻接表</Term>空间`Theta(V+E)`，枚举邻边与degree成正比。无向边常在两端各放一条arc，共享edge ID/weight；插删必须同步，避免半边。
+
+```c
+#include <stdbool.h>
+#include <stddef.h>
+
+typedef struct EdgeNode {
+    size_t to;
+    int weight;
+    struct EdgeNode *next;
+} EdgeNode;
+
+typedef struct {
+    size_t vertex_count;
+    EdgeNode **out;
+} Digraph;
+
+bool graph_valid_vertex(const Digraph *g, size_t v) {
+    return g != NULL && v < g->vertex_count;
+}
+```
+
+链式邻接项顺序来自插入过程，不应让算法测试无意依赖；需要确定输出时排序或使用稳定构建。大规模图也可用CSR连续数组提升局部性，但更新成本不同。
+
+### 十字链表、邻接多重表与边集数组
+
+<Term def="有向图中每条弧同时链接到起点出边链与终点入边链的表示。">十字链表</Term>让入/出边枚举和删除同等直接。<Term def="无向图每条边对象同时挂入两个端点边链、避免复制边记录的表示。">邻接多重表</Term>更新一条edge对象即可，但遍历需判断当前端点取另一端。
+
+<Term def="连续保存每条边的端点与权值、以边为中心的表示。">边集数组</Term>适合Kruskal排序、批处理和序列化，邻接查询需额外index。多表示共存时，Graph mutation必须transactional维护所有索引。
+
+<Callout type="trap" title="图很稀疏，所以邻接表在任何操作上都更快">
+邻接表节省空间并高效枚举邻边，但判定任意(u,v)可能扫描degree；Floyd或高密度bitset运算常更适合矩阵。选择看操作，不只看E/V。
+</Callout>
+
+## 深度优先遍历与广度优先遍历
+
+<Term def="用递归/栈沿未访问邻边尽可能深入，不能继续时回溯的遍历。">深度优先遍历</Term>（DFS）产生深度优先森林。<Term def="用队列按发现距离逐层扩展未访问顶点的遍历。">广度优先遍历</Term>（BFS）在无权图中给源到每个可达顶点的最少边数。
+
+<DsvGraphTraversalLab />
+
+<Stepper>
+  <Step title="切换DFS/BFS与完整遍历"><DsvGraphTraversalLab /></Step>
+  <Step title="跟踪Frontier">同一图逐步记录stack/queue、visited、parent与distance。</Step>
+  <Step title="加入非连通分量">外层按顶点ID启动未访问点，检查每顶点恰好一次并产生森林。</Step>
+</Stepper>
+
+```c
+#include <stdlib.h>
+
+typedef bool (*VertexVisit)(size_t vertex, void *context);
+
+bool bfs(const Digraph *g, size_t source, VertexVisit visit, void *context) {
+    if (!graph_valid_vertex(g, source)) return false;
+    bool *seen = calloc(g->vertex_count, sizeof(*seen));
+    size_t *queue = malloc(g->vertex_count * sizeof(*queue));
+    if (seen == NULL || queue == NULL) { free(seen); free(queue); return false; }
+    size_t front = 0, rear = 0;
+    seen[source] = true;
+    queue[rear++] = source;
+    while (front < rear) {
+        size_t u = queue[front++];
+        if (!visit(u, context)) { free(seen); free(queue); return false; }
+        for (EdgeNode *edge = g->out[u]; edge != NULL; edge = edge->next) {
+            if (!seen[edge->to]) {
+                seen[edge->to] = true;
+                queue[rear++] = edge->to;
+            }
+        }
+    }
+    free(seen); free(queue); return true;
+}
+```
+
+Seen在enqueue时设置，保证每顶点最多入队一次，时间`Theta(V+E)`（邻接表），空间`Theta(V)`。Callback失败要清理并停止。完整图遍历在外层对每个未访问顶点启动，不能只从0号顶点假装覆盖。
+
+## 最小生成树：Prim与Kruskal
+
+<Term def="连通无向带权图中总权值最小的生成树。">最小生成树</Term>（MST）有`V-1`边且无环。Cut property：对任意把顶点分成两组的cut，跨cut最轻的安全边可属于某棵MST（处理tie时可能多解）。
+
+Prim维护已入树顶点集合及每个外部顶点到集合的最轻边，每次加入key最小顶点；矩阵实现`O(V^2)`适合稠密图，邻接表+heap约`O(E log V)`。Kruskal全局按边权排序，用并查集（DSU）只接受连接不同component的边，约`O(E log E)`。
+
+```c
+typedef struct { size_t from, to; int weight; } WeightedEdge;
+
+bool kruskal(WeightedEdge *edges, size_t edge_count, size_t vertex_count,
+             WeightedEdge *tree, size_t *tree_count) {
+    sort_edges_by_weight(edges, edge_count);
+    DisjointSet dsu;
+    if (!dsu_init(&dsu, vertex_count)) return false;
+    size_t chosen = 0;
+    for (size_t i = 0; i < edge_count && chosen + 1 < vertex_count; ++i) {
+        if (dsu_union(&dsu, edges[i].from, edges[i].to)) {
+            tree[chosen++] = edges[i];
+        }
+    }
+    dsu_destroy(&dsu);
+    *tree_count = chosen;
+    return vertex_count == 0 || chosen + 1 == vertex_count;
+}
+```
+
+排序比较要防`a.weight - b.weight`溢出；无向重复边和自环先规范化。若选不足`V-1`边，原图不连通，应返回forest/错误而非称为MST。验证结果需覆盖全部顶点、无环、边来自原图、边数正确；小图可枚举生成树确认最小总权。
+
+## 最短路径：Dijkstra与Floyd
+
+<Term def="在带权图中使指定起终点边权和最小的路径。">最短路径</Term>不同于MST：MST优化整棵连接总权，不保证树上任意两点路径为原图最短。
+
+Dijkstra处理单源且所有可达边权非负。维护暂定距离`dist`，每次settle最小未确定顶点；非负保证以后绕路不会降低它。发现`dist[u] + w < dist[v]`就relax并记录parent。要防INF加法溢出，输入有负边应拒绝或改Bellman-Ford。
+
+Floyd以`dist[i][j]`矩阵做全源动态规划：第k轮允许顶点`0..k`作中间点，更新`min(dist[i][j], dist[i][k]+dist[k][j])`，时间`Theta(V^3)`、空间`Theta(V^2)`。负边可处理，但若最终`dist[i][i] < 0`存在负环，相关最短路无有限定义。
+
+## 拓扑排序
+
+<Term def="把有向无环图顶点排列为线性序，使每条u到v的边中u都先于v。">拓扑排序</Term>用于依赖构建和课程先修。Kahn算法计算入度，把所有0入度顶点放队列，反复输出并减少其出边终点入度；输出数少于`V`说明剩余子图有环。
+
+不同0入度选择产生多个合法序；需要确定结果可用最小ID heap，但这不是唯一“正确”序。验证每个顶点恰出现一次，建立position map，检查每条边`pos[u] < pos[v]`。
+
+## 关键路径
+
+AOE网以边表示活动及持续时间，顶点表示事件；DAG前提必须先拓扑验证。<Term def="AOE网中决定项目最短完成时间、总时差为零的一条或多条活动路径。">关键路径</Term>本质是依赖DAG上的最长工期路径，不是最短路径。
+
+正向拓扑计算事件最早时间`ve[v] = max(ve[v], ve[u] + w)`；项目工期是终点`ve`。逆拓扑初始化终点最迟时间为工期，计算`vl[u] = min(vl[u], vl[v] - w)`。活动`u->v`最早开始`e=ve[u]`，最迟开始`l=vl[v]-w`，`e==l`为关键活动。
+
+<DsvGraphAlgorithmLab />
+
+<Stepper>
+  <Step title="切换MST、最短路、拓扑与关键路径"><DsvGraphAlgorithmLab /></Step>
+  <Step title="先核对前置条件">MST连通无向；Dijkstra非负；Floyd检查负环；拓扑/关键路径必须DAG。</Step>
+  <Step title="验证结果证书">MST给edge set；最短路给distance+parent；拓扑给position；关键路径给ve/vl/slack。</Step>
+</Stepper>
+
+<Callout type="trap" title="Prim、Dijkstra和关键路径看起来都在更新距离，可以互换">
+Prim的key是顶点连接到当前树的最轻单边；Dijkstra的dist是源到顶点的路径和；关键路径在DAG上取最大工期。状态含义和正确性前提完全不同。
+</Callout>
+
+## 统一验证：从Schema到证书
+
+先对小图保留edge-list oracle，所有表示round trip；遍历检查覆盖和parent forest；MST检查V-1/无环/权重最小；最短路逐边验证三角不等式并沿parent重算；拓扑逐边检查顺序；关键活动检查零slack与工期。加入空边、单顶点、非连通、平行/自环、负边、负环、权和溢出和多解tie。
+
+性能结论必须注明representation。矩阵DFS/BFS会扫描`V^2`，邻接表为`V+E`；Prim矩阵与heap版本不同；Floyd天然矩阵。Graph算法的复杂度离不开`V`与`E`两个规模。
+
+动态图修改要维护所有派生状态。新增顶点可能使矩阵整体扩容；删除顶点要移除入边、出边并更新ID映射；邻接表与边集并存时，更新只能在两边都成功后commit。已经计算的MST、distance、topological order或critical path通常失效，除非采用专门增量算法，API应以graph generation/version拒绝旧结果。
+
+不可达距离使用独立INF状态，不能用最大整数直接参与加法；relax前先判断可达并做溢出检查。Parent数组只在reachable顶点有效，重建路径时限制步数不超过V以防损坏环。Floyd的next矩阵同样要区分无路、自身零长路与负环影响。
+
+多解是正常结果：相同权值可有多棵MST，DAG可有多个拓扑序，最短路径也可tie。需要可复现时声明顶点/边次级排序；不需要时，测试验证证书与目标值，不锁死某个序列。把未声明的容器遍历顺序当正确答案，会让表示替换造成伪回归。
+
+对每个算法保留输入图hash、schema、source/target与前置检查结果。日志只存最终distance而没有负边检查、parent和graph version，无法证明结果来自哪张图；可追溯证书让优化实现仍可与小规模reference独立比对。
+
+## 本章回顾：先固定图schema，再选择算法
+
+1. 图由顶点与边构成，方向、权、重复、自环和连通语义必须声明。
+2. 矩阵擅长判边/稠密，邻接表擅长稀疏邻边，十字/多重表和边集服务更新/边中心算法。
+3. DFS使用栈深入，BFS使用队列分层；非连通图需要外层启动并固定visited时机。
+4. Prim/Kruskal求MST，Dijkstra/Floyd求最短路，目标和前置条件不同。
+5. 拓扑排序验证DAG依赖，关键路径用ve/vl找决定工期的零余量活动。
+
+<Exercises>
+
+**问题 1：为什么Dijkstra不能用于负边？**
+
+<Answer>Dijkstra一旦settle最小暂定距离就假定以后路径不会更短；非负边保证绕路只增加距离。负边可能从未settle顶点回到已settle顶点并降低它，破坏不变量，应拒绝或用Bellman-Ford。</Answer>
+
+**问题 2：怎样区分MST与单源最短路径结果？**
+
+<Answer>MST在连通无向图选V-1边使整棵树总权最小，不关心固定源；单源最短路为每个顶点最小化源到它的路径，得到的parent tree总权未必最小。分别用cut/cycle和relaxation证书验证。</Answer>
+
+**问题 3：Kahn拓扑排序如何检测环？**
+
+<Answer>反复输出入度0顶点并删除出边。若最终输出数小于V，剩余每个顶点入度都大于0，沿前驱必重复顶点形成有向环；返回cycle错误而非partial order成功。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="图" definition="由顶点集合和顶点对边集合构成的结构。" />
+  <GlossaryItem term="顶点" definition="图中保存对象并由稳定ID标识的基本单位。" />
+  <GlossaryItem term="边" definition="连接两个顶点并可带方向权值的关系。" />
+  <GlossaryItem term="路径" definition="相邻边首尾连接形成的顶点序列。" />
+  <GlossaryItem term="生成树" definition="覆盖连通无向图全部顶点且无环的V-1边子图。" />
+  <GlossaryItem term="图ADT" definition="定义图schema与操作并隐藏存储表示的契约。" />
+  <GlossaryItem term="邻接矩阵" definition="以V乘V矩阵记录边存在或权值的表示。" />
+  <GlossaryItem term="邻接表" definition="每顶点关联邻接边记录列表的稀疏表示。" />
+  <GlossaryItem term="十字链表" definition="有向弧同时链接到起点出边与终点入边链的表示。" />
+  <GlossaryItem term="邻接多重表" definition="无向边对象同时挂入两个端点边链的表示。" />
+  <GlossaryItem term="边集数组" definition="连续保存端点和权值、以边为中心的表示。" />
+  <GlossaryItem term="深度优先遍历" definition="沿未访问邻边深入并回溯的栈式遍历。" />
+  <GlossaryItem term="广度优先遍历" definition="用队列按发现距离逐层扩展的遍历。" />
+  <GlossaryItem term="最小生成树" definition="连通无向带权图中总权最小的生成树。" />
+  <GlossaryItem term="最短路径" definition="使指定端点间边权和最小的路径。" />
+  <GlossaryItem term="拓扑排序" definition="使所有有向边起点先于终点的DAG线性序。" />
+  <GlossaryItem term="关键路径" definition="AOE网中决定项目最短工期的零余量活动路径。" />
+</Glossary>
+
+<Attribution adaptedFrom="大话数据结构（溢彩加强版），第7章 图" adaptedUrl="https://www.tup.tsinghua.edu.cn/bookscenter/bookcatalog?id=08952301" />

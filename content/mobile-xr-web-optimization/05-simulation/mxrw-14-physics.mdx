@@ -1,0 +1,287 @@
+---
+title: "物理：Collider、步进、查询与调试器"
+type: C
+section: "物理、协作与内容治理"
+order: 1
+description: "按 Unity 6 官方指南第 79—90 页复现 Collider、步进、查询与调试器。"
+demo: true
+math: false
+draft: false
+sourceUrl: "https://unity.com/resources/mobile-xr-web-game-performance-optimization-unity-6"
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Mxrw14PhysicsMapLab,
+  Mxrw14PhysicsExperimentLab,
+  Mxrw14PhysicsEvidenceLab,
+} from "@/components/mdx/mobile-xr-web-optimization/diagrams/mxrw-14-physics";
+
+<Objectives>
+
+- 能解释官方单元 14在Unity 6官方跨平台优化流程中的责任与前后依赖
+- 能复现“碰撞几何 → 层与Broadphase → 固定步长 → 求解同步 → 查询批处理 → 玩法复验”并保存目标设备中间证据
+- 能设计失败实验，判断“相同输入在支持帧率范围内得到一致碰撞与玩法结果，查询不分配，固定步长不会造成螺旋追帧。”是否成立
+
+</Objectives>
+
+## 问题：怎样证明掌握的是官方单元 14，而不是背下一组技巧？
+
+先预测：若只报告修改后FPS，没有设备、构建、场景、输入、热状态和画面合同，另一位开发者能否证明收益来自这次修改？不能。跨平台优化首先是受控实验，其次才是技巧选择。
+
+物理成本由碰撞形状、层矩阵、固定步长、Broadphase、求解迭代、同步和查询分配共同决定。任何降成本都要保持碰撞、稳定性和玩法时序。
+
+<Mxrw14PhysicsMapLab />
+
+## 官方目录边界
+
+本页严格对应Unity Technologies《Optimize your game performance for mobile, XR, and the web in Unity》Unity 6版第79—90页。以下目录项必须进入实现或证据：
+
+- **Simplify colliders**
+- **Optimize your settings**
+- **Adjust simulation frequency**
+- **Modify CookingOptions for MeshColliders**
+- **Use Physics.BakeMesh**
+- **Use Box Pruning for large scenes**
+- **Modify solver iterations**
+- **Disable automatic transform syncing**
+- **Use Contact Arrays**
+- **Reuse Collision Callbacks**
+- **Move static colliders**
+- **Use non-allocating queries**
+- **Batch queries for ray casting**
+- **Visualize with the Physics Debugger**
+
+本站重新组织中文讲解、代码和实验，不逐字复制原文。平台API和包能力随Unity与设备版本变化，实际项目要固定版本并保存迁移差异。
+
+## 核心模型与不可变条件
+
+物理成本由碰撞形状、层矩阵、固定步长、Broadphase、求解迭代、同步和查询分配共同决定。任何降成本都要保持碰撞、稳定性和玩法时序。
+
+不可变条件是：**相同输入在支持帧率范围内得到一致碰撞与玩法结果，查询不分配，固定步长不会造成螺旋追帧。** 如果测试上下文、视觉或玩法结果发生变化，就不能把两次数字直接相减。先解释变化，再决定是否建立新基线。
+
+## 五个必须落到证据的术语
+
+<Term def="物理模拟每个固定步推进的时间间隔">Fixed Timestep</Term>
+
+它必须落到“碰撞几何 → 层与Broadphase → 固定步长 → 求解同步 → 查询批处理 → 玩法复验”的证据链，不能只作为术语记忆。
+
+<Term def="控制MeshCollider烹饪检查与优化的设置">CookingOptions</Term>
+
+它必须落到“碰撞几何 → 层与Broadphase → 固定步长 → 求解同步 → 查询批处理 → 玩法复验”的证据链，不能只作为术语记忆。
+
+<Term def="适合大平面世界的多盒Broadphase划分方式">Box Pruning</Term>
+
+它必须落到“碰撞几何 → 层与Broadphase → 固定步长 → 求解同步 → 查询批处理 → 玩法复验”的证据链，不能只作为术语记忆。
+
+<Term def="Transform变化时自动同步物理世界的设置">Auto Sync Transforms</Term>
+
+它必须落到“碰撞几何 → 层与Broadphase → 固定步长 → 求解同步 → 查询批处理 → 玩法复验”的证据链，不能只作为术语记忆。
+
+<Term def="把结果写入调用方缓冲区而不创建新数组的物理查询">NonAlloc查询</Term>
+
+它必须落到“碰撞几何 → 层与Broadphase → 固定步长 → 求解同步 → 查询批处理 → 玩法复验”的证据链，不能只作为术语记忆。
+
+## 从输入到发布的证据链
+
+主链为：**碰撞几何 → 层与Broadphase → 固定步长 → 求解同步 → 查询批处理 → 玩法复验**。每个节点保存平台、设备、浏览器或运行时、Unity与包版本、构建提交、场景检查点、预算、实际值和首个异常。后一节点只消费前一节点已验证事实。
+
+### 1. Collider
+
+优先简单Primitive并按需要组合，MeshCollider只用于确有几何精度需求的对象。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 2. 设置
+
+层碰撞矩阵关闭不可能交互，Sleep、重力和接触参数按玩法调整并保存基准。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 3. 步长
+
+更高频率提高精度也增加工作，Maximum Allowed Timestep限制掉帧追赶；不同帧率回放验证。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 4. 烹饪
+
+CookingOptions和Physics.BakeMesh把网格处理移到可控阶段，源网格变化后缓存必须失效。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 5. Broadphase求解
+
+大场景选择Box Pruning，降低非关键刚体solver iterations，但检查堆叠、关节与穿透。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 6. 同步回调
+
+关闭自动Transform同步后在查询边界显式同步；重用Collision callbacks和Contact Arrays减少分配。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 7. 查询
+
+Overlap与Raycast使用NonAlloc或Command批处理，缓冲区溢出必须可检测，Physics Debugger验证形状。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+<Mxrw14PhysicsExperimentLab />
+
+## 三步复现与分步观察
+
+<Stepper>
+  <Step title="1. 冻结平台合同与输入">
+    固定设备或浏览器、构建、场景、画质、预热、输入和结果合同，写出唯一假设及反证条件。
+    <Mxrw14PhysicsMapLab />
+  </Step>
+  <Step title="2. 找首因并只改一个变量">
+    沿“碰撞几何 → 层与Broadphase → 固定步长 → 求解同步 → 查询批处理 →
+    玩法复验”保存中间值，在首个越界点停止下钻；一次只修改一个主要因素。
+    <Mxrw14PhysicsExperimentLab />
+  </Step>
+  <Step title="3. 同输入复验并签发">
+    恢复相同热状态和检查点，重放基线输入，同时检查性能、内存、画面、玩法与维护副作用。
+    <Mxrw14PhysicsEvidenceLab />
+  </Step>
+</Stepper>
+
+## 可执行实现骨架
+
+```csharp
+readonly Collider[] hits = new Collider[64];
+
+int Query(Vector3 center, float radius, int mask)
+{
+    int count = Physics.OverlapSphereNonAlloc(center, radius, hits, mask);
+    if (count == hits.Length) overflowCounter++;
+    return count;
+}
+```
+
+每份采集都保存结构化上下文，报告与原始文件必须通过ID互相引用：
+
+```json
+{
+  "chapter": "mxrw-14-physics",
+  "officialPages": "第79—90页",
+  "chain": [
+    "碰撞几何",
+    "层与Broadphase",
+    "固定步长",
+    "求解同步",
+    "查询批处理",
+    "玩法复验"
+  ],
+  "platform": "mobile-web-or-xr",
+  "device": "representative-target",
+  "build": "commit-unity-packages",
+  "scenario": "fixed-checkpoint",
+  "normal": true,
+  "boundary": true,
+  "failureReplay": true
+}
+```
+
+自动门必须保留数值、结果合同和拒绝原因：
+
+```text
+PASS context=platform+device+build+scene+quality+input
+PASS chain=碰撞几何 -> 层与Broadphase -> 固定步长 -> 求解同步 -> 查询批处理 -> 玩法复验
+PASS invariant=相同输入在支持帧率范围内得到一致碰撞与玩法结果，查询不分配，固定步长不会造成螺旋追帧。
+REJECT changed-context | hidden-quality-loss | shifted-cost | missing-failure-replay
+```
+
+## 两个必须主动制造的失败样本
+
+<Callout type="trap" title="官方边界或测试上下文丢失">
+  降低Fixed
+  Timestep却不限制每帧最大物理步数，掉帧时物理追赶进一步拉长主线程形成螺旋。
+  保存错误结论、首个偏离节点和原始数据，再恢复官方边界与相同条件复验。
+</Callout>
+
+<Callout type="trap" title="数字变好但结果或维护成本恶化">
+  故意降低画质、跳过玩法工作、扩大永久缓存或增加难以维护的平台分支。若主指标改善但视觉、行为、内存、热量或发布可靠性变差，发布门必须拒绝。
+</Callout>
+
+## 证据矩阵与签发标准
+
+| 维度       | 正常样本         | 边界样本           | 失败样本         | 签发条件       |
+| ---------- | ---------------- | ------------------ | ---------------- | -------------- |
+| 平台上下文 | 代表设备固定构建 | 最低规格或长时运行 | 故意改变一项条件 | 差异可解释     |
+| 主证据链   | 六节点均记录     | 接近预算输入       | 首个节点注入偏差 | 能定位首因     |
+| 性能结果   | 达到预算         | 无长尾越界         | 主动制造回归     | 同输入可复验   |
+| 正确性     | 视觉玩法一致     | 生命周期完整       | 降质或转移成本   | 所有门同时通过 |
+
+<Mxrw14PhysicsEvidenceLab />
+
+## 练习：把官方单元 14变成可审计交付
+
+<Exercises>
+
+**问题 1** 写出“碰撞几何”到“玩法复验”每一步的输入、观测工具、阈值和输出。
+
+<Answer>
+  每一步都引用同一测试上下文，输出包含数值、原始文件与下一动作理由，不能只写工具或设置名称。
+</Answer>
+
+**问题 2** 主动制造“降低Fixed Timestep却不限制每帧最大物理步数，掉帧时物理追赶进一步拉长主线程形成螺旋。”，保存错误结论与首个偏离节点，再用同一输入证明修复。
+
+<Answer>
+  合格答案包含故障上下文、反证实验、修复后原始数据，以及性能和正确性双重结果。
+</Answer>
+
+**问题 3** 为“相同输入在支持帧率范围内得到一致碰撞与玩法结果，查询不分配，固定步长不会造成螺旋追帧。”设计正常、预算边界和失败三组测试。
+
+<Answer>
+  三组测试只改变计划输入，统一记录平台、构建、设备、帧或快照ID、预算、实际值、首个异常和复验状态。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- 是否逐项覆盖本页官方目录，而没有用通用建议替代？
+- 是否沿“碰撞几何 → 层与Broadphase → 固定步长 → 求解同步 → 查询批处理 → 玩法复验”保存可追溯中间证据？
+- 是否在真实移动、浏览器或XR目标中验证，而非只看Editor？
+- 是否主动制造失败，并证明优化没有转移成本或破坏结果？
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="Fixed Timestep">
+    物理模拟每个固定步推进的时间间隔。
+  </GlossaryItem>
+  <GlossaryItem term="CookingOptions">
+    控制MeshCollider烹饪检查与优化的设置。
+  </GlossaryItem>
+  <GlossaryItem term="Box Pruning">
+    适合大平面世界的多盒Broadphase划分方式。
+  </GlossaryItem>
+  <GlossaryItem term="Auto Sync Transforms">
+    Transform变化时自动同步物理世界的设置。
+  </GlossaryItem>
+  <GlossaryItem term="NonAlloc查询">
+    把结果写入调用方缓冲区而不创建新数组的物理查询。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Unity Technologies《Optimize your game performance for mobile, XR, and the web in Unity》(Unity 6 edition)，2024，101页"
+  adaptedUrl="https://unity.com/resources/mobile-xr-web-game-performance-optimization-unity-6"
+/>

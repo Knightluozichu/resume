@@ -1,0 +1,214 @@
+---
+title: "第6章：Dictionaries"
+type: C
+section: "Part I · Basics"
+order: 6
+description: "掌握dictionary的key-value CRUD、缺失语义、迭代视图和嵌套shape。"
+demo: true
+math: false
+sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
+draft: false
+---
+
+import {
+  PccDictionaryCrudLab,
+  PccDictionaryIterationLab,
+  PccDictionaryNestingLab,
+} from "@/components/mdx/python-crash-course/diagrams/dictionaries";
+
+<Objectives>
+
+- 能解释dictionary的key-value模型，实现add、modify、remove并判断missing key语义
+- 能比较items、keys、values与sorted view，设计顺序和重复值可观察的迭代
+- 能分析list of dictionaries、dictionary of lists和dictionary of dictionaries的嵌套访问路径
+
+</Objectives>
+
+## 为什么dictionary首先定义一个key space
+
+list用位置回答“第几个”，dictionary用hashable key回答“哪个名字对应哪个值”。key必须唯一，因此再次给同一key赋值会替换value；value可重复、可为任意对象。这个模型适合record fields、lookup table和按identity索引的数据。
+
+先预测`alien["points"]`在key不存在时发生什么，`alien.get("points", 0)`是否会把0写回dictionary，以及两个不同key能否指向同一list。语法都像读取，但missing policy和ownership不同。
+
+<Term def="dictionary中唯一key到value引用的映射关系；给已有key赋值会更新binding而不是增加第二个同名key。">key-value binding</Term>
+
+## Working with Dictionaries：add、modify、remove
+
+<Stepper>
+  <Step title="切换四种CRUD场景">
+    <PccDictionaryCrudLab />
+  </Step>
+  <Step title="比较操作前后key space">
+    add扩大key集合，modify只改变value，del缩小key集合，get不改变state。
+  </Step>
+  <Step title="记录missing key策略">
+    必填字段用方括号让KeyError可见，可选字段用get和明确default，不能到处随意吞掉缺失。
+  </Step>
+</Stepper>
+
+<Term def="当前dictionary中所有可查询key的集合；CRUD会以不同方式改变或读取这个空间。">key space</Term>
+
+```python
+alien = {"color": "green", "points": 5}
+alien["x_position"] = 0
+alien["color"] = "yellow"
+
+earned = alien.pop("points")
+speed = alien.get("speed", "medium")
+print(earned, speed, alien)
+```
+
+方括号赋值既可add也可modify，行为取决于key是否已存在。`del mapping[key]`找不到key会KeyError；`pop(key)`删除并返回value，也可提供default。先决定调用方是否需要被删value，再选del或pop。
+
+### key必须hashable，但value没有此限制
+
+string、number、tuple of immutable values通常可做key；list不可hash，不能直接做key。hashability要求key在dictionary生命周期内保持可稳定查找。若身份由多个字段组成，可用tuple key，但字段含义复杂时定义明确类型或规范化字符串更易读。
+
+value可以是list、dictionary或class instance。多个key若引用同一mutable value，对其中一个路径mutation会通过另一路径可见；dictionary只管理key到引用的映射，不复制对象。
+
+## Using get to Access Values
+
+`mapping[key]`表达“该key必须存在”，缺失时KeyError；`mapping.get(key, default)`表达“缺失是预期分支”，返回default且不写入mapping。若value本身可能是None，`get`返回None无法区分missing和present-but-None，可先用`key in mapping`或使用独特sentinel。
+
+<Term def="对key不存在时应报错、返回default、创建值还是跳过的明确业务规则。">missing-key policy</Term>
+
+```python
+profile = {"name": "Ada", "nickname": None}
+sentinel = object()
+
+nickname = profile.get("nickname", sentinel)
+timezone = profile.get("timezone", sentinel)
+print(nickname is sentinel)  # False: present with None
+print(timezone is sentinel)  # True: missing
+```
+
+不要把`get(key, [])`后直接append当作写入：default list只是返回值，不会自动进入dictionary。要按需创建集合可先显式branch，后续也可学习`setdefault`或`defaultdict`，但它们都应建立在清楚的missing policy上。
+
+### default不能掩盖数据损坏
+
+用户可选偏好缺失可以default，数据库主键或协议必填字段缺失应失败。若所有读取都使用空字符串或0默认，数据管道会继续运行并在更远处产生误导结果。边界层先验证required keys，核心逻辑再假定invariant，会比到处get更清晰。
+
+## Looping Through a Dictionary
+
+`for key, value in mapping.items()`同时解包pair；`for key in mapping`与`mapping.keys()`都迭代key；`mapping.values()`迭代value且保留重复项。现代Python保留insertion order，但如果展示或测试需要字母顺序，应显式`sorted(mapping)`声明规则。
+
+<Stepper>
+  <Step title="选择items、keys、values或sorted keys">
+    <PccDictionaryIterationLab />
+  </Step>
+  <Step title="确认view的元素单位">
+    items产生pair，keys产生key，values产生value；循环变量数量必须匹配。
+  </Step>
+  <Step title="定义顺序与去重需求">
+    展示排序用sorted；只看独特value可用set，但set不保留展示顺序契约。
+  </Step>
+</Stepper>
+
+<Term def="items、keys、values返回的动态视图，反映dictionary当前内容并为迭代暴露不同元素单位。">dictionary view</Term>
+
+```python
+favorite_languages = {
+    "ada": "python",
+    "grace": "cobol",
+    "guido": "python",
+}
+
+for name, language in favorite_languages.items():
+    print(f"{name.title()} likes {language.title()}.")
+
+for name in sorted(favorite_languages):
+    print(name.title())
+
+print(set(favorite_languages.values()))
+```
+
+### 迭代时修改key space会破坏遍历
+
+在for mapping中add/remove key可能触发“dictionary changed size during iteration”。如果需要筛选删除，先对`list(mapping)`快照迭代，或构建新dictionary。只修改已有key对应value虽不改变size，也要确保循环的读写contract清晰。
+
+大dictionary的view是动态的，不等于独立snapshot。若后续逻辑需要固定输入，显式复制keys或items；若要实时反映变化，保持view但不要跨越复杂异步边界。
+
+## Nesting：让每一层container表达一种关系
+
+list of dictionaries适合有顺序的records；dictionary of lists适合一个named field包含多个值；dictionary of dictionaries适合按identity直接查record。选择shape时从访问问题出发：主要按位置遍历，还是按ID读取？字段是否多值？是否需要稳定顺序？
+
+<Stepper>
+  <Step title="切换三种nested shape">
+    <PccDictionaryNestingLab />
+  </Step>
+  <Step title="逐层朗读访问路径">
+    `users['ada']['location']`先按identity取record，再按field取value；每个括号都应对应明确关系。
+  </Step>
+  <Step title="验证每一层missing与类型边界">
+    外层key缺失、内层field缺失、预期list却收到string是不同错误，不能用一个宽except吞掉。
+  </Step>
+</Stepper>
+
+<Term def="list与dictionary组合形成的多层data shape，每一层分别表达order、identity、record fields或multiplicity。">nested data shape</Term>
+
+```python
+users = {
+    "ada": {"first": "ada", "last": "lovelace", "location": "london"},
+    "grace": {"first": "grace", "last": "hopper", "location": "new york"},
+}
+
+for username, info in users.items():
+    full_name = f"{info['first']} {info['last']}"
+    print(username, full_name.title(), info["location"].title())
+```
+
+### 嵌套越深，schema越需要显式
+
+三层以上混合container会让访问路径和错误处理迅速复杂。先写一条示例数据和schema说明，列出required/optional fields、类型、空值与identity。第9章classes和第18章Django models会把稳定schema提升为类型边界；当前dictionary仍应保持一致shape。
+
+从JSON读取的数据天然是dictionary/list组合，但外部输入不保证字段存在或类型正确。边界处验证后再传给核心逻辑，避免每一行都防御性get。错误消息应包含访问path，例如`users.ada.location`，而不是只说missing key。
+
+## 选择dictionary还是list
+
+若主要问题是“第几个”和顺序遍历，list更自然；若是“给定唯一key取value”，dictionary更自然。用list反复线性查ID会隐藏lookup意图，用dictionary保存允许重复且无唯一key的records则会被迫制造脆弱key。
+
+有时两者并存：list保存展示顺序，dictionary按ID索引详情。双结构提高查询效率也带来一致性成本，任何add/remove都必须同时更新；在小型学习程序中优先选择单一source of truth。
+
+<Callout type="trap" title="get(key, default) 会把default写进dictionary">
+get只读取。缺失时返回default但mapping不变；若后续需要持久化默认值，显式赋值或采用有清楚副作用契约的创建方法。
+</Callout>
+
+<Callout type="trap" title="dictionary有插入顺序，所以所有输出都天然稳定">
+插入顺序稳定不等于业务需要的排序。数据来源和构建顺序变化会改变输出；用户可见或snapshot测试需要字母/数值规则时显式sorted并写key。
+</Callout>
+
+## 本章回顾：key、view与shape
+
+1. dictionary由唯一key-value binding组成，add/modify/remove改变key space或value。
+2. 方括号表示required key，get表示可选missing-key policy且不会写入default。
+3. items、keys、values是不同dictionary views，顺序和去重规则要显式。
+4. nested data shape让每层container表达identity、fields、order或multiplicity。
+5. 结构复杂时先声明schema、路径和ownership，再写访问代码。
+
+<Exercises>
+
+**问题 1：如何区分key缺失与key存在但value为None？**
+
+<Answer>可先用`key in mapping`判断presence，或用独特`sentinel = object()`后`value = mapping.get(key, sentinel)`并比较identity。不能仅用`get(key) is None`，因为missing和present-with-None都会返回None。</Answer>
+
+**问题 2：遍历dictionary时为何要区分items、keys和values？**
+
+<Answer>items迭代(key,value) pair，keys或直接for mapping迭代key，values迭代value且可重复。循环变量数量与后续语义不同；需要排序就显式sorted keys/items，需要独特values可用set但要接受顺序变化。</Answer>
+
+**问题 3：用户资料应选list of dicts还是dict of dicts？**
+
+<Answer>主要按顺序展示且记录可重复时用list of dicts；频繁按唯一username查找时用dict of dicts，外层key表达identity、内层fields表达record。若同时需要自定义顺序，可保留单一records mapping并另外保存ID order，但要测试一致性。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="key-value binding" definition="唯一key到value引用的映射关系。" />
+  <GlossaryItem term="key space" definition="dictionary当前全部可查询key的集合。" />
+  <GlossaryItem term="missing-key policy" definition="key不存在时应报错、default、创建或跳过的规则。" />
+  <GlossaryItem term="dictionary view" definition="items、keys、values为迭代暴露的动态视图。" />
+  <GlossaryItem term="nested data shape" definition="多层container分别表达identity、fields、order或multiplicity的结构。" />
+</Glossary>
+
+<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 6: Dictionaries" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />

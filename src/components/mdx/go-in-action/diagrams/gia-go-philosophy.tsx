@@ -1,75 +1,10 @@
-/**
- * <GiaGoPhilosophyDiagram>：Go 设计哲学：少即是多与并发原生。
- *
- * 展示 Go 的核心理念：简洁语法、快速编译、原生并发、工程务实。
- * Server Component，viewBox 720×400，CSS 变量配色。
- */
-
-const primary = "var(--text-primary)";
-const secondary = "var(--text-secondary)";
-const border = "var(--border)";
-const elevated = "var(--bg-elevated)";
-const accent = "var(--accent)";
-const success = "var(--success)";
-const warning = "var(--warning)";
-const danger = "var(--danger)";
-
-const PILLARS = [
-  { title: "少即是多", desc: "25 个关键字\n无继承无泛型(1.18前)\n显式优于隐式", color: accent },
-  { title: "快速编译", desc: "无头文件\n依赖明确\n秒级构建大项目", color: success },
-  { title: "原生并发", desc: "goroutine 轻量\nchannel 通信\nCSP 模型", color: warning },
-  { title: "工程务实", desc: "gofmt 统一风格\n内置测试\n一处构建部署", color: danger },
+import { GoActionOfficialLab, type GoActionCase } from "./official-lab";
+const cases: GoActionCase[] = [
+  { label: "开发速度", input: "大型依赖图与团队协作", mechanism: "小语言、快速编译、统一工具", evidence: "短反馈循环", invariant: "简单语法不掩盖包与错误边界。" },
+  { label: "并发", input: "独立网络任务", mechanism: "goroutine、scheduler与channel", evidence: "低成本并发", invariant: "并发不自动等于并行或无竞态。" },
+  { label: "类型系统", input: "具体类型与行为", mechanism: "静态类型、方法、隐式接口实现", evidence: "组合式多态", invariant: "接口由使用方需要的最小行为定义。" },
+  { label: "内存管理", input: "栈、堆与引用", mechanism: "逃逸分析和垃圾回收", evidence: "自动回收", invariant: "GC不管理文件、goroutine和业务生命周期。" },
 ];
-
-export function GiaGoPhilosophyDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox="0 0 720 400" role="img" aria-label="Go 设计哲学四大支柱：少即是多、快速编译、原生并发、工程务实。" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x={360} y={30} textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>
-            Go 设计哲学：为工程而生
-          </text>
-
-          {/* 中心 Gopher 图标化 */}
-          <circle cx={360} cy={120} r={32} fill={accent} fillOpacity="0.12" stroke={accent} strokeWidth="2" />
-          <text x={360} y={126} textAnchor="middle" fontSize="20" fontWeight="700" fill={accent}>Go</text>
-
-          {/* 四大支柱 */}
-          {PILLARS.map((p, i) => {
-            const positions = [
-              { x: 80, y: 70 },
-              { x: 500, y: 70 },
-              { x: 80, y: 200 },
-              { x: 500, y: 200 },
-            ];
-            const pos = positions[i];
-            return (
-              <g key={p.title}>
-                <line x1={360} y1={120} x2={pos.x + 70} y2={pos.y + 36} stroke={p.color} strokeWidth="1" strokeOpacity="0.4" />
-                <rect x={pos.x} y={pos.y} width={140} height={72} rx="8" fill={p.color} fillOpacity="0.08" stroke={p.color} strokeWidth="1.4" strokeOpacity="0.5" />
-                <text x={pos.x + 70} y={pos.y + 20} textAnchor="middle" fontSize="12" fontWeight="700" fill={p.color}>{p.title}</text>
-                {p.desc.split("\n").map((line, li) => (
-                  <text key={li} x={pos.x + 70} y={pos.y + 36 + li * 14} textAnchor="middle" fontSize="9.5" fill={secondary}>{line}</text>
-                ))}
-              </g>
-            );
-          })}
-
-          {/* 对比条 */}
-          <line x1={36} y1={300} x2={684} y2={300} stroke={border} strokeWidth="1" />
-          <text x={360} y={322} textAnchor="middle" fontSize="13" fontWeight="700" fill={primary}>Go vs 其他语言的核心差异</text>
-          <text x={180} y={346} textAnchor="middle" fontSize="10" fill={accent}>无继承 · 组合优于继承</text>
-          <text x={180} y={362} textAnchor="middle" fontSize="10" fill={secondary}>接口隐式实现（鸭子类型）</text>
-          <text x={540} y={346} textAnchor="middle" fontSize="10" fill={accent}>错误是值（error 返回）</text>
-          <text x={540} y={362} textAnchor="middle" fontSize="10" fill={secondary}>无异常 · 显式处理</text>
-          <text x={360} y={388} textAnchor="middle" fontSize="11" fill={secondary}>
-            Go 不追求语言特性的丰富，而追求工程协作的高效——简洁即生产力
-          </text>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        Go 四大支柱：少即是多、快速编译、原生并发、工程务实——为大规模协作工程而生。
-      </figcaption>
-    </figure>
-  );
-}
+export function GiaChallengeLab(){return <GoActionOfficialLab title="现代编程挑战" caption="开发速度、并发、类型与内存管理共同解释Go的设计。" cases={cases}/>;}
+export function GiaRuntimeLab(){return <GoActionOfficialLab title="语言与运行时" caption="切换四项设计，观察编译器与运行时分别承担什么。" cases={cases} tone="violet" initial={1}/>;}
+export function GiaHelloLab(){return <GoActionOfficialLab title="Hello与Playground门禁" caption="最小程序也要记录package、入口、输出和受限执行环境。" cases={cases} tone="emerald" initial={3}/>;}

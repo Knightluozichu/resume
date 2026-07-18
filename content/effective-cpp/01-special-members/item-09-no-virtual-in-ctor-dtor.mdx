@@ -1,0 +1,443 @@
+---
+title: "Item 9：绝不在构造和析构期间调用 virtual 函数"
+type: A
+section: Chapter 2 · Constructors, Destructors, and Assignment Operators
+order: 9
+description: 对齐 Effective C++ 第三版 Item 9：解释动态类型在构造时逐层扩展、析构时逐层收缩，识别直接和间接 virtual 调用，并以参数传递或完整构造后启动替代。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppConstructionAlternativeMap,
+  EcppCtorVirtualCallMap,
+  EcppDynamicTypeLifetimeMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-09-no-virtual-in-ctor-dtor";
+
+<Objectives>
+
+- 能解释构造时动态类型逐层扩展、析构时逐层收缩，并预测每个阶段 virtual dispatch 的实际目标
+- 能分析并识别 constructor/destructor 中经 helper、NVI、callback 或 this 泄露发生的间接 virtual 调用
+- 能设计派生数据构造参数或 factory post-construction start，验证完整对象不变量与失败回滚
+
+</Objectives>
+
+## 从“派生对象尚未成为派生对象”开始
+
+```cpp
+class Transaction {
+public:
+    explicit Transaction(const LogInfo& info)
+    {
+        logTransaction(info); // virtual
+    }
+    virtual void logTransaction(const LogInfo&) const = 0;
+};
+
+class BuyTransaction : public Transaction {
+public:
+    BuyTransaction() : Transaction{createLogInfo()} {}
+    void logTransaction(const LogInfo&) const override;
+};
+```
+
+执行 Transaction constructor 时，BuyTransaction 自己的成员和不变量还没有建立。若 virtual dispatch 进入 BuyTransaction override，它可能读取尚未开始生命周期的数据。
+
+<Term def="对象构造或析构的当前阶段可参与 virtual dispatch 的最派生层级。">
+  construction-time dynamic type
+</Term>
+
+在 base constructor 中被视为 Base，在 Derived constructor 完成相应层后才成为完整 Derived。
+
+<Term def="通过 vtable 或等价机制按对象当前动态类型选择 override 的调用过程。">
+  virtual dispatch
+</Term>
+
+构造/析构期间受到生命周期阶段限制。
+Never call virtual functions during construction or destruction（绝不在构造和析构期间调用 virtual 函数）同时覆盖直接调用和隐藏在 helper、NVI、callback 内的间接路径。
+
+<EcppDynamicTypeLifetimeMap />
+
+## 为什么语言要限制 dispatch
+
+<Term def="最派生对象内部代表某个基类或数据成员的独立对象部分。">
+  subobject lifetime
+</Term>
+
+Base subobject 必须先构造，Derived members 随后才初始化。反向析构时 Derived members 先消失，Base destructor 最后运行。
+
+```text
+construct: virtual bases -> direct bases -> members -> derived body
+destroy:   derived body -> members -> direct bases -> virtual bases
+```
+
+<Term def="对象所有层级成员完成初始化并建立最终不变量之后的正常运行阶段。">
+  fully constructed state
+</Term>
+
+只有此时 virtual 调用才能安全依赖最派生状态。限制 dispatch 是保护未构造/已销毁 subobject，不是功能缺陷。
+
+## Base constructor 中 virtual 只到 Base
+
+```cpp
+class Base {
+public:
+    Base() { announce(); }
+    virtual ~Base() = default;
+private:
+    virtual void announce() const { std::puts("Base"); }
+};
+
+class Derived : public Base {
+private:
+    void announce() const override { std::puts("Derived"); }
+};
+```
+
+构造 Derived 时，Base constructor 调用 Base::announce，不会调用 Derived::announce。
+
+<Term def="构造或析构阶段 virtual 调用只分派到当前正在构造/析构层级的规则。">
+  phase-limited dispatch
+</Term>
+
+如果 Base 版本是 pure virtual 且没有可调用定义，直接或间接调用可能产生 pure virtual call、链接错误或未定义行为。
+
+<Term def="构造/析构期间调用当前层没有有效实现的纯虚函数所导致的错误路径。">
+  pure virtual call
+</Term>
+
+编译器对直接调用有时能警告，但间接路径更隐蔽。
+
+<Callout type="trap">
+  **现象**：Base constructor 调 virtual 后打印
+  Base，于是认为只是“少了多态”且可以接受。**原因**：设计仍依赖尚未存在的派生行为，只是测试没读派生数据。**修法**：移除构造期
+  virtual 依赖，把必要数据显式传给 Base 或在完整构造后调用。
+</Callout>
+
+## 间接调用同样危险
+
+<Term def="构造函数调用普通 helper，helper 内再调用 virtual，从而隐藏真实动态调用点的路径。">
+  indirect virtual call
+</Term>
+
+```cpp
+class Transaction {
+public:
+    Transaction() { initialize(); }
+private:
+    void initialize()
+    {
+        validateBaseState();
+        logTransaction(); // virtual，仍处于 Base constructor
+    }
+    virtual void logTransaction() const = 0;
+};
+```
+
+代码审查若只搜索 constructor 体中的 `virtualName()` 会漏掉 helper、lambda、callback 和注册表调用。
+
+<Term def="构造尚未完成时把 this 指针发布给外部代码，使外部可能调用 virtual 或读取未初始化状态。">
+  this escape
+</Term>
+
+注册 observer、启动线程、把 this 放进全局容器都可能造成更严重的提前调用。
+
+<EcppCtorVirtualCallMap />
+
+## NVI 不会绕开生命周期规则
+
+<Term def="public non-virtual 函数负责前后条件，并调用 private/protected virtual hook 的模式。">
+  NVI idiom
+</Term>
+
+在正常生命周期中可集中不变量检查；但 Base constructor 调 public NVI，内部 virtual hook 仍只到 Base 层。
+
+```cpp
+void Base::initializeInterface()
+{
+    checkBasePrecondition();
+    doInitialize(); // virtual，构造期间仍受限
+}
+```
+
+<Term def="由派生类 override、供基类算法在正常运行期定制某一步的 virtual 函数。">
+  virtual hook
+</Term>
+
+模式不能改变对象生命周期。不要用额外非虚包装掩盖时机错误。
+
+## 析构阶段动态能力反向收缩
+
+<Term def="最派生析构开始后，派生成员逐步销毁，virtual dispatch 随之退回当前基类层。">
+  destruction-time type contraction
+</Term>
+
+```cpp
+class Base {
+public:
+    virtual ~Base() { audit(); }
+private:
+    virtual void audit() const { /* Base state only */ }
+};
+```
+
+Base destructor 中 audit 不会进入 Derived override，因为 Derived destructor 和成员已经结束。
+
+<Term def="派生资源已经释放后，基类析构仍尝试依赖派生 override 完成清理的错误。">
+  teardown dependency inversion
+</Term>
+
+每一层 destructor 应清理该层自己拥有的资源；不要让 Base 要求 Derived 回调帮它收尾。
+
+## 替代一：派生先计算数据再传给 Base
+
+若 Base constructor 只是想记录派生类型相关信息，让 Derived 以 static helper 计算参数：
+
+```cpp
+class Transaction {
+protected:
+    explicit Transaction(LogInfo info)
+        : info_{std::move(info)}
+    {
+        logTransaction(info_); // non-virtual Base implementation
+    }
+private:
+    void logTransaction(const LogInfo&) const;
+    LogInfo info_;
+};
+
+class BuyTransaction : public Transaction {
+public:
+    BuyTransaction()
+        : Transaction{createLogInfo()} {}
+private:
+    static LogInfo createLogInfo();
+};
+```
+
+<Term def="由派生类在进入基类构造前计算，并作为普通值传给基类建立状态的数据。">
+  derived construction data
+</Term>
+
+static helper 没有 this，不能误读未初始化成员。Base 获得完整值后使用非虚逻辑。
+
+<Term def="基类仅依赖构造参数和已完成 base/member 的普通函数，不要求派生 override 的初始化。">
+  non-virtual base initialization
+</Term>
+
+适合参数可在构造前确定的场景。
+
+## 替代二：完整构造后显式 start
+
+某些初始化确实需要最派生行为，例如注册插件能力或调用虚拟设备。用 factory 保证构造后再启动：
+
+```cpp
+class Component {
+public:
+    virtual ~Component() = default;
+    void start()
+    {
+        if (state_ != State::Constructed)
+            throw std::logic_error{"invalid start state"};
+        doStart();
+        state_ = State::Started;
+    }
+private:
+    virtual void doStart() = 0;
+    State state_{State::Constructed};
+};
+
+template<class T, class... Args>
+std::unique_ptr<T> makeStarted(Args&&... args)
+{
+    auto candidate = std::make_unique<T>(std::forward<Args>(args)...);
+    candidate->start();
+    return candidate;
+}
+```
+
+<Term def="对象完整构造后由 factory 或 owner 调用、可安全 virtual dispatch 的启动阶段。">
+  post-construction start
+</Term>
+
+start 失败时 candidate unique_ptr 自动销毁完整对象，不发布半启动实例。
+
+<Term def="对象只在全部构造和启动成功后才移动给外部 owner 的发布规则。">
+  publish-after-start
+</Term>
+
+防止调用方忘记 start，应隐藏 public constructor 或只暴露 factory。
+
+<EcppConstructionAlternativeMap />
+
+<Callout type="trap">
+  **现象**：把 virtual 调用从 constructor 移到 public
+  init()，但允许任意调用方直接 new 后忘记 init。**原因**：修复 dispatch
+  时破坏了对象不变量。**修法**：限制构造可见性，用 factory 原子完成
+  construct+start，失败不发布。
+</Callout>
+
+## 两阶段初始化的状态成本
+
+<Term def="对象从 Constructed、Starting、Started 到 Failed/Stopped 的显式生命周期状态机。">
+  initialization state machine
+</Term>
+
+post-construction 不是免费方案：所有 public 操作必须拒绝未 Started 状态；重复 start、并发 start、start 失败重试要有协议。
+
+```cpp
+enum class State { Constructed, Starting, Started, Failed, Stopped };
+```
+
+<Term def="start 中部分动作成功后后续失败，系统必须撤销已提交副作用的责任。">
+  startup rollback
+</Term>
+
+优先让 start 在局部构建候选资源，成功后一次提交；外部注册尽量最后发生。析构按当前 state 只清理已拥有部分且不抛异常。
+
+## callback 注册必须晚于完整构造
+
+<Term def="把对象回调或 this 注册到事件源，使事件源未来可调用该对象的操作。">
+  callback registration
+</Term>
+
+constructor 中注册会发生 this escape。即使事件源承诺“稍后”，并发线程也可能立即回调。
+
+```cpp
+void Sensor::doStart()
+{
+    auto token = eventLoop_.subscribe([this](Event e) {
+        onEvent(e); // 此时对象已完整构造且 Started 提交需有顺序
+    });
+    subscription_ = std::move(token);
+}
+```
+
+<Term def="回调可能执行前，对象状态与订阅句柄都已提交且对线程可见的顺序保证。">
+  callback publication ordering
+</Term>
+
+并发系统还需同步；单纯“移出 constructor”不自动解决 data race。
+
+## 审计直接与隐藏路径
+
+<Term def="从 constructor/destructor 出发追踪 helper、callback、NVI 和注册调用，查找 virtual dispatch 的过程。">
+  lifecycle virtual-call audit
+</Term>
+
+编译器警告如 `-Wvirtual-call`/静态分析可辅助，但需要人工追踪非虚 helper 和 this escape。
+
+先预测：Base constructor 调 helper，helper 调 pure virtual；Derived override 依赖 member flag。写出每层对象生命周期、实际 dispatch 与可能诊断，再运行日志 probe。
+
+- Base/Derived 每层 constructor/destructor 记录当前成员 ready 标志。
+- 任何 virtual override 断言其层级 ready，构造/析构测试不得触发。
+- factory start 前所有成员已初始化，start 失败对象未发布。
+- callback 只在 Started 后可见，stop 后先注销再销毁成员。
+- direct、helper、lambda 与 NVI 调用链均在静态审计清单中。
+- sanitizer 和线程测试覆盖 this escape 与 start/stop 竞争。
+
+## 小结
+
+- 构造时 dynamic type 逐层扩展，析构时逐层收缩
+- Base constructor/destructor 中 virtual 调用不会进入尚未构造或已销毁的 Derived
+- helper、NVI、callback 与 this escape 都可能隐藏生命周期内 virtual 调用
+- 可提前计算的派生信息作为普通构造参数传给 Base
+- 必须使用最派生行为时，由 factory 在完整构造后执行 start，并失败不发布
+- 两阶段初始化需要状态机、rollback 与 callback publication 协议
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 9"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="construction-time dynamic type">
+    构造析构当前阶段可参与 virtual dispatch 的最派生层。
+  </GlossaryItem>
+  <GlossaryItem term="virtual dispatch">
+    按当前动态类型选择 override 的调用过程。
+  </GlossaryItem>
+  <GlossaryItem term="subobject lifetime">
+    基类或成员子对象从构造到析构的独立生命周期。
+  </GlossaryItem>
+  <GlossaryItem term="fully constructed state">
+    所有层成员和不变量都完成后的运行阶段。
+  </GlossaryItem>
+  <GlossaryItem term="phase-limited dispatch">
+    构造析构期间只分派到当前层级的规则。
+  </GlossaryItem>
+  <GlossaryItem term="pure virtual call">
+    生命周期阶段触及无有效实现纯虚函数的错误。
+  </GlossaryItem>
+  <GlossaryItem term="indirect virtual call">
+    helper 内隐藏的 virtual 调用路径。
+  </GlossaryItem>
+  <GlossaryItem term="this escape">
+    构造完成前把 this 发布给外部代码。
+  </GlossaryItem>
+  <GlossaryItem term="NVI idiom">
+    non-virtual public 接口调用 virtual hook 的模式。
+  </GlossaryItem>
+  <GlossaryItem term="virtual hook">
+    派生 override、供基类算法定制步骤的函数。
+  </GlossaryItem>
+  <GlossaryItem term="destruction-time type contraction">
+    析构时动态能力逐层退回基类的过程。
+  </GlossaryItem>
+  <GlossaryItem term="teardown dependency inversion">
+    基类析构错误依赖已销毁派生行为。
+  </GlossaryItem>
+  <GlossaryItem term="derived construction data">
+    派生在进入 Base 构造前计算并传入的值。
+  </GlossaryItem>
+  <GlossaryItem term="non-virtual base initialization">
+    只依赖基类与参数的普通初始化逻辑。
+  </GlossaryItem>
+  <GlossaryItem term="post-construction start">
+    完整构造后才执行 virtual 启动的阶段。
+  </GlossaryItem>
+  <GlossaryItem term="publish-after-start">
+    构造启动全成功后才交给外部 owner 的规则。
+  </GlossaryItem>
+  <GlossaryItem term="initialization state machine">
+    管理 Constructed、Started、Failed 等状态的模型。
+  </GlossaryItem>
+  <GlossaryItem term="startup rollback">
+    启动部分成功后失败时撤销副作用的责任。
+  </GlossaryItem>
+  <GlossaryItem term="callback registration">
+    向事件源发布对象回调或 this 的操作。
+  </GlossaryItem>
+  <GlossaryItem term="callback publication ordering">
+    回调可见前状态与订阅都已提交的顺序。
+  </GlossaryItem>
+  <GlossaryItem term="lifecycle virtual-call audit">
+    追踪构造析构调用链中 virtual 的审计。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：预测 dispatch。** Base constructor/helper/destructor 都调 virtual，Derived override 读取成员，写出每次实际目标与风险。
+
+<Answer question="构造和析构各阶段 virtual 调用到哪里？">
+  Base constructor 及其 helper 中调用只分派到 Base 层，Derived override
+  不会执行，因为派生成员尚未构造；正常完整生命周期才分派到 Derived；进入 Base
+  destructor 时 Derived destructor 与成员已结束，调用再次只到 Base。若 Base
+  对应函数 pure 且无定义，直接或间接调用会失败，设计本身应移除。
+</Answer>
+
+2. **问题 2：替换日志 virtual。** 基类构造想记录派生交易类型，设计不使用两阶段对象的修复。
+
+<Answer question="派生相关构造日志如何避免 virtual call？">
+  让每个派生类 static createLogInfo 在进入 Base constructor 前生成普通 LogInfo
+  值，作为基类构造参数；Base 保存并用 non-virtual logger 记录。static helper 无
+  this，不能读取未初始化成员；参数包含基类所需全部信息。测试每种派生生成正确值，Base
+  构造不调用任何 virtual。
+</Answer>
+
+3. **问题 3：安全两阶段启动。** 插件必须完整构造后 virtual 注册 callback，设计 factory、状态与失败回滚。
+
+  <Answer question="post-construction start 怎样避免半初始化对象？">隐藏或限制构造，由 factory 用 unique_ptr 创建 candidate，再调用 non-virtual start，内部 virtual doStart；Constructed/Starting/Started/Failed 状态限制操作。doStart 在局部准备资源，外部注册最后提交；失败由 candidate RAII 销毁且不返回。callback 只在 Started 状态发布，stop 先注销再销毁依赖，并测试并发回调。</Answer>
+</Exercises>

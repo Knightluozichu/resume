@@ -1,0 +1,266 @@
+---
+title: "第10章：Visitor"
+type: A
+section: Modern C++ Design · Part II Components
+order: 10
+description: 对齐第一版第10章 Visitor：双分派基础、catch-all overload、Acyclic Visitor、Typelist 生成的通用实现、Cyclic Visitor 回归与返回值/默认处理等 variations。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+draft: false
+---
+
+import {
+  McdAcyclicVisitorMap,
+  McdVisitorDispatchMap,
+  McdVisitorVariationMap,
+} from "@/components/mdx/modern-cpp-design/diagrams/visitor";
+
+<Objectives>
+
+- 能解释 Visitor basics 中 single dispatch 的缺口，并逐步推导 Element::Accept 与 Visitor::Visit 的 double dispatch
+- 能实现 catch-all overload、Acyclic Visitor 与 Typelist-generated generic Visitor，说明 unsupported type 与返回值协议
+- 能比较 cyclic/acyclic/generated variations 在新增 element、operation、RTTI、性能和版本兼容上的成本
+
+</Objectives>
+
+## 为什么一次 virtual call 不够
+
+**Visitor Basics** 解决“操作取决于两个动态类型”：一边是 `Shape*` 实际指向 Circle/Polygon，另一边是 Serialize/Render/Validate operation。C++ virtual dispatch 默认只按 receiver 的动态类型选择；function overload 按参数静态类型选择。
+
+<Term def="通过 Element 的 virtual Accept 和 Visitor 的 virtual Visit 两步调用，使操作同时按 element 与 visitor 的动态类型选择。">
+  double dispatch
+</Term>
+
+```cpp
+struct Circle;
+struct Polygon;
+
+struct Visitor {
+    virtual void visit(Circle&) = 0;
+    virtual void visit(Polygon&) = 0;
+    virtual ~Visitor() = default;
+};
+
+struct Shape {
+    virtual void accept(Visitor&) = 0;
+    virtual ~Shape() = default;
+};
+
+struct Circle : Shape {
+    void accept(Visitor& v) override { v.visit(*this); }
+};
+```
+
+第一次 dispatch 由 `shape->accept` 找到 Circle::accept，此时 `*this` 的静态类型已是 Circle&；第二次 `v.visit(Circle&)` 才选择 operation 的 Circle overload。所谓 double dispatch 是两次 single dispatch 的协议组合。
+
+<McdVisitorDispatchMap />
+
+## Visitor 的适用扩展方向
+
+Visitor 把 operation 从 element classes 中抽出，新增 operation 只需新 Visitor；但新增 element 要给 Visitor base 增 virtual method，并修改所有 concrete visitors。它适合 element hierarchy 稳定、operations 经常增加的编译器 AST、document tree、scene graph。
+
+<Term def="将一族异构 element 上的操作集中到独立对象，使 operation dimension 易扩展而 element dimension相对封闭的模式。">
+  Visitor pattern
+</Term>
+
+若 elements 频繁由 plugins 增加，classic Visitor 会形成 versioning bottleneck；variant + `std::visit`、type-erased callbacks、multimethod registry 或 virtual methods 可能更合适。Pattern 选择必须匹配变化轴。
+
+## Overloading：The Catch-All Function
+
+**Overloading: The Catch-All Function** 为未列出的 element 提供 fallback，例如 `visit(Base&)` 或 template catch-all。由于 overload resolution 发生在 concrete accept 中，exact `visit(Circle&)` 比 base fallback 更优。
+
+<Term def="当 Visitor 没有更具体 overload 时接收基类或通用类型、提供默认处理或显式拒绝的后备函数。">
+  catch-all visitor
+</Term>
+
+```cpp
+struct LoggingVisitor : Visitor {
+    using Visitor::visit;
+    void visit(Shape& unknown) { log(unknown.typeName()); }
+    void visit(Circle& circle) override { log(circle.radius()); }
+};
+```
+
+现实中 base `Visitor` 若只声明 pure exact overload，derived 新增 catch-all 不会自动满足它们；需要 interface 设计支持 fallback，或每个 exact overload default-forward 到 `visit(Shape&)`。`using` 也用于防止 name hiding，让 base overload set 可见。
+
+<Callout type="trap" title="陷阱：加一个 template visit(T&) 就能捕获所有 virtual 类型">
+  function templates 不能 virtual。template catch-all 只参与静态 overload resolution，无法单独替代 Visitor base 的动态接口；必须在 Accept/adapter 处把 concrete T 保留下来。
+</Callout>
+
+## An Implementation Refinement：The Acyclic Visitor
+
+Classic Visitor interface 引用所有 concrete elements，形成 dependency cycle：Visitor knows Circle/Polygon，Circle/Polygon 又知道 Visitor。新增 element 改动 root interface 与所有 operations。**The Acyclic Visitor** 将每种 element 的访问协议拆成独立 `Visitor<T>` interface。
+
+<Term def="把每种 element 的 Visit contract 分成独立接口，使 concrete operation 只继承其支持的类型并解除全量依赖环。">
+  Acyclic Visitor
+</Term>
+
+```cpp
+struct BaseVisitor { virtual ~BaseVisitor() = default; };
+
+template<class T>
+struct VisitorFor {
+    virtual void visit(T&) = 0;
+};
+
+struct Circle : Shape {
+    void accept(BaseVisitor& base) override {
+        if (auto* visitor = dynamic_cast<VisitorFor<Circle>*>(&base)) {
+            visitor->visit(*this);
+        } else {
+            onUnsupported(base);
+        }
+    }
+};
+
+struct Render : BaseVisitor, VisitorFor<Circle>, VisitorFor<Polygon> {
+    void visit(Circle&) override;
+    void visit(Polygon&) override;
+};
+```
+
+new element 只定义新的 `VisitorFor<New>`，已有 operations 不必重编译/实现；operation 也可只支持 subset。代价是每次 accept dynamic_cast，unsupported path 变成 runtime policy，interface inheritance 与 RTTI 增加复杂度。
+
+<McdAcyclicVisitorMap />
+
+## A Generic Implementation of Visitor
+
+**A Generic Implementation of Visitor** 用 Typelist 生成 visitor interfaces，避免手写每个 overload。`GenScatterHierarchy<TList, VisitorUnit>` 生成并列 `Visit(T&)` units；acyclic 版本可让 operation 从所需 units 继承，cyclic 版本由完整 list 生成 root。
+
+<Term def="以 element 类型列表为 schema 自动生成每类型访问单元和分派接口的 Visitor 组件。">
+  generic Visitor
+</Term>
+
+```cpp
+template<class T, class R>
+struct VisitorUnit {
+    virtual R visit(T&) = 0;
+};
+
+template<class R, class ElementList>
+using GeneratedVisitor =
+    GenScatterHierarchy<ElementList, BindSecond<VisitorUnit, R>::template Type>;
+```
+
+真实模板需要把 R 绑定进 Unit，并为 virtual destructor、const element、reference/pointer 和 default behavior 定义协议。Product list duplicate 会生成 ambiguous bases；return type 不同的 operations 也不能共用同一个 root type without erasure/template parameterization。
+
+<Term def="列出所有可访问 element types、驱动 overload 接口生成并决定版本边界的类型序列。">
+  Visitor typelist
+</Term>
+
+generic generation 减少 declaration drift，却没有消除 closed-world assumption：改变 typelist 仍改变 root layout/vtable，并要求 visitors 重新匹配。它自动化 boilerplate，不改变扩展方向。
+
+## Back to the “Cyclic” Visitor
+
+官方的 **Back to the “Cyclic” Visitor** 是在看清 Acyclic trade-off 后重新评估 classic structure。若 element set 确实稳定、每次 traversal 很热、所有 operations 本就应覆盖全部 elements，direct cyclic Visitor 的 virtual overload 更快、更容易静态审计 completeness。
+
+<Term def="Visitor root 明确列出完整 element 集合，elements 与 visitor interface 互相依赖但提供直接双分派的经典结构。">
+  Cyclic Visitor
+</Term>
+
+“cyclic”描述 dependency graph，不表示 object ownership cycle。forward declarations 和分离 header 可控制 include cycle；ABI/versioning 才是公开 visitor interface 的主要问题。跨 plugin boundary 添加 virtual method 会改变 vtable，不应无版本升级直接部署。
+
+## Hooking Variations
+
+**Hooking Variations** 包括返回值、constness、默认处理、停止 traversal、状态与异常：
+
+- `Visitor<R>` 让 Visit 返回统一 R；不同 element 返回不同类型则需 variant/type erasure。
+- `visit(const T&)` 表示只读，mutation visitor 接 `T&`；不要用 const_cast 复用。
+- catch-all 可 no-op、throw、log 或 delegate base behavior。
+- traversal 可由 elements 控制（internal visitor）或 operation 控制（external traversal）。
+
+<Term def="围绕 result type、constness、default behavior、traversal ownership 与 error handling 定制 Visitor 的策略集合。">
+  Visitor variations
+</Term>
+
+<McdVisitorVariationMap />
+
+返回引用需要 lifetime；聚合结果通常保存在 visitor state 或 reducer。异常中止 traversal 时，partially mutated elements 的 consistency 要由 operation 定义。若需要可恢复 transaction，Visitor 只负责 dispatch，rollback/command 协议另建。
+
+<Callout type="trap" title="陷阱：Visitor 自动遍历整个对象结构">
+  Visitor 只定义“遇到某 element 调哪个 operation”。谁走 children、顺序、cycle detection、并发与停止条件是独立 traversal contract；把它们混在 Accept 会让所有 operations 共享同一遍历策略。
+</Callout>
+
+## Visitor Generic Component Quick Facts
+
+**Visitor Generic Component Quick Facts**：
+
+- double dispatch 由 Accept + Visit 两次 virtual calls 组成；overload alone 不是动态多分派。
+- cyclic Visitor 对稳定 element set/新增 operations 友好；acyclic 对新增 elements/subset operations 更宽松。
+- generic typelist generation 减少重复并检查 coverage，但 root 仍依赖 element schema。
+- catch-all、return type、constness 与 traversal 必须在 component contract 中固定。
+
+<Term def="element/operation 扩展方向、dispatch cost、coverage、result 与 traversal 共同构成的 Visitor 选型事实。">
+  Visitor component contract
+</Term>
+
+### 与 variant 和 pattern matching 比较
+
+`std::variant<Circle,Polygon>` + `std::visit` 把 element set封闭在 variant type，operation 是 overloaded callable，编译器可检查所有 alternatives，常能 inline；但 recursive/open hierarchy 与 stable ABI 不一定适合。virtual Visitor 对对象 identity、subclass hierarchy 与 separate allocation 更自然。
+
+先预测：AST node types 固定在一个 compiler release，optimization passes 经常增加，classic/generated cyclic Visitor 合适；若 third-party plugins 每月新增 node type，所有旧 passes 不可能知道它，acyclic/default registry 更符合 evolution。
+
+<Stepper>
+  <Step title="第一步：画出两次分派">
+    从 Base element pointer 和 operation object 出发，逐行标出第一次 accept 的 receiver type、第二次 visit 的 concrete parameter type；验证 overload 不被 hiding。
+
+    <McdVisitorDispatchMap />
+
+  </Step>
+  <Step title="第二步：选择 dependency shape">
+    列出 elements/operations 哪一维更稳定、是否要求每个 operation 全覆盖、能否使用 RTTI；选择 cyclic、acyclic 或 variant。
+
+    <McdAcyclicVisitorMap />
+
+  </Step>
+  <Step title="第三步：固定 variations 与演化测试">
+    定义 result、const、fallback、traversal、exception 和 ABI；加入新 element/operation 演练，记录需要修改与重新编译的模块。
+
+    <McdVisitorVariationMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- Visitor 用 Element::Accept 与 Visitor::Visit 两次 single dispatch 实现 element + operation 双分派
+- catch-all 必须进入有效 overload/virtual protocol，function template 本身不能 virtual
+- Acyclic Visitor 将每种 element 协议拆开，降低全量依赖，代价是 RTTI 与 unsupported runtime path
+- Typelist-generated generic Visitor 自动生成 overload units，但仍由 closed element schema 决定 root interface
+- cyclic Visitor 对稳定 elements、频繁新增 operations 与 hot traversal 仍可能是最佳选择
+- result、const、fallback、traversal ownership 和 exception 是 Hooking Variations 的正式 contract
+- variant/std::visit 提供 closed sum type 的编译期访问；开放 hierarchy 与 ABI 需求可能更适合 virtual Visitor
+
+<Exercises>
+  1. **问题 1：手工追踪 double dispatch。** `Shape*` 指向 Circle，`Visitor&` 指向 AreaVisitor；写出两次 virtual receiver 与最终 overload。
+
+  <Answer question="调用链怎样确定 Circle 操作？">`shape->accept(visitor)` 第一次按 Shape receiver 动态类型进入 `Circle::accept`; 该函数体内 `*this` 静态类型是 Circle&，于是调用 `visitor.visit(Circle&)`; 第二次按 Visitor receiver 动态类型进入 `AreaVisitor::visit(Circle&)`。两步共同选择 element 与 operation。</Answer>
+
+  2. **问题 2：为 plugin elements 选结构。** 核心程序不重新编译，plugin 新增 elements，旧 operations 可忽略未知类型；比较 classic 与 acyclic。
+
+  <Answer question="为什么 acyclic 更匹配？">classic Visitor root 必须新增 virtual overload，改变 ABI 且所有旧 visitors 要实现；acyclic 新 element 定义 `VisitorFor<New>`，旧 operations 未继承该接口，accept dynamic_cast 失败后走 ignore/log fallback。代价是 RTTI 和运行时 unsupported path，需版本化 BaseVisitor boundary。</Answer>
+
+  3. **问题 3：拆分 dispatch 与 traversal。** Scene graph 既要 preorder render 又要 postorder bounds，说明 Accept 不应固定哪种顺序。
+
+  <Answer question="怎样组织 traversal？">Accept 只对当前 node 做 dispatch；独立 walker/operation 决定先 visit 再 children 或先 children 再 visit，并维护 cycle/stop state。这样 render 与 bounds 可选择不同顺序，不必让每个 element 的 Accept 固化一种 traversal 或复制 children logic。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="double dispatch">由 Accept 与 Visit 两步按两个动态类型选择操作的协议。</GlossaryItem>
+  <GlossaryItem term="Visitor pattern">把稳定 element hierarchy 上的可变 operations 抽到独立对象的模式。</GlossaryItem>
+  <GlossaryItem term="catch-all visitor">对未提供更具体 overload 的 element 给出默认处理的后备接口。</GlossaryItem>
+  <GlossaryItem term="Acyclic Visitor">为每个 element 拆独立 Visitor 接口、允许 operation 支持 subset 的结构。</GlossaryItem>
+  <GlossaryItem term="generic Visitor">用类型列表自动生成每 element 访问单元的组件。</GlossaryItem>
+  <GlossaryItem term="Visitor typelist">定义可访问 element schema 并驱动接口生成的类型序列。</GlossaryItem>
+  <GlossaryItem term="Cyclic Visitor">root 明确列出全部 elements 并提供直接双分派的经典结构。</GlossaryItem>
+  <GlossaryItem term="Visitor variations">result、const、fallback、traversal 与 error 等定制维度。</GlossaryItem>
+  <GlossaryItem term="Visitor component contract">扩展方向、dispatch、coverage、result 与 traversal 的整体约束。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Modern C++ Design, First Edition, Chapter 10: Visitor"
+  adaptedUrl="https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+/>

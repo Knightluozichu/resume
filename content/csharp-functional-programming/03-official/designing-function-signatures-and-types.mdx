@@ -1,0 +1,156 @@
+---
+title: "Chapter 3. Designing function signatures and types"
+type: C
+section: "Functional C# 1e · Core concepts"
+order: 3
+description: "覆盖function signature信息设计、data objects、Unit与Option，把absence、completion、failure和invalid state前移到type boundary。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-3"
+draft: false
+---
+
+import { CfpOptionFlowLab, CfpSignatureInformationLab, CfpUnitCompositionLab } from "@/components/mdx/csharp-functional-programming/diagrams/designing-function-signatures-and-types";
+
+<Objectives>
+
+- 能分析function signature泄露的hidden input/output，设计domain value、Option与Either式return使outcome可见
+- 能解释Unit与void的value/composition差异，判断何时成功但无业务数据仍需value-level表示
+- 能设计Option pipeline和boundary adapter，区分None、external null、invalid input与fallback ownership
+
+</Objectives>
+
+## 为什么Signature是最便宜的Architecture
+
+Function body可以写得很functional，但若signature接收primitive soup、读取global、通过out parameter或exception偷偷返回结果，caller仍无法组合和推理。Signature是每个consumer必经的architecture surface：它决定哪些states能表示、哪些dependencies显式、哪些outcomes必须处理。
+
+先预测：`bool TryX(out T)`是否和`Option<T>`表达完全相同；Unit是否等于null；Option是否适合所有failure；把string换成CustomerId是否只是多一个class；nullable reference是否自动替代Option。答案都是否。
+
+<Term def="Function的input/output types、parameter order与failure/absence channels共同暴露的可调用语义。">signature information surface</Term>
+
+## Function signature design
+
+先把function写成arrow：`A -> B`，再问是否真的只有A输入、B输出。Clock、configuration、repository若藏在object fields/global中也是inputs；mutation、logging、out/ref、exception是额外outputs/effects。把稳定dependency部分应用到function，可得到更小的domain operation。
+
+Parameter order影响partial application：先放configuration/dependency，后放变化频繁的data，便于composition root固定前者。多个同type primitives易swap，应提升为validated domain value。Return type区分routine absence、expected validation failure与unexpected dependency fault。
+
+```csharp
+public static Func<Order, Price> PriceWith(
+    TaxPolicy taxPolicy,
+    Currency currency) =>
+    order => Price.Calculate(order, taxPolicy, currency);
+```
+
+<Term def="把primitive转换成带validation和domain meaning的type，使invalid或易混淆state更早被拒绝。">domain value boundary</Term>
+
+<Stepper>
+  <Step title="切换bool/out、nullable、Option与Either"><CfpSignatureInformationLab /></Step>
+  <Step title="列出每种signature的信息损失">记录success、absence、error detail、mutation、default与caller必须猜测的invariant。</Step>
+  <Step title="用compile与consumer cases验收">尝试忽略failure、swap parameters、传invalid primitive和compose next step，比较哪个错误最早出现。</Step>
+</Stepper>
+
+<Callout type="trap" title="Return type越复杂，Signature就越Functional">
+复杂generic type若没有清楚domain states只会搬运ceremony。先定义consumer必须区分的outcomes，再选择最小type；unexpected infrastructure fault不应全部伪装成business Either。
+</Callout>
+
+## Capturing data with data objects
+
+Data object把相关values作为一个immutable snapshot传递，避免long parameter list和temporal mutation。它应表达construction invariant、value equality需求与serialization boundary。第一版写作时没有C# 9 records，常用constructor + getter-only properties；modern records可减少ceremony，但需单独标版本。
+
+不要用“data object”制造anemic bag后在多个functions重复validate。Boundary先parse/validate成domain value，core接收valid state。需要变化时返回copy/new value；若identity和lifecycle重要，则明确entity与value的差异。
+
+### Modern representation boundary
+
+C# 9 records可自动提供value-oriented syntax/equality，但不会自动验证domain invariant，也不会决定serialization compatibility。第一版使用class/getter-only properties表达同一principle；modern替换必须保持constructor/factory validation、external schema和equality contract。
+
+```csharp
+public sealed class Transfer
+{
+    public AccountId From { get; }
+    public AccountId To { get; }
+    public Money Amount { get; }
+
+    public Transfer(AccountId from, AccountId to, Money amount) =>
+        (From, To, Amount) = amount.IsPositive
+            ? (from, to, amount)
+            : throw new ArgumentOutOfRangeException(nameof(amount));
+}
+```
+
+<Term def="一组相关且已验证values形成的immutable snapshot，用于跨function传递完整domain state。">data object snapshot</Term>
+
+## Modeling the absence of data with Unit
+
+Unit表示只有一个可能value的type。它不是absence，而是“计算成功完成，但没有额外业务value”。C# `void`不能作为generic type argument或普通value；Unit让`Func<Unit>`、`Either<Error,Unit>`等pipeline统一处理完成结果。
+
+Unit不应替代meaningful result。保存订单若需要generated id/etag，应返回它；只在success本身就是全部information时用Unit。Implementation可用singleton/empty struct，重点是equality和single-value semantics。
+
+<Term def="只有一个有效value的type，用value表示successful no-data completion并参与generic composition。">unit completion value</Term>
+
+<Stepper>
+  <Step title="切换void、Unit、Action与Func-Unit"><CfpUnitCompositionLab /></Step>
+  <Step title="标出completion与business information">判断operation成功后caller是否需要id/version/count；需要就不能用Unit抹掉。</Step>
+  <Step title="验证generic composition">把operation放入Option/Either/Task-like helper，检查success/failure而不依赖out flag或null。</Step>
+</Stepper>
+
+## Modeling the possible absence of data with Option
+
+Option有两个states：Some(value)和None。它适合routine absence，例如lookup没找到、optional middle name；caller通过Map/Bind/Match/IfNone显式处理，不直接deref null。Option让fallback推迟到最了解context的consumer，而不是repository提前返回empty object。
+
+```csharp
+Option<Customer> customer = repository.Find(id);
+
+string email = customer
+    .Map(value => value.Email)
+    .IfNone("missing@example.invalid");
+```
+
+External null必须在adapter转换：允许absence则None，不允许则validation error。`Some(null)`是否允许要由Option implementation明确；通常禁止以避免双重absence。Option也不携带failure reason，validation/dependency error更适合Either/Result或exception boundary。
+
+<Term def="以Some和None显式表示routine possible absence，并提供Map/Bind/Match等total consumption。">option absence contract</Term>
+
+<Stepper>
+  <Step title="切换Some、None、external null与fallback"><CfpOptionFlowLab /></Step>
+  <Step title="决定absence owner">Repository只报告None；UI、workflow或API boundary决定404、prompt、default还是skip。</Step>
+  <Step title="跑Some/None/null/invalid matrix">确认mapper不在None执行，fallback只在owner处应用，invalid input不被静默改成None。</Step>
+</Stepper>
+
+<Callout type="trap" title="Option可以把所有Exception和Validation都变成None">
+None不携带原因。把permission denied、timeout、invalid format都压成None会丢diagnosis与policy。只表示routine absence；其他outcome用typed error或保留unexpected fault。
+</Callout>
+
+## 本章回顾：让Type保留Caller必须知道的信息
+
+1. Signature显式暴露inputs、outputs、absence与failure，是最早的architecture boundary。
+2. Domain data objects收敛validation并以immutable snapshot跨function传递。
+3. Unit表示successful no-data completion，不是null/absence。
+4. Option表示routine possible absence，fallback由consumer owner决定。
+5. Type复杂度必须对应真实domain states，不能为functional外观而堆generic wrapper。
+
+<Exercises>
+
+**问题 1：`Customer? Find(id)`应何时改成Option？**
+
+<Answer>当not-found是routine state且caller需要compose/map而不想传播null时，用Option；adapter把DB null转换None。若not-found是contract violation或需要reason，使用Either/typed error。测试found/not-found/invalid id/dependency fault四类，不把后两类压成None。</Answer>
+
+**问题 2：发送Email成功时返回Unit是否合理？**
+
+<Answer>若caller只需知道success/failure，`Either<Error,Unit>`合理；若需message id、accepted timestamp或provider receipt，应返回typed receipt。Unit不能隐藏后续idempotency/trace所需information。</Answer>
+
+**问题 3：怎样重构四个string参数避免swap？**
+
+<Answer>为EmailAddress、CustomerId、Locale等建立validated domain values，并将相关字段组合为immutable request data object。Boundary parse后core只接valid values；compile-negative/constructor tests证明错误更早，serialization adapter保持external schema。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="signature information surface" definition="Input/output types与absence/failure channels形成的调用语义。" />
+  <GlossaryItem term="domain value boundary" definition="把primitive转换成validated domain type的最早边界。" />
+  <GlossaryItem term="data object snapshot" definition="相关valid values构成的immutable domain snapshot。" />
+  <GlossaryItem term="unit completion value" definition="以唯一value表示successful no-data completion的type。" />
+  <GlossaryItem term="option absence contract" definition="以Some/None显式表示routine absence的contract。" />
+</Glossary>
+
+<Attribution adaptedFrom="Functional Programming in C#, First Edition, Chapter 3: Designing function signatures and types" adaptedUrl="https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-3" />

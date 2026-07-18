@@ -1,0 +1,274 @@
+---
+title: "第8章：Goroutines and Channels"
+type: C
+section: "Go 程序设计语言 · 通信式并发与任务收敛"
+order: 8
+description: "对齐原书第 8 章：goroutines、clock/echo servers、channels、pipelines、parallel loops、crawler、select、traversal、cancellation 与 chat server。"
+demo: true
+math: false
+sourceUrl: "https://www.gopl.io/"
+draft: false
+---
+
+import {
+  GoplChannelSemanticsLab,
+  GoplConcurrentServerLab,
+  GoplCrawlerCancellationLab,
+} from "@/components/mdx/go-programming-language/diagrams/goroutines-and-channels";
+
+<Objectives>
+
+- 能解释 goroutine start/lifetime 与 unbuffered/buffered channel send、receive、close、range 和 directional type contracts
+- 能实现 bounded pipeline、parallel loop 与 crawler，使用 select multiplexing、dedup、backpressure 和 cancellation 收敛全部任务
+- 能设计 concurrent clock、echo、directory traversal 与 chat servers，验证 connection ownership、slow consumer、error 和 shutdown paths
+
+</Objectives>
+
+## 为什么 Goroutines and Channels 先问“谁等待谁”
+
+`go f()` 只启动 concurrent execution，不提供 completion、error propagation 或 cancellation。channel 把 value transfer 与 synchronization 结合，但只有在明确 sender/receiver/close ownership 后才形成可证明的 lifecycle。原书通过 server、pipeline、crawler 和 chat 逐步建立这套模型。
+
+<Term def="从 go statement 启动到 function return 的并发任务区间；owner 必须能说明它如何完成、报告 error、响应 cancellation，以及 program shutdown 是否等待它。">goroutine lifetime</Term>
+
+先预测：unbuffered send 在什么时刻完成，谁应该 close channel，buffer capacity 是否等于 worker count，select 的 default 为什么可能制造 busy loop，以及 chat 中一个 slow client 能否阻塞所有 clients。
+
+## 8.1 Goroutines：启动容易，收敛必须设计
+
+goroutine 是并发执行的 function。`go f(args)` 在 caller 计算 function value/arguments 后启动新 goroutine，caller 不等待结果；goroutine return 后结束，返回值被丢弃。main return 会结束 process，不会自动等待其他 goroutines。
+
+```go
+func spinner(delay time.Duration) {
+    for {
+        for _, r := range `-\|/` {
+            fmt.Printf("\r%c", r)
+            time.Sleep(delay)
+        }
+    }
+}
+
+go spinner(100 * time.Millisecond)
+```
+
+每个 goroutine 应有明确 owner 与 stop condition。fire-and-forget 只有在 process lifetime 与丢失 work 可接受时成立；service code 通常用 channel、WaitGroup 或 context 等待并传播 error。不要用 sleep 猜任务完成。
+
+## 8.2 Example: Concurrent Clock Server
+
+clock server 监听 TCP，accept 每个 connection 后启动 handler goroutine；handler 用 ticker 每秒写 time，write error/connection close 时 return，并由 owner close conn。accept loop 继续服务其他 clients。
+
+```go
+for {
+    conn, err := listener.Accept()
+    if err != nil { return err }
+    go handleConn(conn)
+}
+
+func handleConn(conn net.Conn) {
+    defer conn.Close()
+    ticker := time.NewTicker(time.Second)
+    defer ticker.Stop()
+    for now := range ticker.C {
+        if _, err := io.WriteString(conn, now.Format("15:04:05\n")); err != nil { return }
+    }
+}
+```
+
+production server 加 read/write deadlines、listener shutdown 与 active handler wait。goroutine-per-connection 简洁，但并发连接数、buffers/fds 必须有 admission limit。
+
+## 8.3 Example: Concurrent Echo Server
+
+echo server scanner 读取 lines，可为每行启动 delayed echo 任务展示 overlap；真正协议应避免多个 goroutines 无序写同一 conn。一个 connection 通常由单 writer owner 串行化 output，reader 把 requests 送入 bounded work pipeline。
+
+half-close、Scanner token limit、idle deadline 与 malformed input 都是 connection contract。handler return 时确保子任务停止/完成后再 close conn，避免 goroutine 对已关闭 fd 继续写。
+
+## 8.4 Channels：typed communication 与 synchronization
+
+channel 由 `make(chan T)` 创建，send `ch <- value`，receive `<-ch`。channel values 可比较；zero nil channel 的 send/receive 永久阻塞，常在 select 中用 nil 动态禁用 case，但误用会泄漏 goroutine。
+
+<Term def="创建和发送 channel 的一侧负责决定何时不再产生 values，并且通常是唯一 close owner；receiver 只读取直到 close，不通过 close 请求 sender 停止。">channel ownership</Term>
+
+<Stepper>
+  <Step title="切换 unbuffered/buffered capacity 与 receiver readiness">
+    <GoplChannelSemanticsLab />
+  </Step>
+  <Step title="观察 send/receive blocking 与 buffer occupancy">
+    capacity 0 要求 sender/receiver rendezvous；capacity N 允许最多 N 个 queued values，满/空仍会阻塞。
+  </Step>
+  <Step title="由 sender owner close 并 drain">
+    close 后 send panic；receiver 先取完 buffered values，再得到 zero value/ok=false，range 自动结束。
+  </Step>
+</Stepper>
+
+### 8.4.1 Unbuffered Channels：rendezvous
+
+unbuffered send 在 matching receive 准备好并完成 value transfer 前阻塞，反之亦然。这建立 happens-before synchronization：send 之前的 actions 对 receive 之后可见。它不是自动 request/response；若需要 reply，message 中携带 response channel 或分成两个 typed directions。
+
+<Term def="capacity 为 0 的 channel send/receive 必须同时配对完成；value transfer 同时形成 sender 与 receiver 的同步点。">unbuffered synchronization</Term>
+
+### 8.4.2 Pipelines：stage ownership 与 close propagation
+
+pipeline 中每个 stage 从 inbound channel receive，转换后 send outbound；producer 完成时 close 自己的 outbound，downstream range 到 close 后再 close 下一段。receiver 不 close inbound，因为它不知道是否还有 producers。
+
+```go
+func squares(out chan<- int) {
+    defer close(out)
+    for x := 0; x < 10; x++ { out <- x * x }
+}
+
+func printAll(in <-chan int) {
+    for value := range in { fmt.Println(value) }
+}
+```
+
+如果 downstream early return，upstream send 可能永久阻塞；每个 blocking operation 同时监听 cancellation，或由 orchestrator drain。error 可作为 result struct 字段或单独受 owner 收集，不能让 worker 只在 success path send completion。
+
+### 8.4.3 Unidirectional Channel Types：API 权限
+
+`chan<- T` 只允许 send，`<-chan T` 只允许 receive。bidirectional channel 可隐式转换为 directional，反向不行。directional signature 把 close/send permission 与 consumer intent写进 compile-time contract。
+
+close receive-only channel 是 compile error；sender function 可接受 `chan<- T` 并在 owner 约定下 close。不要仅靠方向推断谁拥有 channel，仍需 lifecycle documentation。
+
+### 8.4.4 Buffered Channels：有限解耦与 backpressure
+
+`make(chan T, n)` 可保存 n 个 values。send 在 buffer full 时阻塞，receive 在 empty 时阻塞。buffer capacity 应由 burst、service rate 与 memory budget 推导，不用“大一点”隐藏 leak。`len(ch)` 只是一瞬 occupancy，不能用作 synchronization decision。
+
+<Term def="通过有限 channel capacity、worker count 与 admission policy 限制 queued/in-flight work；producer 在系统饱和时阻塞、拒绝、降级或取消，而不是无限积压。">bounded pipeline</Term>
+
+buffer 有时消除特定 goroutine leak，例如只需一个 result 且 caller 可能 early return时 capacity 1 允许 sender 完成；这不是通用修复。首先画出 ownership 和 cancellation，再选最小有意义 capacity。
+
+<Callout type="trap" title="用超大 buffered channel 修复 deadlock">
+它只把阻塞推迟到更高负载并扩大内存。检查是否缺少 receiver、close、cancellation 或 owner wait；capacity 应代表可接受队列上限并配合 overload policy。
+</Callout>
+
+## 8.5 Looping in Parallel：固定任务数也要等所有结果
+
+对独立 items 可每项启动 goroutine，但输入大时需要 semaphore/worker pool限制并发。collector 必须等待启动数量次或 WaitGroup 完成后由独立 owner close result channel。loop variable capture 仍结合 module Go version；shared output 必须串行 owner 或同步。
+
+```go
+results := make(chan Result)
+for _, item := range items {
+    item := item
+    go func() { results <- process(item) }()
+}
+for range items {
+    result := <-results
+    consume(result)
+}
+```
+
+每个 worker 无论成功失败都恰好产出一个 Result，或由 WaitGroup 单独计数；否则 collector deadlock。结果顺序若重要，携带 index 后排序/写回固定 slot。
+
+## 8.6 Example: Concurrent Web Crawler：frontier、dedup 与 work accounting
+
+crawler 从 URL frontier 取任务，并发 fetch links，把新 links 送回 coordinator。coordinator 单独拥有 seen set，避免 concurrent map race；work count 记录已发送未完成任务，降到 0 时安全结束。
+
+<Stepper>
+  <Step title="调整 workers、URLs 与 frontier capacity">
+    <GoplCrawlerCancellationLab />
+  </Step>
+  <Step title="观察 in-flight、queued 与 backpressured work">
+    worker count 限制 network concurrency；bounded frontier 限制 memory，超出部分不能无限创建 goroutines绕过 backpressure。
+  </Step>
+  <Step title="触发 cancellation 并关闭 admission">
+    coordinator 停止提交，workers 的 fetch/send 同时监听 done/context，owner 等待全部退出后再释放 channels/resources。
+  </Step>
+</Stepper>
+
+URL normalization、per-host limit、robots/policy、timeouts、body limit 与 duplicate canonicalization 属于 crawler correctness。单个 fetch failure通常作为 result记录并继续，不让 entire crawl 无条件 panic。
+
+## 8.7 Multiplexing with select：等待多个通信事件
+
+select 评估 channels/values，然后从 ready cases 中伪随机选择一个执行；没有 ready 且无 default 时阻塞。closed receive case 永远 ready，若继续 select 会反复返回 zero value，应检查 ok 后把 channel variable 设 nil 或退出。
+
+<Term def="select 在多个 channel send/receive 与 cancellation/timer cases 间选择 ready communication；nil channel case 禁用，default 使操作 nonblocking。">select multiplexing</Term>
+
+```go
+for {
+    select {
+    case value, ok := <-input:
+        if !ok { input = nil; continue }
+        handle(value)
+    case <-ticker.C:
+        report()
+    case <-done:
+        return
+    }
+}
+```
+
+default 在 tight loop 会 busy-spin，消耗 CPU；需要 periodic work 用 timer/ticker，需要阻塞就不写 default。`time.After` 在高频 loop反复分配 timer，长期状态机可复用 Timer并正确 stop/drain/reset。
+
+## 8.8 Example: Concurrent Directory Traversal
+
+directory traversal 可用 goroutine 并发读取 directories，把 file sizes 送 collector 汇总。semaphore channel 限制 open/read directory operations，避免耗尽 file descriptors。WaitGroup 只由启动方 Add，worker Done，另一个 goroutine Wait 后 close results，避免 send 与 close race。
+
+symlink/cycle、permission errors、path depth、cancellation 与 partial totals 需要 policy。progress ticker 只读取 collector-owned totals或通过 channel请求 snapshot，避免 data race。
+
+## 8.9 Cancellation：broadcast stop 而非发送一个 token
+
+close(done) 让所有 receives `<-done` 同时 ready，是 broadcast；只发送一个 value 只唤醒一个 receiver。close 必须由 single owner执行一次；现代 API 常用 context 传播 deadline/cancel/cause，但 channel select 原理相同。
+
+<Term def="single owner 通过关闭 done channel 或调用 context cancel，使任意数量 goroutines 的 select 同时观察 stop；每个 blocking boundary 都必须有 cancellation case。">cancellation broadcast</Term>
+
+取消不等于 goroutine 已退出。orchestrator 先停止 admission，broadcast cancel，再等待 workers，最后 close owner-owned outputs。HTTP/file/db operation 自身也要接收 context/deadline；否则 worker仍可能卡在不响应 done 的 syscall/library call。
+
+<Callout type="trap" title="main close(done) 后立即 return">
+这只发出停止信号，没有等待 cleanup。用 WaitGroup/result group 等待 goroutines 退出，确认 resources 关闭和 errors 汇总，再允许 process结束。
+</Callout>
+
+## 8.10 Example: Chat Server：single owner + per-client isolation
+
+chat server 可让 broadcaster goroutine 独占 clients map；entering/leaving/messages channels 是 commands。每个 connection 有 reader goroutine 与 writer goroutine，outgoing channel 隔离 broadcaster 与 socket I/O。
+
+<Stepper>
+  <Step title="切换 clock、echo 与 chat topology">
+    <GoplConcurrentServerLab />
+  </Step>
+  <Step title="增加 clients 并标记 slow consumer">
+    chat 的 per-client outgoing queue 必须 bounded；满时选择 disconnect/drop/backpressure，不能让 broadcaster 永久阻塞所有人。
+  </Step>
+  <Step title="沿 disconnect path 清理 ownership">
+    reader退出通知leaving，broadcaster从map删除并close outgoing，writer drain/exit，connection owner最终close conn并汇报完成。
+  </Step>
+</Stepper>
+
+同一 conn 的 concurrent writes 应由一个 writer串行化。client name、message size、idle timeout、join/leave ordering 与 broadcaster shutdown 都需协议。single-owner map 消除 data race，但若 command handler 做慢 I/O，仍会阻塞事件循环；slow work 放到外部并以 result command 回来。
+
+## 本章回顾：通信只有配上生命周期才是并发设计
+
+1. goroutine 启动后必须定义 completion/error/cancellation；main 不自动等待。
+2. unbuffered channel rendezvous，buffered channel 有限解耦；sender owner close，receiver drain。
+3. pipeline/parallel loop/crawler 用 directional channels、bounded workers、work accounting 与 backpressure。
+4. select multiplexing communication、timer 与 cancellation；closed/nil/default cases 各有状态语义。
+5. clock/echo/chat 展示 connection goroutines 与 single-owner broadcaster，slow clients 必须隔离。
+
+<Exercises>
+
+**问题 1：三阶段 pipeline 的第二阶段遇错 early return，怎样避免第一阶段永久阻塞？**
+
+<Answer>orchestrator创建context/done并拥有cancel；每个stage的receive、send和外部I/O都select/绑定context。第二阶段返回typedResult/error并触发cancel，第一阶段send可因done退出，第三阶段也停止。每个stage只close自己的outbound，owner用WaitGroup等待全部goroutines后关闭最终结果；不能只加大buffer或让receiver关闭inbound。</Answer>
+
+**问题 2：crawler 如何知道“没有更多工作”，同时限制并发和重复 URL？**
+
+<Answer>coordinator单独拥有seen和outstanding count：首次URL才入队并count++，worker完成返回links/result使count--，新links去重后再count；count到0且无queued/in-flight才结束。固定worker/semaphore限制fetch并发，boundedfrontier提供backpressure，所有fetch/send监听context，per-host和body/depth也有限制。</Answer>
+
+**问题 3：chat broadcaster 遇到 slow client 时有哪些策略，关闭顺序如何保证不 send on closed channel？**
+
+<Answer>每client有boundedoutgoing channel；满时可断开client、丢弃低优先消息或让producer承担backpressure，策略需可观测，不能阻塞全体。只有broadcaster owner修改clientmap并close outgoing：先从map删除，之后不再send，再close channel；writer range结束后退出，connection lifecycle owner等待reader/writer并closeconn。外部goroutine不得close该channel。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="goroutine lifetime" definition="并发 function 从启动到返回，并受 completion/error/cancellation contract 管理。" />
+  <GlossaryItem term="channel ownership" definition="sender owner 决定 send 完成并负责唯一 close。" />
+  <GlossaryItem term="unbuffered synchronization" definition="capacity 0 channel 的 send/receive rendezvous。" />
+  <GlossaryItem term="bounded pipeline" definition="用有限 queue、workers 与 overload policy 限制 work。" />
+  <GlossaryItem term="select multiplexing" definition="在多个 channel communications 中选择 ready case。" />
+  <GlossaryItem term="cancellation broadcast" definition="close done 或 context cancel 同时通知所有等待 goroutines。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Go Programming Language, Chapter 8: Goroutines and Channels"
+  adaptedUrl="https://www.gopl.io/"
+/>

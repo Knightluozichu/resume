@@ -1,101 +1,332 @@
 ---
-title: 缺失的数字
+title: "面试题53（二）：0到n-1中缺失的数字"
 type: C
-section: 数组
-order: 10
-description: 利用异或抵消特性在 O(1) 空间内找到 [0,n] 的缺失值。
+section: "第6章 面试中的各项能力"
+order: 59
+description: "利用严格递增数组中值与下标的单调错位，二分找到唯一缺失数字，并还原作者的边界契约与6组测试。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/53_02_MissingNumber/MissingNumber.cpp"
 draft: false
 ---
 
-{/* 知识点清单：异或抵消、空间 O(1)、单次扫描；原书章节：缺失的数字。 */}
+import { MissingNumberIndexShiftDiagram, MissingNumberBinarySearchLab, MissingNumberEdgeCaseMap, MissingNumberContractDiagram, MissingNumberOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/missing-number";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能证明异或抵消用于找单一缺失值的正确性。
-- 能处理数组未排序和大小不为 n 的边界。
-- 能对比哈希计数与异或方案的空间差异。
+- 能解释严格递增数组为何在缺口前后形成两种下标关系
+- 能计算二分查找每轮的区间、中点和值与下标比较
+- 能实现作者寻找首个错位位置的原版与稳健版本
+- 能分析缺失0或缺失n、空输入、非法数组和中点溢出
+- 能设计覆盖作者6组用例并与线性参考实现对拍的测试
 
 </Objectives>
 
-## 直觉引入
+## 从“数字3到底消失在哪里”开始
 
-`a ^ a = 0`，`a ^ 0 = a`。  
-把完整区间 `[0, n]` 和给出的数组里的元素全部异或一次后，  
-重复数字相互抵消，只留下缺失值。
+先预测：数组0、1、2、4、5中缺了谁？肉眼能看到3，但计算机不应逐项构造完整集合再比对。题目的关键不是某个值出现了几次，而是严格递增数组里**值与下标的关系在哪一刻改变**。
 
-## 概念讲解
+作者仓库对应的是“**0到n-1中缺失的数字**”这一小题。为了避免书中n与函数参数length的命名差异，本章以后用length表示传入数组的元素个数。合法数组包含length个互不相同的整数，完整数字域应为0到length，共length加1个候选，其中恰好缺一个。
 
-设结果 `ans = 0`，先做 `ans ^= i`（0..n），再做 `ans ^= nums[i]`。
-最终 `ans` 就是缺失的那个数字。  
-这个方法不受顺序影响，且只需常量额外空间。
+在示例0、1、2、4、5中，下标0、1、2上的值都等于下标；缺失3以后，下标3上的值变成4，下标4上的值变成5。前半段是<Term def="缺失值之前所有位置组成的区间，其中numbers[i]等于i。">下标一致区</Term>，后半段是<Term def="缺失值及其后所有位置组成的区间，其中numbers[i]等于i加1。">偏移区</Term>。
 
-## 思考引导
+<MissingNumberIndexShiftDiagram />
 
-### 1) 先问问题，不先盲算
-缺失数目是域完整性核验，不是“谁最小没出现”。先确认数字域是否连续、是否有重复，才能选正确方法。
+所以答案3既是缺失的数，也是**第一个数值不等于下标的位置**。作者没有使用异或，而是对这个位置做二分查找。
 
-### 2) 识别不变式
-若域是 0..n，全部异或后消去成对值，剩下的结果就是唯一缺失者。异或的对消是不可见噪声消除机制。
+## 为什么关系只会改变一次
 
-### 3) 为什么它一定成立
-异或具备自反性和交换律，成对元素抵消为 0，0 与 x 异或仍为 x。只要前提成立，结果可唯一恢复。
+设缺失值为m。因为数组严格递增、值域完整且只有一个缺口：
 
-### 4) 常见误区
-把它当成普适解忽视输入含重复或缺漏范围变化，导致假设失效。求和法也有溢出风险。
+- 下标i小于m时，0到i都没有缺失，因此numbers[i]等于i。
+- 下标i大于或等于m时，前面少了m，原本的i加1被左移到下标i，因此numbers[i]等于i加1。
 
-### 5) 你能找到一个反例吗
-若数组含重复且缺口不在预期范围，异或会仍出数但不代表答案。先用小样本验证约束再走公式。
+于是布尔判断“numbers[i]是否不等于i”在数组上先连续为假，再连续为真。第一次为真的下标称为<Term def="数组中最小的满足numbers[i]不等于i的下标，它就是中间或开头的缺失值。">首个错位</Term>；这个从假变真的边界又是一个<Term def="布尔谓词从连续为假切换为连续为真的唯一边界，可通过二分定位。">单调断点</Term>。
 
-### 6) 迁移到下一题
-ID 可靠性、日志序列校验都常见相同思想。先问“域定义是否完整”，再判断是否可用对消模型。
-## 交互 Demo
+这正是二分可以安全舍弃一半区间的理由。若middle位置仍满足值等于下标，它处在一致区，middle及其左侧都不可能是答案，令left等于middle加1。若值不等于下标，它处在偏移区，答案可能就是middle，也可能更靠左，因此先检查它是不是首个错位，否则令right等于middle减1。
 
-每一步异或展示“成对消失”的过程，最后剩余位恰是缺失位。
+## 忠实还原作者实现
 
-<HashTableDiagram />
+作者函数接收只读指针和数组长度。空指针或非正长度直接返回-1；搜索使用闭区间left到right。
 
 ```cpp
-#include <vector>
-
-class Solution {
-public:
-    int missingNumber(const std::vector<int>& nums) {
-        int n = nums.size();
-        int ans = 0;
-        for (int i = 0; i <= n; ++i) {
-            ans ^= i;
-        }
-        for (int num : nums) {
-            ans ^= num;
-        }
-        return ans;
+int GetMissingNumber(
+    const int* numbers,
+    int length) {
+    if (numbers == nullptr || length <= 0) {
+        return -1;
     }
-};
-```
 
-```typescript
-function missingNumber(nums: number[]): number {
-  let ans = 0;
-  for (let i = 0; i <= nums.length; i++) {
-    ans ^= i;
-  }
-  for (const num of nums) {
-    ans ^= num;
-  }
-  return ans;
+    int left = 0;
+    int right = length - 1;
+    while (left <= right) {
+        int middle = (right + left) >> 1;
+        if (numbers[middle] != middle) {
+            if (middle == 0 ||
+                numbers[middle - 1] ==
+                    middle - 1) {
+                return middle;
+            }
+            right = middle - 1;
+        } else {
+            left = middle + 1;
+        }
+    }
+
+    if (left == length) {
+        return length;
+    }
+    return -1;
 }
 ```
 
-<Callout type="trap">
-  <strong>现象 →</strong> 误将区间写成 `[1,n]`。  
-  <strong>原因 →</strong> 题目通常是 `[0,n]`。  
-  <strong>修复 →</strong> 清楚缺失范围再执行异或。
+当numbers[middle]不等于middle时，作者再检查左邻。middle为0说明它天然没有左邻，直接返回0；否则左邻仍满足值等于下标，当前middle就是由一致到错位的第一个位置。
+
+若左邻也已经错位，说明缺口更靠左，right左移。这个额外判断让函数可以在循环内部直接返回答案；另一种常见写法是不检查左邻，只持续寻找第一个谓词为真的位置，循环结束后统一验证。
+
+## 手算一次二分过程
+
+对0、1、2、4、5，初始搜索区间为0到4。第一次middle为2，numbers[2]等于2，缺口不可能在0到2，令left等于3。第二次区间为3到4，middle为3，numbers[3]等于4；它已经错位，而下标2仍一致，所以返回3。
+
+<MissingNumberBinarySearchLab />
+
+这里不能在“值不等于下标”时无条件返回middle。以数组0、2、3、4为例，第一次若落在下标1以后的任意位置都会错位，但真正答案是1。错位只说明答案不在右侧，必须继续寻找最左端。
+
+每轮要么返回，要么使闭区间至少缩短一半，因此时间复杂度为O(log n)。算法只维护left、right和middle，额外空间为O(1)，并且const指针保证不修改输入数组。
+
+## 缺失0或缺失n如何统一
+
+缺失0时，数组从下标0开始全部错位。无论二分先落在哪里，right都会不断左移，最终middle到达0；middle等于0的短路条件直接返回0。
+
+缺失中间值时，首个错位就在数组内部，返回该下标即可。缺失最后一个候选值length时，所有已有元素都等于各自下标，循环始终右移left，最后left等于length。
+
+数组中没有“下标length”可供读取，所以这种情况不能靠访问最后一个元素之后的位置判断。作者在循环结束后检查left等于length，并返回length。这是<Term def="所有现有位置都满足值等于下标，缺口位于完整值域末端length的情形。">尾端缺失</Term>。
+
+<MissingNumberEdgeCaseMap />
+
+注意作者测试中的数组0、1、2、3、4长度为5，期望答案也是5。这里的“缺失n”按函数视角就是缺失length，而不是返回length减1。
+
+## 正确性证明
+
+循环不变式是：如果首个错位存在于数组下标范围内，它一定仍在left到right中；如果当前没有数组内错位，则答案是length。
+
+当numbers[middle]等于middle时，严格递增且只有一个缺口保证middle左侧也全部一致。首个错位不可能在middle或其左侧，删除这一半不会丢答案。
+
+当numbers[middle]不等于middle时，middle已经位于偏移区。若middle为0，答案只能是0；若左邻一致，middle恰是断点；若左邻也错位，首个错位严格位于middle左侧，删除middle及右半同样安全。
+
+区间每次严格缩小，因此循环必然终止。若在数组内存在断点，某次会命中它并返回；若所有位置一致，left逐步越过right并最终等于length，返回尾端缺失值。由此覆盖缺失0、缺失中间值和缺失length三种位置。
+
+这个证明依赖合法输入。若数组无序、含重复值、缺少多个值或出现范围外数字，“一致后永久偏移”的单调结构不再成立，二分舍弃半区就没有逻辑保证。
+
+## 契约比代码表面更严格
+
+<MissingNumberContractDiagram />
+
+源码只检查指针和length，没有逐项验证严格递增、唯一性和值域。因此返回-1并不等于它能识别所有非法输入；某些坏数组仍会返回一个看似合理的下标。
+
+<Callout type="trap" title="把返回值当成完整输入校验">
+例如重复、乱序或越界值都可能破坏单调断点，但函数不会先扫描验证。若数据来自不可信边界，应先做O(n)契约校验，再调用二分；若调用方已经保证数据合法，就不必为每次查询重复扫描。
 </Callout>
 
+验证会把总时间提高到O(n)，这不是二分失效，而是“验证未知数据”和“在可信前提下求答案”两种任务的成本不同。面试中应明确说出前提由谁保证。
+
+作者还把length小于等于0都定义为无效并返回-1。从纯数学角度看，空数组可以表示完整值域只有0且0恰好缺失；但作者接口不接受这种解释。复刻源码行为时应返回-1，设计新API时则可以另行约定空span返回0。
+
+<Callout type="trap" title="把数学空集语义强加给作者接口">
+传入nullptr和0时，作者第6组测试明确期望-1。若现代封装选择空数组返回0，需要在接口文档和兼容测试中说明这是契约变更，不能声称与原函数逐项等价。
+</Callout>
+
+## 中点计算与稳健版本
+
+源码用right加left后右移一位计算middle。若两个非负int下标都很大，加法可能先发生有符号溢出。稳健写法是left加right减left的一半；差值不会超过当前区间长度。
+
+下面的半开区间版本持续寻找第一个numbers[i]不等于i的位置。它不读取左邻，循环结束时lo自然落在首个错位或length。
+
+```cpp
+#include <cstddef>
+#include <span>
+
+int missingNumber(
+    std::span<const int> numbers) {
+    if (numbers.empty()) {
+        return -1;  // 保持作者的空输入契约
+    }
+
+    std::size_t lo = 0;
+    std::size_t hi = numbers.size();
+    while (lo < hi) {
+        const std::size_t middle =
+            lo + (hi - lo) / 2;
+        if (numbers[middle] ==
+            static_cast<int>(middle)) {
+            lo = middle + 1;
+        } else {
+            hi = middle;
+        }
+    }
+
+    return static_cast<int>(lo);
+}
+```
+
+半开区间初始为0到size，hi本身可以等于数组长度但从不被读取。若全体一致，lo最后等于size，正好表示尾端缺失；若缺失0，hi不断收缩到0。这个模板把开头、中间和末端统一成“第一个真谓词的位置”。
+
+当容器大到size无法转换为int时，最后的强制转换也可能失真。现代接口更适合返回size_t或optional size_t，再用独立状态表示无效输入。这里只为对齐作者int返回类型而保留转换。
+
+## 为什么旧页的异或不是本题源码
+
+旧页把完整范围0到n与输入元素全部异或，利用成对抵消找缺失值。该方法在“数组可无序、值域正确、恰缺一个”的更宽契约下是有效算法，时间O(n)、空间O(1)；它不是作者53（二）的实现，也没有利用已排序条件。
+
+```typescript
+function missingByXor(
+  values: readonly number[],
+): number {
+  let answer = values.length;
+  for (let index = 0;
+       index < values.length;
+       index += 1) {
+    answer ^= index;
+    answer ^= values[index];
+  }
+  return answer;
+}
+```
+
+两种算法的区别应清楚分层：
+
+1. 作者二分要求有序、唯一和值域完整，时间O(log n)。
+2. 异或不依赖顺序，但必须扫描全部元素，时间O(n)。
+3. 两者都不能自动处理重复加多缺口，也都可能对非法输入给出伪答案。
+4. 求和公式同样是O(n)，还要额外讨论整数溢出。
+
+本章保留异或仅用于方案比较，主实现、测试与边界行为都以作者仓库为准。
+
+## 作者6组测试逐项还原
+
+作者main调用Test1到Test6，没有遗漏已定义用例：
+
+1. 1、2、3、4、5，缺失开头0，期望0。
+2. 0、1、2、3、4，所有下标一致，缺失末端5，期望5。
+3. 0、1、2、4、5，首个错位为下标3，期望3。
+4. 单元素1，缺失0，期望0。
+5. 单元素0，缺失1，期望1。
+6. nullptr与长度0，入口拒绝，期望-1。
+
+<MissingNumberOfficialCaseLab />
+
+下面的测试不仅重放作者用例，还为同一个合法域逐一删除每个候选值，与线性参考结果对拍。构造数组时保持严格递增，避免把契约外样本误算为算法错误。
+
+```cpp
+#include <cassert>
+#include <vector>
+
+void testMissingNumber() {
+    int first[] = {1, 2, 3, 4, 5};
+    int last[] = {0, 1, 2, 3, 4};
+    int middle[] = {0, 1, 2, 4, 5};
+    int oneMissingZero[] = {1};
+    int oneMissingOne[] = {0};
+
+    assert(GetMissingNumber(first, 5) == 0);
+    assert(GetMissingNumber(last, 5) == 5);
+    assert(GetMissingNumber(middle, 5) == 3);
+    assert(GetMissingNumber(
+        oneMissingZero, 1) == 0);
+    assert(GetMissingNumber(
+        oneMissingOne, 1) == 1);
+    assert(GetMissingNumber(nullptr, 0) == -1);
+
+    for (int missing = 0;
+         missing <= 128;
+         ++missing) {
+        std::vector<int> values;
+        for (int value = 0;
+             value <= 128;
+             ++value) {
+            if (value != missing) {
+                values.push_back(value);
+            }
+        }
+        assert(GetMissingNumber(
+            values.data(),
+            static_cast<int>(values.size()))
+            == missing);
+    }
+}
+```
+
+这组枚举对拍会覆盖缺失0、每个中间值和缺失128。仍应另外测试空指针，因为vector构造的合法样本始终非空；也可用随机上界反复生成完整域并删除一个位置，参考答案就是被删除值。
+
+非法输入测试应与正确性测试分开。若产品接口承诺拒绝乱序、重复和越界输入，就应先实现显式验证并测试错误状态；不要拿作者未承诺的行为作为稳定规范。
+
+<Stepper>
+  <Step title="观察缺口前后的下标关系">
+    <MissingNumberIndexShiftDiagram />
+    缺口之前值等于下标，缺口及其后值等于下标加1。
+  </Step>
+  <Step title="二分寻找首个错位">
+    <MissingNumberBinarySearchLab />
+    落在一致区就向右，落在偏移区就继续向左收缩。
+  </Step>
+  <Step title="核对开头、中间与末端">
+    <MissingNumberEdgeCaseMap />
+    缺失0返回下标0；全体一致则返回length。
+  </Step>
+  <Step title="确认排序和值域契约">
+    <MissingNumberContractDiagram />
+    二分正确性依赖严格递增、唯一值与单一缺口。
+  </Step>
+  <Step title="执行作者6组测试">
+    <MissingNumberOfficialCaseLab />
+    两个单元素分支和空指针行为都不能省略。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 0到n-1中缺失的数字在作者源码中通过值与下标的错位定位。
+2. 缺口前是下标一致区，缺口后是偏移区，两者形成单调断点。
+3. 二分查找要找第一个数值不等于下标的位置，不能返回任意错位位置。
+4. 缺失0或缺失n分别对应首下标立即错位和所有下标都一致。
+5. 作者空输入返回-1；数学上可解释为空域缺0，但那是不同接口契约。
+6. 时间复杂度O(log n)、额外空间O(1)，前提是输入已满足严格递增和值域要求。
+7. 中点宜用left加right减left的一半，避免left与right直接相加溢出。
+8. 异或是更宽无序契约下的O(n)替代方案，不是作者本题实现。
+
+<Exercises>
+
+**问题 1：数组0、1、3、4、5第一次在下标2看到值3，为什么答案就是2？**
+
+<Answer>下标2已经错位，而它的左邻下标1仍有值1，说明2是首个错位。合法输入中缺失值与首个错位下标相同，所以返回2。</Answer>
+
+**问题 2：数组0、1、2、3为什么循环内没有返回，却应得到4？**
+
+<Answer>每个已有位置都满足值等于下标，left会持续右移，最后等于length即4。作者把这一状态解释为尾端缺失并返回length。</Answer>
+
+**问题 3：为什么无序数组2、0、1不能直接套用作者二分？**
+
+<Answer>值与下标是否相等不再呈先假后真的单调结构，舍弃任一半都可能丢失关键信息。应先排序并重新确认值域，或使用异或、哈希、求和等线性方案。</Answer>
+
+**问题 4：若要让空数组表示缺失0，应修改什么？**
+
+<Answer>现代接口可把空span定义为合法并返回0，同时把无效输入改用optional或错误类型表示。还要更新作者第6组兼容测试，因为原函数对nullptr与长度0明确返回-1。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="下标一致区">缺失值之前值与下标相等的连续前缀。</GlossaryItem>
+  <GlossaryItem term="偏移区">缺失值以后值比下标大1的连续后缀。</GlossaryItem>
+  <GlossaryItem term="首个错位">最小的满足numbers[i]不等于i的下标。</GlossaryItem>
+  <GlossaryItem term="单调断点">布尔判断从连续为假切换为连续为真的唯一边界。</GlossaryItem>
+  <GlossaryItem term="尾端缺失">所有已有值都等于下标，缺失值为length的情形。</GlossaryItem>
+</Glossary>
+
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题53（二）"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/53_02_MissingNumber/MissingNumber.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

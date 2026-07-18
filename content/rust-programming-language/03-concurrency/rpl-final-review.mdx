@@ -1,148 +1,351 @@
 ---
-title: "总复习"
+title: "总复习：从所有权证明到可关闭系统"
 type: B
-section: "并发与现代特性"
-order: 9
-description: "全书知识串联。"
+section: "Rust 程序设计语言 · 21 章综合验收"
+order: 22
+description: "跨越官方 21 章，以 ownership、type/error、execution/capacity、abstraction/unsafe 和 Web Server lifecycle 五条证明链完成总复习。"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://doc.rust-lang.org/book/"
 draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { RplFinalReviewDiagram } from "@/components/mdx/rust-programming-language/diagrams/rpl-final-review";
+import {
+  RplAbstractionFailureReviewLab,
+  RplOwnershipBoundaryReviewLab,
+  RplSystemReadinessLab,
+} from "@/components/mdx/rust-programming-language/diagrams/rpl-final-review";
 
 <Objectives>
-- 串联全书从所有权到异步的完整知识链
-- 掌握 Rust 三大内存安全机制
-- 能够综合运用 trait/泛型/错误处理设计系统
-- 理解 Rust 线程安全和异步编程的底层原理
+
+- 能分析任一 Rust API 的 owner、borrow、Drop、error 与 dispatch contract，并写出使 invalid state 或 invalid access 不可表达的最小类型边界
+- 能比较 enum/generic/dyn Trait/macro、thread/task/channel/shared state 的适用条件，推导 safety、liveness、capacity 与 cancellation/shutdown 风险
+- 能实现并验收一个仅用标准库的 bounded worker system，覆盖输入协议、Job ownership、failure tests、backpressure 和 graceful shutdown 完成证明
+
 </Objectives>
 
-## 直觉引入
+## 为什么总复习不是把 21 章术语再背一遍
 
-回顾整本书的旅程：我们从所有权出发，学会了借用和生命周期的编译期安全保障，掌握了 trait 和泛型的抽象能力，理解了错误处理的显式哲学，最后深入并发和异步的底层原理。现在把这些知识串联起来——Rust 的每个特性都不是孤立的，它们共同构成了一个编译期保证安全、运行时零开销的完整体系。
+全书从 `cargo new` 走到 multithreaded web server，看似跨越 syntax、types、libraries 和 systems，但可以收束成五个持续复用的问题：
 
-## 概念讲解
+1. 谁拥有 value，谁可以在何时访问，何时 Drop？
+2. 哪些合法/失败状态由 type 与 Result 显式表达？
+3. 工作在哪个 thread/task 上推进，queue 与资源上界是什么？
+4. abstraction 在 compile time 还是 runtime 选择，unsafe/macro 新增了什么责任？
+5. system 怎样停止新增、完成已接收工作并证明所有 resources 已退出？
 
-### 知识串联
+<Term def="跨越多个章节、从前置 invariant 到可观察结果都能逐步说明的 correctness 论证路径。">cross-chapter proof chain</Term>
 
-<Term def="所有权→借用/生命周期→trait/泛型→错误处理→并发/异步。每个特性建立在前一个之上，形成编译期安全+零开销的完整体系。">全书知识链： 1. **所有权**（第 0-1 章）：move 语义、drop 机制、Copy trait。是一切的基础。 2. **借用/生命周期**（第 2-3 章）：&amp;T/&amp;mut T 借用规则、NLL、生命周期标注。建立在所有权之上。 3. **trait/泛型**（第 4-6 章）：静态/动态分发、trait bound、单态化、关联类型、Result/? 错误处理。类型系统的高级应用。 4. **并发/异步**（第 7-9 章）：Send/Sync 编译期线程安全、Arc&lt;Mutex&gt; 共享可变、async/await 状态机+runtime。 因果链：所有权是借用规则的基础（&amp;mut T 独占源于所有权唯一）；生命周期保证引用安全（建立在 move 之上）；trait bound 约束泛型（需要所有权和生命周期正确定义）；Send/Sync 依赖所有权系统（&amp;mut T 独占消除数据竞争）；async 状态机保存跨 await 变量（依赖生命周期）。</Term>
+总复习的目标是把 compiler、tests、runtime evidence 与 source structure 对齐。能背出 `Arc<Mutex<T>>` 不等于能设计并发；能写 async fn 不等于理解 cancellation；能打开本地网页不等于 server 有 protocol/capacity/shutdown contract。
 
-### 综合设计
+## 第一条证明链：ownership、borrowing 与 Drop
 
-<Term def="综合运用所有权、trait、泛型、错误处理、并发设计线程安全的 KV 存储服务器。">综合设计一个线程安全的 KV 存储： 1. **所有权**：每个连接 handler 独立拥有请求数据，连接结束自动释放 2. **借用**：解析请求时 &amp;str 借用缓冲区数据，零拷贝 3. **生命周期**：响应构建器持有请求引用，确保安全 4. **trait**：定义 Storage trait（get/put/delete），内存和磁盘两种实现 5. **泛型**：fn handle&lt;S: Storage&gt;(store: Arc&lt;S&gt;, req: Request) -&gt; Response，单态化 6. **错误处理**：enum KvError + ? 传播 + thiserror 7. **并发**：Arc&lt;RwLock&lt;HashMap&gt;&gt; 共享存储，多读单写 8. **async**：tokio::spawn 每连接一个 task，非阻塞 IO</Term>
+### 从函数签名先读 ownership
 
-## 交互Demo
-
-<RplFinalReviewDiagram />
-
-<Stepper>
-<Step title="所有权基础"> move/drop 是一切基础。借用规则源于所有权唯一，生命周期保证引用安全。</Step>
-<Step title="类型系统"> trait 定义行为，泛型单态化零开销，错误处理用 Result/? 显式传播。</Step>
-<Step title="并发异步"> Send/Sync 编译期消除数据竞争，Arc&lt;Mutex&gt; 共享可变，async 状态机+runtime 调度。</Step>
-</Stepper>
-
-## 代码对照
+<Term def="API 明确规定 input 是按值取得、共享借用、独占借用，output 是 owned 还是借自某个 input 的关系。">ownership contract</Term>
 
 ```rust
-// 综合：线程安全 KV 存储服务器
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
-use tokio::net::TcpListener;
+fn consume(input: String) -> usize { input.len() }
+fn inspect(input: &str) -> usize { input.len() }
+fn normalize(input: &mut String) { input.make_ascii_lowercase(); }
+fn first<'a>(input: &'a str) -> &'a str { &input[..1] }
+```
 
-// trait 定义存储接口
-trait Storage: Send + Sync {
-    fn get(&self, key: &str) -> Option<String>;
-    fn put(&self, key: String, val: String);
-    fn delete(&self, key: &str) -> bool;
-}
+`consume` 转移 owner；`inspect` 只借读；`normalize` 在 borrow period 内拥有唯一 mutable access；`first` 的 lifetime 不延长 source，只声明 output 不可比 input borrow 活得久。先读这些关系，再看 function body，很多 move/borrow error 已经可预测。
 
-// 内存实现
-struct MemStorage {
-    data: RwLock<HashMap<String, String>>,
-}
+<Term def="由 reference 创建到最后一次使用之间，borrow checker 要求对应 shared 或 exclusive access rule 持续成立的区间。">borrow period</Term>
 
-impl Storage for MemStorage {
-    fn get(&self, key: &str) -> Option<String> {
-        self.data.read().unwrap().get(key).cloned()
+non-lexical lifetimes 会在最后一次实际使用后结束 borrow，但不会允许 reference 逃出 owner lifetime，也不会放宽“一个 mutable 或多个 immutable”的冲突规则。
+
+### owner graph 比 smart-pointer 名称更重要
+
+<Term def="以 nodes 表示 allocations/values、strong edges 表示 owning references、weak edges 表示非 owning observation 的图。">owner graph</Term>
+
+Box 是单 owner indirection；Rc 是单线程 atomic-free strong count；Arc 是跨线程 atomic strong count；Weak 不增加 strong count；RefCell/Mutex 不增加 owners，而是控制 interior mutation 的 access timing。把它们组合前先回答两轴：是否多 owner？mutation check 在 compile time、runtime borrow 还是 lock guard？
+
+若 allocation v 的 strong-owner 集合为 `S(v)`，它的释放条件是：
+
+$$
+\operatorname{drop}(v) \iff |S(v)| = 0
+$$
+
+strong cycle 让所有 nodes 的 strong count 永不归零，因此 memory-safe 但 leak。把 parent/back-reference 改为 Weak 才改变 ownership graph；仅调用 clone 或 Drop 无法自动回收环。
+
+<Term def="资源释放与 lexical scope 或 owner Drop 绑定，使 file、socket、lock guard 与 allocation 在确定位置清理的模式。">RAII cleanup</Term>
+
+MutexGuard、Ref/RefMut、File、TcpStream 和 JoinHandle 都携带 lifecycle meaning。尤其是 guard：安全性依赖它存在，吞吐依赖它尽早 Drop。把 guard 存进长寿命 struct 或跨 I/O/await 持有，可能不违反 types，却破坏 liveness/capacity。
+
+<Callout type="trap" title="陷阱：遇到 ownership error 就 clone 或改成 Arc">
+  clone 可能复制数据或只增加 owner count；Arc 只解决跨线程 shared ownership。两者都不解释 mutation、lifetime、cycle、lock order 与 shutdown。先画 owner/borrow/Drop，再选择 owned move、borrow、Rc/Weak 或 Arc/Mutex。
+</Callout>
+
+## 第二条证明链：data types、abstraction 与 failure surface
+
+### Struct、Enum、Module 把合法状态收进边界
+
+<Term def="由 constructor、private representation 和 methods 共同保证，所有可观察 instances 始终满足的条件。">representation invariant</Term>
+
+```rust
+pub struct WorkerCount(usize);
+
+impl WorkerCount {
+    pub fn new(value: usize) -> Result<Self, ConfigError> {
+        if value == 0 {
+            Err(ConfigError::ZeroWorkers)
+        } else {
+            Ok(Self(value))
+        }
     }
-    fn put(&self, key: String, val: String) {
-        self.data.write().unwrap().insert(key, val);
-    }
-    fn delete(&self, key: &str) -> bool {
-        self.data.write().unwrap().remove(key).is_some()
-    }
-}
-
-// 泛型 + 错误处理
-#[derive(thiserror::Error, Debug)]
-enum KvError {
-    #[error("not found: {0}")]
-    NotFound(String),
-    #[error("io: {0}")]
-    Io(#[from] std::io::Error),
-}
-
-#[tokio::main]
-async fn main() -> anyhow::Result&lt;()&gt; {
-    let store: Arc<MemStorage> = Arc::new(MemStorage {
-        data: RwLock::new(HashMap::new()),
-    });
-    let listener = TcpListener::bind("127.0.0.1:8080").await?;
-    loop {
-        let (socket, _) = listener.accept().await?;
-        let store = Arc::clone(&store); // Arc 共享所有权
-        tokio::spawn(async move {       // async task
-            handle::<MemStorage>(socket, store).await
-        });
-    }
-}
-
-async fn handle<S: Storage>(socket: tokio::net::TcpStream, store: Arc<S>) {
-    // 借用、所有权、错误处理综合应用
 }
 ```
 
-## 常见误区
+newtype 建立 distinct identity；private field 阻止 caller 直接构造 zero；Result 把 invalid input 暴露为 recoverable failure。若字段 public，validator 只是建议，不是 invariant。
 
-<Callout type="trap">
-**误区：Rust 的安全保证只针对内存**
-Rust 的安全保证涵盖内存安全（无 use-after-free/double-free/悬空指针）和线程安全（无数据竞争）。两者都在编译期保证，运行时零开销。这是通过所有权系统+借用检查器+Send/Sync 标记三者配合实现的。
+<Term def="用 enum variants 表达有限状态集合，使每个 variant 携带恰好需要的数据，并由 match 验证穷尽处理。">closed state model</Term>
+
+Option/Result 是最常见 closed state model；业务 enum 可消除 boolean combinations，例如不用 `is_connected + has_job + failed`，改成 `Idle | Running(JobId) | Failed(Error)`。patterns 同时解构 data 与约束 control flow。
+
+### Generic、dyn Trait、Enum 与 Macro 的选择轴
+
+<Term def="具体 type 在 compile time 已知、通常经 monomorphization 生成 specialized code 的 generic/trait-bound 调用。">static dispatch</Term>
+
+<Term def="具体 implementation 在 runtime 才确定，通过 data pointer 加 vtable 的 trait object 调用。">dynamic dispatch</Term>
+
+选择不是“哪个更快”的单轴：
+
+- closed variants 且需要 exhaustive behavior：enum + match
+- implementation open、caller concrete type compile time known：generic + bound
+- implementation open、runtime heterogeneous collection/plugin：dyn Trait
+- 必须接 variable syntax 或生成 items/impl：macro
+
+function、generic 或 enum 已能表达时，不应用 macro 增加 token parsing、expansion diagnostics 与 compile-time dependency。dynamic dispatch 也不自动要求 heap：`&dyn Trait` 可以借用，`Box<dyn Trait>` 才拥有 heap object。
+
+<Term def="从 input token grammar 到 expanded Rust code 的 compile-time API；错误与兼容性必须同时覆盖调用 syntax 和生成代码。">macro expansion contract</Term>
+
+### Result、panic 与 question-mark propagation
+
+<Term def="public API 可失败的方式、错误类型、context、恢复策略与 propagation 路径的整体设计。">failure surface</Term>
+
+```rust
+#[derive(Debug)]
+enum LoadError {
+    Io(std::io::Error),
+    Empty,
+}
+
+fn load(path: &str) -> Result<String, LoadError> {
+    let text = std::fs::read_to_string(path).map_err(LoadError::Io)?;
+    if text.is_empty() { Err(LoadError::Empty) } else { Ok(text) }
+}
+```
+
+Result 用于 caller 有恢复/传播选择的失败；panic 用于无法维持 invariant、programmer bug 或示例中明确不可恢复的边界。unwrap/expect 把 Result 转成 panic，必须能说明为什么 Err 在该 boundary 不可能或终止是 policy。
+
+<Term def="question-mark operator 把 success value 解包，failure 经 FromResidual/From conversion 后从当前 compatible return boundary 提前返回。">error propagation</Term>
+
+测试证据至少覆盖 success set S、expected failure set F 和 invariant-violation rejection set I：
+
+$$
+T = S \cup F \cup I
+$$
+
+只测 S 会让 malformed input、permission errors、channel disconnect 与 panic paths 在上线后首次执行。
+
+## 第三条证明链：tests、CLI 与 crate delivery
+
+### 三层测试对应三种可见性
+
+<Term def="与 implementation 放在同一 crate 的 cfg(test) child module，可验证 private helpers 与局部 invariants。">unit test boundary</Term>
+
+<Term def="tests 目录中的独立 crate，只能通过 library public API 验证外部使用契约。">integration test boundary</Term>
+
+doc tests 同时验证 examples 可编译、public path 可发现和文档未漂移。`cargo test filter -- --ignored` 中双横线前由 Cargo 解释，后面由 test binary 解释；默认并行要求 fixtures 不共享文件名、port 或 global mutation。
+
+### minigrep 的边界仍是全书模板
+
+Chapter 12 的 Config::build/run/search/thin main 可推广到 server、tool 和 library：
+
+1. boundary parser 把 argv/env/network bytes 转成 validated config/request
+2. core function 只接 typed input，返回 Result 或 pure output
+3. outer main 把 error 映射到 stderr/log/status，不混入 success data
+4. tests 绕过 process/global state，直接验证 core contract
+
+<Term def="只负责读取外部输入、调用 library boundary、报告错误与设置 process status 的最小 executable entrypoint。">thin main</Term>
+
+### Cargo artifact 是交付事实
+
+<Term def="从 source、Cargo.toml、Cargo.lock/workspace、profiles、tests、docs 到 package/published artifact 的可重复链。">Cargo delivery chain</Term>
+
+`cargo check` 快速验证 types，`cargo test` 验证 behavior，`cargo doc/test` 验证 docs，`cargo package` 检查真正将发布的文件；workspace 共用 lock/target 不表示 member 自动获得其他 member 的 dependencies。yank 也不是删除，secret 泄露要 rotate credential。
+
+<Callout type="trap" title="陷阱：unit tests 全绿就证明 public crate 可交付">
+  unit tests 可直接访问 private implementation，无法证明外部 import path、visibility、feature、package contents 或 docs examples。至少补 integration/doc tests 和 cargo package 检查，CLI 还要验证 stdout/stderr/exit status。
 </Callout>
 
-<Callout type="trap">
-**误区：Rust 完全不需要 GC 就能管理所有内存**
-Rust 的所有权系统管理堆内存（自动 drop）。但循环引用（如 Rc/RefCell 形成环）无法被所有权系统自动回收——需要用 Weak&lt;T&gt; 手动打破环。此外，非托管资源（文件、网络连接）需要手动 Dispose/RAII。Rust 不是「零成本管理一切」，而是「编译期保证安全，确定性释放」。
+## 第四条证明链：threads、async 与容量
+
+### Safety、liveness、capacity 分开验收
+
+<Term def="没有 use-after-free、invalid alias、data race 或其他 undefined behavior 的执行属性。">safety property</Term>
+
+<Term def="系统最终能继续推进或完成，不永久 deadlock、starve 或等待永不发生事件的属性。">liveness property</Term>
+
+<Term def="workers、queue、memory、connections 与 latency 在输入压力下保持明确上界和服务策略的属性。">capacity property</Term>
+
+Send/Sync、ownership 与 MutexGuard 主要帮助 safety；lock order、channel close、wake registration 和 join placement 决定 liveness；fixed workers、bounded queues、timeouts 与 backpressure 决定 capacity。任何一项失败都不能由其他项平均掉。
+
+一个稳定 work queue 至少要求长期到达率小于可用处理率。若 N 个 worker 的单 worker 平均处理率是 μ，arrival rate 是 λ，则必要但不充分的条件是：
+
+$$
+\lambda < N\mu
+$$
+
+即使平均满足，burst、长尾 job 和 synchronized slow tasks 仍会积压，因此还要设 queue bound、deadline 与 rejection policy。
+
+<Term def="下游满载时把容量信号反馈给 producer，通过 block、timeout、reject 或 shed 维持资源上界。">backpressure contract</Term>
+
+### Thread、Channel、Shared State 的 completion edges
+
+move closure 把 owner 送进 thread；JoinHandle::join 建立 completion edge；mpsc send 把 message owner 转给 receiver；all Sender Drop + queue empty 让 recv 返回 Err；`Arc<Mutex<T>>` 共享 owner 与独占 access，但 guard scope 必须局部。
+
+```rust
+loop {
+    let message = receiver.lock().unwrap().recv();
+    match message {
+        Ok(job) => job(),
+        Err(_) => break,
+    }
+}
+```
+
+先 let 再 match 让 receiver MutexGuard 在 job 前 Drop。写成 `while let Ok(job) = receiver.lock().unwrap().recv()` 会让 temporary guard 活到 block 结束，pool 退化串行。
+
+<Term def="从 producer 提交 Job、queue 保存、worker dequeue/execute 到 completion/shutdown 的完整工作生命周期。">job lifecycle</Term>
+
+### Async 的 poll/wake 与 cancellation
+
+async fn 调用只构造 Future；executor poll 得到 Ready/Pending；Pending 前注册 Waker；wake 只把 task 重新标记为可 poll。join 等全部，select/race 取得先完成者并可能 Drop 其他 futures；partial I/O/transaction 必须考虑 cancellation safety。
+
+<Term def="Future 在任意 await point 被 Drop 时，已完成 side effects、owned resources 与 protocol state 仍保持可接受状态的性质。">cancellation safety</Term>
+
+blocking I/O 或 CPU-heavy work 不能长期占 async executor thread，应交给 bounded blocking/compute pool。反过来，大量 I/O connections 也不适合无限 thread-per-request。模型选择取决于等待形态与容量，不取决于语法偏好。
+
+## 第五条证明链：patterns、unsafe、macro 与最终系统
+
+### Pattern 是控制流证明工具
+
+refutable pattern 只适合有失败分支的位置；irrefutable pattern 用于 let/parameter。match arms 可各自失败，但整体 exhaustive；guard 增加 runtime condition，却不参与 compiler exhaustiveness proof；at binding 同时验证 subpattern 并保留完整 matched value。
+
+<Term def="所有可能 enum/value shape 均被可达 match arms 覆盖，并在新增 variant 时由 compiler 触发维护提醒的性质。">exhaustive state handling</Term>
+
+### Unsafe 只移动 proof，不删除 proof
+
+<Term def="unsafe API 文档化的 caller obligations 与 implementation guarantees，包括 pointer validity、alignment、initialization、bounds、lifetime 和 aliasing。">safety contract</Term>
+
+unsafe 解锁 raw pointer dereference、unsafe call、mutable static access、unsafe trait impl、union field access；borrow/type checks 仍运行。safe abstraction 必须让所有 safe inputs 都满足 safety contract。测试不能证明不存在 UB，因为 compiler 会假设 language invariants 永不被破坏。
+
+### Chapter 21 把所有链路接起来
+
+最终 server 的每一段都能回指前章：
+
+- TcpStream owned move：Ch 4
+- request enum/match/Result：Ch 6、9、19
+- module/library ThreadPool API：Ch 7、10、14
+- testable parser/handler split：Ch 11、12
+- boxed FnOnce Job：Ch 13、20
+- Arc/Mutex/mpsc/JoinHandle：Ch 15、16
+- thread pool 与 async alternatives：Ch 17
+- graceful Drop protocol：Ch 15、16、21
+
+<Term def="先停止 accept/submit，再关闭 producer endpoint，排空已接收工作，让 workers 退出并 join 的关闭顺序。">shutdown protocol</Term>
+
+综合 readiness 不取平均，而取最弱核心 gate：
+
+$$
+R = \min(R_{protocol}, R_{capacity}, R_{error}, R_{test}, R_{shutdown})
+$$
+
+这解释了为什么“能返回 200”不能抵消 unbounded queue，“类型检查通过”不能抵消 deadlock，“有 Drop impl”不能抵消 sender 仍活着。
+
+<Callout type="trap" title="陷阱：unsafe 很少、线程固定、测试通过，所以系统已 production-ready">
+  unsafe 行数不是 proof quality；fixed workers 不等于 bounded queue；测试通过只覆盖被设计的 cases。还需 protocol limits、timeouts/TLS、panic containment、observability、load/shedding、shutdown deadline 与真实 deployment evidence。
 </Callout>
+
+## 三步完成全书综合验收
+
+<Stepper>
+  <Step title="第一步：从 owner graph 选择 value boundary">
+    先预测 value 应 move、borrow 还是共享，再切换 mutation/thread 条件。写出 owner、access guard 与 Drop 顺序，不用 clone/Arc 掩盖未定义的生命周期。
+
+    <RplOwnershipBoundaryReviewLab />
+  </Step>
+  <Step title="第二步：分开 abstraction 与 failure policy">
+    观察 closed/open variants、compile/runtime choice 与 syntax generation 如何决定 enum、generic、dyn Trait 或 macro；再独立判断失败应 Result 还是 invariant panic。
+
+    <RplAbstractionFailureReviewLab />
+  </Step>
+  <Step title="第三步：用最弱系统门禁决定完成度">
+    切换 protocol、capacity、errors、tests 与 shutdown 五项，观察任一缺失怎样阻止集成交付。修复目标必须回指具体 chapter 和可重复 evidence。
+
+    <RplSystemReadinessLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- ownership contract 先确定 move/borrow/share，owner graph 与 guards 再确定 smart-pointer/lock choice
+- struct/enum/module 建 representation invariant，generic/dyn/enum/macro 分别对应不同开放性与 dispatch/generation contract
+- Result 暴露 recoverable failure，panic 表示无法合理继续的 invariant failure；tests 要覆盖 success、failure 和 rejection
+- unit/integration/doc tests 与 Cargo package 分别验证内部、public、documentation 和 artifact boundary
+- concurrency 必须分别证明 safety、liveness 与 capacity；async 还要处理 poll/wake、blocking boundary 与 cancellation
+- unsafe 把 memory proof 交给 programmer，不删除 proof；patterns 与 type-state 能把更多状态证明留给 compiler
+- final server 的 protocol、queue、error、test、shutdown 任一 gate 失败，整体就未完成
 
 <Exercises>
-**问题 1**：Rust 保证内存安全的三大机制是什么？
+  1. **问题 1：设计跨线程 cache handle。** 多个 workers 只读 config、共享可变 cache，并要求 shutdown 后证明所有 workers 已停止。分别选什么 ownership/access/completion primitive，哪些风险仍需测试？
 
-<Answer>
-1.所有权系统：每个值有唯一所有者离开作用域自动 drop，move 语义防 double-free。2.借用检查器：编译期验证引用规则（不可变和可变引用不共存，引用不悬空）防数据竞争和 use-after-free。3.生命周期标注：编译期验证引用有效范围确保引用不比数据活得久。三者配合编译期保证内存安全运行时零开销。
-</Answer>
+  <Answer question="Arc、Mutex/RwLock、channel 与 JoinHandle 分别解决什么？">immutable config 可 Arc&lt;Config&gt; 共享；cache 可 Arc&lt;Mutex&lt;Cache&gt;&gt; 或读多写少时经测量选择 RwLock，guard 只覆盖内存操作，不能跨 I/O。Job 通过 bounded channel transfer ownership；shutdown 先停止 submit/drop senders，workers recv disconnect 后退出，owner join all handles。类型排除部分 data race，但仍要测试 lock order/deadlock、poison/panic policy、queue saturation/backpressure、slow job 长尾与 shutdown deadline。</Answer>
 
-**问题 2**：综合全书设计线程安全 KV 存储服务器，说明每个 Rust 特性的应用。
+  2. **问题 2：选择 polymorphism。** parser 支持当前 crate 固定三种 commands；storage backend 由 caller 在 compile time 选择；UI 需要 runtime plugin collection；derive 要为 structs 生成重复 impl。各用什么，为什么？
 
-<Answer>
-1.所有权：每连接 handler 独立拥有请求数据连接结束自动释放。2.借用：解析请求 &amp;str 借用零拷贝。3.生命周期：响应构建器持有请求引用确保安全。4.trait：定义 Storage trait 内存和磁盘两种实现。5.泛型：fn handle&lt;S:Storage&gt; 单态化。6.错误处理：enum KvError+?+thiserror。7.并发：Arc&lt;RwLock&lt;HashMap&gt;&gt; 多读单写。8.async：tokio::spawn 每连接 task 非阻塞 IO。9.Send+Sync：自动满足可跨 task 共享。10.Drop：连接 drop 自动清理。
-</Answer>
+  <Answer question="closed set、static open set、runtime open set 与 code generation 怎样映射？">固定 commands 用 enum + exhaustive match；compile-time backend 用 generic S: Storage，静态分派且可内联；runtime plugins 用 Box&lt;dyn Plugin&gt; 或 borrowed dyn Trait，统一异构 implementations；为 structs 生成 impl 用 custom derive proc macro。macro 只用于 syntax/code generation，不替代普通 polymorphism；dyn Trait 需要 object-safe API 与明确 ownership。</Answer>
 
+  3. **问题 3：审计教学 Web Server。** 它有四个 workers、返回 200/404、Drop 中 join，但 queue 无界、worker 用 while-let 持锁执行 job、sender 在 join 后才 drop。按五项 readiness gate 列出失败与修复顺序。
+
+  <Answer question="为什么要先修 liveness 再谈容量和协议扩展？">shutdown/liveness 先失败：join 时 sender 活着，worker 永久 recv；应先 take/drop all senders，RecvError 后 break，再 join。执行 liveness 也失败：while-let temporary guard 覆盖 job，应先 let message 释放锁再执行。capacity 失败：固定 worker 不限制 unbounded queue，改 bounded queue并定义 reject/timeout。protocol 仍是有限首行 parser，要加 framing/limits/malformed handling；errors 不应普遍 unwrap；tests 要覆盖 slow request 并发、queue full、disconnect、job panic 与 shutdown completion。</Answer>
 </Exercises>
 
+## 名词解释
+
 <Glossary>
-<GlossaryItem term="所有权系统">
-Rust 内存管理的核心：唯一所有者+move+drop。编译期保证无 double-free/use-after-free。
-</GlossaryItem>
-<GlossaryItem term="借用检查器">
-编译期验证借用规则（&amp;T/&amp;mut T 不共存、引用不悬空），消除数据竞争。
-</GlossaryItem>
-<GlossaryItem term="零成本抽象">
-Rust 设计原则：编译期完成安全检查，运行时零开销。所有权/trait/泛型/async 都是零成本抽象。
-</GlossaryItem>
-<GlossaryItem term="Send/Sync">
-标记 trait 保证线程安全。编译期验证，不满足则编译错误。消除数据竞争。
-</GlossaryItem>
+  <GlossaryItem term="cross-chapter proof chain">从前置 invariant 到可观察结果的跨章 correctness 论证。</GlossaryItem>
+  <GlossaryItem term="ownership contract">API 对 move、borrow、mutation 与 return ownership 的明确关系。</GlossaryItem>
+  <GlossaryItem term="borrow period">reference 创建到最后使用期间必须维持的访问规则。</GlossaryItem>
+  <GlossaryItem term="owner graph">value/allocation 的 strong owner 与 weak observer 关系图。</GlossaryItem>
+  <GlossaryItem term="RAII cleanup">resource cleanup 与 owner/guard Drop 绑定的模式。</GlossaryItem>
+  <GlossaryItem term="representation invariant">所有可构造 instances 必须保持的内部条件。</GlossaryItem>
+  <GlossaryItem term="closed state model">用有限 enum variants 与 exhaustive match 表达状态。</GlossaryItem>
+  <GlossaryItem term="static dispatch">compile-time concrete type 经 generic monomorphization 调用。</GlossaryItem>
+  <GlossaryItem term="dynamic dispatch">runtime 通过 trait-object vtable 选择 implementation。</GlossaryItem>
+  <GlossaryItem term="macro expansion contract">input token grammar、generated code 与 diagnostics 的约定。</GlossaryItem>
+  <GlossaryItem term="failure surface">API 的错误类型、context、恢复与传播路径。</GlossaryItem>
+  <GlossaryItem term="error propagation">question mark 把兼容 failure 提前返回当前 boundary。</GlossaryItem>
+  <GlossaryItem term="unit test boundary">可见 private implementation 的 crate 内测试边界。</GlossaryItem>
+  <GlossaryItem term="integration test boundary">只经 public API 使用 library 的外部 crate 测试边界。</GlossaryItem>
+  <GlossaryItem term="thin main">只做外部输入、调用、诊断与 exit status 的 entrypoint。</GlossaryItem>
+  <GlossaryItem term="Cargo delivery chain">source/tests/docs/metadata/profile 到 package artifact 的链路。</GlossaryItem>
+  <GlossaryItem term="safety property">没有 invalid memory access、alias 或 data race 的属性。</GlossaryItem>
+  <GlossaryItem term="liveness property">系统不会永久等待并最终推进或完成的属性。</GlossaryItem>
+  <GlossaryItem term="capacity property">资源、queue 与 latency 在压力下有上界和策略的属性。</GlossaryItem>
+  <GlossaryItem term="backpressure contract">下游满载时限制或拒绝 producer 的容量反馈。</GlossaryItem>
+  <GlossaryItem term="job lifecycle">提交、排队、取得、执行、完成与关闭的 work 生命周期。</GlossaryItem>
+  <GlossaryItem term="cancellation safety">Future 在任意 await 点 Drop 后仍保持可接受 state 的性质。</GlossaryItem>
+  <GlossaryItem term="exhaustive state handling">match 覆盖所有 values 并对新增 variant 触发维护提醒。</GlossaryItem>
+  <GlossaryItem term="safety contract">unsafe caller obligations 与 implementation guarantees。</GlossaryItem>
+  <GlossaryItem term="shutdown protocol">停止新增、关闭 producer、排空、退出并 join 的顺序。</GlossaryItem>
 </Glossary>
+
+<Attribution
+  adaptedFrom="The Rust Programming Language, Rust 2024 Edition, Chapters 1-21"
+  adaptedUrl="https://doc.rust-lang.org/book/"
+/>

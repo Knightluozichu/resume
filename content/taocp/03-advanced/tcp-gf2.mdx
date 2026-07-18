@@ -1,162 +1,270 @@
 ---
-title: "GF(2) 域上的运算"
+title: "Volume 4B · Chapter 7 · Combinatorial Searching, Part 2"
 type: B
-section: "高级主题"
-order: 7
-description: "二元域算术、多项式运算与纠错码——TAOCP 中有限域的应用"
+section: "TAOCP · Volume 4"
+order: 8
+description: "重建TAOCP Volume 4B：数学预备再访、回溯编程、精确覆盖与舞蹈链、可满足性、DPLL、watched literals、蕴含图和子句学习。"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/art-of-computer-programming-volume-4b-combinatorial-algorithms-part-2-9780201038064"
 draft: false
 ---
 
-import { TcpGf2Diagram } from "@/components/mdx/taocp/diagrams/tcp-gf2";
+import { TcpSearchTreeLab, TcpNQueensLab, TcpBoundPruningLab, TcpSymmetryLab, TcpExactCoverLab, TcpDancingLinksLab, TcpSatEvaluationLab, TcpUnitPropagationLab, TcpDpllLab, TcpWatchedLiteralLab, TcpImplicationGraphLab, TcpClauseLearningLab, TcpBacktrackCertificateLab } from "@/components/mdx/taocp/diagrams/tcp-gf2";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能解释 GF(2) 域的定义及其与普通算术的区别
-- 能实现 GF(2) 上的多项式加法和乘法
-- 能描述 CRC 校验如何利用 GF(2) 多项式检测错误
-- 能回答：为什么 GF(2) 上的加法等同于异或运算？
+
+- 能解释部分赋值、约束传播、分支和撤销组成的回溯不变量
+- 能比较可行性剪枝、上界剪枝与对称破除的正确性条件
+- 能实现精确覆盖的 Algorithm X 与 Dancing Links 可逆更新
+- 能推导 DPLL 的单元传播、双 watched literals 和冲突蕴含图
+- 能设计含解见证、冲突子句、回跳层级与搜索统计的求解证书
+
 </Objectives>
 
-## 直觉引入
+## 从“回头再试”为什么不足以成为算法开始
 
-普通算术中 1+1=2，但在 GF(2) 中 1+1=0。这不是算错了——GF(2) 是一个只有 0 和 1 两个元素的数学域，加法就是异或（XOR），乘法就是与（AND）。这种简化让硬件实现极其高效：一个异或门就完成了加法。
+先预测：N皇后求解器找到一个合法棋盘，能否说明它枚举完整？一个 SAT 求解器返回`UNSAT`，没有冲突证据时能否相信？组合算法第二部分（combinatorial algorithms part 2）研究的不是模糊的“试错”，而是带契约的搜索：节点表示合法部分状态，分支覆盖所有尚未决定的可能，传播只推出逻辑后果，剪枝不会删除可行解，撤销精确恢复父状态。
 
-GF(2) 看似简单，却支撑了 CRC 校验、Reed-Solomon 纠错码、AES 加密等关键技术。Knuth 在 TAOCP 中讨论 GF(2) 是因为它是有限域运算的基础。
+Volume 4B 的路线是 mathematical preliminaries redux（数学预备再访）、backtrack programming（回溯编程）、dancing links（舞蹈链）、satisfiability（可满足性）和 clause-learning algorithms（子句学习算法）。它把 Volume 4A 的无条件生成改造成有约束搜索，再把失败分支提炼成可复用知识。
 
-## 概念讲解
+<TcpBacktrackCertificateLab />
 
-### GF(2) 域
+## 数学预备再访：对象空间、部分状态与见证
 
-<Term def="GF(2) 是只有两个元素 {0, 1} 的有限域，加法等同异或（XOR），乘法等同与（AND）">GF(2)</Term>是最简单的有限域。其加法和乘法表为：
+一个约束问题由变量、取值域和约束组成。完整赋值若满足全部约束就是解；部分赋值只决定部分变量，其意义在于描述仍可能扩展成解的一组完整对象。搜索树节点存部分赋值，边存一个选择，叶要么给出解见证，要么给出不能扩展的冲突见证。
 
-| + | 0 | 1 |
-|---|---|---|
-| 0 | 0 | 1 |
-| 1 | 1 | 0 |
+<TcpSearchTreeLab />
 
-| × | 0 | 1 |
-|---|---|---|
-| 0 | 0 | 0 |
-| 1 | 0 | 1 |
+若每层平均分支因子为 $b$、深度为 $d$，无剪枝完整树规模为：
 
-关键特性：加法 = 减法 = XOR，因为 $1 + 1 = 0$ 意味着 $1 = -1$。
+$$
+L=b^d,\qquad N=1+b+\cdots+b^d=\frac{b^{d+1}-1}{b-1}.
+$$
 
-### GF(2) 上的多项式
+指数项说明微小剪枝改进可以胜过局部常数优化，但也说明错误剪枝会系统性漏解。完备性论证通常归纳于深度：每个完整解在当前变量处恰好属于一个分支，该分支未被不可靠规则删除。
 
-<Term def="GF(2) 上的多项式是系数全为 0 或 1 的多项式，加法系数模 2，乘法系数模 2">GF(2) 多项式</Term>把 GF(2) 推广到多项式域。例如 $x^3 + x + 1$ 和 $x^2 + 1$ 的加法是 $x^3 + x^2 + x$（对应位异或）。
+<Term def="部分赋值只为一部分变量选择值，并携带足以判断局部约束和继续扩展的增量状态">部分赋值</Term>不应复制整个问题。占用列集合、剩余容量、未满足子句计数等增量摘要能让检查接近每次选择的局部成本，但撤销日志必须覆盖每个被修改字段。
 
-### CRC 校验
+## 回溯编程：选择、传播、递归、撤销
 
-<Term def="CRC（循环冗余校验）用 GF(2) 多项式除法生成校验码，能检测突发错误">CRC</Term>把数据看作 GF(2) 上的多项式，用预定的生成多项式 $G(x)$ 去除，余数就是校验码。接收方用同样的 $G(x)$ 除，余数为 0 则无错误。
-
-## 交互 Demo
-
-<TcpGf2Diagram />
-
-<Stepper>
-<Step title="第一步：数据多项式">
-把数据比特串看作 GF(2) 多项式。例如数据 1011 对应 $M(x) = x^3 + x + 1$。在数据后补 $r$ 个零（$r$ 是生成多项式 $G(x)$ 的次数），得到 $x^r \cdot M(x)$。
-</Step>
-<Step title="第二步：GF(2) 多项式除法">
-用 $x^r \cdot M(x)$ 除以 $G(x)$，除法规则是系数模 2（即异或）。例如 $G(x) = x^3 + x + 1$（CRC-3），除法过程就是反复异或。余数 $R(x)$ 就是 CRC 校验码。
-</Step>
-<Step title="第三步：附上校验码">
-发送 $x^r \cdot M(x) + R(x)$（即原始数据 + CRC 校验码）。接收方用 $G(x)$ 除收到的多项式：如果余数为 0，数据无误；余数非 0，有错误。CRC 能检测所有 ≤ $r$ 位的突发错误。
-</Step>
-</Stepper>
-
-## 代码对照
+<Term def="回溯搜索深度优先扩展部分状态，遇到冲突时撤销最近选择并尝试下一个完备分支">回溯搜索</Term>的标准骨架把状态修改包围在严格作用域内：
 
 ```python
-# GF(2) 运算实现
-# GF(2) 加法 = XOR，乘法 = AND
-
-# GF(2) 多项式加法（异或）
-def gf2_add(a, b):
-    return a ^ b
-
-# GF(2) 多项式乘法
-def gf2_mul(a, b):
-    result = 0
-    while b:
-        if b & 1:
-            result ^= a
-        a <<= 1
-        b >>= 1
-    return result
-
-# GF(2) 多项式除法（返回商和余数）
-def gf2_divmod(a, b):
-    if b == 0:
-        raise ZeroDivisionError
-    quotient = 0
-    remainder = a
-    b_deg = b.bit_length() - 1
-    while remainder.bit_length() - 1 >= b_deg:
-        shift = remainder.bit_length() - 1 - b_deg
-        quotient ^= (1 << shift)
-        remainder ^= (b << shift)
-    return quotient, remainder
-
-# CRC 计算
-def crc(data, generator):
-    # 计算 CRC 校验码
-    r = generator.bit_length() - 1  # 生成多项式的次数
-    padded = data << r  # 补 r 个零
-    _, remainder = gf2_divmod(padded, generator)
-    return remainder
-
-# 示例：CRC-3, G(x) = x³ + x + 1 = 0b1011
-data = 0b1011  # 数据
-gen = 0b1011   # 生成多项式
-crc_val = crc(data, gen)
-print(f"CRC = {bin(crc_val)}")  # 校验码
-transmitted = (data << 3) | crc_val  # 发送的数据+校验码
-print(f"发送: {bin(transmitted)}")
+def search(state):
+    propagate(state)
+    if state.conflict:
+        return
+    if state.complete:
+        emit(state.witness())
+        return
+    choice = choose(state)
+    for value in domain(choice):
+        mark = state.mark()
+        state.assign(choice, value)
+        search(state)
+        state.undo(mark)
 ```
 
-## 常见误区
+`mark/undo`比“凭记忆反做一次”可靠，因为传播可能修改许多间接状态。持久化数据结构用新版本替代撤销日志，也能保持父状态，但会增加分配和垃圾回收成本。
+
+### N皇后与增量冲突集合
+
+N皇后每行放一个皇后，只需维护已占列、主对角线`row-column`和副对角线`row+column`。这三组标识构成部分状态不变量：已有皇后互不攻击。选择新列前即可拒绝冲突，不必等完整棋盘再检查。
+
+<TcpNQueensLab />
+
+合法棋盘是 SAT 见证式证据：逐行坐标可独立验证。若要计数全部解，还需证明每行分支覆盖所有列、冲突判断等价于攻击条件，并将结果与已知小规模计数交叉核对。
+
+### 剪枝、界与优化目标
+
+<Term def="分支定界为部分解计算不劣于其任何扩展的乐观界，当该界无法超过当前最好解时安全剪枝">分支定界</Term>用于优化问题。最大化时上界必须大于等于该分支所有完成解；若低估上界，可能删掉真正最优解。分数背包松弛允许切分物品，因此给0/1背包提供可计算上界。
+
+<TcpBoundPruningLab />
+
+$$
+UB(s)\ge \max_{x\text{ extends }s}f(x),\qquad UB(s)\le incumbent\Longrightarrow prune(s).
+$$
+
+可行性剪枝证明“没有任何扩展能满足约束”，界剪枝证明“扩展不可能改进目标”，两者证据不同。良好分支顺序尽早找到强 incumbent，会让同一个正确上界剪掉更多节点。
+
+### 对称破除
+
+若群作用把多个状态映射为等价解，只保留每个轨道的规范代表可减少搜索。互补位串可选择数值较小者，N皇后可利用镜像，但有自对称对象时不能简单把计数一律乘二。
+
+<TcpSymmetryLab />
+
+对称约束必须保证每个等价类至少保留一个状态。优化问题还要保证目标函数在对称变换下不变；否则两个可行状态虽然结构相似，却不等价。
+
+## 精确覆盖与 Algorithm X
+
+<Term def="精确覆盖从候选子集中选择若干集合，使全集每个元素恰好被覆盖一次">精确覆盖</Term>可写成零一矩阵：列代表约束，行代表候选，目标是选行使每列和恰好为一。仅检查“每列至少一次”会把冲突行误判为解。
+
+<TcpExactCoverLab />
+
+$$
+\sum_{r:A_{rc}=1}x_r=1\quad\text{for every primary column }c,\qquad x_r\in\{0,1\}.
+$$
+
+Algorithm X 选择一个未覆盖列，对含一的每个候选行建立分支；选中行后覆盖它所含的全部列，并删除与这些列冲突的其他行。若没有列，当前行集是解；若某列没有候选行，当前分支冲突。
+
+### Dancing Links 的可逆稀疏矩阵
+
+<Term def="Dancing Links用循环双向链表表示稀疏精确覆盖矩阵，使cover删除与uncover按逆序恢复成为常数级指针更新">Dancing Links</Term>（DLX）不是新的搜索逻辑，而是 Algorithm X 的状态表示。每个一节点同时属于行环和列环，列头记录当前候选数。cover 先摘列头，再逐行摘除冲突节点；uncover 必须严格逆序插回。
+
+<TcpDancingLinksLab />
+
+```text
+cover(c):
+  unlink column header c
+  for each row r in c:
+    for each node j in r except c:
+      unlink j vertically; decrement j.column.size
+
+uncover(c):
+  visit rows and row nodes in reverse order
+  relink each node; increment its column size
+  relink column header c
+```
+
+选择候选数最少的列是 fail-first 启发式：它不改变解集合，只减少平均分支数。指针结构验收需在随机 cover/uncover 序列后逐列遍历，检查左右、上下互逆、列计数和矩阵内容完全恢复。
+
+## 可满足性：从 CNF 求值到 DPLL
+
+<Term def="合取范式由若干子句的合取组成，每个子句是文字的析取；赋值满足所有子句时公式可满足">合取范式</Term>（CNF）把 SAT 写为“每个子句至少一个真文字”。完整赋值很容易验证；难点是从部分赋值高效判断已满足、未决定、单位或冲突子句。
+
+<TcpSatEvaluationLab />
+
+### 单元传播与理由
+
+若一个未满足子句除一个文字外都为假，剩余文字必须为真，这就是 unit propagation（单元传播）。传播得到的赋值要记录理由子句和决策层级，既用于冲突分析，也用于撤销到某个 trail 标记。
+
+<TcpUnitPropagationLab />
+
+纯文字消除、子句包含和变量消去也可简化公式，但若需要输出模型或 UNSAT 证明，预处理步骤必须能重建见证。传播固定点意味着当前没有单位子句，不意味着公式已可满足。
+
+### DPLL 的完备分支
+
+<Term def="DPLL反复单元传播，在未决变量上选择一个极性分支，冲突时回溯并尝试另一极性">DPLL</Term>把回溯骨架实例化为 SAT。若传播不冲突且所有子句满足，就得到模型；否则选择变量 $x$，递归搜索 $F|_{x=0}$ 与 $F|_{x=1}$。两个分支覆盖所有赋值，故搜索完备。
+
+<TcpDpllLab />
+
+```ts
+function dpll(formula: Formula, trail: Trail): Model | null {
+  if (!propagate(formula, trail)) return null;
+  if (formula.isSatisfied(trail)) return trail.model();
+  const variable = chooseUnassigned(formula, trail);
+  return branch(variable, false) ?? branch(variable, true);
+}
+```
+
+变量与极性启发式影响速度但不影响正确性，前提是冲突后仍覆盖未探索分支。现代求解器使用活动度、相位保存和重启；重启清除决策 trail，却保留学到的子句。
+
+## Watched literals：让传播只触碰相关子句
+
+<Term def="双watched literals让每个非单位子句监视两个文字，只有监视文字变假时才扫描该子句寻找替代或触发传播">双监视文字</Term>避免每次赋值重扫全部子句。若一个 watch 变假，优先找另一个不假的未监视文字；找不到时，另一 watch 为真则子句满足，为未赋值则成为单位，为假则冲突。
+
+<TcpWatchedLiteralLab />
+
+watch 的关键不变量不是“监视两个真文字”，而是只要子句尚非单位/冲突，就有足够的非假候选支持延迟访问。回溯把文字从假恢复为未赋值时通常无需移动 watch，这种单向更新正是效率来源。
+
+## 蕴含图与冲突分析
+
+传播文字是图节点，理由子句从使其成为单位的假文字连到该节点；决策文字没有理由。冲突可视为某变量两极同时被迫成立。节点携带决策层级，使求解器能区分当前分支原因与更早祖先条件。
+
+<TcpImplicationGraphLab />
+
+resolution（消解）从含 $x$ 的子句和含 $\neg x$ 的子句消去 $x$：
+
+$$
+(A\lor x)\land(B\lor\neg x)\Longrightarrow(A\lor B).
+$$
+
+反复把冲突子句与当前层传播文字的理由消解，直到学到子句在当前层只含一个文字，得到 first UIP 子句。它在回跳到次高层后立即成为单位，阻止相同冲突区域再次出现。
+
+### 子句学习与非时间顺序回跳
+
+clause-learning algorithms（子句学习算法）把失败分支变成新约束。学到子句必须由原公式和已有学习子句逻辑蕴含，因此不会删除任何模型；它同时给出回跳层级，即除当前层文字外最高的决策层。
+
+<TcpClauseLearningLab />
+
+无限保留所有学习子句会拖慢传播，所以求解器按活动度、长度或 LBD 周期删除低价值子句，但通常保留锁定为当前理由的子句。UNSAT 证明可记录每个学习子句的消解依据，最终导出空子句。
+
+<Stepper>
+  <Step title="第一步：建立部分状态与精确撤销">
+    明确变量域、局部约束、trail与理由；每个递归入口检查状态不变量，并用标记恢复传播造成的全部修改。
+    <TcpNQueensLab />
+  </Step>
+  <Step title="第二步：传播、选最紧约束并安全剪枝">
+    先传播到固定点，再选择候选最少的约束或高活动变量；每个剪枝规则附可行性证明或乐观界，不以“看起来没希望”代替。
+    <TcpDancingLinksLab />
+  </Step>
+  <Step title="第三步：输出解或冲突证书">
+    SAT返回可独立代入的模型；UNSAT记录理由、学习子句和最终空子句；优化搜索报告 incumbent 与覆盖所有未探索分支的界。
+    <TcpBacktrackCertificateLab />
+  </Step>
+</Stepper>
+
+## 检验矩阵与失败复现
+
+回溯实现要测试空问题、立即冲突、唯一解、多解、深层冲突、撤销后重走兄弟分支和对称固定点。DLX 随机 cover 后逆序 uncover 必须逐指针恢复。SAT 对小变量公式穷举所有赋值作为 oracle，比较求解结果；再加入重复文字、重言式、空子句和长传播链。子句学习需逐条验证 resolvent，回跳后学到子句应成为单位。
+
+<TcpBacktrackCertificateLab />
 
 <Callout type="trap">
-**误区：认为 GF(2) 的加法是普通加法模 2。**
-虽然结果相同（$1+1=0$），但概念上 GF(2) 的加法是域运算，不是「普通加法再取模」。GF(2) 中加法和减法是同一个运算（因为 $1=-1$），这意味着 GF(2) 多项式的除法只需要异或，不需要借位——这极大简化了硬件实现。
+**误区：剪掉未找到希望的分支只是性能优化。** 剪枝属于正确性边界。若可行性判断不充分或上界被低估，求解器会漏解甚至返回错误最优值；每条剪枝必须能写出逻辑蕴含或界证明。
 </Callout>
 
 <Callout type="trap">
-**误区：认为 CRC 能纠正错误。**
-CRC 只能检测错误，不能纠正。它通过余数判断数据是否出错，但不告诉你哪里出错了。纠错需要更强的编码（如 Reed-Solomon、BCH 码），它们也基于 GF(2) 或其扩域 $GF(2^m)$，但利用了更多的代数结构。
+**误区：回溯只要撤销最后一个显式选择。** 传播、候选计数、watch、链表和缓存都可能被间接修改。漏撤销一项会污染兄弟分支，产生数据相关的漏解或假冲突；应使用trail标记或严格逆序可逆操作。
 </Callout>
+
+## 练习
 
 <Exercises>
-**问题 1**：为什么 GF(2) 上的加法等同于异或运算？
+
+**问题 1**：N皇后按行搜索时，放置`(row,column)`后需要更新哪三类冲突标识？
 
 <Answer>
-GF(2) 只有 0 和 1 两个元素。加法定义为：0+0=0, 0+1=1, 1+0=1, 1+1=0。这与异或的真值表完全相同：0⊕0=0, 0⊕1=1, 1⊕0=1, 1⊕1=0。本质上，GF(2) 是模 2 的整数环，加法就是模 2 加法，而异或正是比特级的模 2 加法。此外，GF(2) 中 1+1=0 意味着 1=-1，所以加法=减法，除法只需异或无需借位。
+更新列`column`、主对角线标识`row-column`和副对角线标识`row+column`。下一行候选若命中任一集合就冲突。回溯时必须从三组集合精确删除本次标识。
 </Answer>
 
-**问题 2**：用 GF(2) 多项式除法计算 1011 ÷ 11（二进制）的余数。
+**问题 2**：精确覆盖中选择行`B={1,4}`后，为什么所有还含列一或列四的其他行都必须删除？
 
 <Answer>
-被除数 1011，除数 11。1011 ÷ 11：最高位对齐，1011 XOR 1100（11 左移 2 位）= 0111。0111 ÷ 11：0111 XOR 0110（11 左移 1 位）= 0001。0001 的位数 < 11 的位数，余数为 1。验证：1011 = 11 × 110 + 1（模 2），余数 R = 1。
+列一与列四已经由B各覆盖一次；任何再含其中一列的行都会使该列覆盖次数超过一，违反精确覆盖等式。因此这些行在当前分支不可能属于解，删除是逻辑安全的，回溯时需完整恢复。
 </Answer>
+
+**问题 3**：公式子句`(¬x∨y)`在`x=1`且`y`未赋值时，单元传播推出什么？
+
+<Answer>
+文字`¬x`已经为假，子句若要满足，只剩`y`必须为真。因此传播`y=1`，理由记录为子句`(¬x∨y)`；若随后冲突，可沿该理由回溯原因。
+</Answer>
+
+**问题 4**：为什么学到子句允许跳过多个决策层，而普通时间顺序回溯只退一层？
+
+<Answer>
+冲突分析得到的学习子句只依赖若干实际原因层。除当前层唯一文字外，该子句最高的层就是断言层；回到那里，子句立即成为单位。中间没有出现在子句中的决策与这次冲突无关，可安全跳过。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+Volume 4B 把组合搜索组织为可验证状态机：部分赋值定义节点，传播推出必然后果，分支保证覆盖，剪枝给出证明，trail或Dancing Links保证可逆，模型或冲突子句提供见证。SAT进一步用watched literals降低传播成本，用蕴含图解释冲突，用子句学习和非时间回跳复用失败信息。可靠求解器的标准不是“很快找到答案”，而是每个删减与回退都不破坏解空间语义。
+
 <Glossary>
-<GlossaryItem term="GF(2)">
-只有 {0,1} 两个元素的有限域。加法 = XOR，乘法 = AND。是最简单的有限域，硬件实现极高效。
-</GlossaryItem>
-<GlossaryItem term="GF(2) 多项式">
-系数全为 0 或 1 的多项式。加法系数模 2（异或），乘法系数模 2。用于 CRC 和纠错码。
-</GlossaryItem>
-<GlossaryItem term="CRC">
-循环冗余校验。用 GF(2) 多项式除法生成校验码，能检测突发错误，但不能纠错。
-</GlossaryItem>
-<GlossaryItem term="有限域">
-含有限个元素的代数域，满足域的所有公理（加法乘法群、分配律）。GF(2) 是最简单的有限域。
-</GlossaryItem>
+  <GlossaryItem term="部分赋值">只决定部分变量并携带可增量检查约束的搜索状态。</GlossaryItem>
+  <GlossaryItem term="回溯搜索">深度优先扩展部分状态，冲突时精确撤销并覆盖其他分支的搜索框架。</GlossaryItem>
+  <GlossaryItem term="分支定界">以安全乐观界和当前最好值比较来剪除不可能改进的优化分支。</GlossaryItem>
+  <GlossaryItem term="精确覆盖">选择候选集合，使全集中每个元素恰好出现一次的问题。</GlossaryItem>
+  <GlossaryItem term="Dancing Links">以循环双向链实现精确覆盖矩阵可逆cover/uncover的稀疏结构。</GlossaryItem>
+  <GlossaryItem term="合取范式">由子句合取构成、每个子句为文字析取的布尔公式形式。</GlossaryItem>
+  <GlossaryItem term="DPLL">结合单元传播、变量双分支和回溯的完备SAT搜索算法。</GlossaryItem>
+  <GlossaryItem term="双监视文字">只在监视文字变假时访问子句的增量SAT传播机制。</GlossaryItem>
+  <GlossaryItem term="蕴含图">用理由边与决策层记录传播因果和冲突结构的有向图。</GlossaryItem>
+  <GlossaryItem term="学习子句">由冲突理由消解推出、用于阻止同类失败并支持非时间回跳的逻辑后果。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="计算机程序设计艺术（Donald E. Knuth）" adaptedUrl="https://www-cs-faculty.stanford.edu/~knuth/taocp.html" />
+<Attribution adaptedFrom="The Art of Computer Programming, Volume 4B: Combinatorial Algorithms, Part 2, Chapter 7" adaptedUrl="https://www.informit.com/store/art-of-computer-programming-volume-4b-combinatorial-algorithms-part-2-9780201038064" />

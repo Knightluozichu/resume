@@ -1,137 +1,360 @@
 ---
-title: 类与面向对象
+title: 第 6 章：OOP 与 Pong 的 Bat 类
 type: A
-section: C++基础
-order: 4
-description: 类定义、成员变量与函数、访问控制、构造与析构、封装与继承基础——用对象组织游戏世界。
+section: Pong 项目
+order: 6
+description: 对齐官方第 3 版第 6 章：理解面向对象、类与封装，创建 Pong 项目，实现第一个 Bat 类并接入 main 游戏循环。
 demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
 draft: false
 ---
 
-import { BcgOopClassDiagram } from "@/components/mdx/beginning-cpp-game/diagrams/bcg-oop-class";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  BcgpBatUpdateMap,
+  BcgpOopBoundaryMap,
+  BcgpPongFirstFrameMap,
+} from "@/components/mdx/beginning-cpp-game-programming/diagrams/classes-oop";
 
 <Objectives>
-- 能定义一个类，合理划分 public/private/protected 成员
-- 能说明构造与析构的调用时机，理解虚析构的必要性
-- 能用封装保护对象不变量，用继承与多态组织实体体系
+
+- 能解释类、对象、public/private 与封装的职责，并写出始终满足速度和边界不变量的构造函数
+- 能实现 Pong `Bat` 类的输入命令、按秒移动、位置钳制和只读形状查询
+- 能设计 `main` 与 Bat 对象的协作顺序，验证左右边界、松键停止和不同 dt 下的移动
+
 </Objectives>
 
-## 游戏世界满是对象
+## 从“谁负责保证球拍不出界”开始
 
-游戏里每个敌人有血量和 AI、每颗子弹有位置和速度、每个 UI 按钮有外观和点击响应。这些「有状态、有行为」的实体恰好对应 C++ 的类——数据（成员变量）+ 行为（成员函数）。面向对象是游戏开发的天然范式。
+Timber 项目主要把状态放在 `main` 附近。Pong 开始引入
 
-<BcgOopClassDiagram />
+<Term def="把相关状态和操作状态的行为组织为对象，并让对象边界维护自身不变量的软件设计方式。">
+  面向对象编程
+</Term>
+。它不是“所有东西都继承一个基类”，本章也不需要多态；第一个目标只是让球拍对象自己负责位置、速度、方向和形状同步。
 
-## 类的定义
+如果主循环直接写球拍的 x、速度和 RectangleShape，任何调用点都可能忘记边界。把状态设为 private，只允许经命名操作修改，就能把“球拍始终位于场内”集中在一个更新函数中。
+
+<BcgpOopBoundaryMap />
+
+## 类与对象：类型定义和运行实例
+
+<Term def="用户定义类型，声明一组成员数据、成员函数和访问规则，用于描述对象可保持的状态和可执行的操作。">
+  类
+</Term>
+是类型定义；
+<Term def="某个类在运行期的实例，拥有独立成员状态并经历构造、使用和销毁生命周期。">
+  对象
+</Term>
+是具体值。两个 Bat 对象可共享同一类定义，却各有不同位置与方向。
 
 ```cpp
-class Player {
-private:
-  int m_Hp;          // 成员变量：状态
-  Vector2f m_Pos;
+class Bat {
 public:
-  Player();          // 构造函数
-  ~Player();         // 析构函数
-  void move(float dx, float dy);  // 成员函数：行为
-  int getHp() const;
+    Bat(sf::Vector2f startPosition, sf::Vector2f size, float speed);
+
+    void moveLeft();
+    void moveRight();
+    void stop();
+    void update(float dt, float arenaWidth);
+
+    [[nodiscard]] const sf::RectangleShape& shape() const noexcept;
+
+private:
+    sf::Vector2f position_;
+    float speed_;
+    int direction_{0};
+    sf::RectangleShape shape_;
 };
 ```
 
-类是蓝图，对象是按蓝图创建的实例。`Player p1, p2;` 创建两个独立对象，各有自己的 m_Hp 和 m_Pos。
+类声明是调用契约，定义可放进 `.cpp`。成员名后缀只是项目约定。`[[nodiscard]]` 提醒调用者别无意忽略查询结果，`noexcept` 表达简单访问不抛异常；若课程工具链不启用这些现代标注，核心所有权与 const 语义不变。
 
-## 访问控制
+## public、private 与封装
 
-- `public`：类内、类外、子类都能访问——对外接口。
-- `private`：只有类内（含友元）能访问——隐藏实现，外部不可见。
-- `protected`：类内和子类能访问，类外不可——给继承体系用。
+<Term def="类向调用者开放的接口区域，外部只能依赖这里声明的稳定操作与查询。">
+  public 接口
+</Term>
+表达“向左、向右、停止、更新、取得形状”。
+<Term def="只允许类自身成员和友元访问的实现区域，用于隐藏表示并集中维护对象不变量。">
+  private 状态
+</Term>
+保存位置、速度、方向和形状。
 
-原则：成员变量尽量 private，只通过 public 方法访问。这就是封装。
+<Term def="把表示隐藏在类边界内，并让所有状态变化经过能维护不变量的公开操作。">
+  封装
+</Term>
+的收益不是少看几行代码，而是减少能制造非法状态的入口。若 `speed_`
+公开，外部可写负数；若 `shape_` 可修改引用暴露，外部可移动形状却不更新
+`position_`，两套状态分叉。
 
-## 封装的价值
+本章不使用 `protected`、继承或虚析构。它们属于后续 Run 项目的高级 OOP；提前引入会掩盖更基础的问题：单个对象是否有清晰职责、是否可独立测试。
 
-把数据藏进 private、只暴露 public 方法，好处是受控访问 + 不变量维护：
+<Callout type="trap">
+  **现象**：碰撞使用 `position_`，画面却显示 shape
+  在另一处。**原因**：类暴露可修改
+  Shape，调用者绕过更新函数直接移动视觉对象。**修法**：只返回 `const`
+  引用用于绘制，把逻辑位置与形状同步留在类内部。
+</Callout>
+
+## 构造函数：一次建立可用 Bat
+
+<Term def="对象创建时执行的特殊成员函数，通过成员初始化列表建立成员初值并验证构造参数。">
+  构造函数
+</Term>
+应让返回的对象已经可用。成员按类中声明顺序初始化，不按初始化列表书写顺序；列表最好与声明顺序一致，避免依赖尚未初始化成员。
 
 ```cpp
-void Player::takeDamage(int d) {
-  if (d < 0) return;       // 拒绝负伤害
-  m_Hp -= d;
-  if (m_Hp < 0) m_Hp = 0;  // 血量永不小于 0
+#include <algorithm>
+#include <stdexcept>
+
+Bat::Bat(sf::Vector2f startPosition, sf::Vector2f size, float speed)
+    : position_{startPosition}, speed_{speed}, shape_{size}
+{
+    if (size.x <= 0.0F || size.y <= 0.0F || speed < 0.0F)
+        throw std::invalid_argument{"Bat requires positive size and nonnegative speed"};
+
+    shape_.setPosition(position_);
+    shape_.setFillColor(sf::Color::White);
 }
 ```
 
-若 m_Hp 是 public，外部可写 `p.m_Hp = -999` 制造非法状态。封装后只能走 takeDamage，「血量永远非负」这个不变量被锁在类里。
+构造失败抛异常，主程序可在初始化边界捕获并报告。也可用工厂返回错误状态，但不能悄悄把非法参数改成任意默认值。RectangleShape 自己拥有几何与颜色，不借用纹理，因此 Bat 没有额外资源所有权问题。
 
-<Callout type="tip">
-封装的核心收益不是「藏起来」，而是把对象的合法状态约束锁在类内部。改内部存储（如 m_Hp 从 int 换 float）只要方法签名不变，外部代码不用改。
-</Callout>
+<Term def="对象在所有公开操作前后都应保持的合法状态条件，例如速度非负、方向属于 -1/0/1、球拍包围盒位于场内。">
+  类不变量
+</Term>
+在构造后成立，`move/update/stop` 都要保持。
 
-## 构造与析构
+## 命令接口：用一个方向消除矛盾布尔值
 
-构造函数在**对象创建时**调用，负责初始化成员、申请资源；析构函数在**对象销毁时**调用（离开作用域或 delete），负责清理。对象生命周期：构造 → 使用 → 析构。
-
-析构常声明为虚函数（`virtual ~Entity()`），是为了**通过基类指针删除派生类对象时能正确调派生类析构**。否则 `delete basePtr` 只调基类析构，派生部分资源泄漏。
+`movingLeft` 和 `movingRight` 两个 bool 可以同时为真，需要额外优先级。类内部用 `direction_` 的 -1、0、1 表示左、停、右，公开方法仍以游戏语言命名。
 
 ```cpp
-Entity* e = new Player();
-delete e;  // 若 Entity 析构非虚，只清理 Entity 部分，Player 资源泄漏
+void Bat::moveLeft()
+{
+    direction_ = -1;
+}
+
+void Bat::moveRight()
+{
+    direction_ = 1;
+}
+
+void Bat::stop()
+{
+    direction_ = 0;
+}
 ```
+
+<Term def="告诉对象希望执行什么而不暴露内部表示的成员函数，例如 moveLeft、moveRight 和 stop。">
+  命令方法
+</Term>
+不立即积分位置，只设置本帧意图；`update` 统一消费
+dt。这样按键处理次数不会直接决定移动距离。
+
+若左右键同时按下，主循环要决定互相抵消、最后按下优先或固定优先。示例选择抵消并调用 stop，规则可以用输入组合测试。
+
+## update：积分、钳制与同步
+
+<Term def="对象按本帧时间推进逻辑状态、维护边界并同步可绘制表示的成员函数。">
+  更新方法
+</Term>
+接收 dt 和场地宽度。Bat 知道自身宽度，调用者无需重复右边界公式。
+
+```cpp
+void Bat::update(float dt, float arenaWidth)
+{
+    const float maxX{std::max(0.0F, arenaWidth - shape_.getSize().x)};
+    position_.x += static_cast<float>(direction_) * speed_ * dt;
+    position_.x = std::clamp(position_.x, 0.0F, maxX);
+    shape_.setPosition(position_);
+}
+```
+
+如果窗口比球拍还窄，`maxX` 先钳到零，避免给 `std::clamp` 传下界大于上界的无效范围。dt 由主循环统一采样并限幅；类不负责读全局时钟，否则多个对象无法共享同一帧时间。
+
+<Term def="把计算结果限制在合法闭区间内的操作；球拍 x 被限制在零到场宽减球拍宽度。">
+  边界钳制
+</Term>
+按整个包围盒处理，不能只限制左上点到 arenaWidth，否则右半球拍仍会出界。
+
+<BcgpBatUpdateMap />
+
+## const 查询：允许绘制但不允许绕过类
+
+```cpp
+const sf::RectangleShape& Bat::shape() const noexcept
+{
+    return shape_;
+}
+```
+
+<Term def="承诺成员函数不修改对象可观察状态的限定，允许通过 const 对象或引用执行只读查询。">
+  const 成员函数
+</Term>
+让 `window.draw(bat.shape())` 可用，同时返回 `const`
+引用避免复制和外部修改。引用只在 Bat
+存活期间有效，调用者不能保存到对象销毁之后。
+
+另一设计让 Bat 提供 `draw(RenderTarget&)`，封装更强但把渲染依赖带进类。当前书籍风格使用形状查询足够，关键是统一选择，避免一半由 Bat 绘制、一半由 main 访问内部。
+
+## 创建 Pong 项目与 main 函数
+
+<Term def="本书第二个游戏项目，从可移动球拍开始，下一章加入 Ball、AABB 碰撞、物理反弹与计分。">
+  Pong 项目
+</Term>
+复用第 1 章构建与窗口经验，但使用独立资源目录和目标。当前垂直切片只验收窗口、Bat
+构造、持续输入、更新和绘制。
+
+<Term def="创建窗口和对象、管理事件输入更新渲染顺序并返回进程状态的程序入口。">
+  main 函数
+</Term>
+是协调者，不应重新实现 Bat 边界。
+
+```cpp
+sf::RenderWindow window{sf::VideoMode{1280, 720}, "Pong"};
+Bat bat{{540.0F, 660.0F}, {200.0F, 20.0F}, 500.0F};
+sf::Clock frameClock;
+
+while (window.isOpen()) {
+    const float dt{std::min(frameClock.restart().asSeconds(), 0.05F)};
+
+    while (window.pollEvent(event))
+        if (event.type == sf::Event::Closed)
+            window.close();
+
+    const bool left{sf::Keyboard::isKeyPressed(sf::Keyboard::Left)};
+    const bool right{sf::Keyboard::isKeyPressed(sf::Keyboard::Right)};
+    if (left == right)
+        bat.stop();
+    else if (left)
+        bat.moveLeft();
+    else
+        bat.moveRight();
+
+    bat.update(dt, static_cast<float>(window.getSize().x));
+
+    window.clear(sf::Color::Black);
+    window.draw(bat.shape());
+    window.display();
+}
+```
+
+关闭事件后可再次检查 `window.isOpen()` 再更新绘制，与第 1 章保持一致。窗口 resize 时，场宽来自当前尺寸，但 View 映射策略也要同步；若使用固定逻辑分辨率，应传逻辑场宽而非像素宽。
+
+<BcgpPongFirstFrameMap />
+
+## 文件边界与编译依赖
+
+`Bat.hpp` 声明类，`Bat.cpp` 定义成员，`main.cpp` 只包含公开头。头文件使用 include guard 或 `#pragma once`；能前置声明的类型可减少依赖，但按值成员 `sf::RectangleShape` 需要完整定义。
+
+类成员改变会重新编译包含头的文件，这是值成员和内联接口的成本。当前项目规模小，先保持结构清楚；不要为了“解耦”立即引入裸指针和动态分配。
+
+Bat 的成员都是值对象，编译器生成的复制操作会复制位置、方向和 RectangleShape，得到两个随后独立更新的球拍。若游戏只允许一个球拍，可在拥有它的 Game 层限制数量；不要依赖对象内存地址作为稳定身份，因为容器移动或对象复制会改变地址。未来类拥有独占资源时，再显式设计复制、移动或禁止复制，而不是机械添加析构函数。
+
+构建目标要同时加入 `Bat.cpp`。只写头声明却漏掉实现文件，会在链接时出现未定义引用；这与 SFML 库漏链类似，但符号来自自己的类。
 
 <Callout type="trap">
-只要类可能被继承且通过基类指针管理（游戏里 `vector<Entity*>` 几乎必然如此），析构就应虚化。这是防内存泄漏的硬规则，忘虚析构是 C++ 新手最经典的资源泄漏坑。
+  **现象**：Bat 方法声明都能补全，链接却提示 `Bat::update`
+  未定义。**原因**：实现签名与声明不一致，或 `Bat.cpp`
+  没加入构建目标。**修法**：逐字符核对命名空间、const/noexcept
+  和参数，并检查构建源文件列表。
 </Callout>
 
-## 继承与多态
+## 验证对象边界
 
-继承让子类复用基类成员并扩展。多态让通过基类指针调用虚函数时执行子类版本：
+不打开窗口也能测试大部分 Bat：构造在 x=10、宽=100、场宽=300，向左更新足够长时间后 x 应为 0；向右后最大为 200；stop 后位置不变；负速度或非正尺寸构造失败。不同 dt 分片的总时间相同，最终位置在未碰边界前应近似一致。
 
-```cpp
-class Entity {
-public:
-  virtual ~Entity();
-  virtual void update(float dt) = 0;  // 纯虚：强制子类实现
-};
-class Player : public Entity {
-public:
-  void update(float dt) override { /* 玩家专属更新 */ }
-};
-```
+渲染集成再验证 shape 位置始终与逻辑一致、按住移动、松开停止、左右同按按规则停止。窗口缩小到小于球拍宽时，球拍固定在 x=0 而不是触发无效 clamp。
 
-`vector<Entity*>` 可统一管理 Player、Enemy 等不同实体，各自调对 update——这就是多态的威力。子类重写时加 `override` 关键字，编译器帮你检查签名是否真覆盖，防笔误。
+先预测：若 `shape()` 返回非常量引用，调用者把 shape 向右移动 50，但 position\_ 不变，下一次 update 会发生什么？update 会用旧逻辑位置覆盖形状，出现瞬移；这正是 public 接口不应暴露可修改表示的原因。
 
 ## 小结
 
-- 类 = 数据（成员变量）+ 行为（成员函数），对象是实例
-- public/private/protected 控制可见性，封装把不变量锁进类
-- 构造初始化、析构清理，析构该虚就虚
-- 继承复用 + 多态统一管理，override 防笔误
-
-<Attribution
-  adaptedFrom="Beginning C++ Game Programming (Michael Dawson)"
-  adaptedUrl="https://www.packtpub.com/"
-/>
-
-<Glossary>
-<GlossaryItem term="类">
-C++ 中定义对象结构与行为的蓝图，包含成员变量（数据）和成员函数（行为），是面向对象编程的基本单位。
-</GlossaryItem>
-<GlossaryItem term="封装">
-把成员变量设为 private、只通过 public 方法访问的机制，核心收益是受控访问与不变量维护，保证对象始终处于合法状态。
-</GlossaryItem>
-<GlossaryItem term="构造函数">
-对象创建时自动调用的特殊成员函数，负责初始化成员变量和申请资源。
-</GlossaryItem>
-<GlossaryItem term="虚析构">
-声明为 virtual 的析构函数，保证通过基类指针删除派生类对象时能正确调用派生类析构，防止资源泄漏。
-</GlossaryItem>
-<GlossaryItem term="多态">
-通过基类指针/引用调用虚函数时执行实际派生类版本的机制，配合继承实现「统一管理不同实体」。
-</GlossaryItem>
-</Glossary>
+- 本章 OOP 只解决 Pong Bat 的对象边界，不提前引入继承、多态和虚析构
+- 类定义类型，对象拥有实例状态；public 是意图接口，private 保存表示并维护不变量
+- 构造函数用初始化列表一次建立可用对象，非法尺寸或速度在边界失败
+- moveLeft/moveRight/stop 设置方向，update 统一使用 dt 积分、钳制整个球拍并同步形状
+- const 查询允许绘制但阻止外部绕过类修改 Shape，引用生命周期受 Bat 对象约束
+- main 管窗口和阶段顺序，Bat 管自身状态；左右边界、松键和窄窗口都要测试
 
 <Exercises>
-  <Answer question="public/private/protected 三种访问控制分别允许谁访问？给个游戏例子。">public：类内、类外、子类都能访问，是对外接口；private：只有类内能访问，外部和子类不可见；protected：类内和子类能访问，类外不可。例：Player 的 m_Hp 设 private 防外部直接改血量，只能通过 takeDamage() 受控修改；若 Enemy 子类要用基类的 m_Speed，就把 m_Speed 设 protected。</Answer>
-  <Answer question="为什么析构函数常声明为 virtual？不声明会有什么后果？">为了通过基类指针删除派生类对象时能正确调用派生类析构。若基类析构非虚，`Entity* e = new Player(); delete e;` 只调用 Entity 析构，Player 特有的资源（贴图句柄等）不被清理，导致泄漏。游戏里实体几乎总通过 vector&lt;Entity*&gt; 多态管理，所以基类析构必须虚化，这是防泄漏的硬规则。</Answer>
+
+**问题 1** 为什么 Bat 不应公开 `position_` 和可修改 `shape_`？给出会破坏哪两个不变量的例子。
+
+<Answer>
+
+公开 position 允许调用者写负值或超过 `arenaWidth - width`，破坏场内边界；公开可修改 shape 允许只移动视觉而不改逻辑位置，破坏两者同步。公开命令和 const 查询后，所有修改都经 update，类能统一积分、钳制和同步。
+
+</Answer>
+
+**问题 2** 球拍宽 180、场宽 800、速度 500 px/s，从 x=700 向右更新 0.2 秒后 x 应是多少？若场宽只有 100 呢？
+
+<Answer>
+
+正常场地最大 x 为 800-180=620，计算位置 800 后钳到 620。场宽 100 小于球拍宽，maxX 先取 `max(0, -80)` 得 0，因此 x 固定为 0；不能把上下界 0 和 -80 直接传给 clamp。
+
+</Answer>
+
+**问题 3** 怎样把 Bat 分成头文件、实现文件和 main，并定位“声明可见但链接未定义”的错误？
+
+<Answer>
+
+Bat.hpp 放类声明和必需类型定义，Bat.cpp 包含头并定义构造与成员，main.cpp 只依赖公开接口；构建目标同时列出 Bat.cpp。链接未定义时核对实现文件是否加入目标，以及返回类型、参数、命名空间、尾部 const/noexcept 是否与声明完全一致。
+
+</Answer>
+
 </Exercises>
+
+<Glossary>
+
+<GlossaryItem term="面向对象编程">
+  把状态与操作组织为对象，并由对象边界维护自身不变量的设计方式。
+</GlossaryItem>
+<GlossaryItem term="类">
+  声明成员数据、成员函数和访问规则的用户定义类型。
+</GlossaryItem>
+<GlossaryItem term="对象">
+  类的运行实例，拥有独立状态并经历构造、使用和销毁。
+</GlossaryItem>
+<GlossaryItem term="public 接口">
+  类向调用者开放的稳定命令与查询区域。
+</GlossaryItem>
+<GlossaryItem term="private 状态">
+  只由类自身实现访问的表示，用于集中维护合法状态。
+</GlossaryItem>
+<GlossaryItem term="封装">
+  隐藏表示并让状态变化经过维护不变量的公开操作。
+</GlossaryItem>
+<GlossaryItem term="构造函数">
+  对象创建时通过初始化列表建立成员初值并验证参数的特殊成员函数。
+</GlossaryItem>
+<GlossaryItem term="类不变量">
+  对象在公开操作前后都保持的速度、方向、边界与同步条件。
+</GlossaryItem>
+<GlossaryItem term="命令方法">
+  表达调用者意图而不暴露内部表示的成员函数。
+</GlossaryItem>
+<GlossaryItem term="更新方法">
+  按 dt 推进对象状态、维护边界并同步可绘制表示的成员函数。
+</GlossaryItem>
+<GlossaryItem term="边界钳制">
+  把位置限制到完整球拍仍位于场内的合法闭区间。
+</GlossaryItem>
+<GlossaryItem term="const 成员函数">
+  承诺不修改对象可观察状态并允许只读调用的成员函数。
+</GlossaryItem>
+<GlossaryItem term="Pong 项目">
+  本书第二个游戏项目，本章从 Bat 类和可移动球拍切片开始。
+</GlossaryItem>
+<GlossaryItem term="main 函数">
+  创建窗口对象并协调事件、输入、更新和渲染顺序的程序入口。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 6"
+  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+/>

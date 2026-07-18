@@ -1,0 +1,367 @@
+---
+title: "Item 12：覆盖函数必须声明 override"
+type: A
+section: Chapter 3 · Moving to Modern C++
+order: 12
+description: 对齐 Effective Modern C++ Item 12：掌握 virtual override 的名称、参数、const、返回类型、异常规范与引用限定符条件，用 override 将静默签名不匹配转为编译期诊断，并设计 lvalue/rvalue 成员接口。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch03.html"
+draft: false
+---
+
+import {
+  EmcppOverrideRequirementsMap,
+  EmcppRefQualifiedDispatchMap,
+  EmcppSilentOverrideMismatchMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-12-override";
+
+<Objectives>
+
+- 能说出 override requirements（覆盖条件），并判断 base/derived 成员是否形成真正的 virtual override
+- 能分析 const、参数类型、virtual 状态和 ref qualifiers（引用限定符）造成的 signature mismatch（签名不匹配）
+- 能设计带 `&`/`&&` 限定的成员接口，并用 override、静态检查与动态分派测试固定覆盖契约
+
+</Objectives>
+
+## 从“同名不等于覆盖”开始
+
+Item 12 的原则是 Declare overriding functions override（覆盖函数声明 override）。没有 `override` 时，derived 中一个看似正确的同名函数可能只是隐藏 base overload；程序仍能编译，却在 base pointer 调用时执行旧实现。
+
+<Term def="derived virtual function 满足语言覆盖条件，并替换 base virtual slot 的行为。">
+  virtual override
+</Term>
+
+<Term def="放在成员函数声明末尾，要求 compiler 验证该函数确实覆盖某个 base virtual 的上下文关键字。">
+  override specifier
+</Term>
+
+```cpp
+class Base {
+public:
+    virtual void process() const;
+};
+
+class Derived : public Base {
+public:
+    void process() override; // error: missing const, does not override
+};
+```
+
+先预测：若删掉 `override`，Derived 仍有一个合法 non-const function，但它不是 Base virtual 的覆盖。
+
+<EmcppOverrideRequirementsMap />
+
+## 完整的 override requirements
+
+一个 derived member 覆盖 base virtual，至少要核对：
+
+1. base function 是 virtual。
+2. function names 相同，destructor 属于语言规定的特殊同名关系。
+3. parameter types 完全匹配。
+4. member constness 相同。
+5. ref qualifiers 相同。
+6. return type 相同或满足 covariant return 条件。
+7. exception specification 与 base contract 兼容。
+
+<Term def="名称、参数、cv、引用限定、返回与异常规范共同满足 virtual slot 替换规则的条件集合。">
+  override requirements
+</Term>
+
+<Term def="derived override 可返回指向更具体 derived class 的 pointer/reference，而 base 返回 base pointer/reference。">
+  covariant return
+</Term>
+
+任何一层不匹配，都可能产生新的 overload/hiding member，而不是 override。`override` 将这组人工核对交给 compiler。
+
+## const 是成员函数签名的一部分
+
+```cpp
+class Base {
+public:
+    virtual void refresh() const;
+};
+
+class Derived : public Base {
+public:
+    void refresh(); // a different non-const member
+};
+```
+
+<Term def="derived member 与 base virtual 的 const qualification 不一致，导致两者属于不同函数类型。">
+  const signature mismatch
+</Term>
+
+通过 `Base&` 或 `Base*` 调用仍分派到 `Base::refresh() const`；通过 non-const Derived object 调用可能选中 Derived member。行为随静态类型改变，是典型的静默多态 bug。
+
+## 参数类型必须精确匹配
+
+```cpp
+class Base {
+public:
+    virtual void setPriority(int value);
+};
+
+class Derived : public Base {
+public:
+    void setPriority(unsigned value); // overload/hiding, not override
+};
+```
+
+<Term def="参数看似可转换但并非同一类型，使 derived declaration 无法覆盖 base virtual。">
+  parameter signature mismatch
+</Term>
+
+override 判定不允许先做 int-to-unsigned conversion。若意图改变 API，应修改 base contract；若意图覆盖，必须保持参数类型一致。
+
+## base 非 virtual 时不能覆盖
+
+```cpp
+class Base {
+public:
+    void save() const;
+};
+
+class Derived : public Base {
+public:
+    void save() const; // hides, does not override
+};
+```
+
+<Term def="derived 声明遮蔽同名 base member，但 base 未提供 virtual dispatch slot。">
+  nonvirtual name hiding
+</Term>
+
+为 Derived 添加 `override` 会立即指出 base function 非 virtual。这避免开发者误以为通过 base reference 会动态分派。
+
+<EmcppSilentOverrideMismatchMap />
+
+<Callout type="trap" title="陷阱：只要函数名和返回类型相同就是 override">
+  parameter、const、ref qualifier、exception specification 与 base virtual
+  状态都参与判定。返回类型相同 只是条件之一；没有 override specifier
+  时，错误声明常作为新函数继续编译。
+</Callout>
+
+## override 不需要重复 virtual
+
+```cpp
+class Derived : public Base {
+public:
+    void process() const override;
+};
+```
+
+<Term def="一旦函数声明 override，virtual 性质已经由覆盖关系保证，无需同时重复 virtual 关键字。">
+  override-only declaration
+</Term>
+
+写 `virtual ... override` 合法，但 `override` 提供更强信息：它既声明动态分派意图，又要求 compiler 验证。团队可统一只保留 override，降低声明噪声。
+
+## override 和 final 是 contextual keywords
+
+`override`、`final` 只在特定声明位置具有特殊含义；旧代码仍可在其他上下文把它们当 identifier。
+
+<Term def="只在规定语法位置作为关键字解释，在其他位置仍可作为普通 identifier 的词。">
+  contextual keyword
+</Term>
+
+这种设计降低了 C++11 对既有代码的破坏。新代码仍不应把 override 当变量名，以免阅读混淆。
+
+## ref qualifiers 限制调用对象的值类别
+
+成员函数末尾的 `&` 表示只能对 lvalue object 调用，`&&` 表示只能对 rvalue object 调用。
+
+<Term def="写在 non-static member 函数后的 & 或 &&，限制 implicit object parameter 的值类别。">
+  ref qualifier
+</Term>
+
+```cpp
+class Widget {
+public:
+    using Data = std::vector<double>;
+
+    Data& data() & { return values; }
+    Data data() && { return std::move(values); }
+
+private:
+    Data values;
+};
+```
+
+<Term def="对有稳定 identity 的 lvalue owner 返回内部 reference，保留借用与写回语义。">
+  lvalue-qualified accessor
+</Term>
+
+<Term def="对即将销毁的 rvalue owner 移出 value，避免返回指向 temporary 的悬空 reference。">
+  rvalue-qualified accessor
+</Term>
+
+```cpp
+Widget widget;
+auto copy = widget.data();              // lvalue overload, copies from reference
+auto moved = makeWidget().data();       // rvalue overload, moves owned data
+```
+
+<EmcppRefQualifiedDispatchMap />
+
+## ref qualifier 也参与 override 判定
+
+```cpp
+class Base {
+public:
+    virtual void execute() &;
+};
+
+class Derived : public Base {
+public:
+    void execute() && override; // error: qualifier mismatch
+};
+```
+
+<Term def="base 与 derived 的 implicit object parameter 值类别约束不同，无法共享同一 virtual slot。">
+  ref-qualified override mismatch
+</Term>
+
+这类差异视觉上只是一枚符号，尤其容易在 review 中漏掉；override 是可靠停止条件。
+
+<Callout
+  type="trap"
+  title="陷阱：ref qualifier 只影响 overload，不影响 virtual override"
+>
+  `&`/`&&` 是成员函数类型的一部分。derived 若改了 implicit object parameter
+  的值类别约束，就声明了 不同函数；override 会正确拒绝它。
+</Callout>
+
+## using declaration 只能解决 name hiding
+
+derived 定义一个同名 overload 会隐藏 base 中该名字的整个 overload set。可用 using 重新引入：
+
+```cpp
+class Derived : public Base {
+public:
+    using Base::configure;
+    void configure(std::string value);
+};
+```
+
+<Term def="在 derived scope 中重新暴露 base overload set，修复同名 hiding 的声明。">
+  base overload reintroduction
+</Term>
+
+但 using 不会把不匹配函数变成 override。覆盖关系仍必须由精确 signature 加 override 建立。
+
+## override 是重构传感器
+
+如果 base API 把参数从 int 改为 strong type，所有 derived override 会在编译期报错；没有 override 的类可能悄悄保留旧 overload。
+
+<Term def="base virtual contract 改变时，让所有 derived declarations 立即暴露不一致的编译期机制。">
+  hierarchy refactoring sensor
+</Term>
+
+这使 override 不只防初始拼写错误，也保护长期演化。大型继承树应把“所有 intended overrides 都显式 override”设为 lint rule。
+
+## 覆盖契约的测试矩阵
+
+<Term def="同时验证编译期覆盖关系、base-reference 动态分派、const 与对象值类别路径的测试集合。">
+  override contract matrix
+</Term>
+
+1. 每个 intended override 都带 override，mismatch 必须 compile-fail。
+2. 通过 base pointer/reference 调用，观察 Derived 实现被执行。
+3. const 与 non-const objects 覆盖各自允许路径。
+4. lvalue/rvalue accessor 分别验证 borrow、copy/move 与 lifetime。
+5. base signature 重构时，所有 derived classes 必须重新编译。
+6. using reintroduced overload 与 override tests 分开，避免把 name visibility 当动态分派。
+
+先预测完整 function type 与 implicit object parameter，再让 compiler 验证 override；运行期 mock 只能证明已走过的路径，不能证明没有隐藏 mismatch。
+
+## 小结
+
+- 同名 derived member 不一定覆盖 base virtual；无 override 时 mismatch 可能静默编译
+- override requirements 包括 virtual 状态、名称、参数、const、ref qualifier、返回和异常规范
+- const、int/unsigned、nonvirtual base 与 `&`/`&&` 都能造成 signature mismatch
+- override 让 compiler 在声明点验证意图，通常无需再重复 virtual
+- ref qualifiers 为 lvalue owner 返回 borrow、为 rvalue owner 返回 moved value，避免 temporary lifetime 问题
+- using declaration 可恢复 base overload 可见性，但不能制造 override
+- override 是继承体系的重构传感器，base contract 改动会强制所有 derived 同步
+- 验收必须结合 compile-fail mismatch 与 base-reference 动态分派测试
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 12"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch03.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="virtual override">
+    替换 base virtual slot 的函数。
+  </GlossaryItem>
+  <GlossaryItem term="override specifier">
+    要求编译器验证覆盖关系的说明符。
+  </GlossaryItem>
+  <GlossaryItem term="override requirements">
+    形成覆盖关系的完整条件。
+  </GlossaryItem>
+  <GlossaryItem term="covariant return">
+    返回更具体 derived 指针或引用。
+  </GlossaryItem>
+  <GlossaryItem term="const signature mismatch">
+    成员 const 状态不一致。
+  </GlossaryItem>
+  <GlossaryItem term="parameter signature mismatch">
+    参数类型不完全匹配。
+  </GlossaryItem>
+  <GlossaryItem term="nonvirtual name hiding">
+    同名函数遮蔽非 virtual base member。
+  </GlossaryItem>
+  <GlossaryItem term="override-only declaration">
+    只用 override 表达 virtual 覆盖。
+  </GlossaryItem>
+  <GlossaryItem term="contextual keyword">
+    仅在特定位置作为关键字的词。
+  </GlossaryItem>
+  <GlossaryItem term="ref qualifier">
+    限制调用对象值类别的成员限定符。
+  </GlossaryItem>
+  <GlossaryItem term="lvalue-qualified accessor">
+    只接受 lvalue owner 的访问器。
+  </GlossaryItem>
+  <GlossaryItem term="rvalue-qualified accessor">
+    只接受 rvalue owner 的访问器。
+  </GlossaryItem>
+  <GlossaryItem term="ref-qualified override mismatch">
+    引用限定符不一致导致覆盖失败。
+  </GlossaryItem>
+  <GlossaryItem term="base overload reintroduction">
+    重新引入 base 同名 overload set。
+  </GlossaryItem>
+  <GlossaryItem term="hierarchy refactoring sensor">
+    层次结构变更的编译期探测器。
+  </GlossaryItem>
+  <GlossaryItem term="override contract matrix">
+    覆盖、分派和限定符测试表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：检查四个 Derived declarations。** 分别缺 const、参数写 unsigned、base 非 virtual、ref qualifier 改成 rvalue。
+
+<Answer question="哪些是 override，如何让错误不可静默？">
+  四个都不形成目标 override：const 与参数类型属于 function type，非 virtual base
+  没有 dispatch slot， ref qualifier 改变 implicit object parameter。给每个
+  intended declaration 加 override，compiler 会在 声明处逐一拒绝；再修到与 base
+  contract 完全一致。
+</Answer>
+
+2. **问题 2：为 Widget data 设计 lvalue/rvalue overload。** temporary 不能返回内部 reference。
+
+<Answer question="两个返回契约如何写和测试？">
+  lvalue-qualified data 返回 Data reference，允许稳定 owner
+  上借用；rvalue-qualified data 返回 Data value 并 move 内部 storage。测试
+  lvalue mutation 能写回 owner、temporary 调用得到独立 value，并用 sanitizer
+  验证结果越过 full expression 后不悬空。
+</Answer>
+
+3. **问题 3：base 新增 configure int，derived 已有 configure string。** 同时需要两种 overload。
+
+  <Answer question="using 与 override 各解决什么？">using Base configure 重新暴露被同名 derived member 隐藏的 overload set；它不建立动态覆盖。若 derived 还要覆盖 base virtual int 版本，应另写完全匹配并带 override 的 declaration。分别测试 overload lookup 和通过 base reference 的 virtual dispatch。</Answer>
+</Exercises>

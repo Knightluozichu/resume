@@ -1,0 +1,226 @@
+---
+title: "第7章 方法"
+type: C
+section: "たのしいRuby 第5版 · Ruby的基础"
+order: 7
+description: "从receiver与method lookup理解简单、带块和运算符调用，区分实例/类/函数式方法，设计返回值、block、可变参数和关键字参数契约。"
+demo: true
+math: false
+sourceUrl: "https://tanoshiiruby.github.io/5/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RubyMethodCallLab, RubyMethodKindsLab, RubyMethodParametersLab } from "@/components/mdx/ruby-programming/diagrams/methods";
+
+<Objectives>
+
+- 能解释显式receiver、implicit self、带block和运算符形式的方法调用与lookup起点
+- 能区分实例方法、类方法、函数式方法和单例方法的receiver、state owner与visibility
+- 能设计required/optional/rest/keyword参数、block与返回值契约，并验证错误arity
+
+</Objectives>
+
+## 从“函数名”背后的receiver开始
+
+Ruby中的方法调用总有receiver；写`object.run`时显式，写`puts value`时receiver是当前`self`且调用受visibility约束。<Term def="方法消息从哪个对象开始查找实现，以及该对象拥有哪份state。">method receiver boundary</Term>把调用从孤立名字还原成object interaction。
+
+先预测：方法内局部变量`size = 10`之后写`size`，Ruby会调用`self.size`还是读取local？Parser已看到assignment，会读local。若要调用receiver method可写`size()`或`self.size`（private method例外）。名字解析会影响看似相同的无括号调用。
+
+## 方法的调用
+
+完整调用包含receiver、method name、positional/keyword arguments、可选block以及返回/异常。<Term def="一次调用允许的参数形状、block、返回值、异常和副作用的完整约定。">method call contract</Term>应能从签名、名称、文档和测试共同确认。
+
+括号通常可省略，但DSL风格不应牺牲边界清晰度。Nested call、多个arguments或条件expression中优先保留括号；setter、operator和index call虽有特殊syntax，本质仍参与method dispatch。
+
+### 简单的方法调用
+
+```ruby
+name = "ruby"
+
+p name.upcase
+p name.start_with?("ru")
+p name.public_send(:slice, 0, 2)
+```
+
+`send`可调用包括private在内的方法，`public_send`尊重public visibility，更适合外部dispatch。Dynamic method name必须来自allowlist；把用户输入直接转Symbol并send会暴露不应调用的API。Normal call让静态搜索、重构和审计更可靠，dynamic dispatch只在确有数据驱动需求时使用。
+
+### 带块的方法调用
+
+Method可接收一个implicit block，通过`yield`调用；caller用`{}`或`do...end`提供。Brace与do/end的binding precedence不同，和无括号调用组合可能把block交给错误method。复杂chain用括号或分行验证block owner。
+
+```ruby
+result = [1, 2, 3].map do |number|
+  number * number
+end
+
+p result # [1, 4, 9]
+```
+
+Block不是普通argument，但可用`&block`捕获为Proc或把Proc以`&`转换回block；捕获会有额外语义/成本，应只在需要保存、转发或检查时使用。第11章会系统解释block，第21章展开Proc。
+
+### 运算符形式的方法调用
+
+`left + right`大体发送`+`给left，`items[index]`调用`[]`，`items[index] = value`调用`[]=`。Operator precedence与assignment规则仍由parser固定，不能靠重写method改变。第9章会讨论operator定义与下标方法。
+
+<RubyMethodCallLab />
+
+<Stepper>
+  <Step title="切换Simple、Implicit、Block和Operator"><RubyMethodCallLab /></Step>
+  <Step title="展开调用记录">写receiver、lookup chain、arguments、block owner、result和可能异常。</Step>
+  <Step title="制造同名Local"><RubyMethodCallLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="省略receiver的方法就是全局函数">
+Ruby没有脱离对象的全局函数；无receiver调用使用当前self并受method visibility影响。把关键依赖做成显式receiver或参数，避免看似global的hidden context。
+</Callout>
+
+## 方法的分类：实例方法、类方法与函数式方法
+
+分类的核心是receiver是谁。<Term def="方法实现附着的receiver类别及其可访问state与调用方式。">method ownership kind</Term>比“def写在哪里”更能预测行为。
+
+### 实例方法
+
+Class/module body中`def process`定义instance method，receiver是某个instance，可读取该对象`@variables`。Instance method不应偷偷读class/global mutable state；共享依赖通过constructor或method parameter注入，才能独立测试。
+
+### 类方法
+
+`def self.build`在当前class object上定义singleton method，常用作factory、parser或namespace operation。Class method访问的`@cache`属于class object，不是instance，也不是自动被subclass复制。继承class-level configuration前先设计查找和override规则。
+
+```ruby
+class Report
+  def self.from_lines(lines)
+    new(lines.map(&:strip))
+  end
+
+  def initialize(rows)
+    @rows = rows.freeze
+  end
+
+  def size
+    @rows.size
+  end
+end
+```
+
+Factory命名`from_lines`比重载new的隐式branch更明确；返回Report还是subclass、是否copy input和解析异常都属于contract。
+
+### 函数式方法
+
+原书所称函数式方法是省略receiver调用的方法，常见`puts`、`print`、`sleep`等来自Kernel并作为Object的private instance methods可用。Private method不能用普通显式receiver（某些setter/语法例外），强调它依赖当前context而非公共消息。
+
+把大量utility塞进Kernel会污染所有objects。项目helper放module并通过module_function、明确receiver或include到有限scope；pure transformation可做module function，但有state的服务优先object。
+
+<RubyMethodKindsLab />
+
+<Stepper>
+  <Step title="切换Instance、Class、Functional和Singleton"><RubyMethodKindsLab /></Step>
+  <Step title="建立Owner表">记录definition owner、runtime receiver、instance variables、visibility和test substitute。</Step>
+  <Step title="移除Kernel污染"><RubyMethodKindsLab /></Step>
+</Stepper>
+
+## 方法的定义
+
+`def name(parameters) ... end`创建method；method body不会形成closure捕获definition周围的local variables，这与block/lambda不同。需要外部state时用instance variable、constant或显式dependency，不要假定`def`能看到外层local。
+
+Signature应只接受需要的shape。宽泛`*args, **options, &block`方便forwarding，却使错误延迟到深层；公共API先列required参数和允许keywords，unknown keyword应尽早失败。Ruby 2.3的keyword与Hash转换规则和现代Ruby不同，跨版本library必须建立compatibility tests。
+
+### 方法的返回值
+
+Ruby默认返回最后求值expression，也可用`return`提前退出。<Term def="成功返回哪种shape、absence如何表示、失败抛什么异常以及是否修改输入的约定。">method result contract</Term>不应依赖“最后一行刚好是什么”。
+
+```ruby
+def normalize_name(value)
+  return nil if value.nil?
+
+  text = String(value).strip
+  return nil if text.empty?
+
+  text.downcase
+end
+```
+
+这个method返回normalized String或nil；若invalid input应该报错而不是absence，则改为raise并命名。不要同时返回false、nil、String和exception而不说明；使用value object或Result-style结构承载多状态。
+
+### 定义带块的方法
+
+`yield`执行caller block；`block_given?`检查是否提供。Method可在resource setup后yield，并用ensure cleanup，这就是`File.open` block form的模式。Yield次数、参数、异常传播和method最终返回值必须明确。
+
+```ruby
+def with_timer(clock: Process, output: $stdout)
+  started = clock.clock_gettime(Process::CLOCK_MONOTONIC)
+  result = yield
+  result
+ensure
+  if started
+    elapsed = clock.clock_gettime(Process::CLOCK_MONOTONIC) - started
+    output.puts format("%.3fs", elapsed)
+  end
+end
+```
+
+Ruby 2.3支持monotonic clock；ensure内错误可能遮蔽原异常，cleanup/observability代码要尽量不失败。Block中的`break`、`return`与Proc/lambda控制差异将在后续章节细化。
+
+### 参数个数不确定的方法
+
+Rest parameter `*values`收集剩余positional arguments为Array；调用处`splat`展开Array。Rest适合天然variadic domain，如format arguments或sum；若只有两三种结构，显式overload-like branch/value object更易验证。
+
+Required参数可在rest前后出现，分配规则要用目标Ruby验证。Arity错误应保留ArgumentError，不要rescue后猜caller意图。Forwarding还要避免丢block或keywords，跨版本代码尤其需要matrix。
+
+### 关键字参数
+
+Keyword让布尔和同类型参数可读：`render(limit: 20, strict: true)`。Required keyword在Ruby 2.3可用`name:`；default在call time求值。<Term def="以名称传递policy参数并拒绝未知名称，从而让调用含义独立于位置。">keyword policy boundary</Term>不等于接受任意options Hash。
+
+<RubyMethodParametersLab />
+
+<Stepper>
+  <Step title="切换Required、Optional、Rest和Keyword"><RubyMethodParametersLab /></Step>
+  <Step title="生成Arity矩阵">覆盖缺required、多positional、unknown keyword、显式nil/false、splat和block有无。</Step>
+  <Step title="收窄万能Signature"><RubyMethodParametersLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="*args能让API兼容所有未来调用">
+它也会接收拼写错误和意外参数，把失败推迟到更深层。只在domain确实variadic或透明forwarding时使用，并对rest内容与keyword/block转发做严格测试。
+</Callout>
+
+## 关于方法调用的一些补充
+
+Ruby 2.3中Hash与keyword arguments之间存在隐式转换，后续版本逐步分离；维护多版本gem时不要只在一个runtime测试。Method visibility分public/protected/private；visibility表达调用边界，不是安全sandbox。Reflection/dynamic send仍可能绕过约定，真正不可信输入要在capability边界隔离。
+
+Method lookup会经过singleton class、prepended modules、class、included modules和superclasses；本章先固定receiver，详细lookup在第8章展开。Debug时记录receiver.class、method(:name).owner和source_location，比只看method name更能定位实际实现。
+
+## 本章回顾：方法是receiver上的可执行契约
+
+1. 每次调用都有receiver；无receiver写法使用self，局部变量解析和visibility会改变结果。
+2. Simple、block与operator call共享dispatch基础，但block ownership和parser precedence必须明确。
+3. Instance/class/functional/singleton方法的区别落在receiver与state owner。
+4. Return shape、exception、mutation、yield次数和cleanup共同构成method result contract。
+5. Required/optional/rest/keyword参数表达不同shape；越宽泛的signature越需要边界验证。
+
+<Exercises>
+
+**问题 1：怎样确认一次无receiver调用实际执行了哪个method？**
+
+<Answer>记录当前`self`，用`method(:name).owner`和`source_location`查看解析到的实现，并检查同名local与visibility。测试显式括号、显式receiver可行性以及ancestor/module注入变化。</Answer>
+
+**问题 2：带block的resource method应怎样保证cleanup？**
+
+<Answer>Setup后在begin/ensure或等价结构中yield，ensure无论正常、异常、break/return语义都执行cleanup；method说明yield次数、参数和返回值。测试block成功、抛错和cleanup自身失败。</Answer>
+
+**问题 3：什么时候用rest参数，什么时候改用value object？**
+
+<Answer>Domain天然允许任意数量同类值时用rest；若参数有角色、可选组合和validation，value object/keywords更清楚。测试缺失、多余、错误类型、splat和跨Ruby版本keyword转换。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="method receiver boundary" definition="方法查找从哪个对象开始及其state owner。" />
+  <GlossaryItem term="method call contract" definition="参数、block、返回、异常与副作用的调用约定。" />
+  <GlossaryItem term="method ownership kind" definition="实现附着的receiver类别及其可访问state。" />
+  <GlossaryItem term="method result contract" definition="返回shape、absence、异常和mutation的结果约定。" />
+  <GlossaryItem term="keyword policy boundary" definition="用命名参数表达policy并拒绝未知名称的边界。" />
+</Glossary>
+
+<Attribution adaptedFrom="たのしいRuby 第5版 / Ruby基础教程（第5版），第7章 方法" adaptedUrl="https://tanoshiiruby.github.io/5/" />

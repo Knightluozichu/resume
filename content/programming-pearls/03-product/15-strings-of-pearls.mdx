@@ -1,0 +1,452 @@
+---
+title: "Column 15 · Strings of Pearls：从词频、后缀数组到Markov文本"
+type: B
+section: "Part III · The Product"
+order: 14
+description: "按第二版Column 15重建word set/frequency、balanced tree与hash、longest duplicated substring suffix array、word-level order-k Markov generation。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/programming-pearls-9780201657883"
+draft: false
+---
+
+import { PP2WordTokenLab, PP2WordFrequencyLab, PP2HashTableLab, PP2SuffixArrayLab, PP2LCPNeighborLab, PP2PhraseSearchLab, PP2MarkovOrderLab, PP2MarkovSuffixLab, PP2ReservoirChoiceLab, PP2StringStructureMatrixLab, PP2StringCertificateLab } from "@/components/mdx/programming-pearls/diagrams/15-strings-of-pearls";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释Words、Phrases与Generating Text如何把string semantics转化为不同的search/index contracts
+- 能计算word hash、suffix-array longest common prefix、Markov transition frequency与time/space bounds
+- 能实现STL word frequency、separate-chaining hash、longest duplicated substring与order-k Markov generator
+- 能分析tokenization、balanced tree/hash、typical/adversarial suffix sorting与sort/hash Markov representations
+- 能设计corpus normalization、frequency/LCP oracle、transition-distribution test与string pipeline certificate
+
+</Objectives>
+
+## 从“什么是一个词”开始
+
+Strings of Pearls从极长的character sequences出发：web pages、books和由A/C/G/T组成的genetic databases都可视为strings。程序会sort、count、search并分析其中patterns。Column 15不追求一套万能string class，而是用三个problems展示representation怎样跟随operation改变。
+
+先预测：输入`<p>And and, AND&nbsp;pearls.</p>`时有几个words？若答案依赖“忽略markup、fold case、剥punctuation”，那么token contract必须在count之前确定。
+
+<PP2WordTokenLab />
+
+Strings of Pearls（<Term def="通过word counting、suffix ordering与context sampling展示string representation和algorithm design的一组案例。">Strings of Pearls</Term>）的三条主线是：
+
+1. Words：列出distinct words并统计frequency。
+2. Phrases：预处理text，寻找longest duplicated substring并支持phrase lookup。
+3. Generating Text：从training corpus提取order-k contexts，按observed frequencies随机续写。
+
+## 15.1 Words
+
+### The lexical boundary comes first
+
+原书故意采用最简单的定义：word是由whitespace包围的character sequence。这样可以专注data structures，但HTML中的`<html>`、`<body>`与`&nbsp;`会被当成words，punctuation和case也不normalize。
+
+Word Tokenization（<Term def="把character stream切成keys并规定markup、case、punctuation、encoding与boundary behavior的lexical contract。">Word Tokenization</Term>）必须早于frequency map。真实pipeline通常还要声明：
+
+- input encoding与invalid byte policy；
+- Unicode normalization与case folding locale；
+- apostrophe、hyphen、number、emoji和CJK segmentation；
+- HTML/RTF commands、entities与script/style content；
+- max token length与streaming memory bound。
+
+这些不是cleanup细节；任何变化都会改变key identity、counts和downstream model。
+
+### Distinct words with a library set
+
+最短的correct baseline使用C++ Standard Library：
+
+```cpp
+int main() {
+    std::set<std::string> words;
+    std::string token;
+    while (std::cin >> token) words.insert(token);
+    for (const auto& word : words) std::cout << word << "\n";
+}
+```
+
+`set`忽略duplicates并按order迭代。它提供balanced-tree worst-case guarantee、ordered report和library-level ownership，是验证custom implementation的reference。
+
+### Frequency counts with a library map
+
+把set value扩展为counter：
+
+```cpp
+std::map<std::string, int> frequency;
+std::string token;
+while (std::cin >> token) ++frequency[token];
+for (const auto& [word, count] : frequency) {
+    std::cout << word << " " << count << "\n";
+}
+```
+
+Word Frequency（<Term def="把每个exact token映射到occurrence count，并按明确ordering或top-k contract报告的aggregation task。">Word Frequency</Term>）在原书King James Bible实验中处理789,616 tokens、29,131 distinct words。`the`出现62,053次，接近8%；`and`与`And`分开计数。
+
+<PP2WordFrequencyLab />
+
+原书机器上的map version总计约7.6 seconds：read 2.4、insert 4.9、write 0.3。Absolute numbers已过时，breakdown仍有价值：若I/O占dominant，换container不会带来headline speedup；必须分项计时。
+
+### Custom hash table
+
+Special-purpose C version使用29,989个bins、separate chaining与multiplier 31。每个node保存word pointer、count与next pointer：
+
+```c
+typedef struct node *nodeptr;
+typedef struct node {
+    char *word;
+    int count;
+    nodeptr next;
+} node;
+```
+
+Hashing（<Term def="读取key内部characters计算bin index，以average constant lookup换取无sorted order和distribution-sensitive worst case的表示。">Hashing</Term>）的recurrence可写为：
+
+$$
+h_0=0,\qquad
+h_{i+1}=(31h_i+\operatorname{byte}(s_i))\bmod 29989.
+$$
+
+使用unsigned arithmetic使overflow按defined modular behavior进行，最终再mod table size。Modern code还需明确signed `char` conversion与attacker-controlled collision risk。
+
+```c
+void incword(const char *s) {
+    unsigned h = hash(s);
+    for (node *p = bin[h]; p != NULL; p = p->next) {
+        if (strcmp(s, p->word) == 0) {
+            ++p->count;
+            return;
+        }
+    }
+    node *p = allocate_node_and_copy(s);
+    p->count = 1;
+    p->next = bin[h];
+    bin[h] = p;
+}
+```
+
+<PP2HashTableLab />
+
+原书custom hash在同一input上仍用约2.4 seconds reading，却把insert从4.9降到0.5、write从0.3降到0.06，总计约3.0 seconds；processing从5.2降到0.55，约one order of magnitude。收益来自narrow interface、hashing与compact special-purpose nodes，不意味着general map错误。
+
+Balanced Trees（<Term def="把strings视为ordered indivisible keys，保证perverse input下logarithmic operations并持续支持predecessor与sorted report的structure。">Balanced Trees</Term>）与hash解决不同contracts。若要alphabetical report或range query，tree直接满足；hash输出unsorted，必须额外sort。若只要top-$M$ frequency，可scan hash nodes并维护size-$M$ min-heap，而不是先全量alphabetical sort。
+
+<Callout type="trap" title="专用hash在书中快十倍，所以应总是替换library map">
+原实验的token contract、allocator、table size和non-adversarial corpus都固定。Production选择还要计入hash flooding、Unicode ownership、ordered operations、rehash、exception safety与maintenance；先保留library oracle，再测real corpus。
+</Callout>
+
+## 15.2 Phrases
+
+### From online scan to preprocessing
+
+第一次见到text时，搜索phrase只能scan corpus；若可preprocess，可建立inverted index，把word映射到positions，再交集shifted posting lists。Column 15选择另一条路径来解决具体problem：给定text，找longest duplicated substring。
+
+原书例句：
+
+```text
+Ask not what your country can do for you,
+but what you can do for your country
+```
+
+最长重复string是` can do for you`，长度15；` your country`接近第二。Brute force比较每对starting positions并调用`comlen`：
+
+```cpp
+int comlen(const char *p, const char *q) {
+    int i = 0;
+    while (*p && *p++ == *q++) ++i;
+    return i;
+}
+```
+
+有$\Theta(n^2)$ pairs，每次comparison还可能linear，因此至少quadratic，pathological repeated input可更差。
+
+### Suffix array
+
+Suffix Array（<Term def="保存指向text每个suffix起点的indexes/pointers，并按suffix lexicographic order排列的implicit substring index。">Suffix Array</Term>）不复制all substrings。对`banana`，unsorted suffixes为：
+
+```text
+banana, anana, nana, ana, na, a
+```
+
+排序后：
+
+```text
+a, ana, anana, banana, na, nana
+```
+
+<PP2SuffixArrayLab />
+
+若一个string在positions $i,j$重复，它就是suffixes `c+i`与`c+j`的common prefix。拥有global longest common prefix的两个suffix在sorted order中必然相邻；若中间有third suffix，它也共享至少同样prefix。因此只需sort suffix pointers，再scan adjacent pairs：
+
+$$
+L_{\max}=\max_{0\le i<n-1}
+\operatorname{LCP}(a[i],a[i+1]).
+$$
+
+<PP2LCPNeighborLab />
+
+原书C sketch：
+
+```c
+while ((ch = getchar()) != EOF) {
+    a[n] = &c[n];
+    c[n++] = ch;
+}
+c[n] = '\0';
+qsort(a, n, sizeof(char *), pstrcmp);
+for (int i = 0; i + 1 < n; ++i) {
+    int length = comlen(a[i], a[i + 1]);
+    if (length > maxlen) {
+        maxlen = length;
+        maxi = i;
+    }
+}
+printf("%.*s\n", maxlen, a[maxi]);
+```
+
+On typical text，comparison sort加neighbor scan约$O(n\log n)$，space是original text加$n$ pointers。原书在807,503-character *Iliad*上约4.8 seconds找到一段长重复speech。
+
+$$
+T_{\mathrm{typical}}(n)=O(n\log n),\qquad
+S(n)=n\text{ characters}+n\text{ pointers}=O(n).
+$$
+
+但`qsort`做$O(n\log n)$ suffix comparisons，每次`strcmp`可穿过long common prefix；全相同或高度周期性input可能greater than quadratic。书中Problem 7要求专门构造与测量这种case。Modern prefix-doubling、SA-IS或suffix-tree algorithms能提供更强bounds，但本栏的pearls是“pointer sorting exposes adjacency”。
+
+### Phrase lookup after preprocessing
+
+Suffix array还支持new query：用lexicographic lower bound找first suffix不小于query，再scan contiguous prefix matches。Query length为$m$时，simple binary search约$O(m\log n)$ character comparisons，output occurrence scan另计。
+
+<PP2PhraseSearchLab />
+
+Character-level suffixes允许match任意substring；只在word boundaries建pointers可减少space并让结果更像phrases，却会漏掉mid-word matches。这是representation与query contract之间的明确交换。
+
+## 15.3 Generating Text
+
+### Context changes plausibility
+
+Uniform random letters几乎不像English；按single-letter frequency采样稍好，但仍忽略context。Order-1令next token依赖previous one，order-2依赖previous two，依次推广。
+
+Markov Text（<Term def="以preceding k tokens为state，并按training corpus中observed continuation frequencies随机选择next token的generated sequence。">Markov Text</Term>）可视为finite-state Markov chain with stationary transition probabilities。Order-0只保留marginal frequency；higher order保留更长local patterns，也更容易复制training phrases。
+
+<PP2MarkovOrderLab />
+
+在word level，若context $g$出现$C(g)$次，其中next word为$w$的次数是$C(g,w)$，empirical transition为：
+
+$$
+P(W_{t+1}=w\mid W_{t-k+1..t}=g)
+=\frac{C(g,w)}{C(g)}.
+$$
+
+Order-1 text勉强可读，order-3常由很长original phrases和随机joints组成；原书认为parody通常order-2最有趣。这是model capacity与memorization的早期直观版本。
+
+### Word-boundary suffix array
+
+原书不用为每个k-gram分配copy，而是把all tokens连续写入`inputchars`，并让`word[]`只指向word boundaries：
+
+```c
+word[0] = inputchars;
+while (scanf("%s", word[nword]) != EOF) {
+    word[nword + 1] =
+        word[nword] + strlen(word[nword]) + 1;
+    ++nword;
+}
+for (int i = 0; i < k; ++i) word[nword][i] = '\0';
+qsort(word, nword, sizeof(word[0]), sortcmp);
+```
+
+`wordncmp(p,q)`只比较first $k$ null-terminated words。Sort后，相同k-word contexts形成contiguous run；每个pointer后面的第$k$个word就是一个observed continuation。
+
+对`of the people, by the people, for the people`且$k=1$，sorted word-boundary pointers把`the people,`两次和`the people`一次放在一起。Duplicates不能deduplicate，因为2:1 multiplicity正是transition probability。
+
+<PP2MarkovSuffixLab />
+
+### Locate first context and sample one occurrence
+
+Generator从input first $k$ words开始。每轮用Column 9.3的binary search寻找context的first occurrence；必须是first，否则会漏掉前面的continuations并扭曲distribution。然后scan equal run，用Column 12.10 reservoir sampling均匀选择one occurrence：
+
+```c
+int seen = 0;
+for (int i = first; wordncmp(phrase, word[i]) == 0; ++i) {
+    if (rand() % ++seen == 0) chosen = word[i];
+}
+phrase = skip(chosen, 1);
+char *next = skip(phrase, k - 1);
+if (strlen(next) == 0) break;
+printf("%s\n", next);
+```
+
+<PP2ReservoirChoiceLab />
+
+Reservoir Sampling（<Term def="在不知道equal-run length时，以第i项1/i replacement probability保持all seen occurrences均匀的one-pass choice。">Reservoir Sampling</Term>）证明：第$j$项被选时probability $1/j$，之后每步survive factor $(i-1)/i$ telescopes，scan完$r$项后每项均为$1/r$。
+
+End-of-corpus后append的$k$ null bytes既是comparison sentinel，也是generation termination transition。程序还设10,000-word upper bound，避免cycle让输出无限。
+
+### Sort versus hash
+
+原书suffix-array Markov program约为Kernighan/Pike C version的一半长度；对near-megabyte input speed相近，因连续storage与少量`malloc`，在作者系统上memory约低one order of magnitude。Solution 14改用hash table后约快factor two，但memory增加约50%。
+
+这再次说明custom component不是free win：
+
+| Need | Candidate | Strength | Cost |
+|---|---|---|---|
+| ordered word counts | balanced map | bounds + sorted report | comparisons, nodes |
+| fast average counts | hash table | average lookup | no order, collision risk |
+| longest duplicate / phrase search | character suffix array | shared-prefix adjacency | n pointers, preprocessing |
+| Markov k-grams | word-boundary suffix array | compact contexts, binary search | sort + repeated prefix compare |
+| faster Markov generation | context hash | direct group lookup | more metadata and memory |
+
+<PP2StringStructureMatrixLab />
+
+<Callout type="trap" title="Higher-order Markov text更自然，所以模型一定更好">
+As k rises，contexts become sparse and output copies longer training fragments。Evaluate continuation coverage、held-out likelihood、duplicate-span length与privacy/memorization risk，而不能只凭“更像原文”判断。
+</Callout>
+
+## 15.4 Principles
+
+### String problems are system problems
+
+Compiler symbol table、type-ahead help、web phrase search都使用本栏techniques，却还受encoding、storage hierarchy、update frequency、ranking与latency constraints约束。Toy problem负责显露core representation，不代表完整product。
+
+### Data structures for strings
+
+原书归纳三类：
+
+- Hashing：simple，average fast，读取characters计算bucket。
+- Balanced Trees：perverse inputs也有guarantees，library set/map方便。
+- Suffix Arrays：指向every character或word，sort后scan near strings或binary-search phrases。
+
+Column 13.8的compressed spell dictionary则说明string identity有时可以被hash和gap code进一步丢弃。需要report original text时，suffix pointer必须仍指向stable corpus storage；只需probable membership时，可保存far less。
+
+### Libraries or custom-made components
+
+STL set/map/string提供powerful interface与short code；special-purpose hash更快但contract窄。另一些library pieces已经很高效：original code复用`strcmp`与`qsort`，并从`bsearch`/`strcmp` implementation得到binary search和`wordncmp`设计线索。
+
+工程顺序是library baseline、profile、identify missing assumption、customize one boundary、differential test。不要在tokenization尚未定义时先优化hash arithmetic。
+
+## 15.5 Problems
+
+原书17个Problems把三条主线继续扩展：
+
+- 为HTML/RTF stripping、case、punctuation与其他normalization定义word pipeline。
+- 用STL set/map重做Column 13.8 spell search，并比较McIlroy compressed structure的memory。
+- 为word hash加入pool allocator，或把`NHASH=1`研究front insertion、append与move-to-front。
+- 按decreasing frequency输出，或只保留top-$M$ words。
+- 用suffix array寻找query在stored text中的longest match，并设计interactive UI。
+- 构造让naive suffix sortingvery slow的long-prefix input；寻找出现more than $M$ times的longest string。
+- 给two texts找longest common substring；把suffixes标记source并scan adjacent cross-source pairs。
+- 只保留word-boundary suffixes，量化space reduction与lost matches。
+- 生成letter-level与order-0 text，比较exact frequencies。
+- 以hash加速Markov contexts，并复刻Shannon的manual scan algorithm。
+- 用k-gram ideas构建dictionary-free spelling/grammar checker，并研究speech recognition与compression。
+
+Top-$M$ frequency可复用Column 14 size-$M$ min-heap；出现至少$M$次的longest substring可在suffix order上滑动window，取window endpoints的minimum LCP；two-corpus longest common substring则找相邻且source不同的suffix。这些都是把“排序让相关项相邻”继续推广。
+
+## 15.6 Further Reading
+
+原书指向Column 8.8列出的algorithm/data-structure texts，其中包含efficient string representation与processing。Section 15.3还明确连接Shannon 1948 communication theory中的order-k English approximations，以及Kernighan/Pike *The Practice of Programming* Chapter 3的multi-language Markov implementation。
+
+继续学习时应区分：
+
+- exact matching：KMP、Boyer-Moore、Aho-Corasick；
+- static full-text indexes：suffix arrays、LCP、suffix trees、FM-index；
+- token retrieval：inverted indexes与position lists；
+- probabilistic sequence models：n-grams、smoothing、backoff与modern neural models。
+
+本栏的可迁移方法始终相同：先定义string unit与operation，再选择能显露相关adjacency、frequency或context的数据结构。
+
+## 本栏实验路径
+
+<Stepper>
+  <Step title="固定word contract与baseline" description="比较whitespace、markup-aware和normalized tokenization，再用library set/map建立correct oracle。">
+    <PP2WordTokenLab />
+    <PP2WordFrequencyLab />
+  </Step>
+  <Step title="测量tree与hash" description="复刻29,989-bin separate chaining，分离read、insert、report和ordered-output costs。">
+    <PP2HashTableLab />
+    <PP2StringStructureMatrixLab />
+  </Step>
+  <Step title="把重复substring变成邻接" description="构造banana suffix array，扫描adjacent LCP，并通过lower bound检索phrase。">
+    <PP2SuffixArrayLab />
+    <PP2LCPNeighborLab />
+    <PP2PhraseSearchLab />
+  </Step>
+  <Step title="构建order-k contexts" description="让word-boundary suffix pointers保留k-gram multiplicity，观察order升高后的coherence与copying。">
+    <PP2MarkovOrderLab />
+    <PP2MarkovSuffixLab />
+  </Step>
+  <Step title="按频率续写并关闭证据" description="在equal context run中reservoir-sample one occurrence，验证termination、distribution与memory budget。">
+    <PP2ReservoirChoiceLab />
+    <PP2StringCertificateLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Words、Phrases和Generating Text需要不同contracts，string algorithm从unit semantics开始。
+- Whitespace definition便于教学，却会保留markup、punctuation与case differences。
+- STL set/map是concise correctness baseline，并持续支持ordered report。
+- 原书Bible实验有789,616 tokens、29,131 distinct words，`the`出现62,053次。
+- Custom separate-chaining hash使用29,989 bins与multiplier 31，原实验processing约快one order of magnitude。
+- Hash average fast但无order/worst-case guarantee；balanced tree提供order与perverse-input bounds。
+- Longest duplicated substring可转为sorted suffix array中的maximum adjacent LCP。
+- Suffix array保存text加n pointers，不复制all substrings；typical sort-based实现约$O(n\log n)$。
+- Naive suffix comparator遇到long common prefixes可能严重退化，必须加入adversarial corpus。
+- Phrase query可binary-search first matching suffix，再scan contiguous occurrence interval。
+- Order-k Markov model按preceding k tokens与empirical continuation frequency生成next token。
+- Word-boundary suffix array让equal contexts contiguous，并保留duplicate rows作为probability mass。
+- First-occurrence binary search不能省；从run middle开始会bias transition distribution。
+- Reservoir sampling以one pass均匀选择unknown-length equal run，不需存储all candidates。
+- Null sentinels与word limit共同提供generation termination。
+- Representation choice应由count/order/phrase/context operations、memory和adversarial behavior决定。
+
+<Exercises>
+
+1. 对text `To be, or not to be`，分别按whitespace exact、lowercase-plus-punctuation-strip两种contracts给出frequency map；说明哪种可与原书baseline比较。
+2. 为`banana`构造all suffixes、sorted order与adjacent LCP array。证明longest duplicate是`ana`，并说明query `na`的lower-bound interval。
+3. 对training sequence `a b a c a b`、$k=1$，列出context `a`的all continuation occurrences和probabilities。模拟reservoir sampling三项后的uniformity，并说明end sentinel如何参与。
+4. 设计覆盖word map、hash、suffix duplicate与Markov generator的test harness。必须包含exact oracle、long-prefix adversary、fixed RNG、distribution check、memory bound与failure triage。
+
+<Answer>
+
+Whitespace exact tokens为`To:1`、`be,:1`、`or:1`、`not:1`、`to:1`、`be:1`；lowercase加strip punctuation后为`to:2`、`be:2`、`or:1`、`not:1`。只有第一种与原书whitespace/exact-string baseline直接可比；第二种是另一个valid product contract，但必须把normalizer纳入oracle与benchmark。
+
+</Answer>
+
+<Answer>
+
+Unsorted suffixes是`banana, anana, nana, ana, na, a`；sorted为`a, ana, anana, banana, na, nana`。Adjacent LCP lengths依次为1、3、0、0、2，maximum 3对应`ana`与`anana`，因此duplicate为`ana`。Query `na`的lower bound指向`na`，contiguous prefix interval包含`na,nana`两项，对应positions 4和2。
+
+</Answer>
+
+<Answer>
+
+Context `a`出现positions 0、2、4，observed continuations依次为`b,c,b`，所以$P(b\mid a)=2/3$、$P(c\mid a)=1/3$。Reservoir先选第一项；第二项以1/2替换；第三项以1/3替换。Scan后第三项概率1/3，第二项为$(1/2)(2/3)=1/3$，第一项为$(1/2)(2/3)=1/3$。Final `b`后接end sentinel，若current context转到该occurrence，generator停止而不读取越界。
+
+</Answer>
+
+<Answer>
+
+Word stages用normalized token fixtures与library map作exact oracle，hash逐token比较counts并强制all-collision table。Suffix stage对small strings brute-force all pairs，加入empty、all-equal、periodic、Unicode bytes与long common prefix。Markov固定seed并enumerate small runs验证transition counts，large corpus做frequency intervals与termination cap。记录text/pointer/node peak bytes。Failure先查token bytes，再查ownership/index boundaries、comparator/LCP、first-occurrence search、reservoir RNG，最后调查performance。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Strings of Pearls">以word、phrase与generated text案例连接string representations、algorithms与engineering principles。</GlossaryItem>
+  <GlossaryItem term="Word Tokenization">定义characters如何形成keys，以及markup、case、punctuation和encoding如何处理的contract。</GlossaryItem>
+  <GlossaryItem term="Word Frequency">把exact token聚合到occurrence count，并按指定order或top-k报告的任务。</GlossaryItem>
+  <GlossaryItem term="Hashing">读取string characters计算bin，以average lookup speed换取unordered output与distribution-sensitive worst case。</GlossaryItem>
+  <GlossaryItem term="Balanced Trees">保持ordered keys并保证logarithmic operations的set/map常见实现。</GlossaryItem>
+  <GlossaryItem term="Suffix Array">按lexicographic suffix order排列text positions/pointers的static full-text index。</GlossaryItem>
+  <GlossaryItem term="Markov Text">按preceding k tokens与corpus observed transitions随机续写的sequence。</GlossaryItem>
+  <GlossaryItem term="Reservoir Sampling">对unknown-length stream以one pass保持uniform sample的algorithm。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Programming Pearls, Second Edition · Column 15 Strings of Pearls"
+  href="https://www.informit.com/store/programming-pearls-9780201657883"
+  author="Jon Bentley"
+  license="本章按Pearson官方第二版目录、官方Column 15网页/教学材料及wordfreq、longdup、markov源码，重建Words、Phrases、Generating Text、Principles、Problems与Further Reading；现代Unicode/token contracts、adversarial testing、distribution checks与release certificate为教学化扩展。"
+/>

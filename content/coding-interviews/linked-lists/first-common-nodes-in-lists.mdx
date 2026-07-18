@@ -1,135 +1,339 @@
 ---
-title: 两个链表的第一个公共节点
+title: "面试题52：两个链表的第一个公共节点"
 type: C
-section: 链表
-order: 8
-description: 用长度对齐法 O(1) 空间找交点，也可用哈希法；重点是首个公共节点定义。
+section: "第5章 优化时间和空间效率"
+order: 57
+description: "先计算两条无环单链表长度，让长链表先走长度差，再让两个指针同步前进并按节点地址找到共享后缀入口。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/52_FirstCommonNodesInLists/FirstCommonNodesInLists.cpp"
 draft: false
 ---
 
-{/* 知识点清单：双指针同步、链表长度对齐、首节点判定；原书章节：两个链表的第一个公共节点。 */}
+import { ListIntersectionIdentityDiagram, ListLengthAlignmentLab, SharedSuffixProofMap, ListIntersectionContractDiagram, FirstCommonNodeOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/first-common-nodes-in-lists";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能区分“值相同”和“节点相同”（地址）两种交点含义。
-- 能用双指针一次走完即得交点。
-- 能处理不相交、同头等边界。
+- 能解释公共节点比较的是对象身份而不是节点数值
+- 能计算两条链表的长度差并模拟长链先走后的同步过程
+- 能实现作者长度对齐法与换头双指针等价版本
+- 能分析空链、同头、不相交、有环、长度溢出和共享尾部所有权
+- 能设计覆盖作者6种拓扑并验证返回地址的测试
 
 </Objectives>
 
-## 直觉引入
+## 从“同一个6”和“两个值为6”开始
 
-两个链表一旦相交，后续节点地址完全一致。  
-问题变成：从哪个起点开始同步走，才能在同一时刻撞到第一段共享节点？
+先预测：两条链表各自包含一个值为6的节点，并不代表它们相交。题目所说的**两个链表的第一个公共节点**，是两个next指针最终指向同一个内存对象；比较的是<Term def="两个指针是否引用同一个节点对象，而不是节点字段中的数值是否相等。">节点身份</Term>。
 
-## 概念讲解
+一条单链表节点只有一个next。两条无环链一旦指向同一个节点，后续每一步都会沿这个节点唯一的next继续，因此从交点到尾部全部共享。这段公共部分称为<Term def="从第一个公共节点开始，两条链表引用完全相同的一串节点直到nullptr。">共享后缀</Term>。
 
-方法一：两次遍历先算长度 `lenA,lenB`，长链先走 `abs(lenA-lenB)` 步后齐步前进。  
-第一次节点地址相同即答案。  
-如果无交点，两指针同时到 `nullptr`。
+<ListIntersectionIdentityDiagram />
 
-## 思考引导
+图中两条独有前缀都连到同一个节点6，而不是各自新建一个值为6的节点。公共节点之后也不能再分叉，否则同一个节点就需要拥有两个不同next。
 
-### 1) 先问问题，不先比值
-公共节点问题判断的是“同一引用节点”首次交汇，不是 “同值节点”。把对象身份与数值拆开。
+## 为什么从两个头同时走会错位
 
-### 2) 识别不变式
-两个指针各自走完一次后再重头，长度差会在走法中自动抵消，最终等速同步，首次相等即为第一交汇。
+作者Test1中链A是1、2、3、6、7，长度5；链B是4、5、6、7，长度4。若两个指针直接同时从头走，它们依次比较1与4、2与5、3与6、6与7，随后错过真实交点。
 
-### 3) 为什么它一定成立
-两条链尾齐步后，剩余步长完全相同。若存在交汇，交汇点及其后路径一致；若无则都到 null。
+问题不在速度不同，而在独有前缀长度不同。设链A独有前缀长a，链B独有前缀长b，共享后缀长c，那么总长度分别是a加c与b加c；总长度之差正好是独有前缀之差。
 
-### 4) 常见误区
-把数组式找共同值写入链表问题，或用额外集合但不保留引用语义。都不能保证题意。
+作者因此**先计算链表长度**，求出<Term def="两条链表总节点数的绝对差，也等于它们独有前缀长度之差。">长度差</Term>，再让较长链的指针提前走这些节点。
 
-### 5) 你能找到一个反例吗
-两条链尾部共享值相同但非同一引用的场景，能快速暴露你是否混淆了“值”和“身份”。
+## 尾距对齐
 
-### 6) 迁移到下一题
-在事件流合并、调用链归并时，先想“是否需要按引用对齐”，再决定是否用长度校准策略。
-## 交互 Demo
+长链指针走完差值后，两指针从当前位置到nullptr的剩余节点数相等。这种状态称为<Term def="两个链表指针到各自尾后nullptr的剩余步数完全相同。">尾距对齐</Term>。
 
-看齐后指针同步，命中前的异步节点逐步消失，最终在交点处收敛。
+<ListLengthAlignmentLab />
 
-<TreeDiagram />
+Test1中**长链表先走长度差**1步，链A指针从1到2；此时A剩2、3、6、7，B剩4、5、6、7，都是4个节点。然后**两个指针同步前进**：2与4不同，3与5不同，下一步同时到达同一个节点6。
+
+第一次指针相等就是<Term def="尾距对齐后两个指针等速移动，第一次地址相同即确定首个共享节点。">同步命中</Term>。如果没有共享节点，剩余长度相等保证两者同时走到nullptr，函数返回nullptr。
+
+## 忠实还原作者长度法
+
+GetListLength从头走到nullptr，空头返回0。主函数先算两长度，选出长短链，推进长链差值步，再按地址比较并同步移动。
 
 ```cpp
-struct ListNode {
-    int val;
-    ListNode* next;
-    ListNode(int x) : val(x), next(nullptr) {}
-};
-
-class Solution {
-public:
-    int len(ListNode* h) {
-        int n = 0;
-        while (h) { ++n; h = h->next; }
-        return n;
+unsigned int GetListLength(
+    ListNode* pHead) {
+    unsigned int nLength = 0;
+    ListNode* pNode = pHead;
+    while (pNode != nullptr) {
+        ++nLength;
+        pNode = pNode->m_pNext;
     }
-
-    ListNode* getIntersectionNode(ListNode* a, ListNode* b) {
-        int la = len(a), lb = len(b);
-        while (la > lb) { a = a->next; --la; }
-        while (lb > la) { b = b->next; --lb; }
-        while (a && b) {
-            if (a == b) return a;
-            a = a->next;
-            b = b->next;
-        }
-        return nullptr;
-    }
-};
-```
-
-```typescript
-class ListNode {
-  val: number;
-  next: ListNode | null = null;
-  constructor(val: number) {
-    this.val = val;
-  }
+    return nLength;
 }
 
-function listLength(h: ListNode | null): number {
-  let n = 0;
-  while (h) {
-    n++;
-    h = h.next;
-  }
-  return n;
-}
+ListNode* FindFirstCommonNode(
+    ListNode* pHead1,
+    ListNode* pHead2) {
+    const unsigned int nLength1 =
+        GetListLength(pHead1);
+    const unsigned int nLength2 =
+        GetListLength(pHead2);
+    int nLengthDif = nLength1 - nLength2;
 
-function getIntersectionNode(a: ListNode | null, b: ListNode | null): ListNode | null {
-  let la = listLength(a);
-  let lb = listLength(b);
-  while (la > lb && a) {
-    a = a.next;
-    la--;
-  }
-  while (lb > la && b) {
-    b = b.next;
-    lb--;
-  }
-  while (a && b) {
-    if (a === b) return a;
-    a = a.next;
-    b = b.next;
-  }
-  return null;
+    ListNode* pListHeadLong = pHead1;
+    ListNode* pListHeadShort = pHead2;
+    if (nLength2 > nLength1) {
+        pListHeadLong = pHead2;
+        pListHeadShort = pHead1;
+        nLengthDif = nLength2 - nLength1;
+    }
+
+    for (int i = 0;
+         i < nLengthDif;
+         ++i) {
+        pListHeadLong =
+            pListHeadLong->m_pNext;
+    }
+
+    while (pListHeadLong != nullptr &&
+           pListHeadShort != nullptr &&
+           pListHeadLong != pListHeadShort) {
+        pListHeadLong =
+            pListHeadLong->m_pNext;
+        pListHeadShort =
+            pListHeadShort->m_pNext;
+    }
+    return pListHeadLong;
 }
 ```
 
-<Callout type="trap">
-  <strong>现象 →</strong> 比较值而非地址，导致误报交点。  
-  <strong>原因 →</strong> 题目要求的是物理共享节点。  
-  <strong>修复 →</strong> 对比 `a == b`（同一内存引用）。
+循环结束有三种可能：起点本就相等；同步途中命中同一节点；或至少一个指针为空。对齐后两者剩余长度相同，所以不相交时会同时为空，返回长链指针也就是nullptr。
+
+## 正确性证明
+
+假设存在共享后缀，长度c大于0。若a大于b，链A总长比链B多a减b；A先走a减b步后，A还剩b个独有节点加c个共享节点，B也剩b加c。
+
+同步阶段前b步都在各自独有前缀，节点身份不同；走完b步后，两者同时到达共享后缀入口。此前没有公共节点，当前地址相同，所以它恰好是第一个公共节点。
+
+若两链不相交，可视为共享后缀长度0但尾部对象不同。对齐后的剩余节点数相同，同步循环最终让两指针同时成为nullptr；不会误报值相同的独立节点。
+
+若两头本就是同一指针，独有前缀均为0，长度相等；while的地址不等条件一开始就失败，直接返回头，正确覆盖“第一个节点就是公共节点”。
+
+<SharedSuffixProofMap />
+
+## 时间与空间
+
+设两链长度为m和n。长度统计访问m加n个节点；提前走最多两者差值；同步阶段最多走较短链长度。总时间O(m加n)，额外空间O(1)。
+
+哈希集合方法可把第一条链全部节点地址放入集合，再扫描第二条链找首个命中，同样O(m加n)时间，但需O(m)空间。用两个栈从尾部比较也能找到最后一个相同前驱，却需线性空间。
+
+长度对齐法利用“相交后必共享尾部”这一结构，在不修改链表的情况下做到常数空间。
+
+计算长度时还可以同时保存每条链最后一个非空节点。对无环单链表，若两个尾节点地址不同，两链必不相交，可直接返回nullptr；若尾地址相同，则一定存在共享后缀，但仍需长度对齐才能定位第一个公共节点。这个检查不改变O(m加n)复杂度，因为长度遍历本来就要到尾部，却能让不相交输入省掉后续同步扫描。空链没有尾节点，仍按空输入规则处理。
+
+测试这项优化时，应构造“尾节点数值相同但地址不同”和“尾节点地址相同但独有前缀长度不同”两类输入，分别验证提前拒绝与继续定位，避免又把节点值误当成身份。
+
+## 无符号长度差的隐藏转换
+
+源码先执行nLength1减nLength2，再赋给int。两个操作数是unsigned int；若第二条更长，减法先在无符号域下溢成很大的值，再发生到int的实现定义转换。紧接着的分支会重新把nLengthDif设为正确正差，所以常规宽度下错误中间值未被使用，但写法不稳健。
+
+应先比较长短，再在较大值减较小值，或用size_t保存差值：
+
+```cpp
+#include <cstddef>
+
+const ListNode* firstCommonNode(
+    const ListNode* head1,
+    const ListNode* head2) {
+    const std::size_t length1 =
+        listLength(head1);
+    const std::size_t length2 =
+        listLength(head2);
+
+    const ListNode* longer = head1;
+    const ListNode* shorter = head2;
+    std::size_t difference = 0;
+
+    if (length1 >= length2) {
+        difference = length1 - length2;
+    } else {
+        longer = head2;
+        shorter = head1;
+        difference = length2 - length1;
+    }
+
+    while (difference > 0) {
+        longer = longer->next;
+        --difference;
+    }
+    while (longer != shorter) {
+        longer = longer->next;
+        shorter = shorter->next;
+    }
+    return longer;
+}
+```
+
+现代签名用const节点指针表达算法只读。最后循环无需单独检查nullptr：尾距对齐保证不相交时两者同步到空并相等；但这仍依赖无环链表。
+
+## 无环前提不可省略
+
+作者GetListLength以nullptr为终点。任何输入链有环时，它都不会结束，因此本算法不支持带环链表。
+
+<ListIntersectionContractDiagram />
+
+<Callout type="trap" title="把长度法直接用于可能带环的链表">
+有环链没有nullptr尾端，长度统计会无限循环。必须先检测环并根据“两链是否入同一环、入环节点是否相同”等情况重新定义首个公共节点。
 </Callout>
 
+若业务协议保证无环，应在接口文档写清；若输入不可信，应先用快慢指针检测环。不能仅增加一个最大步数后仍宣称返回语义与原题相同。
+
+GetListLength使用unsigned int，极长链可能溢出。size_t更符合内存中节点数量，但真实链长度也受地址空间限制；若链来自惰性远程迭代器，算法和终止契约需重新设计。
+
+## 地址相等，不是值相等
+
+<Callout type="trap" title="用节点value比较公共节点">
+两条独立链都可能含值6；只有指针地址相等才代表共享同一对象。值比较会误报，也无法保证后续后缀真正相同。
+</Callout>
+
+反过来，共享节点的值即使可变或被改写，节点身份仍不变。题目关心结构拓扑，不关心数据字段。
+
+测试也必须构造真实共享：让两个前缀的next都指向同一个节点对象。分别创建两个值相同的尾链，只是在测试“不相交但值相同”。
+
+## 换头双指针是等价扩展
+
+不显式计算长度也能消除差值。指针p走完链A后转到链B头，q走完链B后转到链A头；每个指针都走m加n步，独有前缀差被换头路径自动抵消。
+
+```cpp
+ListNode* firstCommonBySwitching(
+    ListNode* head1,
+    ListNode* head2) {
+    ListNode* p = head1;
+    ListNode* q = head2;
+
+    while (p != q) {
+        p = p == nullptr
+            ? head2
+            : p->m_pNext;
+        q = q == nullptr
+            ? head1
+            : q->m_pNext;
+    }
+    return p;
+}
+```
+
+存在交点时两者在共享入口相遇；不相交时最终同时为nullptr。它同样要求无环，并且不是作者该文件中的实现。旧页把“各走完一次换头”的不变式写进思考引导，却展示长度法代码；重构后应明确区分原书主线和等价扩展。
+
+## 共享尾部的所有权风险
+
+相交链实际上是两个头指针视图共享一组尾节点，不是两棵独立拥有全部节点的对象。若对两个头分别调用会递归删除整链的DestroyList，共享尾部会被释放两次。
+
+作者Test1与Test3逐个DestroyNode，每个物理节点只删一次；Test2两链不相交，才分别DestroyList；Test4两头相同，只销毁一次。测试清理方式本身证明公共关系是对象共享。
+
+工程代码应明确唯一所有者，或使用能表达共享所有权的智能指针模型。用shared_ptr也要防止带环结构造成引用环；原题裸指针是非拥有观察指针。
+
+## 作者6组拓扑测试
+
+1. 两链在中间节点6相交，期望节点6。
+2. 两条独立链完全不交，期望nullptr。
+3. 只共享最后节点7，期望节点7。
+4. 两头相同、整链重合，期望头节点1。
+5. 第一条为空、第二条非空，期望nullptr。
+6. 两条都为空，期望nullptr。
+
+<FirstCommonNodeOfficialCaseLab />
+
+Test没有覆盖第二条为空而第一条非空，但算法关于两输入对称；也没有覆盖“值相同但地址不同”、极长链或带环输入。
+
+```cpp
+#include <cassert>
+
+void testFirstCommonNode() {
+    ListNode shared7{7, nullptr};
+    ListNode shared6{6, &shared7};
+    ListNode a3{3, &shared6};
+    ListNode a2{2, &a3};
+    ListNode a1{1, &a2};
+    ListNode b5{5, &shared6};
+    ListNode b4{4, &b5};
+
+    assert(FindFirstCommonNode(
+        &a1, &b4) == &shared6);
+    assert(FindFirstCommonNode(
+        &a1, &a1) == &a1);
+    assert(FindFirstCommonNode(
+        nullptr, &a1) == nullptr);
+    assert(FindFirstCommonNode(
+        nullptr, nullptr) == nullptr);
+}
+```
+
+若ListNode没有聚合构造，可用作者CreateListNode与ConnectListNodes辅助函数建立同样拓扑。断言必须比较地址，不能只比较返回节点的值。
+
+<Stepper>
+  <Step title="先确认公共的含义">
+    <ListIntersectionIdentityDiagram />
+    比较同一节点对象，交点之后形成不可分叉的共享后缀。
+  </Step>
+  <Step title="计算两条链表长度">
+    <ListLengthAlignmentLab />
+    长链先走差值，使两个指针距尾部步数相同。
+  </Step>
+  <Step title="证明同步首次命中">
+    <SharedSuffixProofMap />
+    独有前缀结束时同时进入共享后缀；无交点则同时为空。
+  </Step>
+  <Step title="核对结构与所有权契约">
+    <ListIntersectionContractDiagram />
+    限定无环、地址判等、可靠长度和共享尾部单次释放。
+  </Step>
+  <Step title="执行6组作者拓扑">
+    <FirstCommonNodeOfficialCaseLab />
+    覆盖中间、末尾、首节点、不相交、一空和两空。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 两个链表的第一个公共节点按节点地址判定，不按值判定。
+2. 无环单链表一旦相交，交点之后形成同一共享后缀。
+3. 作者先计算链表长度，再选出长链与短链。
+4. 长链表先走长度差后，两指针到尾部剩余距离相同。
+5. 两个指针同步前进，首次地址相等就是第一个公共节点。
+6. 不相交时两指针同步到nullptr；一空和两空自然返回空。
+7. 作者的无符号长度先相减再转int有隐患，应比较后再求差。
+8. 长度法和换头法都依赖无环结构；共享尾部只能释放一次。
+
+<Exercises>
+
+**问题 1：两条链各有一个值为6的节点，为什么不一定相交？**
+
+<Answer>节点值只是数据；公共节点要求两个指针引用同一内存对象。两个独立分配且值同为6的节点地址不同，不构成共享后缀。</Answer>
+
+**问题 2：Test1中链A为什么先走1步？**
+
+<Answer>链A长度5、链B长度4，差1。A从节点1走到2后，两指针都剩4个节点；同步走两步后会同时到达共享节点6。</Answer>
+
+**问题 3：为什么无交点时对齐后的两个指针会同时为空？**
+
+<Answer>对齐后两者到各自nullptr的剩余节点数相同，每轮又同步前进；没有地址相等的节点可提前停止，所以相同步数后同时到nullptr。</Answer>
+
+**问题 4：作者为什么不能对相交链的两个头都调用DestroyList？**
+
+<Answer>两个头共享交点后的同一批物理节点。第一条销毁共享尾部后，第二条再销毁会访问并释放已释放内存；必须让每个节点只释放一次。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="节点身份">由内存地址或对象引用决定的节点同一性。</GlossaryItem>
+  <GlossaryItem term="共享后缀">从首个公共节点到尾部被两条链共同引用的节点序列。</GlossaryItem>
+  <GlossaryItem term="长度差">两条链总节点数的绝对差。</GlossaryItem>
+  <GlossaryItem term="尾距对齐">两个指针到各自nullptr的剩余步数相同。</GlossaryItem>
+  <GlossaryItem term="同步命中">尾距对齐后等速移动时第一次指针地址相等。</GlossaryItem>
+</Glossary>
+
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题52"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/52_FirstCommonNodesInLists/FirstCommonNodesInLists.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

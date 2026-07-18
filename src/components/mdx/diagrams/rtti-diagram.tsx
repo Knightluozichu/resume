@@ -69,7 +69,7 @@ export function RTTIDiagram({ step = 1 }: RTTIDiagramProps) {
 
             {/* Code block */}
             <text x="14" y="42" fontSize="10" fill={primary} fontFamily="monospace">Base* bp = new DerivedB();</text>
-            <text x="14" y="58" fontSize="10" fill={secondary} fontFamily="monospace">// bp 是 Base*——只能调 Base 的方法</text>
+            <text x="14" y="58" fontSize="10" fill={secondary} fontFamily="monospace">{"// bp 是 Base*——只能调 Base 的方法"}</text>
 
             {step >= 2 && (
               <>
@@ -79,8 +79,8 @@ export function RTTIDiagram({ step = 1 }: RTTIDiagramProps) {
                 )}
                 {step === 3 && (
                   <>
-                    <text x="14" y="96" fontSize="10" fill={good} fontFamily="monospace">// 指针版本：失败返回 nullptr{' → '}安全判空</text>
-                    <text x="14" y="112" fontSize="10" fill={warn} fontFamily="monospace">// 引用版本：失败抛 std::bad_cast{' → '}需要 try/catch</text>
+                    <text x="14" y="96" fontSize="10" fill={good} fontFamily="monospace">{"// 指针版本：失败返回 nullptr → 安全判空"}</text>
+                    <text x="14" y="112" fontSize="10" fill={warn} fontFamily="monospace">{"// 引用版本：失败抛 std::bad_cast → 需要 try/catch"}</text>
                   </>
                 )}
               </>
@@ -140,9 +140,9 @@ export function RTTIDiagram({ step = 1 }: RTTIDiagramProps) {
               {step === 3 && "③ 指针版 vs 引用版——指针失败返 nullptr 好处理，引用失败抛异常；日常编程优先用指针版"}
             </text>
             <text x="371" y="38" fontSize="9" fill={secondary} textAnchor="middle">
-              {step === 1 && "RTTI 的前提：类必须至少有一个虚函数（通常是虚析构）——dynamic_cast 需要 vtable 中的运行时类型信息。"}
-              {step === 2 && "RTTI 的前提：vtable 提供运行时类型信息。没有虚函数 = 无法 dynamic_cast——编译报错。"}
-              {step === 3 && "typeid：只查询不转换。dynamic_cast：查询+转换一步到位。两者都依赖 RTTI 和虚函数。"}
+              {step === 1 && "向下或横向 dynamic_cast 的源类型必须是多态类型，常通过虚析构函数满足。"}
+              {step === 2 && "语言标准要求多态源类型，但不规定编译器必须用哪种对象布局实现检查。"}
+              {step === 3 && "typeid 用于查询；dynamic_cast 用于受检查转换。对空多态指针解引用求 typeid 会抛 bad_typeid。"}
             </text>
           </g>
         </svg>

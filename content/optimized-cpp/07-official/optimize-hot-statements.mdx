@@ -1,0 +1,300 @@
+---
+title: "第7章：优化热点语句"
+type: C
+section: Optimized C++ · Chapter 7
+order: 7
+description: "对齐第一版第7章 Optimize Hot Statements：循环外提/频率、函数调用与内联、静态/动态多态和 ABI 边界、表达式/运算/闭式，以及 switch、virtual 和 exception。"
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+draft: false
+---
+
+import {
+  OpcCallDispatchBoundaryMap,
+  OpcHotLoopTransformationMap,
+  OpcHotStatementDecisionMap,
+} from "@/components/mdx/optimized-cpp/diagrams/optimize-hot-statements";
+
+<Objectives>
+
+- 能修改 hot loop，把 invariant/call/action 移出或批处理，并验证 iteration semantics 与 compiler output
+- 能比较 direct/inline/template/virtual/PIMPL/DLL dispatch，按 runtime variability、ABI 与 profile 选择边界
+- 能分析 expression/operator/integer/closed-form/control-flow/exception 改写的成本与 correctness 风险
+
+</Objectives>
+
+## 从“只有 Hot Statement 才值得微调”开始
+
+第 5、6 章先删除 algorithm、allocation 和 copy 级大工作；只有 profiler 证明某条 loop/call/expression 在 representative workload 占显著比例，才进入 statement-level。hot statement 的价值仍受 Amdahl 限制，改动必须保存 optimized build、assembly/counters 与端到端结果。
+
+<Term def="在代表性 workload 中高频执行或位于关键延迟路径、经 profile 证明值得局部优化的语句/基本块。">
+  hot statements
+</Term>
+
+<Callout type="trap" title="陷阱：先写更聪明的源代码，再看 profiler">
+  compiler 可能已经 hoist、inline、strength-reduce 或 vectorize，手写 trick
+  反而阻碍优化并降低 clarity。 保留简单 correct baseline，先预测 machine
+  work，再比较 optimized assembly、counters 和完整场景； 没有稳定收益就回滚。
+</Callout>
+
+## Remove Code from Loops
+
+**remove code from loops** 的最高杠杆是让每次 iteration 少做事：删除重复 validation/logging、合并 calls、把 unchanged computation 外提。**remove invariant code** 只有当 value/side effects 在 loop 内确实不变；alias、concurrency、volatile/I/O 或 hidden mutation 可能使“看起来不变”实际上会变。
+
+<Term def="把每次 iteration 无需重复的计算、调用、检查或边界操作删除、外提或批处理。">
+  remove code from loops
+</Term>
+
+**cache the loop end value** 对 opaque/expensive end query 可能有用；现代 `vector::size()` 常已 inline/hoist。若 loop body 会改变 container，缓存旧 end 可能 wrong。**more efficient loop statements** 与 **count down** 也不是普遍法则：现代 CPU/compiler 对简单 induction 很成熟，forward contiguous traversal 常更符合 locality/prefetch。
+
+<Term def="在 loop 期间 end/size 保证稳定且查询非平凡时，把终止值保存一次；不能越过 mutation 或 observable call。">
+  cached loop end
+</Term>
+
+```cpp
+double weightedTotal(std::span<const Item> items, const Config& config) {
+    const double scale = config.unitScale(); // loop invariant
+    const std::size_t count = items.size();
+    double total = 0.0;
+    for (std::size_t i = 0; i < count; ++i) {
+        total += items[i].value * scale;
+    }
+    return total;
+}
+```
+
+只有 `unitScale()` pure/unchanged 且 `items` 不在 body 变长时才能外提。若 `config` 可被另一个 thread 无同步修改，原程序本身可能 data race；不能用 cache 掩盖 concurrency bug。
+
+<OpcHotLoopTransformationMap />
+
+## Calls inside Loops 与 Push Loops Down
+
+**unneeded function calls** 是结果未使用、条件可先过滤或一次 call 可服务多项；**hidden function calls** 可能来自 overloaded operator、conversion、iterator、temporary destructor；**slow-changing calls** 的结果可在明确 version/dirty event 下缓存，而非永远缓存。
+
+<Term def="源代码看似普通表达式却通过 operator、conversion、iterator、temporary lifetime 等触发的函数调用。">
+  hidden function calls
+</Term>
+
+**push loops down into functions** 是把 caller 的 per-item API 改成 range/batch API，让 callee 一次处理 whole range；它减少 call/boundary 并给 compiler/library 更大优化范围。必须定义 partial failure、ordering、cancellation 与 memory。相近的 **actions less frequently** 用 dirty flag/event/periodic update 降频，代价是 freshness。
+
+<Term def="把逐元素调用改为 callee 接受整个 range/batch，在一个边界内执行循环并暴露更大优化范围。">
+  push loops down into functions
+</Term>
+
+**remove code from functions** 则从 hot brief function 删除重复 validation/setup 或将 cold error path 拆开；不能删除公共 API 的必要 contract。可在 higher-level boundary validate once，然后内部使用窄而明确的 prevalidated API。
+
+## Cost of Function Calls 与 Inlining
+
+**cost of function calls** 包括 argument/result convention、branch/return、register/stack pressure，以及 optimizer 无法跨 opaque body 传播常量。相对 function 内大量 work，这些 cost 可能微不足道；call 不是看到就删。
+
+<Term def="调用边界的参数返回约定、控制转移、寄存器压力，以及不透明实现阻止跨边界优化的综合成本。">
+  cost of function calls
+</Term>
+
+**brief functions inline** 能删除 call 并暴露 constants/devirtualization，但 code size/i-cache 可能变差。**define functions before first use** 的核心是让 compiler 在 call site 看见可优化 definition；现代做法是 header/module visibility、LTO 或明确 inline，不应靠手工复制实现。
+
+<Term def="把短热点函数 body 展开到 call site，以消除边界并开放常量传播；需要同时控制 code growth。">
+  inline brief functions
+</Term>
+
+编译器可拒绝 `inline` hint，也可内联未标注函数；`inline` language keyword还涉及 ODR，不等于性能保证。用 optimization report/assembly 观察，而不是按 keyword 推断。
+
+## Eliminate Unused Polymorphism
+
+**eliminate unused polymorphism** 适用于 runtime implementation 实际固定却仍走 virtual/interface 的 hot call；先确认 substitutability 不再需要。**discard unused interfaces** 不应破坏 architecture，只删除没有 consumer、没有 test seam、没有 ABI 价值的层。
+
+<Term def="在 profile hotspot 且 implementation set 封闭时，把无实际 runtime 变化的 dynamic dispatch 改为直接或静态分派。">
+  eliminate unused polymorphism
+</Term>
+
+**select implementation at compile time with templates** 可生成 specialized direct code：
+
+```cpp
+template <class Policy>
+void transformBatch(std::span<float> values, const Policy& policy) {
+    for (float& value : values) {
+        value = policy(value);
+    }
+}
+
+struct Clamp01 {
+    float operator()(float value) const noexcept {
+        return std::clamp(value, 0.0F, 1.0F);
+    }
+};
+```
+
+template 适合 closed policy set 与 compile-time choice；它增加 instantiations/build coupling，不能替代 plugin/runtime configuration。若 compiler 已 devirtualize，manual rewrite 可能无收益。
+
+<OpcCallDispatchBoundaryMap />
+
+## PIMPL、DLL、Static Member 与 Virtual Destructor
+
+**PIMPL idiom** 用 indirection/opaque implementation 降低 compile dependency、稳定 ABI；代价可能是一层 allocation/pointer call，且 call site 看不见 implementation。**calls into DLLs** 也可能经过 import/PLT boundary 并限制跨模块 inline，LTO/whole-program mode 依平台而异。不要为微小 call cost 放弃重要 ABI，先批处理 hot boundary。
+
+<Term def="public object 持有 opaque implementation pointer，以编译隔离和 ABI 稳定换取间接访问与潜在分配。">
+  PIMPL idiom
+</Term>
+
+**static member functions** 没有 implicit `this`，可表达“不依赖实例”，但并不天然比同等 free/direct function 更快。若 function 能 static，真正收益可能是让 dependency 清晰、便于 compiler 分析，而非省一根 pointer。
+
+**virtual destructor** 在通过 base pointer 删除 derived object 时是 correctness requirement；绝不能为速度移除。若类型不允许 polymorphic deletion，可 protected nonvirtual destructor 或不同 ownership API 明确禁止；这属于 design contract，不是 unchecked micro-optimization。
+
+<Callout type="trap" title="陷阱：为避免虚调用删除 virtual destructor">
+  通过 base pointer delete derived 而 base destructor 非 virtual 会导致
+  undefined behavior。先证明类型根本 不支持 polymorphic ownership，并在
+  API/访问控制中禁止；否则保留 virtual destructor。析构 call 若真是
+  hotspot，应减少对象 churn/batch lifetime，而不是破坏销毁语义。
+</Callout>
+
+## Simplify Expressions 与 Less-Expensive Operators
+
+**simplify expressions** 可 group constants、reuse common subexpression、删除 identity operation；但 floating-point reassociation 会改变 rounding/NaN，signed integer overflow 是 undefined behavior。**group constants** 让 compile-time folding 更明显，compiler 通常已做，仍需检查。
+
+<Term def="在保持类型、overflow、rounding 和 side effects 的前提下，减少表达式中的动态操作与依赖链。">
+  simplify expressions
+</Term>
+
+**less-expensive operators** 不是固定表：integer divide 常比 add 贵，但 compiler 可把 constant divide strength-reduce；memory stall 也可能掩盖 arithmetic。**integer arithmetic** 可能比 floating point 更合适于 exact counters/fixed-point，但要证明 range、scale、rounding 与 overflow，不能仅为“更快”降低正确性。
+
+**closed forms** 用公式替换 loop，例如连续整数求和；要在更宽类型中计算并防 overflow：
+
+```cpp
+std::optional<std::uint64_t> sumOneTo(std::uint64_t n) {
+    const auto left = (n % 2 == 0) ? n / 2 : n;
+    const auto right = (n % 2 == 0) ? n + 1 : (n + 1) / 2;
+    if (right != 0 && left > std::numeric_limits<std::uint64_t>::max() / right) {
+        return std::nullopt;
+    }
+    return left * right;
+}
+```
+
+当 `n == UINT64_MAX` 时 `n + 1` 先 overflow，示例仍需先加显式上界 guard 才可投入生产；这正说明 closed form 的 operation 少不等于边界自动正确。练习将补全这个 contract。
+
+## Switch、Virtual Functions 与 Exceptions
+
+“**switch instead of if**”只有在多路 dense integral cases、compiler 生成 jump table 或更好 decision tree 时可能有利；predictability 和 case distribution 比语法更重要。反过来，**virtual functions instead of switch** 可把按 type tag 分支分散到对象行为，提升 extensibility，但增加 indirect call/object layout；两者先由 domain design 决定，再测 hotspot。
+
+<Term def="按 runtime distribution、case density、extensibility 与 compiler output 选择 if/switch/table/virtual dispatch 的控制流策略。">
+  control-flow selection
+</Term>
+
+**no-cost exception handling** 常指不 throw 的正常路径无需每个 `try` 做显式检查；具体 ABI 仍可能增加 unwind metadata/code size，真正 throw/catch 很昂贵。exceptions 应用于 exceptional failure，不用 throw 控制 hot normal flow；与 error-code/expected 比较时必须包含 correctness、cleanup、binary size 和 failure frequency。
+
+<Term def="某些 ABI 下非抛出路径以 metadata 为主、没有逐次显式检查的异常实现；抛出与展开仍然昂贵且实现相关。">
+  no-cost exception handling
+</Term>
+
+<OpcHotStatementDecisionMap />
+
+## 三步改造热点语句
+
+<Stepper>
+  <Step title="第一步：先删循环内工作">
+    先预测每 iteration 的 invariant、hidden/unneeded/slow-changing calls 与 action frequency；外提、batch 或 dirty-update 后验证 side effects、container mutation 与 optimized counters。
+
+    <OpcHotLoopTransformationMap />
+
+  </Step>
+  <Step title="第二步：选择最小必要调用边界">
+    对 direct/inline/template/virtual/PIMPL/DLL 记录 runtime variability、ABI、code size 与 batch opportunity；只对已证明 hot 的 opaque boundary 改造。
+
+    <OpcCallDispatchBoundaryMap />
+
+  </Step>
+  <Step title="第三步：在语义门内改表达式与控制流">
+    对 constant grouping、operator、integer/closed form、if/switch/virtual 与 exception 比较 machine work，同时跑 overflow/rounding/error/fallback tests。
+
+    <OpcHotStatementDecisionMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- statement optimization 只针对 profile 证明的 hotspot，先受 Amdahl 与 correctness gate 约束
+- loop 优先删除/外提 invariant、减少 call/action frequency、批处理；count-down/cache-end 不是普遍规则
+- hidden calls、slow-changing results 与 push-loops-down 能暴露比 call 指令更大的 work
+- brief inline/template 适合 closed hot path，virtual/PIMPL/DLL 仍可能有 runtime/ABI 架构价值
+- static member 不天然更快，virtual destructor 在 polymorphic deletion 中不可删除
+- expression/operator/integer/closed-form 改写必须保持 overflow、rounding、side effects 与 type contract
+- switch/if/virtual 由 distribution 与 design 决定；no-cost exception 也不代表 throw 免费
+
+<Attribution
+  adaptedFrom="Optimized C++, First Edition, Chapter 7: Optimize Hot Statements"
+  adaptedUrl="https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+/>
+
+<Glossary>
+  <GlossaryItem term="hot statements">
+    经代表性 profile 证明高频或位于关键延迟路径的语句。
+  </GlossaryItem>
+  <GlossaryItem term="remove code from loops">
+    删除、外提或批处理每次 iteration 无需重复的工作。
+  </GlossaryItem>
+  <GlossaryItem term="cached loop end">
+    在稳定且查询非平凡时保存 loop 终止值。
+  </GlossaryItem>
+  <GlossaryItem term="hidden function calls">
+    operator/conversion/iterator/temporary 隐式触发的调用。
+  </GlossaryItem>
+  <GlossaryItem term="push loops down into functions">
+    让 callee 一次接受整个 range/batch 并在内部循环。
+  </GlossaryItem>
+  <GlossaryItem term="cost of function calls">
+    调用约定、控制转移、寄存器压力与不透明边界的综合成本。
+  </GlossaryItem>
+  <GlossaryItem term="inline brief functions">
+    在 call site 展开短热点 body 并开放跨边界优化。
+  </GlossaryItem>
+  <GlossaryItem term="eliminate unused polymorphism">
+    对 closed hot implementation 删除无实际变化的动态分派。
+  </GlossaryItem>
+  <GlossaryItem term="PIMPL idiom">
+    以 opaque implementation pointer 换编译隔离和 ABI 稳定。
+  </GlossaryItem>
+  <GlossaryItem term="simplify expressions">
+    在语义相同前提下减少动态操作与依赖链。
+  </GlossaryItem>
+  <GlossaryItem term="control-flow selection">
+    按分布、case 密度和扩展性选择 if/switch/table/virtual。
+  </GlossaryItem>
+  <GlossaryItem term="no-cost exception handling">
+    非抛出路径主要依靠 metadata、抛出仍昂贵的异常 ABI 模型。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：优化每帧百万次 update loop。** body 每次读取不变 config、调用 logger 判级、查 size、每 60 次才需刷新统计。写出改造与验证。
+
+<Answer question="哪些工作可外提、批处理或降频？">
+  外提 immutable config derived values；logger level 若有 version/thread-safe
+  snapshot 可在 frame boundary 读一次，不能越过动态 reconfiguration
+  contract；container 不变时 cache size；统计用 counter/dirty flag 每 60 次
+  batch 更新。保持事件顺序和 error side effects，比较
+  calls/iteration、instructions、branch/ cache、frame p99 与输出；检查 compiler
+  是否本已 hoist，逐项 A/B 防止混淆。
+</Answer>
+
+2. **问题 2：选择 virtual、template 或 PIMPL/DLL。** 图像 filter 在内循环固定一种 policy，但 public SDK 要二进制兼容并支持 plugin。设计两层边界。
+
+<Answer question="如何同时保留 ABI 和 hot-loop 静态分派？">
+  SDK/plugin boundary 保留 PIMPL/virtual/DLL 以维持 runtime openness 与
+  ABI；进入一次 frame/tile 后把选定 implementation 转成 closed
+  kernel/policy，批量调用 templated/direct inner loop，避免 per-pixel
+  DLL/virtual crossing。验证 plugin semantics、errors、ABI tests，并测
+  calls/pixel、code size/i-cache、throughput；若 compiler 已 devirtualize 或
+  kernel 很重，保持更简单 boundary。
+</Answer>
+
+3. **问题 3：补全 `sumOneTo` 并比较 loop。** 处理 `UINT64_MAX`、overflow、small n 与 compiler optimization，说明何时 closed form 可接受。
+
+  <Answer question="operation 更少为何仍需完整语义证明？">
+    先拒绝 `n==UINT64_MAX`，再按奇偶先除 2，并在 multiply 前用 `left > max/right` 检查；结果超范围返回
+    nullopt。用 arbitrary-precision/reference loop 在可枚举 range 和边界 property tests 对照。benchmark
+    small/large n optimized build，检查 compiler 是否已识别 loop。只有 API 接受 overflow signaling、结果
+    完全一致且该 loop 是 hotspot 时保留 closed form。
+  </Answer>
+</Exercises>

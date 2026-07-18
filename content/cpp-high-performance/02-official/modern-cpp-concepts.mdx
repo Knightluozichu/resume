@@ -1,0 +1,239 @@
+---
+title: "第2章：现代C++核心技术"
+type: A
+section: C++ High Performance · Chapter 2
+order: 2
+description: 对齐第一版第2章 Modern C++ Concepts：auto与引用推导、lambda捕获和std::function、move与rule of zero、optional和any的性能契约。
+demo: false
+math: false
+sourceUrl: "https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
+draft: false
+---
+
+import {
+  ChpAutoReferenceDeductionMap,
+  ChpLambdaCallableCostMap,
+  ChpMoveOptionalAnyMap,
+} from "@/components/mdx/cpp-high-performance/diagrams/modern-cpp-concepts";
+
+<Objectives>
+
+- 能推导 auto 在变量、函数签名、const/mutable reference 与 forwarding reference 中的精确类型
+- 能分析 lambda capture、函数指针和 std::function 的 lifetime、调用与存储成本
+- 能比较 move semantics、rule of zero、std::optional 与 std::any 的表示和适用边界
+
+</Objectives>
+
+## 从“现代语法是否保留了性能意图”开始
+
+现代 C++ 技术的共同目标不是缩短代码，而是把 type、ownership、absence 和 callable behavior 更准确地交给 compiler。`auto` 可避免错误重复类型，lambda 让 concrete callable 留在 call site，move 让 resource ownership 可转移，optional/any 则分别表达“可能没有值”和“运行时才知道值类型”。
+
+<Term def="根据 initializer、占位声明形式和引用折叠规则，在编译期确定具体类型的过程。">
+  自动类型推导
+</Term>
+
+先预测每个声明是否 copy、borrow 或 transfer，再看 type diagnostics、constructor counters 和 optimized output。语法短不代表成本低；错误的 plain auto 可偷偷 copy，错误的 reference capture 可悬空，错误的 std::function/any 可引入 type erasure 与 allocation。
+
+## auto变量与函数签名
+
+plain `auto` 使用近似 template-by-value deduction：top-level const/reference 通常被丢弃，得到 independent value。`auto&` 保留 object identity 和 cv，`const auto&` 建立 read-only borrow，`auto&&` 只有在 deduction context 才是 forwarding reference，并按 initializer value category 折叠。
+
+```cpp
+const std::string name = "renderer";
+auto copy = name;            // std::string
+const auto& read = name;     // const std::string&
+auto& alias = name;          // const std::string&
+auto&& forwarding = copy;    // std::string&: copy is an lvalue
+```
+
+<ChpAutoReferenceDeductionMap />
+
+function return type `auto` 在 definition 可见时从 return expressions 推导，不能用来表达 overload based only on return type。trailing return type 能在 parameter scope 中引用表达式，`decltype(auto)` 保留 decltype 的 reference/cv 规则，括号会改变结果。public ABI/API 若需要固定、易读或 forward declaration，显式 return type 通常更合适。
+
+<Term def="在类型推导上下文中形如 T&& 或 auto&&，可根据实参值类别折叠为左值或右值引用的参数。">
+  forwarding reference
+</Term>
+
+generic code 应用 `std::forward<decltype(value)>(value)` 保留 value category；无条件 `std::move(value)` 会把 named object 当 rvalue，可能让 caller 的 lvalue 被意外移动。auto 是 compile-time concrete type，不是 runtime dynamic type。
+
+<Callout type="trap" title="陷阱：auto只省略拼写，不会改变复制或引用语义">
+  `auto value = getRef()` 可能从 reference 复制出新 value；range-for 中 `for
+  (auto item : items)` 也逐个复制。需要 identity 时明确写 `auto&`/`const
+  auto&`，并用 profiler 或 copy counters 验证热点。
+</Callout>
+
+## lambda是匿名closure类型
+
+每个 lambda expression 产生独一无二、编译器生成的 closure type；capture 成为 closure object 的 state，`operator()` 实现 body。capture-by-value 在创建 closure 时保存值，capture-by-reference 保存对外部 object 的借用；init-capture 可以 move resource 进入 closure。
+
+```cpp
+auto buffer = std::make_unique<Buffer>();
+auto consume = [owned = std::move(buffer), scale = 2](int index) mutable {
+    return owned->at(index) * scale++;
+};
+```
+
+`mutable` 允许 non-const call operator 修改 value captures，不会让 reference capture 的外部 lifetime 自动延长。`[&]`/`[=]` capture-all 简洁但隐藏 dependencies；async callback 尤其应显式 capture owner 或 stable value。捕获 `this` 保存的是 pointer-like access，object 销毁后 callback 仍会 dangling。
+
+<Term def="lambda表达式生成的匿名对象类型，其数据成员保存captures，调用运算符承载body。">
+  closure object
+</Term>
+
+captureless lambda 可转换到兼容 function pointer；capturing lambda 需要 closure state，不能直接变成普通 C function pointer。generic/polymorphic lambda 的 `auto` parameters 让 compiler 为不同 argument types 实例化 call operator，保留 static dispatch，但也可能增加 code size。
+
+## lambda、函数指针与std::function
+
+concrete lambda type 在 template call site 可见，compiler 易 inline 并优化 captures。function pointer 只保存 code address、适合 C ABI 和无状态回调，但通常经 indirect call。`std::function<Signature>` type-erases 多种 callable，支持 runtime replacement 和 uniform storage；代价是 erased invocation、manager operations，以及可能的 dynamic allocation。
+
+<ChpLambdaCallableCostMap />
+
+small-buffer optimization 并非所有 implementation/callable 都相同；不能声称 std::function 每次必定 heap allocate。反过来，即使 callable 放进 inline buffer，type-erased call path 仍可能阻碍普通 inlining。若 callback 不需要 ownership，可考虑 template parameter、function reference/view 或 pointer，但必须保证 callable lifetime。
+
+const propagation 也影响 pointer captures：`const auto pointer = raw` 只是 const pointer，pointee 仍可变；`const T*` 才是 pointer-to-const。lambda value capture 默认在 const call operator 中不可改 closure member，但 pointer member 仍可能修改 pointee。
+
+## move semantics不是搬运所有字节
+
+<Term def="通过右值引用和移动操作把资源所有权从源对象转给目标对象，并让源对象保持可析构可赋值状态。">
+  move semantics
+</Term>
+
+move constructor/assignment 对 resource owner 通常复制 handle、重置 source，而不是复制 resource payload。对 int-like 或 fixed array，move 可能与 copy 相同；对 string/vector，是否避免 allocation 还与 allocator compatibility、small-string representation 等实现条件有关。
+
+```cpp
+class Buffer {
+public:
+    explicit Buffer(std::size_t size)
+        : data_(std::make_unique<std::byte[]>(size)), size_(size) {}
+
+private:
+    std::unique_ptr<std::byte[]> data_;
+    std::size_t size_ = 0;
+};
+```
+
+这个 class 让 unique_ptr 自动生成正确 move/destruction，copy 被自然禁用，无需手写 destructor。named rvalue-reference variable 本身仍是 lvalue expression；只有 `std::move` cast 或 forwarding 将它交给 move overload。moved-from standard object 通常 valid but unspecified，除非 type contract 给出更强 postcondition。
+
+<Callout type="trap" title="陷阱：std::move会立即移动并把源对象清空">
+  `std::move` 只做 value-category cast，真正选择哪个 constructor/assignment
+  取决于 overload。const object 常无法绑定需要修改 source 的 move
+  constructor，于是退回 copy；source 的具体状态由 type contract
+  决定，不可假设一律 empty。
+</Callout>
+
+## rule of three、move与rule of zero
+
+手动管理 raw resource 的 class 往往需要 destructor、copy constructor 与 copy assignment 保持深拷贝和异常安全；加入 move 后又扩展成 five special members。任何 user-declared destructor 都可能影响 implicit move generation，空 destructor 也不是“无影响”。
+
+<Term def="把资源封装进已有RAII成员，让class无需自行声明copy/move/destructor即可获得正确生命周期语义。">
+  rule of zero
+</Term>
+
+优先用 string、vector、unique_ptr 等 value/owner member 组合 class，让 compiler 生成 special members。若业务要求 unique identity，显式 delete copy；若需要 value copy，确保 copy/move 都维持 invariant。copy-and-swap 可提供 strong guarantee，但额外 temporary/allocation 是否值得应按 type 和 workload 测量。
+
+“移动非资源”常是误优化：把几个 scalar members move 并不会更快，却可能让 code 表意混乱。只有 ownership transfer、large reusable buffer 或 expensive state 能从 move 中明显获益。
+
+## optional表达absence
+
+<Term def="在对象内部直接管理一个可能存在的T，engaged状态决定T的lifetime，避免用magic value或nullable owner表达缺失。">
+  std::optional
+</Term>
+
+`std::optional<T>` 把 absence 写进 return/member type，contained T 嵌在 optional storage 中，不要求独立 heap allocation。engaged 时 T lifetime active，reset 后结束。它适合 lookup miss、optional configuration 和可能没有结果的 pure value；不适合表达 rich failure reason，此时 expected-like result 更合适。
+
+```cpp
+std::optional<Record> findRecord(std::string_view key) {
+    if (const auto it = records.find(key); it != records.end()) {
+        return it->second;
+    }
+    return std::nullopt;
+}
+```
+
+return optional may copy/move Record depending value category and elision. 如果只需 borrow，`optional<reference_wrapper<const T>>`、pointer 或 iterator result 可能更合适，但 lifetime contract 必须明确。sorting/comparison 按 optional semantics 处理 disengaged 与 engaged values，不能假定与业务排序一致。
+
+## any推迟具体类型
+
+<Term def="可持有满足要求的任意单个值，并在any_cast时进行runtime type检查的类型擦除容器。">
+  std::any
+</Term>
+
+`std::any` 适合 plugin metadata、heterogeneous property bag 等确需 open type set 的边界。它保存 concrete type information 与 manager operations；small values 可能使用 implementation-specific inline storage，large/throwing-move types 可能 allocation。`any_cast<T>` 类型不匹配会抛 bad_any_cast，pointer form 则返回 null。
+
+若 type set 封闭，`std::variant` 提供 compile-time alternatives、visitor exhaustive handling，通常更易优化；若只有“有/无同一类型”，用 optional；若只是 polymorphic behavior，用 interface/type erasure abstraction。any 不应成为绕过 type design 的默认容器。
+
+<ChpMoveOptionalAnyMap />
+
+## 第2章实验协议
+
+1. 用 static_assert/type display 推导 plain auto、auto&、auto&& 与 decltype(auto)。
+2. 对 range-for 记录 copy/move count，比较 auto 与 const auto&。
+3. 输出 closure size，比较 value/reference/init captures。
+4. benchmark concrete lambda、function pointer、std::function，并记录 allocation。
+5. 对 move owner 验证 destination ownership 与 source postcondition。
+6. 删除空 destructor，观察 implicit move traits 与 generated calls。
+7. 比较 optional、variant、any 的 object size、allocation 与 failure path。
+8. 每项结果绑定 compiler、standard library、flags 与 workload。
+
+## 小结
+
+- auto 根据声明形式编译期推导，plain value 与 reference forms 会产生不同copy/identity
+- forwarding reference 需配合 deduction 和 std::forward，named rvalue reference 仍是lvalue
+- lambda 是保存 captures 的 closure object，capture mode 同时决定 state 与 lifetime risk
+- concrete lambda 易静态优化；std::function 提供运行时类型擦除并可能带来间接调用和allocation
+- std::move 只是cast，move operation 是否便宜取决于type representation
+- rule of zero 用RAII成员获得正确special members，避免手写资源协议
+- optional以内联contained object表达absence；rich error应使用更合适结果类型
+- any表达open runtime type set，closed set优先考虑variant
+- 所有成本判断都应记录implementation、callable/value size与真实workload
+
+<Attribution
+  adaptedFrom="C++ High Performance, First Edition, Chapter 2: Modern C++ Concepts"
+  adaptedUrl="https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
+/>
+
+<Glossary>
+  <GlossaryItem term="自动类型推导">
+    从initializer与声明形式确定具体类型。
+  </GlossaryItem>
+  <GlossaryItem term="forwarding reference">
+    可按实参值类别折叠的推导右值引用。
+  </GlossaryItem>
+  <GlossaryItem term="closure object">
+    保存lambda captures并实现调用运算符的对象。
+  </GlossaryItem>
+  <GlossaryItem term="move semantics">
+    转移资源所有权并维持有效源状态的语义。
+  </GlossaryItem>
+  <GlossaryItem term="rule of zero">
+    用RAII成员避免手写special members的规则。
+  </GlossaryItem>
+  <GlossaryItem term="std::optional">
+    在对象内表达可能存在T的值类型。
+  </GlossaryItem>
+  <GlossaryItem term="std::any">运行时类型擦除的单值容器。</GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：推导四个auto声明并找出一次隐藏copy。** 包含plain auto、const auto&、auto&&和range-for。
+
+<Answer question="怎样从声明看出value或borrow？">
+  plain auto 按值推导并丢top-level cv/ref，可能复制reference result；const
+  auto&建立只读borrow；auto&&在deduction context按value
+  category折叠，绑定lvalue得到lvalue reference；range-for的auto
+  item逐元素copy，const auto& item避免copy。再用copy counters和type traits验证。
+</Answer>
+
+2. **问题 2：一个异步callback应使用concrete lambda还是std::function？** 审计capture、owner、替换需求和成本。
+
+<Answer question="callable选择的决策顺序是什么？">
+  先保证capture lifetime：move exclusive owner或capture stable
+  shared/value，禁止悬空reference/this。若caller/callee在compile
+  time并且不需runtime replacement，用template/concrete lambda保留inline；稳定C
+  boundary可用function pointer；需要copyable uniform runtime
+  storage才用std::function。最后测closure size、allocation与invoke hotness。
+</Answer>
+
+3. **问题 3：为“可能没有配置值”选择optional、variant、any或错误结果。** 说明每个类型集合和失败信息。
+
+  <Answer question="四种表示分别适合什么契约？">只有T或absence用optional；有限多个已知类型用variant并visitor；插件等open runtime type set才用any；需要说明失败原因用expected-like value或exception。optional contained T直接位于其storage，any可能type-erase并allocation。选择后测object size/copy/move与failure frequency，不用any掩盖可静态表达的domain。</Answer>
+</Exercises>

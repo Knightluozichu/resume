@@ -1,137 +1,166 @@
 ---
-title: Effective C# 总复习
-type: A
-section: 并发设计
-order: 4
-description: 全书 50 条建议的总复习，串联四大板块的核心准则与贯穿主线。
+title: "Effective C# 第3版总复习：5章50条整书验收"
+type: C
+section: "Effective C# · 总复习"
+order: 6
+description: "以真实系统横穿语言、资源、泛型、LINQ和异常5章，按type/lifetime/execution/failure contract与全书门禁验收50条Item。"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/effective-c-sharp-covers-c-sharp-6.0-50-specific-ways-9780134579443"
 draft: false
 ---
 
-import { EcsFinalReviewDiagram } from "@/components/mdx/effective-csharp/diagrams/ecs-final-review";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import { EcsWholeBookAuditLab, EcsContractChainLab, EcsFinalGateLab } from "@/components/mdx/effective-csharp/diagrams/ecs-final-review";
 
 <Objectives>
 
-- 能复述四大板块的核心准则及彼此的递进关系
-- 能说出贯穿全书的主线——让类型系统替你兜底
-- 能把一个具体问题对应到正确的板块与条款
+- 能分析public SDK、data pipeline、plugin host或hot service，逐章写出50条Item相关的真实风险与证据
+- 能绘制type、lifetime、execution和failure四条端到端contract chain，定位最早可阻止缺陷的边界
+- 能设计outline、code、visual、compatibility和release五类整书门禁，判断是否具备发布条件
 
 </Objectives>
 
-## 直觉引入
+## 为什么总复习必须审计一个完整系统
 
-学完 50 条建议，最后一步不是再背一条，而是把它们串成一条线。Effective C# 的 50 条建议看似分散，实则有一条贯穿的主线：把人为容易犯的错误，交给编译器和运行时来兜底。
+单独回答“readonly与const差别”不代表能设计跨assembly SDK；知道`IQueryable`延迟执行也不代表会关闭DbContext；会写exception filter也不代表系统failure后state正确。总复习把5章放进同一真实boundary，检查建议之间是否互相支持。
 
-属性优先让封装成为默认；readonly 让版本安全成为默认；IDisposable 让资源释放成为默认；泛型约束让类型安全成为默认；LINQ 延迟执行让查询反映最新数据成为默认；异常过滤器让精确 catch 成为默认；Task.WhenAll 让并行成为默认；相等性协调让哈希查找正确成为默认。每一条都是在「让正确的做法成为默认」。
+先预测：所有50条各举一个isolated snippet是否足以通过；同一结果在List与remote provider一致是否等于执行contract一致；catch能恢复流程是否等于strong guarantee。三个答案都是否。
 
-## 概念讲解
+<Term def="以同一真实系统横穿5章，检查type、owner、substitution、execution和failure在boundary处是否一致。">whole-book audit</Term>
 
-<EcsFinalReviewDiagram />
+## 第一轮：按五章扫描同一系统
 
-### 四大板块回顾
+### Chapter 1: Language surface
 
-第一板块「语言习惯」奠定基础：用属性替代字段（封装校验与版本安全）、用 readonly 替代 const（跨程序集版本兼容）、用 is/as 替代强制转换（编译期类型安全）。这是地基——后续所有建议都建立在对语言语义的准确理解上。
+检查public values是否跨version安全、text是否有culture owner、string protocols是否转成type、callbacks/events是否声明thread与retention、hot path是否有boxing evidence、inheritance是否误用`new`。
 
-第二板块「资源管理」管控资源：IDisposable 标准模式区分确定性释放与终结器兜底，using 让释放成为默认，区分托管与非托管资源。这一板块把资源生命周期的负担交给框架。
+### Chapter 2: Lifecycle surface
 
-第三板块「泛型与 LINQ」提升抽象：泛型约束最小化保持复用性，LINQ 延迟执行让查询反映最新数据但需注意重复枚举。这一板块把集合操作的复杂度交给库。
+画resource graph：谁创建、谁borrow、谁transfer、谁Dispose；所有constructors是否经过同一invariant；static failure能否重试；virtual activation是否在完整构造后；cache/pool是否有bound与clear policy。
 
-第四板块「并发设计」收口正确性：异常过滤器精确 catch 不丢栈，Task.WhenAll 并行独立任务，async void 是炸弹，相等性三者协调。这一板块把并发安全交给模式与类型系统。
+### Chapter 3: Substitution surface
 
-### 贯穿主线
+Constraint是否最小、specialization是否同语义、ordering是否通过laws、owned T是否级联释放、variance是否由input/output位置推导、classic bridge与extension是否保持最小surface。
 
-<Term def="Effective C# 的核心哲学：把人为容易犯的错误交给编译器和运行时兜底，让正确的做法成为默认。">让类型系统兜底</Term> 是全书主线。属性让封装成为默认、readonly 让版本安全成为默认、IDisposable 让释放成为默认、泛型约束让类型安全成为默认、WhenAll 让并行成为默认、相等性协调让哈希正确成为默认。每条建议都是在「让正确成为默认，让错误编译不通过」。
+### Chapter 4: Execution surface
 
-<Callout type="tip">
-<strong>建议 →</strong> 把 50 条建议按「它让什么成为默认」来归类记忆。比如「属性让封装成为默认」「readonly 让版本安全成为默认」「using 让释放成为默认」。这样 50 条就不零散，而是一条主线下的统一哲学。
-</Callout>
+每个sequence标注construction、first enumeration、terminal和repeat；IQueryable检查translation/command/round trip，iterator检查resource scope，Single/First检查0/1/many，closure检查execution-time value。
 
-<Callout type="trap">
-<strong>现象 →</strong> 学完 50 条仍觉得零散，遇到问题想不起用哪条。<strong>原因 →</strong> 把建议当成孤立的规则背诵，没串成主线。<strong>修法 →</strong> 按「让什么成为默认」归类，再用四大板块定位——遇到封装问题翻语言习惯、遇到泄漏翻资源管理、遇到抽象翻泛型 LINQ、遇到并发翻并发设计。
-</Callout>
+### Chapter 5: Failure surface
 
-## 交互Demo
+每个public operation标注specific signal、cleanup、post-fault state、translation boundary与logging owner；用fault injection验证strong/basic guarantee，filter只做有界observation。
 
 <Stepper>
-  <Step title="第一步：语言习惯——让封装成为默认">
-    <EcsFinalReviewDiagram />
-    语言习惯板块让正确的基础习惯成为默认：属性让封装成为默认（字段永远 private）、readonly 让版本安全成为默认（跨程序集不烤入）、is/as 让类型安全成为默认（编译期检查替代运行时强转）。
-  </Step>
-  <Step title="第二步：资源管理——让释放成为默认">
-    资源管理板块让资源不泄漏成为默认：IDisposable 模式让释放成为默认（using 确定性释放）、终结器让兜底成为默认（即使忘 using 也能清非托管）、SuppressFinalize 让性能成为默认（释放后不重复终结）。
-  </Step>
-  <Step title="第三步：泛型与 LINQ——让抽象成为默认">
-    泛型与 LINQ 板块让高层次的抽象成为默认：约束最小化让复用成为默认（只约束用到的）、延迟执行让查询反映最新数据成为默认（物化解决重复执行）、IEquatable 让无装箱成为默认。
-  </Step>
-  <Step title="第四步：并发设计——让正确并发成为默认">
-    并发设计板块让并发安全成为默认：异常过滤器让精确 catch 成为默认（不丢栈）、WhenAll 让并行成为默认（独立任务不排队）、ConfigureAwait(false) 让库不死锁成为默认、相等性协调让哈希正确成为默认。
-  </Step>
-  <Step title="第五步：贯穿主线——让类型系统兜底">
-    50 条建议的统一哲学是「让类型系统替你兜底」。每一条都是在把人为容易犯的错误交给编译器和运行时——让正确成为默认，让错误编译不通过。按四大板块定位问题，按「让什么成为默认」归类记忆。
-  </Step>
+  <Step title="切换SDK、pipeline、plugin与hot service"><EcsWholeBookAuditLab /></Step>
+  <Step title="为每章选择最高风险boundary">同一系统每章至少选一个可观察缺陷，不做平均用力的checklist。</Step>
+  <Step title="合并为一份audit record">记录risk、chosen contract、owner、normal/fault evidence和未接受alternative。</Step>
 </Stepper>
 
-## 代码对照
-
-```csharp
-// 语言习惯：属性 + readonly
-public class Settings
-{
-    public string Name { get; set; }              // 属性优先
-    public static readonly int Timeout = 5000;    // readonly 优于 const
-}
-
-// 资源管理：IDisposable 模式
-public class DbConnection : IDisposable
-{
-    public void Dispose() { Dispose(true); GC.SuppressFinalize(this); }
-    protected virtual void Dispose(bool disposing) { /* ... */ }
-    ~DbConnection() => Dispose(false);
-}
-using var db = new DbConnection();                // using 确定性释放
-
-// 泛型与 LINQ：最小约束 + 物化
-public T Max<T>(T a, T b) where T : IComparable<T> // 只约束用到的
-    => a.CompareTo(b) >= 0 ? a : b;
-
-var results = source.Where(x => x.Active)          // 延迟执行
-    .Select(x => x.Name)
-    .ToList();                                     // 物化避免重复枚举
-
-// 并发设计：WhenAll + 异常过滤器 + 相等性
-await Task.WhenAll(DownloadAsync("a"), DownloadAsync("b"));  // 并行
-try { /* ... */ }
-catch (IOException e) when (e.HResult == 0x20) { /* 过滤器 */ } // 精确 catch
-public override int GetHashCode() => HashCode.Combine(X, Y); // 相等性协调
+```text
+boundary: OrderRepository.Query
+owner: request scope
+type: IQueryable<Order>
+execution: ToListAsync at application boundary
+failure: provider cause preserved; no partial domain publish
 ```
 
-## 常见误区
-
-<Callout type="trap">
-<strong>现象 →</strong> 学完 50 条仍零散，遇到问题想不起用哪条。<strong>原因 →</strong> 把建议当孤立规则背诵，没串成主线。<strong>修法 →</strong> 按「让什么成为默认」归类，用四大板块定位：封装问题翻语言习惯、泄漏翻资源管理、抽象翻泛型 LINQ、并发翻并发设计。
+<Callout type="trap" title="50条逐条都能解释，就不必做跨章scenario">
+真实缺陷常发生在建议连接处：delegate capture延长resource、generic repository泄露IQueryable、filter logging重复boundary log。跨章audit才能看到这些组合风险。
 </Callout>
 
-<Callout type="trap">
-<strong>现象 →</strong> 照搬建议到所有场景，比如到处用 WhenAll 或到处用 readonly。<strong>原因 →</strong> 每条建议有适用前提，脱离前提的最佳实践变反模式。<strong>修法 →</strong> 理解每条建议解决的问题和代价——WhenAll 适合独立任务、readonly 适合跨程序集常量，按场景取舍而非照搬。
+## 第二轮：沿四条Contract Chain追踪
+
+### Type chain
+
+从external string/DTO进入typed adapter，经generic constraint/variance，到LINQ delegate/expression binding和runtime dispatch。最早能compile-time拒绝的invalid state不应拖到provider或cast exception。
+
+### Lifetime chain
+
+从creator与DI scope，经delegate/event、generic container、iterator capture，到materialization、Dispose/finally。每次retention和transfer都必须有owner，normal/fault/cancel paths收敛到同一released state。
+
+### Execution chain
+
+从callback/query construction，到generic fast path与enumeration，再到terminal operator/provider command/filter search。记录次数、thread、ordering和short-circuit，禁止用source appearance猜执行。
+
+### Failure chain
+
+从specific exception type，经cleanup与state guarantee，到filter selection、translation、retry/response和single logging boundary。Cause chain与primary fault不能被cleanup或wrapper覆盖。
+
+<Term def="在invalid representation、owner leak、unsupported provider node或partial mutation变成runtime事故前，最先能确定性拒绝它的位置。">earliest enforcement boundary</Term>
+
+<Term def="normal、fault、cancel和repeat路径最终到达同一valid state、released resource与可解释diagnostic的性质。">path convergence</Term>
+
+<Stepper>
+  <Step title="切换type、lifetime、execution与failure chain"><EcsContractChainLab /></Step>
+  <Step title="从输入追到最终handler">不跳层记录representation、owner、binding、terminal、cleanup和policy decision。</Step>
+  <Step title="把防线前移并复测">能用type/constraint拒绝就不等runtime，能在scope materialize就不泄露query，能prepare再commit就不依赖compensation。</Step>
+</Stepper>
+
+```csharp
+await using var session = await factory.OpenAsync(token);
+var result = await session.Orders
+    .Where(OrderPolicies.IsReadyExpression)
+    .SingleAsync(order => order.Id == id, token);
+```
+
+<Callout type="trap" title="多加catch和Dispose就能让所有路径收敛">
+错误owner会double-dispose borrowed resource，宽catch会吞cause，finally mutation会遮蔽primary fault。收敛来自明确contract、fault matrix与state snapshot，而非更多语句。
 </Callout>
 
-## 小结与练习
+## 第三轮：整书发布门禁
+
+1. **Outline**：5章50条publisher titles覆盖100%，无invented unit。
+2. **Code**：每章normal、boundary与fault evidence可复现，compile/provider/ordering tests按风险运行。
+3. **Visual**：每章3个unique interactive labs解释该章state transition，不复用装饰图。
+4. **Compatibility**：base/derived、generic/classic、local/remote、C# 6/current runtime差异均有明确边界。
+5. **Release**：chapter scores、book score、MDX、type、lint在promotion前全绿。
+
+<Term def="原书C# 6语境与现代runtime update并列呈现，明确哪些是原始Item、哪些是当前实现选择。">version-bounded guidance</Term>
+
+<Term def="目录覆盖、章节分数、语法、类型、lint与部署前验证共同组成的不可跳过验收链。">release evidence chain</Term>
+
+<Stepper>
+  <Step title="切换outline、code、visual、compatibility与release"><EcsFinalGateLab /></Step>
+  <Step title="收集machine-readable evidence">保存outline coverage、chapter dimensions、MDX/type/lint结果和active navigation order。</Step>
+  <Step title="任何一项失败即停止promotion">先修复source与tests，再重跑全链；不以production deploy作为内容parser或wiring测试。</Step>
+</Stepper>
+
+```text
+publisher TOC -> 7 active pages -> 21 interactive labs -> chapter 100 -> book 100 -> global gates
+```
+
+## 本章回顾：50条建议最终变成四条可执行Contract
+
+1. 五章扫描确保source、lifecycle、substitution、execution与failure面无遗漏。
+2. Type chain把invalid state前移到compile/boundary；lifetime chain让owner和release可追踪。
+3. Execution chain记录真实次数、位置和ordering；failure chain保护cause、cleanup与post-fault state。
+4. 现代补充必须version-bounded，不能把原书历史结构改写掉。
+5. 整书只有在outline、code、visual、compatibility和release evidence全部通过时完成。
 
 <Exercises>
-  <Answer question="贯穿 Effective C# 全书的主线是什么？">让类型系统替你兜底——把人为容易犯的错误交给编译器和运行时。每条建议都在「让正确成为默认，让错误编译不通过」：属性让封装成为默认、readonly 让版本安全成为默认、IDisposable 让释放成为默认、泛型约束让类型安全成为默认、WhenAll 让并行成为默认、相等性协调让哈希正确成为默认。</Answer>
-  <Answer question="四大板块如何递进？为什么是这个顺序？">语言习惯（封装、类型安全）是地基，资源管理（释放、不泄漏）是安全网，泛型与 LINQ（抽象、查询）是骨架，并发设计（并行、正确性）是收口。递进原因：并发依赖对异常和类型的准确理解（语言习惯），并发资源需正确释放（资源管理），并发集合需泛型抽象（泛型）。跳级会导致知识断层，比如没学异常基础就学 async 会写出 async void。</Answer>
-  <Answer question="遇到一个具体问题，如何对应到正确的板块和条款？">先按问题类型定位板块：封装/版本/类型转换问题翻语言习惯；资源泄漏/释放问题翻资源管理；集合操作/查询/泛型问题翻泛型与 LINQ；多线程/异常/相等性问题翻并发设计。再在板块内按「让什么成为默认」找对应条款。比如「字典查不到相等键」属相等性问题→并发设计板块→GetHashCode 一致性条款。</Answer>
+
+**问题 1：一个plugin返回deferred sequence并注册event，host卸载后仍无法回收，应如何跨章定位？**
+
+<Answer>Chapter 1检查event publisher是否保留subscriber；Chapter 2画plugin/resource owner与unload scope；Chapter 3检查generic plugin contract是否表达ownership；Chapter 4检查sequence是否capture plugin/context且未materialize；Chapter 5验证unload failure cleanup与diagnosis。修复后用weak reference、partial enumeration、unsubscribe和fault paths证明回收。</Answer>
+
+**问题 2：怎样把一个runtime provider fault前移到earliest enforcement boundary？**
+
+<Answer>先把external string转typed value；generic capability用constraint/delegate/static interface表达；query只暴露provider可翻译的expression，unsupported local function在materialization后执行；integration test检查generated command。无法前移的dependency fault在repository boundary保留cause并由policy处理。</Answer>
+
+**问题 3：本书完成的最终证据有哪些？**
+
+<Answer>Publisher identity与5章50条manifest，7个active pages顺序，5个official chapters逐条标题覆盖，导学/总复习及每章3个专属交互实验，chapter/book score 100，active old refs为0，MDX/type/targeted lint/diff checks通过；全库225本完成前不push或deploy。</Answer>
+
 </Exercises>
 
-## 名词解释
+## 术语表
 
 <Glossary>
-  <GlossaryItem term="让类型系统兜底">Effective C# 的核心哲学：把人为容易犯的错误交给编译器和运行时，让正确的做法成为默认，让错误编译不通过。是贯穿 50 条建议的主线。</GlossaryItem>
-  <GlossaryItem term="四大板块">Effective C# 的组织结构：语言习惯奠基、资源管理管控、泛型与 LINQ 抽象、并发设计收口。板块间递进而非并列，顺序由依赖关系决定。</GlossaryItem>
-  <GlossaryItem term="让正确成为默认">每条建议的共同目标：通过类型系统或框架机制，让正确的用法成为不假思索的默认选择，把错误挡在编译期。</GlossaryItem>
+  <GlossaryItem term="whole-book audit" definition="同一真实系统横穿5章检查所有boundary contract的一体化审计。" />
+  <GlossaryItem term="earliest enforcement boundary" definition="能最早确定性拒绝invalid state或unsupported behavior的位置。" />
+  <GlossaryItem term="path convergence" definition="normal/fault/cancel/repeat最终到达同一valid、released、diagnosable state。" />
+  <GlossaryItem term="version-bounded guidance" definition="区分原书C# 6建议与现代runtime update的呈现方式。" />
+  <GlossaryItem term="release evidence chain" definition="outline、score、syntax、type、lint和promotion前验证组成的门禁链。" />
 </Glossary>
 
-<Attribution adaptedFrom="Effective C# (Bill Wagner)" adaptedUrl="" />
+<Attribution adaptedFrom="Effective C#, Third Edition (C# 6.0), all 5 chapters and 50 Items" adaptedUrl="https://www.informit.com/store/effective-c-sharp-covers-c-sharp-6.0-50-specific-ways-9780134579443" />

@@ -1,0 +1,236 @@
+---
+title: "第 6 章 原始值的响应式方案"
+type: A
+section: "Vue.js设计与实现 · 响应系统"
+order: 6
+description: "原始值不能被Proxy直接代理，ref以对象属性承载它；toRef和自动脱ref必须在保持原对象联系的前提下改善使用体验。 本页按权威目录独立教学重构。"
+demo: true
+math: false
+sourceUrl: "https://time.geekbang.org/column/article/740758"
+draft: false
+---
+
+import {
+  Vdi06PrimitiveReactivityMapLab,
+  Vdi06PrimitiveReactivityExperimentLab,
+  Vdi06PrimitiveReactivityEvidenceLab,
+} from "@/components/mdx/vuejs-design-implementation/diagrams/vdi-06-primitive-reactivity";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释第 6 章 原始值的响应式方案的核心机制，并把它放回6篇18章的实现主线
+- 能实现本页最小算法，比较正常、边界、失败和恢复轨迹
+- 能指出依赖、VNode、组件实例、AST或请求状态的唯一所有者
+- 能设计证据回答“原始值读写可追踪，toRef始终连接来源属性，自动脱ref只识别真实ref，替换ref和写入value的语义不混淆。”是否成立
+
+</Objectives>
+
+## 直觉：从输入、状态到提交
+
+原始值不能被Proxy直接代理，ref以对象属性承载它；toRef和自动脱ref必须在保持原对象联系的前提下改善使用体验。 本书不是对最终源码逐行翻译，而是从规范与最小模型逐步构造框架。只看最终DOM会隐藏错误依赖、重复移动、陈旧任务和激活错位；先画输入、状态所有者、调度点、输出和清理责任。
+
+<Vdi06PrimitiveReactivityMapLab />
+
+## 权威目录定位
+
+作者授权数字版前言明确全书分为6篇18章，作者GitHub仓库提供配套代码。本页依照公开完整目录逐项覆盖 **4** 个条目；目录名称仅用于追踪，正文为独立教学重构。
+
+- 6.1 引入ref的概念
+- 6.2 响应丢失问题
+- 6.3 自动脱ref
+- 6.4 总结
+
+## 核心概念与所有权
+
+<Term def="用带value属性的对象承载原始值并参与响应追踪的容器。">ref</Term>、
+<Term def="把响应式对象某个属性映射为保持双向联系的ref。">toRef</Term>、
+<Term def="把响应式对象的各个可枚举属性批量转换为对应ref。">toRefs</Term>、
+<Term def="在特定读取上下文中自动返回ref的value、减少显式访问的行为。">
+  自动脱ref
+</Term>
+、
+<Term def="解构或复制属性后，读取不再经过原代理而失去追踪关系的现象。">
+  响应丢失
+</Term>
+。每个概念都要回答：谁创建输入，哪个结构保存状态，何种操作可以修改，错误如何传播，生命周期结束后谁清理。
+
+|   # | 概念      | 精确定义                                                   |
+| --: | --------- | ---------------------------------------------------------- |
+|   1 | ref       | 用带value属性的对象承载原始值并参与响应追踪的容器。        |
+|   2 | toRef     | 把响应式对象某个属性映射为保持双向联系的ref。              |
+|   3 | toRefs    | 把响应式对象的各个可枚举属性批量转换为对应ref。            |
+|   4 | 自动脱ref | 在特定读取上下文中自动返回ref的value、减少显式访问的行为。 |
+|   5 | 响应丢失  | 解构或复制属性后，读取不再经过原代理而失去追踪关系的现象。 |
+
+## 机制拆解
+
+### 1. 建立机制边界
+
+ref把原始值放在value属性上并使用响应式对象，从而让读取和写入经过track与trigger。标记ref身份不能只靠形状猜测，应使用不可枚举内部标记或受控API。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+### 2. 处理关键算法
+
+直接解构响应式对象得到普通值，后续读取不再经过代理。toRef返回getter/setter形式的ref并继续指向原属性，toRefs批量映射，解决的是连接丢失而不是复制数据。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+### 3. 签发失败与恢复
+
+proxyRefs读取时自动返回ref.value，写入普通值时写回旧ref.value，写入新ref时替换引用。脱ref只发生在明确边界，否则数组、集合和嵌套对象会出现难以预测的身份变化。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+## 三阶段可视化推演
+
+<Stepper>
+  <Step title="1. 建立最小模型">
+    固定运行时、输入和初始状态，先预测数据结构与执行顺序。
+    <Vdi06PrimitiveReactivityMapLab />
+  </Step>
+  <Step title="2. 注入算法边界">
+    只改变一个变量，观察分支切换、重复key、请求乱序、非法模板或激活不匹配的首偏离点。
+    <Vdi06PrimitiveReactivityExperimentLab />
+  </Step>
+  <Step title="3. 清除故障并重放">
+    用相同输入恢复，核对依赖集合、任务队列、宿主节点、组件实例和请求状态是否收敛。
+    <Vdi06PrimitiveReactivityEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小可运行实验
+
+```js
+function toRef(object, key) {
+  return {
+    get value() {
+      return object[key];
+    },
+    set value(v) {
+      object[key] = v;
+    },
+  };
+}
+const count = toRef(state, "count");
+```
+
+保存结构化证据，不以一次console输出或最终截图替代过程：
+
+```yaml
+book: Vue.js设计与实现
+page: vdi-06-primitive-reactivity
+sample: normal | boundary | failure | recovery
+runtime: pinned
+input_fixture: fixed
+first_divergence: null
+cleanup_complete: true
+```
+
+故障注入一次只改变一个变量：
+
+```text
+baseline -> inject(one_fault) -> stop_at_first_divergence
+recover -> replay_same_input
+assert -> precise_dependency && stable_identity && ordered_tasks && no_retained_resource
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：用`{ value: state.count }`复制当前数字，误以为它仍与响应式对象保持联系。** 必须保存输入、执行轨迹和首偏离点，而不是只比较最终结果。
+</Callout>
+
+<Callout type="trap">
+  **误区二：任何对象只要有value属性就自动脱ref，业务对象被误判并改写。**
+  必须加入失败与恢复样本，并检查依赖、节点、任务和状态是否清理。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 变化                 | 预期         | 证据           |
+| ---- | -------------------- | ------------ | -------------- |
+| 正常 | 合法输入与稳定身份   | 主链完成     | 输出与轨迹一致 |
+| 边界 | 空值、重复或极限序列 | 有界退化     | 不越界、不重复 |
+| 失败 | 异常、乱序、非法结构 | 首偏离点停止 | 错误显式传播   |
+| 恢复 | 清除故障后同输入重放 | 收敛到正常   | 无旧依赖和资源 |
+
+<Vdi06PrimitiveReactivityEvidenceLab />
+
+本页签发不变量：**原始值读写可追踪，toRef始终连接来源属性，自动脱ref只识别真实ref，替换ref和写入value的语义不混淆。**
+
+## 练习
+
+<Exercises>
+
+**问题 1** 第 6 章 原始值的响应式方案的核心主张是什么？
+
+<Answer>
+  原始值不能被Proxy直接代理，ref以对象属性承载它；toRef和自动脱ref必须在保持原对象联系的前提下改善使用体验。
+</Answer>
+
+**问题 2** 如何把本页目录变成可执行证据？
+
+<Answer>
+  按公开顺序建立追踪表，至少覆盖6.1 引入ref的概念、6.2 响应丢失问题、6.3
+  自动脱ref、6.4 总结，并为每组条目记录输入、状态、输出、失败与恢复条件。
+</Answer>
+
+**问题 3** 本页怎样签发？
+
+<Answer>
+  原始值读写可追踪，toRef始终连接来源属性，自动脱ref只识别真实ref，替换ref和写入value的语义不混淆。
+  同一运行时与输入必须能重放正常、边界、失败和恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **ref**：用带value属性的对象承载原始值并参与响应追踪的容器。
+- **toRef**：把响应式对象某个属性映射为保持双向联系的ref。
+- **toRefs**：把响应式对象的各个可枚举属性批量转换为对应ref。
+- **自动脱ref**：在特定读取上下文中自动返回ref的value、减少显式访问的行为。
+- **响应丢失**：解构或复制属性后，读取不再经过原代理而失去追踪关系的现象。
+- 官方目录、最小实现、故障注入与恢复证据已经放进同一验收链。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="ref">
+    用带value属性的对象承载原始值并参与响应追踪的容器。
+  </GlossaryItem>
+  <GlossaryItem term="toRef">
+    把响应式对象某个属性映射为保持双向联系的ref。
+  </GlossaryItem>
+  <GlossaryItem term="toRefs">
+    把响应式对象的各个可枚举属性批量转换为对应ref。
+  </GlossaryItem>
+  <GlossaryItem term="自动脱ref">
+    在特定读取上下文中自动返回ref的value、减少显式访问的行为。
+  </GlossaryItem>
+  <GlossaryItem term="响应丢失">
+    解构或复制属性后，读取不再经过原代理而失去追踪关系的现象。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="霍春阳著，人民邮电出版社，2022年1月，501页，ISBN 9787115583864。作者授权数字版前言确认6篇18章的结构与逐章范围，作者GitHub仓库提供配套代码，公开完整目录用于二三级条目追踪；正文为独立教学重构。"
+  adaptedUrl="https://time.geekbang.org/column/article/740758"
+/>
+
+配套代码：https://github.com/HcySunYang/code-for-vue-3-book

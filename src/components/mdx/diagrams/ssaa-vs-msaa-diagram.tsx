@@ -74,32 +74,20 @@ function Panel({
           }
         }
       } else {
-        // MSAA：只有边缘格多放采样点（4 点判覆盖度），内部/外部格只一个着色点（每像素着色一次）。
-        if (edge) {
-          for (let sy = 0; sy < 2; sy++) {
-            for (let sx = 0; sx < 2; sx++) {
-              nodes.push(
-                <circle
-                  key={`m-${col}-${row}-${sx}-${sy}`}
-                  cx={x + 8 + sx * 14}
-                  cy={y + 8 + sy * 14}
-                  r="3"
-                  fill="var(--success)"
-                />,
-              );
-            }
+        // MSAA：所有像素都在多样本附件中保存 4 个样本；仅边缘格的样本形成部分覆盖。
+        for (let sy = 0; sy < 2; sy++) {
+          for (let sx = 0; sx < 2; sx++) {
+            nodes.push(
+              <circle
+                key={`m-${col}-${row}-${sx}-${sy}`}
+                cx={x + 8 + sx * 14}
+                cy={y + 8 + sy * 14}
+                r="3"
+                fill={edge ? "var(--success)" : "var(--accent)"}
+                fillOpacity={edge ? 1 : 0.62}
+              />,
+            );
           }
-        } else {
-          // 非边缘像素：一个着色点（每像素着色一次）
-          nodes.push(
-            <circle
-              key={`m1-${col}-${row}`}
-              cx={x + CELL / 2}
-              cy={y + CELL / 2}
-              r="3"
-              fill="var(--accent)"
-            />,
-          );
         }
       }
     }
@@ -128,7 +116,7 @@ function Panel({
 
 export function SsaaVsMsaaDiagram() {
   const aria =
-    "SSAA 超采样和 MSAA 多重采样的开销对照。左边 SSAA：每个像素都被拆成 4 个子像素，而且每个子像素都跑一遍片段着色，着色量翻几倍，质量好但贵。右边 MSAA：只在几何边缘的像素多放采样点来判覆盖度，片段着色仍然每个像素只跑一次，内部和外部的像素都只有一个着色点，性价比高。";
+    "SSAA 超采样和 MSAA 多重采样的开销对照。左边 SSAA：每个像素都被拆成 4 个子像素，而且每个子像素都跑一遍片段着色，着色量翻几倍，质量好但贵。右边 MSAA：多样本附件为每个像素保存多个样本，片段着色通常每像素一次；只有几何边缘出现部分覆盖和过渡色，避免了每样本着色。";
 
   return (
     <figure className="mdx-figure mx-auto my-4">
@@ -178,7 +166,7 @@ export function SsaaVsMsaaDiagram() {
             fontSize="10"
             fill="var(--text-secondary)"
           >
-            只边缘多采 · 着色每像素一次
+            多样本存储 · 着色通常每像素一次
           </text>
 
           <Panel ox={20} oy={56} mode="ssaa" />
@@ -201,15 +189,15 @@ export function SsaaVsMsaaDiagram() {
           </text>
           <circle cx="262" cy="204" r="3" fill="var(--success)" />
           <text x="272" y="208" fontSize="9" fill="var(--text-secondary)">
-            边缘采样点（只判覆盖度）
+            边缘样本（部分覆盖，形成过渡色）
           </text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
         <strong>SSAA</strong> 把每个像素都拆成子像素、
         <strong>每个子像素都着色</strong>（着色量翻几倍，贵）；
-        <strong>MSAA</strong> 只在<strong>几何边缘</strong>多放采样点判覆盖度，
-        <strong>片段着色仍每像素一次</strong>（性价比之选）。
+        <strong>MSAA</strong> 为每个像素保留多样本覆盖与存储，但通常仍是<strong>每像素一次片段着色</strong>；
+        只有<strong>几何边缘</strong>出现部分覆盖和过渡色，因此避免了 SSAA 的每样本着色。
       </figcaption>
     </figure>
   );

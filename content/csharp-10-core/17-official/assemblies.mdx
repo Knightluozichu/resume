@@ -1,0 +1,179 @@
+---
+title: "Chapter 17. Assemblies"
+type: C
+section: "C# 10 Nutshell · Runtime Services"
+order: 17
+description: "覆盖程序集manifest/metadata/IL、strong name签名、资源与卫星程序集、加载解析隔离、AssemblyLoadContext及插件系统生命周期。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch17.html"
+draft: false
+---
+
+import { CtcAssemblyAnatomyLab, CtcAssemblyLoadLab, CtcPluginLifecycleLab } from "@/components/mdx/csharp-10-core/diagrams/assemblies";
+
+<Objectives>
+
+- 能描述assembly manifest、metadata、IL与resource的关系，并分析type/assembly identity
+- 能区分strong name、publisher trust与resource culture fallback，判断签名和部署边界
+- 能设计AssemblyLoadContext插件生命周期，复现dependency conflict并验证collectible unload
+
+</Objectives>
+
+## 为什么Assembly首先是Identity与Dependency Universe
+
+程序集既是部署文件，也是CLR加载metadata/type/code/resource的identity unit。两个字节相同的contract assembly若由不同AssemblyLoadContext加载，其Type identity仍可能不同；插件能否cast往往取决于contract由谁加载，而不只是namespace和type name。
+
+先预测：Strong name能证明代码来自可信发布者吗；Assembly.LoadFrom同一路径永远返回新实例吗；删除所有局部变量即可卸载collectible ALC吗；satellite assembly包含主程序逻辑吗；插件隔离等于安全sandbox吗。答案都是否。
+
+<Term def="Assembly name/version/culture/public key与load context共同决定runtime看到的类型身份。">assembly identity boundary</Term>
+
+## What's in an Assembly
+
+.NET assembly通常是PE文件，manifest记录assembly identity、references、files、exported types和resources；metadata tables描述types、methods、fields、signatures、generic constraints与custom attributes；method body包含CIL和exception regions。Runtime按metadata token关联这些结构，再JIT/AOT执行。
+
+Module是assembly内的代码/metadata单元，现代应用大多一assembly一module。`Assembly` API可读FullName、Location、EntryPoint、DefinedTypes、ReferencedAssemblies和ManifestResourceNames；single-file、dynamic/AOT场景下Location可能为空，不能把磁盘路径当普遍保证。
+
+```csharp
+Assembly assembly = typeof(Program).Assembly;
+Console.WriteLine(assembly.GetName().FullName);
+
+foreach (AssemblyName reference in assembly.GetReferencedAssemblies())
+    Console.WriteLine($"ref {reference.FullName}");
+
+foreach (string resource in assembly.GetManifestResourceNames())
+    Console.WriteLine($"resource {resource}");
+```
+
+Metadata reference不代表assembly已加载；只有执行触及type/method时才可能解析。Build output中的deps.json/runtimeconfig.json和native assets参与host解析，不都存进manifest。
+
+<Stepper>
+  <Step title="切换manifest、metadata、IL与resources"><CtcAssemblyAnatomyLab /></Step>
+  <Step title="建立artifact inventory">记录assembly identity、target framework、references、resources、PDB、deps/runtimeconfig和native assets。</Step>
+  <Step title="核对runtime evidence">用反射/metadata工具比较编译引用和实际loaded assemblies，标出首次解析时刻。</Step>
+</Stepper>
+
+<Callout type="trap" title="Namespace或Type FullName相同就能互相Cast">
+Type identity还包括定义它的assembly和load context。插件私有加载一份contract后，`IPlugin`名字相同也可能与host类型不兼容。
+</Callout>
+
+## Strong Names and Assembly Signing
+
+Strong name由name、version、culture和public key token组成，并用key对assembly内容签名，主要提供唯一identity与篡改检测语义，支持强命名依赖。它不是publisher trust或恶意代码防护；拿到private key的人可签名，runtime也不会据此授予安全权限。
+
+Authenticode/code signing用于发布者与OS分发信任，NuGet package signing又是另一层。Key保管、CI签名、delay/public signing和version policy必须区分。更改public key会改变identity，所有强引用consumer需重建。
+
+<Term def="Strong name提供程序集唯一identity与内容签名，但不等同于发布者可信或执行sandbox。">strong-name trust limit</Term>
+
+## Resources and Satellite Assemblies
+
+Manifest resource可嵌入binary/text；ResourceManager按base name和CultureInfo查找`.resources`，从具体culture向parent和neutral culture fallback。Satellite assembly通常只含某culture资源，命名/目录如`fr-FR/App.resources.dll`，主assembly保留neutral fallback。
+
+Missing resource可能来自base name、namespace、build action、culture目录或fallback配置错误。Resource key是版本化UI contract；格式化参数也需一致。不要把secret嵌入resource，它仍可被提取。
+
+```csharp
+var manager = new ResourceManager("Nutshell.Messages", typeof(Program).Assembly);
+
+CultureInfo requested = CultureInfo.GetCultureInfo("fr-CA");
+string message = manager.GetString("OrderAccepted", requested)
+    ?? throw new MissingManifestResourceException("OrderAccepted");
+
+Console.WriteLine(string.Format(requested, message, orderId));
+```
+
+测试至少覆盖specific culture、parent fallback、neutral fallback、missing key和placeholder一致性。UI culture与format culture可不同，不要用字符串拼接破坏本地化。
+
+## Loading, Resolving, and Isolating Assemblies
+
+`Assembly.Load(AssemblyName)`按identity让loader解析；`LoadFromAssemblyPath`在特定ALC从绝对路径加载；`LoadFromAssemblyName`仍遵循context policy。不要混用`LoadFile`式孤立加载和默认依赖解析。自定义resolver只返回确切允许的assembly或null，不能递归调用自己造成循环。
+
+Resolution是security boundary：插件提供的dependency/native library路径不可信。Canonicalize并限制在plugin root，拒绝path traversal和意外host library替换。隔离解决版本/identity冲突，不限制文件、网络、CPU或native code权限；不可信插件需要进程/容器级sandbox。
+
+<Term def="某个load context内可见、共享或私有的managed/native dependencies及其版本解析规则。">dependency universe</Term>
+
+## Assembly Load Contexts
+
+Default AssemblyLoadContext承载应用共享依赖。自定义ALC可覆盖Load/LoadUnmanagedDll，配合AssemblyDependencyResolver按plugin deps解析。通常把host contract留在Default并由plugin context返回null共享；其他implementation dependencies私有加载，避免版本冲突。
+
+```csharp
+sealed class PluginLoadContext : AssemblyLoadContext
+{
+    private readonly AssemblyDependencyResolver _resolver;
+
+    public PluginLoadContext(string mainPath)
+        : base(isCollectible: true) => _resolver = new(mainPath);
+
+    protected override Assembly? Load(AssemblyName name)
+    {
+        if (name.Name == typeof(IPlugin).Assembly.GetName().Name) return null;
+        string? path = _resolver.ResolveAssemblyToPath(name);
+        return path is null ? null : LoadFromAssemblyPath(path);
+    }
+}
+```
+
+Collectible ALC卸载是合作式：调用Unload只启动过程；只要host static/event/delegate、running thread/task、GCHandle、Type/MethodInfo、instance或native callback仍引用context对象图，就不会回收。测试以WeakReference指向ALC，在scope退出后循环GC/finalizer，仅作为测试验证，不把强制GC放生产流程。
+
+<Stepper>
+  <Step title="切换default、custom、collectible与resolver"><CtcAssemblyLoadLab /></Step>
+  <Step title="画dependency universe">把host contract、plugin implementation、shared framework、private package和native library分区。</Step>
+  <Step title="制造版本冲突与root leak">加载两个依赖版本，再分别保留event/type/task引用，验证cast和unload证据如何变化。</Step>
+</Stepper>
+
+<Callout type="trap" title="AssemblyLoadContext隔离能安全运行不可信插件">
+ALC隔离的是dependency identity和卸载边界，不撤销插件的进程权限。插件仍能访问host允许的文件、网络和native API。
+</Callout>
+
+## Writing a Plug-In System
+
+插件系统先定义小而稳定的contract assembly：entry interface、capabilities、host services、version negotiation、start/stop、cancellation和error policy。Discovery读取manifest而不执行代码，验证plugin id/version/contract range、路径和签名策略。Instantiation才触发静态构造与dependency load。
+
+每个plugin由lifecycle owner管理ALC、entry instance、subscriptions、tasks、timers和resources。Shutdown先停止新调用，Cancel并await plugin work，Dispose entry，退订host events，清除reflection caches/delegates，再Unload。Host不应让plugin type穿越长期cache；跨强隔离边界用DTO/message而非共享implementation objects。
+
+插件更新可side-by-side加载新版，health check后切流，再drain旧版。若native library、全局状态或无法停止thread使unload不可靠，使用worker process，获得真正failure/resource/security isolation。
+
+<Stepper>
+  <Step title="切换discover、load、run与unload"><CtcPluginLifecycleLab /></Step>
+  <Step title="填写plugin ledger">记录contract range、capabilities、ALC、tasks、events、timers、native assets和shutdown deadline。</Step>
+  <Step title="执行升级与回滚">并行加载两版、切换流量、注入启动/运行/停止失败，并用WeakReference验证旧context释放。</Step>
+</Stepper>
+
+<Term def="插件从发现、兼容校验、加载、运行、停止、退订到可证明卸载的完整owner协议。">plugin lifecycle contract</Term>
+
+## 本章回顾：加载成功不等于隔离正确
+
+1. Assembly包含manifest、metadata、IL和resources，host配置还参与runtime解析。
+2. Strong name是identity/signature，不是publisher trust或sandbox。
+3. Satellite resources按culture parent chain fallback，key和placeholder需要契约测试。
+4. ALC定义dependency universe与type identity；shared contract只能由预期context提供。
+5. Collectible unload必须清除所有跨context roots，插件安全隔离仍需进程边界。
+
+<Exercises>
+
+**问题 1：插件实现IPlugin却无法cast，如何诊断？**
+
+<Answer>打印host与plugin两侧IPlugin的AssemblyQualifiedName、Assembly实例和AssemblyLoadContext。若plugin私有加载了contract副本，修改custom ALC让该assembly返回null并由Default共享；再测试版本兼容，避免只比较namespace/type name。</Answer>
+
+**问题 2：怎样证明collectible ALC可以卸载？**
+
+<Answer>把load/run/stop放进不内联helper，返回仅指向ALC的WeakReference；停止tasks/threads，退订events，Dispose实例并清除Type/delegate/cache引用后Unload。退出scope，在测试中循环Collect、WaitForPendingFinalizers、Collect，断言WeakReference不再存活。</Answer>
+
+**问题 3：什么时候应该把插件放到独立进程？**
+
+<Answer>插件不可信、需要CPU/memory/file/network配额，可能crash/死锁，依赖冲突含native/global state，或无法保证threads/callback停止时。ALC只解决managed dependency identity和合作卸载，进程边界才提供故障与权限隔离。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="assembly identity boundary" definition="Assembly identity与load context共同构成类型身份。" />
+  <GlossaryItem term="strong-name trust limit" definition="Strong name不是发布者信任或执行sandbox。" />
+  <GlossaryItem term="dependency universe" definition="Context内共享/私有managed和native依赖集合。" />
+  <GlossaryItem term="plugin lifecycle contract" definition="Discover到可证明Unload的owner协议。" />
+  <GlossaryItem term="collectible root leak" definition="Host引用阻止collectible ALC对象图回收。" />
+</Glossary>
+
+<Term def="Event、static、Type、delegate、task或native callback从host跨界引用插件，阻止collectible context回收。">collectible root leak</Term>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 17: Assemblies" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch17.html" />

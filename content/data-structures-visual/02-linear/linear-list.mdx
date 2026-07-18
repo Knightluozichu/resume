@@ -1,0 +1,280 @@
+---
+title: "第3章 线性表"
+type: C
+section: "大话数据结构 · 线性结构"
+order: 3
+description: "从线性表ADT出发完整实现顺序表与单链表，证明读取、插入、删除、创建和销毁不变量，并比较静态、循环和双向链表变体。"
+demo: true
+math: false
+sourceUrl: "https://www.tup.tsinghua.edu.cn/bookscenter/bookcatalog?id=08952301"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { DsvLinearRepresentationLab, DsvLinkMutationLab, DsvListVariantLab } from "@/components/mdx/data-structures-visual/diagrams/linear-list";
+
+<Objectives>
+
+- 能描述线性表的有限有序序列语义与ADT操作，并写出位置、长度、顺序和失败不变量
+- 能实现顺序表与带头结点单链表的读取、插入、删除、创建和销毁，证明移动/链接边界正确
+- 能比较顺序、单链、静态、循环和双向表示的时间、空间、局部性与owner成本并作出选择
+
+</Objectives>
+
+## 从“第i个元素”开始
+
+线性表首先是逻辑结构：有限个同类型元素按先后排列，除首尾外每个元素有唯一前驱和后继。“第`i`个”来自逻辑次序，不要求内存地址相邻。顺序表用地址偏移隐含次序，链表用链接显式保存次序；二者应实现同一个线性表抽象数据类型。
+
+先预测：链表插入是否总是`O(1)`？若API只给位置`i`，必须先从头定位前驱，整体为`O(n)`；只有调用者已持有可信前驱/迭代器时，链接改写才是常数。复杂度必须对应完整操作契约。
+
+<Term def="由零个或多个同类型数据元素组成的有限有序序列。">线性表</Term>的核心不变量是长度有限、位置连续、相对顺序明确。
+
+## 线性表的定义与抽象数据类型
+
+线性表的定义可写为`L = (a1, a2, ..., an)`。`n=0`为空表；`a1`没有前驱，`an`没有后继。线性表的抽象数据类型通常提供初始化、判空、长度、按位读取、按值定位、插入、删除、清空与遍历。每个操作都要声明位置是0-based还是1-based、失败是否修改状态、元素是复制还是转移ownership。
+
+<Term def="以值模型、操作、前置条件、结果和不变量定义线性表而隐藏存储表示。">线性表ADT</Term>让顺序表与链表共享测试。本文使用0-based：读取/删除要求`index < length`，插入允许`index <= length`。
+
+一个契约测试先保存操作前序列snapshot，执行非法位置插入后断言status为`BAD_POSITION`、长度和全部元素不变；分配失败也不得把半个结点挂入链。正常插入后，新元素位于`index`，原后缀相对顺序保持。
+
+## 线性表的顺序存储结构
+
+<Term def="用一段地址连续的存储单元依次保存线性表元素，并用长度界定有效前缀。">顺序存储结构</Term>通常由数组、`length`和`capacity`组成。第`i`个元素地址为`base + i * sizeof(Element)`，因此按位读取是常数时间；但中间更新需要移动后缀。
+
+```c
+#include <stdbool.h>
+#include <stddef.h>
+
+enum { CAPACITY = 128 };
+typedef int Element;
+
+typedef struct {
+    Element data[CAPACITY];
+    size_t length;
+} SeqList;
+
+bool seq_insert(SeqList *list, size_t index, Element value) {
+    if (list == NULL || list->length > CAPACITY) return false;
+    if (index > list->length || list->length == CAPACITY) return false;
+    for (size_t j = list->length; j > index; --j) {
+        list->data[j] = list->data[j - 1];
+    }
+    list->data[index] = value;
+    ++list->length;
+    return true;
+}
+
+bool seq_erase(SeqList *list, size_t index, Element *removed) {
+    if (list == NULL || index >= list->length) return false;
+    Element value = list->data[index];
+    for (size_t j = index + 1; j < list->length; ++j) {
+        list->data[j - 1] = list->data[j];
+    }
+    --list->length;
+    if (removed != NULL) *removed = value;
+    return true;
+}
+```
+
+### 顺序存储的插入与删除
+
+插入必须从尾向前移动，否则从前向后会覆盖尚未复制的元素；删除从目标后一个元素向前覆盖。移动次数取决于位置：尾部插入0次，首部插入`n`次；若位置均匀，平均约移动一半元素，渐近仍是`Theta(n)`。
+
+动态数组把固定容量换成扩容策略，单次扩容仍可能移动全部元素并使指针/迭代器失效；后续章节可用摊销分析说明append，但本章必须先声明capacity与失败。<Term def="任何公开操作前后都满足0 <= length <= capacity，且data[0..length)恰好表示逻辑序列。">顺序表不变量</Term>是越界检查的中心。
+
+<Callout type="trap" title="数组有capacity个槽位，所以线性表长度就是capacity">
+Capacity是可用存储上限，length是当前逻辑元素数。读取`data[length]`即使在已分配范围内也不是读取合法线性表元素。
+</Callout>
+
+## 线性表的链式存储结构
+
+<Term def="每个结点保存元素与后继链接，结点地址可分散而逻辑次序由链接决定。">链式存储结构</Term>不需要连续大块空间，可按结点增长。代价是每元素链接开销、分配失败、指针追逐与较差cache局部性。
+
+### 头指针与头结点
+
+<Term def="指向链表第一个结点或哨兵头结点的变量，是访问整条链的入口。">头指针</Term>必须保存才能找到其余结点。<Term def="位于首元结点之前、不保存普通数据的哨兵结点，用于统一首部插入删除。">头结点</Term>不是业务元素，不计入`length`。带头结点后，第0个元素的前驱始终存在，可减少空表特判。
+
+```c
+#include <stdlib.h>
+
+typedef struct Node {
+    Element value;
+    struct Node *next;
+} Node;
+
+typedef struct {
+    Node head;       /* sentinel */
+    size_t length;
+} LinkList;
+
+static Node *link_predecessor(LinkList *list, size_t index) {
+    if (list == NULL || index > list->length) return NULL;
+    Node *previous = &list->head;
+    for (size_t i = 0; i < index; ++i) previous = previous->next;
+    return previous;
+}
+
+bool link_insert(LinkList *list, size_t index, Element value) {
+    Node *previous = link_predecessor(list, index);
+    if (previous == NULL) return false;
+    Node *node = malloc(sizeof(*node));
+    if (node == NULL) return false;
+    node->value = value;
+    node->next = previous->next;
+    previous->next = node;
+    ++list->length;
+    return true;
+}
+```
+
+分配在链接修改前完成，失败时原表不变。先令新结点指向后缀，再让前驱指向新结点，避免丢失链。<Term def="从头结点沿next恰好访问length个数据结点，最后为NULL，且无重复结点或意外环。">单链表不变量</Term>可用计数加Floyd cycle detection验证。
+
+### 单链表读取、插入与删除
+
+单链表读取第`i`项必须从首元结点走`i`步，不能随机定位。删除先找到前驱，保存`victim = previous->next`，再令`previous->next = victim->next`；若API返回值，先复制/转移元素，再按ownership释放结点。
+
+<DsvLinkMutationLab />
+
+<Stepper>
+  <Step title="切换定位、插入、删除和销毁"><DsvLinkMutationLab /></Step>
+  <Step title="跟踪三结点例子">对A->B->C在首/中/尾插入删除，逐步写previous、victim、next和length。</Step>
+  <Step title="注入失败">模拟malloc失败、非法位置和损坏环，确认原链接不变或validator明确拒绝。</Step>
+</Stepper>
+
+```c
+bool link_erase(LinkList *list, size_t index, Element *removed) {
+    if (list == NULL || index >= list->length) return false;
+    Node *previous = link_predecessor(list, index);
+    Node *victim = previous->next;
+    Element value = victim->value;
+    previous->next = victim->next;
+    free(victim);
+    --list->length;
+    if (removed != NULL) *removed = value;
+    return true;
+}
+
+void link_clear(LinkList *list) {
+    if (list == NULL) return;
+    Node *current = list->head.next;
+    while (current != NULL) {
+        Node *next = current->next;
+        free(current);
+        current = next;
+    }
+    list->head.next = NULL;
+    list->length = 0;
+}
+```
+
+### 单链表整表创建与整表删除
+
+头插法每次把新结点放到头后，会反转输入顺序；尾插法维护tail，保持输入顺序。整表创建应在临时list中完成，任意分配失败就清理temp，成功后再交付，避免调用者看到半表。整表删除必须先保存`next`再释放当前结点，最后重置sentinel和长度，使重复clear安全。
+
+所有权若复杂于`int`，需定义element destroy/copy callback。先释放结点再读取其中指针是use-after-free；只释放结点不释放其拥有的payload是泄漏；同一payload由多个结点共享则不能盲目深释放。
+
+## 顺序存储结构与链式存储结构比较
+
+顺序与链式结构比较必须放在同一ADT、同一输入规模和完整操作下进行。只比较链接改写与元素移动，会漏掉定位、分配、扩容、cache、引用失效和错误恢复；只比较大O，又会漏掉每元素额外指针和连续批处理的常数优势。
+
+<DsvLinearRepresentationLab />
+
+<Stepper>
+  <Step title="切换四类操作成本"><DsvLinearRepresentationLab /></Step>
+  <Step title="加入完整操作">把“按位置插入”拆成定位+修改+分配，把“遍历”加入cache局部性和分支成本。</Step>
+  <Step title="按工作负载选择">记录随机读取、顺序遍历、首尾/中间更新比例、最大规模、内存预算和引用稳定性。</Step>
+</Stepper>
+
+顺序表擅长按位访问、紧凑存储和批量遍历；链表擅长在已知结点附近改链接、地址稳定和非连续增长。链表不是动态数据的默认答案：若工作负载主要遍历和尾部append，动态数组通常更简单且更快。选择必须由真实操作分布和profile支持。
+
+### 操作矩阵必须包含定位、修改和生命周期
+
+`get(index)`在顺序表上从base计算地址，在链表上沿next推进；`locate(value)`两者若无额外索引通常都要线性扫描，但连续内存可让顺序表有更好预取。`insert(index,value)`和`erase(index)`在顺序表中要移动后缀，在单链表中要定位前驱；已有迭代器只改变链表的定位条件，API必须保证迭代器属于当前list且未失效。
+
+尾部append也不能只写“顺序表O(1)、链表O(n)”。固定顺序表在未满时常数、满时失败；动态数组扩容时单次线性但可有摊销常数；只保存head的单链表要走到尾部，额外保存tail后可常数挂接，但删除最后结点仍需找前驱；双向链表保存tail则能直接定位尾前驱。成本来自完整representation，不来自“数组/链表”两个名字。
+
+引用稳定性是另一条轴。动态顺序表扩容会移动底层数组，使元素指针、span和iterator全部失效；中间插入删除也会改变后缀元素地址。链表未删除结点的地址通常稳定，但指向被删结点的指针立即悬空，allocator还可能复用同一地址造成ABA式误判。公开API应声明修改后哪些handle仍有效，不能让调用者猜。
+
+### 批量创建应把部分失败留在边界内
+
+单链表读取、插入、删除、创建与整表删除不是五段孤立代码。创建从输入逐项插入，任何parse或malloc失败都要清理已经创建的前缀；读取失败不能改变结构；删除必须按元素ownership返回或销毁payload；整表删除要与单项删除共享同一释放规则。若每段各自决定owner，组合后就会出现重复释放或泄漏。
+
+安全的批量创建可以先初始化temporary sentinel和length，尾插每个成功元素；失败时只clear temp并返回错误，原目标list不变；全部成功后交换head/tail/length完成commit。若直接逐项附加到live list，调用者必须接受partial result并知道处理到哪个输入，这是一种不同且需要显式声明的API。
+
+顺序表批量构建也有相同问题。先验证输入数量不超过capacity，再验证每个元素，最后一次复制并更新length，可以提供strong failure guarantee；边复制边增加length则暴露partial state。选择哪种保证取决于内存与吞吐，但错误后状态必须可描述、可测试。
+
+### 用模型对照测试所有表示
+
+建立一个只适合小规模的reference model，例如固定数组加直接移动，然后生成随机操作序列：insert、erase、get、clear以及非法index。每一步同时作用于SeqList、LinkList和model，比较status、length与完整序列；操作后运行representation validator。这样既验证公开语义，也能发现length忘改、尾指针失效和环。
+
+故障注入至少覆盖第0次、中间和最后一次分配失败；顺序表覆盖满容量；链表覆盖空表、单结点、首尾与重复值。运行AddressSanitizer/UndefinedBehaviorSanitizer检查越界和use-after-free，再用分配计数证明create/clear循环后净结点数为0。算法示例只有进入这套证据链，才从“指针图看起来正确”变成可维护实现。
+
+性能实验应把语义测试与速度测试分开。对几何增长规模分别测随机get、顺序遍历、随机位置更新、已知结点更新和尾部append；记录元素大小、allocator和cache条件。若链表在“已知结点更新”测试中还包含从头定位，或者数组测试预留capacity而链表测试计入malloc，必须在结论中说明操作契约差异。
+
+## 静态链表、循环链表与双向链表
+
+<DsvListVariantLab />
+
+<Stepper>
+  <Step title="切换四种链表变体"><DsvListVariantLab /></Step>
+  <Step title="写各自不变量">静态链表检查free/used池；循环表检查回到sentinel；双链表检查next-prev互逆。</Step>
+  <Step title="选择终止条件">NULL终止只适用于非循环链；循环结构必须保存起点/sentinel并限制步数防损坏死循环。</Step>
+</Stepper>
+
+### 静态链表
+
+<Term def="在固定数组中用下标cursor模拟next指针，并用空闲链管理未使用槽位。">静态链表</Term>适合无指针语言、共享内存/持久化布局或固定内存池。它仍需分配/回收cursor：used链与free链不相交，二者覆盖全部合法槽位，0或特殊值作为null cursor时不能同时保存普通结点。
+
+### 循环链表
+
+<Term def="尾结点的next重新指向首结点或头结点，使链路闭合。">循环链表</Term>可从任意结点遍历一周，持有tail时可常数访问首尾。空表、单结点和完整一圈是必须测试的边界；遍历条件不能写`current != NULL`。
+
+### 双向链表
+
+<Term def="每个结点同时保存前驱prev和后继next链接，支持双向遍历。">双向链表</Term>在已知目标结点时可直接删除，不必重新找前驱；代价是额外链接和更复杂更新。插入`node`到`left/right`之间后必须满足`left->next == node`、`node->prev == left`、`node->next == right`、`right->prev == node`。Sentinel循环双链表可把空/首/尾操作统一为同一splice。
+
+<Callout type="trap" title="双向链表多一个prev，所以删除天然安全">
+它减少定位成本，却增加必须同步维护的关系。漏改任一方向会产生正向可见、反向损坏的半一致结构；操作后要检查互逆链接与长度。
+</Callout>
+
+## 本章回顾：一个ADT，多种成本模型
+
+1. 线性表是有限有序序列，位置、长度和相对顺序属于公开语义。
+2. 顺序表用连续地址和有效前缀实现，按位读取快，中间更新需移动且受capacity约束。
+3. 单链表用next表达次序，按位读取需遍历；已知前驱时插入删除只改常数条链接。
+4. 整表创建/删除必须处理分配失败、payload ownership和部分构建清理。
+5. 静态、循环与双向链表改变存储、终止和导航成本，但不改变线性ADT语义。
+
+<Exercises>
+
+**问题 1：为什么“链表插入O(1)”不是按位置插入的完整结论？**
+
+<Answer>改链接本身是常数次，但若API只给index，单链表先要从头找前驱，整体Theta(n)；还可能包含malloc。只有已有可信前驱/迭代器且分配条件另算时，插入核心才是Theta(1)。</Answer>
+
+**问题 2：怎样证明单链表删除没有丢失后缀或泄漏？**
+
+<Answer>删除前保存previous、victim和victim->next；链接previous->next到后继，处理payload ownership后释放victim，长度减一。操作后从sentinel恰好访问length个结点、无环且序列等于原序列去掉目标。</Answer>
+
+**问题 3：循环双向sentinel链表应检查哪些边界？**
+
+<Answer>空表满足sentinel.next/prev都指向自身；单元素四条互逆关系成立；首/尾/中间插删后每个node.next.prev和node.prev.next回到自身；sentinel不计入length且遍历一圈准确停止。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="线性表" definition="零个或多个同类型元素组成的有限有序序列。" />
+  <GlossaryItem term="线性表ADT" definition="以值、操作和不变量定义并隐藏表示的线性表契约。" />
+  <GlossaryItem term="顺序存储结构" definition="用连续存储单元依次保存元素并以长度界定有效前缀。" />
+  <GlossaryItem term="顺序表不变量" definition="长度不超过容量且有效前缀恰好等于逻辑序列。" />
+  <GlossaryItem term="链式存储结构" definition="用分散结点及链接保存元素逻辑次序的表示。" />
+  <GlossaryItem term="头指针" definition="指向首结点或sentinel、用于进入整条链的变量。" />
+  <GlossaryItem term="头结点" definition="首元结点前不保存业务数据、统一边界操作的哨兵。" />
+  <GlossaryItem term="单链表不变量" definition="从头沿next访问准确长度的唯一结点并以NULL终止。" />
+  <GlossaryItem term="静态链表" definition="在固定数组中用cursor模拟链接并维护空闲池。" />
+  <GlossaryItem term="循环链表" definition="尾链接回到首结点或头结点形成闭环的链表。" />
+  <GlossaryItem term="双向链表" definition="每结点同时保存prev和next、支持双向导航的链表。" />
+</Glossary>
+
+<Attribution adaptedFrom="大话数据结构（溢彩加强版），第3章 线性表" adaptedUrl="https://www.tup.tsinghua.edu.cn/bookscenter/bookcatalog?id=08952301" />

@@ -1,108 +1,315 @@
 ---
-title: 碰撞检测
+title: 第 7 章：Ball、AABB 与 Pong 物理
 type: A
-section: 游戏编程入门
+section: Pong 项目
 order: 7
-description: AABB 包围盒、圆形碰撞与像素级碰撞的原理对比，以及粗筛定候选、精判定真碰的两阶段策略。
+description: 对齐官方第 3 版第 7 章：实现 Ball 类、AABB 碰撞、墙壁与球拍反射、穿透修正、失分重置、计分和 C++20 三路比较。
 demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
 draft: false
 ---
 
-import { BcgCollisionTypesDiagram } from "@/components/mdx/beginning-cpp-game/diagrams/bcg-collision-types";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  BcgpAabbResolutionMap,
+  BcgpBallLifecycleMap,
+  BcgpPongScoreMap,
+} from "@/components/mdx/beginning-cpp-game-programming/diagrams/collision-detection";
 
 <Objectives>
-- 能写出 AABB 矩形重叠的判断条件并理解其局限
-- 能说明圆形碰撞的原理及相比 AABB 的适用场景
-- 能用「粗筛定候选、精判定真碰」的两阶段策略兼顾精度与性能
+
+- 能实现维护位置、速度、形状和边界不变量的 `Ball` 类，并用 dt 推进与重置
+- 能分析 AABB 只提供重叠事实的局限，写出方向筛选、穿透修正和速度反射组成的球拍响应
+- 能设计底线失分、发球重置与 HUD 更新事件，并正确解释 C++20 `<=>` 的排序语义
+
 </Objectives>
 
-## 让物体能相互作用
+## 从“检测到了，然后怎样恢复合法状态”开始
 
-画面能动起来了，但子弹打中敌人要扣血、玩家撞墙要停下——这些需要碰撞检测。碰撞检测回答一个问题：两个物体此刻是否接触/重叠？答案驱动游戏响应。
+第 6 章只有球拍。第 7 章加入
 
-<BcgCollisionTypesDiagram />
+<Term def="封装球的位置、速度、尺寸与可绘制形状，并维护运动和重置不变量的 Pong 游戏对象。">
+  Ball 类
+</Term>
+，完成第二个可玩项目。碰撞系统不能停在布尔值：检测后必须把球移出重叠、反射正确速度分量，并确保反馈和计分只触发一次。
 
-## AABB 包围盒
+<BcgpBallLifecycleMap />
 
-AABB（Axis-Aligned Bounding Box，轴对齐包围盒）用不旋转的矩形包围物体，判两矩形是否重叠。重叠条件：
+## Ball 的状态与构造
 
-```cpp
-A.left < B.right && A.right > B.left
-  && A.top < B.bottom && A.bottom > B.top
-```
-
-SFML 用 `sprite.getGlobalBounds()` 取 `FloatRect`，两个 rect 调 `intersects()` 即可判断。AABB 最快，但物体非矩形或旋转时会有「视觉没碰但盒子碰了」的误差。
-
-## 圆形碰撞
-
-每个物体用一个圆（圆心 + 半径）包围。两圆碰撞当且仅当**圆心距离 < 半径之和**：
+球需要二维位置、二维速度和 RectangleShape。位置作为事实来源，shape 每次更新后同步；速度单位是像素每秒。构造后尺寸为正、速度有限且形状位置一致。
 
 ```cpp
-float dx = a.x - b.x, dy = a.y - b.y;
-float r = a.radius + b.radius;
-bool hit = (dx*dx + dy*dy) < r*r;  // 比平方避免开方
+class Ball {
+public:
+    Ball(sf::Vector2f start, sf::Vector2f size, sf::Vector2f velocity);
+    void update(float dt, sf::Vector2f arenaSize);
+    void reset(sf::Vector2f position, sf::Vector2f velocity);
+    void bounceFromBat(float batTop);
+
+    [[nodiscard]] const sf::RectangleShape& shape() const noexcept;
+    [[nodiscard]] sf::FloatRect bounds() const noexcept;
+    [[nodiscard]] bool missed(float arenaHeight) const noexcept;
+
+private:
+    sf::Vector2f position_;
+    sf::Vector2f velocity_;
+    sf::RectangleShape shape_;
+};
 ```
 
-相比 AABB，圆形更适合球类、圆形物体，且物体旋转时圆不变、判断稳定。缺点是长条形物体（剑、墙）用圆包围误差大。
+<Term def="表示每秒位置变化的二维向量；x/y 分量独立决定水平和垂直方向与速率。">
+  速度向量
+</Term>
+不能和每帧位移混用。`reset`
+同时恢复位置与速度，避免新发球继承旧轮次的屏外位置或反弹方向。
 
-## 像素级碰撞
+## 积分与墙壁反射
 
-取两精灵在重叠区域内的像素，逐个检查是否**双方都非透明**（alpha > 0）。若有任一像素双方都不透明，则真碰撞。这忽略透明边角，最精确。
+<Term def="用当前速度和经过时间近似推进位置的数值步骤，本章采用 position += velocity * dt 的显式欧拉形式。">
+  运动积分
+</Term>
+先更新候选位置，再处理边界。撞左右墙只反转 x，撞顶部只反转
+y；同时投影回边界，防止球留在墙外每帧反复翻转。
+
+```cpp
+void Ball::update(float dt, sf::Vector2f arena)
+{
+    position_ += velocity_ * dt;
+    const sf::Vector2f size{shape_.getSize()};
+
+    if (position_.x < 0.0F) {
+        position_.x = 0.0F;
+        velocity_.x = std::abs(velocity_.x);
+    } else if (position_.x + size.x > arena.x) {
+        position_.x = std::max(0.0F, arena.x - size.x);
+        velocity_.x = -std::abs(velocity_.x);
+    }
+
+    if (position_.y < 0.0F) {
+        position_.y = 0.0F;
+        velocity_.y = std::abs(velocity_.y);
+    }
+    shape_.setPosition(position_);
+}
+```
+
+<Term def="把物体位置投影回合法边界并反转碰撞法向速度分量的简化弹性响应。">
+  速度反射
+</Term>
+使用 `abs`
+固定反弹方向，避免球已朝内却因重复条件又翻回。窗口比球还窄时需要暂停或把最大坐标钳为零，不能构造负边界。
+
+## AABB 检测到底保证什么
+
+<Term def="Axis-Aligned Bounding Box，以不旋转且与坐标轴对齐的矩形近似对象范围。">
+  AABB
+</Term>
+在 x 与 y 两轴都重叠时报告相交。SFML 2.6 可使用
+`FloatRect::intersects`；它回答当前离散时刻是否重叠，不提供首次接触时间、碰撞法线或穿透深度。
+
+```cpp
+bool overlaps(const sf::FloatRect& a, const sf::FloatRect& b)
+{
+    return a.left < b.left + b.width &&
+           a.left + a.width > b.left &&
+           a.top < b.top + b.height &&
+           a.top + a.height > b.top;
+}
+```
+
+<Term def="在两个轴对齐矩形的投影都发生严格交叠时返回当前重叠事实的检测。">
+  AABB 碰撞检测
+</Term>
+是否把边缘刚好接触视为碰撞取决于 `<` 还是 `<=`，要与游戏规则一致。Pong 的矩形球和球拍用 AABB 已足够，不需要像素级碰撞。
 
 <Callout type="trap">
-像素级碰撞极慢——每个候选对要在重叠区逐像素比对，物体多时开销爆炸。绝不能对所有物体都用它。正确做法是先粗筛（AABB/圆形）淘汰绝大多数，只对少数候选做像素精判。
+  **现象**：球看起来穿过球拍，AABB 从未返回 true。**原因**：dt
+  很大时，球从球拍上方一步跳到下方，两个离散端点都不重叠。**修法**：限制
+  dt、提高固定更新频率，或使用扫掠 AABB
+  计算时间区间；不能靠扩大视觉矩形掩盖所有高速穿透。
 </Callout>
 
-## 两阶段策略
+### 离散检测与扫掠检测的边界
 
-实战标准做法：粗筛定候选、精判定真碰。
+离散 AABB 只看更新后的矩形，成本低且适合本书当前速度。要估算是否可能穿透，可比较单步最大位移 `speed * maxDt` 与最薄碰撞体尺寸；位移接近或超过球拍高度时，端点检测不再可靠。减小球速并不是通用修复，它改变玩法；应先确定允许速度和最差帧间隔。
 
-1. **粗筛**：用 AABB/圆形快速淘汰不相交的对，只留包围盒重叠的少数候选。
-2. **精判**：仅对候选对做像素级检测（必要时）。
+扫掠 AABB 把球在一帧中的运动看作线段或扩张矩形，计算两轴进入和离开时间；时间区间重叠且首次进入位于本帧内，才得到接触时刻。随后把球推进到接触点、反射剩余时间。该方法更复杂，本章不要求完整实现，但必须知道 AABB 布尔值不是连续物理证明。
 
-1000 个物体里可能只有 5 对进入像素检测，性能可接受。子弹、方块敌人用 AABB 已足够，不必像素；只有不规则角色需要精确时才上像素级。
+固定步长是另一层策略：渲染帧积累真实时间，以例如 1/120 秒重复更新零到多次，并限制单帧最大追赶次数。它让碰撞步长稳定、测试可重复，但慢机器仍可能落后；插值只改善画面，不会修复错误规则。Pong 可先采用 dt 上限并用高速测试确定安全范围。
 
-## 选型决策
+## 球拍响应：方向筛选、投影、反射
 
-- **AABB**：方块状物体、最快，首选粗筛。
-- **圆形**：球/圆形物体、会旋转的物体。
-- **像素**：不规则精灵、需最精确，只用于精判少数候选。
+球与球拍重叠后，只有球向下运动才响应。先把球底边放到球拍顶边，再让 y 速度为负；否则球仍嵌在球拍中，下一帧又相交并反复翻转。
 
-<Callout type="tip">
-碰撞检测的工程智慧不是「选最精确的」，而是「在正确的地方用刚好够用的」。粗筛用快的，精判才用精确的，二者配合兼顾速度与精度。
+```cpp
+void Ball::bounceFromBat(float batTop)
+{
+    const float ballHeight{shape_.getSize().y};
+    position_.y = batTop - ballHeight;
+    velocity_.y = -std::abs(velocity_.y);
+    shape_.setPosition(position_);
+}
+
+if (ballVelocityY > 0.0F && overlaps(ball.bounds(), bat.shape().getGlobalBounds())) {
+    ball.bounceFromBat(bat.shape().getGlobalBounds().top);
+    batHitSound.play();
+}
+```
+
+示例查询速度可通过 `movingDown()` 封装，避免 main 依赖内部字段。音效只在满足“向下且重叠”的边沿触发。球拍移动也会影响接触，但本章简化为只反射球；更完整物理可把球拍速度加入水平分量。
+
+<BcgpAabbResolutionMap />
+
+<Term def="检测到离散重叠后，把对象移回接触边界以消除交叠并恢复下一帧可分离状态的步骤。">
+  穿透修正
+</Term>
+与速度反射缺一不可。只有投影没有反射会再次进入，只有反射没有投影会在深穿透时连续触发。
+
+## 击球位置与水平速度
+
+为了让 Pong 可控，可根据球撞在球拍中心左侧或右侧调整 x 速度。偏移先归一化到 -1..1，再乘最大横向速度；仍要限制最小纵向速度，避免球几乎水平永不落下。
+
+```cpp
+const sf::FloatRect batBounds{bat.shape().getGlobalBounds()};
+const float batCenter{batBounds.left + batBounds.width * 0.5F};
+const float ballCenter{ball.bounds().left + ball.bounds().width * 0.5F};
+const float offset{std::clamp((ballCenter - batCenter) / (batBounds.width * 0.5F),
+                              -1.0F, 1.0F)};
+ball.setHorizontalVelocity(offset * maximumHorizontalSpeed);
+```
+
+球拍宽度必须大于零。这个响应是玩法模型，不是现实冲量；参数目标是可控和稳定。记录碰撞前后位置速度，可复现角落异常。
+
+## 底线、计分与发球重置
+
+<Term def="球完整越过场地下边界后生成一次得分或失分事件，并停止本轮球更新。">
+  底线事件
+</Term>
+不能用 `if (ball.y > height) ++misses` 每帧累加。检测后立即重置或进入短暂 Serve 状态，确保一轮只计一次。
+
+```cpp
+if (ball.missed(arenaHeight)) {
+    ++misses;
+    ball.reset({arenaWidth * 0.5F, arenaHeight * 0.4F},
+               {initialSpeedX, initialSpeedY});
+    scoreText.setString("Misses: " + std::to_string(misses));
+}
+```
+
+<Term def="把 Ball 放回发球位置并恢复有效速度、清除旧碰撞状态，以开始下一轮。">
+  发球重置
+</Term>
+要让球完整位于场内。若发球方向随机，随机引擎由游戏状态拥有并可固定种子测试；不要在
+reset 内每次按时钟重新播种。
+
+<BcgpPongScoreMap />
+
+## 三路比较运算符
+
+C++20 的
+
+<Term def="写作小于、等于、大于三符号组合的比较运算符，一次产生小于、等于或大于的排序结果，可配合默认成员比较生成关系运算。">
+  三路比较运算符
+</Term>
+适合值对象排序，不参与碰撞响应。默认 `<=>` 按成员声明顺序进行词典式比较，必须确认它符合业务排名。
+
+```cpp
+#include <compare>
+
+struct RankedScore {
+    int points;
+    int streak;
+
+    auto operator<=>(const RankedScore&) const = default;
+};
+```
+
+这里先比较 points，再在相等时比较 streak；如果“分数高排前”或“连击只用于显示”，默认顺序就不符合排名，需要自定义比较器。浮点成员可能产生 partial ordering，因为 NaN 与任何值无序，不能假设总排序。
+
+<Callout type="trap">
+  **现象**：排行榜使用默认 `<=>` 后低分排在前面。**原因**：默认关系定义的是升序词典顺序，不自动理解“更高分更好”。**修法**：明确业务排序方向与平局规则，用自定义比较器并测试小于、相等、大于和并列。
 </Callout>
+
+## 运行 Pong 的阶段顺序
+
+每帧先处理窗口事件和球拍输入，再更新 Bat 与 Ball；然后处理墙壁、球拍碰撞和底线事件，最后刷新 HUD 并绘制。所有检测使用同一次更新后的状态。若游戏结束，停止 Ball 更新但继续事件与终局绘制。
+
+绘制顺序是背景、Bat、Ball、分数和提示。Ball 与 Bat 的 Shape 都只经 const 查询绘制。窗口 resize 时统一使用逻辑场地尺寸或同步 View，不能一部分规则用像素、一部分用旧逻辑宽高。
+
+测试矩阵包括左右墙、顶部、球拍中间和两端、球向上重叠不反弹、深穿透投影、底线只计一次、重置速度合法。用大 dt 明确观察离散检测限制，再选择 dt 上限或固定步长。
+
+### 计分事件与状态提交
+
+将 `BallMissed`、`BatHit` 看成更新阶段产生的事件，而不是让 HUD、声音和规则各自重新检查位置。规则层消费 BallMissed 增加分数并发球，音频层消费 BatHit 播放一次声音，HUD 在数值变化后重建字符串。事件可以只是本帧局部结构，不必立即建立复杂消息总线。
+
+同一更新步内先解决墙壁，再判断球拍，最后判断底线；如果 Ball 已因底线重置，本帧后续不再处理旧位置。一次更新结果可以包含 `hitBat` 与 `missed`，并断言两者不会同时为真。日志记录旧位置、得分方和新发球速度，便于复现。
+
+### 完成 Pong 的端到端验收
+
+正常路径要证明：球拍按住移动且松开停止，球与三面墙和球拍稳定反弹，击球位置改变横向轨迹，漏球只计一次并重新发球，达到目标分进入终局，重启后分数、Ball 和 Bat 都恢复。关闭窗口在任何阶段有效，初始化失败不会进入循环。
+
+故障测试把 dt 注入为正常值、上限值和超大墙上间隔；把 Ball 直接放在墙外、球拍内和底线下，检查一次更新后恢复合法状态。用固定发球速度运行多轮，确认没有 NaN、无限速度或越界累积。若加入加速机制，速度上限和最小纵向分量也成为不变量。
+
+视觉测试在不同窗口比例检查 View：碰撞使用逻辑坐标，HUD 使用屏幕层，resize 不应让物理边界和绘制边界分离。调试叠加可画出 Ball/Bat 的 global bounds，但只在开发模式启用，避免把诊断几何混入正式资源。
+
+每次失败都保存种子、dt、位置和速度，保证下一次运行可以重放同一轨迹。
+
+> 先预测：球向上离开球拍但包围盒仍重叠时，若不检查速度方向会怎样？每帧都可能再次反射，球被吸在球拍附近；响应必须要求向下运动并在反弹时完成位置分离。
 
 ## 小结
 
-- AABB 最快但最粗，适合方块物体和粗筛
-- 圆形碰撞适合球类和旋转物体
-- 像素级最精确但最慢，只对少数候选精判
-- 两阶段：粗筛定候选、精判定真碰
-
-<Attribution
-  adaptedFrom="Beginning C++ Game Programming (Michael Dawson)"
-  adaptedUrl="https://www.packtpub.com/"
-/>
-
-<Glossary>
-<GlossaryItem term="AABB">
-Axis-Aligned Bounding Box，轴对齐包围盒，用不旋转的矩形包围物体检测重叠，最快但最粗，适合方块物体和粗筛。
-</GlossaryItem>
-<GlossaryItem term="圆形碰撞">
-用圆心距离与半径和比较判断碰撞的方法，适合球类和会旋转的物体，旋转时判断不变。
-</GlossaryItem>
-<GlossaryItem term="像素级碰撞">
-逐像素比对两物体重叠区是否都非透明的检测方法，最精确但最慢，只用于精判少数候选。
-</GlossaryItem>
-<GlossaryItem term="两阶段碰撞">
-先用粗筛（AABB/圆形）淘汰不相交的对定候选，再对候选做精判（像素级）的策略，兼顾精度与性能。
-</GlossaryItem>
-</Glossary>
+- Ball 类封装位置、速度、形状、积分和重置，main 协调与 Bat 的世界规则
+- 墙壁碰撞先投影回边界，再只反转对应速度分量，防止重复翻转
+- AABB 只报告离散重叠；高速球可能跨越，需要 dt 策略或扫掠检测
+- 球拍响应由向下方向筛选、穿透修正和 y 速度反射组成，反馈只触发一次
+- 底线生成一次计分事件并立即发球重置，HUD 只是数值分数的投影
+- `<=>` 提供排序结果，默认成员顺序和升序方向必须与业务排名一致
 
 <Exercises>
-  <Answer question="写出 AABB 两矩形重叠的判断条件。SFML 里怎么实现？">重叠条件：A.left &lt; B.right && A.right &gt; B.left && A.top &lt; B.bottom && A.bottom &gt; B.top（即两矩形在 x 和 y 方向都相互跨越）。SFML 用 sprite.getGlobalBounds() 取 FloatRect，两个 rect 调 rectA.intersects(rectB) 返回 bool 即可判断。AABB 最快，但非矩形或旋转物体会有误差。</Answer>
-  <Answer question="为什么不能对所有物体都用像素级碰撞？正确做法是什么？">像素级碰撞要在重叠区逐像素比对，每个候选对开销大，物体多时复杂度爆炸、帧率崩塌。正确做法是两阶段：先用 AABB/圆形粗筛淘汰绝大多数不相交的对，只留少数候选；再仅对候选做像素精判。这样 1000 个物体里可能只有 5 对进入像素检测，性能可接受。粗筛定候选、精判定真碰。</Answer>
+
+**问题 1** 球深度进入球拍 8 px 且 vy 为正，只把 vy 取负为什么仍可能重复碰撞？正确响应顺序是什么？
+
+<Answer>
+
+速度改变后球的位置仍在球拍内部，下一帧离开距离可能不足，AABB 继续重叠并再次触发。应先确认球向下，计算球拍 top，把球 y 投影为 `batTop - ballHeight`，同步 shape，再令 vy 为负并触发一次反馈。
+
+</Answer>
+
+**问题 2** 为什么底线计分必须是事件而不是持续条件？列出 reset 后至少三个不变量。
+
+<Answer>
+
+球在底线外可能停留多帧，持续条件会每帧加分。首次越界生成一次事件后立即重置或切换 Serve。重置后球完整位于场内、位置与 shape 一致、速度非零且朝合法方向，旧碰撞/计分事件已清除，HUD 与数值分数一致。
+
+</Answer>
+
+**问题 3** 默认 `RankedScore{points, streak}` 的 `<=>` 怎样比较？为何它未必符合排行榜？
+
+<Answer>
+
+默认比较按声明顺序：先 points，只有相等再比较 streak，产生升序关系。排行榜通常希望高分在前，可能还不希望 streak 参与并列，因此需要反向比较 points 并明确平局规则，不能把语言生成的词典顺序当成业务排名。
+
+</Answer>
+
 </Exercises>
+
+<Glossary>
+
+<GlossaryItem term="Ball 类">封装球位置、速度、尺寸、形状、运动和重置不变量的 Pong 对象。</GlossaryItem>
+<GlossaryItem term="速度向量">表示每秒二维位置变化的 x/y 分量。</GlossaryItem>
+<GlossaryItem term="运动积分">用速度乘 dt 近似推进位置的数值步骤。</GlossaryItem>
+<GlossaryItem term="速度反射">把位置投影回边界并反转碰撞法向速度分量的响应。</GlossaryItem>
+<GlossaryItem term="AABB">与坐标轴对齐的矩形包围范围。</GlossaryItem>
+<GlossaryItem term="AABB 碰撞检测">在两个矩形的 x/y 投影都严格重叠时报告当前交叠。</GlossaryItem>
+<GlossaryItem term="穿透修正">检测重叠后把对象移动回接触边界以恢复分离状态。</GlossaryItem>
+<GlossaryItem term="底线事件">球完整越过下边界后只产生一次的计分或失分事件。</GlossaryItem>
+<GlossaryItem term="发球重置">恢复 Ball 场内位置与有效速度并清除旧轮次状态。</GlossaryItem>
+<GlossaryItem term="三路比较运算符">C++20 的 `<=>`，一次产生小于、等于或大于的排序关系。</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 7"
+  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+/>

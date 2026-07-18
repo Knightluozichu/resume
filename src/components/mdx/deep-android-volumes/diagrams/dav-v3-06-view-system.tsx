@@ -1,0 +1,6 @@
+"use client";
+import { OfficialDavSeriesLab } from "./official-dav-series-lab";
+const props={unitTitle:"卷III 第6章 深入理解控件系统",focus:"连接WindowManager、ViewRootImpl遍历、软硬件绘制、输入派发与Activity窗口",nodes:["第6章 深入理解控件系统","6.1 初识Android的控件系统","6.1.1 另一种创建窗口的方法","6.1.2 控件系统的组成","6.2 深入理解WindowManager","6.2.1 WindowManager的创建与体系结构","6.2.2 通过WindowManagerGlobal添加窗口","6.2.3 更新窗口的布局","6.2.4 删除窗口","6.2.5 WindowManager的总结","6.3 深入理解ViewRootImpl","6.3.1 ViewRootImpl的创建及其重要成员","6.3.2 控件系统的心跳：performTraversals()","6.3.3 ViewRootImpl总结","6.4 深入理解控件树的绘制","6.4.1 理解Canvas","6.4.2 View.invalidate()与脏区域","6.4.3 开始绘制","6.4.4 软件绘制的原理","6.4.5 硬件加速绘制的原理","6.4.6 使用绘图缓存","6.4.7 控件动画","6.4.8 绘制控件树的总结","6.5 深入理解输入事件的派发","6.5.1 触摸模式","6.5.2 控件焦点","6.5.3 输入事件派发的综述","6.5.4 按键事件的派发","6.5.5 触摸事件的派发","6.5.6 输入事件派发的总结","6.6 Activity与控件系统","6.6.1 理解PhoneWindow","6.6.2 Activity窗口的创建与显示","6.7 本章小结"],versions:["卷I / Android 2.2","卷II / Android 4.0.1","卷III / Android 4.2.2"]};
+export function DavSeriesPipelineLab(){return <OfficialDavSeriesLab mode="pipeline" {...props}/>;}
+export function DavSeriesExperimentLab(){return <OfficialDavSeriesLab mode="experiment" {...props}/>;}
+export function DavSeriesEvidenceLab(){return <OfficialDavSeriesLab mode="evidence" {...props}/>;}

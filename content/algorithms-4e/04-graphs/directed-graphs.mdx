@@ -1,0 +1,315 @@
+---
+title: "4.2 Directed Graphs：可达性、DAG拓扑序与强连通分量"
+type: B
+section: "图"
+order: 16
+description: "按官方4.2重建Digraph表示与reverse、DirectedDFS、onStack cycle detection、DFS orders、topological sort、Kosaraju-Sharir SCC及transitive closure。"
+demo: true
+math: true
+sourceUrl: "https://algs4.cs.princeton.edu/42digraph/"
+draft: false
+---
+
+import { Algs4DirectedGraphModelMap, Algs4DirectedReachabilityLab, Algs4MultiSourceReachabilityLab, Algs4DirectedCycleTraceLab, Algs4DfsOrderLab, Algs4TopologicalOrderLab, Algs4KosarajuSccLab, Algs4KernelDagLab, Algs4TransitiveClosureLab } from "@/components/mdx/algorithms-4e/diagrams/directed-graphs";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释directed edge、in/outdegree、reverse、reachability、DAG、topological order与SCC
+- 能计算DFS orders、cycle parent chain、topological ranks、SCC ids与transitive-closure成本
+- 能实现Digraph addEdge/reverse、DirectedDFS、DirectedCycle、DepthFirstOrder、Topological与Kosaraju
+- 能分析把digraph当undirected、marked与onStack混用、cyclic dependency及错误SCC order
+- 能设计edge-direction、cycle/topological、mutual reachability、kernel DAG与closure matrix验收
+
+</Objectives>
+
+## 从“能去，不代表能回”开始
+
+有向图（<Term def="由vertices与ordered endpoint pairs组成的graph，edge v到w只允许沿from-to方向traverse。">有向图</Term>，directed graphs）把web links、task dependencies、data flow、call relation、one-way roads与state transitions建模为arrows。与undirected graph最根本的差别不是画了箭头，而是reachability不再symmetric：v可到w，不推出w可到v。
+
+先预测从2能到4且4能到5，是否说明5也能到2。不会。只有若5到2也存在directed path，三者才可能落在同一strong component。Directed relation迫使我们区分out-neighbors、in-neighbors、source-to-target path和mutual reachability。
+
+官方4.2按digraph representation、directed reachability、cycles and DAGs、DFS orders/topological order、strong connectivity与transitive closure展开。它们都复用DFS skeleton，但每一步新增的state决定不同certificate。
+
+<Algs4DirectedGraphModelMap />
+
+## 4.2.1 Digraph representation：edge只进入from的adjacency list
+
+有向图表示（<Term def="以vertex-indexed outgoing adjacency lists存储ordered edges，并维护indegree、outdegree与reverse操作。">有向图表示</Term>，digraph representation）与4.1 Graph相似，但 `addEdge(v,w)` 只写 `adj[v]`：
+
+```java
+public void addEdge(int v, int w) {
+    validateVertex(v);
+    validateVertex(w);
+    adj[v].add(w);
+    indegree[w]++;
+    E++;
+}
+
+public Iterable<Integer> adj(int v) {
+    return adj[v];
+}
+```
+
+`adj(v)`只迭代从v指出的destinations，cost proportional to outdegree(v)。每条edge给一个source贡献outdegree、给一个destination贡献indegree，因此：
+
+$$
+\sum_v outdegree(v)=E=\sum_v indegree(v)
+$$
+
+Digraph仍允许parallel edges与self-loops。Adjacency-list space Theta(V+E)，而不是undirected graph的2E endpoint entries。若错误地双向添加，所有one-way semantics消失，directed reachability与SCC都会被扩大。
+
+Reverse digraph \(G^R\) 翻转每条edge：
+
+```java
+public Digraph reverse() {
+    Digraph reverse = new Digraph(V);
+    for (int v = 0; v < V; v++)
+        for (int w : adj(v))
+            reverse.addEdge(w, v);
+    return reverse;
+}
+```
+
+Reverse是本节的核心变换：`w reachable from v in G` 等价于 `v reachable from w in reverse(G)`。它让“谁能到达s”变成普通的“从s可达谁”，也为Kosaraju SCC提供第一遍order。
+
+## 4.2.2 Directed reachability：只沿outgoing edges
+
+有向可达性（<Term def="存在遵循每条arrow方向的directed path，使target可由source到达的relation。">有向可达性</Term>，directed reachability）可直接复用DFS，但必须使用Digraph的outgoing adj：
+
+```java
+private void dfs(Digraph G, int v) {
+    marked[v] = true;
+    count++;
+    for (int w : G.adj(v))
+        if (!marked[w]) dfs(G, w);
+}
+```
+
+<Algs4DirectedReachabilityLab />
+
+Single-source `marked[w]` 回答source到w；它不回答w到source。后者应在reverse(G)从source运行DFS，或在G从w运行DFS。Strong connectivity正是两个方向都true。
+
+Multi-source DirectedDFS接受sources iterable，对每个尚未marked source启动同一DFS；最终marked set是所有source reachability sets的union。它适合正则表达式NFA中的current states、multiple entry points或contagion sources。
+
+<Algs4MultiSourceReachabilityLab />
+
+DFS只进入每个reachable vertex一次并scan其outgoing list，whole digraph worst：
+
+$$
+T_{\mathrm{reach}}=\Theta(V+E)
+$$
+
+若只访问局部，则成本按reachable subgraph计。Path version仍用edgeTo记录first-discovery parent；directed path certificate必须逐pair验证edge方向，不能只检查两个vertices相邻。
+
+## 4.2.3 Cycles and DAGs：onStack区分back edge与finished edge
+
+环与有向无环图（cycles and DAGs）需要比marked更多的信息。Directed cycle是沿arrows回到start的nonempty path；DAG（<Term def="不含任何directed cycle的digraph，可表达consistent precedence constraints。">有向无环图</Term>，directed acyclic graph）允许tasks按依赖顺序线性安排。
+
+仅看到edge指向marked vertex不能判cycle。Marked vertex可能早已完成，edge只是cross/forward edge。DirectedCycle额外维护 `onStack[v]`：vertex enter设true，所有descendants完成后设false；edge指向onStack vertex才是back edge。
+
+<Algs4DirectedCycleTraceLab />
+
+```java
+private void dfs(Digraph G, int v) {
+    onStack[v] = true;
+    marked[v] = true;
+    for (int w : G.adj(v)) {
+        if (cycle != null) return;
+        if (!marked[w]) {
+            edgeTo[w] = v;
+            dfs(G, w);
+        } else if (onStack[w]) {
+            cycle = new Stack<Integer>();
+            for (int x = v; x != w; x = edgeTo[x]) cycle.push(x);
+            cycle.push(w);
+            cycle.push(v);
+        }
+    }
+    onStack[v] = false;
+}
+```
+
+Cycle certificate应首尾相同，每个consecutive pair是actual directed edge，intermediate vertices不重复。`onStack`是当前active recursion path，不是“访问过”；漏掉return时clear会把finished subtree错当active ancestor。
+
+<Callout type="trap" title="把marked neighbor一律判成directed cycle">
+DFS可以有edge指向已完成的vertex，它不在current recursion stack上，无法沿tree parents回到current。只有onStack neighbor表示current path ancestor，back edge才真正闭合directed cycle。
+</Callout>
+
+## 4.2.4 DFS orders：enter、finish与reverse finish
+
+DepthFirstOrder在DFS生命周期的三个时点记录vertex：
+
+- Preorder：enter并mark时enqueue。
+- Postorder：所有out-neighbors完成后enqueue。
+- Reverse postorder：把postorder反转。
+
+<Algs4DfsOrderLab />
+
+Postorder反映“descendants先完成，ancestor后完成”。在DAG中，若有edge \(v\to w\)，DFS要么由v进入w并让w先finish，要么w已在其他search中finish；v不会在w仍active时由edge回到w，否则存在cycle。因此reverse post让v排在w之前。
+
+Pre/post arrays还支持constant-time interval reasoning：在DFS tree中，ancestor的pre早且post晚。不过general digraph edge classification需结合tree structure，不能只看一个order list。
+
+## 4.2.5 Topological order：所有arrows都向前
+
+拓扑顺序（<Term def="DAG vertices的linear order，使每条directed edge from v to w都满足v排在w之前。">拓扑顺序</Term>，topological order）是dependency schedule。若rank记录position，certificate是：
+
+$$
+\forall(v\to w)\in E,\quad rank(v)<rank(w)
+$$
+
+<Algs4TopologicalOrderLab />
+
+关键定理有两部分：
+
+1. Digraph有topological order当且仅当它是DAG。
+2. DAG的DFS reverse postorder是一种topological order。
+
+若存在directed cycle，cycle上的每条edge要求rank严格递增，绕一圈却要求start小于自身，矛盾；所以cycle certificate足以拒绝order。反之DAG无back edge，reverse post满足所有edges forward。
+
+Official `Topological`先运行DirectedCycle；无cycle才计算DepthFirstOrder.reversePost，并建立rank array。Whole processTheta(V+E)。Topological order通常不唯一；两个indegree-zero tasks可交换。若client需要deterministic output，应规定tie-breaker。
+
+Queue-based Kahn algorithm是另一证书：初始化所有indegrees，将zero-indegree sources入queue，逐个remove并decrement outgoing destinations；若最终processed count小于V，remaining subgraph含cycle。它同样linear，并适合显式追踪ready tasks。
+
+<Callout type="trap" title="有cycle时仍输出一串DFS finish order并称作topological">
+Every digraph都有reverse postorder，但只有DAG时它满足all edges forward。必须先做cycle detection，或最终逐edge验证rank；cyclic dependency应返回cycle而非伪schedule。
+</Callout>
+
+## 4.2.6 Strong connectivity：mutual reachability的equivalence classes
+
+强连通性（<Term def="Vertices v与w互相存在directed paths；其maximal equivalence classes称strongly connected components。">强连通性</Term>，strong connectivity）要求两个方向都可达：
+
+$$
+v\sim w
+\iff
+(v\leadsto w)\land(w\leadsto v)
+$$
+
+它是equivalence relation，因而partition vertices。DAG中每个vertex单独构成一个SCC；任何含多个vertices的SCC必含directed cycle。
+
+Kosaraju-Sharir algorithm只需两轮DFS：
+
+1. 在reverse(G)上计算reverse postorder。
+2. 按该order在G上对每个unmarked vertex运行DFS；每次search得到一个SCC并赋同一id。
+
+<Algs4KosarajuSccLab />
+
+为什么first-pass order重要？把每个SCC收缩为kernel DAG。Reverse graph把kernel arrows反向；其reverse postorder让第二遍优先从original kernel的sink-side component启动，该DFS不会越过cross edge进入尚未处理component，因此一次search恰好封闭一个SCC。随意用preorder没有这一保证。
+
+Total work是两次DFS加一次reverse：
+
+$$
+T_{\mathrm{SCC}}=\Theta(V+E)
+$$
+
+预处理后 `stronglyConnected(v,w)`只比较ids，constant time。Certificate可在每个id内选representative，验证所有members both reachable；cross-id pair至少缺一个方向。
+
+## 4.2.7 Kernel DAG：先压缩cycles，再分析global flow
+
+将每个SCC contraction为single vertex，保留不同components之间的arrows并deduplicate，得到kernel DAG（condensation graph）。它必定acyclic：若components间形成cycle，cycle上components彼此可达，本应合并为一个SCC。
+
+<Algs4KernelDagLab />
+
+Kernel DAG把local cyclic behavior与global one-way flow分开。可在其上做topological schedule、source/sink analysis、2-SAT assignment或reachable-core reasoning。任意original path映射成component path；同component内部可自由mutually reach。
+
+SCC output验收不仅看count。应核对每个original edge：同id是internal edge，不同id则成为kernel edge；kernel必须通过DirectedCycle检查；所有vertices恰好属于一个component；component sizes总和V。
+
+## 4.2.8 Transitive closure：用space换大量reachability queries
+
+Transitive closure保留同一vertices，并在v可达w时包含logical edge v到w。Simple implementation为每个source运行一次DirectedDFS，保存V组marked arrays：
+
+```java
+public TransitiveClosure(Digraph G) {
+    tc = new DirectedDFS[G.V()];
+    for (int v = 0; v < G.V(); v++)
+        tc[v] = new DirectedDFS(G, v);
+}
+
+public boolean reachable(int v, int w) {
+    return tc[v].marked(w);
+}
+```
+
+<Algs4TransitiveClosureLab />
+
+Preprocessing timeTheta(V(V+E))、spaceTheta(V squared)，之后query constant。它适合static medium graph与大量queries；large sparse graph若queries少，按需DFS更节省。Dynamic edge updates会使closure maintenance复杂，不能继续假设一次build永久有效。
+
+Closure certificate包含reflexive reachability、每条original edge可达、transitivity：若v可达w且w可达x，则v可达x。SCC在closure matrix中表现为互相全true的diagonal blocks。
+
+## 统一验收：每增加一种state就增加一种certificate
+
+<Stepper>
+  <Step title="核对edge方向与reverse">
+    <Algs4DirectedGraphModelMap />
+    验证outdegree/indegree sums为E，reverse的每条edge一一翻转且double reverse恢复original。
+  </Step>
+  <Step title="分别计算from与to reachability">
+    <Algs4DirectedReachabilityLab />
+    <Algs4MultiSourceReachabilityLab />
+    核对only outgoing traversal、multi-source union及path edges方向。
+  </Step>
+  <Step title="用onStack返回cycle certificate">
+    <Algs4DirectedCycleTraceLab />
+    确认enter/exit onStack lifecycle，cycle首尾相同且每个arrow存在。
+  </Step>
+  <Step title="验证DAG order的每一条edge">
+    <Algs4DfsOrderLab />
+    <Algs4TopologicalOrderLab />
+    无cycle时逐edge检查rank(from)小于rank(to)，有cycle时拒绝order并返回cycle。
+  </Step>
+  <Step title="双遍DFS验收SCC与kernel">
+    <Algs4KosarajuSccLab />
+    <Algs4KernelDagLab />
+    核对id内mutual reachability、partition completeness、cross edges与kernel acyclic。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. Directed edge只进入source adjacency list；indegree sum与outdegree sum都等于E。
+2. Reverse graph把“谁能到s”转成“从s能到谁”，并支撑SCC ordering。
+3. DirectedDFS沿outgoing edges计算single/multi-source reachability，关系通常不symmetric。
+4. Cycle detection必须区分marked与onStack，back edge to active ancestor才闭合directed cycle。
+5. DFS记录pre、post与reverse post；DAG的reverse post是一种topological order。
+6. Digraph有topological order当且仅当无directed cycle，cycle是拒绝schedule的certificate。
+7. Kosaraju先在reverse graph定order，再在original graph逐DFS划分SCC，整体linear。
+8. SCC contraction形成kernel DAG；transitive closure则用quadratic space换constant reachability query。
+
+<Exercises>
+
+**问题 1：若G中v能到w，reverse(G)中哪一个reachability statement成立？**
+
+<Answer>Reverse(G)中w能到v。Original path的每条arrow逐一翻转，vertex sequence反向后形成w到v的directed path。</Answer>
+
+**问题 2：为什么edge指向marked vertex不一定表示directed cycle？**
+
+<Answer>Marked vertex可能已完成并离开recursion stack，current无法沿tree path回到它。只有neighbor仍onStack，才是current active ancestors之一，back edge可闭合cycle。</Answer>
+
+**问题 3：如何用一个candidate topological order做线性certificate？**
+
+<Answer>建立rank[vertex]，遍历每条edge v到w，要求rank[v]严格小于rank[w]；并确认order恰含每个vertex一次。总成本Theta(V+E)。</Answer>
+
+**问题 4：Kosaraju第二遍为什么不能随意按vertex编号启动DFS？**
+
+<Answer>任意root可能沿cross-component edge进入其他SCC并错误合并。Reverse(G)的reverse postorder保证第二遍按kernel DAG合适方向选择roots，使每次DFS恰好封闭一个尚未处理SCC。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="有向图">Edges为ordered endpoint pairs且只能顺arrow traversal的graph。</GlossaryItem>
+  <GlossaryItem term="有向图表示">只存outgoing adjacency并维护indegree/reverse的representation。</GlossaryItem>
+  <GlossaryItem term="有向可达性">存在遵循arrows的source-to-target directed path。</GlossaryItem>
+  <GlossaryItem term="有向无环图">不含directed cycle的digraph，简称DAG。</GlossaryItem>
+  <GlossaryItem term="拓扑顺序">让每条edge source都排在destination之前的DAG linear order。</GlossaryItem>
+  <GlossaryItem term="强连通性">两个vertices互相可达；maximal classes称SCC。</GlossaryItem>
+  <GlossaryItem term="传递闭包">预先表示all-pairs reachability的logical digraph/matrix。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Algorithms, 4th Edition · Section 4.2 Directed Graphs"
+  href="https://algs4.cs.princeton.edu/42digraph/"
+  author="Robert Sedgewick and Kevin Wayne"
+  license="原书、官方页面与Java示例版权归Robert Sedgewick、Kevin Wayne及Addison-Wesley所有；本页依据作者官方4.2 synopsis及Digraph、DirectedDFS、DirectedCycle、DepthFirstOrder、Topological、KosarajuSharirSCC当前实现独立重构教学内容"
+/>

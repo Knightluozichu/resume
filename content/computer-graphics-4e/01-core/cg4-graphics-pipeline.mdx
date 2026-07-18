@@ -1,138 +1,301 @@
 ---
-title: "图形渲染管线"
+title: "图形系统、输出图元与可编程渲染管线"
 type: B
 section: "计算机图形学与渲染"
 order: 1
-description: "从顶点数据到屏幕像素的完整流水线解析"
+description: "从显示硬件和图形系统，到图元实现、颜色出口与 shader 管线诊断"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://www.pearson.com/en-gb/subject-catalog/p/computer-graphics-with-open-gl-pearson-new-international-edition/P200000004424/9781292037196"
 draft: false
 ---
 
-import { Cg4GraphicsPipelineDiagram } from "@/components/mdx/computer-graphics-4e/diagrams/cg4-graphics-pipeline";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  Cg4GraphicsPipelineDiagram,
+  Cg4PipelineDebugDiagram,
+} from "@/components/mdx/computer-graphics-4e/diagrams/cg4-graphics-pipeline";
+import { Cg4StepFlowDiagram } from "@/components/mdx/computer-graphics-4e/diagrams/cg4-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 理解图形渲染管线的完整流程与各阶段职责
-- 掌握顶点着色器与片段着色器的执行模型
-- 明确可编程阶段与固定功能阶段的区别
-- 能根据管线阶段定位渲染问题
+
+- 能描述应用、API/driver、GPU pipeline、framebuffer/compositor 与显示设备组成的图形系统路径
+- 能实现 line/polygon 输出图元的 CPU 参考算法和 programmable shader GPU 对照
+- 能比较 vertex、primitive/raster、fragment 与 per-sample 操作的输入输出和执行次数边界
+- 能解释图元属性、线性颜色、sRGB 编码与显示出口如何共同决定最终像素
+
 </Objectives>
 
-## 直觉引入
+## 图形系统大于 GPU 管线
 
-渲染管线就像汽车装配线：原材料（顶点数据）进入流水线，经过多道工序（顶点着色、图元装配、光栅化、片段着色），每道工序都在前一道的基础上加工，最终产出成品（屏幕像素）。每道工序都可以独立优化，但整体速度取决于最慢的工序。
+原书首先讨论 **Computer Graphics Hardware / 图形硬件**和 **Computer Graphics Systems and Applications / 计算机图形系统与图形应用**，因为“出图”依赖完整系统：应用产生模型/数据与交互，API 和驱动组织资源与命令，GPU 处理图元和样本，framebuffer/compositor 合成，显示设备按刷新和颜色特性输出。
 
-关键在于理解流水线是「串行阶段、并行数据」——阶段之间串行，但每个阶段内部对大量顶点/片段并行处理。这就是 GPU 的设计哲学。
-
-## 概念讲解
-
-渲染管线从顶点数据到屏幕像素经历五个核心阶段：
-
-<Term def="逐顶点执行的着色器，负责坐标变换和属性计算">顶点着色器</Term>是第一个可编程阶段，每个顶点执行一次。<Term def="将顶点按绘制模式组装成图元并进行裁剪">图元装配</Term>将独立顶点组装为三角形等图元。<Term def="将图元扫描转换为像素片段">光栅化</Term>是 3D 到 2D 的桥梁。<Term def="逐片段计算最终颜色的着色器">片段着色器</Term>是另一个可编程阶段，执行次数远多于顶点着色器。
-
-### 阶段详解
-- **顶点输入**：CPU 将顶点数据（位置、法线、UV 等）上传到 GPU
-- **顶点着色器**：MVP 变换、逐顶点属性计算
-- **图元装配**：组装图元、裁剪、背面剔除
-- **光栅化**：扫描转换、属性插值（重心坐标）
-- **片段着色器**：纹理采样、光照计算、最终颜色
-- **逐片段操作**：深度测试、模板测试、混合、写入帧缓冲
-
-### 可编程 vs 固定功能
-顶点着色器和片段着色器是可编程的（开发者写 GLSL 代码），光栅化和深度测试是固定功能的（硬件实现，通过状态配置）。这种设计平衡了灵活性与性能。
-
-## 交互 Demo
-
-> 猜一猜：一个覆盖 10000 像素的三角形，顶点着色器和片段着色器分别执行多少次？
+<Term def="由应用、图形 API/driver、CPU/GPU、内存、framebuffer/compositor、输入和显示设备组成的端到端路径">图形系统路径</Term>中的任一层都可能成为错误或延迟来源。窗口颜色空间错误不能靠 fragment shader 任意加亮修复；CPU 提交瓶颈也不会因 shader 少一条乘法消失。
 
 <Cg4GraphicsPipelineDiagram />
 
-<Stepper>
-<Step title="第一步：顶点处理">
-3 个顶点进入顶点着色器，各执行 1 次（共 3 次），完成 MVP 变换，输出裁剪空间坐标和插值属性。
-</Step>
-<Step title="第二步：图元装配与光栅化">
-3 个顶点组装成 1 个三角形，经裁剪和背面剔除后光栅化，扫描转换生成约 10000 个片段。
-</Step>
-<Step title="第三步：片段处理">
-10000 个片段进入片段着色器，各执行 1 次（共 10000 次），计算光照和纹理后经深度测试写入帧缓冲。
-</Step>
-</Stepper>
+## 输出图元与属性先于 Shader
 
-## 代码对照
+**Graphics Output Primitives / 图形输出图元**定义 point、line、polygon、curve、text 等基本输出对象；**Attributes of Graphics Primitives / 图元属性**定义 line attribute、fill attribute、颜色、线型、宽度、连接和填充规则。它们是渲染意图，不等同于某个 API 的函数名。
 
-一个最小化的渲染管线 C++ + GLSL 实现：
+<Term def="由点、线、多边形、曲线或文本等基本几何及其拓扑构成的输出描述">输出图元</Term>进入现代 GPU 时通常被转换为 points/lines/triangles，复杂曲线和文字先 tessellate 或使用专门距离场/曲线技术。线宽和非实线样式在不同 API/硬件上的保证有限，工程上常用三角形显式构造宽线。
+
+<Term def="控制线型、宽度、填充规则、颜色、连接和端点等外观但不改变基础拓扑的参数">图元属性</Term>必须区分几何属性与采样结果。例如线宽在屏幕空间定义时会受 viewport 和高 DPI 影响；polygon fill rule 又决定自交轮廓内部如何判定。
+
+## 实现算法是硬件阶段的参考模型
+
+**Implementation Algorithms for Graphics Primitives and Attributes / 图元实现算法**解释连续图元怎样变成离散样本。Bresenham 使用整数增量选择最接近理想线的像素；scan-line polygon fill 维护边交点并按填充规则生成跨度。现代 GPU 固定功能 rasterizer 规模化执行同类覆盖任务，但规范采样规则和并行实现会比教学算法更复杂。
+
+理想直线可写为：
+
+$$
+F(x,y)=\Delta y(x-x_0)-\Delta x(y-y_0)=0.
+$$
+
+在主方向每前进一步，只需用误差增量判断次方向是否前进，避免逐像素浮点斜率。下面是第一象限、$0\le m\le1$ 的教学核心；完整实现需处理八分区、端点和裁剪：
 
 ```cpp
-// C++ 端：配置管线状态并绘制
-// 1. 上传顶点数据
-GLuint VAO, VBO;
-glGenVertexArrays(1, &VAO);
-glGenBuffers(1, &VBO);
-glBindVertexArray(VAO);
-glBindBuffer(GL_ARRAY_BUFFER, VBO);
-glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-// 2. 设置顶点属性指针
-glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-glEnableVertexAttribArray(0);
-// 3. 使用着色器程序并绘制
-glUseProgram(shaderProgram);
-glDrawArrays(GL_TRIANGLES, 0, 3); // 3个顶点 = 1个三角形
-```
+std::vector<Pixel> bresenhamLowSlope(int x0, int y0, int x1, int y1) {
+  int dx = x1 - x0;
+  int dy = y1 - y0;
+  int decision = 2 * dy - dx;
+  int y = y0;
+  std::vector<Pixel> pixels;
 
-```glsl
-// 顶点着色器：管线第一阶段
-#version 330 core
-layout(location = 0) in vec3 aPos;
-void main() {
-    gl_Position = vec4(aPos, 1.0); // 直接输出（无变换）
+  for (int x = x0; x <= x1; ++x) {
+    pixels.push_back({x, y});
+    if (decision > 0) {
+      ++y;
+      decision -= 2 * dx;
+    }
+    decision += 2 * dy;
+  }
+  return pixels;
 }
 ```
 
+CPU 参考输出应和解析线距离、八分区对称性、端点包含规则对照。它不应被误用为现代 GPU 抗锯齿线的像素级金标准。
+
+## 可编程 Raster Pipeline 的中间表示
+
+常见 raster pipeline 数据流为：vertex fetch → vertex shader → primitive assembly → clipping → perspective divide/viewport → rasterization/interpolation → fragment shader → depth/stencil/blend → framebuffer。阶段间有依赖，但硬件可流水、并行、缓存、融合或提前测试，不是“前一阶段全部结束后下一阶段才开始”。
+
+### Vertex 到 clip space
+
+Vertex shader 至少产生齐次 clip position：
+
+$$
+\mathbf p_{clip}=PVM\mathbf p_{object}=(x_c,y_c,z_c,w_c)^T.
+$$
+
+裁剪在齐次空间相对六个平面进行，之后 perspective divide 得到 NDC。先除以 w 再裁剪会错误处理跨近裁剪面的图元。
+
 ```glsl
-// 片段着色器：管线最后可编程阶段
-#version 330 core
-out vec4 FragColor;
+#version 450 core
+layout(location = 0) in vec3 position;
+layout(location = 1) in vec3 color;
+layout(std140, binding = 0) uniform Camera { mat4 viewProjection; } camera;
+layout(std140, binding = 1) uniform Object { mat4 model; } objectData;
+
+layout(location = 0) out vec3 vertexColor;
+
 void main() {
-    FragColor = vec4(1.0, 0.5, 0.2, 1.0); // 固定橙色
+    gl_Position = camera.viewProjection * objectData.model * vec4(position, 1.0);
+    vertexColor = color;
 }
 ```
+
+“三角形三个顶点，所以 vertex shader 执行三次”只是逻辑近似。Indexed draws 可通过 post-transform cache 重用结果；实现的 invocation 计数受索引、缓存、实例和生成阶段影响。应说 shader 对每个需要处理的 vertex invocation 定义结果，而不是承诺精确硬件次数。
+
+### Rasterization 与插值
+
+图元装配形成三角形等拓扑；clipping 可能产生新顶点；culling 排除朝向不符合规则的图元；rasterization 按采样位置生成 fragments，并以重心坐标插值 varyings。透视正确插值对属性 $a$ 使用：
+
+$$
+a(p)=\frac{\sum_i \lambda_i\,a_i/w_i}{\sum_i \lambda_i/w_i}.
+$$
+
+直接线性插值屏幕空间 UV 会导致透视纹理游动。`flat`、`noperspective`等 qualifier 则明确选择不同插值合同。
+
+### Fragment 与 per-sample operations
+
+```glsl
+#version 450 core
+layout(location = 0) in vec3 vertexColor;
+layout(location = 0) out vec4 outColor;
+
+void main() {
+    outColor = vec4(vertexColor, 1.0); // 线性工作颜色，出口编码另行处理
+}
+```
+
+Fragment shader invocation 不等于最终 pixel：
+
+- 多个图元 overdraw 会在同一 pixel 产生多个 fragments；
+- early depth/stencil 可能在 shader 前拒绝部分 fragments，shader 行为又可能迫使 late tests；
+- shader derivative 可能需要 helper invocations，它们执行但不写 framebuffer；
+- MSAA 记录多个 coverage/depth samples，不默认让 fragment shader 每 sample 执行；只有 sample shading 或特定行为改变频率；
+- discard、alpha-to-coverage、blend 和 color write mask 都会改变最终写入。
+
+所以“覆盖 5000 像素就执行约 5000 次、4×MSAA 就约 20000 次”不是可靠结论。用 pipeline statistics、overdraw 和 shader profiler 测量。
+
+## 颜色模型与显示出口
+
+**Color Models and Color Applications / 颜色模型与颜色应用**提醒我们 framebuffer 数字不是物理颜色本身。线性光照结果通常在写入 sRGB attachment 时编码，显示系统再解释为目标色彩空间。若 shader 手动 gamma 编码同时 attachment 执行 sRGB conversion，会发生双重编码。
+
+简化 sRGB 传递函数不是单一 $c^{1/2.2}$；精确分段编码为：
+
+$$
+C_{srgb}=\begin{cases}
+12.92C_{lin},&C_{lin}\le0.0031308\\
+1.055C_{lin}^{1/2.4}-0.055,&C_{lin}>0.0031308.
+\end{cases}
+$$
+
+<Term def="从 shader 的线性工作值，经 attachment encoding、compositor 和显示色彩空间到观察结果的转换合同">颜色出口</Term>需要声明工作空间、attachment format、alpha 约定、tone mapping 和显示目标。RGB、HSV、CMYK、CIE 等 color model 服务不同表达和应用，不能仅凭三个通道就认为可直接混算。
+
+## Programmable Shader 的边界
+
+**Programmable Shaders / 可编程着色器**让应用定义 vertex/fragment 以及可选几何、曲面细分、compute 等阶段，但 clipping/raster/depth/blend 仍有固定或状态化规则。现代 shader 也不能绕过资源接口、同步和 framebuffer 颜色合同。
+
+Pipeline throughput 不是各阶段时间简单相加。稳态近似受最慢且不能被重叠隐藏的资源约束：
+
+$$
+T_{frame}\gtrsim\max(T_{vertex},T_{raster},T_{fragment},T_{memory},T_{output}),
+$$
+
+但阶段共享执行单元、缓存和带宽，真实瓶颈需 counter 证明。减少 vertex 工作若 fragment/带宽受限，帧时间可能不变。
+
+## 按第一个失真阶段诊断
+
+<Cg4PipelineDebugDiagram />
+
+调试时保存中间表示：draw arguments、vertex fetch、clip/NDC positions、primitive count、attachments、depth/stencil、shader resources 和颜色空间。黑屏只是最终症状，真正问题可能在第一条错误数据上。
+
+```cpp
+DebugProbe probe;
+probe.captureDrawArguments(draw);
+probe.assertFinite(clipPositions);
+probe.assertInsideExpectedViewVolume(referenceVertices);
+probe.snapshotColorDepthAttachments("after-opaque");
+probe.compareReferencePixels({center, silhouetteEdge, occludedPoint});
+probe.recordPipelineStatistics();
+```
+
+## 三步建立双路径实验
+
+<Stepper>
+<Step title="第一步：建立 CPU 图元参考">
+
+实现 Bresenham line 与 scan-line/edge-function polygon 覆盖，固定像素中心、端点和 fill rule，并保存参考 bitmap。
+
+<Cg4StepFlowDiagram
+  caption="CPU 路径展示离散化决定，不冒充具体 GPU 的完整规范实现。"
+  stage={1}
+  stages={["Reference primitives：line/polygon coverage、attributes、expected pixels"]}
+/>
+
+</Step>
+<Step title="第二步：建立 Shader 管线对照">
+
+上传同一几何，记录 vertex→clip→NDC→sample→fragment 中间量；统一 viewport、cull、depth、blend 和 color encoding。
+
+<Cg4StepFlowDiagram
+  caption="GPU 对照以数学和图像合同一致为目标，不要求内部调用次数相同。"
+  stage={2}
+  stages={[
+    "Reference primitives：line/polygon coverage、attributes、expected pixels",
+    "Programmable path：vertex、clip、raster、fragment、per-sample state",
+  ]}
+/>
+
+</Step>
+<Step title="第三步：定位正确性与瓶颈">
+
+比较关键像素和边界容差，再结合 CPU timeline、pipeline statistics、overdraw 与带宽 counter 确认最慢层。
+
+<Cg4StepFlowDiagram
+  caption="正确性证据和性能证据分开收集，避免用帧率证明图像正确。"
+  stage={3}
+  stages={[
+    "Reference primitives：line/polygon coverage、attributes、expected pixels",
+    "Programmable path：vertex、clip、raster、fragment、per-sample state",
+    "Evidence：reference images、stage counters、timeline、color output",
+  ]}
+/>
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** 认为片段就是像素，混淆两个概念。
-**原因 →** 片段和像素在大多数情况下一一对应。
-**修法 →** 片段是潜在像素——它包含了颜色、深度等信息，但可能被深度测试、模板测试等丢弃。只有通过了所有逐片段操作后，片段才写入帧缓冲成为像素。一个像素位置可能对应多个片段（不同图元覆盖），但最终只有一个写入。
+**现象 →** 用像素数直接估算 fragment shader invocation，并据此判断优化收益。
+**原因 →** 忽略 overdraw、early/late tests、helper invocation、MSAA coverage 与 sample shading。
+**修法 →** 把像素数当下界线索，使用 pipeline statistics、overdraw view 和 shader profiler测实际执行与瓶颈。
 </Callout>
 
 <Callout type="trap">
-**现象 →** 把所有计算都放在片段着色器，忽视顶点着色器的分担能力。
-**原因 →** 片段着色器更灵活，容易想到在那里做所有计算。
-**修法 →** 片段着色器执行次数远多于顶点着色器（3 顶点 vs 10000 片段）。能放在顶点着色器计算并插值的就不要放在片段着色器。例如 ViewMatrix * ModelMatrix 可以预乘在 CPU 端，避免在着色器中重复计算。
+**现象 →** 顶点在 NDC 看似合理但图元穿过相机时爆裂。
+**原因 →** 在齐次 clipping 前手动除以 w，或没有处理 w 符号和近裁剪面。
+**修法 →** 保留 clip coordinates 交给规范裁剪，再 perspective divide；CPU 探针也按同一顺序。
 </Callout>
 
+<Callout type="trap">
+**现象 →** 光照数值正确却整体过亮/过暗，不同窗口或截图结果不一致。
+**原因 →** 线性工作值、sRGB attachment、shader 手动编码和 compositor 目标未形成单一颜色出口合同。
+**修法 →** 明确每个纹理/attachment 的颜色语义，只在一个出口编码，并用已知灰阶和色卡验证。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题**：渲染管线中哪两个阶段是可编程的？为什么不全做成可编程的？
+
+1. **调用计数：** Indexed triangle mesh 有 1000 个唯一顶点、3000 个索引，最终覆盖 20000 像素。能否推出 vertex/fragment shader 精确次数？
 
 <Answer>
-顶点着色器和片段着色器是可编程的（现代 OpenGL 还有几何着色器、曲面细分着色器）。不全做成可编程是因为：1) 光栅化等阶段需要高度的硬件并行优化，固定功能可保证性能；2) 统一的光栅化规则保证不同实现的一致性；3) 固定功能阶段减少驱动开销和编程复杂度。可编程与固定的混合设计平衡了灵活性与性能。
+不能。Vertex invocation 受索引重用和 post-transform cache 影响，可能接近唯一顶点数但不由此保证；fragment invocation 受裁剪、culling、overdraw、early/late depth、helper invocations、MSAA/sample shading 和 discard 影响。可给逻辑工作量范围，再用 pipeline statistics 和 profiler 获取实现上的实际计数。
 </Answer>
 
-**问题**：一个三角形有 3 个顶点，覆盖 5000 个像素，顶点着色器和片段着色器各执行多少次？
+2. **双路径差异：** CPU Bresenham 线与 GPU line primitive 边缘像素不同，是否说明 GPU 错误？
 
 <Answer>
-顶点着色器执行 3 次（每个顶点一次）。片段着色器执行约 5000 次（每个片段一次）。如果开启了 MSAA 4x，片段着色器可能执行约 20000 次（每个像素 4 个子样本各一次，但现代 GPU 有优化）。这就是片段着色器优化比顶点着色器更重要的原因。
+不说明。教学 Bresenham 固定了像素中心、端点和单样本选择；GPU API 具有自己的 diamond-exit/coverage、宽度、抗锯齿和 sample 规则。应先对齐 viewport、sample count、line state 和规范规则；CPU 路径用于验证离散化思想，只有在声明相同规则后才能逐像素比较。
 </Answer>
+
+3. **颜色诊断：** 线性值 0.18 写入 sRGB framebuffer，shader 又先做 pow(color,1/2.2)。会发生什么？
+
+<Answer>
+发生近似双重编码：shader 把线性值先编码一次，sRGB attachment 写入又编码一次，显示结果明显偏亮。应让 shader 输出线性值，由 sRGB attachment 完成出口编码；若目标是线性 UNORM attachment，则由后续明确的显示转换负责。用精确 sRGB 分段函数而非 2.2 幂作参考。
+</Answer>
+
 </Exercises>
 
+## 本章回顾
+
+- 图形系统路径覆盖硬件、应用、driver/GPU、framebuffer/compositor 与显示，不等于单一 GPU 管线；
+- 输出图元、图元属性和实现算法构成可执行 CPU 参考，现代 shader 路径继承其数学合同；
+- vertex/fragment invocation 与顶点/像素数没有固定一一关系，性能由 counter 和 timeline 证明；
+- 颜色模型和颜色出口是最终图像合同的一部分，不能在 shader、attachment 和显示端重复编码。
+
+## 术语表
+
 <Glossary>
-<GlossaryItem term="顶点着色器">渲染管线第一个可编程阶段，逐顶点执行，负责坐标变换（MVP）和逐顶点属性计算。</GlossaryItem>
-<GlossaryItem term="图元装配">将顶点着色器输出的顶点按绘制模式组装成图元（点、线、三角形），并进行裁剪和背面剔除。</GlossaryItem>
-<GlossaryItem term="光栅化">将连续图元扫描转换为离散片段的过程，包括确定覆盖的像素和属性插值。</GlossaryItem>
-<GlossaryItem term="片段着色器">渲染管线最后一个可编程阶段，逐片段执行，计算最终颜色（纹理采样、光照计算等）。</GlossaryItem>
+<GlossaryItem term="图形系统路径">由应用、API/driver、CPU/GPU、内存、framebuffer/compositor 和显示组成的端到端路径。</GlossaryItem>
+<GlossaryItem term="输出图元">由点、线、多边形、曲线或文本等基础几何和拓扑组成的输出描述。</GlossaryItem>
+<GlossaryItem term="图元属性">控制线型、宽度、填充、颜色、连接和端点等外观但不改变基础拓扑的参数。</GlossaryItem>
+<GlossaryItem term="颜色出口">从线性 shader 值经 attachment encoding、compositor 到显示色彩空间的转换合同。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="计算机图形学第4版" adaptedUrl="" />
+<Attribution adaptedFrom="Computer Graphics with OpenGL, 4th Edition" adaptedUrl="https://www.pearson.com/en-gb/subject-catalog/p/computer-graphics-with-open-gl-pearson-new-international-edition/P200000004424/9781292037196" />

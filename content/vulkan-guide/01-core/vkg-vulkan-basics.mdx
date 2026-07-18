@@ -3,140 +3,340 @@ title: "Vulkan 基础与概念"
 type: A
 section: "计算机图形学与渲染"
 order: 1
-description: "实例、设备、队列族、验证层与同步原语"
+description: "以能力合同、对象所有权和同步边界建立 Vulkan 1.4 心智模型"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://docs.vulkan.org/guide/latest/"
 draft: false
 ---
 
-import { VkgVulkanBasicsDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-vulkan-basics";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  VkgVulkanBasicsDiagram,
+  VkgSynchronizationMatrixDiagram,
+} from "@/components/mdx/vulkan-guide/diagrams/vkg-vulkan-basics";
+import { VkgStepFlowDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能区分物理设备与逻辑设备
-- 能说明队列族的作用与选择依据
-- 能解释验证层的意义与启用方式
-- 能回答：栅栏与信号量各用于什么同步场景？
+
+- 能描述从 loader、instance、physical device 到 logical device 的对象所有权和能力协商链
+- 能实现 query、verify、enable、use 四步 feature、extension、format 与 queue family 检查
+- 能比较 barrier、binary/timeline semaphore 与 fence 的依赖边界和适用条件
+- 能解释 validation、debug messenger、对象命名和错误复现如何组成开发期证据链
+
 </Objectives>
 
-## 直觉引入
+## 显式 API 的第一原则
 
-Vulkan 的对象像层层嵌套的俄罗斯套娃：最外层是实例（连接整个 Vulkan 库），里面是物理设备（你选的那块显卡），再里面是逻辑设备（你打开的使用权），逻辑设备里又有队列（GPU 干活的窗口）。每个对象各司其职，显式创建显式销毁。
+Vulkan 的核心不是“对象很多”，而是**应用必须在使用能力前形成合同**。实例声明要使用的 API 版本和实例扩展；物理设备暴露属性、feature、设备扩展、format 与 queue family；逻辑设备只启用已验证且渲染路径真正需要的子集。后续创建的资源、pipeline 和 command 都受这份合同约束。
 
-同步方面，Vulkan 用两种原语：栅栏是「CPU 等 GPU 干完」的红绿灯，信号量是「GPU 内部一件活等另一件活」的接力棒。理解这两个，就理解了 Vulkan 同步的骨架。
+这与 OpenGL 常见的“创建 context 后逐步试用状态”不同。Vulkan 把大量隐式驱动判断前移到初始化和录制阶段，让应用可以并行准备工作并精确控制资源，但也要求应用明确管理生命周期、内存、资源状态和同步。
 
-## 概念讲解
+<Callout type="info">
+**当前学习基线：** Khronos 现行教程使用 Vulkan 1.4、dynamic rendering 和 timeline semaphore。基础章采用这条现代主线；旧设备仍应通过版本与 feature 查询选择兼容路径，不能把“教程基线”误当成所有运行设备都支持。
+</Callout>
 
-### 设备层次
-<Term def="代表实际 GPU 硬件、用于查询能力的对象">物理设备</Term>（VkPhysicalDevice）代表显卡，可查询特性与队列族；<Term def="应用打开的 GPU 使用权、实际分配资源的对象">逻辑设备</Term>（VkDevice）是创建资源、执行命令的句柄。
+## 对象层级不是俄罗斯套娃
 
-### 队列族
-<Term def="按命令类型分组的 GPU 执行通道">队列族</Term>（queue family）：图形、计算、传输、呈现等命令分属不同族，需选同时支持图形与呈现的族。逻辑设备创建时按族请求队列。
+把 Vulkan 对象说成层层嵌套容易产生两个误解：VkPhysicalDevice 不是 VkInstance “拥有的一块显存”，queue family 也不是 VkDevice 内部创建的对象。更准确的关系是**枚举、创建与生命周期依赖**：
 
-### 验证层
-<Term def="在调试期拦截 API 调用做参数校验与错误报告的可选层">验证层</Term>（validation layer）：开发期启用，自动检查误用（如未设同步、对象漏销毁），发布期关闭零开销。
+1. loader 暴露可用实例版本和入口；应用据此创建 VkInstance；
+2. instance 枚举 VkPhysicalDevice；物理设备句柄用于查询，不由应用创建或销毁；
+3. 应用从查询结果选择设备，并以 feature pNext 链和 queue create infos 创建 VkDevice；
+4. device 创建 queue 可用的资源与同步对象；queue handle 由 device 获取，不单独销毁；
+5. device 子对象应在 device 前销毁，surface 应在 instance 前销毁；GPU 仍在访问的对象不能提前释放。
 
-### 同步原语
-- <Term def="CPU 等待 GPU 完成命令的同步对象">栅栏</Term>（Fence）：CPU 调 vkQueueSubmit 时带 fence，之后 vkWaitForFences 阻塞 CPU 等 GPU 做完。
-- <Term def="协调 GPU 内部命令顺序的同步对象">信号量</Term>（Semaphore）：GPU 内部用，如「取图像」信号量通知「绘制」可开始、「绘制完成」信号量通知「呈现」可进行。
-
-## 交互Demo
-
-> 猜一猜：发布版忘记关验证层，会怎样？
+<Term def="应用在创建逻辑设备前查询并确认版本、feature、extension、format、limit 与 queue family，再只启用满足路径需求的集合">能力合同</Term>既是启动条件，也是错误报告的一部分。设备不满足必需条件时应输出哪条断言失败，而不是在更晚的 pipeline 创建或提交阶段崩溃。
 
 <VkgVulkanBasicsDiagram />
 
-<Stepper>
-<Step title="第一步：建实例与设备">
-创建 Instance，枚举物理设备查队列族，选合适的创建逻辑设备并请求图形/呈现队列。
-</Step>
-<Step title="第二步：开验证层">
-开发期启用验证层，拦截错误调用并报详细原因，发布期关闭以免性能损耗。
-</Step>
-<Step title="第三步：用同步原语">
-提交命令时带 fence 让 CPU 等 GPU；用信号量串起取图像→绘制→呈现的 GPU 内部顺序。
-</Step>
-</Stepper>
+## Query、Verify、Enable、Use
 
-## 代码对照
+四步中任何一步缺失都会产生不同故障：
 
-Vulkan 实例、设备与队列创建（C）：
+- **Query**：枚举版本、properties、features、extensions、formats、present support 与 limits；
+- **Verify**：检查渲染路径的全部必需条件，并区分 hard requirement 与 optional path；
+- **Enable**：把 feature 结构链接进 VkDeviceCreateInfo::pNext，把扩展名加入 ppEnabledExtensionNames；
+- **Use**：只调用合同允许的命令，并让资源格式、usage 和 limits 与查询结果一致。
 
-```c
-// 验证层（开发期）
-const char* layers[] = { "VK_LAYER_KHRONOS_validation" };
-VkInstanceCreateInfo ici = {
-  .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-  .enabledLayerCount = 1, .ppEnabledLayerNames = layers,
+“扩展名存在”不保证对应 feature 已开启；核心版本提升也不保证所有可选 feature 为 true。相反，某能力进入核心版本后，旧扩展名可能不再是启用它的唯一条件。正确做法始终是根据 Vulkan 版本和规范规定查询相应 feature，再把需要的结构接入 pNext。
+
+```cpp
+VkPhysicalDeviceVulkan13Features v13{
+  .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+  .pNext = nullptr,
 };
-vkCreateInstance(&ici, NULL, &instance);
-
-// 选物理设备
-vkEnumeratePhysicalDevices(instance, &count, physDevs);
-VkPhysicalDevice physical = physDevs[0];
-
-// 找支持图形+呈现的队列族
-uint32_t queueFamilyIndex = findGraphicsPresentQueueFamily(physical);
-
-// 创建逻辑设备
-float prio = 1.0f;
-VkDeviceQueueCreateInfo qci = {
-  .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-  .queueFamilyIndex = queueFamilyIndex, .queueCount = 1, .pQueuePriorities = &prio,
+VkPhysicalDeviceVulkan12Features v12{
+  .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+  .pNext = &v13,
 };
-VkDeviceCreateInfo dci = {
-  .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-  .queueCreateInfoCount = 1, .pQueueCreateInfos = &qci,
+VkPhysicalDeviceFeatures2 available{
+  .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+  .pNext = &v12,
 };
-vkCreateDevice(physical, &dci, NULL, &device);
-vkGetDeviceQueue(device, queueFamilyIndex, 0, &queue);
+vkGetPhysicalDeviceFeatures2(physicalDevice, &available);
 
-// 同步：栅栏（CPU 等 GPU）+ 信号量（GPU 内部）
-VkFence fence;
-VkFenceCreateInfo fci = { .sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO };
-vkCreateFence(device, &fci, NULL, &fence);
-vkQueueSubmit(queue, 1, &submitInfo, fence);
-vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX);  // CPU 阻塞等
+if (!v12.timelineSemaphore || !v13.dynamicRendering || !v13.synchronization2) {
+  return rejectDevice("modern frame path requires timelineSemaphore, "
+                      "dynamicRendering and synchronization2");
+}
+
+VkPhysicalDeviceVulkan13Features enabled13{
+  .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+  .pNext = nullptr,
+  .synchronization2 = VK_TRUE,
+  .dynamicRendering = VK_TRUE,
+};
+VkPhysicalDeviceVulkan12Features enabled12{
+  .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+  .pNext = &enabled13,
+  .timelineSemaphore = VK_TRUE,
+};
+deviceInfo.pNext = &enabled12;
+VK_CHECK(vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device));
 ```
 
-验证层在开发期替你抓出大量误用，是 Vulkan 调试的基石。
+示例将“查询结构”和“启用结构”分开，避免把设备返回的全部 true feature 原样启用。生产代码还应检查设备 API 版本、所需扩展、surface format、present mode 和 queue 支持，并为不满足 Vulkan 1.3 核心能力的设备选择扩展或旧路径。
+
+## Instance、validation 与 debug utils
+
+<Term def="在 Vulkan loader 调用链中拦截 API 调用、执行参数和状态校验并报告诊断信息的可选层">验证层</Term>不是 Vulkan 正确性的运行时保险。`VK_LAYER_KHRONOS_validation` 能检查大量 valid usage、对象生命周期和部分同步错误，但它不能证明算法正确、没有 race、barrier 足够精确，或渲染结果符合预期。
+
+实例层和设备层扩展要分开查询。窗口系统要求的 surface 实例扩展通常由 GLFW/SDL 等平台层返回；`VK_EXT_debug_utils` 提供 debug messenger、对象命名和命令标签。创建实例时列入扩展名称，只代表可以取得这些入口；还要创建 messenger，并在销毁 instance 前销毁它。
+
+```cpp
+VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(
+    VkDebugUtilsMessageSeverityFlagBitsEXT severity,
+    VkDebugUtilsMessageTypeFlagsEXT type,
+    const VkDebugUtilsMessengerCallbackDataEXT* data,
+    void*) {
+  logValidation(severity, type, data->pMessageIdName, data->messageIdNumber,
+                data->pMessage);
+  return VK_FALSE; // 不要求 loader 中止这次 Vulkan 调用
+}
+
+VkDebugUtilsMessengerCreateInfoEXT debugInfo{
+  .sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+  .messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                     VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT,
+  .messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                 VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                 VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT,
+  .pfnUserCallback = debugCallback,
+};
+
+// 把 debugInfo 同时接到 instance create pNext，可捕获创建/销毁期间消息；
+// instance 创建后再用 vkCreateDebugUtilsMessengerEXT 建立常驻 messenger。
+instanceInfo.pNext = validationEnabled ? &debugInfo : nullptr;
+```
+
+发布构建是否启用 validation 是产品决策，不宜简化为“发布期一定关闭且零开销”。常规发行版通常不请求验证层；内部 QA 或诊断构建可保留开关。无论哪种配置，都不能假设用户机器安装了该层，启用前必须枚举确认。
+
+## Queue family 是能力集合
+
+<Term def="具有相同 queue capabilities 的队列集合；应用按 family 请求一个或多个 queue handle">队列族</Term>描述 queue 支持 graphics、compute、transfer、sparse 等哪些操作。**Present support 不是 VkQueueFlagBits**，它是某个 physical device、queue family 与具体 surface 的组合属性，需用 `vkGetPhysicalDeviceSurfaceSupportKHR` 查询。
+
+图形与呈现可以来自同一 family，也可以分开。分开时可选择 concurrent sharing，或使用 exclusive sharing 并执行 queue family ownership transfer。前者实现简单但可能牺牲部分优化空间；后者控制更明确但同步责任更重。传输专用 queue 也并不自动更快，应由硬件拓扑和测量决定。
+
+```cpp
+struct QueueSelection {
+  uint32_t graphics;
+  uint32_t present;
+};
+
+std::optional<QueueSelection> findQueues(
+    VkPhysicalDevice gpu, VkSurfaceKHR surface) {
+  const auto families = enumerateQueueFamilyProperties(gpu);
+  std::optional<uint32_t> graphics;
+  std::optional<uint32_t> present;
+
+  for (uint32_t i = 0; i < families.size(); ++i) {
+    if (families[i].queueCount > 0 &&
+        (families[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
+      graphics = i;
+    }
+    VkBool32 canPresent = VK_FALSE;
+    VK_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(gpu, i, surface, &canPresent));
+    if (families[i].queueCount > 0 && canPresent) present = i;
+    if (graphics && present) return QueueSelection{*graphics, *present};
+  }
+  return std::nullopt;
+}
+```
+
+若 graphics 与 present 指向同一 family，VkDeviceQueueCreateInfo 只应为该 family 创建一次；若不同，则为去重后的 family 集合分别创建。queue 数量不能超过该 family 的 queueCount，优先级数组长度必须覆盖请求数量。
+
+## 同步不是 fence 与 semaphore 二选一
+
+同步要同时回答三个问题：
+
+1. **执行依赖**：后续操作何时才允许执行；
+2. **内存依赖**：前序写入何时 available，后续读取何时 visible；
+3. **生命周期**：host 何时可以重置 command pool、覆写 staging memory 或销毁资源。
+
+<Term def="通过 source/destination stage 与 access scope 建立执行和内存依赖，并可同时执行 image layout 或 queue ownership transition 的命令">管线屏障</Term>解决同一命令流内的资源依赖。Semaphore 连接 queue operation 或 WSI operation；fence 把一次 queue submission 的完成状态暴露给 host。它们经常一起使用，彼此不能替代。
+
+<VkgSynchronizationMatrixDiagram />
+
+<Term def="只有 signaled/unsignaled 状态、用于一次 wait-signal 接力的 semaphore；WSI acquire 与 present 使用此类型">二值信号量</Term>通常负责 `acquire → graphics submit → present`。<Term def="携带单调递增 64 位值、可表达应用内部跨提交或跨队列进度的 semaphore">时间线信号量</Term>允许 host wait/signal，也允许 queue 按 value 等待；因此“semaphore 不能被 CPU 等待”只对 binary semaphore 成立。Vulkan WSI 的 acquire/present 操作仍要求 binary semaphore 或 fence，不能直接用 timeline semaphore 替换。
+
+Fence 是一次 submission 的 host 可见完成标记。等待 fence 后可以安全重置属于该帧的 command pool、重用 descriptor arena 或写入对应 host-visible buffer；但 fence 本身不会为 command buffer 内两次 shader 访问建立 memory dependency。
+
+```cpp
+VkSemaphoreSubmitInfo waitAcquire{
+  .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+  .semaphore = imageAvailable[frameIndex],
+  .value = 0, // binary semaphore 的 value 必须为 0
+  .stageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+};
+VkCommandBufferSubmitInfo command{
+  .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+  .commandBuffer = frameCommandBuffer,
+};
+VkSemaphoreSubmitInfo signals[] = {
+  {
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+    .semaphore = renderFinished[imageIndex],
+    .value = 0,
+    .stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+  },
+  {
+    .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+    .semaphore = renderTimeline,
+    .value = ++renderValue,
+    .stageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+  },
+};
+VkSubmitInfo2 submit{
+  .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+  .waitSemaphoreInfoCount = 1,
+  .pWaitSemaphoreInfos = &waitAcquire,
+  .commandBufferInfoCount = 1,
+  .pCommandBufferInfos = &command,
+  .signalSemaphoreInfoCount = 2,
+  .pSignalSemaphoreInfos = signals,
+};
+VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, frameFence));
+```
+
+wait stage 必须覆盖最早访问 swapchain image 的阶段；如果先执行 transfer clear，则只等 COLOR_ATTACHMENT_OUTPUT 就太晚。signal stage 和后续 wait scope也要与真实生产/消费关系一致。保守 scope 可能正确但降低并行度，过窄 scope 则可能产生数据竞争。
+
+## 三步建立可审计基础
+
+<Stepper>
+<Step title="第一步：写能力合同">
+
+列出 required 与 optional 能力，查询 loader/instance/device 版本、feature、extension、format、limit 和 queue/surface 支持；任何失败都记录具体断言。
+
+<VkgStepFlowDiagram
+  caption="先查询完整能力集合，再决定设备是否进入候选集。"
+  stage={1}
+  stages={["Query + verify：版本、feature、extension、format、queue 与 surface"]}
+/>
+
+</Step>
+<Step title="第二步：只启用选择结果">
+
+创建 instance、debug messenger 和 device；用最小 pNext 链启用路径需要的 feature，并为去重后的 queue families 建立 queue create infos。
+
+<VkgStepFlowDiagram
+  caption="启用集合是查询结果与路径需求的交集，不是把全部能力照单全收。"
+  stage={2}
+  stages={[
+    "Query + verify：版本、feature、extension、format、queue 与 surface",
+    "Enable：instance extensions、device pNext 与唯一 queue families",
+  ]}
+/>
+
+</Step>
+<Step title="第三步：建立调试与同步证据">
+
+给关键对象命名，启用 validation/synchronization validation，记录 acquire/submit/present 结果；按 command、queue、WSI、host 边界选择同步工具，并用捕获或最小复现验证。
+
+<VkgStepFlowDiagram
+  caption="使用阶段把能力、生命周期和同步假设转化为可复现证据。"
+  stage={3}
+  stages={[
+    "Query + verify：版本、feature、extension、format、queue 与 surface",
+    "Enable：instance extensions、device pNext 与唯一 queue families",
+    "Use + prove：对象命名、validation、同步边界与复现记录",
+  ]}
+/>
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** 选了只支持计算的队列族，绘制命令提交失败。
-**原因 →** 队列族按命令类型分组，图形命令需 GRAPHICS 族，呈现需支持 PRESENT 的族。
-**修法 →** 枚举队列族时查 VK_QUEUE_GRAPHICS_BIT 与呈现支持（vkGetPhysicalDeviceSurfaceSupportKHR），选同时满足的族。
+**现象 →** 设备枚举到了 dynamic rendering，却在调用时收到 feature 未启用的验证错误。
+**原因 →** 查询到 feature 为 true，不代表 VkDevice 已启用；device create 的 pNext 链漏了对应结构或字段。
+**修法 →** 分离 available 与 enabled feature 链，只把路径需要且已验证支持的字段设为 VK_TRUE。
 </Callout>
 
 <Callout type="trap">
-**现象 →** 用栅栏协调取图像与呈现，画面仍撕裂。
-**原因 →** 栅栏是 CPU 等 GPU，不串 GPU 内部命令顺序；取图像→绘制→呈现是 GPU 内部三步，需信号量串联。
-**修法 →** 用信号量：imageAvailable 通知绘制可开始、renderFinished 通知呈现可进行；栅栏只用于 CPU 等命令缓冲执行完以便重用。
+**现象 →** graphics queue 可以提交绘制，但 vkQueuePresentKHR 在目标窗口失败。
+**原因 →** VK_QUEUE_GRAPHICS_BIT 不包含 present 能力；呈现支持依赖具体 surface。
+**修法 →** 对每个候选 family 调 vkGetPhysicalDeviceSurfaceSupportKHR，分别保存 graphics/present family，并正确处理 sharing 或 ownership。
+</Callout>
+
+<Callout type="trap">
+**现象 →** host 等完 fence 后重用资源仍有闪烁，或 validation 报 shader 读写 hazard。
+**原因 →** fence 只证明那次 submission 对 host 完成，不能替代 command 内的 barrier 与内存可见性。
+**修法 →** 为生产者和消费者建立准确的 stage/access dependency；fence 只负责 host 生命周期边界。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：物理设备与逻辑设备有何区别？队列族怎么选？
+
+1. **能力链审计：** 某设备报告 Vulkan 1.3，但 dynamicRendering 查询为 VK_FALSE。应用能否直接调用 vkCmdBeginRendering？列出正确决策。
 
 <Answer>
-物理设备代表实际显卡硬件，用于查询特性与队列族能力；逻辑设备是应用打开的 GPU 使用权，实际创建资源与执行命令。队列族按命令类型分组（图形/计算/传输/呈现），需枚举查 VK_QUEUE_GRAPHICS_BIT 与表面呈现支持（vkGetPhysicalDeviceSurfaceSupportKHR），选同时支持图形与呈现的族，再按族请求队列。
+不能。核心版本决定命令和结构属于哪个版本，不保证每个可选 feature 都为 true。应用应通过 VkPhysicalDeviceVulkan13Features 查询 dynamicRendering；若为 false，则拒绝现代路径或选择 legacy render pass 兼容路径。若为 true，还必须在 vkCreateDevice 的 pNext 启用该字段，之后才可调用 vkCmdBeginRendering。
 </Answer>
 
-**问题**：栅栏和信号量分别用于什么同步场景？为什么不能互换？
+2. **队列设计：** graphics family 为 2，present family 为 5。给出 swapchain image 的两种共享策略及其代价。
 
 <Answer>
-栅栏用于 CPU 等 GPU：提交命令带 fence，CPU 调 vkWaitForFences 阻塞等 GPU 做完以便重用命令缓冲。信号量用于 GPU 内部命令顺序：协调「取图像→绘制→呈现」三步的接力。不能互换因为栅栏无法串 GPU 内部命令顺序（它只让 CPU 等），信号量不能被 CPU 直接等待（它只在 GPU 侧）。各管一侧，互不替代。
+可使用 VK_SHARING_MODE_CONCURRENT，并提供 2、5 两个 family index，免去显式 ownership transfer，但实现可能放弃部分独占优化；也可使用 VK_SHARING_MODE_EXCLUSIVE，在 graphics/present 间通过 release/acquire barrier 转移 queue family ownership，控制更明确但同步实现更复杂。两种方案都必须实测，不能假定专用队列一定更快。
 </Answer>
+
+3. **同步选择：** upload queue 写 staging 目标纹理，graphics queue 随后采样，host 下一帧还要重用 staging memory。分别需要哪些同步关系？
+
+<Answer>
+upload 与 graphics 跨 queue，需要 semaphore 建立提交间执行依赖；纹理还需要 transfer-write 到 shader-read 的内存依赖、layout transition，若 family 不同还要 queue ownership transfer。host 重用 staging memory 前需等待表示 upload submission 完成的 fence 或 timeline value。仅等待 fence 不能替代纹理面向 shader 的 barrier，仅设置 barrier也不能通知 host 何时可覆写 staging memory。
+</Answer>
+
 </Exercises>
 
+## 本章检查清单
+
+- 所有必需能力都有查询、失败原因和兼容路径，没有把 API 版本当成 feature 保证；
+- device 只启用已查询且真正使用的 feature，queue family create infos 已去重；
+- validation、debug messenger 和对象命名可在开发构建中启用，发布路径不依赖验证层存在；
+- 每条同步关系都写清生产者、消费者、stage/access、layout、queue 与 host 生命周期边界。
+
+## 术语表
+
 <Glossary>
-<GlossaryItem term="物理设备">代表实际 GPU 硬件的对象，用于查询特性与队列族，不分配资源。</GlossaryItem>
-<GlossaryItem term="逻辑设备">应用打开的 GPU 使用权，实际创建资源与执行命令的句柄。</GlossaryItem>
-<GlossaryItem term="队列族">按命令类型分组的 GPU 执行通道，需选支持所需命令类型的族。</GlossaryItem>
-<GlossaryItem term="验证层">调试期拦截 API 调用做参数校验与错误报告的可选层，发布期关闭零开销。</GlossaryItem>
+<GlossaryItem term="能力合同">创建 device 前对版本、feature、extension、format、limit 与 queue/surface 支持形成的可检查约束。</GlossaryItem>
+<GlossaryItem term="验证层">开发期拦截 Vulkan 调用并报告 valid usage、生命周期和部分同步问题的可选层。</GlossaryItem>
+<GlossaryItem term="队列族">具有同类 queue capabilities 的队列集合；present 支持需针对具体 surface 另行查询。</GlossaryItem>
+<GlossaryItem term="管线屏障">在命令流中建立 stage/access 执行和内存依赖，并可执行 layout 或 ownership transition 的命令。</GlossaryItem>
+<GlossaryItem term="二值信号量">以 signaled/unsignaled 状态完成一次 queue 或 WSI 接力的 semaphore。</GlossaryItem>
+<GlossaryItem term="时间线信号量">以单调递增值表达跨提交、跨队列或 host/device 进度的 semaphore。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Vulkan 学习指南" adaptedUrl="" />
+<Attribution adaptedFrom="Khronos Vulkan Guide" adaptedUrl="https://docs.vulkan.org/guide/latest/" />

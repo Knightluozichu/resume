@@ -1,0 +1,218 @@
+---
+title: "Chapter 28. Extending Your Application"
+type: C
+section: "Programming in Lua 4e · The C API"
+order: 28
+description: "从C宿主加载Lua配置、读取table并调用Lua function，建立stack-balanced helper、metamethod策略和通用调用签名。"
+demo: true
+math: false
+sourceUrl: "https://www.lua.org/pil/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PilHostConfigLab, PilTableApiLab, PilHostCallLab } from "@/components/mdx/lua-programming/diagrams/extending-application";
+
+<Objectives>
+
+- 能解释C宿主加载Lua配置、查询global与恢复stack的完整边界，并验证missing、wrong type和runtime error
+- 能实现普通与raw table访问，推导get/set API的key消费、top delta、metamethod和array index语义
+- 能设计从C调用Lua function及signature-driven通用helper，检查nargs、nresults、traceback与output lifetime
+
+</Objectives>
+
+## 为什么扩展Application先定义Host Policy
+
+“用Lua扩展应用”意味着host决定何时创建state、加载哪些chunks、暴露哪些functions，以及Lua结果如何进入native domain。配置文件也是可执行代码；即使只想读取width和height，只要开放完整global environment，脚本就可能执行I/O、加载module或无限循环。
+
+先预测：`lua_getglobal`遇到不存在名字会不会不push；读取number后忘记pop会怎样；`lua_getfield`是否触发`__index`；`lua_rawget`需要谁把key放到top；`lua_pcall(L,2,1,0)`前stack从下到上应是什么；返回string pointer在result pop后是否还能保存；generic signature解析到一半失败时如何恢复stack。
+
+<Term def="Host extension policy明确Lua可见capabilities、可加载source、调用边界、resource budget与native data conversion规则。">host extension policy</Term>先于任何`lua_getglobal`调用。
+
+## The Basics
+
+经典用法让Lua chunk计算配置，再由C读取globals。Load与run仍是两步；只在`lua_pcall`成功后读取。下面helper接受已经创建的state并保持“成功或失败都恢复入口top”。
+
+```c
+static int load_config(lua_State *L, const char *path) {
+  int base = lua_gettop(L);
+  int status = luaL_loadfile(L, path);
+  if (status == LUA_OK) status = lua_pcall(L, 0, 0, 0);
+  if (status != LUA_OK) {
+    const char *message = lua_tostring(L, -1);
+    fprintf(stderr, "config: %s\n", message ? message : "unknown error");
+  }
+  lua_settop(L, base);
+  return status == LUA_OK;
+}
+
+static int get_global_int(lua_State *L, const char *name, lua_Integer *out) {
+  int base = lua_gettop(L), isnum = 0;
+  lua_getglobal(L, name);
+  lua_Integer value = lua_tointegerx(L, -1, &isnum);
+  lua_settop(L, base);
+  if (!isnum) return 0;
+  *out = value;
+  return 1;
+}
+```
+
+读取API不能用0代表missing，因为0可能是合法配置。Host应区分missing、wrong type、out of range和valid，并在native对象commit前完成全部validation，避免半更新状态。
+
+<Term def="Balanced host lookup从保存的stack base开始，push并校验一个Lua value，复制结果后在所有分支恢复同一top。">balanced host lookup</Term>让多个配置读取可以安全组合。
+
+<PilHostConfigLab />
+
+<Stepper>
+  <Step title="切换Load、Lookup、Convert和Restore"><PilHostConfigLab /></Step>
+  <Step title="建立Config Transaction">先把所有字段读入temporary native struct，验证range与cross-field invariant，全部通过后一次commit。</Step>
+  <Step title="做Failure Matrix">覆盖syntax/runtime error、missing、wrong type、overflow与resource budget，断言host object和entry top不变。</Step>
+</Stepper>
+
+## Table Manipulation
+
+结构化配置通常放在table。`lua_gettable(L,index)`从top弹出key并push查询结果；table由index定位，先用`lua_absindex`避免push key改变负index。`lua_settable`弹出key和value。普通访问遵守`__index`/`__newindex`，因此可能执行Lua code并raise。
+
+<Term def="Table access mode决定lookup/set是否执行metamethod；ordinary access保留Lua语义，raw access只读写当前table存储。">table access mode</Term>必须按信任边界选择。读取用户对象property可能需要ordinary semantics；解析data-only configuration通常偏向raw access和显式schema。
+
+```c
+static int get_window(lua_State *L, lua_Integer *width,
+                      lua_Integer *height) {
+  int base = lua_gettop(L), ok_width = 0, ok_height = 0;
+  lua_getglobal(L, "window");
+  if (!lua_istable(L, -1)) {
+    lua_settop(L, base);
+    return 0;
+  }
+
+  lua_getfield(L, -1, "width");
+  lua_Integer w = lua_tointegerx(L, -1, &ok_width);
+  lua_pop(L, 1);
+  lua_getfield(L, -1, "height");
+  lua_Integer h = lua_tointegerx(L, -1, &ok_height);
+  lua_settop(L, base);
+  if (!ok_width || !ok_height || w <= 0 || h <= 0) return 0;
+  *width = w; *height = h;
+  return 1;
+}
+```
+
+Table可能有cycles、sparse integer keys和mixed key types；C侧遍历用`lua_next`时，保留table和current key，处理value后pop value但保留key给下一轮。遍历中随意转换key或修改table会破坏迭代契约。
+
+## Some short cuts
+
+`lua_getfield(L,t,"name")`等价于push string key再gettable的常用形式；`lua_geti`处理integer key。对应setter会消费top value。`lua_rawget`/`lua_rawset`使用stack key并绕过metamethod，`lua_rawgeti`/`lua_rawseti`处理integer key。Globals有`lua_getglobal`/`lua_setglobal`。
+
+<PilTableApiLab />
+
+<Stepper>
+  <Step title="切换gettable、getfield、geti和rawget"><PilTableApiLab /></Step>
+  <Step title="推导Top Delta">为每个get/set helper标table index、key来源、value位置与调用后top，特别验证setter会消费value。</Step>
+  <Step title="验证Metamethod Policy">同一table安装__index/__newindex计数器，对ordinary和raw API做对照，确认信任边界没有意外执行代码。</Step>
+</Stepper>
+
+<Callout type="trap" title="Getfield只是Rawget的短写">
+`lua_getfield`保留普通table访问语义，可能运行`__index`；raw API才绕过metamethod。对不可信对象触发metamethod等于执行对方代码，需放在protected policy内。
+</Callout>
+
+## Calling Lua Functions
+
+C调用Lua function时，先push callable，再按顺序pusharguments，最后`lua_pcall(L,nargs,nresults,msgh)`。Call会消费function与arguments；成功push约定数量results，失败pusherror object。Function lookup本身也要验证，不能把nil当作callable交给pcall。
+
+```c
+static int call_distance(lua_State *L, double x, double y, double *out) {
+  int base = lua_gettop(L), isnum = 0;
+  lua_getglobal(L, "distance");
+  if (!lua_isfunction(L, -1)) { lua_settop(L, base); return 0; }
+  lua_pushnumber(L, x);
+  lua_pushnumber(L, y);
+  if (lua_pcall(L, 2, 1, 0) != LUA_OK) {
+    fprintf(stderr, "%s\n", lua_tostring(L, -1));
+    lua_settop(L, base);
+    return 0;
+  }
+  double result = lua_tonumberx(L, -1, &isnum);
+  lua_settop(L, base);
+  if (!isnum) return 0;
+  *out = result;
+  return 1;
+}
+```
+
+若要traceback，在call frame下方放message handler并把absolute index传给pcall，之后删除。返回table/string不能在pop后保留裸stack pointer；要么立刻复制成native owner，要么建立registry reference并明确定义release。
+
+<Term def="Host-to-Lua call frame由callable、n个arguments、message handler和声明的result slots组成，并由pcall原子转换为结果或error。">host-to-Lua call frame</Term>可用stack snapshot测试。
+
+## A Generic Call Function
+
+书中的通用思路用signature描述arguments和results，例如分隔符`>`之前是input specifiers，之后是output specifiers。实现必须先验证整个signature和output pointers，再检查stack capacity；随后push function/arguments、pcall、从后半签名逐项checked conversion，最终恢复base。
+
+```c
+/* Example contract: "dd>d" means two double inputs, one double output. */
+int call_by_signature(lua_State *L, const char *function_name,
+                      const char *signature, ...);
+
+/* The helper owns no returned Lua pointers:
+   numbers/booleans are copied, strings require caller buffers or references. */
+double result = 0.0;
+if (!call_by_signature(L, "distance", "dd>d", 3.0, 4.0, &result)) {
+  report_script_failure();
+}
+```
+
+<Term def="Call signature grammar把C variadic arguments映射为Lua stack values与typed output destinations，是需要完整parse和版本控制的小型FFI。">call signature grammar</Term>不能边读`va_list`边修改stack后才发现非法specifier，否则难以rollback。Variadic C类型提升、NULL string、整数范围、result count和错误文本都要定义。
+
+<PilHostCallLab />
+
+<Stepper>
+  <Step title="切换Function、Arguments、pcall和Results"><PilHostCallLab /></Step>
+  <Step title="模拟Signature">对dd&gt;d、si&gt;bs和非法specifier画完整stack，核对nargs/nresults、C类型提升与输出ownership。</Step>
+  <Step title="故障注入Generic Helper">覆盖missing function、push capacity、Lua error、wrong result type和short output buffer，断言stack与native outputs保持transactional。</Step>
+</Stepper>
+
+<Callout type="trap" title="返回String的const char指针在Pop后可永久保存">
+Pointer由Lua管理，移除对应stack value并允许GC后不再是host-owned lifetime。需要长期使用就复制bytes与length，或创建registry reference并提供显式release。
+</Callout>
+
+## Errors、Reentrancy与Ownership
+
+普通table access和Lua call都可能执行Lua代码，进而error、yield（受调用边界限制）或re-enter host callbacks。Native helper不要持有不允许重入的锁跨越这些调用；host object先进入一致状态，再调用Lua。每个registry reference、buffer和native handle必须有单一owner与release path。
+
+Generic helper适合少量稳定类型；复杂domain API应使用显式typed wrappers，错误更清楚，也能做range/schema validation。Signature不是安全边界，Lua函数仍只能获得policy允许的capabilities。
+
+## 本章回顾：Extension是双向Typed Boundary
+
+1. Host先定义环境、source、budget和conversion policy，再加载可执行配置。
+2. Balanced lookup保存base，校验并复制value，所有分支恢复top；配置先transactional验证再commit。
+3. Table get/set需追踪key与value的stack效果，并明确ordinary或raw metamethod semantics。
+4. 从C调用Lua要构造function+arguments call frame，以pcall得到results或error并验证输出。
+5. Stack string pointer不归host长期所有，跨pop生命周期要复制或registry-reference。
+6. Generic signature helper是小型FFI，先完整parse，再调用并transactional写outputs。
+
+<Exercises>
+
+**问题 1：为什么配置读取要先写入Temporary Struct再更新Application？**
+
+<Answer>多个字段可能在后半段失败或违反cross-field invariant。先完整读取和验证可保证失败时host object不半更新，同时helper恢复stack base；全部通过后一次commit。</Answer>
+
+**问题 2：何时应使用Raw Table Access？**
+
+<Answer>当协议要求读取table自身存储、禁止__index/__newindex执行代码时使用raw access；若对象property语义依赖metamethod则用ordinary access，但放在protected、可重入的调用边界内。</Answer>
+
+**问题 3：Generic Call Helper在pcall成功后还可能失败吗？**
+
+<Answer>会。Result数量或类型可能不符合signature，string可能超出buffer，integer可能越界。Helper应先校验全部results，再transactional写output destinations并恢复entry top。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="host extension policy" definition="规定Lua能力、source、调用、budget和数据转换的宿主策略。" />
+  <GlossaryItem term="balanced host lookup" definition="从保存base读取并复制Lua值、所有分支恢复stack的查询。" />
+  <GlossaryItem term="table access mode" definition="决定ordinary访问执行metamethod或raw访问只看存储的模式。" />
+  <GlossaryItem term="host-to-Lua call frame" definition="由function、arguments、handler和结果契约组成的保护调用栈帧。" />
+  <GlossaryItem term="call signature grammar" definition="把C variadic输入输出映射到Lua stack types的小型FFI语法。" />
+</Glossary>
+
+<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 28: Extending Your Application" adaptedUrl="https://www.lua.org/pil/" />

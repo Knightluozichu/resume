@@ -3,129 +3,325 @@ title: "渲染优化策略"
 type: C
 section: "计算机图形学与渲染"
 order: 5
-description: "批处理、实例化、状态排序与带宽优化"
+description: "用 CPU/GPU/带宽/同步证据选择批处理、实例化、状态排序、剔除和资源格式"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://registry.khronos.org/webgl/specs/latest/2.0/"
 draft: false
 ---
 
-import { DogRenderingOptimizationDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-rendering-optimization";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  DogRenderingOptimizationDiagram,
+  DogBottleneckDecisionDiagram,
+} from "@/components/mdx/deep-opengl/diagrams/dog-rendering-optimization";
+import { DogStepFlowDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能说出 draw call 开销的来源与减少手段
-- 能区分批处理与实例化的适用场景
-- 能解释状态排序为何能提速
-- 能回答：为什么纹理图集能降低带宽？
+
+- 能区分 CPU 提交、顶点/片元、带宽、同步和热稳定性瓶颈并选择对应证据
+- 能实现可测量的实例化与不透明状态排序，同时说明批处理的内存和剔除代价
+- 能分析纹理图集、压缩格式、mip、分辨率和附件位宽对绑定与采样带宽的不同影响
+- 能设计固定场景的优化实验，并以 P50/P95 帧时间和工作量计数判定是否真实改善
+
 </Objectives>
 
 ## 直觉引入
 
-GPU 画图极快，但每次「下达命令」（draw call）都有固定开销：CPU 要准备状态、驱动要校验、GPU 要切换。于是成百上千个小物体各发一次 draw call，瓶颈往往卡在 CPU 和驱动，而不是 GPU 本身。
+“减少 draw call”不是渲染优化的同义词。若主线程每帧花 8 ms 提交一万个小 draw，实例化可能有效；若 GPU 已被全屏片元着色占满，把一万个 draw 合成一个 draw 仍不会减少像素数量，甚至可能因更粗的剔除粒度画更多不可见几何。优化必须先回答“谁在等谁、哪类工作量超预算”。
 
-优化的核心思想就是「合并」：把多个小物体合成一次绘制（批处理），或用一次绘制画一堆相同几何的副本（实例化），再按状态分组减少切换。目标是让 GPU 忙于画图，而不是等 CPU 下命令。
+平均 FPS 也会隐藏问题。60、60、60、15 ms 四帧的平均值可能看起来尚可，但交互会周期性卡顿。工程验收应看 CPU 与 GPU 帧时间分布、P50/P95/P99、draw/triangle/fragment 数、带宽和同步空洞，并固定分辨率、相机路径和资源版本。
 
-## 概念讲解
+## 从帧预算开始
 
-### 减少 draw call
-<Term def="把多个物体合并为一次绘制以分摊固定开销">批处理</Term>（batching）：把同材质物体的顶点合并进一个 VBO 一次画。<Term def="用一次 draw call 绘制多份相同几何的副本">实例化</Term>（instancing）：每个实例只需传一个变换矩阵等「每实例属性」，GPU 复制几何。
+<Term def="为达到目标刷新率而分配给 CPU、GPU 和呈现链路的最大时间与资源范围">帧预算</Term>把目标从“更快”变成可验证约束。60 Hz 一帧约 16.67 ms，120 Hz 约 8.33 ms，但 CPU 与 GPU 可能流水并行，不能把二者时间简单相加。应分别测量：
 
-### 状态排序
-<Term def="按着色器/纹理/状态分组绘制以减少状态切换">状态排序</Term>：切换程序、绑纹理、开关测试都有开销，把同状态的物体排在一起绘制（如先按 shader 分桶、再按纹理）能大幅减少切换。
+- CPU 更新、剔除、排序、命令编码与提交耗时；
+- GPU 各 pass 时间以及顶点、片元和 compute 工作量；
+- 纹理与附件读写、缓存、分辨率和格式；
+- readPixels、gl.finish、查询结果过早读取等同步；
+- 移动设备的频率、功耗和温度稳态。
 
-### 带宽优化
-<Term def="把多张小纹理拼成一张大纹理减少绑定切换">纹理图集</Term>（atlas）让多个物体共用一个纹理绑定点，避免每物体换纹理；压缩纹理格式（ETC/ASTC）减小显存占用与采样带宽。
+<DogBottleneckDecisionDiagram />
 
-### 其他
-视锥剔除、遮挡剔除、LOD、VBO 数据流式更新（glBufferSubData 而非重建）。
+### 1. CPU 提交瓶颈
 
-## 交互Demo
+<Term def="CPU 和驱动在验证状态、编码命令和提交大量小绘制时耗尽帧时间的情况">CPU 提交瓶颈</Term>常表现为 CPU 帧时间高、GPU 有空洞，降低分辨率几乎无改善，而减少 draw 数或状态切换后 CPU 明显下降。批处理、实例化、状态缓存和预生成命令数据适合这一类问题。
 
-> 猜一猜：1000 个相同小球，用 drawArrays 画 1000 次和用 drawArraysInstanced 画 1 次，哪个快？
+### 2. 顶点与片元瓶颈
 
-<DogRenderingOptimizationDiagram />
+顶点瓶颈对模型细分、阴影级联、重复几何和无效实例敏感，可用 LOD、视锥/遮挡剔除、索引复用和更紧凑顶点布局降低工作。片元瓶颈对分辨率、屏幕覆盖、透明层、采样次数和 shader 复杂度敏感，降低渲染比例或替换常量色 shader 是很好的归因实验。
 
-<Stepper>
-<Step title="第一步：减 draw call">
-同材质物体合并 VBO 批处理，或相同几何用实例化一次画多个，分摊每命令固定开销。
-</Step>
-<Step title="第二步：排状态">
-按 shader→纹理→其他状态分组绘制，把同状态物体排在一起，减少切换程序与纹理。
-</Step>
-<Step title="第三步：降带宽">
-用纹理图集让多物体共用纹理、压缩纹理格式减小占用，配合剔除与 LOD 减少需绘制的量。
-</Step>
-</Stepper>
+### 3. 带宽与同步瓶颈
 
-## 代码对照
+<Term def="纹理采样、颜色深度附件和缓冲传输消耗的内存吞吐量">采样带宽</Term>受纹理/附件格式、分辨率、mip、过滤、压缩和访问局部性影响。纹理图集主要减少 bind 和扩大批次，不会自动减少每个采样读取的字节；图集过大、mip padding 不足或访问离散还可能降低缓存效率。
 
-WebGL2 实例化与状态排序：
+同步瓶颈会同时让 CPU 和 GPU 看似“不忙”：CPU 等 GPU readback，GPU 又因命令饥饿出现空洞。应延迟读取 timer/query 结果、使用异步资源管线，并移除热路径中的 gl.finish/readPixels。
+
+## 建立非阻塞测量
+
+WebGL2 可用 EXT_disjoint_timer_query_webgl2 测 GPU 时间。结果必须隔几帧轮询，并检查 GPU_DISJOINT_EXT；立即读取只会把异步 GPU 重新变成同步等待。
 
 ```js
-// 实例化：一次画 N 个立方体，每实例一个变换矩阵
-const matrices = new Float32Array(N * 16);   // 每实例 model 矩阵
-// 把矩阵数组放进一个 VBO，作为实例化属性
-const instanceVBO = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, instanceVBO);
-gl.bufferData(gl.ARRAY_BUFFER, matrices, gl.DYNAMIC_DRAW);
-// mat4 占 4 个属性槽 (2,3,4,5)，每实例推进 1
-for (let i = 0; i < 4; i++) {
-  gl.enableVertexAttribArray(2 + i);
-  gl.vertexAttribPointer(2 + i, 4, gl.FLOAT, false, 64, i * 16);
-  gl.vertexAttribDivisor(2 + i, 1);          // 每实例才推进
-}
-// 一次绘制 N 个实例
-gl.drawElementsInstanced(gl.TRIANGLES, indexCount, gl.UNSIGNED_SHORT, 0, N);
+class GpuTimer {
+  constructor(gl) {
+    this.gl = gl;
+    this.ext = gl.getExtension("EXT_disjoint_timer_query_webgl2");
+    this.pending = [];
+  }
 
-// 状态排序：绘制前按 shader+纹理分桶
-renderList.sort((a, b) =>
-  a.shader !== b.shader ? a.shader - b.shader : a.texture - b.texture);
-let curShader = -1, curTex = -1;
-for (const item of renderList) {
-  if (item.shader !== curShader) { gl.useProgram(item.shader); curShader = item.shader; }
-  if (item.texture !== curTex)  { gl.bindTexture(gl.TEXTURE_2D, item.texture); curTex = item.texture; }
-  gl.drawElements(gl.TRIANGLES, item.count, gl.UNSIGNED_SHORT, 0);
+  begin(label) {
+    if (!this.ext) return null;
+    const query = this.gl.createQuery();
+    if (!query) return null;
+    this.gl.beginQuery(this.ext.TIME_ELAPSED_EXT, query);
+    return { label, query };
+  }
+
+  end(sample) {
+    if (!sample) return;
+    this.gl.endQuery(this.ext.TIME_ELAPSED_EXT);
+    this.pending.push(sample);
+  }
+
+  poll() {
+    const ready = [];
+    this.pending = this.pending.filter((sample) => {
+      const available = this.gl.getQueryParameter(
+        sample.query,
+        this.gl.QUERY_RESULT_AVAILABLE,
+      );
+      const disjoint = this.gl.getParameter(this.ext.GPU_DISJOINT_EXT);
+      if (!available || disjoint) return true;
+      const nanoseconds = this.gl.getQueryParameter(
+        sample.query,
+        this.gl.QUERY_RESULT,
+      );
+      ready.push({ label: sample.label, milliseconds: nanoseconds / 1e6 });
+      this.gl.deleteQuery(sample.query);
+      return false;
+    });
+    return ready;
+  }
 }
 ```
 
-`vertexAttribDivisor(loc,1)` 让该属性每实例推进一次，是实现实例化的关键。
+同时在 CPU 侧记录每帧 drawCount、programBinds、textureBinds、triangles、visibleInstances 和 uploadedBytes。计数器不等于耗时，但能解释“为什么变快”：若 GPU 时间下降而片元覆盖不变，可能是 shader/带宽改善；若 CPU 时间下降且 draw 数减少，才支持提交优化结论。
+
+## 批处理与实例化的边界
+
+批处理把多个几何拼进共享 buffer，以一次或较少 draw 提交。它适合材质兼容、更新频率接近且空间相邻的对象，但代价包括：
+
+- 合并时的 CPU 拷贝和额外内存；
+- 单个对象变化可能要求更新大块 buffer；
+- 剔除粒度从对象变成整个 batch，可能增加 GPU 工作；
+- 不同材质、混合顺序和阴影状态会拆分 batch。
+
+<Term def="一次绘制复用同一几何，通过逐实例属性或缓冲为每个副本提供变换和参数">实例化</Term>不复制基础网格，适合大量相同拓扑。实例数量太少、每实例数据太大或可见实例稀疏时，收益也可能不抵上传和 shader 读取成本，必须测 break-even 点。
+
+<DogRenderingOptimizationDiagram />
+
+## 可复现的 mat4 实例化
+
+一个 mat4 占四个 vec4 属性槽。每个槽都要设置 divisor=1，且这些调用要在目标 VAO 绑定时完成。
+
+```js
+function attachInstanceMatrices(gl, vao, matrices, firstLocation = 4) {
+  const buffer = gl.createBuffer();
+  if (!buffer) throw new Error("create instance buffer failed");
+
+  gl.bindVertexArray(vao);
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, matrices, gl.DYNAMIC_DRAW);
+
+  const bytesPerMatrix = 16 * Float32Array.BYTES_PER_ELEMENT;
+  for (let column = 0; column < 4; column += 1) {
+    const location = firstLocation + column;
+    gl.enableVertexAttribArray(location);
+    gl.vertexAttribPointer(
+      location,
+      4,
+      gl.FLOAT,
+      false,
+      bytesPerMatrix,
+      column * 4 * Float32Array.BYTES_PER_ELEMENT,
+    );
+    gl.vertexAttribDivisor(location, 1);
+  }
+
+  gl.bindVertexArray(null);
+  return buffer;
+}
+
+function drawInstances(gl, vao, indexCount, visibleInstanceCount) {
+  gl.bindVertexArray(vao);
+  gl.drawElementsInstanced(
+    gl.TRIANGLES,
+    indexCount,
+    gl.UNSIGNED_SHORT,
+    0,
+    visibleInstanceCount,
+  );
+}
+```
+
+验收时比较 1、4、16、64、256、1024 个实例的 CPU/GPU 时间。实例化通常减少 CPU 提交，但 GPU 顶点数仍约等于 indexCount × visibleInstanceCount；不可见实例如果没有在 CPU 或 GPU 剔除，仍会执行顶点工作。
+
+## 状态排序不是单一排序键
+
+<Term def="在不破坏正确性的前提下按 program、材质、纹理、深度或其他状态组织绘制顺序">状态排序</Term>要服从渲染语义：
+
+- 不透明物体可先按 pass/program/material 分桶，再在桶内适度前向后排序，兼顾状态切换与早期深度；
+- 透明物体通常需要后向前排序或使用专门 OIT，不能为了少 bind 任意重排；
+- 阴影、深度预 pass 和 G-buffer 使用不同 program/附件，应分别建立 render list；
+- 状态缓存只在目标状态不同才调用 GL，但每个 pass 仍需声明完整目标状态。
+
+```js
+function renderOpaque(gl, items, state) {
+  items.sort((a, b) =>
+    a.pipelineKey - b.pipelineKey ||
+    a.materialKey - b.materialKey ||
+    a.cameraDepth - b.cameraDepth
+  );
+
+  for (const item of items) {
+    if (state.program !== item.program) {
+      gl.useProgram(item.program);
+      state.program = item.program;
+      state.programBinds += 1;
+    }
+    if (state.texture !== item.texture) {
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, item.texture);
+      state.texture = item.texture;
+      state.textureBinds += 1;
+    }
+    gl.bindVertexArray(item.vao);
+    gl.drawElements(gl.TRIANGLES, item.indexCount, item.indexType, 0);
+    state.drawCount += 1;
+  }
+}
+```
+
+排序前后应同时比较 program/texture bind 数、CPU 排序成本、GPU early-depth 收益与最终图像。状态切换减少但透明顺序错误，不是优化成功。
+
+## 纹理与附件带宽
+
+纹理图集的真实价值是把多张小纹理放进同一对象，允许更多物体共享一次绑定和一次 batch。它需要为每个子图保留 mip padding，限制 repeat wrap，并处理不同颜色空间和压缩块边界。若纹理尺寸一致且 WebGL2 可用，texture array 往往比图集更容易保持 mip 和 wrap 语义。
+
+直接降低带宽的手段包括：
+
+- 选择设备支持的 ASTC/ETC 等压缩纹理，并准备格式回退；
+- 为远处采样生成正确 mip，减少高频访问与缓存浪费；
+- 按误差预算选择 RGBA8、RGB10_A2、RG16F、RGBA16F 等附件；
+- 降低阴影、反射和后处理分辨率，避免全分辨率临时附件；
+- 对不再使用的 tile/depth 附件 invalidate，减少无意义 store；
+- 避免每帧重传静态数据，动态 buffer 使用分段/轮转避免覆盖 GPU 尚在读取的区域。
+
+## 分步优化闭环
+
+先预测：把 2000 个 draw 合成 20 个后，CPU 时间下降 4 ms，但 GPU 时间上升 6 ms，因为 batch 无法逐对象剔除。这项改动是否应合入？
+
+<Stepper>
+<Step title="第一步：固定场景并定位瓶颈">
+<DogStepFlowDiagram
+  caption="第 1 步：固定输入，分别测 CPU、GPU、工作量与同步，先证明瓶颈。"
+  stage={1}
+  stages={["固定场景并定位瓶颈类别", "只改变一个优化变量并记录工作量", "比较分布、画质和稳态后决定"]}
+/>
+
+锁定相机轨迹、分辨率、资源版本和热状态，采集基线 P50/P95 与 draw、triangle、fragment、bind、upload、带宽计数。
+</Step>
+<Step title="第二步：实施单变量改动">
+<DogStepFlowDiagram
+  caption="第 2 步：每次只改变实例化、排序、格式或剔除中的一项。"
+  stage={2}
+  stages={["固定场景并定位瓶颈类别", "只改变一个优化变量并记录工作量", "比较分布、画质和稳态后决定"]}
+/>
+
+CPU 提交瓶颈测试实例化；片元瓶颈测试分辨率/常量 shader；带宽瓶颈测试格式和附件；同步瓶颈移除 readback。避免一次修改多个变量后无法归因。
+</Step>
+<Step title="第三步：验证整体而非局部指标">
+<DogStepFlowDiagram
+  caption="第 3 步：局部计数下降只有在总帧时间、画质和稳态同时通过时才成立。"
+  stage={3}
+  stages={["固定场景并定位瓶颈类别", "只改变一个优化变量并记录工作量", "比较分布、画质和稳态后决定"]}
+/>
+
+比较 CPU/GPU 分布、尖峰、内存、功耗和像素差异。若 CPU 省 4 ms、GPU 多 6 ms 且总帧变慢，应缩小 batch 或保留原方案。
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** 用实例化画了 N 个物体，结果每个都长一样、位置没分开。
-**原因 →** 忘了给实例化属性设 vertexAttribDivisor，矩阵属性仍每顶点推进，所有实例拿到第 0 个矩阵。
-**修法 →** 对矩阵的每个属性槽调 vertexAttribDivisor(loc,1)，让属性每实例推进一次，每实例才读到自己的矩阵。
+**现象 →** draw 数从 5000 降到 50，平均 FPS 几乎不变。
+**原因 →** 原场景是片元或带宽瓶颈，提交并非关键路径；合批也没有减少屏幕覆盖和采样。
+**修法 →** 对照降低分辨率和常量色 shader 的实验，分别读取 CPU/GPU 时间，再决定是否继续做提交优化。
 </Callout>
 
 <Callout type="trap">
-**现象 →** 批处理后物体材质各不相同，合并后没法区分纹理。
-**原因 →** 批处理要求同材质，硬把不同纹理物体合并就无法在着色器里区分。
-**修法 →** 只合并同材质物体；若要合并多纹理，用纹理图集把多张拼成一张，片元里按 UV 偏移采样对应子图。
+**现象 →** 使用大纹理图集后 bind 次数下降，但边缘出现串色，显存或采样时间没有下降。
+**原因 →** 图集减少状态切换，不自动减少采样字节；缺少 mip padding 会读取邻近子图，超大图集还可能伤害局部性。
+**修法 →** 添加逐 mip padding，记录压缩格式与采样时间；尺寸一致时评估 texture array，不把图集当带宽压缩。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 为读取 GPU timer 结果每帧立刻轮询或调用 gl.finish，测得的“优化”波动很大。
+**原因 →** 测量本身强制 CPU/GPU 同步，改变了原本流水线。
+**修法 →** 延迟数帧轮询 query，检查 disjoint，批量汇总统计；热路径禁止 finish，仅在隔离诊断时使用。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：draw call 的开销主要在哪？批处理和实例化分别适合什么场景？
+**问题 1**：降低渲染分辨率后 GPU 时间减半，而 draw 数和 CPU 时间几乎不变。最可能是哪类瓶颈？下一步怎样区分片元算力和带宽？
 
 <Answer>
-draw call 开销主要在 CPU 准备状态与驱动校验的固定成本，而非 GPU 绘制本身。批处理适合把多个不同几何但同材质的物体合并进一个 VBO 一次画；实例化适合用一次 draw call 画多份相同几何的副本（如一堆相同树/粒子），每实例只传变换等每实例属性。
+结果说明瓶颈随像素数量变化，优先怀疑片元或带宽，而非 CPU 提交。下一步保持分辨率不变，把复杂片元 shader 换成常量颜色：若 GPU 时间大降，偏向片元算力；再保持 shader、降低附件位宽/数量或纹理格式与采样次数，若改善明显则偏向带宽。结合 GPU counter 才能最终确认。
 </Answer>
 
-**问题**：为什么状态排序能提速？纹理图集如何降低带宽？
+**问题 2**：批处理与实例化分别减少了什么，又分别可能增加什么成本？
 
 <Answer>
-切换程序、绑纹理、开关测试都有固定开销，状态排序把同 shader/纹理/状态的物体排在一起绘制，减少切换次数，让 CPU 和驱动少做无用功。纹理图集把多张小纹理拼成一张大纹理，多个物体共用一个纹理绑定点，避免每物体 bindTexture 切换；且一次绑定后采样器无需频繁换纹理，减少采样带宽与状态切换。
+批处理减少 draw 和状态切换，但会增加几何合并拷贝、内存、更新范围和剔除粒度；实例化减少重复几何的提交与存储，但不会减少每个可见实例的顶点/片元工作，还会增加逐实例数据上传和属性读取。两者都要测实例/batch 规模的 break-even 点。
+</Answer>
+
+**问题 3**：为什么“图集让纹理采样带宽更低”不是可靠结论？如何证明图集改动有价值？
+
+<Answer>
+图集把资源合并为一个纹理对象，直接收益是减少 bind、扩大 batch；每次采样读取多少字节仍由格式、mip、过滤和缓存行为决定。图集还可能引入 padding、串色和局部性问题。应比较 draw/bind 数、CPU 时间、GPU 采样时间、缓存/带宽计数、显存和像素正确性，证明总帧改善而非只看绑定次数。
 </Answer>
 </Exercises>
 
+## 小结
+
+- 优化从帧预算与瓶颈证据开始，draw call 只是 CPU 提交类指标之一。
+- 批处理与实例化减少提交，但可能增加内存、上传、GPU 工作或降低剔除粒度。
+- 状态排序必须服从不透明/透明正确性，状态缓存也不能省略 pass 的目标状态声明。
+- 图集主要减少绑定；压缩、mip、附件格式和分辨率才直接改变大量采样与存储带宽。
+- 非阻塞 GPU query、固定场景、P50/P95 和工作量计数共同构成可归因的优化闭环。
+
 <Glossary>
-<GlossaryItem term="draw call">一次绘制命令，其固定开销在 CPU 与驱动，是优化重点。</GlossaryItem>
-<GlossaryItem term="批处理">把多个同材质物体合并进一个 VBO 一次绘制，分摊 draw call 开销。</GlossaryItem>
-<GlossaryItem term="实例化">一次 draw call 绘制多份相同几何副本，每实例传变换等每实例属性。</GlossaryItem>
-<GlossaryItem term="纹理图集">多张小纹理拼成一张大纹理，共用绑定点减少切换与采样带宽。</GlossaryItem>
+<GlossaryItem term="帧预算">为目标刷新率分配给 CPU、GPU、呈现、内存和功耗的可验证时间与资源范围。</GlossaryItem>
+<GlossaryItem term="CPU 提交瓶颈">CPU 与驱动因大量小绘制、状态验证和命令编码耗尽帧时间，而 GPU 出现等待。</GlossaryItem>
+<GlossaryItem term="采样带宽">纹理和附件访问消耗的内存吞吐，受格式、分辨率、mip、过滤、压缩和局部性影响。</GlossaryItem>
+<GlossaryItem term="实例化">一次绘制复用同一几何，以逐实例属性或缓冲为每个副本提供变换和参数。</GlossaryItem>
+<GlossaryItem term="状态排序">在不破坏渲染正确性的前提下，按 program、材质、纹理、深度等组织绘制顺序。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="深入理解 OpenGL WebGL OpenGL ES" adaptedUrl="" />
+<Attribution
+  adaptedFrom="Khronos WebGL 2.0 Specification and timer query extension contracts"
+  adaptedUrl="https://registry.khronos.org/webgl/specs/latest/2.0/"
+/>

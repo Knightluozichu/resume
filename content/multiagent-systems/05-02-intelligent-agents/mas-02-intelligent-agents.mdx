@@ -1,0 +1,321 @@
+---
+title: "Chapter 2 Intelligent Agents"
+type: C
+section: "Chapter 2 Intelligent Agents"
+order: 5
+description: "比较智能体、对象、专家系统和意向系统，抽象感知、内部状态、决策与行动架构，并说明如何给出任务。"
+demo: true
+math: true
+sourceUrl: "https://www.cs.ox.ac.uk/people/michael.wooldridge/pubs/imas/Contents.html"
+draft: false
+---
+
+import {
+  Mas02IntelligentAgentsModelLab,
+  Mas02IntelligentAgentsGameLab,
+  Mas02IntelligentAgentsEvidenceLab,
+} from "@/components/mdx/multiagent-systems/diagrams/mas-02-intelligent-agents";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释Intelligent Agents、Intelligent Agents、Agents and Objects的参与者、信息、行动、结果和假设边界
+- 能推导并手算期望效用、最佳响应、Shapley值与证据门禁四个表达式
+- 能实现三种交互实验，定位状态、偏好、消息、协议、机制或逻辑模型的首个分叉
+- 能设计正常、边界和单故障样本，独立证明“能为Chapter 2 Intelligent Agents写出明确假设、手算一个最小实例，并用正常、边界和单故障样本复核结论。”
+
+</Objectives>
+
+## 为什么先冻结参与者、信息与规则
+
+<Term def="Intelligent Agents是Chapter 2 Intelligent Agents的第1个执行坐标，关联参与者、信息、行动、结果和失败边界。">
+  Intelligent Agents
+</Term>
+、
+<Term def="Intelligent Agents是Chapter 2 Intelligent Agents的第2个执行坐标，关联参与者、信息、行动、结果和失败边界。">
+  Intelligent Agents
+</Term>
+、
+<Term def="Agents and Objects是Chapter 2 Intelligent Agents的第3个执行坐标，关联参与者、信息、行动、结果和失败边界。">
+  Agents and Objects
+</Term>
+、
+<Term def="Agents and Expert Systems是Chapter 2 Intelligent Agents的第4个执行坐标，关联参与者、信息、行动、结果和失败边界。">
+  Agents and Expert Systems
+</Term>
+、
+<Term def="Agents as Intentional Systems是Chapter 2 Intelligent Agents的第5个执行坐标，关联参与者、信息、行动、结果和失败边界。">
+  Agents as Intentional Systems
+</Term>
+、
+<Term def="Abstract Architectures for Intelligent Agents是Chapter 2 Intelligent Agents的第6个执行坐标，关联参与者、信息、行动、结果和失败边界。">
+  Abstract Architectures for Intelligent Agents
+</Term>
+共同构成本页坐标。比较智能体、对象、专家系统和意向系统，抽象感知、内部状态、决策与行动架构，并说明如何给出任务。
+多智能体结论依赖“谁知道什么、谁能做什么、每个结果值多少以及规则如何更新状态”；缺少其中一项，合作、均衡或公平都可能只是表面现象。
+
+本书锁定Michael Wooldridge第二版、Wiley、2009年5月、484页和ISBN 9780470519462。第二版新增本体、投票、拍卖、议价、联盟和论证等内容，不能用2002年第一版目录代替；现代LLM Agent可作为迁移案例，但不反向改写原书定义和历史结论。
+
+每次实验保存参与者集合、行动集、观察、偏好或效用、初始联合状态、转移规则、消息协议、随机种子、终止条件和逐步轨迹。只看最终任务是否完成，无法区分信息泄漏、效用写反、同步错位、策略偏离、通信语义不一致或机制操纵。
+
+<Callout type="info">
+  **验收命题：** 能为Chapter 2 Intelligent
+  Agents写出明确假设、手算一个最小实例，并用正常、边界和单故障样本复核结论。
+</Callout>
+
+## 效用、均衡与分配骨架
+
+$$
+EU_i(a_i)=sum_{s}P(smid I_i)u_i(a_i,s)
+$$
+
+$$
+a_i^*inargmax_{a_i}u_i(a_i,a_{-i}^*)
+$$
+
+$$
+phi_i(v)=sum_{Ssubseteq Nsetminus{i}}rac{|S|!(n-|S|-1)!}{n!}[v(Scup{i})-v(S)]
+$$
+
+$$
+E=source	imes reproducibility	imes boundary
+$$
+
+第一式要求以智能体可用信息计算期望效用；全知观察不能偷偷进入局部决策。第二式给出最佳响应或纳什条件，但不保证帕累托效率。第三式按所有加入顺序平均边际贡献，小联盟可手算验证。第四式要求来源、重放和边界同时成立。
+
+取双人两行动收益矩阵：共同合作得(3,3)，一方背叛得(5,0)，双方背叛得(1,1)。逐格标记最佳响应可见背叛是占优策略，(背叛,背叛)为纳什均衡，却不如(合作,合作)帕累托有效。重复博弈只有在贴现和未来互动足够重要时才可能支持合作，不能省略时间假设。
+
+## 三段可运行骨架
+
+```python
+def freeze_game(agents, actions, information, utility, transition):
+    return {"agents": agents, "actions": actions, "information": information,
+            "utility": utility, "transition": transition}
+```
+
+```python
+def best_responses(payoffs, opponent_action):
+    values = {action: payoff[opponent_action]
+              for action, payoff in payoffs.items()}
+    peak = max(values.values())
+    return {action for action, value in values.items() if value == peak}
+```
+
+```python
+def trace_gate(records):
+    required = {"state", "observations", "messages", "actions", "outcome"}
+    missing = [step for step, record in enumerate(records)
+               if not required.issubset(record)]
+    return {"pass": not missing, "missing_steps": missing}
+```
+
+第一段冻结博弈或协议合同，第二段从收益表而非口头直觉计算最佳响应，第三段要求每步联合轨迹完整。接入JADE、仿真器、规划器或现代Agent框架时由薄适配器提供真实执行，参与者、状态、消息、行动和结果字段保持稳定。
+
+## 最小实例与手算顺序
+
+先把自然语言场景改写为有限对象：参与者N、行动Ai、信息Ii、结果O、效用ui和转移T。列出所有联合行动，逐个计算效用和最佳响应，再判断占优、均衡、帕累托与社会福利。若是通信协议，继续列会话状态、合法消息、前置条件和状态效果。
+
+三人多数投票例中，保存每人的完整排序而非只记第一名；分别运行plurality、Borda和序贯多数，观察议程变化。三人联盟例枚举空集到全集的八个价值，检查核心约束并按六种加入顺序算Shapley值。拍卖例分开真实估值、出价、分配和支付，才能验证激励性质。
+
+逻辑例给出三个可能世界、可达关系和原子命题估值，逐世界计算知识与共同知识。论证例给出攻击图，先枚举冲突自由集合，再计算可接受和preferred extensions。图上直觉必须与形式定义逐步对应。
+
+## 对照实验、故障注入与回归
+
+基线冻结参与者、行动、信息、效用、协议和终止条件，只改变一个因素。故障轮次注入一个错误效用、遗漏消息、重复任务、过期本体、操纵选票、虚假出价、断裂攻击边或错误可达关系，要求系统在最终结果前报告首个联合状态分叉。
+
+随机仿真用多种子报告结果分布、消息数、收敛轮次、社会福利、最差个体效用与失败率。只提高总福利可能牺牲某个参与者，只减少消息可能延误关键同步；多个指标必须从同一轨迹计算，避免分母不一致。
+
+修复后先重放原失败，再运行对称变换、边界规模和正常基线。确定性机制逐项一致，随机策略落入预设区间。新增智能体、消息丢失或偏好变化时，检查协议是否仍终止、个体是否仍有偏离动机以及安全不变量是否保持。
+
+## 复现实验账本
+
+每个结论绑定一个清单：正式目录坐标、定义、参与者与权限、信息结构、收益或目标、协议版本、最小实例、预期性质、反例和运行轨迹。清单与代码分开保存，使替换仿真器或通信框架时仍能用同一合同复核。
+
+对历史系统如KQML、FIPA ACL、JADE、Contract Net或PRS，记录原书语境和当前可运行替代，不宣称接口仍保持今天的默认行为。对形式定理保存前提和证明义务，对工程案例保存数据、配置和测量；两类证据不能互相冒充。
+
+独立复核者从空目录读取清单，先手算最小实例，再运行正常、边界和单故障样本。若手算、代码和图示不同，停止在首个差异处；不得通过调参让最终数字接近而跳过状态、消息或效用错误。
+
+## 正式目录逐项讲解
+
+### Chapter 2 Intelligent Agents
+
+“Chapter 2 Intelligent Agents”用感知、内部状态、目标、计划、选择函数、行动和环境转移描述。先在有限状态环境手算轨迹，再比较演绎、实践推理、反应式与混合实现；最终成功率不能掩盖不可达状态、规则冲突或层间仲裁错误。
+
+针对“Chapter 2 Intelligent Agents”，先预测只改变一个参与者的偏好、信息、策略、消息、协议或逻辑模型时哪个联合状态最先分叉，再运行正常与单故障路径。保存输入、联合轨迹、配置和判断依据，不用最终结果覆盖前序失败。
+
+### 2.1 Intelligent Agents
+
+“2.1 Intelligent Agents”用感知、内部状态、目标、计划、选择函数、行动和环境转移描述。先在有限状态环境手算轨迹，再比较演绎、实践推理、反应式与混合实现；最终成功率不能掩盖不可达状态、规则冲突或层间仲裁错误。
+
+针对“2.1 Intelligent Agents”，先预测只改变一个参与者的偏好、信息、策略、消息、协议或逻辑模型时哪个联合状态最先分叉，再运行正常与单故障路径。保存输入、联合轨迹、配置和判断依据，不用最终结果覆盖前序失败。
+
+### 2.2 Agents and Objects
+
+“2.2 Agents and Objects”用感知、内部状态、目标、计划、选择函数、行动和环境转移描述。先在有限状态环境手算轨迹，再比较演绎、实践推理、反应式与混合实现；最终成功率不能掩盖不可达状态、规则冲突或层间仲裁错误。
+
+针对“2.2 Agents and Objects”，先预测只改变一个参与者的偏好、信息、策略、消息、协议或逻辑模型时哪个联合状态最先分叉，再运行正常与单故障路径。保存输入、联合轨迹、配置和判断依据，不用最终结果覆盖前序失败。
+
+### 2.3 Agents and Expert Systems
+
+“2.3 Agents and Expert Systems”用感知、内部状态、目标、计划、选择函数、行动和环境转移描述。先在有限状态环境手算轨迹，再比较演绎、实践推理、反应式与混合实现；最终成功率不能掩盖不可达状态、规则冲突或层间仲裁错误。
+
+针对“2.3 Agents and Expert Systems”，先预测只改变一个参与者的偏好、信息、策略、消息、协议或逻辑模型时哪个联合状态最先分叉，再运行正常与单故障路径。保存输入、联合轨迹、配置和判断依据，不用最终结果覆盖前序失败。
+
+### 2.4 Agents as Intentional Systems
+
+“2.4 Agents as Intentional Systems”用感知、内部状态、目标、计划、选择函数、行动和环境转移描述。先在有限状态环境手算轨迹，再比较演绎、实践推理、反应式与混合实现；最终成功率不能掩盖不可达状态、规则冲突或层间仲裁错误。
+
+针对“2.4 Agents as Intentional Systems”，先预测只改变一个参与者的偏好、信息、策略、消息、协议或逻辑模型时哪个联合状态最先分叉，再运行正常与单故障路径。保存输入、联合轨迹、配置和判断依据，不用最终结果覆盖前序失败。
+
+### 2.5 Abstract Architectures for Intelligent Agents
+
+“2.5 Abstract Architectures for Intelligent Agents”用感知、内部状态、目标、计划、选择函数、行动和环境转移描述。先在有限状态环境手算轨迹，再比较演绎、实践推理、反应式与混合实现；最终成功率不能掩盖不可达状态、规则冲突或层间仲裁错误。
+
+针对“2.5 Abstract Architectures for Intelligent Agents”，先预测只改变一个参与者的偏好、信息、策略、消息、协议或逻辑模型时哪个联合状态最先分叉，再运行正常与单故障路径。保存输入、联合轨迹、配置和判断依据，不用最终结果覆盖前序失败。
+
+### 2.6 How to Tell an Agent What to Do
+
+“2.6 How to Tell an Agent What to Do”用感知、内部状态、目标、计划、选择函数、行动和环境转移描述。先在有限状态环境手算轨迹，再比较演绎、实践推理、反应式与混合实现；最终成功率不能掩盖不可达状态、规则冲突或层间仲裁错误。
+
+针对“2.6 How to Tell an Agent What to Do”，先预测只改变一个参与者的偏好、信息、策略、消息、协议或逻辑模型时哪个联合状态最先分叉，再运行正常与单故障路径。保存输入、联合轨迹、配置和判断依据，不用最终结果覆盖前序失败。
+
+## 六类多智能体证据
+
+### 参与者与环境合同
+
+记录每个智能体的能力、权限、观察、目标、资源与身份，定义环境状态和转移。自治不等于无限权限，环境共享也不等于观察相同；初始状态、并发时序和失败模型进入版本。
+
+### 信息、信念与本体合同
+
+区分真实世界、个体观察、信念和共同知识。消息内容使用版本化本体，保存命名空间、映射与冲突；未知信息显式表示，不用全局变量偷偷补齐局部视角。
+
+### 策略、效用与理性合同
+
+效用单位、风险偏好、贴现和时间范围明确，策略从可用信息映射到行动。均衡、效率、公平和社会福利分别验证；一个理性选择可能产生集体低效，不能混为同一指标。
+
+### 通信、协调与组织合同
+
+协议定义合法消息、前置条件、状态效果、超时、重试和终止。任务与结果共享记录所有权和合并规则，联合意图、组织角色、规范和社会法则都有可检测违例。
+
+### 机制、操纵与公平合同
+
+投票、联盟、拍卖和议价记录报告空间、分配、支付与激励假设。用策略操纵、合谋、欺骗和参与者退出测试机制，报告计算复杂度与最坏个体结果，不只展示理想均衡。
+
+### 规范、验证与运行合同
+
+形式公式、原子命题和实现事件一一映射，保存模型检查或轨迹断言。运行监控状态、消息、行动、收益、终止和安全不变量；版本可整体回退，失败轨迹进入隔离回归集。
+
+## 三步交互实验
+
+<Stepper>
+  <Step title="追踪联合状态">
+    拖动阶段，检查参与者、信息、消息、行动、结果和评测依赖，先预测首个分叉。
+    <Mas02IntelligentAgentsModelLab />
+  </Step>
+  <Step title="改变博弈条件">
+    调节实验预算与证据阈值，观察策略、福利、消息和稳定性；一次只改变一个条件。
+    <Mas02IntelligentAgentsGameLab />
+  </Step>
+  <Step title="注入协议故障">
+    注入信息、效用、消息、机制或逻辑故障，要求门禁在最终结果前捕获并给出回退点。
+    <Mas02IntelligentAgentsEvidenceLab />
+  </Step>
+</Stepper>
+
+## 常见失败与回退
+
+<Callout type="trap">
+  **把结果当过程：**
+  只看任务完成或总福利，未保存个体观察、消息、行动、收益和偏离检查，会把偶然协调误判为协议正确。
+</Callout>
+
+<Callout type="trap">
+  **版本与概念混用：** 第二版结构不同于第一版；现代LLM
+  Agent的对话编排也不自动满足原书关于自治、共同知识、均衡或机制的定义。
+</Callout>
+
+<Callout type="tip">
+  **回退顺序：** 版本来源 → 参与者与权限 → 信息结构 → 状态转移 → 效用与策略 →
+  消息协议 → 机制性质 → 逻辑验证。首个差异未解释前不比较最终结果。
+</Callout>
+
+## 本章回顾
+
+比较智能体、对象、专家系统和意向系统，抽象感知、内部状态、决策与行动架构，并说明如何给出任务。 掌握标准不是背诵架构或机制名，而是能重建参与者、信息、行动、效用、协议、对照、性质、限制和失败证据。通过标准为：能为Chapter 2 Intelligent Agents写出明确假设、手算一个最小实例，并用正常、边界和单故障样本复核结论。
+
+<Glossary>
+
+<GlossaryItem term="Intelligent Agents">
+  “Intelligent Agents”是Chapter 2 Intelligent
+  Agents的第1个执行坐标；定义包含参与者、信息、行动、结果、效用、版本和最小反例，并能从联合轨迹复核。
+</GlossaryItem>
+
+<GlossaryItem term="Intelligent Agents">
+  “Intelligent Agents”是Chapter 2 Intelligent
+  Agents的第2个执行坐标；定义包含参与者、信息、行动、结果、效用、版本和最小反例，并能从联合轨迹复核。
+</GlossaryItem>
+
+<GlossaryItem term="Agents and Objects">
+  “Agents and Objects”是Chapter 2 Intelligent
+  Agents的第3个执行坐标；定义包含参与者、信息、行动、结果、效用、版本和最小反例，并能从联合轨迹复核。
+</GlossaryItem>
+
+<GlossaryItem term="Agents and Expert Systems">
+  “Agents and Expert Systems”是Chapter 2 Intelligent
+  Agents的第4个执行坐标；定义包含参与者、信息、行动、结果、效用、版本和最小反例，并能从联合轨迹复核。
+</GlossaryItem>
+
+<GlossaryItem term="Agents as Intentional Systems">
+  “Agents as Intentional Systems”是Chapter 2 Intelligent
+  Agents的第5个执行坐标；定义包含参与者、信息、行动、结果、效用、版本和最小反例，并能从联合轨迹复核。
+</GlossaryItem>
+
+<GlossaryItem term="Abstract Architectures for Intelligent Agents">
+  “Abstract Architectures for Intelligent Agents”是Chapter 2 Intelligent
+  Agents的第6个执行坐标；定义包含参与者、信息、行动、结果、效用、版本和最小反例，并能从联合轨迹复核。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+1. 如何为Chapter 2 Intelligent Agents建立最小可重放基线？
+
+<Answer>
+  固定第二版来源、参与者、行动、信息、效用、联合状态、协议、种子和终止条件，保存每步观察、消息、行动与结果，再运行正常、边界和单故障样本。
+</Answer>
+
+2. 如何证明“能为Chapter 2 Intelligent Agents写出明确假设、手算一个最小实例，并用正常、边界和单故障样本复核结论。”不是一次偶然成功？
+
+<Answer>
+  先手算有限实例，再对相同合同执行对称变换、多种子或多顺序对照，由独立进程重放；均衡、效率、公平和安全性质分别验证。
+</Answer>
+
+3. 修复Chapter 2 Intelligent Agents后怎样回归？
+
+<Answer>
+  先重放原失败，再运行相邻边界和正常基线，按参与者、信息、效用、消息、状态与判断定位首个差异，全部不变量通过后才发布。
+</Answer>
+
+</Exercises>
+
+## 前后导航
+
+- [Part II Intelligent Autonomous Agents](/learn/multiagent-systems/04-part-02-intelligent-autonomous-agents/mas-part-02-intelligent-autonomous-agents)
+- [Chapter 3 Deductive Reasoning Agents](/learn/multiagent-systems/06-03-deductive-reasoning-agents/mas-03-deductive-reasoning-agents)
+
+<Attribution
+  adaptedFrom="Michael Wooldridge, An Introduction to MultiAgent Systems, Second Edition, John Wiley & Sons, May 2009, 484 pages, ISBN 9780470519462 · 基于作者官网197个正式目录层级的独立教学重构"
+  adaptedUrl="https://www.cs.ox.ac.uk/people/michael.wooldridge/pubs/imas/"
+/>

@@ -1,0 +1,324 @@
+---
+title: "第8章：Redis 网络通信模块源码分析"
+type: A
+section: "C++ 服务器开发精髓 · Redis 6.0 事件、Client 与 RESP 调用链"
+order: 8
+description: "对齐原书第 8 章：Redis server/cli 网络链、ae/epoll、读写事件、threaded I/O、client 生命周期、缓冲、定时器、钩子与 RESP。"
+demo: true
+math: false
+sourceUrl: "https://book.douban.com/subject/35491437/"
+draft: false
+---
+
+import {
+  CseRedisServerEventChainLab,
+  CseRedisThreadedIoLab,
+  CseRespPipelineLab,
+} from "@/components/mdx/cpp-server-essence/diagrams/redis-network-module-source-analysis";
+
+<Objectives>
+
+- 能沿 Redis 6.0 源码解释 initServer、ae/epoll、acceptTcpHandler、createClient、readQueryFromClient、processInputBuffer、writeToClient 与 freeClient 调用链
+- 能分析 client 的 query/reply buffers、pending lists、Redis 6.0 多线程网络 I/O ownership，以及 timer/beforeSleep/afterSleep 对事件循环的调度位置
+- 能推导 redis-cli/hiredis 到 RESP inline/multibulk parser、请求应答、pipeline 与断开清理的完整数据流，并用 GDB/命令复现关键断点
+
+</Objectives>
+
+## 为什么源码分析要按事件链，而不是按文件顺序
+
+从 `networking.c` 第一行读到最后一行会混在 client 创建、RESP parser、reply buffer、replication 和 threaded I/O 之间。更可靠的路径是跟随一次连接：初始化 listen fd → accept → create client → read bytes → parse argv → execute command → build/write reply → disconnect。
+
+<Term def="从 OS readiness 经过 ae handler、Redis client state、command parser 到 reply/cleanup 的端到端源码调用序列。">Redis network event chain</Term>
+
+本章以原书对应的 Redis 6.0 源码为基线；后续 Redis 版本已经继续演化 connection abstraction 与 I/O threading，函数位置和 owner 边界必须按 tag 核对，不能把当前 unstable 分支反推到书中版本。
+
+## 8.1 编译、启动与调试 Redis 6.0
+
+这一节对应原书的 **Redis 源码编译与启动**和**调试 Redis 环境**：先固定版本与 artifact，再启动独立实例并设置可重复断点。
+
+克隆官方仓库后 checkout 书中版本，清理缓存、构建带符号 binary，再用独立数据目录和非生产 port 启动。保留 exact commit、compiler flags 和 config，GDB breakpoint 才能与源码一一对应。
+
+```bash
+git clone https://github.com/redis/redis.git
+cd redis
+git checkout 6.0
+make distclean
+make CFLAGS='-O0 -g3 -fno-omit-frame-pointer'
+mkdir -p /tmp/redis-cse
+gdb --args src/redis-server --port 6380 --dir /tmp/redis-cse --save ''
+```
+
+<Term def="固定 Redis tag/commit、构建参数、config、数据目录与端口，使断点、符号和运行行为可重复的源码实验输入。">Redis debug baseline</Term>
+
+通信示例可用 `redis-cli -p 6380 SET course cse`，同时在 GDB 对 `acceptTcpHandler`、`readQueryFromClient`、`processInputBuffer`、`writeToClient`、`freeClient` 设断点。术语中 `client` 是 server-side connection/session state，不等同于外部 redis-cli process。
+
+## 8.2 server 端监听 fd、accept 与 ae/epoll
+
+`server.c:initServer` 创建 `server.el = aeCreateEventLoop(...)`，`listenToPort` 建立 TCP listen fds，`aeCreateTimeEvent(..., serverCron, ...)` 安排时间事件，再把每个 listen fd 以 `AE_READABLE` 注册到 `acceptTcpHandler`。
+
+Linux backend 在 `ae_epoll.c` 中由 `aeApiCreate` 建立 epoll fd，`aeApiAddEvent` 把 AE mask 映射为 EPOLLIN/EPOLLOUT 并调用 `epoll_ctl`，`aeApiPoll`/`epoll_wait` 产生 ready events，`aeProcessEvents` 调用 file handlers。
+
+<Term def="Redis ae.c 暴露的 readable/writable/time-event 抽象，Linux 下由 ae_epoll.c 将其映射到 epoll。">ae event loop</Term>
+
+先预测：listen fd readable 后，真正创建 `client` 的函数位于 `server.c` 还是 `networking.c`；再沿图切换 startup/accept/read/write，核对每一步的文件和 state。
+
+<Stepper>
+  <Step title="沿事件切换 Redis server 调用链">
+    <CseRedisServerEventChainLab />
+  </Step>
+  <Step title="在源码断点记录 client 与 connection identity">
+    每个断点打印 fd、client id、flags、querybuf length、bufpos/reply bytes；不要只看函数名而丢失同一连接的状态连续性。
+  </Step>
+  <Step title="把 ae mask 与 epoll operation 对齐">
+    首次注册用 ADD，已有 fd 修改 read/write interest 用 MOD；删除 client 时 file events 必须先注销，防止 stale callback。
+  </Step>
+</Stepper>
+
+```gdb
+break initServer
+break acceptTcpHandler
+break acceptCommonHandler
+break createClient
+commands 4
+  silent
+  printf "create client conn=%p\n", conn
+  continue
+end
+```
+
+## 8.2.1 接受连接与 createClient
+
+`acceptTcpHandler` 循环 accept TCP connection，交给 `acceptCommonHandler` 做 maxclients/protected-mode 等检查，再调用 `createClient(conn)`。createClient 将 connection 设 nonblocking/TCP_NODELAY/keepalive，注册 `readQueryFromClient`，初始化 client id、database、querybuf、argv/parser state、static reply buffer、reply list、flags、timestamps，并 link 到 global clients/index。
+
+<Term def="Redis 为每条外部连接维护的 server-side state，包含 connection、query parser、argv、reply buffers、flags、auth/DB 与生命周期索引。">Redis client object</Term>
+
+```text
+acceptTcpHandler
+  -> acceptCommonHandler
+    -> createClient(conn)
+      -> connNonBlock / connEnableTcpNoDelay / connKeepAlive
+      -> connSetReadHandler(conn, readQueryFromClient)
+      -> linkClient(c)
+```
+
+监听 fd、accepted connection 和 `client` 分属 OS endpoint、connection abstraction 和 Redis protocol state 三层。调试时不要把 client id 当 fd；fd 可复用，client id/对象 lifetime 才能关联事件。
+
+## 8.2.2 readQueryFromClient 到 command execution
+
+readable 时 connection layer 调 `readQueryFromClient(conn)`：取得 private client，扩展/读取 querybuf，更新 interaction/stat，然后直接 `processInputBuffer(c)`，或在启用 threaded reads 时通过 `postponeClientRead` 放入 pending list。
+
+`processInputBuffer` 根据 querybuf 首字节选择 `PROTO_REQ_MULTIBULK` 或 `PROTO_REQ_INLINE`；分别调用 `processMultibulkBuffer` / `processInlineBuffer`。完整 argv 形成后，`processCommandAndResetClient` 进入 command lookup/execution，再 reset argv/parser state，继续解析 pipeline 剩余 bytes。
+
+<Term def="Redis client 中累积 socket bytes 的 SDS，以及 qb_pos、reqtype、multibulklen、bulklen 共同构成的增量 RESP parser state。">querybuf parser state</Term>
+
+```text
+readQueryFromClient
+  -> connRead -> c->querybuf
+  -> processInputBuffer
+    -> processInlineBuffer | processMultibulkBuffer
+    -> processCommandAndResetClient
+      -> processCommand -> c->cmd->proc
+```
+
+parser 不完整时保留 `multibulklen`/`bulklen` 与 qb_pos 等待下一次 read；pipeline 则在同一个 processInputBuffer loop 连续执行多条已完整命令。
+
+## 8.2.3 可写事件、static buf 与 reply list
+
+command 使用 `addReply*` 构造 RESP output。小回复优先进入 client 内嵌 static `buf`/`bufpos`；放不下或已有 list 时进入 `reply` linked list，并维护 `reply_bytes`/output-buffer limits。
+
+<Term def="Redis client 内小型 static reply buffer 与动态 reply block list 组成的分层输出缓冲。">Redis reply buffer chain</Term>
+
+`clientInstallWriteHandler` 先标记 `CLIENT_PENDING_WRITE` 并加入 `server.clients_pending_write`。beforeSleep 阶段的 `handleClientsWithPendingWrites` 尝试在回 event loop 前直接 flush，减少一次 writable event；若仍有剩余，才注册 `sendReplyToClient`。它调用 `writeToClient` 按 sentlen 推进 partial writes，完成后移除 write handler。
+
+```text
+addReply* -> prepareClientToWrite -> clientInstallWriteHandler
+  -> clients_pending_write
+  -> handleClientsWithPendingWrites[UsingThreads]
+  -> writeToClient
+  -> remaining ? connSetWriteHandler(sendReplyToClient) : clear
+```
+
+<Callout type="trap" title="把 addReply 当作立即 send">
+`addReply*` 主要编码并排入 client output buffers。实际 socket write 可能在 beforeSleep 批处理、I/O thread 或后续 writable handler 中发生；断点只打 addReply 看不到 backpressure。
+</Callout>
+
+## 8.2.4 Redis 6.0 多线程网络 I/O
+
+Redis 6.0 的 `initThreadedIO` 创建 I/O threads 与 per-thread lists，`startThreadedIO`/`stopThreadedIO` 控制运行。pending clients 按 batch 分配给 `io_threads_list`，workers 执行 socket read 或 write；主线程等待完成并继续 parser、command execution 与事件循环协调。
+
+<Term def="Redis 6.0 将成批 client socket read/write 分配给 I/O workers，同时保持 command/keyspace execution 主线程边界的机制。">Redis threaded I/O</Term>
+
+<Stepper>
+  <Step title="切换 pending read/parse/execute/write 阶段">
+    <CseRedisThreadedIoLab />
+  </Step>
+  <Step title="区分 io-threads 与 io-threads-do-reads">
+    配置多个 I/O threads 默认主要帮助 writes；开启 do-reads 后 reads 也可分发。必须按具体 6.0 源码/配置核对，不能只看线程数量。
+  </Step>
+  <Step title="验证主线程 batch barrier">
+    主线程构建 lists、切换 operation、唤醒 workers并等待 pending count 归零，再处理 parsed commands/handlers；这不是任意并行 command executor。
+  </Step>
+</Stepper>
+
+```gdb
+break initThreadedIO
+break handleClientsWithPendingReadsUsingThreads
+break handleClientsWithPendingWritesUsingThreads
+break IOThreadMain
+thread apply all bt
+```
+
+`CLIENT_PENDING_READ`/`CLIENT_PENDING_WRITE` 防止同一 client 重复入队。分析 data race 要先确认当前 `io_threads_op`、client 所在 list 和主线程是否处在等待 barrier，而不是从“有多个线程”直接得出 keyspace 并行结论。
+
+## 8.2.5 client 管理与断开流程
+
+正常/异常断开最终进入 `freeClient`，高风险 callback 中可先 `freeClientAsync` 加入 async-free queue，由 `freeClientsInAsyncFreeQueue` 在安全阶段释放。`unlinkClient` 从 global clients/index 移除，清理 pending read/write list，注销 connection handlers并关闭 connection；随后释放 querybuf、argv、reply、pubsub/watch/transaction 等关联 state。
+
+<Term def="先把 client 标记并加入待释放队列，在安全事件循环阶段完成 unlink/free，避免当前 callback/event batch 使用已释放对象。">asynchronous client free</Term>
+
+```text
+protocol/socket/output-limit error
+  -> freeClientAsync(c)
+  -> server.clients_to_close
+  -> freeClientsInAsyncFreeQueue
+  -> freeClient
+    -> unlinkClient
+    -> free query/reply/argv/session state
+```
+
+<Callout type="trap" title="只在 close(fd) 打断点追断线">
+Redis 6.0 使用 connection abstraction，且 client 可能先异步排队释放。应同时跟 freeClientAsync/freeClient/unlinkClient 与 connClose，记录 client id/flags，才能解释为什么何时断开。
+</Callout>
+
+## 8.2.6 收发缓冲区、限制与慢客户端
+
+原书把 **Redis 收发缓冲区**、**Redis 定时器**和**钩子函数**连续讲解，因为 buffer drain 与周期/睡眠钩子的批处理顺序共同决定 event-loop latency。
+
+querybuf 有协议最大/峰值管理，reply buffer 有 client type-specific hard/soft limits；超限可异步关闭。static buf 减少小回复 allocation，reply list 支持大/分段输出，`sentlen` 记录当前 block progress。
+
+<Term def="按 normal/pubsub/replica client 类型限制 reply memory 的 hard bytes 与 soft bytes/duration 规则。">client output buffer limit</Term>
+
+```text
+client-output-buffer-limit normal 0 0 0
+client-output-buffer-limit replica 256mb 64mb 60
+client-output-buffer-limit pubsub 32mb 8mb 60
+```
+
+慢 client 不读取时，pending reply 增长；Redis 必须在 command-generated data 与 network drain 之间执行 backpressure/close policy。只观察 kernel Send-Q 不够，还要看 client reply_bytes、bufpos、flags 和 limit timestamp。
+
+## 8.2.7 serverCron、time events 与 hooks
+
+`initServer` 用 `aeCreateTimeEvent` 注册 `serverCron`。它周期更新 cached time、统计、clients/database housekeeping、persistence/replication 等；下一次 interval 可动态调整。它不是每连接 timeout wheel，而是 ae time-event 驱动的服务器周期任务。
+
+<Term def="Redis ae event loop 在 file-event poll 前后调用的 beforeSleep/afterSleep hooks，用于批处理 pending work 与维护调度顺序。">event-loop sleep hooks</Term>
+
+`aeSetBeforeSleepProc(server.el, beforeSleep)` 与 `aeSetAfterSleepProc(..., afterSleep)` 安装钩子。beforeSleep 中会处理 pending writes/threaded I/O、cluster/module/blocked clients 等，再进入 poll；afterSleep 处理 poll 返回后的时钟/统计等。源码版本变化较快，分析 hook 应列出具体 tag 的调用清单。
+
+```gdb
+break serverCron
+break beforeSleep
+break afterSleep
+commands
+  silent
+  printf "clients=%lu pending_write=%lu\n", server.clients->len, server.clients_pending_write->len
+  continue
+end
+```
+
+## 8.3 redis-cli 端的网络通信模型
+
+这一端到端路径同时覆盖 **redis-cli 网络通信**、**Redis 通信协议**、**请求命令格式**、**应答命令格式**、**流水线**和**协议解析**。
+
+Redis 6.0 `redis-cli.c` 使用 hiredis `redisContext` 建立 TCP/Unix connection。交互/参数经过 `cliSendCommand`，使用 `redisAppendCommandArgv` 编码并追加 output；`cliReadReply` 调 `redisGetReply` 读取/解析 reply。pipeline 模式先 append 多条，再按顺序 get replies。
+
+<Term def="hiredis 同步连接对象，维护 socket、output buffer、input reader/error，并由 redisAppendCommandArgv/redisGetReply 驱动请求应答。">redisContext</Term>
+
+```text
+redis-cli main
+  -> cliConnect -> redisConnect / redisConnectUnix
+  -> cliSendCommand
+    -> redisAppendCommandArgv
+    -> cliReadReply -> redisGetReply
+```
+
+client pipeline 提高 throughput 是减少 request/response 往返等待，不是让 server command response 乱序。connection 断开时，已写入但未确认的命令是否执行可能不确定，重试写操作需要业务 idempotency。
+
+## 8.4 RESP 请求、应答、pipeline 与 inline command
+
+RESP2 command 通常编码为 array of bulk strings。例如 `SET key value`：
+
+```text
+*3\r\n
+$3\r\nSET\r\n
+$3\r\nkey\r\n
+$5\r\nvalue\r\n
+```
+
+回复前缀包括 simple string `+`、error `-`、integer `:`、bulk string `$`、array `*`；长度和 CRLF 定义 framing。inline command 是为简单 human input 保留的行协议，binary-safe client 应使用 multibulk RESP。
+
+<Stepper>
+  <Step title="切换单命令、pipeline、partial 与 inline input">
+    <CseRespPipelineLab />
+  </Step>
+  <Step title="观察 parser progress 而非 recv 次数">
+    `querybuf` 可有半个 bulk 或多条 commands；qb_pos/multibulklen/bulklen 保存增量状态，完整 argv 才执行。
+  </Step>
+  <Step title="把 replies 与 request order 对齐">
+    同一普通 connection 的 pipeline replies 按 command order 读取；Pub/Sub/push 等模式有额外语义，客户端必须按 negotiated RESP 模式解析。
+  </Step>
+</Stepper>
+
+<Term def="客户端在不等待每条 reply 的情况下连续发送多条 RESP commands，再按顺序读取 replies 的往返延迟优化。">Redis pipelining</Term>
+
+Redis 对协议数据的解析逻辑受 `PROTO_MAX_QUERYBUF_LEN`、bulk length、argc 等限制保护。fuzz 时覆盖 negative/overflow length、missing CRLF、huge argc、partial bulk 和 mixed pipeline。
+
+<Callout type="trap" title="把 pipeline 当 transaction">
+pipeline 只批量传输，其他 client 的 commands 仍可穿插；需要原子条件/批处理时使用适合的 Redis command、MULTI/EXEC 或 script，并理解各自失败语义。
+</Callout>
+
+## 本章回顾：一条 Redis 请求的源码路径
+
+1. `initServer` 创建 ae loop/listeners/time event/hooks，ae_epoll 把 AE masks 映射到 epoll。
+2. `acceptTcpHandler → acceptCommonHandler → createClient` 建 client，并注册 `readQueryFromClient`。
+3. querybuf 经过 inline/multibulk incremental parser，完整 argv 进入 command execution。
+4. `addReply*` 只构建 reply buffer；pending-write batch、threaded I/O 或 writable handler 最终 flush。
+5. Redis 6.0 I/O threads 主要并行 socket reads/writes，command/keyspace execution owner 仍要按主线程边界理解。
+6. freeClientAsync/freeClient/unlinkClient、serverCron 和 sleep hooks 共同闭合 lifetime/scheduling。
+
+<Exercises>
+
+**问题 1：执行 SET 后在 addReplyStatus 看到 `+OK`，但客户端迟迟没收到。下一步应沿哪些 state/function 排查？**
+
+<Answer>先检查 client static buf/bufpos、reply list/reply_bytes 和 CLIENT_PENDING_WRITE；跟 clientInstallWriteHandler 是否把 client 加入 clients_pending_write；查看 beforeSleep 中 handleClientsWithPendingWrites[UsingThreads]、writeToClient 返回/errno/sentlen；若 partial，确认 connSetWriteHandler(sendReplyToClient) 和 AE_WRITABLE 注册；最后核对 output-buffer limit、close flags 与对端是否读取。</Answer>
+
+**问题 2：为什么看到 IOThreadMain 正在 read/write 不能证明 Redis 6.0 多线程并行执行 SET/GET？怎样用断点证明 owner？**
+
+<Answer>I/O threads 接收 pending lists 执行 socket read/write，主线程等待 batch 完成，再由 processInputBuffer/processCommand 执行命令。分别在 IOThreadMain、handleClientsWithPendingReadsUsingThreads、processInputBuffer、processCommand 和 command proc 打断点并打印 pthread id/client id；应看到 parser/command proc 回到主线程。还要核对 io-threads-do-reads 配置与具体 tag。</Answer>
+
+**问题 3：一条 RESP bulk request 被两次 read 拆开，后面又紧跟两条 pipeline commands。parser 如何保证不丢不重？**
+
+<Answer>readQueryFromClient 追加 querybuf；processMultibulkBuffer 用 qb_pos、multibulklen、bulklen 记录尚缺 body，数据不足就返回并保留；下一次 append 后完成 argv，processCommandAndResetClient 执行并 reset command state；processInputBuffer 继续循环解析剩余两条完整 commands。只有实际消费的 bytes 前移/trim，recv boundary 不参与 command identity。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="Redis network event chain" definition="从 ae readiness 经 client/parser/command 到 reply/cleanup 的源码链。" />
+  <GlossaryItem term="Redis debug baseline" definition="固定 tag、构建参数、配置与数据目录的源码实验输入。" />
+  <GlossaryItem term="ae event loop" definition="Redis readable/writable/time-event 抽象及其 epoll backend。" />
+  <GlossaryItem term="Redis client object" definition="server-side connection、parser、reply、auth/DB 与 flags 状态。" />
+  <GlossaryItem term="querybuf parser state" definition="querybuf/qb_pos/reqtype/multibulklen/bulklen 组成的增量 RESP 状态。" />
+  <GlossaryItem term="Redis reply buffer chain" definition="client static buf 与 dynamic reply blocks 组成的输出缓冲。" />
+  <GlossaryItem term="Redis threaded I/O" definition="Redis 6.0 批量并行 socket read/write 的 worker 机制。" />
+  <GlossaryItem term="asynchronous client free" definition="先排队、后在安全事件阶段 unlink/free client 的策略。" />
+  <GlossaryItem term="client output buffer limit" definition="按 client 类型配置的 reply hard/soft memory limit。" />
+  <GlossaryItem term="event-loop sleep hooks" definition="ae poll 前后的 beforeSleep/afterSleep 调度钩子。" />
+  <GlossaryItem term="redisContext" definition="hiredis 的 connection/output/input-reader/error 状态对象。" />
+  <GlossaryItem term="Redis pipelining" definition="连续发送多条 commands 后按序读取 replies 的 RTT 优化。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++服务器开发精髓，第8章 Redis网络通信模块源码分析；并按 Redis 6.0 官方源码核对函数链"
+  adaptedUrl="https://github.com/redis/redis/tree/6.0/src"
+/>

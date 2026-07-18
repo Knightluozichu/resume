@@ -1,0 +1,230 @@
+---
+title: "面试题3（一）：数组中重复的数字"
+type: C
+section: "第2章 面试需要的基础知识"
+order: 3
+description: "利用0..n-1值域把数字放回同名下标，以O(n)时间和O(1)额外空间原地发现任意重复值。"
+demo: true
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/03_01_DuplicationInArray/FindDuplication.cpp"
+draft: false
+---
+
+import { PlacementInvariantDiagram, ContractMatrixMap, DuplicateTraceLab, InPlaceTestLab } from "@/components/mdx/coding-interviews/diagrams/duplicate-in-array";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释为什么值域`0..n-1`允许把数字本身当作目标下标
+- 能推导“目标槽已有同值就发现重复，否则交换归位”的正确性
+- 能实现`O(n)`时间、`O(1)`额外空间的原地查重
+- 能分析每次交换至少归位一个数字，并证明循环必然终止
+- 能设计多个重复、无重复、非法值域和输出参数边界测试
+
+</Objectives>
+
+## 从值为什么能当下标开始
+
+先预测：数组`[2, 3, 1, 0, 2, 5, 3]`里，为什么不需要排序或哈希表，也能在线性时间内找到重复？这道“数组中重复的数字”问题，关键不是“整数容易比较”，而是长度为`n`且所有数字范围在`0..n-1`。每个合法数字`m`天然对应唯一槽位`numbers[m]`。
+
+原书题意只要求找出任意一个重复数字，允许修改输入。于是可以尝试让每个数字都回到“值等于下标”的位置：数字0放下标0，数字1放下标1。若数字`m`准备归位时发现<Term def="由当前数字m指定、下标同为m的数组位置numbers[m]。">目标槽</Term>已经等于`m`，两个不同位置都持有同一个值，`m`就是<Term def="两个不同位置持有同一数字、足以证明该数字重复的局部状态。">重复见证</Term>。
+
+换成自然语言，契约是：**数字范围在0到n-1**，因此可以**把数字m放到下标m的位置**。整个过程只做**原地交换**，并保持**O(1)额外空间**。这四句话分别对应值域、状态映射、输入副作用和资源上界，不能只记最后的复杂度结论。
+
+<Term def="利用元素值所属的连续整数范围，把值直接映射到同名数组下标的关系。">值下标映射</Term>把查重问题改成“每个槽是否被第二次占用”。它成立依赖两个强前提：值域完整落在可访问下标内，并且调用者允许重排数组。少一个前提，都不能直接套用。
+
+<PlacementInvariantDiagram />
+
+## 先把输入契约写完整
+
+输入数组长度为`n`，每个数字必须在`0..n-1`。这一条要在任何`numbers[numbers[i]]`访问之前验证，否则负数或数字`n`会造成越界。作者源码先扫描完整数组检查值域，再进入交换阶段；这是安全性的一部分，不是可省略的“额外判断”。
+
+题目允许多个数字重复，也允许同一数字重复多次，只需返回任意一个。因此测试`[2,4,2,1,4]`时，2和4都应是合法答案。若测试固定期望2，就把多解题错误地缩成单解题。
+
+允许修改输入意味着调用结束后数组顺序可能与调用前不同。接口要明确这个副作用。若调用方仍需要原顺序，可以先复制再运行，代价是`O(n)`额外空间；或者换用哈希集合。不能一边宣称额外空间`O(1)`，一边在函数内部偷偷复制数组。
+
+<ContractMatrixMap />
+
+<Callout type="trap" title="先交换，发现越界再返回失败">
+只要先执行一次`numbers[numbers[i]]`，非法值已经可能触发越界读取。值域校验必须发生在所有值作下标之前，而且要覆盖整个数组，不能只检查当前`i`。
+</Callout>
+
+## 原地归位算法
+
+外层从`i=0`扫描到`n-1`。在位置`i`上，只要`numbers[i] != i`，当前数字还没归位。令`m = numbers[i]`：
+
+1. 若`numbers[m] == m`，数字`m`已经在目标槽，当前位置又出现`m`，返回`m`。
+2. 否则交换`numbers[i]`和`numbers[m]`。交换后数字`m`位于下标`m`，至少一个数字新近归位。
+3. 位置`i`换来另一个数字，继续`while`检查，直到当前位置也归位或发现重复。
+
+```cpp
+#include <optional>
+#include <span>
+#include <utility>
+
+std::optional<int> find_duplicate(std::span<int> numbers) {
+    if (numbers.empty()) {
+        return std::nullopt;
+    }
+
+    const int n = static_cast<int>(numbers.size());
+    for (int value : numbers) {
+        if (value < 0 || value >= n) {
+            return std::nullopt;
+        }
+    }
+
+    for (int i = 0; i < n; ++i) {
+        while (numbers[i] != i) {
+            const int value = numbers[i];
+            if (numbers[value] == value) {
+                return value;
+            }
+            std::swap(numbers[i], numbers[value]);
+        }
+    }
+    return std::nullopt;
+}
+```
+
+`std::optional<int>`把“找到的重复值”与“未找到或输入非法”表示成不同状态，但上面仍把两类失败合并为`nullopt`。生产接口可以返回结构化结果或错误枚举，区分`invalid_range`和`not_found`；面试中至少要口头说明当前返回契约。
+
+原作者接口使用`bool`表示成功，并通过`int* duplication`输出值。若保留该签名，还应验证输出指针不为空：
+
+```cpp
+bool duplicate(int numbers[], int length, int* duplication) {
+    if (numbers == nullptr || duplication == nullptr || length <= 0) {
+        return false;
+    }
+    // 先校验所有值，再执行同样的归位循环。
+    return false;
+}
+```
+
+作者源码的题目契约默认调用者传入有效输出地址；把代码升级为通用接口时，空输出指针必须纳入边界，不能在找到答案后才第一次解引用并崩溃。
+
+## 用不变式证明不是“碰巧交换成功”
+
+<Term def="算法每次进入循环时都保持成立、用来连接状态变化与最终正确性的条件。">循环不变式</Term>可以写成：所有已经归位的槽`j`满足`numbers[j] == j`；后续交换不会无故破坏这些槽。若当前值`m`的目标槽还不是`m`，交换会把`m`放入正确位置；若目标槽已经是`m`，则存在两个位置包含`m`。
+
+交换时要先保存`value = numbers[i]`。若直接连续写：
+
+```cpp
+numbers[i] = numbers[numbers[i]];
+numbers[numbers[i]] = numbers[i]; // numbers[i]已经改变，目标下标也变了
+```
+
+第二行使用的是修改后的`numbers[i]`，不再指向原目标槽。`std::swap(numbers[i], numbers[value])`或作者源码的临时变量都能保持两个下标稳定。
+
+<Term def="值m已经位于下标m，使该值无需再次移动的数组状态。">归位</Term>不仅是直觉，也是终止度量。每次没有返回重复时，至少新增一个归位值。数组只有`n`个槽，因此成功交换总数至多线性级别；外层和内层看似嵌套，不会退化成`O(n²)`。
+
+若整个扫描结束都没有发现目标槽冲突，每个位置都可归位。长度`n`、合法值也只有`n`种时，这意味着每个值恰好出现一次，所以不存在重复。这给出了“返回未找到”的完整性证明。
+
+<DuplicateTraceLab />
+
+## 边界推演与错误版本
+
+先看最短输入。长度1时合法值只能是0，数组`[0]`没有重复，外层扫描一次即可结束。长度2时，`[0,0]`会在`i=1`发现目标槽0已经是0；`[1,0]`经过一次交换变成`[0,1]`，证明“当前值不等于下标”本身不等于重复，只说明它尚未归位。
+
+同一数字出现三次也不改变算法。第一次可以把它放入目标槽，第二次遇到目标槽冲突时立即返回；题目只要求任意重复值，无需继续统计第三次。若业务要输出重复次数，提前返回就不满足需求，应该使用频次表、排序分组或其他统计结构。
+
+多个重复值让“扫描顺序”成为实现细节。`[2,4,2,1,4]`可能先发现2，也可能在不同合法交换策略下先发现4。算法正确性的可观察结果是返回值确实出现至少两次，不是输出与某一参考运行完全相同。测试可以先扫描原始副本验证返回次数，再检查返回值属于允许集合。
+
+一个常见错误是把外层写成单次`if`：当前位置交换一次后就立刻递增`i`。换入的新数字可能仍不等于`i`，如果不继续处理，某些值始终没有归位，后续重复证据也可能被错过。这里必须用`while`，直到当前位置归位或命中目标槽。
+
+另一个错误是试图把数组“排序到完整有序”后才判断。这个算法没有这个目标；只要目标槽已占用就应立即返回。提前停止既符合任意答案契约，也避免无意义交换。若函数返回未找到，才说明所有合法值都能无冲突归位。
+
+输入副作用还影响故障处理。值域在预扫描阶段非法时，数组尚未改变，可以安全返回；交换阶段开始后没有其他预期失败操作，因此不会出现“改了一半才发现非法值”。先整体校验再提交原地变化，让失败行为更容易向调用者说明。
+
+## 复杂度为什么是`O(n)`
+
+第一遍值域校验访问`n`个元素。归位阶段中，外层访问每个位置；每次实际交换至少把一个值放到永久正确槽，最多进行`n`量级的有效交换。因此总时间是`O(n)`，不是因为忽略了`while`，而是因为能为所有内层迭代找到全局线性上界。
+
+算法只使用下标、当前值和交换临时状态，额外空间是`O(1)`。输入数组本身承担了状态表作用，这正是“允许修改”换来的收益。若把所有已见值另存集合，时间仍可达平均`O(n)`，但额外空间变成`O(n)`。
+
+排序法可把相邻相等值识别出来，比较排序通常为`O(n log n)`，且也会修改输入；复制后排序则增加`O(n)`空间。原地归位优于它们的原因不是普遍更强，而是充分利用了连续紧值域。
+
+<Callout type="trap" title="双层循环所以复杂度一定是O(n²)">
+复杂度不能只数语法嵌套。这里每次`while`交换都会新增一个归位槽，所有外层迭代共享最多`n`次有效交换，因此总工作仍为线性级别。
+</Callout>
+
+## 测试要接受多解并验证副作用
+
+作者测试覆盖重复值在最小或最大边界、存在多个重复、没有重复、非法值域和空输入。对于多解输入，测试保存允许答案集合，只要返回值属于集合就通过。这比只验证一个预期值更符合题目契约。
+
+```cpp
+#include <cassert>
+#include <vector>
+
+void test_duplicate() {
+    std::vector<int> values{2, 3, 1, 0, 2, 5, 3};
+    const auto result = find_duplicate(values);
+    assert(result == 2 || result == 3);
+}
+
+void test_no_duplicate() {
+    std::vector<int> values{2, 1, 3, 0, 4};
+    assert(!find_duplicate(values).has_value());
+}
+
+void test_invalid_range() {
+    std::vector<int> values{2, 1, 3, 5, 4};
+    assert(!find_duplicate(values).has_value());
+}
+```
+
+还应明确测试后的输入可能已改变。若接口文档承诺“发现第一个重复后停止”，数组只会部分归位；测试不应假定完整排序结果。若业务要求输入保持不变，这个函数就不满足契约，应选择题3（二）的无修改方案或复制输入。
+
+<InPlaceTestLab />
+
+<Stepper>
+  <Step title="先验证值域和修改权限"><ContractMatrixMap />只有每个值都能安全作下标且调用者允许重排时，才进入原地归位。</Step>
+  <Step title="建立值到目标槽的映射"><PlacementInvariantDiagram />数字m唯一对应下标m；目标槽空缺就交换，已被m占据就构成重复见证。</Step>
+  <Step title="逐步执行并观察归位数"><DuplicateTraceLab />每次成功交换至少新增一个归位值，用这个全局度量证明内层循环总次数线性。</Step>
+  <Step title="按契约覆盖测试"><InPlaceTestLab />多解测试接受答案集合，无重复和非法值域都要验证，不能只跑一个happy path。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 数组长度`n`、值域`0..n-1`让每个数字`m`对应目标下标`m`。
+2. 当前值未归位时，目标槽不是同值就交换；目标槽已有同值就找到重复。
+3. 所有值必须在作下标前完成校验，负数和`n`都会造成越界。
+4. 每次成功交换至少归位一个值，因此所有`while`迭代总数为`O(n)`。
+5. 算法时间`O(n)`、额外空间`O(1)`，代价是修改输入顺序。
+6. 多个重复值都可能成为答案，测试要接受合法答案集合。
+7. 若输入不能修改、值域不连续或要输出全部重复值，应换用其他方案。
+
+<Exercises>
+
+**问题 1：为什么发现`numbers[i] == numbers[numbers[i]]`就能返回？**
+
+<Answer>令`m = numbers[i]`。`numbers[m] == m`表示目标槽`m`已经有一个数字`m`，而位置`i`又有`m`。当`numbers[i] != i`时两个位置不同，因此`m`至少出现两次。</Answer>
+
+**问题 2：为什么嵌套`for + while`仍是`O(n)`？**
+
+<Answer>每次未返回的`while`迭代都把当前值放到同名下标，新增至少一个归位槽。一个槽一旦正确，不会被其他不同值合法占用；全数组最多线性次有效交换，加上校验和外层扫描仍是`O(n)`。</Answer>
+
+**问题 3：输入`[2,4,2,1,4]`的测试为什么必须接受2或4？**
+
+<Answer>题目只要求任意一个重复数字，2和4都满足。具体返回哪个取决于扫描和交换路径，不属于公共契约；测试固定单一答案会把正确实现误判为失败。</Answer>
+
+**问题 4：调用者要求数组顺序保持不变，应如何选择？**
+
+<Answer>不能直接使用原地归位。可复制数组后运行，增加`O(n)`空间；可用哈希集合获得平均`O(n)`时间与`O(n)`空间；若满足题3（二）的`n+1`与`1..n`契约，可用值域计数二分保持`O(1)`额外空间。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="值下标映射">利用连续整数值域，把元素值直接映射到同名数组下标的关系。</GlossaryItem>
+  <GlossaryItem term="循环不变式">算法每次进入循环时都保持成立并用于证明正确性的条件。</GlossaryItem>
+  <GlossaryItem term="归位">值m位于下标m，使该值无需再次移动的状态。</GlossaryItem>
+  <GlossaryItem term="目标槽">由当前数字m指定的数组位置numbers[m]。</GlossaryItem>
+  <GlossaryItem term="重复见证">两个不同位置持有同一数字、足以证明重复存在的局部状态。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="《剑指Offer（第2版）》面试题3（一）及何海涛官方源码 FindDuplication.cpp"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/03_01_DuplicationInArray/FindDuplication.cpp"
+/>

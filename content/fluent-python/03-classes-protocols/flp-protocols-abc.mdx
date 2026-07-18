@@ -1,0 +1,123 @@
+---
+title: "第13章 接口、协议与ABC"
+type: C
+section: "流畅Python 2e · Part III 类与协议"
+order: 13
+description: "按《Fluent Python, 2nd Edition》第13章重建：接口、协议与ABC、鸭子类型与猴子补丁、鹅类型与虚拟子类、静态协议与运行时可检查协议、协议设计与数值协议。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/fluent-python-2nd/9781492056348/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { FlpProtocolsAbcModelLab, FlpProtocolsAbcBoundaryLab, FlpProtocolsAbcEvidenceLab } from "@/components/mdx/fluent-python/diagrams/flp-protocols-abc";
+
+<Objectives>
+- 能解释接口、协议与ABC的核心协议与适用边界
+- 能区分鸭子类型与猴子补丁和鹅类型与虚拟子类的责任与失败方式
+- 能实现并复现静态协议与运行时可检查协议到协议设计与数值协议的最小实验
+</Objectives>
+
+## 从一个错误直觉开始
+
+先预测：只记住接口、协议与ABC的语法，是否足以写出可靠实现？不够。真正需要掌握的是对象、协议、状态和失败路径怎样协作。<Term def="接口、协议与ABC覆盖从非正式行为约定到显式运行时抽象的连续谱。参数类型应依赖真正需要的最小能力，避免为了一个len和getitem要求调用者继承庞大基类。">接口、协议与ABC</Term>不是孤立技巧，而是把调用方意图映射到可测试行为的模型。
+
+<FlpProtocolsAbcModelLab />
+
+## 核心模型与责任
+
+接口、协议与ABC覆盖从非正式行为约定到显式运行时抽象的连续谱。参数类型应依赖真正需要的最小能力，避免为了一个len和getitem要求调用者继承庞大基类。 <Term def="鸭子类型与猴子补丁强调先尝试行为，也提醒补丁作用域和版本风险。测试中临时替换接口可以，生产代码若依赖第三方私有实现，升级时会失去契约保障。">鸭子类型与猴子补丁</Term>
+
+这一章的阅读方法是先写出输入和不变量，再观察解释器或标准库采取哪条路径，最后用反例确认边界。这样学习得到的是可迁移的判断，而不是只能复述示例。
+
+## 机制一：第一条执行链
+
+鸭子类型与猴子补丁强调先尝试行为，也提醒补丁作用域和版本风险。测试中临时替换接口可以，生产代码若依赖第三方私有实现，升级时会失去契约保障。 <Term def="鹅类型与虚拟子类使用ABC的注册和subclasshook声明结构关系。虚拟子类不会继承实现，isinstance成功也不代表mixin存在，注册者必须承担协议真实满足的责任。">鹅类型与虚拟子类</Term>
+
+```python
+from collections.abc import MutableSequence
+class FrenchDeck2(MutableSequence):
+    def __len__(self): return len(self._cards)
+    def __getitem__(self, index): return self._cards[index]
+    def __setitem__(self, index, value): self._cards[index] = value
+    def __delitem__(self, index): del self._cards[index]
+    def insert(self, index, value): self._cards.insert(index, value)
+```
+
+运行后记录对象身份、返回类型和异常位置；再改变一个输入，确认变化来自协议本身，而不是偶然的实现细节。
+
+## 机制二：状态、类型与协作
+
+鹅类型与虚拟子类使用ABC的注册和subclasshook声明结构关系。虚拟子类不会继承实现，isinstance成功也不代表mixin存在，注册者必须承担协议真实满足的责任。 <Term def="静态协议与运行时可检查协议由typing.Protocol表达结构子类型。runtime_checkable只检查属性存在，不验证完整签名；运行时业务校验仍应直接调用并处理失败。">静态协议与运行时可检查协议</Term>
+
+<FlpProtocolsAbcBoundaryLab />
+
+```python
+from typing import Protocol, TypeVar
+T = TypeVar('T')
+class SupportsLessThan(Protocol):
+    def __lt__(self, other: object) -> bool: ...
+```
+
+评审这段代码时，先问调用端依赖什么能力，再问实现是否扩大了共享状态或静默吞掉错误。接口越小，替换和测试通常越直接。
+
+## 机制三：边界条件与成本
+
+静态协议与运行时可检查协议由typing.Protocol表达结构子类型。runtime_checkable只检查属性存在，不验证完整签名；运行时业务校验仍应直接调用并处理失败。 <Term def="协议设计与数值协议应保持精简、可组合并有明确语义。Complex、SupportsAbs等既展示数值能力，也说明类型层次越大越难实现；客户端协议往往比通用大ABC更稳定。">协议设计与数值协议</Term>
+
+协议设计与数值协议应保持精简、可组合并有明确语义。Complex、SupportsAbs等既展示数值能力，也说明类型层次越大越难实现；客户端协议往往比通用大ABC更稳定。 <Term def="用可复现实验判断接口、协议与ABC实现是否保持协议、不变量与失败语义。">接口、协议与ABC验证边界</Term>
+
+```python
+from typing import runtime_checkable
+@runtime_checkable
+class Closable(Protocol):
+    def close(self) -> None: ...
+def shutdown(resource: Closable): resource.close()
+```
+
+<FlpProtocolsAbcEvidenceLab />
+
+## 分步验证
+
+<Stepper>
+  <Step title="建立模型"><FlpProtocolsAbcModelLab /></Step>
+  <Step title="施加边界"><FlpProtocolsAbcBoundaryLab /></Step>
+  <Step title="收集证据">分别运行正常输入、边界输入和失败输入，记录返回值、对象身份、异常类型与资源状态；只有证据支持不变量时才接受实现。</Step>
+</Stepper>
+
+## 代码实验与诊断
+
+把三段代码保存为同一最小实验，先运行原始版本，再只改变一个维度。至少检查：公开结果是否稳定、失败是否在正确边界暴露、是否产生意外别名或资源泄漏、类型提示与运行时行为是否一致。观察变化后写出因果解释，而不是只记录输出。
+
+## 常见误区
+
+<Callout type="trap" title="只会接口、协议与ABC的写法就等于掌握本章">
+语法只能让示例运行；若没有写出输入、所有权、不变量和失败路径，换成真实数据后仍会出现隐蔽错误。应以协议和可复现实验验收。
+</Callout>
+
+<Callout type="trap" title="静态协议与运行时可检查协议在所有场景都更优">
+任何抽象都有适用成本。要比较数据规模、可变性、并发、可观察性与团队维护需求，再根据证据选择；本章给的是判断工具，不是无条件规则。
+</Callout>
+
+## 本章回顾
+
+官方核心单元核对：接口、协议与ABC；鸭子类型与猴子补丁；鹅类型与虚拟子类；静态协议与运行时可检查协议；协议设计与数值协议。这些单元共同回答接口、协议与ABC如何从语言机制落到工程边界；下一步应能在没有范例答案时画出执行链、实现最小版本并解释反例。
+
+<Exercises>
+**问题 1：如何解释“接口、协议与ABC”？**<Answer>接口、协议与ABC覆盖从非正式行为约定到显式运行时抽象的连续谱。参数类型应依赖真正需要的最小能力，避免为了一个len和getitem要求调用者继承庞大基类。</Answer>
+**问题 2：鸭子类型与猴子补丁与鹅类型与虚拟子类应怎样协作？**<Answer>鸭子类型与猴子补丁强调先尝试行为，也提醒补丁作用域和版本风险。测试中临时替换接口可以，生产代码若依赖第三方私有实现，升级时会失去契约保障。 鹅类型与虚拟子类使用ABC的注册和subclasshook声明结构关系。虚拟子类不会继承实现，isinstance成功也不代表mixin存在，注册者必须承担协议真实满足的责任。</Answer>
+**问题 3：如何验收协议设计与数值协议？**<Answer>协议设计与数值协议应保持精简、可组合并有明确语义。Complex、SupportsAbs等既展示数值能力，也说明类型层次越大越难实现；客户端协议往往比通用大ABC更稳定。 编写正常、边界和失败三组输入，比较返回类型、对象状态和异常位置，并确认没有依赖未声明的全局状态。</Answer>
+</Exercises>
+
+## 术语表
+<Glossary>
+  <GlossaryItem term="接口、协议与ABC" definition="接口、协议与ABC覆盖从非正式行为约定到显式运行时抽象的连续谱。" />
+  <GlossaryItem term="鸭子类型与猴子补丁" definition="鸭子类型与猴子补丁强调先尝试行为，也提醒补丁作用域和版本风险。" />
+  <GlossaryItem term="鹅类型与虚拟子类" definition="鹅类型与虚拟子类使用ABC的注册和subclasshook声明结构关系。" />
+  <GlossaryItem term="静态协议与运行时可检查协议" definition="静态协议与运行时可检查协议由typing.Protocol表达结构子类型。" />
+  <GlossaryItem term="协议设计与数值协议" definition="协议设计与数值协议应保持精简、可组合并有明确语义。" />
+  <GlossaryItem term="接口、协议与ABC验证边界" definition="验证接口、协议与ABC协议、不变量和失败路径的边界。" />
+</Glossary>
+
+<Attribution adaptedFrom="Fluent Python, 2nd Edition, Chapter 13: 接口、协议与ABC" adaptedUrl="https://www.oreilly.com/library/view/fluent-python-2nd/9781492056348/" />

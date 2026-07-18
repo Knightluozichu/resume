@@ -207,13 +207,7 @@ export function MediatorDiagram() {
             strokeWidth="1.8"
             markerEnd="url(#med-down-arrow)"
           />
-          <text
-            x={376}
-            y={218}
-            fontSize="12"
-            fontWeight="600"
-            fill={accent}
-          >
+          <text x={376} y={218} fontSize="12" fontWeight="600" fill={accent}>
             引入中介者后
           </text>
 
@@ -353,7 +347,8 @@ export function MediatorDiagram() {
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
         没有 Mediator 时，N 个 Colleague 两两直连需 O(N²) 条链路；引入 Mediator
-        后所有通信经它中转，降为 O(N)。Colleague 之间互不引用，新增同事只需向 Mediator 注册。
+        后所有通信经它中转，降为 O(N)。Colleague 之间互不引用，新增同事只需向
+        Mediator 注册。
       </figcaption>
     </figure>
   );

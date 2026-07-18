@@ -1,0 +1,232 @@
+---
+title: "第11章：Testing"
+type: C
+section: "Go 程序设计语言 · 测试、覆盖率与性能证据"
+order: 11
+description: "对齐原书第 11 章：go test、test functions、coverage、benchmark functions、profiling 与 example functions。"
+demo: true
+math: false
+sourceUrl: "https://www.gopl.io/"
+draft: false
+---
+
+import {
+  GoplBenchmarkProfileLab,
+  GoplCoverageLab,
+  GoplTestCaseLab,
+} from "@/components/mdx/go-programming-language/diagrams/testing";
+
+<Objectives>
+
+- 能解释 go test package workflow，设计 table-driven、randomized、command、white-box/external tests 与稳定 failure oracle
+- 能分析 coverage profile 的已执行/未执行证据，补充 boundary/error/concurrency cases 而不追逐虚假百分比
+- 能实现 Benchmark 与 Example functions，使用 CPU/memory/block profiling 定位成本并用可重复实验验证优化
+
+</Objectives>
+
+## 为什么 Testing 要把“通过”拆成不同证据
+
+一个 test pass 只说明特定 setup/input/oracle 在当前运行成立。coverage 说明 statements 被执行，benchmark 衡量特定 workload，profile 解释成本落点，example 验证公开用法。把这些信号混成单一“质量分”会遗漏错误类别。
+
+<Term def="test 将 actual observable result 与 expected behavior 比较的判定机制；oracle 可以是 exact value、property、independent implementation、protocol trace 或 invariant。">test oracle</Term>
+
+先预测：same-package 与 external test package 各能发现什么，100% statement coverage 是否代表所有 branches 正确，benchmark setup 应否计时，CPU profile 是否能解释 allocation，以及 example output 注释是否参与 test。
+
+## 11.1 The go test Tool：按 package 构建测试 binary
+
+`go test` 扫描 package 的 `_test.go` files，生成/编译 test binary，运行 Test/Benchmark/Example discovery。正常 source 与 test variants可能形成 internal/external packages；test result cache 只在 inputs/flags相容时复用。
+
+```bash
+go test ./...
+go test -run '^TestReverse/spacing$' -count=1 ./word
+go test -race -shuffle=on ./...
+```
+
+默认成功 output简洁，失败给 package和logs。`-run`是 regex过滤，`-count=1`可禁用 result cache用于重跑，`-v`显示测试名/logs。timeout、parallelism与环境依赖需明确；test 不应依赖运行顺序、当前时间、外网或全局 mutable leftovers。
+
+## 11.2 Test Functions：inputs、oracle 与 failure context
+
+Test function 名以 Test 开头并接 `*testing.T`。failure 用 Error/Errorf继续当前 test以收集更多独立断言，Fatal/Fatalf停止当前 goroutine的test；helper 调 `t.Helper()` 让位置指向 caller。Cleanup 注册资源回收，TempDir 管理临时目录。
+
+<Term def="把多个 name/input/want/flags records 放入 slice/map，由同一 test loop 或 t.Run subtests 执行的测试结构；新增 boundary case 不复制 harness。">table-driven test</Term>
+
+<Stepper>
+  <Step title="切换正确/缺陷 implementation">
+    <GoplTestCaseLab />
+  </Step>
+  <Step title="逐 table case 比较 want/got">
+    failure 同时输出 case name、quoted input、want、got；测试 spacing case 才能揭示 normalize-spaces 实现偏差。
+  </Step>
+  <Step title="切换 external/same-package boundary">
+    `word_test` 只能使用 exported API，验证 client contract；`word` white-box 可检查 unexported invariant，但耦合 implementation。
+  </Step>
+</Stepper>
+
+```go
+func TestReverse(t *testing.T) {
+    tests := []struct{ name, input, want string }{
+        {"ascii", "hello world", "world hello"},
+        {"single", "go", "go"},
+        {"spaces", "a  b", "b  a"},
+    }
+    for _, test := range tests {
+        t.Run(test.name, func(t *testing.T) {
+            if got := ReverseWords(test.input); got != test.want {
+                t.Fatalf("ReverseWords(%q) = %q; want %q", test.input, got, test.want)
+            }
+        })
+    }
+}
+```
+
+### Randomized Testing：properties 与 reproducible seed
+
+randomized test 生成大量 inputs并验证 property，例如 `Decode(Encode(x)) == x`、sort后有序且multiset不变。失败必须输出 seed/input以复现；generator覆盖domain边界，不把 random噪声当 coverage。independent slow implementation 可作 differential oracle。
+
+### Testing a Command：隔离 parse、run 与 process exit
+
+command 应把 logic提取为 `run(args, stdin, stdout, stderr) error`，test 使用 bytes.Buffer/temp files，不 fork process即可检查 output/error。只有 exit code/signal/environment必须 end-to-end 时才启动 subprocess。main 负责把 error映射为 stderr/exit status，不在 library调用 os.Exit。
+
+### White-Box Testing 与 External Test Packages
+
+same-package tests 可访问 unexported state，适合复杂 invariant或故障注入；external `package x_test` 只看 exported surface，揭示 API是否自洽。两者可并存：多数 behavior用 external，少量精确内部测试用 white-box。
+
+### Writing Effective Tests：失败信息是诊断接口
+
+test 应小而独立，但按 behavior而非函数机械一一对应。优先测试边界、error、ownership、concurrency与 regression。failure message 给 operation/input/context/want/got，避免只写“failed”。比较 complex structs可输出 focused diff而非无意义 pointer addresses。
+
+### Avoiding Brittle Tests：断言 contract，不断言偶然 representation
+
+不要依赖 map iteration、goroutine schedule、exact whitespace（除非就是 contract）、temporary path、current timezone、private field layout。time用 injected clock/deadline，concurrency用 synchronization而非 sleep。golden files适合 large stable output，但更新必须人工 review semantic diff。
+
+<Callout type="trap" title="测试 implementation steps 而不是 observable contract">
+mock 每个内部 call和顺序会让等价重构全部失败。只在 interaction本身是contract（transaction、retry、protocol ordering）时断言；其他情况比较最终value/state/output。
+</Callout>
+
+## 11.3 Coverage：哪里执行过，不是哪里正确
+
+Go coverage instrumentation 记录 statements execution，`-coverprofile`写 profile，`go tool cover`生成 function/text/HTML views。它帮助发现未触达 branches/error paths，但不能判断 assertions是否有力或 input space是否充分。
+
+<Term def="coverage instrumentation 对本次 test execution 触达 statements/blocks 的映射；它用于发现空白区域，不能单独证明 behavior、branch combinations 或并发 interleavings 正确。">coverage evidence</Term>
+
+<Stepper>
+  <Step title="逐个打开 positive/zero/negative cases">
+    <GoplCoverageLab />
+  </Step>
+  <Step title="观察 source lines 由红变绿">
+    新 test 执行 branch 只增加 coverage；还必须有正确 oracle 验证 result/error与 side effects。
+  </Step>
+  <Step title="从未覆盖区域推导风险案例">
+    优先补 error cleanup、limits、nil/empty、concurrency/cancellation，而不是为了数字调用没有断言的代码。
+  </Step>
+</Stepper>
+
+```bash
+go test -coverprofile=coverage.out ./...
+go tool cover -func=coverage.out
+go tool cover -html=coverage.out -o coverage.html
+```
+
+跨 package integration coverage、subprocess、build tags可能需要额外配置。coverage threshold 可防明显退化，但不应鼓励 low-value tests；review 同时看 mutation/fault detection、failure diagnostics与重要 contracts。
+
+## 11.4 Benchmark Functions：由 harness 校准 b.N
+
+Benchmark 名以 Benchmark 开头并接 `*testing.B`。harness 自动选择 b.N，使测量足够长；loop内执行被测 operation。setup若不属于每次 operation，放 loop外或使用 timer controls；`ReportAllocs`输出 B/op与allocs/op。
+
+<Term def="testing.B 根据耗时自适应 b.N、报告 ns/op，并可报告 allocations；benchmark 必须固定 workload、隔离 setup、避免 dead-code elimination 和环境噪声。">benchmark calibration</Term>
+
+```go
+func BenchmarkEncode(b *testing.B) {
+    input := makeInput(1024)
+    b.ReportAllocs()
+    b.ResetTimer()
+    for i := 0; i < b.N; i++ {
+        output = Encode(input)
+    }
+}
+```
+
+用 sub-benchmarks比较 sizes/implementations，报告 bytes可算 throughput。benchmark结果受 CPU frequency、thermal、background load、toolchain影响；保存多次 samples，用 benchstat等统计比较，不凭单次小差异。优化后仍先通过 correctness tests。
+
+## 11.5 Profiling：解释资源成本落在哪
+
+CPU profile采样 on-CPU stacks，heap/allocation profile定位 retained/allocated memory，block/mutex profile看 synchronization waits。profile workload必须代表真实热点，先确认总量和采样窗口，再读 top/call graph/flame view。
+
+<Stepper>
+  <Step title="调整 input size 与 buffer reuse">
+    <GoplBenchmarkProfileLab />
+  </Step>
+  <Step title="比较 ns/op、B/op 与 allocs/op">
+    复用 buffer可能减少 allocations，但若改变 ownership/concurrency必须先保持正确；每项指标回答不同问题。
+  </Step>
+  <Step title="切换 CPU/memory/block profile">
+    CPU解释计算时间，memory解释allocation/retention，block解释等待；选错profile无法支持结论。
+  </Step>
+</Stepper>
+
+```bash
+go test -bench BenchmarkEncode -benchmem -cpuprofile cpu.out -memprofile mem.out ./codec
+go tool pprof -top ./codec.test cpu.out
+go tool pprof -http=:0 ./codec.test mem.out
+```
+
+profile是attribution，不自动给修复。先找dominant cost，理解call path与correctness constraints，做一项改变，再用相同 benchmark/workload复测。避免优化不在 profile中的漂亮代码。
+
+## 11.6 Example Functions：可执行文档与 output oracle
+
+Example function 名为 Example、ExampleType、ExampleType_Method 等，展示 public API。若包含 `// Output:` comment，go test执行并比较 stdout；`// Unordered output:`允许行顺序无关。无 output comment的 example只编译/展示，不执行比较。
+
+<Term def="位于 _test.go、由 go test 编译并可用 Output comment 验证 stdout 的公开 API 用法；同时服务文档与 regression oracle。">executable example</Term>
+
+```go
+func ExampleReverseWords() {
+    fmt.Println(ReverseWords("hello world"))
+    // Output:
+    // world hello
+}
+```
+
+example 保持短、deterministic、聚焦 common path；complex edge cases仍放 Test functions。不要依赖 network/time/random/map order。package docs中的example名称决定关联展示位置，运行失败说明文档与行为已漂移。
+
+<Callout type="trap" title="Benchmark 变快就直接合并">
+先确认输出未被compiler消除、workload等价、setup计时一致、样本稳定，并运行correctness/race tests。profile若显示优化点不占总成本，微基准收益可能不代表端到端。
+</Callout>
+
+## 本章回顾：每种工具回答一个窄问题
+
+1. go test 按 package构建测试 binary；table-driven/subtests让 case与 harness分离。
+2. randomized test验证 properties，command test隔离process shell，white-box/external tests覆盖不同边界。
+3. coverage 标出 executed statements，不证明 assertions、branches或interleavings正确。
+4. Benchmark 校准 b.N并报告time/allocations；profile解释 CPU/memory/block成本归属。
+5. Example 是 executable documentation，Output comment同时成为 regression oracle。
+
+<Exercises>
+
+**问题 1：为 parser 设计 table/randomized/external tests 时，三者各承担什么证据？**
+
+<Answer>tabletests列出valid/invalid/boundaryinputs及wantAST/error position，failure给case/input/want/got；randomized/property test验证Parse(Format(ast))或never-panic，并记录seed/minimalinput；externalpackage只调用exportedParse/Format，验证publictypes/errors可用。少量same-package tests用于lexer invariant。所有tests限制size/depth/time且不依赖map/schedule。</Answer>
+
+**问题 2：coverage 从 82% 升到 96% 后，为什么仍不能删除 fault-injection tests？**
+
+<Answer>statementcoverage只说明执行，不说明assertion检测了错误，也不覆盖branch combinations、cleanup ordering、race和partial I/O。fault injection验证open/write/close等失败下resource ownership和error propagation，可能走的statements与success相同。评估应同时看风险contracts、oracle、mutation/fault detection与-race，而非单一percentage。</Answer>
+
+**问题 3：一个 allocation optimization 在 benchmark 中快 8%，怎样闭环证明值得上线？**
+
+<Answer>固定toolchain/CPU/workload，运行多次benchmem并统计比较，确认setup、b.N loop、outputsink等价且无dead-code elimination；用memory/CPUprofile证明该allocation是真实hotspot。运行correctness/race/integration tests，检查buffer reuse是否引入alias/concurrency bug；用代表性end-to-end load测latency/throughput/memory，收益超过复杂度后再提交。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="test oracle" definition="判断 actual observable result 是否符合 expected behavior 的机制。" />
+  <GlossaryItem term="table-driven test" definition="用 records 表达 cases、复用同一 test harness。" />
+  <GlossaryItem term="coverage evidence" definition="本次 tests 执行到 source statements/blocks 的映射。" />
+  <GlossaryItem term="benchmark calibration" definition="testing.B 自适应 b.N并报告可比较 operation metrics。" />
+  <GlossaryItem term="executable example" definition="由 go test 编译并可按 Output comment 验证的 API 文档。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Go Programming Language, Chapter 11: Testing"
+  adaptedUrl="https://www.gopl.io/"
+/>

@@ -1,0 +1,238 @@
+---
+title: "第9章 运算符"
+type: C
+section: "たのしいRuby 第5版 · Ruby的基础"
+order: 9
+description: "理解赋值、逻辑、条件、范围与优先级的求值顺序，并以可替换语义定义二元、一元和下标运算符。"
+demo: true
+math: false
+sourceUrl: "https://tanoshiiruby.github.io/5/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RubyOperatorExpressionLab, RubyOperatorPrecedenceLab, RubyOperatorDefinitionLab } from "@/components/mdx/ruby-programming/diagrams/operators";
+
+<Objectives>
+
+- 能分析赋值、逻辑、条件和范围运算符的返回值、短路与边界包含规则
+- 能分析Ruby优先级形成的表达式分组，并用括号消除assignment、and/or和block binding歧义
+- 能实现具有明确代数与容器语义的二元、一元和下标方法，并验证不变量
+
+</Objectives>
+
+## 从“运算符只是特殊符号”开始纠正
+
+Ruby许多运算符最终会向左侧receiver发送method message，但parser先按固定grammar决定token、arity、precedence与assignment target。<Term def="Parser先确定运算符分组和语法角色，之后才对相应receiver执行method dispatch。">operator parsing boundary</Term>解释了为什么重定义`+`不能改变`*`优先级，也不能创造新operator token。
+
+先预测：`2 + 3 * 4`会先调用哪个method？Parser分成`2 + (3 * 4)`，因此先对3调用`*`，再对2调用`+`。Debug复杂表达式时先画syntax tree，再追method owner。
+
+## 赋值运算符
+
+`name = value`返回被赋值value；`object.attr = value`调用setter，`items[key] = value`调用`[]=`，但expression结果通常仍表现为right-hand value。Compound assignment如`x += y`大体执行read、operator、write，不等于receiver有一个`+=` method。
+
+<Term def="复合赋值需要读取旧值、计算新值再写回，三个阶段可能各有副作用或竞态。">read-modify-write contract</Term>提醒我们`counter += 1`不自动atomic。Getter和setter有I/O或dynamic behavior时，`obj.value += 1`可能调用它们各一次并暴露中间失败；并发shared state需lock/atomic abstraction。
+
+```ruby
+class Meter
+  attr_reader :value
+
+  def initialize(value = 0)
+    self.value = value
+  end
+
+  def value=(candidate)
+    number = Integer(candidate)
+    raise ArgumentError, "negative" if number < 0
+    @value = number
+  end
+end
+```
+
+Setter方法名以`=`结尾，内部使用`self.value =`以免被解析为local assignment。Assignment嵌入condition容易把`=`误写成`==`；启用warning并拆成两行。Parallel assignment和splat规则已在第4章说明。
+
+## 逻辑运算符的应用
+
+`&&`和`||` short-circuit并返回operand；`and`/`or`也short-circuit，但precedence很低。`value ||= default`大体只在value为nil或false时写default，因此不能保留合法false；memoization若计算结果可false，每次都会重算。
+
+```ruby
+def enabled(configured, default)
+  configured.nil? ? default : configured
+end
+
+@loaded = true
+@cached_value = load_value unless @loaded
+```
+
+第二种写法用独立loaded flag保存false/nil result。<Term def="缓存必须区分尚未计算与已计算但结果为nil/false的状态。">memoization presence contract</Term>避免把truthiness当presence。
+
+逻辑chain适合无副作用predicate；authorization、charge、write等重要动作使用显式if，记录拒绝原因与异常。`not`与`!`、`and`与`&&`优先级不同，项目内保持一致风格。
+
+## 条件运算符
+
+`condition ? when_true : when_false`是expression，适合两个短小、同shape、无复杂side effect的分支。<Term def="Ternary两支返回同一可理解shape，且整体短到无需隐藏业务policy的使用边界。">ternary readability boundary</Term>限制嵌套。
+
+```ruby
+label = active? ? "active" : "inactive"
+```
+
+Nested ternary、包含assignment/rescue或跨行复杂调用改成if/elsif。Colon还用于Symbol/Hash/keyword syntax，空格与格式化必须让parser角色清楚。
+
+## 范围运算符
+
+`start..finish`包含终点，`start...finish`排除终点。Range可用于`include?`/`cover?`、case和iteration；`cover?`更偏边界比较，`include?`在某些类型/版本可能枚举或使用离散membership，performance与语义需测试。
+
+```ruby
+inclusive = 1..5
+exclusive = 1...5
+
+p inclusive.to_a # [1, 2, 3, 4, 5]
+p exclusive.to_a # [1, 2, 3, 4]
+p((200..299).cover?(204))
+```
+
+<Term def="Range终点是否包含、元素是否可迭代以及membership使用边界还是离散值的约定。">range endpoint contract</Term>对时间窗口尤其重要：相邻窗口常用半开区间`[start, finish)`避免重复计数。Ruby 2.3对beginless/endless Range尚不支持，教程示例保持双端明确。
+
+<RubyOperatorExpressionLab />
+
+<Stepper>
+  <Step title="切换Assignment、Logical、Conditional和Range"><RubyOperatorExpressionLab /></Step>
+  <Step title="记录Value flow">写出每个operand是否求值、expression result、write target与边界包含关系。</Step>
+  <Step title="让false进入Memoization"><RubyOperatorExpressionLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="||=只会在变量从未赋值时执行右侧">
+它在当前值为nil或false时执行。若false/nil是可缓存结果，使用独立presence flag或Hash#key?，并测试两次调用只计算一次。
+</Callout>
+
+## 运算符的优先级
+
+常见顺序包括一元、幂、乘除、加减、shift、比较、equality、逻辑、range、ternary、assignment等，但完整规则应查目标版本。<Term def="Parser在求值前根据固定优先级和结合性构造表达式树的规则。">precedence grouping contract</Term>不是可由operator method改变的行为。
+
+`result = work and audit`分组近似`(result = work) and audit`，而`result = work && audit`近似`result = (work && audit)`。两者都可能合法却含义不同。Business condition用`&&`/`||`加括号；and/or只在团队明确约定的control-flow idiom中使用。
+
+代码审查时把“看起来熟悉”改成“写出唯一分组”，尤其关注一元负号与幂、range与condition、rescue modifier和block。目标不是背表，而是让下一位维护者无需猜测。
+
+```ruby
+# 明确授权policy，不要求读者背优先级
+allowed = authenticated? && (admin? || owns?(resource))
+
+# 明确block owner
+log(items.map { |item| normalize(item) })
+```
+
+Brace block通常比do/end绑定更紧，嵌套无括号调用最易出错。Format工具能统一surface，却不能替你证明block交给哪个method；拆变量并写behavior test。
+
+<RubyOperatorPrecedenceLab />
+
+<Stepper>
+  <Step title="切换四种Precedence案例"><RubyOperatorPrecedenceLab /></Step>
+  <Step title="画Expression tree">先按grammar加括号，再标出receiver、method、short-circuit与assignment。</Step>
+  <Step title="交换and与&&"><RubyOperatorPrecedenceLab /></Step>
+</Stepper>
+
+## 定义运算符
+
+自定义operator不是为了让DSL更“像自然语言”，而是当domain已有熟悉、稳定且可组合的运算语义时提供简洁surface。<Term def="自定义运算符保持用户熟悉的返回shape、等值、不变性和错误原则。">operator substitution contract</Term>防止`+`暗中修改receiver或执行网络请求。
+
+### 定义二元运算符
+
+```ruby
+class Vector2
+  attr_reader :x, :y
+
+  def initialize(x, y)
+    @x = Float(x)
+    @y = Float(y)
+    freeze
+  end
+
+  def +(other)
+    self.class.new(x + other.x, y + other.y)
+  end
+
+  def ==(other)
+    other.is_a?(self.class) && x == other.x && y == other.y
+  end
+end
+```
+
+`+`返回新immutable Vector2，不修改operands。测试identity element、commutativity/associativity只在浮点误差允许的语义范围内；unsupported type应抛清楚错误或实现`coerce` protocol，不能静默返回nil。
+
+### 定义一元运算符
+
+Unary plus/minus method名为`+@`和`-@`，`!`也可定义但改变truth intuition风险高。Vector可定义`-@`返回坐标取反的新value。Unary operator无显式operand，仍从receiver读取state。
+
+### 下标方法
+
+`[](key)`与`[]=(key, value)`让object表现为indexed/keyed collection。<Term def="下标读取和写入对key类型、missing、范围、mutation与返回值的容器语义。">index operator contract</Term>必须与用户对Array/Hash的直觉一致或清楚记录差异。
+
+```ruby
+class Palette
+  def initialize(colors)
+    @colors = colors.dup
+  end
+
+  def [](index)
+    @colors.fetch(index)
+  end
+
+  def []=(index, color)
+    raise ArgumentError, "empty color" if color.to_s.empty?
+    @colors[index] = color
+  end
+end
+```
+
+这里read用fetch令缺失显式，write验证不变量。若支持Range、negative index或Symbol key，逐项加入tests；不要接受任意key后在深层method碰运气。
+
+<RubyOperatorDefinitionLab />
+
+<Stepper>
+  <Step title="切换Binary、Unary、Index read和write"><RubyOperatorDefinitionLab /></Step>
+  <Step title="写Law测试">记录是否mutate、result class、equality、identity/boundary、unsupported operand和exception safety。</Step>
+  <Step title="让+误改Receiver"><RubyOperatorDefinitionLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="既然运算符是method，就可以让+执行任何业务动作">
+技术上可调用复杂逻辑，但会破坏读者对纯计算、返回新值和低副作用的预期。网络、持久化、计费等动作使用命名method，operator只保留稳定domain algebra。
+</Callout>
+
+## 本章回顾：先按grammar分组，再按receiver dispatch
+
+1. Assignment和compound assignment可能触发getter/operator/setter，read-modify-write不自动atomic。
+2. Logical operators short-circuit并返回operand；`||=`不能区分未计算与缓存false/nil。
+3. Ternary只用于短小同shape分支，Range明确inclusive/exclusive endpoint与membership语义。
+4. Precedence和block binding由parser固定，复杂policy用括号和中间变量展示expression tree。
+5. 自定义binary/unary/index operator须保持熟悉的代数与容器契约，不隐藏重副作用。
+
+<Exercises>
+
+**问题 1：怎样缓存一个可能返回false的方法？**
+
+<Answer>不要用`@value ||= compute`；使用独立`@loaded` flag，或Hash以`key?`判断presence。测试compute返回true、false、nil和抛错，确认成功结果只计算一次、异常是否允许重试由policy决定。</Answer>
+
+**问题 2：如何审查一个含assignment、and/or和block的复杂表达式？**
+
+<Answer>先按目标Ruby grammar加全括号，画出assignment target、short-circuit和block owner；再拆成命名中间值。用side-effect spy验证哪些operand/method被调用，不只断言最终value。</Answer>
+
+**问题 3：自定义`[]`/`[]=`至少要测试哪些边界？**
+
+<Answer>合法key、错误key type、missing、negative/range（若支持）、write validation、mutation可见性、返回值与失败后state不变。若表现得不像Array/Hash，API文档和名称应明确差异。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="operator parsing boundary" definition="Parser先定分组和语法角色，再执行method dispatch。" />
+  <GlossaryItem term="read-modify-write contract" definition="复合赋值读取、计算、写回三个阶段的约束。" />
+  <GlossaryItem term="memoization presence contract" definition="缓存区分未计算与已计算false/nil的状态。" />
+  <GlossaryItem term="ternary readability boundary" definition="Ternary只承载短小同shape分支的边界。" />
+  <GlossaryItem term="range endpoint contract" definition="Range终点包含、迭代与membership语义。" />
+  <GlossaryItem term="precedence grouping contract" definition="固定优先级与结合性构造表达式树的规则。" />
+  <GlossaryItem term="operator substitution contract" definition="Operator保持熟悉返回、等值和副作用原则的承诺。" />
+  <GlossaryItem term="index operator contract" definition="下标读写对key、missing、mutation和返回的约定。" />
+</Glossary>
+
+<Attribution adaptedFrom="たのしいRuby 第5版 / Ruby基础教程（第5版），第9章 运算符" adaptedUrl="https://tanoshiiruby.github.io/5/" />

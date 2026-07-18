@@ -1,0 +1,93 @@
+---
+title: "第4章 数组、切片和映射"
+type: C
+section: "Go实战 · 数据与类型"
+order: 4
+description: "比较数组值语义、slice描述符与底层数组共享、append容量迁移，以及map初始化、迭代、删除和传参。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/go-in-action/chapter-4"
+draft: false
+---
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GiaCollectionLayoutLab, GiaAppendLab, GiaMapLab } from "@/components/mdx/go-in-action/diagrams/gia-arrays-slices";
+
+<Objectives>
+- 能解释数组长度属于类型、赋值与传参复制全部元素，并实现多维数组
+- 能绘制slice的pointer、len、cap与底层数组，预测重切片和append是否共享
+- 能初始化、查询、迭代和删除map，并判断nil、顺序与并发访问边界
+</Objectives>
+
+## 从赋值后是否共享开始
+先预测：两个slice赋值后修改一个，另一个是否可见？若仍指向同一底层数组且索引重叠就可见；append迁移后则未必。
+
+数组、切片和映射语法相近，复制语义完全不同。<Term def="赋值或传参后，两个变量是否拥有独立元素还是共享运行时存储的约定。">collection copy contract</Term>是本章主线。
+
+<GiaCollectionLayoutLab />
+
+## 数组内部实现与基础
+
+数组是固定长度连续值，长度属于类型；赋值复制全部元素，函数按值参数也复制。<Term def="数组长度和元素类型共同形成静态类型，并以内联连续元素表示。">array value layout</Term>适合固定协议和小值。
+
+```go
+a := [3]int{1, 2, 3}
+b := a
+b[0] = 9
+fmt.Println(a[0]) // 1
+```
+
+## 声明、初始化、多维与传参
+
+`[...]T`由字面量推导长度，多维数组是数组元素仍为数组。大型数组传参优先指针或slice，但指针表达整个固定布局，slice表达动态视图。
+
+```go
+matrix := [2][2]int{{1, 2}, {3, 4}}
+```
+
+## Slice内部实现与基础
+
+Slice描述符含pointer、len、cap，多个slice可共享底层数组。<Term def="slice可访问长度、可扩展容量和底层数组起点组成的描述符不变量。">slice descriptor invariant</Term>要求len不大于cap。
+
+## Nil、空Slice与Append
+
+Nil slice和空slice长度都为0，但与nil比较和JSON编码可能不同。Append容量足够时写共享数组，否则迁移新数组；必须接收返回值。<Term def="由现有容量决定append复用还是迁移底层数组的分界。">append relocation boundary</Term>会改变别名关系。
+
+```go
+s := make([]int, 0, 1)
+s = append(s, 1)
+s = append(s, 2)
+```
+
+<GiaAppendLab />
+
+## Map内部实现与基础
+
+Map变量指向运行时哈希结构；nil map可读取零值但写入panic，`make`后可写。<Term def="key存在性、零值读取和comma-ok结果之间的查询协议。">map lookup contract</Term>要求不能只凭零值判断存在。
+
+## 迭代、删除与函数传递
+
+Map迭代顺序不稳定，`delete`不存在key安全；传参复制轻量header并共享内容。<Term def="map输出如需稳定顺序，必须抽取key并显式排序。">stable map output rule</Term>。普通map不支持无同步并发写。
+
+<GiaMapLab />
+
+<Stepper><Step title="比较表示"><GiaCollectionLayoutLab /></Step><Step title="预测Append">画旧新len、cap与底层数组。</Step><Step title="检查Map"><GiaMapLab /></Step></Stepper>
+
+## 验收实验：画出别名关系
+准备容量恰好与容量有余两组slice，各自建立子slice后append，再修改新旧索引；记录pointer、len、cap和观察结果。随后测试nil map读取、写入panic、comma-ok、随机迭代和排序输出。目标不是背诵“slice是引用”，而是每次append后重新判断是否共享，并解释函数传参为何复制描述符却共享数据。
+
+<Callout type="trap" title="Slice赋值会复制元素">只复制描述符，通常仍共享底层数组。</Callout>
+<Callout type="trap" title="Map迭代可用于稳定序列化">顺序未承诺，必须排序key。</Callout>
+
+## 本章回顾
+本章覆盖数组、切片和映射，数组内部实现与基础、数组声明、初始化与操作，切片内部实现与基础、nil切片与空切片、append与容量，以及映射内部实现与基础、映射迭代、删除与函数传递。每一部分都必须回到复制或共享契约。
+
+<Exercises>
+**问题 1：数组传参发生什么？**<Answer>按值复制完整数组，除非传指针或slice。</Answer>
+**问题 2：Append何时断开共享？**<Answer>容量不足需分配新底层数组时。</Answer>
+**问题 3：如何区分map缺key与值为零？**<Answer>使用`value, ok := m[key]`。</Answer>
+</Exercises>
+## 术语表
+<Glossary>
+<GlossaryItem term="collection copy contract" definition="集合赋值后的复制或共享约定。" /><GlossaryItem term="array value layout" definition="数组长度类型与连续值布局。" /><GlossaryItem term="slice descriptor invariant" definition="pointer、len和cap关系。" /><GlossaryItem term="append relocation boundary" definition="append复用或迁移数组的分界。" /><GlossaryItem term="map lookup contract" definition="零值与存在性查询协议。" /><GlossaryItem term="stable map output rule" definition="显式排序获得稳定输出。" />
+</Glossary>
+<Attribution adaptedFrom="Go in Action Chapter 4 Arrays, slices, and maps" adaptedUrl="https://livebook.manning.com/book/go-in-action/chapter-4" />

@@ -1,0 +1,168 @@
+---
+title: "Chapter 11. Lazy computations, continuations, and the beauty of monadic composition"
+type: C
+section: "Functional C# 1e · Advanced techniques"
+order: 11
+description: "覆盖laziness、Try exception boundary与DB middleware continuation，把evaluation timing、failure和resource lifetime纳入可组合contract。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-11"
+draft: false
+---
+
+import { CfpDbMiddlewareLab, CfpLazyEvaluationLab, CfpTryContinuationLab } from "@/components/mdx/csharp-functional-programming/diagrams/lazy-computations-continuations-monadic-composition";
+
+<Objectives>
+
+- 能区分eager、deferred、memoized与concurrent lazy evaluation，写出evaluation count和exception policy
+- 能设计Try adapter，把明确的throwing boundary提升为typed computation，同时保留unexpected fault、stack与cancellation语义
+- 能分析continuation组合的connection、transaction、commit/rollback和dispose，证明DB resource lifetime覆盖真正执行期
+
+</Objectives>
+
+## 为什么“现在算还是以后算”属于程序语义
+
+函数式组合不只关心输入输出值，还关心计算何时启动、是否重复、失败是否缓存、资源是否仍有效。把昂贵查询包装成function会延迟执行，却不自动memoize；把它包装成`Lazy&lt;T&gt;`通常共享一次结果，却又引入并发publication和异常缓存策略。Continuation则把“算完以后做什么”变成参数，使外层可以围住内层的resource与outcome。
+
+先预测：lambda创建时会执行body吗；同一个deferred function调用两次只查一次库吗；`Lazy&lt;T&gt;`失败后默认一定重试吗；Try应捕获所有Exception吗；transaction middleware能在返回deferred query前dispose connection吗。答案都是否。
+
+<Term def="计算只在结果被请求时启动，并把启动时点与调用次数作为observable contract的策略。">deferred evaluation contract</Term>
+
+## The virtue of laziness
+
+Eager expression在construction point立刻求值；thunk `Func&lt;T&gt;`把computation变成可调用值，每次调用通常重新执行；memoized lazy cell则在第一次demand后保存value。Laziness可避免未使用分支、建立infinite sequence、推迟昂贵I/O，但它也把failure和cost从定义处移动到消费处，reviewer必须追踪真正的evaluation boundary。
+
+```csharp
+Func<Report> deferred = () => repository.BuildReport(day);
+Lazy<Report> shared = new(
+    () => repository.BuildReport(day),
+    LazyThreadSafetyMode.ExecutionAndPublication);
+
+var first = shared.Value;
+var second = shared.Value; // same published result
+```
+
+`IEnumerable&lt;T&gt;`也是deferred recipe而非materialized collection。每次enumeration可能重新读文件、重查数据库或重新触发日志；`Any()`后再`ToList()`并非免费。API需说明single-use/multi-use、cold/hot、snapshot/live和thread safety。若consumers需要stable snapshot，就在owner boundary materialize并返回immutable view，不让调用者猜测。
+
+<Term def="第一次求值后保存结果并复用，使多次demand共享同一次evaluation outcome的策略。">memoized computation</Term>
+
+<Stepper>
+  <Step title="切换eager、deferred、memoized与concurrent"><CfpLazyEvaluationLab /></Step>
+  <Step title="记录evaluation evidence">给factory加counter、thread id和timestamp，分别测construction、first demand、second demand与concurrent demand。</Step>
+  <Step title="验收value和failure policy">验证success共享次数、exception是否缓存、publication mode是否允许duplicate execution，以及unused branch确实不执行。</Step>
+</Stepper>
+
+<Callout type="trap" title="只要用了Lambda或IEnumerable就天然高效">
+Deferred computation可能被重复枚举，导致N+1查询、重复副作用和在已释放resource上执行。性能判断必须记录evaluation count、materialization point和数据规模，不能从syntax推断。
+</Callout>
+
+## Laziness, caching, and invalidation boundaries
+
+Memoization的key不只是function arguments，还隐含locale、clock、authorization、configuration和data version。对impure computation缓存会冻结旧world state；对failure缓存则可能把短暂故障永久化。设计时写出cache identity、success TTL、negative-cache policy、eviction与single-flight。若value持有connection/stream等resource，缓存resource owner而非纯data通常是错误边界。
+
+并发下需要区分at-most-one publication与at-most-one execution：某些publication mode允许多个threads同时运行factory，但只发布一个结果，这对pure CPU computation可接受，对扣款、发送消息不可接受。测试用barrier同时触发demand，并断言factory调用次数、最终identity和fault传播；不要只做顺序unit test。
+
+## Exception handling with Try
+
+Try把可能throw的调用表示为deferred `Try&lt;T&gt;`，运行后得到success或failure。它的价值不是消灭exception，而是让expected composition显式：Map只转换success，Bind只在success继续，Recover按typed policy处理failure。捕获点必须窄，通常放在第三方parse、filesystem或DB driver adapter；pure domain函数仍返回Option/Either等业务outcome。
+
+```csharp
+Try<Customer> load = Try.Of(() => gateway.Load(customerId));
+
+Try<Invoice> invoice =
+    load.Bind(customer =>
+        Try.Of(() => renderer.Render(customer)));
+
+var result = invoice.Run();
+```
+
+捕获`Exception`后还需taxonomy：argument/programmer bug通常不应变成可恢复Left；`OperationCanceledException`要保留cancellation；fatal runtime conditions不能被普通retry吞掉。Failure对象保存原cause或`ExceptionDispatchInfo`，boundary再映射stable external error。若只保存message，stack、inner cause和machine-readable type都丢失，运维无法定位。
+
+<Term def="把明确throwing boundary提升为可Map/Bind的deferred success-or-failure computation，同时保留原始cause。">Try computation</Term>
+
+<Stepper>
+  <Step title="切换success、expected、throw与cancel"><CfpTryContinuationLab /></Step>
+  <Step title="建立capture matrix">列exception type、是否捕获、是否retry、对外code、log level和cancellation传播方式。</Step>
+  <Step title="用fault injection验收">注入parse error、timeout、cancellation、programmer bug与nested cause，证明只有约定failure进入Try channel。</Step>
+</Stepper>
+
+<Callout type="trap" title="Try能让任何Exception变成Domain Error">
+把NullReference、invariant violation和cancellation统一成Left会制造false recovery，并让监控看起来像普通业务拒绝。Try adapter应有白名单/分类策略，unknown fault保留cause并升级处理。
+</Callout>
+
+## Continuations make control flow a value
+
+Continuation-passing style把函数从`A -> B`改写为接收“拿到B后如何继续”的参数，例如`A -> (B -> R) -> R`。外层不必把resource泄露给caller，而是把resource交给continuation并等待它完成，再统一commit/dispose。Map、Bind、Try和async都可看成受约束的continuation composition；关键是外层仍拥有lifetime与terminal outcome。
+
+<Term def="把后续步骤作为函数参数传入，使外层控制何时调用、如何包围resource与如何解释最终结果。">continuation boundary</Term>
+
+## Creating a middleware pipeline for DB access
+
+DB pipeline可分为open connection、begin transaction、run use case、commit or rollback、dispose五层。每层接收next并返回新function，composition order决定lifetime nesting。Business handler只依赖query/execute capability，不负责connection string、retry或transaction。最外层shell运行完整pipeline，result成功才commit，typed rejection与fault按policy rollback。
+
+```csharp
+Func<DbConnection, Either<Error, T>> program = connection =>
+    useCase(new SqlCustomerStore(connection));
+
+Either<Error, T> RunInTransaction<T>(
+    Func<DbConnection, Either<Error, T>> next)
+{
+    using var connection = Open();
+    using var tx = connection.BeginTransaction();
+    var result = next(connection);
+    if (result.IsRight) tx.Commit(); else tx.Rollback();
+    return result;
+}
+```
+
+真实async版本必须await inner task以后才能dispose；返回`IEnumerable&lt;T&gt;`或callback也要确保enumeration/callback在scope内完成。Retry应包围完整transaction attempt并重新open/redecide，不能复用failed transaction。Nested middleware要明确ambient transaction、isolation level、timeout、idempotency与commit-uncertain情形，避免“数据库报错就重试”导致重复业务effect。
+
+<Term def="以高阶函数围住DB continuation，把acquire、transaction、outcome和release按嵌套顺序组合的结构。">transaction middleware</Term>
+
+<Stepper>
+  <Step title="切换open、begin、commit与rollback"><CfpDbMiddlewareLab /></Step>
+  <Step title="画lifetime nesting">标出connection/transaction创建、inner computation真正完成、commit/rollback与dispose时点。</Step>
+  <Step title="注入边界故障">覆盖open失败、mid-query cancellation、domain Left、commit uncertain、dispose fault和retry，验证resource不泄露且effect不重复。</Step>
+</Stepper>
+
+## Production gate: prove timing, ownership, and retries
+
+验收lazy/Try/middleware不能只比较最终value。Telemetry需记录attempt id、evaluation count、connection/transaction id、start/end、outcome category和retry reason；敏感SQL参数不可进入普通log。测试以fake clock、counter、barrier和recording adapter证明未使用分支不执行、shared lazy只按policy执行、cancellation不翻译为failure、resource总在inner完成后释放。
+
+部署前再做一条真实integration path：让数据库在command执行后、commit response前断开，观察system如何处理unknown commit outcome。若command具有idempotency key，可查询结果后安全恢复；否则自动retry可能重复写入。Continuation让控制边界清晰，但可靠性仍来自明确protocol和证据。
+
+## 本章回顾：Composition也必须保留Evaluation语义
+
+1. Laziness推迟计算，memoization才共享结果；两者不能混为一谈。
+2. Evaluation count、thread publication、exception caching与invalidation都是observable contract。
+3. Try只提升明确throwing boundary，不能吞掉programmer fault和cancellation。
+4. Continuation让外层拥有resource lifetime与terminal outcome，适合构造middleware。
+5. DB pipeline按acquire、transaction、use case、outcome、dispose嵌套，并用fault tests证明。
+
+<Exercises>
+
+**问题 1：怎样证明一个Lazy factory在并发下符合约定？**
+
+<Answer>用barrier同时启动多个Value demand，factory记录counter/thread/timestamp并可选择成功或抛错。分别验证execution/publication mode下调用次数、所有caller看到的identity、异常是否缓存和unused lazy为零次；副作用factory必须采用single-flight或移出lazy。</Answer>
+
+**问题 2：Try adapter应保留哪些failure evidence？**
+
+<Answer>保留原exception/cause chain、stack、operation/correlation id和category；单独传播cancellation，expected infrastructure failure再映射stable error。测试nested cause、redaction、unknown exception与rethrow stack，不能只断言message文本。</Answer>
+
+**问题 3：Transaction middleware为何不能直接返回Deferred Query？**
+
+<Answer>若middleware返回后dispose connection，后续enumeration才执行SQL，会访问已释放resource。应在scope内materialize immutable result，或把enumeration本身放进continuation并等待完成；async同理必须await inner task再commit/dispose。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="deferred evaluation contract" definition="计算在demand时启动且调用次数明确的契约。" />
+  <GlossaryItem term="memoized computation" definition="首次求值后共享result的计算。" />
+  <GlossaryItem term="Try computation" definition="保留cause的deferred success-or-failure组合。" />
+  <GlossaryItem term="continuation boundary" definition="由外层调用后续函数并控制lifetime/outcome的边界。" />
+  <GlossaryItem term="transaction middleware" definition="围住DB continuation的resource与transaction组合层。" />
+</Glossary>
+
+<Attribution adaptedFrom="Functional Programming in C#, First Edition, Chapter 11: Lazy computations, continuations, and the beauty of monadic composition" adaptedUrl="https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-11" />

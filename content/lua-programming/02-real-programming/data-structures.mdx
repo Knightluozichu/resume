@@ -1,0 +1,249 @@
+---
+title: "Chapter 14. Data Structures"
+type: C
+section: "Programming in Lua 4e · Real Programming"
+order: 14
+description: "用Lua table实现arrays、矩阵、linked lists、queues/deques、reverse maps、sets/bags和string buffers，并验证shape、complexity与ownership。"
+demo: true
+math: false
+sourceUrl: "https://www.lua.org/pil/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PilSequenceMatrixLab, PilLinkedQueueLab, PilSemanticStructureLab } from "@/components/mdx/lua-programming/diagrams/data-structures";
+
+<Objectives>
+
+- 能比较array、nested/flat/sparse matrix的shape、index公式与复杂度，并判断何时holes破坏sequence
+- 能实现linked list与queue/deque操作，验证head/tail、empty state、slot clearing和reachability不变量
+- 能设计reverse map、set、bag与string buffer，复现duplicate、zero count、unordered traversal和quadratic concat故障
+
+</Objectives>
+
+## 为什么Table不等于一种Data Structure
+
+Lua只有一类通用table，但data structure来自约定：哪些keys合法、nil表示什么、谁可mutation、每个操作复杂度、遍历是否有序。把同一table一会儿当sequence、一会儿当map，会让`#`、ipairs、table library和序列化产生互相矛盾的结果。
+
+先预测：array中间赋nil后`#`是否仍是元素数；1000乘1000稀疏矩阵应分配多少tables；queue用`table.remove(t,1)`每次成本；reverse map遇到两个keys同value会发生什么；set value存false时membership怎么判断；循环`result=result..chunk`为何可能越来越慢。先写shape与operations，再选表示。
+
+<Term def="数据结构明确允许keys、value含义、nil语义、ordering、ownership和每个公开操作不变量的table形状协议。">table-shape contract</Term>比实现函数更重要。所有mutation通过少量API，才能持续维护count、head/tail、dimensions或reverse index。
+
+## Arrays
+
+Lua array通常是integer keys 1..n且无holes的proper sequence。Indexed access与尾部append通常高效；middle insert/remove需移动后续elements。Index 0或negative keys合法但不属于standard sequence，`#`、ipairs与table library不会把它们当正常array范围。
+
+Nil删除entry，因此array若需要显式missing element，使用sentinel或separate bitmap；否则hole让length变成某个border且ipairs提前停止。<Term def="Array只在1到n连续non-nil且n+1为nil时作为proper sequence使用，logical length与所有sequence APIs一致。">proper-array invariant</Term>要求删除middle item时compact、swap-remove或改用sparse map，并把order policy写清。
+
+Preallocation不是标准Lua API contract；可按实现profile决定。大量append用`array[#array+1]=value`只在array始终proper时安全；若维护explicit n，就写`n=n+1; array[n]=value`并同步所有mutators。
+
+## Matrices and Multi-Dimensional Arrays
+
+Nested matrix用`matrix[row][column]`，易读且允许ragged/sparse rows；flat matrix把二维坐标映射为一维index，减少row table并提高顺序遍历locality。<Term def="Flat row-major matrix以index=(row-1)*columnCount+column映射坐标，并把rows/columns作为不可漂移metadata。">row-major matrix mapping</Term>要求所有access先验证1-based bounds。
+
+```lua
+local function new_matrix(rows, columns, initial)
+  assert(rows > 0 and columns > 0)
+  local matrix = { rows = rows, columns = columns, data = {} }
+  for index = 1, rows * columns do matrix.data[index] = initial end
+  return matrix
+end
+
+local function index_of(matrix, row, column)
+  assert(row >= 1 and row <= matrix.rows)
+  assert(column >= 1 and column <= matrix.columns)
+  return (row - 1) * matrix.columns + column
+end
+
+local matrix = new_matrix(2, 3, 0)
+matrix.data[index_of(matrix, 2, 3)] = 7
+assert(matrix.data[6] == 7)
+```
+
+Rows乘columns要检查integer overflow与allocation budget。Sparse matrix只存non-default values，可用nested row maps避免coordinate string allocation；赋default/nil删除entry，empty row可再删除。Traversal按pairs无稳定order，numeric export需collect/sort coordinates。
+
+<PilSequenceMatrixLab />
+
+<Stepper>
+  <Step title="切换Sequence、Nested、Flat和Sparse Matrix"><PilSequenceMatrixLab /></Step>
+  <Step title="填写Operation Matrix">比较random access、row traversal、append row、sparsity、metadata与memory；用真实workload profile而非抽象偏好选择。</Step>
+  <Step title="验证Coordinates">覆盖四角、single row/column、out-of-range、dimension product overflow、ragged row和default deletion。</Step>
+</Stepper>
+
+<Callout type="trap" title="Lua Table有Array Part，所以任何Integer-key Table都能安全使用Length">
+Implementation可能优化integer keys，但language-level `#`只对proper sequence有可靠含义。Sparse、zero-based或holey tables必须用explicit length/count与专用API。
+</Callout>
+
+## Linked Lists
+
+Singly linked list可把每个node表示为`{value=value,next=head}`，head保存首node；prepend O(1)，按position访问与search O(n)。Node是table identity，value相同的两个nodes仍不同。Tail append若频繁需要，维护tail并在empty/non-empty transitions同步更新。
+
+链表适合频繁已知-node insertion/removal或保持node identity，但Lua table per node有allocation/GC成本，许多场景sequence更快更简单。Removal需有previous node；删除后可清空node.next帮助发现重复使用并释放remainder reference。
+
+Cycle如果不是结构定义的一部分，会让naive traversal无限；加入visited identity set或Floyd detection。共享tail让两个lists不是独立owners，copy/concat必须声明structural sharing。
+
+## Queues and Double-Ended Queues
+
+Queue不要每次`table.remove(list,1)`，它会移动所有后续elements。用`first`与`last`integer indices：empty初始可设first=0、last=-1；push back增加last，pop front读取/清空first再增加first。Deque还支持push front与pop back。
+
+<Term def="Index deque维护first到last的连续live range，empty当first大于last，所有pop清空slot且首尾操作不移动其它elements。">deque index invariant</Term>给每项O(1)首尾操作。Indices长期增长可能接近integer range；在empty时reset，或在安全阈值compact并测试不丢order。
+
+```lua
+local function new_deque()
+  return { first = 0, last = -1 }
+end
+
+local function push_back(queue, value)
+  assert(value ~= nil)
+  queue.last = queue.last + 1
+  queue[queue.last] = value
+end
+
+local function pop_front(queue)
+  if queue.first > queue.last then return nil, "empty" end
+  local value = queue[queue.first]
+  queue[queue.first] = nil
+  queue.first = queue.first + 1
+  if queue.first > queue.last then queue.first, queue.last = 0, -1 end
+  return value
+end
+
+local queue = new_deque()
+push_back(queue, "a"); push_back(queue, "b")
+assert(pop_front(queue) == "a" and pop_front(queue) == "b")
+```
+
+Nil不能作为普通queued value，否则empty result与item冲突；用sentinel或tagged result。并发producer/consumer在普通 Lua state中仍需scheduler/synchronization protocol，table representation本身不提供thread safety。
+
+<PilLinkedQueueLab />
+
+<Stepper>
+  <Step title="切换Linked List、Queue Front、Queue Back和Deque"><PilLinkedQueueLab /></Step>
+  <Step title="画State Transitions">覆盖empty到one、one到empty、两端交错和reset；每步标first/last/live slots与retained references。</Step>
+  <Step title="跑Long Sequence">随机与reference model对比百万次push/pop，验证order、empty reason、slot clearing和index rebasing。</Step>
+</Stepper>
+
+## Graphs
+
+Graph可用adjacency table：`edges[node]`保存out-neighbors的set或sequence。Set便于去重与membership，sequence保留明确顺序但添加/查重成本不同。Directed edge只写source到target；undirected edge必须原子地写双向，删除也要同步。Weighted graph让neighbor映射到weight，nil仍表示edge不存在。
+
+<Term def="图结构明确node identity、directed/undirected语义、neighbor表示、duplicate/self-edge policy，并让每条edge mutation保持邻接关系一致。">graph adjacency invariant</Term>要求table node按identity作key时不得假设序列化后仍是同一node；跨边界最好使用稳定scalar ID。
+
+Traversal必须维护visited set，否则cycle让DFS/BFS无限。BFS复用index queue，DFS可递归或显式stack；深度不可信时显式stack避免call-stack exhaustion。Neighbor来自set/pairs时order unspecified，deterministic path/report需先排序IDs。Untrusted graph还要限制nodes、edges、degree和search depth。
+
+```lua
+local function breadth_first(edges, start)
+  local queue = { start }
+  local first, visited, order = 1, { [start] = true }, {}
+  while first <= #queue do
+    local node = queue[first]
+    first = first + 1
+    order[#order + 1] = node
+    for neighbor in pairs(edges[node] or {}) do
+      if not visited[neighbor] then
+        visited[neighbor] = true
+        queue[#queue + 1] = neighbor
+      end
+    end
+  end
+  return order
+end
+
+local graph = { a = { b = true }, b = { a = true, c = true }, c = {} }
+assert(#breadth_first(graph, "a") == 3)
+```
+
+该示例只保证reachability，不保证beyond-first neighbor order；若输出必须稳定，收集并排序neighbors。Shortest path还要保存parent，weighted shortest path需要priority queue和non-negative weight等额外contract，不能把BFS直接推广。
+
+## Reverse Tables
+
+Reverse table把forward的value映射回key：`reverse[value]=key`。它只在forward relation one-to-one时无损；duplicate value会覆盖先前key。<Term def="反向索引只有在forward values唯一时可存单key，否则每个value必须映射到set/list并同步维护双方。">reverse-index cardinality</Term>要求更新forward时先删除old reverse relation，再添加new relation，所有操作atomic地保持一致。
+
+Table/function作为reverse key按identity；serialization后identity可能改变。Nil value没有entry，不能反向索引。若value mutable且其等价语义来自内容，不能直接用table identity充当content key，应canonicalize为immutable string/number。
+
+## Sets and Bags
+
+Set通常`set[element]=true`，membership检查`set[element] ~= nil`，删除赋nil。只存true避免false与absent混淆。Union/intersection遍历pairs，order unspecified；需要sorted output另行收集。
+
+Bag/multiset用positive count：add加一，remove减一，到zero删除key。<Term def="Set记录presence，bag记录positive multiplicity；bag count为zero时必须删除entry以保持absence与零一致。">set-bag distinction</Term>防止把`bag[x]=0`仍被pairs看见。Total multiplicity与unique count可像词频章一样维护并交叉检查。
+
+## String Buffers
+
+Lua strings immutable。Repeated `result=result..chunk`每轮可能复制不断增长的prefix，形成quadratic bytes copied；收集chunks到proper sequence后一次`table.concat(chunks)`通常线性。<Term def="String builder把immutable chunks按顺序存入proper sequence，限制总bytes/chunks并在边界一次concat。">string-buffer contract</Term>要求chunks均为strings或明确convert，nil不得产生hole。
+
+```lua
+local function build_csv(rows, max_bytes)
+  local chunks, bytes = {}, 0
+  for _, row in ipairs(rows) do
+    local chunk = string.format("%s,%d\n", row.name, row.count)
+    bytes = bytes + #chunk
+    assert(bytes <= max_bytes, "output-too-large")
+    chunks[#chunks + 1] = chunk
+  end
+  return table.concat(chunks)
+end
+
+local csv = build_csv({ { name = "lua", count = 3 }, { name = "c", count = 2 } }, 128)
+assert(csv == "lua,3\nc,2\n")
+```
+
+Very many tiny chunks也有table overhead；可批量flush到file/stream。Table.concat仍要分配最终large string，streaming output才限制peak output memory。CSV escaping不在本例覆盖，production formatter必须处理delimiter、quote与newline。
+
+<PilSemanticStructureLab />
+
+<Stepper>
+  <Step title="切换Reverse Map、Set、Bag和String Buffer"><PilSemanticStructureLab /></Step>
+  <Step title="审计Value Meaning">逐结构写nil/false/zero/duplicate的含义和mutation API，禁止复用一个generic put/remove破坏不变量。</Step>
+  <Step title="做Scale Profile">比较repeated concat、table.concat与streaming write的bytes copied、peak memory和time；对set/bag测试大unique input。</Step>
+</Stepper>
+
+<Callout type="trap" title="result = result .. chunk只多做一次Concatenation">
+每轮都会构造新immutable string并复制已有prefix，累计成本可呈二次方。收集chunks后table.concat，或直接流式写出，并设置总size上限。
+</Callout>
+
+## Choosing by Workload与Ownership
+
+选择结构先列hot operations：random index、ordered traversal、front removal、membership、multiplicity、coordinate access或append text。再列size、sparsity、mutation owner与serialization。Lua implementation details可profile，但correctness只依赖language-level shape。
+
+返回内部table会泄露mutation capability；只读约定无法阻止caller赋值。可返回iterator/snapshot，或提供narrow methods closure。Deep copy需要cycles/shared identity policy，不是自动安全选项。
+
+## 本章回顾：同是Table，Invariant不同
+
+1. Array要求1..n连续non-nil；holes、zero-based和sparse keys不能使用普通sequence APIs。
+2. Matrix可nested、flat或sparse，选择取决于dimension metadata、locality与sparsity。
+3. Linked list优化已知node操作，queue/deque用first/last避免front shift并清空popped slots。
+4. Graph用adjacency表示并以visited阻止cycle；方向、duplicate、identity和traversal order必须显式。
+5. Reverse map要求one-to-one，duplicate values需映射到collection并双向同步。
+6. Set存presence，bag存positive count且zero删除；pairs不提供stable order。
+7. String buffer收集chunks后concat或streaming flush，避免quadratic repeated concatenation。
+
+<Exercises>
+
+**问题 1：为什么Queue Pop必须把旧Slot设为Nil？**
+
+<Answer>First index前进只改变logical range，旧slot若保留value，table仍引用该object graph，GC无法回收且debug/pairs可能看到stale item。读取后赋nil，再移动first；one-to-empty时reset indices。</Answer>
+
+**问题 2：Forward Map有两个Keys映射同一Value，Reverse Map怎样表示？**
+
+<Answer>单一`reverse[value]=key`会覆盖。改为`reverse[value]`保存set或list of keys；forward更新时从old value集合删除key，空集合删除entry，再加入new value集合。测试duplicate add、move与remove保持双向一致。</Answer>
+
+**问题 3：何时Flat Matrix优于Nested Matrix？**
+
+<Answer>Dimensions固定、dense且按row顺序hot traversal时，flat sequence减少row tables并改善locality；但需维护rows/columns与index bounds。Ragged/sparse或频繁替换整row时nested更自然。用真实size/profile验证，并检查rows*columns预算。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="table-shape contract" definition="规定keys、values、nil、order、ownership与公开操作不变量的table协议。" />
+  <GlossaryItem term="proper-array invariant" definition="Keys 1..n连续non-nil并与sequence APIs保持一致的array约束。" />
+  <GlossaryItem term="row-major matrix mapping" definition="以(row-1)*columns+column把二维坐标映射到一维sequence。" />
+  <GlossaryItem term="deque index invariant" definition="First..last为连续live range且pop清空slot的双端队列约束。" />
+  <GlossaryItem term="graph adjacency invariant" definition="Graph明确node identity、edge方向、neighbor表示与mutation一致性的约束。" />
+  <GlossaryItem term="reverse-index cardinality" definition="Reverse relation按value唯一性选择single key或key collection的规则。" />
+  <GlossaryItem term="set-bag distinction" definition="Set存presence而bag存positive multiplicity并在zero删除的区分。" />
+  <GlossaryItem term="string-buffer contract" definition="Chunks按proper sequence收集、限额并一次concat或flush的构建协议。" />
+</Glossary>
+
+<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 14: Data Structures" adaptedUrl="https://www.lua.org/pil/" />

@@ -1,34 +1,37 @@
 ---
-title: C预处理器
+title: C预处理器和C标准库
 type: A
 section: C高级主题
 order: 16
-description: 掌握 #define 宏、#include、条件编译 #ifdef/#ifndef、宏函数与带参宏陷阱、预处理器工作阶段
+description: 掌握宏展开、包含与条件编译、字符串化与粘贴、可变参数宏、_Generic、inline、assert和标准库契约
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/c-primer-plus-9780321928429"
 draft: false
 ---
 
+import { CPrimerPreprocessorContractDiagram } from "@/components/mdx/c-primer-plus/diagrams/preprocessor";
 
 
 
 
 <Objectives>
 
-- 能说明预处理器在编译流水线中的位置，并列举它处理的四类指令：#define、#include、条件编译、#undef
-- 能写出简单常量宏与带参宏，解释宏展开是「纯文本替换」而非函数调用，并给出带括号的安全写法
-- 能用 #ifdef/#ifndef 实现调试开关与头文件包含守卫，并回答：SQUARE(a+b) 在错误宏下为何不等于 (a+b)²？
+- 能追踪函数式宏的记号替换与重扫，判断字符串化、粘贴和可变参数宏中的参数展开次数
+- 能用条件编译、包含守卫和 _Generic 分别完成配置选择、单翻译单元防重与类型分派
+- 能比较宏与 static inline，并正确使用 assert、math.h 与标准库函数的域和错误协议
 
 </Objectives>
 
 ## 编译前还有一道「改写」工序
 
-你写的 `.c` 文件送进编译器之前，会先经过 <Term def="在真正编译 C 语法之前运行的程序；按 # 开头的指令对源码做文本级变换。">预处理器（preprocessor）</Term>。它不做类型检查，也不理解函数调用——只做**找词替换、粘贴文件、按条件删行**。
+你写的 `.c` 文件进入语法与类型分析前，会先经过 <Term def="执行预处理指令、宏替换和条件包含的翻译阶段；主要处理预处理记号，不做C类型检查。">预处理器（preprocessor）</Term>。它不是任意字符级“搜索替换”：源文件先经历字符映射、行拼接、注释替换和预处理记号划分，宏参数替换后还会按规则重扫。
 
 想象出版社排版：作者交稿（源码）后，编辑先统一替换术语、插入标准版权页（`#include`）、按「精装版/平装版」删掉不同章节（条件编译），排完才交给印刷机（编译器）。若没有预处理器，每个 `.c` 都要手写一遍 `stdio.h` 里的声明，常量 `PI` 也要到处改数字。
 
 这一章掌握宏、头文件包含与条件编译——它们决定**编译器最终看到什么文本**。
+
+<CPrimerPreprocessorContractDiagram />
 
 ## 预处理器在流水线中的位置
 
@@ -39,7 +42,7 @@ draft: false
 <Stepper>
   <Step title="第一步：预处理">
     <PreprocessorPipelineDiagram step={1} />
-    展开 `#define`、执行 `#include`、处理 `#ifdef` 等；删除注释；产出 `.i`（仍 mostly 是 C 文本）。
+    执行 include、条件包含和宏替换等翻译阶段。常见工具链可输出 `.i` 便于审查，但扩展名不是 C 标准接口。
   </Step>
   <Step title="第二步：编译">
     <PreprocessorPipelineDiagram step={2} />
@@ -59,7 +62,7 @@ draft: false
 
 ## #define：常量与宏
 
-<Term def="以 #define 名字 替换文本 定义的标识符；预处理器把源码里出现的名字换成 replacement（纯文本）。">宏（macro）</Term> 分两类：
+<Term def="由#define定义的对象式或函数式替换规则；操作单位是预处理记号，参数替换、字符串化、粘贴与重扫遵守各自规则。">宏（macro）</Term> 分两类：
 
 **对象式宏**（无参数）——常用来起名：
 
@@ -81,8 +84,8 @@ draft: false
 要点：
 
 - 宏名习惯**全大写**（与变量区分），但语言不强制
-- `#define` 行末尾不要加分号；replacement 是什么，就原样贴进去
-- 带参宏：`SQUARE(x)` 与 `SQUARE (x)` 不同——**宏名与左括号之间不能有空格**，否则当普通对象宏
+- `#define` 行末尾通常不加分号；替换列表还会经历参数替换与重扫，并非一次原样粘贴
+- 在 `#define SQUARE(x)` **定义中**，宏名与左括号之间不能有空白，否则定义成对象式宏；在调用 `SQUARE (value)` 时，空白不妨碍函数式宏识别
 
 取消定义用 `#undef NAME`。
 
@@ -91,11 +94,11 @@ draft: false
 <Term def="#include 指令在预处理阶段把指定头文件的内容插入当前位置，相当于复制粘贴。">#include</Term> 两种形式：
 
 ```c
-#include <stdio.h>      /* 系统/标准库：按系统目录搜索 */
-#include "myheader.h"   /* 用户头文件：先当前目录，再系统路径 */
+#include <stdio.h>      /* 由实现定义的位置序列搜索 */
+#include "myheader.h"   /* 先按实现定义方式搜索，失败后按尖括号形式处理 */
 ```
 
-<Term def="存放声明、宏、typedef 的 .h 文件；通常不写函数定义（除 inline/static），供多个 .c 共享接口。">头文件（header）</Term> 里常见：函数原型、`extern` 变量声明、`#define` 常量、结构体定义。
+<Term def="由include纳入翻译单元的源文件，通常发布函数声明、类型、宏和extern对象声明；搜索位置与文件命名由实现和构建系统约定。">头文件（header）</Term> 里常见函数原型、extern 对象声明、宏与类型定义。可移植代码不要把“双引号必先当前目录”当成语言保证，应按编译器和构建系统配置 include 路径。
 
 同一头文件被多个 `.c` include 时，声明会重复粘贴。用 <Term def="#ifndef GUARD / #define GUARD / ... / #endif 防止头文件被重复包含导致重复定义。">包含守卫（include guard）</Term>：
 
@@ -117,7 +120,7 @@ C 还可用 `#pragma once`（非标准但广泛支持）达到类似效果；可
 <Term def="根据宏是否定义，在预处理阶段保留或丢弃 #if/#ifdef/#ifndef ... #endif 之间的代码块。">条件编译（conditional compilation）</Term> 常见用途：
 
 - 调试版 vs 发布版（`DEBUG` 宏）
-- 跨平台差异（`WIN32` / `__linux__`）
+- 跨平台差异（使用构建系统或实现文档明确提供的宏）
 - 功能开关
 
 ```c
@@ -155,25 +158,47 @@ C 还可用 `#pragma once`（非标准但广泛支持）达到类似效果；可
 3. 避免 `MAX(a++, b++)` 这类副作用实参
 4. 复杂逻辑用 `static inline` 函数（C99）或普通函数，让编译器做类型检查
 
-C 标准库也大量用宏：`getchar()` 往往是 `#define getchar() getc(stdin)` 的宏，所以别写 `getchar()` 当函数指针用。
+C 标准库头文件可以在声明真实函数的同时提供同名函数式宏。函数式宏只有在名字后跟左括号记号时才展开，因此 `&getchar` 仍可取得函数地址；也可写 `(getchar)()` 或先 `#undef getchar` 抑制宏。不要假定某个实现一定把 getchar 定义成宏。
 
 ## 预定义宏与实用技巧
 
 编译器预定义若干宏，便于调试与可移植代码：
 
 ```c
-printf("文件 %s 行 %u\n", __FILE__, __LINE__);
+printf("文件 %s 行 %d\n", __FILE__, __LINE__);
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
     /* C99 及以上 */
 #endif
 ```
 
+标准预定义宏还包括 `__DATE__`、`__TIME__`、`__STDC__`；`__STDC_VERSION__` 在 C11 实现中为 `201112L`。`__DATE__` 和 `__TIME__` 会让构建结果随时间变化，要求可复现构建时不应把它们写进产物标识。
+
 字符串化 `#` 与连接 `##`（进阶）：
 
 ```c
-#define STR(x) #x          /* STR(hello) → "hello" */
-#define CONCAT(a, b) a##b  /* CONCAT(var, 1) → var1 */
+#define STR_RAW(x) #x
+#define STR(x) STR_RAW(x)
+#define CAT_RAW(a, b) a##b
+#define CAT(a, b) CAT_RAW(a, b)
 ```
+
+`#` 把参数原始预处理记号拼成字符串字面量，`##` 把两侧记号拼成一个新记号；直接邻接它们的参数不会先按普通参数规则展开。两层宏让外层先展开参数，再交给内层字符串化或粘贴。粘贴结果必须形成有效预处理记号，不能用 `##` 随意拼任意字符。
+
+### 可变参数宏
+
+C99 的 <Term def="函数式宏形参列表末尾使用省略号，并在替换列表通过__VA_ARGS__访问其余实参记号；每次调用应满足宏定义所需的参数形状。">可变参数宏</Term> 适合把格式串与参数转发给日志函数：
+
+```c
+#define TRACE(...) do {                    \
+    fprintf(stderr, "[trace] ");           \
+    fprintf(stderr, __VA_ARGS__);           \
+    fputc('\n', stderr);                    \
+} while (0)
+
+TRACE("count=%d", count);
+```
+
+这个 C11 宏要求至少传入一个可作为 fprintf 格式串的实参。`__VA_ARGS__` 仍是记号替换，不会检查格式与参数类型；编译器是否给出格式诊断取决于它能否追踪到 fprintf。不要依赖后来的 `__VA_OPT__` 或厂商“吞逗号”扩展来处理空可变参数。
 
 多行宏用 `\` 续行：
 
@@ -186,6 +211,68 @@ printf("文件 %s 行 %u\n", __FILE__, __LINE__);
 ```
 
 `do { ... } while (0)` 保证在 `if` 后当单语句使用时不踩语法坑。
+
+## _Generic 与内联函数：把类型分派和求值分开
+
+C11 的 <Term def="按控制表达式经过左值、数组和函数转换后的类型，在编译期选择一个关联表达式；控制表达式本身不求值。">泛型选择（_Generic）</Term> 可以让一个宏名选择不同类型的真实函数：
+
+```c
+static inline int max_int(int left, int right) {
+    return left > right ? left : right;
+}
+
+static inline double max_double(double left, double right) {
+    return left > right ? left : right;
+}
+
+#define MAX_VALUE(a, b) _Generic(((a) + (b)), \
+    int: max_int,                                \
+    double: max_double                           \
+)((a), (b))
+```
+
+`((a) + (b))` 只用于确定共同类型，在 _Generic 控制位置不会求值；选中的函数调用才各求值一次 a 与 b。这个接口只支持关联表列出的类型，其他类型会诊断。函数实参之间的求值顺序仍未指定，因此不要传入相互依赖的副作用表达式。
+
+<Term def="inline函数说明符允许实现用函数体替换调用，但不保证实际内联；static inline定义在头文件时，每个翻译单元拥有内部链接版本。">内联函数（inline function）</Term> 有参数和返回类型检查，也不会像 `MAX` 宏那样重复求值实参。`static inline` 适合头文件中的短辅助函数；仅写具有外部链接的 inline 涉及外部定义规则，公共接口应采用项目统一模式而不是凭感觉删掉某个 `.c` 定义。
+
+## C 标准库：头文件、断言与数学函数
+
+<Term def="由标准头文件发布的函数、宏和类型集合；每个接口都有参数域、返回值、错误指示和可能的宏实现规则。">C 标准库</Term> 不只是“链接进来的函数文件”。使用接口前包含指定头文件，按声明传递匹配类型，并阅读返回值和错误协议。
+
+### assert：程序员不变量，不是用户输入校验
+
+```c
+#include <assert.h>
+#include <stddef.h>
+
+double mean(const double *values, size_t count) {
+    double sum = 0.0;
+    size_t i;
+    assert(values != NULL);
+    assert(count > 0);
+    for (i = 0; i < count; ++i)
+        sum += values[i];
+    return sum / count;
+}
+```
+
+<Term def="assert.h提供的诊断宏；表达式为零时输出实现提供的位置信息并调用abort，定义NDEBUG后宏不求值表达式。">assert</Term> 用于违反即表示程序有 bug 的内部不变量。若在包含 `<assert.h>` 前定义 `NDEBUG`，assert 表达式完全不求值，所以其中不能放赋值、函数调用等必要副作用。文件损坏、用户输入错误和内存不足都必须走正常错误处理，不能只靠可被关闭的 assert。
+
+### math.h：先看定义域，再看错误协议
+
+```c
+#include <math.h>
+#include <stddef.h>
+
+int square_root(double input, double *output) {
+    if (output == NULL || input < 0.0)
+        return 0;
+    *output = sqrt(input);
+    return 1;
+}
+```
+
+`<math.h>` 提供 sqrt、pow、sin、isfinite 等数学接口。示例先执行产品定义的实数域检查；若要诊断库的域、极点或范围错误，还要依据 `math_errhandling` 检查 `errno` 和/或浮点异常。某些 Unix 工具链需要在链接命令末尾加 `-lm`，这是工具链约定，不是 C 源语言规则。
 
 ## 代码示例：调试宏与头文件守卫
 
@@ -231,34 +318,36 @@ int main(void) {
 </Callout>
 
 <Callout type="trap">
-  **现象**：头文件无 guard，两个 `.c` 都 include 同一 `.h`，链接报 `multiple definition` 或重复声明冲突。
-  **原因**：预处理把整份头文件粘贴两次，全局变量/函数定义重复。
-  **修法**：头文件用 `#ifndef ... #define ... #endif` 或 `#pragma once`；**定义只放一份 .c**，头文件只放声明。
+  **现象**：同一翻译单元经不同包含路径多次纳入一个无 guard 头文件，结构或枚举定义发生重定义。
+  **原因**：每次 include 都重新处理头文件；守卫只在当前预处理翻译中记住宏是否已定义。
+  **修法**：头文件使用唯一 include guard。注意 guard 不能阻止多个 `.c` 各自从头文件获得外部定义；具有外部链接的定义仍应只放一个 `.c`，头文件发布声明。
 </Callout>
 
 <Callout type="trap">
-  **现象**：`if (cond) SQUARE(x); else ...` 在宏展开后语法错误或逻辑错乱。
-  **原因**：多语句宏若不用 `do { ... } while (0)` 包裹，`else` 可能挂错 `if`。
-  **修法**：多语句宏用 `do { ... } while (0)`，或改写成 inline 函数。
+  **现象**：`#define UPDATE(x) puts("update"); (x)++` 放进 `if (cond) UPDATE(x); else ...` 后，else 无法与预期 if 配对。
+  **原因**：宏展开成两个语句，调用处的分号不能把它们组合成一条语句。
+  **修法**：多语句宏用 `do { ... } while (0)` 包成一个语句，或优先改写成 inline 函数。
 </Callout>
 
 <Callout type="trap">
   **现象**：以为 `#define N 100` 与 `const int N = 100` 完全等价，在需要常量的地方（如 `int a[N]` VLA 或 `#if N > 10`）行为不一致。
-  **原因**：`#if` 只能测**预处理整数**；`const` 变量是编译期对象，不能用于 `#if`。
-  **修法**：需要参与 `#if` 的用 `#define`；需要类型与作用域的用 `enum` 或 `const`。
+  **原因**：#if 只计算预处理整数常量表达式；C11 的 const 对象不是整数常量表达式，块内 `int a[N]` 因而是 VLA（若实现支持），而 enum 常量才是整数常量表达式。
+  **修法**：编译配置用宏；需要 C 整数常量表达式可用 enum；只读对象用 const。不要把三者互换。
 </Callout>
 
 ## 小结
 
 - 预处理器在编译前运行：宏展开、`#include` 粘贴、条件编译裁剪、删注释
-- `#define` 是纯文本替换；带参宏注意括号、副作用与优先级
+- `#define` 按预处理记号执行参数替换与重扫；带参宏注意括号、副作用与优先级
 - `#include <>` 与 `""` 搜索路径不同；头文件需要包含守卫
 - `#ifdef`/`#ifndef`/`#elif`/`#else` 按宏是否定义选代码；`-D`/`-U` 在命令行控制
-- 复杂逻辑优先函数；库宏（`getchar` 等）勿当普通函数指针
+- 字符串化和记号粘贴有特殊参数展开顺序；可变参数宏仍不提供类型或格式安全
+- _Generic 只做编译期类型选择且控制表达式不求值；static inline 提供真实函数类型与单次实参求值
+- assert 可被 NDEBUG 完全关闭，只检查程序员不变量；标准库函数还要遵守定义域、返回值和错误协议
 
 <Exercises>
 
-**练习 1（问答型）** 预处理器与编译器分工有何不同？`#define PI 3.14` 在哪一阶段生效？
+**问题 1（问答型）** 预处理器与编译器分工有何不同？`#define PI 3.14` 在哪一阶段生效？
 
 <Answer>
 
@@ -266,22 +355,20 @@ int main(void) {
 
 </Answer>
 
-**练习 2（改代码型）** 下面宏有何问题？写出安全版本。
+**问题 2（改代码型）** 下面宏在除法表达式中为何得到 12 而不是 5？写出带括号版本，并说明仍剩什么风险。
 
 ```c
 #define DOUBLE(x) x + x
-int r = DOUBLE(3 * 2);
+int r = 20 / DOUBLE(2);
 ```
 
 <Answer>
 
-展开为 `3 * 2 + 3 * 2`（缺少括号，且 `+` 两侧无整体保护）。若写成 `DOUBLE(1+2)` 会得到 `1+2+1+2=6`，而期望的两倍是 `(1+2)*2=6` 碰巧相同；但 `DOUBLE(a+b)` 类表达式在更复杂运算符下会出错。
-
-安全版：`#define DOUBLE(x) ((x) + (x))` 或 `#define DOUBLE(x) (2 * (x))`。
+展开为 `20 / 2 + 2`，按优先级得到 12。带括号版本是 `#define DOUBLE(x) ((x) + (x))`。它仍会把 `DOUBLE(i++)` 的副作用执行两次；没有明确单次求值需求时才可用，通用接口优先 inline 函数。
 
 </Answer>
 
-**练习 3（综合实现型）** 写头文件 `guard.h`：包含守卫 + `MAX(a,b)` 宏 + 仅在 `DEBUG` 定义时启用的 `TRACE(fmt)` 宏（调用 `printf`）。
+**问题 3（综合实现型）** 写头文件 `guard.h`：包含守卫 + `MAX(a,b)` 宏 + 仅在 `DEBUG` 定义时启用的可变参数 `TRACE(...)` 宏。
 
 <Answer>
 
@@ -294,15 +381,19 @@ int r = DOUBLE(3 * 2);
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
 #ifdef DEBUG
-#define TRACE(fmt) printf("[trace] " fmt "\n")
+#define TRACE(...) do {              \
+    fprintf(stderr, "[trace] ");     \
+    fprintf(stderr, __VA_ARGS__);     \
+    fputc('\n', stderr);              \
+} while (0)
 #else
-#define TRACE(fmt) ((void)0)
+#define TRACE(...) ((void)0)
 #endif
 
 #endif
 ```
 
-编译调试版：`gcc -DDEBUG main.c`。
+调用示例：`TRACE("count=%d", count);`。MAX 的每个参数可能求值多次，禁止传入 `i++` 等副作用表达式；需要单次求值与类型检查时改用 inline/_Generic 方案。调试构建可在该工具链中使用 `gcc -DDEBUG main.c`。
 
 </Answer>
 
@@ -313,23 +404,23 @@ int r = DOUBLE(3 * 2);
 <Glossary>
 
 <GlossaryItem term="预处理器（preprocessor）">
-  编译前处理 # 指令的程序；宏展开、include、条件编译。见 PreprocessorPipelineDiagram step 1。
+  执行 include、条件包含和宏替换等翻译阶段，处理预处理记号而不做 C 类型检查。见 PreprocessorPipelineDiagram step 1。
 </GlossaryItem>
 
 <GlossaryItem term="宏（macro）">
-  #define 定义的标识符，使用时被 replacement 文本替换；分对象式与函数式。见 MacroExpansionDiagram。
+  由 #define 建立的对象式或函数式记号替换规则；参数替换后还会重扫，字符串化与粘贴有特殊规则。见 MacroExpansionDiagram。
 </GlossaryItem>
 
 <GlossaryItem term="宏展开（macro expansion）">
-  预处理器把宏名（及实参）替换成 #define 右侧文本的过程；无类型检查。
+  预处理器按规则替换宏名和参数、处理 # 与 ##、再重扫结果的过程；没有 C 类型检查，参数可能在结果中出现多次。
 </GlossaryItem>
 
 <GlossaryItem term="#include">
-  预处理阶段插入头文件内容；尖括号与双引号搜索路径不同。
+  预处理阶段纳入指定源文件；尖括号位置序列与双引号的初始搜索方式由实现定义，构建系统负责配置路径。
 </GlossaryItem>
 
 <GlossaryItem term="头文件（header）">
-  .h 文件，通常放声明与宏；由多个 .c 共享接口。
+  由 include 纳入翻译单元的接口源文件，通常放函数声明、类型、宏和 extern 对象声明。文件后缀不是语言语义。
 </GlossaryItem>
 
 <GlossaryItem term="包含守卫（include guard）">
@@ -364,6 +455,26 @@ int r = DOUBLE(3 * 2);
   预定义宏，展开为当前行号的整数字面量。
 </GlossaryItem>
 
+<GlossaryItem term="可变参数宏">
+  函数式宏以省略号接收其余实参记号，并通过 __VA_ARGS__ 放入替换列表。C11 不具备用 __VA_OPT__ 处理空参数的标准机制。
+</GlossaryItem>
+
+<GlossaryItem term="泛型选择（_Generic）">
+  C11 按控制表达式的类型在编译期选择关联表达式；控制表达式不求值，未列出的类型若无 default 会诊断。
+</GlossaryItem>
+
+<GlossaryItem term="内联函数（inline function）">
+  inline 允许但不强制实现用函数体替换调用。头文件常用 static inline 获得每翻译单元内部链接定义与真实类型检查。
+</GlossaryItem>
+
+<GlossaryItem term="C 标准库">
+  标准头文件发布的函数、宏与类型集合。每个接口都有参数域、返回值、错误指示和可能的函数式宏规则。
+</GlossaryItem>
+
+<GlossaryItem term="assert">
+  assert.h 的诊断宏，条件为零时报告并调用 abort；包含头文件前定义 NDEBUG 后表达式不求值，只适合检查程序员不变量。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution />
+<Attribution title="C Primer Plus, Sixth Edition, Chapter 16: The C Preprocessor and the C Library" url="https://www.informit.com/store/c-primer-plus-9780321928429" />

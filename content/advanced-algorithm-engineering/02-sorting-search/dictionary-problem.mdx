@@ -1,0 +1,325 @@
+---
+title: "第8章 The Dictionary Problem：字典问题"
+type: B
+section: "排序、集合与搜索"
+order: 7
+description: "从直接寻址、链式与通用哈希推进到静态完美表、动态布谷鸟哈希和允许单侧误差的布隆过滤器，统一分析字典操作的时间、空间与概率保证。"
+demo: true
+math: true
+sourceUrl: "https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+draft: false
+---
+
+import { PaeDictionaryOperationMap, PaeChainingLoadLab, PaeUniversalHashLab, PaePerfectHashDiagram, PaeCuckooEvictionLab, PaeBloomFilterLab } from "@/components/mdx/advanced-algorithm-engineering/diagrams/dictionary-problem";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释静态与动态字典的 Search、Insert、Delete 保证
+- 能计算链式哈希的负载因子、期望链长与扩缩容成本
+- 能实现通用哈希和两级完美哈希的构造与查询
+- 能分析布谷鸟图中的逐出、环、重哈希和 stash 边界
+- 能设计给定空间与误报率目标的布隆过滤器
+
+</Objectives>
+
+## 从“只需判断键是否存在”开始
+
+dictionary problem（<Term def="维护由唯一键标识的对象集合，并支持 Search、Insert、Delete；只查询的是静态字典，支持更新的是动态字典。">字典问题</Term>）维护对象集合 D。对象通常写成 key 与 satellite data 的二元组；本章先只讨论键集 S，再把命中的键映射回附属数据。
+
+- Search(k)：判断键 k 是否存在，必要时返回对应对象；
+- Insert(x)：插入 key[x] 唯一标识的对象；
+- Delete(k)：若键存在则删除其对象。
+
+只有 Search 的冻结键集是 static dictionary；同时支持三种操作的是 dynamic dictionary。这个区分决定能否花较高构造成本换取最坏常数查询，也决定更新时是局部移动还是全表重建。
+
+先预测：一个 URL 爬虫字典若有十亿个长键，应该存完整 URL、两处槽位，还是只存几位指纹？若业务不能容忍误报，指纹位图不能替代精确字典；若它只负责快速排除“肯定没见过”的 URL，单侧误差反而能以很少空间挡住大多数后端访问。
+
+<PaeDictionaryOperationMap />
+
+原章依次收紧三种资源：直接寻址用宇宙大小换最坏常数；哈希把空间降到键数级但引入随机保证；Bloom filters（布隆过滤器）连键本身也不存，再以可调误报换更小空间。
+
+## 直接寻址表：最简单的最坏常数方案
+
+direct-address tables（<Term def="为宇宙 U 中每个可能键 k 预留槽 T[k]，以位或指针直接表示成员关系。">直接寻址表</Term>）建立大小 u=|U| 的数组 T。纯成员查询时 T[k] 是一位；带附属数据时 T[k] 是指针，空指针表示不存在。
+
+Search、Insert、Delete 都只访问 T[k]，因此最坏时间是 O(1)。问题是空间取决于 u 而不是 n=|S|：
+
+$$
+\text{space}_{\mathrm{direct}}
+=
+\Theta(u)
+$$
+
+当 n 与 u 同阶，它是最直接也最可靠的工程解；若 32 位学号只用了百万个值，开出 2 的 32 次方个槽就浪费巨大。算法工程的第一条判断不是“能否哈希”，而是宇宙是否足够稠密，能否通过区间压缩或位图先把直接寻址做对。
+
+## 链式哈希：负载因子决定平均扫描长度
+
+Hash table with chaining 用 m 个数组槽，每个槽指向一条链。哈希函数 h 把宇宙键映射到 0 至 m-1；键 k 位于链 T[h(k)]。
+
+- Insert 把新项接到链头，给定 h 为 O(1)；
+- Search 扫描 T[h(k)]；
+- Delete 先搜索，再摘除节点。
+
+若键均匀散入槽位，负载因子 alpha=n/m 就是平均链长。成功或失败查询都满足：
+
+$$
+\mathbb{E}[T_{\mathrm{search}}]
+=
+\Theta\left(1+\frac{n}{m}\right)
+=
+\Theta(1+\alpha)
+$$
+
+<PaeChainingLoadLab />
+
+链表指针、键和一级表都要计入空间。令宇宙大小为 u，原章给出的位成本为：
+
+$$
+(m+n)\log_2 n+n\log_2 u
+$$
+
+长 URL 等键的 n log u 项可能远大于索引指针，这个观察随后直接导向布隆过滤器。
+
+字典大小未知时，以 m=2n0 建表；当 n 小于 n0/2 时减半，当 n 大于 2n0 时加倍，再把当前键全部重哈希。一次重建成本 Theta(n)，但相邻重建之间至少发生 Omega(n) 次更新，故每次操作只分摊 O(1)。
+
+<Callout type="trap" title="把平均链长误写成最坏查询常数">
+alpha 为常数只说明所有链的平均长度为常数，并不排除少数链很长。若查询分布偏向最长链，真实延迟会远高于平均值；接口文档必须写清“对随机哈希函数取期望”还是“每次查询最坏常数”。
+</Callout>
+
+固定的除留余数 h(k)=k mod m 或乘法散列很快，却总存在针对它的坏键集。例如取 m 的倍数会让除留余数全部落到同一槽。未知输入分布下，不可能靠一个事先固定的 h 对所有集合都保持均匀。
+
+## 通用哈希：随机选择函数，而不是假设输入随机
+
+universal hashing（<Term def="从有限哈希族 H 中随机选函数，使任意不同键对 x、y 的碰撞概率至多 1/m。">通用哈希</Term>）把随机性放到实现内部。对任意不同 x、y，哈希族 H 满足：
+
+$$
+\Pr_{h\sim H}[h(x)=h(y)]
+\le
+\frac{1}{m}
+$$
+
+这与随机 pivot 的 Quicksort 同理：输入可以固定甚至对抗，但运行时才抽取参数。对链式表，任意键 x 与其余 n-1 个键的期望碰撞数小于 alpha，因此不再需要假设键本身独立均匀。
+
+<PaeUniversalHashLab />
+
+一个可计算的族先选大素数 p 大于宇宙，再随机选 a 大于0、b 不小于0：
+
+$$
+h_{a,b}(k)
+=
+((ak+b)\bmod p)\bmod m
+$$
+
+另一类在 2 的幂宇宙上用奇数乘法与高位截取，只需机器整数操作，可得到常数倍通用保证。关键不是“某组 a、b 永不碰撞”，而是对每一对键，导致碰撞的参数所占比例有上界。
+
+```text
+BuildUniversalTable(keys, m):
+  choose random h from a universal family
+  for key in keys:
+    append key to T[h(key)]
+  if longest chain exceeds policy:
+    choose a new h and rebuild
+```
+
+单哈希表的最长链仍可能明显大于平均。d-left hashing 分成 d 个子表，插入时检查 d 个候选槽并进入最短链。仅用两个选择，最长链可降到 O(log log n) 量级；这就是 power of two choices，也允许用固定小桶替代指针链，改善局部性。
+
+## 完美、最小与保序哈希：静态键集换最坏常数
+
+perfect hashing（<Term def="针对固定键集 S 无任何碰撞的哈希；若槽数等于键数则为最小完美哈希。">完美哈希</Term>）要求不同字典键映射到不同槽。槽数 m 至少为 n；m=n 时称 minimal perfect hash function，查询一次定位且没有空槽。
+
+若还满足 k_i 的顺序早于 k_j 就有 h(k_i) 小于 h(k_j)，它是 order-preserving MPHF，返回值就是冻结字典中的 rank。原章以两组随机哈希 h1、h2 和数组 g 组合：
+
+$$
+h(t)
+=
+\bigl(g(h_1(t))+g(h_2(t))\bigr)\bmod n
+$$
+
+把每个键 t 视为连接 h1(t)、h2(t) 的边；随机图无环时，从每棵树根设 g 值并沿边传播，就能让 h(t) 等于预定 rank。构造平均 O(n)，求值最坏 O(1)，空间 O(n)，但键集变化通常会破坏图和 rank，所以它服务静态字典。
+
+### 两级完美表：不要求保序时更简单
+
+原章第8.5节给出 FKS 风格两级方案。一级表大小 m=n，用通用 h 把 n 个键分桶；第 j 桶有 n_j 个键，就为它分配 n_j 的平方个二级槽，并独立抽取 h_j，直到该桶无碰撞。
+
+<PaePerfectHashDiagram />
+
+q 个键放进 q 的平方个槽，期望碰撞数小于 1/2，所以平均重抽不到两次。一级各桶平方空间的期望满足：
+
+$$
+\mathbb{E}\left[\sum_{j=0}^{m-1}n_j^2\right]
+\lt
+2n
+$$
+
+查询只做两次地址计算，但第二槽命中后仍要核对保存的 key；不在集合中的键也可能走到某个非空槽，不能只凭位置返回 true。
+
+```text
+SearchPerfect(k):
+  j = h(k)
+  if T[j] is empty: return false
+  i = h_j(k)
+  return T[j][i] is not empty and T[j][i].key == k
+```
+
+构造时若一级平方和过大，只重抽一级 h；某个二级桶冲突，只重抽该桶 h_j，不影响其他桶。随机重试因此保持局部，最终提供 O(n) 期望空间和 O(1) 最坏查询。
+
+## 布谷鸟哈希：两个候选槽与一条逐出路径
+
+cuckoo hashing（<Term def="每个键由 h1、h2 指定两个候选槽；插入占位并逐出旧键，查询只检查两槽。">布谷鸟哈希</Term>）面向动态精确字典。键 k 只能位于 T[h1(k)] 或 T[h2(k)]，所以 Search 与 Delete 最坏只检查两处。
+
+Insert 若两处都满，就把新键放入一处，逐出旧键；旧键必须转向它的另一个候选槽，不能立刻逐出刚放入的新键。级联直到遇到空槽。
+
+<PaeCuckooEvictionLab />
+
+把槽位视为节点、键的两个候选位置视为一条边，就得到 cuckoo graph。边的方向记录当前槽到备用槽；插入逐出链就是沿图走路径。若两条环被新边连接，路径可能永不抵达空槽，系统必须限制逐出步数并重抽 h1、h2 后全表重建。
+
+当表足够稀疏，例如 m 至少为 2cn 且 c 大于1时，长度 L 的连接路径概率按 c 的负 L 次方衰减。查询仍是 O(1) 最坏；一批 Theta(n) 次插入的重哈希总成本是 O(n) 期望，因此单次 Insert 为 O(1) 期望摊还。
+
+```text
+InsertCuckoo(k):
+  repeat up to MAX_KICKS:
+    if one candidate slot is empty:
+      place k and return success
+    swap k with occupant of the chosen slot
+    choose k's other candidate slot next
+  rebuild with fresh h1, h2, or place k in a small stash
+```
+
+常数大小 stash 可先收纳检测到环的少数键，把重哈希概率进一步压低。表过满或过空时仍用全局倍增/减半重建；stash 不是无限溢出链，Search 还必须同时查两槽和这块小区域。
+
+<Callout type="trap" title="看到环就断言插入一定失败">
+布谷鸟图中有环不等于当前逐出必然无限循环；路径可能离开环并到达空槽。实现用最大逐出步数检测失败，分析常用“存在环”作为失败概率的上界，两者不能混成同一个事件。
+</Callout>
+
+## 布隆过滤器：不存键，只存可控指纹
+
+Bloom filters（<Term def="用 m 位数组与 r 个哈希保存集合指纹；不存在假阴性，但对非成员可能返回假阳性。">布隆过滤器</Term>）初始化全零位图 B。插入 k 时把 r 个位置 B[h_i(k)] 置1；查询 y 时，任一位置为0即可断言 y 不在集合，全部为1则返回“可能存在”。
+
+它不存原键，因此标准版本无法列举元素；清除一个共享位会制造假阴性，所以也不能直接 Delete。它最适合作为昂贵精确查询前的否定过滤器，而不是独立的权威字典。
+
+设已插入 n 个键。某位仍为0的概率近似：
+
+$$
+p_0
+\approx
+e^{-rn/m}
+$$
+
+非成员 y 的 r 个位置恰好都为1，误报率近似：
+
+$$
+p_{\mathrm{err}}
+\approx
+\left(1-e^{-rn/m}\right)^r
+$$
+
+<PaeBloomFilterLab />
+
+固定 m、n 后最优哈希数是：
+
+$$
+r^\star
+=
+\frac{m}{n}\ln 2
+$$
+
+此时位图约一半为0、一半为1，且误报率约为 0.6185 的 m/n 次方。空间按“每键位数”线性增加，误报却指数下降；工程上把 r 取临近整数，并把哈希计算成本一起纳入预算。
+
+### 空间下界与三种扩展
+
+任何允许误报 epsilon、禁止假阴性的 n 键成员结构，至少需要：
+
+$$
+m
+\ge
+n\log_2\frac{1}{\epsilon}
+$$
+
+最优参数 Bloom filter 约需 1.44 倍这个下界，因此在渐进空间上只差常数因子。
+
+Compressed Bloom filter 用更大但更稀疏的运行时位图，配合算术编码传输；它可能用更少哈希、在相同传输位数下降低误报，代价是更大运行内存与编解码。Spectral Bloom filter 把位换成计数器，把 r 个计数器最小值作为频次上界估计，并支持多重集增删。
+
+原章还给出分布式集合交应用：机器 A 先把 BF(A) 发给 B；B 用它筛出候选 Q 并回传完整候选键；A 再精确计算 Q 与 A 的交。误报只扩大 Q，不会丢失真实交集，最后一次精确核对恢复正确答案。
+
+## 用保证矩阵而不是吞吐单值验收
+
+精确结构测试空集、重复插入策略、删除不存在键、扩缩容边界、对抗键集和失败重建。固定随机种子重放布谷鸟逐出轨迹，再用独立集合实现作为 Search 预言机。
+
+Bloom filter 必须分别测假阴性数和假阳性率：已插入键的假阴性必须为0；未插入样本的误报率应在置信区间内接近公式。哈希相关性、位数组长度取整和键编码不一致都会让实测偏离理论。
+
+性能报告至少包含 n、m、alpha、最长链、平均/高分位延迟、重建次数、逐出步数、stash 占用、r、bits/key 与误报率。只报告平均吞吐会掩盖最长链、重哈希暂停和热点查询。
+
+<Stepper>
+  <Step title="先确定字典语义和误差预算">
+    <PaeDictionaryOperationMap />
+    区分静态/动态、精确/近似、最坏/期望，避免用不相容的保证做比较。
+  </Step>
+  <Step title="用负载因子约束链式表">
+    <PaeChainingLoadLab />
+    保持 m 与 n 同阶并记录最长链，平均常数才有工程意义。
+  </Step>
+  <Step title="把随机性放进函数选择">
+    <PaeUniversalHashLab />
+    从通用族运行时抽 h，使固定输入上的键对碰撞概率可证明。
+  </Step>
+  <Step title="按静态或动态选择精确结构">
+    <PaePerfectHashDiagram />
+    冻结键集用两级完美表换最坏常数查询；动态场景再用布谷鸟逐出。
+  </Step>
+  <Step title="按 bits/key 设计近似过滤">
+    <PaeBloomFilterLab />
+    由误报目标反推 m/n 与 r，并始终保留后端精确核对。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 字典问题按是否支持更新分为静态与动态，并可携带附属数据。
+2. 直接寻址表以 Theta(|U|) 空间换三种操作的 O(1) 最坏时间。
+3. 链式哈希的期望查询为 Theta(1+alpha)，全局重建保持 alpha 为常数。
+4. 通用哈希随机选择函数，使任意不同键对碰撞概率至多 1/m。
+5. 两个选择显著降低最长链，并能改善桶局部性。
+6. MPHF 无空槽，OPMPHF 还返回静态有序键的 rank。
+7. 两级完美表给每个 q 键桶 q 的平方空间，总空间期望 O(n)，查询最坏 O(1)。
+8. 布谷鸟哈希查两槽，插入沿图逐出；环由重哈希、扩容或 stash 处理。
+9. 布隆过滤器无假阴性但允许假阳性，最优 r=(m/n)ln2。
+10. 压缩和频谱变体分别面向传输带宽与多重集频次。
+
+<Exercises>
+
+**问题 1：n=1200、m=800 的链式表，期望失败查询扫描量级是多少？**
+
+<Answer>alpha=n/m=1.5。通用哈希下期望成本为 Theta(1+alpha)，即常数因子约2.5；这不是最长链上界，也不保证每次查询只检查2.5个节点。</Answer>
+
+**问题 2：一级完美表某桶有 q=4 个键，二级表为何分配16槽？**
+
+<Answer>通用族中任意键对碰撞概率至多1/16，六对键的期望碰撞数小于6/16，也小于1/2。因此随机 h_j 无碰撞的概率至少为常数，平均少量重抽即可成功。</Answer>
+
+**问题 3：布谷鸟查询为何是最坏常数，而插入只是期望摊还常数？**
+
+<Answer>每个键只能在h1、h2两个槽或常数stash中，查询检查数固定。插入可能触发长逐出链乃至全表重哈希；表保持稀疏时，这些昂贵事件概率低，分摊到一批更新后才是期望常数。</Answer>
+
+**问题 4：每键10位的 Bloom filter 应选多少个哈希？**
+
+<Answer>r*=10 ln2 约6.93，因此选7。此时位图约半满，误报率近似0.6185的10次方，约0.82%；仍需用精确后端核对“可能存在”。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="字典问题">维护唯一键集合并支持查询、插入、删除的抽象问题。</GlossaryItem>
+  <GlossaryItem term="直接寻址表">为键宇宙每个位置预留槽的最坏常数字典。</GlossaryItem>
+  <GlossaryItem term="通用哈希">随机函数族对任意不同键对给出碰撞概率上界。</GlossaryItem>
+  <GlossaryItem term="完美哈希">在固定字典键集上无碰撞的哈希；最小版本恰有 n 个槽。</GlossaryItem>
+  <GlossaryItem term="布谷鸟哈希">每键两个候选槽、以逐出链支持动态更新的精确哈希表。</GlossaryItem>
+  <GlossaryItem term="布隆过滤器">只保存位指纹、无假阴性但允许假阳性的近似成员结构。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Pearls of Algorithm Engineering · Chapter 8 The Dictionary Problem"
+  href="https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+  author="Paolo Ferragina"
+  license="原书版权归作者与 Cambridge University Press 所有；本章依据官方目录与作者课程资料独立重构教学内容"
+/>

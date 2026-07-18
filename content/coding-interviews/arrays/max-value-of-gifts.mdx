@@ -1,115 +1,389 @@
 ---
-title: 礼物的最大价值
+title: "面试题47：礼物的最大价值"
 type: C
-section: 数组
-order: 7
-description: 二维网格路径 DP，使用原地或滚动数组求左上到右下最大礼物价值。
+section: "第5章 优化时间和空间效率"
+order: 51
+description: "从左上到右下只能向右或向下，先用二维动态规划保存到格最优值，再用一维列数组压缩空间。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/47_MaxValueOfGifts/MaxValueOfGifts.cpp"
 draft: false
 ---
 
-{/* 知识点清单：二维 DP、状态转移、原地优化；原书章节：礼物的最大价值。 */}
+import { GiftGridDPDiagram, GiftOptimalPathMap, GiftRollingArrayLab, GiftContractDiagram, MaxValueOfGiftsOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/max-value-of-gifts";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能写出 `dp[i][j] = grid[i][j] + max(dp[i-1][j], dp[i][j-1])`。
-- 能解释为什么只能从上方或左方转移。
-- 能给出空间优化版本。
+- 能解释礼物的最大价值为什么具有无后效性的动态规划结构
+- 能计算作者4乘4样例的完整累计表并回溯一条最优路径
+- 能实现作者二维表与一维数组压缩空间的两种解法
+- 能分析正值前提、负值反例、空输入、单行单列和整数溢出
+- 能设计覆盖作者六组用例及路径恢复扩展的测试
 
 </Objectives>
 
-## 直觉引入
+## 从“到达这一格之前在哪里”开始
 
-走到某格 `(i,j)` 只有两种来源：上 `(i-1,j)` 与左 `(i,j-1)`。  
-因此最优路径到达该格完全由这两个前驱的最优值决定，这是标准的局部最优转移。
+先预测：站在棋盘内部任意一格时，最后一步只可能来自上方或左方。因为题目规定从左上角出发，**只能向右或向下**，所以所有到达当前格的合法路径，恰好被这两个来源分成互不重叠的两类。
 
-## 概念讲解
+题目要求收集**礼物的最大价值**，并不要求先枚举每条路径。更关键的问题是：到达每个格子时，最多已经收集多少价值？把这个量定义清楚，后面的选择就只依赖两个已经解决的子问题。
 
-边界处理：
-- 第一行只能从左边来；
-- 第一列只能从上边来。  
-其余位置取二者最大值。
+把从起点到位置行i、列j的最大累计价值称为<Term def="从左上起点沿合法移动到达指定格时能够取得的最大累计价值。">到格最优</Term>。若当前礼物价值是value，来自上方的最优值是up，来自左方的是left，那么状态转移为：
 
-## 思考引导
-
-### 1) 先问问题，不先走路径穷举
-你不是在找一条手工可行路径，而是在问“每个格点的最优值依赖谁”。这就是 DP 定义问题，不是 DFS 写法优先。
-
-### 2) 识别不变式
-到达某格 (i,j) 的最优收益只与上方和左方最优值相关。这个不变式让每个格点可由一个公式闭环计算。
-
-### 3) 为什么它一定成立
-网格约束保证移动只能向右或向下。任一到达路径都必须经过这两个来源之一，因此全局最优可由局部最优递推出。
-
-### 4) 常见误区
-把网格边界和起点状态写反会导致连锁错误。另一个坑是没明确行列越界的初始行列处理。
-
-### 5) 你能找到一个反例吗
-2x2 小网格已足以检验边界递推是否统一（第一行、第一列的初始化规则）是否一致。
-
-### 6) 迁移到下一题
-任何二维路径累计、最短路径、最大价值问题都可复用“局部状态依赖 + 边界初始化”这套骨架。
-## 交互 Demo
-
-DP 表会像波浪向右下传播，能直观看到每个格子依赖左/上状态的关系。
-
-<DynamicProgrammingDiagram />
-
-```cpp
-#include <vector>
-#include <algorithm>
-
-class Solution {
-public:
-    int maxValue(std::vector<std::vector<int>>& grid) {
-        if (grid.empty() || grid[0].empty()) return 0;
-        int m = grid.size(), n = grid[0].size();
-
-        for (int i = 0; i < m; ++i) {
-            for (int j = 0; j < n; ++j) {
-                if (i == 0 && j == 0) continue;
-                int top = (i > 0) ? grid[i - 1][j] : -1;
-                int left = (j > 0) ? grid[i][j - 1] : -1;
-
-                if (i == 0) grid[i][j] += left;
-                else if (j == 0) grid[i][j] += top;
-                else grid[i][j] += std::max(top, left);
-            }
-        }
-        return grid[m - 1][n - 1];
-    }
-};
+```text
+best[i][j] = value[i][j] + max(
+    best[i - 1][j],
+    best[i][j - 1]
+)
 ```
 
-```typescript
-function maxValue(grid: number[][]): number {
-  if (!grid.length || !grid[0].length) return 0;
-  const m = grid.length;
-  const n = grid[0].length;
+不存在的方向在作者题设中按0处理。第一格因此是自身价值，第一行只能从左累加，第一列只能从上累加。
 
-  for (let i = 0; i < m; i++) {
-    for (let j = 0; j < n; j++) {
-      if (i === 0 && j === 0) continue;
-      const fromTop = i > 0 ? grid[i - 1][j] : -Infinity;
-      const fromLeft = j > 0 ? grid[i][j - 1] : -Infinity;
-      if (i === 0) grid[i][j] += fromLeft;
-      else if (j === 0) grid[i][j] += fromTop;
-      else grid[i][j] += Math.max(fromTop, fromLeft);
+<GiftGridDPDiagram />
+
+图中小字是原礼物价值，大字是到格最优。右下角53不是某一步的局部贪心结果，而是所有合法路径被逐格归并后的全局最优值。
+
+## 为什么递推不会漏掉更好的路径
+
+对任意格子，它的<Term def="在合法移动约束下，能够一步进入当前格的上方格或左方格。">前驱格</Term>只有上方和左方。任意完整路径进入当前格时必经其中一个，因此没有第三类路径被遗漏。
+
+再看为什么只保留每个前驱的最大值就够。假设一条经过上方格的路径在到达上方格时不是最优的，把它的前半段替换成上方格的最优路径，后半段仍然合法，且累计价值只会更大。于是经过上方的所有路径只需保留一个最优值；左方同理。最后在两类最优值中取较大者，再加当前礼物价值。
+
+这就是动态规划的最优子结构。未来允许的移动只由当前位置决定，与此前具体走法无关，所以状态具有无后效性。若规则改成“同一行最多连续走两步”或“某把钥匙只能拾取一次”，只用行列坐标就不够，状态还需记录连续步数或钥匙集合。
+
+## 作者第一解：保存完整二维累计表
+
+作者输入不是二维容器，而是一段连续int内存。第i行第j列通过values[i乘cols加j]读取，这种按行连续存放的布局称为<Term def="二维矩阵先依次存完一整行，再存下一行的连续内存布局。">行主序</Term>。
+
+下面保留作者解法的结构：先检查指针和尺寸，为每一行分配累计数组，逐格填表，取右下角后再逐行释放。
+
+```cpp
+#include <algorithm>
+
+int getMaxValue_solution1(
+    const int* values,
+    int rows,
+    int cols) {
+    if (values == nullptr ||
+        rows <= 0 ||
+        cols <= 0) {
+        return 0;
     }
-  }
-  return grid[m - 1][n - 1];
+
+    int** maxValues = new int*[rows];
+    for (int i = 0; i < rows; ++i) {
+        maxValues[i] = new int[cols];
+    }
+
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            int left = 0;
+            int up = 0;
+
+            if (i > 0) {
+                up = maxValues[i - 1][j];
+            }
+            if (j > 0) {
+                left = maxValues[i][j - 1];
+            }
+
+            maxValues[i][j] =
+                std::max(left, up) +
+                values[i * cols + j];
+        }
+    }
+
+    const int result =
+        maxValues[rows - 1][cols - 1];
+    for (int i = 0; i < rows; ++i) {
+        delete[] maxValues[i];
+    }
+    delete[] maxValues;
+    return result;
 }
 ```
 
-<Callout type="trap">
-  <strong>现象 →</strong> 第一行/列值算错。  
-  <strong>原因 →</strong> 误把 `-INF` 当 0，导致路径可以“从不存在的方向转入”。  
-  <strong>修复 →</strong> 明确边界条件分支。
+设网格有rows行、cols列。每格计算一次，时间复杂度为O(rows乘cols)；累计表额外占用O(rows乘cols)空间。输入values只读，没有像旧页那样原地覆盖礼物值。
+
+完整表的优势不只是便于讲解。若还要输出路线，可以从右下角反向比较上方与左方的累计值，选择较大的合法前驱，直到回到左上角，再反转所得坐标序列。
+
+<GiftOptimalPathMap />
+
+对于作者4乘4样例，一条最优路线收集1、12、5、7、7、16、5，合计53。累计值相同时可能存在多条最优路径；“向上优先”或“向左优先”只会选择不同代表，不影响最大价值。
+
+## 手算4乘4累计表
+
+原礼物矩阵为：
+
+```text
+ 1  10   3   8
+12   2   9   6
+ 5   7   4  11
+ 3   7  16   5
+```
+
+第一行只能向右，得到1、11、14、22；第一列只能向下，得到1、13、18、21。其余位置取上、左较大值。例如第二行第三列的礼物是9，上方累计14，左方累计15，所以该格得到24。第四行第三列的礼物是16，上方29，左方32，所以得到48。
+
+完整累计表是：
+
+```text
+ 1  11  14  22
+13  15  24  30
+18  25  29  41
+21  32  48  53
+```
+
+手算时每填一格都要标注“上、左、当前价值”三个量。只写最终53无法检查状态定义和边界，面试官也无法判断答案是递推所得还是猜出。
+
+## 作者第二解：只保留一行
+
+计算第i行时，每个新状态只需要上一行同列和当前行前一列。作者用长度为cols的一维数组完成覆盖，这正是**一维数组压缩空间**。
+
+更新列j之前，maxValues[j]仍保存上一行同列，也就是up；maxValues[j减1]已经在本轮更新，保存当前行左方，也就是left。写回后，maxValues[j]变成当前格到格最优。这一组随扫描位置改变解释、但始终维持上述关系的数组称为<Term def="按行扫描时，同列元素在更新前代表上方状态、更新后代表当前格状态的一维列数组。">滚动列状态</Term>。
+
+```cpp
+#include <algorithm>
+
+int getMaxValue_solution2(
+    const int* values,
+    int rows,
+    int cols) {
+    if (values == nullptr ||
+        rows <= 0 ||
+        cols <= 0) {
+        return 0;
+    }
+
+    int* maxValues = new int[cols];
+    for (int i = 0; i < rows; ++i) {
+        for (int j = 0; j < cols; ++j) {
+            int left = 0;
+            int up = 0;
+
+            if (i > 0) {
+                up = maxValues[j];
+            }
+            if (j > 0) {
+                left = maxValues[j - 1];
+            }
+
+            maxValues[j] =
+                std::max(left, up) +
+                values[i * cols + j];
+        }
+    }
+
+    const int result =
+        maxValues[cols - 1];
+    delete[] maxValues;
+    return result;
+}
+```
+
+<GiftRollingArrayLab />
+
+逐行切换图中的状态，可以看到数组依次变成1、11、14、22，再变成13、15、24、30，最终得到21、32、48、53。时间仍是O(rows乘cols)，额外空间降为O(cols)。
+
+若列数远大于行数，还可转置扫描逻辑，让数组长度取rows与cols的较小者，额外空间降为O(min(rows, cols))。但转置后必须同步修改行主序索引，不能只交换循环变量。
+
+## 空间压缩为什么会丢失路线
+
+二维累计表保留了每个格子的两个候选值，可从终点逐步判断前驱。一维数组在进入下一行时会覆盖上一行，大部分历史状态消失，因此默认只能返回最大总值，不能直接恢复整条路径。
+
+从终点依据累计表反向寻找最优前驱的过程称为<Term def="从终点沿着能保持最优累计值的前驱反向移动，再反转坐标序列以恢复路线。">路径回溯</Term>。若既要O(cols)工作空间又要输出路径，可使用分治式路径恢复，或另存每格方向位；后一种仍需要O(rows乘cols)位空间，只是常数比完整整数表小。
+
+不能声称“空间压缩后仍是严格O(cols)，同时免费输出任意长度路径”。输出路径本身至少有rows加cols减1个坐标，输出空间已有线性下界；恢复过程也需要足够信息区分局部并列。
+
+## 正值契约决定边界能否写0
+
+作者题目明确每件礼物价值大于0。因此在第一行，把不存在的up设为0不会胜过合法的正数left；第一列同理。左上角两个前驱都是0，结果就是起点价值。
+
+如果扩展为允许负数，这一写法会错误地允许路径从网格外“中途进入”。例如一行礼物为负5、负2：合法路径必须从负5开始，总和负7；作者边界在第二格比较left等于负5与up等于0，会选0，错误得到负2。
+
+<GiftContractDiagram />
+
+<Callout type="trap" title="把缺失前驱永远设为0">
+作者代码正确依赖“每格价值大于0”的题设。若允许负值，只有起点可直接取自身；第一行只能继承左方，第一列只能继承上方，内部格才比较两者，或把缺失方向设为可靠的负无穷。
 </Callout>
 
+因此工程扩展不能只改输入注释。状态初值、整数下界与加法溢出都要一起设计。对负无穷哨兵直接加礼物值还可能下溢，最好显式分支处理边界。
+
+## 更稳健的工程实现
+
+作者使用int累加。若每件礼物接近int上界，路径长度稍大就会有符号溢出。可改用int64_t，并用vector管理内存；以下版本仍按作者正值契约、行主序输入和O(cols)空间工作。
+
+```cpp
+#include <algorithm>
+#include <cstdint>
+#include <span>
+#include <stdexcept>
+#include <vector>
+
+std::int64_t maxGiftValue(
+    std::span<const int> values,
+    std::size_t rows,
+    std::size_t cols) {
+    if (rows == 0 || cols == 0) {
+        return 0;
+    }
+    if (rows > values.size() / cols ||
+        rows * cols != values.size()) {
+        throw std::invalid_argument(
+            "matrix dimensions mismatch");
+    }
+
+    std::vector<std::int64_t> best(cols, 0);
+    for (std::size_t i = 0; i < rows; ++i) {
+        for (std::size_t j = 0; j < cols; ++j) {
+            if (values[i * cols + j] <= 0) {
+                throw std::invalid_argument(
+                    "gift values must be positive");
+            }
+            const std::int64_t up =
+                i == 0 ? 0 : best[j];
+            const std::int64_t left =
+                j == 0 ? 0 : best[j - 1];
+            best[j] = std::max(up, left) +
+                      values[i * cols + j];
+        }
+    }
+    return best.back();
+}
+```
+
+尺寸校验先用除法避免rows乘cols在比较前溢出；随后乘法已知安全。若接口要接受带步长的二维视图，不能再假设行主序连续内存，应把stride纳入索引或传入二维span封装。
+
+<Callout type="trap" title="只检查rows和cols，不检查实际缓冲区长度">
+作者的裸指针接口由调用者保证内存至少包含rows乘cols个int。现代接口若能获得span长度，应验证尺寸乘积，否则错误维度会导致越界读取，而不是普通的动态规划错误。
+</Callout>
+
+## 作者六组测试逐项核对
+
+作者test辅助函数会分别调用二维解和一维解，并与同一个expected比较：
+
+1. 3乘3递增矩阵期望29，一条路径是1、4、7、8、9。
+2. 4乘4一般矩阵期望53，覆盖内部格上左竞争。
+3. 单行1、10、3、8期望22，证明第一行只能从左。
+4. 单列1、12、5、3期望21，证明第一列只能从上。
+5. 单格3期望3，证明起点就是终点。
+6. 空指针、0行、0列期望0，证明入口防御分支。
+
+<MaxValueOfGiftsOfficialCaseLab />
+
+源码定义了test6，但main只调用test1到test5，因此空输入测试实际上没有执行。阅读测试代码时必须核对“函数存在”和“测试已运行”两个层次，不能看到定义就当成覆盖。
+
+```cpp
+#include <cassert>
+
+void testMaxGiftValue() {
+    const int grid3x3[] = {
+        1, 2, 3,
+        4, 5, 6,
+        7, 8, 9,
+    };
+    assert(getMaxValue_solution1(
+        grid3x3, 3, 3) == 29);
+    assert(getMaxValue_solution2(
+        grid3x3, 3, 3) == 29);
+
+    const int oneRow[] = {1, 10, 3, 8};
+    assert(getMaxValue_solution2(
+        oneRow, 1, 4) == 22);
+
+    const int oneCol[] = {1, 12, 5, 3};
+    assert(getMaxValue_solution2(
+        oneCol, 4, 1) == 21);
+
+    const int oneCell[] = {3};
+    assert(getMaxValue_solution2(
+        oneCell, 1, 1) == 3);
+    assert(getMaxValue_solution2(
+        nullptr, 0, 0) == 0);
+}
+```
+
+测试还应加入随机小矩阵：枚举所有右下路径求最大值，与二维、一维两版对拍。随机生成器必须遵守正值契约；负值测试应针对重新定义边界后的扩展版本，不能用来否定作者在原题条件下的正确实现。
+
+## 常见错误与诊断顺序
+
+把状态定义成“从当前格到终点”也能解，但扫描方向应从右下到左上，后继变为右方和下方。若状态定义与循环方向混用，会读取尚未计算的数据。
+
+原地修改输入网格是另一种O(1)额外空间变体，却改变调用者数据，而且不是作者源码给出的两种实现。面试回答可以提出扩展，但要先准确还原作者的二维表和一维列数组，再说明变体的前提与副作用。
+
+贪心地每步选择右方或下方礼物更大者不成立。较大的眼前礼物后面可能接一串小值，较小的下一步可能通向高价值区域。动态规划比较的是“到达前驱的完整累计最优”，不是只比较相邻礼物。
+
+二维数组释放时若只delete外层指针，会泄漏每一行；若对new数组使用标量delete，行为未定义。工程版用vector可消除手工配对风险。
+
+诊断错误答案时按以下顺序检查：状态含义是否固定；第一行第一列是否只来自唯一方向；一维覆盖顺序是否使j减1为当前行、j为上一行；行主序索引是否使用cols；最后返回是否为右下角；测试函数是否真的由main调用。
+
+<Stepper>
+  <Step title="定义到格最优">
+    <GiftGridDPDiagram />
+    每格只从上方和左方的累计最优转移，填出完整4乘4表。
+  </Step>
+  <Step title="从累计表恢复路线">
+    <GiftOptimalPathMap />
+    从右下比较合法前驱，反向取得一条总和53的路线。
+  </Step>
+  <Step title="压缩为一维列数组">
+    <GiftRollingArrayLab />
+    更新前同列代表上方，更新后同列代表当前格，左邻已是当前行。
+  </Step>
+  <Step title="核对题设与工程边界">
+    <GiftContractDiagram />
+    正值允许缺失前驱写0；负值、缓冲区长度和溢出需要额外契约。
+  </Step>
+  <Step title="执行而不只是定义测试">
+    <MaxValueOfGiftsOfficialCaseLab />
+    前五组由main调用，第六组空输入虽已定义却被遗漏。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 礼物的最大价值可定义为每格的到格最优，而不是先枚举路径。
+2. 只能向右或向下，所以当前格所有路径恰好来自上方或左方。
+3. 动态规划转移取两个前驱最优的较大者，再加当前礼物价值。
+4. 作者第一解保存rows乘cols累计表，时间和额外空间均为二维规模。
+5. 作者第二解利用一维数组压缩空间，同列更新前是上方，左邻更新后是左方。
+6. 完整累计表可做路径回溯，一维覆盖版默认只保留最大总值。
+7. 缺失前驱设0依赖礼物价值大于0；允许负值时必须重写边界。
+8. 作者定义六组测试，但main遗漏空输入test6，测试覆盖应以实际调用为准。
+
+<Exercises>
+
+**问题 1：4乘4样例第二行第三列为什么是24？**
+
+<Answer>该格礼物价值是9，上方到格最优为14，左方到格最优为15；所有合法路径只能来自这两个前驱，所以取15再加9得到24。</Answer>
+
+**问题 2：一维数组更新第i行第j列之前，maxValues中哪两个位置分别代表什么？**
+
+<Answer>maxValues[j]尚未覆盖，代表上一行同列的up；maxValues[j减1]已在当前行更新，代表当前行左侧的left。写回maxValues[j]后，它代表当前格。</Answer>
+
+**问题 3：为什么礼物允许负值后不能继续把不存在的前驱设为0？**
+
+<Answer>0会大于合法路径的负累计值，使转移仿佛从棋盘外中途进入。例如单行负5、负2会被错误算成负2，而合法路径必须收集两格，总和负7。</Answer>
+
+**问题 4：如何同时返回最大价值和一条最优路径？**
+
+<Answer>保留完整二维累计表，从右下开始比较上方和左方累计值，选择能产生当前最优值的前驱，直到左上，再反转坐标序列。并列时按固定规则任选即可。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="到格最优">从左上沿合法移动到达指定格时的最大累计礼物价值。</GlossaryItem>
+  <GlossaryItem term="前驱格">能够一步进入当前格的上方格或左方格。</GlossaryItem>
+  <GlossaryItem term="行主序">二维矩阵逐行连续存放在一维内存中的布局。</GlossaryItem>
+  <GlossaryItem term="滚动列状态">更新前保存上方、更新后保存当前格的一维列累计数组。</GlossaryItem>
+  <GlossaryItem term="路径回溯">从终点按累计最优反向选择前驱并恢复完整路线的过程。</GlossaryItem>
+</Glossary>
+
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题47"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/47_MaxValueOfGifts/MaxValueOfGifts.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

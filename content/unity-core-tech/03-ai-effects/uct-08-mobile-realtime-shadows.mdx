@@ -1,0 +1,218 @@
+---
+title: "第 8 章 移动端实时阴影绘制：投影、接收与透明材质"
+type: A
+section: "Unity 3D 实战核心技术详解 · 移动端视觉"
+order: 8
+description: "按原书第8章覆盖移动阴影原理、技术实现以及透明材质的实时阴影处理。"
+demo: true
+math: false
+sourceUrl: "https://m.bookschina.com/7380713.htm"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Uct08MobileRealtimeShadowsMapLab,
+  Uct08MobileRealtimeShadowsExperimentLab,
+  Uct08MobileRealtimeShadowsEvidenceLab,
+} from "@/components/mdx/unity-core-tech/diagrams/uct-08-mobile-realtime-shadows";
+
+<Objectives>
+
+- 能解释光源空间深度、阴影比较与接收表面的数据链
+
+- 能实现适合移动预算的实时阴影或替代投影方案
+
+- 能分析透明材质、偏移、锯齿和带宽造成的阴影故障
+
+</Objectives>
+
+## 问题：为什么阴影贴图分辨率翻倍，锯齿可能改善，但设备发热和帧时间会明显恶化？
+
+先预测：实时阴影只有一张黑色贴图吗？不是。它要求从光源视角生成遮挡深度，再在接收表面比较当前片元与记录深度，并处理偏移、过滤、裁剪范围和透明度。原书把原理、实现与透明材质处理分开，说明阴影是完整渲染路径而非单个开关。
+
+<Uct08MobileRealtimeShadowsMapLab />
+
+## 原书边界与目录小节
+
+本页严格对应完整目录中的以下单元；这些单元只在本页计算原章覆盖，现代扩展不替代原书位置：
+
+- **实现原理**
+- **技术实现**
+- **透明材质实时阴影处理**
+
+书籍身份由图书馆题录核对，章节边界由完整目录核对。本站重新组织解释、代码、实验和证据，不逐字复制原文；导读与总复习不重复计入十四个正文章。
+
+## 从光源深度到移动端可承受的遮挡证据
+
+Shadow Map 的第一遍从光源视角写深度，第二遍把世界位置变换到光源裁剪空间并比较深度。分辨率、投影视锥和过滤决定有效 texel 密度；范围过大时同样尺寸贴图会把精度浪费在不可见区域。
+
+Bias 抵消自阴影痤疮，但过大造成 Peter Panning；法线偏移对斜面更有效，却可能让细薄几何漂浮。正确调试应显示光源深度、接收坐标和比较值，而不是只拖动滑杆直到看起来顺眼。
+
+移动端预算同时受额外 DrawCall、顶点变换、深度纹理带宽和采样次数影响。小范围角色可用单光阴影、Blob Shadow 或投影纹理，静态环境可烘焙；方案选择由运动遮挡需求和设备基线决定。
+
+透明材质通常不自动把 alpha 作为阴影轮廓。Cutout 可在 ShadowCaster 使用相同 alpha clip，半透明阴影需要额外近似或排序策略。主 Pass 与 ShadowCaster 的 UV、阈值和动画不一致会产生轮廓错位。
+
+<Uct08MobileRealtimeShadowsExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="从光源位置和方向观察场景所使用的坐标空间。">光源空间</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="记录从光源看到的最近表面深度的纹理。">阴影贴图</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="为减少表面自遮挡误差而调整比较深度的参数。">深度偏移</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="把物体轮廓写入光源深度图的渲染通道。">ShadowCaster</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="按透明度阈值丢弃片元以形成硬边轮廓的技术。">Alpha Clip</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+这些术语组成一份最小领域模型。读者需要为每个对象写出所有者、生命周期、正常值、边界值和故意失败后的第一条可观察信号，才能把概念转成工程判断。
+
+## 关键对象与数据流
+
+光源相机裁剪遮挡物并生成深度纹理，接收 Shader 把世界位置投影到该纹理并做带偏移过滤比较，透明材质的 ShadowCaster 复用主材质 alpha 规则。输出是阴影颜色以及深度图、采样坐标、过绘制和 GPU 时间证据。
+
+每次实验只改变一个输入，先保存版本、参数与预期，再比较输出、日志、内存或帧时间。最终结果偶然正确但中间契约不符合预测，仍不能签发，因为隐藏缓存、默认值或执行顺序可能掩盖根因。
+
+## 三步可重复实验
+
+动手前先预测：改变当前步骤的一项输入后，哪个对象、数值、像素、状态或版本标记应最先变化？固定 Unity 版本、目标平台、资产提交和测试场景。
+
+<Stepper>
+  <Step title="可视化光源深度">
+    <Uct08MobileRealtimeShadowsMapLab />
+
+用固定模型和地面显示阴影贴图，逐步缩小光源范围并记录 texel 利用率、边缘精度和 GPU 时间。
+
+```text
+caster world position -> light view projection -> depth texture
+receiver world position -> light UV and depth -> biased comparison
+```
+
+  </Step>
+  <Step title="扫描偏移与过滤">
+    <Uct08MobileRealtimeShadowsExperimentLab />
+
+在平面、斜面和薄片上扫描 bias、normal bias 与 PCF 样本数，分别标注痤疮、漂浮和软边成本。
+
+```hlsl
+float receiverDepth = shadowCoord.z - bias;
+float blockerDepth = SAMPLE_TEXTURE2D(_ShadowMap, sampler_ShadowMap, shadowCoord.xy).r;
+float visibility = receiverDepth <= blockerDepth ? 1.0 : 0.0;
+```
+
+  </Step>
+  <Step title="验证透明轮廓">
+    <Uct08MobileRealtimeShadowsEvidenceLab />
+
+使用树叶或栅栏纹理，让 Forward 与 ShadowCaster 读取同一 alpha 和阈值；修改阈值时两者轮廓必须同步。
+
+```hlsl
+float alpha = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, uv).a;
+clip(alpha - _Cutoff);
+return 0;
+```
+
+  </Step>
+</Stepper>
+
+## 正常、边界与故障注入
+
+正常样本证明主路径，边界样本说明适用范围，故障样本证明诊断检查确实会在最早契约处拒绝。三类样本必须使用同一观测方式，避免只为成功路径保留证据。
+
+<Callout type="trap">
+  **因果陷阱**：只提高阴影分辨率而不收紧光源范围，会用更高带宽保存大量无效区域。
+</Callout>
+
+<Callout type="trap">
+  **边界陷阱**：透明主材质与 ShadowCaster 使用不同 UV 或
+  Cutoff，会让物体和阴影轮廓不一致。
+</Callout>
+
+## 从原书版本迁移到当前 Unity
+
+书中可能基于 Built-in 管线和自定义投影，现代 URP 提供主光阴影、级联和 Renderer Feature；迁移要保留两遍深度比较原理与移动预算证据。
+
+不同移动 GPU、图形 API 和精度会改变深度伪影，编辑器画面不能代表真机；至少选择低中高三档设备建立可接受阈值。
+
+迁移账本使用五列：原书载体、稳定不变量、当前实现、不可等价处、重放证据。允许 API、插件和渲染管线变化，不允许用新名词删除原章问题或把编辑器成功当成目标平台成功。
+
+## 验收证据
+
+验收包含光源深度图、投影视锥截图、bias 扫描矩阵、透明轮廓对照、阴影替代方案比较、低中高设备 GPU 时间、带宽或过绘制指标以及故障样本。
+
+证据包还要记录文件路径、构建版本、设备、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不是看过。
+
+<Uct08MobileRealtimeShadowsEvidenceLab />
+
+## 小结
+
+- 实时阴影由光源深度生成和接收比较两遍组成
+- 视锥利用率与偏移比单纯分辨率更关键
+- 透明物体需要一致的 ShadowCaster 轮廓规则
+- 移动端要用真机预算选择阴影方案
+
+<Exercises>
+
+**问题 1** 第 8 章 移动端实时阴影绘制的关键输入和输出分别是什么？
+
+<Answer>
+  光源相机裁剪遮挡物并生成深度纹理，接收 Shader
+  把世界位置投影到该纹理并做带偏移过滤比较，透明材质的 ShadowCaster 复用主材质
+  alpha 规则。输出是阴影颜色以及深度图、采样坐标、过绘制和 GPU 时间证据。
+</Answer>
+
+**问题 2** 本章最有诊断价值的故障注入是什么？
+
+<Answer>
+  只提高阴影分辨率而不收紧光源范围，会用更高带宽保存大量无效区域。需要保存失败输入和第一条偏离信号，再修复后重放。
+</Answer>
+
+**问题 3** 迁移到当前 Unity 时必须保留什么？
+
+<Answer>
+  书中可能基于 Built-in 管线和自定义投影，现代 URP 提供主光阴影、级联和 Renderer
+  Feature；迁移要保留两遍深度比较原理与移动预算证据。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="光源空间">
+    从光源位置和方向观察场景所使用的坐标空间。
+  </GlossaryItem>
+  <GlossaryItem term="阴影贴图">
+    记录从光源看到的最近表面深度的纹理。
+  </GlossaryItem>
+  <GlossaryItem term="深度偏移">
+    为减少表面自遮挡误差而调整比较深度的参数。
+  </GlossaryItem>
+  <GlossaryItem term="ShadowCaster">
+    把物体轮廓写入光源深度图的渲染通道。
+  </GlossaryItem>
+  <GlossaryItem term="Alpha Clip">
+    按透明度阈值丢弃片元以形成硬边轮廓的技术。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="姜雪伟《Unity 3D实战核心技术详解》目录与书籍身份资料"
+  adaptedUrl="https://m.bookschina.com/7380713.htm"
+/>

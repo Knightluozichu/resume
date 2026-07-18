@@ -1,0 +1,469 @@
+---
+title: "Item 12：复制对象的所有组成部分"
+type: A
+section: Chapter 2 · Constructors, Destructors, and Assignment Operators
+order: 12
+description: 对齐 Effective C++ 第三版 Item 12：让 copy constructor/assignment 复制所有 base/member 与资源语义，防止新增字段和派生基类状态遗漏，并区分构造与赋值生命周期。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppCopyCoverageMap,
+  EcppCopyLifecycleMap,
+  EcppCopyValidationMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-12-copy-all-parts";
+
+<Objectives>
+
+- 能绘制类型的 base/member/resource/cached-state 复制覆盖矩阵，识别新增字段与派生基类部分的遗漏
+- 能实现 Derived copy constructor 与 copy assignment，分别调用 Base copy/assignment 并保持独立值或共享语义
+- 能比较构造和赋值生命周期，使用 rule of zero、defaulted operations 或阶段无关 helper 消除错误重复
+
+</Objectives>
+
+## 从“编译器不警告遗漏的新成员”开始
+
+```cpp
+class Customer {
+public:
+    Customer(const Customer& rhs)
+        : name_{rhs.name_} {}
+
+    Customer& operator=(const Customer& rhs)
+    {
+        name_ = rhs.name_;
+        return *this;
+    }
+private:
+    std::string name_;
+    Date lastTransaction_; // 后来新增，却未加入两个复制函数
+};
+```
+
+手写 copy functions 后，编译器通常不会提醒 lastTransaction\_ 被遗漏，因为成员本身可默认构造/保持旧值。
+
+<Term def="复制后目标在所有业务组成部分上与源等价，并遵守资源所有权语义的要求。">
+  complete copy contract
+</Term>
+
+Item 12 要求 Copy all parts of an object（复制对象的所有组成部分）。
+
+<Term def="列出每个基类、成员、资源和派生缓存在 copy/move 路径中的处理方式。">
+  copy coverage matrix
+</Term>
+
+让代码演进时遗漏变成可审计事项。
+
+<EcppCopyCoverageMap />
+
+## copy constructor 覆盖所有初始状态
+
+<Term def="从源对象直接初始化新对象全部基类和成员的特殊成员函数。">
+  copy constructor
+</Term>
+
+```cpp
+Customer::Customer(const Customer& rhs)
+    : name_{rhs.name_},
+      lastTransaction_{rhs.lastTransaction_}
+{}
+```
+
+成员按声明顺序构造。若缓存只由业务值派生，可选择复制缓存与有效标记，或把缓存设为 invalid 以后重算。
+
+<Term def="不属于对象抽象值、可由主状态重新计算的缓存或索引状态。">
+  derived cache state
+</Term>
+
+处理策略必须保持逻辑 constness 和性能预期，而不是随意漏掉。
+
+## copy assignment 覆盖所有现有状态
+
+<Term def="把源的完整等价值提交到已经存在的目标对象，并处理目标旧资源的特殊成员。">
+  copy assignment
+</Term>
+
+```cpp
+Customer& Customer::operator=(const Customer& rhs)
+{
+    if (this != &rhs) {
+        name_ = rhs.name_;
+        lastTransaction_ = rhs.lastTransaction_;
+    }
+    return *this;
+}
+```
+
+目标已经有合法值和资源；赋值必须释放、复用或替换旧状态，并满足 Item 10 返回契约与 Item 11 alias/exception 保证。
+
+<Term def="赋值前目标所拥有、提交新值时必须正确保留、复用或释放的状态。">
+  pre-existing target state
+</Term>
+
+copy constructor 没有这一问题，因此二者生命周期不同。
+
+<Callout type="trap">
+  **现象**：新增成员有默认值，copy 后测试没崩，就认为无需修改自定义
+  copy。**原因**：默认值掩盖源值丢失，编译器无法知道业务等价性。**修法**：测试源成员使用非默认
+  sentinel，逐项比较目标，并在代码审查模板加入覆盖矩阵。
+</Callout>
+
+## 派生 copy 必须复制 Base 部分
+
+<Term def="派生对象内部由某个基类提供、拥有独立成员和不变量的子对象。">
+  base subobject
+</Term>
+
+```cpp
+class PriorityCustomer : public Customer {
+public:
+    PriorityCustomer(const PriorityCustomer& rhs)
+        : Customer{rhs}, priority_{rhs.priority_} {}
+
+    PriorityCustomer& operator=(const PriorityCustomer& rhs)
+    {
+        if (this != &rhs) {
+            Customer::operator=(rhs);
+            priority_ = rhs.priority_;
+        }
+        return *this;
+    }
+private:
+    int priority_{};
+};
+```
+
+若 copy constructor 不写 `Customer{rhs}`，Base 会 default construct，源的 name/date 丢失。若 assignment 不显式调用 Base::operator=，目标 Base 保留旧值。
+
+<Term def="派生 copy 明确调用直接基类对应复制操作，保持基类业务状态与不变量。">
+  base-copy delegation
+</Term>
+
+不是虚分派；每层负责自己声明的状态并调用直接基类。
+
+## 多层继承逐层负责
+
+<Term def="每个继承层复制自己的成员，并委托直接基类复制其子对象的分层责任。">
+  layer-by-layer copy
+</Term>
+
+```text
+MostDerived copy
+  -> DirectBase copy
+      -> RootBase copy
+  -> MostDerived members
+```
+
+虚基类由最派生 copy constructor 负责初始化，规则比简单链更复杂。
+
+<Term def="多重继承中由最派生对象共享并负责初始化的一份基类子对象。">
+  virtual base copy
+</Term>
+
+设计 copy 时必须按真实对象模型检查，而非只看当前类成员列表。
+
+## 资源“复制”先定义语义
+
+<Term def="复制资源时为目标创建独立表示，两个对象之后互不影响的策略。">
+  deep copy
+</Term>
+
+<Term def="复制只增加共同资源的所有权或引用计数，多个对象观察同一资源的策略。">
+  shared copy
+</Term>
+
+raw pointer 的地址复制无法表达选择。
+
+```cpp
+class Image {
+public:
+    Image(const Image& rhs)
+        : pixels_{std::make_unique<Pixel[]>(rhs.size_)}, size_{rhs.size_}
+    {
+        std::copy_n(rhs.pixels_.get(), size_, pixels_.get());
+    }
+private:
+    std::unique_ptr<Pixel[]> pixels_;
+    std::size_t size_{};
+};
+```
+
+若 Image 是 value object，应 deep copy；若多个对象共享 immutable texture，可用 shared_ptr 明确 shared copy。
+
+<Term def="复制后两个对象是否独立、共享或禁止复制的资源含义。">
+  resource copy semantics
+</Term>
+
+先设计再编码。
+
+## 不要让 copy constructor 调 assignment
+
+<Term def="尚未完成初始化、成员与基类生命周期仍在建立中的目标对象。">
+  under-construction target
+</Term>
+
+```cpp
+Customer::Customer(const Customer& rhs)
+{
+    *this = rhs; // 错误方向：成员先默认构造，再赋值
+}
+```
+
+这里所有成员进入 constructor body 前已初始化，调用 assignment 产生 default-then-assign；const/reference member 无法处理；assignment 还可能假设目标旧资源存在。
+
+<Term def="把构造阶段错误当作已存在对象赋值处理，造成冗余操作或不变量错误的设计。">
+  construction-via-assignment
+</Term>
+
+不能用少写几行代码换生命周期混淆。
+
+## 不要让 assignment 直接调用 constructor
+
+C++ 不能在现有对象上普通调用 constructor 来“重建”而不先结束生命周期。placement new 手动重建会影响引用、const、继承和异常安全，普通 operator= 不应这样做。
+
+<Term def="显式结束现有对象后在同一存储 placement-new 新对象的低层生命周期操作。">
+  in-place reconstruction
+</Term>
+
+这不是常规复制赋值；只有容器/variant 等底层实现并严格遵守生命周期规则时使用。
+
+```cpp
+Customer& Customer::operator=(const Customer& rhs)
+{
+    this->~Customer();
+    new (this) Customer(rhs); // 异常后 this 不再是有效 Customer
+    return *this;
+}
+```
+
+copy construction 抛异常时目标生命周期未恢复，operator= 连 basic guarantee 都没有。
+
+<EcppCopyLifecycleMap />
+
+<Callout type="trap">
+  **现象**：为了消除 copy ctor/assignment
+  重复，让二者互相调用。**原因**：忽略一个建立生命周期、一个修改已有对象。**修法**：用成员默认操作、copy-and-swap
+  或抽取只计算候选数据的阶段无关 helper，不能互相冒充。
+</Callout>
+
+## 安全共享逻辑的方法
+
+<Term def="只根据源读取并生成候选值，不读取目标生命周期阶段或释放目标资源的普通函数。">
+  phase-independent copy helper
+</Term>
+
+```cpp
+struct CustomerData {
+    std::string name;
+    Date lastTransaction;
+};
+
+CustomerData copyData(const Customer& source);
+```
+
+copy constructor 用 helper 结果初始化，assignment 用 helper 结果 prepare-then-commit。更常见是把相关成员聚合成正确值类型，让 compiler-generated copy 自动覆盖。
+
+<Term def="显式写 `= default` 请求编译器按 base/member 生成对应特殊成员。">
+  defaulted copy operation
+</Term>
+
+```cpp
+class Customer {
+public:
+    Customer(const Customer&) = default;
+    Customer& operator=(const Customer&) = default;
+private:
+    std::string name_;
+    Date lastTransaction_;
+};
+```
+
+新增成员会自动进入 memberwise copy，前提是每个成员的复制语义正是所需语义。
+
+## rule of zero 让覆盖随结构演进
+
+<Term def="由具有正确值/所有权语义的成员组合，不声明 copy/move/destructor 的设计。">
+  rule of zero
+</Term>
+
+比手写 default 更少维护。若类需要自定义 copy，说明有资源、缓存、身份或不变量的特殊语义，应把原因写入覆盖矩阵。
+
+<Term def="类型新增、删除或重排成员时，默认复制行为自动随对象结构更新的性质。">
+  structural copy evolution
+</Term>
+
+自动覆盖不等于自动业务正确：新增 mutex 会删除 copy，新增 shared_ptr 会引入共享，编译或测试应促使重新审查。
+
+## move 也要覆盖所有组成部分
+
+原书聚焦 copying functions；现代同样审查 move constructor/assignment。
+
+<Term def="移动时逐个转移所有 base/member，并让源每一部分保持有效状态的责任。">
+  complete move contract
+</Term>
+
+```cpp
+PriorityCustomer::PriorityCustomer(PriorityCustomer&& rhs) noexcept
+    : Customer{std::move(rhs)},
+      priority_{std::exchange(rhs.priority_, 0)}
+{}
+```
+
+若漏掉 Base move，Base 可能 default construct 或 copy，性能与语义变化。`noexcept` 必须覆盖所有实际子操作。
+
+<Term def="移动完成后源对象所有 base/member 共同满足可析构、可赋值的最小状态。">
+  whole-object moved-from invariant
+</Term>
+
+不能只清当前类成员而让 Base 保持矛盾状态。
+
+## 复制验证不是只比较 operator==
+
+<Term def="为每个 base/member 设置不同非默认值，确保 copy 后每项都可观察验证的测试数据。">
+  sentinel state test
+</Term>
+
+operator== 本身也可能漏同一成员，不能让生产 equality 成为唯一 oracle。测试可通过公共观察接口或专用 test builder 独立检查。
+
+<EcppCopyValidationMap />
+
+<Term def="独立于被测 copy 实现构造预期状态，避免测试与生产代码共同遗漏字段的方法。">
+  independent copy oracle
+</Term>
+
+例如序列化全部业务字段、逐 getter 比较、资源身份计数和修改独立性。
+
+## 异常路径逐成员注入
+
+<Term def="让第 N 个 base/member copy 抛异常，验证已构造子对象自动清理且目标保证成立。">
+  member-copy failure injection
+</Term>
+
+copy constructor 失败时对象从未完成构造，但已完成的 base/member 会自动析构；assignment 则必须满足 basic 或 strong guarantee。
+
+先预测：Derived copy constructor 漏掉 `Base{rhs}` 时，Base sentinel 会变成什么；assignment 漏掉 `Base::operator=` 时目标 Base 保留哪个值。运行覆盖矩阵验证。
+
+- 所有 base/member 使用不同 sentinel，copy 后逐项等价。
+- deep resource 修改目标不影响源；shared resource 引用计数符合协议。
+- assignment 从完全不同旧状态开始，旧资源释放一次。
+- 第 N 个成员抛异常时无泄漏，目标满足声明保证。
+- 新增字段的 mutation test 能让旧 copy 测试失败。
+- move 后目标完整、源 whole-object invariant 成立。
+
+## 小结
+
+- 自定义 copying functions 必须复制所有 base/member 与资源语义
+- 新增成员不会自动提醒手写 copy，需覆盖矩阵和 sentinel test
+- Derived copy constructor/assignment 分别调用 Base copy/assignment
+- copy constructor 建立新生命周期，assignment 修改已有对象，不能互相调用
+- rule of zero/defaulted operations 让 memberwise copy 随结构演进
+- 现代 move 同样要覆盖全部组成并维护 whole-object moved-from invariant
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 12"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="complete copy contract">
+    复制后所有组成等价并符合资源语义的要求。
+  </GlossaryItem>
+  <GlossaryItem term="copy coverage matrix">
+    列出 base/member/resource 在复制路径处理方式的矩阵。
+  </GlossaryItem>
+  <GlossaryItem term="copy constructor">
+    从源直接初始化新对象全部子对象的函数。
+  </GlossaryItem>
+  <GlossaryItem term="derived cache state">
+    可从主状态重新计算、不属于抽象值的缓存。
+  </GlossaryItem>
+  <GlossaryItem term="copy assignment">
+    把源等价值提交到已有目标并处理旧资源的函数。
+  </GlossaryItem>
+  <GlossaryItem term="pre-existing target state">
+    赋值前目标已经拥有且需替换的合法状态。
+  </GlossaryItem>
+  <GlossaryItem term="base subobject">
+    派生对象内部由基类提供的对象部分。
+  </GlossaryItem>
+  <GlossaryItem term="base-copy delegation">
+    派生复制明确调用直接基类对应复制操作。
+  </GlossaryItem>
+  <GlossaryItem term="layer-by-layer copy">
+    每层复制自身并委托直接基类的责任。
+  </GlossaryItem>
+  <GlossaryItem term="virtual base copy">
+    由最派生 copy constructor 负责的虚基类复制。
+  </GlossaryItem>
+  <GlossaryItem term="deep copy">
+    为目标创建独立资源表示的复制策略。
+  </GlossaryItem>
+  <GlossaryItem term="shared copy">复制后共同拥有同一资源的策略。</GlossaryItem>
+  <GlossaryItem term="resource copy semantics">
+    资源复制是独立、共享或禁止的含义。
+  </GlossaryItem>
+  <GlossaryItem term="under-construction target">
+    成员和基类生命周期仍在建立的目标。
+  </GlossaryItem>
+  <GlossaryItem term="construction-via-assignment">
+    错误用赋值实现对象构造的设计。
+  </GlossaryItem>
+  <GlossaryItem term="in-place reconstruction">
+    结束对象后在同一存储 placement-new 的操作。
+  </GlossaryItem>
+  <GlossaryItem term="phase-independent copy helper">
+    只从源生成候选、不依赖目标阶段的 helper。
+  </GlossaryItem>
+  <GlossaryItem term="defaulted copy operation">
+    以 = default 请求编译器 memberwise copy。
+  </GlossaryItem>
+  <GlossaryItem term="rule of zero">
+    由正确成员组合且不声明特殊成员的设计。
+  </GlossaryItem>
+  <GlossaryItem term="structural copy evolution">
+    默认复制随成员结构变化自动更新的性质。
+  </GlossaryItem>
+  <GlossaryItem term="complete move contract">
+    移动全部 base/member 并保持源有效的责任。
+  </GlossaryItem>
+  <GlossaryItem term="whole-object moved-from invariant">
+    移动后源全部组成共同满足的最小不变量。
+  </GlossaryItem>
+  <GlossaryItem term="sentinel state test">
+    为每项设置非默认值以暴露复制遗漏的测试。
+  </GlossaryItem>
+  <GlossaryItem term="independent copy oracle">
+    不复用被测实现而构造复制预期的方法。
+  </GlossaryItem>
+  <GlossaryItem term="member-copy failure injection">
+    让第 N 个子对象复制失败验证清理的测试。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：修复派生复制。** Derived 自定义 copy 只复制自己的成员，补齐 Base、缓存和资源策略。
+
+<Answer question="派生类 copying functions 怎样覆盖完整对象？">
+  copy constructor 在 initializer list 显式 `Base{rhs}`，再初始化每个 Derived
+  member；copy assignment 先按异常策略调用
+  `Base::operator=(rhs)`，再提交派生成员，或构造完整候选后
+  swap。缓存明确复制或失效，资源明确 deep/shared。用 Base 与 Derived 不同
+  sentinel 独立验证。
+</Answer>
+
+2. **问题 2：消除复制重复。** copy ctor 与 assignment 有相同字段转换逻辑，说明哪些共享方式安全、哪些不安全。
+
+<Answer question="copy constructor 与 assignment 应如何共享逻辑？">
+  不能让 constructor 调 assignment，因为目标尚在构造；不能让 assignment 手动调用
+  constructor 重建，因为失败会结束目标生命周期。优先 rule of zero/default
+  memberwise copy；特殊转换可抽到只读取源并生成 candidate data 的
+  phase-independent helper，构造用其初始化，赋值用其 prepare-then-commit。
+</Answer>
+
+3. **问题 3：防止新增字段回归。** 设计一个不会与生产 operator== 共同遗漏字段的复制测试。
+
+  <Answer question="怎样让新增字段遗漏在测试中暴露？">test builder 给每个 base/member 不同非默认 sentinel，经公共 getter、序列化快照或专用 inspector 逐项比较，而不是只调用可能同样遗漏字段的 operator==；对 deep resource 修改目标验证源独立。维护 copy coverage matrix，新增字段审查必须选择 copy/move/cache 策略，并运行 Nth-member failure injection。</Answer>
+</Exercises>

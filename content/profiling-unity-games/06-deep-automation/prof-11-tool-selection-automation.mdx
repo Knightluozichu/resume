@@ -1,0 +1,295 @@
+---
+title: "工具选择、自动指标与性能测试"
+type: C
+section: "项目审计、深度分析与自动化"
+order: 2
+description: "按Unity 6官方指南第84—88页复现官方单元 12，建立可测量、可反证、可回归的性能证据。"
+demo: true
+math: false
+draft: false
+sourceUrl: "https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Prof11ToolSelectionAutomationMapLab,
+  Prof11ToolSelectionAutomationExperimentLab,
+  Prof11ToolSelectionAutomationEvidenceLab,
+} from "@/components/mdx/profiling-unity-games/diagrams/prof-11-tool-selection-automation";
+
+<Objectives>
+
+- 能解释官方单元 12在官方Unity 6性能分析流程中的位置与责任边界
+- 能复现“阶段风险 → 选择指标 → 自动构建 → 固定回放 → 采集解析 → 趋势门禁”并保存可比较的中间证据
+- 能设计一个反证实验，判断“自动化必须保存硬件与构建元数据、固定场景输入、足够样本和原始文件；仪表盘异常能追溯到具体构建和Profiler帧。”是否成立
+
+</Objectives>
+
+## 问题：怎样证明掌握的是官方单元 12，而不是记住几个工具名？
+
+先预测：如果只看到最终帧率或一张截图，不知道设备、构建、场景、输入和采样方式，能否判断修改真的有效？不能。性能结果是测试上下文与程序行为共同产生的，脱离上下文的数字既不能复现，也不能指导下一步。
+
+工具选择由项目阶段和问题决定：原型验证规模风险，早期建立设备基线，每个冲刺比较CPU、GPU与内存，发布候选执行自动门。ProfilerRecorder和Performance Testing把关键指标变成持续数据。
+
+<Prof11ToolSelectionAutomationMapLab />
+
+## 官方目录边界
+
+本页严格对应Unity Technologies的《Ultimate guide to profiling Unity games (Unity 6 edition)》第84—88页。以下目录项必须在实现、实验或证据中出现：
+
+- **Which profiling tools to use and when?**
+- **Prototyping**
+- **Early stages of the project**
+- **End of sprint**
+- **Automating key performance and profiling metrics**
+- **ProfilerRecorder**
+- **Unity Build Automation**
+- **ProfileReader**
+- **Grafana dashboard**
+- **Performance Testing Package for Unity Test Framework**
+
+本站以中文重新组织解释、代码和实验，不逐字复制原文。API示例以Unity 6思路为准；具体包版本和目标平台能力仍要在项目清单中固定。
+
+## 核心模型与不可变条件
+
+工具选择由项目阶段和问题决定：原型验证规模风险，早期建立设备基线，每个冲刺比较CPU、GPU与内存，发布候选执行自动门。ProfilerRecorder和Performance Testing把关键指标变成持续数据。
+
+本单元的不可变条件是：**自动化必须保存硬件与构建元数据、固定场景输入、足够样本和原始文件；仪表盘异常能追溯到具体构建和Profiler帧。** 只要输入条件、观测边界或结果合同有一项改变，就不能把两次测量直接相减。先解释变化来源，再决定是否建立新的基线。
+
+## 五个必须落到证据的术语
+
+<Term def="在运行时低成本读取指定Profiler计数器的API">ProfilerRecorder</Term>
+
+它在本单元中不是孤立名词，而要落到“阶段风险 → 选择指标 → 自动构建 → 固定回放 → 采集解析 → 趋势门禁”的数据链，并能由一次保存的采样或状态记录验证。
+
+<Term def="按规则持续生成可测试Player构建的Unity服务">Build Automation</Term>
+
+它在本单元中不是孤立名词，而要落到“阶段风险 → 选择指标 → 自动构建 → 固定回放 → 采集解析 → 趋势门禁”的数据链，并能由一次保存的采样或状态记录验证。
+
+<Term def="把原始Profiler数据解析或转换为结构化结果的工具">ProfileReader</Term>
+
+它在本单元中不是孤立名词，而要落到“阶段风险 → 选择指标 → 自动构建 → 固定回放 → 采集解析 → 趋势门禁”的数据链，并能由一次保存的采样或状态记录验证。
+
+<Term def="在Unity Test Framework中测量性能样本与元数据的包">
+  Performance Testing Package
+</Term>
+
+它在本单元中不是孤立名词，而要落到“阶段风险 → 选择指标 → 自动构建 → 固定回放 → 采集解析 → 趋势门禁”的数据链，并能由一次保存的采样或状态记录验证。
+
+<Term def="根据历史基线和阈值拒绝持续性能退化的自动规则">趋势门禁</Term>
+
+它在本单元中不是孤立名词，而要落到“阶段风险 → 选择指标 → 自动构建 → 固定回放 → 采集解析 → 趋势门禁”的数据链，并能由一次保存的采样或状态记录验证。
+
+## 从输入到结论的诊断链
+
+主链为：**阶段风险 → 选择指标 → 自动构建 → 固定回放 → 采集解析 → 趋势门禁**。每个节点保存构建提交、设备ID、场景检查点、帧号或快照ID、当前预算、实际值和首个异常。下一节点只消费上一节点已验证的事实，不能用“感觉更流畅”跨过中间归因。
+
+### 1. Which profiling tools to use and when?
+
+原型期用Profiler验证设计规模，例如同屏对象、物理体或粒子数量是否能在目标硬件成立。若基础假设失败，应调整设计而不是等内容完成再优化。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 2. Prototyping
+
+项目早期在多个代表设备上建立CPU、GPU和内存粗基线，观察内容规模趋势。此时精度可以适中，但测试上下文必须稳定，便于后续冲刺比较。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 3. Early stages of the project
+
+每个冲刺结束对发布候选采集CPU Usage、GPU Usage、Memory、Rendering和Physics，并用Profile Analyzer和Memory Profiler与上一候选比较。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 4. End of sprint
+
+ProfilerRecorder适合持续记录Total Reserved Memory、System Used Memory或自定义标记等高层指标。它不替代完整Profiler，而是低成本哨兵。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 5. Automating key performance and profiling metrics
+
+官方示例用自动构建启动Player并捕获约2000帧原始数据，再通过ProfileReader转CSV，上传Grafana。关键是仪表盘保留原始文件链接和构建提交。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 6. ProfilerRecorder
+
+自动场景要有预热、固定相机或输入脚本、检查点和超时。设备在采集前恢复到规定热状态，失败运行应与真实性能退化分开分类。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 7. Unity Build Automation
+
+Performance Testing Package提供测量API、测试装饰器、Editor与Player运行以及构建和硬件元数据。测试阈值应考虑噪声，使用重复样本和统计规则。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 8. ProfileReader
+
+趋势门先告警再逐步升级为阻断。新增场景先积累稳定基线；当样本量和方差足够后，再对中位数、高分位和内存峰值设置独立阈值。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+<Prof11ToolSelectionAutomationExperimentLab />
+
+## 三步复现与分步观察
+
+<Stepper>
+  <Step title="1. 冻结输入与预算合同">
+    记录设备、构建、场景、画质、目标帧率、预热和输入脚本；写出本页要证明的唯一假设以及反证条件。
+    <Prof11ToolSelectionAutomationMapLab />
+  </Step>
+  <Step title="2. 采集、分流并只改一个变量">
+    沿“阶段风险 → 选择指标 → 自动构建 → 固定回放 → 采集解析 →
+    趋势门禁”保存中间值，在首个越界节点停止下钻；一次只修改一个主要因素。
+    <Prof11ToolSelectionAutomationExperimentLab />
+  </Step>
+  <Step title="3. 同输入复验并签发证据">
+    恢复相同热状态和场景检查点，重放基线输入；同时核对帧、内存、画面或玩法副作用。
+    <Prof11ToolSelectionAutomationEvidenceLab />
+  </Step>
+</Stepper>
+
+## 可执行实现骨架
+
+下面的代码只承担本单元的数据所有权或测量边界。真正项目应把阈值放入版本化配置，并让证据文件引用同一个配置哈希。
+
+```csharp
+using Unity.Profiling;
+
+ProfilerRecorder frameTime;
+
+void OnEnable() => frameTime =
+    ProfilerRecorder.StartNew(ProfilerCategory.Internal, "Main Thread", 300);
+
+double LatestMs() => frameTime.LastValue / 1_000_000.0;
+
+void OnDisable() => frameTime.Dispose();
+```
+
+每次采集都保存结构化元数据，避免报告与原始文件失联：
+
+```json
+{
+  "chapter": "prof-11-tool-selection-automation",
+  "officialPages": "第84—88页",
+  "chain": [
+    "阶段风险",
+    "选择指标",
+    "自动构建",
+    "固定回放",
+    "采集解析",
+    "趋势门禁"
+  ],
+  "device": "target-low-tier-01",
+  "build": "commit-and-unity-version",
+  "scenario": "fixed-checkpoint",
+  "baseline": "capture-before.data",
+  "candidate": "capture-after.data",
+  "normal": true,
+  "boundary": true,
+  "failureReplay": true
+}
+```
+
+自动门输出必须同时保留通过值和拒绝原因，而不是只给一个绿色图标：
+
+```text
+PASS context=device+build+scene+quality+input
+PASS chain=阶段风险 -> 选择指标 -> 自动构建 -> 固定回放 -> 采集解析 -> 趋势门禁
+PASS invariant=自动化必须保存硬件与构建元数据、固定场景输入、足够样本和原始文件；仪表盘异常能追溯到具体构建和Profiler帧。
+REJECT missing-raw-data | changed-context | hidden-quality-loss | unreplayed-failure
+```
+
+## 两个必须主动制造的失败样本
+
+<Callout type="trap" title="官方边界或测量上下文丢失">
+  只上传一个平均FPS到仪表盘，不保存设备、场景和原始数据，曲线尖峰出现后无法知道是内容变化、热降频还是采集故障。
+  先保存错误结论、首个偏离节点和原始数据，再恢复官方目录边界与相同测试条件复验。
+</Callout>
+
+<Callout type="trap" title="数字改善但工作被转移或结果改变">
+  故意降低画质、跳过玩法工作、扩大永久缓存或把任务推迟到下一帧。若主指标改善但GPU、内存、热量、图像或玩法合同变差，发布门必须拒绝。
+</Callout>
+
+## 证据矩阵与签发标准
+
+| 维度   | 正常样本       | 边界样本           | 失败样本           | 签发条件       |
+| ------ | -------------- | ------------------ | ------------------ | -------------- |
+| 上下文 | 固定设备与构建 | 最低档或长时间运行 | 故意改变一项条件   | 差异可解释     |
+| 主链   | 六节点均有记录 | 预算附近输入       | 在首个节点注入偏差 | 能定位首因     |
+| 结果   | 达到性能合同   | 无长尾越界         | 主动制造回归       | 同输入可复验   |
+| 副作用 | 画面玩法一致   | 生命周期完整       | 降质或转移成本     | 所有门同时通过 |
+
+<Prof11ToolSelectionAutomationEvidenceLab />
+
+## 练习：把官方单元 12变成可审计交付
+
+<Exercises>
+
+**问题 1** 写出“阶段风险”到“趋势门禁”每一步的输入、观测工具、阈值和输出。
+
+<Answer>
+  每一步都要引用同一测试上下文，输出必须包含数值、原始文件和下一步选择理由；不能只写工具名称。
+</Answer>
+
+**问题 2** 主动制造“只上传一个平均FPS到仪表盘，不保存设备、场景和原始数据，曲线尖峰出现后无法知道是内容变化、热降频还是采集故障。”，保存错误结论与首个偏离节点，再用同一输入证明修复。
+
+<Answer>
+  合格答案包含错误样本、上下文差异、反证实验、修复后原始数据以及性能和正确性双重结果。
+</Answer>
+
+**问题 3** 为不可变条件“自动化必须保存硬件与构建元数据、固定场景输入、足够样本和原始文件；仪表盘异常能追溯到具体构建和Profiler帧。”设计正常、预算边界和失败三组测试。
+
+<Answer>
+  三组测试只改变计划中的输入，统一记录构建、设备、帧或快照ID、预算、实际值、首个异常和复验状态。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- 是否能逐项指出本页覆盖的官方目录项，而没有用通用性能建议替代？
+- 是否沿“阶段风险 → 选择指标 → 自动构建 → 固定回放 → 采集解析 → 趋势门禁”保存了可追溯中间证据？
+- 是否区分定位工具的干扰与发布构建的真实预算？
+- 是否主动制造失败，并在相同输入下证明修复没有转移成本？
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="ProfilerRecorder">
+    在运行时低成本读取指定Profiler计数器的API。
+  </GlossaryItem>
+  <GlossaryItem term="Build Automation">
+    按规则持续生成可测试Player构建的Unity服务。
+  </GlossaryItem>
+  <GlossaryItem term="ProfileReader">
+    把原始Profiler数据解析或转换为结构化结果的工具。
+  </GlossaryItem>
+  <GlossaryItem term="Performance Testing Package">
+    在Unity Test Framework中测量性能样本与元数据的包。
+  </GlossaryItem>
+  <GlossaryItem term="趋势门禁">
+    根据历史基线和阈值拒绝持续性能退化的自动规则。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Unity Technologies《Ultimate guide to profiling Unity games (Unity 6 edition)》，2025，93页"
+  adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+/>

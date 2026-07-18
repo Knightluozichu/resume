@@ -1,233 +1,232 @@
 ---
-title: 从尾到头打印链表
+title: "面试题6：从尾到头打印链表"
 type: C
-section: 链表
-order: 1
-description: 探索链表的逆序输出。对比利用系统调用栈的递归实现与利用 std::stack 或数组的显式栈实现，权衡其时空限制与栈溢出风险。
+section: "第2章 面试需要的基础知识"
+order: 7
+description: "不修改单向链表，用显式栈或递归调用栈把正向遍历转换为后进先出的逆序输出。"
 demo: true
-math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviews
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/06_PrintListInReversedOrder/PrintListInReversedOrder.cpp"
 draft: false
 ---
 
-{/* 知识点清单：单向链表遍历 / 递归回溯 / 系统栈帧 / 显式辅助栈 / 栈溢出风险 / 只读打印约束；原书章节：面试题6：从尾到头打印链表。 */}
+import { LinkedListDirectionDiagram, OutputContractMap, StackUnwindLab, StrategyTradeoffMap } from "@/components/mdx/coding-interviews/diagrams/print-list-reverse";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能解释单向链表单向遍历特性与逆序打印（后进先出）对栈结构的依赖关系。
-- 能描述递归回溯（利用系统栈）与显式辅助栈（利用堆内存）在处理超长链表时的空间安全性差异。
-- 能实现 C++（递归与 std::stack）和 TypeScript（数组模拟栈）的 `print-list-reverse` 算法，并在实现中严禁修改链表节点指针。
+- 能解释单向链表为何只能正向遍历，而逆序输出具有后进先出结构
+- 能实现显式栈版本，并证明它不修改任何节点链接
+- 能实现递归回溯版本，并描述调用栈压入与弹出顺序
+- 能比较递归、显式栈、反转恢复和重复扫描的时间空间代价
+- 能设计空链表、单节点、长链表、有环输入和输出失败测试
 
 </Objectives>
 
-## 直觉引入
+## 从为什么不能直接回头开始
 
-想象一下，你正沿着一条单向的、极其狭窄的地下溶洞小路往前探险。这条小路非常窄，你只能沿着前人的脚印一直往前走，无法在中途转身回头看。
+先预测：链表`1 → 2 → 3`只有`next`指针，走到3后怎样回到2？节点3没有前驱地址，算法如果没有提前保存2，就无法沿链表本身逆向移动。要从尾到头输出，必须在正向遍历时保存稍后需要的信息。
 
-在向前走的过程中，如果你想在走出溶洞后，按照“从终点到起点”的相反顺序依次回忆并记录你经过的所有景点，你会怎么做？
+这道“从尾到头打印链表”接收一个单向链表头节点，要求按尾到头顺序输出每个节点值。作者给出两种解法：把节点指针依次压入`std::stack`后弹出，或先递归访问`next`、回溯时打印当前节点。两者都利用后进先出。
 
-一种方法是，你在走进去的时候，每经过一个景点就在脚下放置一颗特殊的面包屑，并且在面包屑上写下序号。当走到溶洞的尽头（死胡同）时，你无法再前进了。这时你开始往回走，每往回走一步就捡起一颗面包屑，并把面包屑上的景点记录下来。因为你是从终点往回走，所以捡起面包屑的顺序正好与你走进去的顺序相反，实现了“从尾到头”的回溯。
+<Term def="每个节点只保存指向下一个节点的链接、不能直接沿链接访问前驱的线性结构。">单向链表</Term>的遍历方向与输出方向相反。这个矛盾决定至少要付出存储、修改结构或重复遍历中的一种代价，不存在既不存状态、不改链表又只扫描一次的魔法回退。
 
-在计算机科学中，这个溶洞小路就是单向链表，而放置并回收面包屑的过程，就是利用栈或者递归来实现的逆序回溯。这章我们要解决的核心问题就是：如何在不破坏链表结构的前提下，优雅地逆序打印链表的所有元素。
+<LinkedListDirectionDiagram />
 
-## 概念讲解
+## 先定义“打印”的可测试契约
 
-在单向链表中，每个节点只保留了指向下一个节点的 `next` 指针。这意味着我们只能从头到尾进行单向遍历。如果我们想要“从尾到头”打印链表，面临的挑战是：**我们只有走到最后，才能知道尾节点的值；但此时我们已经越过了前面的所有节点。**
+算法题里直接`printf`很直观，但I/O副作用难以断言，也会把顺序算法与终端格式混在一起。更可测试的接口可以返回值数组，或接受`emit(value)`回调。真正打印时再把回调连接到日志或输出流。
 
-由于“先遍历的后打印，后遍历的先打印”，这在逻辑上呈现出一种典型的 **先进后出（LIFO, Last In First Out）** 特征。因此，解决本题的核心工具就是**栈（Stack）**。
+<Term def="遍历过程中不修改节点值、next链接或链表头，调用后结构与调用前一致。">只读遍历</Term>是本题的默认边界。先反转链表再打印虽然能用`O(1)`额外空间，但会临时改变`next`；并发读者、异常中断或提前返回都可能观察到破坏状态。
 
-### 方法 1：递归调用（系统调用栈）
+空链表应产生空输出，不解引用空指针。单节点链表输出该节点一次。默认输入还应是一条以`nullptr`结束的无环链；若可能有环，普通遍历和递归都不会终止，接口必须先检测环、保存已见集合或设定步数上限。
 
-递归在本质上就是一种隐式的栈结构。当我们调用一个函数时，系统会在内存中压入一个 <Term def="存放当前活动子程序/函数调用状态的系统内存区域，每次函数调用都会压入一个栈帧，用于保存局部变量、返回地址和寄存器状态。">系统调用栈</Term>帧。
+<OutputContractMap />
 
-对于逆序打印，我们可以设计如下的递归逻辑：
-1. **基准情况 (Base Case)**：如果当前节点为 `nullptr`，说明已经越过尾节点，直接返回。
-2. **递归阶段 (Recursive Step)**：先递归调用自己处理 `node->next`，让它去解决“后面所有节点的逆序打印”。
-3. **回溯阶段 (Backtracking Step)**：当下一层的递归调用返回后，再打印当前节点 `node->val`。
+## 方法一：显式栈
 
-$$
-\text{printReverse}(N_1) \to \text{printReverse}(N_2) \to \text{printReverse}(N_3) \to \text{Base Case} \to \text{print } 3 \to \text{print } 2 \to \text{print } 1
-$$
+正向遍历时把每个节点指针压入<Term def="由程序显式维护、支持push与pop并按后进先出访问元素的容器。">显式栈</Term>。到达`nullptr`后，栈顶是原尾节点；反复弹出便得到尾到头顺序。
 
-- **时间复杂度**：$O(n)$，每个节点被访问一次。
-- **空间复杂度**：$O(n)$，递归深度为 $n$，系统栈中同时存在 $n$ 个栈帧。
-- **致命缺陷**：对于非常长的链表（例如含有几万个节点），函数嵌套层数过深，极易导致系统栈耗尽，触发编译或运行时的 <Term def="由于函数嵌套层数过深，导致系统调用栈空间耗尽，程序被迫异常中止的错误。">栈溢出</Term>（Stack Overflow）错误。
-
-### 方法 2：显式栈（辅助数组）
-
-为了消除递归带来的栈溢出风险，我们可以使用一个手动创建的 <Term def="在程序中手动创建并管理的数据结构（如 std::stack 或数组），用以模拟先进后出（LIFO）的执行流程，不占用系统调用栈空间。">显式栈</Term>（如 C++ 中的 `std::stack` 或 TS 中的数组）来模拟这个过程：
-
-1. **第一阶段（入栈）**：从头到尾遍历链表，每经过一个节点，就把它的值（或节点指针）压入栈中。
-2. **第二阶段（出栈）**：当遍历到链表末尾后，开始循环判断栈是否为空。只要栈不为空，就弹出栈顶的值并打印。
-
-- **时间复杂度**：$O(n)$，我们进行了一次正向遍历（入栈）和一次反向打印（出栈）。
-- **空间复杂度**：$O(n)$，需要一个大小为 $n$ 的辅助栈。
-- **核心优势**：显式栈使用的是堆内存（Heap），其容量上限远大于系统调用栈（通常只有几 MB），因此在面对超长链表时具有极佳的鲁棒性，不会导致程序崩溃。
-
-## 交互 Demo
-
-猜一猜：当链表长度非常大时，为什么显式辅助栈不会像递归那样导致系统崩溃？
-
-点击下方选项切换两种方案，通过单步调试理解递归系统栈帧与显式辅助栈的运行过程：
-
-<PrintListReverseDiagram />
-
-## 代码对照
-
-在面试中，除非面试官明确要求使用递归，否则推荐使用显式栈来规避栈溢出的风险。另外，**严禁修改链表指针**是本题的隐藏红线——通过反转链表再顺序打印虽然也能解决，但这是一个含有副作用的“破坏性只读”操作。
-
-以下是 C++（递归与显式栈）和 TypeScript（数组模拟栈）的具体实现对照：
-
-<CodeTabs>
-  <Tab label="C++ (递归实现)">
 ```cpp
-#include <iostream>
+#include <stack>
 #include <vector>
 
 struct ListNode {
-    int val;
-    ListNode* next;
-    ListNode(int x) : val(x), next(nullptr) {}
+    int value;
+    const ListNode* next;
 };
 
-class Solution {
-public:
-    // 递归版本：代码简洁，但存在系统栈溢出风险
-    void printListFromTailToHeadRecursive(ListNode* head) {
-        if (head == nullptr) {
-            return;
-        }
-        
-        // 先处理后继节点
-        printListFromTailToHeadRecursive(head->next);
-        
-        // 回溯时打印当前节点值
-        std::cout << head->val << " ";
+std::vector<int> values_from_tail(const ListNode* head) {
+    std::stack<const ListNode*> nodes;
+    for (auto node = head; node != nullptr; node = node->next) {
+        nodes.push(node);
     }
-};
-```
-  </Tab>
-  <Tab label="C++ (显式栈实现)">
-```cpp
-#include <iostream>
-#include <stack>
 
-struct ListNode {
-    int val;
-    ListNode* next;
-    ListNode(int x) : val(x), next(nullptr) {}
-};
-
-class Solution {
-public:
-    // 显式栈版本：使用堆内存的 std::stack，防范超长链表下的栈溢出
-    void printListFromTailToHeadStack(ListNode* head) {
-        std::stack<int> nodes;
-        
-        // 第一步：正向遍历，将节点值依次入栈
-        ListNode* curr = head;
-        while (curr != nullptr) {
-            nodes.push(curr->val);
-            curr = curr->next;
-        }
-        
-        // 第二步：循环出栈并打印
-        while (!nodes.empty()) {
-            std::cout << nodes.top() << " ";
-            nodes.pop();
-        }
+    std::vector<int> result;
+    result.reserve(nodes.size());
+    while (!nodes.empty()) {
+        result.push_back(nodes.top()->value);
+        nodes.pop();
     }
-};
-```
-  </Tab>
-  <Tab label="TypeScript (数组模拟)">
-```typescript
-class ListNode {
-    val: number;
-    next: ListNode | null;
-    constructor(val: number) {
-        this.val = val;
-        this.next = null;
-    }
-}
-
-// 在 TS/JS 中，数组天然具备 push/pop 功能，可直接作为高效栈使用
-function printListFromTailToHead(head: ListNode | null): number[] {
-    const stack: number[] = [];
-    
-    // 正向遍历，将节点值压入栈
-    let curr = head;
-    while (curr !== null) {
-        stack.push(curr.val);
-        curr = curr.next;
-    }
-    
-    // 反向弹出，构建逆序输出结果
-    const result: number[] = [];
-    while (stack.length > 0) {
-        result.push(stack.pop()!);
-    }
-    
     return result;
 }
 ```
-  </Tab>
-</CodeTabs>
 
-## 常见误区
+`const ListNode*`让函数不能通过当前指针修改节点，表达只读意图。它不能阻止其他别名并发修改链表，因此线程安全仍需外部同步或不可变所有权。
 
-<Callout type="trap">
-  <strong>现象 →</strong> 输入空链表（`nullptr`）时，程序直接崩溃或发生段错误（Segmentation Fault）。
-  <strong>原因 →</strong> 在递归基准判定中忽略了对空链表的首层校验，或者在显式栈遍历中，直接使用了 `curr->val` 而没有事先判定 `curr` 是否为空。
-  <strong>修法 →</strong> 在函数开头以及循环条件中，无条件增加 `if (head == nullptr)` 或 `while (curr != nullptr)` 的防护边界检查。
+时间是`O(n)`：每个节点入栈、出栈各一次。栈保存`n`个节点指针，结果也保存`n`个整数。若接口直接通过回调输出，辅助栈仍是`O(n)`，但不再额外保存结果数组。
+
+不要简单说显式栈“不会耗尽内存”。`std::stack`底层容器仍可能分配失败；它的优势是不用为每个节点增加函数调用帧，容量由通用动态存储与分配器管理，失败也可按普通分配异常处理，而不是触发难以恢复的调用栈溢出。
+
+## 方法二：递归回溯
+
+递归把当前节点、返回地址等状态放进<Term def="运行时为嵌套函数调用保存参数、局部状态和返回位置的栈结构。">调用栈</Term>。先处理后继，再输出当前值，就会在返回阶段得到逆序。
+
+```cpp
+#include <functional>
+
+void emit_from_tail(
+    const ListNode* node,
+    const std::function<void(int)>& emit
+) {
+    if (node == nullptr) {
+        return;
+    }
+    emit_from_tail(node->next, emit);
+    emit(node->value);
+}
+```
+
+调用`emit_from_tail(1)`时，1、2、3的栈帧依次建立；遇到`nullptr`返回后，3先输出，再输出2和1。这是<Term def="最后压入的元素最先弹出，简称LIFO的访问顺序。">后进先出</Term>在调用栈上的直接表现。
+
+<StackUnwindLab />
+
+递归代码短，但空间仍是`O(n)`，而且调用栈容量通常有限。链表数万或数十万节点时可能栈溢出。C++不保证尾调用优化；这个递归也不是尾递归，因为递归返回后还要执行`emit`。无法依靠编译器自动把它变成常数栈循环。
+
+<Callout type="trap" title="递归没有显式容器，所以空间是O(1)">
+每个尚未返回的节点都对应一个调用栈帧，递归深度等于链表长度。代码没有写`stack`变量不代表状态不存在，额外空间仍是`O(n)`。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 面试官给出“只读打印”的限制后，考生为了省去 $O(n)$ 的辅助空间，直接原地反转链表（修改 `next` 指针），打印完毕后再试图反转回来。
-  <strong>原因 →</strong> 违反了<Term def="在遍历或输出数据结构的内容时，严禁修改任何指针或节点数据，保持数据结构原始状态不被破坏的操作约束。">只读打印</Term>的副作用限制。如果多线程并发访问链表，或者在逆序打印期间程序被中断，链表的物理结构将被永久破坏。
-  <strong>修法 →</strong> 严禁修改节点的 `next` 指针。应采用递归或辅助栈等非破坏性手段进行纯读取操作。
+## 为什么默认不反转链表
+
+若允许修改，反转`next`后正向输出可把额外空间降为`O(1)`；为了保持调用后结构，还要再反转回来。但“两次反转”不是无副作用：第一次反转后到恢复前，链表处于相反结构。输出回调抛异常、进程取消或另一个线程读取，恢复可能不发生或观察到中间状态。
+
+可以用RAII守卫尽量保证离开作用域时恢复，但析构期异常、并发可见性和节点所有权仍复杂。题目没有授权修改时，显式栈更符合契约。空间限制和只读限制发生冲突时，应向面试官澄清优先级，而不是偷偷违反一项。
+
+不修改且只用`O(1)`额外空间的另一方案是重复扫描：先数出长度，再为第`n-1`、`n-2`等位置每次从头走。它能输出正确结果，但时间为`O(n²)`，通常不如`O(n)`时间、`O(n)`空间的栈。
+
+<StrategyTradeoffMap />
+
+<Callout type="trap" title="打印后再反转回来就等于没有修改">
+可观察副作用取决于整个执行区间，不只看最终状态。异常、取消和并发访问都可能暴露临时反转；只有接口明确允许独占修改并有可靠恢复协议时才能采用。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 在递归实现中，递归调用和打印语句的顺序写反了（先打印当前值，再递归）。
-  <strong>原因 →</strong> 混淆了前序遍历与后序遍历。先打印当前值会导致“顺序打印”而非“逆序打印”。
-  <strong>修法 →</strong> 确保 `printList(head->next)` 必须位于 `std::cout << head->val` 之前。
-</Callout>
+## 有环输入必须单独处理
 
-## 小结与练习
+原书链表由`nullptr`终止，作者测试没有环。若输入可能来自不可信组装，环会让显式栈无限压入，让递归无限深入。不能等内存耗尽来“检测”。
 
-- 单向链表逆序打印具有 **后进先出 (LIFO)** 特性，核心实现依赖于 **栈 (Stack)** 结构。
-- 递归方法调用系统栈实现最为简洁，但因栈大小受限，面对超长链表容易遭遇 **栈溢出 (Stack Overflow)**。
-- 显式栈方法在堆上开辟空间，容量大且安全，是工业级代码首选。
-- 在打印时应严格遵守 **只读打印** 原则，不可改变链表本身的结构。
+可先用快慢指针`O(n)`时间、`O(1)`空间判断有环；发现环后返回错误，因为“尾节点”不存在，“从尾到头”语义也不成立。若业务要对环上有限节点输出，需要重新定义起点、终点和去重顺序，已经是另一道题。
+
+保存已见节点集合也能在遍历时发现环，但增加`O(n)`空间。显式栈本来就需要线性空间时，可以用同一遍历维护集合；是否值得取决于输入契约。可信内部链表不必每次支付防御成本，但边界层应验证结构。
+
+## 输出失败与所有权边界
+
+作者直接调用`printf`，通常忽略输出失败。使用回调或流时，写入可能抛异常或返回错误。显式栈已经完整读取链表，输出失败不会修改链表；调用者可以记录已输出数量或整体重试。递归在回溯中输出，失败会中断剩余前驱值，同样要定义部分输出语义。
+
+栈保存节点指针意味着这些节点在整个收集和弹出阶段必须存活。若另一个所有者可以删除节点，指针会悬空。更安全的方式是保存值副本，或在函数期间持有链表所有权/读锁。保存值会改变元素复制成本，但解除后续对节点生命周期的依赖。
+
+若节点值很大或不可复制，保存指针更高效；这时必须明确链表不可变且生命周期覆盖函数。算法复杂度只写“`O(n)`个指针”还不够，资源与并发契约同样属于工程正确性。
+
+## 官方测试与可验证实现
+
+## 保存节点还是保存值
+
+作者把`ListNode*`压入栈，弹出时再读取节点值。这样每个栈元素只是一个指针，适合节点值较大或不可复制的情况；代价是整个输出阶段都依赖节点仍然存活、内容没有被并发修改。若链表由另一个线程或所有者管理，悬空指针和数据竞争会破坏结果。
+
+把整数值直接压栈则建立快照。遍历结束后，即使原链表销毁，栈中值仍可安全输出；对本题的`int`代价很小。若值是大对象，可以保存引用计数句柄、移动到独立快照，或在持有读锁期间完成输出。选择依据不是固定模板，而是值复制成本与生命周期契约。
+
+无论保存哪一种，都必须**不改变链表结构**：不重写`next`、不替换头节点，也不借“打印后恢复”绕过只读限制。测试应记录每个节点的后继地址，调用后逐一比较，而不只是比较正向值序列；值相同的重复节点会让只比较内容漏掉链接变化。
+
+输出回调还可能重入算法或抛异常。显式栈已经完成收集，异常只中断弹出；链表本身不变。递归回溯输出时，异常会沿调用栈传播并跳过剩余前驱节点。接口应说明是否允许部分输出，或先收集完整结果再一次性交给调用方，以获得更清晰的失败边界。
+
+如果要多次从尾到头遍历同一条不变链表，每次重建栈都是`O(n)`。可以缓存反向索引或直接选择双向链表，但这会增加结构存储和更新成本。单次面试题不需要预处理；工程设计则要把查询频率、更新频率和内存一起比较。
+
+最后，所谓“打印”不一定是标准输出。网络发送、文件写入和UI渲染都可能慢或阻塞。核心算法返回迭代结果或值数组，让上层决定批量、背压、取消与错误处理；这样数据结构遍历不承担设备策略，也更容易基准测试。
+
+作者测试三种输入：`1→2→3→4→5`、单节点1、空链表，并对每个输入分别调用显式栈和递归版本。现代测试应比较返回序列，并在调用后再次正向遍历确认结构未变。
+
+```cpp
+#include <cassert>
+#include <vector>
+
+void test_reverse_values() {
+    const ListNode n5{5, nullptr};
+    const ListNode n4{4, &n5};
+    const ListNode n3{3, &n4};
+    const ListNode n2{2, &n3};
+    const ListNode n1{1, &n2};
+
+    assert((values_from_tail(&n1) ==
+            std::vector<int>{5, 4, 3, 2, 1}));
+    assert(n1.next == &n2 && n2.next == &n3);
+
+    const ListNode only{1, nullptr};
+    assert((values_from_tail(&only) == std::vector<int>{1}));
+    assert(values_from_tail(nullptr).empty());
+}
+```
+
+长链表测试不应调用递归版本去“看看会不会崩”，而应按配置阈值选择显式栈，或让递归接口明确只接受受限长度。栈溢出往往无法像普通异常一样可靠恢复。
+
+<Stepper>
+  <Step title="先确认只读、无环和生命周期"><OutputContractMap />明确链表以null结束，节点在调用期间存活，输出不允许修改value或next。</Step>
+  <Step title="把正向遍历信息压栈"><LinkedListDirectionDiagram />沿next访问1、2、3并保存节点，遍历结束后按3、2、1弹出。</Step>
+  <Step title="理解递归的压栈与回溯"><StackUnwindLab />先递归后继，越过尾节点后才输出当前值，因此自然形成后进先出。</Step>
+  <Step title="按约束选择策略"><StrategyTradeoffMap />比较调用栈、显式容器、临时反转和重复扫描，不只比较代码行数。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 单向链表只能沿`next`正向遍历，逆序输出需要记住已访问节点。
+2. 显式栈先压入节点再弹出，时间`O(n)`、辅助空间`O(n)`。
+3. 递归先访问后继、回溯时输出，调用栈同样占`O(n)`空间。
+4. 深链表可能耗尽调用栈，显式容器更容易控制，但也可能分配失败。
+5. 反转再恢复能用常数额外空间，却违反默认只读契约并暴露中间状态。
+6. 空链表输出空结果，单节点输出一次；有环链表没有尾节点，需拒绝或另定语义。
+7. 返回值数组或输出回调比硬编码`printf`更容易测试和处理失败。
+8. 保存节点指针时必须保证生命周期与并发稳定，保存值则承担复制成本。
 
 <Exercises>
-  <Answer question="如果面试官允许修改链表结构，且空间复杂度要求为 O(1)，应当如何实现逆序打印？">
-    如果允许修改链表结构，可以先通过“原地反转链表”算法，依次翻转所有节点的 `next` 指针。翻转完毕后，链表头部变成了原尾部，直接顺序遍历并打印即可。打印完成后，如果需要恢复链表，可以再次执行反转操作。这种方法的时间复杂度为 $O(n)$，空间复杂度为 $O(1)$。
-  </Answer>
-  <Answer question="除了显式栈和递归，还有其他不修改链表的逆序输出方案吗？">
-    有，例如“多重遍历法”。先正向遍历一遍链表，统计节点总数 $N$。然后使用双重循环，外层循环 $i$ 从 $N-1$ 递减到 0，内层循环每次从头节点向后走 $i$ 步并输出当前节点。此方法不需要额外存储空间，空间复杂度为 $O(1)$，但代价是时间复杂度退化为 $O(n^2)$。在实际开发中很少被采纳。
-  </Answer>
+
+**问题 1：为什么递归语句必须写在输出当前值之前？**
+
+<Answer>先递归到后继，调用会一直深入尾部；回溯时后面的节点先返回并输出，形成尾到头顺序。若先输出当前值再递归，得到的是普通头到尾遍历。</Answer>
+
+**问题 2：显式栈和递归的空间都是`O(n)`，为什么仍常优先显式栈？**
+
+<Answer>显式容器不增加函数调用深度，容量由常规动态存储管理，失败更可控；递归受调用栈上限限制，深链表可能直接栈溢出。显式栈也会分配失败，因此优势是控制方式，不是无限内存。</Answer>
+
+**问题 3：允许`O(1)`空间但禁止修改链表，能否完成？**
+
+<Answer>可以重复扫描：先求长度，再为每个逆序位置从头走到对应节点，空间`O(1)`但时间`O(n²)`。若还要求`O(n)`时间，就必须放宽空间、修改或节点结构中的至少一项。</Answer>
+
+**问题 4：为什么有环链表不能直接套用本题算法？**
+
+<Answer>遍历永远到不了`nullptr`，不存在定义明确的尾节点；显式栈会持续增长，递归会持续深入。应先检测并返回结构错误，除非业务重新定义环上的输出起终点和访问次数。</Answer>
+
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="系统调用栈">
-    存放当前活动子程序/函数调用状态的系统内存区域，每次函数调用都会压入一个栈帧，用于保存局部变量、返回地址 and 寄存器状态。详见「方法 1」节。
-  </GlossaryItem>
-  <GlossaryItem term="显式栈">
-    在程序中手动创建并管理的数据结构（如 std::stack 或数组），用以模拟先进后出（LIFO）的执行流程，不占用系统调用栈空间。详见「方法 2」节。
-  </GlossaryItem>
-  <GlossaryItem term="栈溢出">
-    由于函数嵌套层数过深，导致系统调用栈空间耗尽，程序被迫异常中止的错误。详见「常见误区」节。
-  </GlossaryItem>
-  <GlossaryItem term="只读打印">
-    在遍历或输出数据结构的内容时，严禁修改任何指针或节点数据，保持数据结构原始状态不被破坏的操作约束。详见「常见误区」节。
-  </GlossaryItem>
+  <GlossaryItem term="单向链表">每个节点只保存下一节点链接、不能直接访问前驱的线性结构。</GlossaryItem>
+  <GlossaryItem term="只读遍历">遍历期间不修改节点值、链接和链表头的操作契约。</GlossaryItem>
+  <GlossaryItem term="显式栈">程序显式维护、按后进先出push和pop元素的容器。</GlossaryItem>
+  <GlossaryItem term="调用栈">运行时为嵌套函数调用保存状态和返回位置的栈结构。</GlossaryItem>
+  <GlossaryItem term="后进先出">最后压入的元素最先弹出的LIFO访问顺序。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+  adaptedFrom="《剑指Offer（第2版）》面试题6及何海涛官方源码 PrintListInReversedOrder.cpp"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/06_PrintListInReversedOrder/PrintListInReversedOrder.cpp"
 />

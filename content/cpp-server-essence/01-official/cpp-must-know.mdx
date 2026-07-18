@@ -1,0 +1,310 @@
+---
+title: "第1章：C++ 必知必会"
+type: A
+section: "C++ 服务器开发精髓 · 资源、现代语法与智能指针"
+order: 1
+description: "对齐原书第 1 章：RAII、pimpl、C++11/14/17 初始化与注解、final/override/default/delete、auto/range-for/structured binding、STL emplace 与智能指针。"
+demo: true
+math: false
+sourceUrl: "https://book.douban.com/subject/35491437/"
+draft: false
+---
+
+import {
+  CseModernFeatureContractLab,
+  CseRaiiCleanupLab,
+  CseSmartPointerOwnershipLab,
+} from "@/components/mdx/cpp-server-essence/diagrams/cpp-must-know";
+
+<Objectives>
+
+- 能实现 exception-safe 的 RAII resource wrapper 与 pimpl boundary，证明 acquire、move、release、destructor 与 incomplete type 的 ownership contract
+- 能比较 initializer_list、attributes、final/override/default/delete、auto、range-for、structured binding 和 emplace APIs，判断 copy、overload、lifetime 与 diagnostic 差异
+- 能设计 unique/shared/weak ownership graph，正确使用 make functions 与 enable_shared_from_this，并诊断 double delete、strong cycle 和 control-block 错误
+
+</Objectives>
+
+## 为什么服务器开发先从 C++ resource contract 开始
+
+服务器长期持有 socket、buffer、file、thread、mutex guard 和 callback。connect 失败、allocation 抛异常、early return、peer close 与 shutdown 竞态让错误路径远多于正常路径。若 cleanup 依赖“每个分支都记得 close”，低概率遗漏最终会积成 fd、memory 或 thread leak。
+
+原书第 1 章先建立共同底座：RAII 把 resource 与 lifetime 绑定；pimpl 隔离 implementation；C++11/14/17 把 intent 交给 compiler；smart pointers 把 heap ownership graph 显式化。
+
+目录中的 **C++ 11/14/17 新增的实用特性**不是语法新闻，而是贯穿 initializer、attributes、override/default/delete、deduction、iteration 与 container construction 的可审核 contract。
+
+<Term def="API 规定谁取得 resource、能否 move/copy、何时 release，以及失败路径由谁清理的约定。">resource ownership contract</Term>
+
+## 1.1 RAII：让所有退出路径共用 destructor
+
+原书从手工 cleanup、goto、do-while-zero 演进到 RAII。集中 label 比复制释放语句少漏分支，但仍靠人工维护 acquire/release 顺序；RAII 才把顺序放进 object lifetime。
+
+<Term def="Resource Acquisition Is Initialization；constructor 建立 ownership，destructor 随 scope exit release。">RAII idiom</Term>
+
+```cpp
+class Socket final {
+ public:
+  explicit Socket(int fd = -1) noexcept : fd_(fd) {}
+  ~Socket() { if (fd_ >= 0) ::close(fd_); }
+
+  Socket(const Socket&) = delete;
+  Socket& operator=(const Socket&) = delete;
+
+  Socket(Socket&& other) noexcept
+      : fd_(std::exchange(other.fd_, -1)) {}
+
+  Socket& operator=(Socket&& other) noexcept {
+    if (this != &other) {
+      if (fd_ >= 0) ::close(fd_);
+      fd_ = std::exchange(other.fd_, -1);
+    }
+    return *this;
+  }
+ private:
+  int fd_;
+};
+```
+
+<Term def="copy 被删除、move 转移 handle 并让 source 进入可析构 empty state 的单 owner 资源类型。">unique resource owner</Term>
+
+normal return、early return 和 <Term def="异常传播时已构造 automatic objects 按逆序执行 destructors 的过程。">stack unwinding</Term> 都走同一个 destructor。析构函数通常必须 noexcept；若析构在另一个 active exception 期间抛出，程序会 terminate。
+
+<Term def="把 failure branches 汇聚到一个逆序释放资源 label 的 C-style cleanup 结构。">cleanup label</Term>
+
+<Callout type="trap" title="陷阱：有 destructor 就自动是正确 RAII">
+  默认 copy 会让两个 objects 拥有同一 fd；错误 move 不清空 source 也会 double-close；move assignment 覆盖旧 fd 前不释放则 leak。RAII 仍需完整 copy/move/empty-state/noexcept contract。
+</Callout>
+
+## 1.2 pimpl：隐藏 layout 与重依赖
+
+<Term def="Pointer to implementation；public class 只保存 owning pointer，把 data layout 与 dependencies 放进 source file。">pimpl idiom</Term>
+
+```cpp
+// session.h
+class Session {
+ public:
+  Session();
+  ~Session();
+  Session(Session&&) noexcept;
+  Session& operator=(Session&&) noexcept;
+ private:
+  class Impl;
+  std::unique_ptr<Impl> impl_;
+};
+```
+
+```cpp
+// session.cpp
+class Session::Impl { Buffer input; Parser parser; };
+Session::Session() : impl_(std::make_unique<Impl>()) {}
+Session::~Session() = default;
+Session::Session(Session&&) noexcept = default;
+Session& Session::operator=(Session&&) noexcept = default;
+```
+
+<Term def="header 只 forward-declare Impl，使 consumer 不需解析 implementation-only includes 的编译边界。">compilation firewall</Term>
+
+unique_ptr 可声明 incomplete pointee，但删除 Impl 需要 complete type，所以 destructor 在 `.cpp` 定义。pimpl 可减少 rebuild fan-out、隐藏 layout 并辅助 <Term def="binary consumer 依赖的 object layout、symbols 与 calling convention 保持兼容。">ABI stability</Term>，代价是 allocation、indirection 和 special-member 设计；小 value type 不必机械使用。
+
+## 1.3 C++11/14/17 特性是 contract 工具
+
+### 统一初始化与 initializer_list
+
+<Term def="用 braces 初始化 scalar、aggregate、member 或 constructor argument 的统一表面语法。">uniform initialization</Term>
+
+```cpp
+struct Config {
+  std::string host{"127.0.0.1"};
+  std::uint16_t port{8080};
+  std::size_t workers{4};
+};
+```
+
+braces 可拒绝 narrowing，但会优先考虑 <Term def="接收同类型 elements 的只读 view，braced list overload resolution 会优先考虑它。">initializer_list overload</Term>。`vector<int>(10, 2)` 是十个 2，`vector<int>{10, 2}` 是两个 elements；统一语法不等于统一语义。
+
+### attributes、final、override、default、delete
+
+<Term def="双中括号标准 metadata，例如 nodiscard、maybe_unused 与 fallthrough。">standard attribute</Term>
+
+`[[nodiscard]]` 提醒 caller 不应丢掉 status/handle；`[[fallthrough]]` 声明 switch fallthrough 是 intentional。诊断强度由 implementation 决定，attribute 不是 runtime validation。
+
+<Term def="要求 member 必须覆写 base virtual；signature 不匹配时 compiler 报错。">override contract</Term>
+
+<Term def="禁止 class 被继承或 virtual member 被继续覆写。">final contract</Term>
+
+```cpp
+class Handler { public: virtual void on_data(std::string_view) = 0; };
+class Login final : public Handler {
+ public: void on_data(std::string_view) override;
+};
+```
+
+不写 override 时，const/reference/noexcept mismatch 可能静默形成新 overload。`=default` 是 <Term def="显式要求 compiler 生成默认 special-member definition。">defaulted function</Term>；`=delete` 是 <Term def="参与 overload resolution 但命中即不可调用的 function。">deleted function</Term>，可拒绝 copy 或危险 implicit conversion。
+
+### auto、range-for 与 structured binding
+
+<Term def="从 initializer 推导 variable type；value/reference/const qualifier 由声明形态决定。">auto deduction</Term>
+
+`auto value = expr` 常产生 copy，`auto&` alias lvalue，`const auto&` 只读借用。是否写 `&` 比是否写 auto 更影响 ownership 和性能。
+
+<Term def="通过 begin/end protocol 遍历 range；loop variable qualifier 决定 copy 或 alias。">range-based for</Term>
+
+```cpp
+for (auto& connection : connections) connection.poll();
+```
+
+自定义 type 提供 member begin/end 或 ADL free functions 即可支持 Range-based 循环。临时 range 的 lifetime 和 proxy iterator 仍需审查。
+
+<Term def="把 tuple-like、array 或 aggregate 拆成多个 names，auto/reference qualifier 决定绑定语义。">structured binding</Term>
+
+```cpp
+for (auto& [fd, session] : sessions) session.on_ready(fd);
+```
+
+若省略 `&`，map pair/value 可能被复制，修改 session 不影响 container。
+
+### emplace、try_emplace 与 insert_or_assign
+
+<Term def="container 把 arguments 直接转交 element constructor 的原位构造 API。">in-place construction</Term>
+
+```cpp
+sessions.try_emplace(fd, fd, peer_address);
+```
+
+<Term def="key 不存在时才构造 mapped value；存在时避免无意义 mapped construction。">try_emplace semantics</Term>
+
+insert_or_assign 则明确“缺失就 insert，存在就 assign”。emplace 不保证永远零拷贝或更快，conversion、allocator、exception 与 duplicate-key policy 仍需测量。
+
+<Callout type="trap" title="陷阱：现代写法越短就越安全">
+  auto 可隐藏 copy，braces 可选中 initializer_list，structured binding 不加 reference 会复制，emplace 仍可能转换。安全来自明确 type/lifetime/overload contract，而不是字符更少。
+</Callout>
+
+## 1.4 智能指针：先画 owner graph
+
+### auto_ptr 与 unique_ptr
+
+<Term def="copy 会转移 ownership、违反普通 copy intuition，已在 C++17 移除的旧 owning pointer。">auto_ptr legacy</Term>
+
+unique_ptr 用 deleted copy + explicit move 取代 auto_ptr。<Term def="move-only exclusive owner，destructor 调 deleter；默认应优先用 make_unique 构造。">unique_ptr ownership</Term>
+
+```cpp
+auto session = std::make_unique<Session>(fd);
+workers.push_back(std::move(session));
+```
+
+release 只在立即交给另一个明确 owner 时使用；get 只借出 raw pointer；reset 会释放旧 object。默认先 unique ownership，确有共享 lifetime 再 shared_ptr。
+
+### shared_ptr 与 control block
+
+<Term def="保存 strong/weak counts、deleter 与 allocator 的 shared ownership metadata。">shared_ptr control block</Term>
+
+make_shared 通常一次 allocation 创建 object/control block。<Term def="归零时销毁 shared object；weak count 不延长 object lifetime。">strong reference count</Term>。同一 raw pointer 分别构造两个 shared_ptr 会形成两个 control blocks 并 double delete。
+
+shared_ptr 的 control block 操作可并发，不代表 pointee fields thread-safe；多个 threads 修改 Session 仍需 mutex 或 single-owner-thread discipline。`use_count()==1` 也不是同步原语。
+
+### enable_shared_from_this 与 weak_ptr
+
+<Term def="让已由 shared_ptr 托管的 object 在成员函数中取得同一 control block owner。">enable_shared_from_this contract</Term>
+
+```cpp
+class Session : public std::enable_shared_from_this<Session> {
+ public:
+  void start() {
+    reactor.register_callback([weak = weak_from_this()] {
+      if (auto self = weak.lock()) self->on_ready();
+    });
+  }
+};
+```
+
+object 必须先由 shared_ptr 管理；对 stack/unique object 或 constructor 中过早 shared_from_this 会失败。绝不能 `shared_ptr<Session>(this)`，那会创建第二 control block。
+
+<Term def="不增加 strong count 的 observer，通过 lock 原子尝试取得 live shared_ptr。">weak_ptr observer</Term>
+
+expired 只是瞬时查询；真正访问应直接 lock 并在 returned shared_ptr lifetime 内完成。parent-child、subject-observer 与 callbacks 用 weak 表达 non-owning reverse edge，打破 <Term def="shared_ptr strong edges 成环、count 永不归零的 memory leak。">strong ownership cycle</Term>。
+
+unique_ptr 默认 deleter 常为一个 pointer 大小；stateful deleter 可增大 object。shared_ptr 通常含 object/control-block 两个 pointers，具体 ABI 应对当前 implementation 用 sizeof/benchmark 验证。
+
+<Callout type="trap" title="陷阱：shared_ptr 让 pointee 自动线程安全且不会泄漏">
+  shared_ptr 只同步引用计数，不同步 pointee；双向 strong edges 仍会 cycle leak。优先 unique_ptr，共享 lifetime 才 shared_ptr，反向观察用 weak_ptr。
+</Callout>
+
+## 三步验收第 1 章
+
+<Stepper>
+  <Step title="第一步：在不同 acquire 阶段失败">
+    先预测 manual、goto 与 RAII 各释放哪些资源，再移动 failure point。验收 every early return/exception path，而不是只跑 normal path。
+
+    <CseRaiiCleanupLab />
+  </Step>
+  <Step title="第二步：把语法糖还原成 type contract">
+    切换 override、member init、range-for、structured binding 与 try_emplace，逐项回答新增了什么诊断，是否改变 copy、reference 或 overload。
+
+    <CseModernFeatureContractLab />
+  </Step>
+  <Step title="第三步：画 control block 与 strong edges">
+    切换 unique/shared/weak/shared_from_this，并制造 cycle 或未托管 self。观察 strong count、expiry check 与 release 条件。
+
+    <CseSmartPointerOwnershipLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- RAII 合并 acquire/release 与 lifetime；copy/move/empty state/noexcept destructor 仍需完整设计
+- pimpl 用 incomplete Impl + unique_ptr 建 compilation firewall，并承担 allocation/indirection 代价
+- initializer_list 可改变 braces overload；final/override/default/delete 与 attributes 把 intent 交给 compiler
+- auto、range-for、structured binding 的 qualifier 决定 copy、alias 与 lifetime
+- emplace、try_emplace、insert_or_assign 表达不同 construction 与 duplicate-key policy
+- auto_ptr 被 move-only unique_ptr 取代；shared_ptr 共享 control block，weak_ptr 表达 non-owning edge
+- enable_shared_from_this 只能在 control block 已建立后调用；shared_ptr 不同步 pointee，也不自动打破 cycle
+
+<Exercises>
+  1. **问题 1：审查 Socket wrapper。** destructor close(fd)，却保留默认 copy；move 又不清空 source。会发生什么，怎样修复？
+
+  <Answer question="为什么有 destructor 仍可能 double-close？">默认 copy 与错误 move 都制造两个 fd owners，先析构者 close 后 fd 甚至可能被 OS 复用，后析构者会关闭无关连接。delete copy；move ctor 用 exchange 把 source 设 -1；move assignment 先释放旧 fd 再 exchange；destructor 只在 fd 有效时 noexcept close。</Answer>
+
+  2. **问题 2：解释 `auto item`、`auto [k,v]` 与 `vector<int>{10,2}` 三段风险。**
+
+  <Answer question="auto、structured binding 与 braces 各隐藏什么？">前两个默认产生 value copy，若要 alias 应用 auto& 或 const auto&；braces 命中 initializer_list，得到两个 elements 10 和 2，parentheses (10,2) 才是十个 2。现代语法必须结合 qualifier 与 overload set 恢复精确 contract。</Answer>
+
+  3. **问题 3：Session 用 shared_ptr(this) 注册 callback，Reactor 又被 Session 拥有。指出两个 ownership bug 并修复。**
+
+  <Answer question="怎样避免第二 control block 与 callback cycle？">shared_ptr(this) 创建第二 control block，与原 owner double delete。Session 应继承 enable_shared_from_this，并只在 make_shared 托管后取得 shared/weak_from_this。若 callback strong-captures Session，会与 Reactor 成环；改捕获 weak_ptr，执行时 lock，失败则跳过，并在 close 时 unregister。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="resource ownership contract">resource acquire、move/copy、release 与 failure cleanup 约定。</GlossaryItem>
+  <GlossaryItem term="RAII idiom">constructor 建 ownership、destructor 随 scope exit release。</GlossaryItem>
+  <GlossaryItem term="unique resource owner">copy 禁止、move 转移、同一 resource 只有一个 owner。</GlossaryItem>
+  <GlossaryItem term="stack unwinding">exception 传播时 automatic objects 逆序析构。</GlossaryItem>
+  <GlossaryItem term="cleanup label">goto 汇聚 error paths 并逆序释放的结构。</GlossaryItem>
+  <GlossaryItem term="pimpl idiom">public object 通过 pointer 持有私有 Impl。</GlossaryItem>
+  <GlossaryItem term="compilation firewall">forward-declared Impl 隔离 implementation includes/layout。</GlossaryItem>
+  <GlossaryItem term="ABI stability">layout/symbol/calling convention 对 binary consumer 保持兼容。</GlossaryItem>
+  <GlossaryItem term="uniform initialization">braces 统一表示多类初始化的语法。</GlossaryItem>
+  <GlossaryItem term="initializer_list overload">braced list 优先考虑的 element-view constructor。</GlossaryItem>
+  <GlossaryItem term="standard attribute">双中括号标准 metadata/diagnostic annotation。</GlossaryItem>
+  <GlossaryItem term="override contract">要求 member 匹配 base virtual 的检查。</GlossaryItem>
+  <GlossaryItem term="final contract">禁止进一步 inheritance/override 的声明。</GlossaryItem>
+  <GlossaryItem term="defaulted function">compiler 生成默认 special-member definition。</GlossaryItem>
+  <GlossaryItem term="deleted function">overload 命中即不可调用的 function。</GlossaryItem>
+  <GlossaryItem term="auto deduction">从 initializer 推导 variable type。</GlossaryItem>
+  <GlossaryItem term="range-based for">通过 begin/end protocol 遍历 range。</GlossaryItem>
+  <GlossaryItem term="structured binding">把 tuple-like/aggregate components 引入多个 names。</GlossaryItem>
+  <GlossaryItem term="in-place construction">container 用 arguments 直接构造 element。</GlossaryItem>
+  <GlossaryItem term="try_emplace semantics">key 缺失才构造 mapped value。</GlossaryItem>
+  <GlossaryItem term="auto_ptr legacy">copy 转移 owner、已从 C++17 移除的旧 pointer。</GlossaryItem>
+  <GlossaryItem term="unique_ptr ownership">move-only exclusive pointer/deleter ownership。</GlossaryItem>
+  <GlossaryItem term="shared_ptr control block">保存 strong/weak counts 与 deleter 的 metadata。</GlossaryItem>
+  <GlossaryItem term="strong reference count">归零时销毁 shared object 的 owner count。</GlossaryItem>
+  <GlossaryItem term="enable_shared_from_this contract">从已托管 object 取得同一 control block owner。</GlossaryItem>
+  <GlossaryItem term="weak_ptr observer">不增加 strong count、用 lock 临时取得 owner。</GlossaryItem>
+  <GlossaryItem term="strong ownership cycle">strong edges 成环导致 count 不归零的 leak。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++服务器开发精髓，第1章 C++必知必会"
+  adaptedUrl="https://book.douban.com/subject/35491437/"
+/>

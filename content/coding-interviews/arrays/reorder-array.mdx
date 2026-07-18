@@ -1,332 +1,283 @@
 ---
-title: 调整数组顺序使奇数位于偶数前面
+title: "面试题21：调整数组顺序使奇数位于偶数前面"
 type: C
-section: 数组
-order: 2
-description: 掌握双指针首尾相向扫描进行就地元素交换的划分思想，深入理解稳定性与时空复杂度折中。
+section: "第3章 高质量的代码"
+order: 23
+description: "用首尾双指针原地划分奇偶元素，证明区间不变量，并通过后区谓词把扫描框架扩展到其他二分类规则。"
 demo: true
-math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviews
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/21_ReorderArray/ReorderArray.cpp"
 draft: false
 ---
 
-{/* 知识点清单：双指针相向扫描 / 快慢双指针 / 稳定划分与空间折中 / 位运算优化 / 边界溢出防御 / 泛型谓词设计；原书章节：面试题21：调整数组顺序使奇数位于偶数前面。 */}
+import { OddEvenPartitionDiagram, PartitionInvariantMap, PredicateExtensionDiagram, ReorderOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/reorder-array";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 掌握并能灵活运用**相向双指针**在 $O(N)$ 时间和 $O(1)$ 空间内对数组进行就地奇偶划分。
-- 阐明划分算法中**稳定性（Stability）**的内涵，并对比分析原位非稳定分区与空间换时间稳定分区的时空复杂度折中。
-- 辨析并防御双指针扫描中的**两个关键陷阱**：内部循环索引越界与交换后的指针死循环。
-- 理解泛型和解耦思想，能使用**函数指针/回调函数（谓词）**重构代码，使算法可灵活扩展至任意划分规则（如正负数、大小写、整除等）。
+- 能解释首尾指针各自寻找什么错位元素以及何时终止
+- 能计算每次交换前后三个区间的分区不变量
+- 能实现作者奇偶专用版与判断函数解耦的通用版
+- 能分析线性时间、常数空间和不稳定性的来源
+- 能设计不依赖唯一输出顺序的分区性质测试与稳定方案
 
 </Objectives>
 
-## 直觉引入
+## 从“只分类，不排序”开始
 
-在开始严谨的算法设计之前，我们可以用生活中的日常场景来理解这一思想：
+先预测：输入 1,2,3,4,5,6,7，算法输出必须是 1,3,5,7,2,4,6 吗？题目只要求**奇数位于偶数前面**，没有要求奇数内部或偶数内部继续保持原顺序，也没有要求升序。因此 1,7,3,5,4,6,2 同样是合法结果。
 
-*   **扑克牌花色分类**：想象你手握一叠扑克牌，想要把所有红桃（奇数代表物）移到左边，所有黑桃（偶数代表物）移到右边。你并不关心红桃内部或黑桃内部的大小顺序。
-    
-    你很自然会这样做：左手从最左边开始往右找第一张黑桃，右手从最右边开始往左找第一张红桃。当两只手都找到了目标（左手找到黑桃，右手找到红桃），就对调这两张牌的位置。接着，两手继续往中间摸索，重复此过程，直到两手相遇。这就是**『相向双指针』**的直观体现。
-    
-*   **文件夹归档（稳定分类）**：假设你有一叠按时间先后排序的员工档案。你必须把在职员工（奇数）排到离任员工（偶数）前面，**且要保持原有的时间先后顺序不变**。
-    
-    此时你不能再用前面的“对调”方法了，因为一旦把最左边的离任档案与最右边的在职档案对调，它们与中间档案的相对时间顺序就被打乱了。为了保持稳定性，你通常需要搬来两个空箱子（**辅助缓冲区**），一个装在职的，一个装离任的，依次把档案放入对应的箱子中，最后把两个箱子合并。这就是以空间换时间的**『稳定分区』**过程。
+若把整个数组排序，当然也能让一部分奇数出现在偶数前，但需要更多比较，还会引入并非题目要求的组内次序。本题是二路划分：只要存在一个边界，使边界左侧全是奇数、右侧全是偶数即可。
 
----
+把一个指针放在数组开头向右找偶数，另一个放在末尾向左找奇数；找到一对错位元素后交换。两个位置都从外侧向中间移动，这种技巧称为<Term def="分别从序列首尾出发、单调向中间扫描并成对处理错位元素的方法。">首尾双指针</Term>。
 
-## 概念讲解
+<OddEvenPartitionDiagram />
 
-### 1. 相向双指针就地划分 (Unstable Partition)
+左指针停在偶数2，说明它不应留在前区；右指针停在奇数7，说明它不应留在后区。交换后两个元素同时归位。算法不需要知道最终边界在哪，它通过不断缩小未分类区间自然找到边界。
 
-如果面试官不要求保留元素间的原始相对顺序，我们的目标就是用最少的时间与空间完成分类。通过在数组两端设置 `left` 和 `right` 指针，向中间扫描：
+## 三段区间是不变量
 
-- `left` 指针负责寻找偶数。如果是奇数则跳过（`left++`），遇到偶数时停下。
-- `right` 指针负责寻找奇数。如果是偶数则跳过（`right--`），遇到奇数时停下。
-- 当 `left < right` 且两个指针都停下时，说明定位到了一个“左边的偶数”和一个“右边的奇数”，直接交换它们的值，然后继续向中间扫描。
-- 当 `left >= right` 时，说明所有奇数已成功划分到偶数左侧，扫描结束。
+循环任意时刻都可以把数组分为三段：
 
-```
-初始状态：[2, 4, 5, 7, 8, 1, 3]
-         ^ left           ^ right (2为偶停止, 3为奇停止 -> 交换)
+1. left 左侧已经全部是奇数。
+2. left 到 right 之间尚未分类。
+3. right 右侧已经全部是偶数。
 
-交换后：  [3, 4, 5, 7, 8, 1, 2]
-         ^ left           ^ right
+这组始终成立的条件称为<Term def="循环每轮开始和结束都成立、用于证明已处理区间正确性的条件。">分区不变量</Term>。左内层循环越过奇数，只扩大正确的前区；右内层循环越过偶数，只扩大正确的后区；交换则把两个边界错位元素放进对应区域。
 
-收缩扫描：[3, 4, 5, 7, 8, 1, 2]
-            ^ left     ^ right    (4为偶停止, 1为奇停止 -> 交换)
+<PartitionInvariantMap />
 
-交换后：  [3, 1, 5, 7, 8, 4, 2]
-            ^ left     ^ right
+当 left 与 right 相遇或交错时，未分类区间为空或只剩一个元素。由于两边已满足不变量，整个数组自然满足奇数在前、偶数在后。每个指针只朝一个方向移动，所以算法一定终止。
 
-收缩扫描：[3, 1, 5, 7, 8, 4, 2]
-                     ^   ^
-                   right left     (指针交错 left >= right -> 终止)
-```
+## 忠实实现作者第一种解法
 
-**复杂度分析**：
-- **时间复杂度**：$O(N)$。尽管有嵌套循环，但 `left` 和 `right` 两个指针一共只把数组从头到尾扫过一遍，每个元素最多被访问一次。
-- **空间复杂度**：$O(1)$。仅需常数个指针变量，完成就地（In-place）交换。
+作者用位与最低位判断奇偶：最低位为1是奇数，为0是偶数。空指针或长度为0时必须先返回，否则计算末尾指针会越过有效对象边界。
 
----
-
-### 2. 稳定性 (Stability) 与空间换时间
-
-上述相向双指针算法是**不稳定**的。在上面的例子中，奇数 `3` 原本在 `5` 和 `7` 的右边，经过第一次交换后直接飞到了数组最左端，超越了 `5` 和 `7`。
-
-若要求**稳定划分**，常用的解法有：
-
-1.  **辅助空间法**：
-    创建两个临时数组（或队列）`odds` 和 `evens`。遍历原数组，遇到奇数放入 `odds`，遇到偶数放入 `evens`。最后将 `evens` 拼接到 `odds` 后面，写回原数组。
-    - **时间复杂度**：$O(N)$。
-    - **空间复杂度**：$O(N)$，需要分配同等大小的辅助存储。
-2.  **原地稳定划分（分治法）**：
-    利用类似归并排序的分治策略。将数组分成左右两部分，递归进行奇偶划分。合并时，需要将左半部分的偶数段与右半部分的奇数段进行旋转拼接（类似于数组旋转）。
-    - **时间复杂度**：$O(N \log N)$。
-    - **空间复杂度**：$O(1)$（或递归栈的 $O(\log N)$）。
-
----
-
-### 3. 解耦与可扩展性设计
-
-在实际工程中，今天需求是“奇数在偶数前”，明天可能是“负数在正数前”或“小写字母在大写字母前”。
-如果把“判断是否为奇数”的逻辑硬编码在划分算法中，会导致代码复用性极差。
-
-更好的设计是**将划分逻辑与判定规则解耦**。在 C++ 中可以通过**函数指针**、`std::function` 或 **Lambda 表达式**作为参数；在 TypeScript 中可以使用**谓词回调函数** `(val: number) => boolean`。
-
----
-
-## 交互 Demo
-
-点击下方控制按钮，逐步观察双指针在移动、定位不合规项以及进行就地对调时的行为轨迹：
-
-<PartitionArrayDiagram />
-
----
-
-## 代码对照
-
-### 核心实现 A：就地非稳定双指针划分（C++ & TS）
-
-注意在内部 `while` 扫描中防范越界。在 C++ 实现中，我们进一步使用了函数指针将判断条件解耦。
-
-<CodeTabs>
-  <Tab label="C++ (谓词解耦原位划分)">
 ```cpp
-#include <iostream>
-#include <vector>
+#include <cstddef>
+#include <utility>
 
-// 谓词函数：判断是否为奇数
-bool isOdd(int n) {
-    return (n & 1) != 0; // 位运算优化，等价于 n % 2 != 0
-}
+void reorderOddEven(int* data, std::size_t length) {
+    if (data == nullptr || length == 0) return;
 
-class Solution {
-public:
-    // 接受一个函数指针作为判定条件，实现逻辑解耦
-    void ReorderArray(std::vector<int>& nums, bool (*predicate)(int)) {
-        if (nums.size() <= 1) return;
+    int* begin = data;
+    int* end = data + length - 1;
 
-        int left = 0;
-        int right = nums.size() - 1;
-
-        while (left < right) {
-            // 向右移动 left，直到指向不满足谓词的元素（如偶数）
-            // 必须限制 left < right 防止全奇数数组导致越界
-            while (left < right && predicate(nums[left])) {
-                left++;
-            }
-
-            // 向左移动 right，直到指向满足谓词的元素（如奇数）
-            while (left < right && !predicate(nums[right])) {
-                right--;
-            }
-
-            if (left < right) {
-                // 交换错位元素
-                int temp = nums[left];
-                nums[left] = nums[right];
-                nums[right] = temp;
-                
-                // 交换后必须更新指针，否则若 nums[left] 和 nums[right] 
-                // 的判定没有改变会导致死循环
-                left++;
-                right--;
-            }
+    while (begin < end) {
+        while (begin < end && (*begin & 1) != 0) {
+            ++begin;
+        }
+        while (begin < end && (*end & 1) == 0) {
+            --end;
+        }
+        if (begin < end) {
+            std::swap(*begin, *end);
         }
     }
-};
+}
 ```
-  </Tab>
-  <Tab label="TypeScript (TypeScript版)">
-```typescript
-/**
- * 调整数组顺序，使满足 predicate 条件的元素位于前面
- * @param nums 待调整数组
- * @param predicate 划分谓词，返回 true 的排在前面，false 的排在后面
- */
-function reorderArray(nums: number[], predicate: (x: number) => boolean): number[] {
-  if (!nums || nums.length <= 1) return nums;
 
-  let left = 0;
-  let right = nums.length - 1;
+注意作者交换后没有显式执行 begin 加一和 end 减一，这并不会死循环。交换前 begin 指向偶数、end 指向奇数；交换后 begin 位置变成奇数、end 位置变成偶数。下一轮两个内层循环会立刻分别越过它们，使未分类区间严格缩小。
 
-  while (left < right) {
-    // 寻找前半部分的“非目标项”（例如偶数）
-    while (left < right && predicate(nums[left])) {
-      left++;
-    }
-    // 寻找后半部分的“目标项”（例如奇数）
-    while (left < right && !predicate(nums[right])) {
-      right--;
-    }
+显式移动也可以正确，因为这两个位置已经归类，但它不是防止死循环的唯一方式。阅读源码时应按值与谓词证明进展，不能看到没有手动移动就断言错误。
 
-    if (left < right) {
-      // 交换位置
-      const temp = nums[left];
-      nums[left] = nums[right];
-      nums[right] = temp;
-      
-      left++;
-      right--;
-    }
-  }
+<Callout type="trap" title="交换后没有显式移动就一定死循环">
+作者依靠下一轮内层扫描移动：交换后的左值满足前区条件，右值满足后区条件。真正会破坏进展的是判定函数前后不一致、带副作用，或交换没有改变两侧所属类别。
+</Callout>
 
-  return nums;
+## 复杂度为何不是嵌套循环的平方
+
+代码有外层循环和两个内层循环，但 begin 总共最多前进 length 次，end 总共最多后退 length 次；任何位置不会被同一指针反复跨越。总访问次数与数组长度成线性关系，所以时间 O(n)。
+
+交换就地发生，只使用两个指针和一个临时值，额外空间 O(1)。最坏交换次数不超过 n 的一半，因为每次交换至少修复两个错位位置。已经分区、全奇数或全偶数时没有交换。
+
+数组元素可能为负数。作者的位与写法在项目目标整数表示上可用；若希望表达语义更直接，可以写 value % 2 != 0。不能写 value % 2 == 1，因为负奇数在 C++ 中的余数是 -1，会被误判为非奇数。
+
+## 把“偶数”提取成后区谓词
+
+第二种解法不再把奇偶判断写死在扫描框架中。作者的 func 返回 true 表示该元素应该放到**后半区**：左指针越过 func 为 false 的元素，停在 true；右指针越过 true，停在 false，然后交换。
+
+把这种函数称为<Term def="返回true表示元素属于划分后半区、返回false表示属于前半区的布尔判定函数。">后区谓词</Term>。奇偶题传入 isEven，因此 false 的奇数在前，true 的偶数在后。这里的 true 不是“应放前面”，若调用者误解方向，结果会完全相反。
+
+<PredicateExtensionDiagram />
+
+```cpp
+#include <cstddef>
+#include <utility>
+
+using BackPredicate = bool (*)(int);
+
+bool isEven(int value) {
+    return (value & 1) == 0;
 }
 
-// 示例调用：
-// const arr = [2, 4, 5, 7, 8, 1, 3];
-// reorderArray(arr, (val) => (val & 1) !== 0); // [3, 1, 5, 7, 8, 4, 2]
+void reorder(int* data,
+             std::size_t length,
+             BackPredicate belongsBack) {
+    if (data == nullptr || length == 0 ||
+        belongsBack == nullptr) {
+        return;
+    }
+
+    int* begin = data;
+    int* end = data + length - 1;
+    while (begin < end) {
+        while (begin < end && !belongsBack(*begin)) {
+            ++begin;
+        }
+        while (begin < end && belongsBack(*end)) {
+            --end;
+        }
+        if (begin < end) {
+            std::swap(*begin, *end);
+        }
+    }
+}
+
+void reorderOddEvenExtensible(int* data, std::size_t length) {
+    reorder(data, length, isEven);
+}
 ```
-  </Tab>
-</CodeTabs>
 
----
+这种“判断函数解耦”把稳定的扫描骨架与变化的业务规则分开。把 isEven 换成“是否非负”“是否无效”“是否超过阈值”，就能复用同一划分过程。这里的**扩展性**来自明确的谓词契约，而不只是把函数指针塞进参数列表。
 
-### 核心实现 B：保证相对顺序的稳定划分（C++ & TS）
+现代 C++ 可用函数模板接收无状态 lambda，避免 std::function 的类型擦除开销；若接口跨动态库或 C ABI，普通函数指针反而更清晰。无论形式如何，谓词必须是确定的、无副作用的，并在一次调用期间对同一值返回一致结果。
 
-如果面试要求“稳定分区”，我们需要牺牲空间来换取 $O(N)$ 的高效划分。
+## 非稳定划分会改变组内次序
 
-<CodeTabs>
-  <Tab label="C++ (稳定划分)">
+原算法属于<Term def="只保证两类元素分居边界两侧，不保证任一类别内部相对次序的划分。">不稳定划分</Term>。输入 2,4,6,1,3,5,7 第一次会交换2和7，奇数7直接越过原本位于它前面的1、3、5；虽然分类正确，奇数组内顺序改变。
+
+如果需求要求原数组中先出现的奇数在结果中仍先出现，偶数也同样保序，就需要<Term def="完成二分类的同时保持每一类别元素原始相对顺序的划分。">稳定划分</Term>。最直接方案是顺序扫描两次或使用两个缓冲区：先按原序写入所有奇数，再按原序写入所有偶数，时间 O(n)、额外空间 O(n)。
+
+也可以原地稳定：遇到奇数时把它旋转到前区边界，并把中间偶数整体右移。简单实现最坏 O(n²)；分治配合区间旋转可做到 O(n log n) 时间和较少辅助空间，但明显复杂。需求没要求稳定时，不应主动承担这笔成本。
+
+标准库 std::partition 对应本题非稳定划分，但它的谓词通常表示“放前区”，与作者后区谓词方向相反；std::stable_partition 提供稳定语义，复杂度和空间取决于可用缓冲。调用库函数时仍要先对齐契约。
+
+<Callout type="trap" title="只断言一个固定输出数组">
+非稳定划分可能有多个正确结果，不同实现或库版本的交换路径也可能不同。测试应验证奇偶边界、元素多重集合不变和长度不变；只有算法明确承诺具体交换顺序时才比较完整数组。
+</Callout>
+
+## 测试三个性质而不是只看打印
+
+作者六组测试依次是交错输入、偶数全在前、已经正确分区、单奇数、单偶数和空输入。原示例只打印调整前后数组，人工观察容易漏错；自动测试应验证三个性质：
+
+1. 找到第一个偶数后，后面不能再出现奇数。
+2. 调整前后的元素多重集合相同，不能丢失或复制元素。
+3. 数组长度和存储边界不变，空输入不访问内存。
+
+<ReorderOfficialCaseLab />
+
 ```cpp
+#include <algorithm>
+#include <cassert>
 #include <vector>
 
-class Solution {
-public:
-    std::vector<int> ReorderArrayStable(const std::vector<int>& nums) {
-        if (nums.size() <= 1) return nums;
-
-        std::vector<int> odds;
-        std::vector<int> evens;
-        odds.reserve(nums.size()); // 预分配内存优化性能
-
-        // 顺序扫描，保证相对顺序不变
-        for (int num : nums) {
-            if ((num & 1) != 0) {
-                odds.push_back(num);
-            } else {
-                evens.push_back(num);
-            }
+bool partitionedOddBeforeEven(const std::vector<int>& values) {
+    bool seenEven = false;
+    for (int value : values) {
+        if ((value & 1) == 0) {
+            seenEven = true;
+        } else if (seenEven) {
+            return false;
         }
-
-        // 将偶数集合拼接到奇数集合后面
-        odds.insert(odds.end(), evens.begin(), evens.end());
-        return odds;
     }
-};
-```
-  </Tab>
-  <Tab label="TypeScript (稳定划分)">
-```typescript
-function reorderArrayStable(nums: number[]): number[] {
-  if (!nums || nums.length <= 1) return nums;
+    return true;
+}
 
-  const odds: number[] = [];
-  const evens: number[] = [];
+void checkCase(std::vector<int> values) {
+    auto before = values;
+    reorder(values.data(), values.size(), isEven);
+    assert(partitionedOddBeforeEven(values));
+    std::sort(before.begin(), before.end());
+    auto after = values;
+    std::sort(after.begin(), after.end());
+    assert(before == after);
+}
 
-  // 单次遍历顺序分流
-  for (const num of nums) {
-    if ((num & 1) !== 0) {
-      odds.push(num);
-    } else {
-      evens.push(num);
-    }
-  }
-
-  // 拼接写回
-  return odds.concat(evens);
+void testReorder() {
+    checkCase({1,2,3,4,5,6,7});
+    checkCase({2,4,6,1,3,5,7});
+    checkCase({1,3,5,7,2,4,6});
+    checkCase({1});
+    checkCase({2});
+    checkCase({});
+    reorder(nullptr, 0, isEven);
 }
 ```
-  </Tab>
-</CodeTabs>
 
----
+若元素可重复，多重集合检查仍然有效；只用普通集合会把两个2和一个2视为相同，掩盖复制或丢失。对于模板化对象，应记录ID序列或计数映射，避免排序本身要求对象可比较。
 
-## 常见误区
+还应加入负奇数、全奇、全偶、两个元素正反序和随机数组。随机测试可以把结果与 std::partition 的性质断言比较，但不应要求两个非稳定算法输出相同排列。
 
-<Callout type="trap">
-  <strong>现象 →</strong> 输入数组全部是奇数（例如 <code>[1, 3, 5, 7]</code>）或全部是偶数时，程序报空指针或数组索引越界错误。
-  <strong>原因 →</strong> 在内部 <code>while</code> 扫描递增 <code>left</code> 或递减 <code>right</code> 时，忘记增加越界保护条件 <code>left < right</code>。若数组全是奇数，<code>left</code> 判定成立会不停自增，最终越过最大索引导致内存非法访问。
-  <strong>修复 →</strong> 每一个内部移动指针的 <code>while</code> 语句中，必须首要写明 <code>left < right && ...</code> 检查。
-</Callout>
+## 边界、异常与泛型对象
 
-<Callout type="trap">
-  <strong>现象 →</strong> 代码陷入死循环，CPU 占用率达到 100%。
-  <strong>原因 →</strong> 在找到不合规元素并执行交换后，忘记将 <code>left</code> 指针右移和 <code>right</code> 指针左移。这会导致下一轮外层循环中，左右指针仍停在刚才的值上，再次判定并无限重复交换同一组数据。
-  <strong>修复 →</strong> 确保交换分支执行后紧跟 <code>left++; right--;</code> 语句以突破当前匹配项。
-</Callout>
+长度类型使用 size_t 可以避免把负长度传入核心函数，但外部有符号输入仍要先验证再转换。作者先检查 length 为0，再计算 data + length - 1，这个顺序不可交换；零长度下减一会产生无效位置。
 
-<Callout type="trap">
-  <strong>现象 →</strong> 误以为可以使用重写自定义比较器的普通 `sort`（如 C++ 的 `std::sort`）来低成本实现划分。
-  <strong>原因 →</strong> 排序的开销是 $O(N \log N)$，而本题最坏也应当在 $O(N)$ 内解决。此外，非稳定的普通排序会彻底打乱原本的奇偶内部相对位置。
-  <strong>修复 →</strong> 如需用标准库，应使用针对单向可分性优化的 <code>std::stable_partition</code>，其内部如果能申请到临时内存则为 $O(N)$，否则退化为 $O(N \log N)$ 且保序。
-</Callout>
+对 int 交换不会抛异常。泛型对象若移动或交换可能抛出，原地划分只能提供基本保证：数组仍由有效对象组成，但可能已经部分分区。若业务需要强异常保证，可以先计算目标排列并在临时容器完成，再无异常提交，代价是额外空间。
 
----
+谓词若读取会变化的外部状态，同一元素第一次判为前区、下一次判为后区，不变量与终止证明都会失效。并发修改数组也会造成数据竞争。算法契约应要求独占访问、固定长度和纯判定函数。
 
-## 小结与练习
+链表无法从尾部反向扫描，不能直接套首尾指针。单链表可维护“满足前区谓词”的节点链和后区节点链再拼接，或使用前驱指针重连；如果按原遍历顺序追加到两条链，还能在线性时间、常数额外节点空间内保持稳定。
 
-- **相向双指针** 是在线性时间内对两路属性进行就地分类的标准思想，类似快速排序的核心划分（Partition）策略。
-- **稳定性** 要求通常对应着空间或时间的牺牲。在实际开发中，需要根据具体场景选择 $O(1)$ 空间的不稳定原地算法还是 $O(N)$ 空间的稳定算法。
-- **高内聚低耦合** 的设计要求我们将“判定规则”（谓词）通过回调函数或 Lambda 传入，从而使排序/划分模块不依赖具体的业务实体。
+## 正确性证明
+
+初始时两个已分类区间都为空，不变量成立。左扫描只跨越应在前区的奇数，右扫描只跨越应在后区的偶数，因此扩展后的两区仍正确。若指针未相遇，左边界是偶数、右边界是奇数，交换后两者分别属于正确区域。
+
+每轮至少有一个指针向中间推进；交换后下一轮两侧都会越过刚归位元素，所以未分类区间严格缩小。指针相遇时所有元素都在某个正确区间内，故存在奇偶边界，奇数位于偶数前面。
+
+交换不创建、不销毁元素，只置换两个位置，因此多重集合保持不变。结合终止性与分区不变量，算法满足题目全部要求。
+
+<Stepper>
+  <Step title="先找两侧错位元素"><OddEvenPartitionDiagram />左侧停在偶数，右侧停在奇数，交换能一次修复两个位置。</Step>
+  <Step title="维护三个区间不变量"><PartitionInvariantMap />前区全奇、后区全偶、中间未分类；两个已分类区间单调扩大。</Step>
+  <Step title="抽取后区判断函数"><PredicateExtensionDiagram />约定谓词true放后区，替换isEven即可获得其他二分类规则。</Step>
+  <Step title="用六类输入验证性质"><ReorderOfficialCaseLab />测试边界、分区、多重集合和空输入，不依赖唯一输出排列。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 题目只要求奇数位于偶数前面，不要求排序或保持组内顺序。
+2. 首尾双指针分别寻找左侧偶数和右侧奇数，交换错位元素。
+3. 左前区全奇、右后区全偶、中央未分类构成分区不变量。
+4. 作者交换后由下一轮内层扫描自然推进，不需要额外移动才能终止。
+5. 两个指针单调移动，时间 O(n)、额外空间 O(1)。
+6. 后区谓词返回true的元素放后面，isEven使奇数自然进入前区。
+7. 非稳定划分允许组内次序改变；稳定需求需要额外时间或空间。
+8. 测试应断言分区边界和多重集合，而不是只比较某个固定排列。
 
 <Exercises>
-  <Answer question="除了相向双指针，我们也可以用『快慢双指针』来完成就地奇偶划分吗？它有什么特点？">
-    可以。设置慢指针 `slow` 始终指向“已排好奇数段”的下一个位置（初始为 0），快指针 `fast` 从头到尾扫描。如果 `fast` 扫到奇数，就交换 `array[fast]` 和 `array[slow]`，然后 `slow` 递增。
-    
-    其特点是：
-    1. 它是**单向移动**的，因此特别适用于**单向链表**的分类（链表无法从后往前扫描，无法用相向双指针）。
-    2. 其交换次数通常比相向指针多，且同样是**不稳定**的。
-  </Answer>
-  <Answer question="如果在 TS 中要求就地（In-place）且稳定（Stable）地完成奇偶排序，且时间复杂度只允许 O(N)，能实现吗？">
-    在严格的理论上，存在在线性时间 $O(N)$ 和常数辅助空间 $O(1)$ 下进行稳定分区的算法（例如基于 Block-Sort 的稳定划分算法，如 Stable-Partition-In-Place）。但这类算法**极其复杂**，常数因子非常大，内部涉及大量的局部反转和复杂的指针数学计算，实用价值较低。
-    
-    因此，工业界在遇到“稳定且 $O(N)$”的要求时，几乎无一例外会选择分配 $O(N)$ 辅助空间进行分流拷贝；或者在空间受限时妥协为 $O(N \log N)$ 的稳定归并划分。
-  </Answer>
-</Exercises>
 
----
+**问题 1：作者交换后不移动指针，为什么仍会继续前进？**
+
+<Answer>交换前左边是偶数、右边是奇数；交换后左边变奇数、右边变偶数。下一轮左扫描会越过奇数，右扫描会越过偶数，因此未分类区间至少缩小两个位置。</Answer>
+
+**问题 2：通用Reorder的谓词返回true表示什么？**
+
+<Answer>表示该元素属于后半区。左指针越过false并停在true，右指针越过true并停在false；传入isEven时，偶数为true去后区，奇数为false留前区。</Answer>
+
+**问题 3：为什么不能只断言输出等于1,3,5,7,2,4,6？**
+
+<Answer>原算法不保证稳定，多个排列都满足题意。固定数组断言会拒绝合法实现。应检查第一个偶数之后没有奇数，并比较调整前后的元素计数完全相同。</Answer>
+
+**问题 4：若要求稳定且保持线性时间，最直接方案是什么？**
+
+<Answer>顺序扫描输入，把奇数按原序写入一个缓冲区，再把偶数按原序写入，最后写回。时间O(n)、额外空间O(n)，两类内部相对次序都保持不变。</Answer>
+
+</Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="相向双指针 (Bidirectional Two-Pointer)">
-    一种双指针技巧，将两个指针分别初始化在数组的两端（头和尾），并在循环中使它们相向移动（左指针右移，右指针左移）以逐步逼近相遇，常用于原位划分、二分逼近或回文判定。
-  </GlossaryItem>
-  <GlossaryItem term="稳定划分 (Stable Partition)">
-    在根据某种属性（如奇偶性）将数组分割成前后两部分时，保持具有相同属性的元素在重排前后的相对位置先后顺序不发生变化。
-  </GlossaryItem>
-  <GlossaryItem term="谓词 (Predicate)">
-    一个接收元素并返回布尔值（true/false）的函数。在划分和排序算法中，通常作为参数传入以定义分类规则，起到控制逻辑解耦的作用。
-  </GlossaryItem>
-  <GlossaryItem term="位运算优化 (Bitwise Optimization)">
-    利用底层的按位与（&）、按位或（|）等二进制操作代替算术除法/取余运算。例如用 `(n & 1) !== 0` 代替 `n % 2 !== 0`，由于规避了昂贵的除法器计算，可以微幅提升 CPU 周期效率。
-  </GlossaryItem>
+  <GlossaryItem term="首尾双指针">分别从序列首尾出发并单调向中间扫描的两个位置。</GlossaryItem>
+  <GlossaryItem term="分区不变量">循环各轮都成立、描述前区与后区已正确分类的条件。</GlossaryItem>
+  <GlossaryItem term="后区谓词">返回true表示元素应放到划分后半区的布尔函数。</GlossaryItem>
+  <GlossaryItem term="不稳定划分">只保证类别分区，不保证类别内部原相对顺序。</GlossaryItem>
+  <GlossaryItem term="稳定划分">分类后仍保持每一类别元素原相对顺序的划分。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题21"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/21_ReorderArray/ReorderArray.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

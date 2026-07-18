@@ -1,0 +1,193 @@
+---
+title: "Chapter 19. Interlude: Markov Chain Algorithm"
+type: C
+section: "Programming in Lua 4e · Real Programming"
+order: 19
+description: "实现prefix-to-suffix Markov transition table、随机文本生成与完整bounded程序，并验证频率、prefix编码、seed和终止。"
+demo: true
+math: false
+sourceUrl: "https://www.lua.org/pil/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PilMarkovTrainingLab, PilMarkovGenerationLab, PilMarkovProgramLab } from "@/components/mdx/lua-programming/diagrams/markov-chain";
+
+<Objectives>
+
+- 能解释N-token prefix到suffix occurrences的transition table，推导重复后缀如何形成经验概率
+- 能实现随机生成状态机，验证lookup、sample、shift、sentinel、seed和max-step终止
+- 能设计完整Markov程序的tokenizer、model、RNG与output边界，复现prefix碰撞和资源耗尽
+
+</Objectives>
+
+## 从Transition Counts开始理解“随机模仿”
+
+Markov text generator不理解语义。训练阶段观察每个N-word prefix后出现过哪些suffix；生成阶段只根据当前prefix随机选一个observed suffix，再滑动window。相同suffix出现多次就应在候选list中保留多次，采样频率才接近corpus frequency。
+
+先预测：prefix后A出现9次、B出现1次时去重后概率如何变化；用空格拼prefix遇到token自身含空格会不会collision；corpus为空时model是否能终止；未插入terminal sentinel会发生什么；固定seed能否跨Lua版本保证同文本；MAXGEN为何仍必须存在。先写state与invariants。
+
+<Term def="每个固定长度token prefix映射到所有observed next-token occurrences，重复项保留经验frequency weight。">prefix-suffix transition model</Term>是本章核心。它可用suffix list做uniform-over-occurrences采样，也可压成token-to-count map再做weighted sampling；两者必须产生同一分布。
+
+## Building prefix-to-suffix transition tables
+
+原书使用固定order N、NOWORD sentinel和table：初始prefix由N个sentinels组成；每读一个word，把它append到当前prefix的suffix list，再drop最旧token并append该word；EOF后再插入NOWORD transition。Sentinel必须不可能成为real token。
+
+<Term def="Prefix codec对token tuple提供无碰撞canonical key；delimiter方案必须escape或改用nested tables/length-prefix encoding。">prefix encoding invariant</Term>防止两个不同windows共享transition list。受控`%w+`tokens可选择NUL/newline sentinel/delimiter，但一旦tokenizer允许这些bytes就要升级codec。
+
+```lua
+local NOWORD = "\0"
+local function key(prefix) return table.concat(prefix, "\1") end
+local function shift(prefix, suffix)
+  local next_prefix = {}
+  for index = 2, #prefix do next_prefix[#next_prefix + 1] = prefix[index] end
+  next_prefix[#next_prefix + 1] = suffix
+  return next_prefix
+end
+
+local function add(model, prefix, suffix)
+  local encoded = key(prefix)
+  local list = model[encoded]
+  if not list then list = {}; model[encoded] = list end
+  list[#list + 1] = suffix
+end
+```
+
+示例假设real tokens不含NUL/byte 1，production必须由tokenization policy证明。Model budget限制tokens、unique prefixes、suffix occurrences与token length；否则高-order和大corpus会快速增长memory。
+
+<PilMarkovTrainingLab />
+
+<Stepper>
+  <Step title="切换Prefix、Suffix List、Shift和Sentinel"><PilMarkovTrainingLab /></Step>
+  <Step title="手算Tiny Corpus">对`a b a c`用N=1/2逐token写prefix、appended suffix和shift结果，最后检查terminal transition。</Step>
+  <Step title="验证Multiplicity与Codec">重复同transition十次并统计list length；构造delimiter-like tokens，确保不同tuples不碰撞或被拒绝。</Step>
+</Stepper>
+
+<Callout type="trap" title="Suffix List用Set去重能节省Memory且不改变模型">
+Set把每个distinct suffix变成等概率，丢掉corpus frequency。若要压缩，保存count并按weight采样；验证总weight等于observed transition count。
+</Callout>
+
+## Random text generation
+
+生成从N个NOWORD的start prefix开始：lookup suffix list，随机选一项；选到NOWORD结束，否则emit并shift。<Term def="Generation state由current prefix、RNG state、emitted count和termination reason组成，每步严格lookup、sample、emit/shift或stop。">Markov generation state</Term>要求missing/empty suffix list报model error，不调用`math.random(0)`。
+
+```lua
+local function generate(model, initial, noword, max_tokens, choose)
+  local prefix, output = initial, {}
+  for _ = 1, max_tokens do
+    local options = assert(model[key(prefix)], "missing-prefix")
+    local suffix = options[choose(#options)]
+    if suffix == noword then return output, "sentinel" end
+    output[#output + 1] = suffix
+    prefix = shift(prefix, suffix)
+  end
+  return output, "limit"
+end
+
+local choose_first = function(size) assert(size > 0); return 1 end
+```
+
+注入choose让tests不依赖global RNG。Production sampler验证返回integer 1..size。`math.randomseed`可重放同runtime/call order，但算法可能随Lua版本变化；报告保存seed、runtime和model fingerprint，不承诺全球永久序列。
+
+<Term def="随机运行记录seed或injected RNG、runtime/version、model fingerprint与call order，使问题在同一contract下可重放。">reproducible sampling contract</Term>也要求security用途不用math.random；生成文本不需要cryptographic RNG，但外部可预测性仍应按产品需求评估。
+
+<PilMarkovGenerationLab />
+
+<Stepper>
+  <Step title="切换Lookup、Sample、Emit/Shift和Stop"><PilMarkovGenerationLab /></Step>
+  <Step title="注入Deterministic Choices">让choose依次选first/last/fixed indices，手算prefix轨迹并assert每一步output与reason。</Step>
+  <Step title="FuzzTermination">覆盖empty corpus、missing prefix、only sentinel、self-loop无sentinel和max_tokens为0/1，确保bounded结束。</Step>
+</Stepper>
+
+## A complete Markov chain program
+
+完整程序把第11章tokenization、transition building、RNG和output组合。<Term def="训练和生成分别限制input bytes/tokens、model prefixes/transitions、output tokens/bytes与elapsed work，超限返回明确partial或failure。">Markov resource budget</Term>防止corpus或生成loop耗尽资源。
+
+```lua
+local function train(lines, order, max_tokens)
+  assert(order >= 1)
+  local model, prefix, count = {}, {}, 0
+  for index = 1, order do prefix[index] = NOWORD end
+  for line in lines do
+    for word in string.gmatch(line, "%w+") do
+      count = count + 1
+      assert(count <= max_tokens, "training-token-limit")
+      word = string.lower(word)
+      add(model, prefix, word)
+      prefix = shift(prefix, word)
+    end
+  end
+  add(model, prefix, NOWORD)
+  return model
+end
+
+local corpus = coroutine.wrap(function()
+  coroutine.yield("one fish two fish")
+  coroutine.yield("red fish blue fish")
+end)
+local model = train(corpus, 2, 100)
+assert(model[key({ NOWORD, NOWORD })][1] == "one")
+```
+
+Output formatting不要直接在model loop里拼巨大string；收集bounded tokens后concat，或stream write并检查close。Generated content可能复现training spans，仍受privacy、copyright和content policy约束，Markov简单不代表无风险。
+
+<PilMarkovProgramLab />
+
+<Stepper>
+  <Step title="切换Input、Model、RNG和Output"><PilMarkovProgramLab /></Step>
+  <Step title="建立End-to-end Evidence">保存token policy、order、corpus hash、prefix/transition counts、seed/runtime、termination reason和output hash。</Step>
+  <Step title="做Statistical Check">对已知2:1 transition多次sample检查频率区间，而不是锁死跨version sequence；deterministic unit tests使用injected choose。</Step>
+</Stepper>
+
+<Callout type="trap" title="训练时插入NOWORD后，Generation一定会自然结束">
+模型或prefix codec bug、选择路径和corrupt data仍可能形成不达sentinel的cycle。保留max-token/byte/time hard limits，并返回sentinel或limit等termination reason。
+</Callout>
+
+## Failure Modes与Observability
+
+训练失败、模型不完整、RNG失败、output write失败应使用不同reason；已经写出的文本必须标partial，不能冒充正常sentinel结束。每次run记录order、model prefix/transition counts、seed或sampler ID、emitted tokens、termination reason与elapsed budget，才能区分质量问题和实现故障。
+
+Model若持久化，加载时验证schema version、prefix width、sentinel/token policy与每个suffix list非空；不能等generation走到坏state才发现。日志不保存敏感完整corpus/output时，可使用受控hash与计数定位版本。
+
+## Order、Quality与Testing
+
+Order越高，局部短语更像corpus，但prefix稀疏、memory增大、missing states更可能；order不是单调“更智能”。比较held-out transition coverage、model size与生成重复率。Tokenizer/case policy改变state space，必须versioned。
+
+Unit tests验证tiny exact table、multiplicity、sentinel与shift；property tests断言每transition来自corpus、generation每步有对应edge、output不超limit。统计测试使用宽容区间和足够samples，避免flaky exact counts。
+
+## 本章回顾：随机输出仍要有确定Contract
+
+1. Prefix-to-suffix table保留每次occurrence，重复suffix形成经验frequency weight。
+2. Prefix codec必须无碰撞，window shift始终保持N tokens，NOWORD不可与real token冲突。
+3. Generation按lookup、sample、emit/shift循环，sentinel与hard limit都可终止。
+4. RNG通过injection或seed记录重放，跨runtime不承诺相同sequence。
+5. 完整程序限制input、model、output和time，并保存corpus/model/run evidence。
+6. Order/tokenizer影响稀疏度与质量，必须用tiny proofs、properties与统计检查共同验证。
+
+<Exercises>
+
+**问题 1：Suffix A出现9次、B出现1次，怎样压缩又保持概率？**
+
+<Answer>存`{A=9,B=1}`与total 10，采样1..10并按cumulative weights选择；不能只存set。测试boundary 1..9选A、10选B，并断言weights总和等于observed transitions。</Answer>
+
+**问题 2：为什么固定Seed仍不能保证跨Lua版本完全相同？**
+
+<Answer>Math.random algorithm/initialization可能变化，table/order或call sequence也会改变消费。记录Lua/build、seed、model hash和calls；unit tests注入deterministic chooser，统计tests验证distribution。</Answer>
+
+**问题 3：Corpus为空时Model怎样安全结束？**
+
+<Answer>Initial all-NOWORD prefix仍插入NOWORD suffix，所以第一次lookup即可sentinel-stop。若model缺该entry则返回missing-prefix，不调用random with zero；无论如何保留max steps。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="prefix-suffix transition model" definition="固定prefix映射到保留重复频率的observed suffix occurrences。" />
+  <GlossaryItem term="prefix encoding invariant" definition="Token tuple到canonical key无碰撞且window大小固定的约束。" />
+  <GlossaryItem term="Markov generation state" definition="Prefix、RNG、emitted count与termination reason组成的生成状态。" />
+  <GlossaryItem term="reproducible sampling contract" definition="记录RNG/seed、runtime、model与call order的重放协议。" />
+  <GlossaryItem term="Markov resource budget" definition="限制training、model、generation与output资源的边界。" />
+</Glossary>
+
+<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 19: Interlude: Markov Chain Algorithm" adaptedUrl="https://www.lua.org/pil/" />

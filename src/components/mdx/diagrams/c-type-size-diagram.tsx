@@ -17,7 +17,7 @@ interface CTypeRow {
 
 export function CTypeSizeDiagram() {
   const rows: CTypeRow[] = [
-    { type: "char", bytes: "1", min: "−128", max: "127", note: "ASCII 字符/小整数" },
+    { type: "char", bytes: "1", min: "实现定义", max: "实现定义", note: "普通 char 符号性可变" },
     { type: "unsigned char", bytes: "1", min: "0", max: "255", note: "纯字符/字节数据" },
     { type: "short", bytes: "2", min: "−32,768", max: "32,767" },
     { type: "unsigned short", bytes: "2", min: "0", max: "65,535" },
@@ -26,8 +26,8 @@ export function CTypeSizeDiagram() {
     { type: "long", bytes: "4 或 8", min: "依平台", max: "依平台", note: "≥ int" },
     { type: "long long", bytes: "8", min: "≈ −9.2×10¹⁸", max: "≈ 9.2×10¹⁸" },
     { type: "unsigned long long", bytes: "8", min: "0", max: "≈ 1.8×10¹⁹" },
-    { type: "float", bytes: "4", min: "≈ 1.2×10⁻³⁸", max: "≈ 3.4×10³⁸", note: "6 位有效数字" },
-    { type: "double", bytes: "8", min: "≈ 2.2×10⁻³⁰⁸", max: "≈ 1.8×10³⁰⁸", note: "15 位有效数字" },
+    { type: "float", bytes: "4", min: "≈ −3.4×10³⁸", max: "≈ 3.4×10³⁸", note: "示例 IEEE binary32" },
+    { type: "double", bytes: "8", min: "≈ −1.8×10³⁰⁸", max: "≈ 1.8×10³⁰⁸", note: "示例 IEEE binary64" },
     { type: "long double", bytes: "8/10/16", min: "依平台", max: "依平台", note: "≥ double" },
   ];
 
@@ -58,7 +58,13 @@ export function CTypeSizeDiagram() {
           {rows.map((r, i) => {
             const y = startY + i * rowH;
             const rowBg = i % 2 === 0 ? "var(--bg)" : "var(--bg-elevated)";
-            const isSigned = !r.type.startsWith("unsigned");
+            const signLabel = r.type === "char"
+              ? "依实现"
+              : r.type.startsWith("unsigned")
+                ? "无符号"
+                : r.type.includes("float") || r.type.includes("double")
+                  ? "浮点"
+                  : "有符号";
 
             return (
               <g key={r.type}>
@@ -87,10 +93,10 @@ export function CTypeSizeDiagram() {
                   x={colX.signed}
                   y={y + 4}
                   fontSize="11"
-                  fill={isSigned ? "var(--accent)" : "rgb(229,181,103)"}
+                  fill={signLabel === "无符号" ? "rgb(229,181,103)" : "var(--accent)"}
                   textAnchor="middle"
                 >
-                  {isSigned ? "有符号" : "无符号"}
+                  {signLabel}
                 </text>
                 <text
                   x={colX.min}
@@ -142,7 +148,7 @@ export function CTypeSizeDiagram() {
             fontSize="11"
             fill="var(--text-secondary)"
           >
-            注：字节数为常见平台典型值（64-bit Linux/macOS）。int = 4 字节，long 在 64-bit Windows 为 4 字节。
+            示例快照：假设 CHAR_BIT=8、32 位 int、LP64 风格 long；这不是 C 语言固定布局。
           </text>
           <text
             x="16"
@@ -150,13 +156,12 @@ export function CTypeSizeDiagram() {
             fontSize="11"
             fill="var(--text-secondary)"
           >
-            float 约 6 位有效数字，double 约 15 位。用 sizeof 运算符可确认实际字节数。
+            实际范围与精度请查询 limits.h、stdint.h、float.h 和 sizeof。
           </text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        C 基本数据类型一览。有符号类型一半范围给负数（补码），无符号类型只能存 ≥0。
-        sizeof 运算符可确认当前平台实际大小。
+        一种常见实现的数据模型快照。C 标准不强制补码、固定字节位数或表中的具体类型大小。
       </figcaption>
     </figure>
   );

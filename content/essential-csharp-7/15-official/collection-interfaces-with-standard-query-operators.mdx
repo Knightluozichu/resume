@@ -1,0 +1,231 @@
+---
+title: "第15章：Collection Interfaces with Standard Query Operators"
+type: C
+section: "Essential C# 7.0 · Collections and Querying"
+order: 15
+description: "掌握collection initializer、IEnumerable/GetEnumerator协议、Where/Select/OrderBy、deferred execution与anonymous projection。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-c-sharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7CollectionInitializerLab, Ec7DeferredQueryLab, Ec7EnumerationProtocolLab } from "@/components/mdx/essential-csharp-7/diagrams/collection-interfaces-with-standard-query-operators";
+
+<Objectives>
+
+- 能解释collection initializer从constructor、element evaluation到Add calls的翻译和失败路径
+- 能描述IEnumerable/GetEnumerator、MoveNext、Current、Dispose及source mutation形成的enumeration contract
+- 能分析Where/Select/OrderBy的deferred pipeline、materialization时机与anonymous projection结果
+
+</Objectives>
+
+## 为什么“集合”首先是一组协议
+
+大括号initializer、foreach和LINQ看起来像三套language magic，实际都依赖可组合协议：initializer找到Add，foreach取得enumerator，query operators接收`IEnumerable<T>`并返回新的sequence。理解翻译后，才能判断代码何时执行、何时失败、是否重复扫描、source变化是否可见。
+
+先预测：initializer中的第三个Add失败后object是否返回；foreach在第一次MoveNext前能否读Current；loop break是否Dispose enumerator；Where在声明时会不会执行predicate；source增加element后旧query是否看到；OrderBy是否能逐项不缓冲；ToList前后有何不同。然后逐阶段验证。
+
+<Term def="constructor成功后按source顺序求值每个element并调用compatible Add member的对象建立协议。">collection construction protocol</Term>
+
+## Collection Initializers Translate to Add Calls
+
+collection initializer不是array literal。compiler先调用constructor，再按书写顺序为每个entry调用accessible `Add`；目标type需要满足collection pattern，通常实现`IEnumerable`并提供Add。不同Add overload可接受一个或多个arguments，因此dictionary entry写成双层大括号。
+
+```csharp
+var numbers = new List<int> { 3, 1, 2 };
+
+// Conceptually equivalent:
+var expanded = new List<int>();
+expanded.Add(3);
+expanded.Add(1);
+expanded.Add(2);
+
+var scores = new Dictionary<string, int>
+{
+    { "Ada", 9 },
+    { "Lin", 8 }
+};
+```
+
+element expressions逐个执行；若某个expression或Add抛exception，整个new expression失败，caller拿不到正常result。constructor和此前Add产生的side effects可能已发生，因此Add最好维护每步invariant，不应依赖“所有entries最后一起validate”。
+
+<Stepper>
+  <Step title="切换list、dictionary、custom与failure initializer">
+    <Ec7CollectionInitializerLab />
+  </Step>
+  <Step title="展开constructor与Add sequence">
+    每个entry按source order求值并调用一次compatible Add；dictionary duplicate key在对应Add失败。
+  </Step>
+  <Step title="确认partial construction边界">
+    initializer expression失败不返回object，但已执行的外部side effects不会自动回滚。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="collection initializer一次性原子填充全部元素">
+它是顺序constructor/Add调用的syntax sugar。中途失败会停止后续entries，却不会回滚此前Add或外部side effects。
+</Callout>
+
+## What Makes a Class Enumerable
+
+`IEnumerable<T>.GetEnumerator()`返回`IEnumerator<T>`。enumerator在first element之前创建；每次`MoveNext()`返回是否有下一项，true时`Current`有效；false表示结束。enumerator实现`IDisposable`，foreach用try/finally语义在正常、break或exception退出时释放。
+
+<Term def="GetEnumerator创建独立cursor，MoveNext推进，Current只在有效位置读取，结束后Dispose的迭代约定。">enumeration contract</Term>
+
+```csharp
+IEnumerable<string> source = LoadNames();
+using (IEnumerator<string> iterator = source.GetEnumerator())
+{
+    while (iterator.MoveNext())
+    {
+        string name = iterator.Current;
+        Console.WriteLine(name);
+    }
+}
+```
+
+foreach还支持编译器识别的enumerator pattern，但实现generic interface能让API与LINQ生态一致。通常同时提供non-generic `IEnumerable.GetEnumerator` bridge。一个IEnumerable不是enumerator本身；每次GetEnumerator可创建独立cursor。
+
+<Stepper>
+  <Step title="推进before-first、active与complete states">
+    <Ec7EnumerationProtocolLab />
+  </Step>
+  <Step title="只在MoveNext true后读取Current">
+    first call定位第一项；false后结束，不把Current当稳定last value。
+  </Step>
+  <Step title="验证mutation与Dispose">
+    多数mutable collections用version检测并拒绝枚举中结构修改；foreach仍在finally清理enumerator。
+  </Step>
+</Stepper>
+
+## Enumeration, Mutation, and Repeatability
+
+collection enumerator通常捕获source version，枚举期间Add/Remove会使后续MoveNext抛`InvalidOperationException`，避免悄悄跳项。修改element对象内部state不一定改变collection version，但仍可能影响predicate/order，需单独考虑。
+
+IEnumerable只承诺可请求enumeration，不保证可重复、有限、廉价或thread-safe。generator、network stream或database query可能每次产生新结果，也可能只能消费一次。API documentation应声明repeatability与ownership。
+
+```csharp
+foreach (string name in names)
+{
+    // Do not call names.Add/Remove here.
+    Console.WriteLine(name);
+}
+```
+
+需要mutation时先materialize snapshot、收集待删除keys后第二遍修改，或使用专门concurrent collection；不要把catch InvalidOperationException当控制流程。
+
+## Standard Query Operators Form a Pipeline
+
+standard query operators是`Enumerable`等type上的extension methods。`Where`筛选、`Select`投影、`OrderBy/ThenBy`排序；method syntax把前一sequence作为下一operator source。每个operator返回的type仍表达sequence contract，调用可链式组合。
+
+<Term def="source sequence经过filter、projection、ordering等operators逐层转换为结果sequence的组合结构。">query pipeline</Term>
+
+```csharp
+IEnumerable<Person> people = LoadPeople();
+
+var query = people
+    .Where(person => person.IsActive)
+    .Select(person => new { person.Name, person.Score })
+    .OrderByDescending(item => item.Score)
+    .ThenBy(item => item.Name);
+```
+
+operator order影响semantics与cost。先Where通常减少后续projection/sort输入；先Select可能丢失filter所需data；OrderBy创建新ordering，ThenBy在已有ordering内增加tie-breaker。不要凭自然语言认为任意交换等价。
+
+## Deferred Execution and Materialization
+
+多数sequence-returning operators是deferred：构造query时保存source与delegates，不遍历；每次foreach/GetEnumerator才执行。Where/Select通常stream每一项，OrderBy虽也是“枚举时才执行”，但为全局排序必须在产生first result前缓冲当前source。
+
+<Term def="query composition与实际enumeration分离，使source/predicate在每次消费时重新读取执行的时间边界。">deferred execution boundary</Term>
+
+<Stepper>
+  <Step title="切换compose、enumerate、source change与snapshot">
+    <Ec7DeferredQueryLab />
+  </Step>
+  <Step title="逐operator读取执行时机">
+    Where/Select流式，OrderBy在enumeration时buffer/sort；声明query本身不处理elements。
+  </Step>
+  <Step title="比较live query与ToList snapshot">
+    deferred query再次枚举会看到source变化并重复side effects；ToList立即执行并固定结果values。
+  </Step>
+</Stepper>
+
+```csharp
+var numbers = new List<int> { 1, 2, 3, 4 };
+IEnumerable<int> evens = numbers.Where(value => value % 2 == 0);
+
+numbers.Add(6);
+Console.WriteLine(string.Join(",", evens)); // 2,4,6
+
+List<int> snapshot = evens.ToList();
+numbers.Add(8);
+Console.WriteLine(string.Join(",", snapshot)); // still 2,4,6
+```
+
+scalar terminal operators如Count、First、Any在调用时消费足够source并返回value；ToList/ToArray立即完整materialize。选择边界取决于需要live view、single pass、stable snapshot还是avoid repeated I/O。
+
+<Callout type="trap" title="deferred query只会执行一次并自动缓存结果">
+每次enumeration通常重新读取source并再次运行predicates/projections。需要稳定结果或避免重复I/O/side effects时显式ToList/ToArray。
+</Callout>
+
+## Anonymous Types with LINQ
+
+anonymous type用`new { ... }`创建compiler-generated reference type，properties按initializer推断name/type并只读。它适合method内部把query结果塑形成临时data；同一assembly中相同property names/order/types通常共享generated type identity，但不应把这个实现细节当public schema。
+
+<Term def="在局部query中由compiler推断readonly property names/types的临时结果shape。">anonymous projection</Term>
+
+```csharp
+var summaries = people.Select(person => new
+{
+    person.Name,
+    IsPassing = person.Score >= 60,
+    Rounded = Math.Round(person.Score, 1)
+});
+
+foreach (var summary in summaries)
+    Console.WriteLine($"{summary.Name}: {summary.IsPassing}");
+```
+
+anonymous type没有可在source中命名的public contract，通常不能作为public method return type供静态caller使用。跨method/layer需要稳定schema时定义named class/struct/record-like type（按当前language version）。其generated Equals/GetHashCode基于properties，适合local grouping/key，但property values自身仍可能mutable references。
+
+## Query Testing and Cost Evidence
+
+测试应分composition与enumeration：query构造时predicate call count为0；first enumeration结果/order正确；second enumeration是否重复；source mutation是否可见；exception发生在声明还是消费；OrderBy对large/infinite source是否合理；ToList是否位于正确ownership boundary。
+
+performance不能只数operators。记录source scans、predicate calls、sort buffer size、allocations与database provider translation。对`IQueryable` provider，expression可能翻译到remote query；本章重点是`IEnumerable<T>` standard operators，不能假设所有providers行为完全相同。
+
+## 本章回顾：语法糖背后是Add、Enumerator与Pipeline
+
+1. collection initializer先construct再顺序Add，中途失败不自动rollback。
+2. IEnumerable每次创建enumerator，MoveNext/Current有严格state，foreach负责Dispose。
+3. 枚举中的结构mutation通常使enumerator失效，IEnumerable不保证可重复或廉价。
+4. Where/Select/OrderBy组成query pipeline；deferred表示消费时执行，不表示不buffer。
+5. ToList建立即时snapshot，anonymous type适合局部projection而非公开contract。
+
+<Exercises>
+
+**问题 1：如何证明一个custom ScoreBoard支持collection initializer？**
+
+<Answer>提供可构造type、实现IEnumerable contract并声明accessible Add方法，例如Add(string,int)。把initializer展开为constructor和按顺序Add calls，测试overload binding、duplicate/invalid score失败及中途异常。每个Add都必须独立维护invariant，不能依赖最后一次统一提交。</Answer>
+
+**问题 2：手写enumeration时必须遵守哪些状态与清理规则？**
+
+<Answer>调用GetEnumerator获得独立cursor；第一次及每次读取前先MoveNext，只有true时Current有效；false后停止。用using/try-finally保证normal、break和exception都Dispose。枚举期间不结构修改source，并按collection contract处理version mismatch。</Answer>
+
+**问题 3：何时保留deferred query，何时调用ToList？**
+
+<Answer>需要每次读取最新source、可能只消费部分且predicate纯净时保留deferred；需要稳定snapshot、跨lifetime边界、避免重复I/O/side effects或多次枚举时materialize。还要识别OrderBy在enumeration时全量buffer，不能把deferred误解为常量内存。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="collection construction protocol" definition="constructor后按顺序求值entries并调用Add的建立规则。" />
+  <GlossaryItem term="enumeration contract" definition="GetEnumerator、MoveNext、Current与Dispose构成的cursor协议。" />
+  <GlossaryItem term="query pipeline" definition="source经filter、projection与ordering逐层组合的sequence结构。" />
+  <GlossaryItem term="deferred execution boundary" definition="query composition和每次实际enumeration分离的执行时机。" />
+  <GlossaryItem term="anonymous projection" definition="compiler推断readonly properties的局部临时query shape。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 15: Collection Interfaces with Standard Query Operators" adaptedUrl="https://www.informit.com/store/essential-c-sharp-7.0-9781509303618" />

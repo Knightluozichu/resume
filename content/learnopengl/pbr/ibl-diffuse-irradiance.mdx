@@ -1,14 +1,16 @@
 ---
-title: IBL 漫反射辐照
+title: IBL 漫反射辐照、环境卷积与法线采样
 type: C
 section: PBR
 order: 3
 description: 用环境贴图点亮整个场景——把上一章硬编码的 0.03 常量环境光替换成基于图像的光照（IBL）。本章实现等距柱状投影→立方体贴图转换、辐照度卷积预计算、以及漫反射 IBL 着色器，让 PBR 球从四面八方收到来自环境的真实漫反射光。
 demo: true
 math: false
-sourceUrl: https://learnopengl-cn.github.io/07%20PBR/03%20IBL/01%20Diffuse%20irradiance/
+sourceUrl: https://learnopengl.com/PBR/IBL/Diffuse-irradiance
 draft: false
 ---
+
+import { IblDiffuseIrradianceContractDiagram } from "@/components/mdx/learnopengl/diagrams/ibl-diffuse-irradiance";
 
 {/* C 实战型章（HEL-164，PBR 篇第 3 篇）：原书「IBL - 漫反射辐照度 Diffuse Irradiance」。重心是把硬编码环境光换成真实 IBL（spec C 列）：加载 HDR 等距柱状贴图 → 转成立方体贴图 → 对每面做半球卷积预计算辐照度贴图 → PBR 着色器用法线采样辐照度替换 0.03 常量。C 型段式：概念讲解(§3 压缩) + 交互 Demo(§5 必，ShaderDemo) + 代码对照(§6 核心，≥80% 覆盖) + 误区(§7 ≥4) + 练习(§8 含实现题)。主 viz = ShaderDemo（ray-sphere IBL/非IBL 可切换）+ 3 张 Server SVG diagram。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -18,7 +20,7 @@ draft: false
 
 <Objectives>
 
-- 能改出 PBR 球的环境光照方式：把硬编码的 `vec3(0.03)` 常量替换成基于环境贴图的漫反射 IBL，让球从环境中接收真实的漫反射光
+- 能实现并改出 PBR 球的环境光照方式：把硬编码的 `vec3(0.03)` 常量替换成基于环境贴图的漫反射 IBL，让球从环境中接收真实的漫反射光
 - 能说出 IBL 漫反射的完整预计算管线：加载 HDR → 等距柱状转立方体贴图 → 半球卷积得到辐照度贴图 → 着色器用法线采样
 - 能回答：为什么辐照度贴图只需要 32×32 这么低的分辨率就够用？卷积过程中 cos(θ)×sin(θ) 权重分别在补偿什么？
 
@@ -26,7 +28,7 @@ draft: false
 
 {/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质」库。 */}
 
-## 暗面不再漆黑
+## 为什么暗面不该漆黑
 
 上一章把 PBR 球渲出来了——但拨开那四盏点光源，球的暗面是一片死黑，只靠 `vec3(0.03) * albedo` 这个硬编码常量打点底光。现实里的暗面从不是死黑的：墙上、地板、天空都在往那里补光。
 
@@ -61,6 +63,26 @@ draft: false
 <HemisphereConvolutionDiagram />
 
 这个积分对每个法线方向都做一遍，结果存进一张 32×32 的辐照度贴图。**32×32 就够**，因为漫反射 BRDF 对高频细节不敏感——不同法线方向的辐照度变化很平滑，高分辨率是浪费。
+
+## 单步确认：从 HDR 环境到漫反射 IBL
+
+<Stepper>
+  <Step title="把 HDR 全景转成 cubemap">
+    <IblDiffuseIrradianceContractDiagram step={1} />
+
+    等距柱状图适合存储，但运行时的方向查询更适合 cubemap：用六个 90 度捕获视图把 HDR 环境重投影到六个面，并保持浮点亮度。
+  </Step>
+  <Step title="卷积成低频辐照度">
+    <IblDiffuseIrradianceContractDiagram step={2} />
+
+    对每个输出方向，在以该方向为轴的半球上累计环境辐亮度。`cos(theta)` 表示表面投影权重，`sin(theta)` 补偿球面面积元；结果可预计算为低分辨率贴图。
+  </Step>
+  <Step title="运行时按法线采样">
+    <IblDiffuseIrradianceContractDiagram step={3} />
+
+    片段着色器不再重新积分半球，只用法线 `N` 采样辐照度贴图，再乘 `kD` 与 `albedo`。这就是它能替换常量环境光且保持实时的原因。
+  </Step>
+</Stepper>
 
 {/* 5. 交互 Demo（spec §五）：C 型主 Demo = ShaderDemo。ray-sphere PBR 球，IBL 开关可切换。 */}
 
@@ -357,7 +379,7 @@ vec3 color = ambient + Lo;
 
 ## 常见误区
 
-<Callout type="warn">
+<Callout type="trap">
 
 **IBL 里用普通 fresnelSchlick 而非 fresnelSchlickRoughness**
 
@@ -365,7 +387,7 @@ vec3 color = ambient + Lo;
 
 </Callout>
 
-<Callout type="warn">
+<Callout type="trap">
 
 **辐照度卷积采样步长太大，出现条纹或噪点**
 
@@ -373,7 +395,7 @@ vec3 color = ambient + Lo;
 
 </Callout>
 
-<Callout type="warn">
+<Callout type="trap">
 
 **等距柱状转换时忘记 normalize(localPos)**
 
@@ -381,7 +403,7 @@ vec3 color = ambient + Lo;
 
 </Callout>
 
-<Callout type="warn">
+<Callout type="trap">
 
 **HDR 环境贴图未用浮点格式存储，高亮区域被截断**
 
@@ -437,7 +459,7 @@ vec3 color = ambient + Lo;
 <Attribution
   title="PBR - IBL 漫反射辐照"
   author="Joey de Vries"
-  url="https://learnopengl-cn.github.io/07%20PBR/03%20IBL/01%20Diffuse%20irradiance/"
+  url="https://learnopengl.com/PBR/IBL/Diffuse-irradiance"
   license="CC BY-NC 4.0"
 />
 

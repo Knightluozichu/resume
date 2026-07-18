@@ -547,7 +547,8 @@ export function MementoDiagram() {
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
         Originator 自己创建 / 读取快照，Caretaker 只负责保管 Memento
-        而不窥探其内容。状态被外部化到 Memento 中，Originator 的封装不被打破——这正是「撤销」机制的经典实现。
+        而不窥探其内容。状态被外部化到 Memento 中，Originator
+        的封装不被打破——这正是「撤销」机制的经典实现。
       </figcaption>
     </figure>
   );

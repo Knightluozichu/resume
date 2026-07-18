@@ -497,9 +497,10 @@ export function FlyweightPatternDiagram() {
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        内部状态（intrinsicState）存储在 ConcreteFlyweight 中，可被多个客户端共享；
-        外部状态（extrinsicState）由客户端在调用 operation() 时传入。Factory
-        负责缓存和复用对象——相同 key 只创建一个实例，大幅减少内存占用。
+        内部状态（intrinsicState）存储在 ConcreteFlyweight
+        中，可被多个客户端共享； 外部状态（extrinsicState）由客户端在调用
+        operation() 时传入。Factory 负责缓存和复用对象——相同 key
+        只创建一个实例，大幅减少内存占用。
       </figcaption>
     </figure>
   );

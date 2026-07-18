@@ -1,0 +1,169 @@
+---
+title: "Chapter 5. .NET Overview"
+type: C
+section: "C# 10 Nutshell · .NET and Data"
+order: 5
+description: "覆盖.NET Standard、Framework/.NET 6兼容、语言运行时版本、CLR/BCL、System types与应用层，建立多目标和部署证据。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch05.html"
+draft: false
+---
+
+import { CtcApplicationLayerLab, CtcClrBclTypesLab, CtcCompatibilitySurfaceLab } from "@/components/mdx/csharp-10-core/diagrams/dotnet-overview";
+
+<Objectives>
+
+- 能比较.NET Standard、.NET Framework与.NET 6的contract/runtime差异，设计multi-target library矩阵
+- 能分析LangVersion、TFM、reference assembly、CLR、BCL和NuGet package的版本责任
+- 能设计web、desktop、mobile、library/worker应用层边界，验证host、lifecycle与deployment约束
+
+</Objectives>
+
+## 为什么“.NET兼容”必须拆成多个问题
+
+一个library“支持.NET”可能只表示能对某reference assembly编译，也可能表示在某runtime、OS和application model实际运行。API存在不等于behavior相同，package restore成功不等于native asset可加载，C# syntax可编译也不等于目标TFM提供所需BCL。可靠兼容声明必须写source、API、runtime、platform和deployment五层证据。
+
+先预测：target netstandard2.0就能使用.NET 6所有API吗；.NET Framework 4.8能运行所有netstandard2.1 library吗；相同System.String表示相同runtime版本吗；NuGet package属于BCL吗；console library可无修改迁移到MAUI UI线程。答案都是否。
+
+<Term def="一个artifact对特定TFM、runtime、OS/RID与application host的compile和run支持声明。">compatibility surface</Term>
+
+## .NET Standard
+
+.NET Standard是API specification/reference contract，用于让library面向多个实现共同支持的surface。它不是可安装runtime，也不定义所有behavior/performance。netstandard2.0覆盖广泛legacy consumers；2.1加入更多API但.NET Framework不实现。新应用通常直接target现代.NET，只有library需要广泛兼容时才选Standard或multi-target。
+
+```xml
+<PropertyGroup>
+  <TargetFrameworks>netstandard2.0;net6.0</TargetFrameworks>
+  <LangVersion>10.0</LangVersion>
+</PropertyGroup>
+
+<ItemGroup Condition="'$(TargetFramework)' == 'net6.0'">
+  <PackageReference Include="System.Text.Json" Version="6.0.0" />
+</ItemGroup>
+```
+
+每个TFM独立compile，conditional code/API adapter保持语义一致。Package的lib/ref/runtimes assets由NuGet选择，需检查最终nupkg与consumer restore，不只在project源码中看条件。
+
+## .NET Framework and .NET 6 Compatibility
+
+.NET Framework是Windows legacy runtime，4.x in-place servicing、AppDomain/registry/GAC等生态与现代.NET不同。.NET 6是跨平台统一runtime line，使用新的host、shared framework、AssemblyLoadContext与deployment modes。二者共享大量BCL/API概念，却不保证binary、configuration、remoting、安全或UI model完全兼容。
+
+迁移先盘点framework-specific dependencies：System.Web、AppDomain isolation、Windows-only APIs、old config、COM/GAC。替代后运行behavior tests，尤其serialization、culture、threading、TLS与file paths。Compatibility shim只解决部分API shape，不证明runtime semantics。
+
+<Term def="同一source/API在legacy .NET Framework与modern .NET runtime之间的binary、behavior和platform差异清单。">runtime-family matrix</Term>
+
+<Stepper>
+  <Step title="切换.NET Standard、.NET 6、Framework与multi-target"><CtcCompatibilitySurfaceLab /></Step>
+  <Step title="列compile/run consumers">每个TFM写reference API、实际runtime、OS、package assets和unsupported features。</Step>
+  <Step title="验证package矩阵">Pack后用独立consumer projects restore/build/run，覆盖lowest and highest supported targets。</Step>
+</Stepper>
+
+<Callout type="trap" title="netstandard版本越高兼容范围越广">
+更高Standard提供更多API，却要求实现支持更高contract；netstandard2.1反而不被.NET Framework实现。按consumer集合选择，不按版本号大小。
+</Callout>
+
+## Runtime and C# Language Versions
+
+C# language version由compiler/SDK决定，TFM决定reference APIs，runtime决定执行与JIT/GC behavior。新compiler可把部分新syntax lower到旧runtime，例如file-scoped namespace；另一些feature依赖runtime metadata或BCL types。项目应显式pin SDK和LangVersion，library不要使用`latest`造成开发机漂移。
+
+```text
+source syntax --compiler/LangVersion--> IL + metadata
+        APIs --TFM/reference assemblies--> valid member references
+   execution --runtime host/CLR/BCL--> JIT, GC, loader, behavior
+ deployment --RID/native assets--> target machine success
+```
+
+Feature audit记录minimum compiler、TFM、runtime与OS。CI在clean images构建，不让installed developer packs掩盖依赖；runtime roll-forward和self-contained servicing policy也进入release artifact。
+
+## The CLR and BCL
+
+CLR提供type loading、verification、JIT、GC、exceptions、threading primitives和interop services；BCL提供System命名空间下的core APIs。Shared framework组合特定CLR/BCL implementation。Reference assembly只有API metadata，runtime assembly才含implementation；手工复制两者会造成loader错误。
+
+BCL contract也随版本演进：新增overload、performance、globalization/data behavior可能变化。多runtime支持需contract tests，而非假设相同namespace即相同结果。NuGet libraries在BCL之外，但可扩展/替代功能；dependency graph与版本解析由restore控制。
+
+<Term def="Reference assembly提供compile-time API shape，runtime assembly提供实际implementation且由host/loader解析的分工。">reference-runtime split</Term>
+
+## System Types
+
+C# keywords多是System types aliases：`int`对应System.Int32，`string`对应System.String，`object`对应System.Object。Common Type System让不同.NET languages交换metadata types，CLS定义更小的跨语言可用规则。Public library若面向多语言，unsigned types、operator-only APIs或case-sensitive collisions需评估。
+
+Type forwarding与assembly identity允许implementation移动但保持public identity；reflection/serialization若硬编码assembly-qualified name则更脆弱。Wire schema应有独立stable names，不把runtime type name直接当长期protocol。
+
+<Term def="C# aliases、CTS metadata identity、assembly qualification与cross-language CLS共同形成的公开类型边界。">system-type identity</Term>
+
+<Stepper>
+  <Step title="切换C# type、CLR、BCL与package"><CtcClrBclTypesLab /></Step>
+  <Step title="追踪一个API reference">从keyword/type metadata到reference assembly、runtime implementation和package dependency画完整链。</Step>
+  <Step title="注入loader mismatch">移除runtime/package、改变assembly version/TFM，记录compile、restore或load失败分别发生在哪里。</Step>
+</Stepper>
+
+## Application Layers
+
+Runtime之上是application models。ASP.NET Core定义host、middleware、request DI scope与HTTP lifecycle；Windows desktop有dispatcher/UI thread与Windows APIs；MAUI跨平台但依赖workloads/native packaging/lifecycle；worker/console/library由host与caller决定shutdown、configuration和logging。相同domain core可以复用，adapter不能假设相同thread/lifetime。
+
+```csharp
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddScoped<IOrderService, OrderService>();
+
+var app = builder.Build();
+app.MapPost("/orders", async (OrderDto dto, IOrderService service, CancellationToken token) =>
+    await service.Submit(dto, token));
+app.Run();
+```
+
+Web request cancellation、desktop dispatcher、mobile suspension和worker graceful shutdown是不同terminal contracts。Application layer负责翻译transport/input、建立scope、调用core并映射outcome；core不依赖HttpContext/Dispatcher或platform path。
+
+<Term def="Runtime之上的host、request/UI lifecycle、dependency scope、configuration与deployment约定。">application-model boundary</Term>
+
+<Stepper>
+  <Step title="切换web、desktop、mobile与library/tool"><CtcApplicationLayerLab /></Step>
+  <Step title="标host-owned lifecycle">Startup、request/view/session、background work、shutdown和resource dispose分别归谁。</Step>
+  <Step title="做adapter contract tests">同一core在HTTP、CLI/test host调用，验证input/outcome一致且platform state不泄露。</Step>
+</Stepper>
+
+<Callout type="trap" title="业务Service注册进DI后就与Application Model解耦">
+若signature接收HttpContext、Dispatcher、IFormFile或platform singleton，DI只隐藏耦合。Domain-facing ports应使用typed values和CancellationToken，adapter负责framework types。
+</Callout>
+
+## Deployment and servicing gate
+
+Framework-dependent部署体积小且由机器shared runtime servicing；self-contained携带runtime、版本可控但artifact更大且需自行更新；single-file/trimming/AOT进一步改变reflection/dynamic compatibility。每个选择写patch owner、roll-forward、RID、native dependencies与rollback。
+
+Release test在clean target host从artifact启动，检查runtimeconfig/deps、configuration、TLS/culture、health/shutdown和native load。SBOM与package lock记录BCL外依赖；只在build agent运行不是部署证据。
+
+## 本章回顾：兼容性是五层矩阵
+
+1. .NET Standard是API contract，不是runtime；更高版本不代表更广consumer。
+2. .NET Framework与.NET 6共享概念但有runtime、platform和app-model差异。
+3. LangVersion、TFM、runtime和RID分别约束syntax、API、execution与deployment。
+4. CLR执行，BCL提供base APIs，System types由CTS/assembly identity连接。
+5. Application model增加host/lifecycle/scope，需与portable core隔离。
+
+<Exercises>
+
+**问题 1：Library应target netstandard2.0还是net6.0？**
+
+<Answer>先列consumers；需.NET Framework/广泛旧runtime时考虑netstandard2.0，若只支持现代.NET且需要新API/性能就net6.0。需要两者则multi-target并对每个TFM pack/consumer build/run，避免条件分支语义漂移。</Answer>
+
+**问题 2：怎样定位“开发机能跑、服务器不能跑”？**
+
+<Answer>依次检查artifact TFM/RID、runtimeconfig/deps、installed host/roll-forward、native assets/OS、configuration与package output。用clean target host启动并保存host trace，不能靠重新安装SDK掩盖deployment contract。</Answer>
+
+**问题 3：如何让同一业务核心用于ASP.NET和CLI？**
+
+<Answer>Core只接收domain values/ports/token并返回typed outcome；ASP.NET adapter解析HTTP/DI scope并映射response，CLI adapter解析args/console。运行相同contract suite，另测各host lifecycle、cancellation和dispose。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="compatibility surface" definition="TFM、runtime、OS/RID与host的支持声明。" />
+  <GlossaryItem term="runtime-family matrix" definition="Framework与modern .NET的binary/behavior/platform差异。" />
+  <GlossaryItem term="reference-runtime split" definition="Compile metadata与runtime implementation的分工。" />
+  <GlossaryItem term="system-type identity" definition="C# alias、CTS和assembly identity构成的类型边界。" />
+  <GlossaryItem term="application-model boundary" definition="Host、lifecycle、scope与platform adapter约定。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 5: .NET Overview" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch05.html" />

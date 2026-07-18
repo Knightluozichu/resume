@@ -1,0 +1,472 @@
+---
+title: "Column 10 · Squeezing Space：先简化，再压缩表示"
+type: B
+section: "Part II · Performance"
+order: 9
+description: "按第二版Column 10重建Kentucky tax、200×200 sparse map、data/code-space techniques、allocation/overlaying、cache boundaries及Ken Thompson chess endgame big squeeze。"
+demo: true
+math: true
+sourceUrl: "https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+draft: false
+---
+
+import { PP2SpaceCliffLab, PP2KentuckyTaxLab, PP2SparseMapLab, PP2SparseLookupLab, PP2RecomputeStoreLab, PP2CompressionLab, PP2AllocationPolicyLab, PP2MatrixOverlayLab, PP2CodeSpaceLab, PP2ChessSymmetryLab, PP2SpaceCertificateLab } from "@/components/mdx/programming-pearls/diagrams/10-squeezing-space";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释Squeezing Space为何仍适用于large machines，以及Key Simplicity如何同时改善functionality、robustness、speed与space
+- 能计算dense/sparse map、allocator overhead、bit-width compression、variable records、matrix overlay与chess symmetry database size
+- 能实现firstincol compact index、parallel arrays、recompute/generator strategy、packed command interpreter与canonical key
+- 能分析cache/paging cliffs、time-space tradeoff、shared data mutation、decode cost、layout locality与environment-specific allocation
+- 能设计memory budget、space profile、representation options、boundary experiment、rollback condition与space certificate
+
+</Objectives>
+
+## 从“多用10%内存有什么关系”开始
+
+答案可能是“完全没关系”，也可能是“program无法运行”。若working set仍留在unused RAM，extra bits几乎free；若越过cache、RAM、disk或network packet boundary，runtime与cost可能跳变几个数量级。
+
+先预测：working set从72 MiB增至88 MiB，在80 MiB free RAM的machine上是10%多一点，还是从RAM access变成paging？拖动working set，观察同一bytes increase在不同boundary两侧的结果。
+
+<PP2SpaceCliffLab />
+
+Squeezing Space（<Term def="在明确memory、storage、cache或transmission budget下，通过simplification、representation、recomputation、compression与allocation减少program footprint。">Squeezing Space</Term>）不只是old tiny-machine技巧：
+
+- Embedded/toy/appliance仍有hard memory limits。
+- Huge machines通常承载huge problems。
+- Smaller working sets更容易进入cache，常同时更快。
+- Network/storage time通常与bytes近似成正比。
+- Reduced footprint可提高density、降低cost和failure risk。
+
+但space不是越少越好。目标是满足real envelope并保留correctness、latency、maintainability与portability。
+
+## 10.1 The Key — Simplicity
+
+Key Simplicity（<Term def="先回到problem context，寻找更简单的rule、representation或required function，而不是直接压缩现有复杂artifact。">Key Simplicity</Term>）是本栏overriding principle。
+
+Dennis Ritchie与Ken Thompson最初在只有8,192个18-bit words的machine上开发Unix。Severe size constraints迫使design在efficiency与expressive power之间保持economy，也产生elegance。
+
+### Kentucky tax table：寻找生成规则
+
+1950s，Fred Brooks为national payroll program表示Kentucky state income tax。Law给出income与number of exemptions构成的jagged 2D table，explicit storage需要thousands of words，超过machine capacity。
+
+拟合one mathematical function失败，因为table并不平滑。Brooks查阅Kentucky legislature minutes，发现州税其实是“income扣除federal tax后”的simple function。Program已经有federal tax tables，只需复用它们，再用few dozen words的小表处理remaining income。
+
+<PP2KentuckyTaxLab />
+
+这不是compression algorithm，而是problem reformulation：
+
+$$
+\text{KentuckyTax}
+=
+g\left(
+\text{income}-\text{FederalTax}(\text{income},\text{exemptions})
+\right).
+$$
+
+显式thousands-word table消失，result仍exact。先问“数据从哪里来、为何长这样”，常比先问“用几bits编码”更有效。
+
+<Callout type="trap" title="空间不足时先换更紧凑的序列化格式">
+若stored artifact只是某个简单rule的冗余展开，压缩只能缩小症状，还会引入codec与migration。先恢复generating context；像Kentucky tax一样，最小表示可能是已有计算加一个小表。
+</Callout>
+
+## 10.2 An Illustrative Problem
+
+Illustrative Problem来自early-1980s geographical database：
+
+- 2,000 neighborhoods，各有identifier `0..1999`。
+- Touch pad把位置量化为$x,y\in[0,199]$。
+- No two points共享same coordinate。
+- Query返回该cell的point id，empty时返回`-1`。
+
+最直接的$200\times200=40{,}000$ matrix若每entry 32 bits需160 KB；programmer选择16 bits，仍需80 KB，约占half-megabyte memory的one sixth。系统增长后，这one index成为space hot spot。
+
+<PP2SparseMapLab />
+
+Active density只有：
+
+$$
+\rho
+=
+\frac{2{,}000}{200\times200}
+=
+5\%.
+$$
+
+### 第一版sparse structure：columns plus linked records
+
+每column保存head pointer；每active point保存`row`、`pointnum`与`next`。Lookup只scan一个column：
+
+```cpp
+for (Node* p = column_head[x]; p != nullptr; p = p->next) {
+    if (p->row == y) {
+        return p->point_number;
+    }
+}
+return -1;
+```
+
+200 pointers加2,000 packed records约24,800 bytes，average约ten node visits。但若每record由当时default `malloc`独立分配，每个logical 12-byte record实际consume 48 bytes，总结构约96.8 KB，反而超过dense 80 KB。
+
+Allocator-aware space model：
+
+$$
+M
+=
+M_{\mathrm{payload}}
++M_{\mathrm{padding}}
++M_{\mathrm{metadata}}
++M_{\mathrm{fragmentation}}
++M_{\mathrm{index}}.
+$$
+
+<Callout type="trap" title="Sparse structure一定比dense matrix省内存">
+Pointer width、alignment、allocator metadata与fragmentation可能吞掉sparsity收益。原案例中individually allocated linked nodes约96.8 KB，比80 KB dense matrix更大；必须计算physical allocation，不只数fields。
+</Callout>
+
+### 实际Fortran表示：parallel compact arrays
+
+Target Fortran没有pointers/structures，最后使用：
+
+- `firstincol[201]`：每column slice start，额外sentinel定义last slice end。
+- `row[2000]`：active point的row。
+- `pointnum[2000]`：active point id。
+
+```text
+for k in [firstincol[x], firstincol[x + 1]):
+    if row[k] == y:
+        return pointnum[k]
+return -1
+```
+
+All values先用16 bits，总计：
+
+$$
+(201+2{,}000+2{,}000)\times2
+=
+8{,}402\ \text{bytes}.
+$$
+
+<PP2SparseLookupLab />
+
+该版本只改module functions，几小时集成；没有observed runtime degradation，却释放约70 KB。继续压缩的design ladder：
+
+| Representation | Bytes | Idea |
+|---|---:|---|
+| Dense 16-bit matrix | 80,000 | Store all cells |
+| Packed linked records | 24,800 | Store active entries |
+| Parallel 16-bit arrays | 8,402 | Remove pointers/padding |
+| 8-bit row | 6,400 | Exploit row range `0..199` |
+| Reuse point record row | 4,400 | Do not duplicate row |
+| Two one-byte coordinates/id | 4,000 | Key indexing |
+| Sequential scan existing points | 0 index bytes | Recompute lookup |
+
+No `lastincol` is needed because the next `firstincol` gives the boundary. No `col` is needed because access always comes through one column slice. These are tiny instances of “do not store what context already tells you”.
+
+## 10.3 Techniques for Data Space
+
+### Do not store, recompute
+
+Recomputation（<Term def="保存生成规则、seed或minimal description，在需要时重建object，以execution time换取stored space。">Recomputation</Term>）可把large object降为few bytes：
+
+- Prime table换primality function。
+- Random test file/graph换generator program与seed。
+- Sparse map index换point records的sequential scan。
+- Minimal installation从slower medium读取，不复制到local disk。
+
+<PP2RecomputeStoreLab />
+
+反方向也成立：Network program可“store, do not retransmit”，用local cache换bandwidth。Decision依赖object size、access count、compute/load latency、staleness与failure mode。
+
+### Sparse data structures and sharing
+
+Sparse Data Structure（<Term def="只表示non-default active entries，并用index、key、run或shared object恢复logical dense view的结构。">Sparse Data Structure</Term>）包括：
+
+- Column slices、CSR/CSC、ragged arrays。
+- Key indexing：key本身作为array index，无需重复store。
+- Shared immutable large objects，避免copies。
+- Fourteen canonical calendars：7 possible weekdays for January 1乘leap/non-leap，可服务1821–2080的260 years。
+- Voice silence suppression：低于threshold时发送succinct silence representation，把bandwidth让给other calls。
+
+Sharing要求ownership rule。若multiple owners不希望共同mutation，应immutable、copy-on-write或versioned。
+
+### Data compression
+
+Data Compression（<Term def="利用value range、frequency、redundancy或loss tolerance，用fewer bits编码records or streams，并承担decode与access costs。">Data Compression</Term>）先利用range：
+
+- `row`只有0..199，8 bits足够。
+- Two decimal digits $a,b$可编码为$c=10a+b$，one byte替代two bytes。
+- Decode为$a=\lfloor c/10\rfloor$、$b=c\bmod10$。
+- CD-quality stereo每second：$2\times2\times44{,}100=176{,}400$ bytes；audio codec利用signal redundancy降至fraction。
+
+<PP2CompressionLab />
+
+原书decimal packing使I/O time减半，并让file从two floppy disks降到one。Compression certificate还要说明：lossless/lossy、random access、CPU cost、error propagation、versioning与worst-case expansion。
+
+### Allocation policies
+
+Allocation Policy（<Term def="决定何时reserve、每次reserve多少、如何share/recycle/overlay physical storage，使capacity匹配actual demand与lifetimes。">Allocation Policy</Term>）决定usable capacity。
+
+若预分配10,000个`x`,`y`,`z` records，需求10,001个`x`时会fail，即使20,000 slots idle。Dynamic shared allocation避免per-type stranded capacity。
+
+<PP2AllocationPolicyLab />
+
+Other policies：
+
+- Ask only when needed：lazy/dynamic allocation。
+- Ask only what needed：variable-length records。
+- Recycle discarded storage：garbage collection/free lists。
+- Overlay data structures whose lifetimes do not overlap。
+- Pool similar sizes，减少metadata/fragmentation。
+
+原书一个I/O-bound program的records maximum 250 bytes、average约80 bytes；改variable length后speed约3倍，因为同时减少storage与I/O。
+
+### Overlay symmetric matrices
+
+Brian Kernighan的traveling-salesman program主要空间是two $150\times150$ symmetric distance matrices，diagonal为0。每个matrix只需one triangle，因此可把A放physical square的upper triangle、B放lower triangle：
+
+$$
+A_{ij}=C_{\max(i,j),\min(i,j)},
+\qquad
+B_{ij}=C_{\min(i,j),\max(i,j)}.
+$$
+
+<PP2MatrixOverlayLab />
+
+Two 22,500-word matrices降为one，在30,000-word machine上决定程序能否运行。代价是access expression更复杂、略慢；wrapper functions必须封装layout并test symmetry。
+
+### Layout and locality
+
+Footprint相同，layout也影响time。Arrays虽然可能touch more logical data，却因sequential access比pointer-chasing lists更快。Files/disks/cache pages也需按access locality组织；若经常跨regions，poor placement会增加media swaps、page faults或cache misses。
+
+## 10.4 Techniques for Code Space
+
+### Function definition
+
+Repeated graphics code：
+
+```text
+for i = 17..43: set(i, 68)
+for i = 18..42: set(i, 69)
+for j = 81..91: set(30, j)
+for j = 82..92: set(31, j)
+```
+
+先提炼`hor`/`vert` functions，把repeated instruction patterns换成parameters。这是bottom-up primitive definition：更小、更清楚，也更易maintain。
+
+### Interpreters and packed commands
+
+进一步把calls变成data，shared interpreter执行：
+
+```text
+command  from  to  fixed
+h        17    43  68
+h        18    42  69
+v        81    91  30
+v        82    92  31
+```
+
+若four command types用2 bits，three coordinates各在0..1023用10 bits，总计正好32 bits/command。Translator在build time把readable schema编成packed data。
+
+<PP2CodeSpaceLab />
+
+Code Space（<Term def="Runtime保存instructions、embedded tables、linked libraries与generated specialization所需的memory or ROM footprint。">Code Space</Term>）的three primary techniques：
+
+1. **Function Definition**：抽出common sequences、合并operators、删除unused features。
+2. **Interpreters**：用compact commands加shared execution engine。
+3. **Translation**：Compiler/linker/assembly选择更小machine representation。
+
+Microsoft通过移除seldom-used functions把full Windows缩成Windows CE。Early Unix compiler的小修改可减code约5%。Hand assembly通常expensive、error-prone且收益有限，只在hard memory-critical systems考虑。
+
+1984 Apple Macintosh只有128 KB RAM与64 KB ROM。Team通过generalizing operators、merging functions、deleting features，并手写whole ROM assembly，把大量system functionality装入64 KB；当时估计约为equivalent compiled code的一半。Modern compiler已强很多，但function budget和feature selection仍然有效。
+
+## 10.5 Principles
+
+### Know the cost of space
+
+先明确超预算后果：hard failure、network delay、storage cost、cache miss、paging、lower fleet density还是longer startup。没有boundary与value，就无法判断该牺牲多少time/functionality。
+
+### Measure space hot spots
+
+Code instructions无论执行一次或billion times都占same stored bytes；code-space profile与runtime profile不同。Data则常有dominant record types或structures。原sparse map one structure占half-megabyte system约15%，缩到one tenth有意义；把1 KB object缩100倍几乎无end-to-end effect。
+
+Measurement sources：
+
+- Runtime resident/virtual/heap monitors。
+- Allocator live bytes、peak、size classes与fragmentation。
+- Linker map按symbol/source line归因code and static data。
+- Cache/page-fault counters。
+- Heap snapshots或allocation animation定位leaks。
+
+### Work with the environment
+
+`sizeof(fields)`不是physical cost。Compiler alignment、runtime headers、allocator size classes、GC、page size、compression block与linker dead stripping都可能改变answer。Build小probe并在target environment测。
+
+### Prefer improvements without tradeoffs
+
+Bitmap让data进入memory，可能同时减少time、code和space；parallel arrays可同时减少padding并改善sequential locality。先寻找这种Pareto improvement，再考虑牺牲accuracy、functionality或maintainability。
+
+### Use the right technique
+
+原书归纳：
+
+- Data space：Recomputing、Sparse Structures、Information Theory、Allocation Policies。
+- Code space：Function Definition、Interpreters、Translation。
+- Overriding principle：Simplicity。
+
+## 10.6 A Big Squeeze
+
+Ken Thompson在early 1980s建立two-phase chess endgame solver：
+
+1. Learning phase从all checkmates反向计算every legal board的distance to mate，属于retrograde analysis/dynamic programming。
+2. Gameplay phase查询database，对指定four/five-piece configuration实现perfect play。
+
+Naive five fixed pieces各用6-bit square coordinate，key共30 bits：
+
+$$
+64^5=2^{30}
+\approx
+1.07\ \text{billion records}.
+$$
+
+每record 12 bits，file约1.5 GiB，超过当时disk capacity。
+
+Canonicalization（<Term def="把symmetry-equivalent states映射到one deterministic representative，使database只存每个equivalence class一次。">Canonicalization</Term>）利用horizontal、vertical和diagonal reflections。任意board最多three reflections可把White King移到ten canonical squares：
+
+$$
+10\times64^4
+=
+10\times2^{24}
+\approx
+168\ \text{million records}.
+$$
+
+再排除Black King与White King相邻的illegal states，legal king placements只剩454种：
+
+$$
+454\times64^3
+\approx
+119\ \text{million records},
+$$
+
+原书约记121 million，fit on one dedicated disk。
+
+<PP2ChessSymmetryLab />
+
+这是Big Squeeze：Symmetry约减8倍，决定system能否存在。Space reduction也让learning phase从many months降到few weeks，因为需要enumerate与write的positions更少。
+
+Canonical key必须满足：
+
+- Every legal state都能normalize。
+- Equivalent states得到same canonical record。
+- Move/value在reflection下可正确transform back。
+- Illegal states不占slots。
+- Lookup cost远小于saved I/O与storage。
+
+## 10.7 Space certificate
+
+<PP2SpaceCertificateLab />
+
+Representation交付前记录：
+
+- **Budget and boundary**：ROM、heap、RSS、cache、disk、wire或startup target。
+- **Measured baseline**：Peak/live bytes与dominant owners。
+- **Physical model**：Payload、padding、metadata、fragmentation与indexes。
+- **Options**：Simplify、recompute、sparse、compress、allocate、overlay、interpret。
+- **Behavior**：Exactness、ownership、random access与failure semantics。
+- **Time impact**：Encode/decode、scan、recompute、locality和I/O。
+- **Boundary test**：Cache/RAM/disk/network thresholds。
+- **Maintainability**：Wrapper abstraction、versioning与migration。
+- **Rollback**：何时恢复simple representation。
+
+## 10.8 逐步运行路线
+
+<Stepper>
+  <Step title="先确认space boundary并寻找simpler problem" description="观察cache/RAM cliff，再用Kentucky tax context替代jagged explicit table。">
+    <PP2SpaceCliffLab />
+    <PP2KentuckyTaxLab />
+  </Step>
+  <Step title="把5% dense map改成active-entry index" description="比较dense、linked、parallel和recomputed representations，并跟踪column-slice lookup。">
+    <PP2SparseMapLab />
+    <PP2SparseLookupLab />
+  </Step>
+  <Step title="选择recompute、compression或allocation" description="把object access frequency、encoded bytes与actual record demand放入同一tradeoff。">
+    <PP2RecomputeStoreLab />
+    <PP2CompressionLab />
+    <PP2AllocationPolicyLab />
+  </Step>
+  <Step title="复用physical storage并压缩code" description="让two symmetric matrices共享one square，再比较functions、interpreter与packed command。">
+    <PP2MatrixOverlayLab />
+    <PP2CodeSpaceLab />
+  </Step>
+  <Step title="用symmetry完成Big Squeeze" description="从2^30 chess boards降到legal canonical records，并检查space certificate。">
+    <PP2ChessSymmetryLab />
+    <PP2SpaceCertificateLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Squeezing Space在embedded、large-scale data、cache、network与hard storage budgets中仍然关键。
+- The Key — Simplicity要求先寻找artifact背后的rule；Kentucky tax由large jagged table变为existing federal table加small function。
+- Illustrative Problem的2,000 points只占200×200 grid的5%，dense 80 KB index是space hot spot。
+- Linked sparse records若经general allocator可膨胀至96.8 KB；physical allocator model不可省。
+- Parallel arrays将index降到8,402 bytes，8-bit row与field reuse还能降到6,400/4,400 bytes。
+- Techniques for Data Space包括recompute、sparse/share、compression与allocation policies。
+- Variable-length records、dynamic pools与matrix overlay让physical storage匹配actual demand和lifetimes。
+- Techniques for Code Space包括function definition、interpreter/packed commands与translation。
+- Space cost常在cache、RAM、disk与network boundaries处非线性变化，必须在target environment测量。
+- Big Squeeze利用chess reflection symmetry与legal-state filtering，把约1.07 billion records降到约121 million。
+- 好的space reduction可能同时改善runtime；所有tradeoffs都需behavior、time与maintainability certificate。
+
+<Exercises>
+
+1. 一个1,000×1,000 grid有20,000 active cells，value为32-bit，row/column均小于1,000。比较dense、individually allocated linked records和CSR-like parallel arrays的space；明确pointer、metadata与offset widths。
+2. 一项daily test生成200 GiB deterministic data，generator需20 minutes，local read需5 minutes，测试suite每日访问3次。比较materialize、recompute与cache-one-day，加入storage/network failure后给decision。
+3. 为两个$N\times N$ symmetric matrices设计overlay accessor。证明mapping不collision，处理diagonal policy，并列出property tests与performance tradeoffs。
+4. 一个five-object state space每object有128 positions，每record 20 bits；system有16 GiB budget。若symmetry给16-fold reduction、invalid states再剩70%，判断是否fit，并设计canonicalization verification。
+
+<Answer>
+
+Dense为$10^6\times4=4$ MB。若linked record含32-bit row/value加64-bit next，alignment后常为16 bytes；20,000 records为320 KB，1,000 column heads为8 KB。若allocator每record再加16 bytes metadata，总约648 KB，并可能有fragmentation。CSR-like arrays可用16-bit row 40 KB、32-bit value 80 KB、1,001个32-bit offsets约4 KB，总约124 KB。若point id或value范围允许还可缩，但必须确认alignment、endianness和overflow。
+
+</Answer>
+
+<Answer>
+
+Materialize一次生成20 min，三次读取15 min，总35 min/day并占200 GiB；每次recompute为60 min/day、几乎no stored data；cache-one-day与materialize在single day同为35 min，但可在final access后释放。若generation deterministic且storage昂贵，daily cache合理；若remote source/network易fail，local materialization提高availability。应保留seed、generator version与checksum，明确failed generation是否可复用last-known-good object。
+
+</Answer>
+
+<Answer>
+
+对off-diagonal $(i,j)$，令A访问`C[max(i,j)][min(i,j)]`，B访问`C[min(i,j)][max(i,j)]`；一个落strict lower triangle，一个落strict upper triangle，所以不collision。Diagonal若恒0无需store；若需独立values，另设two length-N arrays。Property tests随机写读A/B、验证symmetry、确保cross-matrix isolation、boundary indices与diagonal behavior。Tradeoff是每access增加min/max/branch，却把dominant memory减半并可能改善cache。
+
+</Answer>
+
+<Answer>
+
+Naive records为$128^5=2^{35}$；20 bits each共$2^{35}\times20/8=80$ GiB。Symmetry除16后为5 GiB，再乘70%约3.5 GiB，fit 16 GiB并留较大margin。Verification对small reduced domain穷举：canonicalization idempotent；所有symmetry transforms得到same key；non-equivalent orbit不collision；invalid states rejected；value/move inverse transform正确。Large domain使用property tests、orbit-size distribution和independent hash/checksum audits。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Squeezing Space">在real memory/storage/cache/wire budget下减少program footprint的工程过程。</GlossaryItem>
+  <GlossaryItem term="Key Simplicity">先恢复problem context与generating rule，再选择最小必要表示的原则。</GlossaryItem>
+  <GlossaryItem term="Recomputation">保存minimal description并按需重建object，以time换stored space。</GlossaryItem>
+  <GlossaryItem term="Sparse Data Structure">只保存active non-default entries并通过compact index恢复logical view的结构。</GlossaryItem>
+  <GlossaryItem term="Data Compression">利用range、frequency、redundancy或loss tolerance用fewer bits编码data。</GlossaryItem>
+  <GlossaryItem term="Allocation Policy">控制reserve timing、size、sharing、recycling与overlay的memory strategy。</GlossaryItem>
+  <GlossaryItem term="Code Space">Runtime instructions、tables、libraries与specialized code占用的memory或ROM。</GlossaryItem>
+  <GlossaryItem term="Canonicalization">将symmetry-equivalent states映射到one deterministic representative。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Programming Pearls, Second Edition · Column 10 Squeezing Space"
+  href="https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+  author="Jon Bentley"
+  license="本章按Pearson官方第二版目录与Column 10正文，重建Kentucky tax、geographical sparse map、data/code space techniques、allocation/layout principles及Ken Thompson chess Big Squeeze；现代capacity boundary、allocator、canonicalization tests与certificate为教学化扩展。"
+/>

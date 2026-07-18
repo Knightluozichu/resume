@@ -1,0 +1,214 @@
+---
+title: "Chapter 8：Adventures in Functions"
+type: A
+section: C++ Primer Plus 6e · 函数增强与泛型
+order: 8
+description: 对齐第6版 Chapter 8：掌握 inline 函数、引用变量、默认参数、函数重载、重载解析与函数模板，并审计别名和实例化契约。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+draft: false
+---
+
+import {
+  EppFunctionFeatureMap,
+  EppOverloadResolutionLab,
+  EppReferenceBindingFlow,
+} from "@/components/mdx/cpp-primer-plus/diagrams/adventures-in-functions";
+
+<Objectives>
+
+- 能比较 inline、引用变量、默认参数、函数重载和函数模板各自解决的问题、成本与失败边界
+- 能实现按值、可写引用、const 引用和指针参数，判断复制、别名、可空性、写权限与生命周期
+- 能推导重载候选、转换等级和模板参数推导，复现歧义、悬空引用与不满足模板操作的诊断
+
+</Objectives>
+
+## 为什么函数增强机制不能混成“少写代码”
+
+内联函数（inline function）处理定义可见性与调用开销优化机会，reference 改变参数是否别名，default argument 改变调用点可省略的实参，overload 让同一名字拥有多个签名，function template 从类型模式生成函数族。五者影响不同边界，组合前应分别写出契约。
+
+<Term def="围绕函数定义布局、参数绑定、调用语法、候选选择或类型生成而增加的独立语言机制。">
+  函数增强机制
+</Term>
+
+<EppFunctionFeatureMap />
+
+## inline 函数允许头文件定义但不保证内联展开
+
+`inline` 允许相同函数定义出现在多个翻译单元，只要它们满足同一定义规则；编译器是否把调用替换为函数体，是优化决定。大函数或递归函数标 inline 也可能保留正常调用。
+
+<Term def="允许函数在多个翻译单元具有一致定义，并向编译器提供内联替换机会的说明。">
+  inline 函数
+</Term>
+
+```cpp
+inline int square(int value) {
+    return value * value;
+}
+```
+
+定义通常放入头文件，让每个使用翻译单元可见。若宏或条件编译使各处定义不同，会违反 ODR。先测量热路径，再讨论展开是否改善性能；不应为省一次调用复制大块代码。
+
+## 引用变量是已有对象的别名
+
+`int& alias = value;` 绑定后不能改绑到另一个对象，通过 alias 写入就是修改 value。引用语法不提供空状态，仍可能因被引用对象结束生命周期而悬空。
+
+<Term def="在初始化时绑定已有对象、之后作为该对象另一名字使用且不能重新绑定的别名。">
+  引用变量
+</Term>
+
+```cpp
+void swap_values(int& left, int& right) {
+    int temporary{left};
+    left = right;
+    right = temporary;
+}
+```
+
+可写引用表示调用者对象会被修改，应由函数名字和文档明确；const 引用适合读取大对象且可绑定某些临时值。指针适合可空、数组范围或显式间接语义，不能因引用语法更短就抹掉“可能没有对象”。
+
+<EppReferenceBindingFlow />
+
+<Callout type="trap" title="陷阱：返回局部变量的引用可以避免复制">
+  局部自动对象在函数返回时销毁，返回它的 reference 会悬空。返回值让编译器执行复制消除/移动，或返回引用到调用者提供且生命周期明确的对象。
+</Callout>
+
+## 默认参数由调用点可见声明提供
+
+默认参数允许调用者省略末尾实参，编译器在调用点补入表达式。默认值通常只在头文件声明一次；定义处重复会造成冲突。提供默认值后，其右侧参数通常也都需要默认值。
+
+<Term def="调用省略相应尾部实参时，由调用点可见声明自动补入的参数表达式。">
+  默认参数
+</Term>
+
+```cpp
+void report(std::string_view message, int repeat = 1);
+
+report("ready");      // report("ready", 1)
+report("retry", 3);
+```
+
+修改库中的默认值不会改变已编译调用点，调用者需重编。默认参数适合稳定、无歧义的常用选择；若参数组合有不同语义，命名函数或配置对象更清楚。
+
+## 函数重载以参数列表区分候选
+
+同一作用域可声明同名函数，只要参数类型/数量等形成不同签名。返回类型不能单独区分重载，因为调用点可能不使用返回值，编译器无法仅凭期望结果选择。
+
+<Term def="在同一作用域为同一函数名提供多个不同参数签名，并由实参选择唯一最佳候选的机制。">
+  函数重载
+</Term>
+
+```cpp
+void show(int value);
+void show(double value);
+void show(std::string_view value);
+```
+
+解析先形成可行候选，再比较精确匹配、promotion、标准转换等等级。若一个候选对第一个实参更好、另一个对第二个更好，调用可能歧义；加更多 overload 不一定改善 API。
+
+<Callout type="trap" title="陷阱：编译器总会选看起来最接近的重载">
+  解析遵循形式化转换等级，不读业务意图。用最小调用列出候选和每个实参转换；歧义应改签名或显式转换，不靠编译器版本碰运气。
+</Callout>
+
+## 函数模板从类型模式生成函数族
+
+函数模板把类型写成参数，调用时由实参推导 T 并实例化具体函数。模板体对 T 执行的每个操作都必须有效；“任意类型都能用”不是自动保证。
+
+<Term def="以类型或非类型模板参数描述函数模式，并按实参推导/指定参数生成具体函数的机制。">
+  函数模板
+</Term>
+
+```cpp
+template <class T>
+void swap_values(T& left, T& right) {
+    T temporary{left};
+    left = right;
+    right = temporary;
+}
+```
+
+该模板隐含 T 可复制构造、可赋值的要求。两个实参推导出的 T 必须一致；`int` 与 `double` 不会自动共同推导一个 T。现代 C++ 可用 concepts 表达约束，但第6版的关键是看见模板体隐式契约。
+
+## overload 与 template 共同参与候选选择
+
+非模板重载和模板实例可同时成为候选。精确的非模板函数通常优先于同等匹配模板；但实际规则还涉及特化程度和转换等级。先预测候选集，再用最小编译实验确认。
+
+<EppOverloadResolutionLab />
+
+函数模板的错误常在实例化某个 T 时才出现。诊断应从“哪个表达式要求 T 支持什么”开始，不要只读最外层几十行模板回溯。为模板写 `static_assert` 或概念可以把失败移到接口边界。
+
+## 引用与模板组合会放大生命周期问题
+
+模板参数为 `T&` 时只能绑定匹配 lvalue，`const T&` 可接收更多值但只读；返回 `T&` 仍要求目标对象活得足够久。类型推导不会修复悬空引用，也不会自动区分 owner 与 borrower。
+
+```cpp
+template <class T>
+const T& larger(const T& left, const T& right) {
+    return left < right ? right : left;
+}
+```
+
+若调用 `larger(1,2)` 并把返回引用保存到调用结束之后，临时对象生命周期成为风险。安全接口可以按值返回小对象，或限制参数为调用者持有的 lvalue 并明确返回借用。
+
+## 先预测四种候选结果
+
+重载实验先预测：哪些声明可行、每个参数用什么转换、是否有唯一最佳候选、模板 T 如何推导。实际编译后比较诊断；若结果超出预期，先缩小候选集，不要再加一个 overload 掩盖。
+
+## 三步选择函数增强机制
+
+<Stepper>
+  <Step title="第一步：明确要改变哪个边界">
+    区分定义布局、复制/别名、可省略实参、同名操作或跨类型生成，再选择 inline/reference/default/overload/template。
+
+    <EppFunctionFeatureMap />
+  </Step>
+  <Step title="第二步：画绑定与生命周期">
+    对每个参数标 copy、mutable alias、const borrow 或 nullable pointer，写明谁拥有对象、是否写回、何时失效。
+
+    <EppReferenceBindingFlow />
+  </Step>
+  <Step title="第三步：推导候选和实例化">
+    列可行函数、转换等级、最佳候选与 T 的隐式操作要求；测试精确、提升、混合类型和歧义。
+
+    <EppOverloadResolutionLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- inline 主要影响定义规则并给优化机会，不保证机器调用被展开
+- reference 表达非空别名但仍受生命周期约束，const 引用、可写引用与指针有不同契约
+- 默认参数在调用点补值并要求调用者重编，适合稳定尾部默认项
+- 函数 overload 按参数签名与转换等级选唯一最佳候选，返回类型不能单独区分
+- 函数 template 生成类型族，模板体操作就是隐式约束，推导和实例化不会自动保证语义安全
+
+<Exercises>
+  1. **问题 1：选择参数。** 小 int、只读大 string、需要写回的计数和可选对象分别用什么形式？
+
+  <Answer question="四类参数如何表达复制、借用和可空性？">小 int 按值；只读大 string 用 const reference；必须写回且对象必存在用 T&；可选对象用 pointer 或显式 optional/reference wrapper。选择同时考虑语义、生命周期、写权限和可空性，不只看复制成本。</Answer>
+
+  2. **问题 2：推导重载。** `show(shortValue)` 在 show(int) 与 show(double) 中为何通常选 int？
+
+  <Answer question="整数提升为什么优于普通转换？">short 到 int 是 integral promotion，short 到 double 是 standard conversion；重载解析中 promotion 等级优于普通转换，所以 show(int) 是更好候选。若候选分别对不同实参更好，则没有唯一 winner。</Answer>
+
+  3. **问题 3：审计模板。** 通用 swap 模板对 T 隐含哪些要求，怎样让失败更靠近接口？
+
+  <Answer question="函数模板的操作契约怎样暴露？">T 必须能从 T 构造 temporary，并支持两次赋值/移动，且这些操作满足预期异常与语义。现代实现可用 concept/requires 或 static_assert 表达要求；测试不可复制、只可移动和抛异常类型，避免深层实例化才报错。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="函数增强机制">改变函数定义、绑定、调用、候选或类型生成边界的机制集合。</GlossaryItem>
+  <GlossaryItem term="inline 函数">允许一致定义跨翻译单元并提供内联机会的函数。</GlossaryItem>
+  <GlossaryItem term="引用变量">初始化后绑定已有对象且不能改绑的别名。</GlossaryItem>
+  <GlossaryItem term="默认参数">调用省略尾部实参时由可见声明补入的表达式。</GlossaryItem>
+  <GlossaryItem term="函数重载">同名不同参数签名并由实参选最佳候选的机制。</GlossaryItem>
+  <GlossaryItem term="函数模板">按类型模式和模板参数生成具体函数的机制。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++ Primer Plus, Sixth Edition, Chapter 8 Adventures in Functions"
+  adaptedUrl="https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+/>

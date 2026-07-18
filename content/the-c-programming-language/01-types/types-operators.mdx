@@ -3,77 +3,281 @@ title: 类型、运算符与表达式
 type: A
 section: 类型与运算符
 order: 1
-description: C 语言基本类型、运算符优先级、表达式求值与隐式类型转换。
+description: 对照 K&R 第二章掌握 ANSI C 的类型与范围、常量和声明、整数提升与通常算术转换、位运算和条件表达式，并严格区分优先级、结合性与求值顺序。
 demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/content/images/9780131103627/samplepages/0131103628.pdf"
 draft: false
 ---
 
-import { KrcTypesMemoryDiagram } from "@/components/mdx/kr-c-language/diagrams/krc-types-memory";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  KrConversionDecisionMap,
+  KrEvaluationOrderMap,
+  KrTypeGuaranteeMap,
+} from "@/components/mdx/the-c-programming-language/diagrams/types-operators";
 
 <Objectives>
 
-- 能说出 char/int/float/double 各占多少字节，以及 sizeof 的用法
-- 能解释整数除法和浮点除法的区别，能修正因类型导致的计算错误
-- 能回答：`unsigned int u = 10; int i = -1; if (i < u)` 结果是什么？为什么？
+- 能比较 `limits.h`、`float.h` 与 `sizeof` 给出的信息，区分 C 标准保证、实现定义选择和项目额外假设
+- 能逐步推导整数提升与通常算术转换，安全改写有符号/无符号比较、整数除法和位操作
+- 能回答：为什么 `a + b * c` 的分组确定，却不能据此推出函数调用或操作数的求值先后？
 
 </Objectives>
 
-## 数据的基本表示
+## 从“本机是 4 字节”开始质疑
 
-程序的本质是处理数据。C 语言用「类型」来规定数据在内存中占多少空间、怎么解读二进制位。基本类型只有四种：`char`（字符/小整数）、`int`（整数）、`float`（单精度浮点）、`double`（双精度浮点）。这四种类型是 C 语言的原子——所有更复杂的数据表示都是它们的组合。
+类型首先规定一组值与可执行操作，然后才由实现选择表示。C 只保证 `sizeof(char) == 1`；这个“1 字节”有 `CHAR_BIT` 位且 `CHAR_BIT >= 8`。标准不保证 `char` 恰好 8 位、`int` 恰好 32 位、`double` 恰好 64 位，也不保证普通 `char` 与 `signed char` 具有相同符号性。
 
-<KrcTypesMemoryDiagram />
+<KrTypeGuaranteeMap />
 
-C 标准唯一定义的绝对大小是 `sizeof(char) == 1`。其余类型的大小依平台而定——但在 64 位 Linux/macOS 上，int 几乎总是 4 字节，double 总是 8 字节。用 `sizeof` 运算符可以确认当前平台的实际大小，它是编译期常量，没有运行时开销。
+ANSI C 的基础类型还包括 `signed`/`unsigned char`、`short`、`unsigned`、`long`、`long double` 和 `void`，并非只有 `char/int/float/double` 四种。`long long` 来自 C99，`_Bool` 也不是 K&R 第二版的 ANSI C90 核心；学习时应标明版本。
 
-<Term def="规定变量在内存中起始地址必须是某个数的整数倍的编译器行为，目的是让 CPU 高效访问数据。">内存对齐</Term>是理解类型大小的关键。CPU 访问对齐的数据比未对齐的数据快得多（某些架构上未对齐访问直接崩溃）。所以编译器会在结构体成员之间自动插入 padding 字节，让每个成员落在自身对齐边界的整数倍地址上。
+下面的程序打印实现事实，而不是宣称这些值跨平台不变：
 
-## 运算符与表达式
+```c
+#include <float.h>
+#include <limits.h>
+#include <stdio.h>
 
-C 的运算符种类繁多，但核心规则只有一条：<Term def="多个运算符出现在同一表达式中时，决定哪个运算符先执行的规则。">运算符优先级</Term>决定结合顺序。`*` 比 `+` 优先级高，所以 `a + b * c` 等价于 `a + (b * c)`。但 K&R 的建议是：不要背优先级表，拿不准就加括号——括号零成本，但可读性提升巨大。
+int main(void)
+{
+    printf("CHAR_BIT=%d, plain char signed=%s\n", CHAR_BIT,
+           CHAR_MIN < 0 ? "yes" : "no");
+    printf("sizeof(short/int/long)=%lu/%lu/%lu\n",
+           (unsigned long)sizeof(short), (unsigned long)sizeof(int),
+           (unsigned long)sizeof(long));
+    printf("UINT_MAX=%lu, FLT_RADIX=%d\n",
+           (unsigned long)UINT_MAX, FLT_RADIX);
+    return 0;
+}
+```
 
-表达式求值中最容易出问题的是<Term def="运算过程中操作数类型不一致时，编译器自动把较窄的类型转换为较宽类型的规则。">隐式类型转换</Term>。当两个不同类型的操作数参与运算时，C 会自动把较窄的类型提升为较宽的类型。`int + float` 会把 int 提升为 float 再运算。这个规则在大多数情况下是合理的，但在有符号和无符号混合时会制造陷阱。
-
-整数除法是另一个高频陷阱：`7 / 2` 的结果是 `3`（截断小数），不是 `3.5`。两个操作数都是整数时，C 执行整数除法。要得到浮点结果，至少一个操作数必须是浮点类型：`7 / 2.0` 或 `(float)7 / 2`。
-
-## 核心概念
-
-自增自减运算符的前缀和后缀区别是 C 的经典考点。`a++` 是后缀：表达式的值是 a 自增前的旧值，然后 a 加 1。`++a` 是前缀：a 先加 1，表达式的值是自增后的新值。两者最终都让 a 加 1，区别只在「表达式的值」——这在赋值和传参时有实际影响：`b = a++` 让 b 得到旧值，`b = ++a` 让 b 得到新值。
-
-K&R 最精妙的运算符设计是<Term def="对整数二进制位逐位进行与/或/异或/取反操作的运算符：&、|、^、~。">位运算符</Term>。`&`（按位与）、`|`（按位或）、`^`（按位异或）、`~`（取反）、`<<`（左移）、`>>`（右移）。这些运算符让 C 能直接操作硬件寄存器的每一位——这是系统编程的核心需求，也是 C 贴近硬件的体现。
-
-<Callout type="tip">
-<strong>建议 →</strong> 写位运算时总是用无符号类型（`unsigned`）。有符号整数的右移行为是实现定义的（有些平台补符号位，有些补 0），用无符号类型可以保证逻辑右移，行为可预测。
-</Callout>
-
-## 常见误区
+在 C90 中，`sizeof` 结果是无符号整数类型 `size_t`；这里转成 `unsigned long` 配 `%lu` 是为了保持示例的 ANSI C 可移植性。现代 C 可用 `%zu`，但该格式说明符来自 C99。除变长数组等后续标准特性外，`sizeof` 的操作数通常不被求值。
 
 <Callout type="trap">
-<strong>现象 →</strong> `int i = -1; unsigned u = 10; if (i < u) printf("yes");` 不输出 yes。<strong>原因 →</strong> 有符号与无符号比较时，C 的隐式转换规则是把有符号转为无符号。-1 被转成 unsigned 后变成 4294967295（2^32 - 1），远大于 10，所以 `i < u` 为假。<strong>修法 →</strong> 避免有符号和无符号直接比较。如果必须比较，先显式转换：`if ((unsigned)i < u)` 或 `if (i < 0 || i < (int)u)`。
+  **现象**：文档写“64 位系统上 long 和指针一定 8 字节”。**原因**：把 LP64 数据模型当成 C 标准；Windows 64 位常用 LLP64，`long` 仍为 32 位。**修法**：协议字段用 `<stdint.h>` 的精确宽度类型（若实现提供），对象大小用 `size_t`，平台假设用构建断言显式验证。
 </Callout>
 
-## 小结与练习
+## 常量与声明先决定类型
 
-- C 基本类型只有四种（char/int/float/double），sizeof 是确认实际大小的唯一可靠手段
-- 运算符优先级拿不准就加括号；整数除法截断小数，需浮点操作数才走浮点除法
-- 隐式类型转换在算术运算中自动发生；有符号与无符号混合比较是最经典的 C 陷阱
-- 位运算符让 C 能直接操作二进制位，是系统编程的基础工具
+整数字面量的类型由进制、值和后缀共同决定。十进制常量与十六/八进制常量的候选类型序列不同；`U`、`L` 后缀会改变候选集合。字符常量 `'A'` 在 C 中类型是 `int`，字符串字面量则是带结尾空字符的字符数组，不能通过指针去修改。
+
+声明把“说明符”和“声明符”组合起来：`unsigned long count;` 的说明符给出基础类型，`int *p[10];` 的声明符说明 `p` 是含 10 个 `int *` 的数组。`const` 在 K&R 第二版的 ANSI C 中已存在，但它限制的是通过某个左值修改对象的能力，不自动让对象成为编译期常量。
+
+## 算术、关系与逻辑运算符
+
+<Term def="执行加、减、乘、除和取余的运算符。运算前会发生整数提升与通常算术转换；结果类型由转换后的公共类型决定。">
+  算术运算符
+</Term>
+不只决定“算什么”，还继承操作数类型的值域。`INT_MAX + 1`
+不是得到一个更大的数学整数，而是有符号溢出的未定义行为；`UINT_MAX + 1U`
+则按模得到零。取余 `%` 只接受整数操作数，不能用于 `double`。
+
+<Term def="比较大小或相等性并产生 int 结果 0 或 1 的运算符。比较前同样会执行通常算术转换，因此混合符号比较必须先审查公共类型。">关系运算符</Term> 包括 `< <= > >=`，相等运算符是 `== !=`。结果类型是 `int`，值为 0 或 1。不要写成数学连写 `0 < x < 10`：它先算 `0 < x` 得到 0/1，再把这个整数与 10 比较，所以几乎总为真；正确写法是 `0 < x && x < 10`。
+
+逻辑与 `&&`、逻辑或 `||` 和逻辑非 `!` 把零视为假、非零视为真。前两者具有短路规则：`p != NULL && p->value > 0` 会先检查指针，若左侧为假就不求右侧。短路常用于保护后续访问，但也应避免把重要副作用藏在右操作数中，否则读者很难看出某条路径是否执行。
+
+> 先预测：若 `int x = 5;`，表达式 `0 < x < 3` 的值是什么？先画语法树，再按每一步的类型和值计算，不要凭数学直觉回答。
+
+答案是 1：`0 < x` 先产生 `int` 值 1，随后 `1 < 3` 仍为真。这个例子把分组、关系结果类型和逻辑组合三件事放在了一起。
+
+## 整数提升不是“窄类型变宽”
+
+小整数参与大多数表达式前先做 <Term def="对 char、signed/unsigned char、short、unsigned short 和位域应用的转换：若 int 能表示源类型全部值则转为 int，否则转为 unsigned int。">整数提升</Term>。因此 `unsigned short` 在一种实现上可能提升为 `int`，在另一种 `int` 范围不足的实现上提升为 `unsigned int`。
+
+随后，二元算术和比较通常通过 <Term def="在整数提升后，根据浮点等级、整数转换等级、符号性和可表示性为两个操作数寻找公共实类型的一组规则。">通常算术转换</Term> 寻找公共类型。它绝不是“总把有符号转无符号”或“较窄转较宽”这么简单。
+
+<KrConversionDecisionMap />
+
+经典例子中 `int i = -1; unsigned int u = 10; i < u` 为假，是因为两者等级相同，`i` 转成 `unsigned int`，负一按模转换成 `UINT_MAX`。但安全修复不是无条件写 `(unsigned)i < u`，那会保留同样转换。若业务语义是数学整数比较，应先处理负数：
+
+```c
+int int_less_than_unsigned(int i, unsigned int u)
+{
+    if (i < 0)
+        return 1;
+    return (unsigned int)i < u;
+}
+```
+
+当 `i` 非负时，转成 `unsigned int` 才能保持值。更好的接口通常从源头统一类型，并在跨类型边界先做范围检查。
+
+## 赋值、递增与条件表达式
+
+赋值运算符要求左操作数是可修改左值。`x += y` 与 `x = x + y` 的数值意图相近，但左操作数在复合赋值中只求值一次；当左侧包含函数调用或指针移动时，这一点影响副作用。赋值表达式自身也有值，所以 `a = b = 0` 按右结合工作，但把多重赋值塞进复杂条件会降低可审计性。
+
+<Term def="前缀形式先修改对象再产生新值，后缀形式产生旧值并安排对象递增或递减；两者都有副作用，不能与同一完整表达式中的其他未排序访问随意混用。">
+  递增与递减
+</Term>
+的前后缀差别在表达式值。若 `i` 原为 5，`j = i++` 让 `j` 得 5、`i` 变 6；重新置 5
+后，`j = ++i` 让二者都为 6。单独写成语句时 `i++` 与 `++i` 都只表达加一，不应凭
+C++ 迭代器经验虚构性能差异。
+
+条件表达式 `condition ? when_true : when_false` 先求条件，只求两个候选中的一个。它不是任意类型的“内联 if”：第二、第三操作数要按标准规则形成结果类型，涉及算术类型时会发生通常算术转换，涉及指针时还要满足兼容或空指针规则。
+
+```c
+int clamp_to_byte(int value)
+{
+    return value < 0 ? 0 : (value > 255 ? 255 : value);
+}
+```
+
+这个嵌套条件表达式的三个最终候选都是 `int`，结果类型清楚；若分支要修改多个对象、处理错误或记录日志，应改用 `if-else`，不要为了“短”牺牲控制流可见性。
+
+<Callout type="tip">
+  阅读赋值与递增表达式时做三列记录：语法分组、每个子表达式的类型、每个副作用何时完成。只要同一标量对象在没有序列保证的区域被多次修改，或既修改又读取其值用于别处，就应拆成独立语句，而不是猜某个编译器顺序。
+</Callout>
+
+## 除法、溢出与浮点转换
+
+`7 / 2` 两个操作数都是整数，结果为 `3`；赋给 `double` 只会把已经得到的 `3` 转成 `3.0`。写 `7.0 / 2.0` 或先转换一个操作数，才会执行浮点除法。K&R 的 ANSI C 与后续 C 标准在负整数除法细节上存在历史边界；现代 C 规定商向零截断，阅读旧实现时不要把后来的规则倒推成所有历史编译器都一致。
+
+无符号算术按比最大值大一的模数运算，回绕是定义良好的；有符号整数溢出是 <Term def="程序执行违反 C 标准要求后，标准不对结果施加约束。编译器可假设有符号溢出不发生，并据此优化控制流。">未定义行为</Term>。浮点转换也可能舍入或溢出；精度与指数范围应从 `float.h` 查询，不能把 IEEE 754 的具体位布局当成所有 C 实现的保证。
+
+## 位运算建立在无符号值上
+
+按位与、或、异或、取反和移位只适用于整数类型。工程代码优先对无符号值做位操作：无符号右移补零，左移在合法移位计数下按模处理；负有符号数右移是实现定义行为，有符号左移还可能触发未定义行为。
+
+```c
+#include <limits.h>
+
+unsigned int set_field(unsigned int word, unsigned int value,
+                       unsigned int shift, unsigned int width)
+{
+    unsigned int bits = (unsigned int)(sizeof word * CHAR_BIT);
+    unsigned int mask;
+    if (width == 0 || width > bits || shift > bits - width)
+        return word;
+    mask = width == bits ? ~0U : ((1U << width) - 1U);
+    mask <<= shift;
+    return (word & ~mask) | ((value << shift) & mask);
+}
+```
+
+先验证 `width` 与 `shift`，避免移位计数等于或超过类型宽度；`width == bits` 单独处理，避免 `1U << bits`。掩码只保留目标字段，其余位保持不变。
+
+## 优先级只决定语法树
+
+<Term def="当多个运算符出现在同一表达式中时，决定哪个运算符与操作数绑定更紧的语法规则。它决定分组，不决定兄弟子表达式的实际求值先后。">
+  运算符优先级
+</Term>
+让 `a + b * c` 分组为 `a + (b *
+c)`；结合性决定同级运算符如何分组，例如赋值从右结合。二者都不等于
+<Term def="抽象执行中各子表达式被计算及其副作用完成的先后约束。若标准没有规定，程序不能依赖编译器某次选择。">
+  求值顺序
+</Term>
+。
+
+<KrEvaluationOrderMap />
+
+`&&`、`||`、条件运算符和逗号运算符提供明确序列规则；普通二元运算符与函数参数通常不提供你想象的从左到右顺序。注意 `f(a(), b())` 中分隔参数的逗号不是逗号运算符。
+
+```c
+#include <stdio.h>
+
+int left(void)  { puts("left");  return 1; }
+int right(void) { puts("right"); return 2; }
+
+int main(void)
+{
+    int a = left();   /* 独立完整表达式，顺序明确 */
+    int b = right();
+    printf("sum=%d\n", a + b);
+    return 0;
+}
+```
+
+若顺序重要，就像上面一样拆成独立语句。`i = i++ + 1` 一类表达式在 K&R 对应的规则下对同一标量产生未被序列约束的读写，属于未定义行为；加括号只能改变分组，不能凭空添加序列保证。
+
+## 把转换告警变成证明义务
+
+在 GCC/Clang 上额外开启 `-Wconversion -Wsign-conversion -Wshift-overflow`，可以暴露窄化、符号变化和可疑移位，但告警不是标准判决器：有些合法转换会告警，有些跨函数的范围错误不会。正确处理方式是写下源值范围、目标值范围和越界策略，再决定保持类型、先检查、饱和、拒绝输入或显式转换。
+
+显式强转只告诉编译器“执行这种转换”，不会证明值可表示，也不会修复对象生存期、别名或求值顺序。比如把负 `int` 强转为 `unsigned` 会得到定义良好的模转换结果，却未必符合业务语义；把大 `unsigned long` 强转为较小整数类型还要面对实现定义或信号等目标标准规则。每个跨符号、跨宽度转换都应在代码审查中附一条范围理由。
+
+动态消毒器可以发现本次执行中的部分未定义行为，却无法穷尽所有输入和表达式路径。最终证据仍是：表达式的每一步类型可推导、每个值落在范围内、每个副作用有标准保证的序列关系。
+
+<Callout type="trap">
+  **现象**：把 `f(i++, i++)`
+  在本机的参数顺序写进业务逻辑。**原因**：误把源码从左到右和参数列表逗号当成序列规则。**修法**：每个副作用放到独立完整表达式，启用
+  `-Wsequence-point` 或相应告警，并让接口接收已经计算好的值。
+</Callout>
+
+## 小结
+
+- C 标准规定类型的关系和最小范围，不固定常见平台的字节数、普通 `char` 符号性或浮点布局
+- 整数提升先于通常算术转换；混合符号结果由等级与可表示性共同决定
+- 正整数除法截断小数；无符号回绕有定义，有符号溢出是未定义行为
+- 位运算优先使用无符号类型，并在移位前验证计数与字段宽度
+- 优先级和结合性决定分组，求值顺序决定时间约束；有顺序要求就拆语句
 
 <Exercises>
-  <Answer question="`int i = 7; float f = i / 2;` 的 f 是多少？为什么？如何修正为 3.5？">f = 3.0。因为 i 和 2 都是 int，执行整数除法 7/2=3（截断），再隐式转 float。修正：`float f = i / 2.0;`（让除数为 double，触发浮点除法）或 `float f = (float)i / 2;`（显式转换被除数）。</Answer>
-  <Answer question="`a[i]++` 和 `++a[i]` 执行后，a[i] 的值和表达式本身的值分别是什么？">两者执行后 a[i] 都加 1。区别在表达式值：`a[i]++`（后缀）返回自增前的旧值，`++a[i]`（前缀）返回自增后的新值。如果 a[i]=5，则 `a[i]++` 的值是 5，`++a[i]` 的值是 6。</Answer>
+
+**问题 1** 在不假设 `int` 位宽的前提下，解释 `int i = -1; unsigned int u = 10; i < u`，并给出保持数学整数语义的比较方式。
+
+<Answer>
+
+同等级的 `int` 与 `unsigned int` 比较时，`i` 转为 `unsigned int`；负一转换为 `UINT_MAX`，所以比较为假。若负有符号值应小于任何无符号值，先判断 `i < 0`，仅在非负时再转换并比较；或重新设计接口统一类型并验证范围。
+
+</Answer>
+
+**问题 2** `sizeof(char)`、`CHAR_BIT`、`sizeof(int)`、普通 `char` 是否有符号，哪些是标准固定值，哪些要查询实现？
+
+<Answer>
+
+`sizeof(char)` 固定为 1；`CHAR_BIT` 至少为 8，但具体值查询 `limits.h`；`sizeof(int)` 由实现决定，只受最小范围和类型等级约束；普通 `char` 的符号性也由实现选择，可用 `CHAR_MIN < 0` 或编译器文档确认。
+
+</Answer>
+
+**问题 3** 为什么给 `f(a(), b())` 加括号不能保证先调用 `a`？怎样改写才能建立顺序？
+
+<Answer>
+
+括号只改变表达式分组，函数参数之间的求值顺序没有因此确定。先用两个独立完整表达式保存结果，例如 `int x = a(); int y = b(); f(x, y);`，前一条语句的副作用完成后才进入下一条。
+
+</Answer>
+
 </Exercises>
 
-## 名词解释
-
 <Glossary>
-  <GlossaryItem term="内存对齐">规定变量在内存中起始地址必须是某个数（通常等于类型大小）的整数倍的编译器行为。目的是让 CPU 高效访问数据。编译器会在结构体成员间自动插入 padding 满足对齐要求。</GlossaryItem>
-  <GlossaryItem term="运算符优先级">多个运算符出现在同一表达式中时，决定哪个运算符先执行的规则。如乘法优先于加法。K&R 建议拿不准就加括号，不靠记忆优先级表。</GlossaryItem>
-  <GlossaryItem term="隐式类型转换">运算过程中操作数类型不一致时，编译器自动把较窄类型转换为较宽类型的规则。如 int + float 时 int 自动提升为 float。有符号与无符号混合时，有符号转为无符号——这是常见陷阱来源。</GlossaryItem>
-  <GlossaryItem term="位运算符">对整数二进制位逐位操作的运算符：&amp;（与）、|（或）、^（异或）、~（取反）、&lt;&lt;（左移）、&gt;&gt;（右移）。让 C 能直接操作硬件寄存器每一位，是系统编程的核心工具。</GlossaryItem>
+
+<GlossaryItem term="整数提升">
+  `char`、`short` 和部分位域在多数表达式中先转为 `int`；若 `int`
+  无法表示源类型全部值，则转为 `unsigned int`。
+</GlossaryItem>
+
+<GlossaryItem term="算术运算符">
+  `+ - * /
+  %`。运算前按规则转换操作数，结果受转换后类型的值域约束；有符号溢出与无符号模运算不可混为一谈。
+</GlossaryItem>
+
+<GlossaryItem term="关系运算符">
+  `< <= > >=`。比较前执行相应转换，结果为 `int` 的 0 或 1；数学连写需要改成由 `&&` 连接的两个比较。
+</GlossaryItem>
+
+<GlossaryItem term="通常算术转换">
+  在整数提升后，根据浮点等级、整数转换等级、符号性和可表示性，为二元操作数寻找公共实类型的规则。
+</GlossaryItem>
+
+<GlossaryItem term="递增与递减">
+  前缀形式先修改再产生新值，后缀形式产生旧值并完成修改。二者都有副作用，不能依赖未保证的求值顺序组合访问同一对象。
+</GlossaryItem>
+
+<GlossaryItem term="未定义行为">
+  违反标准要求后，标准不约束结果。稳定输出、关闭优化或显式强转都不能把根因变成合法语义。
+</GlossaryItem>
+
+<GlossaryItem term="运算符优先级">
+  决定运算符与操作数如何绑定的语法规则。它与结合性共同形成语法树，但不决定兄弟子表达式的执行先后。
+</GlossaryItem>
+
+<GlossaryItem term="求值顺序">
+  子表达式计算与副作用完成的先后约束。标准未保证顺序时，程序不得依赖某个编译器的选择。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution adaptedFrom="The C Programming Language (Kernighan & Ritchie)" adaptedUrl="https://www.prenticehall.com/" />
+<Attribution
+  title="The C Programming Language, Second Edition, Chapter 2: Types, Operators, and Expressions"
+  url="https://www.informit.com/content/images/9780131103627/samplepages/0131103628.pdf"
+/>

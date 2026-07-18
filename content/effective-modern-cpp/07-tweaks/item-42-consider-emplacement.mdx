@@ -1,0 +1,297 @@
+---
+title: "Item 42：考虑就地构造，而不是插入"
+type: A
+section: Chapter 8 · Tweaks
+order: 42
+description: 对齐 Effective Modern C++ Item 42：比较 emplacement 与 insertion 的构造链，分析临时对象消除、重复键拒绝、explicit constructor 可见性和 raw-pointer resource management 风险。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch08.html"
+draft: false
+---
+
+import {
+  EmcppAssociativeEmplaceRejectionFlowMap,
+  EmcppEmplacementSafetyBoundaryMap,
+  EmcppInsertionConstructionPathMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-42-consider-emplacement";
+
+<Objectives>
+
+- 能比较 emplacement（就地构造，emplace）与 insertion（插入，push_back）的对象构造、移动和销毁路径
+- 能判断 temporary object（临时对象）何时真正被消除，以及关联容器 rejection 是否抵消收益
+- 能分析 explicit constructor（explicit 构造）与 resource management（资源管理）风险，设计安全的 emplace call
+
+</Objectives>
+
+## 从“减少的是哪一个对象”开始
+
+向 `vector<Widget>` 插入一个尚未存在的 Widget，push API 通常要求先形成 value_type：
+
+```cpp
+widgets.push_back(Widget(10, true));
+```
+
+<Term def="先在 container 外形成 value_type object，再 copy/move 到 container storage 的插入操作族。">
+  insertion operation
+</Term>
+
+emplace API 接收 constructor arguments，在 container 的目标 storage 中直接构造：
+
+```cpp
+widgets.emplace_back(10, true);
+```
+
+<Term def="perfect-forward constructor arguments，由 container 在最终 storage 直接构造 element 的操作族。">
+  emplacement operation
+</Term>
+
+先预测两条路径分别创建几个 Widget、发生几次 move 和 destructor，再对照构造图。Item 42 是 consider emplacement，不是“全局替换 push”。
+
+<EmcppInsertionConstructionPathMap />
+
+## emplace 的典型收益是消除 value temporary
+
+push_back 版本可能经历：构造 temporary Widget、move-construct container element、销毁 moved-from temporary。emplace_back 可把 `(10, true)` 直接转发给 Widget constructor。
+
+<Term def="为了调用 insertion API 在 container 外构造、随后移动并销毁的短生命周期 value_type object。">
+  insertion temporary object
+</Term>
+
+若 Widget move 昂贵或不可移动，消除 temporary 有实际价值；若 compiler 可 elide、move 极便宜或 container implementation 走相同路径，差异可能很小，应 measurement。
+
+## 已有 value_type 时 emplace 没有天然优势
+
+```cpp
+Widget widget(10, true);
+widgets.push_back(widget);
+widgets.emplace_back(widget);
+```
+
+<Term def="caller 已持有与 container element 相同类型的对象，API 只能从该对象 copy/move 构造新 element 的输入形态。">
+  existing-value insertion
+</Term>
+
+两条 lvalue calls 都 copy Widget；对 `std::move(widget)` 都 move。emplace 无法把已经发生的 caller-side construction 撤销。此时 push_back 类型意图更直接。
+
+<Callout
+  type="trap"
+  title="陷阱：emplace_back 在任何输入下都比 push_back 少一次 move"
+>
+  只有 arguments 尚未形成 value_type 时，emplace 才可能消除 value
+  temporary。传入 existing Widget 时，两者都从该对象构造 element。
+</Callout>
+
+## 三个条件提高 emplacement 获益概率
+
+<Term def="element 通过 construction 加入、argument types 与 value_type 不同、container 很可能接受新 element 的联合场景。">
+  emplacement benefit conditions
+</Term>
+
+1. value 被 construction 到 container，而非 assignment 到已有 slot。
+2. caller 提供 constructor arguments，而不是 existing value_type。
+3. container 不太可能因 duplicate/key constraint 拒绝 insertion。
+
+sequence container 尾部新增通常满足；关联容器重复键、高频失败插入未必满足。
+
+## unique-key container 可能先构造再拒绝
+
+```cpp
+std::set<Widget, WidgetLess> widgets;
+widgets.emplace(10, true);
+```
+
+<Term def="container 因 duplicate key 或约束不接受候选 element，操作返回未插入状态。">
+  container insertion rejection
+</Term>
+
+implementation 可能先 allocate/construct candidate，再比较发现 duplicate 并销毁。若 construction 昂贵，emplace 的 speculative work 反而浪费；已有 value/key 的 insert 或 `try_emplace` 等更有针对性的 API 可能更好。
+
+<EmcppAssociativeEmplaceRejectionFlowMap />
+
+## explicit constructor 会扩大 emplace 可接受输入
+
+emplace 使用 direct initialization，因此可调用 explicit constructors；push insertion 往往需要先把 argument 隐式转换成 value_type，而 explicit 禁止这类隐式转换。
+
+```cpp
+std::vector<std::regex> expressions;
+
+expressions.emplace_back("[a-z]+");
+// expressions.push_back("[a-z]+"); may be rejected by explicit conversion
+```
+
+<Term def="只能由 direct initialization 或显式 conversion 调用，防止普通 implicit conversion 的 constructor。">
+  explicit-constructor boundary
+</Term>
+
+emplace 编译成功不一定更安全；它可能绕过 insertion API 原本提供的 type-checking friction。reviewer 要确认 arguments 确实表达目标 type，而不是意外命中某个 constructor。
+
+<Callout type="trap" title="陷阱：能 emplace 但不能 push 证明 emplace 更正确">
+  差异可能来自 explicit constructor。direct construction
+  接受更宽输入，既是能力也是风险；必须核对选中的 constructor 和参数语义。
+</Callout>
+
+## raw pointer resource ownership 可能开始得太晚
+
+```cpp
+std::list<std::shared_ptr<Widget>> widgets;
+
+widgets.emplace_back(new Widget);
+```
+
+<Term def="raw resource 已创建但尚未交给 RAII owner，期间任何 exception 都可能泄漏资源的时间窗口。">
+  pre-ownership exception window
+</Term>
+
+`new Widget` 在调用前执行；shared_ptr 直到 container 内构造 element 才取得 ownership。若 node allocation 或其他步骤在 ownership 建立前抛异常，raw pointer 有泄漏风险。
+
+## 先建立 RAII ownership 再交给 container
+
+```cpp
+widgets.emplace_back(std::make_shared<Widget>());
+// or widgets.push_back(std::make_shared<Widget>());
+```
+
+<Term def="在进入可能失败的 container operation 前，由 smart pointer/value owner 接管 resource 的异常安全原则。">
+  ownership-before-container rule
+</Term>
+
+make_shared 返回的 temporary smart pointer 已拥有 Widget；container allocation 抛异常时，temporary destructor 回收资源。这里 emplace 不会消除 shared_ptr value 的必要 ownership，push_back 同样清楚。
+
+<EmcppEmplacementSafetyBoundaryMap />
+
+## perfect forwarding 保留的是 argument 陷阱
+
+emplace 把 arguments 原样 forward 给 element constructor，因此 narrowing、nullptr、initializer_list/overload 和 reference lifetime 问题会直接暴露在 constructor selection。
+
+<Term def="emplace 将 cv/reference/category 和 argument types 传给 element constructors，使其 overload set 直接决定语义。">
+  emplace forwarding surface
+</Term>
+
+使用 brace/list 或 overloaded constructors 时，应以 compile-time probes 确认实际选择。不要因为 container API 名为 emplace 就假设 constructor 更受约束。
+
+## vector reallocation 仍会移动已有 elements
+
+emplace 只可能消除新 element 的 temporary；若 vector capacity 不足，reallocation 还要迁移所有 existing elements。
+
+<Term def="vector 扩容时把旧 storage elements move/copy 到新 storage，与新 element 是否 emplace 无关的成本。">
+  reallocation-dominant cost
+</Term>
+
+```cpp
+widgets.reserve(expectedCount);
+widgets.emplace_back(10, true);
+```
+
+性能实验要固定 capacity，否则 reallocation noise 可能淹没 push/emplace 的一个 temporary 差异。
+
+## emplacement 不改变对象 lifetime 规则
+
+如果 constructor 保存 reference/view，emplace 只直接构造该 element，不延长 argument referent lifetime：
+
+```cpp
+views.emplace_back(makeTemporaryString()); // inspect string_view lifetime
+```
+
+<Term def="element 保存 non-owning reference/view 时，其 referent 必须独立活过 container element 的契约。">
+  emplaced-reference lifetime
+</Term>
+
+直接构造有时让 dangling 更隐蔽，因为没有命名 temporary。优先 owning type 或明确 stable storage。
+
+## 用实测分离构造与容器成本
+
+<Term def="分别统计 element constructors/moves/destructors、allocator calls、duplicate rejection 与 reallocation 的性能验证方法。">
+  emplacement cost audit
+</Term>
+
+1. instrument value_type constructors/moves/destructors。
+2. reserve sequence capacity，隔离 reallocation。
+3. 分别测试 constructor args、existing lvalue/rvalue。
+4. 对 associative container 测成功与 duplicate rejection。
+5. 使用 counting allocator 统计 allocation，并注入异常验证 ownership。
+6. 检查 explicit constructor selection 与 non-owning lifetime。
+
+## 小结
+
+- insertion 通常先形成 value_type 再 copy/move；emplacement 可把 constructor args 直接用于最终 storage
+- emplacement 的典型收益是消除 value temporary，而不是让所有传入 existing objects 的操作更快
+- 收益最可能出现在 construction、不同 argument type、低 rejection probability 三项同时成立时
+- unique-key container 可能先构造 candidate 再因 duplicate 拒绝，产生 speculative cost
+- emplace direct initialization 可调用 explicit constructor，扩大输入能力也降低隐式转换防线
+- raw resource 在 container 内才获得 ownership 会形成 exception leak window，应先用 make/shared/unique ownership
+- vector reallocation、reference lifetime 与 allocator cost 不会因 emplace 自动消失
+- 用 emplacement cost audit 同时验证性能、constructor selection 和 resource safety
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 42"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch08.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="insertion operation">
+    先有 value 再插入的操作。
+  </GlossaryItem>
+  <GlossaryItem term="emplacement operation">
+    在最终位置直接构造的操作。
+  </GlossaryItem>
+  <GlossaryItem term="insertion temporary object">
+    插入前形成的短期 element value。
+  </GlossaryItem>
+  <GlossaryItem term="existing-value insertion">
+    传入已有 value_type object 的插入。
+  </GlossaryItem>
+  <GlossaryItem term="emplacement benefit conditions">
+    emplace 易获益的联合条件。
+  </GlossaryItem>
+  <GlossaryItem term="container insertion rejection">
+    候选 element 未被容器接受。
+  </GlossaryItem>
+  <GlossaryItem term="explicit-constructor boundary">
+    direct 与 implicit construction 的边界。
+  </GlossaryItem>
+  <GlossaryItem term="pre-ownership exception window">
+    raw resource 尚无 RAII owner 的窗口。
+  </GlossaryItem>
+  <GlossaryItem term="ownership-before-container rule">
+    容器操作前先建立 ownership。
+  </GlossaryItem>
+  <GlossaryItem term="emplace forwarding surface">
+    constructor 直接接收转发参数的接口面。
+  </GlossaryItem>
+  <GlossaryItem term="reallocation-dominant cost">
+    扩容迁移支配总成本。
+  </GlossaryItem>
+  <GlossaryItem term="emplaced-reference lifetime">
+    就地构造 non-owning element 的寿命。
+  </GlossaryItem>
+  <GlossaryItem term="emplacement cost audit">
+    验证 emplace 成本和安全的流程。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：比较 `push_back(Widget(10,true))`、`emplace_back(10,true)` 与传入 existing Widget。** 预测 constructor/move/destructor 次数。
+
+<Answer question="何时能消除 temporary？">
+  push temporary 路径先构造 Widget，再 move 到 container 并销毁
+  temporary；emplace args 可直接在 slot 构造，消除这一个 value temporary。若
+  caller 已有 Widget lvalue/rvalue，push 与 emplace 都只能 copy/move 该
+  object，emplace 没有可消除的 caller construction。还要 reserve capacity 排除
+  reallocation 干扰。
+</Answer>
+
+2. **问题 2：set emplace 一个 duplicate expensive value。** 分析为何可能比 insert 更贵，并提出验证方法。
+
+<Answer question="rejection path 做了哪些 speculative work？">
+  emplace 只拿到 constructor args，implementation 可能 allocate/construct
+  candidate 后才比较发现 duplicate，再 destroy/deallocate；insert 已有 value/key
+  时可能更早判重。用 instrumented constructors、counting allocator
+  和成功/duplicate 两组 benchmark 测量；map 场景还比较
+  try_emplace，不能只测成功插入。
+</Answer>
+
+3. **问题 3：`list<shared_ptr<Widget>>` 调用 `emplace_back(new Widget)`。** 找出 exception window 并安全改写。
+
+  <Answer question="ownership 应在哪一步建立？">raw new 在函数调用前完成，但 shared_ptr element 到 container 内才构造；若 container node allocation/构造准备先抛异常，raw pointer 尚无 owner，可能泄漏。先调用 make_shared 建立 RAII owner，再 push_back 或 emplace_back smart pointer；异常时 temporary smart pointer 自动释放。还需检查 explicit constructor 使 emplace 接受了哪些 push 不接受的输入。</Answer>
+</Exercises>

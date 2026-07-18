@@ -1,121 +1,226 @@
 ---
-title: "光照模型与着色"
+title: "光、材质、颜色与着色器"
 type: B
 section: "计算机图形学与渲染"
 order: 6
-description: "Flat/Gouraud/Phong三种着色频率对比"
+description: "承载第三版 Ch26-28、Ch33：光的物理量、材质散射、颜色系统与可编程着色器"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
 draft: false
 ---
 
-import { CgpLightingModelsDiagram } from "@/components/mdx/cg-principles-practice/diagrams/cgp-lighting-models";
+import { CgpLightingModelsDiagram, CgpScatteringDiagram, CgpShaderColorDiagram } from "@/components/mdx/cg-principles-practice/diagrams/cgp-lighting-models";
+import { CgpStepFlowDiagram } from "@/components/mdx/cg-principles-practice/diagrams/cgp-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能区分光照模型（Phong/Blinn-Phong）和着色频率（Flat/Gouraud/Phong）
-- 能解释三种着色频率的原理和效果差异
-- 能说出Gouraud着色丢失高光的原因
-- 能回答：现代GPU用哪种着色频率？为什么？
+
+- 能区分 spectrum、flux、intensity、irradiance、radiance 与 reflectance 的量和单位
+- 能比较 object/surface/volume/subsurface scattering 以及 empirical、measured、physical material model
+- 能追踪 spectrum → XYZ → linear RGB → gamut/tone → display encoding，并识别错误插值
+- 能设计 shader interface，使 geometry、material、light、sampling frequency 与输出空间可验证
+
 </Objectives>
 
-## 直觉引入
+## 直觉：RGB 常量不是光，shader 也不是材质本身
 
-想象你在给一个球上色。方案A（Flat）：每个面涂一个颜色——球看起来像由很多平面拼成。方案B（Gouraud）：在顶点处算颜色，面内渐变——球看起来光滑但高光可能不准确。方案C（Phong着色）：在面内插值法线，每个像素算光照——高光锐利准确。
+先预测：`vec3(0.5)` 的光强是多少瓦？HSV 中两个 hue 直接线性插值会沿最短色相路径吗？Phong highlight 在 vertex 之间消失，是材质模型错还是 sampling frequency 错？这些问题必须先分清物理量、表示和执行位置。
 
-注意区分：Phong光照模型（环境+漫反射+镜面）和Phong着色频率（逐像素计算光照）是两个不同的概念，虽然都叫Phong。
-
-## 概念讲解
-
-### 着色频率
+Ch26 Light 定义光和测量；Ch27 Materials and Scattering 定义物质响应；Ch28 Color 把光谱连接到观察者和设备；Ch33 Shaders 把选定近似放入 programmable pipeline。四章形成 `light → scattering → tristimulus/color pipeline → shader samples → display`。
 
 <CgpLightingModelsDiagram />
 
-<Term def="Flat着色是逐面计算光照，每个图元一个颜色的着色方式">Flat着色</Term>：用面法线，一个三角形一个颜色。最快最粗糙。
+## Ch26 Light：从光谱到辐射度量
 
-<Term def="Gouraud着色是逐顶点计算光照，颜色在面内插值的着色方式">Gouraud着色</Term>：在顶点处算光照，颜色双线性插值。高光可能丢失（如果高光不在顶点处）。
+光可用 wave/particle 模型解释 diffraction、interference、polarization 与 energy packet；graphics 通常在尺度足够大时采用 geometric/ray optics 与连续 radiometry。选择模型就是声明忽略哪些现象，不能说 ray optics 是光的完整物理。
 
-<Term def="Phong着色是逐像素计算光照，法线在面内插值的着色方式">Phong着色</Term>：法线插值，每像素算光照。高光锐利准确，现代GPU标准。
+<Term def="单位投影面积、单位立体角方向上的辐射功率密度，是沿真空直线传输和渲染方程使用的核心量">辐亮度</Term>定义：
 
-<Term def="着色频率是光照计算的粒度：面/顶点/像素">着色频率</Term>决定了渲染质量和性能的权衡。
+$$
+L=\frac{d^2\Phi}{dA\cos\theta\,d\omega},
+\qquad [L]=W\,m^{-2}\,sr^{-1}.
+$$
 
-## 交互Demo
+- radiant flux $\Phi$：总功率 W；
+- intensity $I=d\Phi/d\omega$：每立体角功率 W/sr；
+- irradiance $E=d\Phi/dA$：到达表面的每面积功率 W/m²；
+- radiance $L$：带方向的投影面积密度。
 
-<Stepper>
-<Step title="第一步：Flat着色">逐面计算，用面法线。三角形内颜色一致，能看到明显的面边界。适合Low-poly风格或调试法线。</Step>
-<Step title="第二步：Gouraud着色">
-逐顶点计算，颜色在面内插值。比Flat光滑，但如果高光点不在顶点上，高光会丢失或变形。
-<CgpLightingModelsDiagram />
-</Step>
-<Step title="第三步：Phong着色">逐像素计算，法线在面内插值。高光准确锐利，质量最好。现代GPU的片段着色器天然支持逐像素着色。</Step>
-</Stepper>
+<Term def="物体表面对入射光谱和方向的反射比例或分布属性；它是材料响应，不是到达表面的照明颜色">反射率</Term>与 radiance 不能混用。一个白色 albedo 并不发光；输出还取决于 incident radiance、geometry 和 visibility。
 
-## 代码对照
+blackbody spectrum 随 temperature 变化，但“色温”只描述接近黑体轨迹的 chromaticity，不决定任意光源完整 spectrum。polarization/diffraction 在常规 renderer 中常忽略，在薄膜、衍射光栅、LCD/光学系统中可能不可忽略。
+
+## Ch27 Materials and Scattering
+
+<CgpScatteringDiagram />
+
+<Term def="描述入射方向和出射方向之间表面反射/透射辐亮度比例的散射函数家族，包括 BRDF、BTDF 与统一 BSDF">BSDF</Term>进入局部 transport：
+
+$$
+L_o(\omega_o)=\int_{\Omega}f_s(\omega_i,\omega_o)L_i(\omega_i)
+|n\cdot\omega_i|d\omega_i.
+$$
+
+material response 可分：surface reflection/refraction、subsurface transport、participating volume scattering，以及 object-level mixture/layer/geometry。alpha blend 不是自动等价于 physical transmission，多层、absorption、refraction 与 coverage 需明确模型。
+
+<Term def="以少量可调参数拟合观察效果但不保证物理约束的散射模型，如经典 Phong 高光">经验散射模型</Term>适合风格或低成本；measured BRDF/BTF 更贴近采样材料但体量和 interpolation 困难；physical microfacet/diffusion/volume model 参数更可解释，仍包含假设和近似。
+
+评价 material model 应检查：nonnegative、reciprocity（适用时）、energy conservation、sampling/PDF interface、parameter range、normal/scale behavior、spectral/color representation、layering 与可编辑性。
+
+material software interface 不应只提供 `color = shade()`。path/ray renderer 需要 evaluate、sample、pdf，raster renderer 需要 direct/IBL-compatible parameters；两者共享同一 BSDF 语义，避免 offline/real-time 材质漂移。
+
+```cpp
+struct BsdfSample {
+    Vec3 wi;
+    Spectrum f;
+    float pdf;
+    ScatterFlags flags;
+};
+
+Spectrum evaluate(const Surface& s, Vec3 wo, Vec3 wi);
+BsdfSample sample(const Surface& s, Vec3 wo, Vec2 randomSample);
+float pdf(const Surface& s, Vec3 wo, Vec3 wi);
+```
+
+sample 返回值、measure（solid angle/discrete）、delta event 和 transport mode 必须一致，否则 estimator 会系统偏差。
+
+## Ch28 Color：物理光谱到设备信号
+
+<Term def="把光谱功率分布映射为标准观察者三刺激值的颜色描述系统，是设备无关颜色计算的中间表示">CIE XYZ</Term>由 color matching functions 积分：
+
+$$
+X=\int S(\lambda)\bar x(\lambda)d\lambda,\quad
+Y=\int S(\lambda)\bar y(\lambda)d\lambda,\quad
+Z=\int S(\lambda)\bar z(\lambda)d\lambda.
+$$
+
+chromaticity $x=X/(X+Y+Z),y=Y/(X+Y+Z)$ 去掉 overall magnitude；它不能表达亮度，也不能说明 spectrum 唯一，因为 metamer 存在。
+
+<Term def="由一组三原色、白点和 transfer function 定义的 RGB 数值解释范围；相同三个数在不同 RGB 空间可代表不同颜色">RGB 色彩空间</Term>必须携带 primaries/white/transfer。linear RGB 适合 lighting、convolution 和 alpha composite；sRGB-like encoded values 适合存储/显示传输，不能直接用于物理相加。
+
+display pipeline 通常是 scene-linear working space → exposure/tone mapping → gamut mapping → output color space/transfer。超出 gamut 的颜色需 clip/compress/map，策略会改变 hue/lightness。
+
+CMY/CMYK 是减色打印模型；YIQ 等服务特定 video encoding；HSV/HLS 是基于 RGB 的用户参数化，不是 perceptually uniform，也不适合任意 physical interpolation。hue wrap、低 saturation undefined hue 和 negative/HDR RGB 都需特殊处理。
+
+颜色插值必须声明目标：linear-light 能量混合、premultiplied layer blend、perceptual gradient、pigment mixture 或 hue path，不存在统一“正确 lerp”。
+
+## Ch33 Shaders：把模型放到正确频率和空间
+
+<CgpShaderColorDiagram />
+
+programmable shader stage 处理 vertices/primitives/fragments/compute work，但 raster/depth/blend 等仍可由 fixed units 执行。shader interface 必须声明 coordinate space、interpolation qualifier、color/data semantics、range 和 sampling frequency。
+
+Flat shading 每 primitive 使用一个 face response；Gouraud shading 在 vertices 求 lighting 后插值 color；Phong shading 插值 normal 后在 fragments 求 lighting。triangle 内是 barycentric/perspective-correct interpolation，不是“双线性插值”。
+
+Gouraud 丢失 narrow specular 是因为先应用 nonlinear lighting 再线性插值；Phong 也可能因 coarse geometry normal、pixel frequency、normal-map aliasing 或 undersampled light 缺失高光。“逐像素”不是无限正确，现代系统还用 per-sample、quad、tile、compute、ray-hit 和 variable-rate frequency。
 
 ```glsl
-// 三种着色频率的对比
+// Inputs are explicitly world-space and scene-linear.
+in vec3 worldPosition;
+in vec3 worldNormal;
+in vec2 uv;
 
-// Flat: 在几何着色器中计算面法线
-// vec3 faceNormal = cross(v1-v0, v2-v0);
-// gl_FragColor = vec4(calcLight(faceNormal), 1.0);
-
-// Gouraud: 顶点着色器算颜色，插值传给片段着色器
-// vertex shader:
-// vec3 color = ambient + diffuse * max(dot(N, L), 0) + spec * pow(...);
-// outColor = color; // 传给片段着色器插值
-
-// Phong shading: 片段着色器逐像素计算
-#version 330 core
-in vec3 fragNormal;  // 插值后的法线
-in vec3 fragPos;     // 插值后的位置
-uniform vec3 lightDir;
-uniform vec3 viewDir;
+layout(location = 0) out vec4 sceneLinearColor;
 
 void main() {
-    vec3 N = normalize(fragNormal); // 逐像素归一化插值法线
-    vec3 L = normalize(lightDir);
-    vec3 V = normalize(viewDir);
-    // 逐像素计算Phong光照
-    vec3 ambient = vec3(0.1);
-    vec3 diffuse = max(dot(N, L), 0.0) * vec3(0.8);
-    vec3 H = normalize(L + V);
-    vec3 specular = pow(max(dot(N, H), 0.0), 32.0) * vec3(1.0);
-    gl_FragColor = vec4(ambient + diffuse + specular, 1.0);
+    vec3 N = normalize(worldNormal);
+    vec3 base = decodeBaseColor(texture(baseColorMap, uv));
+    BsdfParams bsdf = makeMaterial(base, roughness, metallic);
+    vec3 radiance = evaluateDirectAndEnvironment(bsdf, worldPosition, N);
+    sceneLinearColor = vec4(radiance, opacity); // tone/output transform is later
 }
 ```
+
+environment mapping 用 direction 查询 environment texture；反射 direction、normal space、roughness prefilter 和 color encoding 必须一致。toon/XToon shader 用 ramp、contour 或 view-dependent abstraction 表达风格，评价目标是 information/style consistency，不是物理误差最小。
+
+## 从测量到显示的校准链
+
+一个 material sphere 看起来“对”不足以证明系统。应建立：spectral/radiometric light reference、known reflectance/BSDF、calibrated camera/exposure、scene-linear capture、display transform 和 calibrated monitor/viewing condition。
+
+白炉测试检查 energy，color checker 检查 color transform，roughness/light-size sweep 检查 lobe，shader frequency sweep 检查 sampling。把每层输出保存，才能分辨光源单位、材质、颜色转换还是 shader stage 出错。
+
+## 三步光色着色验收
+
+<Stepper>
+<Step title="第一步：标注量、单位与空间">
+
+为 light/material/texture/varying/output 标注 spectrum/radiance/reflectance、world/tangent、linear/encoded 和 alpha。
+
+<CgpStepFlowDiagram caption="先阻断物理量、坐标和颜色表示混用。" stage={1} stages={["Specify：quantity + units + spectrum/color + coordinate space + frequency"]} />
+
+</Step>
+<Step title="第二步：分层可视化与解析测试">
+
+显示 irradiance、BSDF lobes、normal、direct/indirect、XYZ/linear RGB、tone/gamut mask；运行 inverse-square、white furnace 和 color patch。
+
+<CgpStepFlowDiagram caption="光、材质、颜色和 shader 错误要能分别归因。" stage={2} stages={["Specify：quantity + units + spectrum/color + coordinate space + frequency", "Inspect：light → BSDF → radiance → XYZ/RGB → display layers"]} />
+
+</Step>
+<Step title="第三步：扫描参数、频率和设备">
+
+扫 angle/roughness/light size、vertex/pixel/sample frequency、HDR/exposure/gamut 与输出设备，对比 reference 和 GPU cost。
+
+<CgpStepFlowDiagram caption="物理、感知、时空采样与成本共同通过。" stage={3} stages={["Specify：quantity + units + spectrum/color + coordinate space + frequency", "Inspect：light → BSDF → radiance → XYZ/RGB → display layers", "Validate：analytic/reference + parameter/frequency/device sweeps + cost"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**误区：混淆Phong光照模型和Phong着色频率。**
-Phong光照模型 = 环境光+漫反射+镜面反射的公式。Phong着色频率 = 逐像素计算光照。两者独立——你可以用Gouraud着色频率配Phong光照模型（在顶点处算Phong公式），也可以用Phong着色频率配Lambert光照模型（逐像素算漫反射）。
+**现象 →** `vec3(1)` 同时被称作光强、颜色、albedo 和输出。**原因 →** 丢失单位与 color-space semantics。**修法 →** 类型/变量名标注 radiance/reflectance/linear/encoded，并在边界显式转换。
 </Callout>
 
 <Callout type="trap">
-**误区：认为Gouraud和Phong着色只是性能差异。**
-不只是性能差异，是视觉质量的本质差异。Gouraud在顶点处算光照再插值颜色，如果高光点恰好在三角形中间（不在顶点上），高光会被完全丢失。Phong着色插值法线再逐像素计算，无论高光在哪里都能正确呈现。对于高光物体（金属、塑料），两者差异非常明显。
+**现象 →** 声称现代 GPU 都使用“Phong 逐像素标准”。**原因 →** 把历史 interpolation technique 当固定执行模型。**修法 →** 分开 material model 与 evaluation frequency，按 fragment/sample/compute/ray/VRS 路径实测。
 </Callout>
 
+<Callout type="trap">
+**现象 →** 在 sRGB 或 HSV 上直接平均 lighting/texture，gradient 变暗或绕错 hue。**原因 →** interpolation space 与目标不匹配。**修法 →** 先定义是能量、layer、perceptual 还是 UI hue interpolation，再选空间和 premultiplication。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题 1**：三种着色频率的原理分别是什么？效果有什么差异？
+
+**问题 1：radiance 与 reflectance 为什么不能都叫 color？**
 
 <Answer>
-Flat着色：逐面计算，用面法线算光照，三角形内颜色一致，能看到明显面边界。Gouraud着色：逐顶点计算，在顶点处用Phong模型算颜色，颜色在三角形内双线性插值，表面看起来光滑但高光可能丢失。Phong着色：逐像素计算，法线在三角形内插值，每像素用插值法线计算光照，高光锐利准确。质量递增：Flat < Gouraud < Phong；性能递减：Flat > Gouraud > Phong。
+radiance 是带单位的方向光能量，reflectance/BSDF 是材料对入射光的比例分布，RGB color 还依观察者/色彩空间。混用会导致距离、曝光、能量守恒和显示转换错误。
 </Answer>
 
-**问题 2**：现代GPU用哪种着色频率？为什么Gouraud着色会丢失高光？
+**问题 2：怎样验证 BSDF 的 evaluate/sample/pdf 一致？**
 
 <Answer>
-现代GPU用Phong着色频率（逐像素计算光照），因为片段着色器天然逐像素执行，性能开销与Gouraud差异不大（早期GPU是逐顶点算再插值，现代GPU计算能力足够逐像素）。Gouraud丢失高光的原因：高光是光照的非线性函数（pow(N·H, n)），而Gouraud在顶点处算完颜色后再线性插值。如果高光点在三角形中间（不在顶点上），顶点处可能完全没有高光，插值后高光就消失了。Phong着色插值法线（线性量）再算光照（非线性函数），正确捕获了中间的高光。
+对固定 wo 用 sample 生成 wi，比较返回 f/pdf 与独立 evaluate/pdf；做 hemisphere integral、reciprocity/energy 和 white-furnace 测试，覆盖 delta/continuous lobe、roughness 极值与 grazing angle。
 </Answer>
+
+**问题 3：Gouraud 丢高光的根因是什么？**
+
+<Answer>
+lighting 尤其 specular 是 normal/view/light 的 nonlinear function。Gouraud 只在 vertices 求值再线性插值；若 narrow lobe 峰值落在 triangle 内而顶点值低，插值无法重建该峰值。
+</Answer>
+
+**问题 4：为什么 HSV 不适合所有颜色插值？**
+
+<Answer>
+它由 encoded RGB 几何变换而来，不感知均匀；hue 是环且在低 saturation 不稳定，也不表达 HDR/negative values。应按能量或感知目标选 linear RGB、XYZ/其他空间及 hue path。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+Ch26-28、33 把光、物质、观察者/设备与执行程序连为一条有单位的数据链。可靠着色不由“Phong 还是 Gouraud”单独决定，而由 radiometry、BSDF、color transform、shader interface、sampling frequency 和 display evidence 共同决定。
+
 <Glossary>
-<GlossaryItem term="着色频率">光照计算的粒度，分Flat（面）、Gouraud（顶点）、Phong（像素）三种，决定渲染质量和性能。</GlossaryItem>
-<GlossaryItem term="Flat着色">逐面计算光照的着色方式，每个图元一个颜色，最快但最粗糙。</GlossaryItem>
-<GlossaryItem term="Gouraud着色">逐顶点计算光照再插值颜色的着色方式，高光可能丢失。</GlossaryItem>
-<GlossaryItem term="Phong着色">逐像素计算光照的着色方式，法线在面内插值，高光锐利准确，现代GPU标准。</GlossaryItem>
+<GlossaryItem term="辐亮度">单位投影面积和单位立体角方向上的辐射功率密度。</GlossaryItem>
+<GlossaryItem term="反射率">材料对入射光谱和方向的反射比例或分布属性。</GlossaryItem>
+<GlossaryItem term="BSDF">统一描述表面反射与透射方向分布的散射函数。</GlossaryItem>
+<GlossaryItem term="经验散射模型">以可调参数拟合外观但不保证完整物理约束的模型。</GlossaryItem>
+<GlossaryItem term="CIE XYZ">由标准观察者颜色匹配函数定义的三刺激颜色系统。</GlossaryItem>
+<GlossaryItem term="RGB 色彩空间">由 primaries、white point 和 transfer 定义的 RGB 数值解释。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="计算机图形学：原理及实践" adaptedUrl="https://www.cgpp.net/" />
+<Attribution adaptedFrom="Computer Graphics: Principles and Practice, Third Edition, Chapters 26-28 and 33" adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707" />

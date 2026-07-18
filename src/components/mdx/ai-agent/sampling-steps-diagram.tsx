@@ -114,7 +114,8 @@ const STEPS: readonly TeachingStep[] = [
   },
   {
     label: "softmax",
-    caption: "② softmax 把这排分数归一成一摞「和为 1」的概率：分数越高，概率越大",
+    caption:
+      "② softmax 把这排分数归一成一摞「和为 1」的概率：分数越高，概率越大",
   },
   {
     label: "temp",
@@ -122,11 +123,13 @@ const STEPS: readonly TeachingStep[] = [
   },
   {
     label: "topp",
-    caption: "④ top-p 从高到低累加概率，只留累积刚够 p 的头部候选，尾巴灰显被砍掉",
+    caption:
+      "④ top-p 从高到低累加概率，只留累积刚够 p 的头部候选，尾巴灰显被砍掉",
   },
   {
     label: "pick",
-    caption: "⑤ 最后在存活的候选里掷骰子，按概率随机挑一个——这就是采出的下一个 token",
+    caption:
+      "⑤ 最后在存活的候选里掷骰子，按概率随机挑一个——这就是采出的下一个 token",
   },
 ];
 
@@ -351,7 +354,8 @@ export function AaSamplingStepsDiagram() {
         />
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
-        从模型吐出的原始分数，到最后挑出一个 token——温度在第③步把分布捏陡或捏平，top-p
+        从模型吐出的原始分数，到最后挑出一个
+        token——温度在第③步把分布捏陡或捏平，top-p
         在第④步砍掉长尾，最后一步才真正掷骰子。
       </figcaption>
     </figure>

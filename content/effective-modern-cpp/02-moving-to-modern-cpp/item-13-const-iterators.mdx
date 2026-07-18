@@ -1,0 +1,351 @@
+---
+title: "Item 13：优先使用 const_iterator"
+type: A
+section: Chapter 3 · Moving to Modern C++
+order: 13
+description: 对齐 Effective Modern C++ Item 13：把 const_iterator 作为默认只读位置能力，使用 cbegin/cend 与现代 insert/erase API，并通过 std begin/end/cbegin/cend 支持数组和泛型容器访问。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch03.html"
+draft: false
+---
+
+import {
+  EmcppConstIteratorCapabilityMap,
+  EmcppConstIteratorMutationFlowMap,
+  EmcppGenericContainerAccessMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-13-const-iterators";
+
+<Objectives>
+
+- 能比较 iterator 与 const_iterator 的读写能力，并解释 prefer const iterators（优先常量迭代器）的最小权限原则
+- 能实现 cbegin/cend（cbegin、cend）查找位置并传给 insert/erase，区分“不能改元素”与“容器仍可结构修改”
+- 能设计 generic container access（泛型容器访问），兼容标准容器、built-in arrays 与自定义 begin/end overloads
+
+</Objectives>
+
+## 从“位置能力不应附带多余写权限”开始
+
+Item 13 的原则是 Prefer const_iterators to iterators（优先使用 const_iterator）。当算法只查找、比较或标记位置时，普通 iterator 暴露了不需要的 element mutation 能力；const_iterator 把只读意图写进类型。
+
+<Term def="可遍历容器并读取元素、但通过该迭代器不能修改所指元素的迭代器类型。">
+  const_iterator
+</Term>
+
+<Term def="允许遍历，并在容器与元素类型支持时通过解引用修改元素的普通迭代器。">
+  mutable iterator
+</Term>
+
+```cpp
+std::vector<int> values{1, 2, 3};
+
+auto mutablePosition = values.begin();
+*mutablePosition = 10; // allowed
+
+auto readPosition = values.cbegin();
+// *readPosition = 10; // error
+```
+
+先预测：const_iterator 限制的是经该 handle 修改 element，不会自动把原容器变成 const。
+
+<EmcppConstIteratorCapabilityMap />
+
+## const_iterator 类似 pointer to const
+
+`const_iterator` 与 `const T*` 的角色相似：handle 可以前进、比较和重新赋值，但 dereference 结果不提供 mutable access。
+
+<Term def="迭代器自身可移动，但解引用得到只读引用的能力模型。">
+  movable read-only cursor
+</Term>
+
+```cpp
+auto first = values.cbegin();
+auto last = values.cend();
+
+++first;           // iterator object changes
+auto value = *first; // element only read
+```
+
+这与“const iterator object”不同：`const auto it = values.begin()` 会让 iterator 自身不能递增，但仍可能通过解引用修改 element。
+
+<Term def="iterator object 本身为 const，限制 cursor 移动，却不必然限制 element mutation。">
+  const iterator object
+</Term>
+
+<Callout
+  type="trap"
+  title="陷阱：const auto iterator 与 const_iterator 完全相同"
+>
+  `const auto it = container.begin()` 通常得到不能重新定位的 mutable
+  iterator；`container.cbegin()` 得到可移动但不能写 element 的
+  const_iterator。const 修饰了不同层。
+</Callout>
+
+## 只读算法默认使用 cbegin 与 cend
+
+```cpp
+auto position = std::find(
+    values.cbegin(),
+    values.cend(),
+    1983
+);
+```
+
+<Term def="对任意 cv 状态容器显式请求 const_iterator 起点的成员或自由函数。">
+  cbegin
+</Term>
+
+<Term def="显式请求 const_iterator 尾后位置的成员或自由函数。">cend</Term>
+
+即使 `values` 本身 non-const，调用 cbegin/cend 也清楚表达“这个 traversal 不修改 elements”。reviewer 不必检查 loop body 才确认权限。
+
+## const_iterator 不阻止容器结构修改
+
+现代标准容器的 insert/erase 接口接受 const_iterator 作为位置参数。position 只用于描述边界，不需要写该位置的 element。
+
+```cpp
+auto position = std::find(
+    values.cbegin(),
+    values.cend(),
+    1983
+);
+
+values.insert(position, 1998);
+```
+
+<Term def="用只读 cursor 指定插入或删除位置，由 non-const container 执行结构变化。">
+  const-position mutation
+</Term>
+
+“不能通过 iterator 修改 element”与“不能调用 container mutator”是两个契约。container 仍是 non-const，因此 insert 可改变 size、capacity 并使 iterators 失效。
+
+<EmcppConstIteratorMutationFlowMap />
+
+## C++98 的接口摩擦解释了旧代码习惯
+
+旧标准对 const_iterator 支持不完整：insert/erase 常要求 iterator；从 iterator 到 const_iterator 可转换，但反向不可移植；获取 const begin/end 也常需要强制构造 const view。
+
+<Term def="旧容器 API 要求 mutable iterator 位置，使只读查找结果难以直接用于结构操作的阻力。">
+  legacy const-iterator friction
+</Term>
+
+```cpp
+using Iterator = std::vector<int>::iterator;
+using ConstIterator = std::vector<int>::const_iterator;
+
+ConstIterator position = std::find(
+    static_cast<const std::vector<int>&>(values).begin(),
+    static_cast<const std::vector<int>&>(values).end(),
+    1983
+);
+```
+
+即使找到位置，也没有通用、安全的方式把 arbitrary const_iterator 转回 iterator。现代 API 消除了这项结构性障碍，不应继续沿用“所有位置都用 iterator”的旧习惯。
+
+## iterator 到 const_iterator 是权限收窄
+
+```cpp
+std::vector<int>::iterator iterator = values.begin();
+std::vector<int>::const_iterator constIterator = iterator;
+```
+
+<Term def="从可写 iterator 转为只读 const_iterator，移除 element mutation capability 的安全转换。">
+  iterator capability narrowing
+</Term>
+
+反向转换会凭空恢复写权限，标准不提供通用操作。需要 mutation 时应从 container API 重新获取 iterator，或重构算法让 mutation 明确发生在受控阶段。
+
+<Callout
+  type="trap"
+  title="陷阱：const_iterator 反正来自 non-const container，应该能 cast 回 iterator"
+>
+  const_iterator
+  的类型契约不记录“最初是否可写”。强行恢复权限会破坏泛型性，也可能根本没有可移植
+  cast； 应让 API 接受 const position，或重新设计 mutation boundary。
+</Callout>
+
+## C++14 提供自由函数 cbegin 与 cend
+
+成员 `container.cbegin()` 适合标准容器；generic code 更适合 `std::cbegin(container)` 与 `std::cend(container)`，因为它们也支持 built-in arrays。
+
+```cpp
+template<typename Container, typename Value>
+auto findReadOnly(const Container& container, const Value& value) {
+    return std::find(
+        std::cbegin(container),
+        std::cend(container),
+        value
+    );
+}
+```
+
+<Term def="以统一调用形式获取容器或数组的只读起点和尾后位置。">
+  generic const range access
+</Term>
+
+返回类型由 iterator operation 推导，既能是 vector const_iterator，也能是 array const pointer。
+
+## C++11 可补一个兼容 cbegin helper
+
+C++11 有 `std::begin`/`std::end`，但标准 `std::cbegin`/`std::cend` 在 C++14 才加入。兼容 helper 可把参数绑定为 const reference，再调用 begin：
+
+```cpp
+template<typename Container>
+auto cbegin(const Container& container)
+    -> decltype(std::begin(container)) {
+    return std::begin(container);
+}
+```
+
+<Term def="通过 const reference 参数强制 begin 返回只读 iterator 的 C++11 兼容适配器。">
+  const-view begin adapter
+</Term>
+
+对 built-in array，const reference 保留数组 extent，`std::begin` 返回 pointer to const element，而不是发生 array-to-pointer decay。
+
+## 自定义容器需要 ADL-aware access
+
+若 generic library 要支持用户类型提供的 free `begin/end`，常用：
+
+```cpp
+using std::begin;
+using std::end;
+
+auto first = begin(container);
+auto last = end(container);
+```
+
+<Term def="先引入 std fallback，再让 argument-dependent lookup 查找与用户类型同 namespace 的 range functions。">
+  ADL-aware range access
+</Term>
+
+只读版本应把 container 作为 const reference，确保 ADL 选到 const overload。直接限定 `std::begin` 可能绕过用户自定义 overload；无条件裸调用又可能缺少 array/std fallback。
+
+<EmcppGenericContainerAccessMap />
+
+## const_iterator 与 range-for 的关系
+
+```cpp
+for (const auto& value : values) {
+    observe(value);
+}
+```
+
+<Term def="通过 const element reference 约束 loop body 不修改元素的 range-for 形式。">
+  read-only range iteration
+</Term>
+
+range-for 的 `const auto&` 直接约束 element view，通常比手写 iterator 清晰；但需要保存位置、调用 insert/erase 或组合 iterator algorithms 时，const_iterator 仍是正确工具。
+
+## invalidation 规则不会因 const 消失
+
+const_iterator 只控制写权限，不保证位置稳定。vector reallocation、erase、unordered rehash 等照常使 iterators 失效。
+
+<Term def="容器结构变化后 cursor 不再指向有效 element/boundary 的状态，与 cursor 是否 const 无关。">
+  const-iterator invalidation
+</Term>
+
+```cpp
+auto position = values.cbegin();
+values.push_back(42); // may reallocate
+// use(position);     // may be invalid
+```
+
+算法必须查阅具体 container invalidation contract，在 mutation 后重新获取位置。
+
+## const-iterator 验收矩阵
+
+<Term def="覆盖只读编译约束、insert erase 位置、数组泛型访问、ADL 与 invalidation 的测试集合。">
+  const-iterator contract matrix
+</Term>
+
+1. 通过 const_iterator 写 element 必须 compile-fail。
+2. cursor 自身可以 increment 和 compare。
+3. non-const container insert/erase 接受 const position 并产生正确结构。
+4. generic helper 同时支持 vector、const vector、built-in array 与 custom range。
+5. mutation 后不使用 invalidated cursor。
+6. 需要写 element 的路径显式获取 mutable iterator，不做反向 cast。
+
+先预测 cursor capability、container mutability 与 invalidation event，再写测试；不要把名字中的 const 误解成全对象不可变。
+
+## 小结
+
+- const_iterator 是可移动的只读 cursor；const iterator object 则可能是不能移动的可写 cursor
+- 不需要修改 element 时应 prefer const iterators，以最小权限表达 traversal intent
+- cbegin/cend 对 non-const container 也显式返回 const_iterator
+- 现代 insert/erase 接受 const_iterator 位置，element read-only 不妨碍 container 结构修改
+- iterator 可安全收窄为 const_iterator，反向恢复权限没有通用可移植转换
+- std cbegin/cend 支持标准容器和 built-in arrays；C++11 可用 const-reference adapter
+- custom ranges 需要 std fallback 与 ADL-aware begin/end
+- const_iterator 不改变 reallocation、erase、rehash 的 invalidation 规则
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 13"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch03.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="const_iterator">
+    可移动但不能写 element 的迭代器。
+  </GlossaryItem>
+  <GlossaryItem term="mutable iterator">
+    可通过解引用修改元素的迭代器。
+  </GlossaryItem>
+  <GlossaryItem term="movable read-only cursor">
+    可移动的只读位置能力。
+  </GlossaryItem>
+  <GlossaryItem term="const iterator object">
+    iterator 对象本身不可修改。
+  </GlossaryItem>
+  <GlossaryItem term="cbegin">获取只读 range 起点。</GlossaryItem>
+  <GlossaryItem term="cend">获取只读 range 尾后位置。</GlossaryItem>
+  <GlossaryItem term="const-position mutation">
+    用只读位置执行容器结构修改。
+  </GlossaryItem>
+  <GlossaryItem term="legacy const-iterator friction">
+    旧 API 对只读位置支持不足。
+  </GlossaryItem>
+  <GlossaryItem term="iterator capability narrowing">
+    从可写 cursor 收窄为只读 cursor。
+  </GlossaryItem>
+  <GlossaryItem term="generic const range access">
+    统一访问容器和数组的只读 range。
+  </GlossaryItem>
+  <GlossaryItem term="const-view begin adapter">
+    C++11 的只读 begin 兼容层。
+  </GlossaryItem>
+  <GlossaryItem term="ADL-aware range access">
+    支持用户类型 range overload 的查找方式。
+  </GlossaryItem>
+  <GlossaryItem term="read-only range iteration">
+    const reference range-for。
+  </GlossaryItem>
+  <GlossaryItem term="const-iterator invalidation">
+    结构变化使只读 cursor 失效。
+  </GlossaryItem>
+  <GlossaryItem term="const-iterator contract matrix">
+    只读能力、泛型访问与失效测试表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：查找 1983 并在该位置插入 1998。** 查找过程不允许写 element。
+
+<Answer question="现代写法和权限边界是什么？">
+  用 values cbegin/cend 调用 find，得到 const_iterator；再把该 position 直接传给
+  non-const values 的 insert。cursor 不能修改 element，但 container mutator
+  可改变结构。测试插入位置与内容，并在插入后 不再使用可能失效的旧 position。
+</Answer>
+
+2. **问题 2：解释 const auto it = begin 与 auto it = cbegin。** 哪个能递增，哪个能写元素？
+
+<Answer question="const 分别修饰哪一层？">
+  前者通常是 const mutable-iterator object：不能递增或重新赋值，但解引用可能写
+  element；后者是 普通 const_iterator object：可以递增，却不能经它写
+  element。分别建立 compile-fail cases，避免 只凭变量声明中的 const 判断能力。
+</Answer>
+
+3. **问题 3：实现同时支持 vector、数组与 custom range 的只读 find。** 兼容 C++14。
+
+  <Answer question="访问入口怎样设计？">标准容器和 built-in array 可直接使用 std cbegin/cend；需要用户 free overload 时，把参数绑定为 const reference，引入 std begin/end fallback，再用未限定 begin/end 触发 ADL。测试四类 range 的返回 cursor、只读写保护和 empty range，不把 iterator concrete type 写死。</Answer>
+</Exercises>

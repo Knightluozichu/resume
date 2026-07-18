@@ -1,114 +1,306 @@
 ---
-title: "曲线与曲面"
+title: "对象表示、Bezier/B-spline 与曲面细分"
 type: B
 section: "计算机图形学与渲染"
 order: 7
-description: "Bezier曲线、NURBS与曲面细分"
+description: "从 mesh/parametric/implicit/solid 表示，到稳定求值、连续性、NURBS、曲面法线和防裂 tessellation"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://www.pearson.com/en-gb/subject-catalog/p/computer-graphics-with-open-gl-pearson-new-international-edition/P200000004424/9781292037196"
 draft: false
 ---
 
-import { Cg4CurvesSurfacesDiagram } from "@/components/mdx/computer-graphics-4e/diagrams/cg4-curves-surfaces";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  Cg4CurvesSurfacesDiagram,
+  Cg4CurveEvaluationDiagram,
+} from "@/components/mdx/computer-graphics-4e/diagrams/cg4-curves-surfaces";
+import { Cg4StepFlowDiagram } from "@/components/mdx/computer-graphics-4e/diagrams/cg4-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 理解Bezier曲线的定义与性质
-- 掌握凸包性与de Casteljau算法
-- 了解NURBS的优势与应用
-- 理解曲面细分着色器流程
+
+- 能描述 polygon mesh、parametric、implicit 与 solid/CSG 三维对象表示的操作和误差边界
+- 能实现 de Casteljau 与 Cox-de Boor 求值，并验证端点、凸包、局部支撑和 partition of unity
+- 能推导 Bezier/B-spline 拼接连续性与张量积曲面的切向/法线
+- 能比较 CPU adaptive subdivision 与 GPU tessellation 的误差、共享边和裂缝约束
+
 </Objectives>
 
-## 直觉引入
+## 先选表示，再选算法
 
-Bezier曲线就像用橡皮筋造型——控制点拉伸橡皮筋（曲线），端点固定在首尾控制点上，中间控制点拉拽方向。三次Bezier由4个控制点定义，曲线始终在控制点的凸包内，不会「飞出去」。
+**Three-Dimensional Object Representations / 三维对象表示**不只有 polygon mesh。表示决定什么操作自然、什么误差显式、如何求交和如何渲染：
 
-## 概念讲解
+- Mesh 直接给出 boundary representation，适合 rasterization 和局部编辑，但曲面只是离散近似；
+- Parametric curve/surface 通过参数域求点和导数，适合设计与制造，渲染前需 tessellate；
+- Implicit surface 用 $F(x,y,z)=0$定义边界，inside/outside、blend 和某些求交自然，提取 mesh 需 marching 等算法；
+- Solid modeling/CSG 保存体和集合运算语义，最终仍需鲁棒生成边界或直接求交。
 
-<Term def="由控制点通过Bernstein多项式加权定义的参数曲线">Bezier曲线</Term><Term def="Bezier曲线始终位于控制点凸包内的性质">凸包性</Term><Term def="非均匀有理B样条，支持局部控制和精确圆锥曲线">NURBS</Term><Term def="用Tessellation Shader将参数曲面细分为三角形">曲面细分</Term>
-
-### Bezier曲线
-三次Bezier由4控制点定义：B(t)=(1-t)^3*P0+3t(1-t)^2*P1+3t^2(1-t)*P2+t^3*P3。
-
-### 凸包性
-曲线始终在控制点凸包内，保证数值稳定和高效求交。
-
-### NURBS优势
-精确表示圆锥曲线、局部控制、节点向量调节参数化。
-
-### 曲面细分
-Tessellation Shader: Hull->Tessellator->Domain，自适应细分级别。
-
-## 交互Demo
-
-> 猜一猜：为什么Beizer曲线不经过中间控制点？
+<Term def="以顶点、边、面及其邻接关系描述物体边界的离散三维对象表示">多边形网格</Term>还需要 manifold、orientation、winding 和 attribute seam 合同；顶点位置数组本身不等于完整拓扑。
 
 <Cg4CurvesSurfacesDiagram />
 
-<Stepper>
-<Step title="第一步：定义曲线">
-用4个控制点定义三次Bezier。P0/P3是端点（曲线经过），P1/P2控制切线方向。
-</Step>
-<Step title="第二步：凸包保证">
-曲线始终在控制点凸包内，不会超出范围。保证数值稳定。
-</Step>
-<Step title="第三步：曲面细分">
-用Tessellation Shader将参数曲面自适应细分为三角形。根据曲率和屏幕面积动态调整。
-</Step>
-</Stepper>
+## Bezier 是 Bernstein 基下的控制多边形
 
-## 代码对照
+<Term def="以 Bernstein basis 对控制点作仿射组合的参数曲线，端点插值且位于控制点凸包内">Bezier 曲线</Term>的 n 次形式：
 
-```glsl
-// de Casteljau算法递归求Bezier点
-vec3 deCasteljau(vec3 p0, vec3 p1, vec3 p2, vec3 p3, float t) {
-    vec3 a = mix(p0, p1, t);
-    vec3 b = mix(p1, p2, t);
-    vec3 c = mix(p2, p3, t);
-    vec3 d = mix(a, b, t);
-    vec3 e = mix(b, c, t);
-    return mix(d, e, t);
+$$
+C(t)=\sum_{i=0}^{n}B_i^n(t)P_i,
+\qquad
+B_i^n(t)=\binom ni(1-t)^{n-i}t^i,
+\quad t\in[0,1].
+$$
+
+因为 $B_i^n(t)\ge0$ 且 $\sum_iB_i^n(t)=1$，曲线是控制点的 convex combination，因此具有凸包性。三次曲线应是：
+
+$$
+C(t)=(1-t)^3P_0+3(1-t)^2tP_1+3(1-t)t^2P_2+t^3P_3.
+$$
+
+旧图若漏掉这些平方/立方，已不是三次 Bezier。端点和切线为：
+
+$$
+C(0)=P_0,\quad C(1)=P_n,\quad
+C'(0)=n(P_1-P_0),\quad C'(1)=n(P_n-P_{n-1}).
+$$
+
+中间控制点一般不在曲线上。若需要曲线经过给定数据点，要解 interpolation/fitting 问题；换成 B-spline 并不会自动经过所有控制点。
+
+## de Casteljau 稳定求值和细分
+
+<Term def="反复对相邻控制点做线性插值，最终得到 Bezier 曲线点并同时产生左右子曲线控制点的算法">de Casteljau 算法</Term>定义：
+
+$$
+P_i^{(0)}=P_i,\qquad
+P_i^{(r)}=(1-t)P_i^{(r-1)}+tP_{i+1}^{(r-1)},\qquad
+C(t)=P_0^{(n)}.
+$$
+
+```cpp
+Vec3 deCasteljau(std::span<const Vec3> control, double t) {
+  std::vector<Vec3> work(control.begin(), control.end());
+  for (size_t level = 1; level < control.size(); ++level) {
+    for (size_t i = 0; i + level < control.size(); ++i) {
+      work[i] = lerp(work[i], work[i + 1], t);
+    }
+  }
+  return work.front();
 }
 ```
 
-de Casteljau算法递归线性插值，比直接计算Bernstein多项式更数值稳定。GLSL的mix函数等价于线性插值。
+在 t=0.5 运行 de Casteljau 可得到左右两条等价子 Bezier 的控制点，用于 adaptive subdivision。误差判据可用控制点到端点 chord 的最大距离、曲率或投影屏幕误差；只按参数固定步长会在高曲率处不足、平坦处浪费。
+
+## 拼接连续性必须区分 C 与 G
+
+两段曲线端点相同是 $C^0$ position continuity。参数一阶导相等是 $C^1$；切线方向相同但速度尺度可不同是 $G^1$ geometric continuity。
+
+两条同次数三次 Bezier A、B 的 $C^1$ 条件之一为：
+
+$$
+A_3=B_0,\qquad A_3-A_2=B_1-B_0.
+$$
+
+若只要求 G1，两个向量同向且正比例即可。动画路径中 C1 关系影响参数速度，几何轮廓建模有时只需 G1；不能把“视觉平滑”一概写成 C1。
+
+## B-spline 的局部支撑来自 Knot Vector
+
+原书的 **Spline Representations / 样条表示**以<Term def="以分段多项式 basis、degree、控制点和非降 knot vector 定义，具有局部支撑的参数曲线">B-spline</Term>为核心之一，并使用 Cox-de Boor basis：
+
+$$
+N_{i,0}(t)=
+\begin{cases}1,&u_i\le t<u_{i+1}\\0,&\text{otherwise}\end{cases},
+$$
+
+$$
+N_{i,p}(t)=
+\frac{t-u_i}{u_{i+p}-u_i}N_{i,p-1}(t)+
+\frac{u_{i+p+1}-t}{u_{i+p+1}-u_{i+1}}N_{i+1,p-1}(t),
+$$
+
+零分母项按 0 处理。Degree p 的 basis 只在有限 knot span 非零，因此移动一个控制点只影响局部参数范围。Knot multiplicity 会降低连续性；clamped knot vector 可让曲线插值首尾控制点。
+
+Basis 在有效参数域满足非负和 partition of unity，这些是实现测试：采样多个 t，检查 $\sum_iN_{i,p}(t)\approx1$ 和局部非零数量。
+
+```cpp
+double basis(int i, int degree, double t, std::span<const double> knots) {
+  if (degree == 0) return knots[i] <= t && t < knots[i + 1] ? 1.0 : 0.0;
+  double leftDen = knots[i + degree] - knots[i];
+  double rightDen = knots[i + degree + 1] - knots[i + 1];
+  double left = leftDen == 0.0 ? 0.0 :
+      (t - knots[i]) / leftDen * basis(i, degree - 1, t, knots);
+  double right = rightDen == 0.0 ? 0.0 :
+      (knots[i + degree + 1] - t) / rightDen * basis(i + 1, degree - 1, t, knots);
+  return left + right;
+}
+```
+
+生产求值通常用 de Boor 动态规划，避免指数递归；上面递归仅作为小规模 basis reference。
+
+## NURBS 用权重进入投影空间
+
+<Term def="以 weighted B-spline basis 定义的非均匀有理曲线/曲面，可在适当 knots/weights 下精确表示圆锥曲线">NURBS</Term>为：
+
+$$
+C(t)=\frac{\sum_iN_{i,p}(t)w_iP_i}{\sum_iN_{i,p}(t)w_i}.
+$$
+
+可把 $(w_iP_i,w_i)$视为高一维齐次控制点求 B-spline 后投影。Weights 必须避免分母接近 0；权重越大通常把曲线拉向控制点，但不是无限任意的“影响力旋钮”。圆/圆锥精确表示要求特定 control points、knots 和 weights 组合。
+
+## 张量积曲面、导数与法线
+
+Bezier/B-spline surface 常用 tensor product：
+
+$$
+S(u,v)=\sum_i\sum_jN_{i,p}(u)M_{j,q}(v)P_{ij}.
+$$
+
+偏导 $S_u,S_v$给出切向，法线：
+
+$$
+\mathbf n(u,v)=\frac{S_u\times S_v}{\|S_u\times S_v\|}.
+$$
+
+当叉积接近 0 时参数化退化，normal 未定义；tessellator 要检测并选择邻域、几何法线或修复控制网格。Trimmed surfaces 还需在参数域裁剪，不能只 tessellate 矩形 patch。
+
+## Tessellation 要防共享边裂缝
+
+<Term def="按误差界把连续参数曲线或曲面离散成 line segments/triangles，并保证相邻 patch 边界采样一致的过程">曲面细分</Term>可以 CPU 预生成，也可用 OpenGL tessellation control/evaluation shaders 在 GPU 运行。D3D 中称 Hull/Domain 的阶段，不应混用成 OpenGL API 名称。
+
+<Cg4CurveEvaluationDiagram />
+
+自适应因素包括 screen-space edge length、曲率、displacement frequency 与 silhouette。相邻 patches 若独立算不同 edge level，会产生 T-junction/crack；共享边必须由相同输入和对称规则得到一致 outer tessellation level，或使用 stitching/skirt 等明确策略。
+
+```cpp
+float sharedEdgeLevel(const EdgeKey& edge, const Camera& camera) {
+  float pixels = projectedLength(edge.worldEndpoints, camera);
+  float curvature = edge.curvatureBound;
+  return clampPowerOfTwo(ceil(std::sqrt(pixels * curvature / errorPixels)));
+}
+```
+
+Power-of-two 量化可减少 level 抖动，但不是唯一方案。动态 level 还需 temporal hysteresis，避免相机轻微移动导致拓扑频繁变化和闪烁。
+
+## Algorithmic Modeling 扩展表示来源
+
+**Algorithmic Modeling / 算法建模**用规则而非手工控制点直接生成结构：L-system 生成分支语法，fractal 递归细节，particle system 生成离散动态群，procedural noise/field 生成地形和 implicit surfaces，subdivision surface 反复细化 mesh。
+
+算法输出仍要选择对象表示与误差界。例如 implicit noise terrain 可 ray march，也可 marching cubes 提取 mesh；L-system 可输出 skeleton 再 sweep curve surface；particle system 可能渲染 billboard、mesh 或 volume。生成规则不替代拓扑、采样和可见性验证。
+
+## 三步建立曲面实验
+
+<Stepper>
+<Step title="第一步：验证曲线 basis">
+
+实现 Bernstein/de Casteljau 与 B-spline/de Boor，测试端点、partition of unity、凸包、局部支撑和 knot multiplicity。
+
+<Cg4StepFlowDiagram
+  caption="先证明 basis 与求值一致，再进行视觉编辑。"
+  stage={1}
+  stages={["Curve invariants：endpoints、basis sum、convex hull、local support"]}
+/>
+
+</Step>
+<Step title="第二步：验证连续性与曲面导数">
+
+拼接两段 curve/patch，分别构造 C0、G1、C1；比较位置、切向、法线并标记参数退化区域。
+
+<Cg4StepFlowDiagram
+  caption="连续性用导数数值证明，不用肉眼看起来平滑代替。"
+  stage={2}
+  stages={[
+    "Curve invariants：endpoints、basis sum、convex hull、local support",
+    "Surface differential：C/G continuity、Su/Sv、normals、degeneracy",
+  ]}
+/>
+
+</Step>
+<Step title="第三步：验证自适应细分">
+
+用屏幕误差选择 levels，检查共享边完全同采样、相机运动无明显 popping，并和高密 reference 比较 silhouette。
+
+<Cg4StepFlowDiagram
+  caption="细分验收同时包含误差、裂缝、时域稳定和 triangle cost。"
+  stage={3}
+  stages={[
+    "Curve invariants：endpoints、basis sum、convex hull、local support",
+    "Surface differential：C/G continuity、Su/Sv、normals、degeneracy",
+    "Tessellation evidence：shared edges、screen error、temporal stability",
+  ]}
+/>
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** 认为Bezier曲线经过所有控制点。
-**原因 →** 控制点名称误导。
-**修法 →** Bezier曲线只经过首尾控制点(P0/P3)，中间控制点(P1/P2)只控制切线方向。需要经过所有点应使用B样条。
+**现象 →** 期望 B-spline 经过所有控制点，结果曲线只靠近它们。
+**原因 →** 把 control polygon 当 interpolation data；一般 Bezier/B-spline 是 approximation 表示。
+**修法 →** 若需经过数据点，解 interpolation/fitting 系统或选择插值样条；clamped B-spline 通常只保证端点插值。
 </Callout>
 
 <Callout type="trap">
-**现象 →** 曲面细分级别固定不变。
-**原因 →** 简单实现用固定细分级别。
-**修法 →** 应自适应细分——根据曲率、屏幕投影面积和距离动态调整。平衡质量与性能。
+**现象 →** 两个 patch 单独看平滑，拼接处光照出现硬缝。
+**原因 →** 位置 C0 但切向/法线不连续，或共享边 tessellation levels 不一致。
+**修法 →** 分别验证 boundary points、first derivatives 和 edge samples；按需求建立 G1/C1 约束并统一 edge factors。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 相机移动时曲面轮廓不断跳动。
+**原因 →** tessellation level直接由连续屏幕误差取整，没有量化/hysteresis，邻接 patch 还可能不同步。
+**修法 →** 使用共享 edge key、对称 level 计算、稳定量化和时域 hysteresis；以 silhouette 差异与 triangle 数联合调参。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：三次Bezier曲线由几个控制点定义？端点性质？
+
+1. **Bezier 端点：** 三次控制点 P0..P3 的 C'(0)、C'(1) 是什么？两段等参数 C1 如何约束？
 
 <Answer>
-4个控制点。P0和P3是端点(曲线经过)，P1和P2控制切线方向(曲线不一定经过)。
+$C'(0)=3(P1-P0)$，$C'(1)=3(P3-P2)$。若第二段控制点 Q0..Q3，则先要求 P3=Q0，再要求 $3(P3-P2)=3(Q1-Q0)$，即 P3-P2=Q1-Q0。若只要求 G1，可为正比例而非相等。
 </Answer>
 
-**问题**：NURBS相比Bezier有什么优势？适用什么场景？
+2. **B-spline 局部性：** Degree p 的一个控制点为何只影响局部 knot spans？这对编辑有何意义？
 
 <Answer>
-1)精确表示圆锥曲线 2)局部控制 3)节点向量调节参数化 4)权重调节影响力。适用CAD/CAM建模、工业设计、角色建模。
+对应 basis $N_{i,p}$只在 $[u_i,u_{i+p+1})$有支撑，其余参数为 0，所以移动 Pi 只改变该区间的曲线。编辑大型曲线时不会全局变形；但 knot multiplicity 和参数化仍会改变连续性及影响范围。
 </Answer>
+
+3. **曲面裂缝：** 相邻两个 tensor-product patches 共用几何边，为什么各自按内部曲率选 tessellation level 仍可能裂？
+
+<Answer>
+两 patch 内部控制网不同，会算出不同 edge segments，边界顶点参数位置不一，形成 T-junction。共享边 level 必须只由共享边及统一 camera/error 规则决定，或显式 stitching；同时边界求值和 orientation 必须一致。内部 levels 可独立变化。
+</Answer>
+
 </Exercises>
 
+## 本章回顾
+
+- Mesh、parametric、implicit 与 solid 表示各有自然操作和误差边界；
+- Bezier 用 Bernstein/de Casteljau，B-spline 用 knots 与局部 basis，NURBS 用有理权重；
+- C0/C1/G1 不同，曲面法线来自参数偏导叉积并需处理退化；
+- Adaptive tessellation 必须用屏幕误差和共享边一致性共同约束。
+
+## 术语表
+
 <Glossary>
-<GlossaryItem term="Bezier曲线">由控制点通过Bernstein多项式加权定义的参数曲线。</GlossaryItem>
-<GlossaryItem term="凸包性">Bezier曲线始终位于控制点凸包内的性质，保证数值稳定。</GlossaryItem>
-<GlossaryItem term="NURBS">非均匀有理B样条，支持局部控制和精确圆锥曲线。</GlossaryItem>
-<GlossaryItem term="曲面细分">用Tessellation Shader将参数曲面自适应细分为三角形。</GlossaryItem>
+<GlossaryItem term="多边形网格">以顶点、边、面及邻接关系描述物体边界的离散表示。</GlossaryItem>
+<GlossaryItem term="Bezier 曲线">以 Bernstein basis 对控制点作仿射组合、端点插值且在凸包内的参数曲线。</GlossaryItem>
+<GlossaryItem term="de Casteljau 算法">反复线性插值相邻控制点以稳定求值并产生子曲线控制点的算法。</GlossaryItem>
+<GlossaryItem term="B-spline">以 degree、控制点和 knot vector 定义、具有局部支撑的分段多项式曲线。</GlossaryItem>
+<GlossaryItem term="NURBS">以 weighted B-spline basis 定义的非均匀有理曲线或曲面。</GlossaryItem>
+<GlossaryItem term="曲面细分">按误差把连续参数表示离散为图元并保持共享边一致的过程。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="计算机图形学第4版" adaptedUrl="" />
+<Attribution adaptedFrom="Computer Graphics with OpenGL, 4th Edition" adaptedUrl="https://www.pearson.com/en-gb/subject-catalog/p/computer-graphics-with-open-gl-pearson-new-international-edition/P200000004424/9781292037196" />

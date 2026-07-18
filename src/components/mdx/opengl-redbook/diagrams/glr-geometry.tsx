@@ -1,39 +1,18 @@
-/**
- * <GlrGeometryDiagram>
- *
- * VBO存储数据，VAO封装配置，EBO存储索引
- */
+import type { ReactNode } from "react";
+
+function Frame({ caption, children }: { caption: string; children: ReactNode }) { return <figure className="mdx-figure not-prose mx-auto my-6"><div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div><figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption></figure>; }
 
 export function GlrGeometryDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox="0 0 720 400" role="img" aria-label="VBO存储数据，VAO封装配置，EBO存储索引" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x="360" y="30" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">{`VBO/VAO/EBO关系`}</text>
-<rect x="48" y="80" width="180" height="50" rx="8" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" strokeWidth="1.2" />
-<text x="138" y="103" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--accent)">{`VBO`}</text>
-<text x="138" y="120" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">{`存储顶点数据`}</text>
-<line x1="228" y1="105" x2="268" y2="105" stroke="var(--text-secondary)" strokeWidth="1.5" markerEnd="url(#arrow)" />
-<rect x="268" y="80" width="180" height="50" rx="8" fill="var(--success)" fillOpacity="0.1" stroke="var(--success)" strokeWidth="1.2" />
-<text x="358" y="103" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--success)">{`VAO`}</text>
-<text x="358" y="120" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">{`封装属性配置`}</text>
-<line x1="448" y1="105" x2="488" y2="105" stroke="var(--text-secondary)" strokeWidth="1.5" markerEnd="url(#arrow)" />
-<rect x="488" y="80" width="180" height="50" rx="8" fill="var(--warning)" fillOpacity="0.1" stroke="var(--warning)" strokeWidth="1.2" />
-<text x="578" y="103" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--warning)">{`EBO`}</text>
-<text x="578" y="120" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">{`存储索引`}</text>
-<rect x="48" y="180" width="624" height="120" rx="8" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-<text x="360" y="210" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--text-primary)">{`顶点属性配置`}</text>
-<text x="60" y="240" fontSize="11" fill="var(--accent)">{`位置(layout=0): 3个float, 步长5*float`}</text>
-<text x="60" y="260" fontSize="11" fill="var(--success)">{`UV(layout=1): 2个float, 偏移3*float`}</text>
-<text x="60" y="290" fontSize="11" fill="var(--text-secondary)">{`EBO: {0,1,3, 1,2,3} -> 2个三角形用4个顶点`}</text>
-          <defs>
-            <marker id="glr-geometry-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-              <path d="M0 0 L6 3 L0 6 z" fill="var(--text-secondary)" />
-            </marker>
-          </defs>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">VBO存储数据，VAO封装配置，EBO存储索引</figcaption>
-    </figure>
-  );
+  const nodes = ["buffer bytes", "VAO fetch", "draw + assemble", "clip / feedback", "rasterize"];
+  return <Frame caption="绘制命令连接存储与管线，但字节解释、图元边界和阶段输出是三份不同合同。"><div role="img" aria-label="OpenGL 几何绘制主链" className="grid gap-2 md:grid-cols-5">{nodes.map((x,i)=><div key={x} className="grid min-h-24 content-center rounded-control border border-border bg-bg/45 p-3 text-center"><span className="text-xs font-bold text-accent">0{i+1}</span><strong className="mt-2 text-xs text-primary">{x}</strong></div>)}</div></Frame>;
+}
+
+export function GlrVertexFetchDiagram() {
+  const rows = [["attribute 0", "binding 0", "vec3 @ +0"], ["attribute 1", "binding 0", "vec3 @ +12"], ["attribute 2", "binding 1", "vec2 @ +0, divisor 1"]];
+  return <Frame caption="Format 说明怎样解释元素，binding 说明从哪个 buffer、offset、stride 和实例步频读取。"><div role="img" aria-label="VAO attribute 与 binding 两层映射" className="overflow-hidden rounded-control border border-border text-xs"><div className="grid grid-cols-3 gap-px bg-border">{['Attribute', 'Binding', 'Format'].map(x=><strong key={x} className="bg-bg p-3 text-primary">{x}</strong>)}{rows.flatMap(r=>r.map((x,i)=><span key={`${r[0]}-${x}`} className={i===0?"bg-accent/10 p-3 font-semibold text-accent":"bg-elevated p-3 text-secondary"}>{x}</span>))}</div></div></Frame>;
+}
+
+export function GlrProgrammableGeometryDiagram() {
+  const routes = [["Surface detail", "patch → TCS → tessellator → TES"], ["Topology / layer", "primitive → geometry shader → stream/layer"], ["Bulk generation", "compute → SSBO/indirect → draw"]];
+  return <Frame caption="细分、几何与 compute 处理不同输入域；应按输出合同和成本选择。"><div role="img" aria-label="可编程几何路径选择" className="grid gap-3 md:grid-cols-3">{routes.map(([name,path])=><div key={name} className="rounded-control border border-border bg-bg/45 p-4"><strong className="text-sm text-primary">{name}</strong><p className="mb-0 mt-2 text-xs leading-5 text-secondary">{path}</p></div>)}</div></Frame>;
 }

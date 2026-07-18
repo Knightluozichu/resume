@@ -1,299 +1,223 @@
 ---
-title: "总复习"
-type: B
-section: "元编程与实战"
-order: 9
-description: "Ruby 基础教程全书总复习：四层知识串联、核心设计哲学与综合应用。"
+title: "たのしいRuby 第5版 · 总复习"
+type: C
+section: "たのしいRuby 第5版 · 总复习"
+order: 24
+description: "按四部分复盘第五版23章，以对象状态、控制分派、数据解释、资源边界四类故障模型和数据工具Capstone完成终局验收。"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://tanoshiiruby.github.io/5/"
 draft: false
 ---
 
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { RubFinalReviewDiagram } from "@/components/mdx/ruby-programming/diagrams/rub-final-review";
+import { RubyFinalPartReviewLab, RubyFailureModelLab, RubyCapstoneGateLab } from "@/components/mdx/ruby-programming/diagrams/rub-final-review";
 
 <Objectives>
-- 能将全书四大板块的知识串联为完整的 Ruby 编程图景
-- 能解释核心因果链：对象模型 → 核心语法 → 类与模块 → 元编程
-- 能回答：一个 Ruby 对象从创建到方法调用的完整过程
-- 理解 Rails 的优雅来自 Ruby 的元编程能力
+
+- 能解释四部分与23章如何共同形成对象、程序、核心类和工具能力，并从空白重建关键语义
+- 能推导对象状态、控制分派、数据解释与资源边界四类故障的证据链，定位Ruby问题并给出最小复现
+- 能设计跨命令行、文本、文件、编码和SQLite的数据工具，验证正常、错误、中断、重复执行与回滚
+
 </Objectives>
 
-## 直觉引入
+## 为什么总复习从故障模型而不是目录背诵开始
 
-你已经学完了全书十章——从对象模型到元编程。现在把这些碎片拼成完整的拼图。
+完成23章后，最有价值的能力不是顺序背出`Array`后面是`String`，而是看到现象就知道画哪张图。三个数组元素一起变化属于对象状态；块里的`return`提前离开方法属于控制分派；UTF-8字符串与Windows-31J字节混用属于数据解释；导入中断留下半个数据库属于资源边界。官方目录保证覆盖，故障模型把覆盖转化为诊断方法。
 
-想象你写了一行 `Dog.new("Rex").bark`。在 Ruby 内部发生了什么？`Dog` 是 `Class` 的实例对象，`new` 是 `Class` 的实例方法，它分配内存、调用 `initialize("Rex")` 初始化 `@name`。`bark` 是 `Dog` 的实例方法——Ruby 沿方法查找链查找：Dog → Animal（父类）→ Object → Kernel → BasicObject。如果 `bark` 不存在？`method_missing` 接管——这就是 Rails `find_by_name` 的魔法。
+先预测再分类：`Hash.new([])`导致不同key共享数组是哪类；`rescue Exception`吞掉终止信号是哪类；`String#length`与`bytesize`判断协议长度错误是哪类；`File.open`后回调抛错却没关闭handle是哪类；正则按逗号切CSV为何同时违反数据与边界契约。分类不是贴标签，而是决定收集什么证据、回查哪章、最小复现应保留哪些行为。
 
-这条链路贯穿了全书所有知识——对象模型（一切皆对象）、核心语法（方法调用语法）、类与模块（继承与方法查找）、元编程（method_missing 动态分发）。
+<Term def="用对象状态、控制分派、数据解释和资源边界统一定位Ruby程序故障。">four-model review lens</Term>把23章从线性目录压缩成可执行的调试索引。
 
-## 概念讲解
+## 四部分终局复盘
 
-### 核心因果链
-
-<Term def="全书四大板块形成因果链：对象模型是地基 → 核心语法是工具 → 类与模块是抽象 → 元编程是扩展。每层建立在前一层之上。">
-
-全书的知识不是孤立的——每个板块都建立在前一个板块的基础上：
-
-1. **对象模型**（第1-2章）：一切皆对象。数字、字符串、类本身都是对象。变量是引用。这是理解 Ruby 一切的基础。
-2. **核心语法**（第3-4章）：操作对象的工具。字符串插值、条件分支、块迭代。只有 nil 和 false 为假。
-3. **类与模块**（第5-7章）：组织代码的抽象。类定义结构、模块实现 Mixin、块是灵魂。单继承 + Mixin = 灵活的代码复用。
-4. **元编程**（第8-9章）：运行时操控代码。Open Class、define_method、method_missing。Rails 的优雅源于此。
-
-理解这条链路，你就理解了 Ruby——它不是一堆语法规则的堆砌，而是一个自洽的设计体系。
-
-</Term>
-
-### 一个方法调用的完整旅程
-
-<Term def="Ruby 方法调用从接收者出发，沿方法查找链（ancestors chain）查找方法。method_missing 处理未找到的情况。">
-
-一个方法调用 `dog.bark` 的完整过程：
-
-1. **对象创建**：`Dog.new("Rex")` → `Class#new` 分配内存 → 调用 `Dog#initialize("Rex")` → 设置 `@name`
-2. **方法查找**：`dog.bark` → Ruby 查找 `dog` 的类 `Dog` → 沿 `Dog.ancestors` 查找 `:bark` 方法
-3. **查找链**：`Dog` → `Animal`（父类）→ `Object` → `Kernel`（模块）→ `BasicObject`
-4. **方法执行**：找到 `Dog#bark` → 绑定 `self=dog` → 执行方法体
-5. **未找到时**：`method_missing` 接管 → 可动态处理或抛 `NoMethodError`
-
-</Term>
-
-## 交互Demo
-
-<RubFinalReviewDiagram />
+<RubyFinalPartReviewLab />
 
 <Stepper>
-<Step title="对象模型：一切皆对象">
-`5.class` 返回 `Integer`，`Integer.class` 返回 `Class`，`Class.superclass` 返回 `Module`。这是 Ruby 的根基——没有基本类型和对象类型的割裂，一切走同一套机制。变量是引用（标签），不是盒子。四种变量（局部/实例/类/全局）按作用域区分。真值规则：只有 nil 和 false 为假。
-</Step>
-<Step title="核心语法：操作对象">
-字符串可变且支持插值 `"#{expr}"`，Symbol 不可变且唯一。条件分支 if/unless/case-when，case 用 `===` 匹配（比 switch 强大）。迭代器 each/map/select 是惯用法——替代 for/while 循环。块 `{|x| ...}` 是 Ruby 的灵魂。
-</Step>
-<Step title="类与模块：组织代码">
-类用 `initialize` 构造，`attr_accessor` 生成属性，`<` 单继承。模块双重角色：命名空间 + Mixin。include 混入实例方法，prepend 环绕增强，extend 添加类方法。块/Proc/Lambda 是函数式工具——Lambda 严格检查参数且独立 return。
-</Step>
-<Step title="元编程：扩展边界">
-Open Class 随时打开类。define_method 动态生成方法（attr_accessor 的实现原理）。method_missing 拦截未知方法（Rails find_by_name 的原理）。send 动态调用方法。Gems 管理包，Bundler 锁定版本。Rails 的优雅来自元编程——has_many、validates 等都是元编程宏。
-</Step>
+  <Step title="切换四个章节区间"><RubyFinalPartReviewLab /></Step>
+  <Step title="从空白写Part Proof">第1-3章重做命令行工具，第4-11章重做带块与异常的对象模型，第12-21章重做编码安全文本管线，第22-23章重做可回滚检索工具。</Step>
+  <Step title="做Cross-Part Trace">选择一个CSV字段，从ARGV/File、String/Encoding、Array/Hash、block/exception一路追到SQLite参数和最终输出，标出每层contract。</Step>
 </Stepper>
 
-## 代码对照
+### 第一部分：最小程序与对象消息
+
+Ruby表达式几乎都围绕接收者发送消息。字面量创建对象，变量保存引用，方法返回最后一个表达式；数组、散列、正则和时间对象在第2章先提供直觉，第3章把它们放入实际命令。终局验收需要同时说明stdout/stderr、exit status、输入编码和运行目录，不能把IDE中的一次输出当作程序契约。
 
 ```ruby
-# === 一个 Dog 对象的完整生命周期——贯穿全书知识 ===
-
-# 第3层：类与模块
-module Walkable
-  def walk; "#{@name} is walking"; end
+def run(argv, stdout: $stdout, stderr: $stderr)
+  path = argv.fetch(0)
+  stdout.puts File.basename(path)
+  0
+rescue KeyError => error
+  stderr.puts "usage: ruby tool.rb PATH (#{error.message})"
+  64
 end
 
-module Loggable
-  def self.included(base)
-    base.extend(ClassMethods)
-  end
-
-  module ClassMethods
-    def create_with_log(name)
-      puts "Creating #{self}: #{name}"
-      new(name)
-    end
-  end
-end
-
-class Animal
-  # 第1层：对象模型——实例变量、类变量
-  @@count = 0
-
-  def initialize(name)
-    @name = name  # 实例变量
-    @@count += 1  # 类变量
-  end
-
-  def speak; "#{@name} makes a sound"; end
-
-  def self.count; @@count; end
-end
-
-class Dog < Animal  # 单继承
-  include Walkable   # Mixin
-  include Loggable
-
-  # 第2层：核心语法——attr_accessor
-  attr_accessor :breed
-
-  def initialize(name, breed = "Unknown")
-    super(name)  # 调用父类 initialize
-    @breed = breed
-  end
-
-  # 第2层：核心语法——方法重写
-  def speak
-    "#{@name} says Woof!"
-  end
-
-  # 第4层：元编程——动态方法
-  def self.create_multiples(names)
-    names.map { |n| new(n) }
-  end
-end
-
-# 第4层：元编程——method_missing
-class Dog
-  def method_missing(name, *args)
-    if name.to_s =~ /^find_by_breed_(.+)$/
-      "Searching for breed: #{$1}"
-    else
-      super
-    end
-  end
-
-  def respond_to_missing?(name, include_private = false)
-    name.to_s.start_with?("find_by_breed_") || super
-  end
-end
-
-# === 使用 ===
-dog = Dog.create_with_log("Rex")   # 元编程：类方法
-puts dog.speak                      # => Rex says Woof!
-puts dog.walk                       # => Rex is walking（Mixin）
-puts dog.breed = "Labrador"         # attr_accessor
-puts dog.breed                      # => Labrador
-
-dogs = Dog.create_multiples(["Max", "Buddy", "Charlie"])  # 元编程
-puts dogs.map(&:speak).inspect      # 块迭代 + &:method
-
-puts Dog.find_by_breed_labrador     # method_missing
-puts Dog.count                      # 类变量
-
-# 这段代码串联了全书四层知识：
-# 第1层：对象模型（@name 实例变量、@@count 类变量、引用语义）
-# 第2层：核心语法（attr_accessor、super、字符串插值、map 迭代）
-# 第3层：类与模块（< 继承、include Mixin、included 钩子、extend 类方法）
-# 第4层：元编程（method_missing、动态方法、respond_to_missing?）
+exit(run(ARGV)) if $PROGRAM_NAME == __FILE__
 ```
 
-## 常见误区
+这里依次出现参数、方法、File类、依赖注入、特定异常与状态码。测试不要启动真实进程也可以传`StringIO`，但最终仍要做一次进程级验收，确认通道与exit status一致。
 
-<Callout type="trap">
-**误区：学完每章就够了，不需要串联**
-每章的知识是碎片——串联起来才是完整的 Ruby 图景。不理解对象模型就不知道方法查找链从哪开始，不理解模块就无法理解 prepend 的查找顺序，不理解元编程就无法理解 Rails 的 `has_many`。综合面试题和实际开发往往跨多个板块——一个 bug 可能涉及继承（类）、Mixin（模块）、method_missing（元编程）和块迭代（核心语法）。
+### 第二部分：作用域、分派、块与异常
+
+第4-11章可以用一条调用链串联：局部变量引用一个receiver；条件决定是否调用；循环或迭代器重复调用；方法按参数契约执行；类与模块决定方法查找；运算符转成方法；块交给被调用者控制；异常沿栈传播并由`rescue`/`ensure`收口。
+
+<Term def="记录receiver、class/ancestors、method、arguments、block、result、exception与ensure的完整调用证据。">dispatch trace</Term>比“Ruby是动态语言”更具体。
+
+```ruby
+class Batch
+  def initialize(items)
+    @items = items
+  end
+
+  def each_valid
+    return enum_for(__method__) unless block_given?
+
+    @items.each_with_index do |item, index|
+      yield item
+    rescue StandardError => error
+      warn "index=#{index} #{error.class}: #{error.message}"
+    end
+  end
+end
+```
+
+要验证空集合、块缺失、块异常、外部可变状态和重复枚举。`rescue`范围过大时会把哪个操作的错误归到当前item，也需要明确；清理资源应放在真正拥有资源的frame中。
+
+<Callout type="trap" title="把所有错误都rescue StandardError后继续，程序就更健壮">
+恢复需要明确不变量。若一个item失败后全局状态已部分改变，继续会扩大污染；若无法恢复，应补充上下文后重新抛出或终止transaction。捕获异常不是完成错误处理。
 </Callout>
 
-<Callout type="trap">
-**误区：Ruby 只是 Rails 的语法糖**
-Rails 的优雅来自 Ruby 的元编程能力——`has_many`、`validates`、`before_action` 背后都是 `define_method` 和 `method_missing`。不理解 Ruby 的类、模块、块和元编程，Rails 代码就是黑箱魔法。学 Ruby 不是为了学 Rails——Ruby 本身就是一门精心设计的语言，Matz 的"让程序员快乐"理念体现在每一个设计决策中。
+### 第三部分：核心类的表示与语义
+
+第12-21章围绕“同一个值如何被表示、转换和拥有”。Numeric有整数/浮点与范围；Array有顺序、索引、共享元素；String有字符、字节、编码和可变性；Hash有key equality、default与顺序；Regexp有pattern grammar、match state和回溯风险；IO/File/Dir有open/read/write/close；Encoding定义decode/encode错误；Time/Date定义日历、时区与区间；Proc把块对象化并带来参数与`return`差异。
+
+<Term def="同时说明type、identity、shape、range、bytes、encoding、ordering和aliasing，并用独立断言验证转换前后。">representation proof</Term>是核心类复习的共同格式。
+
+```ruby
+raw = File.binread("records.txt")
+decoded = raw.encode("UTF-8", "Windows-31J", invalid: :raise, undef: :raise)
+
+rows = decoded.each_line.filter_map.with_index(1) do |line, number|
+  fields = line.chomp.split("\t", -1)
+  raise "line #{number}: expected 3 fields" unless fields.length == 3
+  fields.freeze
+end
+```
+
+示例仅适用于真正的TSV，不适用于CSV；若源格式允许quoted newline，应换`CSV`parser。`each_line`是stream边界，`encode`是否一次加载全文件是memory边界，`freeze`只冻结外层数组还是字段字符串也要验证。正是这些问题把API调用升级为表示证明。
+
+### 第四部分：工具的来源、事务与查询契约
+
+第22章要求文本处理具有input grammar、encoding、streaming、deterministic output和error status；第23章把source provenance、CSV schema、normalization、SQLite schema/index、prepared insert、transaction、validation、atomic activation与parameterized query连接起来。数据库文件只是某个source version的派生索引，raw数据和构建报告才是重建依据。
+
+<Term def="候选数据集在独立位置完整构建并通过行数、完整性、样本查询和版本检查后，才原子替换live版本。">candidate activation contract</Term>阻止读者看到半完成状态。
+
+```ruby
+database.transaction do
+  statement = database.prepare(<<~SQL)
+    INSERT INTO postal_codes(postal_code, prefecture, city, locality)
+    VALUES (?, ?, ?, ?)
+  SQL
+
+  begin
+    records.each { |record| statement.execute(*record.values_at(:code, :prefecture, :city, :locality)) }
+  ensure
+    statement.close
+  end
+end
+```
+
+还要固定gem/schema版本，验证duplicate distribution和index plan，在candidate关闭并flush后activate。查询参数绑定只能保护values，表名和排序字段必须allowlist；空结果是正常业务状态，数据库损坏才是系统错误。
+
+## 四类故障模型
+
+<RubyFailureModelLab />
+
+<Stepper>
+  <Step title="切换四类故障"><RubyFailureModelLab /></Step>
+  <Step title="分类十二个Bug">对共享默认对象、变量遮蔽、错误receiver、块提前return、异常吞掉、乱码、正则灾难回溯、文件泄漏、半导入与时区漂移标主模型和次模型。</Step>
+  <Step title="收集最小Evidence">对象类只采object/class/identity；控制类采call/result/error；数据类采type/bytes/encoding；资源类采owner/state/transaction，避免无目标日志。</Step>
+</Stepper>
+
+### 对象状态：Identity、Alias与Method Lookup
+
+Ruby变量是标签，赋值不会自动复制对象。`Array.new(3, [])`和`Hash.new([])`都可能制造意外共享；`dup`与`clone`也只做浅复制且冻结/单例方法语义不同。对象故障先打印`class`、`object_id`、关键字段与`ancestors`，再缩小到哪次状态转移破坏不变量。
+
+### 控制分派：Return、Yield与Exception
+
+方法、块、Proc和lambda的参数/return不同；`break`、`next`、`redo`改变迭代；异常同时携带class、message、cause与backtrace。<Term def="列出caller、receiver、running frame、block、normal result、exception与下一owner的控制账本。">control-transfer ledger</Term>用于区分业务`false`、正常`nil`和执行失败。
+
+### 数据解释：Bytes、Encoding、Pattern与Time
+
+字符串的`length`按字符语义，`bytesize`按字节；`force_encoding`只改标签，不验证或转码；`encode`才做转换。正则处理模式，CSV处理结构；Time对象的offset与时区数据库不是一回事。每次转换都保存original，明确normalization version并测试不可表示字符。
+
+### 资源边界：IO、Callback与Transaction
+
+Block-form `File.open`、`Dir.chdir`、transaction和prepared statement都是owner工具。资源清理覆盖success、error、cancel和shutdown；`ensure`必须幂等且不能遮蔽原异常。Proc回调可能晚到，需用generation/token判断目标是否仍有效。SQLite candidate只有验证后才能activate，旧版本保留到rollback窗口结束。
+
+<Callout type="trap" title="Ruby有垃圾回收，所以文件和数据库资源最终会自动释放">
+GC只管理Ruby对象可达性，不保证及时关闭稀缺OS/数据库资源，也不保证transaction语义。文件、statement、connection和temporary candidate必须有显式owner与终止路径。
 </Callout>
+
+## Capstone：邮政编码文本与查询系统
+
+终局项目覆盖至少三个部分，推荐完整重做第23章：命令行接收source/version；下载或读取immutable raw CSV；按声明encoding解码；用`CSV`parser逐row校验；保留original与canonical字段；在candidate SQLite中事务导入；运行integrity/count/sample query；原子activate；提供exact/prefix/name查询和稳定JSON输出。
+
+<Term def="以正常、错误、中断、重复执行、回滚和关闭场景共同验收跨章节工具。">capstone acceptance matrix</Term>防止demo只证明一次成功路径。
+
+<RubyCapstoneGateLab />
+
+<Stepper>
+  <Step title="切换输入、转换、持久化和查询"><RubyCapstoneGateLab /></Step>
+  <Step title="写四份Contract">分别写source/input schema、decode/normalize invariant、transaction/owner graph和query/result/status契约。</Step>
+  <Step title="执行Acceptance Matrix">逐项注入缺参、坏编码、quoted newline、重复记录、中途异常、验证失败、wildcard、数据库忙、重复运行和shutdown。</Step>
+</Stepper>
+
+## 终局验收清单
+
+1. 能从空白写一个带ARGV、stdout/stderr、exit status和测试替身的命令。
+2. 能解释对象引用、变量作用域、类/模块查找、运算符方法化和块调用。
+3. 能画出异常传播与资源owner，证明success/error/cancel路径都收口。
+4. 能区分数值范围、Array/Hash alias、String bytes/encoding、Regexp grammar与Time offset。
+5. 能写流式文本管线，处理坏编码、格式错误、确定性排序和有界输出。
+6. 能实现CSV/SQLite candidate构建、事务导入、验证、原子激活、参数化查询和rollback。
+7. 能把任何失败归入四类模型，回指具体官方章节并构造最小复现。
+
+## 本章回顾：23章最终收敛为四种可证明能力
+
+1. 对象状态证明接收者、类型、identity、alias和状态转移。
+2. 控制分派证明caller、method/block、result、exception和下一owner。
+3. 数据解释证明range、shape、bytes、encoding、pattern、normalization和time语义。
+4. 资源边界证明handle、callback、transaction、candidate与所有终止路径归零。
+5. 四部分分别提供最小体验、语言基础、核心类与工具集成，任何一部分都不能被主题摘要替代。
+6. Capstone以正常、错误、中断、重复执行、回滚和shutdown矩阵完成全书验收。
 
 <Exercises>
-**问题 1**：描述 `Dog.new("Rex").speak` 这一行的完整执行过程，涉及哪些 Ruby 机制？
 
-<Answer>
-完整执行过程：
+**问题 1：Hash不同key意外共享同一个Array，属于哪类故障，如何证明？**
 
-1. **常量查找**：Ruby 查找 `Dog` 常量，找到 `Dog` 类对象（`Class` 的实例）。
+<Answer>主类是对象状态/alias。构造两个不存在的key，分别取得默认值并比较`object_id`；向其中一个追加后断言另一个也变化。修复为`Hash.new { |hash, key| hash[key] = [] }`，再断言不同key的对象ID不同且重复访问同一key稳定。</Answer>
 
-2. **方法查找（new）**：
-   - `Dog` 没有 `new` 方法
-   - 沿查找链查找：`Dog → Animal → Object → Kernel → BasicObject`
-   - `Class#new` 被找到（Class 继承自 Module，Module 继承自 Object）
+**问题 2：CSV导入中回调抛错后出现半张live表，怎样按四模型修复？**
 
-3. **对象创建（new 内部）**：
-   - `Class#new` 分配内存创建新对象（Dog 的实例）
-   - 设置对象的类指针指向 `Dog`
-   - 调用 `Dog#initialize("Rex")`（传入参数）
+<Answer>控制上让异常传播到拥有transaction的frame；资源上在candidate数据库内事务导入并ensure关闭statement/connection；数据上保留row locator和原始字段；对象上避免跨row共享可变buffer。失败时rollback且不activate，断言live version/hash/rows/query不变。</Answer>
 
-4. **构造函数（initialize）**：
-   - `Dog#initialize` 调用 `super("Rex")`
-   - `Animal#initialize` 设置 `@name = "Rex"`，`@@count += 1`
-   - 返回到 `Dog#initialize`，设置 `@breed = "Unknown"`（默认值）
+**问题 3：一个完整Ruby数据工具需要哪些验收项？**
 
-5. **方法查找（speak）**：
-   - `new` 返回 dog 对象
-   - `dog.speak` → 查找 `Dog.ancestors`：`[Dog, Walkable, Loggable, Animal, Object, Kernel, BasicObject]`
-   - 在 `Dog` 中找到 `speak` 方法（重写了 Animal 的）
+<Answer>输入有参数、来源、版本、checksum、encoding和size限制；转换有CSV schema、original/canonical和rejected rows；持久化有schema/index/prepared transaction/integrity/activation；查询有grammar、limit、stable order、empty/error status和dataset provenance。测试正常、坏编码、重复、中断、验证失败、数据库忙、重复运行、回滚与shutdown。</Answer>
 
-6. **方法执行**：
-   - 绑定 `self = dog` 实例
-   - 执行 `"#{@name} says Woof!"` → 字符串插值 → `"Rex says Woof!"`
-   - 返回结果
-
-涉及的机制：对象模型（Class#new、实例变量）、核心语法（字符串插值）、类与模块（继承、super、方法查找链）、元编程（如果 speak 不存在，method_missing 接管）。
-
-一条简单的 `Dog.new("Rex").speak` 贯穿了全书四大板块的知识。
-</Answer>
-
-**问题 2**：Rails 的 `User.has_many :posts` 是如何实现的？用元编程知识解释。
-
-<Answer>
-`has_many :posts` 是 Rails ActiveRecord 的类方法调用。它背后的实现是**元编程宏**——在类定义时动态生成方法。
-
-简化实现原理：
-
-```ruby
-module ActiveRecord
-  module Associations
-    def self.included(base)
-      base.extend(ClassMethods)
-    end
-
-    module ClassMethods
-      def has_many(association_name)
-        # 1. define_method 生成实例方法
-        define_method(association_name) do
-          # 动态生成查询：Post.where(user_id: self.id)
-          associated_class = association_name.to_s.classify.constantize
-          associated_class.where("#{self.class.name.downcase}_id" => self.id)
-        end
-
-        # 2. 生成关联方法（如 user.posts << post）
-        define_method("#{association_name}=") do |records|
-          # 设置关联...
-        end
-
-        # 3. 生成 build/create 方法
-        define_method("build_#{association_name.to_s.singularize}") do |attrs|
-          associated_class = association_name.to_s.classify.constantize
-          associated_class.new(attrs.merge("#{self.class.name.downcase}_id" => self.id))
-        end
-      end
-    end
-  end
-end
-
-class User
-  include ActiveRecord::Associations  # Mixin
-  has_many :posts  # 调用类方法 has_many
-end
-
-user = User.new(id: 1)
-user.posts           # 调用 define_method 生成的方法
-user.build_post(title: "Hi")  # 调用 build_post 方法
-```
-
-涉及的元编程技术：
-1. **include + extend**：`included` 钩子中 `extend(ClassMethods)`，让 `has_many` 成为类方法
-2. **define_method**：动态生成 `posts`、`posts=`、`build_post` 等方法
-3. **constantize**：`"Post".constantize` 从字符串获取 `Post` 类（动态常量查找）
-4. **method_missing**（补充）：`User.find_by_email("x")` 由 method_missing 拦截，解析方法名生成 SQL
-
-这就是为什么 Rails 代码看起来像"魔法"——`has_many :posts` 一行代码生成了多个方法。而这背后的基石就是 Ruby 的元编程能力：Open Class、define_method、method_missing、钩子方法。
-
-Rails 的优雅 = Ruby 元编程的极致应用。
-</Answer>
 </Exercises>
 
+## 术语表
+
 <Glossary>
-<GlossaryItem term="核心因果链">
-全书四大板块的依赖关系：对象模型（一切皆对象）是地基 → 核心语法（操作对象）是工具 → 类与模块（组织代码）是抽象 → 元编程（运行时操控代码）是扩展。每层建立在前一层之上。
-</GlossaryItem>
-<GlossaryItem term="方法查找链">
-Ruby 查找方法时的顺序列表（ancestors）。从对象的类开始，沿继承链和 include/prepend 的模块查找，直到 BasicObject。method_missing 处理未找到的情况。
-</GlossaryItem>
-<GlossaryItem term="Rails 魔法">
-Rails 的 has_many、validates、find_by_name 等"魔法"本质是 Ruby 元编程——define_method 动态生成方法、method_missing 拦截未知方法。理解元编程就能理解 Rails。
-</GlossaryItem>
-<GlossaryItem term="Ruby 设计哲学">
-Matz 的核心理念：让程序员快乐。体现为：一切皆对象（统一模型）、块是灵魂（优雅迭代）、最小惊讶（直觉化 API）、多种方式做同一件事（表达力优先）。
-</GlossaryItem>
+  <GlossaryItem term="four-model review lens" definition="用对象状态、控制分派、数据解释和资源边界统一诊断Ruby故障。" />
+  <GlossaryItem term="dispatch trace" definition="记录receiver、ancestors、method、arguments、block、result、exception和ensure的证据。" />
+  <GlossaryItem term="representation proof" definition="证明类型、身份、形状、范围、字节、编码、顺序和别名不变量。" />
+  <GlossaryItem term="candidate activation contract" definition="候选数据集完整构建验证后才原子替换live版本的契约。" />
+  <GlossaryItem term="control-transfer ledger" definition="列出caller、receiver、frame、block、结果、异常和下一owner的账本。" />
+  <GlossaryItem term="capstone acceptance matrix" definition="以正常、错误、中断、重复、回滚和关闭场景验收系统的矩阵。" />
 </Glossary>
+
+<Attribution adaptedFrom="たのしいRuby 第5版 complete-book review" adaptedUrl="https://tanoshiiruby.github.io/5/" />

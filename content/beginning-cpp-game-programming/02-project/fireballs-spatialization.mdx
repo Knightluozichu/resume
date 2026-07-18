@@ -1,0 +1,372 @@
+---
+title: 第 20 章：火球与声音空间化
+type: A
+section: Run! 项目
+order: 20
+description: 对齐官方第 3 版第 20 章：实现火球生命周期与碰撞，使用 SFML Listener、声源位置和衰减完成声音空间化，并让 SoundEngine 与 HUD class 消费提交后的事件和快照。
+demo: false
+math: false
+sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+draft: false
+---
+
+import {
+  BcgpFireballHudMap,
+  BcgpFireballLifecycleMap,
+  BcgpSpatialAudioMap,
+} from "@/components/mdx/beginning-cpp-game-programming/diagrams/fireballs-spatialization";
+
+<Objectives>
+
+- 能设计火球从施放意图、规则验证、Factory 生成、扫掠碰撞到一次性销毁的完整生命周期
+- 能实现 SFML 音频 Listener 与世界声源的坐标换算、minimum distance 和 attenuation，验证声音空间化方向与距离
+- 能实现 SoundEngine 的空间 voice 配置，并设计 HUD class 从 PlayerSnapshot 投影生命与火球冷却
+
+</Objectives>
+
+## 从“看得见的距离为何听起来不对”开始
+
+火球一边移动一边发声，是连接玩法事实、世界坐标和音频表现的理想对象。若画面用像素、SFML 音频却直接把数百像素当声学单位，火球离 Player 一小段屏幕距离就可能几乎听不见。
+
+<Term def="Player 发出的移动投射物，具有方向、速度、伤害、寿命并在首次有效命中后退役。">
+  火球
+</Term>
+
+先必须是正确的玩法对象，之后才能成为可靠声源。
+
+<Term def="根据声源与 Listener 的相对位置计算左右方向、距离衰减和混音权重的过程。">
+  声音空间化
+</Term>
+
+不应改变命中结果；音频失败也不能回滚伤害。
+
+<BcgpFireballLifecycleMap />
+
+## 施放是请求，生成是提交结果
+
+<Term def="输入层在按键边沿产生的火球施放请求，不保证最终一定生成对象。">
+  CastIntent
+</Term>
+
+Player 规则验证当前阶段、是否存活、冷却、费用和朝向。按住键不能每帧生成；请求失败不进入冷却。
+
+```cpp
+void PlayerUpdate::tryCast(const CastIntent& intent, UpdateContext& context)
+{
+    if (!intent.pressed || !state_.alive || state_.fireballCooldown > 0.0F)
+        return;
+
+    context.commands.push_back(SpawnFireball{
+        ownerId_, muzzlePosition(), facing_, config_.fireballSpeed});
+    state_.fireballCooldown = config_.fireballCooldown;
+}
+```
+
+<Term def="一次成功施放后，在下一次施放前必须由逻辑时间消耗完的等待值。">
+  火球冷却
+</Term>
+
+只在 Playing 递减，Paused 冻结；重启恢复初始值。是否在生成失败时回滚冷却要写成明确协议，推荐先验证资源再接受施放。
+
+## Factory 构造完整 Projectile
+
+<Term def="根据施放者、出生点、方向和配置创建完整火球对象的工厂边界。">
+  FireballFactory
+</Term>
+
+组装 ProjectileUpdate、FireballGraphics、碰撞体和身份。出生位置应位于 Player 碰撞体外，避免首帧撞到施放者。
+
+```cpp
+std::unique_ptr<GameObject> FireballFactory::create(const SpawnFireball& request)
+{
+    const FireballConfig& config{catalog_.fireball()};
+    validate(config);
+    return std::make_unique<GameObject>(
+        ids_.next(),
+        Transform{request.position},
+        std::make_unique<ProjectileUpdate>(
+            request.owner, request.direction * request.speed,
+            config.damage, config.lifeSeconds),
+        std::make_unique<FireballGraphics>(textures_.get(config.texture)));
+}
+```
+
+<Term def="创建火球时记录的施放者身份，用于避免自伤并归属伤害与得分。">
+  owner id
+</Term>
+
+是稳定 GameObjectId，不保存 Player 裸指针。
+
+## 高速投射物需要扫掠碰撞
+
+<Term def="检查火球从上一位置到候选位置经过的连续路径，而不只检查终点重叠的碰撞方法。">
+  扫掠碰撞
+</Term>
+
+火球每帧移动距离可能超过目标宽度，只看终点 AABB 会穿透。宽相阶段先查询运动包围盒附近对象，窄相阶段计算最早命中时间。
+
+```cpp
+const sf::FloatRect sweptBounds{unionBounds(previousBounds, candidateBounds)};
+for (GameObjectId target : world.queryDamageable(sweptBounds)) {
+    if (target == ownerId_)
+        continue;
+    if (const auto hit = sweep(previousBounds, velocity_ * dt,
+                               world.collider(target));
+        hit && hit->time < earliest.time) {
+        earliest = {*hit, target};
+    }
+}
+```
+
+<Term def="在本帧运动区间中最先发生接触的归一化时间和目标，用于确定唯一首次命中。">
+  最早命中
+</Term>
+
+提交 DamageCommand、FireballHit 事件和 DestroyCommand。三个结果来自同一命中事实，不能让图形或声音再次判断碰撞。
+
+<Callout type="trap">
+  **现象**：高速火球穿过敌人，或同一火球一帧伤害多个重叠目标。**原因**：只检查终点
+  AABB，且命中后仍继续遍历并立即修改对象。**修法**：扫掠运动区间，选择最早有效命中，只追加一次伤害、事件和销毁命令。
+</Callout>
+
+## 寿命、边界与一次退役
+
+<Term def="火球从生成起允许存活的逻辑秒数，耗尽后即使未命中也请求销毁。">
+  projectile TTL
+</Term>
+
+同时设置世界边界，防止飞出关卡的对象永久存在。
+
+<Term def="确保命中、超时和越界多个条件同帧发生时只提交一次销毁的状态。">
+  退役标记
+</Term>
+
+由 ProjectileUpdate 私有保存；标记后不再产生伤害或音效。世界提交器对重复 DestroyCommand 也应幂等。
+
+## SFML 音频的 Listener 与声源
+
+<Term def="SFML 音频场景中的听者位置和朝向，本项目通常跟随已提交 Player 世界位置。">
+  Listener
+</Term>
+
+使用 `sf::Listener::setPosition` 设置。二维世界可映射到音频 x/y 平面，并给 z 固定值；所有声源必须使用相同约定。
+
+```cpp
+sf::Vector3f AudioSpace::toAudio(sf::Vector2f world) const
+{
+    return {world.x * unitsPerPixel_, world.y * unitsPerPixel_, 0.0F};
+}
+
+void SoundEngine::setListener(sf::Vector2f playerPosition)
+{
+    sf::Listener::setPosition(audioSpace_.toAudio(playerPosition));
+}
+```
+
+<Term def="把像素世界距离转换成一致音频距离的比例，使衰减参数具有可调语义。">
+  音频坐标比例
+</Term>
+
+例如 100 像素映射为 1 音频单位。比例改动后 minimum distance 也要按同一单位审查。
+
+<BcgpSpatialAudioMap />
+
+## 近距与衰减参数
+
+<Term def="声源在该距离以内保持近似完整音量、避免无限接近 Listener 时爆音的阈值。">
+  minimum distance
+</Term>
+
+通过 `setMinDistance` 设置；
+
+<Term def="控制超过 minimum distance 后音量随距离下降速度的参数。">
+  attenuation
+</Term>
+
+通过 `setAttenuation` 设置。两者应按试听和可重复距离样例调整，不使用任意默认值。
+
+```cpp
+void SoundEngine::playSpatial(SoundId id, sf::Vector2f worldPosition)
+{
+    Voice& voice{acquireVoice(priorityOf(id))};
+    voice.sound.setBuffer(buffers_.at(id));
+    voice.sound.setRelativeToListener(false);
+    voice.sound.setPosition(audioSpace_.toAudio(worldPosition));
+    voice.sound.setMinDistance(cues_.at(id).minimumDistance);
+    voice.sound.setAttenuation(cues_.at(id).attenuation);
+    voice.sound.play();
+}
+```
+
+菜单确认、HUD 提示等非世界声音应 `setRelativeToListener(true)`，避免 Listener 移动改变 UI 音量。
+
+## SoundEngine 消费带位置的事实
+
+<Term def="包含火球施放、命中或爆炸世界坐标的已提交事件，可直接成为空间声源输入。">
+  SpatialSoundEvent
+</Term>
+
+SoundEngine 从 FireballSpawned 播放施放声，从 FireballHit 播放命中声。事件位置来自规则提交点，不读取已销毁火球。
+
+<Term def="在 voice 池全忙时根据重要性、距离和年龄决定保留或替换声音的策略。">
+  空间 voice 优先级
+</Term>
+
+近处命中通常高于远处循环环境声。抢占停止旧 voice 后必须重新设置 Buffer、位置、relative、minDistance、attenuation 和音量，防止复用残留配置。
+
+<Callout type="trap">
+  **现象**：火球从右侧飞过却听成左侧，或复用 voice
+  后音量忽大忽小。**原因**：渲染坐标与音频轴约定不一致，或池中 voice
+  没有重置全部空间属性。**修法**：只通过 AudioSpace 转换坐标，acquire
+  后完整覆盖空间配置，并用固定位置样例验证左右和距离。
+</Callout>
+
+## HUD class 只投影生命与冷却
+
+<Term def="读取 PlayerSnapshot 并显示生命、火球冷却和状态提示，不拥有真实玩法值的界面组件。">
+  HUD class
+</Term>
+
+生命变化和冷却就绪都来自提交后的 snapshot。
+
+```cpp
+void Hud::update(const PlayerSnapshot& player)
+{
+    healthText_.setString("HP " + std::to_string(player.health));
+    const float ratio{player.fireballCooldownTotal > 0.0F
+        ? std::clamp(1.0F - player.fireballCooldownRemaining /
+                     player.fireballCooldownTotal, 0.0F, 1.0F)
+        : 1.0F};
+    cooldownBar_.setSize({cooldownWidth_ * ratio, cooldownHeight_});
+    cooldownText_.setString(ratio >= 1.0F ? "READY" : "CHARGING");
+}
+```
+
+<Term def="Player 在一帧提交后的生命、火球冷却与可施放状态集合，供 HUD 只读。">
+  PlayerSnapshot
+</Term>
+
+HUD 不因看到 READY 就重置冷却，也不消费伤害。PlayerHurt 事件可以触发短暂闪烁，但最终数字始终以 snapshot 为准。
+
+<BcgpFireballHudMap />
+
+## 一帧中的事实顺序
+
+<Term def="输入、火球运动碰撞、世界提交、Listener 更新、音频消费和 HUD 投影的固定顺序。">
+  火球帧协议
+</Term>
+
+先采样 CastIntent；Player 验证并追加生成命令；现有火球扫掠运动并追加命中结果；世界提交生成、伤害和销毁；生成带最终位置的事件与 PlayerSnapshot；Listener 更新到提交后的 Player 坐标；SoundEngine 消费事件；HUD 投影快照；最后渲染。
+
+先预测：把火球放在 Listener 左、右、近、远四个固定位置，关闭混响和其他声音。正确结果应是左右方向对称、近处音量稳定、远处平滑减弱；若 100 像素就几乎静音，应先检查音频坐标比例，而不是盲目提高总音量。
+
+## 验收与回归测试
+
+- 按住施放键只生成一次火球；冷却期间请求被拒绝且不重复重置计时。
+- 高速火球跨越窄目标时仍找到最早命中，只产生一组伤害、FireballHit 和销毁。
+- 命中、TTL 与越界同帧满足时只退役一次；销毁后事件不读取对象地址。
+- Listener 与四个固定声源使用统一 AudioSpace，验证左右、近距和衰减单调性。
+- voice 池复用后所有空间属性被重设；UI 声音保持 relative，不随 Player 移动。
+- HUD 在伤害、冷却、暂停和重启后显示提交值，READY 边界不会抖动。
+
+## 坐标与生命周期诊断
+
+听到方向错误时，先记录同一逻辑帧的 Player 世界坐标、Listener 音频坐标、火球事件世界坐标、voice 音频坐标和转换比例。Listener 必须来自提交后的 PlayerSnapshot，而不是平滑相机中心；相机带前视或抖动时，用相机做 Listener 会让声音舞台相对 Player 漂移。声源也不能使用屏幕坐标，否则 main view 移动会让静止世界声源听起来跟着移动。
+
+若命中画面正确但没有声音，沿事实链检查 FireballHit 是否在销毁前保存位置，世界提交是否发布事件，SoundEngine 是否取得可用 voice，以及 Buffer 是否仍存活。事件必须携带值类型位置，不能只携带即将销毁的 GameObjectId 再延迟查询。若同一次命中播放两声，比较事件序号，确认 ProjectileUpdate 的退役标记与世界提交器的幂等销毁同时生效。
+
+voice 复用故障可用“空间声、UI 声、空间声”的序列复现。第二个声音设置 relative 后，第三个空间声音必须显式恢复 relative=false，并覆盖位置、近距、衰减、音量、音高和循环标志。测试不依赖人耳：读取 voice 配置快照并逐字段断言，再用固定左右位置做集成试听。
+
+最后核对玩法与表现的失败隔离。声音资源缺失时记录降级并保持伤害结果；HUD 字体加载失败时仍允许火球规则运行；Factory 无法构造火球时不进入冷却或按既定协议回滚。把这些失败注入测试加入回归集，才能证明三条链路共享事实但不共享故障。
+
+## 小结
+
+- 火球由施放请求开始，经规则验证、Factory 构造、扫掠碰撞和一次退役闭环
+- 声音空间化使用统一 AudioSpace、Listener、minimum distance 和 attenuation
+- SoundEngine 消费带世界位置的事实，不读取可能已销毁的火球对象
+- 空间 voice 池复用时完整重置属性，关键近处声音拥有更高优先级
+- HUD class 只投影 PlayerSnapshot，不能反向修改生命或冷却
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 20"
+  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+/>
+
+<Glossary>
+  <GlossaryItem term="火球">
+    Player 发出的有速度、伤害和寿命的投射物。
+  </GlossaryItem>
+  <GlossaryItem term="声音空间化">
+    按声源与 Listener 相对位置计算方向和距离衰减。
+  </GlossaryItem>
+  <GlossaryItem term="CastIntent">
+    输入层产生但尚未通过玩法验证的施放请求。
+  </GlossaryItem>
+  <GlossaryItem term="火球冷却">
+    成功施放后下一次施放前必须消耗的逻辑时间。
+  </GlossaryItem>
+  <GlossaryItem term="FireballFactory">
+    验证配置并组装完整火球对象的工厂。
+  </GlossaryItem>
+  <GlossaryItem term="owner id">记录火球施放者的稳定对象身份。</GlossaryItem>
+  <GlossaryItem term="扫掠碰撞">
+    检查投射物整段运动路径而非只检查终点的碰撞。
+  </GlossaryItem>
+  <GlossaryItem term="最早命中">
+    本帧运动区间内第一个有效接触时间和目标。
+  </GlossaryItem>
+  <GlossaryItem term="projectile TTL">
+    投射物未命中时允许存活的最长逻辑时间。
+  </GlossaryItem>
+  <GlossaryItem term="退役标记">
+    保证火球只提交一次销毁与命中结果的状态。
+  </GlossaryItem>
+  <GlossaryItem term="Listener">SFML 音频场景中的听者位置和朝向。</GlossaryItem>
+  <GlossaryItem term="音频坐标比例">
+    把像素世界距离转换为音频距离的统一比例。
+  </GlossaryItem>
+  <GlossaryItem term="minimum distance">
+    声源保持近似完整音量的近距阈值。
+  </GlossaryItem>
+  <GlossaryItem term="attenuation">
+    控制超过近距后音量随距离下降速度的参数。
+  </GlossaryItem>
+  <GlossaryItem term="SpatialSoundEvent">
+    携带已提交世界位置的声音事实。
+  </GlossaryItem>
+  <GlossaryItem term="空间 voice 优先级">
+    voice 池全忙时综合重要性与距离的抢占规则。
+  </GlossaryItem>
+  <GlossaryItem term="HUD class">
+    从快照投影生命与火球冷却的界面组件。
+  </GlossaryItem>
+  <GlossaryItem term="PlayerSnapshot">
+    一帧提交后的玩家生命、冷却和可施放状态。
+  </GlossaryItem>
+  <GlossaryItem term="火球帧协议">
+    规定火球规则、音频和 HUD 在一帧中的事实顺序。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：设计高速火球命中。** 写出从上一位置到候选位置的扫掠查询，并说明如何保证只伤害最早目标。
+
+<Answer question="高速火球为何不能只检查当前 AABB，如何保证一次命中？">
+  一帧位移可能大于目标宽度，终点 AABB
+  完全越过目标。先用上一与候选包围盒的并集做宽相查询，再对候选目标扫掠并选择最小命中时间；只为该目标追加
+  DamageCommand、FireballHit 和 DestroyCommand，设置退役标记后不再处理其他目标。
+</Answer>
+
+2. **问题 2：校准空间音频。** 设计左、右、近、远四点测试，定位距离衰减过快的问题。
+
+<Answer question="空间音频距离衰减过快时应按什么顺序检查？">
+  先确认 Listener 与声源都经过同一 AudioSpace，轴方向一致；再检查
+  unitsPerPixel，避免直接把数百像素作为音频单位；随后固定 minimum
+  distance，比较超过阈值后的 attenuation
+  曲线；最后才调总体音量。四点测试应验证左右对称、近距稳定、距离增大时音量单调下降。
+</Answer>
+
+3. **问题 3：验证 HUD 与规则隔离。** 设计伤害、冷却、暂停和重启快照序列，证明 HUD 不拥有玩法值。
+
+  <Answer question="如何证明 HUD class 只是 PlayerSnapshot 的投影？">向 HUD 依次输入固定快照，断言生命文本、冷却条与 READY 状态完全由输入值决定；暂停时重复同一快照显示不变；重启快照恢复初值。随后销毁 HUD 再继续运行规则，Player 生命和冷却应不受影响，说明 HUD 没有被玩法读取或反向修改状态。</Answer>
+</Exercises>

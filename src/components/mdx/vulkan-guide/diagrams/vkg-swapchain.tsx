@@ -1,94 +1,80 @@
-/**
- * <VkgSwapchainDiagram>：交换链与呈现模式
- *
- * 纯静态 SVG 展示，无交互。Server Component（无 "use client"）。
- */
+const frameStages = [
+  ["Acquire", "WSI 返回 imageIndex，并 signal imageAvailable[frame]"],
+  ["Record", "按实际旧 layout 过渡，绘制到 images[imageIndex]"],
+  ["Submit", "wait acquire，signal renderFinished[imageIndex]"],
+  ["Present", "present queue 等待该 image 的完成信号量"],
+] as const;
+
+const resultRows = [
+  ["VK_SUCCESS", "继续", "正常呈现"],
+  ["VK_SUBOPTIMAL_KHR", "可继续", "标记重建，当前帧通常仍可完成"],
+  ["VK_ERROR_OUT_OF_DATE_KHR", "停止当前路径", "重新查询 surface 并重建"],
+  ["VK_ERROR_SURFACE_LOST_KHR", "surface 无效", "重建 surface，再重建 swapchain"],
+] as const;
+
+function Frame({ caption, children }: { caption: string; children: React.ReactNode }) {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption>
+    </figure>
+  );
+}
 
 export function VkgSwapchainDiagram() {
   return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox="0 0 720 400" role="img" aria-label="交换链与呈现模式对比" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x="360" y="26" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">交换链呈现模式对比</text>
-
-          {/* FIFO Mode */}
-          <rect x="30" y="50" width="200" height="155" rx="10" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.2" />
-          <text x="130" y="72" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--accent)">FIFO（默认）</text>
-          <text x="130" y="88" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">VSync 开启，队列等待</text>
-
-          <rect x="50" y="100" width="80" height="28" rx="4" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="90" y="118" textAnchor="middle" fontSize="9.5" fill="var(--text-primary)">帧 A（等待）</text>
-          <rect x="50" y="135" width="80" height="28" rx="4" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="90" y="153" textAnchor="middle" fontSize="9.5" fill="var(--text-primary)">帧 B（队列）</text>
-          <rect x="140" y="118" width="70" height="28" rx="4" fill="var(--success)" fillOpacity="0.15" stroke="var(--success)" strokeWidth="1" />
-          <text x="175" y="136" textAnchor="middle" fontSize="9.5" fill="var(--success)">显示器</text>
-          <text x="130" y="185" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">无撕裂，延迟高</text>
-
-          {/* Mailbox Mode */}
-          <rect x="260" y="50" width="200" height="155" rx="10" fill="var(--warning)" fillOpacity="0.06" stroke="var(--warning)" strokeWidth="1.2" />
-          <text x="360" y="72" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--warning)">Mailbox</text>
-          <text x="360" y="88" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">丢弃旧帧，只留最新</text>
-
-          <rect x="280" y="100" width="80" height="28" rx="4" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="320" y="118" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)" textDecoration="line-through">帧 A（丢弃）</text>
-          <rect x="280" y="135" width="80" height="28" rx="4" fill="var(--bg)" stroke="var(--warning)" strokeWidth="1.5" />
-          <text x="320" y="153" textAnchor="middle" fontSize="9.5" fill="var(--text-primary)">帧 B（最新）</text>
-          <rect x="370" y="118" width="70" height="28" rx="4" fill="var(--success)" fillOpacity="0.15" stroke="var(--success)" strokeWidth="1" />
-          <text x="405" y="136" textAnchor="middle" fontSize="9.5" fill="var(--success)">显示器</text>
-          <text x="360" y="185" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">低延迟，功耗高</text>
-
-          {/* Immediate Mode */}
-          <rect x="490" y="50" width="200" height="155" rx="10" fill="var(--danger)" fillOpacity="0.06" stroke="var(--danger)" strokeWidth="1.2" />
-          <text x="590" y="72" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--danger)">Immediate</text>
-          <text x="590" y="88" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">无同步，立即呈现</text>
-
-          <rect x="510" y="100" width="80" height="28" rx="4" fill="var(--bg)" stroke="var(--danger)" strokeWidth="1" />
-          <text x="550" y="118" textAnchor="middle" fontSize="9.5" fill="var(--text-primary)">帧 B</text>
-          <rect x="510" y="135" width="80" height="28" rx="4" fill="var(--bg)" stroke="var(--danger)" strokeWidth="1" strokeDasharray="3,2" />
-          <text x="550" y="153" textAnchor="middle" fontSize="9.5" fill="var(--danger)">撕裂!</text>
-          <rect x="600" y="118" width="70" height="28" rx="4" fill="var(--success)" fillOpacity="0.15" stroke="var(--success)" strokeWidth="1" />
-          <text x="635" y="136" textAnchor="middle" fontSize="9.5" fill="var(--success)">显示器</text>
-          <text x="590" y="185" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">最低延迟，可能撕裂</text>
-
-          {/* Swapchain flow */}
-          <text x="360" y="240" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--text-primary)">交换链渲染循环</text>
-
-          <rect x="30" y="260" width="120" height="50" rx="8" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" strokeWidth="1.2" />
-          <text x="90" y="280" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">1. AcquireImage</text>
-          <text x="90" y="298" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">等 imageAvailable</text>
-
-          <line x1="150" y1="285" x2="175" y2="285" stroke="var(--accent)" strokeWidth="1.3" markerEnd="url(#arrS)" />
-          <defs>
-            <marker id="arrS" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
-              <path d="M0,0 L5,3.5 L0,7 Z" fill="var(--accent)" />
-            </marker>
-          </defs>
-
-          <rect x="175" y="260" width="120" height="50" rx="8" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" strokeWidth="1.2" />
-          <text x="235" y="280" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">2. 渲染命令</text>
-          <text x="235" y="298" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">提交到队列</text>
-
-          <line x1="295" y1="285" x2="320" y2="285" stroke="var(--accent)" strokeWidth="1.3" markerEnd="url(#arrS)" />
-
-          <rect x="320" y="260" width="120" height="50" rx="8" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" strokeWidth="1.2" />
-          <text x="380" y="280" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">3. 渲染完成</text>
-          <text x="380" y="298" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">等 renderFinished</text>
-
-          <line x1="440" y1="285" x2="465" y2="285" stroke="var(--accent)" strokeWidth="1.3" markerEnd="url(#arrS)" />
-
-          <rect x="465" y="260" width="120" height="50" rx="8" fill="var(--success)" fillOpacity="0.1" stroke="var(--success)" strokeWidth="1.2" />
-          <text x="525" y="280" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--success)">4. Present</text>
-          <text x="525" y="298" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">vkQueuePresentKHR</text>
-
-          <rect x="595" y="260" width="100" height="50" rx="8" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="645" y="280" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">显示器</text>
-          <text x="645" y="298" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">观众看到画面</text>
-
-          <text x="360" y="355" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">Acquire → Render → Signal → Present：每帧的标准流程</text>
-          <text x="360" y="378" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">信号量确保 GPU 在图像就绪后渲染，在渲染完成后才呈现</text>
-        </svg>
+    <Frame caption="frame index 管 CPU 侧帧资源，image index 管本次取得的 WSI 图像；两者不能混为一个下标。">
+      <div role="img" aria-label="Vulkan acquire submit present 生命周期" className="grid gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+          <strong className="text-sm text-primary">WSI 一帧的所有权接力</strong>
+          <span className="text-xs text-secondary">frameIndex ≠ imageIndex</span>
+        </div>
+        <div className="grid gap-3 md:grid-cols-4">
+          {frameStages.map(([title, detail], index) => (
+            <div key={title} className="min-h-36 rounded-control border border-border bg-bg/45 p-4">
+              <span className="mb-3 grid size-8 place-items-center rounded-full bg-accent/15 text-sm font-bold text-accent">{index + 1}</span>
+              <strong className="text-sm text-primary">{title}</strong>
+              <p className="mb-0 mt-2 text-xs leading-5 text-secondary">{detail}</p>
+            </div>
+          ))}
+        </div>
+        <div className="grid gap-2 text-xs sm:grid-cols-2">
+          <span className="rounded-control border border-sky-500/35 bg-sky-500/10 p-3 text-secondary">每帧：command pool、fence、acquire semaphore</span>
+          <span className="rounded-control border border-emerald-500/35 bg-emerald-500/10 p-3 text-secondary">每图像：image view、layout 历史、present-wait semaphore</span>
+        </div>
       </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">三种呈现模式对比与交换链渲染循环流程</figcaption>
-    </figure>
+    </Frame>
+  );
+}
+
+export function VkgSwapchainResultDiagram() {
+  return (
+    <Frame caption="Acquire 和 present 都是状态机入口；返回码决定继续、延后重建还是重建 surface。">
+      <div role="img" aria-label="Vulkan WSI 返回码决策矩阵" className="overflow-x-auto">
+        <div className="min-w-[660px] overflow-hidden rounded-control border border-border">
+          <div className="grid grid-cols-[1.5fr_1fr_2fr] gap-px bg-border text-xs">
+            {['返回码', '当前帧', '动作'].map((label) => (
+              <strong key={label} className="bg-bg p-3 text-primary">{label}</strong>
+            ))}
+            {resultRows.flatMap((row, rowIndex) =>
+              row.map((cell, columnIndex) => (
+                <span
+                  key={`${row[0]}-${cell}`}
+                  className={`p-3 leading-5 ${
+                    columnIndex === 0
+                      ? rowIndex >= 2
+                        ? "bg-rose-500/10 font-semibold text-rose-700 dark:text-rose-300"
+                        : "bg-accent/10 font-semibold text-accent"
+                      : "bg-elevated text-secondary"
+                  }`}
+                >
+                  {cell}
+                </span>
+              )),
+            )}
+          </div>
+        </div>
+      </div>
+    </Frame>
   );
 }

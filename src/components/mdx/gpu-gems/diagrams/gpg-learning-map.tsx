@@ -1,78 +1,20 @@
-/**
- * <GpgLearningMapDiagram>：GPU Gems 系列全书学习地图图解。
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * 全部 DESIGN token 配色，无裸 hex。
- */
+import manifest from "../../../../../quality/fidelity-manifests.json";
+import type { ReactNode } from "react";
 
-const VIEW_W = 720;
-const VIEW_H = 400;
+type Unit = { id: string; title: string };
+const units = (manifest.books["gpu-gems"].units as Unit[]);
+const volumeUnits = ["v1", "v2", "v3"].map((volume) => units.filter((unit) => unit.id.includes(`-${volume}-`)));
+const themes = [
+  ["Natural", "8", "G1 1-8"], ["Light / Shadow", "24", "G1 9-15 · G2 9-19 · G3 8-13"],
+  ["Materials", "12", "G1 16-20 · G3 14-20"], ["Image", "24", "G1 21-27 · G2 20-28 · G3 21-28"],
+  ["Engineering", "15", "G1 28-36 · G2 37-42"], ["Geometry", "15", "G2 1-8 · G3 1-7"],
+  ["GPU Compute", "20", "G1 37-42 · G2 29-36 · G3 36-41"], ["Physics", "13", "G2 43-48 · G3 29-35"],
+] as const;
 
-export function GpgLearningMapDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="GPU Gems 系列全书学习地图图解"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <text x={VIEW_W / 2} y="32" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">
-            GPU Gems 系列全书学习地图
-          </text>
-          <text x={VIEW_W / 2} y="54" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
-            自然效果 → 光照材质 → 图像几何 → GPU 计算 → 高级技术
-          </text>
+function Frame({caption,children}:{caption:string;children:ReactNode}){return <figure className="mdx-figure not-prose mx-auto my-6"><div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div><figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption></figure>}
 
-          <rect x="40" y="78" width="640" height="290" rx="12" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.3" />
+export function GpgLearningMapDiagram(){const volumes=[["GPU Gems 1","42","programmable effects → early GPGPU"],["GPU Gems 2","48","geometry/rendering → stream algorithms"],["GPU Gems 3","41","unified shaders → CUDA data parallelism"]];return <Frame caption="三卷共 131 章；硬件载体持续变化，案例中的算法与权衡形成演进主线。"><div role="img" aria-label="GPU Gems 三卷章节与能力演进" className="grid gap-3 md:grid-cols-3">{volumes.map(([a,b,c])=><div key={a} className="min-h-36 rounded-control border border-border bg-bg/45 p-4"><span className="text-2xl font-bold text-accent">{b}</span><strong className="mt-2 block text-sm text-primary">{a}</strong><p className="mb-0 mt-2 text-xs leading-5 text-secondary">{c}</p></div>)}</div></Frame>}
 
-          <rect x="70" y="100" width="120" height="50" rx="8" fill="var(--success)" fillOpacity="0.12" stroke="var(--success)" strokeWidth="1.2" />
-          <text x="130" y="122" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--success)">自然效果</text>
-          <text x="130" y="138" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">水/火/毛发</text>
+export function GpgThemeMappingDiagram(){return <Frame caption="八个主题集合互不重叠，数量之和严格等于 131。"><div role="img" aria-label="GPU Gems 131 章到八个主题的唯一映射" className="overflow-x-auto"><div className="min-w-[680px] overflow-hidden rounded-control border border-border text-xs"><div className="grid grid-cols-[1.2fr_.5fr_2.3fr] gap-px bg-border">{['Theme','Count','Official chapter ranges'].map(x=><strong key={x} className="bg-bg p-3 text-primary">{x}</strong>)}{themes.flatMap(r=>r.map((x,i)=><span key={`${r[0]}-${x}`} className={i===0?"bg-accent/10 p-3 font-semibold text-accent":"bg-elevated p-3 text-secondary"}>{x}</span>))}</div></div></div></Frame>}
 
-          <rect x="210" y="100" width="120" height="50" rx="8" fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeWidth="1.2" />
-          <text x="270" y="122" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--accent)">光照阴影</text>
-          <text x="270" y="138" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">材质着色器</text>
-
-          <rect x="350" y="100" width="120" height="50" rx="8" fill="var(--warning)" fillOpacity="0.12" stroke="var(--warning)" strokeWidth="1.2" />
-          <text x="410" y="122" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--warning)">图像几何</text>
-          <text x="410" y="138" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">后处理/细分</text>
-
-          <rect x="490" y="100" width="120" height="50" rx="8" fill="var(--text-tertiary)" fillOpacity="0.15" stroke="var(--text-tertiary)" strokeWidth="1.2" />
-          <text x="550" y="122" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--text-primary)">GPU 计算</text>
-          <text x="550" y="138" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">粒子/物理</text>
-
-          <text x="130" y="180" textAnchor="middle" fontSize="20" fill="var(--text-tertiary)">&darr;</text>
-          <text x="270" y="180" textAnchor="middle" fontSize="20" fill="var(--text-tertiary)">&darr;</text>
-          <text x="410" y="180" textAnchor="middle" fontSize="20" fill="var(--text-tertiary)">&darr;</text>
-          <text x="550" y="180" textAnchor="middle" fontSize="20" fill="var(--text-tertiary)">&darr;</text>
-
-          <rect x="70" y="200" width="540" height="44" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" />
-          <text x={VIEW_W / 2} y="222" textAnchor="middle" fontSize="12" fill="var(--text-primary)">
-            核心主线：从「像素级真实感」到「GPU 通用计算」
-          </text>
-          <text x={VIEW_W / 2} y="238" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
-            着色器是贯穿全书的工具，GPGPU 是终章的能力跃迁
-          </text>
-
-          <text x={VIEW_W / 2} y="282" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--accent)">
-            学习路径
-          </text>
-          <text x={VIEW_W / 2} y="304" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
-            自然效果（视觉直觉） → 光照材质（物理基础） → 图像几何（处理能力）
-          </text>
-          <text x={VIEW_W / 2} y="322" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
-            → 粒子物理（动态模拟） → GPU 计算（通用并行） → 高级技术（综合实战）
-          </text>
-
-          <text x={VIEW_W / 2} y="352" textAnchor="middle" fontSize="11" fill="var(--text-tertiary)">
-            关键洞察：GPU Gems 是「效果驱动」的实战宝典，每章都用真实案例讲透一个渲染难题
-          </text>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        GPU Gems 系列全书学习地图——从自然效果到 GPU 通用计算的进阶路径
-      </figcaption>
-    </figure>
-  );
-}
+export function GpgOfficialInventoryDiagram(){return <Frame caption="标题来自 NVIDIA 官方在线目录；清单由质量 manifest 直接驱动。"><div aria-label="GPU Gems 三卷 131 章官方目录" className="grid gap-6">{volumeUnits.map((volume,index)=><section key={index}><div className="mb-3 flex items-center justify-between border-b border-border pb-2"><strong className="text-sm text-primary">GPU Gems {index+1}</strong><span className="text-xs text-accent">{volume.length} chapters</span></div><ol className="grid gap-x-6 gap-y-1 text-xs leading-5 text-secondary md:grid-cols-2">{volume.map(unit=><li key={unit.id} className="break-inside-avoid"><span className="mr-2 font-mono text-accent">{unit.id.replace('gpg-','').toUpperCase()}</span>{unit.title.replace(/^GPU Gems \d · /,'')}</li>)}</ol></section>)}</div></Frame>}

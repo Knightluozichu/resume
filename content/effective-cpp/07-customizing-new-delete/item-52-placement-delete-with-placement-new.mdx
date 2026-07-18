@@ -1,0 +1,380 @@
+---
+title: "Item 52：写了 placement new 也要写 placement delete"
+type: A
+section: Chapter 8 · Customizing new and delete
+order: 52
+description: 对齐 Effective C++ 第三版 Item 52：解释 placement new 后 constructor exception 如何查找 matching placement delete，区分构造失败回收与普通 delete expression，并恢复被 class-specific overload 隐藏的 normal forms。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppAllocationNameHidingMap,
+  EcppPlacementConstructorFailureMap,
+  EcppPlacementSignaturePairsMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-52-placement-delete-with-placement-new";
+
+<Objectives>
+
+- 能解释 placement new 取得 storage 后 constructor 抛异常时，compiler 如何寻找 matching placement delete
+- 能实现 normal、standard placement、nothrow 与自定义 logging forms 的签名配对并验证无泄漏
+- 能分析 class-specific operator new/delete 的 name hiding，并用完整 overload set 或 using declaration 恢复 normal forms
+
+</Objectives>
+
+## 从构造函数抛异常开始
+
+```cpp
+class Widget {
+public:
+    static void* operator new(std::size_t size, std::ostream& log);
+};
+
+Widget* widget = new (std::cerr) Widget;
+```
+
+这里的 allocation function 除 size 外还接收 log 参数，因此属于 placement new 的广义形式。
+
+<Term def="除 size 外还接收一个或多个额外参数的 operator new allocation function。">
+  placement new
+</Term>
+
+<Term def="参数列表与某个 placement new 额外参数对应、供构造失败回收 storage 的 operator delete。">
+  placement delete
+</Term>
+
+Item 52 的原则是 Write placement delete if you write placement new（写了 placement new 就写 placement delete）。
+
+先预测：storage 分配成功后 Widget constructor 抛异常，谁有 pointer、谁负责释放？new expression 必须自动寻找与所用 allocation form 匹配的 delete。
+
+## new expression 是 allocation 加 construction
+
+```text
+1. operator new(size, log) -> raw storage
+2. Widget constructor runs in that storage
+3. return Widget pointer
+```
+
+若第二步失败，对象从未完成，客户也拿不到 pointer，无法手工 delete。语言需要自动回收第一步 storage。
+
+<Term def="allocation 已成功但 object construction 未完成并抛出异常的路径。">
+  constructor exception
+</Term>
+
+<Term def="构造失败后没有匹配 deallocation function，已取得 raw storage 无法自动归还。">
+  constructor-failure memory leak
+</Term>
+
+<EcppPlacementConstructorFailureMap />
+
+## matching placement delete 的签名
+
+```cpp
+class Widget {
+public:
+    static void* operator new(std::size_t size, std::ostream& log);
+    static void operator delete(void* memory, std::ostream& log) noexcept;
+};
+```
+
+placement delete 的第一个参数是要释放的 pointer，后续参数类型与 placement new 除 size 外的参数匹配。
+
+<Term def="placement new 的额外参数序列在 placement delete 中按对应类型重现的规则。">
+  placement signature matching
+</Term>
+
+```cpp
+void Widget::operator delete(void* memory, std::ostream& log) noexcept {
+    log << "constructor failed\n";
+    ::operator delete(memory);
+}
+```
+
+constructor 抛出后，语言可调用这条函数；若只有普通 `operator delete(void*)`，它不会被当成该 placement allocation 的构造失败匹配。
+
+<Callout
+  type="trap"
+  title="陷阱：反正类已经有普通 delete，构造失败会自动调用它"
+>
+  placement new 的额外参数参与 matching。缺少对应 placement delete
+  时，语言不会随意改用签名不同的普通 delete，storage 可能泄漏。
+</Callout>
+
+## placement delete 不是正常 delete expression 的目标
+
+```cpp
+Widget* widget = new (std::cerr) Widget;
+delete widget;
+```
+
+若 construction 成功，后续普通 `delete widget` 调用普通 class-specific/global delete，不会保存并重放最初的 log argument。
+
+<Term def="对象成功构造后由 delete expression 选择、不接收原 placement 额外参数的释放路径。">
+  normal deallocation path
+</Term>
+
+因此 class 仍需普通 form：
+
+```cpp
+static void operator delete(void* memory) noexcept;
+static void operator delete(void* memory, std::ostream& log) noexcept;
+```
+
+第一条服务正常 delete，第二条只服务 logging placement construction failure。
+
+<Term def="placement delete 仅在对应 new expression 构造失败时由语言自动考虑的作用域。">
+  placement-delete failure scope
+</Term>
+
+## standard placement new 的特殊语义
+
+标准 placement form 在调用者提供的 buffer 上构造：
+
+```cpp
+alignas(Widget) std::byte storage[sizeof(Widget)];
+Widget* widget = new (storage) Widget;
+```
+
+其 allocation function 概念上返回传入 pointer，不拥有 buffer。matching `operator delete(void*, void*)` 在 constructor failure 时通常无操作，因为 storage 属于调用者。
+
+<Term def="接收 void pointer 并直接在调用者提供 storage 上构造对象的标准 placement form。">
+  standard placement form
+</Term>
+
+<Term def="placement construction 不取得 buffer ownership，失败时只销毁已构造成员而不释放外部 storage。">
+  caller-owned placement storage
+</Term>
+
+调用者必须显式调用 destructor，不能对 stack buffer 使用普通 delete。
+
+## 多种 allocation forms 要逐一配对
+
+<EcppPlacementSignaturePairsMap />
+
+normal、nothrow、aligned、自定义 log/context forms 都有各自 overload selection 和 failure matching。现代 compiler 还可能使用 sized/aligned delete；实现完整 class allocator 时需整体审计。
+
+<Term def="同一 class 提供的 normal、placement、nothrow、sized 与 aligned allocation/deallocation 函数集合。">
+  allocation overload family
+</Term>
+
+## class scope 会隐藏外层同名 forms
+
+只声明 logging operator new：
+
+```cpp
+class Widget {
+public:
+    static void* operator new(std::size_t, std::ostream&);
+};
+
+// new Widget;          // normal form may be hidden
+// new (buffer) Widget; // standard placement form may be hidden
+```
+
+<Term def="class scope 中任一同名 operator new/delete declaration 阻止外层或 base overloads 自动参与查找。">
+  allocation name hiding
+</Term>
+
+这与普通函数 hiding 相同：编译器按 name 找到 class scope 后，不会自动把 global overloads 混入候选。
+
+<EcppAllocationNameHidingMap />
+
+<Callout
+  type="trap"
+  title="陷阱：新增一个 placement overload 不影响原来的 new Widget"
+>
+  class-specific 名称会隐藏 global forms。新增 logging new 后必须重新验证
+  normal、standard placement、nothrow 和 aligned call sites。
+</Callout>
+
+## 方案一：显式提供完整标准 forms
+
+```cpp
+class Widget {
+public:
+    static void* operator new(std::size_t size) {
+        return ::operator new(size);
+    }
+
+    static void* operator new(std::size_t, void* memory) noexcept {
+        return memory;
+    }
+
+    static void* operator new(std::size_t size, const std::nothrow_t& tag) noexcept {
+        return ::operator new(size, tag);
+    }
+
+    static void* operator new(std::size_t size, std::ostream& log);
+};
+```
+
+每条 allocation 还需对应 deallocation。优点是 class API 自包含，缺点是样板多且容易漏新语言 forms。
+
+<Term def="在 class 中转发 global standard overloads，同时添加自定义 placement pair 的方案。">
+  standard-form forwarding
+</Term>
+
+## 方案二：标准形式基类加 using
+
+```cpp
+class StandardNewDeleteForms {
+public:
+    static void* operator new(std::size_t size) { return ::operator new(size); }
+    static void operator delete(void* p) noexcept { ::operator delete(p); }
+    static void* operator new(std::size_t, void* p) noexcept { return p; }
+    static void operator delete(void*, void*) noexcept {}
+};
+
+class Widget : public StandardNewDeleteForms {
+public:
+    using StandardNewDeleteForms::operator new;
+    using StandardNewDeleteForms::operator delete;
+
+    static void* operator new(std::size_t, std::ostream&);
+    static void operator delete(void*, std::ostream&) noexcept;
+};
+```
+
+<Term def="用 using declaration 把 base allocation overload set 重新引入 derived class scope。">
+  allocation overload re-exposure
+</Term>
+
+真实实现还要覆盖 nothrow/aligned/sized forms，并验证访问级别。基类只是组织样板，不改变每个 pair 的契约。
+
+## placement 参数的生命周期与异常安全
+
+placement delete 在 constructor unwind 中接收原 arguments。若参数是 reference/pointer，它们必须在调用期间仍有效；handler 不能假设完整 Widget 已存在。
+
+<Term def="placement extra arguments 在 allocation、construction 和 failure cleanup 全程保持有效的要求。">
+  placement argument lifetime
+</Term>
+
+logging delete 自己必须 noexcept，且错误日志路径最好不动态分配，否则原 constructor exception unwind 中又触发失败。
+
+<Term def="placement delete 在处理原构造异常时不得再抛出第二个异常的约束。">
+  cleanup no-throw boundary
+</Term>
+
+## 不是所有带额外参数的 new 都拥有 storage
+
+custom arena/context placement new 可能从 arena 分配，也可能只定位已有 buffer。matching delete 的行为必须与 ownership 对称：拥有 block 就归还，borrowed buffer 就 no-op/回滚 cursor。
+
+<Term def="placement allocation 是否取得并负责归还 storage 的明确策略。">
+  placement storage ownership
+</Term>
+
+```cpp
+static void* operator new(std::size_t size, Arena& arena);
+static void operator delete(void* p, Arena& arena) noexcept;
+```
+
+arena placement delete 可调用 `arena.deallocate(p)`，前提是 arena 支持单块回收；monotonic arena 则可能只记录失败而不回收。
+
+## 验收矩阵
+
+1. 每个 placement new 都有 exact matching placement delete。
+2. constructor 成功后 normal delete 使用 normal form。
+3. constructor 每个阶段抛异常时 storage 计数归零。
+4. standard placement buffer 不被错误 free，且显式 destructor 正确。
+5. class normal/void-pointer/nothrow/aligned forms 不因 hiding 消失。
+6. extra arguments 生命周期覆盖 failure cleanup，delete 不抛。
+
+<Term def="覆盖构造成功、各阶段失败、名称查找和 storage ownership 的 placement 测试表。">
+  placement allocation matrix
+</Term>
+
+先预测每个 new expression 在 allocation 和 constructor failure 时分别选择哪两个 functions，再用计数 allocator 与故意抛出的 constructor 验证。
+
+## 小结
+
+- placement new 是任何带额外参数的 allocation function，不只标准 void-pointer form
+- constructor 抛异常时，语言按额外参数寻找 matching placement delete；缺失会泄漏 storage
+- placement delete 只服务构造失败，成功对象的普通 delete expression 走 normal delete
+- class-specific operator new/delete declarations 会隐藏同名 normal forms
+- 显式 forwarding 或标准基类加 using 可恢复完整 overload family
+- placement delete 必须与 storage ownership 对称、参数有效且 noexcept
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 52"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="placement new">
+    除 size 外带额外参数的分配函数。
+  </GlossaryItem>
+  <GlossaryItem term="placement delete">
+    匹配 placement new 的构造失败释放函数。
+  </GlossaryItem>
+  <GlossaryItem term="constructor exception">
+    storage 成功但对象构造失败。
+  </GlossaryItem>
+  <GlossaryItem term="constructor-failure memory leak">
+    缺匹配 delete 导致的 storage 泄漏。
+  </GlossaryItem>
+  <GlossaryItem term="placement signature matching">
+    额外参数类型在 delete 中对应重现。
+  </GlossaryItem>
+  <GlossaryItem term="normal deallocation path">
+    成功对象由普通 delete 释放的路径。
+  </GlossaryItem>
+  <GlossaryItem term="placement-delete failure scope">
+    placement delete 仅服务构造失败。
+  </GlossaryItem>
+  <GlossaryItem term="standard placement form">
+    在调用者 void pointer storage 上构造。
+  </GlossaryItem>
+  <GlossaryItem term="caller-owned placement storage">
+    placement 不拥有外部 buffer。
+  </GlossaryItem>
+  <GlossaryItem term="allocation overload family">
+    各种 new/delete forms 的完整集合。
+  </GlossaryItem>
+  <GlossaryItem term="allocation name hiding">
+    class 声明隐藏外层同名分配函数。
+  </GlossaryItem>
+  <GlossaryItem term="standard-form forwarding">
+    class 显式转发标准 global forms。
+  </GlossaryItem>
+  <GlossaryItem term="allocation overload re-exposure">
+    using 引回 base overload set。
+  </GlossaryItem>
+  <GlossaryItem term="placement argument lifetime">
+    额外参数覆盖 cleanup 的寿命要求。
+  </GlossaryItem>
+  <GlossaryItem term="cleanup no-throw boundary">
+    失败清理函数不再抛异常。
+  </GlossaryItem>
+  <GlossaryItem term="placement storage ownership">
+    placement 路径的 storage 所有权策略。
+  </GlossaryItem>
+  <GlossaryItem term="placement allocation matrix">
+    成功、失败和查找的测试表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：logging placement new 已取得 storage，Widget constructor 抛出。** 设计 matching delete。
+
+<Answer question="signature 与职责是什么？">
+  提供 `operator delete`，首参数为 void pointer，第二参数与 new 的 ostream
+  reference 类型一致，并声明 noexcept；它记录失败后把 storage 归还原
+  allocator。用构造函数在多个阶段故意抛异常，验证 matching placement delete
+  每次调用且 live bytes 回零。
+</Answer>
+
+2. **问题 2：新增 logging new 后，普通 new Widget 与标准 placement new 都不再编译。** 修复名称查找。
+
+<Answer question="怎样恢复 normal forms？">
+  在 Widget 显式提供并转发 normal、void-pointer、nothrow、aligned forms 及配对
+  delete，或继承集中这些标准 forms 的基类并用 using 重新暴露 operator new/delete
+  overload sets；再添加 logging pair。编译测试每种 new expression 和
+  constructor-failure path。
+</Answer>
+
+3. **问题 3：Arena placement new 在 monotonic arena 分配，constructor 失败。** placement delete 应怎样处理？
+
+  <Answer question="如何匹配 arena ownership 语义？">signature 必须接收原 Arena reference；若 arena 支持单块回收就 deallocate pointer，若 monotonic policy 不支持则执行 no-op 或回滚 checkpoint，并记录失败，不能调用 global delete。extra Arena 必须活到 cleanup 完成，placement delete noexcept，并测试 cursor/live-byte policy。</Answer>
+</Exercises>

@@ -1,0 +1,216 @@
+---
+title: "Chapter 14. Concurrency and Asynchrony"
+type: C
+section: "C# 10 Nutshell · Runtime Services"
+order: 14
+description: "覆盖线程与线程池、同步上下文、Task、async/await、异步流、取消、TAP、组合器、异步锁和淘汰模式，建立可组合的并发契约。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch14.html"
+draft: false
+---
+
+import { CtcAsyncCompositionLab, CtcAsyncStateMachineLab, CtcExecutionCarrierLab } from "@/components/mdx/csharp-10-core/diagrams/concurrency-and-asynchrony";
+
+<Objectives>
+
+- 能区分Thread、ThreadPool、Task与SynchronizationContext，判断阻塞、并行和异步的真实执行成本
+- 能分析async state machine、exception、cancellation和IAsyncEnumerable的completion contract
+- 能设计有界fan-out、Task combinator与awaitable lock，并复现deadlock、starvation和loser leak
+
+</Objectives>
+
+## 为什么Concurrency先要分清Execution、Waiting与Composition
+
+Thread是执行载体，Task是未来完成结果，async是把等待切成可恢复状态机的语言机制，并行才是同时使用多个执行单元。I/O异步在等待时通常不占线程，CPU工作不会因加上async自动并行。正确设计先写清资源上限、状态owner、completion/error/cancellation，再选择API。
+
+先预测：Task.Run内每个Task都有专属线程吗；await默认一定切到新线程吗；CancellationToken会强行终止工作吗；WhenAny会取消其余任务吗；lock内部可以安全await吗。答案都是否。
+
+<Term def="一个并发操作必须以result、fault或cancellation之一结束，并由明确caller观察该结果的协议。">completion contract</Term>
+
+## Threading
+
+Thread提供独立OS stack、priority、name、background状态和apartment等低层控制，创建和context switch有成本。大多数工作不应手建线程；只有长期阻塞、thread affinity、COM apartment或独立调度需求才考虑。Background thread不阻止进程退出，不能承担必须完成的flush。
+
+共享内存访问必须建立happens-before关系。lock/Monitor提供互斥和memory barriers，volatile只适合有限的单字段可见性场景，Interlocked提供原子read-modify-write。不可变消息和single-owner state通常比更多锁容易证明。
+
+```csharp
+private readonly object _gate = new();
+private Snapshot _snapshot = Snapshot.Empty;
+
+public Snapshot Read()
+{
+    lock (_gate) return _snapshot;
+}
+
+public void Replace(Snapshot next)
+{
+    ArgumentNullException.ThrowIfNull(next);
+    lock (_gate) _snapshot = next;
+}
+```
+
+## Synchronization Contexts
+
+SynchronizationContext抽象continuation应投递到哪里。UI context通常要求控件访问回到单线程；console/ASP.NET Core一般没有自定义context。默认await会捕获当前context（若存在）或使用TaskScheduler语义，`ConfigureAwait(false)`允许library continuation不回原context，但不会使operation本身更异步。
+
+Sync-over-async deadlock常发生在单线程context：caller用`.Result`阻塞context thread，async方法又等待回该context continuation。解决是调用链async all the way；library按契约决定是否捕获，而不是到处Task.Run掩盖。
+
+## The Thread Pool
+
+ThreadPool复用worker和I/O completion threads，适合短且不阻塞的callback。长时间同步I/O、锁等待或sleep会占住worker，引发starvation，runtime虽会注入线程但有延迟和资源成本。观察queue length、thread count、completed work与latency，不把CPU高和starvation混为一谈。
+
+QueueUserWorkItem适合无结果callback，Task.Run提供Task completion/exception composition。CPU-bound工作可用Task.Run把它移出UI thread，但不会降低总CPU；server请求中盲目Task.Run通常只增加排队。
+
+## Tasks
+
+Task/Task&lt;T&gt;表示一次操作的最终状态：RanToCompletion、Faulted或Canceled。它可能已同步完成、由I/O completion完成、在线程池运行，甚至由自定义TaskCompletionSource完成。Task不是thread，await Task也不等于blocking。
+
+Fault存入Task，await会重新抛出；未观察fire-and-forget会丢失错误和生命周期。TaskCompletionSource用`RunContinuationsAsynchronously`可避免producer完成时内联执行未知consumer代码。Cold task和手工Start很少需要，API返回已启动的hot Task是TAP惯例。
+
+<Stepper>
+  <Step title="切换Thread、ThreadPool、Task与SyncContext"><CtcExecutionCarrierLab /></Step>
+  <Step title="画execution timeline">标出caller thread、queue、I/O wait、continuation scheduler和实际CPU执行区间。</Step>
+  <Step title="注入blocking与starvation">固定并发逐步加入同步等待，观测pool queue、threads、throughput和tail latency。</Step>
+</Stepper>
+
+<Callout type="trap" title="Task就是轻量线程">
+Task只是completion abstraction，可能没有任何工作线程。按“每个Task一个线程”推理会误判I/O扩展性、调度和取消行为。
+</Callout>
+
+<Term def="线程池worker都被阻塞或长任务占用，队列增长且新工作迟迟无法开始的状态。">thread-pool starvation</Term>
+
+## Principles of Asynchrony
+
+异步用于不阻塞caller地等待外部完成，主要收益是responsiveness和scalability，不保证更快。API边界应返回Task/ValueTask或IAsyncEnumerable，避免回调和共享flag。资源必须有上限：并发request、buffer、socket、queue和timeout都进入契约。
+
+异步操作可能同步完成，caller不能假设必定yield；如果公平性需要显式策略。ValueTask只在测量证明同步完成频繁且allocation重要时使用，通常只能await一次，不可随意多次消费或组合。
+
+## Asynchronous Functions in C#
+
+async方法从入口同步执行到第一个未完成await；编译器生成state machine保存live locals并注册continuation。返回Task的方法在return时给出结果，异常进入Task；`async void`异常直接送SynchronizationContext且不可await，只用于event handler。
+
+```csharp
+public static async Task<Order> LoadOrderAsync(
+    HttpClient client, Uri uri, CancellationToken cancellationToken)
+{
+    using HttpResponseMessage response = await client.GetAsync(
+        uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken)
+        .ConfigureAwait(false);
+    response.EnsureSuccessStatusCode();
+
+    await using Stream body = await response.Content.ReadAsStreamAsync(cancellationToken)
+        .ConfigureAwait(false);
+    return await JsonSerializer.DeserializeAsync<Order>(body, cancellationToken: cancellationToken)
+        .ConfigureAwait(false)
+        ?? throw new JsonException("missing order");
+}
+```
+
+try/catch应包围await才能观察异步异常；finally可await用于异步清理。不要在async method中持有Monitor lock跨await，continuation可能换线程且临界区无限延长。
+
+<Stepper>
+  <Step title="切换sync prefix、suspended、resumed与completed"><CtcAsyncStateMachineLab /></Step>
+  <Step title="逐行标state machine边界">记录每个await是否已完成、保存哪些locals、continuation投递到哪里及Task当前状态。</Step>
+  <Step title="注入三种终态">让下游分别return、throw和cancel，验证caller只通过await观察result、fault或cancellation。</Step>
+</Stepper>
+
+## Asynchronous Streams
+
+IAsyncEnumerable&lt;T&gt;把“多次异步产生元素”建模为pull stream，`await foreach`逐项MoveNextAsync并在结束/异常时DisposeAsync。Producer可施加natural backpressure：consumer请求下一项才继续；但producer内部若预取仍需bounded buffer。
+
+Cancellation用`WithCancellation(token)`和iterator参数上的EnumeratorCancellation传递。异常在枚举过程中发生，不在取得IAsyncEnumerable时发生；资源owner通常是enumerator scope。枚举一次性来源不要暗示可重复。
+
+## Cancellation
+
+CancellationToken是协作请求，不强杀线程。Operation在安全checkpoint检查token，把token传给下游，并用`ThrowIfCancellationRequested`产生与该token关联的OperationCanceledException。成功提交后的取消如何处理必须定义：例如数据库commit完成后返回成功，不能假装rollback。
+
+CancellationTokenSource拥有timer和registrations，应Dispose；CreateLinkedTokenSource合并caller、timeout和shutdown，但要区分最终原因用于telemetry。Callback可能并发运行，必须短小、线程安全且不抛异常。
+
+<Term def="调用方请求停止、操作在安全checkpoint确认，并明确提交点前后语义的协作协议。">cancellation ownership</Term>
+
+## The Task-Based Asynchronous Pattern
+
+TAP方法后缀Async，返回Task/Task&lt;T&gt;，参数中CancellationToken通常最后；不为异步方法添加out/ref。操作默认在调用时开始，usage error可同步抛，operation error通过Task传播。Progress&lt;T&gt;/IProgress&lt;T&gt;用于进度但callback context和频率需明确。
+
+Timeout不是取消的同义词：caller停止等待后底层工作可能仍运行。优先把token传到真正I/O；`WaitAsync(timeout, token)`只控制等待时，要决定超时后如何观察和清理原Task。
+
+## Task Combinators
+
+WhenAll等待全部并保留输入顺序的结果，不提供并发上限；先创建一万个I/O Task已经发生fan-out。WhenAny只返回最先完成的Task，不取消losers；必须取消、await/observe并Dispose其资源。Delay + WhenAny可建timeout，但底层操作仍需取消。
+
+```csharp
+using var limiter = new SemaphoreSlim(8);
+Task<Result>[] tasks = inputs.Select(async input =>
+{
+    await limiter.WaitAsync(ct).ConfigureAwait(false);
+    try { return await ProcessAsync(input, ct).ConfigureAwait(false); }
+    finally { limiter.Release(); }
+}).ToArray();
+
+Result[] results = await Task.WhenAll(tasks).ConfigureAwait(false);
+```
+
+Race/hedging应限定副作用、loser cleanup与额外负载。ContinuationWith易受scheduler/options和nested Task影响，普通async/await更清晰。
+
+## Asynchronous Locking
+
+C# `lock`/Monitor不能跨await。SemaphoreSlim(1,1)可作为简单async mutex：await WaitAsync，try/finally Release；它不保证严格公平，也不支持reentrancy/ownership诊断。临界区只保护内存状态，不在其中调用未知外部I/O；更复杂工作流用channel/actor把state集中给单一consumer。
+
+多个async locks仍可能deadlock，保持全局order或避免同时持有。Cancellation发生在获得锁前不应Release；获得后任何异常都必须Release。
+
+<Stepper>
+  <Step title="切换WhenAll、WhenAny、Cancellation与SemaphoreSlim"><CtcAsyncCompositionLab /></Step>
+  <Step title="填写operation ledger">记录每个Task的owner、deadline、token、resource、completion observer和loser cleanup。</Step>
+  <Step title="执行race matrix">覆盖同步完成、首个fault、多个fault、timeout、caller cancel与lock wait cancel。</Step>
+</Stepper>
+
+<Callout type="trap" title="WhenAny返回后其余任务自然停止">
+Losers继续运行并可能修改状态、持有socket或最终fault。Winner选出后要按协议取消并观察所有losers。
+</Callout>
+
+## Obsolete Patterns
+
+APM的Begin/End、EAP的Completed event和裸callback在旧API中仍会遇到。迁移时用TaskFactory.FromAsync或TaskCompletionSource包装，保证callback恰好完成一次、同步callback安全、异常/取消映射正确且registration释放。不要把阻塞API伪装成async只返回`Task.FromResult`。
+
+Thread.Abort在现代.NET不可用且破坏invariant；用cooperative cancellation。BackgroundWorker适合旧UI兼容，新代码使用Task、IProgress与CancellationToken。`async void`除event handler外淘汰，fire-and-forget必须交给有lifecycle、error sink和shutdown drain的hosted owner。
+
+<Term def="为未等待任务提供明确lifecycle、异常观察、取消与shutdown drain的宿主管理。">orphan-task containment</Term>
+
+## 本章回顾：Task描述完成，Async组织等待
+
+1. Thread/ThreadPool是执行资源，Task是completion，SynchronizationContext是continuation policy。
+2. Async方法同步运行到未完成await，异常和取消都通过返回对象传播。
+3. IAsyncEnumerable把多项异步结果与enumerator resource lifetime结合。
+4. WhenAll/WhenAny不提供bounded fan-out或自动loser cleanup，必须另行设计。
+5. 并发正确性来自owner、limit、completion、cancellation与observability，而不是更多Task.Run。
+
+<Exercises>
+
+**问题 1：为什么UI线程调用`.Result`可能死锁？**
+
+<Answer>UI线程阻塞等待Task，而被等待async方法在await后尝试回到同一SynchronizationContext；context只能由已阻塞的UI线程执行，形成循环。把调用链改为async并await，library按需ConfigureAwait(false)，不要用Task.Run随机规避。</Answer>
+
+**问题 2：如何实现“取最快副本”而不泄漏loser？**
+
+<Answer>为所有副本创建linked CancellationTokenSource，await WhenAny并await winner；随后Cancel linked source，在finally中await/observe所有losers，容忍与该token对应的取消并记录其他fault，同时确保副作用幂等且fan-out有上限。</Answer>
+
+**问题 3：异步互斥验收哪些竞态？**
+
+<Answer>覆盖同步获得、等待中取消、进入后异常、Dispose/shutdown、多个waiter和重入误用。只在成功WaitAsync后进入try/finally并Release一次，临界区不做未知I/O；用并发压力验证invariant与无deadlock。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="completion contract" definition="Result、fault或cancellation三种明确终态。" />
+  <GlossaryItem term="thread-pool starvation" definition="Workers被阻塞导致队列与延迟持续增长。" />
+  <GlossaryItem term="cancellation ownership" definition="请求、checkpoint与提交边界构成的协作停止协议。" />
+  <GlossaryItem term="orphan-task containment" definition="未直接await任务的宿主管理与错误观察。" />
+  <GlossaryItem term="bounded fan-out" definition="对同时在途操作、buffer和下游压力设置硬上限。" />
+</Glossary>
+
+<Term def="在创建Task之前限制同时在途操作数量，避免WhenAll把输入规模直接变成资源规模。">bounded fan-out</Term>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 14: Concurrency and Asynchrony" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch14.html" />

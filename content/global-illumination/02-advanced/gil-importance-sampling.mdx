@@ -1,108 +1,211 @@
 ---
-title: "重要性采样"
+title: "Monte Carlo 方法与重要性采样"
 type: B
 section: "计算机图形学与渲染"
 order: 5
-description: "让采样分布匹配被积函数——降低蒙特卡洛方差的核心技术"
+description: "复刻第 3 章：概率基础、Monte Carlo 积分、随机变量生成、反演与拒绝采样、方差缩减、分层和低差异序列"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://books.google.com/books?id=KodRAAAAMAAJ"
 draft: false
 ---
 
-import { GilImportanceSamplingDiagram } from "@/components/mdx/global-illumination/diagrams/gil-importance-sampling";
+import { GilImportanceSamplingDiagram, GilSamplingTransformDiagram, GilVarianceToolkitDiagram } from "@/components/mdx/global-illumination/diagrams/gil-importance-sampling";
+import { GilStepFlowDiagram } from "@/components/mdx/global-illumination/diagrams/gil-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能写出重要性采样的数学原理
-- 能解释BRDF采样和光源采样各自的优势
-- 能描述MIS如何组合多种采样策略
-- 能回答为什么最优采样分布是p∝|f|？
+
+- 能解释随机变量、PDF、CDF、期望和方差在光传输估计中的角色
+- 能推导 Monte Carlo 积分估计器的无偏性与标准误差收敛率
+- 能实现反演采样、拒绝采样和二维到半球的随机变量变换
+- 能比较重要性采样、分层采样与 quasi-Monte Carlo 的适用条件
+
 </Objectives>
 
-## 直觉引入
+## 直觉：随机点不是答案，带权平均才是
 
-想象你要估算一个湖的面积，但湖的形状很不规则——中间宽两头窄。如果你均匀地在地图上扔飞镖，大部分飞镖落在湖外（低贡献区域），效率很低。但如果你知道湖的大致形状，往湖中心多扔、湖边缘少扔，同样的飞镖数就能得到更准确的估计。
+先预测：把所有样本都集中到被积函数最高的区域，估计一定更准吗？不一定。若采样密度在仍有非零贡献的区域变为零，估计器失去支持，结果会系统性漏能量；若只改变样本位置却忘记除以 PDF，也会把“多采样”误当成“更多能量”。
 
-重要性采样就是这个思想——让采样分布匹配被积函数的形状，在高贡献区域多采样，低贡献区域少采样，用相同采样数得到更低方差的估计。
-
-## 概念讲解
-
-### 重要性采样原理
+Monte Carlo methods 的核心不是制造噪声，而是把难以解析的高维积分改写为随机变量的期望，再用样本平均估计。这一过程就是 **Monte Carlo integration（蒙特卡洛积分）**。路径追踪的一条路径包含多个方向、距离、光源、时间甚至波长变量；维度很高且 visibility 不连续，规则求积会指数爆炸，而 Monte Carlo 的均方误差主要按样本数而不是名义维度收敛。
 
 <GilImportanceSamplingDiagram />
 
-<Term def="重要性采样通过让采样分布p(x)与被积函数f(x)形状匹配来降低蒙特卡洛方差">重要性采样</Term>的核心：方差最小当p∝|f|。
+## 概率语言：事件、随机变量与分布
 
-<Term def="BRDF采样按BRDF分布采样方向，适合光泽/镜面表面">BRDF采样</Term>在强方向性材料上高效，但可能错过小光源。
+<Term def="把样本空间中的结果映射为数值的函数；渲染中可表示方向、距离、光源索引、路径长度或单样本贡献">随机变量</Term> $X$ 由分布决定。离散变量用 probability mass function，连续变量用 probability density function（PDF）$p(x)$；连续点本身概率为零，区间概率由 $\int_a^b p(x)dx$ 给出。
 
-<Term def="光源采样按光源面积采样方向，适合小光源和直接光照">光源采样</Term>保证命中光源，但可能在BRDF贡献小的方向浪费采样。
+CDF $F_X(x)=P(X\le x)$ 单调且从 0 到 1。期望与方差分别为：
 
-<Term def="多重重要性采样(MIS)加权组合多种采样策略，取各自最优部分">MIS</Term>是现代渲染器的标配技术。
+$$
+\mathbb E[g(X)]=\int g(x)p(x)dx,\qquad
+\operatorname{Var}[X]=\mathbb E[(X-\mathbb E[X])^2].
+$$
 
-## 交互Demo
+联合 PDF 描述多个变量；conditional density 把路径的联合概率分解为 $p(x_0)p(x_1|x_0)\cdots$。独立只表示联合分布可分解，不保证样本覆盖均匀。随机数生成器、sample dimension 的消费顺序和 seed 都是算法状态，调试时必须可复现。
 
-<Stepper>
-<Step title="第一步：数学原理">蒙特卡洛估计量 F=(1/N)Σf(Xi)/p(Xi)。方差Var(F) = (1/N)∫f²/p dx - I²。当p∝|f|时∫f²/p dx最小，方差最小。</Step>
-<Step title="第二步：BRDF vs 光源采样">
-BRDF采样按材料反射分布选方向，光泽表面效率高但小光源噪声大。光源采样直接对光源采样，小光源效率高但光泽表面可能浪费。各有优劣。
-<GilImportanceSamplingDiagram />
-</Step>
-<Step title="第三步：MIS组合">MIS对两种采样策略各取部分采样，用启发式权重(如balance heuristic)组合。在BRDF擅长区域(光泽反射)权重偏向BRDF采样，在光源擅长区域(小光源直射)权重偏向光源采样，保证方差始终可控。</Step>
-</Stepper>
+## Monte Carlo 积分与误差
 
-## 代码对照
+令目标积分 $I=\int_D f(x)d\mu(x)$，选择在 $f\ne0$ 处满足 $p(x)>0$ 的 PDF，从 $p$ 独立采样 $X_i$：
+
+$$
+\widehat I_N=\frac1N\sum_{i=1}^{N}\frac{f(X_i)}{p(X_i)},
+\qquad X_i\sim p.
+$$
+
+<Term def="通过随机样本平均估计积分或期望，并以概率误差而非规则网格误差描述收敛的方法">Monte Carlo 积分</Term>的无偏性来自换元：$\mathbb E[f(X)/p(X)]=\int f(x)dx$。若样本独立且单样本方差有限，则：
+
+$$
+\operatorname{Var}[\widehat I_N]=\frac{\sigma^2}{N},\qquad
+\operatorname{SE}[\widehat I_N]=\frac{\sigma}{\sqrt N}.
+$$
+
+标准误差减半约需四倍样本。这个 $O(N^{-1/2})$ 规律解释了为何暴力加样本昂贵，也解释了方差缩减的价值。无偏不代表当前图像准确；单个高贡献 outlier 会让有限样本均值非常不稳定。
+
+## 怎样从均匀数生成目标随机变量
+
+渲染器通常从 $U\sim U[0,1)$ 开始，再通过 sampling random variables 的变换得到目标分布。<Term def="利用连续分布的累积分布函数反函数，把均匀随机数映射为目标分布样本的方法">反演采样</Term>令 $X=F^{-1}(U)$：
+
+$$
+P(F^{-1}(U)\le x)=P(U\le F(x))=F(x).
+$$
+
+<GilSamplingTransformDiagram />
+
+例如 exponential free-flight distance 的 $F(t)=1-e^{-\sigma_t t}$，所以 $t=-\ln(1-U)/\sigma_t$。离散光源选择可先累计 PMF 得到阶梯 CDF，再二分查找；alias table 则以预处理换取常数时间查询。
+
+当 CDF 难以求逆时，<Term def="从易采样包络分布生成候选，并按目标密度与包络密度之比随机接受候选的方法">拒绝采样</Term>选择 $p(x)\le Mq(x)$：先采 $X\sim q$、$U\sim U[0,1)$，当 $U\le p(X)/(Mq(X))$ 时接受。平均接受率为 $1/M$（两者归一化时），包络太松会浪费大量候选。
+
+二维变换必须携带 Jacobian。均匀 disk 不能令 radius $r=U$，因为面积环带随 $r$ 增长；应取 $r=\sqrt U$。均匀 sphere direction 可令 $z=1-2U_1$、$\phi=2\pi U_2$；cosine hemisphere 可令 disk sample lift 到 $z=\sqrt{1-x^2-y^2}$，其 solid-angle PDF 是 $\cos\theta/\pi$。
+
+## 重要性采样：让权重更稳定
+
+<Term def="选择与被积函数绝对值近似成比例的采样密度，使 f(X)/p(X) 的波动减小，从而降低方差">重要性采样</Term>（importance sampling）并不改变积分：
+
+$$
+\operatorname{Var}[\widehat I_N]=\frac1N\left(\int_D\frac{f(x)^2}{p(x)}dx-I^2\right).
+$$
+
+对非负 $f$，理论零方差分布是 $p^*(x)=f(x)/I$，但它需要预先知道积分及函数全貌。实践只能匹配部分结构：按 cosine 采样 Lambertian lobe，按 BRDF 采光泽方向，按 emitter power 选光源，按 environment luminance 与 spherical Jacobian 建二维分布。
+
+最关键的安全条件是 support：只要 $f(x)\ne0$ 就必须有 $p(x)>0$。PDF 很小而贡献很大时，$f/p$ 形成 firefly。clamp 会引入 bias，只能作为明确报告的工程策略，不能冒充正确 importance sampler。
+
+## 分层、低差异与其他方差工具
+
+<GilVarianceToolkitDiagram />
+
+<Term def="把采样域划分为互不重叠子域，并在每个子域分配样本，以减少随机空洞和团簇造成的低频误差">分层采样</Term>（stratification）保证各层被覆盖。若各层方差不同，可按 estimated standard deviation 分配样本；对 pixel filter、lens、time 等低维变量尤其有效。Latin hypercube 保证每个一维投影分层，但不保证所有高维组合均匀。
+
+Quasi-Monte Carlo 用 Sobol、Halton 等 low-discrepancy sequence 减小样本集合的 discrepancy。它不是普通独立随机数，理论误差依赖函数 variation 与维度；渲染中常加 scrambling 以恢复可估计误差和减少结构 artifact。维度映射必须稳定，否则不同 bounce 消费随机维度的变化会破坏序列质量。
+
+Russian roulette 解决无限路径成本：以 continuation probability $q$ 继续并把后续 throughput 除以 $q$；以 $1-q$ 终止。只要补权正确，它不引入 bias，但可能增加 variance。它与“throughput 小于阈值直接截断”不同，后者是有偏截断。
+
+## MIS 在本章中的位置
+
+BRDF sampling 与 light sampling 各自匹配 integrand 的一部分。Multiple importance sampling 在后续 path/hybrid algorithm 中组合这些 proposal；它依赖本章的 PDF、support 和无偏加权知识，但不是第 3 章的全部内容。
+
+Balance heuristic 对策略 $i$ 的权重可写成 $w_i(x)=n_i p_i(x)/\sum_j n_jp_j(x)$。每个策略计算权重时必须在同一 sample space 和 measure 上评估所有可生成该样本的 PDF。area PDF 与 solid-angle PDF 不能直接相加；delta strategy 也需要离散/连续测度的专门处理。
+
+## 一个可复现的采样接口
 
 ```cpp
-// MIS: 多重重要性采样
-Spectrum EstimateDirectMIS(SurfaceInteraction si, Light light) {
-    // 策略1: 光源采样
-    auto [wi1, Li, pdf1] = light.Sample_Li(si);
-    Spectrum L_light = BRDF(wi1) * Li * cos / pdf1;
-    
-    // 策略2: BRDF采样
-    auto [wi2, f, pdf2] = si.bsdf->Sample_f(wo);
-    Spectrum L_brdf = f * light.L(wi2) * cos / pdf2;
-    
-    // MIS权重 (balance heuristic)
-    float w1 = pdf1 / (pdf1 + pdf2);
-    float w2 = pdf2 / (pdf1 + pdf2);
-    
-    return w1 * L_light + w2 * L_brdf;
+struct Sample {
+    Direction wi;
+    float pdfSolidAngle;
+    Spectrum weight; // f * |n·wi| / pdf
+};
+
+Sample cosineHemisphere(Vec2 u, Frame frame) {
+    Vec2 d = concentricSampleDisk(u);
+    float z = sqrt(max(0.0f, 1.0f - dot(d, d)));
+    Direction local{d.x, d.y, z};
+    return {frame.toWorld(local), z / Pi, Spectrum(1.0f)};
 }
 ```
+
+接口要返回 sample 与它相对的明确 measure。单元测试包括：PDF 数值积分约为 1；样本直方图与理论密度一致；常量函数估计正确；改变坐标 frame 不改变均值；固定 seed 可复现。
+
+## 三步构造采样器
+
+<Stepper>
+<Step title="第一步：定义域、测度与目标密度">
+
+写清是在 area、solid angle、path length 还是 discrete light index 上采样，并确认目标密度归一化和 support。
+
+<GilStepFlowDiagram caption="先确定随机变量到底生活在哪个空间。" stage={1} stages={["Define：domain → measure → target PDF → support"]} />
+
+</Step>
+<Step title="第二步：选择生成方法并补 Jacobian">
+
+根据 CDF 是否可逆选择 inversion、rejection 或多维 transform；从参数域变到几何域时显式推导 Jacobian。
+
+<GilStepFlowDiagram caption="生成样本和评估 PDF 必须是同一个变换的两面。" stage={2} stages={["Define：domain → measure → target PDF → support", "Generate：uniform variates → transform / reject → Jacobian"]} />
+
+</Step>
+<Step title="第三步：验证分布与估计器">
+
+做 normalization、histogram、constant-integrand、analytic integral 与 variance scaling 测试，再与均匀采样对照。
+
+<GilStepFlowDiagram caption="先证明分布正确，再讨论它是否真的降低方差。" stage={3} stages={["Define：domain → measure → target PDF → support", "Generate：uniform variates → transform / reject → Jacobian", "Validate：normalization → histogram → mean / variance"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**误区：认为重要性采样能消除所有噪声。**
-重要性采样降低方差但不能消除。即使p∝|f|，方差仍为(1/N)(∫|f|dx)²-I²，只是从高方差降到低方差。完全消除方差需要p∝|f|且∫|f|dx已知（通常不知道）。实际中重要性采样配合降噪使用。
+**现象 →** 按高贡献区域多采样后，图像整体变亮。**原因 →** 改了 $p$ 却没有除以 PDF，或 PDF measure 不一致。**修法 →** 把 sample、PDF、measure 与 $f/p$ 权重作为一个不可分接口测试。
 </Callout>
 
 <Callout type="trap">
-**误区：不理解MIS权重的选择。**
-MIS权重不是简单的平均值。Balance heuristic w_i = n_i*p_i / Σ n_j*p_j 在理论上接近最优。Power heuristic在极窄分布时更优。错误的权重（如简单平均）在某些场景下方差反而比单一策略更差。
+**现象 →** 用 $\theta\sim U[0,\pi]$、$\phi\sim U[0,2\pi)$ 生成“均匀球面”。**原因 →** 忽略 $\sin\theta$ Jacobian，样本堆积在极点。**修法 →** 均匀采 $z=\cos\theta$，或使用正确 inverse CDF。
 </Callout>
 
+<Callout type="trap">
+**现象 →** 把低差异序列当成更好的独立 RNG，随意改变维度消费顺序。**原因 →** 忽略 discrepancy 依赖整体点集结构。**修法 →** 固定 sample dimension mapping，并通过 scrambling 获得随机化副本和误差估计。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题 1**：为什么最优采样分布是p(x)∝|f(x)|？推导过程是什么？
+
+**问题 1：为什么 importance sampling 不能让 PDF 在非零贡献区域为零？**
 
 <Answer>
-蒙特卡洛方差 Var = (1/N)∫(f²/p)dx - I²。要最小化Var，等价于最小化∫(f²/p)dx。用Cauchy-Schwarz不等式：(∫|f|dx)² ≤ (∫f²/p dx)(∫p dx) = ∫f²/p dx（因为∫p=1）。当且仅当p∝|f|时等号成立，此时∫f²/p dx = (∫|f|dx)²，方差最小为(1/N)(∫|f|dx)²-I²。所以p∝|f|是最优分布。
+估计器要求 $f/p$ 有定义，且期望覆盖原积分。若某集合上 $f\ne0$ 但 $p=0$，该集合永远不会被采到，期望缺少其积分，形成 bias。混合一个具有全支持的 proposal 是常见保险措施。
 </Answer>
 
-**问题 2**：MIS如何组合BRDF采样和光源采样？balance heuristic的权重公式是什么？
+**问题 2：推导均匀圆盘半径为什么是 $r=\sqrt U$。**
 
 <Answer>
-MIS对BRDF采样和光源采样各分配部分采样数(n_B和n_L)，对每个样本用权重组合。Balance heuristic权重：w_B = n_B*p_B / (n_B*p_B + n_L*p_L)，w_L = n_L*p_L / (n_B*p_B + n_L*p_L)。其中p_B和p_L是两种策略在相同方向上的概率密度。效果：在BRDF采样擅长的方向（p_B>>p_L）w_B接近1用BRDF结果；在光源采样擅长的方向（p_L>>p_B）w_L接近1用光源结果。保证方差始终不差于单一策略。
+半径不超过 $r$ 的面积比例为 $F_R(r)=\pi r^2/\pi=r^2$。令 $U=F_R(r)$，inverse CDF 给出 $r=\sqrt U$。若取 $r=U$，中心附近会获得过多样本。
 </Answer>
+
+**问题 3：样本数从 64 增加到多少，独立 Monte Carlo 标准误差理论上减半？**
+
+<Answer>
+标准误差按 $1/\sqrt N$ 缩放。要减半需把 $N$ 乘四，因此从 64 增加到 256；前提是单样本分布和方差不变且样本独立。
+</Answer>
+
+**问题 4：怎样证明一个 cosine hemisphere sampler 不只是“看起来像余弦分布”？**
+
+<Answer>
+数值积分 PDF 应为 1；方向直方图应匹配 $p(\omega)=\cos\theta/\pi$；估计常量 environment 下 Lambertian 反射应得到解析值；旋转局部 frame 后均值不变；多批独立 seed 的方差应按 $1/N$ 缩放。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+第 3 章提供后续所有随机光传输算法的数值语言：概率分布定义样本，Monte Carlo estimator 用 $1/p$ 保持期望，inversion/rejection/transform 生成目标随机变量，importance sampling、stratification、quasi-Monte Carlo 和 Russian roulette 分别控制权重波动、覆盖、差异与路径成本。只有同时验证 PDF、measure、support、均值和方差，采样器才真正正确。
+
 <Glossary>
-<GlossaryItem term="重要性采样">让采样分布匹配被积函数形状以降低方差的蒙特卡洛技术，最优分布p正比于|f|。</GlossaryItem>
-<GlossaryItem term="BRDF采样">按BRDF分布采样方向，适合光泽/镜面表面但在小光源上噪声大。</GlossaryItem>
-<GlossaryItem term="光源采样">按光源面积采样方向，适合小光源和直接光照但在光泽表面可能浪费。</GlossaryItem>
-<GlossaryItem term="多重重要性采样(MIS)">加权组合多种采样策略，用balance heuristic取各自最优部分，保证方差可控。</GlossaryItem>
+<GlossaryItem term="随机变量">把随机结果映射为方向、距离、索引或贡献等数值的函数。</GlossaryItem>
+<GlossaryItem term="Monte Carlo 积分">用带 PDF 权重的随机样本平均估计积分的方法。</GlossaryItem>
+<GlossaryItem term="反演采样">用 CDF 的反函数把均匀数变成目标分布样本的方法。</GlossaryItem>
+<GlossaryItem term="拒绝采样">从包络分布生成候选并按密度比接受样本的方法。</GlossaryItem>
+<GlossaryItem term="重要性采样">让 PDF 近似被积函数绝对值以降低权重方差的方法。</GlossaryItem>
+<GlossaryItem term="分层采样">划分域并保证每个子域获得样本以改善覆盖的方法。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Advanced Global Illumination" adaptedUrl="https://www.amazon.com/dp/1568813074" />
+<Attribution adaptedFrom="Advanced Global Illumination, Second Edition, Chapter 3: Monte Carlo Methods" adaptedUrl="https://books.google.com/books?id=KodRAAAAMAAJ" />

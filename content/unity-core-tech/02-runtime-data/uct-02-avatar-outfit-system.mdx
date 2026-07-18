@@ -1,0 +1,227 @@
+---
+title: "第 2 章 Avatar 换装系统：骨骼映射与网格装配"
+type: A
+section: "Unity 3D 实战核心技术详解 · 玩法与AI"
+order: 2
+description: "按原书第2章拆解基于共享骨架、SkinnedMeshRenderer 和材质的 Avatar 换装原理与代码实现。"
+demo: true
+math: false
+sourceUrl: "https://m.bookschina.com/7380713.htm"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Uct02AvatarOutfitSystemMapLab,
+  Uct02AvatarOutfitSystemExperimentLab,
+  Uct02AvatarOutfitSystemEvidenceLab,
+} from "@/components/mdx/unity-core-tech/diagrams/uct-02-avatar-outfit-system";
+
+<Objectives>
+
+- 能解释服装网格、骨骼数组、绑定姿势和材质之间的契约
+
+- 能实现按骨骼路径重映射的运行时换装流程
+
+- 能分析破面、漂移、材质错位和内存抖动的最早根因
+
+</Objectives>
+
+## 问题：为什么只替换 SkinnedMeshRenderer.sharedMesh 往往能显示服装，却会在动画时扭曲或飞离角色？
+
+先预测：两套角色都叫 Bip001，是否就能直接共享衣服？不能。换装依赖骨架拓扑、骨骼路径、bind pose、骨权重、rootBone、材质和贴图约定同时一致。原书先讲换装原理再给代码，正确顺序是先证明资产契约，再把查找、映射、装配和回收写成确定流程。
+
+<Uct02AvatarOutfitSystemMapLab />
+
+## 原书边界与目录小节
+
+本页严格对应完整目录中的以下单元；这些单元只在本页计算原章覆盖，现代扩展不替代原书位置：
+
+- **换装原理**
+- **换装代码实现**
+
+书籍身份由图书馆题录核对，章节边界由完整目录核对。本站重新组织解释、代码、实验和证据，不逐字复制原文；导读与总复习不重复计入十四个正文章。
+
+## 从服装资产到动画一致性
+
+SkinnedMeshRenderer 的 vertices 通过 BoneWeight 引用 bones 数组索引，bindposes 描述网格绑定时骨骼空间。换装不是把一个 Mesh 挂到角色上，而是让服装网格的每个骨索引重新指向目标 Avatar 中语义相同的 Transform。
+
+可靠映射使用从统一骨架根开始的相对路径，不只使用骨骼短名。短名可能重复，路径还能暴露层级差异。导入时应生成骨架签名、bind pose 数量、BlendShape 列表和材质槽清单，运行时只消费已验证数据。
+
+代码流程为加载服装描述、建立目标骨架字典、按源 bones 顺序生成映射数组、设置 sharedMesh、bones、rootBone 和 sharedMaterials，再对边界姿态做自动检查。需要合批时再 CombineMeshes，并同时处理 bindposes、subMesh 与材质，不应把合并当作第一步。
+
+频繁换装的瓶颈通常是 Instantiate、材质实例化、贴图驻留和临时数组。缓存映射、复用 Renderer、使用 sharedMaterial、按套装管理资源句柄，并在卸装时释放引用，才能把功能正确转为可持续运行。
+
+<Uct02AvatarOutfitSystemExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="由骨骼相对路径、父子关系和绑定信息生成的兼容性标识。">骨架签名</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="网格蒙皮建立时从骨骼空间到网格空间的基准矩阵集合。">绑定姿势</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="把服装网格骨索引逐项重定向到目标角色 Transform 的过程。">
+  骨骼映射
+</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="顶点受哪些骨骼影响以及各自影响比例的数据。">骨权重</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="把多件服装纹理布局到统一纹理以减少材质切换的资产约定。">
+  材质图集
+</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+这些术语组成一份最小领域模型。读者需要为每个对象写出所有者、生命周期、正常值、边界值和故意失败后的第一条可观察信号，才能把概念转成工程判断。
+
+## 关键对象与数据流
+
+输入是经导入校验的服装 Prefab、骨架签名、材质和资源句柄；装配器先核对签名，再生成 bones 映射并设置 Renderer，动画系统随后以同一骨架驱动身体和服装。输出包括可变形角色、映射报告、材质槽报告与释放记录。
+
+每次实验只改变一个输入，先保存版本、参数与预期，再比较输出、日志、内存或帧时间。最终结果偶然正确但中间契约不符合预测，仍不能签发，因为隐藏缓存、默认值或执行顺序可能掩盖根因。
+
+## 三步可重复实验
+
+动手前先预测：改变当前步骤的一项输入后，哪个对象、数值、像素、状态或版本标记应最先变化？固定 Unity 版本、目标平台、资产提交和测试场景。
+
+<Stepper>
+  <Step title="导出资产契约">
+    <Uct02AvatarOutfitSystemMapLab />
+
+从服装根节点导出每根骨骼的相对路径、bind pose 数量、材质槽和 BlendShape；与目标 Avatar 的签名做差集。
+
+```csharp
+string RelativePath(Transform root, Transform bone)
+{
+    return AnimationUtility.CalculateTransformPath(bone, root);
+}
+```
+
+  </Step>
+  <Step title="建立确定映射">
+    <Uct02AvatarOutfitSystemExperimentLab />
+
+按源 Renderer.bones 的原顺序查找目标 Transform，任何缺失都拒绝装配，不用 Find 的模糊结果继续运行。
+
+```csharp
+Transform[] mapped = source.bones
+    .Select(b => targetByPath[RelativePath(sourceRoot, b)])
+    .ToArray();
+target.bones = mapped;
+```
+
+  </Step>
+  <Step title="回放姿态与回收">
+    <Uct02AvatarOutfitSystemEvidenceLab />
+
+播放肩、髋、膝的边界姿态，检查穿模、法线和接缝；连续换装一百次并观察分配、材质实例数和资源引用是否回到基线。
+
+```csharp
+target.sharedMesh = outfit.mesh;
+target.sharedMaterials = outfit.materials;
+target.rootBone = avatarRootBone;
+Debug.Assert(target.bones.Length == outfit.mesh.bindposes.Length);
+```
+
+  </Step>
+</Stepper>
+
+## 正常、边界与故障注入
+
+正常样本证明主路径，边界样本说明适用范围，故障样本证明诊断检查确实会在最早契约处拒绝。三类样本必须使用同一观测方式，避免只为成功路径保留证据。
+
+<Callout type="trap">
+  **因果陷阱**：用骨骼短名映射会在左右同名、武器挂点或重复层级中静默连错，必须使用相对路径或稳定
+  ID。
+</Callout>
+
+<Callout type="trap">
+  **边界陷阱**：访问 renderer.material
+  会隐式实例化材质，连续换装会制造不可见的内存增长。
+</Callout>
+
+## 从原书版本迁移到当前 Unity
+
+现代 Unity 仍以 SkinnedMeshRenderer、bones、bindposes 和 BoneWeight 为核心；Addressables 只改变服装资产的取得与释放，不改变蒙皮契约。
+
+新的骨权重 API、GPU Skinning 和 Entities Graphics 可能改变数据载体，但骨架兼容、路径映射、材质槽与生命周期证据仍必须保留。
+
+迁移账本使用五列：原书载体、稳定不变量、当前实现、不可等价处、重放证据。允许 API、插件和渲染管线变化，不允许用新名词删除原章问题或把编辑器成功当成目标平台成功。
+
+## 验收证据
+
+验收包含骨架差异报告、映射数组、bind pose 数量断言、五个极限姿态截图、材质实例计数、连续换装分配曲线和资源释放后内存快照。
+
+证据包还要记录文件路径、构建版本、设备、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不是看过。
+
+<Uct02AvatarOutfitSystemEvidenceLab />
+
+## 小结
+
+- 换装的核心是蒙皮数据契约而非替换网格
+- 骨骼相对路径比短名可靠
+- 先验证资产兼容，再考虑合批
+- 功能、姿态与资源生命周期要同时验收
+
+<Exercises>
+
+**问题 1** 第 2 章 Avatar 换装系统的关键输入和输出分别是什么？
+
+<Answer>
+  输入是经导入校验的服装
+  Prefab、骨架签名、材质和资源句柄；装配器先核对签名，再生成 bones 映射并设置
+  Renderer，动画系统随后以同一骨架驱动身体和服装。输出包括可变形角色、映射报告、材质槽报告与释放记录。
+</Answer>
+
+**问题 2** 本章最有诊断价值的故障注入是什么？
+
+<Answer>
+  用骨骼短名映射会在左右同名、武器挂点或重复层级中静默连错，必须使用相对路径或稳定
+  ID。需要保存失败输入和第一条偏离信号，再修复后重放。
+</Answer>
+
+**问题 3** 迁移到当前 Unity 时必须保留什么？
+
+<Answer>
+  现代 Unity 仍以 SkinnedMeshRenderer、bones、bindposes 和 BoneWeight
+  为核心；Addressables 只改变服装资产的取得与释放，不改变蒙皮契约。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="骨架签名">
+    由骨骼相对路径、父子关系和绑定信息生成的兼容性标识。
+  </GlossaryItem>
+  <GlossaryItem term="绑定姿势">
+    网格蒙皮建立时从骨骼空间到网格空间的基准矩阵集合。
+  </GlossaryItem>
+  <GlossaryItem term="骨骼映射">
+    把服装网格骨索引逐项重定向到目标角色 Transform 的过程。
+  </GlossaryItem>
+  <GlossaryItem term="骨权重">
+    顶点受哪些骨骼影响以及各自影响比例的数据。
+  </GlossaryItem>
+  <GlossaryItem term="材质图集">
+    把多件服装纹理布局到统一纹理以减少材质切换的资产约定。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="姜雪伟《Unity 3D实战核心技术详解》目录与书籍身份资料"
+  adaptedUrl="https://m.bookschina.com/7380713.htm"
+/>

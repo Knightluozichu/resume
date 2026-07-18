@@ -1,0 +1,265 @@
+---
+title: "第9章：Concurrency with Shared Variables"
+type: C
+section: "Go 程序设计语言 · Race、同步与并发缓存"
+order: 9
+description: "对齐原书第 9 章：race conditions、Mutex/RWMutex、memory synchronization、Once、race detector、concurrent cache 与 goroutines/threads。"
+demo: true
+math: false
+sourceUrl: "https://www.gopl.io/"
+draft: false
+---
+
+import {
+  GoplMemoSchedulerLab,
+  GoplRaceMutexLab,
+  GoplSynchronizationPrimitiveLab,
+} from "@/components/mdx/go-programming-language/diagrams/concurrency-with-shared-variables";
+
+<Objectives>
+
+- 能解释 data race 与 logical race，按 shared invariant 选择 confinement、Mutex、RWMutex、channel 或 atomic synchronization
+- 能推导 happens-before visibility、sync.Once publication 与 race detector 证据边界，避免用 sleep/word-size 猜测同步
+- 能实现 duplicate-suppressing concurrent memo/cache，分析 goroutine stack/scheduling、GOMAXPROCS、thread identity 与 shutdown
+
+</Objectives>
+
+## 为什么共享变量并发先画 invariant，而不是先选锁
+
+多个 goroutines 访问同一 state 不必然错误；缺少 synchronization 且至少一个 write 才形成 data race。即使没有 data race，check-then-act、ordering、lost work 等 logical races 仍可能违反 domain invariant。正确步骤是先列 state owner/invariant，再选择 communication 或 lock。
+
+<Term def="两个 goroutines 并发访问同一 memory location，至少一个是 write，且访问之间没有 happens-before/atomic synchronization 的程序错误。">data race</Term>
+
+先预测：`x++` 是否 atomic，Mutex 只包 write 而 read 不加锁是否安全，Once.Do 的其他 callers 是否一定看见 initialization，`go test -race` 通过是否证明没有 race，以及 GOMAXPROCS 是否等于 OS thread 总数。
+
+## 9.1 Race Conditions：data race 与 higher-level race
+
+`balance += amount`、`x++` 都包含 read、compute、write。两个 goroutines 可读到同一旧值并覆盖彼此。data race 的结果不只“偶尔少 1”；map/slice/string/interface 等 multiword values 在 race 下可能观察不一致内部 state。
+
+<Stepper>
+  <Step title="选择 lost-update interleaving">
+    <GoplRaceMutexLab />
+  </Step>
+  <Step title="观察两个 read-modify-write 的四个事件">
+    scheduler 可在任意 instruction boundary 交错；测试中没复现不等于不存在，代码必须建立 synchronization edge。
+  </Step>
+  <Step title="用一个 Mutex 包住完整 invariant">
+    Lock 后 read/modify/write，Unlock 后下一位 caller 才进入；只保护 write 或使用不同 locks 都不能建立统一顺序。
+  </Step>
+</Stepper>
+
+常见避免策略：goroutine confinement（只有 owner 访问 state）、immutable data、channel ownership transfer、mutex/atomic serialization。monitor goroutine 很适合复杂 command state；短小共享 counter/map 常用 Mutex 更直接。
+
+logical race 示例是两个 operations 分别 lock-safe，但组合“if balance >= amount then withdraw”分两次调用，期间其他 goroutine 可改变 state。把 transaction invariant 放进同一 method/critical section，而不是让 caller 拼接 atomic-looking methods。
+
+<Callout type="trap" title="变量只有一个 machine word，所以无需同步">
+word-sized access 也可能是 data race；atomicity不等于ordering/visibility，也不保护复合 invariant。使用mutex、channel或sync/atomic并说明完整protocol。
+</Callout>
+
+## 9.2 Mutual Exclusion: sync.Mutex
+
+`sync.Mutex` zero value unlocked，可直接作为 struct unexported field。Lock blocks until acquired，Unlock releases；Unlock 未锁 mutex panic。mutex 不可在首次使用后复制，containing type 通常用 pointer receiver。
+
+<Term def="多个 fields/operations 必须一起满足的合法状态条件；同一个 Mutex 的 critical section 覆盖读取、验证与更新，所有访问路径都遵守同一 lock protocol。">critical-section invariant</Term>
+
+```go
+var mu sync.Mutex
+var balance int
+
+func Deposit(amount int) {
+    mu.Lock()
+    defer mu.Unlock()
+    balance += amount
+}
+
+func Balance() int {
+    mu.Lock()
+    defer mu.Unlock()
+    return balance
+}
+```
+
+临界区保持小，但不能小到拆断 invariant。不要持锁执行未知 callback、network/file I/O 或 blocking channel operation，避免长延迟/deadlock；必要时锁内 snapshot/state transition，锁外慢工作，再锁内带 generation 校验 commit。
+
+defer Unlock 减少多 return 漏解锁；极短 hot path 可显式 unlock，但必须测量并保证所有 paths。lock ordering 若跨多个 locks必须全局一致，最好通过 ownership/design 减少 nested locks。
+
+## 9.3 Read/Write Mutexes: sync.RWMutex
+
+RWMutex 允许多个 RLock readers 或一个 Lock writer。适合 read-mostly、read critical section 足够长且 contention 实测明显的 state；短 read 常因 overhead/cache contention 不如 Mutex。writer waiting 时实现会限制新 readers，具体 fairness 不应作为业务 contract。
+
+<Stepper>
+  <Step title="切换 Mutex、RWMutex 与 Once">
+    <GoplSynchronizationPrimitiveLab />
+  </Step>
+  <Step title="调整 readers 与 writer waiting">
+    RWMutex 允许并发 readers，但 writer 要独占；不能可靠地从 RLock upgrade 到 Lock，也不应复制 lock。
+  </Step>
+  <Step title="比较持续 state 与一次 initialization">
+    Mutex/RWMutex 守护持续变化 state；Once.Do 只解决一次初始化和安全发布，职责不同。
+  </Step>
+</Stepper>
+
+所有读写都必须使用同一个 RWMutex；只给 writers 加 Lock 而 readers 裸读仍是 race。返回 pointer/slice/map alias 后 caller 可在锁外访问 shared state，等于穿透保护，应 return snapshot/copy 或把 operation 保留在 method 内。
+
+## 9.4 Memory Synchronization：happens-before 才保证可见
+
+compiler/CPU 可在不改变单 goroutine semantics 的前提下重排 ordinary operations。一个 goroutine “先写 data 再写 ready bool”，另一个忙等 ready 后读 data，若没有 synchronization，既有 data race也没有 visibility guarantee。
+
+<Term def="sequenced-before 与 synchronizing operations 建立的跨 goroutine order；若 write happens-before read，后者才被保证观察到相应发布状态。">happens-before edge</Term>
+
+官方 [Go memory model](https://go.dev/ref/mem) 规定 channel send/receive、close/closed receive、Mutex Unlock/后续 Lock、Once.Do 等 synchronizing edges。race-free programs 获得可按 sequentially consistent interleaving 解释的保证；不要靠 sleep、logging、GOMAXPROCS=1 制造偶然顺序。
+
+```go
+var data string
+var ready = make(chan struct{})
+
+func producer() {
+    data = "initialized"
+    close(ready)
+}
+
+func consumer() {
+    <-ready
+    fmt.Println(data) // close happens-before closed receive
+}
+```
+
+sync/atomic 适合单变量状态/counter与精确 memory-order protocol，但不能自动保护 map+length+generation 等复合 invariant。优先 Mutex/channel；使用 atomic 时封装在 type 中并记录允许 states/transition。
+
+## 9.5 Lazy Initialization: sync.Once
+
+double-checked initialization 如果先裸读 cached pointer再 lock，裸读与写仍 race。`sync.Once` 的 `Do(f)` 保证 f 最多执行一次，其他 callers 等到 f return，并观察其 writes；zero value 可用。
+
+<Term def="sync.Once 保证 initialization function 最多执行一次，并使该 function 的完成 synchronizes-before 所有 Once.Do returns，从而安全发布 initialized state。">once publication</Term>
+
+```go
+var icons map[string]image.Image
+var loadIconsOnce sync.Once
+
+func Icon(name string) image.Image {
+    loadIconsOnce.Do(loadIcons)
+    return icons[name]
+}
+```
+
+若 f panic，Once 仍视为已执行，后续 Do 不重试；因此需要 retryable initialization 时设计显式 state machine，不直接 Once。若 initialization error 必须返回，可让 f 设置 package-level/closure-captured err，所有 callers 在 Do 后读取；该 error 同样被安全发布。
+
+## 9.6 The Race Detector：动态执行证据
+
+Go race detector 用 `go test -race`、`go run -race`、`go build -race` instrumentation 监测实际运行中相互冲突且未同步的 accesses，报告 stacks。它能发现 tests/load 覆盖路径上的 races，但未执行 path 不会被证明安全。
+
+```bash
+go test -race ./...
+go test -race -run TestConcurrentMemo ./memo
+go build -race ./cmd/server
+```
+
+race run 有明显 CPU/memory overhead，适合 CI/测试/staging/可控 workload。报告先找 conflicting accesses 与 goroutine creation stacks，再回到 shared owner/invariant 修复；不要用 exclude、sleep 或复制变量只消除报告而保留逻辑问题。
+
+Go 官方 [Data Race Detector](https://go.dev/doc/articles/race_detector) 文档列出典型 loop counter、map、primitive variable races。race-free 仍不保证无 deadlock、leak、atomicity violation，需专门 tests、timeouts、profiles 与 invariants。
+
+<Callout type="trap" title="race detector 没报错就关闭并发审计">
+动态工具只看执行过的 interleavings。补高并发/取消/error paths，结合静态 ownership review；即使0 races，也继续检查deadlock、goroutine leak和logical transaction race。
+</Callout>
+
+## 9.7 Example: Concurrent Non-Blocking Cache
+
+memoization cache `Get(key)` 首次计算 expensive `f(key)`，后续复用。最简单全局 mutex 若持锁执行 f，会串行化不同 keys；锁外计算再写可让 same key 重复执行。原书逐步演化到 request goroutine owner 或 per-entry ready channel。
+
+<Term def="cache 为每个 key 安装 in-flight entry，首个 caller 执行 fetch，其余 callers 等待 entry.ready；完成后一次发布 result/error，既允许不同 keys 并发又合并相同 work。">duplicate-suppression cache</Term>
+
+<Stepper>
+  <Step title="调整 same-key callers 与 duplicate suppression">
+    <GoplMemoSchedulerLab />
+  </Step>
+  <Step title="安装 in-flight entry 后在锁外 fetch">
+    锁内 lookup/insert placeholder，锁外执行慢 f；followers 找到 entry 后等待 ready，owner完成时写 result并close ready。
+  </Step>
+  <Step title="改变 GOMAXPROCS 并区分并发/并行">
+    caller goroutines 可很多，GOMAXPROCS 只是同时执行 Go code 的parallel slots；blocked waiters 不应占用 busy OS thread。
+  </Step>
+</Stepper>
+
+```go
+type entry struct {
+    result Result
+    ready  chan struct{}
+}
+
+func (m *Memo) Get(key string) Result {
+    m.mu.Lock()
+    e := m.cache[key]
+    if e == nil {
+        e = &entry{ready: make(chan struct{})}
+        m.cache[key] = e
+        m.mu.Unlock()
+        e.result = m.f(key)
+        close(e.ready)
+    } else {
+        m.mu.Unlock()
+        <-e.ready
+    }
+    return e.result
+}
+```
+
+close(ready) publishes result to waiters。production cache还需 context semantics：一个 waiter cancel 不应无条件取消所有共享 fetch；可由 entry owner/reference count决定。eviction 不能删除仍在使用 entry而破坏 lifetime；negative caching、TTL、size budget、panic recovery 与 error caching 都需 policy。
+
+## 9.8 Goroutines and Threads：runtime multiplexing
+
+goroutines 不是 OS threads。runtime scheduler 将大量 goroutines multiplex 到 OS threads；blocked channel/mutex/syscall 与 runnable work 的调度由 runtime 管理。不要把每个 goroutine 当固定 thread，也不要依赖执行 thread affinity。
+
+### 9.8.1 Growable Stacks
+
+goroutine 起始 stack 很小并可按需要 grow/shrink，创建成本远低于固定大 thread stack。这允许 many goroutines，但每个仍持有 stack、descriptor、captured references 与 application resources；百万 leaked goroutines 仍是严重 memory/liveness failure。
+
+### 9.8.2 Goroutine Scheduling
+
+runtime 在 runnable、blocked、syscall、preempted states 间调度。channel/mutex blocking 通常 park goroutine，让 thread 运行其他 work。scheduler ordering/fairness 不应作为 correctness contract；用 explicit synchronization。
+
+### 9.8.3 GOMAXPROCS
+
+GOMAXPROCS 控制可同时执行 Go code 的最大 logical processors，不是 goroutine 数，也不是 process OS thread 总数。I/O-bound work 可有远多于该值的 goroutines；CPU-bound throughput 需 measurement，盲目提高会增加 contention/cache cost。
+
+### 9.8.4 Goroutines Have No Identity
+
+Go 不提供稳定 public goroutine ID。不要从 stack text解析 ID 或实现 goroutine-local storage；把 request/user/trace data 显式作为 parameters/context 传递，把 mutable state 放进 owner object。依赖 thread-local/affinity 的 foreign API 需使用官方 runtime locking机制并严格隔离，不把它扩散为普通设计。
+
+## 本章回顾：race-free 是底线，不是全部 correctness
+
+1. data race 是未同步 conflicting access；logical race 还能在单次 access 都加锁时破坏复合 transaction。
+2. Mutex 守住完整 invariant，RWMutex 只在实测 read-heavy 场景使用，所有 aliases 都要受同一 protocol。
+3. happens-before edge 保证跨 goroutine visibility；Once 同时提供 exactly-once 和 safe publication。
+4. race detector 提供执行路径证据，不证明未执行路径、deadlock 或 leak。
+5. concurrent memo 用 per-key ready 合并 work；goroutine 由 runtime 在 threads 上调度，没有可依赖 identity。
+
+<Exercises>
+
+**问题 1：账户 API 的 Balance 与 Withdraw 各自加锁，为什么仍可能透支，怎样修复？**
+
+<Answer>caller若先Balance检查再Withdraw，两次criticalsections之间其他goroutine可提款，形成logicalcheck-then-act race，即使没有data race。把“余额足够并扣减”作为单一WithdrawIfAvailable method，在同一个Mutex critical section完成validate+update并返回result；外部I/O/logging放锁外，所有balance访问遵守同一mutex。</Answer>
+
+**问题 2：lazy config loader 需要失败后可重试，为什么不能直接 sync.Once？**
+
+<Answer>Once.Do中的function即使panic也视为已执行，普通error若保存后后续callers也只看到同一次结果，不会重试。实现explicit state machine（empty/loading/ready/failed）、generation与backoff；一个owner加载，waiters等ready，每次失败按policy允许下一代重试。状态/结果在mutex或channel edge下发布，不能double-check裸读。</Answer>
+
+**问题 3：same-key concurrent memo 怎样处理一个 waiter 取消而其他 waiter 仍需要结果？**
+
+<Answer>entry拥有sharedfetch context/result/ready，单个Get用select等待entry.ready或callerctx.Done；caller取消只停止自己的等待，不直接cancelsharedfetch。若要节省工作，entry维护waiter count并在所有waiters离开时由owner cancel。completion先写result再close ready；eviction/TTL不释放in-flight entry，errors/negativecache和panic转换需明确policy并用-race测试。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="data race" definition="未由 happens-before/atomic 排序的同址并发 conflicting accesses。" />
+  <GlossaryItem term="critical-section invariant" definition="必须由同一 lock protocol 原子维护的复合合法状态。" />
+  <GlossaryItem term="happens-before edge" definition="保证 write 对另一 goroutine read 可见的同步顺序。" />
+  <GlossaryItem term="once publication" definition="Once.Do 对一次初始化与其结果 visibility 的保证。" />
+  <GlossaryItem term="duplicate-suppression cache" definition="per-key in-flight entry 合并相同并发计算。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Go Programming Language, Chapter 9: Concurrency with Shared Variables"
+  adaptedUrl="https://www.gopl.io/"
+/>

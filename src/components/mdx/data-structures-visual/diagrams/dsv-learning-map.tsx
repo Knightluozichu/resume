@@ -1,129 +1,123 @@
-/**
- * <DsvBookMap>：《大话数据结构》全书学习地图（data-structures-visual 入门章）。
- *
- * 四列布局对应全书四大板块：
- *   入门（紫，2 章）/ 线性结构（绿，2 章）/ 树结构（橙，3 章）/ 算法应用（红，3 章）
- * 每列顶部彩色标题 pill，每个章节是一张圆角小卡片，左缘一颗板块色小圆点。
- * 底部总结栏点出全书主线。
- *
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * 全部 DESIGN token 配色，无裸 hex、无阴影。
- * 布局遵守 docs/diagram-layout-rules.md。
- */
+"use client";
 
-const VIEW_W = 720;
-const VIEW_H = 460;
+import { DsvOfficialLab } from "./official-lab";
 
-const COL_W = 156;
-const COL_GAP = 12;
-const COL_MARGIN = 36;
-const colX = (i: number) => COL_MARGIN + i * (COL_W + COL_GAP);
-
-const CARD_H = 32;
-const CARD_GAP = 10;
-const CARD_ROW = CARD_H + CARD_GAP;
-const CARDS_TOP_Y = 168;
-
-type Column = {
-  id: string;
-  name: string;
-  color: string;
-  chapters: string[];
-};
-
-const COLUMNS: readonly Column[] = [
+const chapterCases = [
   {
-    id: "intro",
-    name: "入门",
-    color: "var(--accent)",
-    chapters: ["0. 学习地图", "1. 算法复杂度"],
+    label: "第1-2章",
+    fields: [
+      ["坐标", "数据结构绪论、算法"],
+      ["核心问题", "数据如何表示，算法如何用时间与空间成本验收"],
+      ["解锁", "逻辑/物理结构、ADT、不变量、复杂度与测试边界"],
+    ],
   },
   {
-    id: "linear",
-    name: "线性结构",
-    color: "var(--success)",
-    chapters: ["2. 数组与链表", "3. 栈与队列"],
+    label: "第3-5章",
+    fields: [
+      ["坐标", "线性表、栈与队列、串"],
+      ["核心问题", "线性关系如何存储、约束访问并完成模式匹配"],
+      ["解锁", "顺序/链式取舍、LIFO/FIFO、朴素匹配与KMP"],
+    ],
   },
   {
-    id: "trees",
-    name: "树结构",
-    color: "var(--warning)",
-    chapters: ["4. 树与二叉搜索树", "5. 堆", "6. 图"],
+    label: "第6-7章",
+    fields: [
+      ["坐标", "树、图"],
+      ["核心问题", "一对多和多对多关系如何存储、遍历与优化"],
+      ["解锁", "二叉树/森林/赫夫曼、遍历、生成树、路径与DAG"],
+    ],
   },
   {
-    id: "algorithms",
-    name: "算法应用",
-    color: "var(--danger)",
-    chapters: ["7. 排序算法", "8. 查找算法", "9. 总复习"],
+    label: "第8-9章",
+    fields: [
+      ["坐标", "查找、排序"],
+      ["核心问题", "如何利用或建立组织结构来定位和重排记录"],
+      ["解锁", "查找结构、散列、七类排序、稳定性与外排序"],
+    ],
+    alert: "本书官方目录是9章。导学和总复习是站内导航与验收页，不替代任何官方章节。",
   },
-];
+] as const;
+
+const dependencyCases = [
+  {
+    label: "表示",
+    fields: [
+      ["先问", "元素之间是什么关系，内存中如何落地？"],
+      ["依赖", "第1章的逻辑结构、物理结构与ADT"],
+      ["证据", "画出元素、链接/索引、边界与owner"],
+    ],
+  },
+  {
+    label: "操作",
+    fields: [
+      ["先问", "允许哪些操作，每次操作保持什么不变量？"],
+      ["依赖", "第2章算法设计与第3-7章结构操作"],
+      ["证据", "前置条件、状态转移、后置条件与失败路径"],
+    ],
+  },
+  {
+    label: "成本",
+    fields: [
+      ["先问", "规模增长时比较、移动、空间和I/O如何变化？"],
+      ["依赖", "第2章复杂度与各章具体操作模型"],
+      ["证据", "上下界、最坏输入、计数器与实测曲线"],
+    ],
+  },
+  {
+    label: "选择",
+    fields: [
+      ["先问", "工作负载和硬约束排除哪些候选？"],
+      ["依赖", "第8-9章查找/排序与前面全部结构"],
+      ["证据", "决策记录、候选对比、故障注入与回退"],
+    ],
+    alert: "学习依赖不是单向背诵：查找或排序失败时，要反向回查表示、不变量和成本模型中第一个失效点。",
+  },
+] as const;
+
+const gateCases = [
+  {
+    label: "预测",
+    fields: [
+      ["动作", "执行前写出结构状态、返回值和复杂度趋势"],
+      ["通过证据", "预期具体到索引、节点、边、比较或移动次数"],
+      ["失败信号", "只说算法应该能工作"],
+    ],
+  },
+  {
+    label: "跟踪",
+    fields: [
+      ["动作", "逐步记录状态转移并检查局部不变量"],
+      ["通过证据", "每一步都能解释为何合法、下一步为何可执行"],
+      ["失败信号", "只有最终输出，没有中间结构证据"],
+    ],
+  },
+  {
+    label: "扰动",
+    fields: [
+      ["动作", "注入空、单项、重复、极值、退化和资源不足"],
+      ["通过证据", "结果、错误或回滚都满足公开契约"],
+      ["失败信号", "示例只覆盖一个整洁输入"],
+    ],
+  },
+  {
+    label: "迁移",
+    fields: [
+      ["动作", "把同一需求改为另一工作负载并重新选结构"],
+      ["通过证据", "能说明取舍、修改测试并回证选择"],
+      ["失败信号", "记住实现，却无法用于新问题"],
+    ],
+    alert: "一章只有在预测、跟踪、扰动和迁移四类证据一致时才算掌握。",
+  },
+] as const;
 
 export function DsvBookMap() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="大话数据结构全书学习地图。四列从左到右对应四大板块：入门（紫色，2 章：学习地图、算法复杂度）、线性结构（绿色，2 章：数组与链表、栈与队列）、树结构（橙色，3 章：树与二叉搜索树、堆、图）、算法应用（红色，3 章：排序算法、查找算法、总复习）。底部总结：从线性到树到图到算法，四段递进覆盖数据结构全貌。"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          {/* ===== 标题 ===== */}
-          <text x={VIEW_W / 2} y="36" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">
-            大话数据结构 · 全书学习地图
-          </text>
-          <text x={VIEW_W / 2} y="58" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
-            从线性 → 树 → 图 → 算法，四段递进覆盖数据结构全貌
-          </text>
+  return <DsvOfficialLab cases={chapterCases} caption="官方9章从表示与算法基础推进到结构、查找和排序。" tone="cyan" />;
+}
 
-          {/* ===== 顶部路径箭头条 ===== */}
-          <rect x={COL_MARGIN} y="76" width={VIEW_W - COL_MARGIN * 2} height="32" rx="10" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.4" />
-          <text x={VIEW_W / 2} y="97" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
-            <tspan fontWeight="700" fill="var(--accent)" fontSize="13">学习路径</tspan>
-            <tspan>{"　"}</tspan>
-            <tspan fill="var(--text-primary)">数据怎么存 → 结构怎么变 → 数据怎么处理</tspan>
-          </text>
+export function DsvLearningDependencyLab() {
+  return <DsvOfficialLab cases={dependencyCases} caption="表示、操作、成本与选择构成全书递进依赖。" tone="violet" />;
+}
 
-          {/* ===== 四列 ===== */}
-          {COLUMNS.map((col, ci) => {
-            const x = colX(ci);
-            return (
-              <g key={col.id}>
-                {/* 列头彩色 pill */}
-                <rect x={x} y="124" width={COL_W} height="32" rx="8" fill={col.color} fillOpacity="0.12" stroke={col.color} strokeWidth="1.2" />
-                <text x={x + COL_W / 2} y="145" textAnchor="middle" fontSize="13" fontWeight="700" fill={col.color}>{col.name}（{col.chapters.length}）</text>
-
-                {/* 章节卡片 */}
-                {col.chapters.map((name, pi) => {
-                  const cy = CARDS_TOP_Y + pi * CARD_ROW;
-                  return (
-                    <g key={name}>
-                      <rect x={x} y={cy} width={COL_W} height={CARD_H} rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-                      <circle cx={x + 12} cy={cy + CARD_H / 2} r="3" fill={col.color} />
-                      <text x={x + COL_W / 2} y={cy + CARD_H / 2 + 4} textAnchor="middle" fontSize="11" fill="var(--text-primary)">{name}</text>
-                      {pi < col.chapters.length - 1 && (
-                        <line x1={x + COL_W / 2} y1={cy + CARD_H} x2={x + COL_W / 2} y2={cy + CARD_ROW - 2} stroke={col.color} strokeWidth="1.4" strokeOpacity="0.6" />
-                      )}
-                    </g>
-                  );
-                })}
-              </g>
-            );
-          })}
-
-          {/* ===== 底部总结栏 ===== */}
-          <rect x="60" y="384" width={VIEW_W - 120} height="52" rx="12" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.4" strokeOpacity="0.4" />
-          <text x={VIEW_W / 2} y="407" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--text-primary)">
-            全书 10 章 · 四段递进
-          </text>
-          <text x={VIEW_W / 2} y="426" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
-            先掌握复杂度分析工具，再用线性结构打基础，进阶树与图，最后用排序与查找实战
-          </text>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        全书分四大板块：入门讲清概念与复杂度，线性结构是基础存储方式，树结构解决层次与网络关系，算法应用是实战场景。四段层层递进，从「怎么存」到「怎么处理」。
-      </figcaption>
-    </figure>
-  );
+export function DsvStudyGateLab() {
+  return <DsvOfficialLab cases={gateCases} caption="预测、跟踪、扰动与迁移把阅读转化为可复查证据。" tone="emerald" />;
 }

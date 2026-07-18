@@ -1,112 +1,261 @@
 ---
-title: 二叉搜索树的后序遍历序列
+title: "面试题33：二叉搜索树的后序遍历序列"
 type: C
-section: 树
-order: 1
-description: 判断一个序列是否为二叉搜索树后序遍历序列。
+section: "第4章 解决面试题的思路"
+order: 37
+description: "以每个连续子序列末尾为根，扫描左右分割并排除右段中的小值，再递归验证左右子树的后序结构。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/33_SquenceOfBST/SquenceOfBST.cpp"
 draft: false
 ---
 
-{/* 知识点清单：后序定义、分区点、递归验证；原书章节：面试题33。 */}
+import { BstPostorderPartitionDiagram, BstPostorderRecursionMap, BstPostorderFailureDiagram, BstPostorderOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/squence-of-bst";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用后序遍历性质定义左右子树边界。
-- 能把序列递归切分为左右子树区间。
-- 能正确处理重复值边界。
+- 能解释后序末尾根如何把连续序列分成左右子树
+- 能计算合法与非法序列的分割点和首个冲突位置
+- 能实现作者递归扫描及线性单调栈验证版本
+- 能分析空序列、互异值前提、重复策略和最坏复杂度
+- 能设计覆盖作者八组完整树、单链、单点、反例与空输入测试
 
 </Objectives>
 
-## 直觉引入
+## 从“最后一个数为什么决定整段分区”开始
 
-后序序列最后一个元素是根。BST 的左子树都小于根，右子树都大于根。
-所以只要能在每一段里找出第一个 `> root` 的分界，再递归验证左右区间即可。
+先预测：序列7、4、6、5的最后一个数5若作为根，第一个大于5的7意味着右子树从7开始；但随后4又小于5。右子树中不能出现比根小的节点，所以不需要真的造树就能判false。
 
-## 算法思路
+二叉树后序顺序是左子树、右子树、根，因此任意非空连续子序列的<Term def="后序子序列最后一个值，对应当前子树的根节点。">后序根</Term>都在末尾。二叉搜索树又要求左侧所有值小于根，右侧所有值大于根。于是“**最后一个数字是根节点**”同时给出了结构位置和值域分割依据。
 
-1. 递归函数 `verify(l, r)`，区间 `[l, r]` 的最后元素是当前根。
-2. 从 `l` 到 `r-1` 找第一个 `> rootVal` 的位置 `m`。
-3. `m` 前必须都 `< rootVal`；`m` 后到 `r-1` 必须都 `> rootVal`。
-4. 左右区间分别验证。
+<BstPostorderPartitionDiagram />
 
-<BalancedTreeDiagram />
+题目判断的是“**二叉搜索树的后序遍历序列**”。作者明确假设所有数字互不相同，所以小于与大于是严格关系，不需要决定重复键落左还是落右。
 
-## 思考引导
+## 先找分割点，再完整检查右段
 
-### 1) 先问问题，不先画树
-后序序列是否是 BST，不是要你造树再判断，而是要用值域规则直接验真假。
+令root等于末尾值。从序列开头扫描，首个大于root的位置i是<Term def="左段结束、右段开始的位置；可等于0或根下标，表示一侧为空。">分割点</Term>。i之前的值都未触发大于条件，在互异前提下全部小于root，构成候选左子树。
 
-### 2) 识别不变式
-后序最后一个是根，左段全部小于根，右段全部大于根。递归时每层收紧值域，剩余元素才可能合法。
+从i继续扫描到根前，任何值小于root都形成<Term def="候选右子树连续区域中出现小于当前根的值，证明本层无法构成BST。">右段冲突</Term>，立即返回false。若没有冲突，顶层满足“**左子树小于根，右子树大于根**”，但还不能返回true：左右段内部也必须分别能形成二叉搜索树。
 
-### 3) 为什么它一定成立
-BST 的定义决定了左/右子树取值范围嵌套，值域剪枝是充分且必要的条件。
+<BstPostorderFailureDiagram />
 
-### 4) 常见误区
-只看相邻关系无法检验跨段错位。必须有全局值域边界，且按递归返回判断。
+只找第一个大值而不检查后续，会错误接受7、4、6、5；只检查当前根而不递归，又可能接受子段内部违反其自身根的序列。两个阶段分别保证当前层分区和所有后代分区。
 
-### 5) 你能找到一个反例吗
-后序 [1,3,2,6,5] 看似“部分有序”，但值域验证会直接判错，适合测试你的递归边界。
+## 忠实还原作者递归实现
 
-### 6) 迁移到下一题
-序列合法性验证常见于语法树、权限树。先从局部值域约束而非局部相邻约束起步。
-## 代码对照
+作者接收可写int数组指针，但函数不修改内容。空指针或长度不正直接false；单元素取根后两次扫描均为空，左右默认true，最终true。
 
-<CodeTabs>
-  <Tab label="C++">
 ```cpp
-#include <vector>
-
-class Solution {
-public:
-    bool verifyPostorder(const std::vector<int>& postorder) {
-        return verify(postorder, 0, (int)postorder.size() - 1);
+bool VerifySquenceOfBST(int sequence[], int length) {
+    if (sequence == nullptr || length <= 0) {
+        return false;
     }
 
-private:
-    bool verify(const std::vector<int>& a, int l, int r) {
-        if (l >= r) return true;
+    const int root = sequence[length - 1];
 
-        int rootVal = a[r];
-        int m = l;
-        while (m < r && a[m] < rootVal) ++m;
-
-        for (int i = m; i < r; ++i) {
-            if (a[i] < rootVal) return false;
+    int i = 0;
+    for (; i < length - 1; ++i) {
+        if (sequence[i] > root) {
+            break;
         }
-
-        return verify(a, l, m - 1) && verify(a, m, r - 1);
     }
-};
-```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-function verifyPostorder(postorder: number[]): boolean {
-    const dfs = (l: number, r: number): boolean => {
-        if (l >= r) return true;
 
-        const root = postorder[r];
-        let m = l;
-        while (m < r && postorder[m] < root) m++;
-
-        for (let i = m; i < r; i++) {
-            if (postorder[i] < root) return false;
+    for (int j = i; j < length - 1; ++j) {
+        if (sequence[j] < root) {
+            return false;
         }
+    }
 
-        return dfs(l, m - 1) && dfs(m, r - 1);
-    };
+    bool left = true;
+    if (i > 0) {
+        left = VerifySquenceOfBST(sequence, i);
+    }
 
-    return dfs(0, postorder.length - 1);
+    bool right = true;
+    if (i < length - 1) {
+        right = VerifySquenceOfBST(
+            sequence + i, length - i - 1);
+    }
+    return left && right;
 }
 ```
-  </Tab>
-</CodeTabs>
+
+左递归长度是i，覆盖下标0到i减1；右递归从sequence+i开始，长度length减i减1，排除最后的root。i为0表示左子树空，i等于length减1表示右子树空，都不调用长度0递归，因为作者顶层把长度0定义为false。
+
+<BstPostorderRecursionMap />
+
+把左右默认设为true，相当于“空子树在父节点内部合法”；但独立传入空序列仍按作者API返回false。这两个语义不矛盾：递归实现选择不调用空段，外部接口则拒绝没有节点的输入。
+
+<Callout type="trap" title="直接递归长度0并沿用作者的false基例">
+叶节点的左右子树都是空段，若无条件递归并让空段返回false，任何叶子都会使整棵树失败。要么像作者一样跳过空段，要么把内部递归的空区间定义为true，并单独处理外部空输入政策。
+</Callout>
+
+## 正确性证明
+
+对子序列长度归纳。长度1只含根，是合法BST后序。假设所有更短非空序列都能被正确判断。
+
+当前末尾必是根。若从首个大于根的元素开始，右段出现小于根的值，则不存在连续“左、右、根”分区，序列必非法。若当前分区全部满足严格大小关系，那么整段合法当且仅当候选左段和右段各自是BST后序。
+
+算法递归的正是这两个更短连续子段，由归纳假设分别正确。两边都true时，可把其对应BST接到root左右形成一棵BST，后序恰为原序列；任一边false时不存在合法子树。因此递归条件既必要又充分。
+
+把<Term def="对分割后的左右连续片段重复执行末尾取根、大小分区和合法性判断。">递归验证子序列</Term>看作构造性证明：算法虽不分配节点，却隐含地给出每棵子树的根与左右范围。
+
+## 复杂度为何最坏是平方
+
+每层递归要线性扫描当前子段。平衡分割时工作量近似n加两个n/2问题，总时间O(n log n)；单链序列1、2、3、4、5或5、4、3、2、1每次只缩短1，扫描长度之和为n加n减1直到1，最坏O(n²)。
+
+递归栈平衡时O(log n)，单链时O(n)，极长输入可能调用栈溢出。原书方案突出后序分区直觉；若生产数据很大，可用单调栈在线性时间验证。
+
+返回布尔值不创建树，除递归栈外控制空间如上。使用数组指针和长度不会复制子序列；若每次slice新vector，会额外产生大量复制与分配，最坏时间和内存都恶化。
+
+## O(n)单调栈替代法
+
+逆向读取后序得到根、右、左顺序。维护一个递减关系的节点栈和<Term def="从右子树退回某个祖先左子树后，后续值必须严格小于的祖先根界限。">值域上界</Term>upper。读到更小值时不断弹出，表示从右链回退到祖先左侧，并把最后弹出的祖先设为新上界；若后续值大于上界，就跨回了已关闭的右侧区域。
+
+```cpp
+#include <limits>
+#include <stack>
+#include <vector>
+
+bool verifyPostorderLinear(const std::vector<int>& postorder) {
+    if (postorder.empty()) {
+        return false;  // Match the author's external policy.
+    }
+
+    long long upper = std::numeric_limits<long long>::max();
+    std::stack<int> ancestors;
+
+    for (auto it = postorder.rbegin();
+         it != postorder.rend(); ++it) {
+        const int value = *it;
+        if (value > upper) {
+            return false;
+        }
+
+        while (!ancestors.empty() &&
+               value < ancestors.top()) {
+            upper = ancestors.top();
+            ancestors.pop();
+        }
+        ancestors.push(value);
+    }
+    return true;
+}
+```
+
+每个值入栈一次、出栈至多一次，时间O(n)、空间O(n)。这段同样假设值互异；若重复允许在右侧或左侧，比较符号和上界等号政策必须成套修改。不要只改一个小于号。
+
+递归版更直接对应作者源码和证明；单调栈版更适合大输入，但状态含义较难在面试中首次推导。章节应先掌握分区递归，再用上界理解优化。
+
+## 作者八组测试覆盖什么
+
+Test1序列4、8、6、12、16、14、10对应三层完整BST；Test2的4、6、7、5对应根5、左4、右7且7的左孩子6。两者验证左右子树同时存在及内部递归。
+
+Test3递增1到5对应全左链，Test4递减5到1对应全右链，锁定一侧为空和O(n)递归深度。Test5单值5返回true。
+
+Test6的7、4、6、5在根5右段发现4；Test7的4、6、12、8、16、14、10在根10右段发现8，都是跨位置冲突。Test8传nullptr、0，返回false。源码总计八组。
+
+<BstPostorderOfficialCaseLab />
+
+```cpp
+#include <cassert>
+#include <vector>
+
+void testPostorder() {
+    assert(verifyPostorderLinear(
+        {4, 8, 6, 12, 16, 14, 10}));
+    assert(verifyPostorderLinear({4, 6, 7, 5}));
+    assert(verifyPostorderLinear({1, 2, 3, 4, 5}));
+    assert(verifyPostorderLinear({5, 4, 3, 2, 1}));
+    assert(verifyPostorderLinear({5}));
+    assert(!verifyPostorderLinear({7, 4, 6, 5}));
+    assert(!verifyPostorderLinear(
+        {4, 6, 12, 8, 16, 14, 10}));
+    assert(!verifyPostorderLinear({}));
+}
+```
+
+还应让递归版与单调栈版对随机互异数组交叉校验。生成合法样本时先构造随机BST再取后序；非法样本不能只随机交换一次并假设必非法，因为交换后仍可能对应另一棵BST，必须以参考验证器给出标签。
+
+<Callout type="trap" title="把单调递增或递减序列当成明显非法">
+后序递增可对应每个节点只有左孩子的BST，递减可对应每个节点只有右孩子的BST。它们不仅合法，还是递归版最坏时间与最深调用栈的关键测试。
+</Callout>
+
+## 重复值、空序列与接口契约
+
+作者题干说明所有数字互不相同。源码寻找左段时遇到大于root才停止，右段只拒绝小于root，因此等于root的值会落入右段并可能被接受；这不是重复键策略，而是前提保证等号永不出现。
+
+若业务允许重复，必须先定义BST不变量：重复全部放左、全部放右、节点计数聚合，或禁止。分割扫描、右段检查、单调栈上界与测试都要按同一政策修改。仅因为当前源码偶然接受某些重复序列，不能推断作者支持重复。
+
+现代平台常把空序列看作空树的合法后序并返回true；作者Test8明确期待false。可把外部入口的空输入政策与内部空子树基例分开，让API文档和测试一致。
+
+输入指针还要求至少可读length个int。负长度被拒绝，但过大错误长度仍会越界；vector或span能携带真实范围。函数只读数据，应改为const int指针表达契约。
+
+## 工程边界与诊断
+
+若只返回false，调用方不知道在哪一层失败。可以返回当前子序列范围、根值、分割点和右段首个小值；Test7会报告顶层root10、右段起点12、冲突值8。诊断不改变验证逻辑，却显著提高可解释性。
+
+一份稳定诊断应使用原数组下标，而不是递归子指针的局部下标。例如记录range=[begin,end)、rootIndex=end减1、splitIndex与conflictIndex；递归右段时只更新begin为split，end为旧rootIndex。这样Test1的顶层范围是[0,7)，左段[0,3)，右段[3,6)，日志可直接对应原序列。若复制slice后只报告局部位置，调用方还要累加多层偏移，容易在空左段或空右段处产生一位误差。
+
+对成功序列也可输出一棵“范围证明树”：每个节点保存根值和左右区间，不必分配真实BinaryTreeNode。它既能展示递归结构，也能验证所有区间互不重叠且覆盖除各层根外的元素；需要真正重建BST时，再按同样范围递归创建节点。
+
+递归实现可先验证右段再递归，像作者一样在顶层冲突处尽早返回。左右递归使用逻辑与短路，左失败后可不验证右；若需要收集全部错误，则要继续两侧并聚合诊断，时间仍受最坏平方界。
+
+并发修改输入会使不同递归层看到不同序列，必须使用不可变快照或外部读锁。对浮点值，NaN破坏严格全序，不应直接复用比较；提供全序比较器或拒绝非有限数。
+
+<Stepper>
+  <Step title="取子序列最后一个数为根"><BstPostorderPartitionDiagram />根前连续区域只能先是小值左段，再是大值右段。</Step>
+  <Step title="检查右段是否回落到根以下"><BstPostorderFailureDiagram />一旦进入右段又发现小值，当前层立即false。</Step>
+  <Step title="递归验证左右连续子段"><BstPostorderRecursionMap />顶层分区正确仍不够，每个子段都要重复相同规则。</Step>
+  <Step title="跑完八组官方序列"><BstPostorderOfficialCaseLab />完整树、双单链、单点、跨分区反例和空输入锁定契约。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 后序序列最后一个数字是当前子树根节点。
+2. 从开头到首个大于根的值是候选左段，其后是候选右段。
+3. 右段出现小于根的值，序列立即非法。
+4. 当前分区通过后仍要递归验证左右子序列。
+5. 作者跳过空子段，但外部空输入返回false，单元素返回true。
+6. 递归版平均依形状而定，单链最坏O(n²)、栈深O(n)。
+7. 逆序单调栈以祖先上界实现O(n)验证。
+8. 作者假设值互异，重复键策略不能从比较符号偶然行为推断。
+
+<Exercises>
+
+**问题 1：4、8、6、12、16、14、10如何完成第一次分割？**
+
+<Answer>根是10，首个大于10的是12。左段4、8、6全部小于10，右段12、16、14全部大于10；再分别以6和14为根递归验证。</Answer>
+
+**问题 2：7、4、6、5在哪一步失败？**
+
+<Answer>根5，首个元素7已启动右段；继续扫描时4小于5，违反右子树所有值大于根的条件，顶层即可返回false。</Answer>
+
+**问题 3：为什么递增1、2、3、4、5是合法后序？**
+
+<Answer>根5之前所有值都小于5，右子树为空；递归后根4之前又都小于4。它对应5到1的全左链，每层后序都是子树后根，因此合法。</Answer>
+
+**问题 4：空序列在递归内部与外部为何可有不同语义？**
+
+<Answer>空子树是合法结构组成，所以内部空区间应视为true或直接跳过；作者外部API把“没有给出序列”视为非法输入并返回false。入口政策与归纳基例应分层定义。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="后序根">当前连续后序子序列最后一个、代表子树根的值。</GlossaryItem>
+  <GlossaryItem term="分割点">第一个大于当前根的元素位置，即右段起点。</GlossaryItem>
+  <GlossaryItem term="递归验证子序列">对左右连续片段重复后序根和大小分区判断。</GlossaryItem>
+  <GlossaryItem term="值域上界">单调栈从右侧回退到左子树后不可越过的祖先根界限。</GlossaryItem>
+  <GlossaryItem term="右段冲突">候选右子树区域中出现小于当前根的值。</GlossaryItem>
+</Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题33"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/33_SquenceOfBST/SquenceOfBST.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

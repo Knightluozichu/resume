@@ -1,118 +1,288 @@
 ---
-title: "光照模型与着色"
+title: "局部光照、BRDF 与表面着色"
 type: B
 section: "计算机图形学与渲染"
 order: 5
-description: "Phong光照模型与着色模式"
+description: "从 Lambert/Phong/Blinn-Phong 到 BRDF 约束、插值频率、法线、可见性和线性颜色"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://www.pearson.com/en-gb/subject-catalog/p/computer-graphics-with-open-gl-pearson-new-international-edition/P200000004424/9781292037196"
 draft: false
 ---
 
-import { Cg4LightingModelsDiagram } from "@/components/mdx/computer-graphics-4e/diagrams/cg4-lighting-models";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  Cg4LightingModelsDiagram,
+  Cg4ShadingMethodsDiagram,
+} from "@/components/mdx/computer-graphics-4e/diagrams/cg4-lighting-models";
+import { Cg4StepFlowDiagram } from "@/components/mdx/computer-graphics-4e/diagrams/cg4-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 理解Phong光照模型的三个分量
-- 掌握Blinn-Phong改进
-- 区分Flat/Gouraud/Phong着色模式
-- 了解BRDF与物理正确性
+
+- 能描述入射光、visibility、surface normal、BRDF、观察方向与颜色出口组成的直接光合同
+- 能实现 Lambert、经典 Phong/Blinn-Phong 和受约束 BRDF 的线性 HDR 对照
+- 能比较 Flat、Gouraud 与 Phong shading 的求值频率、插值对象和高光边界
+- 能推导 BRDF 非负、互易和能量守恒检查，并用 furnace/reference 场景验证
+
 </Objectives>
 
-## 直觉引入
+## 光照模型不是“加三种颜色”
 
-光照就像舞台灯光——环境光提供基础亮度（不会全黑），漫反射让物体面向光的面更亮（Lambert定律），镜面反射产生高光斑点（反射方向对准眼睛时最亮）。三者叠加就是Phong模型。
+**Illumination Models and Surface-Rendering Methods / 光照模型与表面绘制**分两个问题：光如何到达表面，表面又如何把入射光散射到观察方向。局部 illumination 只显式计算光源到当前点的一次路径；shadow visibility、间接反弹和参与介质需要额外算法。
 
-## 概念讲解
-
-<Term def="模拟间接光照的常数项，确保阴影区不全黑">环境光</Term><Term def="Lambert定律，与法线和光源方向夹角余弦成正比">漫反射</Term><Term def="模拟高光，与反射向量和观察向量夹角的幂成正比">镜面反射</Term><Term def="双向反射分布函数，描述入射光如何反射到出射方向">BRDF</Term>
-
-### Phong模型
-总光照 = 环境光(I*k_a) + 漫反射(I*k_d*max(N.L,0)) + 镜面反射(I*k_s*max(R.V,0)^n)
-
-### Blinn-Phong改进
-用半向量H=normalize(L+V)替代反射向量R：max(N.H,0)^n。计算更简单，高光更自然。
-
-### 着色模式
-Flat(每图元一色)、Gouraud(顶点着色插值颜色)、Phong(片段着色插值法线)。质量递增性能递减。
-
-## 交互Demo
-
-> 猜一猜：为什么Blinn-Phong比Phong更常用，即使效果几乎一样？
+<Term def="沿给定方向、单位投影面积和单位立体角传输的光功率密度，是渲染中常用的方向光量">Radiance</Term>在线性空间中沿无参与介质的光线保持不变，适合作为 shader 的光输运量。显示 RGB code 不是 radiance，不能直接用于点积光照。
 
 <Cg4LightingModelsDiagram />
 
-<Stepper>
-<Step title="第一步：环境光">
-I*k_a，模拟间接光的基础亮度，避免阴影区全黑。常数项与方向无关。
-</Step>
-<Step title="第二步：漫反射">
-I*k_d*max(N.L,0)，Lambert余弦定律。法线与光源方向夹角越小越亮，背光面为0。
-</Step>
-<Step title="第三步：镜面反射">
-I*k_s*max(R.V,0)^n（Phong）或I*k_s*max(N.H,0)^n（Blinn-Phong）。n为光泽度，越大高光越集中。
-</Step>
-</Stepper>
+## Lambert 漫反射与 cosine 项
 
-## 代码对照
+<Term def="各方向反射相同、以 albedo 除以 pi 归一化的理想 diffuse BRDF">Lambert BRDF</Term>为：
+
+$$
+f_d(\omega_i,\omega_o)=\frac{\rho_d}{\pi}.
+$$
+
+单个方向光的直接出射 radiance：
+
+$$
+L_o=V(x,\omega_i)L_i\frac{\rho_d}{\pi}
+\max(\mathbf n\cdot\omega_i,0).
+$$
+
+Cosine 项来自表面投影面积，不是 BRDF 本身。$V$是 visibility，阴影时为 0；不计算 V 的“Lambert 光照”会穿墙。
+
+经典教学式常把 $1/\pi$吸收入经验系数 $k_d$，这在调色上可用，但系数不再直接等于物理 albedo。文档必须说明采用哪种约定。
+
+## Ambient 是占位近似
+
+<Term def="以常数或低阶场给未显式计算的间接光提供基础亮度的经验项，不等于真实全局光照">Ambient 项</Term>常写作 $k_aI_a$，能避免全黑，却没有方向、遮挡、反弹颜色或能量来源。它不是“模拟完成了间接光照”，只是占位近似。
+
+更有结构的替代包括 ambient occlusion 调制、light probes/irradiance volumes、environment map convolution、baked lightmaps 或实时 global illumination；这些仍各有可见性、频率和能量边界。
+
+## Phong 与 Blinn-Phong 是经验高光
+
+经典 Phong specular：
+
+$$
+S_P=k_s\max(\mathbf r\cdot\mathbf v,0)^{n_P},
+$$
+
+Blinn-Phong 使用 half vector $\mathbf h=(\mathbf l+\mathbf v)/\|\mathbf l+\mathbf v\|$：
+
+$$
+S_B=k_s\max(\mathbf n\cdot\mathbf h,0)^{n_B}.
+$$
+
+<Term def="以反射向量或半向量幂函数近似镜面高光形状的经验局部光照模型">Phong/Blinn-Phong 高光</Term>的指数不能直接视为同一 roughness；相似 lobe 宽度需要转换/拟合。现代 GPU 上哪个“更快”取决于编译器、归一化和整体 shader，不能沿用早期硬件直觉断言。
+
+未归一化的经验 lobe 随指数改变总能量；diffuse 与 specular 也可能相加超过入射能量。可使用归一化形式作为过渡，例如某些 Blinn lobe 使用与 n 相关的 normalization，但它仍不等同完整 microfacet BRDF。
+
+## BRDF 给出可检查约束
+
+<Term def="把某方向入射 irradiance 微分映射为另一方向出射 radiance 微分的双向反射分布函数">BRDF</Term>写为：
+
+$$
+f_r(\omega_i,\omega_o)=\frac{dL_o(\omega_o)}{dE_i(\omega_i)}.
+$$
+
+理想被动、不带特殊非互易效应的表面常检查：
+
+1. **Nonnegative**：$f_r\ge0$；
+2. **Reciprocity**：$f_r(\omega_i,\omega_o)=f_r(\omega_o,\omega_i)$；
+3. **Energy conservation**：
+
+$$
+\forall\omega_o:\quad
+\int_{\Omega^+}f_r(\omega_i,\omega_o)(\mathbf n\cdot\omega_i)d\omega_i\le1.
+$$
+
+Classic Phong 参数并不自动满足这些条件。Physically based 不只是“用了 BRDF 这个词”，还要求参数意义、Fresnel、normal distribution、geometry masking 和能量分配一致。
+
+## 点光衰减与单位
+
+理想点光源的 irradiance 随距离平方衰减：
+
+$$
+E\propto\frac{I}{r^2}.
+$$
+
+r 接近 0 时理想模型奇异，真实光源有有限面积。工程上可用最小半径/area-light 模型稳定，而不是随意加入常数线性衰减后仍称物理正确。若沿用 $1/(k_c+k_lr+k_qr^2)$经验式，应标明它是艺术控制。
+
+Light color/intensity、albedo 和 framebuffer 要在线性空间组合。sRGB texture 采样应解码；tone mapping 和显示编码在 HDR 累加后进行。
+
+## Surface Rendering：Flat、Gouraud、Phong
+
+这里的 **Phong shading** 指插值 normal 后逐 fragment 求 illumination；**Phong reflection model** 指经验高光，两者是不同概念，可以组合也可以分开。
+
+<Cg4ShadingMethodsDiagram />
+
+- Flat shading 使用 primitive normal，适合刻面与调试拓扑；
+- Gouraud shading 在 vertices 计算颜色再插值，三角形内部很窄的高光可能所有顶点都没采到而消失；
+- Phong shading 插值 normal（或 tangent frame）并重新 normalize，逐 fragment 计算光照，能表现内部高光；
+- Interpolated normal 是几何表面的平滑近似，法线贴图还需正确 tangent space。
+
+非均匀 model scale 下 normal 用 inverse-transpose；镜像变换、two-sided material 和 back-face 需要统一 normal orientation。直接 `normalize(Normal)`不能修复上游错误变换。
+
+## 线性空间参考 Shader
 
 ```glsl
-#version 330 core
-in vec3 Normal;
-in vec3 FragPos;
-uniform vec3 lightPos, viewPos, lightColor, objectColor;
-void main() {
-    vec3 ambient = 0.1 * lightColor;
-    vec3 N = normalize(Normal);
-    vec3 L = normalize(lightPos - FragPos);
-    float diff = max(dot(N, L), 0.0);
-    vec3 diffuse = diff * lightColor;
-    vec3 V = normalize(viewPos - FragPos);
-    vec3 H = normalize(L + V); // Blinn-Phong
-    float spec = pow(max(dot(N, H), 0.0), 32.0);
-    vec3 specular = spec * lightColor;
-    FragColor = vec4((ambient + diffuse + specular) * objectColor, 1.0);
+vec3 shadeDirect(
+    vec3 worldPosition,
+    vec3 worldNormal,
+    vec3 viewPosition,
+    vec3 linearAlbedo,
+    PointLight light,
+    float visibility) {
+  vec3 N = normalize(worldNormal);
+  vec3 toLight = light.position - worldPosition;
+  float distance2 = max(dot(toLight, toLight), light.radius * light.radius);
+  vec3 L = toLight * inversesqrt(max(dot(toLight, toLight), 1e-8));
+  vec3 V = normalize(viewPosition - worldPosition);
+  float nDotL = max(dot(N, L), 0.0);
+
+  vec3 diffuseBrdf = linearAlbedo / 3.14159265;
+  vec3 H = normalize(L + V);
+  float specularLobe = pow(max(dot(N, H), 0.0), material.shininess);
+  vec3 empiricalSpecular = material.specularColor * specularLobe;
+
+  vec3 incidentRadiance = light.intensity / distance2;
+  return visibility * incidentRadiance * nDotL *
+      (diffuseBrdf + empiricalSpecular);
 }
 ```
 
-Blinn-Phong用半向量H=normalize(L+V)替代反射向量R，计算更简单且高光更自然。32.0是光泽度指数，越大高光越集中。
+这段刻意标记 empirical specular，避免把混合模型误称完全物理。实际还要在 $N\cdot L>0$ 且 $N\cdot V>0$半球处理高光，并由材质策略限制 diffuse/specular 能量。
+
+## 用数值和参考场景验光照
+
+```cpp
+void validateLightingModel() {
+  assertNear(lambert({0,0,1}, {0,0,1}), 1.0f);
+  assertNear(lambert({0,0,1}, {1,0,0}), 0.0f);
+  assertEqual(shadeWithVisibility(0.0f), Vec3(0));
+  assertFinite(shadePointLightAtMinimumRadius());
+  compareImage("white-furnace", renderWhiteFurnaceScene());
+  compareImage("gouraud-vs-phong", renderInteriorHighlightScene());
+}
+```
+
+White furnace 让材质处于均匀白环境，检查被动材质是否凭空增能；经典 local model 未必通过，但差异能量化其边界。Gray card、法线球、单方向光、窄高光三角形和 inverse-square 距离序列构成最小回归集。
+
+## 三步建立光照实验
+
+<Stepper>
+<Step title="第一步：冻结向量与颜色合同">
+
+统一 world/view space、N/L/V 方向、normal transform、linear texture decode、light units 和 output encoding。
+
+<Cg4StepFlowDiagram
+  caption="向量和颜色空间正确是任何光照公式的前置条件。"
+  stage={1}
+  stages={["Inputs：spaces、normal orientation、linear color、light units"]}
+/>
+
+</Step>
+<Step title="第二步：逐项验证模型">
+
+分别输出 cosine、visibility、attenuation、diffuse BRDF 和 specular lobe；用数值角度/距离样本检查。
+
+<Cg4StepFlowDiagram
+  caption="分项输出能区分几何、光输运和材质错误。"
+  stage={2}
+  stages={[
+    "Inputs：spaces、normal orientation、linear color、light units",
+    "Terms：NdotL、visibility、attenuation、diffuse、specular",
+  ]}
+/>
+
+</Step>
+<Step title="第三步：比较着色频率与能量">
+
+以相同 mesh 比较 Flat/Gouraud/Phong，运行 furnace、gray card、高光和阴影参考图，再测 shader 成本。
+
+<Cg4StepFlowDiagram
+  caption="画质、能量和性能是三类证据，不用一张好看截图代替。"
+  stage={3}
+  stages={[
+    "Inputs：spaces、normal orientation、linear color、light units",
+    "Terms：NdotL、visibility、attenuation、diffuse、specular",
+    "Evidence：shading modes、furnace、reference images、GPU timing",
+  ]}
+/>
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** 法线未归一化导致光照异常。
-**原因 →** 顶点法线插值后长度变化。
-**修法 →** 插值后法线长度可能变化，必须在片段着色器中normalize(Normal)。否则dot(N,L)结果不正确。
+**现象 →** 阴影区永远有固定灰色，物体间反弹颜色完全没有变化。
+**原因 →** 把 ambient 常数当成真实 indirect illumination。
+**修法 →** 明确 ambient 只是占位；按需求使用 probes/lightmaps/GI，并保留 visibility 和能量验证。
 </Callout>
 
 <Callout type="trap">
-**现象 →** 把所有光源都放在片段着色器中逐个计算。
-**原因 →** 想精确计算每个光源。
-**修法 →** 多光源场景应考虑延迟着色——先写G-Buffer再用屏幕空间Pass计算光照，避免片段着色器重复执行。
+**现象 →** Gouraud 球体大部分高光消失，增加三角形后才出现。
+**原因 →** 高光峰值位于 triangle 内部，但顶点求光照都未采到，插值颜色无法恢复未采样峰值。
+**修法 →** 使用 Phong shading逐 fragment 插值/归一化 normal 后求光，或细分几何；用内部高光场景回归。
+</Callout>
+
+<Callout type="trap">
+**现象 →** Albedo 和 light color 看似合理，结果却过亮且不同显示目标不一致。
+**原因 →** 在 sRGB code 上做点乘/累加，或 shader 和 framebuffer 重复编码。
+**修法 →** 输入解码到线性，HDR 中累加，tone-map 后单次显示编码；用已知灰阶验证出口。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：Phong模型的三个分量是什么？
+
+1. **Lambert 归一化：** 为什么物理 Lambert BRDF 是 albedo/π，而常见教学代码只有 albedo×NdotL？
 
 <Answer>
-环境光(I*k_a模拟间接光)、漫反射(I*k_d*max(N.L,0) Lambert定律)、镜面反射(I*k_s*max(R.V,0)^n高光)。总光照=三者之和。
+BRDF 需在半球积分后反射总能量等于 albedo；$\int_{\Omega^+}\cos\theta d\omega=\pi$，所以除 π。教学模型常把 π 吸收到 light intensity 或 kd 中以简化调色，此时参数不再直接对应物理 albedo，必须声明约定。
 </Answer>
 
-**问题**：Blinn-Phong和Phong的区别？为什么Blinn-Phong更常用？
+2. **Gouraud 高光：** 三角形三个顶点 specular 都为 0，但中心真实高光为 1。Gouraud 与 Phong shading 各输出什么趋势？
 
 <Answer>
-Phong用反射向量R与V的点积，Blinn-Phong用半向量H=normalize(L+V)与N的点积。Blinn-Phong更常用因：1)H计算比R简单 2)N.H角度变化更平缓高光更自然 3)性能更好质量相近。
+Gouraud 插值三个 0，整个 triangle 高光仍为 0；Phong shading 插值 normal/position 并在中心重新求 specular，可得到接近 1 的峰值。是否精确还取决于几何法线、插值和模型。
 </Answer>
+
+3. **BRDF 检查：** 一个模型在均匀白环境中输出比白更亮且无 emission，说明什么？
+
+<Answer>
+提示模型或采样/积分可能不守能量：diffuse+specular分配、lobe normalization、PDF 权重或颜色编码可能错误。先在线性 HDR 下检查 BRDF 半球积分和 Monte Carlo estimator，再排除 tone mapping/encoding；furnace test 是诊断证据，不单独定位具体公式。
+</Answer>
+
 </Exercises>
 
+## 本章回顾
+
+- 直接光由 incident radiance、visibility、cosine、BRDF 和线性颜色出口共同决定；
+- Ambient 是经验占位，Phong/Blinn-Phong 是经验高光，不能冒充完整 GI 或自动物理正确；
+- BRDF 用非负、互易和能量积分约束检查，Lambert albedo/π来自归一化；
+- Flat/Gouraud/Phong 是求值/插值策略，需用内部高光、furnace 和数值场景验证。
+
+## 术语表
+
 <Glossary>
-<GlossaryItem term="环境光">模拟间接光照的常数项，确保阴影区不全黑。</GlossaryItem>
-<GlossaryItem term="漫反射">Lambert定律，与法线和光源方向夹角余弦成正比。</GlossaryItem>
-<GlossaryItem term="镜面反射">模拟高光，与反射向量和观察向量夹角的幂成正比。</GlossaryItem>
-<GlossaryItem term="BRDF">双向反射分布函数，描述入射光如何反射到出射方向。</GlossaryItem>
+<GlossaryItem term="Radiance">沿方向、单位投影面积和立体角传输的光功率密度。</GlossaryItem>
+<GlossaryItem term="Lambert BRDF">以 albedo/π 表示、各出射方向相同的理想 diffuse BRDF。</GlossaryItem>
+<GlossaryItem term="Ambient 项">以常量或低阶场提供基础亮度的经验近似，不等于真实全局光照。</GlossaryItem>
+<GlossaryItem term="Phong/Blinn-Phong 高光">以反射向量或半向量幂函数近似镜面 lobe 的经验模型。</GlossaryItem>
+<GlossaryItem term="BRDF">把方向入射 irradiance 微分映射为方向出射 radiance 微分的反射分布函数。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="计算机图形学第4版" adaptedUrl="" />
+<Attribution adaptedFrom="Computer Graphics with OpenGL, 4th Edition" adaptedUrl="https://www.pearson.com/en-gb/subject-catalog/p/computer-graphics-with-open-gl-pearson-new-international-edition/P200000004424/9781292037196" />

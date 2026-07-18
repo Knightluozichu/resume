@@ -34,12 +34,13 @@ const NODES = {
   B: { cx: 420, cy: 278, type: "term" }, // 终结符
 } as const;
 // 树边：parent 底部中心 → child 顶部中心
-const EDGES: ReadonlyArray<readonly [keyof typeof NODES, keyof typeof NODES]> = [
-  ["AND", "OR"],
-  ["AND", "C"],
-  ["OR", "A"],
-  ["OR", "B"],
-];
+const EDGES: ReadonlyArray<readonly [keyof typeof NODES, keyof typeof NODES]> =
+  [
+    ["AND", "OR"],
+    ["AND", "C"],
+    ["OR", "A"],
+    ["OR", "B"],
+  ];
 
 const accent = "var(--accent)";
 const primary = "var(--text-primary)";
@@ -50,8 +51,7 @@ const success = "var(--success)";
 const warning = "var(--warning)";
 
 export function InterpreterDiagram() {
-  const nodeColor = (t: "non" | "term") =>
-    t === "non" ? warning : success;
+  const nodeColor = (t: "non" | "term") => (t === "non" ? warning : success);
 
   return (
     <figure className="mdx-figure mx-auto my-6">
@@ -211,36 +211,38 @@ export function InterpreterDiagram() {
           })}
 
           {/* ===== 树节点 ===== */}
-          {(Object.keys(NODES) as ReadonlyArray<keyof typeof NODES>).map((k) => {
-            const n = NODES[k];
-            const color = nodeColor(n.type);
-            return (
-              <g key={`node-${k}`}>
-                <rect
-                  x={n.cx - NODE_W / 2}
-                  y={n.cy - NODE_H / 2}
-                  width={NODE_W}
-                  height={NODE_H}
-                  rx="10"
-                  fill={color}
-                  fillOpacity="0.14"
-                  stroke={color}
-                  strokeWidth="1.8"
-                />
-                <text
-                  x={n.cx}
-                  y={n.cy + 5}
-                  textAnchor="middle"
-                  fontSize="15"
-                  fontWeight="700"
-                  fill={color}
-                  fontFamily="monospace"
-                >
-                  {k}
-                </text>
-              </g>
-            );
-          })}
+          {(Object.keys(NODES) as ReadonlyArray<keyof typeof NODES>).map(
+            (k) => {
+              const n = NODES[k];
+              const color = nodeColor(n.type);
+              return (
+                <g key={`node-${k}`}>
+                  <rect
+                    x={n.cx - NODE_W / 2}
+                    y={n.cy - NODE_H / 2}
+                    width={NODE_W}
+                    height={NODE_H}
+                    rx="10"
+                    fill={color}
+                    fillOpacity="0.14"
+                    stroke={color}
+                    strokeWidth="1.8"
+                  />
+                  <text
+                    x={n.cx}
+                    y={n.cy + 5}
+                    textAnchor="middle"
+                    fontSize="15"
+                    fontWeight="700"
+                    fill={color}
+                    fontFamily="monospace"
+                  >
+                    {k}
+                  </text>
+                </g>
+              );
+            },
+          )}
 
           {/* ===== 图例 ===== */}
           {/* 非终结符 */}
@@ -288,9 +290,10 @@ export function InterpreterDiagram() {
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        每个节点都是一个 Expression，非终结符的 interpret
-        递归调用子节点的 interpret 再组合结果，终结符直接返回字面值。给一种文法规则加一种
-        NonTerminal 子类即可扩展语言——但文法一旦复杂，类数量会爆炸，因此只适合简单 DSL。
+        每个节点都是一个 Expression，非终结符的 interpret 递归调用子节点的
+        interpret 再组合结果，终结符直接返回字面值。给一种文法规则加一种
+        NonTerminal
+        子类即可扩展语言——但文法一旦复杂，类数量会爆炸，因此只适合简单 DSL。
       </figcaption>
     </figure>
   );

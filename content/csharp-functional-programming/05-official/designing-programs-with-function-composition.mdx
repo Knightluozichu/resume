@@ -1,0 +1,156 @@
+---
+title: "Chapter 5. Designing programs with function composition"
+type: C
+section: "Functional C# 1e · Core concepts"
+order: 5
+description: "覆盖function composition、data flow、program workflows、functional domain modeling与end-to-end server workflow，以typed stages连接pure core和effect shell。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-5"
+draft: false
+---
+
+import { CfpCompositionAlignmentLab, CfpFunctionalCoreShellLab, CfpWorkflowDataflowLab } from "@/components/mdx/csharp-functional-programming/diagrams/designing-programs-with-function-composition";
+
+<Objectives>
+
+- 能推导ordinary composition与Map/Bind composition的type alignment，定位output/input mismatch和effect boundary
+- 能绘制parse、validate、decide、persist、respond的data-flow workflow，标明每阶段owner与failure channel
+- 能设计functional core/imperative shell的server-side use case，复现normal、invalid、dependency fault与retry路径
+
+</Objectives>
+
+## 为什么Program Design可以从Function Types开始
+
+Function composition把小operations连接成larger behavior：前一个output必须符合后一个input。这个简单规则把architecture问题变成可检查的data flow。若连接不上，通常暴露missing adapter、hidden effect、错误context layering或domain model不完整，而不是需要更多control-flow flags。
+
+先预测：两个functions都有一个parameter就能compose吗；返回Option的function能直接接收plain T function吗；pure core是否可以直接Save以完成workflow；pipeline越长是否越functional；DI container是否等同composition root。答案都是否。
+
+<Term def="前一function的output type/semantic与后一function的input type/semantic可直接或通过明确combinator连接的条件。">composition alignment</Term>
+
+## Function composition
+
+Ordinary composition：`f: A -> B`与`g: B -> C`得到`g after f: A -> C`。若f返回Option B，需Map/Bind；若g产生effect，result type应显式表达command/IO boundary。Composition不是字符串拼接，type和semantic都要对齐：Currency amount不能只因都是decimal就相连。
+
+```csharp
+static Func<A, C> Compose<A, B, C>(
+    Func<A, B> first,
+    Func<B, C> second) =>
+    value => second(first(value));
+
+var normalizeEmail = Compose(ParseEmail, NormalizeEmail);
+```
+
+<Stepper>
+  <Step title="切换aligned、context mismatch、effect与adapter"><CfpCompositionAlignmentLab /></Step>
+  <Step title="写出每一步arrow和domain meaning">不仅写A/B/C，还写ValidatedOrder、Command、PersistedReceipt等semantic role。</Step>
+  <Step title="用compile/failure cases验收连接">删除adapter、改变context、注入effect fault，确认错误在正确boundary而不是late cast/null。</Step>
+</Stepper>
+
+<Callout type="trap" title="只要Generic Types对得上，Composition就语义正确">
+两个decimal可能分别是gross、tax或percentage；两个string可能是JSON或email。Nominal/domain values和named functions必须保护semantic alignment，compiler只检查它能看到的type。
+</Callout>
+
+## Thinking in terms of data flow
+
+Data-flow view把program看成values经过stages，而不是objects互相发命令。每个stage声明input、output、error/effect，便于插入logging、metrics或parallel step而不污染core calculation。Branch也可返回sum type/decision value，后续Match解释。
+
+Data flow不意味着所有事情都IEnumerable chain。Transaction、resource lifetime和cancellation仍需shell控制。关键是业务decision先变value，effect execution后置且有owner。
+
+<Term def="以typed values穿过named stages描述program，显式记录每步input、output、failure和effect。">typed data-flow graph</Term>
+
+## Programming workflows
+
+Workflow是一组domain operations按business sequence组合。好的workflow signature只暴露use case需要的dependencies，并通过partial application在composition root固定它们。它不读取service locator，也不让每个step随意commit。
+
+```csharp
+Func<RequestDto, Either<Error, ResponseDto>> workflow = request =>
+    Parse(request)
+        .Bind(Validate)
+        .Map(Decide)
+        .Bind(ExecuteCommands)
+        .Map(ToResponse);
+```
+
+上例`ExecuteCommands`是真实effect boundary；若要保持pure workflow，可让Decide返回commands，由外层interpreter执行。选择取决于architecture，但命名/signature必须诚实。
+
+<Term def="围绕一个use case组合typed stages，并集中dependency wiring、short-circuit和effect policy的function。">workflow function</Term>
+
+<Stepper>
+  <Step title="切换parse、decide、persist与respond"><CfpWorkflowDataflowLab /></Step>
+  <Step title="给每阶段分配owner">Adapter拥有external shape，core拥有decision，interpreter拥有I/O，delivery拥有status/response。</Step>
+  <Step title="跑normal与每个stage fault">验证哪些后续stages不执行、state是否partial、error如何translation、cleanup/telemetry谁负责。</Step>
+</Stepper>
+
+## An introduction to functional domain modeling
+
+Functional domain model优先用types表达valid states和transitions，用functions表达behavior。Value objects、Option/Either、commands/events使business language出现在signature；entity identity与state change可表示为`State + Command -> Events/NewState`。
+
+不要为了“functional”把所有entity拆成anonymous tuples。Domain type应保护invariant、units与meaning；immutability通过constructor/factory和copy/new value实现。Modern records可减少ceremony，但第一版concept是data-oriented valid types，不依赖records。
+
+<Term def="用domain values、sum-like outcomes和state-transition functions使valid states与business decisions在type/signature中可见。">functional domain model</Term>
+
+## An end-to-end server-side workflow
+
+Server workflow可分为imperative input adapter、pure validation/decision、effect interpreter与response adapter。DB/HTTP exceptions在infrastructure boundary转成稳定application error，unexpected defect保留cause并由top-level policy处理。Transaction scope覆盖需要atomic的commands，而不包住slow external calls。
+
+```csharp
+public async Task<HttpResponse> Handle(RequestDto dto, CancellationToken token)
+{
+    var decision = Parse(dto).Bind(Validate).Map(Decide);
+    if (decision.IsLeft) return ToBadRequest(decision.Left);
+
+    var outcome = await interpreter.Execute(decision.Right, token);
+    return ToHttpResponse(outcome);
+}
+```
+
+Functional core并不负责retry/logging/timeout；shell根据idempotency和failure taxonomy执行。Core result应包含shell做policy所需data，例如command id、expected version和diagnostic context。
+
+<Term def="Pure domain decision结束、external clock/database/network/logging开始执行的明确架构分界。">effect cut line</Term>
+
+<Stepper>
+  <Step title="切换functional core、shell、composition root与end-to-end"><CfpFunctionalCoreShellLab /></Step>
+  <Step title="画出effect cut line">Cut line左侧只产生values/commands，右侧执行clock/DB/network/log；记录crossing types。</Step>
+  <Step title="验证fault、cancel、retry与repeat">检查invalid不触发I/O，dependency fault保留cause，retry幂等，cancel cleanup，repeat不重复business effect。</Step>
+</Stepper>
+
+<Callout type="trap" title="Functional Core返回Command后，系统就自动可靠">
+Interpreter仍可能partial execute、timeout或duplicate。Command需要idempotency key/version，shell需要transaction/outbox/retry policy和observability；pure decision只解决一部分问题。
+</Callout>
+
+## 本章回顾：用Type Alignment把Use Case连成一条证据链
+
+1. Composition要求output/input在type和domain meaning上对齐。
+2. Context value用相应Map/Bind等combinator，effect不能伪装成ordinary function。
+3. Typed data flow让stage、owner、failure和effect位置可见。
+4. Functional domain model以valid values与transition functions表达business rules。
+5. End-to-end server由pure core产生decision，shell解释effects并承担operational policy。
+
+<Exercises>
+
+**问题 1：`Parse -> Validate -> Save`为什么常不是一个pure composition？**
+
+<Answer>Parse/Validate可返回Either values，Save执行DB effect并有async/fault/transaction。让core产生SaveCommand，shell interpreter执行；或signature显式返回Task/Either并标effect boundary。测试invalid不Save、fault不partial、retry idempotent。</Answer>
+
+**问题 2：如何发现pipeline中semantic type mismatch？**
+
+<Answer>为每个stage写domain arrow而非primitive：RawEmail -> ValidEmail -> NormalizedEmail。若只看到string -> string，创建nominal/domain values，让compiler阻止错序；用compile-negative和round-trip/domain law tests验证。</Answer>
+
+**问题 3：Composition root应该做什么、不做什么？**
+
+<Answer>选择concrete adapters/policies，把稳定dependencies partial apply进workflow，形成最终handler；不执行business decisions或在各处service locate。测试不同adapter substitution和startup validation，确保wiring集中且core无需container。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="composition alignment" definition="相邻functions在type与domain semantics上可连接的条件。" />
+  <GlossaryItem term="typed data-flow graph" definition="Values穿过named stages且每步边界明确的program view。" />
+  <GlossaryItem term="workflow function" definition="围绕use case组合stages与policy的function。" />
+  <GlossaryItem term="functional domain model" definition="用valid values与transition functions表达business rules。" />
+  <GlossaryItem term="effect cut line" definition="Pure decision values与external effect execution之间的架构分界。" />
+</Glossary>
+
+<Attribution adaptedFrom="Functional Programming in C#, First Edition, Chapter 5: Designing programs with function composition" adaptedUrl="https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-5" />

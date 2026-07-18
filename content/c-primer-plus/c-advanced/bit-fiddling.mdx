@@ -3,22 +3,23 @@ title: 位操作
 type: A
 section: C高级主题
 order: 15
-description: 掌握二进制/八进制/十六进制表示、按位与或异或取反、位移运算、位字段 bit-field，能读写硬件寄存器和压缩标志位
+description: 掌握整数位模式、同宽无符号掩码、合法移位、位字段ABI限制和C11对齐特性
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/c-primer-plus-9780321928429"
 draft: false
 ---
 
+import { CPrimerBitContractDiagram } from "@/components/mdx/c-primer-plus/diagrams/bit-fiddling";
 
 
 
 
 <Objectives>
 
-- 能写出同一整数的十/八/十六/二进制表示，并用 printf 的 %d/%o/%x 打印，说明硬件里存的是位模式
-- 能解释按位 & | ^ ~ 与逻辑 && || 的区别，并用掩码对 unsigned 标志位做置位、清位、翻转与测试
-- 能说明左移右移与乘除 2 的幂的关系，以及 bit-field 的打包用途与不可移植陷阱，并回答：对 signed 负数右移结果是否一定等于除以 2？
+- 能用匹配的 printf 格式展示无符号整数进制，并为固定宽度寄存器构造同宽掩码
+- 能判断移位计数、整数提升、signed 左移和负数右移何时有定义，并修复宽度不匹配的清位代码
+- 能比较手动位编码、位字段和 _Alignas/_Alignof 的用途，说明哪些布局事实只由目标 ABI 保证
 
 </Objectives>
 
@@ -30,21 +31,23 @@ draft: false
 
 没有位运算，你只能除法取余、多次比较——慢、难读，也写不出紧凑的寄存器映射。这一章还涉及 **bit-field**，让 struct 成员只占若干 bit。
 
+<CPrimerBitContractDiagram />
+
 ## 多种进制：同一数值的不同写法
 
 日常用**十进制**；硬件与调试更常用 **二进制**、**八进制**、**十六进制**——它们都是同一整数的不同**书写方式**，不是不同数值。
 
 ```c
-int n = 42;
-printf("dec %d oct %o hex %x\n", n, n, n);
+unsigned n = 42u;
+printf("dec %u oct %o hex %x\n", n, n, n);
 /* dec 42 oct 52 hex 2a */
 ```
 
-C 字面量：`052`（八进制）、`0x2A`（十六进制）；C23 起可用 `0b00101010`（二进制）。
+C11 字面量可写 `052`（八进制）和 `0x2A`（十六进制），但尚不支持 `0b00101010`；二进制整数常量到 C23 才进入标准。printf 的 `%o`、`%x` 期待 unsigned int，必须让实参类型匹配；格式与实参类型不匹配会产生未定义行为。
 
 <BinaryHexDiagram />
 
-<Term def="以 2 为基数的计数；每一位只能是 0 或 1；左移一位相当于乘以 2。">二进制（binary）</Term> 与硬件位一一对应。**十六进制**每 4 bit 一组，便于读长位串（如 `0xFF` = 8 个 1）。
+<Term def="以2为基数的计数，每一位只能是0或1；整数对象用实现定义宽度和表示保存位模式。">二进制（binary）</Term> 与硬件位一一对应。十六进制每个数字恰表示 4 bit，便于读长位串（如 `0xFF` 表示低 8 位全 1）。
 
 ## 按位运算符：& | ^ ~
 
@@ -75,11 +78,11 @@ flags ^= FLAG_EXEC;              /* 翻转 */
 if (flags & FLAG_READ) { ... }   /* 测试 */
 ```
 
-<Term def="用特定位模式筛选或修改其他字的某些位；如 0xFF00 保留高 8 位。">掩码（mask）</Term> 通常是 `1u << n` 或若干位的组合。`~MASK` 在 unsigned 上才可靠——对 signed 取反宽度与符号扩展易踩坑。
+<Term def="用特定位模式筛选或修改同宽无符号整数中的字段；构造单比特掩码前必须保证移位计数小于该类型位宽。">掩码（mask）</Term> 常由 `1u << n` 或若干位组合，但目标若比 unsigned 更宽，掩码也要用 `UINT64_C(1)` 等同宽类型。`~` 翻转的是提升后操作数类型的全部位；问题核心是类型宽度和整数转换，不是含糊的“符号扩展”。
 
 ## 位移：左移和右移
 
-<Term def="把位模式向左或向右移动 n 位；左移补 0；右移补 0 或符号位依类型与实现。">位移（shift）</Term> 运算符：
+<Term def="对整数提升后的左操作数移动指定位数；计数为负或不小于提升后类型位宽时行为未定义，signed与unsigned结果规则不同。">位移（shift）</Term> 运算符：
 
 ```c
 unsigned x = 5;      /* 0b...0101 */
@@ -92,21 +95,21 @@ unsigned b = x >> 1; /* 0b...0010  → 2  */
 <Stepper>
   <Step title="第一步：左移">
     <ShiftOperatorsDiagram step={1} />
-    **`x << n`**：位向左移 n 位，右侧补 **0**。无溢出时等价 **× 2^n**。`1u << n` 常用来构造第 n 位掩码。
+    unsigned 左移在移位计数合法时等价乘 2 的 n 次方再按该无符号类型取模。signed 非负值仅在数学结果可由结果类型表示时有定义；signed 负值左移或不可表示结果都是未定义行为。
   </Step>
   <Step title="第二步：无符号右移">
     <ShiftOperatorsDiagram step={2} />
-    **unsigned** 右移：左侧补 **0**，等价整除 **2^n**。读硬件状态寄存器时，先 `>>` 再 `&` 掩码提取字段。
+    unsigned 右移左侧补 0，结果等于向下取整除以 2 的 n 次方。读状态寄存器时，先右移再与字段宽度掩码相与。
   </Step>
   <Step title="第三步：有符号右移">
     <ShiftOperatorsDiagram step={3} />
-    **signed** 右移：C 标准**实现定义**——多数平台为**算术右移**（负数左侧补 1）。**不要假设** `-1 >> 1` 等于数学上的 -0.5 或 0；生产代码对位模式用 **unsigned**。
+    signed 非负值右移规则明确；signed 负值右移结果由实现定义，常见算术右移并非可移植承诺。位模式协议应转换到已知无符号类型再移位。
   </Step>
 </Stepper>
 
 ## 位字段 bit-field：在 struct 里压缩位宽
 
-当多个成员各只需几位时，可用 <Term def="struct 成员后加 : 位宽，编译器将多个字段打包进整型存储单元；布局实现定义。">位字段（bit-field）</Term>：
+当多个成员各只需几位时，可用 <Term def="结构成员声明中用冒号指定整数位宽；相邻字段可能共享分配单元，但单元大小、对齐、字段顺序和跨单元方式由实现决定。">位字段（bit-field）</Term>：
 
 ```c
 struct Status {
@@ -123,34 +126,60 @@ s.mode = 5;
 
 <BitFieldDiagram />
 
-位字段**不能取地址**，不能 `&s.ready`。跨单元、对齐与 **padding** 由编译器决定——**不可用于可移植二进制协议**。可移植做法：手动 `value = (reg >> shift) & mask`。
+位字段不能取地址，也不能作为 sizeof 或 _Alignof 的操作数。C11 可移植位字段基础类型是 `_Bool`、`signed int`、`unsigned int`，实现还可接受其他类型。未命名的零宽字段可以要求下一个字段从新分配单元开始，但字段高低位顺序、跨单元规则和 padding 仍由实现决定，因此不可用于可移植协议。手动位移与掩码也必须再定义整数宽度和字节序。
+
+## 对齐特性：_Alignas 与 _Alignof
+
+C11 的 <Term def="_Alignof查询完整对象类型的对齐要求，_Alignas为对象声明指定不弱于自然对齐的有效要求；二者不规定结构成员偏移或线格式。">对齐特性</Term> 可以让接口表达对象地址约束：
+
+```c
+#include <stddef.h>
+#include <stdio.h>
+
+struct packet_buffer {
+    _Alignas(max_align_t) unsigned char bytes[64];
+};
+
+int main(void) {
+    printf("packet alignment = %zu\n",
+           _Alignof(struct packet_buffer));
+    return 0;
+}
+```
+
+`_Alignof(type-name)` 产生 size_t 常量，查询类型要求而不创建对象。`_Alignas` 只能指定实现支持的有效对齐，多个说明取最严格者，不能削弱对象本来的自然对齐。`<stdalign.h>` 在 C11 中提供 `alignas`、`alignof` 宏作为更易读拼写。
+
+提高对象对齐可能增加结构体尾部 padding 和数组步长，并不决定位字段顺序、字节序或文件格式。把任意字节缓冲强制转换成某类型指针前，必须同时满足大小、对齐、有效对象表示和别名规则；“地址看起来是 16 的倍数”只解决其中一项。
 
 ## 代码详解：寄存器风格标志与提取
 
 ### 定义与读写 16 位「寄存器」
 
 ```c
-#define REG_ENABLE  (1u << 0)
-#define REG_MODE_M  0xFu
-#define REG_MODE_S  1u
+#include <stdint.h>
 
-unsigned read_reg(void);   /* 假设从硬件读 */
-void write_reg(unsigned v);
+#define REG_ENABLE     (UINT16_C(1) << 0)
+#define REG_MODE_MASK  UINT16_C(0xF)
+#define REG_MODE_SHIFT 1u
 
-void set_mode(unsigned m) {
-    unsigned r = read_reg();
-    r &= ~(REG_MODE_M << REG_MODE_S);
-    r |= (m & REG_MODE_M) << REG_MODE_S;
-    write_reg(r);
+uint16_t read_reg(void);   /* 假设从硬件读 */
+void write_reg(uint16_t value);
+
+void set_mode(uint16_t mode) {
+    uint16_t reg = read_reg();
+    uint16_t field_mask = (uint16_t)(REG_MODE_MASK << REG_MODE_SHIFT);
+    reg = (uint16_t)((reg & (uint16_t)~field_mask) |
+                     ((uint16_t)(mode << REG_MODE_SHIFT) & field_mask));
+    write_reg(reg);
 }
 ```
 
 ### 不用 bit-field 的可移植解析
 
 ```c
-unsigned reg = read_reg();
-unsigned mode = (reg >> REG_MODE_S) & REG_MODE_M;
-unsigned enabled = (reg & REG_ENABLE) != 0;
+uint16_t reg = read_reg();
+uint16_t mode = (uint16_t)((reg >> REG_MODE_SHIFT) & REG_MODE_MASK);
+int enabled = (reg & REG_ENABLE) != 0;
 ```
 
 ### bit-field 示例（仅本机/嵌入式）
@@ -166,21 +195,21 @@ struct GPIO {
 ## 容易踩的坑
 
 <Callout type="trap">
-  **现象**：`if (flags & FLAG)` 永远为真，即使没置位。
-  **原因**：`FLAG` 未定义成掩码，或 **flags 是有符号** 且高位被符号扩展；也可能忘了 `flags` 初始化为 0。
-  **修法**：掩码用 **`1u << n`**；标志变量用 **unsigned**；测试写 `(flags & FLAG) != 0`。
+  **现象**：`if (flags & FLAG_READ == 0)` 没有按预期检测“READ 未置位”。
+  **原因**：等号比较的优先级高于按位与，表达式解析为 `flags & (FLAG_READ == 0)`，而不是先取掩码结果。
+  **修法**：明确写 `(flags & FLAG_READ) == 0`。位测试始终给按位表达式加括号，避免依赖不直观的优先级。
 </Callout>
 
 <Callout type="trap">
-  **现象**：`flags &= ~FLAG` 清位后反而出现奇怪高位。
-  **原因**：对 **signed int** 做 `~` 会符号扩展；`~0u` 与 `~0` 宽度不同。
-  **修法**：标志与掩码统一 **unsigned**；字面量加 **`u`** 后缀。
+  **现象**：64 位 `uint64_t flags` 执行 `flags &= ~(1u << 3)` 后，高 32 位也被清零。
+  **原因**：在 unsigned int 为 32 位的实现上，取反先产生 32 位 `0xFFFFFFF7`，再转换为 uint64_t 时零扩展成 `0x00000000FFFFFFF7`。
+  **修法**：让掩码从一开始就与目标同宽：`flags &= ~(UINT64_C(1) << 3)`。
 </Callout>
 
 <Callout type="trap">
-  **现象**：`x << 32` 或移位 ≥ 类型位宽，结果未定义或仍为 x。
-  **原因**：移位量 **≥ 左操作数位宽** 是**未定义行为**（UB）。
-  **修法**：移位前检查 `n < sizeof(x)*8`；超大移位用乘除或分步。
+  **现象**：`x << n` 在 n 为 -1 或达到类型位宽时出现不可预测结果。
+  **原因**：移位量为负，或不小于整数提升后左操作数类型的位宽，行为都未定义。
+  **修法**：先验证 `n >= 0 && (unsigned)n < sizeof(x) * CHAR_BIT`，并包含 `<limits.h>`；随后仍要检查 signed 左移值域规则。
 </Callout>
 
 <Callout type="trap">
@@ -192,14 +221,15 @@ struct GPIO {
 ## 小结
 
 - 同一整数可用十/八/十六/二进制书写；**printf %o/%x** 按格式输出
-- **& | ^ ~** 逐 bit 运算；**掩码** 置位 `|=`、清位 `&= ~`、测试 `&`
-- **位移（&lt;&lt; 与 &gt;&gt;）** 左移补 0 常等价 ×2^n；**unsigned** 右移补 0；**signed** 右移勿假设
-- **bit-field** 压缩 struct 成员；**不可移植**、不可取地址
-- 标志位与寄存器优先 **unsigned + 手动掩码**
+- printf 的 %o/%x 需要 unsigned int；固定宽度值使用 inttypes.h 对应格式宏
+- 掩码与目标保持同一无符号宽度；移位计数必须小于提升后类型的 `sizeof * CHAR_BIT`
+- unsigned 左移按模运算，signed 左移有额外值域限制；负 signed 右移由实现定义
+- bit-field 的分配顺序、单元和 padding 不可移植；线上格式使用固定宽度字段和显式字节序
+- _Alignas/_Alignof 表达对象对齐要求，不规定位字段、结构体或文件布局
 
 <Exercises>
 
-**练习 1（问答型）** 十六进制 `0xFF` 对应多少位全 1？用 `1u << n` 如何写出等价掩码？
+**问题 1（问答型）** 十六进制 `0xFF` 对应多少位全 1？用 `1u << n` 如何写出等价掩码？
 
 <Answer>
 
@@ -207,20 +237,27 @@ struct GPIO {
 
 </Answer>
 
-**练习 2（改代码型）** 下面想清 `FLAG_WRITE (1<<1)`，哪里有问题？
+**问题 2（改代码型）** 下面代码想构造 32 位最高位掩码，哪里有问题？
 
 ```c
-int flags = 3;
-flags &= ~FLAG_WRITE;
+#include <stdint.h>
+
+uint32_t high = 1 << 31;
 ```
 
 <Answer>
 
-`flags` 与 `FLAG_WRITE` 宜用 **unsigned**；`1<<1` 在 signed 下 `~` 可能扩展。改为 **`unsigned flags`**，**`#define FLAG_WRITE (1u << 1)`**，再 **`flags &= ~FLAG_WRITE`**。
+字面量 1 是 signed int；在 int 为 32 位时左移到符号位，数学结果不能由 int 表示，行为未定义。使用同宽无符号常量并确保实现提供 uint32_t：
+
+```c
+#include <stdint.h>
+
+uint32_t high = UINT32_C(1) << 31;
+```
 
 </Answer>
 
-**练习 3（综合实现型）** 用 unsigned 实现：`set_flag`、`clear_flag`、`toggle_flag`、`test_flag` 四个宏或 inline 函数，并演示置 READ、清 WRITE、测 READ。
+**问题 3（综合实现型）** 用 unsigned 实现：`set_flag`、`clear_flag`、`toggle_flag`、`test_flag` 四个 inline 函数，并演示置 READ、清 WRITE、测 READ。
 
 <Answer>
 
@@ -237,7 +274,7 @@ int main(void) {
     unsigned flags = 0;
     set_flag(&flags, FLAG_READ);
     clear_flag(&flags, FLAG_WRITE);
-    return test_flag(flags, FLAG_READ);  /* 1 */
+    return test_flag(flags, FLAG_READ) ? 0 : 1;
 }
 ```
 
@@ -254,21 +291,25 @@ int main(void) {
 </GlossaryItem>
 
 <GlossaryItem term="二进制（binary）">
-  以 2 为基数，每位 0 或 1；与硬件存储一致。见 BinaryHexDiagram。
+  以 2 为基数，每位为 0 或 1。整数对象由若干位组成，但 C11 仍允许不同 signed 表示和 padding；协议应选择无符号固定宽度类型。见 BinaryHexDiagram。
 </GlossaryItem>
 
 <GlossaryItem term="掩码（mask）">
-  用于选中或修改特定位的位模式，如 0xFF、1u&lt;&lt;n；配合 &amp; | 做标志位操作。
+  用于选中或修改字段的无符号位模式。掩码应与目标同宽，构造移位前须验证计数小于该类型位宽。
 </GlossaryItem>
 
 <GlossaryItem term="位移（shift）">
-  &lt;&lt; 左移、&gt;&gt; 右移；左移补 0；unsigned 右移补 0。见 ShiftOperatorsDiagram。
+  对整数提升后的值使用左移或右移。计数为负或达到类型位宽时未定义；unsigned 与 signed 的结果和溢出规则不同。见 ShiftOperatorsDiagram。
 </GlossaryItem>
 
 <GlossaryItem term="位字段（bit-field）">
-  struct 成员指定位宽，编译器打包进整型单元；不可取地址，布局实现定义。见 BitFieldDiagram。
+  结构成员指定位宽；不能取地址，分配单元、顺序、对齐和跨单元方式由实现决定，不适合作为可移植协议布局。见 BitFieldDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="对齐特性">
+  C11 的 _Alignof 查询类型对齐要求，_Alignas 为对象指定不弱于自然对齐的有效要求。二者不规定结构成员偏移、位字段顺序或字节序。
 </GlossaryItem>
 
 </Glossary>
 
-<Attribution />
+<Attribution title="C Primer Plus, Sixth Edition, Chapter 15: Bit Fiddling" url="https://www.informit.com/store/c-primer-plus-9780321928429" />

@@ -1,0 +1,398 @@
+---
+title: "6.1 Event-Driven Simulation：碰撞预测、失效事件与弹性证书"
+type: B
+section: "上下文"
+order: 24
+description: "按官方6.1重建hard-disc模型、future-event MinPQ、墙面与粒子碰撞预测、collision-count惰性失效、弹性响应、主循环与守恒量证书。"
+demo: true
+math: true
+sourceUrl: "https://algs4.cs.princeton.edu/61event/"
+draft: false
+---
+
+import { Algs4SimulationStrategyMap, Algs4HardDiscMotionLab, Algs4WallCollisionLab, Algs4PairCollisionPredictionLab, Algs4FutureEventQueueLab, Algs4InvalidatedEventLab, Algs4CollisionResolutionLab, Algs4SimulationLoopLab, Algs4ConservationInvariantLab, Algs4EventWorkLab, Algs4EventCertificateLab } from "@/components/mdx/algorithms-4e/diagrams/event-driven-simulation";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释event-driven simulation、hard-disc model、future-event MinPQ与time-driven误差来源
+- 能计算wall collision time、pair collision discriminant、earliest positive root与absolute event time
+- 能实现collision prediction、collision resolution、collision-count snapshot和main event loop
+- 能分析invalidated events、lazy deletion、floating-point边界、simultaneous collisions与baseline work
+- 能设计clock monotonicity、contact geometry、momentum、kinetic energy和reprediction completeness的独立证书
+
+</Objectives>
+
+## 从“没有事件发生时，模拟器不必醒来”开始
+
+事件驱动模拟（<Term def="不以fixed time quantum扫描系统，而按future events的exact predicted times依次推进state的simulation strategy。">事件驱动模拟</Term>，event-driven simulation）把计算集中到状态真正改变的时刻。对于没有外力的hard discs，粒子在两次碰撞之间保持constant velocity，因此可以直接从当前clock跳到下一次collision。
+
+先预测：如果time-driven simulator每0.1秒检查一次，而两个small discs在0.04秒相撞、0.08秒已经彼此穿过，0.1秒snapshot还能发现碰撞吗？不能。减小dt可降低漏检，却让每个empty interval也执行 $N^2$ overlap checks。
+
+Event-driven版本维护未来事件优先队列（<Term def="以absolute event time为key的MinPQ；队首是当前trajectory assumptions下最早可能发生的event。">未来事件优先队列</Term>，priority queue of future events），每次delete-min、验证、推进、响应、局部重预测。
+
+<Algs4SimulationStrategyMap />
+
+## 6.1.1 Hard-disc model：碰撞之间是解析直线
+
+硬盘粒子模型（<Term def="二维unit box中的non-overlapping circular particles；无外力，粒子间与墙面均发生perfectly elastic collisions。">硬盘粒子模型</Term>，hard-disc model）中，particle i具有：
+
+$$
+\mathbf r_i=(r_{x,i},r_{y,i}),\quad
+\mathbf v_i=(v_{x,i},v_{y,i}),\quad
+\sigma_i,\quad m_i
+$$
+
+其中position在unit box内，radius与mass为positive。两次events之间不存在force，所以对任意 $\Delta t\ge0$：
+
+$$
+\mathbf r_i(t+\Delta t)=\mathbf r_i(t)+\Delta t\,\mathbf v_i(t)
+$$
+
+<Algs4HardDiscMotionLab />
+
+Model assumptions必须写进contract：
+
+- Initial discs不重叠，也不穿墙。
+- Pair collision是binary、instantaneous、frictionless、perfectly elastic。
+- Wall是stationary、reflecting boundary。
+- Ignore simultaneous multi-particle contacts与spin。
+- Floating-point computation需要tolerance policy，不能把negative tiny time重新排进queue。
+
+这不是任意rigid-body engine。它故意选择能解析预测next event的物理模型，以展示priority queue、lazy invalidation和data abstraction怎样结合。
+
+## 6.1.2 Wall collision prediction
+
+碰撞预测（<Term def="在假设没有intervening events、所有particles继续linear motion的前提下，求未来first contact的time delta。">碰撞预测</Term>，collision prediction）先处理wall。
+
+Particle center x必须位于 $[\sigma,1-\sigma]$。若 $v_x\gt0$，到right vertical wall的time：
+
+$$
+\Delta t_x=\frac{1-r_x-\sigma}{v_x}
+$$
+
+若 $v_x\lt0$，到left wall：
+
+$$
+\Delta t_x=\frac{\sigma-r_x}{v_x}
+$$
+
+分子与分母都negative，因此result positive。$v_x=0$ 时vertical wall time是infinity。Horizontal wall对y完全类似。
+
+```java
+double timeToHitVerticalWall() {
+    if (vx > 0) return (1.0 - rx - radius) / vx;
+    if (vx < 0) return (radius - rx) / vx;
+    return Double.POSITIVE_INFINITY;
+}
+```
+
+<Algs4WallCollisionLab />
+
+只把finite event且 $clock+\Delta t\le limit$ 插入MinPQ。Absolute time而非delta作为key，保证来自不同prediction moments的events可直接排序。
+
+## 6.1.3 Pair collision prediction：relative motion的quadratic
+
+对particles i与j，定义relative quantities：
+
+$$
+\Delta\mathbf r=\mathbf r_j-\mathbf r_i,\qquad
+\Delta\mathbf v=\mathbf v_j-\mathbf v_i,\qquad
+\sigma=\sigma_i+\sigma_j
+$$
+
+接触时centers distance等于sigma：
+
+$$
+\left\|\Delta\mathbf r+\Delta t\,\Delta\mathbf v\right\|^2=\sigma^2
+$$
+
+展开得到quadratic。令：
+
+$$
+\begin{aligned}
+dvdr &= \Delta\mathbf v\cdot\Delta\mathbf r,\\
+dvdv &= \Delta\mathbf v\cdot\Delta\mathbf v,\\
+drdr &= \Delta\mathbf r\cdot\Delta\mathbf r,\\
+D &= dvdr^2-dvdv(drdr-\sigma^2).
+\end{aligned}
+$$
+
+若 $dvdr\ge0$，particles在separating或切向不靠近；若dvdv=0，相对位置不变；若 $D\lt0$，trajectory lines不会在radius sum处相交。否则earliest physical root：
+
+$$
+\Delta t=-\frac{dvdr+\sqrt D}{dvdv}
+$$
+
+必须positive，否则返回infinity。
+
+```java
+double dvdr = dx * dvx + dy * dvy;
+if (dvdr >= 0) return INFINITY;
+double dvdv = dvx * dvx + dvy * dvy;
+if (dvdv == 0) return INFINITY;
+double d = dvdr * dvdr - dvdv * (drdr - sigma * sigma);
+if (d < 0) return INFINITY;
+double dt = -(dvdr + Math.sqrt(d)) / dvdv;
+return dt > 0 ? dt : INFINITY;
+```
+
+<Algs4PairCollisionPredictionLab />
+
+Floating-point near-tangent cases可能让理论zero的D变成tiny negative。Tolerance若使用，应scale-aware且测试记录；盲目clamp所有negative D会制造不存在的collision。
+
+## 6.1.4 Future-event queue：预测的是“如果什么都不先发生”
+
+初始化时，对每个particle a：
+
+1. 与all particles计算pair hit time。
+2. 计算vertical与horizontal wall hit times。
+3. 插入limit以内的future events。
+4. 插入time 0的redraw event。
+
+每个event包含absolute time、possibly-null particles a/b，以及creation时的collision counts。Null组合编码四种event：
+
+- a与b都存在：pair collision。
+- 只有a：vertical-wall collision。
+- 只有b：horizontal-wall collision。
+- 都null：redraw。
+
+<Algs4FutureEventQueueLab />
+
+Queue中的collision不是promise，只是基于当前straight-line assumptions的candidate。若A原预计在t=4撞B，但A在t=2先撞墙改变velocity，t=4的A/B event就不再代表physical collision。
+
+## 6.1.5 Invalidated events：collision count作为version stamp
+
+失效事件（<Term def="创建后某个参与particle又发生collision，导致其trajectory改变、原预测不再成立的queued event。">失效事件</Term>，invalidated events）不必在heap内部主动查找删除。Event creation保存：
+
+```java
+countA = a == null ? -1 : a.count();
+countB = b == null ? -1 : b.count();
+
+boolean isValid() {
+    if (a != null && a.count() != countA) return false;
+    if (b != null && b.count() != countB) return false;
+    return true;
+}
+```
+
+<Algs4InvalidatedEventLab />
+
+每次真实collision后，参与particles的count增加。旧event出heap时比较snapshot，mismatch就discard；这就是lazy invalidation。
+
+<Callout type="trap" title="MinPQ中的earliest event一定会发生">
+Queue按candidate time排序，不保证candidate仍有效。必须在delete-min之后、移动particles之前检查collision-count snapshots；若先移动再发现stale，整个system clock与positions已经被污染。
+</Callout>
+
+Why counts suffice：在该model中，particle trajectory只会因collision改变。Count未变意味着position可由same start state与velocity外推，prediction assumptions仍成立；count改变则无论new velocity碰巧相同与否，都保守invalid。
+
+## 6.1.6 Collision resolution：impulse更新velocity
+
+碰撞响应（<Term def="在contact instant按perfectly elastic、frictionless laws更新参与particles velocities，并增加collision counts。">碰撞响应</Term>，collision resolution）发生在所有particles都已推进到event time以后。
+
+### Wall response
+
+Vertical wall反转x component：
+
+$$
+(v_x,v_y)\longrightarrow(-v_x,v_y)
+$$
+
+Horizontal wall反转y component。Speed不变，因此particle kinetic energy不变；particle momentum会改变，因为container接收opposite impulse。
+
+### Pair response
+
+At contact，normal沿 $\Delta\mathbf r$。官方公式令：
+
+$$
+J=\frac{2m_i m_j(\Delta\mathbf v\cdot\Delta\mathbf r)}
+{(m_i+m_j)\sigma},
+\qquad
+(J_x,J_y)=J\frac{\Delta\mathbf r}{\sigma}
+$$
+
+然后：
+
+$$
+\begin{aligned}
+\mathbf v_i'&=\mathbf v_i+\frac{\mathbf J}{m_i},\\
+\mathbf v_j'&=\mathbf v_j-\frac{\mathbf J}{m_j}.
+\end{aligned}
+$$
+
+<Algs4CollisionResolutionLab />
+
+Impulse只作用在normal direction；frictionless tangential components保持。Correct implementation同时守恒pair linear momentum与kinetic energy：
+
+$$
+m_i\mathbf v_i+m_j\mathbf v_j
+=m_i\mathbf v_i'+m_j\mathbf v_j'
+$$
+
+$$
+\frac12m_i\|\mathbf v_i\|^2+\frac12m_j\|\mathbf v_j\|^2
+=\frac12m_i\|\mathbf v_i'\|^2+\frac12m_j\|\mathbf v_j'\|^2
+$$
+
+<Algs4ConservationInvariantLab />
+
+<Callout type="trap" title="只移动发生碰撞的两个particles">
+Event time是global simulation clock。Between events所有particles都沿各自trajectory前进，因此处理event前必须用同一delta移动全部particles；只移动a/b会让其他particles的位置与其future predictions使用不同时间基准。
+</Callout>
+
+## 6.1.7 Main loop：验证后推进，再局部修复future
+
+Official event loop：
+
+```java
+while (!pq.isEmpty()) {
+    Event e = pq.delMin();
+    if (!e.isValid()) continue;
+
+    for (Particle p : particles) p.move(e.time - t);
+    t = e.time;
+
+    if      (e.a != null && e.b != null) e.a.bounceOff(e.b);
+    else if (e.a != null)                e.a.bounceOffVerticalWall();
+    else if (e.b != null)                e.b.bounceOffHorizontalWall();
+    else                                 redraw(limit);
+
+    predict(e.a, limit);
+    predict(e.b, limit);
+}
+```
+
+<Algs4SimulationLoopLab />
+
+Main-loop invariant：
+
+1. Clock t never decreases。
+2. 每个particle position代表exact time t。
+3. Queue含在current trajectories下预测的future candidates；stale ones可存在但会被snapshot拒绝。
+4. 处理physical event后，只有a/b trajectories改变，所以只需重新预测涉及a或b的events。
+
+Redraw也放入same queue，使visualization遵守simulation clock，而不是用separate timer篡改physics。Official HZ=0.5，在每个redraw后安排 $t+1/HZ$ 的next redraw。
+
+## 6.1.8 Work model与扩展边界
+
+<Algs4EventWorkLab />
+
+Baseline `predict(a)`扫描N particles，花O(N) pair predictions；initialization对all particles约O(N²)，每个pair collision后重算a与b各O(N)，heap insertion/deletion另有logarithmic cost。实际queue含duplicates与invalidated events，memory和work取决于collision density。
+
+Time-driven baseline在T/dt个ticks上做O(N²) overlap checks，还可能因dt过大miss events。Event-driven更accurate，但不是自动subquadratic。
+
+Large N可用cell method：unit box划分cells，只预测nearby particles，并安排cross-cell events。它减少candidate pairs，却增加spatial index与cell-boundary maintenance。Simultaneous multi-particle collision也超出当前binary-event assumptions，需要batch same-time contacts或constraint solver。
+
+## 6.1.9 Independent certificate：不要只看动画“像在碰”
+
+Physics animation可能视觉合理但数值错误。Independent trace certificate至少检查：
+
+1. **Clock**：processed valid event times nondecreasing，delta nonnegative。
+2. **Geometry**：pair event时center distance约等于radius sum；wall event时center coordinate约等于radius或1-radius。
+3. **Validity**：event snapshots等于current collision counts。
+4. **Conservation**：pair momentum与kinetic energy在scale-aware tolerance内不变；wall speed不变。
+5. **Bounds**：每次event后particles仍在box内且不重叠。
+6. **Reprediction**：velocity改变后，所有涉及changed particles的新finite events都被安排。
+
+```ts
+for (const event of processedEvents) {
+  assert(event.time >= previousTime);
+  assert(event.snapshotMatchesCurrentCounts());
+  assertContactGeometry(event);
+  const before = invariants(event);
+  resolve(event);
+  assertConservation(before, invariants(event));
+  assertAllParticlesInsideBox();
+}
+```
+
+<Algs4EventCertificateLab />
+
+Testing还应含one particle wall bounce、two equal masses head-on、unequal masses、glancing collision、parallel trajectories、near tangent、event invalidation chain与time-reversal experiment。Roundoff drift要报告，不应用large epsilon掩盖systematic energy leak。
+
+## 6.1.10 逐步运行路线
+
+<Stepper>
+  <Step title="固定hard-disc assumptions" description="确认unit box、no forces、non-overlap、binary elastic contacts与floating-point policy。">
+    <Algs4HardDiscMotionLab />
+  </Step>
+  <Step title="独立验证collision times" description="先算wall time，再以relative quadratic检查approach、discriminant和positive root。">
+    <Algs4WallCollisionLab />
+    <Algs4PairCollisionPredictionLab />
+  </Step>
+  <Step title="维护future-event MinPQ" description="用absolute time排序，并把creation-time collision counts存入event。">
+    <Algs4FutureEventQueueLab />
+    <Algs4InvalidatedEventLab />
+  </Step>
+  <Step title="推进并响应有效event" description="先移动全部particles，再执行pair impulse、wall reflection或redraw，随后局部重预测。">
+    <Algs4SimulationLoopLab />
+    <Algs4CollisionResolutionLab />
+  </Step>
+  <Step title="用物理不变量验收" description="检查clock、contact、bounds、version snapshots、momentum、energy与new-event completeness。">
+    <Algs4ConservationInvariantLab />
+    <Algs4EventCertificateLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Event-driven simulation只在interesting event times改变state，避免fixed dt的空扫描与漏碰撞。
+- Hard-disc model在events之间作constant-velocity linear motion，pair与wall contacts是perfectly elastic。
+- Collision prediction由wall linear equation或relative-motion quadratic求earliest positive time。
+- Priority queue of future events按absolute time排序；queued candidates依赖创建时的trajectory assumptions。
+- Invalidated events通过collision-count version snapshots惰性拒绝，无需从heap中主动定位删除。
+- Collision resolution先把all particles推进到event time，再更新normal velocity components与counts。
+- Pair response守恒linear momentum与kinetic energy；这些数值证书比动画更可靠。
+- 处理有效event后只需repredict涉及changed particles的future collisions。
+- Baseline initialization O(N²)、每次响应O(N) reprediction；cell methods可缩小candidate neighborhood。
+
+<Exercises>
+
+1. Particle位于 `(0.3,0.7)`，radius 0.05，velocity `(0.2,-0.1)`；分别计算vertical与horizontal wall collision times，判断哪个event先进入MinPQ。
+2. 两particles有relative displacement `(0.4,0)`、relative velocity `(-0.1,0)`、radius sum 0.1；计算dvdr、dvdv、D和collision dt，并验证contact distance。
+3. A/B event在counts `(2,5)` 时安排到t=8；A在t=3先撞墙。说明t=8 event如何失效、哪些new events要重预测，以及为何不用从heap主动删除。
+4. 设计head-on与glancing collision的independent certificate，列出geometry、clock、momentum、kinetic energy、bounds和reprediction assertions。
+
+<Answer>
+
+Right vertical wall time为 `(1-0.3-0.05)/0.2=3.25`。Downward horizontal wall time为 `(0.05-0.7)/(-0.1)=6.5`。Vertical event在absolute time `clock+3.25` 更早；若limit允许就先出queue。
+
+</Answer>
+
+<Answer>
+
+dvdr为-0.04，dvdv为0.01，drdr为0.16，sigma²为0.01。D等于0.0016-0.01×0.15=0.0001，sqrt D为0.01；dt等于 `-(-0.04+0.01)/0.01=3`。Relative distance从0.4减少0.1×3后为0.1，正好等于radius sum。
+
+</Answer>
+
+<Answer>
+
+Wall response让A count从2变3并改变velocity。T=8 event仍留在heap，但delete-min时snapshot countA=2与current 3不等，所以在移动任何particle前discard。At t=3处理wall后重新计算A对all particles以及A对两类walls的events；B trajectory没变，不必重算完全不涉及A的pairs。
+
+</Answer>
+
+<Answer>
+
+每个processed event先断言time不小于previous clock、snapshots匹配。Pair contact检查center distance与radius sum；wall contact检查对应coordinate。保存before momentum和energy，response后比较scale-aware tolerance，并检查all centers在radius bounds内。最后以reference predictor枚举changed particles的finite future contacts，确认queue有matching candidates。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="事件驱动模拟">按future events的ordered times推进state而非fixed ticks的simulation。</GlossaryItem>
+  <GlossaryItem term="硬盘粒子模型">Unit box中执行free flight与perfectly elastic contacts的circular particle model。</GlossaryItem>
+  <GlossaryItem term="碰撞预测">在no-intervening-event假设下求first future contact time。</GlossaryItem>
+  <GlossaryItem term="未来事件优先队列">以absolute time为priority保存collision与redraw candidates的MinPQ。</GlossaryItem>
+  <GlossaryItem term="失效事件">因参与particle trajectory已改变而不再对应physical collision的queued candidate。</GlossaryItem>
+  <GlossaryItem term="碰撞计数">Particle每次physical collision递增的version stamp。</GlossaryItem>
+  <GlossaryItem term="碰撞响应">At contact根据impulse与elastic laws更新velocities的state transition。</GlossaryItem>
+  <GlossaryItem term="守恒量证书">以momentum、kinetic energy和geometry验证physics update的independent evidence。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Algorithms, 4th Edition · Section 6.1 Event-Driven Simulation"
+  href="https://algs4.cs.princeton.edu/61event/"
+  author="Robert Sedgewick and Kevin Wayne"
+  license="本章按官方6.1及当前Particle、CollisionSystem、Event与MinPQ实现重构hard-disc assumptions、wall/pair prediction、count-snapshot invalidation、elastic response、redraw scheduling与conservation certificate；代码为教学化摘写与重新组织。"
+/>

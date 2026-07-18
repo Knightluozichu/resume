@@ -1,0 +1,156 @@
+---
+title: "第15章 使用噪声"
+type: C
+section: "Unity Shader精要 · 高级篇"
+order: 15
+description: "把噪声用于消融、水波和全局雾，并区分随机纹理、连续噪声、阈值边缘与时空一致性。"
+demo: true
+math: true
+sourceUrl: "https://www.cnblogs.com/xiaowangba/p/6314640.html"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { UsebNoisePipelineLab, UsebNoiseCompareLab, UsebNoiseEvidenceLab } from "@/components/mdx/unity-shader-essentials/diagrams/useb-15-noise";
+
+<Objectives>
+- 能解释噪声函数、消融阈值和边缘带在Unity渲染链中的位置
+- 能推导本页公式并实现最小Shader，用调试视图比较中间值
+- 能复现时空一致性，用Frame Debugger、边界场景和性能数据验收
+</Objectives>
+
+## 从效果开始
+
+先预测画面、Draw Call和中间缓冲会如何变化，再调整一个参数观察变化。消融以噪声减阈值决定保留区，并在很小差值范围叠加边缘颜色；阈值必须单调且边缘宽度与纹理分辨率协调。水波可叠加不同方向和速度的法线采样。雾噪声应使用世界空间坐标，避免相机移动时纹理粘在屏幕上。 本页用<Term def="在空间上产生伪随机但可控制连续性和频谱的函数。">噪声函数</Term>、<Term def="把噪声值与时间阈值比较并丢弃一侧片元的控制量。">消融阈值</Term>、<Term def="阈值附近保留的窄区间，用于显示发光或烧灼边缘。">边缘带</Term>、<Term def="用噪声或法线贴图随时间偏移来改变采样与反射方向。">水波扰动</Term>、<Term def="动画噪声在空间邻域与连续帧之间避免随机闪烁的性质。">时空一致性</Term>串联视觉目标、GPU数据流、渲染状态和验收证据。
+
+<UsebNoisePipelineLab />
+
+## 第一版权威目录定位
+
+本页一一对应冯乐乐《Unity Shader入门精要》第一版第15章 使用噪声。作者发布的完整目录明确列出5篇20章，人民邮电出版社书目记录确认2016年第一版、ISBN 9787115423054和369页，作者GitHub保存随书源代码与勘误入口。
+
+### 原书小节覆盖
+
+1. 15.1 消融效果
+2. 15.2 水波效果
+3. 15.3 再谈全局雾效
+4. 15.4 扩展阅读
+5. 15.5 参考文献
+
+### 核心对象
+
+1. **噪声函数**：在空间上产生伪随机但可控制连续性和频谱的函数。
+2. **消融阈值**：把噪声值与时间阈值比较并丢弃一侧片元的控制量。
+3. **边缘带**：阈值附近保留的窄区间，用于显示发光或烧灼边缘。
+4. **水波扰动**：用噪声或法线贴图随时间偏移来改变采样与反射方向。
+5. **时空一致性**：动画噪声在空间邻域与连续帧之间避免随机闪烁的性质。
+
+## 数据流与公式
+
+任何Shader效果都先写清五项契约：输入属性来自哪里，当前值位于哪个坐标或色彩空间，可编程阶段输出什么，ShaderLab状态如何合并结果，以及目标平台和Unity版本是什么。
+
+$$
+keep=step(threshold,N(x))
+$$
+
+$$
+edge=1-smoothstep(0,w,|N(x)-threshold|)
+$$
+
+$$
+n=normalize(n_1+n_2)
+$$
+
+$$
+density=\rho_0(1+kN(p_w,t))
+$$
+
+消融以噪声减阈值决定保留区，并在很小差值范围叠加边缘颜色；阈值必须单调且边缘宽度与纹理分辨率协调。水波可叠加不同方向和速度的法线采样。雾噪声应使用世界空间坐标，避免相机移动时纹理粘在屏幕上。 公式不是孤立记忆项；每个向量都标注空间，每个颜色都标注线性或sRGB，每个深度都标注设备、NDC或观察距离，每个纹理通道都标注数据语义。
+
+## 最小Shader实现
+
+```hlsl
+float noise = tex2D(_NoiseTex, i.uv).r;
+clip(noise - _BurnAmount);
+float edge = 1.0 - smoothstep(0.0, _LineWidth, noise - _BurnAmount);
+```
+
+实现顺序固定为常量颜色、输入可视化、核心公式、材质参数和优化。每新增一个步骤都保留开关，这样画面异常时可以二分定位。编译成功只证明语法和部分类型成立，不证明空间、状态或色彩处理正确。
+
+<UsebNoiseCompareLab />
+
+## Unity侧设置与渲染状态
+
+```csharp
+var material = renderer.sharedMaterial;
+material.SetFloat("_DebugMode", debugMode);
+material.EnableKeyword(debugMode > 0 ? "DEBUG_VIEW" : "BASELINE_VIEW");
+Debug.Assert(material.shader.isSupported);
+```
+
+材质、相机和光源属于实验输入，不能只保存Shader文件。用Frame Debugger检查实际选择的SubShader和Pass、关键字变体、渲染队列、RenderTarget、深度写入和混合；用Profiler或GPU捕获确认成本来自提交、顶点、片元还是带宽。
+
+## 边界与平台差异
+
+测试零向量、负缩放、非统一缩放、UV边界、透明物体交叉、近远裁剪面、HDR亮度、不同纹理导入设置和移动精度。原书以Unity 5时代内置管线为语境；迁移到当前Unity、URP或HDRP时，应把概念映射和API替换单独记录，不能把新管线行为倒写成原书内容。
+
+```text
+scene: fixed reference scene
+unity: exact editor version
+pipeline: built-in or named SRP
+platform: graphics API and GPU
+evidence: image diff + frame events + timings
+```
+
+<UsebNoiseEvidenceLab />
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定输入与参考图"><UsebNoisePipelineLab /></Step>
+  <Step title="逐阶段打开效果"><UsebNoiseCompareLab /></Step>
+  <Step title="保存状态与性能"><UsebNoiseEvidenceLab /></Step>
+</Stepper>
+
+1. 建立只有一个网格、一个相机和一个主光的参考场景，保存Unity版本与平台。
+2. 输出UV、法线、深度或光照项等中间值，确认数据空间和范围。
+3. 启用本章核心效果，用Frame Debugger逐Pass检查输入、状态和目标。
+4. 构造边界与失败场景，比较参考图、像素差异、Draw Call和GPU时间。
+
+## 验收证书
+
+验收包至少包含Shader与脚本、材质参数、测试场景、参考图和候选图、Frame Debugger事件、编译关键字、目标平台、帧时间与反例。每帧使用独立随机值驱动噪声，空间图案连续但时间上强烈闪烁。 修复后必须重放同一输入，确认画面和性能变化都能由证据解释。
+
+## 常见误区
+
+<Callout type="trap" title="只看最终截图">每帧使用独立随机值驱动噪声，空间图案连续但时间上强烈闪烁。</Callout>
+
+<Callout type="trap" title="忽略版本与状态">同一段HLSL在不同Unity版本、渲染管线、关键字和纹理导入设置下可能走不同Pass或解释不同数据。修复时把版本、平台、状态和资源设置纳入实验输入。</Callout>
+
+## 本章回顾
+
+本页覆盖噪声函数、消融阈值、边缘带、水波扰动、时空一致性。掌握标准是能从视觉目标画出数据流，写出最小实现，逐阶段可视化中间值，再用渲染状态、边界样例和性能数据完成复现。
+
+<Exercises>
+**问题1：噪声函数与消融阈值如何连接？**
+<Answer>在空间上产生伪随机但可控制连续性和频谱的函数。 把噪声值与时间阈值比较并丢弃一侧片元的控制量。 回答时标注执行阶段和输入空间。</Answer>
+
+**问题2：如何调试边缘带？**
+<Answer>先输出常量，再把相关中间值映射为颜色；逐项关闭纹理、光照和状态，最后用Frame Debugger确认实际Pass。</Answer>
+
+**问题3：如何验收时空一致性？**
+<Answer>动画噪声在空间邻域与连续帧之间避免随机闪烁的性质。 同时保存正常图、边界图、失败反例、状态记录和性能基线。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="噪声函数" definition="在空间上产生伪随机但可控制连续性和频谱的函数。" />
+  <GlossaryItem term="消融阈值" definition="把噪声值与时间阈值比较并丢弃一侧片元的控制量。" />
+  <GlossaryItem term="边缘带" definition="阈值附近保留的窄区间，用于显示发光或烧灼边缘。" />
+  <GlossaryItem term="水波扰动" definition="用噪声或法线贴图随时间偏移来改变采样与反射方向。" />
+  <GlossaryItem term="时空一致性" definition="动画噪声在空间邻域与连续帧之间避免随机闪烁的性质。" />
+  <GlossaryItem term="Shader实验单" definition="记录Unity版本、目标平台、场景、材质、源码、截图和性能的一页式证据。" />
+</Glossary>
+
+<Attribution adaptedFrom="冯乐乐 · Unity Shader入门精要 · 第15章 使用噪声" adaptedUrl="https://www.cnblogs.com/xiaowangba/p/6314640.html" />

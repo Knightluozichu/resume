@@ -1,0 +1,229 @@
+---
+title: "第13章 云端托管专用服务器（Cloud Hosting Dedicated Servers）"
+type: A
+section: "Multiplayer Game Programming · 云端专用服务器"
+order: 13
+description: "专用服务器托管是容量与生命周期控制问题：进程管理器、虚拟机管理器和会话分配必须闭环。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/multiplayer-game-programming-architecting-networked-9780134034331"
+draft: false
+---
+
+import {
+  Mgp13CloudDedicatedServersMapLab,
+  Mgp13CloudDedicatedServersExperimentLab,
+  Mgp13CloudDedicatedServersEvidenceLab,
+} from "@/components/mdx/multiplayer-game-programming/diagrams/mgp-13-cloud-dedicated-servers";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释云端专用服务器的核心机制，并把它放回全书13章与附录A的主线
+- 能比较正常、边界、失败和恢复样本，指出首个状态或时间偏离点
+- 能实现最小C++或协议实验，记录网络身份、版本、所有权与预算
+- 能设计证据回答“只有健康且版本匹配的进程可被放置；控制操作幂等；缩容前所有会话、结果和租约均已清账。”是否成立
+
+</Objectives>
+
+## 直觉：先找唯一事实
+
+专用服务器托管是容量与生命周期控制问题：进程管理器、虚拟机管理器和会话分配必须闭环。 真正的难点不是让一次理想样本跑通，而是让消息身份、世界版本、状态权威和时间预算在丢包、乱序、重复与断线后仍可解释。先预测：如果只保存最终成功画面，本页最可能隐藏哪一种分歧？
+
+<Mgp13CloudDedicatedServersMapLab />
+
+## 权威目录定位
+
+本页依据 Addison-Wesley / InformIT 官方书目与官方目录样章锁定范围。英文标题用于一对一追踪，中文正文为独立教学重构；现代平台差异、安全强化和可观察性补充会明确披露：
+
+- To Host or Not To Host
+- Tools of the Trade
+- Overview and Terminology
+- Local Server Process Manager
+- Virtual Machine Manager
+- Summary
+- Review Questions
+- Additional Readings
+
+本页逐项覆盖8个公开目录条目，并纳入同一套正常、边界、失败与恢复验收。
+
+## 核心概念与所有权
+
+<Term def="无本地玩家、独立运行权威比赛模拟的服务器进程。">专用服务器</Term>、
+<Term def="在单台主机上启动、监控、分配和回收比赛进程的控制组件。">服务器进程管理器</Term>、
+<Term def="依据集群容量创建、配置、健康检查和销毁计算实例的控制组件。">虚拟机管理器</Term>、
+<Term def="按地区、容量、版本和隔离约束为比赛选择主机与进程的决策。">会话放置</Term>、
+<Term def="停止接收新会话并等待或迁移现有会话后安全下线容量的过程。">排空</Term>。每个概念都要回答：谁创建输入，谁拥有可变状态，哪个序号或版本拒绝旧结果，断线后由谁恢复。
+
+| # | 概念 | 工程含义 |
+| -: | --- | --- |
+| 1 | 专用服务器 | 无本地玩家、独立运行权威比赛模拟的服务器进程。 |
+| 2 | 服务器进程管理器 | 在单台主机上启动、监控、分配和回收比赛进程的控制组件。 |
+| 3 | 虚拟机管理器 | 依据集群容量创建、配置、健康检查和销毁计算实例的控制组件。 |
+| 4 | 会话放置 | 按地区、容量、版本和隔离约束为比赛选择主机与进程的决策。 |
+| 5 | 排空 | 停止接收新会话并等待或迁移现有会话后安全下线容量的过程。 |
+
+## 机制拆解
+
+### 1. 托管决策要比较完整成本
+
+自托管提供控制但承担容量、补丁和全球网络运维；云托管提高弹性却引入启动时间、配额和持续成本。决策应以地区峰值并发、每进程容量、目标等待时间和故障预算量化，而不是只比较单台机器价格。
+
+先预测：若省略这一层，哪一个序号、所有权或时间预算会最先失真？
+
+### 2. 两级管理器分离主机与进程生命周期
+
+虚拟机管理器维护计算节点池，进程管理器在健康节点上维护可分配比赛进程。进程崩溃不必立刻销毁虚拟机，节点失联则必须使其所有进程退出可分配集合；两个层级通过租约而不是永久记录声明所有权。
+
+先预测：若省略这一层，哪一个序号、所有权或时间预算会最先失真？
+
+### 3. 伸缩闭环必须处理慢启动和排空
+
+容量信号经冷却和预测产生扩缩请求，新镜像启动、下载和健康检查都需要提前量。缩容先排空，确认无会话和未上传结果后再终止；重试创建也要用操作ID去重，防止控制面超时制造额外实例。
+
+先预测：若省略这一层，哪一个序号、所有权或时间预算会最先失真？
+
+## 六阶段证据链
+
+可操作链条是：预测地区需求 → 准备版本镜像 → 扩展虚拟机池 → 启动健康进程 → 放置比赛会话 → 排空回收并核账。正常样本证明能力，边界样本证明预算，失败样本证明拒绝，恢复样本证明状态与资源重新收敛。
+
+<Stepper>
+  <Step title="1. 预测地区需求与准备版本镜像">
+    固定协议版本、网络种子、输入序号与状态所有者，运行正常和边界样本。
+    <Mgp13CloudDedicatedServersMapLab />
+  </Step>
+  <Step title="2. 扩展虚拟机池与启动健康进程">
+    注入延迟、抖动、丢包、重复或责任节点中断，要求在首偏离点停止。
+    <Mgp13CloudDedicatedServersExperimentLab />
+  </Step>
+  <Step title="3. 放置比赛会话与排空回收并核账">
+    清除故障后重放相同输入，核对世界摘要、对象数量、消息债务与资源租约。
+    <Mgp13CloudDedicatedServersEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小实现骨架
+
+以下代码是独立复现实验骨架，不复制原书代码。序号比较必须处理回绕，生产实现还需补齐平台错误、认证、容量与资源清理。
+
+```cpp
+struct NetworkEvidence {
+  std::uint32_t sequence;
+  std::uint32_t worldVersion;
+  std::uint64_t objectId;
+  double sentAtMs;
+  double appliedAtMs;
+};
+
+bool accepts(const NetworkEvidence& next, const NetworkEvidence& current) {
+  return next.objectId == current.objectId &&
+         next.worldVersion >= current.worldVersion;
+}
+```
+
+证据记录把目录、时序与状态摘要放在一起：
+
+```yaml
+book: Multiplayer Game Programming
+page: mgp-13-cloud-dedicated-servers
+official_entries: 8
+sample: normal | boundary | failure | recovery
+protocol_version: fixed
+network_seed: fixed
+state_owner: explicit
+first_divergence: null
+```
+
+故障脚本一次只改变一个变量：
+
+```text
+baseline -> inject(delay | jitter | loss | duplicate | disconnect)
+observe -> stop_at_first_divergence
+recover -> replay_same_version_seed_and_input
+assert -> one_authority && converged_state && no_orphan_resource
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：只按当前CPU扩容，忽略虚拟机与游戏进程启动时延，峰值到来时容量仍未就绪。** 必须保存消息序号、世界版本和首次拒绝原因，而不是只看最终画面。
+</Callout>
+
+<Callout type="trap">
+  **误区二：缩容直接终止实例，没有排空比赛、提交结果和核对进程租约。** 必须加入边界、失败与恢复样本，证明错误没有跨入下一阶段。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 网络与输入变化 | 预期状态 | 通过条件 |
+| --- | --- | --- | --- |
+| 正常 | 合法版本、顺序、身份与容量 | 六阶段完成 | 权威摘要与对象身份一致 |
+| 边界 | 临界延迟、抖动、回绕或满载 | 达到预算不越界 | 队列有界且无永久饥饿 |
+| 失败 | 丢包、重复、畸形、断线或节点失效 | 首偏离点停止 | 明确拒绝、回滚或接管 |
+| 恢复 | 清除故障后重放同一输入 | 收敛到正常轨迹 | 无双权威、幽灵对象和资源泄漏 |
+
+<Mgp13CloudDedicatedServersEvidenceLab />
+
+本页签发不变量是：**只有健康且版本匹配的进程可被放置；控制操作幂等；缩容前所有会话、结果和租约均已清账。** 单次演示、平均延迟或最终截图不能替代序号、版本、首偏离点和恢复证据。
+
+## 练习
+
+<Exercises>
+
+**问题 1** 为什么不能只以最终世界状态正确作为验收？
+
+<Answer>
+  最终状态会隐藏重复副作用、旧版本覆盖、瞬时双权威和资源泄漏。必须比较消息序号、对象身份、状态所有者、时间预算与首偏离点。
+</Answer>
+
+**问题 2** 如何把本页公开目录变成可执行学习证据？
+
+<Answer>
+  先按公开顺序建立目录追踪表，再为每个主题写出输入、状态、输出、失败与恢复条件。本页重点包括：To Host or Not To Host、Tools of the Trade、Overview and Terminology、Local Server Process Manager、Virtual Machine Manager、Summary；其余条目已在上方逐项列出并纳入验收。
+</Answer>
+
+**问题 3** 本页的最小通过条件是什么？
+
+<Answer>
+  只有健康且版本匹配的进程可被放置；控制操作幂等；缩容前所有会话、结果和租约均已清账。 并且相同协议版本、网络种子和输入可重放正常、边界、失败与恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **专用服务器**：无本地玩家、独立运行权威比赛模拟的服务器进程。
+- **服务器进程管理器**：在单台主机上启动、监控、分配和回收比赛进程的控制组件。
+- **虚拟机管理器**：依据集群容量创建、配置、健康检查和销毁计算实例的控制组件。
+- **会话放置**：按地区、容量、版本和隔离约束为比赛选择主机与进程的决策。
+- **排空**：停止接收新会话并等待或迁移现有会话后安全下线容量的过程。
+- 六阶段机制链已经映射到正常、边界、失败和恢复证据。
+- 官方目录逐项追踪，现代补充不会冒充原书正式分节。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="专用服务器">无本地玩家、独立运行权威比赛模拟的服务器进程。</GlossaryItem>
+  <GlossaryItem term="服务器进程管理器">在单台主机上启动、监控、分配和回收比赛进程的控制组件。</GlossaryItem>
+  <GlossaryItem term="虚拟机管理器">依据集群容量创建、配置、健康检查和销毁计算实例的控制组件。</GlossaryItem>
+  <GlossaryItem term="会话放置">按地区、容量、版本和隔离约束为比赛选择主机与进程的决策。</GlossaryItem>
+  <GlossaryItem term="排空">停止接收新会话并等待或迁移现有会话后安全下线容量的过程。</GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Josh Glazer、Sanjay Madhav 著，Addison-Wesley Professional，第一版，2015年10月出版、版权年2016，384页，eBook ISBN 9780134034331，印刷版 ISBN 9780134034300；InformIT官方书目与官方Pearson目录样章确认13章、附录A及112个公开目录条目。正文为独立教学重构。"
+  adaptedUrl="https://www.informit.com/store/multiplayer-game-programming-architecting-networked-9780134034331"
+/>

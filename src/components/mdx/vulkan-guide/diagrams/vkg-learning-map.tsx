@@ -1,68 +1,113 @@
-/**
- * <VkgLearningMapDiagram>：Vulkan 学习指南 全书学习地图
- * 纯静态 SVG，无交互。Server Component。
- */
+const FIRST_FRAME = [
+  ["Loader 与 Instance", "协商 API 版本、实例扩展和验证层"],
+  ["设备能力契约", "物理设备、队列族、feature、extension、format"],
+  ["Device 与队列", "只启用已查询能力，取得 graphics/present/transfer queue"],
+  ["资源与接口", "内存、buffer/image、descriptor、SPIR-V、pipeline layout"],
+  ["Pipeline 与 Rendering", "动态状态、dynamic rendering、附件和布局"],
+  ["命令与提交", "录制、barrier2、submit2、semaphore/fence、present"],
+] as const;
+
+const CORE_UNITS = [
+  "架构/版本/验证/SPIR-V",
+  "实例/设备/队列/特性",
+  "WSI/Surface/Swapchain",
+  "内存/Buffer/Image/所有权",
+  "Shader/Descriptor/Push Constant",
+  "Pipeline/Dynamic Rendering",
+  "Command Buffer/Threading",
+  "Synchronization2/Timeline",
+  "附件/Layout/Legacy Render Pass",
+  "Compute/Ray Tracing/Mesh/VRS",
+] as const;
+
 export function VkgLearningMapDiagram() {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox="0 0 720 400" role="img" aria-label="Vulkan 学习指南全书学习地图" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x="360" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">Vulkan 学习指南 · 全书学习地图</text>
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
+        <div
+          role="img"
+          aria-label="Vulkan 第一帧六段依赖和十个官方核心单元学习地图"
+          className="grid gap-5"
+        >
+          <section>
+            <h3 className="text-sm font-bold text-primary">第一帧的六段依赖</h3>
+            <div className="mt-3 grid gap-2 md:grid-cols-3">
+              {FIRST_FRAME.map(([title, detail], index) => (
+                <div
+                  key={title}
+                  className="min-h-28 rounded-control border border-accent/50 bg-accent/10 p-3"
+                >
+                  <span className="font-mono text-xs text-secondary">{index + 1}</span>
+                  <strong className="mt-2 block text-sm text-accent">{title}</strong>
+                  <p className="mt-2 text-xs leading-5 text-secondary">{detail}</p>
+                </div>
+              ))}
+            </div>
+          </section>
 
-          {/* 五大初始化步骤 */}
-          <text x="360" y="54" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text-primary)">五大初始化步骤</text>
-          {[
-            { x: 40, t: "1 Instance", d: "实例" },
-            { x: 172, t: "2 Device", d: "物理/逻辑设备" },
-            { x: 304, t: "3 Swapchain", d: "交换链" },
-            { x: 436, t: "4 Pipeline", d: "图形管线" },
-            { x: 568, t: "5 CmdBuffer", d: "命令缓冲" },
-          ].map((s, i) => (
-            <g key={s.t}>
-              <rect x={s.x} y="66" width="112" height="56" rx="8" fill="var(--bg)" stroke="var(--accent)" strokeWidth="1.3" />
-              <text x={s.x + 56} y="88" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--accent)">{s.t}</text>
-              <text x={s.x + 56} y="104" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">{s.d}</text>
-              {i < 4 && <line x1={s.x + 112} y1="94" x2={s.x + 124} y2="94" stroke="var(--accent)" strokeWidth="1.2" markerEnd="url(#vkgArrow)" />}
-            </g>
-          ))}
-
-          {/* 渲染循环 */}
-          <rect x="40" y="140" width="640" height="56" rx="8" fill="var(--accent)" fillOpacity="0.08" stroke="var(--accent)" strokeWidth="1.2" />
-          <text x="360" y="162" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent)">渲染循环：取图像 → 提交命令 → 等同步 → 呈现</text>
-          <text x="360" y="180" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">vkAcquireNextImageKHR → vkQueueSubmit → vkWaitForFences → vkQueuePresentKHR</text>
-
-          {/* 十章 */}
-          <text x="360" y="216" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text-primary)">十章脉络</text>
-          {[
-            { x: 40, y: 226, t: "1 学习地图" },
-            { x: 180, y: 226, t: "2 基础概念" },
-            { x: 320, y: 226, t: "3 实例设备" },
-            { x: 460, y: 226, t: "4 交换链" },
-            { x: 600, y: 226, t: "5 图形管线" },
-            { x: 40, y: 268, t: "6 命令缓冲" },
-            { x: 180, y: 268, t: "7 渲染通道" },
-            { x: 320, y: 268, t: "8 纹理着色器" },
-            { x: 460, y: 268, t: "9 高级特性" },
-            { x: 600, y: 268, t: "10 总复习" },
-          ].map((c) => (
-            <g key={c.t}>
-              <rect x={c.x} y={c.y} width="132" height="32" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-              <text x={c.x + 66} y={c.y + 21} textAnchor="middle" fontSize="9.5" fill="var(--text-primary)">{c.t}</text>
-            </g>
-          ))}
-
-          <rect x="40" y="318" width="640" height="58" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" />
-          <text x="360" y="340" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--text-primary)">核心思想：显式 API + 命令缓冲 + 显式同步</text>
-          <text x="360" y="360" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">代码量大但无驱动隐式开销，可预测、可并行、跨平台一致</text>
-
-          <defs>
-            <marker id="vkgArrow" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto">
-              <path d="M0,0 L7,4.5 L0,9 z" fill="var(--accent)" />
-            </marker>
-          </defs>
-        </svg>
+          <section>
+            <h3 className="text-sm font-bold text-primary">十个权威核心单元</h3>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+              {CORE_UNITS.map((unit, index) => (
+                <div
+                  key={unit}
+                  className="grid min-h-20 content-center rounded-control border border-border bg-bg/40 p-3 text-center"
+                >
+                  <span className="font-mono text-xs text-secondary">{index + 1}</span>
+                  <strong className="mt-1 text-xs leading-5 text-primary">{unit}</strong>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
       </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">五大初始化步骤、渲染循环与十章脉络总览</figcaption>
+      <figcaption className="mt-2 text-center text-sm text-secondary">
+        Vulkan 的第一帧不是固定五步初始化，而是能力、资源、状态、命令和同步组成的依赖图
+      </figcaption>
+    </figure>
+  );
+}
+
+const SUBMISSION_CHAIN = [
+  ["Acquire", "获取 swapchain image；WSI binary semaphore 表示图像可用"],
+  ["Record", "barrier2 转换布局，beginRendering，bind/draw，结束并转 PRESENT"],
+  ["Submit2", "等待 acquire，提交 command buffer，signal timeline 与 render-finished"],
+  ["Present", "present queue 等待 render-finished，再把图像交给呈现引擎"],
+  ["Recycle", "确认该帧/图像资源完成后，才重置 pool、复用 semaphore 和 CPU 数据"],
+] as const;
+
+export function VkgSubmissionChainDiagram() {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
+        <div
+          role="img"
+          aria-label="Vulkan 从获取交换链图像到录制、提交、呈现和资源复用的同步链"
+          className="grid gap-2 md:grid-cols-5"
+        >
+          {SUBMISSION_CHAIN.map(([title, detail], index) => (
+            <div
+              key={title}
+              className="relative min-h-36 rounded-control border border-border bg-bg/40 p-3"
+            >
+              <span className="font-mono text-xs text-secondary">{index + 1}</span>
+              <strong className="mt-2 block text-sm text-accent">{title}</strong>
+              <p className="mt-2 text-xs leading-5 text-secondary">{detail}</p>
+              {index < SUBMISSION_CHAIN.length - 1 && (
+                <span
+                  aria-hidden="true"
+                  className="absolute -right-2 top-1/2 z-10 hidden -translate-y-1/2 text-accent md:block"
+                >
+                  →
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">
+        queue submission 只建立提交边界；正确性还取决于阶段、访问、布局和资源复用时机
+      </figcaption>
     </figure>
   );
 }

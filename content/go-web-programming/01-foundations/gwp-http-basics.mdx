@@ -1,0 +1,106 @@
+---
+title: "第1章 Go与Web应用"
+type: C
+section: "Go Web编程 · 基础与全景"
+order: 1
+description: "理解Go适合Web应用的工程原因，拆解HTTP请求、响应、URI、HTTP/2、handler与template engine。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/go-web-programming/chapter-1"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GwpHttpCycleLab, GwpMessageLab, GwpAppPartsLab } from "@/components/mdx/go-web-programming/diagrams/gwp-http-basics";
+
+<Objectives>
+- 能解释Go如何支持可扩展、模块化、可维护和高性能Web应用
+- 能拆解HTTP请求与响应，并判断方法安全性、幂等性和状态码责任
+- 能实现由handler与template engine组成的最小Go Web应用
+</Objectives>
+
+## 从浏览器为何能调用Go开始
+
+先预测：浏览器访问一个URI时，是否直接调用Go函数？不是。客户端发送HTTP消息，服务器解析后选择handler，再把结果编码为响应。<Term def="客户端请求、服务端处理和响应返回组成的一次协议往返。">HTTP exchange contract</Term>把网络协议与函数调用分开。
+
+<GwpHttpCycleLab />
+
+## Go为何适合Web应用
+
+编译产物、垃圾回收、静态类型、标准库和轻量并发共同降低交付成本。<Term def="组件职责清晰、依赖方向稳定且可独立测试的应用结构。">modular web architecture</Term>比“框架少”更重要；性能也必须由测量证明，不能从语言标签推导。
+
+```go
+func main() {
+    http.HandleFunc("/", hello)
+    log.Fatal(http.ListenAndServe(":8080", nil))
+}
+```
+
+## Web应用如何工作
+
+DNS、连接、HTTP请求、路由、handler、存储和模板按顺序协作。<Term def="把协议输入分派到应用行为并生成响应的处理入口。">handler boundary</Term>只拥有一次请求，不应启动无法取消的后台工作。
+
+## HTTP请求
+
+请求包含method、URI、版本、header和可选body。GET与HEAD应安全，PUT与DELETE按语义应幂等，但服务器实现仍要维护不变量。<Term def="重复执行同一请求产生与执行一次相同目标状态的语义。">idempotent method semantics</Term>不等于每次响应字节完全相同。
+
+```http
+POST /threads HTTP/1.1
+Content-Type: application/x-www-form-urlencoded
+
+title=Go
+```
+
+<GwpMessageLab />
+
+## HTTP响应、URI与HTTP/2
+
+响应由状态行、header和body组成；URI标识资源位置与查询。HTTP/2改变连接上的帧和stream复用，不改变handler看到的高层请求语义。<Term def="状态码、响应头和实体共同表达处理结果的协议承诺。">response message contract</Term>要求写body前确定状态和header。
+
+## Handler与Template Engine
+
+Handler处理协议和业务，template engine把数据与展示程序组合。<Term def="在不改变领域数据的前提下把数据安全渲染为内容的组件。">template rendering boundary</Term>应默认使用html/template处理上下文转义。
+
+```go
+func hello(w http.ResponseWriter, r *http.Request) {
+    w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+    w.WriteHeader(http.StatusOK)
+    _, _ = io.WriteString(w, "hello")
+}
+```
+
+<GwpAppPartsLab />
+
+<Stepper>
+  <Step title="发送请求"><GwpHttpCycleLab /></Step>
+  <Step title="检查消息"><GwpMessageLab /></Step>
+  <Step title="连接应用部件">让handler返回固定数据，再替换成模板输出并比较header。</Step>
+</Stepper>
+
+## 验收实验：原始消息到Handler
+
+用curl分别发送GET、POST和不支持的方法，保存请求行、header、状态和body；随后切换HTTP/1.1与HTTP/2客户端，确认业务handler行为一致。故意在Write后修改状态码，观察为何响应已提交。
+
+<Callout type="trap" title="POST天然比GET安全">方法名不提供认证、授权或加密；敏感操作仍需TLS、身份和权限检查。</Callout>
+<Callout type="trap" title="HTTP/2要求重写业务Handler">net/http在传输层处理协议差异，高层handler契约通常保持不变。</Callout>
+
+## 本章回顾
+
+本章覆盖Go与Web应用、可扩展、模块化、可维护与高性能Web应用、Web应用如何工作、HTTP请求与响应、URI、HTTP/2、处理器与模板引擎，以及Hello Go Web应用。下一章会把这些部件装进完整论坛。
+
+<Exercises>
+**问题 1：安全方法与幂等方法相同吗？**<Answer>不同；安全表示不请求状态改变，幂等表示重复请求的目标状态相同。</Answer>
+**问题 2：何时状态码被提交？**<Answer>调用WriteHeader或第一次Write时。</Answer>
+**问题 3：Handler与模板谁负责什么？**<Answer>Handler处理请求和业务，模板只负责根据数据生成展示内容。</Answer>
+</Exercises>
+
+## 术语表
+<Glossary>
+  <GlossaryItem term="HTTP exchange contract" definition="请求处理响应组成的协议往返。" />
+  <GlossaryItem term="modular web architecture" definition="职责与依赖清晰的Web结构。" />
+  <GlossaryItem term="handler boundary" definition="协议输入进入应用行为的入口。" />
+  <GlossaryItem term="idempotent method semantics" definition="重复执行保持同一目标状态。" />
+  <GlossaryItem term="response message contract" definition="状态、header和body的响应承诺。" />
+  <GlossaryItem term="template rendering boundary" definition="数据到安全内容的展示边界。" />
+</Glossary>
+<Attribution adaptedFrom="Go Web Programming Chapter 1 Go and web applications" adaptedUrl="https://livebook.manning.com/book/go-web-programming/chapter-1" />

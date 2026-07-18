@@ -1,0 +1,188 @@
+---
+title: "Chapter 15. Enumerated Types and Bit Flags"
+type: C
+section: "CLR via C# 4e · Essential Types"
+order: 15
+description: "从enum底层整数与未知值、zero/default、parse/format到Flags掩码、组合与扩展方法，建立可版本化协议。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcBitFlagLab, CvcEnumApiLab, CvcEnumDomainLab } from "@/components/mdx/clr-via-csharp/diagrams/enumerated-types-bit-flags";
+
+<Objectives>
+
+- 能分析enum的underlying value、zero/default、unnamed/alias values及其序列化版本风险
+- 能设计Flags单bit、composite与known mask，验证set/clear/test/toggle和unknown bits策略
+- 能实现集中parse/format/extension与wire adapter，让无效值和前向兼容可观察
+
+</Objectives>
+
+## 为什么Enum不是封闭集合
+
+Enum在CLR中是继承`System.Enum`的value type，底层存一个integral value。Compiler限制source assignment并提供names，但runtime可以cast任意底层bit pattern；反序列化、数据库、reflection和旧新版本交互都可能产生没有声明name的值。于是“变量类型是enum”只证明位宽和静态API，不证明domain value有效。
+
+先预测：`Enum.IsDefined`是否适合Flags组合；zero没声明时default enum是否非法；两个names能否共享一个value；删掉一个member后旧数据会怎样；`HasFlag(0)`为何总为true；unknown flag bit应丢弃还是保留。答案取决于domain是closed validation、forward-compatible protocol还是bit set。
+
+<Term def="Enum底层整数可能存在但没有声明name，需要由业务或协议决定接受、拒绝或保留的状态。">unnamed enum value</Term>
+
+## Enumerated Types
+
+默认underlying type是Int32，也可显式byte/short/long及无符号变体。Public/wire enum一旦发布，数值就是持久contract；重新排序而省略显式赋值会改变值，不能依赖source位置。明确指定每个外部member数值，保留废弃值不复用，记录reserved ranges。
+
+```csharp
+public enum OrderState : byte
+{
+    Unknown = 0,
+    Pending = 1,
+    Accepted = 2,
+    Rejected = 3,
+    Cancelled = 4,
+}
+
+static bool IsKnown(OrderState state) => state is
+    OrderState.Unknown or OrderState.Pending or OrderState.Accepted or
+    OrderState.Rejected or OrderState.Cancelled;
+```
+
+Zero应通常表示Unknown/None/Default，因为fields、arrays和`default(T)`自然为0。若零在domain无意义，所有边界必须验证，否则未初始化值悄悄进入系统。Alias members共享数值会让ToString/GetName选择不稳定或含糊，除兼容别名外避免。
+
+<Term def="Enum numeric values作为database/wire/config数据长期存在时，名称、数值和废弃规则形成的兼容协议。">enum wire identity</Term>
+
+## Parsing, Formatting, and Validation
+
+`Enum.Parse/TryParse`可接受name，也可能接受numeric text；parse成功不等于value declared。`Enum.IsDefined`检查单个exact declared constant，适合closed non-flags enum，但仍要决定Unknown是否业务允许。Case sensitivity、whitespace、alias和numeric input要显式，外部input通常先parse underlying DTO再domain validate。
+
+```csharp
+static bool TryParseState(string text, out OrderState state)
+{
+    if (!Enum.TryParse(text, ignoreCase: true, out state))
+        return false;
+
+    return IsKnown(state) && state != OrderState.Unknown;
+}
+```
+
+Formatting `G/D/X/F`分别偏name/decimal/hex/flags；日志应同时记录name与numeric，例如`Accepted(2)`，未知值仍有证据。JSON serializer可按name或number，不同客户端对unknown member行为不同；前向兼容API可用wrapper `Known/RawValue`，而不是把未知强转默认丢失。
+
+<Stepper>
+  <Step title="切换named、unnamed、zero与alias value"><CvcEnumDomainLab /></Step>
+  <Step title="建立数值注册表">记录underlying type、每个value、reserved/deprecated、zero语义、wire name和owner。</Step>
+  <Step title="做版本交叉测试">旧reader读取新value、新reader读取旧/废弃value，验证拒绝、保留或fallback符合协议。</Step>
+</Stepper>
+
+<Callout type="trap" title="Enum变量只能保存Source里声明过的Members">
+任何底层整数都可经cast/反序列化进入enum。必须在外部边界验证；对于前向兼容协议，还要保留未知raw value而非静默映射。
+</Callout>
+
+## Bit Flags
+
+Flags enum把每个独立选项分配一个bit：1、2、4、8。`[Flags]`主要影响format/design intent，不改变bitwise运算。Composite member用OR组合，如`ReadWrite=Read|Write`；zero命名None。选择unsigned underlying type可让位移/掩码更直观，但跨语言CLS/wire要评估。
+
+```csharp
+[Flags]
+public enum FileAccessBits : uint
+{
+    None = 0,
+    Read = 1u << 0,
+    Write = 1u << 1,
+    Execute = 1u << 2,
+    Audit = 1u << 3,
+    ReadWrite = Read | Write,
+}
+
+const FileAccessBits KnownMask =
+    FileAccessBits.Read | FileAccessBits.Write |
+    FileAccessBits.Execute | FileAccessBits.Audit;
+```
+
+Set: `value |= flag`；clear: `value &= ~flag`；all set: `(value & flags) == flags`；any set: `(value & flags) != 0`；toggle: `value ^= flag`。Zero需特殊：all-set公式对None恒true，语义上“包含空集合”合理但业务API可能不想接受，入口检查flag!=None。
+
+<Term def="所有当前已分配单bit的OR，用于检测、拒绝或保留未来unknown bits。">known flag mask</Term>
+
+Unknown bits处理有三种：closed security permission应拒绝，避免未识别权限被误解释；forward-compatible storage/proxy应保留raw bits再原样转发；display可显示hex unknown部分。切忌先`value &= KnownMask`静默清除，除非协议明确允许，否则信息无法恢复。
+
+<Stepper>
+  <Step title="切换single、composite、unknown与toggle bits"><CvcBitFlagLab /></Step>
+  <Step title="绘制bit allocation">按underlying width标出每一bit、composites、reserved和未来扩展owner，禁止overlap。</Step>
+  <Step title="验证bit laws">覆盖None、each bit、all combinations、unknown high bit，断言set/clear idempotent、toggle twice恢复。</Step>
+</Stepper>
+
+<Callout type="trap" title="Enum.IsDefined可以验证Flags值是否合法">
+有效组合如Read|Execute可能没有单独declared name，IsDefined会false。用`unknown = value & ~KnownMask`检测未知bits，再按protocol决定。
+</Callout>
+
+## Flags and Security Boundaries
+
+Permission flags必须在trusted boundary解析与验证。Unknown bit不能默认grant，也不能因signed sign extension误扩展。做numeric conversion时先固定underlying width；`~flag`会翻转该宽度所有bits，最终应与KnownMask组合。Authorization检查要区分“拥有全部要求”与“拥有任一”，命名`HasAll/HasAny`避免误用。
+
+Composite aliases用于便利，不应分配新bit。删除flag后保留bit为reserved，旧tokens/database仍可能携带。Audit同时记录raw hex和decoded names，事件回放才能解释历史。
+
+## Adding Methods to Enumerated Types
+
+Enum不能添加普通instance state/method，C# extension method可集中domain logic，如`IsTerminal`、`ToWireName`、`HasAll`。它仍是static helper，不阻止invalid raw value；每个method先处理unknown/None。复杂state transition不应堆在enum extension，使用state machine/domain object验证当前->下一状态。
+
+```csharp
+public static class FileAccessBitsExtensions
+{
+    public static bool HasAll(this FileAccessBits value, FileAccessBits required) =>
+        required != FileAccessBits.None && (value & required) == required;
+
+    public static bool IsKnown(this FileAccessBits value) =>
+        (value & ~KnownMask) == 0;
+}
+```
+
+<Term def="通过extension集中enum验证、显示与domain predicate，同时不假装raw value自动有效的API层。">enum policy adapter</Term>
+
+## Wire Adapters and Version Evolution
+
+External JSON/protobuf/database常有自己的enum evolution规则。Protobuf unknown numeric可保留，JSON string未知可能直接失败；adapter必须映射known value并携带unknown raw。不要把wire enum直接散入domain，domain可用discriminated wrapper `KnownState? + Raw`并在decision point拒绝无法处理。
+
+Rename source member若wire用number可能兼容、日志/display变化；wire用string则破坏。Schema registry、serializer options和consumer matrix都要进入版本评审。Enum size变更也影响native layout/storage schema。
+
+<Stepper>
+  <Step title="切换parse、format、extension与wire adapter"><CvcEnumApiLab /></Step>
+  <Step title="建立unknown policy">分别为config、database、wire proxy、domain command和authorization定义拒绝/保留/fallback。</Step>
+  <Step title="演练新旧互通">发送新member/flag给旧版本，再回传，检查raw信息、日志和权限没有被静默改变。</Step>
+</Stepper>
+
+<Term def="旧版本遇到新enum numeric或flag bits时，仍能拒绝、保留或转发而不误解释的能力。">enum forward compatibility</Term>
+
+## 本章回顾：Name是便利，Numeric才是持久事实
+
+1. Enum可保存任意underlying value，zero/default和unnamed value必须有domain policy。
+2. Public/wire enum显式固定numeric values，废弃值不复用，alias谨慎。
+3. Flags用独立power-of-two bits、composite OR与KnownMask；IsDefined不验证组合。
+4. Set/clear/all/any/toggle语义不同，None与unknown bits要单测。
+5. Extension/adapter集中policy，forward-compatible边界保留raw value，安全边界拒绝未知权限。
+
+<Exercises>
+
+**问题 1：旧服务收到新OrderState=5，应返回Unknown还是保留5？**
+
+<Answer>取决于角色。Domain执行者若无法安全处理应拒绝并记录raw 5；proxy/storage为了前向兼容应保留并原样转发，同时展示Unknown(5)。直接映射0会丢失信息且回传错误。为每个boundary定义unknown policy并做新旧交叉测试。</Answer>
+
+**问题 2：怎样验证Flags值只含已知bits？**
+
+<Answer>构造KnownMask为所有独立single-bit flags的OR，计算`unknown = value & ~KnownMask`；unknown为None才全已知。不要用Enum.IsDefined，因为合法组合未必有declared composite name。Security permission对unknown应fail closed。</Answer>
+
+**问题 3：为何`value.HasFlag(None)`为True，API如何避免误用？**
+
+<Answer>空集合是任何集合子集，bit公式`(value & 0)==0`恒true。若业务中查询None无意义，提供`HasAll/HasAny` extension并显式拒绝required==None；调用点用`value==None`判断无flags。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="unnamed enum value" definition="有底层整数但没有声明name、需domain处理的enum状态。" />
+  <GlossaryItem term="enum wire identity" definition="Enum名称/数值作为持久协议的版本身份。" />
+  <GlossaryItem term="known flag mask" definition="全部已分配独立bits的OR，用于检测unknown bits。" />
+  <GlossaryItem term="enum policy adapter" definition="集中validation、format与domain predicate的extension/adapter层。" />
+  <GlossaryItem term="enum forward compatibility" definition="旧版本正确处理并保留新numeric/bits的能力。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 15: Enumerated Types and Bit Flags" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

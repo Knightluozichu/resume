@@ -1,0 +1,279 @@
+---
+title: "Chapter 28 · Matrix Operations"
+type: C
+section: "CLRS4 · 专题"
+order: 28
+description: "按CLRS第四版第28章重建线性方程求解、LUP分解、矩阵求逆、对称正定矩阵与最小二乘。"
+demo: true
+math: true
+sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+draft: false
+---
+
+import { CLRS4LinearSystemLab, CLRS4EliminationLab, CLRS4LUPFactorLab, CLRS4TriangularSolveLab, CLRS4PivotingLab, CLRS4InverseColumnsLab, CLRS4InverseResidualLab, CLRS4SPDQuadraticLab, CLRS4CholeskyLab, CLRS4LeastSquaresLab, CLRS4NormalEquationLab, CLRS4MatrixCertificateLab } from "@/components/mdx/introduction-to-algorithms/diagrams/28-matrix-operations";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释elimination、LUP factorization、triangular solve与pivoting之间的data flow
+- 能计算小型linear system、inverse column、quadratic form与least-squares normal equations
+- 能实现forward substitution、backward substitution、LUP solve和residual verification
+- 能分析singularity、tiny pivot、positive definiteness与condition amplification带来的风险
+- 能设计包含shape、rank、structure、factorization identity和backward residual的矩阵证书
+
+</Objectives>
+
+## 从“不要真的先求逆”开始
+
+先预测：要解$Ax=b$，最直接的公式是$x=A^{-1}b$，但可靠实现通常不会先显式形成$A^{-1}$。原因不只是速度；factorization能保留结构、复用多个right-hand sides，并允许pivot和residual构成更清楚的正确性证书。
+
+<Term def="围绕矩阵分解、线性方程求解、求逆、结构化矩阵和近似拟合组织的一组代数算法。">矩阵运算</Term>把许多图算法、optimization和statistics中的子问题统一成“factor once, solve many”。本章默认dense arithmetic cost model，并在工程说明中区分exact algebraic identity与floating-point behavior。
+
+<CLRS4LinearSystemLab />
+
+### 形状、秩与结构先于代码
+
+对$A\in\mathbb{R}^{n\times n}$，唯一解要求$A$ nonsingular；对rectangular least-squares matrix，normal equations要有唯一解通常要求columns linearly independent。Symmetry、triangularity和positive definiteness不是装饰标签，它们决定可用factorization、storage和stability。
+
+同一个$A$对应多个$b$时，factorization cost只付一次，每个新$b$只做triangular solves。报告总复杂度时必须把one-time preprocessing与per-query cost分开。
+
+## 28.1 Solving systems of linear equations
+
+### Gaussian elimination
+
+<Term def="给定coefficient matrix A和right-hand side b，寻找满足Ax=b的vector x，并明确existence与uniqueness条件。">线性方程组</Term>求解从row operations开始。把pivot column下方entries消成0，就得到upper-triangular $U$；再从最后一行向上back substitute。
+
+<CLRS4EliminationLab />
+
+消去第$k$列时，用multiplier $l_{ik}=a_{ik}/a_{kk}$执行row update。若直接覆盖matrix，可把$U$存在diagonal及上方，把multipliers存在下方，省去独立matrix；但logical identity仍应保留。
+
+```text
+FORWARD-SUBSTITUTION(L, b)
+1  for i = 1 to n
+2      y[i] = b[i] - sum(L[i,j] * y[j], j = 1..i-1)
+3      if L has a nonunit diagonal, divide y[i] by L[i,i]
+4  return y
+
+BACKWARD-SUBSTITUTION(U, y)
+1  for i = n down to 1
+2      x[i] = (y[i] - sum(U[i,j] * x[j], j = i+1..n)) / U[i,i]
+3  return x
+```
+
+两次triangular solve各做$\Theta(n^2)$ arithmetic operations，真正昂贵的是dense elimination的$\Theta(n^3)$ factorization。
+
+### LUP decomposition
+
+<Term def="把nonsingular matrix连同row permutations分解为PA=LU，其中P为permutation、L为unit lower triangular、U为upper triangular。">LUP分解</Term>把消去历史结构化。$P$记录row swaps；$L$记录multipliers；$U$是eliminated matrix：
+
+$$
+PA=LU.
+$$
+
+<CLRS4LUPFactorLab />
+
+解$Ax=b$时，不需要重放所有row operations。先算$Pb$，再解$Ly=Pb$，最后解$Ux=y$：
+
+```text
+LUP-SOLVE(L, U, P, b)
+1  rhs = P * b
+2  y = FORWARD-SUBSTITUTION(L, rhs)
+3  x = BACKWARD-SUBSTITUTION(U, y)
+4  return x
+```
+
+<CLRS4TriangularSolveLab />
+
+Factorization identity与solve residual是两种不同检查。前者验证$PA$是否接近$LU$；后者验证specific solution是否满足$Ax\approx b$。前者通过但后者很差，可能是triangular solve或permutation application有bug；后者偶然很小也不能证明factorization对其他$b$都正确。
+
+### Partial pivoting
+
+若pivot为0，division非法；若pivot极小，即使exact matrix nonsingular，floating-point multiplier也可能巨大并放大roundoff。Partial pivoting在当前column尚未处理的rows中选absolute value最大的entry，与当前pivot row交换。
+
+<CLRS4PivotingLab />
+
+```text
+for k = 1 to n
+    p = argmax |A[i,k]| over i = k..n
+    if A[p,k] is numerically zero, report singular or rank deficient
+    swap rows p and k in A and permutation P
+    eliminate rows below k and store multipliers in L
+```
+
+Partial pivoting不等于“数值误差消失”，但它避免最明显的小pivot disaster。Threshold不能随意写成固定decimal；应结合matrix norm、scale和numeric type。若输入是exact integers而任务要求symbolic result，则cost model与pivot criterion又会变化。
+
+<Callout type="trap" title="只判断determinant不为0就跳过pivoting">
+Nonsingularity保证exact arithmetic中存在唯一解，却不保证当前diagonal entry适合作pivot，也不保证matrix well-conditioned。修法是执行partial pivoting，并同时报告factorization residual与solution residual。
+</Callout>
+
+## 28.2 Inverting matrices
+
+### Inverse as repeated solves
+
+<Term def="对nonsingular square matrix构造满足AA^{-1}=A^{-1}A=I的matrix，并验证乘积残差。">矩阵求逆</Term>可以看成$n$个right-hand sides。Inverse第$j$列$x_j$满足
+
+$$
+Ax_j=e_j.
+$$
+
+因此先做一次LUP factorization，再对identity的每一列调用LUP-SOLVE。Dense arithmetic总量仍为$\Theta(n^3)$，但分解只做一次。
+
+<CLRS4InverseColumnsLab />
+
+```ts
+function inverseFromFactors(n: number, solve: (rhs: number[]) => number[]) {
+  const columns: number[][] = [];
+  for (let j = 0; j < n; j += 1) {
+    const basis = Array.from({ length: n }, (_, i) => Number(i === j));
+    columns.push(solve(basis));
+  }
+  return columns; // transpose this column collection for row-major storage
+}
+```
+
+如果目标只是一个$b$，显式inverse多计算了$n-1$个不需要的right-hand sides，还增加storage和roundoff paths。只有API确实需要inverse entries、后续有大量right-hand sides，或推导本身依赖inverse时，才考虑形成它；即便如此，factorization通常仍是实现入口。
+
+### Inverse verification
+
+Exact arithmetic检查$AX=I$；floating point检查relative backward residual，例如
+
+$$
+\frac{\lVert I-AX\rVert}{\lVert A\rVert\lVert X\rVert}
+$$
+
+是否与machine precision和problem conditioning相称。只打印许多小数不是certificate。
+
+<CLRS4InverseResidualLab />
+
+Inverse存在与计算可靠是两件事。Nearly singular matrix在exact algebra中有inverse，但$\kappa(A)$很大时，input或roundoff的微小perturbation可能引起solution大变化。Residual small说明“某个附近问题被解好”，不单独保证forward error small；还需要condition information。
+
+## 28.3 Symmetric positive-definite matrices and least-squares approximation
+
+### Positive definiteness
+
+<Term def="满足A=A^T且对每个nonzero vector x都有x^TAx大于0的square matrix。">对称正定矩阵</Term>（SPD）把algebraic symmetry与geometric curvature结合。定义为
+
+$$
+A=A^T,
+\qquad
+x^TAx>0\quad\text{for all }x\ne0.
+$$
+
+<CLRS4SPDQuadraticLab />
+
+SPD matrix必nonsingular：若$Ax=0$存在nonzero $x$，则$x^TAx=0$，与positive definiteness矛盾。它的leading principal pivots为正，可在不做row permutations的结构化条件下factor。
+
+### Cholesky factorization
+
+对SPD matrix，Cholesky构造lower-triangular $L$：
+
+$$
+A=LL^T.
+$$
+
+<CLRS4CholeskyLab />
+
+解$Ax=b$变成先解$Ly=b$，再解$L^Tx=y$。只需存一个triangular factor；相比general LUP，常数工作量更小并保持symmetry。若计算某个diagonal square root时radicand为负，可能输入并非SPD，也可能roundoff暴露near-indefiniteness；不能偷偷取absolute value继续。
+
+### Least-squares projection
+
+<Term def="当Ax=b通常无exact solution时，寻找使residual Euclidean norm最小的x，并把Ax解释为b到column space的projection。">最小二乘逼近</Term>处理overdetermined systems：
+
+$$
+\hat{x}=\arg\min_x \lVert Ax-b\rVert_2^2.
+$$
+
+<CLRS4LeastSquaresLab />
+
+令residual $r=b-A\hat{x}$。最优点处，沿$A$每个column direction的first-order change必须为0，所以$r$与column space正交：
+
+$$
+A^T(b-A\hat{x})=0,
+\qquad
+A^TA\hat{x}=A^Tb.
+$$
+
+这就是normal equations。$A^TA$总是symmetric positive semidefinite；若$A$ columns linearly independent，则对nonzero $x$有$\lVert Ax\rVert_2^2>0$，因此$A^TA$为SPD，normal equations有唯一解，可用Cholesky求解。
+
+<CLRS4NormalEquationLab />
+
+Normal equations在算法结构上清楚，却可能把condition number近似平方：
+
+$$
+\kappa_2(A^TA)=\kappa_2(A)^2
+$$
+
+（full-column-rank条件下）。因此numerically demanding work通常优先QR，rank-deficient或最稳健分析常用SVD。本章用normal equations连接SPD与least squares，但不能把代数推导误写成所有数值场景的最佳实现。
+
+<Callout type="trap" title="A的columns很多，所以AᵀA一定正定">
+Column数量不等于linear independence。若存在nonzero x使Ax=0，则xᵀAᵀAx等于零，AᵀA只能是semidefinite。修法是检查rank，或使用rank-revealing QR/SVD并明确minimum-norm或regularized目标。
+</Callout>
+
+## 一份可复查的矩阵计算证书
+
+算法输出不应只有$x$或$A^{-1}$。最小证书应包含input dimensions、rank/structure assumptions、pivot policy、factorization identity residual、solve residual、norm choice与numeric precision。Least squares还应报告$\lVert Ax-b\rVert$和orthogonality residual $\lVert A^T(Ax-b)\rVert$。
+
+<CLRS4MatrixCertificateLab />
+
+<Stepper>
+<Step title="先分类matrix">
+确认square或rectangular、rank assumptions、symmetry和positive definiteness，再选择LUP、Cholesky、QR或SVD路径。
+
+<CLRS4SPDQuadraticLab />
+</Step>
+<Step title="分解后复用solve">
+验证PA约等于LU或A约等于LLᵀ；每个right-hand side只做permutation与triangular substitutions。
+
+<CLRS4LUPFactorLab />
+</Step>
+<Step title="交付backward evidence">
+报告factorization residual、solution residual和conditioning；least squares再检查normal-equation orthogonality。
+
+<CLRS4MatrixCertificateLab />
+</Step>
+</Stepper>
+
+## 小结
+
+Chapter 28 Matrix Operations从solving systems of linear equations出发：Gaussian elimination产生triangular structure，LUP decomposition用$P,L,U$保存row swaps与multipliers，partial pivoting控制小pivot带来的放大。Inverting matrices被还原为同一factorization上的$n$个basis-vector solves，而不是把inverse当黑箱公式。
+
+Symmetric positive-definite matrices提供严格正二次型与Cholesky factorization。Least-squares approximation把inconsistent $Ax=b$转成projection，normal equations连接$A^TA$的SPD structure，但也揭示condition squaring。可靠实现最终交付的是factorization、assumptions与residual evidence，而不只是一个看似精确的array。
+
+<Exercises>
+
+**问题 1**：已知$PA=LU$，为什么解$Ax=b$时先解$Ly=Pb$，再解$Ux=y$？
+
+<Answer>
+由PA=LU与Ax=b可得LUx=Pb。令y=Ux，就先得到lower-triangular system Ly=Pb，再得到upper-triangular system Ux=y。两次substitution各为quadratic work，并正确应用了row permutation。
+</Answer>
+
+**问题 2**：为什么inverse第$j$列可由$Ax=e_j$得到？
+
+<Answer>
+令X=A^{-1}。Identity AX=I按columns展开为A乘X第j列等于I第j列e_j。因此对所有basis vectors复用同一个factorization求解，所得columns组成inverse。
+</Answer>
+
+**问题 3**：证明full-column-rank $A$使$A^TA$ positive definite。
+
+<Answer>
+对任意nonzero x，full column rank意味着Ax非零。于是xᵀAᵀAx等于(Ax)ᵀ(Ax)，也就是严格正的平方norm；同时AᵀA显然symmetric，所以它是SPD。
+</Answer>
+
+**问题 4**：Normal equations的solution residual很小，为什么仍应关注conditioning？
+
+<Answer>
+Small residual说明computed solution精确解决了一个附近问题，但nearly singular或ill-conditioned system会把很小的input/backward perturbation放大成很大的forward error。形成AᵀA还近似平方condition number，因此应结合κ估计并在需要时改用QR或SVD。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="矩阵运算">围绕矩阵分解、线性方程求解、求逆、结构化矩阵和近似拟合组织的一组代数算法。</GlossaryItem>
+<GlossaryItem term="线性方程组">给定coefficient matrix A和right-hand side b，寻找满足Ax=b的vector x，并明确existence与uniqueness条件。</GlossaryItem>
+<GlossaryItem term="LUP分解">把nonsingular matrix连同row permutations分解为PA=LU，其中P为permutation、L为unit lower triangular、U为upper triangular。</GlossaryItem>
+<GlossaryItem term="矩阵求逆">对nonsingular square matrix构造满足AA^{-1}=A^{-1}A=I的matrix，并验证乘积残差。</GlossaryItem>
+<GlossaryItem term="对称正定矩阵">满足A=A^T且对每个nonzero vector x都有x^TAx大于0的square matrix。</GlossaryItem>
+<GlossaryItem term="最小二乘逼近">当Ax=b通常无exact solution时，寻找使residual Euclidean norm最小的x，并把Ax解释为b到column space的projection。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Chapter 28 · Matrix Operations" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

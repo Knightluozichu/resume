@@ -1,0 +1,154 @@
+---
+title: "Chapter 2. C# 2"
+type: C
+section: "C# in Depth 4e · C# 2-5"
+order: 2
+description: "覆盖Generics、Nullable value types、Simplified delegate creation、Iterators与Minor features，解释compile-time contract和compiler-generated state。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-2"
+draft: false
+---
+
+import { DcsGenericRepresentationLab, DcsNullableDelegateLab, DcsIteratorLoweringLab } from "@/components/mdx/deep-understanding-csharp/diagrams/csharp-2";
+
+<Objectives>
+
+- 能比较pre-generic object collection与generic type/method的compile-time、runtime representation和boxing差异
+- 能推导Nullable value types与Simplified delegate creation的conversion、default、capture和invocation语义
+- 能绘制iterator construction、MoveNext、Current与Dispose状态，复现partial enumeration的finally cleanup
+
+</Objectives>
+
+## 为什么C# 2把Runtime猜测前移到Compiler Contract
+
+C# 1可以用`object`存任意值、手写delegate constructor、手写`IEnumerator`，但正确关系主要靠developer记忆和runtime cast。C# 2的主线是把element type、absence、callable target和iteration state交给compiler验证或生成，让错误更早、ceremony更少，同时保留可检查的runtime model。
+
+先预测：`List<string>`是否是`List<object>`子类型；`int? + int?`只要一边有值是否就有值；调用iterator method是否立即执行body；anonymous method是否总不分配。答案都是否。
+
+<Term def="type parameter在generic declaration中保留input/output/storage之间的静态关系，使invalid type use在compile time失败。">parameterized type contract</Term>
+
+## Generics
+
+Pre-generic `ArrayList`只知道`object`：value type插入要boxing，读取要cast，错误可能在很远的consumer处出现。`List<T>`让add、indexer、enumerator都共享T，compiler能追踪关系；runtime也保留constructed generic type，不是Java式type erasure。
+
+### What can be generic?
+
+Classes、structs、interfaces、delegates和methods都可generic。T属于instance state或多个members共同contract时用generic type；只参与一个operation时用generic method并让type inference减少call-site ceremony。Constraint不是documentation，而是compiler可调用哪些members的证明。
+
+```csharp
+public static T Max<T>(T left, T right, IComparer<T> comparer) =>
+    comparer.Compare(left, right) >= 0 ? left : right;
+```
+
+Runtime通常可为reference-type instantiations共享machine code，为value types生成specialized code以处理不同layout；具体策略是runtime实现细节。API correctness不能依赖“每个T一定一份code”，performance结论也必须profile。
+
+<Stepper>
+  <Step title="切换object、generic、method与constraint"><DcsGenericRepresentationLab /></Step>
+  <Step title="写出T在每个member的位置">标记input、output、storage与constraint，检查是否需要generic type而非method。</Step>
+  <Step title="编译invalid cases并量测boxing">错误element insertion必须compile fail；value-type hot path用allocation profile而非猜测。</Step>
+</Stepper>
+
+<Callout type="trap" title="Generic collection只是帮你省掉cast">
+它还改变API可表达关系、value-type boxing、overload resolution和runtime constructed type identity。只看source字符数会漏掉主要收益。
+</Callout>
+
+## Nullable value types
+
+`Nullable<T>`让non-nullable value type同时表达一个T或absence，syntax是`T?`。`HasValue`区分状态，`Value`在empty时抛异常，`GetValueOrDefault`返回default但会丢失“真的为default”和“没有值”的区别。Domain API应保留absence直到有明确default policy的boundary。
+
+Lifted operators把underlying operator提升到nullable operands。多数算术比较遇null产生null或false，但`bool?`的`&`/`|`具有三值逻辑特例；不能凭“null传播”一句话推导全部。Nullable boxing也特殊：empty boxes为null，有值时box underlying T，而不是boxed `Nullable<T>`。
+
+```csharp
+int? quantity = null;
+int? doubled = quantity * 2;       // null
+object? boxed = quantity;          // null
+object boxedValue = (int?)42;      // boxed Int32
+```
+
+<Term def="把T的operator提升到Nullable&lt;T&gt; operands，并为null定义结果的compiler规则。">lifted operator</Term>
+
+## Simplified delegate creation
+
+C# 2允许method group conversion，省掉显式`new Comparison<Product>(CompareProducts)`；overload resolution仍必须找到compatible target。Anonymous method把短callback body放在call site，并可capture外部variable storage，compiler通常生成hidden method和closure object。
+
+Delegate是immutable invocation list。Combine/remove产生新delegate；multicast按顺序调用，非void只返回最后target结果，任一target抛异常会中断后续调用。Language simplification不定义thread safety、subscriber isolation或lifetime，这些由API contract补充。
+
+<Term def="把一组同名methods按目标delegate signature做overload resolution并创建delegate的implicit conversion。">method group conversion</Term>
+
+<Stepper>
+  <Step title="切换nullable、method group、anonymous method与null delegate"><DcsNullableDelegateLab /></Step>
+  <Step title="分开value absence与callback absence">分别写出default/null、conversion、invocation和failure policy，避免一个null承担多种含义。</Step>
+  <Step title="测试boxing、capture和multicast fault">观察nullable boxing type、修改captured variable，并让中间subscriber抛异常确认调用链。</Step>
+</Stepper>
+
+<Callout type="trap" title="Anonymous method按创建时的值做快照">
+它通常capture variable storage，之后赋值会被callback看到；循环、延迟执行和publisher retention会把时间与lifetime问题一起放大。
+</Callout>
+
+## Iterators
+
+Iterator block包含`yield return`/`yield break`，compiler生成实现`IEnumerable<T>`/`IEnumerator<T>`的state machine。调用method通常只创建sequence object；body在`MoveNext`时执行，local state被提升为fields，`Current`暴露最近一次yield value。
+
+每次可重复枚举的iterator应创建独立enumerator state；一个enumerator本身通常不可并发使用。Side effects、time、random和external source会在每次enumeration重跑，因此API要声明live sequence还是snapshot。
+
+`foreach`通过try/finally确保enumerator Dispose。Iterator内部的`try/finally`会被lowering到state transitions；consumer提前break也应触发cleanup。`yield return`不能随意放入所有catch/finally组合，compiler restrictions正是为保持state-machine语义可实现。
+
+```csharp
+public static IEnumerable<string> ReadLines(TextReader reader)
+{
+    string? line;
+    while ((line = reader.ReadLine()) is not null)
+        yield return line;
+}
+```
+
+<Term def="compiler把iterator body转换成保存program counter、locals、Current和cleanup路径的generated type。">iterator state machine</Term>
+
+<Term def="iterator只执行到consumer请求的数量，并在停止枚举时通过Dispose结束其resource scope的消费模式。">partial enumeration contract</Term>
+
+<Stepper>
+  <Step title="切换construction、MoveNext、Dispose与minor features"><DcsIteratorLoweringLab /></Step>
+  <Step title="画出state、Current和finally边">从未开始、yielded、完成到disposed，标出每次MoveNext执行范围。</Step>
+  <Step title="以Take/break和double enumeration验收">只消费一项确认finally，再枚举两次记录body与side-effect次数。</Step>
+</Stepper>
+
+## Minor features
+
+Partial types允许generated与handwritten declarations合并为一个type，适合tool ownership boundary但不应按业务职责随意拆散；static classes让compiler禁止instance；namespace aliases解决name collision；different accessibility与fixed buffer等features各有特定场景。它们不像generics/iterator共享一条runtime机制，但都把意图从convention提升为language rule。
+
+## 本章回顾：Type Relation和Control State都可由Compiler证明
+
+1. Generics保留T关系、减少cast/boxing，并以constraint表达可用能力。
+2. Nullable&lt;T&gt;把value absence纳入type，lifted operators与boxing有精确定义。
+3. Method group与anonymous method简化delegate creation，但capture和multicast lifetime仍需API定义。
+4. Iterator method call与body execution分离，MoveNext驱动generated state machine。
+5. Partial enumeration必须Dispose并运行finally；重复枚举是否重做work是公开contract。
+
+<Exercises>
+
+**问题 1：为什么`List&lt;Dog&gt;`不能赋给`List&lt;Animal&gt;`，怎样提供安全只读view？**
+
+<Answer>List同时消费和生产T；若允许转换，caller可把Cat加入实际List&lt;Dog&gt;，破坏type safety。Concrete mutable type保持invariant；只读producer可暴露`IEnumerable&lt;Animal&gt;`/`IReadOnlyList&lt;Animal&gt;`的covariant reference conversion，并禁止通过该view写入。</Answer>
+
+**问题 2：nullable、delegate与closure三个null/lifetime问题如何区分？**
+
+<Answer>Nullable empty表达value absence，不能用GetValueOrDefault掩盖；null delegate表达无callback，invocation需policy；closure capture的是variable storage并可能被delegate长期保留。分别测试HasValue/default ambiguity、zero/multicast invocation和capture mutation/GC lifetime。</Answer>
+
+**问题 3：iterator读取resource时，谁应拥有resource？**
+
+<Answer>若iterator内部创建resource，就在iterator scope用try/finally/using并依赖enumerator Dispose，document consumer必须dispose；若resource由caller传入，明确borrowed lifetime且枚举必须在caller scope内。需要立即关闭时在scope内materialize snapshot。测试partial break、fault与double enumeration。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="parameterized type contract" definition="由T保留generic input/output/storage静态关系的contract。" />
+  <GlossaryItem term="lifted operator" definition="underlying T operator提升到Nullable<T> operands后的null规则。" />
+  <GlossaryItem term="method group conversion" definition="按target delegate signature解析method并创建delegate的conversion。" />
+  <GlossaryItem term="iterator state machine" definition="保存program counter、locals、Current与cleanup的compiler-generated type。" />
+  <GlossaryItem term="partial enumeration contract" definition="按需消费并在提前停止时Dispose iterator scope的contract。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# in Depth, Fourth Edition, Chapter 2: C# 2" adaptedUrl="https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-2" />

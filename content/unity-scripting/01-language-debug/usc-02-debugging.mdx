@@ -1,0 +1,228 @@
+---
+title: "第 2 章 Debugging：从错误分类到可重放诊断"
+type: A
+section: "Unity 脚本设计 · 语言与调试"
+order: 2
+description: "覆盖编译错误、Console、结构化日志、ToString、视觉调试、错误日志、Profiler 与 MonoDevelop 调试器全套工作流。"
+demo: true
+math: false
+sourceUrl: "https://www.packtpub.com/en-us/product/mastering-unity-scripting-9781784390655"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Usc02DebuggingMapLab,
+  Usc02DebuggingExperimentLab,
+  Usc02DebuggingEvidenceLab,
+} from "@/components/mdx/unity-scripting/diagrams/usc-02-debugging";
+
+<Objectives>
+
+- 能区分编译、运行时、逻辑、视觉和性能错误并选择对应观测工具
+
+- 能实现由日志、Gizmo、Profiler、断点、Watch 与 Call Stack 组成的定位流程
+
+- 能复现并验证包含输入、错误上下文、修复结果和回归样本的诊断记录
+
+</Objectives>
+
+## 问题：为什么 Console 没有红字也不能证明脚本正确
+
+先预测：敌人偶尔穿墙但没有异常，应该先加更多 Debug.Log，还是固定输入并画出碰撞路径？调试章把错误分成编译、运行时异常、错误结果、视觉空间错误与性能退化。工具必须匹配故障：Console 处理编译和异常，结构化日志记录状态，Gizmo 显示空间关系，断点检查控制流，Profiler 识别热点。
+
+<Usc02DebuggingMapLab />
+
+## 原书边界与官方小节
+
+官方目录包含 Compilation errors and the console、Debug.Log custom messages、Overriding the ToString method、Visual debugging、Error logging、Editor debugging、Using the profiler；随后逐项使用 MonoDevelop 的 Watch window、continue and stepping、call stack、Immediate window、conditional breakpoints 和 tracepoints。现代 IDE 可替换界面，但这些调试动作仍是原章边界。
+
+- **Compilation errors and the console；Debug.Log custom messages；Overriding the ToString method**
+- **Visual debugging；Error logging；Editor debugging；Using the profiler**
+- **Debugging with MonoDevelop - getting started；Watch window**
+- **continue and stepping；call stack；Immediate window**
+- **conditional breakpoints；tracepoints**
+
+这些小节按官方目录唯一归属。本站重新组织解释、代码和实验，不逐字复制原文；现代补充必须放在迁移段，不能替换或重复计算原始单元。
+
+## 观察、复现、隔离、修复与回归
+
+可靠调试先把故障变成确定输入，再建立从症状到状态的观测点。日志需要对象、场景、帧号和关键参数，ToString 让领域状态可读，Gizmo 把向量和范围画进场景，断点与 Watch 观察单次控制流，Call Stack 还原调用来源，Profiler 证明耗时归属。修复后必须用同一输入复测，并保留至少一个失败样本防止回归。
+
+<Usc02DebuggingExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="源码无法生成程序集、会阻止进入运行阶段的语法或类型错误。">
+  编译错误
+</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="程序能够运行但状态转换或结果不符合设计约束的错误。">逻辑错误</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="只有表达式满足时才暂停，用于隔离偶发或特定对象故障。">条件断点</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="显示当前执行点由哪些方法逐层调用而来的上下文。">调用栈</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="用 Gizmo、Debug.DrawLine 或覆盖图显示坐标、范围和路径。">
+  视觉调试
+</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+术语若不能落到具体对象、状态和观测点，就仍停留在记忆层。读者应能为每个术语写出生产者、变换规则、消费者、正常值、边界值和失败信号。
+
+## 关键对象与数据流
+
+一次诊断从复现脚本产生固定输入，日志与可视化记录中间状态，断点读取变量，调用栈定位生产者，Profiler 排除性能假象；候选修复只改变一个原因，再用原始复现与边界样本复测。若日志只写“出错了”，或断点改变时序后故障消失，就要补充时间戳、对象 ID 和无暂停追踪。
+
+排查时从最早可控输入开始，逐段检查中间状态和最终消费者。最终结果正确但中间链不符合预测，也不能立即签发，因为它可能依赖未记录的缓存、时序或 Editor 状态。
+
+## 三步可重复实验
+
+动手前先预测：只改变当前步骤的一项输入后，哪个日志、状态或像素应最先变化？实验期间固定 Unity 版本、场景、对象数量、时间步与目标平台，避免多个变量一起漂移。
+
+<Stepper>
+  <Step title="固定失败输入">
+    <Usc02DebuggingMapLab />
+
+记录场景、随机种子、对象 ID、帧号和操作序列，先确认错误可以重复出现。按编译、异常、逻辑、视觉或性能分类，不急于改代码。
+
+```csharp
+Debug.Log($"frame={Time.frameCount} actor={name} state={state} target={target?.name}", this);
+```
+
+  </Step>
+  <Step title="选择观测工具">
+    <Usc02DebuggingExperimentLab />
+
+为数据状态加结构化日志，为空间关系加 Gizmo，为控制流加条件断点和 Watch，为来源读 Call Stack，为耗时加 Profiler marker。
+
+```csharp
+void OnDrawGizmosSelected() {
+    Gizmos.color = Color.yellow;
+    Gizmos.DrawWireSphere(transform.position, detectionRadius);
+}
+```
+
+  </Step>
+  <Step title="验证修复与回归">
+    <Usc02DebuggingEvidenceLab />
+
+只修一个根因，用同一输入重放，再增加空引用、边界距离、重复事件和高负载样本。保存修复前后日志和失败用例。
+
+```csharp
+using (new Unity.Profiling.ProfilerMarker("Enemy.Decide").Auto()) {
+    Decide();
+}
+```
+
+  </Step>
+</Stepper>
+
+## 从症状到最小证据，而不是从工具到工具
+
+同一个“敌人没有移动”至少有五种根因：脚本未编译、引用为空触发异常、状态条件从未满足、目标在世界坐标中不可达，或每帧分配造成严重卡顿。Console 先回答代码是否进入运行态；结构化日志回答状态转换是否发生；Gizmo 把方向、距离和路径画到场景；断点与 Watch 检查一次具体调用；Profiler 判断时间和内存成本。工具顺序由假设决定，不能看到异常就同时打开所有窗口。
+
+一条可用日志需要包含对象身份、场景、帧或时间、输入、旧状态、新状态和触发原因。只打印“entered chase”无法区分哪个 NPC、由谁触发以及之后为什么退出。覆盖 ToString 可形成稳定上下文，但不要在高频路径拼接巨大字符串；性能问题应在目标设备用 Profiler 标记和采样证明，断点会暂停时间，因此不能用断点后的帧率判断真实性能。
+
+## 故障分类与首选证据
+
+- **编译错误**：保存完整诊断、文件位置和最小复现，先清除最早错误再看级联错误。
+- **运行时异常**：保留堆栈、对象身份、输入和生命周期位置，避免只捕获后静默继续。
+- **逻辑错误**：用条件断点和状态快照对比预期转换，不依赖大量无结构日志。
+- **空间错误**：用射线、视锥、路径和碰撞 Gizmo 对照数值与世界位置。
+- **性能错误**：保存 CPU、GPU、GC、目标设备和采样区间，区分一次峰值与持续成本。
+
+修复验收必须重放原失败输入，并额外运行相邻边界。若修复空引用的方法只是跳过整段逻辑，异常消失却可能制造静默状态错误；若优化通过缓存结果，必须证明输入变化时缓存会失效。诊断记录最后要写出被排除的假设和理由，使下一位读者不用重复所有尝试。
+
+## 正常、边界与失败样本
+
+每章至少保存一个正常样本、一个极端边界和一个故意破坏配置。正常样本证明主路径，边界样本说明适用范围，失败样本证明诊断方法真的能抓到错误。
+
+<Callout type="trap">
+  **因果陷阱**：大量无上下文 Debug.Log
+  会改变时序、淹没关键信号并增加分配，日志数量不等于可观测性。
+</Callout>
+
+<Callout type="trap">
+  **版本陷阱**：只在 Editor
+  里调试会遗漏构建差异、平台权限、优化级别和目标设备性能。
+</Callout>
+
+## 从 2015 年到现代 Unity
+
+MonoDevelop 已被 Visual Studio、Rider 等 IDE 取代，但断点、Watch、Step、Call Stack、Immediate 与条件断点的诊断语义不变。现代 Unity 还可使用 Profile Analyzer、Memory Profiler、ProfilerMarker 和平台工具。迁移时要记录工具对运行时的扰动，Development Build 与 Release 不能混作同一基线。
+
+迁移记录采用五列：原书载体、稳定不变量、现代实现、不可等价处、目标平台证据。允许替换工具和 API，不允许抹去原始问题或倒写历史。
+
+## 验收证据
+
+验收选择一个编译错误、一个空引用、一个错误状态、一个空间命中错误和一个性能热点。每项都要有复现输入、匹配工具、中间观测、根因、单变量修复与回归样本；关闭日志或 Gizmo 后，测试仍能自动判定结果。
+
+证据包同时记录场景路径、代码版本、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜测隐藏状态即可重放，才算掌握而不只是读完。
+
+## 小结
+
+- 没有异常不代表没有逻辑、视觉或性能错误
+- 工具要匹配故障类型，并提供足够上下文定位生产者
+- 固定复现与单变量修复是调试因果成立的前提
+- 现代 IDE 替换 MonoDevelop 界面，但核心调试动作保持
+
+<Exercises>
+
+**问题 1** 偶发只影响第 200 个敌人的错误适合什么断点？
+
+<Answer>
+  使用以对象 ID、索引或状态为条件的条件断点，避免前 199 次无关暂停。
+</Answer>
+
+**问题 2** 为什么 Gizmo 适合排查视线错误？
+
+<Answer>
+  它把起点、方向、距离、碰撞点和范围直接画在场景中，能对照数值与空间结果。
+</Answer>
+
+**问题 3** 修复后为什么还要保存失败样本？
+
+<Answer>
+  它固定错误边界，能证明测试确实抓到旧行为，并防止后续改动重新引入。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="编译错误">
+    源码无法生成程序集、会阻止进入运行阶段的语法或类型错误。
+  </GlossaryItem>
+  <GlossaryItem term="逻辑错误">
+    程序能够运行但状态转换或结果不符合设计约束的错误。
+  </GlossaryItem>
+  <GlossaryItem term="条件断点">
+    只有表达式满足时才暂停，用于隔离偶发或特定对象故障。
+  </GlossaryItem>
+  <GlossaryItem term="调用栈">
+    显示当前执行点由哪些方法逐层调用而来的上下文。
+  </GlossaryItem>
+  <GlossaryItem term="视觉调试">
+    用 Gizmo、Debug.DrawLine 或覆盖图显示坐标、范围和路径。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Alan Thorn《Mastering Unity Scripting》第一版官方目录与中文版身份资料"
+  adaptedUrl="https://www.packtpub.com/en-us/product/mastering-unity-scripting-9781784390655"
+/>

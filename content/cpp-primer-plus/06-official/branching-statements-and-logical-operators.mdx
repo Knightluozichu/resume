@@ -1,0 +1,245 @@
+---
+title: "Chapter 6：Branching Statements and Logical Operators"
+type: A
+section: C++ Primer Plus 6e · 分支覆盖与逻辑条件
+order: 6
+description: 对齐第6版 Chapter 6：掌握 if、逻辑表达式、cctype、条件运算符、switch、break/continue、数字读取循环与简单文件输入输出。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+draft: false
+---
+
+import {
+  EppBranchCoverageLab,
+  EppBranchPartitionMap,
+  EppLogicalShortCircuitFlow,
+} from "@/components/mdx/cpp-primer-plus/diagrams/branching-statements-and-logical-operators";
+
+<Objectives>
+
+- 能把输入域划分为互斥且完备的集合，再实现 if/else、条件运算符或 switch 并证明边界覆盖
+- 能推导 &&、||、! 的逻辑表达式和短路求值，使用左侧条件保护右侧索引、指针或解析前提
+- 能复现分支重叠、cctype 非法参数、switch 意外贯穿和文件打开失败，记录路径与退出原因
+
+</Objectives>
+
+## 为什么先划分输入域再写 if
+
+直接从一个样例开始追加 `if`，容易留下重叠和空洞。成绩分类应先定义合法域 `[0,100]`、非法低/高域，再把合法域划为 retry、pass、excellent。每个输入必须恰好落入一个结果，条件顺序才有可审查依据。
+
+<Term def="把所有可能输入分成互不重叠且覆盖全集的类别，并为每类定义唯一处理结果。">
+  输入域划分
+</Term>
+
+<EppBranchPartitionMap />
+
+## if 语句按条件选择一条路径
+
+if 条件求值为 true 时执行分支，else 处理剩余集合。对按阈值递减的分类，应先检查非法域，再从最高阈值向下；否则宽条件会提前吞掉更具体路径。
+
+```cpp
+std::string grade(int score) {
+    if (score < 0 || score > 100) return "invalid";
+    if (score >= 90) return "A";
+    if (score >= 60) return "pass";
+    return "retry";
+}
+```
+
+<Term def="由 if 条件、真分支和可选 else 分支组成，根据 bool 结果选择控制路径的语句。">
+  if 语句
+</Term>
+
+测试 `-1,0,59,60,89,90,100,101`，并为每条 return 记录命中次数。只有正常样例通过，无法证明边界、非法域和不可达分支。
+
+## 逻辑表达式组合条件并可能短路
+
+`&&` 表示两侧都真，`||` 表示至少一侧真，`!` 反转 bool。它们从左向右求值并短路：`&&` 左侧假时跳过右侧，`||` 左侧真时跳过右侧。
+
+<Term def="以关系结果和 &&、||、! 组合布尔条件，决定控制路径或产生 bool 值的表达式。">
+  逻辑表达式
+</Term>
+
+```cpp
+if (index >= 0 && index < count && data != nullptr) {
+    use(data[index]);
+}
+```
+
+先检查范围再访问，短路保证右侧只在前置条件成立时求值。条件顺序也是安全契约；把 `data[index]` 放到最左侧会在检查边界前访问。
+
+<Term def="逻辑运算结果已由左操作数确定时，右操作数不再求值的语言规则。">
+  短路求值
+</Term>
+
+<EppLogicalShortCircuitFlow />
+
+<Callout type="trap" title="陷阱：把 ++count 放在 && 右侧一定会执行">
+  右侧可能因短路跳过。条件负责判断，关键状态变化放在清楚的分支体中；否则结果会依赖前面条件真假，难以审查和测试。
+</Callout>
+
+## cctype 按字符类别判断但有参数域
+
+`<cctype>` 提供 `std::isdigit`、`std::isalpha`、`std::isspace`、`std::toupper` 等字符函数。它们的 int 参数必须是 EOF 或可表示为 unsigned char 的值；直接传负 signed char 会违反前置条件。
+
+<Term def="标准库中按 locale 字符类别判断或转换字符的函数族，参数域为 EOF 或 unsigned char 可表示值。">
+  cctype 字符函数
+</Term>
+
+```cpp
+unsigned char code = static_cast<unsigned char>(ch);
+if (std::isdigit(code)) {
+    ++digitCount;
+}
+```
+
+字符分类比手写 ASCII 范围更能表达意图，但 locale 和编码边界仍需声明。`std::toupper` 返回 int，写回 char 前同样要确认表示范围。
+
+## 条件运算符适合选择一个值
+
+条件运算符 `condition ? whenTrue : whenFalse` 是表达式，产生一个结果，适合窄小且两侧无复杂副作用的值选择。
+
+<Term def="以一个条件在两个候选表达式中只求值一个并产生结果的三操作数表达式。">
+  条件运算符
+</Term>
+
+```cpp
+const char* label = score >= 60 ? "pass" : "retry";
+```
+
+嵌套多层 `?:` 会隐藏分支结构，应改成命名函数或 if/else。两候选还会参与共同类型规则，结果类型不一定与视觉上某一侧完全相同。
+
+## switch 处理一个离散值的多路选择
+
+switch 对整型或枚举表达式与多个常量 case 匹配。case 是入口标签，不会自动创建独立作用域；若没有 break、return 或 throw，执行会贯穿到后续 case。
+
+```cpp
+switch (command) {
+case 's':
+    start();
+    break;
+case 'q':
+    return;
+default:
+    report_unknown(command);
+    break;
+}
+```
+
+<Term def="按一个整型或枚举表达式与常量 case 标签匹配入口的多路分支语句。">
+  switch 语句
+</Term>
+
+有意贯穿应使用 `[[fallthrough]]` 和解释，意外遗漏 break 应由每个 case 的路径测试发现。范围判断、字符串和复合条件通常更适合 if/else。
+
+## break 与 continue 改变最近循环路径
+
+break 离开最近循环或 switch，continue 跳到下一轮循环。它们能让异常路径提前结束，但过多跳转会让不变量和后置条件分散。
+
+使用 continue 时确保推进步骤仍发生。while 循环若在更新前 continue，可能永远停在同一状态；for 的更新表达式仍会执行，但循环体内其他必要清理可能被跳过。
+
+<Callout type="trap" title="陷阱：switch 每个 case 执行完会自动停止">
+  case 只是入口标签。没有 break/return/throw 会继续执行后续 case；对每个离散输入记录实际调用序列，才能识别意外贯穿。
+</Callout>
+
+## 数字读取循环同时拥有格式分支
+
+读取数字不仅有“继续/结束”，还可能遇到格式错误。`while (std::cin >> value)` 在每次成功提取后处理；退出时 EOF 与非数字失败需要不同消息。若要恢复，清除状态后还要消费非法记录，保证输入推进。
+
+```cpp
+double value{0.0};
+double sum{0.0};
+while (std::cin >> value) {
+    sum += value;
+}
+if (!std::cin.eof()) {
+    std::cerr << "invalid numeric input\n";
+}
+```
+
+非法输入不是关系表达式能修复的问题，它属于流解析状态。分支设计要把外部失败纳入输入域，而不是默认所有字符都能变成数字。
+
+## 简单文件输入输出先检查打开状态
+
+本章初步使用 `std::ifstream` 把文件当输入流。路径解析和打开是第一道分支；文件不存在不能与“合法空文件”混为一谈。打开成功后，读取循环仍可能因 EOF、格式或 I/O 错误结束，Chapter 17 再完整处理。
+
+```cpp
+std::ifstream input{"numbers.txt"};
+if (!input) {
+    std::cerr << "cannot open numbers.txt\n";
+    return 1;
+}
+
+double number{0.0};
+while (input >> number) {
+    process(number);
+}
+```
+
+记录当前工作目录和解析后路径，才能复现“IDE 能开、终端找不到”。打开、读取与业务验证是三层独立条件。
+
+## 四类故障验证完整分支责任
+
+<EppBranchCoverageLab />
+
+先预测每个故障会命中哪条路径、哪些表达式不会求值、退出后状态是什么，再运行。分支覆盖率只能说明语句执行过，仍需边界断言证明每个输入被正确分类。
+
+## 三步设计一个分支系统
+
+<Stepper>
+  <Step title="第一步：划分完整输入域">
+    列合法、非法、边界和外部失败类别，为每类指定唯一结果，再翻译成 if/else 或 switch。
+
+    <EppBranchPartitionMap />
+  </Step>
+  <Step title="第二步：标出短路前置条件">
+    对 &&/|| 写左右真假表，确认右侧访问只在索引、指针或解析前提成立后求值。
+
+    <EppLogicalShortCircuitFlow />
+  </Step>
+  <Step title="第三步：做路径与故障测试">
+    覆盖阈值两侧、负 char、每个 case、缺失文件和非法记录；记录命中路径与退出原因。
+
+    <EppBranchCoverageLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 输入域先划为互斥完备类别，再实现 if/else，可避免宽条件吞掉高优先级分支
+- 逻辑表达式会短路，左侧可以保护右侧前置条件，关键副作用不应藏在可能跳过的位置
+- cctype 参数必须是 EOF 或 unsigned char 可表示值，字符编码和 locale 仍需声明
+- 条件运算符适合选一个简单值，switch 适合一个离散值，case 不会自动停止
+- 数字和文件输入有打开、格式、EOF 与业务验证分支，不能只处理正常数据
+
+<Exercises>
+  1. **问题 1：设计分类。** 为成绩 0–100 与非法输入写互斥区间和最小边界样例。
+
+  <Answer question="成绩输入域如何完整划分？">划为 score&lt;0、[0,60)、[60,90)、[90,100]、score&gt;100；样例 -1、0、59、60、89、90、100、101。先拒绝非法，再按 90、60 递减检查，剩余为 retry，每个样例只命中一条结果。</Answer>
+
+  2. **问题 2：推导短路。** 为什么 `ptr != nullptr && index < count && ptr[index] > 0` 的顺序重要？
+
+  <Answer question="短路如何保护访问？">&& 只有左侧为真才求值右侧。先证明 ptr 非空，再证明 index 上界，最后访问元素；若把 ptr[index] 放前面，可能在安全前提检查前解引用。还应单独检查 index 非负或使用一致大小类型。</Answer>
+
+  3. **问题 3：区分文件结果。** 缺失文件、空文件、非法首记录分别如何报告？
+
+  <Answer question="文件输入的三类失败如何分类？">构造 ifstream 后立即检查打开，失败报告路径；打开成功但第一次读取到 EOF 是合法空文件；打开成功却因格式不匹配停止是非法记录，报告位置/原始内容。三者不能都由 while 没进入来表示。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="输入域划分">把所有输入分为互斥完备类别并指定唯一处理结果。</GlossaryItem>
+  <GlossaryItem term="if 语句">根据 bool 条件选择真分支与可选假分支的控制语句。</GlossaryItem>
+  <GlossaryItem term="逻辑表达式">以关系结果和逻辑运算符组合条件的表达式。</GlossaryItem>
+  <GlossaryItem term="短路求值">结果由左操作数确定时跳过右操作数的规则。</GlossaryItem>
+  <GlossaryItem term="cctype 字符函数">按字符类别判断或转换、具有受限参数域的标准函数族。</GlossaryItem>
+  <GlossaryItem term="条件运算符">按条件在两个表达式中选择一个结果的三操作数表达式。</GlossaryItem>
+  <GlossaryItem term="switch 语句">按离散表达式与 case 常量匹配入口的多路分支。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++ Primer Plus, Sixth Edition, Chapter 6 Branching Statements and Logical Operators"
+  adaptedUrl="https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+/>

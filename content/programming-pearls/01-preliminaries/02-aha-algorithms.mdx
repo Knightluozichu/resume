@@ -1,0 +1,439 @@
+---
+title: "Column 2 · Aha! Algorithms：把难题变成已会的问题"
+type: C
+section: "Part I · Preliminaries"
+order: 1
+description: "按第二版Column 2重建three problems、missing integer外部划分、ubiquitous binary search、vector rotation primitives、sorting signatures与anagram pipeline。"
+demo: true
+math: true
+sourceUrl: "https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+draft: false
+---
+
+import { PP2ThreeProblemsMap, PP2MissingIntegerLab, PP2ExternalNarrowingLab, PP2BinarySearchBisectLab, PP2RotationMethodsLab, PP2ReversalRotationLab, PP2JugglingCyclesLab, PP2PrimitivePowerLab, PP2AnagramSignatureLab, PP2AnagramPipelineLab, PP2AhaCertificateLab } from "@/components/mdx/programming-pearls/diagrams/02-aha-algorithms";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释aha algorithms、three problems、ubiquitous binary search、power of primitives与getting it together sorting
+- 能计算missing-integer bucket capacity、binary probes、rotation gcd cycles、reversal moves与anagram pipeline cost
+- 能实现external narrowing、monotone boundary search、three-reversal rotation、juggling rotation和signature grouping
+- 能分析pigeonhole guarantee、predicate monotonicity、permutation correctness、canonical equivalence及memory/I/O边界
+- 能设计missing-integer、rotation与anagram的transformation certificate、property tests和complexity proof
+
+</Objectives>
+
+## 从“先预测答案会长什么样”开始
+
+Aha Algorithm（<Term def="通过改变problem representation或调用恰当primitive，让原本困难的问题出现简单、意外且可证明的solution。">Aha Algorithm</Term>）不是背诵奇技，而是训练看见structure。
+
+先预测：下面three problems看起来毫无关系，它们各自隐藏了什么可复用primitive？
+
+1. 在至多four billion个random 32-bit integers中找一个missing integer。
+2. 把n-element vector向左rotate d positions，要求O(n) time与O(1) extra space。
+3. 在dictionary中找出all sets of anagrams。
+
+<PP2ThreeProblemsMap />
+
+它们分别会变成：反复缩小underfull universe、组合reverse operations、把equivalence转成sortable canonical keys。
+
+## 2.1 Three Problems A：Missing 32-bit integer
+
+32-bit unsigned universe有：
+
+$$
+U=2^{32}=4,294,967,296
+$$
+
+File至多含4,000,000,000 integers，所以即使all distinct，也至少缺少：
+
+$$
+2^{32}-4,000,000,000
+=294,967,296
+$$
+
+个values。Existence来自pigeonhole principle，不需要扫描后才知道。
+
+若有ample memory，分配 $2^{32}$ bits的bitmap，约512 MiB；scan file设置bits，再scan bitmap找first zero。Time O(m+U)，space O(U) bits。
+
+<PP2MissingIntegerLab />
+
+真正有趣的是：只有few hundred bytes main memory，但允许sequential scratch files，怎样保持linear-scale I/O？
+
+## 2.2 External partitioning：找underfull half
+
+按most significant bit把records分成0-prefix与1-prefix两个scratch streams，同时count。每个half最多容纳 $2^{31}$ distinct values；至少一个half的record count小于capacity，它必含missing value。
+
+保留underfull half，按next bit再分；每轮prefix增加one bit，capacity减半。32 rounds后prefix本身就是missing integer。
+
+<PP2ExternalNarrowingLab />
+
+Invariant：
+
+$$
+\operatorname{records}(P)
+<
+\operatorname{capacity}(P)
+=2^{32-|P|}
+$$
+
+因此prefix P覆盖的range必有hole。Partition只需当前bit、two output buffers和counts；main memory可保持constant。
+
+```c
+for (int bit = 31; bit >= 0; --bit) {
+    split_by_bit(current, zero_file, one_file, bit, &zeros, &ones);
+    uint64_t half_capacity = UINT64_C(1) << bit;
+    current = zeros < half_capacity ? zero_file : one_file;
+    prefix = (prefix << 1) | (current == one_file);
+}
+```
+
+Production实现不应真的反复创建无界temporary files；可复用two files，或在memory允许时先count many high-bit buckets，再对one underfull bucket做local bitmap。
+
+<Callout type="trap" title="总选records较少的half">
+正确criterion是record count小于该half的value capacity，不只是和另一half比较。Duplicates存在时count不等于distinct occupancy，必须先去重、改用bitmap/counting，或重新定义proof。
+</Callout>
+
+## 2.3 Ubiquitous Binary Search：寻找单调边界
+
+二分查找（<Term def="对ordered candidate space中的monotone predicate反复取middle，每次排除一半候选的boundary-search pattern。">Binary Search</Term>）不只是在sorted array中找key。它是“寻找单调transition”的general pattern。
+
+Column的经典场景是一叠约1000张cards，其中one bad card会让整批program output异常。测试一个subset代价高，但能回答“bad card是否在这个half”。逐半测试约：
+
+$$
+\left\lceil\log_2 1000\right\rceil=10
+$$
+
+次即可定位。
+
+<PP2BinarySearchBisectLab />
+
+抽象接口不是`array[mid] < target`，而是predicate：
+
+```ts
+function firstTrue(low: number, high: number, pred: (i: number) => boolean) {
+  while (low < high) {
+    const mid = low + Math.floor((high - low) / 2);
+    if (pred(mid)) high = mid;
+    else low = mid + 1;
+  }
+  return low;
+}
+```
+
+Precondition是predicate在search interval内形如false...false,true...true。若它nonmonotone，binary search可能稳定返回错误答案。
+
+Binary search也能用于version regression、configuration changes、failure-inducing input prefix、capacity threshold和minimum feasible resource。每次test必须清楚回答哪一half仍含boundary。
+
+## 2.4 Three Problems B：Vector Rotation
+
+向量旋转（<Term def="把sequence x=ab变成ba，其中a是length d prefix、b是remaining suffix的permutation problem。">Vector Rotation</Term>）要求：
+
+$$
+x[0:n]=ab
+\longrightarrow
+ba
+$$
+
+例如abcdefgh left rotate 3得到defghabc。
+
+<PP2RotationMethodsLab />
+
+Straightforward methods揭示tradeoffs：
+
+- Copy prefix a，shift b，再copy a：O(n) time、O(d) extra space。
+- Left shift one position，repeat d times：O(nd) time、O(1) space。
+- Juggling cycles：O(n) time、O(1) space。
+- Block swap：O(n) time、O(1) space。
+- Three reversals：O(n) time、O(1) space，proof最简洁。
+
+## 2.5 The Power of Primitives：three reversals
+
+反转（<Term def="In-place交换sequence两端元素并向中间收缩，把element order完全颠倒的linear primitive。">Reversal</Term>）primitive：
+
+```c
+void reverse(Item *x, size_t first, size_t last) {
+    while (first < last) {
+        Item tmp = x[first];
+        x[first++] = x[last];
+        x[last--] = tmp;
+    }
+}
+```
+
+把x写成ab，依次：
+
+$$
+ab
+\xrightarrow{\operatorname{rev}(a)}
+a^Rb
+\xrightarrow{\operatorname{rev}(b)}
+a^Rb^R
+\xrightarrow{\operatorname{rev}(all)}
+ba
+$$
+
+<PP2ReversalRotationLab />
+
+```c
+d %= n;
+if (d != 0) {
+    reverse(x, 0, d - 1);
+    reverse(x, d, n - 1);
+    reverse(x, 0, n - 1);
+}
+```
+
+Total swaps不超过n；extra state是indexes和one temporary Item。Empty vector要在`d %= n`前special-case，避免division by zero。
+
+## 2.6 Juggling Algorithm：rotation的cycle structure
+
+Rotation把old index j映射到：
+
+$$
+\pi(j)=(j-d)\bmod n
+$$
+
+这个permutation分成：
+
+$$
+g=\gcd(n,d)
+$$
+
+个disjoint cycles，每个length $n/g$。每个cycle保留one temporary value，沿 $j+d\bmod n$ 搬运。
+
+<PP2JugglingCyclesLab />
+
+```c
+size_t cycles = gcd(n, d);
+for (size_t start = 0; start < cycles; ++start) {
+    Item saved = x[start];
+    size_t current = start;
+    for (;;) {
+        size_t next = current + d;
+        if (next >= n) next -= n;
+        if (next == start) break;
+        x[current] = x[next];
+        current = next;
+    }
+    x[current] = saved;
+}
+```
+
+Proof来自cycle decomposition：cycles不重叠且cover every index；each assignment把正确source搬到destination；closing write恢复saved value。
+
+Three reversals通常更容易review，juggling则揭示permutation algebra。Aha insight不要求只存在one solution，而是让不同primitives暴露不同proof与constant factors。
+
+<PP2PrimitivePowerLab />
+
+## 2.7 Three Problems C：Anagram equivalence
+
+Anagrams是letters multiset相同的words。Pairwise比较dictionary中all word pairs需要O(D²) equivalence tests。关键是构造canonical signature：
+
+$$
+\operatorname{sig}(w)
+=
+\operatorname{sort}(\operatorname{normalize}(w))
+$$
+
+Anagram Signature（<Term def="对word normalization后排序letters得到的canonical key；two words为anagrams当且仅当keys equal。">Anagram Signature</Term>）把permutation equivalence变成string equality。
+
+<PP2AnagramSignatureLab />
+
+Correctness有两个方向：
+
+- Same letters with same multiplicities经过sorting得到identical sequence。
+- Identical sorted sequences意味着每个character count相同，所以words互为permutations。
+
+Normalization policy必须明确case、punctuation、accents与Unicode graphemes。ASCII lowercase classroom dictionary可按bytes排序；general text不能假装byte等于character。
+
+## 2.8 Getting It Together: Sorting
+
+Sorting不只是产生ordered report，还能把equal keys聚在一起：
+
+1. 对每个word计算signature。
+2. Emit `(signature, originalWord)` pair。
+3. Sort pairs by signature。
+4. Linear scan adjacent equal signatures，输出size至少2的groups。
+
+<PP2AnagramPipelineLab />
+
+若D个words，total characters为L，逐word sorting cost约：
+
+$$
+O\left(\sum_i |w_i|\log|w_i|\right)
+$$
+
+Pair sorting O(D log D) key comparisons，final scan O(D)。若alphabet很小，可用frequency vector signature把per-word key construction降到O(|w|+alphabet)。
+
+```ts
+const pairs = words.map(word => ({
+  key: [...normalize(word)].sort().join(""),
+  word,
+}));
+pairs.sort((a, b) => a.key.localeCompare(b.key));
+const groups = groupAdjacentEqualKeys(pairs);
+```
+
+这就是getting it together sorting：先把problem变成“equal items share key”，再让general sort完成grouping的hard work。
+
+## 2.9 Implementing an Anagram Program
+
+Unix-style pipeline可拆成two small programs：
+
+- `sign`读dictionary，每行输出signature与word。
+- System sort按first field排序。
+- `squash`扫描adjacent equal signatures并emit groups。
+
+拆分的价值是每段都可独立test，sort复用成熟tool，intermediate representation可直接inspection。成本是text parsing与process I/O；large-scale production可在one process内保留same logical stages。
+
+Test cases需覆盖：
+
+- Repeated letters：`letter`与`reletter`并非anagrams。
+- Case normalization：`Tea`与`eat`是否同组取决于contract。
+- Duplicate dictionary entries：deduplicate还是保留必须定义。
+- Empty strings与one-letter words。
+- Non-ASCII combining marks与locale。
+
+## 2.10 从三个题抽象出的design moves
+
+<PP2PrimitivePowerLab />
+
+三个solutions共享一条chain：
+
+1. **Expose invariant**：underfull capacity、monotone predicate、permutation、equivalence。
+2. **Choose representation**：prefix range、ordered interval、ab decomposition、canonical signature。
+3. **Apply primitive**：partition/count、binary search、reverse、sort。
+4. **Lift result**：missing prefix、bad card index、rotated vector、anagram groups。
+5. **Prove resources**：passes、probes、moves、memory与sort cost。
+
+“Aha”发生在step 2到3，但可靠program还需要其余steps。
+
+## 2.11 Failure modes与边界
+
+<Callout type="trap" title="只验证sample output，不验证transformation">
+Rotation sample正确不代表all n,d；anagram group看似合理不代表signature canonical；binary search跑得快不代表predicate monotone。必须验证结构性invariant和边界。
+</Callout>
+
+- Missing integer若允许duplicates，bucket raw count可能超过distinct occupancy，underfull proof失效。
+- Signed integer mapping需要定义bit-preserving reinterpretation或offset；不能混用numeric order。
+- Rotation必须normalize d，处理d=0、d=n、n=0和large d。
+- Binary predicate若test有nondeterministic failures，应重复采样或改变model。
+- Signature若仅用sum of character codes，会collision，不是canonical equivalence。
+- External scratch file要处理partial writes、disk full与cleanup。
+
+<PP2AhaCertificateLab />
+
+## 2.12 Principles
+
+- 先动手纸上求解three problems，再读solution，训练representation change。
+- Binary search是寻找monotone boundary的pattern，不只是array routine。
+- Simple primitives可通过composition解决surprising problems。
+- Sorting能完成grouping、duplicate detection、canonical clustering与set operations。
+- Pigeonhole principle可把existence proof直接变成algorithm。
+- Algebraic view如gcd cycles能解释为什么in-place permutation正确。
+- A clever transformation必须附correctness equivalence和resource accounting。
+
+## 2.13 Independent certificate
+
+Missing integer certificate检查chosen prefix每轮record count严格小于capacity，最终value未在input。
+
+Rotation certificate检查output length不变、element multiset不变，并对每个index：
+
+$$
+y[j]=x[(j+d)\bmod n]
+$$
+
+Anagram certificate检查every group内signatures equal、不同groups signatures distinct、all dictionary words accounted exactly once。
+
+<PP2AhaCertificateLab />
+
+Property-based tests可随机生成n、d，与copy-based oracle比较rotation；随机删除one universe value，验证missing finder返回absent member；随机shuffle letters，验证signature invariance。
+
+## 2.14 逐步运行路线
+
+<Stepper>
+  <Step title="先识别three problems的hidden structure" description="分别写出underfull universe、monotone split、permutation和equivalence relation。">
+    <PP2ThreeProblemsMap />
+    <PP2MissingIntegerLab />
+  </Step>
+  <Step title="用partition与binary search缩小候选" description="每次test必须证明至少排除一half，并维持missing或defect仍在chosen range。">
+    <PP2ExternalNarrowingLab />
+    <PP2BinarySearchBisectLab />
+  </Step>
+  <Step title="把rotation分解为known primitives" description="比较temporary、shifts、juggling与three reversals；证明O(n) time和O(1) space。">
+    <PP2RotationMethodsLab />
+    <PP2ReversalRotationLab />
+    <PP2JugglingCyclesLab />
+  </Step>
+  <Step title="把anagram equivalence变成sortable key" description="Normalization后构造canonical signature，sort pairs，再scan adjacent equal groups。">
+    <PP2AnagramSignatureLab />
+    <PP2AnagramPipelineLab />
+  </Step>
+  <Step title="用结构证书验收aha insight" description="检查monotonicity、capacity、permutation、canonical equality与总复杂度。">
+    <PP2PrimitivePowerLab />
+    <PP2AhaCertificateLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Aha Algorithms通过representation change让困难问题调用简单primitive。
+- Three Problems分别是missing 32-bit integer、in-place vector rotation和dictionary anagrams。
+- Underfull prefix与pigeonhole principle让tiny-memory external narrowing可行。
+- Ubiquitous Binary Search寻找monotone boundary，也可定位bad data或regression。
+- Vector Rotation可用three reversals、juggling cycles或block swaps实现O(n) time、O(1) space。
+- Power of Primitives强调reverse、sort和predicate search的可组合性。
+- Anagram Signature把letter-multiset equivalence转成canonical key equality。
+- Getting It Together: Sorting让equal signatures adjacent，linear scan即可分组。
+- Aha insight必须附preconditions、two-way correctness与resource proof。
+
+<Exercises>
+
+1. File含最多 $2^{40}-100$ 个40-bit distinct integers，memory可放 $2^{20}$ counters。设计two-pass missing-integer algorithm并计算每counter capacity与第二遍bitmap size。
+2. 对n=21、d=6的left rotation列出all juggling cycles，证明cycle count与length，并计算three-reversal method的swap upper bound。
+3. 设计一个binary-search debugging predicate来定位1000个ordered commits中的first bad commit。说明哪些环境噪声会破坏monotonicity，以及如何验收predicate。
+4. 为Unicode anagrams设计normalization和collision-free signature；给出pipeline complexity，并说明仅使用character-code sum为何错误。
+
+<Answer>
+
+用high 20 bits作为bucket index，first pass对 $2^{20}$ buckets计数；每bucket覆盖 $2^{20}$ values，所以counter需表示0到 $2^{20}$，至少21 bits，实际可用32-bit。至少一bucket count小于 $2^{20}$。Second pass只收该bucket的low 20 bits，使用 $2^{20}$-bit bitmap，即128 KiB，找zero bit并与high prefix拼成40-bit missing value。
+
+</Answer>
+
+<Answer>
+
+$\gcd(21,6)=3$，有3个cycles，每个length 7。以source-step +6 mod21计，cycles可从0、1、2开始：0→6→12→18→3→9→15→0；其余分别所有indexes加1和加2。Three reversals处理length 6、15、21三段，swaps为floor(6/2)+floor(15/2)+floor(21/2)=3+7+10=20，不超过n。
+
+</Answer>
+
+<Answer>
+
+Predicate `build(commit i) fails deterministic regression test`，前提是good prefix后all commits bad。Binary search找first true。Flaky tests、external service、time-dependent data、non-hermetic builds、fix后再regress都会破坏monotonicity。先固定environment和seed，对sample commits重复test；若history可能good-bad-good，需改成range scan、change-set bisect或定义different causal predicate。
+
+</Answer>
+
+<Answer>
+
+先按contract做Unicode normalization，例如NFC、case folding，并决定是否去掉spaces/punctuation；signature可排序Unicode scalar sequence，或使用完整code-point frequency map的canonical serialization。Sorting signatures无collision，只要normalization和serialization injective。Total cost为all words normalization加per-word sorting，再加D pair sorting。Character-code sum会让不同multisets碰撞，例如`ad`与`bc` sum相同却非anagrams。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Aha Algorithm">通过改写representation或组合primitive得到意外而简单solution的设计洞察。</GlossaryItem>
+  <GlossaryItem term="Binary Search">在monotone predicate的ordered domain中反复减半寻找boundary。</GlossaryItem>
+  <GlossaryItem term="Vector Rotation">把sequence的prefix与suffix交换次序、保持内部order的permutation。</GlossaryItem>
+  <GlossaryItem term="Reversal">In-place颠倒一段sequence的linear-time primitive。</GlossaryItem>
+  <GlossaryItem term="Anagram Signature">对normalized word排序letters得到的collision-free canonical key。</GlossaryItem>
+  <GlossaryItem term="Pigeonhole Principle">Objects多于containers时至少一个container含multiple objects；其capacity反式可定位underfull range。</GlossaryItem>
+  <GlossaryItem term="Canonical Representation">同一equivalence class所有objects映射到相同、不同classes映射到不同的标准形式。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Programming Pearls, Second Edition · Column 2 Aha! Algorithms"
+  href="https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+  author="Jon Bentley"
+  license="本章按Pearson官方第二版目录与Column 2的three problems、ubiquitous binary search、power of primitives、getting it together sorting和anagram program主线重构；实现与证书为现代教学化重写。"
+/>

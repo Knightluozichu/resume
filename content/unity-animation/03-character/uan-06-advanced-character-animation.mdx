@@ -1,0 +1,232 @@
+---
+title: "第 6 章 Advanced Character Animation：可控角色与 Blend Tree"
+type: A
+section: "Unity 游戏动画设计 · 角色动画"
+order: 6
+description: "覆盖可控角色、Blend Tree、维度、浮点映射、脚本准备、Mecanim Blend Tree 驱动与测试。"
+demo: true
+math: false
+sourceUrl: "https://www.packtpub.com/en-us/product/unity-animation-essentials-9781782174813"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Uan06AdvancedCharacterAnimationMapLab,
+  Uan06AdvancedCharacterAnimationExperimentLab,
+  Uan06AdvancedCharacterAnimationEvidenceLab,
+} from "@/components/mdx/unity-animation/diagrams/uan-06-advanced-character-animation";
+
+<Objectives>
+
+- 能解释一维与二维 Blend Tree 的参数空间、阈值和权重
+
+- 能实现世界速度到角色局部参数的归一化与阻尼映射
+
+- 能复现并判断阈值空洞、参数噪声、方向错误和脚滑边界
+
+</Objectives>
+
+## 问题：为什么把速度直接写入 Blend Tree 不一定得到正确混合
+
+先预测：角色最大速度是 6 米每秒，而 Blend Tree 阈值设计为 0 到 1，把 6 直接写入参数会发生什么？参数长期落在边界，几乎只播放最后一个动作。第六章的核心不是拖入 Idle、Walk、Run，而是把输入和物理速度稳定映射到 Blend Tree 的一维或二维参数空间。
+
+<Uan06AdvancedCharacterAnimationMapLab />
+
+## 原书边界与官方小节
+
+官方目录依次为 Creating a controllable character、Blend Trees、Dimensions、Mapping floats、Preparing to script with Blend Tree animations、Scripting with Mecanim Blend Trees、Testing Mecanim Blend Trees。它延续第五章已导入角色，聚焦可控移动混合与验证。
+
+- **Creating a controllable character；Blend Trees**
+- **Dimensions**
+- **Mapping floats**
+- **Preparing to script with Blend Tree animations**
+- **Scripting with Mecanim Blend Trees；Testing Mecanim Blend Trees**
+
+这些小节按官方目录唯一归属。本站重新组织解释、代码与实验，不逐字复制原文；现代补充放在迁移段，不能替换或重复计算原始单元。
+
+## 物理量到混合权重
+
+Blend Tree 不切换离散状态，而是根据参数计算多个 Motion 权重。一维树适合速度轴，二维树同时表达前后与左右或速度与方向。脚本先把世界速度变换到角色局部空间，再按最大速度归一化，并用阻尼抑制输入噪声。阈值必须与参数单位一致；权重和应接近 1，边界外输入应钳制或有明确外推策略。
+
+<Uan06AdvancedCharacterAnimationExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="根据连续参数计算多个 AnimationClip 混合权重的 Motion 节点。">
+  Blend Tree
+</Term>
+必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+
+<Term def="Blend Tree 用于定位样本的一维或二维参数空间。">Dimension</Term>
+必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+
+<Term def="一维树中某个 Motion 对应的参数位置。">Threshold</Term>
+必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+
+<Term def="把速度、输入或角度范围转换到 Blend Tree 参数范围的过程。">
+  Float Mapping
+</Term>
+必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+
+<Term def="让参数在时间上平滑接近目标以抑制突变和噪声的机制。">Damping</Term>
+必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+
+术语若不能落到具体资产、时间点、对象属性和观测值，就仍停留在记忆层。读者应能为每个术语写出生产者、变化规则、消费者、正常样本和失败样本。
+
+## 关键对象与数据流
+
+建立 Idle、Walk、Run、TurnLeft、TurnRight 样本，先测量每段 Clip 的视觉速度与循环相位，再决定阈值。脚本读取实际速度而非只读按键，把世界向量转为局部 forward/right 分量，归一化并写入 Animator。测试从静止、缓慢、满速、反向和急转五类输入采样参数、当前 Clip 权重、角色位移和脚滑。
+
+排查时从最早可控输入开始，逐段检查导入设置、中间状态和最终像素。最终画面正确但链路不符合预测，也不能立即签发，因为它可能依赖未记录的帧率、缓存、随机种子或编辑器状态。
+
+## 三步可重复实验
+
+动手前先预测：只改变当前步骤的一项输入后，哪个状态、骨骼、粒子、纹理或像素应最先变化？实验期间固定 Unity 版本、资产版本、帧率、场景、随机种子与目标平台。
+
+<Stepper>
+  <Step title="标定动画样本">
+    <Uan06AdvancedCharacterAnimationMapLab />
+
+记录 Idle、Walk、Run 和转向 Clip 的周期、位移与脚接触相位，避免只凭名称设置阈值。
+
+```csharp
+Vector3 local = transform.InverseTransformDirection(velocity);
+float forward = Mathf.Clamp(local.z / maxSpeed, -1f, 1f);
+```
+
+  </Step>
+  <Step title="映射参数空间">
+    <Uan06AdvancedCharacterAnimationExperimentLab />
+
+把世界速度转到角色局部轴并归一化，分别构建 1D 走跑树和 2D 转向树，验证中心和四个边界点。
+
+```csharp
+animator.SetFloat("Forward", forward, 0.12f, Time.deltaTime);
+animator.SetFloat("Turn", turn, 0.08f, Time.deltaTime);
+```
+
+  </Step>
+  <Step title="脚本驱动与测试">
+    <Uan06AdvancedCharacterAnimationEvidenceLab />
+
+加入阻尼后重放静止、慢走、奔跑、反向和急转，记录参数、权重、位移与视觉响应延迟。
+
+```text
+input -> world velocity -> local components -> normalized parameters -> blend weights -> pose
+```
+
+  </Step>
+</Stepper>
+
+## Blend Tree 的输入必须与样本空间同单位
+
+一维树常以速度为参数，Idle、Walk、Run 的阈值可以使用真实米每秒，也可以归一化为零到一，但脚本输出和阈值必须采用同一单位。二维树把两个参数映射到平面，常见的是局部横向与前向速度。直接把世界 X、Z 写入角色参数会在角色转向后错位，应先用 InverseTransformDirection 转换到局部空间，再按最大速度归一化并钳制。
+
+权重来自参数点与 Motion 样本的关系。样本分布不均会造成某些方向突然切换，边界外输入可能长期压在最外样本。调试面板中的红点和权重列表应与脚本日志对照，在中心、轴向、对角和范围外分别采样。Damping 能平滑参数，却也增加响应延迟；参数阻尼、角色加速度和 Clip 自身节奏同时存在时，要逐项固定才能定位脚滑或迟滞。
+
+## 控制与动画的闭环
+
+- 输入系统产生期望方向，不直接承诺实际速度。
+- CharacterController 或 Rigidbody 产生实际位移和速度，明确是否包含根运动。
+- 脚本把实际或期望速度转换为 Blend Tree 参数，并记录所选依据。
+- Blend Tree 计算 Motion 权重，Animator 输出姿态和可选根位移。
+- 结果回到对象移动与下一帧速度，避免代码位移和根运动重复叠加。
+
+验收以静止、缓慢前进、全速、后退、横移、斜向和突然反向七组输入重放，记录局部速度、参数、每个 Motion 权重和脚底世界速度。故意交换横纵参数、把阈值单位放大十倍和取消钳制，确认诊断能在画面严重失真前从数值发现问题。
+
+二维树的样本布局还应覆盖参数空间，而不是只在四个轴端放 Clip 后假设对角运动自然成立。分别在中心、轴线中点、四个对角和外边界采样，记录权重和主要 Motion；若缺少斜向样本，要明确由哪些前进与横移 Clip 混合，以及上半身朝向是否可接受。多个 Animator Layer 叠加时同时保存层权重和 Avatar Mask，避免把上层覆盖误诊为 Blend Tree 本身错误。
+
+网络同步项目还应区分本地输入、权威速度和插值速度，明确哪一个驱动动画参数；否则延迟补偿会被误判为 Blend Tree 阻尼。
+
+回放同一网络快照序列并比较权重轨迹，才能证明参数来源稳定。
+
+结果还需覆盖低帧率和高延迟边界。
+
+## 正常、边界与失败样本
+
+每章至少保存一个正常样本、一个极端边界和一个故意破坏配置。正常样本证明主路径，边界样本说明适用范围，失败样本证明诊断方法真的能抓到错误。
+
+<Callout type="trap">
+  **因果陷阱**：参数单位与阈值单位不一致会让权重长期饱和，Blend Tree
+  看似工作却失去中间混合。
+</Callout>
+
+<Callout type="trap">
+  **版本陷阱**：只用输入轴驱动动画会在碰墙、滑坡或外力作用时与真实速度分离，产生跑步原地踏步或滑行。
+</Callout>
+
+## 从 Unity 5 到现代 Unity
+
+Animator Blend Tree、SetFloat 阻尼和局部速度映射仍适用。现代 Input System 只替换输入来源，角色控制器、根运动或网络预测会改变真实速度的所有者。Freeform Cartesian 与 Directional 等二维算法应按样本布局选择；不要把算法名称当成自动正确。
+
+迁移记录采用五列：原书载体、稳定不变量、现代实现、不可等价处、目标平台证据。允许替换工具和 API，不允许抹去原始问题或倒写历史。
+
+## 验收证据
+
+验收包含各 Clip 周期和视觉速度表、阈值图、局部参数映射公式、五类输入的参数与权重采样，以及脚滑和响应延迟。权重必须连续，静止时不抖动，最大速度时不超界，碰墙时动画应按实际策略响应。
+
+证据包同时记录场景路径、代码版本、资产 GUID、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜测隐藏状态即可重放，才算掌握而不只是看过。
+
+## 小结
+
+- Blend Tree 根据连续参数混合动作，不等同于状态转换
+- 维度和阈值必须与输入物理量的单位和范围一致
+- 世界速度需要转换到角色局部参数空间
+- 测试应同时观察参数、权重、位移、脚滑和延迟
+
+<Exercises>
+
+**问题 1** 为什么速度 6 不能直接写入 0 到 1 的树？
+
+<Answer>
+  它会超出设计范围并长期饱和在最后样本，应先按最大速度归一化或把阈值改成物理单位。
+</Answer>
+
+**问题 2** 为什么实际速度比输入轴更可靠？
+
+<Answer>
+  它能反映碰撞、坡度、外力和控制器限制，避免画面动作与真实位移分离。
+</Answer>
+
+**问题 3** 二维树的中心样本通常是什么？
+
+<Answer>
+  参数接近零时的 Idle 或稳定中立姿态，但具体取决于参数语义和样本布局。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Blend Tree">
+    根据连续参数计算多个 AnimationClip 混合权重的 Motion 节点。
+  </GlossaryItem>
+  <GlossaryItem term="Dimension">
+    Blend Tree 用于定位样本的一维或二维参数空间。
+  </GlossaryItem>
+  <GlossaryItem term="Threshold">
+    一维树中某个 Motion 对应的参数位置。
+  </GlossaryItem>
+  <GlossaryItem term="Float Mapping">
+    把速度、输入或角度范围转换到 Blend Tree 参数范围的过程。
+  </GlossaryItem>
+  <GlossaryItem term="Damping">
+    让参数在时间上平滑接近目标以抑制突变和噪声的机制。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Alan Thorn《Unity Animation Essentials》第一版官方目录与中文版《Unity游戏动画设计》身份资料"
+  adaptedUrl="https://www.packtpub.com/en-us/product/unity-animation-essentials-9781782174813"
+/>

@@ -1,110 +1,300 @@
 ---
-title: 最小的 K 个数
+title: "面试题40：最小的k个数"
 type: C
-section: 数组
-order: 5
-description: 通过最大堆维护前 K 小元素，或 O(n) 平均复杂度的快速选择。
+section: "第5章 优化时间和空间效率"
+order: 44
+description: "用Partition原地定位第k小边界，或用降序multiset维护可流式更新的k个最小候选，并明确结果顺序、重复值与无效输入契约。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/40_KLeastNumbers/KLeastNumbers.cpp"
 draft: false
 ---
 
-{/* 知识点清单：堆、Top-K、复杂度权衡；原书章节：最小的 K 个数。 */}
+import { KLeastPartitionDiagram, KLeastMultisetLab, KLeastTradeoffDiagram, KLeastOutputContractDiagram, KLeastOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/k-least-numbers";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能说明为什么最大堆比每次排序更省时间。
-- 能处理 `k <= 0`、`k >= n` 等边界。
-- 能写出稳定可读的堆方案并解释为什么取负序存放。
+- 能解释只定位第k小边界为何无需完成全数组排序
+- 能计算降序multiset逐项保留和淘汰候选的状态
+- 能实现作者Partition与有界候选集合两种方案
+- 能分析O(n)或O(nlogk)、输入修改、结果顺序和重复值权衡
+- 能设计覆盖作者七组测试并自动验证多重集合结果
 
 </Objectives>
 
-## 直觉引入
+## 从“只要前k名，为什么给所有人排座次”开始
 
-要找最小的 K 个元素，不必把整个数组都排好序。  
-一个大小始终不超过 K 的最大堆里，保留当前最小 K 个即可：  
-新元素若比堆顶小，则替换堆顶。
+先预测：在4、5、1、6、2、7、3、8中找“**最小的k个数**”，k为4。完整排序当然能得到1、2、3、4，但题目只关心分界线：只要确认某个位置是第4小，且它左边恰有另外3个不更大的元素，前4个位置就构成答案集合，内部谁先谁后并不重要。
 
-## 概念讲解
+作者给出两条适用于不同约束的路线。解法一复用上一题的Partition，在完整可写数组上做<Term def="通过选择第k小元素划分数组，只保证目标边界两侧关系而不完成全部排序。">原地选择</Term>；解法二把当前最小的k项保存在降序multiset里，可逐个读取数据且不修改输入。
 
-时间复杂度主导项是每个元素一次比较入堆，`O(n log k)`。  
-当 `k` 接近 n 时，排序法可能更简单，但题目要求 Top-K 时堆通常更优。
+<KLeastPartitionDiagram />
 
-## 思考引导
+## 解法一：Partition定位k减一
 
-### 1) 先问问题，不先固定方法
-最小 k 个数先要定义服务目标：是否需要返回有序结果、是否允许改动输入、是否要求接近实时更新。目标不明会选错结构。
-
-### 2) 识别不变式
-k 个候选结构的核心不变式是：当前窗口/堆里的元素总是可能成为前 k 个候选，超过边界者可安全剔除。
-
-### 3) 为什么它一定成立
-最大堆维护前 k 小值时，堆顶是当前候选中的最大者；若出现更小值，它能替代堆顶而不影响前 k 的正确性。
-
-### 4) 常见误区
-把 TopK 写成全局排序会丢掉 O(n log n) 的优化机会；但若数据流多次更新，反而需要更复杂策略，单纯快排未必最佳。
-
-### 5) 你能找到一个反例吗
-当 n 很大而 k 很小（如 10^7 个元素中要 10 个）时，全排序耗时和内存压力都明显，不再适合作为默认方案。
-
-### 6) 迁移到下一题
-TopK 场景在日志、推荐、监控都常见。第一句话先问“更新频率与规模”，再决定用堆、分治或计数法。
-## 交互 Demo
-
-可视化理解“堆顶始终是当前窗口里最大的那个 K 中元素”，不合格元素会被快速淘汰。
-
-<SelectionSortDiagram />
+零基数组中，第k小元素的目标下标是k减一。Partition返回index后，作者按index与k减一的关系缩小start或end，直到二者相等。此时形成<Term def="第k小元素落在下标k-1，前k个位置属于答案侧，后续位置不可能更小的分界。">选择边界</Term>，复制input前k项即可。
 
 ```cpp
-#include <queue>
-#include <vector>
-#include <algorithm>
-
-class Solution {
-public:
-    std::vector<int> smallestK(std::vector<int> nums, int k) {
-        if (k <= 0 || nums.empty()) return {};
-        if (k >= (int)nums.size()) return nums;
-
-        std::priority_queue<int> maxHeap;
-        for (int x : nums) {
-            if ((int)maxHeap.size() < k) {
-                maxHeap.push(x);
-            } else if (x < maxHeap.top()) {
-                maxHeap.pop();
-                maxHeap.push(x);
-            }
-        }
-
-        std::vector<int> ans;
-        while (!maxHeap.empty()) {
-            ans.push_back(maxHeap.top());
-            maxHeap.pop();
-        }
-        return ans;
+void GetLeastNumbers_Solution1(
+    int* input, int n, int* output, int k) {
+    if (input == nullptr ||
+        output == nullptr ||
+        k > n ||
+        n <= 0 ||
+        k <= 0) {
+        return;
     }
-};
-```
 
-```typescript
-function smallestK(nums: number[], k: number): number[] {
-  if (k <= 0 || nums.length === 0) return [];
-  if (k >= nums.length) return [...nums];
+    int start = 0;
+    int end = n - 1;
+    int index = Partition(
+        input, n, start, end);
 
-  // 简洁实现：利用 JS 原生排序保持边界清晰
-  const sorted = [...nums].sort((a, b) => a - b);
-  return sorted.slice(0, k);
+    while (index != k - 1) {
+        if (index > k - 1) {
+            end = index - 1;
+        } else {
+            start = index + 1;
+        }
+        index = Partition(
+            input, n, start, end);
+    }
+
+    for (int i = 0; i < k; ++i) {
+        output[i] = input[i];
+    }
 }
 ```
 
-<Callout type="trap">
-  <strong>现象 →</strong> k 大于数组长度时越界。  
-  <strong>原因 →</strong> 未做边界裁剪。  
-  <strong>修复 →</strong> `if (k >= n) return nums`，并在 C++ 与 TS 均防守。
+正确性来自Partition不变量：主元落位后，左侧值都小于主元。若index大于目标，只需在左段继续；若index小于目标，只需在右段继续。index等于k减一时，任何后段元素都不会小于前k项中的边界元素，因此前k项作为多重集合正好是答案。
+
+这里“答案集合”包含重复次数。例如输入1、1、2、3且k为2，答案应保留两个1；不能先放进普通set去重。内部顺序没有保证，因为Partition只解决边界，不排序前段。作者Test1打印的前k项可能不是1、2、3、4的升序。
+
+随机Partition平均时间O(n)，最坏O(n²)，额外空间O(1)。它会交换input，调用者若需要保留原顺序必须先复制。k等于n时，目标是末下标，算法仍会执行Partition直到最后位置落位；旧页直接“返回原数组”是另一种可用优化，不是作者源码路径。
+
+<Callout type="trap" title="把前k个位置误当成已经升序">
+Partition只保证选择边界，前段可能是3、1、2、4。若接口要求升序展示，必须再排序前k项；若只要求集合，额外排序会改变复杂度和契约。
 </Callout>
 
+## 解法二：降序multiset维护最大候选
+
+作者定义 `multiset<int, greater<int>>`，因此begin指向当前候选中最大的值。这个<Term def="当前保留的k个最小值里最大的一项；新值只有更小时才有资格替换它。">最大候选</Term>就是准入门槛：容器未满时直接插入；容器满后，新值若小于begin，删除一个begin并插入新值，否则丢弃。
+
+<KLeastMultisetLab />
+
+```cpp
+#include <functional>
+#include <set>
+#include <vector>
+
+using intSet =
+    std::multiset<int, std::greater<int>>;
+using setIterator = intSet::iterator;
+
+void GetLeastNumbers_Solution2(
+    const std::vector<int>& data,
+    intSet& leastNumbers,
+    int k) {
+    leastNumbers.clear();
+
+    if (k < 1 || data.size() < k) {
+        return;
+    }
+
+    for (auto iter = data.begin();
+         iter != data.end(); ++iter) {
+        if (leastNumbers.size() < k) {
+            leastNumbers.insert(*iter);
+        } else {
+            auto iterGreatest =
+                leastNumbers.begin();
+            if (*iter < *iterGreatest) {
+                leastNumbers.erase(
+                    iterGreatest);
+                leastNumbers.insert(*iter);
+            }
+        }
+    }
+}
+```
+
+这个<Term def="允许相同键出现多次的有序关联容器；作者借它保存答案中的重复数字。">多重集合</Term>始终满足：扫描完前i项后，里面是该前缀最小的min(i,k)项。容器未满时结论显然；容器已满时，若新值不小于最大候选，它不可能进入前k；若更小，替换最大候选恰好得到新的前k。
+
+每次插入和删除是O(log k)，总时间O(n log k)，空间O(k)。它不要求一次把全部数据装入可写数组，作者签名虽接收vector，核心更新可以直接用于流式输入。题单常把两案概括成 **O(n)或O(nlogk)**：前者指Partition平均复杂度，后者指有界容器；不能把Partition最坏情况也写成确定O(n)。
+
+概念上也可用“最大堆”实现同一门槛：堆顶是最大候选，插入和弹出同为O(log k)。但作者实际源码是multiset，不是priority_queue。multiset可直接迭代全部候选且保留重复键；最大堆更紧凑，只方便访问堆顶，最终输出需逐个弹出。
+
+## 两案不是只看大O符号
+
+<KLeastTradeoffDiagram />
+
+解法一适合数据全在内存、允许修改、追求平均线性时间的场景。解法二适合n很大、k较小、数据只读或逐项到达的场景。k接近n时，维护树的O(n log n)与全排序同阶，简单排序可能更易审计；值域很小且已知时，计数桶还能用O(n加值域)完成。
+
+如果结果需要稳定保持输入相对顺序，两种作者方案都没有直接提供：Partition会重排，multiset按值排序。可先找第k小阈值，再第二遍按输入顺序收集小于阈值的项，并补足等于阈值的项，但这是一种新的稳定输出契约。
+
+如果只要最小值而k等于1，单次线性扫描比通用容器更简单；作者仍通过通用两案覆盖Test4。特化是否值得取决于API热点和可维护性，不应仅因一个边界测试复制整套逻辑。
+
+## 输出顺序与无效输入
+
+作者两案有不同的<Term def="调用者可依赖的结果数量、顺序、重复值、无效输入状态和输入副作用约定。">输出契约</Term>。解法一把答案写进调用方数组，不返回数量或状态；无效时立即return，output保持原有内容。调用方若误读，可能看到未初始化值。解法二先clear结果容器，无效时得到确定空集合。
+
+<KLeastOutputContractDiagram />
+
+解法二用greater排序，迭代输出是降序4、3、2、1，而非题干列出的升序1、2、3、4。两者表示同一多重集合。若测试直接比较vector而不归一化顺序，会把正确集合误判失败；若产品承诺升序，应反向迭代或另行排序并写入接口说明。
+
+<Callout type="trap" title="无效调用后继续读取解法一output">
+作者只return，不清空output，也没有bool返回值。Test3、Test5、Test7因为expectedResult为空而跳过打印，才没有暴露未初始化内容；调用方必须先验证参数或改造返回类型。
+</Callout>
+
+更明确的现代接口可直接返回vector。priority_queue等价表达最大候选，结束后弹出得到降序；若API承诺升序，再reverse。输入为span即可避免复制，同时保留只读语义。
+
+```cpp
+#include <algorithm>
+#include <functional>
+#include <queue>
+#include <span>
+#include <vector>
+
+std::vector<int> leastNumbers(
+    std::span<const int> data,
+    std::size_t k) {
+    if (k == 0 || k > data.size()) {
+        return {};
+    }
+
+    std::priority_queue<int> candidates;
+    for (int value : data) {
+        if (candidates.size() < k) {
+            candidates.push(value);
+        } else if (value < candidates.top()) {
+            candidates.pop();
+            candidates.push(value);
+        }
+    }
+
+    std::vector<int> result;
+    result.reserve(k);
+    while (!candidates.empty()) {
+        result.push_back(candidates.top());
+        candidates.pop();
+    }
+    std::reverse(result.begin(), result.end());
+    return result;
+}
+```
+
+这个版本把k等于0和k大于n都定义为空结果。若业务必须区分“合法请求恰好返回空”与“非法k”，应返回optional或expected，而不是让空vector承担两种含义。作者题目规定k为正且不大于n，但源码仍防守非法值。
+
+## 作者七组测试的真实覆盖
+
+Test函数先把原始数组复制进vector；解法一处理原始data并可能重排，解法二处理复制前的vector。作者打印expectedResult、解法一output和解法二multiset，却没有断言或比较集合，所以这是人工观察测试。
+
+1. k为4且小于n，预期集合1、2、3、4。
+2. k等于n，预期包含全部8个元素。
+3. k为10且大于n，预期无结果。
+4. k等于1，预期最小值1。
+5. k等于0，预期无结果。
+6. 输入含两个2，k为2，预期集合1、2。
+7. data为空指针，n与k都为0，预期无结果。
+
+<KLeastOfficialCaseLab />
+
+Test6说明实现必须接受重复输入，但它没有证明“答案本身需要重复”的情形，因为最小两项是1和2。应补充1、1、3且k为2，防止误用set把两个1压成一个。还应补充负数、全部相等、已排序、逆序、k等于n时的集合完整性，以及无效调用前结果容器非空的清理行为。
+
+作者期望数组只用于打印，不用于自动判定；解法一即使漏写某项、输出重复或集合错误，程序仍不会显示Failed。可靠测试应把结果排序后与期望多重集合比较，同时独立检查解法一输入确实允许变化、解法二输入保持不变。
+
+```cpp
+#include <algorithm>
+#include <cassert>
+#include <vector>
+
+void expectLeast(
+    const std::vector<int>& input,
+    std::size_t k,
+    std::vector<int> expected) {
+    auto actual = leastNumbers(input, k);
+    std::sort(actual.begin(), actual.end());
+    std::sort(expected.begin(), expected.end());
+    assert(actual == expected);
+}
+
+void testLeastNumbers() {
+    expectLeast(
+        {4,5,1,6,2,7,3,8}, 4,
+        {1,2,3,4});
+    expectLeast({1,1,3}, 2, {1,1});
+    expectLeast({-1,-5,2}, 1, {-5});
+    expectLeast({2,2,2}, 3, {2,2,2});
+    expectLeast({4,5,1}, 0, {});
+    expectLeast({4,5,1}, 4, {});
+}
+```
+
+随机测试可复制输入并全排序，截取前k项作为独立参考。被测结果也排序后比较，这样只验证题目要求的多重集合；若接口另承诺升序，则不要排序actual，而要直接断言顺序。
+
+## 数值、内存与服务边界
+
+k来自外部请求时，应先以与容器size相同的无符号类型解析，防止负整数转换成极大size。作者解法二先检查k小于1，利用短路求值避免负数进入data.size与k的比较；改写条件顺序时不能无意破坏这一点。
+
+multiset每个节点有指针和分配器开销，k很大时明显高于连续堆。priority_queue底层vector通常缓存局部性更好；multiset的优势是删除任意迭代器和有序遍历，但本题只删除最大值，因此堆往往更实用。还可给multiset使用池分配器，减少逐节点分配抖动。
+
+流式服务若需要随时查询当前最小k项，候选结构必须跨批次保存；更新逻辑与作者解法二相同。并发写入时要加锁、分片后再合并各分片Top-k，或用不可变快照。多个分片各自保留k项足以合并出全局k项，因为任何分片中排在本分片k名之后的元素不可能进入全局前k。
+
+对浮点输入还要定义NaN顺序；对自定义对象需提供严格弱序比较器，并明确重复是按键还是按对象身份。作者int比较没有这些歧义，但把算法泛化为模板时必须补上契约。
+
+<Stepper>
+  <Step title="先确认结果只需集合还是还需顺序"><KLeastOutputContractDiagram />作者两案顺序不同，重复次数和无效状态也必须先定义。</Step>
+  <Step title="可修改完整数组时定位边界"><KLeastPartitionDiagram />Partition追踪k减一，只让第k小落位而不全排序。</Step>
+  <Step title="只读或流式时维护最大候选"><KLeastMultisetLab />容器满后，只有比当前最大候选更小的新值才进入。</Step>
+  <Step title="按数据条件比较复杂度"><KLeastTradeoffDiagram />平均O(n)与O(n log k)对应不同副作用和内存条件。</Step>
+  <Step title="用七组作者输入再补自动断言"><KLeastOfficialCaseLab />覆盖k边界、重复输入和空指针，并把打印测试升级为集合比较。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 只找最小k项不必完成全排序，关键是第k小选择边界。
+2. Partition解法平均O(n)、O(1)额外空间，但会重排输入且前k项无序。
+3. 作者第二案用降序multiset，begin始终是最大候选。
+4. 有界容器时间O(n log k)、空间O(k)，支持只读和流式处理。
+5. multiset保留重复值；普通set会改变题目多重集合语义。
+6. 解法二迭代结果为降序，解法一顺序未定义。
+7. 解法一无效时output未清空，解法二无效时结果容器被clear。
+8. 作者七组测试只打印，必须增加自动集合、数量与副作用断言。
+
+<Exercises>
+
+**问题 1：Partition在index等于k减一后，为什么可以复制前k项？**
+
+<Answer>主元已处于第k小位置，左边有k减一项不大于它，右边项不小于边界。前k个位置因此正好构成最小k项的多重集合，但内部顺序仍未排序。</Answer>
+
+**问题 2：扫描4、5、1、6、2且k为4时，multiset怎样变化？**
+
+<Answer>前四项填满后按降序为6、5、4、1，最大候选是6；新值2更小，所以删除一个6并插入2，候选变成5、4、2、1。</Answer>
+
+**问题 3：为什么必须用multiset而不是set？**
+
+<Answer>答案按数组元素次数计数。输入1、1、3且k为2时应返回两个1；set会合并相同键，只剩一个1，既少结果又改变语义。</Answer>
+
+**问题 4：怎样测试作者两案而不被输出顺序影响？**
+
+<Answer>分别收集两案结果，先断言数量为k，再对结果副本排序后与排序后的期望多重集合比较；另行检查解法一允许修改输入、解法二不修改输入。若API承诺升序，再增加直接顺序断言。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="原地选择">在输入数组内交换并定位第k小边界，不完成整体排序的选择算法。</GlossaryItem>
+  <GlossaryItem term="选择边界">第k小元素落位后，把最小k项与其余项分开的下标k减一。</GlossaryItem>
+  <GlossaryItem term="最大候选">当前最小k项中最大的值，也是新元素进入候选结构的门槛。</GlossaryItem>
+  <GlossaryItem term="多重集合">允许相同值保留多个实例的有序集合。</GlossaryItem>
+  <GlossaryItem term="输出契约">结果数量、顺序、重复、无效状态及输入副作用的公开约定。</GlossaryItem>
+</Glossary>
+
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题40"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/40_KLeastNumbers/KLeastNumbers.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

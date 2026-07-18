@@ -1,0 +1,305 @@
+---
+title: "第3章：测量性能"
+type: B
+section: Optimized C++ · Chapter 3
+order: 3
+description: 对齐第一版第3章 Measure Performance：优化心态、90/10 与 Amdahl、实验日志和基线、profiler、计时障碍、stopwatch、test harness 与热点成本估计。
+demo: false
+math: true
+sourceUrl: "https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+draft: false
+---
+
+import {
+  OpcAmdahlHuntingMap,
+  OpcMeasurementLayerMap,
+  OpcPerformanceExperimentLoopMap,
+} from "@/components/mdx/optimized-cpp/diagrams/measure-performance";
+
+<Objectives>
+
+- 能计算候选局部优化的端到端收益上限，并用 90/10 rule 与 Amdahl's law 解释优先级
+- 能设计包含目标、baseline、单变量、重复样本、正确性和 lab notebook 的可复现实验
+- 能区分 profiler、stopwatch 与 micro test harness 的适用层级，并识别计时器、编译器和系统噪声
+
+</Objectives>
+
+## 从“性能必须测量”开始
+
+<Term def="把性能主张视为可证伪假设：先定义目标与 workload，再以可重复数据决定保留、回滚或继续调查。">
+  optimizing mindset
+</Term>
+
+**performance must be measured**，因为第 2 章的 memory、prediction、compiler 与 OS state 会使 source intuition 失准。测量也不是最后才跑一次 benchmark；它从 baseline 开始，在每次 change 后回答：correctness 是否相同、目标 metric 是否改善、收益是否超过 noise、其他资源是否退化。
+
+“**big game hunters**”寻找占端到端时间/资源的大目标，而不是先优化最容易改的一行。profile 显示 55% 在 parser、2% 在 formatter 时，parser 的 modest improvement 也可能比 formatter 的极端局部加速更有价值。
+
+<Term def="用 profile 和系统影响寻找最大热点及最高收益上限，优先追踪能改变端到端结果的优化对象。">
+  big game hunters
+</Term>
+
+<Callout type="trap" title="陷阱：benchmark 变快就等于产品变快">
+  microbenchmark 可能测到 compiler 消掉工作、warm cache、非代表数据或 timer
+  overhead； product 还可能把成本转移到 memory、I/O、tail
+  latency。局部结果必须通过 Amdahl 上限和 representative end-to-end scenario
+  两道门。
+</Callout>
+
+## 90/10 Rule 与 Amdahl's Law
+
+**90/10 rule** 是寻找 hot spots 的经验法则：大部分 execution time 往往集中在较小部分 code。它不是保证正好 90%/10%，而是要求先 profile 再集中精力；不同 workload、input phase 与 tail path 会有不同 hotspots。
+
+<Term def="大部分运行成本常集中在少量代码路径的经验规律，用来指导 profile 与优化优先级，而非固定比例定律。">
+  90/10 rule
+</Term>
+
+**Amdahl's law（阿姆达尔定律）**计算局部加速对整体的上限。若原总时间中比例 $p$ 可被加速 $s$ 倍，则整体 speedup 为：
+
+$$
+S_{total}=\frac{1}{(1-p)+\frac{p}{s}}
+$$
+
+当 $p=0.20$、局部快 $s=10$ 倍：
+
+$$
+S_{total}=\frac{1}{0.80+0.20/10}\approx1.22
+$$
+
+即局部“10 倍”只让系统约快 22%。当局部加速趋于无穷，未优化部分仍给出硬上限：
+
+$$
+\lim_{s\to\infty}S_{total}=\frac{1}{1-p}
+$$
+
+反过来，要达成目标 $S_{goal}$，候选至少要覆盖足够大的 $p$；若上限低于目标，应换 hunt target，而不是继续磨局部 implementation。
+
+<Term def="按可优化比例与局部加速倍数计算整体加速上限，揭示未优化/串行部分最终成为瓶颈。">
+  Amdahl law
+</Term>
+
+<OpcAmdahlHuntingMap />
+
+## Perform Experiments，而不是收集故事
+
+**perform experiments** 的基本结构是：提出可证伪 hypothesis、固定 workload/environment、只改变一个主要变量、重复采样、检查 correctness 与资源 trade-off。结果应包含 distribution，不只是一对最好数字。
+
+<Term def="通过受控变量、重复样本、正确性检查和拒绝条件检验性能假设的过程。">
+  performance experiment
+</Term>
+
+**set goals** 要把“更快”写成明确 gate，例如 `p99 <= 80 ms at 8k req/s`、`RSS <= 1.5 GiB`、结果 byte-for-byte identical。然后先测 **baseline performance**；没有同环境 baseline，就无法区分 code change、machine drift 和 load variation。
+
+<Term def="优化前在固定版本、构建、机器、输入和采样协议下得到的对照性能分布与资源指标。">
+  baseline performance
+</Term>
+
+<OpcPerformanceExperimentLoopMap />
+
+**lab notebook** 至少保存 timestamp、commit/compiler/flags、machine/OS/power policy、dataset/seed、warm-up、sample values、summary statistic、counters、correctness result、hypothesis、change 与 decision。只保存平均值和一句“looks faster”无法复查。
+
+<Term def="逐次记录实验问题、环境、版本、输入、原始样本、统计、正确性和结论的可复现性能档案。">
+  lab notebook
+</Term>
+
+可用样本均值和离散度作初步检查：
+
+$$
+\bar{x}=\frac{1}{n}\sum_{i=1}^{n}x_i,\qquad
+s=\sqrt{\frac{1}{n-1}\sum_{i=1}^{n}(x_i-\bar{x})^2}
+$$
+
+但 latency 通常偏斜，median、p95/p99、confidence interval 或 bootstrap 可能比只报 mean 更适合。更重要的是按业务单位归一化，如 ns/item、cycles/request、bytes/frame，并保留原始 samples。
+
+## Profile Program Execution Time
+
+**profile program execution time** 是先定位“时间在哪”，再缩小实验范围。sampling **profiler** 适合 **long-running code**：它周期性采样 stack，低开销估计 hot functions/call paths；instrumentation 可给精确 call/region 数据，却可能扰动 timing。两者都受 inlining、symbols、sampling frequency、blocked time 与多线程 aggregation 影响。
+
+<Term def="通过 sampling、instrumentation 或 tracing 归因程序执行时间、调用路径与等待状态，定位 hot spots。">
+  profiler
+</Term>
+
+profile 要覆盖 representative phase：startup、steady state、burst、shutdown 的热点可能不同。CPU profile 也不等于 wall time；服务可能在 queue、lock、I/O 等待。应把 flame graph/call tree 与 request trace、scheduler、allocation、cache counters 联合解释。
+
+## Measuring Time with Computers
+
+**measuring time with computers** 首先要选 clock。duration 应用 monotonic `std::chrono::steady_clock`，避免 wall clock 被 NTP/manual adjustment 拉动；分辨率、读取成本和实际稳定性要在 target platform 验证。
+
+<Term def="用合适的 monotonic clock、测量边界、重复策略和归一化单位取得 elapsed-time 样本。">
+  computer time measurement
+</Term>
+
+```cpp
+class Stopwatch {
+public:
+    using Clock = std::chrono::steady_clock;
+
+    void start() { startedAt_ = Clock::now(); }
+
+    [[nodiscard]] std::chrono::nanoseconds elapsed() const {
+        return std::chrono::duration_cast<std::chrono::nanoseconds>(
+            Clock::now() - startedAt_);
+    }
+
+private:
+    Clock::time_point startedAt_{};
+};
+```
+
+这个 **stopwatch class** 只负责 elapsed boundary，不自动解决 **measurement obstacles**：timer overhead、scheduler preemption、CPU frequency/turbo、thermal throttling、cold cache/page fault、allocator state、background process、I/O batching 和 shared-machine interference 都可能污染样本。
+
+<Term def="封装 monotonic start/elapsed boundary 的简单计时器；结果仍需由实验协议控制 warm-up、重复与系统噪声。">
+  stopwatch class
+</Term>
+
+计时区间太短时，应把 operation 放入足够多 **loops**，测总时间后除以 verified operation count；但 loop 不能改变 workload，也不能让 compiler 证明结果未使用而删除整个测试。
+
+## Test Harness 与 Code Cost
+
+**test harness** 为被测 operation 提供 input generation、warm-up、repetition、result consumption、correctness oracle 和 sample reporting。估计 **individual C++ statements** 的 cost 时，需要检查 optimized assembly；source statement 可能被 inline、constant-fold、vectorize 或完全消失。
+
+<Term def="组织输入、预热、重复、结果消费、正确性验证与样本输出的可重复基准驱动器。">
+  test harness
+</Term>
+
+```cpp
+template <class Operation>
+auto measureBatch(Operation&& operation, std::size_t iterations) {
+    std::uint64_t checksum = 0;
+    const auto start = std::chrono::steady_clock::now();
+
+    for (std::size_t i = 0; i < iterations; ++i) {
+        checksum ^= static_cast<std::uint64_t>(operation(i));
+    }
+
+    const auto elapsed = std::chrono::steady_clock::now() - start;
+    return std::pair{elapsed, checksum};
+}
+```
+
+`checksum` 让结果逃逸到 caller，但不是万能 barrier；benchmark library 的 `DoNotOptimize`/`ClobberMemory` 等机制和 assembly inspection 更可靠。还要让 fixture setup 不进入 timed region，或明确它就是目标成本的一部分。
+
+```cpp
+const auto [duration, checksum] = measureBatch(
+    [&values](std::size_t i) {
+        const auto index = i % values.size();
+        return values[index] * values[index] + 3;
+    },
+    10'000'000);
+
+assert(checksum == expectedChecksum);
+report(duration, checksum);
+```
+
+要 **estimate code cost**，用 `elapsed / verified operations` 得到 amortized value，并扣除/对照 empty harness cost；但这个数字只适用于同 compiler、target 与 data state。最终仍要回到 profiler 确认该 statement/loop 是 hot spot，并回到 scenario 验证 Amdahl 预测。
+
+<Callout type="trap" title="陷阱：只运行一次并选最快结果">
+  最快值有时接近无干扰下限，却会隐藏生产中的 scheduling 与
+  tail；平均值又可能被少数异常值 拉动。预先声明 warm-up、sample count、summary
+  statistic 和 outlier policy，报告完整分布与环境，
+  不在看完结果后挑最有利统计口径。
+</Callout>
+
+## 三步完成一次性能证据链
+
+<Stepper>
+  <Step title="第一步：用上限选择猎物">
+    从 representative profile 取得 hot fraction，套用 Amdahl's law 计算候选收益上限。先预测目标是否可能达到，避免在低占比路径上追逐漂亮局部数字。
+
+    <OpcAmdahlHuntingMap />
+
+  </Step>
+  <Step title="第二步：冻结实验契约">
+    写清 metric、goal、correctness、workload、machine/build、baseline、单变量 change、samples 和拒绝条件，并在 lab notebook 中保存原始数据。
+
+    <OpcPerformanceExperimentLoopMap />
+
+  </Step>
+  <Step title="第三步：上下贯通测量层级">
+    profiler 找 long-running hot spots，stopwatch/test harness 验证局部 hypothesis，再回到端到端 scenario 检查 bottleneck shift、tail 与资源回归。
+
+    <OpcMeasurementLayerMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- optimizing mindset 把 performance claim 当作可证伪实验，performance must be measured
+- 90/10 rule 指导 profiler 寻找 hot spots，Amdahl's law 计算局部优化的整体收益上限
+- goal、baseline performance 和 correctness contract 是实验开始条件
+- lab notebook 保存版本、环境、输入、原始样本、统计与决定，使实验可复现
+- sampling profiler 适合 long-running code，局部 stopwatch 不能替代端到端归因
+- steady clock、足量 loops 与重复 samples 能降低部分 measurement obstacles，但不能消除系统状态
+- test harness 必须防止 dead-code elimination、隔离 setup，并消费和校验结果
+- individual statements 的 amortized cost 只在当前上下文有效，最终要回到 hotspot 与产品目标
+
+<Attribution
+  adaptedFrom="Optimized C++, First Edition, Chapter 3: Measure Performance"
+  adaptedUrl="https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+/>
+
+<Glossary>
+  <GlossaryItem term="optimizing mindset">
+    以目标、测量和可证伪实验决定性能改动。
+  </GlossaryItem>
+  <GlossaryItem term="big game hunters">
+    优先寻找能改变端到端结果的大热点。
+  </GlossaryItem>
+  <GlossaryItem term="90/10 rule">
+    大部分成本常集中于少量代码路径的经验规律。
+  </GlossaryItem>
+  <GlossaryItem term="Amdahl law">
+    由可优化比例和局部加速计算整体收益上限。
+  </GlossaryItem>
+  <GlossaryItem term="performance experiment">
+    用受控变量、样本和正确性检验性能假设。
+  </GlossaryItem>
+  <GlossaryItem term="baseline performance">
+    优化前固定环境下的对照性能分布。
+  </GlossaryItem>
+  <GlossaryItem term="lab notebook">
+    保存实验问题、环境、版本、样本和结论的档案。
+  </GlossaryItem>
+  <GlossaryItem term="profiler">
+    归因执行时间、调用路径和等待状态的工具。
+  </GlossaryItem>
+  <GlossaryItem term="computer time measurement">
+    用 monotonic clock 和稳定协议采集 elapsed samples。
+  </GlossaryItem>
+  <GlossaryItem term="stopwatch class">
+    封装 start/elapsed 时间边界的简单计时器。
+  </GlossaryItem>
+  <GlossaryItem term="test harness">
+    管理输入、预热、重复、结果消费与报告的基准驱动器。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：用 Amdahl 拒绝错误优先级。** 某服务 70% 在 parse、20% 在 storage wait、10% 在 formatting；候选让 formatting 快 20 倍，或让 parse 快 1.8 倍。计算整体上限并选择第一实验。
+
+<Answer question="局部倍数与整体收益如何换算？">
+  formatting 方案 `1/(0.90+0.10/20)≈1.105x`；parse 方案
+  `1/(0.30+0.70/1.8)≈1.452x`。若目标是端到端 throughput/CPU，先实验 parse，
+  同时验证它不会把更多压力推给 storage。若业务目标专门是 formatter-only API，则
+  workload fraction 已改变，应重新 profile 而非套用旧比例。
+</Answer>
+
+2. **问题 2：审计一个“快 35%”的 microbenchmark。** 它只跑一次、输入是 compile-time constant、结果未使用、计时 200 ns。写出重构步骤。
+
+<Answer question="哪些 measurement obstacles 会制造虚假收益？">
+  compiler 可能 constant-fold/dead-code eliminate，timer overhead 与调度噪声和
+  200 ns 同量级。 改为 runtime seeded representative inputs，校验/消费结果，检查
+  optimized assembly；批量执行到远大于 clock overhead，预热后采多组
+  samples，并记录 machine/compiler/flags。使用成熟 benchmark library， 同时保留
+  old/new correctness 与端到端验证。
+</Answer>
+
+3. **问题 3：为 long-running server 建测量计划。** 目标是 p99 从 140 ms 降到 90 ms，CPU 不增、RSS 增幅不超 5%。列出 profile、局部实验和回归证据。
+
+  <Answer question="如何把 profiler、stopwatch 和 scenario 串成证据链？">
+    先以 production-like request mix 测 baseline p50/p95/p99、throughput、CPU/RSS、queue，并保存
+    trace；sampling profiler/blocked-time trace 找 p99 相关 hot path 和等待。对最高收益 hypothesis
+    用 stopwatch/test harness 做单变量 A/B，记录 samples/counters/correctness；再回完整 load test
+    验证 p99≤90 ms、CPU不增、RSS≤1.05×baseline，并设置 CI/production regression guard。
+  </Answer>
+</Exercises>

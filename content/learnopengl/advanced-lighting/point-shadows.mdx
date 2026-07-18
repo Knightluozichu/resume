@@ -1,14 +1,19 @@
 ---
-title: 点阴影
+title: 点阴影、深度立方图与距离域比较
 type: C
 section: 高级光照
 order: 4
 description: 能讲清点光源向四面八方发光、为什么一张 2D 深度图罩不住要用「深度立方体贴图」6 个面才能包住 360°；为什么第一遍存的是「片元到光源的线性距离」而非裁剪空间深度；第二遍怎么用「方向向量 fragPos − lightPos」去 cubemap 采样最近距离再和实际距离比来判阴影；并能在 demo 里把点光源在房间内移动、亲眼看四面墙和地面的影子全向同时变化。
 demo: true
 math: false
-sourceUrl: https://learnopengl-cn.github.io/05%20Advanced%20Lighting/03%20Shadows/02%20Point%20Shadows/
+sourceUrl: https://learnopengl.com/Advanced-Lighting/Shadows/Point-Shadows
 draft: false
 ---
+
+import {
+  PointShadowCubemapContractDiagram,
+  PointShadowRenderPathsDiagram,
+} from "@/components/mdx/learnopengl/diagrams/point-shadows";
 
 {/* C 实战型章（HEL-83，高级光照篇第 4 篇）：原书「点阴影 Point Shadows」。本章 = 上一章「阴影映射」的全向版，承接它已讲过的深度图/光空间/深度比较/bias/PCF，本章只讲「如何扩展到点光源的 360°」。重心是代码对照(spec C 列 §6 重)：①第一遍——6 个面的 view 矩阵（6 个朝向）+ 渲「片元到光源距离」到 depth cubemap；②第二遍片段着色器——vec3 fragToLight = fragPos − lightPos / 采样 cubemap texture(depthCubemap, fragToLight).r * far_plane 取最近距离 / 和 length(fragToLight) 比 + bias + 可选 PCF 方向偏移。C++/GLSL330（含几何着色器一遍渲 6 面）↔ WebGL2/GLSL300es（无几何着色器需渲 6 次）同逻辑段，差异用 Callout warn 诚实标注。沿用「光与材质 / 相机与摄影」类比库（这次相机要朝 6 个方向各拍一张）。C 型段式：概念讲解(§3 必，是什么压篇幅让给 §6) + 数学 math:false 整节省略(§4) + 交互 Demo(§5 必，主 R3F PointLight 内建点阴影·移光源看四壁全向变 + Stepper 深度立方图四步每步带图) + 代码对照(§6 重) + 误区 ≥3(§7) + 小结含改 Demo 题 + C 型独立实现题(§8)。主 viz = PointShadowsDemo（three.js 内建 PointLight castShadow = 深度立方图全向阴影，控件：光源方位/高度 + 阴影图分辨率 + depth bias + 物体自转 + 重置，头牌 = 移光源看四壁阴影全向同时变）；图解 = PointShadowStepDiagram（Stepper 深度立方图四步配图）。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -26,7 +31,7 @@ draft: false
 
 {/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「相机与摄影」库（承接上一章「光源 = 一台相机」，这次相机朝 6 个方向各拍一张）。 */}
 
-## 一台相机不够，得朝 6 个方向各拍一张
+## 为什么一台相机不够，得朝 6 个方向各拍一张
 
 上一章你让太阳那样的**方向光**投出了影子：把一台「相机」搬到光的位置朝场景拍一张，拍不到的角落就是影子。可那台相机只朝**一个**方向看——太阳的光是平行的、就一个方向，一张就够。
 
@@ -57,6 +62,27 @@ draft: false
 第二遍判阴影时，上一章是用片元在光空间的 `proj.xy` 当 2D 坐标去采样。点光的 cubemap 不用 2D 坐标，而是和天空盒一样用一根**方向向量**去采样——这就是 <Term def="从立方体贴图取值的方式：不用二维 uv 坐标，而是用一根从立方体中心射出的方向向量，方向指向哪个面的哪个点，就取那一点的值。点阴影里这根方向向量就是「从光源指向当前片元」的向量 fragToLight = fragPos − lightPos：用它去深度立方图采样，取回的就是「这个方向上离光源最近的遮挡距离」。">方向向量采样</Term>。具体地，对每个片元算出「从光源指向它」的方向 `fragToLight = fragPos − lightPos`，用这根方向去 cubemap 采样，取回这个方向上存的最近距离（乘回 `far_plane` 还原），再和片元自己到光源的实际距离 `length(fragToLight)` 做**深度比较**：实际距离更大 ⇒ 前面有更近的东西先挡住了光 ⇒ 在阴影；两者基本相等 ⇒ 它自己就是最近的 ⇒ 受光。
 
 <PointShadowStepDiagram step={4} />
+
+<PointShadowCubemapContractDiagram />
+
+## 单步建立：从六面深度到全向判断
+
+> 猜一猜：点光源的每一面都必须记录什么，第二遍为什么不能拿一张面图的二维坐标继续比较？按下面三步走一遍，再回看 6 面立方图的职责。
+
+<Stepper>
+  <Step title="① 六个 90 度面包住光源">
+    <PointShadowStepDiagram step={1} />
+    点光要覆盖完整 360 度，每一面都使用同一个 90 度透视投影；否则 cubemap 面之间会留下缺口或重叠失配。
+  </Step>
+  <Step title="② 每面写入同单位的线性距离">
+    <PointShadowStepDiagram step={3} />
+    第一遍写的是 <code>length(FragPos - lightPos) / far_plane</code>，不是某一面特有的裁剪空间 z；这样六张面能用同一套比较规则。
+  </Step>
+  <Step title="③ 用方向取样，恢复距离后比较">
+    <PointShadowStepDiagram step={4} />
+    第二遍用 <code>fragPos - lightPos</code> 选中正确的 cubemap 方向，采样值乘回 <code>far_plane</code> 后再和当前距离比较；方向本身不必归一化。
+  </Step>
+</Stepper>
 
 这一步的判定逻辑和上一章的深度比较一模一样，只是「比的量」从「投影深度」换成了「到光源的距离」、「取数据的方式」从「2D 坐标」换成了「方向向量」。上一章踩过的 **shadow acne**（自遮挡条纹）、**peter panning**（bias 过大阴影脱离）、**PCF**（采样邻域软化边缘）在点阴影里全都还在——只是 PCF 这次要沿**多个三维方向**偏移采样 cubemap，而不再是在 2D 平面上偏一圈。下面 Demo 先让你把点光源在屋里移起来、看四壁全向变化，代码对照再把 6 个面和方向向量采样落到 shader。
 
@@ -152,12 +178,14 @@ const shadowTransforms = dirs.map(([d, up]) =>
   把三角形发到立方体贴图的第 i 层，**一遍**搞定。**WebGL2
   没有几何着色器**（也没有 `gl_Layer` 那一套 layered
   rendering），只能老老实实**循环 6 次**：每次把 cubemap 的一个面绑到 FBO 的
-  `COLOR_ATTACHMENT0`（用 `framebufferTexture2D(..., TEXTURE_CUBE_MAP_POSITIVE_X
-  + i, ...)`），用第 i 个矩阵把场景渲一遍，6 次填满 6 个面。逻辑等价，只是
+  `DEPTH_ATTACHMENT`（用 `framebufferTexture2D(..., DEPTH_ATTACHMENT,
+  TEXTURE_CUBE_MAP_POSITIVE_X + i, ...)`），用第 i 个矩阵把场景渲一遍，6 次填满 6 个面。逻辑等价，只是
   WebGL2 多 5 趟绘制。
 </Callout>
 
-第一遍的片段着色器是关键：它不靠硬件写深度，而是**手动算「片元到光源的距离」**，除以 `far_plane` 归一化后写进颜色（用一张浮点 cubemap 当距离图）。两端这段 GLSL 逻辑一致，只差版本声明：
+<PointShadowRenderPathsDiagram />
+
+第一遍的片段着色器是关键：它不靠硬件的投影深度，而是**手动算「片元到光源的距离」**，除以 `far_plane` 归一化后写入深度。两端这段 GLSL 逻辑一致，只差版本声明：
 
 <CodeTabs>
   <Tab label="C++ / OpenGL 3.3（第一遍 · 写「到光源距离」）">
@@ -184,12 +212,11 @@ precision highp float;
 in vec4 FragPos;             // 顶点着色器透传的世界坐标
 uniform vec3 lightPos;
 uniform float far_plane;
-out vec4 fragColor;
 void main() {
   // 片元到光源的真实直线距离
   float lightDistance = length(FragPos.xyz - lightPos);
-  // 除以 far_plane 归一化到 [0,1]，写进距离图（WebGL2 用颜色附件存）
-  fragColor = vec4(vec3(lightDistance / far_plane), 1.0);
+  // 除以 far_plane 归一化到 [0,1]，写进当前绑定的 cubemap 深度面
+  gl_FragDepth = lightDistance / far_plane;
 }
 ```
 
@@ -345,7 +372,7 @@ shadow /= 20.0;                         // 20 次取平均 → 软边
 
 <Exercises>
 
-**练习 1（改 Demo 代码型）** 在上面的 demo 里，先**验证「全向」**：把**光源方位**拖一整圈，盯着四面墙看——说出你观察到墙上影子怎么变，并解释为什么没有哪个方向是「盲区」。再把光源移到房间一角，说出**哪面墙**影子最长、为什么。最后切**阴影图分辨率**到 256，描述阴影边缘的变化并解释成因。
+**问题 1（改 Demo 代码型）** 在上面的 demo 里，先**验证「全向」**：把**光源方位**拖一整圈，盯着四面墙看——说出你观察到墙上影子怎么变，并解释为什么没有哪个方向是「盲区」。再把光源移到房间一角，说出**哪面墙**影子最长、为什么。最后切**阴影图分辨率**到 256，描述阴影边缘的变化并解释成因。
 
 <Answer>
 
@@ -355,18 +382,26 @@ shadow /= 20.0;                         // 20 次取平均 → 软边
 
 </Answer>
 
-**练习 2（独立实现题 · C 型）** 不依赖 three 这类封装，自己用**裸 WebGL2**（无几何着色器）渲一张点光源的**深度立方体贴图**。列出你需要的关键步骤（不必写全部代码，但要点要全，尤其是「WebGL2 怎么补几何着色器的缺」）。
+**问题 2（独立实现题 · C 型）** 不依赖 three 这类封装，自己用**裸 WebGL2**（无几何着色器）渲一张点光源的**深度立方体贴图**。列出你需要的关键步骤（不必写全部代码，但要点要全，尤其是「WebGL2 怎么补几何着色器的缺」）。
 
 <Answer>
 
 关键步骤（对应正文第一遍）：
 
-1. **建距离 cubemap + FBO**：用 `gl.texImage2D` 给 cubemap 的 6 个面各分配一张纹理（WebGL2 无几何着色器，用**颜色附件**存距离，建议 `R16F`/`RGBA16F` 浮点格式存 `[0,1]` 距离），再建一个 FBO 和一张同尺寸的深度 renderbuffer。
-2. **算 6 个面的矩阵**：透视投影 `perspective(90°, 1, near, far)`；为 `+X/−X/+Y/−Y/+Z/−Z` 各算一个 `lookAt(lightPos, lightPos + dir_i, up_i)`，注意每面的 `up` 选对（见正文 6 个 dir/up）。
-3. **循环渲 6 次（补几何着色器的缺）**：`for i in 0..5`：把 cubemap 第 i 面绑到 FBO 颜色附件——`framebufferTexture2D(FRAMEBUFFER, COLOR_ATTACHMENT0, TEXTURE_CUBE_MAP_POSITIVE_X + i, cubemap, 0)`；设 viewport 为阴影图尺寸、清缓冲；用第 i 个矩阵把场景渲一遍。
-4. **第一遍片段着色器写距离**：把世界坐标 `FragPos` 透传进来，算 `lightDistance = length(FragPos − lightPos)`，写出 `lightDistance / far_plane`（归一化到 `[0,1]`）。
-5. **采样参数**：cubemap 设 `CLAMP_TO_EDGE`（三个轴 S/T/R）+ `LINEAR`，避免接缝处采样越界。
+- **建深度 cubemap + FBO**：用 `gl.texImage2D` 给 cubemap 的 6 个面各分配 `DEPTH_COMPONENT` 深度图，再建一个 FBO；逐面绑定时挂到 `DEPTH_ATTACHMENT`，不需要颜色附件。
+- **算 6 个面的矩阵**：透视投影 `perspective(90°, 1, near, far)`；为 `+X/−X/+Y/−Y/+Z/−Z` 各算一个 `lookAt(lightPos, lightPos + dir_i, up_i)`，注意每面的 `up` 选对（见正文 6 个 dir/up）。
+- **循环渲 6 次（补几何着色器的缺）**：`for i in 0..5`：把 cubemap 第 i 面绑到 FBO 深度附件——`framebufferTexture2D(FRAMEBUFFER, DEPTH_ATTACHMENT, TEXTURE_CUBE_MAP_POSITIVE_X + i, cubemap, 0)`；设 viewport 为阴影图尺寸、清深度；用第 i 个矩阵把场景渲一遍。
+- **第一遍片段着色器写距离**：把世界坐标 `FragPos` 透传进来，算 `lightDistance = length(FragPos − lightPos)`，以 `gl_FragDepth = lightDistance / far_plane` 写出归一化距离。
+- **采样参数**：cubemap 设 `CLAMP_TO_EDGE`（三个轴 S/T/R）+ `NEAREST`，避免面边缘重复并保留深度比较的原始值。
    （第二遍判阴影：`fragToLight = fragPos − lightPos` → `texture(depthCubemap, fragToLight).r * far_plane` → 和 `length(fragToLight)` 比 + bias；想软边再换成多方向偏移的 PCF。）
+
+</Answer>
+
+**问题 3（距离域排错）** 第一遍把 `length(FragPos - lightPos) / far_plane` 写进深度立方图；第二遍你直接把 `texture(depthCubemap, fragToLight).r` 与 `length(fragToLight)` 比较。会发生什么？修复时除了乘回 `far_plane`，还要不要把 `fragToLight` 归一化？
+
+<Answer>
+
+比较会失去单位一致性：采样值是 `[0,1]` 的归一化距离，当前值却是世界单位距离，结果通常会变成大片错误阴影或没有阴影。应先 `closestDepth *= far_plane`，再和 `length(fragToLight)` 比。`fragToLight` **不需要归一化**：cubemap 会按它的方向选择面与 texel，长度不影响选择方向；保留原向量还能直接用其长度作当前深度。
 
 </Answer>
 

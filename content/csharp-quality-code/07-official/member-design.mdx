@@ -1,0 +1,301 @@
+---
+title: "第7章：成员设计（建议90-101）"
+type: C
+section: "编写高质量代码 · API成员"
+order: 7
+description: "覆盖抽象类构造器、字段与属性、集合属性、构造期初始化、override/new和虚调用，以及接口化公开面、参数抽象、params、重写签名、静态/实例与扩展方法。"
+demo: true
+math: false
+sourceUrl: "https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html"
+draft: false
+---
+
+import { CqcAbstractionSurfaceLab, CqcConstructionInvariantLab, CqcDispatchBindingLab } from "@/components/mdx/csharp-quality-code/diagrams/member-design";
+
+<Objectives>
+
+- 能设计constructor、property和collection surface，使object在publication前满足invariant且不泄露representation ownership
+- 能区分override与new的dispatch slot，分析constructor virtual call、static/instance和extension binding的真实行为
+- 能比较concrete/base/interface、params与override signature，判断public input/output contract是否保持substitutability
+
+</Objectives>
+
+## 为什么成员签名会决定未来还能否修改实现
+
+public member不只是当前实现的入口，它向caller暴露可构造状态、mutation capability、dispatch规则和type assumptions。public field让storage成为contract，List property让collection ownership外泄，concrete parameter让caller与实现共同被绑住，constructor里的virtual call则在对象尚未valid时提前开放polymorphism。
+
+先预测：abstract class的public constructor虽然不能直接new，是否仍是合适visibility；base reference调用derived的`new`同名method会走哪一个；extension method能否覆盖instance member。答案分别是否、base slot、不能。
+
+<Term def="constructor/factory返回并把object发布给外部时，所有required fields、cross-field rules和owned dependencies已经满足的状态承诺。">construction invariant</Term>
+
+## Construction、State与Dispatch（建议90-95）
+
+### 建议90：不要为抽象类提供公开的构造方法
+
+abstract type不能直接实例化，public constructor给出一个实际上不可调用的surface；通常使用protected constructor，只允许derived construction chain建立base invariant。若外部要选择具体实现，提供factory或依赖interface，而不是暴露abstract ctor。
+
+```csharp
+public abstract class Report
+{
+    protected Report(ReportId id)
+        => Id = id.IsEmpty ? throw new ArgumentException("ID is required.", nameof(id)) : id;
+
+    public ReportId Id { get; }
+}
+```
+
+protected也不是越多越好。base constructor只接收base真正拥有的state，避免把derived-specific options塞进层级。
+
+### 建议91：可见字段应该重构为属性
+
+public/protected field把representation和uncontrolled write能力永久暴露；property保留相同使用形状，同时可控制getter/setter visibility、validation、lazy computation、notification和binary evolution。property也不是“字段加壳”：有expensive I/O或显著side effect的operation应是method。
+
+```csharp
+public sealed class Account
+{
+    public string DisplayName { get; private set; } = "Unnamed";
+
+    public void Rename(string value)
+        => DisplayName = string.IsNullOrWhiteSpace(value)
+            ? throw new ArgumentException("Name is required.", nameof(value))
+            : value.Trim();
+}
+```
+
+<Term def="public/protected API允许caller观察或修改的能力集合，以及implementation storage被隐藏后可独立演进的范围。">encapsulation boundary</Term>
+
+### 建议92：谨慎将数组或集合作为属性
+
+返回owned array/List会允许caller替换元素、Add/Remove或持有alias，绕过owner invariant。按语义返回immutable snapshot、`IReadOnlyList<T>` live view或`IEnumerable<T>` stream；它们限制的能力不同，且read-only interface不保证底层不变化。
+
+```csharp
+private readonly List<OrderLine> _lines = new();
+public ImmutableArray<OrderLine> Lines => _lines.ToImmutableArray();
+
+public void AddLine(OrderLine line)
+{
+    Validate(line);
+    _lines.Add(line);
+}
+```
+
+snapshot有copy成本，live view有temporal change，stream有lifetime/re-enumeration；contract必须明说。
+
+### 建议93：构造方法应初始化主要属性和字段
+
+required state应由constructor/factory一次validate并赋值，使object从第一刻可用；可选配置才留init/default。避免caller按特定顺序设置多个properties才能形成valid object，这会产生temporal invalidity并让并发publication更危险。
+
+```csharp
+public sealed class Transfer
+{
+    public Transfer(AccountId from, AccountId to, Money amount)
+    {
+        if (from == to) throw new ArgumentException("Accounts must differ.");
+        if (amount <= Money.Zero) throw new ArgumentOutOfRangeException(nameof(amount));
+        (From, To, Amount) = (from, to, amount);
+    }
+
+    public AccountId From { get; }
+    public AccountId To { get; }
+    public Money Amount { get; }
+}
+```
+
+### 建议94：区别对待override和new
+
+override替换base virtual slot，base-typed reference也会按runtime type dispatch到derived override；`new`只隐藏同名member，选择取决于compile-time reference type，两套slot并存。除非确实要表达无关的新member并接受这种差异，通常不要用new“模拟override”。
+
+<Term def="virtual member在type hierarchy中共享、由runtime receiver type选择implementation的identity；new member会创建独立binding而非替换该slot。">dispatch slot</Term>
+
+```csharp
+class Base { public virtual string Name() => "base"; }
+class Derived : Base
+{
+    public override string Name() => "derived";
+}
+
+Base value = new Derived();
+Console.WriteLine(value.Name()); // derived
+```
+
+### 建议95：避免在构造方法中调用虚成员
+
+base constructor调用virtual member会dispatch到derived override，但derived field initializers/body尚未完成，override观察到default/partial state，甚至把`this`泄露给外部。constructor只执行non-virtual invariant setup；需要polymorphic initialization时用factory在完整construction后调用明确hook。
+
+```csharp
+public static async Task<T> CreateAsync<T>(Func<T> construct, CancellationToken token)
+    where T : IAsyncInitializable
+{
+    T instance = construct();
+    await instance.InitializeAsync(token);
+    return instance;
+}
+```
+
+<Stepper>
+  <Step title="切换abstract ctor、field/property、constructor与virtual call">
+    <CqcConstructionInvariantLab />
+  </Step>
+  <Step title="列出publication前必须为真的规则">
+    标注required state、owned dependencies、collection aliases和derived fields何时ready，不让setter order承担invariant。
+  </Step>
+  <Step title="用base/derived和mutation测试验收">
+    从base reference调用member、尝试外部修改collection，并在derived constructor完成前检测virtual call是否发生。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="getter-only List属性已经封装了集合">
+caller不能替换property reference，却仍能Add/Remove并保留alias。需要controlled mutation就返回immutable snapshot/read-only view并把修改收口到domain methods。
+</Callout>
+
+## Abstraction Surface与Signature Compatibility（建议96-99）
+
+### 建议96：成员应优先考虑公开基类型或接口
+
+public return/property type只暴露caller需要的capability，例如返回`IReadOnlyList<T>`而不是List、返回Stream而不是FileStream，可保留implementation替换自由。但不要盲目返回过宽`IEnumerable<T>`而隐藏random access/count等稳定能力；选择最小且足够的contract。
+
+```csharp
+public IReadOnlyDictionary<OrderId, Order> Snapshot()
+    => _orders.ToImmutableDictionary();
+```
+
+返回interface不自动immutable，也可能隐藏disposal/lifetime。文档和type共同表达ownership。
+
+### 建议97：优先考虑将基类型或接口作为参数传递
+
+parameter应要求实现所需的最小capability，让caller可提供不同implementation与test double。只调用Read时接收Stream而非FileStream，只枚举时接收`IEnumerable<T>`；若算法需要index/count，应诚实接收`IReadOnlyList<T>`，不要每次ElementAt。
+
+<Term def="parameter接受所有满足实现所需能力的值而不要求更具体subtype，从而保留caller substitution和testability。">parameter generality</Term>
+
+```csharp
+public async Task<Hash> ComputeHashAsync(Stream source, CancellationToken token)
+{
+    ArgumentNullException.ThrowIfNull(source);
+    return await _hasher.ComputeAsync(source, token);
+}
+```
+
+### 建议98：用params减少重复参数
+
+`params`适合零到多个同类型、语义同质且通常数量少的末尾参数，改善call-site；它不是替代collection model的万能语法。调用可能创建array，overload resolution与null调用也需测试；hot path/large input可另提供span/list overload。
+
+```csharp
+public static PermissionSet Of(params Permission[] permissions)
+    => new(permissions);
+
+PermissionSet set = PermissionSet.Of(Permission.Read, Permission.Write);
+```
+
+不要用params把不同语义的多个值塞进同一array，named options/record更清晰。
+
+### 建议99：重写时不应使用子类参数
+
+override必须保持base method signature，不能把Animal参数缩窄为Dog，否则通过base contract传入Cat会失败，违反substitutability。需要Dog-specific behavior时，在override内pattern-check并按base contract定义unsupported结果，或重构generic/interface hierarchy。
+
+```csharp
+public override void Handle(Animal animal)
+{
+    if (animal is not Dog dog)
+        throw new NotSupportedException("This handler supports dogs only.");
+    HandleDog(dog);
+}
+```
+
+更好的设计常是在type level表达`IHandler<Dog>`，而不是声称实现general Animal handler后拒绝大部分合法输入。
+
+<Stepper>
+  <Step title="切换return interface、parameter base、params、override input与collection return">
+    <CqcAbstractionSurfaceLab />
+  </Step>
+  <Step title="写出caller真正需要的最小能力">
+    区分enumerate/index/mutate/dispose，避免concrete coupling，也不以过宽interface隐藏实际precondition。
+  </Step>
+  <Step title="执行subtype与alternative implementation测试">
+    用memory/network stream、different collection和base-typed caller验证替换，不依赖原concrete type或narrowed argument。
+  </Step>
+</Stepper>
+
+## Static、Instance与Extension Binding（建议100-101）
+
+### 建议100：静态方法和实例方法没有区别
+
+原题强调二者都可承载behavior，但“没有区别”不能按字面理解。instance method有receiver、可访问instance state并参与virtual dispatch；static method在compile time绑定，没有`this`和override。选择依据是behavior是否属于一个有效object及其polymorphic contract，而非微小call性能猜测。
+
+```csharp
+public sealed class Money
+{
+    public Money Add(Money other) => new(Amount + other.Amount, Currency);
+    public static Money Zero(string currency) => new(0m, currency);
+}
+```
+
+pure factory/helper可static；依赖global mutable static state会隐藏dependency并破坏test isolation，应该注入service。不要为了“方便调用”把domain behavior剥离出owner。
+
+### 建议101：使用扩展方法，向现有类型“添加”方法
+
+extension method是static method加`this`首参数，由compile-time receiver type、namespace/import和overload resolution选择；它不改变原type、不能访问private state、不能真正override virtual member，且同名instance member永远优先。适合稳定、无ownership的convenience operation。
+
+<Term def="extension method可见的namespace/import、适用receiver contract和命名集合；范围过宽会造成冲突与意外overload选择。">extension scope</Term>
+
+```csharp
+public static class OrderExtensions
+{
+    public static Money Total(this IEnumerable<OrderLine> lines)
+        => lines.Aggregate(Money.Zero("CNY"), (sum, line) => sum.Add(line.Total));
+}
+```
+
+若operation需要private invariant、mutable state或virtual specialization，应进入原type/interface/service。对第三方type扩展时使用项目特定namespace，避免“万能Extensions”污染全局发现。
+
+<Stepper>
+  <Step title="切换override、new、instance、static与extension">
+    <CqcDispatchBindingLab />
+  </Step>
+  <Step title="标出compile-time与runtime选择点">
+    override看runtime receiver，new/static/extension主要看compile-time type与scope，instance member优先于extension。
+  </Step>
+  <Step title="用base reference和同名member做binding测试">
+    改变变量声明类型、添加instance同名method与namespace import，确认call target符合API预期而非偶然解析。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="扩展方法等于给第三方type增加virtual能力">
+extension只做static compile-time binding；第三方后来添加同名instance member会改变call resolution。需要polymorphism应使用interface/adapter/service。
+</Callout>
+
+## 本章回顾：公开最小能力，保留最大演进空间
+
+1. abstract constructor用protected，required state在publication前完成，constructor不调用virtual member。
+2. property隐藏storage但不自动隐藏collection mutation；snapshot、view和stream要分别定义ownership/lifetime。
+3. override共享virtual slot，new创建独立binding；base reference是验证polymorphism的关键case。
+4. return和parameter使用足够而不过度的base/interface contract，override不能缩窄合法输入。
+5. params只改善同质小参数call-site，仍有allocation和overload contract。
+6. static/instance按state与polymorphism选择，extension是有scope的static convenience，不是type修改。
+
+<Exercises>
+
+**问题 1：一个abstract Aggregate怎样设计constructor和collection property，避免partial state与外部mutation？**
+
+<Answer>base constructor设为protected，只接收并验证base required identity；derived constructor完成自己的fields后才发布，不从base ctor调用virtual hook。内部List由domain commands修改，对外按temporal需求返回ImmutableArray snapshot或明确live IReadOnlyList view；测试空/非法construction、derived initialization和caller mutation attempt。</Answer>
+
+**问题 2：为什么接受FileStream和返回List通常比接受Stream、返回IReadOnlyList更难演进？**
+
+<Answer>FileStream把caller限定在一种storage并妨碍memory/test/network实现；List返回暴露Add/Remove与representation。若实现只需读Stream，应接收Stream；若caller只需索引读取，返回IReadOnlyList或immutable snapshot。仍需说明dispose ownership和view是否live，不能只换interface名。</Answer>
+
+**问题 3：怎样证明override、new和extension method的调用目标？**
+
+<Answer>建立base/derived对象并分别用base与derived变量调用：override两者都按runtime derived slot，new随变量声明类型走不同slot。再给receiver添加同名instance member或改变namespace import，extension会被instance member压过且按compile-time type解析。把这些作为API compatibility tests。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="construction invariant" definition="object发布前required fields、cross-field rules与owned dependencies已全部valid的状态承诺。" />
+  <GlossaryItem term="encapsulation boundary" definition="API向caller开放的观察/修改能力及implementation storage可独立演进的边界。" />
+  <GlossaryItem term="dispatch slot" definition="virtual hierarchy共享并由runtime receiver选择implementation的member identity。" />
+  <GlossaryItem term="parameter generality" definition="parameter只要求实现真正需要的capability，允许所有合法alternative/subtype。" />
+  <GlossaryItem term="extension scope" definition="extension可见namespace、receiver contract和命名集合共同形成的compile-time作用域。" />
+</Glossary>
+
+<Attribution adaptedFrom="编写高质量代码：改善C#程序的157个建议，第7章 成员设计，建议90-101" adaptedUrl="https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html" />

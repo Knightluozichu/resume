@@ -1,0 +1,458 @@
+---
+title: "Item 25：考虑写出一个不抛异常的 swap"
+type: A
+section: Chapter 4 · Designs and Declarations
+order: 25
+description: 对齐 Effective C++ 第三版 Item 25：为 pimpl 与资源类型实现高效 noexcept member swap、同命名空间 non-member swap、正确的 ADL 调用协议及非模板类型的 std::swap 特化。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppPimplSwapCostMap,
+  EcppSwapCommitGuaranteeMap,
+  EcppSwapLookupProtocolMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-25-non-throwing-swap";
+
+<Objectives>
+
+- 能解释通用 std::swap 与 pimpl member swap 的成本差异，并实现 O(1) noexcept 交换
+- 能写出同 namespace non-member swap 和泛型 `using std::swap; swap(a,b)` 查找协议
+- 能判断 std::swap 全特化、class template、allocator 与条件 noexcept 的合法边界
+
+</Objectives>
+
+## 从一个昂贵的通用交换开始
+
+`std::swap(a, b)` 的通用实现概念上需要一个临时对象和若干 move/copy assignments：
+
+```cpp
+template<class T>
+void genericSwap(T& a, T& b) {
+    T temp(std::move(a));
+    a = std::move(b);
+    b = std::move(temp);
+}
+```
+
+对普通 value type 可能足够；对拥有昂贵 invariant、custom allocation 或 pimpl 的类型，它可能做远多于“交换身份”所需的工作。
+
+<Term def="使用类型的 move/copy construction 与 assignment 交换两个完整对象的标准后备策略。">
+  generic swap fallback
+</Term>
+
+Item 25 的原则是 Consider support for a non-throwing swap（考虑写出一个不抛异常的 swap）。目标包含两部分：找到类型最便宜的表示交换，并把它接入泛型查找协议。
+
+<Term def="在不分配、不复制业务资源且不会抛异常的情况下交换两个对象的可观察值。">
+  non-throwing swap
+</Term>
+
+## pimpl 只需要交换 implementation owner
+
+pimpl idiom（pimpl）把大部分表示放在独立 implementation object：
+
+```cpp
+class Widget {
+public:
+    Widget();
+    Widget(const Widget& rhs);
+    Widget& operator=(Widget rhs);
+    ~Widget();
+
+    void swap(Widget& other) noexcept;
+
+private:
+    std::unique_ptr<WidgetImpl> pImpl_;
+};
+```
+
+<Term def="public class 只保存指向不完整 implementation type 的 owner，以隐藏表示和降低编译依赖。">
+  pimpl idiom
+</Term>
+
+Widget 的全部状态由 `pImpl_` owner 表示。交换两个 Widget 无需复制 WidgetImpl，只交换两个 unique owners：
+
+```cpp
+void Widget::swap(Widget& other) noexcept {
+    pImpl_.swap(other.pImpl_);
+}
+```
+
+<Term def="由 class 提供、能够直接交换 private representation 的成员函数。">
+  member swap
+</Term>
+
+unique_ptr swap 是常数时间且不分配，因此 Widget member swap 可正确声明 noexcept。
+
+<EcppPimplSwapCostMap />
+
+<Callout type="trap">
+  **现象**：pimpl 类型只依赖通用 `std::swap`，认为 move
+  已足够快。**原因**：类型的 move/assignment 可能维护额外状态、日志或 allocator
+  规则，且泛型算法无法知道只换 owner 即可。**修法**：提供直接交换 representation
+  的 member swap，并测量/声明真实 noexcept。
+</Callout>
+
+## 为什么 swap 应尽量不抛
+
+swap 常被用作事务的 commit point：先在临时对象中完成可能失败的准备，再一次交换到目标。
+
+<Term def="所有可能失败的工作成功后，以一个不可失败操作发布完整新状态的边界。">
+  commit point
+</Term>
+
+```cpp
+Widget& Widget::operator=(Widget rhs) {
+    swap(rhs);
+    return *this;
+}
+```
+
+按值参数 rhs 在进入函数体前完成 copy/move；若失败，`*this` 未变。函数体 swap 若不抛，新状态一次提交，旧状态随 rhs 析构。
+
+<Term def="操作失败时目标保持调用前状态，成功时发布完整结果的异常安全等级。">
+  strong exception guarantee
+</Term>
+
+若 swap 在交换一半成员后抛异常，目标和候选都可能部分改变，commit 模型失效。
+
+<EcppSwapCommitGuaranteeMap />
+
+## noexcept 必须来自成员保证
+
+不能为了满足建议而撒谎声明 noexcept。若 member swap 可能抛，noexcept 会在异常逃出时调用 `std::terminate`。
+
+<Term def="异常离开被声明 noexcept 的函数时，程序终止而不是继续栈展开的语言规则。">
+  noexcept termination rule
+</Term>
+
+成员组合类型应使用条件 noexcept：
+
+```cpp
+class Record {
+public:
+    void swap(Record& other)
+        noexcept(noexcept(std::swap(id_, other.id_)) &&
+                 noexcept(std::swap(payload_, other.payload_)));
+
+private:
+    Id id_;
+    Payload payload_;
+};
+```
+
+<Term def="函数 noexcept 状态由其组成操作是否不抛在编译期推导的声明。">
+  conditional noexcept
+</Term>
+
+实现中使用成员的高效 swap；对于未知泛型成员，应采用 ADL-aware helper，而不是硬编码所有 `std::swap`。
+
+## 同 namespace non-member swap 接入 ADL
+
+member swap 高效但泛型算法通常调用 free `swap(a,b)`。因此在类型 namespace 提供 non-member overload：
+
+```cpp
+namespace ui {
+
+void swap(Widget& lhs, Widget& rhs) noexcept {
+    lhs.swap(rhs);
+}
+
+} // namespace ui
+```
+
+<Term def="与用户类型处于同 namespace、转调 member swap 并可由 ADL 找到的自由函数。">
+  ADL-visible swap
+</Term>
+
+它不需要 friend，因为 member swap 已是 public；它只是连接查找协议与 private-aware implementation。
+
+<Term def="public member 提供表示交换，non-member overload 提供泛型发现的双层定制结构。">
+  two-layer swap customization
+</Term>
+
+## 泛型代码不要直接限定 std::swap
+
+正确的泛型调用模式是：
+
+```cpp
+template<class T>
+void exchangeValues(T& a, T& b)
+    noexcept(noexcept(swap(a, b)))
+{
+    using std::swap;
+    swap(a, b);
+}
+```
+
+先 `using std::swap` 引入标准 fallback，再进行 unqualified call，让 ADL 同时寻找类型 namespace 的专用 overload。
+
+<Term def="函数名不带 namespace 限定，使普通查找与 ADL 共同建立候选集合的调用。">
+  unqualified swap call
+</Term>
+
+直接写 `std::swap(a,b)` 会绕过普通 ADL overload；只写 `swap(a,b)` 又可能在没有定制时找不到 fallback。
+
+<Term def="在没有类型专用 swap 时可用的标准库通用实现。">
+  std swap fallback
+</Term>
+
+<EcppSwapLookupProtocolMap />
+
+<Callout type="trap">
+  **现象**：generic algorithm 中始终写 `std::swap(a,b)`。**原因**：namespace
+  限定阻止 ADL 选择用户类型的高效 overload。**修法**：函数作用域先 `using
+  std::swap`，随后非限定调用 `swap(a,b)`。
+</Callout>
+
+## 非模板用户类型可选 std::swap 全特化
+
+对具体 user-defined type，可以为 `std::swap` 提供符合规则的 explicit full specialization，转调 member swap：
+
+```cpp
+namespace std {
+
+template<>
+void swap(ui::Widget& lhs, ui::Widget& rhs) noexcept {
+    lhs.swap(rhs);
+}
+
+} // namespace std
+```
+
+<Term def="为一个具体用户自定义类型提供的 std::swap 模板显式全特化。">
+  std::swap specialization
+</Term>
+
+这使显式写 `std::swap(widgetA, widgetB)` 的代码也走高效路径。但首选仍是同 namespace non-member overload 加 ADL-aware 调用，因为覆盖面更自然。
+
+<Term def="为所有模板参数都已确定的单一类型组合提供标准模板替代实现。">
+  explicit full specialization
+</Term>
+
+不得向 `std` 随意添加普通 overload；只能在标准允许的 user-defined type specialization 边界内操作。
+
+## class template 不要试图偏特化函数模板
+
+若 Widget 本身是 class template：
+
+```cpp
+template<class T>
+class Widget;
+```
+
+希望为所有 `Widget<T>` 偏特化 `std::swap` 会遇到问题：function templates 不能 partial specialization。
+
+<Term def="只固定部分模板参数、其余仍保持泛化的特化形式；函数模板不支持这种机制。">
+  function-template partial specialization
+</Term>
+
+正确做法是在 Widget 自己的 namespace 提供 function template overload：
+
+```cpp
+namespace ui {
+
+template<class T>
+void swap(Widget<T>& lhs, Widget<T>& rhs)
+    noexcept(noexcept(lhs.swap(rhs)))
+{
+    lhs.swap(rhs);
+}
+
+} // namespace ui
+```
+
+<Term def="与 class template 同 namespace 的 swap function template，由 ADL 为每个实例发现。">
+  template swap overload
+</Term>
+
+不要在 `std` namespace 添加该 overload。
+
+## member swap 应逐项使用正确 swap
+
+非 pimpl 类型可能有多个成员。member swap 要为每个成员选择最合适定制：
+
+```cpp
+void Document::swap(Document& other)
+    noexcept(noexcept(swap(title_, other.title_)) &&
+             noexcept(swap(body_, other.body_)))
+{
+    using std::swap;
+    swap(title_, other.title_);
+    swap(body_, other.body_);
+}
+```
+
+<Term def="member swap 内对组成成员同样使用标准 fallback 加 ADL 定制的递归协议。">
+  compositional swap
+</Term>
+
+实际代码中 noexcept expression 的 name lookup 要保证声明顺序和 helper 可见；可用 `std::is_nothrow_swappable_v` 等 traits 简化条件。
+
+<Term def="在编译期判断某类型是否可交换且交换是否不抛的标准类型性质。">
+  nothrow swappable trait
+</Term>
+
+若任一成员 swap 会抛，外层不能承诺无条件 noexcept。
+
+## allocator-aware 类型要审查交换前提
+
+标准容器和自定义 allocator-aware 类型的 swap 可能受 allocator equality 与 propagation traits 约束。交换内部 buffer owner 前，必须确保释放责任仍匹配 allocator。
+
+<Term def="容器 swap 时 allocator 是否随对象一起交换的类型属性。">
+  allocator propagation policy
+</Term>
+
+```text
+propagate_on_container_swap == true
+  -> allocator 与 storage 一起交换
+false and allocators equal
+  -> storage 可安全交换
+false and allocators differ
+  -> 不能盲目交换 owner
+```
+
+<Term def="内存必须最终由与其分配来源兼容的 allocator 释放的不变量。">
+  allocator ownership invariant
+</Term>
+
+这类 swap 的 noexcept condition 必须与 allocator contract 一致，不能只看 pointer swap。
+
+## swap 还影响容器和算法优化
+
+标准算法、sort、rotate、optional/variant 和容器操作会依据 swappability/noexcept 选择路径或保证。正确 swap 不只是赋值实现细节。
+
+<Term def="泛型算法通过 swap traits 和 ADL 使用用户类型高效交换能力的集成契约。">
+  generic swappability contract
+</Term>
+
+若 move construction 抛但 swap 不抛，算法仍可能用 swap 维持更强保证。反之，错误 noexcept 会把可恢复异常变成 terminate。
+
+<Term def="算法根据操作的 noexcept 属性选择能维持性能或异常保证的实现分支。">
+  noexcept-driven algorithm selection
+</Term>
+
+## 用失败注入和查找轨迹验收
+
+先预测每种调用形式最终选择哪个 function，再建立验证矩阵：
+
+- member `a.swap(b)`、ADL `swap(a,b)`、显式 `std::swap(a,b)` 分别记录命中路径。
+- pimpl swap 验证 implementation address 互换、无 allocation/copy/move。
+- static assertions 验证 `is_nothrow_swappable` 与函数声明一致。
+- copy-and-swap failure injection：candidate 构造失败时目标不变，commit 不抛。
+- class template 实例验证同 namespace overload，不向 `std` 添加非法 overload。
+- allocator 相等/不等与 propagation 组合验证 owner/deallocator 配对。
+- self-swap 保持合法值，资源 ledger 不 double free 或泄漏。
+
+<Term def="记录 swap 调用形式、候选选择、成员操作、异常和资源 owner 变化的事件序列。">
+  swap resolution trace
+</Term>
+
+只有查找正确、成本正确、noexcept 真实三者同时成立，swap 定制才完成。
+
+## 小结
+
+- pimpl/resource type 应提供直接交换 representation 的 member swap，避免通用 move/copy 成本
+- non-throwing swap 可作为 prepare-then-commit 的可靠提交点，支撑 strong exception guarantee
+- 在类型 namespace 提供 non-member swap 转调 member，使 ADL 能发现定制
+- generic code 使用 `using std::swap; swap(a,b)`，同时保留用户定制与标准 fallback
+- 具体非模板 user type 可选 std::swap 全特化；class template 用自身 namespace function template overload
+- noexcept 必须由 member、allocator 和递归 swap 的真实保证推导，不能虚假声明
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 25"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="generic swap fallback">
+    通过 move/copy 构造赋值交换完整对象的后备实现。
+  </GlossaryItem>
+  <GlossaryItem term="non-throwing swap">
+    不分配且不会抛异常的值交换。
+  </GlossaryItem>
+  <GlossaryItem term="pimpl idiom">
+    public class 以 owner 隐藏 implementation 表示。
+  </GlossaryItem>
+  <GlossaryItem term="member swap">
+    直接交换 private representation 的成员函数。
+  </GlossaryItem>
+  <GlossaryItem term="commit point">
+    所有准备成功后发布状态的不可失败边界。
+  </GlossaryItem>
+  <GlossaryItem term="strong exception guarantee">
+    失败保持原值，成功发布完整结果。
+  </GlossaryItem>
+  <GlossaryItem term="noexcept termination rule">
+    异常逃出 noexcept 函数会终止程序。
+  </GlossaryItem>
+  <GlossaryItem term="conditional noexcept">
+    由组成操作编译期推导是否不抛。
+  </GlossaryItem>
+  <GlossaryItem term="ADL-visible swap">
+    同类型 namespace、可由 ADL 发现的 swap。
+  </GlossaryItem>
+  <GlossaryItem term="two-layer swap customization">
+    member 实现交换、non-member 提供发现。
+  </GlossaryItem>
+  <GlossaryItem term="unqualified swap call">
+    不带 namespace 限定并允许 ADL 的调用。
+  </GlossaryItem>
+  <GlossaryItem term="std swap fallback">
+    无用户定制时的标准通用交换。
+  </GlossaryItem>
+  <GlossaryItem term="std::swap specialization">
+    具体用户类型的标准 swap 全特化。
+  </GlossaryItem>
+  <GlossaryItem term="explicit full specialization">
+    所有模板参数已确定的单一特化。
+  </GlossaryItem>
+  <GlossaryItem term="function-template partial specialization">
+    函数模板不支持的部分参数特化机制。
+  </GlossaryItem>
+  <GlossaryItem term="template swap overload">
+    同 class template namespace 的 swap function template。
+  </GlossaryItem>
+  <GlossaryItem term="compositional swap">
+    递归为成员使用 ADL-aware swap 的实现。
+  </GlossaryItem>
+  <GlossaryItem term="nothrow swappable trait">
+    判断类型交换是否存在且不抛的性质。
+  </GlossaryItem>
+  <GlossaryItem term="allocator propagation policy">
+    swap 是否同时交换 allocator 的策略。
+  </GlossaryItem>
+  <GlossaryItem term="allocator ownership invariant">
+    allocation 必须由兼容 allocator 释放。
+  </GlossaryItem>
+  <GlossaryItem term="generic swappability contract">
+    用户类型与泛型算法的交换集成约定。
+  </GlossaryItem>
+  <GlossaryItem term="noexcept-driven algorithm selection">
+    算法按 noexcept 选择实现路径。
+  </GlossaryItem>
+  <GlossaryItem term="swap resolution trace">
+    记录查找、交换、异常与 owner 变化的轨迹。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：为 pimpl Widget 定制 swap。** 写出 member、namespace overload 和 generic call，并说明每层职责。
+
+<Answer question="pimpl 类型的三层 swap 怎样协作？">
+  public member `swap(Widget&) noexcept` 直接交换 implementation unique
+  owner；ui namespace 的 non-member `swap(lhs,rhs)` 转调 member，供 ADL
+  发现；generic code 先 `using std::swap` 再非限定 `swap(a,b)`，有定制就命中 ui
+  overload，否则回退标准实现。测试地址互换且 allocation/copy/move 计数为零。
+</Answer>
+
+2. **问题 2：处理 Widget template。** 团队试图为所有 `Widget<T>` 偏特化 `std::swap`，请修正并验证。
+
+  <Answer question="为什么不能偏特化 std::swap 函数模板，正确方案是什么？">function templates 不支持 partial specialization，也不能向 std 随意添加普通 overload。应在 Widget 所在 namespace 定义 constrained `swap(Widget<T>&, Widget<T>&)` function template，条件 noexcept 转调 member swap；泛型调用通过 ADL 命中。为多个 T 实例做 compile/static assertion 和路径计数测试。</Answer>
+
+3. **问题 3：审查 allocator-aware Buffer。** 两对象 allocator 不同且不传播，现有 noexcept swap 只交换 pointers，请分析风险。
+
+  <Answer question="为什么 pointer swap 仍可能违反 noexcept 与资源契约？">交换 pointer 后，每个 Buffer destructor 会用原 allocator 释放另一个 allocator 分配的内存，破坏 allocator ownership invariant。若 propagation 允许，应连 allocator 与 storage 一起交换；若不传播但 allocators 相等，可交换 storage；若不同，需禁止/降级为可能分配的值交换并调整 noexcept。测试全部 propagation/equality 组合与 deallocation ledger。</Answer>
+</Exercises>

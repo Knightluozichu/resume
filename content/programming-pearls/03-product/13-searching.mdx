@@ -1,0 +1,442 @@
+---
+title: "Column 13 · Searching：让集合表示匹配整数搜索的真实代价"
+type: B
+section: "Part III · The Product"
+order: 12
+description: "按第二版Column 13重建IntSet interface、sorted array/list、binary search tree、bit vector、bins、representation principles与Unix spell真实搜索案例。"
+demo: true
+math: true
+sourceUrl: "https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+draft: false
+---
+
+import { PP2SearchInterfaceLab, PP2ArraySetLab, PP2ListSetLab, PP2BSTShapeLab, PP2BitVectorLab, PP2BinsLab, PP2RepresentationMatrixLab, PP2CacheBoundaryLab, PP2SpellPipelineLab, PP2HashDeltaLab, PP2SearchCertificateLab } from "@/components/mdx/programming-pearls/diagrams/13-searching";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释Searching problem的IntSet interface，以及insert、size、sorted report为何必须与representation分离
+- 能计算sorted array/list、binary search tree、bins与bit vector的construction、reporting、space和cache-boundary cost
+- 能实现sentinel array、iterative linked list、unbalanced search tree、direct-index bit vector与range-binned set
+- 能分析random/sorted arrivals、sparse/dense integer universes、allocation layout和library baseline对实际winner的影响
+- 能设计Unix spell式reduction pipeline、representation benchmark、adversarial tests与search release certificate
+
+</Objectives>
+
+## 从“搜索某个值”开始
+
+听到Searching，第一反应往往是binary search。但Column 13并没有先问“怎样找一个value”，而是承接Column 12：反复插入从有限integer universe抽到的keys，忽略duplicates，最后按sorted order输出整个set。真正要选择的不是一个孤立search routine，而是支持完整lifecycle的data representation。
+
+先预测：当$m=1{,}000$、$n=1{,}000{,}000$时，sorted array、tree、bit vector谁快？再把$m$改成500,000，把arrival order改成sorted，观察答案为什么必须改变。
+
+<PP2SearchInterfaceLab />
+
+Searching（<Term def="围绕明确query/update/report contract选择并测量数据表示，而不是把问题缩成一次membership lookup。">Searching</Term>）的核心教训是：interface先稳定，implementation再竞争。Column 12的sampling algorithms只依赖一个integer set；Column 13把这个set拆成多种结构，比较program clarity、time、space与machine behavior。
+
+## 13.1 The Interface
+
+原书用IntSet抽象出三个observable operations：
+
+```cpp
+class IntSet {
+public:
+    IntSet(int maxelements, int maxvalue);
+    void insert(int t);       // insert if absent
+    int size() const;         // number of distinct keys
+    void report(int v[]) const; // increasing order
+};
+```
+
+IntSet Interface（<Term def="以bounded integer universe上的distinct insert、cardinality和increasing report定义集合行为的抽象边界。">IntSet Interface</Term>）还隐含四条contract：
+
+1. key位于`0..maxvalue-1`，out-of-range input要被拒绝或由precondition排除。
+2. 重复`insert(t)`不改变set，也不增加`size()`。
+3. `report(v)`只写distinct keys，而且strictly increasing。
+4. storage最多容纳`maxelements`个keys；capacity failure不能悄悄corrupt结果。
+
+这些条件让five representations可互换，也让test oracle独立于implementation。先用standard library set建立correctness baseline，再让custom structures在同一trace上回放；逐次比较`size`与最终report，就能把representation bug和random generator bug分开。
+
+下面的reference model故意简单：
+
+```cpp
+class LibraryIntSet {
+    std::set<int> values;
+public:
+    void insert(int t) { values.insert(t); }
+    int size() const { return static_cast<int>(values.size()); }
+    void report(std::vector<int>& out) const {
+        out.assign(values.begin(), values.end());
+    }
+};
+```
+
+Library不是自动最快，却是最便宜的correct implementation。只有profile证明construction或space不达标，才值得承担special-purpose code的proof、tests和maintenance。
+
+## 13.2 Linear Structures
+
+Linear Structures（<Term def="按key order把elements存入contiguous array或linked sequence，并以linear traversal定位insertion point的集合表示。">Linear Structures</Term>）最直接地保持sorted report。它们construction通常为quadratic，却把invariant暴露得很清楚。
+
+### Sorted array with a sentinel
+
+设`x[0..m-1]`为stored keys，`x[m]=maxval`为sentinel。插入`t`时，从左向右找到第一个不小于`t`的位置；equal则return，larger则向右shift suffix并写入`t`：
+
+```cpp
+void ArrayIntSet::insert(int t) {
+    int i = 0;
+    while (x[i] < t) ++i;        // maxval sentinel stops the scan
+    if (x[i] == t) return;
+
+    for (int j = n; j > i; --j) x[j] = x[j - 1];
+    x[i] = t;
+    ++n;
+    x[n] = maxval;
+}
+```
+
+<PP2ArraySetLab />
+
+Loop前后保持：
+
+$$
+x[0] \lt x[1] \lt \cdots \lt x[m-1] \lt x[m]=\text{maxval}.
+$$
+
+Sentinel（<Term def="放在合法数据边界之外、保证scan终止并消除每轮显式bound check的特殊值。">Sentinel</Term>）把“未找到”与“到达末尾”折进同一次comparison。它不是magic：`maxval`必须不能作为合法key，capacity还要额外验证。
+
+Single insertion最多scan $m$次并shift $m$个elements；build $m$个distinct keys的worst time为：
+
+$$
+\sum_{i=0}^{m-1}\Theta(i)=\Theta(m^2).
+$$
+
+Array space只需约$m$ words，report是一段sequential memory copy。即使asymptotic insertion不漂亮，small $m$、cache-resident workload和rare updates仍可能让它胜过pointer structures。
+
+### Sorted linked list
+
+Linked version把shift换成pointer update。Head/tail sentinels可以消除empty-list与end-of-list special cases；scan仍从small key走向large key：
+
+```cpp
+void ListIntSet::insert(int t) {
+    Node* p = head;
+    while (p->next->value < t) p = p->next;
+    if (p->next->value == t) return;
+    p->next = new Node{t, p->next};
+    ++n;
+}
+```
+
+<PP2ListSetLab />
+
+Middle insertion本身为$O(1)$，但找到predecessor仍为$O(m)$。每个node保存value与link，书中的word model约$2m$ space；allocation metadata、alignment和cache misses在modern system上还会放大差距。
+
+原书比较recursive与iterative code：消除list recursion可带来约三倍speedup，因为每个visited node都省掉function call；对bins版本只约10%，因为bucket较短。结论不是“一律不用recursion”，而是inner traversal的constant cost必须通过measurement判断。
+
+<Callout type="trap" title="链表插入是O(1)，所以构建集合也是O(m)">
+只有已经持有predecessor pointer时插入才是constant。IntSet收到的只有key，必须先搜索sorted position；m次平均linear search仍形成quadratic construction。
+</Callout>
+
+## 13.3 Binary Search Trees
+
+Binary Search Tree（<Term def="每个node将smaller keys放入left subtree、larger keys放入right subtree，并用inorder traversal产生sorted report的集合表示。">Binary Search Tree</Term>）把一次linear scan改成沿one root-to-leaf path搜索：
+
+```cpp
+Node* insert(Node* p, int t) {
+    if (p == nullptr) return allocate_node(t);
+    if (t < p->value) p->left = insert(p->left, t);
+    else if (t > p->value) p->right = insert(p->right, t);
+    return p; // duplicate: unchanged
+}
+
+void report(Node* p, std::vector<int>& out) {
+    if (p == nullptr) return;
+    report(p->left, out);
+    out.push_back(p->value);
+    report(p->right, out);
+}
+```
+
+For random insertion order，expected tree depth为$O(\log m)$，所以total expected construction为$O(m\log m)$，inorder report为$O(m)$。书中的simple word model为value、left、right共约$3m$ words。
+
+<PP2BSTShapeLab />
+
+但这是unbalanced tree。Ascending keys让每个new node只成为right child，height变为$m$，total insertion回到$\Theta(m^2)$，recursive stack也可能overflow。Expected case的assumption必须写进benchmark dataset，而不能藏在big-O旁边。
+
+为何不立刻加入AVL或red-black balancing？因为原书的目标是探索representation spectrum，并以standard library tree作为strong baseline。Balanced tree适合general dynamic sets；本栏single-build-then-report的specialized workload还可利用range、known capacity和bulk allocation，未必需要完整general-purpose machinery。
+
+## 13.4 Structures for Integers
+
+前两节只利用total order。Integers还给出额外信息：universe有known bound，key可直接参与address calculation。Structures for Integers（<Term def="利用bounded integer universe做direct indexing或range partition，而不只依赖generic comparisons的集合结构。">Structures for Integers</Term>）因此产生bit vector和bins。
+
+### Bit vector: direct key indexing
+
+以one bit表示one possible key。`insert(t)`设置第`t`位；duplicate自然idempotent；`size`可插入时计数或report时popcount；按bit position从low到high scan即可sorted output：
+
+```cpp
+void BitIntSet::insert(unsigned t) {
+    const unsigned word = t / 64;
+    const uint64_t mask = uint64_t{1} << (t % 64);
+    if ((bits[word] & mask) == 0) {
+        bits[word] |= mask;
+        ++n;
+    }
+}
+```
+
+<PP2BitVectorLab />
+
+若machine word含$b$ bits，space约$n/b$ words，initialization与report都是$O(n)$，每次insert为$O(1)$。因此total为$O(n+m)$，常写成$O(n)$。当$m$接近$n$，这是excellent density tradeoff；当$n=2^{32}$而$m=1{,}000$，即使只存few keys也要扫描或清零huge bitmap。
+
+Direct indexing还要求careful arithmetic：`t / word_bits`、shift width和allocation size都要使用unsigned range-safe types。把negative integer转成large unsigned index是memory safety bug，不是普通duplicate。
+
+### Bins: partition the universe
+
+Bins（<Term def="把bounded key range分成ordered intervals，先按range定位bucket，再在小bucket中维护sorted keys的hybrid representation。">Bins</Term>）结合direct indexing与small sorted lists。把`0..n-1`分成$k$个contiguous ranges；key `t`映射到：
+
+$$
+\operatorname{bin}(t)=\min\left(k-1,\left\lfloor\frac{tk}{n}\right\rfloor\right).
+$$
+
+每个bucket内用sorted list或small array，report时依次遍历bin 0到$k-1$。若uniform keys且$k\approx m$，expected bucket length接近1，insert expected $O(1)$，total expected $O(m)$。
+
+<PP2BinsLab />
+
+一个minimal version：
+
+```cpp
+void BinnedIntSet::insert(int t) {
+    const int b = std::min(bin_count - 1,
+                           static_cast<int>((int64_t(t) * bin_count) / maxval));
+    auto& bucket = bins[b];
+    auto it = std::lower_bound(bucket.begin(), bucket.end(), t);
+    if (it == bucket.end() || *it != t) bucket.insert(it, t);
+}
+```
+
+Bins依赖key distribution。若所有keys集中在一个narrow interval，one bucket退化为linear structure。可通过more bins、adaptive splits、hashing或balanced per-bin containers修复，但每一种都改变space、ordering与complexity。先measure actual distribution，再增加machinery。
+
+书中还研究预分配版本“Bins*”：初始化时一次获得全部nodes，避免per-node allocator。其space约降到原先四分之一、time约减半；再消除短bucket中的recursion只增加约10%。一次bulk allocation可同时改善metadata、locality和failure handling。
+
+### One workload, five representations
+
+对build-then-report workload，原书的word-level summary可整理为：
+
+| Representation | Initialize | One insert | Report | Total build/report | Approx. space |
+|---|---:|---:|---:|---:|---:|
+| Sorted array | $O(1)$ | $O(m)$ | $O(m)$ | $O(m^2)$ | $m$ |
+| Sorted list | $O(1)$ | $O(m)$ | $O(m)$ | $O(m^2)$ | $2m$ |
+| Binary tree | $O(1)$ | expected $O(\log m)$ | $O(m)$ | expected $O(m\log m)$ | $3m$ |
+| Bins | $O(m)$ | expected $O(1)$ | $O(m)$ | expected $O(m)$ | about $3m$ |
+| Bit vector | $O(n)$ | $O(1)$ | $O(n)$ | $O(n)$ | $n/b$ words |
+
+<PP2RepresentationMatrixLab />
+
+Table中的$m$表示stored distinct keys，$n$表示integer universe，不能交换。若input duplicates很多，attempt count与final $m$分离；若report repeated many times，maintaining order的价值会显著上升；若只有membership queries，report column可能完全不重要。
+
+## 13.5 Principles
+
+### Use libraries first
+
+先实现standard library set。它提供known semantics、balanced behavior和maintained code；custom candidate必须在same contract、same allocator policy、same output cost下证明收益。只比较one hand-written insert loop与library end-to-end time是不公平的。
+
+### Exploit the problem’s special structure
+
+Generic comparison tree不知道keys是bounded integers；bit vector和bins知道。Special-purpose code之所以可能快，不是因为C++ syntax更聪明，而是它利用了library abstraction故意没有假设的range、capacity、build/report phases和distribution。
+
+### Space is a time parameter
+
+Space/Time Coupling（<Term def="representation size、contiguity与working-set boundary通过cache、TLB和memory hierarchy直接改变execution time的现象。">Space/Time Coupling</Term>）解释了为何$m$ words的array有时击败expected $O(m\log m)$ tree。Pointer chasing需要multiple dependent loads；contiguous scan可prefetch、vectorize并减少allocation。
+
+<PP2CacheBoundaryLab />
+
+Performance curve常在working set越过cache或physical memory时出现cliff，而不是平滑遵循comparison count。书中custom single-block tree allocation约减少三倍space、获得约两倍speedup，说明representation layout与algorithm同等重要。
+
+### Keep invariants visible
+
+Sentinel消除bound branch，前提是range contract清楚；tree inorder保证sorted report，前提是left/right relation始终成立；bins按range order报告，前提是partition覆盖universe且不overlap。Optimization应减少operations，不应隐藏proof obligation。
+
+### Measure the complete operation mix
+
+Separate timings至少包括initialize、attempted inserts、successful distinct inserts、report、destruction和peak bytes。Dataset矩阵要覆盖：
+
+- random permutation、ascending、descending、clustered与duplicate-heavy arrivals；
+- sparse、medium、dense $m/n$；
+- fits-L1、fits-last-level-cache、exceeds-memory tiers；
+- library allocator、pool/bulk allocator；
+- one report与many reports。
+
+只测random keys会掩盖unbalanced tree；只测construction会惩罚bit vector，却漏掉它可能重复提供fast membership。Benchmark不是为favorite structure背书，而是定位applicable regime。
+
+<Callout type="trap" title="Big-O表已经选出了最快结构">
+Expected bounds依赖arrival与distribution，space单位省略allocator/cache，operation mix也可能不同。Table只能筛选candidates；最终选择需要correctness-equivalent implementation和target-machine measurements。
+</Callout>
+
+## 13.6 Problems
+
+原书Problems要求把representation与measurement向外推进：
+
+- 为array/list/tree/bins/bit vector实现同一IntSet interface，用identical random sets验证reports。
+- 对array使用binary search寻找position，再分析为何middle shift仍使single insert为linear。
+- 给unbalanced tree输入sorted keys，测height、time与stack；再与random permutation和library balanced tree比较。
+- 调整bin count，分别测试uniform、clustered与adversarial keys，寻找bucket length与initialization cost的平衡。
+- 使用single preallocated node block重写tree/list/bins，分离allocation time、bytes per key与traversal locality。
+- 对bit vector实现word-at-a-time report、popcount与sparse-word index，明确新index何时值得。
+- 在same memory budget下比较32-bit indexes与64-bit pointers，报告cache boundary而不仅是CPU time。
+
+这些问题的共同方法是“改变一个representation assumption，然后重新跑完整contract”。例如binary search把array position lookup降为$O(\log m)$，却没有消除$O(m)$ shifts；它优化了visible search，不一定优化whole operation。
+
+## 13.7 Further Reading
+
+原书把读者引向data structures、algorithm analysis、memory hierarchy与library implementations。Balanced search trees保证worst-case logarithmic operations；hash tables给expected constant membership，但若需要sorted report，仍要sort或维护额外order。
+
+更深一层的阅读问题是：哪一部分information真正需要保存？Integer bound让bit vector从key values变成presence bits；bins保存range location并缩短local search；bulk allocation把pointer身份替换为compact indexes。下一节的`spell`把这条线推进到极致：它甚至不保存words本身。
+
+## 13.8 A Real Searching Problem
+
+Sidebar “A Real Searching Problem”讲Doug McIlroy在1978年开发Unix `spell`。目标machine是PDP-11，address space只有64 KiB；完整English dictionary、word strings和general search structure都放不下。系统必须从text中找出疑似拼错的words，同时接受极小probability的hash false positive。
+
+### Build a current spelling list
+
+McIlroy先把unabridged dictionary与Brown University million-word corpus求intersection：前者提供validity，后者提供currency，得到约75,000 forms。接着使用约40条prefix rules与30条suffix rules剥离regular inflections，并维护约1,300项exception stop list。最终30,000 base entries还能代表roughly同样数量的inflected forms。
+
+Affix processing会破坏lexicographic order，lookup因此接近random；简单sorted word file不能依靠input locality。这里的第一层compression来自domain model，而非bit trick。
+
+<PP2SpellPipelineLab />
+
+### Hash away unnecessary identity
+
+Spell Hash Set（<Term def="Unix spell把dictionary words映射为sorted 27-bit hashes，只回答probable membership并接受极低false-positive probability的压缩集合。">Spell Hash Set</Term>）不需要恢复word，只需回答“这个candidate大概在dictionary吗”。所以每个word被hash成27-bit integer，universe约$2^{27}$。
+
+30,000个raw 27-bit values仍约810,000 bits，超过32,000个16-bit words的target budget。把hashes排序后不存absolute values，而存successive differences：
+
+```text
+sorted hashes:  6  11  14  19  23
+differences:    6   5   3   5   4
+```
+
+Gaps远小于$2^{27}$，可用variable-length code表示。原实现平均约13.6 bits per entry，接近该set density下约13.57 bits的information scale。少量index words指向compressed stream中的starting points，避免每次从头decode。
+
+<PP2HashDeltaLab />
+
+粗略看，若$d=30{,}000$ dictionary hashes均匀落入$N=2^{27}$：
+
+$$
+P(\text{random nonword hits}) \approx \frac{d}{N}
+=\frac{30{,}000}{134{,}217{,}728}
+\approx 2.24\times10^{-4}.
+$$
+
+Collision会让misspelling被误认为valid，却不会把valid dictionary word误报为error。27 bits是在memory、lookup和acceptable defect之间的engineering choice；它不是cryptographic guarantee。
+
+最终约30,000 entries装入26,000个16-bit machine words，留在64 KiB address space内。书中总结三层reduction：affix analysis把list降到不到原来三分之一，hashing丢掉remaining identity中约60%的bits，difference coding又把storage约减半。
+
+### Search the compressed representation
+
+Query pipeline先做affix normalization，再hash；index定位附近compressed block，decoder累加deltas直到equal或exceed target。若equal，word被视为known；若exceed，报告possible misspelling。Sorted deltas同时提供compression和early termination。
+
+```text
+candidate word
+  -> affix rules / exceptions
+  -> 27-bit hash h
+  -> choose compressed block from index
+  -> accumulate deltas while value < h
+  -> equal: probably known; exceed: report
+```
+
+历史performance是：VAX-11/750上处理5,000-word document约30 seconds CPU，整本书不到10 minutes；包括从disk载入small dictionary时，单word约4 seconds。这些absolute numbers属于当时hardware，持久教训是先把representation缩到可用memory tier，再优化inner search。
+
+`spell`不是“把Bloom filter套在dictionary上”的泛化故事。原栏明确强调sorted 27-bit hashes、delta sequence、variable-length coding和small index。保持这种representation accuracy，才能看见它如何同时解决space与search。
+
+## 本栏实验路径
+
+<Stepper>
+  <Step title="固定IntSet行为边界" description="把distinct insert、size、sorted report、key range和capacity写成可回放contract。">
+    <PP2SearchInterfaceLab />
+    <PP2ArraySetLab />
+  </Step>
+  <Step title="比较linear structures" description="区分linked insertion update与predecessor search，并测sentinel、iteration和contiguous report。">
+    <PP2ListSetLab />
+    <PP2CacheBoundaryLab />
+  </Step>
+  <Step title="暴露tree assumption" description="对random与sorted arrivals比较height、construction和stack，再接入library baseline。">
+    <PP2BSTShapeLab />
+    <PP2RepresentationMatrixLab />
+  </Step>
+  <Step title="利用integer universe" description="在sparse/dense regimes间切换bit vector与bins，验证range partition和sorted report。">
+    <PP2BitVectorLab />
+    <PP2BinsLab />
+  </Step>
+  <Step title="复刻spell压缩搜索" description="跟踪linguistic reduction、27-bit hash、delta coding、index lookup与false-positive budget。">
+    <PP2SpellPipelineLab />
+    <PP2HashDeltaLab />
+    <PP2SearchCertificateLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Searching从operation mix与interface开始，不等于孤立地选择binary search。
+- IntSet统一distinct `insert`、`size`与increasing `report`，使representations可做differential tests。
+- Sorted array使用sentinel简化scan，space紧凑、report连续，但build worst-case为quadratic。
+- Sorted list移除shifts，却仍需linear predecessor search；iteration只改变constant，不改变complexity。
+- Unbalanced binary tree对random arrivals expected $O(m\log m)$，sorted arrivals会退化为quadratic chain。
+- Bit vector以$n/b$ words换取constant insert和ordered universe scan，适合dense bounded keys。
+- Bins按integer range定位short bucket，uniform distribution下可得到expected linear total time。
+- Representation table必须连同arrival、density、allocator、report frequency与memory hierarchy解释。
+- Library set是correctness与maintenance baseline，special-purpose structure必须用measured evidence胜出。
+- Space is time：compact contiguous storage跨越cache/memory boundary时会改变实际winner。
+- Unix `spell`先用corpus与affix rules减词，再保存27-bit hash而非word identity。
+- Sorted hash deltas以variable-length code降到平均约13.6 bits，small index支持near-random lookup。
+- 30,000 entries最终约占26,000个16-bit words，满足PDP-11 64 KiB约束。
+- Search release certificate必须覆盖contract、distribution、adversarial order、memory、library baseline与report order。
+
+<Exercises>
+
+1. 对keys `8, 3, 8, 1, 7`，分别画出sorted array与unbalanced BST的每次state。给出comparisons、shifts、allocated nodes和最终report，并说明duplicate在哪一层被消除。
+2. 在$n=2^{24}$下比较$m=10^3,10^5,10^7$时bit vector与24-byte tree的representation bytes。提出包含initialization、insertion、report和cache tiers的benchmark plan。
+3. 证明当$k=m$ bins、keys independently uniform时one bin的expected occupancy为1；再构造让all keys落入one bin的adversarial input，并提出不破坏sorted report的mitigation。
+4. 复刻`spell` toy pipeline：将sorted hashes `6,11,14,19,23` delta encode，设计one-byte continuation code和two-entry index；说明false positive与false negative分别可能来自哪里，并列出release evidence。
+
+<Answer>
+
+Array states依次为`[8]`、`[3,8]`、duplicate 8不变、`[1,3,8]`、`[1,3,7,8]`。按left-to-right sentinel scan可记录约1、1、3、1、3次停止comparison；new inserts产生0、1、2、1次shifts，总4次。BST以8为root，3为left，duplicate 8在root被拒绝，1为3的left，7为3的right，共4 nodes；inorder report同为`1,3,7,8`。Exact comparison convention可不同，但两者必须与同一interface oracle一致。
+
+</Answer>
+
+<Answer>
+
+Bit vector固定占$2^{24}$ bits，即2 MiB。Tree约为$24m$ bytes：$m=10^3$约23.4 KiB，$10^5$约2.29 MiB，$10^7$约228.9 MiB。Byte crossover不等于time crossover：按density buckets分别测zero-initialization、duplicate/new inserts、one/many reports与destruction；记录L1/LLC misses、peak RSS和allocator calls。数据规模跨过cache tiers时加密采样，且同时测library balanced tree与compact index-based tree。
+
+</Answer>
+
+<Answer>
+
+固定某bin，每个uniform key落入它的probability为$1/k$，occupancy是$m$个indicator之和，因此expectation为$m/k=1$。Adversary只选择同一range内keys，就把该bucket length变为$m$，local sorted list build退化为quadratic。Mitigation可增加或adaptive split bins、在oversized bucket切balanced tree，或用randomized mapping后额外sort report；前两者保留range order，后一种需report阶段恢复order。
+
+</Answer>
+
+<Answer>
+
+Deltas为`6,5,3,5,4`。可用high bit表示continuation、低7 bits保存payload；toy gaps都只占one byte。Index保存第0与第3项的absolute hash及compressed offset，query先选不超过target的anchor，再累加后续gaps。Hash collision导致nonword false positive；implementation丢entry、错误affix rule或corrupt decoder可产生false negative。Evidence包括known-word corpus、known-error corpus、collision simulation、delta round trip、index boundary、truncated stream、memory budget和target latency。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Searching">围绕query、update与report contract选择并测量representation，而非只实现一次lookup。</GlossaryItem>
+  <GlossaryItem term="IntSet Interface">bounded integer universe上的distinct insertion、exact cardinality与increasing report约定。</GlossaryItem>
+  <GlossaryItem term="Linear Structures">以sorted array或linked sequence保存keys，并linear搜索insertion position的表示。</GlossaryItem>
+  <GlossaryItem term="Sentinel">位于valid data边界之外、保证scan终止并减少bound branches的特殊值。</GlossaryItem>
+  <GlossaryItem term="Binary Search Tree">通过left-smaller/right-larger relation组织keys，并以inorder traversal报告sorted set的tree。</GlossaryItem>
+  <GlossaryItem term="Structures for Integers">利用known integer range进行direct indexing或range partition的special-purpose structures。</GlossaryItem>
+  <GlossaryItem term="Bins">按ordered integer intervals分bucket、在bucket内维护small sorted collection的hybrid set。</GlossaryItem>
+  <GlossaryItem term="Space/Time Coupling">representation bytes、layout与memory hierarchy共同决定execution time的关系。</GlossaryItem>
+  <GlossaryItem term="Spell Hash Set">Unix spell保存sorted 27-bit hashes及compressed deltas，而非完整dictionary words的probable-membership set。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Programming Pearls, Second Edition · Column 13 Searching"
+  href="https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+  author="Jon Bentley"
+  license="本章按Pearson官方第二版目录与Column 13正文，重建IntSet interface、linear structures、binary search trees、integer bit vectors/bins、principles、problems、further reading及Doug McIlroy Unix spell sidebar；现代differential testing、cache measurement与release certificate为教学化扩展。"
+/>

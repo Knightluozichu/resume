@@ -1,0 +1,282 @@
+---
+title: "Chapter 5：Test Doubles"
+type: A
+section: 现代 C++ 测试驱动开发 · 依赖与替身
+order: 5
+description: 对齐原书 Chapter 5：识别不可控依赖，区分 fake、stub、spy 与 mock，先手写最小替身建立测试抽象，再用 GoogleMock 表达必要交互，并通过构造依赖注入改善设计。
+demo: false
+math: false
+sourceUrl: "https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/"
+draft: false
+---
+
+import {
+  CtrDependencyInjectionFlow,
+  CtrDoubleChoiceLab,
+  CtrDoubleTaxonomyMap,
+} from "@/components/mdx/cpp-testing-recipes/diagrams/test-doubles";
+
+<Objectives>
+
+- 能识别时间、网络、数据库和随机性造成的依赖挑战，说明测试需要控制哪项输入、观察哪项输出
+- 能区分 fake、stub、spy 与 mock，先手写最小替身，再判断是否值得使用 GoogleMock 等模拟工具
+- 能用构造依赖注入和窄端口改变设计，在生产组合根接真实适配器，并控制交互测试对实现细节的耦合
+
+</Objectives>
+
+## 替身的起点是不可控依赖，不是框架语法
+
+订单到期提醒需要读取当前时间并发送通知。若领域对象直接调用系统时钟和 SMTP，测试只能等待真实日期、配置邮件服务器，并承担网络失败。这样的测试慢、非确定，失败也无法区分业务规则与基础设施。
+
+<Term def="被测行为依赖时间、网络、文件、数据库、随机数或其他难以控制协作者，导致输入不可预测、运行昂贵或失败责任混合的问题。">
+  依赖挑战
+</Term>
+
+先画出依赖：到期判断需要“现在”的查询结果，发送通知是一个命令交互。测试必须控制前者，并观察后者。只有明确控制点和观察点，才能选择合适替身。
+
+## 测试替身是角色，不是一个万能 mock
+
+<Term def="在测试中代替真实协作者、提供可控输入或可观察交互的对象；具体角色包括 fake、stub、spy 与 mock。">
+  测试替身
+</Term>
+
+fake 是简化但可运行的实现，stub 返回预定查询值，spy 记录调用供事后检查，mock 预先声明交互期望并在调用时验证。一个对象可能兼有角色，但测试应说明它在当前场景承担哪项责任。
+
+<CtrDoubleTaxonomyMap />
+
+把所有替身都叫 mock 会模糊测试意图：固定时钟只控制输入，不需要验证 `now()` 调用恰好一次；通知 spy 则需要记录收件人与消息，因为发送命令本身就是行为结果。
+
+## 先写窄端口，再选择实现
+
+<Term def="由被测领域需要定义、只暴露一个协作目的的抽象边界，例如读取时间或发送通知。">
+  测试抽象
+</Term>
+
+接口应由调用者需求驱动，不照搬大型第三方 API。时钟只需要 `now()`；通知端口只需要领域可理解的 `send`。窄接口减少替身工作，也让生产适配器隔离 SMTP、SDK 或系统调用细节。
+
+```cpp
+class Clock {
+public:
+    virtual ~Clock() = default;
+    virtual std::chrono::system_clock::time_point now() const = 0;
+};
+
+class Notifier {
+public:
+    virtual ~Notifier() = default;
+    virtual void send(std::string_view recipient,
+                      std::string_view message) = 0;
+};
+```
+
+并非所有 C++ 替身都必须通过继承。函数对象、模板参数或值类型也能注入；本例使用虚接口，是因为运行时组合和协作者角色清楚。选择机制要服从生命周期、性能和现有代码风格。
+
+## 构造依赖注入让对象始终有效
+
+<Term def="由对象外部创建协作者并通过构造函数传入，使依赖显式、可替换且在对象整个生命周期内有效。">
+  依赖注入
+</Term>
+
+```cpp
+class ExpiryReminder {
+public:
+    ExpiryReminder(const Clock& clock, Notifier& notifier)
+        : clock_{clock}, notifier_{notifier} {}
+
+    void remind(const Order& order) {
+        if (order.expiresAt() <= clock_.now()) {
+            notifier_.send(order.ownerEmail(), "Order expired");
+        }
+    }
+
+private:
+    const Clock& clock_;
+    Notifier& notifier_;
+};
+```
+
+构造注入使 `ExpiryReminder` 不可能忘记必要依赖，测试和生产都必须显式提供。这里保存引用，因此组合者必须保证 Clock 与 Notifier 活得更久；若所有权属于服务，可改用智能指针并写清 owner。
+
+<CtrDependencyInjectionFlow />
+
+服务定位器和全局 setter 也能替换依赖，却把要求隐藏在运行时状态中，测试容易相互污染。构造注入通常是默认选择；可选或每次调用不同的依赖才考虑方法参数等形式。
+
+<Callout type="trap" title="陷阱：用全局单例提供可替换时钟">
+  全局 setter 让测试能改时间，却引入跨测试共享状态、恢复顺序和并发问题。把 Clock 作为显式构造依赖，每个测试拥有自己的实例，生产组合根再选择 SystemClock。
+</Callout>
+
+## 手写替身先暴露真正需要的能力
+
+<Term def="不用模拟框架、只实现当前测试所需控制或记录能力的简单 fake、stub 或 spy。">
+  手写替身
+</Term>
+
+```cpp
+class FixedClock final : public Clock {
+public:
+    explicit FixedClock(TimePoint value) : value_{value} {}
+    TimePoint now() const override { return value_; }
+private:
+    TimePoint value_;
+};
+
+class RecordingNotifier final : public Notifier {
+public:
+    void send(std::string_view recipient,
+              std::string_view message) override {
+        calls.emplace_back(recipient, message);
+    }
+    std::vector<std::pair<std::string, std::string>> calls;
+};
+```
+
+测试由 FixedClock 控制时间，由 RecordingNotifier 事后检查调用。手写替身代码量很少，名字直接表达角色，也不会默认鼓励精确调用顺序。若重复模式和复杂参数匹配显著增加，再引入 mock 工具。
+
+```cpp
+TEST(ExpiryReminderTest, SendsNoticeForExpiredOrder) {
+    FixedClock clock{at("2026-07-13T10:00:00Z")};
+    RecordingNotifier notifier;
+    ExpiryReminder reminder{clock, notifier};
+
+    reminder.remind(orderExpiringAt("2026-07-13T09:59:00Z"));
+
+    ASSERT_EQ(1u, notifier.calls.size());
+    EXPECT_EQ("owner@example.test", notifier.calls[0].first);
+    EXPECT_EQ("Order expired", notifier.calls[0].second);
+}
+```
+
+注意测试不验证 `clock.now()` 调用次数，因为缓存时间或重排查询不影响行为。只断言领域可观察结果，保留重构自由。
+
+## 模拟工具减少机械代码，也会放大过度指定
+
+<Term def="用声明式期望、参数匹配和动作生成测试替身的框架，例如 GoogleMock。">
+  模拟工具
+</Term>
+
+```cpp
+class MockNotifier final : public Notifier {
+public:
+    MOCK_METHOD(void, send,
+                (std::string_view recipient, std::string_view message),
+                (override));
+};
+
+TEST(ExpiryReminderTest, SendsNoticeForExpiredOrderWithMock) {
+    FixedClock clock{at("2026-07-13T10:00:00Z")};
+    MockNotifier notifier;
+    EXPECT_CALL(notifier,
+                send("owner@example.test", "Order expired"));
+
+    ExpiryReminder{clock, notifier}.remind(expiredOrder());
+}
+```
+
+GoogleMock 让参数匹配、调用次数、顺序和返回行为更紧凑。但默认只声明业务必需交互。若测试指定每个内部调用顺序，生产代码改为批处理、缓存或拆分 helper 时会产生无行为回归的失败。
+
+<Callout type="trap" title="陷阱：所有调用都写 EXPECT_CALL">
+  查询协作者常只需返回可控值，命令协作者才常需要观察交互。只验证契约要求的调用、参数和必要次数；不属于业务结果的内部通信不要写死。
+</Callout>
+
+## 替身会推动设计变化
+
+<Term def="测试压力促使代码显式化依赖、缩小接口、分离策略与基础设施，并让对象生命周期和责任更清楚的结构调整。">
+  设计变化
+</Term>
+
+为了替换时钟而提取 Clock 并不是“污染生产代码”；时间原本就是隐藏输入。显式化后，领域判断可以复现，生产适配器也更集中。真正的测试污染是为了满足工具限制制造无领域意义的接口、让所有方法 virtual，或暴露 private 字段。
+
+设计变化应改善生产理解：`ExpiryReminder` 负责到期策略，SystemClock 负责系统时间，SmtpNotifier 负责协议。若抽象只在测试名字中有意义、生产调用者看不懂，应重新审查边界。
+
+## fake 需要契约测试防止与真实实现漂移
+
+内存仓库 fake 常比几十个 stub 更自然，但它可能与数据库的唯一约束、排序、事务或大小写语义不同。为 fake 与真实适配器运行同一组契约测试，证明关键行为一致；只有真实系统特有的性能和故障仍留在集成层。
+
+```cpp
+template <typename RepositoryFactory>
+void repositoryContract(RepositoryFactory makeRepository) {
+    auto repository = makeRepository();
+    repository.save(Order{"42"});
+    EXPECT_TRUE(repository.find("42").has_value());
+    EXPECT_THROW(repository.save(Order{"42"}), DuplicateOrder);
+}
+```
+
+契约测试不是复制实现，而是定义两个适配器都必须满足的调用者行为。若 fake 只为测试“配合”，生产实现不同，快速测试会制造假绿。
+
+## 依赖策略从真实对象开始
+
+<Term def="按依赖成本、确定性、控制需求和观察需求选择真实对象、fake、stub、spy 或 mock，并限制交互耦合的决策方法。">
+  替身策略
+</Term>
+
+默认使用真实、快速、确定的值对象；外部依赖不可控时才引入替身。只需控制查询返回时用 stub，交互结果需事后检查时用 spy，复杂期望表达明显节省代码时用 mock，多步骤状态协作可用 fake。选择最简单满足证据的角色。
+
+<CtrDoubleChoiceLab />
+
+当测试需要五六个 mock 才能创建一个对象，通常说明被测类责任过多或接口边界错误。不要继续堆 setup；画协作图，识别可以独立的策略、编排和基础设施。
+
+## 失败与异常也必须由替身驱动
+
+只测试成功返回会漏掉超时、拒绝和部分失败。stub 可以抛出领域错误或返回 `expected`，测试验证服务的恢复与传播。不要让 mock 抛出生产永远不会产生的异常类型；替身必须遵守真实端口契约。
+
+时间测试还应覆盖恰好到期前、等于到期、到期后一刻，且使用固定时区/时间点表示。替身把输入可控后，边界选择仍需领域判断。
+
+<Stepper>
+  <Step title="第一步：识别控制点与观察点">
+    画出依赖查询和命令；只需控制返回用 stub，需记录命令用 spy，多步骤状态可用 fake，复杂交互才考虑 mock。
+
+    <CtrDoubleTaxonomyMap />
+  </Step>
+  <Step title="第二步：以窄端口进行构造注入">
+    让领域对象依赖 Clock、Notifier 等调用者定义的抽象，测试组合根注入替身，生产组合根注入真实适配器并明确生命周期。
+
+    <CtrDependencyInjectionFlow />
+  </Step>
+  <Step title="第三步：选择最小替身并审查风险">
+    从真实对象开始，按成本与可控性选择角色；只验证业务必要交互，为 fake 补契约测试，避免过度指定内部步骤。
+
+    <CtrDoubleChoiceLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 测试替身解决昂贵、非确定或需要观察的依赖挑战，不能从“想用 mock”倒推接口
+- fake、stub、spy 和 mock 控制与观察责任不同，应按当前测试角色准确选择
+- 手写替身能先暴露真正所需能力，模拟工具适合减少复杂匹配的机械代码
+- 构造依赖注入显式化需求和生命周期，生产与测试只在组合根选择实现
+- 可测试性带来的窄接口与策略/基础设施分离应同时改善生产设计
+- fake 需契约测试防漂移，mock 只指定业务必要交互，真实快速值对象无需替身
+
+<Exercises>
+  1. **问题 1：选择替身。** 价格计算依赖固定汇率查询，但不关心查询次数；支付完成后必须发送一次收据。分别选择什么角色？
+
+  <Answer question="查询输入和命令交互应怎样选替身？">汇率依赖用返回固定值的 stub 或小 fake，只控制输入，不指定调用次数；收据发送是业务可观察命令，用 recording spy 事后检查或用 mock 声明一次必要调用。Money 等纯值计算继续使用真实对象。</Answer>
+
+  2. **问题 2：评审依赖注入。** 某类通过全局 `Clock::setForTest` 修改时间，测试偶尔互相影响。怎样改造？
+
+  <Answer question="怎样把隐藏时间变成显式依赖？">定义只有 `now()` 的窄 Clock 端口，由类构造函数接收引用或受控所有权；每个测试创建自己的 FixedClock，生产组合根传 SystemClock。删除全局 setter，明确被注入对象生命周期，使并发和测试顺序不再共享状态。</Answer>
+
+  3. **问题 3：控制 mock 耦合。** 一个测试精确要求仓库先 `find` 两次、再 `save` 一次；实现加入缓存后行为正确却失败。怎样修正？
+
+  <Answer question="哪些交互期望属于业务契约？">若业务只要求最终保存正确状态，就用 fake 仓库检查结果，或只验证必要 `save` 命令；不要约束无关查询次数与顺序。只有协议明确要求顺序或次数时才保留期望。缓存改变内部通信，不应构成行为回归。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="依赖挑战">外部或非确定协作者使输入难控、运行昂贵、失败责任混合的问题。</GlossaryItem>
+  <GlossaryItem term="测试替身">在测试中代替真实协作者、控制输入或观察交互的对象。</GlossaryItem>
+  <GlossaryItem term="测试抽象">由领域调用者定义、只暴露一个协作目的的窄边界。</GlossaryItem>
+  <GlossaryItem term="依赖注入">由外部创建协作者并显式传给对象的组合方式。</GlossaryItem>
+  <GlossaryItem term="手写替身">不用模拟框架、只实现当前控制或记录需要的简单替身。</GlossaryItem>
+  <GlossaryItem term="模拟工具">用声明式期望、匹配和动作生成替身的框架。</GlossaryItem>
+  <GlossaryItem term="设计变化">测试压力促使依赖显式、接口收窄和责任分离的结构调整。</GlossaryItem>
+  <GlossaryItem term="替身策略">按成本、确定性、控制和观察需要选择最小替身角色的方法。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Modern C++ Programming with Test-Driven Development, Chapter 5 Test Doubles"
+  adaptedUrl="https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/"
+/>

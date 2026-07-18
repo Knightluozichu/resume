@@ -1,0 +1,151 @@
+---
+title: "Chapter 2. Why function purity matters"
+type: C
+section: "Functional C# 1e · Core concepts"
+order: 2
+description: "覆盖purity/side effects、concurrency、testability与computing evolution，把pure core、effect shell、property tests和parallel safety落到可复现边界。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-2"
+draft: false
+---
+
+import { CfpPurityBoundaryLab, CfpPurityConcurrencyLab, CfpPurityTestabilityLab } from "@/components/mdx/csharp-functional-programming/diagrams/why-function-purity-matters";
+
+<Objectives>
+
+- 能解释pure function的explicit input、determinism与no observable side effect要求，区分读取依赖和写入effect
+- 能分析shared mutation与parallel schedule的race surface，设计pure parallel work加single-owner commit
+- 能设计example、property、substitution与effect-boundary tests，复现purity对testability和optimization的收益
+
+</Objectives>
+
+## 为什么Purity是可替换性而不是道德标签
+
+Pure function的价值不是“看起来干净”，而是caller可只凭inputs推理output：相同input给相同result，evaluation不修改外部可观察state。于是call可以被result替换、重复/缓存/并行更容易保持语义。Impure operation不是坏代码；I/O是系统目的之一，但需要隔离和拥有者。
+
+先预测：读取immutable global config是否pure；写logger是否可忽略；抛deterministic argument exception是否算side effect；thread-safe method是否等于pure；pure function是否一定快。答案都需要按observable contract与environment边界具体分析。
+
+<Term def="Result只取决于显式inputs，evaluation不改变外部可观察state，因此call可被result替换。">referential transparency</Term>
+
+## What is function purity?
+
+Purity有两面：deterministic mapping与absence of side effects。Clock、random、environment variable、database read是hidden inputs；file/database write、mutation、logging是effects。Exception也影响totality：若对domain内input可能throw，signature未表达所有outcomes；但固定invalid argument总抛同一failure仍比依赖性fault更易推理。
+
+实用做法是functional core / imperative shell。Shell读取clock、store、HTTP，把facts作为values传给core；core返回decision/commands；shell解释commands并拥有retry、transaction与logging。Effect没有消失，只是从business calculation里移到visible boundary。
+
+```csharp
+public static Discount DecideDiscount(Customer customer, DateTimeOffset now) =>
+    customer.IsVip && customer.MembershipExpiresAt >= now
+        ? new Discount(0.20m)
+        : Discount.None;
+```
+
+<Term def="纯计算返回value/decision，外层adapter负责clock、database、network和logging等external effects的架构边界。">pure core effect shell</Term>
+
+<Stepper>
+  <Step title="切换pure、clock、write与random"><CfpPurityBoundaryLab /></Step>
+  <Step title="建立dependency/effect inventory">对每个read/write标explicit argument、hidden input、returned value、mutation target和failure channel。</Step>
+  <Step title="把hidden dependency参数化后复测">传入fixed time/RNG value/fake store，比较repeat、serialization与boundary effect log。</Step>
+</Stepper>
+
+<Callout type="trap" title="Logger只是辅助，不影响Purity">
+Logging会执行I/O、可能失败、改变timing并产生observable records。Pure core可返回diagnostic data/commands，由shell决定何时记录；不要让“非业务effect”变成hidden dependency。
+</Callout>
+
+## Purity and concurrency
+
+Concurrency困难来自多个executions共享mutable state。`counter++`是read-modify-write，interleaving会丢update；加lock可保证正确但引入contention和ordering。若每个item transformation只读immutable input并返回result，scheduler改变顺序不会改变per-item mapping，parallelization更安全。
+
+最终系统仍要aggregate/persist。策略是parallel pure compute，single owner/reducer commit；或者每个worker返回immutable partial result，最后用associative combine。是否可parallel还依赖operation laws、ordering与resource limits，不是看到pure就无限开threads。
+
+```csharp
+var partials = orders
+    .AsParallel()
+    .Select(order => CalculateInvoice(order))
+    .ToArray();
+
+var batch = partials.Aggregate(InvoiceBatch.Empty, InvoiceBatch.Combine);
+```
+
+<Term def="多个executions可读写同一location时，结果会受interleaving、synchronization和ordering影响的状态面。">shared-mutation schedule</Term>
+
+<Stepper>
+  <Step title="切换shared counter、pure map、ordered effect与cache"><CfpPurityConcurrencyLab /></Step>
+  <Step title="写出commutativity与ownership">哪些operations可任意排序，哪些必须串行，哪个owner负责final commit与failure recovery。</Step>
+  <Step title="用schedule与load test验收">重复随机interleaving、不同degree和failure injection，比较result set、order contract、duplicate effect与throughput。</Step>
+</Stepper>
+
+<Callout type="trap" title="Pure Function可以无条件Memoize或Parallelize">
+Input equality/hash、memory bound、exception/cancellation、result size和ordering仍决定安全性。Memoization还引入mutable cache与eviction policy；它是保持pure semantics的effectful optimization，不是免费属性。
+</Callout>
+
+## Purity and testability
+
+Pure function测试只需构造value并assert result，无数据库fixture、clock patch或mock order。更重要的是可以做property tests：sort保持multiset且有序，normalize idempotent，combine满足associativity。Test描述laws，覆盖比几个examples更宽。
+
+Impure shell也要test，但测试目标不同：given pure decision，是否发送正确command、transaction是否收敛、fault/cancel是否cleanup。Fake dependency在boundary记录commands，而不是mock每个private call。这样core tests快而稳定，integration tests集中于真正effects。
+
+```csharp
+[Property]
+public void Normalize_is_idempotent(CustomerName input)
+{
+    Assert.Equal(Normalize(input), Normalize(Normalize(input)));
+}
+```
+
+<Term def="对一类generated inputs声明始终成立的algebraic/domain law，而不是只检查少数example。">property-based law</Term>
+
+<Stepper>
+  <Step title="切换example、property、effect shell与refactor"><CfpPurityTestabilityLab /></Step>
+  <Step title="为每层选择assertion">Pure core断result/law；shell断commands、cleanup和cause；end-to-end只保留关键integration path。</Step>
+  <Step title="做mutation test与substitution test">故意改变operator/branch看property能否捕获；替换equivalent implementation看consumer是否不变。</Step>
+</Stepper>
+
+## Purity and the evolution of computing
+
+更多cores、distributed services和retry-heavy systems放大shared state成本。Pure/value-oriented code更容易vectorize、parallelize、cache、replay和move across process，因为它把dependency和result变成data。Cloud/distributed并不自动要求FP，但deterministic decision与explicit command对idempotency、event replay和failure recovery尤其重要。
+
+Modern hardware optimization仍需measure；immutability可能增加allocation，persistent data structure有不同cache behavior。Purity提供semantic freedom，runtime是否利用这份自由取决于representation、compiler/JIT和workload。
+
+### Semantic freedom is not a cost model
+
+同一个pure mapping可用eager array、lazy iterator、SIMD或parallel worker实现，observable contract相同但allocation、latency和ordering成本不同。先用purity获得可替换性，再以真实数据选择representation；不要把“更容易优化”误写成“当前实现已经最优”。
+
+<Term def="在不改变observable result的前提下安全执行cache、parallel、reorder或replay所需的semantic余地。">optimization freedom</Term>
+
+## 本章回顾：把可变世界包在可替换计算外面
+
+1. Purity要求explicit inputs、deterministic result和no observable side effects。
+2. Clock/read/write/logging分别是hidden dependency或effect，应由shell拥有。
+3. Pure per-item compute缩小parallel schedule surface；aggregate/commit仍需order与owner。
+4. Pure core适合example、property与substitution tests，effect shell适合protocol/fault tests。
+5. Referential transparency提供optimization freedom，不自动保证performance。
+
+<Exercises>
+
+**问题 1：读取只读configuration singleton为什么仍可能不pure？**
+
+<Answer>若configuration可在process lifetime变化或不同environment值未出现在argument中，它是hidden input。将需要的typed settings在composition root读取并作为value传入；测试两个config values和repeatability。真正compile-time constant可视为function定义的一部分，但要说明version boundary。</Answer>
+
+**问题 2：如何parallelize订单计算且保持一次性写库？**
+
+<Answer>每个Order以pure function生成Invoice/command value，可parallel map；收集后由single transaction owner按明确order/idempotency policy写入。测试不同degree结果等价、worker fault不partial commit、retry不duplicate、cancel释放resources。</Answer>
+
+**问题 3：一个purity refactor最有价值的property test是什么？**
+
+<Answer>选择domain law而非复制implementation，例如normalization idempotent、combine associative、discount非负且不超total。生成boundary inputs，先确认原实现通过，再让refactor与law同时通过；shell effect另做command/fault assertions。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="referential transparency" definition="Function call可被result替换且不改变observable behavior。" />
+  <GlossaryItem term="pure core effect shell" definition="Pure decision与external effect owner分层的架构边界。" />
+  <GlossaryItem term="shared-mutation schedule" definition="共享可写location让结果依赖interleaving的状态面。" />
+  <GlossaryItem term="property-based law" definition="对generated input集合持续成立的domain/algebraic性质。" />
+  <GlossaryItem term="optimization freedom" definition="保持语义下可cache、parallel、reorder或replay的空间。" />
+</Glossary>
+
+<Attribution adaptedFrom="Functional Programming in C#, First Edition, Chapter 2: Why function purity matters" adaptedUrl="https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-2" />

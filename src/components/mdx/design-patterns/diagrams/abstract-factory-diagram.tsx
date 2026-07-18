@@ -696,8 +696,8 @@ export function AbstractFactoryDiagram() {
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        抽象工厂在工厂方法基础上升级：每个具体工厂生产一「族」相关产品（A + B），
-        切换工厂即可整族替换，保证产品间的兼容性。
+        抽象工厂在工厂方法基础上升级：每个具体工厂生产一「族」相关产品（A +
+        B）， 切换工厂即可整族替换，保证产品间的兼容性。
       </figcaption>
     </figure>
   );

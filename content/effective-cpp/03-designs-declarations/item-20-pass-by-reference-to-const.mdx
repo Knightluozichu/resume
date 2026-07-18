@@ -1,0 +1,383 @@
+---
+title: "Item 20：优先以 const 引用传递，而非按值传递"
+type: A
+section: Chapter 4 · Designs and Declarations
+order: 20
+description: 对齐 Effective C++ 第三版 Item 20：比较 pass-by-reference-to-const 与 pass-by-value 的构造析构成本，解释对象切割，并建立内置类型、迭代器、sink 参数和 view 的选择边界。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppCopyCostAnatomyMap,
+  EcppParameterDecisionMap,
+  EcppSlicingDispatchMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-20-pass-by-reference-to-const";
+
+<Objectives>
+
+- 能解释 pass-by-value 隐含的 constructor/destructor 链及其成本
+- 能复现 slicing problem，并说明 const reference 如何保留对象动态类型
+- 能判断 built-in types、迭代器、sink 参数和 view 何时应按值或按引用传递
+
+</Objectives>
+
+## 从一个只读函数的隐藏复制开始
+
+函数只读取参数，却按值接收一个对象：
+
+```cpp
+bool validate(Window window) {
+    return window.width() > 0 && window.height() > 0;
+}
+```
+
+调用 `validate(mainWindow)` 时会构造新的 Window 参数，函数退出还要析构它。若 Window 有 string、vector、mutex wrapper 或 base subobjects，复制成本会沿对象图扩散。
+
+<Term def="调用函数时构造独立参数对象，把实参状态复制或移动到该对象。">
+  pass-by-value
+</Term>
+
+Item 20 建议 Prefer pass-by-reference-to-const to pass-by-value（优先以 const 引用传递，而非按值传递）。
+
+<Term def="参数直接绑定调用者对象，不创建副本，并禁止 callee 通过该引用修改对象。">
+  pass-by-reference-to-const
+</Term>
+
+```cpp
+bool validate(const Window& window) {
+    return window.width() > 0 && window.height() > 0;
+}
+```
+
+这次只传递引用绑定，原对象不复制，且接口明确表达 read-only borrow。
+
+<EcppCopyCostAnatomyMap />
+
+## 复制成本是整条对象构造链
+
+不能只用 `sizeof(T)` 推断按值成本。copy constructor 可能分配内存、递增共享计数、复制树结构、获取锁或执行审计。
+
+<Term def="为创建一个参数副本而触发 base、member 与资源状态复制的完整操作序列。">
+  parameter copy chain
+</Term>
+
+```cpp
+class Customer {
+    std::string name_;
+    std::vector<Order> orders_;
+};
+
+class VipCustomer : public Customer {
+    std::vector<Benefit> benefits_;
+};
+```
+
+按值复制 VipCustomer 可能复制多个动态数组；若函数参数类型是 Customer，还会额外发生对象切割。函数返回时参数副本的 members 按逆序析构。
+
+<Term def="一次按值调用中参数对象构造、成员复制、资源操作和最终析构的总成本。">
+  full copy cost
+</Term>
+
+const reference 通常只需传递地址，但“通常”不是无条件性能保证：引用访问可能有 aliasing 和间接寻址成本，极小 trivially copyable 类型按值更好。
+
+## const 同时表达借用与只读
+
+`const T&` 不只是一种优化，它说明函数不取得 ownership，也不通过该接口修改对象。
+
+<Term def="函数只在调用期间观察对象，不延长其生命周期、不取得释放责任的参数语义。">
+  read-only borrow
+</Term>
+
+借用契约让调用者知道对象在调用后仍归自己，也让实现者不能意外调用 non-const member。
+
+<Term def="编译器基于 const 限定阻止通过某条访问路径修改对象可观察状态。">
+  const access path
+</Term>
+
+logical constness 仍允许内部 cache 等 mutable implementation state，但不能改变用户观察到的值语义。
+
+<Callout type="trap">
+  **现象**：把指针参数改为 `const T&` 后，函数把 `&value`
+  存入异步任务。**原因**：const 只限制修改，不延长
+  lifetime。**修法**：只在调用期间借用；需要跨调用保存时显式复制值或转移
+  shared/unique ownership。
+</Callout>
+
+## 按值传递会切掉派生部分
+
+slicing problem（对象切割）是比性能更严重的语义问题。派生对象传给 base 按值参数时，只复制 base subobject，参数本身成为一个独立 base object。
+
+<Term def="派生对象按 base 类型复制时，派生字段和动态类型信息从参数对象中丢失。">
+  object slicing
+</Term>
+
+```cpp
+class Window {
+public:
+    virtual ~Window() = default;
+    virtual void display() const;
+};
+
+class WindowWithScrollBars : public Window {
+public:
+    void display() const override;
+};
+
+void printByValue(Window window) { window.display(); }
+void printByRef(const Window& window) { window.display(); }
+```
+
+`printByValue(derived)` 内调用 base `Window::display`，因为参数动态类型已是 Window；`printByRef(derived)` 绑定完整派生对象，virtual dispatch 调用 override。
+
+<Term def="运行期根据引用或指针所指对象的动态类型选择 virtual override。">
+  dynamic dispatch preservation
+</Term>
+
+<EcppSlicingDispatchMap />
+
+## 引用不复制所以保留身份
+
+某些对象的关键不是尺寸，而是 identity：GUI window、entity、connection、mutex、session。复制本身就可能没有语义。
+
+<Term def="多个操作必须作用于同一对象实例，而不是状态相等的副本。">
+  identity-preserving parameter
+</Term>
+
+对这些对象，const reference 表示观察同一身份；non-const reference 表示修改同一身份；owner 参数表示接管身份。按值不应成为默认。
+
+<Term def="参数类型清楚区分只读借用、可写借用、复制值和取得 ownership。">
+  parameter intent
+</Term>
+
+好的签名让调用点无需看实现就能判断生命周期责任。
+
+## 内置类型通常按值传递
+
+原书明确给出 built-in types（内置类型）例外。`int`、`double`、pointer 等通常按值传递更自然，复制成本很小，还可能避免引用间接访问。
+
+<Term def="语言直接提供、通常可在寄存器中高效复制的算术、指针等类型。">
+  built-in type
+</Term>
+
+```cpp
+double scale(double value, double factor);
+bool contains(const Node* root, int key);
+```
+
+`const int&` 不会比 int 更清晰，且可能让 optimizer 处理 aliasing。注意“用户定义类型很小”不自动等于内置类型：copy constructor 可能有隐藏工作，ABI 传递规则也不同。
+
+<Term def="没有自定义复制、析构和复杂资源语义，可按位移动且大小很小的值类型。">
+  cheap scalar-like type
+</Term>
+
+对 scalar-like wrapper 应结合 profiling 与 ABI，而不是只看源码字段数。
+
+## 迭代器和函数对象遵循值语义约定
+
+STL iterators 与 function objects 通常被设计为小型、可复制的 value types，算法按值接收它们。
+
+<Term def="在泛型库中预期可以低成本复制并独立使用的 iterator 或 callable 值。">
+  lightweight protocol object
+</Term>
+
+```cpp
+template<class Iterator, class Predicate>
+Iterator findFirst(Iterator first, Iterator last, Predicate predicate);
+```
+
+按值让算法拥有自己的迭代位置和 predicate 状态，符合标准库生态。若某个 predicate 很大，可由调用者传 `std::ref`，而不是改变所有算法签名。
+
+<Term def="接口选择与所属泛型生态中既有复制和调用习惯保持一致。">
+  protocol convention
+</Term>
+
+## sink 参数不是只读借用
+
+若函数要保存参数副本，`const T&` 可能只是把复制推迟到函数内部。现代 C++ 常用“按值接收再 move”统一 lvalue 与 rvalue：
+
+```cpp
+class Person {
+public:
+    explicit Person(std::string name) : name_(std::move(name)) {}
+private:
+    std::string name_;
+};
+```
+
+<Term def="函数将参数内容保存、消费或取得 ownership，而非只在调用期间观察。">
+  sink parameter
+</Term>
+
+lvalue 调用产生一次 copy 再 move，rvalue 调用可 move；如果 lvalue 极多且复制昂贵，分别提供 const reference 与 rvalue overload 可能更优。这里的语义已不同于 Item 20 的只读参数场景。
+
+<Term def="先按值取得独立参数，再移动到成员或容器中的消费模式。">
+  value-then-move idiom
+</Term>
+
+选择要基于调用分布、异常保证和 API 复杂度测量。
+
+## view 类型表达一段借用数据
+
+`string_view`、`span` 可以按值传递自身，同时借用外部数据。它们对象很小，按值复制 view 不复制底层序列。
+
+<Term def="按值传递的轻量描述符，内部引用一段不拥有的数据和范围。">
+  borrowed view
+</Term>
+
+```cpp
+std::size_t countLines(std::string_view text);
+void normalize(std::span<float> samples);
+```
+
+view 的 const 需要精确理解：`span<const T>` 表示元素只读，`const span<T>` 只表示 view 描述符本身不可改，元素仍可能可写。
+
+<Term def="借用对象不得比其引用的数据活得更久的约束。">
+  view lifetime constraint
+</Term>
+
+不要把临时 string 产生的 view 保存到异步对象中。
+
+## reference 的 aliasing 也有代价
+
+两个 reference 参数可能指向同一对象，optimizer 和实现都要考虑 aliasing。需要独立快照时，按值反而是正确语义。
+
+<Term def="多个 pointer/reference 访问路径可能指向同一存储位置的关系。">
+  aliasing possibility
+</Term>
+
+```cpp
+void update(Config& target, const Config& source);
+
+// 必须明确 update(config, config) 是否合法
+```
+
+若算法要求 source 在更新期间稳定，可先复制 snapshot，或在 contract 禁止 alias 并建立 assertion/test。
+
+<Term def="调用前明确说明参数之间是否允许指向同一对象及其结果语义。">
+  aliasing contract
+</Term>
+
+<Callout type="trap">
+  **现象**：机械把所有参数改成 const
+  reference。**原因**：内置类型、iterator、view 和 sink
+  具有不同语义与成本；引用还引入 lifetime/aliasing。**修法**：先判定
+  observe、mutate、consume 或 scalar，再选择参数形式并测量热点。
+</Callout>
+
+<EcppParameterDecisionMap />
+
+## 建立参数决策与验证矩阵
+
+先预测每个候选签名的 copy count、dispatch target 和 lifetime，再用证据验收：
+
+- instrumented type 记录 copy/move/destructor 次数，对比 value 与 const reference。
+- 多态派生类覆写 virtual function，验证 by-value 发生 slicing、by-ref 保留 dispatch。
+- benchmark 内置类型、小型 wrapper、大对象和 shared-count object 的真实 ABI 表现。
+- compile tests 验证 read-only borrow 不能调用 non-const operation。
+- lifetime sanitizer 检查保存 reference/view 导致的悬空。
+- alias tests 覆盖两个参数引用同一对象的行为。
+- sink 场景分别测 lvalue/rvalue 比例与 value-then-move 成本。
+
+<Term def="按语义、复制成本、多态、lifetime 和 ABI 记录参数形式及验证证据的清单。">
+  parameter passing matrix
+</Term>
+
+原则是默认 const reference 观察非平凡对象，同时保留有证据的例外。
+
+## 小结
+
+- pass-by-value 会构造和析构独立参数，成本包含整个 base/member/resource 链
+- const reference 表达 read-only borrow，通常避免复制，但不会延长 lifetime
+- base 按值参数造成 slicing problem；base const reference 保留 derived 动态类型和 virtual dispatch
+- built-in types、iterators、function objects 和 borrowed views 通常按值更合适
+- sink 参数可能使用 value-then-move，不能与只读观察场景混为一谈
+- 参数决策先表达 observe/mutate/consume，再结合成本、aliasing 与 ABI 测量
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 20"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="pass-by-value">构造独立参数对象的传递方式。</GlossaryItem>
+  <GlossaryItem term="pass-by-reference-to-const">
+    只读绑定调用者对象且不复制的传递方式。
+  </GlossaryItem>
+  <GlossaryItem term="parameter copy chain">
+    参数复制触发的 base、member 与资源操作链。
+  </GlossaryItem>
+  <GlossaryItem term="full copy cost">参数构造到析构的全部成本。</GlossaryItem>
+  <GlossaryItem term="read-only borrow">
+    仅在调用期间观察且不取得 ownership。
+  </GlossaryItem>
+  <GlossaryItem term="const access path">
+    不能通过该访问路径修改对象的限定。
+  </GlossaryItem>
+  <GlossaryItem term="object slicing">
+    derived 按 base 值复制时丢失派生部分。
+  </GlossaryItem>
+  <GlossaryItem term="dynamic dispatch preservation">
+    引用或指针保持运行期 virtual 分派。
+  </GlossaryItem>
+  <GlossaryItem term="identity-preserving parameter">
+    让操作作用于同一对象实例的参数。
+  </GlossaryItem>
+  <GlossaryItem term="parameter intent">
+    签名表达借用、修改、复制或取得 ownership。
+  </GlossaryItem>
+  <GlossaryItem term="built-in type">
+    语言内建且通常可低成本复制的类型。
+  </GlossaryItem>
+  <GlossaryItem term="cheap scalar-like type">
+    小型、平凡、无复杂资源语义的值类型。
+  </GlossaryItem>
+  <GlossaryItem term="lightweight protocol object">
+    泛型协议中预期低成本复制的 iterator/callable。
+  </GlossaryItem>
+  <GlossaryItem term="protocol convention">
+    参数选择符合所属库生态的惯例。
+  </GlossaryItem>
+  <GlossaryItem term="sink parameter">
+    保存、消费或取得参数 ownership 的接口。
+  </GlossaryItem>
+  <GlossaryItem term="value-then-move idiom">
+    按值取得参数后移动到目标位置。
+  </GlossaryItem>
+  <GlossaryItem term="borrowed view">
+    按值复制描述符但借用底层数据的类型。
+  </GlossaryItem>
+  <GlossaryItem term="view lifetime constraint">
+    view 不得活得比底层数据更久。
+  </GlossaryItem>
+  <GlossaryItem term="aliasing possibility">
+    多个访问路径可能指向同一存储。
+  </GlossaryItem>
+  <GlossaryItem term="aliasing contract">
+    规定参数是否可引用同一对象及其结果。
+  </GlossaryItem>
+  <GlossaryItem term="parameter passing matrix">
+    参数语义、成本与测试证据的决策清单。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：分析多态打印接口。** `print(Window window)` 接收 `WindowWithScrollBars`，请说明成本、结果并修复。
+
+<Answer question="按值接收多态 base 会发生什么？">
+  调用先复制 Window base subobject，派生滚动条状态被切掉，参数动态类型成为
+  Window，因此 virtual display 调用 base 实现；退出还析构副本。改为 `print(const
+  Window& window)`，只读借用完整对象，不复制并保留 derived dispatch。用 copy
+  trace 与 override counter 同时验证成本和行为。
+</Answer>
+
+2. **问题 2：为四类参数选签名。** 分别处理 int、large Config 只读、string 保存到成员、span 数据只读。
+
+  <Answer question="四类参数分别怎样传递？">int 按值；large Config 只读用 `const Config&`；string 若函数总要保存，可按值接收再 move，并测量 lvalue 比例，或提供 const reference/rvalue overload；连续只读数据用按值 `span<const T>`。每种选择先表达语义，再验证复制次数、ABI 与 lifetime。</Answer>
+
+3. **问题 3：排查异步悬空。** 函数接收 const reference 或 string_view 后把它捕获进后台任务，偶发崩溃，请重构。
+
+  <Answer question="为什么 const reference 和 view 不能直接跨异步边界？">两者都只是 borrow，const 不延长对象生命周期，view 按值复制也不拥有底层字符。后台任务可能晚于调用者对象析构。若任务需要快照，边界处复制为 owning string/value；若共享同一对象，显式传 shared owner 并设计取消/释放协议。sanitizer 测试覆盖临时值、调用者提前退出和任务取消。</Answer>
+</Exercises>

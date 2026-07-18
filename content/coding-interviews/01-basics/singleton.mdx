@@ -1,0 +1,296 @@
+---
+title: "面试题2：实现Singleton模式"
+type: C
+section: "第2章 面试需要的基础知识"
+order: 2
+description: "比较无锁、互斥、双重检查、静态字段与嵌套类型五种实现，理解延迟、并发和作用域边界。"
+demo: true
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/02_Singleton/Program.cs"
+draft: false
+---
+
+import { SingletonBoundaryMap, ConcurrencyRaceDiagram, InitializationTimingLab, SingletonTradeoffLab } from "@/components/mdx/coding-interviews/diagrams/singleton";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释Singleton模式的构造入口、唯一引用和作用域三项契约
+- 能分析无锁延迟初始化为何在并发下可能生成多个实例
+- 能比较每次加锁、双重检查、静态字段和嵌套类型的正确性与时机
+- 能实现基于嵌套类型或`Lazy<T>`的线程安全延迟单例
+- 能判断连接池、可变服务和多进程场景是否真的适合Singleton
+
+</Objectives>
+
+## 从“只能生成一个实例”开始
+
+先预测：把构造函数改成`private`，是否已经保证全程序只有一个对象？没有。私有构造只阻止类外部直接`new`；类内部仍可创建任意多个实例，反射、序列化或不同运行时加载作用域也可能改变边界。完整设计还要回答唯一引用存在哪里、谁负责初始化、并发访问如何同步，以及“一次”究竟限定在哪个作用域。
+
+<Term def="限制一个类型在约定运行时作用域内只有一个受控实例，并提供全局访问点的创建型模式。">Singleton模式</Term>通常由三部分组成：私有构造函数阻止普通外部创建；静态字段保存唯一引用；公共静态属性返回该引用。作者源码用C#展示五个版本，重点不是背出类名，而是比较正确性、初始化时机和访问成本。
+
+<SingletonBoundaryMap />
+
+`sealed`还能阻止通过派生类间接创建其他实例。它不是Singleton成立的全部条件，却能让“谁能构造”更明确。若类型允许继承，派生类构造必须调用基类构造，私有构造会直接阻断；把类声明为`sealed`则进一步表达设计意图。
+
+## 版本一：无锁延迟创建
+
+第一种实现只有在`Instance`首次被读取时才创建对象，这叫<Term def="直到第一次真正需要某个对象或资源时才执行构造的初始化策略。">延迟初始化</Term>：
+
+```csharp
+public sealed class Singleton1
+{
+    private Singleton1() { }
+
+    private static Singleton1? instance;
+
+    public static Singleton1 Instance
+    {
+        get
+        {
+            if (instance is null)
+                instance = new Singleton1();
+            return instance;
+        }
+    }
+}
+```
+
+单线程里它看起来正确；并发下，“检查为空”和“创建并写入”是多个步骤。线程A和B都可能先看到`null`，然后各自执行构造。即使最后静态字段只保留其中一个引用，另一个实例也已经存在，构造副作用甚至可能已经发布到外部。
+
+<ConcurrencyRaceDiagram />
+
+这不是“概率很低所以可接受”的性能选择，而是违反题目唯一性要求。测试只在一个线程连续读取两次`Instance`，无法证明并发正确；需要让多个线程同时越过检查点，或直接依据内存模型和同步规则判断。
+
+<Callout type="trap" title="最终静态字段只有一个引用，所以仍是Singleton">
+并发期间两个构造函数都可能完成。被覆盖的实例可能已注册事件、打开文件或把`this`交给其他对象；字段最终指向谁不能抹掉第二个实例和它的副作用。
+</Callout>
+
+## 版本二：每次访问都加锁
+
+第二种实现用同一个<Term def="让同一时刻只有一个线程进入临界区，并建立必要内存可见性关系的同步机制。">锁</Term>包住检查和创建：
+
+```csharp
+public sealed class Singleton2
+{
+    private Singleton2() { }
+
+    private static readonly object Sync = new();
+    private static Singleton2? instance;
+
+    public static Singleton2 Instance
+    {
+        get
+        {
+            lock (Sync)
+            {
+                if (instance is null)
+                    instance = new Singleton2();
+                return instance;
+            }
+        }
+    }
+}
+```
+
+`lock`把“检查、创建、发布”变成一个临界区，也建立线程间可见性，语义直接且容易审查。代价是实例已经创建后，每次读取仍要进入同一把锁。很多应用中这点成本不重要，正确和清晰优先；只有证据表明访问处于热点，才值得讨论更复杂方案。
+
+锁对象必须是类型私有且只用于这条同步协议。锁住`this`、公开对象或字符串，会允许外部代码参与同一把锁，增加死锁和不可预测等待风险。`readonly`确保锁对象引用不会被替换。
+
+## 版本三：双重检查锁定
+
+作者第三种实现先在锁外检查一次，只有看到未初始化才进入锁，并在锁内再检查一次。这叫<Term def="先无锁检查实例是否存在，未初始化时进入锁并再次检查后创建的优化模式。">双重检查锁定</Term>：
+
+```csharp
+public static Singleton3 Instance
+{
+    get
+    {
+        if (instance is null)
+        {
+            lock (Sync)
+            {
+                if (instance is null)
+                    instance = new Singleton3();
+            }
+        }
+        return instance;
+    }
+}
+```
+
+第二次检查不能省略：线程A和B都可能通过第一次检查，A先持锁完成创建，B随后拿到锁；若B不再次检查，就会再构造一次。这个结构减少实例建成后的锁竞争，但正确性依赖语言和运行时的内存模型、字段发布语义及具体写法。
+
+在现代C#中，与其手写并争论发布细节，通常优先使用运行时类型初始化、`Lazy<T>`或依赖注入容器提供的单例生命周期。跨语言照搬双重检查尤其危险：Java、C++和C#的内存模型与安全惯用法并不完全相同，代码形状相似不代表保证相同。
+
+## 版本四：静态字段立即初始化
+
+第四种直接在静态字段声明处构造实例。C#运行时保证一个类型的静态初始化只执行一次，因此无需自己加锁：
+
+```csharp
+public sealed class Singleton4
+{
+    private Singleton4()
+    {
+        Console.WriteLine("Singleton4 created");
+    }
+
+    private static readonly Singleton4 instance = new();
+
+    public static Singleton4 Instance => instance;
+
+    public static void Print() =>
+        Console.WriteLine("Singleton4 Print");
+}
+```
+
+<Term def="运行时在首次使用类型的特定时机执行静态字段初始化器和静态构造函数，并保证只成功执行一次的过程。">类型初始化</Term>替代了手写锁。实现短、线程安全，适合构造成本低或程序很可能使用实例的情况。但初始化时机可能早于首次读取`Instance`：作者测试调用`Singleton4.Print()`，也会看到构造日志。也就是说，访问类型的其他静态成员可能触发实例创建。
+
+“急切”不等于程序启动瞬间一定创建，具体触发受C#类型初始化规则影响；本题最关键的可观察差异是：外层类型普通静态方法的调用，会让该类型的静态字段进入初始化范围，而不必等到`Instance`属性被读取。
+
+## 版本五：嵌套类型延迟初始化
+
+第五种把实例字段放进嵌套类型`Nested`。读取外层`Singleton5.Instance`时才触及`Nested.instance`；调用外层`Singleton5.Print()`不会初始化嵌套类型，因此既依赖运行时获得线程安全，又保留延迟创建：
+
+```csharp
+public sealed class Singleton5
+{
+    private Singleton5()
+    {
+        Console.WriteLine("Singleton5 created");
+    }
+
+    public static Singleton5 Instance => Nested.instance;
+
+    public static void Print() =>
+        Console.WriteLine("Singleton5 Print");
+
+    private static class Nested
+    {
+        internal static readonly Singleton5 instance = new();
+    }
+}
+```
+
+作者原代码给`Nested`写了显式空静态构造函数，用来控制类型初始化语义；现代写法也常用静态嵌套类承载只读实例。面试中要能解释“为什么调用外层`Print`不构造实例”，而不是只背类模板。
+
+<InitializationTimingLab />
+
+## 现代`Lazy<T>`与依赖注入
+
+标准库`Lazy<T>`直接表达“线程安全地在首次读取Value时构造”，减少手写同步代码：
+
+```csharp
+public sealed class AppClock
+{
+    private AppClock() { }
+
+    private static readonly Lazy<AppClock> lazy =
+        new(() => new AppClock(), isThreadSafe: true);
+
+    public static AppClock Instance => lazy.Value;
+}
+```
+
+还要明确异常策略：不同`LazyThreadSafetyMode`对并发和构造异常缓存行为有不同约定。若工厂抛异常，调用方是否重试、持续看到同一异常，或需要显式恢复，都应按业务需求设计，不能因为用了`Lazy<T>`就忽略失败路径。
+
+更常见的服务应用通过依赖注入容器注册“单例生命周期”，再把接口注入消费者。这样唯一实例仍由组合根管理，但业务类不需要调用隐藏的全局静态入口；测试可以替换实现，生命周期和释放也更集中。模式的核心需求与具体全局访问写法应分开。
+
+## 唯一实例不等于所有问题都解决
+
+Singleton只约束构造与访问，不自动让实例内部的可变字段线程安全。若多个线程拿到同一个对象并修改字典、计数器或连接状态，仍要设计锁、不可变快照、原子操作或消息串行化。创建一次和安全共享是两件事。
+
+它通常也只在当前进程或相应类型加载作用域内唯一。启动四个服务进程，会得到至少四个实例；容器横向扩容后每个副本也各有一个。需要集群唯一任务时，应使用数据库唯一约束、租约、分布式锁或协调系统，并考虑故障、超时和脑裂，不能把静态字段当成分布式协议。
+
+数据库连接更不适合被理解成“全程序只留一个连接”。并发请求会被单连接串行，断线影响所有调用，事务状态也容易互相污染。正确抽象通常是连接池：可以有一个池管理器，但池内维护多个受限连接，借出和归还遵守生命周期。
+
+隐藏全局状态还会影响测试。一个测试修改Singleton，另一个测试可能继承残留状态；并行测试互相干扰，替换依赖困难。若对象有外部资源，何时释放也变得不清楚。使用Singleton之前，应先问是否只是想要“方便访问”；如果是，显式传递接口通常更可维护。
+
+<SingletonTradeoffLab />
+
+<Callout type="trap" title="Singleton对象天然线程安全">
+类型初始化只保证实例被安全创建一次。实例方法和字段若可变，仍可能发生竞态、丢失更新和可见性问题；必须单独定义内部并发契约。
+</Callout>
+
+<Stepper>
+  <Step title="先定义唯一性的边界"><SingletonBoundaryMap />确认是线程、进程、加载域还是集群范围，并写清生命周期与释放责任。</Step>
+  <Step title="重放无锁竞态"><ConcurrencyRaceDiagram />让两个线程同时观察空引用，检查与创建分离后就可能各构造一次。</Step>
+  <Step title="比较五种初始化策略"><InitializationTimingLab />逐一检查创建时机、同步正确性、实例建成后的访问成本和普通静态成员触发行为。</Step>
+  <Step title="回到真实使用场景"><SingletonTradeoffLab />区分只读配置、连接池、可变服务和多进程协调，判断是否需要全局静态入口。</Step>
+</Stepper>
+
+## 如何验证五种实现
+
+测试首先验证引用身份：多次读取`Instance`应满足`ReferenceEquals`。并发测试用屏障让多个线程同时开始读取，记录构造次数和返回引用集合；只检查最终字段不够，还要确认构造函数实际只执行一次。
+
+初始化时机测试应先调用普通静态方法。对`Singleton4`，作者示例会打印构造日志；对`Singleton5`，只调用外层`Print`不会创建实例，直到读取`Instance`。这组对照正是嵌套类型方案存在的理由。
+
+```csharp
+[Fact]
+public void Instance_is_shared_by_all_callers()
+{
+    var results = Enumerable.Range(0, 64)
+        .AsParallel()
+        .Select(_ => Singleton5.Instance)
+        .ToArray();
+
+    Assert.All(results, item =>
+        Assert.Same(results[0], item));
+}
+
+[Fact]
+public void Outer_static_method_does_not_touch_nested_instance()
+{
+    Singleton5.Print();
+    // 构造计数仍为0；首次读取Instance后变为1。
+}
+```
+
+并发测试本身不能证明所有交错都安全，但可以验证实现和回归；正确性依据仍来自运行时保证与同步协议。测试若依赖静态类型只能初始化一次，还要隔离进程或加载上下文，否则先运行的测试会污染“首次访问”条件。
+
+## 本章回顾
+
+1. Singleton模式由私有构造、唯一静态引用和公共访问点构成，`sealed`表达不可派生。
+2. 无锁的检查后创建在并发下可能构造多个实例。
+3. 每次加锁实现直接正确，但实例建成后仍承担同步访问成本。
+4. 双重检查需要锁内第二次检查，且正确性依赖具体语言内存模型。
+5. 静态字段利用运行时类型初始化保证一次创建，但其他静态成员可能提前触发。
+6. 嵌套类型把实例初始化推迟到首次读取`Nested.instance`，兼顾延迟和线程安全。
+7. `Lazy<T>`和依赖注入容器通常比手写全局同步更清晰。
+8. Singleton不保证内部状态线程安全，也不保证多进程或集群全局唯一。
+9. 连接池、外部协调和显式依赖各自解决不同问题，不能由一个静态对象替代。
+
+<Exercises>
+
+**问题 1：为什么`Singleton1`在最终字段只保存一个引用时仍可能违反唯一性？**
+
+<Answer>两个线程可同时读到`null`并各自执行构造。后写入者会覆盖静态字段，但两个对象已经存在，构造副作用也可能逸出。Singleton约束的是实例生成，不只是某一时刻字段里保留几个引用。</Answer>
+
+**问题 2：双重检查中锁内第二次`instance is null`为何不能删？**
+
+<Answer>线程A和B都可能通过锁外检查。A先拿锁完成构造并退出，B随后进入；若B不在锁内重新读取状态，就会再次构造。第二次检查负责吸收等待锁期间其他线程已经提交的初始化。</Answer>
+
+**问题 3：`Singleton4.Print()`与`Singleton5.Print()`对创建时机有什么不同？**
+
+<Answer>版本4的实例是外层类型静态字段，调用外层静态成员会进入该类型初始化范围，因此示例能观察到实例被创建。版本5把实例放在嵌套类型，调用外层`Print`不触及`Nested`；读取`Instance`时才初始化嵌套类型。</Answer>
+
+**问题 4：为什么“数据库连接做成Singleton”通常是错误需求？**
+
+<Answer>单连接会串行并发请求、共享事务状态并形成故障单点。通常需要的是生命周期受控的连接池，而不是唯一连接；若只是池管理器唯一，也要通过注入和释放协议管理，不能把连接本身误当全局单例。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Singleton模式">在约定运行时作用域内限制类型只有一个受控实例并提供访问点的模式。</GlossaryItem>
+  <GlossaryItem term="延迟初始化">直到首次真正需要对象或资源时才执行构造的策略。</GlossaryItem>
+  <GlossaryItem term="锁">让同一时刻只有一个线程进入临界区并建立内存可见性的同步机制。</GlossaryItem>
+  <GlossaryItem term="双重检查锁定">锁外检查、未初始化时入锁并再次检查后创建的优化模式。</GlossaryItem>
+  <GlossaryItem term="类型初始化">运行时执行静态字段初始化器和静态构造函数并保证一次成功执行的过程。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="《剑指Offer（第2版）》面试题2及何海涛官方源码 Program.cs"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/02_Singleton/Program.cs"
+/>

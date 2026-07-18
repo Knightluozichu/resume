@@ -1,0 +1,126 @@
+---
+title: "第14章 打造Linux系统安全审计功能"
+type: C
+section: "Python自动化运维 · 案例篇"
+order: 14
+description: "按刘天斯原书第14章重建：Linux系统安全审计、审计平台架构、审计数据库结构、主机上报配置、Django服务端审计功能。"
+demo: true
+math: false
+sourceUrl: "https://github.com/yorkoliu/pyauto"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PopLinuxSecurityAuditModelLab, PopLinuxSecurityAuditBoundaryLab, PopLinuxSecurityAuditEvidenceLab } from "@/components/mdx/python-ops/diagrams/pop-linux-security-audit";
+
+<Objectives>
+- 能解释Linux系统安全审计的执行链与运维价值
+- 能区分审计平台架构和审计数据库结构的责任与失败语义
+- 能实现并复现主机上报配置到Django服务端审计功能的安全实验
+</Objectives>
+
+## 从一次运维变更开始
+
+先预测：脚本在一台测试机成功，是否就能安全用于批量生产？不能。还要说明目标、权限、超时、部分失败、证据和回滚。<Term def="Linux系统安全审计收集登录、账号、进程、端口和配置变化，目标是不可抵赖的时间线而不是监控所有内容。采集范围遵守最小必要与隐私规则，原始事件只追加。">Linux系统安全审计</Term>必须落进可观察的执行链。
+
+<PopLinuxSecurityAuditModelLab />
+
+## 核心模型与责任
+
+Linux系统安全审计收集登录、账号、进程、端口和配置变化，目标是不可抵赖的时间线而不是监控所有内容。采集范围遵守最小必要与隐私规则，原始事件只追加。 <Term def="审计平台架构由主机agent、认证上报、队列、规范化服务、不可变存储和查询组成。agent断网时本地有界缓冲，重连按事件ID去重；服务器时钟偏差单独记录。">审计平台架构</Term>
+
+本章按照原书核心模块建立最小实验，再用现代Python和安全默认重写边界。工具版本可以变化，但目标选择、输入验证、结果聚合和审计证据不能消失。
+
+## 机制一：采集或控制入口
+
+审计平台架构由主机agent、认证上报、队列、规范化服务、不可变存储和查询组成。agent断网时本地有界缓冲，重连按事件ID去重；服务器时钟偏差单独记录。 <Term def="审计数据库结构分Event、Host、Principal和Evidence。事件包含发生时间、接收时间、类型、schema版本和摘要，索引服务于时间与主机查询，长期归档有保留策略。">审计数据库结构</Term>
+
+```python
+from dataclasses import dataclass
+from datetime import datetime
+@dataclass(frozen=True)
+class AuditEvent:
+    event_id: str
+    host_id: str
+    occurred_at: datetime
+    kind: str
+    payload: dict
+```
+
+运行前固定测试目标与时间窗，运行后保存结构化结果、耗时和异常类型。不要把打印了几行输出当成成功，也不要让示例凭据进入源码。
+
+## 机制二：状态、网络与批量
+
+审计数据库结构分Event、Host、Principal和Evidence。事件包含发生时间、接收时间、类型、schema版本和摘要，索引服务于时间与主机查询，长期归档有保留策略。 <Term def="主机上报配置包括服务端证书、客户端身份、批大小、超时和采集器开关。配置本身签名并版本化，agent不接受服务端下发任意shell字符串。">主机上报配置</Term>
+
+<PopLinuxSecurityAuditBoundaryLab />
+
+```python
+def sign_event(event_bytes, private_key):
+    return private_key.sign(event_bytes)
+def verify_event(event_bytes, signature, public_key):
+    public_key.verify(signature, event_bytes)
+```
+
+批量任务要先预览匹配目标，再限制并发并逐目标汇总。成功、失败、超时和未返回是不同状态；只展示总成功率会掩盖关键主机失败。
+
+## 机制三：证据与恢复
+
+主机上报配置包括服务端证书、客户端身份、批大小、超时和采集器开关。配置本身签名并版本化，agent不接受服务端下发任意shell字符串。 <Term def="Django服务端审计功能先验证mTLS或签名、大小和schema，再在事务内写入事件并返回已接受游标。查询接口按租户和角色授权，导出操作也进入审计日志。">Django服务端审计功能</Term>
+
+Django服务端审计功能先验证mTLS或签名、大小和schema，再在事务内写入事件并返回已接受游标。查询接口按租户和角色授权，导出操作也进入审计日志。 <Term def="验证打造Linux系统安全审计功能的授权、结果和失败路径。">打造Linux系统安全审计功能验收边界</Term>
+
+```python
+@require_POST
+def ingest(request):
+    identity = authenticate_agent(request)
+    events = validate_batch(request.body, max_events=500)
+    accepted = store_idempotently(identity.host_id, events)
+    return JsonResponse({'accepted': accepted}, status=202)
+```
+
+<PopLinuxSecurityAuditEvidenceLab />
+
+## 分步验收
+
+<Stepper>
+  <Step title="建立执行链"><PopLinuxSecurityAuditModelLab /></Step>
+  <Step title="注入边界"><PopLinuxSecurityAuditBoundaryLab /></Step>
+  <Step title="证明可恢复">用正常、超时、权限拒绝和部分失败四组输入运行；核对状态、日志、临时资源与回滚点，并保留可复查证据。</Step>
+</Stepper>
+
+## 实战验证清单
+
+在隔离环境执行三段代码：先只读采集，再模拟一台目标超时，最后验证失败不会改变未授权对象。记录命令或API参数、开始结束时间、目标清单、返回码、标准错误、制品摘要和回滚结果。涉及网络扫描、远程命令或配置发布时，必须使用经过批准的测试资产。
+
+## 常见误区
+
+<Callout type="trap" title="只要Linux系统安全审计能运行就可以批量">
+单机成功没有证明目标选择、并发预算、部分失败和回滚。扩大范围前必须完成预览、限流、逐主机结果与停止条件。
+</Callout>
+
+<Callout type="trap" title="原书工具API可以原样用于今天的生产">
+原书出版于2014年，部分工具和安全默认已经变化。应保留架构思想，依据当前官方文档迁移API、主机密钥、TLS、权限和依赖版本。
+</Callout>
+
+## 本章回顾
+
+官方核心单元核对：Linux系统安全审计；审计平台架构；审计数据库结构；主机上报配置；Django服务端审计功能。本章把原书模块放进现代运维闭环：先授权与预览，再执行与收集，最后判断、审计和恢复。
+
+<Exercises>
+**问题 1：如何解释“Linux系统安全审计”的执行链？**<Answer>Linux系统安全审计收集登录、账号、进程、端口和配置变化，目标是不可抵赖的时间线而不是监控所有内容。采集范围遵守最小必要与隐私规则，原始事件只追加。 审计平台架构由主机agent、认证上报、队列、规范化服务、不可变存储和查询组成。agent断网时本地有界缓冲，重连按事件ID去重；服务器时钟偏差单独记录。</Answer>
+**问题 2：审计数据库结构与主机上报配置如何协作？**<Answer>审计数据库结构分Event、Host、Principal和Evidence。事件包含发生时间、接收时间、类型、schema版本和摘要，索引服务于时间与主机查询，长期归档有保留策略。 主机上报配置包括服务端证书、客户端身份、批大小、超时和采集器开关。配置本身签名并版本化，agent不接受服务端下发任意shell字符串。</Answer>
+**问题 3：如何验收Django服务端审计功能？**<Answer>Django服务端审计功能先验证mTLS或签名、大小和schema，再在事务内写入事件并返回已接受游标。查询接口按租户和角色授权，导出操作也进入审计日志。 增加正常、超时、权限拒绝和部分失败输入，核对目标、返回码、证据和回滚。</Answer>
+</Exercises>
+
+## 术语表
+<Glossary>
+  <GlossaryItem term="Linux系统安全审计" definition="Linux系统安全审计收集登录、账号、进程、端口和配置变化，目标是不可抵赖的时间线而不是监控所有内容。" />
+  <GlossaryItem term="审计平台架构" definition="审计平台架构由主机agent、认证上报、队列、规范化服务、不可变存储和查询组成。" />
+  <GlossaryItem term="审计数据库结构" definition="审计数据库结构分Event、Host、Principal和Evidence。" />
+  <GlossaryItem term="主机上报配置" definition="主机上报配置包括服务端证书、客户端身份、批大小、超时和采集器开关。" />
+  <GlossaryItem term="Django服务端审计功能" definition="Django服务端审计功能先验证mTLS或签名、大小和schema，再在事务内写入事件并返回已接受游标。" />
+  <GlossaryItem term="打造Linux系统安全审计功能验收边界" definition="验证打造Linux系统安全审计功能的授权、结果和失败路径。" />
+</Glossary>
+
+<Attribution adaptedFrom="刘天斯《Python自动化运维：技术与最佳实践》第14章 打造Linux系统安全审计功能" adaptedUrl="https://github.com/yorkoliu/pyauto" />

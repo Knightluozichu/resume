@@ -1,0 +1,215 @@
+---
+title: "第 5 章 游戏中的文本文件加密：加载边界与完整性"
+type: A
+section: "Unity 3D 实战核心技术详解 · 数学与数据"
+order: 5
+description: "按原书第5章从配置格式、加载接口到文本加密算法，建立威胁模型、密钥和完整性边界。"
+demo: true
+math: false
+sourceUrl: "https://m.bookschina.com/7380713.htm"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Uct05TextFileEncryptionMapLab,
+  Uct05TextFileEncryptionExperimentLab,
+  Uct05TextFileEncryptionEvidenceLab,
+} from "@/components/mdx/unity-core-tech/diagrams/uct-05-text-file-encryption";
+
+<Objectives>
+
+- 能解释配置格式、字节编码、加密与完整性校验的职责差异
+
+- 能设计统一文件加载接口并隔离编辑器与运行时来源
+
+- 能分析客户端密钥、篡改和版本迁移的实际安全边界
+
+</Objectives>
+
+## 问题：为什么把 JSON 做 Base64 或异或后看不懂，并不等于配置已经安全？
+
+先预测：攻击者拥有完整客户端时，能否保证客户端永远拿不到解密密钥？不能。文本加密能提高静态修改门槛，但不能把客户端变成可信环境。原书第五章从配置格式、加载接口到算法应用，现代复现必须先定义要防误改、静态查看还是主动篡改，再选择加密与认证。
+
+<Uct05TextFileEncryptionMapLab />
+
+## 原书边界与目录小节
+
+本页严格对应完整目录中的以下单元；这些单元只在本页计算原章覆盖，现代扩展不替代原书位置：
+
+- **配置文件格式**
+- **文件加载接口**
+- **文本文件加密算法及应用**
+
+书籍身份由图书馆题录核对，章节边界由完整目录核对。本站重新组织解释、代码、实验和证据，不逐字复制原文；导读与总复习不重复计入十四个正文章。
+
+## 把格式、加载、保密和完整性分层
+
+配置格式负责字段结构、类型和默认值；UTF-8 等编码负责字符到字节；加载接口负责来源、缓存与错误；加密只负责保密；MAC 或 AEAD 负责检测篡改。把这些层混成一个 ReadText 函数，会让编码错误、版本错误和认证失败无法区分。
+
+统一 IConfigSource 以字节为边界，编辑器可读明文目录，发布包可读加密资源或远端缓存。上层解析器只接收认证成功的明文字节，并对 schema version、必填字段和取值范围做验证。
+
+简单异或可以作为原书历史算法实验，但不能声明为现代安全方案。生产中优先采用经过审计的 AEAD，例如 AES-GCM，并为每个文件使用唯一 nonce；密钥不硬编码在明显字符串中，但仍应承认本地逆向最终可取得密钥。
+
+配置更新需要版本、长度、哈希或签名、原子替换和回滚。解密失败不能覆盖最后一个可用版本；日志只记录文件 ID、版本和错误类别，不记录密钥、完整凭证或全部明文。
+
+<Uct05TextFileEncryptionExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="明确攻击者能力、保护对象和可接受损失的安全假设。">威胁模型</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="隔离配置来源、缓存、解密和解析职责的字节读取边界。">加载接口</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="使未持有密钥的一方不能直接读取内容的性质。">机密性</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="检测内容是否被未授权修改的性质。">完整性</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="同时提供机密性与篡改检测的标准加密模式。">认证加密</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+这些术语组成一份最小领域模型。读者需要为每个对象写出所有者、生命周期、正常值、边界值和故意失败后的第一条可观察信号，才能把概念转成工程判断。
+
+## 关键对象与数据流
+
+构建期先校验明文 schema，再将规范化字节认证加密并生成版本清单；运行时加载器读取密文、校验元数据、完成认证解密，解析器最后生成强类型配置。任何阶段失败都保留上一版本，并输出不含敏感内容的错误证据。
+
+每次实验只改变一个输入，先保存版本、参数与预期，再比较输出、日志、内存或帧时间。最终结果偶然正确但中间契约不符合预测，仍不能签发，因为隐藏缓存、默认值或执行顺序可能掩盖根因。
+
+## 三步可重复实验
+
+动手前先预测：改变当前步骤的一项输入后，哪个对象、数值、像素、状态或版本标记应最先变化？固定 Unity 版本、目标平台、资产提交和测试场景。
+
+<Stepper>
+  <Step title="固定格式和字节边界">
+    <Uct05TextFileEncryptionMapLab />
+
+把同一配置以 UTF-8 规范化，解析后重新序列化并比较；故意加入未知字段、缺失字段和非法范围，验证错误分类。
+
+```csharp
+public interface IConfigSource
+{
+    ValueTask<byte[]> ReadAsync(string id, CancellationToken token);
+}
+```
+
+  </Step>
+  <Step title="对比历史算法与认证加密">
+    <Uct05TextFileEncryptionExperimentLab />
+
+先复现异或以观察已知明文攻击，再用标准 AEAD；翻转密文一位，确认认证在解析前拒绝数据。
+
+```text
+plain bytes -> validate -> encrypt(key, nonce, associated data)
+密文翻转一位 -> authentication failed -> parser never runs
+```
+
+  </Step>
+  <Step title="验证更新与回滚">
+    <Uct05TextFileEncryptionEvidenceLab />
+
+模拟下载中断、错误密钥、版本降级和磁盘写满；临时文件只有在认证与 schema 全通过后才原子替换当前配置。
+
+```csharp
+await File.WriteAllBytesAsync(tempPath, encrypted, token);
+VerifyPackage(tempPath, manifest);
+File.Move(tempPath, livePath, true);
+```
+
+  </Step>
+</Stepper>
+
+## 正常、边界与故障注入
+
+正常样本证明主路径，边界样本说明适用范围，故障样本证明诊断检查确实会在最早契约处拒绝。三类样本必须使用同一观测方式，避免只为成功路径保留证据。
+
+<Callout type="trap">
+  **因果陷阱**：Base64、压缩或简单异或只改变可读性，不提供可靠机密性和篡改检测。
+</Callout>
+
+<Callout type="trap">
+  **边界陷阱**：认证前先解析明文会把被篡改数据送入业务层，错误甚至可能变成合法默认值。
+</Callout>
+
+## 从原书版本迁移到当前 Unity
+
+原书算法应作为理解加载链与攻击面的历史基线；现代项目不要自创密码算法，使用平台或成熟库提供的 AEAD 与签名实现。
+
+Addressables、远程配置或内容分发改变文件来源，但不改变客户端不可信这一事实；高价值规则应由服务器裁决，客户端文件只承担展示与离线体验。
+
+迁移账本使用五列：原书载体、稳定不变量、当前实现、不可等价处、重放证据。允许 API、插件和渲染管线变化，不允许用新名词删除原章问题或把编辑器成功当成目标平台成功。
+
+## 验收证据
+
+验收包含格式 schema、规范化字节样本、历史算法攻击示例、标准认证加密测试向量、篡改拒绝日志、错误密钥与中断回滚、密钥不落日志检查及服务器权威边界说明。
+
+证据包还要记录文件路径、构建版本、设备、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不是看过。
+
+<Uct05TextFileEncryptionEvidenceLab />
+
+## 小结
+
+- 配置格式、加载、加密和解析是四个责任层
+- 客户端加密提高门槛但不建立绝对信任
+- 保密之外还必须验证完整性
+- 更新要在认证和 schema 通过后原子替换
+
+<Exercises>
+
+**问题 1** 第 5 章 游戏中的文本文件加密的关键输入和输出分别是什么？
+
+<Answer>
+  构建期先校验明文
+  schema，再将规范化字节认证加密并生成版本清单；运行时加载器读取密文、校验元数据、完成认证解密，解析器最后生成强类型配置。任何阶段失败都保留上一版本，并输出不含敏感内容的错误证据。
+</Answer>
+
+**问题 2** 本章最有诊断价值的故障注入是什么？
+
+<Answer>
+  Base64、压缩或简单异或只改变可读性，不提供可靠机密性和篡改检测。需要保存失败输入和第一条偏离信号，再修复后重放。
+</Answer>
+
+**问题 3** 迁移到当前 Unity 时必须保留什么？
+
+<Answer>
+  原书算法应作为理解加载链与攻击面的历史基线；现代项目不要自创密码算法，使用平台或成熟库提供的
+  AEAD 与签名实现。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="威胁模型">
+    明确攻击者能力、保护对象和可接受损失的安全假设。
+  </GlossaryItem>
+  <GlossaryItem term="加载接口">
+    隔离配置来源、缓存、解密和解析职责的字节读取边界。
+  </GlossaryItem>
+  <GlossaryItem term="机密性">
+    使未持有密钥的一方不能直接读取内容的性质。
+  </GlossaryItem>
+  <GlossaryItem term="完整性">检测内容是否被未授权修改的性质。</GlossaryItem>
+  <GlossaryItem term="认证加密">
+    同时提供机密性与篡改检测的标准加密模式。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="姜雪伟《Unity 3D实战核心技术详解》目录与书籍身份资料"
+  adaptedUrl="https://m.bookschina.com/7380713.htm"
+/>

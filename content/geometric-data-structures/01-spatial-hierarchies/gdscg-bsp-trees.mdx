@@ -1,0 +1,183 @@
+---
+title: "第3章 BSP树"
+type: C
+section: "几何数据结构 · 空间层次"
+order: 3
+description: "用任意超平面递归分割空间，覆盖无Z缓冲渲染、实体表示、布尔运算和代价驱动构建。"
+demo: true
+math: true
+sourceUrl: "https://www.routledge.com/Geometric-Data-Structures-for-Computer-Graphics/Langetepe-Zachmann/p/book/9780367453862"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GdscgBspTreesObjectLab, GdscgBspTreesQueryLab, GdscgBspTreesEvidenceLab } from "@/components/mdx/geometric-data-structures/diagrams/gdscg-bsp-trees";
+
+<Objectives>
+- 能解释BSP树、分类谓词与分裂片元的对象和不变量
+- 能推导本页复杂度或几何谓词，并用交互图追踪构建、查询与更新
+- 能实现最小实验，以精确基线、边界输入和反例验收代价启发式
+</Objectives>
+
+## 先做预测
+
+先预测结果，再观察结构变化并解释偏差。旋转候选分割面，预测树高、跨面多边形数量和画家顺序长度。再把观察点从前侧移到后侧，判断遍历顺序应在哪个节点翻转而树结构保持不变。 本页用<Term def="以任意超平面递归划分空间并在两侧保存子问题的二叉树。">BSP树</Term>、<Term def="根据有符号距离把点或多边形判为前侧、后侧或共面。">分类谓词</Term>、<Term def="跨越分割面的图元被切成分别落在两侧的片段。">分裂片元</Term>、<Term def="依据观察点相对分割面的方位递归产生从远到近的绘制次序。">画家顺序</Term>、<Term def="平衡树深、查询概率与片元分裂数量的构建目标。">代价启发式</Term>建立从对象、表示、查询到证书的完整链路。
+
+<GdscgBspTreesObjectLab />
+
+## 第一版权威目录定位
+
+本页一一对应Elmar Langetepe与Gabriel Zachmann在A K Peters出版的2006年第一版《Geometric Data Structures for Computer Graphics》第3章 BSP树。出版社页面确认第一版、两位作者、362页和正式10章目录；作者所在研究组同时给出原书信息、ISBN 9781568812359、目录以及第7章材料。
+
+### 原书小节覆盖
+
+1. 3.1 Rendering Without a Z-Buffer
+2. 3.2 Representing Objects with BSPs
+3. 3.3 Boolean Operations
+4. 3.4 Construction Heuristics
+5. 3.4.1 Convex Objects
+6. 3.4.2 Cost-driven Heuristic
+7. 3.4.3 Non-uniform Queries
+8. 3.4.4 Deferred Self-organizing BSPs
+
+### 核心对象
+
+1. **BSP树**：以任意超平面递归划分空间并在两侧保存子问题的二叉树。
+2. **分类谓词**：根据有符号距离把点或多边形判为前侧、后侧或共面。
+3. **分裂片元**：跨越分割面的图元被切成分别落在两侧的片段。
+4. **画家顺序**：依据观察点相对分割面的方位递归产生从远到近的绘制次序。
+5. **代价启发式**：平衡树深、查询概率与片元分裂数量的构建目标。
+
+## 查询与表示契约
+
+先固定数据域、维数、闭开边界、查询输出和数值语义。树高或节点数不是独立目标；只有候选完备、结果无重复、复杂度含输出规模且数值分支一致时，结构才算正确。
+
+$$
+s(x)=n\cdot x+d
+$$
+
+$$
+t=\frac{s(a)}{s(a)-s(b)}
+$$
+
+$$
+C(H)=\alpha|n_f-n_b|+\beta n_s
+$$
+
+$$
+T(h)=T(h_f)+T(h_b)+O(n_s)
+$$
+
+分类由平面方程的符号决定，跨越平面的边按线性插值求交点。画家算法先访问观察点远侧，再处理共面图元，最后访问近侧。集合并、交、差通过把一棵BSP递归裁入另一棵的空间分类；构建质量通常在平衡与分裂代价间取舍。 每个剪枝判断都应能回答两个问题：被排除的集合是什么，以及哪个不变量证明它不含答案。
+
+## 可核查构建与查询
+
+节点保存归一化平面、共面图元和前后孩子。分类使用带误差边界的谓词，只有符号可靠时才切分；布尔运算为每个叶标注内外语义。构建时采样多个候选面，记录左右数量、分裂数和历史查询权重。
+
+
+```python
+def query_with_trace(root, request):
+    stack, hits, trace = [root], [], []
+    while stack:
+        node = stack.pop()
+        trace.append(node.id)
+        if node.disjoint(request):
+            continue
+        if node.is_leaf:
+            hits.extend(node.exact_matches(request))
+        else:
+            stack.extend(node.children)
+    return sorted(set(hits)), trace
+```
+
+通用骨架必须由本章的具体不变量实例化：区域不相交、包围体不重叠、空邻域、证书未失效或静态块版本有效。不能把候选生成误写成最终答案，叶节点仍需执行本章定义的精确测试。
+
+<GdscgBspTreesQueryLab />
+
+## 复杂度与工程取舍
+
+复杂度报告分离构建、查询、更新、内存和输出规模。平均值之外记录P95与最坏样例；同时保存访问节点、候选对象和精确谓词次数，这样才能判断瓶颈来自树质量、数据分布还是数值回退。
+
+```python
+metrics = {
+    "build_ms": 0.0,
+    "visited_nodes": 0,
+    "candidates": 0,
+    "exact_tests": 0,
+    "update_ms": 0.0,
+}
+assert set(metrics) == {"build_ms", "visited_nodes", "candidates", "exact_tests", "update_ms"}
+```
+
+只在结果集合与基线一致后比较性能。构建更慢可能换来大量查询收益，更新更便宜也可能逐渐恶化结构；因此工作负载中的查询次数、更新比例和生命周期必须写入报告。
+
+## 边界、退化与反例
+
+共面多边形的朝向、观察点落在分割面、细长片元和循环数值误差最容易破坏拓扑。若每次切分都重新舍入顶点，裂缝会累积；应复用交点并保存来源边。
+
+```python
+audit = {
+    "normal": "representative geometry",
+    "boundary": "closed-open convention",
+    "degenerate": "duplicate or co-located input",
+    "baseline": "brute-force exact result",
+}
+assert all(audit.values())
+```
+
+<GdscgBspTreesEvidenceLab />
+
+## 图形学应用
+
+在没有深度缓冲的透明多边形场景中，用BSP生成稳定的远近顺序；对两个闭合实体做并交差后，用随机点分类和体积采样验证叶标签。 应用层还要记录从世界坐标到结构坐标的变换，避免把坐标系错误误判为数据结构错误。
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定对象与边界"><GdscgBspTreesObjectLab /></Step>
+  <Step title="执行构建与查询"><GdscgBspTreesQueryLab /></Step>
+  <Step title="保存反例与证书"><GdscgBspTreesEvidenceLab /></Step>
+</Stepper>
+
+1. 用五到十个对象手算结构，标出节点覆盖、邻接或证书。
+2. 执行一个正常查询和一个恰落在边界的查询，逐节点记录剪枝理由。
+3. 删除一个一般位置或静态假设，构造首个失败样例。
+4. 与穷举答案逐项比较，再扩大规模测构建、查询、更新和内存。
+
+## 验收证书
+
+验收包包含原始输入、结构参数、节点或图邻接、查询日志、候选集合、精确结果、复杂度计数和失败反例。对候选面计算平衡与分裂联合代价，并用查询分布校正静态启发式。 任何无法重放的截图或孤立耗时都不能替代证书。
+
+## 常见误区
+
+<Callout type="trap" title="正确性前提被省略">每次选第一个多边形作分割面，在有序输入上形成链并制造大量碎片。</Callout>
+
+<Callout type="trap" title="只看平均耗时">对候选面计算平衡与分裂联合代价，并用查询分布校正静态启发式。 同时保留最坏输入、内存和更新尾延迟。</Callout>
+
+## 本章回顾
+
+本页覆盖BSP树、分类谓词、分裂片元、画家顺序、代价启发式。掌握标准是能从查询契约选择表示，推导剪枝或邻近条件，实现构建与更新，并用精确基线、退化输入和复杂度计数形成可重放证书。
+
+<Exercises>
+**问题1：BSP树与分类谓词如何协作？**
+<Answer>以任意超平面递归划分空间并在两侧保存子问题的二叉树。 根据有符号距离把点或多边形判为前侧、后侧或共面。 回答时必须写出对象域和边界约定。</Answer>
+
+**问题2：怎样核查分裂片元的查询结果？**
+<Answer>保存访问轨迹与候选集合，再与穷举或精确谓词给出的结果逐项比较；复杂度必须包含输出规模。</Answer>
+
+**问题3：如何验收代价启发式？**
+<Answer>平衡树深、查询概率与片元分裂数量的构建目标。 同时保存正常例、边界例、退化例和最坏工作负载。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="BSP树" definition="以任意超平面递归划分空间并在两侧保存子问题的二叉树。" />
+  <GlossaryItem term="分类谓词" definition="根据有符号距离把点或多边形判为前侧、后侧或共面。" />
+  <GlossaryItem term="分裂片元" definition="跨越分割面的图元被切成分别落在两侧的片段。" />
+  <GlossaryItem term="画家顺序" definition="依据观察点相对分割面的方位递归产生从远到近的绘制次序。" />
+  <GlossaryItem term="代价启发式" definition="平衡树深、查询概率与片元分裂数量的构建目标。" />
+  <GlossaryItem term="几何证书" definition="足以重放构建、查询、更新和数值判断的一组输入、轨迹与不变量。" />
+</Glossary>
+
+<Attribution adaptedFrom="Elmar Langetepe, Gabriel Zachmann · Geometric Data Structures for Computer Graphics, First Edition · 第3章 BSP树" adaptedUrl="https://www.routledge.com/Geometric-Data-Structures-for-Computer-Graphics/Langetepe-Zachmann/p/book/9780367453862" />

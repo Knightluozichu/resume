@@ -1,0 +1,182 @@
+---
+title: "Chapter 5. Primitive, Reference, and Value Types"
+type: C
+section: "CLR via C# 4e · Designing Types"
+order: 5
+description: "统一语言primitive与CLR类型，解释checked溢出、值/引用存储、装箱接口陷阱、相等哈希和dynamic绑定。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcEqualityHashLab, CvcPrimitiveMappingLab, CvcValueStorageLab } from "@/components/mdx/clr-via-csharp/diagrams/primitive-reference-value-types";
+
+<Objectives>
+
+- 能分析C# primitive keyword到CLR类型的映射、数值范围、溢出与转换策略
+- 能绘制class、struct、boxed value和interface变量的存储、复制、分配与修改可见性
+- 能设计一致的identity/equality/hash contract，并判断dynamic把哪些错误推迟到运行期
+
+</Objectives>
+
+## 为什么Value/Reference不是“栈和堆”口诀
+
+Reference type与value type描述变量中保存什么以及赋值语义，不直接等价于物理位置。Class instance通常在managed heap，reference本身可能位于stack、register或另一个object字段；struct可以内联在stack local、class object、array、boxed object或JIT寄存器。真正稳定的模型是：reference assignment复制地址语义，value assignment复制字段值；storage位置由owner和runtime优化决定。
+
+先预测：class字段里的struct是否在独立堆对象；boxed struct通过interface调用mutating method后哪个副本改变；`int`和`System.Int32`是否有运行期差异；unchecked是否能关闭所有numeric异常；两个相等对象是否必须有不同hash；dynamic变量是否失去真实CLR类型。每个问题都要求区分语言表面、metadata type、storage和binding阶段。
+
+<Term def="一个值以内联字段、对象引用或装箱对象存在，以及赋值时复制什么的运行时语义。">storage semantics</Term>
+
+## Programming Language Primitive Types
+
+C#的`int`只是`System.Int32`别名，`string`是`System.String`，`object`是`System.Object`。编译器对literal、operator和conversion提供语法便利，但metadata记录CLR类型。例如`decimal`不是IL原生浮点指令类型，它是有专门compiler支持的struct与operator methods；`string`是sealed reference type并具有literal/intern支持。
+
+```csharp
+Console.WriteLine(typeof(int) == typeof(System.Int32));       // True
+Console.WriteLine(typeof(string) == typeof(System.String));  // True
+
+int signed = -1;
+uint bits = unchecked((uint)signed);
+decimal money = 19.95m;
+double approximation = 19.95;
+```
+
+API设计不要根据keyword猜ABI。记录确切bit width、signedness、endianness、format、range和rounding。`nint`宽度跟进程架构；`char`是UTF-16 code unit而非完整Unicode scalar；`DateTime`、`Guid`等常用值也不是C# primitive。跨语言公共API还要考虑CLS consumer是否支持无符号类型与大小写区分。
+
+<Stepper>
+  <Step title="切换int、decimal、string与dynamic"><CvcPrimitiveMappingLab /></Step>
+  <Step title="建立类型账本">为每个边界字段记录CLR type、位宽、nullable、默认值、format、range和conversion policy。</Step>
+  <Step title="验证跨语言metadata">用第二种CLR语言引用API，检查public signature而不是C# keyword显示。</Step>
+</Stepper>
+
+## Checked and Unchecked Primitive Type Operations
+
+Integral arithmetic和显式numeric conversion在overflow时可选择checked抛`OverflowException`或unchecked截断高位。Compiler `/checked`设置默认上下文，局部`checked`/`unchecked`覆盖它。Constant expression的溢出通常在compile time被拒绝；floating-point overflow遵循IEEE语义产生infinity/NaN，而decimal操作可抛overflow，因此不能把checked当所有数值的统一开关。
+
+<Term def="对整数算术和转换明确选择溢出抛错或按位截断，并在边界测试该选择。">overflow policy</Term>
+
+```csharp
+static int AddInventory(int current, int received)
+{
+    if (current < 0 || received < 0)
+        throw new ArgumentOutOfRangeException();
+    return checked(current + received);
+}
+
+uint protocolBits = unchecked((uint)-1); // 有意保留two's-complement bit pattern
+```
+
+业务数量、金额缩放和buffer长度通常应checked并在边界翻译成domain error；hash、crypto、bit protocol可能有意依赖wraparound，应局部unchecked并写注释。验收必须覆盖min/max、正负跨界、cast narrowing和不同编译选项，避免debug/release行为偶然不同。
+
+<Callout type="trap" title="打开checked后所有数值错误都会变成异常">
+Checked主要约束integral arithmetic/conversion；浮点NaN/Infinity、decimal精度、除法舍入、单位混用和业务范围仍需独立验证。
+</Callout>
+
+## Reference Types and Value Types
+
+Reference variable可为null并指向共享instance，赋值创建alias；value variable直接包含其数据，赋值产生独立copy。Struct字段多且可变时，复制成本和“改了副本却以为改原值”风险都会上升。适合value type的典型条件是小、单一值、不可变、没有identity、经常内联；具有身份、可变生命周期或大型状态的对象通常用class。
+
+Array进一步说明区别：`Point[]`连续内联每个struct数据，`Customer[]`连续保存references而对象分散；这影响allocation、cache locality和nullability。Generic `List<T>`能为value type专门化存储，避免把每项装箱成Object。不要为“少一次堆分配”盲目把领域实体改struct，因为复制和boxing可能更糟。
+
+<Term def="引用赋值后多个位置指向同一对象，任一别名修改可被其它别名观察的关系。">reference aliasing</Term>
+
+## Boxing and Unboxing Value Types
+
+把value type转换为Object、非泛型interface或其实现的interface时，CLR分配box、复制value fields并返回reference。Unboxing先检查对象非null且exact boxed type匹配，再取得payload；通常随后复制到value variable。Boxing带来allocation、GC压力和语义副本，尤其在循环、日志params、非泛型collection和interface调用中隐蔽发生。
+
+```csharp
+public struct Counter : IIncrement
+{
+    public int Value;
+    public void Increment() => Value++;
+}
+
+Counter counter = new() { Value = 1 };
+IIncrement boxed = counter; // 分配并复制
+boxed.Increment();           // 修改box中的Counter
+Console.WriteLine(counter.Value);              // 1
+Console.WriteLine(((Counter)boxed).Value);      // 2
+```
+
+Generic constraint可让JIT使用constrained call，对value type interface/virtual调用避免boxing；`object.Equals(value)`、字符串插值在现代handler优化前后也可能有不同分配。性能分析要看allocation trace或generated code，不凭源语法猜。语义上先确认修改的是原storage、临时copy还是box payload。
+
+<Stepper>
+  <Step title="切换class field、struct local、box与unbox"><CvcValueStorageLab /></Step>
+  <Step title="逐语句画副本">标注每个assignment、parameter pass、interface conversion和property getter是否复制或分配。</Step>
+  <Step title="采集allocation证据">用基准与allocation profiler比较generic、object和interface路径，验证优化而不是假设JIT行为。</Step>
+</Stepper>
+
+## Changing Fields in a Boxed Value Type by Using Interfaces (and Why You Shouldn't Do This)
+
+Interface reference可直接调用boxed payload上的mutating method，所以盒内状态确实变化；但普通unbox cast返回value copy，修改该copy不回写box。更危险的是同一原始struct、box和后续copies各自分叉，代码读者无法仅从业务名字判断owner。Mutable struct已经容易产生defensive copy，叠加boxing后更难维护。
+
+设计上优先immutable struct，让操作返回新值；若对象需要通过interface持续改变状态并保留identity，使用class。必须处理历史mutable struct时，缩小box生命周期，不把它存入Object collection或跨API泄露，并用测试同时断言原值和盒内值。
+
+<Callout type="trap" title="把struct转成interface只是换一个静态视图">
+多数情况下转换会boxing并复制。Interface method可能修改盒中副本，而原struct不变；这既是分配问题也是ownership语义问题。
+</Callout>
+
+## Object Equality and Identity
+
+Reference identity问两个引用是否指向同一instance，`ReferenceEquals`不受override影响。Value equality问两个值在领域上是否等价，由`Equals`、`IEquatable<T>`和`==/!=`共同表达。Value type默认Equals逐字段比较但可能较慢；record/record struct生成结构相等语义，但仍应检查成员是否稳定、是否包含浮点、culture-sensitive string或mutable collection。
+
+<Term def="同一类型的Equals、IEquatable、相等运算符与业务键保持对称、传递、一致的整体约束。">equality contract</Term>
+
+Equality必须reflexive、symmetric、transitive，并在对象未改变时稳定。继承层次中加入新字段容易破坏base/derived symmetry；有value语义时可考虑sealed type、明确can-equal策略或composition。Entity通常以不可变identity比较，value object以全部定义字段比较，不能混合“有时按引用、有时按值”。
+
+## Object Hash Codes
+
+Hash code帮助hash table定位bucket，不是唯一id、持久化key或安全hash。若`Equals(a,b)`为true，两者在同一comparer下必须返回相同hash；反向不成立。存入Dictionary/HashSet期间，参与equality/hash的字段不得改变，否则对象留在旧bucket而无法找到。
+
+`HashCode.Combine`可组合字段，但默认process seed可能使结果跨进程不稳定；不要持久化。String comparer必须与业务contract一致：ordinal、ordinal-ignore-case和culture comparison给出不同equality/hash。Dictionary构造时注入comparer，而不是一处lowercase、一处current culture。
+
+## The dynamic Primitive Type
+
+`dynamic`在metadata层通常仍是`System.Object`加DynamicAttribute等信息；变量中的对象保留真实CLR type。差别在binding时机：编译器生成dynamic call site，runtime binder根据运行时receiver、arguments与context选择member/operator，失败抛RuntimeBinderException。它适合COM、动态语言、shape未知的边界adapter，不应扩散到核心领域。
+
+<Term def="把成员与运算符选择从编译期移到运行期，并缓存所见参数形状的调用点。">dynamic call site</Term>
+
+Dynamic不会自动绕过访问控制或类型转换，也不等于reflection字符串调用；binder遵循C#规则并缓存rules。API改名后dynamic consumer不会编译时报错，所以必须以contract tests覆盖成功与缺成员、重载歧义、null和numeric shape。进入typed core前尽快验证并转换为明确DTO/interface。
+
+<Stepper>
+  <Step title="切换identity、value equality、hash与dynamic bind"><CvcEqualityHashLab /></Step>
+  <Step title="填写相等性矩阵">覆盖同引用、等值不同实例、不同derived type、null、字段变更、hash collision与自定义comparer。</Step>
+  <Step title="封住dynamic边界">在adapter内完成member调用、异常翻译和typed projection，禁止dynamic对象进入长期collection或domain层。</Step>
+</Stepper>
+
+## 本章回顾：先问复制与契约，再问位置
+
+1. Primitive keyword映射到CLR类型，数值设计还需位宽、符号、范围、舍入和overflow policy。
+2. Reference/value区别是alias与copy语义，不是简单“堆/栈”位置标签。
+3. Boxing分配并复制，interface修改可能只作用于boxed copy；mutable struct应谨慎。
+4. Identity、equality与hash各有目的，equal必须same hash，collection key必须稳定。
+5. Dynamic保留runtime type但推迟binding错误，应用在狭窄边界并以contract test补偿。
+
+<Exercises>
+
+**问题 1：为何把mutable struct放进`List<object>`后修改原变量，列表值不变？**
+
+<Answer>加入List时struct转换为Object发生boxing，box包含当时字段的copy；后来修改原变量只改原storage。取出后cast又复制盒中值。应使用`List<TStruct>`避免boxing，并最好使struct不可变；若需要共享可变identity，改用class。</Answer>
+
+**问题 2：一个作为Dictionary key的对象加入后再也查不到，如何诊断？**
+
+<Answer>检查Equals/GetHashCode与Dictionary comparer，特别是参与hash的mutable字段是否在插入后改变。记录插入前后hash与等值字段。修复为immutable key/value object，或只用稳定identity字段；同时保证equal对象在同一comparer下hash相同。</Answer>
+
+**问题 3：什么时候选择dynamic而不是reflection或interface？**
+
+<Answer>当边界天然由运行期shape驱动且C# binder语义有价值，例如COM或动态语言对象，可在adapter内用dynamic获得简洁调用与call-site cache。已知contract优先interface/generic；需要枚举metadata、按字符串选择或不执行代码时用reflection/metadata API。Dynamic失败推迟到运行期，必须尽快投影到typed model。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="storage semantics" definition="值以内联、引用或盒子存在及赋值复制内容的语义。" />
+  <GlossaryItem term="overflow policy" definition="明确选择整数溢出抛错或截断的规则。" />
+  <GlossaryItem term="reference aliasing" definition="多个引用共同观察同一可变对象的关系。" />
+  <GlossaryItem term="equality contract" definition="Equals、IEquatable与运算符必须共同满足的等价关系。" />
+  <GlossaryItem term="dynamic call site" definition="运行期选择成员并缓存参数形状规则的调用点。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 5: Primitive, Reference, and Value Types" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

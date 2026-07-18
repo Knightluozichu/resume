@@ -1,0 +1,200 @@
+---
+title: "第 8 章 Unwrapping and UVs in Blender"
+type: A
+section: "玩转 Blender 第 3 版 · UV、纹理与材质"
+order: 8
+description: "覆盖 UV 原理、展开方法、展开前决策、UV 编辑、角色其余部分展开与 UV Packing。"
+demo: true
+math: false
+sourceUrl: "https://www.pearson.com/en-gb/subject-catalog/p/learning-blender/P200000000666/9780136411758"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Bl308UnwrappingUvsMapLab,
+  Bl308UnwrappingUvsExperimentLab,
+  Bl308UnwrappingUvsEvidenceLab,
+} from "@/components/mdx/blender-3d/diagrams/bl3-08-unwrapping-uvs";
+
+<Objectives>
+
+- 能解释 3D 表面到 2D UV 的映射与失真
+
+- 能设计 Jim 各部件的接缝与展开方案
+
+- 能实现满足纹理密度、间距和方向约束的 UV 打包
+
+</Objectives>
+
+## 问题：为什么没有重叠的 UV 仍可能导致纹理模糊和接缝明显
+
+先预测：所有 UV 岛都在 0 到 1 范围内且不重叠，是否就一定合格？不一定。面积比例、拉伸、方向、接缝位置、像素密度和边缘 Padding 同样决定纹理结果。第八章从映射原理出发，为 Jim 的面部、身体、服装和配件建立可绘制的 UV 布局。
+
+<Bl308UnwrappingUvsMapLab />
+
+## 原书边界与官方小节
+
+本页只覆盖 Pearson 第三版目录中的以下原始单元，不用现代功能清单替换作者的角色项目顺序：
+
+- **Seeing How Unwrapping and UVs Work**
+- **Unwrapping in Blender**
+- **Considering Before Unwrapping**
+- **Working with UVs in Blender**
+- **Unwrapping the Rest of the Character；Packing UVs**
+
+这些小节按官方目录唯一归属。本站重新组织解释、实验和证据，不逐字复制原文；导读、总复习和现代迁移不重复计算原章覆盖。
+
+## 切割曲面、控制失真、分配纹理预算
+
+UV 为每个网格角保存二维坐标。接缝把连续三维表面切成可摊平岛，算法在角度、面积和边长之间折中。角色面部优先降低可见区拉伸，接缝放在后脑或遮挡处；服装和配件按材质边界和绘制便利切分。Packing 需要统一 Texel Density、岛间 Padding、方向和镜像策略。
+
+<Bl308UnwrappingUvsExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="附着在网格角上的二维纹理坐标。">UV Coordinate</Term>
+必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+
+<Term def="展开时允许表面断开的标记边。">Seam</Term>
+必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+
+<Term def="由接缝切分后在二维空间连续的一组面。">UV Island</Term>
+必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+
+<Term def="单位模型表面积分配到的纹理像素密度。">Texel Density</Term>
+必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+
+<Term def="三维表面映射到二维后角度或面积的形变。">Stretch</Term>
+必须落到本章资产链：输入来自哪里、由谁修改、输出供谁消费，以及失败时哪个信号最先偏离。
+
+术语若不能落到具体 .blend、Datablock、图像、骨骼、Action、Track 或 Render 上，就仍停留在记忆层。读者应能写出正常值、边界值和故意失败时的观测差异。
+
+## 关键对象与数据流
+
+复制最终拓扑并锁定模型版本，先用测试栅格观察面部和躯干潜在接缝。标记接缝后分区展开，逐岛检查 Stretch、镜像、翻转和方向。为面部等高关注区域分配更高面积或保持统一密度，再按目标分辨率计算 Padding 并打包。任何拓扑变化都触发 UV 回归检查。
+
+每次修改前先保存输入版本，修改后记录输出文件、统计和截图。最终画面正确但中间资产不符合预测，也不能立即签发，因为它可能依赖隐藏偏好、未保存图像、错误链接或偶然缓存。
+
+## 三步可重复实验
+
+动手前先预测：只改变当前步骤的一项输入后，哪个对象、拓扑、像素、骨骼、轨迹或渲染结果应最先变化？实验期间固定 Blender 版本、插件、资产版本、相机和输出设置。
+
+<Stepper>
+  <Step title="规划接缝">
+    <Bl308UnwrappingUvsMapLab />
+
+用测试栅格和最终镜头选择遮挡处接缝，记录面部、躯干、四肢、服装与配件切分理由。
+
+```text
+mesh topology + seams -> unwrap -> stretch check -> texel density -> pack -> grid proof
+```
+
+  </Step>
+  <Step title="展开并检查失真">
+    <Bl308UnwrappingUvsExperimentLab />
+
+逐岛运行展开，使用 Stretch Overlay 和栅格检查面部、手与关节，修正翻转和比例异常。
+
+```python
+for layer in bpy.context.object.data.uv_layers:
+    print(layer.name, len(layer.data))
+```
+
+  </Step>
+  <Step title="统一密度并打包">
+    <Bl308UnwrappingUvsEvidenceLab />
+
+设定目标纹理尺寸、Texel Density 和 Padding，锁定镜像/叠放策略并输出 UV Layout。
+
+```python
+image_size = 2048
+padding_px = 16
+print('normalized padding', padding_px / image_size)
+```
+
+  </Step>
+</Stepper>
+
+## 正常、边界与失败样本
+
+本章至少保存一个正常样本、一个极端边界和一个故意破坏配置。正常样本证明主路径，边界样本说明适用范围，失败样本证明诊断方法确实能抓到错误。
+
+<Callout type="trap">
+  **因果陷阱**：只追求岛塞满空间会牺牲统一密度和足够 Padding，缩小 Mip
+  后出现串色。
+</Callout>
+
+<Callout type="trap">
+  **版本陷阱**：绑定或形态键之后随意改拓扑，会让
+  UV、权重和后续纹理版本一起失效。
+</Callout>
+
+## 从 Blender 2.83 LTS 到当前版本
+
+UV 原理与第三版一致，当前 Blender 的 UV 工具、Pack Islands 选项和 Density 工作流可能增强。迁移应记录算法和参数，不能只写按 U；UDIM 可扩展高分辨率项目，但本书单角色布局仍先通过基础密度与接缝验收。
+
+迁移账本采用五列：原书载体、稳定不变量、当前实现、不可等价处、证据。允许菜单和工具变化，不允许抹去原始问题、项目依赖或章节身份。
+
+## 验收证据
+
+验收包含接缝图、各部件 UV 岛、Stretch Overlay、测试栅格、Texel Density 统计、Padding 像素、打包占用率和导出的 UV Layout。目标镜头中面部与手的像素预算必须可解释。
+
+证据包同时记录文件路径、Datablock 名称、版本、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不只是看过。
+
+UV 验收必须把几何正确和像素预算同时量化。先给全角色套方向明确、格子等大的测试图，在面部、手、躯干、靴子和帽子上分别截取正视与斜视图，记录弯曲线、格子面积和接缝跳变；再按最终镜头的重要度设定 Texel Density，说明面部为何可以高于不可见鞋底。打包时记录图像尺寸、最小岛尺寸、旋转策略、允许重叠的对称部件和以像素计的 Padding，并用缩小后的 Mipmap 预览检查渗色。修改模型后重跑 UV 哈希与岛数量对照，证明拓扑变化没有静默破坏已绘制纹理。
+
+## 小结
+
+- UV 展开是曲面切割和失真控制问题
+- 接缝位置应服从可见性与绘制便利
+- Texel Density 分配纹理预算
+- Packing 必须同时考虑 Padding、方向和叠放策略
+
+<Exercises>
+
+**问题 1** Padding 为什么按像素考虑？
+
+<Answer>Mip 和过滤会跨岛采样，归一间距需随纹理分辨率换算。</Answer>
+
+**问题 2** 面部接缝通常放哪里？
+
+<Answer>尽量放在后脑、发际或遮挡处，具体由镜头和纹理设计决定。</Answer>
+
+**问题 3** 拓扑修改后为何要回归 UV？
+
+<Answer>面和角发生变化会改变 UV 对应和岛边界。</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="UV Coordinate">
+    附着在网格角上的二维纹理坐标。
+  </GlossaryItem>
+  <GlossaryItem term="Seam">展开时允许表面断开的标记边。</GlossaryItem>
+  <GlossaryItem term="UV Island">
+    由接缝切分后在二维空间连续的一组面。
+  </GlossaryItem>
+  <GlossaryItem term="Texel Density">
+    单位模型表面积分配到的纹理像素密度。
+  </GlossaryItem>
+  <GlossaryItem term="Stretch">
+    三维表面映射到二维后角度或面积的形变。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Oliver Villar《Learning Blender》第 3 版 Pearson 官方目录与中文版身份资料"
+  adaptedUrl="https://www.pearson.com/en-gb/subject-catalog/p/learning-blender/P200000000666/9780136411758"
+/>

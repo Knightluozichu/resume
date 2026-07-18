@@ -1,0 +1,181 @@
+---
+title: "Chapter 15. An introduction to message-passing concurrency"
+type: C
+section: "Functional C# 1e · Advanced techniques"
+order: 15
+description: "覆盖shared state风险、mailbox/agent protocol、functional API与LOB topology，把serialization、capacity、failure和delivery guarantees纳入设计。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-15"
+draft: false
+---
+
+import { CfpLobTopologyLab, CfpMailboxProtocolLab, CfpSharedStateChoiceLab } from "@/components/mdx/csharp-functional-programming/diagrams/message-passing-concurrency";
+
+<Objectives>
+
+- 能比较lock、atomic、immutable snapshot与single-owner agent，判断各自保护的invariant和failure mode
+- 能设计typed mailbox protocol、bounded capacity、reply/cancellation与supervision，复现ordering和crash behavior
+- 能分析LOB系统的partition key、consistency boundary和load topology，实现functional API与agent runtime分离
+
+</Objectives>
+
+## 为什么不共享Memory仍然需要Concurrency设计
+
+Message passing把“多个threads直接改同一对象”改成“一个owner按顺序处理immutable messages”。它缩小race surface，却没有消灭并发问题：senders仍并行，mailbox可能无限增长，消息可能duplicate/out-of-order，handler可能crash，reply可能timeout，remote delivery更不等于exactly once。正确性从lock discipline转为protocol和ownership discipline。
+
+先预测：actor一次处理一个message就没有lost update吗；reply timeout表示command未执行吗；immutable message可以安全包含mutable List吗；unbounded mailbox能吸收流量峰值吗；remote actor天然exactly-once吗。答案都是否。
+
+<Term def="由一个执行上下文独占mutable state，其他参与者只能通过messages请求transition的并发边界。">single-owner state</Term>
+
+## The need for shared mutable state
+
+许多invariants横跨多个值，例如余额与reserved amount、inventory与orders、connection与sequence。Lock可把临界区原子化，但所有访问路径必须遵守同一lock order；atomic适合单word update，复杂invariant仍需protocol；immutable snapshot允许lock-free reads，但writers仍要CAS/version；agent把writes串行化并让state不逃出owner。
+
+```csharp
+Either<Error, AccountState> Decide(
+    AccountState state,
+    AccountMessage message) => message switch
+{
+    Debit debit when state.Balance >= debit.Amount =>
+        Right(state with { Balance = state.Balance - debit.Amount }),
+    Debit => Left(Error.InsufficientFunds),
+    _ => Left(Error.UnsupportedMessage)
+};
+```
+
+先定义invariant与contention profile，再选机制。单个counter用Interlocked；read-heavy configuration用immutable atomic replace；短小local aggregate可lock；有明确identity、commands和serial transition的entity适合agent。不要为了“无锁”把简单问题拆成异步protocol，也不要因agent流行就隐藏需要跨entity atomicity的事实。
+
+<Term def="Lock、CAS或mailbox真正保证不可被interleaving破坏的业务关系及其作用范围。">concurrency invariant boundary</Term>
+
+<Stepper>
+  <Step title="切换lock、atomic、immutable与agent"><CfpSharedStateChoiceLab /></Step>
+  <Step title="列invariant和ownership">写出被共同更新的fields、所有write paths、critical duration、reader consistency和failure recovery。</Step>
+  <Step title="用adversarial schedule验收">同时提交conflicting commands，暂停owner/holder，验证无lost update、deadlock或stale publish。</Step>
+</Stepper>
+
+<Callout type="trap" title="Immutable Messages保证整个系统没有Race">
+Message可immutable，但多个owners仍可能对同一外部resource竞争，两个agents也可能基于stale facts做冲突决定。需要partition ownership、versioned protocols或协调流程。
+</Callout>
+
+## Understanding message-passing concurrency
+
+Mailbox接收messages，owner逐个dispatch并更新private state。Local mailbox通常提供enqueue后按某种顺序处理，但来自不同senders的全局顺序未必定义；remote transport还加入serialization、network partition与redelivery。Protocol必须写message identity、sender/causation、expected version、deadline和reply shape。
+
+Tell是fire-and-forget command；Ask建立reply Task，但timeout只表示caller没收到及时reply，handler可能稍后成功。若caller重试，command id/idempotency需要防重。Cancellation同样不能撤回已入队command，除非protocol定义cancel message和owner处理规则；不要把token cancellation误当作distributed rollback。
+
+<Term def="定义message schema、identity、ordering、reply、timeout、dedup和version expectations的并发通信契约。">mailbox protocol</Term>
+
+<Stepper>
+  <Step title="切换send、handle、reply与fail"><CfpMailboxProtocolLab /></Step>
+  <Step title="画message lifecycle">标enqueue accepted、dequeue、state commit、reply send/receive与caller timeout，区分每个事实。</Step>
+  <Step title="注入duplicate、crash与overload">验证dedup window、handler restart、mailbox retention/dead-letter和reply correlation。</Step>
+</Stepper>
+
+<Callout type="trap" title="Ask超时后重试不会重复执行">
+Timeout不是negative acknowledgment。第一次command可能已commit但reply丢失，重试会再次执行；使用stable command id、dedup result或查询确认，不能把网络等待结果当业务执行事实。
+</Callout>
+
+## Functional APIs, agent-based implementations
+
+Caller不应依赖具体actor runtime。暴露`Func&lt;Command, Task&lt;Either&lt;Error,Reply&gt;&gt;&gt;`或domain interface，implementation可用Channel、TPL Dataflow、actor framework或单线程loop。Pure handler保持`(State, Message) -> (State, Effects/Reply)`，runtime负责queue、serialization、cancellation、logging和effect interpretation。
+
+```csharp
+public interface IAccount
+{
+    Task<Either<AccountError, Receipt>> Handle(
+        AccountCommand command,
+        CancellationToken token);
+}
+
+public sealed record Transition(
+    AccountState State,
+    IReadOnlyList<AccountEffect> Effects,
+    Either<AccountError, Receipt> Reply);
+```
+
+这种分离让unit test直接验证handler，不启动threads；contract test再验证runtime的ordering、reply和shutdown。Effects先表示为data，例如PersistEvent、PublishNotification，再由interpreter执行。若effect成功后process在state checkpoint前crash，恢复语义必须明确：event-sourced owner可从durable log重建，in-memory owner可能丢state，outbox处理publish consistency。
+
+<Term def="Domain caller只看到typed command/reply函数，而mailbox、scheduler和runtime作为可替换implementation detail。">agent API boundary</Term>
+
+## Mailbox capacity and backpressure
+
+Unbounded mailbox把overload变成latency和memory growth；bounded mailbox必须定义full policy：wait、reject、drop oldest/latest或route dead letter。Command通常不能静默drop，telemetry sample可能允许latest wins。Capacity由service time、burst、SLO和memory per message推导，并用queue age而非只看length告警。
+
+Fairness也重要：单个slow command会head-of-line block；按entity sharding可并行不同owners，但hot key仍串行。Long I/O handler若await时允许reentrancy，state可能被其他message改变；若不允许reentrancy，mailbox吞吐受I/O限制。可把I/O拆为effect + completion message，带state version/correlation，回来时重新验证context。
+
+## Failure, supervision, and durable ownership
+
+Handler抛异常时选择resume、restart、stop或escalate；每种都要说明当前message、private state和mailbox如何处理。Blind restart可能反复处理poison message；blind resume可能保留corrupt state。通常unexpected fault记录cause，将message隔离/dead-letter，按durable snapshot/event log恢复known-good state，再由supervisor限速重启。
+
+Local agent进程退出就丢mailbox/state，不能承担需要durability的事实。持久命令先写broker/log，再由consumer owner处理并checkpoint；delivery至少一次时handler必须idempotent。Exactly-once business effect通常靠command id、unique constraint、transactional outbox和dedup，不靠runtime宣传语。
+
+## Message-passing concurrency in LOB applications
+
+LOB topology按ownership key划分：account/order/tenant/shard各有serial command stream；pricing或reporting可并行pure workers；portfolio risk按portfolio key聚合；gateway做authentication、routing和bounded ingress。跨owner workflow用saga/process manager维护步骤与compensation，不让一个“global actor”成为所有业务的锁。
+
+```text
+gateway -> partition(accountId) -> account owner -> durable events
+                                      |              |
+                                      v              v
+                                 typed reply      projections
+process manager <- events -> commands to inventory/payment/shipping
+```
+
+Partition key决定哪些invariants可强一致。转账跨两个accounts时，单owner无法原子修改双方；可用ledger owner、reservation protocol或database transaction，按domain requirements选。Rebalancing需迁移ownership并阻止双owners同时写，常用lease/epoch/fencing token。消息携带epoch，stale owner的write被store拒绝。
+
+<Term def="根据entity或tenant key把messages路由到唯一owner，同时保留扩容、hot-key和迁移规则的拓扑。">ownership partition</Term>
+
+<Stepper>
+  <Step title="切换account、pricing、risk与gateway"><CfpLobTopologyLab /></Step>
+  <Step title="标consistency boundary">每个partition写invariants、durable store、cross-owner messages、reply SLO和recovery owner。</Step>
+  <Step title="做hot-key与rebalance演练">压测skewed traffic，迁移partition时注入stale owner，验证fencing、queue drain和无双写。</Step>
+</Stepper>
+
+## Observability and protocol evolution
+
+Trace把command id、causation id、correlation id与entity/partition串起来；metrics记录enqueue rate、dequeue rate、queue age/depth、handler duration、restart、dead letter、timeout与dedup hits。不能把完整message payload默认写log，敏感LOB数据需要schema级redaction。Sampling也不能丢掉failure/dead-letter traces。
+
+Message schema是跨版本contract。新增optional field有default，rename保留wire name，consumer先支持new/old，再producer切换。Mailbox中的old messages可能在部署后才处理，rolling upgrade尤其要验证。Golden messages做serialization/deserialization和semantic handler tests，不能只编译当前records。
+
+## Production gate: prove protocol under disruption
+
+最终验收不止unit handler。Integration harness暂停consumer、填满mailbox、重复delivery、丢reply、crash after effect before checkpoint、restart与partition migration。每个scenario断言business invariant、dedup、reply classification、queue bound和recovery time。Chaos evidence需可复现，记录seed/schedule与message trace。
+
+Shutdown先停止ingress，等待/期限内drain，checkpoint owner，未完成message按durable policy返回queue；不能进程退出时静默丢掉accepted command。Deployment compatible gate还要让old/new nodes交换messages，证明rolling window可用。
+
+## 本章回顾：Message Passing把锁问题变成Protocol问题
+
+1. Single owner序列化private state，但cross-owner invariants仍需明确protocol。
+2. Ask timeout、cancellation与delivery status不是business commit事实，retry必须防重。
+3. Functional API隔离domain handler与agent runtime，pure transition便于重放和测试。
+4. Mailbox需要capacity、fairness、supervision、durability和schema evolution。
+5. LOB topology由ownership key和consistency boundary决定，并用fencing防止迁移双写。
+
+<Exercises>
+
+**问题 1：怎样测试Reply丢失后的安全重试？**
+
+<Answer>第一次command带stable id并成功commit，但harness丢弃reply；caller timeout后以同id重试。Owner/durable store返回已记录result而不重复effect，dedup hit可观测。再测试dedup过期与不同payload同id被拒绝。</Answer>
+
+**问题 2：Mailbox满时应选择哪种策略？**
+
+<Answer>按message价值决定：不可丢command选择bounded wait/reject并让caller backoff；latest-only telemetry可drop old；durable work进入broker。所有策略都记录queue age/drop/reject，并用load test验证SLO与memory上限。</Answer>
+
+**问题 3：Agent重启后怎样恢复State？**
+
+<Answer>从validated snapshot + later durable events重建，或从event log全量fold；poison message隔离，checkpoint/version与effects保持一致。In-memory state无durable source时无法声称恢复，只能明确丢失语义。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="single-owner state" definition="一个执行上下文独占state并以messages接收请求。" />
+  <GlossaryItem term="concurrency invariant boundary" definition="并发机制真正保护的一组业务关系。" />
+  <GlossaryItem term="mailbox protocol" definition="Message identity、ordering、reply与failure契约。" />
+  <GlossaryItem term="agent API boundary" definition="Typed functional API与runtime实现的隔离边界。" />
+  <GlossaryItem term="ownership partition" definition="按key把messages路由到唯一owner的拓扑。" />
+</Glossary>
+
+<Attribution adaptedFrom="Functional Programming in C#, First Edition, Chapter 15: An introduction to message-passing concurrency" adaptedUrl="https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-15" />

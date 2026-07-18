@@ -13,7 +13,6 @@ export function EnumUnionDiagram() {
   const border = "var(--border)";
   const good = "rgb(63,185,127)";
   const warn = "rgb(229,181,103)";
-  const err = "rgb(229,103,92)";
 
   // Layout：dim-label 单独放左 gutter，避免和数据列重叠（修复 HEL-241）
   const labelGutterW = 96;
@@ -154,10 +153,10 @@ export function EnumUnionDiagram() {
                   传统 enum——只维护老代码
                 </text>
                 <text x={col3X + colW / 2} y={verdictY + 22} fontSize="10" fill={good} fontWeight="700" textAnchor="middle">
-                  C++17 优先用 variant 代替 union
+                  C++11 用 tag 管理活跃成员
                 </text>
                 <text x={col1X + verdictW / 2} y={verdictY + 42} fontSize="10" fill={secondary} textAnchor="middle">
-                  enum class：类型安全 + 作用域限定 → 编译期防错。union：共享内存 → 手动管理 ≡ variant 更安全。
+                  enum class：类型安全 + 作用域限定。union：共享存储 + 显式生命周期管理。
                 </text>
               </g>
             );
@@ -170,7 +169,7 @@ export function EnumUnionDiagram() {
               <g>
                 <rect x={cx - 200} y={legendY} width="400" height="20" rx="4" fill="var(--code-bg)" stroke={border} />
                 <text x={cx} y={legendY + 14} fontSize="10" fill={secondary} textAnchor="middle">
-                  ⬤ enum class = 类型安全 {'{'} 推荐 &#xa0;&#xa0; ⬤ 传统 enum = 有风险 &#xa0;&#xa0; ⬤ union = C++17 variant 可替代
+                  ⬤ enum class = 限定作用域 &#xa0;&#xa0; ⬤ 传统 enum = 可隐式转整数 &#xa0;&#xa0; ⬤ union = 追踪活跃成员
                 </text>
               </g>
             );
@@ -178,7 +177,7 @@ export function EnumUnionDiagram() {
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        enum class 是 C++ 推荐的枚举写法——类型安全、作用域限定、不隐式转整数。传统 enum 只有在维护老代码库时碰到。union 在 C++17 后有 std::variant（自动追踪活跃成员）更安全——但理解 union 对底层编程依然重要。
+        enum class 提供限定作用域且不隐式转整数；传统 enum 与整数互转更宽松。C++11 的非平凡 union 成员需要程序显式追踪活跃成员和生命周期。
       </figcaption>
     </figure>
   );

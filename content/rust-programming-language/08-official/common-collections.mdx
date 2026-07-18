@@ -1,0 +1,315 @@
+---
+title: "Chapter 8：常用集合（Common Collections）"
+type: A
+section: Rust 程序设计语言 · 堆上集合与文本
+order: 8
+description: 对齐官方第 8 章：掌握 Vec、UTF-8 String 与 HashMap 的创建、读取和更新，并用所有权、借用、扩容和 entry API 解释其安全边界。
+demo: false
+math: false
+sourceUrl: "https://doc.rust-lang.org/book/ch08-00-common-collections.html"
+draft: false
+---
+
+import {
+  RplHashMapEntryLab,
+  RplUtf8LayersLab,
+  RplVecCapacityLab,
+} from "@/components/mdx/rust-programming-language/diagrams/common-collections";
+
+<Objectives>
+
+- 能分析 `Vec<T>` 的连续存储、索引/get 失败策略和扩容借用冲突，并实现安全遍历与异构 enum 列表
+- 能区分 UTF-8 bytes、Unicode scalar values 与 grapheme clusters，判断 String 拼接、切片和迭代的所有权及边界
+- 能设计 `HashMap<K,V>` 的插入、查询和三种更新策略，使用 `entry().or_insert()` 完成词频累计
+
+</Objectives>
+
+## 为什么集合的 API 必须连同成本一起学习
+
+array 与 tuple 的形状在编译期固定；标准库集合把拥有的数据放在 heap 上，可以随运行时输入增长或缩小。灵活性同时带来分配、迁移、哈希、编码边界和所有权转移。选择集合不能只看“能否装下”，还要说明按什么键读取、元素是否同型、顺序是否重要、缺失如何处理，以及修改会不会使已有引用失效。
+
+<Term def="拥有一组可变数量元素的数据结构；本章聚焦连续序列 Vec、UTF-8 文本 String 和键值映射 HashMap。">集合</Term>
+
+## Vec 把同类型值连续存放
+
+<Term def="标准库提供的可增长连续序列，拥有一段堆缓冲并只存放同一种 T 类型的元素。">Vec</Term>
+
+空 Vec 没有元素供类型推断，需要注解；`vec!` 或第一次 push 通常能推断 T：
+
+```rust
+let empty: Vec<i32> = Vec::new();
+let inferred = vec![1, 2, 3];
+
+let mut scores = Vec::new();
+scores.push(10);
+scores.push(20); // scores: Vec<i32>
+```
+
+Vec 的三个关键量是 pointer、length 和 capacity。length 是已初始化元素数，capacity 是当前缓冲无需重新分配可容纳的元素数。Vec 离开 scope 时先 drop 每个元素，再释放自己的缓冲。
+
+<Term def="Vec 当前已初始化元素的数量，可通过 len 读取。">length</Term>
+
+<Term def="Vec 当前堆缓冲在重新分配前能容纳的元素数量；不等于 length，也不是稳定地址承诺。">capacity</Term>
+
+## 索引和 get 对越界采取不同策略
+
+```rust
+let values = vec![10, 20, 30];
+
+let second: &i32 = &values[1];       // 越界会 panic
+let maybe: Option<&i32> = values.get(9); // 越界返回 None
+```
+
+<Term def="用方括号和 usize 位置直接取得元素引用；调用方声明该位置必须存在，越界时 panic。">Vec 索引</Term>
+
+<Term def="按位置返回 Option 引用的安全查询；存在时是 Some(&T)，越界时是 None。">get</Term>
+
+固定不变量保证 index 合法时，`v[i]` 简洁；用户输入或普通缺失属于预期路径时，`get` 让调用方用 Option 处理。二者不是“安全与不安全”的区别，而是越界究竟代表程序 bug 还是业务分支。
+
+## 活跃元素引用会阻止可能迁移缓冲的 push
+
+```rust
+let mut values = vec![1, 2, 3, 4, 5];
+let first = &values[0];
+
+// values.push(6); // E0502：需要 &mut Vec，同时 first 仍活跃
+println!("{first}");
+```
+
+<Term def="当 push 所需空间超过 capacity 时申请更大缓冲、移动旧元素并释放旧缓冲的过程。">Vec 扩容</Term>
+
+push 需要可变借用整个 Vec，也可能重新分配并改变每个元素地址。若 first 在 push 后还会使用，允许修改就可能产生悬空引用。即使某次运行 capacity 碰巧足够，借用规则也不依赖该偶然状态；它按 API 可能的效果建立稳定保证。
+
+<RplVecCapacityLab />
+
+先预测 capacity 足够时编译器会不会放宽规则，再改变 length、capacity 和引用活跃状态。实验区分了两个事实：运行时是否真的 realloc，以及编译期是否允许同时持有 `&T` 和 `&mut Vec<T>`。
+
+<Callout type="trap" title="陷阱：reserve 之后就长期保存元素引用并任意 push">
+  reserve 可降低一段操作中的重新分配概率，但 push 仍需要可变借用 Vec，活跃元素引用与修改冲突。需要跨修改识别元素时保存稳定 key/index 并在修改后重新查询，或选择地址稳定语义更合适的数据结构。
+</Callout>
+
+## 遍历借用元素，enum 统一有限异构集合
+
+```rust
+for value in &values {
+    println!("{value}");
+}
+
+for value in &mut values {
+    *value += 50;
+}
+```
+
+不可变遍历产生 `&T`，可变遍历产生 `&mut T`，解引用后才能修改。遍历期间 iterator 借用了集合，不能在循环体同时 push/remove 改变结构。
+
+Vec 的每个元素必须同型。已知异构集合的封闭类型集合可用 enum：
+
+```rust
+enum SpreadsheetCell {
+    Int(i32),
+    Float(f64),
+    Text(String),
+}
+
+let row = vec![
+    SpreadsheetCell::Int(3),
+    SpreadsheetCell::Text("blue".into()),
+    SpreadsheetCell::Float(10.12),
+];
+```
+
+三个 variants 都属于 `SpreadsheetCell`，match 又强制处理全部形状。若运行时类型集合开放，需等 Chapter 18 的 trait object，而不是让 Vec 忘记元素布局。
+
+## String 是有 UTF-8 保证的拥有字节集合
+
+<Term def="标准库提供的可增长、可修改、拥有且保证有效 UTF-8 的文本类型，内部基于字节向量。">String</Term>
+
+<Term def="核心语言中的 UTF-8 字符串切片类型，通常以借用形式 &str 出现，不拥有底层文本。">str 切片</Term>
+
+String 可由 `String::new()`、`String::from("text")` 或实现 Display 的值 `.to_string()` 创建。`push_str(&str)` 借用一段文本并追加，不取得参数所有权；`push(char)` 追加一个 Unicode scalar value。
+
+```rust
+let mut owned = String::from("foo");
+let suffix = String::from("bar");
+owned.push_str(&suffix);
+owned.push('!');
+assert_eq!(owned, "foobar!");
+println!("{suffix}"); // suffix 仍有效
+```
+
+## 加号消费左侧 String，format 借用参数
+
+```rust
+let left = String::from("Hello, ");
+let right = String::from("world!");
+let joined = left + &right;
+// left 已 move；right 仍有效
+
+let a = String::from("tic");
+let b = String::from("tac");
+let c = String::from("toe");
+let readable = format!("{a}-{b}-{c}");
+```
+
+`+` 对 String 的行为近似 `fn add(self, rhs: &str) -> String`：取得左侧所有权，借用右侧，经 deref coercion 把 `&String` 视为 `&str`，并返回结果所有权。多个片段更适合 format，表达清晰且不消费参数。
+
+<Callout type="trap" title="陷阱：把字符串加号当成两个操作数都复制">
+  `left + &right` 会 move left，并尽量复用其缓冲追加 right。后续仍需 left 时用 format、预分配目标 String 后 push_str，或明确 clone 并接受额外分配。
+</Callout>
+
+## UTF-8 让“第 i 个字符”没有唯一含义
+
+<Term def="变长 Unicode 编码；一个 Unicode scalar value 使用一到四个 bytes，String 保证其存储始终是有效 UTF-8。">UTF-8</Term>
+
+String 内部近似 `Vec<u8>`，`len()` 返回 bytes 数，不返回人类字符数。文本可从三层观察：raw bytes、Rust `char` 对应的 Unicode scalar values、用户感知的 grapheme clusters。三者数量可能不同，grapheme 分段也不由标准库直接提供。
+
+<Term def="Rust char 表示的 Unicode 码点值，不等同一个 UTF-8 byte，也不保证等同用户感知的单个字母。">Unicode scalar value</Term>
+
+<Term def="用户视觉上常视为一个字符的组合序列，可能由多个 Unicode scalar values 共同组成。">grapheme cluster</Term>
+
+<RplUtf8LayersLab />
+
+在 Latin、Cyrillic 与 Devanagari 文本间切换，先预测 `len()`、`chars().count()` 和 grapheme 数，再观察三层分解。String 不支持 `s[0]`，因为返回 byte、char、grapheme 或 slice 都没有唯一正确答案，char 定位也不能保证 O(1)。
+
+## String range slice 必须落在 char boundary
+
+`&text[0..4]` 的 range 是 byte offsets；起止都落在 UTF-8 char boundary 时返回 `&str`，切进一个多字节 scalar value 内部会 runtime panic。明确需要 scalar values 时用 `chars()`，需要协议 bytes 时用 `bytes()`；需要 grapheme 时选用专门 Unicode crate。
+
+```rust
+for scalar in "Зд".chars() {
+    println!("{scalar}");
+}
+
+for byte in "Зд".bytes() {
+    println!("{byte}");
+}
+```
+
+## HashMap 用 key 而不是位置查找 value
+
+<Term def="通过哈希函数把同型 key 映射到同型 value 的可增长集合；每个唯一 key 同时只关联一个 value。">HashMap</Term>
+
+HashMap 不在 prelude 中，需要 `use std::collections::HashMap;`。`insert`、`get` 和迭代的基本边界如下：
+
+```rust
+use std::collections::HashMap;
+
+let mut scores = HashMap::new();
+scores.insert(String::from("Blue"), 10);
+scores.insert(String::from("Yellow"), 50);
+
+let team = String::from("Blue");
+let score = scores.get(&team).copied().unwrap_or(0);
+
+for (key, value) in &scores {
+    println!("{key}: {value}");
+}
+```
+
+get 返回 `Option<&V>`；这里 copied 把 Copy 的 i32 从引用复制出来，unwrap_or 决定缺失默认值。普通 HashMap 迭代顺序不应作为输出契约。
+
+## 插入会按类型执行 move、Copy 或借用
+
+owned `String` 作为 key/value 传给 insert 会 move，map 成为 owner；i32 等 Copy 类型复制。也能插入 references，但被引用数据必须至少活得和 map 一样久。集合不会暂停所有权规则，只会把规则应用到每个元素。
+
+```rust
+let field = String::from("Favorite color");
+let value = String::from("Blue");
+let mut metadata = HashMap::new();
+metadata.insert(field, value);
+// field 与 value 已 move
+```
+
+## Entry 把存在与缺失统一成一个可更新位置
+
+同一 key 再次 insert 会 overwrite。只在缺失时写默认值，使用 `entry(key).or_insert(default)`；or_insert 对 occupied entry 返回已有 `&mut V`，对 vacant entry 插入默认值再返回新值引用。
+
+<Term def="HashMap 对某 key 的 occupied 或 vacant 状态枚举，让查询与条件插入在一次 API 流程中完成。">Entry API</Term>
+
+```rust
+let text = "hello world wonderful world";
+let mut counts = HashMap::new();
+
+for word in text.split_whitespace() {
+    let count = counts.entry(word).or_insert(0);
+    *count += 1;
+}
+```
+
+`word` 是 text 的 `&str` subslice，counts 因而借用原文本；`or_insert` 返回 `&mut i32`，解引用后原地加一。该 mutable reference 每轮结束，不与下一次 map 可变访问重叠。
+
+<RplHashMapEntryLab />
+
+切换覆盖、缺失插入和词频累计，修改文本并观察 entries。HashMap 输出顺序可以变化，正确性应基于 key-value 集合，而不是某次显示顺序。
+
+<Callout type="trap" title="陷阱：先 get_mut 再 insert 并长期保留 value 引用">
+  `&mut V` 来自对整个 map 的可变借用；引用仍活跃时不能再次结构性修改 map。把基于旧值的更新限定在短 scope，entry API 通常能把查询、插入和更新组合成借用检查器可验证的流程。
+</Callout>
+
+## 三步选择并验证集合
+
+<Stepper>
+  <Step title="第一步：确定寻址与元素类型">
+    按连续整数位置访问同型元素选 Vec；拥有并修改 UTF-8 文本选 String；按唯一 key 查 value 选 HashMap。有限异构序列用 enum 统一元素类型。
+
+    <RplVecCapacityLab />
+  </Step>
+  <Step title="第二步：明确观察单位和失败策略">
+    Vec 越界是 bug 用 index，属于业务缺失用 get；String 明确要 bytes、scalar values 还是 graphemes，range slice 必须验证 byte boundary。
+
+    <RplUtf8LayersLab />
+  </Step>
+  <Step title="第三步：追踪所有权与更新语义">
+    标注插入时 move/Copy/borrow，修改时是否持有元素引用；HashMap 明确 overwrite、insert-if-absent 或 update-from-old，并优先用 entry 表达原子意图。
+
+    <RplHashMapEntryLab />
+  </Step>
+</Stepper>
+
+尤其要把 **String 与 UTF-8** 作为 byte、scalar value 与 grapheme 三层问题处理；这正是 String 不支持整数索引、slice 必须落在 char boundary 的原因。
+
+## 小结
+
+- Vec 连续存放同型 T，index 越界 panic、get 返回 Option；push 可能扩容迁移，因此活跃元素引用阻止结构修改
+- 遍历借用整个集合；有限异构值可包装成 enum，使 Vec 元素仍保持一个静态类型
+- String 是拥有且保证有效 UTF-8 的字节集合；加号消费左侧，bytes、chars 与 graphemes 是不同观察层
+- 字符串 range 使用 byte offsets 且必须落在 char boundary；按领域选择 chars、bytes 或外部 grapheme 分段
+- HashMap 插入遵循 move/Copy/borrow，get 返回 Option 引用；insert 覆盖，entry 可按缺失插入或基于旧值更新
+
+<Exercises>
+  1. **问题 1：解释借用错误。** `let first = &v[0]; v.push(x); println!("{first}");` 为什么即使已知当前 capacity 足够也不通过？怎样保持意图？
+
+  <Answer question="Vec 修改为何与元素引用冲突？">first 的共享借用活跃到 println；push 需要整个 Vec 的可变借用，并在一般语义上可能迁移缓冲。借用规则不依赖本次运行的 capacity 偶然值。可先使用 first 让借用结束再 push，或保存 index/key，修改后重新取得引用。</Answer>
+
+  2. **问题 2：定义文本单位。** 对 UTF-8 文本实现“取前四个字符”，为什么不能直接写 `[0..4]`，应先问什么？
+
+  <Answer question="String 切片的 4 与用户字符的 4 有何区别？">range 0..4 表示四个 bytes，可能切进多字节 scalar value 而 panic。需求必须先定义四个 UTF-8 bytes、四个 Unicode scalar values，还是四个 grapheme clusters；分别使用验证过的 byte boundary、chars 迭代，或 Unicode grapheme 分段 crate。</Answer>
+
+  3. **问题 3：实现词频。** 为什么 `*counts.entry(word).or_insert(0) += 1` 同时处理首次出现和重复出现，word 的所有权是什么？
+
+  <Answer question="Entry API 如何返回统一更新位置？">entry 产生 Vacant 或 Occupied；or_insert 对 Vacant 写入 0，对 Occupied 保留旧值，两者都返回 &mut count，解引用后统一加一。split_whitespace 的 word 是借用原 text 的 &str，HashMap 存这些引用，因此 text 必须覆盖 map 的使用期。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="集合">拥有多个运行时元素并提供特定存储与访问语义的数据结构。</GlossaryItem>
+  <GlossaryItem term="Vec">拥有连续堆缓冲、只存同型 T 的可增长序列。</GlossaryItem>
+  <GlossaryItem term="length">Vec 中已初始化元素的数量。</GlossaryItem>
+  <GlossaryItem term="capacity">Vec 重新分配前当前缓冲可容纳的元素数。</GlossaryItem>
+  <GlossaryItem term="Vec 索引">用位置直接取元素且越界 panic 的访问方式。</GlossaryItem>
+  <GlossaryItem term="get">按位置返回 Option 引用的集合查询。</GlossaryItem>
+  <GlossaryItem term="Vec 扩容">容量不足时迁移到更大连续缓冲的过程。</GlossaryItem>
+  <GlossaryItem term="String">拥有、可增长、可修改且保证有效 UTF-8 的文本类型。</GlossaryItem>
+  <GlossaryItem term="str 切片">借用存储在其他位置的 UTF-8 文本视图。</GlossaryItem>
+  <GlossaryItem term="UTF-8">以一到四个 bytes 编码 Unicode scalar value 的变长编码。</GlossaryItem>
+  <GlossaryItem term="Unicode scalar value">Rust char 表示的 Unicode 码点值。</GlossaryItem>
+  <GlossaryItem term="grapheme cluster">用户感知为一个字符、可由多个 scalar values 构成的序列。</GlossaryItem>
+  <GlossaryItem term="HashMap">用哈希 key 查找唯一关联 value 的可增长映射。</GlossaryItem>
+  <GlossaryItem term="Entry API">统一表达 HashMap key 已占用或空缺并返回更新位置的 API。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Rust Programming Language, Chapter 8 Common Collections"
+  adaptedUrl="https://doc.rust-lang.org/book/ch08-00-common-collections.html"
+/>

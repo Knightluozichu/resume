@@ -1,0 +1,159 @@
+---
+title: "第11章 立方体贴图和天空盒"
+type: C
+section: "Shader开发实战 · 三维光照"
+order: 11
+description: "沿Practical Shader Development正式目录掌握立方体贴图、天空盒、方向采样、反射向量、深度技巧。"
+demo: true
+math: true
+sourceUrl: "https://link.springer.com/book/10.1007/978-1-4842-4457-9"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PsdCubemapsSkyboxesPipelineLab, PsdCubemapsSkyboxesCompareLab, PsdCubemapsSkyboxesEvidenceLab } from "@/components/mdx/shader-practice/diagrams/psd-11-cubemaps-skyboxes";
+
+<Objectives>
+- 能解释立方体贴图、天空盒和方向采样在渲染数据流中的作用
+- 能推导本页公式并用GLSL、应用状态或引擎材质实现最小实验
+- 能复现深度技巧，以参考图、GPU捕获、边界输入和反例验收
+</Objectives>
+
+## 从画面开始
+
+先预测顶点、片元、深度和帧时间会如何变化，再只调整一个参数观察变化。天空盒跟随摄像机位置但不继承平移视差，并通常把裁剪位置z设为w放到远平面。环境反射用世界空间反射方向采样cubemap。立方体贴图面朝向、接缝和颜色空间要统一。 本页用<Term def="由六个面组成并以三维方向采样的环境纹理。">立方体贴图</Term>、<Term def="围绕摄像机绘制环境、表现无限远背景的立方体。">天空盒</Term>、<Term def="用从中心出发的三维向量选择立方体纹理面和坐标。">方向采样</Term>、<Term def="由观察入射方向关于表面法线反射得到的环境查询方向。">反射向量</Term>、<Term def="把天空盒放在最远深度并在场景后绘制以避免遮挡。">深度技巧</Term>建立对象、阶段、状态和证据之间的联系。
+
+<PsdCubemapsSkyboxesPipelineLab />
+
+## 第一版权威目录定位
+
+本页一一对应Kyle Halladay《Practical Shader Development: Vertex and Fragment Shaders for Game Developers》第一版第11章 立方体贴图和天空盒。Springer/Apress正式目录确认2019年第一版、18章、附录代码、ISBN 978-1-4842-4456-2和XXI+381页；清华大学出版社官方样章确认2021中文第一版《Shader开发实战》、ISBN 9787302583349及对应中文目录。
+
+### 原书小节覆盖
+
+1. 11.1 什么是立方体贴图
+2. 11.2 openFrameworks加载
+3. 11.3 在立方体渲染
+4. 11.4 天空盒
+5. 11.5 透视除法
+6. 11.6 天空盒与透视除法
+7. 11.8 立方体贴图反射
+
+### 核心对象
+
+1. **立方体贴图**：由六个面组成并以三维方向采样的环境纹理。
+2. **天空盒**：围绕摄像机绘制环境、表现无限远背景的立方体。
+3. **方向采样**：用从中心出发的三维向量选择立方体纹理面和坐标。
+4. **反射向量**：由观察入射方向关于表面法线反射得到的环境查询方向。
+5. **深度技巧**：把天空盒放在最远深度并在场景后绘制以避免遮挡。
+
+## 数据流与公式
+
+天空盒跟随摄像机位置但不继承平移视差，并通常把裁剪位置z设为w放到远平面。环境反射用世界空间反射方向采样cubemap。立方体贴图面朝向、接缝和颜色空间要统一。 前15章以OpenGL 4.1、GLSL和openFrameworks为实验环境；第16至18章再映射到Unity、UE4与Godot。所有代码都要把可编程Shader与应用侧资源绑定、Draw状态、深度和混合分开记录。
+
+$$
+r=reflect(i,n)
+$$
+
+$$
+C=texture(cube,r)
+$$
+
+$$
+p_c.z=p_c.w
+$$
+
+$$
+depth_{sky}=1
+$$
+
+公式中的位置、方向、颜色、深度和时间必须标注空间、范围与单位。片元输出只是候选颜色，最终结果还经过裁剪、深度、模板、混合与颜色编码。
+
+## 最小实现
+
+```glsl
+vec4 p=projection*mat4(mat3(view))*vec4(position,1.0);
+gl_Position=p.xyww;
+texDir=position;
+```
+
+实现顺序固定为常量输出、输入可视化、核心公式、应用状态和优化。先验证Shader编译与链接，再检查属性位置、uniform、纹理单元和Framebuffer；只有画面与状态都正确后才比较性能。
+
+<PsdCubemapsSkyboxesCompareLab />
+
+## 应用与引擎侧契约
+
+```cpp
+shader.begin();
+shader.setUniform1f("time", elapsedSeconds);
+shader.setUniformTexture("mainTex", texture, 0);
+mesh.draw();
+shader.end();
+```
+
+应用侧保存网格布局、索引、纹理格式、采样器、矩阵顺序、混合与深度状态。引擎章节则把同一概念映射到Material、节点图或ShaderMaterial；语法可以变化，输入空间与合成语义不能靠猜。
+
+## 边界、精度与性能
+
+测试零向量、退化UV、负缩放、近远裁剪面、透明交叉、纹理边缘、大世界坐标、长时间运行和高过度绘制。性能实验固定硬件、分辨率、VSync与场景，先判断CPU还是GPU受限，再用捕获定位具体Draw和Shader阶段。
+
+```text
+renderer: OpenGL 4.1 / named engine and version
+scene: fixed mesh, camera, lights, textures
+state: depth, cull, blend, target
+evidence: image diff, frame capture, CPU/GPU ms
+counterexample: smallest reproducible failure
+```
+
+<PsdCubemapsSkyboxesEvidenceLab />
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定输入和状态"><PsdCubemapsSkyboxesPipelineLab /></Step>
+  <Step title="逐阶段实现与比较"><PsdCubemapsSkyboxesCompareLab /></Step>
+  <Step title="捕获画面和性能"><PsdCubemapsSkyboxesEvidenceLab /></Step>
+</Stepper>
+
+1. 用最小网格与常量颜色验证Shader编译、链接和Draw状态。
+2. 可视化位置、UV、法线、深度或光照项，确认范围和空间。
+3. 打开本章核心效果并保存基线与候选画面。
+4. 构造边界与失败输入，用GPU捕获和计时解释差异。
+
+## 验收证书
+
+证书包含源码与编译版本、应用绑定、资源哈希、状态、参考图、GPU事件、CPU与GPU帧时间和失败反例。天空盒保留视图矩阵平移，摄像机移动时背景像近处立方体一样滑动。 修复后必须重放同一输入并说明差异来自哪个阶段。
+
+## 常见误区
+
+<Callout type="trap" title="把语法当原理">天空盒保留视图矩阵平移，摄像机移动时背景像近处立方体一样滑动。</Callout>
+
+<Callout type="trap" title="只看最终画面">画面相似不证明空间、深度、混合和性能等价。必须保存中间调试视图、固定状态和GPU捕获。</Callout>
+
+## 本章回顾
+
+本页覆盖立方体贴图、天空盒、方向采样、反射向量、深度技巧。掌握标准是能画出数据流，写出最小实现，说明应用或引擎状态，再用边界、精度与性能证据复现结论。
+
+<Exercises>
+**问题1：立方体贴图与天空盒如何连接？**
+<Answer>由六个面组成并以三维方向采样的环境纹理。 围绕摄像机绘制环境、表现无限远背景的立方体。 回答时标注阶段和输入来源。</Answer>
+
+**问题2：怎样调试方向采样？**
+<Answer>先输出常量，再把相关中间值映射为颜色；随后核对应用绑定、固定状态和GPU事件。</Answer>
+
+**问题3：如何验收深度技巧？**
+<Answer>把天空盒放在最远深度并在场景后绘制以避免遮挡。 同时保存正常例、边界例、失败反例和CPU/GPU计时。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="立方体贴图" definition="由六个面组成并以三维方向采样的环境纹理。" />
+  <GlossaryItem term="天空盒" definition="围绕摄像机绘制环境、表现无限远背景的立方体。" />
+  <GlossaryItem term="方向采样" definition="用从中心出发的三维向量选择立方体纹理面和坐标。" />
+  <GlossaryItem term="反射向量" definition="由观察入射方向关于表面法线反射得到的环境查询方向。" />
+  <GlossaryItem term="深度技巧" definition="把天空盒放在最远深度并在场景后绘制以避免遮挡。" />
+  <GlossaryItem term="可复现实验" definition="固定源码、应用状态、资源、硬件和捕获后可再次得到同一结论的实验。" />
+</Glossary>
+
+<Attribution adaptedFrom="Kyle Halladay · Practical Shader Development · 第11章 立方体贴图和天空盒" adaptedUrl="https://link.springer.com/book/10.1007/978-1-4842-4457-9" />

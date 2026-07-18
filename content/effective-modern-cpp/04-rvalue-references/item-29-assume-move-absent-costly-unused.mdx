@@ -1,0 +1,310 @@
+---
+title: "Item 29：假定移动操作不存在、不便宜且未被使用"
+type: A
+section: Chapter 5 · Rvalue References, Move Semantics, and Perfect Forwarding
+order: 29
+description: 对齐 Effective Modern C++ Item 29：从复制回退、内嵌资源、小字符串优化和 noexcept 异常保证分析为何 move 可能不存在、不便宜或未被采用，并建立可测量的性能判断流程。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch05.html"
+draft: false
+---
+
+import {
+  EmcppMoveAssumptionFailureMap,
+  EmcppMoveStorageCostMap,
+  EmcppVectorRelocationDecisionFlowMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-29-assume-move-absent-costly-unused";
+
+<Objectives>
+
+- 能解释 move operations not present（移动操作可能不存在）时 rvalue 为何仍可编译并发生 copy fallback（复制回退）
+- 能比较 move operations not cheap（移动操作可能不便宜）的内嵌资源、std::array 与 small string optimization（小字符串优化）案例
+- 能分析 move operations not used（移动操作可能未使用）与 noexcept、容器 strong exception guarantee 的关系并设计验证实验
+
+</Objectives>
+
+## 从“std::move 不会执行移动”开始
+
+`std::move` 本质是 cast：它允许后续 overload resolution 把 expression 当作 rvalue，但不调用任何构造函数，也不承诺存在 move operation。真正发生 copy 还是 move，由目标类型的 special members、overload set、异常规格和 library algorithm 共同决定。
+
+<Term def="把 expression 转换成可供 rvalue overload 匹配的 xvalue，而不自行移动资源的类型转换。">
+  move cast
+</Term>
+
+Item 29 要求在 generic code 和未知类型上采用保守模型：先假定 move operations not present、move operations not cheap、move operations not used，再用具体类型契约和测量逐项推翻假定。这样不会把“C++11 代码”误等同于“所有路径都获得廉价移动”。
+
+先预测下面三种乐观假设各由什么条件打破。
+
+<EmcppMoveAssumptionFailureMap />
+
+## 移动操作可能不存在
+
+旧类型、显式只实现 copy 的类型，或因 special-member generation 规则没有得到 move constructor 的类型，都可能没有真正的 move overload：
+
+```cpp
+class LegacyBuffer {
+public:
+    LegacyBuffer(const LegacyBuffer& other);
+    LegacyBuffer& operator=(const LegacyBuffer& other);
+};
+
+LegacyBuffer source;
+LegacyBuffer target(std::move(source)); // compiles, but copies
+```
+
+<Term def="类型没有可用 move overload 时，rvalue 仍可绑定 const lvalue reference copy operation 的行为。">
+  copy fallback
+</Term>
+
+`const LegacyBuffer&` 可以绑定 rvalue，所以 copy constructor 仍是 viable candidate。编译成功只证明存在某条接收 rvalue 的路径，不证明路径名为 move。若 copy 很昂贵，`std::move(source)` 不会神奇地降低成本。
+
+这也是兼容性的价值：为旧库代码添加 move 调用通常仍能编译；也是性能推理的风险：同一模板实例化到不同类型时，一种类型 O(1) 转移资源，另一种类型完整复制。
+
+<Callout
+  type="trap"
+  title="陷阱：调用点写了 std::move，profile 中就应当只出现 move constructor"
+>
+  std::move 只改变 overload 输入类别。若 move
+  不存在、被删除或不可访问，const-reference copy 仍可能接收 rvalue；应检查
+  selected constructor 或计数，而不是从调用语法推断。
+</Callout>
+
+## move special members 也可能被生成规则抑制
+
+<Term def="用户声明 destructor、copy operation 等条件使 compiler 不隐式生成 move constructor/assignment 的规则结果。">
+  suppressed implicit move
+</Term>
+
+一个看似现代的 class 只要声明了 destructor，就可能不再隐式获得 move operations；copy operations 若仍存在，rvalue 调用会安静地回退到复制。反过来，显式 default move 也可能因为某个 member 不可移动而被定义为 deleted。
+
+```cpp
+class Session {
+public:
+    ~Session();
+    // inspect explicitly: are move operations declared and viable?
+
+private:
+    LegacyBuffer payload_;
+};
+```
+
+因此审查 concrete type 时要看完整 special-member 状态；审查 template 时则不能假设所有 T 都有 move。
+
+## 移动操作可能不便宜
+
+廉价 move 的典型来源是“对象只持有外部资源句柄”：移动 vector 通常只交换 heap pointer、size、capacity，而不搬运每个 element。但有些类型把资源直接存放在 object representation 内，源对象无法把“自身内部的一块内存”转交给目标对象。
+
+<Term def="资源数据直接位于对象本体内，移动目标仍需逐项或逐字节重建内容的存储模型。">
+  inline resource storage
+</Term>
+
+<EmcppMoveStorageCostMap />
+
+## std::array 的 move 仍与元素数量相关
+
+`std::array<T, N>` 的 N 个元素是对象本体的一部分，没有独立 heap buffer 可偷取：
+
+```cpp
+std::array<Widget, 10000> first;
+auto second = std::move(first);
+```
+
+<Term def="移动 array 时对每个内嵌元素执行 move construction，整体成本随 N 线性增长。">
+  element-wise array move
+</Term>
+
+即便每个 Widget move 比 copy 便宜，总操作仍是 O(N)。与 `std::vector<Widget>` 常见的 O(1) buffer ownership transfer 不同。容器都支持 move 不意味着它们的复杂度相同；resource topology 比 API 名称更能说明成本。
+
+## 小字符串优化让 move 接近 copy
+
+许多 `std::string` 实现采用 small string optimization（小字符串优化，SSO）：短字符序列直接放进 string object 的内嵌 buffer，避免 heap allocation。
+
+<Term def="短字符串将字符直接保存在 string object 内部而非单独分配堆内存的实现优化。">
+  small string optimization
+</Term>
+
+大字符串可通过转交 heap pointer 廉价移动；SSO 字符串没有外部 allocation 可转交，目标仍需复制内嵌字符并更新长度。对短字符串，move 与 copy 的实际指令数可能接近，甚至 benchmark 差异被其他开销淹没。
+
+标准不要求具体 SSO 阈值，不能把某个 library/version 的字符数写进通用算法。只应依赖可移植的语义与复杂度保证，具体性能必须在目标实现上测量。
+
+## 移动操作可能未被使用
+
+即使类型公开了 move constructor，standard library 也可能选择 copy。最典型情形是 vector reallocation：旧 storage 中的所有 elements 要迁移到新 storage，同时尽力维持 strong exception guarantee。
+
+<Term def="操作失败时程序状态回到调用前可观察状态的异常安全保证。">
+  strong exception guarantee
+</Term>
+
+若移动到一半时 move constructor 抛异常，已经移动过的源 elements 可能处于 unspecified state，vector 难以恢复原状。若 copy constructor 可用，复制不会修改源 elements，失败时可销毁新 storage 中的 copies 并保留旧 vector。
+
+## noexcept 决定容器是否敢移动
+
+```cpp
+class Widget {
+public:
+    Widget(const Widget&);
+    Widget(Widget&&);          // may throw
+};
+
+std::vector<Widget> widgets;
+widgets.emplace_back();       // growth may copy old elements
+```
+
+<Term def="声明 operation 不会传播异常，使 library 可在维护强异常保证的路径中安全选择移动。">
+  noexcept move contract
+</Term>
+
+若 move 没有 `noexcept` 而 copy 可用，vector 通常采用 copy fallback 迁移旧 elements。这不是 compiler 忽略 move，而是 library 根据 type traits 和异常保证做出的策略选择。Item 14 的 `noexcept` 因而不只是文档，它会改变 standard container 的性能路径。
+
+<EmcppVectorRelocationDecisionFlowMap />
+
+## move_if_noexcept 表达保守迁移策略
+
+`std::move_if_noexcept` 概括了这类决策：当 move construction 是 noexcept，或 copy construction 不可用时，返回 rvalue reference；否则返回 const lvalue reference 以促使复制。
+
+<Term def="依据 nothrow move 与 copy availability，在 rvalue 和 const lvalue reference 间选择的迁移适配器。">
+  move-if-noexcept selection
+</Term>
+
+```cpp
+template<typename T>
+void relocate(T* source, T* destination) {
+    ::new (destination) T(std::move_if_noexcept(*source));
+}
+```
+
+这段代码仍不能保证最终选中 move：返回 rvalue 之后还要看 T 的 overloads。但它把“优先保持异常保证”的 policy 显式编码在 expression category 中。
+
+<Callout type="trap" title="陷阱：给所有 move constructor 都盲目加 noexcept">
+  noexcept 必须是真实契约。若实现或 member move 可能抛异常却标为
+  noexcept，异常会触发 std::terminate；应先证明整条 move path
+  不抛，再利用容器的移动优化。
+</Callout>
+
+## 不可复制类型会改变退路
+
+如果 T 的 copy constructor 被删除，library 无法通过 copy 维持原策略；即使 move 可能抛异常，也可能只能移动，并在失败时提供较弱保证。
+
+```cpp
+class MoveOnly {
+public:
+    MoveOnly(const MoveOnly&) = delete;
+    MoveOnly(MoveOnly&&); // potentially throwing
+};
+```
+
+<Term def="copy operation 不可用而只能通过 move 转移状态的类型，容器迁移时没有复制退路。">
+  move-only fallback boundary
+</Term>
+
+这说明“move operations not used”不是绝对结论，而是条件化决策。要同时记录 move 是否存在、是否 noexcept、copy 是否可用和调用算法承诺什么异常保证。
+
+## generic code 应采用最坏合理假设
+
+template author 不知道未来 T 是 vector、array、SSO string、legacy copy-only type，还是 throwing-move type。若算法正确性依赖“移动一定 O(1)”或容量扩张一定不复制，它就把实现偶然性错误提升成前置条件。
+
+<Term def="对未知 T 不依赖 move 的存在、低成本或采用情况，只把这些视为可测优化的泛型设计原则。">
+  conservative generic move model
+</Term>
+
+正确做法是让算法在 copy-equivalent 成本下仍满足复杂度上界，或在 template constraints/documentation 中明确要求，例如 nothrow movable。对已知 concrete type 且已验证实现时，可以依据其 documented guarantee 优化，不必永久悲观。
+
+## 用可观测实验替代语法猜测
+
+设计一个 instrumented type，分别统计 copy/move constructors；切换 move 的 `noexcept`、删除 copy、改变 vector reserve，观察 reallocation 路径：
+
+```cpp
+struct Probe {
+    static inline int copies = 0;
+    static inline int moves = 0;
+
+    Probe(const Probe&) { ++copies; }
+    Probe(Probe&&) noexcept { ++moves; }
+};
+```
+
+<Term def="以 constructor counters、allocation counts 与 benchmark 验证实际迁移路径和成本的测量方法。">
+  move-path instrumentation
+</Term>
+
+先预测各配置的 counters，再运行：预留足够 capacity 时不会迁移旧 elements；触发增长且 move noexcept 时 moves 增加；去掉 noexcept 且 copy 可用时 copies 增加。对 string/array 的成本还需 benchmark，constructor 次数本身不能说明每次 operation 的价格。
+
+## 小结
+
+- std::move 只是 move cast，不执行移动，也不保证 move overload 存在
+- move operations not present 时，rvalue 可绑定 const-reference copy constructor，形成安静的 copy fallback
+- implicit move 可能被 user-declared special members 抑制，member 条件也可能令 defaulted move deleted
+- move operations not cheap 常源于 inline resource storage；std::array move 仍是 O(N)
+- small string optimization 把短字符内嵌于对象，短 string move 可能与 copy 成本接近
+- move operations not used 常发生在 vector reallocation：throwing move 会威胁 strong exception guarantee
+- noexcept move contract 与 copy availability 共同影响 move_if_noexcept selection
+- generic code 应先采用 conservative model；concrete type 的优化结论要来自契约、instrumentation 和 benchmark
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 29"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch05.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="move cast">将表达式转换成 xvalue 的 cast。</GlossaryItem>
+  <GlossaryItem term="copy fallback">
+    无可用 move 时由 const-reference copy 接收右值。
+  </GlossaryItem>
+  <GlossaryItem term="suppressed implicit move">
+    特殊成员规则阻止隐式 move 生成。
+  </GlossaryItem>
+  <GlossaryItem term="inline resource storage">
+    资源直接位于对象本体内。
+  </GlossaryItem>
+  <GlossaryItem term="element-wise array move">
+    array 逐元素移动的线性成本。
+  </GlossaryItem>
+  <GlossaryItem term="small string optimization">
+    短字符串字符内嵌存储优化。
+  </GlossaryItem>
+  <GlossaryItem term="strong exception guarantee">
+    失败后保持调用前状态的保证。
+  </GlossaryItem>
+  <GlossaryItem term="noexcept move contract">
+    move 不传播异常的类型契约。
+  </GlossaryItem>
+  <GlossaryItem term="move-if-noexcept selection">
+    按异常与复制能力选择迁移类别。
+  </GlossaryItem>
+  <GlossaryItem term="move-only fallback boundary">
+    copy 不可用时只能选择 move 的边界。
+  </GlossaryItem>
+  <GlossaryItem term="conservative generic move model">
+    泛型代码不依赖廉价 move 的假设。
+  </GlossaryItem>
+  <GlossaryItem term="move-path instrumentation">
+    统计实际 copy/move 路径的实验。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：copy-only LegacyBuffer 接收 std::move(source)。** 解释为何能编译，并设计证明实际复制的实验。
+
+<Answer question="std::move 后为何仍是 copy fallback？">
+  std::move 只把 source 转成 xvalue；LegacyBuffer 没有 move constructor，但
+  `const LegacyBuffer&` copy constructor 可绑定 rvalue，所以 overload resolution
+  选择 copy。给 copy/move constructor 分别增加 counters，或让 copy
+  打印唯一标记；调用后应看到 copy 增加、move 不存在。不要用 source
+  是否“看起来为空”作为证明，因为 copy 不要求改变 source。
+</Answer>
+
+2. **问题 2：比较 vector、array、大 string 与 SSO string 的 move。** 推导资源位置如何决定复杂度。
+
+<Answer question="哪些 move 可以转交外部所有权？">
+  vector 与大 string 通常持有 heap allocation，可转交 pointer/size 等少量
+  metadata，常见成本为 O(1)；array elements 和 SSO characters 位于 object
+  内，目标必须逐元素或逐字节建立内容，array 为 O(N)，SSO move 可能接近
+  copy。具体 string 阈值属于实现细节，应在目标 standard library 上
+  benchmark，而不写入通用契约。
+</Answer>
+
+3. **问题 3：vector 扩容时 Probe 的 move 可能抛异常且 copy 可用。** 判断路径，并说明删除 copy 或给 move 加 noexcept 后如何变化。
+
+  <Answer question="异常保证如何影响实际迁移？">move 可能抛且 copy 可用时，vector 为维持 strong exception guarantee 通常复制旧 elements；将 move 正确标为 noexcept 后可安全移动；删除 copy 后复制退路消失，容器可能只能使用 potentially-throwing move，并按标准条件提供相应较弱保证。通过 reserve 控制是否扩容，再读取 copy/move counters 验证，不从 emplace 或 std::move 的表面语法推断。</Answer>
+</Exercises>

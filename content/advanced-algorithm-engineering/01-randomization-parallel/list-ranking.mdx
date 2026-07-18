@@ -1,0 +1,288 @@
+---
+title: "第4章 List Ranking：链表排名"
+type: B
+section: "随机化与并行"
+order: 3
+description: "把任意磁盘布局的链表排名转化为批量 Sort/Scan，理解指针跳跃的并行模拟，并用大独立集分治达到近扫描级 I/O。"
+demo: true
+math: true
+sourceUrl: "https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+draft: false
+---
+
+import { PaeListEncodingDiagram, PaePointerJumpingLab, PaeSortScanSimulationDiagram, PaeIndependentSetReductionDiagram, PaeDeterministicCoinMap } from "@/components/mdx/advanced-algorithm-engineering/diagrams/list-ranking";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释链表排名为何在 RAM 中线性而在磁盘上可能随机访问
+- 能计算指针跳跃的轮数、工作量与 Rank 不变式
+- 能实现批量 Sort/Scan 对并行随机访存步骤的模拟
+- 能分析独立集删除、递归求解和回填 Rank 的正确性
+- 能设计随机与确定性抛硬币构造大独立集的方案
+
+</Objectives>
+
+## 从“链上走一遍”在磁盘上为何很贵开始
+
+给定 n 个带唯一 id 的单向链表节点，Succ[i] 保存节点 i 的后继 id；尾节点 t 用 Succ[t]=t 的自环表示。<Term def="为单向链表每个节点计算它到尾节点的边数，尾节点排名为0。">链表排名</Term>要求输出每个节点到尾部的距离 Rank[i]。
+
+<PaeListEncodingDiagram />
+
+图中的逻辑链是 2→5→1→4→3，但 Succ 与 Rank 数组按 id 的数值顺序存放。RAM 模型允许通过 Succ 指针常数时间跳到任意数组位置，所以可从头向后两遍赋值、构造前驱后从尾向前赋值，或递归计算后继 Rank，均为 O(n) 时间。
+
+先预测同一算法放到磁盘后的行为：逻辑相邻节点的 id 可以相距很远，每次追踪 Succ 都可能换页。虽然只访问 n 个节点，却可能产生 Theta(n) 次随机 I/O，而信息量下界只要求读写 Theta(n/B) 页。
+
+本章的目标不是让指针跳得更快，而是把大量随机取数重新排列为少量批量排序与顺序扫描。这也揭示一个重要联系：低深度并行算法的共享内存访问，常能转成高效的外存批处理。
+
+## 指针跳跃让已知距离每轮翻倍
+
+pointer-jumping technique（<Term def="每轮把后继替换为后继的后继，并累加跨过距离，使已知链段长度近似翻倍的并行技术。">指针跳跃</Term>）为每个节点配置一个处理器。初始时尾节点 Rank 为0，其余节点 Rank 为1。每一轮从旧快照同步执行：
+
+$$
+\begin{aligned}
+\operatorname{Rank}'[i]
+&=
+\operatorname{Rank}[i]
++\operatorname{Rank}[\operatorname{Succ}[i]],\\
+\operatorname{Succ}'[i]
+&=
+\operatorname{Succ}[\operatorname{Succ}[i]]
+\end{aligned}
+$$
+
+不变式是：当前 Rank[i] 等于原链上从 i 到当前 Succ[i] 的边数。累加后，两段首尾相接；后继再跨过同一个中间点，因此不变式保持。
+
+<PaePointerJumpingLab />
+
+第 r 轮后，一个尚未到尾的节点最多知道原链上 2 的 r 次方步之外的位置，所以最长距离 n-1 在 O(log n) 轮内覆盖。用 n 个处理器时并行时间为 O(log n)，但总操作量是 O(n log n)，高于最优顺序 RAM 算法的 O(n)。
+
+```cpp
+void pointer_jump_round(
+    const std::vector<int>& old_succ,
+    const std::vector<int>& old_rank,
+    std::vector<int>& new_succ,
+    std::vector<int>& new_rank) {
+    for (std::size_t i = 0;
+         i != old_succ.size();
+         ++i) {
+        const std::size_t next =
+            static_cast<std::size_t>(old_succ[i]);
+        new_rank[i] =
+            old_rank[i] + old_rank[next];
+        new_succ[i] = old_succ[next];
+    }
+}
+```
+
+<Callout type="trap" title="在同一数组中按 id 顺序原地更新">
+一轮并行步骤必须全部读取旧 Succ 与旧 Rank。若前面节点先写入新值，后面节点可能跨越超过一轮的距离，结果依赖物理 id 顺序，既不再模拟并行算法，也破坏证明。
+</Callout>
+
+## 用两次排序和三次扫描模拟随机访存
+
+parallel algorithm simulation in a two-level memory（两级存储中的并行算法模拟）面对一般形式 A[a_i] op A[b_i]：第 i 个处理器读取源 A[b_i]，用 op 更新目标 A[a_i]。直接按 i 执行会随机读取 b_i。
+
+<Term def="把随机源地址和目标地址编码为记录，通过按源排序取值、按目标排序写回，将随机访问批量化的外存模拟。">Sort-Scan模拟</Term>使用三元组 (a_i,b_i,0)：
+
+1. Scan 输入，生成全部三元组；
+2. 按 b_i Sort，让记录与源数组位置对齐；
+3. 协同 Scan 数组 A，把 A[b_i] 填入记录；
+4. 按 a_i Sort，让记录与目标位置对齐；
+5. 协同 Scan A，执行目标更新。
+
+<PaeSortScanSimulationDiagram />
+
+两次 Sort 与三次 Scan 都作用于 Theta(n) 条定长记录。若用软 O 记号隐藏外存排序中很小的对数因子，一次并行步骤需要：
+
+$$
+\widetilde O\left(\frac{n}{B}\right)
+\quad\text{I/Os}
+$$
+
+指针跳跃的 Rank 更新与 Succ 更新具有相同源 i、目标 Succ[i]，可把两种值装进四元组，在一次批处理中完成。O(log n) 轮总计：
+
+$$
+\widetilde O\left(\frac{n}{B}\log n\right)
+\quad\text{I/Os}
+$$
+
+相比直接追链的 Theta(n) I/O，只要 B 明显大于 log n 就有优势。更一般地，n 个处理器、T 轮的 PRAM 算法可用 O(n) 空间和约 \(\widetilde O((n/B)T)\) I/O 模拟；T 远小于 B 时得到次线性 I/O。
+
+这种通用转换的代价是工作量可能不最优。指针跳跃仍让所有活动节点参与多轮，下一节用分治只对被删节点周围做必要更新。
+
+## 分治方法：每层删除一个大独立集
+
+divide-and-conquer approach（<Term def="把输入缩成常数比例的同类子问题，递归求解后再组合被移除部分答案。">分治方法</Term>）先给尾节点 Rank=0、其他节点 Rank=1，然后选一个节点集合 I，满足：
+
+- I 是 <Term def="图中任意两个被选节点都不相邻的集合；在单链上等价于被选节点的后继不在集合中。">独立集</Term>；
+- I 至少有 n/c 个节点，其中常数 c 大于2；
+- 因为相邻不能同时选，I 至多有 n/2 个节点。
+
+<PaeIndependentSetReductionDiagram />
+
+Divide 找到 I。Conquer 从链中删除 I：仅对每个指向被删节点 y 的前驱 x 执行 Rank[x]+=Rank[y] 与 Succ[x]=Succ[y]，得到 L*。递归求 L* 的排名。
+
+Recombine 再为每个 y 属于 I 计算 Rank[y]+=Rank[Succ[y]]。独立集性质保证 Succ[y] 没被同层删除，递归答案已经可用；Rank[y] 保存 y 到当前后继的原链距离，两者相加就是 y 到尾部的完整距离。
+
+```text
+ListRankDC(L):
+  I = large_independent_set(L)
+  for each predecessor x of y in I:
+      Rank[x] = Rank[x] + Rank[y]
+      Succ[x] = Succ[y]
+  ListRankDC(L without I)
+  for each y in I:
+      Rank[y] = Rank[y] + Rank[Succ[y]]
+```
+
+<Callout type="trap" title="回填被删节点时固定写成 1 + Rank[Succ]">
+节点可能在更深递归层才被删除，此时它到当前 Succ 之间已压缩了多个原节点，局部 Rank 可能大于1。必须加保存下来的 Rank[y]，不能假设只跨一条原始边。
+</Callout>
+
+若每层独立集选择成本是 I(n)，其余删除与回填可由 Sort/Scan 完成，则递归为：
+
+$$
+T(n)
+=
+I(n)
++\widetilde O\left(\frac{n}{B}\right)
++T\left(\left(1-\frac{1}{c}\right)n\right)
+$$
+
+规模每层按常数比例缩小，所以只要 I(n) 是近扫描成本，各层几何级数之和仍为 \(\widetilde O(n/B)\)。真正困难变成：不沿逻辑链扫描，怎样只用局部信息构造大独立集。
+
+## 随机方案：选择 H 后接 T 的节点
+
+为每个节点独立抛公平硬币。若节点 i 为 H 且 Succ[i] 为 T，就把 i 放进 I。相邻两个节点不可能同时满足条件：若 i 被选，其后继硬币为 T，不可能同时以 H 开头被选。因此 I 一定是独立集。
+
+每个非尾节点被选的概率为：
+
+$$
+\Pr(i\in I)
+=
+\Pr(H,T)
+=
+\frac14
+$$
+
+期望选中约 n/4 个节点；Chernoff 集中界说明集合大小高度集中在期望附近。若小于 n/c，其中 c 取大于4的常数，就重新抛币，期望只需常数轮。
+
+```cpp
+bool selected(
+    std::size_t i,
+    const std::vector<bool>& heads,
+    const std::vector<int>& succ) {
+    const auto next =
+        static_cast<std::size_t>(succ[i]);
+    return heads[i] && !heads[next];
+}
+```
+
+检查 i 与 Succ[i] 的硬币值仍是批量随机访存，可用前述 Sort-Scan模拟。于是 I(n) 为期望近扫描成本，递归解为平均 \(\widetilde O(n/B)\) I/O。
+
+选择 HH 或 TT 不行：一段连续相同硬币会让相邻节点同时入选，破坏独立集。选择 TH 也可以，只是把头尾角色互换。
+
+## 确定性抛硬币：从唯一 id 压到三色
+
+<Term def="从相邻不同的唯一标签出发，反复按首个不同位压缩颜色，最终用常数颜色和局部极小值确定大独立集。">确定性抛硬币</Term>不用随机数。初始 coin(i)=i-1，所有节点颜色唯一，以 b=ceil(log n) 位表示。
+
+对每个 i，找到 coin(i) 与 coin(Succ[i]) 第一个不同的位位置 pi(i)，记 i 在该位的值为 z(i)，并设置：
+
+$$
+\operatorname{coin}'(i)
+=
+2\pi(i)+z(i)
+$$
+
+新颜色范围不超过 2b，表示位数从 b 缩到约 log b。若相邻节点得到相同新颜色，它们的 pi 与 z 都相同，但 pi 正是两者首个不同位，z 不可能也相同，形成矛盾。因此相邻颜色始终不同。
+
+反复 O(log* n) 轮后颜色降到0至5，再用局部重着色降到0、1、2，最后选择颜色严格小于前驱与后继的局部极小节点。
+
+<PaeDeterministicCoinMap />
+
+局部极小节点不相邻，因此构成独立集；三色且相邻不同限制了两个局部极小值之间的最大间隔，可保证至少常数比例，原章给出 n/4 下界。每轮只比较节点与邻居，可用 Sort/Scan；log* n 增长极慢，被软 O 隐藏后，得到最坏情形确定性的 \(\widetilde O(n/B)\) I/O。
+
+这里的 <Term def="渐进记号中额外隐藏与外存排序或迭代对数有关的低阶对数因子。">软O记号</Term>不是把因子变没。工程报告仍应列出排序轮次、记录宽度、临时空间和实际传输量；在真实参数中它们通常小，但会影响实现。
+
+## 如何验证链表排名实现
+
+测试不能只生成按 id 顺序连接的链，那会把所有 I/O 难点隐藏掉。应先生成逻辑排列，再随机打乱 id，构造 Succ 数组；用 RAM 线性预言机求 Rank，与指针跳跃和分治结果逐节点比较。
+
+边界至少覆盖单尾节点、两节点、长链、随机排列、独立集恰好很小的抛币结果，以及递归多层后 Rank[y] 大于1的回填。每轮指针跳跃要检查不变式：沿原链走 Rank[i] 步恰到当前 Succ[i]。
+
+外存基准除总时间外，还应记录 Sort 与 Scan 次数、读写字节、随机 I/O、峰值临时空间和每层剩余节点数。只有 Rank 正确且数据移动符合推导，才能说明并行算法模拟真正转成了 I/O 效率。
+
+<Stepper>
+  <Step title="分开逻辑链与物理数组">
+    <PaeListEncodingDiagram />
+    用 Succ 表示任意 id 排列，明确 Rank 是到自环尾节点的边数。
+  </Step>
+  <Step title="建立指针跳跃不变式">
+    <PaePointerJumpingLab />
+    每轮从旧快照跨过一个后继并累加两段距离，O(log n) 轮到尾。
+  </Step>
+  <Step title="把随机访存批量排序">
+    <PaeSortScanSimulationDiagram />
+    按源地址取值、按目标地址写回，用两次 Sort 与三次 Scan 模拟一轮。
+  </Step>
+  <Step title="用独立集缩小递归">
+    <PaeIndependentSetReductionDiagram />
+    删除常数比例不相邻节点，递归求剩余链，再用累计局部 Rank 回填。
+  </Step>
+  <Step title="把随机局部选择确定化">
+    <PaeDeterministicCoinMap />
+    保持相邻异色并压到三色，选择局部极小值得到大独立集。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 链表排名输出每个节点到自环尾节点的距离。
+2. RAM 中顺序追链是 O(n)，任意磁盘布局却可能产生 Theta(n) 随机 I/O。
+3. 指针跳跃同步更新 Rank 与 Succ，O(log n) 轮、O(n log n) 总工作。
+4. 两次按源和目标排序、三次扫描可批量模拟 A[a_i] op A[b_i]。
+5. PRAM 的 T 轮可转成约 \(\widetilde O((n/B)T)\) 的两级存储模拟。
+6. 分治删除常数比例独立集，递归剩余链，再回填被删节点累计距离。
+7. 随机 HT 规则以1/4概率选节点且保证相邻节点不能同时入选。
+8. 确定性抛硬币把唯一 id 压到三色，再由局部极小构造大独立集。
+9. 随机方案给出平均近扫描 I/O，确定性方案给出最坏情形近扫描 I/O。
+
+<Exercises>
+
+**问题 1：逻辑链 7→2→9→9 的 Rank 分别是什么？**
+
+<Answer>尾节点9的 Rank 为0；节点2到9有1条边，所以 Rank[2]=1；节点7经过2再到9有2条边，所以 Rank[7]=2。Succ[9]=9只用于尾部自环，不再增加距离。</Answer>
+
+**问题 2：为什么指针跳跃一轮需要双缓冲或等价快照？**
+
+<Answer>并行定义要求每个节点读取同一轮开始时的 Succ 与 Rank。原地顺序写入会让后处理节点读到本轮新值，一轮跨过不一致的距离，结果依赖 id 遍历顺序并破坏 Rank 不变式。</Answer>
+
+**问题 3：独立集删除后，为什么被删节点的 Succ 一定留在递归链中？**
+
+<Answer>独立集禁止相邻节点同时入选。若 y 在 I 中，它的直接后继 Succ[y] 就不在 I，因此本层不会被删除，递归会得到该后继到尾部的正确 Rank，供回填 y 使用。</Answer>
+
+**问题 4：随机规则为何选择 HT 而不能选择 HH？**
+
+<Answer>若 i 满足 HT，它的后继硬币是T，不能同时作为以H开头的选中节点，所以集合独立。连续三个H会让前两个节点都满足HH，产生相邻选中节点，破坏删除和回填条件。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="链表排名">计算单向链表每个节点到尾节点边数的问题。</GlossaryItem>
+  <GlossaryItem term="指针跳跃">每轮将后继改为后继的后继并累加距离，使覆盖链段近似翻倍。</GlossaryItem>
+  <GlossaryItem term="Sort-Scan模拟">通过按源和目标排序，把批量随机读写转成顺序扫描的外存技术。</GlossaryItem>
+  <GlossaryItem term="独立集">任意两个成员都不相邻的节点集合。</GlossaryItem>
+  <GlossaryItem term="分治方法">缩小为同类子问题递归求解，再组合被移除部分答案的范式。</GlossaryItem>
+  <GlossaryItem term="确定性抛硬币">用局部标签压缩模拟随机局部选择、确定构造大独立集的技术。</GlossaryItem>
+  <GlossaryItem term="软O记号">隐藏低阶对数因子的渐进记号，常用于简写外存排序成本。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Pearls of Algorithm Engineering · Chapter 4 List Ranking"
+  href="https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+  author="Paolo Ferragina"
+  license="原书版权归作者与 Cambridge University Press 所有；本章依据官方目录与作者课程资料独立重构教学内容"
+/>

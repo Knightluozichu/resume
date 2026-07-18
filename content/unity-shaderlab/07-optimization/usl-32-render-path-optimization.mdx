@@ -1,0 +1,155 @@
+---
+title: "第32章 基于渲染路径的优化"
+type: C
+section: "Unity 3D ShaderLab · 组织与优化"
+order: 32
+description: "沿郭浩瑜第一版正式目录掌握VertexLit优化、Forward优化、Deferred优化、灯光布局、瓶颈证书。"
+demo: true
+math: true
+sourceUrl: "https://search.worldcat.org/title/Unity-3D-Shaderlab/oclc/933550649"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { Usl32RenderPathOptimizationPipelineLab, Usl32RenderPathOptimizationCompareLab, Usl32RenderPathOptimizationEvidenceLab } from "@/components/mdx/unity-shaderlab/diagrams/usl-32-render-path-optimization";
+
+<Objectives>
+- 能解释VertexLit优化、Forward优化和Deferred优化在Unity内置渲染链中的职责
+- 能实现本章最小实验，并区分Shader程序、脚本绑定与固定渲染状态
+- 能验收瓶颈证书，保存画面、Frame Debugger、GPU事件和失败反例
+</Objectives>
+
+## 先预测，再观察
+
+先预测顶点、片元、深度、Draw次数或帧时间会如何变化，再只调整一个变量观察变化。固定场景分别运行VertexLit、Forward和Deferred，记录Draw、顶点、片元、G-buffer与灯光成本。每条路径只采用与其数据流匹配的优化，不把减少灯数量当成唯一答案。 本章用<Term def="利用低片元成本并控制顶点、灯光与插值误差的路径策略。">VertexLit优化</Term>、<Term def="限制像素灯、额外Pass和透明过度绘制的路径策略。">Forward优化</Term>、<Term def="控制G-buffer带宽、灯光体积与不透明适用范围的策略。">Deferred优化</Term>、<Term def="通过范围、重叠和重要度减少无效光照计算。">灯光布局</Term>、<Term def="用帧捕获证明成本位于CPU、顶点、片元或带宽的记录。">瓶颈证书</Term>建立对象、阶段、状态与证据之间的联系。
+
+<Usl32RenderPathOptimizationPipelineLab />
+
+## 第一版权威目录定位
+
+本页一一对应郭浩瑜《Unity 3D ShaderLab开发实战详解》第一版第32章 基于渲染路径的优化。书目记录确认人民邮电出版社2014年出版、ISBN 9787115338907；完整目录确认全书5篇33章。本书基于当时Unity内置渲染管线，涉及固定管线、Cg、VertexLit和Surface Shader时保留历史语境，现代Unity项目需另做版本映射。
+
+### 原章核心小节
+
+1. VertexLit特点与优化
+2. Forward特点与优化
+3. Deferred特点与优化
+4. 合理光照计算
+5. 灯光布局
+
+### 五个核心对象
+
+1. **VertexLit优化**：利用低片元成本并控制顶点、灯光与插值误差的路径策略。
+2. **Forward优化**：限制像素灯、额外Pass和透明过度绘制的路径策略。
+3. **Deferred优化**：控制G-buffer带宽、灯光体积与不透明适用范围的策略。
+4. **灯光布局**：通过范围、重叠和重要度减少无效光照计算。
+5. **瓶颈证书**：用帧捕获证明成本位于CPU、顶点、片元或带宽的记录。
+
+## 数据流与公式
+
+固定场景分别运行VertexLit、Forward和Deferred，记录Draw、顶点、片元、G-buffer与灯光成本。每条路径只采用与其数据流匹配的优化，不把减少灯数量当成唯一答案。 先画出应用脚本、材质属性、SubShader选择、Pass执行、顶点阶段、光栅化、片元阶段和固定状态的生产者到消费者链，再把本章对象放到对应位置。
+
+$$
+T_v=f(vertices,lights)
+$$
+
+$$
+T_f=f(pixels,overdraw,pixelLights)
+$$
+
+$$
+T_d=f(gbufferBandwidth,lightVolumes)
+$$
+
+$$
+T_frame=max(T_cpu,T_gpu)
+$$
+
+公式中的位置、方向、深度、颜色和时间必须标注空间、范围与单位。片元函数输出只是候选颜色，最终结果仍经过裁剪、深度、模板、混合、目标格式与颜色编码。
+
+## 最小实现
+
+```shaderlab
+// Capture one frame per rendering path with identical camera and lights
+```
+
+实现顺序固定为常量输出、输入可视化、核心公式、应用侧绑定和固定状态。先确认材质没有变粉、实际SubShader和Pass正确，再判断画面差异是否来自程序计算。
+
+<Usl32RenderPathOptimizationCompareLab />
+
+## 脚本与材质契约
+
+```csharp
+var material = renderer.sharedMaterial;
+material.SetFloat("_DebugMode", debugMode);
+material.SetTexture("_MainTex", sourceTexture);
+Debug.Assert(material.shader.isSupported);
+```
+
+脚本侧保存Unity版本、渲染路径、相机、灯光、网格布局、材质关键字、纹理导入设置和RenderTexture格式。Shader侧列出Properties、uniform、Tags、LightMode与固定状态，二者缺一都不能复现实验。
+
+## 边界、精度与性能
+
+测试零向量、退化UV、负缩放、近远裁剪面、透明交叉、纹理边缘、相机进入体积、多光源重叠和高过度绘制。性能实验固定目标设备、分辨率、VSync和场景，先判断CPU还是GPU受限，再定位具体Draw、Pass与Shader阶段。
+
+```text
+unity: exact editor and player version
+pipeline: Built-in / named rendering path
+scene: fixed mesh, camera, lights and textures
+state: queue, depth, stencil, cull, blend and target
+evidence: reference image, frame debugger, GPU capture, CPU/GPU ms
+failure: smallest replayable counterexample
+```
+
+<Usl32RenderPathOptimizationEvidenceLab />
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定输入与路径"><Usl32RenderPathOptimizationPipelineLab /></Step>
+  <Step title="逐阶段实现与比较"><Usl32RenderPathOptimizationCompareLab /></Step>
+  <Step title="捕获画面与性能"><Usl32RenderPathOptimizationEvidenceLab /></Step>
+</Stepper>
+
+1. 用最小网格和常量颜色确认Shader、SubShader、Pass与Draw可执行。
+2. 可视化位置、UV、法线、深度、模板或光照项，确认范围和空间。
+3. 打开本章核心效果，保存基线、候选、中间缓冲和参数。
+4. 构造边界与失败输入，用Frame Debugger和GPU捕获解释差异。
+
+## 验收证书
+
+证书包含源码版本、Unity与图形API、脚本绑定、资源哈希、关键字、Pass状态、参考图、GPU事件、CPU/GPU帧时间与失败反例。只看编辑器FPS比较渲染路径，没有固定VSync、分辨率、灯光覆盖和透明对象。 修复后必须用同一输入重放，并指出变化发生在哪个阶段。
+
+## 常见误区
+
+<Callout type="trap" title="把语法当成执行链">只看编辑器FPS比较渲染路径，没有固定VSync、分辨率、灯光覆盖和透明对象。</Callout>
+
+<Callout type="trap" title="只看最终画面">画面相似不证明实际SubShader、Pass、空间、深度、混合和性能等价。必须保存中间视图、固定状态和帧捕获。</Callout>
+
+## 本章回顾
+
+本页覆盖VertexLit优化、Forward优化、Deferred优化、灯光布局、瓶颈证书。掌握标准是能画出生产者到消费者链，写出最小实现，说明脚本和材质契约，再用正确性、边界、精度与性能证据复现结论。
+
+<Exercises>
+**问题1：VertexLit优化与Forward优化如何连接？**
+<Answer>利用低片元成本并控制顶点、灯光与插值误差的路径策略。 限制像素灯、额外Pass和透明过度绘制的路径策略。 回答时要标注实际Pass、空间和输入来源。</Answer>
+
+**问题2：怎样调试Deferred优化？**
+<Answer>先输出常量，再把相关中间值映射为颜色或缓冲；随后核对脚本绑定、固定状态、Frame Debugger与GPU事件。</Answer>
+
+**问题3：如何验收瓶颈证书？**
+<Answer>用帧捕获证明成本位于CPU、顶点、片元或带宽的记录。 同时保存正常例、边界例、失败反例和CPU/GPU计时。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="VertexLit优化" definition="利用低片元成本并控制顶点、灯光与插值误差的路径策略。" />
+  <GlossaryItem term="Forward优化" definition="限制像素灯、额外Pass和透明过度绘制的路径策略。" />
+  <GlossaryItem term="Deferred优化" definition="控制G-buffer带宽、灯光体积与不透明适用范围的策略。" />
+  <GlossaryItem term="灯光布局" definition="通过范围、重叠和重要度减少无效光照计算。" />
+  <GlossaryItem term="瓶颈证书" definition="用帧捕获证明成本位于CPU、顶点、片元或带宽的记录。" />
+  <GlossaryItem term="可复现实验" definition="固定源码、Unity版本、渲染路径、资源、状态、设备与捕获后可再次得到同一结论的实验。" />
+</Glossary>
+
+<Attribution adaptedFrom="郭浩瑜 · Unity 3D ShaderLab开发实战详解 · 第32章 基于渲染路径的优化" adaptedUrl="https://search.worldcat.org/title/Unity-3D-Shaderlab/oclc/933550649" />

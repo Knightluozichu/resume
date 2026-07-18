@@ -1,0 +1,77 @@
+---
+title: "第8章 标准库"
+type: C
+section: "Go实战 · 工程"
+order: 8
+description: "通过文档与源码理解标准库承诺，使用日志、JSON和io.Reader/io.Writer组合流式包。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/go-in-action/chapter-8"
+draft: false
+---
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GiaDocsLab, GiaJsonLab, GiaIoLab } from "@/components/mdx/go-in-action/diagrams/gia-standard-lib";
+
+<Objectives>
+- 能解释go doc、在线文档与当前toolchain源码各自可承诺的边界
+- 能设计日志字段与退出边界，安全编码解码JSON并处理未知字段
+- 能实现io.Reader和io.Writer管线，连接文件、网络、压缩和编码
+</Objectives>
+
+## 从标准库为何值得依赖开始
+先预测：Reader返回`n > 0`同时返回EOF时，是否丢弃这n字节？不能，应先处理数据再解释结束。
+标准库随Go发布、遵守兼容承诺并持续测试。<Term def="由版本、文档、接口、源码与兼容承诺共同确定的库行为。">standard library contract</Term>仍需核对当前版本。
+
+<GiaDocsLab />
+
+## 文档与源代码
+`go doc`看API，源码解释性能和错误细节，但未导出实现不是长期契约。<Term def="先读文档承诺，再用源码验证实现假设而不依赖私有细节。">documentation source boundary</Term>。
+
+```sh
+go doc io.Reader
+go env GOROOT
+```
+
+## 日志
+日志记录事件、稳定字段和上下文；库返回error，main决定fatal退出。<Term def="日志内容、级别、字段、Writer与是否终止进程的责任边界。">logging responsibility contract</Term>禁止泄露secret。
+
+```go
+log.Printf("feed=%q status=%d", name, status)
+```
+
+## JSON编码与解码
+Decoder流式读取，struct tag映射字段。<Term def="未知字段、数字精度、尾随数据、空值和错误位置的解析策略。">JSON decoding policy</Term>应在入口明确。
+
+```go
+dec := json.NewDecoder(r)
+dec.DisallowUnknownFields()
+if err := dec.Decode(&value); err != nil { return err }
+```
+
+<GiaJsonLab />
+
+## Input与Output
+Reader和Writer小接口让包互操作。<Term def="以Reader提供字节、Writer接收字节并传播短读写和错误的流协议。">stream interoperability contract</Term>支持Copy、buffer、gzip、hash与network组合。
+
+## EOF、短写与Close
+Reader可同时返回n大于0和error；Writer可能partial write。<Term def="先处理已传输字节，再解释EOF或错误，并明确最终close责任。">partial I/O rule</Term>。Close错误可能是flush失败，不能总忽略。
+
+<GiaIoLab />
+<Stepper><Step title="核对文档"><GiaDocsLab /></Step><Step title="扰动JSON"><GiaJsonLab /></Step><Step title="组合流"><GiaIoLab /></Step></Stepper>
+
+## 验收实验：故障Reader与Writer
+实现一次只返回少量字节、最后同时返回数据和EOF的Reader，再实现partial write后报错的Writer；让io.Copy和自写循环处理并比较。JSON测试未知字段、两个顶层值、超大数字和空body；日志写入buffer并断言secret被遮蔽。由此证明包间互操作在短读写和错误时仍成立。
+
+<Callout type="trap" title="Read返回EOF就没有数据">允许n大于0同时EOF，应先处理字节。</Callout>
+<Callout type="trap" title="深层库可以log.Fatal">会直接退出进程，剥夺调用者清理和恢复权。</Callout>
+
+## 本章回顾
+本章覆盖标准库、文档与源代码、日志、JSON编码解码、输入与输出、io.Reader与io.Writer以及标准库包间互操作。短读、短写、EOF、flush和Close共同决定流式结果是否完整。
+<Exercises>
+**问题 1：源码哪些内容可依赖？**<Answer>公开文档和API；私有实现只可用于理解与测量。</Answer>
+**问题 2：为何检查Close错误？**<Answer>Buffered writer可能直到close才报告flush失败。</Answer>
+**问题 3：如何拒绝未知JSON字段？**<Answer>使用Decoder并调用DisallowUnknownFields。</Answer>
+</Exercises>
+## 术语表
+<Glossary><GlossaryItem term="standard library contract" definition="版本文档源码与兼容承诺。" /><GlossaryItem term="documentation source boundary" definition="公开承诺与私有实现边界。" /><GlossaryItem term="logging responsibility contract" definition="日志字段Writer与退出责任。" /><GlossaryItem term="JSON decoding policy" definition="JSON边界解析策略。" /><GlossaryItem term="stream interoperability contract" definition="Reader Writer流协议。" /><GlossaryItem term="partial I/O rule" definition="短读写与错误处理规则。" /></Glossary>
+<Attribution adaptedFrom="Go in Action Chapter 8 Standard library" adaptedUrl="https://livebook.manning.com/book/go-in-action/chapter-8" />

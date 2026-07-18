@@ -1,0 +1,222 @@
+---
+title: "第 7 章 残影：蒙皮快照、透明衰减与对象复用"
+type: A
+section: "Unity 3D 实战核心技术详解 · 移动端视觉"
+order: 7
+description: "按原书第7章复现残影技术实现与 Demo，用蒙皮快照、材质衰减和对象池验证效果与成本。"
+demo: true
+math: false
+sourceUrl: "https://m.bookschina.com/7380713.htm"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Uct07AfterimageMapLab,
+  Uct07AfterimageExperimentLab,
+  Uct07AfterimageEvidenceLab,
+} from "@/components/mdx/unity-core-tech/diagrams/uct-07-afterimage";
+
+<Objectives>
+
+- 能解释角色当前姿态如何固化为独立网格快照
+
+- 能实现按时间衰减且不污染共享材质的残影 Demo
+
+- 能分析采样频率、透明排序和临时分配造成的性能故障
+
+</Objectives>
+
+## 问题：为什么复制整个角色 Prefab 能看到残影，却通常是最昂贵也最不稳定的实现？
+
+先预测：把角色复制多份、暂停 Animator、逐渐调透明度是否就完成残影？视觉上可能完成，但会复制脚本、骨架、材质和生命周期。原书第七章的核心是技术实现与 Demo：在需要的时间点固化可渲染姿态，只保留网格、变换、材质参数和生存期。
+
+<Uct07AfterimageMapLab />
+
+## 原书边界与目录小节
+
+本页严格对应完整目录中的以下单元；这些单元只在本页计算原章覆盖，现代扩展不替代原书位置：
+
+- **残影的技术实现**
+- **Demo展示**
+
+书籍身份由图书馆题录核对，章节边界由完整目录核对。本站重新组织解释、代码、实验和证据，不逐字复制原文；导读与总复习不重复计入十四个正文章。
+
+## 把动态角色转换成轻量视觉快照
+
+蒙皮角色的当前姿态存在骨骼矩阵与蒙皮计算中，SkinnedMeshRenderer.BakeMesh 可把这一帧的变形结果写入普通 Mesh。快照对象使用 MeshFilter 与 MeshRenderer，不再需要 Animator 和骨架；位置、旋转、缩放必须与烘焙空间约定一致。
+
+残影材质通常使用透明混合或加色，并以年龄驱动颜色和 alpha。每个快照若访问 material 会产生实例；可以在池对象上预建材质，或用 MaterialPropertyBlock 写入每实例颜色，避免污染 sharedMaterial 和制造分配。
+
+采样间隔决定运动轨迹密度，生命周期决定屏幕上同时存在数量。最大活跃数近似为生命周期除以采样间隔，需要把 Mesh 容量、快照对象和属性块一起池化；动画快但帧率低时按时间采样比按帧采样稳定。
+
+透明排序、深度写入和后处理会影响轮廓。应在固定相机、背景和动作下比较 ZWrite、渲染队列和混合模式，并在目标移动设备记录 CPU 烘焙时间、顶点数、Overdraw 与内存分配。
+
+<Uct07AfterimageExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="把某一时刻骨骼变形后的顶点固化为普通网格的结果。">蒙皮快照</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="相邻两份残影快照之间的时间距离。">采样间隔</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="一份残影从生成到透明度归零并回收到池的持续时间。">生命周期</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="在不实例化材质的情况下为单个 Renderer 覆盖材质属性的数据。">
+  属性块
+</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="透明物体按队列和距离决定绘制先后的规则。">透明排序</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+这些术语组成一份最小领域模型。读者需要为每个对象写出所有者、生命周期、正常值、边界值和故意失败后的第一条可观察信号，才能把概念转成工程判断。
+
+## 关键对象与数据流
+
+触发器按时间请求残影，快照池提供空闲 Mesh 与 Renderer，烘焙器写入当前蒙皮网格并复制世界变换，衰减器根据年龄写颜色和透明度，生命周期结束后清空引用并回池。输出是视觉轨迹以及活跃数、烘焙耗时和分配指标。
+
+每次实验只改变一个输入，先保存版本、参数与预期，再比较输出、日志、内存或帧时间。最终结果偶然正确但中间契约不符合预测，仍不能签发，因为隐藏缓存、默认值或执行顺序可能掩盖根因。
+
+## 三步可重复实验
+
+动手前先预测：改变当前步骤的一项输入后，哪个对象、数值、像素、状态或版本标记应最先变化？固定 Unity 版本、目标平台、资产提交和测试场景。
+
+<Stepper>
+  <Step title="烘焙单帧姿态">
+    <Uct07AfterimageMapLab />
+
+在角色旋转和非一缩放下调用 BakeMesh，把结果交给普通 Renderer；叠加原角色轮廓检查空间是否完全重合。
+
+```csharp
+Mesh snapshot = meshPool.Get();
+skinnedRenderer.BakeMesh(snapshot);
+ghostFilter.sharedMesh = snapshot;
+ghostTransform.SetPositionAndRotation(transform.position, transform.rotation);
+```
+
+  </Step>
+  <Step title="驱动透明衰减">
+    <Uct07AfterimageExperimentLab />
+
+用年龄除以生命周期得到归一化进度，通过 MaterialPropertyBlock 写颜色；比较线性和曲线衰减。
+
+```csharp
+float progress = Mathf.Clamp01(age / lifetime);
+block.SetColor(ColorId, Color.Lerp(startColor, endColor, progress));
+ghostRenderer.SetPropertyBlock(block);
+```
+
+  </Step>
+  <Step title="压测采样与回收">
+    <Uct07AfterimageEvidenceLab />
+
+以不同顶点数、采样间隔和生命周期运行十分钟，确认活跃数上限、零持续分配、Mesh 回池和透明排序。
+
+```csharp
+if (age >= lifetime)
+{
+    meshPool.Release(generatedMesh);
+    ghostPool.Release(this);
+}
+```
+
+  </Step>
+</Stepper>
+
+## 正常、边界与故障注入
+
+正常样本证明主路径，边界样本说明适用范围，故障样本证明诊断检查确实会在最早契约处拒绝。三类样本必须使用同一观测方式，避免只为成功路径保留证据。
+
+<Callout type="trap">
+  **因果陷阱**：复制完整角色会连同
+  Animator、脚本和骨架一起运行，效果数量一高就放大 CPU 与内存成本。
+</Callout>
+
+<Callout type="trap">
+  **边界陷阱**：每次修改 renderer.material
+  会创建材质实例，最终看似只有几张残影却积累大量材质。
+</Callout>
+
+## 从原书版本迁移到当前 Unity
+
+BakeMesh 与 MaterialPropertyBlock 的核心方案仍可用；SRP 下需要为 URP 或 HDRP 编写兼容透明 Shader，并重新验证深度、阴影和批处理。
+
+VFX Graph 或 GPU 顶点缓存可把大量快照移到 GPU，但会改变资产与调试方式；迁移前后应以同一动作、相机和设备比较视觉与成本。
+
+迁移账本使用五列：原书载体、稳定不变量、当前实现、不可等价处、重放证据。允许 API、插件和渲染管线变化，不允许用新名词删除原章问题或把编辑器成功当成目标平台成功。
+
+## 验收证据
+
+验收包含原角色与快照重合图、时间采样轨迹、材质实例计数、活跃对象上限、十分钟分配曲线、不同顶点数 BakeMesh 耗时、透明排序对照与目标设备视频。
+
+证据包还要记录文件路径、构建版本、设备、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不是看过。
+
+<Uct07AfterimageEvidenceLab />
+
+## 小结
+
+- 残影只需保存某时刻的可渲染姿态
+- 按时间采样比按帧采样稳定
+- 属性块避免材质实例化
+- 对象池必须同时覆盖对象和动态 Mesh
+
+<Exercises>
+
+**问题 1** 第 7 章 残影的关键输入和输出分别是什么？
+
+<Answer>
+  触发器按时间请求残影，快照池提供空闲 Mesh 与
+  Renderer，烘焙器写入当前蒙皮网格并复制世界变换，衰减器根据年龄写颜色和透明度，生命周期结束后清空引用并回池。输出是视觉轨迹以及活跃数、烘焙耗时和分配指标。
+</Answer>
+
+**问题 2** 本章最有诊断价值的故障注入是什么？
+
+<Answer>
+  复制完整角色会连同 Animator、脚本和骨架一起运行，效果数量一高就放大 CPU
+  与内存成本。需要保存失败输入和第一条偏离信号，再修复后重放。
+</Answer>
+
+**问题 3** 迁移到当前 Unity 时必须保留什么？
+
+<Answer>
+  BakeMesh 与 MaterialPropertyBlock 的核心方案仍可用；SRP 下需要为 URP 或 HDRP
+  编写兼容透明 Shader，并重新验证深度、阴影和批处理。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="蒙皮快照">
+    把某一时刻骨骼变形后的顶点固化为普通网格的结果。
+  </GlossaryItem>
+  <GlossaryItem term="采样间隔">相邻两份残影快照之间的时间距离。</GlossaryItem>
+  <GlossaryItem term="生命周期">
+    一份残影从生成到透明度归零并回收到池的持续时间。
+  </GlossaryItem>
+  <GlossaryItem term="属性块">
+    在不实例化材质的情况下为单个 Renderer 覆盖材质属性的数据。
+  </GlossaryItem>
+  <GlossaryItem term="透明排序">
+    透明物体按队列和距离决定绘制先后的规则。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="姜雪伟《Unity 3D实战核心技术详解》目录与书籍身份资料"
+  adaptedUrl="https://m.bookschina.com/7380713.htm"
+/>

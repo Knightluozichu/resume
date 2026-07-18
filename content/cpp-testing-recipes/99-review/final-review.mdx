@@ -1,0 +1,300 @@
+---
+title: 总复习：从红灯到团队反馈系统
+type: A
+section: 现代 C++ 测试驱动开发 · 综合验收
+order: 99
+description: 以风险—证据矩阵收束原书 11 章，复查正确红灯、测试构造、替身与增量设计、遗留/并发/性能证据，并用订单服务综合项目和团队门禁完成验收。
+demo: false
+math: false
+sourceUrl: "https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/"
+draft: false
+---
+
+import {
+  CtrCapstoneReadinessLab,
+  CtrFailureDiagnosisFlow,
+  CtrTddEvidenceMatrixMap,
+} from "@/components/mdx/cpp-testing-recipes/diagrams/final-review";
+
+<Objectives>
+
+- 能从规则错误、不可控依赖、遗留未知、并发竞态、工作流/性能和反馈衰退六类风险选择对应证据与 owner
+- 能按信号、层次、依赖、变化类型和持续机制五道闸门诊断失败，不把环境故障、重构错误和需求变化混成一类
+- 能完成一个含真实适配器、遗留或并发风险、性能预算和 CI 团队标准的综合项目，并用四道验收门证明全书能力
+
+</Objectives>
+
+## 总复习不是重复 11 章摘要
+
+真正的掌握表现为遇到问题能选择下一条证据，而不是背出章节标题。规则错了需要最窄行为例；依赖不可控需要 seam 与替身；遗留未知需要特征护栏；线程问题需要受控交错与不变量；用户价值和性能需要外层证据；测试系统衰退需要 CI owner 与团队标准。
+
+<Term def="把具体风险映射到最窄有效测试层、可观察结果、失败责任和持续门禁的全书综合方法。">
+  风险—证据映射
+</Term>
+
+<CtrTddEvidenceMatrixMap />
+
+## 第一问：这是真正的红灯吗
+
+<Term def="测试因目标行为尚未满足而按预测失败，且测试被发现、旧集合此前全绿、诊断与预期一致。">
+  可信红灯
+</Term>
+
+若所有测试因动态库缺失无法启动，先修环境；若旧测试本来就红，先恢复基线；若新测试立即绿，确认它是否执行、断言是否能失败。TDD 的后续设计全依赖红灯信号，不能把任何红色输出都当需求证据。
+
+```bash
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake --build build --parallel
+ctest --test-dir build -N
+ctest --test-dir build --output-on-failure
+```
+
+保存工具版本、测试数、失败用例名、期望/实际和退出码。局部过滤可加快循环，但全绿必须指无过滤回归集合。
+
+<Callout type="trap" title="陷阱：测试进程返回 0 就认为行为正确">
+  0 可能来自没有发现测试、过滤器排空或脚本吞错。先核对预计用例数，故意破坏一条断言确认非零传播，再恢复当前源码全绿。
+</Callout>
+
+## 第二问：这个测试是否给设计留出空间
+
+<Term def="测试只依赖领域可观察结果和必要交互，使内部容器、helper、缓存或调用顺序可在行为不变时重构。">
+  重构稳定性
+</Term>
+
+高质量测试按行为组织，断言显示差值，fixture 不隐藏关键输入，参数化只压缩稳定同规则。直接读取 private 字段、精确要求每次查询顺序、用巨大 snapshot 接受所有变化，都会让测试对错误对象敏感。
+
+```cpp
+TEST(OrderTest, PaysAnAcceptedOrder) {
+    FixedClock clock{knownTime()};
+    InMemoryOrderRepository orders{unpaidOrder("42")};
+    RecordingReceiptPublisher receipts;
+    PayOrder service{clock, orders, receipts};
+
+    const auto result = service.pay("42", acceptedPayment());
+
+    ASSERT_TRUE(result.success());
+    EXPECT_EQ(OrderStatus::Paid, orders.find("42")->status());
+    EXPECT_THAT(receipts.ids(), ::testing::ElementsAre("42"));
+}
+```
+
+测试观察状态与必要收据命令，不要求仓库查几次、service 用哪个 helper。缓存或职责提取后仍应绿。
+
+## 第三问：替身是在控制风险还是复制实现
+
+<Term def="为查询控制输入、为命令观察结果或为复杂状态提供简化实现，并只承担当前测试所需角色的最小替代对象。">
+  最小测试替身
+</Term>
+
+真实快速值对象直接使用；固定时钟是 stub；记录收据发布是 spy；内存仓库是 fake；只有必要交互表达复杂时才使用 mock。fake 与真实适配器共享契约测试，避免测试世界与生产世界漂移。
+
+```cpp
+template <typename RepositoryFactory>
+void orderRepositoryContract(RepositoryFactory make) {
+    auto repository = make();
+    repository.save(unpaidOrder("42"));
+    EXPECT_EQ(OrderStatus::Unpaid, repository.find("42")->status());
+    EXPECT_THROW(repository.save(unpaidOrder("42")), DuplicateOrder);
+}
+```
+
+若创建被测对象需要七八个 mock，先审查类是否混合编排、策略和基础设施。测试困难常是生产设计反馈，不应只用更复杂 setup 掩盖。
+
+## 第四问：行为变化与结构变化分开了吗
+
+<Term def="在全部行为护栏通过时只改善内部结构，新增或改变需求则由独立失败测试明确驱动。">
+  行为—结构分离
+</Term>
+
+遗留代码先写 characterization test，再建立接缝和提取职责；这些安全重构保持旧行为全绿。新增“损坏订单进入隔离队列”时另写红灯。若一次提交同时升级库、提取类、修 bug 和改输出，任何失败都难归因。
+
+```text
+green A: characterize current corrupt-order warning
+green B: wrap global logger behind Logger port
+green C: extract parser with same output
+red D: quarantines corrupt order
+green E: minimal quarantine call
+green F: refactor error classification
+```
+
+Mikado Method 用尝试、记录先决条件、恢复和叶子执行保持大型改造可回退。不要在数日红灯中跨越整个依赖图。
+
+## 第五问：并发证据是否主动制造风险交错
+
+<Term def="通过 latch/barrier、条件谓词、任务计数、唯一执行检查、压力重复和 sanitizer 验证并发协议的组合。">
+  并发证据组合
+</Term>
+
+sleep 只能猜时间，100 个任务最终完成也不能证明多 worker。阻塞第一任务并确认第二任务已 started，证明并行进度；用 accepted = completed + failed + cancelled 检查关闭不丢任务；用 ThreadSanitizer 检查 data race；用双 barrier 固定锁顺序风险。
+
+```cpp
+std::mutex mutex;
+std::condition_variable changed;
+int started = 0;
+
+auto blockingTask = [&] {
+    {
+        std::lock_guard lock{mutex};
+        ++started;
+    }
+    changed.notify_all();
+    release.wait();
+};
+```
+
+测试基础设施也必须线程安全，失败路径要释放 latch 并 join。超时只防挂死，正确性由事件和状态谓词决定。
+
+<Callout type="trap" title="陷阱：多跑一千次普通并发测试就等于覆盖竞态">
+  调度器可能一千次都避开危险交错。针对共享读写、锁顺序和 submit/stop 放置同步点，配合不变量与 TSan；压力重复是补充，不是唯一证明。
+</Callout>
+
+## 第六问：性能和用户价值在哪一层证明
+
+<Term def="以固定环境、代表负载、统计分布和预算验证延迟、吞吐、分配或资源消耗的可复查测量。">
+  性能基准证据
+</Term>
+
+单元测试证明订单金额规则，PostgreSQL 契约证明 Money round-trip，验收场景证明付款后用户看到收据，基准证明代表批次满足 p95 与分配预算。四种证据不能互相替代。
+
+```text
+unit:        two lines total 42.00
+integration: 42.00 persists and reloads without scale loss
+acceptance:  accepted payment exposes a paid receipt
+benchmark:   10k payments p95 <= budget in reference environment
+```
+
+性能先测量后优化，普通 CI 不写抖动毫秒断言。外层失败要下沉为最窄复现，修复后保留内层诊断和外层价值两份证据。
+
+## 第七问：反馈系统能否在团队中持续
+
+<Term def="主干红、随机测试、快层时长、覆盖变化和性能退化都有可见指标、明确 owner、处理动作与时限的团队运行状态。">
+  反馈系统健康
+</Term>
+
+覆盖率只告诉哪些代码执行过，不能证明断言质量；随机测试重跑到绿会摧毁信任；CI 只有自动运行、没有红灯 owner，也会长期失效。团队标准应记录原因和例外流程，并由 pair、kata/dojo、复盘与社区持续更新。
+
+```yaml
+fast_suite_budget: "p95 <= 60s"
+red_main: "stop merge; assign owner immediately"
+flaky_test: "preserve reproduction; quarantine <= 3 days"
+coverage_drop: "review uncovered risk; do not chase line count"
+performance_regression: "confirm environment and distribution"
+```
+
+这些值是项目示例，真实预算由团队规模和系统成本决定。关键是指标触发动作，而不是只展示绿色徽章。
+
+## 一条通用失败诊断链
+
+遇到红灯先确认信号可信，再选择最窄测试层；若依赖不可控，建立 seam；确认当前是在改行为还是结构；修复后把复现、门禁和 owner 固化。这样一次故障会改善未来反馈，而不是只关闭当前 issue。
+
+<CtrFailureDiagnosisFlow />
+
+## 综合项目：订单支付与到期通知服务
+
+项目包含订单金额与状态、PostgreSQL 仓库、支付网关、收据发布、到期通知、异步 worker 和一段直接调用全局 logger 的遗留代码。按下面顺序完成：
+
+1. **Walking skeleton**：一个验收例从 unpaid order 到 paid receipt，真实组合可在测试环境运行
+2. **领域小步**：金额、状态转换、错误边界由快速单元测试驱动
+3. **依赖端口**：Clock、PaymentGateway、Repository、Publisher 使用窄接口，理由明确选择替身
+4. **真实契约**：数据库和支付 sandbox 适配器有独立集成证据
+5. **遗留护栏**：记录当前日志行为，包装 Logger seam，再驱动隔离队列新需求
+6. **并发探针**：线程池恰好一次、drain/cancel、并行进度和 TSan
+7. **性能预算**：代表批次基线、p95/吞吐/分配趋势
+8. **团队门禁**：一键入口、红主干 owner、随机项期限、快层预算
+
+每一步都先写失败预测和验收证据，不要先实现完整服务再补测试。
+
+## 先预测：四道门哪一项最容易被伪造
+
+环境门可能“构建成功但零测试”；设计门可能“全用 mock 却复制实现”；复杂门可能“happy path 多跑几次”；团队门可能“覆盖率很高但主干随机红”。先为四种伪造各设计一个能揭穿它的故意失败或审计信号，再查看交互验收图。
+
+<CtrCapstoneReadinessLab />
+
+## 全书核心决策清单
+
+**写测试前**：目标行为和边界是什么，应该在哪一层证明，失败应显示什么？
+
+**红灯时**：测试被发现吗，旧集合原本绿吗，失败原因与预测一致吗？
+
+**变绿时**：是否只写当前证据需要的代码，全部回归是否运行，是否出现新重复与责任？
+
+**重构时**：行为是否保持，替身是否锁死实现，依赖和生命周期是否更清楚？
+
+**复杂系统中**：遗留有特征护栏吗，并发有受控事件与不变量吗，性能有代表基准吗？
+
+**合入前**：本地与 CI 入口一致吗，失败状态能传播吗，新增慢/随机/隔离项有 owner 吗？
+
+## 两类常见错误
+
+<Callout type="trap" title="陷阱：把测试覆盖当作 TDD 完成">
+  覆盖只说明执行路径；TDD 还要求正确红灯、最小实现、设计反馈与持续重构。用 mutation、边界和失败诊断检查测试能否区分错误，而不是为百分比增加无意义断言。
+</Callout>
+
+<Callout type="trap" title="陷阱：为了可测试性暴露所有内部结构">
+  可测试性应显式真实依赖和责任，不是公开 private 字段。优先从公开行为验证，独立复杂算法提取为窄概念，只有遗留过渡才使用受控接缝并记录移除计划。
+</Callout>
+
+## 最终验收标准
+
+全书掌握需要能现场完成以下闭环：从一个业务例写正确红灯；用最小实现变绿；因测试压力提取一个真实依赖；在全绿下重构；为真实适配器补契约；为遗留或并发风险建立专用证据；把同一入口接入 CI 并定义失败 owner。
+
+无法解释某个测试为何存在、它能杀死哪种错误、为何放在这一层、替身为何选择该角色，就还没有完成。复习应回到对应章节做一次真实小实验，而不是再读摘要。
+
+<Stepper>
+  <Step title="第一步：按风险建立证据矩阵">
+    为规则、依赖、遗留、并发、工作流/性能和反馈健康分别选择最窄证据、失败 owner 与持续门禁。
+
+    <CtrTddEvidenceMatrixMap />
+  </Step>
+  <Step title="第二步：沿五道闸门诊断失败">
+    确认信号、下沉层次、控制依赖、分开行为/结构，再把修复进入 CI 和团队标准，让同类问题更早暴露。
+
+    <CtrFailureDiagnosisFlow />
+  </Step>
+  <Step title="第三步：完成综合项目四道验收门">
+    用环境、设计、复杂风险和团队门检查订单服务；任何门缺证据，都不能用更多普通 happy-path 测试补偿。
+
+    <CtrCapstoneReadinessLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 全书核心是把风险映射到合适证据和 owner，而不是增加测试数量
+- 可信红灯、重构稳定测试、最小替身和行为—结构分离共同保护增量设计
+- 遗留需要特征护栏和接缝，并发需要事件、不变量、压力与 sanitizer 组合
+- 单元、集成、验收和性能基准回答不同问题，外层失败应下沉为最窄复现
+- CI、红主干 owner、随机测试期限和快层预算决定个人 TDD 能否成为共享系统
+- 综合项目必须同时通过环境、设计、复杂风险和团队四道门
+
+<Exercises>
+  1. **问题 1：诊断信号。** 新测试红，但 `ctest -N` 数量没有增加，旧套件也因动态库缺失失败。应怎样恢复闭环？
+
+  <Answer question="怎样先建立可信红灯？">先修复动态库和构建环境，使旧无过滤套件恢复全绿；确认新源进入测试目标并让 `ctest -N` 数量按预测增加；故意破坏新断言，观察正确用例名、差值和非零退出码；再恢复断言，才开始为目标行为写最小生产代码。</Answer>
+
+  2. **问题 2：评审替身。** 支付测试 mock 了仓库五次查询、缓存命中和内部日志顺序，加入缓存后失败但用户结果不变。怎样改？
+
+  <Answer question="怎样恢复重构稳定性？">把仓库改为 in-memory fake 并通过共享契约验证真实适配器语义，断言最终订单状态；支付网关只 stub 必要返回，收据命令用 spy/mock 验证业务必要参数；删除缓存、查询次数和内部日志顺序期望，让测试只对公开结果与必要交互敏感。</Answer>
+
+  3. **问题 3：并发关闭。** ThreadPool 的 100 项最终完成测试一直通过，但线上 stop 偶尔丢任务。设计更强证据。
+
+  <Answer question="怎样固定 submit/stop 风险交错？">用 latch 让一任务运行、另一任务确认入队，再受控并发调用 stop(Drain) 与新 submit；断言 stop 后新任务拒绝，释放运行项，核对 accepted=completed 且每个 id 恰好一次并全部 join。另用 TSan 跑该套件和重复压力，普通最终完成路径不能证明关键交错。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="风险—证据映射">把风险对应到测试层、观察结果、失败责任和门禁的方法。</GlossaryItem>
+  <GlossaryItem term="可信红灯">因目标行为缺失而按预测失败且基线、发现和诊断都可靠的状态。</GlossaryItem>
+  <GlossaryItem term="重构稳定性">测试对行为变化敏感、对内部结构变化稳定的性质。</GlossaryItem>
+  <GlossaryItem term="最小测试替身">只承担当前控制或观察角色、不复制无关实现的替代对象。</GlossaryItem>
+  <GlossaryItem term="行为—结构分离">新需求由红灯驱动、重构在全绿下只改结构的纪律。</GlossaryItem>
+  <GlossaryItem term="并发证据组合">事件控制、不变量、重复与 sanitizer 共同验证并发协议。</GlossaryItem>
+  <GlossaryItem term="性能基准证据">固定环境和代表负载下对统计分布与预算的测量。</GlossaryItem>
+  <GlossaryItem term="反馈系统健康">反馈指标拥有可见趋势、明确 owner、动作和时限的状态。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Modern C++ Programming with Test-Driven Development: Code Better, Sleep Better"
+  adaptedUrl="https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/"
+/>

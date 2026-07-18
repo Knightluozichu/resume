@@ -1,230 +1,320 @@
 ---
-title: 包含 min 函数的栈
+title: "面试题30：包含min函数的栈"
 type: C
-section: 栈和队列
-order: 2
-description: 掌握使用辅助最小栈同步保存当前状态最小值，以 O(1) 时间完成 push、pop、top 和 min 操作。
+section: "第4章 解决面试题的思路"
+order: 32
+description: "用与数据栈等高的辅助栈保存每层前缀最小值，证明push、pop、top与min均为常数时间，并补齐重复值和异常安全边界。"
 demo: true
-math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviews
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/30_MinInStack/StackWithMin.h"
 draft: false
 ---
 
-{/* 知识点清单：辅助栈 / 单调最小值快照 / 重复最小值 / 空栈防御 / O(1) 查询；原书章节：面试题30：包含 min 函数的栈。 */}
+import { MinStackSnapshotDiagram, MinStackInvariantMap, MinStackOperationMap, MinStackOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/min-stack";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 理解为什么普通栈无法在不扫描的情况下直接得到当前最小值。
-- 掌握“数据栈 + 最小栈”的同步设计：每个数据位置都对应一个当时的最小值快照。
-- 能解释重复最小值为什么必须被保留，而不是只保存一个去重后的最小集合。
-- 能用 C++ 和 TypeScript 实现 `push`、`pop`、`top`、`min`，并处理空栈边界。
+- 能解释普通栈为何不能在常数时间恢复被弹出的旧最小值
+- 能计算任意操作序列中数据栈与辅助栈的逐层状态
+- 能实现作者泛型StackWithMin及异常安全的工程版本
+- 能分析等长快照、压缩辅助栈、重复最小值和引用失效
+- 能设计覆盖作者八次检查与空栈、重复值、比较器测试
 
 </Objectives>
 
-## 直觉引入
+## 从“一个min变量为什么不够”开始
 
-普通栈只暴露栈顶。你可以很快知道“最后进来的是谁”，但如果产品经理突然问“当前所有元素里最小的是谁”，普通栈没有额外信息，只能从头扫一遍。
+先预测：依次压入3、4、2，此时一个变量currentMin等于2。弹出2后，怎样在O(1)时间知道旧最小值是3？只看剩余栈顶4不够，重新扫描又要O(n)。真正缺失的不是当前答案，而是每层历史状态。
 
-这道题的关键不是让栈变成排序结构，而是给每一次入栈都拍一张“当前最小值快照”：
+题目要求设计一个“**包含min函数的栈**”，使push、pop、top和min都保持O(1)。作者的方案维护数据栈m_data和<Term def="与数据栈同步变化、专门保存每个深度前缀最小值的第二个栈。">辅助栈</Term>m_min。每压入一个真实值，辅助栈也压入一份“到这一层为止的最小值”；每弹出一层，两边同步撤销。
 
-- 数据栈保存真实元素，比如依次压入 `3, 4, 2, 1`。
-- 最小栈在相同位置保存“压入这个元素后，当前栈内最小值是多少”，得到 `3, 3, 2, 1`。
-- 查询 `min()` 时只看最小栈栈顶，时间就是 $O(1)$。
+<MinStackSnapshotDiagram />
 
-## 核心设计
+因此m_min不是只收集曾经变小的候选值，而是与m_data严格等高。对序列3、4、2、3，数据栈从底到顶是3、4、2、3，辅助栈是3、3、2、2。顶层3离开时，最小值仍是2；2再离开时，下一层快照3自动恢复。
 
-我们维护两个栈：
+## 每层保存当前最小值
 
-| 栈 | 职责 |
-|---|---|
-| `dataStack` | 保存真实入栈元素，支持正常的 `push` / `pop` / `top` |
-| `minStack` | 与 `dataStack` 等长，栈顶永远保存当前全部元素的最小值 |
+把m_data从栈底到第i层的最小值称为<Term def="某一数据深度对应的前缀最小值；弹出更高层后仍可直接恢复。">最小值快照</Term>。核心关系是：对每个有效深度i，m_min[i]等于m_data[0..i]中的最小元素。原书概念“**每层保存当前最小值**”说的就是这个前缀关系。
 
-### `push(x)`
+<MinStackInvariantMap />
 
-先把 `x` 压入 `dataStack`。再计算新的最小值：
+push(value)时，如果m_min为空就压入value；否则比较value和旧m_min.top()，将较小者压入。作者写的是value小于旧最小值时压value，否则复制旧最小值；相等时走else，所以相同最小值仍会作为快照再次压入。
 
-- 如果 `minStack` 为空，新的最小值就是 `x`。
-- 否则新的最小值是 `min(x, minStack.top())`。
+pop()不需要比较将要离开的真实值，只要两个栈各弹一次。min()直接返回m_min.top()；top()返回m_data.top()；empty()和size()以数据栈为准。只要同步关系没有被破坏，接口观察到的永远是同一深度状态。
 
-然后把这个最小值也压入 `minStack`。
+## 忠实实现作者的模板
 
-### `pop()`
+作者把实现写在StackWithMin.h中，因为C++模板定义通常需要在实例化点可见。类型T必须可复制并支持小于比较；min返回const T引用，top同时提供可写和只读引用。
 
-两个栈必须同步弹出。因为 `minStack` 的每一层是对同一时刻 `dataStack` 的快照，数据少一层，快照也必须少一层。
-
-### `min()`
-
-直接返回 `minStack.top()`。它不是“可能的最小值”，而是当前栈状态下已经同步维护好的最小值。
-
-<MinStackDiagram />
-
-## 为什么不能只在变小的时候压最小栈？
-
-有一种常见写法是：只有当新元素 `x <= 当前最小值` 时，才把 `x` 压入最小栈；弹出时如果弹出的元素等于最小栈栈顶，再同步弹出最小栈。这个写法也能成立，但更容易漏掉“重复最小值”的处理。
-
-本章采用“最小栈与数据栈等长”的版本，优势是更直观：
-
-- 每个位置都有快照，不需要在 `pop()` 时比较值。
-- 重复最小值自然保留。
-- 代码更适合面试现场解释和手写。
-
-## 代码对照
-
-<CodeTabs>
-  <Tab label="C++">
 ```cpp
+#include <cassert>
+#include <cstddef>
 #include <stack>
-#include <stdexcept>
-#include <algorithm>
 
-class MinStack {
-private:
-    std::stack<int> dataStack;
-    std::stack<int> minStack;
-
+template <typename T>
+class StackWithMin {
 public:
-    void push(int value) {
-        dataStack.push(value);
+    T& top() { return m_data.top(); }
+    const T& top() const { return m_data.top(); }
 
-        if (minStack.empty()) {
-            minStack.push(value);
+    void push(const T& value) {
+        m_data.push(value);
+        if (m_min.empty() || value < m_min.top()) {
+            m_min.push(value);
         } else {
-            minStack.push(std::min(value, minStack.top()));
+            m_min.push(m_min.top());
         }
     }
 
     void pop() {
-        if (dataStack.empty()) {
-            throw std::runtime_error("stack is empty");
-        }
-
-        dataStack.pop();
-        minStack.pop();
+        assert(!m_data.empty() && !m_min.empty());
+        m_data.pop();
+        m_min.pop();
     }
 
-    int top() const {
-        if (dataStack.empty()) {
-            throw std::runtime_error("stack is empty");
-        }
-
-        return dataStack.top();
+    const T& min() const {
+        assert(!m_data.empty() && !m_min.empty());
+        return m_min.top();
     }
 
-    int min() const {
-        if (minStack.empty()) {
-            throw std::runtime_error("stack is empty");
-        }
+    bool empty() const { return m_data.empty(); }
+    std::size_t size() const { return m_data.size(); }
 
-        return minStack.top();
-    }
+private:
+    std::stack<T> m_data;
+    std::stack<T> m_min;
 };
 ```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-class MinStack {
-  private dataStack: number[] = [];
-  private minStack: number[] = [];
 
-  push(value: number): void {
-    this.dataStack.push(value);
+这里没有调用标准库min函数，而是显式使用小于判断。若value与旧最小值相等，复制旧最小值与压入value在值语义上等价；辅助栈仍增加一层。这也解释了为什么作者的pop可以无条件同步，不需要判断弹出值是否等于最小值。
 
-    const currentMin =
-      this.minStack.length === 0
-        ? value
-        : Math.min(value, this.minStack[this.minStack.length - 1]);
+源代码只在pop和min中用assert检查两个栈非空，top直接交给std::stack。assert在定义NDEBUG的发布构建中会被移除，不能作为外部输入防线；空栈top、pop或min都违反接口前提。教学复现应保留这一事实，生产接口则应明确抛异常、返回optional或把空操作定义为调用方错误。
 
-    this.minStack.push(currentMin);
-  }
+<Callout type="trap" title="把辅助栈理解成去重后的最小值集合">
+作者每次push都向m_min压一层，即使value更大或等于旧最小值也复制快照。若自行改成压缩版，却仍让pop无条件弹辅助栈，第一个普通元素离开就会误删当前最小值。
+</Callout>
 
-  pop(): number {
-    if (this.dataStack.length === 0) {
-      throw new Error("stack is empty");
-    }
+## 为什么四个核心操作都是O(1)
 
-    this.minStack.pop();
-    return this.dataStack.pop()!;
-  }
+std::stack的push、pop与top在所用底层容器满足通常契约时是摊销或规定的常数级操作。一次StackWithMin.push只做两个栈push和一次比较；pop只做两个pop；top和min各做一次top。因此“**push、pop、min都是O(1)**”，top也同样是O(1)。
 
-  top(): number {
-    if (this.dataStack.length === 0) {
-      throw new Error("stack is empty");
-    }
+<MinStackOperationMap />
 
-    return this.dataStack[this.dataStack.length - 1];
-  }
+空间代价是m_data保存n个真实元素，m_min再保存n个快照，总空间O(n)，其中辅助空间O(n)。不能说空间O(1)：虽然每次操作只增加常数个元素，但随着栈深线性增长。若T很大，复制最小值可能昂贵；可以保存共享所有权、稳定索引或使用压缩方案，但每种选择都有生命周期要求。
 
-  min(): number {
-    if (this.minStack.length === 0) {
-      throw new Error("stack is empty");
-    }
-
-    return this.minStack[this.minStack.length - 1];
-  }
-}
-```
-  </Tab>
-</CodeTabs>
+<Term def="在每次操作前后都成立、用来连接局部更新与全局正确性的关系。">同步不变量</Term>包括两部分：两个栈高度相等；辅助栈每层是数据栈对应前缀的最小值。只核对高度不够，因为错误值也能等高；只核对栈顶最小值也不够，因为深层快照可能已损坏，直到后续pop才暴露。
 
 ## 正确性证明
 
-用不变式来证明最清楚：
+对操作次数归纳。初始两个栈为空，高度相等，所有有效深度上的前缀命题为空真。假设操作前不变量成立。
 
-<Callout type="tip">
-  任意时刻，`minStack[i]` 都等于 `dataStack[0..i]` 中的最小值。
+执行push(value)后，旧层内容不变；新数据前缀只比旧前缀多value，所以新最小值恰为value与旧最小值中较小者。算法将它压入m_min，且两个栈都增加一层，不变量继续成立。
+
+执行pop时，两个栈删除同一深度。剩余每个深度的数据前缀和对应快照都没有改变，高度仍相等。于是非空时m_min.top()就是m_data整个有效前缀的最小值，min返回正确答案。每个更新只访问栈顶，证明同时给出常数时间界。
+
+若最小值出现两次，例如压入2、2，辅助栈也有2、2。弹出一个2后，下一层快照仍为2。这不是额外补丁，而是前缀不变量自然推出的结果。
+
+## 等长快照与压缩辅助栈
+
+另一种正确实现只在value小于或等于当前最小时把value压入辅助栈；pop前若数据栈顶等于辅助栈顶，才同步弹出。它让辅助栈大小等于“历史低点出现次数”，在严格递增输入下只占一层，但严格递减时仍是O(n)。
+
+压缩版必须在相等时也压入，或者在辅助项中保存计数。若使用严格小于，压入两个相同最小值后只记一份；弹出第一个时删掉唯一记录，第二个最小值仍在数据栈却无从查询。泛型T还需要相等比较，而作者等长版只依赖小于关系。
+
+```cpp
+#include <cstddef>
+#include <functional>
+#include <stack>
+#include <stdexcept>
+#include <utility>
+
+template <class T, class Compare = std::less<T>>
+class CompressedMinStack {
+    std::stack<T> data;
+    std::stack<std::pair<T, std::size_t>> minima;
+    Compare less;
+
+public:
+    void push(const T& value) {
+        data.push(value);
+        if (minima.empty() || less(value, minima.top().first)) {
+            minima.push({value, 1});
+        } else if (!less(minima.top().first, value)) {
+            ++minima.top().second;
+        }
+    }
+
+    void pop() {
+        if (data.empty()) {
+            throw std::underflow_error("empty stack");
+        }
+        const T& value = data.top();
+        if (!less(value, minima.top().first) &&
+            !less(minima.top().first, value) &&
+            --minima.top().second == 0) {
+            minima.pop();
+        }
+        data.pop();
+    }
+};
+```
+
+这个片段省略top、min等接口以突出计数逻辑。对昂贵对象，比较和复制仍可能抛异常；压缩不等于自动更安全。等长版的优势是状态对应简单、pop无需比较，适合原题解释与一般值类型。
+
+## 工程版的异常安全与接口契约
+
+作者push先向m_data压value，再向m_min压快照。第二次分配或复制若抛异常，数据栈已经增加而辅助栈没有增加，同步不变量被破坏。对int示例通常看不见，但泛型容器不能忽略。简单修复是先算出快照并压入m_min，再尝试压m_data；若后者失败，回滚m_min。
+
+```cpp
+#include <functional>
+#include <optional>
+#include <stack>
+
+template <class T, class Compare = std::less<T>>
+class SafeMinStack {
+    std::stack<T> data_;
+    std::stack<T> min_;
+    Compare less_;
+
+public:
+    void push(const T& value) {
+        T snapshot =
+            min_.empty() || less_(value, min_.top())
+                ? value
+                : min_.top();
+
+        min_.push(snapshot);
+        try {
+            data_.push(value);
+        } catch (...) {
+            min_.pop();
+            throw;
+        }
+    }
+
+    bool pop() {
+        if (data_.empty()) return false;
+        data_.pop();
+        min_.pop();
+        return true;
+    }
+
+    const T* top() const {
+        return data_.empty() ? nullptr : &data_.top();
+    }
+
+    const T* min() const {
+        return min_.empty() ? nullptr : &min_.top();
+    }
+};
+```
+
+这提供基本的事务性：push成功则两个栈都增加，失败则都保持原高度。若m_data.push成功后某种自定义栈pop也可能抛异常，设计还需更强容器保证；标准容器适配器的pop通常不抛。
+
+min与top返回指针或引用时，下一次修改操作可能使其失效，调用方不能长期保存。若希望稳定值语义，可以返回T副本或可选值类型，代价是复制。若T的比较器定义“更大优先”，同一结构就变成max栈；名称与比较器语义必须一致。
+
+<Callout type="trap" title="只用assert处理空栈并把它当作运行时错误返回">
+发布构建可能移除assert，随后std::stack在空容器上top或pop违反前提。库接口应选择异常、optional、布尔返回或明确的前置条件，并让测试覆盖实际发布配置。
 </Callout>
 
-- 初始时两个栈都为空，不变式成立。
-- `push(x)` 时，新栈顶的最小值只能是“旧最小值”和 `x` 之间较小的一个，所以压入 `min(x, oldMin)` 后不变式继续成立。
-- `pop()` 时两个栈同步弹出，同一层的数据与最小值快照同时离开，不会破坏剩余层的历史最小值。
-- 因此 `min()` 返回 `minStack.top()`，就是当前全栈最小值。
+## 作者八次检查逐步验证什么
 
-## 常见误区
+作者main只使用int。Test1压3，min为3；Test2压4，min仍为3；Test3压2，min变2；Test4再压3，min仍为2。随后Test5弹出顶层3，min还是2；Test6弹出2，历史快照恢复为3；Test7弹出4，只剩3，min仍为3；Test8压0，min变0。
 
-<Callout type="trap">
-  <strong>现象 →</strong> 弹出一个最小值后，`min()` 返回了更小但已经不存在的旧值。
-  <strong>原因 →</strong> `pop()` 只弹出了数据栈，没有同步弹出最小栈。
-  <strong>修法 →</strong> 两个栈必须保持同样的高度，每次 `push` 和 `pop` 都同步更新。
-</Callout>
+<MinStackOfficialCaseLab />
 
-<Callout type="trap">
-  <strong>现象 →</strong> 栈里有两个相同最小值，弹出一个后 `min()` 错误地变大。
-  <strong>原因 →</strong> 使用压缩版最小栈时没有处理重复最小值。
-  <strong>修法 →</strong> 要么在 `x <= currentMin` 时压入最小栈，要么直接使用本章的等长快照方案。
-</Callout>
+八次检查覆盖“更大值不改变最小值”“更小值更新最小值”“弹出普通值不改变最小值”“弹出当前最小值恢复旧值”。它没有覆盖空栈操作，也没有压入两个相等的当前最小值；工程测试必须补上这两类。
 
-## 小结与练习
+可以把官方序列写成可重复断言，并核对size与empty：
 
-- 普通栈的 `min()` 如果不加辅助信息，需要 $O(N)$ 扫描。
-- 等长 `minStack` 让每一层都保存当前最小值快照，因此 `min()` 是 $O(1)$。
-- `push`、`pop`、`top`、`min` 的时间复杂度都是 $O(1)$，空间复杂度是 $O(N)$。
-- 重复最小值是这题最容易漏的边界。
+```cpp
+#include <cassert>
+
+void testStackWithMin() {
+    StackWithMin<int> stack;
+    assert(stack.empty());
+
+    stack.push(3); assert(stack.min() == 3);
+    stack.push(4); assert(stack.min() == 3);
+    stack.push(2); assert(stack.min() == 2);
+    stack.push(3); assert(stack.min() == 2);
+    stack.pop();   assert(stack.min() == 2);
+    stack.pop();   assert(stack.min() == 3);
+    stack.pop();   assert(stack.min() == 3);
+    stack.push(0); assert(stack.min() == 0);
+
+    StackWithMin<int> duplicates;
+    duplicates.push(2);
+    duplicates.push(2);
+    duplicates.pop();
+    assert(duplicates.min() == 2);
+    assert(duplicates.size() == 1);
+}
+```
+
+随机状态机测试可用vector作为参考模型：push追加，pop删除末尾，top比较末尾，min用线性扫描计算。被测结构仍必须O(1)，参考模型只为小规模测试服务。每次操作后检查empty、size、top和min，能在第一次同步偏移时立即定位。
+
+## 并发、数值与泛型边界
+
+该结构不是线程安全的。两个线程交错push可能让data与min来自不同操作，即使单个std::stack没有崩溃，也会破坏组合不变量。整个复合操作必须由同一把锁保护，不能分别锁两个底层栈；查询min和top也要与写操作互斥，或返回锁保护下的副本。
+
+浮点T需要定义NaN策略。普通小于比较对NaN两边都为false，NaN可能被当作“不更小”而沿用旧值；首个元素若为NaN，则后续正常数也无法按直觉替换。业务应拒绝NaN或提供全序比较器。字符串、时间戳和业务对象同样要明确比较字段与等价关系。
+
+若top暴露可写T引用，调用方可以原地把数据栈顶从4改成1，却不会更新辅助栈，立刻破坏不变量。作者确实提供了非const top引用，这是教学接口的隐藏风险。更稳妥的最小栈只返回const引用；若要修改栈顶，应定义replaceTop，内部用pop加push原子更新两个栈。
+
+<Term def="多个成员更新要么全部成功、要么恢复到操作前状态的容器保证。">异常安全</Term>与<Term def="某个操作后，先前返回的指针或引用是否仍指向有效对象的规则。">引用有效期</Term>都是模板从int示例走向通用库时必须补充的契约。算法正确性只说明无异常、合法调用下的min值；工程正确性还要求失败路径不破坏状态。
+
+<Stepper>
+  <Step title="为每个数据层保存快照"><MinStackSnapshotDiagram />真实值与前缀最小值一一对应，辅助栈始终与数据栈等高。</Step>
+  <Step title="用不变量检查push和pop"><MinStackInvariantMap />push增加同一深度，pop撤销同一深度，旧最小值自然恢复。</Step>
+  <Step title="核对复杂度与接口边界"><MinStackOperationMap />四个核心操作都是常数时间，但空间随栈深线性增长。</Step>
+  <Step title="跑完八次官方操作"><MinStackOfficialCaseLab />检查更大、更小、普通弹出、最小值弹出与重新压0。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 单个currentMin无法在弹出当前最小值后恢复历史答案。
+2. 作者辅助栈与数据栈等高，每层保存当前前缀最小值。
+3. push压入新快照，pop同步撤销两层，min直接读辅助栈顶。
+4. push、pop、top、min都是O(1)，辅助空间O(n)。
+5. 相等最小值也会形成新快照，因此弹出一个后答案仍正确。
+6. 压缩版需保存相等值或计数，并在pop时比较两个栈顶。
+7. 发布接口不能只依赖assert，非const top还可能绕过同步维护。
+8. 泛型push要考虑第二次压栈失败后的回滚与引用生命周期。
 
 <Exercises>
-  <Answer question="如果要把辅助栈从等长快照改成压缩版，push 和 pop 分别怎么改？">
-    `push(x)` 时，只有当最小栈为空或 `x <= minStack.top()` 时才把 `x` 压入最小栈；`pop()` 时先看数据栈栈顶，如果它等于最小栈栈顶，则两个栈都弹出，否则只弹出数据栈。注意这里必须使用 `<=`，否则重复最小值会丢失计数。
-  </Answer>
-  <Answer question="为什么不能用一个变量 minValue 代替 minStack？">
-    只用一个变量能处理入栈时变小的情况，但弹出当前最小值后，无法在 $O(1)$ 时间知道“上一个最小值”是谁。`minStack` 保存的是每一层历史快照，正好解决这个回退问题。
-  </Answer>
+
+**问题 1：压入3、4、2、2后，两个栈分别是什么？弹出一次后min是多少？**
+
+<Answer>数据栈从底到顶为3、4、2、2，辅助栈为3、3、2、2。同步弹出顶层后，两边变成3、4、2与3、3、2，所以min仍为2。</Answer>
+
+**问题 2：为什么作者等长版只需要小于比较，不需要相等比较？**
+
+<Answer>每次都会压一份快照。value不小于旧最小值时直接复制旧栈顶，相等也包含在这一分支中；pop又无条件同步，因此不必判断离开值是否等于当前最小值。</Answer>
+
+**问题 3：非const top引用为什么会破坏结构？**
+
+<Answer>调用方能直接改写m_data栈顶，却不会重算m_min同层快照。之后min可能返回旧值。应只暴露const读取，或提供由容器内部同步更新的replaceTop操作。</Answer>
+
+**问题 4：怎样让两次压栈具有异常安全？**
+
+<Answer>先构造并压入最小值快照，再尝试压数据值；若第二步抛异常，就弹回辅助栈并重新抛出。成功时两边都增加，失败时恢复原状态。</Answer>
+
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="辅助栈">
-    为主栈额外维护的一份栈结构，用来保存查询所需的派生状态。本题中它保存每一层的当前最小值。
-  </GlossaryItem>
-  <GlossaryItem term="最小值快照">
-    某个入栈时刻的全栈最小值。只要快照和数据层级同步，弹出时就可以自然回退到上一层状态。
-  </GlossaryItem>
-  <GlossaryItem term="不变式">
-    在算法执行过程中始终保持为真的条件。本题的不变式是：最小栈栈顶始终等于当前数据栈的最小值。
-  </GlossaryItem>
+  <GlossaryItem term="辅助栈">与数据栈协作、保存每层派生最小值的第二个栈。</GlossaryItem>
+  <GlossaryItem term="最小值快照">某一深度的数据前缀最小值，用于弹出后恢复历史状态。</GlossaryItem>
+  <GlossaryItem term="同步不变量">两个栈等高且每层快照等于对应数据前缀最小值的关系。</GlossaryItem>
+  <GlossaryItem term="异常安全">复合更新失败时不留下两个成员状态不一致的保证。</GlossaryItem>
+  <GlossaryItem term="引用有效期">容器修改后，先前返回引用仍可使用到何时的契约。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题30"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/30_MinInStack/StackWithMin.h"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

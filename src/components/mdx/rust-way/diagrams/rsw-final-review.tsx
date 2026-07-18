@@ -1,72 +1,20 @@
-/**
- * <RswFinalReviewDiagram>：Rust 编程之道全书知识图谱。
- *
- * 以所有权为圆心，辐射出类型系统、安全、并发、工程四大领域的核心概念。
- * Server Component，viewBox 720×400，CSS 变量配色。
- */
+import { RustWayOfficialLab, type RustWayCase } from "./official-lab";
 
-const primary = "var(--text-primary)";
-const secondary = "var(--text-secondary)";
-const border = "var(--border)";
-const elevated = "var(--bg-elevated)";
-const accent = "var(--accent)";
-const success = "var(--success)";
-const warning = "var(--warning)";
-const danger = "var(--danger)";
-
-const NODES = [
-  { label: "所有权", x: 360, y: 200, r: 46, color: accent, center: true },
-  { label: "借用 & &mut", x: 200, y: 110, r: 34, color: accent },
-  { label: "生命周期 'a", x: 520, y: 110, r: 34, color: success },
-  { label: "Trait/泛型", x: 150, y: 220, r: 34, color: success },
-  { label: "Result/? ", x: 570, y: 220, r: 34, color: warning },
-  { label: "unsafe 边界", x: 200, y: 320, r: 34, color: danger },
-  { label: "Send/Sync", x: 380, y: 340, r: 30, color: warning },
-  { label: "async/Future", x: 540, y: 320, r: 34, color: danger },
+const map: RustWayCase[] = [
+  { label: "值与表示", input: "Ch1-4的语言、类型和内存", mechanism: "类型推导、布局与RAII", result: "可解释的值模型", invariant: "每个值的类型、位置、大小和释放者明确。" },
+  { label: "访问与抽象", input: "Ch5-8的owner、调用与数据", mechanism: "借用、闭包、结构与集合", result: "零成本抽象", invariant: "高层接口不隐藏所有权和表示风险。" },
+  { label: "工程与边界", input: "Ch9-13的错误、包、并发、宏和unsafe", mechanism: "显式失败、模块契约与安全封装", result: "可维护系统", invariant: "跨模块、线程和语言的前置条件可审计。" },
 ];
-
-export function RswFinalReviewDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox="0 0 720 400" role="img" aria-label="Rust 编程之道知识图谱：以所有权为中心，辐射借用、生命周期、Trait、错误处理、unsafe、并发、async。" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x={360} y={28} textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>
-            Rust 编程之道·知识图谱
-          </text>
-          <text x={360} y={46} textAnchor="middle" fontSize="11" fill={secondary}>
-            所有权是万流归宗的圆心——一切特性都为安全与性能服务
-          </text>
-
-          {/* 连线 */}
-          {NODES.filter((n) => !n.center).map((n) => (
-            <line key={`l-${n.label}`} x1={360} y1={200} x2={n.x} y2={n.y} stroke={n.color} strokeWidth="1.2" strokeOpacity="0.4" />
-          ))}
-
-          {/* 节点 */}
-          {NODES.map((n) => (
-            <g key={n.label}>
-              <circle cx={n.x} cy={n.y} r={n.r} fill={n.color} fillOpacity={n.center ? "0.18" : "0.1"} stroke={n.color} strokeWidth={n.center ? "2" : "1.4"} />
-              <text x={n.x} y={n.y + 4} textAnchor="middle" fontSize={n.center ? "13" : "10"} fontWeight={n.center ? "700" : "600"} fill={n.center ? primary : n.color}>
-                {n.label}
-              </text>
-            </g>
-          ))}
-
-          {/* 四象限标签 */}
-          <text x={150} y={86} textAnchor="middle" fontSize="10" fill={secondary}>类型系统</text>
-          <text x={570} y={86} textAnchor="middle" fontSize="10" fill={secondary}>错误处理</text>
-          <text x={120} y={300} textAnchor="middle" fontSize="10" fill={secondary}>安全边界</text>
-          <text x={600} y={300} textAnchor="middle" fontSize="10" fill={secondary}>并发与异步</text>
-
-          <line x1={36} y1={362} x2={684} y2={362} stroke={border} strokeWidth="1" strokeDasharray="4 3" />
-          <text x={360} y={382} textAnchor="middle" fontSize="11" fill={secondary}>
-            零成本抽象：编译期检查安全，运行期不付额外代价——这就是 Rust 之道
-          </text>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        所有权为圆心，借用/生命周期/类型/错误/安全/并发围绕展开——Rust 的统一世界观。
-      </figcaption>
-    </figure>
-  );
-}
+const diagnosis: RustWayCase[] = [
+  { label: "编译失败", input: "type、move、borrow或lifetime诊断", mechanism: "定位最早不满足的约束", result: "最小所有权/类型修复", invariant: "不靠无意义clone或unsafe压掉症状。" },
+  { label: "运行失败", input: "Err、panic、deadlock或错误结果", mechanism: "沿owner、状态与错误链回溯", result: "首个失效不变量", invariant: "日志和测试保留输入、线程、资源与source chain。" },
+  { label: "边界失败", input: "FFI、宏展开、依赖或编码", mechanism: "还原生成物和协议坐标", result: "可复现跨边界证据", invariant: "调用双方对布局、版本、释放和错误语义一致。" },
+];
+const capstone: RustWayCase[] = [
+  { label: "同步核心", input: "领域值与命令", mechanism: "enum状态、Result与模块私有性", result: "可测试library", invariant: "无效状态不可构造，失败不污染已提交状态。" },
+  { label: "并发外壳", input: "任务与共享需求", mechanism: "channel、Arc/lock或Future", result: "有背压的服务", invariant: "取消、关闭、锁顺序和Send/Sync可证明。" },
+  { label: "外部接口", input: "CLI、CSV或FFI输入", mechanism: "验证、转换与安全封装", result: "稳定公开API", invariant: "外部数据不能直接破坏内部不变量。" },
+];
+export function RswWholeBookMapLab() { return <RustWayOfficialLab title="13章统一模型" caption="从值与表示，经访问与抽象，到工程与安全边界。" cases={map} tone="cyan" />; }
+export function RswDiagnosisLab() { return <RustWayOfficialLab title="故障逆向诊断" caption="先判断失败阶段，再追踪最早被破坏的类型、owner或协议。" cases={diagnosis} tone="rose" />; }
+export function RswCapstoneLab() { return <RustWayOfficialLab title="综合项目验收" caption="同步核心、并发外壳和外部接口分别保留自己的不变量。" cases={capstone} tone="emerald" />; }

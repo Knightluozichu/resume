@@ -1,81 +1,260 @@
 ---
-title: Effective Modern C++ 全书串联
+title: "Effective Modern C++ 全书复习与迁移验收"
 type: A
-section: 并发与其他
-order: 9
-description: 42 条条款的总复习思维导图与跨章节串联，把类型推导、资源管理、移动转发、并发合成一条能力链。
+section: 全书复习
+order: 99
+description: 用跨章节 failure scenarios 串联 42 个 Items：从类型和对象契约，经 ownership、move/forward、closure lifetime，走到 task outcome、memory ordering 与条件化优化。
 demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/"
 draft: false
 ---
 
-import { EmcFinalMindMap } from "@/components/mdx/effective-modern-cpp/diagrams/emc-final-mindmap";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  EmcppCrossChapterReviewFlowMap,
+  EmcppFailureToItemsMap,
+  EmcppMigrationEvidenceMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/final-review";
 
 <Objectives>
 
-- 能用一张思维导图复述四大板块及各自的关键条款
-- 能说清 auto/decltype(auto)/显式类型初始化三者如何配合
-- 能给出从 C++98 迁移到 C++14 的 5 条最高优先级准则及理由
+- 能分析一个现代 C++ API 的类型、对象、ownership、value category、closure 和 execution 六层 contract
+- 能复现 copy、dangling、data race 与 allocation symptoms，并定位相关 Items
+- 能设计 C++98/旧 C++ 模块迁移顺序，以负例、failure injection 和 measurement 验收
 
 </Objectives>
 
-## 全书一图收束
+## 从“42 条要在同一条调用链相遇”开始
 
-学完全书 42 条条款，最后一步是把它们串成一条能力链。Effective Modern C++ 不是 42 条孤立建议，而是一条从「读懂类型」到「写好并发」的递进路径——每一层都以前一层为基础，跳级会断层。这一章用思维导图收束四大板块，并做跨章节串联。
+真实代码不会按章节出现。一个把 `unique_ptr` 移入 generic lambda、由 `std::async` 执行并写入 atomic state 的 API，同时涉及 type deduction、ownership、move、capture、launch policy、future lifetime 和 memory ordering。
 
-<EmcFinalMindMap />
+<Term def="沿一个对象或调用从 API 输入到最终销毁/并发观察点，逐层证明类型、ownership、category 与 ordering 的审查方法。">
+  跨章节 contract 链
+</Term>
 
-## 四大板块的核心目标
+先预测每一层最可能丢失什么信息，再用图中的 proof question 自查。
 
-第一板块「类型推导与 auto」（条款 1-6）：让推导为所用，但看得清类型、避开代理类型陷阱。核心是三套推导机制（模板/auto/decltype）加上「优先用 auto」与「显式类型初始化惯用法」。
+<EmcppCrossChapterReviewFlowMap />
 
-第二板块「智能指针与资源管理」（条款 7-22）：用对象和智能指针把资源生命周期交给类型系统，确定性释放。核心是 unique/shared/weak 三种指针 + make 函数 + Pimpl。
+## 第一层：类型边界是否与意图一致
 
-第三板块「移动语义与转发」（条款 23-30）：用右值引用与完美转发让资源高效转移而非拷贝。核心是 std::move、通用引用、引用折叠、std::forward。
+Items 1-6 要求先写出 deduced T、parameter、expression 与 return type。`auto` 不保证得到 owning value，`decltype((x))` 可能变成 reference，proxy 可越过 source lifetime。
 
-第四板块「并发与其他」（条款 31-42）：用 Lambda 与并发 API 安全地写多线程与收尾优化。核心是 Lambda 捕获、task/atomic/future、emplace。
+<Term def="调用、变量或返回处决定具体类型、cv/reference 与 conversion 的接口位置。">
+  类型推导边界
+</Term>
 
-## 跨章节串联：一条能力链
+验收：用 `static_assert`、deleted overload 或 compiler diagnostic 证明 exact type；同时测试 const lvalue、mutable lvalue、rvalue、array/function 与 braced list。
 
-四个板块构成「读类型 → 管资源 → 搬资源 → 并发协作」的递进。读懂类型是读代码的前提；资源管理是安全网；移动是提速器；并发是综合考场。后一块都以前一块为基础：不懂类型推导就看不懂 auto 满天飞的现代代码；不懂资源管理就写不出线程安全的多线程代码；不懂移动语义就无法把对象高效移入 Lambda 闭包与跨线程任务。
+## 第二层：对象声明能否维持有效状态
 
-## auto 三件套配合
+Items 7-17 把 braces、nullptr、alias、enum class、delete、override、const iterator、noexcept、constexpr、thread-safe const 和 special members 连接起来。
 
-auto（条款 5）、decltype(auto)（条款 3）、显式类型初始化（条款 6）三者按场景分层选用：默认用 auto 减冗余防截断；需要透传引用性（如转发返回类型）升级 decltype(auto)；遇到代理类型陷阱加 `static_cast<TargetType>` 强制推导目标类型。三者不是对立，而是同一思路（让推导为所用）的不同工具。
+<Term def="constructor、special members、inheritance specifiers 与 exception contract 共同保证对象始终满足不变量。">
+  现代对象契约
+</Term>
 
-## move 与 forward 的分工
+一个 user-declared destructor 可能抑制 move；缺少 noexcept 可能让 vector 复制；logical const cache 在并发下仍需 mutex/atomic。review 必须检查 generated operations，而不是只看手写函数。
 
-条款 25 口诀：右值引用用 std::move，通用引用用 std::forward。std::move 是无条件右值 cast（确定右值），std::forward 是有条件右值 cast（保持通用引用的值类别）。混用会出 bug——在通用引用上用 move 会把左值也强行移动，导致悬空。唯一例外：`return std::move(local)` 往往有害（阻止 RVO），应直接 `return local`。
-
-<Callout type="tip">
-<strong>建议 →</strong> 把这本书当工具书：每写一段现代 C++ 代码，回头对照相关条款。遇到 auto 想条款 6，遇到 new 想条款 21，遇到 move 想条款 25 与 29，遇到 thread 想条款 37。让准则内化为反射。
+<Callout
+  type="trap"
+  title="陷阱：代码已使用 nullptr、auto 和 override 就完成现代化"
+>
+  关键词迁移不证明对象语义。必须检查初始化、copy/move generation、exception
+  guarantees、ownership 与并发访问。
 </Callout>
 
-<Callout type="trap">
-<strong>现象 →</strong> 学完各板块单独看都懂，合起来用时处处卡壳。<strong>原因 →</strong> 没有建立板块间的联系，比如 Lambda 捕获要用 move、跨线程要管资源生命周期。<strong>修法 →</strong> 用本章的思维导图做自测：闭眼说出每个分支的关键条款与它依赖的前置板块，把孤立的点连成网。
+## 第三层：谁拥有资源直到何时
+
+Items 18-22 先画 ownership graph：unique owner 用 unique_ptr；shared lifetime 才用 shared_ptr；observer/cycle edge 用 weak_ptr；make 函数和 Pimpl 还涉及 allocation 与 complete type。
+
+<Term def="资源从创建、转移、共享、观察到最终释放的 owner/observer 有向图。">
+  ownership graph
+</Term>
+
+验收必须包含 destructor counters、cycle test、expired weak access、duplicate control-block negative test 和 exception injection。
+
+```cpp
+std::shared_ptr<Node> first = std::make_shared<Node>();
+std::shared_ptr<Node> second(first.get()); // negative test: two control blocks
+```
+
+## 第四层：copy、move 与 forward 是否选对
+
+Items 23-30 要区分 named rvalue-reference expression、forwarding reference 与 rvalue reference。`std::move` 不移动，`std::forward` 也不能为 braced list/overload set 发明类型。
+
+<Term def="把 lvalue/rvalue、cv 与 reference collapsing 信息从 caller 保留到最终 constructor/overload 的路径。">
+  value-category path
+</Term>
+
+<Callout type="trap" title="陷阱：看到 std::move 就能断言发生廉价移动">
+  还要检查 move overload 是否存在、是否 noexcept、资源是否内嵌，以及 library
+  是否因异常保证选择 copy fallback。
 </Callout>
 
-## 小结与练习
+## 第五层：closure state 是否晚于依赖对象
 
-- 四大板块一条链：读类型 → 管资源 → 搬资源 → 并发协作，后一块依赖前一块
-- auto 三件套按场景配合：默认 auto，透传引用用 decltype(auto)，代理类型加显式 cast
-- move 用于右值引用（无条件），forward 用于通用引用（有条件），不可混用
-- 迁移最高优先级：智能指针、auto、移动+noexcept、task 优先+thread unjoinable、atomic 管并发
+Items 31-34 要把 capture list 当 dependency manifest。默认引用可能悬空；默认值可能只复制 this pointer；init capture 可拥有 move-only state；generic lambda 用 `std::forward<decltype(param)>`。
 
-<Exercises>
-  <Answer question="用一句话概括四大板块各自的核心目标，并说明它们的递进逻辑。">类型推导与 auto 让推导为所用但看得清类型；智能指针与资源管理把资源生命周期交给类型系统确定性释放；移动语义与转发让资源高效转移而非拷贝；并发与其他用 Lambda 与并发 API 安全写多线程。递进逻辑是「读类型 → 管资源 → 搬资源 → 并发协作」：读懂类型是前提，资源管理是安全网，移动是提速，并发是综合考场，后一块都以前一块为基础，跳级会断层。</Answer>
-  <Answer question="给一个刚从 C++98 迁移到 C++14 的团队列 5 条最高优先级准则及理由。">1. 用智能指针取代裸 new/delete（条款 18-21）：直接消灭内存泄漏与异常安全，迁移成本低收益高。2. 默认用 auto 警惕代理类型（条款 5-6）：减冗余防截断，立竿见影提升质量。3. 移动语义+noexcept+不假设移动（条款 23/14/29）：让性能关键路径真提速。4. 并发优先 task、thread 析构必 unjoinable（条款 35/37）：多线程高发事故区，决定程序不崩溃。5. atomic 管并发、volatile 管特殊内存不混用（条款 40）：C++ 最危险误区之一，多线程正确性基础。这 5 条覆盖资源、类型、性能、并发四维，是性价比最高的起点。</Answer>
-</Exercises>
+<Term def="closure 中每个 copied value、reference、pointer 或 owner handle 与其 referent 的 lifetime 协议。">
+  closure dependency manifest
+</Term>
 
-## 名词解释
+测试 immediate call 不够，必须覆盖 return/store/queue/thread 后的 delayed invocation，并销毁原 owner 再运行 negative case。
+
+```cpp
+auto makeDangling = [] {
+    int local = 42;
+    return [&] { return local; }; // delayed invocation is invalid
+};
+```
+
+## 第六层：execution outcome 与同步是否闭环
+
+Items 35-40 从 task-based programming 开始：future 交付 value/exception；必须异步时指定 launch::async；thread 所有路径 unjoinable；析构行为按 handle/state/policy 分析；void future 做 one-shot event；atomic 负责 concurrency，volatile 负责 special memory。
+
+<Term def="task 的启动、进度、value/exception、等待、取消和 shared-state 销毁组成的完整执行协议。">
+  task outcome protocol
+</Term>
+
+验收包括 deferred path、thread creation failure、early return/throw、last-future destructor wait、broken promise、release/acquire 和 data-race negative tests。
+
+<EmcppFailureToItemsMap />
+
+## 综合案例一：异步上传 API
+
+```cpp
+template<typename Payload>
+auto upload(Payload&& payload) {
+    auto owned = std::make_shared<Job>(
+        std::forward<Payload>(payload));
+
+    return std::async(std::launch::async, [owned] {
+        return owned->run();
+    });
+}
+```
+
+<Term def="一个 API 同时跨越 forwarding construction、shared ownership、closure capture、async policy 和 future outcome 的综合边界。">
+  异步 ownership handoff
+</Term>
+
+逐项证明：Payload deduction 不被 greedy overload 劫持；Job construction exception 不泄漏；shared_ptr 是否真的需要 shared ownership；capture 不依赖 this；future 被保存/get；run exception 被观察；future/member destruction order 不悬空。
+
+## 综合案例二：线程安全缓存
+
+const member lazy-build cache 涉及 Item 16 与 40；若 cache value 是 shared_ptr 又涉及 19/20；若后台 task 初始化则涉及 35-39。
+
+<Term def="多个 readers 观察一次初始化或更新结果时，对 state ownership 与 publication ordering 的联合证明。">
+  cache publication contract
+</Term>
+
+不要只把 ready 改 atomic。普通 data 必须由 release/acquire、call_once 或 mutex 安全发布；失败/重试状态也要编码，owner destruction 必须等待 background work。
+
+## 综合案例三：性能 API 反而更慢
+
+Items 29、41、42 共同要求完整成本路径：move 可能逐元素；pass-by-value assignment 可能错过容量复用；emplace 在 duplicate rejection 时可能 speculative construct。
+
+<Term def="把 parameter construction、allocation、container acceptance、copy/move、destruction 与 exception path 全部计入的成本模型。">
+  端到端成本路径
+</Term>
+
+benchmark 必须分 lvalue/rvalue、small/large、capacity hit/miss、successful/rejected insertion，并使用 counting allocator 与 constructor counters。
+
+## 迁移旧模块的正确顺序
+
+<EmcppMigrationEvidenceMap />
+
+<Term def="先盘点资源和行为，再收紧类型/ownership，随后引入 move/concurrency，最后测量优化的迁移策略。">
+  contract-first migration
+</Term>
+
+直接全局替换 `new→make_shared`、`push→emplace`、`thread→async` 会改变 ownership、constructor selection 和 scheduling。每一步只改变一个 contract，并保留 before/after evidence。
+
+## 五类必留证据
+
+1. **Type evidence**：static_assert、selected overload、compile-fail case。
+2. **Lifetime evidence**：destructor counters、owner graph、delayed invocation。
+3. **Failure evidence**：allocation/thread failure、throw、early return、broken promise。
+4. **Concurrency evidence**：happens-before explanation、TSAN/stress、deferred path。
+5. **Cost evidence**：allocation/copy/move counters 与 representative benchmark。
+
+<Term def="证明迁移没有只改善 happy path，而覆盖类型、寿命、失败、并发和成本五个维度的验收集合。">
+  现代 C++ 迁移证据包
+</Term>
+
+## 小结
+
+- 全书复习应沿真实调用链串联类型、对象、ownership、category、closure 与 execution
+- deduction/static_assert 证明输入边界；special-member/noexcept tests 证明对象契约
+- ownership graph 与 delayed invocation 共同证明资源和 closure lifetime
+- move/forward 要用 selected overload 和完整成本路径验证，不能靠关键词判断
+- future/thread/atomic 要覆盖 deferred、异常、析构等待与 happens-before
+- Items 41-42 只在语义正确后按 measurement 采用
+- 旧模块按 contract-first 顺序迁移，每步留下五类证据
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Items 1-42"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/"
+/>
 
 <Glossary>
-  <GlossaryItem term="能力链">Effective Modern C++ 四板块构成的「读类型 → 管资源 → 搬资源 → 并发协作」递进路径，后一块依赖前一块。</GlossaryItem>
-  <GlossaryItem term="auto 三件套">auto、decltype(auto)、显式类型初始化惯法三者按场景配合：默认 auto，透传引用用 decltype(auto)，代理类型加显式 cast。</GlossaryItem>
-  <GlossaryItem term="move/forward 分工">右值引用用 std::move（无条件右值 cast），通用引用用 std::forward（有条件右值 cast），条款 25 的核心准则。</GlossaryItem>
-  <GlossaryItem term="确定性释放">通过 RAII 与智能指针把资源释放绑定到对象析构，利用栈展开保证无论正常返回还是异常都释放，取代手动 new/delete。</GlossaryItem>
+  <GlossaryItem term="跨章节 contract 链">
+    从输入到销毁逐层证明的审查。
+  </GlossaryItem>
+  <GlossaryItem term="类型推导边界">
+    决定具体类型和 conversion 的位置。
+  </GlossaryItem>
+  <GlossaryItem term="现代对象契约">
+    声明和特殊成员维持对象不变量。
+  </GlossaryItem>
+  <GlossaryItem term="ownership graph">
+    资源 owner/observer 生命周期图。
+  </GlossaryItem>
+  <GlossaryItem term="value-category path">
+    category 保留到最终调用的路径。
+  </GlossaryItem>
+  <GlossaryItem term="closure dependency manifest">
+    capture state 与 referent 寿命协议。
+  </GlossaryItem>
+  <GlossaryItem term="task outcome protocol">
+    执行结果错误和等待的协议。
+  </GlossaryItem>
+  <GlossaryItem term="异步 ownership handoff">
+    资源转入 async task 的综合边界。
+  </GlossaryItem>
+  <GlossaryItem term="cache publication contract">
+    缓存 state 与可见性联合约束。
+  </GlossaryItem>
+  <GlossaryItem term="端到端成本路径">
+    计入完整构造分配与拒绝的模型。
+  </GlossaryItem>
+  <GlossaryItem term="contract-first migration">
+    先正确后并发再优化的迁移顺序。
+  </GlossaryItem>
+  <GlossaryItem term="现代 C++ 迁移证据包">五维迁移验收集合。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Effective Modern C++ (Scott Meyers)" adaptedUrl="https://www.oreilly.com/" />
+<Exercises>
+  1. **问题 1：generic upload 把 caller payload 移入 async lambda。** 写出六层 review evidence。
+
+<Answer question="如何证明不是只在 happy path 正确？">
+  用 lvalue/rvalue/const inputs 验证 deduction 和 constructor；注入 Job
+  allocation/constructor failure；画 shared ownership 与 future lifetime；销毁
+  caller 后延迟运行；让 run 抛异常并由 future.get 观察；显式 launch::async
+  并检查 last-future wait。最后比较 copy/move/allocation counters。
+</Answer>
+
+2. **问题 2：const cache 用 relaxed atomic ready 发布普通 map。** 找出错误并修复。
+
+<Answer question="atomic flag 为什么没有自动发布 map？">
+  relaxed 只保证 ready 自身 atomic，不建立 map writes 对 reader 的
+  happens-before，读 map 仍 data race。用 mutex/call_once，或 producer
+  release-store ready、consumer acquire-load 读到 true 后再访问 immutable
+  map；还要编码 build failure/retry，并保证 owner 析构晚于 background builder。
+</Answer>
+
+3. **问题 3：团队计划全局把 push_back 改 emplace_back、setter 改按值。** 设计回归矩阵。
+
+  <Answer question="如何证明优化条件成立？">按 constructor args/existing value、lvalue/rvalue、small/large、capacity hit/miss、duplicate accepted/rejected 建矩阵；统计 constructors/moves/destructors 与 allocations，注入 container allocation failure 检查 raw ownership，并测试 explicit constructor 和 slicing。只有语义相同且 representative workload 改善的调用点才迁移。</Answer>
+</Exercises>

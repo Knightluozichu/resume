@@ -1,0 +1,297 @@
+---
+title: "Chapter 32 · String Matching"
+type: C
+section: "CLRS4 · 专题"
+order: 32
+description: "按CLRS第四版第32章重建朴素匹配、Rabin-Karp、有限自动机、KMP与后缀数组。"
+demo: true
+math: true
+sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+draft: false
+---
+
+import { CLRS4AlignmentLab, CLRS4NaiveComparisonLab, CLRS4RollingHashLab, CLRS4HashCollisionLab, CLRS4AutomatonStateLab, CLRS4TransitionTableLab, CLRS4PrefixFunctionLab, CLRS4KMPScanLab, CLRS4KMPFallbackLab, CLRS4SuffixArrayLab, CLRS4SuffixSearchLab, CLRS4LCPLab, CLRS4MatcherChoiceLab, CLRS4StringCertificateLab } from "@/components/mdx/introduction-to-algorithms/diagrams/32-string-matching";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释valid shift、occurrence、prefix/suffix state、fingerprint candidate和suffix interval
+- 能计算naive comparisons、rolling hash update、automaton transition、prefix function与LCP
+- 能实现Rabin–Karp verification、finite-automaton scan、KMP和suffix-array binary search
+- 能分析hash collisions、fallback amortization、overlapping matches和encoding boundaries
+- 能设计包含index convention、empty-pattern policy、collision policy与independent oracle的匹配证书
+
+</Objectives>
+
+## 从“失配前已经知道了什么”开始
+
+先预测：pattern前6个characters都匹配，第7个失配。朴素法把pattern右移一位并从头重比，等于丢掉前6次比较提供的信息。高效string matcher的共同问题是：如何把“已匹配prefix”压成state，用它排除不可能的shifts？
+
+<Term def="给定text T与pattern P，找出所有shift s使P逐字符等于T中从s开始的length-m substring。">字符串匹配</Term>设$n=|T|$、$m=|P|$。Valid shifts为0到$n-m$；若
+
+$$
+P[0\mathinner{\ldotp\ldotp}m)
+=
+T[s\mathinner{\ldotp\ldotp}s+m),
+$$
+
+则$s$是occurrence。算法必须明确返回first、any还是all occurrences，以及是否保留overlaps。
+
+<CLRS4AlignmentLab />
+
+### Contract before complexity
+
+Index按bytes、Unicode code points还是grapheme clusters？Case folding和normalization是否先做？Empty pattern匹配0个、1个还是每个boundary？这些都是API semantics，不是算法细节。若preprocessing与scan使用不同encoding，复杂度再好也会返回错误positions。
+
+## 32.1 The naive string-matching algorithm
+
+<Term def="对每个valid shift从pattern首字符开始比较，遇到first mismatch即转到下一个shift的算法。">朴素字符串匹配</Term>枚举所有$n-m+1$ alignments：
+
+```text
+NAIVE-STRING-MATCHER(T, P)
+1  for s = 0 to n-m
+2      j = 0
+3      while j < m and T[s+j] == P[j]
+4          j = j + 1
+5      if j == m, report shift s
+```
+
+<CLRS4NaiveComparisonLab />
+
+Worst case每个shift都匹配很长prefix后才失败，例如repetitive text与pattern，因此time为
+
+$$
+\Theta((n-m+1)m).
+$$
+
+但naive不是“永远不可用”：small pattern、rare first character、SIMD-optimized library search或one-off input时，低setup cost与simple control flow可能胜过复杂preprocessing。它也应作为small-input correctness oracle。
+
+### Overlap handling
+
+报告match后下一shift仍应是$s+1$，除非contract明确只要nonoverlapping results。Pattern `aaa`在text `aaaaa`中有shifts 0、1、2；直接跳$m$会漏掉2个合法occurrences。
+
+## 32.2 The Rabin-Karp algorithm
+
+### Fingerprints and rolling update
+
+<Term def="用rolling modular fingerprint筛选length-m windows，并对hash hits做字符验证的字符串匹配算法。">Rabin-Karp算法</Term>把alphabet symbols视作radix-$d$ digits。Pattern hash $p$与shift-$s$ window hash $t_s$ modulo prime $q$：
+
+$$
+p=\sum_{j=0}^{m-1}P[j]d^{m-1-j}\bmod q.
+$$
+
+从$t_s$更新$t_{s+1}$时，减去leaving character的high-place contribution，乘$d$，再加entering character：
+
+$$
+t_{s+1}
+=
+\bigl(d(t_s-T[s]h)+T[s+m]\bigr)\bmod q,
+\qquad
+h=d^{m-1}\bmod q.
+$$
+
+<CLRS4RollingHashLab />
+
+```ts
+for (let s = 0; s <= text.length - pattern.length; s += 1) {
+  if (windowHash === patternHash &&
+      text.slice(s, s + pattern.length) === pattern) {
+    matches.push(s);
+  }
+  windowHash = roll(windowHash, text[s], text[s + pattern.length]);
+}
+```
+
+Hash mismatch可安全排除shift；hash equality只产生candidate。Character verification把algorithm变成Las Vegas-style exact matcher：collisions增加time，不改变answer。
+
+<CLRS4HashCollisionLab />
+
+Worst case若每个window都collide并触发$m$ comparisons，仍为$\Theta(nm)$。Expected bound依赖random modulus/base或hash assumption；固定small modulus面对adversarial input没有“碰撞很少”的保证。Multiple patterns of equal length可共享text rolling hashes，这是Rabin–Karp的实际优势之一。
+
+<Callout type="trap" title="Hash相等就是字符串相等">
+Modular fingerprint必有collisions。修法是对hash hit做exact character comparison，或明确采用Monte Carlo contract、随机参数和可量化error probability；不能无说明地返回false positive。
+</Callout>
+
+## 32.3 String matching with finite automata
+
+### Prefix state
+
+<Term def="以已匹配pattern-prefix长度为state，预计算每个state与alphabet symbol的next state后线性扫描text的matcher。">有限自动机</Term>states为$0,\ldots,m$。State $q$表示processed text prefix的suffix中，最长与$P[0\mathinner{\ldotp\ldotp}q)$相等者长度为$q$。
+
+<CLRS4AutomatonStateLab />
+
+Transition function
+
+$$
+\delta(q,a)
+=
+\max\{k:P[0\mathinner{\ldotp\ldotp}k)
+\text{ is a suffix of }
+P[0\mathinner{\ldotp\ldotp}q)a\}.
+$$
+
+<CLRS4TransitionTableLab />
+
+```text
+FINITE-AUTOMATON-MATCHER(T, delta, m)
+1  q = 0
+2  for i = 0 to n-1
+3      q = delta[q, T[i]]
+4      if q == m, report i-m+1
+```
+
+Precomputed table后scan为$\Theta(n)$，每character一个lookup。Naive transition construction可能对每$(q,a)$测试多个prefix，cost较高；alphabet大时完整$(m+1)|\Sigma|$ table也浪费space。Sparse transitions、failure links或KMP prefix function在不同reuse pattern下更合适。
+
+Correctness invariant是state始终等于processed text的longest pattern-prefix suffix。Accept state到达$m$时，当前text position结束了一个occurrence；下一character transition也必须允许overlap，而不是清零所有state。
+
+## 32.4 The Knuth-Morris-Pratt algorithm
+
+### Prefix function
+
+<Term def="以prefix function压缩automaton failure transitions，使pattern预处理与text扫描都为linear time的算法。">Knuth-Morris-Pratt算法</Term>（KMP）不存完整alphabet table。Prefix function $\pi[q]$是$P[0\mathinner{\ldotp\ldotp}q]$的longest proper prefix，同时也是suffix的长度。
+
+<CLRS4PrefixFunctionLab />
+
+```text
+COMPUTE-PREFIX-FUNCTION(P)
+1  pi[0] = 0; k = 0
+2  for q = 1 to m-1
+3      while k > 0 and P[k] != P[q]
+4          k = pi[k-1]
+5      if P[k] == P[q], k = k + 1
+6      pi[q] = k
+```
+
+当mismatch发生，已经匹配的prefix中只有它的borders可能继续成为new alignment prefix；KMP沿$\pi$ chain回退，而text index不回退。
+
+<CLRS4KMPFallbackLab />
+
+```text
+KMP-MATCHER(T, P, pi)
+1  q = 0
+2  for i = 0 to n-1
+3      while q > 0 and P[q] != T[i]
+4          q = pi[q-1]
+5      if P[q] == T[i], q = q + 1
+6      if q == m
+7          report i-m+1
+8          q = pi[m-1]
+```
+
+<CLRS4KMPScanLab />
+
+### Why fallback is linear
+
+Inner `while`看似nested loop，但potential $q$每次successful comparison最多增加1，每次fallback严格降低。整个scan中总increases为$O(n)$，总decreases也为$O(n)$，所以matching time $\Theta(n)$；prefix preprocessing同理为$\Theta(m)$。
+
+Match后设$q=\pi[m-1]$保留longest border，正是overlapping occurrences所需。设$q=0$可能仍正确找某些nonoverlap inputs，却会漏掉self-overlapping pattern。
+
+<Callout type="trap" title="KMP匹配成功后总把q清零">
+Pattern可能有nonempty border，下一occurrence可与当前重叠。修法是报告shift后令q等于pi[m-1]，让已知suffix继续充当下一candidate prefix。
+</Callout>
+
+## 32.5 Suffix arrays
+
+### Indexing the text
+
+<Term def="把text所有suffix starting positions按对应suffix的lexicographic order排列成integer array的索引结构。">后缀数组</Term>预处理text而非pattern。若$SA[r]=i$，则rank $r$处suffix为$T[i\mathinner{\ldotp\ldotp}n)$。
+
+<CLRS4SuffixArrayLab />
+
+Naive construction显式materialize并sort所有suffix，可能用quadratic characters。Prefix-doubling construction先按1-character ranks排序，再反复按length $2^k$ prefix rank pairs排序，直到ranks唯一；典型comparison/counting-sort variants给$O(n\log n)$级construction，专门算法还能线性构建。
+
+```text
+PREFIX-DOUBLING-SUFFIX-ARRAY(T)
+1  rank suffixes by their first character
+2  for width = 1, 2, 4, ... while width < n
+3      sort each suffix i by pair (rank[i], rank[i+width])
+4      compress equal pairs into new integer ranks
+5  return suffix starts sorted by final rank
+```
+
+### Pattern query as an interval
+
+所有以pattern $P$开头的suffix在lexicographic order中形成contiguous interval。用two binary searches找lower/upper boundaries，interval中的SA values就是occurrence positions。
+
+<CLRS4SuffixSearchLab />
+
+Basic query每次binary-search comparison最多读$m$ characters，cost $O(m\log n)$；利用known matched prefixes或LCP data可避免重复比较，把query推进到$O(m+\log n)$形式。Output all $k$ positions还需要$\Theta(k)$。
+
+### LCP array
+
+LCP array保存adjacent sorted suffixes的longest common prefix lengths：
+
+<CLRS4LCPLab />
+
+它支持longest repeated substring、accelerated search与range-minimum-based suffix LCP queries。LCP必须与同一suffix array和同一sentinel/encoding构建；若text normalization后只更新SA不更新LCP，index内部会不一致。
+
+## 选择matcher与验收
+
+One pattern/one text常用KMP或verified Rabin–Karp；pattern固定并扫描许多texts，可预建automaton；text固定且有许多pattern queries，suffix array把preprocessing成本摊到queries上。Algorithm name不应先于reuse direction。
+
+<CLRS4MatcherChoiceLab />
+
+<CLRS4StringCertificateLab />
+
+<Stepper>
+<Step title="固定字符串语义">
+确定encoding unit、index unit、normalization、empty pattern和overlap policy；建立naive oracle输出all occurrence shifts。
+
+<CLRS4AlignmentLab />
+</Step>
+<Step title="选择复用方向">
+按pattern重用选择automaton/KMP，按text重用选择suffix array，rolling hash必须声明collision verification。
+
+<CLRS4MatcherChoiceLab />
+</Step>
+<Step title="对照独立oracle">
+覆盖empty、pattern longer than text、repetitive、overlap、Unicode normalization和adversarial collision cases。
+
+<CLRS4StringCertificateLab />
+</Step>
+</Stepper>
+
+## 小结
+
+Chapter 32 String Matching从naive string-matching algorithm建立shift语义。Rabin–Karp algorithm用rolling fingerprints快速筛候选但必须处理spurious hits；finite automata把longest matched prefix变成state；Knuth–Morris–Pratt用prefix function压缩failure transitions，实现linear preprocessing与scan。
+
+Suffix arrays反转复用方向：预处理text的所有suffix lexicographic order，用binary-search interval回答许多pattern queries，并以LCP减少重复prefix work。五种方法的共同正确性核心是保留恰好足够的prefix/suffix信息，同时明确index、overlap、empty pattern与encoding contract。
+
+<Exercises>
+
+**问题 1**：Text `aaaaa`、pattern `aaa`的all occurrence shifts是什么？为何match后跳3会错误？
+
+<Answer>
+Shifts为0、1、2。三个occurrences互相overlap；跳pattern length会从0直接到3，漏掉1和2。All-occurrences contract必须在match后继续考虑最长border或下一shift。
+</Answer>
+
+**问题 2**：Rabin–Karp中window hash与pattern hash不同能否直接reject？相同呢？
+
+<Answer>
+不同可直接reject，因为相等strings在同一hash下必有相等值。相同只能说明candidate，可能是collision；exact matcher还要逐字符验证，或显式接受Monte Carlo false-positive probability。
+</Answer>
+
+**问题 3**：KMP的inner fallback while为何不导致$O(nm)$？
+
+<Answer>
+Matched-prefix lengthq在每个consumed text character上最多增加1，fallback每次严格降低q。整个scan总增加为O(n)，总下降不能超过这些增加加initial value，所以所有fallback累计也是O(n)。
+</Answer>
+
+**问题 4**：Suffix array中为什么所有以P开头的suffix构成连续区间？
+
+<Answer>
+Lexicographic order先比较common prefix。任何以P开头的suffix都共享P；不以P开头的suffix若排在两者之间，必须在P内某个首个不同character同时大于一边又小于另一边，矛盾。因此matches contiguous，可用two boundaries定位。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="字符串匹配">给定text T与pattern P，找出所有shift s使P逐字符等于T中从s开始的length-m substring。</GlossaryItem>
+<GlossaryItem term="朴素字符串匹配">对每个valid shift从pattern首字符开始比较，遇到first mismatch即转到下一个shift的算法。</GlossaryItem>
+<GlossaryItem term="Rabin-Karp算法">用rolling modular fingerprint筛选length-m windows，并对hash hits做字符验证的字符串匹配算法。</GlossaryItem>
+<GlossaryItem term="有限自动机">以已匹配pattern-prefix长度为state，预计算每个state与alphabet symbol的next state后线性扫描text的matcher。</GlossaryItem>
+<GlossaryItem term="Knuth-Morris-Pratt算法">以prefix function压缩automaton failure transitions，使pattern预处理与text扫描都为linear time的算法。</GlossaryItem>
+<GlossaryItem term="后缀数组">把text所有suffix starting positions按对应suffix的lexicographic order排列成integer array的索引结构。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Chapter 32 · String Matching" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

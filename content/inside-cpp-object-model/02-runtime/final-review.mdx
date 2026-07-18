@@ -1,75 +1,298 @@
 ---
-title: 深度探索 C++ 对象模型总复习
+title: "深度探索 C++ 对象模型：跨模块节点池综合复盘"
 type: A
-section: 运行时机制
-order: 9
-description: 全书串联——以 vptr 为枢纽，把对象布局、构造语义、函数模型、运行时多态与生命周期织成一张图。
+section: Inside the C++ Object Model · Final Review
+order: 8
+description: 以跨进程共享记录、动态库多态节点和 placement 对象池事故贯穿官方七章，完成布局、调用、生命周期、模板/异常/RTTI 与 ABI 边界的联合诊断。
 demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/inside-the-c-plus-plus-object-model-9780201834543"
 draft: false
 ---
 
-import { IcoFinalMindMap } from "@/components/mdx/inside-cpp-object-model/diagrams/ico-final-mindmap";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  IcoCapstoneEvidenceMap,
+  IcoFinalKnowledgeMatrixMap,
+  IcoPluginFailureTraceMap,
+} from "@/components/mdx/inside-cpp-object-model/diagrams/final-review";
 
 <Objectives>
 
-- 能用一条主线串起全书五大主题
-- 能说清 vptr 如何贯穿布局、构造、多态、生命周期四大环节
-- 能综合运用对象模型知识诊断并修复多重陷阱叠加的代码
+- 能用官方 7 章知识矩阵分析同一事故中的 representation、generated work、call adjustment、lifetime 与 ABI identity
+- 能复现 foreign vptr、raw polymorphic copy、constructor virtual hook、cross-module destroy/exception/RTTI 的因果链
+- 能设计 versioned data + opaque C ABI + module-owned lifetime + phase-safe pool 的修复，并给出 correctness/performance 证据
 
 </Objectives>
 
-## 一张图串起全书
+## 从“崩在虚调用，根因却不在虚表”开始
 
-走到这里，我们已经把《深度探索 C++ 对象模型》的五大主题过了一遍：对象在内存里的布局、对象怎么被构造出来、成员函数怎么被调用、运行时多态怎么实现、继承与生命周期。这五块不是孤立的，它们由一个共同的枢纽串起来——vptr。
+渲染主进程从 shared memory 读取节点快照，再把 bytes 放进 host object pool。节点行为由 plugin DSO 提供，hierarchy 同时使用 multiple inheritance 与 virtual base；启动时 constructor 调 virtual hook 注册类型，运行时用 RTTI 选择 renderer，失败则抛 C++ exception。线上崩溃出现在第一次 `node->render()`，团队因此断言“vtable 被破坏”。
 
-<IcoFinalMindMap />
+先预测这条链上有几个 object-model boundary：跨进程 bytes、host/plugin allocator、construction phase、secondary base view、template type registration、exception/RTTI identity。崩溃点只是 foreign vptr 被使用的时刻；根因早在把 process-local object representation 当 stable record 时就已产生。
 
-## 以 vptr 为枢纽
+<Term def="把 object layout、call lowering、lifetime state 与 template/exception/RTTI ABI identity 放到同一因果链诊断的方法。">
+  seven-chapter incident analysis
+</Term>
 
-vptr 贯穿构造、使用、析构三阶段，是全书最重要的线索。构造期，vptr 先指向基类虚表、最后才改指向派生类虚表。使用期，虚调用经对象的 vptr 查 vtable 槽位、间接调到正确版本，多态生效；RTTI 也靠 vptr 找到挂在虚表上的 type_info。析构期，vptr 先改回基类虚表再析构派生部分，虚函数又退化为基类版本。
+<IcoFinalKnowledgeMatrixMap />
 
-理解了 vptr 在这三个阶段的去向，就理解了为什么构造析构期虚函数会退化、为什么多态只在构造完成后到析构开始前生效、为什么多重继承的对象要有多个 vptr、为什么没有虚函数就没有 RTTI。vptr 是「布局—构造—多态—生命」四大主题的共同枢纽。
+## 事故代码与错误假设
 
-## 主线一句话
+简化后的 plugin hierarchy 如下：
 
-全书可以用一句话概括：对象在内存里长什么样 → 怎么被造出来 → 怎么调用与多态 → 怎么消亡。这个顺序由依赖关系决定，也是推荐的复习路径：不先懂对象布局，就看不懂构造时 vptr 为什么被两次设置；不懂构造语义，就看不懂多态生效的窗口；不懂运行时多态，多重继承的 this 调整与虚继承就成了无源之水。
+```cpp
+struct Identity {
+    std::uint64_t id = 0;
+    virtual ~Identity() = default;
+};
 
-## 三问诊断法
+struct Node : virtual Identity {
+    Node() { registerType(); }
+    virtual void registerType() {}
+    virtual void update() = 0;
+};
 
-把全书压成一条可操作的诊断线索，可以总结为「三问」：遇到任何 C++ 对象行为的问题，先问——对象内存里有什么？构造析构时 vptr 怎么变？这次调用走没走虚表？这三问覆盖了布局、构造、多态三大主题，能解释绝大多数看似诡异的运行期行为。
+struct Renderable : virtual Identity {
+    virtual void render() = 0;
+};
 
-比如「基类构造函数里调虚函数为什么没走派生覆写」，三问依次回答：对象内存里有 vptr；构造期 vptr 先指向基类虚表、还没改到派生类；这次调用走了虚表，但查到的是基类版本——答案自然浮现。再比如「delete 基类指针为何派生部分没析构」，三问回答：对象内存里有 vptr；析构链是否走虚表取决于析构是否虚函数；若析构非虚，这次 delete 没走虚表、编译期静态绑定基类析构——派生部分被跳过。养成用这三问拆解问题的习惯，对象模型就从一堆零散结论变成了一台可推演的机器。
+struct PluginNode final : Node, Renderable {
+    std::string material;
+    void registerType() override;
+    void update() override;
+    void render() override;
+};
+```
 
-<Callout type="tip">
-<strong>建议 →</strong> 复习时别逐章背，而是用「vptr 此刻指向谁的虚表」这条线索把各章串起来。遇到任何对象模型的问题，先问三句：对象内存里有什么？构造析构时 vptr 怎么变？这次调用走没走虚表？这三问能解释绝大多数 C++ 对象行为。
+这段 declaration 本身已经提出四个问题：shared virtual base `Identity` 在 most-derived object 里只有一份；`Renderable*` 可能是 secondary base view；`PluginNode` 含 nontrivial `std::string`，不可 raw-copy；Node constructor 中 virtual `registerType` 只能使用 active Node phase，不能调到 PluginNode override。
+
+<Term def="跨进程或跨不兼容 module 保存了 vptr、type_info address、allocator-owned pointer 等只在原执行环境有效的对象表示。">
+  foreign object representation
+</Term>
+
+host 端错误地执行：从 shared memory `memcpy` 整个 PluginNode bytes 到 pool；把其中地址解释为 host 地址；通过 `Renderable*` 调 virtual；用 host `delete` 销毁 plugin 创建的对象；让 C++ exception 穿过 DSO。每一步都把 local ABI fact 当成 universal contract。
+
+## 事件链：从错误表示到迟发崩溃
+
+<IcoPluginFailureTraceMap />
+
+### 第1/3章：表示与数据访问
+
+<Term def="most-derived object 内的 base subobjects、nonstatic members、padding、vptr 与 virtual-base metadata 的 ABI-specific bytes。">
+  native object layout
+</Term>
+
+shared memory 中的 `PluginNode` bytes 包含 source process 的 vptr、string internal pointer，以及 virtual base adjustment 所依赖的 ABI representation。即便两进程使用同一 executable，ASLR、allocator state、mapping base 与 object lifetime 都不共享。host 不能通过 `reinterpret_cast` 获得合法 C++ object。
+
+正确 shared record 只存 stable data：version/size、numeric type ID、relative offsets 或 flat payload。host 根据 record 构造自己的 value/handle；plugin 在本进程内建立真实 hierarchy。ordinary data serialization 与 native object layout 必须分离。
+
+### 第2/5章：构造、复制与 active phase
+
+<Term def="construction/destruction 中当前已建立到哪一个 class subobject，并据此限制 virtual behavior 与可访问 invariant 的阶段。">
+  active construction phase
+</Term>
+
+`Node()` 调 `registerType()` 时，PluginNode members 尚未构造，常见 vptr state 只表达 Node phase，因此不会进入 PluginNode override。修复不是“手改 vptr”，而是让 factory 在 complete construction 后调用 non-constructor `start/register`，或把所需 data 通过 base constructor 明确传入。
+
+raw `memcpy` 还跳过 copy constructor：target string 没建立独立 ownership，target vptr/virtual base 没按 most-derived construction 建立。随后 source/target 任一 destruction 都可能 double free。需要复制 dynamic object 时使用 virtual clone/serialization；对象池移动的是 handle 或在 slot 内重新构造，不移动 live polymorphic bytes。
+
+<Callout type="trap" title="陷阱：同compiler同版本就能memcpy多态对象">
+  ABI 相同只让 layout 解释可能相同，不让 nontrivial
+  resource、self-pointer、mutex、vptr phase 和 object lifetime 具备 bitwise copy
+  semantics。trivially copyable 是语义条件； polymorphic `std::string` object
+  明确不满足。
 </Callout>
 
-<Callout type="trap">
-<strong>现象 →</strong> 代码同时踩了三个坑：基类析构非虚却 delete 基类指针、构造函数里调虚函数期望走派生覆写、菱形继承未虚继承导致访问基类成员二义。<strong>原因 →</strong> 三者都是对象模型没吃透的典型表现——虚析构、构造期 vptr、虚继承。<strong>修法 →</strong> ① 基类析构声明 virtual，经 vptr 走派生析构完成反向析构链；② 别在构造里调虚函数做派生行为，改为构造后显式调 init；③ B1、B2 用 virtual 继承 Base，共享 Base 只存一份，经 vbptr 间接定位。
+### 第4章：slot 与 secondary-base thunk
+
+<Term def="从 secondary base view 调 virtual function 时，将 incoming base pointer 调整成 final overrider 所需 this 的 compiler adapter。">
+  secondary-base adjustment thunk
+</Term>
+
+合法 `Renderable*` 指向 PluginNode 内 Renderable subobject；其 vptr/slot 可指向 thunk，先调整到 PluginNode address 再进入 render body。foreign bytes 让 slot 本身无效；若 slot 恰好可读，wrong virtual-base metadata 仍可能计算出错误 `this`。因此必须记录 incoming view、slot target、adjustment 与 body，不能只比对函数名。
+
+## 第6章：对象池必须拥有生命周期协议
+
+原实现只管理 raw blocks，没有记录 slot 中是否已有 live object、由哪个 module 构造、该调用哪个 destructor。正确 pool entry 至少含 generation、type ID、destroy callback 与 owner module token；claim slot 后 placement construct，release 时只调用匹配 destroy，再回收 storage。
+
+```cpp
+struct PoolHandle {
+    std::uint32_t slot;
+    std::uint32_t generation;
+};
+
+struct Slot {
+    alignas(std::max_align_t) std::byte storage[kSlotSize];
+    void (*destroy)(void*) noexcept = nullptr;
+    std::uint32_t generation = 0;
+    bool occupied = false;
+};
+```
+
+<Term def="把 aligned storage、object lifetime start/end、generation 与匹配 destroy function 作为一个不可分割状态机管理的池槽。">
+  phase-safe object pool
+</Term>
+
+pool 不能假设所有 types 同 alignment/size，也不能用 `delete` 释放 placement object。plugin 提供 placement construct/destroy entry，或更简单地让 plugin 自己管理 object，host 只持 opaque handle。constructor throw 时 slot remains unoccupied；只有成功后 publish handle。generation 防 stale handle 重用旧 slot。
+
+<Callout
+  type="trap"
+  title="陷阱：显式调用base虚析构就能销毁placement derived对象"
+>
+  显式 qualified destructor call 不等同 delete-expression
+  的动态销毁协议。最稳妥做法是让 creator module 返回 type-erased destroy
+  callback，由它以正确 complete type 调 destructor； pool 只在 callback
+  完成后复用 storage。
 </Callout>
 
-## 小结与练习
+## 第7章：模板、异常和RTTI留在ABI内侧
 
-- 全书五大主题：对象布局、构造语义、函数模型、运行时多态、继承与生命周期
-- vptr 是布局—构造—多态—生命的共同枢纽，贯穿构造使用析构三阶段
-- 多态只在构造完成到析构开始之间生效，构造析构期虚函数退化
-- 主线：对象长什么样 → 怎么造 → 怎么调用多态 → 怎么消亡
+<Term def="host 与 plugin 共同使用的 version、calling convention、data layout、ownership、error 与 function-table contract。">
+  versioned module ABI
+</Term>
 
-<Exercises>
-  <Answer question="用 vptr 这条线索，解释为什么「构造期调虚函数不走派生覆写」和「多态基类析构必须虚」是同一个机制的两面。">两者都源于 vptr 在构造析构期的行为。构造派生对象时 vptr 先指向基类虚表，基类构造函数运行期间虚调用经 vptr 查到的是基类版本，派生覆写没接上——这是「构造期不走派生覆写」。析构反向：若基类析构非虚，delete 基类指针时编译期按静态类型绑定基类析构、不查虚表，派生部分不析构；只有虚析构才经 vptr 走到派生析构。两者都是「vptr 此刻指向谁」决定的——构造期指基类、使用期指派生、析构期先改回基类。</Answer>
-  <Answer question="设计一个高性能多态对象池，需要兼顾虚函数多态、紧凑内存布局、避免构造期陷阱、正确析构。给出设计要点。">① 多态：基类提供虚接口含虚析构，派生覆写，经基类指针走虚表多态。② 紧凑布局：成员按对齐值从大到小排列压 padding，热数据聚在前一个缓存行，冷数据拆出或用指针间接。③ 对象池：预分配连续内存，对象在其中 placement new 构造、显式析构，注意 vptr 仍由 placement new 正确设置。④ 避免构造期陷阱：构造函数里不调虚函数做派生行为，需初始化后置行为就构造完成后单独调 init。⑤ 析构：归还池时显式调析构（不 delete 内存），虚析构保证派生部分正确清理；析构期同样不调虚函数做派生行为。⑥ 池管分配释放（阶段①⑤），构造析构（阶段②④）按 C++ 规则走，多态窗口（阶段③）只在构造完成后到析构前。</Answer>
-</Exercises>
+template registry 若在 host/plugin 分别隐式实例化，并把 `typeid(T).hash_code()` 或 `type_info*` 当 persistent ID，会把 implementation identity 泄露到 boundary。改用 schema 中明确分配的 stable numeric/string ID；template 只用于 module 内生成 mapping，必要时 explicit instantiation，跨模块只交换 stable values。
 
-## 名词解释
+exception 也不穿越不受控 boundary。plugin entry 最外层 catch all known C++ errors，转换为 versioned status + caller-owned error buffer；host 不需要共享 unwinder/type_info/allocator。RTTI/dynamic_cast 可在 plugin local hierarchy 内使用，但 host 不用它识别 opaque handle。
+
+```cpp
+extern "C" {
+struct NodeApiV1 {
+    std::uint32_t abi_version;
+    void* (*create)(const NodeRecordV1*, ErrorV1*) noexcept;
+    StatusV1 (*update)(void*, ErrorV1*) noexcept;
+    StatusV1 (*render)(void*, ErrorV1*) noexcept;
+    void (*destroy)(void*) noexcept;
+};
+}
+```
+
+<Term def="不暴露 C++ class layout 的未解释 token，只能交回定义它的 versioned function table 操作和销毁。">
+  opaque module handle
+</Term>
+
+`create/destroy` 在同一 module 配对，allocator ownership 不跨界；record/error payload 由明确 size/version 控制；function pointers 是装载后有效的 local process contract，不写进 shared memory。plugin unload 前必须证明没有 outstanding handles/callbacks。
+
+## 修复后的四道验收门
+
+<IcoCapstoneEvidenceMap />
+
+<Term def="只包含版本化 value fields、stable IDs 与 relative offsets，不包含 process-local code/data addresses 的共享或线格式。">
+  stable data boundary
+</Term>
+
+### Gate 1：Representation
+
+扫描 schema 和 shared bytes，确认无 vptr、raw pointer、`std::string` native layout、member pointer 或 `type_info` address。对 unknown version/size 拒绝或按 backward-compatible prefix 解析；fuzz malformed offsets。
+
+### Gate 2：Construction and Calls
+
+trace constructor order：virtual base 一次、direct bases/members 正序、factory post-start 最后；不在 constructor 调 derived hook。对 Node/Renderable 两种 base views 记录 address delta，验证 plugin-local virtual calls 进入同一 PluginNode body 且 thunk adjustment 正确。
+
+### Gate 3：Copy and Runtime Lifetime
+
+禁用 raw object memcpy；测试 clone/record round-trip。故意让第 k 个 pool construction 抛出，确认已构造 subobjects unwind、slot 不发布、storage 可复用；destroy callback 正好一次且由 creator module 执行。ASan/UBSan 验证 stale/double destruction。
+
+### Gate 4：Late Decisions and ABI
+
+host/plugin 使用不同 build version 做 compatibility matrix；template-generated IDs 与 schema stable ID 一致；plugin 内 exception 全被翻译；dynamic_cast/typeid 不跨 boundary。测试 plugin unload 时 outstanding handle 被拒绝，错误信息不引用 module-local storage。
+
+<Term def="对 representation、construction/call、copy/lifetime 与 late-bound ABI 四层分别给出可重复 correctness 和 failure-path 证据。">
+  object-model acceptance gate
+</Term>
+
+## 第七章联合诊断清单
+
+1. 画 most-derived object 与每个 base view，不从 crash address 直接猜 vtable。
+2. 标记哪些 bytes/IDs/pointers 可跨 process/module，哪些只在 local ABI 有效。
+3. 展开 generated default/copy/base/virtual-base work，禁止 raw-copy nontrivial identity。
+4. 对 virtual call 同时记录 slot、thunk、incoming/adjusted this 和 active lifetime phase。
+5. storage owner、constructor、destroy callback、deallocator 必须形成同一 protocol。
+6. template specialization/type ID 不充当未经版本化的 runtime ABI。
+7. exception 在 boundary catch-and-translate，RTTI 仅用于兼容 runtime 内的 local hierarchy。
+8. 以 fault injection、sanitizer、ABI matrix 和 profile 同时证明 correctness 与成本。
+
+## 小结
+
+- 虚调用崩溃可能源自更早的 foreign representation、raw copy 或 ended lifetime
+- 官方七章提供连续诊断链：表示 -> 构造/数据/函数变换 -> lifecycle/runtime -> late-bound ABI
+- vptr、string pointer、type_info 与 member-pointer bytes 都不是共享内存格式
+- constructor virtual hook 受 active phase 限制，complete construction 后再发布/注册
+- multiple inheritance virtual call 还需 secondary-base thunk 和 this adjustment
+- placement pool 必须管理 aligned storage、publish、destroy 与 generation，不能复制 live bytes
+- DSO 用 stable record、opaque handle、module-local create/destroy 和 translated errors
+- 最终验收同时覆盖 representation、call、lifetime、failure path 与 cross-version ABI
+
+<Attribution
+  adaptedFrom="Inside the C++ Object Model, First Edition: integrated review of Chapters 1-7"
+  adaptedUrl="https://www.informit.com/store/inside-the-c-plus-plus-object-model-9780201834543"
+/>
 
 <Glossary>
-  <GlossaryItem term="vptr 枢纽">vptr 贯穿构造、使用、析构三阶段，是对象布局、构造语义、运行时多态、生命周期四大主题的共同线索。</GlossaryItem>
-  <GlossaryItem term="多态窗口">从构造全部完成到析构开始之间，vptr 指向派生类虚表，虚调用才走到派生覆写。</GlossaryItem>
-  <GlossaryItem term="全书主线">对象长什么样 → 怎么造出来 → 怎么调用与多态 → 怎么消亡，由依赖关系决定的复习路径。</GlossaryItem>
-  <GlossaryItem term="三问诊断法">遇对象模型问题先问：对象内存里有什么？构造析构时 vptr 怎么变？这次调用走没走虚表？</GlossaryItem>
+  <GlossaryItem term="seven-chapter incident analysis">
+    用官方七章机制联合追踪同一事故。
+  </GlossaryItem>
+  <GlossaryItem term="foreign object representation">
+    离开原进程/ABI 后失效的 native object bytes。
+  </GlossaryItem>
+  <GlossaryItem term="native object layout">
+    由 ABI 决定的 subobjects、members 与 metadata 布局。
+  </GlossaryItem>
+  <GlossaryItem term="active construction phase">
+    当前已建立、决定虚调度边界的 class 阶段。
+  </GlossaryItem>
+  <GlossaryItem term="secondary-base adjustment thunk">
+    把 base view this 调整到 overrider 的适配代码。
+  </GlossaryItem>
+  <GlossaryItem term="phase-safe object pool">
+    把 slot storage 与 object lifetime 状态统一管理的池。
+  </GlossaryItem>
+  <GlossaryItem term="versioned module ABI">
+    显式版本化的函数、数据、ownership 与 error contract。
+  </GlossaryItem>
+  <GlossaryItem term="opaque module handle">
+    不暴露 C++ layout、只交回 owner module 操作的 token。
+  </GlossaryItem>
+  <GlossaryItem term="stable data boundary">
+    只传稳定 values/IDs/offsets 的跨进程模块格式。
+  </GlossaryItem>
+  <GlossaryItem term="object-model acceptance gate">
+    分层验证表示、调用、生命周期与 ABI 的验收门。
+  </GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Inside the C++ Object Model (Stanley Lippman)" adaptedUrl="https://www.oreilly.com/" />
+<Exercises>
+  1. **问题 1：从 crash 反推根因。** `Renderable*` 首次 virtual call 跳到 unmapped address；给出至少四种上游原因与逐层排除证据。
+
+<Answer question="为什么不能只把vptr改成当前进程地址？">
+  原因可为 foreign shared bytes、raw-copy ended/source object、wrong
+  secondary-base view、pool slot lifetime 未开始/已结束、plugin 已
+  unload。先验证 record 是否含 native pointers，slot
+  generation/occupied，creator module 是否仍 loaded；再由 legitimate local
+  object 记录 Renderable address delta、vptr/slot/thunk。手改 vptr 仍不会构造
+  string、virtual base 或 ownership，且掩盖 lifetime 根因，不能形成合法 object。
+</Answer>
+
+2. **问题 2：设计安全 plugin + pool API。** 必须支持 create/update/render/destroy、shared record、constructor failure、plugin unload 和跨版本兼容。
+
+<Answer question="最小稳定协议包含哪些字段与状态？">
+  shared record 含 size/version/stable type ID/value payload/relative offsets；C
+  ABI table 含 abi_version 和 noexcept create/update/render/destroy。create 在
+  plugin 内构造 complete object，成功后才返回 opaque handle；failure 写
+  caller-owned Error。destroy 回 creator module，pool slot 记录
+  generation/occupied/destroy callback。unload 前引用计数/registry 证明无
+  handles/callbacks。unknown version 拒绝或按明确兼容规则解析，C++
+  exception/RTTI 不跨 boundary。
+</Answer>
+
+3. **问题 3：制定综合验证计划。** 覆盖七章并区分 language guarantee、ABI observation、performance evidence。
+
+  <Answer question="怎样证明修复不是只让崩溃消失？">
+    correctness：layout/base-view probe、constructor/destructor/copy counters、k-th construction
+    throw、clone/serialization round-trip、catch/cast local tests、cross-version DSO matrix、
+    unload/stale-handle/fuzz。ABI：记录 compiler/target、base offsets、thunks、symbol visibility，
+    但不写进 wire contract。performance：同 workload 测 pool allocation、virtual/C ABI call、
+    serialization、branch/cache 和 p99；确认 stable boundary 成本可接受。sanitizers 与 leak/
+    double-destroy counters 必须全绿后才发布。
+  </Answer>
+</Exercises>

@@ -1,0 +1,238 @@
+---
+title: "第11章 块"
+type: C
+section: "たのしいRuby 第5版 · Ruby的基础"
+order: 11
+description: "把block视为控制反转边界，掌握迭代、lifecycle、算法slot、yield参数与返回、执行控制、Proc封装以及局部和block变量作用域。"
+demo: true
+math: false
+sourceUrl: "https://tanoshiiruby.github.io/5/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RubyBlockRolesLab, RubyYieldLifecycleLab, RubyBlockScopeLab } from "@/components/mdx/ruby-programming/diagrams/blocks";
+
+<Objectives>
+
+- 能解释block如何在迭代、资源lifecycle、algorithm slot和callback中反转控制所有权
+- 能实现带block的方法，明确yield次数、参数、结果、optional behavior与ensure cleanup
+- 能分析outer local、block parameter、block-local及break/next/return作用域与控制边界
+
+</Objectives>
+
+## 从“block只是循环体”开始纠正
+
+Block不只是each后面的一段代码；它让method保留整体流程，同时由caller注入一小段policy。<Term def="被调用method拥有何时、多少次、以什么参数执行，而caller只提供局部行为的控制反转。">block control inversion</Term>统一解释iterator、File.open、sort_by与callback。
+
+先预测：`File.open(path) { |file| ... }`中谁负责close？File.open method拥有resource lifecycle，即使block抛异常也应关闭；block只在handle有效期间工作。若caller自己open后忘记ensure，责任边界就泄漏。
+
+## 块是什么
+
+Block由`{ ... }`或`do ... end`附着在method call上，可接收parameters、读取outer locals并返回最后expression。每次call最多有一个implicit block；它不是普通positional argument，但可通过`&`与Proc互转。
+
+Brace通常绑定更紧，do/end更松；`logger items.map {}`和`logger items.map do ... end`可能把block交给不同call。<Term def="Block在nested calls中由parser决定附着到哪个method invocation。">block attachment boundary</Term>要求复杂调用加括号或分行。
+
+Block object并不自动存在；只有捕获为Proc时才形成可保存callable。普通yield通常更直接。第21章会比较Proc/lambda arity与return语义，本章先固定implicit block contract。
+
+## 块的使用方法：循环
+
+Array#each拥有遍历order，block拥有每个element的动作；map拥有结果Array构造，block负责element projection；select拥有过滤流程，block提供predicate。<Term def="Iterator method规定yield序列、顺序、停止和最终返回，block只实现单项policy。">iterator block contract</Term>帮助选对method。
+
+```ruby
+records = [
+  { name: "A", score: 80 },
+  { name: "B", score: 95 },
+]
+
+names = records
+  .select { |record| record[:score] >= 90 }
+  .map { |record| record[:name] }
+
+p names
+```
+
+Chain的每一步都生成/传递shape；数据大时评估intermediate allocation并可用lazy。Block中若同时mutation外部state、I/O和复杂branch，应提取命名method或重新选择higher-level iterator，使policy可单测。
+
+## 隐藏常规处理
+
+Resource method可把setup/cleanup藏在稳定lifecycle中：File.open、Mutex#synchronize、transaction wrapper。这里“隐藏”不是不可观察，而是把每个caller都会重复且容易出错的mechanics集中实现。<Term def="Method统一承担setup、cleanup、timing与error preservation，block只执行有效窗口内工作。">lifecycle block contract</Term>要求ensure覆盖所有exit。
+
+```ruby
+def with_output(path)
+  file = File.open(path, "w:UTF-8")
+  yield(file)
+ensure
+  file.close if file
+end
+```
+
+Production还应处理atomic replace、fsync等domain要求；示例只展示close owner。Block返回值通常应透传，使wrapper不改变业务result；cleanup error不能无意遮蔽primary exception。
+
+## 替换部分算法
+
+Sort提供总体排序algorithm，block定义comparison或projection；group_by提供partition，block定义key；inject提供fold，block定义step。相比继承整套algorithm，block是窄而局部的strategy。
+
+```ruby
+ordered = records.sort_by { |record| [-record[:score], record[:name]] }
+grouped = records.group_by { |record| record[:score] >= 60 ? :pass : :retry }
+
+p ordered: ordered, grouped: grouped
+```
+
+Comparison/projection应稳定、无重副作用且对相同input给一致结果；block内网络调用会被执行多次并使sort极慢。先预计算key或cache，明确error policy。
+
+<RubyBlockRolesLab />
+
+<Stepper>
+  <Step title="切换Iteration、Lifecycle、Algorithm和Callback"><RubyBlockRolesLab /></Step>
+  <Step title="画Owner分工">记录method控制何时/次数/resource/result，block控制哪段policy以及异常向哪传播。</Step>
+  <Step title="把Cleanup移回Method"><RubyBlockRolesLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="Block在caller里写，所以resource cleanup也归caller">
+如果method创建resource并yield，method必须用ensure完成cleanup。Caller只负责block内业务；否则每个caller都可能漏掉异常、break或return路径。
+</Callout>
+
+## 定义带块的方法
+
+Method直接用`yield`调用当前block；没有block时yield抛LocalJumpError。`block_given?`可实现optional behavior，但要避免一个method实际上有两套无关API。<Term def="Method明确block是否required、yield几次、传什么、何时停止、返回什么以及异常如何传播。">yield invocation contract</Term>是定义的核心。
+
+### 执行块
+
+```ruby
+def repeat(count)
+  raise ArgumentError, "block required" unless block_given?
+
+  count.times do |index|
+    yield(index)
+  end
+end
+
+repeat(3) { |index| puts index }
+```
+
+Repeat拥有count validation与iteration，block只处理index。Method返回`count.times`的receiver；若API需要收集block results，应明确用Array构造，不能让caller猜。
+
+### 传递块参数，获取块的值
+
+Yield arguments按block parameter规则分配；block最后expression返回给method。Method可将结果用于map、validation或early stop。<Term def="Yield传出的值shape与block返回给method的value shape构成双向数据协议。">block value channel</Term>应覆盖arity与nil/false。
+
+```ruby
+def first_accepted(values)
+  values.each do |value|
+    accepted = yield(value)
+    return value if accepted
+  end
+  nil
+end
+
+p first_accepted([1, 4, 7]) { |value| value.even? }
+```
+
+这里block result按truth contract解释，method返回原value或nil。若value本身可nil，需要Result/value object区分found nil与not found。
+
+### 控制块的执行
+
+Method决定是否yield、次数和顺序，可在yield前后执行逻辑。Optional block可在无block时返回Enumerator，这是Ruby collection API常见模式：`return enum_for(__method__, args) unless block_given?`。Enumerator保留deferred execution，文档说明source是否一次性。
+
+Block中的`next`把value返回本次yield，`break`退出yielding iterator call；Non-local return语义取决于普通block/Proc/lambda与定义context，不能在wrapper中随意假定。Resource method用ensure防护所有control exit。
+
+<RubyYieldLifecycleLab />
+
+<Stepper>
+  <Step title="切换yield、block_given、capture和ensure"><RubyYieldLifecycleLab /></Step>
+  <Step title="建立Invocation表">覆盖无block、0次、1次、多次、block返回nil/false、block raise与control exit。</Step>
+  <Step title="让Ensure自身失败"><RubyYieldLifecycleLab /></Step>
+</Stepper>
+
+## 将块封装为对象
+
+`&block`在parameter中捕获implicit block为Proc，可保存、转发或稍后`call`；调用处`&callable`把to_proc结果作为block。<Term def="只有需要延迟、保存、组合或转发时，才把一次性implicit block提升为Proc对象。">block capture boundary</Term>避免不必要复杂度。
+
+```ruby
+class Pipeline
+  def initialize(&transform)
+    raise ArgumentError, "transform required" unless transform
+    @transform = transform
+  end
+
+  def call(value)
+    @transform.call(value)
+  end
+end
+
+pipeline = Pipeline.new { |text| text.strip.downcase }
+p pipeline.call(" Ruby ")
+```
+
+Captured Proc closes over outer locals及其bindings，可能延长大对象lifetime；异步保存还要考虑thread safety与request context泄漏。若behavior有复杂state/lifecycle，独立strategy object比Proc更易观察、序列化和替换。
+
+## 局部变量与块变量
+
+Block是closure，可读取并rebind已存在的outer local。Block parameter如`|item|`只在block内；semicolon后的`|item; scratch|`声明block-local，即使外层已有scratch也不修改。<Term def="Block捕获outer bindings，但parameters和semicolon后的block-locals建立内部名字边界。">block lexical scope</Term>防止偶然shadow/mutation。
+
+```ruby
+total = 0
+scratch = :outer
+
+[1, 2, 3].each do |value; scratch|
+  scratch = value * 2
+  total += scratch
+end
+
+p total: total, scratch: scratch # 12, :outer
+```
+
+Parallel/multithread callbacks共享captured mutable binding时需要同步；closure并不复制值。长生命周期callback不要捕获整个request/service object，只提取必要immutable values，减少retention与隐藏dependency。
+
+<RubyBlockScopeLab />
+
+<Stepper>
+  <Step title="切换Outer、Parameter、Block-local和Control"><RubyBlockScopeLab /></Step>
+  <Step title="画Binding箭头">标出block捕获哪些outer locals、哪些名字shadow、哪些对象可变以及block之后可见什么。</Step>
+  <Step title="加入Semicolon local"><RubyBlockScopeLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="Closure会复制外部变量当前值，所以稍后执行不受外界变化影响">
+Ruby block捕获binding；外部rebind或共享mutable object变化可在稍后观察到。需要snapshot时显式复制/冻结必要value，并测试延迟和并发执行。
+</Callout>
+
+## 本章回顾：Method拥有流程，Block注入policy
+
+1. Block通过控制反转连接iteration、resource lifecycle、algorithm slot与callback，不只是循环syntax。
+2. Block attachment由parser决定，nested无括号调用必须明确block owner。
+3. 自定义method声明block required/optional、yield次数、参数、result、异常和ensure cleanup。
+4. Capture为Proc只用于保存、延迟、组合或转发；复杂有状态策略优先object。
+5. Block捕获outer bindings，parameter/block-local建立内部scope，control flow随block/Proc/lambda context变化。
+
+<Exercises>
+
+**问题 1：怎样设计一个安全的resource block method？**
+
+<Answer>Method拥有setup，在begin/ensure中yield，确保正常、异常和control exit都cleanup；透传block result并避免ensure mask primary error。测试setup失败、block成功/抛错、cleanup失败和nested use。</Answer>
+
+**问题 2：什么时候应返回Enumerator而不是要求block？**
+
+<Answer>当operation天然逐项yield且caller可能需要compose/defer时，无block返回`enum_for`；文档说明顺序、size、一次性source和错误时机。Resource只能在iteration期间保持时，Enumerator还要正确管理close。</Answer>
+
+**问题 3：如何避免延迟Proc意外保留整个request对象？**
+
+<Answer>列出closure引用的locals，只提取必要immutable snapshot，避免捕获`self`或大graph；必要时改为显式strategy object。用memory/profile与生命周期测试确认request结束后对象可回收，并覆盖并发调用。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="block control inversion" definition="Method拥有执行流程，caller block只提供局部policy。" />
+  <GlossaryItem term="block attachment boundary" definition="Parser决定block附着到哪个method call的边界。" />
+  <GlossaryItem term="iterator block contract" definition="Iterator规定yield序列与返回，block处理单项。" />
+  <GlossaryItem term="lifecycle block contract" definition="Method统一setup/cleanup，block只做有效窗口工作。" />
+  <GlossaryItem term="yield invocation contract" definition="Block有无、yield次数、参数、结果和异常的约定。" />
+  <GlossaryItem term="block value channel" definition="Yield参数与block返回构成的双向数据协议。" />
+  <GlossaryItem term="block capture boundary" definition="仅在保存、延迟、组合或转发时捕获Proc。" />
+  <GlossaryItem term="block lexical scope" definition="Outer binding捕获与block内部名字的作用域规则。" />
+</Glossary>
+
+<Attribution adaptedFrom="たのしいRuby 第5版 / Ruby基础教程（第5版），第11章 块" adaptedUrl="https://tanoshiiruby.github.io/5/" />

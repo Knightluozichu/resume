@@ -1,88 +1,100 @@
-/**
- * <GilLearningMapDiagram>: 全局光照全书学习地图
- *
- * 直接光基础 -> 离线GI方法 -> 采样理论 -> 实时GI工程
- * Server Component, viewBox 720x400, CSS variables.
- */
+import type { ReactNode } from "react";
 
-const primary = "var(--text-primary)";
-const secondary = "var(--text-secondary)";
-const border = "var(--border)";
-const elevated = "var(--bg-elevated)";
-const accent = "var(--accent)";
-const success = "var(--success)";
-const warning = "var(--warning)";
-const danger = "var(--danger)";
+const columns = [
+  {
+    title: "物理与数值基础",
+    color: "var(--accent)",
+    rows: ["1 Introduction", "2 Light Transport", "3 Monte Carlo", "4 Strategies"],
+  },
+  {
+    title: "核心求解器",
+    color: "var(--success)",
+    rows: ["5 Path Tracing", "6 Stochastic Radiosity", "7 Hybrid Algorithms"],
+  },
+  {
+    title: "边界与实现",
+    color: "var(--warning)",
+    rows: ["8 Realism & Speed", "9 Conclusion", "A / B / C Appendices"],
+  },
+] as const;
+
+function Frame({ caption, children }: { caption: string; children: ReactNode }) {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption>
+    </figure>
+  );
+}
 
 export function GilLearningMapDiagram() {
   return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox="0 0 720 400" role="img" aria-label="全局光照全书学习地图。四个板块：直接与间接光、离线GI方法、采样理论、实时GI。" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x={360} y={30} textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>{`
-            全局光照全书学习地图
-          `}</text>
-          <text x={360} y={50} textAnchor="middle" fontSize="11" fill={secondary}>{`
-            直接光基础 -> 离线GI方法 -> 采样理论 -> 实时GI工程
-          `}</text>
-          <g>
-            <rect x={36} y={70} width={648} height={69} rx="8" fill={accent} fillOpacity="0.06" stroke={accent} strokeWidth="1.2" strokeOpacity="0.4" />
-            <text x={52} y={92} fontSize="13" fontWeight="700" fill={accent}>{`直接与间接光`}</text>
-            <rect x={158} y={92} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={228} y={112} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`直接光照`}</text>
-            <rect x={310} y={92} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={380} y={112} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`间接光照`}</text>
-            <line x1={298} y1={108} x2={310} y2={108} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-            <rect x={462} y={92} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={532} y={112} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`光弹射概念`}</text>
-            <line x1={450} y1={108} x2={462} y2={108} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          </g>
-          <g>
-            <rect x={36} y={147} width={648} height={69} rx="8" fill={success} fillOpacity="0.06" stroke={success} strokeWidth="1.2" strokeOpacity="0.4" />
-            <text x={52} y={169} fontSize="13" fontWeight="700" fill={success}>{`离线GI方法`}</text>
-            <rect x={158} y={169} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={228} y={190} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`辐射度方法`}</text>
-            <rect x={310} y={169} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={380} y={190} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`路径追踪`}</text>
-            <line x1={298} y1={186} x2={310} y2={186} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-            <rect x={462} y={169} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={532} y={190} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`光子映射`}</text>
-            <line x1={450} y1={186} x2={462} y2={186} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          </g>
-          <g>
-            <rect x={36} y={224} width={648} height={69} rx="8" fill={warning} fillOpacity="0.06" stroke={warning} strokeWidth="1.2" strokeOpacity="0.4" />
-            <text x={52} y={246} fontSize="13" fontWeight="700" fill={warning}>{`采样理论`}</text>
-            <rect x={158} y={246} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={228} y={266} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`重要性采样`}</text>
-            <rect x={310} y={246} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={380} y={266} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`有偏与无偏`}</text>
-            <line x1={298} y1={262} x2={310} y2={262} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-            <rect x={462} y={246} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={532} y={266} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`MIS`}</text>
-            <line x1={450} y1={262} x2={462} y2={262} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          </g>
-          <g>
-            <rect x={36} y={301} width={648} height={69} rx="8" fill={danger} fillOpacity="0.06" stroke={danger} strokeWidth="1.2" strokeOpacity="0.4" />
-            <text x={52} y={323} fontSize="13" fontWeight="700" fill={danger}>{`实时GI`}</text>
-            <rect x={158} y={323} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={228} y={344} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`RSM/LPV`}</text>
-            <rect x={310} y={323} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={380} y={344} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`VPL技术`}</text>
-            <line x1={298} y1={340} x2={310} y2={340} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-            <rect x={462} y={323} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={532} y={344} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`降噪后处理`}</text>
-            <line x1={450} y1={340} x2={462} y2={340} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          </g>
-          <defs>
-            <marker id="gilLearningMap-arrow" markerWidth="8" markerHeight="8" refX="4" refY="3" orient="auto">
-              <path d="M0 0 L6 3 L0 6 z" fill="var(--text-secondary)" />
-            </marker>
-          </defs>
-        </svg>
+    <Frame caption="第二版的主线是先建立光传输算子，再比较随机路径、随机辐射度与混合算法，最后讨论速度、感知和未解问题。">
+      <div role="img" aria-label="Advanced Global Illumination 第二版九章三附录结构" className="grid gap-3 lg:grid-cols-3">
+        {columns.map((column, index) => (
+          <section key={column.title} className="border border-border bg-bg/40 p-3">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="grid size-7 shrink-0 place-items-center rounded-full text-xs font-bold text-white" style={{ backgroundColor: column.color }}>{index + 1}</span>
+              <strong className="text-sm text-primary">{column.title}</strong>
+            </div>
+            <div className="grid gap-2">
+              {column.rows.map((row) => <div key={row} className="min-h-9 border-l-2 border-border bg-elevated px-3 py-2 text-xs text-secondary">{row}</div>)}
+            </div>
+          </section>
+        ))}
       </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        全局光照四大板块：概念基础→离线方法→采样理论→实时工程，从原理到实践。
-      </figcaption>
-    </figure>
+    </Frame>
+  );
+}
+
+const owners = [
+  ["direct-indirect", "1, 2, B", "物理、方程、半球坐标"],
+  ["importance-sampling", "3", "Monte Carlo 与方差缩减"],
+  ["bias-unbiased", "4", "策略分类、伴随量与路径表述"],
+  ["path-tracing", "5, A", "随机路径与实现类库"],
+  ["radiosity", "6, C", "随机辐射度与理论分析"],
+  ["advanced-techniques", "7", "混合算法全景"],
+  ["photon-mapping", "7.6", "光子映射专项"],
+  ["realtime-gi", "8, 9", "真实感、速度与结论"],
+] as const;
+
+export function GilChapterOwnershipDiagram() {
+  return (
+    <Frame caption="每个原书单元只设一个正文责任页；光子映射是第 7 章专项，不伪装成独立原书章节。">
+      <div role="img" aria-label="九章三附录到八个正文责任页的映射" className="overflow-x-auto">
+        <div className="min-w-[660px] border border-border">
+          <div className="grid grid-cols-[1.35fr_.7fr_1.6fr] bg-bg px-3 py-2 text-xs font-bold text-primary">
+            <span>正文页</span><span>原书单元</span><span>不可缺失的知识责任</span>
+          </div>
+          {owners.map(([page, units, responsibility], index) => (
+            <div key={page} className={`grid min-h-11 grid-cols-[1.35fr_.7fr_1.6fr] items-center gap-2 px-3 py-2 text-xs ${index % 2 === 0 ? "bg-elevated" : "bg-bg/40"}`}>
+              <code className="text-accent">gil-{page}</code><strong className="text-primary">{units}</strong><span className="text-secondary">{responsibility}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Frame>
+  );
+}
+
+const evidence = [
+  ["目录证据", "版本、章名、唯一责任页", "12/12"],
+  ["教学证据", "概念、公式、算法、专用图", ">= 90"],
+  ["验证证据", "参考值、边界输入、误差预算", "可复现"],
+] as const;
+
+export function GilEvidenceLoopDiagram() {
+  return (
+    <Frame caption="目录覆盖回答“有没有”，教学与验证证据共同回答“是否真的掌握”。">
+      <div role="img" aria-label="全局光照章节的目录教学验证三重验收循环" className="grid gap-3 md:grid-cols-3">
+        {evidence.map(([title, body, gate], index) => (
+          <div key={title} className="relative min-h-36 border border-border bg-bg/40 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3"><strong className="text-sm text-primary">{index + 1}. {title}</strong><span className="text-xs font-bold text-accent">{gate}</span></div>
+            <p className="m-0 text-sm leading-6 text-secondary">{body}</p>
+            <div className="absolute inset-x-4 bottom-3 h-1 bg-border"><div className="h-full bg-success" style={{ width: index === 0 ? "100%" : index === 1 ? "90%" : "75%" }} /></div>
+          </div>
+        ))}
+      </div>
+    </Frame>
   );
 }

@@ -1,0 +1,191 @@
+---
+title: "第5章 条件判断"
+type: C
+section: "たのしいRuby 第5版 · Ruby的基础"
+order: 5
+description: "建立Ruby的truth contract，掌握逻辑运算符的operand返回、if/unless/case表达式、case equality以及条件修饰符的边界。"
+demo: true
+math: false
+sourceUrl: "https://tanoshiiruby.github.io/5/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RubyTruthConditionLab, RubyIfUnlessLab, RubyCaseEqualityLab } from "@/components/mdx/ruby-programming/diagrams/conditional-judgment";
+
+<Objectives>
+
+- 能判断nil、false、0、空字符串和空集合在条件与fallback表达式中的结果
+- 能比较`if`、`unless`、`elsif`、`case`及条件修饰符，选择可读且可测试的分支结构
+- 能实现基于literal、Range、Regexp和Class的case dispatch，并解释`===`证据
+
+</Objectives>
+
+## 从“值为空就是假”这个迁移陷阱开始
+
+Ruby中的条件不是自动调用`empty?`、`zero?`或“是否存在内容”；它只把`nil`与`false`视为falsey，其余对象全部truthy。<Term def="所有对象进入条件上下文时，只有nil和false为假，其余都为真的语言规则。">Ruby truth contract</Term>必须与业务validity分开。
+
+先预测：`if []`、`if ""`和`if 0`分别走哪条分支？全部走true branch。若要判断集合有元素，调用`any?`或`empty?`；判断数字非零，调用`zero?`；判断文本有效，按schema执行strip、长度和格式校验。
+
+## 什么是条件判断
+
+条件判断把一个value解释为truthy/falsey，再选择执行路径。每个分支还应说明输出、side effect与错误owner。<Term def="同一输入只能进入哪些分支、各分支产生什么结果和副作用的约束。">branch decision contract</Term>让分支从语法变成可测试的policy。
+
+`if`、`unless`和`case`都是expression：它们返回被执行分支最后一个表达式的值；没有分支命中且无else时返回nil。这允许直接赋值，但嵌套过深会隐藏控制流。先让条件名称表达业务问题，再决定是否内联。
+
+条件还不能吞掉“无法判断”。例如权限查询可能得到allow、deny或backend unavailable；把异常rescue成false会让安全策略看似保守，却丢失告警与重试信息。先建decision table：列出输入状态、selected branch、返回值、side effect、日志和错误传播。只有真正的二值domain才压缩成boolean；三态或多态结果使用Symbol、value object或明确异常。
+
+重复访问会变化的外部状态也会破坏分支推理，例如先`exists?`再读取文件存在time-of-check/time-of-use race。尽量执行目标操作并处理结果，而不是用一个脆弱condition预判。测试条件时除了每支happy path，还要覆盖边界值、重叠predicate、异常和未命中路径。
+
+## Ruby中的条件
+
+`nil`常表达absence，`false`表达否定，但两者在condition中相同，在数据层却必须区分。配置项允许false时，`configured || default`会错误覆盖false。<Term def="只有nil触发默认值，显式false、0和空字符串是否保留由schema决定的策略。">nil-only fallback</Term>应写成显式nil判断。
+
+```ruby
+def resolve_enabled(configured, default: true)
+  configured.nil? ? default : configured
+end
+
+p resolve_enabled(nil)   # true
+p resolve_enabled(false) # false
+p resolve_enabled(0)     # 0; schema may reject it later
+```
+
+Predicate method惯例以`?`结尾并返回truthy/falsey；最佳实践通常返回true/false，避免泄漏任意对象。组合复杂条件前先把输入normalize，例如将用户文本转换成enum，再判断enum；不要在每个branch重复strip/downcase和nil处理。
+
+<RubyTruthConditionLab />
+
+<Stepper>
+  <Step title="切换nil、false、0和empty"><RubyTruthConditionLab /></Step>
+  <Step title="建立Condition表">为每个值记录truth、`||`结果、业务validity和应调用的predicate。</Step>
+  <Step title="修复false被覆盖"><RubyTruthConditionLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="value || default只在value缺失时使用默认值">
+`||`同时把nil和false视为未选中。若false是合法配置，使用`value.nil? ? default : value`，并在schema层单独拒绝不合法的0或空字符串。
+</Callout>
+
+## 逻辑运算符
+
+`&&`/`and`与`||`/`or`都会short-circuit并返回某个operand，不强制转成boolean。`!`/`not`返回boolean。符号版本与单词版本的precedence不同：`&&`高于`||`，而`and`/`or`优先级很低，常用于控制流但容易与assignment组合出意外。
+
+```ruby
+token = nil
+fallback = "guest"
+identity = token || fallback
+
+ready = identity && !identity.empty?
+p identity: identity, ready: ready
+
+# 用括号表达政策，不依赖读者背precedence
+allowed = authenticated? && (admin? || owns_resource?)
+```
+
+Short-circuit可做guard，例如`user && user.name`，但modern Ruby可用safe navigation `user&.name`表达nil propagation。不要在右operand隐藏关键side effect，如`valid? && charge!`；失败原因、重试和审计都需要显式branch。
+
+<Term def="逻辑运算只在结果尚未确定时求值后续operand，并返回被选中的operand。">short-circuit operand flow</Term>要求测试不仅看boolean，还要看哪些method被调用以及返回了哪个对象。
+
+## if语句
+
+`if condition ... elsif ... else ... end`按顺序测试，第一条truthy branch获胜。把最具体或最便宜条件放前面并不总是正确；ordering本身是policy，例如授权先验证identity，再判断role，不能为性能交换到会泄漏信息的顺序。
+
+```ruby
+label = if score.nil?
+  "missing"
+elsif score >= 90
+  "excellent"
+elsif score >= 60
+  "pass"
+else
+  "retry"
+end
+```
+
+多个branch返回不同shape会把复杂性推给caller。上例都返回String；若一支返回nil、一支返回Hash，应先设计result type。复杂predicate提取为命名method，但不要把每一行都拆成跳转，关键是让branch decision contract一眼可读。
+
+## unless语句
+
+`unless condition`相当于`if !condition`，适合简单negative guard：`return unless enabled?`。带`else`的unless虽然合法，却要求读者对两个分支做双重否定；有else时通常改写为positive if。<Term def="一个否定条件只保护短小动作，不再叠加else或复杂逻辑的可读性边界。">single-negative guard</Term>限制unless的使用范围。
+
+`unless !ready?`、`unless a && b`和嵌套unless都应重写为命名positive predicate。代码审查不只确认结果等价，还要确认错误信息和early return顺序未改变。
+
+<RubyIfUnlessLab />
+
+<Stepper>
+  <Step title="切换if、unless、elsif和modifier"><RubyIfUnlessLab /></Step>
+  <Step title="画First-match路径">列出condition求值顺序、未求值分支、selected result和side effects。</Step>
+  <Step title="消除双重否定"><RubyIfUnlessLab /></Step>
+</Stepper>
+
+## case语句
+
+`case value; when candidate`并非固定用`==`，而是计算`candidate === value`。Literal通常像value equality，Range检查包含关系，Regexp执行匹配，Class/Module检查`is_a?`关系。<Term def="case把被测值交给每个when候选的===方法，由候选定义匹配证据。">case equality protocol</Term>解释了Ruby case的扩展能力。
+
+```ruby
+def classify(value)
+  case value
+  when 200..299 then :success
+  when 400..499 then :client_error
+  when /\Auser:/ then :user_record
+  when String then :other_text
+  else :unknown
+  end
+end
+```
+
+Ordering决定结果：Regexp branch必须放在宽泛String branch之前，否则永远到不了；overlapping Range也由先出现者获胜。`case`无expression时可写`case; when predicate ...`，但本质接近elsif chain；只有候选共享同一被测value并且`===`清楚时，value case最有优势。
+
+<RubyCaseEqualityLab />
+
+<Stepper>
+  <Step title="切换Literal、Range、Regexp和Class"><RubyCaseEqualityLab /></Step>
+  <Step title="记录===调用">对每个when写candidate class、`candidate === value`结果与是否继续后续branch。</Step>
+  <Step title="交换Regexp与String顺序"><RubyCaseEqualityLab /></Step>
+</Stepper>
+
+## if修饰符与unless修饰符
+
+`publish(record) if record.valid?`适合一个短动作和一个显然predicate；修饰符仍先按照Ruby grammar解析整个statement，再按condition决定执行。Assignment、rescue modifier或多段method chain与条件修饰符组合，会让precedence难读，应改为block form。
+
+修饰符不适合隐藏主要成功路径，也不应承载多步resource lifecycle。例如`file.close if opened`不如block-form open可靠，后者对异常也保证cleanup。可读性判断包括line长度、side effect重要性、是否需要else和debug时是否容易加观测点。
+
+<Callout type="trap" title="case when总是用==比较">
+Ruby执行`candidate === value`。Range、Regexp与Class的`===`含义不同，branch顺序也影响首次命中。测试overlap与边界值，不能只测每支一个happy case。
+</Callout>
+
+## 本章回顾：语言真假不等于业务有效
+
+1. 只有nil和false为falsey；0、空String和空collection都truthy，业务规则使用专门predicate。
+2. `&&`/`||` short-circuit并返回operand；false可用配置不能直接套`value || default`。
+3. if按序选择第一条truthy branch并返回结果；unless只用于简单negative guard。
+4. case调用candidate的`===`，可由literal、Range、Regexp与Class提供不同matching semantics。
+5. 条件修饰符只承载短小清晰动作；复杂precedence、resource与重要side effect用block form。
+
+<Exercises>
+
+**问题 1：怎样设计允许false覆盖默认值的配置读取？**
+
+<Answer>只把nil视为缺失：`value.nil? ? default : value`。随后按schema验证必须是true/false；分别测试nil、false、true、0和空字符串，确保language truth与domain validity不混在一起。</Answer>
+
+**问题 2：为什么`case value; when String`要放在Regexp branch之后？**
+
+<Answer>String class的`===`会匹配所有String；若它先出现，具体Regexp永远不可达。为overlapping candidate建立优先级表，测试符合多支的输入并确认first-match policy。</Answer>
+
+**问题 3：何时应把unless改成if？**
+
+<Answer>当出现else、复合否定、双重否定或body不是短guard时改为positive if并给predicate命名。重构测试要同时确认selected result、未执行side effect和early-return顺序。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="Ruby truth contract" definition="条件上下文只有nil和false为假的规则。" />
+  <GlossaryItem term="branch decision contract" definition="分支可达性、结果与副作用的约束。" />
+  <GlossaryItem term="nil-only fallback" definition="仅nil触发默认值、显式false予以保留的策略。" />
+  <GlossaryItem term="short-circuit operand flow" definition="逻辑运算按需求值并返回被选operand的流程。" />
+  <GlossaryItem term="single-negative guard" definition="unless只保护一个短小否定动作的边界。" />
+  <GlossaryItem term="case equality protocol" definition="case由when候选通过===定义匹配证据的协议。" />
+</Glossary>
+
+<Attribution adaptedFrom="たのしいRuby 第5版 / Ruby基础教程（第5版），第5章 条件判断" adaptedUrl="https://tanoshiiruby.github.io/5/" />

@@ -1,0 +1,385 @@
+---
+title: "Item 8：优先使用 nullptr 而非 0 和 NULL"
+type: A
+section: Chapter 3 · Moving to Modern C++
+order: 8
+description: 对齐 Effective Modern C++ Item 8：区分 0、NULL 与 std nullptr_t 的类型身份，分析指针重载与模板类型推导路径，并以 nullptr 建立清晰、可转发的空指针契约。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch03.html"
+draft: false
+---
+
+import {
+  EmcppNullLiteralIdentityMap,
+  EmcppNullTemplateDeductionMap,
+  EmcppPointerOverloadResolutionMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-08-prefer-nullptr";
+
+<Objectives>
+
+- 能区分 0 and NULL（0 与 NULL）的整数身份与 std nullptr_t 的空指针语义，并解释可用的标准转换
+- 能推导 int、bool 与 void pointer overload 并存时的 pointer overload（指针重载）选择，判断 0、NULL 和 nullptr 的不同结果
+- 能分析 template type deduction（模板类型推导）穿过 generic wrapper 后的类型固化过程，并实现可转发的空指针 API 与回归测试
+
+</Objectives>
+
+## 从“空值写法首先是一个类型问题”开始
+
+Item 8 的原则是 Prefer nullptr to 0 and NULL（优先 nullptr）。历史 C/C++ 代码把整数常量 0 当作 null pointer constant；`NULL` 通常也只是展开成某种整数表达式。它们能在特定上下文转换成 pointer，却没有“我是指针”的类型身份。
+
+<Term def="在需要指针的上下文中可转换为空指针值的整数字面量或特定常量表达式。">
+  null pointer constant
+</Term>
+
+<Term def="专门表示空指针字面量的语言关键字，其类型为 std nullptr_t。">
+  nullptr literal
+</Term>
+
+先预测三个变量的直接类型：
+
+```cpp
+auto zero = 0;        // int
+auto legacyNull = NULL; // implementation-dependent integral type
+auto null = nullptr;  // std::nullptr_t
+```
+
+auto 没有把前两者推成 pointer，因为 initializer 本身就是整数。只有 `nullptr` 从起点携带“可转换为空指针”的专用语义。
+
+<EmcppNullLiteralIdentityMap />
+
+## 0 是 int，不是 pointer
+
+字面量 `0` 的类型是 int。它在 pointer initialization、assignment 或 function argument context 中可执行 null pointer conversion：
+
+```cpp
+Widget* first = 0; // legacy null pointer conversion
+auto second = 0;   // int, not Widget*
+```
+
+<Term def="把整数 null pointer constant 转换成某个具体 pointer type 的标准转换。">
+  legacy null pointer conversion
+</Term>
+
+第一行的目标类型 `Widget*` 给 compiler 提供了转换方向；第二行没有 pointer context，auto 忠实得到 int。若值再经过变量、template parameter 或 overload set，最初的“0 也许代表空指针”意图很容易丢失。
+
+## NULL 通常仍是整数宏
+
+`NULL` 来自实现头文件，历史上常定义为 `0`、`0L` 或实现选择的其他 null pointer constant。它不是跨平台固定的 pointer object。
+
+<Term def="由实现头文件提供的传统空指针宏，通常展开为某种整数 null pointer constant。">
+  NULL macro
+</Term>
+
+```cpp
+auto value = NULL;
+static_assert(std::is_integral_v<decltype(value)>);
+```
+
+不同平台上 `decltype(NULL)` 可能不同，因此用 `NULL` 参与 overload resolution 或 template deduction 会把实现细节带入调用行为。
+
+<Callout type="trap" title="陷阱：NULL 大写，所以它一定是具有指针类型的库常量">
+  NULL 通常是 macro，而且常展开成整数。大写命名不提供类型保证；auto、overload 与
+  template deduction 看到的是展开后的表达式，而不是调用者心中的“空指针”注释。
+</Callout>
+
+## nullptr 有专门的 std nullptr_t 类型
+
+`nullptr` 的类型是 `std::nullptr_t`。它本身不是 `Widget*`、`void*` 或任意某个 concrete pointer；它可以通过标准转换变成任何 object pointer、function pointer 或 pointer-to-member 的空值。
+
+<Term def="decltype nullptr 的标准库别名类型，可转换为任意 pointer 或 pointer-to-member 的空值。">
+  std nullptr_t
+</Term>
+
+```cpp
+Widget* widget = nullptr;
+void (*callback)() = nullptr;
+int Widget::* member = nullptr;
+```
+
+<Term def="从 std nullptr_t 转换成目标 pointer type 的空值，不经过整数语义。">
+  nullptr conversion
+</Term>
+
+这种“先保持通用空指针身份、到目标上下文再转换”的设计，正适合 overload 和 generic forwarding。
+
+## 指针重载揭示三种写法的差异
+
+```cpp
+void inspect(int value);
+void inspect(bool value);
+void inspect(void* pointer);
+
+inspect(0);       // calls int overload
+// inspect(NULL); // often ambiguous or selects an integral overload
+inspect(nullptr); // calls void* overload
+```
+
+<Term def="同名函数集合中接收 pointer parameter 的候选，与整数或布尔候选共同参与重载选择。">
+  pointer overload
+</Term>
+
+`inspect(0)` 对 int 是 exact match，根本不会选择 pointer。`NULL` 的具体整数类型由实现决定，可能命中 integral overload 或产生 ambiguity。`nullptr` 不具备普通 integral identity，pointer conversion 让 pointer overload 成为目标。
+
+<EmcppPointerOverloadResolutionMap />
+
+<Term def="候选函数根据 conversion sequence 的等级和特殊规则选出唯一最佳匹配的过程。">
+  overload resolution path
+</Term>
+
+<Callout
+  type="trap"
+  title="陷阱：0 能转换成 pointer，所以 pointer overload 会比 int overload 更符合意图"
+>
+  overload resolution 比较的是语言转换等级，不读取人类意图。0 到 int 是 exact
+  match，0 到 pointer 需要 null pointer conversion；结果必然先偏向整数候选。
+</Callout>
+
+## nullptr 让条件和比较表达真实领域
+
+```cpp
+auto result = findWidget(id); // suppose this returns Widget*
+
+if (result == nullptr) {
+    return NotFound{};
+}
+```
+
+<Term def="在源码中明确表达 operand 应具有 pointer-like 空值语义，而不是普通数字零。">
+  null intent clarity
+</Term>
+
+`result == 0` 需要读者先知道 result 是 pointer，才明白 0 不是计数；`result == nullptr` 直接声明比较的是空指针。IDE、review 和静态分析工具也更容易识别。
+
+## 直接调用有目标类型，模板包装会先固定实参类型
+
+原书用三个 API 展示 subtle difference：
+
+```cpp
+int process(std::shared_ptr<Widget> pointer);
+double consume(std::unique_ptr<Widget> pointer);
+bool observe(Widget* pointer);
+
+auto first = process(0);
+auto second = consume(NULL);
+auto third = observe(nullptr);
+```
+
+direct call 已知 parameter types，0/NULL 可以在该上下文构造相应 empty smart pointer，nullptr 可转换为 raw pointer。虽然这些调用能工作，前两行仍把整数写法伪装成 ownership argument。
+
+<Term def="函数参数类型在调用点已知，因此 argument conversion 可直接朝目标类型执行的调用。">
+  target-typed direct call
+</Term>
+
+加入 lock wrapper 后，deduction 发生在调用目标 conversion 之前：
+
+```cpp
+template<typename Function, typename Mutex, typename Pointer>
+decltype(auto) lockAndCall(
+    Function function,
+    Mutex& mutex,
+    Pointer pointer
+) {
+    std::lock_guard<Mutex> guard(mutex);
+    return function(pointer);
+}
+```
+
+## 0 和 NULL 在模板边界变成普通整数
+
+```cpp
+std::mutex processMutex;
+std::mutex consumeMutex;
+std::mutex observeMutex;
+
+// error: Pointer deduces as int
+auto first = lockAndCall(process, processMutex, 0);
+
+// error: Pointer deduces as NULL's integral type
+auto second = lockAndCall(consume, consumeMutex, NULL);
+
+// okay: Pointer deduces as std::nullptr_t
+auto third = lockAndCall(observe, observeMutex, nullptr);
+```
+
+<Term def="template deduction 根据 argument 的直接类型绑定参数，而不先应用未来被调函数的目标转换。">
+  argument-type freezing
+</Term>
+
+当 wrapper 的 `Pointer` 已推导成 int，函数体内的 `pointer` 是普通 int variable。只有字面量 0 本身才是 integer null pointer constant；值为 0 的普通 int variable 不是 null pointer constant，不能再隐式转换为 pointer parameter。NULL 同理。
+
+<Term def="只有满足语言定义的常量表达式才具有 null pointer constant 身份，普通值为零的整数变量没有该身份。">
+  constant-expression nullness
+</Term>
+
+而 nullptr 推导为 std nullptr_t，局部 variable 仍保留可转换到任意 pointer target 的能力，因此 wrapper 能调用 raw/smart pointer API。
+
+<EmcppNullTemplateDeductionMap />
+
+## 模板类型推导解释了失败发生的位置
+
+这里的 template type deduction（模板类型推导）分两段：
+
+1. wrapper call 根据 argument 直接类型推导 `Pointer`。
+2. wrapper body 再把 named variable 传给真实 function。
+
+<Term def="泛型包装先推导并保存 argument，再在函数体中进行第二次调用转换的两阶段边界。">
+  generic forwarding null boundary
+</Term>
+
+0/NULL 在第一阶段失去 literal constant-expression context；nullptr 在两阶段之间保持 std nullptr_t 类型语义。这不是 smart pointer 特例，而是类型信息能否跨 abstraction boundary 存活的问题。
+
+## 不要用 cast 修补错误的空值入口
+
+可以写 `static_cast<Widget*>(0)`，但它冗长且把目标 type 绑死：
+
+```cpp
+observe(static_cast<Widget*>(0));
+observe(nullptr);
+```
+
+<Term def="在调用点不预先绑定具体 pointer type，交由目标 parameter 执行 nullptr conversion。">
+  target-neutral null argument
+</Term>
+
+nullptr 更适合 overload、factory 与 template wrapper。只有确实需要选择某个具体 pointer overload 时，才应显式 cast，例如两个不同 pointer overload 对 nullptr 本身会 ambiguous。
+
+```cpp
+void reset(FileHandle* handle);
+void reset(SocketHandle* handle);
+
+// reset(nullptr); // ambiguous between two pointer overloads
+reset(static_cast<FileHandle*>(nullptr));
+```
+
+<Term def="多个不同 pointer candidates 对 nullptr conversion 同等可行，必须由 API 名称或显式类型消除歧义。">
+  multi-pointer null ambiguity
+</Term>
+
+最好的 API 往往是具名函数 `resetFile`、`resetSocket`，而不是要求 caller 在空值上编码 overload target。
+
+## 指针与可选值要分清层次
+
+nullptr 只说明“没有 pointer target”，不表达失败原因、未加载、权限不足或逻辑上的 optional domain state。
+
+<Term def="用 pointer nullness 表达对象缺席，而不承担错误分类或多状态业务协议。">
+  pointer absence contract
+</Term>
+
+```cpp
+Widget* cacheLookup(Id id); // non-owning lookup, nullptr means miss
+
+std::expected<Widget, LookupError> loadWidget(Id id); // rich failure
+```
+
+在 C++11/14 可用 expected-like result 或 status + value；重点是不要把所有错误压成 nullptr。Item 8 解决空指针表示的类型安全，不替代 API error model。
+
+## 建立空指针回归矩阵
+
+<Term def="覆盖 overload、raw/smart pointers、template wrapper、多个 pointer candidates 与错误模型的测试集合。">
+  null pointer contract matrix
+</Term>
+
+验证应包括：
+
+1. static assertion 确认 `decltype(nullptr)` 为 std nullptr_t。
+2. overload probe 证明 nullptr 选择期望 pointer candidate。
+3. compile-fail test 记录 0/NULL 经过 wrapper 后不能调用 pointer API。
+4. raw pointer、shared pointer 与 unique pointer 都能从 nullptr 路径构造空值。
+5. 多 pointer overload 对 nullptr 的 ambiguity 由具名 API 或 explicit cast 消除。
+6. 业务失败原因不只依赖 nullptr 时，result type 能保留 error state。
+
+```cpp
+static_assert(std::is_same_v<decltype(nullptr), std::nullptr_t>);
+static_assert(!std::is_integral_v<std::nullptr_t>);
+```
+
+先预测 argument 的直接类型、deduced parameter 与第二次 call conversion，再用 compiler diagnostics 验证；不要只测试最终值是否为零。
+
+## 小结
+
+- 0 是 int；NULL 通常也是实现选择的整数 macro，它们不是 pointer-typed values
+- nullptr 的类型是 std nullptr_t，可转换成任意 pointer 或 pointer-to-member 的空值
+- int/bool/pointer overload 并存时，0 命中 int，NULL 可能命中整数或歧义，nullptr 表达 pointer intent
+- direct call 的目标 parameter 可帮助 0/NULL 转换，但 template type deduction 会先把它们固化成整数
+- 普通值为零的 integer variable 不再是 null pointer constant，wrapper body 无法把它传给 pointer API
+- nullptr 的类型语义能跨 generic forwarding boundary，适合 raw 与 smart pointer 参数
+- 多 pointer overload 仍可能对 nullptr 歧义，应使用具名 API 或明确 target cast
+- nullptr 只表达 pointer absence，不应承担复杂业务错误模型
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 8"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch03.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="null pointer constant">
+    可在指针上下文转为空值的整数常量表达式。
+  </GlossaryItem>
+  <GlossaryItem term="nullptr literal">
+    具有专用空指针类型的关键字。
+  </GlossaryItem>
+  <GlossaryItem term="legacy null pointer conversion">
+    从整数常量零到目标指针的传统转换。
+  </GlossaryItem>
+  <GlossaryItem term="NULL macro">通常展开成整数常量的传统宏。</GlossaryItem>
+  <GlossaryItem term="std nullptr_t">nullptr 的专用标准类型。</GlossaryItem>
+  <GlossaryItem term="nullptr conversion">
+    从 nullptr_t 到目标指针空值的转换。
+  </GlossaryItem>
+  <GlossaryItem term="pointer overload">接收指针参数的重载候选。</GlossaryItem>
+  <GlossaryItem term="overload resolution path">
+    比较转换等级并选择最佳候选的路径。
+  </GlossaryItem>
+  <GlossaryItem term="null intent clarity">
+    源码直接表达空指针语义。
+  </GlossaryItem>
+  <GlossaryItem term="target-typed direct call">
+    已知参数类型后执行转换的直接调用。
+  </GlossaryItem>
+  <GlossaryItem term="argument-type freezing">
+    模板先按实参直接类型固化参数。
+  </GlossaryItem>
+  <GlossaryItem term="constant-expression nullness">
+    空指针常量身份依赖常量表达式。
+  </GlossaryItem>
+  <GlossaryItem term="generic forwarding null boundary">
+    包装函数两阶段传递空值的边界。
+  </GlossaryItem>
+  <GlossaryItem term="target-neutral null argument">
+    不预先绑定具体 pointer type 的空值。
+  </GlossaryItem>
+  <GlossaryItem term="multi-pointer null ambiguity">
+    多个 pointer overload 对 nullptr 同等匹配。
+  </GlossaryItem>
+  <GlossaryItem term="pointer absence contract">
+    仅用 nullness 表达目标对象缺席。
+  </GlossaryItem>
+  <GlossaryItem term="null pointer contract matrix">
+    空值重载、转发与错误模型测试表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：推导 inspect 的三个调用。** overload 分别接收 int、bool 和 void pointer。
+
+<Answer question="0、NULL 与 nullptr 各走哪条路径？">
+  0 对 int 是 exact match，因此选择 int overload；NULL 展开成实现相关 integral
+  expression，可能 选择某个整数候选或产生 ambiguity；nullptr 保持 std nullptr_t
+  身份，可执行 null pointer conversion，选择 void pointer overload。用小型
+  overload probe 固定目标工具链行为。
+</Answer>
+
+2. **问题 2：解释 lockAndCall 传 0 为什么失败。** 真实 function 接收 Widget pointer。
+
+<Answer question="direct call 与 wrapper call 的差异在哪里？">
+  direct call 已知 pointer parameter，字面量 0 可执行 null pointer
+  conversion；wrapper 先把 0 推导成 int，函数体中得到的是 named int
+  variable。它即使值为零也不再是 null pointer constant， 第二次调用不能转成
+  Widget pointer。传 nullptr 会推导 std nullptr_t，并保留目标中立的转换能力。
+</Answer>
+
+3. **问题 3：两个不同 pointer overload 都允许空值。** 设计无歧义接口并保留错误语义。
+
+  <Answer question="何时 cast，何时重构 API？">一次性调用可把 nullptr 显式 cast 到目标 pointer type；公共 API 更适合拆成 resetFile/resetSocket 等具名入口。若“无对象”之外还要表达权限、加载或解析失败，返回 result/expected-like 类型，不用 nullptr 压缩错误。测试覆盖 overload 选择、generic wrapper 和每种 error state。</Answer>
+</Exercises>

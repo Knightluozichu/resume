@@ -1,0 +1,205 @@
+---
+title: "第16章 正则表达式类"
+type: C
+section: "たのしいRuby 第5版 · Ruby的类"
+order: 16
+description: "从Regexp创建、anchor、字符类、重复与分组建立匹配语言，掌握options、capture、quote、sub/gsub、scan以及回溯资源边界。"
+demo: true
+math: false
+sourceUrl: "https://tanoshiiruby.github.io/5/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RubyRegexpTokensLab, RubyRegexpEvidenceLab, RubyRegexpTransformLab } from "@/components/mdx/ruby-programming/diagrams/regular-expressions";
+
+<Objectives>
+
+- 能设计由anchor、character class、group、alternation和quantifier组成的完整输入grammar
+- 能比较match、`=~`、capture和boolean evidence，并将捕获字段转换为typed value
+- 能实现Regexp.quote、options、sub/gsub与scan流程，并限制输入、回溯和输出规模
+
+</Objectives>
+
+## 从“找到了片段就验证成功”开始纠正
+
+Regexp描述一门匹配语言；成功只证明某段input满足pattern覆盖的条件。`/\d+/`匹配`"x12y"`，却不能证明整个input是整数。<Term def="一次匹配究竟覆盖whole input、line还是substring，以及留下哪些未消费文本。">regexp evidence boundary</Term>先于pattern技巧。
+
+先预测：验证record应使用`^...$`还是`\A...\z`？Whole String validation通常用`\A`/`\z`；`^`/`$`按line boundary工作，multi-line input可能只验证其中一行。Anchor选择是security和schema决策。
+
+## 正则表达式对象的创建方法
+
+Literal `/pattern/options`在source中固定；`Regexp.new(source, options)`动态创建。Dynamic literal text必须`Regexp.quote`，dynamic grammar只允许受控片段。<Term def="Pattern中哪些部分是可信grammar，哪些外部text必须escape为literal。">dynamic regexp boundary</Term>防止regex injection。
+
+```ruby
+field = "user.name"
+pattern = Regexp.new("\\A#{Regexp.quote(field)}=(.+)\\z")
+
+p pattern.match("user.name=Ruby")
+```
+
+Compile error抛RegexpError，应在config/load boundary提前发现；不要每行重新new同一pattern。Cache dynamic patterns时限制数量和length，避免unbounded memory。
+
+## 行首、行尾与字符范围
+
+`\A`/`\z`对应String起止，`^`/`$`对应line；`[abc]`匹配一个列举字符，`[a-z]`是range，`[^...]`否定class。<Term def="Anchor选择string/line边界，character class定义单个字符集合并受encoding影响。">anchor class contract</Term>要在examples中覆盖newline和non-ASCII。
+
+POSIX classes如`[[:alpha:]]`比ASCII `[A-Za-z]`意图更宽，但Unicode/version语义需验证。Domain若只允许ASCII identifier，应明确ASCII，而不是把国际文本误收或误拒。
+
+## 任意字符与反斜杠模式
+
+`.`匹配一个字符，newline是否包含受option影响；它过于宽泛时会让delimiter grammar失守。Backslash sequences如`\d`、`\s`、`\w`、boundary与escaped metacharacters在Ruby source String和Regexp grammar之间可能要双重escape。
+
+```ruby
+identifier = /\A[a-z_][a-z0-9_]*\z/i
+integer = /\A[+-]?\d+\z/
+
+p identifier.match("user_42")
+p integer.match("-12")
+```
+
+Literal regex减少String escaping；Regexp.new接收String时先由Ruby String parser处理。Debug时输出`regexp.source`和options，不只看source code视觉。
+
+## 重复与最短匹配
+
+`*`零次以上、`+`一次以上、`?`零或一次、`{m,n}`限定范围；默认quantifier通常greedy，后缀`?`改为lazy/minimal。<Term def="Quantifier规定最小/最大重复与greedy/lazy选择，但仍会为整体成功回溯。">quantifier backtracking contract</Term>不是简单“尽量多/少”。
+
+```ruby
+html = "<b>one</b><b>two</b>"
+p html.scan(/<b>.*<\/b>/)
+p html.scan(/<b>.*?<\/b>/)
+```
+
+即使lazy也不是HTML parser。Nested ambiguous repetition如`(a+)+`在失败长input上可能灾难回溯；限制input length、简化grammar、使用专业parser或runtime timeout机制（目标版本支持需验证），并benchmark失败路径。
+
+## 分组与选择
+
+Parentheses grouping改变quantifier/alternation作用范围并默认capture；`(?:...)`只group不capture。`a|b`alternation优先级低，通常显式group。<Term def="Grouping决定operator scope，capturing group同时定义MatchData字段schema。">regexp grouping contract</Term>避免加括号后悄悄改变capture indices。
+
+Named captures `(?<name>...)`比数字index稳健；optional group可返回nil。重复capture通常只保留某次结果，若需所有重复items用scan/二阶段parser。
+
+<RubyRegexpTokensLab />
+
+<Stepper>
+  <Step title="切换Anchors、Classes、Wildcard和Quantifier"><RubyRegexpTokensLab /></Step>
+  <Step title="画匹配语言">标每个token消费范围、repeat、alternation、未消费prefix/suffix和最坏失败路径。</Step>
+  <Step title="注入长失败输入"><RubyRegexpTokensLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="把*改成*?就能避免所有回溯问题">
+Lazy只改变搜索顺序，整体pattern仍可能大量回溯。控制grammar ambiguity与input/resource上限，并测试最坏失败case。
+</Callout>
+
+## 正则表达式的选项
+
+常见options包括忽略大小写、dot/newline、extended whitespace/comments等，具体flag按Ruby版本确认。<Term def="Regexp options改变case、dot、whitespace和encoding解释，作用域必须局部且可见。">regexp option contract</Term>不能为了一个token全局放宽grammar。
+
+Extended mode便于复杂pattern分行注释，但literal space需escape；case-insensitive不等于locale-aware case folding。Inline option groups可限定局部，测试ASCII/Unicode和newline。
+
+## 捕获与MatchData
+
+`match`返回MatchData，含完整match、captures、named fields、pre/post match和offsets；失败nil。<Term def="Capture schema声明每个字段name、optional、raw text、offset与后续类型转换。">capture schema contract</Term>让Regexp只负责lexical evidence。
+
+```ruby
+pattern = /\A(?<name>[a-z]+):(?<score>\d+)\z/i
+match = pattern.match("Ruby:95")
+raise ArgumentError, "invalid record" unless match
+
+record = {
+  name: match[:name],
+  score: Integer(match[:score], 10),
+}
+p record
+```
+
+Numeric range、date validity等在capture后验证。Global match variables易被后续match覆盖，优先保留局部MatchData。Offsets单位与encoding需目标版本测试。
+
+<RubyRegexpEvidenceLab />
+
+<Stepper>
+  <Step title="切换match、=~、match?和Capture"><RubyRegexpEvidenceLab /></Step>
+  <Step title="建立Evidence表">记录result type、offset、capture、global state、allocation与Ruby 2.3 availability。</Step>
+  <Step title="让Optional capture缺失"><RubyRegexpEvidenceLab /></Step>
+</Stepper>
+
+## 使用Regexp.quote的正则表达式
+
+Regexp.quote/escape把dynamic text中的metacharacters转为literal pattern fragment。它不添加anchors、不限制长度，也不验证surrounding grammar。Search UI可quote query；admin-provided regex若允许grammar则必须权限、length、timeout和审计分开处理。
+
+## sub方法与gsub方法
+
+Sub替首个，gsub替全部；replacement String解释backreferences，block返回replacement value更清楚。<Term def="替换规定首个/全部、replacement语法、capture使用、mutation和最大输出扩张。">regexp replacement contract</Term>保护资源与数据。
+
+```ruby
+source = "id=12 id=34"
+masked = source.gsub(/\d+/) { |digits| "*" * digits.length }
+p masked
+```
+
+Bang variants修改receiver并可能在无变化时返回nil。Untrusted replacement用block避免backreference injection，限制match count/output bytes。Redaction pattern必须测试多line、encoding和旁路格式。
+
+## scan方法
+
+Scan无capture时产出完整match Strings；有一组capture时常产出capture值，多组时产出Arrays。传block可逐项处理，避免materialize全部。<Term def="Scan result shape由capture数量决定，并需限制match数量与memory。">scan result contract</Term>容易因新增括号改变。
+
+```ruby
+text = "A12 B7"
+p text.scan(/\d+/)
+p text.scan(/([A-Z])(\d+)/)
+
+text.scan(/\d+/) { |digits| puts Integer(digits, 10) }
+```
+
+只为group使用noncapturing parentheses，维持result shape。大量matches用block streaming，但Regexp engine仍需遍历input；取消/deadline由外层处理。
+
+<RubyRegexpTransformLab />
+
+<Stepper>
+  <Step title="切换quote、sub/gsub、scan和Options"><RubyRegexpTransformLab /></Step>
+  <Step title="预测Result shape">对0/1/多captures、无match、bang无变化和超多matches写出返回与memory。</Step>
+  <Step title="新增无意Capture括号"><RubyRegexpTransformLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="Scan总是返回匹配到的完整字符串数组">
+Capture会改变scan结果shape，多组通常返回nested Arrays。只分组用`(?:...)`，公共parser用named captures/显式转换并锁定shape tests。
+</Callout>
+
+## 本章回顾：Regexp提供文本证据，不完成全部验证
+
+1. Dynamic literal用Regexp.quote，trusted grammar与untrusted text分开；whole-input用正确anchors。
+2. Character class、wildcard、quantifier、group/alternation共同定义language，也决定回溯风险。
+3. Options局部可见，captures形成字段schema；保留MatchData而非依赖global match state。
+4. Sub/gsub明确首个/全部、replacement和output上限；scan result shape受captures影响。
+5. Match后仍需type/domain validation；输入长度、失败路径和runtime budget属于Regexp contract。
+
+<Exercises>
+
+**问题 1：如何把用户搜索词安全放进Regexp？**
+
+<Answer>先限制input length，用Regexp.quote变literal fragment，再按需求添加明确anchors/options；若允许高级regex，单独权限和resource policy。测试metacharacters、newline、Unicode和长失败输入。</Answer>
+
+**问题 2：为什么Regexp捕获到日期数字仍不能证明日期有效？**
+
+<Answer>Regexp只证明lexical shape；将year/month/day转换Integer后交Date合法性验证，处理range/leap day。保留MatchData locator并将domain error映射到字段。</Answer>
+
+**问题 3：新增括号为何可能破坏scan caller？**
+
+<Answer>Capturing parentheses改变scan返回shape和capture indices。纯group改用`(?:...)`，字段用named captures；为无/单/多capture写contract tests并避免caller依赖脆弱数字位置。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="regexp evidence boundary" definition="匹配覆盖whole/line/substring及未消费文本的边界。" />
+  <GlossaryItem term="dynamic regexp boundary" definition="Trusted grammar与必须quote的dynamic literal分界。" />
+  <GlossaryItem term="anchor class contract" definition="String/line anchor与字符集合/encoding规则。" />
+  <GlossaryItem term="quantifier backtracking contract" definition="重复范围、greedy/lazy与整体回溯规则。" />
+  <GlossaryItem term="regexp grouping contract" definition="Grouping scope与capture字段schema约定。" />
+  <GlossaryItem term="regexp option contract" definition="Case、dot、whitespace与encoding option作用域。" />
+  <GlossaryItem term="capture schema contract" definition="Capture name、optional、raw text、offset与转换规则。" />
+  <GlossaryItem term="regexp replacement contract" definition="首个/全部、replacement、mutation与输出上限。" />
+  <GlossaryItem term="scan result contract" definition="Capture数量决定scan shape与memory规则。" />
+</Glossary>
+
+<Attribution adaptedFrom="たのしいRuby 第5版 / Ruby基础教程（第5版），第16章 正则表达式类" adaptedUrl="https://tanoshiiruby.github.io/5/" />

@@ -1,0 +1,214 @@
+---
+title: "Chapter 29. Primitive Thread Synchronization Constructs"
+type: C
+section: "CLR via C# 4e · Threading"
+order: 29
+description: "覆盖library thread safety、user/kernel primitives、volatile、Interlocked/CAS/spin、event/semaphore/mutex及内存模型与所有权。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcKernelConstructLab, CvcSynchronizationPrimitiveLab, CvcThreadSafetyContractLab } from "@/components/mdx/clr-via-csharp/diagrams/primitive-thread-synchronization-constructs";
+
+<Objectives>
+
+- 能区分immutable/thread-compatible/thread-safe/compound-atomic API，并找出linearization与shared invariant
+- 能比较volatile、Interlocked、spin与kernel waits的原子性、ordering、CPU和blocking成本
+- 能设计event、semaphore与mutex的signal/permit/ownership协议，验证timeout、abandonment和shutdown
+
+</Objectives>
+
+## 为什么Synchronization从Invariant开始
+
+同步不是“给字段加锁”，而是让多个execution flows对共享state的可见顺序符合invariant。先定义哪些operations必须原子、谁可写、read允许多旧、linearization point在哪，再选volatile/Interlocked/lock/event。选primitive后才找问题，常得到单字段安全但多字段状态不存在的组合。
+
+先预测：volatile `count++`是否原子；Interlocked能否自动保护两个字段；SpinLock是否总比Monitor快；AutoResetEvent连续Set两次是否保存两个signals；Semaphore是否记录owner；Mutex被owner thread终止后怎样；thread-safe Dictionary的Contains+Add是否原子。后文从contract、user-mode与kernel-mode回答。
+
+<Term def="所有并发operations必须共同保持的状态关系，以及每个operation看似瞬间生效的linearization point。">concurrent state invariant</Term>
+
+## Class Libraries and Thread Safety
+
+Immutable object发布后无mutation，深度members也immutable时可共享；thread-compatible表示不同instances可并发，共享同instance由caller同步；thread-safe只保证文档列出的单operations；compound sequence需library提供atomic method。Enumerator通常不容忍并发mutation，snapshot/weakly consistent语义按collection。
+
+```csharp
+private readonly ConcurrentDictionary<string, Lazy<Client>> _clients = new();
+
+public Client GetOrCreate(string key) =>
+    _clients.GetOrAdd(
+        key,
+        static name => new Lazy<Client>(
+            () => Client.Connect(name),
+            LazyThreadSafetyMode.ExecutionAndPublication))
+    .Value;
+```
+
+ConcurrentDictionary value factory可能多次执行，只有一个value存入；用Lazy把side effect exactly-once-by-key（仍要处理failure/eviction）。Thread-safe collection不让外部transaction自动atomic。
+
+<Stepper>
+  <Step title="切换immutable、compatible、thread-safe与compound atomic"><CvcThreadSafetyContractLab /></Step>
+  <Step title="写Invariant与Linearization">每个API记录shared fields、合法states、atomic operation、failure/cancel和observer。</Step>
+  <Step title="Stress/Model测试">控制barriers交错读写，检查不变量而不是只跑高并发未崩溃。</Step>
+</Stepper>
+
+<Callout type="trap" title="使用ConcurrentDictionary后ContainsKey再TryAdd就是原子">
+两个thread可在步骤间交错。使用GetOrAdd/TryUpdate/AddOrUpdate等单一atomic API，并理解delegate可能多次执行。
+</Callout>
+
+## Primitive User-Mode and Kernel-Mode Constructs
+
+User-mode primitive不进入kernel，低延迟但等待可能消耗CPU；kernel-mode wait让thread阻塞直到OS object signal，切换成本更高但适合长wait/跨process。Hybrid constructs先user fast path再block，下章。Primitive只提供mechanism，fairness/ownership/deadline需protocol。
+
+<Term def="在纯user-mode原子/自旋与kernel blocking之间按预计等待时间、contention和scope选择的成本边界。">synchronization cost boundary</Term>
+
+## User-Mode Constructs
+
+Memory model允许compiler/JIT/CPU在不违反单线程语义下重排/缓存；data race时不能按source顺序推断另thread观察。Volatile/fences/interlocked/lock建立happens-before-like ordering。Atomic read/write不等于compound atomic或safe publication。
+
+## Volatile Constructs
+
+Volatile.Read/Write提供acquire/release-like ordering和visibility，适合单字段published flag/reference且协议简单。不能让`x++`atomic，不能一起发布多个independent fields除非先初始化immutable object再volatile publish reference。Polling需要backoff/cancel，持续volatile loop消耗CPU。
+
+## C#'s Support for Volatile Fields
+
+`volatile` modifier支持有限field types，并让每次access有volatile semantics；不能用于locals/properties直接。Prefer Volatile static methods在generic/reference场景明确。Double-checked locking若手写需正确volatile publication，但`Lazy<T>`/static initialization更稳。
+
+```csharp
+private Config? _published;
+
+public Config? Current => Volatile.Read(ref _published);
+
+public void Publish(Config config)
+{
+    ArgumentNullException.ThrowIfNull(config);
+    config.Validate();
+    Volatile.Write(ref _published, config); // config随后不可变
+}
+```
+
+<Term def="Producer完整初始化不可变state后以有序write发布reference，consumer有序read后才能观察。">safe publication protocol</Term>
+
+## Interlocked Constructs
+
+Interlocked Increment/Add/Exchange/CompareExchange对单memory location执行atomic read-modify-write并提供强ordering。Counters、once publication、lock-free state transition基础。CAS loop读取expected，计算next，CompareExchange失败则重试；计算必须无side effect或允许重做。
+
+## Implementing a Simple Spin Lock
+
+用CAS把0->1获取，失败SpinWait；release Volatile.Write 0。Real lock还需owner/recursion/exception/fairness，手写易错。Spin只适合等待短于context switch且owner正在其它core运行；single-core/preempted owner时浪费CPU。Use `SpinLock`/Monitor并profile。
+
+```csharp
+sealed class TinySpinLock
+{
+    private int _held;
+
+    public void Enter()
+    {
+        var spinner = new SpinWait();
+        while (Interlocked.CompareExchange(ref _held, 1, 0) != 0)
+            spinner.SpinOnce();
+    }
+
+    public void Exit() => Volatile.Write(ref _held, 0);
+}
+```
+
+教学代码不用于生产：没有owner validation/fairness/cancel。Critical section必须try/finally Exit，不能await/block/call unknown code。
+
+## The Interlocked Anything Pattern
+
+把immutable state装一个reference，CAS替换可原子更新任意多字段snapshot：read current, derive next, CompareExchange ref; retry。ABA问题在reference每次new snapshot通常缓解，pool/reuse则要version stamp。Factory可能重算，side effects移到CAS成功后且防重复。
+
+<Term def="读取immutable snapshot、计算next并用CompareExchange原子替换，失败重试的多字段更新模式。">interlocked snapshot swap</Term>
+
+<Stepper>
+  <Step title="切换volatile、Interlocked、spin与kernel wait"><CvcSynchronizationPrimitiveLab /></Step>
+  <Step title="标注Memory order">每个shared read/write/CAS记录publication、linearization、可重试计算与谁观察。</Step>
+  <Step title="压测Contention">不同cores/quotas让owner preempt，比较spin CPU、Monitor latency、CAS retries和throughput。</Step>
+</Stepper>
+
+<Callout type="trap" title="Volatile让围绕该Field的复合逻辑自动Atomic">
+它只约束单次read/write visibility/order。Check-then-act、increment和多字段invariant需要Interlocked CAS、lock或immutable snapshot swap。
+</Callout>
+
+## Kernel-Mode Constructs
+
+WaitHandle类包装OS dispatcher objects，WaitOne/Any/All让thread block，支持跨process named objects（平台限制）。Kernel transition/handle有成本；Dispose handles；WaitHandle不支持await，阻塞pool会starvation。Async coordination用SemaphoreSlim/TaskCompletionSource/Channel等hybrid/managed。
+
+Named objects需namespace/security/ACL与collision policy，不把用户input直接当name。Cross-process crash/abandonment semantics必须处理。
+
+## Event Constructs
+
+AutoResetEvent是一bit signal，Set释放一个waiter或保存一个signal，连续Set可能coalesce；不是counting queue。ManualResetEvent是gate，Set后所有waiters/后来者通过，Reset关闭；Set/Reset race需phase protocol。Events传“状态已改变”，waiter醒后重新检查predicate。
+
+```csharp
+using var ready = new ManualResetEvent(initialState: false);
+var thread = new Thread(() =>
+{
+    InitializeSharedState();
+    ready.Set();
+});
+thread.Start();
+
+if (!ready.WaitOne(TimeSpan.FromSeconds(5)))
+    throw new TimeoutException("Initialization did not complete");
+thread.Join();
+```
+
+## Semaphore Constructs
+
+Semaphore持permit count，Wait decrements或blocks，Release increments并唤一个。它不记录thread owner，一个flow acquire另一个可release，因此必须lease/finally且防over-release。Kernel Semaphore跨process，SemaphoreSlim适合in-process并支持WaitAsync。Bound concurrency不是queue backpressure全部，还需限制waiting items。
+
+## Mutex Constructs
+
+Mutex是kernel exclusive owner，thread ownership/reentrancy，跨process named。Owner未release终止，下一waiter收到AbandonedMutexException同时获得mutex，表示protected state可能不一致，必须validate/recover，不只是catch忽略。In-process普通lock/Monitor更快。
+
+<Term def="Event保存signal/gate、Semaphore保存permits、Mutex保存thread ownership，各自不同的等待状态语义。">kernel wait semantics</Term>
+
+<Stepper>
+  <Step title="切换auto/manual event、semaphore与mutex"><CvcKernelConstructLab /></Step>
+  <Step title="画State machine">记录unsignaled/signaled/count/owner、每个Wait/Set/Reset/Release、timeout与process crash。</Step>
+  <Step title="注入Abandon/Overrelease">终止mutex owner、重复Release、连续Set和Reset race，验证recovery/guards。</Step>
+</Stepper>
+
+## Choosing the Primitive
+
+一location counter/CAS用Interlocked；immutable reference publication用Volatile/CAS；极短contention一般Monitor/SpinLock测后；one-shot completion用TaskCompletionSource；async permit用SemaphoreSlim；producer-consumer用Channel；cross-process owner用Mutex；cross-process signal/event按protocol。Prefer highest-level proven primitive matching semantics。
+
+Timeout只是wait结束，不撤销owner operation；返回false后也可能signal immediately。Shutdown必须设置状态并唤醒所有waiters，wait loops检查stopping predicate。Disposal与wait race按API处理。
+
+## 本章回顾：Primitive必须匹配State语义
+
+1. 先定义thread safety scope、shared invariant和linearization，再选primitive。
+2. Volatile解决single publication/order，Interlocked解决single-location atomic RMW，CAS可换immutable snapshot。
+3. Spin消耗CPU只适合极短wait，kernel wait适合长wait/跨process但成本高。
+4. Auto/manual events是signal/gate，Semaphore是permit count，Mutex是owner且可能abandoned。
+5. Thread-safe单operations不让compound sequence原子；优先framework high-level atomic API。
+
+<Exercises>
+
+**问题 1：`volatile bool ready`配合多个Fields何时安全？**
+
+<Answer>Producer独占初始化所有fields，最后Volatile.Write ready=true；consumer Volatile.Read true后只读且state不再变，可作为publication。若之后fields继续独立mutable或多个writers，bool不保护复合invariant，改immutable snapshot CAS或lock。</Answer>
+
+**问题 2：AutoResetEvent为何丢了两次Signal中的一次？**
+
+<Answer>它只保存一bit signaled state，不计数；无waiter时连续Set可coalesce。每个item需要一permit用Semaphore，传数据用Channel/queue。Event适合“状态可能已改变”，waiter醒后检查predicate。</Answer>
+
+**问题 3：收到AbandonedMutexException能否直接继续？**
+
+<Answer>当前thread通常已获得mutex，但前owner异常退出，protected state可能partial/corrupt。验证或从journal重建，无法证明就终止/隔离；finally ReleaseMutex。不要catch忽略后把未知状态当正常。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="concurrent state invariant" definition="所有并发operations共同保持的合法状态与linearization。" />
+  <GlossaryItem term="synchronization cost boundary" definition="User atomic/spin与kernel block的成本选择边界。" />
+  <GlossaryItem term="safe publication protocol" definition="初始化后有序发布immutable state的规则。" />
+  <GlossaryItem term="interlocked snapshot swap" definition="CAS原子替换immutable多字段snapshot的模式。" />
+  <GlossaryItem term="kernel wait semantics" definition="Signal、permit与thread owner等OS等待状态语义。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 29: Primitive Thread Synchronization Constructs" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

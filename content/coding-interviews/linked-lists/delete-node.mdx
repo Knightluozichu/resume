@@ -1,316 +1,287 @@
 ---
-title: 删除链表节点
+title: "面试题18（一）：在O(1)时间删除链表节点"
 type: C
-section: 链表
-order: 2
-description: 探索高效的链表节点删除技巧。掌握 O(1) 时间复杂度删除指定节点的“值复制法”，以及如何在已排序链表中彻底去除重复节点的双指针与哨兵技术。
+section: "第3章 高质量的代码"
+order: 19
+description: "非尾节点通过复制后继内容并绕过后继实现常数时间；尾节点仍需从头寻找前驱，并明确节点身份前提。"
 demo: true
-math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviews
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/18_01_DeleteNodeInList/DeleteNodeInList.cpp"
 draft: false
 ---
 
-{/* 知识点清单：单向链表遍历 / 值复制法 / 双指针去重 / 哨兵虚拟头节点 / 显式内存释放 / 摊还分析；原书章节：面试题18：删除链表的节点。 */}
+import { SuccessorCopyDeleteDiagram, DeleteNodeCaseMap, NodeIdentityImpactDiagram, DeleteNodeCaseLab } from "@/components/mdx/coding-interviews/diagrams/delete-node";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能理解并应用“值复制法”，在只给定待删除节点指针时以平均 $O(1)$ 的时间复杂度完成节点删除。
-- 能阐明 $O(1)$ 删除算法的边界缺陷（如尾节点删除），并通过摊还分析推导其平均时间复杂度。
-- 能运用哨兵虚拟头节点与双指针设计并实现已排序链表彻底去重的 $O(n)$ 时间和 $O(1)$ 空间算法。
-- 能辨析 C++ 手动内存释放（规避内存泄漏）与 JS/TS 自动垃圾回收（GC）在节点删除后的内存管理细节差异。
+- 能解释非尾节点为何可以通过删除后继来实现逻辑删除
+- 能计算中间、头、尾、单节点与空链表各自需要的指针修改
+- 能实现同时更新头指针并释放正确物理节点的三分支函数
+- 能分析尾节点线性特例与平均常数结论所依赖的概率假设
+- 能设计节点归属、外部引用、不可复制值与异常安全边界测试
 
 </Objectives>
 
-## 直觉引入
+## 从“给了目标指针却没有前驱”开始
 
-在开始分析代码之前，我们先通过生活中的小例子来建立直觉：
+先预测：单向链表`1→2→3→4→5`中只给头指针和节点3的指针。普通删除要把节点2的`next`改成4，但节点3没有指向2的反向链接；不从头扫描，怎样找到并修改前驱？
 
-*   **场景 A（删除指定节点）**：想象你在排队。突然，排在你前面的那个人（Node 2）有急事需要离开队伍（删除）。常规方法是，排在他后面的那个人（Node 3）把手搭在再后一个人肩膀上，然后 Node 2 离队。但在单向链表中，**排在 Node 2 前面的人（Node 1）无法回头看到谁排在他后面**，所以没法直接将手搭给 Node 3。
-    
-    聪明的排队者想到了一个奇招：Node 2 不用动，让 Node 3 走到 Node 2 面前，把 Node 3 兜里的“号码牌”（值）和所有的随身物品直接塞进 Node 2 兜里。接着，让真实的 Node 3 离队，并让 Node 2 指向 Node 3 原本的后继。在队伍外面看，节点 2 的值变成了 3，而节点 3 的位置空了出来，这同样达成了删除节点 2 的效果。这就是**『值复制法』**。
-    
-*   **场景 B（删除重复节点）**：在一叠整理好的文件中，我们发现有一部分文件重名且内容完全重复。去重（彻底删除重复项）的过程就像是拿着一个记录夹（哨兵 `dummy` 和前驱 `pre`）和扫描眼（`cur`）。扫描眼遇到一叠相同的重复文件时，记录夹在重复区前静止不动，扫描眼不断往后翻，直到翻到第一个完全不一样的全新文件，然后我们用胶水直接把记录夹的下一页粘在这个全新文件上，中途那叠重名的文件直接扔进垃圾桶。这就是**『双指针越过重复区』**的物理模型。
+<Term def="每个节点只保存指向后继的链接，不能直接从节点回到前驱的链式结构。">单向链表</Term>只能向后访问。题目“在O(1)时间删除链表节点”的突破口不是凭空获得<Term def="next指向当前节点、删除时通常负责绕过当前节点的上一节点。">前驱节点</Term>，而是对非尾节点改变“究竟删除哪个物理对象”。
 
-## 概念讲解
+已知目标节点`target`还有后继`next`时，先**复制下一个节点内容**到`target`，再令`target->next = next->next`并释放`next`。从链表值序列看，目标原值消失了；所有动作都只访问目标和后继，时间`O(1)`。
 
-### 1. $O(1)$ 删除单向链表的指定节点
+<SuccessorCopyDeleteDiagram />
 
-在单向链表中，常规删除节点的方法需要已知头节点指针，然后从头遍历查找到待删除节点 `toBeDeleted` 的前驱节点，将前驱的 `next` 指向后继，时间复杂度为 $O(n)$。
+## 常数时间删除的是逻辑值，不是目标对象
 
-如果面试官要求在不给定头节点的前提下，以 $O(1)$ 复杂度删除指定节点，就需要使用上述“值复制法”：
+这种做法属于<Term def="让目标值从抽象序列中消失，但实际释放的可能是另一个物理节点对象。">逻辑删除</Term>。目标对象地址仍在链表中，只是内容从3变成4；真正被`delete`的是原来值4的后继对象。
 
-```
-待删除节点: node (值为 2)
-1 -> [2] -> 3 -> 4 -> null
-      ^ toBeDeleted
+因此算法保证的是“删除后链表值序列与移除目标位置一致”，不保证传入的`target`对象被销毁。如果节点只承载普通整数且没有外部身份观察，这个替换不可见；若地址、唯一ID、锁、文件句柄、引用计数或析构副作用有业务意义，语义就不再等价。
 
-步骤 1: 复制后继节点的值
-1 -> [3] -> 3 -> 4 -> null
-      ^ toBeDeleted (值已被覆盖)
+<NodeIdentityImpactDiagram />
 
-步骤 2: 绕过原后继节点，重写 next 指针
-1 -> [3] ------------> 4 -> null
-      ^ toBeDeleted    (孤立出的 3 将被内存回收)
-```
+<Term def="节点作为对象的地址、生命周期和被外部引用的身份，而不只是它当前保存的值。">物理节点身份</Term>发生两种变化：持有`target`的外部指针仍有效，但看到的值改变；持有`target->next`原后继的外部指针在删除后悬空。接口必须明确链表节点是否允许外部长期引用。
 
-#### 边界情况与局限性
-1.  **待删除节点是尾节点**：尾节点没有后继节点，无法使用值复制。我们只能退回传统做法，从头节点开始正向遍历找到其前驱节点，然后再执行删除。这一特殊操作的时间复杂度是 $O(n)$。
-2.  **链表仅有一个节点（既是头节点又是尾节点）**：直接释放该节点，并必须将外部引用的头指针设为 `nullptr` / `null`。
-3.  **摊还时间复杂度分析**：对于一个长度为 $n$ 的链表，我们删除前 $n-1$ 个非尾节点均可在 $O(1)$ 时间内完成，只有删除尾节点这 1 种情况需要 $O(n)$ 时间。摊还到每次操作的平均耗时为：
-    
-    $$\frac{(n - 1) \times O(1) + 1 \times O(n)}{n} = O(1)$$
-    
-    因此，平均时间复杂度仍然是 $O(1)$。
+<Callout type="trap" title="题目说删除target，就认为target地址一定失效">
+非尾分支保留target对象、释放后继对象。若测试只断言`target`不能再访问，会与算法真实契约冲突；应比较链表逻辑序列，并单独验证身份限制。
+</Callout>
 
----
+## 尾节点为何仍要顺序查找
 
-### 2. 在排序链表中彻底删除重复节点
+尾节点`next`为空，没有后继内容可复制，也没有可绕过的后继对象。要让链表不再指向它，必须修改前驱的`next`；在单向链表中只能从头沿链查找，时间`O(n)`。因此“**尾节点需要顺序查找**”是不可省略的特例。
 
-在一个已排好序的单向链表中，重复的元素在物理上必然是相邻的。要实现彻底去重（即如果 `2` 重复，则把所有值为 `2` 的节点全部删除，例如 `1->2->2->3` 变为 `1->3`），我们需要以下两个核心武器：
+若链表只有一个节点，目标同时是头和尾，不需要扫描前驱：释放目标并把头指针设为空即可。若删除多节点链表的头，头不是尾，可走常数分支：把第二个节点内容复制到头并释放第二个对象，头地址保持不变。
 
-1.  **哨兵虚拟头节点（Sentinel Dummy Node）**：
-    如果重复节点恰好发生在头部（例如 `1->1->2->3`），头节点 `1` 本身需要被删除。若没有哨兵，我们需要在函数内写极其臃肿的分支来更新头指针。使用一个辅助的 `dummy` 节点（`dummy->next = head`）可以将原头节点转化为普通节点，**统一所有的删除逻辑**。
-    
-2.  **双指针联动扫描**：
-    *   `pre` 指针指向当前已经确认为“不重复”的最末尾节点。
-    *   `cur` 指针负责向后扫描和对比。
-    *   一旦检测到 `cur.val === cur.next.val`，就记录该值，并启动内层循环让 `cur` 不断后移，直到跳过所有等于该值的节点。最后通过 `pre.next = cur` 一举绕过这批重复节点。
+<DeleteNodeCaseMap />
 
-## 交互 Demo
+作者接收`ListNode** pListHead`，因为单节点删除会改变调用者持有的头指针。现代 C++ 也可使用`ListNode*& head`；若只按值传`ListNode* head`，函数把本地变量设为空不会更新调用者。
 
-点击切换选项，以单步调试方式观察 $O(1)$ Deletion 与重复节点删除（Bypass & Cleanup）的指针指向与内存区域的变化：
+## 忠实实现三个删除分支
 
-<DeleteNodeDiagram />
+下面保留作者的裸指针结构，并把返回值改成布尔状态。它仍有一个核心前置条件：`target`必须属于`head`所指链表。非尾分支若先做线性归属验证，就会失去`O(1)`优势。
 
-## 代码对照
-
-### 核心实现 A：$O(1)$ 时间删除指定节点
-在 C++ 实现中，值复制完后，需要手动 `delete` 孤立出的后继节点指针以防内存泄漏；而 TypeScript 依赖 V8 的垃圾回收（GC）机制，只需将孤立节点的 `next` 指向置空，使其变成不可达对象即可。
-
-<CodeTabs>
-  <Tab label="C++ (O(1) 删除)">
 ```cpp
 struct ListNode {
-    int m_nValue;
-    ListNode* m_pNext;
-    ListNode(int val) : m_nValue(val), m_pNext(nullptr) {}
+    int value;
+    ListNode* next = nullptr;
 };
 
-class Solution {
-public:
-    void DeleteNode(ListNode** pListHead, ListNode* pToBeDeleted) {
-        if (pListHead == nullptr || *pListHead == nullptr || pToBeDeleted == nullptr) {
-            return;
-        }
+bool deleteKnownNode(ListNode*& head, ListNode* target) {
+    if (head == nullptr || target == nullptr) return false;
 
-        // 1. 待删除节点不是尾节点：使用 O(1) 的值复制法
-        if (pToBeDeleted->m_pNext != nullptr) {
-            ListNode* pNext = pToBeDeleted->m_pNext;
-            pToBeDeleted->m_nValue = pNext->m_nValue;
-            pToBeDeleted->m_pNext = pNext->m_pNext;
-
-            // 物理上释放原来后继节点的内存
-            delete pNext;
-            pNext = nullptr;
-        }
-        // 2. 链表只有一个节点，且待删除节点即为头节点
-        else if (*pListHead == pToBeDeleted) {
-            delete pToBeDeleted;
-            pToBeDeleted = nullptr;
-            *pListHead = nullptr;
-        }
-        // 3. 待删除节点是尾节点，且链表有多个节点：退化为 O(n) 遍历找到前驱
-        else {
-            ListNode* pNode = *pListHead;
-            while (pNode->m_pNext != pToBeDeleted) {
-                pNode = pNode->m_pNext;
-            }
-
-            pNode->m_pNext = nullptr;
-            delete pToBeDeleted;
-            pToBeDeleted = nullptr;
-        }
-    }
-};
-```
-  </Tab>
-  <Tab label="TypeScript (O(1) 删除)">
-```typescript
-class ListNode {
-    val: number;
-    next: ListNode | null = null;
-    constructor(val: number) {
-        this.val = val;
-    }
-}
-
-function deleteNode(head: ListNode | null, toBeDeleted: ListNode | null): ListNode | null {
-    if (!head || !toBeDeleted) {
-        return head;
+    if (target->next != nullptr) {
+        ListNode* successor = target->next;
+        target->value = successor->value;
+        target->next = successor->next;
+        delete successor;
+        return true;
     }
 
-    // 1. 待删除节点不是尾节点：值复制
-    if (toBeDeleted.next !== null) {
-        const nextNode = toBeDeleted.next;
-        toBeDeleted.val = nextNode.val;
-        toBeDeleted.next = nextNode.next;
-        nextNode.next = null; // 切断引用，辅助 JS 垃圾回收 (GC)
-    } 
-    // 2. 链表只有一个节点，且该节点为待删除节点
-    else if (head === toBeDeleted) {
-        head = null;
-    } 
-    // 3. 待删除节点是尾节点且链表有多个节点：退化为 O(n) 搜索前驱
-    else {
-        let curr = head;
-        while (curr.next !== null && curr.next !== toBeDeleted) {
-            curr = curr.next;
-        }
-        if (curr.next === toBeDeleted) {
-            curr.next = null;
-        }
+    if (head == target) {
+        delete target;
+        head = nullptr;
+        return true;
     }
-    return head;
+
+    ListNode* predecessor = head;
+    while (predecessor != nullptr &&
+           predecessor->next != target) {
+        predecessor = predecessor->next;
+    }
+    if (predecessor == nullptr) return false;
+
+    predecessor->next = nullptr;
+    delete target;
+    return true;
 }
 ```
-  </Tab>
-</CodeTabs>
 
-### 核心实现 B：删除已排序链表中的重复节点
-以下是彻底去重（即不保留重复数，例如 `1->2->2` 变为 `1`）的完整逻辑对照：
+尾分支循环加入`predecessor != nullptr`检查，避免不属于链表的尾目标让程序解引用空指针。但非尾外部目标仍可能有自己的后继，函数会错误修改并释放外部结构；“已知属于链表”必须是可信调用契约，或由更高层句柄系统保证。
 
-<CodeTabs>
-  <Tab label="C++ (删除重复节点)">
+若必须接受不可信裸指针，先从头验证归属再删除，所有情况最坏`O(n)`。工程 API 可以不暴露节点指针，改用迭代器/句柄由容器验证版本与所有者，或让调用方同时提供前驱指针；复杂度、易用性与安全性需要明确取舍。
+
+## 平均 O(1) 不是每次 O(1)
+
+长度`n`链表有`n-1`个非尾节点可常数删除，只有一个尾节点需要`O(n)`扫描。若目标在所有节点中等概率随机选择，一次删除期望代价约为：
+
+`((n-1)·O(1) + O(n)) / n = O(1)`。
+
+这就是书中“**平均时间复杂度O(1)**”的结论。它是对目标分布的平均分析，不是摊还分析，也不是单次最坏保证。若业务总删除尾节点，每次仍是`O(n)`；不能用平均结论掩盖特定工作负载。
+
+<Term def="在明确输入或目标概率分布下，对单次操作成本取期望得到的复杂度。">平均时间复杂度</Term>依赖等概率或相近分布假设。摊还复杂度则不要求概率，分析任意操作序列的总代价；两者概念不同。
+
+<Callout type="trap" title="把平均O(1)写成任意节点最坏O(1)">
+尾节点没有后继可复制，单向链表又没有前驱链接，必须扫描。只有修改数据结构为双向链表、同时给前驱，或接受不同删除语义，才能改变该最坏边界。
+</Callout>
+
+## 值复制与异常安全限制
+
+作者节点值是`int`，赋值不会抛异常。泛型节点若保存`std::string`、资源对象或不可复制类型，`target->value = successor->value`可能昂贵、抛异常或根本无法编译。算法的“常数节点访问”不代表值复制成本一定`O(1)`。
+
+若赋值抛出但目标值部分改变，链表可能仍连接却内容损坏。可先构造临时值，再用无异常交换提交，但类型仍需提供合适保证；移动后继值可能让异常前的后继处于已移动状态。容器通用实现通常不会用这种技巧提供强异常保证。
+
+以下`unique_ptr`版本能让后继释放自动发生，但仍改变目标身份并要求值可赋值：
+
 ```cpp
-class Solution {
-public:
-    void DeleteDuplication(ListNode** pHead) {
-        if (pHead == nullptr || *pHead == nullptr) {
-            return;
-        }
+#include <memory>
 
-        // 创建哨兵虚拟头节点，其 next 指向原始头节点
-        ListNode* pDummy = new ListNode(-1);
-        pDummy->m_pNext = *pHead;
-
-        ListNode* pPrev = pDummy;
-        ListNode* pCurr = *pHead;
-
-        while (pCurr != nullptr) {
-            // 判断当前节点是否与下一节点值重复
-            if (pCurr->m_pNext != nullptr && pCurr->m_nValue == pCurr->m_pNext->m_nValue) {
-                int value = pCurr->m_nValue;
-                // 循环跳过所有重复节点，并手动 delete 物理释放其内存
-                while (pCurr != nullptr && pCurr->m_nValue == value) {
-                    ListNode* pToBeDeleted = pCurr;
-                    pCurr = pCurr->m_pNext;
-                    delete pToBeDeleted;
-                }
-                // 前驱节点跳过这一批重复点，指向第一个不重复的新节点
-                pPrev->m_pNext = pCurr;
-            } else {
-                pPrev = pCurr;
-                pCurr = pCurr->m_pNext;
-            }
-        }
-
-        // 重新赋值头指针，并清理哨兵节点
-        *pHead = pDummy->m_pNext;
-        delete pDummy;
-    }
+struct OwnedNode {
+    int value;
+    std::unique_ptr<OwnedNode> next;
 };
-```
-  </Tab>
-  <Tab label="TypeScript (删除重复节点)">
-```typescript
-function deleteDuplication(head: ListNode | null): ListNode | null {
-    if (!head) {
-        return null;
+
+bool deleteNonTail(OwnedNode* target) {
+    if (target == nullptr || target->next == nullptr) return false;
+    target->value = target->next->value;
+    target->next = std::move(target->next->next);
+    return true;
+}
+
+bool deleteTail(std::unique_ptr<OwnedNode>& head,
+                OwnedNode* target) {
+    auto* link = &head;
+    while (*link != nullptr && link->get() != target) {
+        link = &((*link)->next);
     }
-
-    // 创建虚拟头节点，避免繁重的头节点删除特判逻辑
-    const dummy = new ListNode(-1);
-    dummy.next = head;
-
-    let pre = dummy;
-    let cur = head;
-
-    while (cur !== null) {
-        if (cur.next !== null && cur.val === cur.next.val) {
-            const duplicateVal = cur.val;
-            // 循环跳过所有值等于 duplicateVal 的节点
-            while (cur !== null && cur.val === duplicateVal) {
-                cur = cur.next;
-            }
-            // 前驱的 next 直接越过这一批重复节点
-            pre.next = cur;
-        } else {
-            // 无重复，正常平移指针
-            pre = cur;
-            cur = cur.next;
-        }
-    }
-
-    return dummy.next;
+    if (*link == nullptr) return false;
+    *link = std::move((*link)->next);
+    return true;
 }
 ```
-  </Tab>
-</CodeTabs>
 
-## 常见误区
+`link`指向拥有当前节点的`unique_ptr`，找到目标后把它替换为其后继即可；这种“指向链接的指针”还能统一删除头与其他节点。若目标是尾，仍需从头遍历所有权链。
 
-<Callout type="trap">
-  <strong>现象 →</strong> 在 C++ 中执行 $O(1)$ 删除后，检测到内存泄漏。
-  <strong>原因 →</strong> 在“值复制”删除中，物理上真正从链表中剔除的是原待删除节点的后继节点（`pNext`）。如果仅修改了指针连接（`toBeDeleted->next = pNext->next`）而忘记调用 <code>delete pNext</code>，则这块被孤立的后继节点内存将无法被回收，引发内存泄漏。
-  <strong>修复 →</strong> 必须使用临时指针保存后继节点，在修改完指针和数值之后，明确执行 <code>delete pNext</code>。
-</Callout>
+## 并发、迭代器与外部观察者
 
-<Callout type="trap">
-  <strong>现象 →</strong> 试图对尾节点直接套用“值复制法”，程序发生空指针解引用崩溃（Segment Fault）。
-  <strong>原因 →</strong> 尾节点的后继为 <code>nullptr</code>。直接执行 <code>toBeDeleted.val = nextNode.val</code> 会触发 <code>nullptr.val</code>，从而崩溃。
-  <strong>修复 →</strong> 必须做好前置检查：若 <code>toBeDeleted.next === null</code>，则必须走尾节点特判，通过遍历前驱节点完成 $O(n)$ 时间的常规删除。
-</Callout>
+在另一个线程可能遍历或修改链表时，复制值、改指针和释放节点不是原子事务。读线程可能看到新值与旧后继组合，或访问已释放后继。必须使用锁、读复制更新、危险指针等并发回收机制；算法题裸指针版本不是线程安全容器。
 
-<Callout type="trap">
-  <strong>现象 →</strong> 外部多个对象持有了被删后继节点的指针（野指针）。
-  <strong>原因 →</strong> “值复制”方式改变了节点的物理内存归属。在外部看来，原先节点 3 被物理释放了，但实际上外部可能仍持有着指向旧节点 3 地址的引用，这会导致 dangling pointer 风险。
-  <strong>修复 →</strong> 如果在复杂系统中有其他强引用指向各个节点，或者节点具有“地址唯一性约束”，则严禁使用值复制法，只能采用常规 $O(n)$ 双指针遍历前驱法删除。
-</Callout>
+即使单线程，指向后继的迭代器会失效，指向目标的迭代器继续有效但元素值改变。这与标准容器通常描述的失效规则不同。若调用方依赖“只使被删节点迭代器失效”，本技巧违背预期。
 
-## 小结与练习
+节点包含从值派生的缓存字段时，复制主值后也要同步更新所有不变量。只复制`value`而遗漏哈希、时间戳或索引键，会留下内部不一致。安全前提不只是“值可复制”，还包括“完整逻辑内容可替换”。
 
-- **值复制法** 可以把删除非尾单链表节点的时间复杂度优化到 $O(1)$，但对于尾节点需要特殊处理，均摊复杂度仍为 $O(1)$。
-- **哨兵虚拟头节点** 是链表处理中应对“头节点可能被删除/修改”最行之有效的通用武器，可使逻辑实现高度统一。
-- 在已排序链表去重问题中，使用 **双指针联动** 一次正向遍历即可在 $O(n)$ 时间和 $O(1)$ 空间内删除所有多余的重复节点。
+## 怎样获得真正任意节点最坏 O(1)
+
+若每个节点同时保存`prev`和`next`，双向链表可直接让`target->prev->next`与`target->next->prev`互相连接，再释放`target`；头尾通过哨兵或边界分支处理，任意已知节点物理删除都是最坏`O(1)`。代价是每节点多一个指针，插入删除要维护更多不变量。
+
+单向链表也可让删除 API 同时接收前驱与目标，或让迭代器内部持有“指向当前链接的指针”。调用方若已经在遍历中拥有前驱，删除就是常数；若只有目标，寻找前驱的成本只是被移到调用方，整体仍可能线性。
+
+尾指针只能让访问尾节点为`O(1)`，不能让单向尾删除变快，因为仍不知道倒数第二个节点。维护尾指针与前驱缓存、哈希映射或数组索引都能增加信息，但更新每次链表变更的成本和一致性风险也要计入。
+
+使用哨兵头节点可以统一“删除真实头”和普通节点的链接操作，却仍不能从目标反向找到前驱。哨兵减少边界分支，不改变信息可达性；不能把代码更短误解为复杂度更低。
+
+所以题目的技巧是在不改数据结构、只给目标指针的限制下，用身份替换覆盖`n-1`个非尾位置。若需求明确要求销毁目标物理对象，应选择双向链表或提供前驱，而不是继续包装复制后继方案。
+
+## 按值删除与按节点删除是不同接口
+
+若调用方只给一个值`3`而不是节点指针，函数还要从头查找匹配节点，时间已经是`O(n)`；存在重复值时还要约定删第一个、全部还是指定身份。本题常数技巧依赖调用者已经拥有准确节点地址。
+
+若节点句柄可能过期，可为容器分配所有者ID和版本号，删除前校验句柄仍属于当前链表。裸指针无法在对象释放后安全读取这些元数据；句柄表或代际索引能检测陈旧引用，但增加一次间接访问。
+
+返回状态也应区分空输入、目标不属于链表、已删除和不支持身份替换。单一`bool`足够演示，却无法告诉调用方失败原因；生产接口可使用枚举错误，并在调试构建中做线性归属验证。
+
+当复制技巧与普通物理删除都可用时，API 不应根据节点位置悄悄改变外部失效规则。可以明确命名`eraseValueAtKnownNode`，或始终走普通删除保持统一身份语义；可预测性往往比少一次线性扫描更重要。
+
+## 用内存工具验证释放对象
+
+测试值序列只能发现链接错误，不能发现重复释放、泄漏或悬空访问。地址消毒器能捕获删除后解引用原后继，泄漏检测能发现尾分支未释放；未定义行为检测器可暴露无效指针运算。测试结束还要销毁剩余链表，避免夹具自身泄漏干扰结果。
+
+调试分配器可在释放对象上填充特殊模式，使“代码看似还能读取旧值”的悬空错误更快暴露。绝不能以一次运行中已删除地址仍显示4作为安全证据；释放后对象生命周期已经结束，任何解引用都无定义。
+
+若链表可能有环，常规销毁与尾查找都可能不终止。题目假设无环单向链表；接收外部结构时可先检测环或由容器封装保证，不能让删除函数同时承担所有结构修复责任。
+
+## 官方五类测试与身份断言
+
+作者构造`1→2→3→4→5`，分别删除中间3、尾5、头1；再测试单节点删除和空链表。预期逻辑序列分别为`1,2,4,5`、`1,2,3,4`、`2,3,4,5`、空、空。
+
+自动测试还应记录地址：删除中间3后原`target`地址仍在链表，值变4；原后继地址不再可用。不要解引用已删除指针，可在删除前保存地址数值，仅比较链表当前节点地址集合中不再包含它。
+
+```cpp
+#include <cassert>
+#include <vector>
+
+std::vector<int> values(const ListNode* head) {
+    std::vector<int> result;
+    for (auto* node = head; node != nullptr; node = node->next) {
+        result.push_back(node->value);
+    }
+    return result;
+}
+
+void testDeleteNode() {
+    auto* n1 = new ListNode{1};
+    auto* n2 = new ListNode{2};
+    auto* n3 = new ListNode{3};
+    auto* n4 = new ListNode{4};
+    auto* n5 = new ListNode{5};
+    n1->next=n2; n2->next=n3; n3->next=n4; n4->next=n5;
+
+    ListNode* head = n1;
+    assert(deleteKnownNode(head, n3));
+    assert((values(head) == std::vector<int>{1,2,4,5}));
+    assert(n3->value == 4);
+
+    assert(deleteKnownNode(head, n5));
+    assert((values(head) == std::vector<int>{1,2,4}));
+
+    assert(deleteKnownNode(head, head));
+    assert((values(head) == std::vector<int>{2,4}));
+}
+```
+
+测试代码要按当前链表销毁剩余节点，避免把算法正确性与测试泄漏混在一起。还应覆盖空目标、目标不属于链表的尾节点、单节点头删除，以及带自引用或环的非法链表；后两类需由契约拒绝，否则顺序查找可能不终止。
+
+<DeleteNodeCaseLab />
+
+<Stepper>
+  <Step title="先判断目标是否有后继"><SuccessorCopyDeleteDiagram />非尾节点复制后继内容并删除后继，常数次指针和值操作。</Step>
+  <Step title="无后继时区分单节点和尾节点"><DeleteNodeCaseMap />单节点更新头为空，多节点尾部从头找前驱。</Step>
+  <Step title="核对物理节点身份变化"><NodeIdentityImpactDiagram />target地址保留但值改变，successor地址被释放，外部引用契约必须允许。</Step>
+  <Step title="用五类官方位置回归"><DeleteNodeCaseLab />中间、尾、头、单节点和空链表覆盖全部分支。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 在O(1)时间删除链表节点只对有后继的目标成立。
+2. 非尾分支复制下一个节点内容，绕过并释放后继对象。
+3. 该技巧实现逻辑删除，target物理地址保留、后继物理对象被销毁。
+4. 尾节点需要顺序查找前驱，多节点尾删除最坏`O(n)`。
+5. 单节点删除必须更新调用者头指针，因此入口需传头指针引用或二级指针。
+6. 等概率目标假设下平均时间复杂度O(1)，但特定尾删除工作负载仍是线性。
+7. 目标必须属于链表，节点值必须允许完整、异常安全地替换。
+8. 外部引用、节点身份、并发回收或不可复制资源存在时，应使用普通前驱删除。
 
 <Exercises>
-  <Answer question="如果要删除一个无序的单链表中的重复元素（仅保留重复项的第一个），时空限制不同时有什么好办法？">
-    - **方案一（时间优先）**：使用 HashSet 存储已遍历过的值。遍历链表时若当前值在集合中已存在，则将该节点删除；否则加入集合。时间复杂度 $O(n)$，空间复杂度 $O(n)$。
-    - **方案二（空间优先）**：使用双重循环。外层循环遍历节点，内层循环在后继链条中搜索并剔除所有与外层节点值相同的项。时间复杂度 $O(n^2)$，空间复杂度 $O(1)$。
-  </Answer>
-  <Answer question="为什么在双向链表（Doubly Linked List）中，删除给定任意节点不需要“值复制法”也可以做到天生全场景 O(1)？">
-    因为双向链表的每个节点本身都持有前驱 `prev` 和后继 `next`。给定任意节点 `node`，我们可以直接在常数时间内通过 `node->prev` 获取到它的前驱，然后修改 `node->prev->next = node->next`，并更新 `node->next->prev = node->prev`，不需遍历，也不存在尾节点必须依赖头指针来查找前驱的限制，所以是天然全场景 $O(1)$ 的。
-  </Answer>
+
+**问题 1：为什么非尾节点不需要找到前驱？**
+
+<Answer>算法不让前驱绕过target，而是把后继的值和next复制到target，再删除后继。前驱仍指向同一个target地址，但链表值序列中原target值已经消失，因此只访问两个相邻节点。</Answer>
+
+**问题 2：为什么尾节点不能使用同一技巧？**
+
+<Answer>尾节点没有后继可复制，也没有后继可释放。要从链表断开它必须修改前驱next；单向节点没有前驱指针，只能从head顺序寻找。</Answer>
+
+**问题 3：平均O(1)结论依赖什么假设？**
+
+<Answer>长度n的链表只有一个尾节点代价O(n)，其余n减1个节点代价O(1)。只有目标在各节点间近似等概率时，期望成本除以n为O(1)；经常删尾不满足该假设。</Answer>
+
+**问题 4：哪些节点类型不适合复制后继删除？**
+
+<Answer>节点地址或唯一身份被外部观察、值不可复制或赋值会破坏异常保证、节点持有锁和资源、派生字段不能完整替换时都不适合。应取得前驱并物理删除目标对象。</Answer>
+
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="值复制法">
-    在单向链表删除节点时，由于不知道前驱节点指针，将后继节点的值复制给自己，并将 next 指针修改为后继的后继，从而在逻辑上达成删除自身效果的高效方案。详见「概念讲解 1」节。
-  </GlossaryItem>
-  <GlossaryItem term="哨兵虚拟头节点">
-    在单链表头节点前建立的临时辅助节点。通过 dummy.next = head，将对头节点的各种特殊边界（如头节点被删除、为空等）统一归纳为普通节点的常规遍历修改。详见「概念讲解 2」节。
-  </GlossaryItem>
-  <GlossaryItem term="摊还时间复杂度">
-    一种通过对一系列操作的总开销求平均值，来评估算法在最坏情况下平均单次操作时间消耗的分析手段。详见「概念讲解 1」节。
-  </GlossaryItem>
-  <GlossaryItem term="野指针 (Dangling Pointer)">
-    指向已经被删除、释放或已被重新分配的无效堆内存地址的指针。在 C++ 中对其解引用会导致未定义行为或崩溃。详见「常见误区」节。
-  </GlossaryItem>
+  <GlossaryItem term="单向链表">节点只保存后继链接、不能直接访问前驱的链式结构。</GlossaryItem>
+  <GlossaryItem term="前驱节点">next指向当前节点的上一节点。</GlossaryItem>
+  <GlossaryItem term="逻辑删除">让目标值从抽象序列消失，但实际释放的可能是另一物理对象。</GlossaryItem>
+  <GlossaryItem term="物理节点身份">节点地址、生命周期及外部引用所观察的对象身份。</GlossaryItem>
+  <GlossaryItem term="平均时间复杂度">在明确目标概率分布下对单次成本取期望得到的复杂度。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+  adaptedFrom="《剑指Offer（第2版）》面试题18（一）及何海涛官方源码 DeleteNodeInList.cpp"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/18_01_DeleteNodeInList/DeleteNodeInList.cpp"
 />

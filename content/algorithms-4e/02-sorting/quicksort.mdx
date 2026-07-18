@@ -1,0 +1,278 @@
+---
+title: "2.3 Quicksort：随机切分、性能边界与熵最优三向排序"
+type: B
+section: "排序"
+order: 7
+description: "按官方2.3重建随机打乱、双向切分不变量、递归正确性、平均与最坏性能、实现陷阱、三向切分和熵最优排序。"
+demo: true
+math: true
+sourceUrl: "https://algs4.cs.princeton.edu/23quicksort/"
+draft: false
+---
+
+import { Algs4RandomShuffleMap, Algs4TwoWayPartitionLab, Algs4QuickRecursionDiagram, Algs4QuickPerformanceLab, Algs4EqualKeysPolicyLab, Algs4ThreeWayPartitionLab, Algs4EntropyOptimalLab } from "@/components/mdx/algorithms-4e/diagrams/quicksort";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释random shuffling如何把任意输入转成可分析的随机pivot序列
+- 能计算two-way partition的扫描边界、pivot最终rank、平均比较与最坏递归成本
+- 能实现标准quicksort、quickselect、small-array cutoff和Dijkstra three-way partition
+- 能分析越界scan、equal-key policy、未排除pivot、退化栈与非随机subarray等陷阱
+- 能设计覆盖permutation、partition invariant、随机seed、重复分布和entropy的验收
+
+</Objectives>
+
+## 从“第一个元素碰巧是最小值”开始
+
+快速排序（<Term def="以pivot切分区间，把pivot放入最终位置并递归排序两侧subarrays的原地divide-and-conquer排序。">快速排序</Term>，quicksort）把大部分工作放在递归前的partition，而归并排序把大部分工作放在递归后的merge。若每次pivot接近中位数，递归树浅且每层线性；若每次pivot都是minimum，问题只缩短一项，比较量变成平方级。
+
+先预测输入已升序时，直接把首项作为pivot会发生什么。每轮pivot都是minimum，左区为空、右区只少一个元素，递归深度接近N。官方 `Quick.sort` 因此先做随机打乱（<Term def="在排序前均匀随机排列array，使每个subarray首项相对其items可视为随机pivot。">随机打乱</Term>，random shuffling），让性能不再受外部输入顺序支配。
+
+官方2.3覆盖 **Basic algorithm、Partitioning、Implementation details、Performance characteristics、Improvements、Visualization、Entropy-optimal sorting**。Quicksort受欢迎是因为原地、inner loop短、平均N log N，但它的保证是随机概率模型下的平均行为，不是mergesort式worst-case bound。
+
+<Algs4RandomShuffleMap />
+
+## 2.3.1 Basic algorithm：shuffle、partition、排除pivot
+
+标准流程先shuffle整数组，再排序closed interval `a[lo..hi]`。Partition返回j并保证pivot已在最终rank；递归只能处理 `lo..j-1` 和 `j+1..hi`，必须排除j。
+
+```java
+public static void sort(Comparable[] a) {
+    StdRandom.shuffle(a);
+    sort(a, 0, a.length - 1);
+}
+
+private static void sort(Comparable[] a, int lo, int hi) {
+    if (hi <= lo) return;
+    int j = partition(a, lo, hi);
+    sort(a, lo, j - 1);
+    sort(a, j + 1, hi);
+    assert isSorted(a, lo, hi);
+}
+```
+
+正确性用partition postcondition归纳：`a[j]` 已在最终位置；左侧没有大于它的key，右侧没有小于它的key；recursive calls分别把两侧排好后，全区间非降且permutation不变。Termination依赖partition每次固定至少一个位置并从两个children排除它。
+
+Preserving randomness也属于proof premise。Uniform shuffle后，subarray保留相对随机顺序；使用首项pivot等价于从该subarray均匀选pivot。另一设计是在每次partition中随机选一个index并与lo交换，但不能既省略shuffle又永远使用可被输入控制的首项，还宣称相同平均保证。
+
+## 2.3.2 Partitioning：双向扫描与交叉点
+
+切分（<Term def="围绕pivot重排a[lo..hi]，使pivot到最终位置j、左侧不大于它且右侧不小于它的操作。">切分</Term>，partitioning）使用 `v=a[lo]`、left scan i和right scan j。Left寻找大于等于v的item，right寻找小于等于v的item；未交叉时两者都处于错误侧，交换后继续。
+
+```java
+private static int partition(Comparable[] a, int lo, int hi) {
+    int i = lo;
+    int j = hi + 1;
+    Comparable v = a[lo];
+
+    while (true) {
+        while (less(a[++i], v))
+            if (i == hi) break;
+        while (less(v, a[--j]))
+            if (j == lo) break;
+
+        if (i >= j) break;
+        exch(a, i, j);
+    }
+    exch(a, lo, j);
+    return j;
+}
+```
+
+<Algs4TwoWayPartitionLab />
+
+Loop过程中，`a[lo+1..i-1]` 都不大于pivot，`a[j+1..hi]` 都不小于pivot，i到j之间尚未分类。Pointers交叉时，j是left side最右位置；把pivot与 `a[j]` 交换后，pivot final，三段postcondition成立。
+
+Bounds很微妙。若pivot是largest，left scan可一直走到hi，必须有right boundary check；right scan有 `a[lo]` 作为sentinel，官方仍保留说明性boundary logic。Empty/single interval在调用partition前被base case挡住。把closed和half-open intervals混用，常导致读取 `a[hi+1]` 或漏掉最后项。
+
+<Callout type="trap" title="递归时把pivot位置再次包含进去">
+若partition在pivot为minimum时返回lo，却递归调用 `sort(lo, j)` 或 `sort(j, hi)`，其中一个child与parent完全相同，递归不会收缩。正确children是 `lo..j-1` 与 `j+1..hi`，pivot已完成且必须排除。
+</Callout>
+
+## 2.3.3 Equal keys：扫描要停，不是跳过
+
+双向partition遇到equal pivot key时，两侧scan都应停止，必要时交换两个equal items。看似多余，却能让大量相等keys时partition保持平衡。若left scan越过所有equal keys，all-equal input每次会切成0与N-1，重现平方级退化。
+
+<Algs4EqualKeysPolicyLab />
+
+官方标准two-way版本在N个all-equal items上约做N lg N compares，因为i与j从两端相向停止，subproblems近乎均分；但它仍反复递归处理equal items。Three-way版本会在一次linear pass后把整个equal band完成，因此可进一步降到linear。
+
+Quicksort通常不稳定。Partition的远距离exchanges可让equal records跨越；shuffle本身也打乱equal identity order。若业务要求stable，不应只修改一个tie branch后宣称完成，必须重新设计partition或保留原index作secondary key，并重新评估space与comparison contract。
+
+<Callout type="trap" title="让scan跳过所有equal keys">
+在distinct sample上“strict还是non-strict”可能看不出差异，但重复键是quicksort的核心边界。测试必须包含all equal、两个distinct values、skewed frequencies和附带identity labels的equal records，并记录每次partition sizes。
+</Callout>
+
+## 2.3.4 Performance characteristics：平均快，最坏仍平方
+
+性能特征（<Term def="quicksort在随机排列模型下的平均比较、交换和方差，以及极端pivot序列下worst-case成本。">性能特征</Term>，performance characteristics）来自pivot rank递归。对distinct keys，官方命题给出平均比较：
+
+$$
+\mathbb E[C_N]\sim 2N\ln N
+$$
+
+平均exchanges约为compares的六分之一。Standard deviation约为 `0.65N`，相对N log N平均值随N增长而减小，因此大N运行时间通常集中在平均附近。Random shuffle使特定外部排列不能稳定触发坏pivot链，但随机事件仍不是形式上的worst-case elimination。
+
+<Algs4QuickPerformanceLab />
+
+最坏情况下每次只固定一个extreme pivot：
+
+$$
+C_{\mathrm{worst}}(N)
+=(N-1)+(N-2)+\cdots+1
+=\frac{N(N-1)}{2}
+$$
+
+相应recursion stack也可能达到Theta(N)，不仅慢，还可能stack overflow。平衡切分则满足：
+
+$$
+T(N)=2T(N/2)+\Theta(N)=\Theta(N\log N)
+$$
+
+<Algs4QuickRecursionDiagram />
+
+“In-place”指partition不分配N-length copy；recursive stack仍是auxiliary space。Average stack depth为Theta(log N)，worst为Theta(N)。生产实现可先递归较小partition、对较大partition用loop继续，把stack depth控制到log N，即使时间仍可能平方。
+
+## 2.3.5 Improvements、visualization与selection
+
+官方列出两类常见改进。第一，对size 5到15附近的小subarray切换insertion sort，减少recursive overhead；cutoff要按system benchmark。第二，用lo、middle、hi三项的median作为pivot，通常改善partition quality，但要支付sample comparisons。Current `QuickX` 使用median-of-three与cutoff 8。
+
+Visualization应显示pivot、i/j scans、已分类边界、交换和递归区间，而不只展示柱高。真正有诊断价值的trace会检查每次partition后：
+
+1. j落在lo到hi；
+2. 左侧所有keys不大于pivot；
+3. 右侧所有keys不小于pivot；
+4. frequency map与调用前一致；
+5. child intervals严格小于parent。
+
+`Quick.select(a,k)` 复用partition，只沿包含rank k的一侧继续，因此randomized average time linear：
+
+```java
+while (hi > lo) {
+    int j = partition(a, lo, hi);
+    if      (j > k) hi = j - 1;
+    else if (j < k) lo = j + 1;
+    else            return a[j];
+}
+return a[lo];
+```
+
+Select会shuffle并重排array，contract返回第k小key，不保证其他items全局sorted。K必须落在0到N-1；只验证返回value而不验证rank partition，可能漏掉duplicates或boundary bug。
+
+## 2.3.6 Three-way quicksort：一次消除equal band
+
+三向切分快速排序（<Term def="把区间一次划分为小于、等于和大于pivot三段，只递归两侧的quicksort变体。">三向切分快速排序</Term>，three-way quicksort）解决重复keys。Dijkstra Dutch National Flag loop维护四段：
+
+- `a[lo..lt-1]` 小于v；
+- `a[lt..i-1]` 等于v；
+- `a[i..gt]` 未检查；
+- `a[gt+1..hi]` 大于v。
+
+```java
+int lt = lo;
+int gt = hi;
+Comparable v = a[lo];
+int i = lo + 1;
+
+while (i <= gt) {
+    int cmp = a[i].compareTo(v);
+    if      (cmp < 0) exch(a, lt++, i++);
+    else if (cmp > 0) exch(a, i, gt--);
+    else              i++;
+}
+sort(a, lo, lt - 1);
+sort(a, gt + 1, hi);
+```
+
+<Algs4ThreeWayPartitionLab />
+
+Greater case与gt交换后不能增加i，因为换入 `a[i]` 的item尚未检查；less case交换的是equal region开头，交换后该equal item进入新equal band，所以lt与i都前进。Loop结束时unknown为空，整个equal band已经final，不再递归。
+
+## 2.3.7 Entropy-optimal sorting：成本随信息量下降
+
+熵最优排序（<Term def="对重复key frequency distribution达到comparison information lower bound同阶的三向快速排序性质。">熵最优排序</Term>，entropy-optimal sorting）不应把64个只有两种key的items当64个distinct ranks处理。若第r种key频率为f_r、概率为p_r，frequency entropy为：
+
+$$
+H=-\sum_r p_r\log_2 p_r,
+\qquad p_r=\frac{f_r}{N}
+$$
+
+区分multiset arrangements需要的信息量为Theta(NH)加线性项。All equal时H等于0，一次scan即可；keys接近all distinct时H接近lg N，回到N lg N。三向quicksort让equal band不再进入children，因此其比较成本对该distribution达到熵下界同阶。
+
+<Algs4EntropyOptimalLab />
+
+“Entropy-optimal”不是stable，也不是worst-case linear；它描述重复key distribution下的comparison efficiency。仍需randomization防止distinct或skewed partitions被输入顺序操控，还要明确comparator equivalence与object equality不是同一概念：`compareTo` 返回0的records属于同一key class。
+
+## 统一验收：从随机性到重复键分布
+
+<Stepper>
+  <Step title="固定seed验证uniform shuffle边界">
+    <Algs4RandomShuffleMap />
+    检查输出permutation、seed可重放，并用多seed观察pivot ranks而非只跑一次。
+  </Step>
+  <Step title="逐帧验证two-way partition">
+    <Algs4TwoWayPartitionLab />
+    每次scan和exchange后核对左右已分类区、pointer bounds与frequency map。
+  </Step>
+  <Step title="检查pivot排除与递归收缩">
+    <Algs4QuickRecursionDiagram />
+    记录每个child size、最大depth和base case，覆盖minimum与maximum pivot。
+  </Step>
+  <Step title="专测equal-key scan policy">
+    <Algs4EqualKeysPolicyLab />
+    使用all-equal与skewed duplicates比较partition sizes、compares和stack depth。
+  </Step>
+  <Step title="验证three-way四段不变量">
+    <Algs4ThreeWayPartitionLab />
+    对less、equal、greater三个branches分别检查lt、i、gt更新及最终equal band。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. Quicksort先partition再递归两侧，pivot j必须进入最终位置并从children排除。
+2. Random shuffling把输入顺序影响转化为可分析的随机pivot rank序列。
+3. Two-way scans在equal keys处停止，交叉后以a[j]接收pivot。
+4. Distinct random input平均约2N ln N compares，极端pivot链仍需N平方除2。
+5. In-place partition只用constant locals，但递归栈average log N、worst N。
+6. Three-way partition维护小于、等于、未知、大于四段，并跳过整个equal band递归。
+7. Frequency entropy越低，三向quicksort越能把comparison成本从N log N降向linear。
+
+<Exercises>
+
+**问题 1：partition返回j后，为什么递归不能包含j？**
+
+<Answer>Postcondition已证明a[j]位于最终rank；再次包含既浪费工作，也会在j等于lo或hi时产生与parent相同的child interval，导致无限递归。必须使用lo到j减1和j加1到hi。</Answer>
+
+**问题 2：升序distinct数组不shuffle、首项pivot时，长度N大约做多少比较？**
+
+<Answer>每轮pivot是minimum，子问题依次为N减1、N减2直到1；比较和为N乘N减1除2，即Theta(N平方)，递归深度也Theta(N)。</Answer>
+
+**问题 3：three-way greater branch为什么只减gt而不增加i？**
+
+<Answer>交换到gt位置的greater item已归类，但从gt换到i的新item从未检查；增加i会跳过它。保持i不动，下一轮对换入item执行三向比较。</Answer>
+
+**问题 4：64个all-equal keys的entropy是多少，三向切分需要递归equal band吗？**
+
+<Answer>只有一个frequency class，p等于1，所以H为0。第一次linear scan把全区间归入equal band，左右children为空，不应递归equal band。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="快速排序">以pivot切分并递归排序两侧subarrays的原地排序。</GlossaryItem>
+  <GlossaryItem term="随机打乱">排序前均匀随机排列items以保护pivot rank分布的步骤。</GlossaryItem>
+  <GlossaryItem term="切分">把pivot放入最终位置并建立左右order relation的重排操作。</GlossaryItem>
+  <GlossaryItem term="性能特征">平均比较、交换、方差、worst cost与stack depth组成的行为边界。</GlossaryItem>
+  <GlossaryItem term="三向切分快速排序">把小于、等于和大于pivot分成三段且只递归两侧的quicksort。</GlossaryItem>
+  <GlossaryItem term="熵最优排序">对重复key frequencies达到comparison information bound同阶的排序。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Algorithms, 4th Edition · Section 2.3 Quicksort"
+  href="https://algs4.cs.princeton.edu/23quicksort/"
+  author="Robert Sedgewick and Kevin Wayne"
+  license="原书、官方页面与Java示例版权归Robert Sedgewick、Kevin Wayne及Addison-Wesley所有；本页依据作者官方2.3 synopsis及Quick、Quick3way、QuickX、QuickBentleyMcIlroy当前代码独立重构教学内容"
+/>

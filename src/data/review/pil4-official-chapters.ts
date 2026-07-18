@@ -1,0 +1,70 @@
+import type { ReviewChapterSlug, ReviewQuestion } from "./types";
+
+type ChapterReview = readonly [
+  chapter: ReviewChapterSlug,
+  title: string,
+  question1: string,
+  answer1: string,
+  question2: string,
+  answer2: string,
+  tags: readonly string[],
+];
+
+const chapters: readonly ChapterReview[] = [
+  ["pil4-learning-map", "学习地图", "Programming in Lua第四版的四个Part与学习顺序是什么？", "依次是The Basics（1-8）、Real Programming（9-19）、Lua-isms（20-26）和The C API（27-33）。Lua-only路线完成1-26；embedding路线也必须先掌握Lua语义，再进入27-33。", "怎样用四步证据判断一章真正掌握？", "先预测可观察结果，再运行最小完整程序，然后注入nil、错误、超时或OOM等边界，最后脱离页面重画机制并解释不变量。四类证据一致才通过。", ["学习地图", "四Part", "验收"]],
+  ["pil4-getting-started", "Chapter 1. Getting Started", "Chunk、global与local在最小Lua程序中如何区分？", "Chunk是编译/执行单元；未声明local的name通常通过环境查找global；local具有词法作用域和明确lifetime。先用local封住临时状态，再显式导出module API。", "为什么0和空字符串在Lua条件中都为真？", "Lua只有false和nil是假，其余所有值包括0、空字符串和空table都是真。条件判断不能套用C/Python的空值规则。", ["Chapter 1", "chunk", "truth"]],
+  ["pil4-eight-queen-puzzle", "Chapter 2. Interlude: The Eight-Queen Puzzle", "八皇后partial board invariant是什么？", "board[1..row-1]各存一列，已放皇后两两不共享列或对角线。当前层只写board[row]，child返回后恢复；这个归纳不变量保证只探索合法prefix。", "怎样独立证明N=8搜索完整且没有alias错误？", "断言known count为92，并用独立pairwise checker验证每个solution；保存solution时复制1..N列值，不能把同一mutable board reference反复插入结果表。", ["Chapter 2", "回溯", "不变量"]],
+  ["pil4-numbers", "Chapter 3. Numbers", "Lua 5.3 integer与float怎样影响除法和比较？", "math.type可区分integer/float；/执行浮点除法，//向下取整，整数运算可能遵守实现的整数范围。转换和边界处要检查range，不能用显示相同推断representation相同。", "随机数测试怎样避免不可复现？", "显式设置seed，记录生成器版本和调用顺序，用性质或分布断言而非锁死所有平台的具体序列；安全token不能使用普通math.random。", ["Chapter 3", "number", "random"]],
+  ["pil4-strings", "Chapter 4. Strings", "为什么Lua string必须按pointer+length处理？", "Lua string是immutable byte sequence，可含零字节；C边界若只用NUL结尾会截断。读取、复制和比较都携带显式length，另行声明UTF-8等encoding。", "字节长度、code point数与用户字符数为何不同？", "#string计算bytes；UTF-8 code point可占多字节，grapheme还可能由多个code points组合。UI裁剪和索引要选择正确层级，不能把#当字符数。", ["Chapter 4", "string", "Unicode"]],
+  ["pil4-tables", "Chapter 5. Tables", "Table identity与内容相等有什么区别？", "Table赋值和传参复制reference，两个独立但内容相同的table默认不相等；修改共享reference会影响所有alias。Snapshot/serialization必须明确是否保留identity。", "为什么lua_rawlen或#不能证明table是dense array？", "含holes时sequence border不代表元素总数，table还可有hash keys。业务数组要定义1..n连续schema、逐项验证并限制n。", ["Chapter 5", "table", "sequence"]],
+  ["pil4-functions", "Chapter 6. Functions", "Multiple results在哪些上下文会被截断或展开？", "函数调用处于expression list末尾、return末尾或table constructor末尾时可展开；放在括号、非末尾位置或赋给单变量通常只保留第一个。应通过小例子画result positions。", "Proper tail call为什么不增加Lua调用栈？", "当return直接返回另一个function call且没有后续工作时，当前frame可被替换。加表达式、额外结果处理或非尾位置都会失去proper tail call。", ["Chapter 6", "functions", "multiple results"]],
+  ["pil4-external-world", "Chapter 7. The External World", "I/O函数返回值为什么必须按完整tuple处理？", "I/O常以value或nil,error[,code]表达业务失败，不能只看第一个truthy值。Handle owner还要在success、error和early return中close。", "调用os.execute或文件API时最重要的安全边界是什么？", "不要把不可信输入拼接到shell；限制路径、命令和环境capability，检查完整status，并把host I/O与sandbox policy分开。", ["Chapter 7", "I/O", "resource"]],
+  ["pil4-filling-some-gaps", "Chapter 8. Filling Some Gaps", "Local declaration的scope何时开始？", "Local变量scope从声明之后开始，initializer中的同名引用仍可能指外层变量。用最小shadowing例子检查，不要只凭缩进判断。", "goto为什么不能任意跳入local作用域？", "跳入会绕过local初始化并破坏lifetime，因此Lua限制goto跨越local进入其scope。Goto适合受控continue/cleanup形态，不应替代清晰结构。", ["Chapter 8", "scope", "goto"]],
+  ["pil4-closures", "Chapter 9. Closures", "Closure捕获的是值副本还是upvalue cell？", "Closure捕获外层local的cell；多个closures可能共享同一cell，因此一个修改对另一个可见。Loop变量和factory要检查每个closure实际共享/独立的binding。", "怎样用closure实现有状态iterator且避免资源泄漏？", "把遍历state放upvalue，每次调用推进并返回control value；若捕获file/socket，需提供显式close，因为consumer提前停止时closure可能仍保持资源。", ["Chapter 9", "closure", "upvalue"]],
+  ["pil4-pattern-matching", "Chapter 10. Pattern Matching", "Lua pattern与正则表达式为什么不能等同？", "Lua pattern是更小的pattern language，支持captures、classes、frontier等但不是完整regex。先按Lua grammar解释magic characters和greedy/minimal repetition。", "gsub replacement function的输入输出协议是什么？", "它接收captures（无capture时通常是whole match），返回string/number替换；返回false/nil可保留原匹配。限制输入、match和输出增长防止pipeline失控。", ["Chapter 10", "pattern", "gsub"]],
+  ["pil4-most-frequent-words", "Chapter 11. Interlude: Most Frequent Words", "词频程序的完整pipeline有哪些阶段？", "读取source、tokenize/normalize、更新frequency table、转换为records、按count与稳定tie-break排序、输出；每阶段都要有边界和可测试中间结果。", "怎样证明top-N结果在相同频次下可复现？", "定义secondary ordering（如token字典序），固定normalization/encoding，并用小语料独立计算expected map与exact ranking。", ["Chapter 11", "词频", "pipeline"]],
+  ["pil4-date-time", "Chapter 12. Date and Time", "os.time与os.date之间的核心表示边界是什么？", "os.time把calendar fields解释为本地时间并生成timestamp，os.date把timestamp格式化或拆字段；时区、DST和不存在/重复本地时间会影响往返。", "Calendar arithmetic为什么不能总用24*60*60秒加一天？", "DST切换日可能不是24小时。若目标是日历下一天，应修改calendar fields并让库归一化；若目标是精确elapsed duration才加秒。", ["Chapter 12", "date", "timezone"]],
+  ["pil4-bits-bytes", "Chapter 13. Bits and Bytes", "位运算前为什么要先声明宽度和signedness？", "Mask、shift和serialization依赖固定bit width；负数和高位的语义若不明确，会在C边界或协议间变化。先限定range并用mask验证。", "解析binary frame时怎样防止length字段造成越界？", "先确认header完整，再用无overflow arithmetic验证length不超过remaining与policy limit，最后slice；不能在检查前分配或移动offset。", ["Chapter 13", "bits", "binary"]],
+  ["pil4-data-structures", "Chapter 14. Data Structures", "Lua queue为什么通常用head/tail索引而不是table.remove(1)？", "remove(1)会移动后续sequence元素，长期为线性成本；head/tail让enqueue/dequeue近似常数时间，并定期compact避免索引无限增长。", "选择table表示set、graph或matrix前要声明什么？", "声明key/value schema、identity/alias、traversal order、missing值和complexity expectation；同一table机制可表达多种结构，但语义不会自动出现。", ["Chapter 14", "data structures", "queue"]],
+  ["pil4-data-files-serialization", "Chapter 15. Data Files and Serialization", "为什么只递归输出table不能正确序列化一般graph？", "一般graph可能有cycles和shared references；朴素递归会无限循环或复制identity。应分配object IDs，先声明对象，再用back-references连接。", "把数据文件当Lua chunk加载需要哪些边界？", "它是可执行code，不是纯data。对不可信输入应使用data parser；若确需load，提供最小environment、size/instruction/memory limits并验证结果schema。", ["Chapter 15", "serialization", "graph"]],
+  ["pil4-compilation-errors", "Chapter 16. Compilation, Execution, and Errors", "load成功与pcall成功分别证明什么？", "load成功只证明chunk可编译并返回function；执行要再调用，pcall首boolean表示是否raise。业务返回nil/error仍可能发生在pcall成功内。", "怎样保留有用traceback又不让error handler再次失败？", "在错误边界尽早调用debug.traceback或受控message handler，限制格式化工作并支持non-string error；记录primary error，cleanup失败不能覆盖它。", ["Chapter 16", "pcall", "traceback"]],
+  ["pil4-modules-packages", "Chapter 17. Modules and Packages", "require的load/cache状态机怎样避免重复初始化？", "先查package.loaded；未命中时依次search loader、执行module、缓存返回值。循环依赖和partial init需明确sentinel/模块表发布时机。", "为什么package.path和package.cpath属于安全策略？", "它们决定可执行Lua/native代码从哪里加载。固定可信路径、限制searchers，sandbox中禁用动态C loader；native module拥有process权限。", ["Chapter 17", "module", "require"]],
+  ["pil4-iterators-generic-for", "Chapter 18. Iterators and the Generic for", "Generic for的iterator triple是什么？", "表达式产生iterator function、invariant state和initial control；循环反复调用iterator(state,control)，首返回值为nil时终止，并把results赋给loop variables。", "Iterator提前break时为何可能泄漏resource？", "Generic for不通知iterator结束，captured resource可能保持在closure/coroutine中。Resource-bearing iterator必须提供owner/close，__gc仅作fallback。", ["Chapter 18", "iterator", "generic for"]],
+  ["pil4-markov-chain", "Chapter 19. Interlude: Markov Chain", "Markov text generator的state与transition table如何构建？", "用固定长度prefix作为state key，训练时把每个next token追加到该state的successor list；生成时按当前prefix采样next并滑动窗口。", "怎样让生成测试既确定又覆盖随机性？", "注入seeded RNG或deterministic chooser，验证transition counts和终止sentinel；另做性质测试确保每个输出transition存在于训练模型。", ["Chapter 19", "Markov", "random"]],
+  ["pil4-metatables-metamethods", "Chapter 20. Metatables and Metamethods", "__index与__newindex什么时候触发，raw access有什么不同？", "普通读取missing key触发__index，普通写入absent key触发__newindex；rawget/rawset绕过metamethod。已有key写入不会走__newindex。", "Binary metamethod dispatch应验证哪些operand？", "记录两侧type/metatable、候选method和返回schema；不要假设只检查左操作数。Metamethod应避免无限递归，内部storage常用raw access。", ["Chapter 20", "metatable", "dispatch"]],
+  ["pil4-object-oriented-programming", "Chapter 21. Object-Oriented Programming", "Lua对象的method lookup和colon call如何配合？", "Instance metatable的__index通常指class/method table；obj:m(x)等价于obj.m(obj,x)，因此self在第一个参数。Constructor必须设置正确metatable。", "Inheritance用__index链实现时最大的维护风险是什么？", "Lookup链、method override和state layout都隐式；过深链会难推理。优先composition，明确class identity、super lookup和per-instance mutable state。", ["Chapter 21", "OOP", "__index"]],
+  ["pil4-environment", "Chapter 22. The Environment", "Lua 5.3 global name与_ENV是什么关系？", "Global name访问被编译为对词法_ENV upvalue的table索引。给load提供environment可控制chunk可见names，但泄露的closures仍可能带回capability。", "为什么删掉os/io不等于完整sandbox？", "允许值可能通过closure/metatable/debug恢复权限，CPU/memory/native calls也未限制。还要capability allowlist、resource budget和必要的process isolation。", ["Chapter 22", "environment", "sandbox"]],
+  ["pil4-garbage", "Chapter 23. Garbage", "Weak key、weak value和ephemeron语义分别适合什么？", "Weak values适合不阻止value回收的cache；weak keys适合附加metadata；key/value关联场景要理解ephemeron，避免value反向引用key导致意外存活。", "Finalizer为什么不能替代explicit close？", "GC时机不确定，finalizer顺序和错误处理受限。稀缺handle应显式close且幂等，__gc只回收遗漏路径。", ["Chapter 23", "GC", "weak table"]],
+  ["pil4-coroutines", "Chapter 24. Coroutines", "resume/yield双向result protocol是什么？", "首次resume参数进入coroutine function；yield values成为resume results；下一次resume参数成为上次yield的返回值；最终return成为最后resume results。首boolean先表示执行是否raise。", "Coroutine为何提供concurrency但不提供parallelism？", "同一Lua thread只有显式yield才切换，没有preemption；blocking I/O或CPU loop会冻结其它tasks。Parallelism需要独立states/OS workers。", ["Chapter 24", "coroutine", "resume"]],
+  ["pil4-reflection", "Chapter 25. Reflection", "Local、upvalue与stack frame反射坐标为何不稳定？", "Level/index取决于当前编译和调用形态，wrapper、tail call、resume或重构都会变化。Debugger可动态枚举，业务协议不应持久化这些坐标。", "Debug hook能否作为不可绕过的安全timeout？", "不能。Count hook只观察Lua VM instructions，blocking C call/native loop可能不触发；还需wall-clock、memory/native limits和host isolation。", ["Chapter 25", "reflection", "hook"]],
+  ["pil4-multithreading-coroutines", "Chapter 26. Interlude: Multithreading with Coroutines", "Non-blocking receive返回partial加timeout时怎样处理？", "先把partial追加到task protocol buffer，再登记read wait并yield；ready后继续解析。丢弃partial或重发完整请求会损坏协议。", "select返回readable为什么不等于完整HTTP response到达？", "Readiness只表示操作可能取得进展；receive仍可返回partial、EOF或error。应用层继续解析header/body边界并在would-block时重新等待。", ["Chapter 26", "LuaSocket", "select"]],
+  ["pil4-c-api-overview", "Chapter 27. An Overview of the C API", "C API stack contract最少记录哪些信息？", "记录entry top、读取indices、consume/produce的top delta、result count和每条error path形状；relative index跨mutation前转absolute。", "lua_tointeger返回0时如何区分合法0与转换失败？", "Lua 5.3使用lua_tointegerx并检查isnum。边界还要决定是否允许numeric string并检查native range。", ["Chapter 27", "C API", "stack"]],
+  ["pil4-extending-application", "Chapter 28. Extending Your Application", "Host读取Lua config为何要transactional commit？", "先把所有fields读入temporary native struct，检查missing/type/range和cross-field invariant；全通过后一次更新应用，失败则恢复stack且不半更新。", "C调用Lua function的stack frame顺序是什么？", "先push callable，再按顺序push n arguments，lua_pcall声明nargs/nresults并消费它们；成功验证/copy results，失败保存error/traceback，最后恢复base。", ["Chapter 28", "embedding", "pcall"]],
+  ["pil4-calling-c-from-lua", "Chapter 29. Calling C from Lua", "Lua C function返回的int表示什么？", "它表示top上返回给Lua的result数量，不是status。普通失败可返回nil,error；raise则用lua_error/luaL_error并在之前完成native cleanup。", "Continuation为何不能依赖yield前的C local变量？", "普通C frame不会作为coroutine frame原地恢复。k API通过lua_KContext和新的continuation invocation恢复，持久状态放Lua-owned或host-owned结构并处理cancel/close。", ["Chapter 29", "C function", "continuation"]],
+  ["pil4-c-function-techniques", "Chapter 30. Techniques for Writing C Functions", "Registry reference的完整生命周期是什么？", "把value push后luaL_ref创建GC root并记录owner；lua_rawgeti lookup使用；完成/取消时在state close前luaL_unref，随后拒绝旧ref和late callback。", "多个C closures怎样共享per-module state？", "创建一张Lua table，让每个C closure捕获同一个table作为upvalue；字段更新彼此可见，而另一个state/module instance拥有独立table。", ["Chapter 30", "registry", "upvalue"]],
+  ["pil4-user-defined-types", "Chapter 31. User-Defined Types in C", "Full userdata与light userdata的ownership差异是什么？", "Full userdata有Lua-owned per-object block、individual metatable并可__gc；light userdata只是void pointer identity，没有per-object storage或GC ownership。", "Array userdata的__index应如何区分element与method？", "先luaL_checkudata/closed，再按key type分发：integer做1-based bounds并读element，string在methods table raw lookup；其它key按contract返回nil或raise。", ["Chapter 31", "userdata", "metatable"]],
+  ["pil4-managing-resources", "Chapter 32. Managing Resources", "Directory iterator在break时为什么需要explicit close？", "Generic for不会通知iterator终止，captured userdata仍可让DIR*存活，GC时机不确定。API要暴露owner/close，EOF/error也主动关闭。", "XML foreign callback中的Lua error应怎样传播？", "Callback用lua_pcall捕获并复制first error、停止parser，返回outer owner frame；outer先free parser/unref handlers，再raise，避免long jump穿过foreign C frames。", ["Chapter 32", "resource", "callback"]],
+  ["pil4-threads-states", "Chapter 33. Threads and States", "Lua thread、Lua state与OS thread分别共享什么？", "Lua thread只有stack/status独立，同state内共享globals/registry/heap/GC；independent state拥有独立这些对象；OS thread是native执行实体，同一state必须单owner串行进入。", "Independent states之间怎样传递数据？", "不能lua_xmove或传Lua pointers；按versioned bounded schema编码host-owned message，queue提供backpressure，receiver验证后构造新Lua values并只授予本地capability。", ["Chapter 33", "state", "message"]],
+  ["pil4-final-review", "总复习", "四类Lua故障模型是什么，各追踪什么？", "Representation追type/identity/shape/encoding；control追frame/result/error/resumer；lifetime追roots/owner/close；isolation追environment/state/OS owner/capabilities。", "一个Lua/C capstone至少需要哪些验收场景？", "除正常路径外覆盖wrong type、Lua error、partial I/O、timeout/cancel、GC、OOM、late callback、并发owner和shutdown；每项验证stack、result、resource和capability不变量。", ["总复习", "故障模型", "capstone"]],
+];
+
+export const pil4OfficialChapterQuestions: ReviewQuestion[] = chapters.flatMap(
+  ([chapter, title, question1, answer1, question2, answer2, tags]) => [
+    {
+      id: `${chapter}-1`,
+      chapter,
+      level: 2,
+      question: question1,
+      answer: answer1,
+      tags: [title, ...tags],
+    },
+    {
+      id: `${chapter}-2`,
+      chapter,
+      level: 3,
+      question: question2,
+      answer: answer2,
+      tags: [title, ...tags],
+    },
+  ],
+);

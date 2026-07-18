@@ -1,0 +1,275 @@
+---
+title: "第15章：Generating Data"
+type: C
+section: "Part II · Projects · Data Visualization"
+order: 15
+description: "用Matplotlib生成line/scatter与RandomWalk图，再用Plotly分析骰子结果和导出可复现图表。"
+demo: true
+math: false
+sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
+draft: false
+---
+
+import {
+  PccDiceDistributionLab,
+  PccPlotEncodingLab,
+  PccRandomWalkLab,
+} from "@/components/mdx/python-crash-course/diagrams/generating-data";
+
+<Objectives>
+
+- 能比较Matplotlib line graph与scatter的encoding，设计labels、ticks、colormap和savefig输出
+- 能实现RandomWalk的step生成、起终点强调与multiple walks，并分析seed和sample size对图形的影响
+- 能计算两颗Die的sum distribution，使用Plotly Express绘制bar chart并验证frequency总数与support
+
+</Objectives>
+
+## 为什么先生成可控数据再学习可视化
+
+真实数据常同时包含missing values、format drift和sampling bias。先用平方数、RandomWalk与骰子生成器，data-generating process完全已知，图不对时可区分是数据逻辑、visual encoding还是library API问题。可视化不是“把数组交给函数”，而是把variable映射到position、color、size和label，并检查映射是否忠实。
+
+先预测：平方数用line与scatter分别暗示什么；RandomWalk point count翻倍后range一定翻倍吗；D6+D6为何sum 7比sum 2常见。预测给出可证伪解释，运行图后再用data和概率核对。
+
+<Term def="把数据变量映射到position、line、marker、color、size或label的规则。">visual encoding</Term>
+
+本章有两条链路：Matplotlib适合静态、精确控制和image export；Plotly Express快速创建interactive HTML。两者都需要先明确data shape与chart question，不能用默认样式替代分析。
+
+## Installing Matplotlib and Plotly
+
+依旧用当前interpreter安装并验证import。Jupyter、VS Code和terminal若使用不同environment，会出现terminal能import、editor运行失败。保存Python executable与package versions作为运行证据。
+
+```bash
+python3 -m pip install matplotlib plotly
+python3 -c "import sys, matplotlib, plotly; print(sys.executable); print(matplotlib.__version__, plotly.__version__)"
+```
+
+在无GUI环境中`plt.show()`可能无法打开window，但`fig.savefig()`仍可通过非交互backend产出文件。把数据生成、figure creation与show/save分成functions，测试无需真正弹窗。
+
+## Plotting a Simple Line Graph
+
+Matplotlib面向`Figure`与`Axes`：`fig, ax = plt.subplots()`创建container，`ax.plot(input_values, squares)`在axes上编码x/y。显式提供input values可避免默认index掩盖domain起点；若平方数据从1开始而默认x从0开始，图的语义就错位。
+
+```python
+import matplotlib.pyplot as plt
+
+input_values = [1, 2, 3, 4, 5]
+squares = [1, 4, 9, 16, 25]
+
+fig, ax = plt.subplots()
+ax.plot(input_values, squares, linewidth=3)
+ax.set_title("Square Numbers", fontsize=24)
+ax.set_xlabel("Value", fontsize=14)
+ax.set_ylabel("Square of Value", fontsize=14)
+ax.tick_params(labelsize=14)
+plt.show()
+```
+
+title说明question，axis labels说明变量与单位，ticks控制阅读精度。linewidth和fontsize服务于层级，不改变data。若数据代表离散类别却连线，line会暗示类别之间连续可插值；chart choice本身就是claim。
+
+## Plotting and Styling Individual Points
+
+`ax.scatter(x_values, y_values, s=10)`显示samples，不强制相邻点存在路径关系。可传单一color，或让`c=y_values, cmap=plt.cm.Blues`用colormap编码magnitude。color同时承担装饰和信息时，应在caption或colorbar说明含义，且避免与背景对比不足。
+
+```python
+x_values = range(1, 1001)
+y_values = [x**2 for x in x_values]
+
+fig, ax = plt.subplots()
+ax.scatter(x_values, y_values, c=y_values, cmap=plt.cm.Blues, s=10)
+ax.axis([0, 1100, 0, 1_100_000])
+ax.ticklabel_format(style="plain")
+```
+
+axis limits决定visible window，设错会截断outlier或制造空白；`ticklabel_format(style="plain")`避免scientific notation，但大数过长时也可能拥挤。视觉设置必须针对读者任务，而不是把书中参数机械复制到所有dataset。
+
+<Stepper>
+  <Step title="切换line、scatter与colormap">
+    <PccPlotEncodingLab />
+  </Step>
+  <Step title="说明每个channel表达什么">
+    x是input，y是square；line表达有序趋势，marker表达sample，color若重复编码y就帮助扫描大小但不增加新变量。
+  </Step>
+  <Step title="验证数据而非只看形状">
+    检查首尾point、point count、x/y配对和axis范围，确保图形没有通过错误scale产生看似合理的曲线。
+  </Step>
+</Stepper>
+
+## Random Walks：把随机过程封装成数据生成器
+
+RandomWalk从`(0, 0)`开始，每一步随机选择x/y方向与距离，拒绝原地踏步，再append新position。class拥有`x_values`、`y_values`和`num_points`；`fill_walk()`只生成data，不知道Matplotlib。分离后可以测试length、start和step constraints。
+
+<Term def="当前位置由一系列随机方向与距离增量逐步累积形成的路径。">random walk</Term>
+
+```python
+from random import choice
+
+class RandomWalk:
+    def __init__(self, num_points=5000) -> None:
+        self.num_points = num_points
+        self.x_values = [0]
+        self.y_values = [0]
+
+    def fill_walk(self) -> None:
+        while len(self.x_values) < self.num_points:
+            x_step = choice([1, -1]) * choice([0, 1, 2, 3, 4])
+            y_step = choice([1, -1]) * choice([0, 1, 2, 3, 4])
+            if x_step == 0 and y_step == 0:
+                continue
+            self.x_values.append(self.x_values[-1] + x_step)
+            self.y_values.append(self.y_values[-1] + y_step)
+```
+
+`continue`拒绝zero-step，保证每个新增point都发生movement。while的termination依赖每次最终有nonzero step的正概率；测试时注入可控random source会比patch全局`choice`更可靠。point count是sample length，不直接等于路径几何长度，因为每步distance不同。
+
+### Plotting a Random Walk
+
+用point index作为color值，colormap从早到晚显示time order；start point用green、end point用red覆盖绘制。隐藏axes可突出path shape，但若任务需要读coordinate或比较scale，应保留axes。presentation选择不能删除分析所需信息。
+
+```python
+point_numbers = range(rw.num_points)
+ax.scatter(rw.x_values, rw.y_values, c=point_numbers,
+           cmap=plt.cm.Blues, edgecolors="none", s=1)
+ax.scatter(0, 0, c="green", edgecolors="none", s=100)
+ax.scatter(rw.x_values[-1], rw.y_values[-1],
+           c="red", edgecolors="none", s=100)
+ax.get_xaxis().set_visible(False)
+ax.get_yaxis().set_visible(False)
+```
+
+<Term def="初始化伪随机数生成器、使同一算法产生可重复序列的输入值。">random seed</Term>
+
+<Stepper>
+  <Step title="改变seed、point count与axes">
+    <PccRandomWalkLab />
+  </Step>
+  <Step title="比较sample size而不承诺单调extent">
+    更多steps通常扩大探索范围，但某一次path可能折返；比较多个seeds和分布，而不是用单条walk下结论。
+  </Step>
+  <Step title="检查生成器不变量">
+    length等于num_points、首点为原点、相邻点不相同、每步距离在允许集合内，x/y list长度始终一致。
+  </Step>
+</Stepper>
+
+### Multiple Random Walks and stopping policy
+
+书中用outer while不断创建walk，显示后询问是否再生成。输入必须normalize，并只接受明确yes/no；绘图window关闭与terminal prompt是两个不同event boundary。自动批处理则用固定count或seed list，避免interactive loop无法结束。
+
+比较multiple walks时保持axis aspect、point count和style一致，否则无法判断差异来自randomness还是chart configuration。若要展示“典型范围”，应汇总许多walk的endpoint或extent distribution，而不是挑一条好看的path。
+
+## Saving Figures as Artifacts
+
+`plt.savefig("squares_plot.png", bbox_inches="tight")`在show前保存，显式指定path、format和DPI。保存后检查file存在、bytes大于0，并记录生成data参数；只有image没有seed与code，结果不可复现。循环生成多图时每次`plt.close(fig)`释放资源。
+
+<Term def="带有明确格式、路径和生成参数，可被检查和共享的图像或HTML输出。">export artifact</Term>
+
+```python
+output_path = "artifacts/random_walk_seed_42.png"
+fig.savefig(output_path, dpi=160, bbox_inches="tight")
+plt.close(fig)
+```
+
+不要把临时结果覆盖同一文件却不记录版本。filename可包含dataset、seed或timestamp；项目元数据记录Python与library version。artifact验证至少包含dimensions、预期labels和数据范围，而不只是“命令退出0”。
+
+## Rolling Dice with Plotly
+
+`Die`封装`sides`并用`randint(1, num_sides)`返回一次结果。生成两颗骰子时，每轮调用两次并求和；frequency不是从1开始，而从`2`到`max_result = die_1.num_sides + die_2.num_sides`。若把possible_results写成1..12，会产生不可能的sum 1并漏掉12或最高值。
+
+```python
+from random import randint
+
+class Die:
+    def __init__(self, num_sides=6) -> None:
+        self.num_sides = num_sides
+
+    def roll(self) -> int:
+        return randint(1, self.num_sides)
+
+die_1, die_2 = Die(), Die()
+results = [die_1.roll() + die_2.roll() for _ in range(1000)]
+max_result = die_1.num_sides + die_2.num_sides
+poss_results = range(2, max_result + 1)
+frequencies = [results.count(value) for value in poss_results]
+```
+
+<Term def="每个可能结果及其probability或frequency构成的完整结果分布。">probability distribution</Term>
+
+基本验证是`sum(frequencies) == len(results)`，support从2到最大和，所有frequency非负。D6+D6的理论count为1,2,3,4,5,6,5,4,3,2,1，因为sum 7有六种ordered pairs，sum 2只有一种。有限实验会波动，rolls增加时relative frequency通常接近理论值。
+
+<Stepper>
+  <Step title="改变第二颗Die与roll count">
+    <PccDiceDistributionLab />
+  </Step>
+  <Step title="从ordered pairs计算理论shape">
+    枚举`(a, b)`并按sum计数，先得到exact distribution，再比较simulation frequency而不是凭柱高猜测。
+  </Step>
+  <Step title="验证support与总数守恒">
+    最小sum为2，最大为两颗sides之和；frequency总数等于rolls，任何out-of-range result都表示生成或统计错误。
+  </Step>
+</Stepper>
+
+## Plotly Express Bar Chart and HTML Export
+
+Plotly Express用tidy arrays创建chart：x是possible results，y是frequencies，labels提供可读axis names，title说明实验。`fig.update_layout(xaxis_dtick=1)`让每个integer sum都有tick。hover自动显示值，但仍需保证label与单位清楚。
+
+```python
+import plotly.express as px
+
+title = "Results of Rolling Two D6 Dice 1,000 Times"
+labels = {"x": "Result", "y": "Frequency of Result"}
+fig = px.bar(x=list(poss_results), y=frequencies,
+             title=title, labels=labels)
+fig.update_layout(xaxis_dtick=1)
+fig.write_html("dice_visual_d6_d6.html")
+```
+
+`write_html`产生可离线打开的interactive artifact，file可能较大，因为可内嵌Plotly JavaScript。若部署网站，可选择CDN模式但会引入network dependency。PNG与HTML解决不同交付需求，应在artifact contract中写明。
+
+## 从图形回到数据验证
+
+一张平滑曲线可能来自错误排序，一张对称柱状图也可能frequency总数不对。每次绘图前打印或assert最小值、最大值、length、sum和首尾records；绘图后检查labels、axis limits、color semantics与输出文件。visual inspection用于发现pattern，不替代结构验证。
+
+随机实验还要记录seed。没有seed时不能逐样本复现，但仍可通过distribution properties验证；有seed时同版本PRNG应重现序列。测试不要断言“每次sum 7一定最多”，而应测试support、count conservation与大量样本下合理tolerance。
+
+<Callout type="trap" title="图看起来合理就证明数据生成正确">
+错误的x/y pairing、漏掉support或频数不守恒也可能形成漂亮图形。绘图前验证shape、range、length与sum，图只提供另一层证据。
+</Callout>
+
+<Callout type="trap" title="隐藏axes总能让RandomWalk更清晰">
+隐藏axes适合欣赏path shape，但会删除coordinate与scale证据。根据问题选择；比较不同walk extent时保持axes和aspect一致，不能只追求视觉效果。
+</Callout>
+
+## 本章回顾：生成、编码、验证、导出
+
+1. Matplotlib Figure/Axes把data映射到line、marker、color、label与ticks。
+2. RandomWalk生成器与plot分离，seed、point count和step constraints决定可复现性。
+3. start/end、axes和colormap应服务于明确阅读任务。
+4. 两颗Die的sum frequency必须覆盖正确support且总数等于rolls。
+5. savefig与write_html产生export artifact，还需记录参数并验证文件内容。
+
+<Exercises>
+
+**问题 1：如何判断一组平方数应使用line还是scatter？**
+
+<Answer>若强调有序输入上的连续趋势，可用line；若强调每个离散sample和密度，用scatter。无论选择哪种，都显式验证x/y配对、首尾值、axis范围和labels；colormap若编码顺序或magnitude，要说明语义而非仅装饰。</Answer>
+
+**问题 2：怎样测试RandomWalk而不依赖某一条“好看”的路径？**
+
+<Answer>注入seed或random source，断言x/y长度等于num_points、首点为(0,0)、相邻点非重复、step方向与距离在允许集合。对统计性质运行多个seeds比较endpoint/extent distribution，不断言单条walk必须向外扩张。</Answer>
+
+**问题 3：D6与D8各roll 5000次，频数表应满足哪些不变量？**
+
+<Answer>support从2到14，所有frequency非负且总和为5000；每个result都来自一个D6与D8的合法值。理论count可枚举48个ordered pairs，simulation relative frequencies应在合理tolerance内接近理论，而不是要求完全相等。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="visual encoding" definition="把变量映射到position、line、marker、color、size或label的规则。" />
+  <GlossaryItem term="random walk" definition="由随机方向与距离增量逐步累积当前位置的路径。" />
+  <GlossaryItem term="random seed" definition="初始化伪随机生成器并使序列可重复的输入值。" />
+  <GlossaryItem term="export artifact" definition="带明确格式、路径和参数、可检查与共享的图像或HTML输出。" />
+  <GlossaryItem term="probability distribution" definition="每个可能结果及其probability或frequency构成的完整分布。" />
+</Glossary>
+
+<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 15: Generating Data" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />

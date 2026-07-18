@@ -1,0 +1,329 @@
+---
+title: "第5章：异常与自定义异常（建议58-70）"
+type: C
+section: "编写高质量代码 · 失败语义"
+order: 5
+description: "覆盖异常与错误码边界、正确抛出/重抛/包装、finally和吞异常、Tester-Doer、未处理与多线程异常、自定义异常继承、资源清理及单点日志责任。"
+demo: true
+math: false
+sourceUrl: "https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html"
+draft: false
+---
+
+import { CqcExceptionBoundaryLab, CqcFailureChannelLab, CqcPropagationLab } from "@/components/mdx/csharp-quality-code/diagrams/exceptions-and-custom-exceptions";
+
+<Objectives>
+
+- 能区分normal invalid input、expected absence、cancellation、broken invariant与dependency failure，并设计Try/Result或exception channel
+- 能比较`throw;`、`throw ex;`、InnerException wrapping、filter和finally对stack、context与cleanup的影响
+- 能设计request、batch、background task和process exception boundary，判断recover、retry、log-once或terminate策略
+
+</Objectives>
+
+## 为什么异常设计的核心是Caller还能做什么
+
+异常不是“出现错误”的统一标签，而是control transfer与diagnostic object。调用者若能按正常业务分支纠正输入，就不该用exception做循环跳转；若当前层无法恢复，就应保持cause与stack向上交给真正的boundary；只有某层拥有足够context决定response、retry或termination时，catch才有意义。
+
+先预测：`catch (Exception ex) { throw ex; }`是否等同`throw;`；每一层都log后rethrow是否更安全；创建raw Thread的外层try/catch能否捕获thread body异常。答案分别是否、否、不能。
+
+<Term def="按normal invalid input、expected absence、cancellation、contract violation、transient/permanent dependency failure分类，并为每类指定channel与caller action。">failure taxonomy</Term>
+
+## Failure Channel与Expected Paths（建议58-59）
+
+### 建议58：用抛出异常代替返回错误代码
+
+对无法用正常return value表达、且当前调用无法继续的失败，specific exception比magic error code更能保留type、message、stack和cause，也不会让caller轻易忽略。但现代结论不是“所有失败都throw”：validation、TryParse、lookup absence等expected outcome用Try/Result/nullable更清晰。
+
+```csharp
+public Order LoadRequired(OrderId id)
+{
+    return _orders.TryGetValue(id, out Order? order)
+        ? order
+        : throw new OrderNotFoundException(id);
+}
+
+public bool TryLoad(OrderId id, out Order? order) => _orders.TryGetValue(id, out order);
+```
+
+两个API代表不同contract：Required缺失违反caller expectation；TryLoad允许absence。不要返回`-1`、null和throw混用而不说明优先级。
+
+### 建议59：不要在不恰当的场合下引发异常
+
+exception不适合高频expected branch、boolean query或可提前验证的ordinary input，也不应用于正常loop termination。另一方面，先`CanXxx`再`Xxx`可能存在TOCTOU race；filesystem/network状态在检查后会变化，最终operation仍需处理exception。
+
+```csharp
+if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int count))
+    return ValidationResult.Invalid("count", "must be an integer");
+
+if (count < 0)
+    return ValidationResult.Invalid("count", "must be non-negative");
+```
+
+argument validation可抛`ArgumentException`系列，因为caller违反programming contract；用户输入应先映射为domain validation result，避免用stack unwinding承担UI flow。
+
+<Stepper>
+  <Step title="切换invalid、absence、invariant、I/O与cancellation">
+    <CqcFailureChannelLab />
+  </Step>
+  <Step title="写出failure发生后caller可执行的动作">
+    能纠正则Result/Try；能安全retry则保留idempotency与cause；无法恢复则exception向boundary传播。
+  </Step>
+  <Step title="用频率、stack和分支测试验收">
+    normal invalid case不产生exception telemetry；exception case保留original stack；cancellation不被记录成server fault。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="先检查文件存在就可以避免所有I/O异常">
+check与open之间文件可能被删、permission可能变化；检查只能改善expected UX，不能取代operation exception handling。真正处理要在能决定retry/response的boundary。
+</Callout>
+
+## Propagation、Finally与Loop Recovery（建议60-64）
+
+### 建议60：重新引发异常时使用Inner Exception
+
+原题需要拆成两种情况：同一abstraction没有新context时直接`throw;`，它保留original stack；跨abstraction要把low-level exception翻译成stable domain exception时，创建outer exception并把原exception作为InnerException。`throw ex;`会重置可见throw origin，应避免。
+
+<Term def="exception从最初throw site沿调用链传播时保留的stack、cause chain和operation context，用于定位真正失败源。">stack provenance</Term>
+
+```csharp
+try
+{
+    return await _store.LoadAsync(id, cancellationToken);
+}
+catch (StorageException exception)
+{
+    throw new OrderRepositoryException($"Failed to load order {id}.", exception);
+}
+```
+
+只在abstraction boundary包装一次，并避免把secret/huge payload写进message。若只是清理后继续传播，用`throw;`。
+
+### 建议61：避免在finally内撰写无效代码
+
+finally用于必须执行的cleanup，不应`return`覆盖正常结果，也不应轻易throw覆盖正在传播的primary exception。C#会限制部分control flow，但cleanup operation自身仍可能失败；应选择using/SafeHandle等可靠primitive，必要时记录secondary cleanup failure而保留primary cause。
+
+```csharp
+Exception? primary = null;
+try
+{
+    await ExecuteAsync();
+}
+catch (Exception exception)
+{
+    primary = exception;
+    throw;
+}
+finally
+{
+    await ReleaseLeaseAsync(primary);
+}
+```
+
+实际设计更常把lease实现成IAsyncDisposable，统一cleanup contract。finally不保证process crash时执行，因此不能单独承担durable transaction。
+
+### 建议62：避免嵌套异常
+
+多层try/catch若每层只捕获、log、包装再抛，会产生重复noise与深cause chain。缩小try scope，只包围确实可能抛目标exception的operation；用guard clauses减少control nesting；同一层若无法recover或translate就不catch。
+
+```csharp
+Order order = await LoadAsync(id, cancellationToken);
+Validate(order);
+await ChargeAsync(order, cancellationToken);
+```
+
+每个method仍可抛异常，代码不需要用一个巨大try包住所有步骤。边界拥有operation context时统一处理。
+
+### 建议63：避免“吃掉”异常
+
+空catch或仅返回default会把明确failure变成后续corruption。若exception代表允许忽略的optional feature，catch必须specific，说明忽略理由、保持state consistent，并提供metric/trace；否则rethrow或映射结果。
+
+```csharp
+try
+{
+    await _thumbnailCache.StoreAsync(key, bytes, cancellationToken);
+}
+catch (CacheUnavailableException exception)
+{
+    _metrics.RecordThumbnailCacheMiss(exception.Reason);
+    // The primary image is already durable; cache population is best effort.
+}
+```
+
+这不是swallow，因为业务contract明确cache可丢且有observability。不要catch `Exception`后继续使用半更新state。
+
+### 建议64：为循环增加Tester-Doer模式而不是将try-catch置于循环内
+
+循环中的expected invalid item应先test/Try，再执行doer，避免每项throw；但测试必须与动作共享同一可靠contract，不能制造race。对每项确实可能独立失败的batch，可在item boundary catch documented exception、记录结果并继续，前提是state isolation成立。
+
+```csharp
+foreach (ImportRow row in rows)
+{
+    if (!ImportRow.TryValidate(row, out ValidImportRow? valid, out string? error))
+    {
+        results.Add(ImportResult.Invalid(row.Line, error));
+        continue;
+    }
+
+    results.Add(await ImportOneAsync(valid, cancellationToken));
+}
+```
+
+Tester-Doer用于ordinary precondition，不是“先ping dependency再调用”的万能法。benchmark exception rate并测试第N项失败后前N-1项是否已commit。
+
+<Term def="无论normal return还是stack unwinding都让owned lease/resource回到合法状态，同时不遮蔽primary failure的承诺。">cleanup guarantee</Term>
+
+<Stepper>
+  <Step title="切换throw、throw ex、wrap、filter与finally">
+    <CqcPropagationLab />
+  </Step>
+  <Step title="标出catch层是否能recover或translate">
+    能恢复则完成state repair；能提供stable abstraction context才wrap；否则不catch或使用throw保留provenance。
+  </Step>
+  <Step title="故障注入验证cause与cleanup">
+    分别在open、process、commit、dispose阶段抛错，检查original stack、InnerException、resource count和secondary failure policy。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="每层catch、log、rethrow能提供最完整诊断">
+它通常制造同一故障多条日志并泄露低层context。中间层只translate；最终boundary记录一次包含cause chain、correlation和decision的structured event。
+</Callout>
+
+## Host Boundary、Custom Type与Logging（建议65-70）
+
+### 建议65：总是处理未捕获的异常
+
+不是在每个method加catch，而是在execution boundary观察所有terminal failures：request middleware映射response，batch orchestrator记录item/job结果，BackgroundService host决定restart/stop，process last-resort handler只做最小telemetry。未知异常后state是否可继续必须保守判断。
+
+<Term def="拥有完整operation context并能做出recover、response、retry、restart或terminate决策的最外层执行单元。">exception boundary</Term>
+
+```csharp
+try
+{
+    await RunJobAsync(stoppingToken);
+}
+catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+{
+    // Expected host shutdown.
+}
+catch (Exception exception)
+{
+    _logger.LogCritical(exception, "Job {JobId} terminated", _jobId);
+    throw; // Let the host apply restart/termination policy.
+}
+```
+
+global handler不是恢复魔法；stack overflow、corrupted process state或fatal runtime condition可能无法安全继续。
+
+### 建议66：正确捕获多线程中的异常
+
+exception沿当前execution flow传播，不会跳回创建Thread的caller try/catch。Task会保存fault，必须await/observe；parallel APIs可能聚合异常；raw thread要在entry point捕获并signal supervisor。async void除event handler外应避免，因为caller无法await。
+
+```csharp
+Task worker = Task.Run(() => ProcessPartition(partition, cancellationToken), cancellationToken);
+
+try
+{
+    await worker;
+}
+catch (PartitionException exception)
+{
+    await _supervisor.FailPartitionAsync(partition.Id, exception, cancellationToken);
+}
+```
+
+不要fire-and-forget后丢失Task；交给host-owned task registry/background service，并定义shutdown await、retry和unobserved fault telemetry。
+
+### 建议67：慎用自定义异常
+
+只有caller需要按type采取不同action，或需要跨abstraction提供稳定failure contract时，才创建custom exception。message不同但处理相同通常用existing exception；不要为每个method造一种type。custom exception提供有意义properties、standard constructors与inner exception，且避免包含secret。
+
+```csharp
+public sealed class OrderConflictException : Exception
+{
+    public OrderConflictException(OrderId orderId, long expectedVersion, Exception? inner = null)
+        : base($"Order {orderId} changed before commit.", inner)
+        => (OrderId, ExpectedVersion) = (orderId, expectedVersion);
+
+    public OrderId OrderId { get; }
+    public long ExpectedVersion { get; }
+}
+```
+
+### 建议68：从System.Exception或其他常见的基本异常中派生异常
+
+application custom exception应继承`Exception`或语义确实匹配的specific base，例如argument-related API通常直接抛`ArgumentException`而非自建type。不要继承`ApplicationException`期待runtime自动区分应用/系统错误；catch hierarchy要服务caller policy。
+
+若framework要求serialization constructors，要遵循该target framework contract；现代process boundary更常把exception映射为显式error DTO，不直接serialize exception object。
+
+### 建议69：应使用finally避免资源泄漏
+
+finally保证stack unwind时执行cleanup，是using/lock等language construct背后的机制。优先用`using`/`await using`，减少手写遗漏；手写finally适合lease return、state rollback或多个资源的特殊顺序。cleanup必须幂等且不遮蔽primary exception。
+
+```csharp
+Lease lease = await _pool.RentAsync(cancellationToken);
+try
+{
+    await UseAsync(lease, cancellationToken);
+}
+finally
+{
+    _pool.Return(lease);
+}
+```
+
+### 建议70：避免在调用栈较低的位置记录异常
+
+low-level library不知道request、tenant、retry decision和是否最终失败；它log后rethrow会与上层重复。让最外层拥有action的boundary记录一次structured log，包含correlation、stable operation fields和full exception；中层可加exception properties/Activity tags，但不宣告最终failure。
+
+<Term def="对一次失败只由能做最终处理决策的boundary负责主日志，其他层只传播或增加结构化context的规则。">log ownership</Term>
+
+security-sensitive denial/audit可能必须在低层记录独立audit event，这与重复exception log不同。metrics也可在低层累计，但不要把同一stack trace写多遍。
+
+<Stepper>
+  <Step title="切换request、batch、background task、raw thread与fatal process">
+    <CqcExceptionBoundaryLab />
+  </Step>
+  <Step title="为每个boundary指定handle set与continue policy">
+    列出哪些exception可映射/重试，unknown fault后state是否可信，cancellation如何单独处理，谁决定terminate。
+  </Step>
+  <Step title="执行一次故障只产生日志一次的测试">
+    注入同一root failure，断言Task被observe、cleanup完成、response/job state正确且主exception event只有一条。
+  </Step>
+</Stepper>
+
+## 本章回顾：Exception是Failure Contract，不是错误装饰
+
+1. expected invalid/absence走Try、Result或nullable；broken invariant和无法本地恢复的dependency failure用specific exception。
+2. 同层rethrow用`throw;`保留stack；跨abstraction才wrap并保留InnerException；避免`throw ex;`。
+3. finally/using建立cleanup guarantee，不能用return或secondary throw遮蔽primary failure。
+4. loop先处理expected invalid path；独立item exception只有在state隔离并有明确continue policy时才能捕获。
+5. Task必须await/observe，raw thread在entry处理；global boundary决定response、restart或termination。
+6. custom exception按caller action设计，主日志由最终decision boundary写一次。
+
+<Exercises>
+
+**问题 1：导入1000行CSV时，格式错误、数据库超时和代码invariant破坏分别应怎样传播？**
+
+<Answer>格式错误是expected item validation，用Try/Result记录line error并按batch policy继续；数据库超时作为dependency exception保留cause，只有operation幂等且policy允许时由orchestrator重试，否则终止job；invariant破坏specific exception并fail fast，不把半可信state继续处理。三者分别测试结果计数、retry attempts/transaction和original stack。</Answer>
+
+**问题 2：何时使用`throw;`，何时创建带InnerException的新异常？**
+
+<Answer>当前层无法recover且不改变abstraction contract时不catch或catch后`throw;`，保留original stack。repository把provider/storage failure翻译成稳定domain-facing contract时，创建outer exception并把原exception作为InnerException，同时加入non-secret operation context。永远不以`throw ex;`代替rethrow。</Answer>
+
+**问题 3：后台Task异常怎样做到不丢失、只记录一次并正确决定是否继续？**
+
+<Answer>Task交给BackgroundService/supervisor拥有并await，boundary分别处理host cancellation、documented recoverable fault和unknown fault；中层不重复log。boundary记录一次含job/correlation/cause chain的structured event，再按idempotency与state integrity决定retry/restart/stop。测试fault observation、cleanup、日志条数和shutdown await。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="failure taxonomy" definition="把expected input、absence、cancellation、contract和dependency failures映射到channel与caller action的分类。" />
+  <GlossaryItem term="stack provenance" definition="保留original throw site、cause chain和operation context以定位真实失败源的诊断连续性。" />
+  <GlossaryItem term="cleanup guarantee" definition="normal或exceptional exit都恢复owned resource/state且不遮蔽primary failure的承诺。" />
+  <GlossaryItem term="exception boundary" definition="拥有完整context并能决定recover、response、retry、restart或terminate的执行边界。" />
+  <GlossaryItem term="log ownership" definition="一次失败由最终decision boundary写主日志，其他层传播或增加context的单一责任。" />
+</Glossary>
+
+<Attribution adaptedFrom="编写高质量代码：改善C#程序的157个建议，第5章 异常与自定义异常，建议58-70" adaptedUrl="https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html" />

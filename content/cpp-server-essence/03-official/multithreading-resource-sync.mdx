@@ -1,0 +1,366 @@
+---
+title: "第3章：多线程编程与资源同步"
+type: A
+section: "C++ 服务器开发精髓 · 生命周期、同步与任务系统"
+order: 3
+description: "对齐原书第 3 章：线程操作、Linux/Windows/C++ 同步对象、原子操作、锁经验、TLS、线程池、环形队列、纤程与协程。"
+demo: true
+math: false
+sourceUrl: "https://book.douban.com/subject/35491437/"
+draft: false
+---
+
+import {
+  CseSynchronizationPrimitiveLab,
+  CseThreadLifecycleLab,
+  CseThreadPoolBackpressureLab,
+} from "@/components/mdx/cpp-server-essence/diagrams/multithreading-resource-sync";
+
+<Objectives>
+
+- 能解释 main、worker、join、detach、fatal signal 与 uncaught exception 的生命周期结果，并写出可停止、可回收的线程 owner
+- 能比较 Linux、Windows 与 C++ 11/14/17 的 mutex、semaphore、condition variable、read-write lock 和 atomic contract
+- 能设计有界线程池、环形队列与 overload policy，分析 deadlock、livelock、TLS、fiber/coroutine 对服务器正确性的影响
+
+</Objectives>
+
+## 为什么线程不是“更轻的函数调用”
+
+线程共享进程的 address space、file descriptors 和大部分 runtime state，却各自拥有 stack、register context、scheduler state 与 thread-local data。共享带来低成本通信，也意味着任一 data race、越界写或 fatal signal 都可能摧毁整个进程。
+
+<Term def="线程从创建、可运行、执行、阻塞到结束，并由 owner join 或 detach 的完整状态与资源回收约定。">thread lifecycle contract</Term>
+
+原书第 3 章先澄清线程生命周期，再依次讨论原子操作、三套同步 API、锁经验、线程局部存储与任务系统。学习顺序的关键是：先定义谁拥有线程和共享状态，再选择同步原语，最后才谈线程池性能。
+
+## 3.1 主线程退出、工作线程崩溃会发生什么
+
+在标准 C++ 中，从 `main` 返回等价于调用 `std::exit`，进程结束，其他线程不保证继续完成；POSIX 的 `pthread_exit(nullptr)` 只结束调用线程，进程可等待其余 pthread，但把 main thread 特殊退出当成架构常态会让 shutdown ownership 模糊。可靠服务器应由明确的 supervisor 请求停止，再 join 所有 worker。
+
+worker 中逃逸的 C++ exception 会触发 `std::terminate`；`SIGSEGV`、`SIGABRT` 等未处理 fatal signal 的默认 disposition 通常终止整个进程。线程因此不是 crash isolation boundary。
+
+先预测下面三种场景的结果：`main` 直接返回、主线程调用 `pthread_exit`、worker 抛出未捕获异常；再切换控件观察 process boundary 是否符合你的判断。
+
+<Stepper>
+  <Step title="区分线程退出与进程退出">
+    <CseThreadLifecycleLab />
+  </Step>
+  <Step title="标出 owner 与停止信号">
+    每个 joinable thread 都必须有唯一 owner；停止条件使用受同步保护的 state 或 atomic flag，而不是让对象 destructor 与后台线程竞速。
+  </Step>
+  <Step title="验证所有结束路径">
+    分别测试正常完成、启动失败、停止请求、任务异常和进程信号，确认不会遗留 joinable thread、悬空 `this` 或未刷新的队列。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="把 detach 当自动资源回收">
+`detach` 只放弃 join handle，不会延长捕获对象的 lifetime，也没有通知任务何时完成。若 detached lambda 捕获 `this`，owner 销毁后仍运行就是 use-after-free。
+</Callout>
+
+## 3.2 创建线程、获取 ID 与等待结束
+
+POSIX 用 `pthread_create`、`pthread_self`、`pthread_join`；Windows 原生 API 有 `CreateThread`/`WaitForSingleObject`，使用 C runtime 的程序还需注意 `_beginthreadex` 对 CRT thread state 的初始化；C++ 11 的 `std::thread` 提供跨平台 move-only handle、`get_id`、`join` 和 `detach`。
+
+<Term def="仍关联可等待执行线程的 std::thread 状态；对象销毁时若仍 joinable，会调用 std::terminate。">joinable thread</Term>
+
+```cpp
+class Worker {
+ public:
+  void start() {
+    thread_ = std::thread(&Worker::run, this);
+  }
+  void stop() {
+    stopping_.store(true, std::memory_order_release);
+    cv_.notify_all();
+    if (thread_.joinable()) thread_.join();
+  }
+  ~Worker() { stop(); }
+
+ private:
+  void run();
+  std::atomic<bool> stopping_{false};
+  std::mutex mu_;
+  std::condition_variable cv_;
+  std::thread thread_;
+};
+```
+
+把对象实例指针作为线程函数参数是常见惯用法，但 `this` 只是地址，不提供 lifetime。正确 contract 是 owner 在对象成员销毁前请求停止并 join；若线程要共享超出单 owner 的状态，捕获独立 state 的 `shared_ptr`，不要为了方便把整个 service 变成无边界 shared ownership。
+
+线程 ID 只适合诊断和 map key，不应假设连续、永久唯一或等于 OS process ID。日志同时记录 process id、native thread id、logical worker name 和 request/trace id，才能把系统调度与业务请求关联起来。
+
+## 3.3 从类成员函数启动线程
+
+non-static member function 隐含 `this` 参数。`std::thread(&Session::loop, this, fd)` 会复制普通参数；传引用必须显式使用 `std::ref`，否则你以为共享的对象可能已被复制。lambda 捕获也要审核 value/reference/lifetime。
+
+```cpp
+void Session::start() {
+  auto state = state_;  // shared state has an explicit lifetime
+  worker_ = std::thread([state, fd = fd_] {
+    while (!state->stopping.load(std::memory_order_acquire)) {
+      state->poll_once(fd);
+    }
+  });
+}
+```
+
+## 3.4 整型赋值、原子读改写与 memory order
+
+“机器字大小的整型赋值”不等于可移植的线程同步。普通变量发生并发读写且至少一个是 write，在没有 happens-before 时就是 C++ data race，程序行为未定义；`counter++` 更是 load、add、store 三步 read-modify-write，多个线程会丢失更新。
+
+<Term def="一个线程中的 side effect 对另一线程可见所需的顺序关系，由 mutex、atomic release/acquire、thread start/join 等建立。">happens-before</Term>
+
+```cpp
+std::atomic<std::uint64_t> accepted{0};
+accepted.fetch_add(1, std::memory_order_relaxed); // 只需原子计数
+
+payload = make_payload();
+ready.store(true, std::memory_order_release);
+// other thread
+if (ready.load(std::memory_order_acquire)) consume(payload);
+```
+
+`relaxed` 只保证该 atomic 自身的修改顺序，不发布旁边的普通数据；release/acquire 可把 release 前的写发布给观察到该值的 acquire。Windows `Interlocked*` 和 C++ `std::atomic` 都能提供原子 RMW，但应从共享状态不变量推导 memory order，而非为了“快”随意降级。
+
+<Callout type="trap" title="volatile 不能修复 data race">
+C++ `volatile` 主要约束特定 observable access，不能提供 atomicity、mutual exclusion 或跨线程 happens-before。设备寄存器与线程同步是两类问题。
+</Callout>
+
+## 3.5 Linux 同步对象：mutex、semaphore、condition variable、rwlock
+
+<Term def="通过 pthread_mutex_lock/unlock 保护共享不变量的 POSIX 互斥对象；critical section 必须在所有访问路径一致执行。">pthread mutex</Term>
+
+`pthread_mutex_t` 表达单 owner exclusive access；normal mutex 不应递归 lock。`sem_t` 是 permit counter，适合限制并发资源数量或 producer/consumer token，但不能替代“状态满足了吗”的 predicate。`pthread_cond_t` 与 mutex 配合，wait 会原子释放 mutex、休眠，再在返回前重新获得 mutex；必须在循环中重查 predicate，以处理 spurious wakeup 和多个消费者竞争。
+
+```cpp
+pthread_mutex_lock(&mu);
+while (queue.empty() && !stopping) {
+  pthread_cond_wait(&not_empty, &mu);
+}
+if (!queue.empty()) task = pop_locked();
+pthread_mutex_unlock(&mu);
+```
+
+`pthread_rwlock_t` 允许并发 reader 与独占 writer，只有读占比高、critical section 足够长且实现不会造成 writer starvation 时才可能优于 mutex。读锁不是免费；cache-line bouncing 和调度开销仍存在。
+
+## 3.6 Windows 同步对象与跨进程共享
+
+Windows 将 user-mode 与 kernel waitable objects 混合提供：
+
+| 需求 | Windows 对象 | 关键语义 |
+| --- | --- | --- |
+| 进程内短互斥 | `CRITICAL_SECTION` | owner 递归语义，不能跨进程 |
+| 等待一个/多个 handle | `WaitForSingleObject` / `WaitForMultipleObjects` | 等待返回值区分 signaled、timeout、abandoned、failure |
+| 状态通知 | auto/manual-reset `Event` | auto 唤醒一个后复位；manual 保持 signaled 直到 reset |
+| 跨进程互斥 | named `Mutex` | kernel object；abandoned 表示前 owner 异常退出 |
+| permit 限流 | `Semaphore` | current/max count；release 数量必须守恒 |
+| 读多写少 | `SRWLOCK` | shared/exclusive；与 condition variable 配合 |
+
+<Term def="Windows 可等待对象在 owner 未释放就结束时返回的状态，表示共享数据可能处于半更新状态，不能当作普通成功。">abandoned mutex</Term>
+
+跨进程对象需要命名空间、security descriptor 与 handle lifetime；Linux 的 process-shared pthread object 则必须放在 shared memory 并配置 `PTHREAD_PROCESS_SHARED`。标准 `std::mutex` 不定义跨进程共享。
+
+## 3.7 C++ 11/14/17 同步对象：用 RAII 表达锁范围
+
+C++ 标准库提供 `std::mutex`、`recursive_mutex`、`timed_mutex`、`shared_mutex`，以及 `lock_guard`、`unique_lock`、`shared_lock`。默认优先不可递归 mutex；递归锁常掩盖 ownership 和 re-entrancy 设计问题。
+
+<Stepper>
+  <Step title="按共享不变量选择同步原语">
+    <CseSynchronizationPrimitiveLab />
+  </Step>
+  <Step title="把 predicate 和 mutex 放在同一 state owner">
+    condition variable 不拥有状态。生产者持锁修改 queue/stopping，消费者用同一 mutex 检查 predicate，才能避免 lost wakeup。
+  </Step>
+  <Step title="用 RAII 缩小 critical section">
+    在锁内只修改共享 state；阻塞 I/O、callback、日志格式化和用户代码移出锁区，防止 convoy 与反向调用死锁。
+  </Step>
+</Stepper>
+
+```cpp
+std::unique_lock<std::mutex> lock(mu);
+not_empty.wait(lock, [&] { return stopping || !queue.empty(); });
+if (stopping && queue.empty()) return;
+Task task = std::move(queue.front());
+queue.pop_front();
+lock.unlock();
+task();
+```
+
+<Term def="condition variable 唤醒后必须在持锁状态重新检查的共享状态表达式，例如 stopping || !queue.empty()。">wait predicate</Term>
+
+`notify_one` 不传递 event payload，也不积累“通知次数”；共享 predicate 才是真相。若只 notify 而状态修改和检查不受同一 mutex contract 约束，consumer 可能永久睡眠。
+
+## 3.8 如何确保新线程真的启动
+
+`std::thread` constructor 成功只表示执行资源已创建，不表示线程已经完成 config、bind、TLS 或 event loop 初始化。需要启动握手：worker 报告 `ready` 或 `exception_ptr`，owner 在 timeout 内等待；失败时请求停止并 join，不要让服务对外宣称 ready。
+
+```cpp
+std::promise<void> started;
+auto ready = started.get_future();
+std::thread worker([p = std::move(started)]() mutable {
+  try {
+    initialize_worker();
+    p.set_value();
+    event_loop();
+  } catch (...) {
+    p.set_exception(std::current_exception());
+  }
+});
+ready.get(); // propagates initialization failure
+```
+
+<Term def="创建者等待 worker 完成最低初始化并明确返回 ready 或 error 的启动确认协议。">thread startup handshake</Term>
+
+## 3.9 锁的次数、范围、粒度与死锁/活锁
+
+优化锁之前先写出 protected invariant。减少次数可批量更新；缩小范围可把 I/O 移出 critical section；减小粒度可分片 state，但锁越多，顺序与观测快照越复杂。
+
+<Term def="多个执行者各自持有资源并等待对方释放，形成 wait-for cycle，因而永远无法前进。">deadlock</Term>
+
+避免 deadlock 的常用规则：全局 lock ordering；同时拿多个锁时用 `std::lock`/`std::scoped_lock`；锁内不调用未知 callback；不要持锁等待 thread join；timeout 只用于诊断/恢复，不等于证明没有环。
+
+```cpp
+void transfer(Account& from, Account& to, int amount) {
+  if (&from == &to) return;
+  std::scoped_lock lock(from.mu, to.mu); // C++17 deadlock avoidance
+  from.balance -= amount;
+  to.balance += amount;
+}
+```
+
+<Term def="线程没有阻塞，却持续互相让步、重试或撤销，系统状态不断变化但业务没有完成。">livelock</Term>
+
+livelock 常由双方相同的 try-lock/retry policy 导致；使用固定 lock order、randomized/exponential backoff 或 single owner queue。starvation 则是某线程长期拿不到资源，需要看 fairness、priority inversion 和 queue discipline。
+
+<Callout type="trap" title="缩小锁粒度不一定提升吞吐">
+把一把锁拆成多把锁会增加 cache contention、lock ordering 和一致快照成本。先用 contention profile、wait time 与 critical-section duration 证明瓶颈，再改变边界。
+</Callout>
+
+## 3.10 线程局部存储不是普通全局变量
+
+Windows TLS index、POSIX `pthread_key_create` 和 C++ 11 `thread_local` 都让每个线程拥有独立实例。适合 errno-like state、per-thread buffer、allocator cache 或 trace context，但在线程池中线程比请求活得久，TLS 若不在任务边界重置，会把上一个请求身份泄漏给下一个请求。
+
+<Term def="每个线程独立持有的变量实例；其初始化、析构与线程生命周期绑定，而非请求生命周期。">thread-local storage</Term>
+
+```cpp
+thread_local RequestContext context;
+
+void run_task(Task task) {
+  ContextGuard guard(context, task.trace_id); // exit 时恢复/清空
+  task();
+}
+```
+
+dynamic library unloading、TLS destructor 顺序和主线程/worker 退出差异都需要测试。不要让 TLS 成为隐藏 dependency；业务函数仍应优先显式传递 context。
+
+## 3.11 C 库中的非线程安全函数
+
+历史 API 可能返回指向共享 static buffer 的指针或使用隐式 global state，例如 `strtok`、`localtime`、`gmtime` 的传统版本。一个线程的下一次调用会覆盖另一个线程正在读取的数据。优先使用 `strtok_r`、`localtime_r`（POSIX）或对应 secure variant，并把结果复制进 caller-owned storage。
+
+```cpp
+std::tm local_time(std::time_t value) {
+  std::tm result{};
+#ifdef _WIN32
+  localtime_s(&result, &value);
+#else
+  localtime_r(&value, &result);
+#endif
+  return result;
+}
+```
+
+判断 API 是否 thread-safe，要查平台 contract，而不是看到“只读参数”就推断安全。locale、environment、signal handler 和 library-global cache 也可能是隐式共享状态。
+
+## 3.12 线程池、环形队列与消息中间件
+
+线程池把 task submission 与 execution 分离：producer 创建拥有明确 lifetime 的 task，bounded queue 限制在途内存，worker 取任务并把 result/exception/cancellation 传回 owner。线程数不是越多越好：CPU-bound 通常接近可用 cores，blocking I/O 需要按阻塞比例建模或拆池。
+
+<Term def="容量固定、head/tail 取模移动的队列；它让内存使用有界，但并不自动提供线程安全与过载策略。">bounded ring queue</Term>
+
+<Term def="当 producer 的持续到达率超过 consumer 服务率时，系统通过阻塞、拒绝、丢弃、降级或上游限流限制积压。">backpressure policy</Term>
+
+<Stepper>
+  <Step title="用到达率和服务率观察过载">
+    <CseThreadPoolBackpressureLab />
+  </Step>
+  <Step title="定义 full queue 行为">
+    交互请求可快速 reject/timeout，遥测可按策略 drop，关键任务可阻塞 producer；策略必须按 task class 区分并记录指标。
+  </Step>
+  <Step title="隔离阻塞域并验证 shutdown">
+    CPU、磁盘和外部 RPC 不共享一个无界池。停止时先关闭 admission，再 drain/cancel queue，最后唤醒并 join workers。
+  </Step>
+</Stepper>
+
+```cpp
+bool ThreadPool::submit(Task task) {
+  std::lock_guard lock(mu_);
+  if (stopping_ || queue_.size() == capacity_) return false;
+  queue_.push_back(std::move(task));
+  not_empty_.notify_one();
+  return true;
+}
+```
+
+lock-free ring queue 还要处理 single/multi producer-consumer 模型、atomic head/tail、memory reclamation、ABA 和 false sharing；不能因“环形”二字自动宣称 lock-free。跨进程/跨机器 message middleware 则增加 serialization、delivery semantics、ack、redelivery、ordering 与 idempotency，不是本地 queue 的透明替代。
+
+## 3.13 Fiber 与 coroutine：改变等待方式，不改变共享状态规则
+
+<Term def="在用户态 scheduler 中切换 stack/context 的轻量执行单元；一次 blocking syscall 仍可能阻塞承载它的 OS thread。">fiber</Term>
+
+Fiber 通常 stackful，由 runtime 保存寄存器和 stack；coroutine 可 stackless，把 suspension points 编译为 state machine。它们可以降低大量并发等待的 thread/stack 成本，但不会自动消除 data race、deadlock、cancellation 或 lifetime 问题。
+
+```cpp
+Task<Response> fetch(Request request) {
+  auto connection = co_await pool.acquire();
+  co_await connection.write(request);
+  co_return co_await connection.read_response();
+}
+```
+
+在 coroutine suspension 前后必须检查：哪些 references 跨越 suspension、executor 是否切换线程、mutex 是否仍被持有、取消如何传播。绝不在持有普通 mutex 时 `co_await` 未知操作；continuation 可能在另一线程恢复并形成长时间锁占用或 deadlock。
+
+## 本章回顾：从共享状态到调度系统
+
+1. 先画 thread/process、owner 与 lifetime，明确 start/stop/join/error 路径。
+2. 对每个共享不变量选择 atomic 或 mutex，并写出 happens-before 与 predicate。
+3. condition variable 只通知“状态可能变化”，waiter 必须持锁循环检查状态。
+4. 线程池必须有 bounded queue、overload policy、异常/取消传播与 shutdown protocol。
+5. TLS、fiber 和 coroutine 改变 storage/scheduling 位置，不会替你解决 ownership。
+
+<Exercises>
+
+**问题 1：为什么 `bool ready` 的 producer 写入与 consumer 轮询即使在某台 x86 机器上“每次都成功”，仍不是正确同步？请给出 atomic 和 mutex/condition-variable 两种修复。**
+
+<Answer>普通 bool 的并发读写没有 happens-before，是 C++ data race。简单发布可使用 `ready.store(true, release)` 与 `ready.load(acquire)`，并保证 payload 在 release 前写完；需要等待与复合 predicate 时，将 ready/payload 放在同一 mutex 下修改，consumer 用 `cv.wait(lock, predicate)`，producer 修改后 notify。</Answer>
+
+**问题 2：一个线程池有 4 个 worker，每个平均处理 5 tasks/s，持续到达 28 tasks/s。无界队列为什么不是解决方案？应怎样设计？**
+
+<Answer>理论服务率约 20 tasks/s，持续每秒新增约 8 个积压；无界队列只把过载转成不断增长的内存、排队延迟和过期请求。应设有界队列与等待预算，按任务类型选择 reject、timeout、drop、degrade 或上游 backpressure，记录 saturation 指标，并通过扩容、减少服务时间或拆分阻塞池提升真实服务率。</Answer>
+
+**问题 3：代码持有 `sessions_mutex` 后调用 callback，callback 又获取 `metrics_mutex`；另一路先拿 `metrics_mutex` 再删除 session。如何证明和修复 deadlock？**
+
+<Answer>画 wait-for graph 可得到 sessions→metrics 与 metrics→sessions 的 cycle。用 thread dump/lock instrumentation 证明双方持有与等待关系。修复应统一全局 lock order，或在 sessions lock 内只复制稳定数据，释放后再调用 callback；需要同时拿锁时使用 `std::scoped_lock`，并禁止持锁调用未知用户代码。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="thread lifecycle contract" definition="线程创建、运行、停止、join/detach 与资源回收的完整约定。" />
+  <GlossaryItem term="joinable thread" definition="仍关联可等待执行线程、销毁前必须 join 或 detach 的 thread handle。" />
+  <GlossaryItem term="happens-before" definition="使一个线程 side effects 对另一线程可见的 C++ 顺序关系。" />
+  <GlossaryItem term="pthread mutex" definition="保护共享不变量的 POSIX exclusive synchronization object。" />
+  <GlossaryItem term="abandoned mutex" definition="Windows mutex owner 异常结束后，waiter 得到的共享状态可能损坏提示。" />
+  <GlossaryItem term="wait predicate" definition="condition-variable waiter 每次醒来都要持锁重查的共享状态表达式。" />
+  <GlossaryItem term="thread startup handshake" definition="worker 初始化后向 creator 明确返回 ready 或 error 的协议。" />
+  <GlossaryItem term="deadlock" definition="执行者形成资源等待环而永久无法前进。" />
+  <GlossaryItem term="livelock" definition="执行者持续重试或让步，状态变化却没有业务进展。" />
+  <GlossaryItem term="thread-local storage" definition="初始化与析构绑定线程 lifetime 的每线程独立变量实例。" />
+  <GlossaryItem term="bounded ring queue" definition="head/tail 循环移动且容量固定的有界队列结构。" />
+  <GlossaryItem term="backpressure policy" definition="过载时限制 producer 积压的阻塞、拒绝、丢弃、降级或限流策略。" />
+  <GlossaryItem term="fiber" definition="由 user-space scheduler 切换 context 的 stackful lightweight execution unit。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++服务器开发精髓，第3章 多线程编程与资源同步"
+  adaptedUrl="https://book.douban.com/subject/35491437/"
+/>

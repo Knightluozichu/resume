@@ -1,0 +1,309 @@
+---
+title: "Item 33：对 auto&& 参数使用 decltype 再转发"
+type: A
+section: Chapter 6 · Lambda Expressions
+order: 33
+description: 对齐 Effective Modern C++ Item 33：把 generic lambda 反糖化为模板调用运算符，证明 decltype(auto&& parameter) 如何恢复 cv/reference 信息，并实现单参数与参数包的 std::forward。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch06.html"
+draft: false
+---
+
+import {
+  EmcppDecltypeForwardingProofMap,
+  EmcppGenericLambdaDesugaringMap,
+  EmcppVariadicGenericForwardingFlowMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-33-decltype-auto-forward-generic-lambda";
+
+<Objectives>
+
+- 能解释 generic lambda（泛型 lambda）的 auto&& 参数如何对应 generated call-operator template 中的 forwarding reference
+- 能推导 decltype on auto parameters（auto 参数使用 decltype）在 lvalue、const lvalue 与 rvalue 下的精确结果
+- 能实现使用 std forward（完美转发）的单参数与 variadic auto double ampersand parameter（auto&& 参数）wrapper
+
+</Objectives>
+
+## 从“generic lambda 里没有可写的 T”开始
+
+普通 forwarding function template 有显式 template parameter，可直接写 `std::forward<T>`：
+
+```cpp
+template<typename T>
+decltype(auto) callNormalize(T&& value) {
+    return normalize(std::forward<T>(value));
+}
+```
+
+C++14 generic lambda 把参数类型写成 auto，使用方看不到 compiler 生成的 template parameter 名称：
+
+```cpp
+auto callNormalize = [](auto&& value) -> decltype(auto) {
+    return normalize(/* how should value be forwarded? */);
+};
+```
+
+<Term def="parameter list 含 auto，使 compiler 为 closure call operator 生成 function template 的 C++14 lambda。">
+  generic lambda
+</Term>
+
+Item 33 的答案是对 parameter 使用 `decltype`，把它的声明类型作为 `std::forward` template argument。先预测 generic lambda 的隐藏 call operator 长什么样，再证明这种写法保留 category。
+
+<EmcppGenericLambdaDesugaringMap />
+
+## auto&& parameter 是 forwarding reference
+
+generic lambda 可近似反糖化为 unnamed closure class：
+
+```cpp
+class GeneratedClosure {
+public:
+    template<typename T>
+    decltype(auto) operator()(T&& value) const {
+        return normalize(/* forward value */);
+    }
+};
+```
+
+<Term def="generic lambda 中由 deduced cv-unqualified auto 与 && 组成，可按 argument category 折叠成 lvalue/rvalue reference 的参数。">
+  auto double ampersand parameter
+</Term>
+
+因此 `auto&& value` 遵守 Item 28 的 forwarding-reference deduction 与 reference collapsing：lvalue 使 hidden T 成为 lvalue reference；rvalue 使 T 为 non-reference，最终 parameter 为 rvalue reference。
+
+若写 `const auto&&`，它不再是 forwarding reference，只接 rvalue；若 auto 不参与 deduction，也不能套用这条规则。
+
+## named parameter expression 仍是 lvalue
+
+```cpp
+auto wrapper = [](auto&& value) {
+    target(value); // value expression is always an lvalue
+};
+```
+
+<Term def="即使 parameter 的声明类型是 rvalue reference，只要表达式是有名字的 parameter，它在 body 中仍是 lvalue。">
+  named-parameter lvalue
+</Term>
+
+直接传 `value` 会把原 rvalue 降为 lvalue：可能选择 copy overload，无法调用只接 rvalue 的 API，或改变目标 overload。无条件 `std::move(value)` 又会把原 lvalue 错误变成 rvalue。因此必须依据 deduction 保存的信息条件转发。
+
+<Callout
+  type="trap"
+  title="陷阱：auto&& 已经保留类别，body 中直接传 value 就等于 forwarding"
+>
+  auto&& 只让 parameter type 能绑定两类输入；有名字的 value expression 仍是
+  lvalue。真正恢复调用者 category 的动作发生在 std::forward，而不是 parameter
+  declaration 本身。
+</Callout>
+
+## decltype(parameter) 取回声明类型
+
+对 unparenthesized parameter name 使用 `decltype`，返回 entity 的 declared type：
+
+```cpp
+auto wrapper = [](auto&& value) -> decltype(auto) {
+    return target(
+        std::forward<decltype(value)>(value)
+    );
+};
+```
+
+<Term def="对未加括号的变量或参数名称应用 decltype，得到该实体的声明类型而非按通用 expression-category 规则推导。">
+  unparenthesized decltype rule
+</Term>
+
+如果 caller 传 Widget lvalue，value 的 declared type 是 `Widget&`；如果传 Widget rvalue，则是 `Widget&&`。这正好编码 `std::forward` 所需的信息。
+
+## lvalue 路径：decltype 得到 T&
+
+```cpp
+Widget widget;
+wrapper(widget);
+```
+
+<Term def="lvalue 输入使 auto&& 折叠为 lvalue reference，decltype(parameter) 因而返回 U&。">
+  lvalue decltype path
+</Term>
+
+推导与转发步骤：
+
+1. auto 对应 hidden T，lvalue 使 T 推导为 `Widget&`。
+2. parameter `T&&` 形成 `Widget& &&`，折叠为 `Widget&`。
+3. `decltype(value)` 返回 parameter declared type `Widget&`。
+4. `std::forward<Widget&>(value)` 的结果经折叠仍为 `Widget&`，target 收到 lvalue。
+
+const lvalue 走同一路径并保留 const：结果为 `const Widget&`。
+
+## rvalue 路径：decltype 得到 T&& 也正确
+
+```cpp
+wrapper(Widget{});
+```
+
+<Term def="rvalue 输入使 auto 推导为 non-reference U，parameter 与 decltype(parameter) 均为 U&&。">
+  rvalue decltype path
+</Term>
+
+普通 function template 常写 `std::forward<T>`，其中 T 为 Widget；generic lambda 使用 `std::forward<decltype(value)>`，template argument 是 `Widget&&`。两者看起来不同，但结果一致：`std::forward<Widget&&>` 的 return type 再形成 `Widget&& &&`，引用折叠后仍是 `Widget&&`。
+
+<EmcppDecltypeForwardingProofMap />
+
+## 为什么不应写 decltype((value))
+
+额外括号触发 decltype 的通用 expression rule。`(value)` 是 named lvalue expression，无论 parameter declared type 原来是 `Widget&` 还是 `Widget&&`，`decltype((value))` 都得到 lvalue reference。
+
+```cpp
+auto broken = [](auto&& value) {
+    return target(
+        std::forward<decltype((value))>(value)
+    );
+};
+```
+
+<Term def="对 parenthesized named parameter 使用 decltype 时按 lvalue expression 推导，导致原 rvalue category 被抹成 lvalue reference。">
+  parenthesized-decltype category loss
+</Term>
+
+因此公式必须使用 `decltype(value)`，不加额外括号。括号在运行计算上看似无害，却会切换 decltype 的语法分支。
+
+<Callout type="trap" title="陷阱：decltype((value)) 比 decltype(value) 更精确">
+  对名字加括号会从 entity-declared-type 规则切换为 expression-category
+  规则；named value 是 lvalue，于是所有输入都得到 lvalue reference，rvalue
+  forwarding 被破坏。
+</Callout>
+
+## return type 也可能需要 decltype(auto)
+
+若 target 返回 reference，lambda 的普通 auto return type deduction 会像按值 auto 一样丢弃 top-level reference。使用 `-> decltype(auto)` 可保留 target 的精确返回类型：
+
+```cpp
+auto access = [](auto&& container, auto index) -> decltype(auto) {
+    return std::forward<decltype(container)>(container)[index];
+};
+```
+
+<Term def="以 decltype 规则推导 function return type，从而保留 expression 的 reference 与 cv 信息。">
+  decltype-auto return preservation
+</Term>
+
+parameter forwarding 与 return preservation 是两个独立边界：前者决定 target 收到什么 category，后者决定 caller 收到 value 还是 reference。只修一侧仍可能改变 wrapper 语义。
+
+## variadic generic lambda 要逐项 forward
+
+C++14 generic lambda 可接 parameter pack：
+
+```cpp
+auto invoke = [](auto&&... args) -> decltype(auto) {
+    return target(
+        std::forward<decltype(args)>(args)...
+    );
+};
+```
+
+<Term def="generic lambda 中每个 auto&& element 独立推导并保留自身 cv/reference/category 的参数包。">
+  variadic forwarding pack
+</Term>
+
+`decltype(args)` 位于 pack pattern 中，分别得到每个 parameter 的 declared type；尾部 `...` 同时展开 `std::forward` expression。若输入是 `(lvalue, rvalue, const lvalue)`，target 仍按相同混合类别接收三项。
+
+<EmcppVariadicGenericForwardingFlowMap />
+
+## 展开位置决定是否逐项保留类别
+
+<Term def="parameter pack expansion 中将每个 args 与对应 decltype(args) 放入同一个 std::forward pattern 的配对规则。">
+  per-element forward expansion
+</Term>
+
+不能先把 args 收进普通 container/tuple 再假定 category 自动保留；命名 storage 通常把 expressions 变成 lvalues。若确需延迟调用，应使用 tuple of references/owned values，并在 apply 时重新依据 element types 转发，明确 lifetime。
+
+同样不能只写 `target(args...)`，因为每个 named args expression 都是 lvalue。正确 pattern 必须把 type recovery 和 expression cast 放在同一个 expansion 内。
+
+## generic wrapper 的四步审查
+
+<Term def="检查参数是否真正 forwarding、decltype 语法分支、每项 forward 配对以及返回引用保留的验证流程。">
+  generic forwarding audit
+</Term>
+
+1. parameter 是否为 deduced cv-unqualified `auto&&`？
+2. `decltype(param)` 是否未加多余括号，返回 declared type？
+3. 每个 named parameter 是否经 `std::forward<decltype(param)>` 使用？
+4. target return reference 是否需要 `decltype(auto)` 保留？
+5. wrapper 是否跨越异步/存储边界，使 reference lifetime 失效？
+
+先预测 overload selection 与 return type，再用 static assertions/overload probes 验证；不能只看运行值相同。
+
+## 小结
+
+- generic lambda 的 auto parameter 让 generated closure call operator 成为 function template
+- deduced `auto&&` 是 forwarding reference，lvalue/rvalue 通过 deduction 与 reference collapsing 得到不同 parameter type
+- named parameter expression 永远是 lvalue，必须显式 std forward 才能恢复 caller category
+- decltype on auto parameters 以未加括号的名字返回 declared type，正好替代不可见的 hidden T
+- lvalue 时 decltype(param) 为 U&；rvalue 时为 U&&，两者作为 std::forward template argument 都得到正确结果
+- `decltype((param))` 按 named lvalue expression 推导，会把所有路径变成 lvalue，应避免额外括号
+- variadic generic lambda 使用 `std::forward<decltype(args)>(args)...` 逐项保留混合 categories
+- target 可能返回 reference 时，另用 `decltype(auto)` 保留 wrapper return type
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 33"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch06.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="generic lambda">
+    call operator 由 auto parameter 生成模板的 lambda。
+  </GlossaryItem>
+  <GlossaryItem term="auto double ampersand parameter">
+    可折叠为左右值引用的 deduced auto&& 参数。
+  </GlossaryItem>
+  <GlossaryItem term="named-parameter lvalue">
+    有名字的 parameter expression 是左值。
+  </GlossaryItem>
+  <GlossaryItem term="unparenthesized decltype rule">
+    decltype(name) 返回实体声明类型。
+  </GlossaryItem>
+  <GlossaryItem term="lvalue decltype path">
+    左值输入使 decltype 参数结果为 U&。
+  </GlossaryItem>
+  <GlossaryItem term="rvalue decltype path">
+    右值输入使 decltype 参数结果为 U&&。
+  </GlossaryItem>
+  <GlossaryItem term="parenthesized-decltype category loss">
+    额外括号令 named 参数统一推导成左值引用。
+  </GlossaryItem>
+  <GlossaryItem term="decltype-auto return preservation">
+    保留返回表达式 reference/cv 的推导。
+  </GlossaryItem>
+  <GlossaryItem term="variadic forwarding pack">
+    独立保存每个参数 category 的 auto&& 包。
+  </GlossaryItem>
+  <GlossaryItem term="per-element forward expansion">
+    每个参数与其 decltype 配对转发。
+  </GlossaryItem>
+  <GlossaryItem term="generic forwarding audit">
+    检查泛型转发边界的固定流程。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：向 `[](auto&& value)` 分别传 Widget lvalue、const lvalue 与 rvalue。** 推导 parameter、decltype 与 forward result。
+
+<Answer question="三条路径怎样保留 category？">
+  mutable lvalue 使 parameter/decltype(value) 为 Widget&，forward 后仍为
+  lvalue；const lvalue 得到 const Widget& 并保留 const lvalue；rvalue 使
+  parameter 与 decltype(value) 为 Widget&&，forward 的返回类型经 `Widget&& &&`
+  折叠仍为 Widget&&。named value 本身始终是 lvalue，结果来自 forward cast。
+</Answer>
+
+2. **问题 2：比较 `decltype(value)` 与 `decltype((value))`。** 解释为什么后者破坏 rvalue path。
+
+<Answer question="括号切换了哪条规则？">
+  未加括号的 parameter name 使用 entity rule，返回 declared type，能区分 Widget&
+  与 Widget&&；加括号后按 expression category 分析，而 named value 是
+  lvalue，所以两类输入都得到 lvalue reference。将后者传给 std::forward
+  会统一输出 lvalue，失去原 rvalue category。
+</Answer>
+
+3. **问题 3：编写 variadic generic lambda 转发 `(mutable lvalue, rvalue, const lvalue)`。** 同时保留 target 的 reference return。
+
+  <Answer question="pack 与返回类型怎样组合？">写 `[](auto&&... args) -> decltype(auto) { return target(std::forward<decltype(args)>(args)...); }`。每个 decltype(args) 独立取回其 parameter declared type，pack expansion 逐项配对 forward，因此混合 categories 不互相影响；trailing decltype(auto) 再按 target call expression 保留 reference/cv return。还应以 overload probes 和 static_assert 验证，而非只比较返回数值。</Answer>
+</Exercises>

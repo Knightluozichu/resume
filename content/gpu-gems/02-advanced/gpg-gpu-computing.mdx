@@ -1,121 +1,235 @@
 ---
-title: "GPU 通用计算"
+title: "GPU 计算：三代编程模型与 20 章复现"
 type: B
 section: "计算机图形学与渲染"
 order: 7
-description: "从图形管线到通用并行计算——GPGPU 的编程模型与应用"
+description: "从 fragment-pass 工具箱、流体/体绘制，到流式架构、数据结构/归约，再到 CUDA AES、随机数、地震、scan 与反馈"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems"
 draft: false
 ---
 
-import { GpgGpuComputingDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-gpu-computing";
+import { GpgGpuComputingDiagram, GpgComputeChapterMatrixDiagram, GpgParallelPrimitiveDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-gpu-computing";
+import { GpgStepFlowDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能解释图形管线与通用计算管线的区别
-- 能描述 SIMT 编程模型与线程组的组织方式
-- 能回答：GPU 为什么适合数据并行而非任务并行？
-- 能识别 GPGPU 的典型应用场景与分支发散问题
+
+- 能描述三卷 20 个 GPU 计算原章及 fragment-pass、streaming、CUDA 三代编程模型
+- 能推导流体投影、volume compositing、reduction/scan、随机采样与 Gaussian recurrence 的核心关系
+- 能解释 data layout、gather/scatter、flow control、memory traffic、feedback compaction 的性能边界
+- 能为 AES、地震成像、超声、stereogram、deformer 等应用建立 CPU oracle 和端到端证据
+
 </Objectives>
 
-## 直觉引入
+## 直觉：GPU 计算不是从 Compute Shader 开始的
 
-GPU 原本是「画三角形专用芯片」。但有人发现：画三角形时，每个像素的计算逻辑相同只是数据不同——这不就是并行计算的理想场景吗？于是人们开始「借用」图形管线做通用计算：把数据伪装成纹理，用像素着色器当计算内核。后来 GPU 厂商干脆开放了通用计算接口（CUDA、Compute Shader），GPU 正式从「画图芯片」变成「并行计算芯片」。
+第一卷把数组编码成纹理，用 fragment shader 逐元素计算并 ping-pong render target；第二卷抽象 streaming processor、gather、reduction 和数据结构；第三卷 CUDA 提供线程块、共享存储和更一般 scatter。若把三卷都重写成现代 work group，会丢失算法为何适配/不适配当时 GPU 的关键。
 
-## 概念讲解
+先预测：一个现代 compute 版 reduction 比原 fragment-pass 快，是否说明原章算法已被“替代”？只说明载体性能变化；树形归约的工作量、跨度、结合律和数值顺序仍需复现。
 
-### 图形管线 vs 通用计算
+<Term def="把同一个 kernel 应用于大量数据元素，并把存储访问和控制流组织为可并行流的计算模型">流式计算模型</Term>贯穿三代载体。
 
 <GpgGpuComputingDiagram />
 
-<Term def="GPGPU 是 General-Purpose computing on GPU 的缩写，把 GPU 用于非图形的通用并行计算">
-GPGPU
-</Term>
+## 20 个原章与独立核心
 
-图形管线的输入是几何、输出是像素，必须经过顶点和光栅化阶段；通用计算管线的输入和输出都是任意数据缓冲，直接由线程组处理，没有光栅化约束。
+<GpgComputeChapterMatrixDiagram />
 
-<Term def="SIMT 是 Single Instruction Multiple Threads 的缩写，GPU 的执行模型，同一指令同时驱动多个线程">
-SIMT
-</Term>
+### GPU Gems 1 Ch37-42：借图形管线做计算
 
-## 交互Demo
+- **A Toolkit for Computation on GPUs**：把数组、迭代、reduction、sort/search 等计算原语映射到 texture + fragment pass；
+- **Fast Fluid Dynamics Simulation on the GPU**：GPU 执行 advection、force、diffusion/pressure 和 projection；
+- **Volume Rendering Techniques**：三维纹理采样、transfer function、front-to-back compositing 和 early termination；
+- **Applying Real-Time Shading to 3D Ultrasound Visualization**：将医学体数据、切片/体绘制和 shading 结合；
+- **Real-Time Stereograms**：按深度约束建立左右像素对应并生成自立体图；
+- **Deformers**：把 lattice、twist、bend 等几何变形映射到 vertex program。
 
-<Stepper>
-<Step title="第一步：线程组组织">
-Compute Shader 以线程组（Thread Group）为单位调度。一个组通常 64-1024 个线程，共享同一块共享内存。组内线程可同步和通信，组间独立。设计时要把数据按组划分，让组内访问局部化。
-<GpgGpuComputingDiagram />
-</Step>
-<Step title="第二步：数据并行执行">
-每个线程执行同一段着色器代码，但处理不同的数据（按线程 ID 索引）。这就像 1000 个工人用同一份说明书，每人处理一个不同的零件。GPU 的 thousands of cores 让这种数据并行极其高效。
-</Step>
-<Step title="第三步：结果写回与归约">
-计算完成后，结果写回显存缓冲。对于需要汇总的场景（如求和、求最大值），用归约算法：先组内归约到共享内存，再组间归约，最后得到全局结果。
-</Step>
-</Stepper>
+<Term def="把计算域编码为纹理，用全屏/几何光栅产生 invocation，fragment shader 从源纹理 gather 并写目标纹理，再交换读写目标的早期 GPGPU 方式">Fragment-pass GPGPU</Term>受到输出位置固定、scatter 困难和 pass 同步限制。
 
-## 代码对照
-
-```glsl
-// Compute Shader：图像模糊（卷积）
-layout(local_size_x = 16, local_size_y = 16) in;
-layout(binding = 0, rgba8) uniform image2D inputImg;
-layout(binding = 1, rgba8) uniform image2D outputImg;
-shared vec4 sharedData[18][18]; // 共享内存缓存邻域
-
-void main() {
-    ivec2 localIdx = ivec2(gl_LocalInvocationID.xy);
-    ivec2 globalIdx = ivec2(gl_GlobalInvocationID.xy);
-
-    // 加载到共享内存（含 halo 区域）
-    ivec2 loadIdx = globalIdx - ivec2(1);
-    sharedData[localIdx.x + 1][localIdx.y + 1] = imageLoad(inputImg, loadIdx);
-
-    barrier(); // 组内同步
-
-    // 卷积模糊
-    vec4 sum = vec4(0.0);
-    for (int dx = -1; dx <= 1; dx++) {
-        for (int dy = -1; dy <= 1; dy++) {
-            sum += sharedData[localIdx.x + 1 + dx][localIdx.y + 1 + dy];
-        }
-    }
-    imageStore(outputImg, globalIdx, sum / 9.0);
+```cpp
+Texture src = initialState, dst = scratch;
+for (int iteration=0; iteration<K; ++iteration) {
+  bindInputs(src);
+  bindRenderTarget(dst);
+  drawDomainQuad(fragmentKernel);
+  swap(src, dst); // pass boundary establishes the next iteration source
 }
 ```
+
+### Stable fluids：算子分解与投影
+
+不可压缩速度场满足 $\nabla\cdot\mathbf u=0$。一步常分为 advection、force、pressure solve、projection：
+
+$$
+\nabla^2p=\nabla\cdot\mathbf u^*,\qquad
+\mathbf u=\mathbf u^*-\nabla p.
+$$
+
+半拉格朗日 advection 稳定但有数值耗散；Jacobi pressure 迭代次数影响 divergence 残差。验收边界条件、质量/涡量趋势、$\|\nabla\cdot u\|$ 和时间步，而非只看烟雾动画。
+
+### Volume、ultrasound 与合成
+
+front-to-back 预乘合成：
+
+$$
+C_{new}=C+(1-\alpha)\alpha_s C_s,\qquad
+\alpha_{new}=\alpha+(1-\alpha)\alpha_s.
+$$
+
+<Term def="把标量体数据经 transfer function 映射为颜色/消光，沿视线采样并按透射率合成的图像生成过程">体绘制</Term>要说明采样步长、transfer function、梯度法线和 early termination。超声数据还需保留物理强度/动态范围和医学空间标定，不能把图像增强当诊断真实性。
+
+Stereogram 与 deformers 分别代表约束传播和独立顶点映射；前者要处理冲突/遮挡，后者要验证坐标空间、Jacobian/法线和边界连续性。
+
+### GPU Gems 2 Ch29-36：架构与并行原语
+
+- **Streaming Architectures and Technology Trends**：流处理器、算术/带宽趋势和可编程性；
+- **The GeForce 6 Series GPU Architecture**：当代 vertex/fragment 单元、纹理、分支和吞吐约束；
+- **Mapping Computational Concepts to GPUs**：把 map、gather、scatter 替代、reduction 和迭代映射到 GPU；
+- **Taking the Plunge into GPU Computing**：从算法选择、数据表示、精度到传输评估 GPU 适用性；
+- **Implementing Efficient Parallel Data Structures on GPUs**：排序数组、grid、tree/stack 替代和 pointer-less 结构；
+- **GPU Flow-Control Idioms**：predication、分支、stream compaction 与多 pass 控制流；
+- **GPU Program Optimization**：用瓶颈、算术强度、访问合并和 pass 数量驱动优化；
+- **Stream Reduction Operations for GPGPU Applications**：以树形 pass 合并 sum/min/max 等流。
+
+<Term def="把一组元素按结合运算合并为较少元素直至单值或分块结果的并行原语">并行归约</Term>对 $N$ 项的总工作 $O(N)$、理想跨度 $O(\log N)$。浮点加法不满足严格结合律，树顺序与 CPU 串行结果可能不同，需误差容限/补偿策略。
+
+<GpgParallelPrimitiveDiagram />
+
+```glsl
+shared float tile[BLOCK];
+tile[lid] = gid < count ? input[gid] : 0.0;
+barrier();
+for (uint stride=BLOCK/2; stride>0; stride>>=1) {
+  if (lid < stride) tile[lid] += tile[lid+stride];
+  barrier();
+}
+if (lid==0) partial[groupId] = tile[0];
+```
+
+不要给 shared memory 固定“快多少倍”；bank conflict、occupancy、global cache 和复用次数决定收益。必须测 memory transaction、active groups 和实际 kernel time。
+
+### GPU Gems 3 Ch36-41：CUDA 数据并行应用
+
+- **AES Encryption and Decryption on the GPU**：并行处理独立 block，管理 lookup/table、key schedule 和吞吐；
+- **Efficient Random Number Generation and Application Using CUDA**：并行 RNG state、统计质量和应用采样；
+- **Imaging Earth's Subsurface Using CUDA**：将 seismic imaging/stencil/波传播类计算映射到 CUDA；
+- **Parallel Prefix Sum (Scan) with CUDA**：work-efficient up-sweep/down-sweep 和 block hierarchy；
+- **Incremental Computation of the Gaussian**：利用相邻 Gaussian 样本递推减少 transcendental 计算；
+- **Using the Geometry Shader for Compact and Variable-Length GPU Feedback**：用 geometry shader 输出变长结果并 compact feedback。
+
+### Scan、RNG 与可变长输出
+
+<Term def="输出每个位置之前或包含当前位置的前缀结合结果，是 compaction、排序、分配和稀疏构建的基础原语">并行前缀和</Term>。exclusive scan：
+
+$$
+y_i=\sum_{j=0}^{i-1}x_j.
+$$
+
+work-efficient scan 用 tree up-sweep 得总和，再 down-sweep 分发前缀；多 block 还需 scan block sums 并 uniform add。验收零项、非幂二长度、溢出和 in-place 边界。
+
+RNG 不能只看速度：每线程 state seed/subsequence 不应重叠，要测均匀性、自相关和应用估计偏差。AES 要用标准测试向量验证加解密和 block mode；性能报告包含 host/device 传输与数据规模，不能只报 kernel bandwidth。
+
+geometry shader feedback 是统一 shader 时代的变长输出技巧。现代 compute 可用 predicate + scan + scatter compact，但必须比较输出顺序、容量、计数和 overflow。
+
+### Gaussian recurrence 与地震成像
+
+Gaussian $g(x)=e^{-x^2/(2\sigma^2)}$ 的相邻值比可递推更新，避免每项 `exp`。实现必须定期/边界重归一化并比较累计误差。
+
+Seismic imaging 通常具有高维 stencil/相关/累加和巨大带宽。验证小网格解析波、边界条件、时间步稳定性和浮点精度；tile 共享存储只有在 halo 复用抵消加载/同步时有效。
+
+```cpp
+Result validateKernel(Kernel gpu, Reference cpu, Inputs tests) {
+  for (auto input : tests) {
+    auto expected = cpu(input);
+    auto actual = gpu(input);
+    compareValuesAndInvariants(expected, actual);
+  }
+  return measureEndToEnd(gpu, tests.largeCases());
+}
+```
+
+## 三步 20 章验收
+
+<Stepper>
+<Step title="第一步：还原时代数据流">
+
+分别画出 texture/pass、streaming GPU 与 CUDA block 的输入、输出、同步和不可表达操作，禁止直接抹成 compute。
+
+<GpgStepFlowDiagram caption="算法为何这样写，取决于当时可用 gather、scatter 和同步。" stage={1} stages={["Recover：fragment passes → streams → CUDA blocks"]} />
+
+</Step>
+<Step title="第二步：建立原语与应用 oracle">
+
+为 reduction/scan/RNG/AES/Gaussian 写 CPU tests；为 fluid/volume/ultrasound/seismic/deformer 检查解析量和中间场。
+
+<GpgStepFlowDiagram caption="原语正确和应用结果正确需要两层独立证据。" stage={2} stages={["Recover：fragment passes → streams → CUDA blocks", "Verify：primitive tests + application invariants + intermediate fields"]} />
+
+</Step>
+<Step title="第三步：规模与端到端性能">
+
+扫描数据量、分支分布、tile、迭代、传输和精度，报告 kernel/whole-pipeline 时间与 CPU 交叉点。
+
+<GpgStepFlowDiagram caption="GPU 优势必须包含调度、传输和问题规模。" stage={3} stages={["Recover：fragment passes → streams → CUDA blocks", "Verify：primitive tests + application invariants + intermediate fields", "Validate：scaling、traffic、accuracy、end-to-end crossover"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**误区：在 GPU 上做大量分支判断。**
-SIMT 模型下，同一 warp 内的线程必须执行相同指令。如果 if-else 让 warp 内线程走了不同分支，GPU 会串行执行所有分支，性能减半。应尽量用数学函数（step、mix）替代分支。
+**现象 →** 用一段现代 Compute Shader 卷积代表 20 个 GPGPU 原章。
+**原因 →** 忽略 fragment-pass 限制、流式抽象、并行原语和 CUDA 应用各自核心。
+**修法 →** 保留三代数据流，并逐章验证 fluid/volume、structures/reduction、AES/RNG/scan 等不同问题。
 </Callout>
 
 <Callout type="trap">
-**误区：忽略共享内存与全局内存的带宽差异。**
-GPU 的共享内存比全局内存快 10-100 倍。如果每个线程都从全局内存读数据，会被带宽瓶颈卡住。正确做法是先协作加载到共享内存，再从共享内存读取计算。
+**现象 →** 用 `mix/step` 替换所有分支，认为必然更快。
+**原因 →** 分支相干性、执行架构和两边工作量未测；predication 可能执行全部路径。
+**修法 →** 构造不同分支分布，测 instruction/occupancy/time，并保持数值边界一致。
 </Callout>
 
+<Callout type="trap">
+**现象 →** GPU kernel 快于 CPU 就宣布加速。
+**原因 →** 忽略上传、下载、同步、预处理和小规模 launch 成本。
+**修法 →** 同时报 kernel 与端到端时间，扫描问题规模并给出性能交叉点和驻留数据条件。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题 1**：GPU 为什么适合数据并行而非任务并行？
+
+**问题 1：fragment-pass reduction 与 CUDA reduction 的不变量是什么？**
 
 <Answer>
-GPU 的 SIMT 模型要求同一 warp 内线程执行相同指令。数据并行（同一段代码处理不同数据）天然符合此模型；任务并行（不同线程做不同的事）会导致 warp 内分支发散，GPU 串行执行所有分支，效率大幅下降。所以 GPU 擅长「同一件事的海量并行」，不擅长「不同事情的同时处理」。
+都以结合运算分层缩小元素数，工作近似 O(N)、跨度 O(log N)，每层输出成为下一层输入。不同的是写入/gather、同步和局部存储载体；浮点树顺序误差两者都要验收。
 </Answer>
 
-**问题 2**：共享内存为什么能大幅提升 GPU 计算性能？
+**问题 2：如何验证 Parallel Prefix Sum？**
 
 <Answer>
-共享内存是片上高速缓存，带宽比全局显存高 10-100 倍，延迟低一个数量级。当多个线程需要访问重叠的邻域数据时（如图像卷积），先协作把数据从全局内存加载到共享内存，再从共享内存读取，避免了重复的全局内存访问。这就是 GPU 编程的「分块」优化策略。
+对零长度、1、非幂二、跨 block、大值溢出和随机数组，与 CPU exclusive/inclusive scan 比较；检查总工作、block sums、uniform add 和容量，并用 scan 驱动 compaction 端到端测试。
 </Answer>
+
+**问题 3：设计覆盖 20 章的综合任务。**
+
+<Answer>
+读取超声/地震体数据，GPU deformer/流体更新场，volume render 输出；用 reduction 统计、scan compact、RNG 采样、Gaussian filter，AES 加密输出；保留 fragment-pass 教学对照与 CUDA/compute 现代路径，并记录数值、流量和时间。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+20 章记录 GPU 从图形管线计算工具箱、流式并行机器到 CUDA 通用处理器的演进。完整复现既要保留每代限制，也要验证 reduction/scan/RNG 等基础原语和 fluid/volume/AES/seismic 等应用，不能用“GPU 适合数据并行”一句话代替。
+
 <Glossary>
-<GlossaryItem term="GPGPU">GPU 通用计算，把图形处理器用于非图形渲染的通用并行计算任务。</GlossaryItem>
-<GlossaryItem term="SIMT">单指令多线程，GPU 的执行模型，一条指令同时驱动一组线程（warp）。</GlossaryItem>
-<GlossaryItem term="线程组">Compute Shader 的调度单位，组内线程共享内存并可同步，组间独立执行。</GlossaryItem>
-<GlossaryItem term="分支发散">同一 warp 内线程因条件分支走向不同路径，导致串行执行和性能下降。</GlossaryItem>
+<GlossaryItem term="流式计算模型">同一 kernel 作用于大量数据元素并组织并行流的模型。</GlossaryItem>
+<GlossaryItem term="Fragment-pass GPGPU">以纹理、fragment shader 和 ping-pong render target 表达计算的早期路径。</GlossaryItem>
+<GlossaryItem term="体绘制">对体数据沿视线采样 transfer function 并按透射率合成。</GlossaryItem>
+<GlossaryItem term="并行归约">按结合运算分层把元素集合缩小为部分或单一结果。</GlossaryItem>
+<GlossaryItem term="并行前缀和">为每个位置计算此前元素结合结果的基础并行原语。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="GPU Gems 系列" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3" />
+<Attribution adaptedFrom="GPU Gems 1 Ch37-42, GPU Gems 2 Ch29-36, GPU Gems 3 Ch36-41" adaptedUrl="https://developer.nvidia.com/gpugems" />

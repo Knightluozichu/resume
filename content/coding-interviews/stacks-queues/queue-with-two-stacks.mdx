@@ -1,214 +1,258 @@
 ---
-title: 用两个栈实现队列
+title: "面试题9：用两个栈实现队列"
 type: C
-section: 栈和队列
-order: 1
-description: 利用两个后进先出（LIFO）的栈，巧妙实现一个先进先出（FIFO）的队列，并探讨摊还时间复杂度分析。
+section: "第2章 面试需要的基础知识"
+order: 10
+description: "让stack1负责压入、stack2负责弹出，只在输出栈为空时整体搬运，以摊还O(1)代价实现FIFO队列。"
 demo: true
-math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviews
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/09_QueueWithTwoStacks/Queue.h"
 draft: false
 ---
 
-{/* 知识点清单：栈（LIFO）/ 队列（FIFO） / 双栈模拟 / 摊还分析 / 状态转移；原书章节：面试题9：用两个栈实现队列。 */}
+import { TwoStackQueueFlowDiagram, QueueStateInvariantMap, QueueOperationTraceLab, QueueAmortizedCostLab } from "@/components/mdx/coding-interviews/diagrams/queue-with-two-stacks";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能解释栈（LIFO）与队列（FIFO）的本质区别与行为差异。
-- 能描述如何利用双栈的状态转移机制，在 LIFO 的基础上模拟出符合 FIFO 的出队操作。
-- 能准确分析双栈队列在入队和出队操作中的摊还（Amortized）时间复杂度，并理解其为 $O(1)$ 的原因。
-- 能使用 C++ 和 TypeScript 实现完整的双栈队列，并正确处理队列为空等异常边界。
+- 能解释两个后进先出容器为何经过搬运后形成先进先出顺序
+- 能实现作者要求的`appendTail`与`deleteHead`两个模板队列接口
+- 能判断输出栈未空时为何绝不能搬运输入栈
+- 能分析任意操作序列中每个元素最多跨栈一次，并证明摊还常数时间
+- 能设计覆盖空队列、交错进出、对象移动和异常路径的测试
 
 </Objectives>
 
-## 直觉引入
+## 从两次反转为何恢复原顺序开始
 
-假设你的办公桌上有两个公文盒，分别标着“待处理（Inbox）”和“已分类（Outbox）”。这天，秘书送来一叠文件，他总是顺手把新文件堆在“待处理”盒的最上面。这就像在叠罗汉，最晚送来的文件压在最上面，而最早送来的文件被压在了最底下。
+先预测：依次入队`a、b、c`后，`stack1`从底到顶是`a、b、c`。若把它们逐个弹出并压入`stack2`，第二个栈从底到顶会变成`c、b、a`。此时从`stack2`栈顶弹出，得到的为何恰好是最早进入的`a`？
 
-如果现在你想处理那份“最早送来”的文件，该怎么办？因为文件堆在“待处理”盒里，你直接伸手拿只能拿到最上面那份最新的。此时，你把“待处理”盒里的文件整叠搬起来，一张张拿出来放到“已分类”盒中——由于你是从上面开始拿的，原本在最上面的最新文件就被放到了“已分类”盒的最底下，而原本被压在最底下的“最早送来”的文件，现在神奇地跑到了“已分类”盒的最上面！
+<Term def="只允许在同一端压入和弹出，最后进入的元素最先离开的线性结构。">栈</Term>遵守后进先出，<Term def="在尾部加入、在头部删除，最早进入的元素最先离开的线性结构。">队列</Term>遵守先进先出。一次入栈把到达顺序反过来；再把输入栈逐项搬到输出栈，相当于第二次反转，最老元素重新来到可删除的一端。
 
-从此以后，每当你想处理最老的文件，只需直接从“已分类”盒的最上面拿取。如果“已分类”盒空了，就再次把“待处理”盒里的文件整叠翻转过去。这样，我们仅仅通过两个“只能从顶部拿取”的盒子，就完美实现了“先来先办”的流转规则。
+题目要求用两个栈实现队列，接口名沿用作者源码：`appendTail`把元素加入队尾，`deleteHead`删除并返回队头。核心分工可以压缩为两句话：**stack1负责压入**新元素，**stack2负责弹出**旧元素；只有`stack2`为空时，才把`stack1`中的全部元素搬过去。
 
-## 概念讲解
+<TwoStackQueueFlowDiagram />
 
-### 栈与队列的本质区别
+## 两个栈共同表示一条逻辑队列
 
-在计算机科学中，<Term def="后进先出（Last-In-First-Out, LIFO）的数据结构，只能在栈顶进行插入（Push）和删除（Pop）操作。">栈</Term>与<Term def="先进先出（First-In-First-Out, FIFO）的数据结构，在一端插入元素（入队），在另一端删除元素（出队）。">队列</Term>是两种最基本的线性数据结构：
+不要把两个栈理解成两条独立队列。任意时刻，逻辑队列从头到尾的顺序是：先按`stack2`从顶到底读取旧元素，再按`stack1`从底到顶读取新元素。输出栈保存等待优先离开的前缀，输入栈保存后来到达的后缀。
 
-- **栈**：遵循后进先出（LIFO）原则，就像一摞盘子，最后放上去的盘子最先被拿走。
-- **队列**：遵循先进先出（FIFO）原则，就像排队买票，排在最前面的人最先买票离开。
+例如首次转移后`stack2`还有`b、c`等待弹出，此时新元素`d`进入`stack1`。正确队列顺序是`b、c、d`。若立即把`d`搬到非空输出栈，它会压在`b`上方并提前离开，破坏先进先出；所以“输出栈为空才搬运”不是性能技巧，而是正确性条件。
 
-本章的任务是：使用两个栈模拟一个队列，使其支持入队（Enqueue）与出队（Dequeue）操作。
+<QueueStateInvariantMap />
 
-### 双栈模拟的运行机制
+这个<Term def="在每次公开操作前后都成立、用于证明结构仍表示同一逻辑队列的条件。">表示不变量</Term>可以写成：`stack2`中的所有元素都早于`stack1`中的所有元素；`stack2`非空时，其栈顶就是队头。`appendTail`只在较新的后缀末端加入元素，不破坏顺序；`deleteHead`要么删除已有队头，要么先把整个后缀反转成新的前缀再删除。
 
-我们准备两个栈：`Stack 1` 用作**输入栈**，`Stack 2` 用作**输出栈**。
+测试不变量时，可以在调试版本中把两个栈复制出来，按“输出栈顶到底、输入栈底到顶”的顺序生成逻辑快照，并与标准库队列逐步对照。每次随机操作后两者的长度、队头和完整序列都应相同。
 
-#### 1. 入队（Enqueue）操作
-当有新元素需要入队时，我们**无脑压入 `Stack 1`**。
-- **时间复杂度**：只执行了一次基本的 push 操作，时间复杂度为 $O(1)$。
-- **空间复杂度**：为存储元素，需要消耗相应的内存，空间复杂度为 $O(1)$。
+## 忠实实现接口，同时修正源码风险
 
-#### 2. 出队（Dequeue）操作
-出队需要返回队列中最先进入的元素。我们优先从 `Stack 2` 中获取：
-- **若 `Stack 2` 不为空**：直接弹出 `Stack 2` 的栈顶元素。
-- **若 `Stack 2` 为空**：将 `Stack 1` 中的**所有**元素依次弹出并压入 `Stack 2`。此时，`Stack 1` 中原本处于栈底的最老元素便来到了 `Stack 2` 的栈顶。接着弹出 `Stack 2` 栈顶元素。
-- **若两个栈均为空**：队列无元素，抛出异常或返回特定标记。
+作者的`CQueue<T>`使用两个`std::stack<T>`成员。`appendTail`直接压入`stack1`；`deleteHead`先在`stack2`为空时转移，再检查两个栈是否都空，最后从`stack2`取出队头。这是原题必须掌握的结构。
 
-### 为什么均摊时间复杂度是 $O(1)$？
+下面实现保留同一契约，但修正两个 C++ 细节：转移时先把栈顶值复制或移动到临时对象，再弹出源栈；空队列抛出异常对象而不是`new exception`得到的指针。
 
-虽然在 `Stack 2` 为空时，单次出队操作需要将 `Stack 1` 的所有元素转移过去，最坏情况时间复杂度为 $O(N)$。但如果我们使用<Term def="分析算法在一系列连续操作中的平均代价，而不是单次最坏情况。">摊还分析</Term>，会发现每个元素在整个生命周期中：
-1. 入队时压入 `Stack 1`（$1$ 次 push）
-2. 转移时从 `Stack 1` 弹出（$1$ 次 pop）
-3. 转移时压入 `Stack 2`（$1$ 次 push）
-4. 出队时从 `Stack 2` 弹出（$1$ 次 pop）
-
-每个元素在进入和离开队列的整个生命周期中，**最多只经历了 2 次 push 和 2 次 pop**，操作总数是恒定的常数 4。因此，将这些操作均摊到每个元素上，**每次入队 and 出队操作的均摊时间复杂度为 $O(1)$**。
-
-## 交互 Demo
-
-猜一猜：如果我们在 Stack 1 中积攒了 'A', 'B', 'C'，此时进行一次 Dequeue，元素是如何在两个栈之间转移的？
-
-下面我们一步步运行双栈队列的操作，点击下方控制按钮，体验数据在 Stack 1 与 Stack 2 之间的流转与状态转移：
-
-<QueueWithTwoStacksDiagram />
-
-## 代码对照
-
-在具体代码落地时，我们需要注意对空队列进行防御性编程。以下是 C++ 与 TypeScript 的具体实现对比：
-
-<CodeTabs>
-  <Tab label="C++">
 ```cpp
 #include <stack>
 #include <stdexcept>
+#include <utility>
 
-template <typename T>
+template <class T>
 class CQueue {
-private:
-    std::stack<T> s1; // 输入栈
-    std::stack<T> s2; // 输出栈
-
-    // 将 s1 中的元素全部转移到 s2 中
-    void transfer() {
-        if (s2.empty()) {
-            while (!s1.empty()) {
-                s2.push(s1.top());
-                s1.pop();
-            }
-        }
-    }
-
 public:
-    CQueue() {}
-
-    // 入队操作，直接压入输入栈
-    void appendTail(T value) {
-        s1.push(value);
+    void appendTail(const T& value) {
+        stack1_.push(value);
     }
 
-    // 出队操作，从输出栈弹出
+    void appendTail(T&& value) {
+        stack1_.push(std::move(value));
+    }
+
     T deleteHead() {
-        transfer(); // 保证输出栈非空（如果有元素的话）
-        
-        if (s2.empty()) {
-            throw std::runtime_error("Queue is empty");
+        moveIfNeeded();
+        if (stack2_.empty()) {
+            throw std::underflow_error("queue is empty");
         }
-        
-        T head = s2.top();
-        s2.pop();
+
+        T head = std::move(stack2_.top());
+        stack2_.pop();
         return head;
     }
+
+    bool empty() const noexcept {
+        return stack1_.empty() && stack2_.empty();
+    }
+
+private:
+    void moveIfNeeded() {
+        if (!stack2_.empty()) return;
+        while (!stack1_.empty()) {
+            T value = std::move(stack1_.top());
+            stack1_.pop();
+            stack2_.push(std::move(value));
+        }
+    }
+
+    std::stack<T> stack1_;
+    std::stack<T> stack2_;
 };
 ```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-class CQueue<T> {
-    private s1: T[] = []; // 输入栈（使用数组模拟）
-    private s2: T[] = []; // 输出栈（使用数组模拟）
 
-    // 将 s1 中的元素全部转移 to s2 中
-    private transfer(): void {
-        if (this.s2.length === 0) {
-            while (this.s1.length > 0) {
-                // array.pop() 对应栈的 pop 操作
-                const val = this.s1.pop();
-                if (val !== undefined) {
-                    this.s2.push(val);
-                }
-            }
-        }
-    }
+作者仓库的`Queue.h`先写`T& data = stack1.top()`，随后`pop`，最后才`push(data)`。`pop`之后该引用已经失效，再读取它属于未定义行为；安全顺序必须是先构造独立临时值，再删除源栈顶。源码还使用`throw new exception(...)`，这会抛指针、增加泄漏与捕获类型错配风险，现代 C++ 应按值抛出具体异常。
 
-    // 入队操作
-    public appendTail(value: T): void {
-        this.s1.push(value);
-    }
+<Callout type="trap" title="照抄先引用top再pop的顺序">
+`std::stack::pop`会销毁栈顶对象，之前取得的引用随即失效。即使`char`样例看似正常，也不能证明行为有效；对象析构、内存复用或优化都可能让后续`push(data)`读到无效内容。
+</Callout>
 
-    // 出队操作
-    public deleteHead(): T {
-        this.transfer();
+## 为什么单次最坏线性，摊还仍为常数
 
-        if (this.s2.length === 0) {
-            throw new Error("Queue is empty");
-        }
+若`stack2`为空且`stack1`中有`k`个元素，一次`deleteHead`要做`k`次跨栈搬运，单次最坏时间是`O(k)`，不能声称每一次出队都严格`O(1)`。但观察一串操作，每个元素只经历固定生命周期：压入`stack1`一次，最多从`stack1`弹出一次、压入`stack2`一次，最后从`stack2`弹出一次。
 
-        // 强行非空断言，因为上面已进行过判空检查
-        return this.s2.pop()!;
+假设一共入队`m`个元素。无论入队和出队如何交错，所有搬运次数加起来至多`m`，因为元素一旦进入`stack2`就不会返回`stack1`。所有栈操作总数至多约`4m`，再加每次调用的常数判断，因此任意`q`次合法操作的总代价是`O(q)`，平均到每次就是<Term def="把偶发昂贵操作的代价分摊到整段操作序列，而不是对单次操作取概率平均。">摊还O(1)</Term>。
+
+这不是“平均输入下大概很快”。摊还分析不需要随机分布，对最不利的合法操作序列也成立。一次昂贵搬运之所以能被支付，是因为被搬的每个元素此前只做过便宜入队，之后也不会再次搬运。
+
+也可以用<Term def="给数据结构当前状态分配一笔预存代价，用状态变化抵消未来昂贵操作的摊还证明方法。">势能法</Term>理解同一结论：把`stack1`中的元素个数乘以2作为势能。一次入队的实际代价为1，势能增加2，可把摊还代价记为3；搬运`k`个元素虽然实际代价约为`2k`，但势能同时下降`2k`，昂贵工作被此前积累的势能抵消。输出栈普通弹出实际代价为1且势能不变。势能始终非负，因此任意操作前缀的实际总代价都不会超过累计摊还预算。
+
+聚合法按元素数总账，势能法按状态余额记账，两者证明的是同一个最坏序列保证。面试中任选一种讲清即可；若只说“多数出队很快”，没有说明一个元素不会被反复搬运，就还没有完成摊还证明。
+
+<QueueAmortizedCostLab />
+
+空间方面，两个栈合计恰好保存当前队列中的`n`个元素，辅助存储为`O(n)`；搬运期间临时值只占`O(1)`额外空间。不能把两个栈分别写成`O(n)`后误算成更高数量级，常数2在渐进复杂度中仍是`O(n)`。
+
+## 官方交错序列验证了什么
+
+作者测试先入队`a、b、c`，连续删除得到`a、b`；接着入队`d`，删除必须仍得到旧元素`c`；再入队`e`，最后依次得到`d、e`。输出总序列是`a、b、c、d、e`。
+
+关键断言是“入队`d`后仍先返回`c`”。此时`stack2`还保存`c`，`d`只在`stack1`中等待。它直接覆盖了最常见错误：每次出队都无条件转移，或新入队就转移到非空输出栈。
+
+```cpp
+#include <cassert>
+
+void testOfficialSequence() {
+    CQueue<char> queue;
+    queue.appendTail('a');
+    queue.appendTail('b');
+    queue.appendTail('c');
+
+    assert(queue.deleteHead() == 'a');
+    assert(queue.deleteHead() == 'b');
+
+    queue.appendTail('d');
+    assert(queue.deleteHead() == 'c');
+
+    queue.appendTail('e');
+    assert(queue.deleteHead() == 'd');
+    assert(queue.deleteHead() == 'e');
+    assert(queue.empty());
+}
+
+void testEmptyQueue() {
+    CQueue<int> queue;
+    try {
+        (void)queue.deleteHead();
+        assert(false);
+    } catch (const std::underflow_error&) {
+        assert(true);
     }
 }
 ```
-  </Tab>
-</CodeTabs>
 
-## 常见误区
+官方序列没有调用空队列删除，工程测试必须补上；还应覆盖只入队不出队、单元素反复进出、大批量搬运、可移动但不可复制类型，以及异常路径后队列是否仍可使用。测试不仅比较输出值，也要检查`empty`与元素数量等可观察状态。
 
-<Callout type="trap">
-  <strong>现象 →</strong> 连续出队时，输出数据的顺序错乱，新入队的元素抢占了老元素的位置。
-  <strong>原因 →</strong> 在 `Stack 2` 还不为空时，就又把 `Stack 1` 的元素转移了过去，导致最新压入 `Stack 2` 的元素覆盖在原本该出队的老元素之上。
-  <strong>修法 →</strong> 严格执行限制条件：**只有当 `Stack 2` 为空时**，才可以从 `Stack 1` 转移数据。
+<QueueOperationTraceLab />
+
+## 异常安全与只可移动类型
+
+`appendTail`若在分配内存或构造元素时抛异常，标准容器通常保持原状态，队列仍有效。跨栈搬运更复杂：若`T`的移动构造可能抛异常，已有若干元素可能已进入`stack2`，而当前元素是否仍留在`stack1`取决于类型保证。面试基本题通常忽略这层，但通用库要明确类型约束或设计恢复策略。
+
+最简单的稳健契约是要求`T`可无异常移动，或在移动可能抛出且复制可用时优先复制。若必须给任意用户类型提供强异常保证，可以先搬到临时容器，全部成功后再提交状态，但实现和额外空间都会增加。算法正确性与泛型异常安全是两个层次，不能因为字符测试通过就默认模板适用于所有`T`。
+
+TypeScript 数组版没有悬空引用问题，但仍要区分“空数组”与“元素值为`undefined`”。若泛型允许`undefined`，不能用`pop() === undefined`判定空队列；应先检查`length`。
+
+```typescript
+class TwoStackQueue<T> {
+  private readonly stack1: T[] = [];
+  private readonly stack2: T[] = [];
+
+  appendTail(value: T): void {
+    this.stack1.push(value);
+  }
+
+  deleteHead(): T {
+    if (this.stack2.length === 0) {
+      while (this.stack1.length > 0) {
+        this.stack2.push(this.stack1.pop() as T);
+      }
+    }
+    if (this.stack2.length === 0) {
+      throw new RangeError("queue is empty");
+    }
+    return this.stack2.pop() as T;
+  }
+}
+```
+
+<Callout type="trap" title="两个栈天然让入队与出队线程安全">
+`deleteHead`在搬运时同时读写两个栈；若另一个线程并发`appendTail`，没有同步就会产生数据竞争。简单实现不是并发队列，至少要用覆盖复合操作的互斥策略，并重新证明线性化顺序。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 当队列为空时调用出队，程序崩溃，报空指针或越界错误。
-  <strong>原因 →</strong> 没有对两个栈同时为空的“空队列”情况做检查防护，直接调用了 `stack.top()` 或 `stack.pop()`。
-  <strong>修法 →</strong> 在出队逻辑中，先调用 `transfer()`，随后必须判断 `Stack 2` 是否依然为空。若为空，则说明整个队列确实无数据，此时应合理抛出异常或返回特定默认值。
-</Callout>
+## 接口语义要先于微优化
 
-## 小结与练习
+空队列删除可以抛异常、返回`optional<T>`，或提供`bool tryDeleteHead(T&)`；关键是接口必须区分“没有元素”和“元素本身等于某个默认值”。返回`0`或空字符串会把合法数据与失败混为一谈。
 
-- 栈（LIFO）与队列（FIFO）的相反特性可以通过“双栈反转”来实现互相模拟。
-- 入队直接 push 到 Stack 1，出队从 Stack 2 弹出。当 Stack 2 为空时，将 Stack 1 全部元素转移至 Stack 2。
-- 摊还分析表明，虽然单次转移最坏需要 $O(N)$，但整体均摊时间复杂度为 $O(1)$。
-- 空间复杂度为 $O(N)$，需要完整的空间来存放队列元素。
+若增加`front`操作，它应复用“输出栈为空才搬运”的准备逻辑，但只读`stack2.top()`而不弹出。`size`等于两个栈大小之和。`clear`要同时清空两个栈。每个扩展操作都必须维护同一表示不变量，不能绕开状态规则直接操作其中一个容器。
+
+实时系统还要注意摊还`O(1)`不代表延迟上界为常数；第一次出队可能搬运大量元素。若单次延迟必须稳定，可以采用链式队列、环形缓冲区，或把反转工作增量化。面试答案应准确说“总吞吐有摊还保证”，不要把它扩大成硬实时保证。
+
+<Stepper>
+  <Step title="新元素只进入输入栈"><TwoStackQueueFlowDiagram />appendTail不触碰输出栈，因而不会让新元素越过任何旧元素。</Step>
+  <Step title="先检查输出栈状态"><QueueStateInvariantMap />输出栈非空就直接弹出；为空才允许搬运输入栈全部元素。</Step>
+  <Step title="用交错操作追踪新旧边界"><QueueOperationTraceLab />a、b、c出队到一半后加入d，下一项仍必须是c。</Step>
+  <Step title="按元素生命周期核算总成本"><QueueAmortizedCostLab />每个元素最多跨栈一次，因此整段操作总成本线性，单次摊还为常数。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 用两个栈实现队列依靠两次后进先出反转恢复先进先出顺序。
+2. stack1负责压入新元素，stack2负责弹出旧元素。
+3. stack2非空时绝不能搬运stack1，否则新元素会越过仍待删除的旧元素。
+4. 单次出队最坏可能为`O(n)`，但每个元素最多搬运一次，所以摊还O(1)。
+5. 两个栈合计保存`n`个元素，空间复杂度为`O(n)`。
+6. 空队列必须通过异常或显式结果表达，不能读取空栈顶。
+7. C++ 转移要先保存值再`pop`，异常应按值抛出而不是抛裸指针。
+8. 双栈结构本身不提供线程安全或严格常数延迟，这些都需要额外设计。
 
 <Exercises>
-  <Answer question="如何使用两个队列（FIFO）来实现一个栈（LIFO）？请简述其 Push 和 Pop 操作思路。">
-    使用两个队列 `Queue 1` 和 `Queue 2`：
-    - **方法一（Push 慢，Pop 快）**：每次入栈（Push）时，先将元素放入空队列（如 `Queue 2`），再将另一个队列中的所有元素依次移入 `Queue 2`，最后交换两队列的引用。这样可以使最新元素总是位于队列头部，出栈（Pop）只需直接出队，时间复杂度为 $O(N)$ 入栈，$O(1)$ 出栈。
-    - **方法二（Push 快，Pop 慢）**：入栈直接加入非空队列，出栈时把队列中的 $N-1$ 个元素转移到另一个空队列中，只留下最后一个元素用于返回，时间复杂度为 $O(1)$ 入栈，$O(N)$ 出栈。
-  </Answer>
-  <Answer question="双栈队列在大规模并发的多线程环境下，相比传统的单链表队列有什么优势？">
-    双栈队列的结构将入队操作和出队操作解耦到了不同的实体（Stack 1 和 Stack 2）。在没有发生数据转移的绝大多数时刻，入队线程锁 Stack 1，出队线程锁 Stack 2，互不干扰。这比必须同时锁住头尾指针的传统单链表队列具有更低的锁竞争，提升了并发吞吐量。
-  </Answer>
+
+**问题 1：为什么stack2非空时不能把stack1搬过去？**
+
+<Answer>stack2中的元素比stack1中的元素更早入队，且其栈顶是当前队头。此时搬入新元素会把它们压到旧元素上方，使新元素先离开，破坏FIFO；必须等旧前缀完全弹空后再反转新后缀。</Answer>
+
+**问题 2：一次deleteHead搬运n个元素，摊还复杂度为何仍是O(1)？**
+
+<Answer>每个元素只在入队时进入stack1，最多跨到stack2一次，最后弹出一次。对m个入队元素，所有搬运合计不超过m次，整段操作总栈操作数为O(m)，分摊到每次公开操作是常数。</Answer>
+
+**问题 3：作者源码中先保存`top`引用、再`pop`、再压入该引用有什么问题？**
+
+<Answer>pop会销毁栈顶对象，使引用立即失效；之后读取它是未定义行为。应先复制或移动构造独立临时对象，再pop源栈，最后把临时对象压入输出栈。</Answer>
+
+**问题 4：如何用两个队列实现一个栈？**
+
+<Answer>可让入栈便宜：元素直接进入当前队列，出栈时把前n减1个元素搬到另一个空队列，最后一个就是栈顶；也可让出栈便宜：每次新元素入队后把旧队列全部搬到其后，使新元素始终位于队头。两者都用一次整体搬运交换FIFO与LIFO顺序。</Answer>
+
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="栈">
-    后进先出（LIFO）的线性数据结构。只允许在栈顶一端进行插入和删除。
-  </GlossaryItem>
-  <GlossaryItem term="队列">
-    先进先出（FIFO）的线性数据结构。只允许在队尾插入，在队头删除。
-  </GlossaryItem>
-  <GlossaryItem term="摊还分析">
-    一种算法分析方法，用来评估在连续的一系列操作中，平均每步操作所花费的时间或资源，从而能够更合理地估算包含偶发性高耗时操作的算法效率。详见「概念讲解」节。
-  </GlossaryItem>
+  <GlossaryItem term="栈">只在栈顶插入和删除，遵守后进先出的线性结构。</GlossaryItem>
+  <GlossaryItem term="队列">在队尾加入、队头删除，遵守先进先出的线性结构。</GlossaryItem>
+  <GlossaryItem term="表示不变量">每次公开操作前后都成立，并把内部状态对应到抽象队列顺序的条件。</GlossaryItem>
+  <GlossaryItem term="摊还O(1)">任意长合法操作序列的总代价线性，因此每次操作的分摊代价为常数。</GlossaryItem>
+  <GlossaryItem term="势能法">给当前状态分配非负势能，用势能变化支付未来昂贵操作的摊还分析方法。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+  adaptedFrom="《剑指Offer（第2版）》面试题9及何海涛官方源码 Queue.h、QueueWithTwoStacks.cpp"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/09_QueueWithTwoStacks/Queue.h"
 />

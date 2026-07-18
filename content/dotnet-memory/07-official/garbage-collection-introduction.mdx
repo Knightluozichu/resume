@@ -1,0 +1,199 @@
+---
+title: "Chapter 7：垃圾回收导论（Garbage Collection – Introduction）"
+type: A
+section: Pro .NET 内存管理（第2版）· 回收触发与线程协调
+order: 7
+description: 对齐原书第 7 章：从 SOH/LOH 分配预算、回收代选择与 free list，进入 SuspendEE、安全点、暂停拆解和 GC 事件诊断，建立后续标记、计划、清扫与压缩的总流程。
+demo: false
+math: false
+sourceUrl: "https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_7"
+draft: false
+---
+
+import {
+  DnmGcTriggerDecisionMap,
+  DnmGenerationBudgetLab,
+  DnmSuspensionTimelineLab,
+} from "@/components/mdx/dotnet-memory/diagrams/garbage-collection-introduction";
+
+<Objectives>
+
+- 能描述分配预算耗尽、显式诱导、低内存与本机内存压力等触发来源，并区分 SOH/LOH 预算与堆剩余容量
+- 能分析“触发—回收代选择—SuspendEE—安全点—回收阶段—恢复”流程，并拆开挂起等待与 GC 工作时间
+- 能设计基于 GCStart/GCEnd reason、type、depth、pause 与同窗口分配速率的诊断实验，判断应查分配、存活、晋升还是线程协作
+
+</Objectives>
+
+## 为什么 GC 发生不等于“内存已经满了”
+
+最常见的回收起点是分配推进到运行时设定的预算边界，而不是操作系统最后一个字节已经用完。运行时用预算控制“允许这一代在下次评估前分配多少”，再根据上次回收后的存活、晋升、堆大小和当前 GC 配置动态调整。预算是控制反馈信号，堆空间是存储状态，两者不能互换。
+
+<Term def="运行时允许某个逻辑堆或代在下一次回收决策前推进的分配量；它会随存活量、堆状态和 GC 策略动态变化。">分配预算</Term>
+
+除了预算耗尽，应用可显式调用 `GC.Collect` 诱导回收，运行时也会响应低内存信号、托管外内存压力和内部策略。`GC.AddMemoryPressure` 只是告诉 GC 某个托管包装器背后还有重要的本机内存，影响回收启发式；它不会替应用释放那块本机资源。由 loader/runtime 使用的 non-GC heap 也不受追踪式 GC 直接管理。
+
+<DnmGcTriggerDecisionMap />
+
+<Callout type="trap" title="陷阱：看到 Gen 2 GC 就断言进程内存耗尽">
+  Gen 2 可能由 LOH 分配、显式诱导、运行时启发式或内存压力触发。必须读取事件中的 reason、type、depth，并同时看堆大小、分配速率和操作系统内存信号；单独一个 Gen 2 计数不能证明 OOM 临近。
+</Callout>
+
+## 分配预算怎样形成触发请求
+
+普通 SOH 小对象通常在线程的 <Term def="线程从逻辑 GC heap 获得的一段局部可分配范围，可在快路径推进指针而无需每次竞争全局分配锁。">分配上下文</Term> 中推进。context 补充量会计入相应逻辑堆和代的预算；因此工具显示的 budget 变化有时是在呈现 allocation context 的会计变化，而不是一块固定、精确到字节的“剩余槽”。不同诊断工具还可能采用不同采样与舍入口径。
+
+SOH 与 LOH 的分配路径、锁和预算观察点可以不同。年轻代预算先越界时，运行时通常先考虑较低代回收；LOH 分配压力则可能把请求带到完整回收候选。即使两个路径在相近时刻都观察到预算越界，最终仍需由 GC 协调一次合法回收，不能把两条计数简单相加成两次必然暂停。
+
+<DnmGenerationBudgetLab />
+
+图中的预算是因果模型，不是 CLR 预测器。先预测提高 SOH 或 LOH 分配速率会让哪条边界先到，再调节参数；实际结果要由对应运行时版本的 GC 事件确认。
+
+```csharp
+long gen0Before = GC.CollectionCount(0);
+long gen2Before = GC.CollectionCount(2);
+
+RunComparableLoad();
+
+var info = GC.GetGCMemoryInfo();
+Console.WriteLine($"Gen0 delta: {GC.CollectionCount(0) - gen0Before}");
+Console.WriteLine($"Gen2 delta: {GC.CollectionCount(2) - gen2Before}");
+Console.WriteLine($"Heap after last GC: {info.HeapSizeBytes:n0} B");
+Console.WriteLine($"Fragmented: {info.FragmentedBytes:n0} B");
+```
+
+这些进程内 API 适合做低成本前后对比，却不告诉你是哪条调用栈分配、具体 reason 或每次暂停的时间线。诊断不能停在 `CollectionCount`。
+
+## 回收代选择决定覆盖范围
+
+<Term def="运行时根据预算、上一轮存活与晋升等状态决定本次覆盖 Gen 0、Gen 0–1 或 Gen 0–2 的过程。">回收代选择</Term>
+
+收集 Gen 0 只覆盖最年轻的 SOH 范围；收集 Gen 1 同时覆盖 Gen 0；收集 Gen 2 则覆盖 Gen 0、Gen 1、Gen 2，并按相应策略处理 LOH/POH。因而 `depth=2` 不是“只检查老对象”，而是一次覆盖所有代的完整回收。对象年龄也不是墙上时间，而是它经历了多少次覆盖其所在代的回收并存活。
+
+运行时可根据年轻代回收的存活率、晋升量、碎片和可用空间调整下一轮预算，必要时扩大覆盖范围。不要把“预算最低的代必然单独回收”写成固定规则：代选择包含启发式，且 workstation/server、background/foreground 等 flavor 会改变协调方式，第 11 章再展开这些配置。
+
+```text
+requested depth 0  -> collect Gen 0
+requested depth 1  -> collect Gen 0 + Gen 1
+requested depth 2  -> collect Gen 0 + Gen 1 + Gen 2, coordinate LOH/POH
+actual choice       -> runtime policy may escalate or reshape the request
+```
+
+## SuspendEE 怎样得到稳定的根集合
+
+GC 在遍历和更新托管引用的关键阶段，需要让执行引擎进入可协调状态。<Term def="CLR 为垃圾回收或其他运行时操作请求托管线程协作停下，使根和引用状态可安全检查的执行引擎挂起过程。">SuspendEE</Term> 发出挂起请求后，并非操作系统在任意机器指令上粗暴冻结所有线程；线程要在运行时知道如何解释其栈和寄存器的位置停下。
+
+<Term def="JIT 与 CLR 能准确报告当前活跃托管引用，并允许线程为 GC 挂起协作的位置。">安全点</Term>
+
+JIT 生成的 GC info 描述哪些寄存器和栈槽在特定位置保存托管引用。线程可通过 GC poll、调用边界、返回路径或运行时的 hijacking 等机制注意到挂起请求。处于 preemptive GC mode 的本机/互操作区线程通常已被视为不再执行可随意改变托管引用的 cooperative 代码，但精确细节取决于运行时实现和调用状态。
+
+<DnmSuspensionTimelineLab />
+
+从业务看到的 pause 至少要拆成：请求发出后等待最慢线程到可挂起位置、GC 必要阶段工作、恢复协调。长暂停不一定意味着标记算法本身慢；一个迟迟不能协作的线程也能拉长尾部。Background GC 允许部分老年代工作与应用并发，但仍存在需要协调/暂停的阶段，不能把“background”翻译成“零暂停”。
+
+<Callout type="trap" title="陷阱：把任意源码行都当成安全点">
+  安全点由 JIT 生成代码和 GC info 决定，不等同于每一行 C#。诊断挂起延迟时应查看线程状态、运行时事件和本机调用边界，而不是仅凭源码行号推断线程一定能立刻停下。
+</Callout>
+
+## 空闲链表分配与回收后的再次分配
+
+<Term def="记录堆中可复用空洞的内部结构，分配器可在合适时从中寻找足够大的块，而不必总在段尾推进。">空闲链表</Term>
+
+SOH 的常见年轻对象走 allocation context 与指针碰撞，回收后被压缩的连续空间也适合重新建立快路径。无法或不适合压缩的区域会留下空洞，LOH 尤其依赖 free-list 式复用；空洞尺寸不合适时，即使总空闲字节很多，新大对象仍可能要求扩展或提交 segment。
+
+运行时也维护各代的 free list，低代列表可因频繁回收被快速重建；具体搜索次数、列表组织和 allocator helper 名称都是实现细节，不能当作跨版本 API 契约。应用层应观察“对象大小分布、碎片、分配 reason、回收 depth 与 segment 增长”的结果链，而不是依赖私有字段名称。
+
+```text
+fast path: allocation context has room -> bump alloc_ptr
+reuse path: suitable free-list entry -> consume/split a hole
+slow path: no suitable block -> refill/expand/commit or request GC -> retry
+```
+
+## GC.Collect 为什么通常不是默认修复
+
+`GC.Collect` 可以指定最大回收代、mode、blocking 与 compacting，但“强制”不表示能回收仍然可达的对象，也不保证工作集立刻返还给操作系统。它可能打乱运行时根据存活率调出的预算、把本可在 Gen 0 死亡的对象提前晋升，或把一次停顿移到更糟的业务时刻。
+
+```csharp
+// 仅当你有明确生命周期边界、测量证据和对照实验时评估。
+GC.Collect(
+    generation: 2,
+    mode: GCCollectionMode.Optimized,
+    blocking: false,
+    compacting: false);
+```
+
+合理候选包括可重复测试夹具间隔离、完成一次极大且明确的对象图阶段后验证，或特定平台资源约束下的实测策略。验收必须比较诱导前后的吞吐、p95/p99、晋升、完整回收频率和工作集；仅看“调用后堆暂时变小”不够。
+
+## 用事件回答“谁触发、收哪一代、停多久”
+
+<Term def="把 GCStart/GCEnd、SuspendEE/RestartEE、heap stats 与业务活动放在同一时间轴，利用 reason、type、depth 和暂停区间解释回收因果。">GC 事件诊断</Term>
+
+第一步用计数器找异常窗口，第二步在同一负载采 EventPipe/ETW trace，第三步才在必要时抓 dump 查存活根。`GCStart` 的 reason 回答触发类别，depth 回答最大覆盖代，type/flavor 帮助解释并发与阻塞方式；SuspendEE 到 RestartEE 的时间线再区分等待线程和 GC 工作。不同工具字段名可能略有差异，应保存运行时与工具版本。
+
+```bash
+dotnet-trace collect \
+  --process-id "$PID" \
+  --providers Microsoft-Windows-DotNETRuntime:0x1:4 \
+  --duration 00:00:30 \
+  --output gc-window.nettrace
+```
+
+一次可复核的结论应像这样：“在 10:02:14 的请求峰值，SOH allocation rate 从 70 升到 210 MB/s；随后出现 depth 0、allocation-small reason 的阻塞回收，SuspendEE 0.8 ms、GC work 4.6 ms，未见 Gen 2 增长。”它比“GC 太频繁”多出时间、触发、覆盖范围和可行动证据。
+
+## 三步建立回收导论诊断闭环
+
+<Stepper>
+  <Step title="第一步：识别真实触发与回收深度">
+    固定负载窗口，读取 GCStart 的 reason、type 和 depth；先预测是 SOH、LOH、induced 还是压力信号，再与 allocation rate 和预算变化核对。
+
+    <DnmGcTriggerDecisionMap />
+  </Step>
+  <Step title="第二步：拆开预算与代选择">
+    分开统计 SOH/LOH 分配、年轻代存活和晋升；用实验图改变单一变量，理解哪个边界先到，但以真实事件决定最终覆盖代。
+
+    <DnmGenerationBudgetLab />
+  </Step>
+  <Step title="第三步：拆开暂停并验证改动">
+    对齐 SuspendEE、线程到达安全点、GC 阶段与 RestartEE，找出 pause 的主导段；改动后以相同负载比较 reason、depth、p99、吞吐和工作集。
+
+    <DnmSuspensionTimelineLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 分配预算是动态回收控制信号，不等于堆剩余容量；SOH、LOH、诱导请求和内存压力都可能参与触发
+- 回收代选择决定覆盖范围，Gen 2 collection 同时覆盖更年轻的代，不能只解释成“老年代扫描”
+- SuspendEE 依靠安全点、GC info 与线程模式得到可解释的根状态；暂停包含挂起等待、GC 工作和恢复协调
+- allocation context 适合指针碰撞快路径，free list 复用空洞；总空闲很多也可能因尺寸不匹配而扩展 segment
+- GCStart/GCEnd 与 SuspendEE/RestartEE 的 reason、type、depth 和时间线才是触发诊断证据，`GC.Collect` 不是默认修复
+
+<Exercises>
+  1. **问题 1：解释预算触发。** 进程还有大量可用内存，却每隔两秒出现一次 Gen 0 GC，这是否说明 CLR 判断错误？怎样验证？
+
+  <Answer question="预算边界为何可以早于内存耗尽？">不说明判断错误。年轻代分配预算本来就用于在空间彻底耗尽前控制回收频率与存活成本。固定负载后同时采 SOH allocation rate、GCStart reason/depth、回收后存活和晋升；若是 allocation-small 且 depth 0，再判断应减少高频分配还是接受短回收。不要用进程空闲内存替代预算证据。</Answer>
+
+  2. **问题 2：拆解长暂停。** 某次 depth 0 GC 的 pause 是 45 ms，但 heap 很小，怎样判断问题在 GC 工作还是线程挂起？
+
+  <Answer question="如何把暂停分成可行动区间？">在同一 trace 对齐 SuspendEE 请求、各线程协作状态、GCStart/GCEnd 与 RestartEE。若大部分时间发生在 GCStart 前或 suspend 区间，查最慢线程、cooperative/preemptive mode、本机调用和安全点；若 GC 阶段占主导，再查存活量、晋升和扫描工作。小 heap 不能排除挂起等待。</Answer>
+
+  3. **问题 3：评估诱导回收。** 批处理结束后调用完整 `GC.Collect` 让堆立刻下降，能否据此保留？
+
+  <Answer question="诱导回收需要什么对照证据？">先证明批处理存在明确对象图终点且对象已不可达，再用有/无诱导两组相同负载比较总吞吐、p95/p99、晋升、后续 Gen 2 频率、工作集与资源释放。若只把运行时原本会分摊的工作提前、引入更长暂停或对象仍被根保留，就应删除调用并修正生命周期。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="分配预算">控制下一次回收评估前允许分配量的动态运行时阈值。</GlossaryItem>
+  <GlossaryItem term="分配上下文">线程局部推进分配指针的一段托管堆范围。</GlossaryItem>
+  <GlossaryItem term="回收代选择">决定本次回收覆盖到 Gen 0、Gen 1 或 Gen 2 的过程。</GlossaryItem>
+  <GlossaryItem term="SuspendEE">运行时请求托管线程协作停下以建立可扫描状态的过程。</GlossaryItem>
+  <GlossaryItem term="安全点">JIT/CLR 能准确报告活跃托管引用并允许 GC 协作挂起的位置。</GlossaryItem>
+  <GlossaryItem term="空闲链表">记录可复用堆空洞，供非指针碰撞路径查找合适块的结构。</GlossaryItem>
+  <GlossaryItem term="GC 事件诊断">用回收与线程事件的原因、深度和时间线解释触发及暂停。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Pro .NET Memory Management, Second Edition, Chapter 7 Garbage Collection – Introduction"
+  adaptedUrl="https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_7"
+/>

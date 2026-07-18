@@ -1,0 +1,238 @@
+---
+title: "附录B Kubernetes上的MySQL"
+description: "依据第4版完整目录覆盖5个节点：评估Kubernetes为MySQL提供资源、控制平面和自动化是否值得新增故障复杂度"
+type: C
+section: "高性能MySQL（第4版 / 2022）"
+draft: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/gao-xing-neng-mysql-di-4ban/9787121442575/"
+demo: true
+order: 0
+---
+
+import {
+  Hpm4AppendixBKubernetesSloLab,
+  Hpm4AppendixBKubernetesCapacityLab,
+  Hpm4AppendixBKubernetesEvidenceLab,
+} from "@/components/mdx/high-performance-mysql/diagrams/hpm4-appendix-b-kubernetes";
+
+# 附录B Kubernetes上的MySQL
+
+本课程对应Silvia Botros、Jeremy Tinley著，宁海元、周振兴、张新铭译《高性能MySQL（第4版）》，电子工业出版社2022年9月出版，纸书344页，ISBN 9787121442575。原版High Performance MySQL: Proven Strategies for Operating at Scale由O'Reilly于2021年11月发布，386页，ISBN 9781492080503。
+
+官方中英文目录确认第4版为13章与附录A、B。课程按15个正式单元逐项重构，不沿用第3版的14章结构，也不复制原文；另设学习地图与总复习，共17页。本页覆盖5个正式节点。
+
+<Objectives>
+
+- 能解释“附录B Kubernetes上的MySQL”的5个目录节点，并连接到“评估Kubernetes为MySQL提供资源、控制平面和自动化是否值得新增故障复杂度”主线。
+- 能复现责任边界、Operator能力矩阵、Pod与卷故障演练和退出方案，保存MySQL版本、Schema、数据量、配置、负载、预期与实际结果。
+- 能比较基线、压力与故障条件，证明“数据卷生命周期独立于Pod，资源与节点隔离明确，备份、恢复、升级和控制平面故障均有答案”。
+- 能设计反例推翻“因为组织已有Kubernetes就迁移数据库，未定义控制平面、持久卷与有状态故障语义”，并给出上线门、回退与独立验收条件。
+
+</Objectives>
+
+## 从用户SLO和一次故障开始
+
+先预测：在30天窗口内，目标请求成功率、P95与P99延迟、允许错误分钟和恢复时间各是多少？再描述本章机制如何影响这些结果。不要先看图表再给故事；先固定服务目标、MySQL版本、数据规模、并发、缓存状态和故障点，实验后才允许用证据修正模型。
+
+本页主问题是“评估Kubernetes为MySQL提供资源、控制平面和自动化是否值得新增故障复杂度”。最终交付不是一组建议，而是责任边界、Operator能力矩阵、Pod与卷故障演练和退出方案，由另一位工程师证明：**数据卷生命周期独立于Pod，资源与节点隔离明确，备份、恢复、升级和控制平面故障均有答案**。
+
+## 核心词汇与运行边界
+
+<Term def="Kubernetes是“评估Kubernetes为MySQL提供资源、控制平面和自动化是否值得新增故障复杂度”中的第1个核心概念；必须由版本、负载、机制、反例和指标定义">
+  Kubernetes
+</Term>
+、
+<Term def="Operator是“评估Kubernetes为MySQL提供资源、控制平面和自动化是否值得新增故障复杂度”中的第2个核心概念；必须由版本、负载、机制、反例和指标定义">
+  Operator
+</Term>
+、
+<Term def="持久卷是“评估Kubernetes为MySQL提供资源、控制平面和自动化是否值得新增故障复杂度”中的第3个核心概念；必须由版本、负载、机制、反例和指标定义">
+  持久卷
+</Term>
+、
+<Term def="控制平面是“评估Kubernetes为MySQL提供资源、控制平面和自动化是否值得新增故障复杂度”中的第4个核心概念；必须由版本、负载、机制、反例和指标定义">
+  控制平面
+</Term>
+、
+<Term def="有状态工作负载是“评估Kubernetes为MySQL提供资源、控制平面和自动化是否值得新增故障复杂度”中的第5个核心概念；必须由版本、负载、机制、反例和指标定义">
+  有状态工作负载
+</Term>
+构成本页词汇。每个词都要回答它改变哪个用户指标、由哪个MySQL或基础设施模块实现、在哪个压力或故障边界失效，以及用哪条独立证据发现失效。
+
+<Hpm4AppendixBKubernetesSloLab />
+
+## 第4版目录逐节点映射
+
+### B.1 用Kubernetes供应资源
+
+**节点合同 1/5 · 定义用户影响。** 先写“B.1 用Kubernetes供应资源”影响的用户请求、MySQL状态和资源，再把它接入“评估Kubernetes为MySQL提供资源、控制平面和自动化是否值得新增故障复杂度”。上游是“本章服务目标”，下游是“B.2 仔细限定目标”；若无法解释这条因果关系，术语记忆不能算完成。
+
+在固定MySQL 8.0小型业务库中先预测成功率、实际扫描行、锁或版本、日志位置、资源等待和恢复终点，再只改变一个变量。用“数据卷生命周期独立于Pod，资源与节点隔离明确，备份、恢复、升级和控制平面故障均有答案”验收正常与失败路径，并保存执行计划、Performance Schema摘要、状态变量或业务对账中真正支持结论的部分。
+
+### B.2 仔细限定目标
+
+**节点合同 2/5 · 固定实验输入。** 先写“B.2 仔细限定目标”影响的用户请求、MySQL状态和资源，再把它接入“评估Kubernetes为MySQL提供资源、控制平面和自动化是否值得新增故障复杂度”。上游是“B.1 用Kubernetes供应资源”，下游是“B.3 选择控制平面”；若无法解释这条因果关系，术语记忆不能算完成。
+
+在固定MySQL 8.0小型业务库中先预测成功率、实际扫描行、锁或版本、日志位置、资源等待和恢复终点，再只改变一个变量。用“数据卷生命周期独立于Pod，资源与节点隔离明确，备份、恢复、升级和控制平面故障均有答案”验收正常与失败路径，并保存执行计划、Performance Schema摘要、状态变量或业务对账中真正支持结论的部分。
+
+### B.3 选择控制平面
+
+**节点合同 3/5 · 定位责任层。** 先写“B.3 选择控制平面”影响的用户请求、MySQL状态和资源，再把它接入“评估Kubernetes为MySQL提供资源、控制平面和自动化是否值得新增故障复杂度”。上游是“B.2 仔细限定目标”，下游是“B.4 状态服务的细节”；若无法解释这条因果关系，术语记忆不能算完成。
+
+在固定MySQL 8.0小型业务库中先预测成功率、实际扫描行、锁或版本、日志位置、资源等待和恢复终点，再只改变一个变量。用“数据卷生命周期独立于Pod，资源与节点隔离明确，备份、恢复、升级和控制平面故障均有答案”验收正常与失败路径，并保存执行计划、Performance Schema摘要、状态变量或业务对账中真正支持结论的部分。
+
+### B.4 状态服务的细节
+
+**节点合同 4/5 · 推演正常路径。** 先写“B.4 状态服务的细节”影响的用户请求、MySQL状态和资源，再把它接入“评估Kubernetes为MySQL提供资源、控制平面和自动化是否值得新增故障复杂度”。上游是“B.3 选择控制平面”，下游是“B.5 小结”；若无法解释这条因果关系，术语记忆不能算完成。
+
+在固定MySQL 8.0小型业务库中先预测成功率、实际扫描行、锁或版本、日志位置、资源等待和恢复终点，再只改变一个变量。用“数据卷生命周期独立于Pod，资源与节点隔离明确，备份、恢复、升级和控制平面故障均有答案”验收正常与失败路径，并保存执行计划、Performance Schema摘要、状态变量或业务对账中真正支持结论的部分。
+
+### B.5 小结
+
+**节点合同 5/5 · 注入失败条件。** 先写“B.5 小结”影响的用户请求、MySQL状态和资源，再把它接入“评估Kubernetes为MySQL提供资源、控制平面和自动化是否值得新增故障复杂度”。上游是“B.4 状态服务的细节”，下游是“本章生产交付物”；若无法解释这条因果关系，术语记忆不能算完成。
+
+在固定MySQL 8.0小型业务库中先预测成功率、实际扫描行、锁或版本、日志位置、资源等待和恢复终点，再只改变一个变量。用“数据卷生命周期独立于Pod，资源与节点隔离明确，备份、恢复、升级和控制平面故障均有答案”验收正常与失败路径，并保存执行计划、Performance Schema摘要、状态变量或业务对账中真正支持结论的部分。
+
+## 机制推演：从请求到资源与恢复
+
+Kubernetes擅长声明式供应和无状态弹性，但MySQL的数据卷、恢复和拓扑有独立生命周期。采用前应限定目标、选择经过验证的Operator或Vitess、隔离资源，并从小型非关键数据集验证最坏故障恢复。
+
+生产推演始终拆成六层：用户请求与SLO、应用连接和事务、MySQL服务层、InnoDB页锁版本与日志、操作系统及硬件、复制备份和路由。先确定等待发生在哪一层，再选择指标和干预；参数、索引、分片与扩容属于不同层，不能用一个方案覆盖所有症状。
+
+性能证据同时包含工作量和等待。工作量包括每秒请求、实际扫描行、返回字节、日志字节和脏页；等待包括CPU调度、I/O、锁、元数据锁、复制回放与队列。只有延迟下降且结果、持久性和错误预算没有恶化，优化才成立。
+
+可靠性证据必须覆盖最坏时间点。对事务在提交前后崩溃，对副本在接收与应用之间中断，对备份在基线与binlog之间恢复，对分片在路由切换时重试。记录最后确认状态、数据损失上界、恢复步骤、恢复耗时和业务对账，避免把进程重新启动当作服务恢复。
+
+## 最小可重放实验
+
+```sql
+-- 固定MySQL 8.0版本、会话与样例规模，再采集输入基线
+SELECT VERSION() AS mysql_version, @@transaction_isolation AS isolation;
+SELECT COUNT(*) AS orders_n, COUNT(DISTINCT customer_id) AS customers_n
+FROM orders;
+```
+
+运行前写出预计行数、访问路径、锁或版本、日志变化和尾延迟。运行后保存EXPLAIN ANALYZE、相关Performance Schema摘要与业务对账；不要让待测查询自己证明结果正确。
+
+```text
+book=高性能MySQL（第4版 / 2022）
+unit=hpm4-appendix-b-kubernetes
+mysql=8.0.x | exact patch required
+dataset=orders-lab-v1 | rows and distribution fixed
+workload=qps, concurrency, read-write ratio, cache state
+prediction=result, p95, p99, waits, failure endpoint
+artifact=责任边界、Operator能力矩阵、Pod与卷故障演练和退出方案
+```
+
+```sql
+-- 用独立摘要核对语句负载与等待，不只看单次客户端耗时
+SELECT DIGEST_TEXT, COUNT_STAR, SUM_TIMER_WAIT, SUM_ROWS_EXAMINED
+FROM performance_schema.events_statements_summary_by_digest
+ORDER BY SUM_TIMER_WAIT DESC LIMIT 10;
+```
+
+## 三步交互实验
+
+<Stepper>
+  <Step title="1. 固定SLO与章节节点">
+    选择目录节点，先计算错误预算并声明用户可观察结果。
+    <Hpm4AppendixBKubernetesSloLab />
+  </Step>
+  <Step title="2. 改变容量或故障条件">
+    保持Schema和查询不变，调节数据、并发与缓存命中，先预测再观察。
+    <Hpm4AppendixBKubernetesCapacityLab />
+  </Step>
+  <Step title="3. 通过生产证据门">
+    六类证据齐备后才能宣布优化、扩容、切换或恢复完成。
+    <Hpm4AppendixBKubernetesEvidenceLab />
+  </Step>
+</Stepper>
+
+<Callout type="trap">
+  **优化陷阱。**
+  因为组织已有Kubernetes就迁移数据库，未定义控制平面、持久卷与有状态故障语义。先恢复SLO、版本、工作负载和结果合同，再改变一项设计；不要用单次快结果掩盖尾延迟、数据风险或观测偏差。
+</Callout>
+
+<Callout type="trap">
+  **因果陷阱。**
+  指标同时变化不等于存在因果关系。缓存预热、流量分布、后台任务、复制延迟和云平台噪声都可能改变结果；必须保留对照并一次改变一个变量。
+</Callout>
+
+<Callout type="warning">
+  DDL、参数、复制切换、恢复、分片和升级实验只在隔离环境执行。先验证备份和回退，规定最大写入、锁等待、错误预算消耗与停止条件。
+</Callout>
+
+## 证据解释与独立交接
+
+服务证据固定为什么优化。保存SLI公式、SLO窗口、流量分母、延迟分位数和错误预算燃烧；若用户指标没有改善，底层计数器变漂亮也不能证明价值。缺失采样和维护窗口必须显式处理。
+
+数据库证据解释发生了什么。保存Schema与统计、SQL和参数、计划估计与实际行、锁和版本、redo与binlog位置、状态变量及Performance Schema摘要。重置摘要或重启实例会改变基线，必须记录时间点。
+
+资源证据定位限制。保存CPU利用率与运行队列、内存与交换、磁盘延迟和队列、网络、云盘限额及后台刷新。平均值不能替代分位数和饱和时段，客户端总延迟也不能自动归因于数据库执行。
+
+故障证据证明可恢复。保存故障注入点、最后确认事务、晋升或恢复步骤、RPO/RTO实测、数据对账与旧源隔离。备份任务成功、副本在线或Pod重建都不是业务恢复的充分条件。
+
+## 本章回顾
+
+重新完成“评估Kubernetes为MySQL提供资源、控制平面和自动化是否值得新增故障复杂度”：先写SLO和结果合同，按5个目录节点建立因果模型，固定负载，采集基线，只改变一个变量，注入失败并独立对账。最终交付责任边界、Operator能力矩阵、Pod与卷故障演练和退出方案，证明“数据卷生命周期独立于Pod，资源与节点隔离明确，备份、恢复、升级和控制平面故障均有答案”。
+
+## 复习与生产验收
+
+<Exercises>
+**问题 1**：为什么“附录B Kubernetes上的MySQL”必须覆盖5个正式节点？
+<Answer>这些节点共同组成“评估Kubernetes为MySQL提供资源、控制平面和自动化是否值得新增故障复杂度”的服务目标、机制、负载、故障和证据链；缺项会使责任边界、Operator能力矩阵、Pod与卷故障演练和退出方案无法复现。</Answer>
+
+**问题 2**：本页最小运行不变量是什么？
+
+<Answer>
+  数据卷生命周期独立于Pod，资源与节点隔离明确，备份、恢复、升级和控制平面故障均有答案。必须由固定版本和负载、正常轨迹、压力数据、故障反例与业务对账共同证明。
+</Answer>
+
+**问题 3**：怎样构造最小反例？
+
+<Answer>
+  把“因为组织已有Kubernetes就迁移数据库，未定义控制平面、持久卷与有状态故障语义”写成待证假设，保持Schema与查询不变，只改变缓存、并发、数据分布或故障时点之一，再比较用户与数据库证据。
+</Answer>
+
+**问题 4**：为什么平均延迟不足以验收优化？
+
+<Answer>
+  平均值会隐藏排队、锁、I/O抖动和少数极慢请求；至少需要P95/P99、吞吐、错误率、实际扫描与等待，并确认结果语义不变。
+</Answer>
+
+**问题 5**：可靠性变更怎样验证？
+
+<Answer>
+  在最坏确认边界注入故障，记录最后确认事务、恢复或切换过程、RPO/RTO、数据一致性、旧源隔离与回退结果。
+</Answer>
+
+**问题 6**：独立交接至少包含什么？
+
+<Answer>需要SLO、版本与配置、Schema与数据分布、负载脚本、责任边界、Operator能力矩阵、Pod与卷故障演练和退出方案、计划与等待、故障演练、业务对账和回退条件。</Answer>
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Kubernetes">
+    Kubernetes以“数据卷生命周期独立于Pod，资源与节点隔离明确，备份、恢复、升级和控制平面故障均有答案”为运行边界，并由正常、压力与故障证据共同验证。
+  </GlossaryItem>
+  <GlossaryItem term="Operator">
+    Operator以“数据卷生命周期独立于Pod，资源与节点隔离明确，备份、恢复、升级和控制平面故障均有答案”为运行边界，并由正常、压力与故障证据共同验证。
+  </GlossaryItem>
+  <GlossaryItem term="持久卷">
+    持久卷以“数据卷生命周期独立于Pod，资源与节点隔离明确，备份、恢复、升级和控制平面故障均有答案”为运行边界，并由正常、压力与故障证据共同验证。
+  </GlossaryItem>
+  <GlossaryItem term="控制平面">
+    控制平面以“数据卷生命周期独立于Pod，资源与节点隔离明确，备份、恢复、升级和控制平面故障均有答案”为运行边界，并由正常、压力与故障证据共同验证。
+  </GlossaryItem>
+  <GlossaryItem term="有状态工作负载">
+    有状态工作负载以“数据卷生命周期独立于Pod，资源与节点隔离明确，备份、恢复、升级和控制平面故障均有答案”为运行边界，并由正常、压力与故障证据共同验证。
+  </GlossaryItem>
+</Glossary>
+
+[← 上一页：附录A 升级MySQL](/learn/high-performance-mysql/14-appendix-a/hpm4-appendix-a-upgrading) · [下一页：第4版全书复习与生产验收 →](/learn/high-performance-mysql/99-final-review/hpm4-official-final-review)
+
+<Attribution
+  adaptedFrom="《高性能MySQL（第4版）》"
+  adaptedUrl="https://www.oreilly.com/library/view/gao-xing-neng-mysql-di-4ban/9787121442575/"
+/>

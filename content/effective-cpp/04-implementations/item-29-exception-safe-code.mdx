@@ -1,0 +1,475 @@
+---
+title: "Item 29：为异常安全而努力是值得的"
+type: A
+section: Chapter 5 · Implementations
+order: 29
+description: 对齐 Effective C++ 第三版 Item 29：从锁和图像更新失败出发，区分 no-leak、basic、strong、nothrow 保证，以 RAII 和 prepare-commit/copy-and-swap 构建可证明的异常安全，并处理外部副作用。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppExceptionGuaranteeLadderMap,
+  EcppFailurePointAuditMap,
+  EcppPrepareCommitSwapMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-29-exception-safe-code";
+
+<Objectives>
+
+- 能区分 no-leak、basic、strong、nothrow guarantee，并描述异常后对象与外部状态
+- 能修改 delete/mutate-before-allocate 为 RAII candidate 加 noexcept commit，证明 copy-and-swap 强保证
+- 能分析 stream、database、network 等不可回滚副作用，设计 compensation、outbox 和失败注入测试
+
+</Objectives>
+
+## 从 changeBackground 的三个破坏点开始
+
+菜单对象拥有背景图并记录更换次数：
+
+```cpp
+class PrettyMenu {
+public:
+    void changeBackground(std::istream& imageSource);
+
+private:
+    Mutex mutex_;
+    Image* background_;
+    int imageChanges_;
+};
+```
+
+一个脆弱实现先加锁、删除旧图、递增计数，再创建新图：
+
+```cpp
+void PrettyMenu::changeBackground(std::istream& source) {
+    lock(&mutex_);
+    delete background_;
+    ++imageChanges_;
+    background_ = new Image(source);
+    unlock(&mutex_);
+}
+```
+
+若 `new Image(source)` 抛异常：mutex 永久锁住；background* 可能仍保存已释放地址；imageChanges* 已经增加却没有新图。
+
+<Term def="异常从任意可抛点离开后，资源、不变量和可观察状态仍满足明确契约的能力。">
+  exception-safe code
+</Term>
+
+Item 29 的原则是 Strive for exception-safe code（为异常安全代码而努力）。捕获异常不是核心；核心是失败时系统仍处于可证明状态。
+
+<Term def="列出函数内每个可抛操作，以及异常时资源 owner 和对象状态的分析。">
+  failure-point analysis
+</Term>
+
+## 第一底线：异常不能泄漏资源
+
+手工 lock/unlock 在异常路径跳过 unlock。先以 RAII guard 管理 mutex：
+
+```cpp
+void PrettyMenu::changeBackground(std::istream& source) {
+    std::scoped_lock lock(mutex_);
+    // work
+}
+```
+
+<Term def="异常离开作用域时所有已取得资源仍由 RAII owner 释放的最低资源保证。">
+  no-leak guarantee
+</Term>
+
+raw Image pointer 也应由 unique/shared owner 管理。RAII 解决锁和内存泄漏，但并不自动恢复 imageChanges\_ 或旧图像。
+
+<Term def="将资源 release 绑定到对象 destructor，使正常与异常退出共享清理路径。">
+  RAII cleanup boundary
+</Term>
+
+“没有泄漏”是异常安全的必要条件，不是完整保证。
+
+## 四层保证必须明确命名
+
+<Term def="异常后可能泄漏资源、破坏不变量或令对象无法安全销毁的状态。">
+  no exception guarantee
+</Term>
+
+<Term def="异常后无资源泄漏且所有对象保持有效不变量，但具体值可能改变。">
+  basic guarantee
+</Term>
+
+<Term def="异常后操作所有可观察效果回滚，系统状态与调用前一致。">
+  strong guarantee
+</Term>
+
+<Term def="操作承诺不让异常离开函数，并完成其契约。">nothrow guarantee</Term>
+
+basic 允许“有效但值不确定”；strong 提供 commit-or-rollback；nothrow 最强，适用于 destructor、deallocation、swap 等系统基础操作。
+
+<EcppExceptionGuaranteeLadderMap />
+
+<Callout type="trap">
+  **现象**：函数使用智能指针和 lock guard，就宣称 strong
+  guarantee。**原因**：RAII
+  只证明资源清理，计数、容器内容和外部副作用仍可能部分改变。**修法**：逐项列出
+  observable state，分别证明异常后不变或有效。
+</Callout>
+
+## 先构造新资源，再替换旧资源
+
+不要先 delete old image。先创建 candidate owner：
+
+```cpp
+void PrettyMenu::changeBackground(std::istream& source) {
+    auto candidate = std::make_shared<Image>(source);
+
+    std::scoped_lock lock(mutex_);
+    background_.swap(candidate);
+    ++imageChanges_;
+}
+```
+
+<Term def="在目标对象之外完成分配、解析和验证的临时完整状态。">
+  prepared candidate
+</Term>
+
+若 Image construction 抛，candidate 未完成，background\_/counter 不变。成功后锁内交换，candidate 接管旧图并在退出时释放。
+
+<Term def="在新状态完整有效后，以不可失败操作一次替换目标状态的结构。">
+  prepare-then-commit
+</Term>
+
+这里 counter increment 对 int 不抛，因此 swap 后更新可安全完成；若 commit 包含多个可能失败成员，还需聚合 state 后一起 swap。
+
+## copy-and-swap 把完整状态作为事务
+
+把相关数据放进 implementation state：
+
+```cpp
+struct MenuState {
+    std::shared_ptr<Image> background;
+    std::uint64_t imageChanges;
+
+    void swap(MenuState& other) noexcept {
+        background.swap(other.background);
+        std::swap(imageChanges, other.imageChanges);
+    }
+};
+```
+
+change 可以复制当前 state，在副本上构建新图和递增计数，最后 no-throw swap。
+
+<Term def="复制目标状态、修改副本，成功后以不抛 swap 提交的强保证习惯。">
+  copy-and-swap
+</Term>
+
+```cpp
+void PrettyMenu::changeBackground(std::istream& source) {
+    MenuState next = state_;
+    next.background = std::make_shared<Image>(source);
+    ++next.imageChanges;
+
+    std::scoped_lock lock(mutex_);
+    state_.swap(next);
+}
+```
+
+<Term def="从完整候选切换到目标对象、且自身不能失败的最终发布操作。">
+  noexcept commit operation
+</Term>
+
+<EcppPrepareCommitSwapMap />
+
+若 state\_ 可能在 candidate 构建期间被其他线程修改，还需 version check 或锁内 snapshot；异常安全不替代并发一致性。
+
+## strong guarantee 依赖每个组成操作
+
+函数整体通常只能提供最弱 sub-operation 的保证，除非它能 catch、rollback 或隔离其效果。
+
+<Term def="外层函数保证受其调用的最弱不可隔离操作限制的组合规律。">
+  weakest-link guarantee
+</Term>
+
+```cpp
+void update() {
+    firstStrongOperation();
+    secondBasicOperation();
+}
+```
+
+若 second 抛后只保持 basic，update 无法仅凭 first strong 宣称 strong。
+
+<Term def="把可抛操作作用于独立 candidate，使其失败效果不进入目标可观察状态。">
+  failure isolation
+</Term>
+
+审查必须沿 call graph 追踪 guarantees，而不是只看当前函数代码。
+
+## basic guarantee 仍要求对象可继续使用
+
+basic 不等于“没崩溃”。异常后所有 invariants 必须成立，资源无泄漏，对象可析构、可赋值，并且文档说明哪些值可能改变。
+
+<Term def="失败后对象仍处于类型允许的状态，可安全销毁和执行文档允许的后续操作。">
+  valid post-failure state
+</Term>
+
+容器操作可能在失败前插入部分元素，但 size/capacity/element invariants 仍合法；用户可以 clear 或重试。
+
+<Term def="异常发生前已完成的一部分效果允许保留，但必须形成一致可描述状态。">
+  partial progress contract
+</Term>
+
+如果函数留下 dangling pointer、锁未释放或 size 与 storage 不匹配，连 basic 都没有。
+
+## nothrow 操作构成安全基础设施
+
+destructor、resource release、rollback、swap 与 move 常被异常处理路径依赖，应尽量 nothrow。
+
+<Term def="其他异常保证依赖、必须在栈展开或提交阶段可靠执行的不可失败操作。">
+  no-fail primitive
+</Term>
+
+```cpp
+static_assert(std::is_nothrow_swappable_v<MenuState>);
+static_assert(std::is_nothrow_destructible_v<MenuState>);
+```
+
+<Term def="在编译期验证实现是否满足不抛交换、移动或析构等保证的约束。">
+  nothrow trait assertion
+</Term>
+
+不能虚假写 noexcept；内部异常逃出会 terminate。需要在边界 catch 并转换为 status 的操作，要明确是否真的“完成契约”还是 best-effort。
+
+## 外部副作用通常不能自动回滚
+
+读 stream 会推进 position，发送 network packet 会被外部观察，写 database 可能已经 commit。内存 copy-and-swap 无法撤销这些效果。
+
+<Term def="函数之外的系统能够观察、且不能仅靠恢复内存对象状态撤销的操作结果。">
+  external side effect
+</Term>
+
+例如 Image constructor 从 stream 读取失败，PrettyMenu 可保持原值，但 stream 已消耗部分 bytes。函数对菜单是 strong，对 stream 不是 strong。
+
+<Term def="分别对内存对象、输入源、持久化系统和通知系统声明不同失败保证。">
+  multi-resource guarantee boundary
+</Term>
+
+API 文档必须指出这种差异，或先把 input buffer snapshot 到可重放 storage。
+
+## database 和消息需要事务或补偿
+
+跨系统更新不能假装一个 C++ swap 就能原子化。可使用 database transaction、outbox、idempotency key 或 compensation。
+
+<Term def="把持久化状态更新和待发送事件写入同一数据库事务，稍后可靠发布的模式。">
+  transactional outbox
+</Term>
+
+```text
+begin transaction
+  update menu row
+  insert event into outbox
+commit
+publisher sends event idempotently
+```
+
+<Term def="为已经发生且不可直接回滚的外部效果执行语义相反或修正操作。">
+  compensating action
+</Term>
+
+这通常提供 eventual consistency，而不是进程内 strong guarantee；需要明确重试、重复和顺序。
+
+<Callout type="trap">
+  **现象**：对象先 copy-and-swap，再发送事件，于是宣称整个 use case
+  strong。**原因**：事件发送失败时对象已提交，或事件成功后本地崩溃，跨系统状态分裂。**修法**：事务
+  outbox/idempotent consumer，或定义可补偿的 saga 契约。
+</Callout>
+
+## 锁范围与 candidate snapshot 要一致
+
+为了减少持锁时间，可在锁外构建独立 Image；但复制 state/version 和 commit 必须防止 lost update。
+
+<Term def="candidate 准备期间目标被其他线程修改，最后旧 snapshot 覆盖新状态的并发错误。">
+  stale-candidate overwrite
+</Term>
+
+```cpp
+for (;;) {
+    auto [snapshot, version] = readState();
+    auto candidate = buildNext(snapshot, source);
+    if (tryCommit(version, std::move(candidate))) break;
+}
+```
+
+<Term def="提交时验证目标版本仍与构建 candidate 的 snapshot 一致，否则重试。">
+  optimistic commit validation
+</Term>
+
+异常安全、线程安全和进度策略必须一起测试：重试是否有界，source 能否重放，external effects 是否重复。
+
+## 性能不能作为放弃保证的默认理由
+
+copy whole state 可能昂贵，但先测量。可只复制会变化的 representation、使用 persistent data structure 或针对性 prepare/commit。
+
+<Term def="在保持保证前提下缩小 candidate 范围、复用不可变数据或优化提交路径。">
+  guarantee-preserving optimization
+</Term>
+
+如果业务只能承担 basic guarantee，也应明确选择并提供 recovery API，而不是让实现偶然处于某状态。
+
+<Term def="由领域恢复成本、性能和可撤销性明确选择的失败后状态承诺。">
+  deliberate guarantee level
+</Term>
+
+保证是接口的一部分，性能优化必须维持或显式版本化改变它。
+
+## 对每个 throw point 做失败注入
+
+先预测每个 throw point 发生后 old image、counter、mutex、stream position 与外部事件分别处于什么状态，再运行注入测试核对实际轨迹。
+
+代码阅读无法覆盖 allocator、copy constructor、decoder 和 callback 的所有异常位置。测试要逐点注入。
+
+<Term def="在第 N 个可抛操作强制失败，以观察资源和状态是否满足声明保证。">
+  deterministic failure injection
+</Term>
+
+<EcppFailurePointAuditMap />
+
+验证矩阵包括：
+
+- lock guard 在每个 throw point 后都释放 mutex。
+- allocation/decoder 失败时 old image、counter、version 保持原值。
+- basic-only operation 失败后 invariant、resource ledger 与 recovery API 有效。
+- swap/destructor/rollback 路径不抛，traits 与 runtime instrument 一致。
+- stream position、database row、outbox event 分别记录可观察效果。
+- concurrent commit 覆盖 stale version、retry、source replay 和 cancellation。
+- success path 只释放旧 image 一次，notification 不重复。
+
+<Term def="记录每个失败点的资源 owner、对象值、锁、外部效果和预期保证的表。">
+  exception guarantee matrix
+</Term>
+
+只有每行都有自动化证据，strong/basic/nothrow 才不是口号。
+
+## 小结
+
+- exception-safe code 必须同时处理资源泄漏、对象不变量和可观察状态
+- RAII 提供 no-leak floor，但不能自动回滚计数、容器或外部副作用
+- basic 保证有效状态，strong 保证失败无效果，nothrow 承诺操作不失败
+- prepare candidate 后以 noexcept swap commit，可用 copy-and-swap 构建 strong guarantee
+- 外层保证受最弱不可隔离操作限制；stream/network/database 需单独声明或事务补偿
+- deterministic failure injection 与 exception guarantee matrix 用于逐点证明保证
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 29"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="exception-safe code">
+    异常后仍满足明确资源与状态契约的代码。
+  </GlossaryItem>
+  <GlossaryItem term="failure-point analysis">
+    列出可抛点及失败状态的分析。
+  </GlossaryItem>
+  <GlossaryItem term="no-leak guarantee">
+    异常路径仍释放全部已取得资源。
+  </GlossaryItem>
+  <GlossaryItem term="RAII cleanup boundary">
+    由析构统一执行资源清理的边界。
+  </GlossaryItem>
+  <GlossaryItem term="no exception guarantee">
+    异常后没有可依赖状态承诺。
+  </GlossaryItem>
+  <GlossaryItem term="basic guarantee">
+    无泄漏且对象保持有效但值可能改变。
+  </GlossaryItem>
+  <GlossaryItem term="strong guarantee">
+    失败时所有可观察状态保持原值。
+  </GlossaryItem>
+  <GlossaryItem term="nothrow guarantee">
+    操作承诺不让异常离开并完成契约。
+  </GlossaryItem>
+  <GlossaryItem term="prepared candidate">
+    目标之外构建的完整临时状态。
+  </GlossaryItem>
+  <GlossaryItem term="prepare-then-commit">
+    先准备、后以不可失败操作发布。
+  </GlossaryItem>
+  <GlossaryItem term="copy-and-swap">复制修改候选后以 swap 提交。</GlossaryItem>
+  <GlossaryItem term="noexcept commit operation">
+    不会抛异常的最终状态发布。
+  </GlossaryItem>
+  <GlossaryItem term="weakest-link guarantee">
+    外层受最弱不可隔离子操作限制。
+  </GlossaryItem>
+  <GlossaryItem term="failure isolation">
+    让可抛工作只影响临时 candidate。
+  </GlossaryItem>
+  <GlossaryItem term="valid post-failure state">
+    失败后仍可析构、恢复和继续使用的状态。
+  </GlossaryItem>
+  <GlossaryItem term="partial progress contract">
+    允许保留部分效果但保持一致的契约。
+  </GlossaryItem>
+  <GlossaryItem term="no-fail primitive">
+    栈展开和提交依赖的不可失败基础操作。
+  </GlossaryItem>
+  <GlossaryItem term="nothrow trait assertion">
+    编译期验证不抛能力的约束。
+  </GlossaryItem>
+  <GlossaryItem term="external side effect">
+    进程对象之外可观察且难回滚的效果。
+  </GlossaryItem>
+  <GlossaryItem term="multi-resource guarantee boundary">
+    分别声明各资源失败保证的边界。
+  </GlossaryItem>
+  <GlossaryItem term="transactional outbox">
+    状态与待发事件同事务持久化的模式。
+  </GlossaryItem>
+  <GlossaryItem term="compensating action">
+    修正已发生外部效果的语义操作。
+  </GlossaryItem>
+  <GlossaryItem term="stale-candidate overwrite">
+    旧 snapshot candidate 覆盖并发新状态。
+  </GlossaryItem>
+  <GlossaryItem term="optimistic commit validation">
+    按版本校验后提交或重试。
+  </GlossaryItem>
+  <GlossaryItem term="guarantee-preserving optimization">
+    不降低保证的 candidate/commit 优化。
+  </GlossaryItem>
+  <GlossaryItem term="deliberate guarantee level">
+    按领域成本明确选择的失败承诺。
+  </GlossaryItem>
+  <GlossaryItem term="deterministic failure injection">
+    在指定可抛点强制异常的测试。
+  </GlossaryItem>
+  <GlossaryItem term="exception guarantee matrix">
+    失败点、状态和保证的验证表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：修复 PrettyMenu。** 原实现手工锁、delete old image、递增计数后 new，请给出 strong guarantee 方案。
+
+<Answer question="怎样消除锁泄漏、dangling image 和错误计数？">
+  使用 scoped_lock/RAII owner；在目标之外构造并验证 Image candidate，失败时 old
+  state 不变。把 background 与 counter 聚合进 MenuState，复制 current
+  state、更新 candidate，最后锁内 noexcept swap；candidate 析构释放旧
+  image。逐点注入 allocation/decode 异常，验证 mutex 可获取、地址/计数/version
+  全部原值。
+</Answer>
+
+2. **问题 2：组合保证。** update 先调用 strong 内存更新，再调用只能 basic 的插件 callback，外层能承诺什么，怎样提升？
+
+<Answer question="为什么外层不能直接宣称 strong guarantee？">
+  插件异常可能已留下有效但改变的插件状态，外层受 weakest-link guarantee
+  限制，通常最多 basic。若可在 isolated candidate/plugin transaction 中执行并
+  rollback，可恢复 strong；若不可撤销，应明确 partial progress，提供
+  compensation/idempotent retry。测试插件每个 failure point 和外层
+  recovery，而不是只检查内存对象。
+</Answer>
+
+3. **问题 3：处理数据库与消息。** 更新菜单记录后发送事件，任一步失败都可能状态分裂，请设计边界。
+
+  <Answer question="跨数据库和消息系统怎样定义异常安全？">把菜单 row 更新与 outbox event 写入同一 database transaction；commit 后 publisher 以 idempotency key 重试发送，consumer 去重。进程内对象可提供 strong commit，但跨系统声明 eventual consistency，不虚称全局 rollback。测试 transaction abort、commit 后崩溃、重复发送、乱序与补偿，保证最终 row/event 对齐。</Answer>
+</Exercises>

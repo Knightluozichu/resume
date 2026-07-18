@@ -1,0 +1,201 @@
+---
+title: "第7章 渲染管线与图形学"
+type: C
+section: "Unity3D 高级编程之进阶主程 · 第7章"
+order: 7
+description: "渲染章节从图形学基础和管线阶段进入批处理、实例化、采样、Shader 编译与 Projector。任何优化结论都要同时说明 CPU 提交、GPU 阶段、显存、变体和画质，不能把 Draw Call 当成唯一指标。"
+demo: true
+math: false
+sourceUrl: "https://www.cnblogs.com/ZhYQ-Note/articles/15493562.html"
+draft: false
+---
+
+import {
+  Objectives, Callout, Attribution, Glossary, GlossaryItem, Term,
+  Exercises, Answer, Stepper, Step,
+} from "@/components/mdx/mdx-components";
+import {
+  U3ap07RenderingGraphicsArchitectureLab, U3ap07RenderingGraphicsRuntimeLab, U3ap07RenderingGraphicsReleaseLab,
+} from "@/components/mdx/unity-advanced-programming/diagrams/u3ap-07-rendering-graphics";
+
+<Objectives>
+- 能解释图形学基础的成本与适用边界
+- 能比较渲染管线一和渲染管线二的证据差异
+- 能设计第7章的正常、边界和失败样本
+- 能复现“锁定画面场景 → 捕获管线阶段 → 定位限制端 → 修改一种策略 → 复测变体画质 → 签发设备预算”全链轨迹
+- 能判断第7章是否满足主程交接门
+</Objectives>
+
+## 从连载位置与先预测开始
+
+本页对应陆泽西（Jesse Lu）《Unity3D 高级编程之进阶主程》的第7章。该作品是在线技术连载，不是有 ISBN 的正式出版书；原作者旧站已不可作为稳定入口，因此以保存下来的完整文章索引核对章节，并保留原始标题与编号。
+
+渲染章节从图形学基础和管线阶段进入批处理、实例化、采样、Shader 编译与 Projector。任何优化结论都要同时说明 CPU 提交、GPU 阶段、显存、变体和画质，不能把 Draw Call 当成唯一指标。
+
+<Callout type="note" title="先预测">
+  在运行实验前，先预测“锁定画面场景”经过“捕获管线阶段”后最先变化的模块、状态或指标，并写出一个会推翻预测的结果。
+</Callout>
+
+<U3ap07RenderingGraphicsArchitectureLab />
+
+## 原连载文章覆盖矩阵
+
+| # | 原文章主题或本页检查点 | 可观察解释 |
+| ---: | --- | --- |
+| 1 | 图形学基础 | 建立坐标、矩阵、光栅化、深度和插值的最小模型。 |
+| 2 | 渲染管线一 | 追踪 CPU 提交到顶点、光栅化和片元输出。 |
+| 3 | 渲染管线二 | 理解状态、资源绑定、透明排序和深度测试。 |
+| 4 | 渲染原理与知识一 | 分析剔除、批处理和 Draw Call。 |
+| 5 | 渲染原理与知识二 | 分析静态批处理、动态批处理及其内存边界。 |
+| 6 | 渲染原理与知识三 | 分析 GPU Instancing、常量缓冲与 SRP Batcher。 |
+| 7 | 多重采样与着色器编译原理 | 连接 MSAA 成本、Shader 变体和平台编译。 |
+| 8 | Projector 投影原理 | 用投影矩阵和额外渲染处理贴花或范围效果。 |
+
+图形学基础、渲染管线一、渲染管线二、渲染原理与知识一、渲染原理与知识二、渲染原理与知识三、多重采样与着色器编译原理、Projector 投影原理 不是随意补充的主程知识清单，而是沿“锁定画面场景 → 捕获管线阶段 → 定位限制端 → 修改一种策略 → 复测变体画质 → 签发设备预算”建立因果关系。每个条目都要能定位到实验输入、首个状态变化和最终门禁。
+
+## 核心模型与技术边界
+
+渲染章节从图形学基础和管线阶段进入批处理、实例化、采样、Shader 编译与 Projector。任何优化结论都要同时说明 CPU 提交、GPU 阶段、显存、变体和画质，不能把 Draw Call 当成唯一指标。
+
+连载写作年代与今天的 Unity、.NET 后端和渲染管线存在差异。复现时保留作者要解释的机制，同时记录旧 API、当前替代路径、运行时版本和验证结果。没有版本映射的“更新版结论”不能覆盖原文章，也不能把今天的默认行为倒推成当年的事实。
+
+<Term def="建立坐标、矩阵、光栅化、深度和插值的最小模型。">图形学基础</Term>必须在本页留下输入、内部状态和输出证据，不能只作为术语出现。
+
+<Term def="追踪 CPU 提交到顶点、光栅化和片元输出。">渲染管线一</Term>必须在本页留下输入、内部状态和输出证据，不能只作为术语出现。
+
+<Term def="理解状态、资源绑定、透明排序和深度测试。">渲染管线二</Term>必须在本页留下输入、内部状态和输出证据，不能只作为术语出现。
+
+<Term def="分析剔除、批处理和 Draw Call。">渲染原理与知识一</Term>必须在本页留下输入、内部状态和输出证据，不能只作为术语出现。
+
+<Term def="分析静态批处理、动态批处理及其内存边界。">渲染原理与知识二</Term>必须在本页留下输入、内部状态和输出证据，不能只作为术语出现。
+
+## 六阶段主程证据链
+
+<Stepper>
+  <Step title="1. 锁定画面场景 → 捕获管线阶段">
+    固定 Unity、脚本后端、平台、数据规模和输入。先保存结构快照，再运行正常样本，禁止同时修改多个策略。
+    <U3ap07RenderingGraphicsArchitectureLab />
+  </Step>
+  <Step title="2. 定位限制端 → 修改一种策略">
+    加入边界与故障样本，记录首个偏离节点。最终画面或平均值不能代替协议、分配、重建、决策或路径轨迹。
+    <U3ap07RenderingGraphicsRuntimeLab />
+  </Step>
+  <Step title="3. 复测变体画质 → 签发设备预算">
+    确认门禁能拒绝故障，修复后用同一输入复测，并归档版本、日志、捕获、截图和结论。
+    <U3ap07RenderingGraphicsReleaseLab />
+  </Step>
+</Stepper>
+
+## 可复现实验
+
+构建包含重复网格、透明物体、MSAA 和 Projector 的固定场景，在同一设备比较无批处理、实例化与 SRP Batcher。先预测瓶颈，再保存 Frame Debugger 与 GPU 捕获。
+
+最小实现只暴露本章关键状态，不把因果藏进通用框架。
+
+```csharp
+public readonly record struct RenderBudget(
+    float CpuMs, float GpuMs, int DrawCalls, long MemoryBytes);
+
+static bool Pass(RenderBudget value, RenderBudget limit)
+{
+    return value.CpuMs <= limit.CpuMs && value.GpuMs <= limit.GpuMs
+        && value.DrawCalls <= limit.DrawCalls && value.MemoryBytes <= limit.MemoryBytes;
+}
+```
+
+统一证据契约把结构、版本和故障计划放在同一结果中。
+
+```ts
+type LeadProgramEvidence = {
+  chapter: "u3ap-07-rendering-graphics";
+  runtimeVersion: string;
+  sample: "baseline" | "boundary" | "failure";
+  stages: readonly string[];
+  firstDeviation: string | null;
+  decision: "pass" | "rejected";
+};
+
+function canRelease(run: LeadProgramEvidence): boolean {
+  return run.stages.length === 6 &&
+    (run.sample !== "failure" || run.decision === "rejected");
+}
+```
+
+证据日志至少保留下列字段，并与捕获文件使用同一运行编号。
+
+```text
+stage,name,sample,input,observation,result
+1,锁定画面场景,baseline,planned,observed,pass
+2,捕获管线阶段,baseline,planned,observed,pass
+3,定位限制端,baseline,planned,observed,pass
+4,修改一种策略,baseline,planned,observed,pass
+5,复测变体画质,baseline,planned,observed,pass
+6,签发设备预算,baseline,planned,observed,pass
+```
+
+## 两个必须主动制造的失败
+
+<Callout type="trap" title="局部结论没有运行证据">
+  只统计 Draw Call，启用所有合批和 Shader 关键字，结果 CPU 指标变好但显存、变体、透明排序或 GPU 长尾恶化。必须保存故障版本和首个偏离节点，再用相同输入验证修复。
+</Callout>
+
+<Callout type="trap" title="指标改善但系统边界退化">
+  故意让一个平均指标变好，同时删除版本、长尾、内存、协议、画质或交接证据。只要“同一设备、相机路径和画质设置下，优化后的 CPU、GPU、显存、变体与截图门同时通过。”不成立，即使演示成功也必须拒绝。
+</Callout>
+
+## 验收矩阵
+
+| 维度 | 正常样本 | 边界样本 | 失败样本 | 通过条件 |
+| --- | --- | --- | --- | --- |
+| 连载 | 原主题逐项定位 | 相邻文章交叉 | 故意漏一项 | 无主题空洞 |
+| 结构 | 依赖和状态可见 | 极限规模与阈值 | 注入错误边界 | 首偏离可定位 |
+| 运行 | 固定输入可回放 | 长尾与平台差异 | 故障计划 | 结果可复现 |
+| 交接 | 他人按证据复验 | 干净环境 | 删除隐含依赖 | 不变量成立 |
+
+## 练习
+
+<Exercises>
+
+**问题 1** 第7章覆盖哪些原连载主题？选择三个写出因果链。
+
+<Answer>
+  本页覆盖 图形学基础、渲染管线一、渲染管线二、渲染原理与知识一、渲染原理与知识二、渲染原理与知识三、多重采样与着色器编译原理、Projector 投影原理。合格答案要沿“锁定画面场景 → 捕获管线阶段 → 定位限制端 → 修改一种策略 → 复测变体画质 → 签发设备预算”写清上游输入、中间状态和下游证据，不能只复述标题。
+</Answer>
+
+**问题 2** 怎样制造“只统计 Draw Call，启用所有合批和 Shader 关键字，结果 CPU 指标变好但显存、变体、透明排序或 GPU 长尾恶化。”并证明修复有效？
+
+<Answer>
+  固定运行时版本、平台、数据规模和输入，只注入该故障；保存首个偏离节点。修复后用相同条件复测正常、边界和失败组，并确认门禁从拒绝恢复为通过。
+</Answer>
+
+**问题 3** 为什么“同一设备、相机路径和画质设置下，优化后的 CPU、GPU、显存、变体与截图门同时通过。”是第7章的签发不变量？
+
+<Answer>
+  因为主程交付的是可演进系统，不是一次演示。缺少该不变量时，局部指标可能改善，却会把成本转移到其他模块、平台、团队或线上故障。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- 已覆盖 图形学基础、渲染管线一、渲染管线二、渲染原理与知识一、渲染原理与知识二、渲染原理与知识三、多重采样与着色器编译原理、Projector 投影原理，没有用自拟的热更新或 CI/CD 目录替代原连载。
+- 已沿“锁定画面场景 → 捕获管线阶段 → 定位限制端 → 修改一种策略 → 复测变体画质 → 签发设备预算”保存正常、边界、失败与修复证据。
+- 已记录原写作年代与当前 Unity 的版本映射。
+- 已以“同一设备、相机路径和画质设置下，优化后的 CPU、GPU、显存、变体与截图门同时通过。”作为交接门。
+
+## 术语表
+
+<Glossary>
+<GlossaryItem term="图形学基础">建立坐标、矩阵、光栅化、深度和插值的最小模型。</GlossaryItem>
+<GlossaryItem term="渲染管线一">追踪 CPU 提交到顶点、光栅化和片元输出。</GlossaryItem>
+<GlossaryItem term="渲染管线二">理解状态、资源绑定、透明排序和深度测试。</GlossaryItem>
+<GlossaryItem term="渲染原理与知识一">分析剔除、批处理和 Draw Call。</GlossaryItem>
+<GlossaryItem term="渲染原理与知识二">分析静态批处理、动态批处理及其内存边界。</GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="陆泽西（Jesse Lu）在线连载《Unity3D 高级编程之进阶主程》；现存完整文章索引由博客园保存，原作者旧站入口已失效"
+  adaptedUrl="https://www.cnblogs.com/ZhYQ-Note/articles/15493562.html"
+/>

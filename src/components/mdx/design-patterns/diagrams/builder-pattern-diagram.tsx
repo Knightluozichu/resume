@@ -402,12 +402,19 @@ export function BuilderPatternDiagram() {
           </text>
 
           {/* 四个步骤框 */}
-          {([
-            { name: "buildPartA()", note: "构建部件 A", color: accent, i: 0 },
-            { name: "buildPartB()", note: "构建部件 B", color: accent, i: 1 },
-            { name: "buildPartC()", note: "构建部件 C", color: accent, i: 2 },
-            { name: "getResult()", note: "返回 Product", color: success, i: 3 },
-          ] as const).map((step) => {
+          {(
+            [
+              { name: "buildPartA()", note: "构建部件 A", color: accent, i: 0 },
+              { name: "buildPartB()", note: "构建部件 B", color: accent, i: 1 },
+              { name: "buildPartC()", note: "构建部件 C", color: accent, i: 2 },
+              {
+                name: "getResult()",
+                note: "返回 Product",
+                color: success,
+                i: 3,
+              },
+            ] as const
+          ).map((step) => {
             const x = STEP_X[step.i];
             return (
               <g key={step.name}>
@@ -488,8 +495,9 @@ export function BuilderPatternDiagram() {
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        Director 只负责编排步骤顺序，Builder 负责具体装配——同一套构建流程可以搭配不同
-        ConcreteBuilder 产出不同表示，新增表示只需新增建造者，无需改 Director。
+        Director 只负责编排步骤顺序，Builder
+        负责具体装配——同一套构建流程可以搭配不同 ConcreteBuilder
+        产出不同表示，新增表示只需新增建造者，无需改 Director。
       </figcaption>
     </figure>
   );

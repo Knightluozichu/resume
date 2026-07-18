@@ -1,107 +1,202 @@
 ---
-title: "直接光与间接光"
+title: "真实感图像合成与光传输物理"
 type: B
 section: "计算机图形学与渲染"
 order: 1
-description: "光弹射的分类与计算——GI的概念基石"
+description: "复刻第 1、2 章与附录 B：从真实感图像合成框架、辐射度量到渲染方程、重要度和半球坐标"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://books.google.com/books?id=KodRAAAAMAAJ"
 draft: false
 ---
 
-import { GilDirectIndirectDiagram } from "@/components/mdx/global-illumination/diagrams/gil-direct-indirect";
+import { GilDirectIndirectDiagram, GilRadiometryBalanceDiagram, GilHemisphereMeasureDiagram } from "@/components/mdx/global-illumination/diagrams/gil-direct-indirect";
+import { GilStepFlowDiagram } from "@/components/mdx/global-illumination/diagrams/gil-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能区分直接光照、间接光照、环境光照
-- 能解释为什么间接光照是真实感的关键
-- 能写出直接光照和间接光照的计算公式
-- 能回答色渗透(Color Bleeding)是如何产生的？
+
+- 能描述真实感图像合成从场景获取、光传输到测量显示的完整框架
+- 能区分 flux、irradiance、radiance、BRDF 与 importance 的定义和量纲
+- 能推导出射 radiance 的渲染方程并解释直接与间接项的算法分解
+- 能计算半球坐标的 solid angle 微元并判断 PDF 与 cosine 项是否匹配
+
 </Objectives>
 
-## 直觉引入
+## 直觉：一个像素到底测量了什么
 
-想象一个白色房间，一面墙是红色。阳光照到红墙，红墙反射红光。这些红光又照到旁边的白墙上，让白墙微微泛红——这就是色渗透。没有间接光照计算，红墙旁边的白墙就是纯白，看起来不自然。
+先预测：若把一个面光源放大四倍，同时把它的总 radiant flux 保持不变，照在墙上的亮度会怎样变化？若只存“光源颜色 × 强度”，很难回答；若明确 area emitter 的 radiance、表面接收的 irradiance、BRDF 和相机 measurement function，就能逐项核对能量与几何关系。
 
-直接光回答「光源直接照到了哪里」，间接光回答「光弹射后又到了哪里」。两者之和才是最终看到的颜色。
-
-## 概念讲解
-
-### 直接光与间接光
+真实感图像合成（realistic image synthesis）的目标不是模仿照片滤镜，而是给定现实采集或人工设计的场景描述，预测成像系统将测到的光。原书第 1 章把问题置于更大的系统中：先获取/建模几何、材质与光源，再计算场景中的全局光照（global illumination framework），最后通过相机、显示和人类视觉解释结果。
 
 <GilDirectIndirectDiagram />
 
-<Term def="直接光照是光从光源出发经一次反射到达相机的光路">直接光照</Term>只需对光源积分，计算高效。
+一张物理正确但 tone mapping 错误的 HDR 图会显示失败；一个几何与 BRDF 不可信的场景也不会因求解器无偏而“真实”。因此，第 1 章的框架要求把 scene acquisition、light transport 与 visual display 分开验收。本页重点建立中间的物理契约，并说明它如何被测量端使用。
 
-<Term def="间接光照是光经两次或更多次反射后到达相机的光路">间接光照</Term>需要递归追踪，是GI计算的核心开销。
+## 能量、功率与辐射度量
 
-<Term def="色渗透(Color Bleeding)是间接光的色彩传递效果——彩色表面的反射光给附近物体染上颜色">色渗透</Term>是间接光照最显著的视觉特征。
+<Term def="以可加、守恒的物理量描述辐射能在时间、面积与方向上的分布，是光传输算法的量纲基础">辐射度量</Term>（radiometry）从 radiant energy $Q$ 开始。Radiant flux 是单位时间通过的能量，$\Phi=dQ/dt$，单位 watt。Irradiance $E$ 是入射到表面的 flux density，单位 $\mathrm{W/m^2}$；radiant exitance 则描述离开表面的通量密度。
 
-<Term def="环境光遮蔽(AO)是间接光在角落和缝隙处减弱的效果，是GI最简单的近似">环境光遮蔽</Term>用低成本的近似模拟间接光衰减。
+<GilRadiometryBalanceDiagram />
 
-## 交互Demo
+<Term def="单位投影面积、单位立体角上的辐射通量密度；在真空直线传播中保持不变，是路径追踪携带的核心量">辐亮度</Term>（radiance）同时保留位置和方向。沿方向 $\omega$ 穿过面积 $dA$、立体角 $d\omega$ 的微分 flux 为：
 
-<Stepper>
-<Step title="第一步：直接光照">直接光照 = 光源到表面到相机，一次弹射。显式采样光源即可计算，效率高、噪声低。</Step>
-<Step title="第二步：间接光照">
-间接光照 = 光源到表面A到表面B到...到相机，多次弹射。需要递归追踪或预计算，是GI的核心开销。
-<GilDirectIndirectDiagram />
-</Step>
-<Step title="第三步：视觉特征">间接光产生色渗透（彩色反射光染到邻近物体）、环境光填充（阴影区域不纯黑）、接触阴影（AO在角落变暗）。</Step>
-</Stepper>
+$$
+d^2\Phi=L(x,\omega)\,|n\cdot\omega|\,dA\,d\omega.
+$$
 
-## 代码对照
+余弦不是经验“压暗项”，而是面积投影：斜射方向看到的有效面积是 $dA_\perp=|n\cdot\omega|dA$。若 sampler 的 PDF 已按 projected solid angle 定义，却又额外乘一次 cosine，就会发生双重计权。
+
+## 半球坐标与立体角
+
+方向积分不是普通二维角度积分。附录 B 用 hemispherical coordinates（半球坐标）明确：以表面法线为极轴，方向由 polar angle $\theta$ 和 azimuth $\phi$ 表示，单位球面的面积就是 solid angle（立体角）。
+
+<GilHemisphereMeasureDiagram />
+
+球面参数化的 Jacobian 给出：
+
+$$
+d\omega=\sin\theta\,d\theta\,d\phi,
+\qquad \theta\in[0,\pi/2],\quad\phi\in[0,2\pi).
+$$
+
+用它检查整个上半球的立体角：$\int_0^{2\pi}\int_0^{\pi/2}\sin\theta\,d\theta d\phi=2\pi$ sr。再检查 cosine-weighted normalization：$\int_{\Omega^+}\cos\theta\,d\omega=\pi$。因此 Lambertian BRDF 为 $\rho/\pi$，而常用 cosine-weighted PDF 为 $p(\omega)=\cos\theta/\pi$。
+
+## 发射、散射与 BRDF
+
+表面可以自发光，也可以把入射 radiance 散射到出射方向。<Term def="双向反射分布函数，定义单位入射 irradiance 对指定出射 radiance 的贡献，并受能量守恒与互易性约束">双向反射分布函数</Term>（BRDF）定义为：
+
+$$
+f_r(x,\omega_i,\omega_o)=\frac{dL_o(x,\omega_o)}{dE_i(x,\omega_i)}.
+$$
+
+它的单位是 $\mathrm{sr^{-1}}$。物理可行 BRDF 至少要满足非负、能量守恒；在 Helmholtz reciprocity 成立的普通被动材料上还有 $f_r(\omega_i,\omega_o)=f_r(\omega_o,\omega_i)$。镜面 delta distribution 不能当普通有限函数代入数值积分，采样与 PDF 必须在相同测度下处理。
+
+Emission 给出 $L_e$；reflection 把 hemisphere 上的 $L_i$ 变为 $L_o$；visibility 与 geometry 负责把另一点的出射 radiance 连接为当前点的入射 radiance。光传输因此是局部散射和全局传播的交替。
+
+## 渲染方程与直接/间接分解
+
+<Term def="描述一点沿出射方向的辐亮度等于自发光与所有入射方向散射贡献之和的积分方程">渲染方程</Term>（rendering equation）写为：
+
+$$
+L_o(x,\omega_o)=L_e(x,\omega_o)+
+\int_{\Omega_x^+}f_r(x,\omega_i,\omega_o)L_i(x,\omega_i)|n\cdot\omega_i|d\omega_i.
+$$
+
+$L_i$ 又来自别处的 $L_o$，所以这是递归积分方程。把入射域按“下一段是否命中 emitter”划分，才得到算法上的 direct illumination 与 indirect illumination；它不是简单用固定弹射次数定义。相机直接看见光源对应 emission/零次散射；相机射线命中表面后显式连接光源通常称直接光；其余经过非发光表面再传播的贡献称间接光。
+
+色渗透来自能量与 spectrum 的连续散射：白光被红墙的 spectral BRDF 选择性反射，再作为邻近表面的 $L_i$。阴影不纯黑、亮部互反射和 caustic 都可由同一方程解释，不需要另造“效果项”。Ambient light 和 ambient occlusion 只能是某些场景/方向分布下的低维近似，不能替代一般 $L_i(x,\omega)$。
+
+## 重要度与测量方程
+
+只从光源向外追踪会生成大量永远不进入相机的能量。原书同时引入 <Term def="从传感器或目标测量向场景反向传播的敏感度函数，用于判断某段传输对最终测量的价值">重要度</Term>（importance）：radiance 描述能量从 emitter 流向场景，importance 描述 camera measurement 对位置方向状态的敏感度。二者的传输方程互为 adjoint，为后续 light tracing 与 bidirectional methods 奠基。
+
+像素值不是某条相机 ray 上的单点 radiance，而是 radiance 与 sensor response 的积分。令 $W_e$ 表示像素/镜头/时间/波长的 measurement function，抽象测量方程可写成：
+
+$$
+M=\int_{\mathcal R} W_e(r)\,L(r)\,d\mu(r).
+$$
+
+这里的域 $\mathcal R$ 可以包含 sensor position、direction、time 与 wavelength。Pinhole camera、finite aperture、motion blur 和 spectral sensor 只是选择不同 $W_e$。把 importance 与 radiance 分开，可以解释为什么“对场景能量很大”不等于“对某个像素贡献很大”。
+
+## 从方程到可执行估计器
+
+渲染器应保留量纲和 producer-to-consumer 关系，而不是把所有值都装进 `Color`：
 
 ```cpp
-// 直接光照 + 间接光照 = 全局光照
-Spectrum GI(SurfaceInteraction si) {
-    Spectrum L_direct(0), L_indirect(0);
-    
-    // 直接光照：采样光源
-    for (auto &light : scene.lights)
-        L_direct += EstimateDirect(si, light);
-    
-    // 间接光照：递归追踪反射光
-    auto [wi, f, pdf] = si.bsdf->Sample_f(wo);
-    Ray reflectRay(si.p, wi);
-    L_indirect = f * Li(reflectRay) * cos / pdf;
-    
-    return L_direct + L_indirect;
+Radiance estimate(const Surface& x, Direction wo, Sampler& rng) {
+    Radiance Lo = x.emission(wo);
+    Lo += sampleEmitterConnection(x, wo, rng); // direct estimator
+
+    auto s = x.bsdf.sample(wo, rng);           // wi, f, pdf in solid angle
+    if (!s.valid || s.pdf == 0) return Lo;
+    const auto Li = trace(nextRay(x, s.wi), rng);
+    return Lo + s.f * Li * absDot(x.normal, s.wi) / s.pdf;
 }
 ```
+
+代码中的 `Li` 必须是 radiance，`s.f` 是 $\mathrm{sr^{-1}}$，cosine 无单位，`pdf` 是 $\mathrm{sr^{-1}}$；乘除后仍为 radiance。若 emitter connection 与 BSDF continuation 都可能采到同一直接路径，还要用 MIS 权重避免重复计数，而不是把两项无条件相加。
+
+## 三步核对一个像素
+
+<Stepper>
+<Step title="第一步：声明量与测度">
+
+从像素 measurement function 开始，标注 sensor sample、radiance、surface normal、solid-angle PDF 与 BRDF 单位。
+
+<GilStepFlowDiagram caption="先让每个变量回答它是什么量、相对什么测度。" stage={1} stages={["Declare：quantity → unit → domain / measure"]} />
+
+</Step>
+<Step title="第二步：拆开发射、直接与间接传播">
+
+沿 camera path 标记 emission、显式 emitter connection、BSDF continuation、visibility 和 throughput，检查同一路径是否重复。
+
+<GilStepFlowDiagram caption="从像素反查每段贡献的生产者和连接方式。" stage={2} stages={["Declare：quantity → unit → domain / measure", "Trace：sensor → surface → scatter / emitter → source"]} />
+
+</Step>
+<Step title="第三步：做守恒与参考测试">
+
+用常量 radiance、Lambertian 白炉、封闭 diffuse box 和镜面 delta 场景测试能量、PDF normalization 与 failure signature。
+
+<GilStepFlowDiagram caption="量纲、路径和能量参考同时通过，像素才可信。" stage={3} stages={["Declare：quantity → unit → domain / measure", "Trace：sensor → surface → scatter / emitter → source", "Validate：normalization → white furnace → reference image"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**误区：认为环境光等于间接光照。**
-环境光是间接光的常数近似——假设间接光均匀来自四面八方。真实间接光有方向性（靠近红墙的方向偏红），环境光丢失了这种信息。AO是对环境光的改进——在角落减少环境光，但仍是粗糙近似。
+**现象 →** 把 irradiance、radiance 和 RGB 都叫“光照强度”。**原因 →** 忽略面积、方向与单位。**修法 →** 为每个变量写 quantity、unit、domain 和 measure，再做乘积量纲检查。
 </Callout>
 
 <Callout type="trap">
-**误区：忽略色渗透的重要性。**
-色渗透是观众感知「真实」的关键线索。一个纯白场景如果有红色物体，旁边的白色表面应该微微泛红。缺少色渗透是「CG感」的常见来源——一切看起来太干净、太分离。
+**现象 →** 用“弹一次是直接、弹两次是间接”分类所有路径。**原因 →** 混淆从相机端计数、从光源端计数和散射事件。**修法 →** 明确 path convention，并按 emitter connection 与非发光表面 continuation 分解 estimator。
 </Callout>
 
+<Callout type="trap">
+**现象 →** 在 $d\theta d\phi$ 上均匀采样就宣称方向均匀。**原因 →** 丢失球面 Jacobian $\sin\theta$。**修法 →** 在 solid angle 上验证 PDF normalization，并用球面积分测试样本直方图。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题 1**：直接光照和间接光照的区别是什么？如何计算？
+
+**问题 1：为什么 radiance 适合作为路径传播量，而 irradiance 不适合？**
 
 <Answer>
-直接光照是光从光源经一次反射到达相机，通过显式采样光源计算——对每个光源采样一个方向，检查遮挡，计算BRDF贡献。间接光照是光经两次或更多次反射到达相机，需要递归追踪——从当前表面按BRDF采样方向，追踪反射光线，其返回值就是间接光。直接光效率高（光源采样），间接光效率低（随机方向采样）。
+Radiance 保留方向，在无参与介质的真空直线段上不随距离变化，可在两个端点间直接传递；irradiance 已对接收半球方向积分，丢失了光从何处到来的信息，无法继续经过方向相关 BRDF 传播。
 </Answer>
 
-**问题 2**：色渗透是如何产生的？为什么它是真实感的重要标志？
+**问题 2：证明 Lambertian BRDF 中为什么有 $1/\pi$。**
 
 <Answer>
-色渗透产生过程：白光照到红色表面→红表面吸收绿蓝光、反射红光→反射的红光照射到邻近的白色表面→白表面反射红光→相机看到白表面泛红。这是间接光照的自然结果。色渗透是真实感的重要标志因为它编码了场景中物体间的空间关系——只有相邻的物体才有色渗透，观众的潜意识用色渗透判断物体的距离和材质，缺少色渗透会让场景看起来「物体漂浮」而非「物体共处一室」。
+若 $f_r=\rho/\pi$，常量入射 radiance 为 $L_i$，反射出射 radiance为 $(\rho/\pi)L_i\int_{\Omega^+}\cos\theta d\omega=(\rho/\pi)L_i\pi=\rho L_i$。因此半球总反射比例是 albedo $\rho$，满足能量守恒。
 </Answer>
+
+**问题 3：一个像素的 measurement function 可能包含哪些维度？**
+
+<Answer>
+至少包含 sensor/film 上的空间滤波与镜头方向；有限孔径还包含 aperture position，motion blur 包含 time，光谱成像包含 wavelength。像素值是这些维度上 radiance 与响应函数的积分，而不是理想中心 ray 的单个值。
+</Answer>
+
+**问题 4：怎样发现 cosine 被重复计算？**
+
+<Answer>
+先确认 BRDF、采样 PDF 和积分使用的测度。若 PDF 是 projected-solid-angle density，cosine 已吸收到测度；估计器再乘 cosine 会重复。用常量环境照明和 Lambertian 白炉测试：正确结果应与方向旋转无关且不凭空损失能量。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+第 1、2 章和附录 B 共同建立全书契约：真实感图像合成从场景获取经 global illumination 到测量显示；radiometry 给每个值明确量纲；hemispherical coordinates 给方向积分明确测度；rendering equation 连接 emission、scattering 与 visibility；importance 和 measurement equation 再说明哪些传输会影响最终像素。后续所有算法只是对这套物理与测量系统的不同数值求解。
+
 <Glossary>
-<GlossaryItem term="直接光照">光从光源出发经一次反射到达相机的光路，显式采样光源高效计算。</GlossaryItem>
-<GlossaryItem term="间接光照">光经两次或更多次反射后到达相机的光路，需递归追踪，是GI核心开销。</GlossaryItem>
-<GlossaryItem term="色渗透(Color Bleeding)">彩色表面的反射光给附近物体染上颜色的间接光效果，是真实感关键线索。</GlossaryItem>
-<GlossaryItem term="环境光遮蔽(AO)">间接光在角落和缝隙处减弱的近似效果，是GI最简单最低成本的近似。</GlossaryItem>
+<GlossaryItem term="辐射度量">描述辐射能随时间、面积与方向分布的物理量体系。</GlossaryItem>
+<GlossaryItem term="辐亮度">单位投影面积和单位立体角上的辐射通量密度。</GlossaryItem>
+<GlossaryItem term="双向反射分布函数">把单位入射 irradiance 映射为指定方向出射 radiance 的函数。</GlossaryItem>
+<GlossaryItem term="渲染方程">自发光与半球入射散射贡献之和的积分方程。</GlossaryItem>
+<GlossaryItem term="重要度">从测量端反向传播、衡量传输状态对传感器价值的函数。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Advanced Global Illumination" adaptedUrl="https://www.amazon.com/dp/1568813074" />
+<Attribution adaptedFrom="Advanced Global Illumination, Second Edition, Chapters 1-2 and Appendix B" adaptedUrl="https://books.google.com/books?id=KodRAAAAMAAJ" />

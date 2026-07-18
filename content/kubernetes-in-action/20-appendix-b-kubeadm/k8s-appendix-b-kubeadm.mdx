@@ -1,0 +1,222 @@
+---
+title: "附录B 使用 kubeadm 配置多节点集群"
+description: "依据电子工业出版社第1版完整目录：用kubeadm配置书中时代的多节点Kubernetes集群并验证控制面与节点加入"
+type: C
+section: "Kubernetes in Action中文版（第1版 / Kubernetes 1.8 / 2018）"
+order: 20
+draft: false
+math: false
+sourceUrl: "https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53240"
+demo: true
+---
+
+import {
+  K8sAppendixBKubeadmObjectLab,
+  K8sAppendixBKubeadmReconcileLab,
+  K8sAppendixBKubeadmEvidenceLab,
+} from "@/components/mdx/kubernetes-in-action/diagrams/k8s-appendix-b-kubeadm";
+
+# 附录B 使用 kubeadm 配置多节点集群
+
+本课程对应Marko Lukša著《Kubernetes in Action中文版》第1版，七牛容器云团队译，电子工业出版社2018年12月出版，592页，ISBN 9787121349959；英文原版由Manning于2017年12月出版。作者第1版源码第8章明确下载Kubernetes 1.8.0客户端，课程据此固定行为边界。
+
+全书正式分母为18章与附录A至D，共22个正式单元、404个唯一章/附录/节节点；另设学习地图和总复习，共24页。第2版、现代apps/v1写法、EndpointSlice、Gateway API、Pod Security Admission或后来的多集群方案只能作为差异材料，不能替代第1版。本页逐项覆盖1个目录节点，最终交付主机基线、kubeadm初始化、join令牌、CNI、节点验证和销毁重建。
+
+<Objectives>
+
+- 能解释“附录B 使用 kubeadm 配置多节点集群”的1个目录节点，并绘制API对象、控制器、调度、节点执行、网络与存储边界。
+- 能比较基线、压力、对象变化、Pod或节点故障和恢复轨迹，判断期望状态、实际状态与业务完成点。
+- 能设计并复现主机基线、kubeadm初始化、join令牌、CNI、节点验证和销毁重建，用清单、事件、日志、指标与最终状态支持结论。
+- 能分析“只看到节点Ready就结束，未验证DNS、Pod网络、Service、证书和重启恢复”为何失败，并写出停止、恢复、回退与独立交接条件。
+
+</Objectives>
+
+## 从一次声明式变更开始
+
+先预测：kubectl提交对象后，API服务器完成哪些认证、授权、准入和持久化步骤，哪个控制器watch到变化，调度器如何选择节点，kubelet怎样创建容器，Service、卷与探针何时就绪。观察前先写预测，再按resourceVersion、UID、ownerReference和事件时间线修正模型。
+
+Kubernetes 1.8的完成不是命令返回created。对象进入etcd、控制器观察、创建下级对象、Pod被调度、镜像启动、探针通过、Endpoint接入流量和业务结果稳定是不同检查点。控制循环允许中间状态，验收必须明确等待条件和超时后的诊断路径。
+
+## 核心词汇与版本边界
+
+<Term def="kubeadm是附录B 使用 kubeadm 配置多节点集群的第1个核心概念，必须同时说明Kubernetes 1.8对象、控制循环、故障边界和观测证据">
+  kubeadm
+</Term>
+、
+<Term def="bootstrap token是附录B 使用 kubeadm 配置多节点集群的第2个核心概念，必须同时说明Kubernetes 1.8对象、控制循环、故障边界和观测证据">
+  bootstrap token
+</Term>
+、
+<Term def="证书是附录B 使用 kubeadm 配置多节点集群的第3个核心概念，必须同时说明Kubernetes 1.8对象、控制循环、故障边界和观测证据">
+  证书
+</Term>
+、
+<Term def="CNI是附录B 使用 kubeadm 配置多节点集群的第4个核心概念，必须同时说明Kubernetes 1.8对象、控制循环、故障边界和观测证据">
+  CNI
+</Term>
+、
+<Term def="节点加入是附录B 使用 kubeadm 配置多节点集群的第5个核心概念，必须同时说明Kubernetes 1.8对象、控制循环、故障边界和观测证据">
+  节点加入
+</Term>
+
+这些词构成本页词汇。每个词都要回答：对象由谁声明，谁拥有，谁调谐，期望与实际状态保存在哪里，失败后会重试还是终止，怎样观测，以及Kubernetes 1.8之后哪些变化不属于本书。
+
+<K8sAppendixBKubeadmObjectLab />
+
+## 原书目录逐节点重构
+
+### 附录B 使用 kubeadm 配置多节点集群
+
+**目录节点 1/1。** “附录B 使用 kubeadm 配置多节点集群”服务于“用kubeadm配置书中时代的多节点Kubernetes集群并验证控制面与节点加入”。先识别它在Kubernetes 1.8中对应API对象、期望状态、实际状态、所有者引用和执行组件，再标出创建、观察、调谐、删除与垃圾回收边界。结论必须从清单、API响应、事件、控制器日志、节点状态和应用结果复核。
+
+状态轨迹从“本章输入与版本契约”进入“附录B 使用 kubeadm 配置多节点集群”，再到“本章证据门与回退”。沿kubectl请求、API认证授权、etcd持久化、watch、控制器调谐、调度、kubelet执行、网络与存储准备记录resourceVersion和时间线。Pod重建、节点故障、网络分区或控制面重启必须有独立分支，不能只画正常箭头。
+
+实验固定Kubernetes 1.8、集群拓扑、镜像摘要、命名空间和对象清单，只改变副本、探针、资源、标签选择、节点、网络或存储条件之一。比较期望/当前/就绪副本、Pending原因、重启、事件、吞吐、P95/P99和最终业务集合，用“版本、容器运行时、网络插件、令牌和证书固定，节点重建后控制面与Pod网络恢复”验收。
+
+## 可复现实验与对象切片
+
+```bash
+# 固定Kubernetes 1.8客户端、上下文、命名空间和对象版本。
+kubectl version --short
+kubectl config current-context
+kubectl get --raw /version
+kubectl get events --sort-by=.metadata.creationTimestamp
+```
+
+```yaml
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: book-lab
+spec:
+  replicas: 3
+  template:
+    metadata:
+      labels: { app: book-lab }
+    spec:
+      containers:
+        - name: app
+          image: example/book-lab@sha256:fixed
+          resources:
+            requests: { cpu: 100m, memory: 64Mi }
+```
+
+```text
+evidence = client/server/runtime/api-version and kubeconfig context
+         + manifest/uid/resourceVersion/ownerReference/status snapshot
+         + api/watch/controller/scheduler/kubelet/event timeline
+         + desired/current/ready/restarts/pending/p95/p99 metrics
+         + pod/node/network/storage/control-plane fault and business reconciliation
+```
+
+## 三步交互实验
+
+<Stepper>
+  <Step title="1. 选择目录节点并预测对象链">
+    改变期望副本、就绪副本与对象阶段，先预测API、控制器、调度与kubelet路径，再观察。
+    <K8sAppendixBKubeadmObjectLab />
+  </Step>
+  <Step title="2. 改变资源、探针与故障条件">
+    调整负载、requests、limits、节点与探针故障，比较Pending、重启、可用副本和尾延迟。
+    <K8sAppendixBKubeadmReconcileLab />
+  </Step>
+  <Step title="3. 通过端到端证据门">
+    目录、版本、对象、控制循环、指标、故障、业务对账与回退齐全后才接受结论。
+    <K8sAppendixBKubeadmEvidenceLab />
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="语义陷阱">
+  只看到节点Ready就结束，未验证DNS、Pod网络、Service、证书和重启恢复。先写清对象所有权、控制器完成点、节点执行与最终业务不变量，再选择命令或清单。
+</Callout>
+
+<Callout type="trap" title="版本陷阱">
+  原书以Kubernetes
+  1.8.0为基线，ReplicationController、extensions/v1beta1、rkt、Heapster、Service
+  Catalog和Federation均有时代语境；现代结果可作迁移差异，不能证明本书行为。
+</Callout>
+
+<Callout type="warning" title="隔离实验">
+  删除命名空间、驱逐Pod、停止节点、网络隔离、卷回收、证书与RBAC变更只在隔离集群演练。先备份清单、etcd或业务样本并规定停止上界。
+</Callout>
+
+## 独立证据与生产交接
+
+目录证据保存18章4附录与404个唯一节点映射；环境证据保存客户端、API服务器、etcd、容器运行时、网络与存储插件版本；对象证据保存清单、UID、resourceVersion、ownerReference、spec和status；运行证据保存事件、控制器、调度、kubelet、探针、流量和最终业务结果。
+
+验收记录按一次变更一个编号：记录上下文、命名空间、操作者、开始结束时间、对象前后状态、请求样本、预期与实际结果、日志和指标窗口。失败时保留原始事件、Pending或终止原因、影响范围、停止条件和回退验证；成功时也须由另一位读者按同一材料重放。
+
+性能判断固定镜像、请求分布、副本、资源、探针、Service、节点和存储语义。扩大limit或关闭探针换来的吞吐不是等价优化。平均值会隐藏调度等待、镜像拉取、CPU节流、OOM、控制器重试、Endpoint切换和卷挂载，必须保留P95/P99与状态时间线。
+
+恢复判断从业务状态结束。Pod Running、节点Ready、Deployment Available、PVC Bound或API可访问都只是阶段；还要核对客户端请求、数据集合、身份权限、对象版本和旧实例是否停止提供错误结果。
+
+## 本章回顾
+
+重新完成“用kubeadm配置书中时代的多节点Kubernetes集群并验证控制面与节点加入”：固定Kubernetes 1.8和第1版目录，从声明式对象与控制循环推导边界，通过基线、压力与故障实验测量，最后交付主机基线、kubeadm初始化、join令牌、CNI、节点验证和销毁重建。只有“版本、容器运行时、网络插件、令牌和证书固定，节点重建后控制面与Pod网络恢复”与反例都能独立重放，本页才算完成。
+
+## 复习与运行验收
+
+<Exercises>
+**问题 1**：为什么“附录B 使用 kubeadm 配置多节点集群”必须覆盖1个目录节点？
+<Answer>这些节点共同组成“用kubeadm配置书中时代的多节点Kubernetes集群并验证控制面与节点加入”的对象、控制循环、运行与证据链；漏项会使主机基线、kubeadm初始化、join令牌、CNI、节点验证和销毁重建无法独立复现。</Answer>
+
+**问题 2**：本页最小不变量是什么？
+
+<Answer>
+  版本、容器运行时、网络插件、令牌和证书固定，节点重建后控制面与Pod网络恢复。需要版本、对象、控制器轨迹、指标、故障与业务对账共同证明。
+</Answer>
+
+**问题 3**：怎样构造最小反例？
+
+<Answer>
+  固定Kubernetes
+  1.8、集群、命名空间、镜像和清单，只改变副本、探针、资源、标签选择、节点、网络或存储条件之一，再比较状态轨迹与最终业务结果。
+</Answer>
+
+**问题 4**：为什么不能直接用现代Kubernetes替代本页实验？
+
+<Answer>
+  原书源码以Kubernetes
+  1.8.0为基线；API版本、运行时、网络、安全、伸缩和多集群机制后来均有变化，新版只能作为差异材料。
+</Answer>
+
+**问题 5**：如何验证性能和恢复结论？
+
+<Answer>
+  固定镜像、请求分布、副本、资源、探针、网络和存储语义，重复测期望/当前/就绪、重启、Pending、吞吐、P95/P99和错误，并独立对账。
+</Answer>
+
+**问题 6**：独立交接需要什么？
+
+<Answer>需要完整目录映射、版本环境、对象快照、控制循环轨迹、主机基线、kubeadm初始化、join令牌、CNI、节点验证和销毁重建、负载、故障、对账、停止、恢复、回退和责任人。</Answer>
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="kubeadm">
+    kubeadm在本页对应Kubernetes
+    1.8中的对象、字段或状态；适用范围由“版本、容器运行时、网络插件、令牌和证书固定，节点重建后控制面与Pod网络恢复”和故障反例共同限定。
+  </GlossaryItem>
+  <GlossaryItem term="bootstrap token">
+    bootstrap token在本页对应Kubernetes
+    1.8中的对象、字段或状态；适用范围由“版本、容器运行时、网络插件、令牌和证书固定，节点重建后控制面与Pod网络恢复”和故障反例共同限定。
+  </GlossaryItem>
+  <GlossaryItem term="证书">
+    证书在本页对应Kubernetes
+    1.8中的对象、字段或状态；适用范围由“版本、容器运行时、网络插件、令牌和证书固定，节点重建后控制面与Pod网络恢复”和故障反例共同限定。
+  </GlossaryItem>
+  <GlossaryItem term="CNI">
+    CNI在本页对应Kubernetes
+    1.8中的对象、字段或状态；适用范围由“版本、容器运行时、网络插件、令牌和证书固定，节点重建后控制面与Pod网络恢复”和故障反例共同限定。
+  </GlossaryItem>
+  <GlossaryItem term="节点加入">
+    节点加入在本页对应Kubernetes
+    1.8中的对象、字段或状态；适用范围由“版本、容器运行时、网络插件、令牌和证书固定，节点重建后控制面与Pod网络恢复”和故障反例共同限定。
+  </GlossaryItem>
+</Glossary>
+
+[← 上一页：附录A 在多个集群中使用 kubectl](/learn/kubernetes-in-action/19-appendix-a-kubectl-multicluster/k8s-appendix-a-kubectl-multicluster) · [下一页：附录C 使用其他容器运行时 →](/learn/kubernetes-in-action/21-appendix-c-runtimes/k8s-appendix-c-runtimes)
+
+<Attribution
+  adaptedFrom="Marko Lukša《Kubernetes in Action》第1版"
+  adaptedUrl="https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53240"
+/>

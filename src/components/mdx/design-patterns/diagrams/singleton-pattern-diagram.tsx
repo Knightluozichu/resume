@@ -431,7 +431,8 @@ export function SingletonPatternDiagram() {
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
         单例模式确保一个类只有一个实例，并提供全局访问点：构造函数私有化，通过静态
-        getInstance() 控制创建。饿汉式简单且线程安全；懒汉式延迟创建但需自行加锁；双重检查在延迟创建的同时保证线程安全与性能。
+        getInstance()
+        控制创建。饿汉式简单且线程安全；懒汉式延迟创建但需自行加锁；双重检查在延迟创建的同时保证线程安全与性能。
       </figcaption>
     </figure>
   );

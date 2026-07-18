@@ -1,99 +1,20 @@
-/**
- * <RswErrorHandlingDiagram>：Result/Option 与 ? 传播链。
- *
- * 展示 Recoverable(Result) vs Unrecoverable(panic) 分流，以及 ? 短路传播。
- * Server Component，viewBox 720×400，CSS 变量配色。
- */
+import { RustWayOfficialLab, type RustWayCase } from "./official-lab";
 
-const primary = "var(--text-primary)";
-const secondary = "var(--text-secondary)";
-const border = "var(--border)";
-const elevated = "var(--bg-elevated)";
-const accent = "var(--accent)";
-const success = "var(--success)";
-const warning = "var(--warning)";
-const danger = "var(--danger)";
-
-export function RswErrorHandlingDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox="0 0 720 400" role="img" aria-label="错误处理：可恢复错误用 Result 分流，不可恢复错误用 panic 终止，? 操作符短路传播。" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x={360} y={30} textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>
-            错误处理：可恢复与不可恢复的分流
-          </text>
-
-          {/* 错误源 */}
-          <rect x={300} y={50} width={120} height={44} rx="8" fill={accent} fillOpacity="0.12" stroke={accent} strokeWidth="1.4" />
-          <text x={360} y={76} textAnchor="middle" fontSize="12" fontWeight="700" fill={accent}>运行时异常</text>
-
-          {/* 分流箭头 */}
-          <line x1={340} y1={94} x2={200} y2={120} stroke={success} strokeWidth="1.6" markerEnd="url(#rsw-eh-s)" />
-          <line x1={380} y1={94} x2={520} y2={120} stroke={danger} strokeWidth="1.6" markerEnd="url(#rsw-eh-d)" />
-          <text x={250} y={112} textAnchor="middle" fontSize="10" fill={success}>可恢复</text>
-          <text x={470} y={112} textAnchor="middle" fontSize="10" fill={danger}>不可恢复</text>
-
-          {/* Result 分支 */}
-          <rect x={70} y={124} width={260} height={140} rx="10" fill={success} fillOpacity="0.06" stroke={success} strokeWidth="1.4" strokeOpacity="0.5" />
-          <text x={200} y={146} textAnchor="middle" fontSize="13" fontWeight="700" fill={success}>Result&lt;T, E&gt;</text>
-          <rect x={90} y={160} width={100} height={36} rx="6" fill={elevated} stroke={success} />
-          <text x={140} y={182} textAnchor="middle" fontSize="11" fill={success}>Ok(T)</text>
-          <rect x={210} y={160} width={100} height={36} rx="6" fill={elevated} stroke={danger} />
-          <text x={260} y={182} textAnchor="middle" fontSize="11" fill={danger}>Err(E)</text>
-          <text x={200} y={214} textAnchor="middle" fontSize="10" fill={secondary}>match / map / and_then 处理</text>
-          <text x={200} y={232} textAnchor="middle" fontSize="10" fill={accent}>? 操作符：遇 Err 立即返回</text>
-          <text x={200} y={250} textAnchor="middle" fontSize="10" fill={secondary}>调用方决定恢复策略</text>
-
-          {/* panic 分支 */}
-          <rect x={390} y={124} width={260} height={140} rx="10" fill={danger} fillOpacity="0.06" stroke={danger} strokeWidth="1.4" strokeOpacity="0.5" />
-          <text x={520} y={146} textAnchor="middle" fontSize="13" fontWeight="700" fill={danger}>panic!</text>
-          <text x={520} y={172} textAnchor="middle" fontSize="10" fill={secondary}>展开调用栈（unwind）</text>
-          <text x={520} y={190} textAnchor="middle" fontSize="10" fill={secondary}>或终止进程（abort）</text>
-          <text x={520} y={214} textAnchor="middle" fontSize="10" fill={warning}>unwrap / expect 触发</text>
-          <text x={520} y={232} textAnchor="middle" fontSize="10" fill={secondary}>数组越界 / 除零 / 不变式破坏</text>
-          <text x={520} y={250} textAnchor="middle" fontSize="10" fill={secondary}>表示程序已进入不可修复状态</text>
-
-          {/* ? 传播链 */}
-          <line x1={36} y1={284} x2={684} y2={284} stroke={border} strokeWidth="1" />
-          <text x={360} y={306} textAnchor="middle" fontSize="13" fontWeight="700" fill={primary}>? 短路传播链</text>
-          <rect x={60} y={322} width={120} height={40} rx="6" fill={elevated} stroke={border} />
-          <text x={120} y={340} textAnchor="middle" fontSize="10" fill={primary}>read_file()</text>
-          <text x={120} y={356} textAnchor="middle" fontSize="9" fill={secondary}>Result&lt;String&gt;</text>
-          <line x1={180} y1={342} x2={210} y2={342} stroke={accent} strokeWidth="1.4" markerEnd="url(#rsw-eh-a)" />
-          <text x={195} y={334} textAnchor="middle" fontSize="9" fill={accent}>?</text>
-          <rect x={210} y={322} width={120} height={40} rx="6" fill={elevated} stroke={border} />
-          <text x={270} y={340} textAnchor="middle" fontSize="10" fill={primary}>parse_line()</text>
-          <text x={270} y={356} textAnchor="middle" fontSize="9" fill={secondary}>Result&lt;int&gt;</text>
-          <line x1={330} y1={342} x2={360} y2={342} stroke={accent} strokeWidth="1.4" markerEnd="url(#rsw-eh-a)" />
-          <text x={345} y={334} textAnchor="middle" fontSize="9" fill={accent}>?</text>
-          <rect x={360} y={322} width={120} height={40} rx="6" fill={elevated} stroke={border} />
-          <text x={420} y={340} textAnchor="middle" fontSize="10" fill={primary}>compute()</text>
-          <text x={420} y={356} textAnchor="middle" fontSize="9" fill={secondary}>Result&lt;T&gt;</text>
-          <line x1={480} y1={342} x2={510} y2={342} stroke={accent} strokeWidth="1.4" markerEnd="url(#rsw-eh-a)" />
-          <text x={495} y={334} textAnchor="middle" fontSize="9" fill={accent}>?</text>
-          <rect x={510} y={322} width={150} height={40} rx="6" fill={success} fillOpacity="0.12" stroke={success} />
-          <text x={585} y={340} textAnchor="middle" fontSize="10" fill={success}>main / 顶层处理</text>
-          <text x={585} y={356} textAnchor="middle" fontSize="9" fill={secondary}>最终恢复或报告</text>
-          <text x={360} y={386} textAnchor="middle" fontSize="11" fill={secondary}>
-            任一环节 Err 即短路向上冒泡，Ok 才继续——错误处理零样板
-          </text>
-
-          <defs>
-            <marker id="rsw-eh-s" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-              <path d="M0 0 L6 3 L0 6 z" fill="var(--success)" />
-            </marker>
-            <marker id="rsw-eh-d" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-              <path d="M0 0 L6 3 L0 6 z" fill="var(--danger)" />
-            </marker>
-            <marker id="rsw-eh-a" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-              <path d="M0 0 L6 3 L0 6 z" fill="var(--accent)" />
-            </marker>
-          </defs>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        Result 处理可恢复错误，panic 处理不可恢复错误，? 操作符让错误沿调用链优雅传播。
-      </figcaption>
-    </figure>
-  );
-}
+const failure: RustWayCase[] = [
+  { label: "类型消除", input: "可能缺失或失败的操作", mechanism: "Option/Result进入签名", result: "调用者被迫处理", invariant: "失败不是正常值的特殊哨兵。" },
+  { label: "边界验证", input: "外部字符串与配置", mechanism: "parse、validate、normalize", result: "内部有效类型", invariant: "无效状态不能越过边界进入核心逻辑。" },
+  { label: "不变量设计", input: "构造参数", mechanism: "私有字段加受检构造器", result: "构造后始终合法的对象", invariant: "方法只需处理已证明的内部状态。" },
+];
+const channels: RustWayCase[] = [
+  { label: "Option", input: "有或无，不需要原因", mechanism: "Some/None穷尽处理", result: "显式缺失", invariant: "None不能同时承担多种不可区分错误。" },
+  { label: "Result", input: "可能失败且需要上下文", mechanism: "Ok/Err与?传播", result: "类型化错误路径", invariant: "错误保留source与操作上下文。" },
+  { label: "panic", input: "被破坏的不变量或程序缺陷", mechanism: "终止或unwind", result: "当前控制流不能恢复", invariant: "库不能用panic处理普通外部输入错误。" },
+];
+const thirdParty: RustWayCase[] = [
+  { label: "保留来源", input: "第三方Error", mechanism: "source chain或transparent wrapper", result: "可诊断因果链", invariant: "不要只保留一条丢类型的字符串。" },
+  { label: "翻译边界", input: "库内部错误", mechanism: "映射为领域错误variant", result: "稳定公开API", invariant: "外部依赖升级不应任意破坏调用者匹配。" },
+  { label: "附加上下文", input: "低层I/O失败", mechanism: "记录路径、操作与输入坐标", result: "可定位错误", invariant: "敏感数据不能被上下文日志泄露。" },
+];
+export function RswFailureEliminationLab() { return <RustWayOfficialLab title="从设计中消除失败" caption="先缩小无效状态空间，再选择错误通道。" cases={failure} tone="emerald" />; }
+export function RswErrorChannelLab() { return <RustWayOfficialLab title="Option、Result与panic" caption="缺失、可恢复失败和不变量崩溃不能混用一个通道。" cases={channels} tone="rose" />; }
+export function RswThirdPartyErrorLab() { return <RustWayOfficialLab title="第三方库错误边界" caption="保留来源、翻译公开语义并补足操作上下文。" cases={thirdParty} tone="amber" />; }

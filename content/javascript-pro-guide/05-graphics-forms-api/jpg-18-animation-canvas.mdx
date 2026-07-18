@@ -1,0 +1,267 @@
+---
+title: "第 18 章 动画与Canvas图形"
+type: A
+section: "JavaScript高级程序设计（第4版） · 图形、表单与API"
+order: 18
+description: "动画要由刷新时钟驱动，Canvas则是有状态即时绘制表面；时间步长、像素密度与状态栈决定视觉正确性。"
+demo: true
+math: false
+sourceUrl: "https://uat.store.wiley.com/en-us/professional-javascript-for-web-developers-4th-edition-p-9781119366577"
+draft: false
+---
+
+import {
+  Jpg18AnimationCanvasMapLab,
+  Jpg18AnimationCanvasExperimentLab,
+  Jpg18AnimationCanvasEvidenceLab,
+} from "@/components/mdx/javascript-pro-guide/diagrams/jpg-18-animation-canvas";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释第 18 章 动画与Canvas图形的核心机制，并把它放回28章与4个附录的主线
+- 能比较正常、边界、失败和恢复样本，指出首个执行或状态偏离点
+- 能实现最小JavaScript实验，记录浏览器版本、输入、任务顺序与资源所有权
+- 能设计证据回答“动画速度与刷新率无关；后台恢复不出现巨跳；画布分辨率匹配预算且绘图状态不泄漏到下一对象。”是否成立
+
+</Objectives>
+
+## 直觉：先画执行与所有权
+
+动画要由刷新时钟驱动，Canvas则是有状态即时绘制表面；时间步长、像素密度与状态栈决定视觉正确性。 真正的难点不是让一次示例得到预期输出，而是让绑定、对象、任务、权限和资源在异常、取消、重复与版本切换后仍可解释。先预测：若只保存最终截图，最可能隐藏哪一种陈旧状态？
+
+<Jpg18AnimationCanvasMapLab />
+
+## 权威目录定位
+
+本页依据 Wiley 第4版官方31页目录样章与中文版公开完整目录锁定范围。目录名称用于一对一追踪，正文为独立教学重构；新浏览器差异、安全与可观察性补充会明确披露：
+
+- 18.1 使用requestAnimationFrame
+- 18.1.1 早期定时动画
+- 18.1.2 时间间隔的问题
+- 18.1.3 requestAnimationFrame
+- 18.1.4 cancelAnimationFrame
+- 18.1.5 通过requestAnimationFrame节流
+- 18.2 基本的画布功能
+- 18.3 2D绘图上下文
+- 18.3.1 填充和描边
+- 18.3.2 绘制矩形
+- 18.3.3 绘制路径
+- 18.3.4 绘制文本
+- 18.3.5 变换
+- 18.3.6 绘制图像
+- 18.3.7 阴影
+- 18.3.8 渐变
+- 18.3.9 图案
+- 18.3.10 图像数据
+- 18.3.11 合成
+- 18.4 WebGL
+- 18.4.1 WebGL上下文
+- 18.4.2 WebGL基础
+- 18.4.3 WebGL1与WebGL2
+- 18.5 小结
+
+本页逐项覆盖 **24** 个公开目录条目，并纳入正常、边界、失败和恢复验收。
+
+## 核心概念与所有权
+
+<Term def="在浏览器下一次绘制前调度回调并提供高精度时间戳的动画API。">
+  requestAnimationFrame
+</Term>
+、
+<Term def="相邻动画帧时间戳之差，用于让运动与实际时间而非帧数相关。">
+  时间步长
+</Term>
+、<Term def="通过脚本在位图表面即时绘制2D或WebGL图形的元素。">Canvas</Term>、
+<Term def="保存和恢复变换、样式、裁剪等2D上下文状态的栈。">绘图状态栈</Term>、
+<Term def="CSS像素与设备物理像素之间的比例，用于调整画布清晰度。">
+  设备像素比
+</Term>
+。每个概念都要回答：谁创建输入，状态保存在哪里，哪个任务或版本可修改它，结束后由谁清理。
+
+|   # | 概念                  | 工程含义                                                  |
+| --: | --------------------- | --------------------------------------------------------- |
+|   1 | requestAnimationFrame | 在浏览器下一次绘制前调度回调并提供高精度时间戳的动画API。 |
+|   2 | 时间步长              | 相邻动画帧时间戳之差，用于让运动与实际时间而非帧数相关。  |
+|   3 | Canvas                | 通过脚本在位图表面即时绘制2D或WebGL图形的元素。           |
+|   4 | 绘图状态栈            | 保存和恢复变换、样式、裁剪等2D上下文状态的栈。            |
+|   5 | 设备像素比            | CSS像素与设备物理像素之间的比例，用于调整画布清晰度。     |
+
+## 机制拆解
+
+### 1. 运动必须乘时间
+
+按帧增加固定距离会在高刷新率设备上更快。使用rAF时间戳计算dt，并对后台恢复后的巨大间隔设上限；复杂模拟可用固定步长累计器，渲染再插值。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+### 2. Canvas尺寸有两套单位
+
+CSS尺寸决定布局，width/height属性决定位图分辨率。按devicePixelRatio放大位图并缩放上下文可避免模糊，但要控制最大像素预算和窗口变化后的重建。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+### 3. 2D上下文是状态机
+
+变换、透明度、合成与裁剪会持续影响后续绘制。局部绘制用save/restore包围，路径在beginPath后重建；离屏画布和脏矩形只在测量证明有效时采用。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+## 六阶段证据链
+
+可操作链条是：读取帧时间戳 → 计算有界步长 → 更新模拟状态 → 缩放物理画布 → 保存绘制状态 → 提交帧并重调度。正常样本证明能力，边界样本证明预算，失败样本证明拒绝，恢复样本证明任务、状态和资源重新收敛。
+
+<Stepper>
+  <Step title="1. 读取帧时间戳与计算有界步长">
+    固定浏览器版本、输入、初始DOM与时钟，运行正常和边界样本。
+    <Jpg18AnimationCanvasMapLab />
+  </Step>
+  <Step title="2. 更新模拟状态与缩放物理画布">
+    注入异常、取消、重复事件、权限拒绝或旧缓存，要求在首偏离点停止。
+    <Jpg18AnimationCanvasExperimentLab />
+  </Step>
+  <Step title="3. 保存绘制状态与提交帧并重调度">
+    清除故障后重放相同输入，核对输出、任务队列、DOM摘要、监听器与资源数量。
+    <Jpg18AnimationCanvasEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小可运行实验
+
+以下代码用于独立观察本页机制；生产实现还需加入输入验证、兼容策略、权限、取消与清理。
+
+```js
+let previous = performance.now();
+function frame(now) {
+  const dt = Math.min((now - previous) / 1000, 0.05);
+  previous = now;
+  update(dt);
+  draw();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+```
+
+证据记录把目录、运行时与状态摘要放在一起：
+
+```yaml
+book: JavaScript高级程序设计（第4版）
+page: jpg-18-animation-canvas
+official_entries: 24
+sample: normal | boundary | failure | recovery
+browser_version: fixed
+input_fixture: fixed
+first_divergence: null
+cleanup_complete: true
+```
+
+故障脚本一次只改变一个变量：
+
+```text
+baseline -> inject(exception | cancel | duplicate | denied | stale-cache)
+observe -> stop_at_first_divergence
+recover -> replay_same_runtime_and_input
+assert -> one_state_owner && stable_output && no_stale_task && no_resource_leak
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：每帧移动固定像素，144Hz与60Hz设备速度不同。**
+  必须保存输入、任务顺序、状态摘要与首次拒绝原因，而不是只看最终页面。
+</Callout>
+
+<Callout type="trap">
+  **误区二：只用CSS放大低分辨率Canvas，高DPI显示模糊。**
+  必须加入边界、失败与恢复样本，证明错误没有跨入下一阶段。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 输入与环境变化                   | 预期状态       | 通过条件                     |
+| ---- | -------------------------------- | -------------- | ---------------------------- |
+| 正常 | 合法输入、权限、顺序与版本       | 六阶段完成     | 输出和状态摘要一致           |
+| 边界 | 空值、极限容量、重复事件或慢任务 | 达到预算不越界 | 主线程与内存有界             |
+| 失败 | 异常、取消、拒权、断网或旧产物   | 首偏离点停止   | 明确传播、回滚或降级         |
+| 恢复 | 修复后重放同一输入               | 收敛到正常轨迹 | 无陈旧任务、监听器和资源泄漏 |
+
+<Jpg18AnimationCanvasEvidenceLab />
+
+本页签发不变量是：**动画速度与刷新率无关；后台恢复不出现巨跳；画布分辨率匹配预算且绘图状态不泄漏到下一对象。** 单次成功、平均耗时或最终截图不能替代运行时版本、执行轨迹、首偏离点与清理证据。
+
+## 练习
+
+<Exercises>
+
+**问题 1** 为什么不能只以最终页面结果正确作为验收？
+
+<Answer>
+  最终结果会隐藏重复副作用、旧任务覆盖、错误吞没和资源泄漏。必须比较输入、执行顺序、状态所有者、首偏离点与清理结果。
+</Answer>
+
+**问题 2** 如何把本页公开目录变成可执行学习证据？
+
+<Answer>
+  按公开顺序建立追踪表，为每组条目写出输入、状态、输出、失败与恢复条件。本页重点包括：18.1
+  使用requestAnimationFrame、18.1.1 早期定时动画、18.1.2 时间间隔的问题、18.1.3
+  requestAnimationFrame、18.1.4 cancelAnimationFrame、18.1.5
+  通过requestAnimationFrame节流、18.2 基本的画布功能、18.3
+  2D绘图上下文；其余条目已在上方逐项列出。
+</Answer>
+
+**问题 3** 本页的最小通过条件是什么？
+
+<Answer>
+  动画速度与刷新率无关；后台恢复不出现巨跳；画布分辨率匹配预算且绘图状态不泄漏到下一对象。
+  并且相同浏览器版本、输入与初始状态可以重放正常、边界、失败和恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **requestAnimationFrame**：在浏览器下一次绘制前调度回调并提供高精度时间戳的动画API。
+- **时间步长**：相邻动画帧时间戳之差，用于让运动与实际时间而非帧数相关。
+- **Canvas**：通过脚本在位图表面即时绘制2D或WebGL图形的元素。
+- **绘图状态栈**：保存和恢复变换、样式、裁剪等2D上下文状态的栈。
+- **设备像素比**：CSS像素与设备物理像素之间的比例，用于调整画布清晰度。
+- 六阶段机制链已经映射到正常、边界、失败与恢复证据。
+- 官方目录逐项追踪，现代补充不会冒充原书正式分节。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="requestAnimationFrame">
+    在浏览器下一次绘制前调度回调并提供高精度时间戳的动画API。
+  </GlossaryItem>
+  <GlossaryItem term="时间步长">
+    相邻动画帧时间戳之差，用于让运动与实际时间而非帧数相关。
+  </GlossaryItem>
+  <GlossaryItem term="Canvas">
+    通过脚本在位图表面即时绘制2D或WebGL图形的元素。
+  </GlossaryItem>
+  <GlossaryItem term="绘图状态栈">
+    保存和恢复变换、样式、裁剪等2D上下文状态的栈。
+  </GlossaryItem>
+  <GlossaryItem term="设备像素比">
+    CSS像素与设备物理像素之间的比例，用于调整画布清晰度。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Matt Frisbie 著，李松峰译，人民邮电出版社，2020年9月，866页，ISBN 9787115545381；英文原版 Professional JavaScript for Web Developers, 4th Edition，Wiley，2019年10月，1200页，印刷版 ISBN 9781119366447、电子版 ISBN 9781119366577。Wiley官方31页目录样章与中文版公开目录确认28章、4个附录和757个二三级目录条目。正文为独立教学重构。"
+  adaptedUrl="https://uat.store.wiley.com/en-us/professional-javascript-for-web-developers-4th-edition-p-9781119366577"
+/>

@@ -1,0 +1,282 @@
+---
+title: "Chapter 8：Legacy Challenges"
+type: A
+section: 现代 C++ 测试驱动开发 · 遗留改造
+order: 8
+description: 对齐原书 Chapter 8：用特征测试保护未知行为，以安全重构建立接缝和更快测试，处理 rlog 等硬依赖，应用 Mondo Extracto、spy/mock 与替代注入，并用 Mikado Method 规划大型改造。
+demo: false
+math: false
+sourceUrl: "https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/"
+draft: false
+---
+
+import {
+  CtrLegacyChangeMap,
+  CtrLegacyInjectionLab,
+  CtrMondoExtractoFlow,
+} from "@/components/mdx/cpp-testing-recipes/diagrams/legacy-challenges";
+
+<Objectives>
+
+- 能先观察并用特征测试保护遗留行为，再将建立测试接缝的安全重构与新需求行为变化分开
+- 能把 rlog、系统时间、文件和网络等硬依赖替换为 spy、mock 或受控注入，使目标测试更快、更确定
+- 能用 Mondo Extracto 分解大职责，并用 Mikado Method 从目标失败反推先决改造，形成可回退的执行图
+
+</Objectives>
+
+## 遗留代码的困难是缺少可信反馈
+
+遗留代码不由年龄定义，而由改动时能否快速知道破坏了什么定义。一个十年前但有清晰契约与快速测试的模块可以安全演化；昨天写成、依赖全局状态且只能人工验证的代码已经具有遗留风险。
+
+<Term def="缺少足够自动化行为护栏、依赖难以控制，修改时难以快速确定影响范围的现有代码。">
+  遗留代码
+</Term>
+
+面对遗留代码，先压制“顺手重写”的冲动。团队通常不知道所有隐含调用者、错误兼容和数据边界。第一目标是建立观察点，把当前行为变成可重复证据，再决定哪些行为保留、哪些需要显式改变。
+
+<CtrLegacyChangeMap />
+
+## 保持测试驱动心态，但调整第一步
+
+<Term def="即使当前代码不可测，也坚持用可观察证据缩小变化、先保护现状再为新需求建立失败测试的工作取向。">
+  遗留代码中的 TDD 心态
+</Term>
+
+新代码可以直接从需求红灯开始；遗留代码常需先写 characterization test。它记录当前输出，不宣称输出正确。护栏建立后，结构调整保持这些测试全绿；真正的新需求另写失败测试，清楚表明语义将改变。
+
+## 特征测试记录事实，不替系统辩护
+
+<Term def="以固定输入捕获遗留系统当前可观察输出或交互，用于在重构期间侦测无意行为变化的测试。">
+  特征测试
+</Term>
+
+选择稳定入口与代表输入，记录返回值、状态变化、文件内容或外部调用。避免一开始断言每个 private 字段；那会把未知实现冻结。测试名可以说明“characterizes current behavior”，并在注释或 issue 中记录可疑结果。
+
+```cpp
+TEST(LegacyInvoiceTest, CharacterizesCurrentRoundingAtBoundary) {
+    LegacyInvoice invoice;
+    invoice.addLine(1005, 10);
+
+    EXPECT_EQ(101, invoice.taxCents());
+}
+```
+
+若业务确认应为 100，新增 `RoundsHalfCentAccordingToPolicy` 失败测试并修改实现；不要悄悄改原期望。这样差异明确区分“保护现状”与“批准改变”。
+
+<Callout type="trap" title="陷阱：先把遗留输出改成看起来正确再写测试">
+  未经护栏的修复无法说明还改变了什么。先记录当前行为和调用者影响，再用独立失败测试表达期望；若旧行为确为缺陷，更新或替换特征测试要有业务证据。
+</Callout>
+
+## 安全重构只改变结构
+
+<Term def="在已有行为护栏持续通过的前提下，以可回退小步改名、提取、移动或注入依赖，不改变外部可观察语义。">
+  安全重构
+</Term>
+
+先做编译器或 IDE 能可靠支持的机械改动：改名、提取函数、引入参数、移动方法。每一步运行最窄相关测试和定期全套。不要同时清理格式、修复业务、升级库和改变所有权；混合变化会使失败无法归因。
+
+```cpp
+// 过渡入口保持旧调用者不变。
+LegacyProcessor::LegacyProcessor()
+    : LegacyProcessor{defaultLogger(), systemClock()} {}
+
+// 新入口让测试能够显式注入。
+LegacyProcessor::LegacyProcessor(Logger& logger, Clock& clock)
+    : logger_{logger}, clock_{clock} {}
+```
+
+委托构造让生产旧入口保持兼容，测试使用新入口。迁移完成后再评估是否删除默认构造，避免临时兼容永久隐藏依赖。
+
+## rlog 示例：先包装边界，再写记录型替身
+
+原书通过 rlog 日志依赖展示遗留挑战。若业务类直接调用 rlog 全局 API，测试只能抓控制台或文件，既慢又难断言。先定义领域需要的最窄 Logger 端口，真实适配器内部调用 rlog；测试用 recording spy 保存 level 与 message。
+
+<Term def="为 rlog 等全局日志设施建立窄 Logger 端口，并在测试中记录消息以替代真实输出的边界技术。">
+  rlog 测试替身
+</Term>
+
+```cpp
+class Logger {
+public:
+    virtual ~Logger() = default;
+    virtual void warn(std::string_view message) = 0;
+};
+
+class RecordingLogger final : public Logger {
+public:
+    void warn(std::string_view message) override {
+        warnings.emplace_back(message);
+    }
+    std::vector<std::string> warnings;
+};
+```
+
+测试只验证业务要求的警告，例如拒绝损坏记录必须记录订单 id；不验证 rlog 内部格式、文件名或时间戳。真实 RlogAdapter 的格式和配置由少量集成测试证明。
+
+## 接缝是可替换行为的窄位置
+
+<Term def="无需修改被测核心逻辑即可改变某项依赖或观察方式的位置，例如构造参数、函数参数、链接替代或薄 wrapper。">
+  测试接缝
+</Term>
+
+构造注入通常最清楚；函数参数适合局部依赖；无法立即修改 C/静态 API 时，可用链接替代或预处理包装建立临时 seam。越隐蔽的方式越要记录构建条件和移除计划，防止测试编译了与生产不同的世界。
+
+<CtrLegacyInjectionLab />
+
+<Callout type="trap" title="陷阱：使用宏把 private 和外部调用全部替换掉">
+  预处理接缝可能让测试快速启动，但也会改变类定义和编译语义。仅在难改边界作受控过渡，优先向显式 wrapper、参数或构造注入迁移，并用真实适配器契约测试补证据。
+</Callout>
+
+## spy、mock 与替代注入服务不同目的
+
+<Term def="用记录型 spy 观察事后调用、用 mock 声明必要交互，或用构造/参数/链接等方式替换硬依赖的组合策略。">
+  spy、mock 与替代注入
+</Term>
+
+读取当前时间只需 stub，日志和发送命令可用 spy，协议顺序确属契约时用 mock。先建立注入点，再选择替身；若直接让 mock 框架侵入生产类 private 结构，测试会锁死遗留实现。
+
+```cpp
+TEST(LegacyProcessorTest, WarnsWhenRecordIsCorrupt) {
+    RecordingLogger logger;
+    FixedClock clock{knownTime()};
+    LegacyProcessor processor{logger, clock};
+
+    processor.process(corruptRecord("order-42"));
+
+    ASSERT_EQ(1u, logger.warnings.size());
+    EXPECT_THAT(logger.warnings.front(),
+                ::testing::HasSubstr("order-42"));
+}
+```
+
+测试观察领域消息包含订单 id，不要求内部先解析几次、调用哪个 private helper。这样后续提取 parser 或缓存不会产生无关失败。
+
+## 让测试变快是设计改造的一部分
+
+<Term def="把纯计算与进程外 I/O 分离，用可控替身在内存执行核心行为，同时保留少量真实边界测试的加速过程。">
+  更快测试
+</Term>
+
+先用计时和依赖图找出慢源：数据库启动、固定 sleep、真实网络、大文件或全系统初始化。提取窄端口后，大多数规则在内存运行；真实适配器保留契约和集成测试。不要只是给慢测试加标签后在本地永远跳过。
+
+```text
+before: 1 scenario x 8.4 s, failure says "timeout"
+after:  37 policy tests x 12 ms + 3 adapter tests x 1.1 s
+proof:  same characterization cases run through both boundaries
+```
+
+速度提升必须保留语义证据。若 fake 忽略真实数据库排序或事务约束，需要共享契约测试防止假绿。
+
+## Mondo Extracto：大提取也由小步完成
+
+<Term def="在高层特征护栏保护下，把巨大过程或类中的职责逐项提取为可注入协作者，并逐步建立更窄快测试的方法。">
+  Mondo Extracto
+</Term>
+
+当一个函数同时读文件、解析、计算、写数据库和发通知，无法一次性单元测试。先从最稳定边界建立高层特征测试，标记纯计算与副作用，再一次提取一个职责并由旧入口转发。每个新协作者获得窄契约，旧高层测试继续证明组合。
+
+<CtrMondoExtractoFlow />
+
+大提取的风险不是代码量本身，而是一次跨越太多不可观察状态。保持旧入口、一次移动一个变量/责任、频繁编译测试和小提交，能把“大手术”还原成许多机械步骤。
+
+## 从保护现状转向测试驱动变化
+
+<Term def="在遗留行为已有护栏后，为新需求先写独立失败测试，再用最小实现改变语义并保留所有未声明改变的旧行为。">
+  测试驱动变更
+</Term>
+
+例如新需求要求损坏记录进入隔离队列。先在已提取 Processor 接口上写 `QuarantinesCorruptRecord` 红灯，注入 RecordingQuarantine，最小调用后全绿，再重构错误分类。特征测试继续保护其他记录处理，不被新需求无意改变。
+
+行为变化若故意使某个特征测试失败，应评审该旧行为是否仍需兼容。更新测试时保留原因和迁移计划，而不是看到红灯就改期望。
+
+## Mikado Method 处理前置条件网络
+
+<Term def="先尝试目标改动，记录失败的先决条件并恢复，再递归探索每个前置条件，形成从叶子到目标的可执行改造图。">
+  Mikado Method
+</Term>
+
+大型遗留改造常出现“要注入仓库，先改构造；要改构造，先改 40 个创建点；创建点又依赖全局工厂”。不要在未通过状态一路硬改。先尝试目标，记录阻碍，然后撤销到绿；对每个阻碍重复尝试、记录、撤销，直到找到可独立完成的叶子。
+
+```text
+目标：Processor 构造注入 Repository
+  ├─ 创建点改为 CompositionRoot
+  │   ├─ 提取默认 Repository 工厂
+  │   └─ 给 CLI 入口加最小组合测试
+  └─ 删除 Processor 内部 singleton 访问
+      ├─ 加当前查询特征测试
+      └─ 把查询移动到窄 Repository 端口
+```
+
+执行时从叶子开始，每项完成后提交绿点并从图中划掉。Mikado 图保存依赖关系，不要求按最初估计不变；新发现可以追加节点。
+
+## 先预测：哪个动作是行为变化
+
+把以下动作分类为特征测试、安全重构或新行为：记录当前错误码、把全局日志包进 Logger、将超时从 5 秒改为 1 秒、提取 parser、在损坏记录时新增隔离队列。若一个提交同时包含三类，先拆出最小顺序并说明每步应该保持哪些测试绿、哪条测试应新变红。
+
+## 重写不是默认捷径
+
+重写会失去旧系统中未文档化的边界和兼容行为。只有当可观察契约已被测试捕获、迁移可并行比对、回滚路径明确，且增量修改成本确实更高时才考虑。即使重写，也应用 characterization cases 对新旧实现做差分验证。
+
+逐步 strangler 路径通常更安全：新行为进入新组件，旧入口按规则路由，指标比较两侧结果，覆盖扩大后删除旧块。TDD 仍在新组件内工作，集成证据保护迁移。
+
+<Stepper>
+  <Step title="第一步：观察并保护当前行为">
+    选择稳定入口和固定输入，用特征测试记录返回、状态或必要交互；故意改变实现确认护栏会红，再恢复全绿。
+
+    <CtrLegacyChangeMap />
+  </Step>
+  <Step title="第二步：安全提取职责并加速测试">
+    标记 I/O、时间、全局和纯计算，一次提取一个协作者，保持旧入口转发；新边界补快测试，真实适配器保留契约测试。
+
+    <CtrMondoExtractoFlow />
+  </Step>
+  <Step title="第三步：选择接缝并驱动新变化">
+    优先显式构造或参数注入，难改边界才用链接/预处理替代；以 spy/mock 观察必要行为，再为新需求写独立红灯。
+
+    <CtrLegacyInjectionLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 遗留风险来自缺少可信反馈，第一步是观察和特征测试，不是立即重写
+- 安全重构只改变结构，新需求用独立失败测试驱动，二者必须分开
+- rlog 等全局依赖可先包进窄端口，再用 recording spy 观察领域消息
+- 构造/参数注入优先，链接与预处理 seam 只作受控过渡并需移除计划
+- Mondo Extracto 用高层护栏和小步提取拆开巨大责任，同时建立更快测试
+- Mikado Method 通过尝试、记录先决条件、恢复和叶子优先执行大型改造
+
+<Exercises>
+  1. **问题 1：保护可疑行为。** 遗留税额边界返回 101，但需求人员尚未确认是否应为 100。怎样继续？
+
+  <Answer question="特征测试和新需求测试如何分工？">先用固定输入写特征测试记录 101，证明重构期间不会无意改变；标记可疑并寻求业务证据。若确认应为 100，另写描述政策的新失败测试，修改实现后更新或替换旧特征测试，并记录这是有意语义变化。</Answer>
+
+  2. **问题 2：替换全局 rlog。** 业务类直接写文件日志，测试慢且只能人工查看。给出最小迁移顺序。
+
+  <Answer question="怎样建立 rlog 测试接缝？">先用高层测试保护当前关键输出；定义只有业务所需 warn/info 的 Logger 端口和调用 rlog 的真实适配器；增加可注入构造并让旧构造委托默认适配器；测试传 RecordingLogger 断言必要消息；最后把格式和文件行为留给少量适配器集成测试。</Answer>
+
+  3. **问题 3：规划大型注入。** Processor 要改为注入 Repository，但 40 个创建点和全局工厂阻塞。Mikado Method 怎样执行？
+
+  <Answer question="怎样把目标改造变成可回退依赖图？">先尝试改构造，记录所有编译/测试阻碍后恢复绿；分别尝试创建点集中、默认工厂提取、CLI 组合测试和 singleton 查询接缝，每次把新的前置条件加入图并恢复。找到可独立完成的叶子后逐项实现、测试、提交，再向目标回收。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="遗留代码">缺少自动护栏和可控依赖、修改时难以快速确认影响的代码。</GlossaryItem>
+  <GlossaryItem term="遗留代码中的 TDD 心态">先用证据保护现状，再以新红灯驱动改变的工作取向。</GlossaryItem>
+  <GlossaryItem term="特征测试">以固定输入捕获当前可观察行为、保护结构调整的测试。</GlossaryItem>
+  <GlossaryItem term="安全重构">在护栏全绿下只改变内部结构的可回退小步。</GlossaryItem>
+  <GlossaryItem term="rlog 测试替身">包装 rlog 边界并记录领域日志消息的测试技术。</GlossaryItem>
+  <GlossaryItem term="测试接缝">无需修改核心逻辑即可替换依赖或观察行为的位置。</GlossaryItem>
+  <GlossaryItem term="spy、mock 与替代注入">观察交互、声明期望和替换硬依赖的组合策略。</GlossaryItem>
+  <GlossaryItem term="更快测试">分离纯逻辑和真实 I/O、让核心行为在内存快速运行的改造。</GlossaryItem>
+  <GlossaryItem term="Mondo Extracto">以高层护栏和连续小步提取巨大职责的方法。</GlossaryItem>
+  <GlossaryItem term="测试驱动变更">护栏建立后由新失败测试明确改变遗留语义的过程。</GlossaryItem>
+  <GlossaryItem term="Mikado Method">从目标失败反推先决条件、恢复并由叶子执行的改造规划法。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Modern C++ Programming with Test-Driven Development, Chapter 8 Legacy Challenges"
+  adaptedUrl="https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/"
+/>

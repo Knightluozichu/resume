@@ -1,0 +1,228 @@
+---
+title: "第7章：User Input and while Loops"
+type: C
+section: "Part I · Basics"
+order: 7
+description: "将raw input解析为可信值，用可证明终止的while管理交互状态和collection搬运。"
+demo: true
+math: false
+sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
+draft: false
+---
+
+import {
+  PccCollectionTransferLab,
+  PccInputParseLab,
+  PccWhileStateMachineLab,
+} from "@/components/mdx/python-crash-course/diagrams/user-input-and-while-loops";
+
+<Objectives>
+
+- 能描述input返回raw string的边界，实现strip、int parse、范围与modulo验证
+- 能比较sentinel、flag、break和continue，分析while loop的state transition与退出证明
+- 能设计列表搬运、删除全部匹配和问卷dictionary流程，判断每次iteration如何接近终止
+
+</Objectives>
+
+## 为什么交互程序先处理边界，再处理循环
+
+`input(prompt)`暂停程序，读取一行并返回string；即使用户输入`42`，结果仍是`"42"`。因此比较、加法和modulo之前必须parse。把raw input直接带进核心逻辑，会让类型错误与业务错误混在一起，也让“重新提示”难以控制。
+
+while根据condition重复执行，不知道用户何时停止。循环正确性包含两部分：每轮工作符合contract，以及state最终有机会让condition变False或执行break。只验证第一轮输出，无法证明不会无限循环。
+
+<Term def="input返回、尚未经过类型解析、规范化和业务验证的原始字符串。">raw input</Term>
+
+## How the input Function Works
+
+prompt应告诉用户期望格式和退出方式，长prompt可先组成string再传入input。输入的末尾newline不会进入返回值，但用户可输入前后spaces；是否strip要按字段语义决定，密码等数据未必允许随意清洗。
+
+<Stepper>
+  <Step title="选择一个raw input场景">
+    <PccInputParseLab />
+  </Step>
+  <Step title="按normalize、parse、validate顺序处理">
+    strip只处理边界空白，int负责语法转换，范围与modulo属于业务规则。
+  </Step>
+  <Step title="失败时保留原因并重新提示">
+    ValueError与out-of-range是不同失败；错误消息应告诉用户如何修复，而不是直接退出或使用0替代。
+  </Step>
+</Stepper>
+
+<Term def="把raw string转换为目标type，并把语法失败与业务验证失败分开的边界流程。">parse boundary</Term>
+
+```python
+while True:
+    raw_age = input("Age (or 'quit'): ").strip()
+    if raw_age == "quit":
+        break
+    try:
+        age = int(raw_age)
+    except ValueError:
+        print("Enter a whole number.")
+        continue
+    if not 0 <= age <= 130:
+        print("Age must be between 0 and 130.")
+        continue
+    print(f"Accepted age: {age}")
+```
+
+### int转换不等于完整验证
+
+`int("-3")`合法，但年龄可能不允许负数；`int("003")`得到3，若字段是保留前导零的编号，就不应转为integer。type选择要由领域决定：数量、年龄适合int，邮政编码、账号和电话号码通常保留string。
+
+parse成功后保留typed value，后续不要重复转换raw string。若需要审计，可同时记录raw和normalized，但日志要避免敏感信息。
+
+## The Modulo Operator
+
+`a % b`给出除以b的remainder，可判断偶数、整除、轮转slot。`number % 2 == 0`表示even，`number % 10 == 0`表示10的multiple。除数为0会ZeroDivisionError，因此若b来自input要先验证非零。
+
+<Term def="除法后的余数运算，用于整除、奇偶和周期位置判断；除数不能为0。">modulo invariant</Term>
+
+```python
+number = int(input("Enter an integer: "))
+if number % 2 == 0:
+    print(f"{number} is even.")
+else:
+    print(f"{number} is odd.")
+
+if number % 10 == 0:
+    print("It is a multiple of ten.")
+```
+
+Python对负数的modulo结果遵循floor division关系，结果符号与除数一致。仅判断是否整除时`% divisor == 0`对正负被除数都稳定；若把remainder用于array slot，要明确期望范围和除数符号。
+
+## Introducing while Loops
+
+for适合遍历有限collection，while适合重复直到state满足条件。典型state包括message sentinel、active flag、remaining work或重试次数。每轮结束前必须能指出哪一项state改变，否则循环可能永远重复同一输入。
+
+<Stepper>
+  <Step title="切换sentinel、flag、break或continue">
+    <PccWhileStateMachineLab />
+  </Step>
+  <Step title="画出每轮state transition">
+    prompt得到新input，分支处理，state更新，再回到condition；continue跳到下一轮，break立即退出。
+  </Step>
+  <Step title="证明存在exit path">
+    至少一类可达input能改变condition或触发break，外部EOF/异常也要决定如何处理。
+  </Step>
+</Stepper>
+
+<Term def="一次while iteration对控制变量、collection或外部状态造成的可观察变化。">loop state transition</Term>
+
+```python
+prompt = "Tell me something (enter 'quit' to stop): "
+message = ""
+
+while message != "quit":
+    message = input(prompt).strip()
+    if message != "quit":
+        print(message)
+```
+
+sentinel把退出值同时放在condition和input中，适合单一控制值；flag适合多个事件都能结束循环；`while True`配break能把退出检查靠近输入，但必须清楚列出所有break路径。三种写法没有绝对优劣，选择最能表达state machine的一种。
+
+### break与continue改变的是控制流位置
+
+break跳出最近一层loop；continue跳过本轮剩余body，回到condition。多层嵌套中break不会自动退出所有循环。若控制流需要多个flag和跨层break，通常应提取function并用return表达更清晰的完成路径。
+
+continue之前要确保state已推进。若invalid item不会从queue移除，continue会永久处理同一元素；因此mutation顺序和failure policy必须一起设计。
+
+## Avoiding Infinite Loops
+
+无限循环常由condition变量从未更新、更新方向错误、某个continue绕过更新，或外部input永远无法满足sentinel造成。调试时记录iteration number和关键state，并设置临时max iterations；不要只强制终止进程而丢失最后状态。
+
+<Term def="证明每次iteration都让某个有限度量接近退出，或存在可达事件直接终止循环的论证。">termination proof</Term>
+
+对数字循环，可用distance-to-boundary；对queue搬运，可用source length；对删除匹配，可用remaining matches；对用户交互则依赖明确sentinel并处理EOF/取消。没有有限度量的服务loop也应有外部shutdown signal。
+
+## Using a while Loop with Lists and Dictionaries
+
+while可以把items从一个list移动到另一个、删除全部匹配，或持续收集responses到dictionary。关键是每轮mutation符合invariant：source减少、匹配数下降，或问卷明确询问是否继续。
+
+官方目录把前两种模式概括为 **Moving Items Between Lists** 与 **remove all instances**：前者要求总元素数守恒，后者要求remaining matches单调下降到0。
+
+<Stepper>
+  <Step title="选择collection loop场景">
+    <PccCollectionTransferLab />
+  </Step>
+  <Step title="记录before、operation与after">
+    搬运使用pop再append，删除全部匹配每次remove一个，问卷每轮写入一个key-value pair。
+  </Step>
+  <Step title="检查终止度量与数据完整性">
+    既要证明loop结束，也要证明没有丢item、重复移动或静默覆盖不该覆盖的response。
+  </Step>
+</Stepper>
+
+```python
+unconfirmed_users = ["alice", "brian", "candace"]
+confirmed_users = []
+
+while unconfirmed_users:
+    current_user = unconfirmed_users.pop()
+    print(f"Verifying user: {current_user.title()}")
+    confirmed_users.append(current_user)
+
+print(sorted(confirmed_users))
+```
+
+### Moving Items from One List to Another
+
+上例每轮让unconfirmed length减少1，confirmed length增加1，总元素数保持不变，这是可测试invariant。pop末尾是O(1)且会反转相对顺序；若必须FIFO，初学例可pop(0)，真实大queue应使用`collections.deque`。
+
+处理过程中若验证失败，要决定item进入rejected list、重新排队还是终止；不能pop后异常导致item凭空丢失。先完成validation再mutation，或用try/finally记录outcome。
+
+### Removing All Instances of Specific Values
+
+`while "pastrami" in sandwich_orders: sandwich_orders.remove("pastrami")`每轮减少一个匹配，最终membership为False。数据量大时构建过滤后的新list更直接，也避免O(n²)扫描；本章写法用于练习condition与mutation的配合。
+
+若remove前后没有匹配数下降，termination proof失败。不要在没有membership guard时直接remove，否则最后一次会ValueError。
+
+### Filling a Dictionary with User Input
+
+问卷loop每轮收集name和response，写入`responses[name] = response`。同名再次出现会覆盖旧value；若应保留多次响应，就让value成为list或使用唯一ID。继续提示应规范化为yes/no，非法回答重新询问而不是默认结束。
+
+输入系统还要考虑用户按Ctrl-D/Ctrl-Z产生EOF、Ctrl-C取消和空姓名。小练习可明确退出，生产交互要在边界捕获对应异常并保存已确认数据。
+
+<Callout type="trap" title="input返回数字，因为用户输入的是数字字符">
+input始终返回string。必须先int/float parse并处理ValueError，再做数值比较或modulo；账号等看似数字的数据可能本来就应保持string。
+</Callout>
+
+<Callout type="trap" title="while True 配一个break就一定会终止">
+break分支可能永远不可达，或continue在检查前跳走。需要列出state transition与可达exit input，并为collection loop提供单调下降的termination measure。
+</Callout>
+
+## 本章回顾：输入、状态与退出
+
+1. raw input先normalize、parse、validate，再进入typed core。
+2. modulo用于remainder规则，不能绕过type和除数验证。
+3. sentinel、flag、break/continue都应对应可读state transition。
+4. termination proof说明每轮如何接近退出或哪个事件可终止。
+5. collection loop既要结束，也要保持元素总数、匹配数或response ownership不变量。
+
+<Exercises>
+
+**问题 1：设计一个整数输入循环，如何区分parse失败和范围失败？**
+
+<Answer>先strip raw string并识别quit；try `int(raw)`，ValueError提示whole number并continue；parse成功后单独检查min/max，越界提示允许范围并continue；合法值才进入业务逻辑。测试空、3.5、负数、上下边界和quit。</Answer>
+
+**问题 2：如何证明从source list搬运到target list的while会终止且不丢数据？**
+
+<Answer>度量是len(source)，每轮pop恰好减少1，有限初始长度最终到0；invariant是len(source)+len(target)保持初始总数，每个pop value恰好append一次。若中间可能失败，增加rejected outcome或在mutation前验证，测试顺序契约。</Answer>
+
+**问题 3：continue为什么可能制造无限循环？**
+
+<Answer>continue跳过本轮余下代码。若state update或queue pop位于其后，下一轮看到相同condition和同一item，循环无法推进。把推进动作放在可能continue之前，或重构为先消费input再分类，并用iteration trace证明度量下降。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="raw input" definition="input返回、尚未解析和验证的原始字符串。" />
+  <GlossaryItem term="parse boundary" definition="把raw string转换为typed value并区分语法与业务失败的边界。" />
+  <GlossaryItem term="modulo invariant" definition="用余数表达整除、奇偶或周期位置的规则。" />
+  <GlossaryItem term="loop state transition" definition="一次while iteration对控制状态造成的可观察变化。" />
+  <GlossaryItem term="termination proof" definition="说明每轮接近退出或存在可达终止事件的论证。" />
+</Glossary>
+
+<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 7: User Input and while Loops" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />

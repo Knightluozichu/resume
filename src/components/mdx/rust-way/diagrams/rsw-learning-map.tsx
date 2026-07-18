@@ -1,103 +1,19 @@
-/**
- * <RswLearningMapDiagram>：Rust 编程之道全书学习地图。
- *
- * 四大板块（Rust基石 · 类型系统 · 错误与安全 · 高级工程）及 10 章依赖关系。
- * 纯静态展示，Server Component。viewBox 720×400，CSS 变量配色。
- */
+import { RustWayOfficialLab, type RustWayCase } from "./official-lab";
 
-const VIEW_W = 720;
-const VIEW_H = 400;
-
-const accent = "var(--accent)";
-const success = "var(--success)";
-const warning = "var(--warning)";
-const danger = "var(--danger)";
-const primary = "var(--text-primary)";
-const secondary = "var(--text-secondary)";
-const border = "var(--border)";
-const elevated = "var(--bg-elevated)";
-
-interface SectionCard {
-  title: string;
-  color: string;
-  chapters: string[];
-  y: number;
-}
-
-const SECTIONS: readonly SectionCard[] = [
-  { title: "Rust 基石", color: accent, chapters: ["学习地图", "所有权与借用"], y: 86 },
-  { title: "类型系统", color: success, chapters: ["Trait 与泛型", "生命周期"], y: 162 },
-  { title: "错误与安全", color: warning, chapters: ["错误处理", "unsafe Rust", "并发"], y: 238 },
-  { title: "高级工程", color: danger, chapters: ["async 运行时", "宏", "总复习"], y: 314 },
+const route: RustWayCase[] = [
+  { label: "1-3 语言与类型", input: "语法、表达式、值的类型", mechanism: "推导、泛型、Trait与转换", result: "可检查的抽象契约", invariant: "任何抽象都能追到具体类型、布局和行为约束。" },
+  { label: "4-5 内存与所有权", input: "栈、堆、值与引用", mechanism: "RAII、移动、借用与生命周期", result: "无GC的内存安全", invariant: "释放者唯一，引用不越过被引用值的有效期。" },
+  { label: "6-10 抽象与工程", input: "函数、数据、错误与包", mechanism: "闭包、迭代器、结构、Result与Cargo", result: "可复用的程序边界", invariant: "错误、可见性、依赖与资源owner都必须显式。" },
+  { label: "11-13 边界", input: "线程、宏、外部内存", mechanism: "Send/Sync、代码生成与unsafe契约", result: "可审计的系统能力", invariant: "安全接口不能让调用者制造未定义行为。" },
 ];
 
-const COL_X = [190, 320, 450, 580, 660];
-const CH_W = 108;
-const CH_H = 48;
+const gates: RustWayCase[] = [
+  { label: "预测", input: "代码与初始状态", mechanism: "先写编译或运行结果", result: "可证伪预期", invariant: "预期必须包含所有权、类型或并发理由。" },
+  { label: "执行", input: "固定toolchain与命令", mechanism: "编译、测试、记录诊断", result: "可重复证据", invariant: "版本、命令、stdout、stderr与status完整。" },
+  { label: "扰动", input: "边界值与失败注入", mechanism: "改变所有者、类型、线程或输入", result: "失效边界", invariant: "失败必须发生在预期的编译期或错误通道。" },
+  { label: "解释", input: "结果与诊断", mechanism: "重画值、引用、类型和线程关系", result: "可迁移模型", invariant: "脱离示例仍能解释最早被破坏的不变量。" },
+];
 
-export function RswLearningMapDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="Rust 编程之道全书学习地图。四个板块：Rust基石（学习地图、所有权与借用）、类型系统（Trait与泛型、生命周期）、错误与安全（错误处理、unsafe Rust、并发）、高级工程（async运行时、宏、总复习）。"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <text x={VIEW_W / 2} y={30} textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>
-            Rust 编程之道全书学习地图
-          </text>
-          <text x={VIEW_W / 2} y={50} textAnchor="middle" fontSize="11" fill={secondary}>
-            所有权筑基 · 类型立柱 · 安全为界 · 工程致远
-          </text>
-
-          {SECTIONS.map((sec, si) => {
-            const startIdx = SECTIONS.slice(0, si).reduce((a, s) => a + s.chapters.length, 0);
-            return (
-              <g key={sec.title}>
-                <rect x={36} y={sec.y - 14} width={110} height={CH_H} rx="8" fill={sec.color} fillOpacity="0.12" stroke={sec.color} strokeWidth="1.4" strokeOpacity="0.5" />
-                <text x={91} y={sec.y + 4} textAnchor="middle" fontSize="12" fontWeight="700" fill={sec.color}>
-                  {sec.title}
-                </text>
-                <text x={91} y={sec.y + 22} textAnchor="middle" fontSize="10" fill={secondary}>
-                  {`${sec.chapters.length} 章`}
-                </text>
-                {sec.chapters.map((ch, i) => {
-                  const x = COL_X[i];
-                  const chIdx = startIdx + i + 1;
-                  return (
-                    <g key={ch}>
-                      <rect x={x} y={sec.y - 14} width={CH_W} height={CH_H} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-                      <text x={x + CH_W / 2} y={sec.y + 4} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>
-                        {ch}
-                      </text>
-                      <text x={x + CH_W / 2} y={sec.y + 22} textAnchor="middle" fontSize="10" fill={secondary}>
-                        {`第 ${chIdx} 章`}
-                      </text>
-                      {i > 0 && (
-                        <line x1={COL_X[i - 1] + CH_W} y1={sec.y + 10} x2={x} y2={sec.y + 10} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-                      )}
-                    </g>
-                  );
-                })}
-                {si < SECTIONS.length - 1 && (
-                  <line x1={91} y1={sec.y + CH_H - 14} x2={91} y2={sec.y + CH_H} stroke={secondary} strokeWidth="1.4" markerEnd="url(#rsw-lm-arrow)" />
-                )}
-              </g>
-            );
-          })}
-
-          <defs>
-            <marker id="rsw-lm-arrow" markerWidth="8" markerHeight="8" refX="4" refY="3" orient="auto">
-              <path d="M0 0 L6 3 L0 6 z" fill="var(--text-secondary)" />
-            </marker>
-          </defs>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        Rust 编程之道四大板块与十章依赖关系：所有权是地基，类型系统是骨架。
-      </figcaption>
-    </figure>
-  );
-}
+export function RswLearningRouteLab() { return <RustWayOfficialLab title="13章主线" caption="切换四段主线，观察安全、抽象与工程能力如何逐层累积。" cases={route} tone="cyan" />; }
+export function RswOfficialOutlineLab() { return <RustWayOfficialLab title="官方目录坐标" caption="每段都对应《Rust编程之道》中的连续官方章节，不再压缩成十个主题页。" cases={route} tone="violet" />; }
+export function RswEvidenceGateLab() { return <RustWayOfficialLab title="章节掌握门禁" caption="预测、执行、扰动、解释共同构成掌握证据。" cases={gates} tone="emerald" />; }

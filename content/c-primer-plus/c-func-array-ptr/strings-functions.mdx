@@ -3,28 +3,21 @@ title: 字符串和字符串函数
 type: C
 section: C函数数组指针
 order: 11
-description: 掌握C字符串以'\0'结尾的内存布局、常用string.h函数（strlen/strcpy/strcat/strcmp）、字符串I/O与自定义字符串处理
+description: 掌握字符串表示与I/O、string.h函数、字符串指针排序、命令行参数和可诊断的字符串转数值
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/c-primer-plus-9780321928429"
 draft: false
 ---
 
-{/* C 实战型第 11 章（C Primer Plus §11 改编）：\0 结尾、string.h 四函数、strcpy 溢出、char[] vs char*、fgets/puts、自定义字符串函数。
-   重心是概念讲解(§3) + 代码对照(§6) + 常见误区(§7)，数学省略(math:false)。
-   draft:true 待总监 review。 */}
-
-{/* 知识点清单（先摊开，逐条标 viz 形态，每条至少配一种 viz）：
-   1) 字符数组 + \0 终止符内存布局 — CStringNullTerminatorDiagram
-   2) strcpy 缓冲区溢出风险（step 1-3）— StrcpyBufferDiagram
-   3) strlen/strcpy/strcat/strcmp 速查 — StringFunctionTableDiagram
-   4) char s[] vs char *s 区别 — StringPointerVsArrayDiagram */}
+import { CPrimerStringBoundaryDiagram } from "@/components/mdx/c-primer-plus/diagrams/strings-functions";
 
 <Objectives>
 
 - 能解释 C 字符串为何必须以 `\0` 结尾，并说明 `strlen` 与 `sizeof` 对同一数组为何常差 1
-- 能正确使用 `strlen`、`strcpy`、`strcat`、`strcmp`，并说明 `strcpy` 的目标缓冲区必须足够大的原因
-- 能区分 `char ar[] = "..."` 与 `char *p = "..."` 在可修改性与 `sizeof` 上的差异，并用 `fgets` 安全读入一行文本
+- 能正确使用 `strlen`、`strcpy`、`strcat`、`strcmp`，并判断 `fgets` 是否读到完整记录
+- 能用字符串指针数组和 qsort 排序词表，并解释比较器为何接收二级指针
+- 能验证 argc/argv 命令行参数，并用 strtol 区分无数字、尾随垃圾和范围错误
 
 </Objectives>
 
@@ -36,7 +29,9 @@ draft: false
 
 这一章把 `\0` 铁律、`string.h` 四大函数、安全读写的 `fgets`，以及自己写字符串处理函数的方法讲清楚。搞懂这些，后面结构体、文件 I/O、动态内存都会轻松很多。
 
-## C 字符串的内存布局：可见字符 + 看不见的 \0
+<CPrimerStringBoundaryDiagram />
+
+## 字符串表示：可见字符 + 看不见的 \0
 
 <Term def="ASCII 值为 0 的特殊字符，写作 \0。C 用它标记字符串结束，本身不计入 strlen 返回的长度。">空字符（null character）</Term> 是 C 字符串的「终点站」。声明：
 
@@ -118,7 +113,7 @@ strcat(buf, ", world!");
   </Step>
   <Step title="第三步：越界覆盖相邻内存">
     <StrcpyBufferDiagram step={3} />
-    多出来的字节会写出 `dest` 边界，覆盖栈上其他变量甚至返回地址——经典缓冲区溢出漏洞来源。更安全：`strncpy`、`snprintf`，或 C11 的 `strlcpy`（若平台提供）。
+    多出来的字节写出 dest 边界，行为未定义，也可能破坏相邻对象。应先证明容量足够，或用 snprintf 按目标容量格式化。strncpy 不保证截断结果以 NUL 结尾，strlcpy 也不是 C11 标准函数，不能只换函数名就宣称安全。
   </Step>
 </Stepper>
 
@@ -141,18 +136,18 @@ else if (strcmp(s1, s2) < 0)
 
 ```c
 char ar[] = "Hello";   /* 数组：栈上副本，可修改 */
-char *ptr = "Hello";   /* 指针：指向只读字面量 */
+const char *ptr = "Hello"; /* 指针：只读访问字符串字面量 */
 ```
 
 <StringPointerVsArrayDiagram />
 
-`ar[0] = 'h'` 合法；`ptr[0] = 'h'` 是**未定义行为**——<Term def="双引号中的文本，编译为带 \0 结尾的 char 序列，通常存放在只读数据段。">字符串字面量</Term>存放在只读数据段。要可改字符串，用 `char ar[]` 或 `malloc` 分配堆内存。
+`ar[0] = 'h'` 合法；字符串字面量在 C 中具有 char 数组类型，但任何修改尝试都是**未定义行为**。<Term def="双引号中的文本，在程序中形成带空字符结尾的静态存储期字符数组；是否与相同字面量合并、放在哪个物理段由实现决定。">字符串字面量</Term> 不保证位于某个特定“只读数据段”，所以规则应写成语言契约而不是内存段猜测。用 `const char *` 接收能让编译器阻止误写；要可改则用 `char ar[]` 或拥有足够容量的动态对象。
 
 `sizeof` 也不同：`sizeof(ar)` 是数组总字节（含 `\0`）；`sizeof(ptr)` 是**指针变量本身**的大小（通常 8 或 4），与字符串长度无关。
 
-函数形参 `char s[]` 与 `char *s` **完全等价**——都接收指向首字符的指针。但调用时若传入字符串字面量，函数内仍不能修改内容。
+函数形参位置的 `char s[]` 会调整为 `char *s`，两种声明表示相同参数类型。只读接口应声明 `const char *s`；否则类型会错误暗示函数可能修改内容。
 
-## 字符串输入与输出
+## 字符串输入输出：按流读写完整记录
 
 ### 输出：puts 与 fputs
 
@@ -165,18 +160,34 @@ fputs("Hi", stdout);  /* 仅 Hi，无换行 */
 
 ### 输入：用 fgets，别用 gets
 
-<Term def="从流中读入一行到缓冲区，最多读 size-1 个字符，保留换行符（若有），并保证以 \0 结尾。比 gets 安全。">fgets()</Term> 接受**缓冲区大小**，最多读 `size-1` 个字符，并保证 `\0` 结尾：
+<Term def="从流中读取至多 size-1 个字符，遇到换行时把换行也存入；成功时写入空字符并返回目标指针，输入结束或错误且未读到字符时返回空指针。">fgets()</Term> 接受缓冲区大小，但“调用成功”不等于“整行已读完”：
 
 ```c
 char line[80];
 if (fgets(line, sizeof line, stdin) != NULL) {
-    /* line 里可能有末尾 \n */
-    line[strcspn(line, "\n")] = '\0';  /* 可选：去掉换行 */
-    printf("你输入了：%s\n", line);
+    char *newline = strchr(line, '\n');
+    if (newline != NULL) {
+        *newline = '\0';
+        printf("完整一行：%s\n", line);
+    } else {
+        int ch = getchar();
+        if (ch == '\n') {
+            printf("完整一行：%s\n", line);
+        } else if (ch == EOF) {
+            if (ferror(stdin))
+                fputs("读取失败\n", stderr);
+            else
+                printf("文件末尾的最后一行：%s\n", line);
+        } else {
+            while ((ch = getchar()) != '\n' && ch != EOF)
+                ;
+            fputs("输入行过长\n", stderr);
+        }
+    }
 }
 ```
 
-`gets()` 已被 C11 移除——它不检查缓冲区大小，和 `strcpy` 一样危险。**永远用 `fgets`。**
+`fgets` 保留读到的换行；缓冲区填满前没有换行时，要区分“最后一行没有换行”和“当前记录被截断”。`gets()` 已被 C11 移除，因为接口根本没有容量参数。
 
 ## 自定义字符串函数
 
@@ -185,8 +196,8 @@ if (fgets(line, sizeof line, stdin) != NULL) {
 ### 手写 my_strlen
 
 ```c
-int my_strlen(const char *s) {
-    int count = 0;
+size_t my_strlen(const char *s) {
+    size_t count = 0;
     while (s[count] != '\0')
         count++;
     return count;
@@ -207,6 +218,8 @@ char *my_strcpy(char *dest, const char *src) {
 ```
 
 `while ((*dest++ = *src++) != '\0')` 是经典 C 惯用法：赋值、比较、指针后移一步完成。
+
+它与标准 `strcpy` 一样要求 dest 容量足够，并要求源与目标对象不重叠；接口没有容量参数，函数自身无法验证这两个前置条件。
 
 ### 场景：读一行并统计单词数（简化）
 
@@ -231,12 +244,89 @@ int count_words(const char *s) {
 
 用 `isspace` 判断空白，用状态机 `in_word` 检测「从非空白进入空白」的边界——这就是自定义字符串处理的典型模式。
 
+## 排序字符串：排序指针而不是复制字符
+
+字符串列表常表示为指针数组。<Term def="让字符串指针数组按 strcmp 顺序重排；排序交换的是指针元素，字符串字节本身不移动。">字符串指针排序</Term> 可以交给 `qsort`：
+
+```c
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
+
+static int compare_words(const void *lhs, const void *rhs) {
+    const char *left = *(const char *const *)lhs;
+    const char *right = *(const char *const *)rhs;
+    return strcmp(left, right);
+}
+
+int main(void) {
+    const char *words[] = {"pear", "apple", "plum"};
+    size_t count = sizeof words / sizeof words[0];
+    qsort(words, count, sizeof words[0], compare_words);
+    return strcmp(words[0], "apple") != 0;
+}
+```
+
+qsort 把“数组元素的地址”传给比较器。这里元素本身是 `const char *`，所以参数要解释为指向该指针元素的指针，再解引用一次取得字符串。排序只改变 words 中各指针的顺序，不会尝试修改字符串字面量。`strcmp` 是逐字节字典序，不是面向 locale 的自然语言排序。
+
+## 命令行参数：argc 与 argv 的边界
+
+宿主环境可以用 `main(int argc, char *argv[])` 提供 <Term def="程序启动时由宿主环境传入的字符串数组；argc 给出参数数量，argv 保存各参数指针，并以空指针哨兵结束。">命令行参数</Term>。在宿主提供这些信息时，argc 非负，`argv[argc]` 是空指针；`argv[0]` 通常表示程序调用名，但它也可能是空字符串，不能拿来做安全判断。
+
+```c
+#include <stdio.h>
+
+int main(int argc, char *argv[]) {
+    int i;
+    if (argc < 2) {
+        fprintf(stderr, "usage: %s WORD...\n",
+                argc > 0 ? argv[0] : "program");
+        return 2;
+    }
+
+    for (i = 1; i < argc; ++i)
+        printf("argv[%d] = %s\n", i, argv[i]);
+    return 0;
+}
+```
+
+argc 是元素计数，不含末尾空指针；业务参数从 argv[1] 开始。访问前先验证 argc，不能假定用户一定传了某个位置。虽然 C 允许修改 argv 指向的字符串内容，接口设计通常把它们当输入，并在需要长期保存或重排内容时复制到自有存储。
+
+## 字符串转数字：用 strtol 保留失败原因
+
+`atoi` 无法把合法的 0 与转换失败区分开，也没有可用的结束位置和可靠范围诊断。<Term def="把字符串前缀按指定进制转换为 long，并通过 endptr 返回首个未转换字符；范围错误通过 errno 的 ERANGE 报告。">strtol()</Term> 允许调用方逐层验证：
+
+```c
+#include <errno.h>
+#include <limits.h>
+#include <stdlib.h>
+
+static int parse_int(const char *text, int *result) {
+    char *end;
+    long value;
+
+    errno = 0;
+    value = strtol(text, &end, 10);
+    if (end == text)                  /* 一个数字也没读到 */
+        return 0;
+    if (*end != '\0')                /* 有未接受的尾随字符 */
+        return 0;
+    if (errno == ERANGE || value < INT_MIN || value > INT_MAX)
+        return 0;
+
+    *result = (int)value;
+    return 1;
+}
+```
+
+调用前把 errno 清零，只在返回后结合结果检查 ERANGE；不能仅看 errno 的旧值。end == text 表示没有转换，`*end` 检查是否完整消费字符串，再检查 long 到 int 的目标范围。若产品允许尾随空白，应显式用 `isspace((unsigned char)*end)` 跳过后再要求结束；进制参数用 10 表示十进制，用 0 才会按前缀识别八进制或十六进制。
+
 ## 容易踩的坑
 
 <Callout type="trap">
-  **现象**：`char msg[5] = "Hello";` 编译警告或运行异常。
-  **原因**：`"Hello"` 需要 6 字节（5 字母 + `\0`），数组只有 5 格，**没有空间放结尾 `\0`**。
-  **修法**：数组至少 `char msg[6]`，或缩短字面量。初始化时编译器会尽量塞 `\0`，但空间不够就是未定义行为。
+  **现象**：`char msg[5] = "Hello";` 初始化能通过，但随后 `strlen(msg)` 或 `puts(msg)` 读出边界。
+  **原因**：C 特别允许字符数组大小恰好容纳字面量可见字符而省略终止空字符。初始化本身合法，得到的却只是 5 个字符的数组，不是 C 字符串；把它交给要求空字符结尾的函数会产生未定义行为。
+  **修法**：需要字符串就写 `char msg[6] = "Hello";` 或让编译器推导 `char msg[] = "Hello";`。
 </Callout>
 
 <Callout type="trap">
@@ -247,27 +337,29 @@ int count_words(const char *s) {
 
 <Callout type="trap">
   **现象**：`strcat(dest, src)` 后程序崩溃或 dest 内容乱掉。
-  **原因**：`dest` 剩余空间不够放下 `src`（含 `\0`）。`strcat` 与 `strcpy` 一样**不检查边界**。
-  **修法**：确保 `strlen(dest) + strlen(src) + 1 <= dest 容量`；或先用 `strncat` / `snprintf` 限制长度。
+  **原因**：dest 可能不是已终止字符串，剩余空间不够，或源与目标对象重叠。strcat 不接收容量，无法替调用方验证这些前置条件。
+  **修法**：在已知容量下证明 `strlen(dest) + strlen(src) + 1` 不超过容量且对象不重叠，或用 snprintf 明确传入目标容量并检查返回值是否表示截断。strncat 的第三个参数不是目标容量，不能直接替换。
 </Callout>
 
 <Callout type="trap">
   **现象**：`char *p = "Hi"; p[0] = 'h';` 在部分系统上崩溃。
-  **原因**：字符串字面量**只读**，通过 `char *` 修改是未定义行为。
-  **修法**：要可改用 `char ar[] = "Hi";`，或 `malloc` + `strcpy`。
+  **原因**：C 字符串字面量不具有 const 类型，但标准规定修改它的行为未定义；是否立即崩溃取决于实现。
+  **修法**：只读引用写 `const char *p = "Hi";`；需要修改则创建 `char ar[] = "Hi";` 或有明确容量与所有权的动态副本。
 </Callout>
 
 ## 小结
 
 - C 字符串 = 连续 `char` + 结尾 `\0`；`strlen` 数到 `\0` 前，`sizeof` 数整个数组
 - `strcpy` / `strcat` 不检查目标大小；`strcmp` 返回 0 表示相等
-- `char ar[]` 可修改；`char *p = "..."` 指向只读字面量，不可改
-- 读行用 **`fgets(buf, size, stdin)`**；输出可用 `puts` / `fputs`
+- `char ar[]` 创建可修改副本；字符串字面量应经 const char 指针只读访问
+- fgets 成功后仍要判断换行、文件末尾与截断；输出可用 puts / fputs
+- qsort 排字符串指针时交换指针元素，比较器需先解引用到字符串再调用 strcmp
+- 命令行参数先检查 argc；字符串转整数用 strtol 检查 endptr、errno 和目标范围
 - 自定义函数核心：找 `\0`、逐字节复制、用 `const char *` 保护只读参数
 
 <Exercises>
 
-**练习 1（改代码型）** 下面程序想比较用户输入与 `"yes"` 是否相同，但有 bug。改正后输入 `yes` 应打印 `匹配`。
+**问题 1（改代码型）** 下面程序想比较用户输入与 `"yes"` 是否相同，但有 bug。改正后输入 `yes` 应打印 `匹配`。
 
 ```c
 char answer[10];
@@ -278,17 +370,19 @@ if (answer == "yes")
 
 <Answer>
 
-两处修改：用 `strcmp` 比较内容；`fgets` 可能保留换行，需去掉：
+先检查 fgets 是否成功，再去掉可能保留的换行，并用 strcmp 比较内容：
 
 ```c
-answer[strcspn(answer, "\n")] = '\0';
-if (strcmp(answer, "yes") == 0)
-    printf("匹配\n");
+if (fgets(answer, sizeof answer, stdin) != NULL) {
+    answer[strcspn(answer, "\n")] = '\0';
+    if (strcmp(answer, "yes") == 0)
+        printf("匹配\n");
+}
 ```
 
 </Answer>
 
-**练习 2（问答型）** `char a[] = "Hi";` 与 `char *b = "Hi";` 执行 `sizeof(a)` 和 `sizeof(b)` 通常各得多少（64 位系统）？为什么？
+**问题 2（问答型）** `char a[] = "Hi";` 与 `const char *b = "Hi";` 执行 `sizeof(a)` 和 `sizeof(b)` 通常各得多少（64 位系统）？为什么？
 
 <Answer>
 
@@ -296,23 +390,24 @@ if (strcmp(answer, "yes") == 0)
 
 </Answer>
 
-**练习 3（综合实现型）** 不用 `strlen`，写函数 `int str_len(const char *s)`，并在 `main` 里测试 `"Cat"` 与 `""`。
+**问题 3（综合实现型）** 不用 `strlen`，写函数 `size_t str_len(const char *s)`，并在 `main` 里测试 `"Cat"` 与 `""`。
 
 <Answer>
 
 ```c
 #include <stdio.h>
+#include <stddef.h>
 
-int str_len(const char *s) {
-    int n = 0;
+size_t str_len(const char *s) {
+    size_t n = 0;
     while (s[n] != '\0')
         n++;
     return n;
 }
 
 int main(void) {
-    printf("%d\n", str_len("Cat"));  /* 3 */
-    printf("%d\n", str_len(""));     /* 0 */
+    printf("%zu\n", str_len("Cat"));  /* 3 */
+    printf("%zu\n", str_len(""));     /* 0 */
     return 0;
 }
 ```
@@ -350,13 +445,25 @@ int main(void) {
 </GlossaryItem>
 
 <GlossaryItem term="fgets()">
-  从流读一行到缓冲区，最多 size-1 字符，保证 \0 结尾。比已废弃的 gets 安全，读 stdin 时常用。
+  从流读取至多 size-1 个字符；成功时写入空字符并返回目标指针。调用方仍须判断是否读到换行、无换行的文件末尾或被缓冲区截断的记录。
 </GlossaryItem>
 
 <GlossaryItem term="字符串字面量">
-  双引号中的文本，如 "Hello"。编译为带 \0 的 char 序列。用 char *p = "..." 指向只读区，不可修改。
+  双引号中的文本，在程序中形成带空字符结尾的静态存储期字符数组。C 不给它 const 类型，但任何修改行为未定义；物理存放位置由实现决定。
+</GlossaryItem>
+
+<GlossaryItem term="字符串指针排序">
+  对字符串指针数组重排指针元素，而不复制各字符串字节。qsort 比较器收到元素地址，需先解引用为字符串指针再调用 strcmp。
+</GlossaryItem>
+
+<GlossaryItem term="命令行参数">
+  程序启动时由宿主环境提供的字符串数组。argc 给出参数数量，argv 保存指针，argv[argc] 是空指针哨兵；访问业务参数前应检查 argc。
+</GlossaryItem>
+
+<GlossaryItem term="strtol()">
+  把字符串前缀转换为 long，并通过 endptr 返回首个未转换字符。可靠解析需检查是否读到数字、尾部策略、errno 的 ERANGE 和目标类型范围。
 </GlossaryItem>
 
 </Glossary>
 
-<Attribution />
+<Attribution title="C Primer Plus, Sixth Edition, Chapter 11: Character Strings and String Functions" url="https://www.informit.com/store/c-primer-plus-9780321928429" />

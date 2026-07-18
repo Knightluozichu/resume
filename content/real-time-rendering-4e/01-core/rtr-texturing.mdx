@@ -1,107 +1,205 @@
 ---
-title: "纹理与采样技术"
+title: "纹理采样与图像空间效果"
 type: B
 section: "计算机图形学与渲染"
 order: 4
-description: "UV映射、过滤模式与Mipmap多级渐远纹理"
+description: "承载官方 Ch6、Ch12：纹理表示与过滤、采样足迹、图像空间效果、重投影和时域稳定性"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://www.realtimerendering.com/"
 draft: false
 ---
 
-import { RtrTexturingDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-texturing";
+import { RtrTexturingDiagram, RtrTextureFootprintDiagram, RtrImageSpaceDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-texturing";
+import { RtrStepFlowDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能解释UV坐标如何把2D纹理映射到3D表面
-- 能区分最近邻、双线性、三线性过滤的效果差异
-- 能解释Mipmap如何解决远处纹理闪烁问题
-- 能回答：各向异性过滤解决了什么问题？
+
+- 能分析 screen pixel 在 texture space 的 footprint，并解释 mip LOD 与各向异性
+- 能区分 color、normal、roughness、depth、cube、volume 与 render-target texture 的采样规则
+- 能描述 Image-Space Effects 对 depth、normal、motion vector 和 history 的依赖
+- 能设计纹理走样、重投影、遮挡暴露和时域稳定性的可复现实验
+
 </Objectives>
 
-## 直觉引入
+## 直觉：采样的是面积，不是一个点
 
-想象你在包装礼物。纹理就是包装纸上的图案，UV坐标就是「这张纸怎么贴到盒子上」的说明——哪块纸贴哪个面，怎么对齐。如果盒子很大但纸很小（放大），你需要插值补全像素；如果盒子很小但纸很大（缩小），你需要把多个像素合并成一个。
+先预测：地面退到远处时，一个屏幕像素覆盖的是一个 texel，还是细长的一片纹理区域？相机移动后，上一帧同一像素位置是否仍代表同一个表面点？前者决定空间过滤，后者决定时域重投影。
 
-Mipmap就像准备多张不同分辨率的包装纸——近处用高精度纸，远处用低精度纸，避免远处闪烁。
-
-## 概念讲解
-
-### 纹理映射与采样
+Ch6 Texturing 研究从参数坐标到离散纹理信号的表示、寻址与过滤；Ch12 Image-Space Effects 利用已经光栅化的 color/depth/normal/motion 数据近似更昂贵的光学、遮蔽和重建过程。两章的共同核心是 footprint、visibility 与 reconstruction。
 
 <RtrTexturingDiagram />
 
-<Term def="UV映射是将2D纹理坐标(u,v)映射到3D模型表面的过程">UV映射</Term>是纹理技术的核心。每个顶点除了位置还有UV坐标，光栅化阶段插值后，片段着色器用UV从纹理采样。
+## Ch6 Texturing：映射、寻址与数据语义
 
-<Term def="纹理过滤决定在UV坐标非整数时如何从纹素获取颜色">纹理过滤</Term>分放大过滤和缩小过滤。放大时像素多于纹素，用双线性插值；缩小时纹素多于像素，需要<Term def="Mipmap是预计算的多级渐远纹理，每级分辨率为上一级的一半">Mipmap</Term>避免走样。
+<Term def="把表面参数、方向或三维位置映射到离散纹理域，并对纹素信号进行重建和过滤的过程">纹理映射</Term>不只包括 2D UV。常见映射还有 cube map 的方向查询、projective texture、triplanar mapping、3D volume texture、array/atlas 和 procedural texture。
 
-<Term def="各向异性过滤在斜角观察时沿投影方向做非对称采样，减少模糊">各向异性过滤</Term>（AF）解决斜面纹理模糊问题。
+一条采样链包含：坐标生成与插值 → address mode（repeat/clamp/mirror/border）→ LOD/footprint → texel fetch/decompression → reconstruction filter → data decode。UV seam、wrap 和导数不连续会影响 LOD；atlas 还需 padding，避免 mip 与双线性跨 tile 污染。
 
-## 交互Demo
+纹理的语义决定解码：base color/emissive 常按颜色 transfer function 解码；normal、roughness、metalness、depth、ID 等是数据，不能套 sRGB。法线贴图还要匹配 tangent basis、handedness、Y 方向与压缩重建。
 
-<Stepper>
-<Step title="第一步：UV映射基础">理解UV坐标空间[0,1]x[0,1]如何映射到3D表面。纹理坐标插值是光栅化的关键功能。</Step>
-<Step title="第二步：过滤与Mipmap">
-放大用双线性插值平滑像素，缩小用Mipmap+三线性消除走样。观察不同过滤模式的效果差异。
-<RtrTexturingDiagram />
-</Step>
-<Step title="第三步：高级纹理技术">纹理不只能存颜色——法线贴图存法线、阴影贴图存深度、查找表存预计算数据。纹理是GPU最通用的数据容器。</Step>
-</Stepper>
+## 采样理论、Mipmap 与 footprint
 
-## 代码对照
+<RtrTextureFootprintDiagram />
+
+<Term def="一个输出样本反投影到纹理域后覆盖的区域；其形状与大小决定需要积分的纹理频率和过滤核">纹理足迹</Term>可由屏幕导数近似。对二维坐标 $(u,v)$：
+
+$$
+J=\begin{bmatrix}\partial u/\partial x&\partial u/\partial y\\
+\partial v/\partial x&\partial v/\partial y\end{bmatrix}.
+$$
+
+Jacobian 把屏幕像素局部映射为 texture-space 椭圆。各向同性 mip LOD 常用最大导数长度的对数近似：
+
+$$
+\lambda=\log_2\left(\max(\|\partial \mathbf{uv}/\partial x\|,
+\|\partial \mathbf{uv}/\partial y\|)\cdot S\right),
+$$
+
+其中 $S$ 是纹理尺度。bilinear 在单层四邻域重建，trilinear 再在相邻 mip 层插值；它减弱 mip 过渡，但不能准确积分细长 footprint。
+
+<Term def="沿纹理足迹长轴增加采样、限制长短轴比，以改善斜视表面缩小过滤的技术">各向异性过滤</Term>比把椭圆扩成大圆保留更多细节。质量/成本依最大 anisotropy、实现与 cache；不能把“16x”理解为所有样本固定取 16 次。
+
+完整、方形、每边减半且相同格式的二维 mip chain，面积级数为 $1+1/4+1/16+\cdots=4/3$。非方形、稀疏、尾部打包、压缩对齐和 streaming 改变实际开销，因此“mip 一定增加 33%”不是通用内存结论。
 
 ```glsl
-// 纹理采样与过滤
-uniform sampler2D diffuseMap;
-uniform sampler2D normalMap;
+vec2 uvDx = dFdx(uv);
+vec2 uvDy = dFdy(uv);
 
-// 基础采样（GPU自动处理过滤和Mipmap）
-vec4 color = texture(diffuseMap, TexCoords);
+// Explicit gradients preserve the intended footprint across helper functions.
+vec4 encodedBase = textureGrad(baseColorMap, uv, uvDx, uvDy);
+vec3 baseLinear = srgbToLinear(encodedBase.rgb);
 
-// 手动指定Mipmap级别（用于特殊效果）
-vec4 lodColor = textureLod(diffuseMap, TexCoords, 2.0); // 强制用Level 2
-
-// 各向异性采样（需要扩展）
-// float anisoLevel = 4.0;
-// vec4 afColor = textureGrad(diffuseMap, TexCoords, dFdx(TexCoords)*anisoLevel, dFdy(TexCoords)*anisoLevel);
-
-// 法线贴图：从纹理解压法线
-vec3 normal = texture(normalMap, TexCoords).rgb * 2.0 - 1.0;
-normal = normalize(normal);
+// Data texture: no sRGB decode; reconstruct and normalize tangent normal.
+vec2 packed = textureGrad(normalMap, uv, uvDx, uvDy).rg * 2.0 - 1.0;
+vec3 normalTS = normalize(vec3(packed, sqrt(max(1.0 - dot(packed, packed), 0.0))));
 ```
+
+derivative 在 fragment quad 上估计；动态分支、discard、primitive 边缘与非 fragment stage 可能使隐式 LOD 不可用或不稳定，此时需要显式 gradient/LOD 或不同采样策略。
+
+## 纹理压缩与虚拟化
+
+block compression 以固定块近似 texel，可降低存储和带宽，但会产生端点、block boundary、normal 与 HDR 误差；“不影响视觉质量”不成立。格式选择要按内容：颜色、单通道 mask、双通道 normal、HDR 各有不同候选。
+
+<Term def="只让需要的纹理页驻留物理内存，并通过页表把虚拟纹理坐标映射到缓存页面的技术">虚拟纹理</Term>把超大纹理变成 feedback、page request、stream、cache 与 page table 系统。验收除画质外，还要检查 miss、反馈延迟、mip fallback、border、I/O 峰值和相机快速移动时的稳定性。
+
+## Ch12 Image-Space Effects：便宜来自可见样本的复用
+
+<RtrImageSpaceDiagram />
+
+图像空间效果只拥有当前/历史 frame buffers，不天然知道屏幕后面的几何。常见输入有 HDR color、linear depth、normal、roughness、material ID、motion vector 和 exposure；常见效果包括 bloom、tone mapping、depth of field、motion blur、SSAO、SSR、outlines 和 temporal reconstruction。
+
+<Term def="用当前像素的运动向量把它映射到上一帧对应位置，以复用历史颜色或统计量的过程">时域重投影</Term>常写为 `prevUV = currUV + motion`，但 motion 的方向、NDC/UV 单位、jitter 和 dynamic object transform 必须一致。camera-only motion 不足以处理动画物体。
+
+历史样本需通过 depth/normal/material 一致性验证。disocclusion 没有有效历史；越界、透明、粒子、反射和曝光变化也需要特殊处理。history clamp/neighborhood clipping 限制拖影，但过强会损失稳定性。
+
+### 效果的边界
+
+- SSAO 近似有限半径内的屏幕可见遮蔽，缺少屏外与背面信息；
+- SSR 沿 depth buffer 搜索交点，无法反射屏外、被遮挡或 depth 不足的对象；
+- depth of field 和 motion blur 需要正确 circle of confusion/velocity 与前后景分层，朴素 gather 会跨轮廓泄漏；
+- bloom 应从 HDR 信号提取/卷积并在显示变换前合成，不是简单模糊 LDR 白色像素；
+- TAA/upscaler 是时空重建器，不只是“上一帧平均”。
+
+一个简单 history 更新可表示为：
+
+$$
+C_t=(1-\alpha)C_{current}+\alpha\,clamp(C_{history},N_{min},N_{max}),
+$$
+
+其中 $\alpha$ 应随 motion、confidence、reactive mask 和 disocclusion 改变，邻域范围也应在合适颜色空间统计。
+
+```glsl
+vec2 prevUV = uv + motionVector;
+bool valid = all(greaterThanEqual(prevUV, vec2(0.0))) &&
+             all(lessThanEqual(prevUV, vec2(1.0)));
+vec3 history = texture(historyColor, prevUV).rgb;
+valid = valid && depthConsistent(depth, texture(historyDepth, prevUV).r);
+vec3 clipped = clipToCurrentNeighborhood(history, uv);
+vec3 resolved = mix(currentColor, clipped, valid ? historyWeight : 0.0);
+```
+
+## 三步采样与历史验收
+
+<Stepper>
+<Step title="第一步：可视化 footprint 与 buffers">
+
+显示 mip level、anisotropy、UV derivative，以及 linear depth、normal、velocity、history validity 和 disocclusion mask。
+
+<RtrStepFlowDiagram caption="先确认过滤与后处理真正读到了什么。" stage={1} stages={["Inspect：UV gradients、LOD、G-buffer、motion、history validity"]} />
+
+</Step>
+<Step title="第二步：建立空间和时间压力场景">
+
+使用远退棋盘、斜视地面、UV seam、亚像素线、相机 pan、动态物体、遮挡暴露和曝光跳变。
+
+<RtrStepFlowDiagram caption="固定场景分别暴露 spatial aliasing 与 temporal ghosting。" stage={2} stages={["Inspect：UV gradients、LOD、G-buffer、motion、history validity", "Stress：minification、seams、motion、disocclusion、exposure"]} />
+
+</Step>
+<Step title="第三步：比较 reference 与成本">
+
+对比 supersampled/spatial-only reference，记录静态误差、运动误差、闪烁频谱、history rejection、带宽和 GPU 时间。
+
+<RtrStepFlowDiagram caption="清晰不能以闪烁换取，稳定也不能靠无限模糊获得。" stage={3} stages={["Inspect：UV gradients、LOD、G-buffer、motion、history validity", "Stress：minification、seams、motion、disocclusion、exposure", "Validate：reference error、flicker、rejection、bandwidth、time"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**误区：认为Mipmap浪费显存。**
-Mipmap只增加33%的显存（1+1/4+1/16+...=4/3），但大幅减少远处纹理采样带宽，提升性能的同时消除闪烁。这是性价比极高的技术。
+**现象 →** 远处纹理仍闪烁，开三线性后斜地面又过度模糊。**原因 →** 各向同性 mip 不能准确覆盖细长 footprint。**修法 →** 可视化导数/LOD，使用合适 anisotropic filter，并验证 UV seam 与 sampler 状态。
 </Callout>
 
 <Callout type="trap">
-**误区：所有情况都用三线性过滤。**
-三线性过滤在两个Mipmap级别间插值，斜角观察时仍会模糊。各向异性过滤(AF)沿投影方向非对称采样，效果远好于三线性，适合地面、墙壁等斜面纹理。
+**现象 →** 所有纹理都标 sRGB，法线和 roughness 失真。**原因 →** 混淆颜色编码与数值数据。**修法 →** 在资产 schema 中声明语义、色域、transfer、normal convention 和压缩格式，并加入导入测试。
 </Callout>
 
+<Callout type="trap">
+**现象 →** TAA 在人物后留下长尾，SSR 在屏幕边缘消失。**原因 →** 无效历史未拒绝，且图像空间方法缺少屏外信息。**修法 →** 校验 motion/depth/normal，标出 disocclusion；对 SSR 提供 environment/probe/ray tracing fallback。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题 1**：Mipmap如何解决远处纹理闪烁问题？
+
+**问题 1：为什么 trilinear 仍可能让斜视地面模糊？**
 
 <Answer>
-远处物体在屏幕上只占少量像素，但原始纹理分辨率很高，采样时跳过大量纹素导致走样（闪烁）。Mipmap预生成多级低分辨率版本，远处物体自动选择低级别纹理，每像素采样纹素数趋于1:1，消除走样。代价是增加33%显存。
+它用各向同性尺度选择 mip，并在两层间插值；斜视像素在纹理域形成高长宽比椭圆，扩成圆形 footprint 会沿短轴过度低通。各向异性过滤沿长轴取多个受限样本，更贴近真实覆盖。
 </Answer>
 
-**问题 2**：各向异性过滤解决了什么问题？三线性为什么不够？
+**问题 2：什么情况下 mip chain 不是简单增加 1/3 内存？**
 
 <Answer>
-三线性过滤在各向同性（圆形）区域采样，但斜面投影到屏幕时纹理变形为椭圆，各向同性采样会混入过多纹素导致模糊。各向异性过滤沿椭圆长轴方向做非对称采样（如16x），保留更多沿观察方向的细节，大幅减少斜面模糊。
+非方形或非完整链、block compression 对齐、mip tail packing、稀疏/虚拟纹理、array/cube/volume、不同层格式及 streaming resident policy 都会改变实际分配；4/3 只描述理想二维面积级数。
 </Answer>
+
+**问题 3：如何判断 TAA 拖影来自 motion vector 还是 history clamp？**
+
+<Answer>
+可视化 motion 和 prevUV，用静态/刚体解析运动检查重投影误差；再分别禁用 history、固定权重、显示 rejection 与 clamp 范围。错误 prevUV 会沿运动方向错位，过宽 clamp/过高权重则让错误历史长期存留。
+</Answer>
+
+**问题 4：SSR 缺失信息时应该怎样处理？**
+
+<Answer>
+根据 ray miss、屏幕边缘、步进置信度和粗糙度建立 confidence，渐进混合 environment map、reflection probe 或 ray-traced fallback；不能把 miss 当黑色，也不能假装屏幕空间结果完整。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+Ch6 与 Ch12 都在解决有限样本如何重建信号。纹理过滤关注屏幕像素在纹理域的空间足迹，图像空间效果还要处理跨帧对应和缺失可见性。可靠结果来自正确数据语义、footprint/history 可视化、压力场景、reference 与成本共同验证。
+
 <Glossary>
-<GlossaryItem term="UV映射">将2D纹理坐标(u,v)映射到3D模型表面的过程，是纹理贴图的基础。</GlossaryItem>
-<GlossaryItem term="Mipmap">预计算的多级渐远纹理链，每级分辨率为上一级一半，用于减少远处纹理走样。</GlossaryItem>
-<GlossaryItem term="各向异性过滤">沿投影方向非对称采样的纹理过滤方式，解决斜面纹理模糊问题。</GlossaryItem>
-<GlossaryItem term="纹素">Texel，纹理中的单个像素，是纹理最小单元，类似屏幕的像素。</GlossaryItem>
+<GlossaryItem term="纹理映射">把参数、方向或位置映射到纹理域并重建纹素信号。</GlossaryItem>
+<GlossaryItem term="纹理足迹">输出样本反投影到纹理空间后覆盖的区域。</GlossaryItem>
+<GlossaryItem term="各向异性过滤">沿足迹长轴增加采样以改善斜视缩小质量的过滤。</GlossaryItem>
+<GlossaryItem term="虚拟纹理">以页表和缓存按需驻留超大纹理页面的系统。</GlossaryItem>
+<GlossaryItem term="时域重投影">用运动向量寻找上一帧对应表面样本的过程。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="实时渲染第4版" adaptedUrl="https://www.realtimerendering.com/" />
+<Attribution adaptedFrom="Real-Time Rendering 4e, Chapters 6 and 12" adaptedUrl="https://www.realtimerendering.com/" />

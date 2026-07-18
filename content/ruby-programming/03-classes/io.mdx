@@ -1,0 +1,217 @@
+---
+title: "第17章 IO类"
+type: C
+section: "たのしいRuby 第5版 · Ruby的类"
+order: 17
+description: "统一理解标准与文件I/O、line/chunk读写、position、text/binary mode、buffer，以及process、open-uri和StringIO适配边界。"
+demo: true
+math: false
+sourceUrl: "https://tanoshiiruby.github.io/5/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RubyIoChannelsLab, RubyIoStreamLab, RubyIoAdaptersLab } from "@/components/mdx/ruby-programming/diagrams/io";
+
+<Objectives>
+
+- 能区分STDIN/STDOUT/STDERR和File的方向、protocol、encoding与close owner
+- 能比较line/chunk读写、seek/position、text/binary mode和buffer flush的结果边界
+- 能实现可注入StringIO的stream processor，并为subprocess与open-uri设置status、timeout和size policy
+
+</Objectives>
+
+## 从“IO都能read/write所以可以互换”开始纠正
+
+IO-shaped objects共享`read`、`write`、`each_line`等messages，但file、pipe、terminal、socket和StringIO在seekability、timeout、durability、encoding与ownership上不同。<Term def="Stream支持哪些操作、谁关闭、是否可seek、何时EOF、采用何种encoding与失败类型。">IO capability contract</Term>决定可替换范围。
+
+先预测：把StringIO测试通过能否证明socket reader不会挂死？不能。StringIO没有network timeout、partial read、backpressure和disconnect。Contract tests共享数据处理，transport integration tests验证真实边界。
+
+## 输入/输出的种类：标准输入输出与文件输入输出
+
+`$stdin`/STDIN、`$stdout`/STDOUT、`$stderr`/STDERR是process标准streams。Normal machine/user output写stdout，diagnostic写stderr，使shell pipeline只接收协议数据。<Term def="命令把正常数据与诊断分配到stdout/stderr，并用exit status说明整体结果。">standard stream contract</Term>不能靠终端混合画面验收。
+
+File I/O由open mode决定read/write/append、truncate/create和text/binary。Creator通常拥有close；被注入的IO由caller拥有，method不应擅自close。Block-form File.open把owner固定在method。
+
+```ruby
+def copy_lines(input, output)
+  input.each_line do |line|
+    output.write(line)
+  end
+end
+
+File.open("source.txt", "r:UTF-8") do |input|
+  File.open("copy.txt", "w:UTF-8") do |output|
+    copy_lines(input, output)
+  end
+end
+```
+
+业务core只依赖input/output protocol，path/open/close留在adapter。Open mode和permissions是data safety policy，覆盖文件前还要atomic replace/backup策略。
+
+<RubyIoChannelsLab />
+
+<Stepper>
+  <Step title="切换STDIN、STDOUT、STDERR和File"><RubyIoChannelsLab /></Step>
+  <Step title="建立Owner表">记录creator、close owner、encoding、normal/diagnostic protocol、EOF与错误映射。</Step>
+  <Step title="交换stdout与stderr"><RubyIoChannelsLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="Method用完传入的IO就应该close">
+Close责任属于创建/借出contract。Method通常不关闭caller注入的STDIN、StringIO或shared socket；自己open的resource用block/ensure关闭。
+</Callout>
+
+## 基本的输入操作与输出操作
+
+`gets`读一条record并在EOF返回nil；`read`读全部或指定length；`readpartial`适合streaming但EOF/short read语义需处理。`each_line`以enumeration隐藏重复gets。<Term def="读取声明record/chunk大小、EOF表示、blocking/timeout和最大输入预算。">IO read boundary</Term>防止unbounded read。
+
+```ruby
+def count_bytes(input, chunk_size: 16 * 1024)
+  total = 0
+  loop do
+    chunk = input.read(chunk_size)
+    break if chunk.nil? || chunk.empty?
+    total += chunk.bytesize
+  end
+  total
+end
+```
+
+File#read(length)在EOF返回nil/empty的具体状态按目标API验证；loop同时防两种。Network stream可能short read，不可假定一次read填满length。Protocol若要求exact bytes，循环累积并对early EOF报错。
+
+`write`返回写入bytes数量，`print`不自动换行，`puts`按对象/数组添加换行，`printf`按format输出。Machine protocol优先write明确bytes；partial writes在低层transport需循环/专用API。
+
+## 文件指针
+
+`pos`/`tell`返回byte offset，`seek(offset, whence)`移动，`rewind`回到开头。<Term def="Position以byte offset表示，仅对seekable stream有效，并与buffer/encoding状态协调。">IO position contract</Term>不能把character index直接seek。
+
+```ruby
+File.open("data.bin", "rb") do |file|
+  header = file.read(4)
+  payload_offset = file.pos
+  file.seek(payload_offset, IO::SEEK_SET)
+  payload = file.read
+  p header: header, bytes: payload.bytesize
+end
+```
+
+Pipe/socket通常不可seek，会抛Errno::ESPIPE等。Text transcoding下byte position与character boundary可能不对齐；需要随机访问文本时建byte-offset index并从合法边界decode，或用higher-level record store。
+
+## 二进制模式与文本模式
+
+Text mode把bytes按external encoding解码为String并可能做newline转换；binary mode保留bytes，String encoding常为ASCII-8BIT。<Term def="I/O边界明确bytes或text，若为text则声明external/internal encoding与invalid sequence policy。">text binary boundary</Term>不允许中途猜编码。
+
+```ruby
+digest_input = File.binread("asset.dat")
+p digest_input.encoding
+
+File.open("names.txt", "r:UTF-8") do |file|
+  file.each_line { |line| p line.chomp }
+end
+```
+
+Image/protocol/archive必须binary；配置/source是text并验证encoding。Binary String可含NUL且length/bytesize语义不同，不能随意puts或Regexp处理。第19章会展开Encoding。
+
+<RubyIoStreamLab />
+
+<Stepper>
+  <Step title="切换Line、Chunk、Position和Buffer"><RubyIoStreamLab /></Step>
+  <Step title="注入边界">覆盖empty、exact chunk、short read、early EOF、non-seekable、invalid encoding和write failure。</Step>
+  <Step title="把Character index用于seek"><RubyIoStreamLab /></Step>
+</Stepper>
+
+## 缓冲
+
+Ruby/OS/device可能多层buffer。`flush`把Ruby user-space buffer推向OS，不等于disk durable；`fsync`等才请求更强durability，仍受filesystem/hardware语义限制。<Term def="Flush、OS write、fsync和最终durability是不同阶段，API只承诺其中明确的一层。">buffer durability contract</Term>避免“日志已flush所以不会丢”。
+
+Terminal输出常line-buffered，file/network策略不同；`sync = true`降低buffering但增加syscalls。Benchmark throughput与latency，关键transaction使用database/atomic file protocol，而非只开sync。
+
+Buffer还影响交互：向child process写request后不flush，双方可能互等。Reader需处理producer长期不换行，不能只依赖gets。
+
+## 与命令进行交互
+
+`IO.popen`可连接child stream，但同时处理stdin/stdout/stderr与status更适合Open3。<Term def="Subprocess调用明确argv无shell、stdin/stdout/stderr、timeout、output上限、exit status与kill/reap。">subprocess IO contract</Term>防注入与hang。
+
+```ruby
+require "open3"
+
+stdout, stderr, status = Open3.capture3("ruby", "-e", "puts RUBY_VERSION")
+raise "child failed: #{stderr}" unless status.success?
+puts stdout
+```
+
+Capture3会把output全收内存；大输出用popen3并并发drain stdout/stderr，避免pipe deadlock。Production加timeout、process group cleanup与redaction，argument vector禁止拼接shell。
+
+## open-uri库
+
+Open-uri让URI表现为IO，但隐藏redirect、DNS、TLS、proxy、timeout和response size。<Term def="网络open限制scheme/host/IP、redirect、timeout、TLS、status、content type与最大bytes。">remote IO policy</Term>是SSRF与资源安全边界。
+
+不可信URL不能直接open；解析后allowlist scheme/host，防DNS rebinding/private IP，限制redirect并stream到size cap。现代项目常用显式HTTP client获取status/headers/body，open-uri只适合受控简化场景。
+
+## stringio库
+
+StringIO用String实现许多IO methods，适合注入测试。<Term def="StringIO验证stream-shaped业务逻辑，但不替代真实file/socket的timing、seek、encoding和failure tests。">in-memory IO seam</Term>限定证据强度。
+
+```ruby
+require "stringio"
+
+input = StringIO.new("a\nb\n")
+output = StringIO.new
+copy_lines(input, output)
+
+raise "copy mismatch" unless output.string == "a\nb\n"
+```
+
+StringIO position、encoding与close semantics可测试core；另外用faulting fake模拟read/write异常，再用真实tempfile/pipe integration覆盖OS行为。
+
+<RubyIoAdaptersLab />
+
+<Stepper>
+  <Step title="切换Text、Binary、StringIO和Process/URI"><RubyIoAdaptersLab /></Step>
+  <Step title="分层验证">Core用StringIO，failure fake注入异常，tempfile/pipe/HTTP test验证transport语义。</Step>
+  <Step title="让Network输出无限增长"><RubyIoAdaptersLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="open-uri返回IO，所以安全策略和本地File一样">
+它背后是网络请求，必须处理SSRF、redirect、DNS/TLS、timeout、status和size。IO接口只统一部分操作，不统一信任边界。
+</Callout>
+
+## 本章回顾：统一stream操作，不抹平transport差异
+
+1. STDIN/STDOUT/STDERR与File有不同protocol和owner，normal data与diagnostic分流。
+2. Line/chunk read明确EOF、short read、blocking与size；creator关闭resource。
+3. Position是byte offset且只对seekable stream；text/binary决定decode与String semantics。
+4. Flush不等于durability，subprocess必须管理三条stream、status、timeout和reap。
+5. Open-uri有network security policy，StringIO只证明core stream logic，不证明transport behavior。
+
+<Exercises>
+
+**问题 1：如何测试一个既支持文件又支持stdin的处理器？**
+
+<Answer>Core接收input/output IO并用StringIO做数据/EOF tests；adapter负责`-`映射STDIN或block-open File。再用tempfile、pipe验证encoding/short read和close owner，CLI process test验证stdout/stderr/status。</Answer>
+
+**问题 2：flush为何不能证明文件已持久化？**
+
+<Answer>Flush只把Ruby buffer提交给下层，OS page cache/device仍可能未落盘。按durability需求使用fsync、atomic rename、directory sync或database transaction，并测试crash model；普通日志可接受更弱保证。</Answer>
+
+**问题 3：使用open-uri读取用户URL前需要哪些门禁？**
+
+<Answer>Allowlist scheme/host，解析并阻止private/link-local/metadata IP和DNS rebinding，限制redirect、connect/read timeout、TLS、status/content type与最大bytes；敏感network最好隔离service并用显式HTTP client。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="IO capability contract" definition="Stream操作、owner、seek、EOF、encoding与错误约定。" />
+  <GlossaryItem term="standard stream contract" definition="Stdout正常数据、stderr诊断与exit status协议。" />
+  <GlossaryItem term="IO read boundary" definition="Record/chunk、EOF、blocking与最大输入预算。" />
+  <GlossaryItem term="IO position contract" definition="Seekable stream的byte offset与buffer/encoding规则。" />
+  <GlossaryItem term="text binary boundary" definition="Bytes或text及external/internal encoding边界。" />
+  <GlossaryItem term="buffer durability contract" definition="Flush、OS write、fsync与durability阶段约定。" />
+  <GlossaryItem term="subprocess IO contract" definition="Argv、三条stream、timeout、status与reap协议。" />
+  <GlossaryItem term="remote IO policy" definition="网络URI的scheme、host、redirect、timeout与size门禁。" />
+  <GlossaryItem term="in-memory IO seam" definition="StringIO仅验证stream-shaped core logic的边界。" />
+</Glossary>
+
+<Attribution adaptedFrom="たのしいRuby 第5版 / Ruby基础教程（第5版），第17章 IO类" adaptedUrl="https://tanoshiiruby.github.io/5/" />

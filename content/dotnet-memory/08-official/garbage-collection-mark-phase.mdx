@@ -1,0 +1,232 @@
+---
+title: "Chapter 8：垃圾回收标记阶段（Garbage Collection – Mark Phase）"
+type: A
+section: Pro .NET 内存管理（第2版）· 根枚举与可达闭包
+order: 8
+description: 对齐原书第 8 章：从 JIT 精确根、静态字段、句柄与终结处理出发，以标记栈遍历可达图，并解释代际回收中的写屏障、卡表、固定根和 eager root collection。
+demo: false
+math: false
+sourceUrl: "https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_8"
+draft: false
+---
+
+import {
+  DnmCardTableLab,
+  DnmMarkTraversalLab,
+  DnmRootReachabilityMap,
+} from "@/components/mdx/dotnet-memory/diagrams/garbage-collection-mark-phase";
+
+<Objectives>
+
+- 能描述 CLR 如何从栈/寄存器、静态字段、句柄和终结处理枚举精确根，并解释 JIT 活跃范围为何可短于源码作用域
+- 能分析标记栈遍历共享子图和引用环的过程，区分强可达、弱引用、待终结可达与固定对象
+- 能设计老对象指向年轻对象的卡表实验，从写屏障、dirty card 到年轻代补扫验证 remembered set 是否工作
+
+</Objectives>
+
+## 为什么标记阶段先问“从哪里出发”
+
+追踪式 GC 不会逐个询问对象“你还要不要活着”，它先取得一组堆外入口，再沿强引用边求传递闭包。<Term def="由运行时明确报告、位于托管堆之外并直接指向托管对象的引用位置，例如活跃栈槽、寄存器、静态字段和强句柄。">GC 根</Term> 是算法的起点；没有任何根路径能到达的对象才是回收候选。
+
+根必须是“引用所在的位置”，而不只是某个地址值。若后续压缩移动对象，GC 还需要更新根位置中的引用。普通 C# 由 JIT 和 CLR 保证这份契约；CoreCLR 本机代码若把 `OBJECTREF` 藏进 GC 不知道的结构，回收后就可能形成悬空地址，即所谓 GC hole。
+
+<DnmRootReachabilityMap />
+
+<Term def="从所有强 GC 根出发，沿对象引用边能够访问到的全部对象及边构成的图；图外对象才属于不可达候选。">可达性图</Term>
+
+对象图允许共享和环。静态缓存指向 A，A 与 B 互相引用时，只要静态根还在，A/B 都活；清掉静态根后，整个孤立环都可回收。引用计数在这里可能困住环，追踪标记则不会。
+
+<Callout type="trap" title="陷阱：对象互相引用就永远不会被回收">
+  环内部的引用不构成堆外根。判断泄漏应从增长对象反向查 GC root 路径；若路径来自静态缓存、事件订阅或强句柄，修正所有权。只看到 A↔B 不能证明它们仍然存活。
+</Callout>
+
+## JIT 怎样报告栈与寄存器中的精确根
+
+JIT 为编译代码生成 GC info，描述在可挂起位置哪些寄存器和栈槽含对象引用或 interior byref。stack walker 结合线程上下文与这些映射枚举根。GC 不会把每个看起来像地址的机器字都保守当引用，否则随机整数可能错误保活对象，也无法安全更新移动后的真正引用。
+
+<Term def="JIT 判定某个托管引用从定义到最后一次语义使用之间需要向 GC 报告的代码区间；优化后可短于变量的词法作用域。">引用活跃范围</Term>
+
+Release Tier 1 优化可在最后一次使用后提前结束根的活跃范围，书中称为 eager root collection；因此变量仍写在源码块里，不代表后续安全点还会上报。Debug 和 Tier 0 常保留得更久，测试时可能观察不到同样现象。`GC.KeepAlive` 放在最后一个必须依赖对象存活的位置，用于扩展语义活跃范围，而不是执行真实工作。
+
+```csharp
+static void Send(NativeWrapper wrapper)
+{
+    NativeApi.UseHandle(wrapper.DangerousHandle);
+
+    // 确保 wrapper 及其终结器拥有的资源活到本机调用返回之后。
+    GC.KeepAlive(wrapper);
+}
+```
+
+把 `GC.KeepAlive(wrapper)` 放在本机调用之前没有意义，放在方法末尾也不自动解决异步回调所有权。它只保证传入对象在该调用之前保持可达。
+
+## 静态字段、句柄与 interior root 有何差异
+
+<Term def="CLR 维护的、GC 可枚举和更新的间接引用槽；不同种类可提供强、弱、固定或依赖关系语义。">GC 句柄</Term>
+
+静态字段是常见长期根；强句柄与普通强引用相同，会把目标及其引用闭包标活。弱句柄不把目标加入强闭包，目标若无其他强路径可在本轮成为不可达；dependent handle 则表达“主对象活时才让次对象随之存活”的条件边。具体句柄生命周期在第 12 章继续展开，本章只关心它们如何参与标记。
+
+托管 byref 可指向对象字段或数组元素内部。GC 枚举到 interior root 时必须识别所属对象基址，标记整个对象，并在移动时保持偏移关系。普通无类型 `IntPtr` 只是整数地址，GC 不会自动把它当根或更新它；跨 GC 保存对象内部地址必须使用受支持的 pinning/interop 契约。
+
+```text
+precise root  = location + kind + current object reference
+interior root = location + object base recovery + interior offset
+raw IntPtr    = numeric address; not automatically traced or relocated
+```
+
+## 终结对象为什么会额外存活一轮
+
+<Term def="GC 首次发现可终结对象已无普通强路径后，将其转入待终结集合并作为特殊根重新标记，以便终结线程稍后安全执行终结器。">终结根</Term>
+
+带终结器的实例在创建时被登记。标记阶段若发现它仍由普通根可达，就与普通对象一样存活；若首次变为不可达且未 `SuppressFinalize`，运行时把它移入待执行终结器的 f-reachable 队列，并重新把它及必要引用标活。终结器运行后，若对象没有复活，下一次覆盖它的回收才可真正释放存储。
+
+“finalization queue 是根”是便于理解的简写，实际是特殊扫描规则，不是登记过的对象从出生起永远强可达。终结器可能让一整片对象图多跨一次回收，增加晋升和暂停；资源所有权应优先使用 `IDisposable`/`SafeHandle`，对象生命周期细节留到第 12 章。
+
+```csharp
+sealed class NativeOwner : IDisposable
+{
+    private readonly SafeHandle _handle;
+
+    public void Dispose()
+    {
+        _handle.Dispose();
+        GC.SuppressFinalize(this);
+    }
+}
+```
+
+这里 `SuppressFinalize` 只有在该类型确实登记了终结处理时才改变路径；`SafeHandle` 通常承载可靠终结语义，业务包装器无需重复实现脆弱的裸终结器。
+
+## 标记栈怎样遍历共享子图与引用环
+
+<Term def="标记算法保存已发现但尚未扫描其引用字段对象的工作集合；弹出对象、扫描子引用并压入首次发现目标，直到集合为空。">标记栈</Term>
+
+根枚举得到对象后，GC 检查标记状态：首次发现则置 marked 并加入工作集合；随后读取对象类型信息，依据 MethodTable 关联的 GC descriptor 找出引用字段，再处理每个子对象。已标记对象不会重复压入，所以菱形共享和引用环都能终止。
+
+<DnmMarkTraversalLab />
+
+可把核心逻辑写成下面的抽象算法；真实 server GC 会并行分工，工作栈也有分段、溢出恢复等实现细节，但不改变“每个强可达对象至少被发现、重复边不重复展开”的不变量。
+
+```text
+for root in enumerate_precise_roots():
+    mark_and_push(root)
+
+while mark_work_not_empty():
+    object = pop()
+    for child in scan_reference_fields(object.type, object):
+        if child is in collected scope and not marked(child):
+            mark_and_push(child)
+```
+
+“in collected scope”很重要：Gen 0 回收不需要遍历所有 Gen 2 对象，但仍必须找到从老代进入年轻代的边。这正是写屏障和卡表解决的问题。
+
+## MethodTable 低位怎样临时承载标记状态
+
+对象必须有地方记录“已发现”。本章描述的 CoreCLR 实现会利用 MethodTable 指针的对齐：类型数据地址按 4 或 8 字节对齐，最低若干位通常为零，因此运行时可临时叠加 mark/pin 等 GC 位，读取真正 MethodTable 时再掩掉这些位。这不破坏类型身份，却避免为每个对象额外增加独立字段。
+
+这是运行时内部布局，不是 C# 或 ECMA CLI 保证。应用不得通过固定偏移读取对象头，也不能假定所有版本、架构和 GC 实现都使用相同位。需要学习时可比较 Tier 1 JIT 反汇编、运行时源码与 dump；业务诊断应依赖受支持事件和工具。
+
+## 写屏障与卡表怎样补回老到新的边
+
+年轻代回收若从根只扫描 Gen 0，会漏掉 `Gen2Object.Field = Gen0Object`。JIT 因此在托管引用写入旁生成 <Term def="托管引用字段发生赋值时由 JIT/运行时执行的附加记录逻辑，用于维护代际 remembered set 和并发 GC 所需不变量。">写屏障</Term>。它检查/记录目标槽地址，把对应老代地址区间标成可能含有进入年轻代的引用。
+
+<Term def="按托管堆地址区间划分的紧凑 remembered set；dirty card 表示该区间可能含老对象指向较年轻对象的引用，需要在低代回收时补扫。">卡表</Term>
+
+<DnmCardTableLab />
+
+卡表故意允许假阳性：一个 card 覆盖多个字段/对象，只记录“这里可能有相关边”，扫描时再检查真实引用。这样每次赋值只做很小的常数工作，代价是年轻代回收补扫少量无关槽。数组批量复制、运行时 helper 和 unsafe 内部路径也必须采用相应 bulk/write barrier；普通 C# 赋值由 JIT 保证。
+
+```csharp
+// 假设 cache 已晋升到 Gen 2，而 request 是新建的 Gen 0 对象。
+cache.Current = request;
+// JIT 生成引用写入，并通过 write barrier 把 cache.Current 所在 card 置脏。
+
+cache.Current = null;
+// 清空也是引用写入；卡表可以暂时保守地保持 dirty。
+```
+
+<Callout type="trap" title="陷阱：把 dirty card 当成泄漏对象清单">
+  Card 只代表某段地址可能发生过相关引用写入，可能包含假阳性，也不直接说明目标仍存活。泄漏要查回收后的存活对象与到根路径；卡表更适合解释年轻代为什么需要扫描某段老代内存。
+</Callout>
+
+## 固定对象在标记阶段表达哪两个事实
+
+<Term def="在特定固定作用域或句柄生命周期内既保持可达、又要求 GC 不改变地址的对象；固定结束后并不会自动永久存活。">固定对象</Term>
+
+`fixed`/pinned handle 参与根枚举时同时表达强可达和不可移动。若是 interior pinned root，GC 还要找到对象基址并保留内部偏移。标记阶段先确认它属于 live set，并记录 pinning；第 9 章计划阶段才决定 pin 如何切断可移动 plug、留下 gap，第 10 章再真正清扫或压缩。
+
+POH 对象按设计不移动，但仍然需要可达性判定；“在 POH”不等于永久根。相反，一个已经失去全部强根的 POH 数组也能在覆盖该区域的回收中被释放。缩短 pin 时间是减少碎片影响的手段，不是改变对象业务生命周期的替代品。
+
+## 怎样从 dump 验证标记结论
+
+标记算法本身在运行时内部执行，应用排查通常从结果反推：`dumpheap -stat` 找增长类型，`dumpheap -mt` 找实例，`gcroot` 列出一条或多条根路径。若对象只在 Debug 存活而 Release Tier 1 消失，应检查 JIT 活跃范围；若根是强 GCHandle 或静态字段，应修复句柄销毁、缓存淘汰或订阅解除。
+
+```text
+dotnet-dump analyze app.dmp
+> dumpheap -stat
+> dumpheap -type Namespace.Suspect
+> gcroot 000001F234567890
+```
+
+dump 是某一时刻已存活对象的快照，不能单独给出分配速率或每轮标记成本。把它与同版本、同负载的 GC 事件和 allocation trace 对齐，才能区分“对象图合理但分配太快”与“根路径异常导致长期保留”。
+
+## 三步建立标记阶段验证闭环
+
+<Stepper>
+  <Step title="第一步：列出精确根与句柄语义">
+    从线程栈/寄存器、静态字段、强/弱/固定句柄和终结处理逐类列根，先预测每一类是否应保持对象强可达，再用 gcroot 验证。
+
+    <DnmRootReachabilityMap />
+  </Step>
+  <Step title="第二步：手推一次可达图遍历">
+    在含共享节点、孤立节点和引用环的图上推进标记栈，确认每个目标只在首次发现时入栈，并解释 JIT/type metadata 如何找到引用位置。
+
+    <DnmMarkTraversalLab />
+  </Step>
+  <Step title="第三步：验证跨代边没有被漏掉">
+    构造稳定老对象持有新对象的场景，切换赋值方向并观察低代回收；用写屏障/dirty card 解释为何无需全扫老代，再以根路径确认目标生命周期。
+
+    <DnmCardTableLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- GC 根是可更新的堆外引用位置；JIT GC info 让栈和寄存器根精确到安全点与活跃范围
+- 标记栈从强根求可达闭包，标记位避免共享子图与引用环重复展开；图外对象才是回收候选
+- 强、弱、固定、依赖句柄和终结处理具有不同标记语义，待终结对象通常会额外存活一轮
+- 写屏障把潜在老到新的边记录到卡表，年轻代回收只需补扫 dirty cards，而不必遍历全部老代
+- 固定对象既要标活又不可移动，但 pinning/POH 都不使对象永久存活；清扫和压缩决策属于后续阶段
+
+<Exercises>
+  1. **问题 1：解释 Release 才出现的提前终结。** 包装器变量仍在方法源码作用域内，本机调用尚未返回，终结器却释放了句柄；为什么可能发生，怎样修正并验证？
+
+  <Answer question="JIT 活跃范围如何影响根枚举？">Tier 1 JIT 可在最后一次托管语义使用后停止把包装器报告为栈根，即使源码块尚未结束；Debug/Tier 0 可能延长活跃范围而掩盖问题。把 GC.KeepAlive(wrapper) 放在本机调用返回后的最后必要位置，并用 Release/Tier 1、受控 GC 压力和资源正确性测试验证。</Answer>
+
+  2. **问题 2：手推带环对象图。** 根 R 指向 A，A 指向 B/C，B/C 都指向 D，D 指回 A，E 孤立；标记栈怎样结束，谁可回收？
+
+  <Answer question="标记位如何处理共享与循环？">R 使 A 首次标记入栈；扫描 A 后 B/C 入栈，扫描 B 或 C 时 D 首次入栈，另一条到 D 的边因已标记跳过，D 到 A 也因 A 已标记跳过。工作栈最终清空，A/B/C/D 属于可达闭包；E 无根路径，是回收候选。</Answer>
+
+  3. **问题 3：解释低代回收为何看见老对象的新字段。** 一个 Gen 2 缓存刚把 Gen 0 请求对象写入字段，Gen 0 GC 不扫描全部 Gen 2，为什么不会误回收请求对象？
+
+  <Answer question="写屏障和卡表如何构成 remembered set？">引用赋值经过 JIT write barrier，把老对象字段所在 card 标脏。Gen 0 回收枚举普通根后补扫 dirty card 中的引用槽，发现进入年轻代的边并标记请求对象。Card 可有假阳性但不能漏掉受支持写入；若绕过 barrier 的运行时/unsafe 代码才会破坏不变量。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="GC 根">由运行时精确报告并可在对象移动后更新的堆外引用位置。</GlossaryItem>
+  <GlossaryItem term="引用活跃范围">JIT 在特定代码区间向 GC 报告某引用仍有语义用途的范围。</GlossaryItem>
+  <GlossaryItem term="可达性图">从强根沿引用边形成的全部可访问对象与边。</GlossaryItem>
+  <GlossaryItem term="GC 句柄">CLR 可枚举、更新并赋予强弱固定等语义的间接引用槽。</GlossaryItem>
+  <GlossaryItem term="终结根">让首次不可达的可终结对象为执行终结器继续存活的特殊根。</GlossaryItem>
+  <GlossaryItem term="标记栈">保存已发现但尚待扫描引用字段对象的工作集合。</GlossaryItem>
+  <GlossaryItem term="写屏障">引用写入时维护代际或并发 GC 记录的附加逻辑。</GlossaryItem>
+  <GlossaryItem term="卡表">按地址区间记录潜在跨代引用的保守 remembered set。</GlossaryItem>
+  <GlossaryItem term="固定对象">在固定生命周期内保持可达且地址不得被 GC 改变的对象。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Pro .NET Memory Management, Second Edition, Chapter 8 Garbage Collection – Mark Phase"
+  adaptedUrl="https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_8"
+/>

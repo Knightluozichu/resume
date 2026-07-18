@@ -1,110 +1,125 @@
-/**
- * <RubLearningMapDiagram>：Ruby 基础教程全书学习地图。
- *
- * 四大板块（Ruby基础 · 核心语法 · 类与模块 · 元编程与实战）及 10 章的依赖关系。
- *
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * 全部 DESIGN token 配色，无裸 hex、无阴影。
- * viewBox 720×420，四周留白 >=32，字号 >=11。
- */
+"use client";
 
-const VIEW_W = 720;
-const VIEW_H = 420;
+import { RubyOfficialLab } from "./official-lab";
 
-const accent = "var(--accent)";
-const success = "var(--success)";
-const warning = "var(--warning)";
-const danger = "var(--danger)";
-const primary = "var(--text-primary)";
-const secondary = "var(--text-secondary)";
-const border = "var(--border)";
-const elevated = "var(--bg-elevated)";
+const partCases = [
+  {
+    label: "Ruby初体验",
+    fields: [
+      ["章节", "第1-3章"],
+      ["核心", "运行方式、对象与方法、数组/散列、命令行程序"],
+      ["验收", "从输入到输出完成一个可诊断的Ruby命令"],
+    ],
+  },
+  {
+    label: "Ruby的基础",
+    fields: [
+      ["章节", "第4-11章"],
+      ["核心", "变量、条件、循环、方法、类/模块、运算符、异常与块"],
+      ["验收", "解释作用域、方法分派和正常/异常控制流"],
+    ],
+  },
+  {
+    label: "Ruby的类",
+    fields: [
+      ["章节", "第12-21章"],
+      ["核心", "数值、数组、字符串、散列、正则、IO、文件、编码、时间与Proc"],
+      ["验收", "为每类写出表示、边界、资源和失败语义"],
+    ],
+  },
+  {
+    label: "制作工具",
+    fields: [
+      ["章节", "第22-23章"],
+      ["核心", "文本处理与邮政编码CSV/SQLite检索工具"],
+      ["验收", "交付可重建、可验证、可回滚的完整数据管线"],
+    ],
+    alert: "《たのしいRuby 第5版》有四部分、23个官方章节。导学和总复习只负责导航与综合验收，不替代任何原文章节。",
+  },
+] as const;
 
-interface SectionCard {
-  title: string;
-  color: string;
-  chapters: string[];
-  y: number;
+const dependencyCases = [
+  {
+    label: "对象",
+    fields: [
+      ["问题", "接收者是什么对象，状态存在哪里？"],
+      ["依赖", "字面量、变量、常量、类与模块"],
+      ["解锁", "稳定的对象模型与作用域解释"],
+    ],
+  },
+  {
+    label: "控制",
+    fields: [
+      ["问题", "下一次由哪个方法、块或异常路径接管？"],
+      ["依赖", "条件、循环、方法、块与异常"],
+      ["解锁", "可组合的迭代、回调和失败传播"],
+    ],
+  },
+  {
+    label: "数据",
+    fields: [
+      ["问题", "值的编码、形状、顺序和匹配规则是什么？"],
+      ["依赖", "数值、数组、字符串、散列、正则与Encoding"],
+      ["解锁", "不会静默损坏的转换与文本处理"],
+    ],
+  },
+  {
+    label: "边界",
+    fields: [
+      ["问题", "谁拥有IO、文件、时间、数据库和回调生命周期？"],
+      ["依赖", "前三层的对象、控制与数据契约"],
+      ["解锁", "可诊断、可恢复、可重建的工程工具"],
+    ],
+    alert: "学习依赖是累积的。第22、23章不是孤立项目：它们把前21章的对象、控制、数据和资源语义组合成端到端工具。",
+  },
+] as const;
+
+const gateCases = [
+  {
+    label: "预测",
+    fields: [
+      ["动作", "运行前写出返回值、对象状态、异常或文件变化"],
+      ["证据", "可被执行结果证伪的具体预期"],
+      ["失败信号", "只说大概会成功，没有可观察结果"],
+    ],
+  },
+  {
+    label: "执行",
+    fields: [
+      ["动作", "运行最小但完整的程序并保存输入与环境"],
+      ["证据", "输出、类型、状态、文件内容或数据库行数"],
+      ["失败信号", "只阅读代码，从未验证实际语义"],
+    ],
+  },
+  {
+    label: "扰动",
+    fields: [
+      ["动作", "注入nil、坏编码、空输入、异常、中断或重复数据"],
+      ["证据", "非理想路径仍满足不变量并给出诊断"],
+      ["失败信号", "示例只在一个happy path输入上工作"],
+    ],
+  },
+  {
+    label: "解释",
+    fields: [
+      ["动作", "离开页面重画对象、控制、数据和owner关系"],
+      ["证据", "图、代码、测试和错误说明相互一致"],
+      ["失败信号", "只记API名称，无法推导边界行为"],
+    ],
+    alert: "章节只有在预测、执行、扰动和解释四类证据一致时才算掌握。",
+  },
+] as const;
+
+export function RubyBookPartMapLab() {
+  return <RubyOfficialLab cases={partCases} caption="第五版按四部分覆盖全部23个官方章节。" tone="cyan" />;
 }
 
-const SECTIONS: readonly SectionCard[] = [
-  { title: "Ruby 基础", color: accent, chapters: ["学习地图", "对象与变量"], y: 92 },
-  { title: "核心语法", color: success, chapters: ["字符串", "控制流"], y: 175 },
-  { title: "类与模块", color: warning, chapters: ["类", "模块与 Mixin", "块与 Proc"], y: 258 },
-  { title: "元编程与实战", color: danger, chapters: ["元编程", "Gems 与 Bundler", "总复习"], y: 341 },
-];
-
-const COL_X = [60, 190, 320, 450, 580];
-const CH_W = 110;
-const CH_H = 52;
-
-export function RubLearningMapDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="Ruby 基础教程全书学习地图。四个板块：Ruby基础（学习地图、对象与变量）、核心语法（字符串、控制流）、类与模块（类、模块与Mixin、块与Proc）、元编程与实战（元编程、Gems与Bundler、总复习）。"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <text x={VIEW_W / 2} y={34} textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>
-            Ruby 基础教程全书学习地图
-          </text>
-          <text x={VIEW_W / 2} y={54} textAnchor="middle" fontSize="11" fill={secondary}>
-            一切皆对象 · 块是灵魂 · 模块实现多重继承 · 元编程打开黑箱
-          </text>
-
-          {SECTIONS.map((sec) => (
-            <g key={sec.title}>
-              <rect x={36} y={sec.y - 16} width={100} height={CH_H} rx="8" fill={sec.color} fillOpacity="0.12" stroke={sec.color} strokeWidth="1.4" strokeOpacity="0.5" />
-              <text x={86} y={sec.y + 4} textAnchor="middle" fontSize="12" fontWeight="700" fill={sec.color}>
-                {sec.title}
-              </text>
-              <text x={86} y={sec.y + 22} textAnchor="middle" fontSize="10" fill={secondary}>
-                {`${sec.chapters.length} 章`}
-              </text>
-
-              {sec.chapters.map((ch, i) => {
-                const x = COL_X[i];
-                const chIdx = SECTIONS.slice(0, SECTIONS.indexOf(sec)).reduce((acc, s) => acc + s.chapters.length, 0) + i + 1;
-                return (
-                  <g key={ch}>
-                    <rect x={x} y={sec.y - 16} width={CH_W} height={CH_H} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-                    <text x={x + CH_W / 2} y={sec.y + 6} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>
-                      {ch}
-                    </text>
-                    <text x={x + CH_W / 2} y={sec.y + 24} textAnchor="middle" fontSize="10" fill={secondary}>
-                      {`第 ${chIdx} 章`}
-                    </text>
-                    {i > 0 && (
-                      <line x1={COL_X[i - 1] + CH_W} y1={sec.y + 10} x2={x} y2={sec.y + 10} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-                    )}
-                  </g>
-                );
-              })}
-
-              {sec.title !== "元编程与实战" && (
-                <line x1={86} y1={sec.y + CH_H - 16} x2={86} y2={sec.y + CH_H - 2} stroke={secondary} strokeWidth="1.4" markerEnd="url(#rub-lm-arrow)" />
-              )}
-            </g>
-          ))}
-
-          <defs>
-            <marker id="rub-lm-arrow" markerWidth="8" markerHeight="8" refX="4" refY="3" orient="auto">
-              <path d="M0 0 L6 3 L0 6 z" fill="var(--text-secondary)" />
-            </marker>
-          </defs>
-
-          <line x1={32} y1={396} x2={VIEW_W - 32} y2={396} stroke={border} strokeWidth="1" strokeDasharray="4 3" />
-          <text x={VIEW_W / 2} y={412} textAnchor="middle" fontSize="11" fill={secondary}>
-            对象模型打底 · 块+模块搭骨 · 元编程拓展边界 · Gems 生态收尾
-          </text>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        Ruby 基础教程全书四大板块与十章依赖关系。
-      </figcaption>
-    </figure>
-  );
+export function RubyLearningDependencyLab() {
+  return <RubyOfficialLab cases={dependencyCases} caption="对象、控制、数据与边界构成逐层累积的学习依赖。" tone="violet" />;
 }
+
+export function RubyStudyGateLab() {
+  return <RubyOfficialLab cases={gateCases} caption="预测、执行、扰动与解释把阅读转化为可复查的掌握证据。" tone="emerald" />;
+}
+
+export const RubLearningMapDiagram = RubyBookPartMapLab;

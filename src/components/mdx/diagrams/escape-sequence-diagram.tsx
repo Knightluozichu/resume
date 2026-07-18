@@ -16,16 +16,66 @@ interface EscapeRow {
 
 export function EscapeSequenceDiagram() {
   const rows: EscapeRow[] = [
-    { seq: "\\n", name: "换行 (LF)", desc: "光标移到下一行开头", ascii: "10 (0x0A)" },
-    { seq: "\\t", name: "水平制表 (Tab)", desc: "光标移到下一个制表位", ascii: "9 (0x09)" },
-    { seq: "\\\\", name: "反斜杠", desc: "输出一个字面的反斜杠 \\", ascii: "92 (0x5C)" },
-    { seq: "\\\"", name: "双引号", desc: "在字符串中输出双引号 \"", ascii: "34 (0x22)" },
-    { seq: "\\'", name: "单引号", desc: "在字符常量中输出单引号 '", ascii: "39 (0x27)" },
-    { seq: "\\0", name: "空字符 (NUL)", desc: "字符串结束标记，ASCII 0", ascii: "0 (0x00)" },
-    { seq: "\\r", name: "回车 (CR)", desc: "光标移到当前行开头", ascii: "13 (0x0D)" },
-    { seq: "\\a", name: "响铃 (BEL)", desc: "触发系统蜂鸣声", ascii: "7 (0x07)" },
-    { seq: "\\b", name: "退格 (BS)", desc: "光标向左退一格", ascii: "8 (0x08)" },
-    { seq: "\\xhh", name: "十六进制转义", desc: "用十六进制码表示字符，如 \\x41 = 'A'", ascii: "hh = 任意十六进制" },
+    {
+      seq: "\\n",
+      name: "换行 (LF)",
+      desc: "光标移到下一行开头",
+      ascii: "10 (0x0A)",
+    },
+    {
+      seq: "\\t",
+      name: "水平制表 (Tab)",
+      desc: "光标移到下一个制表位",
+      ascii: "9 (0x09)",
+    },
+    {
+      seq: "\\\\",
+      name: "反斜杠",
+      desc: "输出一个字面的反斜杠 \\",
+      ascii: "92 (0x5C)",
+    },
+    {
+      seq: '\\"',
+      name: "双引号",
+      desc: '在字符串中输出双引号 "',
+      ascii: "34 (0x22)",
+    },
+    {
+      seq: "\\'",
+      name: "单引号",
+      desc: "在字符常量中输出单引号 '",
+      ascii: "39 (0x27)",
+    },
+    {
+      seq: "\\0",
+      name: "空字符 (NUL)",
+      desc: "字符串结束标记，ASCII 0",
+      ascii: "0 (0x00)",
+    },
+    {
+      seq: "\\r",
+      name: "回车 (CR)",
+      desc: "光标移到当前行开头",
+      ascii: "13 (0x0D)",
+    },
+    {
+      seq: "\\a",
+      name: "响铃 (BEL)",
+      desc: "触发系统蜂鸣声",
+      ascii: "7 (0x07)",
+    },
+    {
+      seq: "\\b",
+      name: "退格 (BS)",
+      desc: "光标向左退一格",
+      ascii: "8 (0x08)",
+    },
+    {
+      seq: "\\xhh",
+      name: "十六进制转义",
+      desc: "用十六进制码表示字符，如 \\x41 = 'A'",
+      ascii: "hh = 任意十六进制",
+    },
   ];
 
   const colX = { seq: 24, name: 128, desc: 268, ascii: 464 };
@@ -43,11 +93,55 @@ export function EscapeSequenceDiagram() {
           className="mx-auto block h-auto w-full max-w-[620px]"
         >
           {/* 表头 */}
-          <rect x="12" y={headerY - 12} width="588" height="28" rx="4" fill="var(--accent)" opacity="0.15" />
-          <text x={colX.seq} y={headerY + 4} fontSize="12" fontWeight="700" fill="var(--accent)" fontFamily="monospace">转义序列</text>
-          <text x={colX.name} y={headerY + 4} fontSize="12" fontWeight="700" fill="var(--accent)" textAnchor="middle">名称</text>
-          <text x={colX.desc} y={headerY + 4} fontSize="12" fontWeight="700" fill="var(--accent)" textAnchor="middle">含义</text>
-          <text x={colX.ascii} y={headerY + 4} fontSize="12" fontWeight="700" fill="var(--accent)" textAnchor="middle">ASCII 码</text>
+          <rect
+            x="12"
+            y={headerY - 12}
+            width="588"
+            height="28"
+            rx="4"
+            fill="var(--accent)"
+            opacity="0.15"
+          />
+          <text
+            x={colX.seq}
+            y={headerY + 4}
+            fontSize="12"
+            fontWeight="700"
+            fill="var(--accent)"
+            fontFamily="monospace"
+          >
+            转义序列
+          </text>
+          <text
+            x={colX.name}
+            y={headerY + 4}
+            fontSize="12"
+            fontWeight="700"
+            fill="var(--accent)"
+            textAnchor="middle"
+          >
+            名称
+          </text>
+          <text
+            x={colX.desc}
+            y={headerY + 4}
+            fontSize="12"
+            fontWeight="700"
+            fill="var(--accent)"
+            textAnchor="middle"
+          >
+            含义
+          </text>
+          <text
+            x={colX.ascii}
+            y={headerY + 4}
+            fontSize="12"
+            fontWeight="700"
+            fill="var(--accent)"
+            textAnchor="middle"
+          >
+            ASCII 码
+          </text>
 
           {/* 数据行 */}
           {rows.map((r, i) => {
@@ -56,7 +150,14 @@ export function EscapeSequenceDiagram() {
 
             return (
               <g key={r.seq}>
-                <rect x="12" y={y - 10} width="588" height={rowH - 4} rx="4" fill={rowBg} />
+                <rect
+                  x="12"
+                  y={y - 10}
+                  width="588"
+                  height={rowH - 4}
+                  rx="4"
+                  fill={rowBg}
+                />
                 <text
                   x={colX.seq}
                   y={y + 4}
@@ -101,17 +202,38 @@ export function EscapeSequenceDiagram() {
           })}
 
           {/* 底部提示 */}
-          <line x1="16" y1={startY + rows.length * rowH + 12} x2="600" y2={startY + rows.length * rowH + 12} stroke="var(--border)" strokeWidth="1" strokeDasharray="4 4" />
-          <text x="16" y={startY + rows.length * rowH + 30} fontSize="11" fill="var(--text-secondary)">
-            反斜杠 \ 告诉编译器「后面的字符有特殊含义」——把普通字母转成控制字符，故称「转义」。
+          <line
+            x1="16"
+            y1={startY + rows.length * rowH + 12}
+            x2="600"
+            y2={startY + rows.length * rowH + 12}
+            stroke="var(--border)"
+            strokeWidth="1"
+            strokeDasharray="4 4"
+          />
+          <text
+            x="16"
+            y={startY + rows.length * rowH + 30}
+            fontSize="11"
+            fill="var(--text-secondary)"
+          >
+            反斜杠 \
+            告诉编译器「后面的字符有特殊含义」——把普通字母转成控制字符，故称「转义」。
           </text>
-          <text x="16" y={startY + rows.length * rowH + 46} fontSize="11" fill="var(--text-secondary)">
-            \\xhh 中 hh 为两位十六进制数。除 \\x 外还有 \\ooo（八进制转义），如 \\101 = 'A'（八进制 101 = 十进制 65）。
+          <text
+            x="16"
+            y={startY + rows.length * rowH + 46}
+            fontSize="11"
+            fill="var(--text-secondary)"
+          >
+            \\xhh 中 hh 为两位十六进制数。除 \\x 外还有 \\ooo（八进制转义），如
+            \\101 = &apos;A&apos;（八进制 101 = 十进制 65）。
           </text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        C 语言常用转义序列一览。反斜杠把普通字符转成控制功能——\\n 不是字母 n，而是「换行」。
+        C 语言常用转义序列一览。反斜杠把普通字符转成控制功能——\\n 不是字母
+        n，而是「换行」。
       </figcaption>
     </figure>
   );

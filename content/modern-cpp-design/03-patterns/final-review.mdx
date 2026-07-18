@@ -1,83 +1,246 @@
 ---
-title: Modern C++ Design 总复习
-type: A
-section: 设计模式实现
-order: 10
-description: 全书四大分支的总复习思维导图与跨章节串联，把 Policy、Typelist、Loki 组件、设计模式合成一条能力链。
+title: "Modern C++ Design 总复习：插件式场景运行时"
+type: C
+section: Modern C++ Design · Integrated Review
+order: 12
+description: 用一个插件式场景运行时贯穿官方11章：Policy/traits/Typelist、allocator、Functor、Singleton、SmartPtr、Factories、Visitor 与 Multimethods，形成可验证的现代化设计闭环。
 demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
 draft: false
 ---
 
-import { McdFinalMindMap } from "@/components/mdx/modern-cpp-design/diagrams/mcd-final-review";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  McdContractLedgerMap,
+  McdIntegratedSceneSystemMap,
+  McdModernizationReleaseMap,
+} from "@/components/mdx/modern-cpp-design/diagrams/final-review";
 
 <Objectives>
 
-- 能用一张思维导图复述四大分支及各自的关键技术
-- 能说清 Policy 如何贯穿 Loki 各组件、Typelist 如何作为骨架
-- 能给出 Modern C++ Design 对现代 C++ 标准的影响及今天的阅读价值
+- 能分析插件式场景系统到官方11章的逐层映射，并说明每章的输入、输出与 runtime state
+- 能设计 type/key、resource owner、callable code、global shutdown 与 memory domain 五类跨章契约审计
+- 能比较 Loki/C++98 与现代 C++ 的替换方案，并以语义、生命周期、成本和演进证据决定发布或拒绝
 
 </Objectives>
 
-## 全书一图收束
+## 从一个系统事故开始
 
-学完全书，最后一步是把四大分支串成一条能力链。Modern C++ Design 不是孤立的技术手册，而是一条从「编译时工具」到「组件实战」到「模式重构」的递进路径——前者是工具，中者是工具的实战，后者是工具对经典模式的重新表达。这一章用思维导图收束四大分支，并做跨章节串联。
+场景编辑器支持 runtime plugins。启动时选择 Vulkan/OpenGL backend；plugins 注册 Node creators 与 collision handlers；scene nodes 经 Visitor 执行 serialize/render/validate；两个 objects 碰撞由 Multimethod 决定。一次热重载后，程序在 callback 中跳进已卸载 plugin，退出时 Logger 又访问已销毁 Registry。
 
-<McdFinalMindMap />
+这不是“忘了加 shared_ptr”或“Singleton 不好”的单点问题，而是一条跨 11 章的 contract chain：type key 指向哪段 code，谁拥有 object，allocator 在哪个 domain，callback 活多久，global services 何时停止，dispatch 是否仍能找到合法 handler。
 
-## 四大分支的核心目标
+<Term def="把类型身份、对象所有权、可调用代码、内存域和全局生命周期串成一条可验证依赖的系统设计。">
+  cross-component contract chain
+</Term>
 
-第一分支「Policy 与 Typelist」：用 Policy 解耦正交设计维度，用 Typelist 在编译时操作类型集合——为后续所有组件提供元编程基础设施。
+<McdIntegratedSceneSystemMap />
 
-第二分支「Loki 组件」：用 Policy 加 Typelist 实现智能指针、小对象分配器、广义仿函数三大实用组件，展示 Policy 化设计如何造出可定制的库组件。
+## Ch1-3：先生成可验证的类型结构
 
-第三分支「设计模式实现」：用模板元编程重新实现 Singleton、对象工厂、抽象工厂，把 GoF 模式从运行时多态升级为编译时生成。
+第1章把 backend storage、error checking、thread mode 拆成 Policies；第2章用 concepts/traits 证明 compatibility；第3章用 ProductList/NodeList 生成 factory/visitor schema。目标不是模板数量，而是一个变化轴只有一个 owner。
 
-第四分支「编译时哲学」贯穿全书——把尽可能多的决策推到编译时，用模板做类型级计算，零运行时开销换取类型安全与性能。
+```cpp
+template<class Storage, class Checking, class Threading>
+requires CompatibleScenePolicies<Storage, Checking, Threading>
+class SceneRuntime;
 
-## Policy 贯穿各组件
+using BackendProducts = TypeList<Buffer, Texture, Pipeline>;
+using NodeKinds = TypeList<MeshNode, LightNode, ScriptNode>;
+```
 
-Policy 是 Loki 的灵魂。每个组件都是 Host 模板类，接收若干 Policy 参数，把正交维度拆成可独立替换的策略。SmartPtr 有四个 Policy（所有权/检查/转换/存储），SingletonHolder 有三个 Policy（创建/生命周期/线程模型）。共同点是：Policy 是模板参数编译时组合，零虚函数开销；默认 Policy 提供常用行为；Policy 之间正交可独立替换。一个 Host 类加 N 个 Policy 维度覆盖 N 维组合空间，远比继承层次灵活。
+<Term def="由类型列表定义产品或元素集合，再驱动 interface、factory 或 visitor 生成的编译期结构契约。">
+  generated type schema
+</Term>
 
-## Typelist 是骨架
+schema 必须 unique/order/versioned；`ConcreteProducts[i]` 除了派生于 `AbstractProducts[i]`，还要共享 backend family tag。compile success 不能证明 VulkanBuffer 与 OpenGLPipeline 可混用。
 
-Typelist 让组件能「对一组类型做批量操作」，全部编译时完成。GenFactory 用 typelist 自动生成工厂注册；AbstractFactory 用 typelist 通过 GenScatterHierarchy 自动生成 N 个 Make 接口；Functor 用 typelist 表示参数类型列表支持任意参数数量。没有 typelist，这些自动化都做不到——它是把「多个类型」变成一等公民的骨架，连接 Policy 与组件，实现编译时自动化，零开销抽象。C++11 后变参模板是 typelist 的语言原生版本。
-
-<Callout type="tip">
-<strong>建议 →</strong> 把这本书当「模板元编程思想史」读：读 Policy 学编译时组合，读 Typelist 学编译时类型计算，读组件学 Policy 落地，读模式学模板重构经典。具体实现用现代 C++ 重写，但思想不朽。
+<Callout type="trap" title="陷阱：用一个 Typelist 生成代码就获得系统一致性">
+  Typelist 只编码成员与顺序。family、module version、owner、thread 和 clone 语义必须额外约束；生成更多 class 不能替代跨类型 invariant。
 </Callout>
 
-<Callout type="trap">
-<strong>现象 →</strong> 学完各分支单独看都懂，合起来用时不知道怎么选 Policy 组合。<strong>原因 →</strong> 没有建立分支间的联系——Policy 是工具，Typelist 是骨架，组件是实战，模式是应用。<strong>修法 →</strong> 用本章思维导图自测：闭眼说出每个分支的关键技术与它如何被后续分支使用，把孤立的点连成网。
+## Ch4：Node 内存必须服从 phase lifetime
+
+旧设计为每个 node 使用全局 small-object pool。plugins 卸载时，某些 nodes 仍在 pool；delete 又穿过 plugin-specific destructor。真正问题不是 block 快慢，而是 object lifetime 与 code/memory domain 不一致。
+
+<Term def="分配器、对象 destructor 所在代码和最终释放者共同存活的范围；跨域释放必须由显式 owner/deleter 连接。">
+  allocation domain
+</Term>
+
+若整个 scene load phase 一起销毁，`pmr::monotonic_buffer_resource` 更简单；若 nodes 独立回收，pool 要记录 owner module lease。任何 custom allocator 都要验证 size/alignment/constructor throw/thread/cross-free/RSS retention。
+
+## Ch5：Functor target 也有代码生命周期
+
+Factory creator、event callback、collision handler 都可放进 type-erased Functor。擦除 concrete type 不会擦除 target code 所在 plugin，也不会自动延长 receiver。
+
+```cpp
+struct RegisteredCallback {
+    ModuleLease module;
+    std::move_only_function<void(Event&)> invoke;
+};
+
+void dispatch(RegisteredCallback& callback, Event& event) {
+    callback.invoke(event); // lease 保证 target code 仍已加载
+}
+```
+
+<Term def="在 erased callable 存活与调用期间阻止其实现代码或 receiver 所属模块被卸载的持有凭证。">
+  callable module lease
+</Term>
+
+copyable Functor 若捕获 unique resource 会强迫错误 clone；这里应使用 move-only wrapper。binding/chaining 还要定义 captured state、exception 与 partial effects，不能把 callback 当无状态 function pointer。
+
+## Ch6：全局 Registry 要有显式 shutdown
+
+SingletonHolder 可参数化 Creation/Lifetime/Threading，却仍会隐藏依赖。场景系统真正 process-global 的服务只有 ModuleManager/Diagnostics；Registry 与 Renderer 更适合由 application root 持有并按 DAG 停止。
+
+```cpp
+int runApplication() {
+    ModuleManager modules;
+    Registry registry(modules);
+    Renderer renderer(registry);
+
+    runEditor(renderer);
+    renderer.stop();
+    registry.drainAndUnregister();
+    modules.unloadAll();
+}
+```
+
+<Term def="在 object destruction 前先阻止新请求、排空进行中调用、注销 entries，再按依赖顺序释放模块的生命周期阶段。">
+  explicit shutdown phase
+</Term>
+
+这样 dead reference 在 architecture 中消失，而不是用 Phoenix 重生一个空 Registry。Phoenix/longevity 是可用 Policies，但只有 late access 有业务意义且状态可重建时才选。
+
+## Ch7：资源所有权与 plugin lease 同步
+
+GPU resources 由 backend family 创建，必须由同 backend/device/deleter 销毁。`unique_ptr<Resource, BackendDeleter>` 表达独占；shared caches 用 `shared_ptr` + weak cache，但 control-block thread safety 不等于 GPU object 可并发访问。
+
+<Term def="资源 handle、deleter、backend/device 与 module lease 共同移动和销毁，禁止跨 family 或卸载后释放。">
+  resource-owner bundle
+</Term>
+
+不要用 implicit raw conversion 把 owner 静默泄出，也不要重载 `operator&` 让 C API 覆盖 live handle；使用显式 borrow/out_ptr adapter，review 时能看见 lifetime transition。
+
+## Ch8-9：先选 creator，再保证 product family
+
+Node plugin registry 属于 Object Factory：`nodeTypeId -> creator`. Renderer backend 属于 Abstract Factory：一次选择 Vulkan family，再创建 Buffer/Texture/Pipeline。把两者混成 `(backend, product, node)` 字符串表会让 caller 重新承担 family consistency。
+
+<Term def="先由 runtime ID 选择模块或产品 creator，再由一个 Abstract Factory 限制整组相容产品的两级创建结构。">
+  two-level creation architecture
+</Term>
+
+registry `unregister` 只阻止新 lookup；必须等待已复制 creators、in-flight calls 和 live products 的 ModuleLeases 全归零。Abstract Factory 若动态切换 theme/backend，应发布完整 immutable family snapshot，而非逐 slot 更新 prototypes。
+
+## Ch10：稳定 Node 集合上的一元操作
+
+Mesh/Light/Script nodes 在一个 engine version 内稳定，Serialize/Render/Validate operations 经常增加，适合 generated cyclic Visitor。Accept 只 dispatch 当前 element，traversal order 由独立 walker 定义。
+
+<Term def="在稳定 element schema 上通过 Accept/Visit 两次分派选择一元 operation，并将遍历策略与分派分开。">
+  node Visitor boundary
+</Term>
+
+plugin 若新增未知 Node 而 core 不重编译，则 classic root ABI 不再合适；可用 acyclic Visitor/default registry。选择取决于 element dimension 是否 closed，不是“Visitor 更面向对象”。
+
+## Ch11：两个动态对象的交互
+
+碰撞处理依赖 lhs/rhs 两个 dynamic types，属于 Multimethod。几种 node types 且 pair dense/hot，可分配 type IDs 使用 matrix；plugin types 稀疏且开放，则 type_index pair registry 更合适。
+
+<Term def="按两个对象的动态类型 pair 查找 interaction handler，并显式定义 symmetry、unknown pair 与 cast safety。">
+  interaction dispatcher
+</Term>
+
+symmetry 是 operation property：overlap 可对称，damage source/target 不对称。key 必须从本次 objects 生成，typed adapter 默认 checked cast；只有 invariant 封闭且 profile 证明 cast material 才考虑 static_cast。
+
+<McdContractLedgerMap />
+
+## 五类契约账本
+
+每个 design review 至少回答：
+
+1. **Type/key**：schema、runtime ID 与 dynamic object 是否一致，版本是否稳定？
+2. **Object/resource**：谁拥有、copy/move/clone/cycle 如何，哪个 deleter 最终执行？
+3. **Callable/code**：target 与 receiver 是否 live，plugin code 何时可 unload？
+4. **Global lifecycle**：谁 stop/drain，destructor 是否还调用别的 service？
+5. **Memory domain**：size/alignment/allocator owner 与 object lifetime 是否一致？
+
+<Term def="按类型、资源、可调用代码、全局生命周期与内存域记录 owner、证明、失败和测试的审计表。">
+  contract ledger
+</Term>
+
+<Callout type="trap" title="陷阱：把所有 lifetime 都改成 shared_ptr">
+  shared ownership 会延迟 unload、制造 cycle，并隐藏谁应 stop。module lease、resource owner、registry entry 和 global service 有不同生命周期；应按 contract 选择 unique/shared/weak/explicit phase，而非统一计数。
 </Callout>
 
-## 对现代 C++ 的影响
+## 现代化发布门
 
-Modern C++ Design 是 C++ 模板元编程的奠基之作。它的影响深远：Policy 思想渗透进 std::allocator_traits、std::char_traits 等标准库组件；Typelist 是变参模板 `template<typename... Ts>` 的前身，催生了 std::tuple、std::variant；SmartPtr 的 Policy 维度影响了 std::unique_ptr/shared_ptr/weak_ptr 的设计；Functor 是 std::function 的直系前身；小对象分配器思想体现在 std::pmr::pool_resource；「编译时哲学」在 constexpr、consteval、概念里全面强化。
+<McdModernizationReleaseMap />
 
-今天读这本书的价值在学思想而非实现。Loki 的宏 typelist、裸指针、无移动已过时，生产代码应用现代 C++。但 Policy 化设计、Typelist 元编程、模板重构模式的思想被现代标准全面继承——读 Loki 能搞懂「为什么变参模板这样设计」「std::function 内部怎么做」「std::shared_ptr 的维度从哪来」。
+优先标准设施：concepts/type_traits、parameter packs/variant、pmr、function/move_only_function、unique/shared/weak_ptr、magic static/call_once、type_index。自定义 Policy host/dispatcher 只有在标准语义不够、ABI/性能/领域约束明确且有测试时保留。
 
-## 小结与练习
+先预测：自研 dense multimethod 让 microbenchmark 快 20%，但增加 plugin type-ID reuse bug、matrix rebuild lock 和 unload complexity；若 collision 只占 frame 1%，端到端上限不足，应拒绝。Modern C++ Design 教会的是让 trade-off 参数化，不是无条件采用最复杂模板。
 
-- 四大分支一条链：Policy/Typelist 基础 → Loki 组件实战 → 设计模式重构 → 编译时哲学贯穿
-- Policy 是灵魂：每个组件用 Policy 参数化正交维度，编译时组合零开销
-- Typelist 是骨架：让组件对一组类型做编译时批量操作，支撑工厂与仿函数自动化
-- 思想被现代 C++ 全面继承（变参模板、std::function、unique/shared_ptr），实现已被超越
+<Stepper>
+  <Step title="第一步：按 11 章画出系统链">
+    从 compile-time schema 到 runtime substrate、creation、dispatch 逐层标组件；每个 chapter 必须对应实际决定或明确“不使用”。
+
+    <McdIntegratedSceneSystemMap />
+
+  </Step>
+  <Step title="第二步：补全五类契约账本">
+    对每个 registry entry/object/callback 填 type key、owner/deleter、module lease、shutdown phase 与 allocation domain；缺证据即不允许 unload。
+
+    <McdContractLedgerMap />
+
+  </Step>
+  <Step title="第三步：现代化并做演进演练">
+    先替换标准设施，再演练新增 Policy、product、family、element、operation、plugin unload；测 compile/binary/runtime/RSS，并保留 rollback。
+
+    <McdModernizationReleaseMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- Ch1-3 建立 Policy/traits/type schema，Ch4-7 建立 memory/call/global lifetime/resource owner，Ch8-11 建立 creation 与 dispatch
+- type erasure 隐藏 callable type，不会隐藏 target code lifetime；registry unregister 也不会自动证明 plugin 可卸载
+- Singleton lifecycle 应优先变成 composition-root shutdown，Phoenix/longevity 只处理明确 late-access 语义
+- Object Factory 选择一个 creator，Abstract Factory 保证一族 products；Visitor 处理稳定 elements 上的一元 operations，Multimethod 处理多个动态对象交互
+- 五类 contract ledger 把模板、runtime key、ownership、code lease、shutdown 与 allocator domain 联成可验证链
+- 现代化应先使用标准设施；自定义 Loki-style component 必须通过语义、生命周期、成本与演进门
 
 <Exercises>
-  <Answer question="用一句话概括四大分支各自的核心目标，并说明递进逻辑。">Policy 与 Typelist 提供编译时基础设施（解耦维度、操作类型集合）；Loki 组件用基础设施造可定制库组件（智能指针、分配器、仿函数）；设计模式用模板重构经典 GoF 模式（Singleton、工厂）；编译时哲学贯穿全书（把决策推到编译时）。递进逻辑是「工具→实战→应用」：前者是工具，中者是工具实战，后者是工具对经典的重新表达，层层依赖。</Answer>
-  <Answer question="Modern C++ Design 对现代 C++ 标准有何影响？今天读还有价值吗？">影响深远：Policy 思想渗透进 std::allocator_traits 等标准组件；Typelist 是变参模板前身催生 std::tuple/variant；SmartPtr 维度影响 unique_ptr/shared_ptr；Functor 是 std::function 前身；小对象分配思想体现在 pmr pool；编译时哲学在 constexpr/概念里强化。今天读的价值在学思想（Policy 化、元编程、模式重构），实现已过时应用现代 C++ 重写。读思想弃实现是正确姿势。</Answer>
+  1. **问题 1：修复热重载事故。** plugin entry 已 unregister，但 callback 和 Node objects 仍 live；给出安全 unload 顺序。
+
+  <Answer question="ModuleLease 如何关闭竞态？">先标记 module draining 并阻止新 lookup/registration；registry 移除 entries；等待已复制 creators、in-flight callbacks 和 live objects 的 leases 归零；确保对象用 plugin deleter 在 code 尚加载时销毁；最后 unload。不能用 `std::shared_ptr&lt;void&gt;` 模糊代替明确三类 lease。</Answer>
+
+  2. **问题 2：为新 ScriptNode 选择 Visitor 演化。** core 不能重编译，旧 visitors 可忽略；说明 classic typelist Visitor 为何失败以及替代。
+
+  <Answer question="开放 element dimension 需要什么结构？">classic/generated cyclic root 要把 ScriptNode 加入 typelist并改变 interface/vtable，旧 visitors 不兼容。可用 acyclic `VisitorFor<ScriptNode>` + unsupported fallback，或 runtime node-operation registry；接受 RTTI/lookup并版本化 Base boundary，traversal仍独立。</Answer>
+
+  3. **问题 3：拒绝或发布 custom allocator + dispatcher。** microbench 各快 2x，端到端提升 3%，RSS 增 35%，plugin unload tests 偶发失败；做决定。
+
+  <Answer question="为什么局部速度不能越过系统发布门？">拒绝并回滚：3% materiality需对产品目标判断，但RSS与unload correctness已明确失败。先用pmr/mature allocator和map/hash dispatcher作为基线，修 owner/lease/type-ID generation；只有端到端收益覆盖复杂度且五类 contract/evolution tests 全通过，才重新独立评估每个 custom component。</Answer>
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="Policy 化设计">把正交设计维度拆成模板策略参数编译时组合的设计范式，是 Loki 灵魂，影响现代 C++ 标准库的 traits 设计。</GlossaryItem>
-  <GlossaryItem term="Typelist 骨架">Typelist 作为编译时类型容器连接 Policy 与组件，支撑工厂、抽象工厂、仿函数的自动化生成，是变参模板的前身。</GlossaryItem>
-  <GlossaryItem term="编译时哲学">把尽可能多的决策推到编译时用模板完成，运行时零动态分发开销，在 constexpr、consteval、概念里全面强化。</GlossaryItem>
-  <GlossaryItem term="零开销抽象">Policy 编译时组合使运行时无虚函数开销，与手写针对性代码一样高效，是 C++ 模板设计的核心追求。</GlossaryItem>
+  <GlossaryItem term="cross-component contract chain">连接类型、对象、代码、内存与全局生命周期的系统依赖链。</GlossaryItem>
+  <GlossaryItem term="generated type schema">由类型列表驱动接口、factory 或 visitor 生成的编译期 schema。</GlossaryItem>
+  <GlossaryItem term="allocation domain">allocator、object destructor code 与最终释放者共同有效的范围。</GlossaryItem>
+  <GlossaryItem term="callable module lease">保证 callback target code 与 receiver 在调用期间可用的模块凭证。</GlossaryItem>
+  <GlossaryItem term="explicit shutdown phase">停止新请求、排空、注销并按依赖释放的显式阶段。</GlossaryItem>
+  <GlossaryItem term="resource-owner bundle">handle、deleter、backend/device 与 module lease 同步移动销毁的 owner。</GlossaryItem>
+  <GlossaryItem term="two-level creation architecture">Object Factory 选择 creator、Abstract Factory 约束 family 的两级结构。</GlossaryItem>
+  <GlossaryItem term="node Visitor boundary">稳定 node schema 上的双分派边界，与 traversal 分离。</GlossaryItem>
+  <GlossaryItem term="interaction dispatcher">按动态类型 pair 选择 interaction handler 的分派器。</GlossaryItem>
+  <GlossaryItem term="contract ledger">记录五类资产 owner、证明、失败与测试的审计账本。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Modern C++ Design (Andrei Alexandrescu)" adaptedUrl="https://www.oreilly.com/" />
+<Attribution
+  adaptedFrom="Modern C++ Design, First Edition, integrated review across Chapters 1-11"
+  adaptedUrl="https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+/>

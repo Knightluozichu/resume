@@ -1,92 +1,47 @@
-/**
- * <PccFinalReviewDiagram>：Python 全书知识串联图。
- *
- * 从基础语法到项目实战的完整知识链条，展示各板块如何串联。
- *
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * 全部 DESIGN token 配色，无裸 hex、无阴影。
- * viewBox 720×420，四周留白 >=32，字号 >=11。
- */
+"use client";
 
-const VIEW_W = 720;
-const VIEW_H = 420;
+import { useMemo, useState } from "react";
 
-const accent = "var(--accent)";
-const success = "var(--success)";
-const warning = "var(--warning)";
-const danger = "var(--danger)";
-const primary = "var(--text-primary)";
-const secondary = "var(--text-secondary)";
-const border = "var(--border)";
-const elevated = "var(--bg-elevated)";
+const projects = [
+  { name: "Alien Invasion", chapters: "12–14", input: "keyboard/mouse + frame clock", core: "Ship/Bullet/Alien Groups + game stats", output: "responsive frame + score/HUD", failures: "stuck event, leaked bullet, repeated hit, stale HUD", evidence: "FPS, Group counts, transition tests" },
+  { name: "Data Visualization", chapters: "15–17", input: "generated, CSV/GeoJSON, API", core: "parse → validate → normalize → encode", output: "PNG/HTML charts", failures: "schema drift, missing row, rate limit, misleading axis", evidence: "record counts, ranges, seed, artifact checks" },
+  { name: "Learning Log", chapters: "18–20", input: "HTTP request + forms + session", core: "URL/view/ORM/template + owner policy", output: "responsive deployed app", failures: "schema drift, CSRF, IDOR, static/boot failure", evidence: "tests, migrations, security matrix, health" },
+];
 
-export function PccFinalReviewDiagram() {
+export function PccThreeProjectIntegrationLab() {
+  const [selected, setSelected] = useState(0);
+  const item = projects[selected];
   return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="Python 全书知识串联：变量列表→控制流函数→类文件异常→项目实战。从数据存储到逻辑控制再到工程实践，层层递进。"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          {/* 主标题 */}
-          <text x={VIEW_W / 2} y={34} textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>
-            全书知识串联：从语法到项目
-          </text>
-          <text x={VIEW_W / 2} y={54} textAnchor="middle" fontSize="11" fill={secondary}>
-            数据存储 → 逻辑控制 → 抽象封装 → 工程实践
-          </text>
+    <figure className="mdx-figure not-prose mx-auto my-6"><div className="border border-border bg-elevated p-4 sm:p-5"><div className="grid grid-cols-3 border border-border">{projects.map((project, index) => <button key={project.name} type="button" onClick={() => setSelected(index)} className={`min-h-12 px-2 text-xs sm:text-sm ${selected === index ? "bg-primary text-bg" : "bg-bg text-primary"}`}>{project.name}</button>)}</div><div className="mt-4 grid gap-3 sm:grid-cols-3"><div className="border border-cyan-500/40 bg-cyan-500/10 p-3"><span className="text-xs text-secondary">input · ch {item.chapters}</span><p className="mt-2 text-sm text-primary">{item.input}</p></div><div className="border border-violet-500/40 bg-violet-500/10 p-3"><span className="text-xs text-secondary">state pipeline</span><p className="mt-2 text-sm text-primary">{item.core}</p></div><div className="border border-emerald-500/40 bg-emerald-500/10 p-3"><span className="text-xs text-secondary">output</span><p className="mt-2 text-sm text-primary">{item.output}</p></div></div><div className="mt-3 grid gap-3 sm:grid-cols-2"><p className="border border-rose-500/40 bg-rose-500/10 p-3 text-sm text-primary">failure classes: {item.failures}</p><p className="border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-primary">evidence: {item.evidence}</p></div></div><figcaption className="mt-2 text-center text-sm text-secondary">切换三大项目，比较input、state pipeline、output、failure与verification evidence。</figcaption></figure>
+  );
+}
 
-          {/* 四层知识链 */}
-          {/* Layer 1: 数据存储 */}
-          <rect x={32} y={76} width={656} height={72} rx="8" fill={accent} fillOpacity="0.06" stroke={accent} strokeWidth="1" strokeOpacity="0.3" />
-          <text x={56} y={98} fontSize="12" fontWeight="700" fill={accent}>Layer 1 · 数据存储</text>
-          <text x={56} y={116} fontSize="11" fill={secondary}>变量（标签→对象）· 列表/字典/集合 · 字符串操作</text>
-          <text x={56} y={134} fontSize="11" fill={secondary}>→ 一切编程的起点：如何在内存中组织和操作数据</text>
+const debugCases = [
+  { symptom: "Ship按一下才移动，按住不连续", producer: "KEYDOWN/KEYUP edge events", contract: "movement flags persist between frames", consumer: "Ship.update each frame", chapters: "7, 9, 12" },
+  { symptom: "地震地图位置错误但没有exception", producer: "GeoJSON coordinates", contract: "[longitude, latitude] + range/sample validation", consumer: "scatter_geo location", chapters: "6, 10, 16" },
+  { symptom: "API图为空，status为200", producer: "response JSON", contract: "items schema + normalize + valid-empty distinction", consumer: "Plotly records", chapters: "10, 15, 17" },
+  { symptom: "Alice能编辑Bob的Entry", producer: "entry_id URL parameter", contract: "query scoped by topic__owner=request.user", consumer: "ModelForm update", chapters: "11, 18, 19" },
+  { symptom: "部署后HTML正常但CSS 404", producer: "static finders/build", contract: "collectstatic artifact + production route", consumer: "browser CSS request", chapters: "18, 20" },
+];
 
-          {/* 箭头 */}
-          <line x1={360} y1={148} x2={360} y2={160} stroke={secondary} strokeWidth="1.4" markerEnd="url(#pcc-fr-arrow)" />
+export function PccCrossChapterDebugLab() {
+  const [selected, setSelected] = useState(2);
+  const item = debugCases[selected];
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6"><div className="border border-border bg-elevated p-4 sm:p-5"><label className="block text-sm text-primary">failure symptom<select value={selected} onChange={(event) => setSelected(Number(event.target.value))} className="mt-2 min-h-11 w-full border border-border bg-bg px-3">{debugCases.map((entry, index) => <option key={entry.symptom} value={index}>{entry.symptom}</option>)}</select></label><div className="mt-4 grid gap-2 sm:grid-cols-4">{[["producer", item.producer], ["contract", item.contract], ["consumer", item.consumer], ["review chapters", item.chapters]].map(([label, value], index) => <div key={label} className={`min-h-28 border p-3 ${index === 1 ? "border-amber-500/40 bg-amber-500/10" : "border-border bg-bg"}`}><span className="text-xs text-secondary">{index + 1}. {label}</span><p className="mt-2 text-xs leading-5 text-primary">{value}</p></div>)}</div></div><figcaption className="mt-2 text-center text-sm text-secondary">从症状追踪producer → contract → consumer，并回退到跨章最小知识集合。</figcaption></figure>
+  );
+}
 
-          {/* Layer 2: 逻辑控制 */}
-          <rect x={32} y={160} width={656} height={72} rx="8" fill={success} fillOpacity="0.06" stroke={success} strokeWidth="1" strokeOpacity="0.3" />
-          <text x={56} y={182} fontSize="12" fontWeight="700" fill={success}>Layer 2 · 逻辑控制</text>
-          <text x={56} y={200} fontSize="11" fill={secondary}>if-elif-else 分支 · while/for 循环 · 函数定义与参数</text>
-          <text x={56} y={218} fontSize="11" fill={secondary}>→ 让数据动起来：根据条件做判断，重复执行，封装复用</text>
-
-          {/* 箭头 */}
-          <line x1={360} y1={232} x2={360} y2={244} stroke={secondary} strokeWidth="1.4" markerEnd="url(#pcc-fr-arrow)" />
-
-          {/* Layer 3: 抽象封装 */}
-          <rect x={32} y={244} width={656} height={72} rx="8" fill={warning} fillOpacity="0.06" stroke={warning} strokeWidth="1" strokeOpacity="0.3" />
-          <text x={56} y={266} fontSize="12" fontWeight="700" fill={warning}>Layer 3 · 抽象封装</text>
-          <text x={56} y={284} fontSize="11" fill={secondary}>类与继承 · 文件 I/O · 异常处理 · 单元测试</text>
-          <text x={56} y={302} fontSize="11" fill={secondary}>→ 从脚本到工程：用类组织数据+行为，用异常处理错误，用测试保证质量</text>
-
-          {/* 箭头 */}
-          <line x1={360} y1={316} x2={360} y2={328} stroke={secondary} strokeWidth="1.4" markerEnd="url(#pcc-fr-arrow)" />
-
-          {/* Layer 4: 工程实践 */}
-          <rect x={32} y={328} width={656} height={72} rx="8" fill={danger} fillOpacity="0.06" stroke={danger} strokeWidth="1" strokeOpacity="0.3" />
-          <text x={56} y={350} fontSize="12" fontWeight="700" fill={danger}>Layer 4 · 工程实践</text>
-          <text x={56} y={368} fontSize="11" fill={secondary}>游戏开发（Pygame）· 数据可视化（Matplotlib/Plotly）· API 调用</text>
-          <text x={56} y={386} fontSize="11" fill={secondary}>→ 综合应用：用前三层知识构建完整项目，从"会写代码"到"能做产品"</text>
-
-          {/* 底部总结 */}
-          <text x={VIEW_W / 2} y={414} textAnchor="middle" fontSize="11" fill={secondary}>
-            数据是原料 · 逻辑是加工 · 封装是结构 · 项目是成品
-          </text>
-
-          <defs>
-            <marker id="pcc-fr-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-              <path d="M0 0 L6 3 L0 6 z" fill="var(--text-secondary)" />
-            </marker>
-          </defs>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        Python 全书四层知识链：数据存储→逻辑控制→抽象封装→工程实践，层层递进。
-      </figcaption>
-    </figure>
+export function PccCapstoneAcceptanceLab() {
+  const [tests, setTests] = useState(true);
+  const [failures, setFailures] = useState(false);
+  const [security, setSecurity] = useState(false);
+  const [artifacts, setArtifacts] = useState(true);
+  const [operations, setOperations] = useState(false);
+  const checks = [tests, failures, security, artifacts, operations];
+  const score = useMemo(() => checks.filter(Boolean).length, [tests, failures, security, artifacts, operations]);
+  const rows: Array<[boolean, (value: boolean) => void, string]> = [[tests, setTests, "automated behavior tests"], [failures, setFailures, "boundary/failure scenarios"], [security, setSecurity, "identity and ownership matrix"], [artifacts, setArtifacts, "chart/build/runtime artifacts"], [operations, setOperations, "logs, health and rollback evidence"]];
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6"><div className="grid gap-4 border border-border bg-elevated p-4 sm:p-5 lg:grid-cols-[0.9fr_1.1fr]"><div className="space-y-2">{rows.map(([value, setter, label]) => <label key={label} className="flex min-h-11 items-center gap-3 border border-border bg-bg px-3 text-sm text-primary"><input type="checkbox" checked={value} onChange={(event) => setter(event.target.checked)} />{label}</label>)}</div><div className={`border p-4 ${score === 5 ? "border-emerald-500/40 bg-emerald-500/10" : "border-amber-500/40 bg-amber-500/10"}`}><strong className="text-xl text-primary">capstone acceptance {score}/5</strong><div className="mt-4 h-3 border border-border bg-bg"><div className="h-full bg-emerald-500 transition-all" style={{ width: `${score * 20}%` }} /></div><p className="mt-4 text-sm leading-6 text-primary">{score === 5 ? "可交付：正常、失败、安全、artifact与operation证据完整。" : "未闭环：通过happy path不代表项目已经达到可交付标准。"}</p></div></div><figcaption className="mt-2 text-center text-sm text-secondary">打开capstone五类验收证据，判断20章知识是否真正转化为可交付能力。</figcaption></figure>
   );
 }

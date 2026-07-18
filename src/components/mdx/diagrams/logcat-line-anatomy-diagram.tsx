@@ -69,11 +69,36 @@ const FIELDS: readonly LogField[] = [
 type LogLevel = { key: string; name: string; meaning: string; color: string };
 
 const LEVELS: readonly LogLevel[] = [
-  { key: "V", name: "Verbose", meaning: "最啰嗦：流水账", color: "var(--text-secondary)" },
-  { key: "D", name: "Debug", meaning: "调试：开发期打点", color: "var(--accent)" },
-  { key: "I", name: "Info", meaning: "信息：正常事件", color: "var(--success)" },
-  { key: "W", name: "Warn", meaning: "警告：可能有问题", color: "var(--warning)" },
-  { key: "E", name: "Error", meaning: "错误：崩溃在这", color: "var(--danger)" },
+  {
+    key: "V",
+    name: "Verbose",
+    meaning: "最啰嗦：流水账",
+    color: "var(--text-secondary)",
+  },
+  {
+    key: "D",
+    name: "Debug",
+    meaning: "调试：开发期打点",
+    color: "var(--accent)",
+  },
+  {
+    key: "I",
+    name: "Info",
+    meaning: "信息：正常事件",
+    color: "var(--success)",
+  },
+  {
+    key: "W",
+    name: "Warn",
+    meaning: "警告：可能有问题",
+    color: "var(--warning)",
+  },
+  {
+    key: "E",
+    name: "Error",
+    meaning: "错误：崩溃在这",
+    color: "var(--danger)",
+  },
 ];
 
 // —— 三种过滤方式。 ——
@@ -97,17 +122,19 @@ const VIEW_H = LEGEND_Y + LEVELS.length * LEGEND_ROW_H + 40;
 
 // 各字段在条带中的累计权重（用于横向布局）。
 const TOTAL_WEIGHT = FIELDS.reduce((sum, f) => sum + f.weight, 0);
+const SEGMENTS = FIELDS.map((field, index) => {
+  const precedingWeight = FIELDS.slice(0, index).reduce(
+    (sum, item) => sum + item.weight,
+    0,
+  );
+  return {
+    ...field,
+    x: PAD_X + (precedingWeight / TOTAL_WEIGHT) * TRACK_W,
+    w: (field.weight / TOTAL_WEIGHT) * TRACK_W,
+  };
+});
 
 export function LogcatLineAnatomyDiagram() {
-  // 预先算好每个字段色块的 x / width。
-  let cursor = PAD_X;
-  const segments = FIELDS.map((f) => {
-    const w = (f.weight / TOTAL_WEIGHT) * TRACK_W;
-    const seg = { ...f, x: cursor, w };
-    cursor += w;
-    return seg;
-  });
-
   return (
     <figure className="mdx-figure mx-auto my-6">
       <div className="overflow-hidden rounded-card border border-border bg-elevated">
@@ -127,17 +154,12 @@ export function LogcatLineAnatomyDiagram() {
           >
             一行 Logcat 日志，拆开看是这五段
           </text>
-          <text
-            x={PAD_X}
-            y="46"
-            fontSize="10"
-            fill="var(--text-secondary)"
-          >
+          <text x={PAD_X} y="46" fontSize="10" fill="var(--text-secondary)">
             认清每段的位置，才知道过滤框里该按哪一段筛
           </text>
 
           {/* —— 日志条带：各字段一个色块 —— */}
-          {segments.map((s) => {
+          {SEGMENTS.map((s) => {
             const cx = s.x + s.w / 2;
             return (
               <g key={s.label}>
@@ -309,8 +331,10 @@ export function LogcatLineAnatomyDiagram() {
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
-        一行 Logcat 日志由时间戳、PID-TID、级别、TAG、消息正文拼成。看懂分段后，过滤就是
-        在「级别 / TAG / 正则」三个维度上筛——把无关噪音挡在外面，崩溃行（Error）一眼可见。
+        一行 Logcat
+        日志由时间戳、PID-TID、级别、TAG、消息正文拼成。看懂分段后，过滤就是
+        在「级别 / TAG /
+        正则」三个维度上筛——把无关噪音挡在外面，崩溃行（Error）一眼可见。
       </figcaption>
     </figure>
   );

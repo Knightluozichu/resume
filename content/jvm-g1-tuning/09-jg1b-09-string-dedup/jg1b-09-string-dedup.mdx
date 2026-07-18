@@ -1,0 +1,205 @@
+---
+title: "第9章 G1的新特性：字符串去重"
+description: "依据彭成寒《JVM G1源码分析和调优》完整目录独立重构：理解G1字符串去重的候选、哈希表和后台处理，并与String.intern的语义、生命周期和成本区分"
+type: C
+section: "JVM G1源码分析和调优（jdk8u60源码基线）"
+draft: false
+math: true
+sourceUrl: "https://bbs.huaweicloud.com/blogs/139856"
+demo: true
+order: 0
+---
+
+import { Jg1RegionLab, Jg1CycleLab, Jg1EvidenceLab } from "@/components/mdx/jvm-g1-tuning/diagrams/jg1b-09-string-dedup";
+
+# 第9章 G1的新特性：字符串去重
+
+本页对应原书正式结构中的 **第9章 G1的新特性：字符串去重**。课程不复制原文，而是按目录节点独立还原算法、jdk8u60 HotSpot源码路径、日志语义和调优证据。当前任务是：理解G1字符串去重的候选、哈希表和后台处理，并与String.intern的语义、生命周期和成本区分。
+
+<Callout type="info">**版本与来源边界。** 本课程锁定彭成寒《JVM G1源码分析和调优》，机械工业出版社，2019年，285页，ISBN 9787111621973。华章计算机发布的作者前言与完整目录确认12章、附录A-C和源码范围；主体使用jdk8u60，第7章另比较JDK 10并行Full GC。后续JDK已改变源码目录、参数和实现，现代复核必须单列，不能覆盖原书语境。</Callout>
+
+## 可验收学习目标
+
+<Objectives>
+- 能解释本页6个正式节点在G1对象图、线程、Region与回收周期中的责任。
+- 能实现一个固定源码提交、JDK、堆、参数、工作量和停止条件的可重复GC实验。
+- 能比较源码分支、统一时间线日志、对象状态与性能指标，区分相关性和因果。
+- 能设计失败反例、资源隔离、参数回滚与版本迁移记录，让他人独立重放。
+</Objectives>
+
+本页交付 **字符串分布基线、候选年龄、去重日志、CPU与内存收益、intern语义对照**。首要陷阱是“用平均节省比例外推业务、把去重和intern当等价，或忽略扫描、哈希、表维护和字符串分布”。所有参数实验必须先预测收益和负面影响，再运行。
+
+## 官方目录逐节点复刻
+
+### 第9章 G1的新特性：字符串去重
+
+**正式节点 1/6。** 基于字符串内容分布测量候选、去重与表成本，区分共享底层值和intern规范语义，报告CPU与内存净收益。节点结论服务于“理解G1字符串去重的候选、哈希表和后台处理，并与String.intern的语义、生命周期和成本区分”，并写入字符串分布基线、候选年龄、去重日志、CPU与内存收益、intern语义对照。
+
+先预测一个能排除当前解释的结果，再运行基线与单变量对照。验收注明源码提交、JDK、参数、堆、工作量、采集窗口和单位；若只有流程背诵或工具截图，就没有覆盖“第9章 G1的新特性：字符串去重”。
+
+### 9.1 字符串去重概述
+
+**正式节点 2/6。** 基于字符串内容分布测量候选、去重与表成本，区分共享底层值和intern规范语义，报告CPU与内存净收益。节点结论服务于“理解G1字符串去重的候选、哈希表和后台处理，并与String.intern的语义、生命周期和成本区分”，并写入字符串分布基线、候选年龄、去重日志、CPU与内存收益、intern语义对照。
+
+先预测一个能排除当前解释的结果，再运行基线与单变量对照。验收注明源码提交、JDK、参数、堆、工作量、采集窗口和单位；若只有流程背诵或工具截图，就没有覆盖“9.1 字符串去重概述”。
+
+### 9.2 日志解读
+
+**正式节点 3/6。** 先定义SLO、工作量和基线，再从日志提出单一参数假设；同时报告停顿、吞吐、CPU、内存、失败和回滚，不能只展示改善指标。节点结论服务于“理解G1字符串去重的候选、哈希表和后台处理，并与String.intern的语义、生命周期和成本区分”，并写入字符串分布基线、候选年龄、去重日志、CPU与内存收益、intern语义对照。
+
+先预测一个能排除当前解释的结果，再运行基线与单变量对照。验收注明源码提交、JDK、参数、堆、工作量、采集窗口和单位；若只有流程背诵或工具截图，就没有覆盖“9.2 日志解读”。
+
+### 9.3 参数介绍和调优
+
+**正式节点 4/6。** 先定义SLO、工作量和基线，再从日志提出单一参数假设；同时报告停顿、吞吐、CPU、内存、失败和回滚，不能只展示改善指标。节点结论服务于“理解G1字符串去重的候选、哈希表和后台处理，并与String.intern的语义、生命周期和成本区分”，并写入字符串分布基线、候选年龄、去重日志、CPU与内存收益、intern语义对照。
+
+先预测一个能排除当前解释的结果，再运行基线与单变量对照。验收注明源码提交、JDK、参数、堆、工作量、采集窗口和单位；若只有流程背诵或工具截图，就没有覆盖“9.3 参数介绍和调优”。
+
+### 9.4 字符串去重和String.intern的区别
+
+**正式节点 5/6。** 基于字符串内容分布测量候选、去重与表成本，区分共享底层值和intern规范语义，报告CPU与内存净收益。节点结论服务于“理解G1字符串去重的候选、哈希表和后台处理，并与String.intern的语义、生命周期和成本区分”，并写入字符串分布基线、候选年龄、去重日志、CPU与内存收益、intern语义对照。
+
+先预测一个能排除当前解释的结果，再运行基线与单变量对照。验收注明源码提交、JDK、参数、堆、工作量、采集窗口和单位；若只有流程背诵或工具截图，就没有覆盖“9.4 字符串去重和String.intern的区别”。
+
+### 9.5 String.intern中的实现
+
+**正式节点 6/6。** 基于字符串内容分布测量候选、去重与表成本，区分共享底层值和intern规范语义，报告CPU与内存净收益。节点结论服务于“理解G1字符串去重的候选、哈希表和后台处理，并与String.intern的语义、生命周期和成本区分”，并写入字符串分布基线、候选年龄、去重日志、CPU与内存收益、intern语义对照。
+
+先预测一个能排除当前解释的结果，再运行基线与单变量对照。验收注明源码提交、JDK、参数、堆、工作量、采集窗口和单位；若只有流程背诵或工具截图，就没有覆盖“9.5 String.intern中的实现”。
+
+## 从Region和时间线开始
+
+G1把堆划分为大小相等的Region，但Region不是固定代；Eden、Survivor、Old、Humongous与空闲状态会随分配和回收改变。<Term def="一次暂停中计划回收的一组Region">Collection Set</Term>决定本轮扫描和复制边界，<Term def="记录其他Region中指向本Region引用位置的反向索引">Remembered Set</Term>避免每次扫描整个堆。任何流程图都要同时标出对象来源、目标Region、引用更新和失败余量。
+
+写入引用时，G1通过写屏障把脏卡放入队列，后台Refine线程更新RSet；当队列积压跨过区间，应用线程也可能承担处理。<Term def="记录待精炼脏卡地址的线程本地或全局队列">Dirty Card Queue</Term>连接应用写入与后续扫描。调优Refine不能只看后台线程CPU，还要观察Mutator协助、队列水位、跨Region引用率和暂停中的RSet扫描成本。
+
+G1的停顿目标是预测输入，不是硬实时保证。<Term def="使用近期阶段耗时及偏差估计给定停顿预算能容纳多少回收工作的模型">停顿预测模型</Term>影响年轻代长度和CSet选择，但实际时间还取决于存活率、RSet、复制带宽、工作线程平衡与安全点。缩短目标可能增加GC频率和CPU，放宽目标可能扩大年轻代和单次复制；所以收益必须在完整工作量中衡量。
+
+并发标记遵守SATB视图，允许应用线程继续修改对象图，并通过屏障保留必要引用。<Term def="并发标记开始时逻辑对象图的快照语义，通过写屏障避免漏标">Snapshot At The Beginning</Term>不意味着没有浮动垃圾，也不负责移动对象。初始标记、根区扫描、并发标记、再标记和清理必须与之后的Mixed回收区分；Mixed才会在暂停中疏散选中的Old Region。
+
+对象复制需要目标空间。存活估计错误、Humongous碎片、并发周期过晚或分配突增可能导致<Term def="暂停疏散时目标空间不足，部分对象无法按计划复制的失败状态">Evacuation Failure</Term>，进一步走向Full GC。修复不能只加堆；还要确认并发标记启动、存活集、Region余量、分配速率、引用处理和安全点。Full GC后的暂时恢复只说明状态被压缩，不证明根因消失。
+
+## 源码、日志与版本证据
+
+原书源码基线jdk8u60的G1目录和后续OpenJDK不同。每条源码结论记录仓库、提交、文件、函数、调用者和关键条件；书中为讲解而删节的大括号、统计和辅助路径不能当作可编译原文。对JDK 10并行Full GC，必须切换到对应仓库重新建立调用链，禁止把两个版本片段拼成一个虚构实现。
+
+日志按统一时钟构建阶段树：暂停开始与结束、到达安全点、根扫描、RSet更新、对象复制、引用处理、清理和并发阶段。总停顿等于多个阶段和同步成本，阶段并行也可能因负载不均产生长尾。先保存原始日志，再解析；解析器必须匹配JDK格式，未知字段不能静默丢弃。
+
+参数分产品、诊断、实验和开发类别，适用性取决于构建与版本。参数存在不表示应修改。每次只改变一项，记录默认值来源、预测机制、成功指标、负面指标和回滚阈值。若日志改善但吞吐、CPU、RSS、错误率或恢复时间恶化，不能称为调优成功。
+
+安全点是独立诊断维度。应用停止前等待线程到达安全点的时间不等于GC阶段执行时间；长本地调用、缺少轮询或线程状态都可能拉长Time to Safepoint。采集时把TTSP和安全点内工作拆开，否则增加GC并行线程无法解决进入安全点之前的延迟。
+
+引用处理、字符串去重和NMT同样有边界。软弱虚引用的处理受可达性与策略影响，字符串去重收益依赖内容分布，NMT不等于进程RSS。所有平均收益必须回到本应用的对象直方图、分配率、CPU和长期保留验证，不能照搬书中或文档的示例百分比。
+
+## 最小可执行切片
+
+先固定案例与环境：
+
+```java
+record G1Case(String sourceCommit, String javaVersion, String flags,
+              String workloadHash, long heapBytes, String logHash) {}
+var baseline = captureBeforeRun();
+```
+
+分析器保留阶段树，不只抓总暂停：
+
+```java
+var event = parseGcEvent(rawLog, exactJdkVersion);
+assertTrue(event.hasSafepointBoundary());
+assertEquals(event.pauseNanos(), event.phaseTree().criticalPathNanos());
+```
+
+交接合同要求单变量和回滚：
+
+```gherkin
+Feature: 第9章 G1的新特性：字符串去重
+  Scenario: validate a G1 source and tuning hypothesis
+    Given jdk8u60 or the explicitly selected source tree and a fixed workload
+    When 分别使用高重复和低重复字符串负载，比较去重率、堆节省、CPU成本与intern行为
+    Then source branches, raw logs, object states, and metrics agree
+    And adverse effects, version limits, and rollback thresholds are recorded
+```
+
+## 定量判断
+
+Region数量与堆和Region大小相关，大对象需要连续Region，实际边界还包含对齐：
+
+$$
+N_{regions}approx rac{HeapSize}{RegionSize},qquad N_{humongous}=leftlceilrac{AlignedObjectSize}{RegionSize}ightceil
+$$
+
+停顿关键路径应按阶段和并行失衡解释：
+
+$$
+T_{pause}=T_{ttsp}+T_{roots}+T_{rset}+T_{copy}+T_{ref}+T_{cleanup}+T_{sync}
+$$
+
+调优同时约束吞吐、暂停和资源：
+
+$$
+Throughput=rac{Work}{T_{wall}},qquad GCOverhead=rac{T_{gc}}{T_{wall}},qquad L_{p99}leq Budget
+$$
+
+并发标记必须赶在空间耗尽前完成，可用预算模型表达风险而非给出万能IHOP：
+
+$$
+T_{mark}+T_{margin}<rac{FreeBytes-ReserveBytes}{AllocationRate}
+$$
+
+这些公式是调查框架，不替代G1内部预测。数字必须注明单位、重复次数、分位数、CPU、NUMA、容器限制、预热和存活率。
+
+## 三步源码实验
+
+<Steps>
+  <Step title="1. 建立Region与引用图">
+    从“理解G1字符串去重的候选、哈希表和后台处理，并与String.intern的语义、生命周期和成本区分”选择一个对象路径，标出Region状态、RSet、队列、线程和源码函数。先预测改变工作量后哪条边会成为关键路径。
+    <Jg1RegionLab />
+  </Step>
+  <Step title="2. 重放GC周期">
+    固定源码、JDK、堆和输入，执行“分别使用高重复和低重复字符串负载，比较去重率、堆节省、CPU成本与intern行为”。将日志阶段与源码条件逐项对齐，一次只改变一个变量。
+    <Jg1CycleLab />
+  </Step>
+  <Step title="3. 通过调优证据门">
+    用字符串分布基线、候选年龄、去重日志、CPU与内存收益、intern语义对照核对原理、版本、原始日志、负面指标和回滚；无法复现或只有单一指标改善时不接受结论。
+    <Jg1EvidenceLab />
+  </Step>
+</Steps>
+
+<Callout type="trap">**陷阱：停顿目标当保证。** G1只能依据历史估计选择工作量，存活率、RSet、复制、线程失衡和安全点都可打破目标。必须解释预测误差。</Callout>
+
+<Callout type="trap">**陷阱：旧源码外推。** jdk8u60的目录、参数和实现不能直接代表现代JDK。复核时切换源码树并重新建立证据，不做名称替换式迁移。</Callout>
+
+<Callout type="warning">**实验隔离。** 分配压力、疏散失败、Full GC与调试构建可能长时间占用CPU和内存。使用独立进程或容器、硬限制、超时和销毁步骤，禁止直接在生产制造故障。</Callout>
+
+## 本章回顾
+
+本页从第9章 G1的新特性：字符串去重覆盖到9.5 String.intern中的实现，共6个正式节点。最小闭环是建立Region和引用图，以同一源码与日志重放“分别使用高重复和低重复字符串负载，比较去重率、堆节省、CPU成本与intern行为”，再用字符串分布基线、候选年龄、去重日志、CPU与内存收益、intern语义对照证明机制、参数收益、副作用、版本与回滚。若仍落入“用平均节省比例外推业务、把去重和intern当等价，或忽略扫描、哈希、表维护和字符串分布”，应回到节点补做状态和失败对照。
+
+<Exercises>
+
+**问题 1**：如何为第9章 G1的新特性：字符串去重建立源码到日志的最小证据链？
+
+<Answer>固定源码提交、JDK、堆、参数和工作量，执行“分别使用高重复和低重复字符串负载，比较去重率、堆节省、CPU成本与intern行为”；把对象或Region状态、函数分支、原始日志阶段和指标对齐，并预先写出可推翻条件。</Answer>
+
+**问题 2**：为什么“用平均节省比例外推业务、把去重和intern当等价，或忽略扫描、哈希、表维护和字符串分布”会破坏调优结论？
+
+<Answer>它混淆版本或遗漏关键成本，使一个指标改善不能归因。应回到字符串分布基线、候选年龄、去重日志、CPU与内存收益、intern语义对照，补齐基线、单变量对照、负面指标、故障反例和回滚。</Answer>
+
+**问题 3**：迁移到现代JDK时应怎样处理原书jdk8u60结论？
+
+<Answer>保留原书机制与源码语境，选择目标JDK源码和统一日志重新定位类、函数、参数与默认值；用相同工作量比较可观察合同，不把旧路径和旧调优值直接复制。</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Collection Set">一次暂停中计划回收的一组Region。</GlossaryItem>
+  <GlossaryItem term="Remembered Set">记录其他Region中指向本Region引用位置的反向索引。</GlossaryItem>
+  <GlossaryItem term="Dirty Card Queue">记录待精炼脏卡地址的线程本地或全局队列。</GlossaryItem>
+  <GlossaryItem term="停顿预测模型">使用近期阶段耗时及偏差估计给定停顿预算能容纳多少回收工作的模型。</GlossaryItem>
+  <GlossaryItem term="Snapshot At The Beginning">并发标记开始时逻辑对象图的快照语义，通过写屏障避免漏标。</GlossaryItem>
+  <GlossaryItem term="Evacuation Failure">暂停疏散时目标空间不足，部分对象无法按计划复制的失败状态。</GlossaryItem>
+</Glossary>
+
+[← 上一页：第8章 G1中的引用处理](/learn/jvm-g1-tuning/08-jg1b-08-reference-processing/jg1b-08-reference-processing) · [下一页：第10章 线程中的安全点 →](/learn/jvm-g1-tuning/10-jg1b-10-safepoints/jg1b-10-safepoints)
+
+<Attribution adaptedFrom="彭成寒《JVM G1源码分析和调优》" adaptedUrl="https://bbs.huaweicloud.com/blogs/139856" />

@@ -1,0 +1,149 @@
+---
+title: "Chapter 7. C# 5 bonus features"
+type: C
+section: "C# in Depth 4e · C# 2-5"
+order: 7
+description: "覆盖Capturing variables in foreach loops与Caller information attributes，深入解释iteration storage、compiler-emitted arguments和diagnostic provenance边界。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-7"
+draft: false
+---
+
+import { DcsForeachCaptureLab, DcsCallerInfoLab, DcsDiagnosticProvenanceLab } from "@/components/mdx/deep-understanding-csharp/diagrams/csharp-5-bonus";
+
+<Objectives>
+
+- 能比较C# 5前后foreach iteration-variable lowering，并复现foreach、for与mutable captured object的不同结果
+- 能推导CallerMemberName/FilePath/LineNumber如何由caller compiler写入optional arguments，判断explicit override行为
+- 能设计property notification、logging与wrapper中的diagnostic provenance，避免把caller info当security或stable schema
+
+</Objectives>
+
+## 为什么两个“小Feature”都在修复Hidden Source Context
+
+Closure bug来自reader以为每轮有新value，而compiler曾让delegates共享一个storage；caller info解决callee想知道call site，却不想每处重复脆弱string。两者都把source context变成明确compiler rule：一个调整variable scope/lifetime，一个把call-site metadata烤进arguments。
+
+先预测：C# 5修复foreach后for loop capture是否也改变；每轮iteration variable不同是否意味着captured object immutable；CallerFilePath是否runtime stack读取；caller info是否不可伪造。答案都是否。
+
+<Term def="closure保存variable storage而非创建时value snapshot，之后赋值和lifetime由该storage决定。">captured storage model</Term>
+
+## Capturing variables in foreach loops
+
+旧语言语义可理解为iteration variable位于loop外，每次赋新值；所有anonymous methods capture同一variable，所以延迟执行时看到最终value。C# 5把foreach iteration variable视为每次iteration在body内新建，closures得到不同storage，使常见直觉成立。
+
+```csharp
+var actions = new List<Action>();
+foreach (var value in new[] { "a", "b", "c" })
+{
+    actions.Add(() => Console.WriteLine(value));
+}
+// C# 5+: a, b, c
+```
+
+### The fix is deliberately narrow
+
+`for (var i=0; ...)`的i仍是一个loop variable，capture后通常看到loop结束值；需要body-local copy。Foreach修的是iteration-variable declaration semantics，不是“所有loop capture按值”。Code review必须识别实际variable declaration scope。
+
+即使每轮variable storage不同，variable若保存mutable object reference，closures仍看到object后续mutation。想要snapshot应capture immutable value、clone owned data或提前project；“不同reference variable”不保证“不同object state”。
+
+### Version and compatibility
+
+同一source用旧/new compiler可能产生不同observable behavior，这正是language breaking change的罕见例子，因旧行为几乎总是bug。Legacy binary不因runtime升级重写closure；只有recompile按新compiler semantics生成。Migration测试要区分existing binary与rebuilt source。
+
+<Term def="C# 5让foreach每轮iteration variable拥有独立storage，从而让每个closure保留对应iteration value。">per-iteration variable semantics</Term>
+
+<Stepper>
+  <Step title="切换旧foreach、新foreach、for与mutable item"><DcsForeachCaptureLab /></Step>
+  <Step title="画出variable declaration与closure edges">不要只列values；为每个storage编号，并标出多个delegates是否指向同一格。</Step>
+  <Step title="延迟执行并修改对象">Loop后才invoke；分别修改loop variable可达object，确认storage fix与object mutation是两层问题。</Step>
+</Stepper>
+
+<Callout type="trap" title="C# 5以后不再有循环变量捕获问题">
+只有foreach iteration variable semantics改变；for variable仍共享，且每轮不同reference也可能指向later-mutated objects。仍需storage/lifetime分析。
+</Callout>
+
+## Caller information attributes
+
+`CallerMemberName`、`CallerFilePath`、`CallerLineNumber`标注optional parameters。Call site省略argument时，compiler根据source context写入普通string/int；callee只接收values，不inspect stack。Explicit argument优先，因此它们是convenience diagnostics，不是tamper-proof identity。
+
+```csharp
+static void Trace(
+    string message,
+    [CallerMemberName] string member = "",
+    [CallerFilePath] string file = "",
+    [CallerLineNumber] int line = 0) { }
+```
+
+Member name适合`INotifyPropertyChanged` helper，减少rename后string drift；file/line可辅助logging，但absolute source path可能泄露build machine/目录并增加cardinality。Release pipeline应normalize/redact，需要stable event schema时用explicit event id而不是source line。
+
+Forwarding wrapper若希望保留original caller，自己也要暴露caller-info optional parameters并显式传给inner method；否则inner compiler填的是wrapper member/file/line。每增加一层都测试provenance，避免日志看似精确却指向helper。
+
+<Term def="caller compiler在省略optional argument时，把member/file/line等source context写成普通argument的机制。">compiler-emitted caller argument</Term>
+
+<Stepper>
+  <Step title="切换member、file、line与modern expression"><DcsCallerInfoLab /></Step>
+  <Step title="展开caller实际发出的arguments">把每个省略参数改写成literal，确认rebuild、rename和explicit value如何改变结果。</Step>
+  <Step title="经过wrapper并检查privacy">调用一层/两层helper，验证origin；扫描file path和expression是否含敏感信息。</Step>
+</Stepper>
+
+<Callout type="trap" title="Caller info来自runtime stack，所以永远是真实调用者">
+它是compile-time optional argument，caller可显式覆盖，reflection/dynamic或其他language也可能不同处理。不能用于authorization、audit identity或anti-tamper。
+</Callout>
+
+## Diagnostic provenance的正确边界
+
+Property notification关心的是property contract；caller member name在property setter helper里合适，但若一个method代表多个properties，应显式传name。Logging关心event identity与operation context；source location只是补充。Guard message可在现代版本用`CallerArgumentExpression`显示source expression，但它属于C# 10 update，不是第4版C# 5内容。
+
+Caller info values会bake进caller binary：source移动line或rename member后，旧binary仍携带旧values，新build产生新values。Aggregating metrics不应以line/file为长期key。Symbol/PDB与runtime stack各解决其他diagnostic问题，不能互相替代。
+
+```csharp
+void OnPropertyChanged([CallerMemberName] string propertyName = "") =>
+    PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
+```
+
+<Term def="diagnostic event从真实operation经wrapper到sink时，对source context、operation id与owner的可追踪关系。">diagnostic provenance</Term>
+
+<Term def="caller info是可覆盖、可过期的提示数据，不能承担authorization、identity或不可抵赖审计。">non-authoritative source metadata</Term>
+
+<Stepper>
+  <Step title="切换property、logging、guard与forwarding"><DcsDiagnosticProvenanceLab /></Step>
+  <Step title="为每种metadata指定trust level">Member用于convenience，file/line用于debug，operation id用于correlation，principal用于security；不得混用。</Step>
+  <Step title="执行rename/rebuild/old-binary matrix">比较旧binary、新build和explicit override，确认dashboard/schema不依赖会变化的source location。</Step>
+</Stepper>
+
+## 本章回顾：Compiler Context是便利证据，不是权威事实
+
+1. C# 5 foreach每轮创建独立iteration-variable storage，修复常见closure结果。
+2. For loop variable未改变，captured object也仍可能mutable；必须分开storage与object state。
+3. Caller info由caller compiler写入optional arguments，不是runtime stack inspection。
+4. Wrapper需显式forward original context，file path要privacy/cardinality治理。
+5. Caller metadata适合diagnostics和notification，不适合security identity或stable event key。
+
+<Exercises>
+
+**问题 1：为何C# 5 foreach输出正确，for loop仍可能全输出最终index？**
+
+<Answer>Foreach language change让iteration variable每轮有独立storage；for的i在loop declaration只有一个storage，所有closures共享它。For body内创建`var captured=i`再capture。用loop后延迟invoke和storage graph验证，不依赖立即执行掩盖问题。</Answer>
+
+**问题 2：CallerFilePath可以直接作为日志聚合维度吗？**
+
+<Answer>不应。它可能是absolute build path，泄露环境且随checkout/root/source移动变化，旧binary还保留旧值，cardinality高。先redact/normalize，仅作debug field；聚合使用stable event id、operation name和structured domain dimensions。</Answer>
+
+**问题 3：两层logging wrapper怎样保留最外层caller？**
+
+<Answer>Outer public helper声明caller-info optional parameters，compiler在真实call site填值；outer显式把member/file/line传给inner，inner不要重新依赖自己的caller defaults。测试direct、one/two wrapper、explicit override与old/new build，并明确metadata非security authority。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="captured storage model" definition="closure保留variable storage而非创建时value snapshot。" />
+  <GlossaryItem term="per-iteration variable semantics" definition="foreach每轮iteration variable拥有独立storage的C# 5规则。" />
+  <GlossaryItem term="compiler-emitted caller argument" definition="caller compiler把source context写入optional argument。" />
+  <GlossaryItem term="diagnostic provenance" definition="diagnostic从operation经wrapper到sink的context追踪关系。" />
+  <GlossaryItem term="non-authoritative source metadata" definition="可覆盖、可过期且不能承担security identity的source hint。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# in Depth, Fourth Edition, Chapter 7: C# 5 bonus features" adaptedUrl="https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-7" />

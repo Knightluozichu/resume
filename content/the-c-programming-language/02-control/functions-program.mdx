@@ -3,75 +3,276 @@ title: 函数与程序结构
 type: A
 section: 控制流与函数
 order: 3
-description: 函数定义、参数值传递、外部变量、作用域规则与预处理器。
+description: 对照 K&R 第四章掌握函数原型和值传递、返回契约、外部变量、作用域/链接/存储期、头文件、static/register、块结构、初始化、递归和 C 预处理器，并建立可链接的多文件模块。
 demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/content/images/9780131103627/samplepages/0131103628.pdf"
 draft: false
 ---
 
-import { KrcFunctionStackDiagram } from "@/components/mdx/kr-c-language/diagrams/krc-function-stack";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  KrFunctionContractMap,
+  KrPreprocessorBoundaryMap,
+  KrProgramLinkageMap,
+} from "@/components/mdx/the-c-programming-language/diagrams/functions-program";
 
 <Objectives>
 
-- 能解释 C 函数的值传递机制，以及为什么通过指针可以间接修改外部变量
-- 能说出 extern、static、作用域规则的作用，以及头文件的组织方式
-- 能回答：`#define` 宏和 `static inline` 函数各有什么优缺点？现代 C 推荐哪种？
+- 能实现带完整原型、状态返回和输出参数的 ANSI C 函数，并解释数组形参与值传递边界
+- 能区分作用域、链接与存储期，组织一个头文件加两个源文件且通过编译/链接检查
+- 能比较函数式宏、ANSI C 普通函数与 C99 `static inline`，说明各自的求值、类型和链接代价
 
 </Objectives>
 
-## 函数：程序的积木
+## 从调用点能证明什么开始
 
-函数让程序从「一长串平铺的语句」变成「有层次的模块化结构」。一个好的函数只做一件事，有清晰的输入（参数）和输出（返回值），可以被反复调用。K&R 全书的例子几乎都以函数为组织单元——从最简单的 `strlen` 到复杂的排序器，每个功能都封装成独立函数。
+函数不是“跳到另一段代码”的语法糖，而是一份跨调用边界的契约：调用点必须知道参数数量与类型、返回类型、哪些对象可能被间接修改、失败怎样表达。K&R 第二版最重要的 ANSI C 更新之一就是函数原型，它让编译器能在调用发生前检查定义与使用是否兼容。
 
-<KrcFunctionStackDiagram />
+<KrFunctionContractMap />
 
-## 核心概念
+图中没有“参数从右到左压栈”或“栈向低地址增长”，因为 C 标准不保证这些 ABI 细节。参数可能进寄存器，函数可能被内联，优化后可能没有稳定帧指针。调试器展示的是某个编译器、目标 ABI 与优化级别的实现，不是语言语义。
 
-C 语言所有参数都是<Term def="调用函数时把实参的值复制一份给形参，函数内修改的是副本，不影响原始变量。C 没有引用传递。">值传递</Term>。调用函数时，实参的值被复制一份给形参，函数内部修改的是这份副本，外部的原始变量不受影响。传 int 时复制 int 的值，传指针时复制指针的值（地址）。
+## 原型、定义与返回类型
 
-那为什么传指针能修改外部变量？因为指针的副本指向同一块内存——通过副本间接读写那块内存，效果等同于修改了外部变量。本质上 C 只有值传递，没有引用传递。「传指针」只是传了一个地址值的副本，但这个副本指向的数据是共享的。
+<Term def="声明函数名、返回类型以及参数类型列表，使调用点能检查参数数量、转换与返回值使用是否与定义兼容。">
+  函数原型
+</Term>
+应在调用前可见，通常来自模块头文件。`double atof(const char *text);`
+同时声明非整数返回类型和只读输入约定；若调用点错误地假定返回
+`int`，寄存器与值解释都可能不兼容。
 
-<Term def="声明一个变量或函数在别处（通常是另一个文件）定义，此处只是引用其声明。">extern</Term>关键字用于跨文件共享全局变量。如果一个全局变量在文件 A 中定义（`int count = 0;`），文件 B 想使用它，必须在 B 中写 `extern int count;` 声明。不写 extern 会在 B 中创建一个新的独立定义。头文件中通常放 extern 声明，定义放在 .c 文件中——这是多文件 C 程序的标准组织方式。
+K&R 第一版时代的旧式定义与隐式 `int` 是历史语法；第二版讲 ANSI 原型，现代 C99 以后还删除了隐式函数声明。本站示例统一使用原型形式，不用“编译器猜返回类型”掩盖接口错误。
 
-<Term def="决定变量名在哪些代码区域可见的规则，C 分为块作用域、文件作用域和原型作用域。">作用域</Term>规则决定变量名在哪里可见。函数内定义的局部变量是块作用域（只在该函数或花括号块内可见）。函数外定义的全局变量是文件作用域（从定义处到文件末尾可见，其他文件用 extern 引用）。`static` 修饰局部变量时延长其生命周期到程序结束但保持块作用域；修饰全局变量/函数时限制其链接范围为当前文件（文件私有）。
+函数若可能失败，应避免用某个合法数据值兼作模糊错误。可以返回状态码，把多个结果写到调用者提供的对象：
 
-预处理器是 C 编译流程的第一步。`#include` 把头文件内容插入当前文件，`#define` 定义宏（文本替换），`#ifdef`/`#endif` 做条件编译。函数式宏（`#define MAX(a,b) ((a)>(b)?(a):(b))`）看起来像函数，但没有类型检查、参数可能被多次求值（`MAX(i++, j++)` 会让 i++ 执行两次）。现代 C 推荐用 `static inline` 函数替代函数式宏——有类型检查、参数只求值一次、调试器可见，编译器能优化掉调用开销。
+```c
+int divide_int(int dividend, int divisor, int *quotient, int *remainder)
+{
+    if (divisor == 0 || quotient == 0 || remainder == 0)
+        return 0;
+    *quotient = dividend / divisor;
+    *remainder = dividend % divisor;
+    return 1;
+}
+```
 
-<Callout type="tip">
-<strong>建议 →</strong> 多文件 C 程序的标准组织：每个模块一个 .c 文件（定义）+ 一个 .h 文件（声明）。.h 文件里放函数原型和 extern 变量声明，.c 文件里放定义。其他文件通过 `#include` 头文件获取声明。永远不要在 .h 文件中放定义（会导致重复定义链接错误）。
-</Callout>
+调用者只在返回真后读取两个输出。真实接口还要考虑最小有符号值除以负一的溢出边界；对外 API 应把允许范围写入契约，而不是假设“除数非零就一定安全”。
 
-## 常见误区
+## C 只有值传递
+
+<Term def="函数调用把每个实参的值复制给对应形参。指针实参复制的是地址值，形参可通过该地址访问同一对象，但形参指针本身仍是独立副本。">
+  值传递
+</Term>
+解释了两件看似矛盾的事：修改 `int` 形参不影响调用者，修改 `*pointer`
+却可能影响调用者对象。后者不是引用传递，而是两个指针值指向同一对象。
+
+改变形参指针本身只改变副本：`pointer = NULL` 不会把调用者的指针置空。若接口要更新调用者保存的指针，需传“指向该指针对象的指针”，并明确新所有权与失败时旧值是否保留。
+
+数组参数还有一层调整：形参写作 `int values[10]`、`int values[]` 或 `int *values`，在函数类型中都调整为指针，`10` 不会随调用传入。函数必须另收 `size_t count`，并规定指针在 `count > 0` 时有效、目标容量和是否允许重叠。
 
 <Callout type="trap">
-<strong>现象 →</strong> 函数内修改了参数值，但外部变量没变。<strong>原因 →</strong> C 是值传递——函数内修改的是实参的副本，不是原始变量。`void add(int x) { x++; }` 调用 `add(n)` 后 n 不变。<strong>修法 →</strong> 如果需要修改外部变量，传指针：`void add(int *x) { (*x)++; }`，调用 `add(&n)`。通过指针间接修改才是 C 中让函数影响外部数据的唯一方式。
+  **现象**：函数内用 `sizeof(values) / sizeof(values[0])`
+  计算数组长度，结果只是指针大小除以元素大小。**原因**：数组形参已调整为指针。**修法**：长度作为独立参数传入，或在数组仍是对象的调用点计算元素数；接口同时验证容量与空指针规则。
 </Callout>
+
+## 作用域、链接与存储期是三条轴
+
+<Term def="名字在源程序中可以被查找到的区域，例如块作用域、函数作用域、函数原型作用域与文件作用域。">
+  作用域
+</Term>
+回答名字在哪里可见；
+<Term def="多个声明是否指向同一个函数或对象。外部链接可跨翻译单元解析，内部链接只在当前翻译单元共享，无链接的名字不与其他声明合并。">
+  链接
+</Term>
+回答不同声明是否代表同一实体；存储期回答对象生存期多长。三者相关但不等价。
+
+文件作用域 `static` 函数/对象具有内部链接，只在当前翻译单元可用。块内 `static` 对象仍只有块作用域且无链接，但具有静态存储期，程序启动时初始化一次并贯穿执行。普通块内变量通常是自动存储期，每次进入声明所在块获得一个对象。
+
+所有静态存储期对象在程序启动前先零初始化；未显式初始化的自动对象值不确定，读取它来计算结果可能触发未定义行为。`register` 在 ANSI C 中是自动存储期声明说明符和优化提示，并限制取地址；现代优化器通常自行分配寄存器，接口设计不应依赖该提示。
+
+<KrProgramLinkageMap />
+
+旧页常把“全局变量就是 `extern`”说得过于简单。文件作用域 `int count;` 是暂定定义，程序仍需要满足外部定义规则；头文件若在多个翻译单元放这种写法，可能产生多重定义或依赖旧工具链的 common 扩展。头文件应写 `extern int count;`，并在恰好一个 `.c` 文件提供 `int count = 0;`，更好的设计则优先用函数封装状态。
+
+## 头文件与翻译单元
+
+每个 `.c` 文件经过预处理后形成一个 <Term def="一个源文件及其递归包含的头文件经预处理后交给编译器的完整单位；各翻译单元分别检查，链接器再解析外部符号。">翻译单元</Term>。头文件是共享接口文本，不是单独编译的实现容器。它应包含函数原型、共享类型、必要宏和 `extern` 声明，并使用包含保护。
+
+头文件 `counter.h`：
+
+```c
+#ifndef COUNTER_H
+#define COUNTER_H
+
+void counter_reset(void);
+void counter_add(unsigned long amount);
+unsigned long counter_value(void);
+
+#endif
+```
+
+实现文件 `counter.c` 把状态设为文件私有：
+
+```c
+#include "counter.h"
+
+static unsigned long value;
+
+void counter_reset(void) { value = 0; }
+void counter_add(unsigned long amount) { value += amount; }
+unsigned long counter_value(void) { return value; }
+```
+
+调用文件只看公开接口：
+
+```c
+#include "counter.h"
+#include <stdio.h>
+
+int main(void)
+{
+    counter_reset();
+    counter_add(3);
+    printf("%lu\n", counter_value());
+    return 0;
+}
+```
+
+用 `cc -std=c90 -Wall -Wextra -Wpedantic counter.c main.c -o counter` 一次编译并链接。再分别编译为对象文件，可以区分编译期原型错误与链接期未定义/重复符号错误。
 
 <Callout type="trap">
-<strong>现象 →</strong> `int x = 1;` 全局变量，函数内写 `int x = x + 1;` 结果是不确定的随机值而非 2。<strong>原因 →</strong> 局部变量 x 从声明处就遮蔽了全局 x，等号右侧的 x 引用的是尚未初始化的局部 x（内存残留值），不是全局的 1。这叫变量遮蔽（shadowing）。<strong>修法 →</strong> 避免内层变量与外层同名，或改用不同的变量名。编译时加 `-Wshadow` 警告可检测此类问题。
+  **现象**：头文件中写普通对象或非 `static`
+  函数定义，单文件正常，多文件链接失败。**原因**：每个包含者都获得一份外部定义。**修法**：头文件保留声明，外部定义只放一个源文件；仅对有明确理由的
+  C99 `static inline` 私有助手在头文件给定义。
 </Callout>
 
-## 小结与练习
+## 外部变量与接口状态
 
-- C 所有参数都是值传递——传指针本质是传地址值的副本，通过副本间接修改才能影响外部
-- extern 声明跨文件引用全局变量；static 延长局部变量生命周期或限制全局符号的链接范围
-- 作用域决定可见性：块作用域（局部）、文件作用域（全局）、extern 扩展到其他文件
-- 函数式宏无类型检查且可能多次求值，现代 C 推荐用 static inline 函数替代
+`extern` 声明表示该名字具有相应链接并在别处定义，它不是“从另一个文件复制变量”。函数声明通常默认具有外部链接，不需要重复写 `extern`。跨文件声明必须类型兼容；某个源文件把对象声明成 `long`，另一个定义成 `int`，链接器未必能诊断出 C 类型契约冲突。
+
+外部可变状态让任何调用都可能改变结果，增加初始化顺序、重入、测试隔离和并发风险。优先把状态隐藏在模块实现后，通过函数维持不变量；测试提供明确 reset/setup，而不是让用例依赖前一个用例留下的值。
+
+局部名字可以遮蔽外层名字。`int x = x + 1;` 在块内声明时，初始化器中的 `x` 已指向新声明的自动对象，而不是同名文件对象，读取不确定值会出错。开启 `-Wshadow`，并让局部名字表达角色而非复用短名。
+
+## 递归需要基例、进展和深度界限
+
+<Term def="函数直接或间接调用自身，把问题缩小后交给下一层调用，并由基例停止展开。正确性需要基例、严格进展和资源深度分析。">
+  递归
+</Term>
+适合树、分治和递归语法，但不是天然比循环清楚。必须证明参数每次更接近基例，并估计最坏深度；C
+不保证尾调用优化，也不规定递归一定对应某种向低地址增长的硬件栈。
+
+下面用返回状态避免阶乘溢出被静默接受：
+
+```c
+#include <limits.h>
+
+int factorial(unsigned int n, unsigned long *result)
+{
+    unsigned long previous;
+    if (result == 0)
+        return 0;
+    if (n < 2) {
+        *result = 1;
+        return 1;
+    }
+    if (!factorial(n - 1, &previous) || previous > ULONG_MAX / n)
+        return 0;
+    *result = previous * n;
+    return 1;
+}
+```
+
+基例处理 0 和 1；`n - 1` 保证进展；乘法前用除法边界避免无符号回绕。对不可信大输入仍应限制 `n` 或改迭代实现，避免调用深度耗尽实现资源。
+
+## 预处理器只操作记号
+
+<KrPreprocessorBoundaryMap />
+
+C <Term def="在正式语法和类型检查前处理 include、宏展开与条件编译的翻译阶段。它操作预处理记号，不理解 C 对象类型或运行时值。">预处理器</Term> 负责 `#include`、`#define`、`#if/#ifdef` 等。对象式宏适合编译期开关、字符串化/记号粘贴等记号任务；函数式宏可能重复求值实参，也没有函数调用那样的参数类型契约。
+
+```c
+#define MAX_BAD(a, b) ((a) > (b) ? (a) : (b))
+
+/* MAX_BAD(i++, j++) 会先比较两个实参，再次求值被选中的那个。 */
+```
+
+为参数和整体加括号只能修复分组，不能修复多次求值。ANSI C90 没有 `inline`；在 C99 及之后，头文件内的私有小助手可用 `static inline`，获得类型检查与每个实参一次求值。公开的 `inline` 与 `extern inline` 定义规则更复杂，应遵循项目统一模式，不把 C++ 经验直接套入 C。
+
+条件编译会产生多个实际程序。每个受支持宏组合都要构建与测试，公开结构布局和函数声明不能在调用者与实现之间悄悄分叉。遇到错误时先判断是宏展开、C 类型检查还是外部符号解析，必要时查看预处理输出而不是只读原源码。
+
+> 先预测：`MAX_BAD(i++, j++)` 至少会修改哪个变量两次？答案取决于第一次比较选择了哪个分支，这正说明宏把副作用次数交给了运行数据。
+
+## 小结
+
+- 函数原型让调用点检查参数和返回类型；C 参数始终值传递，数组形参调整为指针
+- 作用域、链接、存储期分别回答名字可见性、实体身份和对象生存期，不能混用
+- 头文件放共享声明与类型，外部定义放一个源文件，文件私有实现使用 `static`
+- 递归要证明基例、进展、深度和算术边界，C 不保证具体栈帧或尾调用优化
+- 预处理器操作记号；宏适合记号任务，C99 `static inline` 适合有类型的私有小函数
 
 <Exercises>
-  <Answer question="为什么说 C 只有值传递没有引用传递？传指针修改外部变量算不算引用传递？">不算。传指针时，传递的是指针（地址）的值的副本——函数内拿到的是地址副本，但副本指向同一块内存。通过副本间接读写内存确实能影响外部数据，但机制仍是「复制一份值给形参」。真正的引用传递（如 C++ 的 `int &x`）不复制，直接绑定到原始变量。C 没有这个机制。</Answer>
-  <Answer question="`#define SQUARE(x) x*x` 调用 `SQUARE(3+1)` 结果是多少？为什么？如何修正？">结果是 7（不是 16）。因为宏是文本替换：`SQUARE(3+1)` 展开为 `3+1*3+1`，乘法优先于加法，得 3+3+1=7。修正：给每个参数和整体都加括号 `#define SQUARE(x) ((x)*(x))`，展开为 `((3+1)*(3+1))` = 16。或者直接用 `static inline int square(int x) { return x*x; }`，彻底避免宏的陷阱。</Answer>
+
+**问题 1** `void set_null(int *p) { p = 0; }` 为什么不能把调用者指针置空？若接口确实需要更新调用者指针，应怎样设计？
+
+<Answer>
+
+`p` 是调用者指针值的副本，给副本赋零不改变原指针对象。可接受 `int **out` 并写 `*out = NULL`，但必须说明输出参数非空、旧指针指向对象由谁释放，以及失败时是否保持旧值；很多接口更适合直接返回新指针并另传状态。
+
+</Answer>
+
+**问题 2** 解释 `counter.h`、`counter.c`、`main.c` 中声明、定义、内部链接和外部链接各在哪里，并说明把 `static unsigned long value;` 放进头文件会发生什么。
+
+<Answer>
+
+头文件给出三个外部函数声明；`counter.c` 给出函数外部定义，`value` 是内部链接的文件私有定义；`main.c` 通过声明调用同一外部函数。若头文件放 `static value`，每个翻译单元会得到彼此不同的私有对象，不会共享一个计数器，且可能产生未使用对象告警。
+
+</Answer>
+
+**问题 3** 比较 `#define SQUARE(x) ((x) * (x))`、ANSI C90 普通函数和 C99 `static inline`。对 `SQUARE(i++)` 各有什么行为与诊断能力？
+
+<Answer>
+
+宏把 `i++` 替换两次，产生未定义行为风险且没有参数类型检查；普通函数在调用前只求值一次，并按原型转换/检查参数，但抽象机存在函数调用语义；C99 `static inline` 同样只求值一次且有类型检查，编译器可内联，放头文件时每个翻译单元有内部链接定义。是否实际内联始终由实现决定。
+
+</Answer>
+
 </Exercises>
 
-## 名词解释
-
 <Glossary>
-  <GlossaryItem term="值传递">调用函数时把实参的值复制一份给形参的参数传递方式。函数内修改的是副本，不影响原始变量。C 语言所有参数都是值传递，包括传指针时传的也是指针值的副本。</GlossaryItem>
-  <GlossaryItem term="extern">声明一个变量或函数在别处（通常是另一个 .c 文件）定义，此处只是引用。用于跨文件共享全局变量。头文件中放 extern 声明，.c 文件中放定义。</GlossaryItem>
-  <GlossaryItem term="作用域">决定变量名在哪些代码区域可见的规则。C 分为块作用域（函数/花括号内）、文件作用域（全局变量从定义到文件末尾）。static 可限制全局符号到文件私有。</GlossaryItem>
-  <GlossaryItem term="static">两个用途：修饰局部变量时延长生命周期到程序结束（但作用域不变）；修饰全局变量/函数时限制链接范围为当前文件（文件私有，其他文件 extern 也不可见）。</GlossaryItem>
+
+<GlossaryItem term="函数原型">
+  声明函数返回类型与参数类型列表，使调用点能检查数量、转换和返回值使用。定义与所有可见声明必须兼容。
+</GlossaryItem>
+
+<GlossaryItem term="值传递">
+  调用把实参值复制到形参。指针形参复制地址值，可通过地址访问同一对象，但修改形参指针本身不改变调用者指针。
+</GlossaryItem>
+
+<GlossaryItem term="作用域">
+  名字在源程序中可被查找的区域，包括块、函数、函数原型和文件作用域；它不等于对象生存期或跨文件实体身份。
+</GlossaryItem>
+
+<GlossaryItem term="链接">
+  多个声明是否指向同一函数或对象。外部链接可跨翻译单元解析，内部链接限制在当前翻译单元，无链接名字不与其他声明合并。
+</GlossaryItem>
+
+<GlossaryItem term="翻译单元">
+  一个源文件及递归包含内容经预处理后交给编译器的单位。各单元分别检查，链接器再解析外部符号。
+</GlossaryItem>
+
+<GlossaryItem term="递归">
+  函数直接或间接调用自身。正确实现需要停止展开的基例、每次调用的严格进展和可接受的最坏深度。
+</GlossaryItem>
+
+<GlossaryItem term="预处理器">
+  在 C
+  语法与类型检查前处理包含、宏展开和条件编译的阶段。它操作记号，不理解运行时对象和类型契约。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution adaptedFrom="The C Programming Language (Kernighan & Ritchie)" adaptedUrl="https://www.prenticehall.com/" />
+<Attribution
+  title="The C Programming Language, Second Edition, Chapter 4: Functions and Program Structure"
+  url="https://www.informit.com/content/images/9780131103627/samplepages/0131103628.pdf"
+/>

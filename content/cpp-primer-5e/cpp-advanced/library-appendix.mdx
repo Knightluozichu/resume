@@ -1,0 +1,335 @@
+---
+title: 附录 A：标准库
+type: C
+section: 高级主题
+order: 4
+description: 按头文件定位标准库名字，按区间契约选择查找、排序与重排算法，并正确组合随机数引擎和分布
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/c-plus-plus-primer-9780321714114"
+draft: false
+---
+
+import {
+  CppAlgorithmSelectionDiagram,
+  CppLibraryHeaderMapDiagram,
+  CppRandomCatalogDiagram,
+} from "@/components/mdx/cpp-primer-5e/diagrams/library-appendix";
+
+<Objectives>
+
+- 能按设施家族找到常用库名字和头文件，并解释“包含头文件”与“名字位于 `std` 命名空间”是两件事
+- 能根据迭代器类别、输入区间和期望后置条件，在查找算法、排序算法与重排算法中选择合适接口
+- 能组合随机数引擎和随机数分布，分别实现可复现实验与非固定播种的模拟输入
+- 能回答：为什么 `lower_bound` 不能对任意未排序区间使用，为什么 `uniform_int_distribution` 不能被简单的取模表达式等价替代
+
+</Objectives>
+
+## 直觉：附录不是名单，而是一张导航图
+
+标准库名字很多，死记每个声明位置很快会失效。更稳定的方法是先判断问题属于容器、算法、迭代器、所有权、文本、I/O 还是随机数，再进入对应头文件核对接口。头文件解决声明可见性，`std::` 解决名字查找，两者不能互相替代。
+
+算法也不该按“名字看起来像”来选。每个算法都带着区间、迭代器能力、比较关系、返回值和后置条件。把这些契约读清楚，才知道它会不会改动元素、结果指向哪里、是否要求有序，以及复杂度承诺建立在哪些前提上。
+
+<CppLibraryHeaderMapDiagram />
+
+## 库名字和头文件：先定位设施家族
+
+`<Term def="标准库设施声明所在的标准头入口。包含头文件让声明可见，但名字通常仍位于 std 命名空间；实现可在内部包含其他头，程序不能依赖这种间接包含。">标准头文件（standard header）</Term>` 是可移植的声明入口。应直接包含自己使用的设施对应头，而不是因为某个平台碰巧经别的头间接包含就省略。
+
+```cpp
+#include <algorithm>   // find, sort, transform
+#include <iterator>    // iterator traits and adaptors
+#include <memory>      // smart pointers and allocator
+#include <random>      // engines and distributions
+#include <tuple>       // tuple, get, tie
+
+std::vector<int> values; // vector 仍需直接包含 <vector>
+```
+
+常用家族可以这样建立索引：
+
+| 需求 | 头文件 | 代表名字 |
+|---|---|---|
+| 顺序与关联容器 | `vector`、`list`、`map`、`unordered_map` 对应同名头 | `vector`、`map` |
+| 区间算法 | `<algorithm>` | `find`、`sort`、`partition` |
+| 数值算法 | `<numeric>` | `accumulate`、`inner_product` |
+| 迭代器适配 | `<iterator>` | `back_inserter`、流迭代器 |
+| 所有权 | `<memory>` | `shared_ptr`、`unique_ptr`、`allocator` |
+| 函数对象 | `<functional>` | `bind`、`function`、比较器 |
+| 随机数 | `<random>` | `mt19937`、各类分布 |
+
+`<Term def="C++ 标准库大多数名字所在的命名空间。头文件控制声明是否可见，std 限定名控制查找哪个名字；在头文件全局作用域使用宽泛 using 指令会影响所有包含者。">std 命名空间</Term>` 不等于头文件。写了 `std::sort` 但没包含 `<algorithm>` 仍不完整；包含 `<algorithm>` 后也不应假设 `sort` 自动进入全局作用域。
+
+<Callout type="tip">
+  编译器报“名字未声明”时按两步排查：先确认直接包含了标准指定的头，再确认使用了正确限定名。不要通过新增 `using namespace std;` 掩盖缺失头文件。
+</Callout>
+
+## 算法概览：区间、操作与结果
+
+`<Term def="由两个迭代器表示的左闭右开序列，first 指向首元素，last 指向尾后位置。空区间满足 first 等于 last；算法不得解引用 last。">半开区间</Term>` 是标准算法的共同输入模型。区间不拥有元素，算法通过迭代器读写已有对象，因此容器类型往往不是算法模板参数的一部分。
+
+`<Term def="算法对迭代器操作能力的最低要求分类，包括输入、输出、前向、双向和随机访问。算法能否使用某种迭代器由所需操作决定，例如 sort 要求随机访问。">迭代器类别</Term>` 决定哪些算法可用。`find` 只需单向读取，`reverse` 需要双向移动，`sort` 需要随机访问；因此 `list` 不能交给通用 `sort`，而使用自己的成员 `sort`。
+
+<Stepper>
+  <Step title="① 确认区间和迭代器能力">
+    <CppAlgorithmSelectionDiagram step={1} />
+
+    明确 `[first,last)` 是否有效、是否允许写入，以及迭代器是输入、前向、双向还是随机访问。容器成员操作可能使已有迭代器失效，也要在算法调用前后核对。
+  </Step>
+  <Step title="② 按语义和前置条件选算法">
+    <CppAlgorithmSelectionDiagram step={2} />
+
+    查一个值用 `find`，按谓词查用 `find_if`，对有序范围二分查找用 `lower_bound`。需要全排序才用 `sort`；只关心第 k 个位置可考虑 `nth_element`。
+  </Step>
+  <Step title="③ 解释返回值和后置条件">
+    <CppAlgorithmSelectionDiagram step={3} />
+
+    查找算法通常返回迭代器，失败时等于 `last`；重排算法可能返回分界点；排序算法直接修改范围。调用者必须消费返回值，而不是只看“函数执行了”。
+  </Step>
+</Stepper>
+
+## 查找算法：先分清无序与有序
+
+`<Term def="在线性区间中逐个比较元素的算法家族，如 find、find_if 和 adjacent_find。通常不要求区间有序，失败时返回尾后迭代器。">查找算法</Term>` 中，最基础的 `find` 与 `find_if` 只要求可读区间：
+
+```cpp
+std::vector<int> values{4, 1, 9, 2};
+auto nine = std::find(values.begin(), values.end(), 9);
+if (nine != values.end()) {
+    std::cout << "index=" << (nine - values.begin()) << '\n';
+}
+
+auto even = std::find_if(values.begin(), values.end(),
+                         [](int x) { return x % 2 == 0; });
+```
+
+有序区间提供另一组能力。`<Term def="在已经按同一比较关系分区的区间中寻找第一个不小于目标值的位置。若前置分区条件不成立，结果不具有调用者期待的二分查找语义。">lower_bound</Term>` 返回可插入位置，而不是布尔值：
+
+```cpp
+std::vector<int> sorted{1, 2, 4, 4, 9};
+auto pos = std::lower_bound(sorted.begin(), sorted.end(), 4);
+// pos 指向第一个 4；若目标不存在，仍返回保持有序的插入位置
+bool exists = pos != sorted.end() && *pos == 4;
+```
+
+比较器必须与形成该有序区间时使用的关系一致。若用自定义比较器排序，却用默认小于关系调用 `lower_bound`，前置条件已经不成立。
+
+## 排序算法与选择算法：只做需要的工作
+
+`<Term def="重排随机访问区间使其满足给定严格弱序关系的算法。sort 不保持等价元素原相对顺序，stable_sort 保持；两者都要求比较关系满足严格弱序。">排序算法</Term>` 不只是 `sort` 一个名字。是否需要稳定性、是否只需局部顺序、是否允许修改输入，都会改变选择。
+
+```cpp
+struct Record { int key; std::string name; };
+std::vector<Record> rows;
+
+std::stable_sort(rows.begin(), rows.end(),
+    [](const Record &a, const Record &b) {
+        return a.key < b.key;
+    });
+// key 相等的记录保持原相对顺序
+```
+
+比较函数必须表现为严格弱序，特别是 `comp(x,x)` 必须为 `false`。用 `<=` 代替 `<` 会破坏算法前提，结果不再受标准契约保护。
+
+只需要“前 k 小”或“第 k 个”时，全排序通常多做了工作：
+
+```cpp
+std::vector<int> data{9, 1, 7, 3, 2, 8};
+auto middle = data.begin() + 3;
+std::nth_element(data.begin(), middle, data.end());
+// *middle 是排序后该位置的值；两侧各自不保证有序
+
+auto boundary = std::partition(data.begin(), data.end(),
+                               [](int x) { return x % 2 == 0; });
+// [begin,boundary) 满足谓词，后半不满足；组内不保证稳定
+```
+
+`<Term def="将区间元素重新排列，使满足谓词的元素位于分界点之前，其余位于之后，并返回分界迭代器。partition 不保证组内相对顺序。">partition</Term>` 适合分类，而 `nth_element` 适合选择统计量。它们的后置条件比完整排序弱，也因此能避免不必要工作。
+
+## 随机数分布与随机数引擎
+
+`<Term def="保存内部状态并生成确定性伪随机序列的函数对象。相同引擎类型和相同种子产生可复现序列；引擎本身不表达目标范围或概率形状。">随机数引擎</Term>` 与 `<Term def="把引擎输出映射为目标统计形状的函数对象，例如闭区间均匀整数、均匀实数或正态分布。分布可能保存参数和缓存状态。">随机数分布</Term>` 是两个独立层次。
+
+<CppRandomCatalogDiagram />
+
+```cpp
+#include <random>
+
+std::mt19937 engine(20260712); // 固定种子：测试可复现
+std::uniform_int_distribution<int> die(1, 6);
+std::normal_distribution<double> noise(0.0, 1.0);
+
+int face = die(engine);       // [1,6] 均匀整数
+double sample = noise(engine); // 正态样本
+```
+
+`<Term def="用于初始化随机数引擎状态的值或值序列。固定种子支持复现实验；不同种子不自动保证统计独立，复杂状态可用 seed_seq 扩散多个整数。">种子（seed）</Term>` 是复现策略的一部分。测试中固定种子可让失败稳定重现；模拟中可从配置、时间或平台非确定源构造种子，但要记录策略，不能把 `random_device` 一概当作密码学保证。
+
+```cpp
+std::random_device source;
+std::seed_seq seeds{source(), source(), source(), source()};
+std::mt19937 engine(seeds);
+std::uniform_real_distribution<double> unit(0.0, 1.0);
+```
+
+引擎应长期存活并持续推进；每次采样都重新构造同种子引擎，只会反复得到序列开头。分布也可能有状态，例如某些正态分布实现会缓存中间结果；需要重置其状态时使用 `reset()`。
+
+## 容易踩的坑
+
+<Callout type="trap">
+  **现象** → 本机没包含 `<vector>` 也能编译，换编译器后报 `vector` 未声明。
+
+  **原因** → 依赖了其他头的间接包含，而标准只保证直接指定的声明入口。
+
+  **修法** → 每个翻译单元直接包含它使用的标准设施对应头，并保留 `std::` 限定名。
+</Callout>
+
+<Callout type="trap">
+  **现象** → 对未排序数据调用 `lower_bound`，返回位置看似随机。
+
+  **原因** → 算法要求区间已按同一比较关系分区；违反前置条件后，返回值不表达正确插入点。
+
+  **修法** → 若数据无序用 `find`/`find_if`；若二分查询是长期需求，先维护有序不变量或选择有序关联容器。
+</Callout>
+
+<Callout type="trap">
+  **现象** → 在 `sort` 比较器中写 `a <= b`，偶发错误或结果异常。
+
+  **原因** → `<=` 让 `comp(x,x)` 为真，破坏严格弱序前提。
+
+  **修法** → 比较器只表达严格“先于”关系，等价元素双方比较都应为假。
+</Callout>
+
+<Callout type="trap">
+  **现象** → 随机函数每次调用都重新以同一个值播种，输出总是相同。
+
+  **原因** → 引擎是确定性状态机；重新构造会回到同一序列起点。
+
+  **修法** → 让引擎跨多次采样存活。测试固定一次种子，模拟则记录并集中管理播种策略。
+</Callout>
+
+## 小结
+
+- 库名字和头文件是声明导航，`std::` 是名字限定；直接包含所用设施，不依赖间接包含
+- 算法接受半开区间，选择前先核对迭代器类别、可写性、前置条件、返回值和后置条件
+- 无序查找、二分查找、完整排序、稳定排序、分区与选择算法解决的是不同契约
+- 随机数引擎生成可复现序列，随机数分布负责范围与统计形状，种子负责初始化策略
+
+<Exercises>
+
+**问题 1（头文件审计）** 下面代码只包含 `<iostream>` 却使用 `vector`、`sort` 和 `accumulate`。列出必须直接包含的标准头，并写出限定名。
+
+<Answer>
+
+应直接包含容器、算法和数值算法各自的头：
+
+```cpp
+#include <algorithm>
+#include <iostream>
+#include <numeric>
+#include <vector>
+
+std::vector<int> values{3, 1, 2};
+std::sort(values.begin(), values.end());
+int sum = std::accumulate(values.begin(), values.end(), 0);
+```
+
+`<iostream>` 是否在某实现中间接包含其他声明不属于可移植契约。
+
+</Answer>
+
+**问题 2（算法选型）** 有一百万个无序整数，只需要找到排序后第 1000 个值，不要求其余元素有序。应使用 `sort`、`partial_sort` 还是 `nth_element`？写出代码并描述后置条件。
+
+<Answer>
+
+只关心某个最终位置时使用 `nth_element`：
+
+```cpp
+auto nth = values.begin() + 999;
+std::nth_element(values.begin(), nth, values.end());
+int answer = *nth;
+```
+
+调用后 `*nth` 等于完整排序后该位置的值；前面的元素不大于它，后面的元素不小于它，但两侧内部都不保证排序。
+
+</Answer>
+
+**问题 3（随机性实验）** 写一个掷骰函数，使单元测试可以传入固定种子复现序列，并说明为什么不能在函数每次调用时重新播种。
+
+<Answer>
+
+把引擎作为有状态对象保存在调用方或骰子对象中：
+
+```cpp
+class Dice {
+    std::mt19937 engine_;
+    std::uniform_int_distribution<int> distribution_;
+public:
+    explicit Dice(unsigned seed)
+        : engine_(seed), distribution_(1, 6) {}
+    int roll() { return distribution_(engine_); }
+};
+
+Dice dice(42);
+int first = dice.roll();
+int second = dice.roll();
+```
+
+相同种子构造的 `Dice` 会产生相同序列，便于复现；每次 `roll` 重建引擎会不断返回同一序列的第一个样本。
+
+</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+
+<GlossaryItem term="标准头文件（standard header）">
+  标准库设施的声明入口。程序应直接包含所用设施对应头，不能依赖实现的间接包含。
+</GlossaryItem>
+
+<GlossaryItem term="std 命名空间">
+  C++ 标准库大多数名字所在作用域。头文件让声明可见，`std::` 决定名字查找位置。
+</GlossaryItem>
+
+<GlossaryItem term="半开区间">
+  由 `[first,last)` 表示的算法区间，包含首位置但不包含尾后位置；`last` 不可解引用。
+</GlossaryItem>
+
+<GlossaryItem term="迭代器类别">
+  算法所需迭代能力的分类，包括输入、输出、前向、双向与随机访问。
+</GlossaryItem>
+
+<GlossaryItem term="查找算法">
+  在区间中寻找值或满足谓词元素的算法家族，失败通常返回尾后迭代器。
+</GlossaryItem>
+
+<GlossaryItem term="lower_bound">
+  在已按同一比较关系分区的范围中，返回第一个不小于目标值的位置。
+</GlossaryItem>
+
+<GlossaryItem term="排序算法">
+  按严格弱序重排范围的算法。`sort` 不稳定，`stable_sort` 保持等价元素原相对顺序。
+</GlossaryItem>
+
+<GlossaryItem term="partition">
+  按谓词把区间重排成两组并返回分界位置，不保证各组内部相对顺序。
+</GlossaryItem>
+
+<GlossaryItem term="随机数引擎">
+  保存状态并从种子生成确定性伪随机序列的函数对象。
+</GlossaryItem>
+
+<GlossaryItem term="随机数分布">
+  把引擎输出映射为目标范围和统计形状的函数对象。
+</GlossaryItem>
+
+<GlossaryItem term="种子（seed）">
+  初始化引擎状态的值或值序列；固定种子用于复现，复杂状态可用 `seed_seq` 初始化。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution source="C++ Primer, Fifth Edition, Appendix A: The Library" />

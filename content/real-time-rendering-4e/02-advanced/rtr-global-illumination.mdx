@@ -1,121 +1,198 @@
 ---
-title: "实时全局光照"
+title: "全局光照与实时光线追踪"
 type: B
 section: "计算机图形学与渲染"
 order: 7
-description: "直接光与间接光的近似方案——从AO到光线追踪"
+description: "承载官方 Ch11、Ch26：间接光传输、预计算与动态 GI、加速结构、低样本光追和降噪"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://www.realtimerendering.com/"
 draft: false
 ---
 
-import { RtrGlobalIlluminationDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-global-illumination";
+import { RtrGlobalIlluminationDiagram, RtrGiMethodsDiagram, RtrRayTracingDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-global-illumination";
+import { RtrStepFlowDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能区分直接光照和间接光照（GI）
-- 能解释AO（环境光遮蔽）是GI的什么简化形式
-- 能列出三种实时GI技术及其优缺点
-- 能回答：为什么实时GI如此困难？
+
+- 能从渲染方程区分 emission、direct、indirect 与 visibility，而不是按“弹射次数口号”分类
+- 能比较 lightmap/probe、screen-space、voxel/SDF、DDGI 与 ray-traced GI 的信息边界
+- 能描述 BLAS/TLAS、ray traversal、hit shading、temporal accumulation 和 denoising 数据流
+- 能设计覆盖漏光、屏外信息、动态几何、低样本噪声和历史失效的 GI 回归
+
 </Objectives>
 
-## 直觉引入
+## 直觉：GI 的困难是高维积分与可见性
 
-想象一个白色房间。阳光从窗户照进来，照到红色地毯上——墙壁上会泛着淡淡的红色。这就是全局光照（GI）：光不只从光源直接到眼睛，还会在表面之间弹射，携带颜色信息。
+先预测：红墙移到白墙旁边，烘焙 lightmap、screen-space GI 和动态探针分别何时更新？镜头看不到红墙后，SSGI 还能保留它的反弹光吗？技术选择取决于它存了什么、能看见什么、何时更新。
 
-直接光只算「光源→表面→眼睛」一次弹射，而GI要算多次弹射。每次弹射的计算量指数增长，这就是实时GI的根本困难——16.6ms内算不完。所以各种GI技术都是在「质量」和「速度」之间做妥协。
-
-## 概念讲解
-
-### 全局光照技术
+Ch11 Global Illumination 处理表面之间的间接能量交换；Ch26 Real-Time Ray Tracing 提供查询几何可见性和路径样本的现代执行方式。光追不自动等于 GI，也不自动精确：结果还取决于路径 estimator、样本数、材质、加速结构、降噪与历史有效性。
 
 <RtrGlobalIlluminationDiagram />
 
-<Term def="全局光照模拟光线在场景中多次弹射的效果，包括直接光和间接光">全局光照</Term>（GI）的核心挑战：多次弹射的计算量指数增长。
+## Ch11 Global Illumination：递归 transport，不是一个 ambient 项
 
-实时GI的主要方案：
-- <Term def="光探针在场景中预采样或实时更新间接光信息，用球谐函数压缩存储">光探针</Term>（Light Probe）：空间采样间接光
-- <Term def="SSAO在屏幕空间采样深度信息近似环境光遮蔽，是GI的最简形式">SSAO</Term>：屏幕空间环境光遮蔽
-- <Term def="DDGI用动态更新的体素网格存储辐照度，支持动态场景的实时GI">DDGI</Term>：动态辐照度体素
-- <Term def="RTX利用硬件光线追踪单元实时计算光线弹射，是最精确的实时GI方案">RTX光线追踪</Term>
+<Term def="同时计算直接与间接光传输，使表面之间的遮蔽、颜色渗透和多次反射参与最终辐亮度的渲染问题">全局光照</Term>来自渲染方程的递归：入射 radiance 又是其他表面的出射 radiance。
 
-## 交互Demo
+$$
+L_o(x,v)=L_e(x,v)+\int_{\Omega^+}f_r(x,l,v)L_i(x,l)V(x,l)(n\cdot l)d\omega.
+$$
 
-<Stepper>
-<Step title="第一步：GI的本质">理解直接光（一次弹射）和间接光（多次弹射）的区别。AO是最简GI——只计算遮蔽不计算颜色。</Step>
-<Step title="第二步：屏幕空间方案">
-SSAO/SSGI/SSR在屏幕空间做近似，快速但有限制（屏幕外的信息无法获取）。理解它们的原理和局限。
-<RtrGlobalIlluminationDiagram />
-</Step>
-<Step title="第三步：空间与追踪方案">光探针预采样间接光，DDGI动态更新体素，RTX用硬件做光线追踪。从预计算到实时的演进趋势。</Step>
-</Stepper>
+可以把 $L_i$ 按直接光源与其他表面贡献拆分，但 direct/indirect 的具体路径定义要与 estimator 一致。计算困难不只是“路径数量指数增长”：路径空间维度高、visibility 不连续、亮光源/高光路径导致方差，动态场景又限制预计算与时间复用。
 
-## 代码对照
+<Term def="几何对半球环境入射方向的可见比例及其余弦加权近似；不携带完整光源颜色与多次传输">环境光遮蔽</Term>是可见性/几何项近似，不等同于 GI，也不应无条件乘到所有 direct/specular/indirect light。SSAO 只看屏幕 depth/normal，缺少屏外、背面和距离之外的信息。
 
-```glsl
-// SSAO (屏幕空间环境光遮蔽) 简化实现
-uniform sampler2D gPosition;
-uniform sampler2D gNormal;
-uniform sampler2D noiseTexture;
-uniform vec3 samples[64]; // 采样球
+## 表示、缓存与更新策略
 
-float SSAO(vec2 texCoords, mat4 projection) {
-    vec3 fragPos = texture(gPosition, texCoords).rgb;
-    vec3 normal = texture(gNormal, texCoords).rgb;
-    
-    float occlusion = 0.0;
-    for(int i = 0; i < 64; ++i) {
-        // 采样点从切线空间变换到世界空间
-        vec3 samplePos = fragPos + samples[i];
-        
-        // 变换到裁剪空间并采样深度
-        vec4 offset = projection * vec4(samplePos, 1.0);
-        offset.xyz /= offset.w;
-        offset.xyz = offset.xyz * 0.5 + 0.5;
-        
-        float sampleDepth = texture(gPosition, offset.xy).z;
-        
-        // 如果采样点的深度小于实际几何深度，则被遮挡
-        if(samplePos.z < sampleDepth + 0.025)
-            occlusion += 1.0;
-    }
-    occlusion = 1.0 - (occlusion / 64.0);
-    return occlusion;
+<RtrGiMethodsDiagram />
+
+### 预计算 lightmap 与 probes
+
+lightmap 把静态表面的 irradiance/radiance 烘焙到 UV atlas，质量高且运行时便宜，但受 UV、texel density、静态几何/光照和方向表示约束。directional lightmap 或 basis coefficients 可恢复部分法线/方向响应。
+
+<Term def="在空间离散位置缓存低频入射光或 irradiance，并在运行时插值供动态物体或表面使用的结构">光照探针</Term>常用球谐函数压缩低频方向信号。插值需考虑墙体可见性，否则探针会跨墙漏光；tetrahedral/visibility-aware interpolation、probe relocation/classification 可改善。
+
+### 动态探针、体素和距离场
+
+<Term def="用分布式探针持续发射射线、更新 irradiance 与可见性统计，并在空间插值间接光的动态 GI 家族">DDGI</Term>不是“必然用体素存 irradiance”。典型 probe grid 更新 ray radiance 与 depth moments，使用 hysteresis 降噪；需要处理 probe 位于几何内、快速光照变化、薄墙漏光和 scrolling volume。
+
+voxel cone tracing 把场景/辐射体素化并构建 mip，cone 近似方向积分；内存、各向异性、voxel leak 和动态更新是主要边界。SDF 方法擅长粗略 visibility/距离 marching，但薄几何、非均匀缩放与场组合误差需要保守处理。
+
+### 屏幕空间与混合 GI
+
+SSGI 从当前 frame buffers 追踪/采样，能复用已着色 radiance，成本低但缺屏外、被遮挡和背面信息，并受 depth thickness 近似限制。混合系统通常用 screen-space 取近场细节，probe/lightmap 供稳定低频，ray tracing 处理高价值缺口；每层需要 confidence 和明确 fallback。
+
+## Ch26 Real-Time Ray Tracing：查询路径与加速结构
+
+<RtrRayTracingDiagram />
+
+<Term def="组织三角形或过程原语包围盒的层次结构，使射线通过包围盒剔除避免遍历所有几何">包围体层次结构</Term>（BVH）把平均查询从线性枚举降到层次遍历，但复杂度依空间分布、构建质量和 ray coherence。
+
+现代系统通常将 geometry 放在 BLAS，把 instance transform/reference 放在 TLAS。静态 BLAS 可高质量 build/compact；变形几何可 refit 或 rebuild；TLAS 随实例变换更新。build/update、scratch、compaction、memory residency 和同步都属于帧预算。
+
+一条 ray 工作流包括 ray generation/query → TLAS/BLAS traversal → primitive intersection → any-hit/alpha decision → closest-hit shading 或 miss。硬件可加速 traversal/intersection，但 shader divergence、随机 memory、复杂 any-hit 与深递归仍昂贵。
+
+```cpp
+RayDesc ray = makeSecondaryRay(position, normal, sampledDirection);
+RayHit hit = traceScene(tlas, ray, geometryMask);
+
+if (hit.valid) {
+    Surface next = fetchSurface(hit.instance, hit.primitive, hit.barycentrics);
+    sample.radiance = emitted(next) + estimateDirect(next, rng);
+    sample.throughput *= evaluateBsdfPdfRatio(surface, sampledDirection);
+} else {
+    sample.radiance = sampleEnvironment(ray.direction);
 }
 ```
+
+ray origin 必须按几何尺度稳健偏移，避免 self-intersection 又不穿过薄面；instance mask、alpha-tested any-hit、double-sided 与 motion transform 都要匹配 raster path。
+
+## 低样本估计、复用与降噪
+
+实时预算常只有每像素每效果少量 rays。Monte Carlo estimator：
+
+$$
+\hat L=\frac{1}{N}\sum_{i=1}^{N}\frac{f(X_i)}{p(X_i)},
+\qquad Var[\hat L]\propto\frac{1}{N}.
+$$
+
+噪声标准差只按 $1/\sqrt N$ 下降，不能靠少量增加 samples 快速消失。importance sampling、next-event estimation、MIS、reservoir sampling 和 spatiotemporal reuse 用更好分布或更多候选降低方差，但必须保留正确权重与有效性。
+
+<Term def="利用几何、法线、材质、运动与历史等辅助特征，在尽量保留边缘和能量的前提下估计低噪辐射信号的过程">光线追踪降噪</Term>通常包括：demodulation（可选）、temporal reprojection/accumulation、history validation、variance estimation、edge-aware spatial filter、remodulation。它会引入 bias；firefly clamp、history clamp 和 blur 必须用 reference 验证，不能只看“更干净”。
+
+路径 throughput 在每次反射乘 BRDF、cosine、visibility 并除 PDF。Russian roulette 以存活概率继续长路径并除权，保持无偏而减少平均工作；固定截断则产生可解释但有偏的缺失能量。
+
+## GI 方法的统一误差账本
+
+任何实时 GI 都应记录四类误差：
+
+- **representation**：lightmap/probe/voxel/GBuffer/ray scene 丢了哪些频率与几何；
+- **sampling**：ray/direction/probe 更新是否覆盖主要贡献，PDF/权重是否正确；
+- **reuse/filter**：历史、空间插值和 denoise 引入多少 lag、leak、blur、bias；
+- **systems**：build/update、memory、streaming、queue 与 shader 成本是否满足 frame/latency budget。
+
+## 三步 GI 验收
+
+<Stepper>
+<Step title="第一步：拆分贡献与置信度">
+
+分别显示 direct、diffuse/specular indirect、AO、probe/SS/ray layer、ray hit distance、sample count、variance 和 confidence。
+
+<RtrStepFlowDiagram caption="先知道每一块能量由哪种表示和 estimator 产生。" stage={1} stages={["Inspect：transport layers、hits、samples、variance、confidence"]} />
+
+</Step>
+<Step title="第二步：构造信息边界场景">
+
+测试红白 color bleed、薄墙、门开关、屏外发光体、动态实例、镜面链、相机切换和 lighting change。
+
+<RtrStepFlowDiagram caption="这些场景分别暴露漏光、缺失可见性、更新延迟和高方差路径。" stage={2} stages={["Inspect：transport layers、hits、samples、variance、confidence", "Stress：thin walls、off-screen emitters、dynamic geometry、specular paths"]} />
+
+</Step>
+<Step title="第三步：对比路径追踪 reference">
+
+固定曝光与材质，对比高样本 reference；记录 bias、variance、temporal lag、disocclusion、build/update、rays、memory 与 P95 GPU time。
+
+<RtrStepFlowDiagram caption="低噪、低偏差、快速响应和实时成本必须一起衡量。" stage={3} stages={["Inspect：transport layers、hits、samples、variance、confidence", "Stress：thin walls、off-screen emitters、dynamic geometry、specular paths", "Validate：reference error、response time、build/update、memory、GPU"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**误区：把SSAO等同于全局光照。**
-SSAO只计算环境光的遮蔽程度（角落变暗），不计算间接光的颜色（红地毯反射到白墙上的红色）。它是GI的最简形式——只算遮蔽不算颜色。完整的GI需要额外的间接光计算。
+**现象 →** 把 SSAO 称作完整 GI，或把 AO 乘到所有光照。**原因 →** 混淆几何可见性近似与 radiance transport。**修法 →** 单独显示 AO 的作用域，用直接/间接 reference 验证它只调制目标低频环境项。
 </Callout>
 
 <Callout type="trap">
-**误区：认为RTX已经完全解决实时GI。**
-RTX硬件光线追踪大幅提升了GI质量，但仍有局限：1）半分辨率采样需要降噪；2）弹射次数仍受限（通常1-2次）；3）高频间接光（如焦散）仍困难。RTX是当前最优方案但不是终极方案。
+**现象 →** 认为有硬件 ray tracing 就得到“最精确 GI”。**原因 →** 忽略 estimator、samples、材质、scene representation 与 denoiser。**修法 →** 报告 rays/pixel、bounce、PDF、history 和 reference error，不用品名代替方法证据。
 </Callout>
 
+<Callout type="trap">
+**现象 →** 动态光关掉后房间仍亮，薄墙另一侧漏色。**原因 →** probe hysteresis/visibility 与历史复用未处理突变和遮挡。**修法 →** 显示 probe depth/confidence，加入 change detection、relocation/classification 与历史重置回归。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题 1**：直接光照和间接光照的区别是什么？为什么GI如此困难？
+
+**问题 1：AO 为什么不等于 GI？**
 
 <Answer>
-直接光是光从光源出发只弹射一次到达眼睛（光源→表面→眼睛）；间接光是光在场景中多次弹射后到达眼睛（光源→表面A→表面B→眼睛），携带了弹射表面的颜色信息。GI困难因为每次弹射的计算量指数增长——N个表面两两组合的弹射路径数量是O(N^弹射次数)，实时16.6ms内无法穷举，必须用近似方法。
+AO 主要估计半球方向的几何可见比例，不包含入射 radiance、材质颜色传播、方向光源和多次传输。GI 求的是 radiance transport；AO 只能作为特定环境照明近似中的一项，且作用域要明确。
 </Answer>
 
-**问题 2**：SSAO是全局光照的什么简化形式？它计算了什么，忽略了什么？
+**问题 2：BLAS 与 TLAS 分离解决什么问题？**
 
 <Answer>
-SSAO是GI的最简形式——只计算环境光的遮蔽程度，不计算间接光的颜色。它计算了：角落、缝隙等几何遮挡处变暗（遮蔽值高），开放处不暗（遮蔽值低）。它忽略了：间接光的颜色传播（红地毯的红色不会反射到白墙上）、间接光的方向性（只标量遮蔽不存方向）。SSAO快速但视觉信息有限，是质量与性能的折中。
+BLAS 组织一份 geometry 的原语，TLAS 组织引用这些 BLAS 的实例及变换。相同 mesh 可多实例共享 BLAS，只更新 TLAS 变换；变形 geometry 再选择 refit/rebuild BLAS，从而分离几何与场景实例更新成本。
 </Answer>
+
+**问题 3：怎样区分低样本噪声与 denoiser 拖影？**
+
+<Answer>
+保存 raw sample、sample count、variance、motion、history validity 与 filtered output；关闭历史只看空间滤波，再固定相机观察 Monte Carlo 方差。raw 随帧随机波动是采样噪声，错误历史沿运动残留则是重投影/验证问题。
+</Answer>
+
+**问题 4：动态 GI 的薄墙漏光怎样复现和量化？**
+
+<Answer>
+建立一侧强色光、另一侧全黑的可变墙厚场景，扫描 probe spacing、ray count、visibility bias 和墙厚；记录暗侧 irradiance/reference ratio、probe depth moments、更新时间与内存，并覆盖开门/关门过程。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+Ch11 与 Ch26 把间接光传输和实时几何查询连接起来。lightmap、probe、screen-space、voxel/SDF 与 ray tracing 只是不同的信息与更新选择；最终质量由 estimator、可见性、样本、复用和系统预算共同决定，必须以分层可视化、边界场景和高样本 reference 验收。
+
 <Glossary>
-<GlossaryItem term="全局光照">模拟光线在场景中多次弹射效果的渲染技术，包括直接光和间接光。</GlossaryItem>
-<GlossaryItem term="SSAO">屏幕空间环境光遮蔽，在屏幕空间采样深度近似遮蔽，是GI的最简形式。</GlossaryItem>
-<GlossaryItem term="光探针">在场景空间中采样间接光信息并用球谐函数压缩存储的GI技术。</GlossaryItem>
-<GlossaryItem term="RTX光线追踪">利用硬件光线追踪单元实时计算光线弹射，是当前最精确的实时GI方案。</GlossaryItem>
+<GlossaryItem term="全局光照">计算直接与间接表面光传输的渲染问题。</GlossaryItem>
+<GlossaryItem term="环境光遮蔽">对半球环境方向几何可见比例的近似。</GlossaryItem>
+<GlossaryItem term="光照探针">在空间离散点缓存低频入射光并插值的结构。</GlossaryItem>
+<GlossaryItem term="DDGI">持续用射线更新探针 radiance/irradiance 与可见性的动态 GI 家族。</GlossaryItem>
+<GlossaryItem term="包围体层次结构">以层次包围盒加速射线与几何相交查询的结构。</GlossaryItem>
+<GlossaryItem term="光线追踪降噪">利用辅助特征和时空样本估计低噪 radiance 的过程。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="实时渲染第4版" adaptedUrl="https://www.realtimerendering.com/" />
+<Attribution adaptedFrom="Real-Time Rendering 4e, Chapters 11 and 26" adaptedUrl="https://www.realtimerendering.com/" />

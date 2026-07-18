@@ -3,77 +3,267 @@ title: 指针运算与字符串
 type: A
 section: 指针与数组
 order: 5
-description: 指针算术步长、字符数组与字符指针、指针数组、命令行参数 argv。
+description: 延续 K&R 第五章，以空字符终止与容量契约区分字符串字面量、可修改字符数组和只读指针，并掌握指针数组、char **、二维字符矩阵、argc/argv、函数指针和复杂声明。
 demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/content/images/9780131103627/samplepages/0131103628.pdf"
 draft: false
 ---
 
-import { KrcStringPointerDiagram } from "@/components/mdx/kr-c-language/diagrams/krc-string-pointer";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  KrCallbackDeclarationMap,
+  KrStringCollectionTypeMap,
+  KrStringStorageContractMap,
+} from "@/components/mdx/the-c-programming-language/diagrams/pointer-arithmetic";
 
 <Objectives>
 
-- 能区分字符数组（可改）和字符指针（指向只读常量）的内存模型与行为差异
-- 能解释指针算术 `p+n` 的实际偏移字节数，以及同一数组内指针相减的含义
-- 能回答：`main(int argc, char *argv[])` 中 argv 是什么类型？如何遍历所有命令行参数？
+- 能比较字符串字面量、初始化字符数组与 `const char *` 的类型、存储期、可修改性、长度和容量契约
+- 能区分指针数组、指向指针的指针和二维字符数组，并安全遍历 `argc/argv`
+- 能读写函数指针与回调数组声明，实现不溢出的 `qsort` 比较器并解释复杂声明的结合顺序
 
 </Objectives>
 
-## 指针算术的步长
+## 从“字符数组不一定是字符串”开始
 
-指针加减一个整数 n，实际偏移的字节数是 `n * sizeof(*p)`，而不是 n 个字节。这是 C 指针最核心的设计：指针不仅存储地址，还携带了类型信息，使得指针算术自动按类型大小缩放。`int *p` 加 1 跳过 1 个 int（4 字节），`char *p` 加 1 跳过 1 个 char（1 字节），`double *p` 加 1 跳过 8 字节。
+C 没有独立运行时字符串对象；所谓字符串，是一段字符序列后紧跟空字符 `\0` 的协议。`char bytes[4] = {'t', 'e', 'x', 't'};` 是合法字符数组，却不是 C 字符串，传给 `strlen` 或 `%s` 会越过边界寻找不存在的终止符。
 
-<KrcStringPointerDiagram />
+<KrStringStorageContractMap />
 
-## 核心概念
+接口必须同时知道可读范围与终止协议。只写 `const char *text` 表达“通过该指针不修改字符”，不证明指针非空、对象仍存活或一定能在边界内找到 `\0`；这些都是函数前置条件。
 
-字符串在 C 中没有独立类型——它是以 `'\0'`（空字符）结尾的字符数组。这带来两种存储方式：<Term def="在栈上分配的字符数组，内容可修改，如 char s[] = &quot;hello&quot;;。">字符数组</Term>和<Term def="指向字符串常量的字符指针，常量通常在只读内存段，不可修改，如 char *s = &quot;hello&quot;;。">字符指针</Term>。
+## 字符串字面量与可修改数组
 
-`char s[] = "hello";` 在栈上分配 6 字节，把 "hello\0" 复制进去。s 是数组名，元素可任意修改（`s[0] = 'H'` 合法）。
+<Term def="源代码中由双引号包围的字符序列，翻译后形成带结尾空字符的静态存储期字符数组。C 中其元素类型不是 const char，但尝试修改的行为未定义。">
+  字符串字面量
+</Term>
+`"hello"`
+含六个字符对象，包括终止符。它具有静态存储期，但实现可以合并相同字面量，修改任何字符串字面量的行为都未定义。不要依赖它位于名为
+`.rodata` 的段，也不要把“某次段错误”当成规则本身。
 
-`char *s = "hello";` 中 s 是指针，指向字符串常量。字符串常量通常存储在只读内存段，尝试修改（`s[0] = 'H'`）行为未定义——可能段错误。s 本身可以重新指向其他地址。
+`char text[] = "hello";` 用字面量初始化一个独立数组，元素可修改；数组是自动、静态还是线程存储期取决于声明位置与说明符，不等于“一定在栈上”。`const char *view = "hello";` 则让接口在类型层阻止经 `view` 写字符，是读取字面量的推荐声明。
 
-指针运算遍历字符串是 K&R 的经典写法：`while (*p) p++;`。每次循环检查 p 指向的字符是否为 `'\0'`（值为 0，即假），不是就 p 前进一步。`*p++` 先取 p 指向的字符，再把 p 加 1——后缀自增的巧妙运用。遇到 `'\0'` 时条件为假，循环终止。
+```c
+#include <stddef.h>
+#include <string.h>
 
-<Term def="指向指针的指针，即存储另一个指针地址的变量。命令行参数 char **argv 就是指针数组。">指针数组</Term>是 C 处理多个字符串的标准方式。`char *lines[100]` 是一个数组，每个元素是 `char *`，指向一个字符串。排序时只需交换指针（8 字节），不需要搬移整个字符串——这是 K&R 用指针数组实现高效文本排序的核心思路。
+int copy_text(char *target, size_t capacity, const char *source)
+{
+    size_t length;
+    if (target == NULL || source == NULL)
+        return 0;
+    length = strlen(source);
+    if (length >= capacity)
+        return 0;
+    memcpy(target, source, length + 1);
+    return 1;
+}
+```
 
-命令行参数通过 `main(int argc, char *argv[])` 传入。`argv` 是 `char **` 类型（指针数组的退化），`argv[0]` 是程序名，`argv[1]` 到 `argv[argc-1]` 是用户传入的参数，`argv[argc]` 是 NULL（哨兵）。遍历可以用下标，也可以用指针：`for (char **p = argv; *p; p++) printf("%s\n", *p);`。
-
-<Callout type="tip">
-<strong>建议 →</strong> K&R 实现的简化版 strlen 用了三行代码完美展示指针运算：`char *p = s; while (*p) p++; return p - s;`。同一数组内两个指针相减的结果是元素个数（自动除以 sizeof），不是字节数。读懂这段代码，就懂了 C 指针的精髓。
-</Callout>
-
-## 常见误区
+`length + 1` 包含终止符；先检查 `length >= capacity` 避免加一溢出的写法。函数仍要求 `source` 已在可达范围内终止，且源目标不重叠；若允许重叠应使用 `memmove`。失败时目标保持不变，因为容量验证发生在写入前。
 
 <Callout type="trap">
-<strong>现象 →</strong> `char *s = "hello"; s[0] = 'H';` 运行时崩溃（段错误）。<strong>原因 →</strong> 字符串常量 "hello" 通常存储在只读内存段（.rodata），尝试写入触发内存保护异常。<strong>修法 →</strong> 如果需要修改字符串，用字符数组：`char s[] = "hello"; s[0] = 'H';`。数组在栈上有一份副本，可安全修改。或者用 malloc 分配可写内存再 strcpy。
+  **现象**：用 `strncpy(target, source, capacity)` 后直接把 `target`
+  当字符串。**原因**：源长度不小于上限时，`strncpy`
+  不保证写入终止符，并且会用零填满剩余区域。**修法**：先定义截断还是失败；失败协议可像示例先测长度，截断协议则显式保留一格并写终止符。
 </Callout>
+
+## 字符指针、字符串函数与长度
+
+K&R 用字符指针实现一组字符串函数：`strlen` 的指针写法从起点移动到首个空字符，再用同一数组中的指针差得到长度。返回类型在现代标准库中是 `size_t`，而指针差类型是 `ptrdiff_t`；从差值转成 `size_t` 前，算法已经证明终点不早于起点。
+
+```c
+#include <stddef.h>
+
+size_t text_length(const char *text)
+{
+    const char *cursor = text;
+    while (*cursor != '\0')
+        ++cursor;
+    return (size_t)(cursor - text);
+}
+```
+
+这段代码的前置条件与 `strlen` 相同：`text` 非空且存在可达终止符。`*cursor++` 按优先级解析为 `*(cursor++)`，先产生当前字符值，再递增指针；若可读性比紧凑更重要，拆成两条语句更容易检查边界。
+
+指针加一的抽象步长是一个所指元素，不应把 `int *` 固定解释为四字节或 `double *` 固定八字节。对 `char *` 而言一个元素恰好是一个 C 字节，因为 `sizeof(char) == 1`；这个字节有多少位仍由 `CHAR_BIT` 决定。
+
+## 指针数组不是 char \*\* 对象
+
+<Term def="元素本身是指针的数组，例如 char *lines[100]。数组对象存放固定数量的指针值；在多数表达式中才转换为指向首个指针元素的二级指针。">
+  指针数组
+</Term>
+`char *lines[100]` 含一百个 `char *`
+子对象。每个元素可指向不同长度、不同存储期的字符序列；交换两个元素只重排视图，不搬移字符串字节。
+
+<Term def="保存另一个指针对象地址的指针类型，例如 char **。它本身不声明数组长度，也不保证后面存在多个指针元素。">
+  指向指针的指针
+</Term>
+`char **cursor` 只是一个指针对象。`lines`
+在表达式中转换后可初始化它，但二者声明布局仍不同，`sizeof lines` 与 `sizeof
+cursor` 也不同。
+
+<KrStringCollectionTypeMap />
+
+二维字符数组 `char rows[100][80]` 则连续存放一百个固定宽度行，转换为 `char (*)[80]`。它不是 `char **`：内存中没有一百个行指针。强制转换不会创建这些指针，只会让后续解引用错误解释字符数据。
 
 <Callout type="trap">
-<strong>现象 →</strong> 指向不同数组的两个指针相减或比较，得到无意义的结果。<strong>原因 →</strong> C 标准规定指针算术（相减、比较大小）只在同一数组内（或越过末尾一个位置）有定义。跨数组的指针运算行为未定义。<strong>修法 →</strong> 确保指针运算的两个操作数指向同一块连续内存。如果需要跨缓冲区操作，用整数索引而非指针差值。
+  **现象**：把 `char matrix[10][32]` 强转为 `char **`
+  传入函数后崩溃。**原因**：函数把前几个字符字节当成一枚指针值。**修法**：让形参保留列类型
+  `char matrix[][32]`，或显式构造 `char *rows[10]` 并逐项指向各行。
 </Callout>
 
-## 小结与练习
+## argc 与 argv 的启动契约
 
-- 指针算术步长 = sizeof(指向类型)：int* 加 1 跳 4 字节，char* 加 1 跳 1 字节
-- 字符数组在栈上可改，字符指针指向只读常量不可改；C 字符串以 '\0' 结尾
-- 指针数组排序只需交换指针（O(1)），无需搬移字符串内容——K&R 文本排序的核心思路
-- argv 是 char** 类型，argv[0] 是程序名，argv[argc] 是 NULL 哨兵
+`main(int argc, char *argv[])` 的数组形参调整使 `argv` 在函数类型中成为 `char **`。`argc` 非负，`argv[argc]` 是空指针；当 `argc > 0` 时，`argv[0]` 由宿主环境提供用于表示程序调用名，但不能可移植地假设它是绝对路径。
+
+```c
+#include <stdio.h>
+
+int main(int argc, char *argv[])
+{
+    int index;
+    for (index = 0; index < argc; ++index)
+        printf("argv[%d] = %s\n", index, argv[index]);
+    return 0;
+}
+```
+
+按 `argc` 遍历最清楚，也可用 `argv[argc]` 哨兵。命令行字符串由宿主环境构造，其编码、引号解析和可用长度是平台约定；不要把 shell 的展开规则误写成 ISO C 语言保证。
+
+原书常通过移动 `argv` 指针解析选项，这会丢失原始基址。现代代码可保留 `argv`，移动单独索引或游标，便于错误信息引用原始参数位置。任何读取 `argv[index + 1]` 的选项都必须先验证剩余参数数量。
+
+## main 函数与宿主环境
+
+在 hosted C 实现中，标准入口可写 `int main(void)` 或与 `int main(int argc, char *argv[])` 等价的形式；实现还可以提供其他文档化形式。`main` 返回的零表示成功，非零状态交给宿主环境解释；不要把 shell 显示方式或某个操作系统的状态位宽当成 ISO C 保证。
+
+`argv[argc]` 的空指针使指针式遍历可停止，但 `argc` 仍是主要边界，因为它能在访问前验证后续参数数量。`argv[0]` 不是可移植的安装路径 API，参数编码也取决于宿主。freestanding 实现（内核、引导程序、部分嵌入式环境）甚至不要求以这两种 `main` 形式启动，应遵循目标平台入口契约。
+
+入口函数仍受普通数组形参调整和值传递规则约束：`argv` 是指针值副本，移动它不会改写宿主保存的参数表，但会丢失当前函数中的原始起点。保持原指针并移动索引，能让诊断和所有权推理更清楚。
+
+## 函数指针把算法与策略分开
+
+<Term def="保存函数标识的指针，可按兼容函数类型调用。它不等同于对象指针，不能可移植地经 void * 存储。">
+  函数指针
+</Term>
+让排序、遍历和事件分派接收调用策略。`qsort`
+比较器接收两个元素地址，返回负、零、正值表示顺序；它必须在所有调用中保持一致，不能修改元素或依赖调用次数。
+
+```c
+#include <stdlib.h>
+
+int compare_ints(const void *left, const void *right)
+{
+    int a = *(const int *)left;
+    int b = *(const int *)right;
+    return (a > b) - (a < b);
+}
+
+void sort_ints(int values[], size_t count)
+{
+    qsort(values, count, sizeof values[0], compare_ints);
+}
+```
+
+不要写 `return a - b;`，差值可能有符号溢出。`qsort` 给出的地址按元素类型正确对齐，所以转换回 `const int *` 后读取合法；比较器函数类型若不兼容，强转函数指针也不能修复调用约定。
+
+<KrCallbackDeclarationMap />
+
+## 从名字向外读复杂声明
+
+<Term def="由指针、数组和函数声明符嵌套形成的声明。阅读时从标识符出发，先处理括号，再按后缀 []/() 与前缀 * 的结合关系向外解释。">
+  复杂声明
+</Term>
+的关键是括号：`int *find(void)` 中 `find` 先与 `()` 结合，所以它是返回 `int *`
+的函数；`int (*find)(void)` 中括号让 `*find` 先结合，所以它是指向返回 `int`
+函数的指针。
+
+`int (*handlers[4])(int)` 从 `handlers` 开始：先看 `[4]`，它是四元素数组；元素外有 `*`，是指针；再看 `(int)`，指向接收 `int` 的函数；最外层 `int` 是函数返回类型。对公开 API，可用 `typedef int (*handler_fn)(int);` 分层命名，但仍要让所有权、可为空和调用线程规则可见。
+
+函数名在多数表达式中也会转换为函数指针，调用可写 `callback(value)` 或 `(*callback)(value)`。调用前确认非空；函数指针比较只应用于相等/不等，不做对象数组式算术。
+
+## 字符串集合的所有权
+
+指针数组排序看似只交换地址，却带来所有权问题：每个字符串由谁分配、谁释放、是否共享字面量、数组销毁时是否逐项释放。把字面量、调用者缓冲和 `malloc` 结果混进同一 `char *` 数组后统一 `free` 会出错。
+
+可用 `const char *` 表示只读借用集合；若模块拥有字符串，则复制每个字符串并记录成功数量，失败时只释放已经取得的对象。排序函数只重排借用指针，不转移字符串所有权。接口文档应把“元素可改”“指针可重排”“字符串由谁释放”分成三条。
+
+字符串比较必须用 `strcmp` 等按内容比较，`left == right` 只比较两个指针是否指向同一位置。相同文本的字面量可能被合并也可能不合并，因此地址相等既不是内容 API，也不能作为跨构建稳定标识。
+
+> 先预测：两个内容都为 `"same"` 的字符串指针用 `==` 比较是否一定为真？不一定；内容相等应由逐字符协议判断，字面量合并是实现选择。
+
+## 解析参数时保持错误可定位
+
+命令行解析要把“当前参数”“该选项还需要几个值”“未知选项怎样处理”写成状态机。遇到 `-o` 后先检查 `index + 1 < argc`，再消费文件名；错误信息同时打印原始索引与选项文本。不要在检查前递增 `argv`，否则缺参时很难指出哪个参数触发错误。
+
+对可重复选项决定覆盖、累加还是拒绝；对 `--` 之后的文本决定是否停止选项解析；对空字符串和以连字符开头的文件名提供明确规则。这些属于程序协议，不由 C 标准替你定义。
+
+环境可能允许修改 `argv` 字符串，但把参数原地切分会破坏后续日志与诊断。更稳妥的做法是保留原输入，使用指向子串的只读视图或复制需要持久化的值，并把所有权写进配置对象。
+
+## 小结
+
+- 字符数组只有在可达范围内含空字符时才是字符串；长度、容量和终止符是独立契约
+- 字符串字面量具有静态存储期，C 中类型不是 const 数组，但任何修改行为都未定义
+- 指针数组对象、`char **` 和二维字符数组布局不同；转换只在规定表达式语境发生
+- `argc` 给命令行元素数，`argv[argc]` 是空指针；程序名与参数编码受宿主环境约束
+- 函数指针要求兼容声明和稳定回调语义；复杂声明从名字出发按括号与后缀向外读
 
 <Exercises>
-  <Answer question='`char *s = "hello";` 和 `char s[] = "hello";` 有什么本质区别？哪种可以修改字符？'>前者是指针，指向只读字符串常量（通常在 .rodata 段），尝试修改字符行为未定义（可能段错误）。后者是字符数组，在栈上分配 6 字节并把 "hello\0" 复制进去，元素可任意修改。需要修改字符串内容时必须用字符数组（或 malloc 分配的可写内存）。</Answer>
-  <Answer question="K&R 的 strlen 实现 `char *p = s; while (*p) p++; return p - s;` 中，`p - s` 返回的是字节数还是字符数？为什么？">返回的是字符数（元素个数），不是字节数。C 标准规定：指向同一数组内两个元素的指针相减，结果是它们之间的元素个数（ptrdiff_t 类型），自动除以 sizeof(元素类型)。这里元素是 char（1 字节），所以元素数 = 字节数，但对 int 数组则不同。这个设计让指针相减天然以「元素」为单位，无需手动除以 sizeof。</Answer>
+
+**问题 1** 比较 `char a[] = "hello";`、`const char *p = "hello";` 与 `char bytes[5] = {'h','e','l','l','o'};`：哪些是字符串，哪些元素可经当前名字修改，`sizeof` 分别表达什么？
+
+<Answer>
+
+`a` 是六元素可修改字符数组并含终止符，是字符串；`p` 是只读访问指针，指向字面量，`sizeof p` 是指针大小而非文本长度；`bytes` 有五个字符但无终止符，不是字符串。`sizeof a` 为 6，`sizeof bytes` 为 5，具体 `sizeof p` 由实现决定。
+
+</Answer>
+
+**问题 2** 为什么 `char *lines[10]` 可在表达式中传给 `char **` 形参，而 `char matrix[10][32]` 不可以？
+
+<Answer>
+
+`lines` 的元素类型是 `char *`，数组转换后得到指向首个 `char *` 元素的 `char **`。`matrix` 的元素类型是 `char[32]`，转换后得到 `char (*)[32]`；其存储是连续字符，没有行指针对象，二者布局与步长不同。
+
+</Answer>
+
+**问题 3** 解释 `int *f(void)`、`int (*f)(void)` 与 `int (*f[3])(void)`，并说明为何 `qsort` 比较器不应返回两个 `int` 的差。
+
+<Answer>
+
+第一项是返回 `int *` 的函数；第二项是指向“无参数、返回 int”函数的指针；第三项是三个此类函数指针组成的数组。比较器返回差值可能在极端值间发生有符号溢出，应使用 `(a > b) - (a < b)` 等不溢出的三路比较。
+
+</Answer>
+
 </Exercises>
 
-## 名词解释
-
 <Glossary>
-  <GlossaryItem term="字符数组">在栈上分配的字符数组，内容是字符串的副本，可修改。如 `char s[] = "hello";` 在栈上分配 6 字节。适合需要修改字符串内容的场景。</GlossaryItem>
-  <GlossaryItem term="字符指针">指向字符串常量的字符指针。如 `char *s = "hello";` 中 s 指向只读内存中的常量，尝试修改字符行为未定义。s 本身可重新指向其他地址。</GlossaryItem>
-  <GlossaryItem term="指针数组">元素为指针的数组，如 `char *lines[100]` 是 100 个 char* 指针的数组。常用于管理多个字符串，排序时只需交换指针而非搬移字符串内容。</GlossaryItem>
-  <GlossaryItem term="argv">main 函数的第二个参数，类型为 char**，是指向字符串的指针数组。argv[0] 是程序名，argv[1] 到 argv[argc-1] 是用户参数，argv[argc] 是 NULL 哨兵。</GlossaryItem>
+
+<GlossaryItem term="字符串字面量">
+  双引号字符序列翻译成带结尾空字符的静态存储期字符数组。C 中其元素类型不是
+  `const char`，但修改行为未定义。
+</GlossaryItem>
+
+<GlossaryItem term="指针数组">
+  元素类型为指针的数组。对象实际存放固定数量指针；多数表达式中才转换为指向首个指针元素的二级指针。
+</GlossaryItem>
+
+<GlossaryItem term="指向指针的指针">
+  保存另一个指针对象地址的指针，例如 `char
+  **`。它本身不声明数组长度，也不等于二维字符数组。
+</GlossaryItem>
+
+<GlossaryItem term="函数指针">
+  指向兼容函数类型的指针，可用于回调和策略注入。它不属于对象指针，不能假设可经
+  `void *` 可移植往返。
+</GlossaryItem>
+
+<GlossaryItem term="复杂声明">
+  指针、数组与函数声明符的嵌套组合。从标识符开始，先处理括号，再按后缀和前缀向外解释。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution adaptedFrom="The C Programming Language (Kernighan & Ritchie)" adaptedUrl="https://www.prenticehall.com/" />
+<Attribution
+  title="The C Programming Language, Second Edition, Chapter 5: Pointers and Arrays"
+  url="https://www.informit.com/content/images/9780131103627/samplepages/0131103628.pdf"
+/>

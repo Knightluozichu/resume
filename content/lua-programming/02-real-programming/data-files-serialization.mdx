@@ -1,0 +1,204 @@
+---
+title: "Chapter 15. Data Files and Serialization"
+type: C
+section: "Programming in Lua 4e · Real Programming"
+order: 15
+description: "掌握Lua data files、scalar/table serialization、无环递归与cycle/shared identity恢复，并建立deterministic和安全反序列化边界。"
+demo: true
+math: false
+sourceUrl: "https://www.lua.org/pil/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PilDataFileLab, PilAcyclicSerializationLab, PilGraphSerializationLab } from "@/components/mdx/lua-programming/diagrams/data-files-serialization";
+
+<Objectives>
+
+- 能区分data-as-code与passive data，解释load environment、capability、schema和resource risk
+- 能实现scalar与acyclic table serialization，验证type domain、escaping、key order、depth和shared reference
+- 能设计cycle/shared table的identity-preserving两阶段恢复，复现alias丢失与不可信反序列化故障
+
+</Objectives>
+
+## 为什么Serialization不是把Table打印出来
+
+Serialization要把运行时value映射成可保存bytes，并在另一时刻恢复约定语义。难点不只是format：哪些types允许、number是否无损、table key如何排序、metatable是否保留、两个references是否指向同一table、cycle如何终止、加载过程能执行什么code。
+
+先预测：`tostring(table)`能否恢复entries；`string.format("%q", math.huge)`是否是可执行Lua literal；两个fields共享同一child经普通recursive serializer后是否仍alias；table作key如何编码；`loadfile(path,"t",{})`是否就能安全执行不可信文件；pairs生成的文本能否用于stable hash。先定义domain与threat model。
+
+<Term def="序列化格式只接受明确types、ranges、table shapes、identity/metatable policy和资源上限，domain之外立即拒绝。">serialization value domain</Term>避免“遇到什么就tostring什么”。Function、userdata、thread和C resources没有通用可移植表示，通常用stable ID/adapter或禁止。
+
+## Data Files
+
+Lua source本身可描述data：文件可`return { ... }`，也可连续调用`Entry { ... }`等collector。后者允许省略外层list并在读取时处理records，但每个暴露global都是可调用capability。无论看起来多像配置，chunk都能包含loops、function calls和allocations。
+
+<Term def="把Lua chunk作为数据载体时，执行者显式提供最小environment、text-only mode、resource isolation和schema collector，而不把文件视为被动文本。">data-as-code capability</Term>要求trusted authoring与untrusted upload分开。Lua 5.3的`loadfile(path,"t",env)`可拒绝binary chunk并指定environment，但空environment仍可运行arithmetic、loops和table constructors导致CPU/memory exhaustion；真正隔离需要separate state/process与budgets。
+
+```lua
+local records = {}
+local environment = {
+  Entry = function(record)
+    assert(type(record) == "table")
+    assert(type(record.name) == "string" and #record.name <= 64)
+    assert(math.type(record.value) == "integer")
+    records[#records + 1] = { name = record.name, value = record.value }
+  end,
+}
+
+local chunk = assert(load("Entry { name='lua', value=53 }", "data", "t", environment))
+chunk()
+assert(records[1].name == "lua" and records[1].value == 53)
+```
+
+这个示例只展示name restriction与schema collection，不是untrusted sandbox。Collector复制validated scalar fields，避免把source table连同metatable/extra references直接纳入domain。Record count、source bytes与execution instructions仍需外部限制。
+
+<PilDataFileLab />
+
+<Stepper>
+  <Step title="切换Return Value、Record Calls、Text-only Load和Schema Gate"><PilDataFileLab /></Step>
+  <Step title="列Capability Inventory">记录environment每个name可读取/调用的资源、closure捕获和indirect references；删除不需要的library/table。</Step>
+  <Step title="隔离Failure">覆盖syntax error、runtime error、infinite loop、huge constructor、extra field和version mismatch；在separate process/state强制time/memory limits。</Step>
+</Stepper>
+
+<Callout type="trap" title="Empty Environment让Load变成安全JSON Parser">
+Chunk仍能执行控制流并分配大量strings/tables；environment函数也可能泄露capabilities。Untrusted data应使用passive parser，或在受资源限制的隔离runtime执行并严格validate result。
+</Callout>
+
+## Serialization
+
+Scalar serializer需处理nil、boolean、number与string。`%q`可生成quoted Lua string literal并escape控制字符；number的`string.format`/tostring要保留integer与float round-trip，NaN、infinity、negative zero按policy拒绝或tagged encode。Locale-dependent decimal separator不可进入wire format。
+
+<Term def="同一logical value在固定schema/version下总产生相同bytes，key order、number spelling、escaping和line endings不依赖hash或locale。">deterministic serialization order</Term>用于diff、cache key与signature。Pairs order unspecified，record/map keys需collect并按type-aware total order排序。排序本身要限定key types，table/function keys没有天然跨process order。
+
+Deserialize不是“成功load就完成”；还要验证version、required/unknown fields、types、ranges、duplicate semantics、depth和object count。<Term def="Decoded generic values只有通过version、shape、type、range、identity和resource validation后才可构造domain objects。">deserialization schema gate</Term>防止旧/恶意数据直接获得业务capability。
+
+## Saving tables without cycles
+
+Acyclic table可递归编码为constructor：sequence fields按index顺序，map fields按sorted key。<Term def="无环serializer在递归路径维护visiting/seen状态，拒绝cycle并把repeated table reference识别为identity而非盲目复制。">acyclic recursion guard</Term>不仅防stack overflow，也避免alias语义悄悄改变。
+
+```lua
+local function quote_scalar(value)
+  local kind = type(value)
+  if kind == "string" then return string.format("%q", value) end
+  if kind == "boolean" or kind == "nil" then return tostring(value) end
+  if kind == "number" then
+    assert(value == value and value ~= math.huge and value ~= -math.huge)
+    return math.type(value) == "integer" and string.format("%d", value)
+      or string.format("%.17g", value)
+  end
+  error("unsupported scalar: " .. kind)
+end
+
+local function save_record(record)
+  local keys, parts = {}, { "{" }
+  for key in pairs(record) do
+    assert(type(key) == "string")
+    keys[#keys + 1] = key
+  end
+  table.sort(keys)
+  for _, key in ipairs(keys) do
+    parts[#parts + 1] = "[" .. quote_scalar(key) .. "]=" .. quote_scalar(record[key]) .. ","
+  end
+  parts[#parts + 1] = "}"
+  return table.concat(parts)
+end
+
+assert(save_record({ b = 2, a = "x" }) == "{[\"a\"]=\"x\",[\"b\"]=2,}")
+```
+
+示例故意只支持string-key scalar record，domain小而可证明。General recursive version要区分active path cycle与already-seen alias、限制depth/items/bytes，并避免Lua call-stack过深。Metatable默认不保存；若保存metatable name，必须从allowlisted registry恢复，不能执行任意constructor。
+
+<PilAcyclicSerializationLab />
+
+<Stepper>
+  <Step title="切换Scalar、Sequence、Record和Repeated Table"><PilAcyclicSerializationLab /></Step>
+  <Step title="填写Domain Matrix">为nil/boolean/integer/float/string/table key/function/userdata/metatable分别写encode、adapter或reject，禁止implicit tostring。</Step>
+  <Step title="跑Determinism Tests">随机table insertion order、locale与line ending重复序列化，assert bytes相同；另测depth/item/output limits。</Step>
+</Stepper>
+
+## Saving tables with cycles
+
+Cycle或shared reference不能用单个nested constructor tree无损表达。正确思路把table graph中的每个identity编号：第一遍discover所有reachable tables；第二步先为每个ID创建empty table；第三步逐项赋值，table key/value引用对应ID。这样self-cycle、mutual cycle与shared child都有已存在target。
+
+<Term def="对象图为每个table identity分配唯一ID，先创建所有tables再连接references，从而恢复cycles与shared aliases。">identity-preserving graph serialization</Term>要求发现阶段遍历table keys和values，因为table也可作key。Deterministic IDs不能依赖pairs discovery order；先建立canonical ordering或使用stable domain IDs，任意table-key graph的canonicalization本身是复杂问题。
+
+```lua
+local source = {}
+source.self = source
+source.child = { value = 7 }
+source.alias = source.child
+
+-- Two-phase output: allocate identities first, then link fields.
+local serialized = [[
+local t = { {}, {} }
+t[1].self = t[1]
+t[1].child = t[2]
+t[1].alias = t[2]
+t[2].value = 7
+return t[1]
+]]
+
+local restored = assert(load(serialized, "saved-graph", "t", {}))()
+assert(restored.self == restored)
+assert(restored.child == restored.alias)
+assert(restored.child.value == 7)
+```
+
+这里展示representation proof，不是接受任意graph的production serializer。完整实现要escape keys、encode scalars、限制tables/edges/depth/output、处理table keys，并固定ID/order。若format是Lua source，加载仍有data-as-code风险；可以把ID records放进passive JSON/binary schema再由可信decoder链接。
+
+<PilGraphSerializationLab />
+
+<Stepper>
+  <Step title="切换Discover、Allocate、Link和Validate"><PilGraphSerializationLab /></Step>
+  <Step title="画Identity Graph">为self-cycle、two-node cycle、diamond shared child和table key编号，恢复后逐个assert identity equality。</Step>
+  <Step title="Fuzz Graph Limits">生成deep chain、wide graph、many aliases、cycles与unsupported values，验证终止、stable reason和allocation预算。</Step>
+</Stepper>
+
+<Callout type="trap" title="两个相同Content的Tables恢复成两个Copies就等价">
+如果原图两个fields引用同一mutable child，复制后修改一处不再影响另一处，程序语义已改变。Format必须声明preserve identity还是value-copy，并用alias/cycle tests验收。
+</Callout>
+
+## Versioning、Atomic Save与Integrity
+
+Serialized root包含schema version；reader支持明确版本并用pure migrations生成新shape，不在加载时执行任意hook。Unknown fields是reject、preserve还是ignore要按compatibility policy。Migrations也要bounded并可重复测试。
+
+Save先写同目录temporary file，检查write/flush/close，再atomic rename；durability需host fsync policy。Checksum可检测accidental corruption，untrusted authenticity需要MAC/signature并在执行/解析前验证。Signature依赖canonical bytes，因此deterministic serialization是安全前提之一。
+
+## 本章回顾：先限制Value Domain，再选择Format
+
+1. Lua data file是executable chunk；restricted environment缩小capability但不限制CPU/memory。
+2. Serialization明确支持types、numbers、keys、metatables、identity和budgets，unsupported value拒绝。
+3. Deterministic output固定key order、number spelling、escaping和line endings，不依赖pairs/locale。
+4. Acyclic serializer仍需seen/visiting guard，区分cycle和repeated alias。
+5. Cyclic graph先discover/allocate identities，再link assignments，才能保留self-cycle与shared child。
+6. Decode后必须过schema gate；save还需version、atomic replace、integrity和migration policy。
+
+<Exercises>
+
+**问题 1：为什么Restricted Load Environment仍不能处理Untrusted Upload？**
+
+<Answer>Chunk不需要globals也能写infinite loop、巨大literal/constructor和expensive arithmetic；暴露collector还可能泄露references。使用passive parser，或在separate process/state设置instruction/time/memory limits，再validate copied result。</Answer>
+
+**问题 2：怎样区分Cycle和Shared Alias？**
+
+<Answer>Traversal维护active path与global seen/ID map：遇到active table是cycle，遇到seen但不active是重复alias。两者都需identity ID graph format；恢复后分别assert self/path cycle和两个fields引用同一table。</Answer>
+
+**问题 3：为什么Pairs Order会破坏Signature？**
+
+<Answer>同一table的iteration order不保证稳定，logical value会生成不同bytes，hash/signature随之变化。限制key domain、收集并total-order排序，固定number/string encoding和line endings，再对canonical bytes签名。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="serialization value domain" definition="明确可编码types、ranges、shapes、identity/metatable与budgets的值域。" />
+  <GlossaryItem term="data-as-code capability" definition="Lua data chunk按可执行code提供最小environment并隔离资源的边界。" />
+  <GlossaryItem term="deterministic serialization order" definition="同一logical value在固定schema下总产生相同canonical bytes的规则。" />
+  <GlossaryItem term="deserialization schema gate" definition="Decoded values通过version、shape、type、range与resource验证后进入domain。" />
+  <GlossaryItem term="acyclic recursion guard" definition="递归保存维护active/seen状态并拒绝cycle或识别alias的保护。" />
+  <GlossaryItem term="identity-preserving graph serialization" definition="为tables分配IDs并先allocate后link以保留cycles和aliases的格式。" />
+</Glossary>
+
+<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 15: Data Files and Serialization" adaptedUrl="https://www.lua.org/pil/" />

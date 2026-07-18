@@ -1,0 +1,165 @@
+---
+title: "Chapter 1: C# Language Idioms (Items 1-10)"
+type: C
+section: "Effective C# · 语言习惯"
+order: 1
+description: "完整覆盖第3版Item 1-10：局部类型推断、readonly、pattern/cast、字符串与文化、强类型API、delegate/event、装箱及new成员隐藏。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-sharp-covers-c-sharp-6.0-50-specific-ways-9780134579443"
+draft: false
+---
+
+import { EcsExpressionChoiceLab, EcsCallbackContractLab, EcsRuntimeDispatchLab } from "@/components/mdx/effective-csharp/diagrams/language-idioms";
+
+<Objectives>
+
+- 能判断可读性、静态类型、版本边界和culture ownership，选择var、readonly、pattern、interpolation与FormattableString
+- 能设计compiler可检查且lifetime明确的command、callback和event API contract
+- 能分析boxing allocation与new member hiding，并用generic或virtual dispatch及针对性测试修正
+
+</Objectives>
+
+## 为什么语言习惯必须让类型表达决策
+
+本章的10条建议并非追求短语法，而是让source code保留足够的type、culture、ownership与dispatch信息。`var`可以减少重复，interpolation可以让template贴近value，但只要它们遮住numeric width、cross-culture contract或runtime allocation，就应改用更明确的表达。
+
+先预测：把所有local改成`var`、把所有public value改成`const`、把所有type mismatch改成`as`，是否仍能保留相同的版本与失败contract？逐项答案都是否。
+
+<Term def="编译器在不丢失静态类型的前提下，从初始化表达式推导局部变量类型；它不是dynamic。">local type inference</Term>
+
+## Type、Value与Text边界（Items 1-5）
+
+### Item 1: Prefer Implicitly Typed Local Variables
+
+右侧构造、LINQ projection或anonymous type已经清楚给出类型时用`var`，避免把复杂generic type重复两遍。若method name没有揭示返回的precision、ownership或abstraction，显式类型更利于review。验收不是“是否全部var”，而是reader能否在当前行推断contract。
+
+### Item 2: Prefer readonly to const
+
+`const`值会编译进consumer，public library改值后旧consumer仍使用旧literal；`static readonly`在runtime从定义assembly读取，适合可能演进的domain value。真正跨版本永不变化且需要constant expression的值才用`const`。
+
+```csharp
+public static class Limits
+{
+    public static readonly TimeSpan RequestTimeout = TimeSpan.FromSeconds(5);
+    public const int BytesPerKilobyte = 1024;
+}
+```
+
+### Item 3: Prefer the is or as Operators to Casts
+
+当mismatch是预期branch时，declaration pattern同时测试和bind：`if (message is Invoice invoice)`。当contract保证类型必须匹配时，explicit cast可fail fast。`as`只适用于reference/nullable并把mismatch变成`null`，必须避免与“合法null”混淆。
+
+### Item 4: Replace string.Format() with Interpolated Strings
+
+Interpolation把placeholder与expression并置，重排参数时不易错；但它不会自动解决logging template、localization或invariant serialization。Structured logging应保留property names，machine protocol应使用stable serializer，而非把任何文本都插值化。
+
+### Item 5: Prefer FormattableString for Culture-Specific Strings
+
+`FormattableString`保留composite format与typed arguments，让最终sink选择culture。UI通常在边界使用用户culture；signature、cache key、wire value则显式invariant。不要先产生普通`string`再尝试恢复丢失的culture intent。
+
+<Stepper>
+  <Step title="切换五种expression与formatting场景"><EcsExpressionChoiceLab /></Step>
+  <Step title="标出静态类型与culture owner">写出谁决定类型可读性、谁选择culture，以及value是否跨assembly、process或locale。</Step>
+  <Step title="用版本和locale反例验收">升级library constant，并以en-US、fr-FR和invariant执行同一输入，确认consumer得到预期值与文本。</Step>
+</Stepper>
+
+<Callout type="trap" title="var、interpolation和const总是更快也更现代">
+`var`只改变source，interpolation的handler优化取决于target API，`const`甚至会制造跨assembly版本风险。先写contract，再用compiler output或benchmark证明性能。
+</Callout>
+
+## Strong Contract与Invocation边界（Items 6-8）
+
+### Item 6: Avoid String-ly Typed APIs
+
+用string传command、member name或state会把拼写错误推迟到runtime。优先enum、value object、generic type、expression或具体command；若external protocol只能是string，在adapter处parse/validate并尽快转成domain type。
+
+### Item 7: Express Callbacks with Delegates
+
+Delegate同时声明参数、返回值和同步调用形态，比“method name string + reflection”可检查。选择`Action`/`Func`用于通用签名，domain语义强或需文档时声明named delegate。还要说明callback是否可重入、是否允许抛异常、在哪个thread调用。
+
+### Item 8: Use the Null Conditional Operator for Event Invocations
+
+`Changed?.Invoke(this, args)`只读取一次event delegate，并清楚表达“无subscriber则不调用”。这不等于完整event contract：publisher仍需确定thread、subscriber exception、ordering和unsubscribe；跨thread修改subscription时还要按实际concurrency model验证。
+
+```csharp
+public event EventHandler<PriceChangedEventArgs>? PriceChanged;
+
+private void RaisePriceChanged(decimal before, decimal after) =>
+    PriceChanged?.Invoke(this, new(before, after));
+```
+
+<Term def="以string承载本可由type、member、enum或schema表达的信息，导致rename与invalid value无法在compile time发现。">stringly typed API</Term>
+
+<Stepper>
+  <Step title="比较string command、delegate、event和raise"><EcsCallbackContractLab /></Step>
+  <Step title="画出调用权与保留关系">标记谁可invoke、谁只可subscribe，以及delegate target或closure被谁保留。</Step>
+  <Step title="注入rename、异常与取消订阅">重命名operation应有compile error；一个subscriber抛异常时按policy处理；owner结束后subscriber可被回收。</Step>
+</Stepper>
+
+<Callout type="trap" title="换成delegate和?.Invoke就自动线程安全">
+Delegate解决signature，null-conditional解决单次读取；它们不定义thread affinity、并发subscription、异常隔离和lifetime。每项仍需owner与测试。
+</Callout>
+
+## Runtime Cost与Inheritance演进（Items 9-10）
+
+### Item 9: Minimize Boxing and Unboxing
+
+Value type转成`object`或某些interface representation时会boxing并可能分配；unboxing要求exact boxed type。优先generic collection/API保留`T`，hot path再用allocation profiler验证。不要为消除一次冷路径boxing制造复杂unsafe design。
+
+### Item 10: Use the new Modifier Only to React to Base Class Updates
+
+`new`不是polymorphic override，它明确隐藏base同名member，调用目标取决于reference的compile-time type。典型合法场景是base library升级后新增同名member，而derived type必须保留既有semantics；仍应审计全部call sites。需要substitutability时应由base `virtual`、derived `override`建立同一slot。
+
+```csharp
+Base value = new Derived();
+value.Render(); // override: Derived.Render; new: Base.Render
+```
+
+<Term def="值类型为适配object或interface representation而包装成heap object的过程，可能引入allocation、copy与后续exact unbox。">boxing</Term>
+
+<Term def="derived member以new隐藏base同名member，调用按reference的静态类型解析，不形成virtual slot。">member hiding</Term>
+
+<Term def="由调用边界明确决定locale、format provider和round-trip规则，而不是依赖机器默认culture。">culture ownership</Term>
+
+<Stepper>
+  <Step title="切换boxing与dispatch案例"><EcsRuntimeDispatchLab /></Step>
+  <Step title="追踪representation与binding">检查value是否跨object/interface边界，并分别用base-typed、derived-typed reference推导调用目标。</Step>
+  <Step title="以profile和substitution tests验收">只优化量测到的allocation；用base contract suite确认derived behavior在所有入口一致。</Step>
+</Stepper>
+
+## 本章回顾：语法选择必须留下可验证的Contract
+
+1. `var`保留static type，但可读性由当前表达式是否揭示contract决定。
+2. `readonly`避免public const的literal baking；culture由最终格式化边界显式拥有。
+3. Pattern表达预期shape branch，explicit cast表达contract violation。
+4. Type、delegate和event把字符串协议升级为compiler proof，但仍需lifetime和thread policy。
+5. Generic API减少boxing；`new`只明确隐藏，不替代`override`。
+
+<Exercises>
+
+**问题 1：library公开timeout值，UI和签名日志分别如何选择readonly与culture？**
+
+<Answer>可能调整的timeout用`static readonly TimeSpan`，避免旧consumer继续使用baked literal。UI在render边界按用户culture格式化；用于签名或machine comparison的值保持typed representation或显式InvariantCulture，不能复用UI string。</Answer>
+
+**问题 2：怎样把`Run("price", callbackName)`改成可验收的强类型API？**
+
+<Answer>在external adapter把字符串解析成command/value type，core API接收具体command与`Func<Order, Price>`或named delegate。测试未知command被boundary拒绝、rename产生compile error、callback exception/thread policy明确，且captured owner结束后不会被长期publisher保留。</Answer>
+
+**问题 3：何时修boxing，何时用new，分别需要什么证据？**
+
+<Answer>Profiler显示hot path因object/interface转换产生显著allocation时，用generic collection或constrained generic保留T，并以benchmark回归。只有base升级新增同名member且derived必须保留旧语义时显式`new`，随后用base/derived typed call tests审计；需要替代行为则改为virtual/override。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="local type inference" definition="由initializer推导局部变量的静态类型，不是runtime dynamic typing。" />
+  <GlossaryItem term="culture ownership" definition="由明确边界选择locale、format provider和round-trip规则。" />
+  <GlossaryItem term="stringly typed API" definition="用string承载本应由type或schema约束的信息。" />
+  <GlossaryItem term="boxing" definition="value type转换为object/interface representation时的包装、copy及潜在allocation。" />
+  <GlossaryItem term="member hiding" definition="derived以new隐藏base同名member并按reference静态类型绑定。" />
+</Glossary>
+
+<Attribution adaptedFrom="Effective C#, Third Edition, Chapter 1: C# Language Idioms, Items 1-10" adaptedUrl="https://www.informit.com/store/effective-c-sharp-covers-c-sharp-6.0-50-specific-ways-9780134579443" />

@@ -3,28 +3,20 @@ title: 高级数据表示
 type: A
 section: C高级主题
 order: 17
-description: 掌握函数指针、抽象数据类型 ADT 思想、队列/栈/链表基本概念、C标准库 qsort/bsearch，理解C语言数据抽象能力边界
+description: 掌握链表所有权、ADT接口与实现、队列模拟、数组与链表权衡、二叉搜索树及比较回调
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/c-primer-plus-9780321928429"
 draft: false
 ---
 
-{/* A 概念型第 17 章（C Primer Plus §17 改编）：函数指针、ADT、链表、队列栈、qsort/bsearch。
-   全书终章。draft:true 待总监 review。 */}
-
-{/* 知识点清单：
-   1) 函数指针声明/赋值/调用 — FunctionPointerDiagram（step 1-3）
-   2) ADT 接口与实现分离 — 正文 + 队列/栈
-   3) 单向链表节点与遍历 — LinkedListDiagram（step 1-4）
-   4) 队列 FIFO vs 栈 LIFO — QueueStackDiagram
-   5) qsort/bsearch 比较回调 — QsortBsearchDiagram */}
+import { CPrimerDataStructureContractDiagram } from "@/components/mdx/c-primer-plus/diagrams/advanced-data";
 
 <Objectives>
 
-- 能声明函数指针、赋函数地址并通过指针间接调用，说明与数组名 decay 为指针的相似点
-- 能解释 ADT「接口与实现分离」思想，对比队列 FIFO 与栈 LIFO 的入出规则，并画出单向链表 head→node→NULL 结构
-- 能编写 qsort/bsearch 所需的比较函数，并回答：为何 bsearch 要求数组已排序？
+- 能实现单向链表插入与销毁，证明 head 所有权和每个 malloc 节点的唯一 free 路径
+- 能设计不透明 Queue ADT，并用 front/rear 不变量完成到达、服务、等待时间的队列模拟
+- 能实现二叉搜索树插入、查找和后序销毁，并比较数组、链表与未平衡树的复杂度边界
 
 </Objectives>
 
@@ -32,13 +24,15 @@ draft: false
 
 前几章你已会用数组、struct、指针组织**数据**。但程序里还有另一类需求：同一套流程，**具体步骤可换**——排序按整数比还是按字符串比？菜单按编号执行不同操作？错误处理走默认分支还是自定义回调？
 
-想象餐厅**点菜系统**：前台只认「下单接口」（菜号 + 做法），后厨可以换厨师、换菜谱，前台流程不变。C 没有类与继承，但可以用 <Term def="保存函数入口地址的指针；通过它间接调用目标函数，实现运行时可换的行为。">函数指针（function pointer）</Term> 把「行为」像数据一样传来传去——再配合 struct 与动态内存，就能手写链表、队列、栈等 <Term def="Abstract Data Type；只暴露操作规则（接口），隐藏内部表示（实现）的数据类型思想。">抽象数据类型（ADT）</Term>。
+想象餐厅**点菜系统**：前台只认「下单接口」（菜号 + 做法），后厨可以换厨师、换菜谱，前台流程不变。C 没有类与继承，但可以用 <Term def="指向具有兼容函数类型的指针；可比较、赋值并用于间接调用，但表示形式不要求等同数据地址或机器代码入口整数。">函数指针（function pointer）</Term> 把「行为」作为参数或表项传递——再配合 struct 与动态内存，就能手写链表、队列、栈等 <Term def="Abstract Data Type；只暴露操作规则（接口），隐藏内部表示（实现）的数据类型思想。">抽象数据类型（ADT）</Term>。
 
 没有这层抽象，你只能为每种排序、每种菜单写死函数名；标准库的 `qsort`/`bsearch` 也无法对任意元素类型工作。本章是全书最后一章：把指针、结构体、动态内存串成**可扩展的数据结构能力**，并看清 C 在抽象上的边界。
 
+<CPrimerDataStructureContractDiagram />
+
 ## 函数指针：声明、赋值与调用
 
-普通指针指向**数据**；函数指针指向**代码**（函数的入口地址）。声明语法最容易错在 `*` 与括号的优先级：
+对象指针指向对象，函数指针指向函数；两类指针的表示和可转换规则不必相同，不能靠 `void *` 在两者之间做可移植往返。声明语法最容易错在 `*` 与括号的优先级：
 
 ```c
 int  sum(double a, double b);           /* 普通函数原型 */
@@ -56,22 +50,22 @@ int (*pf)(double, double);              /* pf 是指针，指向这类函数 */
   </Step>
   <Step title="第二步：赋函数地址">
     <FunctionPointerDiagram step={2} />
-    `pf = sum` 或 `pf = &sum` 均可（函数名在赋值给指针时 decay 为地址）。`pf` 里存的是 `sum` 的入口地址。
+    `pf = sum` 或 `pf = &sum` 均可。函数指示符在多数表达式中转换为函数指针；一元取地址得到兼容的函数指针值。
   </Step>
   <Step title="第三步：间接调用">
     <FunctionPointerDiagram step={3} />
-    `(*pf)(3.0, 4.0)` 与 `pf(3.0, 4.0)` 等价。编译器根据指针跳转到对应代码执行。
+    `(*pf)(3.0, 4.0)` 与 `pf(3.0, 4.0)` 等价。指针必须非空且指向类型兼容的函数；用不兼容类型调用会产生未定义行为。
   </Step>
 </Stepper>
 
- typedef 可简化冗长声明：
+typedef 可简化冗长声明：
 
 ```c
 typedef int (*Compare_fn)(const void *, const void *);
 Compare_fn cmp = my_compare;
 ```
 
-函数指针常见用途：回调（`qsort`）、状态机分派、插件式接口、<Term def="函数内部调用通过指针传入的另一函数；调用方决定具体行为。">函数指针表</Term>（模拟虚函数）。
+函数指针常见用途：回调（qsort）、状态机分派和插件式接口。<Term def="元素类型为某种函数指针的数组或结构成员集合；先验证索引或标签，再间接调用对应行为。">函数指针表</Term> 可实现表驱动分派。
 
 ## ADT：只承诺「能做什么」
 
@@ -102,9 +96,135 @@ C 语言**没有**内置 `stack<T>` 或 `list<T>`（那是 C++ STL）。ADT 在 
 
 猜一猜：用**单个下标**只从数组一端插入删除，得到的是栈还是队列？
 
+### Queue ADT：接口、实现与不变量
+
+头文件可以只暴露不完整类型和操作，不让调用者直接改 front/rear：
+
+```c
+/* queue.h */
+#include <stddef.h>
+
+typedef struct Queue Queue;
+
+Queue *queue_create(void);
+int queue_enqueue(Queue *queue, unsigned value);
+int queue_dequeue(Queue *queue, unsigned *value);
+int queue_is_empty(const Queue *queue);
+size_t queue_size(const Queue *queue);
+void queue_destroy(Queue **queue);
+```
+
+源文件定义表示。关键不变量是：空队列时 front 和 rear 同时为空；单节点时二者指向同一节点；非空时 rear->next 为空。
+
+```c
+/* queue.c */
+#include "queue.h"
+#include <stdint.h>
+#include <stdlib.h>
+
+struct QueueNode {
+    unsigned value;
+    struct QueueNode *next;
+};
+
+struct Queue {
+    struct QueueNode *front;
+    struct QueueNode *rear;
+    size_t size;
+};
+
+Queue *queue_create(void) {
+    return calloc(1, sizeof(Queue));
+}
+
+int queue_is_empty(const Queue *queue) {
+    return queue == NULL || queue->front == NULL;
+}
+
+size_t queue_size(const Queue *queue) {
+    return queue == NULL ? 0 : queue->size;
+}
+
+int queue_enqueue(Queue *queue, unsigned value) {
+    struct QueueNode *node;
+    if (queue == NULL || queue->size == SIZE_MAX)
+        return 0;
+    node = malloc(sizeof *node);
+    if (node == NULL)
+        return 0;                  /* 失败不改变原队列 */
+    node->value = value;
+    node->next = NULL;
+    if (queue->rear != NULL)
+        queue->rear->next = node;
+    else
+        queue->front = node;
+    queue->rear = node;
+    queue->size++;
+    return 1;
+}
+
+int queue_dequeue(Queue *queue, unsigned *value) {
+    struct QueueNode *node;
+    if (queue == NULL || value == NULL || queue->front == NULL)
+        return 0;
+    node = queue->front;
+    *value = node->value;
+    queue->front = node->next;
+    if (queue->front == NULL)
+        queue->rear = NULL;
+    queue->size--;
+    free(node);
+    return 1;
+}
+
+void queue_destroy(Queue **handle) {
+    struct QueueNode *node, *next;
+    if (handle == NULL || *handle == NULL)
+        return;
+    node = (*handle)->front;
+    while (node != NULL) {
+        next = node->next;
+        free(node);
+        node = next;
+    }
+    free(*handle);
+    *handle = NULL;
+}
+```
+
+calloc 让 create 从空不变量开始；destroy 沿 front 保存 next 后逐节点释放，最后释放 Queue 并把调用方指针置空。链式队列没有编译期固定容量，但仍受 size_t 计数上限、分配失败和进程内存限制。
+
+### 用队列模拟单服务台
+
+<Term def="按离散时间推进到达和服务事件；顾客到达时入队，服务台每个时刻从队首取一人，并累计等待时间。">队列模拟</Term> 可以评估平均等待时间。下面假设 arrivals 已按非递减时刻排序，服务台每个 tick 最多处理一名顾客：
+
+```c
+double simulate_wait(const unsigned arrivals[], size_t count,
+                     Queue *queue) {
+    size_t next = 0, served = 0;
+    unsigned tick = 0, arrived, total_wait = 0;
+
+    while (next < count || !queue_is_empty(queue)) {
+        while (next < count && arrivals[next] <= tick) {
+            if (!queue_enqueue(queue, arrivals[next]))
+                return -1.0;
+            next++;
+        }
+        if (queue_dequeue(queue, &arrived)) {
+            total_wait += tick - arrived;
+            served++;
+        }
+        tick++;
+    }
+    return served == 0 ? 0.0 : (double)total_wait / served;
+}
+```
+
+真实模拟还要检查 tick 与 total_wait 溢出、支持每位顾客不同服务时长，并区分“分配失败”与合法的负指标。这里的价值是展示 FIFO 如何把到达顺序转成等待时间，而不是把 -1.0 当成通用错误协议。
+
 ## 单向链表：用 next 串起节点
 
-数组元素在内存中**连续**，随机访问 O(1)，但中间插入要搬移后续元素。链表每个 <Term def="含数据域与指向下一个节点的指针；末节点 next 为 NULL。">节点（node）</Term> 在堆上单独分配，通过 `struct Node *next` 连接：
+数组元素连续，按下标随机访问 O(1)，但保持顺序的中间插入通常要搬移后续元素。链表的 <Term def="含数据域与指向下一个节点的指针；末节点next为空。节点可来自动态、静态或调用方存储，但一个容器必须约定统一所有权。">节点（node）</Term> 不要求地址连续，通过 `struct Node *next` 连接：
 
 ```c
 struct Node {
@@ -124,11 +244,11 @@ struct Node *head = NULL;   /* 空链表 */
   </Step>
   <Step title="第二步：头指针">
     <LinkedListDiagram step={2} />
-    `head` 是唯一固定入口；空表 `head == NULL`。丢失 head 则整链泄漏且无法访问。
+    `head` 是容器约定的所有权根；空表 `head == NULL`。若动态链只由 head 持有，覆盖它而未先保存或释放可达节点会泄漏整条链。
   </Step>
   <Step title="第三步：链接节点">
     <LinkedListDiagram step={3} />
-    新节点 `malloc` 后，改前一节点的 `next` 或头指针。节点地址通常**不连续**。
+    动态实现先完整初始化新节点，再提交 head 或前驱的 next。malloc 失败时不应修改原链；节点地址无需连续。
   </Step>
   <Step title="第四步：遍历">
     <LinkedListDiagram step={4} />
@@ -136,9 +256,150 @@ struct Node *head = NULL;   /* 空链表 */
   </Step>
 </Stepper>
 
-链表优点：已知前驱时插入/删除 O(1)。缺点：无 O(1) 下标访问；每个节点多一个指针；缓存局部性不如数组。双向链表再多一个 `prev`，便于从尾部删除。
+```c
+#include <stdlib.h>
 
-释放链表需沿 `next` 逐个 `free`，或写 `destroy_list` 封装进 ADT 实现。
+int list_push_front(struct Node **head, int value) {
+    struct Node *node;
+    if (head == NULL)
+        return 0;
+    node = malloc(sizeof *node);
+    if (node == NULL)
+        return 0;
+    node->data = value;
+    node->next = *head;
+    *head = node;                 /* 最后提交，失败时原链不变 */
+    return 1;
+}
+
+void list_destroy(struct Node **head) {
+    struct Node *node, *next;
+    if (head == NULL)
+        return;
+    node = *head;
+    while (node != NULL) {
+        next = node->next;        /* free 前保存后继 */
+        free(node);
+        node = next;
+    }
+    *head = NULL;
+}
+```
+
+### 链表与数组：复杂度必须连同定位成本一起算
+
+<Term def="根据访问、插入、删除、容量增长和缓存局部性比较连续数组与指针链表示，而不是笼统宣称某一种结构更快。">链表与数组</Term> 的权衡取决于操作分布：
+
+| 操作 | 动态数组 | 单向链表 |
+|---|---|---|
+| 按下标访问 | O(1) | O(n) |
+| 已知位置后的插入 | 搬移时 O(n) | 已知前驱时 O(1) |
+| 查找值 | 无序 O(n) | O(n) |
+| 连续遍历 | 缓存局部性通常较好 | 节点跳转和指针开销 |
+| 扩容 | 可能重新分配整块 | 每节点独立分配，逐次失败 |
+
+“链表删除 O(1)”只在已经持有前驱或相应链接位置时成立；先从 head 查找目标仍是 O(n)。双向链表多一个 prev，可在已知节点时更容易删除，但增加内存和不变量维护成本。
+
+上面的 list_destroy 把逐节点释放封装进容器实现，调用方不需要接触释放顺序。
+
+## 二叉搜索树：树接口与树实现
+
+<Term def="每个节点最多有左右两个孩子，并维持左子树键小于当前键、右子树键大于当前键的不变量；操作复杂度取决于树高。">二叉搜索树（BST）</Term> 可以用不透明 Tree 接口隐藏节点：
+
+```c
+/* tree.h */
+#include <stddef.h>
+
+typedef struct Tree Tree;
+enum TreeInsertResult {
+    TREE_OUT_OF_MEMORY = -1,
+    TREE_ALREADY_PRESENT = 0,
+    TREE_INSERTED = 1
+};
+
+Tree *tree_create(void);
+enum TreeInsertResult tree_insert(Tree *tree, int key);
+int tree_contains(const Tree *tree, int key);
+size_t tree_size(const Tree *tree);
+void tree_destroy(Tree **tree);
+```
+
+树实现把“指向当前子树根指针的指针”作为插入位置，只有节点分配成功后才提交链接：
+
+```c
+/* tree.c */
+#include "tree.h"
+#include <stdint.h>
+#include <stdlib.h>
+
+struct TreeNode {
+    int key;
+    struct TreeNode *left;
+    struct TreeNode *right;
+};
+
+struct Tree {
+    struct TreeNode *root;
+    size_t size;
+};
+
+Tree *tree_create(void) {
+    return calloc(1, sizeof(Tree));
+}
+
+enum TreeInsertResult tree_insert(Tree *tree, int key) {
+    struct TreeNode **link, *node;
+    if (tree == NULL || tree->size == SIZE_MAX)
+        return TREE_OUT_OF_MEMORY;
+    link = &tree->root;
+    while (*link != NULL) {
+        if (key == (*link)->key)
+            return TREE_ALREADY_PRESENT;
+        link = key < (*link)->key ? &(*link)->left : &(*link)->right;
+    }
+    node = malloc(sizeof *node);
+    if (node == NULL)
+        return TREE_OUT_OF_MEMORY;
+    node->key = key;
+    node->left = NULL;
+    node->right = NULL;
+    *link = node;
+    tree->size++;
+    return TREE_INSERTED;
+}
+
+int tree_contains(const Tree *tree, int key) {
+    const struct TreeNode *node = tree == NULL ? NULL : tree->root;
+    while (node != NULL) {
+        if (key == node->key)
+            return 1;
+        node = key < node->key ? node->left : node->right;
+    }
+    return 0;
+}
+
+size_t tree_size(const Tree *tree) {
+    return tree == NULL ? 0 : tree->size;
+}
+
+static void destroy_nodes(struct TreeNode *node) {
+    if (node == NULL)
+        return;
+    destroy_nodes(node->left);
+    destroy_nodes(node->right);
+    free(node);
+}
+
+void tree_destroy(Tree **handle) {
+    if (handle == NULL || *handle == NULL)
+        return;
+    destroy_nodes((*handle)->root);
+    free(*handle);
+    *handle = NULL;
+}
+```
+
+查找和插入都是 O(h)，h 为树高；未平衡树按有序键插入会退化成长度 n 的链，最坏 O(n)，不能笼统声称 O(log n)。中序遍历会按键递增访问节点。递归后序销毁简洁，但不可信数据形成的深退化树可能耗尽调用栈，工程实现可改用显式栈或在容器中采用平衡树。
 
 ## qsort 与 bsearch：标准库里的回调
 
@@ -165,9 +426,9 @@ int int_compare(const void *a, const void *b) {
 
 <QsortBsearchDiagram />
 
-`qsort` 对任意元素类型排序，只要提供 `size` 与比较逻辑；内部实现通常是快速排序的混合版本（实现定义，但 API 稳定）。
+qsort 对任意完整对象类型的数组重排，只要提供元素大小与一致的比较关系。标准不规定算法、复杂度或稳定性；相等元素的原顺序可能改变。比较函数不得通过参数修改元素，并应对所有可能比较对给出自洽顺序。
 
-`bsearch` 在**已按 compar 升序排好**的数组中二分查找 `key`；找到返回元素指针，否则 `NULL`。**未排序就 bsearch = 未定义行为**。
+bsearch 要求数组已经按同一 compar 形成相容分区；找到返回某个匹配元素指针，否则返回 NULL。若存在多个相等元素，不指定返回哪一个。未排序或换用不一致比较器会破坏接口前置条件，结果没有可依赖的查找保证。
 
 ## C 在数据抽象上的边界
 
@@ -251,15 +512,17 @@ int main(void) {
 
 ## 小结
 
-- 函数指针保存入口地址：`int (*pf)(...)`，赋值 `pf = func`，调用 `pf(...)` 或 `(*pf)(...)`
+- 函数指针指向兼容函数类型：`int (*pf)(...)`，赋值 `pf = func`，调用 `pf(...)` 或 `(*pf)(...)`
 - ADT 强调接口与实现分离；栈 LIFO、队列 FIFO，C 需手写或用库封装
-- 单向链表：`head` + `data` + `next`，遍历至 NULL；插入灵活，随机访问慢
+- 链表以 head 为所有权根；已知链接位置可 O(1) 修改，但定位仍可能 O(n)，销毁前先保存 next
+- Queue ADT 维护空、单节点和多节点的 front/rear 不变量；队列模拟把 FIFO 到达顺序转换成等待指标
+- BST 查找和插入为 O(h)，未平衡树最坏退化到 O(n)；后序销毁先释放左右子树
 - `qsort`/`bsearch` 通过 `void *` 与比较回调处理任意元素类型；`bsearch` 前提是有序
 - C 的抽象靠约定与 discipline；全书 17 章从初识 C、控制流、函数、指针、字符串、内存、文件、struct、预处理器、位操作，到本章的数据结构能力——你已具备阅读与编写中等规模 C 程序的基础
 
 <Exercises>
 
-**练习 1（问答型）** 函数指针 `int (*pf)(double, double)` 与函数声明 `int *pf(double, double)` 有何区别？
+**问题 1（问答型）** 函数指针 `int (*pf)(double, double)` 与函数声明 `int *pf(double, double)` 有何区别？
 
 <Answer>
 
@@ -267,7 +530,7 @@ int main(void) {
 
 </Answer>
 
-**练习 2（概念型）** 同样三个元素按 1→2→3 顺序入容器：栈 pop 的顺序是什么？队列 dequeue 的顺序是什么？
+**问题 2（概念型）** 同样三个元素按 1→2→3 顺序入容器：栈 pop 的顺序是什么？队列 dequeue 的顺序是什么？
 
 <Answer>
 
@@ -275,18 +538,26 @@ int main(void) {
 
 </Answer>
 
-**练习 3（实现型）** 写比较函数，使 `qsort` 对 `double arr[]` 升序排序（提示：用 `(a>b)-(a<b)` 或 if 返回 ±1/0）。
+**问题 3（实现型）** 写比较函数，使 `qsort` 对 `double arr[]` 升序排序，并规定所有 NaN 排在普通数值之后。
 
 <Answer>
 
 ```c
+#include <math.h>
+
 int dbl_compare(const void *a, const void *b) {
     double da = *(const double *)a;
     double db = *(const double *)b;
+    if (isnan(da))
+        return isnan(db) ? 0 : 1;
+    if (isnan(db))
+        return -1;
     return (da > db) - (da < db);
 }
 /* qsort(arr, n, sizeof(double), dbl_compare); */
 ```
+
+若不单独处理 NaN，`(da > db) - (da < db)` 在任一操作数为 NaN 时返回 0，会把 NaN 与每个普通数都判为等价，无法形成自洽排序关系。这里把所有 NaN 归为同一等价类并放到末尾。
 
 </Answer>
 
@@ -297,7 +568,7 @@ int dbl_compare(const void *a, const void *b) {
 <Glossary>
 
 <GlossaryItem term="函数指针（function pointer）">
-  保存函数入口地址的指针；声明时 (*名字) 必须加括号。见 FunctionPointerDiagram。
+  指向兼容函数类型的指针，可用于间接调用。表示不要求等同对象地址或机器入口整数，声明时 `(*名字)` 必须加括号。见 FunctionPointerDiagram。
 </GlossaryItem>
 
 <GlossaryItem term="间接调用">
@@ -305,7 +576,7 @@ int dbl_compare(const void *a, const void *b) {
 </GlossaryItem>
 
 <GlossaryItem term="函数指针表">
-  函数内部通过指针数组或函数指针调用不同实现，模拟面向对象的多态分派；调用方决定具体行为。
+  元素为同一兼容函数指针类型的数组或字段集合。按已验证索引或标签选择后间接调用，用于表驱动分派。
 </GlossaryItem>
 
 <GlossaryItem term="抽象数据类型">
@@ -341,7 +612,7 @@ int dbl_compare(const void *a, const void *b) {
 </GlossaryItem>
 
 <GlossaryItem term="bsearch">
-  stdlib 二分查找；要求数组已按 compar 排序，否则结果不可靠。
+  stdlib 查找接口；要求数组已按同一 compar 形成相容顺序。重复等值元素中返回哪一个不指定，未排序时没有可依赖结果。
 </GlossaryItem>
 
 <GlossaryItem term="比较函数（comparison function）">
@@ -353,9 +624,21 @@ int dbl_compare(const void *a, const void *b) {
 </GlossaryItem>
 
 <GlossaryItem term="void *">
-  无类型指针；qsort 用其表示任意元素地址，比较前需 cast 成真实类型。
+  可与对象指针互相转换的通用对象指针类型；不能直接解引用，比较器需转换成真实元素指针。它不提供函数指针的可移植中转表示。
+</GlossaryItem>
+
+<GlossaryItem term="队列模拟">
+  按离散时间把到达事件入队、让服务台从队首取出顾客，并累计等待时间等指标。分配失败和计数溢出必须单独处理。
+</GlossaryItem>
+
+<GlossaryItem term="链表与数组">
+  连续数组与指针链表示的权衡。数组下标 O(1) 且局部性好；链表已知前驱后局部修改 O(1)，但定位通常 O(n)。
+</GlossaryItem>
+
+<GlossaryItem term="二叉搜索树（BST）">
+  维持左子树键小、右子树键大的二叉树。操作复杂度为 O(h)；未平衡时 h 可达 n，销毁通常使用后序遍历。
 </GlossaryItem>
 
 </Glossary>
 
-<Attribution />
+<Attribution title="C Primer Plus, Sixth Edition, Chapter 17: Advanced Data Representation" url="https://www.informit.com/store/c-primer-plus-9780321928429" />

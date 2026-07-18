@@ -1,0 +1,195 @@
+---
+title: "Chapter 16. Arrays"
+type: C
+section: "CLR via C# 4e · Essential Types"
+order: 16
+description: "覆盖数组初始化、covariance、System.Array与接口、传返alias、非零下界、运行时布局、unsafe fixed/pinning及现代Span/Pool边界。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcArrayBoundaryLab, CvcArrayShapeLab, CvcArrayTypeLab } from "@/components/mdx/clr-via-csharp/diagrams/arrays";
+
+<Objectives>
+
+- 能区分vector、rectangular、jagged与non-zero-lower-bound array的rank、bounds和访问方式
+- 能分析array covariance、System.Array/generic interface与value inline storage的类型安全和成本
+- 能设计数组传返、pin/fixed、Span与ArrayPool的alias、lifetime、logical length和清理协议
+
+</Objectives>
+
+## 为什么Array同时是Object、Storage和Runtime Shape
+
+每个array都是reference object，带runtime element type、rank、length和bounds；元素storage由shape决定。`int[]`内联连续Int32，`Customer[]`连续存references，`int[,]`是一块rectangular object，`int[][]`则是outer references指向各row arrays。把它们都当“列表”会漏掉covariance写检查、bounds、cache locality与ownership。
+
+先预测：`string[]`转`object[]`后能否写任意object；`int[]`能否转`object[]`；array作为参数是否复制所有元素；返回private array是否安全；rectangular与jagged的Length含义是否相同；pin住array是否防止其它线程修改；pool rent(100)是否保证Length=100。后文用shape、type和boundary三层回答。
+
+<Term def="由element type、rank、每维length与lower bound共同确定的数组运行时形状。">array runtime shape</Term>
+
+## Initializing Array Elements
+
+分配array后CLR把每个element zero initialize：numeric 0、bool false、reference null、struct fields递归default。Initializer按源顺序提供值；jagged rows需分别分配，可为不同length甚至null。Default不一定是domain valid，reference array即使nullable annotation写非空，runtime zeroing仍先产生null slots，constructor/owner必须填充。
+
+```csharp
+int[] vector = new int[4];                 // 0,0,0,0
+int[,] matrix = { { 1, 2 }, { 3, 4 } };   // rank 2, one object
+int[][] jagged =
+{
+    new[] { 1, 2 },
+    new[] { 3, 4, 5 },
+};
+
+Console.WriteLine($"rank={matrix.Rank}, total={matrix.Length}");
+```
+
+Large value-type array可一次获得连续数据，适合cache，但初始化/清零也有成本。SkipLocalsInit或unsafe绕过只能在证明每个元素写前不读时使用。Reference arrays的未填槽必须在发布前验证，避免把null error推迟。
+
+## Casting Arrays
+
+CLR为reference type arrays保留covariance：Derived[]可赋给Base[]。Read安全，write必须检查真实array element type；把Object写入实际String[]抛`ArrayTypeMismatchException`。这是历史兼容而非理想generic设计，性能也带写barrier/type check。Value type arrays不covariant，`int[]`不是`object[]`，否则需要逐元素boxing和不同layout。
+
+```csharp
+string[] names = ["Ada", "Linus"];
+object[] objects = names;
+
+Console.WriteLine(objects[0]);
+try
+{
+    objects[0] = new object();
+}
+catch (ArrayTypeMismatchException error)
+{
+    Console.WriteLine(error.GetType().Name);
+}
+```
+
+Generic read-only covariance用`IEnumerable<out T>`表达producer，不暴露write；mutable collections保持invariant。若方法只读数组，接受ReadOnlySpan/`IReadOnlyList<T>`/`IEnumerable<T>`取决是否需要contiguous、index/count或stream。不要利用array covariance设计新API。
+
+<Term def="Reference array允许Derived[]转Base[]，但每次写入按真实element type运行检查的历史规则。">array covariance check</Term>
+
+<Stepper>
+  <Step title="切换reference covariance、value array、generic view与Span"><CvcArrayTypeLab /></Step>
+  <Step title="绘制真实Element Type">同时记录变量static array type和object runtime element type，预测每次read/write conversion。</Step>
+  <Step title="制造错误写入">通过base/object view写不兼容实例，观察ArrayTypeMismatch；再用invariant/read-only generic API消除风险。</Step>
+</Stepper>
+
+<Callout type="trap" title="能Cast成Object[]就代表可以存任何Object">
+Array object仍记得真实element type；每次写入会检查。`string[]`的Object[] view不能写普通Object，运行时抛ArrayTypeMismatchException。
+</Callout>
+
+## All Arrays Are Implicitly Derived from System.Array
+
+Array object继承`System.Array`，提供Rank、Length、LongLength、GetLength/GetLowerBound/GetUpperBound、GetValue/SetValue、Copy/Clear/Sort/BinarySearch等。`System.Array`抽象了任意rank/bounds，但GetValue/SetValue基于Object会对value elements boxing且缺少静态类型安全，hot path优先typed indexing/generic helpers。
+
+Array.Clone做shallow copy：复制elements，reference elements仍指向同一objects。`Array.Copy`可进行某些reference/numeric conversion并处理overlap，`Buffer.BlockCopy`按bytes只适合primitive arrays且要明确endianness。深copy需要domain semantics，不是通用reflection递归。
+
+## All Arrays Implicitly Implement IEnumerable, ICollection, and IList
+
+SZ arrays实现nongeneric与generic `IEnumerable<T>`、`ICollection<T>`、`IList<T>`等（runtime特殊支持）；它们fixed-size，index set允许，Add/Remove等改变size操作抛NotSupportedException。Interface名代表capability不总完整，caller需检查fixed-size/read-only semantics。转nongeneric interface会让value elements在枚举/访问时boxing。
+
+<Term def="Array以IList/ICollection视图暴露fixed-size能力，部分修改size的members不受支持。">fixed-size interface contract</Term>
+
+LINQ overarray通常通过generic enumeration，JIT可优化，但链式operators仍可能分配iterator/result。Span提供stack-only contiguous view，不能跨await/yield或存heap；`Memory<T>`可跨async但owner/lifetime仍需明确。选择依据是消费模式，不是追新API。
+
+## Passing and Returning Arrays
+
+Array是reference type，parameter按值传递时复制reference，caller/callee alias同一storage；callee改elements可见，重新赋parameter不改变caller变量。Return internal array会把mutable state暴露；可返回clone/immutable array/read-only view或owner-controlled Memory。ReadOnlyCollection wrapper不防owner继续修改。
+
+```csharp
+public sealed class KeySchedule
+{
+    private readonly byte[] _bytes;
+
+    public KeySchedule(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.IsEmpty) throw new ArgumentException("Key required", nameof(bytes));
+        _bytes = bytes.ToArray(); // 获取自己的snapshot ownership
+    }
+
+    public byte[] ExportCopy() => (byte[])_bytes.Clone();
+}
+```
+
+Sensitive arrays要明确谁clear。Constructor defensive copy防caller后改；return copy防外部改内部。高性能时可传ReadOnlySpan并保证不保存，或返回IMemoryOwner/lease让caller Dispose。不要靠文档说“请勿修改”却暴露raw array。
+
+<Term def="调用边界上谁拥有数组storage、谁可修改、能保存多久以及何时清理/归还的协议。">array ownership contract</Term>
+
+## Creating Non-Zero Lower Bound Arrays
+
+`Array.CreateInstance(elementType, lengths, lowerBounds)`可创建每维非零下界array，常见于COM/旧语言interop。C#普通`T[]`是single-dimensional zero-based vector，custom-bound array通常只能经System.Array/GetValue/SetValue访问。循环必须从GetLowerBound到GetUpperBound，不能假设0..Length-1。
+
+Serializer/algorithm若只接受SZ array，应入口验证Rank==1与GetLowerBound(0)==0，或copy normalize。Non-zero bounds属于runtime shape和contract，不是offset decoration。
+
+<Stepper>
+  <Step title="切换vector、rectangular、jagged与custom bounds"><CvcArrayShapeLab /></Step>
+  <Step title="填写Shape表">记录Rank、每维lower/upper/length、total Length、row nullability和contiguity。</Step>
+  <Step title="泛化遍历">分别测试zero/non-zero lower bounds与多rank，证明算法没有隐藏0-based假设。</Step>
+</Stepper>
+
+## Array Internals
+
+Array object header后包含length/bounds信息与element storage（具体layout由runtime/architecture决定）。SZ arrays访问容易做range-check elimination/vectorization；rectangular accessor可能更复杂；jagged多一次reference load但rows可符合问题shape。Cache locality取决访问顺序、element size和working set，不能只凭语法断言性能。
+
+Large arrays可能进入LOH，生命周期与fragmentation影响GC；含references的array每个slot参与GC scanning/write barrier。Array.Clear释放reference roots或清零value storage。Pool可减少分配但扩大retained memory与敏感数据remanence，必须测。
+
+## Unsafe Array Access and Fixed-Size Arrays
+
+`fixed` pin managed array/span并取得pointer，防GC在scope内移动，不防其它线程写，也不延长native异步使用到scope外。Empty array pointer、element typeblittability、endianness、alignment、buffer length和native ownership都要明确。Fixed-size buffer只允许在unsafe struct中特定primitive element，常用于interop layout。
+
+<Term def="在极短scope内阻止GC移动对象并向native暴露稳定地址，同时承担ABI与并发责任。">pinning window</Term>
+
+Unsafe loop可省bounds checks但JIT常能优化普通for/Span。先benchmark/disassemble，证明bounds check是瓶颈；错误pointer arithmetic会越界且可能进程崩溃。Prefer safe Span/MemoryMarshal/BinaryPrimitives表达边界，unsafe集中在小adapter并做fuzz/canary。
+
+<Stepper>
+  <Step title="切换pass、return、pin与pool ownership"><CvcArrayBoundaryLab /></Step>
+  <Step title="建立Lease账本">记录storage owner、logical length、capacity、alias、pin start/end、native callback和return/clear责任。</Step>
+  <Step title="注入边界故障">测试empty、oversized, pooled larger buffer、native delayed callback、double return和sensitive data残留。</Step>
+</Stepper>
+
+<Callout type="trap" title="Pinned数组在Native调用结束前一直安全">
+只有fixed/GCHandle仍有效时地址稳定；若native保存pointer用于异步回调，scope结束就悬空。还需防并发修改、明确长度/ABI，并让lease覆盖真实native lifetime。
+</Callout>
+
+## Pooling and Logical Length
+
+`ArrayPool<T>.Rent(n)`返回Length至少n、可能更大。Caller必须单独保存logical length，不能遍历整个array读取旧数据；finally归还一次，敏感T用clearArray或自行清理。Returned array不再可访问，double return/use-after-return是ownership bug。
+
+Pool适合可控短scope的大量临时buffers；长期持有会耗尽pool并增加working set。租还频率、size buckets、clear成本和allocation rate都要profile。公开API若直接返回pooled array而无lease type，caller几乎无法知道何时归还。
+
+## 本章回顾：Array API必须暴露Shape与Ownership
+
+1. Array有runtime element type、rank、length/bounds；vector、rectangular、jagged与custom bounds不同。
+2. Reference array covariance把写错误推迟到runtime；value arrays不covariant，generic read-only abstraction更安全。
+3. System.Array/collection interfaces提供通用能力，但GetValue boxing与fixed-size mutators需注意。
+4. Pass/return都共享reference storage；需要snapshot、read-only view或lease明确ownership。
+5. Pin/unsafe/pool改变lifetime、ABI和cleanup责任，必须用logical length、finally和故障测试证明。
+
+<Exercises>
+
+**问题 1：方法接收object[]，caller传string[]后写入DateTime失败，如何改API？**
+
+<Answer>这是array covariance runtime write check。若方法需要写任意object，创建/接受真正object[]或invariant mutable abstraction；若只读，接受`IEnumerable<object>`/ReadOnlySpan适用类型并不写。不要捕获ArrayTypeMismatch继续，因为storage contract本身错误。</Answer>
+
+**问题 2：返回内部byte[]为何即使Property类型是`IReadOnlyList<byte>`仍可能泄漏？**
+
+<Answer>若caller能从其它路径拿到原array，或owner继续修改，read-only view仍是live alias；某些实现还可cast回array。需要稳定/隔离就返回copy/immutable snapshot；高性能则返回有明确lifetime的ReadOnlyMemory并由owner保证期间不改。</Answer>
+
+**问题 3：ArrayPool租100字节后怎样安全使用？**
+
+<Answer>保存logicalLength=100，只读取已写入的0..99，不依赖returned Length；try/finally中归还一次，归还后不再使用。Sensitive data在归还前clear或Return(clearArray:true)。不要把raw pooled array跨层返回，使用lease owner封装Dispose。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="array runtime shape" definition="Element type、rank、length与lower bounds组成的运行时形状。" />
+  <GlossaryItem term="array covariance check" definition="Reference array转换后写入仍按真实element type检查。" />
+  <GlossaryItem term="fixed-size interface contract" definition="Array的list/collection视图不能改变size。" />
+  <GlossaryItem term="array ownership contract" definition="数组storage的修改、保存、清理与归还责任。" />
+  <GlossaryItem term="pinning window" definition="地址稳定且native可合法使用managed storage的有限scope。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 16: Arrays" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

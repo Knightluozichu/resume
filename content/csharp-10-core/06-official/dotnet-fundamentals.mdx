@@ -1,0 +1,197 @@
+---
+title: "Chapter 6. .NET Fundamentals"
+type: C
+section: "C# 10 Nutshell · .NET and Data"
+order: 6
+description: "覆盖文本、时间、格式化、全球化、数值、enum/Guid、相等与排序及utility classes，以表示和round-trip契约掌握BCL基础。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch06.html"
+draft: false
+---
+
+import { CtcEqualityOrderLab, CtcFormatCultureLab, CtcRepresentationChoiceLab } from "@/components/mdx/csharp-10-core/diagrams/dotnet-fundamentals";
+
+<Objectives>
+
+- 能比较string/Rune/bytes、DateTimeOffset/local time/TimeSpan的表示，设计Unicode与DST边界测试
+- 能设计display与wire的format/parse/globalization contract，复现跨culture round trip
+- 能实现value equality、hash与ordering一致性，判断enum、Guid和utility class的适用边界
+
+</Objectives>
+
+## 为什么BCL基础的核心是Representation Contract
+
+Text、time、number和identity看似基础，一旦跨进程、culture、timezone或collection，就会暴露隐含假设。`string.Length`数的是UTF-16 code units，DateTime的Kind不携带完整timezone，ToString默认受culture影响，GetHashCode不稳定也不适合作wire id。先选表示与contract，再选API。
+
+先预测：char等于一个用户字符吗；DateTime.Now适合测耗时吗；InvariantCulture适合所有UI显示吗；两个Equals相等对象可有不同hash吗；Guid顺序有统一业务意义吗。答案都是否。
+
+<Term def="明确domain value在memory、display、wire和storage中使用何种表示及如何round trip的契约。">representation contract</Term>
+
+## String and Text Handling
+
+String是immutable UTF-16 code-unit sequence；char是单个code unit，Rune表达Unicode scalar，StringInfo/text element更接近grapheme cluster。Index/slice按code unit可能切断surrogate；normalization不同的字符串视觉相同但binary不同。协议通常按UTF-8 bytes，必须明确invalid byte fallback。
+
+```csharp
+string text = "A🙂e\u0301";
+int codeUnits = text.Length;
+int scalars = text.EnumerateRunes().Count();
+int graphemes = new StringInfo(text).LengthInTextElements;
+
+byte[] utf8 = Encoding.UTF8.GetBytes(text.Normalize(NormalizationForm.FormC));
+```
+
+Comparison按用途：protocol/key用Ordinal/OrdinalIgnoreCase，用户语言排序用CultureInfo/CompareInfo。StringBuilder适合大量incremental construction，但不保证结果更少allocation于小常量拼接；测量后选择。Sensitive text减少长期string copies，安全场景使用专门secret handling。
+
+## Dates and Times
+
+Instant优先DateTimeOffset/UTC，local recurring schedule用DateOnly/TimeOnly加IANA/Windows zone与resolution policy，duration用TimeSpan，elapsed measurement用Stopwatch monotonic source。DateTime Kind只标Local/Utc/Unspecified，不等于完整zone。DST有gap与overlap，同一local time可能不存在或对应两个instants。
+
+<Term def="区分instant、local civil time、timezone规则、duration与monotonic elapsed measurement的时间模型。">temporal representation</Term>
+
+Clock作为dependency注入；tests用fixed clock和明确zone。Serialization保留offset/zone需求，数据库column语义写清。Calendar arithmetic“加一天”和“加24小时”在DST附近不同，domain policy决定。
+
+<Stepper>
+  <Step title="切换text、instant、local time与duration"><CtcRepresentationChoiceLab /></Step>
+  <Step title="标representation单位">Text写code unit/scalar/grapheme/bytes；time写instant/local/zone/duration。</Step>
+  <Step title="运行edge corpus">Surrogate/combining、DST gap/overlap、leap/day boundary和clock rollback逐项验证。</Step>
+</Stepper>
+
+<Callout type="trap" title="DateTimeOffset已经包含完整Timezone">
+它保留instant与当时offset，但不保存timezone规则/identifier，无法直接推导未来recurrence。Recurring local schedule需单独zone id与gap/overlap policy。
+</Callout>
+
+## Formatting and Parsing
+
+Formatting把value变text，parsing尝试重建value；display和wire目标不同。Display尊重user culture且可变；wire/storage用explicit invariant format/version。`Parse`对invalid抛异常，`TryParse`适合expected input；ParseExact/TryParseExact收窄grammar。
+
+```csharp
+var culture = CultureInfo.GetCultureInfo("fr-FR");
+string display = amount.ToString("N2", culture);
+string wire = instant.ToString("O", CultureInfo.InvariantCulture);
+
+bool ok = DateTimeOffset.TryParseExact(
+    wire, "O", CultureInfo.InvariantCulture,
+    DateTimeStyles.RoundtripKind, out var parsed);
+```
+
+Round-trip tests覆盖min/max、precision/scale、offset、invalid/extra text和version。不要用默认ToString当cache key/JSON/database format，也不依赖exception message文本做protocol。
+
+## Globalization
+
+CultureInfo影响number/date format、comparison、casing、calendar和resources。CurrentCulture与CurrentUICulture角色不同，async flow可能传播；server请求应从trusted locale policy选择，不盲信任任意header。InvariantCulture用于machine-readable stable behavior，不是“英语UI”。
+
+ICU/NLS/runtime版本可能改变排序与globalization data，persistence key不要依赖culture sort key长期稳定。Resource fallback、pluralization与RTL需要UI tests。Security normalization与case folding不能简单套UI culture。
+
+<Term def="明确哪些operations使用user culture、UI resource culture、ordinal或invariant machine format的策略。">culture boundary policy</Term>
+
+<Stepper>
+  <Step title="切换display、wire、number与date"><CtcFormatCultureLab /></Step>
+  <Step title="建立format table">每个field写format string、provider、style、precision、invalid policy和schema version。</Step>
+  <Step title="跨culture round trip">至少en-US/fr-FR/tr-TR/ar与invariant运行format/parse/comparison，固定expected wire。</Step>
+</Stepper>
+
+## Working with Numbers
+
+Convert/Parse/checked conversion处理不同input渠道；Math提供transcendental/rounding，BigInteger支持任意精度整数，Half降低storage precision，Complex表示复数，Random是pseudo-random。BitOperations处理位级算法。每种type都需range、precision、unit与performance tradeoff。
+
+Random.Shared适合普通并发随机，不适合cryptographic secret；安全token使用RandomNumberGenerator。Seeded Random用于可复现test/simulation，并记录seed。Numeric algorithm测试overflow、NaN/infinity、rounding和platform tolerance。
+
+## Enums
+
+Enum为numeric codes命名，ToString/Parse可处理name/value，但unknown numeric仍可存在。Flags组合用HasFlag或bit operations并定义zero/unknown bits。Wire values稳定，不复用已发布number。User input TryParse后仍需IsDefined/allowed mask按domain验证。
+
+Enum formatting受name而非culture，localization通过resource mapping。若value携带payload/行为，用closed records/polymorphism而非膨胀enum switch。
+
+## The Guid Struct
+
+Guid是128-bit identifier，有多种string formats和byte ordering细节。`Guid.NewGuid`适合随机unique identifiers，但不提供有序性、时间语义或security proof；数据库cluster key可能因随机写产生fragmentation，需评估UUID版本/ordered id策略。
+
+Wire选择固定format（常D/N）并用TryParseExact。Empty不是自动invalid，domain constructor决定。不要通过Guid排序推断创建时间，比较结果只是一种implementation-defined/defined component order而非业务chronology。
+
+## Equality Comparison
+
+Reference identity、value equality与domain identity不同。Equals/`==`/IEquatable需一致，equal objects必须same hash；mutable key在Dictionary/HashSet中改变参与hash的fields会导致无法找回。Floating-point、string culture和record inheritance有各自语义。
+
+```csharp
+public sealed record CustomerNumber(string Value)
+{
+    public string Value { get; } = Normalize(Value);
+    private static string Normalize(string value) =>
+        value.Trim().ToUpperInvariant();
+}
+
+var set = new HashSet<CustomerNumber>();
+set.Add(new(" ab-42 "));
+bool found = set.Contains(new("AB-42"));
+```
+
+Property tests验证reflexive/symmetric/transitive/hash consistency与null。Comparer作为collection construction dependency，不能插入后更换语义。
+
+<Term def="Equals、operator、IEquatable与GetHashCode对相同domain value产生一致结果且key保持稳定的约定。">equality-hash contract</Term>
+
+## Order Comparison
+
+IComparable定义natural order，IComparer注入alternative order。Comparer需anti-symmetric/transitive；SortedDictionary/SortedSet把Compare==0视为same key，即使Equals不同会丢数据。Partial order（版本依赖、NaN、domain incomparable）不应伪装成total order。
+
+String sort选择ordinal/culture并明确stability；LINQ ThenBy构建secondary order。Pagination必须有deterministic tie-breaker，否则数据更新/不同plan会重复或漏项。
+
+<Stepper>
+  <Step title="切换equality、order、identity与key"><CtcEqualityOrderLab /></Step>
+  <Step title="写algebra properties">Equality三律+hash，order反对称/传递/tie，与domain identity分别列出。</Step>
+  <Step title="在collections验收">HashSet/Dictionary/SortedSet插入、查找、duplicate、mutable mutation和culture change全部测试。</Step>
+</Stepper>
+
+<Callout type="trap" title="CompareTo返回0但Equals为False也没关系">
+SortedSet/SortedDictionary通常把compare zero视为同一位置，可能丢掉第二项。Natural/comparer order必须与collection期望一致，或使用包含tie-breaker的comparer。
+</Callout>
+
+## Utility Classes
+
+Console、Environment、Process、AppContext等连接process/host。Console可能redirect/noninteractive；Environment variables是untrusted strings且平台case rules不同；Process启动需要argument quoting、timeout、stdout/stderr drain和kill tree；AppContext switches是compat behavior，不是任意业务config。
+
+这些APIs放在infrastructure adapter，core接typed config/capability。Tests用fake process runner/config source；integration覆盖redirect、large output、nonzero exit、timeout/cancel和missing variable，避免child-process deadlock。
+
+<Term def="Console、Environment、Process和AppContext等host APIs被封装成typed, testable infrastructure capabilities的边界。">host utility boundary</Term>
+
+## Production round-trip gate
+
+关键text/time/number/id fields建立golden corpus：旧版本payload、新版本parse、所有culture/zone、min/max/invalid与canonical reserialize。Comparer/hash升级需migration，不能静默改变persistent dictionary/index semantics。
+
+Telemetry记录parse reason code、culture/zone/version而不泄露raw secret。Runtime/globalization data升级跑golden tests，证明display允许变化、wire仍稳定。
+
+## 本章回顾：先定义表示，再调用BCL
+
+1. Text区分code unit/scalar/grapheme/bytes，comparison按protocol或user用途选择。
+2. Instant、local time、zone、duration和monotonic elapsed不是同一种时间。
+3. Display使用culture，wire使用explicit invariant/versioned round trip。
+4. Equality、hash、order与identity需分别定义并在collections验证。
+5. Enum/Guid/utility classes都有unknown、ordering、host与security边界。
+
+<Exercises>
+
+**问题 1：怎样存储“每天当地时间09:00执行”的计划？**
+
+<Answer>保存DateOnly/TimeOnly recurrence规则、timezone id与DST gap/overlap policy，运行时根据当日zone rules解析成instant。只保存DateTimeOffset会丢未来timezone变化；测试gap、overlap与zone database升级。</Answer>
+
+**问题 2：Machine wire format为何不使用CurrentCulture？**
+
+<Answer>CurrentCulture随user/request/machine变化，数字分隔符、date order和calendar不同，无法稳定round trip。Wire指定invariant exact format和schema version，display才用user culture；跨culture golden tests验证。</Answer>
+
+**问题 3：自定义value作为Dictionary key需满足什么？**
+
+<Answer>Equals自反/对称/传递，equal值hash相同；参与equality/hash的fields插入后不变；comparer在collection lifetime固定。测试equal duplicates、hash retrieval、null与mutation，serialization后仍canonical相等。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="representation contract" definition="Memory/display/wire/storage的value表示与round trip。" />
+  <GlossaryItem term="temporal representation" definition="Instant、local、zone、duration与monotonic time区分。" />
+  <GlossaryItem term="culture boundary policy" definition="User/UI/ordinal/invariant culture的使用约定。" />
+  <GlossaryItem term="equality-hash contract" definition="Equals/operator/hash与stable key的一致性。" />
+  <GlossaryItem term="host utility boundary" definition="Process/environment等host APIs的typed adapter。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 6: .NET Fundamentals" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch06.html" />

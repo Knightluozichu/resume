@@ -1,0 +1,373 @@
+---
+title: "Item 51：编写 new 和 delete 时遵守常规"
+type: A
+section: Chapter 8 · Customizing new and delete
+order: 51
+description: 对齐 Effective C++ 第三版 Item 51：实现 zero-byte 与 new-handler 约定，防止 class-specific operator new 截断 derived allocation，并让 delete 遵守 null、noexcept、size/alignment 与 allocation family 配对。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppBaseClassAllocationSizeMap,
+  EcppOperatorDeleteConventionMap,
+  EcppOperatorNewConventionMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-51-conventions-writing-new-delete";
+
+<Objectives>
+
+- 能实现处理 zero-byte request、new-handler 重试与 bad_alloc 的 throwing operator new 骨架
+- 能解释 base class operator new 为何会接收 derived size，并设计安全的 size mismatch delegation
+- 能比较 scalar、array、sized、aligned delete forms，验证 null、noexcept 和 allocator identity 配对
+
+</Objectives>
+
+## 从一份最小契约开始
+
+```cpp
+void* operator new(std::size_t size);
+void operator delete(void* memory) noexcept;
+```
+
+allocation function 只取得 raw storage，deallocation function 只归还 storage。它们位于语言 new/delete expression 的底层，必须模仿标准约定。
+
+<Term def="自定义 allocation/deallocation functions 必须保持的大小、失败、对齐和释放行为。">
+  new-delete convention
+</Term>
+
+<Term def="调用方请求分配零个 bytes 的合法边界输入。">zero byte request</Term>
+
+Item 51 的原则是 Adhere to convention when writing new and delete（编写 new/delete 时遵守常规）。
+
+先预测：`operator new(0)` 是否可以成功返回 null？throwing form 成功应返回可供 matching delete 使用的非空 pointer；通常把请求提升到 1 byte。
+
+## zero-byte request 必须可处理
+
+```cpp
+void* operator new(std::size_t size) {
+    if (size == 0) size = 1;
+    // allocate at least one byte
+}
+```
+
+<Term def="把零请求提升为最小非零 storage，以保持成功结果和释放语义。">
+  zero-size normalization
+</Term>
+
+标准不要求两个存活的零请求共享地址；最稳健做法是按最小 block 分配，使每次成功结果可独立传给 delete。
+
+<Term def="成功 throwing allocation 返回非空且适当对齐、可由对应 delete 释放的地址。">
+  successful allocation result
+</Term>
+
+## allocation 失败要遵守 new-handler 循环
+
+```cpp
+void* operator new(std::size_t size) {
+    if (size == 0) size = 1;
+
+    for (;;) {
+        if (void* memory = tryAllocate(size)) return memory;
+
+        std::new_handler handler = std::get_new_handler();
+        if (!handler) throw std::bad_alloc{};
+        handler();
+    }
+}
+```
+
+<Term def="allocation 失败后反复调用 handler 并重试，直到成功、抛异常或终止。">
+  new-handler retry loop
+</Term>
+
+handler 返回意味着它声称条件已改变；allocation function 必须重试。若无 handler，throwing operator new 抛 `std::bad_alloc`，不能静默返回 null。
+
+<EcppOperatorNewConventionMap />
+
+<Term def="失败时抛 bad_alloc、成功时返回 non-null storage 的普通 operator new 形式。">
+  throwing allocation form
+</Term>
+
+<Callout type="trap" title="陷阱：自定义 operator new 失败时返回 nullptr">
+  普通 new expression 假设 throwing allocation 成功非空或抛异常。返回 null
+  会破坏语言路径；只有对应 nothrow allocation contract 才以 null 表示失败。
+</Callout>
+
+## handler 返回而条件不变会无限循环
+
+Item 49 已说明 handler 的动作。Item 51 在实现侧必须接受 handler 可能返回，并重新尝试；不能只调用一次后直接 bad_alloc，也不能忽略 null handler。
+
+<Term def="handler 未释放资源或改变策略却正常返回，导致 allocation 不断失败重试的状态。">
+  new-handler infinite loop
+</Term>
+
+自定义 allocator 的 failure injection tests 应限制重试次数并观察 handler 行为，测试本身避免挂死 CI。
+
+## class-specific operator new 是 static
+
+```cpp
+class Base {
+public:
+    static void* operator new(std::size_t size);
+};
+
+class Derived : public Base {
+    std::array<std::byte, 1024> extra_;
+};
+```
+
+allocation 在 constructor 前发生，没有对象可动态分派。class-specific operator new 是 static-like function；Derived 未声明自己的版本时，name lookup 可能使用继承来的 Base allocation function，并传入 `sizeof(Derived)`。
+
+<Term def="定义在 class scope、可被 derived new expression 找到的静态分配函数。">
+  base class operator new
+</Term>
+
+<Term def="继承来的 class allocator 收到大于或不同于 Base 对象大小的请求。">
+  derived-size allocation request
+</Term>
+
+若 Base pool 固定返回 `sizeof(Base)` block，会造成 Derived constructor 写越界。
+
+## size mismatch 必须转交通用 allocator
+
+```cpp
+void* Base::operator new(std::size_t size) {
+    if (size != sizeof(Base)) {
+        return ::operator new(size);
+    }
+    return basePool.allocate();
+}
+```
+
+<Term def="class allocator 遇到非目标大小时调用 global allocation function 的安全回退。">
+  size-mismatch delegation
+</Term>
+
+只有精确 Base size 走固定池；Derived、ABI padding 变化或其他未知请求交给 global allocator。
+
+<EcppBaseClassAllocationSizeMap />
+
+## delete 端必须镜像来源
+
+若 Base allocation 对 size mismatch 调 global new，sized delete 应把对应 request 交给 global delete。
+
+```cpp
+void Base::operator delete(void* memory, std::size_t size) noexcept {
+    if (!memory) return;
+    if (size != sizeof(Base)) {
+        ::operator delete(memory);
+        return;
+    }
+    basePool.deallocate(memory);
+}
+```
+
+<Term def="释放路径根据 size 或 metadata 回到最初取得 storage 的 allocator。">
+  allocation-source mirroring
+</Term>
+
+不能把 global block 塞入 Base pool，也不能把 pool block 交给 global delete。
+
+## delete null 必须无操作
+
+```cpp
+Base::operator delete(nullptr); // must do nothing
+```
+
+<Term def="deallocation function 接收 null pointer 时立即返回，不读取 metadata 或修改 allocator。">
+  null deallocation no-op
+</Term>
+
+很多底层 free 已接受 null，但自定义 header lookup 若先对 pointer 做减法，会产生错误。null check 应在最前面。
+
+<EcppOperatorDeleteConventionMap />
+
+<Term def="deallocation function 不传播异常，尤其不能在 destructor unwinding 中再次抛出。">
+  non-throwing deallocation
+</Term>
+
+## new[] 只看到 raw byte count
+
+```cpp
+void* Base::operator new[](std::size_t bytes);
+```
+
+`bytes` 可能包含多个 elements、实现的 array cookie 和 padding。allocation function 不知道元素数，也不应构造 objects。
+
+<Term def="实现为记录 array element count 等信息加在 allocation 上的隐藏开销。">
+  array allocation cookie
+</Term>
+
+<Term def="operator new[] 接收的总 storage 大小，不能简单解释为对象数量乘固定 size。">
+  array raw byte request
+</Term>
+
+class hierarchy 下 inherited array allocator 还可能接收 derived arrays。除非有可靠通用设计，class fixed-size pool 不应机械复用于 `new[]`。
+
+<Callout type="trap" title="陷阱：用 bytes 除以 sizeof(Base) 得到数组元素数">
+  array cookie、padding、derived element size 都会破坏这个假设。allocation
+  function 应处理 raw bytes，元素构造和数量属于 new expression/ABI 层。
+</Callout>
+
+## alignment 是成功结果的一部分
+
+普通 operator new 必须满足相应默认 alignment；over-aligned allocation 通过带 `std::align_val_t` 的 overload 处理。
+
+```cpp
+void* operator new(std::size_t size, std::align_val_t alignment);
+void operator delete(void* p, std::align_val_t alignment) noexcept;
+```
+
+<Term def="为 over-aligned types 接收显式 alignment 并返回对应边界 storage 的函数。">
+  aligned allocation form
+</Term>
+
+<Term def="allocation 和 deallocation 在 scalar/array/aligned/sized 维度使用兼容函数族。">
+  allocation family pairing
+</Term>
+
+若自定义 class 只声明非 aligned form，却后来增加 over-aligned member，需重新审计 lookup 和 compiler 选择；最安全是提供完整配对或显式 delegate。
+
+## sized delete 是信息，不是盲目信任
+
+```cpp
+void operator delete(void* p, std::size_t size) noexcept;
+```
+
+<Term def="由调用路径在可用时把对象 storage 大小传给 deallocation function 的形式。">
+  sized deallocation form
+</Term>
+
+size 可帮助选择 pool，但 polymorphic delete、ABI 与 compiler flags 影响何时调用。allocator metadata 仍应能识别 block 来源，不要把 sized overload 当唯一安全证据。
+
+## constructor 失败需要 matching delete
+
+new expression 先 allocation，再 constructor。constructor 抛异常时，语言寻找与所用 operator new 匹配的 delete 释放 storage。
+
+<Term def="constructor 未完成时由语言调用对应 deallocation function 回收 raw storage 的路径。">
+  constructor-failure deallocation
+</Term>
+
+普通 new/delete 形状看似简单，但 placement forms 的额外参数要求 Item 52 的 placement delete；本章先建立“每个 allocation form 都有可匹配释放路径”的总原则。
+
+## 验收矩阵
+
+至少覆盖：
+
+1. size 0 返回非空且可释放。
+2. failure + null handler 抛 bad_alloc。
+3. handler 释放资源后第二次成功。
+4. Base 与 Derived 分别走 pool/global，并正确回收。
+5. delete null 不访问 metadata。
+6. scalar/array/aligned/sized forms 配对。
+7. constructor 抛出时无泄漏。
+8. 多线程 free list 与 handler 路径无数据竞争。
+
+<Term def="覆盖边界大小、失败、继承、函数族和异常路径的 allocation 测试集合。">
+  allocation convention matrix
+</Term>
+
+先预测每个 case 选择哪个 overload 和 allocator domain，再用计数器、sanitizer 与 failure injection 验证。
+
+## 小结
+
+- throwing operator new 要正规化 zero-byte request，成功返回 non-null，失败遵循 new-handler 重试或 bad_alloc
+- handler 返回而失败条件不变会形成 infinite loop，测试必须可控注入
+- base class operator new 可被 derived allocation 使用，size 不等于 Base 时必须安全 delegate
+- delete null 是 no-op，deallocation 必须 noexcept 并镜像原 allocator 来源
+- operator new[] 接收 raw bytes，不能假定元素数或固定 Base 大小
+- scalar/array/sized/aligned 和 constructor-failure 路径都需 matching delete
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 51"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="new-delete convention">
+    自定义分配释放必须保持的契约。
+  </GlossaryItem>
+  <GlossaryItem term="zero byte request">
+    请求零 bytes 的边界输入。
+  </GlossaryItem>
+  <GlossaryItem term="zero-size normalization">
+    把零请求提升为最小非零请求。
+  </GlossaryItem>
+  <GlossaryItem term="successful allocation result">
+    成功时非空、对齐且可释放的地址。
+  </GlossaryItem>
+  <GlossaryItem term="new-handler retry loop">
+    失败调用 handler 后反复重试。
+  </GlossaryItem>
+  <GlossaryItem term="throwing allocation form">
+    失败抛 bad_alloc 的普通 new。
+  </GlossaryItem>
+  <GlossaryItem term="new-handler infinite loop">
+    handler 无改变返回导致的无限重试。
+  </GlossaryItem>
+  <GlossaryItem term="base class operator new">
+    可被派生 new 找到的 class 分配函数。
+  </GlossaryItem>
+  <GlossaryItem term="derived-size allocation request">
+    基类 allocator 收到派生对象大小。
+  </GlossaryItem>
+  <GlossaryItem term="size-mismatch delegation">
+    未知尺寸转交 global allocator。
+  </GlossaryItem>
+  <GlossaryItem term="allocation-source mirroring">
+    释放回到原始 allocator 来源。
+  </GlossaryItem>
+  <GlossaryItem term="null deallocation no-op">
+    delete null 时立即无操作返回。
+  </GlossaryItem>
+  <GlossaryItem term="non-throwing deallocation">
+    释放函数不传播异常。
+  </GlossaryItem>
+  <GlossaryItem term="array allocation cookie">
+    实现附加的数组元素元数据。
+  </GlossaryItem>
+  <GlossaryItem term="array raw byte request">
+    new[] 传入的总 storage bytes。
+  </GlossaryItem>
+  <GlossaryItem term="aligned allocation form">
+    接收显式 alignment 的分配形式。
+  </GlossaryItem>
+  <GlossaryItem term="allocation family pairing">
+    new/delete 函数族兼容配对。
+  </GlossaryItem>
+  <GlossaryItem term="sized deallocation form">
+    释放时接收 size 的 overload。
+  </GlossaryItem>
+  <GlossaryItem term="constructor-failure deallocation">
+    构造异常后回收 storage 的路径。
+  </GlossaryItem>
+  <GlossaryItem term="allocation convention matrix">
+    完整分配常规测试集合。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：实现 throwing operator new 的失败循环。** zero request 正常化，无 handler 时抛异常。
+
+<Answer question="控制流必须满足哪些常规？">
+  先把 size 0 提升为 1；循环尝试 allocator，成功返回 non-null aligned
+  storage；失败读取当前 handler，无 handler 抛 bad_alloc，有 handler
+  就调用并重试。用注入测试覆盖首次成功、释放 reserve 后成功、handler
+  自抛和无改变 handler 的受控循环。
+</Answer>
+
+2. **问题 2：Base 固定池 block 为 64 bytes，Derived 为 256 bytes。** Derived 没有自己的 operator new。
+
+<Answer question="怎样避免派生对象越界并正确释放？">
+  Base operator new 比较 size；仅精确等于 sizeof Base 时走 pool，其他 size 委托
+  global new。matching sized delete 对非 Base size 委托 global delete，Base
+  block 回 pool；更稳健可用 metadata 标识来源。测试 Derived
+  构造、析构、构造抛出和 polymorphic delete。
+</Answer>
+
+3. **问题 3：自定义 allocator 要支持 arrays 与 64-byte over-aligned objects。** 制定 overload 和测试。
+
+  <Answer question="为什么不能只复用 scalar 固定池？">new[] bytes 可能含 cookie/padding 且元素类型/数量未知，应按 raw bytes 使用通用路径；over-aligned form 接收 align_val_t，并提供 matching aligned delete。测试 zero-length array、constructor 中途失败、地址模 64、scalar/array/aligned/sized overload 选择和 allocator identity。</Answer>
+</Exercises>

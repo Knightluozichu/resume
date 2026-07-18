@@ -95,7 +95,7 @@ const STEPS: readonly TeachingStep[] = [
   {
     label: "verdict",
     caption:
-      "④ 发现两条访问之间无 happens-before、且至少一个是写 → 判定为数据竞争",
+      "④ 本次观察到冲突访问、至少一个非原子，且无 happens-before → 判定为数据竞争",
   },
   {
     label: "report",
@@ -247,7 +247,7 @@ export function TsanDetectionDiagram() {
         <svg
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           role="img"
-          aria-label="ThreadSanitizer 如何抓数据竞争动画。顶部左边是线程 A 写变量 x，右边是线程 B 读变量 x，中间是共享变量 x，两者之间没有任何同步。第一步：A 写 x、B 读 x 无锁无原子无 happens-before 边。第二步：TSan 在每次内存访问处插桩，记录哪个线程、读还是写、是否加锁、向量时钟。第三步：把 A 写 x 和 B 读 x 两条记录摆在一起比对，看它们之间有没有 happens-before 关系。第四步：发现两条访问之间没有 happens-before 关系、且至少一个是写，判定为数据竞争。第五步：TSan 报告冲突的两处访问和各自调用栈，定位到代码行。播放时按五步依次点亮，可播放、暂停、单步、拖动进度。"
+          aria-label="ThreadSanitizer 动态检测数据竞争动画。线程 A 写变量 x，线程 B 读变量 x，两者没有同步。TSan 对本次执行且被插桩的访问与同步事件建模，比较两条冲突访问之间是否存在 happens-before。若本次观察到的访问冲突、至少一个非原子且没有 happens-before，TSan 报告两侧调用栈。未执行路径和未插桩模块不在本次证据范围内。"
           className="mx-auto block h-auto w-full max-w-[680px]"
         >
           {/* 标题 */}
@@ -258,7 +258,7 @@ export function TsanDetectionDiagram() {
             fontWeight="700"
             fill="var(--text-primary)"
           >
-            ThreadSanitizer：靠 happens-before 分析自动抓数据竞争
+            ThreadSanitizer：分析本次已覆盖的冲突访问
           </text>
           <text x="20" y="48" fontSize="11" fill="var(--text-secondary)">
             给后厨装监控——盯着「两人同时碰一份料、却没打招呼」
@@ -416,7 +416,7 @@ export function TsanDetectionDiagram() {
               fontWeight="700"
               fill={RACE_COLOR}
             >
-              无 happens-before + 至少一个是写 → 判定：数据竞争 ⚠
+              冲突 + 至少一个非原子 + 无 happens-before → 数据竞争
             </text>
           </g>
 
@@ -465,16 +465,12 @@ export function TsanDetectionDiagram() {
         <TimelineControls
           timeline={timeline}
           labelText={LABEL_TEXT}
-          caption="A 写、B 读、无同步 → 插桩记录线程/锁/时钟 → 比对有无 happens-before → 无且含写=数据竞争 → 报告冲突两处。可暂停、单步、拖进度。"
+          caption="A 写、B 读、无同步 → 插桩记录本次访问与同步 → 比对 happens-before → 报告已观察到的数据竞争。可暂停、单步、拖进度。"
         />
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
-        ThreadSanitizer
-        不靠运气复现：它在每次内存访问处插桩，记录访问者的线程、锁集和向量时钟，
-        再用 happens-before
-        关系判断两次访问是否真有先后保证。一旦发现两次访问之间毫无
-        happens-before、又至少有一个是写，就判定为数据竞争并报告冲突的两处代码——把「时有时无」的
-        bug 变成「每跑必抓」的确定结果。
+        ThreadSanitizer 用插桩和 happens-before
+        模型检查本次执行覆盖到的冲突访问，并报告两侧调用栈。它是动态检测器：未执行路径、未插桩模块和高层协议错误可能漏检，零报告不是正确性证明。
       </figcaption>
     </figure>
   );

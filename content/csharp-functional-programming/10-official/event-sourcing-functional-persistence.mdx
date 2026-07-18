@@ -1,0 +1,147 @@
+---
+title: "Chapter 10. Event sourcing: a functional approach to persistence"
+type: C
+section: "Functional C# 1e · Becoming functional"
+order: 10
+description: "覆盖functional storage view、event sourcing basics、write/projection/snapshot architecture与immutable storage tradeoffs，把state fold和append effect分开。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-10"
+draft: false
+---
+
+import { CfpEventArchitectureLab, CfpEventFoldLab, CfpImmutableStorageLab } from "@/components/mdx/csharp-functional-programming/diagrams/event-sourcing-functional-persistence";
+
+<Objectives>
+
+- 能比较overwrite、immutable snapshots、event log与hybrid storage保留的信息、query和evolution成本
+- 能设计`fold events -> state`与`state + command -> events`pure core，复现replay/idempotency
+- 能分析expected-version append、projection、snapshot与event evolution architecture，设计fault/rebuild gates
+
+</Objectives>
+
+## 为什么Persistence也可以保存Change而不只保存Current State
+
+传统CRUD覆盖latest row，过去发生什么需另建audit。Event sourcing把domain facts append为immutable log，current state由ordered events fold得到。它天然适合functional transition/replay，但引入event schema permanence、projection lag、concurrency和operational complexity，不是通用升级。
+
+先预测：append-only就等于event sourcing吗；replay同events必然同state吗；snapshot可随意覆盖吗；projection exactly-once是否由framework保证；event可按class rename直接迁移。答案都是否。
+
+<Term def="以immutable domain events作为source of truth，通过ordered fold重建aggregate state的persistence model。">event-sourced state</Term>
+
+## Thinking functionally about data storage
+
+Functional view把storage reads当facts/snapshots，把writes当new facts/versions，而非远程mutable variables。Overwrite简单、query直接；immutable snapshots保留versions；events保留intent/history；hybrid用events+snapshots/projections平衡load和query。
+
+```text
+overwrite: id -> latest row
+snapshot:  (id, version) -> state
+events:    (streamId, sequence) -> immutable fact
+```
+
+<Term def="Storage保存latest row、versioned state或domain facts时，对history、query与concurrency的明确选择。">immutable storage model</Term>
+
+<Stepper>
+  <Step title="切换overwrite、snapshot、events与hybrid"><CfpImmutableStorageLab /></Step>
+  <Step title="列出source of truth与derived views">谁可rebuild、谁可删除、schema如何version、query读取哪个consistency point。</Step>
+  <Step title="用audit/query/recovery scenarios验收">比较point-in-time、latest query、history correction、storage growth和restore time。</Step>
+</Stepper>
+
+<Callout type="trap" title="需要Audit Log就应该Event Source所有Aggregate">
+Audit可独立满足合规；event sourcing要求events能完整重建domain state并长期version。若只需who/when记录，CRUD+audit可能更简单可靠。
+</Callout>
+
+## Event sourcing basics
+
+核心分两functions：`Fold(initial, events) -> state`与`Decide(state, command) -> events/error`。Apply event应deterministic且无I/O；Decide只产生facts，不append。Shell load stream、fold、decide，再以expected version atomic append。
+
+```csharp
+AccountState Fold(IEnumerable<AccountEvent> events) =>
+    events.Aggregate(AccountState.Empty, Apply);
+
+Either<Error, IEnumerable<AccountEvent>> Decide(
+    AccountState state, Withdraw command) =>
+    state.CanWithdraw(command.Amount)
+        ? Right(new FundsWithdrawn(command.Id, command.Amount))
+        : Left(Error.InsufficientFunds);
+```
+
+<Term def="从initial state按event order应用pure transition，得到可重复aggregate state的reduction。">deterministic event fold</Term>
+
+<Stepper>
+  <Step title="切换initial、apply、decide与replay"><CfpEventFoldLab /></Step>
+  <Step title="分离fact与command">Command可能被拒绝；Event命名过去式、已发生且不可随意修改。</Step>
+  <Step title="验证replay与duplicate">相同ordered events同state，duplicate command/event按idempotency policy处理，invalid order明确失败。</Step>
+</Stepper>
+
+## Architecture of an event-sourced system
+
+Write path：load snapshot/tail、fold、decide、append(expectedVersion)。Conflict表示concurrent command基于stale state，需reload/redecide或返回conflict，不能盲重试旧events。Read path由projection消费events构建optimized views，通常eventually consistent。
+
+Snapshot只是optimization，必须能验证stream/version和schema；删除events会改变source of truth。Projection consumer需checkpoint、idempotent update、duplicate/out-of-order policy与full rebuild。Outbox/subscription保证也要明确，不宣称神奇exactly-once。
+
+```csharp
+var stream = await store.Load(streamId, token);
+var state = Fold(stream.Events);
+var pending = Decide(state, command);
+await store.Append(streamId, stream.Version, pending.Right, token);
+```
+
+<Term def="Append携带读取时stream version，只有版本未变才atomic成功的optimistic concurrency contract。">expected-version append</Term>
+
+<Stepper>
+  <Step title="切换write、projection、snapshot与migration"><CfpEventArchitectureLab /></Step>
+  <Step title="画出consistency和checkpoint">Command response、event commit、projection visibility、snapshot version和consumer offset分别何时成立。</Step>
+  <Step title="注入conflict/duplicate/rebuild/evolution">验证stale write不覆盖、projection幂等、snapshot corrupt fallback、old events仍可读。</Step>
+</Stepper>
+
+<Callout type="trap" title="Event Bus和Exactly Once会解决Projection一致性">
+Network/consumer crash会duplicate或redeliver。Projection用event id/offset、idempotent transaction和checkpoint闭环；business exactly-once通常由dedup语义实现，不是transport口号。
+</Callout>
+
+### Operational replay gate
+
+上线前把rebuild写成可重复runbook：在隔离read model从零消费golden streams，记录events/sec、lag、poison event、retry与checkpoint advance，完成后以golden queries和aggregate totals对比live projection。遇到unknown event不能跳过后继续宣称成功；应隔离stream、保留offset和原因，修复reader/upcaster后从安全checkpoint恢复。容量评估同时覆盖全量replay时长、双写切换窗口、磁盘峰值与回滚路径，确保“能重放”不是只在unit test成立。
+
+## Comparing different approaches to immutable storage
+
+Event sourcing适合history本身有业务价值、复杂state transition需audit/replay、多projections受益的domain。Versioned snapshots适合point-in-time但不需intent；append audit+CRUD适合记录变更者；temporal DB提供system-time query。按requirements、team ops和schema evolution选择。
+
+Event schema一旦发布就是长期contract。Prefer stable semantic events；rename/internal refactor不改wire name。需要upcaster/new event version时保留old reader与golden streams。
+
+<Term def="Event schema、meaning和ordering跨多年code versions保持可replay，必要时通过upcast/version兼容。">event evolution contract</Term>
+
+## 本章回顾：Pure Fold不等于简单Operations
+
+1. Event sourcing保存domain facts，state由ordered deterministic fold重建。
+2. Decide产生events，shell以expected version append，I/O不进入Apply。
+3. Projection、snapshot是derived optimization，需要checkpoint、idempotency和rebuild。
+4. Event schema是长期contract，internal rename不能破坏history。
+5. CRUD/audit/snapshot/events各有tradeoff，按domain history价值选择。
+
+<Exercises>
+
+**问题 1：并发两次withdraw怎样避免lost update？**
+
+<Answer>两者从version 5 decide；首个append expected 5成功变6，第二个失败conflict，reload version6并重新Decide，可能余额不足。不能把旧FundsWithdrawn盲append。测试race、retry与command id dedup。</Answer>
+
+**问题 2：Projection rebuild需要哪些证据？**
+
+<Answer>从empty读模型按global/stream order重放，duplicate event idempotent，checkpoint atomic，old event versions可upcast；完成后与live projection/golden queries一致。注入crash between write/checkpoint并验证resume。</Answer>
+
+**问题 3：何时不应选择Event Sourcing？**
+
+<Answer>History没有domain value、CRUD/simple reporting占主导、team无法承担schema/replay/projection operations或event boundaries不稳定时，选择CRUD+audit/temporal/snapshots。用requirements和failure recovery成本而非技术新颖度决策。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="event-sourced state" definition="Events为source of truth并fold成current state。" />
+  <GlossaryItem term="immutable storage model" definition="Latest、snapshot或facts的storage信息选择。" />
+  <GlossaryItem term="deterministic event fold" definition="Ordered events纯归约为state。" />
+  <GlossaryItem term="expected-version append" definition="基于read version的atomic optimistic append。" />
+  <GlossaryItem term="event evolution contract" definition="Old event meaning/schema长期可replay的兼容契约。" />
+</Glossary>
+
+<Attribution adaptedFrom="Functional Programming in C#, First Edition, Chapter 10: Event sourcing: a functional approach to persistence" adaptedUrl="https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-10" />

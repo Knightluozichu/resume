@@ -1,0 +1,255 @@
+---
+title: "第11章 Amortized Analysis：用势能解释昂贵操作序列"
+type: C
+section: "算法设计与均摊"
+order: 10
+description: "按第3版五节完整重构无关谜题、二项队列、斜堆、Fibonacci堆与伸展树的均摊分析，并统一聚合、记账和势能方法。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+draft: false
+---
+
+import { DsaAmortizedMethodsLab, DsaUnrelatedPuzzleLab, DsaBinomialPotentialLab, DsaSkewHeapPotentialLab, DsaFibonacciHeapPotentialLab, DsaSplayPotentialLab } from "@/components/mdx/dsa-cpp/diagrams/amortized-analysis";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释amortized、average-case与worst-case per-operation的差异
+- 能计算aggregate、accounting与potential method下的sequence成本
+- 能实现binomial carry、skew merge、Fibonacci cascading cut和splay rotation的势能记账
+- 能分析potential非负、marked-node规则与rank/size函数的证明义务
+- 能设计同时报告actual spikes和amortized guarantees的性能验收
+
+</Objectives>
+
+## 从“昂贵的一次不代表昂贵的一串”开始
+
+均摊分析（<Term def="对任意operation sequence的总成本给deterministic bound，再分摊到operations，而不假设输入概率分布。">均摊分析</Term>）允许某次 operation 很贵，只要能证明这种贵操作不可能高频连续发生。Dynamic array resize 单次 O(N)，但几何扩容的一串 pushes 总成本 O(N)。
+
+先预测容量从1开始、每次满时翻倍，连续插入8个items会搬移多少旧items。扩容到2、4、8时分别搬1、2、4个，总搬移7；虽然第5次insert会搬4个，前8次的总搬移仍小于8。这正是“保留尖峰，但约束整串”的视角。
+
+三种标准视角等价但证明习惯不同：aggregate method 直接界定 total；accounting method 给便宜操作多收 credit；potential method 用 data-structure state 的储能函数 Phi。第 i 次 amortized cost：
+
+$$
+\widehat c_i=c_i+\Phi(D_i)-\Phi(D_{i-1})
+$$
+
+若 Phi(D0)=0 且始终非负，则所有 actual costs 之和不超过 amortized costs 之和。Potential 不能凭直觉随便取；它必须让昂贵操作对应足够大的势能下降。
+
+<DsaAmortizedMethodsLab />
+
+## 11.1 An Unrelated Puzzle
+
+无关谜题（<Term def="原书以总meeting time这个额外变量，绕开逐段无限往返求和并引出potential的间接分析思想。">无关谜题</Term>）描述两个小猫在100 yards球场两端，以每分钟10 yards 相向而行；母猫以每分钟100 yards 在两者之间往返，直到相遇。
+
+直接方法会求每一段逐渐缩短的距离并加 infinite geometric series。间接方法先求相遇时间：
+
+$$
+t=\frac{100}{10+10}=5\ \text{minutes},\qquad
+d=100t=500\ \text{yards}
+$$
+
+<DsaUnrelatedPuzzleLab />
+
+额外变量 time 把复杂轨迹投影成简单乘法。Potential 在后续 data structures 中做同一件事：不逐个追踪未来所有 rotations/links，而记录当前 state 中“尚未支付的工作”。
+
+谜题本身不是 amortized analysis，但它解释为何间接变量能让难以直接求和的过程变清楚。
+
+## 11.2 Binomial Queues
+
+二项队列（<Term def="以每个rank至多一棵binomial tree表示size二进制位，并用tree count作为carry工作的potential。">二项队列</Term>）的 insert 是把 B0 singleton 加到 forest。若低 ranks 已占用，就连续 combine，像 binary counter 加1。某次从 size `2^k-1` 插入会做 k 次 links，actual O(log N)。
+
+取 potential 为 forest 中 trees 数 t(H)。若 insert 做 k 次 links，tree count 从原有低位 k 棵加 singleton 后，降到1棵，变化为1-k。于是：
+
+$$
+\widehat c=(k+1)+(1-k)=2
+$$
+
+<DsaBinomialPotentialLab />
+
+因此 insert amortized O(1)，即使某次 binary carry 很长。Merge 的 actual 与两 size bit patterns 的 carries 相关；deleteMin 仍要找 minimum root、拆 children 并 merge，amortized O(log N)。
+
+```cpp
+void insert(Key key) {
+    Tree* carry = singleton(key);
+    for (std::size_t rank = 0; carry != nullptr; ++rank) {
+        if (roots[rank] == nullptr)
+            std::swap(roots[rank], carry);
+        else {
+            carry = link(roots[rank], carry);
+            roots[rank] = nullptr;
+        }
+    }
+}
+```
+
+Potential proof既解释了成本，也解释了为何 representation 用one-tree-per-rank：每次 link 消除一个 root，释放先前积累的 credit。
+
+## 11.3 Skew Heaps
+
+斜堆（<Term def="无显式balance metadata、每次merge交换children，并以heavy/light势能证明amortized logarithmic merge的heap。">斜堆</Term>）单次 merge 沿两个 right paths，可能 linear。分析按 subtree size 把 right-path nodes 分为 heavy/light：若某 child subtree 超过 parent size 的一半，该方向是 heavy；一条 root-to-leaf path 的 light edges 至多 O(log N)。
+
+<DsaSkewHeapPotentialLab />
+
+Merge 后无条件 swap children，使许多旧 right-heavy nodes 离开 right path。取 potential 为 heavy nodes 数，actual cost 中大量 heavy visits 被势能下降支付，只剩 O(log N) light visits 和新势能增长：
+
+$$
+\widehat c_{\mathrm{merge}}=O(\log N)
+$$
+
+Insert 是与 singleton merge，deleteMin 是左右 children merge，故也取得相应 amortized bounds。这里没有“每次 right spine 都 logarithmic”的 structural invariant；那是 leftist heap 的 worst-case property。
+
+<Callout type="trap" title="把skew heap说成每次logarithmic">
+Skew heap不保存npl，单次merge可以很长。保证来自整个sequence中heavy/light状态的势能变化；需要严格tail latency时不能用amortized bound冒充per-operation bound。
+</Callout>
+
+## 11.4 Fibonacci Heaps
+
+斐波那契堆（<Term def="以lazy root list、degree consolidation、marked nodes和cascading cuts获得cheap insert/merge/decrease-key的meldable heap。">斐波那契堆</Term>）进一步延迟结构整理。它从两点改造前面 heaps：
+
+1. Cutting Nodes in Leftist Heaps：decrease-key 若破坏 parent order，可 cut node；但任意切会破坏结构 bound；
+2. Lazy Merging for Binomial Queues：insert/merge 只拼 root lists，不立刻合并同 degree trees；deleteMin 时再 consolidate。
+
+<DsaFibonacciHeapPotentialLab />
+
+Fibonacci heap 用 circular doubly linked root/child lists，维护 min pointer。Insert 和 meld 只接 list，actual O(1)。DeleteMin 把 minimum children 提到 root list，再按 degree 合并，amortized O(log N)。
+
+Decrease-key 将违反 heap order 的 node cut 到 root list；若 parent 已经丢过一个 child（marked），继续 cascading cut。第一次丢 child 只 mark，第二次才 cut，避免 degree 与 subtree size 关系失控：
+
+```cpp
+void decreaseKey(Node* x, Key key) {
+    x->key = key;
+    Node* parent = x->parent;
+    if (parent && x->key < parent->key) {
+        cutToRoot(x, parent);
+        cascadingCut(parent);
+    }
+    if (x->key < minimum->key) minimum = x;
+}
+```
+
+经典 potential 是 roots 数 t 加 marked nonroots 数 m 的两倍：
+
+$$
+\Phi(H)=t(H)+2m(H)
+$$
+
+Cascading cuts actual 可能长，但每个被继续 cut 的 marked node 变 unmarked，释放2单位 potential，支付 cut 并允许 root count 增加。由 degree d node 的 descendants 至少按 Fibonacci 数增长，可得 maximum degree O(log N)，因此 deleteMin consolidation 扫描的 degree table 也 logarithmic。
+
+```cpp
+amortized = actual
+          + (rootsAfter + 2 * markedAfter)
+          - (rootsBefore + 2 * markedBefore);
+```
+
+<Callout type="trap" title="删除mark或parent字段仍宣称同一复杂度">
+Fibonacci bound依赖“丢一个child先mark，第二个再cascade”的规则。简化metadata可能仍返回正确minimum，却破坏degree-size lemma与decrease-key的amortized proof。
+</Callout>
+
+实际系统中 Fibonacci heap pointer-heavy、constants大；只有 decrease-key/merge 比例高且规模合适时才可能优于 binary heap。Asymptotic table不是自动benchmark结果。
+
+## 11.5 Splay Trees
+
+伸展树（<Term def="每次access后把目标或最后访问node旋到root，并用subtree-size rank势能证明amortized logarithmic的BST。">伸展树</Term>）不保存 height/color。Zig、zig-zig、zig-zag 的单次 rotation sequence 可很长，但访问后经常使用的 nodes 靠近 root。
+
+<DsaSplayPotentialLab />
+
+令 subtree size 为 s(x)，rank r(x)=log2 s(x)，tree potential 是所有 node ranks 之和：
+
+$$
+\Phi(T)=\sum_{x\in T}\log_2 s(x)
+$$
+
+Access lemma 把 splaying x 的 amortized rotation cost界定为 O(1)+3(r(root)-r(x))。因 rank difference 至多 log N，一次 access amortized O(log N)；m 次 operations 总 O(m log N)。
+
+```cpp
+while (x->parent != nullptr) {
+    Node* p = x->parent;
+    Node* g = p->parent;
+    if (!g) rotate(x);
+    else if (sameDirection(x, p, g)) {
+        rotate(p);
+        rotate(x);
+    } else {
+        rotate(x);
+        rotate(x);
+    }
+}
+```
+
+这不是每次 height bound。一次 access 可 O(N)，但 sequence 有 static optimality、working-set 等更强适应性结果。Correctness 仍需每次 rotation 保持 BST inorder sequence 和 parent pointers。
+
+## 统一验证：actual spike与amortized bound同时报告
+
+<Stepper>
+  <Step title="明确分析对象是operation sequence">
+    <DsaAmortizedMethodsLab />
+    写出actual cost、state、potential和初始/非负条件，不引入随机分布。
+  </Step>
+  <Step title="找出昂贵操作释放的state">
+    <DsaBinomialPotentialLab />
+    Binary carries、root consolidations、cascading cuts或rotations必须对应势能下降。
+  </Step>
+  <Step title="核查每个structural lemma">
+    <DsaSkewHeapPotentialLab />
+    分清leftist worst-case invariant与skew heavy/light amortized argument。
+  </Step>
+  <Step title="逐operation计算actual加Delta Phi">
+    <DsaFibonacciHeapPotentialLab />
+    覆盖insert、meld、decrease-key、deleteMin及long cascading-cut sequence。
+  </Step>
+  <Step title="保留tail latency指标">
+    <DsaSplayPotentialLab />
+    同时报告max actual rotations、p99与sequence average，避免均摊值掩盖spike。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. Amortized analysis对任意sequence给总成本bound，不是average-case probability。
+2. Aggregate、accounting和potential是三种等价证明视角。
+3. 原书谜题用meeting time绕开无限分段，示范引入间接变量。
+4. Binomial insert的长binary carry由tree-count potential下降支付。
+5. Skew heap用heavy/light势能给merge amortized logarithmic，而非每次保证。
+6. Fibonacci heap以lazy consolidation和marked cascading cuts取得cheap decrease-key。
+7. Phi=t+2m同时记录root debt和marked-node debt，degree-size lemma限制deleteMin。
+8. Splay tree用subtree-rank potential支付rotations并提供amortized access bound。
+
+<Exercises>
+
+**问题 1：原书谜题中相距100yards、双方各10yards/min，相遇多久，100yards/min的往返者跑多远？**
+
+<Answer>接近速度20yards/min，所以5分钟相遇；往返者连续跑5分钟，总距离100乘5等于500yards。无需逐段求无限geometric series。</Answer>
+
+**问题 2：binomial queue size 7插入一个item，做多少links，tree-count potential如何变？**
+
+<Answer>7的binary是111，加入B0产生三次carry links，结果8是1000。Tree count从3变1，Delta Phi=-2；若actual按singleton创建加3 links为4，amortized是4-2=2。</Answer>
+
+**问题 3：Fibonacci heap为何marked node第二次丢child时要cascading cut？**
+
+<Answer>第一次丢child允许mark并保留；再次丢child若仍不cut，node degree可能高但subtree太小，破坏Fibonacci degree-size bound。Cascading cut恢复该结构，并由mark potential支付长链。</Answer>
+
+**问题 4：splay tree一次访问走N层是否反驳O(log N)结论？**
+
+<Answer>不反驳，因为结论是amortized而非每次worst-case。该长访问改变tree并通常显著降低potential；把actual cost加Delta Phi后，整串operations总成本仍受O(m log N)界定。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="均摊分析">对任意operation sequence总成本进行deterministic分摊。</GlossaryItem>
+  <GlossaryItem term="无关谜题">以额外time变量示范间接求和与potential思想的原书例子。</GlossaryItem>
+  <GlossaryItem term="二项队列">用rank forest与tree-count potential分析binary carries的queue。</GlossaryItem>
+  <GlossaryItem term="斜堆">以heavy/light势能证明merge均摊成本的self-adjusting heap。</GlossaryItem>
+  <GlossaryItem term="斐波那契堆">用lazy roots、marks和cascading cuts优化meld/decrease-key的heap。</GlossaryItem>
+  <GlossaryItem term="伸展树">以access splay和subtree-rank potential提供均摊性能的BST。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Data Structures and Algorithm Analysis in C++, 3rd Edition · Chapter 11 Amortized Analysis"
+  href="https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+  author="Mark Allen Weiss"
+  license="原书版权归作者及 Pearson/Addison-Wesley 所有；本章依据官方完整目录及第3版均摊分析结构独立重构教学内容"
+/>

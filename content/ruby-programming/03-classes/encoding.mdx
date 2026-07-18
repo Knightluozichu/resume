@@ -1,0 +1,185 @@
+---
+title: "第19章 Encoding类"
+type: C
+section: "たのしいRuby 第5版 · Ruby的类"
+order: 19
+description: "建立bytes、String encoding标签、source magic comment、Regexp兼容、IO external/internal encoding与严格transcoding的完整边界。"
+demo: true
+math: false
+sourceUrl: "https://tanoshiiruby.github.io/5/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RubyEncodingStringLab, RubyEncodingBoundaryLab, RubyEncodingFailuresLab } from "@/components/mdx/ruby-programming/diagrams/encoding";
+
+<Objectives>
+
+- 能区分raw bytes、String Encoding标签、validity、transcoding与Unicode normalization
+- 能分析source、Regexp和IO external/internal encoding在不同阶段的owner与兼容条件
+- 能设计strict decode、显式replace/quarantine和round-trip验证，保留数据损失证据
+
+</Objectives>
+
+## 从“乱码就force_encoding UTF-8”开始纠正
+
+`force_encoding`只改变String的Encoding标签，不改变任何byte；标签错了只会把问题延后。<Term def="先知道bytes来自何种encoding，再验证、transcode并进入统一内部representation。">decode trust boundary</Term>要求source metadata来自protocol、BOM或可信配置，而不是肉眼猜。
+
+先预测：Windows-31J bytes直接force UTF-8后`valid_encoding?`可能false；即使偶然true，字符也可能错。正确流程先标记实际source encoding，验证，再`encode("UTF-8")`。
+
+## Ruby的编码与字符串
+
+String包含byte sequence与Encoding object。`bytesize`是bytes，`length`按当前encoding解释characters；ASCII-only String在许多编码间兼容，但不能据此推断source。<Term def="String的bytes与encoding标签必须一致，所有字符API才有可解释语义。">encoded string invariant</Term>是基础。
+
+```ruby
+text = "Ruby中文"
+
+p encoding: text.encoding
+p valid: text.valid_encoding?
+p bytes: text.bytesize
+p characters: text.length
+```
+
+Encoding不是语言检测；同一bytes在多个single-byte encodings都可能valid。Unicode normalization NFC/NFD也不是encoding conversion：它改变codepoint composition，搜索/identity是否normalize是独立domain policy。
+
+<RubyEncodingStringLab />
+
+<Stepper>
+  <Step title="切换Bytes、Tag、Validity和Transcode"><RubyEncodingStringLab /></Step>
+  <Step title="画Text pipeline">标raw bytes、source metadata、force tag、validity、encode、normalize与output encode。</Step>
+  <Step title="故意贴错Encoding标签"><RubyEncodingStringLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="valid_encoding?为true就证明文本解码正确">
+它只证明bytes在当前标签下合法，不证明标签就是实际source encoding，也不证明内容/normalization正确。Source必须来自可靠metadata并做domain validation。
+</Callout>
+
+## 脚本编码与魔法注释
+
+Ruby parser必须知道source file encoding，modern Ruby默认UTF-8；magic comment如`# encoding: Windows-31J`在文件开头声明。<Term def="Source encoding只控制parser如何解释脚本bytes和literals，不自动设置运行时文件/网络输入。">source encoding boundary</Term>不能与IO encoding混淆。
+
+团队应统一UTF-8 source并由editor/CI验证。Magic comment不是把文件转码；声明必须与实际bytes一致。Shebang与magic comment位置有规则，目标Ruby 2.3需验证。
+
+`__ENCODING__`可观察当前source encoding。不同source files各自解析literals，运行时连接时仍检查String encoding compatibility。
+
+## Encoding类
+
+Encoding对象描述Ruby支持的编码，`Encoding.find`按name/alias查找，`Encoding.list`列出。<Term def="Encoding name来自allowlist/配置，unsupported或ambiguous alias在边界失败。">encoding selection contract</Term>避免用户任意name触发不可预测转换。
+
+```ruby
+source_encoding = Encoding.find("Windows-31J")
+target_encoding = Encoding::UTF_8
+
+raw = File.binread(path)
+tagged = raw.force_encoding(source_encoding)
+raise EncodingError, "invalid source bytes" unless tagged.valid_encoding?
+
+text = tagged.encode(target_encoding)
+```
+
+Default external/internal encodings受process locale/arguments影响，不应成为可复现程序的隐式配置；I/O boundary显式指定。Encoding objects immutable-like，可比较identity/name，但serialization使用canonical name。
+
+## 正则表达式与编码
+
+Regexp pattern与target String必须encoding-compatible。<Term def="Pattern literal/runtime encoding与target String可共同解释字符，才能匹配。">regexp encoding contract</Term>不同于是否pattern grammar正确。
+
+```ruby
+pattern = /[[:alpha:]]+/
+match = pattern.match("Ruby日本語")
+p match && match[0]
+```
+
+Character class、case-insensitive与dot对Unicode的支持受Ruby/Onigmo版本和options影响。Binary String使用byte-oriented pattern，不应混入text pattern。出现CompatibilityError先追两边encoding/validity，不要统一force UTF-8。
+
+<RubyEncodingBoundaryLab />
+
+<Stepper>
+  <Step title="切换Source、Regexp、External和Internal"><RubyEncodingBoundaryLab /></Step>
+  <Step title="记录Owner">每个encoding设置由parser、I/O adapter、pattern还是application core负责，并标转换发生时点。</Step>
+  <Step title="让Binary String进入Text Regexp"><RubyEncodingBoundaryLab /></Step>
+</Stepper>
+
+## IO类与编码：外部编码与内部编码
+
+External encoding描述stream bytes，internal encoding是读取后自动transcode目标；`"r:Windows-31J:UTF-8"`可表达二者。<Term def="I/O先按external decode，再可转internal；write则按边界反向编码的协议。">IO transcoding contract</Term>把转换放在adapter。
+
+```ruby
+File.open(path, "r:Windows-31J:UTF-8") do |file|
+  file.each_line do |line|
+    raise "unexpected internal encoding" unless line.encoding == Encoding::UTF_8
+  end
+end
+```
+
+Mode string支持和encoding names按平台/Ruby版本验证。Binary mode禁止自动transcode。Network protocol若headers声明charset，先验证allowlist再设置source；缺失charset使用协议default，不随locale猜。
+
+### 编码的设定与作用
+
+IO#set_encoding可配置external/internal和invalid/undef options。Strict default让坏data尽早失败；`:replace`需给replacement、计数并保留raw locator。<Term def="Invalid bytes与target无法表示字符分别选择reject、replace或quarantine，并记录loss。">transcoding loss policy</Term>是业务决策。
+
+Replacement可能把两个不同identifiers变成同一String，安全/主键数据禁止silent replace。Display-only feed可替换但打标；批处理把坏record隔离并继续，最终status仍反映partial failure。
+
+## 编码转换与错误证据
+
+`encode`可能抛InvalidByteSequenceError（source bytes非法）或UndefinedConversionError（target无对应字符）。<Term def="转换失败保留source encoding、byte offset/record、target、error class和脱敏样本。">encoding failure evidence</Term>帮助定位而不泄漏数据。
+
+```ruby
+def decode_strict(raw, source, target = Encoding::UTF_8)
+  tagged = raw.dup.force_encoding(source)
+  raise Encoding::InvalidByteSequenceError unless tagged.valid_encoding?
+  tagged.encode(target)
+end
+```
+
+手工raise内建异常构造细节不理想，production定义domain DecodeError并保留cause/context。Round-trip `decoded.encode(source)`只在encoding可逆且normalization/replace未发生时可作为证据；不是所有转换lossless。
+
+<RubyEncodingFailuresLab />
+
+<Stepper>
+  <Step title="切换Invalid、Undefined、Compatibility和Replacement"><RubyEncodingFailuresLab /></Step>
+  <Step title="建立Loss ledger">记录record id、source/target、error class、offset、replacement count和raw quarantine位置。</Step>
+  <Step title="让两个Key替换后碰撞"><RubyEncodingFailuresLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="replace invalid字符后程序继续就是修复成功">
+Replacement不可逆且可能破坏identifier、金额或签名。默认strict；允许替换时限定display场景、计数打标并保留raw evidence。
+</Callout>
+
+## 本章回顾：Encoding是边界协议，不是乱码补丁
+
+1. String由bytes和Encoding标签组成；validity只证明当前解释合法，source仍需可信metadata。
+2. Source magic comment只影响parser/literals，不影响runtime File/network input。
+3. Regexp与String需encoding-compatible；binary/text分别使用byte/character grammar。
+4. IO external/internal encoding把decode/transcode放入adapter，core统一使用UTF-8等内部representation。
+5. Invalid/undefined/compatibility分开处理，replace是可审计data loss，关键字段默认strict/quarantine。
+
+<Exercises>
+
+**问题 1：拿到未知encoding的bytes时为什么不能依次尝试直到valid?**
+
+<Answer>许多encoding对同一bytes都valid，第一种合法不等于真实source。使用protocol/BOM/metadata/可信配置；若确需检测，作为带confidence的独立流程并人工/领域校验，保留raw bytes。</Answer>
+
+**问题 2：如何设计可继续处理坏record的导入器？**
+
+<Answer>逐record严格decode/convert；失败捕获specific domain error，保存record id、source/target、offset和受控raw quarantine，计数并继续。最终报告partial failure/status，关键identifier不replace。</Answer>
+
+**问题 3：Regexp CompatibilityError应怎样排查？**
+
+<Answer>记录pattern.encoding/source/options与target.encoding/valid_encoding?，确认binary/text和source decode boundary。把双方正确transcode到统一encoding；不要盲目force标签。加入non-ASCII和invalid bytes回归测试。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="decode trust boundary" definition="可信source encoding后验证、transcode到内部representation。" />
+  <GlossaryItem term="encoded string invariant" definition="String bytes与Encoding标签一致的约束。" />
+  <GlossaryItem term="source encoding boundary" definition="Source encoding只控制parser和literals。" />
+  <GlossaryItem term="encoding selection contract" definition="Encoding name allowlist、alias与unsupported处理。" />
+  <GlossaryItem term="regexp encoding contract" definition="Pattern与target String的字符解释兼容约定。" />
+  <GlossaryItem term="IO transcoding contract" definition="External decode、internal transcode与write encode协议。" />
+  <GlossaryItem term="transcoding loss policy" definition="Invalid/undefined选择reject、replace或quarantine。" />
+  <GlossaryItem term="encoding failure evidence" definition="转换失败的source/target、locator与loss证据。" />
+</Glossary>
+
+<Attribution adaptedFrom="たのしいRuby 第5版 / Ruby基础教程（第5版），第19章 Encoding类" adaptedUrl="https://tanoshiiruby.github.io/5/" />

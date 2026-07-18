@@ -1,0 +1,133 @@
+---
+title: "第12章 优化原则与性能剖析"
+type: C
+section: "Python高级编程 · 性能与设计"
+order: 12
+description: "按原书第12章 Optimization: General Principles and Profiling Techniques重建：优化三原则、优化策略、CPU剖析、内存剖析、网络剖析。"
+demo: true
+math: false
+sourceUrl: "https://tarekziade.wordpress.com/2008/09/24/expert-python-programming-book-more-details-sample-chapter/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PyaOptimizationProfilingModelLab, PyaOptimizationProfilingBoundaryLab, PyaOptimizationProfilingEvidenceLab } from "@/components/mdx/python-advanced/diagrams/pya-optimization-profiling";
+
+<Objectives>
+- 能解释优化三原则与优化策略的责任和依赖
+- 能区分CPU剖析和内存剖析的适用边界
+- 能实现并复现围绕网络剖析的最小工程实验
+</Objectives>
+
+## 先做预测
+
+先预测：一个示例在作者机器上运行成功，是否足以证明它可维护？不能。还要明确解释器与依赖、输入边界、失败路径、可观察结果和重建步骤。<Term def="先让程序正确，从用户可感知目标出发，并保持代码可读可维护；没有性能预算和基线的优化只是猜测。">优化三原则</Term>给出本章的第一个契约，<Term def="先确认瓶颈是否在本服务，再考虑硬件、算法或缓存，最后写速度回归测试；局部变快若让端到端更慢就不算优化。">优化策略</Term>把它放进可重复流程。
+
+<PyaOptimizationProfilingModelLab />
+
+## 原书骨架与现代迁移
+
+官方章节围绕优化三原则、优化策略、CPU剖析、内存剖析、网络剖析展开。原书出版于Python 2.5与早期敏捷工具生态，本章保留它解释“为什么”的结构；命令和安全默认按当前Python、标准库与PyPA维护文档迁移，不把EasyInstall、distutils安装命令、旧CI或旧项目平台直接当成新项目默认。
+
+<Term def="宏观剖析定位高耗时路径，微基准隔离小函数；采样与插桩有不同扰动，报告要包含输入、调用次数和累计时间。">CPU剖析</Term>承接前两项，把局部语法或工具放回应用数据流。阅读时沿输入、协议、状态、输出和证据追踪，避免只背API名称。
+
+```python
+import timeit
+elapsed = timeit.timeit(
+    "sorted(values)",
+    setup="values=list(range(1000, 0, -1))",
+    number=1000,
+)
+print(elapsed)
+```
+
+## 机制一：责任与数据流
+
+先让程序正确，从用户可感知目标出发，并保持代码可读可维护；没有性能预算和基线的优化只是猜测。 先确认瓶颈是否在本服务，再考虑硬件、算法或缓存，最后写速度回归测试；局部变快若让端到端更慢就不算优化。 先写出公共行为和失败类型，再选择语法或工具。这样即使实现从原书工具迁到当前生态，调用者仍能依据相同契约判断结果。
+
+<Term def="理解对象分配、引用生命周期和峰值驻留后再定位泄漏；单看最终内存会漏掉处理中间峰值，优化也要防止复用可变对象造成错误。">内存剖析</Term>提醒我们：抽象不能消除成本，只会改变成本出现的位置。包装、生成器、构建系统、CI或缓存都必须说明资源、顺序和异常传播。
+
+<PyaOptimizationProfilingBoundaryLab />
+
+```bash
+python -m cProfile -o profile.out app.py
+python -m pstats profile.out
+# sort cumulative, then inspect the hottest call chain
+```
+
+## 机制二：失败与边界
+
+宏观剖析定位高耗时路径，微基准隔离小函数；采样与插桩有不同扰动，报告要包含输入、调用次数和累计时间。 理解对象分配、引用生命周期和峰值驻留后再定位泄漏；单看最终内存会漏掉处理中间峰值，优化也要防止复用可变对象造成错误。 边界实验至少包含正常、空输入、上限附近、依赖失败和重复执行。涉及网络、并发或外部制品时，再加入超时、取消、部分完成与摘要校验。
+
+历史工具不等于无价值。正确迁移是先提取声明式配置、隔离、持续反馈和可回滚发布等不变量，再用维护中的接口重写；错误做法是机械替换命令却保留隐式环境和不可追踪副作用。
+
+```python
+import tracemalloc
+tracemalloc.start()
+run_workload()
+current, peak = tracemalloc.get_traced_memory()
+print({"current": current, "peak": peak})
+```
+
+## 机制三：证据闭环
+
+<Term def="网络性能分解为DNS、连接、握手、服务处理和传输，并同时观察请求数与字节量；平均时延会掩盖尾部与重试放大。">网络剖析</Term>负责收束验收。网络性能分解为DNS、连接、握手、服务处理和传输，并同时观察请求数与字节量；平均时延会掩盖尾部与重试放大。 保存解释器、依赖锁定、输入、命令、退出状态、关键输出和制品摘要，才能让另一台干净机器重放同一结论。
+
+<PyaOptimizationProfilingEvidenceLab />
+
+## 分步实验
+
+<Stepper>
+  <Step title="建立模型"><PyaOptimizationProfilingModelLab /></Step>
+  <Step title="注入边界"><PyaOptimizationProfilingBoundaryLab /></Step>
+  <Step title="保留证据"><PyaOptimizationProfilingEvidenceLab /></Step>
+</Stepper>
+
+## 实战验收清单
+
+1. 在隔离环境运行三段示例，记录解释器实现、版本和依赖来源。
+2. 为核心行为增加正常、空输入、失败和重复执行测试，先看到失败再修改实现。
+3. 清理缓存和临时文件后重跑，证明结果不依赖工作区残留。
+4. 对历史命令写出当前替代路径，并说明保留的架构不变量与不再采用的安全默认。
+
+## 迁移决策题
+
+设想团队正在维护一个已经运行多年的Python服务：它仍依赖本章对应的历史工具，但业务不能停机。先不要直接重写。第一步列出优化三原则承担的真实输入和输出，再用优化策略识别构建或运行时依赖；第二步把CPU剖析放进隔离实验，证明当前行为与失败类型；第三步用内存剖析设计兼容层，让旧入口和新入口在同一组契约测试下运行；最后以网络剖析保存制品摘要、性能或行为差异与回滚条件。只有新路径在正常、边界和故障输入上都达到既定条件，才逐步切换流量或调用者。这样迁移的是可验证契约，而不是把一个旧命令盲目替换为一个新命令。
+
+## 常见误区
+
+<Callout type="trap" title="把高级Python等同于语法技巧">
+原书的核心是专业软件生命周期。技巧若没有包边界、测试、文档、CI和性能证据，只会增加维护成本。
+</Callout>
+
+<Callout type="trap" title="直接复制2008年的工具命令">
+旧工具用于理解问题背景。新项目应使用当前维护接口、隔离环境和构建标准，并把迁移结果放进自动验收。
+</Callout>
+
+## 本章回顾
+
+本章逐项覆盖优化三原则、优化策略、CPU剖析、内存剖析、网络剖析。方法是用可读接口表达责任，用边界测试证明失败语义，再以可重建环境和制品证据完成闭环。
+
+<Exercises>
+**问题 1：优化三原则与优化策略怎样协作？**
+<Answer>先让程序正确，从用户可感知目标出发，并保持代码可读可维护；没有性能预算和基线的优化只是猜测。 先确认瓶颈是否在本服务，再考虑硬件、算法或缓存，最后写速度回归测试；局部变快若让端到端更慢就不算优化。</Answer>
+
+**问题 2：CPU剖析与内存剖析的边界是什么？**
+<Answer>宏观剖析定位高耗时路径，微基准隔离小函数；采样与插桩有不同扰动，报告要包含输入、调用次数和累计时间。 理解对象分配、引用生命周期和峰值驻留后再定位泄漏；单看最终内存会漏掉处理中间峰值，优化也要防止复用可变对象造成错误。</Answer>
+
+**问题 3：如何验收网络剖析？**
+<Answer>网络性能分解为DNS、连接、握手、服务处理和传输，并同时观察请求数与字节量；平均时延会掩盖尾部与重试放大。 使用正常、空输入、失败、重复执行和干净环境重建，保存命令、状态与制品摘要。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="优化三原则" definition="先让程序正确，从用户可感知目标出发，并保持代码可读可维护" />
+  <GlossaryItem term="优化策略" definition="先确认瓶颈是否在本服务，再考虑硬件、算法或缓存，最后写速度回归测试" />
+  <GlossaryItem term="CPU剖析" definition="宏观剖析定位高耗时路径，微基准隔离小函数" />
+  <GlossaryItem term="内存剖析" definition="理解对象分配、引用生命周期和峰值驻留后再定位泄漏" />
+  <GlossaryItem term="网络剖析" definition="网络性能分解为DNS、连接、握手、服务处理和传输，并同时观察请求数与字节量" />
+  <GlossaryItem term="现代迁移边界" definition="保留原书问题与架构不变量，按当前维护接口更新实现。" />
+</Glossary>
+
+<Attribution adaptedFrom="Tarek Ziadé · Expert Python Programming · 原书第12章 Optimization: General Principles and Profiling Techniques" adaptedUrl="https://tarekziade.wordpress.com/2008/09/24/expert-python-programming-book-more-details-sample-chapter/" />

@@ -1,116 +1,230 @@
 ---
-title: "OpenGL基础与初始化"
+title: "OpenGL 上下文、对象与状态"
 type: B
 section: "计算机图形学与渲染"
 order: 1
-description: "OpenGL上下文、窗口创建与函数加载"
+description: "建立 OpenGL 4.5 上下文、状态、对象生命周期、DSA 与调试输出的最小可靠程序"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://www.informit.com/store/opengl-programming-guide-the-official-guide-to-learning-9780134495552"
 draft: false
 ---
 
-import { GlrOpenglBasicsDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-opengl-basics";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  GlrOpenglBasicsDiagram,
+  GlrContextOwnershipDiagram,
+  GlrDebugLoopDiagram,
+} from "@/components/mdx/opengl-redbook/diagrams/glr-opengl-basics";
+import { GlrStepFlowDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 理解OpenGL上下文与状态机模型
-- 掌握GLFW窗口创建与GLAD函数加载
-- 了解OpenGL版本与Profile
-- 能搭建基本OpenGL开发环境
+
+- 能解释窗口、线程、OpenGL 上下文、共享组和函数加载器各自负责什么
+- 能写出请求 OpenGL 4.5 Core、加载入口点并启用 debug output 的失败即停初始化程序
+- 能区分 context state、container object state 与 data object storage 的生命周期
+- 能比较 bind-to-edit 与 Direct State Access，并用状态查询和调试回调定位空白帧
+
 </Objectives>
 
-## 直觉引入
+## 直觉：OpenGL 是有隐式环境的命令协议
 
-OpenGL就像驾驶汽车——你不需要知道引擎内部怎么工作，但需要知道方向盘(状态设置)和油门(绘制命令)怎么用。OpenGL是状态机：设置当前着色器、纹理、混合模式等状态，然后发出绘制命令。
+OpenGL 不是场景库，也不负责创建窗口。窗口系统创建可呈现表面和上下文，加载器取得当前驱动实现的函数入口；OpenGL 命令再读取“当前线程上的当前上下文”，修改对象或提交工作。
 
-## 概念讲解
+先预测：窗口成功显示但第一条 `glCreateBuffers` 崩溃，最先检查窗口尺寸、函数入口是否加载，还是顶点数据？答案应是函数加载和当前上下文，因为此时尚未访问顶点。
 
-<Term def="OpenGL状态的集合，包含所有当前设置">OpenGL上下文</Term><Term def="通过设置状态影响后续操作的计算模型">状态机</Term><Term def="移除所有废弃API的现代OpenGL规范">Core Profile</Term><Term def="GLFW创建窗口和上下文，GLAD加载函数指针">GLAD/GLFW</Term>
-
-### OpenGL初始化流程
-1. GLFW初始化并创建窗口 2. 设置OpenGL版本(3.3+ Core) 3. 创建上下文 4. GLAD加载函数 5. 设置视口
-
-### 状态机模型
-设置状态->绘制->设置新状态->绘制。状态包括着色器、纹理、混合、深度测试等。减少状态切换是性能优化关键。
-
-## 交互Demo
-
-> 猜一猜：为什么OpenGL需要GLAD来加载函数，不能直接调用？
+<Term def="与线程绑定、保存 OpenGL 状态并解释命令的执行环境；窗口只提供可呈现表面，两者不是同一个对象">OpenGL 上下文</Term>必须先 current，随后才能加载和调用该实现的入口点。
 
 <GlrOpenglBasicsDiagram />
 
-<Stepper>
-<Step title="第一步：创建窗口">
-用GLFW创建窗口并设置OpenGL版本(3.3+ Core Profile)。GLFW负责窗口管理和输入。
-</Step>
-<Step title="第二步：加载函数">
-用GLAD加载OpenGL函数指针。不同平台函数地址不同，GLAD统一处理。
-</Step>
-<Step title="第三步：渲染循环">
-清空缓冲->设置状态->绘制->交换缓冲。处理输入和窗口事件。
-</Step>
-</Stepper>
+## 创建、绑定与加载顺序
 
-## 代码对照
+初始化顺序是一条硬合同：初始化窗口库 → 声明版本/profile → 创建窗口与上下文 → 让上下文在当前线程 current → 加载函数 → 查询实际能力 → 注册调试回调。请求 4.5 不等于一定获得 4.5，必须查询实际版本。
 
 ```cpp
-int main() {
-    glfwInit();
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
-    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    GLFWwindow* window = glfwCreateWindow(800, 600, "OpenGL", NULL, NULL);
-    glfwMakeContextCurrent(window);
-    gladLoadGLLoader((GLADloadproc)glfwGetProcAddress);
-    glViewport(0, 0, 800, 600);
-    while(!glfwWindowShouldClose(window)) {
-        glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT);
-        glfwSwapBuffers(window);
-        glfwPollEvents();
-    }
-    glfwTerminate();
-}
+glfwSetErrorCallback(onGlfwError);
+if (!glfwInit()) fail("GLFW init");
+
+glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
+glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 5);
+glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+#ifdef __APPLE__
+glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
+#endif
+
+GLFWwindow* window = glfwCreateWindow(1280, 720, "probe", nullptr, nullptr);
+if (!window) fail("context creation");
+glfwMakeContextCurrent(window);
+if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress)) fail("GL entry points");
+
+std::printf("GL %s | GLSL %s\n", glGetString(GL_VERSION),
+            glGetString(GL_SHADING_LANGUAGE_VERSION));
 ```
 
-macOS需要FORWARD_COMPAT标志。渲染循环中先清空再绘制最后交换缓冲。
+<Term def="由窗口系统在某个线程上设置的上下文关联；绝大多数 OpenGL 命令都隐式作用于该关联">当前上下文</Term>具有线程亲和性。把渲染迁移到另一线程时，先从原线程解除，再在新线程设为 current；不能假定两个线程可同时使用同一上下文。
+
+<GlrContextOwnershipDiagram />
+
+## 状态、对象与共享边界
+
+“OpenGL 是状态机”过于笼统。至少要分三类：
+
+- **context state**：当前 program、VAO、FBO、viewport、depth/blend 开关等；
+- **container object**：VAO、FBO 等记录其他对象引用和格式关系，通常不在共享上下文间共享；
+- **data object**：buffer、texture、shader/program 等可在同一 share group 中共享，但共享不自动解决并发同步。
+
+<Term def="在创建上下文时建立、允许若干上下文访问特定数据对象名的共享关系；它不共享全部上下文状态，也不提供自动同步">共享组</Term>适合加载线程与渲染线程复用纹理/缓冲。资源删除也不是简单“立即释放”：对象名删除后，仍被其他对象引用或仍在命令中使用的存储要按规范生命周期处理。
+
+OpenGL 视口把规范化设备坐标映射到窗口坐标：
+
+$$
+x_w=x_0+\frac{w}{2}(x_{ndc}+1),\qquad
+y_w=y_0+\frac{h}{2}(y_{ndc}+1).
+$$
+
+高 DPI 环境下窗口逻辑尺寸不等于 framebuffer 像素尺寸，所以 `glViewport` 应跟随 framebuffer-size callback，而不是只使用创建窗口时的逻辑宽高。
+
+## Bind-to-edit 与 DSA
+
+旧式调用先绑定再修改，隐藏输入是“当前 target 上绑定了谁”；OpenGL 4.5 的 <Term def="Direct State Access，在函数参数中直接指定被查询或修改对象，减少临时绑定和状态泄漏">Direct State Access</Term>显式给出对象名。
+
+```cpp
+// bind-to-edit：结果依赖 GL_ARRAY_BUFFER 当前绑定。
+glBindBuffer(GL_ARRAY_BUFFER, buffer);
+glBufferData(GL_ARRAY_BUFFER, bytes, data, GL_STATIC_DRAW);
+
+// DSA：创建和存储目标都显式。
+glCreateBuffers(1, &buffer);
+glNamedBufferStorage(buffer, bytes, data, 0);
+```
+
+DSA 不是“GPU 更快”的保证；主要收益是减少隐藏状态和恢复绑定的错误。命令提交、对象合法性、同步和驱动执行成本仍需测量。
+
+## Debug output 与失败即停
+
+Core Profile 不会替你修正非法枚举、错误对象或越界接口。启用 `GL_KHR_debug`/核心 debug output，把 source、type、id、severity 写入日志；开发期可对 high severity 断点。回调可能在驱动调用栈内触发，不应在回调中递归调用复杂 OpenGL 逻辑。
+
+```cpp
+glEnable(GL_DEBUG_OUTPUT);
+glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
+glDebugMessageCallback(onGlMessage, nullptr);
+glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE,
+                      GL_DEBUG_SEVERITY_NOTIFICATION, 0, nullptr, GL_FALSE);
+
+glObjectLabel(GL_BUFFER, buffer, -1, "scene.vertices");
+glPushDebugGroup(GL_DEBUG_SOURCE_APPLICATION, 0, -1, "opaque-pass");
+drawOpaque();
+glPopDebugGroup();
+```
+
+<Term def="由实现发出的结构化诊断消息通道，可报告 API 错误、未定义行为和性能提示，并用对象标签与调试组提供上下文">调试输出</Term>比每条命令后轮询 `glGetError` 更有定位信息；但它不保证报告所有逻辑错误，仍需状态断言与图像验证。
+
+<GlrDebugLoopDiagram />
+
+## 最小渲染循环与时间合同
+
+渲染循环至少处理事件、同步 framebuffer 尺寸、清除/绘制、交换缓冲。启用双缓冲后，`swap` 提交可呈现图像；是否阻塞受 swap interval、平台合成器和队列状态影响。
+
+若以固定步长更新模拟，累计器可写为：
+
+$$
+a\leftarrow a+\Delta t,\qquad
+\text{while }a\ge h:\;simulate(h),\;a\leftarrow a-h.
+$$
+
+这避免渲染帧率直接改变模拟速度。应限制单帧最大累计时间，防止暂停调试后出现“追赶风暴”。
+
+## 三步空白帧排查
+
+<Stepper>
+<Step title="第一步：证明环境成立">
+
+记录窗口系统错误、实际 GL/GLSL 版本、context/profile flags 和 framebuffer 尺寸；确认上下文在调用线程 current。
+
+<GlrStepFlowDiagram caption="先证明命令环境存在，再讨论绘制数据。" stage={1} stages={["Environment：current context、entry points、actual capabilities"]} />
+
+</Step>
+<Step title="第二步：证明状态和对象成立">
+
+启用 debug output，为 program、VAO、buffer、FBO 加标签；查询链接状态、FBO 完整性、viewport 和关键开关。
+
+<GlrStepFlowDiagram caption="对象标签和状态快照把隐式依赖变成证据。" stage={2} stages={["Environment：current context、entry points、actual capabilities", "State：labeled objects、program、VAO、FBO、viewport"]} />
+
+</Step>
+<Step title="第三步：证明输出路径成立">
+
+先只清屏验证呈现，再画硬编码全屏三角形，最后逐项恢复顶点数据、深度、裁剪和混合；每一步保存参考像素。
+
+<GlrStepFlowDiagram caption="逐层恢复让第一处差异成为根因附近的信号。" stage={3} stages={["Environment：current context、entry points、actual capabilities", "State：labeled objects、program、VAO、FBO、viewport", "Output：clear → fixed triangle → real scene"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** 不检查GLAD加载是否成功。
-**原因 →** 默认加载会成功。
-**修法 →** gladLoadGLLoader可能失败。应检查返回值，失败时调用OpenGL函数会段错误。
+**现象 →** 创建窗口后立刻调用现代 OpenGL 函数，函数指针为空。
+**原因 →** 没有先让上下文 current，或忽略加载器失败返回值。
+**修法 →** 固定初始化顺序并失败即停；记录实际版本，不依赖请求值猜能力。
 </Callout>
 
 <Callout type="trap">
-**现象 →** 在渲染循环中频繁设置相同状态。
-**原因 →** 每次绘制前都设置所有状态。
-**修法 →** 状态切换有开销。相同状态物体应批量绘制(Sorting by state)。
+**现象 →** resize 后画面只占一角或像素模糊。
+**原因 →** 把窗口逻辑尺寸当 framebuffer 像素尺寸，且没有更新 viewport。
+**修法 →** 使用 framebuffer-size callback 更新 `glViewport` 和依赖分辨率的附件。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 多上下文共享纹理后偶发旧数据，便认为 share group 失效。
+**原因 →** 共享对象名不等于共享 context state，也不建立生产者/消费者同步。
+**修法 →** 分别验证对象是否可共享、命令是否完成、内存是否可见，并为跨线程访问建立显式同步。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：什么是OpenGL上下文？
+
+**问题 1：窗口、上下文和 GLAD 各自是什么？**
 
 <Answer>
-OpenGL上下文是状态集合，包含当前着色器、纹理、缓冲区等所有OpenGL状态。所有操作在当前上下文中进行。
+窗口是平台可呈现表面和输入载体；上下文保存 OpenGL 状态并解释命令；GLAD 一类加载器从当前实现取得函数入口。窗口创建成功不保证入口已加载，也不保证请求版本就是实际版本。
 </Answer>
 
-**问题**：为什么macOS需要FORWARD_COMPAT标志？
+**问题 2：为什么 DSA 更易调试，却不必然更快？**
 
 <Answer>
-macOS的OpenGL实现只支持Core Profile且要求前向兼容。FORWARD_COMPAT移除所有已废弃功能。
+DSA 在参数中显式指定对象，减少临时绑定和状态泄漏；但它没有消除驱动验证、命令提交、同步或 GPU 工作。性能结论必须在具体调用模式和实现上测量。
 </Answer>
+
+**问题 3：设计一个多上下文资源共享验收。**
+
+<Answer>
+在创建第二上下文时加入同一 share group；加载线程创建并填充有标签的 buffer/texture，插入同步；渲染线程等待后读取并画出已知校验图。另测 VAO/FBO 等容器状态不应被误认为自动共享，并记录调试消息与像素哈希。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+可靠 OpenGL 程序从“当前上下文 + 已加载入口 + 已核实能力”开始。随后把 context state、容器对象与数据对象分开管理，用 DSA 降低隐藏绑定，用 debug output、对象标签和逐层输出探针闭环。窗口能出现只是环境的一部分，不是渲染正确性的证明。
+
 <Glossary>
-<GlossaryItem term="OpenGL上下文">OpenGL状态的集合，所有操作在当前上下文中进行。</GlossaryItem>
-<GlossaryItem term="状态机">通过设置状态影响后续操作的计算模型。</GlossaryItem>
-<GlossaryItem term="Core Profile">移除所有废弃API的现代OpenGL规范。</GlossaryItem>
-<GlossaryItem term="GLAD/GLFW">GLFW创建窗口和上下文，GLAD加载OpenGL函数指针。</GlossaryItem>
+<GlossaryItem term="OpenGL 上下文">与线程关联、保存状态并解释 OpenGL 命令的执行环境。</GlossaryItem>
+<GlossaryItem term="当前上下文">窗口系统为某线程设置、被后续 OpenGL 命令隐式使用的上下文。</GlossaryItem>
+<GlossaryItem term="共享组">允许若干上下文访问部分数据对象的关系，不共享全部状态或自动同步。</GlossaryItem>
+<GlossaryItem term="Direct State Access">在调用中直接指定对象名的 OpenGL 4.5 对象访问方式。</GlossaryItem>
+<GlossaryItem term="调试输出">实现提供的结构化 API 错误、未定义行为和性能消息通道。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="OpenGL 红宝书" adaptedUrl="" />
+<Attribution adaptedFrom="OpenGL Programming Guide, 9th Edition, Chapter 1" adaptedUrl="https://www.informit.com/store/opengl-programming-guide-the-official-guide-to-learning-9780134495552" />

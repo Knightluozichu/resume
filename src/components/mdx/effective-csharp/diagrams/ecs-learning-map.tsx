@@ -1,141 +1,44 @@
-/**
- * <EcsLearningMapDiagram>：Effective C# 全书学习地图（入门章）。
- *
- * 四大板块横向排布，展示 50 条建议的组织结构：
- *   - 第 1 列「语言习惯」（accent 紫）：条款 1-12
- *   - 第 2 列「资源管理」（success 绿）：条款 13-25
- *   - 第 3 列「泛型与 LINQ」（warning 暖）：条款 26-37
- *   - 第 4 列「并发设计」（accent 紫）：条款 38-50
- * 列间用箭头连接表示进阶关系。
- *
- * 纯静态展示，无交互。Server Component。
- * 全部 DESIGN token 配色，无裸 hex、无阴影。
- * viewBox 720×420，四周留白 ≥32，字号 ≥11。
- */
+"use client";
 
-const VIEW_W = 720;
-const VIEW_H = 420;
+import { useState } from "react";
 
-const COL_W = 152;
-const COL_GAP = 16;
-const COL_MARGIN = 32;
-const colX = (i: number) => COL_MARGIN + i * (COL_W + COL_GAP);
-
-const ITEM_H = 46;
-const ITEM_GAP = 10;
-const ITEM_START_Y = 100;
-const itemY = (i: number) => ITEM_START_Y + i * (ITEM_H + ITEM_GAP);
-
-interface Column {
-  title: string;
-  range: string;
-  color: string;
-  items: string[];
-}
-
-const COLUMNS: readonly Column[] = [
-  {
-    title: "语言习惯",
-    range: "条款 1-12",
-    color: "var(--accent)",
-    items: ["属性优先于字段", "readonly 与 const", "is/as 优于强制转换", "条件特性替 #if"],
-  },
-  {
-    title: "资源管理",
-    range: "条款 13-25",
-    color: "var(--success)",
-    items: ["IDisposable 模式", "using 语句", "值类型与引用类型", "0 基索引数组"],
-  },
-  {
-    title: "泛型与 LINQ",
-    range: "条款 26-37",
-    color: "var(--warning)",
-    items: ["泛型约束最小化", "延迟执行", "避免重复枚举", "lambda 捕获陷阱"],
-  },
-  {
-    title: "并发设计",
-    range: "条款 38-50",
-    color: "var(--accent)",
-    items: ["异常过滤器", "并行与异步", "Task 与 await", "相等性与哈希"],
-  },
+const chapters = [
+  { label: "1 Language", items: "1-10", question: "How should source express type, text, callback and dispatch?", artifact: "API idiom decision table", gate: "version, culture, lifetime and allocation tests" },
+  { label: "2 Resources", items: "11-17", question: "Who owns creation, valid state and release?", artifact: "construction/resource ownership map", gate: "fault injection across every lifecycle phase" },
+  { label: "3 Generics", items: "18-28", question: "What capability and substitution does T promise?", artifact: "constraint/variance/API matrix", gate: "compile cases, laws and compatibility suite" },
+  { label: "4 LINQ", items: "29-44", question: "When and where does a sequence execute?", artifact: "construction-to-enumeration trace", gate: "enumeration count, provider and cardinality evidence" },
+  { label: "5 Exceptions", items: "45-50", question: "What remains true when work cannot complete?", artifact: "failure taxonomy and state guarantee", gate: "fault matrix, cleanup and cause-chain checks" },
 ];
 
-export function EcsLearningMapDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="Effective C# 全书地图。四列纵向排列：第 1 列语言习惯（紫色）包含属性优先、readonly 与 const、is/as 优于强制转换、条件特性替 #if；第 2 列资源管理（绿色）包含 IDisposable 模式、using 语句、值类型与引用类型、0 基索引数组；第 3 列泛型与 LINQ（暖色）包含泛型约束最小化、延迟执行、避免重复枚举、lambda 捕获陷阱；第 4 列并发设计（紫色）包含异常过滤器、并行与异步、Task 与 await、相等性与哈希。列间用箭头连接表示进阶关系。"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <defs>
-            <marker id="ecs-map-arrow" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
-              <path d="M0 0 L7 3 L0 6 z" fill="var(--text-secondary)" />
-            </marker>
-          </defs>
+export function EcsOfficialRoadmapLab() {
+  const [selected, setSelected] = useState(0);
+  const item = chapters[selected];
+  return <figure className="mdx-figure not-prose mx-auto my-6"><div className="border border-border bg-elevated p-4 sm:p-5"><div className="grid grid-cols-3 gap-2 sm:grid-cols-5">{chapters.map((entry, index) => <button key={entry.label} type="button" onClick={() => setSelected(index)} className={`min-h-12 border px-2 text-xs ${selected === index ? "border-cyan-500 bg-cyan-500/15 text-primary" : "border-border bg-bg text-secondary"}`}>{entry.label}</button>)}</div><div className="mt-4 grid gap-3 md:grid-cols-2">{[["original items", item.items], ["chapter question", item.question], ["study artifact", item.artifact], ["acceptance gate", item.gate]].map(([title, value]) => <div key={title} className="border border-border bg-bg p-4"><span className="text-xs text-secondary">{title}</span><strong className="mt-2 block text-sm leading-6 text-primary">{value}</strong></div>)}</div></div><figcaption className="mt-2 text-center text-sm text-secondary">第3版按5个原章推进：语言、资源、泛型、LINQ、异常，每章都以可交付证据收口。</figcaption></figure>;
+}
 
-          {/* 主标题 */}
-          <text x={VIEW_W / 2} y={34} textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">
-            Effective C# · 全书地图
-          </text>
-          <text x={VIEW_W / 2} y={56} textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
-            50 条建议 · 四大板块 · 从语言习惯到并发设计
-          </text>
+const clusters = [
+  { label: "compile-time", items: "1, 3, 6-10, 18, 22-28", relation: "make invalid representation or substitution fail early", rehearsal: "rename, invalid conversion and generic compile cases", failure: "syntax is concise but contract remains hidden" },
+  { label: "lifetime", items: "7-8, 11-17, 21, 41, 46", relation: "delegates, resources and iterators retain state", rehearsal: "owner graph plus normal/fault/cancel/dispose", failure: "GC is mistaken for deterministic cleanup" },
+  { label: "execution", items: "29-44", relation: "query construction differs from enumeration", rehearsal: "counter, provider command and terminal operator", failure: "deferred work repeats or escapes its scope" },
+  { label: "failure", items: "39, 45-50", relation: "signal, cleanup and post-fault state form one contract", rehearsal: "fault injection at every boundary", failure: "catch hides cause or partial mutation" },
+];
 
-          {/* 四列 */}
-          {COLUMNS.map((col, ci) => {
-            const cx = colX(ci);
-            return (
-              <g key={col.title}>
-                <rect x={cx} y={70} width={COL_W} height={26} rx="6" fill={col.color} fillOpacity="0.12" stroke={col.color} strokeWidth="1.5" />
-                <text x={cx + COL_W / 2} y={88} textAnchor="middle" fontSize="12" fontWeight="700" fill={col.color}>
-                  {col.title}
-                </text>
-                <text x={cx + COL_W / 2} y={96} textAnchor="middle" fontSize="10" fill="var(--text-secondary)" fontFamily="monospace">
-                  {col.range}
-                </text>
+export function EcsItemClusterLab() {
+  const [selected, setSelected] = useState(0);
+  const item = clusters[selected];
+  return <figure className="mdx-figure not-prose mx-auto my-6"><div className="border border-border bg-elevated p-4 sm:p-5"><div className="grid grid-cols-2 gap-2 sm:grid-cols-4">{clusters.map((entry, index) => <button key={entry.label} type="button" onClick={() => setSelected(index)} className={`min-h-12 border px-2 text-xs ${selected === index ? "border-violet-500 bg-violet-500/15 text-primary" : "border-border bg-bg text-secondary"}`}>{entry.label}</button>)}</div><div className="mt-4 grid gap-3 md:grid-cols-2">{[["related items", item.items], ["cross-chapter relation", item.relation], ["rehearsal", item.rehearsal], ["failure signal", item.failure]].map(([title, value]) => <div key={title} className="border border-border bg-bg p-4"><span className="text-xs text-secondary">{title}</span><strong className="mt-2 block text-sm leading-6 text-primary">{value}</strong></div>)}</div></div><figcaption className="mt-2 text-center text-sm text-secondary">纵向读完原章后，再按compile-time、lifetime、execution和failure四条横线复盘。</figcaption></figure>;
+}
 
-                {col.items.map((item, ii) => {
-                  const y = itemY(ii);
-                  return (
-                    <g key={item}>
-                      <rect x={cx} y={y} width={COL_W} height={ITEM_H} rx="8" fill={col.color} fillOpacity="0.06" stroke={col.color} strokeWidth="1.4" strokeOpacity="0.5" />
-                      <text x={cx + COL_W / 2} y={y + ITEM_H / 2 + 4} textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">
-                        {item}
-                      </text>
-                    </g>
-                  );
-                })}
-              </g>
-            );
-          })}
+const gates = [
+  { label: "title coverage", input: "50 publisher Item titles", action: "map each title to one official chapter page", output: "100% outline coverage", reject: "topic sampling or invented chapter" },
+  { label: "decision", input: "one real code boundary", action: "state alternatives and tradeoff", output: "chosen contract with owner", reject: "memorized slogan without scenario" },
+  { label: "visual", input: "chapter-specific state choices", action: "interact and predict transition", output: "observable before/after model", reject: "generic decorative diagram" },
+  { label: "practice", input: "normal plus fault cases", action: "run code/compile/provider/fault evidence", output: "reproducible acceptance", reject: "answer-only reading" },
+  { label: "modern note", input: "2017 C# 6 guidance", action: "separate original advice from current runtime", output: "version-bounded recommendation", reject: "rewriting history as modern syntax" },
+];
 
-          {/* 列间进阶箭头 */}
-          {[0, 1, 2].map((i) => (
-            <line
-              key={`arrow-${i}`}
-              x1={colX(i) + COL_W + 4}
-              y1={itemY(1) + ITEM_H / 2}
-              x2={colX(i + 1) - 4}
-              y2={itemY(1) + ITEM_H / 2}
-              stroke="var(--text-secondary)"
-              strokeWidth="1.6"
-              markerEnd="url(#ecs-map-arrow)"
-            />
-          ))}
-
-          {/* 底部总结 */}
-          <line x1={32} y1={368} x2={VIEW_W - 32} y2={368} stroke="var(--border)" strokeWidth="1" strokeDasharray="4 3" />
-          <text x={VIEW_W / 2} y={392} textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
-            习惯奠基，资源管控，泛型抽象，并发收口——50 条准则一条主线
-          </text>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        全书四大板块：语言习惯（条款 1-12）奠基，资源管理（条款 13-25）管控，泛型与 LINQ（条款 26-37）抽象，并发设计（条款 38-50）收口。
-      </figcaption>
-    </figure>
-  );
+export function EcsStudyGateLab() {
+  const [selected, setSelected] = useState(0);
+  const item = gates[selected];
+  return <figure className="mdx-figure not-prose mx-auto my-6"><div className="border border-border bg-elevated p-4 sm:p-5"><div className="grid grid-cols-3 gap-2 sm:grid-cols-5">{gates.map((entry, index) => <button key={entry.label} type="button" onClick={() => setSelected(index)} className={`min-h-12 border px-2 text-xs ${selected === index ? "border-emerald-500 bg-emerald-500/15 text-primary" : "border-border bg-bg text-secondary"}`}>{entry.label}</button>)}</div><div className="mt-4 grid gap-3 md:grid-cols-2">{[["input", item.input], ["action", item.action], ["evidence", item.output], ["reject", item.reject]].map(([title, value]) => <div key={title} className="border border-border bg-bg p-4"><span className="text-xs text-secondary">{title}</span><strong className="mt-2 block text-sm leading-6 text-primary">{value}</strong></div>)}</div></div><figcaption className="mt-2 text-center text-sm text-secondary">每章必须同时通过目录、决策、视觉、实践和版本边界五道门禁。</figcaption></figure>;
 }

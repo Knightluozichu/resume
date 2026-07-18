@@ -11,6 +11,7 @@ draft: false
 ---
 
 import { RtwDiffuseDiagram } from "@/components/mdx/ray-tracing-weekend/diagrams/rtw-diffuse";
+import { RtwStepFlowDiagram } from "@/components/mdx/ray-tracing-weekend/diagrams/rtw-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
@@ -37,10 +38,36 @@ $$
 \mathbf{d} = \mathbf{N} + \vec{s}
 $$
 
-若 $\mathbf{d}$ 恰好指向表面内部（与 $\mathbf{N}$ 反向），则取 $-\mathbf{d}$ 修正。这种「法线加随机向量」的采样等价于在单位球面上均匀采样后偏移，自然产生余弦加权分布，是物理正确的兰伯特模型。
+这里需要更精确地看待退化情形。<Term def="随机单位向量：通过拒绝采样在单位球内取点并归一化得到的长度为 1 的随机方向；它在单位球面上均匀分布，可作为漫反射散射的随机输入。">随机单位向量</Term>满足 $\mathbf{N}\cdot\vec{s}\ge-1$，所以
+
+$$
+\mathbf{N}\cdot(\mathbf{N}+\vec{s})=1+\mathbf{N}\cdot\vec{s}\ge0
+$$
+
+`N + s` 不会指向法线反半球；唯一危险是 $s=-N$ 时方向恰为零，浮点计算会令它非常接近零。正确处理不是把一个“反向向量”取负，而是检测 `near_zero()` 后直接退回 `rec.normal`。这样既保持外侧方向，又不把零向量传入下一次求交。
+
+### 从均匀半球到 Lambert 分布
+
+先在法线同侧半球均匀取方向，能得到柔和的漫反射，但并不符合真实哑光表面“越靠近法线越可能”的分布。<Term def="半球采样：以表面法线为轴，只在表面外侧半球生成随机方向。均匀半球采样每个立体角机会相同；Lambert 采样则让靠近法线的方向拥有更高概率。">半球采样</Term>是第一步，`N + random_unit_vector()` 则把单位球采样点平移到以交点法线为中心的切球上，使更多方向集中在法线附近，形成原书使用的 Lambertian 近似。
+
+这个差别在简单的两球场景里不总显眼：Lambert 分布会让阴影更集中，也让天空光更明显地染到朝上的表面。不要用单张截图判断采样是否正确；应以相同随机种子和样本数分别渲染均匀半球与法线偏置版本，比较阴影边缘、天空染色和噪点收敛。
 
 ### 伽马校正
 光的能量与显示亮度是非线性的。线性累加的颜色需做伽马校正 $\sqrt{\cdot}$（γ=2）后写入像素，否则画面整体偏暗、中间调发灰。
+
+<Term def="样本平均：对同一像素的独立路径颜色先在线性空间逐分量相加并除以样本数，再做显示变换。先做伽马后平均会系统性改变亮度。">样本平均</Term>必须先完成，之后才可把结果交给显示编码：
+
+$$
+\mathbf{C}_{linear}=\frac{1}{N}\sum_{k=1}^{N}\mathbf{L}_k,
+\qquad
+\mathbf{C}_{display}=\sqrt{\max(\mathbf{C}_{linear},0)}
+$$
+
+上式的平方根是 gamma 2 的近似逆变换。若对每一个样本先开平方再平均，非线性函数会改变估计量，画面会偏亮；若完全不做变换，普通图像查看器会把线性中灰显示得过暗。<Term def="伽马校正：在线性渲染结果写入常规图像前应用的显示编码近似。gamma 2 时对每个非负颜色分量开平方，使中间亮度在查看器中看起来正确。">伽马校正</Term>只属于输出边界，不应混进材质 attenuation 或递归累加。
+
+### 递归上限与噪点不是同一种问题
+
+增加 `samples_per_pixel` 会减少随机估计的方差，噪点大致按 $1/\sqrt{N}$ 变慢；增加 `max_depth` 则允许一条路径经历更多次反弹。前者不能补救过浅的玻璃或镜面路径，后者也不会让单样本的颗粒噪点消失。调参时先确认散射方向、t_min 与伽马输出正确，再分别观察“增加样本”和“增加深度”带来的变化，避免用昂贵渲染掩盖逻辑错误。
 
 ## 交互Demo
 
@@ -50,12 +77,18 @@ $$
 
 <Stepper>
 <Step title="第一步：取随机向量">
+<RtwStepFlowDiagram caption="漫反射第 1 步：先在随机方向中取一个可重复统计的样本。" stage={1} stages={["生成随机单位向量", "法线偏置形成散射方向", "递归平均并做伽马校正"]} />
+
 在交点 p 处生成随机单位向量 s（在单位球内均匀取点再归一化）。
 </Step>
 <Step title="第二步：构造散射方向">
-散射方向 d = N + s；若 d 与 N 反向（指向内部）则取 −d，保证光线射向表面外侧。
+<RtwStepFlowDiagram caption="漫反射第 2 步：法线把随机样本限制在表面外侧的半球。" stage={2} stages={["生成随机单位向量", "法线偏置形成散射方向", "递归平均并做伽马校正"]} />
+
+散射方向 d = N + s；若 d 接近零则退回 N。由于 N·(N+s)≥0，非退化方向天然位于表面外侧。
 </Step>
 <Step title="第三步：递归与平均">
+<RtwStepFlowDiagram caption="漫反射第 3 步：统计平均降低噪点，伽马校正才把线性结果正确显示。" stage={3} stages={["生成随机单位向量", "法线偏置形成散射方向", "递归平均并做伽马校正"]} />
+
 对每个像素发射多条这样的随机光线，递归取色后平均，再经伽马校正写入像素，得到平滑的哑光表面。
 </Step>
 </Stepper>
@@ -96,6 +129,18 @@ void write_color(std::ostream& out, color pixel_color, int samples) {
 
 `sqrt` 就是 γ=2 的伽马校正；`samples` 分摊保证多次采样平均。
 
+```cpp
+color write_color_sample(color accumulated, int samples_per_pixel) {
+  const auto scale = 1.0 / samples_per_pixel;
+  auto r = std::sqrt(std::max(0.0, scale * accumulated.x()));
+  auto g = std::sqrt(std::max(0.0, scale * accumulated.y()));
+  auto b = std::sqrt(std::max(0.0, scale * accumulated.z()));
+  return color(r, g, b);  // 再夹到 [0,0.999] 并写入 PPM
+}
+```
+
+这段顺序把“统计平均”和“显示编码”明确分开。排查画面过暗时，先打印线性平均值与伽马后值；若线性值已经接近零，问题在路径或材质；若线性值合理而输出很暗，问题才可能在伽马或字节映射。
+
 ## 常见误区
 
 <Callout type="trap">
@@ -113,24 +158,39 @@ void write_color(std::ostream& out, color pixel_color, int samples) {
 ## 练习
 
 <Exercises>
-**问题**：为什么散射方向用 N + 随机单位向量能近似兰伯特余弦分布？
+**问题 1**：为什么散射方向用 N + 随机单位向量能近似兰伯特余弦分布？
 
 <Answer>
 在单位球面上均匀采样得到的方向 s，加到法线 N 上后，合成方向 d 与 N 的夹角越大概率越小（因为 s 偏离 N 时 d 长度与方向变化使大角样本稀疏），自然产生与 cosθ 成正比的密度——这正是兰伯特余弦律要求的分布。无需显式算余弦，几何采样就内置了正确的加权。
 </Answer>
 
-**问题**：为什么写入像素前要开平方（伽马校正）？不做会怎样？
+**问题 2**：为什么写入像素前要开平方（伽马校正）？不做会怎样？
 
 <Answer>
 光的能量累加是线性的，但显示器亮度与输入信号是非线性的（约 γ=2.2）。不做伽马校正时，线性值直接映射会压暗中间调，画面整体偏暗发灰。开平方（γ=2 近似）把线性值「提亮」回感知均匀的亮度，灰墙才显得自然。
 </Answer>
+
+**问题 3**：为什么 `d = N + s` 的实现遇到 `d.near_zero()` 应改回 `N`，而不是写成 `d = -d`？
+
+<Answer>
+对单位法线 N 和单位随机向量 s，N·(N+s)=1+N·s 不会小于零，因而非零的 d 本来就在外侧半球。只有 s 几乎等于 -N 时 d 接近零，零方向会在归一化或后续求交中产生 NaN。改回 N 保持确定的外侧散射；对零向量取负仍然是零，不能修复问题。
+</Answer>
 </Exercises>
+
+## 小结
+
+- `N + random_unit_vector()` 是法线偏置的 Lambertian 近似；退化时回退 N，而不是翻转向量。
+- 每像素的随机路径先在线性空间平均，样本数减少噪点，递归深度增加可见弹跳层数。
+- gamma 2 的平方根只在输出时应用，且必须位于样本平均之后。
+- 渲染变暗时应区分路径吞吐量、随机方差和显示编码三个不同来源。
 
 <Glossary>
 <GlossaryItem term="兰伯特余弦律">漫反射表面亮度正比于入射光与法线夹角的余弦 cosθ，是哑光材质的物理基础。</GlossaryItem>
 <GlossaryItem term="随机单位向量">在单位球面上均匀采样得到的方向，加到法线上构成漫反射散射方向。</GlossaryItem>
 <GlossaryItem term="伽马校正">把线性累加的颜色按 γ≈2 映射到显示亮度（开平方），使中间调不致偏暗。</GlossaryItem>
 <GlossaryItem term="albedo">反照率，漫反射材质的衰减色，表示表面反射各波长的比例。</GlossaryItem>
+<GlossaryItem term="半球采样">以表面法线为轴，只在表面外侧半球生成随机方向。均匀半球与 Lambert 分布的方向概率不同。</GlossaryItem>
+<GlossaryItem term="样本平均">对同一像素的独立路径颜色先在线性空间逐分量相加并除以样本数，再做显示变换。</GlossaryItem>
 </Glossary>
 
 <Attribution adaptedFrom="Ray Tracing in One Weekend (Peter Shirley)" adaptedUrl="https://raytracing.github.io/books/RayTracingInOneWeekend.html" />

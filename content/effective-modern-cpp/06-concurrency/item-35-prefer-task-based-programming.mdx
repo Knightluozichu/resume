@@ -1,0 +1,280 @@
+---
+title: "Item 35：优先基于任务，而不是基于线程"
+type: A
+section: Chapter 7 · The Concurrency API
+order: 35
+description: 对齐 Effective Modern C++ Item 35：比较 task-based 与 thread-based programming 的结果和异常通道、软件/硬件线程调度责任，以及需要 native control 时的例外边界。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch07.html"
+draft: false
+---
+
+import {
+  EmcppTaskOutcomeDeliveryMap,
+  EmcppTaskSchedulingAbstractionMap,
+  EmcppTaskThreadDecisionMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-35-prefer-task-based-programming";
+
+<Objectives>
+
+- 能比较 task-based programming（基于任务的编程）与 thread-based programming（基于线程的编程）的责任边界
+- 能实现 async future（async/future）结果通道，并解释 return value exception（返回值与异常）如何统一交付
+- 能分析 software thread、OS thread 与 hardware thread 的调度关系，并判断何时必须下沉到 thread control
+
+</Objectives>
+
+## 从“工作是什么”与“在哪条线程做”开始
+
+并发代码有两个不同问题：要执行什么 computation，以及由哪项 execution resource 执行。task-based API 优先描述工作和结果；thread-based API 直接请求一条 software thread，并让应用承担更多生命周期与调度细节。
+
+<Term def="提交一个 callable 作为工作单元，并通过 future 等抽象取得结果，而不直接指定承载它的物理线程。">
+  task-based programming
+</Term>
+
+<Term def="显式创建和管理 std::thread，把 callable 绑定到一条软件线程并负责 join/detach 的模型。">
+  thread-based programming
+</Term>
+
+先预测相同函数通过 thread 与 async 启动后，返回值、异常和同步分别去哪里。
+
+## thread 只提供执行与 join
+
+```cpp
+int calculateAnswer();
+
+std::thread worker(calculateAnswer);
+worker.join();
+```
+
+`std::thread` 接受 callable，但 callable 的 return value 被丢弃。`join` 只表示等待 thread 完成，不返回计算结果。若需要结果，必须另建 promise、shared state、mutex/condition variable 或 packaged_task，并自行连接生产者与消费者。
+
+<Term def="thread object 提供等待底层执行结束的同步动作，但不自带 callable result channel。">
+  join-only synchronization
+</Term>
+
+更危险的是 exception：若 calculateAnswer 在新 thread 中抛出而未在线程函数内部 catch，异常不会自动跨线程传回 creator，通常触发 `std::terminate`。
+
+## async 把 computation 建模为 task
+
+```cpp
+auto result = std::async(calculateAnswer);
+
+// do independent work
+
+int answer = result.get();
+```
+
+<Term def="std::async 返回的 typed handle，表示某项异步或延迟 computation 的共享结果状态。">
+  async future
+</Term>
+
+future 保存 task 的最终 outcome。函数正常返回时，`get()` 取得 int；函数抛异常时，runtime 把 exception 存入 shared state，`get()` 在 caller context 中重新抛出。等待、值和错误通过同一 typed protocol 交付。
+
+<EmcppTaskOutcomeDeliveryMap />
+
+## 返回值与异常是同一个 outcome channel
+
+<Term def="future shared state 同时持有正常 value 或 exception，并在 get 时把二者之一交给 consumer。">
+  result-exception channel
+</Term>
+
+```cpp
+try {
+    auto result = std::async([]() -> int {
+        throw std::runtime_error("calculation failed");
+    });
+    int value = result.get();
+} catch (const std::runtime_error& error) {
+    log(error.what());
+}
+```
+
+异常在 consumer 的 try/catch 中恢复普通 control flow；不需要在线程入口把 exception_ptr 手工写入另一个对象。`future::get` 通常只能调用一次，因为它消费结果；需要多个 consumer 时应明确转换为 shared_future。
+
+<Callout
+  type="trap"
+  title="陷阱：std::thread 入口抛出的异常会在 join 时重新抛出"
+>
+  join 只等待 execution completion，不读取 callable outcome。未捕获异常不会跨
+  thread boundary 自动传播；要么在线程体捕获并写入 promise，要么使用
+  async/future 的结果通道。
+</Callout>
+
+## 应用不应过早决定 physical worker
+
+task 表达“这项工作可独立执行”，runtime 保留选择执行策略的空间；thread 则把“一项工作对应一条 software thread”写进程序结构。
+
+<Term def="程序可创建和管理的 std::thread 对象所代表的执行序列，通常映射到 OS thread。">
+  software thread
+</Term>
+
+<Term def="操作系统调度器管理的 runnable execution entity，数量可远多于 CPU 同时执行槽。">
+  OS thread
+</Term>
+
+<Term def="CPU core 或 simultaneous-multithreading context 提供的实际并行执行槽。">
+  hardware thread
+</Term>
+
+<EmcppTaskSchedulingAbstractionMap />
+
+## oversubscription 不是免费的并行度
+
+当 runnable software/OS threads 远多于 hardware threads，系统发生 oversubscription。scheduler 频繁 context switch，cache locality 下降，stack 与 kernel bookkeeping 占用内存；吞吐量可能比少量 workers 更差。
+
+<Term def="可运行软件线程数量显著超过硬件并行槽，造成排队、切换和资源竞争的状态。">
+  oversubscription
+</Term>
+
+应用层为每个小任务创建 thread，很难根据其他进程负载、硬件数量和任务阻塞比例动态平衡。task abstraction 让 runtime/executor 有机会复用资源或延迟执行；具体 `std::async` policy 仍需 Item 36 进一步审查，不能把它等同于标准化 thread pool。
+
+## thread exhaustion 需要手工处理
+
+`std::thread` construction 可能因系统无法再创建 thread 而抛 `std::system_error`。如果算法已把正确性建立在 N 条 thread 全部创建成功上，部分创建失败后的 join、rollback 和 fallback 都由应用负责。
+
+<Term def="进程或系统达到线程、地址空间、stack 或内核资源限制，无法继续创建 software thread。">
+  thread exhaustion
+</Term>
+
+task-based design 把工作描述与 worker count 解耦，至少允许执行设施根据可用资源安排；但标准 `async` 的具体保证取决于 launch policy，仍应设计 bounded concurrency，而非提交无限任务。
+
+## task 更容易表达依赖组合
+
+```cpp
+auto left = std::async(loadLeftPartition);
+auto right = std::async(loadRightPartition);
+
+return merge(left.get(), right.get());
+```
+
+<Term def="以 future result 作为后续 computation 输入，显式表达 data dependency 而不是围绕线程身份组织流程。">
+  future dependency composition
+</Term>
+
+这里关心的是两个 partitions 完成并产生值，不关心它们在哪两条 thread 上。thread 版本还需为每个 result 分配存储、同步写入、捕获异常并保证所有早退路径 join。
+
+## RAII 仍不能忽略 future 生命周期
+
+task-based 不等于“无需生命周期设计”。某些 `std::async` 返回 future 的 destructor 在特定条件下可能等待异步 task 完成；忽略 future 可能意外把连续调用串行化。
+
+<Term def="future handle 的等待、get、共享与销毁时机共同决定 task completion 和 caller blocking 行为。">
+  future lifetime contract
+</Term>
+
+应命名 future、明确 get/wait 点，并在设计中记录是否允许 deferred execution。Item 36 将专门处理默认 launch policy 的不确定性。
+
+<Callout
+  type="trap"
+  title="陷阱：把 std::async 的返回值丢掉仍能得到并行 fire-and-forget"
+>
+  temporary future 的销毁可能等待关联 async
+  task，连续语句因此表现为串行。fire-and-forget 需要明确 executor/lifetime/error
+  sink，不能靠忽略 handle 实现。
+</Callout>
+
+## 何时 thread-based 仍然合理
+
+task-based 是默认，不是绝对规则。当程序必须设置 native thread priority/affinity、取得 native handle、集成指定 event loop、使用只能在 owner thread 调用的 GUI/API，或实现底层 scheduler/thread pool 时，thread identity 本身就是需求。
+
+<Term def="业务或平台约束要求指定 execution thread 的 identity、affinity、priority、stack 或 native handle 的场景。">
+  native-thread control requirement
+</Term>
+
+这时应直接使用 thread 或平台 executor，并把 join、异常、结果、取消和 shutdown protocol 全部显式补齐。不能因为 Item 35 偏好 task 就用 async 隐藏一个本来必须固定线程的 contract。
+
+<EmcppTaskThreadDecisionMap />
+
+## task 与 thread 的选择清单
+
+<Term def="根据 outcome channel、调度自由度、线程身份和生命周期需求选择并发抽象层的审查流程。">
+  concurrency abstraction audit
+</Term>
+
+1. computation 是否有 return value 或 exception 需要交给 caller？
+2. 正确性是否依赖具体 thread identity、affinity 或 event loop？
+3. 工作数量是否可能超过 hardware concurrency，需要 bounded scheduling？
+4. future 在哪里 get/wait，是否可能 deferred 或在 destructor 阻塞？
+5. shutdown/cancellation 时如何收集全部 outcomes？
+
+默认从 task/outcome 描述开始；只有证据表明 execution identity 是需求，才下沉 thread，并补回 future 原本提供的结果与错误协议。
+
+## 小结
+
+- task-based programming 描述工作与 outcome，thread-based programming 直接管理 software thread
+- std::thread 的 join 只等待，callable return value 被丢弃，未捕获异常不会在 join 时交付
+- async future 通过 shared state 统一承载 return value exception，并在 get 时同步或重新抛出
+- task abstraction 让 runtime/OS 保留调度自由，应用避免过早绑定一任务一线程
+- software/OS threads 超过 hardware threads 会 oversubscribe，引入切换、cache 和 stack 成本
+- future lifetime、launch policy 与 bounded concurrency 仍需显式设计，task 不是无限并行保证
+- native handle、affinity、priority、指定 event-loop thread 等要求可合理选择 thread-based control
+- 先做 concurrency abstraction audit：默认 task，只有 thread identity 是真实需求时才下沉
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 35"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch07.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="task-based programming">
+    以工作和 future outcome 为中心的并发模型。
+  </GlossaryItem>
+  <GlossaryItem term="thread-based programming">
+    显式创建管理软件线程的模型。
+  </GlossaryItem>
+  <GlossaryItem term="join-only synchronization">
+    只等待线程完成而不交付结果。
+  </GlossaryItem>
+  <GlossaryItem term="async future">
+    async computation 的 typed result handle。
+  </GlossaryItem>
+  <GlossaryItem term="result-exception channel">
+    future 统一交付值或异常的通道。
+  </GlossaryItem>
+  <GlossaryItem term="software thread">程序可管理的执行序列。</GlossaryItem>
+  <GlossaryItem term="OS thread">操作系统调度的 runnable entity。</GlossaryItem>
+  <GlossaryItem term="hardware thread">CPU 实际并行执行槽。</GlossaryItem>
+  <GlossaryItem term="oversubscription">
+    runnable threads 超过硬件并行槽。
+  </GlossaryItem>
+  <GlossaryItem term="thread exhaustion">
+    系统资源不足导致线程创建失败。
+  </GlossaryItem>
+  <GlossaryItem term="future dependency composition">
+    以 future results 表达 task 依赖。
+  </GlossaryItem>
+  <GlossaryItem term="future lifetime contract">
+    future 等待、读取与销毁行为约定。
+  </GlossaryItem>
+  <GlossaryItem term="native-thread control requirement">
+    必须控制具体底层线程的需求。
+  </GlossaryItem>
+  <GlossaryItem term="concurrency abstraction audit">
+    选择 task 或 thread 层级的检查流程。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：calculateAnswer 返回 int 或抛异常。** 比较 thread 与 async 的完整交付链。
+
+<Answer question="值与异常分别去哪里？">
+  thread 直接调用时 int return 被丢弃，join 仅等待；未在线程入口捕获的异常触发
+  terminate。要交付 outcome 需手写 promise/shared state。async 返回 future；正常
+  int 存入 shared state，异常也以 exception_ptr 存入，caller 的 get 等待并返回
+  int 或重新抛出，因此一条 typed channel 覆盖两种结果。
+</Answer>
+
+2. **问题 2：为一万个短工作各创建 thread。** 分析 oversubscription 与 task-based 重构边界。
+
+<Answer question="为什么线程数量不等于并行度？">
+  hardware threads 决定同时执行槽；大量 software/OS threads 只能排队并产生
+  context switch、cache miss、stack 与 kernel resource 成本，还可能 thread
+  exhaustion。把每项工作建模为 task，交给 bounded executor/runtime 在有限
+  workers 上调度；但不能假定默认 async 就是 thread pool，仍要明确 launch policy
+  与提交上限。
+</Answer>
+
+3. **问题 3：工作必须在 UI owner thread 运行，同时要把异常交回调用者。** 判断是否仍应使用 thread-based control。
+
+  <Answer question="何时 execution identity 高于 task 默认？">UI API 的 designated-thread contract 使 thread/executor identity 成为正确性需求，不能交给任意 async worker。应提交到 UI event-loop executor，同时用 promise/future 或框架 task handle 交付 value/exception；若直接管理 thread，还要明确 shutdown、join 与 cancellation。Item 35 的原则是优先 task outcome abstraction，不是抹掉真实的 native-thread requirement。</Answer>
+</Exercises>

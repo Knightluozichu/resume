@@ -1,347 +1,194 @@
 ---
-title: "总复习"
+title: "总复习：第一版十五章工程验收"
 type: A
-section: "函数式实践"
-order: 4
-description: "全书知识图谱串讲：从函数一等公民到 Monad 链式的因果链与综合实战。"
+section: "Functional C# 1e · 总复习"
+order: 16
+description: "串联第一版15章，从typed functional core到state、async、Rx与message passing，完成correctness、compatibility、capacity和recovery验收。"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://livebook.manning.com/book/functional-programming-in-c-sharp/table-of-contents"
 draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { CfpFinalReviewDiagram } from "@/components/mdx/csharp-functional-programming/diagrams/cfp-final-review";
+import { CfpArchitectureReviewLab, CfpEffectSelectionLab, CfpReleaseGateLab } from "@/components/mdx/csharp-functional-programming/diagrams/cfp-final-review";
 
 <Objectives>
 
-- 串联全书四大板块的因果链：基础 → 高阶 → 不可变 → 实践
-- 综合运用函数式思维解决实际问题：从命令式到函数式的完整重构
-- 能回答：函数式编程的三大核心原则如何在 C# 中落地？
-- 能回答：在什么场景选择命令式、什么场景选择函数式？
+- 能绘制15章共同的input、pure decision、effect interpreter与versioned publication架构
+- 能比较Option、Either、Validation、State、Task、Observable和agent protocol，判断每种type保留的observable contract
+- 能设计correctness、compatibility、capacity与recovery四类release gates，复现duplicate、conflict、timeout和crash路径
 
 </Objectives>
 
-## 直觉引入
+## 为什么总复习不是再背一遍术语
 
-学完全书九章，我们走过了这样一条路：从「函数是一等公民」出发，经过高阶函数的组合引擎，不可变数据的安全基石，最终到达 Monad 和错误处理的实践工具箱。这条路不是孤立的章节堆砌，而是一条因果链——每个概念都是下一个概念的前提。
+第一版15章形成一条工程链：函数成为typed values，purity让局部推理成立，patterns与composition组装程序，typed errors和immutable data管理expected变化，event/state保存历史，lazy/async/stream/message effects把时间与并发引入。复习目标是拿到一个真实workflow，能把每一层signature、owner、failure和证据画出来。
 
-总复习的目标不是重述每章内容，而是**串联因果链**：为什么高阶函数需要一等公民？为什么不可变性需要高阶函数？为什么 Monad 需要高阶函数和不可变性？理解了这条链，你就不只是记住了 API，而是掌握了函数式思维的设计逻辑。
+先预测：只要pure core正确，transaction shell就不会破坏业务吗；Either可同时表达cancellation与validation吗；immutable snapshot可避免两个writers冲突吗；Observable Dispose等于Completed吗；Ask timeout意味着agent没执行。答案都是否。
 
-## 概念讲解
+<Term def="把输入翻译、pure decision、effect interpretation和versioned publication分离，同时保持typed outcome贯穿的系统结构。">functional application architecture</Term>
 
-### 全书因果链
+## 从Chapter 1到15的一条主线
 
-<Term def="全书四大板块构成递进因果链：函数是一等公民（基石）→ 高阶函数（组合引擎）→ 不可变数据（安全基石）→ Monad/错误处理（实践工具箱）。每个板块以前一个为前提——没有一等公民就没有高阶函数，没有高阶函数就没有 Monad 的 Bind，没有不可变性 Monad 链式就不安全。">
+第1–3章回答“函数是什么、可信条件是什么、signature说了什么”；第4–5章回答“怎样组合”；第6–8章回答“失败、依赖与多参数context怎样组合”；第9–10章回答“数据、identity、history怎样保留”；第11–15章回答“evaluation、resource、state、async、stream、mailbox怎样结束和恢复”。
 
-1. **函数是一等公民**（第 2 章）：函数可以赋值、传参、返回。这是所有后续概念的前提——高阶函数接受函数参数，Monad 的 Bind 返回函数，没有一等公民这些都不可能。
-2. **高阶函数**（第 3-4 章）：Map/Filter/Reduce 接受函数参数，柯里化返回函数。高阶函数是一等公民的直接应用——函数作为数据被操作。
-3. **不可变数据**（第 5-6 章）：record + with 创建副本而非修改。不可变性依赖高阶函数——数据转换（Select/Where）用高阶函数描述「如何从旧数据生成新数据」。
-4. **函数式实践**（第 7-10 章）：延迟求值用 yield 迭代器，Monad 用 Bind 链式，错误处理用 Result 类型。这些综合运用前三个板块：Monad 的 Bind 是高阶函数，Result 的不可变性保证安全传播，延迟执行是 IEnumerable Monad 的体现。
+所有章节可归纳成四个问题：输入和值是否有效；decision是否deterministic；effect何时执行并由谁拥有；result/state何时对外可见。任何新技术都放回这四问，而不是增加一个孤立名词。
 
-</Term>
-
-### 三大核心原则的落地
-
-<Term def="函数式编程三大核心原则在 C# 中的落地：1）函数是一等公民——Func<T> 委托 + Lambda + LINQ；2）不可变性——record + init + with 表达式；3）声明式组合——LINQ 管道 + switch 表达式 + Monad 链式。">
-
-| 原则 | C# 落地 | 核心机制 |
-|---|---|---|
-| 函数是一等公民 | `Func<T, U>` + Lambda | 函数有类型，可赋值传参返回 |
-| 不可变性 | `record` + `with` + `init` | 数据创建后不可修改，变更创建副本 |
-| 声明式组合 | LINQ 管道 + switch 表达式 | 描述「做什么」而非「怎么做」 |
-
-</Term>
-
-### 命令式 vs 函数式的选择
-
-函数式不是银弹，C# 是多范式语言。选择原则：**数据处理用函数式，行为建模用 OOP，系统边界用 try-catch，内核逻辑用 Result**。
-
-## 交互Demo
-
-<CfpFinalReviewDiagram />
+<Term def="每个workflow都追问value validity、decision determinism、effect ownership与publication visibility的统一审查框架。">four-boundary review</Term>
 
 <Stepper>
-
-<Step title="第一环：函数是一等公民（基石）">
-
-全书起点。`Func<int, int> f = x => x * 2` 把函数赋值给变量。`nums.Select(f)` 把函数作为参数传递。`Adder(n)` 返回函数。没有一等公民，后续的高阶函数、柯里化、Monad 都无从谈起。C# 通过 `Func<T>` 委托类型和 Lambda 实现一等公民——函数有了明确类型，与 int、string 同等地位。
-
-</Step>
-
-<Step title="第二环：高阶函数（组合引擎）">
-
-一等公民的直接应用。`Where` 接受谓词函数，`Select` 接受映射函数，`Aggregate` 接受聚合函数——都是高阶函数。柯里化把多参数函数拆成单参数链，偏应用固定部分参数生成新函数。管道组合 `Where(...).Select(...).Aggregate(...)` 让数据流过一系列函数变换。高阶函数是函数式编程的组合引擎——用小函数拼出复杂逻辑。
-
-</Step>
-
-<Step title="第三环：不可变数据（安全基石）">
-
-`record` 提供不可变性——属性 init-only，`with` 创建副本而非修改。不可变数据消除共享状态导致的并发 bug，引用透明使代码可推演、可缓存、可测试。不可变性依赖高阶函数——数据转换用 Select/Where 描述「如何从旧数据生成新数据」。模式匹配（switch 表达式）把控制流变成值表达式，用类型/属性/关系模式替代 if-else 链。
-
-</Step>
-
-<Step title="第四环：实践工具箱（落地）">
-
-综合运用前三板块。延迟求值（yield + IEnumerable）让管道按需计算，处理无限序列。Monad（Option/Result）用 Bind 链式消除嵌套 if-null 和 try-catch——None/Error 自动短路。错误处理用 Result 类型把错误变成数据，签名体现可失败性。LINQ 的 SelectMany 就是 Monad 的 Bind，C# 把 Monad 模式融入了语言。
-
-</Step>
-
+  <Step title="切换input、decide、execute与publish"><CfpArchitectureReviewLab /></Step>
+  <Step title="标15章知识落点">在四个boundaries旁写purity、types、errors、state、Task、Rx和agent分别承担什么责任。</Step>
+  <Step title="用trace反向复查">从外部response/state倒推effect、decision和input，任何无法解释的hidden dependency即为缺口。</Step>
 </Stepper>
 
-## 代码对照
-
-```csharp
-// 综合实战：从命令式到函数式的完整重构
-
-// === 需求：读取用户列表，过滤成年人，获取邮箱，发送通知 ===
-
-// 命令式实现
-class NotificationService
-{
-    public void NotifyAdults(string filePath)
-    {
-        List<User> users;
-        try
-        {
-            var lines = File.ReadAllLines(filePath);
-            users = new List<User>();
-            foreach (var line in lines)
-            {
-                var parts = line.Split(',');
-                if (parts.Length < 3) continue;
-                if (!int.TryParse(parts[1], out var age)) continue;
-                users.Add(new User(parts[0], age, parts[2]));
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error: {ex.Message}");
-            return;
-        }
-
-        foreach (var user in users)
-        {
-            if (user.Age >= 18)
-            {
-                if (!string.IsNullOrEmpty(user.Email))
-                {
-                    try
-                    {
-                        SendEmail(user.Email, $"Hello {user.Name}");
-                        Console.WriteLine($"Sent to {user.Name}");
-                    }
-                    catch
-                    {
-                        Console.WriteLine($"Failed for {user.Name}");
-                    }
-                }
-            }
-        }
-    }
-
-    void SendEmail(string to, string body) { /* ... */ }
-}
-
-// 函数式重构
-record User(string Name, int Age, string Email);
-
-// 边界：IO 用 try-catch 转 Result
-Result<string[], string> ReadLinesSafe(string path)
-{
-    try { return new Ok<string[], string>(File.ReadAllLines(path)); }
-    catch (Exception ex) { return new Err<string[], string>(ex.Message); }
-}
-
-// 纯函数：解析行
-Result<User, string> ParseUser(string line)
-{
-    var parts = line.Split(',');
-    return parts.Length < 3
-        ? new Err<User, string>($"Invalid line: {line}")
-        : int.TryParse(parts[1], out var age)
-            ? new Ok<User, string>(new User(parts[0], age, parts[2]))
-            : new Err<User, string>($"Invalid age: {parts[1]}");
-}
-
-// 纯函数：发送通知
-Result<string, string> Notify(User user)
-    => string.IsNullOrEmpty(user.Email)
-        ? new Err<string, string>($"No email for {user.Name}")
-        : SendEmailSafe(user.Email, $"Hello {user.Name}");
-
-Result<string, string> SendEmailSafe(string to, string body)
-{
-    try { /* SendEmail(to, body); */ return new Ok<string, string>($"Sent to {to}"); }
-    catch (Exception ex) { return new Err<string, string>(ex.Message); }
-}
-
-// 函数式管道
-void NotifyAdultsFunctional(string filePath)
-{
-    var results = ReadLinesSafe(filePath)              // Result<string[], string>
-        .Map(lines => lines.Select(ParseUser))         // Result<IEnumerable<Result<User, string>>, string>
-        .Match(
-            ok: userResults => userResults
-                .Where(r => r is Ok<User, string>)     // 只保留解析成功的
-                .Select(r => (r as Ok<User, string>)!.Value)
-                .Where(u => u.Age >= 18)                // 过滤成年人
-                .Select(Notify)                         // 发送通知
-                .Select(r => r.Match(
-                    ok: msg => msg,
-                    err: e => $"FAIL: {e}"
-                ))
-                .ToList(),
-            err: e => new List<string> { $"READ FAIL: {e}" }
-        );
-
-    foreach (var r in results)
-        Console.WriteLine(r);
-}
+```text
+untrusted input -> typed values -> pure decision -> effect description
+                                                -> interpreter
+                                                -> versioned publish
+external outcome <- translation <- typed result <- execution evidence
 ```
 
-## 常见误区
+## Value and signature gate
 
-<Callout type="trap">
+先检查domain values能否表示illegal state。Option表达absence，Either表达一种expected failure channel，Validation可累积independent errors；不要用null、magic string或catch-all Exception替代。Function signature列出真正dependencies：clock、random、configuration、lookup都以values/functions传入，I/O adapter留在boundary。
 
-**误区：学完全书就应该所有代码都用函数式**
+Purity不是“没有void”，而是相同显式input得到相同output且不产生未声明effect。Mutable collection alias、current time、lazy enumeration、logger call都可能破坏referential transparency。Test用counter、fake clock、old snapshot和repeated invocation证明，不从代码外观猜。
 
-C# 是多范式语言，函数式是工具箱中的工具，不是唯一选择。数据处理（过滤、映射、聚合）用 LINQ 管道最自然；数据建模用 record + 模式匹配最安全；错误处理用 Result 类型最显式。但 GUI 事件处理、状态机、性能关键路径可能用 OOP 或命令式更合适。原则：**数据处理用函数式，行为建模用 OOP，边界 IO 用 try-catch，内核逻辑用 Result**。不要为了函数式而函数式——按场景选择最合适的范式。
+<Term def="通过domain constructors与Option/Either/Validation让invalid、absence和expected failure在进入core前可见的门禁。">typed value gate</Term>
 
+```csharp
+Either<ValidationError, Command> Parse(CommandDto dto) =>
+    from id in OrderId.Create(dto.Id)
+    from amount in PositiveAmount.Create(dto.Amount)
+    select new Command(id, amount);
+
+Either<DomainError, Decision> Decide(State state, Command command) =>
+    policy(state, command);
+```
+
+<Callout type="trap" title="Record和Readonly会自动产生Deep Immutability">
+Record的with是shallow copy，readonly field仍可指向mutable List。需要immutable members、defensive snapshot与publish ownership；测试旧引用在后续change后保持不变。
 </Callout>
 
-<Callout type="trap">
+## Composition and law gate
 
-**误区：函数式编程只在学术中有用，实际工程用不上**
+Map改变context内value；Bind表达dependent next step；Applicative Apply组合independent elevated values；fold按order归约；partial application固定dependencies。选择错误会改变error accumulation、parallelism和effect count。例如把independent validation写成Bind只得到first error，把dependent remote calls写成parallel Apply则缺少前一步结果。
 
-本书每一章都展示了 C# 中的实际应用：LINQ 是函数式管道（高阶函数）、record 是不可变数据（C# 9）、switch 表达式是模式匹配（C# 8）、`?.` 是 Maybe Monad、`await` 是 Task Monad。这些不是学术理论，而是 C# 语言的核心特性。掌握函数式思维让你能更好地利用这些特性，写出更安全、更可组合、更可测试的代码。C# 3.0 引入 LINQ 就是函数式思维在工业语言中的成功实践。
+Custom abstraction要定义equality和laws。Option比较Some/None和值，Either还比较error选择，sequence比较order，Task/Observable还要观察effect trace与terminal。Property tests生成empty/boundary/error cases，并保留seed/minimal counterexample。Law是允许安全refactor的contract，不是学术附录。
 
+<Term def="用identity、associativity、ordering与effect-count证据证明组合前后observable semantics一致的门禁。">composition law gate</Term>
+
+## Error and boundary translation gate
+
+建立outcome taxonomy：absence、validation、business rejection、optimistic conflict、cancellation、transient infrastructure fault、unexpected bug。Internal type可丰富，external contract必须stable并redact。Error code/status/field path/retryable进入consumer matrix，cause chain/correlation进入secure telemetry。
+
+Try只捕获明确throwing adapter，Task cancellation保留canceled state，Observable OnError是terminal，agent timeout不是业务否定。Retry必须重新执行operation并接受duplicate/unknown completion风险；用idempotency key、deadline和attempt trace闭环。若所有层都只返回`Result&lt;string,T&gt;`，taxonomy已丢失。
+
+## State, data, and persistence gate
+
+Explicit transition写成`(State, Command) -> State/Outcome`，State computation只消除pure threading样板。Concurrent publication仍需expected version/CAS或single owner。Event sourcing把events作为source of truth，snapshot/projection是derived views；old event schema、checkpoint、idempotent projection与rebuild runbook是长期成本。
+
+```csharp
+var loaded = await store.Load(id, token);
+var decision = Decide(loaded.State, command);
+if (!decision.IsRight) return decision.Left;
+
+await store.Append(
+    id,
+    expectedVersion: loaded.Version,
+    events: decision.Right.Events,
+    token);
+```
+
+测试同时覆盖old snapshot不变、two writers冲突、duplicate command、snapshot corrupt fallback与golden stream replay。Operational proof记录replay duration、poison events、projection lag和cutover/rollback，不以“可以重新跑代码”代替recovery。
+
+<Callout type="trap" title="Event Sourcing总比CRUD更Functional">
+若history无domain价值、schema仍不稳定、团队无法承担replay/projection operations，CRUD+audit或versioned snapshots更合理。Functional设计要求明确tradeoff，不要求所有state都变event log。
 </Callout>
+
+## Choosing the right effect
+
+Option用于absence；Either用于expected short-circuit；Validation用于independent accumulation；Try封装throwing boundary；State用于pure state threading；Task用于single async completion；Observable用于multi-value push/time composition；agent protocol用于single-owner serialized transition。它们都可Map/Bind，不代表可互换。
+
+Stacked effects保留层次，例如`Task&lt;Either&lt;Error,A&gt;&gt;`区分transport lifecycle与domain result。抽象helper可以减少await/match样板，但必须保留cancel/fault/Left。若团队无法读懂复杂stack，用domain-named wrapper与narrow API，不应把channels压成null/string。
+
+<Term def="按cardinality、timing、failure、state ownership和backpressure选择Option、Task、Observable等context的决策。">effect selection contract</Term>
+
+<Stepper>
+  <Step title="切换absence、expected fail、async/stream与state/concurrency"><CfpEffectSelectionLab /></Step>
+  <Step title="填写effect decision table">列cardinality、push/pull、terminal、cancel、backpressure、durability与subscriber/owner。</Step>
+  <Step title="验证层次没有丢失">注入Left、fault、cancel、empty和duplicate，断言每个outcome仍进入自己的channel。</Step>
+</Stepper>
+
+## Evaluation, resource, and cancellation gate
+
+Lazy、deferred function与memoized cell有不同execution count；IEnumerable多次enumeration可能重复I/O；transaction continuation必须在inner computation真正完成后dispose；Task recipe与hot Task不同；Observable subscription拥有resource；agent mailbox拥有queued commands。复习时画timeline，不只画data arrows。
+
+每个timeline标construction、start、first value、terminal、dispose/cancel、retry和visibility。Fault injection覆盖open失败、mid-I/O cancellation、commit unknown、observer dispose、reply lost。Resource tests用counter与fake adapter断言acquire/release恰好一次，不能仅依赖using syntax review。
+
+## Async, stream, and message capacity gate
+
+Traverse翻转list/effect结构，但并发policy另定；WhenAll不会限制已启动tasks。IObservable无built-in backpressure，ObserveOn可能建立无界queue。Agent serializes one owner，却可能形成hot-key和mailbox backlog。Capacity从DB pool、rate limit、CPU/memory和SLO推导。
+
+Metrics统一看queue wait/age、in-flight、service time、drop/reject、timeout/cancel和downstream saturation。Load test需包括burst与skewed key；bounded policy定义wait/reject/drop/durable enqueue。任何unbounded默认都要有明确风险接受，而非留给memory自动处理。
+
+## Correctness, compatibility, capacity, recovery
+
+Correctness用examples、properties、laws和fault tests证明结果/invariants；compatibility用old clients/events/messages和rolling version matrix证明契约；capacity用load、queue、replay duration证明上限；recovery用duplicate、crash、checkpoint、idempotency与runbook证明可恢复。四类证据共同构成release gate。
+
+并非每个小pure function都需四套测试，但book级综合workflow必须覆盖。特别是external schema、event history、async write、Observable adapter和agent protocol，缺compatibility/recovery会把风险推到上线后。
+
+<Stepper>
+  <Step title="切换四类发布证据"><CfpReleaseGateLab /></Step>
+  <Step title="建立scenario matrix">每个critical path选normal、boundary、duplicate、reorder、timeout、crash和old-version cases。</Step>
+  <Step title="把证据绑定发布">CI执行fast correctness/compatibility，预发布跑capacity/recovery演练，结果保留版本与时间戳。</Step>
+</Stepper>
+
+## 综合案例：订单提交流程
+
+Input boundary把DTO解析为OrderId/Lines，Validation累积independent field errors；pure Decide读取versioned OrderState，返回events或domain rejection；interpreter以expected version append，并用outbox发布；async payment以idempotency key调用；projection/Rx更新UI；process manager通过messages协调inventory/payment。
+
+该案例横跨15章，但每层仍可单独解释。Payment timeout不是Declined；append conflict需要reload/redecide；projection lag不回滚已提交order；UI unsubscribe不取消durable workflow；process manager retry必须dedup。一个“函数式pipeline”若不表达这些差异，就仍不完整。
+
+## 最终验收清单
+
+读者应能不看答案完成：写一个pure signature并列hidden effects；比较Map/Bind/Apply；设计typed error table；解释immutable snapshot与CAS；画event-sourced write/read/rebuild；区分lazy/deferred/memoized；组合State/Task/Observable；设计mailbox capacity与reply-loss recovery。
+
+代码库应能证明：导航恰好map + 15 chapters + final；每页有章节专属视觉与练习；review questions每页可达；MDX/type/lint通过；旧抽样主题不再参与内容扫描。Book score为100只是自动化摘要，以上结构与行为证据才是完整验收。
+
+## 本章回顾：Functional意味着Explicit Contracts
+
+1. 第一版15章共同把values、composition、effects和operations变成显式contract。
+2. Pure core、typed outcome与versioned state提供局部推理，但shell仍需transaction/retry evidence。
+3. 选择effect看cardinality、timing、failure和ownership，不看抽象名称。
+4. Async、Rx和message passing必须证明terminal、capacity、cancellation、duplicate与recovery。
+5. 发布由correctness、compatibility、capacity和recovery四类门禁共同决定。
 
 <Exercises>
 
-**问题 1**：请说出全书四大板块的因果链，并解释为什么不可变性放在高阶函数之后。
+**问题 1：怎样审查一个`Task&lt;Either&lt;Error,T&gt;&gt;` workflow？**
 
-<Answer>
+<Answer>先分Task success/fault/cancel与Either Right/Left两层；逐步写Map/Bind是否执行、token是否贯穿、Left是否短路、fault是否保留cause。再检查retry是否新invoke、idempotency/unknown completion和capacity，不能只断言最终Right。</Answer>
 
-因果链：函数是一等公民（基石）→ 高阶函数（组合引擎）→ 不可变数据（安全基石）→ Monad/错误处理（实践工具箱）。
+**问题 2：Immutable State为何仍需Version？**
 
-不可变性放在高阶函数之后的原因：不可变数据的「变更」操作（with 表达式创建副本）需要高阶函数描述「如何从旧数据生成新数据」。`Select`、`Where`、`Aggregate` 等高阶函数是数据转换的工具——不可变数据不能原地修改，只能用高阶函数生成新数据。不理解高阶函数，就无法理解 `nums.Select(x => x * 2)` 如何在不修改原数组的情况下生成新数组。此外，延迟执行（IEnumerable）本身是高阶函数的延迟应用，不可变数据流依赖延迟执行来避免中间集合。所以高阶函数是不可变性的前置依赖。
+<Answer>Immutability防止已发布snapshot被修改，却不阻止两个writers从同一old snapshot计算不同new snapshots。Expected version/CAS或single owner决定谁可publish；失败者reload/redecide，测试two-writer race并保留old reference。</Answer>
 
-</Answer>
+**问题 3：给订单系统设计四类发布门禁。**
 
-**问题 2**：请综合运用全书知识，重构以下命令式代码为函数式风格。要求使用 record、LINQ、switch 表达式和 Result 类型。
-
-```csharp
-// 命令式：计算订单折扣
-string GetDiscount(Customer c, Order o)
-{
-    if (c == null) return "Customer required";
-    if (o == null) return "Order required";
-    decimal discount = 0;
-    if (c.IsVip)
-        discount = 0.2m;
-    else if (c.Years > 5)
-        discount = 0.1m;
-    else
-        discount = 0;
-    if (o.Total > 1000)
-        discount += 0.05m;
-    var finalPrice = o.Total * (1 - discount);
-    return $"{c.Name}: {finalPrice:F2} (discount: {discount:P0})";
-}
-```
-
-<Answer>
-
-```csharp
-// 不可变数据模型
-public record Customer(string Name, bool IsVip, int Years);
-public record Order(decimal Total);
-public record DiscountResult(string Summary, decimal FinalPrice, decimal DiscountRate);
-
-// 函数式重构
-Result<DiscountResult, string> GetDiscountFunctional(Customer? c, Order? o)
-    => (c, o) switch
-    {
-        (null, _)    => new Err<DiscountResult, string>("Customer required"),
-        (_, null)    => new Err<DiscountResult, string>("Order required"),
-        (var cust, var ord) => new Ok<DiscountResult, string>(
-            new DiscountResult(
-                $"{cust.Name}: {ord.Total * (1 - CalcDiscount(cust, ord)):F2} " +
-                $"(discount: {CalcDiscount(cust, ord):P0})",
-                ord.Total * (1 - CalcDiscount(cust, ord)),
-                CalcDiscount(cust, ord)
-            )
-        )
-    };
-
-// 纯函数：计算折扣率（switch 表达式）
-decimal CalcDiscount(Customer c, Order o)
-    => (BaseDiscount(c), o.Total > 1000) switch
-    {
-        (var base_, true)  => base_ + 0.05m,  // 基础折扣 + 大额折扣
-        (var base_, false) => base_            // 仅基础折扣
-    };
-
-// 纯函数：基础折扣（switch 表达式 + 属性模式）
-decimal BaseDiscount(Customer c) => c switch
-{
-    { IsVip: true }     => 0.2m,
-    { Years: > 5 }      => 0.1m,
-    _                   => 0m
-};
-
-// 使用
-var r1 = GetDiscountFunctional(
-    new Customer("Alice", true, 3),
-    new Order(2000m));
-// Ok: "Alice: 1500.00 (discount: 25%)"
-
-var r2 = GetDiscountFunctional(null, new Order(100m));
-// Err: "Customer required"
-
-var r3 = GetDiscountFunctional(
-    new Customer("Bob", false, 3),
-    new Order(500m));
-// Ok: "Bob: 500.00 (discount: 0%)"
-```
-
-重构要点：
-1. **record**——不可变数据模型，值语义相等
-2. **switch 表达式**——元组模式替代 if-else 链，属性模式替代条件判断
-3. **Result 类型**——错误变成数据，签名体现可失败性
-4. **纯函数**——CalcDiscount 和 BaseDiscount 无副作用，可测试、可缓存
-5. **声明式**——描述「匹配什么返回什么」，不描述「怎么跳转」
-
-</Answer>
+<Answer>Correctness验证parse/decision/invariants与laws；compatibility验证old DTO/events/messages及rolling nodes；capacity验证batch traverse、projection lag和hot order key；recovery注入append conflict、payment unknown completion、duplicate event与process crash，检查idempotency/checkpoint/runbook。</Answer>
 
 </Exercises>
 
+## 术语表
+
 <Glossary>
-
-<GlossaryItem term="因果链">
-
-全书四大板块的递进依赖：函数是一等公民（基石）→ 高阶函数（组合引擎）→ 不可变数据（安全基石）→ Monad/错误处理（实践工具箱）。每个板块以前一个为前提。
-
-</GlossaryItem>
-
-<GlossaryItem term="三大核心原则落地">
-
-函数是一等公民（Func + Lambda + LINQ）、不可变性（record + with + init）、声明式组合（LINQ 管道 + switch 表达式 + Monad 链式）。三大原则在 C# 中通过具体语法特性落地。
-
-</GlossaryItem>
-
-<GlossaryItem term="范式选择">
-
-C# 是多范式语言，按场景选择：数据处理用函数式（LINQ），行为建模用 OOP（class + 虚方法），边界 IO 用 try-catch，内核逻辑用 Result。不要为了函数式而函数式。
-
-</GlossaryItem>
-
-<GlossaryItem term="边界 try-catch，内核 Result">
-
-函数式架构模式：在系统边界（IO、外部 API）用 try-catch 捕获异常转为 Result，内核逻辑用 Result 链式传播。副作用集中在边界，纯逻辑在内核。
-
-</GlossaryItem>
-
+  <GlossaryItem term="functional application architecture" definition="Typed input、pure decision、effect execution与publish分层。" />
+  <GlossaryItem term="four-boundary review" definition="Value、decision、effect ownership和visibility四问。" />
+  <GlossaryItem term="typed value gate" definition="Invalid/absence/failure在core前进入type。" />
+  <GlossaryItem term="composition law gate" definition="用laws、ordering和effect trace证明组合等价。" />
+  <GlossaryItem term="effect selection contract" definition="按timing、cardinality、failure和ownership选择effect。" />
 </Glossary>
+
+<Attribution adaptedFrom="Functional Programming in C#, First Edition, all 15 chapters and publisher table of contents" adaptedUrl="https://livebook.manning.com/book/functional-programming-in-c-sharp/table-of-contents" />

@@ -1,110 +1,309 @@
 ---
-title: 类型、变量与运算符
+title: 第 2 章：变量、运算符与动画决策
 type: A
-section: C++基础
-order: 1
-description: C++ 基本类型系统、变量声明、运算符与类型推断——游戏里分数、坐标、开关各自该用什么类型。
+section: Timber!!! 项目
+order: 2
+description: 对齐官方第 3 版第 2 章：用 C++ 变量、初始化、运算符、随机数、if/else 和 SFML 计时驱动云、蜜蜂与树的动画。
 demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
 draft: false
 ---
 
-import { BcgTypeSystemDiagram } from "@/components/mdx/beginning-cpp-game/diagrams/bcg-type-system";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  BcgpRandomResetMap,
+  BcgpTimedMovementMap,
+  BcgpVariableStateMap,
+} from "@/components/mdx/beginning-cpp-game-programming/diagrams/types-variables";
 
 <Objectives>
-- 能说出 C++ 四大基本类型族及其典型游戏用途
-- 能区分有符号与无符号整型，并说明无符号回绕陷阱
-- 能用 auto 做类型推断并判断何时该显式声明类型
+
+- 能解释动画变量的类型、初值、单位和值域，推导运算符组合后的结果并识别窄化、溢出和优先级风险
+- 能实现只播种一次、可固定种子复现的随机高度与速度生成，并用 `if/else` 维护云和蜜蜂的越界重置
+- 能比较每帧固定移动与按秒速度，计算 `speed * dt` 位移并验证不同帧率下一秒运动近似一致
+
 </Objectives>
 
-## 类型是 C++ 的第一块砖
+## 从“云现在在哪里、每秒走多远”开始
 
-C++ 是静态类型语言，每个变量在声明时就要确定类型，编译器据此分配内存、检查运算合法性。游戏里所有数据——玩家的血量、角色的坐标、菜单的选项、是否通关——都要先想清楚用什么类型存。
+第 1 章只绘制静态背景。第 2 章把 Timber!!! 的云、蜜蜂和树加入画面，并用
 
-<BcgTypeSystemDiagram />
+<Term def="在 C++ 中有名字、有类型、有生命周期的对象，用来保存位置、速度、开关和计数等可变化游戏状态。">
+  C++ 变量
+</Term>
+描述每个实体。变量设计的第一问不是“写 `int` 还是
+`float`”，而是它表示什么量、使用什么单位、在哪些状态下有效。
 
-## 四大类型族
+云至少需要水平位置、垂直位置、每秒速度和是否活动。位置单位可约定为世界像素，速度单位是像素每秒，时间单位是秒。只有写清单位，`position += speed * seconds` 才能通过量纲检查。
 
-C++ 基本类型分四族：
+<BcgpVariableStateMap />
 
-- **整型**：`short`、`int`、`long`、`long long`，存整数。游戏里的分数、生命值、关卡编号都用它。
-- **浮点**：`float`、`double`、`long double`，存小数。角色坐标、速度、角度这类需要小数精度的量用浮点。
-- **字符**：`char`、`wchar_t`、`char16_t`、`char32_t`，存单个字符。本质是小整数，可参与算术运算，常用于菜单选项（如按 `'1'` 开始）。
-- **布尔**：`bool`，只有 `true`/`false`。游戏里的开关——是否暂停、是否碰撞、是否通关——都用它。
+## 类型、初始化与值域
 
-## 有符号 vs 无符号
+SFML 的 `sf::Vector2f` 与精灵位置使用 `float`，所以位置和速度使用 `float` 可减少无意转换。窗口宽度和数组索引有各自类型，不应为了“统一”全部改成浮点或无符号。C++ 只规定基本类型的最小能力和相对关系，不能把某台机器的字节数写成所有实现保证。
 
-整型可用 `signed`/`unsigned` 修饰。默认 `int` 是有符号，可正可负；`unsigned int` 只能非负，但正数上限翻倍。这听起来像「白捡范围」，但有陷阱。
+<Term def="在对象生命周期开始时为它建立确定值的过程；花括号初始化还能拒绝部分会丢失信息的窄化转换。">
+  初始化
+</Term>
+必须覆盖进入首帧的每个状态。局部基本类型若未初始化，读取其不确定值可能导致未定义行为；动画会表现为偶发跳跃，而非可靠的“随机效果”。
 
 ```cpp
-unsigned int hp = 0;
-hp = hp - 1;  // 结果不是 -1，而是 4294967295！
+float cloudX{-300.0F};
+float cloudY{80.0F};
+float cloudSpeed{60.0F};       // pixels per second
+bool cloudActive{true};
+int score{0};
 ```
 
-无符号数减到负数会「回绕」成巨大正数。如果用 `unsigned` 存血量，玩家本该死亡却变成满血，bug 极难排查。
+花括号会阻止例如 `int lives{3.5};` 这样的窄化。`auto` 可在初值清楚时减少重复，但不会自动选择“最适合业务”的类型：`auto speed = 60;` 推导为 `int`，不会因为后续乘 `dt` 就改成 `float`。带 `F` 的字面量明确是 `float`。
+
+血量可能降到零以下再钳制，不宜只因语义“非负”就使用无符号类型；无符号减法按模运算，0 减 1 会得到该类型的最大值。类型首先服务运算协议，而不是自然语言标签。
+
+## 运算符：先写单位，再看优先级
+
+<Term def="对一个或多个操作数执行算术、比较、逻辑、赋值或成员访问等操作的符号；操作数类型决定转换和结果规则。">
+  运算符
+</Term>
+把状态组合成新值。`+ - * /` 做算术，`< >= ==` 做比较，`&& || !` 做逻辑，`+=` 等复合赋值表达“以旧值为基础更新”。不要把赋值 `=` 与相等 `==` 混淆。
+
+<Term def="由字面量、名字、函数调用和运算符组成并产生值或副作用的代码片段；求值受优先级、结合性和语言顺序规则约束。">
+  表达式
+</Term>
+`cloudX += cloudSpeed * dt`
+先乘后加，量纲是像素加像素。括号仍可用于强调意图，但不能靠“从左到右读源码”猜函数参数或子表达式的求值顺序。
+
+```cpp
+const float displacement{cloudSpeed * dt};
+cloudX += displacement;
+
+const bool pastRightEdge{cloudX >= windowWidth + cloudWidth};
+if (cloudActive && pastRightEdge) {
+    cloudX = -cloudWidth;
+}
+```
+
+把条件命名后，分支更接近玩法语言。浮点数不应用 `==` 判断经过多帧累积后是否恰好到达边界；使用越过比较。除法前确认分母不为零，整数乘加前确认值域足够。
 
 <Callout type="trap">
-不要用 unsigned 存「会做减法」的量（如血量、倒计时）。回绕陷阱会让 0-1 变成天文数字。需要非负语义时，用 int 并在逻辑里约束范围更安全。
+  **现象**：对象移动到边界附近后永不重置。**原因**：代码检查 `cloudX == windowWidth`，但每帧位移不一定恰好落在该值，浮点累积也可能产生表示误差。**修法**：按完整包围范围使用 `>=` 或 `<=` 判断已经越界，并在重置后恢复全部相关不变量。
 </Callout>
 
-## 浮点的取舍
+## 随机数：随机不等于不可复现
 
-`float` 约 7 位有效数字、4 字节；`double` 约 15 位、8 字节。游戏坐标一般用 `float`：精度对屏幕像素足够，内存更省，GPU 单精度运算也更快。只有需要高精度累积（物理引擎长时间积分）才用 `double`。SFML 的 `Vector2f` 也用 `float`。
-
-## 变量与初始化
-
-```cpp
-int score = 0;          // 传统初始化
-float x{100.0f};        // 列表初始化，防窄化
-auto name = getPlayerName(); // 类型推断
-```
-
-C++11 起推荐用 `{}` 列表初始化，它会阻止隐式窄化（如 `int x{3.5}` 编译报错），更安全。
-
-## 类型推断 auto
-
-`auto` 让编译器推导类型，少打字、改类型时连声明一起改。适合类型明显或冗长的场景：
+<Term def="由伪随机引擎和分布共同生成的值；引擎维护序列状态，分布把结果映射到速度、高度等业务范围。">
+  随机数
+</Term>
+让云和蜜蜂每次从不同高度、以不同速度进入。现代 C++
+应把引擎创建在循环外，只播种一次；每帧重新用时钟播种可能在相同时间粒度产生重复序列，也让测试无法回放。
 
 ```cpp
-for (auto it = enemies.begin(); it != enemies.end(); ++it) { ... }
+#include <random>
+
+std::random_device seedSource;
+std::mt19937 randomEngine{seedSource()};
+std::uniform_real_distribution<float> cloudHeight{20.0F, 220.0F};
+std::uniform_real_distribution<float> cloudSpeedRange{40.0F, 120.0F};
+
+cloudY = cloudHeight(randomEngine);
+cloudSpeed = cloudSpeedRange(randomEngine);
 ```
 
-但类型不明显或涉及精度敏感运算时，显式声明更易读：
+<Term def="初始化伪随机引擎起始状态的值；相同算法和相同种子可用于重放同一随机序列。">
+  随机种子
+</Term>
+在正式运行可来自
+`std::random_device`，在测试与复现中应允许传入固定值。日志记录种子后，“偶尔某朵云异常”才能转成稳定失败用例。随机分布范围应由可见区域、精灵尺寸和玩法速度决定，不是散落的魔法数。
 
-<Callout type="tip">
-auto 的原则：类型从名字或上下文一目了然时用 auto；涉及精度（int/float 区别影响运算结果）或读者需要明确类型时显式声明。`auto hp = player.getHp();` 读者不知是 int 还是 float，此时写 `int hp` 更清楚。
+`rand() % n` 会把引擎范围用余数映射，可能有分布偏差，并依赖全局状态。`std::uniform_int_distribution` 或 `uniform_real_distribution` 直接表达目标区间，也能把随机策略作为对象依赖注入。
+
+<BcgpRandomResetMap />
+
+## if/else：决策必须保持状态完整
+
+<Term def="根据布尔条件只执行两个互斥分支之一的控制结构；条件应表达业务事实，两个分支共同覆盖预期状态。">
+  if/else
+</Term>
+用于判断精灵是否活动、是否越界以及是否需要重置。重置不是只改
+`x`：若玩法规定每次重生随机高度和速度，就要在同一状态转换中同时更新三项，避免下一帧出现半旧半新状态。
+
+```cpp
+if (!cloudActive) {
+    cloudX = -cloudWidth;
+    cloudY = cloudHeight(randomEngine);
+    cloudSpeed = cloudSpeedRange(randomEngine);
+    cloudActive = true;
+} else if (cloudX > windowWidth) {
+    cloudActive = false;
+}
+```
+
+这里把“离开右侧”与“在下一帧重生”拆成两个状态，便于以后插入等待时间。也可以一次完成重置，但必须选定一致模型。条件顺序很重要：先判断无效或非活动状态，再使用依赖该状态的值。
+
+布尔变量应命名为事实，如 `cloudActive`、`playerAlive`，避免 `flag1`。多于少量互斥状态时，使用 `enum class` 比多个可能互相矛盾的 `bool` 更清楚；枚举将在第 4 章进入游戏机制。
+
+## 计时：每帧共享同一个时间跨度
+
+<Term def="SFML 用于测量经过时间的对象；restart 返回上次启动或重启以来的时间并同时开始下一段测量。">
+  SFML Clock
+</Term>
+应在循环外创建，每帧开头只 `restart`
+一次。若每个实体各自重启同一时钟，后面的实体得到接近零的时间；若多个时钟在不同点采样，同一帧世界状态会使用不一致时间。
+
+```cpp
+#include <SFML/Graphics.hpp>
+#include <algorithm>
+
+sf::Clock frameClock;
+
+while (window.isOpen()) {
+    const float rawDt{frameClock.restart().asSeconds()};
+    const float dt{std::min(rawDt, 0.05F)};
+
+    // poll all events here
+    cloudX += cloudSpeed * dt;
+    cloudSprite.setPosition(cloudX, cloudY);
+
+    window.clear();
+    window.draw(backgroundSprite);
+    window.draw(cloudSprite);
+    window.display();
+}
+```
+
+<Term def="相邻两帧更新之间经过的秒数，常记为 dt；每秒速度乘 dt 得到本帧位移。">
+  delta time
+</Term>
+可能因断点、窗口拖动或系统暂停突然变大。对本章的简单视觉动画，将单帧 dt 限制为
+0.05
+秒可避免恢复时云瞬移穿过屏幕；这会在长停顿时丢弃部分模拟时间。后续物理游戏可能需要固定步长与累加器，不能把限幅当成所有系统的终极方案。
+
+## 云和蜜蜂动画：位置是事实来源
+
+<Term def="把移动速度定义为每秒单位，再乘本帧经过秒数更新位置，使不同渲染帧率下单位时间位移近似一致。">
+  帧率无关移动
+</Term>
+避免快机器每秒执行更多帧就跑得更快。逻辑变量 `cloudX/cloudY`
+是事实来源，更新后一次同步到精灵；不要一处改变量、另一处直接
+`sprite.move`，否则两套位置逐渐分叉。
+
+<BcgpTimedMovementMap />
+
+```cpp
+const float rightBoundary{static_cast<float>(window.getSize().x)};
+
+cloudX += cloudSpeed * dt;
+if (cloudX > rightBoundary) {
+    cloudX = -cloudWidth;
+    cloudY = cloudHeight(randomEngine);
+    cloudSpeed = cloudSpeedRange(randomEngine);
+}
+cloudSprite.setPosition(cloudX, cloudY);
+```
+
+重置到 `-cloudWidth` 让精灵从左侧外完整进入，而不是半个身体突然出现。若云向左移动，边界要检查 `x + width < 0` 并重置到右侧。蜜蜂可复用同一更新协议，但拥有独立状态与分布，不能误共享一个位置变量。
+
+绘制只读取已经完成的状态，顺序仍是背景、云、蜜蜂、前景。更新全部实体后再绘制，保证这一帧画面代表同一个逻辑时刻。
+
+<Callout type="trap">
+  **现象**：云在 144 Hz 显示器上比 60 Hz 快一倍多。**原因**：代码每帧固定 `x +=
+  1`，把“每帧位移”误当成“每秒速度”。**修法**：速度使用像素每秒，所有实体共享一帧的
+  `dt`，并在不同帧率限制下测量一秒位移。
 </Callout>
+
+## 验证变量、随机与时间
+
+先用固定种子运行，记录第一次重置的高度和速度，重复启动应得到相同序列；再换非固定种子验证范围始终合法。分别设置 30 和 120 的帧率上限，让云以 100 px/s 运行一秒，位置差应接近 100 像素，误差来自调度和采样而非随帧率成倍变化。
+
+故障测试包括：把速度范围设为 0 检查对象是否停住；把窗口宽度改小检查越界重置；暂停调试器数秒检查 dt 限幅；用两个云实例确认它们不共享位置。每个测试都对应一个状态不变量。
+
+随机测试不能断言某次必须产生具体值，除非固定种子和实现序列是测试契约；更常见是断言所有样本落在范围内、两端边界按分布语义处理、同种子重放一致。
+
+还要把逻辑位置与精灵位置同时记录在一帧末尾：两者长期不相等，说明某条分支只更新了其中一套状态。对多个实体使用带名称或索引的日志，避免把云 1 的重置误认为云 2 的跳变；验证目标是状态转换，不是只看画面“差不多在动”。
+
+> 先预测：若把 `sf::Clock frameClock;` 放进 `while` 循环体开头，`restart()` 得到的 dt 会怎样？每帧都创建新时钟，测得的只是构造后极短时间，物体几乎不移动；时钟必须跨帧存活。
 
 ## 小结
 
-- C++ 基本类型分整型、浮点、字符、布尔四族
-- 整型有符号/无符号之分，无符号回绕陷阱要警惕
-- 游戏坐标用 float，计数用 int，开关用 bool
-- auto 省事但类型不明显时显式声明更可读
-
-<Attribution
-  adaptedFrom="Beginning C++ Game Programming (Michael Dawson)"
-  adaptedUrl="https://www.packtpub.com/"
-/>
-
-<Glossary>
-<GlossaryItem term="静态类型">
-变量类型在编译期确定的语言特性，编译器据此分配内存并检查运算合法性，C++ 是静态类型语言。
-</GlossaryItem>
-<GlossaryItem term="无符号回绕">
-unsigned 整型减到负数时回绕成最大正值的现象，会导致「0-1 变成天文数字」的恶性 bug，故不宜存会做减法的量。
-</GlossaryItem>
-<GlossaryItem term="列表初始化">
-用 `{}` 初始化变量的语法，会阻止隐式窄化转换（如把浮点赋给整型），比 `=` 更安全。
-</GlossaryItem>
-<GlossaryItem term="auto">
-C++11 起的类型推断关键字，让编译器从初值推导变量类型，减少冗长类型名书写。
-</GlossaryItem>
-</Glossary>
+- 动画变量同时需要名字、类型、初值、单位和值域；位置和速度不能用同一含糊概念
+- 运算符结果受操作数类型、优先级和值域约束，浮点边界用越过比较而非等待精确相等
+- 随机引擎在循环外播种一次，分布表达高度与速度范围，固定种子用于错误重放
+- `if/else` 是状态转换，重置时要同时恢复位置、高度、速度和活动标志的不变量
+- 每帧只采样一个 `dt`，速度乘秒得到位移；巨大 dt 的限幅策略要明确其丢弃模拟时间的代价
+- 逻辑位置是事实来源，所有实体更新完成后再同步精灵并按层绘制
 
 <Exercises>
-  <Answer question="为什么用 unsigned int 存玩家血量是危险的？举个具体场景。">unsigned 减到负数会回绕成巨大正数。若用 unsigned 存血量，玩家本该死亡（hp=0 时再受伤），hp = 0 - 10 会变成 4294967286，表现为「负伤反而满血」，bug 极难排查。应改用 int 并在逻辑里把 hp 钳制到 ≥0。</Answer>
-  <Answer question="游戏里表示角色坐标该用 float 还是 double？为什么？">一般用 float。屏幕像素级定位 7 位有效数字足够，float 占 4 字节省内存、对海量实体（子弹、粒子）更友好，GPU 单精度运算通常更快。只有需要高精度累积（如物理引擎长时间积分）才用 double。SFML 的 Vector2f 也用 float。</Answer>
+
+**问题 1** 为一朵从左向右移动的云定义状态变量、类型、单位和值域，并写出越过右边界后的完整重置不变量。
+
+<Answer>
+
+可用 `float x/y` 表示世界像素位置、`float speed` 表示像素每秒、`bool active` 表示是否参与更新，纹理宽度和窗口边界另有只读值。初始与重置后应满足：`x == -cloudWidth`，`y` 在可见垂直范围且扣除云高度，`speed` 位于正的设计区间，`active` 为真，精灵位置与逻辑位置一致。不能只重置 x 而保留失效速度或越界 y。
+
+</Answer>
+
+**问题 2** 为什么随机引擎不能每帧重新播种？怎样同时满足正式运行变化与测试可复现？
+
+<Answer>
+
+引擎需要跨调用保存序列状态；每帧按低分辨率时钟播种可能反复得到相同种子，还把生成器成本放进热循环。构造游戏状态时注入种子：正式运行默认从 `random_device` 取得并记录，测试传固定常量。引擎跨帧持久存在，分别用明确分布产生高度和速度；失败日志保留种子即可重放。
+
+</Answer>
+
+**问题 3** 云速为 90 px/s，30 FPS 与 120 FPS 的理想单帧位移各是多少？为什么一秒结果仍可能有小误差，怎样验证不是帧率绑定？
+
+<Answer>
+
+30 FPS 理想 dt 为 1/30 秒，单帧约 3 px；120 FPS 理想 dt 为 1/120 秒，单帧约 0.75 px，理想一秒都累计 90 px。真实调度、计时精度和首尾采样会产生小误差。应在多个帧率限制下记录实际累计 dt 与位置变化，检查位移接近 `speed * elapsedSeconds`，而不是要求恰好执行固定帧数。
+
+</Answer>
+
 </Exercises>
+
+<Glossary>
+
+<GlossaryItem term="C++ 变量">
+  有名字、类型和生命周期的对象，用于保存位置、速度、开关与计数等游戏状态。
+</GlossaryItem>
+
+<GlossaryItem term="初始化">
+  对象生命周期开始时建立确定值的过程；花括号还会拒绝部分会丢失信息的窄化转换。
+</GlossaryItem>
+
+<GlossaryItem term="运算符">
+  对操作数执行算术、比较、逻辑或赋值等操作的符号，其结果规则取决于操作数类型。
+</GlossaryItem>
+
+<GlossaryItem term="表达式">
+  由值、名字、调用和运算符组成并产生值或副作用的片段，受优先级与求值规则约束。
+</GlossaryItem>
+
+<GlossaryItem term="随机数">
+  伪随机引擎按状态产生序列，再由分布映射到游戏需要的高度、速度或整数范围。
+</GlossaryItem>
+
+<GlossaryItem term="随机种子">
+  初始化伪随机引擎序列状态的值，固定种子让随机轨迹可重复测试和调试。
+</GlossaryItem>
+
+<GlossaryItem term="if/else">
+  根据布尔条件选择两个互斥分支之一的控制结构，常用于活动状态、越界和重置决策。
+</GlossaryItem>
+
+<GlossaryItem term="SFML Clock">
+  测量经过时间的 SFML 对象，应跨帧存活并由一帧统一采样。
+</GlossaryItem>
+
+<GlossaryItem term="delta time">
+  相邻更新之间经过的秒数，速度乘以它得到本帧位移。
+</GlossaryItem>
+
+<GlossaryItem term="帧率无关移动">
+  以每秒速度和实际经过时间更新位置，使不同渲染帧率下单位时间运动近似一致。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 2"
+  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+/>

@@ -3,13 +3,14 @@ title: 函数
 type: C
 section: C函数数组指针
 order: 9
-description: 掌握函数定义/声明/调用、形参与实参、返回值、函数原型、局部变量与函数作用域，能编写模块化C程序
+description: 掌握函数定义/声明/调用、形参与实参、返回值、函数原型、局部变量的块作用域与自动存储期，能编写模块化C程序
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/c-primer-plus-9780321928429"
 draft: false
 ---
 
+import { CPrimerFunctionContractDiagram } from "@/components/mdx/c-primer-plus/diagrams/functions";
 
 
 
@@ -18,7 +19,7 @@ draft: false
 
 - 能写出带返回类型的函数定义与函数原型，并解释声明、定义、调用三者在编译/链接阶段各自的作用
 - 能区分形参与实参，并说明 C 对 int/double 等类型采用值传递时，函数内修改形参为何不影响调用方的原变量
-- 能利用局部变量与函数作用域把程序拆成多个函数模块，并回答：fact(4) 递归时栈上同时存在几层 fact 栈帧？
+- 能利用局部变量与块作用域把程序拆成多个函数模块，并回答：fact(4) 到达 fact(1) 时同时有几次 fact 调用尚未返回？
 
 </Objectives>
 
@@ -28,7 +29,9 @@ draft: false
 
 **如果没有函数呢？** 重复逻辑只能复制粘贴，变量名容易冲突，团队协作也无法分工。函数把「一段可复用的加工步骤」打包命名：需要时调用，不需要时不用管内部细节。这一章教你 C 语言里函数怎么定义、怎么声明、怎么传参、怎么返回值，以及怎样用多个函数拼出模块化程序。
 
-## 函数的定义、原型与调用
+<CPrimerFunctionContractDiagram />
+
+## 创建和使用函数：定义、原型与调用
 
 <Term def="由返回类型、函数名、形参列表和函数体组成的完整实现。告诉编译器函数做什么，并提供可执行的代码。">函数定义</Term> 是函数的「完整档案」：
 
@@ -127,9 +130,9 @@ int main(void) {
 
 <Term def="函数执行完毕或通过 return 交还给调用方的结果。类型须与函数声明的返回类型兼容。">返回值</Term> 常用赋值或表达式接收：`int r = sum(3, 5);` 或 `printf("%d", sum(3, 5));`。
 
-## 调用栈：一次函数调用发生了什么
+## 调用记录：一次函数调用发生了什么
 
-每次调用函数，系统在栈上为这次调用分配一块 <Term def="一次函数调用在栈上占用的内存区域，保存返回地址、形参和局部变量。调用结束即销毁。">栈帧（stack frame）</Term>：压入实参、保存返回地址（调用结束后跳回哪里）、存放形参与局部变量；`return` 后整块回收。
+从 C 抽象机看，每次函数调用都有独立的参数与自动对象实例，并在返回后结束本次执行。常见 ABI 用 <Term def="常见机器实现中用于保存一次函数调用状态的区域，可含返回地址、被保存寄存器与部分自动对象；具体布局不是 C 语言保证。">栈帧（stack frame）</Term> 表示这份调用记录，但优化器可以把参数和局部对象放入寄存器、消除对象，甚至内联整个调用。因此下图是理解调用关系的典型实现模型，不是可移植程序可以依赖的内存布局。
 
 <FunctionCallStackDiagram />
 
@@ -138,27 +141,29 @@ int main(void) {
 <Stepper>
   <Step title="第一步：传参压栈">
     <FunctionCallStackDiagram step={1} />
-    main 调用 add：实参 5、3 压栈，保存返回地址，main 暂停等待。
+    main 调用 add：实参表达式的值被交给形参，调用方暂停等待。典型 ABI 可能把值放在寄存器或栈上，并保留返回位置。
   </Step>
   <Step title="第二步：callee 执行">
     <FunctionCallStackDiagram step={2} />
-    CPU 进入 add 栈帧：形参 x=5、y=3，局部变量 z 也在此帧。返回地址指明 add 结束后回 main 哪一行。
+    add 观察到独立的形参 x=5、y=3，并创建本次调用的自动对象 z。图中的地址只是教学示意，实际布局由 ABI 与优化决定。
   </Step>
   <Step title="第三步：return 带回值">
     <FunctionCallStackDiagram step={3} />
-    `return z` 把 8 写入返回值通道（通常寄存器），准备跳回 main。
+    `return z` 把值 8 交还给调用表达式。具体返回值通道由 ABI 决定，常见小标量使用寄存器。
   </Step>
   <Step title="第四步：销毁 callee 栈帧">
     <FunctionCallStackDiagram step={4} />
-    add 的栈帧弹出，main 继续，`result` 收到 8。add 里的局部变量随之消失。
+    add 的本次执行结束，main 继续，`result` 收到 8。add 中非 static 自动对象的生存期结束，不应再通过悬空地址访问它们。
   </Step>
 </Stepper>
 
-## 局部变量与函数作用域
+## 局部变量、块作用域与自动存储期
 
-<Term def="在函数体或块内声明的变量。只在该函数（或块）内可见，函数返回后销毁。">局部变量</Term> 在函数体内声明，属于该函数的 <Term def="标识符在程序中可被引用的区域。函数形参和函数体内声明的变量属于该函数作用域。">函数作用域</Term>：
+<Term def="在函数体或复合语句块内声明的对象；其名字通常具有块作用域，未带 static 时通常具有自动存储期。">局部变量</Term> 的名字属于 <Term def="从声明点开始，到包含该声明的最小复合语句或函数定义末尾为止的可见区域。">块作用域</Term>。形参的作用域覆盖整个函数定义；函数体内普通局部对象通常具有自动存储期，每次进入相应块都会产生新的对象实例：
 
 ```c
+int twice(int n);
+
 int main(void) {
     int x = 10;        /* main 的局部变量 */
     printf("%d\n", twice(x));
@@ -171,9 +176,9 @@ int twice(int n) {     /* n 是 twice 的局部变量 */
 }
 ```
 
-`main` 看不到 `tmp`，`twice` 也看不到 `x`——各自栈帧互不干扰。同名变量在不同函数里互不影响；同一函数内不同块可再嵌套块作用域（与第 7 章分支块相同规则）。
+`main` 看不到 `tmp`，`twice` 也看不到 `x`，因为它们的块作用域不重叠。同名局部标识符在不同函数里互不影响；内层块还可以隐藏外层同名标识符。C 标准术语中的**函数作用域只属于 label 标签**，普通局部变量不是“函数作用域”。
 
-函数级 static 局部变量（`static int count`）生命周期贯穿整个程序，但作用域仍限在本函数内——后续章节会展开。
+函数内的 static 局部对象（`static int count`）具有静态存储期，生命周期贯穿整个程序，但名字仍只有块作用域；后续章节会展开。
 
 ## 递归：函数调用自身
 
@@ -210,6 +215,87 @@ long fact(int n) {
   </Step>
 </Stepper>
 
+### 尾递归不是“自动省栈”承诺
+
+当递归调用是返回前最后一个动作时，称为 <Term def="递归调用的结果被当前函数直接返回，调用后不再执行乘法、加法等待完成操作的递归形式。">尾递归（tail recursion）</Term>。把中间结果放进累加器，就能把阶乘写成尾递归：
+
+```c
+static unsigned long fact_tail(unsigned n, unsigned long acc) {
+    if (n <= 1)
+        return acc;
+    return fact_tail(n - 1, acc * n);
+}
+
+unsigned long fact(unsigned n) {
+    return fact_tail(n, 1UL);
+}
+```
+
+实现**可以**把尾调用复用为当前调用记录，但 C11 不保证尾调用优化；可移植程序不能因为“这是尾递归”就假定常量栈空间。若深度由不可信输入决定，循环通常更稳妥。无论递归还是循环，`unsigned long` 的阶乘都会很快溢出，生产代码还要在乘法前检查 `acc > ULONG_MAX / n`。
+
+## 多源文件与头文件：从翻译单元到链接
+
+较大的程序会把声明放进头文件，把定义分散到多个源文件。预处理后，每个 `.c` 文件连同它包含的头文件形成一个 <Term def="一个源文件经过预处理、展开 include 后交给编译器处理的完整单位；各翻译单元分别生成目标文件。">翻译单元</Term>，再由链接器把目标文件组成程序。
+
+```c
+/* math_utils.h */
+#ifndef MATH_UTILS_H
+#define MATH_UTILS_H
+int square(int value);
+#endif
+```
+
+```c
+/* math_utils.c */
+#include "math_utils.h"
+
+int square(int value) {
+    return value * value;
+}
+```
+
+```c
+/* main.c */
+#include <stdio.h>
+#include "math_utils.h"
+
+int main(void) {
+    printf("%d\n", square(7));
+    return 0;
+}
+```
+
+```bash
+cc -std=c11 -Wall -Wextra -Wpedantic -c math_utils.c
+cc -std=c11 -Wall -Wextra -Wpedantic -c main.c
+cc main.o math_utils.o -o app
+```
+
+头文件保护宏允许同一声明被间接包含多次；函数定义留在一个 `.c` 文件中。声明告诉每个调用所在的翻译单元函数类型，定义提供最终可链接实体。具有外部链接的普通函数在整个程序中通常只能有一个定义：没有定义会产生未解析符号，重复定义会产生多重定义错误。
+
+## 地址和指针：仍然是值传递
+
+一元 `&` 运算符取得对象的地址，`*` 对指针做 <Term def="通过指针保存的地址访问它所指向对象的运算，也称解引用；只可用于有效、对齐且指向对象生存期内的指针。">间接访问</Term>。把地址作为实参，函数收到的仍然是**指针值的副本**，但副本和调用方指针指向同一对象，所以能修改该对象：
+
+```c
+#include <stdio.h>
+
+void swap(int *left, int *right) {
+    int temp = *left;
+    *left = *right;
+    *right = temp;
+}
+
+int main(void) {
+    int a = 3, b = 8;
+    swap(&a, &b);
+    printf("a=%d b=%d\n", a, b);
+    return 0;
+}
+```
+
+调用方用 `&a`、`&b` 提供有效地址，`swap` 用 `*left`、`*right` 间接访问对象。若接口允许空指针，函数必须在解引用前明确处理；本例的契约要求两个参数都指向有效 `int`。传指针没有改变 C 的值传递规则，只是被复制的值恰好是地址。
+
 ## 代码详解：模块化小工具
 
 ### 场景一：函数原型 + 定义 + 调用
@@ -236,13 +322,15 @@ double cube(double x) {   /* 定义 */
 ```c
 #include <stdio.h>
 
-int get_int(void);
+int get_int(int *value);
 int square(int n);
 void greet(void);
 
 int main(void) {
+    int x;
     greet();
-    int x = get_int();
+    if (!get_int(&x))
+        return 1;
     printf("平方 = %d\n", square(x));
     return 0;
 }
@@ -251,10 +339,8 @@ void greet(void) {
     printf("输入一个整数：");
 }
 
-int get_int(void) {
-    int n;
-    scanf("%d", &n);
-    return n;
+int get_int(int *value) {
+    return scanf("%d", value) == 1;
 }
 
 int square(int n) {
@@ -289,11 +375,9 @@ int main(void) {
 ```c
 #include <stdio.h>
 
-long fact(int n) {
-    if (n < 0)
-        return 0;       /* 错误输入，本示例简化处理 */
+unsigned long fact(unsigned n) {
     if (n <= 1)
-        return 1;
+        return 1UL;
     return n * fact(n - 1);
 }
 
@@ -303,12 +387,14 @@ int main(void) {
 }
 ```
 
+本例聚焦递归结构，并假设 `4!` 可由 `unsigned long` 表示。若 n 来自输入，调用前还要限制范围或在每次乘法前做溢出检查。
+
 ## 容易踩的坑
 
 <Callout type="trap">
   **现象**：`void foo()` 无参调用能编译，但 `foo(42)` 在某些旧编译器下也不报错，运行却错乱。
-  **原因**：`void foo()` 在旧 C 中表示「参数未说明」，不是严格的「无参数」。与 `void foo(void)` 不同。
-  **修法**：无参函数一律写 `void foo(void)` 声明与定义。C 实战里坚持「空参 = void」。
+  **原因**：在本书使用的 C11 中，声明 `void foo()` 的空参数列表表示参数信息未指定，不是“函数不接收参数”的完整原型；`void foo(void)` 才明确无参数。
+  **修法**：无参函数写 `void foo(void)`。不要依赖调用点缺少参数检查的旧式声明。
 </Callout>
 
 <Callout type="trap">
@@ -318,9 +404,9 @@ int main(void) {
 </Callout>
 
 <Callout type="trap">
-  **现象**：调用函数前没写原型，编译器按旧规则假定返回 `int`，返回 `double` 时无警告，结果精度错乱。
-  **原因**：C99 起不允许隐式 `int` 返回；无原型时编译器只能猜，链接可能仍过但行为未定义。
-  **修法**：在调用前写完整原型，或把定义放在调用之前，或把头文件 `#include` 进来。
+  **现象**：调用函数前没有任何声明，现代编译失败或给出必须处理的诊断；强行继续可能生成不匹配的调用。
+  **原因**：C99 起已经删除隐式函数声明与隐式 int。链接器只按符号连接，不能补做源语言层面的参数和返回类型检查。
+  **修法**：让完整原型在调用前可见：把声明放进头文件并 include，或把定义放在调用之前。不要忽略该诊断。
 </Callout>
 
 <Callout type="trap">
@@ -333,13 +419,15 @@ int main(void) {
 
 - 函数 = 返回类型 + 名字 + 形参列表 + 体；原型供编译器检查，定义提供实现，链接器绑定调用
 - 实参是调用时的值，形参是定义里的占位；C 默认值传递，改形参不改实参
-- 每次调用压栈帧（返回地址、形参、局部变量），return 后帧销毁
-- 局部变量限函数作用域；多函数协作 = 模块化
-- 递归需基准情形；fact(n) 栈深为 n 层（到基准为止）
+- 每次调用有独立执行状态；栈帧是常见实现模型，不是所有局部对象的标准布局保证
+- 普通局部变量具有块作用域；只有 label 标签具有 C 术语中的函数作用域
+- 递归需基准情形与进展；尾调用优化不是 C11 保证
+- 多源文件用头文件共享声明、源文件提供定义、链接器组合目标文件
+- 传地址仍是值传递；被复制的指针可用于间接访问调用方对象
 
 <Exercises>
 
-**练习 1（改代码型）** 下面程序链接失败，缺少什么？补全后应输出 `面积 = 50`。
+**问题 1（改代码型）** 下面程序链接失败，缺少什么？补全后应输出 `面积 = 50`。
 
 ```c
 #include <stdio.h>
@@ -371,7 +459,7 @@ int rect_area(int w, int h) {
 
 </Answer>
 
-**练习 2（问答型）** 调用 `try_change(num)` 后 `num` 仍是 5，用文字说明值传递下内存里发生了什么。
+**问题 2（问答型）** 调用 `try_change(num)` 后 `num` 仍是 5，用文字说明值传递下内存里发生了什么。
 
 <Answer>
 
@@ -379,7 +467,7 @@ int rect_area(int w, int h) {
 
 </Answer>
 
-**练习 3（综合实现型）** 写程序：用函数 `int is_prime(int n)` 判断素数，`void print_primes(int limit)` 打印 2 到 limit 之间所有素数。main 只负责读 `limit` 并调用。
+**问题 3（综合实现型）** 写程序：用函数 `int is_prime(int n)` 判断素数，`void print_primes(int limit)` 打印 2 到 limit 之间所有素数。main 只负责读 `limit` 并调用。
 
 <Answer>
 
@@ -392,7 +480,8 @@ void print_primes(int limit);
 int main(void) {
     int limit;
     printf("上限 = ");
-    scanf("%d", &limit);
+    if (scanf("%d", &limit) != 1)
+        return 1;
     print_primes(limit);
     return 0;
 }
@@ -401,7 +490,7 @@ int is_prime(int n) {
     int i;
     if (n < 2)
         return 0;
-    for (i = 2; i * i <= n; i++)
+    for (i = 2; i <= n / i; i++)
         if (n % i == 0)
             return 0;
     return 1;
@@ -425,7 +514,7 @@ void print_primes(int limit) {
 <Glossary>
 
 <GlossaryItem term="函数定义">
-  由返回类型、函数名、形参列表和函数体构成的完整实现。既声明接口又提供可执行代码。一个函数在整个程序中只能有一处定义（内联等特殊情况除外）。
+  由返回类型、函数名、形参列表和函数体构成的完整实现。既声明接口又提供可执行代码。具有外部链接且被使用的普通函数在整个程序中应有一个外部定义。
 </GlossaryItem>
 
 <GlossaryItem term="函数原型（声明）">
@@ -449,21 +538,33 @@ void print_primes(int limit) {
 </GlossaryItem>
 
 <GlossaryItem term="栈帧（stack frame）">
-  一次函数调用在调用栈上占用的区域，保存返回地址、形参和局部变量。被调函数返回后该帧销毁。详见 FunctionCallStackDiagram。
+  常见 ABI 用来保存一次函数调用状态的区域，可含返回地址、被保存寄存器和部分自动对象。具体布局以及对象是否实际入栈不由 C 标准保证。详见 FunctionCallStackDiagram。
 </GlossaryItem>
 
 <GlossaryItem term="局部变量">
-  在函数体或块内声明的变量，只在该作用域可见，通常存放在当前栈帧，函数返回后失效（static 局部除外）。
+  在函数体或复合语句块内声明的对象。名字通常具有块作用域；未带 static 时具有自动存储期，其生存期在相应块执行期间。
 </GlossaryItem>
 
-<GlossaryItem term="函数作用域">
-  形参与函数体内声明的标识符只在该函数内可引用。不同函数的局部变量互不可见，支持模块化与命名隔离。
+<GlossaryItem term="块作用域">
+  从声明点到包含声明的最小复合语句或函数定义末尾的名字可见区域。普通局部变量和形参使用块作用域；C 的函数作用域只适用于 label 标签。
 </GlossaryItem>
 
 <GlossaryItem term="递归（recursion）">
   函数调用自身解决问题。须有基准情形停止递归，否则栈溢出。fact(n) 是经典示例。详见 RecursionStackDiagram。
 </GlossaryItem>
 
+<GlossaryItem term="尾递归（tail recursion）">
+  递归调用结果被当前函数直接返回，调用之后没有待完成操作的递归形式。实现可以优化尾调用，但 C11 不保证常量栈空间。
+</GlossaryItem>
+
+<GlossaryItem term="翻译单元">
+  一个源文件经过预处理并展开 include 后交给编译器的完整单位。多个翻译单元分别生成目标文件，再由链接器组成程序。
+</GlossaryItem>
+
+<GlossaryItem term="间接访问">
+  对有效指针使用一元星号访问其所指对象的操作，也称解引用。指针必须满足对象生存期、类型和对齐等要求。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution />
+<Attribution title="C Primer Plus, Sixth Edition, Chapter 9: Functions" url="https://www.informit.com/store/c-primer-plus-9780321928429" />

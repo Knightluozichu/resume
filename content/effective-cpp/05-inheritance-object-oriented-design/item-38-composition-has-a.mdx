@@ -1,0 +1,408 @@
+---
+title: "Item 38：通过组合塑模 has-a 或 is-implemented-in-terms-of"
+type: A
+section: Chapter 6 · Inheritance and Object-Oriented Design
+order: 38
+description: 对齐 Effective C++ 第三版 Item 38：区分应用域的 has-a 与实现域的 is-implemented-in-terms-of，用 composition 表达所有权、生命周期和实现复用，并避免把 List 错当 Set 的 public base。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppCompositionLifetimeMap,
+  EcppCompositionRelationshipMap,
+  EcppSetOverListMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-38-composition-has-a";
+
+<Objectives>
+
+- 能区分 application domain 中的 has-a、implementation domain 中的 is-implemented-in-terms-of 与 public inheritance 的 is-a
+- 能设计值成员、拥有指针或非拥有引用的 composition，并推导其构造、析构和不变量边界
+- 能实现由 List 提供机制的 Set wrapper，隐藏语义错配并用替换测试验证抽象
+
+</Objectives>
+
+## 先把关系读成一句话
+
+```cpp
+class Address { /* ... */ };
+class PhoneNumber { /* ... */ };
+
+class Person {
+public:
+    Person(std::string name, Address address, PhoneNumber phone);
+
+private:
+    std::string name_;
+    Address address_;
+    PhoneNumber phone_;
+};
+```
+
+Person 不是 Address，也不应在需要 Address 的位置替换 Address。准确的领域句子是“Person has an Address”。
+
+<Term def="一个对象把另一个类型的对象作为组成部分或私有实现状态的对象关系。">
+  composition
+</Term>
+
+中文常译作组合或复合。Item 38 的原则是 Model has-a or is-implemented-in-terms-of through composition（通过组合塑模有一个或根据某物实现）。
+
+<Term def="应用对象拥有某个组成部分，并由整体负责协调该部分的关系。">
+  has-a
+</Term>
+
+<Term def="一个抽象在内部借助另一机制完成工作，但不承诺两者可互相替换。">
+  is-implemented-in-terms-of
+</Term>
+
+<EcppCompositionRelationshipMap />
+
+先预测：若一句关系只能读成“Car has an Engine”，却被写成 `class Car : public Engine`，哪些 Engine 操作会泄漏为 Car 的公开承诺？
+
+## application domain：组合表达 has-a
+
+<Term def="描述人、地点、车辆、订单等业务概念及其规则的模型空间。">
+  application domain
+</Term>
+
+在应用域，成员通常是现实概念的组成部分：Person 有姓名和地址，Car 有发动机，Window 有按钮。这里 composition 主要表达 has-a。
+
+```cpp
+class Engine {
+public:
+    void ignite();
+    bool healthy() const;
+};
+
+class Car {
+public:
+    void start() {
+        if (!engine_.healthy()) {
+            throw std::runtime_error("engine unavailable");
+        }
+        engine_.ignite();
+    }
+
+private:
+    Engine engine_;
+};
+```
+
+Car 对外暴露 `start`，而不是把 Engine 的全部接口提升成自己的接口。这样 Car 能在点火前检查整车约束，也能在未来更换发动机实现而不改变客户代码。
+
+<Term def="整体对象负责维护、协调并最终销毁其组成部分的职责边界。">
+  composition ownership boundary
+</Term>
+
+<Term def="由拥有者协调多个成员状态必须同时满足的业务条件。">
+  aggregate invariant
+</Term>
+
+<Callout type="trap" title="陷阱：为了复用 ignite 就 public 继承 Engine">
+  public inheritance 宣告 Car is-an Engine，并把所有 Engine public operations
+  变成 Car 的接口。代码复用不能证明替换关系；没有 is-a 语义时应优先组合。
+</Callout>
+
+## implementation domain：组合表达根据某物实现
+
+<Term def="容器、缓冲、锁、内存块、算法策略等程序实现机制所在的模型空间。">
+  implementation domain
+</Term>
+
+在实现域，组合对象未必是现实世界的部件。它可能只是完成抽象所需的机制。例如 Set 可以借助 `std::list` 存储元素，但 Set 不是 List。
+
+```cpp
+template<class T>
+class Set {
+public:
+    bool contains(const T& value) const {
+        return std::find(data_.begin(), data_.end(), value) != data_.end();
+    }
+
+    bool insert(const T& value) {
+        if (contains(value)) return false;
+        data_.push_back(value);
+        return true;
+    }
+
+    bool erase(const T& value) {
+        auto it = std::find(data_.begin(), data_.end(), value);
+        if (it == data_.end()) return false;
+        data_.erase(it);
+        return true;
+    }
+
+private:
+    std::list<T> data_;
+};
+```
+
+<Term def="外部客户真正依赖的集合行为，如唯一性、成员判断和删除语义。">
+  Set contract
+</Term>
+
+<Term def="内部提供存储、遍历等能力，但不决定外部抽象语义的底层对象。">
+  implementation mechanism
+</Term>
+
+`data_` 提供存储和线性查找机制，Set wrapper 负责唯一性。客户看不到 `push_front`、`sort` 或 iterator mutation，因此不能绕过 Set contract。
+
+<EcppSetOverListMap />
+
+这就是 is-implemented-in-terms-of：Set 根据 List 实现，而不是 Set is-a List。
+
+## 为什么 public inheritance 在 Set/List 上撒谎
+
+public inheritance 的语义是 is-a：凡接受 base 的地方都应接受 derived，并保持可观察契约。List 允许重复元素，Set 不允许。
+
+```cpp
+template<class Sequence>
+void appendTwice(Sequence& sequence, const typename Sequence::value_type& x) {
+    sequence.push_back(x);
+    sequence.push_back(x);
+}
+```
+
+若 `Set<T>` public 继承 `std::list<T>`，它必须接受 `appendTwice` 的 List 操作，但结果违反唯一性。隐藏 `push_back` 也不能修复：客户仍可把 Set 转为 List reference，再调用 base 接口；而且 base nonvirtual operations 不会动态改派到 Set。
+
+<Term def="把 derived 放入任何 base 客户仍应保持 base 合约的语义检验。">
+  substitutability test
+</Term>
+
+<Term def="底层类型提供、却与上层抽象规则冲突的公开操作。">
+  semantic interface mismatch
+</Term>
+
+<Callout type="trap" title="陷阱：把不想要的 base 函数设为 private 就行">
+  access control 只影响名字可访问性，不会把错误的 is-a
+  变成正确关系，也不会阻止经 base reference 使用公开 base
+  接口。先判断语义，再选择复用工具。
+</Callout>
+
+## 值成员把生命周期嵌入完整对象
+
+值组合不只减少接口泄漏，还提供确定的 construction/destruction 规则。
+
+<Term def="拥有者和成员共享存储期，成员随完整对象自动构造与销毁的关系。">
+  embedded lifetime
+</Term>
+
+<Term def="成员总按类中声明顺序构造，而不是按 initializer list 的书写顺序。">
+  member declaration order
+</Term>
+
+```cpp
+class Person {
+public:
+    Person(std::string name, Address address)
+        : name_(std::move(name)), address_(std::move(address)) {}
+
+private:
+    std::string name_; // constructed first
+    Address address_;  // constructed second
+};                     // destroyed address_, then name_
+```
+
+构造完整 Person 时，成员先按声明顺序构造，再执行 Person constructor body；析构时先执行 Person destructor body，成员按声明逆序销毁。
+
+<EcppCompositionLifetimeMap />
+
+这允许 owner constructor 在进入 body 后假设所有成员已经存在，也使异常展开自动销毁已构造成员。不要靠调整 initializer list 的视觉顺序表达依赖，应让声明顺序与依赖顺序一致。
+
+<Term def="构造后保持成员有效、析构前由语言自动清理成员的资源管理性质。">
+  automatic member cleanup
+</Term>
+
+## 值、拥有指针和非拥有引用怎么选
+
+composition 并不等于所有成员都必须按值存储。先判断所有权，再判断可选性、多态性、对象大小与稳定地址需求。
+
+```cpp
+class Car {
+private:
+    Engine engine_;                         // required, concrete, same lifetime
+    std::unique_ptr<Navigation> navigation_; // optional/polymorphic, owned
+    Diagnostics& diagnostics_;              // required, borrowed, lifetime external
+};
+```
+
+<Term def="必需、具体且与 owner 同寿命的成员直接存储方式。">
+  value composition
+</Term>
+
+<Term def="由 owner 独占销毁、可为空或可在运行期选择具体类型的间接成员。">
+  owning indirection
+</Term>
+
+<Term def="owner 使用但不负责销毁，且外部必须保证有效期覆盖使用期的依赖。">
+  borrowed dependency
+</Term>
+
+值成员默认最简单：无空状态、无额外分配、异常清理自动。`unique_ptr` 适合可选、大对象、Pimpl 或 polymorphic member。reference/pointer 借用必须把 lifetime precondition 写进接口，不能让“组合”这个词掩盖悬空风险。
+
+<Term def="借用对象必须比使用它的 owner 或 operation 活得更久的前置条件。">
+  borrow lifetime precondition
+</Term>
+
+## composition 保护封装与替换能力
+
+当 Set 私有组合 List，List 的具体类型、分配策略和 iterator 类型都不必出现在 Set 的 public API。实现以后可从 list 换成 unordered storage，只要 Set contract 不变。
+
+<Term def="底层实现类型改变而客户源码和行为合约无需改变的能力。">
+  implementation replaceability
+</Term>
+
+<Term def="底层对象只通过 owner 的窄接口使用，不把全部能力泄漏给客户。">
+  encapsulated delegation
+</Term>
+
+```cpp
+class ReportCache {
+public:
+    std::optional<Report> find(Key key) const;
+    void store(Key key, Report report);
+
+private:
+    std::unordered_map<Key, Report> entries_;
+};
+```
+
+ReportCache 根据 map 实现，但不承诺 map 的 iteration order、bucket API 或 operator indexing。窄接口让 owner 可以增加容量限制、统计、锁和淘汰政策。
+
+## 组合不是自动正确：检查暴露与反向依赖
+
+仅把对象写成 member 不代表设计已经完成。若 `Car::engine()` 返回可变 `Engine&`，客户仍能绕开 Car invariant；若 Engine 反向保存可变 Car pointer，两个对象可能形成隐式循环协议。
+
+<Term def="owner 将可变成员句柄泄漏给客户，使客户绕过整体规则的风险。">
+  mutable component escape
+</Term>
+
+<Term def="组成部分回指拥有者并依赖其状态，导致初始化、销毁或测试顺序耦合。">
+  back-reference coupling
+</Term>
+
+优先暴露意图操作，如 `start`、`relocate`、`insert`。确需查询时返回值、只读 view 或受限 facade；确需 callback 时明确注销和 lifetime 规则。
+
+## 一套可执行的关系决策流程
+
+面对两个类型 A、B，按以下顺序判断：
+
+1. 写出领域句子：A is-a B、A has-a B，还是 A 根据 B 实现。
+2. 做替换测试：所有承诺给 B 客户的操作和不变量，A 是否都能保持。
+3. 若 is-a 成立，才考虑 public inheritance；若只是拥有或机制复用，选择 composition。
+4. 为 composition 选择值、拥有指针或借用，并写明 lifetime 与空状态。
+5. 只暴露 A 的 contract，通过 delegation 翻译操作并维护 aggregate invariant。
+6. 用替换、生命周期、异常和实现更换测试验证关系没有撒谎。
+
+<Term def="先陈述语义关系、再确定代码复用机制，而不是从语法便利反推模型的步骤。">
+  relationship-first design
+</Term>
+
+先预测再运行测试：让一个只懂 B contract 的函数接收 A；如果测试必须特判 A，说明 is-a 值得重新审查。
+
+## 本章回顾
+
+Item 38 不是简单地说“组合优于继承”，而是给两个精确映射：application domain 的 composition 常表达 has-a，implementation domain 的 composition 常表达 is-implemented-in-terms-of。public inheritance 只为 is-a 服务。
+
+组合让 owner 控制接口、生命周期和不变量；Set-over-List 让底层机制可复用却不泄漏错误语义。判断的起点永远是一句真实关系，而不是哪种语法少写几行代码。
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 38"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="composition">
+    对象包含组成部分或私有实现对象的关系。
+  </GlossaryItem>
+  <GlossaryItem term="has-a">应用对象拥有组成部分的领域关系。</GlossaryItem>
+  <GlossaryItem term="is-implemented-in-terms-of">
+    抽象借助另一机制实现但不承诺替换。
+  </GlossaryItem>
+  <GlossaryItem term="application domain">
+    业务与现实概念所在的模型空间。
+  </GlossaryItem>
+  <GlossaryItem term="composition ownership boundary">
+    整体负责协调并销毁组成部分的边界。
+  </GlossaryItem>
+  <GlossaryItem term="aggregate invariant">
+    多个成员状态共同满足的整体约束。
+  </GlossaryItem>
+  <GlossaryItem term="implementation domain">
+    容器、锁和算法等实现机制空间。
+  </GlossaryItem>
+  <GlossaryItem term="Set contract">
+    集合唯一性、查询和删除的外部行为。
+  </GlossaryItem>
+  <GlossaryItem term="implementation mechanism">
+    只提供内部能力的底层对象。
+  </GlossaryItem>
+  <GlossaryItem term="substitutability test">
+    derived 是否保持 base 合约的检验。
+  </GlossaryItem>
+  <GlossaryItem term="semantic interface mismatch">
+    底层公开操作与上层规则冲突。
+  </GlossaryItem>
+  <GlossaryItem term="embedded lifetime">
+    成员随完整对象自动生灭的关系。
+  </GlossaryItem>
+  <GlossaryItem term="member declaration order">
+    成员依照类中声明位置构造的规则。
+  </GlossaryItem>
+  <GlossaryItem term="automatic member cleanup">
+    语言在展开和析构时自动清理成员。
+  </GlossaryItem>
+  <GlossaryItem term="value composition">
+    必需具体成员的直接存储方式。
+  </GlossaryItem>
+  <GlossaryItem term="owning indirection">
+    owner 独占销毁的间接成员。
+  </GlossaryItem>
+  <GlossaryItem term="borrowed dependency">
+    使用但不负责销毁的外部对象。
+  </GlossaryItem>
+  <GlossaryItem term="borrow lifetime precondition">
+    外部对象有效期覆盖使用期的条件。
+  </GlossaryItem>
+  <GlossaryItem term="implementation replaceability">
+    更换底层机制而不改变客户合约。
+  </GlossaryItem>
+  <GlossaryItem term="encapsulated delegation">
+    通过 owner 窄接口转发内部操作。
+  </GlossaryItem>
+  <GlossaryItem term="mutable component escape">
+    可变成员句柄绕开整体规则的泄漏。
+  </GlossaryItem>
+  <GlossaryItem term="back-reference coupling">
+    成员回指 owner 导致的生命周期耦合。
+  </GlossaryItem>
+  <GlossaryItem term="relationship-first design">
+    先确定语义关系再选择复用语法。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：修复 Car public 继承 Engine。** 客户只需要启动、停止和健康检查，说明关系并重新设计接口。
+
+<Answer question="怎样证明并修复错误的 public inheritance？">
+  先做替换测试：Car 不能替换 Engine，领域句子是 Car has-an Engine。把 Engine
+  改为 Car 的 private value member，由 Car 的 start/stop/healthy 委托，并在
+  start 中维护整车不变量。测试客户不能调用裸 Engine
+  调参接口，构造失败会自动清理成员，销毁顺序确定。
+</Answer>
+
+2. **问题 2：用 List 实现 Set。** 要求唯一元素、contains、insert、erase，并允许未来替换存储结构。
+
+<Answer question="为什么 composition 比 public inheritance 正确？">
+  Set 与 List 不可替换，因为 List 允许重复且暴露 push_front 等操作。把 list 设为
+  private member，insert 先查重再插入，erase 和 contains 只委托必要机制；public
+  API 不暴露 list iterator 或类型。用重复插入、删除缺失值和替换 unordered
+  storage 的 contract tests 验证。
+</Answer>
+
+3. **问题 3：选择成员存储方式。** Engine 必需且具体，Navigation 可选并有多个实现，Diagnostics 由进程共享。
+
+  <Answer question="三个依赖应怎样存储并验证生命周期？">Engine 用值成员获得同寿命与自动清理；Navigation 用 unique ownership 表达可选和多态，并让 base destructor 为 virtual；Diagnostics 用 reference 或 non-owning pointer，构造时注入并声明外部寿命必须覆盖 Car。测试空 Navigation、构造异常、Car 销毁和故意缩短借用对象寿命的 sanitizer 场景。</Answer>
+</Exercises>

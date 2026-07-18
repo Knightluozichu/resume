@@ -1,0 +1,499 @@
+---
+title: "Item 32：确定 public 继承塑造出 is-a 关系"
+type: A
+section: Chapter 6 · Inheritance and Object-Oriented Design
+order: 32
+description: 对齐 Effective C++ 第三版 Item 32：把 public inheritance 视为严格 substitutability 契约，以 Square–Rectangle 和 Penguin–Bird 反例检查前置、后置、不变量和错误模型，并用能力接口与组合重构。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppInheritanceDecisionMap,
+  EcppSquareRectangleFailureMap,
+  EcppSubstitutionContractMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-32-public-inheritance-is-a";
+
+<Objectives>
+
+- 能解释 public inheritance models is-a 与 Liskov substitution 的可观察契约
+- 能复现 Square–Rectangle 在 setWidth 后置条件上的冲突，并判断前置、后置与 invariant 变化
+- 能设计 capability interface、composition 或独立 value types，替代只为代码复用建立的错误继承
+
+</Objectives>
+
+## 从“正方形当然是长方形”开始质疑
+
+在数学分类中，Square 是 Rectangle；在 C++ 类型系统中，public inheritance 会让所有 `Square*`/`Square&` 自动可用于需要 `Rectangle*`/`Rectangle&` 的地方。
+
+<Term def="derived object 在任何要求 base contract 的位置都能合法替换 base object 的公开继承关系。">
+  public inheritance is-a
+</Term>
+
+Item 32 的原则是 Make sure public inheritance models is-a（确定 public 继承塑模 is-a）。这里 is-a 不是日常语言的“看起来属于”，而是程序行为的严格承诺。
+
+<Term def="客户程序只依赖 base contract 时，将对象替换为 derived 后仍保持正确。">
+  behavioral substitutability
+</Term>
+
+如果 Square 不能满足 Rectangle 的全部可观察操作，它就不应 public inherit Rectangle，即使两者共享 width/height 数据。
+
+## public 继承向客户承诺什么
+
+base 的每个 public operation 都成为 derived 的契约。derived 可以实现得更快、返回更具体类型或加强结果，但不能让原本合法的 base 客户失效。
+
+<Term def="base type 对合法输入、结果、状态、错误和复杂度给客户的可依赖说明。">
+  base observable contract
+</Term>
+
+<EcppSubstitutionContractMap />
+
+Liskov substitution（里氏替换）可具体化为：
+
+- derived 不应加强 precondition。
+- derived 不应削弱 postcondition。
+- derived 应保持 base invariant。
+- derived 不应引入 base 客户无法处理的新失败语义。
+- derived 的 lifetime/ownership 行为不能让 base 用法悬空或泄漏。
+
+<Term def="derived operation 不能要求比 base operation 更多的输入或对象状态条件。">
+  precondition contravariance rule
+</Term>
+
+<Term def="derived operation 的结果保证不能少于 base，必要时可以更具体或更强。">
+  postcondition covariance rule
+</Term>
+
+这些名称不是为了形式主义，而是给 code review 可检查的清单。
+
+## Rectangle 客户的合法假设
+
+定义一个可独立修改宽高的 Rectangle：
+
+```cpp
+class Rectangle {
+public:
+    virtual ~Rectangle() = default;
+    virtual void setWidth(int value);
+    virtual void setHeight(int value);
+    int width() const noexcept;
+    int height() const noexcept;
+};
+```
+
+`setWidth` 的自然后置条件是 width 变为 value，height 保持原值。
+
+<Term def="operation 成功返回后，客户可以断言成立的结果与未变化状态。">
+  operation postcondition
+</Term>
+
+```cpp
+void makeWider(Rectangle& value) {
+    const int oldHeight = value.height();
+    value.setWidth(value.width() + 10);
+    assert(value.height() == oldHeight);
+}
+```
+
+这个函数对 Rectangle contract 是正确的，不属于“客户不该这样写”。
+
+<Term def="只使用 base public API，并依赖其公开前置/后置条件的程序。">
+  valid base client
+</Term>
+
+## Square 无法同时满足两个契约
+
+Square invariant 要求 width 始终等于 height：
+
+```cpp
+class Square : public Rectangle {
+public:
+    void setWidth(int value) override {
+        Rectangle::setWidth(value);
+        Rectangle::setHeight(value);
+    }
+
+    void setHeight(int value) override {
+        Rectangle::setWidth(value);
+        Rectangle::setHeight(value);
+    }
+};
+```
+
+<Term def="Square 的所有可观察状态中 width 与 height 必须相等的领域条件。">
+  square invariant
+</Term>
+
+为了保持自身 invariant，Square::setWidth 必须改变 height；这削弱了 Rectangle::setWidth 的“height unchanged”后置条件。传给 makeWider 后 assertion 失败。
+
+<Term def="derived 为维护自身规则而改变 base operation 已承诺效果的替换冲突。">
+  invariant-postcondition conflict
+</Term>
+
+<EcppSquareRectangleFailureMap />
+
+<Callout type="trap">
+  **现象**：把 makeWider 的 assertion
+  删除，认为问题解决。**原因**：客户依赖的是合法 Rectangle
+  contract，删除测试只隐藏 derived 违约。**修法**：重设类型关系或 base
+  API，而不是要求所有客户知道 Square 例外。
+</Callout>
+
+## “抛异常表示不支持”也不满足 is-a
+
+Square 可以让 setWidth 抛 `UnsupportedOperation`，但 Rectangle 客户原本可合法调用；derived 增强了 precondition 或引入新失败。
+
+<Term def="derived 对 base 合法操作以异常、错误码或 no-op 表示“不支持”的设计气味。">
+  unsupported inherited operation
+</Term>
+
+```cpp
+void Square::setWidth(int) {
+    throw UnsupportedOperation{};
+}
+```
+
+这不恢复 substitutability，只把静默违约改为运行期违约。
+
+<Term def="所有继承到 derived public interface 的 operations 对其合法状态都必须有一致语义。">
+  total inherited contract
+</Term>
+
+若 operation 对某 subtype 没有意义，base abstraction 过宽或继承关系错误。
+
+## 现实分类不等于软件行为模型
+
+Penguin 在生物分类上是 Bird，但如果 Bird API 声明 `fly()`，Penguin 无法替换 Flying Bird。
+
+<Term def="现实世界按属性或名称建立的分类，不保证程序操作集合可替换。">
+  domain taxonomy
+</Term>
+
+错误设计：
+
+```cpp
+class Bird {
+public:
+    virtual void fly() = 0;
+};
+
+class Penguin : public Bird {
+public:
+    void fly() override; // throw/no-op 都违背 contract
+};
+```
+
+<Term def="抽象类型定义的可执行能力集合，而不仅是实体标签。">
+  behavioral capability set
+</Term>
+
+软件模型应服务客户操作，而不是复制百科分类树。
+
+## 拆分可选能力
+
+若只有部分 birds 会飞，fly 不应属于所有 Bird：
+
+```cpp
+class Bird {
+public:
+    virtual ~Bird() = default;
+    virtual void eat() = 0;
+};
+
+class Flyable {
+public:
+    virtual ~Flyable() = default;
+    virtual void fly() = 0;
+};
+
+class Sparrow : public Bird, public Flyable { /* ... */ };
+class Penguin : public Bird { /* ... */ };
+```
+
+<Term def="只声明一种可选行为，让实现者明确选择是否满足该契约的小接口。">
+  capability interface
+</Term>
+
+调用 fly 的客户依赖 Flyable，而非 Bird；类型系统拒绝 Penguin。
+
+<Term def="客户端只依赖完成任务所需最小操作集合的设计。">
+  interface segregation
+</Term>
+
+这样错误从 runtime throw 提前到 compile-time mismatch。
+
+## Square 与 Rectangle 可共享更小抽象
+
+可以建只读 Shape/Bounds 接口，或让二者成为独立 value types：
+
+```cpp
+class RectBounds {
+public:
+    int width() const noexcept;
+    int height() const noexcept;
+};
+
+class Rectangle {
+    RectBounds bounds_;
+};
+
+class Square {
+    int side_;
+};
+```
+
+<Term def="两个类型复用共同 value/helper，而不声明其中一个可替换另一个。">
+  composition without substitutability
+</Term>
+
+需要统一绘制时，两者可实现只读 Drawable/Shape，不暴露独立 setWidth/setHeight。
+
+<Term def="只包含所有 implementations 都能一致满足的最小公共行为。">
+  common semantic abstraction
+</Term>
+
+共享代码应通过 helper/composition，不必伪造 public is-a。
+
+## 代码复用不是 public 继承的理由
+
+“Derived 想复用 Base implementation”只说明实现关系，不说明客户可替换。
+
+<Term def="为了获得已有字段或函数实现而建立关系，但没有行为替换语义。">
+  implementation-reuse motivation
+</Term>
+
+优先 composition；private inheritance 适用于少数需要 protected access/empty-base optimization 的实现关系，Item 39 会深入。
+
+<Term def="类型拥有另一个对象并通过其 public API 复用能力的 has-a 结构。">
+  composition has-a
+</Term>
+
+public inheritance 必须从 base client contract 出发证明，而不是从 derived 写代码方便出发。
+
+<Callout type="trap">
+  **现象**：因为两个类型字段相同或 derived 需要复用 helper，就 public
+  inherit。**原因**：storage similarity 被误当成 substitutability。**修法**：用
+  composition/helper 复用；只有所有 base operations 对 derived 都保持契约时才
+  public inherit。
+</Callout>
+
+## 前置条件不能变严格
+
+若 base `send(Message)` 接受任意合法 Message，derived 只接受 size < 1KB，就拒绝了 base 客户可传的合法值。
+
+<Term def="derived 把 base 允许的输入集合缩小，使原合法调用失败。">
+  strengthened precondition
+</Term>
+
+可让 base contract 本来就声明 limit，或把 restricted sender 作为不同类型/策略，不应隐藏在 override。
+
+<Term def="base 接受的合法 input/state 集合，所有 derived 必须至少同样宽。">
+  accepted-domain preservation
+</Term>
+
+参数类型相同不证明 semantic domain 相同，测试要覆盖边界值。
+
+## 后置条件和错误模型不能变弱
+
+base `save()` 承诺成功后 durable，derived 只写 memory cache 却返回成功，削弱 postcondition。
+
+<Term def="derived 返回成功时提供少于 base 承诺的可观察效果。">
+  weakened postcondition
+</Term>
+
+base no-throw operation 被 override 改成可能抛也会破坏客户；C++ noexcept override rules 能检查部分情况，但业务错误语义仍需测试。
+
+<Term def="derived 在异常、错误码、重试和 side effects 上保持 base 客户可处理的失败契约。">
+  error-model substitutability
+</Term>
+
+性能复杂度若属于 public promise，也不能从 O(1) 悄然变 O(n) 并让实时客户失效。
+
+## public inheritance 也包含 lifetime 契约
+
+若 base 有 virtual destructor、copy/clone、ownership 和 thread-safety promise，derived 必须保持。
+
+<Term def="base 指针/引用管理 derived 时，销毁、复制、移动和借用仍安全的要求。">
+  lifetime substitutability
+</Term>
+
+例如 base clone 承诺独立 deep copy，derived 不能返回共享 mutable state；base thread-safe const query，derived 不能使用 unsynchronized mutable cache。
+
+<Term def="derived 引入资源或缓存后仍维持 base 声明的并发与 ownership 行为。">
+  nonfunctional contract preservation
+</Term>
+
+is-a 不只检查函数名字和返回值。
+
+## 用 base contract suite 验证每个 derived
+
+为 base 写参数化契约测试，并对每个 concrete derived 运行：
+
+```cpp
+template<class Factory>
+void rectangleContract(Factory makeRectangle) {
+    auto value = makeRectangle();
+    const int oldHeight = value->height();
+    value->setWidth(value->width() + 10);
+    CHECK(value->height() == oldHeight);
+}
+```
+
+<Term def="只依据 base public contract 编写，并对所有 derived factories 重复执行的测试集合。">
+  base contract suite
+</Term>
+
+<Term def="同一套客户行为测试在每个 subtype 上成立的自动化 substitutability 证据。">
+  subtype conformance test
+</Term>
+
+compile checks 只能证明可转换，contract suite 才证明行为。
+
+<EcppInheritanceDecisionMap />
+
+## 评审继承关系的证据矩阵
+
+先预测每个 base operation 对候选 derived 的合法输入、结果和 invariant，再验证：
+
+- 列出 base public/virtual/non-virtual operations 与 documented pre/postconditions。
+- 对每个 derived 标记是否加强 precondition、削弱 postcondition或新增失败。
+- property tests 覆盖 Square/Rectangle width-height 状态空间。
+- base contract suite 对每个 factory/derived 重跑。
+- ownership tests 覆盖 virtual destruction、clone、copy/move 和 borrowed handles。
+- concurrency/complexity tests 覆盖 base 承诺的非功能属性。
+- 客户代码不包含 derived type checks 或 “except subtype X” 分支。
+- 只复用 implementation 的候选改成 composition 后比较 API 清晰度。
+
+<Term def="按 base operation 记录各 derived 前置、后置、不变量、失败与测试证据的表。">
+  inheritance substitution matrix
+</Term>
+
+任何一行需要“derived 例外”都应重新审查 public inheritance。
+
+## 小结
+
+- public inheritance models is-a 意味 derived 可替换 base，不只是现实分类或字段相似
+- derived 不能加强 precondition、削弱 postcondition、破坏 base invariant 或错误模型
+- Square 为保持边长相等必须改变 Rectangle setWidth 语义，因此不能满足该 base contract
+- Penguin–Bird 问题应拆分 Flyable capability，让不支持的操作从 base interface 消失
+- 只为 implementation reuse 应选择 composition/helper，而不是 public inheritance
+- base contract suite 与 inheritance substitution matrix 提供逐 derived 的行为证据
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 32"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="public inheritance is-a">
+    derived 可在所有 base contract 场景替换 base。
+  </GlossaryItem>
+  <GlossaryItem term="behavioral substitutability">
+    替换对象后客户程序仍正确。
+  </GlossaryItem>
+  <GlossaryItem term="base observable contract">
+    base 对输入结果状态和失败的承诺。
+  </GlossaryItem>
+  <GlossaryItem term="precondition contravariance rule">
+    derived 不能要求更多输入条件。
+  </GlossaryItem>
+  <GlossaryItem term="postcondition covariance rule">
+    derived 不能少提供结果保证。
+  </GlossaryItem>
+  <GlossaryItem term="operation postcondition">
+    操作成功后客户可断言的状态。
+  </GlossaryItem>
+  <GlossaryItem term="valid base client">
+    只依赖 base public contract 的程序。
+  </GlossaryItem>
+  <GlossaryItem term="square invariant">
+    Square 的 width 必须等于 height。
+  </GlossaryItem>
+  <GlossaryItem term="invariant-postcondition conflict">
+    derived invariant 与 base 后置条件冲突。
+  </GlossaryItem>
+  <GlossaryItem term="unsupported inherited operation">
+    derived 对合法 base 操作表示不支持。
+  </GlossaryItem>
+  <GlossaryItem term="total inherited contract">
+    全部继承 operations 对 subtype 都有语义。
+  </GlossaryItem>
+  <GlossaryItem term="domain taxonomy">
+    现实属性分类而非程序行为契约。
+  </GlossaryItem>
+  <GlossaryItem term="behavioral capability set">
+    抽象类型提供的可执行操作集合。
+  </GlossaryItem>
+  <GlossaryItem term="capability interface">
+    只声明一种可选行为的小接口。
+  </GlossaryItem>
+  <GlossaryItem term="interface segregation">
+    客户只依赖完成任务的最小操作集。
+  </GlossaryItem>
+  <GlossaryItem term="composition without substitutability">
+    共享实现但不声明可替换关系。
+  </GlossaryItem>
+  <GlossaryItem term="common semantic abstraction">
+    所有实现都一致满足的最小行为。
+  </GlossaryItem>
+  <GlossaryItem term="implementation-reuse motivation">
+    仅为获得已有代码建立关系的动机。
+  </GlossaryItem>
+  <GlossaryItem term="composition has-a">
+    以成员对象复用另一类型能力。
+  </GlossaryItem>
+  <GlossaryItem term="strengthened precondition">
+    derived 缩小 base 合法输入集合。
+  </GlossaryItem>
+  <GlossaryItem term="accepted-domain preservation">
+    derived 至少接受 base 的全部合法输入。
+  </GlossaryItem>
+  <GlossaryItem term="weakened postcondition">
+    derived 成功结果少于 base 承诺。
+  </GlossaryItem>
+  <GlossaryItem term="error-model substitutability">
+    derived 保持 base 失败语义。
+  </GlossaryItem>
+  <GlossaryItem term="lifetime substitutability">
+    derived 保持 base 销毁复制借用安全。
+  </GlossaryItem>
+  <GlossaryItem term="nonfunctional contract preservation">
+    保持 thread/complexity/ownership 承诺。
+  </GlossaryItem>
+  <GlossaryItem term="base contract suite">
+    对全部 subtype 重跑的 base 行为测试。
+  </GlossaryItem>
+  <GlossaryItem term="subtype conformance test">
+    自动验证 subtype 可替换性的测试。
+  </GlossaryItem>
+  <GlossaryItem term="inheritance substitution matrix">
+    逐操作记录 subtype 契约与证据的表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：证明 Square–Rectangle 冲突。** 写出合法 Rectangle 客户并说明 Square override 无法同时满足两个 invariant。
+
+<Answer question="为什么删除 assertion 或抛异常都不能修复继承？">
+  Rectangle::setWidth 承诺只改 width，合法客户可保存 oldHeight
+  并断言不变；Square 为保持 width==height 必须同时改 height，削弱 base
+  postcondition。抛 Unsupported 又把 base 合法操作变成失败，加强
+  precondition。应拆成独立 value types，共享只读 Shape/Bounds 或 composition
+  helper，不宣称 mutable Rectangle is-a。
+</Answer>
+
+2. **问题 2：重构 Bird/Penguin。** Bird 当前要求 fly，Penguin override 抛异常，请设计 capability hierarchy。
+
+<Answer question="怎样让不能飞的鸟仍有类型安全模型？">
+  把 eat/reproduce 等所有 birds 都支持的行为留在 Bird；把 fly 放入独立 Flyable
+  interface。Sparrow 同时实现 Bird 与 Flyable，Penguin 只实现 Bird。飞行客户接收
+  Flyable&，编译期拒绝 Penguin；不需要 runtime type check、no-op 或
+  exception。对 Bird/Flyable 分别建立 contract suites。
+</Answer>
+
+3. **问题 3：审查缓存派生类。** Base 查询承诺 thread-safe O(1) 且不抛，Derived 使用无锁 lazy cache，偶尔分配并抛异常，请判断。
+
+  <Answer question="非功能与失败契约为什么也影响 is-a？">Base 客户依赖并发安全、复杂度和不抛语义；Derived data race、首次 O(n)/allocation 与异常会破坏 substitutability，即使返回值正确。可在构造阶段建立 cache、使用同步且 no-throw 的固定存储，或放宽并版本化 base contract；若无法满足，应分离类型而非保留 public inheritance。</Answer>
+</Exercises>

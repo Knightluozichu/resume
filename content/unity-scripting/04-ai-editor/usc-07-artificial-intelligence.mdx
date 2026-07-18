@@ -1,0 +1,221 @@
+---
+title: "第 7 章 Artificial Intelligence：NavMesh 与有限状态机"
+type: A
+section: "Unity 脚本设计 · AI 与编辑器"
+order: 7
+description: "用 NavMesh、NPC Agent、Mecanim 与 C# 状态机实现 Idle、Patrol、Chase、Attack 和 Seek-Health/Flee。"
+demo: true
+math: false
+sourceUrl: "https://www.packtpub.com/en-us/product/mastering-unity-scripting-9781784390655"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Usc07ArtificialIntelligenceMapLab,
+  Usc07ArtificialIntelligenceExperimentLab,
+  Usc07ArtificialIntelligenceEvidenceLab,
+} from "@/components/mdx/unity-scripting/diagrams/usc-07-artificial-intelligence";
+
+<Objectives>
+
+- 能解释感知、状态转换、导航和动作怎样组成 NPC 决策闭环
+
+- 能实现 Idle、Patrol、Chase、Attack 与 Seek-Health/Flee 状态机
+
+- 能复现并验证 NavMesh、视线、路径失败、状态抖动和恢复策略的边界
+
+</Objectives>
+
+## 问题：为什么敌人能找到路径却仍可能在追逐与攻击之间疯狂切换
+
+先预测：攻击阈值与追逐阈值相同，目标在边界抖动时状态会怎样？AI 章把前六章的世界、事件、相机可见性、集合和调试集中到一个 NPC 案例。NavMesh 只解决可行路径，FSM 决定何时巡逻、追逐、攻击、逃跑或寻找生命；感知噪声、阈值和动作完成条件决定状态是否稳定。
+
+<Usc07ArtificialIntelligenceMapLab />
+
+## 原书边界与官方小节
+
+官方目录覆盖 Artificial Intelligence in games、Starting the project、Baking a navigation mesh、Starting an NPC agent、Finite State Machines in Mecanim、Finite State Machines in C# - getting started，以及 Creating the Idle、Patrol、Chase、Attack、Seek-Health (or flee) state。每个状态必须保留独立触发、动作和退出条件。
+
+- **Artificial Intelligence in games；Starting the project**
+- **Baking a navigation mesh；Starting an NPC agent**
+- **Finite State Machines in Mecanim；Finite State Machines in C# - getting started**
+- **Creating the Idle state；Creating the Patrol state；Creating the Chase state**
+- **Creating the Attack state；Creating the Seek-Health (or flee) state**
+
+这些小节按官方目录唯一归属。本站重新组织解释、代码和实验，不逐字复制原文；现代补充必须放在迁移段，不能替换或重复计算原始单元。
+
+## 感知、决策、导航与动作闭环
+
+感知层读取目标距离、视线、生命和路径可达性，决策层根据带迟滞的守卫条件选择状态，状态 Enter/Update/Exit 管理局部动作，NavMeshAgent 产生移动，Mecanim 表现动画，事件反馈命中或动作结束。状态机不能直接依赖动画名称和全局搜索；应把感知快照与动作接口分开，使相同决策可被测试。
+
+<Usc07ArtificialIntelligenceExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="表示可行走表面和连接、供路径规划使用的 NavMesh 数据。">
+  导航网格
+</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="在有限状态和明确转换条件之间切换的决策模型。">有限状态机</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="允许状态转换发生的布尔约束。">守卫条件</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="进入和退出使用不同阈值，避免边界附近频繁切换。">迟滞</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="同一决策时刻汇总距离、视线、生命和路径状态的不可变输入。">
+  感知快照
+</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+术语若不能落到具体对象、状态和观测点，就仍停留在记忆层。读者应能为每个术语写出生产者、变换规则、消费者、正常值、边界值和失败信号。
+
+## 关键对象与数据流
+
+目标位置和遮挡产生感知快照，FSM 根据优先级和守卫选择状态；Patrol/Chase/SeekHealth 向 Agent 设置目的地，Attack 请求动作并等待反馈，Mecanim 消费状态参数。实验沿固定目标轨迹重放，记录每帧感知、当前状态、转换原因、路径状态和动作结果，才能区分导航失败与决策错误。
+
+排查时从最早可控输入开始，逐段检查中间状态和最终消费者。最终结果正确但中间链不符合预测，也不能立即签发，因为它可能依赖未记录的缓存、时序或 Editor 状态。
+
+## 三步可重复实验
+
+动手前先预测：只改变当前步骤的一项输入后，哪个日志、状态或像素应最先变化？实验期间固定 Unity 版本、场景、对象数量、时间步与目标平台，避免多个变量一起漂移。
+
+<Stepper>
+  <Step title="固定导航环境">
+    <Usc07ArtificialIntelligenceMapLab />
+
+建立地面、障碍和目标轨迹，烘焙 NavMesh，记录 Agent 半径、速度、停止距离与可达/不可达样本。
+
+```csharp
+public readonly record struct Perception(float Distance, bool HasLineOfSight, float Health01, bool PathReady);
+```
+
+  </Step>
+  <Step title="实现五状态">
+    <Usc07ArtificialIntelligenceExperimentLab />
+
+为 Idle、Patrol、Chase、Attack、SeekHealth/Flee 写 Enter/Update/Exit 和守卫，使用感知快照驱动，不在状态中全局搜索。
+
+```csharp
+if (state == State.Chase && p.Distance <= attackEnter) Change(State.Attack);
+else if (state == State.Attack && p.Distance >= attackExit) Change(State.Chase);
+```
+
+  </Step>
+  <Step title="重放边界轨迹">
+    <Usc07ArtificialIntelligenceEvidenceLab />
+
+让目标穿过视线、距离和障碍边界，降低 NPC 生命，记录状态图、路径状态和动画参数，验证迟滞与优先级。
+
+```csharp
+agent.SetDestination(target.position);
+Debug.Log($"state={state} path={agent.pathStatus} remaining={agent.remainingDistance}");
+```
+
+  </Step>
+</Stepper>
+
+## 状态机先写转换表，再写每帧代码
+
+五个状态必须有互斥且可解释的进入条件。Idle 在没有巡逻目标时等待；Patrol 沿有效路径移动；Chase 需要感知成立且目标超出攻击距离；Attack 要求视线和距离同时满足；低生命值进入 Seek-Health 或 Flee，并在恢复阈值后返回。若只用一串 if 依赖代码顺序，多个条件同时成立时行为会随重构漂移。转换表应写出源状态、条件、目标状态、优先级和进入退出副作用。
+
+感知不是状态机本身。距离、视角、遮挡和目标存活先形成感知快照，状态机只消费快照；NavMeshAgent 再执行目的地和速度。这样可以分别注入“看见但无路”“有路但目标消失”“低血且药包不可达”等失败。路径请求也不是立即成功，必须观察 pathPending、pathStatus、remainingDistance 和 stoppingDistance，不能用一次 SetDestination 返回值代替完整导航证据。
+
+## 防止抖动与不可重放
+
+- 进入和退出阈值采用滞回，例如不同的追逐距离与放弃距离，避免边界来回切换。
+- 感知按固定频率采样并记录时间戳，动作更新不能读取来源不明的半更新状态。
+- 随机巡逻使用固定种子，测试保存出生点、目标序列和导航网格版本。
+- 每次转换记录旧状态、新状态、原因和关键输入，禁止无原因的任意跳转。
+- NavMesh 缺失、部分路径和目标失效都要有恢复状态，而不是让 Agent 永久停住。
+
+Mecanim FSM 和 C# FSM 可以承担不同层次：前者适合动画状态与过渡，后者适合游戏决策、感知和导航。迁移到现代 AI Navigation 包时，烘焙入口和组件会变化，但闭环仍是感知、决策、导航、动作、反馈。签发场景应重放正常巡逻、遮挡、无路、低生命值和目标销毁五条轨迹，并比较逐帧转换日志。
+
+多人目标场景还需要稳定的选择策略。感知列表顺序可能受物理查询和对象创建顺序影响，若直接选择第一个结果，同一输入在不同运行中会追逐不同目标。应先过滤无效目标，再按距离、威胁值和稳定身份建立明确排序；当前目标仍有效时保留锁定，只有达到切换阈值才重新选择。测试随机打乱候选输入顺序，比较最终目标和状态轨迹，证明行为由规则决定而不是由容器偶然顺序决定。
+
+## 正常、边界与失败样本
+
+每章至少保存一个正常样本、一个极端边界和一个故意破坏配置。正常样本证明主路径，边界样本说明适用范围，失败样本证明诊断方法真的能抓到错误。
+
+<Callout type="trap">
+  **因果陷阱**：把 Animator
+  状态直接当业务状态会让决策依赖过渡时间和动画命名，难以测试与复用。
+</Callout>
+
+<Callout type="trap">
+  **版本陷阱**：每帧重新 SetDestination、Raycast 和全场搜索会把一个简单 FSM
+  变成高成本轮询。
+</Callout>
+
+## 从 2015 年到现代 Unity
+
+现代 AI Navigation 包改变 NavMeshSurface、烘焙和链接工作流，Mecanim 与 NavMeshAgent 核心仍可映射。原章的状态与路径问题应保留，再用当前组件实现。更复杂行为树或 Utility AI 可以对照，但不能替代对五个原始状态和 C#/Mecanim FSM 的覆盖。
+
+迁移记录采用五列：原书载体、稳定不变量、现代实现、不可等价处、目标平台证据。允许替换工具和 API，不允许抹去原始问题或倒写历史。
+
+## 验收证据
+
+验收场景包含可达巡逻、目标出现、遮挡、进入攻击、退出攻击、低血寻找生命、无可达路径和目标丢失。日志给出感知快照、转换原因、Agent pathStatus 与动作结果；相同轨迹重放应得到同一状态序列。
+
+证据包同时记录场景路径、代码版本、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜测隐藏状态即可重放，才算掌握而不只是读完。
+
+## 小结
+
+- NavMesh 解决路径，FSM 解决何时做什么
+- 感知快照、守卫、状态动作和反馈应解耦
+- 迟滞、优先级与动作完成条件决定状态稳定性
+- 现代 AI 包可替换烘焙载体，不能删除原始五状态边界
+
+<Exercises>
+
+**问题 1** 攻击与追逐为何需要不同进出阈值？
+
+<Answer>形成迟滞区，目标在边界小幅移动时不会每帧切换状态。</Answer>
+
+**问题 2** 路径失败应由哪个层处理？
+
+<Answer>
+  感知/导航反馈记录 pathStatus，决策层据此选择等待、重新规划或其他状态。
+</Answer>
+
+**问题 3** 如何证明状态机确定性？
+
+<Answer>固定目标轨迹、随机种子和时间步，比较状态序列与转换原因。</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="导航网格">
+    表示可行走表面和连接、供路径规划使用的 NavMesh 数据。
+  </GlossaryItem>
+  <GlossaryItem term="有限状态机">
+    在有限状态和明确转换条件之间切换的决策模型。
+  </GlossaryItem>
+  <GlossaryItem term="守卫条件">允许状态转换发生的布尔约束。</GlossaryItem>
+  <GlossaryItem term="迟滞">
+    进入和退出使用不同阈值，避免边界附近频繁切换。
+  </GlossaryItem>
+  <GlossaryItem term="感知快照">
+    同一决策时刻汇总距离、视线、生命和路径状态的不可变输入。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Alan Thorn《Mastering Unity Scripting》第一版官方目录与中文版身份资料"
+  adaptedUrl="https://www.packtpub.com/en-us/product/mastering-unity-scripting-9781784390655"
+/>

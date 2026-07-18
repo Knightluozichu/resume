@@ -1,0 +1,428 @@
+---
+title: "Item 40：审慎使用 multiple inheritance"
+type: A
+section: Chapter 6 · Inheritance and Object-Oriented Design
+order: 40
+description: 对齐 Effective C++ 第三版 Item 40：解决多重继承的名字歧义，推导 diamond 与 virtual inheritance 的布局和初始化成本，并用 public interface base 加 private implementation base 表达正当双角色。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppInterfaceImplementationRolesMap,
+  EcppMultipleInheritanceAmbiguityMap,
+  EcppVirtualDiamondLayoutMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-40-multiple-inheritance-judiciously";
+
+<Objectives>
+
+- 能复现两个 base 声明同名函数时的 ambiguity，并用限定调用、using 或 derived wrapper 明确选择
+- 能绘制普通 diamond 与 virtual inheritance 的 subobject 布局，推导 most-derived 初始化责任和成本
+- 能设计一个 public interface base 加 private implementation base 的多继承类型，并判断 composition 是否更清晰
+
+</Objectives>
+
+## 从一个无法决定的 checkOut 开始
+
+```cpp
+class BorrowableItem {
+public:
+    void checkOut();
+};
+
+class ElectronicGadget {
+private:
+    bool checkOut() const;
+};
+
+class MP3Player : public BorrowableItem, public ElectronicGadget {};
+```
+
+```cpp
+MP3Player player;
+// player.checkOut(); // ambiguous
+```
+
+即使 `ElectronicGadget::checkOut` 是 private，调用仍歧义。C++ 名字查找先找到两个 base scope 中的候选，再判断访问性；编译器不会因为一个候选不可访问就替程序选择另一个。
+
+<Term def="一个 derived 同时直接继承两个或更多 base types 的类关系。">
+  multiple inheritance
+</Term>
+
+Item 40 的原则是 Use multiple inheritance judiciously（审慎使用多重继承）。
+
+<Term def="同一未限定名字可沿多条 base 路径找到，程序无法唯一决定声明的状态。">
+  ambiguity
+</Term>
+
+<Term def="名字查找确定候选集合后才判断调用上下文能否访问声明的语言顺序。">
+  lookup-before-access
+</Term>
+
+<EcppMultipleInheritanceAmbiguityMap />
+
+先预测：把 Gadget 的 `checkOut` 改成 protected 或 public，是否能消除 ambiguity？答案是否改变，为什么？
+
+## 用限定名表达选择，而不是依赖猜测
+
+```cpp
+player.BorrowableItem::checkOut();
+```
+
+<Term def="在调用点写出目标 base scope，从多条继承路径中选择一个声明。">
+  qualified base call
+</Term>
+
+限定调用最直接，但会让客户知道继承结构。若业务语义是“借出播放器”，更好的 API 是在 derived 中提供意图 wrapper。
+
+```cpp
+class MP3Player : public BorrowableItem, public ElectronicGadget {
+public:
+    void borrow() { BorrowableItem::checkOut(); }
+};
+```
+
+<Term def="derived 用自己的公开操作固定 base 选择，并隐藏底层名字冲突的函数。">
+  disambiguating wrapper
+</Term>
+
+`using BorrowableItem::checkOut` 也能把一个名字引入 derived scope，但应确认是否真的想公开原始 base contract。wrapper 更适合改名、校验参数和维护 derived invariant。
+
+<Term def="通过 using declaration 把选定 base overload set 引入 derived scope 的方法。">
+  selective using declaration
+</Term>
+
+<Callout type="trap" title="陷阱：private 候选不会参与歧义">
+  access control 不是 overload 或名字查找过滤器。看到同名 base members
+  时，先画出 lookup paths，再显式限定；不要把编译成功寄托在访问级别上。
+</Callout>
+
+## 多重继承首先是多个独立身份
+
+若一个类型 public 继承两个 interface classes，它向客户同时承诺两个 is-a 关系。
+
+```cpp
+class Printable {
+public:
+    virtual ~Printable() = default;
+    virtual void print(std::ostream&) const = 0;
+};
+
+class Serializable {
+public:
+    virtual ~Serializable() = default;
+    virtual Bytes serialize() const = 0;
+};
+
+class Invoice final : public Printable, public Serializable {
+    // both contracts implemented
+};
+```
+
+<Term def="derived 对每个 public base 都必须独立保持替换性与行为合约的责任。">
+  multiple public contracts
+</Term>
+
+这种多继承可能合理：Printable 和 Serializable 是正交 capabilities，通常没有 data，也不共享共同 stateful root。客户分别经不同 interface 使用 Invoice。
+
+<Term def="职责互不重叠、状态规则不冲突，能分别验证的接口能力。">
+  orthogonal interface capability
+</Term>
+
+但若两个 bases 都拥有生命周期状态、copy 规则和同名操作，derived 要同时维护的交叉不变量会迅速增多。
+
+## diamond：共同祖先出现两次
+
+```cpp
+class File { /* path and metadata */ };
+class InputFile : public File {};
+class OutputFile : public File {};
+class IOFile : public InputFile, public OutputFile {};
+```
+
+IOFile 含两个 File subobjects：一个经 InputFile 路径，一个经 OutputFile 路径。`IOFile` 转成 `File&` 会歧义，`path` 也有两份。
+
+<Term def="两条继承路径从共同 root 分叉后在同一 most-derived type 汇合的结构。">
+  diamond inheritance
+</Term>
+
+<Term def="普通菱形中同一共同祖先沿不同路径形成多个独立 base subobjects。">
+  duplicated base subobject
+</Term>
+
+```cpp
+IOFile file;
+File& inputSide = static_cast<InputFile&>(file);
+File& outputSide = static_cast<OutputFile&>(file);
+```
+
+两份 File state 可能各自持有不同 path，这到底是需求还是模型错误必须明确回答。
+
+## virtual inheritance 共享共同 base
+
+```cpp
+class InputFile : virtual public File {};
+class OutputFile : virtual public File {};
+class IOFile : public InputFile, public OutputFile {
+public:
+    explicit IOFile(Path path) : File(std::move(path)) {}
+};
+```
+
+<Term def="让多条继承路径在 most-derived object 中共享同一个共同 base subobject 的机制。">
+  virtual inheritance
+</Term>
+
+<Term def="共享 virtual base 后只保留一个共同祖先对象的身份语义。">
+  shared virtual base identity
+</Term>
+
+virtual 在这里描述 base subobject 共享，与 virtual function 是不同机制。InputFile 和 OutputFile 都声明 virtual inheritance 后，IOFile 中只有一个 File。
+
+<EcppVirtualDiamondLayoutMap />
+
+## most-derived type 负责构造 virtual base
+
+virtual base 由最终完整对象直接初始化，而不是由中间 bases 最终决定。
+
+<Term def="创建完整对象时位于继承图最底部、负责 virtual bases 初始化的实际类型。">
+  most-derived constructor
+</Term>
+
+```cpp
+class File {
+public:
+    explicit File(Path path);
+};
+
+class IOFile : public InputFile, public OutputFile {
+public:
+    explicit IOFile(Path path)
+        : File(path), InputFile(), OutputFile() {}
+};
+```
+
+当未来再派生 `EncryptedIOFile`，它才是 most-derived，并负责 File 初始化。这个责任穿过中间层，增加构造知识和演进耦合。
+
+<Term def="最终派生类必须知道并直接满足远端 virtual base 构造要求的依赖。">
+  virtual-base initialization coupling
+</Term>
+
+## virtual inheritance 的成本模型
+
+共享 base identity 不是免费抽象。实现通常需要额外指针或 offset metadata 来定位 virtual base；访问可能多一次间接计算；对象更大；初始化规则更复杂；cast 和 debugger layout 也更难读。
+
+<Term def="为在运行期定位共享 virtual base 而保存的 ABI 布局信息。">
+  virtual-base offset metadata
+</Term>
+
+<Term def="对象大小、成员访问、构造责任和诊断复杂度共同形成的虚继承代价。">
+  virtual inheritance cost
+</Term>
+
+Item 40 的审慎建议是：非必要不要使用 virtual bases；若必须使用，尽量避免在 virtual base 放 data。纯接口或极小稳定状态更容易管理。
+
+<Callout
+  type="trap"
+  title="陷阱：所有 diamond 都应该立刻改成 virtual inheritance"
+>
+  先判断是否真的需要共享一个 root identity。有时两份 state
+  正是两个角色所需，有时整个继承图应改成 composition。virtual inheritance
+  修复布局歧义，却会引入新成本。
+</Callout>
+
+## 可辩护形态：public interface + private implementation
+
+Item 40 给出一种现实可用的组合：一个 public base 表达公开接口身份，另一个 private base 提供实现和 virtual hooks。
+
+```cpp
+class IPerson {
+public:
+    virtual ~IPerson() = default;
+    virtual std::string name() const = 0;
+};
+
+class PersonInfo {
+public:
+    explicit PersonInfo(DatabaseId id) : id_(id) {}
+
+    std::string theName() const {
+        return nameDelimOpen() + readName(id_) + nameDelimClose();
+    }
+
+private:
+    virtual std::string nameDelimOpen() const { return "["; }
+    virtual std::string nameDelimClose() const { return "]"; }
+    DatabaseId id_;
+};
+
+class CPerson final : public IPerson, private PersonInfo {
+public:
+    explicit CPerson(DatabaseId id) : PersonInfo(id) {}
+    std::string name() const override { return theName(); }
+
+private:
+    std::string nameDelimOpen() const override { return {}; }
+    std::string nameDelimClose() const override { return {}; }
+};
+```
+
+<Term def="只定义客户契约、通常不保存实例数据的公开抽象 base。">
+  interface class
+</Term>
+
+<Term def="通过 private base 复用算法并参与其 virtual extension protocol 的角色。">
+  private implementation base
+</Term>
+
+CPerson public 继承 IPerson，因为 CPerson is-an IPerson；private 继承 PersonInfo，因为 CPerson 根据 PersonInfo 实现，并需要重定义其 delimiters。两条继承边分别有不同、可说明的语义。
+
+<EcppInterfaceImplementationRolesMap />
+
+<Term def="同一 derived 对一个 base 采用 public identity、对另一个采用 private implementation 的设计。">
+  public-private inheritance pairing
+</Term>
+
+## 为什么不直接 composition PersonInfo
+
+若 CPerson 只调用 `PersonInfo::theName`，composition 更好；但示例还需要 override PersonInfo 的 virtual delimiters。普通 member 不能 override 其所属类型的 virtual functions。
+
+可以像 Item 39 那样设计 nested adapter 或修改 PersonInfo 接受 strategy/callback。若 PersonInfo 是不可修改的既有实现，private inheritance 可能是局部成本最低的办法。
+
+<Term def="在无法修改既有 base 协议时，用 private inheritance 参与其扩展点的约束。">
+  legacy extension constraint
+</Term>
+
+```cpp
+class CPerson final : public IPerson {
+private:
+    class InfoAdapter final : public PersonInfo {
+        // overrides and calls owner if needed
+    };
+
+    InfoAdapter info_;
+};
+```
+
+adapter composition 能让 CPerson 的继承图更简单，但增加一个辅助类型与 back-reference。应比较实际依赖，不要机械套规则。
+
+## 审查多重继承的六张表
+
+1. **身份表**：每条 public edge 是否真是 is-a，能否独立做 substitutability test。
+2. **名字表**：base public/protected/private names 是否冲突，客户如何消歧。
+3. **状态表**：共同祖先应有一份还是多份 state，谁维护交叉 invariant。
+4. **布局表**：是否出现 virtual base、额外 offset、size/alignment 与 ABI 影响。
+5. **构造表**：谁初始化 virtual base，constructor failure 如何展开。
+6. **演进表**：任一 base 新增 overload、data 或 virtual 是否破坏 derived。
+
+<Term def="把身份、名字、状态、布局、构造和演进风险逐项记录的多继承审查方法。">
+  multiple-inheritance audit matrix
+</Term>
+
+先预测后编译：分别给两个 bases 新增同名 nonvirtual function，观察现有 derived call sites 是否从唯一解析变为 ambiguity。多继承的风险不仅在今天，也在 base 独立演进后。
+
+## 小结
+
+- multiple inheritance 同时引入多个 base scopes、身份、状态和构造协议
+- 名字查找的 ambiguity 先于 access checking，private 候选也会参与冲突
+- 普通 diamond 包含多份共同 base；virtual inheritance 可共享一份但有布局与初始化成本
+- most-derived type 负责直接初始化 virtual bases
+- 多个正交纯接口可以合理 public 继承，但每个 contract 都要独立验证
+- public interface base 加 private implementation base 是可辩护形态，前提是每条边语义明确
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 40"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="multiple inheritance">
+    同时直接继承多个 bases 的关系。
+  </GlossaryItem>
+  <GlossaryItem term="ambiguity">
+    名字可沿多条路径找到而无法唯一决定。
+  </GlossaryItem>
+  <GlossaryItem term="lookup-before-access">
+    先查名再检查访问性的顺序。
+  </GlossaryItem>
+  <GlossaryItem term="qualified base call">
+    显式写出目标 base scope 的调用。
+  </GlossaryItem>
+  <GlossaryItem term="disambiguating wrapper">
+    derived 固定 base 选择的意图接口。
+  </GlossaryItem>
+  <GlossaryItem term="selective using declaration">
+    引入选定 base overload set 的声明。
+  </GlossaryItem>
+  <GlossaryItem term="multiple public contracts">
+    同时保持多个公开 base 合约的责任。
+  </GlossaryItem>
+  <GlossaryItem term="orthogonal interface capability">
+    可独立验证且状态不冲突的接口能力。
+  </GlossaryItem>
+  <GlossaryItem term="diamond inheritance">
+    共同 root 分叉后在 derived 汇合的继承图。
+  </GlossaryItem>
+  <GlossaryItem term="duplicated base subobject">
+    普通菱形沿路径产生的多份共同 base。
+  </GlossaryItem>
+  <GlossaryItem term="virtual inheritance">
+    多路径共享共同 base subobject 的机制。
+  </GlossaryItem>
+  <GlossaryItem term="shared virtual base identity">
+    菱形中唯一共同 base 的身份。
+  </GlossaryItem>
+  <GlossaryItem term="most-derived constructor">
+    负责 virtual base 初始化的完整对象构造器。
+  </GlossaryItem>
+  <GlossaryItem term="virtual-base initialization coupling">
+    最终类型依赖远端 virtual base 构造要求。
+  </GlossaryItem>
+  <GlossaryItem term="virtual-base offset metadata">
+    定位 virtual base 的 ABI 布局信息。
+  </GlossaryItem>
+  <GlossaryItem term="virtual inheritance cost">
+    虚继承的空间、访问、构造与诊断代价。
+  </GlossaryItem>
+  <GlossaryItem term="interface class">
+    只定义客户契约的公开抽象 base。
+  </GlossaryItem>
+  <GlossaryItem term="private implementation base">
+    私有复用算法和扩展协议的 base。
+  </GlossaryItem>
+  <GlossaryItem term="public-private inheritance pairing">
+    公开接口与私有实现两种继承角色组合。
+  </GlossaryItem>
+  <GlossaryItem term="legacy extension constraint">
+    既有实现只能通过继承扩展的限制。
+  </GlossaryItem>
+  <GlossaryItem term="multiple-inheritance audit matrix">
+    身份到演进的六维审查表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：修复 MP3Player 的 checkOut ambiguity。** 客户意图是图书馆借出，Gadget 的同名函数是内部状态检查。
+
+<Answer question="怎样消歧且减少客户对继承图的依赖？">
+  在 MP3Player 提供 borrow wrapper，由它显式调用 BorrowableItem::checkOut，并把
+  Gadget
+  检查放进前置条件；不要要求每个客户写限定名。测试未限定原名不作为公开业务入口、borrow
+  调用正确 base、任一 base 新增 overload 后 wrapper 仍保持明确。
+</Answer>
+
+2. **问题 2：分析 IOFile diamond。** File 保存唯一 canonical path，InputFile 与 OutputFile 都需访问它。
+
+<Answer question="何时使用 virtual inheritance，必须补哪些验证？">
+  需求明确要求一个 File identity 时，两条中间路径 virtual 继承 File；由 IOFile
+  及任何更深 most-derived type 显式初始化 File。验证只有一个 File
+  subobject、两条路径观察同一 path、对象 size/alignment、copy/move、constructor
+  exception 与 ABI。若成本过高，改为共享 FileState composition。
+</Answer>
+
+3. **问题 3：审查 CPerson 的两条继承边。** IPerson 是客户接口，PersonInfo 是不可修改且依靠 virtual hooks 的实现。
+
+  <Answer question="为什么这组多继承可接受，替代方案是什么？">CPerson public 继承 IPerson 保持公开 is-a，private 继承 PersonInfo 只表达 implemented-in-terms-of 并 override delimiters；两条边语义不同且无共同 root。分别测试 IPerson substitutability 和 PersonInfo hook 行为。替代是 nested InfoAdapter member，可隔离实现继承，但需比较辅助类型和 owner lifetime 成本。</Answer>
+</Exercises>

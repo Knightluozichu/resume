@@ -1,0 +1,205 @@
+---
+title: "Lesson 10：构建大型程序"
+type: A
+section: Easy C++（第5版）· 多文件组织
+order: 10
+description: 对齐原书 Lesson 10「大規模なプログラムの作成」：用头文件、源文件、翻译单元、声明/定义、分离编译、链接与命名空间建立可扩展多文件结构。
+demo: false
+math: false
+sourceUrl: "https://www.sbcr.jp/product/4797392593/"
+draft: false
+---
+
+import {
+  EcpLargeProgramsBuildMap,
+  EcpLargeProgramsLinkLab,
+  EcpLargeProgramsSymbolFlow,
+} from "@/components/mdx/easy-cpp-5e/diagrams/building-large-programs";
+
+<Objectives>
+
+- 能解释头文件、源文件、翻译单元、目标文件与可执行文件的生产关系
+- 能实现声明与定义分离、include guard 和命名空间，构建一个三文件程序
+- 能分析未定义符号、重复定义与陈旧目标文件，判断故障发生在预处理、编译还是链接
+
+</Objectives>
+
+## 为什么文件变多不是目标
+
+把 500 行程序随意切成五个 100 行文件，并不会自动得到良好结构。拆分文件的目标是稳定接口、隔离实现、缩小修改影响，并让各部分可以独立编译。分割边界应围绕责任和依赖，而不是行数。
+
+<Term def="一个源文件在预处理展开所有 include 后形成、由编译器独立处理的完整输入。">翻译单元</Term>
+
+每个 `.cpp` 通常形成一个翻译单元，分别编译为目标文件；链接器最后解析它们之间的符号引用。头文件不会单独“运行”，它的文本被包含到各个翻译单元中。
+
+<EcpLargeProgramsBuildMap />
+
+## 声明描述接口，定义提供实体
+
+声明告诉编译器某个名字及其类型存在，定义真正提供函数体或对象存储。多个翻译单元可以看到同一份函数声明，但程序中通常只能有一个对应的非 inline 函数定义。
+
+<Term def="介绍名字、类型与接口，使当前翻译单元可以检查使用方式而不一定提供实体。">声明</Term>
+
+<Term def="为函数提供函数体或为对象提供实际实体与存储的代码。">定义</Term>
+
+```cpp title="calculator.hpp"
+#ifndef EASY_CPP_CALCULATOR_HPP
+#define EASY_CPP_CALCULATOR_HPP
+
+namespace easy {
+int add(int left, int right);
+}
+
+#endif
+```
+
+```cpp title="calculator.cpp"
+#include "calculator.hpp"
+
+int easy::add(int left, int right) {
+    return left + right;
+}
+```
+
+```cpp title="main.cpp"
+#include <iostream>
+#include "calculator.hpp"
+
+int main() {
+    std::cout << easy::add(2, 3) << '\n';
+}
+```
+
+头文件公开调用者必须知道的声明，源文件保存实现。`calculator.cpp` 也包含自己的头文件，让编译器立即检查声明与定义是否一致。
+
+## 头文件防护阻止同一翻译单元重复展开
+
+头文件可能通过不同依赖路径被多次 include。include guard 使用预处理宏确保同一翻译单元中内容只展开一次。
+
+<Term def="供多个翻译单元共享声明与必要类型定义的接口文件，通常使用 include guard 防止重复展开。">头文件</Term>
+
+宏名应在项目内唯一。`#pragma once` 也很常见，但传统 guard 的机制更直接：第一次未定义宏，进入并定义；后续包含发现宏已定义，跳过正文。
+
+<Callout type="trap" title="陷阱：include guard 能阻止所有重复定义">
+  guard 只阻止同一翻译单元内重复展开一个头文件。若把普通函数定义写进头文件，多个 .cpp 各自产生定义，链接时仍可能重复；接口与实现边界必须同时正确。
+</Callout>
+
+## 分离编译把改动限制在相关单元
+
+可以分别生成目标文件，再链接为程序。只修改 `calculator.cpp` 时，若公开头文件未变，理论上只需重编该源文件并重新链接。
+
+```bash
+g++ -std=c++17 -Wall -Wextra -c calculator.cpp -o calculator.o
+g++ -std=c++17 -Wall -Wextra -c main.cpp -o main.o
+g++ calculator.o main.o -o calculator_app
+```
+
+<Term def="各翻译单元独立编译为目标文件，随后由链接器组合的构建方式。">分离编译</Term>
+
+构建系统负责记录“哪个目标文件依赖哪些源文件和头文件”。若头文件变化却没有重编所有包含者，旧目标文件可能保留陈旧接口假设。干净重建能排除陈旧产物，但长期修复应是正确依赖图，而不是每次删除全部缓存。
+
+## 链接器按符号连接调用与定义
+
+编译 `main.cpp` 时，只需知道 `easy::add(int,int)` 的声明，就能生成一个未解析引用；链接器在 `calculator.o` 中寻找唯一匹配定义。找不到是未定义符号，找到多个普通定义则是重复定义。
+
+<Term def="跨目标文件解析符号引用并把目标代码与库组合成最终程序的阶段。">链接</Term>
+
+<EcpLargeProgramsSymbolFlow />
+
+符号匹配包含命名空间、参数类型与限定信息。声明 `easy::add(int,int)`，却定义全局 `add(int,int)`，源码文字看似相近，符号仍不同。先读链接错误中的完整名字，再检查定义是否编入目标列表。
+
+<Callout type="trap" title="陷阱：undefined reference 一定是缺少 #include">
+  include 解决当前翻译单元的声明可见性；链接错误表示编译已经接受调用，却找不到定义。应检查实现、签名、命名空间、目标文件和库链接选项。
+</Callout>
+
+## 作用域与链接属性回答两个不同问题
+
+作用域回答“源码中哪里能查到这个名字”，链接属性回答“不同翻译单元中的同名声明是否指同一实体”。块作用域变量只在块内可见；命名空间作用域名字可在更大范围声明；`static` 命名空间对象具有内部链接，只在当前翻译单元对应实体。
+
+不要用全局变量作为跨文件通信的默认方案。它把初始化顺序、并发修改和测试隔离变成隐藏契约。优先通过函数参数、返回值和拥有明确生命周期的对象传递状态。
+
+## 命名空间组织名字并避免冲突
+
+命名空间把相关接口放进命名范围。`easy::add` 与其他库的 `math::add` 可以共存，调用点明确选择来源。
+
+<Term def="在全局层级组织相关名字、控制查找并避免不同模块重名冲突的作用域。">命名空间</Term>
+
+```cpp
+namespace easy {
+class Calculator;
+int add(int left, int right);
+}
+```
+
+命名空间可以跨多个文件扩展，不需要把所有定义写在一个块中。头文件不要使用 `using namespace`，否则每个包含者都被迫扩大名字查找范围。
+
+## include 依赖会影响重编译范围
+
+一个头文件 include 另一个头文件，会把依赖传递给所有包含者。能用前置声明满足的接口可减少不必要展开，但只有编译器不需要完整类型时才行；按值成员、继承和需要对象大小的操作通常要求完整定义。
+
+依赖优化的第一目标仍是正确。先让每个文件直接包含自己使用的声明，不依赖“碰巧由别的头文件间接带入”；再用构建计时决定是否值得前置声明或 Pimpl。
+
+## 先预测三类故障的阶段
+
+<EcpLargeProgramsLinkLab />
+
+先预测：删除头文件声明会使 `main.cpp` 编译失败；保留声明但不链接 `calculator.o` 会链接失败；把普通定义复制到两个 `.cpp` 会重复定义。三者现象不同，修复入口也不同。
+
+## 三步构建可验证模块
+
+<Stepper>
+  <Step title="第一步：确定接口边界">
+    把调用者必须知道的声明放入带 guard 的头文件，把实现放入同名源文件，并让实现首先包含自己的头文件。
+
+    <EcpLargeProgramsBuildMap />
+  </Step>
+  <Step title="第二步：独立编译并连接符号">
+    分别生成目标文件，检查每个编译命令输入；再链接并沿完整符号名验证调用、声明与唯一定义一致。
+
+    <EcpLargeProgramsSymbolFlow />
+  </Step>
+  <Step title="第三步：制造阶段性故障">
+    分别删除声明、遗漏目标文件和复制定义，记录编译器或链接器诊断；恢复后修改头文件验证所有包含者重编。
+
+    <EcpLargeProgramsLinkLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 多文件组织围绕责任、接口和依赖，不按行数机械切割
+- 每个 .cpp 预处理后形成翻译单元，独立编译为目标文件，最终由链接器组合
+- 声明让使用可检查，定义提供实体；头文件共享声明，源文件保存普通实现
+- include guard 只防单个翻译单元重复展开，不能修复跨翻译单元重复定义
+- 命名空间组织名字，作用域与链接属性分别控制可见范围和跨文件实体身份
+
+<Exercises>
+  1. **问题 1：区分产物。** `calculator.hpp`、`calculator.cpp`、`calculator.o` 与可执行文件如何产生？
+
+  <Answer question="头文件、源文件、目标文件和可执行文件的生产关系是什么？">头文件被 include 到源文件形成翻译单元；编译器把 calculator.cpp 的翻译单元生成 calculator.o；其他源文件各自产生目标文件；链接器解析它们的符号引用并组合为可执行文件。头文件通常不单独编译运行。</Answer>
+
+  2. **问题 2：判断阶段。** 有声明但遗漏 `calculator.o`、没有声明、两个源文件都定义 add，分别在哪一步失败？
+
+  <Answer question="三类多文件错误分别属于编译还是链接？">没有可见声明时调用无法通过编译；有声明但未链接实现目标文件时产生未定义符号；两个目标文件都提供普通 add 定义时链接器报告重复定义。应按阶段检查不同输入。</Answer>
+
+  3. **问题 3：审计头文件。** 为什么实现源文件也应首先 include 自己的公开头文件？
+
+  <Answer question="实现文件包含自己的头文件有什么价值？">编译器能在定义处直接比较公开声明与实现签名，及时发现参数、返回类型、命名空间不一致；否则调用者和实现可能各自编译，直到链接才暴露难读的符号差异。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="翻译单元">源文件经预处理展开 include 后的独立编译输入。</GlossaryItem>
+  <GlossaryItem term="声明">介绍名字、类型和接口，使使用可被编译器检查。</GlossaryItem>
+  <GlossaryItem term="定义">为函数或对象提供实际实体的代码。</GlossaryItem>
+  <GlossaryItem term="头文件">共享声明与必要类型定义的接口文件。</GlossaryItem>
+  <GlossaryItem term="分离编译">各翻译单元独立生成目标文件后再链接的方式。</GlossaryItem>
+  <GlossaryItem term="链接">解析跨目标文件符号并生成最终程序的阶段。</GlossaryItem>
+  <GlossaryItem term="命名空间">组织相关名字并避免模块重名冲突的作用域。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="やさしいC++ 第5版, Lesson 10 大規模なプログラムの作成"
+  adaptedUrl="https://www.sbcr.jp/product/4797392593/"
+/>

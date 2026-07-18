@@ -1,0 +1,274 @@
+---
+title: "第19章：Multithreading"
+type: C
+section: "Essential C# 7.0 · Concurrency"
+order: 19
+description: "掌握thread/race、Thread/ThreadPool、Task/async/await、CancellationToken、TAP、Parallel.ForEach与PLINQ。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-csharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7ParallelPartitionLab, Ec7TaskCancellationLab, Ec7ThreadInterleavingLab } from "@/components/mdx/essential-csharp-7/diagrams/multithreading";
+
+<Objectives>
+
+- 能解释thread interleaving、non-atomic read-modify-write与Thread/ThreadPool调度产生的race和lifetime
+- 能设计Task-based async/await、CancellationToken与TAP API，并区分completed、faulted和canceled outcomes
+- 能比较sequential、Parallel.ForEach与PLINQ的partition、ordering、shared-state和overhead边界
+
+</Objectives>
+
+## 为什么“同时进行”有三种不同问题
+
+multithreading允许多个execution paths交错；asynchrony让caller等待I/O时不阻塞当前thread；parallelism用多个cores同时计算。它们可组合，却不是同义词。用Task.Run包住blocking I/O只是占住pool thread，用async读取文件也不保证并行CPU，Parallel.ForEach更不适合有共享mutation的小任务。
+
+先预测：两个`counter++`为何可能只增加1；new Thread和ThreadPool谁拥有worker lifetime；async method调用后先执行到哪里；await是否总切thread；Cancel是否立即杀死operation；Task fault何时抛；PLINQ是否保持source order。然后沿interleaving、Task timeline和partition验证。
+
+<Term def="多个execution paths的operations以不同顺序交错，并共同决定shared-state observable result的时间线。">execution interleaving</Term>
+
+## Multithreading Basics and Race Conditions
+
+thread拥有独立call stack和instruction position，但process memory中的objects可被多个threads引用。scheduler可在operations之间切换；source一行`counter++`通常展开为read、add、write，不是atomic。两个threads都读0再各写1就丢一次update。
+
+<Term def="多个threads未建立必要ordering/atomicity而访问shared mutable state，使结果依赖不可控interleaving。">race condition</Term>
+
+```csharp
+private static int counter;
+
+static void IncrementMany()
+{
+    for (int i = 0; i < 100_000; i++)
+        counter++; // read-modify-write, not atomic
+}
+```
+
+race不一定每次复现，debugger/logging会改变timing。测试要高并发重复、barrier对齐critical window，并以invariant检查结果；真正修复使用ownership/immutability或第20章的lock/Interlocked，而不是Sleep。
+
+<Stepper>
+  <Step title="切换serial与lost-update interleaving">
+    <Ec7ThreadInterleavingLab />
+  </Step>
+  <Step title="展开read-modify-write">
+    标出每个thread读值和写值；同一source line可在内部步骤间交错。
+  </Step>
+  <Step title="比较Thread与ThreadPool ownership">
+    dedicated Thread由caller start/join；pool复用workers处理短任务，不应长期blocking。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="一行C#语句执行时不会被其他thread插入">
+source statement不等于atomic operation。counter++、check-then-act和collection compound operations都可在内部步骤间交错。
+</Callout>
+
+## Working with Thread
+
+`Thread`表示dedicated managed thread，可设置IsBackground、Name、priority等并Start/Join。foreground threads会阻止process正常退出，background threads不会；任何共享data仍需同步。适合需要特定thread identity、apartment、long-running blocking loop等少数场景。
+
+```csharp
+var worker = new Thread(() =>
+{
+    Console.WriteLine($"worker {Thread.CurrentThread.ManagedThreadId}");
+    DoWork();
+});
+
+worker.IsBackground = true;
+worker.Start();
+worker.Join();
+```
+
+不要使用Thread.Abort式强制终止思维；operation应协作停止并finally cleanup。UI thread只能由其dispatcher/context更新UI，worker需marshal result。
+
+## ThreadPool and Scheduler Ownership
+
+ThreadPool维护可复用worker集合，避免每个短work item创建OS thread。`QueueUserWorkItem`只提供低层queue，completion/exception组合较弱；现代业务通常使用Task，它默认由TaskScheduler调度到pool并保留状态、result和exception。
+
+<Term def="dedicated Thread、ThreadPool或TaskScheduler负责worker创建、复用、排队与执行公平性的边界。">scheduler ownership</Term>
+
+```csharp
+ThreadPool.QueueUserWorkItem(state =>
+{
+    try { Process((Job)state); }
+    catch (Exception ex) { Log(ex); }
+}, job);
+```
+
+pool starvation发生在大量work items长期block/synchronous wait，导致continuations无worker。I/O优先真正async API；CPU long-running work需measure并考虑dedicated scheduler/thread，不盲目queue。
+
+## Task Represents an Outcome
+
+Task不是thread，它是一次operation最终completion的句柄：RanToCompletion、Faulted或Canceled。`Task<T>`还承载result。Task可能在pool执行、由I/O completion驱动、已完成或由custom scheduler执行；不要从Task推断专属thread。
+
+<Term def="operation从调用、incomplete等待到RanToCompletion/Faulted/Canceled及result/exception observation的状态约定。">task lifecycle</Term>
+
+```csharp
+Task<int> compute = Task.Run(() => ComputeScore());
+
+try
+{
+    int score = await compute;
+    Console.WriteLine(score);
+}
+catch (Exception ex)
+{
+    Console.Error.WriteLine(ex);
+}
+```
+
+不要fire-and-forget普通Task；未await/return的fault可能丢失ownership。只有event handler等边界使用async void，且异常直接进入context。组合用WhenAll/WhenAny并定义partial success/exception policy。
+
+## async and await State Machines
+
+async method同步执行到第一个尚未完成的await；此时注册continuation并把incomplete Task返回caller，不阻塞thread。operation完成后continuation按captured SynchronizationContext/TaskScheduler或默认scheduler恢复。若awaiter已完成，代码可能同步继续，不能依赖“await一定异步”。
+
+<Stepper>
+  <Step title="切换async I/O、already-complete、cancel与fault">
+    <Ec7TaskCancellationLab />
+  </Step>
+  <Step title="跟踪同步前缀与continuation">
+    调用先运行到incomplete await；caller获得Task，完成信号再恢复state machine。
+  </Step>
+  <Step title="区分terminal outcomes">
+    await返回result、重抛stored exception或抛cancellation；Task shape不保证implementation不blocking。
+  </Step>
+</Stepper>
+
+```csharp
+public async Task<string> DownloadAsync(Uri uri, CancellationToken token)
+{
+    using (var client = new HttpClient())
+    using (HttpResponseMessage response = await client.GetAsync(uri, token))
+    {
+        response.EnsureSuccessStatusCode();
+        return await response.Content.ReadAsStringAsync();
+    }
+}
+```
+
+library中context capture policy要明确；UI/app code常需回context，lower-level library可在适当版本使用ConfigureAwait(false)。不要同步`.Result`/`.Wait()`堵住需同一context的continuation，可能deadlock并包装exception。
+
+<Callout type="trap" title="async method会自动在后台线程运行">
+async本身不创建thread。同步前缀在caller thread运行，真正async I/O等待期间可能没有worker，continuation在哪里恢复由context/scheduler决定。
+</Callout>
+
+## Cooperative Cancellation
+
+CancellationToken是协作信号。caller拥有CancellationTokenSource并发出Cancel；callee接收token、传给下游、定期ThrowIfCancellationRequested或检查IsCancellationRequested。Cancel不强杀thread、不回滚已产生side effects，operation决定安全观察点。
+
+<Term def="caller发出停止请求、每层传播同一token、operation在安全点观察并以canceled outcome结束的协议。">cancellation contract</Term>
+
+```csharp
+public static async Task ProcessAsync(
+    IEnumerable<Job> jobs,
+    CancellationToken token)
+{
+    foreach (Job job in jobs)
+    {
+        token.ThrowIfCancellationRequested();
+        await ProcessOneAsync(job, token);
+    }
+}
+```
+
+若已commit不可回滚operation，需定义cancel只阻止下一项还是返回partial result。注册callback要Dispose registration；CancellationTokenSource也应按ownership Dispose。超时可由CancelAfter实现，但“timeout”和“user canceled”日志/UX可能需区分。
+
+## Task-based Asynchronous Pattern
+
+TAP约定async operation返回Task或`Task<T>`，方法名以Async结尾，通常立即返回hot task；cancellation用CancellationToken，progress可`IProgress<T>`，usage errors可同步throw，operation failures进入Task。async methods不能有ref/out，因为completion与call stack分离。
+
+```csharp
+public Task<Report> LoadReportAsync(
+    string id,
+    CancellationToken cancellationToken)
+{
+    if (id == null) throw new ArgumentNullException(nameof(id));
+    return repository.LoadAsync(id, cancellationToken);
+}
+```
+
+不要用Task.Run伪装server-side blocking I/O为可扩展TAP；它只是转移blocking。CPU-bound desktop work可Task.Run保持UI responsive，但仍受cores和cancellation granularity约束。
+
+## Parallel.ForEach for CPU-bound Independent Work
+
+Parallel.ForEach把iterations partition到workers，适合每项CPU cost足够大、iterations独立、order不重要。shared aggregation需thread-local state、concurrent collection或同步；直接Add到List、更新普通counter会race。exceptions通常聚合，partial side effects可能已发生。
+
+<Term def="partition/scheduling/merge成本与每项CPU工作、core数量、ordering和shared-state协调之间的收益模型。">parallel cost model</Term>
+
+```csharp
+var options = new ParallelOptions
+{
+    CancellationToken = token,
+    MaxDegreeOfParallelism = Environment.ProcessorCount
+};
+
+Parallel.ForEach(images, options, image =>
+{
+    RenderIndependent(image);
+});
+```
+
+benchmark包括warmup、real input、sequential baseline、degree和allocation。tiny work会被partition/context/merge成本淹没，I/O blocking loops也可能耗尽pool。
+
+## PLINQ
+
+`AsParallel()`把LINQ source交给PLINQ partition/merge。默认不保证source order；需要时`AsOrdered()`增加协调成本。`WithCancellation`传播token，`WithDegreeOfParallelism`限制workers，exceptions可AggregateException。operator/lambda必须thread-safe且最好pure。
+
+<Stepper>
+  <Step title="切换sequential、Parallel、PLINQ、小任务与cancel">
+    <Ec7ParallelPartitionLab />
+  </Step>
+  <Step title="检查partition和ordering">
+    Parallel/PLINQ completion默认无source order；AsOrdered只在确有需求时使用。
+  </Step>
+  <Step title="比较overhead、failure与partial effects">
+    小任务可能更慢；cancel/exception前已有iterations执行，side effects需幂等或隔离。
+  </Step>
+</Stepper>
+
+```csharp
+var hashes = files
+    .AsParallel()
+    .WithCancellation(token)
+    .Select(file => ComputeHash(file))
+    .ToArray();
+```
+
+不要对remote IQueryable直接假设PLINQ；materialize/AsEnumerable边界、memory和provider必须清晰。需要deterministic output时排序最终results，或AsOrdered并测量。
+
+## 本章回顾：先选Execution Model，再谈速度
+
+1. thread interleaving会拆开non-atomic operations，race结果依赖timing。
+2. Thread提供dedicated identity，ThreadPool复用workers，Task表达operation outcome而非thread。
+3. async/await生成continuation state machine，不阻塞等待也不保证新thread。
+4. cancellation是贯穿调用链的协作contract；TAP规范Task return、Async naming和failure channel。
+5. Parallel.ForEach/PLINQ只在CPU work足够大且独立时收益，order/shared state/overhead必须测量。
+
+<Exercises>
+
+**问题 1：如何稳定证明counter++存在lost update？**
+
+<Answer>把operation展开为read/add/write，用barrier让两个threads在read后同时继续write，重复测试final count小于expected。Sleep不是证明。修复需Interlocked.Increment、lock或消除shared mutation，并在修复后用同一stress/invariant测试。</Answer>
+
+**问题 2：一个合格TAP方法如何处理validation、failure和cancellation？**
+
+<Answer>命名Async并返回Task/Task result，调用即开始；null等usage error可同步validation，operation failure存入Task由await重抛；接受CancellationToken并传给所有下游，在安全点观察，取消以OperationCanceledException/Task Canceled结束。不要用ref/out或隐藏blocking I/O。</Answer>
+
+**问题 3：何时把sequential LINQ改成PLINQ？**
+
+<Answer>先profile确认每项CPU-heavy、数量足够、独立且order非必要；建立sequential baseline，在真实core/input上测partition/merge和allocation。确保lambdas无shared mutation，定义cancel/exception partial effects；需要order用AsOrdered并重新测，tiny/I/O work保持sequential/async。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="execution interleaving" definition="多个execution paths不同顺序交错并决定shared result的时间线。" />
+  <GlossaryItem term="race condition" definition="缺少ordering/atomicity的shared-state访问导致timing-dependent结果。" />
+  <GlossaryItem term="scheduler ownership" definition="Thread、ThreadPool或TaskScheduler对worker、queue和执行的责任。" />
+  <GlossaryItem term="task lifecycle" definition="operation到completed、faulted或canceled及结果观察的状态约定。" />
+  <GlossaryItem term="cancellation contract" definition="token由caller发出、调用链传播并在安全点协作停止的协议。" />
+  <GlossaryItem term="parallel cost model" definition="每项CPU工作与partition、ordering、merge和协调成本的收益关系。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 19: Multithreading" adaptedUrl="https://www.informit.com/store/essential-csharp-7.0-9781509303618" />

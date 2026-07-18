@@ -1,0 +1,225 @@
+---
+title: "Chapter 12. Generics"
+type: C
+section: "CLR via C# 4e · Designing Types"
+order: 12
+description: "覆盖FCL泛型基础设施、open/closed identity、继承与代码共享、interface/delegate variance、方法推断和完整约束/可验证性规则。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcGenericConstraintLab, CvcGenericTypeIdentityLab, CvcGenericVarianceLab } from "@/components/mdx/clr-via-csharp/diagrams/generics";
+
+<Objectives>
+
+- 能描述open/closed generic type、constructed identity、static storage与JIT代码共享/专门化
+- 能推导generic interface/delegate的invariance、covariance和contravariance安全方向
+- 能设计primary/secondary/constructor constraints，使generic body可验证且避免boxing、dynamic和反射补洞
+
+</Objectives>
+
+## 为什么Generic是运行时Type System能力
+
+泛型不只是compiler替换文本。CLR metadata保留generic parameter、constraints和constructed type，loader/JIT知道`List<int>`与`List<string>`的精确identity，value type不必装箱，reflection能观察open definition和closed construction。Generic让“一份算法、多个类型”仍保持静态检查，但每个constraint、variance与runtime sharing都有边界。
+
+先预测：`List<string>`是否继承`List<object>`；`typeof(List<>)`能否new；`Cache<int>.Value`与`Cache<string>.Value`是否共享；所有reference-type constructions是否使用相同native code；`where T:new()`能否调用private constructor；`default(T)==null`是否可编译。后文从identity、variance和constraint三条链推导，不背结论。
+
+<Term def="Generic definition与所有type arguments组合而成、参与assignment、static storage与runtime加载的精确身份。">constructed generic identity</Term>
+
+## Generics in the Framework Class Library
+
+FCL用`List<T>`、`Dictionary<TKey,TValue>`、`Nullable<T>`、`IEnumerable<T>`、`Task<T>`等提供type-safe collections与results。相比Object-based API，generic避免caller cast、提前发现错误并让value types保持inline storage。选择FCL generic abstraction时仍要看ordering、mutability、equality comparer、thread safety和allocation，不能只因“泛型”就认为高性能。
+
+```csharp
+var prices = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase)
+{
+    ["CPU"] = 1999m,
+};
+
+if (prices.TryGetValue("cpu", out decimal price))
+    Console.WriteLine(price);
+```
+
+Comparer属于generic collection行为contract；`Dictionary<string,decimal>` identity不包含comparer实例，两个同type collections可有不同equality semantics。API应在construction明确注入，不在业务中散落normalization。
+
+## Generics Infrastructure
+
+Metadata用GenericParam、GenericParamConstraint、TypeSpec和MethodSpec描述parameters/constructed signatures。CLR在load/JIT验证constraints，C# compiler在call site与generic body提前检查。Generic parameter不是Object占位符；在constraint允许范围内，JIT可用constrained calls处理value/reference type，减少boxing。
+
+Reflection通过`IsGenericTypeDefinition`、`ContainsGenericParameters`、`GetGenericArguments`、`MakeGenericType`操作，但构造时仍验证arity与constraints。Dynamic type creation/AOT/trimming还要确保closed types与metadata被保留，不能假设运行时任意组合都可生成代码。
+
+## Open and Closed Types
+
+`Dictionary<,>`是open generic definition，包含未赋值parameters，不能普通instantiate；`Dictionary<string,int>`是closed constructed type，可new并有自己的runtime identity。Nested generic identity还包含outer arguments；部分开放type在reflection中可存在但仍`ContainsGenericParameters=true`。
+
+<Term def="仍包含未绑定generic parameters、只能作为definition/metadata操作而不能普通构造实例的类型。">open generic type</Term>
+
+Closed generic type拥有static fields/type initialization。每个closed construction通常独立，例如`Counter<int>.Value`与`Counter<long>.Value`。DI container注册open service到open implementation时，resolution阶段构造closed type并检查constraints；失败应在startup validate，而不是首次request。
+
+<Stepper>
+  <Step title="切换open、closed、nested construction与generic method"><CvcGenericTypeIdentityLab /></Step>
+  <Step title="建立identity表">记录generic definition、arity、arguments、constraints、load context、static owner与可否instantiate。</Step>
+  <Step title="验证反射/AOT">枚举实际closed set，在trimmed/AOT发布中提前preserve或source-generate，避免运行时MakeGenericType失败。</Step>
+</Stepper>
+
+## Generic Types and Inheritance
+
+`List<string>`与`List<object>`是同一generic definition的不同constructed types，彼此没有class inheritance。它们都继承各自definition指定的base construction，例如`Derived<T> : Base<T>`。Generic type可以继承closed base `Base<int>`或parameterized base `Base<T>`，但assignment遵循实际base/interface graph与variance，而非“string继承object所以容器也继承”。
+
+Mutable `List<T>`必须invariant：若`List<string>`可当`List<object>`，caller就能Add(new object())破坏原storage。Array covariance是历史reference conversion，会把检查推迟到runtime并可能`ArrayTypeMismatchException`，不应据此推导generic collections。
+
+## Generic Type Identity
+
+Identity包括generic definition及每个argument的runtime identity。`List<int>`与`List<Int32>`相同因为keyword同CLR type；同名`Plugin.Contract`从不同assembly/load context构造出的`List<Plugin.Contract>`仍不同。Generic arguments也进入assembly-qualified name与serialization contract。
+
+Static members按closed type分开，typeof/`is`/reflection可精确检查。不要把generic type name字符串手工拼接持久化；版本、assembly qualification和nested syntax脆弱，使用stable contract id与受控mapping。
+
+## Code Explosion
+
+CLR/JIT可对reference-type instantiations共享一份canonical native code，通过hidden generic context处理具体type；value types布局/operations不同，通常需specialized code。Runtime还可能因constraints、optimization或AOT策略生成不同版本。泛型既能消除boxing也可能增加native image与JIT时间，特别是许多large structs/closed combinations。
+
+<Term def="大量closed generic constructions导致JIT/AOT代码、metadata和startup成本增长的现象。">generic code expansion</Term>
+
+优化前用JIT events、native image size和startup profile量化。减少无意义closed combinations、把非type-dependent逻辑移到nongeneric helper、避免巨大value-type泛型层层组合。不要为节省理论code size退回Object并引入cast/boxing。
+
+## Generic Interfaces and Generic Delegates
+
+Generic interface表达带类型的capability，generic delegate表达带类型的callback。`IComparer<T>`、`IEquatable<T>`避免Object cast；`Func<T,TResult>`/`Action<T>`减少自定义delegate proliferation。Value type实现generic interface时，受constraint的调用可constrained dispatch避免boxing，但转成interface variable仍可能boxing。
+
+```csharp
+static T Max<T>(T left, T right, IComparer<T> comparer) =>
+    comparer.Compare(left, right) >= 0 ? left : right;
+
+Func<string, int> length = static text => text.Length;
+Console.WriteLine(Max("aa", "b", Comparer<string>.Create((x, y) => length(x) - length(y))));
+```
+
+Delegate equality包含target+method；generic construction不同则delegate types不同。Callback API还要定义exception、thread、lifetime和variance，generic只保证signature。
+
+## Delegate and Interface Contravariant and Covariant Generic Type Arguments
+
+Covariant `out T`只把T放在输出位置，因此`IEnumerable<string>`可作为`IEnumerable<object>`：consumer只读取Object，实际都是String。Contravariant `in T`只把T放输入位置，因此能比较任意Object的`IComparer<object>`可用于String。T同时输入输出或mutable storage必须invariant。
+
+<Term def="Generic parameter只被生产时允许向base方向转换、只被消费时允许从更宽consumer复用的安全引用转换。">variance direction</Term>
+
+Variance只适用于interface/delegate generic parameters和reference-type arguments；value type constructions不通过boxing自动variance。编译器检查所有成员positions，包括nested delegate/generic组合。推导时问“谁向谁交付值”：producer可变宽，consumer可复用更宽输入。
+
+<Stepper>
+  <Step title="切换invariant、covariant、contravariant与value-type限制"><CvcGenericVarianceLab /></Step>
+  <Step title="标注每个T位置">对parameters、returns、delegates和nested generics逐层标记consume/produce，推导允许方向。</Step>
+  <Step title="做破坏性尝试">尝试通过假想转换写入错误type，若能构造反例就必须invariant；再用compiler验证结论。</Step>
+</Stepper>
+
+<Callout type="trap" title="Derived继承Base，所以任何Container<Derived>都能转Container<Base>">
+可变container同时消费与生产T，转换会允许写入非Derived的Base并破坏storage。只有contract位置满足variance安全时interface/delegate才声明方向。
+</Callout>
+
+## Generic Methods and Generic Methods and Type Inference
+
+Generic method在nongeneric或generic owner中声明自己的parameters。Compiler从arguments、receiver和某些context推断type arguments，但不只凭return target完成所有推断；失败时显式指定。Inference先收集bounds再fix types，numeric implicit conversion与overload candidates可能产生意外选择，公共overloads应减少模糊。
+
+```csharp
+static IReadOnlyList<TOut> Map<TIn, TOut>(
+    IEnumerable<TIn> source,
+    Func<TIn, TOut> projection)
+{
+    var result = new List<TOut>();
+    foreach (TIn item in source)
+        result.Add(projection(item));
+    return result;
+}
+
+IReadOnlyList<int> lengths = Map(new[] { "a", "bbb" }, s => s.Length);
+```
+
+Generic method overload与nongeneric重载一起参与resolution；constraint通常不是初始signature区分手段，两个仅constraints不同的方法不能作为合法overload。设计时让names/parameters表达能力，不靠复杂推断谜题。
+
+## Generics and Other Members
+
+Fields、properties、events、operators和nested types都可使用containing generic parameters；methods还能声明新parameters。每个closed owner有相应static state，nested type identity包含outer parameters。Attribute arguments不能任意是type parameter值，runtime serialization/DI也需知道closed identity。
+
+Generic virtual method dispatch结合receiver slot与method arguments；override必须保持generic arity/constraints兼容。Property自身在C#不能声明新generic parameters，需generic method。Event delegate可generic，但subscription lifetime不因type-safe而自动解决。
+
+## Verifiability and Constraints
+
+Generic body在不知道具体T时只能执行所有允许T都安全的操作。Constraint给compiler/JIT一份capability proof：可调用哪些members、是否可能null、是否有public parameterless constructor、是否是unmanaged。用constraint表达真实需求，避免在body里cast、reflection或dynamic猜能力。
+
+<Term def="Generic constraint向compiler与CLR证明body可对所有合法type arguments执行哪些操作。">constraint capability proof</Term>
+
+## Primary Constraints, Secondary Constraints, and Constructor Constraints
+
+Primary constraints包括class/struct/unmanaged/notnull/base class等（具体取决语言版本），限制表示或主继承关系；secondary constraints包括interfaces和type parameter关系；`new()` constructor constraint保证public parameterless construction并通常放最后。`new()`不支持async factory、required dependencies或nonpublic constructor，复杂创建用factory interface/delegate。
+
+Constraints影响API compatibility：收紧会让旧source不再构造closed type/method，放宽可能让body实现需要改变。Runtime加载已构造metadata时也验证。Public generic contract应在docs列出语义要求，type-system constraint只能表达可调用能力，不能表达“比较器必须传递”等behavior law。
+
+<Stepper>
+  <Step title="切换primary、secondary、constructor与modern static constraints"><CvcGenericConstraintLab /></Step>
+  <Step title="从Body反推能力">逐条列body操作需要的member、conversion、construction、null/layout，再选最小constraints。</Step>
+  <Step title="验证合法与非法Type">编译多个reference/value/nullable/derived types，并在reflection construction中验证runtime同样拒绝违规参数。</Step>
+</Stepper>
+
+## Other Verifiability Issues
+
+未约束T的storage可能是reference或value，`null`、default、boxing和comparison都不能按单一路径假设。Calling virtual/interface members可使用constrained prefix避免value type boxing。AOT需要提前知道或支持runtime generic sharing，reflection-created combinations可能受限。Unsafe generic code还要加unmanaged等约束证明布局。
+
+<Callout type="trap" title="Generic Body最终总会拿到具体T，所以可以先当Object再Cast">
+这样丢失compile-time proof、可能boxing并把错误推迟到运行时。应通过最小constraint表达能力；若合法types确实无共同contract，重新设计输入策略。
+</Callout>
+
+## Casting a Generic Type Variable
+
+`(SomeType)(object)value`虽可绕过compiler，但对不兼容T运行失败并可能boxing。若T有base/interface constraint，可直接implicit/explicit conversion到该contract；pattern matching可处理真正optional分支。Generic conversion operators受静态规则限制，现代static abstract interface可表达numeric capability，但目标版本要明确。
+
+## Setting a Generic Type Variable to a Default Value
+
+`default(T)`对reference是null，对numeric/value type是zeroed/default value，对nullable是无值。它不保证业务有效，也不总调用用户constructor。使用`default!`只压nullability warning，不改变runtime。若absence与合法default必须区分，用Option/Maybe、bool+value或nullable constrained model。
+
+## Comparing a Generic Type Variable with null
+
+无约束T在不同C#版本可用`value is null`做不调用operator的null test；`== null`可能因operator availability/constraints受限。Class/class? constraint明确reference语义，notnull排除nullable annotations但runtime仍需防恶意/null reflection caller。不要把default(T)等同null。
+
+## Comparing Two Generic Type Variables with Each Other
+
+未约束T不能假定`==`存在或语义正确。Value equality优先`EqualityComparer<T>.Default`，它会利用`IEquatable<T>`并处理null/value types；ordering用`Comparer<T>.Default`或注入`IComparer<T>`，并明确culture/domain。Generic algorithm需要稳定law，不能只要求method存在。
+
+## Using Generic Type Variables as Operands
+
+原书时代无法直接对任意T使用`+`等operator，常用delegate strategy、interface或dynamic（失去静态保证）。现代C#可用含static abstract members的generic math interfaces表达，但仅在目标runtime/language支持时。无论工具，operator语义、overflow和unit仍需contract tests。
+
+## 本章回顾：Constraint让Reuse保持可证明
+
+1. Generic metadata保留open/closed identity与constraints，不是文本替换；closed type拥有独立type/static语义。
+2. CLR可共享reference construction代码并专门化value types，真实code expansion需测量。
+3. Variance由consume/produce位置推导，只适用于安全reference conversions。
+4. Generic method inference减少显式type arguments，但不应靠复杂overload隐藏contract。
+5. Constraints是body capability proof；default、null、equality、operator和construction都必须在合法T全集上成立。
+
+<Exercises>
+
+**问题 1：为什么`IEnumerable<string>`可赋给`IEnumerable<object>`，`IList<string>`不行？**
+
+<Answer>IEnumerable只生产T，String都可作为Object读取，所以out covariance安全；IList既生产又消费T，若转换成立，caller可Add非String的Object破坏原列表。用consume/produce反例推导，不背容器名称。</Answer>
+
+**问题 2：Generic cache在不同T上出现多份“Singleton”，是Bug吗？**
+
+<Answer>Closed generic types有不同runtime identity与static storage，`Cache<A>.Instance`和`Cache<B>.Instance`本来独立；不同load context还可能再分裂。若需求是每T一份，这是特性；若需进程唯一，把owner移到nongeneric host service并以Type/key索引，明确卸载与retention。</Answer>
+
+**问题 3：怎样写一个支持比较的Generic算法而不Cast/Reflection？**
+
+<Answer>接受`IComparer<T>`参数或加`where T:IComparable<T>`并用`Comparer<T>.Default`；前者更灵活且可表达domain/culture。Value equality用`EqualityComparer<T>.Default`。现代numeric operator可用static abstract generic math constraint，但要固定目标版本并测试algebra/overflow。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="constructed generic identity" definition="Generic definition与所有arguments共同形成的runtime身份。" />
+  <GlossaryItem term="open generic type" definition="仍含未绑定parameters、不能普通instantiate的definition。" />
+  <GlossaryItem term="generic code expansion" definition="Closed constructions增加JIT/AOT代码与启动成本的现象。" />
+  <GlossaryItem term="variance direction" definition="按producer/consumer位置推导的安全generic引用转换方向。" />
+  <GlossaryItem term="constraint capability proof" definition="Constraint对generic body可用操作提供的静态与运行时证明。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 12: Generics" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

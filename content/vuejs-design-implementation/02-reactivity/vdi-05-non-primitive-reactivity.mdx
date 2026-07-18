@@ -1,0 +1,250 @@
+---
+title: "第 5 章 非原始值的响应式方案"
+type: A
+section: "Vue.js设计与实现 · 响应系统"
+order: 5
+description: "对象响应式必须按ECMAScript对象语义区分读取、设置、新增、删除、遍历、数组长度和集合迭代，不能只实现get与set。 本页按权威目录独立教学重构。"
+demo: true
+math: false
+sourceUrl: "https://time.geekbang.org/column/article/740758"
+draft: false
+---
+
+import {
+  Vdi05NonPrimitiveReactivityMapLab,
+  Vdi05NonPrimitiveReactivityExperimentLab,
+  Vdi05NonPrimitiveReactivityEvidenceLab,
+} from "@/components/mdx/vuejs-design-implementation/diagrams/vdi-05-non-primitive-reactivity";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释第 5 章 非原始值的响应式方案的核心机制，并把它放回6篇18章的实现主线
+- 能实现本页最小算法，比较正常、边界、失败和恢复轨迹
+- 能指出依赖、VNode、组件实例、AST或请求状态的唯一所有者
+- 能设计证据回答“对象、数组、Map和Set的读取与结构变化触发准确，原型链不重复触发，浅深只读语义清楚，原始数据不被代理污染。”是否成立
+
+</Objectives>
+
+## 直觉：从输入、状态到提交
+
+对象响应式必须按ECMAScript对象语义区分读取、设置、新增、删除、遍历、数组长度和集合迭代，不能只实现get与set。 本书不是对最终源码逐行翻译，而是从规范与最小模型逐步构造框架。只看最终DOM会隐藏错误依赖、重复移动、陈旧任务和激活错位；先画输入、状态所有者、调度点、输出和清理责任。
+
+<Vdi05NonPrimitiveReactivityMapLab />
+
+## 权威目录定位
+
+作者授权数字版前言明确全书分为6篇18章，作者GitHub仓库提供配套代码。本页依照公开完整目录逐项覆盖 **19** 个条目；目录名称仅用于追踪，正文为独立教学重构。
+
+- 5.1 理解Proxy和Reflect
+- 5.2 JavaScript对象及Proxy的工作原理
+- 5.3 如何代理Object
+- 5.4 合理地触发响应
+- 5.5 浅响应与深响应
+- 5.6 只读和浅只读
+- 5.7 代理数组
+- 5.7.1 数组的索引与length
+- 5.7.2 遍历数组
+- 5.7.3 数组的查找方法
+- 5.7.4 隐式修改数组长度的原型方法
+- 5.8 代理Set和Map
+- 5.8.1 如何代理Set和Map
+- 5.8.2 建立响应联系
+- 5.8.3 避免污染原始数据
+- 5.8.4 处理forEach
+- 5.8.5 迭代器方法
+- 5.8.6 values与keys方法
+- 5.9 总结
+
+## 核心概念与所有权
+
+<Term def="拦截对象基本操作并把读取、写入、遍历等行为转交处理器的代理对象。">
+  Proxy
+</Term>
+、
+<Term def="以函数形式执行对象内部操作并允许显式传入接收者的标准API。">
+  Reflect
+</Term>
+、<Term def="递归或按需把嵌套对象转换为响应式代理的策略。">深响应</Term>、
+<Term def="允许读取但拒绝或警告写入的代理语义。">只读</Term>、
+<Term def="为Map、Set等集合方法建立正确this、追踪与触发语义的包装。">
+  集合代理
+</Term>
+。每个概念都要回答：谁创建输入，哪个结构保存状态，何种操作可以修改，错误如何传播，生命周期结束后谁清理。
+
+|   # | 概念     | 精确定义                                                         |
+| --: | -------- | ---------------------------------------------------------------- |
+|   1 | Proxy    | 拦截对象基本操作并把读取、写入、遍历等行为转交处理器的代理对象。 |
+|   2 | Reflect  | 以函数形式执行对象内部操作并允许显式传入接收者的标准API。        |
+|   3 | 深响应   | 递归或按需把嵌套对象转换为响应式代理的策略。                     |
+|   4 | 只读     | 允许读取但拒绝或警告写入的代理语义。                             |
+|   5 | 集合代理 | 为Map、Set等集合方法建立正确this、追踪与触发语义的包装。         |
+
+## 机制拆解
+
+### 1. 建立机制边界
+
+Reflect.get传入receiver可让访问器中的this继续指向代理；set时比较target与toRaw(receiver)，避免原型链上的一次赋值触发两次。has、ownKeys和deleteProperty分别对应in、遍历和删除依赖。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+### 2. 处理关键算法
+
+数组索引新增会影响length，缩短length会使越界索引失效；includes等查找要在代理和原始数组上兼容，push等会读写length并可能自触发，需要暂停追踪。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+### 3. 签发失败与恢复
+
+Map和Set方法依赖正确this，因此要返回包装函数。get追踪键，size和迭代追踪结构依赖，set区分新增与修改；写入前把代理值还原，避免原始集合被响应代理污染。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+## 三阶段可视化推演
+
+<Stepper>
+  <Step title="1. 建立最小模型">
+    固定运行时、输入和初始状态，先预测数据结构与执行顺序。
+    <Vdi05NonPrimitiveReactivityMapLab />
+  </Step>
+  <Step title="2. 注入算法边界">
+    只改变一个变量，观察分支切换、重复key、请求乱序、非法模板或激活不匹配的首偏离点。
+    <Vdi05NonPrimitiveReactivityExperimentLab />
+  </Step>
+  <Step title="3. 清除故障并重放">
+    用相同输入恢复，核对依赖集合、任务队列、宿主节点、组件实例和请求状态是否收敛。
+    <Vdi05NonPrimitiveReactivityEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小可运行实验
+
+```js
+const reactiveMap = new WeakMap();
+function reactive(target) {
+  if (reactiveMap.has(target)) return reactiveMap.get(target);
+  const proxy = new Proxy(target, mutableHandlers);
+  reactiveMap.set(target, proxy);
+  return proxy;
+}
+```
+
+保存结构化证据，不以一次console输出或最终截图替代过程：
+
+```yaml
+book: Vue.js设计与实现
+page: vdi-05-non-primitive-reactivity
+sample: normal | boundary | failure | recovery
+runtime: pinned
+input_fixture: fixed
+first_divergence: null
+cleanup_complete: true
+```
+
+故障注入一次只改变一个变量：
+
+```text
+baseline -> inject(one_fault) -> stop_at_first_divergence
+recover -> replay_same_input
+assert -> precise_dependency && stable_identity && ordered_tasks && no_retained_resource
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：代理Object只拦截get和set，删除属性或for-in变化时视图不更新。**
+  必须保存输入、执行轨迹和首偏离点，而不是只比较最终结果。
+</Callout>
+
+<Callout type="trap">
+  **误区二：把响应式代理对象直接写入原始Map，之后从原始入口读取也携带代理污染。**
+  必须加入失败与恢复样本，并检查依赖、节点、任务和状态是否清理。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 变化                 | 预期         | 证据           |
+| ---- | -------------------- | ------------ | -------------- |
+| 正常 | 合法输入与稳定身份   | 主链完成     | 输出与轨迹一致 |
+| 边界 | 空值、重复或极限序列 | 有界退化     | 不越界、不重复 |
+| 失败 | 异常、乱序、非法结构 | 首偏离点停止 | 错误显式传播   |
+| 恢复 | 清除故障后同输入重放 | 收敛到正常   | 无旧依赖和资源 |
+
+<Vdi05NonPrimitiveReactivityEvidenceLab />
+
+本页签发不变量：**对象、数组、Map和Set的读取与结构变化触发准确，原型链不重复触发，浅深只读语义清楚，原始数据不被代理污染。**
+
+## 练习
+
+<Exercises>
+
+**问题 1** 第 5 章 非原始值的响应式方案的核心主张是什么？
+
+<Answer>
+  对象响应式必须按ECMAScript对象语义区分读取、设置、新增、删除、遍历、数组长度和集合迭代，不能只实现get与set。
+</Answer>
+
+**问题 2** 如何把本页目录变成可执行证据？
+
+<Answer>
+  按公开顺序建立追踪表，至少覆盖5.1 理解Proxy和Reflect、5.2
+  JavaScript对象及Proxy的工作原理、5.3 如何代理Object、5.4 合理地触发响应、5.5
+  浅响应与深响应、5.6 只读和浅只读、5.7
+  代理数组；其余条目已在上方逐项列出，并为每组条目记录输入、状态、输出、失败与恢复条件。
+</Answer>
+
+**问题 3** 本页怎样签发？
+
+<Answer>
+  对象、数组、Map和Set的读取与结构变化触发准确，原型链不重复触发，浅深只读语义清楚，原始数据不被代理污染。
+  同一运行时与输入必须能重放正常、边界、失败和恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **Proxy**：拦截对象基本操作并把读取、写入、遍历等行为转交处理器的代理对象。
+- **Reflect**：以函数形式执行对象内部操作并允许显式传入接收者的标准API。
+- **深响应**：递归或按需把嵌套对象转换为响应式代理的策略。
+- **只读**：允许读取但拒绝或警告写入的代理语义。
+- **集合代理**：为Map、Set等集合方法建立正确this、追踪与触发语义的包装。
+- 官方目录、最小实现、故障注入与恢复证据已经放进同一验收链。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="Proxy">
+    拦截对象基本操作并把读取、写入、遍历等行为转交处理器的代理对象。
+  </GlossaryItem>
+  <GlossaryItem term="Reflect">
+    以函数形式执行对象内部操作并允许显式传入接收者的标准API。
+  </GlossaryItem>
+  <GlossaryItem term="深响应">
+    递归或按需把嵌套对象转换为响应式代理的策略。
+  </GlossaryItem>
+  <GlossaryItem term="只读">允许读取但拒绝或警告写入的代理语义。</GlossaryItem>
+  <GlossaryItem term="集合代理">
+    为Map、Set等集合方法建立正确this、追踪与触发语义的包装。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="霍春阳著，人民邮电出版社，2022年1月，501页，ISBN 9787115583864。作者授权数字版前言确认6篇18章的结构与逐章范围，作者GitHub仓库提供配套代码，公开完整目录用于二三级条目追踪；正文为独立教学重构。"
+  adaptedUrl="https://time.geekbang.org/column/article/740758"
+/>
+
+配套代码：https://github.com/HcySunYang/code-for-vue-3-book

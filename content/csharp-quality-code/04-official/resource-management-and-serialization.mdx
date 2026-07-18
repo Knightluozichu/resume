@@ -1,0 +1,333 @@
+---
+title: "第4章：资源管理和序列化（建议46-57）"
+type: C
+section: "编写高质量代码 · 资源与持久化"
+order: 4
+description: "覆盖IDisposable、终结器与SafeHandle、幂等Dispose和继承模式、托管/非托管资源、及时释放与引用寿命，以及序列化排除、定制合同、ISerializable和继承链。"
+demo: true
+math: false
+sourceUrl: "https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html"
+draft: false
+---
+
+import { CqcDisposeStateLab, CqcOwnershipGraphLab, CqcSerializationContractLab } from "@/components/mdx/csharp-quality-code/diagrams/resource-management-and-serialization";
+
+<Objectives>
+
+- 能分析managed/native与owned/borrowed resource graph，设计IDisposable、IAsyncDisposable、SafeHandle和fallback cleanup边界
+- 能实现幂等Dispose state machine，判断sealed/inheritable type何时需要Dispose(bool)、finalizer和ObjectDisposedException
+- 能比较DTO、ignore attribute、custom converter与legacy ISerializable，设计显式、可迁移且不泄露runtime state的serialization contract
+
+</Objectives>
+
+## 为什么GC不能替你决定资源和数据的所有权
+
+GC回答managed object何时不可达，不回答file handle何时必须关闭、buffer何时必须flush、borrowed stream能否由callee释放，也不回答domain object哪些fields可以进入wire format。资源管理和序列化都需要一个显式ownership boundary：谁拥有，何时结束，失败时谁兜底，跨版本暴露什么。
+
+先预测：一个只包含FileStream field的class是否需要自己的finalizer；连续调用Dispose两次是否应抛错；把private cache标记为不序列化后，旧payload读取是否就自动兼容。现代答案分别是通常不需要、应幂等、仍需version contract。
+
+<Term def="创建、接收或转移resource时明确谁负责deterministic release，borrower能做什么，以及失败fallback落在哪里的关系图。">resource ownership graph</Term>
+
+## Deterministic Cleanup与Dispose Pattern（建议46-53）
+
+### 建议46：显式释放资源需继承接口IDisposable
+
+type直接拥有scarce resource，或拥有必须Dispose的managed child时，实现`IDisposable`让caller通过`using`建立deterministic lifetime。若cleanup本身必须await，例如async flush/network shutdown，再实现`IAsyncDisposable`并要求`await using`。不要给普通managed memory加Dispose来“帮助GC”。
+
+```csharp
+public sealed class ExportSession : IDisposable
+{
+    private readonly Stream _output;
+    private readonly bool _ownsOutput;
+
+    public ExportSession(Stream output, bool ownsOutput)
+        => (_output, _ownsOutput) = (output, ownsOutput);
+
+    public void Dispose()
+    {
+        if (_ownsOutput)
+            _output.Dispose();
+    }
+}
+```
+
+API必须说明dependency是owned还是borrowed；`leaveOpen`/`ownsOutput`比猜测更可靠。Dispose不是destructor同义词，而是所有权协议的结束command。
+
+### 建议47：即使提供了显式释放方法，也应该在终结器中提供隐式清理
+
+这条2011年的建议不能作为现代通则。只有type直接持有unmanaged resource且没有SafeHandle包装时，才考虑finalizer；仅持有FileStream、DbConnection等managed IDisposable field时，不要再加application finalizer，因为child已经负责native fallback，而finalizable object会增加GC成本并延迟回收。
+
+```csharp
+public sealed class NativeBufferHandle : SafeHandle
+{
+    private NativeBufferHandle() : base(IntPtr.Zero, ownsHandle: true) { }
+    public override bool IsInvalid => handle == IntPtr.Zero;
+    protected override bool ReleaseHandle() => NativeMethods.FreeBuffer(handle);
+}
+```
+
+SafeHandle封装critical finalization与handle lifetime，owner只需Dispose SafeHandle。finalizer不能保证及时执行，也可能在process shutdown根本不执行，因此不能承担业务flush、remote commit或log delivery。
+
+<Term def="caller主动执行Dispose/DisposeAsync的主路径之外，只用于最小native handle release的non-deterministic safety net。">finalization fallback</Term>
+
+### 建议48：Dispose方法应允许被多次调用
+
+Dispose应幂等：第一次从active转disposed并释放owned resources，后续调用不重复close、不因“已经释放”而报错。幂等让nested owners、using与error cleanup可以安全汇合。它不自动等于thread-safe；Dispose与其他operation竞争时仍需定义同步policy。
+
+```csharp
+public sealed class Session : IDisposable
+{
+    private SafeFileHandle? _handle;
+
+    public void Dispose()
+    {
+        SafeFileHandle? handle = Interlocked.Exchange(ref _handle, null);
+        handle?.Dispose();
+    }
+}
+```
+
+对live-state method，可在field为空时抛`ObjectDisposedException.ThrowIf`。测试显式Dispose、重复Dispose、部分construction失败和并发race。
+
+### 建议49：在Dispose模式中应提取一个受保护的虚方法
+
+可继承的base class若参与dispose ownership，传统模式提供`protected virtual Dispose(bool disposing)`让derived class释放自己的owned fields，并由public Dispose调用后`GC.SuppressFinalize(this)`。但优先问type是否应该sealed：可组合的resource owner做成sealed往往更简单，避免derived class漏调base或在finalizer path访问managed state。
+
+```csharp
+public abstract class ResourceOwner : IDisposable
+{
+    private bool _disposed;
+
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed) return;
+        if (disposing) DisposeManagedChildren();
+        ReleaseDirectNativeState();
+        _disposed = true;
+    }
+}
+```
+
+若base没有finalizer/direct native state，`Dispose(false)`路径可能根本不需要。不要只复制模板而不画ownership graph。
+
+### 建议50：在Dispose模式中应区别对待托管资源和非托管资源
+
+`disposing: true`来自显式调用，managed object graph仍可安全访问，因此释放owned managed IDisposable和native state；`disposing: false`只可能来自finalizer，其他managed objects的finalization order未知，只释放本type直接拥有的minimal unmanaged state。使用SafeHandle后，application type通常无需false分支。
+
+```csharp
+protected virtual void Dispose(bool disposing)
+{
+    if (_disposed) return;
+    if (disposing)
+        _bufferedWriter.Dispose();
+
+    _nativeHandle.Dispose(); // SafeHandle is designed for reliable release.
+    _disposed = true;
+}
+```
+
+### 建议51：具有可释放字段的类型或拥有本机资源的类型应该是可释放的
+
+若type拥有一个IDisposable/IAsyncDisposable field，它通常也应实现对应contract并向上级传播cleanup；关键字是“拥有”。dependency injection传入的shared singleton、caller-owned stream或cache借用的handle不能擅自释放。ownership transfer应写进constructor/factory/name和tests。
+
+```csharp
+public sealed class ReportWriter : IAsyncDisposable
+{
+    private readonly Stream _stream;
+    public async ValueTask DisposeAsync()
+    {
+        await _stream.FlushAsync().ConfigureAwait(false);
+        await _stream.DisposeAsync().ConfigureAwait(false);
+    }
+}
+```
+
+### 建议52：及时释放资源
+
+用最小scope的`using`/`await using`，使release时刻与业务operation结束一致；不要把connection、reader、lock-like lease或large pooled buffer留到GC。factory返回resource时，caller必须能看出需要Dispose，analyzer应检查漏释放。
+
+```csharp
+await using FileStream stream = File.OpenWrite(path);
+await JsonSerializer.SerializeAsync(stream, payload, cancellationToken: cancellationToken);
+await stream.FlushAsync(cancellationToken);
+```
+
+及时也不等于越早越好：response body仍在读取时不能关闭stream；ownership scope必须覆盖最后一次使用。对pool item用try/finally归还，不能依赖finalizer。
+
+### 建议53：必要时应将不再使用的对象引用赋值为null
+
+普通local通常由JIT liveness与GC处理，手动设null既无必要，也可能被优化；它不能替代Dispose。真正有意义的是long-lived owner中的field持有large graph，而logical lifetime已结束：清除field可打断reachability，并同时进入明确state。对sensitive data还要考虑zeroing API，而不只是null reference。
+
+<Term def="从GC root沿fields、static或handle追到目标object的引用链，用于证明究竟是谁延长了managed lifetime。">retention path</Term>
+
+```csharp
+public void ClearSnapshot()
+{
+    Volatile.Write(ref _cachedSnapshot, null);
+}
+```
+
+用memory profiler/retention path证明谁在持有对象，再改reference。不要把每个local都赋null当成风格规则；`GC.KeepAlive`反而用于必须延长native interop lifetime的少数场景。
+
+<Stepper>
+  <Step title="切换managed、owned/borrowed、SafeHandle与async resource">
+    <CqcOwnershipGraphLab />
+  </Step>
+  <Step title="标出owner、borrower与transfer point">
+    对constructor parameter、factory result和field逐一标记谁释放，是否需要leaveOpen，以及同步或异步release。
+  </Step>
+  <Step title="用handle与retention证据验收">
+    重复operation后检查OS handles、pool counts和GC retention path回到baseline，不以“Dispose被调用”替代效果证明。
+  </Step>
+</Stepper>
+
+<Stepper>
+  <Step title="切换active、Dispose、重复Dispose、finalizer与disposed call">
+    <CqcDisposeStateLab />
+  </Step>
+  <Step title="写出唯一状态转换和并发policy">
+    说明哪一步原子标记disposed，哪些fields只释放一次，以及operation与Dispose竞争时谁获胜。
+  </Step>
+  <Step title="覆盖显式、异常和fallback路径">
+    测试normal using、constructor部分失败、double Dispose、ObjectDisposedException；仅对direct native owner测试finalizer fallback。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="实现IDisposable后必须再写finalizer">
+finalizer只为直接unmanaged ownership兜底，且现代代码优先SafeHandle。为仅含managed disposable fields的class加finalizer会延迟回收，还可能错误访问已终结对象。
+</Callout>
+
+## Serialization Shape、Version与Inheritance（建议54-57）
+
+### 建议54：为无用字段标注不可序列化
+
+cache、delegate、thread primitive、native handle、service reference与derived data不属于persistent state，应以serializer contract排除，例如`[JsonIgnore]`或DTO不包含该member。不要依赖field visibility猜测默认行为，不同serializer规则不同。
+
+```csharp
+public sealed class UserProfileDto
+{
+    public required string UserId { get; init; }
+    public required string DisplayName { get; init; }
+
+    [JsonIgnore]
+    public string? DiagnosticCacheKey { get; init; }
+}
+```
+
+security review要采用allowlist思维：只include协议需要的数据，secret即使“当前serializer忽略private field”也不应混在transport object中。
+
+### 建议55：利用定制特性减少可序列化的字段
+
+attribute可声明include/ignore/name/order等metadata，减少偶然暴露；但attribute绑在domain type上会耦合具体serializer。跨多个formats或复杂migration时，显式DTO/source-generated context/custom converter更清楚。每次contract change都要更新golden payload与backward/forward compatibility tests。
+
+<Term def="明确列出wire/persistent fields、名称、类型、null/default、版本迁移和敏感信息规则，而不是序列化整个runtime object graph。">serialization allowlist</Term>
+
+```csharp
+public sealed record OrderSnapshot(
+    [property: JsonPropertyName("id")] string Id,
+    [property: JsonPropertyName("total")] decimal Total,
+    [property: JsonPropertyName("v")] int Version);
+```
+
+### 建议56：使用继承ISerializable接口更灵活地控制序列化过程
+
+`ISerializable`允许手动写`SerializationInfo` keys和特殊constructor，在旧formatter生态中可控制shape；但它不应成为新系统默认。BinaryFormatter等legacy binary serialization存在严重安全问题并已被现代.NET淘汰/禁用，新跨进程格式优先JSON、protobuf等显式schema与安全parser。
+
+```csharp
+[Serializable]
+public class LegacyToken : ISerializable
+{
+    protected LegacyToken(SerializationInfo info, StreamingContext context)
+        => Value = info.GetString("value") ?? throw new SerializationException();
+
+    public string Value { get; }
+
+    public virtual void GetObjectData(SerializationInfo info, StreamingContext context)
+        => info.AddValue("value", Value);
+}
+```
+
+若被遗留兼容强制使用，固定key、validate hostile input、限制allowed types，并规划migration。灵活性越高，越需要security/version proof。
+
+### 建议57：实现ISerializable的子类型应负责父类的序列化
+
+derived type实现legacy ISerializable时，必须保存/恢复base contract，通常调用base serialization constructor与`base.GetObjectData`；否则base state丢失或invariant被绕过。base/derived必须协调key命名与version migration，private implementation fields不应由derived猜测复制。
+
+```csharp
+[Serializable]
+public sealed class LegacyAdminToken : LegacyToken
+{
+    private LegacyAdminToken(SerializationInfo info, StreamingContext context)
+        : base(info, context)
+        => Scope = info.GetString("admin_scope") ?? "none";
+
+    public override void GetObjectData(SerializationInfo info, StreamingContext context)
+    {
+        base.GetObjectData(info, context);
+        info.AddValue("admin_scope", Scope);
+    }
+}
+```
+
+若base没有为serialization inheritance设计protected hook，不要用reflection抓fields；改用DTO composition往往更稳定。新系统应把inheritance hierarchy映射为versioned discriminated DTO，而不是直接持久化runtime subtype graph。
+
+<Term def="reader和writer在字段增删改名、default变化与base/derived演进时仍能安全交换数据的明确兼容规则。">versioned wire contract</Term>
+
+<Stepper>
+  <Step title="切换DTO、ignore、converter、ISerializable与derived contract">
+    <CqcSerializationContractLab />
+  </Step>
+  <Step title="列出include、exclude与version migration">
+    对每个field说明业务含义、secret policy、null/default、旧reader和新reader行为，不序列化cache/handle/callback。
+  </Step>
+  <Step title="用golden、round-trip与hostile payload验收">
+    保存代表性旧版本payload，测试新旧互读、unknown/missing fields、derived state与恶意type/size输入。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="给字段加Ignore就完成了序列化安全设计">
+Ignore只影响某个serializer的shape，不自动处理secret复制、旧payload、derived type、hostile input或schema migration。优先建立allowlist DTO和version tests。
+</Callout>
+
+## 本章回顾：Ownership先于Cleanup，Contract先于Serializer
+
+1. IDisposable表达deterministic ownership end；IAsyncDisposable处理必须await的release，不为普通GC memory服务。
+2. finalizer只兜底直接native ownership，优先SafeHandle；Dispose要幂等并明确race与disposed-state behavior。
+3. inheritable Dispose pattern是extension contract，不应机械套到可以sealed/composed的type。
+4. 清null只在long-lived retention path有证据时使用，不能代替Dispose或敏感数据zeroing。
+5. serialization采用字段allowlist、显式version和hostile-input验证；runtime cache/handle/delegate不进入wire state。
+6. ISerializable与inheritance chaining限于legacy compatibility，新系统优先DTO和受支持的schema serializer。
+
+<Exercises>
+
+**问题 1：一个type拥有FileStream field，为什么通常不应再写finalizer？**
+
+<Answer>FileStream是managed IDisposable并已通过SafeHandle管理native fallback；owner实现Dispose并在using scope及时释放即可。给owner加finalizer会让对象进入finalization queue、延迟回收，且finalizer不能安全依赖其他managed fields。只有type直接拥有未包装native resource时才需要最小finalizer，更好的修复是先封装SafeHandle。</Answer>
+
+**问题 2：如何验收Dispose实现同时满足幂等、ownership和并发要求？**
+
+<Answer>先列出owned/borrowed fields与active/disposed states；第一次Dispose原子交换状态并只释放owned fields，第二次no-op，borrowed dependency仍可用。测试normal using、double Dispose、construction failure、method-after-dispose和Dispose与operation race；以handle/pool count回baseline证明效果，不只mock调用次数。</Answer>
+
+**问题 3：把domain inheritance hierarchy直接交给legacy formatter有什么风险，现代替代方案是什么？**
+
+<Answer>会暴露runtime type graph和implementation fields，base/derived state与constructor invariant难以协调，type metadata还扩大untrusted deserialization攻击面。新系统映射到versioned DTO/discriminator，allowlist fields与allowed variants，用JSON/protobuf等受支持parser；通过golden old payload、round-trip、unknown fields和hostile size/type tests验收。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="resource ownership graph" definition="标明resource owner、borrower、transfer、deterministic release和fallback responsibility的关系图。" />
+  <GlossaryItem term="finalization fallback" definition="显式Dispose主路径之外、仅用于minimal native release的non-deterministic safety net。" />
+  <GlossaryItem term="serialization allowlist" definition="显式列出可进入wire/persistent state的fields、names、types、defaults和secret policy。" />
+  <GlossaryItem term="versioned wire contract" definition="字段和type演进时新旧reader/writer安全互操作的兼容与migration规则。" />
+  <GlossaryItem term="retention path" definition="从GC root到目标object的引用链，用于证明是谁延长了managed object lifetime。" />
+</Glossary>
+
+<Attribution adaptedFrom="编写高质量代码：改善C#程序的157个建议，第4章 资源管理和序列化，建议46-57" adaptedUrl="https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html" />

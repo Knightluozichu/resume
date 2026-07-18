@@ -1,185 +1,303 @@
 ---
-title: "图形管线"
+title: "图形管线与动态渲染接口"
 type: A
 section: "计算机图形学与渲染"
 order: 4
-description: "理解 Vulkan 图形管线的完整阶段与可编程/固定功能配置"
+description: "从 SPIR-V 接口、pipeline layout、附件格式到动态状态与缓存身份"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://docs.vulkan.org/guide/latest/dynamic_state.html"
 draft: false
 ---
 
-import { VkgGraphicsPipelineDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-graphics-pipeline";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  VkgGraphicsPipelineDiagram,
+  VkgPipelineStateDiagram,
+} from "@/components/mdx/vulkan-guide/diagrams/vkg-graphics-pipeline";
+import { VkgStepFlowDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 理解 Vulkan 图形管线的完整阶段及其顺序关系
-- 区分可编程阶段（VS/FS）与固定功能阶段（光栅化/混合）
-- 掌握 VkGraphicsPipelineCreateInfo 的关键配置项
-- 理解管线布局（Pipeline Layout）与渲染通道（Render Pass）的关系
+
+- 能描述 shader、pipeline layout、rendering formats 与固定/动态状态组成的四类接口合同
+- 能实现以 dynamic rendering 创建并录制基础 graphics pipeline 的最小闭环
+- 能比较固定状态与动态状态对 pipeline 组合数、录制责任和设备 feature 的影响
+- 能解释 pipeline cache 的兼容身份、持久化验证和编译反馈边界
+
 </Objectives>
 
-## 直觉引入
+## Pipeline 是接口合同，不是八站流水线
 
-把图形管线想象成一条工厂流水线：原材料（顶点数据）从入口送进去，经过一系列加工站（顶点着色器→光栅化→片段着色器→混合），最终产出成品（屏幕像素）。与 OpenGL 不同的是，Vulkan 要求你在开工前就把整条流水线的所有参数「一次性配置好」并固化成一个不可变对象——这就是 <Term def="VkPipeline 是 Vulkan 中将图形管线所有状态预配置并固化为不可变对象的句柄，创建开销大但绑定开销极低。">VkPipeline</Term>。
+图形阶段常画成“vertex input → vertex shader → rasterization → fragment shader → blending”，这有助于理解数据流，却不能理解 Vulkan pipeline 对象的真正职责。现代 GPU 可能并行、融合或延迟执行阶段；应用真正提交的是一份兼容合同：shader 的输入输出、资源布局、附件格式/采样数，以及哪些状态固定在 pipeline、哪些由 command buffer 动态给出。
 
-## 概念讲解
-
-### 管线阶段总览
-
-Vulkan 图形管线包含以下阶段（按执行顺序）：
-
-1. **顶点输入**：定义顶点数据的布局和绑定方式
-2. **输入装配**：定义图元拓扑（三角形列表、线带等）
-3. **顶点着色器**（可编程）：变换顶点位置
-4. **曲面细分**（可选可编程）：几何体细分
-5. **几何着色器**（可选可编程）：图元级几何操作
-6. **光栅化**：将图元转为片段，深度裁剪、面剔除
-7. **片段着色器**（可编程）：计算每个片段的颜色
-8. **颜色混合**：将片段颜色与帧缓冲已有颜色混合
-
-### 着色器阶段
-
-Vulkan 使用 SPIR-V 字节码，通过 `vkCreateShaderModule` 加载：
-
-```c
-VkShaderModule vertShaderModule;
-VkShaderModuleCreateInfo shaderInfo = {
-    .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-    .codeSize = codeSize,
-    .pCode = (uint32_t*)shaderCode,
-};
-vkCreateShaderModule(device, &shaderInfo, NULL, &vertShaderModule);
-
-VkPipelineShaderStageCreateInfo vertStage = {
-    .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-    .stage = VK_SHADER_STAGE_VERTEX_BIT,
-    .module = vertShaderModule,
-    .pName = "main",
-};
-```
-
-### 固定功能状态
-
-Vulkan 把 OpenGL 中的全局状态拆分到管线创建时的结构体中：
-
-```c
-VkPipelineRasterizationStateCreateInfo rasterizer = {
-    .sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-    .depthClampEnable = VK_FALSE,
-    .rasterizerDiscardEnable = VK_FALSE,
-    .polygonMode = VK_POLYGON_MODE_FILL,
-    .cullMode = VK_CULL_MODE_BACK_BIT,
-    .frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE,
-    .lineWidth = 1.0f,
-};
-```
-
-### 管线布局与渲染通道
-
-<Term def="管线布局描述着色器所需的描述符集布局和推送常量范围，是 uniform 和纹理绑定的接口规范。">管线布局（Pipeline Layout）</Term> 定义了着色器访问资源的接口。它由一组 <Term def="描述符集布局定义着色器如何访问缓冲区和图像等资源，是 uniform、纹理、存储缓冲绑定的蓝图。">描述符集布局（Descriptor Set Layout）</Term> 和推送常量范围组成。
-
-<Term def="渲染通道定义渲染操作使用的附件格式、子通道和依赖关系，是 framebuffer 和 pipeline 的桥梁。">渲染通道（Render Pass）</Term> 定义了渲染目标的格式和附件结构，管线创建时必须引用它。
-
-### 动态状态
-
-某些状态可以在绘制时动态设置，无需重建管线：
-
-```c
-VkDynamicState dynamicStates[] = {
-    VK_DYNAMIC_STATE_VIEWPORT,
-    VK_DYNAMIC_STATE_SCISSOR,
-};
-
-VkPipelineDynamicStateCreateInfo dynamicState = {
-    .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-    .dynamicStateCount = 2,
-    .pDynamicStates = dynamicStates,
-};
-```
-
-## 交互Demo
-
-> 猜一猜：Vulkan 为什么把管线做成不可变对象，而 OpenGL 允许随时修改状态？
+<Term def="将 shader stages、资源接口、渲染目标合同与大部分图形状态组合为可绑定对象的 Vulkan 句柄">VkPipeline</Term>通常不可在创建后修改，但被声明为 dynamic 的状态不存储具体值。绑定 pipeline 后还必须在 draw 前设置所需动态状态。创建和绑定成本都依实现而异，不能仅凭“预编译对象”断言绑定一定可以忽略。
 
 <VkgGraphicsPipelineDiagram />
 
-<Stepper>
-  <Step title="配置着色器与顶点输入">
-    创建 SPIR-V 着色器模块，配置 `VkPipelineShaderStageCreateInfo`（VS + FS）。同时填充 `VkPipelineVertexInputStateCreateInfo`（顶点属性绑定）和 `VkPipelineInputAssemblyStateCreateInfo`（图元拓扑）。
-  </Step>
-  <Step title="配置固定功能状态">
-    填充光栅化（面剔除、填充模式）、混合（颜色混合公式）、多重采样、视口/裁剪等状态结构体。选择动态状态（如 viewport/scissor）避免窗口尺寸变化时重建管线。
-  </Step>
-  <Step title="创建管线">
-    将所有状态结构体汇入 `VkGraphicsPipelineCreateInfo`，连同管线布局和渲染通道，调用 `vkCreateGraphicsPipelines`。使用管线缓存（VkPipelineCache）加速后续创建。
-  </Step>
-</Stepper>
+## Shader 模块与接口反射
 
-## 代码对照
+Vulkan shader module 消费 SPIR-V。源码可以来自 GLSL、HLSL、Slang 等前端；构建系统应固定编译器版本、target environment、entry point 和优化/debug 配置，并把编译诊断当内容资产保存。
 
-完整的管线创建结构：
+`VkPipelineShaderStageCreateInfo`指定 stage、module、entry point 和 specialization constants。创建 pipeline 后，若不再用于其他创建操作，shader module 可以销毁；pipeline 保留所需实现状态。
 
-```c
-VkGraphicsPipelineCreateInfo pipelineInfo = {
-    .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
-    .stageCount = 2,
-    .pStages = shaderStages,              // VS + FS
-    .pVertexInputState = &vertexInputInfo,
-    .pInputAssemblyState = &inputAssembly,
-    .pViewportState = &viewportState,
-    .pRasterizationState = &rasterizer,
-    .pMultisampleState = &multisampling,
-    .pColorBlendState = &colorBlending,
-    .pDynamicState = &dynamicState,
-    .layout = pipelineLayout,
-    .renderPass = renderPass,
-    .subpass = 0,
+```cpp
+VkShaderModule createShaderModule(VkDevice device, std::span<const uint32_t> words) {
+  VkShaderModuleCreateInfo info{
+    .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    .codeSize = words.size_bytes(),
+    .pCode = words.data(),
+  };
+  VkShaderModule module = VK_NULL_HANDLE;
+  VK_CHECK(vkCreateShaderModule(device, &info, nullptr, &module));
+  return module;
+}
+
+VkPipelineShaderStageCreateInfo stages[] = {
+  {
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+    .stage = VK_SHADER_STAGE_VERTEX_BIT,
+    .module = vertexModule,
+    .pName = "main",
+  },
+  {
+    .sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+    .stage = VK_SHADER_STAGE_FRAGMENT_BIT,
+    .module = fragmentModule,
+    .pName = "main",
+  },
+};
+```
+
+构建时至少验证：vertex output location/type 与 fragment input 匹配；descriptor set/binding/type/count 与 set layout 匹配；push constant offset/size/stages 在 layout 范围内；fragment outputs 与 color attachment 位置一致。仅“SPIR-V 能创建 module”不证明 stage interfaces 兼容。
+
+## Pipeline layout 是资源 ABI
+
+<Term def="由按 set 编号排列的 descriptor set layouts 与 push constant ranges 组成、定义 shader 资源访问 ABI 的对象">Pipeline layout</Term>描述 descriptor sets 和 push constants，不描述 vertex buffer，也不拥有 descriptor set。多个 pipeline 可以共享兼容 layout；切换 pipeline 时，已绑定 descriptor sets 是否仍兼容取决于规范定义的 set layout 兼容前缀和 push constant ranges，而不是句柄是否相同。
+
+```cpp
+VkDescriptorSetLayout setLayouts[] = {frameSetLayout, materialSetLayout};
+VkPushConstantRange objectRange{
+  .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT,
+  .offset = 0,
+  .size = sizeof(ObjectPushConstants),
+};
+VkPipelineLayoutCreateInfo layoutInfo{
+  .sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
+  .setLayoutCount = 2,
+  .pSetLayouts = setLayouts,
+  .pushConstantRangeCount = 1,
+  .pPushConstantRanges = &objectRange,
+};
+VK_CHECK(vkCreatePipelineLayout(device, &layoutInfo, nullptr, &pipelineLayout));
+```
+
+push constant size受 `maxPushConstantsSize`限制，stage visibility 应覆盖实际读取阶段；重叠 ranges 还要满足规范约束。把所有资源都塞进 set 0 会让 layout 演进和绑定复用困难，通常按更新频率和所有权拆为 frame/view、material、object 等集合。
+
+## Dynamic rendering 的附件合同
+
+<Term def="不创建 VkRenderPass/VkFramebuffer，而在命令录制时用 VkRenderingInfo 直接声明当前附件的渲染路径">Dynamic rendering</Term>减少 render pass/framebuffer 对象，但不删除格式、采样数、load/store、layout 和同步合同。
+
+创建 pipeline 时通过 `VkPipelineRenderingCreateInfo`声明 color/depth/stencil formats；`VkGraphicsPipelineCreateInfo::renderPass`设为 null。录制时 `VkRenderingAttachmentInfo`中的 imageView、layout、load/store 与 clear value 必须与这些声明及实际资源兼容。
+
+```cpp
+VkFormat colorFormat = swapchainFormat;
+VkPipelineRenderingCreateInfo renderingInfo{
+  .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
+  .colorAttachmentCount = 1,
+  .pColorAttachmentFormats = &colorFormat,
+  .depthAttachmentFormat = depthFormat,
+  .stencilAttachmentFormat = hasStencil(depthFormat) ? depthFormat : VK_FORMAT_UNDEFINED,
 };
 
-VkPipeline graphicsPipeline;
-vkCreateGraphicsPipelines(device, pipelineCache, 1,
-    &pipelineInfo, NULL, &graphicsPipeline);
+VkGraphicsPipelineCreateInfo pipelineInfo{
+  .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+  .pNext = &renderingInfo,
+  .stageCount = 2,
+  .pStages = stages,
+  .pVertexInputState = &vertexInput,
+  .pInputAssemblyState = &inputAssembly,
+  .pViewportState = &viewportState,
+  .pRasterizationState = &rasterization,
+  .pMultisampleState = &multisample,
+  .pDepthStencilState = &depthStencil,
+  .pColorBlendState = &colorBlend,
+  .pDynamicState = &dynamicState,
+  .layout = pipelineLayout,
+  .renderPass = VK_NULL_HANDLE,
+  .subpass = 0,
+};
+VK_CHECK(vkCreateGraphicsPipelines(
+    device, pipelineCache, 1, &pipelineInfo, nullptr, &pipeline));
 ```
+
+若 swapchain 重建改变 color format，或 MSAA/depth format 改变，附件合同相关 pipeline 需要重建。若只有 extent 改变且 viewport/scissor 为动态状态，则通常可复用同一 pipeline。
+
+## 固定功能仍是可验证状态
+
+基础 graphics pipeline 还要定义：
+
+- vertex input bindings/attributes 与 input assembly topology；
+- viewport count、scissor count；
+- rasterization discard、polygon mode、cull mode、front face、depth bias；
+- sample count、sample mask 和 alpha-to-coverage；
+- depth test/write/compare 与 stencil operations；
+- 每个 color attachment 的 blend enable、factors、ops 与 write mask。
+
+非 fill polygon mode、wide lines 等状态需要对应 feature。depth attachment 未提供时，不应创建或启用依赖它的状态假设。color blend attachment count 和 dynamic rendering colorAttachmentCount 必须一致；每个 attachment 的写掩码也应显式设置，否则“绘制成功但无颜色”很难定位。
+
+frontFace 与坐标约定相关。通过负 viewport height 翻转 Y、在 shader 翻转 Y，或改变投影矩阵都会影响 winding；剔除错误应从完整坐标链验证，而不是机械切换 CLOCKWISE。
+
+## 动态状态把组合转成录制责任
+
+<Term def="在 pipeline 创建时只声明为动态、具体值由 command buffer 中 vkCmdSet* 命令提供的图形状态">动态状态</Term>可减少 pipeline 组合，但不是免费灵活性。核心 viewport/scissor 常设为动态；更多 cull mode、front face、depth test 等动态能力依赖 Vulkan 版本或扩展 feature，必须查询并启用。
+
+<VkgPipelineStateDiagram />
+
+```cpp
+VkDynamicState dynamicStates[] = {
+  VK_DYNAMIC_STATE_VIEWPORT,
+  VK_DYNAMIC_STATE_SCISSOR,
+};
+VkPipelineDynamicStateCreateInfo dynamicInfo{
+  .sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+  .dynamicStateCount = std::size(dynamicStates),
+  .pDynamicStates = dynamicStates,
+};
+
+vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+vkCmdSetViewport(cmd, 0, 1, &viewport);
+vkCmdSetScissor(cmd, 0, 1, &scissor);
+vkCmdBindDescriptorSets(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS,
+    pipelineLayout, 0, descriptorSets.size(), descriptorSets.data(),
+    dynamicOffsets.size(), dynamicOffsets.data());
+vkCmdDrawIndexed(cmd, indexCount, instanceCount, 0, 0, 0);
+```
+
+动态状态通常在 command buffer 中持续到被新值覆盖，但切换到需要不同动态状态集合的 pipeline 后，必须按规范保证 draw 前所有 required dynamic state 都已有效设置。渲染器可在 command encoder 层跟踪 dirty state，避免遗漏和无意义重复命令。
+
+## Pipeline cache 不是通用二进制
+
+<Term def="由实现管理、可复用部分 pipeline 创建数据并可导出初始数据的设备对象">Pipeline cache</Term>可以降低部分重复创建成本，但命中、内容和收益均由实现决定。缓存数据有设备/驱动兼容身份，包括 vendorID、deviceID 与 pipelineCacheUUID；不能把 A 机器文件直接当 B 机器通用缓存。
+
+持久化流程应：创建时校验缓存头与当前设备身份；不兼容就丢弃；运行结束或稳定节点通过 `vkGetPipelineCacheData`导出；写入使用临时文件加原子替换；驱动更新后允许自然失效。多个线程或多个 cache 的合并也要遵守外部同步要求。
+
+首次创建仍可能发生昂贵编译。应用应预热关键 pipeline、后台创建非关键变体，并使用 pipeline creation feedback 或 executable properties 等可用工具测量，而不是把加载卡顿都归因于“没用 cache”。支持 `VK_EXT_pipeline_creation_cache_control`时还可请求在需要编译时失败，从而把实时路径中的意外编译暴露出来。
+
+## 三步建立 PipelineRegistry
+
+<Stepper>
+<Step title="第一步：生成接口签名">
+
+从 shader 反射、descriptor layouts、push ranges、attachment formats/sample count 和固定状态生成稳定描述，并在创建前做跨阶段校验。
+
+<VkgStepFlowDiagram
+  caption="接口不匹配应在 pipeline registry 层失败，而不是等到 draw。"
+  stage={1}
+  stages={["Interface signature：SPIR-V、layout、formats、samples 与 states"]}
+/>
+
+</Step>
+<Step title="第二步：创建并缓存变体">
+
+按设备 feature 决定动态状态集合，构造 dynamic rendering pipeline；记录创建时长、缓存命中反馈和失败原因。
+
+<VkgStepFlowDiagram
+  caption="变体 key 只包含真正固定的状态，动态值不应扩大组合数。"
+  stage={2}
+  stages={[
+    "Interface signature：SPIR-V、layout、formats、samples 与 states",
+    "Pipeline variant：fixed key、dynamic declarations 与 compile feedback",
+  ]}
+/>
+
+</Step>
+<Step title="第三步：录制完整动态状态">
+
+绑定 pipeline/layout-compatible descriptors，设置每个 required dynamic state，再 draw；验证 swapchain/depth/MSAA generation 与 pipeline format 合同一致。
+
+<VkgStepFlowDiagram
+  caption="创建期合同与录制期状态共同决定一次 draw 是否完整。"
+  stage={3}
+  stages={[
+    "Interface signature：SPIR-V、layout、formats、samples 与 states",
+    "Pipeline variant：fixed key、dynamic declarations 与 compile feedback",
+    "Command proof：bind、set dynamic state、descriptors、draw 与 attachments",
+  ]}
+/>
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-以为每次修改 viewport 都需要重建管线。实际上只需在创建管线时把 viewport/scissor 设为动态状态（`VK_DYNAMIC_STATE_VIEWPORT`），然后在绘制命令中用 `vkCmdSetViewport` 动态设置即可，大幅减少管线重建开销。
+**现象 →** 使用 dynamic rendering 后 pipeline 创建成功，begin rendering 时却报附件格式不兼容。
+**原因 →** 误以为不用 VkRenderPass 就不必声明 attachment formats，漏填 VkPipelineRenderingCreateInfo 或重建后仍用旧格式。
+**修法 →** 把 color/depth/stencil formats 与 sample count 纳入 pipeline key，并和当前 rendering attachments 一起验证。
 </Callout>
 
 <Callout type="trap">
-忽略管线缓存的使用。`VkPipelineCache` 可以在多次创建管线时复用编译结果，跨运行甚至可以序列化到磁盘。不使用缓存会导致相同着色器每次启动都重新编译，严重影响加载时间。
+**现象 →** viewport 设为动态后画面为空或只占一角，validation 报动态状态未设置。
+**原因 →** dynamic state 没有创建期默认值；只声明动态但 draw 前未 vkCmdSetViewport/vkCmdSetScissor。
+**修法 →** command encoder 在每次绑定需要这些状态的 pipeline 后确保值已设置，并用 dirty-state 跟踪验证。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 加载另一个设备或驱动版本产生的 pipeline cache 后启动失败或卡顿没有改善。
+**原因 →** 把实现相关 cache 当跨设备通用编译产物，且没有检查 header 身份与实际创建反馈。
+**修法 →** 按 vendor/device/pipelineCacheUUID 隔离并校验缓存；不兼容立即丢弃，性能用测量而不是文件存在证明。
 </Callout>
 
 ## 练习
 
 <Exercises>
-1. Vulkan 的不可变管线设计与 OpenGL 的状态机模式相比，有什么优劣？
-   <Answer>
-   优势：驱动无需在绘制时验证状态组合，绑定开销极低（仅需绑定一个对象）；状态切换可预测，性能更稳定；便于多线程并行创建管线。劣势：创建开销大（需编译着色器+验证全部状态）；状态组合多时需要创建大量管线对象（可通过管线缓存缓解）；灵活性不如 OpenGL 的即时状态修改。
-   </Answer>
 
-2. 什么情况下应该使用动态状态而不是重建管线？
-   <Answer>
-   当某个状态频繁变化但其他状态不变时用动态状态。最典型的是 viewport/scissor（窗口尺寸变化时）和 line width。把这些设为动态状态，用 vkCmdSetViewport 等命令在录制时设置，避免每次窗口 resize 都重建管线。但如果大量状态同时变化（如切换材质），则应预创建不同管线并用 vkCmdBindPipeline 切换。
-   </Answer>
+1. **重建判断：** swapchain extent 从 1920×1080 变为 2560×1440，format 不变，viewport/scissor 为动态；pipeline 是否必须重建？若 format 变为 HDR 格式呢？
+
+<Answer>
+仅 extent 改变时，若 attachment format/sample count 和其他固定状态不变，且 viewport/scissor 均为动态，pipeline 通常可复用，只需录制新 viewport/scissor。format 改变时，dynamic rendering pipeline 的 VkPipelineRenderingCreateInfo 合同变化，必须选择或创建对应 format 的 pipeline；blend 和 shader 输出色彩路径也应一起审计。
+</Answer>
+
+2. **组合控制：** 2 种 cull mode、2 种 depth test、4 个 viewport。设备支持将前三者中的 cull/depth 和 viewport 全部动态化。固定与动态方案各有多少状态组合？
+
+<Answer>
+若全部固定，理论组合为 2×2×4=16；若都声明为动态，pipeline key 中这三类状态可合并为 1 个变体，但每次 draw 前必须设置 cull mode、depth test 和 viewport，且先查询并启用相关扩展或核心 feature。是否全部动态仍应基于绑定/录制成本和实际 workload 测量。
+</Answer>
+
+3. **布局兼容：** 两个 pipeline 的 set 0 layout 相同，set 1 layout 不同。切换后哪些 descriptor set 可以保留？
+
+<Answer>
+按 pipeline layout compatibility 规则，兼容前缀中的 set 0 可以保持有效；从首个不兼容 set 起，后续 sets 需要按新 layout 重新绑定。还要检查 push constant ranges 的兼容条件。实现中应按 layout signature 计算兼容前缀，不能只比较 VkPipelineLayout 句柄。
+</Answer>
+
 </Exercises>
 
+## 本章检查清单
+
+- shader locations、descriptor bindings、push constants 与 pipeline layout 在创建前已反射验证；
+- dynamic rendering formats/sample count 与实际 attachments、swapchain generation 一致；
+- 所有 declared dynamic state 在 draw 前都有有效 vkCmdSet*，扩展状态对应 feature 已启用；
+- pipeline cache 按设备/驱动身份校验，创建时长和缓存收益有可观测证据。
+
+## 术语表
+
 <Glossary>
-  <GlossaryItem term="VkPipeline">
-    将图形管线所有状态（着色器、固定功能、布局）预配置并固化为不可变对象的句柄。创建开销大但绑定开销极低，是 Vulkan 性能优势的核心设计。
-  </GlossaryItem>
-  <GlossaryItem term="管线布局 (Pipeline Layout)">
-    描述着色器所需的描述符集布局和推送常量范围的接口规范。定义了着色器如何访问 uniform 缓冲、纹理和存储缓冲等资源。
-  </GlossaryItem>
-  <GlossaryItem term="SPIR-V">
-    Vulkan 使用的着色器中间字节码格式，跨平台跨驱动。通常从 GLSL/HLSL 编译而来，可预编译并嵌入应用，避免运行时编译开销。
-  </GlossaryItem>
-  <GlossaryItem term="VkPipelineCache">
-    管线缓存对象，可复用着色器编译和管线创建结果。可序列化到磁盘跨运行使用，显著减少重复管线的创建时间。
-  </GlossaryItem>
+<GlossaryItem term="VkPipeline">组合 shader、资源接口、渲染目标合同与固定/动态图形状态的可绑定对象。</GlossaryItem>
+<GlossaryItem term="Pipeline layout">由 descriptor set layouts 与 push constant ranges 组成的 shader 资源 ABI。</GlossaryItem>
+<GlossaryItem term="Dynamic rendering">用 VkRenderingInfo 在录制时声明附件、无需 VkRenderPass/VkFramebuffer 对象的渲染路径。</GlossaryItem>
+<GlossaryItem term="动态状态">创建时声明、由 command buffer 中 vkCmdSet* 提供具体值的图形状态。</GlossaryItem>
+<GlossaryItem term="Pipeline cache">实现管理并带设备/驱动兼容身份的 pipeline 创建缓存对象。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Vulkan 学习指南" adaptedUrl="https://vulkan.lunarg.com/" />
+<Attribution adaptedFrom="Khronos Vulkan Guide" adaptedUrl="https://docs.vulkan.org/guide/latest/dynamic_state.html" />

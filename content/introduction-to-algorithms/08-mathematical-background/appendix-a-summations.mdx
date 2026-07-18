@@ -1,0 +1,326 @@
+---
+title: "Appendix A · Summations"
+type: B
+section: "CLRS4 · 数学基础"
+order: 36
+description: "按CLRS第四版附录A重建求和公式、级数变换、逐项界、区间拆分与积分夹逼。"
+demo: true
+math: true
+sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+draft: false
+---
+
+import { CLRS4SigmaRangeLab, CLRS4LinearityLab, CLRS4ArithmeticSeriesLab, CLRS4GeometricSeriesLab, CLRS4HarmonicSeriesLab, CLRS4TelescopingLab, CLRS4DifferentiateSeriesLab, CLRS4TermwiseBoundLab, CLRS4SplitRangeLab, CLRS4IntegralBoundLab, CLRS4DominantTermLab, CLRS4GeometricTailLab, CLRS4SummationCertificateLab } from "@/components/mdx/introduction-to-algorithms/diagrams/appendix-a-summations";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释summations的index、range、term、linearity与empty-sum convention
+- 能计算arithmetic、geometric、harmonic、telescoping和differentiated power series
+- 能实现finite-sum checker、range split、termwise comparison与integral comparison
+- 能分析summation formulas and properties成立的前提、boundary terms与convergence条件
+- 能设计包含identity、index substitution、bounding summations步骤和asymptotic conclusion的求和证书
+
+</Objectives>
+
+## 从“循环执行了多少总工作”开始
+
+先预测：一个loop第$i$轮做$i$次操作，总成本不是“最后一轮的$i$”，而是$1+2+\cdots+n$；一个divide-and-conquer level的工作按ratio变化，常变成geometric series；hashing或randomized analysis中的平均代价又常出现harmonic sum。<Term def="把同一表达式在离散index range上的values相加，并显式记录index、上下界和term的记号与运算。">求和</Term>是把逐步成本变成总成本的语言。
+
+高质量derivation不能只写最终$\Theta$。要先检查index从0还是1开始、upper bound是否inclusive、term是否nonnegative、infinite series是否convergent，再选择identity或bound。Off-by-one通常不改变asymptotic class，却会破坏exact count、probability normalization和后续telescoping boundary。
+
+## A.1 Summation formulas and properties
+
+### Sigma notation and ranges
+
+<Term def="关于linearity、index change、range split以及常见finite或infinite series closed forms的一组求和规则。">求和公式与性质</Term>（summation formulas and properties）从记号开始：
+
+$$
+\sum_{k=a}^{b} f(k)
+=
+f(a)+f(a+1)+\cdots+f(b).
+$$
+
+当$b<a$时，finite empty sum约定为0，使range split和recurrence边界无需特殊分支。Index variable是bound variable，重命名不改变value；但上下界和term中的index必须同步替换。
+
+<CLRS4SigmaRangeLab />
+
+Variable substitution要跟踪new endpoints。例如令$j=k-a$，则$k=a,\ldots,b$对应$j=0,\ldots,b-a$：
+
+$$
+\sum_{k=a}^{b}f(k)
+=
+\sum_{j=0}^{b-a}f(j+a).
+$$
+
+只改term不改range会悄悄增加或丢失terms。检查方法是展开first two和last two terms，确认两边逐项对应。
+
+### Linearity
+
+Finite sums满足linearity：
+
+$$
+\sum_{k=a}^{b}
+\bigl(\alpha f(k)+\beta g(k)\bigr)
+=
+\alpha\sum_{k=a}^{b}f(k)
++
+\beta\sum_{k=a}^{b}g(k).
+$$
+
+<CLRS4LinearityLab />
+
+Linearity允许把constant factor移出sigma，也允许把同range的sums合并。若ranges不同，应先补齐、拆分或显式处理boundary terms；不能直接把两个不同upper bounds的sigma合成一个。
+
+### Arithmetic series and polynomial sums
+
+<Term def="相邻terms差为constant的sequence之和；最基本实例是1到n的integers之和。">等差级数</Term>可用首尾配对：
+
+$$
+\sum_{k=1}^{n}k
+=
+\frac{n(n+1)}2.
+$$
+
+<CLRS4ArithmeticSeriesLab />
+
+常用power sums还包括
+
+$$
+\sum_{k=1}^{n}k^2
+=
+\frac{n(n+1)(2n+1)}6,
+\qquad
+\sum_{k=1}^{n}k^3
+=
+\left(\frac{n(n+1)}2\right)^2.
+$$
+
+Exact formulas可由induction或finite differences验证。做asymptotic analysis时更常使用一般结论：fixed nonnegative integer $p$下，$\sum_{k=1}^{n}k^p=\Theta(n^{p+1})$。但若$p$随$n$变化，就不能把hidden constants视为固定。
+
+### Geometric series
+
+<Term def="相邻terms按fixed ratio r变化的series，finite closed form与infinite convergence都由r决定。">几何级数</Term>满足$r\ne1$时
+
+$$
+\sum_{k=0}^{n}r^k
+=
+\frac{1-r^{n+1}}{1-r}.
+$$
+
+Proof把sum乘$r$后与原式相减，中间terms全部cancel。$r=1$时sum是$n+1$，不能代入分母为0的formula。
+
+<CLRS4GeometricSeriesLab />
+
+Infinite geometric series只在$|r|<1$时converges：
+
+$$
+\sum_{k=0}^{\infty}r^k
+=
+\frac1{1-r}.
+$$
+
+当$r>1$时finite sum由last term主导；当$0<r<1$时tail可显式控制。Algorithms中前者常描述递归树从root到leaves增长，后者常描述error或probability快速衰减。
+
+<CLRS4GeometricTailLab />
+
+从index $m$开始的tail为$r^m/(1-r)$。这不仅给asymptotic class，也给“截断多少terms才能使error低于tolerance”的可计算certificate。
+
+### Harmonic series
+
+<Term def="reciprocals 1, 1/2, ..., 1/n的partial sum；它发散但增长阶为log n。">调和级数</Term>定义$H_n=\sum_{k=1}^{n}1/k$。Integral comparison给出
+
+$$
+\ln n
+\le H_n
+\le 1+\ln n.
+$$
+
+<CLRS4HarmonicSeriesLab />
+
+因此$H_n=\Theta(\log n)$。它出现在random permutation records、coupon collector、quicksort average analysis、set cover approximation等地方。这里的log base只差constant，但exact formula中的natural logarithm来自integral of $1/x$。
+
+Harmonic sum diverges，不能因为growth很慢就把infinite sum当作constant。对finite algorithmic input，它的partial sum有限；对limit statement，则必须承认它无finite limit。
+
+### Telescoping series
+
+<Term def="展开后多数interior terms正负相消，只留下少量boundary terms的series。">伸缩级数</Term>的标准形式是
+
+$$
+\sum_{k=a}^{b}
+\bigl(u_k-u_{k+1}\bigr)
+=
+u_a-u_{b+1}.
+$$
+
+<CLRS4TelescopingLab />
+
+例如$1/(k(k+1))=1/k-1/(k+1)$，于是大量fractions相消。风险在boundary：last negative term是$u_{b+1}$而不是$u_b$。最稳妥的方法是展开前三项和最后两项，再写剩余boundaries。
+
+### Differentiating and integrating power series
+
+Finite polynomial可逐项differentiate或integrate。对geometric identity操作可生成weighted sums：
+
+$$
+\frac{d}{dx}
+\sum_{k=0}^{n}x^k
+=
+\sum_{k=1}^{n}kx^{k-1}.
+$$
+
+<CLRS4DifferentiateSeriesLab />
+
+Infinite power series则必须在convergence radius内操作，并区分pointwise与uniform convergence等分析条件。算法教材通常在$|x|<1$内使用geometric series derivations；越过boundary后照搬formula会得到错误finite value。
+
+Products也能转成sums分析：positive terms下对数满足$\log\prod_i a_i=\sum_i\log a_i$。这对probability product、multiplicative weights和factorial growth很有用，但必须保证每个$a_i>0$并说明log base。
+
+## A.2 Bounding summations
+
+### Termwise comparison
+
+<Term def="通过逐项比较、区间拆分、积分或dominant-term argument，为sum建立upper/lower bounds的过程。">求和的界</Term>（bounding summations）首先使用monotonicity：若对range内每个$k$都有$0\le a_k\le b_k$，则
+
+$$
+\sum_k a_k
+\le
+\sum_k b_k.
+$$
+
+<CLRS4TermwiseBoundLab />
+
+Uniform bound是特殊情况：$n$个nonnegative terms每个至多$M$，总和至多$nM$。这是安全但有时很松的bound；若terms跨越多个scale，应按range拆分或使用geometric/integral structure。
+
+Lower bound同样重要。若选定一段包含$m$个terms且每个至少$L$，则sum至少$mL$。证明$\Theta$需要matching upper和lower bounds，只给$O$不能说明bound tight。
+
+### Splitting the range
+
+<Term def="在threshold处分开index interval，对不同子区间应用不同identity或bound再合并。">区间拆分</Term>写作
+
+$$
+\sum_{k=a}^{b}f(k)
+=
+\sum_{k=a}^{m}f(k)
++
+\sum_{k=m+1}^{b}f(k).
+$$
+
+<CLRS4SplitRangeLab />
+
+Threshold可取$n/2$、$\sqrt n$、某个power-of-two boundary或function改变monotonicity的位置。拆分本身是exact identity，approximation发生在各subrange的bound中；因此certificate要分别记录每段使用的inequality。
+
+Dyadic grouping把indices按$[1,2),[2,4),[4,8),\ldots$分组。每组内terms相近，group count为$O(\log n)$，常用于调和和、bit levels与doubling arguments。
+
+### Integral comparison
+
+<Term def="把monotone nonnegative function的discrete rectangles与曲线下面积比较，从而夹住finite sum。">积分界</Term>对positive decreasing $f$给出一种常用形态：
+
+$$
+\int_{1}^{n+1} f(x)\,dx
+\le
+\sum_{k=1}^{n}f(k)
+\le
+f(1)+\int_{1}^{n}f(x)\,dx.
+$$
+
+<CLRS4IntegralBoundLab />
+
+若$f$ increasing，rectangles相对curve的位置改变，bound方向也要相应调整。不要只背公式；先画unit-width rectangles，判断left endpoint或right endpoint rectangle位于curve上方还是下方。
+
+Integral test还能判断infinite positive series convergence。例如$\sum 1/k^p$在$p>1$时converges，在$p\le1$时diverges。算法中常用finite partial sum bound，但同一comparison也解释tail error。
+
+### Dominant terms and asymptotic tightness
+
+<Term def="当terms按constant factor增长或衰减时，用largest term或first tail term控制whole sum order的方法。">主导项法</Term>对geometrically increasing nonnegative terms特别有效：
+
+$$
+\sum_{k=0}^{n}2^k
+=
+2^{n+1}-1
+=
+\Theta(2^n).
+$$
+
+<CLRS4DominantTermLab />
+
+“取最大项乘term count”给$O(n2^n)$，虽然正确却不tight；geometric identity把extra $n$去掉。相反，若terms变化缓慢，例如$k$或$1/k$，只看last term可能丢失factor $n$或$\log n$。
+
+Bounding workflow应先识别shape：polynomial、geometric、harmonic、telescoping或mixed。Mixed sums可split range、factor dominant scale、change index或比较integral。不要在看清term behavior前机械套一个formula。
+
+<Callout type="trap" title="最大项决定所有sum">
+只有geometric growth等特定结构下，whole sum才与largest term同阶。对n个近似相等的terms，总和通常是n倍单项；对harmonic terms则有额外log factor。修法是检查相邻term ratio或用upper/lower block bounds。
+</Callout>
+
+<Callout type="trap" title="同一个积分夹逼方向适用于所有函数">
+Rectangle在curve上方还是下方取决于f是increasing还是decreasing。修法是先画或计算一个unit interval，确认endpoint rectangle与integral的相对位置，再推广range。
+</Callout>
+
+## 求和推导的审计流程
+
+<CLRS4SummationCertificateLab />
+
+<Stepper>
+<Step title="展开边界并确认index">
+写出first、second、penultimate和last terms，检查inclusive range、term count与substitution后的endpoints。
+
+<CLRS4SigmaRangeLab />
+</Step>
+<Step title="识别series结构">
+判断是arithmetic、geometric、harmonic、telescoping、power sum还是mixed form，再选择identity或split。
+
+<CLRS4GeometricSeriesLab />
+</Step>
+<Step title="同时给upper与lower evidence">
+记录每条inequality的前提和方向，必要时用integral、block或dominant-term给matching bounds。
+
+<CLRS4SummationCertificateLab />
+</Step>
+</Stepper>
+
+## 小结
+
+Appendix A Summations把循环、递归层和概率事件的逐项成本转换为总成本。Summation formulas and properties包括index substitution、linearity、arithmetic与power sums、geometric series、harmonic series、telescoping和power-series transformations。每条identity都附带range、boundary与convergence条件。
+
+Bounding summations从termwise comparison开始，并通过range splitting、dyadic grouping、integral comparison和dominant-term arguments得到tight asymptotic bounds。可靠推导要展开boundary terms、区分exact identity与inequality、说明monotonicity或ratio前提，并同时寻找upper与lower bounds。
+
+<Exercises>
+
+**问题 1**：把$\sum_{k=3}^{n}f(k)$改写成从0开始的sum时，上界和term应如何变化？
+
+<Answer>
+令$j=k-3$，当k等于3时j等于0，当k等于n时j等于n减3。因此改写为从j等于0到n减3的$f(j+3)$之和；三处必须同步变化。
+</Answer>
+
+**问题 2**：为什么$\sum_{k=0}^{n}2^k$是$\Theta(2^n)$而不是只得到$O(n2^n)$？
+
+<Answer>
+Geometric closed form为$2^{n+1}-1$，它同时不小于$2^n$且不大于$2^{n+1}$。上下界只差constant，因此是Theta；最大项乘term count只是较松的通用upper bound。
+</Answer>
+
+**问题 3**：如何用积分说明$H_n=\Theta(\log n)$？
+
+<Answer>
+函数1/x positive且decreasing。Unit rectangles给出ln n不大于Hn，Hn不大于1加ln n。两边都与log n同阶，所以Hn为Theta log n。
+</Answer>
+
+**问题 4**：Telescoping sum为什么仍需展开last terms？
+
+<Answer>
+Interior cancellation容易看出，错误通常发生在boundary。展开后可确认保留的是first positive term与最后一个negative successor，例如$u_a-u_{b+1}$，避免误写成$u_a-u_b$。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="求和">把同一表达式在离散index range上的values相加，并显式记录index、上下界和term的记号与运算。</GlossaryItem>
+<GlossaryItem term="求和公式与性质">关于linearity、index change、range split以及常见finite或infinite series closed forms的一组求和规则。</GlossaryItem>
+<GlossaryItem term="等差级数">相邻terms差为constant的sequence之和；最基本实例是1到n的integers之和。</GlossaryItem>
+<GlossaryItem term="几何级数">相邻terms按fixed ratio r变化的series，finite closed form与infinite convergence都由r决定。</GlossaryItem>
+<GlossaryItem term="调和级数">reciprocals 1, 1/2, ..., 1/n的partial sum；它发散但增长阶为log n。</GlossaryItem>
+<GlossaryItem term="伸缩级数">展开后多数interior terms正负相消，只留下少量boundary terms的series。</GlossaryItem>
+<GlossaryItem term="求和的界">通过逐项比较、区间拆分、积分或dominant-term argument，为sum建立upper/lower bounds的过程。</GlossaryItem>
+<GlossaryItem term="区间拆分">在threshold处分开index interval，对不同子区间应用不同identity或bound再合并。</GlossaryItem>
+<GlossaryItem term="积分界">把monotone nonnegative function的discrete rectangles与曲线下面积比较，从而夹住finite sum。</GlossaryItem>
+<GlossaryItem term="主导项法">当terms按constant factor增长或衰减时，用largest term或first tail term控制whole sum order的方法。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Appendix A · Summations" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

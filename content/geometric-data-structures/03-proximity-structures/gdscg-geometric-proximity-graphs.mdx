@@ -1,0 +1,183 @@
+---
+title: "第7章 几何邻近图"
+type: C
+section: "几何数据结构 · 邻近关系"
+order: 2
+description: "比较RNG、Gabriel图、beta骨架和影响球图，证明包含关系并应用于分类、点云曲面与交线搜索。"
+demo: true
+math: true
+sourceUrl: "https://www.routledge.com/Geometric-Data-Structures-for-Computer-Graphics/Langetepe-Zachmann/p/book/9780367453862"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GdscgGeometricProximityGraphsObjectLab, GdscgGeometricProximityGraphsQueryLab, GdscgGeometricProximityGraphsEvidenceLab } from "@/components/mdx/geometric-data-structures/diagrams/gdscg-geometric-proximity-graphs";
+
+<Objectives>
+- 能解释相对邻域图、Gabriel图与beta骨架的对象和不变量
+- 能推导本页复杂度或几何谓词，并用交互图追踪构建、查询与更新
+- 能实现最小实验，以精确基线、边界输入和反例验收包含链
+</Objectives>
+
+## 先做预测
+
+先预测结果，再观察结构变化并解释偏差。在点云中逐渐加入离群点并改变局部密度，预测RNG、Gabriel图和影响球图的连通性与边数。再调beta参数，判断图会如何从稠密变稀疏。 本页用<Term def="仅当两点形成的月牙区域不含其他站点时连接它们。">相对邻域图</Term>、<Term def="仅当以两点连线为直径的闭球内部不含其他站点时连接。">Gabriel图</Term>、<Term def="通过参数化月牙邻域控制图的稀疏程度。">beta骨架</Term>、<Term def="每点以最近邻距离为半径，两球相交时建立边。">影响球图</Term>、<Term def="最小生成树、RNG、Gabriel图与Delaunay图之间的子图关系。">包含链</Term>建立从对象、表示、查询到证书的完整链路。
+
+<GdscgGeometricProximityGraphsObjectLab />
+
+## 第一版权威目录定位
+
+本页一一对应Elmar Langetepe与Gabriel Zachmann在A K Peters出版的2006年第一版《Geometric Data Structures for Computer Graphics》第7章 几何邻近图。出版社页面确认第一版、两位作者、362页和正式10章目录；作者所在研究组同时给出原书信息、ISBN 9781568812359、目录以及第7章材料。
+
+### 原书小节覆盖
+
+1. 7.1 A Small Collection of Proximity Graphs
+2. 7.1.1 Preliminary Definitions
+3. 7.1.2 Definitions of Proximity Graphs
+4. 7.1.3 Inclusion Property
+5. 7.1.4 Construction Algorithms
+6. 7.2 Classification
+7. 7.3 Surfaces Defined by Point Clouds
+8. 7.4 Intersection Detection Between Point Clouds
+
+### 核心对象
+
+1. **相对邻域图**：仅当两点形成的月牙区域不含其他站点时连接它们。
+2. **Gabriel图**：仅当以两点连线为直径的闭球内部不含其他站点时连接。
+3. **beta骨架**：通过参数化月牙邻域控制图的稀疏程度。
+4. **影响球图**：每点以最近邻距离为半径，两球相交时建立边。
+5. **包含链**：最小生成树、RNG、Gabriel图与Delaunay图之间的子图关系。
+
+## 查询与表示契约
+
+先固定数据域、维数、闭开边界、查询输出和数值语义。树高或节点数不是独立目标；只有候选完备、结果无重复、复杂度含输出规模且数值分支一致时，结构才算正确。
+
+$$
+L(p,q)=B(p,d)\cap B(q,d)
+$$
+
+$$
+G(p,q)=B\left(\frac{p+q}{2},\frac{d}{2}\right)
+$$
+
+$$
+MST\subseteq RNG\subseteq GG\subseteq DG
+$$
+
+$$
+pq\in SIG\Longleftrightarrow d(p,q)\le r_p+r_q
+$$
+
+每类邻近图都把边存在性转为一个空邻域测试。RNG使用两球交集月牙，Gabriel图使用直径球，beta骨架统一两者；影响球图则按局部密度给每点独立半径。空区域的包含关系推出最小生成树包含于RNG，RNG包含于Gabriel图，后者包含于Delaunay图。 每个剪枝判断都应能回答两个问题：被排除的集合是什么，以及哪个不变量证明它不含答案。
+
+## 可核查构建与查询
+
+先构造Delaunay图作为候选超图，再对每条候选边检查直径球或月牙。点云曲面用邻近图近似测地邻域，分类任务在图上清理噪声样本；两个点云求交先找符号变化括区，再沿图插值定位根。
+
+
+```python
+def query_with_trace(root, request):
+    stack, hits, trace = [root], [], []
+    while stack:
+        node = stack.pop()
+        trace.append(node.id)
+        if node.disjoint(request):
+            continue
+        if node.is_leaf:
+            hits.extend(node.exact_matches(request))
+        else:
+            stack.extend(node.children)
+    return sorted(set(hits)), trace
+```
+
+通用骨架必须由本章的具体不变量实例化：区域不相交、包围体不重叠、空邻域、证书未失效或静态块版本有效。不能把候选生成误写成最终答案，叶节点仍需执行本章定义的精确测试。
+
+<GdscgGeometricProximityGraphsQueryLab />
+
+## 复杂度与工程取舍
+
+复杂度报告分离构建、查询、更新、内存和输出规模。平均值之外记录P95与最坏样例；同时保存访问节点、候选对象和精确谓词次数，这样才能判断瓶颈来自树质量、数据分布还是数值回退。
+
+```python
+metrics = {
+    "build_ms": 0.0,
+    "visited_nodes": 0,
+    "candidates": 0,
+    "exact_tests": 0,
+    "update_ms": 0.0,
+}
+assert set(metrics) == {"build_ms", "visited_nodes", "candidates", "exact_tests", "update_ms"}
+```
+
+只在结果集合与基线一致后比较性能。构建更慢可能换来大量查询收益，更新更便宜也可能逐渐恶化结构；因此工作负载中的查询次数、更新比例和生命周期必须写入报告。
+
+## 边界、退化与反例
+
+非均匀采样会让固定半径图断裂或跨层粘连；重复点令最近邻半径为零；边界点缺少双侧邻域。局部尺度必须保存来源和置信度，不能无条件当作表面拓扑。
+
+```python
+audit = {
+    "normal": "representative geometry",
+    "boundary": "closed-open convention",
+    "degenerate": "duplicate or co-located input",
+    "baseline": "brute-force exact result",
+}
+assert all(audit.values())
+```
+
+<GdscgGeometricProximityGraphsEvidenceLab />
+
+## 图形学应用
+
+对带噪点云分别构建Gabriel图与r阶影响球图，比较连通分量、平均度和跨薄层错误边。交线搜索保存括区边、插值参数与原隐式函数残差。 应用层还要记录从世界坐标到结构坐标的变换，避免把坐标系错误误判为数据结构错误。
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定对象与边界"><GdscgGeometricProximityGraphsObjectLab /></Step>
+  <Step title="执行构建与查询"><GdscgGeometricProximityGraphsQueryLab /></Step>
+  <Step title="保存反例与证书"><GdscgGeometricProximityGraphsEvidenceLab /></Step>
+</Stepper>
+
+1. 用五到十个对象手算结构，标出节点覆盖、邻接或证书。
+2. 执行一个正常查询和一个恰落在边界的查询，逐节点记录剪枝理由。
+3. 删除一个一般位置或静态假设，构造首个失败样例。
+4. 与穷举答案逐项比较，再扩大规模测构建、查询、更新和内存。
+
+## 验收证书
+
+验收包包含原始输入、结构参数、节点或图邻接、查询日志、候选集合、精确结果、复杂度计数和失败反例。采用局部最近邻尺度和Delaunay候选，并用统计离群阈值裁剪过长边。 任何无法重放的截图或孤立耗时都不能替代证书。
+
+## 常见误区
+
+<Callout type="trap" title="正确性前提被省略">直接在全点集做固定半径连接，稠密区域边数爆炸而稀疏区域仍断开。</Callout>
+
+<Callout type="trap" title="只看平均耗时">采用局部最近邻尺度和Delaunay候选，并用统计离群阈值裁剪过长边。 同时保留最坏输入、内存和更新尾延迟。</Callout>
+
+## 本章回顾
+
+本页覆盖相对邻域图、Gabriel图、beta骨架、影响球图、包含链。掌握标准是能从查询契约选择表示，推导剪枝或邻近条件，实现构建与更新，并用精确基线、退化输入和复杂度计数形成可重放证书。
+
+<Exercises>
+**问题1：相对邻域图与Gabriel图如何协作？**
+<Answer>仅当两点形成的月牙区域不含其他站点时连接它们。 仅当以两点连线为直径的闭球内部不含其他站点时连接。 回答时必须写出对象域和边界约定。</Answer>
+
+**问题2：怎样核查beta骨架的查询结果？**
+<Answer>保存访问轨迹与候选集合，再与穷举或精确谓词给出的结果逐项比较；复杂度必须包含输出规模。</Answer>
+
+**问题3：如何验收包含链？**
+<Answer>最小生成树、RNG、Gabriel图与Delaunay图之间的子图关系。 同时保存正常例、边界例、退化例和最坏工作负载。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="相对邻域图" definition="仅当两点形成的月牙区域不含其他站点时连接它们。" />
+  <GlossaryItem term="Gabriel图" definition="仅当以两点连线为直径的闭球内部不含其他站点时连接。" />
+  <GlossaryItem term="beta骨架" definition="通过参数化月牙邻域控制图的稀疏程度。" />
+  <GlossaryItem term="影响球图" definition="每点以最近邻距离为半径，两球相交时建立边。" />
+  <GlossaryItem term="包含链" definition="最小生成树、RNG、Gabriel图与Delaunay图之间的子图关系。" />
+  <GlossaryItem term="几何证书" definition="足以重放构建、查询、更新和数值判断的一组输入、轨迹与不变量。" />
+</Glossary>
+
+<Attribution adaptedFrom="Elmar Langetepe, Gabriel Zachmann · Geometric Data Structures for Computer Graphics, First Edition · 第7章 几何邻近图" adaptedUrl="https://www.routledge.com/Geometric-Data-Structures-for-Computer-Graphics/Langetepe-Zachmann/p/book/9780367453862" />

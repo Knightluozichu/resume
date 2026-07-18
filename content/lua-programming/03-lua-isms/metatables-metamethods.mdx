@@ -1,0 +1,236 @@
+---
+title: "Chapter 20. Metatables and Metamethods"
+type: C
+section: "Programming in Lua 4e · Lua-isms"
+order: 20
+description: "掌握Lua metatable分派、算术与关系metamethod、__index/__newindex、默认值、访问追踪和只读代理的精确边界。"
+demo: true
+math: false
+sourceUrl: "https://www.lua.org/pil/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PilMetamethodDispatchLab, PilIndexDefaultLab, PilNewIndexProxyLab } from "@/components/mdx/lua-programming/diagrams/metatables-metamethods";
+
+<Objectives>
+
+- 能解释算术、关系与library-defined metamethod分派，并判断mixed operands和algebraic laws
+- 能推导raw lookup、__index与default/prototype chain，复现missing key、side effect和cycle故障
+- 能设计__newindex proxy、tracking与read-only facade，验证existing keys、raw bypass和nested mutability
+
+</Objectives>
+
+## 为什么Metatable改变的是Fallback Protocol
+
+Metatable不改变table已存entries，也不是class object。它为普通操作无法直接完成时提供named hooks：算术operand不是number、table lookup raw miss、写入raw missing key、tostring/pairs等库函数请求扩展。先做primitive/raw operation，再决定是否调用metamethod。
+
+先预测：给已有key赋值是否触发`__newindex`；`__index`返回default会不会把default写入table；`rawget`是否调用hook；vector加number时Lua先找哪个operand；`<=`缺`__le`时会怎样；readonly proxy能否阻止`rawset`；nested child是否也readonly。先画raw path与fallback path。
+
+<Term def="Primitive或raw operation先尝试，只有语言规定的失败/缺失条件才按operand metatable查找特定hook。">metamethod fallback boundary</Term>防止把hook想成全局interceptor。Get/setmetatable管理关联；`__metatable`可让普通get/setmetatable隐藏或拒绝替换，但debug library与C host仍可能越权。
+
+## Arithmetic Metamethods
+
+Arithmetic hooks包括`__add`、`__sub`、`__mul`、`__div`、`__idiv`、`__mod`、`__pow`、bitwise hooks、concatenation与unary hooks。Binary primitive不能完成时，Lua按operand/metatable规则寻找hook并传入原operands。Hook必须验证左右domain；commutative operator也不代表mixed-order自动对称。
+
+<Term def="Operator hook明确允许的left/right domain、result type、coercion、error与closure/algebra laws，而不根据偶然type猜测。">operator domain contract</Term>例如vector+vector和vector*scalar可支持，scalar*vector需要对应dispatch或shared function；dimension mismatch明确error。
+
+```lua
+local Vector = {}
+Vector.__index = Vector
+
+function Vector.new(x, y)
+  return setmetatable({ x = x, y = y }, Vector)
+end
+
+function Vector.__add(left, right)
+  assert(getmetatable(left) == Vector and getmetatable(right) == Vector)
+  return Vector.new(left.x + right.x, left.y + right.y)
+end
+
+function Vector.__tostring(value)
+  return string.format("Vector(%g,%g)", value.x, value.y)
+end
+
+local sum = Vector.new(1, 2) + Vector.new(3, 4)
+assert(sum.x == 4 and tostring(sum) == "Vector(4,6)")
+```
+
+Metamethod可被频繁调用，不在里面做unbounded I/O或隐式global mutation。Result应创建新value还是mutate operand必须一致；算术通常返回新object，避免`a+b`改变a。
+
+## Relational Metamethods
+
+`__lt`与`__le`定义ordering；equality在raw identity不相等后、符合语言的compatible metamethod条件时才考虑`__eq`。不同metatables是否共同比较要按Lua 5.3规则设计，最稳妥是同domain实例共享同一metatable/hook。`rawequal`绕过metamethod检查identity/raw equality。
+
+Lua可在缺`__le`时用not-swapped-`__lt`语义fallback，但遇到unordered/NaN-like domain时不一定符合需求，因此通常同时实现并测试。<Term def="Relational hooks保持equality的reflexive/symmetric语义与ordering的irreflexive/asymmetric/transitive规则，并和sort comparator一致。">relational metamethod laws</Term>是table.sort可用性的前提。
+
+不要让`__eq`比较mutable fields却又把objects用作identity keys并期待hash随内容更新；Lua table key仍按object identity组织。Content equality与key identity是两层contract。
+
+## Library-Defined Metamethods
+
+Base libraries可约定hooks，例如`tostring`调用`__tostring`，Lua 5.3的`pairs`可使用`__pairs`，`__metatable`控制普通metatable access。它们不是所有语言operators统一机制；使用前查目标Lua版本。
+
+`__tostring`必须返回string且避免递归调用`tostring(self)`；diagnostic formatting也不应泄露secrets。`__pairs`返回iterator/state/control并遵守第18章progress协议。保护`__metatable`是API封装，不是面对debug/C capability的security sandbox。
+
+<PilMetamethodDispatchLab />
+
+<Stepper>
+  <Step title="切换Arithmetic、Equality、Ordering和Library Hooks"><PilMetamethodDispatchLab /></Step>
+  <Step title="填写Dispatch Matrix">对left/right同domain、mixed order、primitive value、missing hook逐项记录选择的hook、arguments、result或error。</Step>
+  <Step title="验证Algebraic Laws">随机instances测试add identity/commutativity（若声明）、equality symmetry与ordering transitivity，再交给table.sort验证。</Step>
+</Stepper>
+
+<Callout type="trap" title="定义__eq后，任何两个Tables都会按内容比较">
+Raw identity相同先为true；不同objects是否调用__eq受双方类型/metatable兼容规则约束。共享domain metatable并测试两边，不能把任意table deep equality寄托在一个hook上。
+</Callout>
+
+## Table-Access Metamethods
+
+Read `table[key]`先raw lookup。Raw value非nil直接返回，即使value为false；只有nil miss才查`__index`。Write先看target raw key：已存在则直接覆盖，missing才查`__newindex`。Nil assignment删除key，因此下一次ordinary write可能从direct path切换到hook path。
+
+<Term def="Table access先检查target raw entry；read/write hook只处理raw nil miss，rawget/rawset始终绕过hook。">raw access precedence</Term>解释tracking为何需empty proxy。Hook内部若对同一proxy普通赋值会再次触发，应用`rawset(backing,key,value)`或操作hidden storage。
+
+## The __index metamethod
+
+`__index`可为table或function。Table形式把missing lookup委托给fallback/prototype，fallback本身有metatable时可继续chain；function接收target与key，可compute、log或validate。Chain必须无cycle且有bounded depth。
+
+<Term def="Missing read可委托给共享fallback table形成prototype chain，但raw writes仍落在instance并遮蔽fallback field。">prototype lookup chain</Term>是method sharing基础。Instance `obj.method`从prototype取得function，colon call再传self。修改shared prototype影响未shadow instances，已存同名instance field不受影响。
+
+## Tables with default values
+
+Default可用`__index=function(_,key) return default end`，也可按key计算。Default lookup不插入entry；pairs仍看不到。若要memoize，hook验证后rawset target，但这改变read side effects与memory growth，必须显式命名。
+
+```lua
+local function with_default(target, default)
+  return setmetatable(target, {
+    __index = function() return default end,
+  })
+end
+
+local counters = with_default({}, 0)
+assert(counters.missing == 0 and rawget(counters, "missing") == nil)
+counters.lua = counters.lua + 1
+assert(rawget(counters, "lua") == 1)
+```
+
+Mutable default table若共享，多个keys会得到同一identity；通常返回factory-created value并决定是否cache。False是否覆盖default取决于raw hit：stored false是有效value，不会触发`__index`。
+
+<PilIndexDefaultLab />
+
+<Stepper>
+  <Step title="切换Raw Hit、Index Table、Index Function和Default"><PilIndexDefaultLab /></Step>
+  <Step title="画Lookup Chain">从instance raw key到prototype/default逐层记录identity、hook、side effect和termination；构造cycle验证拒绝。</Step>
+  <Step title="区分Read与Memoize">连续读取missing key，分别断言pure default不改变pairs，memoizing default只创建一次并受size上限约束。</Step>
+</Stepper>
+
+## The __newindex metamethod
+
+`__newindex`可为table重定向写入，或function接收target/key/value。它仅处理target raw missing key；已有key修改绕过。Validation table若直接存首次value，后续更新将不再验证，这是经典漏洞。
+
+<Term def="要观察所有ordinary writes，public table保持raw-empty，由__index/__newindex把读写转发到不可泄露的backing store。">empty proxy mediation</Term>解决existing-key bypass。Hook校验key/value后rawset backing，不rawset proxy。
+
+## Tracking table accesses
+
+Tracking proxy的read/write hooks记录operation再访问backing；`__pairs`提供backing traversal，否则pairs看到empty proxy。Log必须避免用会再次触发hooks的formatting，并限制volume。Reads可能包含secret，audit记录key/code而非value。
+
+```lua
+local function tracked(backing, events)
+  local proxy = {}
+  return setmetatable(proxy, {
+    __index = function(_, key)
+      events[#events + 1] = { op = "read", key = key }
+      return backing[key]
+    end,
+    __newindex = function(_, key, value)
+      events[#events + 1] = { op = "write", key = key }
+      backing[key] = value
+    end,
+    __pairs = function() return next, backing, nil end,
+    __metatable = "tracked",
+  })
+end
+
+local events, data = {}, { count = 1 }
+local proxy = tracked(data, events)
+proxy.count = proxy.count + 1
+assert(data.count == 2 and #events == 2)
+```
+
+Backed assignment here普通写data，可行因为backing无tracking metatable；若可能有，使用rawset按owner policy。Rawset(proxy,...)会在proxy创建entry并绕过tracking，后续read也绕过；因此proxy是cooperative API，不是对拥有rawset/debug能力代码的sandbox。
+
+## Read-only tables
+
+Readonly facade同样用empty proxy：`__index`读backing，`__newindex`无条件error，`__pairs`遍历backing，`__metatable`隐藏。<Term def="Read-only proxy拒绝ordinary top-level writes，但不冻结nested values、backing owner、rawset/debug或C-level capabilities。">cooperative read-only boundary</Term>必须准确命名，不声称deep immutability。
+
+```lua
+local function read_only(backing)
+  return setmetatable({}, {
+    __index = backing,
+    __newindex = function(_, key)
+      error("read-only key: " .. tostring(key), 2)
+    end,
+    __pairs = function() return next, backing, nil end,
+    __metatable = false,
+  })
+end
+
+local original = { name = "lua", nested = { value = 1 } }
+local view = read_only(original)
+assert(view.name == "lua")
+assert(not pcall(function() view.name = "other" end))
+view.nested.value = 2 -- nested table is still mutable
+assert(original.nested.value == 2)
+```
+
+Deep readonly需递归proxy、identity cache和cycle handling；但original reference仍可mutation。Security隔离要移除raw/debug capabilities、复制validated data或使用separate state/process。
+
+<PilNewIndexProxyLab />
+
+<Stepper>
+  <Step title="切换Raw Existing、Newindex Table、Newindex Function和Proxy"><PilNewIndexProxyLab /></Step>
+  <Step title="验证Every Write">对同一key首次写、再次写、赋nil后再写、rawset与backing direct write逐项记录哪些被hook观察。</Step>
+  <Step title="测试Read-only Depth">覆盖top-level、nested, pairs、rawset、metatable access和leaked backing，清楚标注cooperative而非security guarantee。</Step>
+</Stepper>
+
+<Callout type="trap" title="给原Table加__newindex就能验证所有字段修改">
+已有raw key赋值直接覆盖，不调用__newindex。要拦截所有ordinary writes，公开raw-empty proxy，把真实entries放hidden backing，并避免泄露raw bypass capability。
+</Callout>
+
+## 本章回顾：Hook只在规定Fallback点生效
+
+1. Metamethod在primitive/raw path无法完成时分派，operand domain与algebraic laws必须明确。
+2. Equality/ordering有各自兼容与fallback规则；raw identity和table key identity仍独立。
+3. `__index`只处理missing read，可构建prototype/default；default不自动插入。
+4. `__newindex`只处理missing write，已有key绕过；全量tracking需empty proxy。
+5. Tracking/readonly proxy需`__pairs`、hidden backing与recursion control，rawset可绕过。
+6. Readonly通常只保护ordinary top-level API，不代表deep freeze或security sandbox。
+
+<Exercises>
+
+**问题 1：为什么Validation __newindex只拦到第一次写？**
+
+<Answer>第一次missing key触发hook，若hook rawset到public target，该key之后raw-existing，ordinary assignment直接覆盖。把value存hidden backing、public proxy保持empty，所有writes才持续触发。</Answer>
+
+**问题 2：Default Table为何可能让不同Keys共享状态？**
+
+<Answer>若`__index`每次返回同一个default table，`t.a`和`t.b`是同一identity，修改一处另一处可见。按需求返回immutable shared value、每key factory并cache，或不cache；用rawequal和mutation测试。</Answer>
+
+**问题 3：怎样证明Read-only Proxy不是Security Boundary？**
+
+<Answer>Ordinary `proxy.key=value`会失败，但`rawset(proxy,key,value)`可创建绕过entry；nested table和leaked backing仍可改，debug/C也可能换metatable。真正隔离要控制capabilities并复制/隔离state。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="metamethod fallback boundary" definition="Primitive/raw path先执行，仅在规定失败或missing时调用hook的边界。" />
+  <GlossaryItem term="operator domain contract" definition="Operator明确左右operand domain、result、coercion与error的协议。" />
+  <GlossaryItem term="relational metamethod laws" definition="Equality与ordering hooks保持对称、严格和传递等关系规则。" />
+  <GlossaryItem term="raw access precedence" definition="Raw entry优先且index/newindex只处理nil miss的table访问规则。" />
+  <GlossaryItem term="prototype lookup chain" definition="Missing read沿共享fallback tables查找且instance write可shadow的链。" />
+  <GlossaryItem term="empty proxy mediation" definition="Public table保持raw-empty并由hooks转发所有ordinary accesses的模式。" />
+  <GlossaryItem term="cooperative read-only boundary" definition="拒绝ordinary top-level writes但不防raw/nested/backing能力的边界。" />
+</Glossary>
+
+<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 20: Metatables and Metamethods" adaptedUrl="https://www.lua.org/pil/" />

@@ -1,278 +1,261 @@
 ---
-title: 合并两个排序的链表
+title: "面试题25：合并两个排序的链表"
 type: C
-section: 链表
-order: 6
-description: 掌握迭代和递归双指针有序拼接单链表及边界极值防范。
+section: "第3章 高质量的代码"
+order: 27
+description: "每次选择两个有序头节点中较小者，递归或迭代重连原节点，并明确重复值、空链和所有权契约。"
 demo: true
-math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviews
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/25_MergeSortedLists/MergeSortedLists.cpp"
 draft: false
 ---
 
-{/* 知识点清单：双指针归并 / 哨兵节点 / 单指针更新 / 原地重挂载 / 递归数学关系式 / 链表稳定性 / 栈溢出风险；原书章节：面试题25：合并两个排序的链表。 */}
+import { MergeHeadChoiceDiagram, MergeRecursionInvariantMap, MergeTiePolicyDiagram, MergeOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/merge-sorted-lists";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能熟练运用双指针迭代归并（Merge）算法合并两个已排序的单链表，达到 $O(M+N)$ 时间复杂度和 $O(1)$ 空间复杂度。
-- 能阐明哨兵节点（Dummy Node）在简化头节点挂载逻辑及防范边界空指针异常中的核心作用。
-- 能准确写出递归合并链表的核心递推数学公式，并指出其回溯链接流程及超长链表时的栈溢出风险。
-- 能熟练编写防御性守卫条件，处理两个输入链表为空、单侧为空以及相同值节点排序稳定性等核心边界问题。
+- 能解释为何两个当前头节点中的较小者必是全局最小剩余节点
+- 能计算递归每层选择、后缀规模与重复值身份顺序
+- 能实现作者递归版及保持同一相等策略的迭代版
+- 能分析线性时间、递归栈、原地重连和共享节点风险
+- 能设计覆盖作者五组输入、有序性、多重集合与节点身份的测试
 
 </Objectives>
 
-## 直觉引入
+## 从“全局最小值只可能在哪”开始
 
-在理解具体代码之前，我们可以通过两个日常生活的场景来直观感受有序链表合并的归并逻辑：
+先预测：list1为1→3→5，list2为2→4→6。合并结果的第一个节点需要扫描两条链的全部节点吗？不需要。因为每条链自身升序，任何后续节点都不小于当前头；全局最小剩余节点只可能是head1或head2中较小者。
 
-*   **场景 A（拉链齿扣合）**：想象一条拉链，拉链的两侧分别有一排已经按顺序排列好的金属齿（分别代表两个排序链表）。当拉头（`tail` 指针）向上滑动时，它会将左右两侧的齿交替扣合在一起。每次扣合时，拉头都是比较当前最靠近扣合位置的两个齿，把较小/较先遇到的齿（`p1.val` 或 `p2.val`）扣入合并好的拉链轨道中，然后继续往上移动。
-    
-*   **场景 B（扑克牌整理）**：想象你手中有两叠已经从小到大排好序的扑克牌。现在你要将它们合并成一叠新的有序牌。你只需要把两叠牌的牌面向上放在桌上，每次比较两叠牌最上面的一张（`p1` 和 `p2` 指针），拿起较小的那张牌面朝下放入新牌堆的底部（`tail`），被拿走牌的那一叠会露出新的一张牌作为比较对象。当其中一叠牌被全部拿完时，你就可以将剩下的另一叠牌一次性整叠放在新牌堆的底部。
+这就是合并两个排序的链表的局部决策依据。选择较小头后，该节点成为<Term def="当前子问题合并结果的第一个节点，next将连接更小规模子问题的结果。">合并头</Term>；未选链保持不动，选中链前进一格，剩余问题仍是两条排序链的合并。
 
-## 概念讲解
+<Term def="沿next方向节点值单调不降，因而头节点是该链当前最小值的链表。">排序链表</Term>是必要前置条件。若输入1→5→3，头部比较无法发现后面的3应该排在5前面；算法仍会终止，却不能保证输出有序。
 
-合并两个排序链表的解法主要分为**迭代归并法**和**递归归并法**。
+<MergeHeadChoiceDiagram />
 
-### 1. 迭代法：双指针与哨兵节点
+## 作者递归如何缩小同类问题
 
-迭代法的核心思想是**双指针同步遍历与原地重挂载**。我们不需要创建任何新节点，只需在已有节点之间重新建立连接。
+若head1为空，结果就是head2；若head2为空，结果就是head1。这个无需继续分解、可直接返回的条件称为<Term def="递归中无需继续调用、可直接给出当前子问题答案的终止条件。">递归基</Term>，也是本题的空链表边界。
 
-#### 哨兵节点（Dummy Node）的妙用
-如果直接合并，我们需要在第一次合并时决定新链表的头节点是 `list1` 的首节点还是 `list2` 的首节点，并且需要单独保存这个头节点指针作为返回值。这会使代码包含许多分支判断。
-为了简化这一逻辑，我们引入一个**哨兵节点 `dummy`**：
-1. 初始时，让一个辅助指针 `tail` 指向 `dummy`。
-2. 每次比较后，将 `tail.next` 指向较小的节点，然后将指针和 `tail` 各向前移动一步。
-3. 遍历结束后，只需返回 `dummy.next` 即可，它自动指向了合并后的真实头节点。
+两链都非空时，作者比较两个头节点。head1值严格小于head2时选head1，并让它的next指向Merge(head1.next, head2)；否则选head2，并递归合并head1与head2.next。
 
-#### 迭代合并步骤
-1. 初始化 `dummy`，令 `tail = dummy`。设置双指针 `p1 = list1`，`p2 = list2`。
-2. 当 `p1` 和 `p2` 均不为空时，循环执行：
-   - 比较 `p1.val` 与 `p2.val`。
-   - 若 `p1.val <= p2.val`，则令 `tail.next = p1`，并移动 `p1 = p1.next`。
-   - 否则，令 `tail.next = p2`，并移动 `p2 = p2.next`。
-   - 每次挂载后，前移尾指针：`tail = tail.next`。
-3. **收尾拼接**：当循环结束，说明至少有一个链表已遍历完。我们将剩余未空的链表直接链接到尾部：`tail.next = p1 !== null ? p1 : p2`。
+<MergeRecursionInvariantMap />
 
----
+每层固定一个全局最小剩余节点，待合并总节点数减一。递归返回的后缀已经有序，且其中所有值不小于本层所选头，所以把它接到next后仍整体有序。
 
-### 2. 递归法：数学递推关系
+## 忠实实现严格小于的作者版本
 
-递归法则是将合并问题分解为更小规模的子问题。其核心数学关系式如下：
+作者使用严格小于号。两个值相等时走else，先选择第二条链的节点。这不会破坏值序列有序性，但会决定跨链重复节点的身份顺序。
 
-$$
-\text{merge}(L_1, L_2) = 
-\begin{cases} 
-L_2 & \text{if } L_1 \text{ is null} \\
-L_1 & \text{if } L_2 \text{ is null} \\
-L_1 \text{ with } L_1.\text{next} = \text{merge}(L_1.\text{next}, L_2) & \text{if } L_1.\text{val} \le L_2.\text{val} \\
-L_2 \text{ with } L_2.\text{next} = \text{merge}(L_1, L_2.\text{next}) & \text{if } L_1.\text{val} > L_2.\text{val}
-\end{cases}
-$$
-
-#### 递归工作流程
-- **“递”去**：递归向下，每次比较两个链表的当前头节点。若 `list1.val` 较小，则剥离出 `list1`，并递归地合并 `list1.next` 和 `list2`。
-- **“归”回**：把子问题合并出来的链表头，挂载到之前被剥离节点的 `next` 上，并逐层返回被剥离的节点。
-
-## 交互 Demo
-
-点击切换选项，以单步调试方式观察迭代合并两个排序链表的运行流程与调试终端状态：
-
-<MergeSortedListsDiagram />
-
-## 代码对照
-
-### 核心实现 A：迭代原地归并
-
-迭代法仅使用常数个辅助指针，空间复杂度为 $O(1)$，对系统内存无额外消耗，且不存在栈溢出风险。
-
-<CodeTabs>
-  <Tab label="C++ (迭代归并)">
 ```cpp
 struct ListNode {
-    int m_nValue;
-    ListNode* m_pNext;
-    ListNode(int val) : m_nValue(val), m_pNext(nullptr) {}
+    int value;
+    ListNode* next = nullptr;
 };
 
-class Solution {
-public:
-    ListNode* Merge(ListNode* pHead1, ListNode* pHead2) {
-        // 1. 防御性守卫
-        if (pHead1 == nullptr) return pHead2;
-        if (pHead2 == nullptr) return pHead1;
+ListNode* mergeSortedLists(ListNode* head1, ListNode* head2) {
+    if (head1 == nullptr) return head2;
+    if (head2 == nullptr) return head1;
 
-        // 2. 哨兵节点与尾指针
-        ListNode dummy(-1);
-        ListNode* pTail = &dummy;
-
-        ListNode* p1 = pHead1;
-        ListNode* p2 = pHead2;
-
-        while (p1 != nullptr && p2 != nullptr) {
-            // 3. 比较并拼接，保持稳定性使用 <=
-            if (p1->m_nValue <= p2->m_nValue) {
-                pTail->m_pNext = p1;
-                p1 = p1->m_pNext;
-            } else {
-                pTail->m_pNext = p2;
-                p2 = p2->m_pNext;
-            }
-            pTail = pTail->m_pNext; // 尾指针前移
-        }
-
-        // 4. 将未完链表直接接入尾部
-        pTail->m_pNext = (p1 != nullptr) ? p1 : p2;
-
-        return dummy.m_pNext;
+    ListNode* mergedHead = nullptr;
+    if (head1->value < head2->value) {
+        mergedHead = head1;
+        mergedHead->next =
+            mergeSortedLists(head1->next, head2);
+    } else {
+        mergedHead = head2;
+        mergedHead->next =
+            mergeSortedLists(head1, head2->next);
     }
-};
-```
-  </Tab>
-  <Tab label="TypeScript (迭代归并)">
-```typescript
-class ListNode {
-    val: number;
-    next: ListNode | null = null;
-    constructor(val: number) {
-        this.val = val;
-    }
+    return mergedHead;
 }
+```
 
-function mergeTwoLists(l1: ListNode | null, l2: ListNode | null): ListNode | null {
-    // 1. 防御性空值守卫
-    if (l1 === null) return l2;
-    if (l2 === null) return l1;
+函数没有创建新业务节点，也没有复制value；它把原节点的next重新连接成一条链，这叫<Term def="复用两条输入链的原节点，只改写next形成输出链，不复制节点对象。">原地重连</Term>。返回后，两条输入链的原头不再代表彼此独立的旧结构，调用者应把所有权统一转交给合并结果。
 
-    // 2. 哨兵节点初始化
-    const dummy = new ListNode(-1);
-    let tail = dummy;
+<Callout type="trap" title="把源码的严格小于讲成小于等于">
+作者相等时先取第二条链。改为小于等于仍会得到正确值序列，但跨链重复节点次序改变。若章节声称忠实复刻源码，必须保留并解释这个差异。
+</Callout>
 
-    let p1: ListNode | null = l1;
-    let p2: ListNode | null = l2;
+## 重复值的相等策略
 
-    while (p1 !== null && p2 !== null) {
-        // 3. 比较大小并挂载
-        if (p1.val <= p2.val) {
-            tail.next = p1;
-            p1 = p1.next;
+把相等时选择哪条链称为<Term def="两个当前头值相等时，规定优先接入第一链还是第二链节点的规则。">相等策略</Term>。作者的严格小于使第二链优先；非严格小于等于使第一链优先。
+
+<MergeTiePolicyDiagram />
+
+两种策略都保持每一条输入链内部的相对顺序，因为任何链的指针都只向前移动。但“稳定合并”若定义为第一输入中的相等节点优先于第二输入，就必须用小于等于；若数据带时间戳、来源优先级或稳定ID，策略需要由接口明确。
+
+只比较输出值无法验证相等策略。作者Test2的两条链都是1→3→5，值结果必为1,1,3,3,5,5；只有保存节点地址或来源标签，才能看出每对相等值是第二链节点先出现。
+
+## 迭代版保持同一语义
+
+递归或迭代只是控制流不同。迭代版可用栈上哨兵统一第一次接入，并在相等时同样选择head2，保持作者语义：
+
+```cpp
+ListNode* mergeSortedListsIterative(ListNode* head1,
+                                    ListNode* head2) {
+    ListNode dummy{};
+    ListNode* tail = &dummy;
+
+    while (head1 != nullptr && head2 != nullptr) {
+        if (head1->value < head2->value) {
+            tail->next = head1;
+            head1 = head1->next;
         } else {
-            tail.next = p2;
-            p2 = p2.next;
+            tail->next = head2;
+            head2 = head2->next;
         }
-        tail = tail.next; // 尾指针移动
+        tail = tail->next;
     }
 
-    // 4. 收尾拼接剩余部分
-    tail.next = p1 !== null ? p1 : p2;
-
+    tail->next = head1 != nullptr ? head1 : head2;
     return dummy.next;
 }
 ```
-  </Tab>
-</CodeTabs>
 
-### 核心实现 B：递归归并
+每轮只移动被选中节点所属链的头指针，另一链仍停在当前最小节点。tail必须在接入后前进到新尾；若只移动输入指针、不移动tail，下一轮会覆盖同一条next链接，丢失已接入节点。
 
-递归实现极其简洁优雅，但由于需要依靠系统调用栈保存上下文，空间复杂度为 $O(M+N)$。
+循环结束时至少一条链为空。另一条链整体已排序，且其头值不小于已合并尾，直接整段连接即可，无需逐节点继续比较。哨兵是局部栈对象，只用其next作为真实结果，不会进入返回链。
 
-<CodeTabs>
-  <Tab label="C++ (递归归并)">
+## 递归栈与迭代空间
+
+设两链长度为m和n。每层递归固定一个节点，最深可能达到m+n层，时间O(m+n)，调用栈O(m+n)。长链会触发栈溢出，因此生产代码通常使用迭代版，额外工作空间O(1)。
+
+递归返回阶段虽然在赋值next，但比较和选择发生在向下调用时；每个节点只被选择一次。代码短不等于没有额外空间，调用栈保存每层的所选节点与返回位置。
+
+迭代版使用哨兵、tail和两个输入指针。哨兵不按输入规模增长，所以仍是常数空间。若为了保持输入不变而复制每个节点，空间才变为O(m+n)，那是不同所有权契约。
+
+## 输入共享、环和别名风险
+
+两条输入链必须无环且不共享节点。若它们在某个尾部交汇，递归会从不同路径遇到同一物理节点，重连可能让节点指向自己或形成环。最极端的head1==head2会在比较相等时反复选择head2并把同一链与自身合并，行为错误。
+
+裸指针接口应声明两条链节点集合互斥。容器使用唯一所有权时，可通过移动两个head进入合并函数自然表达；共享所有权结构若要保留旧链，应创建新节点而不是原地重连。
+
+输入有环时没有空链递归基，算法不终止。并发修改next也会破坏有序性和所有权。调用期间需要独占两条链，或先复制不可变快照。
+
+比较器若抛异常，递归或迭代可能已经重连一部分节点，只能提供基本保证。int比较无异常；泛型版本应说明比较和链接操作的异常语义，强保证通常需要先确定顺序再提交或构造新链。
+
+<Callout type="trap" title="把共享尾部的两条链当作独立输入">
+原地合并假设节点集合互斥。共享节点会被从两条路径重复接入，可能形成自环；应先拒绝别名结构，或使用复制式合并保留共享输入。
+</Callout>
+
+## 作者五组测试分别锁定什么
+
+Test1合并1→3→5与2→4→6，验证严格交错选择。Test2合并两条相同的1→3→5，验证重复值和相等分支。Test3合并两个单节点1与2，验证最小非空规模。
+
+Test4让第二条链为空，递归基直接返回第一链；Test5两条都为空，返回空。作者没有单独写第一链为空、第二链非空的测试，但代码第一个递归基覆盖它，增强套件应补上。
+
+<MergeOfficialCaseLab />
+
+自动测试需要同时检查四个性质：值非降、节点总数等于m+n、每个输入地址恰好出现一次、结果最终到空。重复值测试还要检查作者第二链优先：
+
 ```cpp
-class Solution {
-public:
-    ListNode* MergeRecursive(ListNode* pHead1, ListNode* pHead2) {
-        // 递归基 (Base Case)
-        if (pHead1 == nullptr) return pHead2;
-        if (pHead2 == nullptr) return pHead1;
+#include <array>
+#include <cassert>
 
-        if (pHead1->m_nValue <= pHead2->m_nValue) {
-            pHead1->m_pNext = MergeRecursive(pHead1->m_pNext, pHead2);
-            return pHead1;
-        } else {
-            pHead2->m_pNext = MergeRecursive(pHead1, pHead2->m_pNext);
-            return pHead2;
-        }
-    }
-};
-```
-  </Tab>
-  <Tab label="TypeScript (递归归并)">
-```typescript
-function mergeTwoListsRecursive(l1: ListNode | null, l2: ListNode | null): ListNode | null {
-    // 递归终止条件
-    if (l1 === null) return l2;
-    if (l2 === null) return l1;
+void testMergeSortedLists() {
+    ListNode a5{5}, a3{3, &a5}, a1{1, &a3};
+    ListNode b6{6}, b4{4, &b6}, b2{2, &b4};
 
-    if (l1.val <= l2.val) {
-        l1.next = mergeTwoListsRecursive(l1.next, l2);
-        return l1;
-    } else {
-        l2.next = mergeTwoListsRecursive(l1, l2.next);
-        return l2;
+    ListNode* merged = mergeSortedLists(&a1, &b2);
+    const std::array<ListNode*, 6> expected{
+        &a1, &b2, &a3, &b4, &a5, &b6
+    };
+    for (ListNode* node : expected) {
+        assert(merged == node);
+        merged = merged->next;
     }
+    assert(merged == nullptr);
+
+    ListNode aEqual{1};
+    ListNode bEqual{1};
+    merged = mergeSortedLists(&aEqual, &bEqual);
+    assert(merged == &bEqual);
+    assert(merged->next == &aEqual);
+
+    ListNode only{7};
+    assert(mergeSortedLists(&only, nullptr) == &only);
+    assert(mergeSortedLists(nullptr, nullptr) == nullptr);
 }
 ```
-  </Tab>
-</CodeTabs>
 
-## 常见误区
+测试用栈节点避免手工释放，但必须保证结果不活过作用域。堆节点则只能从合并后的唯一head统一销毁，不能再分别Destroy两条输入链，否则会重复释放。
 
-<Callout type="trap">
-  <strong>现象 →</strong> 合并后的链表发生局部节点缺失，或者最后只剩下一两个节点。
-  <strong>原因 →</strong> 混淆了指针的遍历和更新操作。例如，在循环中将较小节点拼入后，没有移动对应的 `p1` 或 `p2` 指针，或者将尾指针 `tail` 指向了错误的地址，导致链表在修改时发生了断裂或数据覆盖。
-  <strong>修复 →</strong> 记住单指针更新原则：每次只移动被接入节点的原链表指针（<code>p1 = p1.next</code> 或 <code>p2 = p2.next</code>），另一方保持不动；同时不要忘记前移尾指针 <code>tail = tail.next</code>。
-</Callout>
+可以随机生成两组已排序值与唯一节点ID，用数组标准归并作为参考，比较值和来源策略。若只对结果调用sort再比较，会掩盖输出本身无序，必须按遍历顺序检查。
 
-<Callout type="trap">
-  <strong>现象 →</strong> 相同的两个排序链表合并，当链表总长度为 $10^5$ 时，递归程序因栈溢出 (Stack Overflow) 异常终止。
-  <strong>原因 →</strong> 递归合并每一次比较和重链接都需要开辟一个系统函数调用栈帧。在链表长度达到数十万级时，调用栈深度将超出浏览器的 JS 引擎或 C++ 执行栈的最大限额（通常在 $10^4$ 左右）。
-  <strong>修复 →</strong> 在超长链表及高并发生产环境中，首选使用空间复杂度为 $O(1)$ 的迭代原地合并法。
-</Callout>
+## 有序性与完整性的证明
 
-<Callout type="trap">
-  <strong>现象 →</strong> 无法正确返回合并后链表的头节点，或者返回的头节点值与预期不符。
-  <strong>原因 →</strong> 未能妥善记录最初的头节点位置。如果没有使用 `dummy` 节点，很容易在移动尾指针 `tail` 的过程中把最终返回的引用修改为了链表的末尾节点，导致返回了 `null` 或尾节点。
-  <strong>修复 →</strong> 在函数开头引入 <code>const dummy = new ListNode(-1);</code>。用额外的尾变量 <code>let tail = dummy;</code> 执行移动。最终使用并返回哨兵的后继 <code>dummy.next</code>，绝不能直接返回移动后的 <code>tail</code>。
-</Callout>
+递归基中一条为空，另一条本身有序，返回正确。两条非空时，较小头不大于任一后续节点，作为结果头正确；递归子问题规模更小且按归纳假设有序，将其接到所选头后整体仍有序。
 
-## 小结与练习
+每层恰好选择一个节点并只前进对应输入链，节点不会丢失或重复；最终某链为空，另一后缀整段接入。结果包含两输入节点多重集合的并集。
 
-- **迭代法** 适用于超长链表，利用哨兵节点 `dummy` 和单更新指针实现 $O(M+N)$ 时间和 $O(1)$ 空间复杂度的原地合并。
-- **递归法** 代码极为洗练，但在处理超长链表时容易发生栈溢出崩溃。
-- **稳定性** 在比较相等元素时，优先取第一个链表的元素（使用 `<=` 条件），这可以保持原有的元素相对顺序。
+递归深度有限，因为每层总剩余节点数减一。迭代版维护同一不变量：dummy.next到tail是已合并有序前缀，head1和head2是两个有序未处理后缀。两种控制流因此语义等价。
+
+## 从两链推广到k链
+
+在泛型链表中，排序与合并必须使用同一个比较器。若输入按降序排列，却仍用小值优先，结果不会保持原顺序；应改为每次选择更大的头。比较器还要形成稳定的一致次序：如果同一对节点有时返回真、有时返回假，递归选择就无法证明有序。
+
+浮点值中的 NaN 是典型边界。普通小于比较对 NaN 两个方向都为假，作者分支会把它当作“第一头不小于第二头”而选择第二链，却不能建立完整数值次序。业务若允许 NaN，必须定义它排在前、排在后或直接拒绝，并用同一规则预排序输入。
+
+节点保存不可复制资源并不妨碍原地合并，因为算法只改next，不移动value；但两个输入容器的分配器、回收策略和生命周期必须兼容。若节点只能由各自容器释放，把它们串成一个结果会让销毁责任不清，应改为复制值到统一所有者或让返回容器记录来源。
+
+顺序把k条链逐条合并，最坏会让早期节点被反复扫描，总时间接近O(Nk)。更好的分治法成对合并，每个节点经历约log k层，总时间O(N log k)。
+
+最小堆也能维护k个当前头，每次弹出最小节点并压入其后继，时间O(N log k)、额外空间O(k)。重复值来源顺序要放入堆键，例如值、链编号和链内序号，才能得到确定策略。
+
+无论推广方式，核心仍是当前最小候选只在各链头部。理解“两头比较”之后，k路归并只是把两个候选扩成k个候选的数据结构选择。
+
+<Stepper>
+  <Step title="先比较两个当前头"><MergeHeadChoiceDiagram />较小头是全局最小剩余节点，选中后子问题规模减一。</Step>
+  <Step title="按递归基和分支重连"><MergeRecursionInvariantMap />空链直接返回另一链，非空时所选头连接递归后缀。</Step>
+  <Step title="明确重复值选择策略"><MergeTiePolicyDiagram />作者严格小于，相等时第二链节点先进入结果。</Step>
+  <Step title="用五类官方输入封口"><MergeOfficialCaseLab />交错、重复、单节点、单空和双空覆盖全部递归路径。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 合并两个排序的链表时，全局最小剩余节点只可能在两个头部。
+2. 比较两个头节点，选择较小者并递归合并其余后缀。
+3. 任一链为空时直接返回另一链，这是递归基和空链表边界。
+4. 作者使用严格小于，相等时先选第二条链节点。
+5. 递归或迭代都为O(m+n)时间，但递归需要O(m+n)调用栈。
+6. 原地重连复用节点，合并后原两链不再是独立结构。
+7. 输入必须升序、无环、节点集合互斥且遍历期间不变。
+8. 测试应检查有序性、完整地址集合、重复值策略和最终空尾。
 
 <Exercises>
-  <Answer question="如何合并 K 个排序的链表（Merge K Sorted Lists）？">
-    这是经典的链表与分治法/优先队列结合题目。常见的解决方案有：
-    1. **分治合并（Divide and Conquer）**：类似于归并排序。将 $K$ 个链表分成左右两部分，递归两两合并。每次合并两个链表的时间复杂度为 $O(N)$（$N$ 为两个链表的节点总数），总的时间复杂度为 $O(N \log K)$，空间复杂度为 $O(\log K)$（递归栈开销）。
-    2. **最小堆（Min-Heap / Priority Queue）**：维护一个大小为 $K$ 的最小堆，初始时将 $K$ 个链表的头节点存入堆中。每次从堆中取出最小值的节点链接到合并链表尾部，再将该节点在原链表中的后继节点存入堆中。直到堆为空。时间复杂度为 $O(N \log K)$，空间复杂度为 $O(K)$。
-  </Answer>
-  <Answer question="如果合并的是两个单向循环链表，迭代法的终止条件应该怎么设计？">
-    单向循环链表的尾节点指向头节点，不存在 `null` 指针。如果采用传统的 `l1 !== null && l2 !== null` 条件，会导致死循环。
-    其终止条件与逻辑调整如下：
-    1. **记录初始头节点**：初始时分别用 `head1` 和 `head2` 记录两个循环链表的起始位置。
-    2. **循环条件**：循环运行的条件应是“两个链表均未一整轮循环遍历完”。我们在迭代时必须在指针到达各自的记录起始节点时跳出循环，并将另一未完的链表以同样边界处理直接链接到结果中。
-  </Answer>
+
+**问题 1：为什么只比较两个头节点就足够？**
+
+<Answer>每条链已升序，链内任何后续值都不小于当前头。因此两条链所有剩余节点的最小值必是两个头之一，选择较小头不会错过更小的后继。</Answer>
+
+**问题 2：作者遇到相等值时先取哪条链？**
+
+<Answer>条件是head1严格小于head2；相等时进入else，先取head2。改为小于等于会改成第一链优先，值序列仍有序，但重复节点的跨链身份顺序不同。</Answer>
+
+**问题 3：为什么递归空间不是O(1)？**
+
+<Answer>每选择一个节点都会保留一层调用上下文，最坏直到一条链耗尽才回溯，深度可达m+n。节点虽原地复用，系统调用栈仍占O(m+n)空间。</Answer>
+
+**问题 4：怎样验证合并没有丢节点或重复节点？**
+
+<Answer>合并前保存两链所有节点地址及计数，合并后遍历结果，要求每个地址恰好出现一次、总数为m+n、值非降且最终next为空。只比较值会漏掉重复值节点身份错误。</Answer>
+
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="双指针归并">
-    在合并两个排序的数据结构（如链表或数组）时，分别在两个结构头部维护一个读指针，每次比较两指针所指元素的大小，将较小者加入合并结构并将该指针前移的排序拼接算法。详见「概念讲解 1」节。
-  </GlossaryItem>
-  <GlossaryItem term="哨兵节点 (Dummy Node)">
-    在链表操作中临时创建的用于占位、不包含实际业务数据的头节点。通过哨兵节点，可以消除在链表头部插入节点时对于“头指针是否为空”的特殊判断。详见「概念讲解 1」节。
-  </GlossaryItem>
-  <GlossaryItem term="单指针更新原则">
-    在双指针归并遍历比较中，每次只移动被选中的较小节点所对应的原链表指针，而保持另一方的指针留在原位置，以防止数据跳过或逻辑混乱。详见「常见误区」节。
-  </GlossaryItem>
-  <GlossaryItem term="稳定性 (Stability)">
-    在排序或合并操作中，若两个节点的值相等，操作后它们各自原先在输入中的先后顺序保持不变，则称该算法具有稳定性。详见「小结与练习」节。
-  </GlossaryItem>
+  <GlossaryItem term="排序链表">沿next方向节点值单调不降、头节点是当前最小值的链表。</GlossaryItem>
+  <GlossaryItem term="合并头">当前子问题结果的第一个节点，其next连接更小子问题。</GlossaryItem>
+  <GlossaryItem term="递归基">任一输入链为空时可直接返回另一链的终止条件。</GlossaryItem>
+  <GlossaryItem term="相等策略">头值相等时规定优先接入第一链还是第二链节点的规则。</GlossaryItem>
+  <GlossaryItem term="原地重连">复用输入节点、只改写next形成合并结果的方式。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题25"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/25_MergeSortedLists/MergeSortedLists.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

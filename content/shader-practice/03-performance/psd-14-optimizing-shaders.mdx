@@ -1,0 +1,159 @@
+---
+title: "第14章 优化着色器"
+type: C
+section: "Shader开发实战 · 性能与精度"
+order: 14
+description: "沿Practical Shader Development正式目录掌握顶点搬移、动态分支、MAD、写掩码、过度绘制。"
+demo: true
+math: true
+sourceUrl: "https://link.springer.com/book/10.1007/978-1-4842-4457-9"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PsdOptimizingShadersPipelineLab, PsdOptimizingShadersCompareLab, PsdOptimizingShadersEvidenceLab } from "@/components/mdx/shader-practice/diagrams/psd-14-optimizing-shaders";
+
+<Objectives>
+- 能解释顶点搬移、动态分支和MAD在渲染数据流中的作用
+- 能推导本页公式并用GLSL、应用状态或引擎材质实现最小实验
+- 能复现过度绘制，以参考图、GPU捕获、边界输入和反例验收
+</Objectives>
+
+## 从画面开始
+
+先预测顶点、片元、深度和帧时间会如何变化，再只调整一个参数观察变化。优化必须在剖析后进行。把计算移到顶点阶段会引入插值误差，动态分支成本依赖相邻线程一致性，内置函数通常比手写近似更容易被驱动优化。透明层和全屏效果尤其要测过度绘制。 本页用<Term def="把可安全插值的片元计算提前到低频顶点阶段。">顶点搬移</Term>、<Term def="运行时按数据选择路径、可能导致同一执行组发散的条件分支。">动态分支</Term>、<Term def="融合乘加或易被硬件高效执行的乘加表达。">MAD</Term>、<Term def="限制渲染目标写入通道以减少不必要输出的状态。">写掩码</Term>、<Term def="同一像素被多次片元着色但早期结果被覆盖的浪费。">过度绘制</Term>建立对象、阶段、状态和证据之间的联系。
+
+<PsdOptimizingShadersPipelineLab />
+
+## 第一版权威目录定位
+
+本页一一对应Kyle Halladay《Practical Shader Development: Vertex and Fragment Shaders for Game Developers》第一版第14章 优化着色器。Springer/Apress正式目录确认2019年第一版、18章、附录代码、ISBN 978-1-4842-4456-2和XXI+381页；清华大学出版社官方样章确认2021中文第一版《Shader开发实战》、ISBN 9787302583349及对应中文目录。
+
+### 原书小节覆盖
+
+1. 14.1 把计算移到顶点Shader
+2. 14.2 避免动态分支
+3. 14.3 使用MAD
+4. 14.4 优先内置GLSL函数
+5. 14.5 写掩码
+6. 14.6 避免过度绘制
+7. 14.7 最终想法
+
+### 核心对象
+
+1. **顶点搬移**：把可安全插值的片元计算提前到低频顶点阶段。
+2. **动态分支**：运行时按数据选择路径、可能导致同一执行组发散的条件分支。
+3. **MAD**：融合乘加或易被硬件高效执行的乘加表达。
+4. **写掩码**：限制渲染目标写入通道以减少不必要输出的状态。
+5. **过度绘制**：同一像素被多次片元着色但早期结果被覆盖的浪费。
+
+## 数据流与公式
+
+优化必须在剖析后进行。把计算移到顶点阶段会引入插值误差，动态分支成本依赖相邻线程一致性，内置函数通常比手写近似更容易被驱动优化。透明层和全屏效果尤其要测过度绘制。 前15章以OpenGL 4.1、GLSL和openFrameworks为实验环境；第16至18章再映射到Unity、UE4与Godot。所有代码都要把可编程Shader与应用侧资源绑定、Draw状态、深度和混合分开记录。
+
+$$
+cost=N_vC_v+N_fC_f
+$$
+
+$$
+N_f\gg N_v
+$$
+
+$$
+mad(a,b,c)=ab+c
+$$
+
+$$
+overdraw=fragments/pixels
+$$
+
+公式中的位置、方向、颜色、深度和时间必须标注空间、范围与单位。片元输出只是候选颜色，最终结果还经过裁剪、深度、模板、混合与颜色编码。
+
+## 最小实现
+
+```glsl
+// candidate: compute low-frequency value per vertex
+vertexOut.fog=computeFog(worldPos);
+// fragment only interpolates and applies it
+```
+
+实现顺序固定为常量输出、输入可视化、核心公式、应用状态和优化。先验证Shader编译与链接，再检查属性位置、uniform、纹理单元和Framebuffer；只有画面与状态都正确后才比较性能。
+
+<PsdOptimizingShadersCompareLab />
+
+## 应用与引擎侧契约
+
+```cpp
+shader.begin();
+shader.setUniform1f("time", elapsedSeconds);
+shader.setUniformTexture("mainTex", texture, 0);
+mesh.draw();
+shader.end();
+```
+
+应用侧保存网格布局、索引、纹理格式、采样器、矩阵顺序、混合与深度状态。引擎章节则把同一概念映射到Material、节点图或ShaderMaterial；语法可以变化，输入空间与合成语义不能靠猜。
+
+## 边界、精度与性能
+
+测试零向量、退化UV、负缩放、近远裁剪面、透明交叉、纹理边缘、大世界坐标、长时间运行和高过度绘制。性能实验固定硬件、分辨率、VSync与场景，先判断CPU还是GPU受限，再用捕获定位具体Draw和Shader阶段。
+
+```text
+renderer: OpenGL 4.1 / named engine and version
+scene: fixed mesh, camera, lights, textures
+state: depth, cull, blend, target
+evidence: image diff, frame capture, CPU/GPU ms
+counterexample: smallest reproducible failure
+```
+
+<PsdOptimizingShadersEvidenceLab />
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定输入和状态"><PsdOptimizingShadersPipelineLab /></Step>
+  <Step title="逐阶段实现与比较"><PsdOptimizingShadersCompareLab /></Step>
+  <Step title="捕获画面和性能"><PsdOptimizingShadersEvidenceLab /></Step>
+</Stepper>
+
+1. 用最小网格与常量颜色验证Shader编译、链接和Draw状态。
+2. 可视化位置、UV、法线、深度或光照项，确认范围和空间。
+3. 打开本章核心效果并保存基线与候选画面。
+4. 构造边界与失败输入，用GPU捕获和计时解释差异。
+
+## 验收证书
+
+证书包含源码与编译版本、应用绑定、资源哈希、状态、参考图、GPU事件、CPU与GPU帧时间和失败反例。为了减少片元指令把非线性高光放到顶点阶段，低多边形模型出现明显断层。 修复后必须重放同一输入并说明差异来自哪个阶段。
+
+## 常见误区
+
+<Callout type="trap" title="把语法当原理">为了减少片元指令把非线性高光放到顶点阶段，低多边形模型出现明显断层。</Callout>
+
+<Callout type="trap" title="只看最终画面">画面相似不证明空间、深度、混合和性能等价。必须保存中间调试视图、固定状态和GPU捕获。</Callout>
+
+## 本章回顾
+
+本页覆盖顶点搬移、动态分支、MAD、写掩码、过度绘制。掌握标准是能画出数据流，写出最小实现，说明应用或引擎状态，再用边界、精度与性能证据复现结论。
+
+<Exercises>
+**问题1：顶点搬移与动态分支如何连接？**
+<Answer>把可安全插值的片元计算提前到低频顶点阶段。 运行时按数据选择路径、可能导致同一执行组发散的条件分支。 回答时标注阶段和输入来源。</Answer>
+
+**问题2：怎样调试MAD？**
+<Answer>先输出常量，再把相关中间值映射为颜色；随后核对应用绑定、固定状态和GPU事件。</Answer>
+
+**问题3：如何验收过度绘制？**
+<Answer>同一像素被多次片元着色但早期结果被覆盖的浪费。 同时保存正常例、边界例、失败反例和CPU/GPU计时。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="顶点搬移" definition="把可安全插值的片元计算提前到低频顶点阶段。" />
+  <GlossaryItem term="动态分支" definition="运行时按数据选择路径、可能导致同一执行组发散的条件分支。" />
+  <GlossaryItem term="MAD" definition="融合乘加或易被硬件高效执行的乘加表达。" />
+  <GlossaryItem term="写掩码" definition="限制渲染目标写入通道以减少不必要输出的状态。" />
+  <GlossaryItem term="过度绘制" definition="同一像素被多次片元着色但早期结果被覆盖的浪费。" />
+  <GlossaryItem term="可复现实验" definition="固定源码、应用状态、资源、硬件和捕获后可再次得到同一结论的实验。" />
+</Glossary>
+
+<Attribution adaptedFrom="Kyle Halladay · Practical Shader Development · 第14章 优化着色器" adaptedUrl="https://link.springer.com/book/10.1007/978-1-4842-4457-9" />

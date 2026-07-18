@@ -1,0 +1,445 @@
+---
+title: "Item 8：阻止异常逃离 destructor"
+type: A
+section: Chapter 2 · Constructors, Destructors, and Assignment Operators
+order: 8
+description: 对齐 Effective C++ 第三版 Item 8：解释 stack unwinding 中析构再抛异常为何 terminate，设计显式 close/commit 与 noexcept destructor fallback，并验证失败策略。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppDestructorFailurePolicyMap,
+  EcppDoubleExceptionMap,
+  EcppExplicitCloseProtocolMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-08-destructor-exceptions";
+
+<Objectives>
+
+- 能解释正常作用域退出与 stack unwinding 中 destructor 抛异常的不同风险，并复现双异常触发 terminate
+- 能设计显式 close/commit、幂等状态与 noexcept destructor fallback，使调用方处理可恢复失败
+- 能比较记录吞掉、rollback 与 terminate 策略，并以故障注入验证资源、事务和容器析构路径
+
+</Objectives>
+
+## 从“第二个异常没有去处”开始
+
+对象析构既发生在正常离开作用域，也发生在异常传播的
+
+<Term def="异常离开当前作用域时，按逆序销毁已构造自动对象并逐层退出调用栈的过程。">
+  stack unwinding
+</Term>
+
+。如果一个 primary exception 正在传播，某个 destructor 又抛出另一个异常，运行时无法同时传播两者，通常调用 `std::terminate`。
+
+<Term def="在已有异常传播期间，析构或清理代码再次抛出的异常。">
+  secondary exception
+</Term>
+
+使外层 catch 无法选择保留哪一个。
+Prevent exceptions from leaving destructors（阻止异常逃离析构函数）覆盖整个析构链：析构函数体、成员析构和基类析构产生的异常都必须在 no-throw boundary 内按策略处理。
+
+<EcppDoubleExceptionMap />
+
+## 一个元素析构可终止整个容器销毁
+
+原书以数据库连接为例；数组或 vector 中多个对象析构时问题更明显：
+
+```cpp
+class DBConnection {
+public:
+    void close(); // 可能抛异常
+};
+
+class DBConn {
+public:
+    ~DBConn()
+    {
+        db_.close(); // 异常可逃离 destructor
+    }
+private:
+    DBConnection db_;
+};
+```
+
+<Term def="析构函数体或成员/基类析构中产生并越过对象生命周期边界的异常。">
+  escaping destructor exception
+</Term>
+
+若 `vector<DBConn>` 销毁时第一个元素抛异常，剩余元素的清理和程序控制流都可能受破坏。
+
+<Term def="运行库在无法继续异常处理或违反 noexcept 时立即结束程序的函数。">
+  std::terminate
+</Term>
+
+不是可在上层恢复的普通错误。
+
+<Callout type="trap">
+  **现象**：单独调用 destructor 测试时异常能被
+  catch，就认为设计安全。**原因**：测试没有让 primary exception
+  同时活动。**修法**：分别测试正常销毁与 unwinding；后者要求 destructor
+  内部绝不让异常逸出。
+</Callout>
+
+## 现代 destructor 默认倾向 noexcept
+
+<Term def="函数承诺异常不会越过其边界；若违反，运行时调用 terminate。">
+  noexcept contract
+</Term>
+
+用户声明 destructor 通常隐式具有 noexcept 条件，取决于成员/基类析构。显式写 `noexcept` 可强调接口，但不能自动处理内部失败。
+
+```cpp
+class DBConn {
+public:
+    ~DBConn() noexcept
+    {
+        try {
+            db_.close();
+        } catch (...) {
+            record_cleanup_failure(std::current_exception());
+        }
+    }
+private:
+    DBConnection db_;
+};
+```
+
+<Term def="析构边界捕获全部清理异常并执行不会再抛的记录、吞掉或终止策略。">
+  no-throw cleanup boundary
+</Term>
+
+关键是 `record_cleanup_failure` 自身也不能抛；日志分配失败、锁失败都要考虑。
+
+## 吞掉还是终止取决于不变量
+
+<Term def="析构捕获清理异常、记录后继续，使程序保持可运行的策略。">
+  swallow-and-log
+</Term>
+
+适合失败不会破坏进程核心不变量，且调用方已没有恢复动作的 best-effort cleanup。
+
+<Term def="析构捕获故障后主动调用 terminate，避免在无法保证正确性时继续运行。">
+  terminate-on-failure
+</Term>
+
+适合继续运行会产生数据损坏或安全风险。主动终止比异常偶然逸出更明确，但仍应让正常调用方有机会先处理。
+
+```cpp
+~CriticalSession() noexcept
+{
+    try {
+        rollback_if_active();
+    } catch (...) {
+        emergency_log();
+        std::terminate();
+    }
+}
+```
+
+<Term def="对象对外正确性依赖的状态约束，一旦无法恢复便不能安全继续。">
+  process-critical invariant
+</Term>
+
+决定是否终止，而不是“析构永远吞掉”。
+
+## 把可处理失败交给普通函数
+
+<Term def="由调用方在正常控制流主动调用、可报告失败并在成功后更新关闭状态的接口。">
+  explicit close
+</Term>
+
+```cpp
+class DBConn {
+public:
+    explicit DBConn(DBConnection connection)
+        : db_{std::move(connection)} {}
+
+    void close()
+    {
+        if (closed_)
+            return;
+        db_.close();      // 失败时调用方可 catch/retry
+        closed_ = true;  // 只在成功后提交状态
+    }
+
+    ~DBConn() noexcept
+    {
+        if (!closed_)
+            close_noexcept();
+    }
+private:
+    void close_noexcept() noexcept;
+    DBConnection db_;
+    bool closed_{};
+};
+```
+
+<Term def="多次调用得到与一次调用相同最终状态，不重复释放或提交副作用的关闭操作。">
+  idempotent close
+</Term>
+
+显式 close 让用户处理异常；destructor 是最后兜底，不能替代正常错误处理。
+
+<EcppExplicitCloseProtocolMap />
+
+<Callout type="trap">
+  **现象**：提供 close() 后 destructor 什么都不做，调用方一旦忘记 close
+  就泄漏。**原因**：把显式错误处理与 RAII 自动清理误认为二选一。**修法**：close
+  提供可处理路径，destructor 保留 no-throw fallback，并以状态保证不重复关闭。
+</Callout>
+
+## 状态提交顺序决定重试语义
+
+<Term def="close 成功后才把对象从 Active 转为 Closed，失败时保持可识别可重试状态的协议。">
+  close state commit
+</Term>
+
+某些底层 API 失败后句柄状态未知，不能简单重试。wrapper 必须根据 API 契约定义 Active、Closed、Failed/Unknown 状态。
+
+```cpp
+enum class CloseState { Active, Closed, Failed };
+
+void Connection::close()
+{
+    if (state_ != CloseState::Active)
+        return;
+    try {
+        native_close(handle_);
+        state_ = CloseState::Closed;
+    } catch (...) {
+        state_ = CloseState::Failed;
+        throw;
+    }
+}
+```
+
+<Term def="底层关闭失败后无法确认资源是仍活动还是已部分释放的状态。">
+  indeterminate cleanup state
+</Term>
+
+destructor fallback 对此只能按协议记录或终止，不能盲目重复操作造成 double close。
+
+## commit 不应藏在 destructor
+
+<Term def="可能失败且改变持久业务结果，需要调用方观察并决定重试或补偿的操作。">
+  explicit commit
+</Term>
+
+事务、文件 flush、网络发送等不应只在 destructor 执行，因为调用方无法可靠得知失败。
+
+```cpp
+class Transaction {
+public:
+    void commit();
+    ~Transaction() noexcept
+    {
+        if (!committed_)
+            rollback_noexcept();
+    }
+private:
+    bool committed_{};
+};
+```
+
+<Term def="未显式 commit 时由 destructor 尝试恢复原状态，且异常不越过析构边界的回滚。">
+  destructor rollback
+</Term>
+
+RAII 负责“未提交则回滚”，调用方负责“提交是否成功”。这比 destructor 自动 commit 更符合异常安全。
+
+## scope guard 也必须 no-throw
+
+<Term def="离开作用域时执行指定清理动作的 RAII 对象，常用于回滚临时状态。">
+  scope guard
+</Term>
+
+```cpp
+auto rollback = ScopeExit{[&]() noexcept {
+    restore_previous_state_noexcept();
+}};
+
+apply_changes();
+rollback.release();
+```
+
+<Term def="取消 scope guard 的离开作用域动作，表示主操作已经成功提交。">
+  guard release
+</Term>
+
+lambda 标记 noexcept 并不证明内部调用真的不抛，需要静态约束或内部 catch。通用 ScopeExit 可要求 `std::is_nothrow_invocable_v<F&>`。
+
+## 第三方 destructor 会抛怎么办
+
+<Term def="把可能抛异常的第三方资源封装起来，在自己的 destructor 边界实施统一策略的对象。">
+  exception firewall wrapper
+</Term>
+
+不能修改第三方类时，在 wrapper 的显式 close 中调用并传播，在 destructor 中 catch all。若第三方 destructor 本身 `noexcept(false)`，把它作为成员会影响外层析构异常规范；可通过动态所有权和受控销毁隔离，但最终仍需处理。
+
+```cpp
+void ThirdPartyOwner::destroy_noexcept() noexcept
+{
+    try {
+        resource_.reset();
+    } catch (...) {
+        report_without_throwing(std::current_exception());
+    }
+}
+```
+
+<Term def="保存已捕获异常供稍后诊断或在安全控制流重新抛出的类型擦除异常对象。">
+  exception_ptr
+</Term>
+
+在析构中保存到外部线程安全诊断通道仍需考虑分配与生命周期，不能保存回即将销毁对象。
+
+## 选择失败策略
+
+<EcppDestructorFailurePolicyMap />
+
+<Term def="无法向调用方报告成功、只能尽最大努力完成且失败后记录的清理动作。">
+  best-effort cleanup
+</Term>
+
+文件描述符 close、临时目录删除常属此类；事务 commit 不是。
+
+<Term def="主动让某个可失败操作返回 error/expected 或抛异常，使调用方必须观察结果。">
+  observable failure API
+</Term>
+
+是把 destructor 风险移回正常控制流的关键。
+
+## 故障注入覆盖两种退出路径
+
+<Term def="测试替身在指定次数或阶段主动让 close、rollback、日志等操作失败。">
+  cleanup failure injection
+</Term>
+
+先预测：正常作用域退出时 destructor 抛异常能否被外层 catch？若作用域内先抛 primary exception，结果又如何？分别运行，记录 terminate handler。
+
+```cpp
+std::set_terminate([] {
+    terminateObserved.store(true);
+    std::_Exit(99);
+});
+```
+
+terminate 测试应放独立进程，避免结束测试 runner。
+
+- 正常显式 close 失败可被调用方 catch，状态符合协议。
+- close 成功后 destructor 不重复调用底层 close。
+- 忘记 close 时 destructor fallback 执行一次且不抛。
+- primary exception unwinding 期间 cleanup 失败不产生 secondary exception。
+- rollback 失败按策略记录或 terminate，测试进程退出码明确。
+- 容器中一个元素 cleanup 失败不会阻止其余元素按策略清理。
+
+## 小结
+
+- stack unwinding 中 destructor 再抛 secondary exception 会触发 terminate
+- destructor 应建立 no-throw cleanup boundary，不能让清理异常逃离
+- 可恢复关闭失败通过 explicit close 暴露，destructor 只做幂等 fallback
+- commit 属于可观察业务操作，应显式执行；destructor 更适合 no-throw rollback
+- 吞掉、记录或 terminate 取决于继续运行是否破坏核心不变量
+- 正常退出和异常 unwinding 必须分别做故障注入测试
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 8"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="stack unwinding">
+    异常传播时逆序销毁自动对象并退出调用栈的过程。
+  </GlossaryItem>
+  <GlossaryItem term="secondary exception">
+    已有异常传播时清理代码再次抛出的异常。
+  </GlossaryItem>
+  <GlossaryItem term="escaping destructor exception">
+    越过对象析构边界继续传播的异常。
+  </GlossaryItem>
+  <GlossaryItem term="std::terminate">
+    异常机制无法继续时立即终止程序的运行库函数。
+  </GlossaryItem>
+  <GlossaryItem term="noexcept contract">
+    承诺异常不越过函数边界的接口约束。
+  </GlossaryItem>
+  <GlossaryItem term="no-throw cleanup boundary">
+    析构内部捕获并处理所有清理失败的边界。
+  </GlossaryItem>
+  <GlossaryItem term="swallow-and-log">
+    记录析构故障后吞掉异常继续运行的策略。
+  </GlossaryItem>
+  <GlossaryItem term="terminate-on-failure">
+    清理失败破坏不变量时主动终止的策略。
+  </GlossaryItem>
+  <GlossaryItem term="process-critical invariant">
+    一旦无法恢复就不能安全继续的进程约束。
+  </GlossaryItem>
+  <GlossaryItem term="explicit close">
+    调用方主动执行并可观察失败的关闭接口。
+  </GlossaryItem>
+  <GlossaryItem term="idempotent close">
+    多次调用与一次调用具有同一最终效果的关闭。
+  </GlossaryItem>
+  <GlossaryItem term="close state commit">
+    成功后才提交 Closed，失败保留可识别状态的协议。
+  </GlossaryItem>
+  <GlossaryItem term="indeterminate cleanup state">
+    失败后无法确认资源是否已部分释放的状态。
+  </GlossaryItem>
+  <GlossaryItem term="explicit commit">
+    调用方必须观察结果的持久业务提交。
+  </GlossaryItem>
+  <GlossaryItem term="destructor rollback">
+    析构中不抛异常地尝试恢复未提交状态。
+  </GlossaryItem>
+  <GlossaryItem term="scope guard">
+    离开作用域时执行清理动作的 RAII 对象。
+  </GlossaryItem>
+  <GlossaryItem term="guard release">
+    取消 scope guard 清理，表示主操作已提交。
+  </GlossaryItem>
+  <GlossaryItem term="exception firewall wrapper">
+    封装第三方抛异常资源并统一处理的边界对象。
+  </GlossaryItem>
+  <GlossaryItem term="exception_ptr">
+    可保存并稍后处理的类型擦除异常对象。
+  </GlossaryItem>
+  <GlossaryItem term="best-effort cleanup">
+    无法报告成功、尽力执行并记录失败的清理。
+  </GlossaryItem>
+  <GlossaryItem term="observable failure API">
+    让调用方必须观察可失败操作结果的接口。
+  </GlossaryItem>
+  <GlossaryItem term="cleanup failure injection">
+    在指定清理阶段主动制造失败的测试方法。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：设计连接关闭协议。** 底层 close 可能抛且失败后状态未知，设计 wrapper 的显式接口、状态和析构策略。
+
+<Answer question="状态未知的 close 应如何包装？">
+  提供显式 close 让调用方在正常控制流处理异常；状态至少区分
+  Active、Closed、Failed/Unknown，成功后才提交
+  Closed，失败后不盲目重试。destructor noexcept：Active 时做一次受控
+  fallback，Unknown 时按底层协议记录或 terminate，不让异常逸出。close
+  成功后析构不重复操作。
+</Answer>
+
+2. **问题 2：区分 commit 与 rollback。** 为数据库事务解释为什么 destructor 不应自动 commit，并设计异常路径。
+
+<Answer question="事务为何应显式 commit、析构 rollback？">
+  commit
+  可能失败并改变持久数据，调用方必须观察结果、重试或补偿，藏在析构中无法可靠报告；未提交事务离开作用域时，destructor
+  执行 best-effort no-throw rollback，维持异常安全。commit
+  成功设置状态，析构跳过 rollback；rollback 失败按不变量选择记录或 terminate。
+</Answer>
+
+3. **问题 3：复现双异常。** 设计独立进程测试证明 unwinding 中析构抛异常触发 terminate，并验证修复。
+
+  <Answer question="怎样安全测试 destructor 的双异常行为？">子进程安装 terminate handler 并设置特定退出码；函数创建清理会失败的对象后抛 primary exception，stack unwinding 调用 destructor，旧实现再抛应触发退出码。修复后 destructor catch all 并记录，primary exception 到达外层 catch，子进程正常退出；另测正常显式 close 的异常仍可观察。</Answer>
+</Exercises>

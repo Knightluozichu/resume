@@ -519,8 +519,10 @@ export function CompoundPatternDiagram() {
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        Model 用 Observer 通知 View，View 用 Composite 组合子视图，再把输入处理委托给可替换的
-        Controller（Strategy）。三个模式各司其职，组合起来才构成完整的 MVC——单一模式做不到这种解耦度。
+        Model 用 Observer 通知 View，View 用 Composite
+        组合子视图，再把输入处理委托给可替换的
+        Controller（Strategy）。三个模式各司其职，组合起来才构成完整的
+        MVC——单一模式做不到这种解耦度。
       </figcaption>
     </figure>
   );

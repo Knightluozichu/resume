@@ -1,65 +1,23 @@
-/**
- * <CgpRasterGraphicsDiagram>：光栅图形学基础图解。
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * 全部 DESIGN token 配色，无裸 hex。
- */
+import type { ReactNode } from "react";
 
-const VIEW_W = 720;
-const VIEW_H = 400;
+function Frame({ caption, children }: { caption: string; children: ReactNode }) {
+  return <figure className="mdx-figure not-prose mx-auto my-6"><div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div><figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption></figure>;
+}
+
+const chain = [["Geometry", "continuous primitives / rays"], ["Coverage", "sample positions + visibility"], ["Image", "channels + alpha + encoding"], ["Filter", "convolution + reconstruction"], ["Texture", "surface footprint + mip"], ["GPU", "parallel work + locality"]] as const;
 
 export function CgpRasterGraphicsDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="光栅图形学基础图解"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <text x={VIEW_W / 2} y="32" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">
-            光栅图形学基础
-          </text>
-          <text x={VIEW_W / 2} y="54" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
-            从直线到三角形——图元光栅化算法
-          </text>
+  return <Frame caption="六章共同描述从连续几何到离散图像、再到纹理和硬件执行的采样链。"><div role="img" aria-label="几何覆盖图像过滤纹理和GPU的完整采样链" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">{chain.map(([title, detail], index) => <div key={title} className="relative min-h-28 border border-border bg-bg/45 p-3"><span className="text-xs font-bold text-accent">0{index + 1}</span><strong className="mt-2 block text-sm text-primary">{title}</strong><span className="mt-2 block text-xs text-secondary">{detail}</span>{index < chain.length - 1 && <span aria-hidden="true" className="absolute -right-2 top-11 z-10 text-accent">→</span>}</div>)}</div></Frame>;
+}
 
-          <rect x="40" y="80" width="640" height="280" rx="12" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.3" />
+const sampling = [["Continuous signal", "geometry / radiance / texture"], ["Prefilter", "remove unresolved frequencies"], ["Samples", "spatial + temporal measurements"], ["Reconstruct", "kernel + finite support"], ["Output", "display / next sampling stage"]] as const;
 
-          {/* DDA/Bresenham */}
-          <rect x="60" y="110" width="180" height="120" rx="10" fill="var(--success)" fillOpacity="0.06" stroke="var(--success)" strokeWidth="1.2" />
-          <text x="150" y="132" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--success)">直线光栅化</text>
-          <text x="150" y="154" textAnchor="middle" fontSize="10" fill="var(--text-primary)">DDA算法</text>
-          <text x="150" y="172" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">Bresenham算法</text>
-          <text x="150" y="192" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">中点画线法</text>
-          <text x="150" y="214" textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">整数运算，无浮点</text>
+export function CgpSamplingDiagram() {
+  return <Frame caption="抗锯齿不是事后模糊：在采样前限制频率，在输出时按明确 kernel 重建。"><div role="img" aria-label="连续信号预滤波采样重建与输出流程" className="grid gap-2 md:grid-cols-5">{sampling.map(([title, detail], index) => <div key={title} className="relative min-h-28 border border-border bg-bg/45 p-3"><span className="grid size-7 place-items-center rounded-full bg-warning/15 text-xs font-bold text-warning">{index + 1}</span><strong className="mt-3 block text-sm text-primary">{title}</strong><span className="mt-2 block text-xs text-secondary">{detail}</span>{index < sampling.length - 1 && <span aria-hidden="true" className="absolute -right-2 top-11 z-10 text-accent">→</span>}</div>)}</div><div className="mt-3 grid gap-2 text-xs sm:grid-cols-3"><span className="border-l-4 border-success bg-success/10 p-2 text-primary">space: edge / texture</span><span className="border-l-4 border-warning bg-warning/10 p-2 text-primary">time: motion / flicker</span><span className="border-l-4 border-accent bg-accent/10 p-2 text-primary">semantics: color / alpha / normal</span></div></Frame>;
+}
 
-          {/* Triangle fill */}
-          <rect x="260" y="110" width="180" height="120" rx="10" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.2" />
-          <text x="350" y="132" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">三角形填充</text>
-          <text x="350" y="154" textAnchor="middle" fontSize="10" fill="var(--text-primary)">扫描线填充</text>
-          <text x="350" y="172" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">重心坐标判断</text>
-          <text x="350" y="192" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">edge function</text>
-          <text x="350" y="214" textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">GPU硬件实现</text>
+const gpu = [["Command front end", "work + state"], ["Raster / setup", "primitive → coverage"], ["Shader groups", "SIMT arithmetic"], ["Texture / cache", "filtered reads + locality"], ["Depth / blend", "visibility + output"], ["Memory / display", "bandwidth + present"]] as const;
 
-          {/* Anti-aliasing */}
-          <rect x="460" y="110" width="200" height="120" rx="10" fill="var(--warning)" fillOpacity="0.06" stroke="var(--warning)" strokeWidth="1.2" />
-          <text x="560" y="132" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--warning)">抗锯齿</text>
-          <text x="560" y="154" textAnchor="middle" fontSize="10" fill="var(--text-primary)">超采样(SSAA)</text>
-          <text x="560" y="172" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">多重采样(MSAA)</text>
-          <text x="560" y="192" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">FXAA / TAA</text>
-          <text x="560" y="214" textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">边缘像素混合</text>
-
-          {/* Key insight */}
-          <rect x="60" y="260" width="600" height="80" rx="8" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.3" />
-          <text x={VIEW_W / 2} y="284" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--accent)">光栅化核心思想</text>
-          <text x={VIEW_W / 2} y="306" textAnchor="middle" fontSize="11" fill="var(--text-primary)">连续几何 → 离散像素：每个像素判断「是否被图元覆盖」</text>
-          <text x={VIEW_W / 2} y="324" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">锯齿是离散采样的必然产物，抗锯齿用「覆盖率」而非「是否」来决定像素颜色</text>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        光栅图形学基础——直线光栅化、三角形填充与抗锯齿
-      </figcaption>
-    </figure>
-  );
+export function CgpGpuDataflowDiagram() {
+  return <Frame caption="现代 GPU 以专用单元、shader groups、cache 与 memory controllers 协作追求吞吐。"><div role="img" aria-label="现代GPU命令光栅着色纹理深度内存数据流" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">{gpu.map(([name, role], index) => <div key={name} className="relative min-h-28 border border-border bg-bg/45 p-3"><strong className="text-sm text-primary">{name}</strong><span className="mt-2 block text-xs text-secondary">{role}</span>{index < gpu.length - 1 && <span aria-hidden="true" className="absolute -right-2 top-10 z-10 text-accent">→</span>}</div>)}</div></Frame>;
 }

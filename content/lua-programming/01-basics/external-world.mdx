@@ -1,0 +1,203 @@
+---
+title: "Chapter 7. The External World"
+type: C
+section: "Programming in Lua 4e · The Basics"
+order: 7
+description: "掌握Lua simple与complete I/O model、read formats、file handle生命周期、seek与buffering、filesystem操作和系统命令能力边界。"
+demo: true
+math: false
+sourceUrl: "https://www.lua.org/pil/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PilSimpleIoLab, PilFileHandleLab, PilSystemCommandLab } from "@/components/mdx/lua-programming/diagrams/external-world";
+
+<Objectives>
+
+- 能区分simple与complete I/O model，推导read format、EOF、current-file state和error result
+- 能设计file handle的open、iterate、seek、buffer、flush与close协议，验证文本和二进制边界
+- 能设计filesystem与system-command capability边界，验证路径竞争、命令注入和退出状态解码
+
+</Objectives>
+
+## 为什么External World必须从Ownership与Failure开始
+
+纯Lua value遵守语言内部规则，文件、终端、环境变量和进程却受host OS、权限、编码、路径、buffer与并发变化影响。相同source在不同cwd、locale、line ending或shell下可能得到不同结果。因此I/O不是“调用一个read函数”，而是一次外部资源交易：谁打开、谁拥有、何时关闭、读写单位是什么、失败返回什么、数据何时可见。
+
+先预测：`io.read("l")`遇到empty line和EOF各返回什么；`io.output(path)`会不会保留旧内容；`file:write`成功是否表示数据已经落盘；`io.lines(path)`与`file:lines()`谁负责close；`os.execute`返回的第一个值能否直接当exit code；把用户输入拼进command是否只需加引号。先写平台和Lua版本，再运行实验。
+
+<Term def="每个外部资源明确创建者、唯一关闭责任、有效生命周期、失败路径与跨函数转移方式的协议。">external resource ownership</Term>是本章贯穿线。Ordinary Lua 5.3 file handle不能只靠“离开scope”及时关闭；GC最终回收不是可预测的release schedule，写路径尤其必须显式close并检查结果。
+
+## The Simple I/O Model
+
+Simple model维护current input file与current output file。`io.input()`/`io.output()`读取当前handle；传handle或filename会替换它。随后`io.read(...)`从current input读，`io.write(...)`写向current output。默认通常对应standard input/output，适合短脚本和linear filters，却把dependency藏在global mutable state里。
+
+传filename给`io.output(path)`通常按write mode打开并截断目标；若需求是append或atomic replace，应使用complete model明确mode与commit流程。Library函数不应悄悄替换current files，否则caller之后的日志和输入会指向错误资源。确需临时切换时保存旧handle、在所有success/failure path恢复，并仍要处理新handle关闭。
+
+<Term def="io.read与io.write通过可替换current input/output隐式选择资源，任何切换都可能影响后续无显式handle调用的共享状态。">current-file state</Term>解释了simple API的便利和风险。它不是thread-local transaction，也不携带lexical ownership。
+
+```lua
+local previous = io.input()
+local input, open_error = io.open("records.txt", "r")
+if not input then return nil, open_error end
+
+io.input(input)
+local first = io.read("l")
+io.input(previous)
+
+local closed, close_error = input:close()
+if not closed then return nil, close_error end
+return first
+```
+
+## Read Formats与EOF Contract
+
+Read可接多个formats并返回对应values。`"l"`读取一行且去掉line ending，`"L"`保留line ending，`"a"`读取剩余全部内容，`"n"`解析number，integer n读取最多n bytes；Lua 5.3为兼容也接受带`*`的形式。Zero-length read可用于检查EOF语义，但协议应以目标runtime manual和测试为准。
+
+<Term def="Read API明确format、文本或byte单位、empty data与EOF区分、partial result、parse failure和资源上限的输入协议。">read-format contract</Term>要求caller检查每个返回值。Line读取在empty line返回empty string，在EOF返回nil；whole-file read可能返回巨大string，必须在不可信文件上先限定size或stream。Number format遇到invalid token会返回nil，而输入位置未必按naive loop期待前进；`while true do n=read('n') end`可能形成stuck parser。
+
+Multiple formats中一旦某项失败，返回结果需要结合Lua manual理解，不能把部分values当完整record。对结构化数据更稳妥的方式是按line/bytes读取、显式parse，并返回line/offset和reason。Text mode会受平台line translation影响；需要stable offsets、hash或wire bytes时用binary mode。
+
+<PilSimpleIoLab />
+
+<Stepper>
+  <Step title="切换Current Input、Read Line、Read Number和Current Output"><PilSimpleIoLab /></Step>
+  <Step title="建立EOF Matrix">覆盖empty file、empty line、最后一行无换行、invalid number、partial byte read和whole-file size上限，分别记录value与error。</Step>
+  <Step title="移除Hidden State">把library改为接收explicit input/output handles；用两个同时打开的文件交错测试，证明调用顺序不再改变目标资源。</Step>
+</Stepper>
+
+<Callout type="trap" title="io.read返回nil只代表正常EOF">
+Nil还可能来自numeric parse failure或I/O error，且不同read form的额外诊断能力不同。Parser必须知道format与当前位置，必要时改用line/byte read再自行解析，不能统一吞成EOF。
+</Callout>
+
+## The Complete I/O Model
+
+Complete model用`io.open(filename, mode)`返回独立file handle，后续调用`file:read`、`file:write`、`file:flush`与`file:close`。Open失败返回nil及diagnostic values；调用方应保留message/code用于日志，但对外避免泄露敏感绝对路径。`io.stdin`、`io.stdout`、`io.stderr`也是预定义handles，不应像owned regular file那样随意close。
+
+Mode由`r`、`w`、`a`组成，可加`+`允许update，加`b`选择binary。`w`会创建或截断，`a`让writes定位到end，`r+`通常要求文件存在且不截断；具体共享、locking和newline translation是platform concern。Mode必须来自代码中的allowlist，不能直接接受untrusted string。
+
+<Term def="File API显式声明text encoding、newline translation、byte offsets、partial read/write及跨平台差异，避免把文本字符位置当稳定字节位置。">text-byte boundary</Term>在UTF-8上尤其重要：读取n bytes可能截断multibyte sequence，seek offset通常是byte-oriented，不是Unicode code point。Lua string能容纳任意bytes，但display/parser未必能处理invalid text。
+
+## Iteration与Close Ownership
+
+`io.lines(filename, formats...)`打开文件并返回iterator，正常读到EOF时会关闭它；如果传nil filename则迭代current input而不拥有它。`file:lines(formats...)`基于已有handle创建iterator，但不会替caller关闭。Loop因break、error或早return提前结束时，自动关闭保证也要按API和版本验证；最稳妥是caller保留handle并在受控cleanup path关闭。
+
+Lua 5.4增加to-be-closed variables，但本书面向Lua 5.3，不能把5.4 lexical-close语法写进baseline。工程中可用`with_file(path, mode, fn)`集中执行open、protected callback、close和error combination；需要决定callback error与close error同时发生时哪个为primary、另一个如何附加。
+
+Write方法通常返回handle以支持chaining，失败可能抛错或返回failure，必须按具体API测试。Close也可能失败，例如buffer flush时磁盘空间不足；只检查write调用而忽略close会报告假成功。
+
+## Other Operations on Files
+
+`file:seek(whence, offset)`以`"set"`、`"cur"`或`"end"`为基准移动position并返回新position，失败返回nil与message。它适合random-access binary format、size probe和resume，但text-mode offsets、sparse writes与大文件范围依赖平台。不要把character index直接当seek offset。
+
+`file:setvbuf("no")`关闭buffering，`"full"`使用full buffering，`"line"`按行缓冲，可带size hint。Buffering影响visibility与syscall frequency，不改变application-level transaction semantics。`file:flush()`请求把Lua/C library buffer交给OS；它不等于storage durable，真正持久化通常还需host-specific fsync与directory sync策略。
+
+`io.tmpfile()`返回已打开的temporary file handle，减少name-then-open race；`os.tmpname()`只给temporary-looking name，随后open存在TOCTOU与权限问题，并需显式remove。`io.type(value)`可区分open/closed file handle。生产写配置常用同目录temporary file、完整write/flush/close，再atomic rename；替换原文件的atomicity与权限保留仍需按OS验证。
+
+```lua
+local function read_at_most(path, limit)
+  local file, open_error = io.open(path, "rb")
+  if not file then return nil, open_error end
+
+  local data = file:read(limit + 1)
+  local closed, close_error = file:close()
+  if not closed then return nil, close_error end
+  if #data > limit then return nil, "file-too-large" end
+  return data
+end
+```
+
+这里多读一个byte，用可观测证据区分“大小正好等于上限”和“内容被静默截断”；无论读取结果如何都由同一owner关闭handle。若`read`自身可能抛错，生产helper还要用protected cleanup结构组合read与close错误。
+
+<PilFileHandleLab />
+
+<Stepper>
+  <Step title="切换Open Modes、Lines Iterator、Seek和Buffering"><PilFileHandleLab /></Step>
+  <Step title="画Handle Lifecycle">标出open成功/失败、read/write、early return、callback error、flush error和close error，每条路径必须到唯一owner。</Step>
+  <Step title="做Binary Offset Test">写入含NUL与多字节UTF-8的bytes，分别在text/binary mode seek与读取，验证offset、newline translation和hash结果。</Step>
+</Stepper>
+
+## Other System Calls
+
+`os.remove(path)`删除文件名，`os.rename(old, new)`移动或重命名；成功通常返回true，失败返回nil、message和code。Destination replacement、跨filesystem move、open-file behavior与case sensitivity平台不同。Path validation不能只拒绝`..`字符串：canonicalization、symlink、absolute path、Unicode normalization和race都可能越界；高风险服务应由host提供directory handle或sandboxed filesystem adapter。
+
+`os.getenv(name)`读取process environment，missing返回nil。Environment是ambient configuration，不是secret vault；值可能被子进程继承、日志泄露或在测试间变化。程序启动时读取allowlisted names、验证类型/range，并转为immutable config。`os.exit`终止整个process，library不应调用；是否close Lua state及执行finalizers取决于参数和runtime，不能当普通error return。
+
+Temporary names、environment与process exit都属于authority较大的host interface。嵌入Lua或执行不可信脚本时，删除global `os`并不足以构成sandbox：已有function references、io handles、native modules、CPU与memory仍可越界。
+
+## Running System Commands
+
+`os.execute(command)`把string交给host command processor执行；无参数时可用于询问shell availability。Lua 5.3的result通常是success boolean或nil、termination kind（如exit/signal）和status code，不能把第一个返回值想当然地当integer exit code。Windows/POSIX shell、quoting、encoding和signal semantics不同，必须用目标平台matrix测试。
+
+`io.popen(command, mode)`启动command并返回连接其standard output或input的file handle，通常只能单向读或写。读取stdout并不自动捕获stderr；不持续drain pipe、等待/close顺序、large output、timeout与child process tree都可能deadlock或泄漏。`popen`/`close`的status同样需要decode。
+
+<Term def="任何调用shell或子进程的接口都把executable、arguments、environment、cwd、stdio、timeout与退出状态视为结构化且受限的能力边界。">command capability boundary</Term>禁止把untrusted filename、branch name或query直接拼进command。Shell quoting函数很难跨shell可靠；需要dynamic arguments时用host library提供的argument-vector spawn API，显式设置env/cwd和stdio limits。
+
+```lua
+local function run_fixed_health_check()
+  local ok, kind, status = os.execute("/usr/local/bin/health-check --brief")
+  if ok then return true end
+  return nil, { kind = kind, status = status }
+end
+
+local function read_fixed_report()
+  local pipe, open_error = io.popen("/usr/local/bin/report --format=text", "r")
+  if not pipe then return nil, open_error end
+  local output = pipe:read("a")
+  local ok, kind, status = pipe:close()
+  if not ok then return nil, { kind = kind, status = status } end
+  return output
+end
+```
+
+上例仍只适合程序内固定command，并不解决timeout、output limit或portable spawn；它的价值是展示status tuple必须检查。真实服务应把process runner封装在host层，Lua只提交validated operation ID与typed arguments。
+
+<PilSystemCommandLab />
+
+<Stepper>
+  <Step title="切换Rename/Remove、Temporary File、os.execute和io.popen"><PilSystemCommandLab /></Step>
+  <Step title="列Capability Allowlist">为每个操作记录允许root、固定executable、typed arguments、env、cwd、stdin/stdout上限、timeout、cancel和audit字段。</Step>
+  <Step title="注入Failure Matrix">覆盖missing permission、disk full、rename conflict、child nonzero、signal、huge output与timeout，验证cleanup和status decode。</Step>
+</Stepper>
+
+<Callout type="trap" title="只要给用户输入加Shell引号，os.execute就安全">
+Quoting依赖具体shell、encoding和嵌套语法，且仍暴露executable、cwd、env、timeout与resource limits。Dynamic input必须走argument-vector process API或固定operation adapter，不拼command string。
+</Callout>
+
+## 本章回顾：External API必须携带Owner、Unit与Outcome
+
+1. Simple I/O依赖current input/output，适合linear scripts，不适合隐藏在library中的共享状态。
+2. Read formats要区分empty、EOF、parse failure、partial bytes与size limits。
+3. Complete model显式暴露handle；open、flush和close都可能失败，唯一owner负责所有路径。
+4. Lines iterator、seek、buffer与temporary file各有不同ownership和text/byte边界。
+5. Rename、remove、environment和exit是host capabilities，路径与process scope必须受控。
+6. `os.execute`和`io.popen`返回结构化outcome且经过shell；dynamic arguments应交给host spawn adapter。
+
+<Exercises>
+
+**问题 1：为什么`for line in file:lines() do ... end`后不能假设file已经关闭？**
+
+<Answer>`file:lines()`使用caller提供的handle，不接管其ownership；正常EOF也不替caller关闭。保留handle，在success、break、error和early return路径统一close并检查close error。`io.lines(path)`的自动打开/EOF关闭是另一套契约，不能混用。</Answer>
+
+**问题 2：怎样安全保存一份配置文件，避免一开始就截断旧文件？**
+
+<Answer>在目标同目录创建安全temporary handle，写完整内容并检查write、flush、close；验证长度或重新读取，再按平台规则rename替换目标。限制path root并处理rename conflict、权限和disk-full。需要durability时由host层补fsync和directory sync。</Answer>
+
+**问题 3：为什么`if os.execute(cmd) == 0 then`不是Lua 5.3的可移植成功判断？**
+
+<Answer>Lua 5.3通常返回success boolean或nil、termination kind与status，而不是单一exit integer；不同平台还改变shell/termination semantics。完整接收三个结果并按目标平台decode。若cmd含dynamic data，不论如何判断status都应改用argument-vector host runner。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="external resource ownership" definition="外部资源明确创建、唯一关闭责任、生命周期、失败与转移方式的协议。" />
+  <GlossaryItem term="current-file state" definition="Simple I/O通过可替换current input/output隐式选择资源的共享状态。" />
+  <GlossaryItem term="read-format contract" definition="Read明确format、unit、EOF、partial result、parse failure与上限的协议。" />
+  <GlossaryItem term="text-byte boundary" definition="文件接口区分encoding、newline、byte offset与Unicode位置的边界。" />
+  <GlossaryItem term="command capability boundary" definition="子进程执行把程序、参数、环境、stdio、timeout和状态作为受限结构化能力。" />
+</Glossary>
+
+<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 7: The External World" adaptedUrl="https://www.lua.org/pil/" />

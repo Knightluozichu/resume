@@ -1,0 +1,244 @@
+---
+title: "第 5 章 Vue内置组件"
+type: A
+section: "Vue.js从入门到项目实战 · 选项、组件与项目化"
+order: 5
+description: "把动态组件、插槽、组件缓存与单/多节点过渡串成一条组件身份和生命周期主线。"
+demo: true
+math: false
+sourceUrl: "https://www.tup.com.cn/bookscenter/book_08226301.html"
+draft: false
+---
+
+import {
+  Vjp05BuiltInComponentsMapLab,
+  Vjp05BuiltInComponentsExperimentLab,
+  Vjp05BuiltInComponentsEvidenceLab,
+} from "@/components/mdx/vuejs-practice/diagrams/vjp-05-built-in-components";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释第 5 章 Vue内置组件的核心机制，并把它放回11章、5个附录的学习主线
+- 能比较正常、边界、失败和恢复样本，指出首个状态、身份、任务或资源偏离点
+- 能实现本页最小Vue 2实验，记录运行时、输入、事件顺序、状态所有者与清理动作
+- 能设计证据回答“内容和布局所有权清楚，组件身份可解释，缓存有边界，激活/停用资源对称，多节点过渡不会留下重复节点或后台任务。”是否成立
+
+</Objectives>
+
+## 直觉：先画状态、身份与交付链
+
+把动态组件、插槽、组件缓存与单/多节点过渡串成一条组件身份和生命周期主线。 动态组件、插槽、keep-alive和transition分别控制组件选择、内容所有权、实例寿命与视觉状态过渡。 真正掌握本页，不是让一次演示碰巧得到正确截图，而是能解释输入从哪里来、谁拥有可变状态、哪次事件触发更新、失败后如何停止，以及组件和外部资源何时释放。先预测：只看最终页面，最容易遗漏哪条陈旧请求、重复事件或错误身份？
+
+<Vjp05BuiltInComponentsMapLab />
+
+## 权威目录定位
+
+本书依据清华大学出版社官方书目与官方目录核对：刘汉伟著，2019年4月出版，ISBN 9787302523888。原书处于Vue 2、Vue CLI、Vuex和当时webpack的技术语境；Vue 3、Pinia、Vite或Nuxt只会作为明确的迁移注记，不会冒充原书正式分节。
+
+本页按官方目录顺序逐项覆盖 **7** 个公开条目；目录名称只用于一对一追踪，正文为独立教学重构。
+
+- 5.1 组件服务
+- 5.1.1 动态组件
+- 5.1.2 使用插槽分发内容
+- 5.1.3 组件的缓存
+- 5.2 过渡效果
+- 5.2.1 单节点的过渡
+- 5.2.2 多节点的过渡
+
+## 核心概念与所有权
+
+<Term def="通过is在多个组件类型之间切换当前渲染目标的内置能力。">动态组件</Term>
+、<Term def="由父级提供内容、由子级决定放置位置的内容分发契约。">插槽</Term>、
+<Term def="缓存非活动组件实例并触发激活与停用钩子的抽象组件。">keep-alive</Term>
+、
+<Term def="为单个元素或组件的进入、离开过程协调类名和钩子的抽象组件。">
+  transition
+</Term>
+、
+<Term def="由组件类型和key共同确定、影响实例复用与状态保存的标识。">
+  组件身份
+</Term>
+。这些概念不是孤立名词：每一个都要回答“输入由谁创建、状态保存在哪里、哪个事件可以修改、失败如何传播、离开页面后由谁清理”。
+
+|   # | 概念       | 工程含义                                                   |
+| --: | ---------- | ---------------------------------------------------------- |
+|   1 | 动态组件   | 通过is在多个组件类型之间切换当前渲染目标的内置能力。       |
+|   2 | 插槽       | 由父级提供内容、由子级决定放置位置的内容分发契约。         |
+|   3 | keep-alive | 缓存非活动组件实例并触发激活与停用钩子的抽象组件。         |
+|   4 | transition | 为单个元素或组件的进入、离开过程协调类名和钩子的抽象组件。 |
+|   5 | 组件身份   | 由组件类型和key共同确定、影响实例复用与状态保存的标识。    |
+
+## 机制拆解
+
+### 1. 动态选择不等于重建
+
+component的is决定渲染类型，key进一步决定同类型实例是否复用。切换表单步骤时，错误的身份策略会保留不该保留的输入，或销毁本应缓存的状态。先定义业务实体身份，再决定key和缓存。
+
+先预测：若省略这一层，状态、组件身份、异步任务或构建产物会在哪里首次偏离？
+
+### 2. 插槽分开内容与布局所有权
+
+父组件拥有业务内容和数据，子组件拥有版式与插槽位置。具名插槽表达多个区域，作用域插槽把子组件计算出的局部上下文以受控参数交给父级渲染，避免直接读取子组件内部状态。
+
+先预测：若省略这一层，状态、组件身份、异步任务或构建产物会在哪里首次偏离？
+
+### 3. 缓存与过渡都是生命周期
+
+keep-alive中的组件不会普通销毁，而会activated和deactivated；订阅和轮询要考虑停用状态。transition等待CSS或JS过渡结束，多节点切换要有稳定key和明确mode，否则旧新节点可能同时占位。
+
+先预测：若省略这一层，状态、组件身份、异步任务或构建产物会在哪里首次偏离？
+
+## 三阶段可视化推演
+
+<Stepper>
+  <Step title="1. 建立目录与状态地图">
+    固定Vue运行时、工具链、输入数据和初始URL，先画出正常路径与唯一状态所有者。
+    <Vjp05BuiltInComponentsMapLab />
+  </Step>
+  <Step title="2. 注入边界与失败">
+    只改变一个变量，观察空值、重复事件、请求乱序、资源拒绝或旧缓存造成的首偏离点。
+    <Vjp05BuiltInComponentsExperimentLab />
+  </Step>
+  <Step title="3. 清除故障并重放">
+    使用相同输入恢复，核对DOM摘要、状态版本、监听器、定时器、请求和构建资源是否收敛。
+    <Vjp05BuiltInComponentsEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小可运行实验
+
+下面的最小实现聚焦本页核心。先在独立页面运行，再加入空输入、快速重复操作和销毁重建；不要直接把演示代码当成完整生产方案。
+
+```js
+<keep-alive :include="cachedViews">
+  <component :is="currentView" :key="recordId">
+    <template #toolbar>操作区</template>
+  </component>
+</keep-alive>
+```
+
+证据记录必须同时保存目录坐标、运行时和状态摘要：
+
+```yaml
+book: Vue.js从入门到项目实战
+page: vjp-05-built-in-components
+sample: normal | boundary | failure | recovery
+runtime: Vue 2.x + pinned toolchain
+input_fixture: fixed
+first_divergence: null
+cleanup_complete: true
+```
+
+故障脚本保持一次只改变一个变量：
+
+```text
+baseline -> run_same_input
+inject -> stale-state | duplicate-event | denied-resource | broken-build
+observe -> stop_at_first_divergence
+recover -> clear_fault_and_replay
+assert -> one_state_owner && stable_output && no_stale_task && no_resource_leak
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：把keep-alive当成无上限页面缓存，既不设include也不处理deactivated中的后台任务。**
+  最终截图可能仍正确，但状态轨迹、资源数量或下一次交互已经偏离；必须保存首次偏离前后的输入与事件。
+</Callout>
+
+<Callout type="trap">
+  **误区二：多节点过渡没有稳定key，框架复用旧节点后进入和离开类名落在错误对象上。**
+  用正常样本无法暴露这一问题，要增加边界、失败和恢复样本，并在销毁后检查残留任务。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 输入与环境变化               | 预期状态       | 通过条件               |
+| ---- | ---------------------------- | -------------- | ---------------------- |
+| 正常 | 合法数据、稳定身份、固定版本 | 完成主链       | 输出与状态摘要一致     |
+| 边界 | 空值、极限数量、快速重复事件 | 有界退化       | 不越界、不重复、不阻塞 |
+| 失败 | 请求拒绝、旧缓存、资源缺失   | 首偏离点停止   | 错误显式传播或降级     |
+| 恢复 | 清除故障后重放同一输入       | 收敛到正常轨迹 | 无陈旧任务和资源泄漏   |
+
+<Vjp05BuiltInComponentsEvidenceLab />
+
+本页签发不变量是：**内容和布局所有权清楚，组件身份可解释，缓存有边界，激活/停用资源对称，多节点过渡不会留下重复节点或后台任务。** 单次成功、平均耗时或最终截图不能代替运行时版本、事件轨迹、首偏离点和清理证据。
+
+## 练习
+
+<Exercises>
+
+**问题 1** 第 5 章 Vue内置组件的核心主张是什么？为什么只看最终页面不足以验收？
+
+<Answer>
+  动态组件、插槽、keep-alive和transition分别控制组件选择、内容所有权、实例寿命与视觉状态过渡。
+  最终页面会隐藏重复副作用、旧任务覆盖、错误吞没和资源泄漏，所以必须比较输入、状态所有者、事件顺序、首偏离点与清理结果。
+</Answer>
+
+**问题 2** 如何把本页公开目录变成可执行学习证据？
+
+<Answer>
+  按官方顺序建立追踪表，为每组条目写出输入、状态、输出、失败与恢复条件。本页首先覆盖5.1
+  组件服务、5.1.1 动态组件、5.1.2 使用插槽分发内容、5.1.3 组件的缓存、5.2
+  过渡效果、5.2.1 单节点的过渡、5.2.2 多节点的过渡。
+</Answer>
+
+**问题 3** 本页的最小通过条件是什么？
+
+<Answer>
+  内容和布局所有权清楚，组件身份可解释，缓存有边界，激活/停用资源对称，多节点过渡不会留下重复节点或后台任务。
+  并且同一运行时、输入与初始状态可以重放正常、边界、失败和恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **动态组件**：通过is在多个组件类型之间切换当前渲染目标的内置能力。
+- **插槽**：由父级提供内容、由子级决定放置位置的内容分发契约。
+- **keep-alive**：缓存非活动组件实例并触发激活与停用钩子的抽象组件。
+- **transition**：为单个元素或组件的进入、离开过程协调类名和钩子的抽象组件。
+- **组件身份**：由组件类型和key共同确定、影响实例复用与状态保存的标识。
+- 本页已经把官方目录、机制链、最小实现、故障注入和恢复证据放在同一条验收路径上。
+- 原书Vue 2技术语境与现代迁移说明保持清晰边界。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="动态组件">
+    通过is在多个组件类型之间切换当前渲染目标的内置能力。
+  </GlossaryItem>
+  <GlossaryItem term="插槽">
+    由父级提供内容、由子级决定放置位置的内容分发契约。
+  </GlossaryItem>
+  <GlossaryItem term="keep-alive">
+    缓存非活动组件实例并触发激活与停用钩子的抽象组件。
+  </GlossaryItem>
+  <GlossaryItem term="transition">
+    为单个元素或组件的进入、离开过程协调类名和钩子的抽象组件。
+  </GlossaryItem>
+  <GlossaryItem term="组件身份">
+    由组件类型和key共同确定、影响实例复用与状态保存的标识。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="刘汉伟著，清华大学出版社，2019年4月，ISBN 9787302523888。清华大学出版社官方书目与官方目录确认全书分为概念篇和实战篇，共11章、5个附录；正文为独立教学重构，不复制原书段落。"
+  adaptedUrl="https://www.tup.com.cn/bookscenter/book_08226301.html"
+/>
+
+官方目录：https://www.tup.com.cn/bookscenter/bookcatalog?id=08226301

@@ -1,0 +1,156 @@
+---
+title: "源码单元21 变体、SRP Batcher、DOTS、XR与调试"
+type: C
+section: "Unity 6 URP源码 · 工程验收"
+order: 21
+description: "沿Unity 6 URP固定提交掌握Shader变体、SRP Batcher、DOTS Instancing、XR宏、Debug Display。"
+demo: true
+math: true
+sourceUrl: "https://github.com/Unity-Technologies/Graphics/tree/275a7f9ad9330e3cf7f3ea57a0b242a551fde291/Packages/com.unity.render-pipelines.universal/Shaders"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { Uus21VariantsBatchingXrDebugPipelineLab, Uus21VariantsBatchingXrDebugCompareLab, Uus21VariantsBatchingXrDebugEvidenceLab } from "@/components/mdx/unity-urp-shaders/diagrams/uus-21-variants-batching-xr-debug";
+
+<Objectives>
+- 能从固定提交和真实文件解释Shader变体、SRP Batcher与DOTS Instancing
+- 能绘制ShaderLab、HLSL include、数据结构、函数与Renderer Pass的生产者到消费者链
+- 能判断Debug Display是否达标，同时保存源码定位、Frame Debugger、GPU事件和失败变体
+</Objectives>
+
+## 先预测，再读源码
+
+先预测这个文件或符号会影响哪个Pass、缓冲、关键字和GPU阶段，再打开源码与帧调试观察。把正确性和工程成本放在同一验收：统计变体，检查UnityPerMaterial布局，测试DOTS实例属性、双眼纹理与运动向量，并用DebugReplacement和Frame Debugger解释每个Draw。 本单元用<Term def="由multi_compile、shader_feature、平台和Renderer配置产生的编译版本。">Shader变体</Term>、<Term def="按兼容常量布局持续驻留材质数据并减少CPU状态绑定的机制。">SRP Batcher</Term>、<Term def="从实体实例数据读取覆盖材质属性的Shader路径。">DOTS Instancing</Term>、<Term def="支持单通道实例化、纹理数组、双眼索引和运动向量的宏合同。">XR宏</Term>、<Term def="用替换Shader和调试关键字可视化材质、光照、层与缓冲的系统。">Debug Display</Term>建立静态源码与运行时证据之间的对应关系。
+
+<Uus21VariantsBatchingXrDebugPipelineLab />
+
+## 官方源码基线
+
+本页一一对应 Unity Technologies 官方 Graphics 仓库 6000.0/staging 提交 275a7f9a 中的源码单元。课程核对日期为 2026-07-15；所有路径均固定到该提交，不把 master 开发代码与发布分支混用。
+
+### 必读文件
+
+1. `Packages/com.unity.render-pipelines.universal/ShaderLibrary/DOTS.hlsl`
+2. `Packages/com.unity.render-pipelines.universal/ShaderLibrary/UniversalDOTSInstancing.hlsl`
+3. `Packages/com.unity.render-pipelines.universal/ShaderLibrary/RenderingLayers.hlsl`
+4. `Packages/com.unity.render-pipelines.universal/Shaders/XR/XRMotionVector.shader`
+5. `Packages/com.unity.render-pipelines.universal/Shaders/Debug/DebugReplacement.shader`
+
+### 五个核心符号
+
+1. **Shader变体**：由multi_compile、shader_feature、平台和Renderer配置产生的编译版本。
+2. **SRP Batcher**：按兼容常量布局持续驻留材质数据并减少CPU状态绑定的机制。
+3. **DOTS Instancing**：从实体实例数据读取覆盖材质属性的Shader路径。
+4. **XR宏**：支持单通道实例化、纹理数组、双眼索引和运动向量的宏合同。
+5. **Debug Display**：用替换Shader和调试关键字可视化材质、光照、层与缓冲的系统。
+
+## 生产者到消费者链
+
+把正确性和工程成本放在同一验收：统计变体，检查UnityPerMaterial布局，测试DOTS实例属性、双眼纹理与运动向量，并用DebugReplacement和Frame Debugger解释每个Draw。 阅读顺序固定为资源入口、ShaderLab Properties与Pass、HLSL输入结构、核心函数、共享库、运行时Renderer选择。每个箭头都写明文件、符号、参数、关键字和目标缓冲。
+
+$$
+variants=product(keywordOptions)*platforms
+$$
+
+$$
+cpuCost=f(SetPass,constantUploads)
+$$
+
+$$
+instanceValue=DOTSOverride or materialDefault
+$$
+
+$$
+proof=buildLog+frameCapture+XRBothEyes
+$$
+
+公式中的位置、方向、深度、颜色和索引必须标注空间、范围与来源。源码中能找到函数不证明它在当前变体执行，必须继续核对pragma、关键字、LightMode和Renderer配置。
+
+## 最小源码探针
+
+```hlsl
+CBUFFER_START(UnityPerMaterial) float4 _BaseColor; CBUFFER_END
+```
+
+探针顺序是常量输出、输入结构可视化、核心函数分项、固定状态和目标缓冲。先确认实际Shader变体和Pass，再解释颜色或性能差异。
+
+<Uus21VariantsBatchingXrDebugCompareLab />
+
+## 运行时互证
+
+```text
+source: commit + package path + symbol
+material: shader + keywords + UnityPerMaterial layout
+renderer: renderer asset + rendering path + pass event
+frame: draw + LightMode + target + attachments
+evidence: Frame Debugger + GPU capture + variant log
+```
+
+用Frame Debugger确认实际Pass和关键字，用GPU捕获确认RenderState、资源绑定、MRT与时序，用构建日志确认变体是否保留。修改包源码时还要记录嵌入包与上游提交的差异。
+
+## 边界、兼容与性能
+
+测试Forward与Deferred、主光与附加光、Lightmap与Probe、透明与Alpha Clip、XR单通道实例、动态分辨率、DOTS实例、不同图形API和移动Tile GPU。固定Unity版本、平台、分辨率、VSync和场景后再比较CPU/GPU时间。
+
+```text
+baseline: official commit 275a7f9ad933
+candidate: exact local diff
+correctness: image and buffer diff
+compatibility: renderer modes, APIs, XR and platforms
+performance: variants, SetPass, samples, bandwidth, CPU/GPU ms
+failure: smallest replayable configuration
+```
+
+<Uus21VariantsBatchingXrDebugEvidenceLab />
+
+## 分步源码实验
+
+<Stepper>
+  <Step title="固定提交与入口"><Uus21VariantsBatchingXrDebugPipelineLab /></Step>
+  <Step title="追踪数据与Pass"><Uus21VariantsBatchingXrDebugCompareLab /></Step>
+  <Step title="捕获运行时证据"><Uus21VariantsBatchingXrDebugEvidenceLab /></Step>
+</Stepper>
+
+1. 在固定提交打开必读文件，定位入口、include、结构和核心函数。
+2. 画出生产者到消费者链，并标注关键字与LightMode。
+3. 用最小材质和场景触发目标变体，保存中间缓冲。
+4. 构造失败配置，用源码差异和GPU事件解释原因。
+
+## 验收证书
+
+证书包含提交、文件、符号、调用和include链、材质与关键字、Renderer配置、Pass事件、目标缓冲、GPU计时与失败反例。用MaterialPropertyBlock或不一致CBUFFER布局测试SRP Batcher，却把普通实例化与SRP Batcher混为同一种合批。 修复后必须重放同一配置，并指出静态源码和运行时事件各发生了什么变化。
+
+## 常见误区
+
+<Callout type="trap" title="源码版本没有固定">用MaterialPropertyBlock或不一致CBUFFER布局测试SRP Batcher，却把普通实例化与SRP Batcher混为同一种合批。</Callout>
+
+<Callout type="trap" title="静态代码等于运行时">函数被include不代表当前关键字和LightMode会执行它。必须用变体日志、Frame Debugger和GPU捕获互证。</Callout>
+
+## 本章回顾
+
+本页覆盖Shader变体、SRP Batcher、DOTS Instancing、XR宏、Debug Display。掌握标准是能给出固定路径和符号，画出数据链，触发对应Pass，再用正确性、兼容性和性能证据复现结论。
+
+<Exercises>
+**问题1：Shader变体与SRP Batcher如何连接？**
+<Answer>由multi_compile、shader_feature、平台和Renderer配置产生的编译版本。 按兼容常量布局持续驻留材质数据并减少CPU状态绑定的机制。 回答时必须给出文件、符号和运行Pass。</Answer>
+
+**问题2：怎样调试DOTS Instancing？**
+<Answer>先定位生产者，再追踪结构参数和消费者；随后核对pragma、关键字、LightMode、Frame Debugger和GPU事件。</Answer>
+
+**问题3：如何验收Debug Display？**
+<Answer>用替换Shader和调试关键字可视化材质、光照、层与缓冲的系统。 同时保存正常变体、边界变体、失败配置和CPU/GPU计时。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="Shader变体" definition="由multi_compile、shader_feature、平台和Renderer配置产生的编译版本。" />
+  <GlossaryItem term="SRP Batcher" definition="按兼容常量布局持续驻留材质数据并减少CPU状态绑定的机制。" />
+  <GlossaryItem term="DOTS Instancing" definition="从实体实例数据读取覆盖材质属性的Shader路径。" />
+  <GlossaryItem term="XR宏" definition="支持单通道实例化、纹理数组、双眼索引和运动向量的宏合同。" />
+  <GlossaryItem term="Debug Display" definition="用替换Shader和调试关键字可视化材质、光照、层与缓冲的系统。" />
+  <GlossaryItem term="源码证书" definition="固定提交、路径、符号、变体和运行事件后可再次验证同一结论的记录。" />
+</Glossary>
+
+<Attribution adaptedFrom="Unity Technologies · Universal Render Pipeline source · 源码单元21 变体、SRP Batcher、DOTS、XR与调试" adaptedUrl="https://github.com/Unity-Technologies/Graphics/tree/275a7f9ad9330e3cf7f3ea57a0b242a551fde291/Packages/com.unity.render-pipelines.universal/Shaders" />

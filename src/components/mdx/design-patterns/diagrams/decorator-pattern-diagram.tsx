@@ -519,8 +519,9 @@ export function DecoratorPatternDiagram() {
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        装饰器用「持有」代替「继承」：每个装饰器都实现 Component 接口，同时持有一个
-        Component 引用。operation() 先做自己的 addedBehavior()，再把请求委托给内部组件——
+        装饰器用「持有」代替「继承」：每个装饰器都实现 Component
+        接口，同时持有一个 Component 引用。operation() 先做自己的
+        addedBehavior()，再把请求委托给内部组件——
         像俄罗斯套娃一样层层包裹，运行时可自由组合装饰顺序。
       </figcaption>
     </figure>

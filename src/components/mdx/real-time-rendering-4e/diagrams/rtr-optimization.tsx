@@ -1,85 +1,90 @@
-/**
- * <RtrOptimizationDiagram>：渲染优化与加速图解。
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * 全部 DESIGN token 配色，无裸 hex。
- */
+import type { ReactNode } from "react";
 
-const VIEW_W = 720;
-const VIEW_H = 400;
+function Frame({ caption, children }: { caption: string; children: ReactNode }) {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption>
+    </figure>
+  );
+}
+
+const optimizationLoop = [
+  ["Measure", "CPU / GPU / present timeline + percentiles"],
+  ["Hypothesize", "draw / vertex / pixel / memory / wait bound"],
+  ["Scale one axis", "controlled workload + identical output"],
+  ["Verify", "time slope + counters + regression"],
+] as const;
 
 export function RtrOptimizationDiagram() {
   return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="渲染优化与加速技术图解"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <text x={VIEW_W / 2} y="32" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">
-            渲染优化与加速
-          </text>
-          <text x={VIEW_W / 2} y="54" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
-            剔除→合批→LOD→带宽优化
-          </text>
-
-          <rect x="40" y="80" width="640" height="280" rx="12" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.3" />
-
-          {/* Optimization pipeline */}
-          <rect x="55" y="105" width="140" height="90" rx="8" fill="var(--success)" fillOpacity="0.08" stroke="var(--success)" strokeWidth="1.2" />
-          <text x="125" y="128" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--success)">1. 剔除</text>
-          <text x="125" y="148" textAnchor="middle" fontSize="9" fill="var(--text-primary)">视锥剔除</text>
-          <text x="125" y="164" textAnchor="middle" fontSize="9" fill="var(--text-primary)">遮挡剔除</text>
-          <text x="125" y="180" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">背面剔除</text>
-
-          <text x="205" y="150" textAnchor="middle" fontSize="14" fill="var(--text-tertiary)">&rarr;</text>
-
-          <rect x="220" y="105" width="140" height="90" rx="8" fill="var(--accent)" fillOpacity="0.08" stroke="var(--accent)" strokeWidth="1.2" />
-          <text x="290" y="128" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">2. 合批</text>
-          <text x="290" y="148" textAnchor="middle" fontSize="9" fill="var(--text-primary)">Draw Call合并</text>
-          <text x="290" y="164" textAnchor="middle" fontSize="9" fill="var(--text-primary)">Instancing</text>
-          <text x="290" y="180" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">SR Batcher</text>
-
-          <text x="370" y="150" textAnchor="middle" fontSize="14" fill="var(--text-tertiary)">&rarr;</text>
-
-          <rect x="385" y="105" width="140" height="90" rx="8" fill="var(--warning)" fillOpacity="0.08" stroke="var(--warning)" strokeWidth="1.2" />
-          <text x="455" y="128" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--warning)">3. LOD</text>
-          <text x="455" y="148" textAnchor="middle" fontSize="9" fill="var(--text-primary)">细节层次</text>
-          <text x="455" y="164" textAnchor="middle" fontSize="9" fill="var(--text-primary)">距离切换模型</text>
-          <text x="455" y="180" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">Mesh LOD / Shader LOD</text>
-
-          <text x="535" y="150" textAnchor="middle" fontSize="14" fill="var(--text-tertiary)">&rarr;</text>
-
-          <rect x="550" y="105" width="110" height="90" rx="8" fill="var(--text-tertiary)" fillOpacity="0.1" stroke="var(--text-tertiary)" strokeWidth="1.2" />
-          <text x="605" y="128" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-primary)">4. 带宽</text>
-          <text x="605" y="148" textAnchor="middle" fontSize="9" fill="var(--text-primary)">纹理压缩</text>
-          <text x="605" y="164" textAnchor="middle" fontSize="9" fill="var(--text-primary)">G-Buffer优化</text>
-          <text x="605" y="180" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">延迟vs前向</text>
-
-          {/* Acceleration structures */}
-          <rect x="55" y="220" width="290" height="60" rx="8" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="1" />
-          <text x="200" y="242" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">空间加速结构</text>
-          <text x="200" y="262" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">BVH / KD-Tree / 八叉树 — 快速剔除不可见物体</text>
-
-          <rect x="375" y="220" width="285" height="60" rx="8" fill="var(--warning)" fillOpacity="0.04" stroke="var(--warning)" strokeWidth="1" />
-          <text x="517" y="242" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--warning)">GPU 带宽优化</text>
-          <text x="517" y="262" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">合批减DrawCall，压缩减显存，LOD减三角形</text>
-
-          <text x={VIEW_W / 2} y="312" textAnchor="middle" fontSize="11" fill="var(--text-tertiary)">
-            性能公式：帧时间 = CPU提交 + GPU绘制 + 带宽传输
-          </text>
-          <text x={VIEW_W / 2} y="330" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
-            先Profile再优化：80%的性能问题来自20%的代码
-          </text>
-          <text x={VIEW_W / 2} y="348" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
-            Draw Call是CPU瓶颈，三角形数是GPU瓶颈，纹理是带宽瓶颈
-          </text>
-        </svg>
+    <Frame caption="优化是测量、假设、单维度实验和回归组成的循环，不是固定技巧顺序。">
+      <div role="img" aria-label="渲染性能诊断与验证循环" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {optimizationLoop.map(([title, detail], index) => (
+          <div key={title} className="relative min-h-28 border border-border bg-bg/45 p-3">
+            <span className="text-xs font-bold text-accent">0{index + 1}</span>
+            <strong className="mt-2 block text-sm text-primary">{title}</strong>
+            <span className="mt-2 block text-xs leading-5 text-secondary">{detail}</span>
+            {index < optimizationLoop.length - 1 && <span aria-hidden="true" className="absolute -right-2 top-12 z-10 text-accent">→</span>}
+          </div>
+        ))}
       </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        渲染优化与加速——剔除、合批、LOD、带宽优化的完整流程
-      </figcaption>
-    </figure>
+    </Frame>
+  );
+}
+
+const queryPath = [
+  ["Objects / primitives", "bounds + motion + masks"],
+  ["Acceleration", "BVH / grid / hierarchy / sort"],
+  ["Broad candidates", "conservative possible pairs"],
+  ["Exact test", "ray / SAT / GJK / primitive"],
+  ["Result", "visible / hit / contact / TOI"],
+] as const;
+
+export function RtrAccelerationDiagram() {
+  return (
+    <Frame caption="空间结构只减少候选；最终可见性、命中和接触仍由稳健窄相位决定。">
+      <div role="img" aria-label="空间加速、宽相位和精确相交查询漏斗" className="grid gap-2 md:grid-cols-5">
+        {queryPath.map(([title, detail], index) => (
+          <div key={title} className="relative min-h-32 border border-border bg-bg/45 p-3">
+            <span className="grid size-7 place-items-center rounded-full bg-accent/15 text-xs font-bold text-accent">{index + 1}</span>
+            <strong className="mt-3 block text-sm text-primary">{title}</strong>
+            <span className="mt-2 block text-xs leading-5 text-secondary">{detail}</span>
+            {index < queryPath.length - 1 && <span aria-hidden="true" className="absolute -right-2 top-12 z-10 text-accent">→</span>}
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
+        <span className="border-l-4 border-success bg-success/10 p-2 text-primary">Conservative broad phase</span>
+        <span className="border-l-4 border-warning bg-warning/10 p-2 text-primary">Watertight / scale-aware tests</span>
+        <span className="border-l-4 border-accent bg-accent/10 p-2 text-primary">Update cost + query cost</span>
+      </div>
+    </Frame>
+  );
+}
+
+const systems = [
+  ["Efficient shading", "GPU-driven / forward+ / VRS", "pixels, memory, queues"],
+  ["VR / AR", "prediction / stereo / foveation", "motion-to-photon, pose error"],
+  ["Collision", "broad/narrow / CCD / solver", "misses, TOI, penetration"],
+  ["Future feature", "ray / neural / virtualized data", "reference, power, fallback"],
+] as const;
+
+export function RtrRealtimeSystemsDiagram() {
+  return (
+    <Frame caption="实时特性最终都要回到工作量、正确性、延迟、平台和回退五项门槛。">
+      <div role="img" aria-label="高效着色、XR、碰撞与未来技术的统一验收维度" className="grid gap-3 md:grid-cols-2">
+        {systems.map(([title, method, evidence], index) => (
+          <div key={title} className="grid min-h-28 grid-cols-[2.25rem_1fr] gap-3 border border-border bg-bg/45 p-3">
+            <span className="grid size-9 place-items-center rounded-full bg-accent/15 text-sm font-bold text-accent">{index + 1}</span>
+            <div>
+              <strong className="text-sm text-primary">{title}</strong>
+              <p className="mb-0 mt-1 text-xs text-secondary">Method: {method}</p>
+              <p className="mb-0 mt-2 border-t border-border pt-2 text-xs text-warning">Evidence: {evidence}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Frame>
   );
 }

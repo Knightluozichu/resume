@@ -1,0 +1,307 @@
+---
+title: "第1章：基本语言要素（建议1-15）"
+type: C
+section: "编写高质量代码 · 语言篇"
+order: 1
+description: "覆盖字符串、转换与解析、nullable/const/enum、运算符/比较/相等/哈希、格式化、复制和dynamic反射边界。"
+demo: true
+math: false
+sourceUrl: "https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html"
+draft: false
+---
+
+import { CqcRepresentationBoundaryLab, CqcStringConversionLab, CqcValueContractLab } from "@/components/mdx/csharp-quality-code/diagrams/basic-language-elements";
+
+<Objectives>
+
+- 能分析字符串、cast/pattern与Parse/TryParse的真实conversion、allocation和failure contract，而不是套用性能口号
+- 能设计nullable、const/readonly、enum、operator、comparison、Equals/GetHashCode相互一致的value contract
+- 能比较format、shallow/deep copy与dynamic/reflection的representation、identity和binding边界
+
+</Objectives>
+
+## 为什么“建议”必须还原成Decision Boundary
+
+原书第1章的15条建议来自C#/.NET 4时代，核心问题仍成立：转换失败是不是正常输入，default value有没有domain meaning，相等对象能否稳定进入hash collection，复制后是否共享nested state，runtime binding是否值得失去compile-time proof。但具体结论不能脱离现代compiler/runtime与API contract机械照抄。
+
+本章保留每条原书建议的标题与问题意识，同时为它补上适用条件、反例和验收证据。先预测：`"count=" + 9`是否一定boxing；外部文本无效时Parse是否总是错；enum持久化时显式值是风险还是保护；两个Equals相等对象若hash不同会怎样。
+
+<Term def="输入无效属于业务允许分支，调用者应通过返回值、nullable或result object处理，而不是依赖exception跳转的失败。">normal failure path</Term>
+
+## 字符串、转换与解析（建议1-4）
+
+### 建议1：正确操作字符串
+
+string immutable意味着每次产生不同text的operation返回新string，但compiler可能折叠constants，runtime也有不同Concat/interpolation handlers；不能从source表面断言一次拼接必然boxing。两三段表达式优先清晰的interpolation，循环或未知段数用StringBuilder，protocol text显式culture/encoding。
+
+```csharp
+string label = $"count={count}";
+
+var builder = new StringBuilder();
+foreach (Order order in orders)
+    builder.Append(order.Id).Append(':').AppendLine(order.Status);
+
+string report = builder.ToString();
+```
+
+验收使用allocation profiler或BenchmarkDotNet，并检查warm-up、result consumption与input size；只看一段旧IL不能代表当前target runtime。StringBuilder也不是所有拼接的默认答案，小表达式反而增加object与复杂度。
+
+### 建议2：使用默认转型方法
+
+优先使用language/FCL定义的conversion：numeric checked cast、Convert、Parse/TryParse、explicit operator或TypeConverter各有不同null/overflow/culture语义。所谓“默认”不是随便选一个，而是先明确source/target与failure contract，再选择标准实现，避免手写映射漏掉boundary。
+
+```csharp
+int narrowed = checked((int)longValue);
+int convertedNull = Convert.ToInt32(nullableText); // null becomes 0
+int parsed = int.Parse(text, CultureInfo.InvariantCulture); // null/invalid throws
+```
+
+Convert与Parse对null不同，checked与unchecked对overflow不同。wrapper要把这些语义写进name/tests，不能因return type相同就互换。
+
+### 建议3：区别对待强制转型与as和is
+
+explicit cast表达“contract保证compatible，不兼容就是exception”；`as`把reference/nullable conversion failure变null；C# 7 declaration pattern把test与typed binding合并。`is`后再cast会重复表达意图，现代代码常直接pattern。
+
+```csharp
+if (candidate is Order order)
+    Process(order);
+
+Order required = (Order)candidate; // Fail immediately if contract is broken.
+Order optional = candidate as Order;
+```
+
+不要把`as`概括为总比cast快。选择依据是failure semantics与null ambiguity：input本来就可能null时，`as`结果无法区分null source和wrong type；pattern通常更清晰。
+
+### 建议4：TryParse比Parse好
+
+来自UI、file或network的无效文本通常是normal failure path，TryParse避免为常见分支构造exception。内部配置按contract必须有效时，Parse的exception能保留错误位置；“总是TryParse”会让caller忽略false并继续使用default。
+
+```csharp
+if (!int.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out int count))
+    return ValidationResult.Invalid("count must be an integer");
+
+int requiredPort = int.Parse(configuredPort, CultureInfo.InvariantCulture);
+```
+
+<Stepper>
+  <Step title="切换concat、StringBuilder、cast、pattern与TryParse">
+    <CqcStringConversionLab />
+  </Step>
+  <Step title="先定义invalid input是否正常">
+    normal branch用Try/pattern/result；contract violation用即时exception，不把failure推迟成null dereference。
+  </Step>
+  <Step title="用IL、allocation与boundary cases验证">
+    检查selected overload、boxing/copy、culture、null、overflow和异常路径，而不是只比较一条happy path。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="Try API永远优于throwing API">
+Try适合预期失败，但若false被忽略，错误会以default value污染后续state。先定义失败属于input validation还是broken invariant，再决定channel。
+</Callout>
+
+## Nullable、readonly/const与enum（建议5-8）
+
+### 建议5：使用int?来确保值类型也可以为null
+
+nullable value type表达“值或缺失”，适合unknown age、optional timeout等真实domain absence。不要用0/-1 sentinel混合数据与控制；但若field业务上必填，就应在construction拒绝null，而不是到处传播nullable。
+
+<Term def="业务模型中尚未提供、不适用或未知，与数值0、空集合等合法值不同的状态。">semantic absence</Term>
+
+```csharp
+public sealed class Registration
+{
+    public Registration(int? age)
+    {
+        if (age is < 0 or > 130) throw new ArgumentOutOfRangeException(nameof(age));
+        Age = age;
+    }
+
+    public int? Age { get; }
+}
+```
+
+nullable要贯穿serialization/database/API mapping，测试null、0、boundary和round-trip。`GetValueOrDefault`只有在default确实等价时才使用。
+
+### 建议6：区别readonly和const的使用方法
+
+const是compile-time constant，consumer assembly通常把值内联；public const升级后旧consumer不重编译会保留旧值。readonly field在constructor/static constructor赋值，runtime读取，且每instance可不同。immutable reference readonly只保证field不能改指向，不保证object内部不变。
+
+### 建议7：将0值作为枚举的默认值
+
+所有enum storage的default bits为0，因此0应有明确意义：`None`、`Unknown`或合法首态，并按domain选择。Flags enum通常提供None=0；non-flags若0绝不合法，也要在deserialization/API boundary验证，不能假设type system拒绝未命名数值。
+
+### 建议8：避免给枚举类型的元素提供显式的值
+
+这条建议减少无必要编号与重复风险，但不是持久化/协议enum的通则。若值写入database、wire或跨版本交换，显式稳定编号能防止中间插入member导致重编号；同时应保留未知值处理。纯process内enum可依赖自动递增，但不要让ordinal承担业务排序。
+
+```csharp
+public enum JobState
+{
+    Unknown = 0,
+    Queued = 10,
+    Running = 20,
+    Completed = 30,
+}
+
+public const int ProtocolVersion = 3;
+public static readonly TimeSpan DefaultTimeout = TimeSpan.FromSeconds(30);
+```
+
+## Operator、Comparison、Equality与Hash（建议9-12）
+
+### 建议9：习惯重载运算符
+
+只有type具备自然、无歧义且低惊讶的value semantics时才重载operator，例如Money加法、Vector运算。operator应与named method、Equals/CompareTo一致；成对实现`==/!=`、关系operator，并明确overflow/unit/currency。为“写起来短”重载会隐藏side effect或昂贵I/O。
+
+### 建议10：创建对象时需要考虑是否实现比较器
+
+先问domain是否存在唯一natural order。type自己的稳定natural order实现IComparable；不同页面/业务排序用IComparer policy，避免把“按姓名”“按时间”都塞进type。comparison需要antisymmetry、transitivity与0语义，null policy也要一致。
+
+### 建议11：区别对待==和Equals
+
+operator `==`由compile-time operand types参与选择；Equals是virtual instance/value equality contract。reference type未重载`==`时通常比较identity，string等type重载为value equality。调用方需要选择identity还是domain value，不应混用。
+
+### 建议12：重写Equals时也要重写GetHashCode
+
+equal objects必须在同一comparer/process contract下产生相同hash；否则Dictionary/HashSet可能放入后找不到。hash不要求全局唯一，也不应持久化。参与equality/hash的key state在collection lifetime内保持immutable。
+
+<Term def="type明确哪些fields构成domain value，以及Equals、operator、comparison和hash如何对这些fields保持一致的规则。">equality domain</Term>
+
+```csharp
+public readonly struct Money : IEquatable<Money>, IComparable<Money>
+{
+    public Money(decimal amount, string currency)
+        => (Amount, Currency) = (amount, currency ?? throw new ArgumentNullException(nameof(currency)));
+
+    public decimal Amount { get; }
+    public string Currency { get; }
+
+    public bool Equals(Money other) =>
+        Amount == other.Amount && StringComparer.Ordinal.Equals(Currency, other.Currency);
+
+    public override bool Equals(object obj) => obj is Money other && Equals(other);
+    public override int GetHashCode() => HashCode.Combine(Amount, StringComparer.Ordinal.GetHashCode(Currency));
+    public int CompareTo(Money other) =>
+        Currency == other.Currency ? Amount.CompareTo(other.Amount) : throw new InvalidOperationException();
+
+    public static bool operator ==(Money left, Money right) => left.Equals(right);
+    public static bool operator !=(Money left, Money right) => !left.Equals(right);
+}
+```
+
+<Stepper>
+  <Step title="切换nullable、const/readonly、enum、equality与comparison">
+    <CqcValueContractLab />
+  </Step>
+  <Step title="写出default、version和mutation规则">
+    说明0/null的domain meaning、const内联风险、enum是否持久化，以及key何时必须immutable。
+  </Step>
+  <Step title="用property tests验证algebraic laws">
+    equality测reflexive/symmetric/transitive/hash；ordering测sign symmetry/transitivity；operators与named methods交叉验证。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="实现Equals和GetHashCode后，type就能安全作为key">
+若参与hash的property可变，入表后修改仍会破坏bucket定位。key stability是lifetime contract，不只是两个override。
+</Callout>
+
+## Formatting、Copy与Dynamic Reflection（建议13-15）
+
+### 建议13：为类型输出格式化字符串
+
+type若同时面向UI、log与protocol，应实现明确representation contract：default ToString适合诊断，IFormattable支持format/culture，machine format固定InvariantCulture并最好用专门serializer。不要让用户locale改变wire value，也不要把secret写进diagnostic string。
+
+<Term def="domain value映射到UI、日志、诊断或机器传输文本时，对format、culture、precision、round-trip与敏感信息的约定。">representation contract</Term>
+
+```csharp
+public string ToString(string format, IFormatProvider provider)
+{
+    provider ??= CultureInfo.CurrentCulture;
+    return format switch
+    {
+        "A" => Amount.ToString("0.00", provider),
+        "C" or null => $"{Currency} {Amount.ToString("0.00", provider)}",
+        _ => throw new FormatException($"Unknown format: {format}"),
+    };
+}
+```
+
+### 建议14：正确实现浅拷贝和深拷贝
+
+shallow copy复制top-level fields，nested references继续共享；deep copy按ownership graph复制可变owned nodes。并非“越深越安全”：immutable values可共享，database connection/file handle不能随意clone，graph cycle与alias identity要有policy。优先copy constructor/factory表达允许复制的state，而不是通用serialization hack。
+
+```csharp
+public sealed class OrderDraft
+{
+    public OrderDraft(OrderDraft source)
+    {
+        CustomerId = source.CustomerId;
+        Lines = source.Lines.Select(line => new OrderLine(line)).ToList();
+    }
+
+    public string CustomerId { get; }
+    public List<OrderLine> Lines { get; }
+}
+```
+
+### 建议15：使用dynamic来简化反射实现
+
+dynamic可让runtime binder处理member lookup/overload，减少显式MemberInfo/Invoke代码，适合COM、dynamic language或已验证adapter边界。它不等于更安全的reflection：typo/signature change延迟到runtime，AOT/trimming和performance也需考虑。已知contract优先interface/generic；reflection discovery后尽快转换为typed delegate/interface。
+
+<Term def="只在一个受控adapter内推迟member/overload resolution，并在进入前验证来源、离开时恢复typed contract的区域。">deferred binding boundary</Term>
+
+```csharp
+public static IReportAdapter Bind(object plugin)
+{
+    if (plugin is IReportAdapter typed) return typed;
+    return new DynamicReportAdapter(plugin); // dynamic remains inside this adapter.
+}
+```
+
+<Stepper>
+  <Step title="切换format、shallow/deep copy、dynamic与reflection">
+    <CqcRepresentationBoundaryLab />
+  </Step>
+  <Step title="标出representation与identity变化">
+    formatting产生text；shallow保留nested identity；deep按ownership复制；dynamic只改变binding timing。
+  </Step>
+  <Step title="把宽松边界收回typed API">
+    validate format/culture、copy graph和runtime member后，返回stable typed result，不让dynamic传播进domain core。
+  </Step>
+</Stepper>
+
+## 本章回顾：15条建议共同维护Value与Boundary Contract
+
+1. string/convert/parse选择取决于allocation evidence和failure是否属于normal path。
+2. nullable、const/readonly与enum必须定义absence、versioning和default bits。
+3. operators、comparison、Equals与GetHashCode围绕同一equality domain，并保持key immutable。
+4. formatting区分human/machine representation，copy区分owned identity，dynamic限制在adapter。
+5. 原书建议是审查问题的入口；最终结论要由当前target、domain contract与tests决定。
+
+<Exercises>
+
+**问题 1：外部CSV中的年龄字段应使用Parse还是TryParse，null与0怎样区分？**
+
+<Answer>无效/空CSV属于normal input failure，用TryParse或显式empty branch返回validation error；合法0与缺失分别映射int值0和nullable null。指定culture/number style，测试empty、whitespace、negative、overflow与valid boundary。若内部配置按部署contract必须有效，启动时Parse并fail fast更合理。</Answer>
+
+**问题 2：设计可作为Dictionary key的Money，需要哪些一致性证明？**
+
+<Answer>先定义amount+currency为equality domain并使其immutable；typed/object Equals与==/!=一致，equal必同hash；CompareTo只在同currency有效或用外部IComparer。property tests验证reflexive/symmetric/transitive/hash与ordering，测试入表后lookup。hash不持久化，currency comparer固定。</Answer>
+
+**问题 3：何时可用dynamic替代reflection，怎样限制风险？**
+
+<Answer>当来源是COM/dynamic language或已验证plugin且调用shape稳定时，可在小adapter内用dynamic减少Invoke plumbing；进入前验证type/version，捕获并翻译RuntimeBinderException，离开时返回typed interface/result。hot path profile，AOT声明reachability；compile-time contract已知时直接interface/generic。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="normal failure path" definition="无效输入属于业务允许分支，应以Try/result/null而非exception控制流表达。" />
+  <GlossaryItem term="semantic absence" definition="未提供、不适用或未知，与0等合法业务值不同的缺失状态。" />
+  <GlossaryItem term="equality domain" definition="构成domain value并共同决定Equals、operator、ordering和hash的fields与规则。" />
+  <GlossaryItem term="representation contract" definition="value转UI/log/wire text时的format、culture、round-trip与敏感信息约定。" />
+  <GlossaryItem term="deferred binding boundary" definition="把runtime member binding限制在验证过的adapter并恢复typed output的边界。" />
+</Glossary>
+
+<Attribution adaptedFrom="编写高质量代码：改善C#程序的157个建议，第1章 基本语言要素，建议1-15" adaptedUrl="https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html" />

@@ -1,0 +1,422 @@
+---
+title: "Item 24：若所有参数都需要类型转换，请采用非成员函数"
+type: A
+section: Chapter 4 · Designs and Declarations
+order: 24
+description: 对齐 Effective C++ 第三版 Item 24：用 Rational operator* 解释成员函数对左右操作数的隐式转换不对称，改用非成员函数让所有参数参与转换，并约束安全转换、ADL 与模板推导边界。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppConversionPolicyDecisionMap,
+  EcppMemberConversionAsymmetryMap,
+  EcppNonMemberCandidateFlowMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-24-non-member-conversions";
+
+<Objectives>
+
+- 能复现 member operator* 中 `r * 2`成功而`2 \* r` 失败的候选与转换过程
+- 能实现 namespace non-member function，使左右 operands 按相同规则参与安全 implicit conversion
+- 能判断 converting constructor、explicit、hidden friend 与 function template 的适用边界
+
+</Objectives>
+
+## 从左右互换后编译失败开始
+
+有理数允许整数构造：
+
+```cpp
+class Rational {
+public:
+    Rational(int numerator = 0, int denominator = 1);
+
+    Rational operator*(const Rational& rhs) const;
+};
+```
+
+调用结果却不对称：
+
+```cpp
+Rational oneHalf(1, 2);
+Rational a = oneHalf * 2; // 成功
+Rational b = 2 * oneHalf; // 失败
+```
+
+<Term def="只需一个参数即可调用、且未标记 explicit，因此可用于用户定义隐式转换的 constructor。">
+  converting constructor
+</Term>
+
+数学乘法的 operands 地位相同，但 member function 把左 operand 隐藏为 `this`。这改变了候选函数建立与参数转换的规则。
+
+<Term def="表达式中编译器收集所有可能调用函数并判断参数能否绑定的过程。">
+  overload candidate formation
+</Term>
+
+Item 24 的原则是 Declare non-member functions when type conversions should apply to all parameters（若所有参数都需要类型转换，请采用非成员函数）。
+
+## 为什么右参数能够转换
+
+`oneHalf * 2` 等价于：
+
+```cpp
+oneHalf.operator*(2);
+```
+
+receiver 已经是 Rational，member candidate 明确存在。编译器检查普通参数 `rhs` 时，可用 `Rational(2)` 把 int 转成 Rational。
+
+<Term def="编译器在函数参数绑定中插入一次用户定义 constructor 或 conversion function。">
+  user-defined implicit conversion
+</Term>
+
+```text
+oneHalf.operator*( Rational(2) )
+```
+
+转换后的右参数与 `const Rational&` 匹配，调用成立。
+
+<Term def="函数调用中除隐式对象参数外、显式写在参数列表中的参数。">
+  ordinary function parameter
+</Term>
+
+## 为什么左侧不能先转换
+
+`2 * oneHalf` 若使用 member 设计，需要先把 2 变成 Rational，再调用其 member。但候选查找从左 operand 的类型开始；int 没有 Rational 的 member `operator*`。
+
+<Term def="member function 调用中由 this 表示、决定在哪个 class scope 查找成员的左侧对象。">
+  implicit object parameter
+</Term>
+
+编译器不会为了发现一个尚不存在的 member candidate，先猜测把 receiver 转成任意用户类型。显式写 `Rational(2) * oneHalf` 才能成立。
+
+<Term def="左右领域地位相同，却因一个 operand 被编码为 this 而获得不同转换规则。">
+  member conversion asymmetry
+</Term>
+
+<EcppMemberConversionAsymmetryMap />
+
+<Callout type="trap">
+  **现象**：看到 `r * 2` 可编译，就假设 commutative 的 `2 * r`
+  也会转换。**原因**：右侧是 ordinary parameter，左侧是 candidate lookup 的
+  receiver。**修法**：对称 value operation 使用 non-member
+  function，让两侧都进入参数列表。
+</Callout>
+
+## 非成员函数让两侧地位相同
+
+把乘法移出 class：
+
+```cpp
+namespace math {
+
+class Rational {
+public:
+    Rational(int numerator = 0, int denominator = 1);
+    int numerator() const noexcept;
+    int denominator() const noexcept;
+};
+
+Rational operator*(const Rational& lhs, const Rational& rhs) {
+    return Rational(lhs.numerator() * rhs.numerator(),
+                    lhs.denominator() * rhs.denominator());
+}
+
+} // namespace math
+```
+
+<Term def="不依附于 receiver、所有 operands 都显式出现在参数列表中的自由函数。">
+  non-member function
+</Term>
+
+现在 `oneHalf * 2` 可把 rhs 转为 Rational，`2 * oneHalf` 可把 lhs 转为 Rational。type conversions apply to all parameters（所有参数参与类型转换）。
+
+<Term def="对称 operands 在候选绑定阶段获得同样 conversion sequence 资格。">
+  symmetric parameter conversion
+</Term>
+
+<EcppNonMemberCandidateFlowMap />
+
+## ADL 帮助发现同命名空间操作符
+
+对 `2 * oneHalf`，普通查找与 argument-dependent lookup 会考虑 Rational 所在 namespace 的 non-member operator。
+
+<Term def="根据实参类型关联 namespace/class 补充非成员候选的查找机制。">
+  argument-dependent lookup
+</Term>
+
+只要一个 operand 已是 Rational，ADL 可找到同 namespace operator；另一个 operand 再接受安全转换。若两个 operands 都是 int，则没有 Rational associated namespace，也不应把普通整数乘法劫持成 Rational。
+
+<Term def="由实参类型确定、供 ADL 搜索函数声明的 namespace 与 class 集合。">
+  associated namespace set
+</Term>
+
+函数应与类型放同 namespace，而不是散落 global scope 或添加到 `std`。
+
+## 通常不需要 friend
+
+Item 24 要求 non-member，不等于要求 friend。若 public accessors 足以实现乘法，应保持 non-member non-friend，减少 private representation 依赖。
+
+<Term def="非成员函数仅使用 public contract，不获得读取私有表示的额外权限。">
+  public-contract operator
+</Term>
+
+如果 performance/invariant 真正要求直接访问，可考虑 narrow friend；但需要把它计入封装边界。不能因为 operator 写在 class 附近就自动 friend。
+
+<Term def="在无法通过稳定 public API 正确高效实现时，向特定 non-member 授予的最小私有权限。">
+  narrow operator friendship
+</Term>
+
+<Callout type="trap">
+  **现象**：把所有 non-member operators 都声明
+  friend。**原因**：混淆“函数位置”和“访问权限”，无端扩大 private
+  依赖。**修法**：先用 public semantic accessors
+  实现；只有证据证明不足时才窄授权。
+</Callout>
+
+## 只有安全转换才应隐式发生
+
+non-member 解决的是“两侧能否同等参与转换”，不证明转换本身合理。int 到 Rational 通常无损且含义唯一：整数 n 对应 n/1。
+
+<Term def="不丢失信息、没有单位歧义且保持领域不变量的自动类型转换。">
+  semantics-preserving conversion
+</Term>
+
+Money、Angle、Duration 等需要单位或上下文，裸 int 隐式转换可能危险：
+
+```cpp
+class Money {
+public:
+    explicit Money(std::int64_t minorUnits, Currency currency);
+};
+```
+
+<Term def="必须在调用点写明 constructor 或 named factory，避免编译器静默插入的转换。">
+  explicit conversion boundary
+</Term>
+
+如果转换会 narrowing、分配、失败或依赖 global context，应使用 `explicit`、named factory 或 Result，而不是为了 operator 对称性放宽契约。
+
+## 修改型操作仍适合成员
+
+`operator*` 产生独立值且 operands 对称；`operator*=` 修改左对象，lhs 有明确 identity，因此通常是 member。
+
+<Term def="修改 receiver 状态并保持其 identity 的 compound assignment operation。">
+  mutating compound operator
+</Term>
+
+```cpp
+class Rational {
+public:
+    Rational& operator*=(const Rational& rhs);
+};
+
+Rational operator*(Rational lhs, const Rational& rhs) {
+    lhs *= rhs;
+    return lhs;
+}
+```
+
+<Term def="用按值 lhs 副本调用核心 compound assignment，再按值返回结果的二元运算实现模式。">
+  compound-operator reuse
+</Term>
+
+这种分层把 invariant-critical mutation 留给 member，同时让 free operator 提供对称接口和转换。
+
+## explicit constructor 时提供显式 overload
+
+若领域要求 constructor explicit，但仍希望支持 `Rational * int`，可以提供明确 overload，而不是打开所有 int 转换：
+
+```cpp
+Rational operator*(const Rational& lhs, int rhs);
+Rational operator*(int lhs, const Rational& rhs);
+```
+
+<Term def="为特定 operand 组合提供显式函数声明，不依赖通用隐式构造。">
+  targeted mixed-type overload
+</Term>
+
+overload 可做范围检查并定义返回类型。代价是组合数量增加，需要避免 ambiguity 和重复实现。
+
+<Term def="多个 overload 对同一表达式具有同等 conversion rank，编译器无法选择唯一候选。">
+  overload ambiguity
+</Term>
+
+优先从领域 API 需要的组合出发，不要生成所有数值类型笛卡尔积。
+
+## hidden friend 是现代查找工具但仍是 friend
+
+operator 可在 class 内定义为 friend，成为 non-member 并主要通过 ADL 找到：
+
+```cpp
+class Rational {
+    friend Rational operator*(Rational lhs, const Rational& rhs) {
+        lhs *= rhs;
+        return lhs;
+    }
+};
+```
+
+<Term def="在 class definition 中定义、不是 member、通常只通过 ADL 参与候选的 friend function。">
+  hidden friend
+</Term>
+
+它对防止无关隐式转换和模板 generic operators 很有用，但拥有 private access。若不需要权限，namespace non-friend 更清楚地维持封装；若采用 hidden friend，应明确它属于 joint representation boundary。
+
+<Term def="class 与获权 operator 必须共同审查 representation 变化的维护范围。">
+  operator encapsulation boundary
+</Term>
+
+## function template 的推导规则不同
+
+将 operator 泛化为 function template 时，template argument deduction 不会靠 user-defined conversion 推导冲突参数。
+
+<Term def="从调用实参直接推断模板参数的阶段，该阶段通常不执行用户定义隐式转换来完成推导。">
+  template argument deduction boundary
+</Term>
+
+```cpp
+template<class T>
+Rational<T> operator*(const Rational<T>& lhs, const Rational<T>& rhs);
+```
+
+`Rational<int> * 2` 可能因第二参数推导为 int、第一参数推导 T=int 的形式冲突而失败。可使用 hidden friend、non-deduced context、mixed-type template 或 targeted overload；这是 Item 46 还会深入的主题。
+
+<Term def="在推导、conversion 和 overload resolution 三阶段分别验证候选可行性的泛型接口设计。">
+  staged generic resolution
+</Term>
+
+不能把非模板函数的转换直觉原样套到 template。
+
+<EcppConversionPolicyDecisionMap />
+
+## 用左右矩阵验收二元接口
+
+先预测每个表达式收集哪些 candidates、每个参数使用何种 conversion sequence，再建立测试：
+
+- `Rational * Rational`、`Rational * int`、`int * Rational` 三组 compile tests。
+- unsafe unit/narrowing conversion 必须 compile fail 或返回显式错误。
+- overload ambiguity tests 覆盖 int、long、double 与 wrapper combinations。
+- ADL tests 确认 operator 位于类型 namespace，global/`std` 不被污染。
+- encapsulation audit 确认 operator 能否保持 non-friend。
+- algebra tests 验证左右形式值一致、identity/invariant 正确。
+- template tests 单独覆盖 deduction，不用普通 implicit conversion 测试替代。
+
+<Term def="按 lhs/rhs 类型组合记录候选、转换、结果与预期编译状态的测试表。">
+  operand conversion matrix
+</Term>
+
+对称性是 API 语义，不只是两条示例能编译。
+
+## 小结
+
+- member operator 把 lhs 作为 implicit object parameter，导致 rhs 可转换而 lhs 不能先转换后发现成员
+- non-member function 让所有 operands 成为普通参数，使安全 type conversions apply to all parameters
+- operator 与类型放同 namespace，借助 ADL 发现；能用 public API 时保持 non-friend
+- implicit conversion 只适用于无损、唯一且不需上下文的语义变化
+- mutating compound operator 通常是 member，对称 value operator 可基于它实现为 free function
+- function template deduction 不自动复用普通函数的转换规则，需要独立设计和测试
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 24"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="converting constructor">
+    可用于用户定义隐式转换的单参数构造入口。
+  </GlossaryItem>
+  <GlossaryItem term="overload candidate formation">
+    收集候选并检查参数绑定的过程。
+  </GlossaryItem>
+  <GlossaryItem term="user-defined implicit conversion">
+    编译器插入 constructor 或 conversion function。
+  </GlossaryItem>
+  <GlossaryItem term="ordinary function parameter">
+    显式位于函数参数列表的参数。
+  </GlossaryItem>
+  <GlossaryItem term="implicit object parameter">
+    member 调用中由 this 表示的 receiver。
+  </GlossaryItem>
+  <GlossaryItem term="member conversion asymmetry">
+    this 与普通参数获得不同转换待遇。
+  </GlossaryItem>
+  <GlossaryItem term="non-member function">
+    所有 operands 显式出现在参数列表的自由函数。
+  </GlossaryItem>
+  <GlossaryItem term="symmetric parameter conversion">
+    左右参数具有相同转换资格。
+  </GlossaryItem>
+  <GlossaryItem term="argument-dependent lookup">
+    按实参关联范围补充函数候选。
+  </GlossaryItem>
+  <GlossaryItem term="associated namespace set">
+    ADL 搜索的参数关联 namespace/class 集合。
+  </GlossaryItem>
+  <GlossaryItem term="public-contract operator">
+    只依赖公开契约的 non-member operator。
+  </GlossaryItem>
+  <GlossaryItem term="narrow operator friendship">
+    向特定 operator 授予最小 private 权限。
+  </GlossaryItem>
+  <GlossaryItem term="semantics-preserving conversion">
+    无损、无歧义且保持不变量的转换。
+  </GlossaryItem>
+  <GlossaryItem term="explicit conversion boundary">
+    调用点必须明确写出的转换。
+  </GlossaryItem>
+  <GlossaryItem term="mutating compound operator">
+    修改 receiver identity 的复合运算。
+  </GlossaryItem>
+  <GlossaryItem term="compound-operator reuse">
+    free binary operator 复用 compound member 的模式。
+  </GlossaryItem>
+  <GlossaryItem term="targeted mixed-type overload">
+    为特定混合参数组合声明的 overload。
+  </GlossaryItem>
+  <GlossaryItem term="overload ambiguity">
+    多个候选 conversion rank 相同而无法选择。
+  </GlossaryItem>
+  <GlossaryItem term="hidden friend">
+    class 内定义、主要由 ADL 找到的 non-member friend。
+  </GlossaryItem>
+  <GlossaryItem term="operator encapsulation boundary">
+    class 与获权 operator 的共同维护范围。
+  </GlossaryItem>
+  <GlossaryItem term="template argument deduction boundary">
+    模板推导不依靠用户转换补全参数的边界。
+  </GlossaryItem>
+  <GlossaryItem term="staged generic resolution">
+    分别处理推导、转换与 overload 的设计。
+  </GlossaryItem>
+  <GlossaryItem term="operand conversion matrix">
+    左右类型组合及候选转换的验证表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：解释 Rational 失败。** member operator 下 `r * 2` 成功、`2 * r` 失败，请写出候选和转换链并修复。
+
+<Answer question="为什么两种顺序结果不同，non-member 如何修复？">
+  `r * 2` 已从 Rational receiver 找到 member，普通 rhs 可经 converting
+  constructor 变成 Rational；`2 * r` 从 int receiver 找不到该
+  member，不能先猜测转换 receiver 再查成员。将 `operator*` 声明为 Rational
+  namespace 的 non-member，使 lhs/rhs 都是普通参数，ADL
+  找到候选后两侧均可应用安全转换。
+</Answer>
+
+2. **问题 2：审查 Money 转换。** 团队想让 int 自动变 Money，以支持 `money + 10` 与 `10 + money`，请判断。
+
+<Answer question="为什么函数对称不等于应开放 Money 隐式转换？">
+  int 没有 currency/unit，转换依赖上下文且可能造成金额单位错误，不是
+  semantics-preserving conversion。保持 constructor
+  explicit；若业务确需混合操作，提供携带 Currency 的 named factory，或限定
+  `Money + MinorUnits` 的 targeted overload，并定义
+  overflow/error。两侧对称只能通过显式类型表达，不能靠猜测单位。
+</Answer>
+
+3. **问题 3：处理 Rational template。** 普通函数版本支持 `Rational<int> * 2`，改成 function template 后推导失败，设计验证方案。
+
+  <Answer question="为什么模板推导不复用普通隐式转换，怎样设计？">template argument deduction 从两个参数直接推 T，不执行 user-defined conversion 来消除推导冲突。可把 operator 定义为 Rational class template 的 hidden friend，让 T 已由 class 确定；或将 scalar 参数置于 non-deduced context、提供 constrained mixed-type overload。分别测试 deduction、conversion 与 ambiguity，不能只验证最终运行值。</Answer>
+</Exercises>

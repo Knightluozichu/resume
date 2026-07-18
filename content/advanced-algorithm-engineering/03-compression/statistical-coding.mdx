@@ -1,0 +1,297 @@
+---
+title: "第12章 Statistical Coding：统计编码"
+type: B
+section: "压缩与编码"
+order: 11
+description: "区分统计模型与编码器，推导 Huffman、Canonical Huffman、Arithmetic/Range Coding，并用 PPM 的上下文、escape 与排除原则改进概率估计。"
+demo: true
+math: true
+sourceUrl: "https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+draft: false
+---
+
+import { PaeModelCoderPipelineDiagram, PaeHuffmanMergeLab, PaeCanonicalHuffmanDiagram, PaeArithmeticIntervalLab, PaeRangeRenormalizationLab, PaePpmContextLab, PaeCoderTradeoffMap } from "@/components/mdx/advanced-algorithm-engineering/diagrams/statistical-coding";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释统计模型与编码器的职责边界
+- 能计算 Huffman 码的平均长度与熵界
+- 能实现 Canonical Huffman 的码表重建
+- 能分析算术编码与 Range Coding 的区间演化
+- 能设计包含 escape、排除原则和阶数选择的 PPM 模型
+
+</Objectives>
+
+## 从“一符号一整数位”为何会浪费开始
+
+statistical coding（<Term def="先估计符号或上下文的概率，再让高概率事件获得更短表示、低概率事件承担更长表示的无损编码方法。">统计编码</Term>）不直接问“字符的编号是多少”，而问“在当前模型下它有多意外”。若事件概率为 p，理想信息量是：
+
+$$
+I(\sigma)=-\log_2 p_\sigma
+$$
+
+先预测一个二元源：a 的概率是0.99，b 的概率是0.01。若坚持每个符号各用1 bit，平均仍是1 bit/symbol；理想平均信息量却只有约0.081 bits/symbol。问题不在字母表太大，而在“逐符号码长必须是整数”。
+
+原章先把系统拆成 model 与 coder。模型根据已见数据估计概率；编码器只负责把概率变成可逆 bitstream。0th-order model 只统计单个符号，忽略次序；kth-order model 则估计“给定前 k 个符号，下一个符号是什么”的条件概率。
+
+<PaeModelCoderPipelineDiagram />
+
+静态模型先扫一遍输入，发送频率表或码表作为 preamble，再编码正文；动态模型让编码器与解码器按相同规则在线更新计数，可省预扫描，却必须严格同步。模型成本也要计入压缩率：短文本的 Huffman 树、频率表或上下文表可能比节省的正文还大。
+
+对序列 S 的0阶经验概率，若符号 σ 出现 nσ 次、总长 n，则：
+
+$$
+p_\sigma=\frac{n_\sigma}{n},
+\qquad
+H_0(S)=-\sum_{\sigma\in\Sigma}p_\sigma\log_2p_\sigma
+$$
+
+熵是模型下的平均信息下界，不是任意实现自动达到的文件大小。header、块边界、整数码长、有限精度和随机访问索引都会增加实际成本。
+
+## Huffman Coding：每次合并两个最小权重
+
+Huffman coding（<Term def="反复合并两个最小频率节点，得到平均码长最小的静态二进制前缀码。">Huffman编码</Term>）把每个符号放在二叉树叶子。左、右边分别记0、1；从根到叶的路径就是 codeword。任何叶子都不是另一叶子的祖先，因此码字 prefix-free，解码器读到叶子即可切分。
+
+对频率5、9、12、13、16、45，贪心算法每轮从优先队列取最小两个权重，建父节点并放回。合并成本等于新父节点权重；所有合并成本之和恰好等于 weighted path length。
+
+<PaeHuffmanMergeLab />
+
+```text
+BuildHuffman(frequencies):
+  heap = one leaf per symbol, ordered by frequency
+  while heap has more than one node:
+    left  = extractMin(heap)
+    right = extractMin(heap)
+    insert(heap, Node(left.weight + right.weight, left, right))
+  return extractMin(heap)
+```
+
+若叶深为 ℓσ，则每符号平均码长：
+
+$$
+L_H=\sum_{\sigma\in\Sigma}p_\sigma\ell_\sigma
+$$
+
+Huffman 的交换论证是：最小概率的两个符号可放到最深层并互为兄弟；把它们收缩为一个合并符号后，剩余问题仍是同类最优子问题。归纳即可证明它在“静态、逐符号、二进制、前缀码”这组限制内平均码长最小。
+
+对0阶模型有经典边界：
+
+$$
+H_0(S)\le L_H\lt H_0(S)+1
+$$
+
+右侧每符号最多浪费不足1 bit，但概率0.99的 a 仍不能获得0.014 bit 的码字，只能至少1 bit。这正是逐符号整数码长的结构限制。Huffman 最优也不等于所有无损压缩器最优：算术编码可把整条序列一起表示，Interpolative code 还会利用单调上下界。
+
+频率相同会产生多棵平均长度相同的树，但 maximum codeword length 可能不同。工程上若解码表只允许某个最大位长，应在 tie-break 时优先控制树高，或使用 length-limited Huffman；直接截断长码会破坏 prefix-free 与最优性。
+
+<Callout type="trap" title="只报正文 bit 数，不计模型前导">
+静态 Huffman 必须让解码器知道树、每个符号的码长或频率。对短块，preamble 可能吞掉全部收益；比较方案时必须把码表、原长、块索引和 padding 一起计入。
+</Callout>
+
+## Canonical Huffman：只传码长也能重建码字
+
+Canonical Huffman（<Term def="保留 Huffman 码长，按码长与符号顺序连续分配二进制整数码，从而无需传输树形结构。">Canonical Huffman</Term>）不改变每个符号的长度，因此平均码长与原树完全相同。它只规范同长度码字的排列：先按 length，再按 symbol 排序；同长度 code 连续递增，进入更长长度时先加一再左移。
+
+<PaeCanonicalHuffmanDiagram />
+
+设 count[ℓ] 是长度 ℓ 的码字数，first[ℓ] 是该层第一个 canonical code。递推为：
+
+$$
+\operatorname{first}[\ell]
+=
+\bigl(\operatorname{first}[\ell-1]+\operatorname{count}[\ell-1]\bigr)2
+$$
+
+若按长度排序后的符号数组为 symb，解码器读取 bits 并在某层判断 code 是否落入该层连续区间；命中后，用 `offset = code - first[length]` 定位 symb。也可把前 k bits 展开成快速表，长码再进入二级表。
+
+```text
+BuildCanonical(lengths):
+  sort symbols by (length, symbol)
+  code = 0
+  previousLength = 0
+  for symbol in sorted symbols:
+    code = code << (length[symbol] - previousLength)
+    assign symbol the current code
+    code = code + 1
+    previousLength = length[symbol]
+```
+
+只传长度仍需编码“哪个符号对应哪个长度”。常见做法是固定字母表顺序发送 lengths，并对大量0长度做 RLE；若字母表是动态 token 集，则还要发送 token 本身。Canonical 的价值不是让正文更短，而是缩小模型、稳定格式并加速 table-driven decode。
+
+限制最大码长时，不能随意把超长 leaves 提到上层。可用 package-merge 在给定最大长度下求最优码长，或缩放极端频率后重建；实现还应验证 Kraft inequality，拒绝 oversubscribed 或 incomplete table 中不允许的码流。
+
+## Arithmetic Coding：用一个区间表示整条序列
+
+Arithmetic coding（<Term def="按符号概率反复细分当前区间，用最终子区间中的一个数表示整条符号序列。">算术编码</Term>）绕开逐符号整数码长。把按固定顺序排列的字母表映射到 [0,1) 的连续子区间。设符号 σ 的累计概率为 fσ，当前区间起点 li-1、宽度 si-1，则读入 S[i] 后：
+
+$$
+s_i=s_{i-1}P[S[i]],
+\qquad
+l_i=l_{i-1}+s_{i-1}f_{S[i]}
+$$
+
+例子 `abac` 使用 P[a]=1/2、P[b]=P[c]=1/4，最终区间为 [19/64,20/64)。解码器只要持有该区间中的数 x、相同概率模型和原序列长度，就能从 [0,1) 开始反向判断 x 落在哪个符号子区间，并逐步恢复 a、b、a、c。
+
+<PaeArithmeticIntervalLab />
+
+最终宽度为：
+
+$$
+s_n=\prod_{i=1}^{n}P[S[i]]
+$$
+
+若选择最短二进制前缀，使其 dyadic interval 完整落入最终区间，则原章定理12.3给出：
+
+$$
+|\operatorname{AC}(S)|
+\le
+2-\log_2s_n
+\le
+2+nH_0(S)
+$$
+
+这里冗余是整条序列至多约2 bits，而不是 Huffman 的每个符号不足1 bit。序列越长，摊到每符号的损失越接近0。Arithmetic 还能使用 dynamic model，因为每一步只需要编码器和解码器给出完全一致的当前累计概率。
+
+代价也很明确。一个输出 number 依赖此前全部符号，不能从任意 bit offset 开始解；随机访问通常要切块，并为每块保存 model checkpoint 或重置模型。块越短，访问和并行越好，header 与熵损失越大；块越长，压缩率越接近整段理论值，但错误传播、延迟和局部读取变差。
+
+<Callout type="trap" title="用浮点数直接保存 low 与 high">
+区间会指数缩小，普通浮点很快丢失可区分端点；编码器与解码器若舍入路径不同还会永久失同步。实际格式应采用经过证明的有限精度 Range Coding 与确定性计数缩放规则。
+</Callout>
+
+## Range Coding：整数端点、重归一化与流式输出
+
+Range Coding（<Term def="以固定字宽的整数 low/high、累计计数和重归一化规则实现算术编码的工程形式。">Range Coding</Term>）把 [0,1) 映射到 [0,M)，其中 M 是机器字范围。概率由整数 count 近似，累计计数 C[σ] 表示排在 σ 前的总次数；区间更新使用整数乘除，并保证每个非零计数都得到非空子区间。
+
+当新 `[L,H)` 完全落在下半区，输出0并把端点乘2；完全落在上半区，输出1、减去半区起点后再乘2。若窄区间跨过中点却落在中间两四分位，会出现 underflow：暂不输出，围绕中点放大，并累计待补的互补位。
+
+<PaeRangeRenormalizationLab />
+
+```text
+EncodeRange(symbol):
+  range = high - low
+  high = low + floor(range * cumulativeHigh[symbol] / total)
+  low  = low + floor(range * cumulativeLow[symbol]  / total)
+  while low and high share a stable leading bit:
+    emit that bit and pending complementary underflow bits
+    renormalize low and high
+```
+
+解码器维护同宽 shift register v。它先把 v 映射到累计频率刻度，找出所属符号，再执行完全相同的区间更新与重归一化，并从输入补一位。二者必须统一半开区间、取整方向、端点是否含 high、EOF 终止方式和 count rescale 时机。
+
+有限精度要求 total count 不能无限增长，否则小概率子区间会被舍入成空。动态模型达到阈值后可把各计数除2并保留最小1；编码器与解码器必须在同一个已编码符号后触发。原章给出的 Range 方法经验损失很小，却换来定宽整数运算、边处理边输出和可控内存。
+
+## Prediction by Partial Matching：让上下文改进概率
+
+prediction by partial matching（<Term def="维护0到K阶上下文计数，从最长可用上下文开始预测，失败则编码 escape 并逐级后退的自适应概率模型。">部分匹配预测</Term>，PPM）把0阶独立同分布模型提升到 kth-order conditional model。它为每个长度0到K的 context α 统计 α 后接 σ 的次数；编码 S[i] 前，从最长已存在的上下文开始。
+
+若当前上下文曾见过目标符号，就用该条件概率交给 Arithmetic/Range coder；若没见过，就在该上下文编码 escape，降到短一阶模型。一路失败后进入 order -1：在完整字母表上均匀编码尚未出现的符号。escape 不是额外的原始 bit 标记，而是当前统计模型中的一个普通事件，因此解码器能同步选择相同后退路径。
+
+<PaePpmContextLab />
+
+原章以 `abracadabra`、K=2 说明流程。前缀末尾 context 是 `ra`：若下一个是 c，order 2 已有 `ra → c`，直接命中；若是 d，先在 `ra` 编码 escape，再在 order 1 的 `a → d` 命中；若是未见过的 e，会继续经过 order 0，最后在 order -1 编码。
+
+### 排除原则
+
+从高阶 context 逃逸本身带来了负信息。若 `ra` 曾只跟 c，而编码器仍选择 escape，就能断定当前符号不是 c；退到 context `a` 时，应从其候选集合排除 c，并重新归一化剩余计数。若一路退到 order -1，则可排除所有在高阶模型已被证明不可能的符号。
+
+这就是 exclusion principle。它不改变可逆性，因为解码器看到同一串 escapes，也知道应排除哪些符号。概率质量集中到更少候选上，目标符号码长随之下降，代价是每次回退要维护排除集合。
+
+### 零频率与 escape 概率
+
+未见事件不能真的给概率0，否则 Arithmetic coder 无法分配非空区间。PPM 的关键工程选择是怎样给 escape 留概率质量：
+
+- Method A 给 escape 一个固定 count 1，已见符号使用原 count。
+- Method C 让 escape count 等于当前 context 中不同后继的数量，强调还可能出现新后继。
+- Method D 可把已见符号计数减半、escape 使用不同符号数的一半，缓和稀疏 context 的过度自信。
+
+不同方法形成 PPMA、PPMC、PPMD 等变体；它们没有对所有数据统一最优的先验答案。应把 escape 策略、exclusion 是否开启、字母表定义、K、更新时机与 rescale 一起写进格式。
+
+K 也不是越大越好。长上下文更具体，一旦重复就给出尖锐分布；但它更稀疏，会频繁支付多个 escapes，并占用更多 context nodes。原章实验指出4到5字符以后常不再改善。应在验证集上测压缩率、模型内存和速度，或用 context pruning/escape 代价决定是否保留节点。
+
+特别要区分：PPM 是 modeling technique，不是 bit coder。它输出“本层 symbol/escape 的概率分布”，真正把事件写入 bitstream 的仍是 Arithmetic Coding、Range Coding 或其他 statistical encoder。
+
+## 方案选择：压缩率不是唯一坐标
+
+<PaeCoderTradeoffMap />
+
+Canonical Huffman 适合解码吞吐高、静态 token 字典和需要从已知 codeword boundary 重启的场景；Arithmetic/Range 适合概率极偏或动态更新，能逼近熵却增加串行依赖；PPM 在重复文本上通过上下文降低条件熵，但模型内存与 escape 计算更重。
+
+评测时固定 corpus 与 block policy，同时报告正文 bits/symbol、模型与索引开销、encode/decode MB/s、peak model memory、首字节延迟、随机块访问时间和损坏后的 error propagation。只拿理论 H0 对比磁盘字节，会漏掉对齐、终止、原长和 metadata。
+
+正确性测试至少覆盖单符号字母表、空输入、所有频率相等、极端偏斜、count rescale 边界、underflow 连续发生、被截断码流、非法 Huffman lengths、块尾 padding 以及编码器/解码器模型更新顺序。对 adaptive coder，golden bitstream 比单纯 round-trip 更能发现双方一起犯同一错误。
+
+<Stepper>
+  <Step title="先拆开模型与编码器">
+    <PaeModelCoderPipelineDiagram />
+    明确概率由谁估计、bitstream 由谁生成，再决定静态还是动态更新。
+  </Step>
+  <Step title="逐符号前缀码先做 Huffman">
+    <PaeHuffmanMergeLab />
+    合并两个最小频率，并把树形结果规范成 Canonical lengths。
+  </Step>
+  <Step title="极偏分布改用整段区间">
+    <PaeArithmeticIntervalLab />
+    让整个序列共享一个嵌套区间，把整数位长损失摊到整段。
+  </Step>
+  <Step title="落地时转成有限精度范围">
+    <PaeRangeRenormalizationLab />
+    用整数端点、共同首位输出与 underflow 规则保持流式同步。
+  </Step>
+  <Step title="需要高阶模型时逐级逃逸">
+    <PaePpmContextLab />
+    从最长上下文预测，失败则 escape、排除不可能符号并降阶。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 统计编码由模型和编码器组成：前者估计概率，后者把概率变成 bits。
+2. 0阶熵只看符号 multiplicity；k阶模型利用前文 context 的条件概率。
+3. Huffman 反复合并两个最小频率，在静态二进制前缀码中平均长度最优。
+4. Huffman 平均码长满足 H0 到 H0+1 的界，但每个码字仍是整数位。
+5. Canonical Huffman 只保留码长，按长度和符号顺序即可重建连续码字。
+6. Arithmetic Coding 用最终嵌套区间表示整条消息，正文至多约 nH0+2 bits。
+7. Range Coding 用整数端点、累计计数和重归一化实现流式有限精度编码。
+8. 分块改善随机访问、并行和错误隔离，却会增加模型与边界开销。
+9. PPM 从最长 context 开始，失败时编码 escape，最终退到 order -1。
+10. 排除原则利用高阶 escape 的负信息；escape 概率与 K 必须靠数据验证。
+
+<Exercises>
+
+**问题 1：频率5、9、12、13、16、45的 Huffman 合并顺序与平均位数是多少？**
+
+<Answer>依次合并5+9=14、12+13=25、14+16=30、25+30=55、45+55=100。对应码长可取45为1位，12、13、16为3位，5、9为4位；总加权长度为45+36+39+48+20+36=224，平均2.24 bits/symbol。</Answer>
+
+**问题 2：`abac` 的最终算术区间为何是 [19/64,20/64)，理论信息量是多少？**
+
+<Answer>按a的前1/2、b的第二个1/4、a的前1/2、c的最后1/4逐层细分，得到宽度1/64的区间[19/64,20/64)。概率乘积是1/64，负对数为6 bits；实际选择可识别该区间的 dyadic 前缀还可能多至约2 bits。</Answer>
+
+**问题 3：Range decoder 为何必须与 encoder 在同一时刻 rescale counts？**
+
+<Answer>区间划分由累计计数决定。任一方早一个或晚一个符号缩放，下一步的子区间边界就不同；decoder 的寄存器会落入另一个符号区间，之后所有模型更新继续分叉，无法自行恢复。</Answer>
+
+**问题 4：在 PPM 中，`abracadabra` 后编码 d 时排除原则如何省码？**
+
+<Answer>order 2 的context `ra`只见过c；既然发生escape，d就不可能是c。退到order 1 的context `a`时排除c，把原本分给c的概率质量重新分给其余候选，因此d的条件概率由示例中的1/7升为1/6，码长略降。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="统计编码">依概率给高频事件短表示、低频事件长表示的无损编码体系。</GlossaryItem>
+  <GlossaryItem term="Huffman编码">贪心合并最小权重节点得到的最优静态二进制前缀码。</GlossaryItem>
+  <GlossaryItem term="Canonical Huffman">按码长与符号次序规范分配码字、只需保存长度的 Huffman 形式。</GlossaryItem>
+  <GlossaryItem term="算术编码">用最终嵌套概率区间中的一个数表示整条符号序列。</GlossaryItem>
+  <GlossaryItem term="Range Coding">使用有限精度整数范围和重归一化实现的算术编码。</GlossaryItem>
+  <GlossaryItem term="部分匹配预测">从最长上下文开始预测并通过 escape 逐级回退的自适应模型。</GlossaryItem>
+  <GlossaryItem term="排除原则">根据高阶模型已经逃逸，排除低阶模型中不可能符号并重归一化概率。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Pearls of Algorithm Engineering · Chapter 12 Statistical Coding"
+  href="https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+  author="Paolo Ferragina"
+  license="原书版权归作者与 Cambridge University Press 所有；本章依据官方目录与作者课程资料独立重构教学内容"
+/>

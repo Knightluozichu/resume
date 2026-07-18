@@ -3,12 +3,14 @@ title: 线程间共享数据
 type: C
 section: 共享数据
 order: 1
-description: 读完能用 std::mutex + std::lock_guard 给共享数据加锁、识别出「每个操作都加了锁却仍有竞态」的接口竞态、用固定加锁顺序与 std::scoped_lock 避免死锁，并知道 unique_lock / call_once / shared_mutex 各在什么场景用。
+description: 读完能区分竞态条件与数据竞争，用 std::mutex + std::lock_guard 保护共享数据，识别接口竞态，并用固定加锁层级或 std::scoped_lock 避免死锁。
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://livebook.manning.com/book/c-plus-plus-concurrency-in-action-second-edition/chapter-3"
 draft: false
 ---
+
+import { SharedDataProtectionMap } from "@/components/mdx/cpp-concurrency/diagrams/protecting-shared-data";
 
 {/* C 实战型第三章（《C++ 并发编程实战》第2版 §3 改编重写）：原书讲竞态条件、用 mutex 保护共享数据、接口设计中的隐藏竞态（stack）、死锁与避免（固定顺序 / std::lock / std::scoped_lock）、灵活加锁（unique_lock / 锁粒度 / call_once / shared_mutex）。重心是代码对照(§6 ≥80% 关键码)与竞态交错器(§5 主 Demo)，math:false。全程沿用「餐厅后厨」隐喻（共享数据=同一块砧板/同一张订单，mutex=唯一一把厨刀，竞态=两厨师同时改同一张订单，死锁=两厨师各攥一件对方要的工具互不相让）。draft:true 待总监 review。 */}
 
@@ -18,15 +20,15 @@ draft: false
 
 <Objectives>
 
-- 能用 `std::mutex` + `std::lock_guard` 给共享数据加锁：把读写共享数据的那几行圈进**临界区**，让任一时刻只有一个线程在改它——**把一段有竞态的代码改成线程安全的**
-- 能识别「每个操作都单独加了锁、组合起来却仍有竞态」的**接口竞态**（如 `empty()` / `top()` / `pop()` 连用），并知道为什么、怎么改
+- 能区分**竞态条件**与会令 C++ 程序行为未定义的**数据竞争**，并指出 `counter++` 同时触发了哪两类问题
+- 能修改一段共享状态代码：用 `std::mutex` + `std::lock_guard` 圈定完整临界区，并把 `empty()` / `top()` / `pop()` 的接口竞态合并成单一操作
 - 能回答：两个线程各对一个共享变量 `++` 一次（初值 0），最后这个变量一定等于 2 吗？如果不一定，是哪一步出了问题、怎么用锁修好？
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；类比固定用「餐厅后厨」，与第1、2章一致。 */}
 
-## 两个厨师，一张订单
+## 从一张共享订单开始
 
 前两章你学会了喊帮厨、管帮厨。可一旦两个厨师在同一个后厨干活，新麻烦就来了：他们要**共用东西**——同一块砧板、同一张订单。两人各自埋头干没事，一旦同时去改同一张订单，就乱套了。
 
@@ -36,19 +38,31 @@ draft: false
 
 {/* 3. 概念讲解（spec §三，C 型可把「是什么」压缩，篇幅让给 §6）：一小节一概念；术语首现 Term def 高亮且进章末 Glossary；引用 §5 Demo。 */}
 
-## 竞态条件：被打断的「读—改—写」
+## 竞态条件与数据竞争：先分清逻辑错误和语言规则
 
-上一章末尾我们见过 <Term def="多个线程同时访问同一份共享数据、且至少有一个在写时，最终结果取决于它们碰巧谁先谁后——执行顺序一变，结果就变。是并发编程最经典的 bug。">竞态条件（race condition）</Term> 这个词。现在把它讲透。
+<Term def="程序的结果或正确性依赖多个操作的相对时序。它是逻辑层概念，范围比数据竞争更广；即使每次内存访问都加了锁，分离的检查与执行仍可能形成接口竞态。">
+  竞态条件（race condition）
+</Term>
+是一个逻辑层概念：只要正确性依赖“谁先谁后”，时序改变就可能暴露错误。它不等于“同时写一个变量”；后面
+`empty()` 与 `pop()` 的组合即使内部都加锁，仍然可能有竞态条件。
+
+<Term def="两个线程对同一内存位置进行冲突访问，至少一个是写，而且访问既非合适的原子操作、彼此也没有 happens-before 关系。C++ 规定数据竞争导致未定义行为。">
+  数据竞争（data race）
+</Term>
+是更严格的 C++
+语言规则：两个线程冲突访问同一内存位置，至少一个写，并且没有原子操作或同步建立顺序，程序行为就是**未定义**。因此
+`counter++` 无锁并发既有时序上的竞态条件，也有数据竞争；不能把真实 C++
+程序的可能结果限定为 1 或 2。
 
 一段共享数据通常带着某种**约定**——书里叫 <Term def="一段数据在「正确状态」下始终成立的约定。比如「链表里每个 next 指针都指向真实的下一个节点」「计数器的值 = 已发生的事件数」。修改数据的中途，不变量可能被暂时打破，必须在别人看到前修复好。">不变量（invariant）</Term>。比如计数器 `counter` 的不变量是「它的值等于已经发生的 `++` 次数」。`counter++` 看起来是一个动作，在机器层面其实是三步：**读**出当前值 → **加一** → **写**回。这三步之间，不变量是暂时破着的。
 
-如果一个线程做到一半（比如刚读完、还没写回），另一个线程插进来也读了同一个旧值，两人各自加一、各自写回——后写的那个把先写的覆盖了，一次 `++` 就丢了。这就是竞态：**结果取决于两条「读—改—写」碰巧怎么交错**。下面这个交互演示让你亲手拨动交错顺序，亲眼看结果在 2 和 1 之间跳：
+如果一个线程刚读完、还没写回，另一个线程也读了旧值，两次写回在一个简化机器模型里会形成“丢更新”。下面的交互演示用于理解这种交错，**不是** C++ 未定义行为的完整结果枚举：
 
 > 猜一猜：两个线程各 `++counter` 一次（初值 0），最后 `counter` 一定是 2 吗？先选一种交错走一遍，再下结论。
 
 <RaceConditionExplorer />
 
-玩过你就明白了：只要两条 `++` 在时间上有重叠（一个还没写回，另一个就读了旧值），就可能丢更新。要根治，必须让一条 `++` 整段做完，另一条才能开始——也就是**不许它俩重叠**。
+玩过你就明白了：需要把一次完整的“读、改、写”作为不可被另一条同类操作穿插的单元。互斥量可以建立这个顺序；若只是独立计数，也可以使用满足所需内存顺序的原子类型，后者会在第 5 章展开。
 
 ## 互斥量：唯一的那把厨刀
 
@@ -60,6 +74,10 @@ draft: false
 
 看清楚了：A 持刀切砧板时，B 只能空等；A 放下刀，B 才拿到。两段临界区在时间轴上**永不重叠**——这正是竞态消失的原因。手动 `lock` / `unlock` 容易忘记解锁（尤其中途抛异常时），所以 C++ 给了一个 RAII 包装 <Term def="一个 RAII 工具类：构造时对传入的 mutex 上锁，析构时自动解锁。把它声明在临界区开头，离开作用域（正常返回或异常）时自动 unlock，绝不漏锁。是保护临界区最常用的方式。">std::lock_guard</Term>——它构造时上锁、析构时自动解锁，具体写法第六节细说。
 
+<SharedDataProtectionMap />
+
+互斥量不会“绑定”某个变量，正确性来自一条共同协议：所有可能触碰同一不变量的路径都使用同一保护机制，并且锁的作用域覆盖完整操作。漏掉一次读、提前返回内部引用，或把检查与执行拆到两个临界区，都会让协议失效。
+
 ## 接口竞态：每步都加锁，仍可能翻车
 
 这里有个反直觉的坑：**给每个操作都单独加了锁，组合起来用却仍可能有竞态。** 经典例子是 `std::stack` 的 `empty()`、`top()`、`pop()`。哪怕这三个成员函数各自内部都正确加了锁，下面这种「先查空、再取顶、再弹出」的组合用法仍然是错的：在你 `empty()` 返回 false 之后、`top()` 之前，别的线程可能把栈弹空了。问题不在单个操作，而在**接口被设计成「查」和「用」分两步**——这一节先建立认识，第六节给出根治的改法（把 `top` + `pop` 合并成一个返回值的原子操作）。
@@ -70,7 +88,9 @@ draft: false
 
 <DeadlockCycleDiagram />
 
-避免死锁最简单可靠的办法是 **让所有线程按同一个固定顺序加锁**（永远先 `lock1` 再 `lock2`）；或者用标准库的 <Term def="C++ 标准库函数，一次性锁住多个互斥量。它内部用「全有或全无」的避让算法获取这些锁，要么全部锁上、要么一个都不锁后重试，从根上杜绝因加锁顺序不一致导致的死锁。配合 std::lock_guard 的 adopt_lock 使用。">std::lock</Term>（或 C++17 的 `std::scoped_lock`）**一次锁住多把**——它保证「全有或全无」，从根上避开顺序不一致的死锁。代码见第六节。
+避免死锁最直接的办法是让所有线程遵守同一锁层级；也可以用 <Term def="std::lock 使用死锁规避算法获取多把 Lockable，成功返回时全部已锁；若调用抛异常，会解开本次已经取得的锁。C++17 的 std::scoped_lock 将多锁获取与 RAII 解锁组合起来。">std::lock / std::scoped_lock</Term> 获取一组锁。算法执行期间可能暂时持有其中一部分并回退重试，准确承诺是“不会因为传入锁的获取顺序形成死锁”，不是每个中间瞬间都“全有或全无”。
+
+还要遵守三条组合规则：能不嵌套就不嵌套；持锁时不要调用用户回调或其他未知代码；必须嵌套时，把锁层级写成可审查的不变量。固定顺序应使用稳定业务层级或 `std::less` 定义的指针全序，不能依赖无关对象裸指针的内建 `<` 比较。
 
 ## 灵活加锁：更趁手的几种锁
 
@@ -113,11 +133,11 @@ int main() {
     std::thread t2(add_many);
     t1.join();
     t2.join();
-    // counter 多半不是 2'000'000，而是个偏小的随机数
+    // 数据竞争：C++ 行为未定义，不能只假设“结果偏小”
 }
 ```
 
-每次 `++counter` 的「读—改—写」都可能被另一线程插入，丢掉一次更新（正是上面竞态交错器演示的现象）。要修，就得让任一时刻只有一个线程在碰 `counter`。
+交错器展示了常见的丢更新路径，但这段程序在 C++ 中有数据竞争，编译器无需维持该简化模型。修复目标不是“让结果大概率正确”，而是建立同步关系，彻底移除数据竞争。
 
 ### 加锁：std::mutex + std::lock_guard
 
@@ -182,7 +202,7 @@ public:
         std::lock_guard<std::mutex> g(m);
         data.push(std::move(v));
     }
-    // 合并 top+pop：一把锁内完成，返回值（空栈返回 nullopt）
+    // 合并 top+pop：一把锁内完成，空栈返回 nullopt
     std::optional<T> pop() {
         std::lock_guard<std::mutex> g(m);
         if (data.empty()) return std::nullopt;
@@ -194,6 +214,8 @@ public:
 ```
 
 现在调用方只用一句 `auto v = s.pop();`，「查空 + 取顶 + 弹出」在同一把锁里一气呵成，中间没有缝可钻。
+
+这个简化版本还要求 `T` 的移动构造满足你需要的异常保证：若移动会抛出并修改源对象，栈顶可能保留一个被部分移动的值。生产接口可以约束 `T` 为 nothrow-move、在可用时先复制，或像原书示例那样返回 `std::shared_ptr<T>`，先安全构造返回对象再修改容器。
 
 ### 死锁与修法：固定顺序 / std::lock / std::scoped_lock
 
@@ -213,7 +235,7 @@ void swap_bad(Account& x, Account& y) {
 
 ```cpp
 void swap_ok(Account& x, Account& y) {
-    // 一次锁两把：要么都锁上、要么都不锁后重试，绝不形成环形等待
+    if (&x == &y) return; // 同一个 mutex 不能作为两个参数重复获取
     std::scoped_lock guard(x.m, y.m);
     std::swap(x.balance, y.balance);
 }
@@ -221,9 +243,10 @@ void swap_ok(Account& x, Account& y) {
 
 <Callout type="tip">
   C++17 之前没有 `std::scoped_lock`，用 `std::lock(x.m, y.m);`
-  先一次锁两把，再用 `std::lock_guard g1(x.m, std::adopt_lock);`
+  通过死锁规避算法取得两把锁，再用 `std::lock_guard g1(x.m, std::adopt_lock);`
   「领养」已锁的互斥量（告诉
-  guard「锁已上好，你只负责析构时解锁」）。另一条同样可靠的路子：**约定全局加锁顺序**——所有线程永远先锁地址小的那个，环就连不起来。
+  guard「锁已上好，你只负责析构时解锁」）。另一条可靠路径是规定全局锁层级；若按对象地址排序，使用
+  `std::less` 提供的严格全序，并先处理两个参数实际是同一对象的情况。
 </Callout>
 
 ### 灵活加锁：unique_lock（延迟 / 提前解锁）
@@ -259,14 +282,14 @@ std::once_flag flag;
 std::unique_ptr<Resource> res;
 
 Resource& get_resource() {
-    std::call_once(flag, [] {       // 这个 lambda 全程只会被执行一次
+    std::call_once(flag, [] {
         res = std::make_unique<Resource>();
     });
     return *res;                    // 之后每次调用都直接返回，已就绪
 }
 ```
 
-`std::call_once` 保证那段初始化在多线程并发下**只跑一次**，其余线程会**等它跑完**再继续——既无数据竞争，又不像普通 mutex 那样每次访问都上锁。
+`std::call_once` 保证一次**成功返回**的初始化对其他返回的调用可见。若 callable 抛异常，本次调用是 exceptional，flag 不会被置为完成，后续调用还会重试；所以“最多执行一次”只适用于成功完成的那次初始化。C++11 起，函数内静态变量的初始化也由语言保证线程安全，适合能直接构造并返回的单例资源。
 
 ### 读多写少：shared_mutex 读写锁
 
@@ -294,7 +317,7 @@ void update(const std::string& host, const std::string& ip) {
 }
 ```
 
-读用 `std::shared_lock`（多读并行），写用 `std::lock_guard` / `std::unique_lock`（独占）。读多写少时并发度明显高于普通 `mutex`。
+读用 `std::shared_lock`（多读并行），写用 `std::lock_guard` / `std::unique_lock`（独占）。它是否快于普通 mutex 必须实测：读临界区太短时管理开销可能更高，而且标准不保证读者或写者公平，具体实现可能出现一方长期等待。
 
 {/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字；含接口竞态、加锁顺序不一致死锁、返回受保护数据的引用导致保护失效。 */}
 
@@ -317,7 +340,7 @@ void update(const std::string& host, const std::string& ip) {
 
 <Callout type="trap">
   **现象**：程序偶发整体卡死、CPU 占用为
-  0，怎么都不往下走。**原因**：**死锁**——多个线程以**不一致的顺序**获取多把锁，形成环形等待（A
+  0，怎么都不往下走。**原因**：可能是**死锁**——多个线程以**不一致的顺序**获取多把锁，形成环形等待（A
   持 lock1 等 lock2，B 持 lock2 等 lock1）。**修法**：用 `std::scoped_lock`（或
   `std::lock` +
   `adopt_lock`）一次锁住所有需要的锁；或**约定全局固定加锁顺序**，所有线程都按同一顺序锁，环就连不起来。
@@ -334,15 +357,15 @@ void update(const std::string& host, const std::string& ip) {
 
 ## 小结
 
-- **竞态条件**：多个线程同时读写共享数据、至少一个在写时，结果取决于交错顺序——`++counter` 的「读—改—写」被打断就会丢更新，破坏数据的**不变量**
+- **数据竞争**是 C++ 的未定义行为条件；**竞态条件**是更广的逻辑时序错误，接口的 check-then-act 即使各步加锁也可能竞态
 - 用 **`std::mutex` + `std::lock_guard`** 把读写共享数据的代码圈成**临界区**：构造上锁、析构自动解锁，任一刻只有一个线程能进，竞态消失
 - **接口竞态**：每个操作都加锁，组合用（`empty`→`top`→`pop`）仍可能 race；修法是把需要原子完成的复合逻辑**合并成一个加锁的操作**
 - **死锁**：多把锁顺序不一致 → 环形等待僵死；用 **`std::lock` / `std::scoped_lock` 一次锁多把**，或约定**全局固定加锁顺序**避免
-- 灵活加锁：**`unique_lock`** 可延迟/提前解锁/移动，**`call_once`** 做只跑一次的惰性初始化，**`shared_mutex`** 读写锁让读多写少场景多读并行
+- 灵活加锁：**`unique_lock`** 可延迟/提前解锁/移动，**`call_once`** 在异常后会重试初始化，**`shared_mutex`** 允许多读但性能与公平性由实现和负载决定
 
 <Exercises>
 
-**练习 1（改代码型）** 下面这段统计代码有竞态：两个线程各对 `total` 累加，最后结果常偏小。请用 `std::mutex` + `std::lock_guard` 把它改成线程安全（不许改成局部累加最后合并，就是要练加锁）。
+**问题 1（改代码型）** 下面这段统计代码存在数据竞争，行为未定义。请用 `std::mutex` + `std::lock_guard` 把它改成线程安全，并说明为什么每个访问点必须服从同一把锁的协议（本题暂不改成局部累加）。
 
 ```cpp
 long total = 0;
@@ -373,7 +396,7 @@ void accumulate(const std::vector<int>& v) {
 
 </Answer>
 
-**练习 2（问答型）** 同事写了一个「线程安全队列」，`empty()`、`front()`、`pop()` 三个成员函数内部都正确加了锁。他在多个线程里这样消费：`while(!q.empty()){ auto v=q.front(); q.pop(); handle(v); }`。他说「每个操作都加锁了，肯定线程安全」。他对吗？指出隐患并给修法。
+**问题 2（问答型）** 同事写了一个「线程安全队列」，`empty()`、`front()`、`pop()` 三个成员函数内部都正确加了锁。他在多个线程里这样消费：`while(!q.empty()){ auto v=q.front(); q.pop(); handle(v); }`。他说「每个操作都加锁了，肯定线程安全」。他对吗？指出隐患并给修法。
 
 <Answer>
 
@@ -381,7 +404,7 @@ void accumulate(const std::vector<int>& v) {
 
 </Answer>
 
-**练习 3（独立实现型）** 实现一个线程安全的计数器类 `Counter`：成员 `increment()`（加一）、`get()`（读当前值）。要求用 `std::mutex` 保护，且 `get()` 必须能在 `const` 对象上调用。提示：被 `const` 成员函数用到的 `mutex` 要声明成 `mutable`。
+**问题 3（独立实现型）** 实现一个线程安全的计数器类 `Counter`：成员 `increment()`（加一）、`get()`（读当前值）。要求用 `std::mutex` 保护，且 `get()` 必须能在 `const` 对象上调用。提示：被 `const` 成员函数用到的 `mutex` 要声明成 `mutable`。
 
 <Answer>
 
@@ -414,8 +437,13 @@ public:
 <Glossary>
 
 <GlossaryItem term="竞态条件（race condition）">
-  多个线程同时访问同一份共享数据、且至少有一个在写时，最终结果取决于它们碰巧谁先谁后——执行顺序一变，结果就变。像两个厨师同时往同一张订单上写字，谁的盖了谁的全凭手快手慢。是并发编程最经典的
-  bug。详见本章「竞态条件」一节。
+  程序结果或正确性依赖并发操作相对时序的逻辑问题。它比数据竞争更广：即使每次访问都加锁，分开的检查与执行仍可能形成接口竞态。
+</GlossaryItem>
+
+<GlossaryItem term="数据竞争（data race）">
+  对同一内存位置的冲突并发访问缺少 happens-before
+  关系，至少一个是写，而且没有合适原子语义。C++
+  规定存在数据竞争的程序行为未定义，不能只按源码推演几个结果。
 </GlossaryItem>
 
 <GlossaryItem term="不变量（invariant）">
@@ -451,10 +479,10 @@ public:
 </GlossaryItem>
 
 <GlossaryItem term="std::lock / std::scoped_lock" id="std::lock">
-  一次性锁住**多个**互斥量的工具。`std::lock(a, b)`
-  用「全有或全无」的避让算法获取多把锁——要么全锁上、要么一个都不锁后重试，从根上杜绝因加锁顺序不一致导致的死锁。C++17
-  的 `std::scoped_lock guard(a, b);` 把它和 RAII
-  解锁打包在一起，是首选写法。详见本章「死锁与修法」一节。
+  `std::lock` 用死锁规避算法获取多把
+  Lockable，成功返回时全部已锁，抛异常时解开本次已经取得的锁。C++17 的
+  `std::scoped_lock` 把多锁获取和 RAII 解锁组合起来；同一 mutex
+  不能作为多个参数重复传入。
 </GlossaryItem>
 
 <GlossaryItem term="std::unique_lock">
@@ -478,6 +506,9 @@ public:
 
 </Glossary>
 
-{/* 9. 出处声明（spec §九）：本书为《C++ 并发编程实战》第2版改编重写，sourceUrl 为空，Attribution 标签空参自动渲染。缺失 = 必打回。 */}
+{/* 9. 出处声明（spec §九）：本书为《C++ 并发编程实战》第2版改编重写。 */}
 
-<Attribution />
+<Attribution
+  title="C++ Concurrency in Action, Second Edition, Chapter 3: Sharing data between threads"
+  url="https://livebook.manning.com/book/c-plus-plus-concurrency-in-action-second-edition/chapter-3"
+/>

@@ -1,0 +1,232 @@
+---
+title: "第 9 章 移动端海水仿真技术：网格、波浪、浮力与渲染"
+type: A
+section: "Unity 3D 实战核心技术详解 · 移动端视觉"
+order: 9
+description: "按原书第9章串联海面网格、波浪算法、浮力、风、参数 UI、渲染与案例。"
+demo: true
+math: false
+sourceUrl: "https://m.bookschina.com/7380713.htm"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Uct09MobileOceanSimulationMapLab,
+  Uct09MobileOceanSimulationExperimentLab,
+  Uct09MobileOceanSimulationEvidenceLab,
+} from "@/components/mdx/unity-core-tech/diagrams/uct-09-mobile-ocean-simulation";
+
+<Objectives>
+
+- 能解释海面网格、波函数、法线、材质和浮力采样的共享模型
+
+- 能实现受移动端预算约束的参数化海水案例
+
+- 能分析视觉波面与物理浮力不一致造成的漂移
+
+</Objectives>
+
+## 问题：为什么海面 Shader 看起来有波浪，船却仍像漂在一张水平平面上？
+
+先预测：只在顶点 Shader 中位移海面，CPU 上的浮力查询是否会自动得到同样高度？不会。原书第九章从原理、网格、算法和实现一直讲到浮力、风、UI、渲染与案例，核心是让视觉、物理和调参共享同一个波模型。
+
+<Uct09MobileOceanSimulationMapLab />
+
+## 原书边界与目录小节
+
+本页严格对应完整目录中的以下单元；这些单元只在本页计算原章覆盖，现代扩展不替代原书位置：
+
+- **海水实现原理**
+- **海水网格**
+- **海水算法**
+- **海水技术实现**
+- **浮力**
+- **风**
+- **UI参数控制**
+- **海水渲染**
+- **案例分享**
+
+书籍身份由图书馆题录核对，章节边界由完整目录核对。本站重新组织解释、代码、实验和证据，不逐字复制原文；导读与总复习不重复计入十四个正文章。
+
+## 一套波参数驱动视觉、法线和浮力
+
+海水网格提供采样点，顶点密度决定几何波能表达的最高频率。移动端常围绕相机使用有限网格或分环 LOD，把大尺度位移放在顶点，小尺度细节交给法线贴图，避免远处同样高密度。
+
+多个正弦波或 Gerstner 波由方向、波长、幅度、速度和陡度叠加。Gerstner 同时产生水平与垂直位移，陡度过大时会自交。每一分量要使用一致时间和相位，随机参数应固定种子以便回放。
+
+法线可以由波函数偏导推导，也可结合滚动法线纹理。反射、折射、Fresnel、深度颜色和泡沫都增加采样与带宽；移动方案应按设备档位裁剪特性，而不是把桌面水面直接降分辨率。
+
+浮力点查询同一波函数的高度与法线，施加浮力、阻尼和转矩。若 GPU Shader 与 CPU 浮力各写一套近似，参数或时间稍有差异就会穿水；应共享参数并用可对照的简化函数。
+
+风控制波方向与能量，UI 只是修改统一参数集。案例应保存参数快照、设备档位、相机和天气种子，使同一海况可重现，并记录网格顶点数、Shader 变体、GPU 时间和浮力误差。
+
+<Uct09MobileOceanSimulationExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="定义波方向、波长、幅度、速度、相位和陡度的一组数据。">波谱参数</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="同时产生水平与垂直位移、能形成较尖波峰的参数波模型。">
+  Gerstner 波
+</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="依据观察距离调整网格密度和水面特性的层级策略。">海面 LOD</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="在刚体局部布置并查询水面高度和法线的位置。">浮力采样点</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="反射比例随视线与表面法线夹角变化的现象。">Fresnel</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+这些术语组成一份最小领域模型。读者需要为每个对象写出所有者、生命周期、正常值、边界值和故意失败后的第一条可观察信号，才能把概念转成工程判断。
+
+## 关键对象与数据流
+
+风和海况生成统一 WaveSet，网格系统按相机提供顶点，GPU 用 WaveSet 位移并计算法线与着色，CPU 浮力系统在若干点查询同一时间和参数，UI 修改的也是这份数据。输出是画面、刚体运动和参数快照三条可对照证据。
+
+每次实验只改变一个输入，先保存版本、参数与预期，再比较输出、日志、内存或帧时间。最终结果偶然正确但中间契约不符合预测，仍不能签发，因为隐藏缓存、默认值或执行顺序可能掩盖根因。
+
+## 三步可重复实验
+
+动手前先预测：改变当前步骤的一项输入后，哪个对象、数值、像素、状态或版本标记应最先变化？固定 Unity 版本、目标平台、资产提交和测试场景。
+
+<Stepper>
+  <Step title="建立单波基准">
+    <Uct09MobileOceanSimulationMapLab />
+
+先只启用一条正弦波，记录固定世界点在十个时刻的高度；CPU 与 Shader 调试输出应在容差内一致。
+
+```csharp
+float Height(Vector2 xz, Wave w, float time)
+{
+    float phase = Vector2.Dot(w.direction, xz) * w.frequency + time * w.speed;
+    return w.amplitude * Mathf.Sin(phase);
+}
+```
+
+  </Step>
+  <Step title="叠加网格与渲染">
+    <Uct09MobileOceanSimulationExperimentLab />
+
+逐项增加波分量、法线、Fresnel、深度色与泡沫，记录每一项对 GPU 时间和画面的增量，建立设备档位。
+
+```hlsl
+float3 displaced = positionWS;
+for (int i = 0; i < _WaveCount; ++i)
+    displaced += EvaluateWave(_Waves[i], positionWS.xz, _Time.y);
+```
+
+  </Step>
+  <Step title="校准浮力与 UI">
+    <Uct09MobileOceanSimulationEvidenceLab />
+
+在船体四角放置采样点，比较静水、顺风、逆风和大波；UI 改变参数后，视觉和浮力必须同帧读取同一快照。
+
+```csharp
+float depth = waterHeight - point.position.y;
+if (depth > 0f)
+    body.AddForceAtPosition(Vector3.up * depth * buoyancy, point.position);
+```
+
+  </Step>
+</Stepper>
+
+## 正常、边界与故障注入
+
+正常样本证明主路径，边界样本说明适用范围，故障样本证明诊断检查确实会在最早契约处拒绝。三类样本必须使用同一观测方式，避免只为成功路径保留证据。
+
+<Callout type="trap">
+  **因果陷阱**：GPU 与 CPU 各维护一套波参数或时间，会让水面视觉与浮力长期漂移。
+</Callout>
+
+<Callout type="trap">
+  **边界陷阱**：为远近海面使用同样网格密度和 Shader
+  特性，会把移动端预算浪费在不可见细节。
+</Callout>
+
+## 从原书版本迁移到当前 Unity
+
+Built-in、URP 与自定义 SRP 的抓屏、深度和反射接口不同，但统一波模型、网格 LOD、浮力查询与参数快照是稳定核心。
+
+现代设备可用 Compute Shader 或 FFT 海面，但原书移动案例的目标是受控成本；只有真机证据证明收益时才升级模型。
+
+迁移账本使用五列：原书载体、稳定不变量、当前实现、不可等价处、重放证据。允许 API、插件和渲染管线变化，不允许用新名词删除原章问题或把编辑器成功当成目标平台成功。
+
+## 验收证据
+
+验收包含单波 CPU/GPU 高度表、网格 LOD 线框、特性增量 GPU 数据、浮力点轨迹、风向案例、UI 参数快照、三档设备画面与性能，以及故意错开时间后的失败样本。
+
+证据包还要记录文件路径、构建版本、设备、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不是看过。
+
+<Uct09MobileOceanSimulationEvidenceLab />
+
+## 小结
+
+- 网格密度决定可表达波频率
+- 视觉和浮力必须共享波参数与时间
+- 渲染特性应逐项计量并按设备分档
+- 案例必须连同海况参数一起保存
+
+<Exercises>
+
+**问题 1** 第 9 章 移动端海水仿真技术的关键输入和输出分别是什么？
+
+<Answer>
+  风和海况生成统一 WaveSet，网格系统按相机提供顶点，GPU 用 WaveSet
+  位移并计算法线与着色，CPU 浮力系统在若干点查询同一时间和参数，UI
+  修改的也是这份数据。输出是画面、刚体运动和参数快照三条可对照证据。
+</Answer>
+
+**问题 2** 本章最有诊断价值的故障注入是什么？
+
+<Answer>
+  GPU 与 CPU
+  各维护一套波参数或时间，会让水面视觉与浮力长期漂移。需要保存失败输入和第一条偏离信号，再修复后重放。
+</Answer>
+
+**问题 3** 迁移到当前 Unity 时必须保留什么？
+
+<Answer>
+  Built-in、URP 与自定义 SRP 的抓屏、深度和反射接口不同，但统一波模型、网格
+  LOD、浮力查询与参数快照是稳定核心。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="波谱参数">
+    定义波方向、波长、幅度、速度、相位和陡度的一组数据。
+  </GlossaryItem>
+  <GlossaryItem term="Gerstner 波">
+    同时产生水平与垂直位移、能形成较尖波峰的参数波模型。
+  </GlossaryItem>
+  <GlossaryItem term="海面 LOD">
+    依据观察距离调整网格密度和水面特性的层级策略。
+  </GlossaryItem>
+  <GlossaryItem term="浮力采样点">
+    在刚体局部布置并查询水面高度和法线的位置。
+  </GlossaryItem>
+  <GlossaryItem term="Fresnel">
+    反射比例随视线与表面法线夹角变化的现象。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="姜雪伟《Unity 3D实战核心技术详解》目录与书籍身份资料"
+  adaptedUrl="https://m.bookschina.com/7380713.htm"
+/>

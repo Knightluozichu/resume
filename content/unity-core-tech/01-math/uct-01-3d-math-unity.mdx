@@ -1,0 +1,223 @@
+---
+title: "第 1 章 3D 数学与 Unity：坐标、向量、矩阵和旋转"
+type: A
+section: "Unity 3D 实战核心技术详解 · 数学与数据"
+order: 1
+description: "按原书第1章建立 Unity 坐标系、向量运算、变换矩阵、四元数和欧拉角的统一空间模型。"
+demo: true
+math: false
+sourceUrl: "https://m.bookschina.com/7380713.htm"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Uct013dMathUnityMapLab,
+  Uct013dMathUnityExperimentLab,
+  Uct013dMathUnityEvidenceLab,
+} from "@/components/mdx/unity-core-tech/diagrams/uct-01-3d-math-unity";
+
+<Objectives>
+
+- 能解释局部空间、世界空间、观察空间之间的变换责任
+
+- 能推导点积、叉积和变换矩阵在 Unity 中的可观察结果
+
+- 能比较四元数与欧拉角的组合、插值和失效边界
+
+</Objectives>
+
+## 问题：为什么角色朝向、摄像机跟随和挂点错位通常不是一个 API 问题，而是空间约定没有说清？
+
+先预测：把局部坐标直接当世界坐标、把方向向量当位置点、把欧拉角逐轴相加，画面是否仍可能偶然正确？会，但只在特定父节点、特定角度和特定更新顺序下成立。原书第一章把坐标系、向量、矩阵、四元数和欧拉角放在一起，目的就是让所有移动、朝向与旋转共享同一套可计算约定。
+
+<Uct013dMathUnityMapLab />
+
+## 原书边界与目录小节
+
+本页严格对应完整目录中的以下单元；这些单元只在本页计算原章覆盖，现代扩展不替代原书位置：
+
+- **Unity坐标系**
+- **向量：加法、减法、点乘、叉乘**
+- **矩阵：平移、缩放、旋转**
+- **四元数**
+- **欧拉角**
+
+书籍身份由图书馆题录核对，章节边界由完整目录核对。本站重新组织解释、代码、实验和证据，不逐字复制原文；导读与总复习不重复计入十四个正文章。
+
+## 从空间语义到可组合变换
+
+Unity 的 Transform 同时携带局部位置、局部旋转和局部缩放；父子层级把这些量组合成世界变换。位置点受平移影响，方向向量不受平移影响，法线在非均匀缩放下还需要逆转置规则。任何数学代码首先要写清输入和输出属于哪个空间。
+
+向量加减描述位移组合，点积回答同向程度、投影和夹角，叉积给出同时垂直于两个输入的有向法线。点积依赖长度与夹角，叉积依赖输入顺序；把未归一化向量直接当余弦，或交换叉积顺序，都会产生稳定但错误的结果。
+
+齐次矩阵把平移、旋转和缩放统一为可组合变换。矩阵乘法不满足交换律，先局部旋转再世界平移与反过来不是同一件事。Unity 的 Matrix4x4.TRS 适合显式构造验证矩阵，但实际层级还需检查父节点缩放和矩阵乘向量的具体 API。
+
+四元数适合表示三维朝向、组合旋转与球面插值；欧拉角适合人类输入，却会遇到万向节锁、角度绕回和插值路径不连续。工程上保存 Quaternion 作为状态，只在编辑器或调试界面显示 Euler，能减少累积误差和轴序歧义。
+
+<Uct013dMathUnityExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="为点、方向和变换赋予共同原点与基向量的参照系。">坐标空间</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="把两个向量映射为标量，用于夹角、投影和朝向判断。">点积</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="生成同时垂直于两个输入向量的有向向量，顺序决定方向。">叉积</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="用四维形式统一表达三维平移、旋转、缩放及其组合。">齐次矩阵</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="避免欧拉角奇异并支持稳定旋转组合与球面插值的表示。">四元数</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+这些术语组成一份最小领域模型。读者需要为每个对象写出所有者、生命周期、正常值、边界值和故意失败后的第一条可观察信号，才能把概念转成工程判断。
+
+## 关键对象与数据流
+
+输入是带空间标签的位置、方向和旋转，变换阶段先完成局部到世界的矩阵组合，再用点积或叉积做几何判定，最后由 Quaternion 驱动朝向。输出不仅是画面，还应包含矩阵、单位向量、夹角和父子层级快照；这些数值能区分数学错误与渲染错觉。
+
+每次实验只改变一个输入，先保存版本、参数与预期，再比较输出、日志、内存或帧时间。最终结果偶然正确但中间契约不符合预测，仍不能签发，因为隐藏缓存、默认值或执行顺序可能掩盖根因。
+
+## 三步可重复实验
+
+动手前先预测：改变当前步骤的一项输入后，哪个对象、数值、像素、状态或版本标记应最先变化？固定 Unity 版本、目标平台、资产提交和测试场景。
+
+<Stepper>
+  <Step title="建立空间标签实验">
+    <Uct013dMathUnityMapLab />
+
+创建带旋转和非均匀缩放的父节点，分别记录 TransformPoint、TransformDirection 与 InverseTransformPoint 的输入输出，证明点和方向的处理不同。
+
+```csharp
+Vector3 worldPoint = root.TransformPoint(localPoint);
+Vector3 worldDir = root.TransformDirection(localDir);
+Debug.Log(new { worldPoint, worldDir });
+```
+
+  </Step>
+  <Step title="验证向量与矩阵顺序">
+    <Uct013dMathUnityExperimentLab />
+
+固定两个不平行向量，检查点积、叉积和 Matrix4x4.TRS；交换叉积输入、交换矩阵组合次序，保存预期与实测差异。
+
+```csharp
+float facing = Vector3.Dot(a.normalized, b.normalized);
+Vector3 normal = Vector3.Cross(a, b).normalized;
+Matrix4x4 trs = Matrix4x4.TRS(p, q, s);
+```
+
+  </Step>
+  <Step title="比较两种旋转表示">
+    <Uct013dMathUnityEvidenceLab />
+
+让物体跨越 359 度到 1 度，并经过接近万向节锁的姿态；对比欧拉角线性插值与 Quaternion.Slerp 的路径和速度。
+
+```csharp
+Quaternion target = Quaternion.LookRotation(direction, Vector3.up);
+transform.rotation = Quaternion.Slerp(transform.rotation, target, t);
+Debug.Assert(Mathf.Abs(transform.rotation.sqrMagnitude - 1f) < 0.001f);
+```
+
+  </Step>
+</Stepper>
+
+## 正常、边界与故障注入
+
+正常样本证明主路径，边界样本说明适用范围，故障样本证明诊断检查确实会在最早契约处拒绝。三类样本必须使用同一观测方式，避免只为成功路径保留证据。
+
+<Callout type="trap">
+  **因果陷阱**：把 Transform.position 与 localPosition
+  混用，会让代码在无父节点时通过、进入层级后失效。
+</Callout>
+
+<Callout type="trap">
+  **边界陷阱**：逐帧读取 eulerAngles
+  再累加会受角度绕回和轴序影响，不能代替四元数状态。
+</Callout>
+
+## 从原书版本迁移到当前 Unity
+
+Vector3、Matrix4x4、Quaternion 和 Transform 的核心数学语义在现代 Unity 中仍稳定，迁移重点不是替换 API，而是把空间、单位、左右乘约定写进测试。
+
+DOTS 或 Unity.Mathematics 使用 float3、float4x4 和 quaternion，数据布局与乘法函数不同；迁移时应以同一组基准向量和矩阵结果做逐项对照。
+
+迁移账本使用五列：原书载体、稳定不变量、当前实现、不可等价处、重放证据。允许 API、插件和渲染管线变化，不允许用新名词删除原章问题或把编辑器成功当成目标平台成功。
+
+## 验收证据
+
+验收包应包含父子层级截图、局部与世界数值表、点积和叉积断言、两种矩阵顺序的对照、欧拉角边界轨迹与四元数插值曲线。另一位读者只看这些证据即可定位空间错误。
+
+证据包还要记录文件路径、构建版本、设备、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不是看过。
+
+<Uct013dMathUnityEvidenceLab />
+
+## 小结
+
+- 每个位置和方向都必须带空间语义
+- 点积回答相似度，叉积回答有向法线
+- 矩阵顺序决定变换含义
+- 四元数保存旋转状态，欧拉角只做输入与展示
+
+<Exercises>
+
+**问题 1** 第 1 章 3D 数学与 Unity的关键输入和输出分别是什么？
+
+<Answer>
+  输入是带空间标签的位置、方向和旋转，变换阶段先完成局部到世界的矩阵组合，再用点积或叉积做几何判定，最后由
+  Quaternion
+  驱动朝向。输出不仅是画面，还应包含矩阵、单位向量、夹角和父子层级快照；这些数值能区分数学错误与渲染错觉。
+</Answer>
+
+**问题 2** 本章最有诊断价值的故障注入是什么？
+
+<Answer>
+  把 Transform.position 与 localPosition
+  混用，会让代码在无父节点时通过、进入层级后失效。需要保存失败输入和第一条偏离信号，再修复后重放。
+</Answer>
+
+**问题 3** 迁移到当前 Unity 时必须保留什么？
+
+<Answer>
+  Vector3、Matrix4x4、Quaternion 和 Transform 的核心数学语义在现代 Unity
+  中仍稳定，迁移重点不是替换 API，而是把空间、单位、左右乘约定写进测试。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="坐标空间">
+    为点、方向和变换赋予共同原点与基向量的参照系。
+  </GlossaryItem>
+  <GlossaryItem term="点积">
+    把两个向量映射为标量，用于夹角、投影和朝向判断。
+  </GlossaryItem>
+  <GlossaryItem term="叉积">
+    生成同时垂直于两个输入向量的有向向量，顺序决定方向。
+  </GlossaryItem>
+  <GlossaryItem term="齐次矩阵">
+    用四维形式统一表达三维平移、旋转、缩放及其组合。
+  </GlossaryItem>
+  <GlossaryItem term="四元数">
+    避免欧拉角奇异并支持稳定旋转组合与球面插值的表示。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="姜雪伟《Unity 3D实战核心技术详解》目录与书籍身份资料"
+  adaptedUrl="https://m.bookschina.com/7380713.htm"
+/>

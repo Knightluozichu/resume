@@ -1,0 +1,330 @@
+---
+title: "Item 54：熟悉标准程序库与 TR1"
+type: A
+section: Chapter 9 · Miscellany
+order: 54
+description: 对齐 Effective C++ 第三版 Item 54：建立标准库 containers/algorithms/function objects 的能力地图，解释 TR1 的历史位置及 smart pointers、hash tables、regular expressions 等设施向现代 std 的迁移。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppLibrarySelectionWorkflowMap,
+  EcppStandardLibraryCapabilityMap,
+  EcppTr1ModernMigrationMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-54-standard-library-tr1";
+
+<Objectives>
+
+- 能描述标准程序库中 containers、iterators、algorithms、smart pointers 与 function objects 的组合边界
+- 能解释 TR1/Boost 的历史角色，并比较其 smart pointers、hash tables、regular expressions 等设施与现代 std 对应物
+- 能设计从语义需求、标准契约、性能测量到 portability matrix 的 library 选型流程
+
+</Objectives>
+
+## 从“不再手写基础设施”开始
+
+C++ 标准库给出跨项目共同理解的 types、algorithms 和 contracts。熟悉它的目标不是背 API，而是在遇到所有权、查找、排序、时间和并发问题时先识别已有标准抽象。
+
+<Term def="由 C++ 标准规定、随符合实现提供的容器、算法、工具和基础设施集合。">
+  standard library
+</Term>
+
+<Term def="标准设施在接口、复杂度、异常、失效与线程行为上的可依赖规则。">
+  library contract
+</Term>
+
+Item 54 的原则是 Familiarize yourself with the standard library including TR1（熟悉标准库，包括 TR1）。
+
+<EcppStandardLibraryCapabilityMap />
+
+先预测：选择 vector 与 list 时，除了插入复杂度还必须比较哪些 contract？iterator invalidation、cache locality、内存开销和真实遍历模式同样决定结果。
+
+## containers、iterators 与 algorithms 是组合系统
+
+```cpp
+std::vector<Record> records = loadRecords();
+
+std::ranges::sort(records, {}, &Record::key);
+auto match = std::ranges::find(records, wantedId, &Record::id);
+```
+
+<Term def="管理元素 storage、ordering、lookup 与 iterator invalidation 规则的标准类型。">
+  standard container
+</Term>
+
+<Term def="把数据结构位置抽象为遍历接口，使 algorithms 不依赖具体 container。">
+  iterator abstraction
+</Term>
+
+<Term def="通过 iterator/range 操作数据并声明复杂度、前置条件和结果的标准函数。">
+  standard algorithm
+</Term>
+
+算法与容器分离让同一 sort/find/transform 逻辑复用于不同 storage，同时 traits/concepts 选择合适实现。不要因一个操作不顺手就立刻写自有 container。
+
+## smart pointers 把 ownership 变成类型
+
+```cpp
+auto document = std::make_unique<Document>();
+auto sharedCache = std::make_shared<Cache>();
+std::weak_ptr<Cache> observer = sharedCache;
+```
+
+<Term def="通过 destructor 自动释放资源并在类型中表达 ownership policy 的 pointer-like 对象。">
+  smart pointers
+</Term>
+
+`unique_ptr` 表达单一 ownership，`shared_ptr` 表达共享 control block，`weak_ptr` 表达不增加 ownership 的观察。选择依据是生命周期，不是“哪个最方便复制”。
+
+<Term def="shared pointer family 共同保存引用计数、deleter 等 ownership metadata 的对象。">
+  shared ownership control block
+</Term>
+
+优先 `make_unique/make_shared`，避免 raw new 暴露和参数求值中的泄漏窗口；但 custom deleter、arrays 和 over-aligned resource 仍需读 contract。
+
+## function objects 与 callable vocabulary
+
+原书时代强调 function objects、`std::tr1::function` 与 bind。现代标准中常见：
+
+```cpp
+std::function<bool(const Record&)> predicate =
+    [limit](const Record& value) { return value.score() >= limit; };
+```
+
+<Term def="可用 function-call syntax 调用的对象，包括函数指针、带调用运算符的类型和 lambda。">
+  function objects
+</Term>
+
+<Term def="类型擦除保存任意兼容 callable、提供固定调用 signature 的标准包装。">
+  callable type erasure
+</Term>
+
+`std::function` 提供运行期多态和可复制 vocabulary，但可能分配且有间接调用。template parameter 或 `auto` callable 保留静态类型并利于 inline；按边界需要选择。
+
+<Callout type="trap" title="陷阱：所有 callback 都使用 std::function">
+  热点内部算法若只需临时 callable，template/lambda 可避免 type
+  erasure；跨模块存储和统一接口才更适合 std::function。以 ownership、lifetime
+  与性能 contract 判断。
+</Callout>
+
+## TR1 是历史桥梁
+
+<Term def="C++ 标准委员会发布的 Technical Report 1，在完整标准修订前推广一批库扩展。">
+  TR1
+</Term>
+
+Effective C++ 第三版成书时，TR1 设施通常位于 `std::tr1`，实现可用性不一。它吸收了大量 Boost 实践，为后来 C++11 标准库提供基础。
+
+<Term def="在非正式标准库生态中试验并验证许多后来进入 TR1/标准的组件集合。">
+  Boost library lineage
+</Term>
+
+今天阅读 `std::tr1::shared_ptr`、`std::tr1::function` 时，应理解原书意图，再映射到当前 `std::shared_ptr`、`std::function`；不要机械复制历史 namespace。
+
+<EcppTr1ModernMigrationMap />
+
+## TR1 smart pointers 的现代落点
+
+TR1 主要提供 shared/weak ownership；现代 C++ 还以 `unique_ptr` 取代旧 `auto_ptr` 的转移式复制。
+
+<Term def="从 TR1 设施进入后续正式 C++ 标准并在 namespace std 提供的演进。">
+  TR1 standardization path
+</Term>
+
+迁移不只是 namespace 替换：检查 constructors、atomic operations、array support、owner comparison 和实现 ABI。大型项目通过 adapter/compatibility layer 分阶段切换。
+
+## hash tables：平均常量不等于总是更快
+
+```cpp
+std::unordered_map<Key, Value, KeyHash, KeyEqual> index;
+```
+
+<Term def="通过 hash 与 equality 把 keys 分配到 buckets 的无序关联容器。">
+  hash tables
+</Term>
+
+TR1 引入 unordered containers，后来进入标准。contract 包括平均复杂度、rehash invalidation、load factor、hash/equality 一致性和最坏冲突行为。
+
+<Term def="容器扩大 bucket array 并重新分布元素，可能使 iterators 失效的操作。">
+  rehash boundary
+</Term>
+
+有序 map 提供 order/range query 与稳定复杂度；小数据线性 vector 可能 cache 更好。按操作分布测量。
+
+## regular expressions：先确认语法和成本
+
+```cpp
+std::regex pattern(R"(^[A-Z]{2}-\d{4}$)");
+bool valid = std::regex_match(code, pattern);
+```
+
+<Term def="以模式描述文本匹配、搜索和替换规则的标准库设施。">
+  regular expressions
+</Term>
+
+TR1 regex 后来进入 `std::regex`。应复用 compiled pattern、明确 grammar/locale、限制不可信输入复杂度，并在目标 standard-library implementation 上 benchmark。
+
+<Term def="正则模式的语法规则、locale 和实现算法共同形成的行为与性能边界。">
+  regex execution contract
+</Term>
+
+<Callout type="trap" title="陷阱：进入 std 就保证所有实现性能一致">
+  标准主要规定语义，不保证常数因子或具体算法。regex、filesystem、parallel
+  algorithms 等设施仍需在正式工具链测量与验证边界输入。
+</Callout>
+
+## tuple 与 type traits 支撑泛型代码
+
+```cpp
+using Result = std::tuple<Status, Payload, Metadata>;
+static_assert(std::is_nothrow_move_constructible_v<Payload>);
+```
+
+<Term def="固定长度、元素类型可不同的 product type。">tuple vocabulary</Term>
+
+<Term def="在编译期查询或变换类型属性的模板集合。">type traits</Term>
+
+TR1 的 tuple/type_traits 成为现代 generic programming 基础。公共 API 若每个位置有领域意义，named struct 往往比 tuple 清晰；traits 也应服务真实 constraint，而不是炫技。
+
+## random、math 与 reference wrappers
+
+TR1 还包含随机数、特殊数学函数、`reference_wrapper` 等。现代 `<random>` 把 engine 与 distribution 分离，避免 `rand()%n` 的质量和偏差问题。
+
+<Term def="产生伪随机状态序列的 engine 与把结果映射为目标概率分布的 distribution 分离设计。">
+  random engine-distribution split
+</Term>
+
+`std::ref` 允许在按值保存 callable arguments 的设施中显式传 reference；它是生命周期敏感工具，不会延长 referent 寿命。
+
+<Term def="可复制保存 reference 语义、但不拥有被引用对象的标准包装。">
+  reference wrapper
+</Term>
+
+## 标准库优先不等于禁止第三方库
+
+标准设施的优势是普及、文档、工具支持和 portability；第三方库可能在性能、功能或发布节奏上更适合。
+
+<Term def="用标准 library 作为默认候选，再依据明确缺口选择第三方或自研实现。">
+  standard-library-first policy
+</Term>
+
+选择第三方前记录：缺少什么 contract、版本/ABI、license、安全维护、平台覆盖和迁移出口。自研基础设施成本最高，必须有持续 owner。
+
+## 一套 library 选型流程
+
+1. 用领域语言写 ownership、ordering、lookup、parsing 或 concurrency 需求。
+2. 搜索当前 C++ standard 和已启用 library version 的设施。
+3. 阅读 invalidation、complexity、exceptions、thread safety 和 lifetime contract。
+4. 对热点在正式 compiler/library/platform 基准测量。
+5. 若需第三方，用窄 domain adapter 隔离供应商 API。
+6. 在多标准库/工具链矩阵验证，并记录升级路径。
+
+<Term def="从需求到标准设施、契约、基准、包装和可移植验证的选择步骤。">
+  library selection workflow
+</Term>
+
+<EcppLibrarySelectionWorkflowMap />
+
+先预测某个 cache 应选 map、unordered_map 还是 sorted vector，再用真实 key 数、查询/更新比例和 iteration 需求验证。
+
+## 小结
+
+- 熟悉标准库是理解可复用 contracts，不是只记 container 名称
+- containers、iterators、algorithms 与 function objects 形成可组合 generic system
+- smart pointers 以类型表达 ownership，function/type erasure 按边界需要选用
+- TR1 是从 Boost 实践走向正式标准的重要历史桥梁，现代代码使用对应 std 设施
+- hash tables、regex、tuple、traits 等进入标准后仍需理解失效、复杂度和实现差异
+- 标准库应是默认候选，但最终选择要经过 contract、benchmark 和 portability matrix
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 54"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="standard library">
+    标准规定的容器、算法和基础设施。
+  </GlossaryItem>
+  <GlossaryItem term="library contract">
+    设施可依赖的语义与复杂度规则。
+  </GlossaryItem>
+  <GlossaryItem term="standard container">
+    管理元素 storage 与查找的标准类型。
+  </GlossaryItem>
+  <GlossaryItem term="iterator abstraction">
+    解耦算法和具体容器的位置接口。
+  </GlossaryItem>
+  <GlossaryItem term="standard algorithm">
+    操作 iterator/range 的标准函数。
+  </GlossaryItem>
+  <GlossaryItem term="smart pointers">
+    在类型中表达 ownership 的 pointer wrapper。
+  </GlossaryItem>
+  <GlossaryItem term="shared ownership control block">
+    shared family 的引用计数和 deleter 状态。
+  </GlossaryItem>
+  <GlossaryItem term="function objects">可用调用语法执行的对象。</GlossaryItem>
+  <GlossaryItem term="callable type erasure">
+    以固定 signature 保存任意 callable。
+  </GlossaryItem>
+  <GlossaryItem term="TR1">标准委员会 Technical Report 1。</GlossaryItem>
+  <GlossaryItem term="Boost library lineage">
+    TR1/标准设施的实验来源。
+  </GlossaryItem>
+  <GlossaryItem term="TR1 standardization path">
+    TR1 设施进入正式 std 的演进。
+  </GlossaryItem>
+  <GlossaryItem term="hash tables">
+    以 hash/equality 组织 buckets 的容器。
+  </GlossaryItem>
+  <GlossaryItem term="rehash boundary">
+    重建 buckets 及其失效边界。
+  </GlossaryItem>
+  <GlossaryItem term="regular expressions">模式驱动文本匹配设施。</GlossaryItem>
+  <GlossaryItem term="regex execution contract">
+    regex 语法、locale 和性能边界。
+  </GlossaryItem>
+  <GlossaryItem term="tuple vocabulary">
+    固定长度异构 product type。
+  </GlossaryItem>
+  <GlossaryItem term="type traits">编译期查询或变换类型属性。</GlossaryItem>
+  <GlossaryItem term="random engine-distribution split">
+    随机状态生成与概率映射分离。
+  </GlossaryItem>
+  <GlossaryItem term="reference wrapper">
+    可复制的非 owning reference 表达。
+  </GlossaryItem>
+  <GlossaryItem term="standard-library-first policy">
+    优先评估标准设施的策略。
+  </GlossaryItem>
+  <GlossaryItem term="library selection workflow">
+    需求到可移植验证的选型流程。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：把旧代码的 TR1 shared pointer 迁到现代标准库。** 不能只做 namespace 替换。
+
+<Answer question="迁移审查应覆盖什么？">
+  盘点 constructors、custom deleter、weak ownership、atomic access、owner
+  comparison、array use 和跨 module ABI；建立 compatibility adapter 分阶段切换到
+  std shared/weak pointers，同步把独占场景改为
+  unique_ptr。用生命周期、单次释放、并发和二进制边界测试验证。
+</Answer>
+
+2. **问题 2：为 100 个元素的只读 lookup table 选择 unordered_map 或 sorted vector。** 制定证据。
+
+<Answer question="不能只比较大 O 的原因是什么？">
+  unordered_map 有 buckets、hash、allocation 和较差 locality；sorted vector
+  查询为对数但连续 cache，构建后不更新。记录 key/value
+  大小、查询次数、iteration/order、构建频率，基准 p50/p99、RSS 与 cache
+  misses，并验证 invalidation 和重复 key contract。
+</Answer>
+
+3. **问题 3：公共 API 要保存 callback。** 比较 function、template callable 与 function pointer。
+
+  <Answer question="怎样按边界选择？">跨模块或需异构可复制存储时使用 std function，并规定 ownership/lifetime 与可能 allocation；内部热点一次调用用 template/auto 保留静态类型和 inline；只接受无捕获稳定 ABI 时可用 function pointer。用大捕获、异常、空 callable 和性能测试验证。</Answer>
+</Exercises>

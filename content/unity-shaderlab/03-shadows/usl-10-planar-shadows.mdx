@@ -1,0 +1,155 @@
+---
+title: "第10章 平面阴影"
+type: C
+section: "Unity 3D ShaderLab · 阴影"
+order: 10
+description: "沿郭浩瑜第一版正式目录掌握平面投影、接收平面、投影矩阵、共面冲突、适用边界。"
+demo: true
+math: true
+sourceUrl: "https://search.worldcat.org/title/Unity-3D-Shaderlab/oclc/933550649"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { Usl10PlanarShadowsPipelineLab, Usl10PlanarShadowsCompareLab, Usl10PlanarShadowsEvidenceLab } from "@/components/mdx/unity-shaderlab/diagrams/usl-10-planar-shadows";
+
+<Objectives>
+- 能解释平面投影、接收平面和投影矩阵在Unity内置渲染链中的职责
+- 能实现本章最小实验，并区分Shader程序、脚本绑定与固定渲染状态
+- 能验收适用边界，保存画面、Frame Debugger、GPU事件和失败反例
+</Objectives>
+
+## 先预测，再观察
+
+先预测顶点、片元、深度、Draw次数或帧时间会如何变化，再只调整一个变量观察变化。分别用方向光和点光推导顶点到平面的交点，再用偏移和模板限制阴影区域。平面阴影是廉价几何近似，不支持起伏接收面、互相遮挡或真实软阴影。 本章用<Term def="把顶点沿光线方向投到指定平面形成阴影几何。">平面投影</Term>、<Term def="定义阴影落点约束的平面方程。">接收平面</Term>、<Term def="一次性表达光源到平面的几何映射。">投影矩阵</Term>、<Term def="阴影与地面深度过近引发的Z-fighting。">共面冲突</Term>、<Term def="只适合近似平面接收器和简单遮挡物的限制。">适用边界</Term>建立对象、阶段、状态与证据之间的联系。
+
+<Usl10PlanarShadowsPipelineLab />
+
+## 第一版权威目录定位
+
+本页一一对应郭浩瑜《Unity 3D ShaderLab开发实战详解》第一版第10章 平面阴影。书目记录确认人民邮电出版社2014年出版、ISBN 9787115338907；完整目录确认全书5篇33章。本书基于当时Unity内置渲染管线，涉及固定管线、Cg、VertexLit和Surface Shader时保留历史语境，现代Unity项目需另做版本映射。
+
+### 原章核心小节
+
+1. 平面投影原理
+2. 方向光与点光
+3. 投影矩阵
+4. 深度偏移
+5. 适用限制
+
+### 五个核心对象
+
+1. **平面投影**：把顶点沿光线方向投到指定平面形成阴影几何。
+2. **接收平面**：定义阴影落点约束的平面方程。
+3. **投影矩阵**：一次性表达光源到平面的几何映射。
+4. **共面冲突**：阴影与地面深度过近引发的Z-fighting。
+5. **适用边界**：只适合近似平面接收器和简单遮挡物的限制。
+
+## 数据流与公式
+
+分别用方向光和点光推导顶点到平面的交点，再用偏移和模板限制阴影区域。平面阴影是廉价几何近似，不支持起伏接收面、互相遮挡或真实软阴影。 先画出应用脚本、材质属性、SubShader选择、Pass执行、顶点阶段、光栅化、片元阶段和固定状态的生产者到消费者链，再把本章对象放到对应位置。
+
+$$
+plane:ncdot x+d=0
+$$
+
+$$
+x'=x+t l
+$$
+
+$$
+t=-(ncdot x+d)/(ncdot l)
+$$
+
+$$
+z'=z+bias
+$$
+
+公式中的位置、方向、深度、颜色和时间必须标注空间、范围与单位。片元函数输出只是候选颜色，最终结果仍经过裁剪、深度、模板、混合、目标格式与颜色编码。
+
+## 最小实现
+
+```shaderlab
+float3 shadowPos = worldPos + lightDir * t;
+```
+
+实现顺序固定为常量输出、输入可视化、核心公式、应用侧绑定和固定状态。先确认材质没有变粉、实际SubShader和Pass正确，再判断画面差异是否来自程序计算。
+
+<Usl10PlanarShadowsCompareLab />
+
+## 脚本与材质契约
+
+```csharp
+var material = renderer.sharedMaterial;
+material.SetFloat("_DebugMode", debugMode);
+material.SetTexture("_MainTex", sourceTexture);
+Debug.Assert(material.shader.isSupported);
+```
+
+脚本侧保存Unity版本、渲染路径、相机、灯光、网格布局、材质关键字、纹理导入设置和RenderTexture格式。Shader侧列出Properties、uniform、Tags、LightMode与固定状态，二者缺一都不能复现实验。
+
+## 边界、精度与性能
+
+测试零向量、退化UV、负缩放、近远裁剪面、透明交叉、纹理边缘、相机进入体积、多光源重叠和高过度绘制。性能实验固定目标设备、分辨率、VSync和场景，先判断CPU还是GPU受限，再定位具体Draw、Pass与Shader阶段。
+
+```text
+unity: exact editor and player version
+pipeline: Built-in / named rendering path
+scene: fixed mesh, camera, lights and textures
+state: queue, depth, stencil, cull, blend and target
+evidence: reference image, frame debugger, GPU capture, CPU/GPU ms
+failure: smallest replayable counterexample
+```
+
+<Usl10PlanarShadowsEvidenceLab />
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定输入与路径"><Usl10PlanarShadowsPipelineLab /></Step>
+  <Step title="逐阶段实现与比较"><Usl10PlanarShadowsCompareLab /></Step>
+  <Step title="捕获画面与性能"><Usl10PlanarShadowsEvidenceLab /></Step>
+</Stepper>
+
+1. 用最小网格和常量颜色确认Shader、SubShader、Pass与Draw可执行。
+2. 可视化位置、UV、法线、深度、模板或光照项，确认范围和空间。
+3. 打开本章核心效果，保存基线、候选、中间缓冲和参数。
+4. 构造边界与失败输入，用Frame Debugger和GPU捕获解释差异。
+
+## 验收证书
+
+证书包含源码版本、Unity与图形API、脚本绑定、资源哈希、关键字、Pass状态、参考图、GPU事件、CPU/GPU帧时间与失败反例。对任意地形仍使用单一接收平面，阴影悬空或穿透后继续增加深度偏移。 修复后必须用同一输入重放，并指出变化发生在哪个阶段。
+
+## 常见误区
+
+<Callout type="trap" title="把语法当成执行链">对任意地形仍使用单一接收平面，阴影悬空或穿透后继续增加深度偏移。</Callout>
+
+<Callout type="trap" title="只看最终画面">画面相似不证明实际SubShader、Pass、空间、深度、混合和性能等价。必须保存中间视图、固定状态和帧捕获。</Callout>
+
+## 本章回顾
+
+本页覆盖平面投影、接收平面、投影矩阵、共面冲突、适用边界。掌握标准是能画出生产者到消费者链，写出最小实现，说明脚本和材质契约，再用正确性、边界、精度与性能证据复现结论。
+
+<Exercises>
+**问题1：平面投影与接收平面如何连接？**
+<Answer>把顶点沿光线方向投到指定平面形成阴影几何。 定义阴影落点约束的平面方程。 回答时要标注实际Pass、空间和输入来源。</Answer>
+
+**问题2：怎样调试投影矩阵？**
+<Answer>先输出常量，再把相关中间值映射为颜色或缓冲；随后核对脚本绑定、固定状态、Frame Debugger与GPU事件。</Answer>
+
+**问题3：如何验收适用边界？**
+<Answer>只适合近似平面接收器和简单遮挡物的限制。 同时保存正常例、边界例、失败反例和CPU/GPU计时。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="平面投影" definition="把顶点沿光线方向投到指定平面形成阴影几何。" />
+  <GlossaryItem term="接收平面" definition="定义阴影落点约束的平面方程。" />
+  <GlossaryItem term="投影矩阵" definition="一次性表达光源到平面的几何映射。" />
+  <GlossaryItem term="共面冲突" definition="阴影与地面深度过近引发的Z-fighting。" />
+  <GlossaryItem term="适用边界" definition="只适合近似平面接收器和简单遮挡物的限制。" />
+  <GlossaryItem term="可复现实验" definition="固定源码、Unity版本、渲染路径、资源、状态、设备与捕获后可再次得到同一结论的实验。" />
+</Glossary>
+
+<Attribution adaptedFrom="郭浩瑜 · Unity 3D ShaderLab开发实战详解 · 第10章 平面阴影" adaptedUrl="https://search.worldcat.org/title/Unity-3D-Shaderlab/oclc/933550649" />

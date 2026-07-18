@@ -1,0 +1,170 @@
+---
+title: "Chapter 15. C# 8 and beyond"
+type: C
+section: "C# in Depth 4e · C# 7+"
+order: 15
+description: "以第四版2019年的preview视角覆盖nullable references、switch expressions、recursive patterns、indexes/ranges、async streams/disposal及参与语言演进的方法。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-15"
+draft: false
+---
+
+import { DcsAsyncIntegrationLab, DcsCsharp8ShapeLab, DcsNullableFlowLab } from "@/components/mdx/deep-understanding-csharp/diagrams/csharp-8-and-beyond";
+
+<Objectives>
+
+- 能解释nullable reference annotations与flow analysis如何表达null intent，区分warning、suppression、runtime validation和migration context
+- 能推导switch expression、recursive patterns、Index与Range的match/bounds结果，并设计exhaustiveness和slice-cost tests
+- 能设计async stream与async disposal的producer-consumer protocol，复现iteration、early exit、cancellation、failure和cleanup路径
+
+</Objectives>
+
+## 为什么必须同时保留Preview历史与最终Version边界
+
+第四版在2019年出版，本章面对的是C# 8尚在形成中的language。它不仅介绍syntax，也示范如何读proposal、试preview compiler、区分design intent与shipping guarantee。今天回看时要做双层叙述：先还原书中看到的候选方向，再标明后来C# 8落地的稳定语义；不能把更晚版本的扩展伪装成作者当时已知结论。
+
+先预测：`string?`是否创建新的CLR runtime type；`!`是否插入runtime null check；switch expression是否天然处理所有未来subtypes；`^1`是否等于length-1这个数值而不依赖receiver；range slicing是否总为零allocation；停止`await foreach`是否自动取消所有producer work。答案都需要contract和target-type context，而不是只背符号。
+
+<Term def="Compiler结合nullable annotation与每条control-flow path推断expression当前可能为null或non-null的状态。">nullable flow state</Term>
+
+## Nullable reference types
+
+Nullable reference types为reference values增加compile-time intent：在enabled context中，`string`表示正常path期望non-null，`string?`表示null是允许state。它不改变CLR中reference可为null的事实，也不会让`string`成为全新runtime type；价值来自annotations、warnings和flow analysis共同暴露潜在contract mismatch。
+
+Flow state会因null check、patterns、assignment、member annotations和method contracts变化。Migration应按boundary推进：先启用warnings观察legacy oblivious code，再标annotated API，修真正fault，最后才对有外部证明的点使用suppression。`value!`只告诉compiler暂信此处non-null，runtime value完全不变。
+
+```csharp
+#nullable enable
+static int LengthOrZero(string? text)
+{
+    if (text is null) return 0;
+    return text.Length; // flow state is non-null here
+}
+```
+
+<Stepper>
+  <Step title="切换non-null、maybe-null、oblivious与suppressed"><DcsNullableFlowLab /></Step>
+  <Step title="绘制annotation与flow state">对entry、guard、assignment、call和return逐点标注declared type与current compiler state。</Step>
+  <Step title="用null injection与warning budget验收">运行real null paths，记录warnings变化，禁止用批量!让warning count下降却保留runtime fault。</Step>
+</Stepper>
+
+<Callout type="trap" title="启用nullable后，non-null annotation会自动阻止runtime null">
+Annotations主要驱动compile-time warnings。Reflection、old assemblies、deserialization和suppression仍可带来null；public boundary需要runtime validation与tests，不能把warning-free等同于null-safe。
+</Callout>
+
+## Switch expressions
+
+Switch expression把input映射为一个result，arms通常以pattern、optional guard和expression组成。它比statement更适合pure classification，促使每个arm产生同一target-compatible result。Arm order仍重要，missing case需要明确处理；对enum或closed hierarchy可用tests/analysis逼近exhaustiveness，对open world必须保留unknown policy。
+
+```csharp
+static decimal Discount(Customer customer) => customer switch
+{
+    { IsVip: true, Years: >= 5 } => 0.20m,
+    { IsVip: true } => 0.10m,
+    null => throw new ArgumentNullException(nameof(customer)),
+    _ => 0m,
+};
+```
+
+<Term def="Switch expression或classifier对所有合法、null和未来unknown inputs是否都有明确outcome的证明。">exhaustiveness policy</Term>
+
+## Recursive pattern matching
+
+Recursive patterns允许在一个pattern中继续检查properties、positions与nested shapes，把“type + fields + guards”写成declarative classifier。C# 8的property/positional patterns建立在Chapter 12的test-and-bind model上；后续版本又加入relational、logical、list等patterns，必须另标版本，不能塞回原书preview。
+
+Pattern读取property可能执行getter并抛异常或产生cost，不能假设它只是field match。Overlapping arms按order解决；复杂business classification应配decision table，若pattern树比domain language更难读，就抽出named predicates或domain methods。
+
+<Term def="Pattern对一个value的nested properties或deconstructed positions继续应用subpatterns的shape test。">recursive shape match</Term>
+
+## Indexes and ranges
+
+`Index`表达从start或end定位，`^1`通常表示last element；`Range`用`start..end`表达start-inclusive、end-exclusive interval。语法由receiver支持的indexer/Length/Count与Slice patterns解释，因此bounds、empty range和copy/view semantics取决于target type。
+
+Array/string slicing常产生新array/string；Span slicing通常产生view。不要从`[..]`符号推断allocation-free。Off-by-one tests应覆盖empty、single、full、from-end、start=end、reversed与out-of-range，并明确Unicode string slicing按UTF-16 code units而非grapheme clusters。
+
+<Term def="Range的start-inclusive/end-exclusive bounds如何映射到target length，并决定empty、valid或out-of-range结果。">slice boundary contract</Term>
+
+<Stepper>
+  <Step title="切换switch、property pattern、index与range"><DcsCsharp8ShapeLab /></Step>
+  <Step title="恢复ordered arms与numeric bounds">写出pattern order、fallback、Index offset、Range start/end和target-specific slice operation。</Step>
+  <Step title="执行decision与boundary matrix">测试overlap/unknown/null以及empty/full/from-end/invalid ranges，同时测allocation或view behavior。</Step>
+</Stepper>
+
+## More async integration
+
+C# 8把async扩展到iteration与cleanup。`IAsyncEnumerable<T>`配合`await foreach`让每次MoveNext可异步等待，适合streaming I/O；`IAsyncDisposable`配合`await using`让cleanup本身可异步完成。它们不是把普通collection/Dispose加一个await，而是新的producer-consumer protocols。
+
+```csharp
+await foreach (Order order in repository.StreamAsync(cancellationToken))
+{
+    await ProcessAsync(order, cancellationToken);
+}
+
+await using var lease = await pool.AcquireAsync(cancellationToken);
+```
+
+Early break、consumer exception、cancellation和enumerator failure都必须走cleanup policy。Cancellation token如何传给async iterator取决于method/consumer contract；停止enumeration不一定终止producer已启动的independent work。Backpressure也不是自动无限安全，producer每次yield和buffering strategy要审计。
+
+<Term def="Producer异步提供sequence elements，consumer逐次await move并在终止时可靠释放enumerator的协议。">asynchronous iteration protocol</Term>
+
+<Term def="Resource cleanup本身需要await，并在normal、failure、cancellation和early-exit paths都被完成的协议。">asynchronous cleanup ownership</Term>
+
+<Stepper>
+  <Step title="切换async stream、dispose、cancellation与failure"><DcsAsyncIntegrationLab /></Step>
+  <Step title="画出producer-consumer state machine">记录MoveNext、Current、break、exception、token observation和DisposeAsync的所有transitions。</Step>
+  <Step title="用slow/failing fake验收">控制每次yield与cleanup时机，测试early break、consumer throw、producer throw、cancel-before/during和dispose failure。</Step>
+</Stepper>
+
+<Callout type="trap" title="await foreach天然提供cancellation、backpressure与完整cleanup">
+它提供消费语法，具体token wiring、buffering、producer child work和DisposeAsync failure仍由API实现负责。验收必须观察停止后是否继续生产、资源何时释放以及哪个异常最终传播。
+</Callout>
+
+## Features not yet in preview
+
+原书把“尚未进入preview”的候选特性单独讨论，核心方法比名单更重要：proposal可能被推迟、重塑、拆分或取消；syntax、runtime support、BCL support和tooling maturity也可能不同步。教材应保存当时状态，不把后来结果倒写成必然。
+
+阅读历史proposal时给每项加四列：book-time status、first shipping version、current semantics、required runtime/library。这样既尊重原书，也让现代reader不把preview sample直接复制到production。
+
+## Getting involved
+
+C#设计过程公开在language proposals、notes、compiler preview与issue discussions中。有效参与不是只投票喜欢某个syntax，而是提交最小use case、alternative、compatibility constraints、lowering/runtime cost和可复现compiler feedback。先验证已有proposal是否覆盖问题，再用小project测试LangVersion和target framework。
+
+参与也要区分language、compiler、runtime与library repositories。一个feature无法工作时，先缩小是parser/type checker、generated IL、runtime capability还是BCL API缺口；清晰的层次证据比宽泛意见更能推动设计。
+
+## 本章回顾：Preview阅读能力也是语言能力
+
+1. Nullable references增加annotation和flow analysis，不改变CLR null，也不替代runtime validation。
+2. Switch expressions与recursive patterns压缩classification，但仍依赖order、coverage和getter semantics。
+3. Index/Range表达bounds，allocation与view由target type决定。
+4. Async streams/disposal扩展了iteration与cleanup protocols，cancellation和failure ownership必须测试。
+5. Preview、shipping与modern extension要分层记录；参与设计需要可复现use case和跨层证据。
+
+<Exercises>
+
+**问题 1：一个legacy library启用nullable后出现五千warnings，怎样迁移？**
+
+<Answer>按boundary分批启用，先从public contracts和leaf modules开始；将真实optional values标?，在deserialization/reflection等入口做runtime validation，使用attributes表达复杂postconditions。建立warning baseline只允许下降，逐个suppression附proof与test，禁止全局disable或批量!。</Answer>
+
+**问题 2：Range API如何证明既正确又没有错误的性能假设？**
+
+<Answer>明确receiver type及其index/range pattern，列start/end/from-end计算和start-inclusive/end-exclusive规则。测试empty/full/last/reversed/out-of-bounds；用allocation profiler确认array/string copy还是Span view。不要把统一syntax当成统一cost。</Answer>
+
+**问题 3：Async stream在consumer处理第3项失败时怎样闭环？**
+
+<Answer>Fake producer逐项可控并记录MoveNext/DisposeAsync。让consumer第3项抛错，验证enumerator cleanup仍await完成、producer child work被按contract取消、原异常与cleanup异常按明确policy传播、前两项effect符合idempotency。再覆盖early break和token cancellation。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="nullable flow state" definition="Compiler沿control flow推断reference当前可能null或non-null的状态。" />
+  <GlossaryItem term="exhaustiveness policy" definition="Classifier对known、null与unknown inputs的完整outcome规则。" />
+  <GlossaryItem term="recursive shape match" definition="Pattern递归检查nested properties或positions的shape test。" />
+  <GlossaryItem term="slice boundary contract" definition="Range bounds映射到target length和slice result的规则。" />
+  <GlossaryItem term="asynchronous iteration protocol" definition="Producer与consumer通过异步MoveNext和cleanup协作的sequence contract。" />
+  <GlossaryItem term="asynchronous cleanup ownership" definition="所有退出path都完成可await resource cleanup的责任。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# in Depth, Fourth Edition, Chapter 15: C# 8 and beyond" adaptedUrl="https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-15" />

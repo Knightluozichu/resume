@@ -1,114 +1,245 @@
 ---
-title: "全局光照总复习"
+title: "Advanced Global Illumination 2e 总复习"
 type: B
 section: "计算机图形学与渲染"
 order: 9
-description: "串联全书核心概念——从直接光到实时GI的全景回顾"
+description: "按第二版 9 章与 3 附录复查物理、概率、路径/辐射度/混合求解、真实感边界、实现与理论证据"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://books.google.com/books?id=KodRAAAAMAAJ"
 draft: false
 ---
 
-import { GilFinalReviewDiagram } from "@/components/mdx/global-illumination/diagrams/gil-final-review";
+import { GilFinalReviewDiagram, GilMethodSelectionDiagram, GilFailureDiagnosisDiagram } from "@/components/mdx/global-illumination/diagrams/gil-final-review";
+import { GilStepFlowDiagram } from "@/components/mdx/global-illumination/diagrams/gil-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能用光的弹射次数串联全书四大板块
-- 能区分辐射度、路径追踪、光子映射的核心差异
-- 能解释有偏无偏和重要性采样的工程意义
-- 能针对不同场景设计合适的GI方案
+
+- 能按第二版 9 章与 3 附录复述每个单元的核心问题和证据
+- 能从 rendering/measurement equation 推导 path、radiosity、density 与 hybrid solver 的关系
+- 能比较 bias、variance、consistency、path support、memory 与 dynamic lifetime
+- 能针对给定场景设计 GI 方案并用失败症状定位错误层
+
 </Objectives>
 
-## 直觉引入
+## 直觉：总复习不是再列一次方法名
 
-想象一束阳光从窗户射入。它直接照亮地板（直接光），地板反射的光照亮墙壁（一次间接光），墙壁再反射照亮天花板（二次间接光）……每一次弹射都是GI的一个层次。
+先预测：一张图出现墙角漏光，最先应该增加 SPP、缩小 photon radius、细化 radiosity mesh，还是失效 irradiance cache？没有上下文无法回答。必须先知道贡献由哪个 estimator 生成、存储在哪个 domain、以什么 kernel/validity 重建，再选择实验。
 
-全书就是沿着这束光的弹射旅程展开：直接光是起点，间接光是核心，辐射度/路径追踪/光子映射是不同求解策略，重要性采样/有偏无偏是优化理论，实时GI是工程目标。总复习就是把这条光的旅程完整走一遍。
-
-## 概念讲解
-
-### 全书知识串联
+全书主线不是“直接光 → 间接光 → 实时 GI”，而是：定义 realistic image synthesis 与 measurement；建立 radiometry/hemisphere/transport physics；用 probability 与 Monte Carlo 构造数值工具；在 radiance/importance/path formulation 下分类策略；实现 stochastic path tracing、stochastic radiosity 与 hybrid algorithms；最后扩展到 media、subsurface、perception、PRT、speed 和 unresolved issues。
 
 <GilFinalReviewDiagram />
 
-<Term def="直接光是GI的起点——一次弹射的光照，高效计算但效果扁平">直接光</Term>回答「光源照亮了什么」。
+## 十二单元逐项验收
 
-<Term def="间接光是GI的核心——多次弹射的光照，产生色渗透和环境光">间接光</Term>回答「光弹射后又到了什么」。
+### 1-2 与 B：框架、物理、半球测度
 
-<Term def="辐射度/路径追踪/光子映射是三种不同策略——矩阵求解/随机游走/正向追踪">GI方法</Term>回答「如何计算光弹射」。
+能否解释 scene acquisition → global illumination framework → visual display？能否区分 flux、irradiance、radiance 与 importance？能否从 solid angle $d\omega=\sin\theta d\theta d\phi$ 推出 hemisphere area $2\pi$ 和 $\int\cos\theta d\omega=\pi$？
 
-<Term def="实时GI是工程目标——在毫秒预算内用近似方法逼近离线GI质量">实时GI</Term>回答「如何快速近似GI」。
+<Term def="从场景描述、光传输到相机测量和显示感知的完整生产消费链，是判断算法输出是否有意义的上层契约">图像合成链</Term>要求公式量纲、坐标/测度和 display state 都可追溯。只会写 $L_o=L_e+\int fL_i\cos d\omega$，但不知道每项 unit 与 PDF measure，不算通过。
 
-## 交互Demo
+### 3：Monte Carlo 方法
 
-<Stepper>
-<Step title="第一步：概念回顾">直接光一次弹射（NEE高效），间接光多次弹射（递归追踪）。色渗透和AO是间接光的视觉特征。理解「为什么只有直接光不真实」是GI的起点。</Step>
-<Step title="第二步：方法回顾">
-辐射度：漫反射矩阵求解，视角无关。路径追踪：随机游走，通用无偏。光子映射：正向追踪，擅长焦散，有偏但一致。各有适用场景。
-<GilFinalReviewDiagram />
-</Step>
-<Step title="第三步：理论与工程回顾">重要性采样降低方差（p∝|f|最优），MIS组合策略。有偏无偏的权衡：低采样有偏差小方差低，高采样无偏差大方差高。实时GI用近似+降噪在毫秒内逼近离线质量。</Step>
-</Stepper>
+能否从 random variable、PDF/CDF、expectation 和 variance 推导 estimator？能否实现 inversion/rejection sampling、disk/sphere/hemisphere transform，并验证 normalization/histogram？能否区分 importance sampling、stratification、quasi-Monte Carlo 与 Russian roulette 解决的误差？
 
-## 代码对照
+$$
+\widehat I_N=\frac1N\sum_{i=1}^{N}\frac{f(X_i)}{p(X_i)},
+\qquad \operatorname{SE}=\frac{\sigma}{\sqrt N}.
+$$
+
+### 4：光传输策略
+
+能否写出 radiance equation $L=L_e+KL$ 与 importance adjoint equation $W=W_e+K^*W$？能否解释 measurement $\langle W_e,L\rangle=\langle W,L_e\rangle$？能否将 full path contribution 分解为 endpoint、GRDF/BSDF、geometry、visibility 和 measurement，并把不同 strategy PDF 转到共同 path measure？
+
+<Term def="由光源/相机端点和 diffuse、specular、medium 等散射事件序列定义的一组路径，用于分析算法的生成支持与重叠">路径族</Term>是方法选择的最小单位。材质名字或“室内/室外”只提供线索，不能代替 path support 分析。
+
+### 5 与 A：随机路径与类库
+
+能否从 camera ray setup 开始，分别处理 eligible emission、direct/environment/indirect illumination、throughput、PDF 与 roulette？能否用 PathNode 保存 event、beta、forward/reverse density，并让 LightSampler 的 sample/evaluate/PDF 一致？能否说明 light tracing 与 camera tracing 的 endpoint 对偶？
+
+$$
+\beta_{i+1}=\beta_i\frac{f_i|n_i\cdot\omega_{i+1}|}{p_i(\omega_{i+1})},
+\qquad C_i=\beta_iL_i.
+$$
+
+### 6 与 C：随机辐射度和理论
+
+能否推导 $(I-RF)B=E$、form-factor reciprocity $A_iF_{ij}=A_jF_{ji}$？能否用 weighted gather/shoot/random walk 替换完整矩阵，并分析 stochastic relaxation 的 conditional expectation、variance、spectral stability 与 residual？能否分开 basis refinement bias、cluster bias 和 stochastic variance？
+
+<Term def="在固定场景、量纲、离散和随机预算下，由解析解、确定性小系统或高质量独立求解器生成的可信对照">传输参考</Term>必须包含 linear HDR/energy，不是只保存 tone-mapped screenshot。
+
+### 7：Hybrid algorithms
+
+能否说明 final gathering、multipass、BDPT、MLT、irradiance cache、photon mapping、instant radiosity 与 lightcuts 各自复用什么状态？能否用 path-class table 证明没有 duplicate/gap？能否解释 MLT mixing、cache validity、photon kernel 与 VPL hierarchy bound？
+
+$$
+\operatorname{MSE}(\widehat I)=\operatorname{Var}(\widehat I)
++\bigl(\mathbb E[\widehat I]-I\bigr)^2.
+$$
+
+<Term def="多个 estimator 在同一完整光路上的生成支持相交，若未经互斥划分或合法加权会造成重复能量">路径重叠</Term>是混合系统最危险的静默错误。每个 component 看起来都合理，组合却可能过亮。
+
+### 8-9：真实感、速度与结论
+
+能否写出 participating-media RTE 与 BSSRDF 的额外位置维度？能否分离 scene-linear HDR、exposure、tone mapping 和 display encoding？能否说明 PRT 的 basis、transport matrix、fixed dimensions、compression 与 invalidation？能否列出 acquisition、modeling、transport、speed、perception/display、validation 的 unresolved issues？
+
+$$
+\mathbf L_o=\mathbf T\mathbf l,
+\qquad \text{runtime fast} \Longleftrightarrow
+\text{geometry/material transfer fixed or cheaply updated}.
+$$
+
+<Term def="在预计算、运行时、内存、动态更新和误差之间完整记录交换条件的生命周期账本">真实感预算</Term>防止只报 frame time，却隐藏预计算和 stale transport。
+
+## 统一方法选择矩阵
+
+<GilMethodSelectionDiagram />
+
+选择方法的顺序应是：先识别 dominant path family 与 scene dynamics；再确定 state representation 与 estimator support；然后比较 work-normalized error；最后才考虑工程实现。常见组合示例：
+
+1. **Diffuse static architecture**：hierarchical/stochastic radiosity 或 PRT/cache，重点验收 basis/visibility 与 invalidation；
+2. **General dynamic scene**：camera path + NEE/MIS，必要时 BDPT，重点验收 path PDF 与 variance；
+3. **Strong caustic**：caustic photon density、BDPT/MLT，重点验收 kernel bias 或 chain mixing；
+4. **Participating medium**：volume path sampling，重点验收 transmittance/free-flight/phase PDFs；
+5. **Interactive fixed geometry lighting**：PRT/VPL/lightcuts，重点验收 representation frequency、bounds 和 update scope。
+
+方法不是互斥标签。组合时必须用 path partition、MIS 或 proposal/control-variate relation说明责任，不能凭经验把输出相加。
+
+## 从症状回到根因
+
+<GilFailureDiagnosisDiagram />
+
+<Term def="随路径或像素输出生成的中间证据层，如 throughput、PDF、path length、visibility、neighbor count、radius、cache validity 和 energy sum">传输诊断层</Term>让最终图像可解释。最低集合包括：
+
+- direct/emission/indirect/caustic/medium component AOV；
+- path event sequence 与 per-vertex forward/reverse PDF；
+- throughput magnitude、roulette survival 和 MIS weight sum；
+- photon/cache/VPL neighbor count、radius、validity/bound；
+- linear energy totals、sample mean/variance、runtime/memory；
+- tone-map 前后 luminance 与 clipped pixels。
+
+调试实验一次只改变一个维度。亮度随 sampler 改变，先查 PDF/measure；噪声随 samples 不按预期下降，查 heavy tail/correlation；漏光随 radius/cache threshold 改变，查 reconstruction boundary；动态拖影查 invalidation/history；只有显示图错而 HDR 对，查 exposure/tone/color encoding。
+
+## 一套完整验收场景
+
+最小 suite 不追求艺术性，而要隔离 path family：
+
+1. Constant environment + Lambertian plane：PDF/cosine/rotation；
+2. Two-patch enclosure：form factor/reciprocity/matrix energy；
+3. Cornell box：diffuse multi-bounce/color transfer；
+4. Small area light + glossy/delta object：NEE/MIS/specular support；
+5. Glass caustic：photon/BDPT/MLT difficult paths；
+6. Thin wall/doorway：cache/kernel/cluster boundary；
+7. Homogeneous fog：transmittance/single/multiple scattering；
+8. Subsurface slab：entry-exit distance/scale；
+9. Rotating HDR environment on static object：PRT basis/runtime；
+10. HDR chart/display sweep：exposure/tone/color encoding。
+
+每个场景固定 unit scale、spectral/RGB convention、seed/budget 和 reference；否则不同算法比较的不是同一目标。
+
+## 可执行的全书审计接口
 
 ```cpp
-// GI 全景：从概念到工程
-Spectrum FullGI(Ray ray, Scene scene) {
-    // 1. 直接光 (NEE + MIS)
-    Spectrum L_direct = estimateDirectNEE_MIS(si, scene);
-    
-    // 2. 间接光 (按材质选择方法)
-    Spectrum L_indirect(0);
-    if (si.isDiffuse)
-        L_indirect = irradianceCache.interpolate(si);  // 缓存加速
-    else if (si.isCaustic)
-        L_indirect = photonMap.estimate(si);  // 光子映射
-    else
-        L_indirect = pathTrace(si);  // 路径追踪
-    
-    // 3. 组合
-    Spectrum L = L_direct + L_indirect;
-    
-    // 4. 降噪 (实时)
-    if (realtime) L = SVGF_denoise(L);
-    
-    return L;  // 直接光 + 间接光 = 全局光照
-}
+struct TransportEvidence {
+    PathClass path;
+    Spectrum contribution;
+    double jointPdf;
+    double misWeight;
+    Error biasProxy, variance;
+    Cost trace, query, memory;
+    VersionedState cacheOrPrecompute;
+};
+
+AuditResult validate(const Scene& scene,
+                     const Integrator& candidate,
+                     const Reference& linearHdr,
+                     const DisplayTransform& fixedDisplay);
 ```
+
+审计结果既要指出 mean error，也要指出覆盖路径、失败位置和资源交换。一个 90+ 分页面只是教学门槛；全书通过要求 12/12 单元、10/10 本地页和全量 MDX/type/lint 一起成立。
+
+## 三步完成最终复查
+
+<Stepper>
+<Step title="第一步：逐单元闭卷复述">
+
+对 9 章 3 附录分别写出核心问题、关键方程/算法、专用图含义、失败模式与一个可判定实验。
+
+<GilStepFlowDiagram caption="目录标题只有在能展开机制和证据时才算覆盖。" stage={1} stages={["Recall：12 units → concept → equation / algorithm → failure"]} />
+
+</Step>
+<Step title="第二步：完成场景到策略设计">
+
+从 scene dynamics 和 dominant path families 推导 representation、samplers、solver/reconstruction、组合责任和生命周期。
+
+<GilStepFlowDiagram caption="方案必须从路径与变化维度推出来。" stage={2} stages={["Recall：12 units → concept → equation / algorithm → failure", "Design：path family → state → estimator → overlap / lifetime"]} />
+
+</Step>
+<Step title="第三步：用 reference 与诊断层验收">
+
+跑最小 suite，比较 linear HDR、energy、bias/variance、dynamic update 与 cost；最后固定 tone/display 检查 perceptual output。
+
+<GilStepFlowDiagram caption="物理、数值、工程和显示四层都要有证据。" stage={3} stages={["Recall：12 units → concept → equation / algorithm → failure", "Design：path family → state → estimator → overlap / lifetime", "Validate：reference → AOV / statistics → lifecycle → display"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**误区：孤立学习各章不串联。**
-GI的核心是权衡——精度vs速度、无偏vs有偏、通用vs专用。不理解权衡就无法选择方法。
+**现象 →** 用“弹射次数”一条线总结全书。**原因 →** 丢失 measurement/importance、state representation、adjoint/path strategy、media/perception 与实现理论。**修法 →** 按 12 单元逐项复述并用统一 transport chain 连接。
 </Callout>
 
 <Callout type="trap">
-**误区：只学方法不学权衡。**
-GI每种方法都有代价：路径追踪无偏但慢，光子映射快但偏，辐照度缓存更快但更偏。不理解这些权衡就无法在工程中做选择。学方法要同时学它的「适用条件」和「失效条件」。
+**现象 →** 根据“路径追踪无偏、光子映射有偏”直接选算法。**原因 →** 忽略有限预算 variance、path support、consistency schedule 与 lifecycle。**修法 →** 比较 work-normalized MSE、dominant paths 和动态更新约束。
 </Callout>
 
+<Callout type="trap">
+**现象 →** 最终图片相似就宣称方法正确。**原因 →** tone map 与多种误差可能互相抵消。**修法 →** 检查 linear reference、energy、path/PDF AOV 和参数扫描，再固定显示变换。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题 1**：用光的弹射次数串联全书四大板块。
+
+**问题 1：为什么“直接光一次弹射、间接光多次弹射”不足以作为全书总纲？**
 
 <Answer>
-1)直接与间接光：0-1次弹射（直接光）vs 2+次弹射（间接光），建立GI基本概念。2)离线GI方法：辐射度用矩阵求解所有弹射（漫反射），路径追踪用随机游走递归弹射（通用），光子映射用正向追踪弹射（焦散）。3)采样理论：重要性采样让每次弹射的采样更高效，有偏无偏决定弹射估计的性质，MIS组合不同弹射方向的采样。4)实时GI：在毫秒内近似所有弹射（RSM一次弹射，LPV多弹射低精度，降噪处理低采样噪声）。
+它无法表达 measurement/importance 对偶、solid-angle/path measure、Monte Carlo estimator、finite-element/density representation、hybrid overlap、media/subsurface 的额外维度、PRT lifecycle 和 tone/perception。弹射次数只能粗略描述一部分 path length。
 </Answer>
 
-**问题 2**：给定一个有玻璃窗(焦散)、红砖墙(色渗透)、金属雕塑(光泽反射)的博物馆场景，设计完整的GI方案。
+**问题 2：给定动态博物馆、玻璃焦散和体积雾，怎样设计可审计方案？**
 
 <Answer>
-1)直接光：NEE+MIS处理所有光源，保证硬阴影和直接照明质量。2)玻璃焦散：光子映射——从光源正向追踪光子经玻璃聚焦到地面，密度估计计算焦散图案。3)红砖墙色渗透：路径追踪或辐照度缓存——红墙反射红光照到邻近白色展品表面，漫反射间接光用缓存插值加速。4)金属雕塑光泽反射：路径追踪BRDF采样——Cook-Torrance重要性采样高效处理镜面反射方向。5)多弹射环境光：辐照度缓存——多次弹射后的环境光在空间上平滑，用稀疏点缓存插值。6)自适应采样：焦散区域和阴影边缘增加采样，纯色墙面减少采样。7)如果实时：1spp路径追踪+SVGF降噪，或RSM+LPV组合。整体：直接光NEE，焦散PM，漫反射IC，光泽PT，自适应分配，降噪后处理——混合架构取长补短。
+Camera path + NEE/MIS 处理一般动态表面；caustic 用支持 `L-S+-D-E` 的 photon/BDPT/MLT component并明确与 path tracer 分区；雾用 free-flight/transmittance/phase sampling。缓存仅用于有可靠 invalidation 的平滑区域。输出 direct/caustic/medium AOV、PDF/path、kernel/variance 和 linear HDR reference。
 </Answer>
+
+**问题 3：为什么一个固定 photon radius 的结果可能越来越平滑却不越来越正确？**
+
+<Answer>
+增加 photons 使该固定邻域内 variance 下降，但 estimate 收敛到 kernel-smoothed field；跨 gradient/boundary 的 bias 不消失。需令 $h_N\to0$ 且邻域样本数仍增长，并处理 surface boundary。
+</Answer>
+
+**问题 4：怎样区分 transport 错误与 display 错误？**
+
+<Answer>
+先在 scene-linear HDR 中比较 radiance/energy/reference 和 component AOV；若已经错，问题在模型或 estimator。若 HDR 正确而显示错，固定 exposure、tone curve、color space、transfer function 和 display range 逐层比较，检查 clipping/gamma/hue。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+第二版的完整能力不是记住几种 GI 名称，而是从真实感图像合成链出发，以 radiometry、hemisphere measure、rendering/measurement/adjoint equations 定义问题；用 Monte Carlo、path formulation、finite element、density 和 hybrid state 求解；再把 media、subsurface、PRT、display/perception 与 unresolved issues 纳入同一证据体系。最终验收必须同时证明 12 单元覆盖、方法选择逻辑、失败诊断、linear reference 和资源生命周期。
+
 <Glossary>
-<GlossaryItem term='GI全书链'>直接光(起点)->间接光(核心)->GI方法(策略)->采样理论(优化)->实时GI(工程)。</GlossaryItem>
-<GlossaryItem term='三大GI方法'>辐射度(矩阵求解漫反射)、路径追踪(随机游走通用)、光子映射(正向追踪焦散)各有擅长。</GlossaryItem>
-<GlossaryItem term='采样优化'>重要性采样降低方差(p正比|f|)，MIS组合策略，有偏无偏权衡精度与速度。</GlossaryItem>
-<GlossaryItem term='实时GI工程'>近似方法(RSM/LPV/VPL)+降噪(SVGF)在毫秒预算内逼近离线GI质量。</GlossaryItem>
+<GlossaryItem term="图像合成链">从场景描述经光传输到测量、显示和观察者的完整链。</GlossaryItem>
+<GlossaryItem term="路径族">由端点和散射事件序列定义、用于分析策略支持的一组光路。</GlossaryItem>
+<GlossaryItem term="传输参考">在固定条件下用于比较候选求解器的解析或高质量线性结果。</GlossaryItem>
+<GlossaryItem term="路径重叠">多个 estimator 可生成同一完整路径且可能重复计数的状态。</GlossaryItem>
+<GlossaryItem term="真实感预算">记录预计算、运行时、内存、更新与误差交换的账本。</GlossaryItem>
+<GlossaryItem term="传输诊断层">随贡献输出的路径、PDF、权重、缓存和统计中间证据。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Advanced Global Illumination" adaptedUrl="https://www.amazon.com/dp/1568813074" />
+<Attribution adaptedFrom="Advanced Global Illumination, Second Edition, Chapters 1-9 and Appendices A-C" adaptedUrl="https://books.google.com/books?id=KodRAAAAMAAJ" />

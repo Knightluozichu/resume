@@ -1,46 +1,5 @@
-/**
- * <GlrFinalReviewDiagram>
- *
- * OpenGL红宝书核心知识图谱
- */
-
-export function GlrFinalReviewDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox="0 0 720 400" role="img" aria-label="OpenGL红宝书核心知识图谱" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x="360" y="30" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">OpenGL红宝书 核心知识图谱</text>
-<text x="360" y="50" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">从初始化到现代实践的完整脉络</text>
-<rect x="280" y="170" width="160" height="50" rx="8" fill="var(--accent)" fillOpacity="0.15" stroke="var(--accent)" strokeWidth="1.5" />
-<text x="360" y="195" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--accent)">可编程管线</text>
-<text x="360" y="210" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">核心主线</text>
-<line x1="280" y1="180" x2="160" y2="120" stroke="var(--border)" strokeWidth="1" />
-<rect x="80" y="100" width="140" height="40" rx="6" fill="var(--success)" fillOpacity="0.1" stroke="var(--success)" strokeWidth="1" />
-<text x="150" y="118" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--success)">着色器</text>
-<text x="150" y="132" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">GLSL编程</text>
-<line x1="440" y1="180" x2="560" y2="120" stroke="var(--border)" strokeWidth="1" />
-<rect x="500" y="100" width="140" height="40" rx="6" fill="var(--warning)" fillOpacity="0.1" stroke="var(--warning)" strokeWidth="1" />
-<text x="570" y="118" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--warning)">纹理光照</text>
-<text x="570" y="132" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">材质+采样</text>
-<line x1="280" y1="210" x2="160" y2="280" stroke="var(--border)" strokeWidth="1" />
-<rect x="80" y="260" width="140" height="40" rx="6" fill="var(--danger)" fillOpacity="0.1" stroke="var(--danger)" strokeWidth="1" />
-<text x="150" y="278" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--danger)">帧缓冲</text>
-<text x="150" y="292" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">FBO+混合</text>
-<line x1="440" y1="210" x2="560" y2="280" stroke="var(--border)" strokeWidth="1" />
-<rect x="500" y="260" width="140" height="40" rx="6" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" strokeWidth="1" />
-<text x="570" y="278" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">现代实践</text>
-<text x="570" y="292" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">实例化+优化</text>
-<rect x="120" y="340" width="480" height="40" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-<text x="360" y="358" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">高级主题</text>
-<text x="360" y="372" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">高级缓冲(UBO/SSBO) 间接绘制 DSA SPIRV</text>
-          <defs>
-            <marker id="glr-final-review-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-              <path d="M0 0 L6 3 L0 6 z" fill="var(--text-secondary)" />
-            </marker>
-          </defs>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">OpenGL红宝书核心知识图谱</figcaption>
-    </figure>
-  );
-}
+import type { ReactNode } from "react";
+function Frame({caption,children}:{caption:string;children:ReactNode}){return <figure className="mdx-figure not-prose mx-auto my-6"><div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div><figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption></figure>}
+export function GlrFinalReviewDiagram(){const rows=[["Environment","context + debug"],["Programs","GLSL/SPIR-V + interfaces"],["Graphics","draw + fragments"],["Resources","texture/FBO + layout"],["Memory","compute + visibility"]];return <Frame caption="全书十二章最终收束为五份可独立检查又相互连接的合同。"><div role="img" aria-label="OpenGL 全书五份合同" className="grid gap-2 md:grid-cols-5">{rows.map(([a,b],i)=><div key={a} className="grid min-h-24 content-center rounded-control border border-border bg-bg/45 p-3 text-center"><span className="text-xs font-bold text-accent">0{i+1}</span><strong className="mt-1 text-xs text-primary">{a}</strong><span className="mt-2 text-xs text-secondary">{b}</span></div>)}</div></Frame>}
+export function GlrEvidenceMatrixDiagram(){const groups=[["1-3","context · shader · draw","logs · reflection · fetch probes"],["4-6","fragments · viewing · resources","attachments · feedback · pixel probes"],["7-10","light · procedural · tess · geometry","debug outputs · edge tests · counters"],["11-12","memory · compute","layout reflection · barriers · fences"]];return <Frame caption="每个官方单元都需要实现位置、可观察量和边界测试，不以点名代替覆盖。"><div role="img" aria-label="官方十二章证据矩阵" className="overflow-hidden rounded-control border border-border text-xs"><div className="grid grid-cols-[.7fr_1.5fr_2fr] gap-px bg-border">{['Chapters','Contracts','Evidence'].map(x=><strong key={x} className="bg-bg p-3 text-primary">{x}</strong>)}{groups.flatMap(r=>r.map((x,i)=><span key={`${r[0]}-${x}`} className={i===0?"bg-accent/10 p-3 font-semibold text-accent":"bg-elevated p-3 text-secondary"}>{x}</span>))}</div></div></Frame>}
+export function GlrCapstoneDiagram(){const projects=[["Project A · renderer","shadow → MRT/MSAA → transparent → resolve","image + attachment evidence"],["Project B · GPU particles","compute → barrier → indirect draw → fence","value + sync evidence"]];return <Frame caption="两个项目分别压实图形输出链和 GPU 内存链，并在最终帧汇合。"><div role="img" aria-label="红宝书两个综合项目" className="grid gap-3 md:grid-cols-2">{projects.map(([a,b,c])=><div key={a} className="rounded-control border border-border bg-bg/45 p-4"><strong className="text-sm text-primary">{a}</strong><p className="mb-0 mt-2 text-xs leading-5 text-secondary">{b}</p><span className="mt-3 block text-xs font-semibold text-accent">{c}</span></div>)}</div></Frame>}

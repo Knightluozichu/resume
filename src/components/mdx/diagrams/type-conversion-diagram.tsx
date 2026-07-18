@@ -160,11 +160,18 @@ export function TypeConversionDiagram({ step = 1 }: Props) {
           )}
 
           {/* 说明文字 */}
-          <text x={14} y={20} fontSize="12" fontWeight="700" fill="var(--accent)">
+          <text
+            x={14}
+            y={20}
+            fontSize="12"
+            fontWeight="700"
+            fill="var(--accent)"
+          >
             隐式转换方向（窄 → 宽）—— 编译器自动帮你做，不丢信息
           </text>
           <text x={14} y={240} fontSize="11" fill="var(--text-secondary)">
-            C++ 的「类型提升」规则：如果两个操作数类型不同，编译器先把窄类型转成宽类型再运算。
+            C++
+            的「类型提升」规则：如果两个操作数类型不同，编译器先把窄类型转成宽类型再运算。
           </text>
           <text x={14} y={258} fontSize="11" fill="var(--text-secondary)">
             逆方向需显式 static_cast，如 static_cast&lt;int&gt;(3.14) → 3。
@@ -172,7 +179,9 @@ export function TypeConversionDiagram({ step = 1 }: Props) {
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        从左到右是"安全方向"——小容量类型自动转为大容量类型。int→float 虽是隐式但可能丢精度（float 有效数字仅约 7 位）。逆方向必须显式 static_cast。
+        从左到右是&quot;安全方向&quot;——小容量类型自动转为大容量类型。int→float
+        虽是隐式但可能丢精度（float 有效数字仅约 7 位）。逆方向必须显式
+        static_cast。
       </figcaption>
     </figure>
   );

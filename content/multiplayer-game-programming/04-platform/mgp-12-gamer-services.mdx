@@ -1,0 +1,232 @@
+---
+title: "第12章 玩家服务（Gamer Services）"
+type: A
+section: "Multiplayer Game Programming · 玩家服务"
+order: 12
+description: "大厅、匹配、统计、成就和排行榜是跨会话服务，必须以身份、幂等和可验证结果连接到游戏服务器。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/multiplayer-game-programming-architecting-networked-9780134034331"
+draft: false
+---
+
+import {
+  Mgp12GamerServicesMapLab,
+  Mgp12GamerServicesExperimentLab,
+  Mgp12GamerServicesEvidenceLab,
+} from "@/components/mdx/multiplayer-game-programming/diagrams/mgp-12-gamer-services";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释玩家服务的核心机制，并把它放回全书13章与附录A的主线
+- 能比较正常、边界、失败和恢复样本，指出首个状态或时间偏离点
+- 能实现最小C++或协议实验，记录网络身份、版本、所有权与预算
+- 能设计证据回答“身份映射稳定；大厅和匹配转换有版本；同一权威比赛结果无论重试多少次只生效一次。”是否成立
+
+</Objectives>
+
+## 直觉：先找唯一事实
+
+大厅、匹配、统计、成就和排行榜是跨会话服务，必须以身份、幂等和可验证结果连接到游戏服务器。 真正的难点不是让一次理想样本跑通，而是让消息身份、世界版本、状态权威和时间预算在丢包、乱序、重复与断线后仍可解释。先预测：如果只保存最终成功画面，本页最可能隐藏哪一种分歧？
+
+<Mgp12GamerServicesMapLab />
+
+## 权威目录定位
+
+本页依据 Addison-Wesley / InformIT 官方书目与官方目录样章锁定范围。英文标题用于一对一追踪，中文正文为独立教学重构；现代平台差异、安全强化和可观察性补充会明确披露：
+
+- Choosing a Gamer Service
+- Basic Setup
+- Lobbies and Matchmaking
+- Networking
+- Player Statistics
+- Player Achievements
+- Leaderboards
+- Other Services
+- Summary
+- Review Questions
+- Additional Readings
+
+本页逐项覆盖11个公开目录条目，并纳入同一套正常、边界、失败与恢复验收。
+
+## 核心概念与所有权
+
+<Term def="提供身份、社交、匹配、统计等跨游戏会话能力的平台或后端。">玩家服务</Term>、
+<Term def="玩家组队、选择规则并准备进入具体比赛的临时协作空间。">大厅</Term>、
+<Term def="依据技能、地区、队伍和等待预算把玩家分配到兼容会话的过程。">匹配</Term>、
+<Term def="同一比赛结果重复到达时只产生一次统计、成就或奖励效果。">幂等提交</Term>、
+<Term def="按可验证指标和赛季规则维护玩家相对顺序的服务。">排行榜</Term>。每个概念都要回答：谁创建输入，谁拥有可变状态，哪个序号或版本拒绝旧结果，断线后由谁恢复。
+
+| # | 概念 | 工程含义 |
+| -: | --- | --- |
+| 1 | 玩家服务 | 提供身份、社交、匹配、统计等跨游戏会话能力的平台或后端。 |
+| 2 | 大厅 | 玩家组队、选择规则并准备进入具体比赛的临时协作空间。 |
+| 3 | 匹配 | 依据技能、地区、队伍和等待预算把玩家分配到兼容会话的过程。 |
+| 4 | 幂等提交 | 同一比赛结果重复到达时只产生一次统计、成就或奖励效果。 |
+| 5 | 排行榜 | 按可验证指标和赛季规则维护玩家相对顺序的服务。 |
+
+## 机制拆解
+
+### 1. 选择服务先比较契约
+
+平台覆盖、身份体系、地区、配额、可用性和数据可迁移性比SDK调用方式更重要。为每项能力定义本地降级：匹配不可用时是否排队，统计不可用时如何持久重试，平台身份如何映射到内部稳定玩家ID。
+
+先预测：若省略这一层，哪一个序号、所有权或时间预算会最先失真？
+
+### 2. 大厅与匹配是两个状态机
+
+大厅管理成员、队长、规则和准备状态；匹配管理候选池、约束放宽、分配与取消。把二者混成一个布尔“正在匹配”会导致成员变化、重复匹配和取消竞态。每次转换应带版本和幂等操作ID。
+
+先预测：若省略这一层，哪一个序号、所有权或时间预算会最先失真？
+
+### 3. 结果只能从可信来源提交
+
+客户端不能直接写胜场、成就或排行榜分数。权威比赛服务器用比赛ID、参与者、规则版本和结果摘要签名提交；服务端以比赛ID去重，并让统计、成就和排行从同一不可变结果派生。
+
+先预测：若省略这一层，哪一个序号、所有权或时间预算会最先失真？
+
+## 六阶段证据链
+
+可操作链条是：认证玩家身份 → 创建大厅队伍 → 执行约束匹配 → 签发会话凭证 → 提交权威结果 → 更新统计成就排行。正常样本证明能力，边界样本证明预算，失败样本证明拒绝，恢复样本证明状态与资源重新收敛。
+
+<Stepper>
+  <Step title="1. 认证玩家身份与创建大厅队伍">
+    固定协议版本、网络种子、输入序号与状态所有者，运行正常和边界样本。
+    <Mgp12GamerServicesMapLab />
+  </Step>
+  <Step title="2. 执行约束匹配与签发会话凭证">
+    注入延迟、抖动、丢包、重复或责任节点中断，要求在首偏离点停止。
+    <Mgp12GamerServicesExperimentLab />
+  </Step>
+  <Step title="3. 提交权威结果与更新统计成就排行">
+    清除故障后重放相同输入，核对世界摘要、对象数量、消息债务与资源租约。
+    <Mgp12GamerServicesEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小实现骨架
+
+以下代码是独立复现实验骨架，不复制原书代码。序号比较必须处理回绕，生产实现还需补齐平台错误、认证、容量与资源清理。
+
+```cpp
+struct NetworkEvidence {
+  std::uint32_t sequence;
+  std::uint32_t worldVersion;
+  std::uint64_t objectId;
+  double sentAtMs;
+  double appliedAtMs;
+};
+
+bool accepts(const NetworkEvidence& next, const NetworkEvidence& current) {
+  return next.objectId == current.objectId &&
+         next.worldVersion >= current.worldVersion;
+}
+```
+
+证据记录把目录、时序与状态摘要放在一起：
+
+```yaml
+book: Multiplayer Game Programming
+page: mgp-12-gamer-services
+official_entries: 11
+sample: normal | boundary | failure | recovery
+protocol_version: fixed
+network_seed: fixed
+state_owner: explicit
+first_divergence: null
+```
+
+故障脚本一次只改变一个变量：
+
+```text
+baseline -> inject(delay | jitter | loss | duplicate | disconnect)
+observe -> stop_at_first_divergence
+recover -> replay_same_version_seed_and_input
+assert -> one_authority && converged_state && no_orphan_resource
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：把平台SDK成功回调当作业务完成，忽略超时后成功、重复回调和取消竞态。** 必须保存消息序号、世界版本和首次拒绝原因，而不是只看最终画面。
+</Callout>
+
+<Callout type="trap">
+  **误区二：允许客户端直接提交统计或排行榜分数，事后再靠异常检测修正。** 必须加入边界、失败与恢复样本，证明错误没有跨入下一阶段。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 网络与输入变化 | 预期状态 | 通过条件 |
+| --- | --- | --- | --- |
+| 正常 | 合法版本、顺序、身份与容量 | 六阶段完成 | 权威摘要与对象身份一致 |
+| 边界 | 临界延迟、抖动、回绕或满载 | 达到预算不越界 | 队列有界且无永久饥饿 |
+| 失败 | 丢包、重复、畸形、断线或节点失效 | 首偏离点停止 | 明确拒绝、回滚或接管 |
+| 恢复 | 清除故障后重放同一输入 | 收敛到正常轨迹 | 无双权威、幽灵对象和资源泄漏 |
+
+<Mgp12GamerServicesEvidenceLab />
+
+本页签发不变量是：**身份映射稳定；大厅和匹配转换有版本；同一权威比赛结果无论重试多少次只生效一次。** 单次演示、平均延迟或最终截图不能替代序号、版本、首偏离点和恢复证据。
+
+## 练习
+
+<Exercises>
+
+**问题 1** 为什么不能只以最终世界状态正确作为验收？
+
+<Answer>
+  最终状态会隐藏重复副作用、旧版本覆盖、瞬时双权威和资源泄漏。必须比较消息序号、对象身份、状态所有者、时间预算与首偏离点。
+</Answer>
+
+**问题 2** 如何把本页公开目录变成可执行学习证据？
+
+<Answer>
+  先按公开顺序建立目录追踪表，再为每个主题写出输入、状态、输出、失败与恢复条件。本页重点包括：Choosing a Gamer Service、Basic Setup、Lobbies and Matchmaking、Networking、Player Statistics、Player Achievements；其余条目已在上方逐项列出并纳入验收。
+</Answer>
+
+**问题 3** 本页的最小通过条件是什么？
+
+<Answer>
+  身份映射稳定；大厅和匹配转换有版本；同一权威比赛结果无论重试多少次只生效一次。 并且相同协议版本、网络种子和输入可重放正常、边界、失败与恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **玩家服务**：提供身份、社交、匹配、统计等跨游戏会话能力的平台或后端。
+- **大厅**：玩家组队、选择规则并准备进入具体比赛的临时协作空间。
+- **匹配**：依据技能、地区、队伍和等待预算把玩家分配到兼容会话的过程。
+- **幂等提交**：同一比赛结果重复到达时只产生一次统计、成就或奖励效果。
+- **排行榜**：按可验证指标和赛季规则维护玩家相对顺序的服务。
+- 六阶段机制链已经映射到正常、边界、失败和恢复证据。
+- 官方目录逐项追踪，现代补充不会冒充原书正式分节。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="玩家服务">提供身份、社交、匹配、统计等跨游戏会话能力的平台或后端。</GlossaryItem>
+  <GlossaryItem term="大厅">玩家组队、选择规则并准备进入具体比赛的临时协作空间。</GlossaryItem>
+  <GlossaryItem term="匹配">依据技能、地区、队伍和等待预算把玩家分配到兼容会话的过程。</GlossaryItem>
+  <GlossaryItem term="幂等提交">同一比赛结果重复到达时只产生一次统计、成就或奖励效果。</GlossaryItem>
+  <GlossaryItem term="排行榜">按可验证指标和赛季规则维护玩家相对顺序的服务。</GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Josh Glazer、Sanjay Madhav 著，Addison-Wesley Professional，第一版，2015年10月出版、版权年2016，384页，eBook ISBN 9780134034331，印刷版 ISBN 9780134034300；InformIT官方书目与官方Pearson目录样章确认13章、附录A及112个公开目录条目。正文为独立教学重构。"
+  adaptedUrl="https://www.informit.com/store/multiplayer-game-programming-architecting-networked-9780134034331"
+/>

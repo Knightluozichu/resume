@@ -1,41 +1,43 @@
 import type { ReviewQuestion } from "./types";
 
-/** C++ 性能优化指南 · 学习路线图复习题 */
+/** Optimized C++ · 官方十三章学习地图复习题 */
 export const opcLearningMapQuestions: ReviewQuestion[] = [
   {
     id: "opc-learning-map-1",
     chapter: "opc-learning-map",
     level: 1,
-    question: `《C++ 性能优化指南》（Kurt Guntheroth）全书分为哪五大板块？各板块解决什么问题？`,
+    question: "官方第一版 13 章怎样形成三阶段连续路线？",
     answer:
-      `全书分五大板块：\n\n1. 性能思维（2 章）：学习路线图、性能优化思维。建立「测量→分析→优化→验证」的方法论，回答「怎么知道哪里慢」。\n\n2. 字符串与算法（2 章）：字符串优化、算法选择。从最高频的操作要速度，回答「热点怎么改」。\n\n3. 内存管理（2 章）：动态分配优化、智能指针性能。减少 malloc/free 开销，回答「内存怎么省」。\n\n4. I/O 与并发（2 章）：I/O 优化、并发优化。榨取多核与 I/O 硬件红利，回答「硬件怎么用满」。\n\n5. 优化实践（2 章）：性能分析工具、总复习。用工具链量化与防回归，回答「怎么可持续地快」。\n\n记忆线索：方法论 → 高频操作 → 内存 → 硬件 → 工程化。`,
-    tags: ["学习地图", "全书结构", "五段递进"],
+      "第1-3章建立 goal、machine-cost model 与 measurement evidence；第4-8章从 string、algorithm、dynamic variables、hot statements、libraries 删除/重塑 work；第9-13章处理 search/sort、containers、I/O、concurrency、memory management 的系统资源契约。后一阶段使用前一阶段的 baseline、ownership 和因果证据。",
+    tags: ["官方13章", "学习地图", "阶段依赖"],
   },
   {
     id: "opc-learning-map-2",
     chapter: "opc-learning-map",
     level: 2,
-    question: `本书强调「性能优化是测量驱动而非直觉驱动」，为什么凭直觉优化通常无效？`,
+    question:
+      "为什么优化杠杆通常按 goal/workload → algorithm/work → representation/ownership → library/call path → statement/manager 排序？",
     answer:
-      `现代 C++ 程序的性能瓶颈往往违反直觉：\n\n1. 优化了非热点：90/10 法则——90% 的时间花在 10% 的代码上。凭感觉改的那段往往不在热点，白费功夫。\n2. 低估隐藏成本：\`std::string\` 的拷贝、\`shared_ptr\` 的原子操作、cache miss 的代价，都不在「纸面复杂度」里体现。\n3. 编译器可能已经帮你优化了：你手动展开的循环、内联的函数，编译器可能早做了。\n\n所以必须先测量（建立基线）、再剖析（定位热点）、再优化、最后验证。不测量就优化 = 瞎猜。`,
-    tags: ["测量优先", "热点", "90/10 法则"],
+      "越靠前越可能删除数量级或无关工作，端到端上限更大且 context specificity 更低；越靠后通常只缩小常数并增加 ABI、lifetime、thread 或维护风险。每轮仍要按当前 profile 和 Amdahl ceiling 决定；前级改动造成 bottleneck shift 后必须重新排序。",
+    tags: ["杠杆顺序", "Amdahl", "bottleneck shift"],
   },
   {
     id: "opc-learning-map-3",
     chapter: "opc-learning-map",
     level: 3,
-    question: `如果让你规划本书的学习顺序，会先学「字符串优化」还是先学「并发优化」？为什么？`,
+    question:
+      "predict、baseline、controlled change、system validation、guard/rollback 五道证据门各拒绝什么？",
     answer:
-      `应先学字符串优化，再学并发优化。原因：\n\n1. 投入产出比：字符串操作是几乎所有程序的最高频操作，改一处影响全局。并发优化复杂度高、风险大，应留到单线程已极致后再做。\n2. 概念依赖：并发优化的前提是单线程已经高效。如果字符串拷贝满天飞、热路径里 malloc 不断，多核并行只是「把烂代码跑多份」。\n3. 风险递增：字符串优化风险低（改个传参方式），并发优化风险高（数据竞争、死锁、false sharing），应从低风险到高风险。\n\n本书编排也遵循此序：字符串与算法在前，I/O 与并发在后。`,
-    tags: ["学习路径", "依赖关系", "应用"],
+      "Predict 拒绝无目标/机制的提案；baseline 拒绝无法复现的 before；controlled change 拒绝多变量和语义变化；system validation 拒绝局部快但 tail/CPU/RSS/queue 退化；guard/rollback 拒绝无法持续检测或安全撤销。失败实验进 notebook 并回滚代码。",
+    tags: ["证据链", "实验", "回滚"],
   },
   {
     id: "opc-learning-map-4",
     chapter: "opc-learning-map",
     level: 4,
-    question: `综合分析：本书「测量→高频操作→内存→硬件→工具链」的五段结构，对一个 C++ 工程师的性能优化工作流意味着什么？`,
+    question: "为一个陌生 C++ 服务写出读完 13 章后的最小性能工程交付物。",
     answer:
-      `这是一个由「方法论」到「低垂果实」到「基础设施」到「硬件」到「工程化」的完整优化工作流：\n\n1. 方法论层（测量）：先建基线、定位热点。这是纪律——禁止凭感觉动手。\n\n2. 低垂果实层（字符串与算法）：热点确定后，先改最高频、最低风险的。换 \`string_view\`、\`reserve\`、选对算法，往往能拿到数量级提升且风险极低。\n\n3. 基础设施层（内存管理）：高频操作优化后，看内存分配。减少 malloc、用对象池，消除隐藏的分配开销。\n\n4. 硬件层（I/O 与并发）：单线程榨干后，再用多核与异步 I/O。这层收益大但复杂度高，须有剖析支撑。\n\n5. 工程化层（工具链）：把优化固化——benchmark 纳入 CI 防回归。\n\n工作流含义：遇到性能问题，按此顺序排查——先测量定位，再从高频操作入手，再查内存，单线程吃满后再上并发，最后用工具链锁住成果。跳层（不测量就上多核）往往事倍功半。`,
-    tags: ["综合", "工作流", "五段结构"],
+      "应包含 workload+correctness+resource/lifecycle contract、Amdahl 上限、representative baseline/raw samples、profile/counter causal decomposition、最高杠杆候选、ownership/structure/I-O/concurrency/storage contracts、单变量 A/B、p50/p99/throughput/CPU/RSS/queue/failure 结果、bottleneck shift、regression guard 与 feature-flag rollback。",
+    tags: ["综合", "交付物", "工程闭环"],
   },
 ];

@@ -1,256 +1,189 @@
 ---
-title: "总复习"
+title: "总复习：25 章工程验收"
 type: A
-section: "现代C#"
-order: 4
-description: "C# 10 核心技术指南总复习：十大特性串讲、知识图谱与综合练习。"
+section: "C# 10 Nutshell · 总复习"
+order: 26
+description: "把C# 10 in a Nutshell官方25章归并为模型、运行、诊断和边界四类决策，完成跨章节工程验收。"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/"
 draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { CtcFinalReviewDiagram } from "@/components/mdx/csharp-10-core/diagrams/ctc-final-review";
+import { CtcReviewDecisionLab, CtcReviewExamLab, CtcReviewFailureLab } from "@/components/mdx/csharp-10-core/diagrams/ctc-final-review";
 
 <Objectives>
 
-- 串联全书十大特性的因果链与依赖关系
-- 建立从类型系统到现代特性的完整知识图谱
-- 掌握 C# 10 的核心设计理念与多范式编程能力
-- 综合应用类型系统、异步并发与现代特性解决实际问题
+- 能比较model、operation、inspection与protection四类决策
+- 能分析wrong value、stuck work、retained resource和boundary fault
+- 能实现包含type、owner、limit、version和evidence的综合方案
 
 </Objectives>
 
-## 直觉引入
+## 为什么总复习要从Failure反向串书
 
-你已经走完了 C# 10 核心技术指南的全部十章。现在是退后一步、看清全景的时候。
+真实问题不会标注“这是第14章”。一次请求超时可能来自DNS、socket、thread-pool starvation、lock、GC pause、regex backtracking或plugin callback；一个错误结果可能来自culture、equality、deferred LINQ、JSON unknown或dynamic overload。总复习要把章节名称转成排查问题和设计约束。
 
-C# 10 的十大特性不是孤立的——它们构成一条因果链：类型系统是地基，泛型和委托筑墙，异步并发拓边界，模式匹配与 Record 装修，源生成器在建造时自动化。每个特性都建立在前一个的基础上，理解这条链比记住每个语法更重要。
+先预测：所有高CPU都应使用Parallel吗；Dispose完成就不存在managed leak吗；reflection和dynamic错误都可用try/catch补救吗；AES-GCM保证nonce可复用吗；ConcurrentDictionary能让跨多个key的transaction线程安全。答案都是否。
 
-总复习的目标不是重复每章的内容，而是把散落的拼图拼成完整画面——理解 C# 10 为什么这样设计，以及在实际项目中如何组合这些特性。
+<Term def="从症状沿value、work、resource和external boundary逐层回溯到首个违约点的跨章节方法。">cross-chapter causal trace</Term>
 
-## 概念讲解
+## 决策域一：Model正确性（Chapters 1-11）
 
-### 十大特性因果链
-
-<Term def="C# 10 的十大特性构成一条因果链：类型系统（值/引用类型）是地基 → 泛型（类型参数化）和委托（类型安全回调）筑墙 → async/await（状态机）和 TPL（多核并行）拓边界 → 模式匹配（声明式条件）、Record（值语义数据）、源生成器（编译时代码生成）装修。每个特性都建立在前一个的基础上。">
-
-1. **类型系统总览**：值类型 vs 引用类型、装箱、可空引用类型。是所有后续特性的地基——泛型、委托、异步、Record 都建立在类型系统之上。
-2. **泛型深入**：类型参数化、约束、协变逆变。建立在类型系统之上——`Task<T>` 是泛型，`List<T>` 消除装箱。
-3. **委托与事件**：类型安全回调、event 封装、多播。建立在类型系统之上——委托的「类型安全」来自类型系统的签名检查。异步的 continuation 是委托。
-4. **异步深入**：async/await 状态机、Task/ValueTask、同步上下文。建立在泛型（`Task<T>`）和委托（continuation）之上。
-5. **并行与 TPL**：Parallel.For、PLINQ、Task.Run。建立在泛型委托（`Action<T>`）和 Task 之上。
-6. **模式匹配**：类型模式、属性模式、switch 表达式、列表模式。建立在类型系统之上——类型模式和属性模式依赖类型系统。
-7. **Record 与结构体**：record（引用+值语义）、record struct（值+值语义）、with 表达式。建立在类型系统之上——record 和 record struct 是类型系统的两个维度。
-8. **源生成器**：编译时代码生成、增量管线。建立在类型系统的元数据之上——生成器分析类型信息生成代码。
-
-</Term>
-
-### C# 10 的设计理念
-
-C# 10 体现了三个设计理念：
-
-1. **类型安全优先**：泛型消除装箱、可空引用类型防 null、委托检查签名。C# 在编译时尽可能捕获错误。
-2. **多范式融合**：OOP（class）、函数式（record、模式匹配、不可变）、命令式（循环、可变）、声明式（LINQ、模式匹配）。C# 10 不强制单一范式。
-3. **性能不妥协**：`ValueTask` 省分配、`Span<T>` 零拷贝、源生成器消除反射、`record struct` 避免堆分配。安全与性能兼得。
-
-### 组合应用
-
-实际项目中，这些特性经常组合使用：
-
-- **API 控制器**：record（请求/响应 DTO）+ async/await（数据库查询）+ 模式匹配（结果处理）+ 源生成器（JSON 序列化）。
-- **事件驱动系统**：委托与事件（发布订阅）+ async/await（异步处理器）+ record（事件数据）+ 模式匹配（事件路由）。
-- **数据管道**：泛型（通用处理器）+ PLINQ（并行处理）+ record struct（数据载体）+ 源生成器（序列化）。
-
-## 交互Demo
-
-<CtcFinalReviewDiagram />
-
-<Stepper>
-
-<Step title="地基层：类型系统">
-
-值类型与引用类型的内存模型决定了装箱、赋值、参数传递的一切行为。可空引用类型在编译时防 null。这是全书的地基——泛型是类型参数化，委托是类型安全回调，Record 是值语义数据，都建立在类型系统之上。
-
-</Step>
-
-<Step title="架构层：泛型与委托">
-
-泛型让类型安全（`List<T>` 消除装箱），委托让回调安全（签名检查）。两者是 C# 类型系统的两个核心机制——异步的 `Task<T>` 是泛型，continuation 是委托；并行的 `Action<T>` 是泛型委托；LINQ 的 `Func<T,bool>` 是泛型委托。
-
-</Step>
-
-<Step title="能力层：异步与并行">
-
-async/await 的状态机让线程不阻塞（I/O 场景），TPL 的 Parallel.For 让多核并行（CPU 场景）。`Task` 是两者的共同抽象。理解异步状态机才能写出不阻塞、不死锁的高性能代码；理解并行才能利用多核加速 CPU 密集计算。
-
-</Step>
-
-<Step title="表现层：现代特性">
-
-模式匹配让条件分支更表达力，Record 让数据建模更简洁，源生成器让编译时编程成为可能。这三者建立在前面所有层级之上——模式匹配依赖类型系统，Record 是类型系统的值语义封装，源生成器分析类型元数据。组合使用它们，C# 10 代码比传统 C# 更安全、更简洁、更快。
-
-</Step>
-
-</Stepper>
-
-## 代码对照
+Language chapters决定哪些values和operations合法：type safety、class/struct/interface/generic、delegate/lambda、nullability、record/pattern和exception。NET/data chapters决定value如何比较、排序、格式化、枚举、查询和序列化。综合验收先写invariant和identity，再选collection/LINQ/XML/JSON。
 
 ```csharp
-// 综合应用：API 控制器全链路
+public sealed record OrderId(Guid Value);
+public sealed record Order(OrderId Id, decimal Total, DateTimeOffset CreatedAt);
 
-// record：值语义 DTO（不可变、值相等、with 表达式）
-public record CreateUserRequest(string Name, int Age, string Email);
-public record UserDto(int Id, string Name, int Age, string Email);
-
-// async/await：异步数据库查询（不阻塞线程）
-// 泛型：Task<T> 是泛型异步结果
-public async Task<Result<UserDto>> CreateUserAsync(CreateUserRequest request)
-{
-    // 模式匹配：验证逻辑
-    if (request is { Age: < 0 or > 150 })
-        return Result<UserDto>.Failure("Invalid age");
-
-    if (request is { Name.Length: 0 })
-        return Result<UserDto>.Failure("Name required");
-
-    // record with：创建领域模型
-    var user = new User(0, request.Name, request.Age, request.Email);
-
-    // async：异步写入数据库
-    var saved = await _repo.SaveAsync(user);
-
-    // 模式匹配 + record：结果处理
-    return saved switch
-    {
-        { Id: > 0 } => Result<UserDto>.Success(saved with { }),
-        _ => Result<UserDto>.Failure("Save failed")
-    };
-}
-
-// 源生成器：JSON 序列化（零反射）
-[JsonSerializable(typeof(CreateUserRequest))]
-[JsonSerializable(typeof(UserDto))]
-public partial class ApiJsonContext : JsonSerializerContext { }
-
-// 委托与事件：用户创建后发布事件
-public event Func<User, Task>? UserCreated;
-
-async Task OnUserCreated(User user)
-{
-    if (UserCreated is null) return;
-    // 多播安全调用
-    foreach (var handler in UserCreated.GetInvocationList())
-    {
-        try { await ((Func<User, Task>)handler)(user); }
-        catch (Exception ex) { _logger.LogError(ex, "Handler failed"); }
-    }
-}
-
-// 泛型：Result 类型
-public abstract record Result<T>
-{
-    public static Result<T> Success(T value) => new SuccessResult(value);
-    public static Result<T> Failure(string error) => new ErrorResult(error);
-
-    public record SuccessResult(T Value) : Result<T>;
-    public record ErrorResult(string Error) : Result<T>;
-}
-
-// 领域模型
-public record User(int Id, string Name, int Age, string Email);
-
-// 并行：批量处理用户
-public async Task ProcessAllUsersAsync(IReadOnlyList<User> users)
-{
-    // PLINQ + async：并行异步处理
-    var tasks = users
-        .AsParallel()
-        .Select(async user => await ProcessUserAsync(user))
-        .ToArray();
-    await Task.WhenAll(tasks);
-}
-
-async Task<User> ProcessUserAsync(User user) => user;
+static IReadOnlyDictionary<OrderId, decimal> Summarize(IEnumerable<Order> source) =>
+    source
+        .Where(order => order.Total >= 0)
+        .GroupBy(order => order.Id)
+        .ToDictionary(group => group.Key, group => group.Sum(order => order.Total));
 ```
 
-## 常见误区
+复核问题：OrderId的equality是否符合domain；source会枚举几次；provider能否translate；decimal/culture/timezone是否稳定；duplicate id是聚合还是错误；输出是否需要immutable snapshot。
 
-<Callout type="trap">
+<Stepper>
+  <Step title="切换model、operate、inspect与protect"><CtcReviewDecisionLab /></Step>
+  <Step title="写decision record">为一个需求记录候选机制、invariant、owner、failure、性能和兼容取舍。</Step>
+  <Step title="找反例推翻默认">例如List不适合key lookup、dynamic不适合稳定domain、Regex不适合嵌套grammar。</Step>
+</Stepper>
 
-**误区：学完语法就等于掌握 C# 10**
-
-C# 10 的十大特性不只是语法——它们代表了 C# 语言设计的哲学。类型安全优先意味着编译时捕获错误；多范式融合意味着不拘泥于 OOP；性能不妥协意味着安全与速度兼得。真正的掌握是在实际项目中知道**何时用哪个特性**、**如何组合它们**、**它们的底层机制是什么**。语法可以查文档，设计判断力只能通过理解因果链来建立。
-
+<Callout type="trap" title="类型能编译就代表Domain Model正确">
+编译器不知道currency、timezone、identity、schema和illegal state。用private construction、typed outcome与boundary tests补齐业务invariant。
 </Callout>
 
-<Callout type="trap">
+<Term def="把domain identity、equality/order、null/unknown、serialization和version写成一个可演化模型契约。">model semantics gate</Term>
 
-**误区：新特性总是比旧特性好**
+## 决策域二：Operation与Owner（Chapters 12-17）
 
-`record struct` 不总是比 `struct` 好——大结构体的复制开销可能超过堆分配。`ValueTask` 不总是比 `Task` 好——异步完成时仍需分配且只能 await 一次。源生成器不总是比反射好——简单的一次性反射可能比维护生成器更简单。模式匹配不总是比 if-else 好——简单条件用 if-else 更清晰。选择特性时要理解其适用场景和限制，而不是盲目追求「现代」。
+Dispose/GC、diagnostics、async、stream、network和assembly组成运行时主链。每个operation都要回答：谁启动，谁持有resource，如何cancel，result/fault由谁观察，partial output何时发布，shutdown如何drain。Task不是thread，GC不是resource owner，HttpClient不是每请求连接。
 
+```csharp
+static async Task<Snapshot> LoadSnapshotAsync(
+    HttpClient client, Uri endpoint, CancellationToken ct)
+{
+    using HttpResponseMessage response = await client.SendAsync(
+        new HttpRequestMessage(HttpMethod.Get, endpoint),
+        HttpCompletionOption.ResponseHeadersRead, ct);
+    response.EnsureSuccessStatusCode();
+    await using Stream stream = await response.Content.ReadAsStreamAsync(ct);
+    return await SnapshotReader.ReadBoundedAsync(stream, 2_000_000, ct);
+}
+```
+
+验收覆盖DNS/connect/header/body不同失败阶段、response/stream释放、JSON limits、timeout与caller cancel分类、trace correlation、retry idempotency和旧新schema。若由plugin解析，再增加ALC contract identity和unload roots。
+
+<Term def="Operation从创建、等待、提交、取消、失败到资源释放和shutdown drain的完整时序。">operation ownership timeline</Term>
+
+## 决策域三：Inspection与Late Binding（Chapters 13, 17-20）
+
+Diagnostics提供证据；assembly/reflection/dynamic决定runtime identity和binding；cryptography保护数据边界。共同原则是“不凭名字猜”：stack必须匹配build/PDB，Type必须匹配assembly/ALC，dynamic必须匹配runtime shape，ciphertext必须匹配algorithm/key/version/AAD。
+
+Reflection discovery只读CustomAttributeData，验证后才activate；dynamic object在adapter转typed DTO；crypto envelope先验证format/length/allowlist再decrypt/verify。所有cache key包含真正identity且不能阻止collectible owner回收。
+
+<Stepper>
+  <Step title="切换wrong value、stuck、retained与boundary fault"><CtcReviewFailureLab /></Step>
+  <Step title="收集最低成本证据">Value diff看输入/模型，stuck看timeline/stacks，retained看owner/root，boundary看bytes/identity。</Step>
+  <Step title="建立before/after因果">固定负载只改变一个因素，复现症状消失且证据链相应改变。</Step>
+</Stepper>
+
+<Callout type="trap" title="拿到异常或Stack Trace就找到Root Cause">
+异常是观察点，可能离首个违约很远。仍需版本、输入、owner、timeline和重复证据排除后续症状。
 </Callout>
+
+<Term def="晚绑定操作只有在identity、shape/signature、allowlist、version和execution side effect验证后才能越界。">runtime binding gate</Term>
+
+## 决策域四：Concurrency、Memory与External Boundary（Chapters 21-25）
+
+Advanced Threading与Parallel Programming决定共享状态、signals、partitions和queues；Span/Memory决定view/owner；native/COM决定ABI/apartment；Regex决定text program与backtracking budget。它们都容易在局部benchmark中显得成功，却在最大规模、错误输入或shutdown时失败。
+
+```csharp
+static async Task ProcessFramesAsync(
+    ChannelReader<IMemoryOwner<byte>> frames, CancellationToken ct)
+{
+    await foreach (IMemoryOwner<byte> owner in frames.ReadAllAsync(ct))
+    {
+        using (owner)
+        {
+            ReadOnlySpan<byte> frame = owner.Memory.Span;
+            if (!NativeValidator.TryValidate(frame)) continue;
+            ParseWithBudget(frame);
+        }
+    }
+}
+```
+
+这条pipeline需要bounded Channel、consumer fault propagation、memory lease、native signature/callback safety和parser/regex limits。并行度只在sequential baseline和真实负载证明收益后增加；native pointer不得超出Span/owner scope。
+
+## 25章最终检查表
+
+### Language与Data
+
+- Ch1-4：能预测type/conversion/dispatch/null/exception/iterator与unsafe边界。
+- Ch5-7：能选择runtime target、text/time/number/equality和collection。
+- Ch8-11：能解释deferred/provider execution、operator semantics和XML/JSON schema/lifetime。
+
+### Runtime与Metadata
+
+- Ch12-13：能区分Dispose与GC，用timeline/stack/counter/dump建立证据。
+- Ch14-17：能设计completion/cancel/stream/network/assembly/plugin owner。
+- Ch18-20：能守住reflection/dynamic execution和crypto key/version/nonce边界。
+
+### Low-level与Text
+
+- Ch21-22：能证明lock/signal/parallel/queue invariant和capacity。
+- Ch23-24：能证明Span/Memory/native/COM的storage、ABI、callback和apartment lifetime。
+- Ch25：能证明pattern语义与valid/invalid/near-miss资源预算。
+
+## 综合故障演练：插件批处理服务
+
+场景：host从HTTP流式接收JSON jobs，由collectible plugin反射发现handler，bounded queue并行处理，native codec读取pooled buffers，Regex提取标签，结果AES-GCM加密后原子写文件。
+
+演练依次注入：JSON超深、queue满、plugin dependency冲突、callback晚到、pool提前Return、Regex near-miss、nonce allocator回滚、disk full和shutdown。每个fault都要有唯一owner、bounded resource、可观察错误和恢复/拒绝策略。若任何一步只能说“应该没问题”，说明对应章节尚未通过迁移验收。
+
+<Stepper>
+  <Step title="切换explain、implement、diagnose与transfer"><CtcReviewExamLab /></Step>
+  <Step title="完成四类交付">机制解释含反例，小实现含fault path，诊断含before/after，新场景含tradeoff。</Step>
+  <Step title="用证据关门">所有资源、线程、Task、buffer、plugin context和临时文件在成功/失败/取消后都有终态。</Step>
+</Stepper>
+
+<Term def="对综合场景逐项注入invalid、fault、race、resource exhaustion与shutdown，验证所有owner终态。">integrated failure matrix</Term>
+
+## 本章回顾：掌握意味着能迁移
+
+1. Model先定义value与identity，operation再定义owner与completion。
+2. Diagnostics建立证据，reflection/dynamic/crypto守住晚绑定边界。
+3. Concurrency、memory和interop必须在最大规模与错误路径验证。
+4. 任何优化都需要baseline，任何外部输入都需要limit/version。
+5. 能解释、实现、诊断并迁移到陌生场景，才算完成25章。
 
 <Exercises>
 
-**问题 1**：请描述 C# 10 十大特性的因果链，说明为什么这个学习顺序不可打乱。
+**问题 1：一个服务内存增长且P99升高，如何跨章节排查？**
 
-<Answer>
+<Answer>先用Ch13固定版本/窗口看allocation、GC、thread pool和trace；Ch12 heap snapshot找root path；Ch14/21看blocking/starvation/lock；Ch15/16查未释放response/stream；Ch17/18查plugin Type/cache roots；Ch23查pool lease。修复后同负载比较root path、heap和P99。</Answer>
 
-因果链：类型系统（地基）→ 泛型与委托（架构）→ 异步与并行（能力）→ 模式匹配、Record、源生成器（表现）。
+**问题 2：怎样设计可安全热更新的处理插件？**
 
-顺序不可打乱的原因：类型系统是所有特性的基础——泛型是类型参数化，委托的类型安全来自类型系统，Record 的值语义是类型系统的设计选择，模式匹配的类型模式依赖类型系统。泛型和委托是异步的基础——`Task<T>` 是泛型，continuation 是委托。异步和并行是现代特性的组合场景——API 控制器用 async/await + record + 源生成器。模式匹配应先于 Record 学习——Record 依赖模式匹配做解构和条件判断。源生成器需要理解类型系统的元数据。每个特性建立在前一个的基础上，跳级会丢失因果关系。
+<Answer>Ch17用共享contract和私有collectible ALC；Ch18 discovery只读metadata，验证后activate；Ch14取消并await tasks；Ch21停止timer/callback；Ch23归还buffers；Ch24 unregister native callbacks；清除events/type caches后Unload，以WeakReference测试旧context回收。</Answer>
 
-</Answer>
+**问题 3：如何验收一个“高性能文本入口”？**
 
-**问题 2**：设计一个「用户注册 API」的完整链路，说明在每一步用到哪些 C# 10 特性及其原因。
-
-<Answer>
-
-1. **请求 DTO**：用 `record`（`record RegisterRequest(string Name, string Email, string Password)`）。原因：不可变、值相等、`with` 表达式、自动 `ToString` 用于日志。
-
-2. **请求验证**：用模式匹配（`request is { Name.Length: 0 }`、`request is { Age: < 0 or > 150 }`）。原因：声明式条件，比 if-else 嵌套更清晰。
-
-3. **密码哈希**：用 `async/await`（`await _hasher.HashAsync(request.Password)`）。原因：CPU 密集计算用 `Task.Run` 卸载或使用异步 API 避免阻塞。
-
-4. **数据库写入**：用 `async/await`（`await _repo.SaveAsync(user)`）。原因：I/O 操作不阻塞线程，`Task<T>` 是泛型异步结果。
-
-5. **事件发布**：用委托与事件（`event Func<User, Task> UserRegistered`）。原因：发布-订阅模式，event 封装保护订阅者。多播用 `GetInvocationList` 隔离异常。
-
-6. **JSON 序列化**：用源生成器（`[JsonSerializable(typeof(RegisterRequest))]`）。原因：编译时生成序列化代码，零运行时反射，比反射快 5-10 倍。
-
-7. **响应 DTO**：用 `record`（`record UserDto(int Id, string Name)`）。原因：不可变数据传输对象，值相等便于测试。
-
-8. **结果类型**：用泛型 record（`Result<T>` 的 `SuccessResult` 和 `ErrorResult`）。原因：类型安全的结果封装，避免异常控制流。
-
-9. **批量处理**：用 PLINQ + async（`users.AsParallel().Select(async u => await ProcessAsync(u))`）。原因：并行异步处理，利用多核。
-
-每一步的选择都基于该特性的设计优势：record 的不可变和值语义、模式匹配的声明式表达、async/await 的非阻塞、事件的安全封装、源生成器的编译时优化、泛型的类型安全。
-
-</Answer>
+<Answer>Ch6固定encoding/culture，Ch15处理partial stream，Ch23用Span但保持owner，Ch24若native则核对ABI，Ch25对pattern设input/output/timeout并压near-miss；与顺序安全基线比较allocation/throughput，同时注入截断、Unicode边界、取消和错误长度。</Answer>
 
 </Exercises>
 
+## 术语表
+
 <Glossary>
-
-<GlossaryItem term="因果链">
-
-十大特性的依赖关系：类型系统 → 泛型与委托 → 异步与并行 → 模式匹配、Record、源生成器。每个特性建立在前一个基础上，顺序不可打乱。
-
-</GlossaryItem>
-
-<GlossaryItem term="三大设计理念">
-
-类型安全优先（编译时捕获错误）、多范式融合（OOP+函数式+命令式）、性能不妥协（安全与速度兼得）。
-
-</GlossaryItem>
-
-<GlossaryItem term="组合应用">
-
-实际项目中特性组合使用：API 控制器 = record（DTO）+ async/await（数据库）+ 模式匹配（验证）+ 源生成器（序列化）+ 委托事件（通知）。
-
-</GlossaryItem>
-
+  <GlossaryItem term="cross-chapter causal trace" definition="从症状跨value/work/resource/boundary追到首个违约。" />
+  <GlossaryItem term="model semantics gate" definition="Domain identity、schema、equality和version验收。" />
+  <GlossaryItem term="operation ownership timeline" definition="Operation到completion与cleanup的完整时序。" />
+  <GlossaryItem term="runtime binding gate" definition="Runtime identity/shape/version验证后才执行。" />
+  <GlossaryItem term="integrated failure matrix" definition="综合场景的invalid/fault/race/exhaustion/shutdown注入。" />
 </Glossary>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapters 1-25" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/" />

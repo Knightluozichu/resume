@@ -1,0 +1,231 @@
+---
+title: "第 1 章 权衡的艺术"
+type: A
+section: "Vue.js设计与实现 · 框架设计概览"
+order: 1
+description: "框架设计不是追求单一最快路径，而是在声明式可维护性、运行时开销和编译时信息之间选择可证明的平衡。 本页按权威目录独立教学重构。"
+demo: true
+math: false
+sourceUrl: "https://time.geekbang.org/column/article/740758"
+draft: false
+---
+
+import {
+  Vdi01ArtOfTradeoffsMapLab,
+  Vdi01ArtOfTradeoffsExperimentLab,
+  Vdi01ArtOfTradeoffsEvidenceLab,
+} from "@/components/mdx/vuejs-design-implementation/diagrams/vdi-01-art-of-tradeoffs";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释第 1 章 权衡的艺术的核心机制，并把它放回6篇18章的实现主线
+- 能实现本页最小算法，比较正常、边界、失败和恢复轨迹
+- 能指出依赖、VNode、组件实例、AST或请求状态的唯一所有者
+- 能设计证据回答“权衡结论明确输入规模、更新模式和维护目标，运行时与编译时责任可解释，同一基准可以重放。”是否成立
+
+</Objectives>
+
+## 直觉：从输入、状态到提交
+
+框架设计不是追求单一最快路径，而是在声明式可维护性、运行时开销和编译时信息之间选择可证明的平衡。 本书不是对最终源码逐行翻译，而是从规范与最小模型逐步构造框架。只看最终DOM会隐藏错误依赖、重复移动、陈旧任务和激活错位；先画输入、状态所有者、调度点、输出和清理责任。
+
+<Vdi01ArtOfTradeoffsMapLab />
+
+## 权威目录定位
+
+作者授权数字版前言明确全书分为6篇18章，作者GitHub仓库提供配套代码。本页依照公开完整目录逐项覆盖 **5** 个条目；目录名称仅用于追踪，正文为独立教学重构。
+
+- 1.1 命令式和声明式
+- 1.2 性能与可维护性的权衡
+- 1.3 虚拟DOM的性能到底如何
+- 1.4 运行时和编译时
+- 1.5 总结
+
+## 核心概念与所有权
+
+<Term def="直接描述操作步骤与状态修改顺序的编程范式。">命令式</Term>、
+<Term def="描述期望结果并由框架选择具体执行步骤的编程范式。">声明式</Term>、
+<Term def="用JavaScript对象描述UI树，并通过比较计算真实平台更新的中间表示。">
+  虚拟DOM
+</Term>
+、<Term def="应用执行期间负责创建、更新和销毁UI的框架能力。">运行时</Term>、
+<Term def="在应用运行前分析模板或源码并生成更低成本运行代码的阶段。">
+  编译时
+</Term>
+。每个概念都要回答：谁创建输入，哪个结构保存状态，何种操作可以修改，错误如何传播，生命周期结束后谁清理。
+
+|   # | 概念    | 精确定义                                                         |
+| --: | ------- | ---------------------------------------------------------------- |
+|   1 | 命令式  | 直接描述操作步骤与状态修改顺序的编程范式。                       |
+|   2 | 声明式  | 描述期望结果并由框架选择具体执行步骤的编程范式。                 |
+|   3 | 虚拟DOM | 用JavaScript对象描述UI树，并通过比较计算真实平台更新的中间表示。 |
+|   4 | 运行时  | 应用执行期间负责创建、更新和销毁UI的框架能力。                   |
+|   5 | 编译时  | 在应用运行前分析模板或源码并生成更低成本运行代码的阶段。         |
+
+## 机制拆解
+
+### 1. 建立机制边界
+
+命令式代码明确写出每一步DOM操作，初始成本可低，却把状态到视图的映射分散在流程中；声明式代码描述目标UI，框架承担差异计算，因此更容易维护但必须支付运行或编译成本。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+### 2. 处理关键算法
+
+比较innerHTML、虚拟DOM和精确DOM操作要区分创建与更新，也要计入JavaScript计算和DOM操作。虚拟DOM的价值不是在所有输入上最快，而是用可接受性能换取声明式抽象和跨平台能力。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+### 3. 签发失败与恢复
+
+纯运行时框架只能在执行时发现结构，纯编译时方案要求构建阶段掌握全部模板。Vue 3采用运行时加编译时：编译器标记动态信息，渲染器在更新时利用这些提示缩小工作量。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+## 三阶段可视化推演
+
+<Stepper>
+  <Step title="1. 建立最小模型">
+    固定运行时、输入和初始状态，先预测数据结构与执行顺序。
+    <Vdi01ArtOfTradeoffsMapLab />
+  </Step>
+  <Step title="2. 注入算法边界">
+    只改变一个变量，观察分支切换、重复key、请求乱序、非法模板或激活不匹配的首偏离点。
+    <Vdi01ArtOfTradeoffsExperimentLab />
+  </Step>
+  <Step title="3. 清除故障并重放">
+    用相同输入恢复，核对依赖集合、任务队列、宿主节点、组件实例和请求状态是否收敛。
+    <Vdi01ArtOfTradeoffsEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小可运行实验
+
+```js
+const ui = (state) => ({ type: "h1", children: state.title });
+const previous = ui({ title: "old" });
+const next = ui({ title: "new" });
+patch(previous, next);
+```
+
+保存结构化证据，不以一次console输出或最终截图替代过程：
+
+```yaml
+book: Vue.js设计与实现
+page: vdi-01-art-of-tradeoffs
+sample: normal | boundary | failure | recovery
+runtime: pinned
+input_fixture: fixed
+first_divergence: null
+cleanup_complete: true
+```
+
+故障注入一次只改变一个变量：
+
+```text
+baseline -> inject(one_fault) -> stop_at_first_divergence
+recover -> replay_same_input
+assert -> precise_dependency && stable_identity && ordered_tasks && no_retained_resource
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：宣称虚拟DOM必然比原生DOM快，却没有定义创建、更新和维护成本。**
+  必须保存输入、执行轨迹和首偏离点，而不是只比较最终结果。
+</Callout>
+
+<Callout type="trap">
+  **误区二：只按微基准选择范式，忽略业务变化后命令式更新路径的复杂度。**
+  必须加入失败与恢复样本，并检查依赖、节点、任务和状态是否清理。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 变化                 | 预期         | 证据           |
+| ---- | -------------------- | ------------ | -------------- |
+| 正常 | 合法输入与稳定身份   | 主链完成     | 输出与轨迹一致 |
+| 边界 | 空值、重复或极限序列 | 有界退化     | 不越界、不重复 |
+| 失败 | 异常、乱序、非法结构 | 首偏离点停止 | 错误显式传播   |
+| 恢复 | 清除故障后同输入重放 | 收敛到正常   | 无旧依赖和资源 |
+
+<Vdi01ArtOfTradeoffsEvidenceLab />
+
+本页签发不变量：**权衡结论明确输入规模、更新模式和维护目标，运行时与编译时责任可解释，同一基准可以重放。**
+
+## 练习
+
+<Exercises>
+
+**问题 1** 第 1 章 权衡的艺术的核心主张是什么？
+
+<Answer>
+  框架设计不是追求单一最快路径，而是在声明式可维护性、运行时开销和编译时信息之间选择可证明的平衡。
+</Answer>
+
+**问题 2** 如何把本页目录变成可执行证据？
+
+<Answer>
+  按公开顺序建立追踪表，至少覆盖1.1 命令式和声明式、1.2
+  性能与可维护性的权衡、1.3 虚拟DOM的性能到底如何、1.4 运行时和编译时、1.5
+  总结，并为每组条目记录输入、状态、输出、失败与恢复条件。
+</Answer>
+
+**问题 3** 本页怎样签发？
+
+<Answer>
+  权衡结论明确输入规模、更新模式和维护目标，运行时与编译时责任可解释，同一基准可以重放。
+  同一运行时与输入必须能重放正常、边界、失败和恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **命令式**：直接描述操作步骤与状态修改顺序的编程范式。
+- **声明式**：描述期望结果并由框架选择具体执行步骤的编程范式。
+- **虚拟DOM**：用JavaScript对象描述UI树，并通过比较计算真实平台更新的中间表示。
+- **运行时**：应用执行期间负责创建、更新和销毁UI的框架能力。
+- **编译时**：在应用运行前分析模板或源码并生成更低成本运行代码的阶段。
+- 官方目录、最小实现、故障注入与恢复证据已经放进同一验收链。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="命令式">
+    直接描述操作步骤与状态修改顺序的编程范式。
+  </GlossaryItem>
+  <GlossaryItem term="声明式">
+    描述期望结果并由框架选择具体执行步骤的编程范式。
+  </GlossaryItem>
+  <GlossaryItem term="虚拟DOM">
+    用JavaScript对象描述UI树，并通过比较计算真实平台更新的中间表示。
+  </GlossaryItem>
+  <GlossaryItem term="运行时">
+    应用执行期间负责创建、更新和销毁UI的框架能力。
+  </GlossaryItem>
+  <GlossaryItem term="编译时">
+    在应用运行前分析模板或源码并生成更低成本运行代码的阶段。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="霍春阳著，人民邮电出版社，2022年1月，501页，ISBN 9787115583864。作者授权数字版前言确认6篇18章的结构与逐章范围，作者GitHub仓库提供配套代码，公开完整目录用于二三级条目追踪；正文为独立教学重构。"
+  adaptedUrl="https://time.geekbang.org/column/article/740758"
+/>
+
+配套代码：https://github.com/HcySunYang/code-for-vue-3-book

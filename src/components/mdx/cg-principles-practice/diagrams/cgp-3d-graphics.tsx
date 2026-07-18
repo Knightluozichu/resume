@@ -1,59 +1,23 @@
-/**
- * <Cgp3dGraphicsDiagram>：3D图形与投影图解。
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * 全部 DESIGN token 配色，无裸 hex。
- */
+import type { ReactNode } from "react";
 
-const VIEW_W = 720;
-const VIEW_H = 400;
+function Frame({ caption, children }: { caption: string; children: ReactNode }) {
+  return <figure className="mdx-figure not-prose mx-auto my-6"><div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div><figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption></figure>;
+}
+
+const cameraPath = [["Model", "local geometry"], ["Hierarchy", "world composition"], ["View", "camera frame"], ["Clip", "homogeneous + clipping"], ["NDC / viewport", "divide + pixel/depth"], ["Visibility", "nearest covered surface"]] as const;
 
 export function Cgp3dGraphicsDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="3D图形与投影图解"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <text x={VIEW_W / 2} y="32" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">
-            3D图形与投影
-          </text>
-          <text x={VIEW_W / 2} y="54" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
-            透视投影与正交投影的数学原理
-          </text>
+  return <Frame caption="Dürer 的成像几何扩展为 model、camera、clip、viewport 与 visibility 完整链。"><div role="img" aria-label="三维模型到相机投影和可见性的完整路径" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">{cameraPath.map(([title, detail], index) => <div key={title} className="relative min-h-28 border border-border bg-bg/45 p-3"><span className="text-xs font-bold text-accent">0{index + 1}</span><strong className="mt-2 block text-sm text-primary">{title}</strong><span className="mt-2 block text-xs text-secondary">{detail}</span>{index < cameraPath.length - 1 && <span aria-hidden="true" className="absolute -right-2 top-11 z-10 text-accent">→</span>}</div>)}</div></Frame>;
+}
 
-          <rect x="40" y="80" width="640" height="280" rx="12" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.3" />
+const hierarchy = [["Shoulder", "world = root · local", "rigid pose"], ["Elbow", "world = shoulder · local", "inherits parent basis"], ["Hand", "world = elbow · local", "draw + bounds"], ["Tool", "world = hand · local", "attachment frame"]] as const;
 
-          {/* Perspective */}
-          <rect x="60" y="110" width="280" height="130" rx="10" fill="var(--success)" fillOpacity="0.06" stroke="var(--success)" strokeWidth="1.2" />
-          <text x="200" y="134" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--success)">透视投影</text>
-          <text x="200" y="156" textAnchor="middle" fontSize="10" fill="var(--text-primary)">近大远小</text>
-          <text x="200" y="174" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">x' = x * n / (n - z)</text>
-          <text x="200" y="192" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">y' = y * n / (n - z)</text>
-          <text x="200" y="212" textAnchor="middle" fontSize="10" fill="var(--text-primary)">FOV + 宽高比 → 透视矩阵</text>
-          <text x="200" y="230" textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">模拟人眼/相机视角</text>
+export function CgpHierarchyDiagram() {
+  return <Frame caption="层次模型逐级组合 local transform；parent scale/shear 会改变所有后代 frame。"><div role="img" aria-label="肩肘手工具的层次变换树" className="grid gap-3 md:grid-cols-4">{hierarchy.map(([name, equation, note], index) => <div key={name} className="relative min-h-32 border border-border bg-bg/45 p-3"><span className="grid size-8 place-items-center rounded-full bg-accent/15 text-sm font-bold text-accent">{index + 1}</span><strong className="mt-3 block text-sm text-primary">{name}</strong><span className="mt-2 block text-xs text-warning">{equation}</span><span className="mt-2 block text-xs text-secondary">{note}</span>{index < hierarchy.length - 1 && <span aria-hidden="true" className="absolute -right-2 top-12 z-10 text-accent">→</span>}</div>)}</div></Frame>;
+}
 
-          {/* Orthographic */}
-          <rect x="360" y="110" width="280" height="130" rx="10" fill="var(--warning)" fillOpacity="0.06" stroke="var(--warning)" strokeWidth="1.2" />
-          <text x="500" y="134" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--warning)">正交投影</text>
-          <text x="500" y="156" textAnchor="middle" fontSize="10" fill="var(--text-primary)">无近大远小</text>
-          <text x="500" y="174" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">x' = (x - l) / (r - l) * 2 - 1</text>
-          <text x="500" y="192" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">y' = (y - b) / (t - b) * 2 - 1</text>
-          <text x="500" y="212" textAnchor="middle" fontSize="10" fill="var(--text-primary)">平行线保持平行</text>
-          <text x="500" y="230" textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">适合CAD/2D游戏/俯视图</text>
+const platforms = [["Thin API", "resources + pipelines + commands", "maximum responsibility"], ["Render framework", "materials + passes + assets", "render-focused reuse"], ["Scene toolkit", "hierarchy + camera + selection", "domain data model"], ["Engine", "editor + animation + physics + build", "product workflow"], ["Display platform", "browser / mobile / UI", "integration + power constraints"]] as const;
 
-          {/* Comparison */}
-          <rect x="60" y="270" width="600" height="70" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" />
-          <text x={VIEW_W / 2} y="294" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--accent)">核心差异：透视投影的w分量 = -z（携带深度信息）</text>
-          <text x={VIEW_W / 2} y="316" textAnchor="middle" fontSize="11" fill="var(--text-primary)">透视除法：x/w, y/w, z/w → 归一化设备坐标(NDC)</text>
-          <text x={VIEW_W / 2} y="332" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">正交投影w恒为1，不做除法，所以无透视形变</text>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        3D图形与投影——透视投影与正交投影的数学原理对比
-      </figcaption>
-    </figure>
-  );
+export function CgpCameraPlatformDiagram() {
+  return <Frame caption="平台抽象越厚，提供的系统越多；控制、可观测性与应用责任也随之变化。"><div role="img" aria-label="薄图形API到完整引擎和显示平台的抽象层比较" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">{platforms.map(([name, owns, tradeoff]) => <div key={name} className="min-h-32 border border-border bg-bg/45 p-3"><strong className="text-sm text-primary">{name}</strong><p className="mb-0 mt-2 text-xs text-success">Owns: {owns}</p><p className="mb-0 mt-2 border-t border-border pt-2 text-xs text-secondary">Tradeoff: {tradeoff}</p></div>)}</div></Frame>;
 }

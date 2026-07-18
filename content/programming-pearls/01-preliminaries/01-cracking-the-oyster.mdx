@@ -1,0 +1,405 @@
+---
+title: "Column 1 · Cracking the Oyster：先问对问题，再选对表示"
+type: C
+section: "Part I · Preliminaries"
+order: 0
+description: "按第二版Column 1重建friendly conversation、precise problem statement、external/multi-pass/bitmap design、bit-vector implementation、preconditions与time-space-I/O证书。"
+demo: true
+math: true
+sourceUrl: "https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+draft: false
+---
+
+import { PP2ProblemContractLab, PP2ConversationMap, PP2DesignAlternativesLab, PP2BitmapMemoryLab, PP2BitMappingLab, PP2BitOperationsLab, PP2BitmapSortLab, PP2MultiPassLab, PP2PreconditionsLab, PP2CostCertificateLab } from "@/components/mdx/programming-pearls/diagrams/01-cracking-the-oyster";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释cracking the oyster、a friendly conversation、precise problem statement、program design与implementation sketch
+- 能计算bitmap bit count、32-bit word index、mask、memory bytes、multi-pass count及O(m+n)成本
+- 能实现set、clear、test、single-pass bitmap loading与ascending domain scan
+- 能分析external merge、multi-pass、bitmap三种方案及duplicates、payload、range、portability边界
+- 能设计输入contract、precondition checks、correctness invariant、I/O budget和mutation certificate
+
+</Objectives>
+
+## 从“怎样排序磁盘文件”这个错误问题开始
+
+Column 1以一通求助电话展开。程序员问“怎样排序一个disk file”，直觉答案是external merge sort：生成sorted runs，写work files，再多路merge。算法当然正确，却可能解决了一个比真实需求更一般、更昂贵的问题。
+
+先预测：若records其实只是distinct integers，所有values都来自一个不大的known range，不携带payload，而且只需ascending output，还需要comparison sort和temporary files吗？
+
+破解珍珠问题（<Term def="通过持续澄清constraints，把一个看似通用而复杂的问题转化为能被简单表示解决的精确问题。">Cracking the Oyster</Term>）的关键不是先写算法，而是先把外壳撬开，找到隐藏的structure。
+
+<PP2ConversationMap />
+
+## 1.1 A Friendly Conversation：约束从追问中出现
+
+A friendly conversation不是闲聊，而是需求发现过程。应依次问：
+
+- **Records是什么？** 仅是integers，还是key加payload？
+- **数量与range？** 最多m个records，key落在0到n−1。
+- **Duplicates？** 若无duplicate，输出是set的ordered listing。
+- **Memory和time？** 约一兆字节级memory，顺序I/O可接受。
+- **运行频率？** One-off script和daily production值得投入的设计不同。
+- **Failure contract？** Out-of-range、duplicate、malformed input如何处理？
+
+原问题一旦精确，sorting不再是“重排m个records”，而是“表示finite universe中的一个subset，再按universe order枚举”。
+
+<PP2ProblemContractLab />
+
+<Callout type="trap" title="对模糊需求直接套通用算法">
+External sort能处理arbitrary records、duplicates和unbounded keys，但这些能力会带来work files、merge logic和更多I/O。未确认需求就实现它，正确性可能有余，成本却失控。
+</Callout>
+
+## 1.2 Precise Problem Statement：把每个形容词换成数值
+
+精确问题陈述（<Term def="明确input domain、record count、uniqueness、payload、memory、time、output与failure behavior的可验收contract。">Precise Problem Statement</Term>）可写成：
+
+> 输入至多m个distinct nonnegative integers，每个value严格小于n；在bounded memory中输出这些integers的ascending sequence。
+
+核心preconditions：
+
+$$
+0\le x_i<n
+$$
+
+$$
+i\ne j\Longrightarrow x_i\ne x_j
+$$
+
+输出y必须满足：
+
+$$
+\{y_0,\ldots,y_{m-1}\}
+=
+\{x_0,\ldots,x_{m-1}\}
+$$
+
+且：
+
+$$
+y_0<y_1<\cdots<y_{m-1}
+$$
+
+这四条分别约束range、uniqueness、membership preservation和order。若contract允许duplicates，set equality会丢multiplicity；若record带payload，integer membership不足以恢复原record。
+
+## 1.3 Program Design：先列方案，再用contract筛选
+
+程序设计（<Term def="在实现前根据problem contract比较representations、algorithms、I/O、space、correctness与failure behavior。">Program Design</Term>）至少考虑三条路线。
+
+<PP2DesignAlternativesLab />
+
+### External merge sort
+
+把memory能容纳的chunks分别排序并spill，最后merge。它处理general records和duplicates，I/O model可预测，但需要temporary storage、run metadata和merge code。
+
+### Multiple-pass algorithm
+
+若memory只能表示range的一小段，就把domain切成intervals。每遍scan完整input，只处理当前interval；每遍结束按位扫描并输出。
+
+<PP2MultiPassLab />
+
+设每遍bitmap能表示B个keys，则passes：
+
+$$
+p=\left\lceil\frac{n}{B}\right\rceil
+$$
+
+总输入读取约p·m records，无work files。它以sequential I/O换memory，不是“更慢一定更省空间”的抽象口号，而是明确可计算的tradeoff。
+
+### Bitmap or bit vector
+
+若完整domain bitmap能装入memory，读取input once，令bit[x]=1，再从0到n−1扫描所有bits并输出set positions。No comparisons、no temporary files。
+
+Bitmap（<Term def="为finite universe每个possible key分配one bit，用membership替代逐record存储的direct-address set representation。">Bitmap</Term>）利用了本题三项罕见组合：finite dense domain、no duplicates、no payload。
+
+## 1.4 Representation：one bit per possible integer
+
+若domain size为n，理论space正好n bits：
+
+$$
+S_{\text{bits}}=n,\qquad
+S_{\text{bytes}}=\left\lceil\frac n8\right\rceil
+$$
+
+Ten million possible values需要10,000,000 bits，也就是1,250,000 decimal bytes，约1.19 MiB。称作“约一兆字节”时必须说明MB/MiB和array overhead，不能让口头预算代替byte calculation。
+
+<PP2BitmapMemoryLab />
+
+用32-bit unsigned words实现时：
+
+$$
+\operatorname{word}(i)=\left\lfloor\frac i{32}\right\rfloor,
+\qquad
+\operatorname{bit}(i)=i\bmod32
+$$
+
+Array word count：
+
+$$
+\left\lceil\frac n{32}\right\rceil
+$$
+
+<PP2BitMappingLab />
+
+Power-of-two word size允许用shift与mask：
+
+```c
+enum { BITS_PER_WORD = 32, SHIFT = 5, MASK = 31 };
+
+size_t word_index(uint32_t i) { return i >> SHIFT; }
+uint32_t bit_mask(uint32_t i) { return UINT32_C(1) << (i & MASK); }
+```
+
+用`UINT32_C(1)`而不是signed `1`，避免把signed 1左移到sign bit带来的C undefined behavior。`uint32_t`也让word width进入type contract。
+
+## 1.5 Implementation Sketch：set、clear、test
+
+实现草图（<Term def="在完整编码前给出data layout、关键operations、main passes、invariants与边界处理的最小可执行设计。">Implementation Sketch</Term>）只需三种bit operations：
+
+```c
+void set_bit(uint32_t *bits, uint32_t i) {
+    bits[word_index(i)] |= bit_mask(i);
+}
+
+void clear_bit(uint32_t *bits, uint32_t i) {
+    bits[word_index(i)] &= ~bit_mask(i);
+}
+
+bool test_bit(const uint32_t *bits, uint32_t i) {
+    return (bits[word_index(i)] & bit_mask(i)) != 0;
+}
+```
+
+<PP2BitOperationsLab />
+
+Initialization不必逐bit clear；word-parallel zero fill更直接：
+
+```c
+const size_t words = (n + BITS_PER_WORD - 1) / BITS_PER_WORD;
+uint32_t *bits = calloc(words, sizeof(*bits));
+if (bits == NULL) fail("allocation");
+```
+
+`calloc`返回all-bits-zero storage，恰好表示empty set。若buffer复用，必须显式`memset`; stale bits会产生从未输入的phantom values。
+
+## 1.6 Two-pass control flow
+
+Bitmap sort有两个logical passes，但只读input一次：
+
+1. **Load pass**：read each integer x，validate，再set bit x。
+2. **Domain pass**：for i from 0 through n−1，test bit i；若set则emit i。
+
+```c
+uint32_t x;
+while (read_uint32(input, &x)) {
+    if (x >= n) fail("out-of-range key");
+    if (test_bit(bits, x)) fail("duplicate key");
+    set_bit(bits, x);
+}
+
+for (uint32_t i = 0; i < n; ++i) {
+    if (test_bit(bits, i)) write_uint32(output, i);
+}
+```
+
+<PP2BitmapSortLab />
+
+Monotone scan自动产生sorted order；set bit保证每个valid input key至少输出一次；duplicate rejection与one-bit state保证exactly once。
+
+## 1.7 Correctness invariant
+
+Load loop处理前k个records后，保持：
+
+$$
+\operatorname{test}(v)
+\iff
+v\in\{x_0,\ldots,x_{k-1}\}
+$$
+
+Initialization时k=0，all bits zero。处理valid new x只改变x对应bit，且duplicate check保证它此前为zero，因此invariant保持。
+
+Output loop扫描到i之前，保持：
+
+- all input keys smaller than i已按ascending order输出；
+- no key at least i已输出；
+- output不含non-input value。
+
+若test(i)为true就输出i，否则跳过。Loop结束于n时，membership与strict order同时满足。
+
+<PP2CostCertificateLab />
+
+## 1.8 Complexity不是只看CPU
+
+设m为input record count、n为key universe size：
+
+$$
+T=O(m+n),\qquad
+S=O(n)\text{ bits}
+$$
+
+它不是comparison sorting的O(m log m)，因为遍历了整个domain。若n与m同阶且domain dense，bitmap极佳；若n远大于m，domain scan和space可能比hash set加sort更差。
+
+实际time包含：
+
+- Parsing m integers。
+- Sequential input read。
+- n bit tests。
+- Formatting/writing m outputs。
+- Cache and memory bandwidth。
+
+若text output占主导，bit tricks的nanosecond improvement没有意义。Column的原则是先改变representation和algorithm，再profile局部code。
+
+## 1.9 Preconditions改变时，方案怎样变化
+
+<PP2PreconditionsLab />
+
+### Duplicates matter
+
+One bit只能表达zero-or-one。若需要输出multiplicity，可改为small counters：
+
+$$
+S=n\left\lceil\log_2(c_{\max}+1)\right\rceil\text{ bits}
+$$
+
+若counts无known bound，使用hash map或external sorting。
+
+### Records carry payload
+
+Direct-address table可存pointer/list而非bit，但space变为n machine words甚至更多。若domain sparse，balanced tree、hash table或comparison sort更合理。
+
+### Range unknown or huge
+
+不能按max key直接allocate。可先做range discovery pass、coordinate compression、hash partition，或使用external sort。任何方案都需重新计算passes和temporary space。
+
+### Input may be malformed
+
+Parsing failure、negative value、overflow、out-of-range和duplicate必须有明确behavior。静默截断或用modulo映射会把invalid input变成错误的valid output。
+
+<Callout type="trap" title="为了省检查，直接把key写入bitmap">
+未经range validation的word index会越界写内存；未经duplicate policy确认的one-bit representation会静默丢数量。Precondition不是文档装饰，而是内存安全与语义正确性的入口。
+</Callout>
+
+## 1.10 Time-space tradeoff与“不是tradeoff”的地方
+
+Full bitmap fit时，它常常**同时**减少space、code complexity和I/O：不需要temporary files，也不需要general record structures。这不是牺牲time换space，而是使用更强problem information消除不必要工作。
+
+Memory不足时才出现真正tradeoff：domain partition让每遍bitmap变小，但input scans增加。应以storage bandwidth和latency估算，不凭“sequential scan很快”猜测。
+
+例如n=10,000,000，available bitmap memory为128 KiB，可表示1,048,576 keys，每次需约10 passes。若input为40 MB，至少读取约400 MB；加大到256 KiB可降到5 passes。这个结果能直接进入capacity review。
+
+## 1.11 Principles：从这一颗珍珠带走什么
+
+Column 1的principles不只是“位图很省空间”：
+
+1. **Understand the problem**：重复追问直到每个constraint可度量。
+2. **Exploit structure**：finite range、uniqueness和no payload决定representation。
+3. **Compare designs**：general external sort、multi-pass、bitmap各有valid domain。
+4. **Make cost explicit**：CPU、memory、input passes、work files和output都计费。
+5. **Write invariants before code**：membership和monotone emission证明correctness。
+6. **Validate assumptions at boundaries**：range、duplicates、allocation与parse errors。
+7. **Prefer simple programs produced by precise thinking**：simple code是analysis结果，不是省略需求。
+
+## 1.12 独立验收证书
+
+Production验收可记录：
+
+- Contract：m、n、uniqueness、payload、memory、output format。
+- Allocation：ceil(n/32) words，无overflow。
+- Load invariant：processed keys与set bits等价。
+- Output invariant：prefix complete、sorted、no extras。
+- Complexity：one input scan、one domain scan、one output stream。
+- Mutation tests：duplicate、n、n+1、negative、empty input、last valid key、stale buffer。
+
+<PP2CostCertificateLab />
+
+只有当所有checks通过，才能说bitmap implementation解决了**精确问题**。若业务contract变化，应重新回到friendly conversation，而不是继续给bitmap打补丁。
+
+## 1.13 逐步运行路线
+
+<Stepper>
+  <Step title="先追问并写精确contract" description="确认record shape、count、range、duplicates、payload、memory、time、output和failure behavior。">
+    <PP2ConversationMap />
+    <PP2ProblemContractLab />
+  </Step>
+  <Step title="比较三种program design" description="用相同contract衡量external merge、multi-pass与full bitmap的I/O和适用边界。">
+    <PP2DesignAlternativesLab />
+    <PP2MultiPassLab />
+  </Step>
+  <Step title="证明bitmap能装下" description="按one bit per key计算bits、words与bytes，处理round-up和allocation overflow。">
+    <PP2BitmapMemoryLab />
+    <PP2BitMappingLab />
+  </Step>
+  <Step title="实现membership与ascending scan" description="用unsigned mask完成set/clear/test；load后从0到n−1输出set positions。">
+    <PP2BitOperationsLab />
+    <PP2BitmapSortLab />
+  </Step>
+  <Step title="用preconditions和invariants验收" description="Mutation覆盖duplicate、range、payload与stale state，并核对membership、order和cost。">
+    <PP2PreconditionsLab />
+    <PP2CostCertificateLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Cracking the Oyster从vague request中寻找决定性constraints。
+- A friendly conversation把“sort a disk file”改写成finite-domain set enumeration。
+- Precise Problem Statement必须量化range、count、memory、uniqueness、payload和failure behavior。
+- Program Design先比较external merge、multi-pass与bitmap，再选择最符合contract者。
+- Bitmap以one bit per possible key表示set，适合bounded、dense、distinct、payload-free keys。
+- Implementation Sketch由word index、bit mask、set/clear/test、load pass和domain pass组成。
+- Load invariant证明membership；monotone scan invariant证明ascending exact output。
+- Bitmap sort用O(n) bits、O(m+n) time，性能取决于domain density与I/O。
+- Multi-pass把smaller bitmap换成more input scans，是可量化的time-space-I/O tradeoff。
+- Duplicates、payload、unknown range或malformed input都会改变representation和correctness contract。
+
+<Exercises>
+
+1. Domain为0到99,999,999，使用64-bit words。计算word count、byte count，以及integer 12,345,678的word index、bit offset和unsigned mask。
+2. Memory只能提供64 KiB bitmap，domain size为10,000,000。设计multi-pass intervals，计算passes，并说明如何保证跨interval输出仍全局有序。
+3. 修改bitmap sort以保留每个key最多15次的multiplicity。给出每key bits、总space、increment overflow policy和ascending output逻辑。
+4. 为bitmap sort写property-based tests：生成valid sets并验证membership/order；再设计至少四个invalid mutations和expected failure。
+
+<Answer>
+
+64-bit word count为ceil(100,000,000/64)=1,562,500，byte count为12,500,000。对i=12,345,678，word index是floor(i/64)=192,901，bit offset是i mod 64=14，mask为`UINT64_C(1) << 14`，即0x0000000000004000。Allocation前还要检查word count乘8不溢出`size_t`。
+
+</Answer>
+
+<Answer>
+
+64 KiB等于524,288 bits，每遍覆盖最多524,288 consecutive keys。Passes为ceil(10,000,000/524,288)=20。第p遍只接收区间 `[pB, min((p+1)B,n))`，bit index减去interval start；各遍按p递增并在内部按bit递增输出，因此前一遍所有keys都小于后一遍，global order成立。Input需scan 20次。
+
+</Answer>
+
+<Answer>
+
+Maximum count 15需要4 bits per key，总space为4n bits，可用packed nibbles或byte counter简化。读取x时先验证range，再读取counter；等于15时按contract reject、saturate或spill，不能silent wrap。输出扫描key order，每个i重复emit counter[i]次。若counts常很稀疏，hash map可能更省space。
+
+</Answer>
+
+<Answer>
+
+Valid generator从bounded domain无放回采样；oracle用普通numeric sort，断言bitmap output与oracle sequence完全相等、strictly increasing且length相同。Invalid mutations包括duplicate key、negative key、key等于n、malformed token、allocation failure和未清零buffer；分别期待duplicate/range/parse/allocation error，stale buffer test则必须证明reset后无phantom output。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Cracking the Oyster">通过澄清真实constraints，把复杂表象转成简单精确问题的设计过程。</GlossaryItem>
+  <GlossaryItem term="Precise Problem Statement">量化input、output、resource和failure behavior的可验收问题合同。</GlossaryItem>
+  <GlossaryItem term="Program Design">在编码前比较representation、algorithm、cost与correctness的阶段。</GlossaryItem>
+  <GlossaryItem term="Bitmap">为finite universe每个key分配one membership bit的direct-address set。</GlossaryItem>
+  <GlossaryItem term="Implementation Sketch">描述关键data layout、operations、passes与invariants的最小实现计划。</GlossaryItem>
+  <GlossaryItem term="Multiple-Pass Algorithm">反复顺序扫描input，每遍处理一个domain partition以降低memory。</GlossaryItem>
+  <GlossaryItem term="Loop Invariant">每次iteration前后成立、用于连接initialization、maintenance与termination的断言。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Programming Pearls, Second Edition · Column 1 Cracking the Oyster"
+  href="https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+  author="Jon Bentley"
+  license="本章按Pearson官方第二版目录与Column 1的friendly conversation、precise problem statement、program design、implementation sketch及bit-vector sorting主线重构；C实现使用现代unsigned fixed-width写法并补充边界验收。"
+/>

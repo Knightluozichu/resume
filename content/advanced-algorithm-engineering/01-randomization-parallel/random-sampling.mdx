@@ -1,0 +1,311 @@
+---
+title: "第3章 Random Sampling：随机抽样"
+type: B
+section: "随机化与并行"
+order: 2
+description: "在磁盘与单遍流模型中设计均匀无放回抽样，比较位置去重、随机键和蓄水池抽样的空间、I/O、随机数与概率证明。"
+demo: true
+math: true
+sourceUrl: "https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+draft: false
+---
+
+import { PaeSamplingUniformityDiagram, PaeDiskSamplingMap, PaeKnownLengthStreamLab, PaeRandomKeyHeapDiagram, PaeReservoirSamplingLab } from "@/components/mdx/advanced-algorithm-engineering/diagrams/random-sampling";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释均匀无放回样本的子集概率与包含概率
+- 能计算磁盘已知长度抽样的位置生成和 I/O 成本
+- 能实现已知长度单遍流的剩余名额接受算法
+- 能分析随机键与蓄水池抽样在未知长度流中的正确性
+- 能设计覆盖偏差、重复、边界和随机数质量的统计测试
+
+</Objectives>
+
+## 从“每个样本等概率”究竟指什么开始
+
+给定含 n 个项目的序列 S，要不重复地选出恰好 m 个项目。<Term def="从 n 个位置中选择恰好 m 个且不重复，使所有大小为 m 的位置子集具有相同概率。">均匀无放回抽样</Term>的严格含义是：每个大小为 m 的子集概率相同，而不是每个项目以1/n概率出现在最终样本中。
+
+$$
+\Pr(R=A)=\frac{1}{\binom{n}{m}},
+\qquad
+\Pr(i\in R)
+=
+\frac{\binom{n-1}{m-1}}{\binom{n}{m}}
+=
+\frac{m}{n}
+$$
+
+第一式描述联合分布，第二式描述单个位置的边缘包含概率。只验证每个位置大约出现 m/n 次还不充分：一个错误算法可能让各位置频率相同，却只产生少数特定组合。
+
+<PaeSamplingUniformityDiagram />
+
+先预测两个边界：m等于1时，每项概率是1/n；m等于n时，唯一合法样本是整个序列，每项概率为1。算法还必须明确 m 大于 n、m 为0、空流以及项目重复值怎样处理。这里抽的是**位置**，相同值位于不同位置仍是不同项目。
+
+## 评价抽样算法的四类资源
+
+原章同时比较 I/O、额外空间、CPU 时间和随机数数量。输入可能是磁盘文件，也可能是只能向前读取一次的 channel；n 可能预先知道，也可能直到流结束才知道。这些约束会改变可用算法。
+
+抽中的位置若按升序输出，可以顺序扫描原文件提取项目，减少寻道和回看；还不必为变长字符串维护随机访问指针。若 m 能放入内部存储，位置排序可在内存完成；m 大于 M 时则需要后续章节的外存排序。
+
+因此“先随机取 m 个项目”不是完整设计。必须回答是否允许修改输入、是否可随机访问、是否知道 n、能否回看、输出要位置还是对象，以及 m 个结果能否驻留内存。
+
+## 磁盘模型与已知序列长度
+
+disk model and known sequence length（磁盘模型与已知序列长度）允许先生成位置，再从 S 取对象。原章依次改进三类方案。
+
+第一种方案复制一个指向全部 n 个项目的指针数组。每轮在尚未抽中的前缀中随机选一个位置，把它与末尾未抽中位置交换。Fisher-Yates 的前 m 步保证不重复，但指针数组占 Theta(n) 空间，而且在大数组上产生 Theta(m) 次随机访问。复制真实对象更糟：变长对象无法常数时间交换，空间也可能超过原文件。
+
+第二种方案只维护已抽位置字典。每次从1到n生成位置，若未出现就插入；重复则重新抽。这种 <Term def="随机候选与已选位置冲突时丢弃并重新生成，直到得到新位置。">重采样</Term>用哈希表把额外空间降为 O(m)。
+
+```cpp
+std::vector<std::size_t> sample_positions(
+    std::size_t n,
+    std::size_t m,
+    std::mt19937_64& engine) {
+    if (m > n)
+        throw std::invalid_argument("m exceeds n");
+
+    std::uniform_int_distribution<std::size_t> draw(0, n - 1);
+    std::unordered_set<std::size_t> chosen;
+    chosen.reserve(m * 2);
+
+    while (chosen.size() != m)
+        chosen.insert(draw(engine));
+
+    std::vector<std::size_t> positions(
+        chosen.begin(), chosen.end());
+    std::sort(positions.begin(), positions.end());
+    return positions;
+}
+```
+
+当 m 小于 n/2 时，任何阶段抽到重复位置的概率至多 m/n，小于1/2，所以每个新位置期望只需常数次尝试。若 m 接近 n，应抽“不选的 n-m 个位置”再取补集，避免碰撞概率逼近1。
+
+第三种方案每轮批量生成 m 个位置，排序并去重，再补齐缺口。碰撞由 birthday problem（生日问题）控制。一次生成的 m 个位置全都不同的概率是：
+
+$$
+\Pr(\text{distinct})
+=
+\prod_{k=0}^{m-1}\left(1-\frac{k}{n}\right)
+\le
+\exp\left(-\frac{m(m-1)}{2n}\right)
+$$
+
+当 m 远小于平方根 n 时碰撞稀少；达到平方根量级后，重复不能再忽略。因为位置是固定范围内的随机整数，还可用 m 个桶覆盖大小约 n/m 的区间，期望每桶常数项，再在桶内排序，把平均 CPU 成本降到 O(m)。
+
+<PaeDiskSamplingMap />
+
+位置有序后，若 m 个目标分散得很稀，直接随机读取需要 O(m) I/O；顺序扫描整个文件需要 O(n/B) I/O。因此可取两者较小的策略，达到 O(min(m,n/B)) 量级，同时还要考虑随机寻道和连续吞吐的现实差异。
+
+<Callout type="trap" title="m 接近 n 时仍不停重采样已选位置">
+当字典已有 m-1 个位置时，新抽中未选位置的概率只有 (n-m+1)/n。若 m 接近 n，期望重试次数急剧上升；应改抽较小补集，或使用保证无重复的置换式方法。
+</Callout>
+
+## 流模型与已知序列长度
+
+streaming model and known sequence length（流模型与已知序列长度）只允许每项经过一次。算法看到 S[j] 时必须立即决定是否收下；已跳过的项目不能重抽，也不能先生成全部位置后随机回看。
+
+<Term def="输入只能按到达顺序处理，通常限制通过次数与工作空间，不能任意回看历史项目的计算模型。">流模型</Term>下若总长 n 已知、已选 s 项，当前位置 j 之后连同当前项还剩 n-j+1 个项目，尚缺 m-s 个名额。应以：
+
+$$
+p_j
+=
+\frac{m-s}{n-j+1}
+$$
+
+的概率接受当前项。它正是“从剩余项目中均匀选出剩余名额”时当前项目被包含的组合概率。
+
+<PaeKnownLengthStreamLab />
+
+```cpp
+template<class InputIt, class URBG>
+auto sample_known_length(
+    InputIt first,
+    InputIt last,
+    std::size_t n,
+    std::size_t m,
+    URBG& engine) {
+    using Value = typename std::iterator_traits<InputIt>::value_type;
+    if (m > n)
+        throw std::invalid_argument("m exceeds n");
+
+    std::vector<Value> sample;
+    sample.reserve(m);
+    std::size_t seen = 0;
+
+    while (first != last && sample.size() != m) {
+        const std::size_t remaining = n - seen;
+        const std::size_t needed = m - sample.size();
+        std::uniform_int_distribution<std::size_t> draw(1, remaining);
+        if (draw(engine) <= needed)
+            sample.push_back(*first);
+        ++first;
+        ++seen;
+    }
+    if (sample.size() != m || seen > n)
+        throw std::runtime_error("length contract violated");
+    return sample;
+}
+```
+
+当剩余项目数等于剩余名额时，概率变成1，所以不会少选；选满后即可停止，所以不会多选。给定前 j-1 项中已经选了 s 项，所有剩余项目对剩余 m-s 个名额对称，因此每一步保持条件均匀性，最终所有大小为 m 的子集等概率。
+
+该算法一次扫描，O(n) 时间、O(n/B) I/O、O(m) 结果空间，并生成至多 n 个随机决策。Vitter 的改进不为每项生成布尔指示，而直接按正确分布生成“跳过多少项再选下一项”的 gap，把随机数数量降到 O(m)；生成 gap 本身需要精心实现离散分布，不能用随意的几何近似替代。
+
+## 未知长度流：随机键保留 top-m
+
+streaming model and unknown sequence length（流模型与未知序列长度）无法使用 n-j+1。一个通用办法是给每个到达项目生成独立连续 <Term def="与项目独立绑定的随机优先级；保留最大的 m 个键可产生均匀大小为 m 的样本。">随机键</Term>，并用大小为 m 的最小堆保留 top-m。
+
+<PaeRandomKeyHeapDiagram />
+
+任意 n 个连续独立随机键的全排列等可能。某个大小为 m 的项目子集成为最大 m 个键的概率与其他子集相同，所以结果均匀。连续分布理论上不并列；有限位伪随机数可能碰撞，工程实现应把稳定唯一序号作为第二比较键，并分析这是否保持对称的并列规则。
+
+```cpp
+template<class T, class URBG>
+void consider_random_key(
+    const T& item,
+    std::size_t m,
+    URBG& engine,
+    MinHeap<Keyed<T>>& heap) {
+    const auto key =
+        std::generate_canonical<double, 53>(engine);
+    if (heap.size() < m) {
+        heap.push({key, item});
+    } else if (key > heap.top().key) {
+        heap.pop();
+        heap.push({key, item});
+    }
+}
+```
+
+它单遍、O(m) 空间，但最坏每项都可能触发 O(log m) 堆更新，总时间 O(n log m)，随机数 n 个。它适合需要可合并优先级的分布式场景，却不是本章未知长度单机流的最优时间方案。
+
+## 未知长度流：蓄水池抽样
+
+<Term def="先保存前 m 项，处理第 j 个后续项目时以 m/j 概率纳入并均匀替换池中一项的未知长度流抽样。">蓄水池抽样</Term>只保留 m 个项目：
+
+1. 把前 m 项装入 R；
+2. 处理第 j 项时，在1到j之间均匀生成整数 h；
+3. 若 h 不大于 m，用当前项替换 R[h]；否则跳过。
+
+```cpp
+template<class T, class URBG>
+void reservoir_consider(
+    const T& item,
+    std::size_t seen,
+    std::vector<T>& reservoir,
+    URBG& engine) {
+    const std::size_t m = reservoir.size();
+    std::uniform_int_distribution<std::size_t> draw(1, seen);
+    const std::size_t h = draw(engine);
+    if (h <= m)
+        reservoir[h - 1] = item;
+}
+```
+
+<PaeReservoirSamplingLab />
+
+处理第 j 项时，新项进入概率是 m/j。此前任一旧项在处理 j-1 项后位于池中的概率按归纳假设为 m/(j-1)；新项若进入，恰好替换这个旧项的概率是1/m，所以旧项被移除的无条件概率是1/j。它最终保留的概率为：
+
+$$
+\frac{m}{j-1}
+\left(1-\frac{1}{j}\right)
+=
+\frac{m}{j}
+$$
+
+新旧项目在处理 j 项后都具有 m/j 的包含概率，归纳成立。进一步结合对称替换可证明所有大小为 m 的子集等概率，而不只是边缘概率相同。
+
+算法对每项做常数工作，O(n) 时间、O(n/B) I/O、恰好 O(m) 结果空间；它不知道 n，也不回看输入，因此在该模型下时间、空间和 I/O 都达到必要下界。
+
+<Callout type="trap" title="用 random() % j 生成 h">
+若随机源范围不是 j 的整数倍，取模会让某些余数更常见，累积成抽样偏差。应使用标准库的均匀整数分布或拒绝法，并固定种子接口以支持可复现实验。
+</Callout>
+
+## 正确性之外还要验证随机性契约
+
+抽样代码单次运行没有“期望答案”，测试必须分层：
+
+- 确定性检查样本大小恰为 m、位置不重复、项目来自输入；
+- 边界检查 m为0、m为1、m等于n、m大于n、短流与声明 n 不一致；
+- 固定种子让回归测试可复现，但不要用固定种子证明统计均匀；
+- 对小 n 枚举所有组合，运行大量不同种子，检查每个组合频率；
+- 同时检查每个位置包含频率约为 m/n，并用置信区间或卡方检验解释波动；
+- 对变长对象、重复值和大 m 验证抽的是位置而不是去重后的值。
+
+伪随机生成器质量、种子来源和并行流拆分属于算法契约的一部分。密码学抽样还需要不可预测的安全随机源；普通模拟可优先选择速度与可复现性，但不能混用目标。
+
+<Stepper>
+  <Step title="先定义联合均匀性">
+    <PaeSamplingUniformityDiagram />
+    所有大小为 m 的位置子集等概率，并推导每个位置包含概率 m/n。
+  </Step>
+  <Step title="利用磁盘上的位置抽样">
+    <PaeDiskSamplingMap />
+    只保存 O(m) 个位置，排序后在随机读取与全文件顺扫之间选较小成本。
+  </Step>
+  <Step title="已知 n 时分配剩余名额">
+    <PaeKnownLengthStreamLab />
+    当前项以剩余名额除以剩余项目的概率接受，保证单遍且恰选 m 项。
+  </Step>
+  <Step title="未知 n 时先用随机键建模">
+    <PaeRandomKeyHeapDiagram />
+    top-m 的对称性给出均匀样本，但堆带来 O(n log m) 时间。
+  </Step>
+  <Step title="用蓄水池达到流式最优">
+    <PaeReservoirSamplingLab />
+    新项以 m/j 进入并随机替换，归纳保持每个历史项目的 m/j 包含概率。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 均匀无放回抽样要求所有大小为 m 的子集概率为组合数倒数。
+2. 每个位置在最终样本中的包含概率是 m/n，而不是一般情况下的1/n。
+3. 磁盘已知 n 时，可用哈希或排序生成 O(m) 个位置，再按序提取项目。
+4. m 接近 n 时应抽补集，避免重采样碰撞使期望时间恶化。
+5. 已知 n 的流以 (m-s)/(n-j+1) 接受当前项，恰好选满且保持条件均匀。
+6. Vitter 跳跃法直接生成下一选中项的距离，把随机决策数从 n 降到 m 量级。
+7. 未知 n 时，随机键 top-m 正确但需要 O(n log m) 堆时间。
+8. 蓄水池抽样以 m/j 接受第 j 项并均匀替换，保持所有项目对称。
+9. 随机数映射、种子、组合频率与边界测试都属于可复查的正确性证据。
+
+<Exercises>
+
+**问题 1：n等于10、m等于3时，每个具体三元素子集概率和每个位置包含概率分别是多少？**
+
+<Answer>共有组合数 C(10,3) 等于120个三元素子集，所以每个具体子集概率是1/120。含某一固定位置的子集有 C(9,2) 等于36个，因此包含概率36/120等于3/10，也就是m/n。</Answer>
+
+**问题 2：已知长度流在 n等于8、m等于3、扫描到 j等于6且此前已选2项时，接受概率是多少？**
+
+<Answer>剩余名额是1，包含当前项在内的剩余项目是8-6+1等于3，所以概率为1/3。若前两项都未选，剩余名额会更大，末尾概率最终会升到1以保证选满。</Answer>
+
+**问题 3：蓄水池大小 m等于2，处理第5项后，最早的第1项仍在池中的概率是多少？**
+
+<Answer>处理前4项后它在池中的概率为2/4。第5项恰替换它的无条件概率是1/5，所以存活因子为4/5；乘积为(2/4)乘(4/5)等于2/5，符合m/j。</Answer>
+
+**问题 4：为什么只统计每个位置出现频率不足以证明联合均匀？**
+
+<Answer>边缘频率相同不代表组合等概率。例如某算法可能只在几个互不相交的固定组合间均匀选择，让每个位置频率相同，却从不产生其他合法组合。小规模测试还应统计全部大小为m的子集频率。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="均匀无放回抽样">从 n 个位置中选恰好 m 个且不重复，使每个大小为 m 的子集等概率。</GlossaryItem>
+  <GlossaryItem term="包含概率">某个固定项目出现在最终样本中的边缘概率，均匀大小 m 样本中为 m/n。</GlossaryItem>
+  <GlossaryItem term="重采样">随机候选重复或不合法时丢弃并再次生成。</GlossaryItem>
+  <GlossaryItem term="流模型">按到达顺序有限次处理输入、不能任意回看历史项目的计算模型。</GlossaryItem>
+  <GlossaryItem term="随机键">独立分配给项目的随机优先级，保留 top-m 可得到均匀样本。</GlossaryItem>
+  <GlossaryItem term="蓄水池抽样">未知总长流中维护固定 m 项，并随到达项目按 m/j 概率替换的算法。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Pearls of Algorithm Engineering · Chapter 3 Random Sampling"
+  href="https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+  author="Paolo Ferragina"
+  license="原书版权归作者与 Cambridge University Press 所有；本章依据官方目录与作者课程资料独立重构教学内容"
+/>

@@ -1,0 +1,256 @@
+---
+title: "第3章：数据语义"
+type: A
+section: Inside the C++ Object Model · Chapter 3
+order: 3
+description: 对齐原书第3章 The Semantics of Data：成员绑定与布局、静态和非静态访问、继承数据表示、对象效率及数据成员指针。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/inside-the-c-plus-plus-object-model-9780201834543"
+draft: false
+---
+
+import {
+  IcoDataBindingAccessMap,
+  IcoDataMemberPointerMap,
+  IcoInheritedDataLayoutMap,
+} from "@/components/mdx/inside-cpp-object-model/diagrams/semantics-of-data";
+
+<Objectives>
+
+- 能解释 data member 的名称绑定、布局定位与实际 load/store 是三个相互衔接但不同的阶段
+- 能推导 inheritance without polymorphism、adding polymorphism、multiple inheritance 和 virtual inheritance 下的数据访问路径
+- 能分析 static/nonstatic data access、object member efficiency 与 pointer to data members 的表示和成本
+
+</Objectives>
+
+## 从“成员名”和“成员地址”不是一回事开始
+
+读 `object.value` 时，compiler 先根据 static type 做 member lookup 与 access control，再根据 object model 找到对应 storage。先预测 derived class 声明同名 member 后，`baseView.value` 与 `derived.value` 是否会访问同一字段；答案由 name binding 与选中的 class subobject 决定，不由内存中哪个字段更近决定。
+
+<Term def="在 class scope、声明位置与语言查找规则下，把一个 member name 解析为特定声明的过程。">
+  binding of a data member
+</Term>
+
+<IcoDataBindingAccessMap />
+
+## 3.1 The Binding of a Data Member
+
+class member declaration 同时参与 type name、member name 和 scope rules。现代 compiler 必须遵循完整语言规则，但原书提醒我们：早期实现采用逐行或多阶段处理时，嵌套 typedef、inline member body 与后出现声明可能暴露错误绑定。
+
+```cpp
+using Length = int;
+
+class Point3d {
+public:
+    void set(Length value) { coordinate_ = value; }
+
+private:
+    using Coordinate = double;
+    Coordinate coordinate_ = 0.0;
+};
+```
+
+`set` 的 parameter type 明确绑定到外部 `Length`，`coordinate_` 绑定到 class 内 `Coordinate`。可读代码应避免用同名 nested type 依赖细微 lookup timing。更重要的是，name binding 只回答“选中哪个 declaration”；它还没有回答 member 放在 object 的哪个 offset。
+
+<Callout
+  type="trap"
+  title="陷阱：同名derived member会覆盖base object中的那份存储"
+>
+  name hiding 改变 lookup，不删除 base subobject 的 data。derived object
+  可以同时含有 Base::value 与 Derived::value；通过 Base view 访问前者，通过明确
+  derived lookup 访问后者。把名称遮蔽误当布局覆盖，会造成错误序列化和错误 offset
+  假设。
+</Callout>
+
+## 3.2 Data Member Layout
+
+<Term def="compiler/ABI 在满足声明顺序约束、alignment、base 与实现元数据要求后，为 nonstatic data 分配对象内位置。">
+  data member layout
+</Term>
+
+nonstatic member 占每个 object 的 storage；static member 不占 instance bytes。layout 还要满足每个 field alignment，因而可能在 members 之间插入 padding，并把 object size 向整体 alignment 取整。base tail padding 能否复用、empty base optimization、`[[no_unique_address]]` 等细节依赖语言版本与 ABI，不能用一条“字段顺序相加”概括。
+
+```cpp
+struct Packet {
+    char tag;
+    std::uint32_t length;
+    char flags;
+};
+
+static_assert(sizeof(Packet) >=
+              sizeof(char) + sizeof(std::uint32_t) + sizeof(char));
+```
+
+这条断言只表达下界。常见 ABI 会在 `tag` 后插 padding 以对齐 `length`，并在末尾补齐 array stride。交换 member declaration 可能减小 size，却可能破坏 ABI、serialization 或 cache access pattern；需要用 `alignof`、member addresses 和 target ABI 文档验证。
+
+<Term def="为满足成员 alignment 或 object array stride 而存在、但不直接承载该成员值的对象表示字节。">
+  padding
+</Term>
+
+access specifier 主要控制访问，不是可靠的物理分区标签。标准对 member address order 的保证随语言版本演进，跨版本/ABI 的持久化格式仍不应依赖原生 class layout。稳定 wire format 应逐字段编码。
+
+## 3.3 Access of a Data Member
+
+<Term def="在 class 外只有一份 storage、可通过 class name 或 object expression 命名但不需要 this offset 的成员。">
+  static data member
+</Term>
+
+`Type::count` 通常 lower 为对一个具有 linkage/storage duration 的实体访问。写成 `object.count` 也不意味着 compiler 从 object 内取值；object expression 只参与语言语法和可能的求值规则，static storage 仍独立存在。
+
+<Term def="属于每个 object/subobject 的字段，访问时需要以 this 或 object address 加上布局定位信息。">
+  nonstatic data member
+</Term>
+
+对普通 nonvirtual base/member，`this->field` 常能 lower 为 `*(this + constant_offset)`。public/protected/private 不改变这条运行时路径。inline accessor 在 definition 可见时通常也能回到同样 load/store，因此“封装必然比 struct 慢”没有普遍依据。
+
+## 3.4 Inheritance and the Data Member
+
+<IcoInheritedDataLayoutMap />
+
+### Inheritance without Polymorphism
+
+<Term def="只组合 base subobject 与 derived members、不要求 virtual dispatch 或 virtual base 定位的继承表示。">
+  inheritance without polymorphism
+</Term>
+
+普通 single inheritance 下，derived object 含完整 base subobject。base member access 往往仍是 compile-time offset，derived-to-base pointer conversion 也常是 fixed adjustment。注意 base 自身的 tail padding 与 derived member 安置由 ABI 决定；不能简单假设 derived field 一定紧跟 base 最后一个显式 field。
+
+### Adding Polymorphism
+
+加入 virtual function 常让 class 获得 implementation vptr，并提高 size/alignment。但 data member 本身没有变成“虚数据”；base/derived ordinary fields 仍通常按 fixed layout 访问。动态成本主要在 virtual call 和可能的 pointer adjustment，而不是每次读 `x` 都查 vtable。
+
+<Term def="对象中支持运行时 virtual dispatch 的实现元数据，通常表现为一个或多个 vptr 及 class-level vtable。">
+  polymorphic representation
+</Term>
+
+### Multiple Inheritance
+
+multiple inheritance 在同一 most-derived object 内放多个 base subobjects。转换到非首要 base view 可能调整 address；此后该 base 的 own data 仍可用相对其 base pointer 的 fixed offset 访问。错误地把原始 derived address 当成任意 base address，会读到错误 segment。
+
+### Virtual Inheritance
+
+<Term def="让多条继承路径在 most-derived object 中共享一份 base subobject，并通过实现元数据定位它的继承形式。">
+  virtual inheritance
+</Term>
+
+virtual base 的位置需要兼容不同 most-derived layouts，常不能编码成当前 class 的单一固定 offset。ABI 可通过 vtable entry、virtual-base table 或其他 metadata 得到 adjustment。访问 shared base data 因而可能比普通 base 多一次 load/add，也更限制 layout assumptions。
+
+<Callout type="trap" title="陷阱：有vptr的类，其所有data member都经vtable访问">
+  vtable 支持 virtual function 和某些 ABI 的 virtual-base metadata；ordinary
+  nonstatic data 通常仍在 object 内按 offset 访问。只有 virtual base location
+  之类依赖 most-derived layout 的路径才需要额外动态定位。
+</Callout>
+
+## 3.5 Object Member Efficiency
+
+<Term def="在保持相同算法和数据表示时，比较直接对象、封装访问、普通继承、多重继承与虚继承的实际访问成本。">
+  object member efficiency
+</Term>
+
+效率分析要拆成 load count、dependency chain、cache locality 与 optimizer visibility。普通 nonstatic field、inline getter 和 C struct field 在优化后可能生成相同 instruction；static data 类似 global access；nonvirtual base field 常只是 constant offset。virtual base access 才常多出 metadata load 和 adjustment。
+
+微基准必须阻止 dead-code elimination、固定相同 data volume，并分别测 cold/warm cache。若 workload 被 memory latency 主导，一次额外 pointer chase 的影响可能远大于算术；若 compiler 已 hoist virtual-base offset 到 loop 外，单次源码访问数又不能直接代表每次迭代成本。
+
+## 3.6 Pointer to Data Members
+
+<Term def="类型为 T C::* 的 class-relative member locator；它未绑定具体 object，必须用 dot-star 或 arrow-star 运算符应用。">
+  pointer to data members
+</Term>
+
+<IcoDataMemberPointerMap />
+
+```cpp
+struct Record {
+    int id;
+    int count;
+};
+
+int Record::* selected = &Record::count;
+Record record{7, 12};
+Record* pointer = &record;
+
+int a = record.*selected;
+int b = pointer->*selected;
+```
+
+member pointer 不是 `int*`：形成 `&Record::count` 时没有任何 Record instance。常见 ABI 会编码 relative offset，并为 null member pointer 保留特殊表示；多重/虚继承转换可能需要 adjustment 或受到语言限制。不要序列化其 bytes，也不要假设零就是 null。
+
+<Term def="把 pointer-to-member 与具体 object/base view 组合，执行必要 class adjustment 后得到成员 lvalue 的过程。">
+  member pointer application
+</Term>
+
+效率上，已知 ordinary member pointer 常是一次 add 后 load，optimizer 若看到常量还可折叠为直接 offset。runtime-selected member 保留动态 add；涉及 inheritance conversion 时可能有额外 adjustment。应与 switch、offset table 等实际替代方案在同一 workload 下比较。
+
+## 第3章验证清单
+
+1. 先完成 member lookup/binding，再讨论 storage offset。
+2. 区分 nonstatic instance bytes、static storage 与 function code。
+3. 用 declaration、alignment 和 ABI 证据解释 padding，不凭字段和估算 `sizeof`。
+4. 对 inheritance 分别画 base subobject、derived data 与 polymorphic metadata。
+5. multiple inheritance 先转换到正确 base view，再应用 base-relative offset。
+6. virtual inheritance 明确 shared base 的 runtime location 来源。
+7. 比较 accessor 与 direct field 时检查 optimized output，而不是只数源码层调用。
+8. 把 pointer-to-data-member 当 class-relative locator，不当 raw address 或稳定序列化值。
+
+## 小结
+
+- data member binding 决定声明身份，layout 决定位置，machine access 才执行 address calculation
+- nonstatic data 进入每个 object，static data 独立存储，member function code 不随实例复制
+- padding、base layout 与 ABI metadata 共同决定 `sizeof`，不能靠显式字段字节简单相加
+- inheritance without polymorphism 的 ordinary data access 通常仍是 fixed offset
+- adding polymorphism 增加 virtual representation，但不会让所有数据访问自动虚化
+- multiple inheritance 主要要求正确 base pointer adjustment，virtual inheritance 还需定位共享 base
+- object member efficiency 应由优化后指令和实际 memory behavior 验证
+- pointer to data members 是 class-relative locator，应用到 object 后才产生 member lvalue
+
+<Attribution
+  adaptedFrom="Inside the C++ Object Model, First Edition, Chapter 3: The Semantics of Data"
+  adaptedUrl="https://www.informit.com/store/inside-the-c-plus-plus-object-model-9780201834543"
+/>
+
+<Glossary>
+  <GlossaryItem term="binding of a data member">把成员名解析到特定 class declaration。</GlossaryItem>
+  <GlossaryItem term="data member layout">为 base 和 nonstatic member 分配对象内位置。</GlossaryItem>
+  <GlossaryItem term="padding">为 alignment 与 array stride 保留的表示字节。</GlossaryItem>
+  <GlossaryItem term="static data member">位于对象外、由 class 共享一份的成员。</GlossaryItem>
+  <GlossaryItem term="nonstatic data member">以 object/base address 定位的实例字段。</GlossaryItem>
+  <GlossaryItem term="inheritance without polymorphism">不需要虚分派或共享虚基定位的继承表示。</GlossaryItem>
+  <GlossaryItem term="polymorphic representation">支持 runtime virtual behavior 的对象元数据。</GlossaryItem>
+  <GlossaryItem term="virtual inheritance">在 most-derived object 中共享一份 base 的继承。</GlossaryItem>
+  <GlossaryItem term="object member efficiency">按真实访问路径比较对象成员成本。</GlossaryItem>
+  <GlossaryItem term="pointer to data members">未绑定对象的 class-relative member locator。</GlossaryItem>
+  <GlossaryItem term="member pointer application">用 .* 或 ->* 把 locator 应用到 object。</GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：推导同名成员与布局。** `Derived` 同时继承 `Base::value` 并声明自己的 `value`；分别分析 `derived.value`、`baseRef.value`、`derived.Base::value` 的 binding 与 address 来源。
+
+<Answer question="名称隐藏为什么不等于存储覆盖？">
+  `derived.value` lookup 选择 Derived declaration，再用 Derived layout
+  定位；`baseRef.value` 的 static type 为 Base，只能选择 Base declaration，再从
+  Base subobject address 取 fixed offset；qualified expression 明确选择 Base
+  member，并先形成 Derived 内的 Base view。两份 nonstatic data 都存在，name
+  hiding 只改变未限定查找。
+</Answer>
+
+2. **问题 2：比较四种继承数据访问。** 对普通单继承、加入 virtual function、多重继承的第二 base、virtual base 各写出 address calculation 和可能的额外 load。
+
+<Answer question="哪些路径通常固定，哪些依赖runtime layout？">
+  ordinary single-base/member 多为 object address 加 compile-time offset；加
+  virtual function 后 ordinary data 仍固定，只是 object 另有 vptr。multiple
+  inheritance 转第二 base 时先加 fixed base adjustment，再按 base-relative
+  offset 访问。virtual base location 要适配不同 most-derived object，常先从 ABI
+  metadata 取 offset，再加到 object/base address，因此多一条依赖链。
+</Answer>
+
+3. **问题 3：设计 pointer-to-data-member 实验。** runtime 在 `id` 与 `count` 之间选择 member pointer，应用到 object；再加入 base conversion，比较 direct access、member pointer 与 switch 的优化结果。
+
+  <Answer question="实验需要记录什么才能解释效率？">
+    固定 compiler/ABI/optimization，检查 member pointer size/null representation、普通
+    member 的 encoded locator、base conversion 后的 adjustment。用同一 record array 和
+    selection pattern benchmark，阻止 dead-code elimination，并查看 assembly 中 offset
+    是否常量折叠、是否每次 runtime add、是否出现 virtual-base metadata load。不要把
+    representation bytes 当跨 ABI 格式。
+  </Answer>
+</Exercises>

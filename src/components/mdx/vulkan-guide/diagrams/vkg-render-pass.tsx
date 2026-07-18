@@ -1,115 +1,61 @@
-/**
- * <VkgRenderPassDiagram>：渲染通道与附件结构
- *
- * 纯静态 SVG 展示，无交互。Server Component（无 "use client"）。
- */
+const lifecycle = [
+  ["Before", "barrier2", "producer writes → attachment access + layout"],
+  ["Begin", "VkRenderingInfo", "views、load/store、clear、render area"],
+  ["Draw", "pipeline contract", "formats、samples、layout 与实际附件一致"],
+  ["After", "barrier2", "attachment writes → next read/present + layout"],
+] as const;
+
+const comparison = [
+  ["对象", "VkRenderingInfo 在录制时给出", "VkRenderPass + VkFramebuffer 预创建"],
+  ["Pipeline 合同", "VkPipelineRenderingCreateInfo formats", "兼容 render pass + subpass"],
+  ["多阶段局部读取", "多个 rendering instance + barriers", "subpass + input attachment 可能局部保留"],
+  ["同步/layout", "应用显式 barrier", "subpass dependencies + 隐式转换，仍需正确 scope"],
+] as const;
+
+function Frame({ caption, children }: { caption: string; children: React.ReactNode }) {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption>
+    </figure>
+  );
+}
 
 export function VkgRenderPassDiagram() {
   return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox="0 0 720 400" role="img" aria-label="渲染通道与附件结构" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x="360" y="26" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">渲染通道：附件 → 子通道 → 帧缓冲</text>
-
-          {/* Render Pass container */}
-          <rect x="20" y="45" width="680" height="180" rx="12" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="1.2" />
-          <text x="360" y="65" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--accent)">VkRenderPass</text>
-
-          {/* Attachments column */}
-          <text x="100" y="85" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">附件描述</text>
-
-          <rect x="40" y="95" width="120" height="35" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="100" y="110" textAnchor="middle" fontSize="9" fontWeight="600" fill="var(--text-primary)">附件 0: 颜色</text>
-          <text x="100" y="123" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">CLEAR→STORE</text>
-
-          <rect x="40" y="135" width="120" height="35" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="100" y="150" textAnchor="middle" fontSize="9" fontWeight="600" fill="var(--text-primary)">附件 1: 法线</text>
-          <text x="100" y="163" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">CLEAR→DONT_CARE</text>
-
-          <rect x="40" y="175" width="120" height="35" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="100" y="190" textAnchor="middle" fontSize="9" fontWeight="600" fill="var(--text-primary)">附件 2: 深度</text>
-          <text x="100" y="203" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">CLEAR→DONT_CARE</text>
-
-          {/* Subpass 0 */}
-          <rect x="200" y="95" width="150" height="75" rx="8" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" strokeWidth="1.2" />
-          <text x="275" y="113" textAnchor="middle" fontSize="10.5" fontWeight="700" fill="var(--accent)">子通道 0: G-Buffer</text>
-          <text x="275" y="130" textAnchor="middle" fontSize="8.5" fill="var(--text-secondary)">写 → 附件 0（颜色）</text>
-          <text x="275" y="144" textAnchor="middle" fontSize="8.5" fill="var(--text-secondary)">写 → 附件 1（法线）</text>
-          <text x="275" y="158" textAnchor="middle" fontSize="8.5" fill="var(--text-secondary)">写 → 附件 2（深度）</text>
-
-          {/* Dependency arrow */}
-          <line x1="275" y1="170" x2="275" y2="185" stroke="var(--warning)" strokeWidth="1.5" markerEnd="url(#aRP)" />
-          <defs>
-            <marker id="aRP" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
-              <path d="M0,0 L5,3.5 L0,7 Z" fill="var(--warning)" />
-            </marker>
-          </defs>
-          <text x="300" y="182" fontSize="8" fill="var(--warning)">依赖</text>
-
-          {/* Subpass 1 */}
-          <rect x="200" y="185" width="150" height="35" rx="8" fill="var(--success)" fillOpacity="0.1" stroke="var(--success)" strokeWidth="1.2" />
-          <text x="275" y="203" textAnchor="middle" fontSize="10.5" fontWeight="700" fill="var(--success)">子通道 1: 光照</text>
-          <text x="275" y="216" textAnchor="middle" fontSize="8.5" fill="var(--text-secondary)">读附件 0,1 → 写交换链</text>
-
-          {/* External dependency arrows */}
-          <text x="410" y="85" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">子通道依赖</text>
-
-          <rect x="370" y="95" width="150" height="30" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="445" y="114" textAnchor="middle" fontSize="9" fill="var(--text-primary)">EXTERNAL → 子通道 0</text>
-
-          <rect x="370" y="135" width="150" height="30" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="445" y="154" textAnchor="middle" fontSize="9" fill="var(--text-primary)">子通道 0 → 子通道 1</text>
-
-          <rect x="370" y="175" width="150" height="30" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="445" y="194" textAnchor="middle" fontSize="9" fill="var(--text-primary)">子通道 1 → EXTERNAL</text>
-
-          {/* Layout transitions */}
-          <text x="610" y="85" textAnchor="middle" fontSize="10.5" fontWeight="600" fill="var(--text-primary)">布局转换</text>
-          <rect x="540" y="95" width="140" height="30" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="610" y="114" textAnchor="middle" fontSize="8.5" fill="var(--text-primary)">UNDEFINED → COLOR_OPT</text>
-          <rect x="540" y="135" width="140" height="30" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="610" y="154" textAnchor="middle" fontSize="8.5" fill="var(--text-primary)">COLOR_OPT → SHADER_RO</text>
-          <rect x="540" y="175" width="140" height="30" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="610" y="194" textAnchor="middle" fontSize="8.5" fill="var(--text-primary)">SHADER_RO → PRESENT</text>
-
-          {/* Framebuffer */}
-          <rect x="100" y="250" width="520" height="55" rx="10" fill="var(--success)" fillOpacity="0.06" stroke="var(--success)" strokeWidth="1.2" />
-          <text x="360" y="270" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--success)">VkFramebuffer</text>
-          <text x="360" y="288" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">VkImageView[0]（颜色）+ VkImageView[1]（法线）+ VkImageView[2]（深度）→ 绑定到 RenderPass 附件槽</text>
-
-          <line x1="100" y1="210" x2="100" y2="250" stroke="var(--success)" strokeWidth="1" strokeDasharray="3,2" />
-          <line x1="275" y1="220" x2="275" y2="250" stroke="var(--success)" strokeWidth="1" strokeDasharray="3,2" />
-
-          {/* Render commands */}
-          <text x="360" y="335" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">渲染命令流程</text>
-          <rect x="60" y="350" width="120" height="32" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="120" y="370" textAnchor="middle" fontSize="9" fill="var(--text-primary)">vkCmdBeginRenderPass</text>
-          <line x1="180" y1="366" x2="195" y2="366" stroke="var(--accent)" strokeWidth="1.2" markerEnd="url(#aRP2)" />
-          <defs>
-            <marker id="aRP2" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
-              <path d="M0,0 L5,3.5 L0,7 Z" fill="var(--accent)" />
-            </marker>
-          </defs>
-
-          <rect x="195" y="350" width="80" height="32" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="235" y="370" textAnchor="middle" fontSize="9" fill="var(--text-primary)">子通道 0 绘制</text>
-          <line x1="275" y1="366" x2="290" y2="366" stroke="var(--accent)" strokeWidth="1.2" markerEnd="url(#aRP2)" />
-
-          <rect x="290" y="350" width="80" height="32" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="330" y="370" textAnchor="middle" fontSize="9" fill="var(--text-primary)">vkCmdNextSubpass</text>
-          <line x1="370" y1="366" x2="385" y2="366" stroke="var(--accent)" strokeWidth="1.2" markerEnd="url(#aRP2)" />
-
-          <rect x="385" y="350" width="80" height="32" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="425" y="370" textAnchor="middle" fontSize="9" fill="var(--text-primary)">子通道 1 绘制</text>
-          <line x1="465" y1="366" x2="480" y2="366" stroke="var(--accent)" strokeWidth="1.2" markerEnd="url(#aRP2)" />
-
-          <rect x="480" y="350" width="150" height="32" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="555" y="370" textAnchor="middle" fontSize="9" fill="var(--text-primary)">vkCmdEndRenderPass</text>
-
-          <text x="360" y="398" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">附件描述 → 子通道引用 → 子通道依赖 → 帧缓冲绑定 → 录制渲染命令</text>
-        </svg>
+    <Frame caption="Dynamic rendering 只改变附件描述方式；前后访问依赖和 layout transition 仍由应用建立。">
+      <div role="img" aria-label="Vulkan dynamic rendering 附件生命周期" className="grid gap-3">
+        <strong className="border-b border-border pb-3 text-sm text-primary">Attachment lifecycle</strong>
+        <div className="grid gap-3 md:grid-cols-4">
+          {lifecycle.map(([phase, api, detail], index) => (
+            <div key={phase} className="min-h-36 rounded-control border border-border bg-bg/45 p-4">
+              <span className="mb-3 grid size-8 place-items-center rounded-full bg-accent/15 text-sm font-bold text-accent">{index + 1}</span>
+              <strong className="block text-sm text-primary">{phase}</strong>
+              <code className="mt-2 block text-xs text-accent">{api}</code>
+              <p className="mb-0 mt-2 text-xs leading-5 text-secondary">{detail}</p>
+            </div>
+          ))}
+        </div>
       </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">渲染通道的附件、子通道、依赖与帧缓冲结构</figcaption>
-    </figure>
+    </Frame>
+  );
+}
+
+export function VkgRenderingModelDiagram() {
+  return (
+    <Frame caption="现代主线和 legacy render pass 都有效；选择取决于附件局部性、平台和引擎架构。">
+      <div role="img" aria-label="Dynamic rendering 与 legacy render pass 对比" className="overflow-x-auto">
+        <div className="min-w-[760px] overflow-hidden rounded-control border border-border">
+          <div className="grid grid-cols-[1.2fr_2fr_2fr] gap-px bg-border text-xs">
+            {['维度', 'Dynamic rendering', 'Legacy render pass'].map((label) => (
+              <strong key={label} className="bg-bg p-3 text-primary">{label}</strong>
+            ))}
+            {comparison.flatMap((row) => row.map((cell, index) => (
+              <span key={`${row[0]}-${cell}`} className={index === 0 ? "bg-accent/10 p-3 font-semibold text-accent" : "bg-elevated p-3 leading-5 text-secondary"}>{cell}</span>
+            )))}
+          </div>
+        </div>
+      </div>
+    </Frame>
   );
 }

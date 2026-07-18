@@ -1,0 +1,343 @@
+---
+title: 第 13 章：分层 View 与 HUD
+type: A
+section: Zombie Arena 项目
+order: 13
+description: 对齐官方第 3 版第 13 章：分层绘制世界与 HUD，集中更新分数、弹药和生命界面，并实现 Home、LevelUp 与 GameOver 屏幕状态。
+demo: false
+math: false
+sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+draft: false
+---
+
+import {
+  BcgpHudProjectionMap,
+  BcgpLayeredViewMap,
+  BcgpScreenStateMap,
+} from "@/components/mdx/beginning-cpp-game-programming/diagrams/layered-hud";
+
+<Objectives>
+
+- 能实现一帧内 worldView、hudView 和全屏面板的稳定绘制顺序，并解释 View 切换不清屏的语义
+- 能设计以 GameSnapshot 为唯一数据源的 HUD 对象更新，正确处理文本格式、边界重算和锚点布局
+- 能实现 Home、Playing、LevelUp、GameOver 状态转换，冻结相应时间与输入并保证一次选择只提交一次
+
+</Objectives>
+
+## 从“哪些东西应随相机移动”开始
+
+第 8 章建立双 View，第 13 章把它扩展为完整
+
+<Term def="按世界、世界叠加、固定 HUD 和全屏面板的顺序使用不同 View 绘制同一帧的技术。">
+  分层视图
+</Term>
+。地图、Player、Zombie、Bullet 属于世界；弹药、分数、生命和波次属于 HUD；Home 与
+LevelUp 面板属于阻塞世界输入的屏幕状态。
+
+<BcgpLayeredViewMap />
+
+## 一次 clear，一次 display，中间切 View
+
+<Term def="在 worldView 下绘制地图和游戏实体的阶段，所有对象使用世界坐标并随相机滚动。">
+  世界图层
+</Term>
+先绘制。世界血条、爆炸和地面标记若绑定实体位置，也在此层。随后切换 hudView
+绘制固定界面。
+
+```cpp
+window.clear(sf::Color::Black);
+
+window.setView(worldView);
+drawTerrain(window);
+drawEntities(window);
+drawWorldEffects(window);
+
+window.setView(hudView);
+hud.draw(window);
+
+if (phase != GamePhase::Playing)
+    screens.draw(window, phase);
+
+window.display();
+```
+
+<Term def="在固定逻辑屏幕坐标中绘制分数、弹药、生命和提示的阶段，不受世界相机中心影响。">
+  HUD 图层
+</Term>
+切 View 不会清除后缓冲，只改变后续 draw 的坐标映射。若每层都
+clear，前一层会消失；若中途 display，玩家可能看到半成品帧。
+
+<Callout type="trap">
+  **现象**：世界正常但 HUD 完全看不到。**原因**：画 HUD 前仍激活
+  worldView，文本固定坐标落在当前世界视野外，或全屏背景后画覆盖它。**修法**：每个绘制区段开头显式
+  setView，并用固定顺序断言 draw 调用。
+</Callout>
+
+## HUD 对象不是业务状态
+
+<Term def="显示生命、弹药、分数、波次和提示的一组 Text/Shape 对象，由游戏状态投影生成但不拥有规则。">
+  HUD 对象
+</Term>
+不应保存“真正分数”并让 Game 再读取。业务层产生只读
+<Term def="某一帧用于界面显示的生命、弹药、分数、波次和阶段值集合。">
+  GameSnapshot
+</Term>
+，HUD 比较前后值并更新视图。
+
+```cpp
+struct GameSnapshot {
+    int health;
+    int maximumHealth;
+    int ammo;
+    int score;
+    int wave;
+    GamePhase phase;
+
+    auto operator<=>(const GameSnapshot&) const = default;
+};
+```
+
+Snapshot 是值，不含 Player/Zombie 指针，避免 HUD 跨帧保存易失引用。若生命变化，更新生命文本和条宽；分数未变则无需重新格式化。先保证正确，再测量文本更新是否真是瓶颈。
+
+<BcgpHudProjectionMap />
+
+## 更新 HUD：格式与布局一起刷新
+
+<Term def="把数值状态转换成可显示字符串、几何宽度和颜色，并写入对应 HUD 对象的过程。">
+  HUD 更新
+</Term>
+不能只 `setString`：文本宽度变化后，右对齐或居中原点也要重算。
+
+```cpp
+void Hud::setScore(int score)
+{
+    scoreText_.setString("Score: " + std::to_string(score));
+    const sf::FloatRect bounds{scoreText_.getLocalBounds()};
+    scoreText_.setOrigin(bounds.left + bounds.width, bounds.top);
+    scoreText_.setPosition(logicalWidth_ - margin_, margin_);
+}
+```
+
+<Term def="以屏幕边缘、中心或另一控件为稳定参考放置 UI，使文本长度变化后仍保持预期对齐。">
+  锚点布局
+</Term>
+比固定左上坐标更稳。`getLocalBounds().left/top` 可能不为零，设置 origin
+时应包含偏移。Font 必须覆盖所有 Text 生命周期。
+
+## 生命条与弹药
+
+生命条宽度由 `health / maximumHealth` 归一化，先处理最大值非正，再钳到 0..1。业务层应已保证 health 合法，HUD 仍防御损坏 snapshot，避免负宽。
+
+```cpp
+const float ratio{snapshot.maximumHealth > 0
+    ? std::clamp(static_cast<float>(snapshot.health) /
+                     static_cast<float>(snapshot.maximumHealth),
+                 0.0F, 1.0F)
+    : 0.0F};
+healthBar_.setSize({fullHealthWidth_ * ratio, healthBarHeight_});
+healthBar_.setFillColor(ratio < 0.25F ? sf::Color::Red : sf::Color::Green);
+```
+
+弹药显示整数，成功 shoot 后才扣减，Pickup 提交后增加。HUD 接收提交后的 snapshot，因此不会显示“子弹没发出但弹药已扣”的中间状态。
+
+<Term def="仅在对应状态值变化时重新格式化或布局 HUD 元素的更新策略。">
+  脏标记
+</Term>
+可减少工作，但状态比较必须完整；漏标记比每帧更新更糟。
+
+## Home 屏幕是状态而非背景图
+
+<Term def="游戏启动或返回菜单时显示标题与开始入口、停止战斗更新并接管输入的阶段。">
+  Home 屏幕
+</Term>
+可继续绘制静态世界作为背景，但 Player/Zombie 不更新。Enter 的 KeyPressed
+边沿开始新局，按住不能每帧重置。
+
+```cpp
+if (phase == GamePhase::Home &&
+    event.type == sf::Event::KeyPressed &&
+    event.key.code == sf::Keyboard::Enter) {
+    resetGame();
+    frameClock.restart();
+    phase = GamePhase::Playing;
+}
+```
+
+状态提交前 reset 完整成功，最后才进入 Playing。退出 Home 时清除菜单选择和重复输入状态；恢复时钟，避免菜单停留时间成为第一帧 dt。
+
+## LevelUp 屏幕与一次选择
+
+<Term def="达到升级条件后暂停战斗、显示可选能力，并在一次合法选择后应用效果并恢复游戏的阶段。">
+  LevelUp 屏幕
+</Term>
+不能只盖面板同时让 Zombie 在背后继续伤害
+Player。进入时冻结游戏时间、生成当前合法选项；选择时验证资源和上限，再提交属性。
+
+```cpp
+if (phase == GamePhase::LevelUp && event.type == sf::Event::KeyPressed) {
+    const std::optional<Upgrade> choice{mapUpgradeKey(event.key.code)};
+    if (choice && player.canApply(*choice)) {
+        player.apply(*choice);
+        phase = GamePhase::Playing;
+        frameClock.restart();
+    }
+}
+```
+
+<Term def="玩家在升级面板选定并经合法性检查后，对 Player 状态执行一次的能力修改。">
+  升级提交
+</Term>
+只在转换边沿触发。重复按键、已达上限和过期选项都不能重复消费点数。
+
+<BcgpScreenStateMap />
+
+## GameOver 与重启路径
+
+<Term def="Player 死亡后冻结战斗、显示最终分数并只接受重启或返回 Home 的终局阶段。">
+  GameOver 屏幕
+</Term>
+读取最终 snapshot，不继续加分。重启恢复
+Player、horde、Bullet/Pickup、分数和波次；返回 Home
+则释放关卡对象或保持明确静态预览。
+
+Home、LevelUp、GameOver 的输入集合互斥。不要让全局射击查询在非 Playing 阶段运行，否则点击菜单会向世界发射子弹。输入路由先看 phase，再交给对应处理器。
+
+首页与升级界面共享同一 hudView 和安全区域，但读取不同状态、接受不同命令；复用布局组件不能把两套转换规则合并成一个含糊的 showMenu 布尔值。
+
+焦点丢失可自动转 Paused 或忽略持续输入；恢复时清方向并重启帧时钟。界面状态也是时间策略的一部分。
+
+## resize 与逻辑 UI 分辨率
+
+hudView 可保持 1280x720 逻辑尺寸，在不同窗口使用 letterbox viewport，避免 UI 被非等比拉伸。resize 时计算目标宽高比和归一化 viewport；worldView 可使用相同视口或独立策略，但鼠标映射必须指定对应 View。
+
+<Term def="在窗口比例与逻辑比例不同时用空白边保留等比内容区域的 viewport 策略。">
+  letterbox
+</Term>
+产生的黑边不是 HUD 坐标。点击前先判断像素是否在有效 viewport
+内，避免黑边映射到菜单按钮。
+
+文本需测试最长本地化字符串。动态缩放字体不是首选，先允许换行、扩大面板或按安全区域布局。按钮和计数器尺寸稳定，状态变化不能推动其它元素跳动。
+
+<Callout type="trap">
+  **现象**：宽屏窗口中按钮看起来正确，但点击位置偏移。**原因**：绘制使用
+  letterbox hudView，输入却按整个窗口像素直接比较。**修法**：用相同 hudView 做
+  mapPixelToCoords，并拒绝 viewport 黑边区域。
+</Callout>
+
+## HUD 类的职责边界
+
+Hud 拥有 Text/Shape 并借用 Font，提供 `update(snapshot)` 与 `draw(target)`；不读取全局 Player、不修改分数、不处理升级规则。ScreenOverlay 可独立拥有 Home/LevelUp/GameOver 文本，或 Hud 根据 phase 绘制，但输入仍由状态机处理。
+
+```cpp
+class Hud {
+public:
+    Hud(const sf::Font& font, sf::Vector2f logicalSize);
+    void update(const GameSnapshot& snapshot);
+    void draw(sf::RenderTarget& target) const;
+
+private:
+    GameSnapshot previous_{};
+    bool initialized_{false};
+    sf::Text scoreText_;
+    sf::Text ammoText_;
+    sf::RectangleShape healthBar_;
+};
+```
+
+Font 由资源层拥有。previous 只用于投影缓存，不成为业务来源。首次 initialized 强制全量刷新，避免默认 snapshot 恰好相等导致空文本。
+
+## 验证层次、状态和布局
+
+渲染测试记录 draw 阶段：worldView 下世界对象，hudView 下 HUD，面板最后，一帧一次 clear/display。让 Player 移动一屏，HUD 像素位置保持；World 血条跟 Zombie 移动。
+
+状态测试 Home 不更新战斗，Enter 只重置一次；LevelUp 冻结 Player/Zombie/Bullet/Pickup 时间，一次合法选择修改一次属性并恢复；GameOver 分数不再变化，重启完整清理。每次恢复 frameClock 重新开始。
+
+布局测试分数从 9 到 100000 后仍右对齐，生命 0/满值/损坏值宽度合法，最长消息不溢出。多个窗口比例下截图和 mapPixelToCoords 点击回放同时通过。
+
+> 先预测：先画 HUD 再画世界会怎样？即使坐标正确，世界背景和实体会覆盖 HUD；绘制顺序也是层次契约的一部分。
+
+## 小结
+
+- 一帧只 clear/display 一次，中间按 worldView 世界、hudView HUD、全屏面板顺序叠加
+- HUD 是 GameSnapshot 的只读投影，业务分数、生命和弹药仍由游戏状态拥有
+- 文本变化后重算 local bounds，以锚点布局保持右对齐和居中
+- Home、LevelUp、GameOver 是明确状态，决定输入和游戏时间，不只是视觉覆盖
+- LevelUp 选择只提交一次，恢复前重启帧时钟；非 Playing 阶段不处理射击
+- resize 使用一致 View/viewport 映射，letterbox 黑边不属于可点击逻辑区域
+
+<Exercises>
+
+**问题 1** 写出一帧的三层绘制顺序，为什么每层不能各自 clear/display？
+
+<Answer>
+
+先 clear；set worldView 画地图、实体和世界特效；set hudView 画生命、弹药、分数；最后画当前全屏面板并一次 display。每层 clear 会擦掉前层，多个 display 会呈现中间半帧并可能闪烁；setView 只改后续坐标映射，不清缓冲。
+
+</Answer>
+
+**问题 2** 分数从 99 变 100 后，右对齐 Text 要更新哪些数据？为何 HUD 不能拥有真实 score？
+
+<Answer>
+
+从新 snapshot 格式化字符串、setString、重取 local bounds、把 origin 设到含 left/top 偏移的右上，再放到右边距锚点。真实 score 由规则层拥有并决定计分；HUD 若另存会产生双事实来源，只应缓存 previous snapshot 用于脏更新。
+
+</Answer>
+
+**问题 3** 进入 LevelUp 后哪些系统冻结，一次选择如何安全恢复 Playing？
+
+<Answer>
+
+冻结 Player、Zombie、Bullet、Pickup 冷却和战斗计时，但继续窗口事件与界面绘制。KeyPressed 映射一次选项，重新验证点数和上限，提交 Player 修改，清除选择状态，重启 frameClock，最后转 Playing；按住或重复事件不能再次消费。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="分层视图">
+  按世界、HUD 和全屏面板顺序使用不同 View 绘制一帧。
+</GlossaryItem>
+<GlossaryItem term="世界图层">
+  在 worldView 下绘制地图、实体和世界特效的阶段。
+</GlossaryItem>
+<GlossaryItem term="HUD 图层">
+  在固定 hudView 下绘制分数、生命、弹药和提示的阶段。
+</GlossaryItem>
+<GlossaryItem term="HUD 对象">
+  由 Text/Shape 组成、从游戏状态投影但不拥有规则的界面对象。
+</GlossaryItem>
+<GlossaryItem term="GameSnapshot">
+  供界面读取的一帧生命、弹药、分数、波次和阶段值。
+</GlossaryItem>
+<GlossaryItem term="HUD 更新">
+  把数值状态格式化为字符串、几何与颜色并刷新界面的过程。
+</GlossaryItem>
+<GlossaryItem term="锚点布局">
+  以边缘或中心为参考、在内容变化后保持对齐的 UI 放置方式。
+</GlossaryItem>
+<GlossaryItem term="脏标记">
+  只在对应状态变化时重新格式化或布局 HUD 元素的策略。
+</GlossaryItem>
+<GlossaryItem term="Home 屏幕">
+  显示标题和开始入口、停止战斗并接管输入的初始阶段。
+</GlossaryItem>
+<GlossaryItem term="LevelUp 屏幕">
+  冻结战斗并提供一次能力选择的升级阶段。
+</GlossaryItem>
+<GlossaryItem term="升级提交">
+  合法选择后对 Player 状态执行一次的能力修改。
+</GlossaryItem>
+<GlossaryItem term="GameOver 屏幕">
+  Player 死亡后显示最终结果并接受重启或回首页的终局阶段。
+</GlossaryItem>
+<GlossaryItem term="letterbox">
+  窗口比例不同时用空白边保留逻辑内容等比的 viewport 策略。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 13"
+  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+/>

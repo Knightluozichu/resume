@@ -1,0 +1,242 @@
+---
+title: "Chapter 19 · Data Structures for Disjoint Sets"
+type: C
+section: "CLRS4 · 高级数据结构"
+order: 19
+description: "按CLRS第四版第19章重建不相交集合操作、链表表示、集合森林，以及按秩合并与路径压缩分析。"
+demo: true
+math: true
+sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+draft: false
+---
+
+import { CLRS4DisjointSetPartitionLab, CLRS4DisjointSetOperationsLab, CLRS4LinkedListUnionLab, CLRS4WeightedDoublingLab, CLRS4DisjointSetForestLab, CLRS4UnionByRankLab, CLRS4PathCompressionLab, CLRS4FindSetTraceLab, CLRS4InverseAckermannLab, CLRS4DisjointSetCertificateLab } from "@/components/mdx/introduction-to-algorithms/diagrams/19-data-structures-for-disjoint-sets";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释MAKE-SET、FIND-SET与UNION如何维护元素partition及稳定representative contract
+- 能计算weighted linked-list union的pointer rewrite次数与forest FIND路径成本
+- 能实现链表加权合并、union by rank、recursive path compression和deterministic tie policy
+- 能分析set-size doubling、rank-height关系及组合优化为何得到inverse-Ackermann序列界
+- 能设计包含partition、forest acyclicity、rank invariant、compression rewrite与复杂度量词的证书
+
+</Objectives>
+
+## 从“连通性查询为何不必每次重跑图搜索”开始
+
+先预测：边不断加入无向图，只需回答两个顶点是否已连通。每次从头BFS会重复探索旧边；若每个connected component维护一个representative，查询只需比较两个FIND-SET结果，加入跨component边时再UNION。
+
+<Term def="维护元素partition、为每个集合选代表元，并支持创建单例、查询代表元和合并集合的数据结构族。">不相交集合数据结构</Term>也称union-find。它适合只合并、不拆分的动态等价关系；如果需要删除边后拆分component，接口与分析都不足。
+
+<CLRS4DisjointSetPartitionLab />
+
+## 19.1 Disjoint-set operations
+
+### Partition contract
+
+设universe为$S=\{x_1,\ldots,x_n\}$，当前sets构成partition：
+
+$$
+S_1\cup S_2\cup\cdots\cup S_k=S,
+\qquad
+S_i\cap S_j=\varnothing\quad(i\ne j).
+$$
+
+<Term def="MAKE-SET创建单例，FIND-SET返回所属集合代表元，UNION合并两个集合并保持partition的接口。">不相交集合操作</Term>有三项：
+
+1. `MAKE-SET(x)`要求$x$尚未存在，创建$\{x\}$。
+2. `FIND-SET(x)`返回该set的representative；同set元素结果相同。
+3. `UNION(x,y)`先找两root，不同才合并；相同则no-op。
+
+<CLRS4DisjointSetOperationsLab />
+
+Representative不必是最小元素，也不必在不同版本保持不变。客户端只能依赖“相同集合返回相同代表”，不能把具体root identity写成业务语义。Tie policy可固定root选择以便测试复现。
+
+在connected components或Kruskal算法中，`FIND-SET(u) != FIND-SET(v)`既是“当前不连通”判断，也是加入edge不会成环的certificate；随后UNION两个representatives。
+
+## 19.2 Linked-list representation of disjoint sets
+
+### Direct representative pointers
+
+<Term def="每个集合用链表保存成员，每个节点直接指向head代表元，head同时维护tail和size的集合表示。">链表表示</Term>让MAKE-SET和FIND-SET为$O(1)$。UNION把一条list接到另一条tail，但被追加list的每个node都要重写representative pointer。
+
+若总把large list附到singleton后面，已有大量元素可能反复改pointer，$n-1$次union累计$\Theta(n^2)$。
+
+<CLRS4LinkedListUnionLab />
+
+Weighted-union heuristic总把shorter list附到longer list。某个element每次被重写时，其new set size至少翻倍：
+
+$$
+1,2,4,\ldots,2^r\le n
+\quad\Longrightarrow\quad
+r\le\lfloor\lg n\rfloor.
+$$
+
+<CLRS4WeightedDoublingLab />
+
+因此$n$个elements的全部representative rewrites至多$O(n\log n)$。含$n$次MAKE-SET的$m$个操作总时间：
+
+$$
+T(m,n)=O(m+n\log n).
+$$
+
+```cpp
+void list_union(Set* x, Set* y) {
+    if (x == y) return;
+    if (x->size < y->size) swap(x, y);
+    x->tail->next = y->head;
+    for (Node* node = y->head; node != nullptr; node = node->next)
+        node->representative = x->head;
+    x->tail = y->tail;
+    x->size += y->size;
+}
+```
+
+Head/tail empty-state、self-union和size update必须原子保持。实际并发环境还需锁或版本协议，本章分析假定顺序操作。
+
+<Callout type="trap" title="链表拼接是常数时间，所以UNION也是">
+只改tail next会让被附加节点继续指向旧representative，FIND-SET返回错误partition。修法是把重写所有短list节点的成本纳入模型，再用set-size doubling证明每个element只承担对数次。
+</Callout>
+
+## 19.3 Disjoint-set forests
+
+### Parent-pointer trees
+
+<Term def="每个element指向parent、root指向自身，以一棵rooted tree表示一个集合并用root作为代表元的结构。">不相交集合森林</Term>避免给所有成员保存direct representative。MAKE-SET令`parent[x]=x`；FIND沿parent到root；UNION把一棵root挂到另一棵root。
+
+<CLRS4DisjointSetForestLab />
+
+若随意link，连续把root挂成child可形成长度$n-1$的chain，使FIND为$\Theta(n)$。Union by rank为root维护height upper bound `rank`，总把低rank root挂到高rank root；仅当ranks相等时任选一root为parent并把它rank加1。
+
+<CLRS4UnionByRankLab />
+
+```cpp
+void link_roots(Node* x, Node* y) {
+    if (x->rank > y->rank) swap(x, y);
+    x->parent = y;
+    if (x->rank == y->rank) ++y->rank;
+}
+
+void unite(Node* x, Node* y) {
+    link_roots(find_set(x), find_set(y));
+}
+```
+
+Rank为$r$的root至少代表$2^r$个elements，因此：
+
+$$
+rank[x]\le\lfloor\lg n\rfloor.
+$$
+
+单独使用union by rank使tree height为$O(\log n)$。Path compression会让rank不再等于实际height，但它仍是单调upper-bound标签，link规则继续有效；不要在compression后重新计算rank。
+
+### Path compression
+
+FIND-SET递归找到root后，在return path把每个visited node直接指向root。Partition不变，后续queries更短。
+
+<CLRS4PathCompressionLab />
+
+```cpp
+Node* find_set(Node* x) {
+    if (x->parent != x)
+        x->parent = find_set(x->parent);
+    return x->parent;
+}
+```
+
+<CLRS4FindSetTraceLab />
+
+Compression只改parent，不改rank。Iterative版本需要先找到root，再第二次遍历path执行rewire；若只把起点指向grandparent，是path halving，仍是有效变体但证明与具体writes不同。
+
+## 19.4 Analysis of union by rank with path compression
+
+### Sequence bound
+
+<Term def="用rank限制树增长、并在FIND后把访问路径直接连到root的组合优化，使操作序列总时间达到反Ackermann界。">按秩合并与路径压缩</Term>组合后，单次FIND仍可能遇到较长的尚未压缩path；正确结论是长度$m$操作序列的总时间。
+
+对$n$次MAKE-SET及总计$m\ge n$次operations：
+
+$$
+T(m,n)=O(m\,\alpha(n)),
+$$
+
+其中$\alpha$是inverse Ackermann function，增长极慢但不是数学上的常数。
+
+<CLRS4InverseAckermannLab />
+
+分析核心可分三层：
+
+1. Rank只在相等rank roots合并时增加，故rank沿parent path严格增加。
+2. Rank为$r$的node需要至少$2^r$规模，high-rank nodes数量迅速减少。
+3. Path compression让一个node跨过大量中间rank；按rank区间为这些跳跃收费后，重复昂贵traversal极少。
+
+完整证明使用快速增长函数对rank分层，并把FIND path成本分给nodes。不能用“第一次压平后全是常数”替代：不同union会把roots重新link，且一段序列中仍会创建新的未压缩paths。
+
+<Callout type="trap" title="union-find每次都是严格O(1)">
+工程上alpha极小，但理论保证是m次操作总计$O(m alpha(n))$，不是每个FIND worst-case常数。修法是同时报告amortized sequence bound、启发式组合与具体操作量词。
+</Callout>
+
+<CLRS4DisjointSetCertificateLab />
+
+<Stepper>
+<Step title="固定partition接口">
+验证每个element恰属一个set，MAKE-SET前置条件明确，FIND结果只承诺representative equivalence。
+
+<CLRS4DisjointSetOperationsLab />
+</Step>
+<Step title="维护forest不变量">
+Parent pointers无环且root自指；UNION只link roots，低rank挂高rank，相等时只增新root rank。
+
+<CLRS4UnionByRankLab />
+</Step>
+<Step title="压缩并正确报告界">
+FIND回程重写visited parents，rank保持不变，复杂度按包含m次operations的整个sequence核算。
+
+<CLRS4DisjointSetCertificateLab />
+</Step>
+</Stepper>
+
+## 小结
+
+Chapter 19 Data Structures for Disjoint Sets先定义disjoint-set operations与partition contract；linked-list representation用weighted union和size doubling把pointer rewrites压到$O(n\log n)$。Disjoint-set forests用parent roots表示集合，union by rank控制height，path compression降低未来FIND成本。
+
+Analysis of union by rank with path compression给出$O(m\alpha(n))$总序列界。正确实现必须保持forest acyclic、只link representatives、相等rank时才递增，并让compression只重写parents；正确说明则要区分amortized practical constant与worst-case per-call constant。
+
+<Exercises>
+
+**问题 1**：Weighted linked-list union为何让一个element最多改$O(\log n)$次representative？
+
+<Answer>
+Element只在所属list作为较短一方时被重写；合并后new set size至少是原来的两倍。从singleton开始，重写$r$次后set size至少$2^r$且不超过$n$，所以$r\le\lfloor\lg n\rfloor$。
+</Answer>
+
+**问题 2**：Union by rank中何时增加rank？
+
+<Answer>
+只有两个不同roots的rank相等时，任选一个挂到另一个下面，新root的rank增加1。若ranks不同，低rank root挂到高rank root，后者已有upper bound足以覆盖新child，rank不变。
+</Answer>
+
+**问题 3**：Path compression后为何不重算rank为实际height？
+
+<Answer>
+Rank在分析和link规则中是单调height upper bound，不要求等于当前height。Compression降低实际深度但保留rank，可继续保证parent path rank递增；重算会破坏简单单调维护并无性能必要。
+</Answer>
+
+**问题 4**：为什么不能把$O(m\alpha(n))$说成每次FIND严格$O(1)$？
+
+<Answer>
+该式对整个operation sequence求和，允许个别尚未压缩的FIND较长，只保证这些昂贵路径不会频繁重复。Alpha虽对现实$n$很小，仍是增长函数，也不能改变amortized与worst-case per-operation的量词差异。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="不相交集合数据结构">维护元素partition、为每个集合选代表元，并支持创建单例、查询代表元和合并集合的数据结构族。</GlossaryItem>
+<GlossaryItem term="不相交集合操作">MAKE-SET创建单例，FIND-SET返回所属集合代表元，UNION合并两个集合并保持partition的接口。</GlossaryItem>
+<GlossaryItem term="链表表示">每个集合用链表保存成员，每个节点直接指向head代表元，head同时维护tail和size的集合表示。</GlossaryItem>
+<GlossaryItem term="不相交集合森林">每个element指向parent、root指向自身，以一棵rooted tree表示一个集合并用root作为代表元的结构。</GlossaryItem>
+<GlossaryItem term="按秩合并与路径压缩">用rank限制树增长、并在FIND后把访问路径直接连到root的组合优化，使操作序列总时间达到反Ackermann界。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Chapter 19 · Data Structures for Disjoint Sets" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

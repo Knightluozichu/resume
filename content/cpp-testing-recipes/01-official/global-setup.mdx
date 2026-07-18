@@ -1,0 +1,243 @@
+---
+title: "Chapter 1：Global Setup"
+type: A
+section: 现代 C++ 测试驱动开发 · 环境与反馈回路
+order: 1
+description: 对齐原书 Chapter 1：建立可重复的 C++ 编译、CMake、GoogleTest/GoogleMock 与 CppUTest 环境，让产品目标、测试发现、失败输出和第三方依赖都有可核对证据。
+demo: false
+math: false
+sourceUrl: "https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/"
+draft: false
+---
+
+import {
+  CtrEnvironmentProofLab,
+  CtrTestTargetBuildFlow,
+  CtrToolchainSetupMap,
+} from "@/components/mdx/cpp-testing-recipes/diagrams/global-setup";
+
+<Objectives>
+
+- 能区分 C++ 编译器、CMake/CTest 与测试框架的责任，并用版本、目标图、测试数和退出码证明环境真实可用
+- 能建立产品库与测试可执行文件分离的最小工程，同时接入 GoogleTest、GoogleMock 或 CppUTest 中的一套明确测试入口
+- 能识别编译器、依赖、测试发现和构建缓存漂移，用干净构建与固定依赖复现同一组测试结果
+
+</Objectives>
+
+## 为什么 TDD 的第一章是环境，而不是第一个断言
+
+测试驱动开发依赖很短的反馈回路：写一个会失败的测试，确认失败原因正确，写最小实现，让测试通过，再在全绿保护下重构。若一次构建要靠 IDE 中未记录的按钮、测试文件没有被发现，或开发机与持续集成使用不同编译器，红与绿都可能是环境伪造的信号。
+
+<Term def="把源代码按照选定的 C++ 标准翻译为目标文件，并报告词法、语法和类型问题的工具实现。">
+  C++ 编译器
+</Term>
+
+本章目标不是收集尽可能多的工具，而是建立一个任何成员都能从空目录复现的反馈回路。对每次运行，至少应回答四个问题：使用了哪个编译器，构建了哪些目标，发现了多少测试，失败是否通过非零退出码传出。
+
+<CtrToolchainSetupMap />
+
+## 三层工具链必须各自留下证据
+
+编译器决定语言模式、标准库组合和诊断；CMake 描述目标与依赖；GoogleTest 或 CppUTest 负责注册和执行测试。IDE 可以驱动这三层，却不能成为唯一配置来源。把实际命令和目标关系写进仓库，成员才不需要猜测某台机器的隐藏设置。
+
+<Term def="用目标、源文件、编译选项和链接依赖组成的有向关系，决定哪些输入变化需要重建哪些产物。">
+  CMake 构建图
+</Term>
+
+先记录编译器身份，再选择标准模式和警告。TDD 需要快速反馈，但不能用关闭诊断换速度；测试目标通常继承与产品目标相同的标准和重要警告，避免测试通过的是另一套语言契约。
+
+```bash
+c++ --version
+cmake --version
+ctest --version
+```
+
+不要只保存“安装成功”的截图。版本文本、配置命令和最终测试退出码才是可比较的证据。不同系统的安装方式可以不同，但仓库中的构建入口和预期结果应一致。
+
+## 用 CMake 分离产品目标与测试目标
+
+产品代码不应为了可测试而链接测试框架。更稳妥的结构是：核心实现形成普通库，测试可执行文件链接该库与框架，CTest 再统一发现和执行用例。这样生产目标不携带测试依赖，测试又能通过公开契约驱动产品代码。
+
+<Term def="CMake 随附的测试运行层，用统一命令枚举测试、执行用例、汇总结果并以退出码报告整体成败。">
+  CTest
+</Term>
+
+下面的最小构建图假定 GoogleTest 已由系统包管理器、父工程或受控依赖步骤提供。关键不是安装渠道，而是 `soundex`、`soundex_test` 和 CTest 之间的边清晰可读。
+
+```cmake
+cmake_minimum_required(VERSION 3.23)
+project(soundex_tdd LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+add_library(soundex src/Soundex.cpp)
+target_include_directories(soundex PUBLIC include)
+
+include(CTest)
+if(BUILD_TESTING)
+  find_package(GTest CONFIG REQUIRED)
+  add_executable(soundex_test tests/SoundexTest.cpp)
+  target_link_libraries(soundex_test PRIVATE soundex GTest::gtest_main)
+
+  include(GoogleTest)
+  gtest_discover_tests(soundex_test)
+endif()
+```
+
+`BUILD_TESTING` 让使用者显式选择是否创建测试目标；`GTest::gtest_main` 提供测试入口；`gtest_discover_tests` 在构建后枚举真实用例并注册到 CTest。若只写 `add_executable` 而不注册，测试程序存在却可能永远不被默认测试命令执行。
+
+<CtrTestTargetBuildFlow />
+
+## 先做冒烟测试，再进入 Soundex 示例
+
+第一个测试的任务是证明反馈回路，而不是证明领域算法。它必须能被发现、能通过，也能在故意改变期望后稳定失败。只有红绿两种路径都验证过，下一章的 Soundex 测试才有可信载体。
+
+<Term def="Google 提供的 C++ 单元测试框架，负责 TEST 注册、夹具生命周期、断言和结构化失败报告。">
+  GoogleTest
+</Term>
+
+```cpp
+#include <gtest/gtest.h>
+
+TEST(EnvironmentSmokeTest, ReportsAUsefulFailure) {
+    const int expected = 4;
+    const int actual = 2 + 2;
+    EXPECT_EQ(expected, actual);
+}
+```
+
+先保持 `expected` 为 4，确认测试通过；再临时改成 5，预测失败用例名、期望值和实际值，确认 CTest 返回非零；最后撤销故障并再次全绿。只验证通过路径会漏掉测试未发现、断言未执行或退出码被脚本吞掉等问题。
+
+<Callout type="trap" title="陷阱：看到可执行文件生成就认为测试已接入">
+  `soundex_test` 能链接只证明测试程序存在。还要用 `ctest -N` 核对发现数量，用一次故意失败确认断言执行，并检查 `ctest` 的非零退出码能让脚本和流水线失败。
+</Callout>
+
+## 从干净目录执行 configure、build、test
+
+<Term def="测试框架把源码中的测试定义枚举为运行器可见用例的过程；发现数量是判断测试是否漏跑的重要信号。">
+  测试发现
+</Term>
+
+采用 out-of-source 构建，把源码与生成物分开。切换编译器、生成器或关键依赖时使用新的构建目录，避免旧 `CMakeCache.txt` 混入上一套环境。
+
+```bash
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
+cmake --build build --parallel
+ctest --test-dir build -N
+ctest --test-dir build --output-on-failure
+```
+
+第一条命令创建构建图，第二条只负责生成目标，第三条枚举测试而不执行，第四条执行并在失败时打印框架输出。记录 configure 阶段的编译器 ID/版本、`ctest -N` 数量和最终退出码，能够区分“没有测试”“测试未发现”“测试失败”三种状态。
+
+## GoogleMock 解决交互，不能代替设计判断
+
+<Term def="GoogleTest 配套的模拟工具，用期望调用、参数匹配和返回行为描述对象之间的可观察交互。">
+  GoogleMock
+</Term>
+
+GoogleMock 适合下一阶段需要隔离网络、时钟、文件或其他协作者的测试。它不应成为 Global Setup 的必用层，也不应为了 mock 而把每个函数都改成虚函数。先让纯逻辑通过真实值测试；确实存在昂贵、非确定或难以控制的依赖时，再建立窄接口并选择测试替身。
+
+使用 `GTest::gmock` 或 `GTest::gmock_main` 前，应确认当前 GoogleTest 包实际导出了对应 CMake target。不要手写猜测的库文件名或 include 路径，那会把包布局泄漏进工程。
+
+## CppUTest 是另一条完整路径，不是第二套必装仪式
+
+<Term def="轻量的 C/C++ 单元测试框架，提供测试组、检查宏、内存泄漏检测与 mock 支持，适合受限或兼容 C 的工程。">
+  CppUTest
+</Term>
+
+原书同时介绍 Google Mock 与 CppUTest，是为了让读者理解测试思想不绑定单一框架。一个工程应先选定主路径：GoogleTest 生态完整、发现工具成熟；CppUTest 更轻，并对 C 接口和受限环境友好。选择标准应来自目标平台、现有依赖和团队维护能力，而不是同一测试重复写两套。
+
+```cmake
+# 采用 CppUTest 时，测试目标仍遵守相同边界。
+find_package(CppUTest CONFIG REQUIRED)
+add_executable(soundex_cpputest tests/SoundexCppUTest.cpp)
+target_link_libraries(soundex_cpputest PRIVATE soundex CppUTest::CppUTest)
+add_test(NAME soundex_cpputest COMMAND soundex_cpputest)
+```
+
+不同发行包导出的 target 名可能不同，应以所用包的配置文件为准。重要的是把实际名称固定在构建脚本中，并让 CTest 继续成为团队统一入口。
+
+## 第三方依赖必须固定身份
+
+<Term def="由工程之外维护、通过包管理器、源码子树或下载步骤进入构建图的库及其版本契约。">
+  第三方依赖
+</Term>
+
+依赖获取方式可以是系统包、vcpkg/Conan、Git submodule 或 CMake `FetchContent`。无论哪一种，都要固定版本或提交哈希，并记录许可证、更新责任和离线策略。跟随移动分支会让相同产品源码在不同日期编译出不同测试基础设施。
+
+若使用在线获取，配置阶段还会依赖网络可用性。持续集成应缓存已锁定的依赖，失败时区分“依赖下载失败”和“产品测试失败”，不要把基础设施故障误判为红灯测试。
+
+<Callout type="trap" title="陷阱：总是下载最新版测试框架">
+  “最新版”是随时间变化的输入，无法复现。固定发布版或提交哈希，计划性升级时单独审查变更并重跑全套测试；不要让普通 configure 隐式更新测试基础。
+</Callout>
+
+<CtrEnvironmentProofLab />
+
+## 建立可重复环境验收表
+
+<Term def="从空构建目录出发，给定相同源码、工具链与依赖身份时能得到相同目标图和测试结论的环境。">
+  可重复测试环境
+</Term>
+
+一次有效验收应包含：空构建目录、明确编译器、固定标准模式、锁定第三方依赖、可预测测试数、一次故意失败和恢复后的全绿。对于跨平台工程，在每个支持平台都保存同样结构的证据，而不是要求路径和安装命令完全相同。
+
+<Stepper>
+  <Step title="第一步：声明工具责任与版本">
+    写下编译器、CMake/CTest、测试框架各自负责什么，保存版本与标准模式；不要让 IDE 成为唯一事实来源。
+
+    <CtrToolchainSetupMap />
+  </Step>
+  <Step title="第二步：建立目标图与统一入口">
+    将产品库和测试程序分开，注册到 CTest；从空目录 configure、build，并先用 `ctest -N` 核对预计用例数。
+
+    <CtrTestTargetBuildFlow />
+  </Step>
+  <Step title="第三步：制造并排除环境伪信号">
+    依次模拟版本漂移、漏发现、依赖漂移和旧缓存，预测现象，再用日志、测试数、锁定值与新构建目录确认责任边界。
+
+    <CtrEnvironmentProofLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- C++ 编译器、CMake/CTest 与测试框架构成三层反馈链，每层都要有独立证据
+- 产品库不依赖测试框架，测试目标链接产品和框架，再由 CTest 统一发现与执行
+- 冒烟测试必须验证通过和故意失败两条路径，测试数与退出码比“程序生成了”更可靠
+- GoogleTest、GoogleMock 和 CppUTest 各有适用边界，一个工程不必同时维护两套主框架
+- 第三方依赖必须固定身份，编译器或关键配置变化时应从独立空构建目录重新配置
+
+<Exercises>
+  1. **问题 1：证明测试真的被执行。** 一个工程能成功生成 `soundex_test`，请设计最小证据链排除“测试存在但没有运行”。
+
+  <Answer question="怎样证明测试被发现、执行并能传播失败？">先预测并用 `ctest -N` 核对用例数量；运行全绿并记录退出码；临时把一个确定断言改错，确认输出包含预期用例名、期望值和实际值且 CTest 返回非零；恢复断言后再次全绿。四步共同排除未注册、未执行和脚本吞错。</Answer>
+
+  2. **问题 2：选择框架。** 一个桌面 C++ 服务已有 GoogleTest；一个受限固件工程包含大量 C 接口。如何决策 GoogleTest 与 CppUTest？
+
+  <Answer question="框架选择应依据哪些约束？">桌面服务优先延续已有 GoogleTest 生态和发现工具，交互依赖需要时再引入 GoogleMock；受限固件评估 CppUTest 的轻量运行、C 兼容和内存检查。选择基于平台、现有资产和维护成本，不为形式统一强推同一框架，也不在单项目无故双写。</Answer>
+
+  3. **问题 3：复现依赖漂移。** 同一提交昨天通过、今天在新机器 configure 失败，应如何区分源码、工具链和第三方依赖问题？
+
+  <Answer question="怎样定位环境漂移的责任层？">从空构建目录保存编译器与 CMake 版本，检查依赖解析到的固定版本或哈希，再比较 configure 日志和目标发现数。若依赖跟随分支，先锁定到昨天身份复测；若缓存携带旧编译器，换目录；只有环境一致后仍失败，才把差异归入产品源码。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="C++ 编译器">把 C++ 翻译单元按标准模式编译成目标文件并提供诊断的实现。</GlossaryItem>
+  <GlossaryItem term="CMake 构建图">由目标、输入、选项和依赖边组成的可重复构建关系。</GlossaryItem>
+  <GlossaryItem term="CTest">CMake 的测试执行层，负责枚举、运行、汇总和返回整体状态。</GlossaryItem>
+  <GlossaryItem term="GoogleTest">提供 C++ 测试注册、夹具、断言和失败报告的框架。</GlossaryItem>
+  <GlossaryItem term="GoogleMock">用于描述和验证协作者交互的 GoogleTest 配套模拟工具。</GlossaryItem>
+  <GlossaryItem term="CppUTest">面向 C/C++、适合轻量和受限环境的单元测试框架。</GlossaryItem>
+  <GlossaryItem term="测试发现">把源码中的测试定义枚举为测试运行器可执行用例的过程。</GlossaryItem>
+  <GlossaryItem term="第三方依赖">从工程外进入构建图、需要固定版本与维护契约的库。</GlossaryItem>
+  <GlossaryItem term="可重复测试环境">相同源码和已声明输入可稳定得到同一目标图与测试结论的环境。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Modern C++ Programming with Test-Driven Development, Chapter 1 Global Setup"
+  adaptedUrl="https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/"
+/>

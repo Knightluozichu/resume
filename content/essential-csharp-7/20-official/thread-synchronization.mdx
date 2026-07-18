@@ -1,0 +1,260 @@
+---
+title: "第20章：Thread Synchronization"
+type: C
+section: "Essential C# 7.0 · Concurrency"
+order: 20
+description: "掌握shared-state synchronization、critical section、lock/Monitor/Interlocked/primitives、deadlock/thread safety与Timer reentrancy。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-csharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7CriticalSectionLab, Ec7SynchronizationPrimitiveLab, Ec7TimerReentrancyLab } from "@/components/mdx/essential-csharp-7/diagrams/thread-synchronization";
+
+<Objectives>
+
+- 能解释shared invariant所需的atomicity、ordering、visibility，并设计最小critical section与private lock gate
+- 能比较lock、Monitor、Interlocked、SemaphoreSlim和event primitives，并分析deadlock wait graph
+- 能设计thread-safe System.Threading.Timer callback、overlap policy、Dispose与in-flight coordination
+
+</Objectives>
+
+## 为什么“加一把锁”不是同步设计
+
+同步不是给method套lock keyword，而是找出哪些state必须一起保持invariant、哪些operations会交错、所有访问是否使用同一coordination mechanism。两个threads锁不同objects仍会race；lock内调用未知callback可能deadlock；periodic timer若callback慢于period会重叠，即使每次看似“单线程函数”。
+
+先预测：transfer更新两个balances时临界区边界在哪里；lock是否只保证一个counter atomic；Monitor.Wait是否一直持lock；Interlocked能否保护两个fields；T1先A后B、T2先B后A会怎样；Dispose Timer后in-flight callback是否立刻消失。随后沿invariant、wait ownership和timer timeline验证。
+
+<Term def="多个fields/objects之间在每个公开operation前后必须成立，并由同一同步策略保护的shared-state规则。">shared invariant</Term>
+
+## Why Synchronization: Atomicity, Ordering, Visibility
+
+atomicity保证一组steps对其他threads不可见为partial state；ordering保证happens-before关系；visibility保证一个thread的writes按规则对另一个可见。lock/Interlocked等既提供操作互斥/原子性，也建立必要memory barriers。仅把field标volatile通常不能把multi-step invariant变atomic。
+
+```csharp
+public sealed class AccountPair
+{
+    private readonly object gate = new object();
+    private decimal left = 100M;
+    private decimal right = 100M;
+
+    public void Transfer(decimal amount)
+    {
+        lock (gate)
+        {
+            if (amount < 0M || left < amount)
+                throw new InvalidOperationException();
+            left -= amount;
+            right += amount;
+        }
+    }
+}
+```
+
+这里invariant是left+right在成功transfer后不变，check和两个writes必须在同一critical section。所有读取snapshot也应锁同gate，否则可能看到一半更新。
+
+<Term def="为保持一个invariant而必须作为不可分割logical operation执行的最小代码与state访问范围。">critical section</Term>
+
+<Stepper>
+  <Step title="切换unsynchronized、lock、Interlocked与wrong-lock cases">
+    <Ec7CriticalSectionLab />
+  </Step>
+  <Step title="标出invariant和最小保护范围">
+    transfer的check、debit、credit一起保护；I/O/log callback移出lock。
+  </Step>
+  <Step title="确认所有paths使用同一gate">
+    lock gateA和gateB不互斥；read/write都必须遵守同一ownership contract。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="只要每个thread都用了lock，就不会race">
+locks必须是同一个identity并覆盖同一shared invariant的全部访问。不同gate、漏锁read或锁外check仍会race。
+</Callout>
+
+## lock and Monitor
+
+`lock (gate) { body }`由compiler转换为Monitor.Enter配合try/finally Exit，exception也释放。Monitor是reentrant：同一thread可重复进入同一object并需对应退出。gate应private readonly，避免外部代码参与；不要lock(this)、public object、typeof或interned string。
+
+```csharp
+private readonly object gate = new object();
+private readonly Queue<Job> queue = new Queue<Job>();
+
+public void Enqueue(Job job)
+{
+    lock (gate)
+    {
+        queue.Enqueue(job);
+        Monitor.Pulse(gate);
+    }
+}
+```
+
+lock scope要短而完整：不在其中await、network I/O、sleep或调用unknown user code。过大降低concurrency，过小破坏invariant。C# lock不能直接await；async coordination使用SemaphoreSlim.WaitAsync等明确async primitive。
+
+## Monitor.Wait, Pulse, and Condition Predicates
+
+`Monitor.Wait(gate)`要求caller持有monitor，随后原子释放lock并进入condition wait；被Pulse/PulseAll唤醒后还要重新竞争并获得lock才返回。wake不保证condition仍成立，因此总在while predicate中检查，不能用if。
+
+<Term def="thread在持lock时检查predicate，不满足则原子释放并等待，重获lock后循环重查的条件协议。">condition-wait protocol</Term>
+
+```csharp
+public Job Dequeue()
+{
+    lock (gate)
+    {
+        while (queue.Count == 0)
+            Monitor.Wait(gate);
+
+        return queue.Dequeue();
+    }
+}
+```
+
+Pulse只表示“state可能改变”，不是把item直接交给特定waiter。producer先修改state再Pulse，二者在同lock内；lost notification和spurious/logical wake由predicate loop处理。
+
+## Interlocked for Single-Location Atomic Operations
+
+Interlocked提供Increment/Decrement/Exchange/CompareExchange/Add等单memory-location原子read-modify-write，并建立memory ordering。适合counter、flag、one-time initialization state；不能自动把两个fields或check-then-update transaction变atomic。
+
+```csharp
+private int completed;
+
+public void MarkCompleted()
+{
+    Interlocked.Increment(ref completed);
+}
+
+public bool TryBecomeLeader()
+{
+    return Interlocked.CompareExchange(ref leader, 1, 0) == 0;
+}
+```
+
+complex lock-free algorithm涉及ABA、progress和memory reclamation，不应仅拼Interlocked。优先现成Concurrent collections/Task primitives，并用stress/formal invariant验证。
+
+## Choosing Synchronization Primitives
+
+Monitor/lock做process内mutual exclusion；SemaphoreSlim限制并发permit且支持WaitAsync；Mutex可跨process但成本高；ManualResetEvent/AutoResetEvent发送level/one-waiter signals；CountdownEvent等待计数归零；ReaderWriterLockSlim适合read-heavy且写少，但更复杂。选择依据是ownership和wait semantics，不是“更高级”。
+
+<Stepper>
+  <Step title="切换lock、Monitor condition、Interlocked、Semaphore与deadlock">
+    <Ec7SynchronizationPrimitiveLab />
+  </Step>
+  <Step title="比较owner、state与wait semantics">
+    mutual exclusion、condition queue、single atomic location和permit count解决不同问题。
+  </Step>
+  <Step title="验证release和failure路径">
+    lock用finally；Semaphore每个成功Wait对应一次Release；timeout/cancel不释放未取得permit。
+  </Step>
+</Stepper>
+
+```csharp
+private readonly SemaphoreSlim slots = new SemaphoreSlim(4, 4);
+
+public async Task RunBoundedAsync(Func<Task> work, CancellationToken token)
+{
+    await slots.WaitAsync(token);
+    try { await work(); }
+    finally { slots.Release(); }
+}
+```
+
+## Deadlock and Lock Ordering
+
+deadlock常需mutual exclusion、hold-and-wait、no preemption、circular wait同时成立。典型是T1持A等B，T2持B等A。统一global lock order（总先A后B）、避免nested locks、缩短scope、try/timeout与message passing可打破条件。
+
+<Term def="threads/resources形成每个owner等待下一资源的cycle，所有participants都无法前进的wait-for graph。">deadlock cycle</Term>
+
+```csharp
+// Every code path acquires lower account id first.
+Account first = left.Id < right.Id ? left : right;
+Account second = ReferenceEquals(first, left) ? right : left;
+
+lock (first.Gate)
+lock (second.Gate)
+{
+    TransferCore(left, right, amount);
+}
+```
+
+同步等待async continuation也可形成context deadlock，不需要两把monitor。capture context后`.Result`堵住context thread，continuation无法恢复。全链async并await，避免sync-over-async。
+
+<Callout type="trap" title="deadlock只会发生在两个显式lock嵌套时">
+任何资源/continuation的循环等待都可deadlock，包括UI context同步等待async、semaphore permit和callback等待owner。画wait-for graph而不是只搜索lock关键字。
+</Callout>
+
+## Thread Safety as a Public Contract
+
+thread-safe必须说明哪些operations可concurrent、是否linearizable、callbacks在哪个thread、enumeration是否snapshot、Dispose能否与operation并发。一个class内部用了lock不代表所有public composites原子；caller先Count再Dequeue仍可能race，应提供TryDequeue等atomic API。
+
+优先immutable state、thread confinement、actor/message queue或ConcurrentDictionary/ConcurrentQueue，减少shared mutation。锁只是最后机制之一。测试用barriers扩大窗口、随机stress、invariant/timeout和deadlock dump，不能以“跑了100次没错”证明安全。
+
+## System.Threading.Timer Scheduling
+
+System.Threading.Timer在ThreadPool callbacks上按dueTime/period触发。periodic tick不等待前一callback完成；若callback耗时超过period，可并发重入。callback必须thread-safe，或用Interlocked gate跳过/合并tick，或用one-shot timer在完成后重新Change。
+
+<Term def="timer触发、callback执行时长、下一tick、overlap policy与Dispose/in-flight work之间的生命周期约定。">timer reentrancy contract</Term>
+
+<Stepper>
+  <Step title="切换normal、overlap、one-shot、gate与Dispose">
+    <Ec7TimerReentrancyLab />
+  </Step>
+  <Step title="比较period与callback duration">
+    callback超过period时下一pool worker可进入；必须选择allow、skip、queue或reschedule。
+  </Step>
+  <Step title="处理Dispose与in-flight callback">
+    Dispose阻止未来调度但已排队/运行callback可能继续；协调owned resources后再释放。
+  </Step>
+</Stepper>
+
+```csharp
+private int running;
+
+private void OnTick(object state)
+{
+    if (Interlocked.Exchange(ref running, 1) != 0)
+        return;
+
+    try { Refresh(); }
+    finally { Volatile.Write(ref running, 0); }
+}
+```
+
+保留Timer strong reference；若只在local创建后丢弃，可能被GC导致停止。callback closure/target也可能延长object lifetime。Dispose pattern要停止timer、等待/容忍in-flight callback，并让callback检查disposed state。
+
+## 本章回顾：同步围绕Invariant和Wait Graph
+
+1. synchronization同时处理atomicity、ordering、visibility，critical section由shared invariant决定。
+2. lock/Monitor使用同一private gate；Wait释放并重获lock且必须while重查predicate。
+3. Interlocked适合单位置RMW，Semaphore/events等各有特定wait semantics。
+4. deadlock是wait-for cycle，global order、无nested wait和async-all-the-way可降低风险。
+5. Timer callbacks可重叠，必须定义reentrancy、Dispose和in-flight lifetime。
+
+<Exercises>
+
+**问题 1：如何为跨两个Account的transfer设计同步？**
+
+<Answer>invariant是两账户总额和各自余额规则；check/debit/credit必须一个logical critical section。若每账户gate，所有路径按稳定Id顺序获取两锁，finally释放，lock内不I/O/callback。snapshot reads也遵守同策略，并用barrier stress验证总额。</Answer>
+
+**问题 2：何时用Interlocked、lock或SemaphoreSlim？**
+
+<Answer>单counter/flag的atomic RMW用Interlocked；多个steps/fields共同invariant用private-gate lock；限制同时执行N个async operations用SemaphoreSlim WaitAsync/Release。不能用Interlocked拼multi-field transaction，也不能在lock中await；每次成功wait必须finally release。</Answer>
+
+**问题 3：怎样防止periodic Timer callback重叠和Dispose race？**
+
+<Answer>先明确allow/skip/queue policy；可用Interlocked running gate跳过重叠并在finally reset，或one-shot callback完成后Change下一次。保留Timer reference，Dispose停止future ticks，但把in-flight callback纳入计数/完成信号或让其检查disposed，最后再释放它访问的resources。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="shared invariant" definition="多个state在公开operation前后必须成立并由同一同步策略保护的规则。" />
+  <GlossaryItem term="critical section" definition="维护一个invariant必须作为不可分logical operation执行的最小范围。" />
+  <GlossaryItem term="condition-wait protocol" definition="持lock检查predicate、Wait释放、重获后while重查的协议。" />
+  <GlossaryItem term="deadlock cycle" definition="owners/resources形成循环等待而无人可前进的wait-for graph。" />
+  <GlossaryItem term="timer reentrancy contract" definition="tick、callback duration、overlap、Dispose和in-flight work的约定。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 20: Thread Synchronization" adaptedUrl="https://www.informit.com/store/essential-csharp-7.0-9781509303618" />

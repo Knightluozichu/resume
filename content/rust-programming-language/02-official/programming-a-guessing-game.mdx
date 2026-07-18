@@ -1,0 +1,303 @@
+---
+title: "Chapter 2：编写猜数字游戏（Programming a Guessing Game）"
+type: C
+section: Rust 程序设计语言 · 第一项完整实践
+order: 2
+description: 对齐官方第 2 章：用 Cargo、标准输入、rand 依赖、变量遮蔽、Result、Ordering、match、loop、continue 与 break 渐进完成一个健壮的猜数字程序。
+demo: false
+math: false
+sourceUrl: "https://doc.rust-lang.org/book/ch02-00-guessing-game-tutorial.html"
+draft: false
+---
+
+import {
+  RplDependencyGraphLab,
+  RplGameLoopLab,
+  RplGuessPipelineLab,
+} from "@/components/mdx/rust-programming-language/diagrams/programming-a-guessing-game";
+
+<Objectives>
+
+- 能实现标准输入到 `u32` 的完整转换管线，并解释 `String`、`trim`、`parse`、`Result` 和变量遮蔽之间的关系
+- 能分析 Cargo 如何从 `rand = "0.8.5"` 解析直接与传递依赖，并区分 manifest 约束、lockfile 结果和增量构建
+- 能设计 `Ordering`/`match` 与 `loop`/`continue`/`break` 的控制流，使无效输入可恢复、猜中后正确退出
+
+</Objectives>
+
+## 为什么用一个项目提前遇见 Rust 的主线
+
+官方第 2 章故意在完整解释所有权、枚举和 trait 之前制作一个可运行程序。目标不是一次掌握每个语法细节，而是让**输入、类型、错误、依赖和控制流**在一个可观察项目中汇合。后续章节会逐一解释这些机制；本章先建立从编译错误和运行结果反推程序状态的能力。
+
+游戏契约很小：启动时生成 `1..=100` 的秘密数字；每轮读取一次猜测；小了或大了就继续；猜中就退出；非数字输入不应让进程崩溃。这个契约同时给出成功路径、两条继续路径和一条错误恢复路径，足以检验第一批 Rust 观念。
+
+<Term def="一段完整的项目式学习迭代：每次只增加一个可观察行为，编译并运行，再用错误或输出决定下一次修改。">渐进项目</Term>
+
+## 创建项目并固定依赖版本
+
+从 Cargo package 开始，先确认生成的 Rust 2024 Edition 清单和默认二进制 crate 能运行，再引入第三方依赖。这样若后续失败，可以区分是基础工具链、依赖解析还是新代码造成。
+
+```bash
+cargo new guessing_game
+cd guessing_game
+cargo run
+```
+
+```toml
+[package]
+name = "guessing_game"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rand = "0.8.5"
+```
+
+<Term def="当前 package 在 Cargo.toml 中显式声明的 crate，例如 guessing_game 对 rand 的依赖。">直接依赖</Term>
+
+`rand` 本身还依赖 `rand_core`、随机源适配和平台实现等 crate，这些是当前 package 没有直接声明的**传递依赖**。Cargo 从 registry 元数据求解完整依赖图，下载缺失源码，按依赖顺序构建，并把具体选择写入 `Cargo.lock`。
+
+<Term def="由直接依赖继续引入、属于完整构建图但未由当前 package 直接列在清单中的依赖。">传递依赖</Term>
+
+<RplDependencyGraphLab />
+
+先预测再切换两个条件：lockfile 存在且 manifest 未变化时，Cargo 复用已锁定版本；首次构建没有 lockfile 时，Cargo 求解后创建它；改变依赖约束时，Cargo 必须确认旧解析是否仍满足新范围，必要时更新依赖图。源码只做小改动时，已编译依赖通常不会重编。
+
+```bash
+cargo build
+cargo tree
+cargo update -p rand
+cargo build
+```
+
+`rand = "0.8.5"` 按 Cargo 对 `0.x` 版本的兼容规则允许 `0.8` 系列内的兼容更新，而不会自动跨到 `0.9`。本章使用官方示例对应的 `0.8.5` API；若改用其他大/小版本，应先看该版本文档，不要把方法名差异误判为 Rust 语法问题。
+
+<Callout type="trap" title="陷阱：只在源码里写 use rand::Rng">
+  `use` 只把已有依赖中的名称带入当前作用域，不会下载或声明 crate。必须先在 `[dependencies]` 中登记 `rand`，让 Cargo 解析和编译它；反过来只写依赖但不把所需 trait 放进作用域，方法解析仍可能失败。
+</Callout>
+
+## 第一轮：读取终端输入
+
+标准库的 `std::io` 不在 prelude 的自动导入集合中，因此用 `use std::io` 把模块名带入作用域。`String::new()` 通过关联函数创建空的可增长 UTF-8 字符串；变量默认不可变，所以要让 `read_line` 追加输入，绑定必须写成 `let mut guess` 并传入 `&mut guess`。
+
+<Term def="终端或管道提供给进程的标准输入流；io::stdin() 返回访问该流的句柄，read_line 会把一行内容追加到可变 String。">标准输入</Term>
+
+```rust
+use std::io;
+
+fn main() {
+    println!("Guess the number!");
+    println!("Please input your guess.");
+
+    let mut guess = String::new();
+    io::stdin()
+        .read_line(&mut guess)
+        .expect("Failed to read line");
+
+    println!("You guessed: {guess}");
+}
+```
+
+`read_line` 同时做两件事：修改传入的 `String`，并返回 `io::Result<usize>`，其中成功值是读取的字节数。`Result` 带有 `#[must_use]` 语义，完全忽略它会触发警告，因为输入可能因底层 I/O 失败。此处用 `expect` 把无法恢复的终端读取失败转成带上下文的 panic；第 9 章会系统设计错误边界。
+
+<Term def="表示操作成功或失败的枚举；`Ok(T)` 携带成功值，`Err(E)` 携带错误，调用方必须决定传播、恢复或终止。">Result</Term>
+
+按回车后输入并不只是数字。键入 `42` 时，Unix 常见缓冲内容是 `"42\n"`，Windows 终端可能产生 `"42\r\n"`；这正是后面必须 `trim()` 的原因。
+
+## 第二轮：生成秘密数字
+
+`rand::Rng` 是定义 `gen_range` 等方法的 trait，必须在作用域内，方法调用才能通过 trait 方法解析。`thread_rng()` 提供与当前线程关联并由系统随机源播种的生成器；`1..=100` 是包含两端的范围。
+
+```rust
+use rand::Rng;
+
+fn main() {
+    let secret_number = rand::thread_rng().gen_range(1..=100);
+    println!("temporary debug secret: {secret_number}");
+}
+```
+
+<Term def="定义随机数生成器共同方法的 trait；把 rand::Rng 带入作用域后，生成器值才能使用 gen_range 等扩展方法。">Rng trait</Term>
+
+开发阶段暂时打印秘密数字，是一个明确的测试探针：它能证明范围和每次运行的变化。完成游戏后必须删除，因为测试探针不能破坏产品契约。更严谨的测试会把随机源抽象为可注入输入，但这超出本章第一次项目的范围。
+
+<Callout type="trap" title="陷阱：把伪随机样本当成均匀性证明">
+  连续运行几次看到不同数字，只证明调用路径大致工作，不能统计证明分布均匀。这里的验收是值始终位于 `1..=100` 且游戏可用；安全令牌等密码学用途还需要专用随机 API 和威胁模型。
+</Callout>
+
+## 第三轮：从 String 转成 u32
+
+如果直接写 `guess.cmp(&secret_number)`，编译器会报告类型不匹配：`guess` 是 `String`，秘密数字由上下文推断为整数，字符串比较和数值比较不是一回事。编译错误在这里揭示了必须存在的输入边界：外部文本先清洗、解析和验证，才能进入数值领域。
+
+```text
+expected reference `&String`
+   found reference `&{integer}`
+```
+
+<Term def="在同一作用域用新的 let 绑定复用旧变量名；新绑定可以改变类型，右侧表达式仍读取旧绑定。">变量遮蔽</Term>
+
+```rust
+let mut guess = String::new();
+io::stdin().read_line(&mut guess).expect("Failed to read line");
+
+let guess: u32 = guess
+    .trim()
+    .parse()
+    .expect("Please type a number!");
+```
+
+这不是把原 `String` 原地变成 `u32`。右侧的 `guess` 指旧字符串；`trim()` 返回去除两端空白的 `&str` 视图；`parse()` 根据左侧 `u32` 注解选择目标类型并返回 `Result<u32, ParseIntError>`；新的 `let guess` 遮蔽旧绑定，使后续同一个业务名代表已验证数值。
+
+<RplGuessPipelineLab />
+
+先预测各阶段：在 `stdin` 阶段比较会因类型不同而失败；`trim` 只消除空白，不保证内容是数字；`parse` 可能得到 `Err`；只有成功的 `u32` 才能与同类型秘密数字调用 `cmp`。勾选非数字输入，再切到 parse 阶段即可看到控制流为什么要恢复而不是解包崩溃。
+
+## 第四轮：用 Ordering 和 match 穷尽比较结果
+
+<Term def="数值或可排序值比较的三态结果枚举，变体为 Less、Greater 和 Equal；它把比较结果编码为可穷尽匹配的类型。">Ordering</Term>
+
+`cmp` 返回 `std::cmp::Ordering`。`match` 的每个分支由模式和表达式组成，编译器要求覆盖所有可能变体；这里恰好是小于、大于、等于三种。与多个相互独立的布尔判断相比，枚举使状态空间显式且可检查。
+
+```rust
+use std::cmp::Ordering;
+
+match guess.cmp(&secret_number) {
+    Ordering::Less => println!("Too small!"),
+    Ordering::Greater => println!("Too big!"),
+    Ordering::Equal => println!("You win!"),
+}
+```
+
+<Term def="把一个值与一组模式逐一比较，并执行第一个匹配分支的表达式；对枚举通常要求穷尽所有可能变体。">match 表达式</Term>
+
+`match` 本身是表达式，每个 arm 可以产生值，而不只是执行打印。本章先把它用于控制输出；解析输入时还会让 `Ok(num)` arm 产出数字，让 `Err(_)` arm 改变循环控制。
+
+## 第五轮：把一次尝试扩展为健壮循环
+
+秘密数字应在 `loop` 外生成一次，否则每次猜测面对的答案都会变化。每轮输入缓冲应在 loop 内新建，避免 `read_line` 的追加语义把多轮文本积累到同一 `String`。这两个变量位置体现了不同生命周期：跨轮状态和单轮状态不能混放。
+
+<Term def="无条件重复执行的循环表达式；通过 break 离开，通过 continue 跳过本轮剩余语句并开始下一轮。">loop 循环</Term>
+
+最终代码把解析错误从 `expect` 改成 `match`。成功时取出 `num`；失败时 `_` 忽略具体错误并 `continue`。猜中时 `break`，其余 `Ordering` 结果自然走到本轮末尾，再开始下一轮。
+
+```rust
+use std::cmp::Ordering;
+use std::io;
+
+use rand::Rng;
+
+fn main() {
+    println!("Guess the number!");
+    let secret_number = rand::thread_rng().gen_range(1..=100);
+
+    loop {
+        println!("Please input your guess.");
+
+        let mut guess = String::new();
+        io::stdin()
+            .read_line(&mut guess)
+            .expect("Failed to read line");
+
+        let guess: u32 = match guess.trim().parse() {
+            Ok(num) => num,
+            Err(_) => continue,
+        };
+
+        println!("You guessed: {guess}");
+
+        match guess.cmp(&secret_number) {
+            Ordering::Less => println!("Too small!"),
+            Ordering::Greater => println!("Too big!"),
+            Ordering::Equal => {
+                println!("You win!");
+                break;
+            }
+        }
+    }
+}
+```
+
+<RplGameLoopLab />
+
+切换四种结果并预测下一状态：无效输入在比较前 `continue`；Less 和 Greater 完成本轮后自然回到输入；Equal 执行 `break`，而 `main` 在 loop 后没有其他语句，所以程序正常结束。这里的退出是受控控制流，不是依赖 panic 或 `Ctrl-C`。
+
+## 可复现验收清单
+
+项目章必须运行代码并观察结果，不能只读最终清单。至少覆盖以下场景：
+
+```bash
+cargo fmt --check
+cargo check
+cargo run
+```
+
+1. 输入小于秘密数字时打印 `Too small!` 并再次提示。
+2. 输入大于秘密数字时打印 `Too big!` 并再次提示。
+3. 输入非数字时不 panic，而是直接开始下一轮。
+4. 输入正确数字时打印 `You win!`，随后进程正常退出。
+5. 重新运行时秘密数字仍在闭区间 `1..=100`，且正式输出不泄露答案。
+
+可临时恢复秘密数字日志完成分支覆盖，验收后删除。更进一步可把比较逻辑提取为纯函数并测试，但官方第 11 章才会系统介绍 Rust 测试组织。
+
+## 三步形成项目迭代框架
+
+<Stepper>
+  <Step title="第一步：固定依赖与构建图">
+    先让默认 package 成功运行，再声明 `rand 0.8.5`，观察直接依赖、传递依赖和 Cargo.lock。源码变化不应无故重编整个依赖树。
+
+    <RplDependencyGraphLab />
+  </Step>
+  <Step title="第二步：穿过文本类型边界">
+    把 stdin 的 String 依次 trim、parse 为 u32，再进行 cmp。先预测每一步的类型与失败方式，不用 `as` 强转或字符串字典序掩盖边界。
+
+    <RplGuessPipelineLab />
+  </Step>
+  <Step title="第三步：闭合状态与退出路径">
+    把秘密数字放在 loop 外、单轮缓冲放在 loop 内；解析错误 continue，猜中 break，其余分支自然进入下一轮。逐条运行验收四种路径。
+
+    <RplGameLoopLab />
+  </Step>
+</Stepper>
+
+本项目引入的 **rand crate** 同时展示 registry dependency、Cargo.lock resolution 与 trait-provided random API；它不是标准库隐式模块。
+
+## 小结
+
+- 猜数字项目把 Cargo 依赖、标准输入、变量可变性、引用、Result、trait 方法、类型推断、match 和循环控制串成一个可运行闭环
+- `Cargo.toml` 的 `rand = "0.8.5"` 是直接依赖约束，Cargo 还会求解传递依赖，并用 Cargo.lock 固定具体构建图
+- `read_line` 把带换行的文本追加到可变 String；`trim().parse()` 才把输入边界转换为可比较的 u32，遮蔽让同一业务名承担新类型
+- `Ordering` 把比较结果建模为 Less、Greater、Equal；`match` 穷尽状态，避免遗漏分支
+- 无效输入用 `continue` 恢复，猜中用 `break` 正常退出；panic 不应充当普通游戏控制流
+
+<Exercises>
+  1. **问题 1：解释类型管线。** 用户输入 `" 76\n"` 后，`read_line`、`trim`、`parse::<u32>` 和遮蔽分别产生什么值或绑定？哪一步可能失败？
+
+  <Answer question="为什么不能直接比较 String 与秘密数字？">read_line 把原始文本写入 String；trim 返回内容为 `"76"` 的 `&str` 视图；parse 尝试产生 `Result<u32, ParseIntError>`；成功值 76 通过新的 `let guess: u32` 遮蔽旧 String。parse 会在非数字或越界时失败，String 与 u32 的语义和类型都不同，不能直接 cmp。</Answer>
+
+  2. **问题 2：判断依赖重建。** `Cargo.lock` 已锁定 rand 0.8.5，只修改 `src/main.rs` 后再次 build。Cargo 通常重编什么？若把 manifest 改为不兼容的新约束，路径又怎样变化？
+
+  <Answer question="直接源码变化和依赖约束变化为何影响不同？">只改当前源码时，已编译且输入未变的 rand 及传递依赖可复用，Cargo 主要重编 guessing_game。manifest 约束变化时要重新检查或求解依赖图，更新 lockfile，并重编版本或 feature 发生变化的依赖及其下游目标；是否命中缓存由完整输入指纹决定。</Answer>
+
+  3. **问题 3：追踪控制流。** 连续输入 `foo`、`20`、`80`、`61`，秘密数字是 61。每轮分别命中什么分支，为什么只有最后一轮结束进程？
+
+  <Answer question="continue、自然迭代和 break 的区别是什么？">`foo` 解析为 Err，执行 continue，跳过比较；20 得到 Ordering::Less，打印 Too small 后自然进入下一轮；80 得到 Greater，同样继续；61 得到 Equal，打印 You win 并 break 离开 loop。main 随后返回，进程正常结束。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="渐进项目">每次增加一个可观察行为并立即编译运行，用证据推动下一步的项目学习方式。</GlossaryItem>
+  <GlossaryItem term="直接依赖">当前 package 在 Cargo.toml 中显式声明的依赖。</GlossaryItem>
+  <GlossaryItem term="传递依赖">由直接依赖继续引入并参与完整构建图的依赖。</GlossaryItem>
+  <GlossaryItem term="标准输入">进程读取终端或管道输入的标准流，Rust 通过 io::stdin 访问。</GlossaryItem>
+  <GlossaryItem term="Result">用 Ok 与 Err 明确表示成功或失败的枚举。</GlossaryItem>
+  <GlossaryItem term="Rng trait">为随机数生成器定义 gen_range 等共同方法的 trait。</GlossaryItem>
+  <GlossaryItem term="变量遮蔽">用新的 let 绑定复用变量名，并允许新绑定具有不同类型。</GlossaryItem>
+  <GlossaryItem term="Ordering">将比较结果编码为 Less、Greater、Equal 三种变体的枚举。</GlossaryItem>
+  <GlossaryItem term="match 表达式">按模式选择第一个匹配 arm，并要求覆盖值的完整状态空间。</GlossaryItem>
+  <GlossaryItem term="loop 循环">无条件重复的循环表达式，由 continue 进入下一轮、break 退出。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Rust Programming Language, Chapter 2 Programming a Guessing Game"
+  adaptedUrl="https://doc.rust-lang.org/book/ch02-00-guessing-game-tutorial.html"
+/>

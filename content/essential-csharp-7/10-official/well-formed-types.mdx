@@ -1,0 +1,275 @@
+---
+title: "第10章：Well-Formed Types"
+type: C
+section: "Essential C# 7.0 · Type Design"
+order: 10
+description: "掌握object member契约、operator/conversion、assembly/namespace/NuGet/XML docs、GC、IDisposable/finalizer、weak references与Lazy。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-c-sharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7AssemblyDocumentationLab, Ec7EqualityContractLab, Ec7LifetimeLazyLab } from "@/components/mdx/essential-csharp-7/diagrams/well-formed-types";
+
+<Objectives>
+
+- 能设计Equals、GetHashCode、ToString与equality operators一致的value contract并验证hashed collection行为
+- 能解释namespace、assembly reference、NuGet package和XML documentation在compile/deploy链中的不同责任
+- 能比较GC reachability、weak reference、IDisposable/finalizer cleanup与Lazy initialization的生命周期边界
+
+</Objectives>
+
+## 为什么“能编译的type”还不够
+
+一个type进入真实系统后会被打印、比较、放入dictionary、跨assembly引用、由IDE展示文档、持有file handle、被GC追踪并可能延迟创建。若这些边界没有统一contract，局部methods都正确，组合后仍会出现key找不到、resource泄漏、dependency缺失或初始化竞态。
+
+先预测：两个相等objects能否返回不同hash；mutable key插入Dictionary后再修改会怎样；namespace能否自动带来assembly；离开scope后GC是否立刻执行；`using`与finalizer谁负责及时关闭file；Lazy factory何时运行。然后沿equality、compilation和lifetime三条证据链验证。
+
+<Term def="Equals、GetHashCode、operators与collection lookup必须对同一logical value给出一致结论的约定。">equality contract</Term>
+
+## Overriding object Members
+
+`object.Equals`定义logical equality，`GetHashCode`为hashed collections提供bucket hint，`ToString`提供人类可读诊断representation。reference type默认Equals通常接近identity；value type默认逐field比较可能正确但有成本。domain value应显式选择参与equality的稳定components。
+
+Equals应满足reflexive、symmetric、transitive和consistent；任何`a.Equals(b)`为true的pair必须返回相同hash。不同values允许hash collision。参与hash的state在key留在Dictionary/HashSet期间不可变化，否则lookup会去错误bucket。
+
+<Stepper>
+  <Step title="切换相等、不同与mutable key cases">
+    <Ec7EqualityContractLab />
+  </Step>
+  <Step title="比较Equals、hash与operator结果">
+    相等values必须同hash且`==`表达同一domain meaning，不让API互相矛盾。
+  </Step>
+  <Step title="验证collection lookup">
+    插入后不修改equality components；测试duplicate add、lookup与remove。
+  </Step>
+</Stepper>
+
+```csharp
+public sealed class Money : IEquatable<Money>
+{
+    public Money(decimal amount, string currency)
+    {
+        Amount = amount;
+        Currency = currency ?? throw new ArgumentNullException(nameof(currency));
+    }
+
+    public decimal Amount { get; }
+    public string Currency { get; }
+
+    public bool Equals(Money other) =>
+        !ReferenceEquals(other, null) &&
+        Amount == other.Amount &&
+        StringComparer.Ordinal.Equals(Currency, other.Currency);
+
+    public override bool Equals(object obj) => Equals(obj as Money);
+    public override int GetHashCode()
+    {
+        unchecked { return (Amount.GetHashCode() * 397) ^ StringComparer.Ordinal.GetHashCode(Currency); }
+    }
+
+    public override string ToString() => $"{Amount} {Currency}";
+}
+```
+
+`IEquatable<T>`避免generic collections走object path，并让typed equality清晰。ToString不应当稳定serialization schema；culture-sensitive display与machine format应分开设计。
+
+## Operator Overloading and Conversion Operators
+
+user-defined operators应保持熟悉含义、symmetry和equality contract。若定义`==`通常同时定义`!=`并override Equals/GetHashCode。operator至少一个operand必须是declaring type；不能改变precedence或short-circuit规则。
+
+<Term def="user-defined operators、Equals和implicit/explicit conversions对domain meaning、loss与failure保持一致的规则。">operator coherence</Term>
+
+```csharp
+public static bool operator ==(Money left, Money right)
+{
+    if (ReferenceEquals(left, right)) return true;
+    if (ReferenceEquals(left, null)) return false;
+    return left.Equals(right);
+}
+
+public static bool operator !=(Money left, Money right) => !(left == right);
+
+public static Money operator +(Money left, Money right)
+{
+    if (left.Currency != right.Currency)
+        throw new InvalidOperationException("currency mismatch");
+    return new Money(left.Amount + right.Amount, left.Currency);
+}
+```
+
+implicit conversion只应在不会丢失信息、不会意外throw且意义唯一时使用；可能loss/failure的转换应explicit或named method/Try-pattern。不要让conversion偷偷执行I/O或昂贵work。
+
+```csharp
+public static explicit operator decimal(Money value)
+{
+    if (value == null) throw new ArgumentNullException(nameof(value));
+    return value.Amount;
+}
+```
+
+<Callout type="trap" title="Equals比较内容，而==保留reference identity更灵活">
+同一public value type有两套不一致equality会破坏caller直觉与generic/non-generic code。若要检查identity，显式用ReferenceEquals；domain equality APIs应保持coherent。
+</Callout>
+
+## Referencing Other Assemblies and NuGet Packages
+
+compiler要使用外部type，需要metadata assembly reference；runtime还需找到compatible implementation/dependencies。project reference连接同solution project，assembly/file reference指向binary，NuGet PackageReference通过restore解析package、target framework assets与transitive dependencies。
+
+<Term def="source type usage到compile-time metadata、restored package assets和runtime binary resolution的dependency链。">assembly boundary</Term>
+
+```xml
+<ItemGroup>
+  <ProjectReference Include="..\Billing.Core\Billing.Core.csproj" />
+  <PackageReference Include="Example.Parser" Version="2.1.0" />
+</ItemGroup>
+```
+
+package不是单一DLL的同义词，它可含多target assets、build props/targets和transitive packages。lock/central version policy、license和vulnerability audit都属于dependency management。compile成功不保证deployment目录完整，需运行实际target artifact。
+
+## Defining and Using Namespaces
+
+namespace组织fully qualified names并避免collision；它不创建runtime object、access boundary或assembly dependency。相同namespace可跨多个assemblies，一个assembly也可含多个namespaces。`using`只缩短source lookup，reference仍必须存在。
+
+```csharp
+namespace Billing.Domain
+{
+    public sealed class Money { }
+}
+
+// Elsewhere, with assembly reference present:
+using Billing.Domain;
+```
+
+namespace naming应反映stable ownership/domain，不要与folder机械耦合到无法重构。public type移动namespace是source-breaking change，即使implementation未变。
+
+<Stepper>
+  <Step title="切换namespace、reference、NuGet与XML docs">
+    <Ec7AssemblyDocumentationLab />
+  </Step>
+  <Step title="区分name lookup与binary availability">
+    using/namespace解决name，reference/package restore提供metadata和runtime assets。
+  </Step>
+  <Step title="确认build artifacts">
+    检查assembly、dependency files与documentation XML是否按target configuration生成并部署。
+  </Step>
+</Stepper>
+
+## XML Documentation Comments
+
+`///` XML comments生成结构化API documentation。常用tags包括`summary`、`param`、`returns`、`exception`、`remarks`、`see/seealso`与`typeparam`。启用documentation file后compiler可校验部分引用并输出XML，IDE和doc tools将其与assembly metadata结合。
+
+```csharp
+/// <summary>Adds two values with the same currency.</summary>
+/// <param name="left">The first non-null value.</param>
+/// <param name="right">The second non-null value.</param>
+/// <returns>A new value containing the sum.</returns>
+/// <exception cref="InvalidOperationException">Currencies differ.</exception>
+public static Money Add(Money left, Money right) { /* ... */ return left + right; }
+```
+
+docs应说明contract而不是复述name。parameter rename后同步XML，CI可把missing/malformed docs warnings提升为errors。XML file不是runtime implementation，也不替代tests。
+
+## Garbage Collection and Reachability
+
+GC从roots沿strong references判断managed objects是否reachable；unreachable object可在未来collection中回收，具体时间不确定。generation优化基于大多数objects短命的假设。把variable设null不保证立即collect，`GC.Collect`通常不应作为业务cleanup机制。
+
+<Term def="managed object是否存在从GC roots出发的strong reference path，以及不可达后由runtime择机回收的生命周期。">reachability lifetime</Term>
+
+weak reference不保持target alive；cache/observer等场景可在每次使用时`TryGetTarget`。它不保证target存在，也不替代ownership design。
+
+```csharp
+var weak = new WeakReference<Report>(new Report());
+
+Report target;
+if (weak.TryGetTarget(out target))
+    Console.WriteLine(target.ToString());
+else
+    Console.WriteLine("target was collected");
+```
+
+managed memory回收与external resource release不同。File handle、socket、native buffer等稀缺resource需要deterministic cleanup。
+
+## IDisposable, using, and Finalizers
+
+`IDisposable.Dispose`建立显式cleanup contract；`using` statement用try/finally语义确保normal/exception exit都调用Dispose。Dispose应可重复调用或至少明确防护，调用后methods应拒绝无效使用。finalizer由GC在不确定时间为拥有unmanaged resource的object提供fallback，不能承担及时释放。
+
+<Stepper>
+  <Step title="切换reachable、Dispose、finalizer、weak与Lazy状态">
+    <Ec7LifetimeLazyLab />
+  </Step>
+  <Step title="分开memory和resource evidence">
+    GC负责managed reachability；using scope exit提供handle已释放的确定证据。
+  </Step>
+  <Step title="检查fallback与deferred work">
+    finalizer仅兜底且增加成本；weak target每次重查；Lazy在first Value前不运行factory。
+  </Step>
+</Stepper>
+
+```csharp
+using (var stream = File.OpenRead(path))
+{
+    // use stream; Dispose runs when scope exits
+}
+```
+
+owning unmanaged handle通常用SafeHandle封装，减少直接finalizer复杂度。若class只持有其他IDisposable managed objects，通常实现Dispose并转发即可，不需要finalizer。
+
+<Callout type="trap" title="GC最终会回收对象，所以不用Dispose">
+GC回收managed memory的时间不确定，也不知道何时必须释放file/socket/native handle。using/Dispose提供确定性resource cleanup；finalizer只是昂贵兜底。
+</Callout>
+
+## Lazy Initialization
+
+`Lazy<T>`把factory推迟到首次读取`Value`，并提供规定的thread-safety modes。它适合creation昂贵且可能从不使用的dependency；不适合隐藏必须在startup就验证的configuration failure。factory side effects、exception caching和reentrancy都应测试。
+
+```csharp
+private readonly Lazy<ReportIndex> index =
+    new Lazy<ReportIndex>(() => ReportIndex.Load());
+
+public Report Find(string id)
+{
+    return index.Value.Find(id);
+}
+```
+
+lazy不是free performance：首次access承担latency，长期持有Lazy也长期保留已创建value。需要retry时要明确exception policy，不能假设每次Value都会重新执行factory。
+
+## 本章回顾：让Type融入Runtime与Toolchain
+
+1. Equals、GetHashCode、ToString和operators必须表达同一stable value contract。
+2. implicit/explicit conversions要按loss和failure选择，不能隐藏昂贵side effects。
+3. namespace解决names，assembly/package解决metadata与binaries，XML docs服务tooling contract。
+4. GC依据reachability回收managed memory；weak reference不保持target alive。
+5. Dispose/using负责确定性resource cleanup，finalizer仅兜底，Lazy推迟并协调creation。
+
+<Exercises>
+
+**问题 1：如何验收Money的equality/hash/operator实现？**
+
+<Answer>构造相同amount/currency、不同amount、不同currency、null和same-reference cases，验证reflexive/symmetric/transitive；Equals为true必同hash，==/!=与Equals一致。将values放入Dictionary/HashSet测试add/lookup/remove，并保证参与equality的properties immutable，避免插入后bucket失效。</Answer>
+
+**问题 2：为什么using namespace、assembly reference和NuGet不是同一件事？**
+
+<Answer>namespace/using只组织并缩短source names；assembly reference向compiler提供external metadata identity；NuGet restore选择与target framework匹配的package assets并带来references/transitive files。还需验证runtime deployment能解析binaries。缺少任一层都可能在不同阶段失败。</Answer>
+
+**问题 3：GC、Dispose、finalizer、weak reference和Lazy分别解决什么问题？**
+
+<Answer>GC按strong reachability择机回收managed memory；Dispose/using及时释放外部resource；finalizer为遗漏Dispose的unmanaged ownership提供不确定时间的fallback；weak reference允许target被回收并要求每次重查；Lazy把factory推迟到first Value并管理初始化并发。它们不能互相替代。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="equality contract" definition="Equals、hash、operators与collection lookup对logical value的一致约定。" />
+  <GlossaryItem term="operator coherence" definition="operators/conversions与domain equality、loss和failure semantics保持一致。" />
+  <GlossaryItem term="assembly boundary" definition="source usage到metadata reference、package assets和runtime binaries的dependency链。" />
+  <GlossaryItem term="reachability lifetime" definition="从GC roots到object的strong path及不可达后的择机回收周期。" />
+  <GlossaryItem term="resource ownership" definition="谁必须通过Dispose释放外部resource、finalizer何时仅作fallback的责任。" />
+</Glossary>
+
+<Term def="对象拥有外部resource时由Dispose提供确定cleanup，并仅在必要时以finalizer兜底的责任。">resource ownership</Term>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 10: Well-Formed Types" adaptedUrl="https://www.informit.com/store/essential-csharp-7.0-9781509303618" />

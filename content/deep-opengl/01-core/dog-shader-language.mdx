@@ -3,130 +3,313 @@ title: "GLSL ES 着色器语言"
 type: C
 section: "计算机图形学与渲染"
 order: 2
-description: "GLSL ES 的类型、限定符与内建变量"
+description: "从类型与精度、阶段接口到编译链接和纹理绑定，建立可验证的 GLSL ES 程序"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://registry.khronos.org/OpenGL/specs/es/3.0/GLSL_ES_Specification_3.00.pdf"
 draft: false
 ---
 
-import { DogShaderLanguageDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-shader-language";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  DogShaderLanguageDiagram,
+  DogShaderInterfaceDiagram,
+} from "@/components/mdx/deep-opengl/diagrams/dog-shader-language";
+import { DogStepFlowDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能区分 GLSL ES 的标量、向量与矩阵类型
-- 能说明 in/out、uniform、attribute/varying 限定符的用途
-- 能解释精度限定符在移动端的意义
-- 能回答：顶点与片元着色器如何通过 varying 传值？
+
+- 能比较 GLSL ES 1.00、3.00 与桌面 GLSL 在阶段接口和输出语法上的关键差异
+- 能解释类型、精度、插值限定符以及矩阵布局如何影响结果与可移植性
+- 能实现带完整编译、链接、接口查询和资源绑定检查的 WebGL2 着色器程序
+- 能分析编译成功但链接或绘制失败时，错误位于源码、阶段接口还是应用绑定
+
 </Objectives>
 
 ## 直觉引入
 
-GLSL ES 是给 GPU 说的「方言」：语法像 C，但天生擅长并行算向量矩阵。顶点着色器对每个顶点跑一遍，片元着色器对每个像素跑一遍，两者之间用「管道」传数据——这个管道就是 varying（ES3 里叫 in/out）。
+着色器不是一段被“丢给 GPU”就自动理解的数据处理函数。它同时处在三份契约里：源码必须满足某个 GLSL ES 版本；顶点输出与片元输入必须能链接成阶段接口；应用还要把 VAO 属性、uniform、纹理单元和输出附件接到正确位置。只看源码语法，会漏掉后两层最常见的故障。
 
-你可以把着色器想成两个工人：顶点工人加工每个顶点（算位置、传颜色），把半成品通过管道递给片元工人；片元工人对每个像素拿到管道里插值后的数据，算出最终颜色。uniform 则是两人共用的「公告板」，整次绘制不变。
+可以把顶点着色器和片元着色器看成流水线两端的独立程序。顶点阶段为每个顶点输出裁剪空间位置和待插值数据；光栅化根据图元覆盖生成片元并插值；片元阶段读取插值结果、uniform 与纹理，输出一个或多个颜色值。程序链接器负责验证两端接口，应用负责提供真正的数据来源。
 
-## 概念讲解
+## 版本先于语法
 
-### 类型
-<Term def="GPU 并行运算的基本数据类型">GLSL 类型</Term>：标量 `float/int/bool`、向量 `vec2/3/4`（可 `.xyz/.rgba` 分量访问）、矩阵 `mat2/3/4`、采样器 `sampler2D`。
+WebGL 1 使用 GLSL ES 1.00，WebGL 2 使用 GLSL ES 3.00。OpenGL ES 3.2 还可使用 GLSL ES 3.20 的更多阶段与特性；桌面 OpenGL 使用桌面 GLSL，版本号、扩展和部分关键字并不能与 GLSL ES 逐行互换。
 
-### 限定符
-- <Term def="每次绘制不变、所有顶点片元共享的全局变量">uniform</Term>：全局常量，如变换矩阵、光源参数。
-- **attribute（ES2）/ in（ES3 顶点）**：每顶点不同的输入，如位置、UV。
-- **varying（ES2）/ out→in（ES3）**：顶点输出、片元输入，管线自动插值。
-- <Term def="声明浮点精度的限定符">精度限定符</Term>：`highp/mediump/lowp`，片元着色器默认无 float 精度，必须显式声明。
+| 目的 | GLSL ES 1.00 | GLSL ES 3.00 |
+| --- | --- | --- |
+| 顶点输入 | attribute | in |
+| 顶点到片元 | varying / varying | out / in |
+| 片元颜色 | gl_FragColor | 用户声明 out vec4 |
+| 纹理采样 | texture2D | texture |
+| 版本声明 | 通常省略或 100 | #version 300 es，必须在最前 |
 
-### 内建变量
-顶点：`gl_Position`（输出裁剪空间位置）、`gl_PointSize`。片元：`gl_FragColor`（ES2 输出颜色）/ ES3 用 `out vec4` 自定义输出、`gl_FragCoord`（像素坐标）。
+同一项目维护 ES 100 和 ES 300 两套源码时，应由明确的预处理或模板层生成版本差异，不能只替换 attribute 为 in：片元输出、纹理函数、整数类型、布局限定与扩展声明都可能不同。
 
-## 交互Demo
+## 类型与运算边界
 
-> 猜一猜：顶点着色器输出一个 varying 颜色，片元收到的颜色和顶点输出的一样吗？
+GLSL ES 提供标量、向量、矩阵、结构、数组与不透明类型。vec3 不只是三个 float 的容器，它支持逐分量算术、swizzle 和向量内建函数；mat4 与 vec4 的乘法表示线性变换。几个容易被类 C 外观掩盖的规则是：
 
-<DogShaderLanguageDiagram />
+- 类型转换比 JavaScript/C 更严格，int 与 float 混算不能依赖隐式转换；
+- 向量的乘号通常是逐分量乘法，矩阵乘法则由操作数类型决定；
+- 矩阵按列向量语义构造，mvp * position 与 position * mvp 不是同一运算；
+- WebGL 的 uniformMatrix*fv 要求 transpose 参数为 false，应用应按约定准备矩阵数据；
+- 数组大小、循环和动态索引能力受语言版本与目标实现约束，不能从桌面 GLSL 直接推断。
 
-<Stepper>
-<Step title="第一步：顶点着色器">
-对每顶点读 attribute（位置、UV），用 uniform 变换矩阵算 gl_Position，把颜色/UV 写入 out varying。
-</Step>
-<Step title="第二步：管线插值">
-光栅化阶段对图元覆盖的每个像素，把顶点 varying 按重心坐标插值，得到片元级数据。
-</Step>
-<Step title="第三步：片元着色器">
-对每像素读 in varying（插值后的颜色/UV），采样纹理、算光照，写入 out 颜色到帧缓冲。
-</Step>
-</Stepper>
+## 精度是数值契约
 
-## 代码对照
+<Term def="为浮点或整数表达式声明最小范围与精度等级的 highp、mediump、lowp">精度限定符</Term>描述最低数值能力，不是跨 GPU 固定的 IEEE 位数，也不保证 highp 一定更慢。顶点语言有默认浮点精度；片元语言没有默认 float 精度，必须声明默认 precision 或给相关声明逐一指定精度。
 
-GLSL ES 3.00 顶点与片元着色器：
+在 WebGL1 的片元阶段，highp float 可能不可用；WebGL2 对应 GLSL ES 3.00，片元 highp 是核心能力，但实际范围与精度仍应通过 getShaderPrecisionFormat 记录。颜色与普通 UV 常可使用 mediump，世界空间大坐标、深度重建、阴影比较和高动态范围计算更容易暴露 mediump 的范围或量化误差。
 
-```glsl
-// 顶点着色器 #version 300 es
-#version 300 es
-precision highp float;                 // 顶点默认 highp，写明更稳
-in vec3 a_pos;                         // 每顶点属性
-in vec2 a_uv;
-uniform mat4 u_mvp;                    // 全局变换矩阵
-out vec2 v_uv;                         // 输出给片元（varying）
-out vec3 v_color;
-void main() {
-  gl_Position = u_mvp * vec4(a_pos, 1.0);
-  v_uv = a_uv;
-  v_color = a_pos;                     // 用位置当颜色示意
-}
-
-// 片元着色器 #version 300 es
-#version 300 es
-precision mediump float;               // 片元必须显式声明 float 精度
-in vec2 v_uv;                          // 接收插值后的 varying
-in vec3 v_color;
-uniform sampler2D u_tex;               // 纹理采样器
-out vec4 fragColor;                    // 自定义输出（取代 gl_FragColor）
-void main() {
-  vec4 tex = texture(u_tex, v_uv);
-  fragColor = tex * vec4(v_color, 1.0);
+```js
+function reportFragmentPrecision(gl) {
+  for (const level of [gl.LOW_FLOAT, gl.MEDIUM_FLOAT, gl.HIGH_FLOAT]) {
+    const info = gl.getShaderPrecisionFormat(gl.FRAGMENT_SHADER, level);
+    console.log({
+      level,
+      rangeMin: info?.rangeMin,
+      rangeMax: info?.rangeMax,
+      precisionBits: info?.precision,
+    });
+  }
 }
 ```
 
-`out`/`in` 配对：顶点 `out vec2 v_uv` 与片元 `in vec2 v_uv` 同名即自动连接，管线负责插值。
+精度选择应由可重复场景验证：放大远距离坐标、观察渐变 banding、比较深度边缘和法线高光，再决定哪些中间量必须提升，而不是整份着色器盲目 highp 或 mediump。
+
+## 阶段接口与插值
+
+<Term def="相邻着色器阶段之间必须在名称、类型、数组、精度和限定规则上兼容的输入输出集合">阶段接口</Term>把顶点 out 接到片元 in。GLSL ES 3.00 默认按名称匹配，链接器还检查类型、数组和相关限定是否兼容。声明存在不代表变量一定活跃：若编译器证明某输入或 uniform 不影响输出，它可以被优化掉，应用查询位置会得到 -1 或 null。
+
+<Term def="控制顶点输出如何为图元内部片元生成值的 smooth、flat、centroid 等规则">插值限定符</Term>决定光栅化如何传值：
+
+- smooth 是默认的透视正确插值，适合颜色、UV、法线等连续量；
+- flat 不插值，整个图元使用 provoking vertex 的值；整数片元输入必须使用 flat；
+- centroid 要求插值位置位于图元与像素采样区域的交集附近，多重采样边缘更稳定。
+
+顶点着色器写出的 v_uv 只存在于顶点上。片元读到的是由三个顶点值按屏幕覆盖和透视关系生成的结果，而不是“离这个片元最近的顶点值”。
+
+<DogShaderLanguageDiagram />
+
+## 应用、程序与资源接口
+
+<Term def="由应用设置、在一次绘制期间对各着色器调用保持常量的程序变量">uniform</Term>适合变换、材质参数和纹理单元索引。普通 uniform 属于 program；切换 program 后，相同名字也不是同一个存储位置。WebGL2 的 uniform block 可把一组数据通过缓冲绑定复用，但 block 布局与绑定点仍要显式匹配。
+
+<Term def="在着色器中代表纹理访问类型，其 uniform 值选择纹理单元而非保存纹理对象">采样器</Term>连接两层状态：uniform1i 把 sampler 设为纹理单元编号，activeTexture + bindTexture 把纹理对象接到该单元和目标。把 sampler uniform 设为 0 不等于纹理已绑定，漏掉任一层都会采到错误资源或不完整纹理。
+
+<DogShaderInterfaceDiagram />
+
+## 分步建立可验证程序
+
+先预测：顶点输出 v_color 是 vec3，片元输入同名变量改成 vec4。两个 shader 各自能编译成功吗？program 能链接成功吗？
+
+<Stepper>
+<Step title="第一步：分别编译阶段源码">
+<DogStepFlowDiagram
+  caption="第 1 步：版本、语法、类型和阶段内建变量先在单个 shader 内成立。"
+  stage={1}
+  stages={["分别编译并保留每个阶段日志", "链接并核对阶段接口与活跃资源", "绑定应用数据并用基准图像验收"]}
+/>
+
+为每个阶段指定正确版本，编译后立即读取 COMPILE_STATUS 和 info log。不要等到链接失败才猜是哪一段源码有问题。
+</Step>
+<Step title="第二步：链接并检查接口">
+<DogStepFlowDiagram
+  caption="第 2 步：链接器把顶点输出、片元输入、属性和输出位置组成一份程序接口。"
+  stage={2}
+  stages={["分别编译并保留每个阶段日志", "链接并核对阶段接口与活跃资源", "绑定应用数据并用基准图像验收"]}
+/>
+
+链接后读取 LINK_STATUS 与 program log，再查询活跃 attribute、uniform 和 uniform block。阶段类型不匹配时，两个 shader 可能都编译成功，但 program 必须链接失败。
+</Step>
+<Step title="第三步：接入 VAO、uniform 与纹理">
+<DogStepFlowDiagram
+  caption="第 3 步：程序接口只有接到 VAO、uniform 值和纹理单元后才形成可绘制数据流。"
+  stage={3}
+  stages={["分别编译并保留每个阶段日志", "链接并核对阶段接口与活跃资源", "绑定应用数据并用基准图像验收"]}
+/>
+
+绑定 program，按位置配置 VAO，设置矩阵与采样器，绑定纹理单元，并用固定三角形、常量颜色和已知纹理逐层验收。
+</Step>
+</Stepper>
+
+## 一对完整的 GLSL ES 3.00 阶段
+
+顶点阶段显式固定属性位置，输出 UV、颜色和一个不插值的材质编号。矩阵按“投影 × 视图 × 模型 × 位置”的列向量顺序使用。
+
+```glsl
+#version 300 es
+precision highp float;
+precision highp int;
+
+layout(location = 0) in vec3 a_position;
+layout(location = 1) in vec2 a_uv;
+layout(location = 2) in vec3 a_color;
+
+uniform mat4 u_model;
+uniform mat4 u_viewProjection;
+
+out highp vec2 v_uv;
+out mediump vec3 v_color;
+flat out highp int v_materialId;
+
+void main() {
+  gl_Position = u_viewProjection * u_model * vec4(a_position, 1.0);
+  v_uv = a_uv;
+  v_color = a_color;
+  v_materialId = 0;
+}
+```
+
+片元阶段必须以兼容声明接收接口。这里用纹理 alpha 混合顶点颜色，并写入 location 0 的颜色附件。
+
+```glsl
+#version 300 es
+precision highp float;
+precision highp int;
+
+in highp vec2 v_uv;
+in mediump vec3 v_color;
+flat in highp int v_materialId;
+
+uniform sampler2D u_baseColor;
+layout(location = 0) out vec4 outColor;
+
+void main() {
+  vec4 texel = texture(u_baseColor, v_uv);
+  outColor = vec4(texel.rgb * v_color, texel.a);
+}
+```
+
+若把片元 v_color 改成 vec4，阶段源码各自仍可能合法，但链接器会报告接口类型不匹配。若完全不使用 v_materialId，它可能被优化掉；应用不应把“查询不到未使用变量”误判成链接器故障。
+
+## 编译、链接与资源绑定
+
+下面的 JavaScript 保留每个阶段日志，并验证矩阵和采样器位置。createShader/createProgram 返回失败也有明确路径。
+
+```js
+function compile(gl, type, source) {
+  const shader = gl.createShader(type);
+  if (!shader) throw new Error("createShader failed");
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  const log = gl.getShaderInfoLog(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    gl.deleteShader(shader);
+    throw new Error(log || "shader compile failed");
+  }
+  if (log) console.info(log);
+  return shader;
+}
+
+function link(gl, vertexSource, fragmentSource) {
+  const vertex = compile(gl, gl.VERTEX_SHADER, vertexSource);
+  const fragment = compile(gl, gl.FRAGMENT_SHADER, fragmentSource);
+  const program = gl.createProgram();
+  if (!program) throw new Error("createProgram failed");
+  gl.attachShader(program, vertex);
+  gl.attachShader(program, fragment);
+  gl.linkProgram(program);
+  gl.deleteShader(vertex);
+  gl.deleteShader(fragment);
+  const log = gl.getProgramInfoLog(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    gl.deleteProgram(program);
+    throw new Error(log || "program link failed");
+  }
+  if (log) console.info(log);
+  return program;
+}
+
+function bindMaterial(gl, program, mvpModel, viewProjection, texture) {
+  gl.useProgram(program);
+  const model = gl.getUniformLocation(program, "u_model");
+  const vp = gl.getUniformLocation(program, "u_viewProjection");
+  const baseColor = gl.getUniformLocation(program, "u_baseColor");
+  if (model === null || vp === null || baseColor === null) {
+    throw new Error("required uniform was not active");
+  }
+  gl.uniformMatrix4fv(model, false, mvpModel);
+  gl.uniformMatrix4fv(vp, false, viewProjection);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, texture);
+  gl.uniform1i(baseColor, 0);
+}
+```
+
+可复现实验应依次制造三类错误：删掉分号观察编译日志；把 v_color 类型改错观察链接日志；把纹理绑定到 TEXTURE1 但 sampler 保持 0，观察程序已链接却采样错误。这三步分别验证源码、阶段接口和应用绑定。
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** 片元着色器编译失败报「no default precision for float」。
-**原因 →** GLSL ES 片元着色器没有默认 float 精度，必须显式声明，顶点则有默认 highp。
-**修法 →** 在片元着色器顶部加 `precision mediump float;`（或 highp），整文件生效。
+**现象 →** 在所有移动设备上把片元计算统一改成 mediump，远处模型抖动、深度重建断层或高光突然消失。
+**原因 →** mediump 只承诺最低范围和精度，具体实现不同；世界坐标和非线性计算可能超出预算。
+**修法 →** 查询精度格式并用极端坐标、渐变和深度边缘做对照，只对已验证的中间量降精度。
 </Callout>
 
 <Callout type="trap">
-**现象 →** 顶点输出的 varying 在片元里拿不到或值乱跳。
-**原因 →** 顶点的 out 与片元的 in 名称不一致，或类型不匹配，管线没建立连接。
-**修法 →** 确保两端 varying 同名同类型（如都 `vec2 v_uv`），ES3 靠名称匹配，ES2 靠 varying 声明匹配，名称错就断开。
+**现象 →** 顶点与片元 shader 都编译成功，却无法链接 program。
+**原因 →** 单阶段语法合法不代表阶段接口兼容，out/in 的名称、类型、数组、精度或插值限定可能不一致。
+**修法 →** 分别保存编译日志，再读取 program link log；把接口声明并排比较，不要继续修改 VAO。
+</Callout>
+
+<Callout type="trap">
+**现象 →** sampler uniform 已设为 0，纹理仍然全黑或采到了别的材质。
+**原因 →** sampler 只选择纹理单元；TEXTURE0 上还必须绑定目标正确且完整的纹理对象。
+**修法 →** 同时检查 useProgram、uniform1i、activeTexture、bindTexture、纹理完整性和 mipmap 过滤条件。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：uniform、attribute/in、varying/out-in 三类限定符分别什么用途？哪个会在管线中被插值？
+**问题 1**：为什么 highp 不能简单理解为“更精确但一定更慢”？WebGL1 与 WebGL2 的片元阶段还要分别检查什么？
 
 <Answer>
-uniform 是每次绘制不变的全局常量（如变换矩阵、光源），所有顶点片元共享；attribute（ES2）/in（ES3 顶点）是每顶点不同的输入（如位置、UV）；varying（ES2）/out-in（ES3）是顶点输出到片元输入的数据，会被光栅化按重心坐标插值。varying/out-in 是会被插值的那个。
+精度限定符规定最低范围和精度，硬件可能用同一执行宽度实现多个等级，因此性能差异不能脱离实现和基准断言。WebGL1 的片元 highp float 可能不可用，应查询 getShaderPrecisionFormat 并准备降级；WebGL2 的 GLSL ES 3.00 把片元 highp 纳入核心能力，但仍应记录实际范围和精度，并用目标场景验证数值误差。
 </Answer>
 
-**问题**：为什么片元着色器必须显式声明 float 精度？mediump 和 highp 各适合什么场景？
+**问题 2**：v_color 在顶点阶段是 vec3、片元阶段是 vec4 时，为什么编译可能都成功而链接失败？
 
 <Answer>
-GLSL ES 规定片元着色器无默认 float 精度（顶点默认 highp），不声明会编译失败。highp 精度高但慢、可能不支持，适合需要精度的计算（如位置变换）；mediump 精度足够、性能好，适合颜色、UV、普通片元运算，是移动端常用默认。
+每个 shader 单独编译时，vec3 输出和 vec4 输入在各自阶段内都是合法声明；只有链接 program 时，链接器才把相邻阶段组成接口并比较变量。名称相同但类型不一致违反阶段接口契约，因此链接失败。这类错误应读 program info log，而不是检查 VAO 或纹理。
+</Answer>
+
+**问题 3**：sampler2D、纹理单元和纹理对象三者如何连接？请给出把纹理接到单元 3 的命令顺序。
+
+<Answer>
+sampler2D uniform 保存纹理单元编号；activeTexture 选择应用随后操作的纹理单元；bindTexture 把具体纹理对象绑定到该单元的 TEXTURE_2D 目标。顺序可写为 useProgram(program)，activeTexture(TEXTURE0 + 3)，bindTexture(TEXTURE_2D, texture)，uniform1i(samplerLocation, 3)。还要保证纹理尺寸、格式和过滤所需 mipmap 完整。
 </Answer>
 </Exercises>
 
+## 小结
+
+- GLSL ES 版本决定可用语法；ES 100、ES 300 和桌面 GLSL 不能只靠关键字替换互转。
+- 精度限定符定义最低数值能力，选择必须结合阶段支持查询和极端输入验证。
+- 阶段接口在链接时检查，应用接口则由 VAO、uniform、纹理单元和输出附件在绘制时完成。
+- smooth、flat 与 centroid 决定顶点输出如何生成片元输入，整数片元输入必须使用 flat。
+- 编译、链接、资源绑定应分别制造故障并保存日志，才能把“黑屏”定位到正确边界。
+
 <Glossary>
-<GlossaryItem term="uniform">每次绘制不变、所有顶点片元共享的全局变量，如变换矩阵、光源参数。</GlossaryItem>
-<GlossaryItem term="varying">顶点输出、片元输入的变量，光栅化阶段按重心坐标自动插值。</GlossaryItem>
-<GlossaryItem term="精度限定符">highp/mediump/lowp，声明浮点精度；片元着色器必须显式声明 float 精度。</GlossaryItem>
-<GlossaryItem term="采样器">sampler2D 等，用于在着色器中读取纹理的颜色类型。</GlossaryItem>
+<GlossaryItem term="精度限定符">highp、mediump、lowp 规定浮点或整数表达式的最低范围和精度等级，实际能力要按阶段和实现查询。</GlossaryItem>
+<GlossaryItem term="阶段接口">相邻着色器阶段之间按名称、类型、数组、精度和限定规则组成的输入输出契约，在程序链接时验证。</GlossaryItem>
+<GlossaryItem term="插值限定符">smooth、flat、centroid 等控制顶点输出如何为图元内部片元生成输入值。</GlossaryItem>
+<GlossaryItem term="uniform">属于 program、由应用设置并在一次绘制期间对各着色器调用保持常量的变量。</GlossaryItem>
+<GlossaryItem term="采样器">不透明着色器类型，其 uniform 值选择纹理单元；具体纹理对象仍需绑定到该单元与目标。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="深入理解 OpenGL WebGL OpenGL ES" adaptedUrl="" />
+<Attribution
+  adaptedFrom="Khronos The OpenGL ES Shading Language 3.00 Specification"
+  adaptedUrl="https://registry.khronos.org/OpenGL/specs/es/3.0/GLSL_ES_Specification_3.00.pdf"
+/>

@@ -1,0 +1,276 @@
+---
+title: "面试题18（二）：删除链表中重复的节点"
+type: C
+section: "第3章 高质量的代码"
+order: 20
+description: "利用排序链表中相同值连续成段的性质，一次扫描删除所有出现多次的值，并正确处理头部、尾部和全重复边界。"
+demo: true
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/18_02_DeleteDuplicatedNode/DeleteDuplicatedNode.cpp"
+draft: false
+---
+
+import { DuplicateRunDeletionDiagram, DuplicatePredecessorInvariantMap, HeadRunRewireDiagram, DeleteDuplicatedCaseLab } from "@/components/mdx/coding-interviews/diagrams/delete-duplicated-node";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释排序链表为何能在线性扫描中识别完整重复段
+- 能计算删除头部、中部、尾部与全链重复段后的链接结果
+- 能实现重复节点全部删除且不保留任何副本的裸指针版本
+- 能分析前驱节点、当前节点与下一段不同值之间的不变量
+- 能设计覆盖作者十类输入及内存所有权边界的自动测试
+
+</Objectives>
+
+## 从“去重到底保留几个”开始
+
+先预测：输入排序链表 1→2→3→3→4→4→5，输出应该是 1→2→3→4→5，还是 1→2→5？
+
+题目“删除链表中重复的节点”的契约是第二种：只要某个值出现超过一次，该值对应的节点就要**全部删除**。它不是常见的“相邻重复只保留一个”，也不是只删除多出来的副本。两个 3 和两个 4 都不再出现在结果中，因此作者示例输出为 1→2→5。
+
+<Term def="节点值按非递减或非递增次序排列，使相同值必然连续出现的链表。">排序链表</Term>提供了关键结构：相同值一定聚在一个连续区间。把这个区间称为<Term def="排序链表中由同一数值组成的最大连续节点区间。">重复段</Term>。扫描到当前节点时，只比较它和后继的值，就能判断当前值是否开始重复；一旦重复，再向后越过所有相同值即可找到下一段不同值。
+
+<DuplicateRunDeletionDiagram />
+
+如果输入未排序，例如 1→2→1，两个 1 不相邻，局部比较不会发现它们属于同一重复值。要支持无序链表，必须先排序、使用哈希计数后第二次扫描，或用额外结构记录出现次数；本题的一次扫描结论严格依赖“排序链表”前置条件。
+
+<Callout type="trap" title="把本题写成重复值保留一个">
+常规去重遇到一段 3→3 时保留第一个3，只删除后面的3；本题要求两个3都删除。判断到重复后，不能先把current当作保留节点，必须让链接越过整个重复段。
+</Callout>
+
+## 前驱只指向已经确定保留的节点
+
+维护两个位置：
+
+1. current 指向尚未处理的第一节点。
+2. pre 指向已经确定保留的最后一节点；若还没有保留节点，pre 为空。
+
+若 current 与 next 的值不同，current 只出现一次，可以保留它：令 pre=current，current=next。若二者值相同，就记录该值并删除连续的整段；删除后 current 指向首个不同值。此时 pre 不动，因为被删段中没有任何节点可以成为保留前驱。
+
+<DuplicatePredecessorInvariantMap />
+
+这就是<Term def="始终指向已处理前缀中最后一个确定保留节点，绝不进入待删除重复段的指针。">保留前驱</Term>不变量：pre 后面的链接始终通向“尚未处理的第一节点”。删除中间重复段后，要做的链接更新正是 pre->next = current，其中 current 已经是**下一段不同值**。
+
+因此“前驱节点与下一段不同值”构成一次删除后的两端：左端是最后一个保留节点，右端是尚未判断但值已不同的节点。中间所有同值节点已经释放。只要每轮恢复这条连接，已处理前缀就不会残留重复值，也不会丢失后续链表。
+
+## 头部重复为何必须改写 head
+
+当重复段从链表头开始时，pre 仍为空，没有 pre->next 可以修改。删除整段后，调用者的 head 必须直接指向 current。若所有节点值都相同，current 最终为空，head 也必须变为空链表。
+
+<HeadRunRewireDiagram />
+
+作者使用 ListNode** pHead 让函数能够更新调用者的头指针。C++ 也可以使用 ListNode*& head。另一种办法是在真实头之前放一个<Term def="不承载业务值、专门提供稳定前驱位置以统一头部和中间链接操作的辅助节点。">哨兵节点</Term>，让头部重复段也拥有前驱；但函数返回时仍要把哨兵的 next 交回给真实 head。
+
+哨兵能减少“pre 为空”的分支，却不能替代释放循环。重复段中的每一个物理节点都拥有独立生命周期，必须逐个保存 next、释放当前节点，再前进；只把前驱链接跨过去会造成整段内存泄漏。
+
+## 忠实实现整段删除
+
+下面实现沿用作者的裸指针所有权模型。duplicated只表示 current 所在值是否重复；一旦为真，内部循环删除从 current 开始的全部同值节点。
+
+```cpp
+struct ListNode {
+    int value;
+    ListNode* next = nullptr;
+};
+
+void deleteDuplicatedNodes(ListNode*& head) {
+    ListNode* pre = nullptr;
+    ListNode* current = head;
+
+    while (current != nullptr) {
+        ListNode* next = current->next;
+        const bool duplicated =
+            next != nullptr && next->value == current->value;
+
+        if (!duplicated) {
+            pre = current;
+            current = next;
+            continue;
+        }
+
+        const int duplicatedValue = current->value;
+        while (current != nullptr &&
+               current->value == duplicatedValue) {
+            ListNode* doomed = current;
+            current = current->next;
+            delete doomed;
+        }
+
+        if (pre == nullptr) {
+            head = current;
+        } else {
+            pre->next = current;
+        }
+    }
+}
+```
+
+外层每次要么保留一个节点并前进，要么删除至少两个节点并越过一段。每个节点最多被 current 访问常数次，因此时间复杂度为 O(n)；只使用 pre、current、next 和一个值副本，额外空间为 O(1)。
+
+注意删除循环先保存 current->next，再释放 current。若先 delete 后读取 next，就会解引用生命周期已结束的对象，属于未定义行为。也不能在释放后通过旧 current 读取重复值，所以要在进入循环前复制 duplicatedValue。
+
+## 用指向链接的指针统一头部与中部
+
+裸指针版本的两个重连分支可以用<Term def="保存某条next链接或head变量地址，从而直接改写拥有当前节点那条链接的二级指针。">指向链接的指针</Term>统一。link 始终指向“拥有 current 的那条指针”：最初是 head 的地址；保留节点后变成其 next 的地址；删除重复段后直接把 *link 改成下一段不同值。
+
+```cpp
+void deleteDuplicatedWithLink(ListNode*& head) {
+    ListNode** link = &head;
+
+    while (*link != nullptr) {
+        ListNode* current = *link;
+        if (current->next == nullptr ||
+            current->next->value != current->value) {
+            link = &current->next;
+            continue;
+        }
+
+        const int value = current->value;
+        while (*link != nullptr && (*link)->value == value) {
+            ListNode* doomed = *link;
+            *link = doomed->next;
+            delete doomed;
+        }
+    }
+}
+```
+
+这个版本没有单独的 pre 变量：*link 本身就是未处理后缀的入口。若重复段从头开始，link 仍指向 head；若在中间，link 指向上一个保留节点的 next。它统一了链接操作，但要求读者清楚二级指针的含义，不能把代码变短误认为算法契约改变。
+
+如果链表用 std::unique_ptr 拥有节点，可以让 link 指向拥有当前节点的 unique_ptr，删除动作变为移动后继所有权，释放自动发生：
+
+```cpp
+#include <memory>
+
+struct OwnedNode {
+    int value;
+    std::unique_ptr<OwnedNode> next;
+};
+
+void deleteDuplicatedOwned(std::unique_ptr<OwnedNode>& head) {
+    std::unique_ptr<OwnedNode>* link = &head;
+
+    while (*link != nullptr) {
+        const int value = (*link)->value;
+        auto* probe = (*link)->next.get();
+        if (probe == nullptr || probe->value != value) {
+            link = &((*link)->next);
+            continue;
+        }
+
+        while (*link != nullptr && (*link)->value == value) {
+            *link = std::move((*link)->next);
+        }
+    }
+}
+```
+
+赋值右侧先取得后继所有权，旧节点随后由被覆盖的 unique_ptr 销毁。该写法避免显式 delete 和泄漏，但仍假设链表无环且节点由唯一所有权链管理。若外部还保存裸指针指向被删节点，删除后它们同样悬空。
+
+## 异常安全和泛型值边界
+
+作者节点值为 int，复制 duplicatedValue 不会抛异常。泛型节点的值复制若可能抛出，异常发生在删除前，链表尚未改变，可以保持原结构；但进入删除循环后不应再执行可能抛出的值操作，否则可能只删掉重复段的一部分。
+
+可以先完成所有潜在失败的比较准备，再提交指针修改。比较运算本身若会抛出，最稳妥的策略是在释放任何节点前先找到整段终点；只有确认边界后再进行无异常的摘链和销毁。析构函数按 C++ 约定也不应抛异常，否则栈展开和所有权容器都无法提供可靠保证。
+
+若值只支持等价比较而不可复制，可以保存对值的引用来扫描边界，但该引用所指节点不能在比较结束前删除。先用 probe 找到首个不同值，再第二次遍历释放整段即可；这仍是线性总时间，因为每个被删节点至多经过查找和释放两次。
+
+## 外部引用、所有权与接口契约
+
+算法会释放所有重复节点。调用方保存的任何指向这些节点的指针、引用或迭代器都会失效；指向保留节点的引用仍有效。测试不能在删除后读取旧指针来判断值，而应在删除前记录地址数值，之后只检查这些地址不再出现在可达链表中。
+
+共享节点、交叉链表或环形链表都不满足作者模型。若两个头指针共享同一尾段，从其中一条链删除重复节点会让另一条链悬空；若存在环，扫描可能永不结束或重复释放。生产接口应由容器独占节点并隐藏裸链接，或在调试入口验证无环与所有权。
+
+并发遍历时，断链和释放也不是线程安全事务。另一个线程可能刚读取到即将释放的节点。需要互斥锁、读复制更新、危险指针或纪元回收等机制；不能只把 next 改成原子指针就安全地立即 delete。
+
+<Callout type="trap" title="只重连前驱而不逐个释放重复节点">
+让pre直接指向下一段不同值只改变可达性，被跳过的节点仍占用堆内存。裸指针实现必须逐个delete；智能指针实现必须逐个转移所有权，使旧拥有者在覆盖时析构。
+</Callout>
+
+## 官方十组测试如何锁定语义
+
+作者测试并非只验证示例。十组输入分别覆盖：部分重复、全部唯一、头部六个相同值、全链同值、所有值都成对、首中尾都有重复、两个不同节点、单节点、两个相同节点以及空链表。
+
+其中几组尤其能区分错误实现：
+
+- 1→1→2 应得到 2，验证头部重连。
+- 1→1 应得到空，验证不保留一个副本。
+- 1→1→2→2→3→3→4→4 应得到空，验证连续删除多段时 link 或 pre 没有错误前进。
+- 1→1→2→3→3→4→5→5 应得到 2→4，验证头、中、尾三处重复段。
+- 1→2→3→4→5→6→7 原样保留，验证唯一节点不会被误删。
+
+<DeleteDuplicatedCaseLab />
+
+自动测试除了比较值序列，还应在地址消毒器和泄漏检测下运行。每个测试结束后销毁剩余链表；否则测试夹具泄漏会掩盖算法是否正确释放。空链表和单节点测试也能证明函数不会无条件解引用 head 或 next。
+
+## 不同去重需求应使用不同函数名
+
+“删除重复节点”在接口层容易歧义。至少有三种常见契约：每个值保留第一个、只删除相邻多余副本、出现多次的值一个不留。本题属于第三种。生产代码应使用 eraseAllRepeatedValues 之类明确命名，并在文档中写出输入必须已排序。
+
+若需求是无序链表中删除所有重复值，可以先用哈希表统计每个值出现次数，再用指向链接的指针删除计数大于一的节点，时间期望 O(n)、空间 O(n)。若不能使用额外空间，可排序后应用本题算法，但排序会改变原节点顺序，且链表排序成本为 O(n log n)。
+
+若输入是数据库游标或流，不能回退且不知道后续是否再次出现相同值，无序情形无法在看到第一个值时立刻决定是否输出。排序前提不仅优化复杂度，也让决策在一个连续重复段结束时即可完成。
+
+## 正确性证明
+
+循环开始时，head 到 pre 的已处理前缀只包含原链表中出现一次的值，并保持原相对次序；current 是未处理后缀的第一节点。若 current 与后继不同，有序性保证当前值不会在更后面再次出现，所以保留它仍满足不变量。
+
+若 current 与后继相同，有序性保证该值的所有节点都连续位于当前重复段。删除到首个不同值并把 pre 或 head 接到那里，恰好移除了该值的全部节点；其他值的节点没有改变次序。新 current 重新成为未处理后缀入口，不变量恢复。
+
+循环在 current 为空时终止。此时未处理后缀为空，已处理前缀覆盖所有原节点；根据不变量，结果恰好由原链表中只出现一次的值组成。因此算法既不会保留重复值，也不会误删唯一值。
+
+<Stepper>
+  <Step title="先确认有序前提和删除契约"><DuplicateRunDeletionDiagram />相同值连续成段；一旦一段长度大于一，整段全部删除而不是保留一个。</Step>
+  <Step title="维持保留前驱不变量"><DuplicatePredecessorInvariantMap />唯一节点让pre前进，重复段删除时pre不进入该段。</Step>
+  <Step title="单独检查头部重连"><HeadRunRewireDiagram />pre为空时更新head，使它指向下一段不同值或空。</Step>
+  <Step title="跑完作者十组边界"><DeleteDuplicatedCaseLab />部分、头尾、全重复、全唯一、单节点和空链表共同锁定语义。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 本题输入必须是排序链表，相同值因此形成连续重复段。
+2. 重复节点全部删除表示某值出现多次时一个副本也不保留。
+3. pre 始终是最后一个保留节点，current 始终是未处理后缀入口。
+4. 删除重复段后，把保留前驱或 head 连接到下一段不同值。
+5. 每个节点只被常数次访问，时间 O(n)、额外空间 O(1)。
+6. 头部重复、全链重复和连续多段删除是最容易写错的边界。
+7. 裸指针版本要逐个释放节点，智能指针版本要正确转移所有权。
+8. 作者十组测试与内存工具一起验证值序列、链接和生命周期。
+
+<Exercises>
+
+**问题 1：为什么链表有序是一次扫描删除全部重复值的必要条件？**
+
+<Answer>有序性保证相同值只会出现在一个连续段。看到当前值与后继不同，就能确定该值以后不会再次出现并安全保留；无序链表中的同值可能在远处再次出现，需要计数、排序或第二次扫描。</Answer>
+
+**问题 2：pre 为什么不能在发现重复后移动到重复段最后一个节点？**
+
+<Answer>重复段中每个节点都将释放，pre 若进入该段就会成为悬空指针。它必须停在最后一个确定保留的节点，删除结束后由它连接下一段不同值；若没有保留前缀，则直接更新head。</Answer>
+
+**问题 3：指向链接的指针如何统一删除头部和中间重复段？**
+
+<Answer>link保存拥有当前节点那条指针的地址。头部时它指向head，中间时指向上个保留节点的next；循环把星号link不断改成后继，就能在同一代码路径释放整段并恢复链接。</Answer>
+
+**问题 4：为什么只比较输出值还不足以验证实现？**
+
+<Answer>错误实现可能得到正确序列却泄漏被跨过的节点，或先释放再读取next造成未定义行为。还要用地址消毒器、泄漏检测和完整销毁夹具验证节点生命周期，并覆盖作者十组边界。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="排序链表">节点值按非递减或非递增次序排列、相同值连续出现的链表。</GlossaryItem>
+  <GlossaryItem term="重复段">由同一数值构成的最大连续节点区间。</GlossaryItem>
+  <GlossaryItem term="保留前驱">已处理前缀中最后一个确定保留、不会被释放的节点。</GlossaryItem>
+  <GlossaryItem term="哨兵节点">不承载业务值、用于提供稳定前驱位置的辅助节点。</GlossaryItem>
+  <GlossaryItem term="指向链接的指针">保存head或next变量地址、可直接改写拥有当前节点那条链接的二级指针。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题18（二）"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/18_02_DeleteDuplicatedNode/DeleteDuplicatedNode.cpp"
+  author="何海涛"
+  license="作者公开示例代码；本章为独立重构讲解"
+/>

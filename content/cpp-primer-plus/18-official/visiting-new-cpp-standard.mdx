@@ -1,0 +1,301 @@
+---
+title: "Chapter 18：Visiting with the New C++ Standard"
+type: A
+section: C++ Primer Plus 6e · C++11 类型、所有权与 callable
+order: 18
+description: 对齐第6版 Chapter 18：掌握 uniform initialization、auto、smart pointer、scoped enum、rvalue reference/move、lambda、wrapper 与 variadic template。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+draft: false
+---
+
+import {
+  EppCallableVariadicLab,
+  EppModernFeatureMap,
+  EppMoveStateFlow,
+} from "@/components/mdx/cpp-primer-plus/diagrams/visiting-new-cpp-standard";
+
+<Objectives>
+
+- 能比较 uniform initialization、`auto`/`decltype` 与旧声明形式，复现 narrowing 和 initializer_list 选择差异
+- 能实现 unique owner 类型的 rvalue reference、move constructor/assignment，并判断 smart pointer 与 scoped enum 的契约收益
+- 能设计 lambda、`std::function`/`bind` wrapper 和 variadic template，分析 capture、type erasure 与 parameter pack 展开成本
+
+</Objectives>
+
+## 为什么新标准特性要按契约而不是年份学习
+
+第六版把 C++11 作为“新标准”介绍。真正需要保留的不是发布年份，而是它把哪些错误交给类型系统：brace 可诊断 narrowing，smart pointer 把 owner 写进类型，override 检查虚函数，move 区分复制和资源转移，lambda 把局部策略变成 callable object。
+
+## uniform initialization 统一语法但仍有重载规则
+
+统一初始化（uniform initialization）用 braces 初始化标量、聚合、类和容器，并禁止许多窄化转换。空 braces 值初始化。它减少语法分裂，却不会让所有构造候选等价：存在 `initializer_list` constructor 时，列表初始化会优先尝试它。
+
+<Term def="使用花括号为标量、聚合和类对象提供初始化器，并对窄化进行更严格诊断的统一语法。">
+  统一初始化
+</Term>
+
+```cpp
+int count{42};
+std::vector<int> values{1, 2, 3};
+
+// int narrowed{3.5};              // error: narrowing
+std::vector<int> sized(3, 7);      // {7,7,7}
+std::vector<int> listed{3, 7};     // {3,7}
+```
+
+`()` 与 `{}` 在 vector 示例中语义不同。审计初始化时写出候选 constructor、是否走 initializer_list、元素数量和窄化规则，不能只以“现代风格”替换符号。
+
+<Callout type="trap" title="陷阱：把所有圆括号初始化机械改成花括号不会改变行为">
+  initializer_list 有优先级，vector(3,7) 和 vector{3,7} 结果不同；某些 narrowing 也从允许变为编译错误。迁移必须用测试确认构造候选和元素内容。
+</Callout>
+
+## auto 与 decltype 分别从初始化器和表达式推导
+
+自动类型推导（`auto`）从 initializer 推导变量类型，常去掉顶层 const/reference；需要引用时显式写 `auto&`、`const auto&` 或 `auto&&`。`decltype(expr)` 按表达式规则保留更多类型和值类别信息，额外括号会影响结果。
+
+<Term def="让编译器按初始化器或表达式规则确定声明类型，同时仍需显式决定引用和 const 边界。">
+  自动类型推导
+</Term>
+
+```cpp
+const int answer = 42;
+auto copy = answer;              // int
+const auto& view = answer;       // const int&
+decltype(answer) exact = answer; // const int
+decltype((answer)) ref = answer; // const int&
+```
+
+auto 消除冗长拼写，不消除理解类型的责任。尤其 range-for 应判断复制还是引用，iterator/value 类型决定生命周期和修改语义。
+
+<EppModernFeatureMap />
+
+## smart pointers 与 scoped enumeration 收紧隐式边
+
+C++11 的 `unique_ptr`、`shared_ptr`、`weak_ptr` 用模板表达 owner；`make_shared`/`make_unique`（后者在 C++14 标准化）减少裸 new 暴露。作用域枚举（scoped enumeration）用 `enum class` 把枚举项限制在类型 scope，并禁止自动转整数。
+
+<Term def="通过析构和复制/移动规则表达动态对象唯一、共享或观察所有权的 RAII 模板。">
+  智能指针
+</Term>
+
+<Term def="枚举项必须以枚举类型限定且不会隐式转换为整数的 enum class 类型。">
+  作用域枚举
+</Term>
+
+```cpp
+enum class Status : std::uint8_t { idle, running, failed };
+
+Status state = Status::running;
+// int raw = state;  // explicit conversion required
+
+auto task = std::make_unique<Task>();
+run(*task);  // borrow is visible at call site
+```
+
+scoped enum 避免全局枚举名冲突和意外算术；底层类型可控制存储/协议，但跨文件格式仍需显式编码版本。
+
+## rvalue reference 区分可借用资源的表达式
+
+右值引用（rvalue reference, `T&&`）可绑定临时值或 xvalue，使 overload 能选择 move operation。命名的右值引用变量在表达式中仍是 lvalue；要继续转移需显式 `std::move` 或泛型代码中的 `std::forward`。
+
+<Term def="以 T&& 形式绑定临时值或被显式转换为 xvalue 的表达式，用于区分可转移资源的参数类别。">
+  右值引用
+</Term>
+
+```cpp
+class Buffer {
+public:
+    explicit Buffer(std::size_t size)
+        : data_{new int[size]}, size_{size} {}
+
+    ~Buffer() { delete[] data_; }
+
+    Buffer(Buffer&& other) noexcept
+        : data_{other.data_}, size_{other.size_} {
+        other.data_ = nullptr;
+        other.size_ = 0;
+    }
+
+private:
+    int* data_{nullptr};
+    std::size_t size_{0};
+};
+```
+
+move constructor 接管资源并把 source 留在 valid but unspecified（这里明确为空）状态。`noexcept` 让许多容器在重分配时愿意 move 而非 copy。
+
+## move semantics 是类型协议，不是强制偷取
+
+移动语义（move semantics）由 move constructor/assignment 的实现定义。`std::move(x)` 本身不移动字节，只把 x 转成 xvalue 以参与 overload resolution；若类型无 move，仍可能复制。
+
+<Term def="允许新对象或已有对象从可移动源接管资源，并规定源对象移动后仍有效的特殊成员语义。">
+  移动语义
+</Term>
+
+```cpp
+Buffer& Buffer::operator=(Buffer&& other) noexcept {
+    if (this == &other) return *this;
+    delete[] data_;
+    data_ = other.data_;
+    size_ = other.size_;
+    other.data_ = nullptr;
+    other.size_ = 0;
+    return *this;
+}
+```
+
+定义 destructor/copy/move 中任一项会影响其余项是否隐式生成，应按 Rule of Five/Zero 审查。优先让 vector/unique_ptr 成员提供正确 move，避免手写裸 owner。
+
+<EppMoveStateFlow />
+
+<Callout type="trap" title="陷阱：调用 std::move 后对象立即销毁或必然为空">
+  std::move 只是 cast；是否调用 move、源状态为何由后续操作决定。移动后对象必须可析构和可赋值，但除非类型另有保证，不应读取具体值。
+</Callout>
+
+## new class features 让设计意图可编译检查
+
+新类特性（new class features）包括 `=default`、`=delete`、delegating constructors、inheriting constructors、`override`、`final`、类内成员初始化与 explicit conversion operator。它们减少重复并把禁止复制、覆盖签名和默认状态写进声明。
+
+```cpp
+class Session final {
+public:
+    Session() : Session{Options{}} {}
+    explicit Session(Options options) : options_{std::move(options)} {}
+
+    Session(const Session&) = delete;
+    Session& operator=(const Session&) = delete;
+
+private:
+    Options options_{};
+};
+```
+
+delegating constructor 最终应汇聚到一个建立不变量的目标构造；delete 比把复制声明为 private 且不定义更早、更清楚地诊断。
+
+## lambda expression 生成带 capture 的闭包对象
+
+lambda 由 capture、参数、可选 specifier/返回类型和 body 构成。按值 capture 复制创建时的值，按引用 capture 借用外部对象；闭包逃逸 scope 时引用可能悬空。默认 `operator()` 为 const，`mutable` 允许修改闭包内部副本。
+
+<Term def="在表达式处定义匿名函数对象，并通过 capture 明确复制或借用外部状态的语法。">
+  lambda
+</Term>
+
+```cpp
+int limit = 10;
+auto below = [limit](int value) { return value < limit; };
+
+std::vector<int> values{3, 14, 7};
+auto count = std::count_if(values.begin(), values.end(), below);
+```
+
+`[&]` 和 `[=]` 隐藏每个依赖方向，大型或异步 callable 更适合显式 capture。捕获 `this` 是捕获 pointer，不延长对象生命周期。
+
+## wrappers 统一 callable，代价是 type erasure
+
+`std::function<R(Args...)>` 是 callable wrapper，可存函数、lambda、functor 或 bind result，提供统一运行时类型；代价可能包括间接调用、分配和 copyability 限制。`std::bind` 预绑定参数并以 placeholder 重排，lambda 往往更直观。
+
+<Term def="以统一签名保存和调用不同 callable 的对象，例如 std::function 或参数绑定结果。">
+  包装器
+</Term>
+
+```cpp
+#include <functional>
+
+std::function<bool(int)> predicate = [limit](int value) {
+    return value < limit;
+};
+
+auto bound = std::bind(std::less<int>{}, std::placeholders::_1, limit);
+```
+
+若 callable 只在模板内部使用，保留具体 lambda 类型通常更轻；需要跨非模板接口、容器存储多种 callable 或运行时替换时，std::function 的 type erasure 才有价值。
+
+## variadic templates 对 parameter pack 展开
+
+可变参数模板（variadic template）用 template parameter pack 接受任意数量和类型参数。C++11 常用递归展开：定义空/单项 base case，再每次处理一个参数；现代 fold expression 是后续标准的更简洁形式。
+
+<Term def="以类型/函数参数包接收可变数量参数，并在编译期展开生成具体函数或类的模板。">
+  可变参数模板
+</Term>
+
+```cpp
+void logLine(std::ostream& out) {
+    out << '\n';
+}
+
+template <typename T, typename... Rest>
+void logLine(std::ostream& out, T&& first, Rest&&... rest) {
+    out << std::forward<T>(first);
+    if constexpr (sizeof...(rest) > 0) out << ' ';
+    logLine(out, std::forward<Rest>(rest)...);
+}
+```
+
+示例中的 `if constexpr` 属于 C++17；若严格使用 C++11，可通过 overload/base case 控制分隔符。关键契约是 pack 大小、展开位置、forwarding 和递归终止。
+
+先预测 lambda、std::function、bind 和 variadic 四种 callable 的存储/调用成本与生命周期，再切换实验面板核对。
+
+<EppCallableVariadicLab />
+
+## 三步验证新特性是否改善契约
+
+<Stepper>
+  <Step title="第一步：对照旧写法与编译器证据">
+    为 brace/auto/scoped enum/default-delete-override 分别制造 narrowing、类型推导和签名错误，确认诊断改变。
+
+    <EppModernFeatureMap />
+  </Step>
+  <Step title="第二步：追踪 move 前后 owner">
+    记录 lvalue/xvalue/temporary、选中的 overload、目标 owner 与 source 可用操作，并覆盖 self move assignment。
+
+    <EppMoveStateFlow />
+  </Step>
+  <Step title="第三步：比较 callable 表示">
+    用同一 predicate 实现 lambda/function/bind，再展开空、单项、多项 variadic pack，检查 capture 和 forward。
+
+    <EppCallableVariadicLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- uniform initialization 统一语法并诊断 narrowing，但 initializer_list 会改变 overload selection
+- auto/decltype 遵循精确推导规则，仍需显式决定 reference 与 const
+- smart pointers and scoped enumerations 分别收紧 owner 与名字/整数转换边
+- rvalue references 让 overload 区分可移动表达式，move semantics 决定资源转移和 source 状态
+- new class features 把 default/delete/override 等意图交给编译器检查
+- lambda、wrappers and variadic templates 提供不同 callable 复用与成本模型
+
+<Exercises>
+  1. **问题 1：审计 brace 迁移。** `vector<int> v(5,1)` 改成 `v{5,1}` 后为何测试失败？
+
+  <Answer question="uniform initialization 的候选选择怎样变化？">圆括号调用 size/value constructor，生成五个 1；花括号优先 initializer_list，生成元素 5 和 1。迁移时列出 overload candidates、元素数和值，并保留能表达意图的形式；brace 的 narrowing 优势不能替代语义测试。</Answer>
+
+  2. **问题 2：验证 move。** `target = std::move(source)` 后能否断言 source.empty()？
+
+  <Answer question="移动后源对象有哪些保证？">通用保证通常只是 valid but unspecified，可析构并可赋新值；只有类型契约明确时才能断言 empty。记录实际 move assignment、self-move 处理和目标 owner，若需确定源状态就显式 `source = Type{}`。</Answer>
+
+  3. **问题 3：选择 callable 表示。** 一个算法只在模板函数内立即调用 predicate，是否需要 std::function？
+
+  <Answer question="何时保留具体 lambda 类型？">模板参数可直接接收 callable，保留具体类型便于内联且避免 type erasure/可能分配；只有跨固定非模板接口、运行时替换或异构存储时才用 std::function。还要检查 lambda capture 的 owner 与逃逸时间。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="统一初始化">以 braces 初始化并诊断窄化的统一语法。</GlossaryItem>
+  <GlossaryItem term="自动类型推导">由初始化器/表达式规则确定声明类型的机制。</GlossaryItem>
+  <GlossaryItem term="智能指针">通过类型语义表达动态对象 owner 的 RAII 模板。</GlossaryItem>
+  <GlossaryItem term="作用域枚举">枚举项需限定且不隐式转整数的 enum class。</GlossaryItem>
+  <GlossaryItem term="右值引用">绑定临时/xvalue 并支持移动 overload 的 T&& 引用。</GlossaryItem>
+  <GlossaryItem term="移动语义">从可移动源接管资源并保持源有效的特殊成员协议。</GlossaryItem>
+  <GlossaryItem term="lambda">以 capture 和函数体生成闭包对象的表达式。</GlossaryItem>
+  <GlossaryItem term="包装器">用统一签名保存/调用不同 callable 的对象。</GlossaryItem>
+  <GlossaryItem term="可变参数模板">通过 parameter pack 接收并展开可变数量参数的模板。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++ Primer Plus, Sixth Edition, Chapter 18 Visiting with the New C++ Standard"
+  adaptedUrl="https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+/>

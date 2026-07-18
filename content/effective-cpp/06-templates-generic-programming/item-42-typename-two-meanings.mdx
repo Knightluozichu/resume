@@ -1,0 +1,397 @@
+---
+title: "Item 42：理解 typename 的双重含义"
+type: A
+section: Chapter 7 · Templates and Generic Programming
+order: 42
+description: 对齐 Effective C++ 第三版 Item 42：说明 template type parameter 中 class 与 typename 等价，识别 nested dependent type name 的解析歧义，并掌握 typename 在普通声明、base list 和 mem-initializer 中的位置规则。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppDependentNameParseMap,
+  EcppTypenameContextMatrixMap,
+  EcppTypenameTwoMeaningsMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-42-typename-two-meanings";
+
+<Objectives>
+
+- 能解释 template type parameter 声明中 `class` 与 `typename` 完全等价，且二者都可接收非 class 类型
+- 能判断一个 qualified name 是否为 nested dependent type name，并写出正确的 typename 消歧
+- 能区分普通声明、alias、base list 与 mem-initializer 的 typename 规则并复现编译结果
+
+</Objectives>
+
+## 从两段等价声明开始
+
+```cpp
+template<class T>
+class Widget;
+
+template<typename T>
+class Gadget;
+```
+
+在 template parameter list 中，`class T` 与 `typename T` 意义完全相同：都声明 T 是 type parameter。
+
+<Term def="模板形参代表一个类型，实例化时由具体 type argument 替换。">
+  template type parameter
+</Term>
+
+<Term def="在模板类型参数列表中可互换使用 class 或 typename 的语言规则。">
+  parameter-keyword equivalence
+</Term>
+
+Item 42 的原则是 Understand the two meanings of typename（理解 typename 的双重含义）。
+
+```cpp
+Widget<int> countWidget;
+Gadget<double> ratioGadget;
+```
+
+`class T` 并不要求 T 必须是 class；`int` 同样合法。团队可以用风格约定区分，但不能把约定误当语言限制。
+
+<EcppTypenameTwoMeaningsMap />
+
+先预测：把 `template<class T>` 全部改成 `template<typename T>`，生成代码和 overload 行为是否改变？
+
+## 第二种含义：声明依赖名称是类型
+
+```cpp
+template<class C>
+void printSecond(const C& container) {
+    C::const_iterator iter(container.begin()); // parse error
+}
+```
+
+`C::const_iterator` 的含义依赖具体 C。它既是 qualified name，又位于 dependent scope 中，并且嵌套在 C 里面。
+
+<Term def="含义取决于一个或多个 template parameters、只有实例化后才能最终解析的名称。">
+  dependent name
+</Term>
+
+<Term def="出现在 dependent scope 限定之后的内部名称，如 C 的 const_iterator。">
+  nested dependent name
+</Term>
+
+<Term def="预期表示类型的 nested dependent name，需要 parser 获得额外类型提示。">
+  dependent type name
+</Term>
+
+正确写法是：
+
+```cpp
+template<class C>
+void printSecond(const C& container) {
+    typename C::const_iterator iter(container.begin());
+}
+```
+
+这里 `typename` 不是引入 template parameter，而是告诉 compiler：把后面的 qualified dependent name 当作 type。
+
+## 为什么 compiler 不等实例化后再猜
+
+看这条声明：
+
+```cpp
+C::const_iterator* p;
+```
+
+如果 `C::const_iterator` 是类型，这是 pointer declaration；如果某个 specialization 把 `const_iterator` 定义成 static data member，且作用域里已有变量 `p`，tokens 也可读成 multiplication expression。
+
+<Term def="同一 token sequence 可被读取为 declaration 或 expression 的语法不确定性。">
+  declaration-expression ambiguity
+</Term>
+
+<Term def="模板定义阶段未获明确证据时，把 nested dependent name 假定为非类型的解析规则。">
+  dependent-name non-type assumption
+</Term>
+
+C++ 不能让模板定义阶段的 grammar 完全悬空，因此采用保守规则：除非上下文已经确定它是 type，或程序用 `typename` 指明，否则 nested dependent name 不按 type 解析。
+
+```cpp
+typename C::const_iterator* p;
+```
+
+<Term def="用 typename 明确要求 parser 将 qualified dependent name 作为类型读取。">
+  typename disambiguation
+</Term>
+
+<EcppDependentNameParseMap />
+
+## 三问定位法
+
+不要看到 `::` 就机械添加 typename，依次问：
+
+1. 名称是否 qualified，例如 `A::B`？
+2. qualifier 是否依赖 template parameter，例如 `Container<T>` 或 `T`？
+3. 最终名称是否要在当前上下文被当作 type？
+
+三项都成立时，通常需要 `typename`。
+
+<Term def="qualified、dependent、type 三项共同决定 typename 需求的检查流程。">
+  qualified-dependent-type test
+</Term>
+
+```cpp
+template<class Iter>
+void clearValue(Iter iter) {
+    typename std::iterator_traits<Iter>::value_type value{};
+    *iter = value;
+}
+```
+
+`value_type` 是 iterator_traits 的 nested name，iterator_traits specialization 取决于 Iter，当前要把它声明为 local variable type，所以需要 typename。
+
+<Term def="通过 specialization 为 iterator 提供 value_type 等关联类型的标准 traits 模板。">
+  iterator traits dependent type
+</Term>
+
+## 已知类型与非依赖名称不需要 typename
+
+```cpp
+std::string::size_type length = 0;
+```
+
+`std::string` 不依赖当前 template parameter，compiler 在定义点已经知道 `size_type` 是类型。
+
+```cpp
+template<class T>
+struct Holder {
+    using Index = std::size_t;
+    Index index = 0;
+};
+```
+
+当前 template 自己已建立的 member alias 可在其已知上下文中直接使用。关键不是“代码位于模板中”，而是名称含义是否依赖未知 specialization。
+
+<Term def="在模板定义点已确定为类型、不需要等待 substitution 的名称。">
+  nondependent known type
+</Term>
+
+<Callout type="trap" title="陷阱：模板里的所有双冒号前都加 typename">
+  `typename` 只能用于声明类型的合适语法位置。namespace 名、static value、base
+  list 的 base 名称等位置不能随意添加；先做三问检查。
+</Callout>
+
+## alias 声明中的依赖类型
+
+```cpp
+template<class C>
+using Element = typename C::value_type;
+
+template<class C>
+void consume(const C& source) {
+    using Iter = typename C::const_iterator;
+    Iter first = source.begin();
+}
+```
+
+<Term def="using declaration 右侧依赖类型仍需 typename 才能被解析为 type-id。">
+  dependent alias target
+</Term>
+
+alias 只能把重复的 dependent name 和 typename 集中起来；它不会取消最初声明处的消歧责任。建立 `Element<C>` 后，使用 alias template 的结果本身已处于类型语法上下文，调用代码更清楚。
+
+## base list 是明确例外
+
+```cpp
+template<class T>
+class Derived : public Base<T>::Nested {
+    // ...
+};
+```
+
+base-specifier grammar 已要求这里出现 base type，所以不写、也不能按 Item 42 的规则写 `typename`。
+
+<Term def="class declaration 冒号之后列出直接 base types 的语法区域。">
+  base-specifier list
+</Term>
+
+```cpp
+template<class T>
+class Derived : public Base<T>::Nested {
+public:
+    explicit Derived(int value)
+        : Base<T>::Nested(value) {}
+};
+```
+
+constructor mem-initializer 中指定 dependent base class 时同样不加 typename。
+
+<Term def="constructor 冒号之后指定 bases 与 members 初始化方式的语法区域。">
+  mem-initializer list
+</Term>
+
+<EcppTypenameContextMatrixMap />
+
+## 同一个名称进入函数体后规则改变
+
+```cpp
+template<class T>
+class Derived : public Base<T>::Nested {
+public:
+    void makeCopy() {
+        typename Base<T>::Nested copy(*this);
+    }
+};
+```
+
+在 base list 中 grammar 已确定 type；进入普通 statement 后，`Base<T>::Nested` 又可能是 type 或 value，因此 local declaration 需要 typename。
+
+<Term def="同一 dependent name 因所在 grammar position 不同而改变 typename 需求。">
+  context-sensitive typename rule
+</Term>
+
+这说明记忆“某个名字总要 typename”是错误模型。应记住 parser 在这个位置是否已经知道它必须是 type。
+
+## typename 不能证明 specialization 真的提供类型
+
+`typename` 是解析指令，不会创造类型。
+
+```cpp
+template<class T>
+struct Traits;
+
+template<class T>
+using Value = typename Traits<T>::value_type;
+```
+
+若 `Traits<int>` 没有 `value_type`，alias 在实例化时仍失败。
+
+<Term def="typename 只确定语法类别，具体 specialization 仍必须实际定义该 nested type。">
+  deferred type validation
+</Term>
+
+<Callout
+  type="trap"
+  title="陷阱：加上 typename 就能修复所有 dependent name 错误"
+>
+  若缺少 specialization、名称拼错、访问受限或目标实际是 value，typename
+  只会产生另一条错误。先判断语义，再处理 parser 歧义。
+</Callout>
+
+## 与 dependent template 的对照
+
+当 dependent object 后的名称是 member template，另一个消歧关键字是 `template`：
+
+```cpp
+template<class T>
+void invoke(T& object) {
+    object.template convert<int>();
+}
+```
+
+<Term def="在 dependent object 或 scope 后声明接下来的名称是 template，从而正确解析尖括号。">
+  template disambiguator
+</Term>
+
+`typename` 解决“后面是否是类型”，`template` 解决“后面是否是模板”。两者可组合：
+
+```cpp
+typename Registry<T>::template Rebind<int>::type value;
+```
+
+先确认 `Rebind` 是 template，再确认最终 `type` 是 dependent type。复杂声明应优先用 alias 分段，降低解析和审查负担。
+
+## 一套编译诊断流程
+
+遇到 dependent name 报错时：
+
+1. 标出所有 template parameters 和 dependent expressions。
+2. 对每个 `A::B` 执行 qualified-dependent-type test。
+3. 若是普通声明/alias 的 dependent type，在名称前加 typename。
+4. 若位于 base list 或 base mem-initializer，确认不写 typename。
+5. 若尖括号被解析成比较运算，检查是否缺 dependent `template` disambiguator。
+6. 用至少两个 specializations 编译，确认目标 nested entity 确实为类型。
+
+<Term def="按依赖性、语法类别、上下文例外和 specialization 逐层定位模板解析错误的方法。">
+  dependent-name diagnostic workflow
+</Term>
+
+先预测下列三个位置的结果再编译：base list、constructor initializer、function local declaration。不要只记答案，要说出 parser 在每个位置已掌握的语法证据。
+
+## 小结
+
+- template type parameter list 中 `class` 与 `typename` 完全等价
+- nested dependent name 默认不按 type 解析，因为未知 specialization 可能把它定义为 value
+- 普通声明和 alias 中的 dependent qualified type 通常需要 typename
+- base-specifier list 与 base mem-initializer 的类型位置不写 typename
+- typename 只负责语法消歧，实例化仍要验证 specialization 真有该类型
+- dependent member template 的尖括号歧义由 `template` disambiguator 处理
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 42"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="template type parameter">
+    由具体类型实参替换的模板形参。
+  </GlossaryItem>
+  <GlossaryItem term="parameter-keyword equivalence">
+    参数列表中 class 与 typename 等价。
+  </GlossaryItem>
+  <GlossaryItem term="dependent name">含义依赖模板参数的名称。</GlossaryItem>
+  <GlossaryItem term="nested dependent name">
+    位于 dependent scope 内部的名称。
+  </GlossaryItem>
+  <GlossaryItem term="dependent type name">
+    预期表示类型的嵌套依赖名称。
+  </GlossaryItem>
+  <GlossaryItem term="declaration-expression ambiguity">
+    tokens 可读成声明或表达式的歧义。
+  </GlossaryItem>
+  <GlossaryItem term="dependent-name non-type assumption">
+    未消歧时依赖名称默认按非类型读取。
+  </GlossaryItem>
+  <GlossaryItem term="typename disambiguation">
+    声明 qualified dependent name 是类型。
+  </GlossaryItem>
+  <GlossaryItem term="qualified-dependent-type test">
+    判断 typename 需求的三问流程。
+  </GlossaryItem>
+  <GlossaryItem term="iterator traits dependent type">
+    iterator_traits 提供的依赖关联类型。
+  </GlossaryItem>
+  <GlossaryItem term="nondependent known type">
+    定义点已确定为类型的名称。
+  </GlossaryItem>
+  <GlossaryItem term="dependent alias target">
+    alias 右侧等待实例化的类型。
+  </GlossaryItem>
+  <GlossaryItem term="base-specifier list">
+    class declaration 中列出直接 bases 的区域。
+  </GlossaryItem>
+  <GlossaryItem term="mem-initializer list">
+    constructor 指定 bases 和 members 初始化的区域。
+  </GlossaryItem>
+  <GlossaryItem term="context-sensitive typename rule">
+    语法位置改变 typename 需求的规则。
+  </GlossaryItem>
+  <GlossaryItem term="deferred type validation">
+    实例化时验证 nested type 真正存在。
+  </GlossaryItem>
+  <GlossaryItem term="template disambiguator">
+    声明 dependent member name 是模板的关键字。
+  </GlossaryItem>
+  <GlossaryItem term="dependent-name diagnostic workflow">
+    依赖性到 specialization 的诊断流程。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：修复 iterator_traits 声明。** 模板函数要创建 iterator 的 value_type 临时对象。
+
+  <Answer question="为什么需要 typename，正确判断链是什么？">`std::iterator_traits<Iter>::value_type` 是 qualified name，qualifier 依赖 Iter，当前 local declaration 要把末尾名称当 type，三问全为是，因此在完整名称前写 typename。它只修复解析；还要实例化验证对应 iterator_traits specialization 确有 value_type。</Answer>
+
+2. **问题 2：解释三个位置。** Derived 继承 Base 的 Nested，在 constructor 初始化它，并在函数体创建一份 copy。
+
+  <Answer question="三个位置分别是否写 typename？">base-specifier 写 `Base<T>::Nested`，不加 typename；constructor mem-initializer 指定同一 base 时也不加；function body 的 local declaration 写 `typename Base<T>::Nested copy`。差异来自 grammar context 是否已经强制该名称为 type，不是名称自身改变。</Answer>
+
+3. **问题 3：区分 typename 与 template 消歧。** Registry 的 dependent Rebind 是 member template，其结果有 nested type。
+
+  <Answer question="怎样解析组合名称并降低复杂度？">写 `typename Registry<T>::template Rebind<int>::type`：scope 依赖 T，所以 template 声明 Rebind 后的尖括号是模板实参，typename 声明最终 type 是类型。工程代码可先建立 `using Rebound = typename Registry<T>::template Rebind<int>::type`，再使用 Rebound，并用正反 specializations 编译。</Answer>
+</Exercises>

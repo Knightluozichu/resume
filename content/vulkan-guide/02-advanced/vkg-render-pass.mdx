@@ -1,190 +1,292 @@
 ---
-title: "渲染通道与附件"
+title: "Dynamic Rendering、附件与 Legacy Render Pass"
 type: A
 section: "计算机图形学与渲染"
 order: 6
-description: "理解渲染通道、附件描述、子通道与子通道依赖及图像布局转换"
+description: "以附件生命周期、load/store、layout barrier 为主线，再理解 subpass 的局部依赖"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://docs.vulkan.org/spec/latest/chapters/renderpass.html"
 draft: false
 ---
 
-import { VkgRenderPassDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-render-pass";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  VkgRenderPassDiagram,
+  VkgRenderingModelDiagram,
+} from "@/components/mdx/vulkan-guide/diagrams/vkg-render-pass";
+import { VkgStepFlowDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 理解渲染通道（Render Pass）的作用与 VkFramebuffer 的关系
-- 掌握附件描述的格式、加载/存储操作与布局转换
-- 理解子通道（Subpass）与子通道依赖的作用
-- 了解 Vulkan 1.3 动态渲染（Dynamic Rendering）的简化方案
+
+- 能描述 attachment 从前序访问、layout transition、load、draw、store 到后序访问的完整生命周期
+- 能实现 synchronization2 + dynamic rendering 的颜色深度绘制闭环
+- 能比较 LOAD、CLEAR、DONT_CARE 与 STORE、DONT_CARE 对内容有效性和带宽机会的影响
+- 能解释 legacy render pass、subpass、input attachment 与 framebuffer 仍有价值的场景
+
 </Objectives>
 
-## 直觉引入
+## 附件是有历史的图像子资源
 
-想象一个画家在画一幅油画：他不是一次性画完，而是分层作画——先打底色（子通道 1），再画细节（子通道 2），最后上光油（子通道 3）。每一步用到的画布状态不同，前一步的结果会影响后一步。Vulkan 的 <Term def="VkRenderPass 描述渲染操作使用的附件格式、子通道结构及子通道间的依赖关系，是 Vulkan 管线对渲染目标的抽象。">VkRenderPass</Term> 就是这种分层渲染的「作画计划」，它定义了所有附件的格式、每个子通道读/写哪些附件，以及子通道之间如何衔接。
+<Term def="在一次 rendering instance 中作为 color、depth、stencil 或 resolve 目标使用的 image view 及其访问合同">Rendering attachment</Term>不是一块自动清空的“帧缓冲槽”。它背后是 VkImage 的某个 subresource range，进入渲染前已有 queue ownership、layout、可见内容和上一次访问者；离开后又会被采样、复制、继续绘制或呈现。
 
-## 概念讲解
-
-### 附件描述
-
-<Term def="附件描述定义渲染通道中每个附件的格式、采样数、加载/存储操作和初始/最终布局。">附件描述（Attachment Description）</Term> 是渲染通道的核心组成：
-
-```c
-VkAttachmentDescription colorAttachment = {
-    .format = swapchainImageFormat,
-    .samples = VK_SAMPLE_COUNT_1_BIT,
-    .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,     // 开始时清空
-    .storeOp = VK_ATTACHMENT_STORE_OP_STORE,    // 结束时保留
-    .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-    .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-    .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-    .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-};
-```
-
-- **loadOp**：渲染开始时如何处理附件（清空/加载/不关心）
-- **storeOp**：渲染结束时是否保留内容
-- **initialLayout/finalLayout**：附件进入和离开渲染通道时的布局
-
-### 子通道
-
-<Term def="子通道是渲染通道内的一个渲染步骤，定义该步骤引用哪些附件及以何种方式引用。">子通道（Subpass）</Term> 通过 <Term def="附件引用指定子通道中附件的索引和该阶段的布局，决定着色器如何访问该附件。">附件引用（Attachment Reference）</Term> 关联附件：
-
-```c
-VkAttachmentReference colorAttachmentRef = {
-    .attachment = 0,
-    .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-};
-
-VkSubpassDescription subpass = {
-    .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-    .colorAttachmentCount = 1,
-    .pColorAttachments = &colorAttachmentRef,
-};
-```
-
-### 子通道依赖
-
-<Term def="子通道依赖定义子通道之间的执行顺序和内存依赖，确保前一个子通道的写入对后一个子通道可见。">子通道依赖（Subpass Dependency）</Term> 控制子通道间的同步与布局转换：
-
-```c
-VkSubpassDependency dependency = {
-    .srcSubpass = VK_SUBPASS_EXTERNAL,
-    .dstSubpass = 0,
-    .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-    .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-    .srcAccessMask = 0,
-    .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-};
-```
-
-### 帧缓冲
-
-<Term def="VkFramebuffer 绑定具体的 VkImageView 到渲染通道的附件槽位，是渲染操作的实际目标。">VkFramebuffer</Term> 把渲染通道的抽象附件绑定到具体的图像视图：
-
-```c
-VkFramebufferCreateInfo fbInfo = {
-    .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-    .renderPass = renderPass,
-    .attachmentCount = 1,
-    .pAttachments = &imageView,
-    .width = swapchainExtent.width,
-    .height = swapchainExtent.height,
-    .layers = 1,
-};
-vkCreateFramebuffer(device, &fbInfo, NULL, &framebuffer);
-```
-
-## 交互Demo
-
-> 猜一猜：如果一个渲染通道有 2 个子通道（G-Buffer + 光照），它们之间需要什么样的依赖？
+因此一段渲染至少回答：前一个 producer 是谁、旧内容是否要保留、当前 attachment 的 format/sample/layout 是什么、结束内容是否有效、下一消费者是谁。Dynamic rendering 与 legacy render pass 只是表达这些答案的两种模型。
 
 <VkgRenderPassDiagram />
 
-<Stepper>
-  <Step title="定义附件描述">
-    为每个附件（颜色、深度等）配置格式、采样数、loadOp/storeOp 和 initialLayout/finalLayout。例如颜色附件用 `CLEAR` + `STORE`，从 `UNDEFINED` 转到 `PRESENT_SRC_KHR`。
-  </Step>
-  <Step title="定义子通道与引用">
-    为每个渲染步骤创建 `VkSubpassDescription`，通过附件引用指定该步骤读/写哪些附件。延迟渲染的 G-Buffer 子通道写入多个颜色附件，光照子通道读取它们作为输入附件。
-  </Step>
-  <Step title="定义子通道依赖并创建">
-    用 `VkSubpassDependency` 指定子通道间的同步和布局转换时机。`srcSubpass = EXTERNAL` 表示渲染通道之前，`dstSubpass = EXTERNAL` 表示之后。最后调用 `vkCreateRenderPass` 创建。
-  </Step>
-</Stepper>
+## Layout 不是同步的替代品
 
-## 代码对照
+<Term def="实现为特定 image 用途优化的状态标签；layout transition 必须与执行和内存依赖一起建立">Image layout</Term>描述图像在某类访问中的组织和用途。把 layout 字段从 A 写成 B，不会自动让 A 阶段写入对 B 阶段可见；barrier 还要提供正确的 src/dst stage、access、subresource range，以及必要的 queue family ownership。
 
-延迟渲染的渲染通道结构（G-Buffer + 光照两个子通道）：
+`VK_IMAGE_LAYOUT_UNDEFINED`允许实现丢弃旧内容，适合首次使用或明确不保留内容。它不能与期待旧数据的 LOAD 语义配合。需要保留时应记录真实旧 layout，并从真实 producer 建立依赖；把 layout 粗暴改成 GENERAL 也不会自动保留或同步内容。
 
-```c
-// 附件：位置、法线、颜色 + 深度
-VkAttachmentDescription attachments[] = {
-    { .format = VK_FORMAT_R16G16B16A16_SFLOAT,
-      .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-      .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-      .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL }, // 位置
-    { .format = VK_FORMAT_R16G16B16A16_SFLOAT,
-      .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-      .storeOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-      .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL }, // 法线
-    { .format = swapchainFormat,
-      .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-      .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-      .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR }, // 最终颜色
-    { .format = depthFormat,
-      .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-      .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-      .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-      .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL }, // 深度
+```cpp
+VkImageMemoryBarrier2 toAttachment{
+  .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+  .srcStageMask = previous.stage,
+  .srcAccessMask = previous.access,
+  .dstStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+  .dstAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT |
+                   VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+  .oldLayout = previous.layout,
+  .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+  .image = colorImage,
+  .subresourceRange = colorRange,
+};
+VkDependencyInfo before{
+  .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+  .imageMemoryBarrierCount = 1,
+  .pImageMemoryBarriers = &toAttachment,
+};
+vkCmdPipelineBarrier2(cmd, &before);
+```
+
+若 loadOp 是 CLEAR 且旧内容不需要，可令 previous layout 为 UNDEFINED、src stage/access 为 NONE；若 loadOp 是 LOAD，src scope 必须覆盖真实 producer 的写入，不能用 NONE 假装依赖不存在。
+
+## Load/store 决定内容承诺
+
+<Term def="rendering instance 开始和结束时，应用对附件旧内容和新内容是否有效作出的语义声明">Load/store operations</Term>影响正确性，也给 tile-based 实现避免外存读写的机会：
+
+| 操作 | 语义 | 内容边界 |
+|---|---|---|
+| LOAD | 保留进入前已有内容 | 旧内容必须有效并正确同步 |
+| CLEAR | 用 clearValue 初始化渲染区域 | 不需要读取旧内容 |
+| DONT_CARE load | 旧内容不需要 | 不能假设为 0 或任意固定值 |
+| STORE | rendering 结果在结束后有效 | 后续消费者可在同步后读取 |
+| DONT_CARE store | 结束内容不再需要 | 后续读取内容未定义 |
+
+DONT_CARE 不是“自动清空”，也不保证一定更快；它声明应用不依赖内容，使实现可以省去加载或存储。Depth prepass 后若主 pass 要 LOAD depth，就必须 STORE 或在同一允许保留的 rendering 结构中维持有效内容。
+
+## Dynamic rendering 主线
+
+Dynamic rendering 在 Vulkan 1.3 为核心 feature。应用在 pipeline 创建时用 `VkPipelineRenderingCreateInfo`声明 formats，在录制时用 `VkRenderingInfo`和 `VkRenderingAttachmentInfo`提供实际 views、layout、load/store、clear 和 render area。
+
+```cpp
+VkRenderingAttachmentInfo color{
+  .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+  .imageView = colorView,
+  .imageLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+  .resolveMode = VK_RESOLVE_MODE_NONE,
+  .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+  .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+  .clearValue = {.color = {{0.02f, 0.03f, 0.05f, 1.0f}}},
+};
+VkRenderingAttachmentInfo depth{
+  .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
+  .imageView = depthView,
+  .imageLayout = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
+  .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+  .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+  .clearValue = {.depthStencil = {1.0f, 0}},
+};
+VkRenderingInfo rendering{
+  .sType = VK_STRUCTURE_TYPE_RENDERING_INFO,
+  .renderArea = {{0, 0}, extent},
+  .layerCount = 1,
+  .colorAttachmentCount = 1,
+  .pColorAttachments = &color,
+  .pDepthAttachment = &depth,
 };
 
-// 子通道 0：G-Buffer（写位置、法线、深度）
-// 子通道 1：光照（读位置、法线作为输入附件，写最终颜色）
-// 依赖：子通道 0 完成后子通道 1 才能开始
+vkCmdBeginRendering(cmd, &rendering);
+vkCmdBindPipeline(cmd, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+recordOpaqueDraws(cmd);
+vkCmdEndRendering(cmd);
 ```
+
+`vkCmdBeginRendering`不会自动把 color/depth image 转入指定 layout，也不会在结束时转到 PRESENT 或 SHADER_READ_ONLY。应用必须在 begin 前和 end 后显式 barrier。Pipeline 声明的 color/depth/stencil formats 与 rasterizationSamples 要和当前附件合同兼容。
+
+## 后置依赖与呈现
+
+Color attachment 写入完成后，交换链 image 通常转到 PRESENT_SRC_KHR；离屏附件可能转到 SHADER_READ_ONLY_OPTIMAL 供 fragment/compute 读取。两者需要不同 dst scope。
+
+```cpp
+VkImageMemoryBarrier2 toPresent{
+  .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+  .srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+  .srcAccessMask = VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+  .dstStageMask = VK_PIPELINE_STAGE_2_NONE,
+  .dstAccessMask = VK_ACCESS_2_NONE,
+  .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+  .newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+  .image = swapchainImage,
+  .subresourceRange = colorRange,
+};
+VkDependencyInfo after{
+  .sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+  .imageMemoryBarrierCount = 1,
+  .pImageMemoryBarriers = &toPresent,
+};
+vkCmdPipelineBarrier2(cmd, &after);
+```
+
+呈现的跨 queue family ownership 要根据 sharing mode 和 family 配置处理。Barrier 只覆盖指定 subresource range；mip/layer 不完整时，其余子资源保持各自状态。
+
+## MSAA 与 resolve 附件
+
+多重采样 color/depth attachment 的 samples 必须与 pipeline rasterizationSamples 一致。要输出单采样 swapchain image，可在 color attachment 中指定 resolveImageView、resolveImageLayout 与 resolveMode。Resolve 目标同样需要 begin 前正确 layout 和 end 后后置依赖。
+
+Transient attachment 和 lazily allocated memory 可能降低 tile GPU 外存成本，但必须查询 memory type 与 usage 支持，不能假设桌面离散 GPU 也有同样收益。若后续要采样 MSAA attachment，其 store 与 memory 策略也不能再按“纯 transient”处理。
+
+## Legacy render pass 与 framebuffer
+
+<Term def="预先描述 attachments、subpasses、references 和 dependencies 的渲染对象，并由 framebuffer 绑定具体 image views">Legacy render pass</Term>仍是有效模型。VkRenderPass 定义附件格式/采样、load/store、初末 layout、subpass 引用和依赖；VkFramebuffer 把兼容 image views 绑定到附件槽。Graphics pipeline 与某个 compatible render pass/subpass 创建。
+
+Subpass 可把前一阶段输出作为 input attachment 在后续 fragment shader 中按当前像素读取。Tile-based GPU 可能把这些数据保留在片上，减少外存往返；但这是架构机会，不是所有实现都保证收益，也不适合需要任意邻域采样的普通 sampled image 算法。
+
+```cpp
+VkSubpassDependency2 gbufferToLighting{
+  .sType = VK_STRUCTURE_TYPE_SUBPASS_DEPENDENCY_2,
+  .srcSubpass = 0,
+  .dstSubpass = 1,
+  .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+  .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+  .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+  .dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
+  .dependencyFlags = VK_DEPENDENCY_BY_REGION_BIT,
+};
+```
+
+Dependency 必须同时表达 execution 与 memory scope；仅写“subpass 0 在 subpass 1 前”不足以让写入可见。External dependency 连接 render pass instance 外部操作，仍要与真实 producer/consumer 阶段匹配。
+
+<VkgRenderingModelDiagram />
+
+Dynamic rendering 适合通用 render graph、动态附件集合和减少对象组合；legacy subpass 适合明确受益于 input attachment 局部性的路径，或兼容旧平台。两者可共存，选择应来自设备能力和 profile，而不是“新 API 必然更快”。
+
+## 三步建立附件状态机
+
+<Stepper>
+<Step title="第一步：声明进入合同">
+
+从 render graph 取得每个 attachment 的 previous stage/access/layout/owner，决定 loadOp，并生成 begin 前 barrier。
+
+<VkgStepFlowDiagram
+  caption="LOAD 必须追溯真实 producer；CLEAR/DONT_CARE 才能放弃旧内容。"
+  stage={1}
+  stages={["Enter：previous access、layout、ownership、load intent"]}
+/>
+
+</Step>
+<Step title="第二步：录制 rendering instance">
+
+验证 pipeline formats/samples，填写 views、load/store、clear、renderArea 与 layers/viewMask，begin、draw、end。
+
+<VkgStepFlowDiagram
+  caption="Dynamic rendering 的简化发生在对象模型，不发生在附件合同。"
+  stage={2}
+  stages={[
+    "Enter：previous access、layout、ownership、load intent",
+    "Render：formats、samples、views、load/store、draw",
+  ]}
+/>
+
+</Step>
+<Step title="第三步：发布结果">
+
+根据下一消费者生成 after barrier、layout 和 ownership；STORE/DONT_CARE 与后续读取意图必须一致，并记录新的 subresource state。
+
+<VkgStepFlowDiagram
+  caption="附件结束状态是下一 pass 的输入合同。"
+  stage={3}
+  stages={[
+    "Enter：previous access、layout、ownership、load intent",
+    "Render：formats、samples、views、load/store、draw",
+    "Exit：next access、layout、ownership、store validity",
+  ]}
+/>
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-把 `initialLayout` 设为 `VK_IMAGE_LAYOUT_UNDEFINED` 后期望保留旧内容。`UNDEFINED` 表示内容未定义，驱动可能会丢弃旧数据。如果需要保留上一帧的内容，应使用 `VK_IMAGE_LAYOUT_GENERAL` 或对应的 `*_OPTIMAL` 布局，并用 `loadOp = LOAD`。
+**现象 →** dynamic rendering 第一帧正常，第二帧 validation 报 layout 不匹配或出现旧帧残影。
+**原因 →** 以为 begin/end rendering 自动转换 layout，没有记录 swapchain image 的真实历史状态。
+**修法 →** begin 前从实际旧 layout barrier 到 attachment layout，end 后 barrier 到 PRESENT；按 imageIndex 记录状态。
 </Callout>
 
 <Callout type="trap">
-遗漏子通道依赖，导致两个子通道之间出现数据竞争。没有显式依赖时，驱动不保证子通道 0 的写入对子通道 1 可见。必须用 `VkSubpassDependency` 指定 `srcStageMask` 和 `dstAccessMask`，确保前一个子通道的写入操作在后一个子通道开始前完成。
+**现象 →** 设置 loadOp=LOAD 后内容随机，或设置 storeOp=DONT_CARE 后下一 pass 采样噪声。
+**原因 →** LOAD 的旧内容未有效保存/同步，或 DONT_CARE 明确放弃了结束内容。
+**修法 →** 从真实 producer 建立依赖并保证旧内容有效；任何后续读取都要求 STORE 或等价的有效保留合同。
+</Callout>
+
+<Callout type="trap">
+**现象 →** legacy 两 subpass 之间偶发读到未完成 G-buffer。
+**原因 →** dependency 只有阶段顺序，srcAccess/dstAccess 没覆盖 color write 到 input attachment read。
+**修法 →** 使用匹配的 stage/access scopes，局部附件依赖可加 BY_REGION，并验证 attachment references/layouts。
 </Callout>
 
 ## 练习
 
 <Exercises>
-1. `VK_ATTACHMENT_LOAD_OP_CLEAR`、`VK_ATTACHMENT_LOAD_OP_LOAD` 和 `VK_ATTACHMENT_LOAD_OP_DONT_CARE` 各有什么区别？
-   <Answer>
-   CLEAR：渲染开始时把附件清空为指定值（通过 clearValue），最常用于颜色和深度缓冲。LOAD：保留附件已有内容，渲染在其基础上叠加，适用于分层渲染或保留上一帧。DONT_CARE：不关心附件初始内容，驱动可以自由处理（可能不清空也不加载），性能最优但内容未定义，适用于中间缓冲。
-   </Answer>
 
-2. Vulkan 1.3 的动态渲染（Dynamic Rendering）相比传统渲染通道有什么优势？
-   <Answer>
-   动态渲染用 vkCmdBeginRendering/vkCmdEndRendering 替代 vkCmdBeginRenderPass/vkCmdEndRenderPass，无需预先创建 VkRenderPass 和 VkFramebuffer 对象。优势：1) 减少样板代码，简化初始化；2) 不需要手动管理附件布局转换，驱动自动处理；3) 更容易实现动态分辨率和可变附件配置。劣势：某些复杂的多子通道场景（如延迟渲染）仍需传统渲染通道，且旧驱动可能不支持。
-   </Answer>
+1. **内容有效性：** 离屏 color attachment 首次使用时 CLEAR，结束后下一 compute pass 读取。应怎样设置 load/store 和前后 barrier？
+
+<Answer>
+首次内容不保留，可从 UNDEFINED、NONE/NONE barrier 到 COLOR_ATTACHMENT_OPTIMAL + COLOR_ATTACHMENT_WRITE；loadOp=CLEAR。结束内容要供 compute 读取，所以 storeOp=STORE；end 后从 COLOR_ATTACHMENT_OUTPUT/COLOR_ATTACHMENT_WRITE barrier 到 COMPUTE_SHADER/SHADER_SAMPLED_READ（或实际 storage read）并转到合适 shader-read layout。
+</Answer>
+
+2. **Dynamic rendering：** 删除 VkRenderPass/VkFramebuffer 后，哪些信息仍必须提供？
+
+<Answer>
+Pipeline 创建仍需 color/depth/stencil formats 和 sample count；录制仍需 attachment image views、layouts、load/store、clear values、render area、layerCount/viewMask；begin 前和 end 后仍需执行/内存依赖、layout transition 和可能的 queue ownership。删除的是预创建对象，不是附件合同。
+</Answer>
+
+3. **Subpass 选择：** G-buffer 光照需要按当前像素读取多个附件，目标平台以 tile GPU 为主。为何 legacy subpass 可能有价值，又为何不能直接断言更快？
+
+<Answer>
+Input attachments 与 BY_REGION subpass dependency 允许实现把局部数据保留在 tile memory，减少外存存取，因此值得实现和测试。但硬件/驱动可能同样优化 dynamic rendering/render graph，subpass 也有 pipeline 和架构约束；若算法需要邻域采样则不适合 input attachment。最终需比较带宽、GPU 时间和平台覆盖。
+</Answer>
+
 </Exercises>
 
+## 本章检查清单
+
+- 每个 attachment 的 previous/next stage、access、layout、owner 和 subresource range 都可追踪；
+- load/store 与内容是否有效一致，DONT_CARE 未被当成 clear 或保留；
+- dynamic rendering pipeline formats/samples 与实际 views 一致，前后 barriers 完整；
+- legacy subpass 只在局部读取与实测支持时采用，dependencies 同时覆盖执行和内存。
+
+## 术语表
+
 <Glossary>
-  <GlossaryItem term="VkRenderPass">
-    描述渲染操作的附件格式、子通道结构和子通道间依赖关系的不可变对象。是 framebuffer 和 pipeline 的桥梁，定义了渲染目标的完整布局。
-  </GlossaryItem>
-  <GlossaryItem term="附件描述 (Attachment Description)">
-    定义附件的格式、采样数、加载/存储操作和初始/最终布局。loadOp 决定渲染开始时如何处理内容，finalLayout 决定渲染后的用途。
-  </GlossaryItem>
-  <GlossaryItem term="子通道依赖 (Subpass Dependency)">
-    定义子通道间或子通道与外部的执行顺序和内存依赖。指定源/目标阶段掩码和访问掩码，确保写入操作对后续读取可见。
-  </GlossaryItem>
-  <GlossaryItem term="VkFramebuffer">
-    绑定具体 VkImageView 到渲染通道附件槽位的对象。是渲染操作的实际目标，尺寸和层数在创建时固定。
-  </GlossaryItem>
+<GlossaryItem term="Rendering attachment">一次 rendering instance 中作为 color、depth、stencil 或 resolve 目标的 image view 及访问合同。</GlossaryItem>
+<GlossaryItem term="Image layout">为特定 image 用途优化的状态标签，转换时必须配合执行和内存依赖。</GlossaryItem>
+<GlossaryItem term="Load/store operations">声明 rendering 开始时旧内容如何处理，以及结束内容是否继续有效。</GlossaryItem>
+<GlossaryItem term="Legacy render pass">预先描述 attachments、subpasses、references 和 dependencies，并由 framebuffer 绑定 views 的模型。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Vulkan 学习指南" adaptedUrl="https://vulkan.lunarg.com/" />
+<Attribution adaptedFrom="Vulkan Specification: Render Pass" adaptedUrl="https://docs.vulkan.org/spec/latest/chapters/renderpass.html" />

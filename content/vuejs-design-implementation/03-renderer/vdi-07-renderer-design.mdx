@@ -1,0 +1,238 @@
+---
+title: "第 7 章 渲染器的设计"
+type: A
+section: "Vue.js设计与实现 · 渲染器"
+order: 7
+description: "渲染器核心只理解VNode和生命周期，把平台操作注入后，响应式effect负责驱动新旧子树比较。 本页按权威目录独立教学重构。"
+demo: true
+math: false
+sourceUrl: "https://time.geekbang.org/column/article/740758"
+draft: false
+---
+
+import {
+  Vdi07RendererDesignMapLab,
+  Vdi07RendererDesignExperimentLab,
+  Vdi07RendererDesignEvidenceLab,
+} from "@/components/mdx/vuejs-design-implementation/diagrams/vdi-07-renderer-design";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释第 7 章 渲染器的设计的核心机制，并把它放回6篇18章的实现主线
+- 能实现本页最小算法，比较正常、边界、失败和恢复轨迹
+- 能指出依赖、VNode、组件实例、AST或请求状态的唯一所有者
+- 能设计证据回答“宿主操作可替换，节点类型分派完整，容器保留唯一旧VNode，响应更新被调度去重，render(null)对称卸载。”是否成立
+
+</Objectives>
+
+## 直觉：从输入、状态到提交
+
+渲染器核心只理解VNode和生命周期，把平台操作注入后，响应式effect负责驱动新旧子树比较。 本书不是对最终源码逐行翻译，而是从规范与最小模型逐步构造框架。只看最终DOM会隐藏错误依赖、重复移动、陈旧任务和激活错位；先画输入、状态所有者、调度点、输出和清理责任。
+
+<Vdi07RendererDesignMapLab />
+
+## 权威目录定位
+
+作者授权数字版前言明确全书分为6篇18章，作者GitHub仓库提供配套代码。本页依照公开完整目录逐项覆盖 **4** 个条目；目录名称仅用于追踪，正文为独立教学重构。
+
+- 7.1 渲染器与响应系统的结合
+- 7.2 渲染器的基本概念
+- 7.3 自定义渲染器
+- 7.4 总结
+
+## 核心概念与所有权
+
+<Term def="把虚拟节点映射到宿主平台元素并负责挂载、更新和卸载的模块。">
+  渲染器
+</Term>
+、
+<Term def="创建元素、设置文本、插入、删除和设置属性等平台相关能力。">
+  宿主操作
+</Term>
+、
+<Term def="描述元素、组件、文本或片段类型、属性和子节点的虚拟节点。">
+  VNode
+</Term>
+、<Term def="追踪状态读取、触发相关副作用并控制更新执行的模块。">响应系统</Term>
+、
+<Term def="通过注入宿主操作把同一渲染核心适配到DOM之外平台的渲染器。">
+  自定义渲染器
+</Term>
+。每个概念都要回答：谁创建输入，哪个结构保存状态，何种操作可以修改，错误如何传播，生命周期结束后谁清理。
+
+|   # | 概念         | 精确定义                                                   |
+| --: | ------------ | ---------------------------------------------------------- |
+|   1 | 渲染器       | 把虚拟节点映射到宿主平台元素并负责挂载、更新和卸载的模块。 |
+|   2 | 宿主操作     | 创建元素、设置文本、插入、删除和设置属性等平台相关能力。   |
+|   3 | VNode        | 描述元素、组件、文本或片段类型、属性和子节点的虚拟节点。   |
+|   4 | 响应系统     | 追踪状态读取、触发相关副作用并控制更新执行的模块。         |
+|   5 | 自定义渲染器 | 通过注入宿主操作把同一渲染核心适配到DOM之外平台的渲染器。  |
+
+## 机制拆解
+
+### 1. 建立机制边界
+
+createRenderer接收createElement、setElementText、insert等宿主操作，render把新VNode与容器.\_vnode比较。传入null时卸载旧树，完成状态与宿主节点的对称生命周期。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+### 2. 处理关键算法
+
+patch根据VNode type区分字符串元素、Text、Comment、Fragment和组件，再决定mount或patch。把平台API写死在核心里会阻止非DOM渲染，也让测试必须依赖浏览器。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+### 3. 签发失败与恢复
+
+组件render放入effect，首次执行挂载子树，后续状态变化生成新子树并patch。scheduler把多次同步写入合并为一个任务，渲染器不应自行订阅每个状态。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+## 三阶段可视化推演
+
+<Stepper>
+  <Step title="1. 建立最小模型">
+    固定运行时、输入和初始状态，先预测数据结构与执行顺序。
+    <Vdi07RendererDesignMapLab />
+  </Step>
+  <Step title="2. 注入算法边界">
+    只改变一个变量，观察分支切换、重复key、请求乱序、非法模板或激活不匹配的首偏离点。
+    <Vdi07RendererDesignExperimentLab />
+  </Step>
+  <Step title="3. 清除故障并重放">
+    用相同输入恢复，核对依赖集合、任务队列、宿主节点、组件实例和请求状态是否收敛。
+    <Vdi07RendererDesignEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小可运行实验
+
+```js
+function render(vnode, container) {
+  if (vnode) patch(container._vnode || null, vnode, container);
+  else if (container._vnode) unmount(container._vnode);
+  container._vnode = vnode;
+}
+```
+
+保存结构化证据，不以一次console输出或最终截图替代过程：
+
+```yaml
+book: Vue.js设计与实现
+page: vdi-07-renderer-design
+sample: normal | boundary | failure | recovery
+runtime: pinned
+input_fixture: fixed
+first_divergence: null
+cleanup_complete: true
+```
+
+故障注入一次只改变一个变量：
+
+```text
+baseline -> inject(one_fault) -> stop_at_first_divergence
+recover -> replay_same_input
+assert -> precise_dependency && stable_identity && ordered_tasks && no_retained_resource
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：渲染器核心直接调用document，所谓自定义渲染器只换了容器参数。**
+  必须保存输入、执行轨迹和首偏离点，而不是只比较最终结果。
+</Callout>
+
+<Callout type="trap">
+  **误区二：容器不保存旧VNode，每次render都重新挂载并留下旧节点。**
+  必须加入失败与恢复样本，并检查依赖、节点、任务和状态是否清理。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 变化                 | 预期         | 证据           |
+| ---- | -------------------- | ------------ | -------------- |
+| 正常 | 合法输入与稳定身份   | 主链完成     | 输出与轨迹一致 |
+| 边界 | 空值、重复或极限序列 | 有界退化     | 不越界、不重复 |
+| 失败 | 异常、乱序、非法结构 | 首偏离点停止 | 错误显式传播   |
+| 恢复 | 清除故障后同输入重放 | 收敛到正常   | 无旧依赖和资源 |
+
+<Vdi07RendererDesignEvidenceLab />
+
+本页签发不变量：**宿主操作可替换，节点类型分派完整，容器保留唯一旧VNode，响应更新被调度去重，render(null)对称卸载。**
+
+## 练习
+
+<Exercises>
+
+**问题 1** 第 7 章 渲染器的设计的核心主张是什么？
+
+<Answer>
+  渲染器核心只理解VNode和生命周期，把平台操作注入后，响应式effect负责驱动新旧子树比较。
+</Answer>
+
+**问题 2** 如何把本页目录变成可执行证据？
+
+<Answer>
+  按公开顺序建立追踪表，至少覆盖7.1 渲染器与响应系统的结合、7.2
+  渲染器的基本概念、7.3 自定义渲染器、7.4
+  总结，并为每组条目记录输入、状态、输出、失败与恢复条件。
+</Answer>
+
+**问题 3** 本页怎样签发？
+
+<Answer>
+  宿主操作可替换，节点类型分派完整，容器保留唯一旧VNode，响应更新被调度去重，render(null)对称卸载。
+  同一运行时与输入必须能重放正常、边界、失败和恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **渲染器**：把虚拟节点映射到宿主平台元素并负责挂载、更新和卸载的模块。
+- **宿主操作**：创建元素、设置文本、插入、删除和设置属性等平台相关能力。
+- **VNode**：描述元素、组件、文本或片段类型、属性和子节点的虚拟节点。
+- **响应系统**：追踪状态读取、触发相关副作用并控制更新执行的模块。
+- **自定义渲染器**：通过注入宿主操作把同一渲染核心适配到DOM之外平台的渲染器。
+- 官方目录、最小实现、故障注入与恢复证据已经放进同一验收链。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="渲染器">
+    把虚拟节点映射到宿主平台元素并负责挂载、更新和卸载的模块。
+  </GlossaryItem>
+  <GlossaryItem term="宿主操作">
+    创建元素、设置文本、插入、删除和设置属性等平台相关能力。
+  </GlossaryItem>
+  <GlossaryItem term="VNode">
+    描述元素、组件、文本或片段类型、属性和子节点的虚拟节点。
+  </GlossaryItem>
+  <GlossaryItem term="响应系统">
+    追踪状态读取、触发相关副作用并控制更新执行的模块。
+  </GlossaryItem>
+  <GlossaryItem term="自定义渲染器">
+    通过注入宿主操作把同一渲染核心适配到DOM之外平台的渲染器。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="霍春阳著，人民邮电出版社，2022年1月，501页，ISBN 9787115583864。作者授权数字版前言确认6篇18章的结构与逐章范围，作者GitHub仓库提供配套代码，公开完整目录用于二三级条目追踪；正文为独立教学重构。"
+  adaptedUrl="https://time.geekbang.org/column/article/740758"
+/>
+
+配套代码：https://github.com/HcySunYang/code-for-vue-3-book

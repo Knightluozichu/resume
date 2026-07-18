@@ -107,14 +107,14 @@ export function NamespaceNestingDiagram({ step = 1 }: NamespaceNestingDiagramPro
               <g transform={`translate(30, ${h - 140})`}>
                 <rect x={0} y={0} width={w - 60} height={110} rx={8} fill={accent + "08"} stroke={border} strokeWidth={1} />
                 <text x={16} y={24} fontSize={12} fontWeight={600} fill={accent}>
-                  嵌套命名空间（C++17 简化写法）
+                  嵌套命名空间（C++11）
                 </text>
                 <text x={16} y={46} fontSize={10} fill={primary} fontFamily="monospace">
-                  namespace outer::middle::inner {'{'} int value = 42; {'}'}
+                  namespace outer {'{'} namespace middle {'{'} namespace inner {'{'} ... {'}'} {'}'} {'}'}
                   {' '}
                 </text>
                 <text x={16} y={66} fontSize={10} fill={secondary}>
-                  C++17 起可以用 :: 一行写出嵌套命名空间——等价于三层嵌套花括号。
+                  C++11 逐层书写 namespace 定义；限定名仍用 :: 表示查找路径。
                 </text>
                 <text x={16} y={86} fontSize={10} fill={blue}>
                   完整路径 outer::middle::inner::value 可以精确访问每一层中的名字，绝无歧义。
@@ -229,7 +229,7 @@ export function NamespaceNestingDiagram({ step = 1 }: NamespaceNestingDiagramPro
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
         {step === 1 &&
-          "第一步：C++17 起可用 A::B::C 语法一行写出嵌套命名空间——内层名字可以通过完整路径精确访问。"}
+          "第一步：C++11 用逐层 namespace 花括号定义嵌套作用域，并通过 A::B::C 形式的限定名精确访问。"}
         {step === 2 &&
           "第二步：using 声明（如 using A::B::x）只把 x 一个名字导入当前作用域，精确且安全。"}
         {step === 3 &&

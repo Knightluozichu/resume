@@ -1,0 +1,300 @@
+---
+title: "原生平台 Profiling 工具索引"
+type: C
+section: "平台工具与进阶资源"
+order: 1
+description: "按Unity 6官方指南第89—91页复现官方单元 13，建立可测量、可反证、可回归的性能证据。"
+demo: true
+math: false
+draft: false
+sourceUrl: "https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Prof12NativeToolIndexMapLab,
+  Prof12NativeToolIndexExperimentLab,
+  Prof12NativeToolIndexEvidenceLab,
+} from "@/components/mdx/profiling-unity-games/diagrams/prof-12-native-tool-index";
+
+<Objectives>
+
+- 能解释官方单元 13在官方Unity 6性能分析流程中的位置与责任边界
+- 能复现“Unity分诊 → 平台选择 → 共享标记 → 原生捕获 → 硬件计数器 → 回写Unity假设”并保存可比较的中间证据
+- 能设计一个反证实验，判断“每份原生捕获都要能回连Unity帧、构建和场景检查点，工具版本与平台权限完整记录；平台A的计数器结论不得直接外推到平台B。”是否成立
+
+</Objectives>
+
+## 问题：怎样证明掌握的是官方单元 13，而不是记住几个工具名？
+
+先预测：如果只看到最终帧率或一张截图，不知道设备、构建、场景、输入和采样方式，能否判断修改真的有效？不能。性能结果是测试上下文与程序行为共同产生的，脱离上下文的数字既不能复现，也不能指导下一步。
+
+Unity工具先给出引擎模块、线程和对象语义；原生工具再解释调度、缓存、功耗、驱动和GPU阶段。选择取决于平台与问题，关联点是同一构建、同一场景和共享标记。
+
+<Prof12NativeToolIndexMapLab />
+
+## 官方目录边界
+
+本页严格对应Unity Technologies的《Ultimate guide to profiling Unity games (Unity 6 edition)》第89—91页。以下目录项必须在实现、实验或证据中出现：
+
+- **Native profiling tools**
+- **Android Studio**
+- **Arm Performance Studio**
+- **Snapdragon Profiler**
+- **Intel VTune**
+- **Intel GPA suite**
+- **PIX**
+- **Windows Performance Toolkit**
+- **PlayStation Razor**
+- **Xcode Instruments**
+- **Chrome DevTools Performance**
+- **GPU debugging and profiling tools**
+- **RenderDoc**
+- **NVIDIA Nsight Frame Debugger**
+
+本站以中文重新组织解释、代码和实验，不逐字复制原文。API示例以Unity 6思路为准；具体包版本和目标平台能力仍要在项目清单中固定。
+
+## 核心模型与不可变条件
+
+Unity工具先给出引擎模块、线程和对象语义；原生工具再解释调度、缓存、功耗、驱动和GPU阶段。选择取决于平台与问题，关联点是同一构建、同一场景和共享标记。
+
+本单元的不可变条件是：**每份原生捕获都要能回连Unity帧、构建和场景检查点，工具版本与平台权限完整记录；平台A的计数器结论不得直接外推到平台B。** 只要输入条件、观测边界或结果合同有一项改变，就不能把两次测量直接相减。先解释变化来源，再决定是否建立新的基线。
+
+## 五个必须落到证据的术语
+
+<Term def="由操作系统芯片或平台提供的低层性能工具">原生分析器</Term>
+
+它在本单元中不是孤立名词，而要落到“Unity分诊 → 平台选择 → 共享标记 → 原生捕获 → 硬件计数器 → 回写Unity假设”的数据链，并能由一次保存的采样或状态记录验证。
+
+<Term def="记录一帧图形API命令资源和管线状态的数据">GPU捕获</Term>
+
+它在本单元中不是孤立名词，而要落到“Unity分诊 → 平台选择 → 共享标记 → 原生捕获 → 硬件计数器 → 回写Unity假设”的数据链，并能由一次保存的采样或状态记录验证。
+
+<Term def="反映CPU或GPU微架构事件数量的测量值">硬件计数器</Term>
+
+它在本单元中不是孤立名词，而要落到“Unity分诊 → 平台选择 → 共享标记 → 原生捕获 → 硬件计数器 → 回写Unity假设”的数据链，并能由一次保存的采样或状态记录验证。
+
+<Term def="在Unity与原生轨迹中可共同识别的事件名称或时间点">共享标记</Term>
+
+它在本单元中不是孤立名词，而要落到“Unity分诊 → 平台选择 → 共享标记 → 原生捕获 → 硬件计数器 → 回写Unity假设”的数据链，并能由一次保存的采样或状态记录验证。
+
+<Term def="把某一硬件结果推断到另一平台的高风险做法">平台外推</Term>
+
+它在本单元中不是孤立名词，而要落到“Unity分诊 → 平台选择 → 共享标记 → 原生捕获 → 硬件计数器 → 回写Unity假设”的数据链，并能由一次保存的采样或状态记录验证。
+
+## 从输入到结论的诊断链
+
+主链为：**Unity分诊 → 平台选择 → 共享标记 → 原生捕获 → 硬件计数器 → 回写Unity假设**。每个节点保存构建提交、设备ID、场景检查点、帧号或快照ID、当前预算、实际值和首个异常。下一节点只消费上一节点已验证的事实，不能用“感觉更流畅”跨过中间归因。
+
+### 1. Native profiling tools
+
+Android Studio查看Android进程CPU、内存和系统资源；Arm Performance Studio覆盖Arm CPU与GPU，Snapdragon Profiler针对高通SoC的CPU、GPU、DSP、功耗与热。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 2. Android Studio
+
+Intel VTune侧重Intel CPU热点、并行和微架构，Intel GPA侧重图形工作。工具与芯片匹配是前提，不支持的硬件不能靠相似名称替代。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 3. Arm Performance Studio
+
+PIX服务DirectX与Xbox/Windows图形和性能分析，Windows Performance Toolkit解释系统调度与ETW事件；Superluminal等工具可补充桌面CPU调用栈。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 4. Snapdragon Profiler
+
+PlayStation Razor和其他主机工具受平台SDK与权限约束。证据记录只能保存团队许可范围内的信息，跨平台公共文档不应假装提供专有计数器。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 5. Intel VTune
+
+Xcode Instruments分析iOS和macOS的CPU、分配、能耗等，Xcode GPU Frame Debugger解释Apple GPU帧；WebGL可结合Firefox或Chrome DevTools查看浏览器主线程和Web调用。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 6. Intel GPA suite
+
+GPU工具包括Arm Streamline与Frame Advisor、RenderDoc、Intel GPA、Apple捕获、Visual Studio Graphics Diagnostics、PIX、Nsight和AMD工具。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 7. PIX
+
+Unity Frame Debugger说明发送了哪些命令，原生GPU工具说明命令执行成本。用共享事件、截图、帧号或可控检查点把两边对齐，避免抓到不同帧。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 8. Windows Performance Toolkit
+
+原生计数器的名称和含义随硬件变化。先阅读对应厂商文档，再通过单变量实验验证方向，不能用一个高计数器直接跳到代码结论。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+<Prof12NativeToolIndexExperimentLab />
+
+## 官方平台分类不能被通用工具名替代
+
+官方索引按 **Android / Arm**、**Intel**、**Xbox / PC**、**PC / Universal**、**PlayStation**、**iOS** 与 **WebGL** 分类。Android Studio、Arm Performance Studio与Snapdragon Profiler服务移动SoC；Intel VTune和GPA分别补充CPU与图形证据；PIX面向DirectX与Xbox/PC；Windows Performance Toolkit等工具解释PC系统调度；PlayStation工具受平台SDK约束；Xcode Instruments服务iOS；Chrome DevTools Performance用于WebGL浏览器主线程。
+
+这些分类不是同一工具的别名。每个平台都有不同调度器、驱动、内存模型、功耗和权限边界，必须先从目标平台选择工具，再把原生捕获回连Unity帧与共享标记。
+
+## 三步复现与分步观察
+
+<Stepper>
+  <Step title="1. 冻结输入与预算合同">
+    记录设备、构建、场景、画质、目标帧率、预热和输入脚本；写出本页要证明的唯一假设以及反证条件。
+    <Prof12NativeToolIndexMapLab />
+  </Step>
+  <Step title="2. 采集、分流并只改一个变量">
+    沿“Unity分诊 → 平台选择 → 共享标记 → 原生捕获 → 硬件计数器 →
+    回写Unity假设”保存中间值，在首个越界节点停止下钻；一次只修改一个主要因素。
+    <Prof12NativeToolIndexExperimentLab />
+  </Step>
+  <Step title="3. 同输入复验并签发证据">
+    恢复相同热状态和场景检查点，重放基线输入；同时核对帧、内存、画面或玩法副作用。
+    <Prof12NativeToolIndexEvidenceLab />
+  </Step>
+</Stepper>
+
+## 可执行实现骨架
+
+下面的代码只承担本单元的数据所有权或测量边界。真正项目应把阈值放入版本化配置，并让证据文件引用同一个配置哈希。
+
+```csharp
+public readonly record struct NativeCaptureLink(
+    string BuildCommit, string DeviceId, string Scenario,
+    int UnityFrame, string UnityMarker, string NativeCapture,
+    string ToolVersion, string ScreenshotHash);
+
+bool Correlated(NativeCaptureLink link) =>
+    link.UnityFrame >= 0 && !string.IsNullOrWhiteSpace(link.UnityMarker);
+```
+
+每次采集都保存结构化元数据，避免报告与原始文件失联：
+
+```json
+{
+  "chapter": "prof-12-native-tool-index",
+  "officialPages": "第89—91页",
+  "chain": [
+    "Unity分诊",
+    "平台选择",
+    "共享标记",
+    "原生捕获",
+    "硬件计数器",
+    "回写Unity假设"
+  ],
+  "device": "target-low-tier-01",
+  "build": "commit-and-unity-version",
+  "scenario": "fixed-checkpoint",
+  "baseline": "capture-before.data",
+  "candidate": "capture-after.data",
+  "normal": true,
+  "boundary": true,
+  "failureReplay": true
+}
+```
+
+自动门输出必须同时保留通过值和拒绝原因，而不是只给一个绿色图标：
+
+```text
+PASS context=device+build+scene+quality+input
+PASS chain=Unity分诊 -> 平台选择 -> 共享标记 -> 原生捕获 -> 硬件计数器 -> 回写Unity假设
+PASS invariant=每份原生捕获都要能回连Unity帧、构建和场景检查点，工具版本与平台权限完整记录；平台A的计数器结论不得直接外推到平台B。
+REJECT missing-raw-data | changed-context | hidden-quality-loss | unreplayed-failure
+```
+
+## 两个必须主动制造的失败样本
+
+<Callout type="trap" title="官方边界或测量上下文丢失">
+  在桌面RenderDoc里确认一个GPU瓶颈后直接宣称移动端同样受限，或拿系统CPU热点却无法映射回Unity中的帧和玩法事件。
+  先保存错误结论、首个偏离节点和原始数据，再恢复官方目录边界与相同测试条件复验。
+</Callout>
+
+<Callout type="trap" title="数字改善但工作被转移或结果改变">
+  故意降低画质、跳过玩法工作、扩大永久缓存或把任务推迟到下一帧。若主指标改善但GPU、内存、热量、图像或玩法合同变差，发布门必须拒绝。
+</Callout>
+
+## 证据矩阵与签发标准
+
+| 维度   | 正常样本       | 边界样本           | 失败样本           | 签发条件       |
+| ------ | -------------- | ------------------ | ------------------ | -------------- |
+| 上下文 | 固定设备与构建 | 最低档或长时间运行 | 故意改变一项条件   | 差异可解释     |
+| 主链   | 六节点均有记录 | 预算附近输入       | 在首个节点注入偏差 | 能定位首因     |
+| 结果   | 达到性能合同   | 无长尾越界         | 主动制造回归       | 同输入可复验   |
+| 副作用 | 画面玩法一致   | 生命周期完整       | 降质或转移成本     | 所有门同时通过 |
+
+<Prof12NativeToolIndexEvidenceLab />
+
+## 练习：把官方单元 13变成可审计交付
+
+<Exercises>
+
+**问题 1** 写出“Unity分诊”到“回写Unity假设”每一步的输入、观测工具、阈值和输出。
+
+<Answer>
+  每一步都要引用同一测试上下文，输出必须包含数值、原始文件和下一步选择理由；不能只写工具名称。
+</Answer>
+
+**问题 2** 主动制造“在桌面RenderDoc里确认一个GPU瓶颈后直接宣称移动端同样受限，或拿系统CPU热点却无法映射回Unity中的帧和玩法事件。”，保存错误结论与首个偏离节点，再用同一输入证明修复。
+
+<Answer>
+  合格答案包含错误样本、上下文差异、反证实验、修复后原始数据以及性能和正确性双重结果。
+</Answer>
+
+**问题 3** 为不可变条件“每份原生捕获都要能回连Unity帧、构建和场景检查点，工具版本与平台权限完整记录；平台A的计数器结论不得直接外推到平台B。”设计正常、预算边界和失败三组测试。
+
+<Answer>
+  三组测试只改变计划中的输入，统一记录构建、设备、帧或快照ID、预算、实际值、首个异常和复验状态。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- 是否能逐项指出本页覆盖的官方目录项，而没有用通用性能建议替代？
+- 是否沿“Unity分诊 → 平台选择 → 共享标记 → 原生捕获 → 硬件计数器 → 回写Unity假设”保存了可追溯中间证据？
+- 是否区分定位工具的干扰与发布构建的真实预算？
+- 是否主动制造失败，并在相同输入下证明修复没有转移成本？
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="原生分析器">
+    由操作系统芯片或平台提供的低层性能工具。
+  </GlossaryItem>
+  <GlossaryItem term="GPU捕获">
+    记录一帧图形API命令资源和管线状态的数据。
+  </GlossaryItem>
+  <GlossaryItem term="硬件计数器">
+    反映CPU或GPU微架构事件数量的测量值。
+  </GlossaryItem>
+  <GlossaryItem term="共享标记">
+    在Unity与原生轨迹中可共同识别的事件名称或时间点。
+  </GlossaryItem>
+  <GlossaryItem term="平台外推">
+    把某一硬件结果推断到另一平台的高风险做法。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Unity Technologies《Ultimate guide to profiling Unity games (Unity 6 edition)》，2025，93页"
+  adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+/>

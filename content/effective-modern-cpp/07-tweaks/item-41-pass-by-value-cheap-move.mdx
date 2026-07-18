@@ -1,0 +1,293 @@
+---
+title: "Item 41：可复制、移动便宜且总会复制时考虑按值传参"
+type: A
+section: Chapter 8 · Tweaks
+order: 41
+description: 对齐 Effective Modern C++ Item 41：比较 const&/&& 重载、forwarding reference 与 pass-by-value 的成本，建立 copyable-cheap-move-always-copied 条件，并分析 assignment allocation 与 slicing 反例。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch08.html"
+draft: false
+---
+
+import {
+  EmcppAssignmentAllocationFlowMap,
+  EmcppPassByValueCostMap,
+  EmcppPassByValueSuitabilityMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-41-pass-by-value-cheap-move";
+
+<Objectives>
+
+- 能比较 pass by value（按值传参）、const&/&& overloads 与 forwarding template 的接口复杂度和 copy/move 成本
+- 能判断 copyable cheap to move（可复制且移动便宜）且 always copied（总会复制）三项前提是否同时成立
+- 能分析 slicing（切片）、assignment allocation（分配成本）和 conditional-copy 反例，设计正确参数策略
+
+</Objectives>
+
+## 从“sink 最终一定需要自己的值”开始
+
+假设 class 把每个新名字存入 container。传统方式为 lvalue/rvalue 各写 overload：
+
+```cpp
+void addName(const std::string& name) {
+    names.push_back(name);
+}
+
+void addName(std::string&& name) {
+    names.push_back(std::move(name));
+}
+```
+
+<Term def="函数无论输入类别如何都要取得独立 value ownership 并存入成员或容器的参数角色。">
+  value sink parameter
+</Term>
+
+两条函数正确且性能直接，但 implementation 重复；参数增加时，lvalue/rvalue overload combinations 可指数增长。
+
+先预测同一个 string lvalue、rvalue 与可转换输入经过三种接口时分别发生几次 copy、move 与 allocation，再对照下图；不要只数函数 body 内的操作，parameter construction 也属于调用成本。
+
+## forwarding template 减少重复但扩大接口
+
+```cpp
+template<typename T>
+void addName(T&& name) {
+    names.emplace_back(std::forward<T>(name));
+}
+```
+
+<Term def="用 forwarding reference 接收多种输入并保留 category，但把 template deduction 与约束暴露到 API 的方案。">
+  forwarding sink template
+</Term>
+
+它可直接构造 string，却带来 Item 26/27 的 greedy overload、深层 diagnostics、header implementation 和 constraint 复杂度。API 本来只需要 string value 时，无限泛化未必值得。
+
+## 按值方案只保留一个普通函数
+
+```cpp
+void addName(std::string name) {
+    names.push_back(std::move(name));
+}
+```
+
+<Term def="在函数边界构造独立 parameter object，再将其 move 到最终 destination 的单一 non-template 接口。">
+  pass-by-value sink
+</Term>
+
+lvalue caller 复制构造 parameter；rvalue caller 移动构造或由实现消除中间构造；body 统一 move。代码短、类型域明确、diagnostics 普通。
+
+<EmcppPassByValueCostMap />
+
+## 代价通常是最多一次额外 move
+
+与理想 overload 比较，lvalue path 从“一次 copy”变为“一次 copy + 一次 move”；rvalue path 常从“一次 move”变为最多“两次 moves”，具体可受 copy elision 影响。
+
+<Term def="按值 parameter 相对精确 overload 在 value 进入最终 storage 前可能增加的一次移动操作。">
+  extra-move tax
+</Term>
+
+只有 move 确实便宜，这项 tax 才可接受。`std::vector`/large string 常通过转移少量 handles 移动；`std::array`、inline buffer 或维护复杂 invariant 的类型可能逐元素移动。
+
+<Callout
+  type="trap"
+  title="陷阱：现代 C++ 中 move 永远是 O(1)，所以 sink 都应按值"
+>
+  move cost 由资源布局决定。inline elements、array 和某些 small-object
+  representations 仍需 O(N) 搬运；必须查类型契约或测量。
+</Callout>
+
+## 三项核心条件必须同时满足
+
+<Term def="适合按值 sink 的联合条件：类型可复制、move 成本低、函数所有成功路径都会获得独立副本。">
+  copyable-cheap-move-always-copied gate
+</Term>
+
+1. copyable：lvalue callers 能构造 parameter。
+2. cheap to move：extra-move tax 小且可预测。
+3. always copied：parameter 不是只读、偶尔缓存或条件性使用。
+
+标题是 consider，而不是 prefer；任一条件失败就重新比较 const-reference、overloads 或 forwarding。
+
+<EmcppPassByValueSuitabilityMap />
+
+## conditional copy 会提前支付成本
+
+```cpp
+void maybeCache(std::string value) {
+    if (cacheMiss()) cache.push_back(std::move(value));
+}
+```
+
+<Term def="函数只有部分 control-flow paths 获取参数副本，其他路径仅检查或完全不用该值。">
+  conditional-copy parameter
+</Term>
+
+lvalue 在调用前已经复制构造 parameter，即使 cache hit 不存储也付费。`const std::string&` 可在 miss path 才 copy；若要优化 rvalue，再增加 overload 或约束 wrapper。
+
+## assignment 与 construction 的 allocation 不同
+
+考虑 setter：
+
+```cpp
+class Password {
+public:
+    void changeTo(std::string next) {
+        value_ = std::move(next);
+    }
+
+private:
+    std::string value_;
+};
+```
+
+<Term def="目标对象已持有可复用 storage 时，copy assignment 可能避免新 allocation，而 copy construction parameter 必须建立独立 storage。">
+  assignment storage reuse
+</Term>
+
+若 lvalue next 长度小于 value* capacity，`value* = next` 可复用 buffer；按值方案先 copy-construct next parameter，可能新 allocation，随后 move assignment 又释放 value\_ 旧 buffer。
+
+<EmcppAssignmentAllocationFlowMap />
+
+## “总会复制”要区分 construct 与 assign
+
+<Term def="将输入构造成新 destination 与覆盖已有 destination 在资源复用能力上的差异。">
+  construction-assignment distinction
+</Term>
+
+push_back 新 element 是 construction sink，按值更自然；setter 覆盖 member 是 assignment sink，const& 可能利用 capacity。只看源码有 `std::move(param)` 不足以证明按值低成本，还要追踪 destination 是否已有资源。
+
+<Callout
+  type="trap"
+  title="陷阱：body 最后 move-assign，所以按值一定比 const-reference assignment 快"
+>
+  parameter 的 lvalue copy construction 可能先分配新 buffer，而 const-reference
+  assignment 可直接复用 member capacity。要计完整调用链 allocation，不只计 body
+  中 move 指令。
+</Callout>
+
+## polymorphic base 按值会 slicing
+
+```cpp
+void registerShape(Shape shape); // dangerous for polymorphic input
+
+Circle circle;
+registerShape(circle); // derived part is sliced
+```
+
+<Term def="derived object 按 base value 构造 parameter 时只保留 base subobject，丢失 derived state/dynamic type。">
+  object slicing
+</Term>
+
+按值适合明确 concrete value type，不适合多态 base interface。多态 ownership 用 smart pointer，非拥有访问用 reference/pointer，并明确 lifetime。
+
+## exception timing 也会移动到调用前
+
+按值 parameter 的 copy/move construction 在进入 function body 前发生；若 copy allocation 抛异常，logging、lock acquisition 或 metrics body 尚未执行。
+
+<Term def="parameter construction failure 在 function body 之前发生，使副作用和 exception boundary 与 reference API 不同。">
+  parameter-boundary exception
+</Term>
+
+这通常有利于 strong guarantee，但若 API 依赖 body 内 instrumentation 或事务边界，应明确差异。const-reference 可能把 copy 放到更晚的 selected path。
+
+## 多参数会放大 overload 数量
+
+两个 sink params 若都支持 const&/&&，需四组 overload；三个需八组。按值各一个 parameter 可把接口保持单一。
+
+<Term def="为 N 个独立 lvalue/rvalue sink parameters 编写精确 overload 时出现最多 2^N combinations 的维护成本。">
+  value-category overload explosion
+</Term>
+
+forwarding template 也能避免组合，但增加 constraints 和 compile-time surface。按值在类型明确、moves cheap、always stored 时是中间方案。
+
+## 参数策略验收清单
+
+<Term def="按 type properties、control flow、destination operation、polymorphism 与 measured costs 决定 parameter passing 的流程。">
+  parameter-strategy audit
+</Term>
+
+1. input 是 concrete value 还是 polymorphic base？
+2. 所有成功 paths 都会 copy/store，还是 conditional？
+3. move complexity、exception 与 allocation 是否真的便宜？
+4. destination 是 construction 还是可能复用 storage 的 assignment？
+5. extra move 与减少 overload/template complexity 的交换是否值得？
+6. benchmark 是否覆盖 lvalue/rvalue、small/large values 与 allocator 行为？
+
+## 小结
+
+- pass by value 适合 sink：边界构造独立 parameter，body 统一 move 到 destination
+- 相对 const&/&& overloads 通常支付最多一次 extra move，换取单一 non-template API
+- 必须同时满足 copyable、cheap to move、always copied，任一失败都不应机械采用
+- conditional copy 会让 lvalue 在无需存储的路径也提前复制
+- assignment 可能复用 destination capacity；按值 copy construction 可能增加 allocation
+- polymorphic base 按值会 slicing，不能用于保留 dynamic type 的接口
+- 多参数 exact overloads 会组合爆炸，按值可降低维护成本，但仍要核对完整 runtime cost
+- 用 parameter-strategy audit 按具体类型和 operation 决策，而不是全局风格规则
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 41"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch08.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="value sink parameter">
+    最终取得独立 ownership 的参数。
+  </GlossaryItem>
+  <GlossaryItem term="forwarding sink template">
+    以 forwarding reference 实现 sink。
+  </GlossaryItem>
+  <GlossaryItem term="pass-by-value sink">
+    按值构造后统一移动的接口。
+  </GlossaryItem>
+  <GlossaryItem term="extra-move tax">
+    按值相对精确重载的额外移动。
+  </GlossaryItem>
+  <GlossaryItem term="copyable-cheap-move-always-copied gate">
+    按值方案的三项联合前提。
+  </GlossaryItem>
+  <GlossaryItem term="conditional-copy parameter">
+    仅部分路径复制的参数。
+  </GlossaryItem>
+  <GlossaryItem term="assignment storage reuse">
+    赋值复用目标已有容量。
+  </GlossaryItem>
+  <GlossaryItem term="construction-assignment distinction">
+    新建与覆盖目标的资源差异。
+  </GlossaryItem>
+  <GlossaryItem term="object slicing">
+    base value 丢失 derived 部分。
+  </GlossaryItem>
+  <GlossaryItem term="parameter-boundary exception">
+    进入 body 前的参数构造异常。
+  </GlossaryItem>
+  <GlossaryItem term="value-category overload explosion">
+    多参数左右值重载组合增长。
+  </GlossaryItem>
+  <GlossaryItem term="parameter-strategy audit">
+    选择参数传递方式的检查流程。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：addName 总把 string push 到 vector。** 比较 lvalue/rvalue 在 overload、forwarding 和按值方案的成本与接口代价。
+
+<Answer question="按值方案交换了什么？">
+  精确 const&/&& 对 lvalue 一 copy、rvalue 一 move，但重复实现；forwarding
+  接近最优 construction，却扩大 template/constraint surface。按值对 lvalue
+  通常一 copy 加一 move，对 rvalue 最多两 moves，并保留单一普通函数。若 string
+  move 便宜且每次都存储，这次 extra-move tax 可换取更简单 API。
+</Answer>
+
+2. **问题 2：Password setter 覆盖已有大 capacity string。** 解释为何按值可能增加 allocation。
+
+<Answer question="assignment reuse 在哪里丢失？">
+  const-reference copy assignment 可把 source 直接写入 value_ 的现有 buffer；若
+  capacity 足够无需 allocation。按值 lvalue call 先 copy-construct独立
+  parameter，必须取得自己的 buffer，随后 move-assign 给 value_ 并释放旧
+  buffer。虽然 body 是 move，调用链可能多一次 allocation/deallocation，应按
+  small/large lvalues benchmark。
+</Answer>
+
+3. **问题 3：API 接收 Shape 并有时缓存 derived objects。** 判断按值是否满足 Item 41 条件并重设计。
+
+  <Answer question="切片与 conditional copy 如何共同否决？">Shape by value 会 slicing，无法保留 Circle 等 dynamic type；“有时缓存”又违反 always copied，调用前构造 value 会在不缓存路径浪费。非拥有处理可接 `const Shape&`；需要多态 ownership 时接/返回 `unique_ptr<Shape>` 或提供 virtual clone，在实际缓存 path 才复制。参数策略必须同时满足语义与成本，不能仅凭 move cheap。</Answer>
+</Exercises>

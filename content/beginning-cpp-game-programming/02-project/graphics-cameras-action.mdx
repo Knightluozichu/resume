@@ -1,0 +1,369 @@
+---
+title: 第 17 章：Graphics、Camera 与多视图行动
+type: A
+section: Run! 项目
+order: 17
+description: 对齐官方第 3 版第 17 章：把 Graphics 行为提交为 draw calls，实现 main view 与 radar view 的 Camera 类，并用独立 HUD View 显示 timer text。
+demo: false
+math: false
+sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+draft: false
+---
+
+import {
+  BcgpCameraViewsMap,
+  BcgpDrawCallPipelineMap,
+  BcgpTimerTextMap,
+} from "@/components/mdx/beginning-cpp-game-programming/diagrams/graphics-cameras-action";
+
+<Objectives>
+
+- 能设计从 RenderSnapshot 到 draw calls 的收集、剔除、排序和执行管线，并用计数器定位渲染成本
+- 能实现独立的 Camera 类，以同一世界快照驱动 main view 与 radar view，并正确配置归一化 viewport
+- 能实现暂停语义明确的 timer text，完成固定宽度格式化、边界重算和 HUD 锚点布局
+
+</Objectives>
+
+## 从“一个世界为何能被看两次”开始
+
+第 16 章在逻辑提交后生成稳定快照。本章的
+
+<Term def="把已提交世界状态转换成可见精灵、形状和文本的只读表现阶段。">
+  Graphics 阶段
+</Term>
+
+不再推进 Player，也不重新判断碰撞。同一世界可以先通过主相机绘制，再通过雷达相机缩小绘制；两次观察不能让对象 update 两次。
+
+<Term def="一次向 RenderTarget 提交可绘制对象的操作，是测量渲染工作量的基本单位之一。">
+  draw call
+</Term>
+
+数量重要但不是唯一指标。纹理切换、顶点数量、过度绘制和文字重建也可能更贵，优化前先测量。
+
+<BcgpDrawCallPipelineMap />
+
+## Graphics 行为提交数据而非控制窗口
+
+<Term def="GameObject 中读取 Transform 与外观状态、生成 DrawItem，但不拥有窗口或修改游戏逻辑的行为。">
+  Graphics 行为
+</Term>
+
+若每个对象都直接 `window.setView()`，最终渲染顺序会取决于对象排列。让 Graphics 只提交带层级、材质和包围盒的数据，Renderer 决定在哪个相机下执行。
+
+```cpp
+struct DrawItem {
+    RenderLayer layer;
+    TextureId texture;
+    sf::FloatRect worldBounds;
+    sf::Transform transform;
+    sf::IntRect textureRect;
+};
+
+class GraphicsBehavior {
+public:
+    virtual ~GraphicsBehavior() = default;
+    virtual void submit(const RenderSnapshot& snapshot,
+                        std::vector<DrawItem>& out) const = 0;
+};
+```
+
+<Term def="只包含绘制本帧所需位置、外观和可见性信息，不暴露可写玩法对象的值。">
+  RenderSnapshot
+</Term>
+
+保证相机和渲染读取同一提交时刻。若 draw 直接读取正在被 update 改写的对象，多线程或分阶段渲染会出现半旧半新的撕裂状态。
+
+## 收集、剔除、排序、执行
+
+<Term def="使用相机世界可见矩形排除完全位于视野外 DrawItem 的阶段。">
+  视锥剔除
+</Term>
+
+二维项目可用矩形相交完成。主视图和雷达范围不同，所以各自剔除；不能把主视图剔除结果直接复用给雷达。
+
+```cpp
+void Renderer::draw(sf::RenderTarget& target,
+                    const Camera& camera,
+                    std::span<const DrawItem> items)
+{
+    target.setView(camera.view());
+    scratch_.clear();
+    for (const DrawItem& item : items) {
+        if (camera.visibleBounds().intersects(item.worldBounds))
+            scratch_.push_back(&item);
+    }
+    std::stable_sort(scratch_.begin(), scratch_.end(), drawOrder);
+    for (const DrawItem* item : scratch_)
+        drawItem(target, *item);
+}
+```
+
+<Term def="决定背景、平台、玩家、效果和前景覆盖顺序的语义层级。">
+  RenderLayer
+</Term>
+
+优先保证正确遮挡，再在同层按材质排序减少状态切换。透明对象不能随意重排；需要按混合语义或深度保持顺序。
+
+<Callout type="trap">
+  **现象**：减少 draw calls
+  后雨滴却出现在玩家背后，透明边缘也异常。**原因**：为了按纹理排序跨越
+  RenderLayer，破坏了透明绘制顺序。**修法**：先按语义层分桶，只在允许重排的桶内批处理，并分别记录
+  call、材质切换和过度绘制。
+</Callout>
+
+## Camera 类封装观察规则
+
+<Term def="拥有 sf::View、世界可见范围和跟随策略，并把世界坐标映射到指定窗口 viewport 的对象。">
+  Camera 类
+</Term>
+
+不拥有 Player，只接收目标的提交后位置。resize 时重新计算 View 尺寸和 viewport，玩法世界单位不因窗口像素改变。
+
+```cpp
+class Camera {
+public:
+    void follow(sf::Vector2f target, float dt);
+    void resize(sf::Vector2u windowSize);
+
+    const sf::View& view() const { return view_; }
+    sf::FloatRect visibleBounds() const;
+
+private:
+    sf::View view_;
+    sf::FloatRect worldLimits_;
+    float smoothing_{8.0F};
+};
+```
+
+<Term def="在世界坐标中限定相机中心，防止视图越过关卡边界露出空白区域的约束。">
+  相机边界
+</Term>
+
+钳制时要考虑半个 View 尺寸；若世界比 View 更小，应居中而不是让 min 大于 max。
+
+## main view：跟随、前视与稳定性
+
+<Term def="占据窗口主体、跟随 Player 展示当前跑酷区域的世界视图。">
+  main view
+</Term>
+
+可在移动方向增加少量前视，使玩家看到即将到来的平台。前视来自稳定速度或朝向，不应直接对单帧输入抖动响应。
+
+```cpp
+void Camera::follow(sf::Vector2f target, float dt)
+{
+    const sf::Vector2f current{view_.getCenter()};
+    const float alpha{1.0F - std::exp(-smoothing_ * dt)};
+    const sf::Vector2f desired{clampToWorld(target)};
+    view_.setCenter(current + (desired - current) * alpha);
+}
+```
+
+<Term def="用与帧率无关的指数插值让相机中心逐步接近目标，减弱位置离散变化造成的抖动。">
+  平滑跟随
+</Term>
+
+暂停时相机通常冻结；恢复前重启帧时钟，避免超大 dt 让相机瞬移。若玩法要求精确观察，调试模式可关闭平滑。
+
+## radar view：同一快照的第二次投影
+
+<Term def="以更大世界范围和右上角小 viewport 展示玩家、平台及关键威胁的辅助视图。">
+  radar view
+</Term>
+
+并非把主画面截图缩小。它使用独立 Camera、独立可见范围和简化 Graphics 表现，只绘制对导航有意义的项目。
+
+```cpp
+sf::View makeRadarView(sf::Vector2f center)
+{
+    sf::View radar{center, {1600.0F, 900.0F}};
+    radar.setViewport({0.74F, 0.04F, 0.23F, 0.23F});
+    return radar;
+}
+```
+
+<Term def="以窗口宽高比例表示 sf::View 输出区域的位置与尺寸，取值相对窗口而非像素。">
+  viewport
+</Term>
+
+使雷达随分辨率保持相对位置。雷达边框属于 HUD，应在 radar 世界内容后切回 HUD View 再绘制，避免边框随雷达缩放。
+
+<BcgpCameraViewsMap />
+
+<Callout type="trap">
+  **现象**：雷达内容正确，但后续计时文本消失或出现在世界远处。**原因**：绘制
+  radar view 后忘记恢复 HUD
+  View，后续像素坐标被当作世界坐标。**修法**：每个渲染阶段开头显式
+  setView，使用固定顺序绘制 main、radar、HUD，不依赖上一阶段遗留状态。
+</Callout>
+
+## timer text：时间状态与显示分离
+
+<Term def="从已提交游戏经过时间派生的分钟秒数字符串，固定显示在 HUD View 中。">
+  timer text
+</Term>
+
+真正状态只有 `elapsed`。分钟、秒和字符串都是派生值，避免多个计数器不同步。
+
+```cpp
+void TimerHud::update(float elapsedSeconds)
+{
+    const int total{std::max(0, static_cast<int>(elapsedSeconds))};
+    const int minutes{total / 60};
+    const int seconds{total % 60};
+
+    std::ostringstream text;
+    text << std::setfill('0') << std::setw(2) << minutes
+         << ':' << std::setw(2) << seconds;
+    timer_.setString(text.str());
+    recenterOrigin(timer_);
+}
+```
+
+<Term def="把分钟和秒格式化为固定字符宽度，减少数字位数变化引发的布局跳动。">
+  固定宽度格式
+</Term>
+
+每次字符串变化后重算 local bounds，再以 HUD 逻辑宽度中心锚定。Font 由更长寿命资源所有者保存。
+
+<BcgpTimerTextMap />
+
+## 计时状态协议
+
+<Term def="规定 Playing、Paused、Home 和 GameOver 各阶段是否累加 elapsed 的规则。">
+  计时协议
+</Term>
+
+通常只在 Playing 累加受限 dt；暂停、菜单和终局冻结。新局把 elapsed 清零，继续游戏不清零，重启帧时钟防止停留时间注入。若排行榜按真实完成时间计分，应明确暂停是否计时，不能由实现偶然决定。
+
+<Term def="以 HUD 逻辑屏幕边缘或中心为参考，在文本尺寸变化后重新计算稳定位置的布局方式。">
+  HUD 锚点
+</Term>
+
+让 timer text 在窗口 resize 后仍居中。先预测：若只在初始化时设置 origin，从 `09:59` 变成 `10:00` 时文本中心是否仍在同一点？
+
+## 固定渲染顺序与测量
+
+<Term def="主世界、雷达世界、HUD 与覆盖层在每帧使用明确 View 和先后顺序执行的协议。">
+  渲染通道
+</Term>
+
+推荐顺序：clear；main Camera 剔除并绘制世界；radar Camera 绘制简化项目；HUD View 绘制雷达边框和 timer text；最后绘制暂停或终局覆盖层；display。整帧只 clear/display 一次。
+
+<Term def="记录候选项目、剔除项目、实际调用和材质切换，用于定位渲染瓶颈的一组数据。">
+  渲染计数器
+</Term>
+
+分别记录 main 与 radar，避免把雷达的第二次绘制误判为重复 bug。性能回归测试使用同一快照和相机配置，比较实际 calls，而不是只凭肉眼看帧率。
+
+## 坐标转换与 resize 诊断
+
+本章的 camera classes（相机类）不只是保存两个 `sf::View`，还必须明确三套坐标：世界坐标描述 Player 与平台；归一化 viewport 描述一个 View 占窗口的比例；HUD 逻辑坐标描述 timer text 和边框。鼠标像素要先用目标 View 做 `mapPixelToCoords`，不能拿窗口像素直接和世界包围盒比较。雷达点击若使用 main view 转换，会得到看似合理但完全错误的世界位置。
+
+窗口 resize 后先决定显示策略。若保持固定世界高度，就按新宽高比调整 main view 宽度；若使用 letterbox，就计算新的归一化 viewport 并接受黑边。两种策略都应让 Camera::resize 独立完成，Renderer 只读取结果。radar view 可以保持自己的世界尺寸，但小 viewport 需要检查宽高比，否则圆形标记会被拉成椭圆。HUD View 则重建为固定逻辑尺寸，再让锚点系统重新放置计时文本与雷达边框。
+
+诊断画面错位时，记录当前通道名、View center、View size、viewport 和待绘制对象的 worldBounds。若 main 正常而 radar 空白，先确认 radar 剔除使用自己的 visibleBounds；若两者都偏移，检查 RenderSnapshot 的 Transform 是否已经是世界坐标；若只有 HUD 偏移，检查最后一次 `setView` 与 resize 后的 HUD 逻辑尺寸。这样能沿坐标边界定位，而不是反复调整魔法像素。
+
+还应验证极端窗口：窄屏、超宽屏、最小可用尺寸和高 DPI 缩放。断言 viewport 每个分量都在合法比例范围，View size 为正，世界边界钳制不会产生反向区间。测试用固定 Player 位置分别经过 main、radar 和 HUD 转换，再反向映射，允许浮点误差但必须回到同一语义坐标。
+
+## 验证清单
+
+- Player 静止、移动和瞬移时，main Camera 的边界、平滑和前视符合协议。
+- main view 剔除的远处对象若在 radar 范围内，仍会出现在 radar view。
+- resize 后两个 viewport 比例不变，HUD timer text 仍以逻辑屏幕居中。
+- 从 `09:59` 到 `10:00` 文本不跳位，暂停阶段 elapsed 不增加。
+- 随机打乱 DrawItem 输入顺序后，RenderLayer 遮挡结果保持一致。
+- 统计候选、剔除、绘制与材质切换数量，确认优化改变的是预期指标。
+
+## 小结
+
+- Graphics 行为从 RenderSnapshot 生成 DrawItem，Renderer 统一产生 draw calls
+- Camera 类封装 View、可见范围、跟随和 viewport，不能拥有玩法对象
+- main view 与 radar view 观察同一提交快照，但各自剔除和选择表现
+- timer text 从单一 elapsed 派生，使用固定宽度格式和 HUD 锚点
+- 每个渲染通道显式设置 View，并用渲染计数器验证优化
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 17"
+  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+/>
+
+<Glossary>
+  <GlossaryItem term="Graphics 阶段">
+    把已提交世界状态转换为可见图形的只读表现阶段。
+  </GlossaryItem>
+  <GlossaryItem term="draw call">
+    一次向 RenderTarget 提交可绘制对象的操作。
+  </GlossaryItem>
+  <GlossaryItem term="Graphics 行为">
+    读取快照并生成 DrawItem、不拥有窗口的对象行为。
+  </GlossaryItem>
+  <GlossaryItem term="RenderSnapshot">
+    本帧绘制需要的只读位置与外观快照。
+  </GlossaryItem>
+  <GlossaryItem term="视锥剔除">
+    按相机可见矩形过滤完全位于视野外项目的过程。
+  </GlossaryItem>
+  <GlossaryItem term="RenderLayer">
+    保证背景、实体、效果和前景正确遮挡的语义层级。
+  </GlossaryItem>
+  <GlossaryItem term="Camera 类">
+    拥有 View、可见范围和跟随策略的观察对象。
+  </GlossaryItem>
+  <GlossaryItem term="相机边界">
+    限制 View 中心不越过世界有效范围的约束。
+  </GlossaryItem>
+  <GlossaryItem term="main view">
+    占据窗口主体并跟随 Player 的世界视图。
+  </GlossaryItem>
+  <GlossaryItem term="平滑跟随">
+    用与帧率无关插值让相机逐步接近目标。
+  </GlossaryItem>
+  <GlossaryItem term="radar view">
+    使用更大世界范围和小 viewport 的辅助视图。
+  </GlossaryItem>
+  <GlossaryItem term="viewport">
+    以窗口比例表示 View 输出区域的位置和尺寸。
+  </GlossaryItem>
+  <GlossaryItem term="timer text">
+    从游戏经过时间派生并显示在 HUD 的计时文本。
+  </GlossaryItem>
+  <GlossaryItem term="固定宽度格式">
+    用零填充保持分钟秒数字符宽度稳定的格式。
+  </GlossaryItem>
+  <GlossaryItem term="计时协议">
+    规定各游戏阶段是否累加经过时间的规则。
+  </GlossaryItem>
+  <GlossaryItem term="HUD 锚点">
+    按逻辑屏幕边缘或中心重新定位控件的布局方式。
+  </GlossaryItem>
+  <GlossaryItem term="渲染通道">
+    使用明确 View 和顺序绘制一类内容的阶段。
+  </GlossaryItem>
+  <GlossaryItem term="渲染计数器">
+    统计候选、剔除、调用和材质切换的诊断数据。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：设计双相机帧。** 写出 main、radar、HUD 三个 View 的绘制顺序，并说明各自剔除集合为何不能共用。
+
+<Answer question="main view、radar view 和 HUD View 应按什么顺序绘制，为什么剔除结果不能共用？">
+  先 clear，在 main Camera 下按主视野剔除并绘制世界；再切 radar
+  Camera，按更大范围筛选简化项目；最后切 HUD View 绘制雷达边框、timer text
+  和覆盖层，然后 display。两个世界 View
+  的中心和范围不同，主视图外对象仍可能在雷达内，所以不能共用剔除结果。
+</Answer>
+
+2. **问题 2：诊断排序回归。** 优化材质切换后透明效果遮挡错误，写出定位指标和修复边界。
+
+<Answer question="按纹理排序降低 draw calls 后透明遮挡错误，应如何定位和修复？">
+  同时比较 draw calls、材质切换和各 RenderLayer
+  的输入顺序，确认排序是否跨越语义层或改变透明项远近关系。修复是先按 RenderLayer
+  分桶，只在允许重排的不透明桶内按材质排序；透明桶保持规定顺序，不能为减少调用牺牲正确性。
+</Answer>
+
+3. **问题 3：验证计时布局。** 设计覆盖暂停、分钟进位和窗口 resize 的 timer text 测试。
+
+  <Answer question="timer text 至少需要哪些状态和布局测试？">在 Playing 中固定 dt 累加得到预期时间；Paused、Home、GameOver 不增加 elapsed；从 09:59 到 10:00 使用固定宽度格式且中心不跳；resize 后按新 HUD 逻辑尺寸重新锚定；新局清零、继续游戏保留时间，并验证恢复前重启帧时钟。</Answer>
+</Exercises>

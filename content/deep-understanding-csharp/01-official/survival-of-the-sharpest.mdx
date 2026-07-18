@@ -1,0 +1,174 @@
+---
+title: "Chapter 1. Survival of the sharpest"
+type: C
+section: "C# in Depth 4e · Context"
+order: 1
+description: "覆盖语言、平台、社区与本书自身的演进语境，建立版本、runtime、compiler lowering和production boundary四类深入理解证据。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-1"
+draft: false
+---
+
+import { DcsEvolutionContextLab, DcsLanguagePressureLab, DcsEvidenceBoundaryLab } from "@/components/mdx/deep-understanding-csharp/diagrams/survival-of-the-sharpest";
+
+<Objectives>
+
+- 能比较C# language、.NET platform、developer community与本书结构的独立演进轴，写出准确版本边界
+- 能分析type safety、concision、LINQ、asynchrony和efficiency背后的设计压力与兼容成本
+- 能设计version/runtime/lowering/production四层证据，判断一个语言特性解释是否完整可复现
+
+</Objectives>
+
+## 为什么“深入”必须从Context开始
+
+语言特性从不孤立出现。Generics回应type-safe reuse，LINQ回应统一数据组合，async回应continuation ceremony，`ref readonly`回应copy cost；但每个response都受source compatibility、binary compatibility、runtime能力和developer可读性约束。只记语法会错把compiler transformation当magic，也会把library或provider behavior归因给language。
+
+先预测：使用新SDK是否自动启用最新language version；async是否意味着新thread；query syntax是否定义database执行；一段书中snippet是否可直接当production architecture。四个答案都是否。
+
+<Term def="compiler接受的C# feature set，与SDK、target framework和runtime版本相关但不等同。">language version axis</Term>
+
+## An evolving language
+
+C#的演进维持两个方向：在large scale用types表达API relation，在small scale减少无意义ceremony。C# 2 generics让collection element type进入compile contract；C# 3 lambda/query让behavior与data transformation可组合；C# 5 async把callback state machine恢复成顺序阅读；C# 6/7继续压缩property、string、tuple和pattern表达。
+
+### A helpful type system at large and small scales
+
+Type system不是只防止`int`赋给`string`。Generic variance表达producer/consumer替代，nullable value表达absence，tuple element names提升local composition，`ref` family表达alias与copy contract。深入理解时要写negative compile case：哪些程序必须被拒绝，以及拒绝发生在哪一版compiler。
+
+### Ever more concise code
+
+Concision的目标是删除ceremony，不是删除semantics。Expression-bodied member能让trivial mapping更醒目，但复杂failure path仍需要block；lambda让local callback简洁，但closure capture会改变lifetime；initializer让construction紧凑，但evaluation order仍存在。每次缩短都要能展开成等价模型。
+
+### Simple data access with LINQ
+
+LINQ统一query vocabulary，却没有统一execution engine。`IEnumerable<T>`运行delegates，`IQueryable<T>`交给provider翻译expression tree；query expression只是compiler mapping。需要分别验证operator binding、enumeration count与remote command，不能由相同source syntax推断相同cost。
+
+### Asynchrony
+
+Async method通常先同步运行到incomplete await，再保存state并注册continuation。它不承诺parallelism或dedicated thread；I/O completion、SynchronizationContext、ExecutionContext和task-like builder属于不同层。正确问题不是“await在哪个thread”，而是“谁完成awaitable、continuation捕获什么context、fault/cancel如何传播”。
+
+### Balancing efficiency and complexity
+
+Value types、stack-oriented buffers、ref returns可以减少allocation/copy，也增加alias、escape与lifetime规则。语言只有在common case可安全表达时才加入特性。Application应先profile，再选择最低复杂度且能证明收益的feature，不因“更底层”自动采用。
+
+### Evolution at speed: Using minor versions
+
+C# 7.1/7.2/7.3展示minor release加速：async Main、default literal、`in` parameters等不再等待大版本。Project的`LangVersion`和compiler toolset因此成为build contract；target runtime可能支持所需BCL却仍因compiler version不够无法解析syntax，反之亦然。
+
+```xml
+<PropertyGroup>
+  <TargetFramework>net8.0</TargetFramework>
+  <LangVersion>7.3</LangVersion>
+</PropertyGroup>
+```
+
+<Stepper>
+  <Step title="切换type、concision、LINQ、async与efficiency压力"><DcsLanguagePressureLab /></Step>
+  <Step title="写出feature前后的ceremony与contract">比较source、static types、generated control flow和runtime dependencies，不只比较行数。</Step>
+  <Step title="运行版本与negative cases">固定SDK/LangVersion，编译应成功和应失败samples；再在目标runtime执行behavior tests。</Step>
+</Stepper>
+
+<Callout type="trap" title="新语法只是旧语法糖，所以无需理解lowering">
+“语法糖”仍可能生成closure class、iterator/async state machine、expression tree或extra copy。Public semantics相近不代表allocation、lifetime和debug behavior相同。
+</Callout>
+
+## An evolving platform
+
+C# language、CLR、BCL和application framework是四层。`async`是language transformation，但`Task`是library type；generics需要runtime representation支持；LINQ operator在BCL，remote translation由provider实现；GC与JIT更不是C# syntax。讨论feature时必须标注责任层。
+
+.NET Framework、.NET Core与后续统一.NET带来cross-platform与open-source runtime。相同language version可面向不同target frameworks，available APIs、JIT、GC与deployment model可能不同。Library author还要考虑target framework moniker与consumer matrix，而不是只写“支持C# 7”。
+
+```csharp
+// Language feature: await expression.
+// Library contract: Task.Delay returns an awaitable Task.
+// Runtime behavior: timer completion schedules the continuation.
+await Task.Delay(TimeSpan.FromMilliseconds(10), token);
+```
+
+<Term def="把language syntax、compiler lowering、CLR execution、BCL API与provider/framework行为分开归因的边界。">platform responsibility boundary</Term>
+
+<Stepper>
+  <Step title="切换language、platform、community与book演进"><DcsEvolutionContextLab /></Step>
+  <Step title="为一个feature标注四层owner">例如query syntax归compiler，Enumerable归BCL，SQL translation归provider，round trip归deployment。</Step>
+  <Step title="跨target matrix复现">在声明支持的TFM/runtime运行相同public behavior，记录API availability与performance差异。</Step>
+</Stepper>
+
+## An evolving community
+
+Open-source compiler与language proposal让设计过程可观察，但proposal、preview implementation、specification和shipped stable feature不是同一个状态。Blog或conference demo可解释motivation，最终语义应回到versioned specification、compiler tests与release notes。
+
+Community feedback会改变feature shape：diagnostics揭示learnability，library authors暴露compatibility，runtime teams量测implementation cost。深入学习不是诉诸authority，而是沿evidence chain验证。Jon Skeet的示例价值在于精确隔离一个language question，而不是替代compiler/spec。
+
+<Term def="从proposal、preview、specification、compiler implementation到stable release逐层确认feature语义的证据链。">feature provenance</Term>
+
+## An evolving book
+
+第4版采用mixed-level coverage：Chapter 2-7快速重建C# 2-5基础，Chapter 8后深入C# 6/7并展望C# 8。读者不必平均用力；熟悉主题可先做acceptance questions，失败再回读，但不能因“日常常用”跳过under-the-hood证据。
+
+### Mixed-level coverage
+
+每章的最低交付是：能说明motivation，能展开compiler/runtime model，能写boundary test，能指出现代版本变化。只会写syntax算使用能力，不算depth；只会画IL而不能做API decision也不算掌握。
+
+### Examples using Noda Time
+
+书中用Noda Time提供真实但受控的domain examples。课程借鉴的是“用足够真实的type暴露language question”，不要求把Noda Time当语言组成。Example dependency、domain invariant与language behavior应分离。
+
+### Terminology choices
+
+Parameter/argument、variable/value、compile-time type/runtime type、asynchrony/parallelism等术语不能混用。Terminology不是文字洁癖；它决定call chain中主体是否清楚。例如“await返回thread”同时误解await expression与scheduler。
+
+```text
+source feature -> compiler lowering -> runtime/library contract -> observable behavior
+proposal       -> preview           -> specification            -> stable release
+```
+
+<Term def="把书中为隔离语言机制而简化的snippet，与security、resilience、scale、observability齐备的production code分开的界线。">didactic production boundary</Term>
+
+<Term def="在parameter/argument、variable/value、static/runtime type等相近概念间保持固定含义。">terminology discipline</Term>
+
+<Stepper>
+  <Step title="切换version、runtime、lowering与production证据"><DcsEvidenceBoundaryLab /></Step>
+  <Step title="给现有解释补最弱的一层">若只有source，补lowering；若只有IL，补API decision；若只有happy path，补fault与production omissions。</Step>
+  <Step title="由另一人按术语复述">Reviewer必须能指出每个action的主体、时机、static/runtime type和version，不允许用“系统自动处理”代替。</Step>
+</Stepper>
+
+<Callout type="trap" title="书中sample可运行，所以已经是production-ready">
+Didactic code刻意省略cancellation、security、retry、observability、scale与compatibility。先明确它证明的单一机制，再补目标系统实际需要的非功能contract。
+</Callout>
+
+## 本章回顾：每个Feature都有四层证据和四个演进主体
+
+1. Language、platform、community与book相互影响但拥有独立version和责任边界。
+2. Type safety、concision、LINQ、async与efficiency都是具体pressure下的tradeoff。
+3. SDK、LangVersion、TFM与runtime不是同一轴，支持声明必须写完整matrix。
+4. 深入理解从source进入lowering、runtime/library，再回到observable production decision。
+5. Proposal不是spec，sample不是architecture，术语准确是调用链与证据准确的前提。
+
+<Exercises>
+
+**问题 1：项目使用net8.0，是否可以断言所有C# 8语法都可用？**
+
+<Answer>不能。TFM决定可引用API/runtime contract，language syntax由compiler与LangVersion决定。检查global.json/SDK、project LangVersion、analyzer与CI toolset；编译positive/negative sample。反向也一样：新compiler可把某些syntax lowering到旧runtime，但依赖新BCL/API的feature仍受TFM限制。</Answer>
+
+**问题 2：怎样证明query syntax的某次性能问题不属于C#语言本身？**
+
+<Answer>先展开query expression到method calls，确认source static type绑定Enumerable还是Queryable；本地路径记录enumeration与delegate次数，remote路径检查expression tree、generated command、indexes和round trips。Syntax mapping归compiler，operator归BCL/provider，性能根因由实际execution evidence定位。</Answer>
+
+**问题 3：把书中async snippet迁入服务前至少补哪些production证据？**
+
+<Answer>固定SDK/language/runtime matrix，跟踪awaitable completion与context flow；补cancellation、timeout、fault propagation、resource cleanup、concurrency budget与observability；验证没有sync-over-async、unobserved task或重复side effect。Sample只证明language mechanism，服务还要证明resilience与ownership。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="language version axis" definition="compiler接受的C# feature set，与SDK/TFM/runtime相关但独立。" />
+  <GlossaryItem term="platform responsibility boundary" definition="分离syntax、lowering、CLR、BCL与provider/framework责任。" />
+  <GlossaryItem term="feature provenance" definition="从proposal到stable release确认语义的版本化证据链。" />
+  <GlossaryItem term="didactic production boundary" definition="隔离机制的教学snippet与完整production contract之间的边界。" />
+  <GlossaryItem term="terminology discipline" definition="对parameter/value/type/time等相近概念保持固定准确含义。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# in Depth, Fourth Edition, Chapter 1: Survival of the sharpest" adaptedUrl="https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-1" />

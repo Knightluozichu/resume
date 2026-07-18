@@ -1,286 +1,287 @@
 ---
-title: 表示数值的字符串
+title: "面试题20：表示数值的字符串"
 type: C
-section: 字符串
-order: 3
-description: 掌握确定性有限状态自动机 (DFA) 匹配合法数值的严密边界判定。
+section: "第3章 高质量的代码"
+order: 22
+description: "按原书文法分阶段扫描有符号整数、小数与指数，用共享游标和完整消费检查拒绝缺位或残留字符。"
 demo: true
-math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviews
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/20_NumericStrings/NumericStrings.cpp"
 draft: false
 ---
 
+import { NumericGrammarDiagram, NumericCursorInvariantMap, DecimalExponentFlowDiagram, NumericOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/numeric-strings";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
 <Objectives>
-- 能用自己的话解释 <Term def="确定性有限状态自动机 (DFA)">DFA</Term> 的基本原理与 10 个核心状态
-- 能正确推导和设计数值字符串的各种状态转移路径
-- 能熟练处理诸如空串、连续符号、带点指数等各种恶劣边界条件
-- 能回答：基于 DFA 的校验方法与常规分治扫描法在实现上有何本质差异？
+
+- 能解释原书数值文法中 A、B、C 三段整数扫描器的不同约束
+- 能计算符号、小数点、指数和残留字符对共享游标的推进结果
+- 能实现忠实的指针扫描版和不依赖空字符哨兵的字符串视图版
+- 能分析或运算与短路顺序为何同时影响真假结果和游标副作用
+- 能设计覆盖作者21组输入、空指针、空串和语言扩展边界的测试
+
 </Objectives>
 
-## 为什么需要状态自动机
+## 从“600. 为什么合法”开始
 
-在许多系统和语言标准中，对“合法数值”的定义非常宽泛且精细。除了像 `123` 这样简单的整数外，我们还要支持科学计数法 `+1.2e-3`、省略前导数字的浮点数 `.5`，甚至连末尾跟了小数点的 `1.` 在 C++ 等标准里也是合法的。
+先预测：600.、-.123、12e、12e+5.4 四个输入中，哪些是表示数值的字符串？作者答案依次是合法、合法、非法、非法。小数点后可以没有数字，但前面必须已经有整数；小数点前也可以没有数字，但后面必须至少有一位。指数后则只能是完整整数，不能再出现小数点。
 
-如果不使用工具，直接用常规的 `if-else` 条件分支去扫描字符串，代码会变得极其臃肿。由于各种边界条件纵横交错（如正负号必须出现在首位或紧随 `e/E` 后面；小数点不能与指数同时出现；指数必须是一个整数且前面要有数值基础等），人工拼凑的分支逻辑极易漏判。这就好比在一座复杂的迷宫里游走，在每一个分岔口都通过拼凑的标志做判断，最终必然迷失。
+这不是把字符逐个加入“允许集合”就能解决的问题。同一个正负号出现在开头或指数后合法，出现在整数中间非法；同一个点号只能出现在指数之前，且点两侧至少一侧有数字。必须同时记录当前位于哪一段文法，以及扫描到了哪里。
 
-为了解决这种**词法分析中的多状态依赖判定**问题，<Term id="DFA" def="根据当前输入字符和当前状态唯一确定下一个状态的数学模型">DFA (确定有限状态自动机)</Term> 便是最优雅的“图纸”。我们只需定义出所有合法的内部状态以及相应的转移规则，状态机就会像精密仪器一样，按照字符驱动，在有向图上自动流转。一旦走入无路可通的节点便立即拒绝，而走到终点时若处于“可接收状态”即为合法。
+作者把合法形式概括为两类：A 后面可接点号和可选 B，再可接指数；或者直接由点号和 B 开始，再可接指数。A 和指数中的 C 是<Term def="可带一个前导正号或负号、但符号后必须至少有一位数字的十进制整数。">有符号整数</Term>，B 是<Term def="只包含一位或多位十进制数字、不允许正负号的整数片段。">无符号整数</Term>。
 
----
+<NumericGrammarDiagram />
 
-## DFA 是怎么工作的
+这套规则准确区分**整数部分与小数部分**：A 已经提供数字时，点后的 B 可以为空，所以 600. 合法；A 为空时，B 必须非空，所以 .123 合法而单独的点非法。**指数e或E**若出现，前面的基数必须已经有效，后面的 C 必须完整。
 
-表示数值的字符串 DFA 一共包含 **10 个状态**。这些状态定义了状态机从空串出发，到处理各个符号、数字、小数点，再到完成指数校验和尾随空格处理的全流程：
+## 两个扫描器共享同一个游标
 
-| 状态 ID | 状态名称 (Label) | 状态物理意义 | 是否为合法结束态 (Accept)? |
-| :--- | :--- | :--- | :---: |
-| **S0** | `Start` | 起始空格或初始未读状态 | 否 |
-| **S1** | `Sign` | 数字前的主正负号（如 `+`、`-`） | 否 |
-| **S2** | `Integer` | 小数点前的整数部分（如 `123`） | **是** |
-| **S3** | `DotWithoutInt` | 前面没有数字的小数点（如 `.5` 中的小数点） | 否 |
-| **S4** | `DotWithInt` | 前面有数字的小数点（如 `1.` 中的小数点） | **是** |
-| **S5** | `Decimal` | 小数点后的分数部分（如 `0.12` 中的 `12`） | **是** |
-| **S6** | `Exponent` | 指数符号（如 `e` 或 `E`） | 否 |
-| **S7** | `ExpSign` | 指数部分的正负号 | 否 |
-| **S8** | `ExpInteger` | 指数部分的整数值 | **是** |
-| **S9** | `EndSpace` | 数值结束后的尾随空格 | **是** |
+scanUnsignedInteger 从当前位置连续消费数字，并返回是否至少消费一位。scanInteger 先消费可选符号，再调用无符号扫描器。二者不仅返回真假，还要推进调用者持有的位置，因此作者参数类型是指向指针的指针。
 
-我们把字符分为六类：空格 `space`、正负号 `sign`、数字 `digit`、小数点 `dot`、指数符号 `exponent` 以及其他非法字符 `other`。状态机的转移表可以形式化表示如下：
+将“下一个尚未处理字符的位置”称为<Term def="始终指向输入中首个尚未归入已识别语法单元的字符位置。">扫描游标</Term>。每个阶段开始时，游标指向该语法单元入口；结束时，它停在第一个不属于该单元的字符。调用者根据这个字符决定是否进入小数或指数阶段。
 
-$$
-\delta(\text{State}, \text{CharType}) = \text{NextState}
-$$
+<NumericCursorInvariantMap />
 
-例如，如果在 `Integer` (S2) 状态读入一个小数点 `dot`，它将转移至 `DotWithInt` (S4)，因为此时已经具备了左侧整数；而在 `Start` (S0) 状态读入 `dot`，则必须转移至 `DotWithoutInt` (S3)，代表这是一个没有前导整数的小数。
+例如 -123.45e+6 的整数扫描先越过负号和123，停在点号；小数扫描越过45，停在 e；指数扫描越过正号和6，停在字符串结尾。每个函数只负责一个局部文法，组合函数负责阶段顺序。
 
----
+## 忠实实现作者的三阶段扫描
 
-## 交互演示
+下面把作者的双指针参数改写成引用传递，但保留完全相同的游标副作用和布尔组合。输入为空指针立即失败，空字符串因为三个数字扫描器都没有消费而失败。
 
-> 猜一猜：如果向状态机输入 `.`，它将停留在哪一步？它是如何拒绝这个非数值的？动手操作下方的 DFA 模拟器，在输入框中输入不同的字符，观察状态转移的轨迹。
-
-<StringDfaDiagram />
-
----
-
-## 代码对照
-
-下面分别给出 C++ 与 TypeScript 使用转移表（查表法）实现的 DFA 校验代码。查表法将“图转移关系”固化在哈希表或邻接矩阵中，使核心判定循环保持为极简的 $O(1)$ 步进，从而使逻辑极为清晰。
-
-<CodeTabs>
-  <Tab label="C++ 实现">
 ```cpp
-#include <string>
-#include <unordered_map>
-#include <unordered_set>
+bool scanUnsignedInteger(const char*& cursor) {
+    const char* before = cursor;
+    while (*cursor != 0 &&
+           *cursor >= '0' && *cursor <= '9') {
+        ++cursor;
+    }
+    return cursor > before;
+}
 
-class Solution {
-public:
-    enum State {
-        STATE_START,
-        STATE_SIGN,
-        STATE_INTEGER,
-        STATE_DOT_WITHOUT_INT,
-        STATE_DOT_WITH_INT,
-        STATE_DECIMAL,
-        STATE_EXPONENT,
-        STATE_EXP_SIGN,
-        STATE_EXP_INTEGER,
-        STATE_END_SPACE
-    };
+bool scanInteger(const char*& cursor) {
+    if (*cursor == '+' || *cursor == '-') {
+        ++cursor;
+    }
+    return scanUnsignedInteger(cursor);
+}
 
-    enum CharType {
-        CHAR_SPACE,
-        CHAR_SIGN,
-        CHAR_DIGIT,
-        CHAR_DOT,
-        CHAR_EXPONENT,
-        CHAR_OTHER
-    };
+bool isNumeric(const char* input) {
+    if (input == nullptr) return false;
 
-    CharType toCharType(char ch) {
-        if (ch == ' ') return CHAR_SPACE;
-        if (ch == '+' || ch == '-') return CHAR_SIGN;
-        if (ch >= '0' && ch <= '9') return CHAR_DIGIT;
-        if (ch == '.') return CHAR_DOT;
-        if (ch == 'e' || ch == 'E') return CHAR_EXPONENT;
-        return CHAR_OTHER;
+    const char* cursor = input;
+    bool numeric = scanInteger(cursor);
+
+    if (*cursor == '.') {
+        ++cursor;
+        numeric = scanUnsignedInteger(cursor) || numeric;
     }
 
-    bool isNumber(std::string s) {
-        // 定义 DFA 转移表
-        std::unordered_map<State, std::unordered_map<CharType, State>> transferTable = {
-            {STATE_START, {{CHAR_SPACE, STATE_START}, {CHAR_SIGN, STATE_SIGN}, {CHAR_DIGIT, STATE_INTEGER}, {CHAR_DOT, STATE_DOT_WITHOUT_INT}}},
-            {STATE_SIGN, {{CHAR_DIGIT, STATE_INTEGER}, {CHAR_DOT, STATE_DOT_WITHOUT_INT}}},
-            {STATE_INTEGER, {{CHAR_DIGIT, STATE_INTEGER}, {CHAR_DOT, STATE_DOT_WITH_INT}, {CHAR_EXPONENT, STATE_EXPONENT}, {CHAR_SPACE, STATE_END_SPACE}}},
-            {STATE_DOT_WITHOUT_INT, {{CHAR_DIGIT, STATE_DECIMAL}}},
-            {STATE_DOT_WITH_INT, {{CHAR_DIGIT, STATE_DECIMAL}, {CHAR_EXPONENT, STATE_EXPONENT}, {CHAR_SPACE, STATE_END_SPACE}}},
-            {STATE_DECIMAL, {{CHAR_DIGIT, STATE_DECIMAL}, {CHAR_EXPONENT, STATE_EXPONENT}, {CHAR_SPACE, STATE_END_SPACE}}},
-            {STATE_EXPONENT, {{CHAR_SIGN, STATE_EXP_SIGN}, {CHAR_DIGIT, STATE_EXP_INTEGER}}},
-            {STATE_EXP_SIGN, {{CHAR_DIGIT, STATE_EXP_INTEGER}}},
-            {STATE_EXP_INTEGER, {{CHAR_DIGIT, STATE_EXP_INTEGER}, {CHAR_SPACE, STATE_END_SPACE}}},
-            {STATE_END_SPACE, {{CHAR_SPACE, STATE_END_SPACE}}}
-        };
-
-        // 允许接收的合法终点状态
-        std::unordered_set<State> validEndStates = {
-            STATE_INTEGER,
-            STATE_DOT_WITH_INT,
-            STATE_DECIMAL,
-            STATE_EXP_INTEGER,
-            STATE_END_SPACE
-        };
-
-        State state = STATE_START;
-        for (char ch : s) {
-            CharType type = toCharType(ch);
-            if (transferTable[state].find(type) == transferTable[state].end()) {
-                return false; // 出现无法识别的路径转移，立即拒绝
-            }
-            state = transferTable[state][type];
-        }
-
-        return validEndStates.count(state) > 0;
+    if (*cursor == 'e' || *cursor == 'E') {
+        ++cursor;
+        numeric = numeric && scanInteger(cursor);
     }
-};
-```
-  </Tab>
-  <Tab label="TypeScript 实现">
-```typescript
-function isNumber(s: string): boolean {
-  type State = 
-    | "START"
-    | "SIGN"
-    | "INTEGER"
-    | "DOT_WITHOUT_INT"
-    | "DOT_WITH_INT"
-    | "DECIMAL"
-    | "EXPONENT"
-    | "EXP_SIGN"
-    | "EXP_INTEGER"
-    | "END_SPACE";
 
-  type CharType = "space" | "sign" | "digit" | "dot" | "exponent" | "other";
-
-  function toCharType(ch: string): CharType {
-    if (ch === " ") return "space";
-    if (ch === "+" || ch === "-") return "sign";
-    if (ch >= "0" && ch <= "9") return "digit";
-    if (ch === ".") return "dot";
-    if (ch === "e" || ch === "E") return "exponent";
-    return "other";
-  }
-
-  // 转移矩阵
-  const transferTable: Record<State, Partial<Record<CharType, State>>> = {
-    START: { space: "START", sign: "SIGN", digit: "INTEGER", dot: "DOT_WITHOUT_INT" },
-    SIGN: { digit: "INTEGER", dot: "DOT_WITHOUT_INT" },
-    INTEGER: { digit: "INTEGER", dot: "DOT_WITH_INT", exponent: "EXPONENT", space: "END_SPACE" },
-    DOT_WITHOUT_INT: { digit: "DECIMAL" },
-    DOT_WITH_INT: { digit: "DECIMAL", exponent: "EXPONENT", space: "END_SPACE" },
-    DECIMAL: { digit: "DECIMAL", exponent: "EXPONENT", space: "END_SPACE" },
-    EXPONENT: { sign: "EXP_SIGN", digit: "EXP_INTEGER" },
-    EXP_SIGN: { digit: "EXP_INTEGER" },
-    EXP_INTEGER: { digit: "EXP_INTEGER", space: "END_SPACE" },
-    END_SPACE: { space: "END_SPACE" },
-  };
-
-  const validEndStates = new Set<State>([
-    "INTEGER",
-    "DOT_WITH_INT",
-    "DECIMAL",
-    "EXP_INTEGER",
-    "END_SPACE",
-  ]);
-
-  let state: State = "START";
-  for (let i = 0; i < s.length; i++) {
-    const type = toCharType(s[i]);
-    const nextState = transferTable[state][type];
-    if (!nextState) {
-      return false; // 无转移路径
-    }
-    state = nextState;
-  }
-
-  return validEndStates.has(state);
+    return numeric && *cursor == 0;
 }
 ```
-  </Tab>
-</CodeTabs>
 
----
+整数阶段可能失败却仍推进一个符号。例如输入 -.123 时，scanInteger 消费负号，但因点号前没有数字返回 false；随后小数阶段消费123并返回 true，或运算让整个基数恢复为有效。这正是允许有符号的无整数部分小数。
 
-## 容易踩的坑
+点号阶段的写法必须让 scanUnsignedInteger 位于或运算左侧。C++ 的<Term def="逻辑与或从左到右求值，并在结果已确定时不再执行右侧表达式。">短路求值</Term>会跳过不必要的右操作数。若误写成 numeric || scanUnsignedInteger(cursor)，当点前已有数字时右侧不会执行，小数位没有被消费，最终完整消费检查会把 123.45 判为非法。
 
-> [!WARNING]
-> **坑 1：未拦截中间空格**
->
-> **现象**：向状态机输入 `"123  45"` 却被误判为合法。
->
-> **原因**：如果简单设计一个统一的 `Space` 状态并且不管它在哪都自环，就会把中间的空格也全部吞掉。
->
-> **修法**：必须明确区分前导空格和尾随空格两个不同的状态。只允许在 `Start` (S0) 状态自环，一旦进入数值区，便不能再走空格；直到最右侧的有效结束状态，才可以因空格转移至 `EndSpace` 并在其自环。在 `EndSpace` 下如果再出现任何非空格，则会因查无转移路径而直接拒绝。
+<Callout type="trap" title="交换或运算两侧只影响可读性">
+这里右侧函数会推进游标，运算顺序属于算法语义。作者故意先调用小数扫描器，再与旧numeric做或运算；交换两侧会因短路跳过扫描，留下本应消费的小数位。
+</Callout>
 
-> [!IMPORTANT]
-> **坑 2：基数或指数部分缺少数字**
->
-> **现象**：验证 `"1.2e"`、`"e9"` 判定为合法。
->
-> **原因**：在读入 `'e'` / `'E'` 时判定逻辑提前宣告结束，或者没有检查指数符号前方是否具备有效数值。
->
-> **修法**：必须保证 `Exponent` 状态 (S6) 为非合法接收态。也就是说，指数部分必须“至少包含一个数字”作为结尾，才会转移到 `ExpInteger` (S8) 这一合法接收状态。同理，基数部分缺失（如 `e9`）由于在 `Start` 时只能靠 `dot` / `sign` / `digit` 转移，无法直接由 `exponent` 启动。
+指数阶段则使用 numeric && scanInteger(cursor)。基数无效时，无论指数是什么都不可能变为有效，短路跳过指数扫描不影响最终 false；基数有效时必须执行指数扫描，确保 e 后至少有一位整数数字。
 
-> [!NOTE]
-> **坑 3：语言标准的差异 (如 `"1.e2"`)**
->
-> **现象**：有些语言下，浮点数写法 `"1.e2"` 是不合法的，但是在 C++ / Python 等标准中它能被正确识别为 $1.0 \times 10^2$。
->
-> **原因**：状态机是否允许从 `DotWithInt` (S4) 直接转移到 `Exponent` (S6)。
->
-> **修法**：若想支持 `"1.e2"` 这种省掉小数位而直接跟指数的语法规则，转移表中应包含：`DotWithInt: { exponent: Exponent }`；如果是不允许（如 C# 或 Java 中可能不支持此格式），则需将该转移项移除，强制要求小数点后必须出现数字才被允许跟指数。
+## 小数和指数不能任意调换
 
----
+组合函数固定按“整数、可选小数、可选指数”前进。点号只检查一次，所以 1.2.3 在第二个点停住；指数阶段之后不再检查点号，所以 12e+5.4 在指数整数5后停住。最终残留检查将二者拒绝。
 
-## 小结
+<DecimalExponentFlowDiagram />
 
-- DFA 拥有 10 个状态，通过状态的单向转移和不可逆路径来限制符号、小数点和空格的位置。
-- 采用查表法（DFA）可以将复杂的语法分支扁平化为一个状态机的步进判定，消除嵌套的 if-else 判定。
-- 空格通过非对称的 `Start` 与 `EndSpace` 隔离，中间出现空格因缺少转移而直接失败。
-- 数值验证算法的性能是极为优异的：时间复杂度为 $O(N)$（一次扫描，每次查表常数耗时），空间复杂度为 $O(1)$（只需有限的状态变量）。
+把这种最后要求游标恰好位于输入末尾的规则称为<Term def="所有字符都必须被合法语法单元消费，任何未识别后缀都会使整体失败。">完整消费</Term>。它能用很少分支拒绝 1a3.14、1+23 等输入：扫描器不必认识所有非法形式，只需在首个不属于当前单元的字符处停止，最后发现残留即可。
 
----
+“符号位与完整消费”必须一起测试。连续符号 +-5 的整数扫描消费第一个正号后，第二个负号不是数字，于是失败并残留；1+23 先把1识别为有效整数，但加号既不是点也不是指数，最终因未到末尾失败。局部扫描成功不代表整个输入成功。
 
-## 练习
+## 为什么点号两侧使用或，指数两侧使用与
+
+小数点前后只要求至少一侧有数字，因此基数有效条件是“点前数字存在，或点后数字存在”。这覆盖 233.、.666 和 233.666，同时拒绝单独的点与加点。
+
+指数两侧则都必须有效：e 前要有合法基数，e 后要有有符号整数，所以使用与运算。12e 失败是因为 C 未消费数字；e1 和 .e1 失败是因为基数无效；12e+5.4 即使指数整数 +5 成功，点号残留仍使整体失败。
+
+若把指数 C 错用无符号扫描器，-1E-16 会被拒绝；若把小数 B 错用有符号扫描器，1.+2 会被错误接受。复用函数前必须先对照语法职责，不能因为它们都“扫描数字”就互换。
+
+## 用字符串视图显式返回消费量
+
+裸指针版本依赖空字符哨兵，并把返回真假和修改位置绑在一起。工程代码可使用字符串视图与下标，把边界放在容器长度内。扫描器返回是否消费数字，位置仍由引用更新：
+
+```cpp
+#include <string_view>
+
+bool scanUnsigned(std::string_view text, std::size_t& pos) {
+    const std::size_t begin = pos;
+    while (pos < text.size() &&
+           text[pos] >= '0' && text[pos] <= '9') {
+        ++pos;
+    }
+    return pos > begin;
+}
+
+bool scanSigned(std::string_view text, std::size_t& pos) {
+    if (pos < text.size() &&
+        (text[pos] == '+' || text[pos] == '-')) {
+        ++pos;
+    }
+    return scanUnsigned(text, pos);
+}
+
+bool isNumeric(std::string_view text) {
+    std::size_t pos = 0;
+    bool numeric = scanSigned(text, pos);
+
+    if (pos < text.size() && text[pos] == '.') {
+        ++pos;
+        const bool fraction = scanUnsigned(text, pos);
+        numeric = fraction || numeric;
+    }
+
+    if (pos < text.size() &&
+        (text[pos] == 'e' || text[pos] == 'E')) {
+        ++pos;
+        const bool exponent = scanSigned(text, pos);
+        numeric = numeric && exponent;
+    }
+
+    return numeric && pos == text.size();
+}
+```
+
+这里把有副作用调用先保存到局部变量，再做布尔组合，可避免读者漏看短路顺序。每个字符最多被某个扫描器访问一次，时间 O(n)；只保存位置和少量布尔值，额外空间 O(1)。
+
+不应直接用带区域设置的 isdigit 代替明确的 ASCII 判断，除非先把 char 转为 unsigned char 并确认需求允许本地化数字。原题只接受0到9；全角数字、阿拉伯文数字和下划线分隔符都不在契约内。
+
+## 语法校验不是数值转换
+
+本函数只判断字符形式，不计算数值，因此 1.79769313486232E+308 合法，即使目标浮点类型在某些平台上可能溢出。语法合法、可转换、转换不溢出是三个不同阶段。生产解析器应在校验后调用受控转换，并检查范围与舍入错误。
+
+同理，前导零、负零、极大指数都按本题文法合法。若业务规则禁止 001、要求金额最多两位小数，或把指数范围限制在某区间，需要在本题语法之上增加语义约束，不能悄悄改变“数值字符串”的原书答案。
+
+作者实现不接受前后空格，因为第一次扫描会在空格处失败，最后也不会跳过空格。很多平台的数值解析函数会自动忽略空白，但那是另一份契约。若需要允许空格，应在入口明确裁剪，或设计具有起始和结束空格状态的 DFA，并增加相应测试。
+
+状态机确实能表达同一语言：把符号、整数、小数点、分数、指数标记、指数符号、指数数字设为状态即可。但原书核心是扫描器组合与指针推进。DFA 适合语法继续扩展时集中维护转移；分段扫描更直接对应 A、B、C 文法，二者不应混成不同边界的答案。
+
+<Callout type="trap" title="直接用strtod返回位置代替题目推导">
+库函数常接受空白、无穷、NaN、十六进制或区域设置形式，具体契约可能比原题更宽。除非严格检查结束位置并限制语法，否则“能转换”不等于符合作者21组测试。
+</Callout>
+
+## 作者21组测试怎样分层
+
+前九组合法输入覆盖整数、带符号整数、普通小数、尾点小数、无整数部分小数、正负指数和接近双精度上界的长数值。后十二组非法输入覆盖指数缺位、字母杂质、中间符号、重复点、连续符号、指数小数、单独点、无基数指数、加点、空串和空指针。
+
+<NumericOfficialCaseLab />
+
+把全部官方输入写成表驱动测试，能让指针版与字符串视图版逐项交叉校验：
+
+```cpp
+#include <cassert>
+
+void testNumericStrings() {
+    const struct { const char* text; bool expected; } cases[] = {
+        {"100", true},
+        {"123.45e+6", true},
+        {"+500", true},
+        {"5e2", true},
+        {"3.1416", true},
+        {"600.", true},
+        {"-.123", true},
+        {"-1E-16", true},
+        {"1.79769313486232E+308", true},
+        {"12e", false},
+        {"1a3.14", false},
+        {"1+23", false},
+        {"1.2.3", false},
+        {"+-5", false},
+        {"12e+5.4", false},
+        {".", false},
+        {".e1", false},
+        {"e1", false},
+        {"+.", false},
+        {"", false},
+        {nullptr, false},
+    };
+
+    for (const auto& item : cases) {
+        assert(isNumeric(item.text) == item.expected);
+    }
+}
+```
+
+字符串视图重载不能接收空指针，因此空指针应由外层 C 接口单独测试，再把非空内容交给安全核心。还应补充 +.5、46.e3、前后空格、全角数字和极长输入，明确它们在当前契约下的预期。
+
+属性测试可以随机生成符合 A、B、C 文法的字符串并要求全部通过，再随机插入字母、第二个点或错误位置符号并要求失败。随机测试不能替代21组固定回归，但能发现组合边界遗漏。
+
+## 正确性证明
+
+scanUnsigned 恰好消费当前位置开始的最大数字前缀，并只在长度至少一时返回真；scanSigned 在此前最多消费一个符号，因此恰好识别有符号整数。它们离开时游标总停在该单元后的第一字符。
+
+组合函数先识别 A。若有点号，再识别 B，并以或运算保证点两侧至少一侧有数字；因此基数恰好覆盖 A、A.、A.B 或 .B。若随后出现 e 或 E，再以与运算要求基数已经有效且 C 是有符号整数。
+
+最后完整消费排除所有未被上述文法识别的后缀。由三个扫描器的局部正确性和固定阶段顺序可知，函数接受且仅接受原书两种数值形式，既不会漏掉600.与-.123，也不会误收12e和12e+5.4。
+
+<Stepper>
+  <Step title="先把文法拆成A、B、C"><NumericGrammarDiagram />A和C允许符号，B不允许；点号两侧至少一侧有数字，指数后必须有整数。</Step>
+  <Step title="追踪共享游标不变量"><NumericCursorInvariantMap />每个扫描器停在首个不属于当前单元的字符，让外层决定下一阶段。</Step>
+  <Step title="按整数、小数、指数前进"><DecimalExponentFlowDiagram />固定顺序扫描，并在末尾拒绝任何第二个点、字母或其他残留。</Step>
+  <Step title="跑完作者21组边界"><NumericOfficialCaseLab />合法九组和非法十二组共同锁定符号、点、指数、空串及空指针。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 原书文法由有符号整数A、无符号小数尾B和有符号指数C组合。
+2. A存在时B可空，A不存在时B必须非空，因此600.与-.123都合法。
+3. 指数e或E前必须已有合法基数，后面必须是至少一位的有符号整数。
+4. 扫描游标始终停在首个未消费字符，阶段按整数、小数、指数固定前进。
+5. 小数两侧有效性使用或，指数两侧有效性使用与。
+6. 短路求值顺序会影响带副作用扫描器是否执行，不能随意交换操作数。
+7. 最终完整消费统一拒绝第二个点、中间符号、字母和指数小数。
+8. 算法时间 O(n)、空间 O(1)，但只做语法验证，不处理转换范围。
 
 <Exercises>
-1. **（分析推导）** 如果需要状态机额外支持十六进制数（如 `0x1A`，`0Xef` 等），我们需要在现有的 10 个状态之上增加哪些新状态？转移条件是什么？
-   - **答案**：
-     需要增加 2 个新状态：
-     - `HexIndicator` (十六进制标志，如读入 `0` 转移后遇到 `x` 或 `X`)；
-     - `HexInteger` (十六进制有效整数部分，接受数字与 `a-f` / `A-F` 字符)。
-     
-     具体转移设计为：
-     - 在 `Start` 或 `Sign` 遇到 `'0'` 时，进入 `Integer` 状态；
-     - 在 `Integer` 状态且只含有单个前导 `'0'` 时，若遇到 `'x'` 或 `'X'`，转移至新状态 `HexIndicator`；
-     - 在 `HexIndicator` 遇到 `[0-9a-fA-F]`，转移至 `HexInteger` 并可以自环接收同类字符；
-     - `HexInteger` 应设置为合法接收态，同时允许从它转移至 `EndSpace`。
-2. **（问答型）** 为什么在转移表中没有从 `DotWithoutInt` (S3) 状态转移至 `Exponent` (S6) 的路径？如果是字符串 `".e3"` 会发生什么？
-   - **答案**：
-     因为 `DotWithoutInt` 代表前面没有数字的小数点（例如单独的 `.`），此时它还不构成一个有效的实数。根据数学规范，科学计数法的基数必须是一个有效的数值（整数或小数），单独的 `.` 不是数值，因此后面不能跟指数。
-     对于字符串 `".e3"`：
-     1. 从 `Start` 读入 `.` 转移至 `DotWithoutInt` 状态；
-     2. 下一步读入 `e`，但在 `DotWithoutInt` 状态对应的转移中，`exponent`（即 `e`）是未定义的（`transferTable[3]` 只包含 `{ digit: 5 }`）；
-     3. 状态转移中断，函数立即返回 `false`，判定为非法。
-</Exercises>
 
----
+**问题 1：为什么600.合法而单独的点不合法？**
+
+<Answer>小数点两侧至少一侧要有数字。600.的A扫描成功，即使B为空，或运算后基数仍有效；单独的点在A和B扫描中都没有数字，或运算结果为false。</Answer>
+
+**问题 2：为什么小数扫描函数必须放在或运算左侧？**
+
+<Answer>它需要推进共享游标。若先写已经为true的numeric，短路求值会跳过右侧函数，小数位留在输入中，最终完整消费失败。先调用扫描器既取得B是否存在，也保证位置正确。</Answer>
+
+**问题 3：12e+5.4在哪一步失败？**
+
+<Answer>A识别12，指数阶段识别有符号整数+5并暂时保持有效，但指数扫描停在点号。函数没有指数后小数阶段，最终发现游标未到结尾，所以整体失败。</Answer>
+
+**问题 4：如何扩展为允许前后空格但禁止中间空格？**
+
+<Answer>可在核心扫描前跳过前导空格，完成数值文法后跳过尾随空格，再检查结尾；或用DFA区分起始空格与尾随空格状态。必须增加空格边界测试，并保持进入尾随空格后不能再回到数值状态。</Answer>
+
+</Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="DFA">确定性有限状态自动机 (Deterministic Finite Automaton)。是一种数学计算模型，它包含一组有限状态、一个起始状态、一组接收（合法结束）状态，以及一套确定性的转移函数。对于每一个状态与输入的组合，都有且仅有一个确定的下一个状态。</GlossaryItem>
-  <GlossaryItem term="Accept State">接收状态（或称有效结束状态）。指的是状态自动机在处理完整个字符串后，能被判定为“匹配成功”的合法状态集合。在数值校验中，整数、带小数点实数、分数、指数整数状态都是合法的接收态，代表数值是完整且规范的。</GlossaryItem>
-  <GlossaryItem term="词法分析">Lexical Analysis。编译程序的第一阶段，其核心任务是将输入的字符流（Source Code）读入，识别并归类为具有语法物理意义的最小单词序列（Token），如数值、标识符、运算符等。DFA 是实现词法分析最核心的技术。</GlossaryItem>
+  <GlossaryItem term="有符号整数">允许一个前导正负号，且符号后必须至少有一位数字的整数片段。</GlossaryItem>
+  <GlossaryItem term="无符号整数">由一位或多位十进制数字组成、不允许正负号的片段。</GlossaryItem>
+  <GlossaryItem term="扫描游标">指向输入中首个尚未归入已识别语法单元的字符位置。</GlossaryItem>
+  <GlossaryItem term="完整消费">要求所有输入字符都被合法语法单元识别，不能留下后缀。</GlossaryItem>
+  <GlossaryItem term="短路求值">逻辑运算在结果已确定时不再执行右侧表达式的规则。</GlossaryItem>
 </Glossary>
 
-<Attribution sourceUrl={frontmatter.sourceUrl} />
+<Attribution
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题20"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/20_NumericStrings/NumericStrings.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
+/>

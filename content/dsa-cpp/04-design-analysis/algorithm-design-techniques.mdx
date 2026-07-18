@@ -1,0 +1,244 @@
+---
+title: "第10章 Algorithm Design Techniques：从局部选择到搜索空间剪枝"
+type: C
+section: "算法设计与均摊"
+order: 9
+description: "按第3版五节完整重构贪心、分治、动态规划、随机化与回溯，并用正确性证据、状态设计和失败反例统一比较。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+draft: false
+---
+
+import { DsaDesignTechniqueMapLab, DsaGreedyExchangeLab, DsaDivideConquerRecurrenceLab, DsaDynamicProgrammingTableLab, DsaRandomizedConfidenceLab, DsaBacktrackingSearchLab } from "@/components/mdx/dsa-cpp/diagrams/algorithm-design-techniques";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释五类算法设计技巧如何组织choices、subproblems和state
+- 能计算greedy、divide-and-conquer、DP、randomized与backtracking的成本或误差界
+- 能实现exchange-safe greedy、recurrence split、matrix-chain table、witness trial和undo search
+- 能分析greedy反例、overlapping states、random independence与unsafe pruning
+- 能设计从brute-force oracle到proof certificate的算法验收流程
+
+</Objectives>
+
+## 从“代码外形不是设计技巧”开始
+
+算法设计技巧（<Term def="以选择承诺、子问题划分、状态复用、随机采样或系统枚举组织算法与正确性证明的方法。">算法设计技巧</Term>）不能只按“有没有递归”分类。Quicksort 和 mergesort 都递归，却因 partition/combine 不同而有不同风险；memoized recursion 与 bottom-up table 外形不同，却实现同一 dynamic-programming recurrence。
+
+先预测 coin denominations 4、3、1 凑6。每次取最大 coin 的 greedy 得到4+1+1共3枚，而最优是3+3共2枚。局部选择“看起来最好”不构成证明；必须说明为什么某个 optimal solution 可 exchange 成包含该选择。
+
+官方结构是总题 **Algorithm Design Techniques**，随后五节 **Greedy Algorithms、Divide and Conquer、Dynamic Programming、Randomized Algorithms、Backtracking Algorithms**。下面用同一套问题核查它们：state 是什么、做什么 choice、是否回看、如何证明、最坏输入是什么。
+
+<DsaDesignTechniqueMapLab />
+
+## 10.1 Greedy Algorithms
+
+贪心算法（<Term def="每一步提交当前locally optimal feasible choice且不回退，并依赖exchange、cut或stays-ahead证明。">贪心算法</Term>）适合拥有 greedy-choice property 和 optimal substructure 的问题。常见 proof patterns：
+
+- exchange argument：把任意 optimal solution 的第一选择替换成 greedy choice，不变差；
+- cut property：跨某个 cut 的 minimum edge 是 safe；
+- stays ahead：证明 greedy prefix 在每一步不落后于任何 competitor。
+
+<DsaGreedyExchangeLab />
+
+以 interval scheduling 为例，每次选最早结束且与已选 intervals compatible 的活动：
+
+```cpp
+std::sort(intervals.begin(), intervals.end(), byFinish);
+Time end = minusInfinity;
+for (const Interval& interval : intervals) {
+    if (interval.start < end) continue;
+    answer.push_back(interval);
+    end = interval.finish;
+}
+```
+
+Exchange proof 把 optimal schedule 的首活动换成最早结束者，它不会减少余下可用时间。相反，coin change 只在特定 denomination systems 成立，不能从几个示例归纳 universal correctness。
+
+Greedy 在 Huffman coding、Kruskal/Prim、Dijkstra 中也出现，但 safe-choice lemma 各不相同。Dijkstra 还需要 nonnegative weights；算法名字不是免检前提。
+
+<Callout type="trap" title="用测试样例替代greedy证明">
+通过一万组random cases仍可能漏掉结构化counterexample。先写brute-force oracle搜索小规模反例，再给exchange/cut proof，二者分别发现实现错误与设计错误。
+</Callout>
+
+## 10.2 Divide and Conquer
+
+分治（<Term def="把problem分成较小且近独立subproblems，递归求解并combine为原问题答案。">分治</Term>）包含 divide、conquer、combine。成本由 recurrence 决定：
+
+$$
+T(N)=aT(N/b)+f(N)
+$$
+
+其中 a 是 subproblem 数，N/b 是规模，f(N) 是 split/combine work。Mergesort 是 `2T(N/2)+Theta(N)`；balanced binary search 是 `T(N/2)+Theta(1)`；bad quicksort 是 `T(N-1)+Theta(N)`。
+
+<DsaDivideConquerRecurrenceLab />
+
+正确性通常用 induction：假设 recursive calls 正确，再证明 combine 保持目标。Subproblems 若严重 overlap，纯 recursion 会重复计算；这提示转向 DP。Subproblems 若共享可变 state，所谓“独立”也可能被 aliasing 破坏。
+
+第3版示例包含 matrix multiplication、Fibonacci 等，用来区分算法结构和 asymptotic improvement。Matrix divide 只有在 block arithmetic 与 cutoff 合理时才兑现理论收益；小 sizes 的 constants 与 cache layout 仍重要。
+
+## 10.3 Dynamic Programming
+
+动态规划（<Term def="对具有optimal substructure与overlapping subproblems的问题定义state/transition并只计算每个state一次。">动态规划</Term>）先写 state meaning，再写 transition、base cases 与 evaluation order。第3版 `Fig10_43` 的递归 `eval(n)` 反复计算所有更小 `eval(i)`；`Fig10_45` 用 table 保存结果，消除 exponential duplication。
+
+Matrix-chain multiplication 给 dimensions `c0...cn`，state `m[i,j]` 是矩阵 Ai 到 Aj 的 minimum scalar multiplications：
+
+$$
+m[i,j]=\min_{i\le k<j}
+\left(m[i,k]+m[k+1,j]+c_{i-1}c_kc_j\right)
+$$
+
+<DsaDynamicProgrammingTableLab />
+
+第3版 `Fig10_46.cpp` 按 chain length k 增长填 upper triangle，并把最优 split 存入 `lastChange`。只存 cost 不能重建 parenthesization：
+
+```cpp
+for (int length = 2; length <= n; ++length)
+    for (int left = 1; left + length - 1 <= n; ++left) {
+        int right = left + length - 1;
+        cost[left][right] = infinity;
+        for (int split = left; split < right; ++split)
+            relaxSplit(left, split, right, cost, lastChange);
+    }
+```
+
+State 必须包含影响 future choices 的全部信息，又不能把 history 原样塞入导致 state explosion。Top-down memoization 容易从 recurrence 写出且只访问 reachable states；bottom-up 便于控制 order、memory rolling 和 cache locality。
+
+<Callout type="trap" title="先建二维表再找状态含义">
+Table shape不是DP证明。若两个不同history被错误合并到同一state，而future feasibility不同，transition会丢解。先写“state代表什么”，再证明transition覆盖且不重复。
+</Callout>
+
+## 10.4 Randomized Algorithms
+
+随机化算法（<Term def="算法内部使用random choices，并以expected runtime或bounded error而非单一路径描述保证。">随机化算法</Term>）分两类：
+
+- Las Vegas：结果总正确，runtime 随机，如 randomized pivot quicksort；
+- Monte Carlo：runtime受控，允许小概率错误，如 repeated primality witnesses。
+
+第3版 `Fig10_62.cpp` 的 witness test 若发现 nontrivial square root of 1，就确定 composite；若若干随机 bases 都通过，只能说 probably prime。若每次对 composite 的 false-pass probability 至多1/4，独立 t 次：
+
+$$
+\Pr[\text{all false passes}]\le 4^{-t}
+$$
+
+<DsaRandomizedConfidenceLab />
+
+```cpp
+bool probablyPrime(Integer n, int trials, Random& random) {
+    for (int i = 0; i < trials; ++i) {
+        Integer base = random.uniform(2, n - 2);
+        if (!passesWitness(base, n)) return false;
+    }
+    return true;
+}
+```
+
+Seed 决定 reproducibility；测试应记录 seed 和 sampled choices。Cryptographic use 需要 cryptographically secure entropy 与 overflow-safe modular multiplication，不能直接复用教学 PRNG 和窄 integer arithmetic。
+
+Expected O(N log N) 不等于 deterministic worst-case；error bound 也依赖 trials independence 和 witness theorem。报告必须说清 guarantee 类型。
+
+## 10.5 Backtracking Algorithms
+
+回溯算法（<Term def="深度优先枚举partial assignments，发现constraint violation时撤销choice并剪掉不可能分支。">回溯算法</Term>）适合 constraint satisfaction、排列、N-Queens、turnpike reconstruction 等。基本 skeleton：
+
+```cpp
+bool search(State& state) {
+    if (state.complete()) return state.accepts();
+    for (Choice choice : state.candidates()) {
+        if (!state.feasible(choice)) continue;
+        state.apply(choice);
+        if (search(state)) return true;
+        state.undo(choice);
+    }
+    return false;
+}
+```
+
+<DsaBacktrackingSearchLab />
+
+Correctness 来自搜索树 completeness：每个 solution 对应某条 branch；safe pruning 只删除无法扩展成 solution 的 partial states。`apply/undo` 必须完全对称，特别是多个 indexes、counts 和 sets 同时变化时。
+
+Worst-case 通常 exponential：
+
+$$
+T(d)=O(b^d)
+$$
+
+但 variable ordering、constraint propagation、symmetry breaking 和 lower bounds 可大幅减少实际 nodes。Branch-and-bound 在 feasibility pruning 外，再用 objective bound 删除不可能优于 incumbent 的分支。
+
+找到第一个 solution、枚举全部 solutions、计数和求最优需要不同返回控制。误把“找到一个”当“证明最优”是常见 contract error。
+
+## 统一流程：从反例到证明再到基准
+
+<Stepper>
+  <Step title="先写state、choice与goal">
+    <DsaDesignTechniqueMapLab />
+    不按loop/recursion外形分类，先判断choices是否可承诺、subproblems是否overlap。
+  </Step>
+  <Step title="用brute force寻找greedy反例">
+    <DsaGreedyExchangeLab />
+    小规模枚举与greedy对比；没有反例后仍需exchange或cut proof。
+  </Step>
+  <Step title="把recurrence画成工作量树">
+    <DsaDivideConquerRecurrenceLab />
+    分别标subproblem count、size、combine cost与unbalanced worst case。
+  </Step>
+  <Step title="DP先核对state meaning">
+    <DsaDynamicProgrammingTableLab />
+    与memoized recursion及小规模exhaustive oracle比较cost和reconstruction。
+  </Step>
+  <Step title="随机与搜索保留证据">
+    <DsaRandomizedConfidenceLab />
+    记录seed、trials、error bound；backtracking记录visited/pruned nodes与incumbent。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. Design technique由choice、subproblem和proof structure定义，不由代码外形定义。
+2. Greedy需要safe-choice证明；局部最优样例不能替代exchange/cut argument。
+3. Divide-and-conquer成本由recurrence中a、b和combine work共同决定。
+4. DP以state/transition消除overlap，并另存choice才能重建solution。
+5. Randomized algorithm必须区分Las Vegas、Monte Carlo、expected runtime与error bound。
+6. Repeated independent trials可指数降低one-sided error，但seed和arithmetic仍要验证。
+7. Backtracking以complete search保证正确，以safe pruning减少nodes，worst-case仍可exponential。
+
+<Exercises>
+
+**问题 1：coins 4、3、1凑6为什么largest-first greedy失败？**
+
+<Answer>Greedy先取4，余2只能取1、1，共3枚；optimal取3、3只需2枚。不存在把optimal首枚3交换成4而不增加枚数的safe exchange，因此该coin system不满足该greedy choice property。</Answer>
+
+**问题 2：`T(N)=2T(N/2)+N`与`T(N)=T(N-1)+N`各是什么量级？**
+
+<Answer>前者每层总combine work N、共log N层，所以Theta(N log N)；后者展开为N+(N-1)+...+1，Theta(N²)。分治是否balanced直接改变复杂度。</Answer>
+
+**问题 3：四个matrix-chain的DP为何按subchain length递增填表？**
+
+<Answer>State m[i,j]依赖更短的m[i,k]与m[k+1,j]。按length从1到n填充可保证计算长chain时所有split两侧cost已存在，满足dependency order。</Answer>
+
+**问题 4：每次false-prime概率至多1/4，独立做5次的总error上界是多少？**
+
+<Answer>五次都false-pass才误判，概率至多(1/4)^5=1/1024，约0.0009766。若trials不独立，这个乘法界不能直接使用。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="算法设计技巧">组织choices、subproblems、state与proof的通用方法。</GlossaryItem>
+  <GlossaryItem term="贪心算法">提交local choice且以exchange/cut等证明optimal的算法。</GlossaryItem>
+  <GlossaryItem term="分治">拆成较小近独立subproblems并combine的设计。</GlossaryItem>
+  <GlossaryItem term="动态规划">以state/transition复用overlapping subproblems。</GlossaryItem>
+  <GlossaryItem term="随机化算法">以random choices获得expected runtime或bounded error。</GlossaryItem>
+  <GlossaryItem term="回溯算法">枚举partial assignments并以safe pruning撤销搜索。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Data Structures and Algorithm Analysis in C++, 3rd Edition · Chapter 10 Algorithm Design Techniques"
+  href="https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+  author="Mark Allen Weiss"
+  license="原书与官方示例代码版权归作者及 Pearson/Addison-Wesley 所有；本章依据官方完整目录及作者公开的第3版 Fig10_43/Fig10_45/Fig10_46/Fig10_62 示例独立重构教学内容"
+/>

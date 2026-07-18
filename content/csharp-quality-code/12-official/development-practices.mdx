@@ -1,0 +1,200 @@
+---
+title: "第12章：规范开发行为（建议154-157）"
+type: C
+section: "编写高质量代码 · 演进与交付"
+order: 12
+description: "覆盖避免过度设计与持续重构、测试和生产代码共同版本化、attribute/feature/protocol多版本选择，以及从首个UI开始的分层自动化与发布证据。"
+demo: true
+math: false
+sourceUrl: "https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html"
+draft: false
+---
+
+import { CqcEvolutionLoopLab, CqcTestAssetLab, CqcVersionAutomationLab } from "@/components/mdx/csharp-quality-code/diagrams/development-practices";
+
+<Objectives>
+
+- 能分析current evidence、reversibility与public migration cost，设计不过度但保留refactoring option的最小实现
+- 能设计unit/contract/integration/UI/production test ownership，使测试与生产代码在同一change中版本化和验收
+- 能比较attribute metadata、feature flag、protocol version与release gate，判断selector、rollout、compatibility和cleanup责任
+
+</Objectives>
+
+## 为什么开发行为必须把“以后再改”变成可兑现承诺
+
+YAGNI若没有tests会变成“不敢改”，自动化若只在项目末期补会得到不可测试UI和不可控环境，feature flag若没有owner/expiry则成为永久分支。规范行为不是流程表格，而是让每个change带着证据、rollback和下一次演进option进入仓库。
+
+先预测：避免过度设计是否意味着不设计schema migration；测试是否可以放在另一个长期滞后的仓库；第一个UI只是静态页面时是否可等功能齐全再自动化。三个答案都是否。
+
+<Term def="当前实现有明确替换边界、characterization/contract tests和migration路径，使未来变化无需big-bang rewrite的能力。">design option</Term>
+
+## Evidence-Driven Design与Refactoring（建议154）
+
+### 建议154：不要过度设计，在敏捷中体会重构的乐趣
+
+只为当前已知use case实现最简单cohesive design，不为假想十种variants创建plugin framework；当第二个真实variant、量测到的scale或重复change出现时，再提取abstraction。与此同时，public schema/protocol/data migration等难逆决策必须提前设计compatibility，不能拿YAGNI逃避。
+
+```csharp
+public sealed class InvoiceExporter
+{
+    public Task ExportCsvAsync(Invoice invoice, Stream output, CancellationToken token)
+        => WriteCsvAsync(invoice, output, token);
+}
+```
+
+当JSON成为真实需求，再提取`IInvoiceFormatter`并用contract tests约束两种implementation；不是第一天先建formatter registry、discovery、hot reload。
+
+<Term def="characterization、unit、contract与integration tests共同锁定external behavior，让small refactoring可以快速发现semantic drift。">refactoring safety net</Term>
+
+### 可逆与不可逆决策分开
+
+private method shape、internal class拆分通常可逆，可快速试验；published API、database schema、wire version、encrypted format和external event不可轻易回滚，需要decision record、compatibility matrix与migration。设计投入跟reversal cost成比例，而非一律“先简单”。
+
+### 小步演进闭环
+
+每步保持green：补characterization，做一个结构变化，跑tests/observability，删除旧path；不要同时重写behavior、storage和deployment。refactor commit与feature change可逻辑分离，reviewer能验证行为未变。
+
+<Stepper>
+  <Step title="切换current need、second variant、scale、legacy与irreversible choice">
+    <CqcEvolutionLoopLab />
+  </Step>
+  <Step title="标出证据与reversal cost">
+    记录真实consumer/variant/load，区分internal可逆choice和public/schema不可逆choice，并决定最小seam。
+  </Step>
+  <Step title="用下一次change演练验收option">
+    增加一个variant或修改rule，确认tests能定位回归、修改范围局部且旧consumer有migration path。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="YAGNI意味着任何抽象和测试都可以以后再补">
+YAGNI拒绝无证据feature，不拒绝当前contract、external dependency seam、测试和不可逆migration设计。没有safety net，“以后重构”通常无法兑现。
+</Callout>
+
+## Test Code也是Production Asset（建议155）
+
+### 建议155：随生产代码一起提交单元测试代码
+
+behavior change、test和必要fixture在同一commit/PR，reviewer看到requirement如何被证明；test source与production使用同一version、branch和ownership。不要把tests当一次性脚本或另一个长期不同步仓库，除非cross-system test有明确独立release contract。
+
+<Term def="负责production behavior的团队同时负责对应test、fixture、failure triage、flakiness和长期维护，不把验证债务转给下游。">test ownership</Term>
+
+```csharp
+[Fact]
+public void DateRange_rejects_end_before_start()
+{
+    Action construct = () => new DateRange(new DateOnly(2026, 7, 2), new DateOnly(2026, 7, 1));
+    construct.Should().Throw<ArgumentException>();
+}
+```
+
+### 分层而不是只追求unit数量
+
+unit验证policy/value，contract运行所有implementations，integration验证database/queue/filesystem，UI journey覆盖critical path，deployed smoke验证environment/config。每层解决不同risk；只做unit会漏wiring，只做E2E则慢且难定位。
+
+### Flaky test是产品缺陷
+
+随机time、shared global state、unowned fixture、eventual consistency和brittle selector会制造flakiness。记录owner，修determinism或明确quarantine deadline；不能反复rerun直到绿，更不能长期关闭gate。
+
+<Stepper>
+  <Step title="切换unit、contract、integration、UI journey与production check">
+    <CqcTestAssetLab />
+  </Step>
+  <Step title="为每类risk指定最小测试层">
+    business rule用unit，provider substitution用contract，wiring/schema用integration，critical user outcome用UI，environment用smoke。
+  </Step>
+  <Step title="把test与change、owner和trigger绑定">
+    同一PR提交，CI按成本分层触发；failure有明确team triage，fixture/selector随production contract更新。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="E2E能覆盖真实流程，所以可以替代unit和contract tests">
+E2E提供广但粗的confidence，慢且难定位；policy edge cases和provider compatibility需要更低层快速证据。测试组合按risk分层，不按数量互相替代。
+</Callout>
+
+## Version Selection与Automation from First UI（建议156-157）
+
+### 建议156：利用特性为应用程序提供多个版本
+
+attribute可在type/member上声明version/capability metadata，由composition root集中发现和选择，适合compile-time known implementations；不要让业务各处反射扫描。runtime rollout常用feature flag，wire compatibility用explicit protocol version，它们有不同selector和lifetime。
+
+<Term def="attribute、request version、tenant cohort或feature flag中明确决定使用哪套implementation/contract且可审计的输入。">version selector</Term>
+
+```csharp
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = true)]
+public sealed class ProtocolVersionAttribute(int version) : Attribute
+{
+    public int Version { get; } = version;
+}
+
+[ProtocolVersion(2)]
+public sealed class InvoiceProtocolV2 : IInvoiceProtocol { }
+```
+
+selection必须处理duplicate/missing/unsupported version并fail closed。feature flag有owner、metric、rollback和expiry；migration完成删除旧implementation和flag，防止组合爆炸。
+
+### 建议157：从写第一个界面开始，就进行自动化测试
+
+首个UI同时建立testability seam：stable role/test id、可注入clock/network、deterministic data、可观察loading/error/success state。先自动化一条critical journey，而不是等所有screens完成后再改造selector与state management。
+
+<Term def="用大量fast unit/contract、较少integration和最少critical UI journeys组成，并以deployed smoke补环境证据的风险分层。">automation pyramid</Term>
+
+```tsx
+<button type="submit" aria-label="Issue invoice" disabled={isSubmitting}>
+  Issue
+</button>
+```
+
+UI test断言用户outcome和accessible role，不依赖CSS class、pixel coordinate或内部component tree；visual regression只覆盖layout-specific risk。viewport、keyboard、loading/failure和retry属于首批关键cases。
+
+### Release gate收口版本与测试
+
+CI先跑type/lint/unit/contract，再按change触发integration/UI；deploy后执行smoke并保留artifact/version evidence。gate失败不push/promote，flaky check有owner和修复deadline。版本selector的每个active branch都必须在矩阵中有证据。
+
+<Stepper>
+  <Step title="切换attribute、flag、protocol、UI seam与release gate">
+    <CqcVersionAutomationLab />
+  </Step>
+  <Step title="写出selector、owner、rollout和deletion condition">
+    attribute用于known metadata，flag用于audience rollout，protocol用于wire contract；每个旧branch都有迁移deadline。
+  </Step>
+  <Step title="从首个界面跑到deployed smoke">
+    unit/contract/integration/UI按层通过，supported versions矩阵绿，部署后synthetic journey验证真实configuration。
+  </Step>
+</Stepper>
+
+## 本章回顾：每次Change都带着下一次Change的证据
+
+1. 当前需求用最小直接设计，真实第二variant再抽象；不可逆schema/protocol仍需提前migration设计。
+2. refactoring safety net让small reversible steps可持续，不做big-bang rewrite。
+3. test与production同commit、同owner、同version；unit/contract/integration/UI/smoke各自覆盖不同risk。
+4. attribute、feature flag和protocol version是不同selectors，都要处理unsupported、rollout、rollback和deletion。
+5. 第一个UI就建立stable selectors、injectable dependencies与critical journey automation。
+6. release gate汇总代码、版本矩阵与部署证据，失败不promote。
+
+<Exercises>
+
+**问题 1：何时应从直接实现提取interface，何时属于过度设计？**
+
+<Answer>当出现第二个真实implementation、external dependency需要替换、caller contract需隔离或change history证明variation时提取，并运行shared contract tests。只有一个use case且没有替换/ownership边界时先直接实现；但published schema/protocol仍要显式version/migration，不能用YAGNI跳过不可逆风险。</Answer>
+
+**问题 2：一个功能PR应怎样同时提交测试并控制flakiness？**
+
+<Answer>同一PR包含behavior、最小对应unit/contract/integration或UI evidence和fixture；使用injectable clock/random、isolated data、stable role selectors及bounded waits，失败由功能owner triage。CI分层执行，不靠重复rerun；发现flaky立即修或短期quarantine并设deadline。</Answer>
+
+**问题 3：attribute version、feature flag和protocol version如何共同存在而不失控？**
+
+<Answer>Protocol version是external explicit contract；composition root按attribute metadata注册对应implementation；feature flag只控制cohort rollout。建立supported matrix、duplicate/missing fail-closed、每branch tests/metrics和rollback；migration完成删除旧protocol implementation、attribute registration与flag，避免永久组合。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="design option" definition="通过stable seam、tests和migration保留未来局部替换而无需big-bang rewrite的能力。" />
+  <GlossaryItem term="refactoring safety net" definition="characterization/unit/contract/integration tests共同锁定behavior并发现结构变化的semantic drift。" />
+  <GlossaryItem term="test ownership" definition="production owner同时负责test、fixture、failure triage、flakiness和长期维护。" />
+  <GlossaryItem term="version selector" definition="attribute、request version、cohort或flag中可审计地选择implementation/contract的输入。" />
+  <GlossaryItem term="automation pyramid" definition="大量fast低层tests、较少integration与最少critical UI journeys加deployed smoke的risk layering。" />
+</Glossary>
+
+<Attribution adaptedFrom="编写高质量代码：改善C#程序的157个建议，第12章 规范开发行为，建议154-157" adaptedUrl="https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html" />

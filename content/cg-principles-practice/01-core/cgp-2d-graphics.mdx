@@ -1,115 +1,228 @@
 ---
-title: "2D图形与变换"
+title: "二维场景、变换与图形测试平台"
 type: B
 section: "计算机图形学与渲染"
 order: 3
-description: "平移、旋转、缩放与齐次坐标矩阵"
+description: "承载第三版 Ch2、Ch4、Ch10、Ch12：WPF 场景抽象、2D test bed、齐次变换与可验证变换库"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
 draft: false
 ---
 
-import { Cgp2dGraphicsDiagram } from "@/components/mdx/cg-principles-practice/diagrams/cgp-2d-graphics";
+import { Cgp2dGraphicsDiagram, Cgp2dTransformDiagram, CgpTransformLibraryDiagram } from "@/components/mdx/cg-principles-practice/diagrams/cgp-2d-graphics";
+import { CgpStepFlowDiagram } from "@/components/mdx/cg-principles-practice/diagrams/cgp-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能写出2D平移、旋转、缩放的3x3齐次坐标矩阵
-- 能解释为什么需要齐次坐标来统一变换
-- 能计算多个变换组合后的复合矩阵
-- 能回答：为什么变换顺序不能交换？
+
+- 能解释 WPF retained-mode scene、declarative specification、layout 与 device-independent unit 的可迁移原理
+- 能用 2D Graphics Test Bed 复现 corner cutting、变换组合、坐标映射和边界输入
+- 能推导二维 affine transform、change of frame、inverse 与 composition
+- 能设计区分 Point/Vector、固定乘法约定并通过性质测试的 2D/3D transformation library
+
 </Objectives>
 
-## 直觉引入
+## 直觉：二维简单到足以暴露所有约定错误
 
-想象你在玩俄罗斯方块。按左/右键平移方块，按旋转键旋转方块，按下降键缩放（加速）。这些操作背后都是矩阵乘法——2D图形变换就是用矩阵「操控」图形的位置和形状。
+先预测：把窗口宽度翻倍，逻辑图形应翻倍、保持物理尺寸还是保持布局比例？先绕局部 pivot 旋转再移动，与先移动再绕世界原点旋转是否相同？二维系统迫使我们明确单位、frame、ownership 和 composition order。
 
-关键洞察：平移不能直接用2x2矩阵表示（它是加法不是乘法），所以引入齐次坐标——用3维向量表示2D点，让平移也能变成矩阵乘法。这样所有变换统一为矩阵乘法，可以组合。
-
-## 概念讲解
-
-### 2D变换与齐次坐标
+Ch2 Introduction to 2D Graphics Using WPF 提供 retained scene 示例；Ch4 A 2D Graphics Test Bed 把算法变成可观察实验；Ch10 Transformations in Two Dimensions 给出数学；Ch12 A 2D and 3D Transformation Library for Graphics 把约定固化为可复用代码。
 
 <Cgp2dGraphicsDiagram />
 
-<Term def="齐次坐标用n+1维向量表示n维点，使仿射变换统一为矩阵乘法">齐次坐标</Term>是2D变换的基础：2D点(x,y)表示为(x,y,1)。
+## Ch2 Introduction to 2D Graphics Using WPF
 
-三种基本变换：
-- <Term def="平移变换将所有点移动固定距离的变换">平移</Term>：[1 0 tx; 0 1 ty; 0 0 1]
-- <Term def="旋转变换绕某点旋转一定角度的变换">旋转</Term>：[cos -sin 0; sin cos 0; 0 0 1]
-- <Term def="缩放变换沿坐标轴拉伸或压缩的变换">缩放</Term>：[sx 0 0; 0 sy 0; 0 0 1]
+WPF 是本书 2013 第三版使用的教学平台，不是现代项目必须采用的 API。可迁移原理是：
 
-<Term def="仿射变换是平移、旋转、缩放和剪切的组合，保留平行线关系">仿射变换</Term>可以组合：M = M_n x ... x M_1，点右乘矩阵链。
+- **retained mode**：应用提交 scene objects/properties，系统保存并决定何时 layout、render、composite；
+- **declarative scene**：XAML 之类描述结构与绑定，imperative code 处理状态变化；
+- **hierarchy**：parent transform/opacity/clip 影响 descendants；
+- **layout vs render transform**：前者参与测量与排列，后者通常只改变绘制；
+- **device-independent unit**：逻辑单位与 device pixels 通过 DPI/display scale 映射。
 
-## 交互Demo
+<Term def="应用保留场景对象与属性，由图形框架跟踪变化并在需要时重新布局、绘制和合成的模式">保留模式场景</Term>与 immediate mode 各有边界。retained mode 易于 binding/animation/hit test，却需要 dirty propagation、lifetime 和 cache 策略；immediate mode 控制直接，但应用负责每帧重建命令与状态。
 
-<Stepper>
-<Step title="第一步：基本变换">掌握平移、旋转、缩放的齐次坐标矩阵。理解每个矩阵元素的几何含义——tx/ty是位移，theta是角度，sx/sy是缩放因子。</Step>
-<Step title="第二步：变换组合">
-多个变换组合时，矩阵相乘的顺序就是变换的顺序。先平移再旋转 ≠ 先旋转再平移。矩阵乘法不可交换。
-<Cgp2dGraphicsDiagram />
-</Step>
-<Step title="第三步：实际应用">2D游戏的相机移动、UI元素的动画、图像的缩放旋转都是2D变换的应用。理解变换矩阵是所有图形操作的基础。</Step>
-</Stepper>
+一个基本链路是 `input/binding → scene property → layout → world/render transform → clip → raster/composite → display`。debug 时必须知道问题发生在 layout 还是 rendering，而不是只改最终 matrix。
 
-## 代码对照
+## Ch4 A 2D Graphics Test Bed
+
+<Term def="以固定坐标、输入场景、可视化开关、参考输出和自动断言快速验证二维算法的最小实验环境">二维图形测试平台</Term>应允许：显示 control points/frames/bounds、逐步执行、保存输入、导出 reference、扫参数和比较算法版本。
+
+corner cutting 以 polyline 相邻点生成新点。Chaikin-like 一步可写为：
+
+$$
+Q_i=(1-\alpha)P_i+\alpha P_{i+1},\qquad
+R_i=\alpha P_i+(1-\alpha)P_{i+1},\quad 0<\alpha<1/2.
+$$
+
+迭代产生平滑极限趋势，但 open/closed endpoint rule、self-intersection、duplicate points 与 iteration growth 必须显式。test bed 要同时画原 polyline、新点与 segment correspondence，而不是只显示“更圆”的最终线。
 
 ```cpp
-// 2D 变换矩阵组合
-#include <cmath>
-
-// 3x3 矩阵用 9 个 float 表示
-struct Mat3 { float m[3][3]; };
-
-Mat3 multiply(Mat3 a, Mat3 b) {
-    Mat3 result = {};
-    for(int i=0; i<3; i++)
-        for(int j=0; j<3; j++)
-            for(int k=0; k<3; k++)
-                result.m[i][j] += a.m[i][k] * b.m[k][j];
-    return result;
+std::vector<Vec2> cornerCut(std::span<const Vec2> p, float alpha, bool closed) {
+    require(alpha > 0.0f && alpha < 0.5f);
+    std::vector<Vec2> out;
+    forEachEdge(p, closed, [&](Vec2 a, Vec2 b) {
+        out.push_back((1.0f - alpha) * a + alpha * b);
+        out.push_back(alpha * a + (1.0f - alpha) * b);
+    });
+    return applyEndpointPolicy(out, p, closed);
 }
-
-// 先平移(100,50) 再旋转45度 再缩放2倍
-Mat3 T = {{{1,0,100},{0,1,50},{0,0,1}}};
-float r = 45 * M_PI / 180;
-Mat3 R = {{{cos(r),-sin(r),0},{sin(r),cos(r),0},{0,0,1}}};
-Mat3 S = {{{2,0,0},{0,2,0},{0,0,1}}};
-// 注意顺序：先变换的在右边
-Mat3 M = multiply(S, multiply(R, T));
 ```
+
+测试不只比截图：验证 affine equivariance `cut(MP)=M cut(P)`、点数增长、convex-hull containment、closed continuity，以及 NaN/duplicate/empty input policy。
+
+## Ch10 Transformations in Two Dimensions
+
+<Cgp2dTransformDiagram />
+
+<Term def="保持 affine combination 的变换，因此保留直线、平行性和同一直线上的比例；可由线性部分加平移表示">仿射变换</Term>对列向量约定：
+
+$$
+\tilde p'=M\tilde p,qquad
+M=\begin{bmatrix}a&c&t_x\\b&d&t_y\\0&0&1\end{bmatrix},
+\quad \tilde p=(x,y,1)^T.
+$$
+
+point 的 $w=1$ 会受 translation，vector 的 $w=0$ 不受 translation。rotation、scale、shear、reflection 都在 $2\times2$ 线性部分；determinant 表示有向面积缩放，`det(M)=0` 时变换不可逆。
+
+若先执行 $A$ 再执行 $B$，列向量约定下：
+
+$$
+p'=B(Ap)=(BA)p.
+$$
+
+所以“先做的在右侧”只在已声明的列向量约定下成立；row-vector 项目顺序相反。内存 row-major/column-major 又是独立问题。
+
+### Pivot、frame 与换基
+
+绕 pivot $c$ 旋转：$M=T(c)R(\theta)T(-c)$。把坐标从 frame A 转到 B，应组合 `worldFromA` 与 `BFromWorld = inverse(worldFromB)`：
+
+$$
+p_B=M_{B\leftarrow W}M_{W\leftarrow A}p_A.
+$$
+
+命名矩阵的 source/target 比只写 `modelMatrix` 更能阻止顺序错误。inverse 还用于 hit testing：可把 pointer 从 screen 映回 local，再用简单 local geometry query。
+
+<Term def="用额外坐标把 affine translation 与 linear transform 统一为矩阵乘法，并可表示无穷远方向的坐标系统">齐次坐标</Term>不只是“为了平移”。一般 projective transform 的最后一行可不是 `[0,0,1]`，结果需除以 $w$；$w\approx0$ 与符号变化必须有策略。
+
+## Ch12 A 2D and 3D Transformation Library for Graphics
+
+<CgpTransformLibraryDiagram />
+
+变换库首先是 semantic contract：
+
+- `Point2 - Point2 -> Vector2`，`Point2 + Vector2 -> Point2`，禁止 `Point + Point` 的无意义默认；
+- `FrameFromLocal` / `LocalFromFrame` 或 `Transform<From,To>` 编码方向；
+- 固定 handedness、vector side、angle unit、clip/depth convention 与 storage；
+- separate construction（translate/rotate/scale/look-at）和 application（point/vector/normal/bounds）；
+- inverse 返回 failure/optional，不能对 singular matrix 静默生成 Inf/NaN。
+
+<Term def="对大量随机输入验证应始终成立的代数关系，而不是只核对少数手写样例的测试方法">性质测试</Term>适合变换库：
+
+```cpp
+property("inverse round trip", [](Affine2 m, Point2 p) {
+    assume(abs(determinant(m.linear)) > 1e-5f);
+    CHECK(near(inverse(m).applyPoint(m.applyPoint(p)), p));
+});
+
+property("composition", [](Affine2 a, Affine2 b, Point2 p) {
+    CHECK(near((b * a).applyPoint(p), b.applyPoint(a.applyPoint(p))));
+});
+```
+
+数值 tolerance 应按 magnitude、operation count 与 precision 设计，不能全库固定一个 epsilon。还要测试 NaN/Inf policy、negative scale/winding、huge translation、near singular、serialization 与 CPU/shader 一致性。
+
+## 从逻辑单位到设备像素
+
+二维 UI/绘图常跨 local、layout、window logical、framebuffer pixel 与 physical display。映射可近似：
+
+$$
+p_{pixel}=S_{DPI}\,M_{window\leftarrow local}p_{local}.
+$$
+
+pixel snapping 可让细线清晰，却会破坏连续动画；high-DPI 下 half-pixel 口诀依 API sampling convention，不能通用复制。reference 应覆盖 scale 100%/125%/200%、subpixel motion、clip edge 与文本/几何混排。
+
+## 三步二维系统验收
+
+<Stepper>
+<Step title="第一步：冻结单位、frame 与矩阵约定">
+
+标出 local/layout/window/pixel，声明 column/row vector、handedness、DPI 和 pivot；显示 basis 与 bounds。
+
+<CgpStepFlowDiagram caption="先消除约定歧义，再讨论矩阵数值。" stage={1} stages={["Specify：units + frames + vector convention + hierarchy + DPI"]} />
+
+</Step>
+<Step title="第二步：用 test bed 可视化算法">
+
+逐步显示 corner-cut points、composed frame、inverse pointer、clip 与 dirty region；保存参数和 reference。
+
+<CgpStepFlowDiagram caption="中间量让 layout、algorithm 与 raster 问题可分离。" stage={2} stages={["Specify：units + frames + vector convention + hierarchy + DPI", "Inspect：control geometry + transforms + inverse input + clip + dirty state"]} />
+
+</Step>
+<Step title="第三步：运行性质与设备矩阵">
+
+执行 inverse/composition/affine-equivariance property tests，并扫 DPI、窗口尺寸、奇异矩阵、空输入和多次迭代。
+
+<CgpStepFlowDiagram caption="数学性质、视觉 reference 与平台尺度共同通过。" stage={3} stages={["Specify：units + frames + vector convention + hierarchy + DPI", "Inspect：control geometry + transforms + inverse input + clip + dirty state", "Validate：properties + edge inputs + image references + DPI matrix"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**误区：认为变换顺序可以交换。**
-先平移再旋转 ≠ 先旋转再平移。比如一个在原点的物体：先旋转45度它还在原点，再平移到(100,0)——它到了(100,0)。但如果先平移到(100,0)再旋转45度——它会绕原点旋转45度，跑到(70,70)左右。矩阵乘法不可交换。
+**现象 →** 同时说 `M*v` 和“点左乘/右乘”，代码顺序靠猜。**原因 →** 混淆 vector convention 与 memory layout。**修法 →** API 命名 source/target，写 composition property test，并在 CPU/shader 两端用已知点验收。
 </Callout>
 
 <Callout type="trap">
-**误区：不理解齐次坐标为什么用3维表示2D。**
-2D平移是加法(x+tx, y+ty)，不是乘法，无法用2x2矩阵表示。引入齐次坐标后，(x,y)变成(x,y,1)，平移就变成了矩阵乘法。更深层的原因是：齐次坐标统一了所有仿射变换为矩阵乘法，使它们可以组合和链式应用。
+**现象 →** 在 WPF/retained UI 中只改 render transform，却期待 layout 和 hit bounds 一起变化。**原因 →** 混淆 layout transform 与 visual transform。**修法 →** 显示 layout slot、render bounds 和 input inverse path，按任务选择层级。
 </Callout>
 
+<Callout type="trap">
+**现象 →** test bed 只展示正常三角形和一次旋转。**原因 →** 把 demo 当验证。**修法 →** 加 open/closed、duplicate、empty、near-singular、negative scale、DPI 和随机性质测试。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题 1**：齐次坐标的作用是什么？为什么2D变换需要它？
+
+**问题 1：retained mode 与 immediate mode 的核心差别是什么？**
 
 <Answer>
-齐次坐标用3维向量(x,y,1)表示2D点，使平移变换也能用矩阵乘法表示。2D平移是加法(x+tx, y+ty)，无法用2x2矩阵表示（矩阵乘法是线性组合，不包含加法）。引入第3个分量w=1后，平移变为[x,y,1]×[1,0,tx; 0,1,ty; 0,0,1] = [x+tx, y+ty, 1]，统一为矩阵乘法。这使得平移、旋转、缩放可以组合成单一矩阵，大幅简化变换链的计算。
+retained mode 由框架保存 scene/state、跟踪 dirty 并调度 layout/render；immediate mode 由应用在绘制时提交命令，通常自己维护状态。差别影响更新粒度、hit testing、lifetime、可观测性和性能，不是单纯 API 语法。
 </Answer>
 
-**问题 2**：为什么变换顺序不能交换？给出具体例子。
+**问题 2：如何构造绕任意点旋转并验证顺序？**
 
 <Answer>
-矩阵乘法不可交换，M1×M2 ≠ M2×M1。具体例子：一个在原点的三角形。方案A「先旋转45度再平移到(100,0)」：旋转后仍在原点（旋转不改变原点位置），平移后到达(100,0)。方案B「先平移到(100,0)再旋转45度」：先到(100,0)，然后绕原点旋转45度，到达约(70,70)。两个结果完全不同。实际应用中，变换顺序通常为：先缩放（改变大小）→ 再旋转（改变方向）→ 最后平移（改变位置），即 M = T × R × S。
+列向量下 `T(c) R T(-c)`：先把 pivot 移到原点，再旋转，再移回。验证 pivot 自身不动，距 pivot 长度保持，并以 property test 比较组合矩阵与逐步应用。
 </Answer>
+
+**问题 3：corner cutting 为什么适合验证 affine equivariance？**
+
+<Answer>
+新点由原点的 affine combination 生成，所以先做 affine transform 再切角，应等于先切角再变换。若不等，通常是坐标、权重、endpoint 或 composition 实现有错。
+</Answer>
+
+**问题 4：变换库为什么要区分 Point 和 Vector？**
+
+<Answer>
+point 表示位置并受 translation，vector 表示差/方向不受 translation；二者允许的代数操作也不同。类型区分能在编译/API 层阻止把方向当位置、把两个位置相加等语义错误。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+Ch2、Ch4、Ch10、Ch12 从平台场景、可视实验、二维数学到库合同形成闭环。二维系统的完成标准不是会写三张矩阵，而是单位、frame、hierarchy、composition、inverse、DPI 与退化输入都有可见证据和自动性质测试。
+
 <Glossary>
-<GlossaryItem term="齐次坐标">用n+1维向量表示n维点的坐标系统，使仿射变换（包括平移）统一为矩阵乘法。</GlossaryItem>
-<GlossaryItem term="仿射变换">平移、旋转、缩放和剪切的组合，保留平行线和平行线段比例关系。</GlossaryItem>
-<GlossaryItem term="变换组合">多个变换矩阵相乘得到复合矩阵，顺序为变换执行顺序的逆序（先变换的在右边）。</GlossaryItem>
-<GlossaryItem term="变换矩阵">用矩阵表示几何变换的数学工具，2D仿射变换用3x3齐次矩阵表示。</GlossaryItem>
+<GlossaryItem term="保留模式场景">由框架保存对象属性并调度布局、绘制和合成的图形模式。</GlossaryItem>
+<GlossaryItem term="二维图形测试平台">以固定输入、可视中间量和参考输出验证二维算法的环境。</GlossaryItem>
+<GlossaryItem term="仿射变换">保持 affine combination、直线、平行性和共线比例的变换。</GlossaryItem>
+<GlossaryItem term="齐次坐标">用额外坐标统一 affine/projective 变换并表示方向与无穷远的系统。</GlossaryItem>
+<GlossaryItem term="性质测试">以随机输入验证 inverse、composition 等普遍代数关系的测试。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="计算机图形学：原理及实践" adaptedUrl="https://www.cgpp.net/" />
+<Attribution adaptedFrom="Computer Graphics: Principles and Practice, Third Edition, Chapters 2, 4, 10 and 12" adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707" />

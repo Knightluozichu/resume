@@ -1,0 +1,272 @@
+---
+title: "面试题3（二）：不修改数组找出重复的数字"
+type: C
+section: "第2章 面试需要的基础知识"
+order: 4
+description: "在n+1个数字落入1..n且禁止改数组时，用值域二分与区间计数在O(1)额外空间找出重复值。"
+demo: true
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/03_02_DuplicationInArrayNoEdit/FindDuplicationNoEdit.cpp"
+draft: false
+---
+
+import { ValueRangeDiagram, PigeonholeTraceLab, ComplexityTradeoffMap, NoEditTestLab } from "@/components/mdx/coding-interviews/diagrams/duplicate-in-array-no-edit";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释`n+1`个元素落入`1..n`时重复必然存在的抽屉原理
+- 能区分按值域二分与按数组下标二分，并描述每轮计数对象
+- 能实现不修改输入、额外空间`O(1)`的区间计数算法
+- 能解释并证明计数超过区间容量的一半必含重复，并维护候选区间
+- 能比较原地归位、值域计数、哈希集合和复制排序的时间空间取舍
+
+</Objectives>
+
+## 从“不能修改数组”改变了什么开始
+
+先预测：题3（一）只需交换就能在线性时间查重，为什么加一句“不能修改输入数组”后，作者实现变成`O(n log n)`？“不修改数组找出重复的数字”改变了可用存储：上一题把输入数组同时当作状态表，数字`m`是否已占据下标`m`记录了访问历史。禁止重排后，这块`O(n)`规模的隐式存储不可再使用。
+
+本题给出长度`n+1`的数组，所有数字都在`1..n`。有`n+1`个元素却只有`n`种可能值，因此至少一个数字重复。这是<Term def="把多于容器数量的对象放入这些容器时，至少一个容器包含多个对象的计数原理。">抽屉原理</Term>：数字是对象，值1到n是抽屉。
+
+自然语言契约是：**数字范围在1到n**，数组长度是n+1，并且不能修改原数组。算法会**按值域二分**，每一轮都**统计区间内数字个数**，再用抽屉原理判断哪一半仍必含重复。这里没有利用输入下标顺序。
+
+题目仍只要求任意一个重复数字，不要求统计全部重复，也不要求重复次数。作者方法不改数组、只保存几个边界和计数器，额外空间`O(1)`；代价是每次缩小值域都要重新扫描完整输入。
+
+<ValueRangeDiagram />
+
+## 二分的是值域，不是下标
+
+普通二分查找依赖数组按下标有序，本题输入顺序任意，不能用中间元素与目标比较。这里的<Term def="把可能的数值范围分成两半，通过每半的元素计数决定下一候选范围的方法。">值域二分</Term>切分的是候选数字`start..end`。
+
+初始候选值域为`1..n`。取`middle`，扫描完整数组，统计值落在`start..middle`的元素个数`count`。左半最多容纳`middle-start+1`个互不相同的值，这个数量叫<Term def="闭区间内可容纳的不同整数数量，即end-start+1。">区间容量</Term>。
+
+若`count`大于左半容量，左半必有重复，令`end = middle`；否则，结合当前候选区间中重复必然存在的不变式，重复应在右半，令`start = middle + 1`。当`start == end`时，若该值出现超过一次就返回。
+
+<Term def="元素计数超过其中不同值数量，因而必定包含重复的候选值区间。">过满区间</Term>是每轮可执行判据。算法不关心数组中这些元素排列在哪些下标，只关心有多少值落在当前数值区间。
+
+## 作者算法的直接实现
+
+下面保留官方源码的结构，同时增加完整值域校验。校验很重要：`n`由`length-1`推导，任何值小于1或大于`n`都破坏“n+1个元素进入n个合法抽屉”的前提。
+
+```cpp
+#include <optional>
+#include <span>
+
+int count_range(
+    std::span<const int> numbers,
+    int start,
+    int end
+) {
+    int count = 0;
+    for (int value : numbers) {
+        if (value >= start && value <= end) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+std::optional<int> find_duplicate_no_edit(
+    std::span<const int> numbers
+) {
+    if (numbers.size() < 2) {
+        return std::nullopt;
+    }
+
+    const int n = static_cast<int>(numbers.size()) - 1;
+    for (int value : numbers) {
+        if (value < 1 || value > n) {
+            return std::nullopt;
+        }
+    }
+
+    int start = 1;
+    int end = n;
+    while (start <= end) {
+        const int middle = start + (end - start) / 2;
+        const int count = count_range(numbers, start, middle);
+
+        if (start == end) {
+            return count > 1
+                ? std::optional<int>{start}
+                : std::nullopt;
+        }
+
+        const int capacity = middle - start + 1;
+        if (count > capacity) {
+            end = middle;
+        } else {
+            start = middle + 1;
+        }
+    }
+    return std::nullopt;
+}
+```
+
+`middle = start + (end-start)/2`避免`start+end`在一般整数范围里溢出。虽然本题值域通常受数组长度限制，写出稳定中点公式能表明边界意识。
+
+`std::span<const int>`同时表达连续只读输入和不复制数组；原作者使用`const int*`与长度参数。两者都能保留“不修改”契约，现代接口还可用`std::optional`区分找到与未找到。
+
+## 为什么选择的半区仍保证有重复
+
+算法维护<Term def="当前仍被证明至少包含一个重复值的闭区间start..end。">候选区间</Term>不变式。初始`1..n`由抽屉原理保证含重复。假设当前区间含有的相关元素数超过容量，把它分成左、右两半：
+
+- 左半计数超过左半容量时，左半自身过满，因此直接保留左半。
+- 左半计数不超过容量时，若右半也不超过容量，两半总计就不会超过整个候选区间容量，与当前区间过满矛盾；因此右半必须过满。
+
+这个证明解释了为什么`count <= capacity`时可以去右边。不是因为左边“没有任何重复”——计数等于容量时仍可能既有重复又有缺失——而是至少有一个重复必定留在右边，足以满足“返回任意一个”的目标。
+
+<Callout type="trap" title="左半count不超容量就证明左半没有重复">
+例如区间1..2里出现`[1,1]`，计数2等于容量2，但1仍重复，只是2缺失。算法只需要证明右半也存在某个重复，不能把计数未超解释成左半元素互异。
+</Callout>
+
+对输入`[2,3,5,4,3,2,6,7]`，值域1..7的左半1..4容量4，实际落入`2,3,4,3,2`共5个，故保留1..4。再检查1..2，计数为2、容量也为2，不足以证明其中无重复，但由候选区间过满可知3..4也过满，于是转向3..4，最终定位3。
+
+<PigeonholeTraceLab />
+
+## 从完整扫描到下一候选区间
+
+每轮计数都读取原数组的全部元素，但只给落在当前左半闭区间的值加一。小于`start`或大于`middle`的值不影响本轮左半判断。不能先按上一轮候选区间过滤并复制出子数组，因为复制会使用随候选规模变化的额外空间，也会掩盖“输入不修改、常数状态”的设计目标。
+
+设当前候选区间容量为`C`，其中相关元素个数至少为`C+1`。切分后的左、右容量分别为`L`和`R`，满足`L+R=C`。若左计数不超过`L`，右侧相关元素数至少为`C+1-L=R+1`，所以右半过满。这是右移`start`的定量证明。
+
+当候选只剩一个值`v`时，区间容量为1。必须重新统计`v`在完整输入中的出现次数；次数大于1才返回。虽然在严格有效契约下，不变式已经保证它重复，显式计数让代码在边界和错误输入下更稳健，也对应作者实现的终止分支。
+
+以下TypeScript版本刻意保持输入为只读数组，便于在不同语言中核对同一不变式：
+
+```ts
+function findDuplicateNoEdit(values: readonly number[]): number | null {
+  if (values.length < 2) return null;
+  const n = values.length - 1;
+  if (values.some((value) => value < 1 || value > n)) return null;
+
+  let start = 1;
+  let end = n;
+  while (start <= end) {
+    const middle = start + Math.floor((end - start) / 2);
+    let count = 0;
+    for (const value of values) {
+      if (value >= start && value <= middle) count += 1;
+    }
+
+    if (start === end) return count > 1 ? start : null;
+    const capacity = middle - start + 1;
+    if (count > capacity) end = middle;
+    else start = middle + 1;
+  }
+  return null;
+}
+```
+
+注意参数类型`readonly number[]`只在类型系统层面阻止直接写入；若调用者与其他线程共享可变数组，函数执行期间数据仍可能被外部修改，计数轮次看到不一致快照。并发生产场景需要不可变快照、锁或版本校验，不能把`const`/`readonly`误当跨线程同步。
+
+对超大输入，反复全量扫描具有良好顺序访问局部性，却会产生多轮内存带宽成本。复杂度相同的实现也可能因缓存、数据位置和并发读取表现不同；在真实系统中要基于数据规模测量，而不是只比较大O。
+
+## 复杂度与信息代价
+
+值域每轮缩小约一半，共`O(log n)`轮。每轮`count_range`都扫描`n+1`个元素，时间总计`O(n log n)`。只保存`start`、`end`、`middle`和`count`，额外空间`O(1)`，输入保持原样。
+
+这里的`log n`不是对有序数组做快速定位，而是用多轮全量计数换取不存储访问历史。每轮只获得“哪一半一定过满”一比特左右的信息，所以必须反复扫描。
+
+如果允许`O(n)`额外空间，哈希集合可在平均`O(n)`时间找到首个已见值；如果允许复制，复制后排序在`O(n log n)`时间找相邻重复，并保留原数组。若允许修改且值域是`0..n-1`，题3（一）的原地归位达到`O(n)`时间。
+
+还有基于函数图和快慢指针的做法，可在特定`1..n`映射契约下达到`O(n)`时间与`O(1)`空间，但其建模和返回语义不同。本章忠实重建作者的值域计数方法；面试中可把替代方案作为比较，不应跳过当前方法的抽屉证明。
+
+<ComplexityTradeoffMap />
+
+<Callout type="trap" title="看到while二分就写成O(log n)">
+每次缩小值域之前都要完整扫描输入计数，单轮是`O(n)`。共有`O(log n)`轮，所以总时间是`O(n log n)`，不能只看边界折半。
+</Callout>
+
+## 只能保证找出一个，不保证找全
+
+若多个数字重复，算法每轮只保留一个被证明过满的半区，另一半即使也有重复也会被丢弃。因此输出是任意一个重复值，不是所有重复值集合，也不提供各自次数。
+
+它也不直接适用于“数组长度n、值域0..n-1但可能无重复”的一般输入。那种输入没有`n+1`对`n`的过满保证；在某轮左半不过满时，无法据此断言右半必过满。算法契约不是语法细节，而是证明链的一部分。
+
+测试要覆盖重复值1和值`n`、最小长度`[1,1]`、重复出现在数组中部、多个重复值、同值重复多次以及非法值域。多个重复时允许答案集合；还要保存输入副本，调用后断言数组完全不变。
+
+```cpp
+#include <cassert>
+#include <vector>
+
+void test_no_edit() {
+    const std::vector<int> values{2, 3, 5, 4, 3, 2, 6, 7};
+    const auto before = values;
+    const auto result = find_duplicate_no_edit(values);
+    assert(result == 2 || result == 3);
+    assert(values == before);
+}
+
+void test_boundaries() {
+    const std::vector<int> low{1, 2, 3, 4, 5, 6, 7, 1, 8};
+    const std::vector<int> high{1, 7, 3, 4, 5, 6, 8, 2, 8};
+    assert(find_duplicate_no_edit(low) == 1);
+    assert(find_duplicate_no_edit(high) == 8);
+}
+
+void test_invalid_contract() {
+    const std::vector<int> invalid{1, 2, 6, 4, 5, 3};
+    assert(!find_duplicate_no_edit(invalid).has_value());
+}
+```
+
+<NoEditTestLab />
+
+<Stepper>
+  <Step title="先验证抽屉前提"><ComplexityTradeoffMap />确认长度是n+1、每个值在1..n、只需任意重复且输入不可修改。</Step>
+  <Step title="把候选值域二分"><ValueRangeDiagram />统计完整输入里落在左半值域的元素数，与左半区间容量比较。</Step>
+  <Step title="维持过满候选区间"><PigeonholeTraceLab />左半过满就保留左半，否则由总过满不变式推出右半过满，直到单值。</Step>
+  <Step title="验证边界与不修改承诺"><NoEditTestLab />覆盖1、n、多个重复、同值多次和非法值域，并断言调用前后数组相同。</Step>
+</Stepper>
+
+## 本章回顾
+
+把这个方法放进真实接口时，还要定义“未返回数字”的含义。严格满足长度和值域契约时，抽屉原理保证一定能找到重复；因此`null`更可能表示输入无效或实现错误，而不是正常的“没有重复”。若接口把非法输入与未找到合并，调用方无法区分数据质量故障和业务空结果。更稳健的返回结构应携带`found`、`invalid_range`等状态，并保留原数组用于诊断。
+
+只读也包括观察一致性。函数本身不写数组，不代表外部不会在多轮扫描之间修改它；一旦每轮看到不同版本，候选区间证明就断裂。单线程局部数组天然满足，跨线程共享数据则需不可变快照、读锁或版本号重试。算法证明默认输入在一次调用期间保持稳定，这个前提应与“不修改输入”一起写入契约。
+
+1. 长度`n+1`、值域`1..n`由抽屉原理保证至少一个重复。
+2. 算法按值域二分，不依赖输入数组的下标顺序或有序性。
+3. 每轮统计区间内数字个数；计数超过区间容量，该半区必含重复。
+4. 左半不过满不等于左半没有重复，只能结合候选区间过满推出右半也有重复。
+5. 值域缩小`O(log n)`轮，每轮扫描`O(n)`，总时间`O(n log n)`。
+6. 只使用常数个整数，额外空间`O(1)`，且数组内容与顺序不变。
+7. 算法返回任意一个重复值，不会枚举所有重复。
+8. 修改权限、值域、重复必然性、时间和空间必须一起决定方案。
+
+<Exercises>
+
+**问题 1：为什么`n+1`个数字都在`1..n`时重复必然存在？**
+
+<Answer>只有n个不同合法值，相当于n个抽屉，却放入n+1个元素。若每个值最多出现一次，最多只能容纳n个元素，与实际n+1矛盾，因此至少一个值出现两次或更多。</Answer>
+
+**问题 2：左半计数等于容量，能否断言左半无重复？**
+
+<Answer>不能。`[1,1]`落在值域1..2时计数2等于容量2，但1重复、2缺失。算法去右半的依据是当前整体过满且左半未超容量，所以右半必须过满；不是左半一定互异。</Answer>
+
+**问题 3：为何总复杂度不是`O(log n)`？**
+
+<Answer>边界确实折半`O(log n)`次，但每次都调用`count_range`扫描全部`n+1`个元素，单轮`O(n)`，相乘得到`O(n log n)`。</Answer>
+
+**问题 4：若要找出所有重复值，应怎样调整方案？**
+
+<Answer>当前算法每轮丢弃一个半区，无法保留全部答案。可用哈希表统计频次，时间平均`O(n)`、空间`O(n)`；也可复制后排序再扫描相邻组。方案取决于是否允许额外空间、是否要次数和是否要保留顺序。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="抽屉原理">多于容器数量的对象放入这些容器时，至少一个容器含多个对象的计数原理。</GlossaryItem>
+  <GlossaryItem term="值域二分">切分候选数值范围并用区间计数选择下一半的方法。</GlossaryItem>
+  <GlossaryItem term="区间容量">闭整数区间可容纳的不同值数量，即end-start+1。</GlossaryItem>
+  <GlossaryItem term="过满区间">元素计数超过不同值容量、因而必定含重复的区间。</GlossaryItem>
+  <GlossaryItem term="候选区间">当前仍被证明至少包含一个重复值的闭值域。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="《剑指Offer（第2版）》面试题3（二）及何海涛官方源码 FindDuplicationNoEdit.cpp"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/03_02_DuplicationInArrayNoEdit/FindDuplicationNoEdit.cpp"
+/>

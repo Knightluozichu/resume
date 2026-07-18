@@ -1,0 +1,220 @@
+---
+title: "Chapter 30. Hybrid Thread Synchronization Constructs"
+type: C
+section: "CLR via C# 4e · Threading"
+order: 30
+description: "覆盖hybrid lock、spin/owner/recursion、Slim/Monitor/RWLock/OneMany/Countdown/Barrier、double-check、condition、async sync与concurrent collections。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcAsyncSynchronizationLab, CvcHybridLockLab, CvcPhaseSynchronizationLab } from "@/components/mdx/clr-via-csharp/diagrams/hybrid-thread-synchronization-constructs";
+
+<Objectives>
+
+- 能描述hybrid construct的user-mode fast path、spin/inflate/block与owner/recursion/fairness成本
+- 能比较Monitor、Slim events/semaphore、ReaderWriterLockSlim、CountdownEvent、Barrier和condition pattern
+- 能设计double-check/Lazy、async exclusion、concurrent collection/message passing并验证compound invariants与shutdown
+
+</Objectives>
+
+## 为什么Hybrid Construct比Primitive更常用
+
+真实锁希望无竞争时几条user-mode atomic instructions，短竞争先spin，长竞争才park到runtime/kernel；同时提供owner、recursion、wait queue、timeout和async（某些类型）。这就是hybrid。应用通常应选经过验证的Monitor/SemaphoreSlim等，不从CAS+event自制，除非profile证明缺口且有形式化state model。
+
+先预测：lock/Monitor是否公平；Monitor.Enter是否reentrant；`await`能否放lock内；ReaderWriterLockSlim读多就一定快；CountdownEvent与Barrier谁可多phase；Pulse是否保存signal；Lazy double-check是否还需volatile；ConcurrentDictionary factory是否只执行一次。后文按lock、phase和async/collections回答。
+
+<Term def="无竞争走user-mode fast path，短等候spin，必要时进入managed/kernel wait的同步构造。">hybrid synchronization path</Term>
+
+## A Simple Hybrid Lock
+
+教学hybrid lock可用Interlocked state尝试获取，失败先SpinWait，再lazy创建AutoResetEvent/Semaphore并block；release唤waiter。正确实现还需避免lost wake、dispose race、waiter count overflow、fairness、owner recursion、exception cleanup。State transitions比代码行多，production使用framework。
+
+```csharp
+private readonly object _gate = new();
+private AccountState _state = AccountState.Empty;
+
+public AccountState Snapshot()
+{
+    lock (_gate)
+        return _state; // immutable snapshot
+}
+
+public void Apply(Transaction transaction)
+{
+    lock (_gate)
+        _state = _state.Apply(transaction);
+}
+```
+
+最小critical section只做memory state，不I/O/await/callback。Lock owner用try/finally由compiler lock保证，返回immutable snapshot避免外部在lock外修改内部。
+
+## Spinning, Thread Ownership, and Recursion
+
+Spin适合owner很快释放且正在其它core运行；owner被preempt、single core或long critical section则浪费CPU。SpinWait逐步yield/sleep。Owner tracking防非owner release，Monitor/Mutex有thread ownership；Semaphore无。Recursion允许同thread重复enter但隐藏reentrancy/design问题，退出次数必须匹配。
+
+<Term def="同步构造是否记录持有者、允许同一thread重入，以及等待者公平/饥饿的完整语义。">lock ownership semantics</Term>
+
+Fairness通常不保证，barging可能提高throughput却让tail starvation。若SLO需要fair queue，用explicit queue/Channel/semaphore policy并测。Priority inversion靠缩短locks/avoid priority dependence，不自行boost。
+
+## Hybrid Constructs in the Framework Class Library
+
+Monitor/lock、ManualResetEventSlim、SemaphoreSlim、ReaderWriterLockSlim、CountdownEvent、Barrier等提供不同state models。选择表应写exclusive/permits/read-write/phases、sync/async、cross-process、owner/recursion、timeout/cancel和Dispose。Highest-level匹配 semantics，而不是“最快名字”。
+
+<Stepper>
+  <Step title="切换Monitor、SemaphoreSlim、ReaderWriterLockSlim与ManualResetEventSlim"><CvcHybridLockLab /></Step>
+  <Step title="建立Primitive矩阵">记录fast/slow path、owner、recursion、sync/async、cross-process、fairness、dispose与metrics。</Step>
+  <Step title="压测临界区">无/低/高竞争、owner preemption、NUMA/container quota，测throughput/CPU/p99而非micro average。</Step>
+</Stepper>
+
+<Callout type="trap" title="自写Hybrid Lock只有几十行，所以更高性能也更可控">
+Lost wake、dispose race、owner/fairness、memory ordering和异常路径很难覆盖。Framework实现经过多年验证；自定义需要可证明状态机和真实profile收益。
+</Callout>
+
+## The ManualResetEventSlim and SemaphoreSlim Classes
+
+ManualResetEventSlim为短wait先spin，必要时inflate kernel event；Set gate open，Reset close，不支持cross-process name。访问WaitHandle可能强制inflate。SemaphoreSlim维护permits并支持WaitAsync，是async bounded concurrency常用；无thread ownership，acquire成功才finally Release，防over-release。
+
+```csharp
+private readonly SemaphoreSlim _slots = new(initialCount: 8, maxCount: 8);
+
+public async Task<Response> ExecuteAsync(Request request, CancellationToken ct)
+{
+    await _slots.WaitAsync(ct).ConfigureAwait(false);
+    try
+    {
+        return await _client.SendAsync(request, ct).ConfigureAwait(false);
+    }
+    finally
+    {
+        _slots.Release();
+    }
+}
+```
+
+Cancellation before acquire means不Release；上面await成功后才进入try，正确。Dispose与waiters并发需owner shutdown先停止新wait、cancel/drain再Dispose。Semaphore限制active，不限制waiting queue，入口还要bounded admission。
+
+## The Monitor Class and Sync Blocks
+
+每个reference object可关联sync block，Monitor.Enter/Exit exclusive reentrant；`lock(obj)`编译try/finally。锁private readonly gate，不锁this/public type/string intern，避免外部参与。Monitor.Wait在持lock时原子release并wait，醒后reacquire；Pulse/PulseAll只通知当前waiters，不保存future signal。
+
+<Term def="Condition waiter在同一Monitor保护下循环检查predicate，Wait原子释放/重获，state change后Pulse通知。">monitor condition protocol</Term>
+
+Wait必须`while (!predicate) Monitor.Wait`，醒来后状态可能被别人消费；Pulse在修改predicate后且持同一lock调用。Pulse不是data，queue state才是真相。Modern producer-consumer优先Channel/BlockingCollection。
+
+## The ReaderWriterLockSlim Class
+
+允许多read或一write，有upgradeable read避免典型upgrade deadlock；recursion默认NoRecursion。适合read frequent、critical section enough、writes少；短操作Monitor可能更快。Writer starvation/fairness实现可变，不能假设。所有Enter对应finally Exit，不在持lock await。
+
+Upgradeable slot一次一个，读取后必要时EnterWrite；普通read直接升级可能deadlock。返回内部mutable ref会让lock保护失效，返回snapshot或在lock内执行受控delegate（未知callback风险）。
+
+## The OneManyLock Class
+
+原书手写OneManyLock演示用bit-packed state/CAS协调one writer/many readers、waiters/events。价值在state machine推理：free、owned by readers/writer、waiting counts、wake policy；不应直接复制生产。ReaderWriterLockSlim已有owner/recursion/disposal/性能工程。
+
+Custom lock必须证明每个transition、no lost wake、overflow、cancel/timeout、dispose、fairness，并用model checker/stress。没有实测缺口不造。
+
+## The CountdownEvent Class
+
+CountdownEvent从initial count开始，每个producer Signal减一，到0释放waiters；可AddCount/TryAddCount/Reset但与zero race谨慎。适合等待固定/动态已登记tasks完成。每个registered producer必须finally Signal exactly once，exception也不漏；过度Signal抛。
+
+## The Barrier Class
+
+Barrier让固定participants每phase SignalAndWait，全部到齐后advance并可post-phase action；可Add/RemoveParticipant。一个participant退出/异常会让其它卡住，必须cancellation/timeout/failure policy。适合iterative algorithms，不适合任意producer completion。
+
+<Term def="Countdown面向一次性N个完成信号，Barrier面向已知participants反复会合的phase协调。">phase synchronization contract</Term>
+
+<Stepper>
+  <Step title="切换Countdown、Barrier、condition与OneMany state"><CvcPhaseSynchronizationLab /></Step>
+  <Step title="绘制Phase状态">记录participants/count/predicate、谁signal/pulse、异常/取消/超时后如何解除其它waiters。</Step>
+  <Step title="故障注入">一个participant不来、多signal、post-phase抛错、waiter shutdown，验证无永久hang。</Step>
+</Stepper>
+
+## Thread Synchronization Construct Summary
+
+Exclusive短sync state用Monitor；async permit/exclusion用SemaphoreSlim；read-heavy测后ReaderWriterLockSlim；manual gate用MRES；one-shot completions优先Task/WhenAll/Countdown；multi-phase Barrier；producer-consumer Channel；cross-process kernel Event/Semaphore/Mutex。每个choice伴capacity/timeout/cancel/shutdown。
+
+## The Famous Double-Check Locking Technique
+
+Double-check先read singleton，null才lock，再check并construct/publish。正确需要safe publication（volatile/reference or lock semantics）与immutable completed object。C#优先static initialization或`Lazy<T>`，处理exception caching/mode清楚；手写节省一次uncontended lock通常不值风险。
+
+```csharp
+private static readonly Lazy<Registry> RegistryInstance =
+    new(
+        static () => Registry.LoadAndValidate(),
+        LazyThreadSafetyMode.ExecutionAndPublication);
+
+public static Registry Instance => RegistryInstance.Value;
+```
+
+Lazy factory不应依赖会循环访问Instance，避免deadlock/recursive exception。需要async initialization用host startup/AsyncLazy proven pattern，不sync-block Task in static factory。
+
+## The Condition Variable Pattern
+
+Shared predicate+Monitor：producer在lock更新queue/state后Pulse；consumer在lock while predicate false Wait，醒后recheck并consume。Timeout Wait返回false但state可能同时变化，loop用deadline重新判断。PulseAll避免特定lost progress但thundering herd，选择需state model。
+
+<Callout type="trap" title="Pulse一次会永久保存一个Signal给未来Waiter">
+Monitor.Pulse只移动当前wait queue中的一个thread，不保存。真实条件在shared predicate；没有waiter时Pulse消失，因此必须while检查state。
+</Callout>
+
+## Asynchronous Synchronization
+
+不能在C# lock里await：continuation可能不同thread，Monitor thread ownership与长等待冲突。Async mutual exclusion用SemaphoreSlim(1,1)或proven AsyncLock；critical section内await外部I/O仍串行且占permit，应尽量prepare outside/commit short inside。Cancellation acquisition与release correctness。
+
+TaskCompletionSource表示one-shot signal/result，RunContinuationsAsynchronously防在lock内inline user code；Channel提供async producer-consumer/backpressure；AsyncManualResetEvent需proven implementation。No thread owner意味着reentrancy策略不同。
+
+<Term def="可跨await等待且不阻塞thread，同时明确permit/result、cancellation、continuation和release owner的协调。">async synchronization ownership</Term>
+
+## The Concurrent Collection Classes
+
+ConcurrentDictionary/Queue/Stack/Bag/BlockingCollection提供thread-safe atomic operations/collections；delegates如GetOrAdd factory可能多次执行，enumeration snapshot/weak semantics按type。Compound invariants跨多个calls仍需lock/state machine。BlockingCollection是sync blocking producer-consumer，modern async用Channel。
+
+Message passing把mutable state归单consumer，减少locks；bounded channel提供backpressure，completion/exception/shutdown显式。不是所有state适合actor，跨多个owners transaction仍需protocol。
+
+<Stepper>
+  <Step title="切换double-check/Lazy、async mutex、concurrent collection与message passing"><CvcAsyncSynchronizationLab /></Step>
+  <Step title="声明Ownership">记录state owner、permit/channel capacity、factory重复、continuation context、cancel与complete/drain。</Step>
+  <Step title="验证Compound操作">在最大交错下检查linearization、duplicate side effect、release leak、channel completion和shutdown。</Step>
+</Stepper>
+
+<Callout type="trap" title="Concurrent Collection让任何多步骤业务逻辑都Atomic">
+它只保证文档中的单operations。跨Contains/Get/Update或多个collections的invariant仍需一个atomic API、lock、immutable CAS或single-owner message loop。
+</Callout>
+
+## 本章回顾：优先成熟Construct与显式Ownership
+
+1. Hybrid先user fast path/spin再block；owner/recursion/fairness/cleanup决定真实语义。
+2. Monitor、Slim、RWLock、Countdown、Barrier分别解决exclusive、permit/gate、read-write和phase问题。
+3. Condition变量以predicate为真相，Wait在while，Pulse不保存future signal。
+4. Double-check优先Lazy/static init；async不能持Monitor，使用SemaphoreSlim/Channel/Task signal。
+5. Concurrent collection保证单operations，不保证跨calls invariant；message passing可集中state owner/backpressure。
+
+<Exercises>
+
+**问题 1：SemaphoreSlim WaitAsync被Cancel后Finally Release导致SemaphoreFull，为什么？**
+
+<Answer>Acquisition未成功却release。把await WaitAsync放try之前，成功后才进入try/finally；或用bool acquired guard。测试cancel-before/acquire race、body fault和shutdown，assert CurrentCount不超过max且无permit leak。</Answer>
+
+**问题 2：Monitor Wait偶尔永不醒，怎样审计Condition Pattern？**
+
+<Answer>Predicate读写、Wait和Pulse必须在同一private lock；consumer用while recheck，producer先改变state再Pulse/PulseAll。Pulse不保存，若没有waiter不能代表state。加入deadline/shutdown predicate并用controlled interleavings测试。</Answer>
+
+**问题 3：Read多Write少就一定用ReaderWriterLockSlim吗？**
+
+<Answer>不一定，lock overhead/critical section太短、core少或write bursts时Monitor更快更公平。用真实read/write ratio、section duration、contention/p99 benchmark；避免upgrade/recursion。若state可immutable snapshot+CAS，reads可无锁且设计更简单。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="hybrid synchronization path" definition="User fast path、spin与managed/kernel wait组成的路径。" />
+  <GlossaryItem term="lock ownership semantics" definition="Owner、recursion、fairness与starvation的锁语义。" />
+  <GlossaryItem term="monitor condition protocol" definition="同一lock下predicate、Wait与Pulse的条件变量协议。" />
+  <GlossaryItem term="phase synchronization contract" definition="Countdown一次完成与Barrier多阶段会合的协调协议。" />
+  <GlossaryItem term="async synchronization ownership" definition="跨await不阻塞thread的permit/result与release责任。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 30: Hybrid Thread Synchronization Constructs" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

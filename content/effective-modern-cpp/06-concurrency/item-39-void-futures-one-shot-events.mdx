@@ -1,0 +1,323 @@
+---
+title: "Item 39：用 void future 做一次性事件通信"
+type: A
+section: Chapter 7 · The Concurrency API
+order: 39
+description: 对齐 Effective Modern C++ Item 39：比较 atomic polling、condition variable 与 promise<void>/future<void>，实现无 payload 的一次性握手、broken-promise 错误通道和 shared_future 多接收者扇出。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch07.html"
+draft: false
+---
+
+import {
+  EmcppOneShotMechanismTradeoffMap,
+  EmcppPromiseFutureHandshakeFlowMap,
+  EmcppSharedFutureFanoutMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-39-void-futures-one-shot-events";
+
+<Objectives>
+
+- 能比较 void futures（void future）、atomic polling 与 condition variable（条件变量）的等待语义和成本
+- 能实现 one-shot event communication（一次性事件通信）的 promise future（promise 与 future）握手，并解释内存可见性
+- 能设计 broken promise、重复 set_value 和 shared_future 多接收者的失败与扩展路径
+
+</Objectives>
+
+## 从“事件没有 payload 也需要同步状态”开始
+
+一个 detecting task 发现条件成立后，要唤醒 reacting task。通信只表达“现在可以继续”，不需要传 int/string；但仍需持久 ready state、阻塞等待和跨线程 happens-before。
+
+<Term def="只把 shared state 从 not-ready 转为 ready、不携带业务 value 的 future consumer handle。">
+  void future
+</Term>
+
+先预测 detector 早于 reactor 发信号时，三种机制是否丢事件、是否忙等、是否可复用。
+
+<EmcppOneShotMechanismTradeoffMap />
+
+## atomic flag 可见但 polling 有代价
+
+```cpp
+std::atomic<bool> detected{false};
+
+void react() {
+    while (!detected.load()) {
+        std::this_thread::yield();
+    }
+    performReaction();
+}
+```
+
+<Term def="consumer 重复读取 atomic state 直到条件成立的主动等待方式。">
+  atomic event polling
+</Term>
+
+busy polling 消耗 CPU；加入 sleep/yield 降低消耗却增加 latency，并需要选择 interval。atomic flag 能反复读，但“一次等待一次唤醒”的业务意图没有直接编码。
+
+## condition variable 需要 mutex 与 predicate
+
+```cpp
+std::mutex mutex;
+std::condition_variable condition;
+bool detected = false;
+
+void react() {
+    std::unique_lock lock(mutex);
+    condition.wait(lock, [] { return detected; });
+    performReaction();
+}
+```
+
+<Term def="允许 thread 阻塞并由 notification 唤醒，但必须配合受 mutex 保护 predicate 判断真实状态的同步设施。">
+  condition variable
+</Term>
+
+predicate 处理两类问题：spurious wakeup 可能无通知返回；notification 可能发生在 wait 前，但 detected=true 被持久保存，后来的 waiter 不会永远睡眠。只调用 `condition.wait(lock)` 而没有 predicate 是不完整协议。
+
+<Callout
+  type="trap"
+  title="陷阱：notify_one 本身会保存一次事件，晚到的 waiter 仍能收到"
+>
+  condition-variable notification 不排队保存。保存事件的是 mutex 保护的
+  predicate；wait 必须先检查 predicate，再在同一原子 wait protocol
+  中释放锁和阻塞。
+</Callout>
+
+## `promise<void>` 直接编码一次 ready transition
+
+```cpp
+std::promise<void> detectedPromise;
+std::future<void> detectedFuture = detectedPromise.get_future();
+
+void detect() {
+    detectCondition();
+    detectedPromise.set_value();
+}
+
+void react() {
+    detectedFuture.wait();
+    performReaction();
+}
+```
+
+<Term def="provider 通过 set_value 完成 shared state，consumer future 通过 wait/get 观察 ready 的一次性通道。">
+  promise-future event channel
+</Term>
+
+void 表示没有 result payload。`set_value()` 让 state ready；future wait 阻塞而不忙等。若 signal 先发生，ready state 已保存在 shared state，后续 wait 立即返回，不存在瞬时通知丢失。
+
+<EmcppPromiseFutureHandshakeFlowMap />
+
+## ready transition 建立 happens-before
+
+```cpp
+SharedData data;
+std::promise<void> readyPromise;
+auto readyFuture = readyPromise.get_future();
+
+// producer
+data.prepare();
+readyPromise.set_value();
+
+// consumer
+readyFuture.wait();
+data.consume();
+```
+
+<Term def="provider 完成 promise 与 consumer 成功 wait/get 之间的同步关系，使 signal 前 writes 对 receiver 可见。">
+  future event synchronization
+</Term>
+
+不能用普通 bool 替代并假设“最终能看见”；无同步读写会 data race。promise/future shared state 同时提供 blocking 和 memory ordering boundary。
+
+## get_future 与 set_value 都是一次性操作
+
+一个 promise 通常只能调用一次 `get_future()`；shared state 也只能完成一次。第二次 `set_value` 或 `set_exception` 会抛 `std::future_error`。
+
+<Term def="promise shared state 从 not-ready 到 value/exception ready 只能发生一次，不能重置为下一轮事件。">
+  single-assignment shared state
+</Term>
+
+因此它适合 startup latch、首次配置完成、单次检测或 one-shot handoff。若事件每帧/每请求反复发生，应创建新 promise/future pair，或改用 condition variable/semaphore/channel。
+
+<Callout
+  type="trap"
+  title="陷阱：收到事件后把同一个 promise 再 set_value 就能复用"
+>
+  promise 是 single-assignment。重复完成会报 future_error；shared_future 只增加
+  readers，不会让 provider 可多次发布。
+</Callout>
+
+## broken promise 解除永久等待
+
+若 provider promise 在未 set value/exception 前销毁，仍存在的 future 会 ready，并在 `get()` 时抛 broken-promise `future_error`。
+
+<Term def="provider 未完成 shared state 就销毁时，由 promise destructor 写入 shared state 的错误 outcome。">
+  broken-promise completion
+</Term>
+
+```cpp
+std::future<void> makeSignal() {
+    std::promise<void> promise;
+    auto future = promise.get_future();
+    return future; // promise dies incomplete
+}
+
+makeSignal().get(); // throws future_error
+```
+
+这比静默永久等待更可诊断。reactor 若只调用 wait 不调用 get，会看到 ready 却不观察异常；需要错误语义时用 get 消费 outcome。
+
+## set_exception 可主动传播检测失败
+
+```cpp
+try {
+    detectCondition();
+    detectedPromise.set_value();
+} catch (...) {
+    detectedPromise.set_exception(std::current_exception());
+}
+```
+
+<Term def="provider 把 current_exception 存入 shared state，使 consumer get 在自身线程重新抛出的失败通道。">
+  void-future exception channel
+</Term>
+
+即使没有 value payload，void future 仍能区分成功事件与失败完成。单纯 condition variable 还需额外 error field 和 predicate 状态机。
+
+## 多个 reactors 使用 `shared_future<void>`
+
+`std::future` move-only，`get` 面向单 consumer。若多个 tasks 都等待同一 one-shot event，把它转换成 `shared_future<void>`：
+
+```cpp
+std::promise<void> promise;
+std::shared_future<void> ready = promise.get_future().share();
+
+auto first = ready;
+auto second = ready;
+```
+
+<Term def="可复制、多个 consumers 可分别 wait/get 同一 shared state 的 future handle。">
+  void shared-future fanout
+</Term>
+
+<EmcppSharedFutureFanoutMap />
+
+一次 `promise.set_value()` 让所有 copies ready。它是一次性 broadcast，不是 queue；晚创建的 copy 只要 state handle 仍存在也会立即观察 ready。
+
+## thread startup handshake 的完整顺序
+
+<Term def="先构造 promise/future channel，再启动 producer/consumer threads，最后 signal 并 join 的结构化初始化流程。">
+  startup event handshake
+</Term>
+
+```cpp
+std::promise<void> readyPromise;
+auto readyFuture = readyPromise.get_future();
+
+std::thread reactor([future = std::move(readyFuture)]() mutable {
+    future.get();
+    performReaction();
+});
+
+std::thread detector([&readyPromise] {
+    detectCondition();
+    readyPromise.set_value();
+});
+
+detector.join();
+reactor.join();
+```
+
+channel 必须在线程启动前建好；promise 被引用捕获时，owner 要活到 detector 完成。异常路径还应 set_exception，线程仍需 RAII join。
+
+## 选择机制的边界
+
+<Term def="根据事件次数、receiver 数量、payload/error、等待策略与资源成本选择 atomic、condition variable 或 future 的审查流程。">
+  event-communication audit
+</Term>
+
+1. event 是 one-shot 还是反复发生？
+2. 一个 receiver 还是 broadcast，多 receiver 是否需要 shared_future？
+3. 是否要传 value/exception，还是只需 ready？
+4. receiver 要阻塞、轮询、超时还是参与 event loop？
+5. shared-state allocation 成本是否适合高频路径？
+6. provider 提前退出时，broken promise 是否被 get 观察？
+
+一次性且需要阻塞/错误通道时，void future 很清晰；可复用 predicate 更适合 condition variable；极低延迟 lock-free protocol 才考虑精心设计的 atomics。
+
+## 小结
+
+- void future 用 shared-state readiness 表达无 payload 的 one-shot event communication
+- atomic polling 会消耗 CPU 或增加 latency；condition variable 需要 mutex-protected predicate 防 spurious/missed wakeups
+- promise.set_value 与 future.wait/get 既保存事件，也建立 signal 前 writes 的可见性
+- promise shared state single-assignment，get_future/set_value 都不能无限复用
+- provider 未完成就销毁产生 broken promise；consumer 应 get 才能观察错误
+- set_exception 让 void channel 同样传递失败 outcome
+- `shared_future<void>` 支持多个 receivers，但 event 仍只发布一次
+- 用 event-communication audit 按次数、receivers、错误、等待和成本选择机制
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 39"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch07.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="void future">只承载 ready/error 的 future。</GlossaryItem>
+  <GlossaryItem term="atomic event polling">
+    反复读取 atomic flag 等待事件。
+  </GlossaryItem>
+  <GlossaryItem term="condition variable">
+    以 predicate 配合阻塞唤醒的设施。
+  </GlossaryItem>
+  <GlossaryItem term="promise-future event channel">
+    一次性 provider/consumer 事件通道。
+  </GlossaryItem>
+  <GlossaryItem term="future event synchronization">
+    signal 与 wait 间的可见性关系。
+  </GlossaryItem>
+  <GlossaryItem term="single-assignment shared state">
+    只能完成一次的共享状态。
+  </GlossaryItem>
+  <GlossaryItem term="broken-promise completion">
+    provider 消失时完成为错误。
+  </GlossaryItem>
+  <GlossaryItem term="void-future exception channel">
+    void state 传递异常的路径。
+  </GlossaryItem>
+  <GlossaryItem term="void shared-future fanout">
+    多个 readers 等待同一 void state。
+  </GlossaryItem>
+  <GlossaryItem term="startup event handshake">
+    先建 channel 再启动线程的握手。
+  </GlossaryItem>
+  <GlossaryItem term="event-communication audit">
+    选择事件机制的检查流程。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：detector 在 reactor 调用 wait 前先 set_value。** 解释 void future 与裸 condition notification 的差异。
+
+<Answer question="事件是否会丢失？">
+  promise set_value 把 shared state 持久变为 ready，reactor 后来的 wait
+  立即返回，不丢事件。condition-variable notification 本身不保存；必须先在 mutex
+  下把 predicate 设为 true，wait 使用 predicate
+  才能在晚到时跳过阻塞。两者都需状态，future 把一次 ready transition 内建在
+  shared state 中。
+</Answer>
+
+2. **问题 2：provider 异常退出，promise 未 set_value。** 设计让 receiver 不永久等待且能看到错误的路径。
+
+<Answer question="broken promise 与主动异常怎样交付？">
+  若 promise 析构未完成 state，future 会 ready，get 抛 broken-promise
+  future_error；因此 receiver 应 get 而非只 wait。更明确的 producer catch
+  路径调用 set_exception(current_exception)，receiver get 重新抛原异常。RAII
+  必须保证 provider handle 最终销毁或完成，不能泄漏 promise 让 waiter 永久阻塞。
+</Answer>
+
+3. **问题 3：四个 reactors 等待同一 startup event，且系统以后还要反复 reload。** 选择通信结构。
+
+  <Answer question="一次广播与重复事件如何拆分？">startup one-shot 可把 `future<void>` share 成 `shared_future<void>`，复制给四个 reactors，一次 set_value 全部唤醒。reload 是重复事件，不能复用已完成 promise；应为每轮创建新 pair，或使用 condition variable 加 generation/predicate、semaphore/channel。shared_future 增加 readers，不改变 single-assignment，所以不能承担无限 reload stream。</Answer>
+</Exercises>

@@ -1,0 +1,254 @@
+---
+title: "第22章：The Common Language Infrastructure"
+type: C
+section: "Essential C# 7.0 · Runtime Architecture"
+order: 22
+description: "掌握CLI、CTS/CLS、BCL与.NET Standard，追踪C#到CIL再到JIT/AOT，并理解assembly、manifest、module、metadata和runtime portability。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-c-sharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7AssemblyMetadataLab, Ec7CliContractLab, Ec7CompilationPipelineLab } from "@/components/mdx/essential-csharp-7/diagrams/the-common-language-infrastructure";
+
+<Objectives>
+
+- 能解释CLI、CTS、CLS、BCL与.NET Standard分别约束哪一层，并判断跨语言API是否真正可消费
+- 能比较JIT、AOT与.NET Native的编译时机、产物、启动/动态能力取舍，追踪C#到machine code
+- 能分析assembly、manifest、module、CIL与metadata在identity、loading、reflection和portability中的责任
+
+</Objectives>
+
+## 为什么C#程序不是“编译一次就直接成为CPU指令”
+
+C# compiler通常先把source翻译成Common Intermediate Language与metadata，并包装进assembly。runtime装载assembly、解析type/member identity，再由JIT把将要执行的method编译为当前architecture的machine code，或使用提前生成的native image。GC、exception handling、threading和type loading也由runtime execution system协同。
+
+这层中间模型使多种source languages共享type system与binary format，也让不同CLI implementations在不同OS/CPU上执行相同managed artifact。但“有CIL”不等于任意平台都能运行：程序还依赖目标runtime、BCL API、native libraries、filesystem/endianness假设与部署内容。
+
+先预测：CLI、CTS、CLS、BCL和.NET Standard中，哪一个是runtime实现，哪一个只定义API contract；C# source、assembly、CIL与machine code分别在哪个阶段出现。随后用三张图逐层验证。
+
+<Term def="规定CIL、metadata、Common Type System、execution system与相关file format，使多语言可共享runtime binary model的标准化基础设施。">Common Language Infrastructure</Term>
+
+## Defining the Common Language Infrastructure
+
+Common Language Infrastructure（CLI）不是某一个Microsoft product的名字，而是一套execution与binary interoperability specification。它规定可执行code如何表示、type如何描述、metadata如何关联、runtime怎样装载和执行。C#是生产CLI-compatible artifacts的一种language；Visual Basic等language也可面向同一模型。
+
+CLI的价值来自稳定边界：compiler把source-language constructs映射到CTS/CIL/metadata；runtime implementation读取这些产物并提供execution services；library通过公共type和metadata被其他language消费。某种C#特性若没有直接CIL instruction，compiler可改写为普通types/methods/state machines，runtime执行改写后的结果。
+
+<Stepper>
+  <Step title="切换CLI、CTS、CLS、BCL与.NET Standard">
+    <Ec7CliContractLab />
+  </Step>
+  <Step title="标出标准、实现与API contract">
+    CLI/CTS/CLS定义binary与type规则；runtime product实现execution；BCL/.NET Standard描述可调用的library surface。
+  </Step>
+  <Step title="检查跨语言public surface">
+    public signature只用consumer language支持且符合CLS的types；内部仍可使用更完整CTS能力。
+  </Step>
+</Stepper>
+
+## CLI Implementations：.NET Framework与.NET Core
+
+.NET Framework和.NET Core都是面向CLI概念的runtime/library implementations，但deployment、supported platforms与available API surface不同。书中时代的.NET Framework主要随Windows提供完整成熟框架；.NET Core采用模块化、side-by-side与cross-platform方向。implementation选择决定loader、JIT/GC实现、base libraries与host integration，而不是改变C# source grammar本身。
+
+同一个assembly能否运行取决于它target的contract是否由目标implementation满足。引用只存在于某平台的API、P/Invoke特定library、registry/UI等能力都会收窄portability。portable architecture把domain logic放在共享contract后，把platform services放到adapter中并在每个target实际集成测试。
+
+<Callout type="trap" title="只要代码编译成CIL，就天然跨平台">
+CIL只解决instruction与type representation的一部分。API availability、runtime version、native dependency、path/encoding、architecture与deployment model仍可能让程序只能在一个平台工作。
+</Callout>
+
+## .NET Standard与Base Class Library
+
+Base Class Library（BCL）提供Object、String、collections、I/O、threading、reflection等基础types与APIs。`.NET Standard`是版本化API specification，目标platform声明实现某个version后，target该contract的library可在这些implementations上被消费。它不是runtime、不是OS，也不是独立可执行deployment。
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+  </PropertyGroup>
+</Project>
+```
+
+选择更高contract version得到更多API，但可兼容的older implementations更少。compiler通过reference assemblies检查surface；运行时仍需要真正implementation。NuGet dependency若target更窄平台或调用contract之外API，library整体portability也会下降。
+
+<Term def="platforms可声明实现的版本化managed API surface；它定义可用library contract，但本身不提供runtime或deployment。">.NET Standard</Term>
+
+## Common Type System与Common Language Specification
+
+Common Type System（CTS）定义value/reference types、members、visibility、inheritance、interfaces、boxing等runtime可表达规则，使不同language产物能共享type identity。Common Language Specification（CLS）是CTS中面向广泛language interoperability的一组规则；它主要约束公开给其他assemblies的API，而不是禁止implementation内部使用全部CTS。
+
+```csharp
+[assembly: CLSCompliant(true)]
+
+public sealed class Counter
+{
+    private uint rawValue; // Internal representation may use non-CLS details.
+
+    public long Value => rawValue;
+
+    [CLSCompliant(false)]
+    public uint RawValue => rawValue;
+}
+```
+
+例如某consumer language不支持unsigned public types、只按case-insensitive name解析，library若暴露这些surface就可能难以消费。标记assembly为CLS-compliant让compiler报告公开签名问题；必要例外在member上显式标记。CLS compliance提高language reach，不代表API语义自然好用，仍需清晰ownership、nullability与error contract。
+
+<Term def="CLI中定义type categories、member rules、inheritance、visibility与runtime identity的共同类型模型。">Common Type System</Term>
+
+## C# Compilation to CIL
+
+C# compiler进行parsing、name binding、type checking和lowering，生成PE-format assembly，其中包含CIL method bodies与metadata。CIL是stack-based intermediate instruction set；source local name、syntax sugar和某些control structure可能不保留原样，但type/member references通过metadata tokens保持可解析identity。
+
+```csharp
+public static int Add(int left, int right)
+{
+    return left + right;
+}
+```
+
+对应的简化CIL体现“压入argument、相加、return”，而不是C# expression text：
+
+```il
+.method public hidebysig static int32 Add(int32 left, int32 right) cil managed
+{
+  .maxstack 2
+  ldarg.0
+  ldarg.1
+  add
+  ret
+}
+```
+
+async、iterator、lambda closure等会lower为generated types/methods；阅读CIL可解释allocation、boxing、virtual call与state machine，但优化后的machine code才决定最终执行成本。debug与release CIL也可能不同。
+
+<Term def="CLI定义的stack-based intermediate instruction language，携带method operations并通过metadata token引用types与members。">Common Intermediate Language</Term>
+
+## JIT、AOT与.NET Native
+
+Just-In-Time compilation通常在method首次执行前把CIL转换为当前process/architecture的native code。JIT可利用runtime知道的CPU、generic instantiation与type information，但带来startup与warm-up成本；生成code通常只服务当前run。不同runtime可采用tiered或其他策略，本章核心是“转换发生在execution environment”。
+
+Ahead-of-Time compilation把更多转换提前到build/publish阶段，产出native image以降低startup或满足没有JIT的environment。`.NET Native`是书中讨论的AOT技术实例。AOT需要预先知道reachable code；reflection、runtime code generation、dynamic activation与未声明generic instantiations会让静态分析更困难，可能需要metadata directives或设计收敛。
+
+<Stepper>
+  <Step title="沿compile、load、JIT、AOT与GC阶段移动">
+    <Ec7CompilationPipelineLab />
+  </Step>
+  <Step title="区分每阶段输入与产物">
+    compiler产出CIL/metadata assembly；loader解析identity；JIT/AOT产出machine code；runtime管理execution services。
+  </Step>
+  <Step title="验证性能与动态行为假设">
+    分开测cold startup、warm throughput与package size，并列出reflection/dynamic roots，不能只凭“native”判断更快。
+  </Step>
+</Stepper>
+
+```csharp
+public static object CreateByName(string assemblyQualifiedName)
+{
+    Type type = Type.GetType(assemblyQualifiedName, throwOnError: true);
+    return Activator.CreateInstance(type);
+}
+```
+
+这段dynamic activation在JIT environment可由runtime按metadata查找；AOT分析若看不到string指向哪些types，可能无法保留constructor/code。可靠做法是使用explicit registry、static references或目标toolchain要求的preservation metadata。
+
+## Runtime、Garbage Collection与Platform Portability
+
+runtime execution system负责type loading、JIT/AOT code integration、managed allocation、garbage collection、exceptions、thread coordination与interop transitions。GC追踪reachable managed objects并回收不可达memory，但不会自动结束database transaction、close every OS handle或知道native ownership；IDisposable/SafeHandle仍是deterministic resource protocol。
+
+```csharp
+public static byte[] BuildPayload(int size)
+{
+    var payload = new byte[size];
+    payload[0] = 0x52;
+    return payload; // GC tracks object reachability after return.
+}
+```
+
+managed reference不等于固定address，前章的P/Invoke pointer需要pin/copy；finalizer timing不确定，也不能承担业务时序。portability审查分三层：CLI/CTS representation是否兼容、target API contract是否存在、环境资源与native behavior是否一致。
+
+## Assemblies, Manifests, and Modules
+
+assembly是reference、versioning、security identity与deployment的logical unit。它可由一个或多个modules组成，并包含resources。通常C# project产出single-module assembly，但概念上module是物理PE file，assembly是由manifest声明的logical closure。
+
+manifest位于assembly的一个module中，描述assembly identity、files/modules、exported types、resources和referenced assemblies。loader先依据identity与host policy定位assembly，再按manifest解析dependencies与types。file name不是完整type identity，简单把DLL复制到目录也不保证version/dependency正确。
+
+```csharp
+using System.Reflection;
+
+Assembly assembly = typeof(string).Assembly;
+Console.WriteLine(assembly.FullName);
+Console.WriteLine(assembly.ManifestModule.Name);
+
+foreach (AssemblyName reference in assembly.GetReferencedAssemblies())
+    Console.WriteLine(reference.FullName);
+```
+
+<Stepper>
+  <Step title="切换assembly、manifest、module、CIL method与reflection">
+    <Ec7AssemblyMetadataLab />
+  </Step>
+  <Step title="从identity追到physical payload">
+    reference指向assembly identity；manifest列出modules/resources/dependencies；module保存type metadata与method bodies。
+  </Step>
+  <Step title="模拟loader失败并定位层级">
+    区分assembly未找到、identity/version不匹配、dependency缺失、bad image architecture和type/member缺失。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="Assembly、DLL与Module是三个可互换名称">
+DLL是常见physical file extension，module是CLI physical unit，assembly是manifest定义的logical identity/versioning unit。常见single-file产物让三者看似重合，但loader contract并不相同。
+</Callout>
+
+## Metadata把Binary变成自描述产物
+
+metadata tables描述assembly/module、type definitions/references、members、signatures、custom attributes、generic constraints与method bodies关联。compiler、loader、JIT、reflection、debugger和serializer都可消费它。metadata token只在所属module/context中有意义，不是全局稳定ID。
+
+```csharp
+Type type = typeof(Dictionary<,>);
+Console.WriteLine(type.AssemblyQualifiedName);
+
+foreach (MethodInfo method in type.GetMethods(BindingFlags.Public | BindingFlags.Instance))
+    Console.WriteLine($"{method.MetadataToken:X8} {method.Name}");
+```
+
+reflection读取的是compiled descriptions，不会恢复全部source intent；local names、comments与high-level syntax可能不存在。dynamic inspection也会带来loading、trimming/AOT reachability与security边界，应缓存descriptor并尽快转换成typed contract。
+
+<Term def="assembly/module中描述identity、types、members、signatures、references、attributes与CIL关联的结构化自描述数据。">metadata</Term>
+
+## 本章回顾：分清Contract、Artifact与Execution Stage
+
+1. CLI定义共同binary/execution model；runtime products实现它，BCL提供library，.NET Standard定义API contract。
+2. CTS是完整runtime type model，CLS是公开API跨语言互操作所需subset。
+3. C# compiler主要产出CIL与metadata assembly；JIT在运行时、AOT在运行前生成machine code。
+4. runtime还提供loading、GC、exceptions与thread services，但managed code仍需管理external resources。
+5. assembly是logical identity unit，manifest描述closure，module承载physical metadata/CIL payload。
+6. portability必须同时满足representation、API surface、native/environment三层约束。
+
+<Exercises>
+
+**问题 1：一个target .NET Standard的library是否一定能在任意设备运行？**
+
+<Answer>不一定。.NET Standard只规定managed API surface；设备必须有实现该version的runtime/platform，全部dependencies也要兼容。library若P/Invoke、依赖特定filesystem/UI/architecture或反射加载缺失assembly，仍会失败。应分别审查CLI/runtime、API contract与platform/native assumptions，并在每个target做integration test。</Answer>
+
+**问题 2：如何从C# method定位到实际执行的machine code阶段？**
+
+<Answer>先用compiler产出assembly，以IL/metadata工具确认method的CIL、signature和tokens；loader按manifest解析assembly/dependencies；JIT在首次执行上下文将method转为当前architecture code，或AOT在publish阶段提前生成。性能分析区分cold JIT/startup与warm execution，不能把CIL listing当最终CPU instructions。</Answer>
+
+**问题 3：跨语言公共库为何同时需要CTS和CLS视角？**
+
+<Answer>CTS说明runtime能表达的完整types/member/inheritance规则，implementation内部可使用；CLS限制public/protected surface到更多languages能消费的subset。标记assembly CLSCompliant让compiler检查unsigned types、name collision等问题，对必要例外显式标注，同时仍设计清晰语义与error contract。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="Common Language Infrastructure" definition="统一CIL、metadata、type system、execution与file format的标准化基础设施。" />
+  <GlossaryItem term=".NET Standard" definition="platform可实现的版本化managed API contract，不是runtime或deployment。" />
+  <GlossaryItem term="Common Type System" definition="CLI中统一types、members、inheritance、visibility与runtime identity的模型。" />
+  <GlossaryItem term="Common Intermediate Language" definition="compiler生成并由JIT/AOT消费的stack-based intermediate instructions。" />
+  <GlossaryItem term="metadata" definition="描述assembly、types、members、signatures、references与CIL关联的结构化数据。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 22: The Common Language Infrastructure" adaptedUrl="https://www.informit.com/store/essential-c-sharp-7.0-9781509303618" />

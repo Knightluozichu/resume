@@ -1,0 +1,194 @@
+---
+title: "Chapter 18. Custom Attributes"
+type: C
+section: "CLR via C# 4e · Essential Types"
+order: 18
+description: "覆盖attribute usage/定义/payload限制、反射检测、实例匹配、CustomAttributeData/raw metadata无实例读取与Conditional特性。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcAttributeDeclarationLab, CvcAttributeDetectionLab, CvcAttributePolicyLab } from "@/components/mdx/clr-via-csharp/diagrams/custom-attributes";
+
+<Objectives>
+
+- 能设计AttributeUsage、constructor/named payload与target，使metadata意图稳定且可版本化
+- 能比较attribute实例化、IsDefined、CustomAttributeData与raw metadata读取的执行和加载边界
+- 能设计attribute equality、Conditional emission和runtime enforcement，验证trimming/AOT与不可信metadata
+
+</Objectives>
+
+## 为什么Attribute只记录Intent，不执行Policy
+
+Attribute把声明式数据写进metadata，compiler/runtime/framework/tool读取后决定行为。标记`[Authorize]`不会自己阻止调用，`[Serializable]`不保证数据安全，`[Obsolete]`是否error取决compiler。安全与正确性属于读取者：何时扫描、是否继承、如何验证、缓存多久、失败时fail open/closed。把metadata当命令而无owner会产生装饰性安全。
+
+先预测：读取custom attributes是否会执行attribute constructor；attribute argument能否是任意object；AllowMultiple时顺序是否可靠；Inherited对interface/member是否都一样；两个attribute instances何时equal；ConditionalAttribute作用在attribute class后，哪些build会省略usage；trim后有attribute是否保证target member还在。后文用declaration、detection和policy三层回答。
+
+<Term def="Attribute declaration记录的目标、payload、继承与重复规则，以及消费工具对它的解释协议。">attribute metadata contract</Term>
+
+## Using Custom Attributes
+
+Attribute可放assembly/module/type/member/parameter/return/generic parameter等targets，C#短名省略`Attribute`后缀。Attribute本身只是metadata row/blob；不同consumer可有不同行为，例如compiler看Obsolete，serializer看DataMember，test runner看Fact。每个自定义attribute应有一个明确owner/tool和可测试效果。
+
+```csharp
+[ServiceContract(version: 2, Owner = "payments")]
+public interface IPaymentGateway
+{
+    [Operation(Name = "authorize", Idempotent = true)]
+    Task<Authorization> AuthorizeAsync(Request request, CancellationToken ct);
+}
+```
+
+不要用attribute隐藏复杂业务流程。稳定静态metadata适合attribute；环境配置、secret、动态权限与频繁变化policy应由typed config/service提供。Attribute payload会进入binary并可能被reflection公开，不放敏感信息。
+
+## Defining Your Own Attribute Class
+
+Custom attribute继承`System.Attribute`，通常sealed，并用`AttributeUsage`限制ValidOn、AllowMultiple和Inherited。Constructor positional arguments表达必需身份，public settable properties/fields作为named optional values。Constructor应只赋值/验证轻量数据，不做I/O、service lookup或全局注册，因为reflection实例化可能在tooling/startup等意外时刻发生。
+
+```csharp
+[AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = true)]
+public sealed class OperationAttribute : Attribute
+{
+    public OperationAttribute(string name) =>
+        Name = string.IsNullOrWhiteSpace(name)
+            ? throw new ArgumentException("Operation name required", nameof(name))
+            : name;
+
+    public string Name { get; }
+    public bool Idempotent { get; init; }
+}
+```
+
+Target选择要精确：type-level默认是否传播到derived；method-level override lookup是否查询base definition；interface attributes不会自动像class inheritance一样传播给implementation。Consumer必须明确`inherit`参数和member/interface traversal，不能只信AttributeUsage。
+
+<Term def="AttributeUsage对可标注targets、是否允许重复和继承查询意图的声明。">attribute usage boundary</Term>
+
+## Attribute Constructor and Field/Property Data Types
+
+Metadata attribute arguments只支持有限类型：primitive、string、Type、enum、object包装上述类型及一维arrays等，不能直接保存DateTime、decimal或任意complex object。需要复杂配置可拆成primitive fields/Type token，或attribute只给stable key，运行时去typed registry读取。
+
+Type argument保存type reference，会影响dependency/trimming；enum保存底层值，未知版本要处理。Array payload是metadata值集合，attribute object property返回的array若mutable会影响实例equality/cache，最好copy/read-only。Named property新增可有default，删除/改类型会破坏旧metadata consumer。
+
+<Stepper>
+  <Step title="切换target、inherited、multiple与payload"><CvcAttributeDeclarationLab /></Step>
+  <Step title="建立Schema表">记录required constructor args、named defaults、allowed targets、multiplicity、inherit lookup和版本owner。</Step>
+  <Step title="验证Metadata编码">用CustomAttributeData读取constructor/named arguments，确认Type/enum/array版本与预期一致。</Step>
+</Stepper>
+
+<Callout type="trap" title="Attribute可以保存任意配置对象，运行时再取出">
+Attribute blob只支持受限metadata常量类型，且内容公开固定在binary。复杂/动态配置应通过stable key连接typed configuration，不要序列化对象进attribute。
+</Callout>
+
+## Detecting the Use of a Custom Attribute
+
+`GetCustomAttributes`通常构造attribute instances并执行constructor/property assignment；malformed data或constructor exception会让扫描失败。`IsDefined`只问presence，通常不需返回instances，但inherit semantics仍要核对。Cache attribute result时key包含MemberInfo/type/load context，static cache可能阻止collectible context卸载。
+
+```csharp
+foreach (MethodInfo method in serviceType.GetMethods())
+{
+    if (!method.IsDefined(typeof(OperationAttribute), inherit: true))
+        continue;
+
+    OperationAttribute operation = method
+        .GetCustomAttribute<OperationAttribute>(inherit: true)!;
+    Register(operation.Name, method, operation.Idempotent);
+}
+```
+
+扫描外部assembly会load dependencies并可能执行attribute code，安全tooling应先用metadata-only path。Runtime registry在startup扫描自己的trusted assemblies可实例化，但要验证duplicate names、signature、visibility和policy；attribute presence不是完整资格。
+
+<Term def="读取attribute时是否加载target assembly/type、执行attribute constructor及产生side effects的边界。">attribute instantiation boundary</Term>
+
+## Matching Two Attribute Instances Against Each Other
+
+`Attribute.Equals`默认比较attribute type及其fields（具体reflection semantics），`TypeId`允许同type的多个逻辑identity用于某些frameworks。含array/reference/mutable state时默认comparison可能不符合metadata语义。Registry去重最好从CustomAttributeData规范化constructor/named values，定义自己的key，而不是依赖object reference。
+
+AllowMultiple attributes不应假设metadata enumeration顺序就是priority，除非显式Priority字段并验证唯一性。Equality与merge规则写进consumer：重复是error、last wins、aggregate还是按key replace。
+
+## Detecting the Use of a Custom Attribute Without Creating Attribute-Derived Objects
+
+`CustomAttributeData`暴露constructor、ConstructorArguments和NamedArguments，不实例化attribute class，适合inspection、plugin discovery与避免constructor side effects。它仍基于reflection load的metadata/type resolution。`System.Reflection.Metadata`可直接读取PE metadata blobs，不把target assembly load进execution context，最适合不可信/批量静态审计，但需要手工decode signatures。
+
+```csharp
+IEnumerable<CustomAttributeData> attributes = method.CustomAttributes;
+foreach (CustomAttributeData data in attributes)
+{
+    Console.WriteLine(data.AttributeType.FullName);
+    foreach (CustomAttributeTypedArgument argument in data.ConstructorArguments)
+        Console.WriteLine($"  ctor: {argument.ArgumentType}={argument.Value}");
+    foreach (CustomAttributeNamedArgument argument in data.NamedArguments)
+        Console.WriteLine($"  {argument.MemberName}={argument.TypedValue.Value}");
+}
+```
+
+Metadata-only不等于trusted：payload长度、duplicate、type reference、malformed blob都要limit/validate。Discovery与activation分离；先静态筛选allowlist/hash/signature，隔离context或process中再load/execute。
+
+<Stepper>
+  <Step title="切换instantiate、presence、CustomAttributeData与raw metadata"><CvcAttributeDetectionLab /></Step>
+  <Step title="选择最小执行级别">仅presence不用construct；需values用data；不可信file用raw metadata；确认后才activation。</Step>
+  <Step title="做恶意样本">Attribute constructor抛错/做I/O、payload malformed/huge、dependency缺失，验证scanner仍受控。</Step>
+</Stepper>
+
+<Callout type="trap" title="GetCustomAttributes只是读Metadata，不会执行用户代码">
+它通常构造attribute objects并运行constructor/property setters。扫描不可信程序集优先CustomAttributeData或raw metadata，并把activation隔离。
+</Callout>
+
+## Conditional Attribute Classes
+
+在attribute class上应用`[Conditional("SYMBOL")]`，使用该attribute的source只有在caller compilation定义symbol时才把usage写入metadata（某些target如assembly等细节需按语言规则验证）。这类似Conditional methods的call-site omission，是build-time emission，不是runtime开关。不同build configuration因此可能有不同metadata surface。
+
+<Term def="由compiler symbol决定attribute usage是否写入产物，从而使不同build的metadata有意分叉。">conditional metadata emission</Term>
+
+Conditional适合debug instrumentation hints，不适合安全、serialization或协议必需metadata，因为release omission会改变功能。CI应检查每种configuration的attribute inventory，发布清单记录symbols。Runtime无法把已省略usage“重新打开”。
+
+## Attribute Equality, Policy, and Trimming
+
+Attribute只是input，consumer把它变成policy。Authorization scanner应fail closed、验证method signature/duplicate/owner；serializer生成schema；DI registry验证lifetime/cycles。不要让untrusted assembly仅凭标记获得privilege。Policy decision需logs和version，attribute schema升级要兼容旧payload/default。
+
+Trimming/AOT可能移除仅通过reflection发现的types/members；attribute presence不一定让linker理解动态access。使用DynamicallyAccessedMembers、DynamicDependency、descriptor或source generator，具体按target docs；最佳方案常是compile-time generator生成registry，运行时无需广泛扫描。
+
+<Term def="从attribute metadata读取、验证到真正授权/注册/序列化行为之间由明确owner执行的步骤。">attribute enforcement pipeline</Term>
+
+<Stepper>
+  <Step title="切换equality、conditional、runtime policy与trimming"><CvcAttributePolicyLab /></Step>
+  <Step title="定义Enforcement">记录scanner、validation、duplicate/equality、cache、failure mode、audit和权限owner。</Step>
+  <Step title="验证发布形态">对Debug/Release/trimmed/AOT产物比较metadata inventory与generated registry，执行真实startup。</Step>
+</Stepper>
+
+## 本章回顾：Metadata不是行为，Consumer才是
+
+1. Attribute定义targets、payload、multiplicity与inherit intent，constructor保持纯和轻量。
+2. Payload受metadata常量类型限制，复杂动态配置使用stable key连接typed source。
+3. GetCustomAttributes会实例化；IsDefined/Data/raw metadata逐步减少执行与加载。
+4. Equality、multiple ordering和Conditional emission需要consumer/build明确定义，不能依赖偶然顺序。
+5. Runtime policy验证attribute而非信任attribute；trimming/AOT需source generation或preservation evidence。
+
+<Exercises>
+
+**问题 1：Plugin discovery为何不应直接GetCustomAttributes所有DLL？**
+
+<Answer>这会load assemblies/dependencies并执行attribute constructors，恶意或坏插件可做I/O、抛错或污染进程。先用System.Reflection.Metadata读取identity/attribute blobs，验证allowlist/hash/schema；必要时用MetadataLoadContext/CustomAttributeData，再在隔离context/process activation。</Answer>
+
+**问题 2：AllowMultiple attribute怎样去重和排序？**
+
+<Answer>不要依赖metadata enumeration顺序。定义stable key/priority字段，从CustomAttributeData规范化constructor/named arguments；重复key是error或明确replace，排序按priority+stable tie-breaker。把规则放consumer并测试跨compiler/build。</Answer>
+
+**问题 3：Release里某些Attribute突然消失，如何定位？**
+
+<Answer>检查attribute class是否带Conditional及Release symbols，确认compiler是否根本未emit；再检查trimming是否移除target/metadata。比较Debug/Release/trimmed的raw metadata inventory和linker warnings。Conditional省略无法运行时恢复，必要metadata不要使用Conditional。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="attribute metadata contract" definition="Attribute声明与消费工具之间的稳定metadata协议。" />
+  <GlossaryItem term="attribute usage boundary" definition="Valid targets、multiplicity与inherit intent的限制。" />
+  <GlossaryItem term="attribute instantiation boundary" definition="读取时是否加载并执行attribute代码的边界。" />
+  <GlossaryItem term="conditional metadata emission" definition="由compiler symbol决定usage是否写入产物。" />
+  <GlossaryItem term="attribute enforcement pipeline" definition="从metadata读取验证到真正policy行为的明确步骤。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 18: Custom Attributes" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

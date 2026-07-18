@@ -1,0 +1,288 @@
+---
+title: "第5章 · 状态间的奇妙转移——动态规划"
+type: C
+section: "搜索与动态规划"
+order: 5
+description: "按图解版第5章重建从搜索到动态规划、仓储转移、股票状态、猫舍bitmask、运输与会议剪枝、路径规划、矩阵链和文本处理。"
+demo: true
+math: true
+sourceUrl: "https://www.tenlong.com.tw/products/9787522615059?list_name=rd"
+draft: false
+---
+
+import { CAISearchToDPGraph, CAIWarehouseTransitionLab, CAIStockStateLab, CAICatMaskLab, CAITransportPruningLab, CAIMeetingDecisionLab, CAIGridPathLab, CAIMatrixChainLab, CAITextEditLab, CAIDPContractLab } from "@/components/mdx/competitive-algorithms/diagrams/05-dynamic-programming";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释动态规划如何把重复搜索合并为状态图，以及状态、转移、base case与计算顺序的职责
+- 能计算仓储、股票、bitmask、加权会议、网格路径、矩阵链和编辑距离的状态与转移数量
+- 能实现自顶向下记忆化、自底向上表格、滚动状态、subset DP和区间DP
+- 能分析状态定义是否充分、状态压缩是否无损、转移与决策剪枝是否保持最优解
+- 能设计从暴力oracle、递推证明、依赖顺序到重建答案和资源证书的DP方案
+
+</Objectives>
+
+## 从“递归已经正确，为什么还超时”开始
+
+先预测：两个递归调用参数相同，却来自不同历史路径，它们是否需要各算一次？如果从该点开始的合法动作与最优答案只由参数决定，那么历史已经被参数充分概括；重复展开只是浪费。
+
+<Term def="把问题分解为相互重叠的子问题，用状态保存每个子问题答案，并按依赖关系组合为原问题答案的方法。">动态规划</Term>不是“填二维表”，而是把搜索树中未来相同的节点合并为状态图。
+
+<CAISearchToDPGraph />
+
+## 5.1 初探动态规划
+
+一个DP设计必须完整回答：
+
+1. 状态表示了哪个子问题；
+2. 每个动作怎样产生后继；
+3. 当前答案怎样由后继答案组合；
+4. base case是什么；
+5. 状态按什么顺序求值；
+6. 最终答案位于哪个状态。
+
+### 5.1.1 拼图游戏——从搜索到动态规划
+
+拼图游戏——从搜索到动态规划的关键是识别重复状态。若一个关卡位置由`(row,col,remaining_moves)`完整决定，那么不同路径到达同一三元组后，未来可行解集合相同，可以缓存。
+
+设状态集合为$S$，每状态最多$b$个动作。树搜索可能展开$O(b^d)$个路径节点；记忆化后，每个可达状态只求一次：
+
+$$
+T=O\left(|S|\cdot b\right)
+$$
+
+这不是免费降复杂度。若状态中必须保留整个棋盘，$|S|$仍可能指数大；DP消除的是重复路径，不会消除本质上不同的状态。
+
+### 5.1.2 物流仓库——状态的转移
+
+物流仓库——状态的转移可把第$d$天开始时库存$x$写为<Term def="对未来决策所需历史信息的最小充分摘要；相同状态必须拥有相同后继集合与子问题答案。">状态</Term>`dp[d][x]`。订货量$q$满足容量与需求约束，下一库存为：
+
+$$
+x'=x+q-\operatorname{demand}[d]
+$$
+
+<CAIWarehouseTransitionLab />
+
+<Term def="从一个状态选择合法动作到达后继状态，并把局部成本或收益与后继答案组合的递推关系。">状态转移</Term>可写为：
+
+$$
+dp[d][x]=\min_q\left\{\operatorname{orderCost}(q)+\operatorname{holdCost}(x')+dp[d+1][x']\right\}
+$$
+
+若允许缺货但有罚金，负库存也许合法；若不允许，负$x'$必须剪掉。业务contract改变状态域，而不只是改一个常数。
+
+## 5.2 状态的巧妙定义
+
+状态的巧妙定义遵循一个张力：字段太少会错误合并未来不同的历史；字段太多会让状态空间爆炸。判断方法是提出反例：能否找到两个编码相同的历史，下一步合法动作或最优后缀却不同？
+
+### 5.2.1 股票投资计划——不同的状态和转移
+
+股票投资计划——不同的状态和转移说明“天数”不够。第$d$天结束时，持有股票与不持有股票的未来不同：
+
+$$
+\begin{aligned}
+cash_d&=\max(cash_{d-1},hold_{d-1}+p_d),\\
+hold_d&=\max(hold_{d-1},cash_{d-1}-p_d)
+\end{aligned}
+$$
+
+<CAIStockStateLab />
+
+若同一天计算`cash`后立即用新cash更新`hold`，就可能在同一价格完成不符合题意的多次动作。应从旧状态同时转移到新状态。加入交易费、冷冻期、最多$k$次交易时，还需扩展状态字段。
+
+```cpp
+long long cash = 0;
+long long hold = -price[0];
+for (std::size_t day = 1; day < price.size(); ++day) {
+    const long long next_cash = std::max(cash, hold + price[day]);
+    const long long next_hold = std::max(hold, cash - price[day]);
+    cash = next_cash;
+    hold = next_hold;
+}
+```
+
+### 5.2.2 流浪猫的家——状态压缩与状态剪枝
+
+流浪猫的家——状态压缩与状态剪枝可把“哪些猫已经分配”编码为bitmask。<Term def="在不丢失未来决策所需信息的前提下，用更紧凑编码表示状态，常见形式包括bitmask与滚动数组。">状态压缩</Term>令第$i$位表示猫$i$是否已有住处：
+
+$$
+mask'=mask\mathbin{\vert}(1\ll i)
+$$
+
+<CAICatMaskLab />
+
+```cpp
+for (int mask = 0; mask < (1 << cat_count); ++mask) {
+    const int shelter = std::popcount(static_cast<unsigned>(mask));
+    for (int cat = 0; cat < cat_count; ++cat) {
+        if ((mask & (1 << cat)) == 0 && allowed[cat][shelter]) {
+            dp[mask | (1 << cat)] += dp[mask];
+        }
+    }
+}
+```
+
+若每个shelter恰放一只猫，已分配数量可由`popcount(mask)`恢复，无需再存shelter index。若容量不同或允许空位，这个推导失效，必须增加状态。
+
+## 5.3 转移方式的神奇优化
+
+转移方式的神奇优化有两条路线：减少状态，或减少每状态要检查的决策。任何剪枝都要给出dominance、单调性或上下界证明。
+
+### 5.3.1 运输计划——在转移中剪枝
+
+运输计划——在转移中剪枝可维护Pareto frontier。若状态A装载不少于B、成本不高于B，而且未来只关心“剩余容量与总成本”，B被A支配，永远不可能进入更优完整方案。
+
+<CAITransportPruningLab />
+
+需要谨慎确认未来转移对两个状态同样可用。若A较重会限制未来路线、货物类别不同影响兼容性，单看load与cost不足以判定支配。
+
+### 5.3.2 会议安排——在决策中剪枝
+
+会议安排——在决策中剪枝考虑带价值且不能重叠的会议。按结束时间排序，令$p(i)$为与会议$i$兼容的最后一个会议下标：
+
+$$
+dp[i]=\max\left(dp[i-1],\ value_i+dp[p(i)]\right)
+$$
+
+<CAIMeetingDecisionLab />
+
+两个决策足够：不选$i$，答案是前$i-1$个会议最优值；选$i$，与它冲突的区间都被一次跳过，只接到$p(i)$。二分查找$p(i)$后，总成本$O(n\log n)$。
+
+<Callout type="trap" title="看到一个状态值更差就直接删除">
+Dominance必须覆盖未来可用动作。状态当前成本更高，却可能拥有更多资源、更早结束时间或不同兼容集合。修法是先写出“任意未来后缀都能从支配状态复制”的映射，再剪枝。
+</Callout>
+
+## 5.4 经典的动态规划算法
+
+经典的动态规划算法不是题型清单，而是几类状态图：序列前缀、网格DAG、subset lattice和区间分割。它们都依赖<Term def="一个最优解可以由其子问题的最优解组合；否则替换子解可改进原解并产生矛盾。">最优子结构</Term>。识别依赖图比记住数组形状更可靠。
+
+### 5.4.1 路径规划——用动态规划创造算法
+
+路径规划——用动态规划创造算法以只能向右或向下的网格为例。每格是状态，前驱只有上方与左方：
+
+$$
+dp[r][c]=w[r][c]+\min(dp[r-1][c],dp[r][c-1])
+$$
+
+<CAIGridPathLab />
+
+```cpp
+for (int r = 0; r < rows; ++r) {
+    for (int c = 0; c < cols; ++c) {
+        if (r == 0 && c == 0) continue;
+        long long best = INF;
+        if (r > 0) best = std::min(best, dp[r - 1][c]);
+        if (c > 0) best = std::min(best, dp[r][c - 1]);
+        dp[r][c] = weight[r][c] + best;
+    }
+}
+```
+
+因为边只指向行列更大的格子，行优先顺序是拓扑序。若允许上下左右移动，状态图可能有环，应使用Dijkstra等通用最短路，不能照抄一次填表。
+
+### 5.4.2 矩阵乘积——用动态规划优化算法
+
+矩阵乘积——用动态规划优化算法不改变矩阵顺序，只选择括号。矩阵$A_i$尺寸为$p_{i-1}\times p_i$，令`dp[l][r]`为相乘区间$l..r`最少标量乘法：
+
+$$
+dp[l][r]=\min_{l\le k\lt r}\left(dp[l][k]+dp[k+1][r]+p_{l-1}p_kp_r\right)
+$$
+
+<CAIMatrixChainLab />
+
+区间长度从2递增，保证较短子区间已求出。需要重建括号时，另存达到最小值的split$k$；只存成本会丢失方案。
+
+## 5.5 玩转自然语言——动态规划在文本处理中的应用
+
+玩转自然语言——动态规划在文本处理中的应用常以两个前缀为状态。编辑距离令`dp[i][j]`表示把源前$i$个字符变为目标前$j$个字符的最少操作：
+
+$$
+dp[i][j]=\min
+\begin{cases}
+dp[i-1][j]+1 & \text{delete}\\
+dp[i][j-1]+1 & \text{insert}\\
+dp[i-1][j-1]+[a_i\ne b_j] & \text{match or replace}
+\end{cases}
+$$
+
+<CAITextEditLab />
+
+```cpp
+for (std::size_t i = 1; i <= a.size(); ++i) {
+    for (std::size_t j = 1; j <= b.size(); ++j) {
+        int replace = dp[i - 1][j - 1] + (a[i - 1] != b[j - 1]);
+        dp[i][j] = std::min({dp[i - 1][j] + 1, dp[i][j - 1] + 1, replace});
+    }
+}
+```
+
+同一框架可扩展到词切分、序列标注、语音解码与字符串对齐。若局部操作成本来自模型概率，通常把概率乘积取负对数转为路径成本，再在状态图上求最短路。
+
+<Callout type="trap" title="递推式正确就随便遍历表">
+若读取的依赖尚未计算，结果会使用默认值。修法是画出状态依赖边，选择拓扑序；区间DP按长度，前缀DP按索引，环形依赖则需重新建模或使用图算法。
+</Callout>
+
+<CAIDPContractLab />
+
+<Stepper>
+<Step title="从暴力搜索写出真值">
+先定义state、action、goal，用小规模递归确认答案与重复状态。
+
+<CAISearchToDPGraph />
+</Step>
+<Step title="证明状态充分与转移完备">
+相同编码必须有相同未来；每个最优解的最后一步必须被某个转移覆盖。
+
+<CAIWarehouseTransitionLab />
+</Step>
+<Step title="选择顺序、压缩并重建">
+按依赖拓扑求值，确认滚动数组未覆盖仍要使用的数据，并保存parent重建方案。
+
+<CAIDPContractLab />
+</Step>
+</Stepper>
+
+## 小结
+
+本章从拼图游戏的搜索到动态规划，借物流仓库理解状态的转移；股票投资计划展示不同的状态和转移，流浪猫的家展示状态压缩与状态剪枝。运输计划和会议安排分别说明在转移中剪枝与在决策中剪枝。
+
+路径规划展示用动态规划创造算法，矩阵乘积展示用动态规划优化算法，文本处理则把前缀对齐推广到自然语言。DP的核心始终是充分状态、完备转移、正确base case和依赖顺序。
+
+<Exercises>
+
+**问题 1**：为什么股票DP只用`day`作状态会错误？写出最小补充字段。
+
+<Answer>
+同一天结束时，持有一股和不持有股票的合法下一步及财富含义不同；只用day会把未来不同的历史合并。最小补充字段是`holding`布尔值，形成`dp[day][0/1]`。若有限制交易次数，还要加入已用次数。
+</Answer>
+
+**问题 2**：有$n$只猫、每个住处恰放一只，subset DP有多少状态和转移上界？
+
+<Answer>
+Mask共有$2^n$个。每个mask最多尝试$n$只未分配猫，因此直接实现上界$O(n2^n)$时间、$O(2^n)$空间。住处下标可由`popcount(mask)`恢复，不需要额外维度。
+</Answer>
+
+**问题 3**：矩阵尺寸为$10\times30,30\times5,5\times60$，两种括号成本分别是多少？
+
+<Answer>
+$(AB)C$成本为$10\cdot30\cdot5+10\cdot5\cdot60=4500$；$A(BC)$成本为$30\cdot5\cdot60+10\cdot30\cdot60=27000$。结果矩阵相同，但前者标量乘法少22500次。
+</Answer>
+
+**问题 4**：怎样证明一个DP转移没有漏掉最优解？
+
+<Answer>
+任取一个最优完整解，观察它的最后一个动作或第一处分割；证明该动作对应递推式枚举的某个候选，去掉它后剩余部分正是某个已定义子状态的最优解。若剩余不是最优，可替换为更优子解并改进完整解，产生矛盾。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="动态规划">把问题分解为相互重叠的子问题，用状态保存每个子问题答案，并按依赖关系组合为原问题答案的方法。</GlossaryItem>
+<GlossaryItem term="状态">对未来决策所需历史信息的最小充分摘要；相同状态必须拥有相同后继集合与子问题答案。</GlossaryItem>
+<GlossaryItem term="状态转移">从一个状态选择合法动作到达后继状态，并把局部成本或收益与后继答案组合的递推关系。</GlossaryItem>
+<GlossaryItem term="状态压缩">在不丢失未来决策所需信息的前提下，用更紧凑编码表示状态，常见形式包括bitmask与滚动数组。</GlossaryItem>
+<GlossaryItem term="最优子结构">一个最优解可以由其子问题的最优解组合；否则替换子解可改进原解并产生矛盾。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="《深入浅出算法竞赛（图解版）》第5章“状态间的奇妙转移——动态规划”" adaptedUrl="https://www.tenlong.com.tw/products/9787522615059?list_name=rd" />

@@ -1,145 +1,268 @@
 ---
-title: K 近邻
-type: A
-section: 策略与规划
+title: "第12章 K近邻"
+type: C
+section: "算法图解（第2版）"
 order: 12
-description: KNN——训练只是记住数据，预测时才按距离找邻居投票。
+description: "从橙子与葡萄柚分类出发，掌握特征提取、距离、k邻居投票、推荐、回归、缩放与预测成本。"
 demo: true
 math: false
-sourceUrl: https://www.manning.com/books/grokking-algorithms-second-edition
+sourceUrl: "https://livebook.manning.com/book/grokking-algorithms-second-edition/chapter-12/"
 draft: false
 ---
 
-{/* 知识点清单：K近邻/惰性学习/距离度量/特征缩放/分类与回归/维数灾难；原书章节：K-nearest neighbors。 */}
+import { FruitFeatureDiagram, KnnVoteLab, RecommendationFeatureMap, KSelectionLab } from "@/components/mdx/grokking-algorithms-2e/diagrams/k-nearest-neighbors";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释 KNN 作为「惰性学习」与传统训练模型的本质区别。
-- 能说明为什么特征缩放（归一化/标准化）对 KNN 的效果有决定性影响。
-- 能回答：K 太小和 K 太大各有什么问题——如何在实际问题中选合适的 K。
+- 能解释K近邻根据最相似样本预测，并把水果或用户表示成任务相关特征向量
+- 能计算欧氏距离，执行训练集拟合的归一化或标准化并避免数据泄漏
+- 能实现KNN分类与多数投票，分析k过小和过大的偏差方差取舍
+- 能设计相似用户推荐和KNN回归，说明邻居标签与目标值的不同聚合方式
+- 能分析KNN训练、存储与预测成本，判断精确扫描、索引或近似近邻的适用场景
 
 </Objectives>
 
-## 先玩一遍
+## 从橙子与葡萄柚开始
 
-KNN 可能是最直观的机器学习算法。想象你在水果摊前想判断一个水果是橙子还是葡萄柚——你会看它的颜色、大小、重量，然后在脑子里搜索记忆：它和哪些已知水果最像？周围最近的那几个邻居是什么标签？少数服从多数——这就是 KNN。
+先预测：一个水果比常见橙子更大、更红，但又没有典型葡萄柚那么明显。若只看“它最像谁”，怎样把直觉变成可重复算法？
 
-<AlgorithmPlayground
-  mode="knn"
-  title="K 近邻 · 交互动画"
-  focus="KNN 不做任何训练——给一个新样本，现算所有已知样本的距离，找最近的 K 个投票。"
-/>
+<FruitFeatureDiagram />
 
-<Callout type="tip">
-  <strong>猜一猜：</strong>把 K 从 1 调成 5，分类边界变得模糊还是锐利？
-  观察中间过渡区域——单个噪声点（离群点）在 K=1 时会造成孤岛，K=5 时被邻居投票抹平。
-</Callout>
+原章用橙子与葡萄柚分类建立直觉：葡萄柚通常更大、更红，橙子通常更小、颜色不同。<Term def="预测时寻找新样本附近的k个已标注样本，并聚合它们标签或数值的算法。">K近邻</Term>根据最相似样本预测。对新水果选择最近的k个邻居，分类用邻居多数投票；若三位邻居中两位是橙子、一位是葡萄柚，就预测橙子。
 
-## 分步动画
+这里没有自动出现的“相似”。必须先决定怎样描述水果、怎样缩放数值、用什么距离以及选择多少邻居。KNN简单，是因为规则短；并不意味着数据表示和验证可以省略。
 
-<KnnDiagram />
+## 特征提取与距离
+
+<Term def="把原始对象转换成可供算法比较的数值属性的过程。">特征提取</Term>把对象表示为数值。水果可以用大小、重量、红度、表皮纹理等特征；用户可以用对不同电影类型的偏好评分。选择与任务相关的特征比盲目增加维度更重要：包装条形码可能唯一识别水果，却未必帮助判断品种。
+
+<Term def="按固定顺序排列的一组数值，用于表示一个对象。">特征向量</Term>例如 `[大小=7.2, 红度=6.8]`。向量各维必须在训练样本与新样本中含义一致，缺失值、类别编码和单位也要使用同一规则。
+
+<Term def="多维空间中两点各坐标差平方和的平方根。">欧氏距离</Term>衡量特征向量接近程度：
+
+$$
+d(x,y)=\sqrt{\sum_{j=1}^{p}(x_j-y_j)^2}.
+$$
+
+下面只用训练样本拟合均值和标准差，再用同一参数变换训练样本与查询。若先把验证集或测试集也纳入均值计算，就把未来数据分布泄漏给模型评估。
+
+```python
+from math import sqrt
+from statistics import fmean
+
+def fit_standardizer(rows: list[list[float]]) -> tuple[list[float], list[float]]:
+    columns = list(zip(*rows))
+    means = [fmean(column) for column in columns]
+    scales = []
+    for column, mean in zip(columns, means):
+        variance = fmean([(value - mean) ** 2 for value in column])
+        scales.append(sqrt(variance) or 1.0)
+    return means, scales
+
+def transform(
+    row: list[float], means: list[float], scales: list[float]
+) -> list[float]:
+    return [
+        (value - mean) / scale
+        for value, mean, scale in zip(row, means, scales)
+    ]
+
+def euclidean(left: list[float], right: list[float]) -> float:
+    if len(left) != len(right):
+        raise ValueError("feature dimensions differ")
+    return sqrt(sum((a - b) ** 2 for a, b in zip(left, right)))
+```
+
+<Term def="用训练集参数把各特征转换到可比较尺度的预处理，包括归一化或标准化。">特征缩放</Term>防止数值范围大的维度支配距离。例如重量100至300克、红度0至1时，未缩放欧氏距离几乎只看重量。特征归一化或标准化不能保证每个特征都同样有用，但能消除纯单位尺度造成的支配。
 
 <Stepper>
-  <Step title="看输入结构——特征空间中的散点">
-    KNN 把每个已知样本画在特征空间里：横轴是某个特征（如水果重量），
-    纵轴是另一个特征（如颜色深浅）。每个点的颜色代表它的类别。
-    分类任务变成了一道几何题：在特征空间中，新点落在哪里？
-    <AlgorithmPlayground mode="knn" title="K 近邻 · 特征空间" currentStep={1} />
-  </Step>
-  <Step title="执行关键动作——计算距离、找最近 K 个邻居">
-    新样本来了，KNN 遍历全体已知样本，计算它们与新样本的距离（通常用欧几里得距离）。
-    排序后取距离最小的 K 个点。这 K 个邻居就是决策依据——没有提前训练好的模型参数，
-    没有权重矩阵，只有「现场把全部数据扫一遍」。
-    <AlgorithmPlayground mode="knn" title="K 近邻 · 邻居搜索" currentStep={2} />
-  </Step>
-  <Step title="收缩问题规模——投票得出分类">
-    统计 K 个最近邻居的类别分布。多数票胜出——新样本归入邻居中最多的一类。
-    如果是回归任务（预测数值），则取 K 个邻居目标值的平均（或加权平均，越近权重越大）。
-    K 是唯一的「超参数」——选 K 的智慧占了 KNN 效果的一半。
-    <AlgorithmPlayground mode="knn" title="K 近邻 · 投票分类" currentStep={3} />
-  </Step>
-  <Step title="读出结论——KNN 的甜蜜与代价">
-    KNN 不训练 = 没有训练时间成本，模型更新极其简单（添加新数据就是追加一个点）。
-    但预测时 O(n·d) 扫全部样本（n 个样本 × d 维特征），当 n 很大时预测极慢。
-    这是«惰性学习»的核心取舍——把所有计算推迟到预测时。
-    <AlgorithmPlayground mode="knn" title="K 近邻 · 决策边界" currentStep={4} />
-  </Step>
+  <Step title="定义与任务相关的特征"><FruitFeatureDiagram />水果品种可看大小与红度；先解释每一维为何可能帮助区分类别。</Step>
+  <Step title="只用训练集拟合缩放参数">计算训练集各维均值与标准差，保存参数；验证、测试和线上查询只做transform。</Step>
+  <Step title="计算到全部样本的距离"><KnnVoteLab />对每个已标注样本计算同一种距离，保证特征顺序、单位与缺失值处理一致。</Step>
+  <Step title="选择最近的k个邻居">按距离从小到大选前k个，保留距离和标签，供投票、加权或回归聚合。</Step>
 </Stepper>
 
-## 核心概念
-
-<Term def="一种惰性学习算法：不做显式训练，只在预测时才计算新样本与全体已知样本的距离，用最近 K 个邻居的标签投票决定分类。">K 近邻（KNN）</Term>
-是机器学习中最简单也最不「偷懒」的算法——说它简单是因为没有训练过程、没有损失函数、没有梯度下降；说它不偷懒是因为每次预测都要扫一遍全体数据。KNN 本质是一个哲学声明：«相似的东西大概率属于同一类»。剩下的全是工程细节——距离怎么算、K 怎么选、特征怎么预处理。
-
-<Term def="一种学习范式：训练阶段只存储数据，不构建模型的抽象表示，所有计算延迟到预测阶段进行。">惰性学习</Term>
-是 KNN 区别于大多数机器学习算法的标志。传统模型（线性回归、神经网络）在训练阶段耗费大量计算来「压缩」数据为模型参数；预测时 O(1) 或 O(d) 就出结果。惰性学习反过来：训练 O(1)，预测 O(n·d)。选择惰性还是急切学习，取决于你的延迟要求在哪里——训练端还是推理端。
-
-<Term def="衡量两个点在高维空间中远近的数学方式，常用的有欧几里得距离（直线）和曼哈顿距离（网格）。">距离度量</Term>
-是 KNN 的灵魂。如果距离度量选错了，«最近邻» 就没意义。欧几里得距离适合连续特征、球形数据；曼哈顿距离适合网格状特征；余弦相似度适合文本（方向比长度重要）。KNN 不关心绝对位置，只关心相对远近——距离公式决定了这个«近»是什么含义。
-
-<Term def="在进行距离计算之前，将不同量纲的特征统一到同一尺度范围（如 0-1 或均值 0 标准差 1）。">特征缩放</Term>
-是 KNN 最容易被跳过的致命步骤。如果水果重量（100-300 克）和颜色深浅（0-1）直接算距离，重量差异会完全支配距离计算结果——颜色深浅的差异变得微不足道。归一化（min-max 到 [0,1]）或标准化（z-score 均值 0 方差 1）必须在计算距离之前完成。
-
-## 常见误区
-
-- **现象 →** 不同特征量纲不统一就直接跑 KNN，发现颜色特征完全不起作用。**原因 →** 距离计算中，数值大的特征（如重量 200）天然比数值小的特征（如颜色 0.7）贡献更大的差值。**修法 →** 对所有特征做标准化处理，使每个特征的均值为 0、标准差为 1，距离计算才对所有特征一视同仁。
-
-- **现象 →** K=1 时分类边界「太锐利」，测试集上一个噪声点就造成大块误分类。**原因 →** K=1 的决策相当于只信任最近的一个邻居——这个邻居可能是标签标错的离群点。**修法 →** 增大 K（常用 3、5、7 奇数）用邻居投票抹平噪声。K 值通常通过交叉验证按分类准确率选定。
-
-- **现象 →** KNN 在特征维度很高（如 100+ 维）时表现很差，准确率暴跌。**原因 →** «维数灾难»（Curse of dimensionality）：高维空间中，所有点之间的距离趋向于相等——最近邻和最远邻的距离差别很小，邻居的概念失去意义。**修法 →** 高维数据先用 PCA 降维，或换用更适合高维的算法（随机森林、神经网络）。
-
-<Callout type="trap">
-  <strong>现象 →</strong> 用 KNN 做了分类发现准确率还行，就直接上线，没有考虑推理时的延迟。<strong>原因 →</strong>{" "}
-  KNN 预测时需要扫全体训练数据。如果训练集有 100 万条，每次预测都要做 100 万次距离计算。<strong>修法 →</strong>{" "}
-  用 K-D 树或 Ball Tree 等空间索引加速近邻搜索（降至 O(log n)），或用局部敏感哈希做近似近邻——放弃精确最近邻，换速度。
+<Callout type="trap" title="所有特征原值直接算距离">
+量纲大的特征会支配欧氏距离。应在训练折内拟合缩放参数，并把同一变换应用到验证与查询；仍需通过验证判断特征是否相关，缩放不能修复无关特征。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 选了 K=5 发现 3 类对 2 类就判为种类 A，忽略样本不平衡。<strong>原因 →</strong>{" "}
-  如果种类 A 在训练集中占比 80%（4000 条 vs 种类 B 1000 条），新样本的邻居可能全是 A——不是因为类别相似，而是 A 样本太密集。<strong>修法 →</strong>{" "}
-  加权投票（距离越近权重越大）或对训练集做重采样平衡类别分布。
+## 分类：多数投票
+
+<Term def="从有限类别中为新样本预测一个标签的任务。">分类</Term>用邻居标签聚合。最简单的<Term def="把k个邻居中出现次数最多的类别作为预测结果的规则。">多数投票</Term>只数票；也可以让更近邻居权重更大。二分类常选奇数k减少平票，但多分类或重复距离仍可能平票，所以实现需要确定的决胜规则。
+
+```python
+from collections import defaultdict
+
+Sample = tuple[list[float], str]
+
+def knn_classify(
+    samples: list[Sample], query: list[float], k: int
+) -> str:
+    if not 1 <= k <= len(samples):
+        raise ValueError("k must be within the sample count")
+
+    nearest = sorted(
+        (euclidean(features, query), label)
+        for features, label in samples
+    )[:k]
+
+    votes: dict[str, list[float]] = defaultdict(list)
+    for distance, label in nearest:
+        votes[label].append(distance)
+
+    return min(
+        votes,
+        key=lambda label: (
+            -len(votes[label]),
+            sum(votes[label]),
+            label,
+        ),
+    )
+```
+
+决胜键依次比较票数更多、同票时邻居总距离更小、再同票时标签字典序，因此结果可复现。生产系统还应处理类别不平衡、重复样本、置信度阈值与拒绝预测；“多数类”可能只是训练数据数量更多，不一定代表局部证据更强。
+
+<Stepper>
+  <Step title="检查k与样本数量"><KnnVoteLab />k至少为1且不能超过可用训练样本；交叉验证的每个训练折都要满足该条件。</Step>
+  <Step title="按距离截取最近邻">不要先按标签分组；邻居资格只由统一距离或相似度定义决定。</Step>
+  <Step title="聚合标签并处理平票">多数投票给出类别；可用距离和作为平票规则，或使用预先声明的距离加权。</Step>
+  <Step title="在验证集选择k与规则"><KSelectionLab />同时比较准确率、召回率、类别不平衡影响和预测延迟，不查看测试集调参。</Step>
+</Stepper>
+
+## k过小与k过大
+
+k过小对噪声敏感。k等于1时，一个错标样本或离群点就能独自决定附近查询，模型方差高、决策边界容易出现孤岛。k过大可能抹平局部结构；当k接近训练集大小时，预测趋向全局多数类，小类区域会被淹没，偏差增大。
+
+没有脱离数据的固定最佳k。应在训练数据内部交叉验证候选k，并把缩放、特征选择等步骤放进每个训练折，最后只在独立测试集做一次无偏评估。距离度量、投票权重和特征集合也都是模型选择的一部分，“k是唯一超参数”并不成立。
+
+<KSelectionLab />
+
+<Callout type="trap" title="在测试集上挑出表现最好的k">
+反复查看测试结果会把测试集变成调参数据，使最终分数乐观。应使用训练/验证或交叉验证选择k，锁定方案后再评估一次测试集。
 </Callout>
 
-## 小结与练习
+## 推荐系统：寻找相似用户
 
-- KNN 是惰性学习：训练无成本，预测时 O(n·d) 扫全部样本找最近邻居。
-- 距离度量选错 = 邻居不靠谱。特征缩放不做 = 量纲大的特征独裁距离。
-- K 值平衡：K=1 过拟合噪声，K 过大则边界模糊、误杀小类。
-- KNN 高维易受维数灾难影响——维度越高，所有点之间距离趋同。
+<Term def="根据用户历史与相似关系生成其可能感兴趣内容的系统。">推荐系统</Term>与水果分类共享同一结构。先把用户表示为喜剧、动作、剧情、恐怖、爱情等偏好特征向量；再寻找距离近的用户；相似用户提供推荐候选，即他们高评分而目标用户尚未看过的电影。
+
+<RecommendationFeatureMap />
+
+特征提取决定“口味相似”的含义。评分缺失不应简单当作0分，因为“没看过”和“不喜欢”不同；不同用户评分尺度也可能不同，有人总打5分，有人最高只打3分。实际协同过滤常使用共同评分项、中心化、余弦相似度或更专门的矩阵方法。原章KNN故事的重点是：推荐前必须先把对象转成可比较表示。
+
+## 回归：对邻居目标值求平均
+
+<Term def="预测连续数值而不是离散类别的任务。">回归</Term>对邻居目标值求平均。例如预测用户会给一部电影多少分，可以找最相似用户并平均他们对该电影的评分；也可按距离倒数加权，让更近用户贡献更大。
+
+```python
+NumericSample = tuple[list[float], float]
+
+def knn_regress(
+    samples: list[NumericSample], query: list[float], k: int
+) -> float:
+    if not 1 <= k <= len(samples):
+        raise ValueError("k must be within the sample count")
+    nearest = sorted(
+        (euclidean(features, query), target)
+        for features, target in samples
+    )[:k]
+    return fmean(target for _, target in nearest)
+
+ratings = [
+    ([5.0, 1.0, 4.0], 4.5),
+    ([4.0, 1.0, 5.0], 4.0),
+    ([1.0, 5.0, 1.0], 1.5),
+]
+prediction = knn_regress(ratings, [4.5, 1.0, 4.5], k=2)
+assert prediction == 4.25
+```
+
+分类与回归的邻居搜索相同，输出聚合不同。分类数标签频率，回归平均或加权平均连续目标。回归还要关注异常目标值、评分范围与均方误差等指标；平均值可能被极端邻居拉动。
+
+<Stepper>
+  <Step title="把用户转成同构特征向量"><RecommendationFeatureMap />每一维表示相同电影类型或行为统计，缺失值与评分尺度使用统一语义。</Step>
+  <Step title="寻找相似用户">在缩放或中心化后的表示上计算距离，选择最近的k位用户。</Step>
+  <Step title="区分推荐候选与最终分数">邻居喜欢的未看内容形成候选；再用邻居评分聚合估计目标用户偏好。</Step>
+  <Step title="回归时平均目标值">若预测连续评分，对邻居目标值求平均或预先验证的距离加权平均，而不是类别投票。</Step>
+</Stepper>
+
+## 成本、索引与局限
+
+KNN训练成本低但预测需搜索样本。训练阶段至少要校验、缩放并存储 `n` 个 `d` 维样本，时间与内存通常是 `O(nd)`，只是没有昂贵的参数优化循环。暴力预测计算全部距离也是 `O(nd)`；全排序是 `O(n log n)`，维护大小k的堆可降为 `O(n log k)`。
+
+低维、分布合适时，KD-tree或ball tree可能显著加速精确查询；但树索引没有对任意高维数据的统一 `O(log n)` 保证。维度升高后数据变稀疏，最近与较远距离的区分度可能下降，这就是常说的维数灾难。此时可减少无关维度、学习更合适表示，或在可接受召回损失时使用近似最近邻。
+
+<Term def="训练阶段主要保存样本，把大部分计算推迟到查询阶段的学习方式。">惰性学习</Term>描述这种取舍，但“惰性”不等于训练零成本。数据更新简单、局部模式直观是优点；内存大、预测慢、对表示敏感是代价。
+
+线上更新还会改变邻域本身。追加新样本虽不需要重新优化参数，却可能要求重新计算缩放统计、重建近邻索引并重新验证k；删除隐私数据也必须同步清理样本库和索引。评估时应按真实时间或用户边界切分数据，避免同一用户的近重复记录同时进入训练与测试，让最近邻“认出副本”而不是学到可泛化相似性。
+
+监控也要覆盖数据漂移：若新水果尺寸分布或用户口味长期偏离训练样本，最近邻可能仍返回结果，却已经没有足够接近的可靠参照。可记录最近距离、邻居标签一致度和拒绝率，为低置信查询设置人工或后备策略。
+
+<Callout type="trap" title="使用KD-tree后查询一定是O(log n)">
+查询成本依赖维度、数据分布、距离和树平衡；高维时大量分支可能都需访问，最坏情况接近线性扫描。应在真实数据上测延迟与召回，再决定精确索引或近似近邻。
+</Callout>
+
+## 原章概念回查
+
+K近邻根据最相似样本预测，橙子与葡萄柚分类展示了大小和红度的局部邻域。特征提取把对象表示为数值，欧氏距离衡量特征向量接近程度。
+
+算法选择最近的k个邻居，分类用邻居多数投票。k过小对噪声敏感，k过大可能抹平局部结构。特征尺度不同会支配距离，因此要做特征归一化或标准化。
+
+推荐系统把用户表示为特征向量，相似用户提供推荐候选。回归对邻居目标值求平均。选择与任务相关的特征，才能让距离表示真实相似。
+
+KNN训练成本低但预测需搜索样本；具体成本还包括数据存储、缩放、邻居选择和索引维护。
+
+## 本章回顾
+
+1. KNN依据局部相似样本进行分类或回归。
+2. 特征提取先决定对象如何进入数值空间。
+3. 欧氏距离只是众多距离之一，必须匹配特征语义。
+4. 缩放参数只从训练数据拟合并复用于未来查询。
+5. 分类用多数投票或距离加权投票。
+6. k过小易受噪声影响，k过大易忽略局部结构。
+7. k、距离、权重、特征和缩放都需要验证。
+8. 推荐系统可由相似用户产生候选与评分估计。
+9. 回归平均邻居连续目标值，不做类别投票。
+10. KNN存储训练样本，暴力查询需计算到全部样本的距离。
+11. 树索引对低维可能有效，高维不能承诺对数查询。
+12. 特征质量、维度和数据分布往往比算法代码更决定结果。
 
 <Exercises>
-  <Answer question="如果训练集有 10 万个样本、50 维特征，每次预测要算 10 万次距离。如何加速？">
-    使用空间索引结构（K-D Tree 或 Ball Tree）将最近邻搜索从 O(n) 降到平均 O(log n)。如果可接受微小精度损失，可以用近似最近邻（ANN）如局部敏感哈希——用距离的近似换几十倍甚至千倍的速度。
-  </Answer>
-  <Answer question="给一个水果分类问题：特征为重量 (g)、直径 (cm)、颜色 RGB 三个通道。哪些特征需要缩放？为什么？">
-    全部都需要。重量（~100-300）、直径（~5-15）、RGB 各通道（0-255）量纲完全不同。如果不缩放，RGB 通道的差值（最大 255）会完全掩盖直径的差值（最大 ~10）。标准化后所有特征均值 0、标准差 1，距离计算才对每个维度公平。
-  </Answer>
+
+**问题 1：重量范围100至300克、红度范围0至1，直接算欧氏距离会有什么问题？**
+
+<Answer>重量差可达数百，红度差最多1，平方和几乎由重量决定，红度即使有分类价值也难以影响邻居。应只用训练集拟合标准化或归一化参数，再对验证、测试和查询使用同一变换。</Answer>
+
+**问题 2：k等于1和k接近训练样本数时分别有什么风险？**
+
+<Answer>k等于1时单个噪声、错标或离群样本就能决定预测，方差高；k很大时局部类别被全局多数稀释，偏差高，小类尤其容易被淹没。应通过训练集内部交叉验证选择。</Answer>
+
+**问题 3：三位相似用户对电影评分4、5、2，未加权KNN回归预测是多少？**
+
+<Answer>未加权平均为 `(4+5+2)/3 = 11/3`，约3.67。若采用距离加权，结果取决于三位邻居距离；权重规则必须预先定义并在验证数据上选择。</Answer>
+
+**问题 4：“KNN没有训练，所以训练时间和存储都是O(1)”是否正确？**
+
+<Answer>不正确。KNN通常没有参数优化循环，但仍需校验、变换和保存n个d维样本，时间与内存至少是O(nd)尺度。计算主要被推迟到预测，暴力查询也要O(nd)计算距离。</Answer>
+
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="K 近邻（KNN）">
-    一种懒惰学习分类/回归算法。没有训练过程，预测时计算新样本与所有训练样本的距离，找最近的 K 个邻居投票决定结果。简单直观但预测慢。
-  </GlossaryItem>
-  <GlossaryItem term="惰性学习">
-    训练时只记数据不做模型构建，所有计算推迟到预测时的学习范式。KNN 是惰性学习的代表。
-  </GlossaryItem>
-  <GlossaryItem term="距离度量">
-    衡量两点在特征空间中远近的数学函数。欧几里得距离（直线）、曼哈顿距离（网格）、余弦相似度（方向）是最常用的三种。
-  </GlossaryItem>
-  <GlossaryItem term="特征缩放">
-    距离计算前的必要预处理步骤。将不同量纲的特征统一到同一尺度——归一化（min-max 到 [0,1]）或标准化（z-score 均值 0、方差 1）。
-  </GlossaryItem>
-  <GlossaryItem term="维数灾难">
-    高维空间中数据分布变得稀疏，点之间的相对距离差异消失的现象。KNN 在高维（通常 50+）时准确率急剧下降。
-  </GlossaryItem>
-  <GlossaryItem term="超参数 K">
-    KNN 的唯一参数：用多少个最近邻居来决策。K=1 过拟合噪声，K 过大欠拟合。通常通过交叉验证选最优 K。
-  </GlossaryItem>
+  <GlossaryItem term="K近邻">查找新样本附近k个已标注样本并聚合其标签或目标值的算法。</GlossaryItem>
+  <GlossaryItem term="特征提取">把原始对象转换成任务相关数值属性的过程。</GlossaryItem>
+  <GlossaryItem term="特征向量">按固定语义与顺序排列、用于表示一个对象的一组数值。</GlossaryItem>
+  <GlossaryItem term="欧氏距离">各维坐标差平方和的平方根。</GlossaryItem>
+  <GlossaryItem term="特征缩放">用训练集参数统一特征数值尺度的归一化或标准化过程。</GlossaryItem>
+  <GlossaryItem term="分类">从有限类别中为新样本预测标签的任务。</GlossaryItem>
+  <GlossaryItem term="多数投票">选择k个邻居中出现次数最多类别的聚合规则。</GlossaryItem>
+  <GlossaryItem term="推荐系统">依据用户历史与相似关系生成候选内容的系统。</GlossaryItem>
+  <GlossaryItem term="回归">预测连续数值目标的任务。</GlossaryItem>
+  <GlossaryItem term="惰性学习">主要存储训练样本并把计算推迟到查询阶段的学习方式。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Grokking Algorithms, Second Edition"
-  adaptedUrl="https://www.manning.com/books/grokking-algorithms-second-edition"
+  adaptedFrom="Grokking Algorithms, Second Edition, Chapter 12: k-nearest neighbors"
+  adaptedUrl="https://livebook.manning.com/book/grokking-algorithms-second-edition/chapter-12/"
 />

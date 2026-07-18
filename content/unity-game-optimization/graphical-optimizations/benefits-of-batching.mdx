@@ -1,24 +1,20 @@
 ---
 title: 合批的收益
 type: A
-section: 图形优化
+section: "Unity Game Optimization · 渲染与运行时"
 order: 1
 description: 理解 Draw Call、SetPass 与 Static/Dynamic Batching，用合批降低 CPU 提交开销。
 demo: true
 math: false
 draft: false
-sourceUrl: ""
+sourceUrl: "https://www.packtpub.com/en-us/product/unity-game-optimization-9781838556518"
 ---
 
-{/* A 概念型（Unity Game Optimization Ch3 改编）：合批降低 CPU 提交开销。
-   重心是 Draw Call/Batches/SetPass 概念(§3)与合批策略 Stepper(§5)，无数学推导。 */}
-
-{/* 知识点清单：
-   1) Draw Call / Batches / SetPass — DrawCallPipelineDiagram
-   2) Dynamic batching 条件与限制 — DynamicBatchingDiagram
-   3) Static batching 与标记 Static — StaticBatchingDiagram
-   4) GPU Instancing / SRP Batcher — SrpBatcherDiagram
-   5) Frame Debugger 验证合批 — FrameDebuggerBatchDiagram */}
+import {
+  BenefitsOfBatchingMapLab,
+  BenefitsOfBatchingExperimentLab,
+  BenefitsOfBatchingEvidenceLab,
+} from "@/components/mdx/unity-game-optimization/diagrams/benefits-of-batching";
 
 <Objectives>
 
@@ -27,6 +23,62 @@ sourceUrl: ""
 - 能回答：Profiler 显示 Batches 很高时，你会先打开 Frame Debugger 看什么、再尝试哪两种现代合批手段（Instancing / SRP Batcher）？
 
 </Objectives>
+
+## 原书边界：Chapter 3
+
+Packt 第三版把本章命名为 **The Benefits of Batching**。官方目录列出的核心范围如下；这些条目共同构成本章的一对一边界：
+
+- **Draw calls**：纳入本章实验与验收，不拆到别章重复计数。
+- **Materials and shaders**：纳入本章实验与验收，不拆到别章重复计数。
+- **The Frame Debugger**：纳入本章实验与验收，不拆到别章重复计数。
+- **Dynamic batching**：纳入本章实验与验收，不拆到别章重复计数。
+- **Static batching**：纳入本章实验与验收，不拆到别章重复计数。
+
+把渲染提交成本拆成材质状态切换、批次、顶点处理、内存占用与可见像素，不能只追一个 Draw Call 数字。SRP Batcher、GPU Instancing 与 BatchRendererGroup 是现代补充；它们优化的契约不同，不能与静态合批互换。 因此，本章既保留 2019/2020 语境，也明确标出迁移到现代 Unity 时哪些是稳定原理、哪些只是版本相关接口。
+
+<BenefitsOfBatchingMapLab />
+
+## 三步证据实验
+
+先预测：如果候选优化真的命中瓶颈，哪个指标应先变化，哪个正确性条件必须保持？下面三步只改变一个变量，并把正常、边界和失败样本一起保存。
+
+<Stepper>
+  <Step title="固定范围与基线">
+    <BenefitsOfBatchingMapLab />
+    用同一组网格逐项切换材质、Static、Instancing 与 SRP Batcher，记录 Main Thread、Render Thread、SetPass 和内存。 先写明目标设备、构建类型、场景、画质、预热和采样窗口，不把 Editor 数据与真机数据混在一起。
+
+```csharp
+renderer.sharedMaterial = sharedMaterial; // avoid material clones
+```
+
+  </Step>
+  <Step title="运行单变量候选">
+    <BenefitsOfBatchingExperimentLab />
+    只启用一个候选改动，保存同一输入下的结果。需要记录的不只是平均 FPS，还包括 Frame Debugger 事件序列、Batches/SetPass、渲染线程耗时和静态合批后的网格内存。
+
+```csharp
+Graphics.DrawMeshInstanced(mesh, 0, material, matrices);
+```
+
+  </Step>
+  <Step title="复测并签发证据">
+    <BenefitsOfBatchingEvidenceLab />
+    对比 P50、P95、峰值与正确性；若收益只出现在 Editor、单次运行或错误画质下，就回退候选并保留失败原因。
+
+```csharp
+before = CaptureFrameDebugger();
+EnableBatchingCandidate();
+after = CaptureFrameDebugger();
+```
+
+  </Step>
+</Stepper>
+
+<Callout type="trap">
+  **版本迁移陷阱**：合批可能增加顶点数据、破坏独立剔除或被材质关键字拆开；批次更少不等于
+  GPU 更快。 第三版内容应作为原理和历史载体来复现，现代 API
+  必须另行标注并在当前目标设备上重新测量。
+</Callout>
 
 ## 场景里东西一多，CPU 先喊不动
 
@@ -38,7 +90,18 @@ sourceUrl: ""
 
 想象 GPU 是厨房，CPU 是前台。每画一个物体，前台就要下一单：写地址（网格）、选套餐（材质）、备注口味（Shader Pass）。厨房真正炒菜（光栅化）可能很快，但 **前台如果给每个苹果各下一单闪送**，单子堆成山，客人照样饿肚子。
 
-<Term def="CPU 向图形驱动/GPU 发出的一次「请绘制这个网格+材质+Pass」的指令；每次提交都有固定开销。">Draw Call（绘制调用）</Term> 就是那一单闪送。<Term def="引擎把多次 Draw Call 合并成更少提交组后的计数；Profiler 里 Batches 通常 ≤ Draw Calls，合批越好差距越大。">Batches（批次数）</Term> 是拼单后的配送趟数。<Term def="切换着色器 Pass（材质变体/渲染状态）的次数；Pass 切换与 Draw Call 一样有 CPU 开销。">SetPass Calls</Term> 则是换套餐模板的次数——同一品牌不同口味也要重新填表。
+<Term def="CPU 向图形驱动/GPU 发出的一次「请绘制这个网格+材质+Pass」的指令；每次提交都有固定开销。">
+  Draw Call（绘制调用）
+</Term>
+就是那一单闪送。
+<Term def="引擎把多次 Draw Call 合并成更少提交组后的计数；Profiler 里 Batches 通常 ≤ Draw Calls，合批越好差距越大。">
+  Batches（批次数）
+</Term>
+是拼单后的配送趟数。
+<Term def="切换着色器 Pass（材质变体/渲染状态）的次数；Pass 切换与 Draw Call 一样有 CPU 开销。">
+  SetPass Calls
+</Term>
+则是换套餐模板的次数——同一品牌不同口味也要重新填表。
 
 <DrawCallPipelineDiagram />
 
@@ -48,7 +111,10 @@ sourceUrl: ""
 
 ## Dynamic Batching：运行时拼单
 
-<Term def="Unity 在运行时把满足条件的小网格合并成一次提交的自动合批；默认在 Player Settings 可开关。">Dynamic Batching（动态合批）</Term> 像闪送平台的「顺路拼单」——帧与帧之间，引擎尝试把**同材质、顶点数够小**的物体合并再提交。
+<Term def="Unity 在运行时把满足条件的小网格合并成一次提交的自动合批；默认在 Player Settings 可开关。">
+  Dynamic Batching（动态合批）
+</Term>
+像闪送平台的「顺路拼单」——帧与帧之间，引擎尝试把**同材质、顶点数够小**的物体合并再提交。
 
 <DynamicBatchingDiagram />
 
@@ -63,12 +129,18 @@ sourceUrl: ""
 Dynamic Batching 的代价在 **CPU**：每帧可能要复制、合并顶点缓冲。移动平台上默认常关闭或限制更严——顶点合并本身也可能比少几次 Draw Call 更贵。所以它适合 **少量、小网格、同材质** 的场景，不适合整片森林。
 
 <Callout type="tip">
-  在 Player Settings → Other Settings 查看 **Dynamic Batching** 开关。若 Profiler 里 Batches 仍接近 Draw Calls，先查材质是否一致、顶点是否超标，而不是盲目指望动态合批救场。
+  在 Player Settings → Other Settings 查看 **Dynamic Batching** 开关。若
+  Profiler 里 Batches 仍接近 Draw
+  Calls，先查材质是否一致、顶点是否超标，而不是盲目指望动态合批救场。
 </Callout>
 
 ## Static Batching：装修前把家具焊死
 
-<Term def="构建期把标记为 Static 且同材质的网格合并成大网格；运行时一次提交，物体不可再移动。">Static Batching（静态合批）</Term> 像装修前把一百把同款椅子焊成一个整体再搬进场景——**运行时 CPU 几乎零合并成本**，但 **内存里会多一份合并后的网格副本**，且 **物体不能再动**。
+<Term def="构建期把标记为 Static 且同材质的网格合并成大网格；运行时一次提交，物体不可再移动。">
+  Static Batching（静态合批）
+</Term>
+像装修前把一百把同款椅子焊成一个整体再搬进场景——**运行时 CPU
+几乎零合并成本**，但 **内存里会多一份合并后的网格副本**，且 **物体不能再动**。
 
 <StaticBatchingDiagram />
 
@@ -87,7 +159,9 @@ Static 与 Dynamic 可以并存，但 **同物体不会双重合并**；大场�
 **SRP Batcher**（<Term def="URP/HDRP 内置的按兼容 Shader 批量提交机制，减少材质间 SetPass 与常量缓冲切换。">SRP 批处理器</Term>）适合 **同一 Shader 变体、不同材质参数** 的大量 Lit 物体——颜色、金属度不同仍可批量提交，前提是 Shader 使用兼容的 CBUFFER 布局（URP Lit 默认兼容）。在 URP Asset 中确认 **SRP Batcher** 已开启。
 
 <Callout type="tip">
-  二者不互斥：Instancing 解决「同网格 N 份」，SRP Batcher 解决「同 Shader 不同材质参数」。Profiler 里 SetPass 仍高时，查自定义 Shader 是否打断 SRP Batcher（Frame Debugger 会标注 **SRP Batch** 或 **not batching** 原因）。
+  二者不互斥：Instancing 解决「同网格 N 份」，SRP Batcher 解决「同 Shader
+  不同材质参数」。Profiler 里 SetPass 仍高时，查自定义 Shader 是否打断 SRP
+  Batcher（Frame Debugger 会标注 **SRP Batch** 或 **not batching** 原因）。
 </Callout>
 
 <SrpBatcherDiagram mode="instancing" />
@@ -119,19 +193,27 @@ Frame Debugger 与 Ch1 介绍的 Profile Analyzer 互补：前者看 **单帧结
 <Stepper>
   <Step title="① 基线：Profiler Rendering 记下 Draw / Batches / SetPass">
     <DrawCallPipelineDiagram highlight="all" />
-    固定镜头 Play 30 秒，打开 Profiler → Rendering，记下 **Draw Calls、Batches、SetPass Calls** 三个数。若 Batches ≈ Draw Calls，说明合批几乎没工作——记下数字作为对照尺。
+    固定镜头 Play 30 秒，打开 Profiler → Rendering，记下 **Draw
+    Calls、Batches、SetPass Calls** 三个数。若 Batches ≈ Draw
+    Calls，说明合批几乎没工作——记下数字作为对照尺。
   </Step>
   <Step title="② Frame Debugger：谁没进同一个 Batch？">
     <FrameDebuggerBatchDiagram batched={false} />
-    Window → Analysis → Frame Debugger → Enable。逐条展开 Draw，看 **材质名、Shader、是否 Static、是否 Instanced**。列出打断合批的前三名原因（材质不一致最常见）。
+    Window → Analysis → Frame Debugger → Enable。逐条展开 Draw，看
+    **材质名、Shader、是否 Static、是否
+    Instanced**。列出打断合批的前三名原因（材质不一致最常见）。
   </Step>
   <Step title="③ 选策略：Static / Instancing / SRP / 减材质种类">
     <StaticBatchingDiagram />
-    不动的物体 → 标记 Static；大量相同网格 → 材质开 **Enable GPU Instancing**；URP 项目 → 确认 **SRP Batcher** 与兼容 Shader；全局 → **合并材质图集、减少 Shader 变体** 降 SetPass。
+    不动的物体 → 标记 Static；大量相同网格 → 材质开 **Enable GPU
+    Instancing**；URP 项目 → 确认 **SRP Batcher** 与兼容 Shader；全局 →
+    **合并材质图集、减少 Shader 变体** 降 SetPass。
   </Step>
   <Step title="④ 复测：Batches 与 SetPass 是否下降">
     <FrameDebuggerBatchDiagram batched={true} />
-    同场景同镜头再录 Profiler，对比三个数。Frame Debugger 里应出现 **SRP Batch / Static Batched / Instanced** 等条目。若 Batches 不变，说明改动未命中打断条件——回到 ② 查下一类原因。
+    同场景同镜头再录 Profiler，对比三个数。Frame Debugger 里应出现 **SRP Batch /
+    Static Batched / Instanced** 等条目。若 Batches
+    不变，说明改动未命中打断条件——回到 ② 查下一类原因。
   </Step>
 </Stepper>
 
@@ -162,15 +244,26 @@ Player / URP 侧常用检查项：
 ## 容易踩的坑
 
 <Callout type="trap">
-  **现象**：给会动的敌人勾选 Static，Batches 降了，但移动时卡顿或合批反复重建。**原因**：Static Batching 要求物体不再移动；移动 Static 触发合并网格失效与重建。**修法**：仅对关卡静态几何勾选 Static；可动对象用 Instancing 或减少材质种类。
+  **现象**：给会动的敌人勾选 Static，Batches
+  降了，但移动时卡顿或合批反复重建。**原因**：Static Batching
+  要求物体不再移动；移动 Static
+  触发合并网格失效与重建。**修法**：仅对关卡静态几何勾选 Static；可动对象用
+  Instancing 或减少材质种类。
 </Callout>
 
 <Callout type="trap">
-  **现象**：开了 Dynamic Batching，Batches 几乎不变，CPU 反而更高。**原因**：顶点合并开销大于省下的 Draw Call；或网格顶点数超标、材质不一致。**修法**：Profiler 对比合批前后 CPU ms；超小且同材质才值得；大场景优先 Static / Instancing / SRP Batcher。
+  **现象**：开了 Dynamic Batching，Batches 几乎不变，CPU
+  反而更高。**原因**：顶点合并开销大于省下的 Draw
+  Call；或网格顶点数超标、材质不一致。**修法**：Profiler 对比合批前后 CPU
+  ms；超小且同材质才值得；大场景优先 Static / Instancing / SRP Batcher。
 </Callout>
 
 <Callout type="trap">
-  **现象**：URP 项目 SetPass 仍上千，SRP Batcher 显示未生效。**原因**：自定义 Shader 未按 SRP 兼容方式声明常量缓冲，或材质启用了不兼容的关键字/Pass。**修法**：Frame Debugger 查看 **not batching** 原因；对照 URP Lit Shader 的 CBUFFER 写法，或先用官方 Lit 验证。
+  **现象**：URP 项目 SetPass 仍上千，SRP Batcher 显示未生效。**原因**：自定义
+  Shader 未按 SRP
+  兼容方式声明常量缓冲，或材质启用了不兼容的关键字/Pass。**修法**：Frame
+  Debugger 查看 **not batching** 原因；对照 URP Lit Shader 的 CBUFFER
+  写法，或先用官方 Lit 验证。
 </Callout>
 
 ## 小结
@@ -183,7 +276,7 @@ Player / URP 侧常用检查项：
 
 <Exercises>
 
-**练习 1（改 Demo 型）** 在 Batches 最高的场景打开 Profiler 与 Frame Debugger，写下当前 Draw Calls、Batches、SetPass。任选 **一种** 合批手段（Static / Instancing / 合并材质）只做一处改动，复测并填表——哪两个数下降了？Frame Debugger 里 Batch 条目有何变化？
+**问题 1（改 Demo 型）** 在 Batches 最高的场景打开 Profiler 与 Frame Debugger，写下当前 Draw Calls、Batches、SetPass。任选 **一种** 合批手段（Static / Instancing / 合并材质）只做一处改动，复测并填表——哪两个数下降了？Frame Debugger 里 Batch 条目有何变化？
 
 <Answer>
 
@@ -191,7 +284,7 @@ Player / URP 侧常用检查项：
 
 </Answer>
 
-**练习 2（问答型）** Dynamic Batching 与 Static Batching 各适合什么物体？各有什么主要代价？
+**问题 2（问答型）** Dynamic Batching 与 Static Batching 各适合什么物体？各有什么主要代价？
 
 <Answer>
 
@@ -199,7 +292,7 @@ Dynamic：运行时同材质、低顶点、非蒙皮的小物体；代价是 CPU
 
 </Answer>
 
-**练习 3（问答型）** GPU Instancing 和 SRP Batcher 解决的是不是同一种问题？各举一个适用例子。
+**问题 3（问答型）** GPU Instancing 和 SRP Batcher 解决的是不是同一种问题？各举一个适用例子。
 
 <Answer>
 
@@ -212,15 +305,18 @@ Dynamic：运行时同材质、低顶点、非蒙皮的小物体；代价是 CPU
 <Glossary>
 
 <GlossaryItem term="Draw Call（绘制调用）">
-  CPU 向 GPU 发出的一次绘制指令，含网格、材质与 Pass。每次有固定 CPU 开销。详见「像点外卖」一节。
+  CPU 向 GPU 发出的一次绘制指令，含网格、材质与 Pass。每次有固定 CPU
+  开销。详见「像点外卖」一节。
 </GlossaryItem>
 
 <GlossaryItem term="Batches（批次数）">
-  合批后实际提交组数，Profiler Rendering 中通常 ≤ Draw Calls。详见 DrawCallPipelineDiagram。
+  合批后实际提交组数，Profiler Rendering 中通常 ≤ Draw Calls。详见
+  DrawCallPipelineDiagram。
 </GlossaryItem>
 
 <GlossaryItem term="SetPass Calls">
-  着色器 Pass 切换次数，材质/关键字越碎越高。详见 DrawCallPipelineDiagram highlight setpass。
+  着色器 Pass 切换次数，材质/关键字越碎越高。详见 DrawCallPipelineDiagram
+  highlight setpass。
 </GlossaryItem>
 
 <GlossaryItem term="Dynamic Batching（动态合批）">
@@ -236,7 +332,8 @@ Dynamic：运行时同材质、低顶点、非蒙皮的小物体；代价是 CPU
 </GlossaryItem>
 
 <GlossaryItem term="SRP Batcher" id="term-srp-批处理器">
-  URP/HDRP 按兼容 Shader 批量提交，减少 SetPass。详见 SrpBatcherDiagram mode srp。
+  URP/HDRP 按兼容 Shader 批量提交，减少 SetPass。详见 SrpBatcherDiagram mode
+  srp。
 </GlossaryItem>
 
 <GlossaryItem term="Frame Debugger">
@@ -247,5 +344,5 @@ Dynamic：运行时同材质、低顶点、非蒙皮的小物体；代价是 CPU
 
 <Attribution
   adaptedFrom="Packt《Unity Game Optimization》第3版"
-  adaptedUrl="https://www.packtpub.com/product/unity-game-optimization-third-edition/9781839215721"
+  adaptedUrl="https://www.packtpub.com/en-us/product/unity-game-optimization-9781838556518"
 />

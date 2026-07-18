@@ -1,0 +1,289 @@
+---
+title: "第6章 Priority Queues：从二叉堆到可合并队列"
+type: C
+section: "散列与优先队列"
+order: 5
+description: "按第3版九节完整重构优先队列模型、简单实现、二叉堆、应用、d堆、左式堆、斜堆、二项队列与标准库priority_queue。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+draft: false
+---
+
+import { DsaPriorityQueueModelLab, DsaSimplePriorityQueueMatrix, DsaBinaryHeapIndexLab, DsaHeapPercolationLab, DsaHeapApplicationsDiagram, DsaDHeapTradeoffLab, DsaMeldableHeapLab, DsaBinomialCarryLab, DsaStdPriorityQueueLab } from "@/components/mdx/dsa-cpp/diagrams/priority-queues-heaps";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释 priority queue ADT 与 sorted sequence 的语义差异
+- 能计算 binary heap、d-heap、leftist heap 与 binomial queue 的结构成本
+- 能实现 buildHeap、percolate up/down、merge 与 deleteMin
+- 能分析 workload 中 insert、deleteMin、decrease-key 和 merge 的主导比例
+- 能设计匹配调度、图算法、流式 top-k 或多队列合并的优先队列
+
+</Objectives>
+
+## 从“只维护下一个极值”开始
+
+优先队列模型（<Term def="支持insert、findMin或findMax、deleteMin或deleteMax，而不承诺完整排序遍历的ADT。">优先队列模型</Term>）保存一组带 priority 的 items，但只需要快速回答“下一个是谁”。Scheduler 不必每次把全部 jobs 排好，只需取最高优先级；event simulation 也只需取最早 timestamp。
+
+先预测依次插入4、3、5后，min-priority queue 的 `top` 是3，max-priority queue 的 `top` 是5。若接口只写 `priority_queue` 却不定义 comparator direction，调用方可能把最紧急事件留到最后。
+
+官方九节依次为 **Model、Simple Implementations、Binary Heap、Applications of Priority Queues、d-Heaps、Leftist Heaps、Skew Heaps、Binomial Queues、Priority Queues in the Standard Library**。它们围绕同一 ADT 比较三种能力：普通极值操作、cache-friendly array layout，以及高效 meld/merge。
+
+<DsaPriorityQueueModelLab />
+
+## 6.1 Model
+
+Min-priority queue 的核心 operations 是 `insert(x)`、`findMin()`、`deleteMin()`；通常允许 duplicates。它不保证任意 key 的 search，也不保证迭代时 sorted。若业务需要删除任意 item 或 decrease-key，还要额外 handle/index map，不能假设基础 heap API 自动支持。
+
+空队列上的 `findMin/deleteMin` 必须有明确 contract。第3版作者代码抛 `UnderflowException`；现代接口也可以返回 optional 或让调用者先检查 empty，但不能读未初始化 root。
+
+## 6.2 Simple Implementations
+
+优先队列简单实现（<Term def="用unsorted或sorted array/list实现priority queue，并把线性成本放到不同operation。">优先队列简单实现</Term>）揭示 tradeoff：
+
+- unsorted array 的 insert O(1)，但 find/delete extreme 需要 scan O(N)；
+- sorted array 的 extreme 在端点，find O(1)，但 insert 要移动 O(N)；
+- linked list 可改变移动成本，却不能同时消除 search 和 insertion position 成本。
+
+<DsaSimplePriorityQueueMatrix />
+
+若 workload 是批量收集后只取一次 minimum，unsorted array 可能已经足够；若 insert 与 deleteMin 交错数百万次，binary heap 才提供稳定组合。ADT 不等于固定 implementation。
+
+## 6.3 Binary Heap
+
+二叉堆（<Term def="用complete binary tree shape与heap-order property实现的array-based priority queue。">二叉堆</Term>）同时保持：
+
+1. structure property：形状是 complete binary tree，除最后一层外全满，最后一层从左填；
+2. heap-order property：min-heap 每个 parent 不大于 children。
+
+第3版使用 1-based array，index i 的亲属位置为：
+
+$$
+\operatorname{parent}(i)=\left\lfloor\frac{i}{2}\right\rfloor,\qquad
+\operatorname{left}(i)=2i,\qquad
+\operatorname{right}(i)=2i+1
+$$
+
+<DsaBinaryHeapIndexLab />
+
+Complete shape 使 height 为：
+
+$$
+h=\lfloor\log_2 N\rfloor
+$$
+
+`findMin` 直接读 `array[1]`，O(1)。Insert 先在末尾创建 hole，再比较 parent 并向上滤：
+
+```cpp
+void insert(const T& x) {
+    if (size + 1 == array.size())
+        array.resize(array.size() * 2);
+    std::size_t hole = ++size;
+    for (; hole > 1 && x < array[hole / 2]; hole /= 2)
+        array[hole] = std::move(array[hole / 2]);
+    array[hole] = x;
+}
+```
+
+`deleteMin` 保存 root，把最后元素放入 root hole，每层选择更小 child 向下滤。若总选 left child，会在 right child 更小时破坏 heap order：
+
+```cpp
+void percolateDown(std::size_t hole) {
+    T value = std::move(array[hole]);
+    while (2 * hole <= size) {
+        std::size_t child = 2 * hole;
+        if (child != size && array[child + 1] < array[child])
+            ++child;
+        if (!(array[child] < value)) break;
+        array[hole] = std::move(array[child]);
+        hole = child;
+    }
+    array[hole] = std::move(value);
+}
+```
+
+<DsaHeapPercolationLab />
+
+从任意 array 建 heap 不需要逐个 O(log N) insert。`buildHeap` 从最后一个 internal node `N/2` 向 root 做 percolateDown。深层 nodes 多但移动距离短，因此总成本是：
+
+$$
+\sum_{h\ge 0}\frac{N}{2^{h+1}}O(h)=O(N)
+$$
+
+<Callout type="trap" title="把 buildHeap 写成 N log N">
+逐个insert当然能建堆，但浪费了complete tree中多数nodes靠近leaves的事实。已有批量items时应自底向上heapify，并用线性基准验证，而不是把较慢构造当成必然。
+</Callout>
+
+## 6.4 Applications of Priority Queues
+
+优先队列应用（<Term def="把事件时间、路径估计或当前阈值映射为priority key，以极值操作驱动算法。">优先队列应用</Term>）包括：
+
+- operating system/job scheduling：priority 是 deadline、class 或动态权重；
+- discrete event simulation：每次 deleteMin 得到下一个 timestamp；
+- Dijkstra/Prim：取最小 tentative distance/edge，常需要 decrease-key 或 lazy duplicate；
+- top-k stream：维护容量 k 的 min-heap，让 root 是当前第 k 大阈值；
+- heapsort：buildHeap 后反复 delete extreme，得到 ordered output。
+
+<DsaHeapApplicationsDiagram />
+
+应用正确性依赖 priority key 与 stale entry policy。Dijkstra 若标准容器没有 decrease-key，可 push 新 distance，并在 pop 时丢弃与当前 best 不符的 stale item；但必须分析额外 queue size 和 comparisons。
+
+## 6.5 d-Heaps
+
+d堆（<Term def="每个internal node最多有d个children的complete heap，用更低height交换更宽child scan。">d堆</Term>）把 binary arity 2 推广为 d。0-based layout 常用 children `di+1` 到 `di+d`，parent 为 floor((i-1)/d)。高度约：
+
+$$
+h=\Theta(\log_d N)
+$$
+
+<DsaDHeapTradeoffLab />
+
+较大 d 减少 insert 上滤层数，并可能适合 decrease-key 密集场景；deleteMin 每层却要比较最多 d 个 children，约 O(d log_d N)。最佳 d 取决于 operation mix、cache line、comparison cost，不能只追求最低 height。
+
+## 6.6 Leftist Heaps
+
+左式堆（<Term def="以null-path length保证right spine短，并以merge作为insert与deleteMin原语的heap-ordered tree。">左式堆</Term>）为高效 meld 设计。Null-path length `npl(x)` 是从 x 到缺少两个 children 的 node 的最短路径；leftist property 要求：
+
+$$
+\operatorname{npl}(\mathrm{left})\ge \operatorname{npl}(\mathrm{right})
+$$
+
+因此 shortest path 在 right side，right spine 长度 O(log N)。Merge 比较两个 roots，较小 root 保留，把另一个 heap 与其 right subtree 递归 merge；若左右 npl 顺序不满足就 swap，并更新 npl。
+
+```cpp
+Node* merge(Node* a, Node* b) {
+    if (!a) return b;
+    if (!b) return a;
+    if (b->key < a->key) std::swap(a, b);
+    a->right = merge(a->right, b);
+    if (npl(a->left) < npl(a->right))
+        std::swap(a->left, a->right);
+    a->npl = npl(a->right) + 1;
+    return a;
+}
+```
+
+Insert 是与 singleton merge；deleteMin 删除 root 后 merge 左右 heaps。第3版 `merge(rhs)` 会吸收 rhs 并把 rhs.root 置空，还显式避免 self-merge aliasing。
+
+<DsaMeldableHeapLab />
+
+## 6.7 Skew Heaps
+
+斜堆（<Term def="不保存npl，而在merge路径上无条件交换children以获得均摊对数成本的自调整heap。">斜堆</Term>）删除 leftist metadata，也不逐次保证短 right spine。Merge 同样选较小 root 并递归合并，但在返回时交换 children。
+
+单次 merge 可能 linear，操作序列的 amortized bound 才是 O(log N)。这与 splay tree 的思想相似：以自调整换掉显式 balance metadata。需要严格 per-operation latency 时，不能把 amortized 当 worst-case。
+
+## 6.8 Binomial Queues
+
+二项队列（<Term def="每个rank至多保存一棵binomial tree，并以二进制进位方式实现merge的forest priority queue。">二项队列</Term>）是 heap-ordered binomial trees 的 forest。Rank k 的 binomial tree Bk 有：
+
+$$
+|B_k|=2^k,\qquad \operatorname{height}(B_k)=k
+$$
+
+一个 size N 的 queue 是否含 Bk，恰由 N 的二进制第 k 位决定。Merge 两个 queues 时，同 rank 的两棵树 combine 成下一 rank 的 carry，过程与 binary addition 一致。
+
+<DsaBinomialCarryLab />
+
+Combine 只比较 roots，让较大 root 成为较小 root 的 child。FindMin 需要扫描 O(log N) 个 tree roots；merge O(log N)。DeleteMin 找到最小 root，移除其 Bk，把 children 拆成 B0 到 B(k-1) 的新 queue，再 merge 回剩余 forest。
+
+第3版 `BinomialQueue.h` 的 merge switch 同时处理 this tree、rhs tree 和 carry 的八种 presence cases。理解 binary carry 比背 switch cases 更可靠，也更容易写 exhaustive tests。
+
+## 6.9 Priority Queues in the Standard Library
+
+标准库优先队列（<Term def="std::priority_queue容器适配器，以top、push、pop暴露默认max-heap或自定义comparator语义。">标准库优先队列</Term>）默认使用 `vector` 与 `less`，所以 `top()` 是最大值。第3版 `TestPQ.cpp` 对比默认 max queue 与 `greater<int>` min queue：
+
+```cpp
+std::priority_queue<int> maxQueue;
+std::priority_queue<int, std::vector<int>, std::greater<int>> minQueue;
+```
+
+<DsaStdPriorityQueueLab />
+
+Comparator 描述的是排序关系，不是“谁先出队”的自然语言函数。自定义 record 时，应把 tie-breaker 写清楚，保证 strict weak ordering。`pop()` 不返回 value，通常先读取 `top()` 再 `pop()`；此间不要让其他线程无同步地修改 queue。
+
+<Callout type="trap" title="反转 comparator 直觉">
+许多调用者把“更高优先级返回true”直接写进 comparator，结果top方向与预期相反。先用3个不同priority的items写可执行断言，明确默认max与greater-min语义。
+</Callout>
+
+标准适配器没有 meld、decrease-key 或 stable ordering；需要这些 operations 时应选择专用 heap、handle-based implementation，或明确使用 lazy duplicates。
+
+## 统一验证：先测 operation mix，再选 heap
+
+<Stepper>
+  <Step title="锁定极值方向与tie policy">
+    <DsaPriorityQueueModelLab />
+    用三个不同 priorities 和两个相同 priorities 验证 top/pop 顺序。
+  </Step>
+  <Step title="核查数组索引与heap order">
+    <DsaBinaryHeapIndexLab />
+    对每个非root node检查parent不大于child，并覆盖只有left child的最后internal node。
+  </Step>
+  <Step title="逐帧验证上下滤">
+    <DsaHeapPercolationLab />
+    插入新minimum、删除root、duplicate与capacity growth后都重查complete shape。
+  </Step>
+  <Step title="需要meld时比较显式与均摊保证">
+    <DsaMeldableHeapLab />
+    分别测leftist right spine、skew sequence cost与self-merge alias protection。
+  </Step>
+  <Step title="用二进制位验证forest">
+    <DsaBinomialCarryLab />
+    每个rank至多一棵tree，总node count必须等于所有active ranks的2次幂之和。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. Priority queue 维护下一个极值，不等于完整 sorted container。
+2. Simple implementations 把 O(N) 成本放在 insert 或 extreme removal 的不同位置。
+3. Binary heap 用 complete shape 和 heap order 在 array 上实现 O(log N) insert/deleteMin。
+4. Bottom-up buildHeap 是 O(N)，不是 N 次 insert 的 O(N log N)。
+5. Applications 先把业务状态映射为 priority，并明确 stale/tie policy。
+6. d-heap 以更宽 child scan 换更低 height。
+7. Leftist heap 用 npl 保证短 right spine；skew heap 以自调整提供 amortized merge。
+8. Binomial queue 的 forest ranks 与 size 二进制位一一对应。
+9. std::priority_queue 默认 max-heap，不提供 meld、decrease-key 或 stable order。
+
+<Exercises>
+
+**问题 1：1-based binary heap 中index 13的parent和children位置是什么？**
+
+<Answer>parent是floor(13/2)=6；left是26，right是27。只有当这些child indices不超过currentSize时才真实存在。</Answer>
+
+**问题 2：为什么bottom-up buildHeap是O(N)而不是O(N log N)？**
+
+<Answer>只有少数靠近root的nodes可能下滤log N层；约一半nodes是leaves不移动，四分之一最多移动1层，八分之一最多2层。按数量乘高度求和形成收敛级数，总工作O(N)。</Answer>
+
+**问题 3：leftist heap为何只约束right path而不要求整棵tree平衡？**
+
+<Answer>merge递归只沿right spine前进；保证right spine O(log N)就足以界定merge。Left subtree可以很深，只要npl(left)不小于npl(right)，并不需要AVL式整体height balance。</Answer>
+
+**问题 4：size 13的binomial queue包含哪些ranks？**
+
+<Answer>13的二进制是1101，因此包含B3、B2、B0，各有8、4、1个nodes，总和13；B1位置为空。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="优先队列模型">只维护下一极值及插入删除的ADT。</GlossaryItem>
+  <GlossaryItem term="优先队列简单实现">用sorted或unsorted线性结构分配操作成本。</GlossaryItem>
+  <GlossaryItem term="二叉堆">complete binary shape加heap order的array priority queue。</GlossaryItem>
+  <GlossaryItem term="优先队列应用">以事件时间、路径估计或top-k阈值驱动极值处理。</GlossaryItem>
+  <GlossaryItem term="d堆">每个node最多d个children的complete heap。</GlossaryItem>
+  <GlossaryItem term="左式堆">以npl保证短right spine的meldable heap。</GlossaryItem>
+  <GlossaryItem term="斜堆">无metadata、以自调整merge获得均摊性能的heap。</GlossaryItem>
+  <GlossaryItem term="二项队列">按binary ranks保存binomial trees的forest queue。</GlossaryItem>
+  <GlossaryItem term="标准库优先队列">默认max-heap语义的std::priority_queue适配器。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Data Structures and Algorithm Analysis in C++, 3rd Edition · Chapter 6 Priority Queues (Heaps)"
+  href="https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+  author="Mark Allen Weiss"
+  license="原书与官方示例代码版权归作者及 Pearson/Addison-Wesley 所有；本章依据官方完整目录及作者公开的第3版 BinaryHeap/LeftistHeap/BinomialQueue/TestPQ 示例独立重构教学内容"
+/>

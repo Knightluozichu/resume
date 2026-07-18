@@ -1,0 +1,257 @@
+---
+title: "第9章：Value Types"
+type: C
+section: "Essential C# 7.0 · Type Design"
+order: 9
+description: "掌握struct value semantics、default/immutable design、boxing/unboxing以及enum与Flags bit masks。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-c-sharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7BoxingBoundaryLab, Ec7EnumFlagsLab, Ec7StructCopyLab } from "@/components/mdx/essential-csharp-7/diagrams/value-types";
+
+<Objectives>
+
+- 能解释struct assignment、parameter passing、default value和mutation产生的value semantics结果
+- 能分析boxing/unboxing在object/interface边界的copy、allocation、exact type与failure behavior
+- 能设计enum与Flags values、验证unnamed numeric values并写出正确bit set/test/clear operations
+
+</Objectives>
+
+## 为什么value type设计必须经得起“随处复制”
+
+class object通过reference共享identity，struct value则会在assignment、普通parameter passing、return、array element读取等位置复制。一个mutable struct若藏在property或collection中，caller可能修改的只是temporary copy；一个很大的struct频繁复制也会付出成本。value type应代表小型、完整、像数字一样的value，而不是仅为了“少分配”把class改成struct。
+
+先预测：`Point b = a`后修改b是否影响a；把int赋给object后再改原int，box里是什么；boxed int能否直接unbox成long；enum variable能否保存没有name的numeric value；Flags的0应该表示什么。然后分别追踪copy、object boundary和bit pattern。
+
+<Term def="value在assignment和by-value calls中被完整复制，副本拥有独立field state而不共享object identity。">value semantics</Term>
+
+## Structs and Their Default State
+
+`struct`声明value type，可包含fields、properties、methods、constructors、operators并实现interfaces，但不能继承另一个class/struct；它最终具有`System.ValueType`提供的value-type基础行为。每个struct总有zero-initialized default value，即使未调用自定义带参数constructor。
+
+C# 7.0 struct不能声明自定义parameterless instance constructor，instance fields必须在constructor正常返回前全部definitely assigned。default value必须是可承受的state；若全零绝对非法且无法在每个operation中检测，class或factory/result design可能更合适。
+
+<Term def="所有fields取各自default时形成的struct状态，它可由default expression、array initialization等路径产生。">default-state contract</Term>
+
+```csharp
+public struct Point
+{
+    public Point(int x, int y)
+    {
+        X = x;
+        Y = y;
+    }
+
+    public int X { get; }
+    public int Y { get; }
+
+    public Point Move(int dx, int dy) => new Point(X + dx, Y + dy);
+}
+
+Point origin = default(Point); // X=0, Y=0
+Point first = new Point(2, 3);
+Point second = first;          // copies X and Y
+second = second.Move(7, 0);    // first remains (2,3)
+```
+
+immutable design让copy不令人惊讶：fields/properties construction后不变，operations返回新value。`readonly struct` keyword是C# 7.2能力；严格C# 7.0仍可用private/readonly fields和get-only properties表达immutable intent，但要标明语言版本差异。
+
+<Stepper>
+  <Step title="切换mutable与immutable-style design">
+    <Ec7StructCopyLab />
+  </Step>
+  <Step title="执行assignment后修改副本">
+    mutable struct的b fields变化不影响a；不可变style通过返回new value表达变化。
+  </Step>
+  <Step title="寻找hidden copy sites">
+    检查property getter、foreach variable、method parameter和interface conversion，确认修改的是哪一份value。
+  </Step>
+</Stepper>
+
+## Choosing Struct or Class
+
+struct适合语义上是single value、通常较小、不可变或接近不可变、没有独立identity/lifetime的类型，例如coordinates、ranges、money+currency组合。class适合需要shared mutation、identity、inheritance hierarchy、nullable-by-default或较大state的entity。
+
+<Term def="根据identity、copy frequency、size、mutability、default state和inheritance需求选择struct或class的决策边界。">struct design boundary</Term>
+
+```csharp
+static Point Translate(Point value, int dx, int dy)
+{
+    return value.Move(dx, dy); // parameter and return are values
+}
+```
+
+不要用“少于16 bytes就struct”作为唯一规则；size只是copy cost因素。public struct发布后增加fields会改变copy/layout/performance特征，mutable fields还会让hash/equality和collection behavior不稳定。
+
+<Callout type="trap" title="struct一定在stack上，所以总比class快">
+struct可能嵌在heap object/array中、被boxing或被JIT优化；class references也可能被优化。应从value semantics与measurement选择，不能把storage口诀当性能结论。
+</Callout>
+
+## Mutable Struct Copy Traps
+
+若property返回struct，getter通常返回copy；对copy修改可能被compiler拒绝或不写回owner。foreach iteration variable也是每项value。即便语法允许，caller很难判断mutation作用于原storage还是temporary，因此public mutable structs应谨慎。
+
+```csharp
+public struct Counter
+{
+    public int Value;
+    public void Increment() { Value++; }
+}
+
+Counter a = new Counter();
+Counter b = a;
+b.Increment();
+Console.WriteLine(a.Value); // 0
+Console.WriteLine(b.Value); // 1
+```
+
+需要高性能原位修改时可通过array index、ref local/ref return等显式storage alias设计，但这应有benchmark与清晰lifetime contract，不是一般domain API默认。
+
+## Boxing: Crossing into object or Interface
+
+boxing把value type转换为`object`、`System.ValueType`或其实现的interface时，在object representation中保存该value的copy。原variable与box之后独立；修改一边不更新另一边。boxing通常涉及allocation和copy，频繁发生会增加GC pressure。
+
+<Term def="value type跨到object/interface representation时创建包含value copy的object，以及返回时要求exact type的边界。">boxing boundary</Term>
+
+<Stepper>
+  <Step title="切换box、source mutation与interface conversion">
+    <Ec7BoxingBoundaryLab />
+  </Step>
+  <Step title="记录boxed runtime type与value copy">
+    `object box = n`保存boxed Int32；后续n变化不会改box。
+  </Step>
+  <Step title="验证unbox exactness与failure">
+    先unbox为原boxed type，再做numeric conversion；直接unbox为long会失败。
+  </Step>
+</Stepper>
+
+```csharp
+int number = 7;
+object box = number;       // boxing copies 7
+number = 8;
+
+int restored = (int)box;  // exact unbox succeeds: 7
+long widened = restored;  // numeric conversion after unbox
+```
+
+generic `List<int>`直接存int values，避免旧式non-generic collection把每项box成object。struct经interface reference调用也可能boxing；generic constraint有时允许constrained call避免box，是否发生应通过profiler/IL而不是猜测。
+
+## Unboxing and Invalid Casts
+
+unboxing包含runtime检查boxed object是否含exact compatible value type，再把value复制到target variable。boxed int不是boxed long，尽管int可implicit convert到long；`(long)box`先要求box内就是Int64，因此抛`InvalidCastException`。null unbox到non-nullable value type也失败。
+
+```csharp
+object boxed = 42;
+
+try
+{
+    long wrong = (long)boxed;
+}
+catch (InvalidCastException)
+{
+    int exact = (int)boxed;
+    long correct = exact;
+    Console.WriteLine(correct);
+}
+```
+
+pattern matching可安全检查boxed type：`if (boxed is int value)`同时验证和提取。不要用catch作为正常type probing流程。
+
+<Callout type="trap" title="int能转long，所以boxed int也能直接cast为long">
+unboxing不是numeric conversion。必须先按box内exact type取出int，再执行int到long conversion；一步`(long)boxedInt`会因runtime boxed type不符而失败。
+</Callout>
+
+## Enums: Named Integral Domains
+
+`enum`定义一组named integral constants，默认underlying type是int，也可显式用byte、short、long等integral type。enum提高domain可读性和type separation，但runtime value仍可能包含未声明numeric value，例如cast、deserialization或未来version传入。default enum value的bits全0，即使没有name。
+
+<Term def="以integral representation承载named domain values，同时必须决定zero与unnamed numeric values处理策略的类型。">enum domain</Term>
+
+```csharp
+public enum OrderState
+{
+    Unknown = 0,
+    Pending = 1,
+    Paid = 2,
+    Shipped = 3
+}
+
+OrderState state = (OrderState)99;
+if (!Enum.IsDefined(typeof(OrderState), state))
+    state = OrderState.Unknown;
+```
+
+protocol/storage enum应显式赋numeric values，避免reordering改变wire representation。switch必须包含default/unknown policy，以支持invalid input和未来新增values。`Enum.TryParse`可parse name或numeric text；parse成功不等于value已声明，必要时再IsDefined。
+
+## FlagsAttribute and Bit Masks
+
+可组合independent options时，用`[Flags]` enum并让每个single flag取power-of-two bit；`None = 0`表示无flags，composites可命名常用组合。`FlagsAttribute`主要表达intent并影响formatting，不自动阻止overlap/invalid bits，bitwise rules本身仍由integral representation决定。
+
+<Stepper>
+  <Step title="组合Read、Write与Execute bits">
+    <Ec7EnumFlagsLab />
+  </Step>
+  <Step title="检查decimal、binary与names">
+    set用OR，test用AND equality，clear用AND complement；0明确命名None。
+  </Step>
+  <Step title="注入unnamed bit并验证">
+    enum可保存8等未声明bits，boundary必须reject、mask或forward-compatible保留。
+  </Step>
+</Stepper>
+
+```csharp
+[Flags]
+public enum Permission
+{
+    None = 0,
+    Read = 1 << 0,
+    Write = 1 << 1,
+    Execute = 1 << 2,
+    ReadWrite = Read | Write
+}
+
+Permission permissions = Permission.Read | Permission.Write;
+bool canWrite = (permissions & Permission.Write) == Permission.Write;
+permissions &= ~Permission.Write;
+```
+
+普通互斥state不要加Flags；`Pending | Shipped`若没有业务意义，应使用ordinary enum。validation可计算known mask并检查`(value & ~known) == 0`，但forward-compatible protocol有时需要保留unknown bits，应把policy写清。
+
+## 本章回顾：Copy、Box与Bits
+
+1. struct以value semantics工作，assignment与by-value calls复制全部fields。
+2. default struct state始终可产生；immutable-style设计减少hidden copy mutation问题。
+3. boxing跨到object/interface时复制value并通常allocation，unboxing要求exact boxed type。
+4. enum是named integral domain，不自动拒绝unnamed values，zero需要明确policy。
+5. Flags用independent power-of-two bits组合，attribute不会替你完成validation。
+
+<Exercises>
+
+**问题 1：怎样判断一个domain type应是struct还是class？**
+
+<Answer>先问是否需要identity、shared mutation、class inheritance或nullable-by-default；需要则通常class。若它是小型完整value、复制自然、default state可处理并能保持不可变，struct合适。再用真实profile评估copy/boxing，检查properties、interfaces和collections中的hidden copies，不能只依据“在栈上”或固定byte阈值。</Answer>
+
+**问题 2：为什么boxed int不能直接unbox成long，正确流程是什么？**
+
+<Answer>box记录exact runtime value type Int32，unboxing先验证target正是compatible boxed type，不执行numeric widening。因此先`int value = (int)box`取出副本，再`long widened = value`做语言numeric conversion。若source不可信，用`box is int value`pattern处理failure。</Answer>
+
+**问题 3：如何设计并验证Permission Flags enum？**
+
+<Answer>定义None=0，每个single flag使用独立power-of-two bit，常用组合由OR构成。set用OR、test用`(value & flag) == flag`、clear用AND complement。计算known mask测试unnamed bits，并决定reject、strip或保留；同时确保该domain真允许组合，而非互斥states。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="value semantics" definition="assignment和by-value calls复制完整value，副本state彼此独立。" />
+  <GlossaryItem term="default-state contract" definition="struct所有fields取default时必然可产生的zero-initialized状态。" />
+  <GlossaryItem term="struct design boundary" definition="以identity、copy、size、mutability和default state选择struct/class。" />
+  <GlossaryItem term="boxing boundary" definition="value跨object/interface representation产生copy并要求exact unboxing的边界。" />
+  <GlossaryItem term="enum domain" definition="named integral values及zero/unnamed values处理policy构成的domain。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 9: Value Types" adaptedUrl="https://www.informit.com/store/essential-csharp-7.0-9781509303618" />

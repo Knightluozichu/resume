@@ -1,0 +1,304 @@
+---
+title: "Chapter 33 · Machine-Learning Algorithms"
+type: C
+section: "CLRS4 · 专题"
+order: 33
+description: "按CLRS第四版第33章重建聚类、乘法权重算法与梯度下降的目标、更新、证明和验收。"
+demo: true
+math: true
+sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+draft: false
+---
+
+import { CLRS4ClusteringObjectiveLab, CLRS4AssignmentStepLab, CLRS4CenterUpdateLab, CLRS4LloydIterationLab, CLRS4InitializationLab, CLRS4ExpertWeightsLab, CLRS4LearningRateLab, CLRS4RegretLab, CLRS4PotentialProofLab, CLRS4GradientStepLab, CLRS4GradientRateLab, CLRS4GradientVectorLab, CLRS4ConvexityLab, CLRS4StoppingLab, CLRS4MLCertificateLab } from "@/components/mdx/introduction-to-algorithms/diagrams/33-machine-learning-algorithms";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释k-means objective、expert regret、gradient direction与convexity guarantee
+- 能计算cluster assignments、centroid updates、multiplicative weights、regret和gradient steps
+- 能实现Lloyd iteration、weighted-majority update与multivariate gradient descent
+- 能分析initialization、learning rate、local optimum、adversarial losses和stopping criteria
+- 能设计包含objective、seed、trace、baseline、regret或convergence evidence的算法证书
+
+</Objectives>
+
+## 从“算法究竟学到了什么”开始
+
+先预测：把六个points分成两组、每天从三个experts中选一个、沿function slope找minimum，看起来是三类不同任务。它们的共同结构是：先定义可计算objective或loss，再反复更新state，并用单调性、regret或convexity证明“更新不是盲走”。
+
+<Term def="从data或feedback更新parameters、weights或representatives，并以objective、regret或generalization指标评价结果的算法。">机器学习算法</Term>在本章只聚焦三种基础方法：clustering发现unlabeled geometry；multiplicative weights在online feedback下组合experts；gradient descent最小化differentiable objective。
+
+算法优化training objective不等于模型在未来data上表现好。教材中的algorithmic guarantees需要和data sampling、held-out evaluation、robustness与deployment constraints分层说明。
+
+## 33.1 Clustering
+
+### K-means objective
+
+<Term def="在没有labels时，按给定distance或similarity把points划成groups，并用representatives描述每组。">聚类</Term>不是一个唯一答案；必须先给distance、cluster count与objective。Euclidean $k$-means选择centers $\mu_1,\ldots,\mu_k$，使within-cluster sum of squares最小：
+
+$$
+J(C,\mu)
+=
+\sum_{i=1}^{n}
+\lVert x_i-\mu_{C(i)}\rVert_2^2.
+$$
+
+<CLRS4ClusteringObjectiveLab />
+
+<Term def="交替执行nearest-center assignment与cluster-mean update，使sum-of-squared-distance objective单调不增的聚类算法。">k-means算法</Term>也称Lloyd's algorithm。它把joint optimization拆成两个容易的blocks。
+
+### Assignment step
+
+Centers fixed时，每个point独立选择nearest center：
+
+$$
+C(i)\leftarrow
+\arg\min_{j\in\{1,\ldots,k\}}
+\lVert x_i-\mu_j\rVert_2^2.
+$$
+
+<CLRS4AssignmentStepLab />
+
+这个选择逐point最优，所以不会增加$J$。Equal-distance ties要有stable rule，否则同一input在不同iteration order下可能产生不同empty clusters。
+
+### Center-update step
+
+Assignments fixed时，每个nonempty cluster的optimal center是arithmetic mean：
+
+$$
+\mu_j
+\leftarrow
+\frac{1}{|C_j|}
+\sum_{i:C(i)=j}x_i.
+$$
+
+<CLRS4CenterUpdateLab />
+
+Mean最小化squared Euclidean distances，可由展开quadratic或令gradient为0证明。若使用Manhattan distance，representative应转为median；更换distance却仍更新mean，objective proof会失效。
+
+```text
+LLOYD-K-MEANS(points, k, initial_centers)
+1  centers = initial_centers
+2  repeat
+3      assign each point to a nearest center
+4      replace each nonempty center by its assigned-point mean
+5      repair empty clusters by a declared policy
+6  until assignments stabilize or a stopping rule fires
+7  return assignments, centers, objective trace
+```
+
+<CLRS4LloydIterationLab />
+
+每个phase nonincreasing，finite assignments下eventually stabilizes；但$J$ nonconvex，结果通常只保证local optimum。Initialization、feature scaling、outliers和chosen $k$都会改变答案。
+
+<CLRS4InitializationLab />
+
+K-means++-style spread seeding与multiple restarts可降低bad basin风险；它们不把local algorithm变成global optimizer。验收应同时报告seed、all restart objectives、best run与cluster sizes，不能只展示最好的一张图。
+
+<Callout type="trap" title="Objective不再下降就证明找到了global optimum">
+Lloyd updates只保证对当前assignments或centers的block-wise最优和总体单调不增。修法是称其为local/stationary result，记录initialization并做multiple restarts或与independent baseline比较。
+</Callout>
+
+## 33.2 Multiplicative-weights algorithms
+
+### Experts and losses
+
+<Term def="维护experts的positive weights，按normalized weights决策，再按observed losses乘法缩小表现差的experts。">乘法权重算法</Term>（multiplicative weights update，MWU）处理$N$个experts、$T$ rounds。Round $t$开始有weights $w_i^{(t)}$，形成distribution
+
+$$
+p_i^{(t)}
+=
+\frac{w_i^{(t)}}{\sum_j w_j^{(t)}}.
+$$
+
+Learner按$p^{(t)}$混合experts，随后观察每个expert loss $\ell_i^{(t)}\in[0,1]$。
+
+<CLRS4ExpertWeightsLab />
+
+一个常见update为
+
+$$
+w_i^{(t+1)}
+=
+w_i^{(t)}\bigl(1-\epsilon\ell_i^{(t)}\bigr),
+\qquad 0\lt\epsilon\le\frac12.
+$$
+
+```text
+MULTIPLICATIVE-WEIGHTS(losses, epsilon)
+1  initialize every expert weight to 1
+2  for each round t
+3      normalize weights into probabilities p
+4      incur expected loss dot(p, losses[t])
+5      for each expert i
+6          weight[i] *= 1 - epsilon * losses[t][i]
+```
+
+<CLRS4LearningRateLab />
+
+Loss high的expert按multiplicative factor下降，zero-loss expert保持。Normalization不是update本身，却是把relative weights转成合法probability distribution的必要步骤。若loss范围不是$[0,1]$，必须rescale或改用相应bound。
+
+### Regret, not hindsight accuracy
+
+<Term def="Learner cumulative loss减去同一sequence上best fixed expert cumulative loss的差。">遗憾</Term>（regret）定义为
+
+$$
+R_T
+=
+\sum_{t=1}^{T}\langle p^{(t)},\ell^{(t)}\rangle
+-
+\min_i\sum_{t=1}^{T}\ell_i^{(t)}.
+$$
+
+<CLRS4RegretLab />
+
+适当选择$\epsilon$可得到
+
+$$
+R_T=O\bigl(\sqrt{T\log N}\bigr),
+\qquad
+\frac{R_T}{T}\longrightarrow0.
+$$
+
+这表示average loss渐近接近best fixed expert in hindsight，不表示每round预测正确，也不和每round都选择不同best expert的dynamic oracle比较。
+
+### Potential proof
+
+令total weight potential $\Phi^{(t)}=\sum_iw_i^{(t)}$。Update给出由learner cumulative loss控制的upper bound；任意fixed expert $i$保留的weight给$\Phi$ lower bound。对两边取log并使用elementary inequalities，就把learner loss与best expert loss连接。
+
+<CLRS4PotentialProofLab />
+
+Adversary可自适应选择difficult loss sequence，regret guarantee仍是sequence-wise comparator statement。若algorithm按probability随机抽一个expert，分析expected loss；工程日志应区分distribution expected loss与一次sampled action loss。
+
+<Callout type="trap" title="Regret小就说明每轮都接近当轮最优">
+Comparator是整个horizon上的best single expert，不是每轮切换的oracle。修法是明确comparator class；若允许switching experts，需要不同regret定义、regularization或tracking algorithm。
+</Callout>
+
+## 33.3 Gradient descent
+
+### Gradient as a local direction
+
+<Term def="按当前point的negative gradient更新parameters，以step size控制移动并最小化differentiable function的方法。">梯度下降</Term>对$f:\mathbb{R}^d\to\mathbb{R}$迭代
+
+$$
+x^{(t+1)}
+=
+x^{(t)}-\eta_t\nabla f(x^{(t)}).
+$$
+
+Gradient收集所有partial derivatives；在Euclidean norm下，$-\nabla f$是local steepest-descent direction。
+
+<CLRS4GradientVectorLab />
+
+```ts
+for (let t = 0; t < maxIterations; t += 1) {
+  const g = gradient(x);
+  if (norm(g) <= gradientTolerance) break;
+  x = subtract(x, scale(stepSize(t), g));
+  objectiveTrace.push(f(x));
+}
+```
+
+<CLRS4GradientStepLab />
+
+### Step size and smoothness
+
+Direction正确不代表任意distance都安全。$\eta$太小收敛慢；太大会overshoot、oscillate或diverge。
+
+<CLRS4GradientRateLab />
+
+若$f$有$L$-Lipschitz gradient，常数step不超过$1/L$可用descent lemma保证objective下降。Backtracking line search可从trial step缩小，直到observed decrease满足condition；stochastic gradients则需要不同noise-aware schedule。
+
+### Convexity and convergence
+
+<Term def="对任意两points，function在其convex combination处不高于endpoint values的同权重组合。">凸函数</Term>满足
+
+$$
+f(\lambda x+(1-\lambda)y)
+\le
+\lambda f(x)+(1-\lambda)f(y),
+\qquad 0\le\lambda\le1.
+$$
+
+<CLRS4ConvexityLab />
+
+Differentiable convex function的任何zero-gradient point都是global minimizer。Smooth convex gradient descent可给objective-gap convergence bounds；strong convexity进一步给linear/geometric convergence。在nonconvex objectives中，small gradient通常只证明接近stationary point，不证明global optimal。
+
+### Stopping evidence
+
+Fixed iteration count是budget，不是单独的convergence proof。应同时记录objective trace、gradient norm、step norm、relative objective change、constraint violation（若有）和best-known lower bound。
+
+<CLRS4StoppingLab />
+
+Training data上的objective下降也可能伴随validation performance恶化。Optimization certificate与generalization evidence分层：前者证明“这个objective被如何优化”，后者评估“learned result是否适用于unseen data”。
+
+## 三类算法的共同审计框架
+
+Clustering交付final objective与restart distribution；MWU交付cumulative learner loss、best expert loss和regret；gradient descent交付objective/gradient traces与assumptions。它们都需要明确initial state、hyperparameters和comparison baseline。
+
+<CLRS4MLCertificateLab />
+
+<Stepper>
+<Step title="先固定objective与comparator">
+Clustering写distance与k，MWU写loss range与best-expert class，gradient descent写function、domain和smoothness assumptions。
+
+<CLRS4ClusteringObjectiveLab />
+</Step>
+<Step title="记录完整update trace">
+保存seeds、assignments/objectives、expert weights/losses、gradient norms和steps；不要只保留final state。
+
+<CLRS4PotentialProofLab />
+</Step>
+<Step title="区分算法保证与数据结论">
+Local optimum、low regret、small gradient各自只支持特定claim；另用held-out data或domain checks评价deployment behavior。
+
+<CLRS4MLCertificateLab />
+</Step>
+</Stepper>
+
+## 小结
+
+Chapter 33 Machine-Learning Algorithms以三种update patterns建立基础。Clustering中的k-means交替做nearest-center assignment与mean update，objective单调不增但依赖initialization并只保证local result。Multiplicative-weights algorithms按loss调整expert weights，以total-weight potential证明$O(\sqrt{T\log N})$ regret。
+
+Gradient descent沿negative gradient移动，step size由smoothness控制；convexity决定stationary point能否升级为global optimum。三者的高质量交付都要包含objective、initialization、update trace、baseline和对应的regret/convergence证据，并避免把optimization success误写成generalization success。
+
+<Exercises>
+
+**问题 1**：为什么fixed assignments下，cluster arithmetic mean最小化sum of squared distances？
+
+<Answer>
+对center μ的objective是各point与μ差的平方和，是convex quadratic。对μ求gradient得到2乘以cluster size再乘μ，减2乘以points sum；令其为0得到μ等于arithmetic mean，且positive Hessian说明这是global minimizer。
+</Answer>
+
+**问题 2**：Lloyd objective每轮不增，为什么仍可能对initialization敏感？
+
+<Answer>
+Objective对assignments和centers的joint problem是nonconvex。每个step只在另一block fixed时最优，不同initial centers会进入不同basins，最终停在不同local optima；单调性不比较这些basins。
+</Answer>
+
+**问题 3**：MWU regret为20、rounds为1000表示什么？
+
+<Answer>
+Learner cumulative loss比这1000 rounds上best fixed expert多20，因此average excess loss为0.02。它不保证每round接近当轮best，也不与可每round自由切换expert的oracle比较。
+</Answer>
+
+**问题 4**：Gradient norm很小为什么在nonconvex problem中不能证明global optimal？
+
+<Answer>
+Small gradient只说明接近stationary point。Nonconvex function的stationary point可能是local minimum、saddle或flat region；global claim还需要convexity、special structure或独立global lower bound。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="机器学习算法">从data或feedback更新parameters、weights或representatives，并以objective、regret或generalization指标评价结果的算法。</GlossaryItem>
+<GlossaryItem term="聚类">在没有labels时，按给定distance或similarity把points划成groups，并用representatives描述每组。</GlossaryItem>
+<GlossaryItem term="k-means算法">交替执行nearest-center assignment与cluster-mean update，使sum-of-squared-distance objective单调不增的聚类算法。</GlossaryItem>
+<GlossaryItem term="乘法权重算法">维护experts的positive weights，按normalized weights决策，再按observed losses乘法缩小表现差的experts。</GlossaryItem>
+<GlossaryItem term="遗憾">Learner cumulative loss减去同一sequence上best fixed expert cumulative loss的差。</GlossaryItem>
+<GlossaryItem term="梯度下降">按当前point的negative gradient更新parameters，以step size控制移动并最小化differentiable function的方法。</GlossaryItem>
+<GlossaryItem term="凸函数">对任意两points，function在其convex combination处不高于endpoint values的同权重组合。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Chapter 33 · Machine-Learning Algorithms" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

@@ -1,0 +1,244 @@
+---
+title: "Chapter 5 · Probabilistic Analysis and Randomized Algorithms"
+type: B
+section: "CLRS4 · 基础"
+order: 5
+description: "按CLRS第四版第5章重建雇用问题、指示器随机变量、随机排列与随机算法，并扩展生日悖论、球入箱、连续正面和在线雇用分析。"
+demo: true
+math: true
+sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+draft: false
+---
+
+import { CLRS4HiringTraceLab, CLRS4HiringCostLab, CLRS4RecordProbabilityLab, CLRS4IndicatorSumLab, CLRS4RandomnessBoundaryLab, CLRS4FisherYatesLab, CLRS4PermutationUniformityLab, CLRS4BirthdayLab, CLRS4BallsBinsLab, CLRS4StreakOnlineLab } from "@/components/mdx/introduction-to-algorithms/diagrams/05-probabilistic-analysis-randomized-algorithms";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释概率分析的输入分布假设与随机算法的内部随机位之间的区别
+- 能计算雇用次数、生日碰撞、空箱数量和连续正面事件的期望或概率
+- 能实现均匀原地随机排列并用循环不变式证明每个排列等概率
+- 能分析指示器随机变量为何无需相互独立也可通过期望线性性求和
+- 能设计包含样本空间、随机变量、期望对象与对抗性输入边界的随机化证书
+
+</Objectives>
+
+## 从“为什么只会偶尔换掉当前最佳”开始
+
+先预测：按随机顺序面试$n$名能力各异的候选人，每当看到迄今最好者就立即雇用，期望会雇用$n/2$人吗？不会。位置$i$的候选人成为前$i$人中最佳者的概率只有$1/i$，这些概率之和约为$\ln n$。
+
+<CLRS4HiringTraceLab />
+
+本章用这个雇用问题建立两条不同路线：<Term def="先为输入指定概率分布，再对确定性算法在该分布上的成本取期望的分析方法。">概率分析</Term>把不确定性放在输入；随机化算法则由算法主动抽取随机位，让固定输入也对应一个运行时间分布。
+
+## 5.1 The hiring problem
+
+### 成本模型与最坏排列
+
+<Term def="顺序面试候选人并在遇到迄今最佳者时立即替换当前雇员，用来研究记录事件与期望成本的模型问题。">雇用问题</Term>设每次面试成本$c_i$，每次雇用成本$c_h$，其中$c_h$远大于$c_i$。所有候选人都必须面试，所以基础成本固定为$c_in$；变化只来自雇用次数$m$：
+
+$$
+C(n)=c_in+c_hm.
+$$
+
+若候选人按能力递增到达，每个人都是新纪录，$m=n$，这是最坏排列，总成本$(c_i+c_h)n$。若最优秀者第一个到达，后续无人打破纪录，只雇用一次。最坏分析提供确定保证，却不能告诉我们典型随机顺序中$m$有多大。
+
+<CLRS4HiringCostLab />
+
+### 概率分析需要样本空间
+
+假设候选人的能力排名互异，且$n!$种到达排列等概率。这个假设定义了样本空间；没有它，“平均顺序”没有数学意义。对固定位置$i$，前$i$人中的最佳者等可能出现在任一位置，所以第$i$人被雇用的概率为$1/i$。
+
+<CLRS4RecordProbabilityLab />
+
+该分布可能不符合现实招聘：推荐批次、候选人退出和季节性都会造成相关顺序。概率分析的结论应连同分布假设一起报告；若输入来自未知或对抗性来源，可以由算法先随机打乱顺序，把均匀性变成自己控制的机制。
+
+<Callout type="trap" title="写expected却不写对什么取期望">
+期望必须对应明确概率空间。修法是说明随机性来自输入排列、算法随机位还是两者，并声明固定了哪些量。否则同一个“期望时间”可能代表不同保证。
+</Callout>
+
+## 5.2 Indicator random variables
+
+### 把事件变成0或1
+
+<Term def="事件发生时取1、否则取0的随机变量，其期望等于事件发生概率。">指示器随机变量</Term>把“第$i$名候选人是否被雇用”记作：
+
+$$
+X_i=
+\begin{cases}
+1,&\text{candidate i is hired},\\
+0,&\text{otherwise}.
+\end{cases}
+\qquad
+\mathbb E[X_i]=\Pr\{X_i=1\}=\frac1i.
+$$
+
+总雇用次数$X=\sum_{i=1}^{n}X_i$。期望线性性给出：
+
+$$
+\mathbb E[X]
+=\mathbb E\!\left[\sum_{i=1}^{n}X_i\right]
+=\sum_{i=1}^{n}\mathbb E[X_i]
+=\sum_{i=1}^{n}\frac1i
+=H_n=\ln n+O(1).
+$$
+
+<CLRS4IndicatorSumLab />
+
+因此期望总成本为$O(c_in+c_h\ln n)$。最重要的技术点是：期望线性性不要求$X_i$独立。事实上“早期出现特别优秀者”会影响后续被雇用机会，这些指示器存在依赖，但每项期望仍可相加。
+
+指示器方法的工作流是先把总量写成局部事件之和，再逐项求概率。它把难以直接描述的“总碰撞数”“空箱数”“长度为k的窗口数”转化为结构相同的小问题。
+
+```ts
+function recordCount(ranks: number[]) {
+  let best = -Infinity;
+  let records = 0;
+  for (const rank of ranks) {
+    if (rank > best) {
+      best = rank;
+      records += 1;
+    }
+  }
+  return records;
+}
+```
+
+## 5.3 Randomized algorithms
+
+### 随机性来自哪里
+
+<Term def="在执行中主动调用随机数生成器，使同一输入可能走不同执行路径，并对内部随机选择取期望的算法。">随机算法</Term>把随机位视为额外输入。对每个固定问题实例$x$，运行时间$T(x,R)$随随机串$R$变化，期望保证是$\mathbb E_R[T(x,R)]$。
+
+<CLRS4RandomnessBoundaryLab />
+
+这与“输入本来是均匀随机的”不同。随机算法可以先把任意候选人序列均匀洗牌，再执行确定性HIRE-ASSISTANT；只要随机数独立且洗牌均匀，期望雇用数对每个固定能力集合都是$H_n$。对手可以选择输入内容，却无法预知后续私有随机位。
+
+### 均匀随机排列
+
+<Term def="所有n!个排列都以相同概率1/n!出现的随机排列分布。">均匀随机排列</Term>要求每个最终排列的概率严格相同。一种错误方法是让每个元素独立交换到`RANDOM(1,n)`位置；不同交换序列汇聚到各排列的次数不相同，通常不能保证均匀。RANDOMIZE-IN-PLACE在位置$i$只从尚未固定的后缀`i..n`中均匀选择$j$并交换：
+
+```text
+RANDOMIZE-IN-PLACE(A)
+1  for i = 1 to A.length
+2      swap A[i] with A[RANDOM(i, A.length)]
+```
+
+<CLRS4FisherYatesLab />
+
+循环不变式是：第$i$轮开始前，前$i-1$个位置是从全部元素中抽出的均匀有序样本，每种前缀概率为$(n-i+1)!/n!$。第$i$轮在剩余$n-i+1$个元素中均匀选一个，因此长度$i$的每种前缀概率变为$(n-i)!/n!$。终止时每个完整排列概率$1/n!$。
+
+<CLRS4PermutationUniformityLab />
+
+实现还依赖随机数接口：`RANDOM(i,n)`必须在闭区间内无偏，不能用会产生模偏差的低质量转换；种子用于复现实验，不应被误认为新的独立证据。密码学对手场景还需要不可预测随机源，而性能随机化通常只需统计质量和速度。
+
+<Callout type="trap" title="看起来很乱就等于均匀">
+视觉杂乱不能证明每个排列概率相同。修法是写出循环不变式，计算任意固定前缀的概率，并在终止时得到严格的$1/n!$。
+</Callout>
+
+## 5.4 Probabilistic analysis and further uses of indicator random variables
+
+### Birthday paradox
+
+在365个等可能生日中抽取$k$人，至少两人同生日的概率可先算补事件：
+
+$$
+\Pr\{\text{no collision}\}
+=\prod_{i=0}^{k-1}\frac{365-i}{365},
+\qquad
+\Pr\{\text{collision}\}=1-\Pr\{\text{no collision}\}.
+$$
+
+<CLRS4BirthdayLab />
+
+当$k=23$时，碰撞概率已超过一半。指示器视角则为每一对人定义$X_{ij}$，其期望为$1/365$，所以匹配对数期望为$\binom{k}{2}/365$。注意“期望匹配对数超过某值”和“至少一次碰撞的概率”不是同一随机量，不能直接互换。
+
+### Balls and bins
+
+把$b$个球独立均匀投入$n$个箱。对每个箱$j$定义空箱指示器$E_j$，则：
+
+$$
+\Pr\{E_j=1\}=\left(1-\frac1n\right)^b,
+\qquad
+\mathbb E[\text{empty bins}]
+=n\left(1-\frac1n\right)^b.
+$$
+
+<CLRS4BallsBinsLab />
+
+同样可以为“球$i$与球$j$落入同一箱”定义成对指示器，求碰撞对数期望；或为每个箱负载超过阈值定义事件，结合尾界分析最大负载。平均负载$b/n$不保证每个箱接近平均，尤其不能单独推出最大值。
+
+### Streaks
+
+抛$n$次公平硬币，长度$k$的连续正面可以从所有起点窗口定义指示器。某固定窗口全为正面的概率$2^{-k}$，候选窗口不足$n$个，因此长度$k$ streak的期望候选数至多$n/2^k$。取$k$略大于$\lg n$时，这个期望很小，并可用Markov或union bound控制出现概率。
+
+窗口互相重叠而不独立，但期望线性性仍有效。要证明存在较长streak的下界，可选取不重叠窗口恢复独立性，再分析没有任何全正面窗口的概率。最终最长连续正面长度集中在$\Theta(\lg n)$附近。
+
+### Online hiring problem
+
+在线雇用中，拒绝的候选人不能召回，目标也从“随时维护当前最佳”变成“只选一次且尽量选到全局最佳”。经典策略先观察前$k$人但不雇用，用其最佳能力设阈值；随后雇用第一个超过阈值者。
+
+<CLRS4StreakOnlineLab />
+
+观察过少，阈值噪声大且容易过早承诺；观察过多，最佳者可能已在样本期被永久错过。分析按全局最佳者位置分解成功事件并对$k$优化，得到探索与利用的权衡。这一问题强调：改变决策contract后，即使候选人模型相同，随机变量和成功指标也必须重新定义。
+
+<Stepper>
+<Step title="先写概率空间">
+明确基本结果、是否等概率，以及随机性来自输入还是算法随机位。
+
+<CLRS4RandomnessBoundaryLab />
+</Step>
+<Step title="再拆成指示器">
+把总次数写成局部事件之和，逐项计算概率，再使用期望线性性。
+
+<CLRS4IndicatorSumLab />
+</Step>
+<Step title="最后审计随机过程">
+证明洗牌均匀或抽样无偏，区分期望、尾概率与高概率结论，并保留对固定输入的保证边界。
+
+<CLRS4PermutationUniformityLab />
+</Step>
+</Stepper>
+
+## 小结
+
+Chapter 5 Probabilistic Analysis and Randomized Algorithms从雇用问题建立期望分析。随机到达下，第$i$人打破纪录的概率为$1/i$，指示器求和得到期望雇用次数$H_n=\Theta(\lg n)$。期望线性性不要求事件独立，但每个期望都必须建立在明确样本空间上。
+
+随机算法把随机性纳入过程本身，可以对每个固定输入在内部随机位上给出期望保证；均匀洗牌需要概率不变式，而不是“交换很多次”。指示器随机变量的进一步应用覆盖生日碰撞、球入箱、连续正面与在线雇用，并提醒我们区分期望计数、至少一次事件概率和高概率界。
+
+<Exercises>
+
+**问题 1**：证明随机顺序雇用问题的期望雇用次数为$H_n$。
+
+<Answer>
+令$X_i$表示第$i$人是否为前$i$人中最佳。随机排列下前$i$人中每个位置等可能承载最佳者，所以$\mathbb E[X_i]=1/i$。总次数$X=\sum_iX_i$，由期望线性性得$\mathbb E[X]=\sum_i1/i=H_n$，无需假设各$X_i$独立。
+</Answer>
+
+**问题 2**：为什么原地洗牌第$i$轮必须从后缀`i..n`选择，而不是每次从全数组选择？
+
+<Answer>
+从后缀选择可保持“已固定前缀是均匀有序样本”的不变式，每个剩余元素成为下一项的条件概率相同。反复从全数组交换会让不同最终排列拥有不同数量的生成路径，除非另做证明，不能保证$1/n!$。
+</Answer>
+
+**问题 3**：有40个球均匀独立投入20个箱，空箱期望是多少？
+
+<Answer>
+单个箱保持为空的概率为$(19/20)^{40}$。为20个箱各定义空箱指示器并求和，期望为空箱数$20(19/20)^{40}$，约为2.57；箱之间不独立不影响期望线性性。
+</Answer>
+
+**问题 4**：概率分析和随机算法各自怎样面对对抗性输入？
+
+<Answer>
+概率分析依赖外部输入分布，若对手改变分布，期望结论可能失效。随机算法对每个固定输入在私有随机位上取期望，只要对手不能预知这些随机位，保证不要求输入本身随机。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="概率分析">先为输入指定概率分布，再对确定性算法在该分布上的成本取期望的分析方法。</GlossaryItem>
+<GlossaryItem term="雇用问题">顺序面试候选人并在遇到迄今最佳者时立即替换当前雇员，用来研究记录事件与期望成本的模型问题。</GlossaryItem>
+<GlossaryItem term="指示器随机变量">事件发生时取1、否则取0的随机变量，其期望等于事件发生概率。</GlossaryItem>
+<GlossaryItem term="随机算法">在执行中主动调用随机数生成器，使同一输入可能走不同执行路径，并对内部随机选择取期望的算法。</GlossaryItem>
+<GlossaryItem term="均匀随机排列">所有n!个排列都以相同概率1/n!出现的随机排列分布。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Chapter 5 · Probabilistic Analysis and Randomized Algorithms" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

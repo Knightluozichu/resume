@@ -1,0 +1,249 @@
+---
+title: "第11章：Exception Handling"
+type: C
+section: "Essential C# 7.0 · Reliability"
+order: 11
+description: "掌握multiple catches、try/catch/finally/filter、catch-all边界、expected failures、自定义异常、inner exception与正确rethrow。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-c-sharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7CatchSelectionLab, Ec7PropagationPolicyLab, Ec7RethrowWrapLab } from "@/components/mdx/essential-csharp-7/diagrams/exception-handling";
+
+<Objectives>
+
+- 能解释exception从throw site沿call stack传播、匹配typed catch/filter并执行finally的顺序
+- 能判断预期failure、可恢复exception、catch-all与传播之间的正确policy并保留诊断证据
+- 能设计custom exception、inner exception wrapping与正确rethrow，验证stack trace和cause chain
+
+</Objectives>
+
+## 为什么catch得住不等于处理正确
+
+exception表示当前method无法按contract正常完成。catch如果没有恢复策略，只是打印一句话再返回默认值，会把真实failure改造成假成功；在每层都log又会产生重复噪声；`throw ex;`还会损坏最关键的origin evidence。正确设计从“这一层能做什么决定”开始，而不是从“哪里能写try”开始。
+
+先预测：多个catch如何选择；filter为false后是否继续寻找handler；finally在return/throw时是否执行；catch-all吞掉exception后caller看到什么；`throw;`与`throw ex;`的stack有何差别；wrapper怎样保留original cause。然后逐条观察handler、unwind、cleanup和cause chain。
+
+<Term def="exception type、filter、catch order与call stack共同决定由哪一层handler接管failure的规则。">handler selection</Term>
+
+## Multiple Exception Types and Catch Ordering
+
+一个try可跟多个catch。runtime按source order寻找第一个type-compatible且filter为true的handler；具体derived exception必须放在广泛base exception前，否则后者会吞掉前者，compiler也会拒绝明显unreachable catch。每个handler应针对该type提供不同恢复或转换策略。
+
+```csharp
+try
+{
+    LoadConfiguration(path);
+}
+catch (FileNotFoundException ex)
+{
+    Console.Error.WriteLine($"missing file: {ex.FileName}");
+}
+catch (UnauthorizedAccessException ex)
+{
+    Console.Error.WriteLine($"permission denied: {ex.Message}");
+}
+catch (IOException ex)
+{
+    Console.Error.WriteLine($"I/O failure: {ex.Message}");
+}
+```
+
+不要按“可能抛的所有types”机械加catch。若当前层对IOException没有可执行decision，应让它传播到有policy的boundary。typed catch的价值是区分recovery，不是让异常消失。
+
+## try, catch, finally, and Exception Filters
+
+try包围可能失败的operation；catch处理匹配exception；finally无论try正常、catch后return或exception继续传播，通常都会在离开construct时执行，适合释放非using形式的resource与恢复local invariant。不要在finally里return或抛新异常覆盖原failure。
+
+exception filter `catch (IOException ex) when (attempt < maxAttempts)`在handler真正接管前判断条件。filter可用context区分transient、specific error code等；filter false会继续寻找外层/后续handler，且原始stack尚未unwind到catch body。
+
+<Term def="exception传播期间每个frame的finally执行、locals退出与handler search共同形成的离栈过程。">stack unwinding</Term>
+
+<Stepper>
+  <Step title="切换Format、I/O filter与no-error场景">
+    <Ec7CatchSelectionLab />
+  </Step>
+  <Step title="读取type/filter匹配过程">
+    filter false不等于handled；继续搜索下一个compatible handler。
+  </Step>
+  <Step title="确认finally执行位置">
+    normal、handled与propagating paths都验证cleanup evidence，不在finally掩盖原exception。
+  </Step>
+</Stepper>
+
+```csharp
+for (int attempt = 1; attempt <= 3; attempt++)
+{
+    try
+    {
+        return ReadRemote();
+    }
+    catch (IOException ex) when (attempt < 3 && IsTransient(ex))
+    {
+        Thread.Sleep(attempt * 100);
+    }
+}
+throw new InvalidOperationException("unreachable retry state");
+```
+
+retry必须有max attempts、backoff、idempotency与cancellation policy；filter只是分类机制，不自动让operation安全重试。
+
+## Propagation and the General Catch Block
+
+未处理exception沿call stack向caller传播，途中执行finally，直到找到handler或终止thread/process boundary。catch-all可写`catch`或`catch (Exception ex)`；后者提供exception object。它适合top-level boundary记录并映射exit/response，或执行cleanup后rethrow，不适合在底层把所有bugs变成null。
+
+<Term def="某一architecture layer拥有足够context来恢复、retry、translate或记录并终止failure的唯一位置。">exception boundary</Term>
+
+<Stepper>
+  <Step title="切换handled、propagate、swallow与Try-pattern">
+    <Ec7PropagationPolicyLab />
+  </Step>
+  <Step title="逐frame检查decision ownership">
+    没有恢复policy的Service不catch；Controller/worker boundary决定response、retry或exit。
+  </Step>
+  <Step title="区分failure evidence与cleanup">
+    finally执行不表示exception已处理；catch-all若吞掉会丢失caller可见failure。
+  </Step>
+</Stepper>
+
+```csharp
+static int Main(string[] args)
+{
+    try
+    {
+        return Run(args);
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine(ex);
+        return 1;
+    }
+}
+```
+
+捕获`Exception`通常不应尝试继续任意业务状态；某些严重runtime failures也不保证可恢复。top-level记录应包含完整exception (`ToString`)和correlation context，同时避免暴露secret data。
+
+<Callout type="trap" title="每个method都catch Exception，系统就不会崩">
+这会隐藏programming bugs、让invalid state继续传播并产生假成功。只在有明确恢复/转换策略或top-level failure boundary catch；否则保留原exception传播。
+</Callout>
+
+## Expected Situations versus Exceptions
+
+用户输入格式错误、dictionary key缺失、正常search无结果等频繁且预期的outcome，通常应使用Try-pattern、bool/result或domain option，而不是用throw/catch驱动主流程。exception适合无法履行contract、I/O/runtime failure或programming invariant violation。
+
+```csharp
+int value;
+if (!int.TryParse(input, out value))
+{
+    validation.Add("value must be an integer");
+    return;
+}
+```
+
+不要仅凭“exception慢”决定；更重要的是semantic signal。若caller合理地每秒处理大量invalid input，Try-pattern清晰且高效；若method contract要求resource存在，missing file可能就是exception。API naming要表达选择：`Parse`抛，`TryParse`返回bool。
+
+## Guidelines for Reliable Exception Handling
+
+在throw point提供具体type、准确message和structured properties；在catch point只处理能真正恢复的范围。不要用empty catch，不要catch后只log再重复在每层log；选一个ownership boundary。cleanup优先using/Dispose/finally，不能依赖catch一定执行。
+
+测试至少覆盖：normal path；每个typed catch；filter true/false；finally在normal/throw/return下；retry exhaustion；cancellation；wrapped cause；top-level exit/response。message可变化，assert应优先type、properties和inner exception。
+
+<Term def="异常处理是否保留throw type、original stack、inner causes与boundary context以支持定位的质量。">diagnostic fidelity</Term>
+
+## Defining Custom Exceptions
+
+custom exception用于caller需要单独catch/recovery的domain failure，不是为了给每条message造class。继承`Exception`，name以Exception结尾，提供message、inner exception与有用readonly properties；跨传统binary serialization boundary时还需遵守相应serialization pattern。
+
+```csharp
+public sealed class QuotaExceededException : Exception
+{
+    public QuotaExceededException(int limit)
+        : base($"Quota limit {limit} was exceeded.")
+    {
+        Limit = limit;
+    }
+
+    public QuotaExceededException(int limit, Exception inner)
+        : base($"Quota limit {limit} was exceeded.", inner)
+    {
+        Limit = limit;
+    }
+
+    public int Limit { get; }
+}
+```
+
+caller可catch `QuotaExceededException`并读取Limit选择UI/retry，而不解析message。若built-in `ArgumentException`、`InvalidOperationException`、`IOException`已准确表达，不要重复发明。
+
+## Rethrow versus Wrap
+
+catch中`throw;`重新抛当前exception并保留original stack trace。`throw ex;`从当前位置重新抛，破坏可见origin，通常错误。wrap在跨abstraction boundary时创建更合适的domain exception，并把original放入InnerException；outer message加入当前operation context，不能丢掉cause。
+
+<Term def="跨abstraction layer创建新exception表达当前contract，同时通过InnerException保留底层cause chain的转换。">exception translation</Term>
+
+<Stepper>
+  <Step title="切换throw、throw ex、wrap与custom paths">
+    <Ec7RethrowWrapLab />
+  </Step>
+  <Step title="比较stack origin与cause chain">
+    `throw;`保留原site；wrap保留inner；`throw ex;`损坏关键stack evidence。
+  </Step>
+  <Step title="选择boundary语义">
+    同层无新语义就直接传播；跨storage/domain boundary且caller不应依赖底层type时wrap。
+  </Step>
+</Stepper>
+
+```csharp
+try
+{
+    return repository.Load(orderId);
+}
+catch (SqlException ex)
+{
+    throw new OrderLoadException(orderId, ex);
+}
+```
+
+不要在每层wrap，避免十层无价值链。translation应发生在真正的abstraction boundary，例如database exception转换为repository/domain operation failure。
+
+<Callout type="trap" title="throw ex和throw;抛的是同一个对象，所以诊断相同">
+两者可能是同一exception object，但`throw ex;`重置可见throw origin，原始stack证据受损。原样传播使用`throw;`，语义转换则new wrapper并传inner。
+</Callout>
+
+## 本章回顾：Failure必须有Owner和Evidence
+
+1. multiple catches按source order选择第一个type/filter match；specific handler在general handler前。
+2. finally负责离开路径cleanup，filter false继续handler search，未处理exception沿stack传播。
+3. catch-all只适合有policy的top-level/boundary，不应吞掉bugs。
+4. expected outcome使用Try/result；custom exception提供typed recovery data。
+5. `throw;`保留stack，wrap用InnerException跨abstraction translation，`throw ex;`应避免。
+
+<Exercises>
+
+**问题 1：怎样设计一个只重试transient IOException的读取流程？**
+
+<Answer>用bounded loop包住单次operation，catch IOException并以filter检查attempt未耗尽且error被分类为transient；每次backoff并保证operation idempotent/cancellable。final attempt不匹配filter，让原exception传播或在boundary wrap。测试filter true/false、成功、exhaustion和finally cleanup。</Answer>
+
+**问题 2：什么时候应使用Try-pattern，什么时候throw exception？**
+
+<Answer>invalid user input、search miss等频繁且预期outcome用Try/bool/result，caller明确分支；method无法履行已声明contract、I/O失败或invariant破坏用exception。选择是semantic contract，不只是性能；命名如Parse/TryParse应让caller预先知道failure channel。</Answer>
+
+**问题 3：如何在repository边界转换底层异常并保持诊断？**
+
+<Answer>只捕获需要translation的底层type，创建表达repository/domain operation的custom exception，加入order id等非敏感context，并把original作为InnerException。无需转换就不catch；原样重抛用`throw;`。测试outer type/properties、inner identity和完整stack，避免`throw ex;`与多层无价值wrapping。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="handler selection" definition="exception type、filter、catch order和stack共同选择handler的规则。" />
+  <GlossaryItem term="stack unwinding" definition="exception传播时执行finally并退出frames直到handler的过程。" />
+  <GlossaryItem term="exception boundary" definition="拥有恢复、retry、translate或终止failure policy的architecture layer。" />
+  <GlossaryItem term="diagnostic fidelity" definition="type、original stack、inner causes和boundary context的保真程度。" />
+  <GlossaryItem term="exception translation" definition="跨抽象创建domain exception并以内层exception保留底层cause。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 11: Exception Handling" adaptedUrl="https://www.informit.com/store/essential-csharp-7.0-9781509303618" />

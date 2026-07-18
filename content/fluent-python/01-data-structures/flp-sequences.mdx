@@ -1,182 +1,120 @@
 ---
-title: "序列类型"
-type: B
-section: "数据结构"
+title: "第2章 序列构成的数组"
+type: C
+section: "流畅Python 2e · Part I 数据结构"
 order: 2
-description: "掌握Python序列分类与底层语义：容器vs扁平、可变vs不可变、切片解包推导式与共享引用陷阱。"
+description: "按《Fluent Python, 2nd Edition》第2章重建：序列构成的数组、列表推导式与生成器表达式、元组、解包与序列模式匹配、切片与增量赋值、数组、内存视图与双端队列。"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.oreilly.com/library/view/fluent-python-2nd/9781492056348/"
 draft: false
 ---
 
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { FlpSequencesDiagram } from "@/components/mdx/fluent-python/diagrams/flp-sequences";
+import { FlpSequencesModelLab, FlpSequencesBoundaryLab, FlpSequencesEvidenceLab } from "@/components/mdx/fluent-python/diagrams/flp-sequences";
 
 <Objectives>
-
-- 能按容器/扁平、可变/不可变两个维度给序列分类并举例
-- 能用切片、解包、推导式写出 Pythonic 的序列操作
-- 能回答：为什么 `[[0]] * 3` 修改一个会牵连全部？
-
+- 能解释序列构成的数组的核心协议与适用边界
+- 能区分列表推导式与生成器表达式和元组、解包与序列模式匹配的责任与失败方式
+- 能实现并复现切片与增量赋值到数组、内存视图与双端队列的最小实验
 </Objectives>
 
-## 直觉引入
+## 从一个错误直觉开始
 
-序列就像一排储物柜。有的柜子大，能塞任意东西（容器序列，存的是「东西的地址」）；有的柜子窄，只能塞同一种小件（扁平序列，直接存值）。有的柜子门能随时开关换东西（可变），有的焊死了只能整柜换（不可变）。
+先预测：只记住序列构成的数组的语法，是否足以写出可靠实现？不够。真正需要掌握的是对象、协议、状态和失败路径怎样协作。<Term def="序列构成的数组先区分容器序列与扁平序列，再区分可变与不可变。list保存对象引用，array保存同质机器值；选择结构时要先写出元素类型、访问方式和更新需求。">序列构成的数组</Term>不是孤立技巧，而是把调用方意图映射到可测试行为的模型。
 
-Python 的序列家族看似庞杂——list、tuple、str、bytes、array、deque——但只要按「存什么」和「能不能改」两个维度一摆，立刻井然有序。理解这两个维度，你才知道该用哪种序列，以及为什么 `[[0]] * 3` 会踩坑。
+<FlpSequencesModelLab />
 
-没有这层认知，你会无脑用 list 存一千万个整数（浪费内存），或在 `*` 复制嵌套列表时遭遇「改一个全变」的灵异 bug。
+## 核心模型与责任
 
-## 概念讲解
+序列构成的数组先区分容器序列与扁平序列，再区分可变与不可变。list保存对象引用，array保存同质机器值；选择结构时要先写出元素类型、访问方式和更新需求。 <Term def="列表推导式用于立即构造列表，生成器表达式把值按需送入构造器或消费端。推导式的目标应是构造新序列，若只是为了副作用，普通循环会更清楚。">列表推导式与生成器表达式</Term>
 
-### 两个分类维度
+这一章的阅读方法是先写出输入和不变量，再观察解释器或标准库采取哪条路径，最后用反例确认边界。这样学习得到的是可迁移的判断，而不是只能复述示例。
 
-<Term def="容器序列存的是对象的引用（可异构）；扁平序列在内存中紧凑存原始值（同质）。">
+## 机制一：第一条执行链
 
-**容器序列**（list、tuple、deque）存的是对象的引用，柜子里放的是「地址」，所以能混装不同类型。**扁平序列**（str、bytes、array.array）直接在连续内存里存原始值，只能存同一种类型，但更紧凑省空间。
-
-</Term>
-
-另一个维度是可变性：**可变序列**（list、bytearray、array、deque）能就地增删改；**不可变序列**（tuple、str、bytes）一旦创建内容固定，要"改"只能重建一个新对象。两个维度交叉，正好四类。
-
-### 切片与解包
-
-切片 `s[a:b:c]` 的第三参数是步长，且支持负数（反向）。切片是"浅拷贝"——新建容器，但元素仍是原引用。解包 `a, b, *rest = seq` 用星号收集剩余项，是替代下标循环的 Pythonic 写法。
-
-### 推导式与生成器表达式
-
-列表推导式 `[x for x in seq if cond]` 立即求值生成 list；生成器表达式 `(x for x in seq)` 惰性求值，逐个产出，内存 O(1)。大数据流用生成器表达式，需要随机访问或多次遍历用列表推导式。
-
-## 交互Demo
-
-<FlpSequencesDiagram />
-
-<Stepper>
-
-<Step title="第一步：判断存什么、能不能改">
-
-选序列前先问两个问题：元素是异构对象还是同质数值？需要中途修改吗？异构用容器序列，同质大量数值用扁平序列；要改用可变，要哈希（做字典键）用不可变。
-
-</Step>
-
-<Step title="第二步：用切片与解包替代下标循环">
-
-`first, *middle, last = seq` 一行取首尾；`seq[::-1]` 一行反转；`seq[::2]` 取偶数位。这些语法糖背后是 `__getitem__` 的切片协议，比手写 for 循环又快又清晰。
-
-</Step>
-
-<Step title="第三步：警惕 * 对可变内层的共享引用">
-
-`[[0]] * 3` 复制的是引用，三个内层列表是同一对象。要用 `[[0] for _ in range(3)]` 让每项独立。这是「容器存引用」语义的必然后果。
-
-</Step>
-
-</Stepper>
-
-## 代码对照
+列表推导式用于立即构造列表，生成器表达式把值按需送入构造器或消费端。推导式的目标应是构造新序列，若只是为了副作用，普通循环会更清楚。 <Term def="元组既可作为不可变序列，也可作为无字段名记录。扩展解包、嵌套解包和序列模式匹配能把结构约束写在赋值位置，并用星号捕获剩余元素。">元组、解包与序列模式匹配</Term>
 
 ```python
-# 序列操作：分类、切片、解包、推导式
-from array import array
-
-# 容器序列：异构引用
-mixed = [1, "two", 3.0, None]          # list 存引用，可混装
-
-# 扁平序列：同质紧凑
-nums = array('i', [1, 2, 3, 4, 5])     # 4 字节/元素，比 list 省内存
-
-# 切片：步长与反向
-s = list(range(10))
-print(s[2:8:2])     # [2, 4, 6] —— 起止步长
-print(s[::-1])      # [9..0]   —— 反转
-print(s[::2])       # [0, 2, 4, 6, 8] —— 偶数位
-
-# 解包：星号收集
-first, *rest, last = s
-print(first, last, len(rest))   # 0 9 8
-
-# 推导式 vs 生成器表达式
-squares = [x*x for x in range(5)]        # list，立即求值
-squares_gen = (x*x for x in range(5))    # generator，惰性
-print(sum(squares_gen))                  # 30，逐个产出累加
-
-# 共享引用陷阱
-bad = [[0]] * 3
-bad[0][0] = 9
-print(bad)           # [[9], [9], [9]] —— 三处同一对象！
-good = [[0] for _ in range(3)]
-good[0][0] = 9
-print(good)          # [[9], [0], [0]] —— 各自独立
+symbols = '$¢£¥€¤'
+codes = [ord(symbol) for symbol in symbols]
+utf8 = tuple(ord(symbol) for symbol in symbols)
 ```
 
-`bad` 与 `good` 的对比，是「容器存引用」语义最直观的教训：`*` 复制引用而非对象。
+运行后记录对象身份、返回类型和异常位置；再改变一个输入，确认变化来自协议本身，而不是偶然的实现细节。
+
+## 机制二：状态、类型与协作
+
+元组既可作为不可变序列，也可作为无字段名记录。扩展解包、嵌套解包和序列模式匹配能把结构约束写在赋值位置，并用星号捕获剩余元素。 <Term def="切片是半开区间并生成新对象；给切片赋值可以改变长度。增量赋值是否原地更新取决于对象是否实现iadd，可变list通常保留身份，不可变tuple会重新绑定。">切片与增量赋值</Term>
+
+<FlpSequencesBoundaryLab />
+
+```python
+record = ('Tokyo', 'JP', 36.933, (35.689, 139.692))
+city, country, population, (lat, lon) = record
+match record:
+    case [name, 'JP', _, [_, longitude]]: print(name, longitude)
+```
+
+评审这段代码时，先问调用端依赖什么能力，再问实现是否扩大了共享状态或静默吞掉错误。接口越小，替换和测试通常越直接。
+
+## 机制三：边界条件与成本
+
+切片是半开区间并生成新对象；给切片赋值可以改变长度。增量赋值是否原地更新取决于对象是否实现iadd，可变list通常保留身份，不可变tuple会重新绑定。 <Term def="数组、内存视图与双端队列分别解决紧凑数值存储、零复制重解释和两端高效操作。deque中间访问较慢，memoryview共享底层缓冲区，因此别名与生命周期必须可见。">数组、内存视图与双端队列</Term>
+
+数组、内存视图与双端队列分别解决紧凑数值存储、零复制重解释和两端高效操作。deque中间访问较慢，memoryview共享底层缓冲区，因此别名与生命周期必须可见。 <Term def="用可复现实验判断序列构成的数组实现是否保持协议、不变量与失败语义。">序列构成的数组验证边界</Term>
+
+```python
+from array import array
+from collections import deque
+numbers = array('d', [1.0, 2.0, 3.0])
+view = memoryview(numbers)
+queue = deque(range(5), maxlen=5)
+queue.rotate(2)
+```
+
+<FlpSequencesEvidenceLab />
+
+## 分步验证
+
+<Stepper>
+  <Step title="建立模型"><FlpSequencesModelLab /></Step>
+  <Step title="施加边界"><FlpSequencesBoundaryLab /></Step>
+  <Step title="收集证据">分别运行正常输入、边界输入和失败输入，记录返回值、对象身份、异常类型与资源状态；只有证据支持不变量时才接受实现。</Step>
+</Stepper>
+
+## 代码实验与诊断
+
+把三段代码保存为同一最小实验，先运行原始版本，再只改变一个维度。至少检查：公开结果是否稳定、失败是否在正确边界暴露、是否产生意外别名或资源泄漏、类型提示与运行时行为是否一致。观察变化后写出因果解释，而不是只记录输出。
 
 ## 常见误区
 
-<Callout type="trap">
-
-**误区：用 `[[0]] * n` 创建二维矩阵**
-
-`[[0]] * n` 会让所有行指向同一个内层列表，改一行全变。正确写法是推导式 `[[0] * cols for _ in range(rows)]`，每行独立新建。这是 Python 新手最经典的坑，根源是不理解容器序列存引用。
-
+<Callout type="trap" title="只会序列构成的数组的写法就等于掌握本章">
+语法只能让示例运行；若没有写出输入、所有权、不变量和失败路径，换成真实数据后仍会出现隐蔽错误。应以协议和可复现实验验收。
 </Callout>
 
-<Callout type="trap">
-
-**误区：对生成器表达式多次遍历或下标访问**
-
-生成器表达式 `(x for x in seq)` 是一次性迭代器，遍历完即耗尽，且不支持 `gen[i]`。如果你需要多次遍历或随机访问，必须先转成 list。把它当 list 用会得到空序列或 `TypeError`。
-
+<Callout type="trap" title="切片与增量赋值在所有场景都更优">
+任何抽象都有适用成本。要比较数据规模、可变性、并发、可观察性与团队维护需求，再根据证据选择；本章给的是判断工具，不是无条件规则。
 </Callout>
+
+## 本章回顾
+
+官方核心单元核对：序列构成的数组；列表推导式与生成器表达式；元组、解包与序列模式匹配；切片与增量赋值；数组、内存视图与双端队列。这些单元共同回答序列构成的数组如何从语言机制落到工程边界；下一步应能在没有范例答案时画出执行链、实现最小版本并解释反例。
 
 <Exercises>
-
-**问题 1**：`a = [1, 2, 3]; b = a * 2` 与 `c = [[0]] * 3; c[0][0] = 9` 的结果分别是什么？后者为何会「全部变成 9」？
-
-<Answer>
-
-`a * 2` = `[1, 2, 3, 1, 2, 3]`，因为元素是不可变整数，`*` 重复拼接没问题。`c = [[0]] * 3` 看似是 `[[0],[0],[0]]`，但三个子列表是**同一对象的引用**（`*` 复制引用不复制对象），所以 `c[0][0] = 9` 改的是那个共享的内层列表，三处都变，结果 `[[9],[9],[9]]`。正确写法 `[[0] for _ in range(3)]` 每次循环新建内层列表，互相独立。
-
-</Answer>
-
-**问题 2**：什么场景下该用 `array.array` 而非 `list`？请从内存和类型约束两个角度说明。
-
-<Answer>
-
-1. 内存：`array.array` 是扁平序列，在连续内存紧凑存原始数值（如 `'i'` 型 4 字节/元素），而 `list` 存指向 Python 整型对象的指针（每个对象还有对象头）。存上千万个整数时 `array` 可省数倍内存。2. 类型约束：`array` 强制同类型，能提前发现类型混用错误，二进制布局确定，便于和 C 库、`struct`、`memoryview` 零拷贝交互。反过来，需要异构混装或频繁中间增删时仍用 `list`。口诀：同质大量数值用扁平，异构灵活用容器。
-
-</Answer>
-
+**问题 1：如何解释“序列构成的数组”？**<Answer>序列构成的数组先区分容器序列与扁平序列，再区分可变与不可变。list保存对象引用，array保存同质机器值；选择结构时要先写出元素类型、访问方式和更新需求。</Answer>
+**问题 2：列表推导式与生成器表达式与元组、解包与序列模式匹配应怎样协作？**<Answer>列表推导式用于立即构造列表，生成器表达式把值按需送入构造器或消费端。推导式的目标应是构造新序列，若只是为了副作用，普通循环会更清楚。 元组既可作为不可变序列，也可作为无字段名记录。扩展解包、嵌套解包和序列模式匹配能把结构约束写在赋值位置，并用星号捕获剩余元素。</Answer>
+**问题 3：如何验收数组、内存视图与双端队列？**<Answer>数组、内存视图与双端队列分别解决紧凑数值存储、零复制重解释和两端高效操作。deque中间访问较慢，memoryview共享底层缓冲区，因此别名与生命周期必须可见。 编写正常、边界和失败三组输入，比较返回类型、对象状态和异常位置，并确认没有依赖未声明的全局状态。</Answer>
 </Exercises>
 
+## 术语表
 <Glossary>
-
-<GlossaryItem term="容器序列">
-
-存对象引用的序列（list、tuple、deque），可混装异构类型。元素是「指向对象的地址」，所以嵌套时要注意共享引用。
-
-</GlossaryItem>
-
-<GlossaryItem term="扁平序列">
-
-在连续内存中直接存原始值的序列（str、bytes、array.array），同质紧凑、省内存，但不存对象引用。
-
-</GlossaryItem>
-
-<GlossaryItem term="生成器表达式">
-
-用圆括号 `(x for x in seq)` 的惰性求值表达式，逐个产出值、内存 O(1)，适合大数据流。一次性迭代器，不支持随机访问。
-
-</GlossaryItem>
-
-<GlossaryItem term="共享引用陷阱">
-
-`[[0]] * n` 等便捷语法对可变内层对象只复制引用，导致多处指向同一对象，改一处全变。改用推导式 `[[0] for _ in range(n)]` 可让各项独立。
-
-</GlossaryItem>
-
+  <GlossaryItem term="序列构成的数组" definition="序列构成的数组先区分容器序列与扁平序列，再区分可变与不可变。" />
+  <GlossaryItem term="列表推导式与生成器表达式" definition="列表推导式用于立即构造列表，生成器表达式把值按需送入构造器或消费端。" />
+  <GlossaryItem term="元组、解包与序列模式匹配" definition="元组既可作为不可变序列，也可作为无字段名记录。" />
+  <GlossaryItem term="切片与增量赋值" definition="切片是半开区间并生成新对象；给切片赋值可以改变长度。" />
+  <GlossaryItem term="数组、内存视图与双端队列" definition="数组、内存视图与双端队列分别解决紧凑数值存储、零复制重解释和两端高效操作。" />
+  <GlossaryItem term="序列构成的数组验证边界" definition="验证序列构成的数组协议、不变量和失败路径的边界。" />
 </Glossary>
 
-<Attribution sourceUrl="" />
+<Attribution adaptedFrom="Fluent Python, 2nd Edition, Chapter 2: 序列构成的数组" adaptedUrl="https://www.oreilly.com/library/view/fluent-python-2nd/9781492056348/" />

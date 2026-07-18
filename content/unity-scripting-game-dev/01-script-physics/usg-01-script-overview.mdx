@@ -1,0 +1,233 @@
+---
+title: "第1章 Unity脚本概览"
+type: A
+section: "Unity 3D 脚本编程与游戏开发 · 脚本与物理"
+order: 1
+description: "从Start、Update、输入、触发器到第一个3D滚球跑酷闭环。"
+demo: true
+math: false
+sourceUrl: "https://www.dedao.cn/ebook/detail?id=z4R9BQ7pP4ZEaXYkx8KvRdljeyqo608g25w1m2bMAO9NnDL7gBGQr5VzJqrvmEVN"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Usg01ScriptOverviewMapLab,
+  Usg01ScriptOverviewExperimentLab,
+  Usg01ScriptOverviewEvidenceLab,
+} from "@/components/mdx/unity-scripting-game-dev/diagrams/usg-01-script-overview";
+
+<Objectives>
+
+- 能解释第1章在原书13章结构中的责任与前后依赖
+- 能实现“读取输入、计算位移、移动小球”之间可观察、可回放的数据链
+- 能比较原书实现与当前Unity迁移方案，并设计失败注入证据
+
+</Objectives>
+
+## 问题：怎样证明自己复现的是第1章，而不是一个同名教程？
+
+先预测：如果删掉原章标题、命名实例和系统边界，只留一段能运行的C#代码，另一位读者还能反推出本章吗？不能。先让脚本在Start建立初始状态，在Update读取输入并用帧时间驱动物体，再用触发器把吃金币和终点连接为3D滚球跑酷。每个回调只承担一种时序责任。
+
+<Usg01ScriptOverviewMapLab />
+
+## 原书边界与目录单元
+
+本页严格对应2021年版目录中的以下单元。现代API和工程补充可以解决版本差异，但不能替代这些原目录位置：
+
+- **控制物体的运动**
+- **Start和Update事件**
+- **修改物体位置**
+- **读取和处理输入**
+- **实例：实现一个移动的小球**
+- **触发器事件**
+- **实例：吃金币**
+- **制作第一个游戏：3D滚球跑酷**
+- **游戏设计**
+- **功能实现**
+- **游戏机制**
+- **完成和完善游戏**
+
+详细章目采用得到电子书目录；作者、ISBN与出版社信息由教材采选系统交叉核对。本站重新组织讲解、代码、实验和证据，不逐字复制原文。导读和总复习不重复计入13个正文章。
+
+## 核心模型与行为不变量
+
+先让脚本在Start建立初始状态，在Update读取输入并用帧时间驱动物体，再用触发器把吃金币和终点连接为3D滚球跑酷。每个回调只承担一种时序责任。
+
+先写功能切片：输入来自哪里，哪个对象拥有状态，在哪个Unity回调更新，调用哪个引擎系统，输出由谁消费，失败时第一条信号是什么。脚本、Inspector引用和场景对象都必须能回到同一个切片编号。
+
+相同输入在不同帧率下得到一致速度，金币只结算一次，成功和失败状态互斥。 这条不变量要在正常、边界和失败三组输入下成立。最终画面正确但中间所有权、时序或资源生命周期错误，仍不能签发。
+
+## 五个核心术语
+
+<Term def="继承MonoBehaviour并挂载到游戏物体的行为单元">脚本组件</Term>
+它必须落到第1章的输入、状态、输出与失败信号，不能只作为名词记忆。
+
+<Term def="在渲染帧读取并归一化的玩家控制意图">帧输入</Term>
+它必须落到第1章的输入、状态、输出与失败信号，不能只作为名词记忆。
+
+<Term def="物体进入、停留或离开触发区域时产生的回调">触发器事件</Term>
+它必须落到第1章的输入、状态、输出与失败信号，不能只作为名词记忆。
+
+<Term def="检测、计分、隐藏或销毁以及界面反馈组成的收集流程">金币闭环</Term>
+它必须落到第1章的输入、状态、输出与失败信号，不能只作为名词记忆。
+
+<Term def="开始、奔跑、成功和失败之间唯一可追踪的游戏阶段">跑酷状态</Term>
+它必须落到第1章的输入、状态、输出与失败信号，不能只作为名词记忆。
+
+术语连成模型后，再记录对象的创建、启用、禁用、销毁和场景切换行为。Unity回调不是任意函数名，而是引擎调度合同；在错误阶段读取输入、推进物理或释放资源，会产生偶发且难以回放的故障。
+
+## 从输入到结果的数据链
+
+本章主链是：读取输入 → 计算位移 → 移动小球 → 进入触发器 → 更新金币 → 判定终点。每个节点保存切片ID、帧号、对象ID和状态版本。表现系统只能呈现玩法事实，资源与数据系统必须通过租约或快照管理生命周期。
+
+```csharp
+void Update()
+{
+    Vector2 input = new(Input.GetAxisRaw("Horizontal"), Input.GetAxisRaw("Vertical"));
+    Vector3 delta = new(input.x, 0f, input.y);
+    transform.position += speed * Time.deltaTime * delta.normalized;
+}
+```
+
+旧输入API、Text、AssetBundle或LitJSON可以迁移到Input System、TextMeshPro、Addressables或System.Text.Json，但迁移账本必须写明原书问题、替代实现、保留不变量和对照证据。
+
+<Usg01ScriptOverviewExperimentLab />
+
+## 三步复现与中间检查
+
+<Stepper>
+  <Step title="1. 固定原章边界和切片合同">
+    把“控制物体的运动、Start和Update事件、修改物体位置”映射为输入、所有者、时钟、输出和失败信号；缺少原目录映射的功能不进入实现。
+    <Usg01ScriptOverviewMapLab />
+  </Step>
+  <Step title="2. 单变量实现并注入故障">
+    按读取输入、计算位移、移动小球、进入触发器推进，每次只改变一个变量，保存状态快照和首条错误日志。
+    <Usg01ScriptOverviewExperimentLab />
+  </Step>
+  <Step title="3. 回放案例并签发证据">
+    在编辑器和目标构建中执行正常、边界、失败三组输入，核对结果、生命周期和现代迁移差异。
+    <Usg01ScriptOverviewEvidenceLab />
+  </Step>
+</Stepper>
+
+## 两个必须主动制造的失败样本
+
+<Callout type="trap" title="目录或案例漂移">
+  在每帧直接增加固定位置量，或触发器重复计分，导致帧率相关移动和一枚金币多次结算。
+  这种实现即使运行正常，也没有覆盖第1章的原书边界。先恢复目录与命名实例，再讨论扩展。
+</Callout>
+
+<Callout type="trap" title="结果正确、时序错误">
+  故意在低帧率、重复触发、对象禁用和场景卸载时回放。若出现重复结算、旧协程继续运行、事件未退订或资源提前释放，说明状态所有权仍不合格。
+</Callout>
+
+## 当前Unity迁移表
+
+| 原书对象            | 当前实现                           | 必须保留的证据                 |
+| ------------------- | ---------------------------------- | ------------------------------ |
+| 旧输入、UI或资源API | 当前官方包或兼容层                 | 原案例输入、状态和结果对照     |
+| MonoBehaviour回调   | 明确时钟与状态所有者的组件         | Awake到Destroy的顺序日志       |
+| 场景公开引用        | SerializeField、稳定ID或运行时注入 | 缺失引用检查和场景重载回放     |
+| 手工创建销毁        | 仅在证据支持时使用对象池或租约     | 创建、复位、唯一释放和峰值数据 |
+
+现代迁移不能把原书内容改写为通用最佳实践清单。每章首先复现其具体系统和实例，再补充版本差异、性能风险和可测试接口。
+
+## 证据包与自动检查
+
+每次运行至少保存原章、案例、构建号、输入序列、状态版本、首个失败信号、截图或日志哈希以及修复后同输入回放。跨系统案例还要保存对象和资源的创建释放记录。
+
+```json
+{
+  "chapter": "第1章",
+  "unit": "控制物体的运动",
+  "flow": [
+    "读取输入",
+    "计算位移",
+    "移动小球",
+    "进入触发器",
+    "更新金币",
+    "判定终点"
+  ],
+  "normal": true,
+  "boundary": true,
+  "failureReplay": true
+}
+```
+
+```text
+PASS chapter=第1章 ownership=true timing=true result=true
+PASS invariant=相同输入在不同帧率下得到一致速度，金币只结算一次，成功和失败状态互斥。
+REJECT missing-unit | duplicate-event | stale-reference | premature-release
+```
+
+<Usg01ScriptOverviewEvidenceLab />
+
+## 练习：把知识变成可审计交付
+
+<Exercises>
+
+**问题 1** 为“控制物体的运动”写出输入、状态所有者、更新时钟、输出和失败信号。
+
+<Answer>
+  合同必须从读取输入追踪到判定终点，并能定位唯一责任对象。
+</Answer>
+
+**问题 2** 制造“在每帧直接增加固定位置量，或触发器重复计分，导致帧率相关移动和一枚金币多次结算。”，保存首个偏离节点，并用同一输入证明修复。
+
+<Answer>
+  故障证书要同时保留版本、输入、首条日志、修复和复验。
+</Answer>
+
+**问题 3** 列出三项可迁移API和三项不可改变的不变量，附编辑器与构建回放证据。
+
+<Answer>
+  API、包名与序列化工具可替换；原目录单元、案例行为、状态所有权和可观察结果不可删除。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- 是否能逐项指出本页覆盖的原目录单元与命名实例？
+- 是否能解释脚本组件、帧输入、触发器事件之间的关系？
+- 是否保存正常、边界、失败三组回放和现代迁移差异？
+- 是否验证对象禁用、场景重载和资源释放后的状态？
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="脚本组件">
+    继承MonoBehaviour并挂载到游戏物体的行为单元。
+  </GlossaryItem>
+  <GlossaryItem term="帧输入">
+    在渲染帧读取并归一化的玩家控制意图。
+  </GlossaryItem>
+  <GlossaryItem term="触发器事件">
+    物体进入、停留或离开触发区域时产生的回调。
+  </GlossaryItem>
+  <GlossaryItem term="金币闭环">
+    检测、计分、隐藏或销毁以及界面反馈组成的收集流程。
+  </GlossaryItem>
+  <GlossaryItem term="跑酷状态">
+    开始、奔跑、成功和失败之间唯一可追踪的游戏阶段。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="《Unity 3D脚本编程与游戏开发》马遥、沈琰，人民邮电出版社，2021，ISBN 9787115558756"
+  adaptedUrl="https://www.dedao.cn/ebook/detail?id=z4R9BQ7pP4ZEaXYkx8KvRdljeyqo608g25w1m2bMAO9NnDL7gBGQr5VzJqrvmEVN"
+/>

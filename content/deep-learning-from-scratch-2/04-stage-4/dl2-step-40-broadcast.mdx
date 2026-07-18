@@ -1,0 +1,221 @@
+---
+title: "步骤40 进行广播的函数"
+type: B
+section: "第4阶段 · 神经网络"
+order: 40
+description: "步骤40 进行广播的函数覆盖4个权威目录层级，以可执行框架合同、数学推导、交互实验和失败对照重建核心。"
+demo: true
+math: true
+sourceUrl: "https://www.oreilly.co.jp/books/9784873119069/toc.html"
+draft: false
+---
+
+import {
+  Dl2Step40BroadcastMapLab,
+  Dl2Step40BroadcastExperimentLab,
+  Dl2Step40BroadcastEvidenceLab,
+} from "@/components/mdx/deep-learning-from-scratch-2/diagrams/dl2-step-40-broadcast";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释步骤40 进行广播的函数新增的接口、对象关系、数学规则和适用边界
+- 能计算四个核心方程中的forward值、shape、局部导数或参数更新
+- 能复现三个互动视图，并定位第一条图连接、数值、梯度或模式证据分叉
+- 能判断“张量函数的forward与backward保持shape合同，广播反向用sum_to还原原shape；参数由Layer递归收集并只由Optimizer更新。”是否成立
+
+</Objectives>
+
+## 为什么先冻结框架合同
+
+<Term def="张量是本页第1个核查坐标，用于连接框架接口、数值状态、计算图和失败边界。">
+  张量
+</Term>
+、
+<Term def="shape是本页第2个核查坐标，用于连接框架接口、数值状态、计算图和失败边界。">
+  shape
+</Term>
+、
+<Term def="广播是本页第3个核查坐标，用于连接框架接口、数值状态、计算图和失败边界。">
+  广播
+</Term>
+、
+<Term def="Parameter是本页第4个核查坐标，用于连接框架接口、数值状态、计算图和失败边界。">
+  Parameter
+</Term>
+、
+<Term def="证据重放是本页第5个核查坐标，用于连接框架接口、数值状态、计算图和失败边界。">
+  证据重放
+</Term>
+共同构成本页坐标。步骤40
+进行广播的函数沿“输入合同、前向状态、反向规则、独立测试”扩展DeZero，并保持张量函数的forward与backward保持shape合同，广播反向用sum_to还原原shape；参数由Layer递归收集并只由Optimizer更新。
+
+自制框架的难点不是写出一个能返回数字的函数，而是让自然Python表达式、动态图、反向传播、内存和模式在同一合同下工作。实验先冻结Python/NumPy版本、输入与参数数组、对象身份、随机种子和上一版测试，再预测新能力应最先改变的中间量。
+
+每次forward保存输出值、shape、dtype、creator和generation；每次backward保存上游梯度、局部导数、输入梯度和参数梯度。若最终损失下降但对象连接、梯度累加或模式切换错误，训练结果不能采信。修复后清空grad、图、优化器与循环状态，从原始输入完整重放。
+
+## 数学骨架
+
+$$
+Y=XW+b
+$$
+
+$$
+dX=dYW^{\top},\quad dW=X^{\top}dY
+$$
+
+$$
+L=-\frac1N\sum_n\log p_{n,t_n}
+$$
+
+$$
+\theta_{t+1}=\theta_t-\eta\nabla_{\theta}L
+$$
+
+方程进入代码前先声明输入输出shape、轴和对象所有权。解析梯度与中心差分比较相对误差，参数更新后用新forward独立重算；高阶、GPU或时序模式还要记录是否建图、设备和状态边界。
+
+## 核心机制
+
+1. Function调用先标准化输入，再执行forward，包装输出并设置creator；backward按输入顺序返回局部梯度。
+2. 函数连续调用形成动态图，必须用对象身份连接而不是复制数值，否则回溯会失去来源。
+3. 标量自动微分扩展到张量后，每个函数都要明确axis、keepdims与广播语义。forward能运行不代表backward shape正确，必须逐层断言。
+4. reshape与transpose只改变视图或轴顺序，sum压缩轴，broadcast_to扩展单位轴；反向分别执行逆形状、逆置换、广播和sum_to。
+5. Parameter标记可训练Variable，Layer递归发现参数，Model组织层，Optimizer只消费参数与梯度。职责分离使保存、迁移和更新可统一实现。
+6. Dataset与DataLoader把样本访问、预处理、打乱和批量组装分离。训练循环冻结数据折分，并保存批次索引、损失、准确率和更新状态。
+
+## DeZero实现合同
+
+1. **对象合同：** Variable只承载数据、梯度与图连接，Function负责数值变换与局部导数；便利API最终委托核心函数，不能绕过creator设置。
+2. **shape合同：** forward与backward逐轴对称。前向广播、求和、转置或reshape后，反向必须恢复每个输入的原shape，并对重复路径累加。
+3. **顺序合同：** 动态图按实际运行创建，反向按generation拓扑逆序；同一函数只处理一次，同一变量可从多条路径接收贡献。
+4. **模式合同：** no_grad、create_graph、train/test与设备上下文使用成对进入和恢复，异常退出也不能污染全局状态。
+5. **资源合同：** 不需要的中间梯度及时释放，weakref打破循环引用；保存加载、CPU/GPU和DataLoader都保留稳定键、dtype与样本身份。
+6. **测试合同：** 每个新函数至少有forward例、解析backward、数值梯度、shape边界和失败样本；上一版本测试必须继续通过。
+
+## 权威目录逐项讲解
+
+### 步骤40 进行广播的函数
+
+Function调用先标准化输入，再执行forward，包装输出并设置creator；backward按输入顺序返回局部梯度。 函数连续调用形成动态图，必须用对象身份连接而不是复制数值，否则回溯会失去来源。 验收时保存输入、输出、creator或状态、局部梯度和失败边界，并核对“张量函数的forward与backward保持shape合同，广播反向用sum_to还原原shape；参数由Layer递归收集并只由Optimizer更新。”是否成立。
+
+先预测该单元改变后最早变化的是对象连接、forward值、shape、generation、内存、梯度还是模式，再运行固定小样本。若末端结果合理但首个证据没有出现，应停止并从上一个通过测试的DeZero版本重放。
+
+### 40.1 broadcast_to函数和sum_to函数
+
+Function调用先标准化输入，再执行forward，包装输出并设置creator；backward按输入顺序返回局部梯度。 函数连续调用形成动态图，必须用对象身份连接而不是复制数值，否则回溯会失去来源。 验收时保存输入、输出、creator或状态、局部梯度和失败边界，并核对“张量函数的forward与backward保持shape合同，广播反向用sum_to还原原shape；参数由Layer递归收集并只由Optimizer更新。”是否成立。
+
+先预测该单元改变后最早变化的是对象连接、forward值、shape、generation、内存、梯度还是模式，再运行固定小样本。若末端结果合理但首个证据没有出现，应停止并从上一个通过测试的DeZero版本重放。
+
+### 40.2 DeZero的broadcast_to函数和sum_to函数
+
+Function调用先标准化输入，再执行forward，包装输出并设置creator；backward按输入顺序返回局部梯度。 函数连续调用形成动态图，必须用对象身份连接而不是复制数值，否则回溯会失去来源。 验收时保存输入、输出、creator或状态、局部梯度和失败边界，并核对“张量函数的forward与backward保持shape合同，广播反向用sum_to还原原shape；参数由Layer递归收集并只由Optimizer更新。”是否成立。
+
+先预测该单元改变后最早变化的是对象连接、forward值、shape、generation、内存、梯度还是模式，再运行固定小样本。若末端结果合理但首个证据没有出现，应停止并从上一个通过测试的DeZero版本重放。
+
+### 40.3 支持广播
+
+sum压缩指定轴，backward先恢复被删除单位轴再广播；broadcast_to的backward用sum_to。 广播从右轴对齐，前向扩展的轴在反向必须求和，避免梯度shape正确但数值重复。 验收时保存输入、输出、creator或状态、局部梯度和失败边界，并核对“张量函数的forward与backward保持shape合同，广播反向用sum_to还原原shape；参数由Layer递归收集并只由Optimizer更新。”是否成立。
+
+先预测该单元改变后最早变化的是对象连接、forward值、shape、generation、内存、梯度还是模式，再运行固定小样本。若末端结果合理但首个证据没有出现，应停止并从上一个通过测试的DeZero版本重放。
+
+## 三步交互实验
+
+先预测单变量变化会最早影响对象图、forward、shape、梯度还是独立测试，再切换基线、边界和失败模式。
+
+<Stepper>
+  <Step title="画出对象与计算图">
+    标出Variable、Function、creator、参数、数据或循环状态的所有权与连接。
+    <Dl2Step40BroadcastMapLab />
+  </Step>
+  <Step title="运行单变量实验">
+    固定输入、参数和上一版代码，只改变一个接口、shape、模式或设备条件。
+    <Dl2Step40BroadcastExperimentLab />
+  </Step>
+  <Step title="核对独立证据">
+    比较forward、解析/数值梯度、对象存活、更新与重放测试，定位第一处分叉。
+    <Dl2Step40BroadcastEvidenceLab />
+  </Step>
+</Stepper>
+
+## 常见失败与边界
+
+<Callout type="trap">
+  **便利接口绕过核心图：**
+  运算结果数值正确，但输出未设置creator，后续backward在中途停止。所有运算符和包装函数必须委托Function调用。
+</Callout>
+
+<Callout type="trap">
+  **只看训练终点：**
+  错误广播、梯度覆盖、旧缓存、错误模式或测试泄漏可能暂时得到较低损失；必须核对最早中间证据。
+</Callout>
+
+<Callout type="tip">
+  **最小重放顺序：**
+  在标量或极小数组上先手算forward与局部导数，再做中心差分、组合图和长训练。首错出现后清空全部派生状态。
+</Callout>
+
+## 本章回顾
+
+步骤40 进行广播的函数沿“输入合同、前向状态、反向规则、独立测试”扩展DeZero，并保持张量函数的forward与backward保持shape合同，广播反向用sum_to还原原shape；参数由Layer递归收集并只由Optimizer更新。 验收底线是：张量函数的forward与backward保持shape合同，广播反向用sum_to还原原shape；参数由Layer递归收集并只由Optimizer更新。。完成标准是能预测首个中间变化、重放实现、解释失败样本，并证明新能力没有破坏此前测试。
+
+<Glossary>
+
+<GlossaryItem term="张量">
+  “张量”对应“冻结输入与版本”：记录对象身份、shape、前向缓存、局部梯度、模式和数值容差；仅有最终输出不足以证明框架正确。
+</GlossaryItem>
+
+<GlossaryItem term="shape">
+  “shape”对应“执行forward”：记录对象身份、shape、前向缓存、局部梯度、模式和数值容差；仅有最终输出不足以证明框架正确。
+</GlossaryItem>
+
+<GlossaryItem term="广播">
+  “广播”对应“保存图与shape”：记录对象身份、shape、前向缓存、局部梯度、模式和数值容差；仅有最终输出不足以证明框架正确。
+</GlossaryItem>
+
+<GlossaryItem term="Parameter">
+  “Parameter”对应“执行backward”：记录对象身份、shape、前向缓存、局部梯度、模式和数值容差；仅有最终输出不足以证明框架正确。
+</GlossaryItem>
+
+<GlossaryItem term="证据重放">
+  “证据重放”对应“核对数值梯度”：记录对象身份、shape、前向缓存、局部梯度、模式和数值容差；仅有最终输出不足以证明框架正确。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+1. 如何为步骤40 进行广播的函数建立最小可手算的forward/backward测试？
+
+<Answer>
+固定一个标量或极小数组、对象身份和上一版实现，按“冻结输入与版本 -> 执行forward -> 保存图与shape -> 执行backward -> 核对数值梯度 -> 独立重放测试”保存中间证据。手算四个方程，并用中心差分比较解析梯度；shape、creator、generation和模式都应符合合同。
+</Answer>
+
+2. 如何证明新便利接口没有绕过DeZero计算图或改变梯度？
+
+<Answer>
+  让核心函数与便利写法共享同一输入，逐项比较输出、creator链、generation、解析梯度和数值梯度。两条路径必须在容差内一致，并继续通过所有旧测试。
+</Answer>
+
+3. 为“张量函数的forward与backward保持shape合同，广播反向用sum_to还原原shape；参数由Layer递归收集并只由Optimizer更新。”构造失败样本并指出停止位置。
+
+<Answer>
+  可以故意断开creator、覆盖梯度、交换shape轴、复用旧图、忘记恢复模式或混用CPU/GPU。运行前预测第一条被破坏的证据，在该处停止，清空grad、缓存、优化器和状态后重放。
+</Answer>
+
+</Exercises>
+
+<Attribution
+  adaptedFrom="斋藤康毅著、郑明智译《深度学习入门2：自制框架》，人民邮电出版社，2023年3月，ISBN 9787115607515；原版《ゼロから作るDeep Learning ❸》，O'Reilly Japan，2020年4月20日，552页，ISBN 9784873119069 · 基于官方5阶段、60步骤、207个编号小节与3个附录完整目录的独立教学重构"
+  adaptedUrl="https://www.oreilly.co.jp/books/9784873119069/toc.html"
+/>

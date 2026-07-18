@@ -1,0 +1,205 @@
+---
+title: "Chapter 17. Modules and Packages"
+type: C
+section: "Programming in Lua 4e · Real Programming"
+order: 17
+description: "掌握require缓存、module alias、package.path/cpath搜索、searchers loader协议、Lua模块写法与submodule/package依赖布局。"
+demo: true
+math: false
+sourceUrl: "https://www.lua.org/pil/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PilRequireStateLab, PilModuleSearchLab, PilPackageLayoutLab } from "@/components/mdx/lua-programming/diagrams/modules-packages";
+
+<Objectives>
+
+- 能解释require从exact name、searcher、loader到package.loaded export的状态机，判断reload与cycle风险
+- 能分析package.path/cpath、searchpath和searchers顺序，复现同文件多名加载与diagnostic丢失
+- 能设计module table、private locals、submodules与dependency graph，验证export identity和兼容边界
+
+</Objectives>
+
+## 为什么Module Identity不是File Path
+
+Require的输入是module-name string，不是单纯文件路径。Name作为`package.loaded` cache key，再由searchers解释成preload entry、Lua file或C library。两个不同names可能搜索到同一file并各执行一次；同一name也可能因path/searcher变化加载不同source。因此identity来自name、search policy与cache共同决定。
+
+先预测：require两次是否重复top-level side effect；module返回nil时require返回什么；清掉`package.loaded[name]`后旧local alias会更新吗；`require("a.b")`是否自动先执行a；两个path templates指向同file会不会去重；custom searcher返回error string还是raise。先画name到export的状态机。
+
+<Term def="Require以exact module-name string作为cache identity，经有序searchers得到loader并把一次初始化结果保存到package.loaded。">require cache identity</Term>要求命名稳定。相对/绝对别名、大小写差异或版本alias若混用，会产生多个singleton、duplicated registries和type identity分裂。
+
+## The Function require
+
+Require先检查`package.loaded[name]`的truthy value，有则直接返回。没有时按`package.searchers`顺序寻找loader；找到后执行loader并处理返回值。Loader返回non-nil通常成为cache export；若返回nil且未自行设置cache，require会留下truthy completion marker。模块应明确return export table，避免caller只得到true。
+
+<Term def="Module top-level code只在cache miss初始化，并把可长期共享的export object与side effects作为一次性事务处理。">module initialization transaction</Term>要求失败不留下half-valid global state。Open resource、register callback等side effects若后续raise，要cleanup；retry是否安全必须明确。
+
+Cycles会让A初始化过程中require B，B又require A。不同Lua版本/loader实现对in-progress marker细节不应被业务依赖；设计上抽取shared third module、注入dependency，或先建立complete export skeleton再加载对方并验证。最稳妥是保持module graph acyclic。
+
+```lua
+-- stats.lua
+local M = {}
+local total = 0
+
+function M.add(value)
+  assert(type(value) == "number")
+  total = total + value
+  return total
+end
+
+function M.current()
+  return total
+end
+
+return M
+```
+
+每次正常require同一exact name得到同一M identity，多个callers共享private `total` upvalue。若export应无状态，就不要误把mutable singleton state藏在module；改用factory创建instances。
+
+<PilRequireStateLab />
+
+<Stepper>
+  <Step title="切换Cache Hit、First Load、Nil Return和Reload"><PilRequireStateLab /></Step>
+  <Step title="画Require State">标cache lookup、searcher diagnostics、loader execution、export assignment与failure cleanup；对每个exact name单独画。</Step>
+  <Step title="做Identity Tests">同name require两次、alias name、clear cache、old reference和cycle分别比较rawequal与top-level side-effect count。</Step>
+</Stepper>
+
+<Callout type="trap" title="清空package.loaded后，所有地方都会切换到新Module">
+只影响以后require；已有locals、closures和tables仍引用旧export。Hot reload需要显式reference indirection或迁移所有owners，还要处理旧callbacks/resources，不能只删cache key。
+</Callout>
+
+## Renaming a module
+
+Caller可`local json = require("vendor.long_json_name")`，local alias不影响cache key。<Term def="调用方用lexical local选择简短名称，而require仍使用唯一canonical module name作为加载与缓存身份。">module alias boundary</Term>避免通过复制文件或以多个names require实现“改名”。
+
+Module内部也不应依赖安装路径推断自己的public name；loader接收name可用于diagnostic，但export语义保持稳定。发布rename需要compatibility shim：旧name模块只require并return新canonical export，确保两者返回同一identity；不要把实现复制两份。
+
+Global alias污染namespace且可被别处覆盖；local alias更快且scope清晰。Export field rename则是API change，可保留deprecated wrapper并测试result/error contract。
+
+## Path searching
+
+`package.path`是semicolon-separated Lua templates，`?`替换为module name转换后的path；通常dots换directory separator。`package.cpath`用于native libraries。模板如`./?.lua;./?/init.lua`让`pkg.feature`尝试`./pkg/feature.lua`和`./pkg/feature/init.lua`。
+
+`package.searchpath(name, path, sep, rep)`执行类似模板搜索并返回found filename，失败返回nil与aggregated diagnostic。<Term def="Path template按明确name separator替换、ordered candidates与root allowlist解析module，而不把工作目录和用户输入隐式加入authority。">module path resolution</Term>要求production固定roots；修改cwd或环境变量可能改变加载code。
+
+Path string不是shell command，但仍有path traversal与shadowing风险。Untrusted module name先限制segments；不要把上传目录放在trusted standard modules之前。Deployment保存resolved module manifest/hash，避免同name在机器上指向不同file。
+
+## Searchers
+
+`package.searchers`是ordered functions。Searcher接收module name，成功返回loader function及可能的loader data；找不到时返回diagnostic string供require汇总。默认通常包括preload、Lua path、C path与C-root searcher，具体顺序按runtime检查。
+
+<Term def="Searcher只负责按一个authority来源定位并返回loader或diagnostic，执行与cache assignment仍由require协议控制。">searcher-loader protocol</Term>使custom zip/database/network source可插入，但network-on-require会引入latency、offline与supply-chain风险。生产custom searcher应读取本地signed/versioned store并设size/hash limits。
+
+```lua
+local virtual_sources = {
+  ["demo.answer"] = "return { value = 42 }",
+}
+
+local function virtual_searcher(name)
+  local source = virtual_sources[name]
+  if not source then return "\n\tno virtual module '" .. name .. "'" end
+  local loader, message = load(source, "@virtual/" .. name .. ".lua", "t", {})
+  if not loader then return "\n\tvirtual compile error: " .. message end
+  return loader, "virtual:" .. name
+end
+
+table.insert(package.searchers, virtual_searcher)
+local answer = require("demo.answer")
+assert(answer.value == 42)
+```
+
+示例修改global searchers，test结束应remove，production应在isolated Lua state安装一次。Environment为空不限制CPU/memory；virtual source仍是trusted code。Searcher不要直接调用loader，否则绕过require cache/error lifecycle。
+
+<PilModuleSearchLab />
+
+<Stepper>
+  <Step title="切换Preload、Lua Path、C Path和Custom Searcher"><PilModuleSearchLab /></Step>
+  <Step title="记录Authority Order">列每个searcher可访问roots/store、signature policy、ABI与diagnostic；先命中的authority决定执行code。</Step>
+  <Step title="注入Search Failures">覆盖missing、syntax error、wrong ABI、duplicate name、path shadow和custom timeout，确保aggregated message保留每个candidate证据。</Step>
+</Stepper>
+
+## The Basic Approach for Writing Modules in Lua
+
+标准写法创建local export table M，private state/helpers保持local，public functions赋给M，末尾`return M`。不要把所有实现放globals，也不要使用过时module-global magic隐藏environment。Dependency在顶部local require，形成可审计direct graph。
+
+Export table是mutable capability；caller可替换fields。若必须防mutation，可返回facade functions closure、document ownership，或由host/proxy限制，但Lua普通table没有真正readonly。不要return内部mutable config/cache，提供snapshot或narrow methods。
+
+Factory module和singleton module要区分：factory export `new()`，每次返回独立object；singleton module在cache export/upvalues共享state。Tests清cache重载singleton可能制造两个instances，应在isolated state或提供reset-for-test API。
+
+## Submodules and Packages
+
+Package是name与directory convention。`pkg.feature`通常映射到`pkg/feature.lua`；`pkg`可能映射`pkg.lua`或`pkg/init.lua`，取决于path templates。Require parent不会按语言规则自动load children，require child也不保证parent export已初始化；每个module显式require直接dependency。
+
+<Term def="Package root与submodules使用canonical dotted names和显式dependency edges，parent/child的加载、re-export与version兼容均由代码声明。">submodule package contract</Term>避免“目录层级自动等于对象层级”。Parent可re-export selected child，但会增加initialization cost与cycle risk；lazy accessor需定义error/cache semantics。
+
+```lua
+-- codec/init.lua
+local M = {}
+M.json = require("codec.json")
+M.binary = require("codec.binary")
+return M
+
+-- caller.lua
+local json = require("codec.json")       -- direct dependency
+local all_codecs = require("codec")      -- explicit aggregate dependency
+assert(json == all_codecs.json)
+```
+
+Versioning可在package name、manifest或export field表达，但不要让同一process任意混合ABI-incompatible majors。Native submodule还需确保Lua/C ABI、symbol name与platform artifact匹配。
+
+<PilPackageLayoutLab />
+
+<Stepper>
+  <Step title="切换Module Table、Local Alias、Submodule和Dependency Graph"><PilPackageLayoutLab /></Step>
+  <Step title="画Canonical Names">为每个export写唯一require name、candidate files、owner package、direct dependencies与re-exports，找出alias duplicates。</Step>
+  <Step title="做Fresh-state Tests">在新Lua state验证任意合法load order、missing optional submodule、cycle detection、same export identity与clean failure rollback。</Step>
+</Stepper>
+
+<Callout type="trap" title="require Parent Package会自动发现并加载所有Submodules">
+Lua没有这种自动层级语义。只有parent code显式require/re-export时才加载child；隐式扫描目录会让依赖、顺序和部署内容不可审计。
+</Callout>
+
+## Security、Native Modules与Deployment
+
+Package path是code execution authority。Production不要从current writable directory优先加载；固定read-only roots、校验artifact hashes并最小化custom searchers。C modules绕过Lua安全边界，可访问process memory/filesystem，必须完全trusted且ABI compatible。
+
+Build/deploy应验证每个canonical module能在clean environment require，记录resolved path与export smoke tests。Dev hot reload与production deterministic load分开，不把cache clearing当部署机制。
+
+## 本章回顾：Require管理Name到Export的唯一映射
+
+1. Require按exact name查package.loaded，cache miss才search/execute loader并缓存export。
+2. Local alias不改变module identity；正式rename用shim返回同一canonical export。
+3. Package.path/cpath按ordered templates搜索，resolved roots与name segments属于执行authority。
+4. Searcher返回loader或diagnostic，不直接代替require执行/cache；custom stores需trust与budgets。
+5. Module用local M、private locals、explicit dependencies和return M控制export surface。
+6. Submodule是canonical dotted name与文件布局约定，parent/child加载和re-export必须显式。
+
+<Exercises>
+
+**问题 1：为什么同一File用两个Module Names Require会产生两个Singleton？**
+
+<Answer>Package.loaded按exact name keyed，不按resolved path deduplicate。两个names各cache miss、各执行top-level code并返回不同export/upvalues。选择canonical name；旧name shim只require并return canonical export，再assert identity相同。</Answer>
+
+**问题 2：Custom Searcher找不到Module时应该Raise吗？**
+
+<Answer>正常not-found应返回diagnostic string，让require继续后续searchers并汇总证据；只有searcher自身不可恢复failure才raise。成功返回loader与search data，不先执行loader。测试顺序和aggregated message。</Answer>
+
+**问题 3：怎样安全测试Reload而不污染Existing Callers？**
+
+<Answer>优先创建fresh Lua state/process，每次从clean package.loaded开始。若当前state清cache，明确旧references仍存在，比较old/new identity并cleanup callbacks/resources；不要把这种测试机制当production hot reload。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="require cache identity" definition="Exact module name经searchers加载一次并在package.loaded缓存export的身份。" />
+  <GlossaryItem term="module initialization transaction" definition="Cache miss时module top-level一次性建立export与side effects的初始化。" />
+  <GlossaryItem term="module alias boundary" definition="Local可重命名引用但canonical require name保持cache身份的边界。" />
+  <GlossaryItem term="module path resolution" definition="Path templates按ordered candidates和trusted roots解析module name的规则。" />
+  <GlossaryItem term="searcher-loader protocol" definition="Searcher返回loader/search data或diagnostic而由require执行缓存的协议。" />
+  <GlossaryItem term="submodule package contract" definition="Canonical dotted names、explicit dependencies与re-export组成的package约定。" />
+</Glossary>
+
+<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 17: Modules and Packages" adaptedUrl="https://www.lua.org/pil/" />

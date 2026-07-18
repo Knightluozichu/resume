@@ -1,0 +1,449 @@
+---
+title: "Item 5：了解 C++ 默默编写并调用哪些函数"
+type: A
+section: Chapter 2 · Constructors, Destructors, and Assignment Operators
+order: 5
+description: 对齐 Effective C++ 第三版 Item 5：推导编译器隐式声明、定义或删除的默认构造、析构、复制与现代移动操作，并从 base/member 语义验证生成结果。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppMemberwiseOperationMap,
+  EcppSpecialMemberDesignMap,
+  EcppSpecialMemberGenerationMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-05-compiler-generated-functions";
+
+<Objectives>
+
+- 能推导一个类的 default constructor、destructor、copy constructor、copy assignment 与现代 move 操作是否隐式声明、定义或删除
+- 能分析编译器生成操作如何逐个调用 base/member 对应函数，识别 raw pointer、const、reference 与 inaccessible 子操作的影响
+- 能设计符合值、独占所有者、多态基类或身份对象语义的特殊成员集合，并以 type traits 和资源测试验证
+
+</Objectives>
+
+## 从“空 class 并不是什么都没有”开始
+
+```cpp
+class Empty {};
+```
+
+源码没有声明函数，但在被需要且满足规则时，编译器可能为它声明并定义默认构造、析构、复制构造和复制赋值。原书 Item 5 要求先知道
+
+<Term def="编译器根据语言规则为类隐式声明或定义的构造、析构与赋值操作。">
+  compiler-generated functions
+</Term>
+
+，否则接口会在没有显式设计的情况下获得复制、赋值或销毁能力。
+Know what functions C++ silently writes and calls（了解 C++ 默默编写并调用哪些函数）要求把这些隐式能力当成真实 public 接口审查，而不是把源码中“没写”误认为类型“不支持”。
+
+<Term def="由语言特殊识别、控制对象创建复制移动与销毁的一组成员函数。">
+  特殊成员函数
+</Term>
+
+现代 C++ 还包括 move constructor 和 move assignment，因此应在原书四项基础上审查六项。
+
+<EcppSpecialMemberGenerationMap />
+
+## 隐式声明不等于一定可调用
+
+<Term def="编译器把函数签名加入类接口，但函数体可能尚未生成或最终被定义为 deleted 的阶段。">
+  implicit declaration
+</Term>
+
+与
+
+<Term def="当操作被 ODR-use 或语义需要时，编译器根据子对象生成函数体的阶段。">
+  implicit definition
+</Term>
+
+要区分。某操作可在重载集合出现，却因成员不可复制而被定义为 deleted。
+
+```cpp
+struct Record {
+    const int id;
+    std::string name;
+};
+
+static_assert(std::is_copy_constructible_v<Record>);
+static_assert(!std::is_copy_assignable_v<Record>);
+```
+
+copy constructor 可直接初始化 `id`，copy assignment 却不能重新赋值 const member。
+
+<Term def="函数仍参与部分语言规则，但任何选择该函数的调用都会编译失败的定义状态。">
+  deleted function
+</Term>
+
+现代 `= delete` 能显式表达相同结果，Item 6 将专门处理不想要的生成函数。
+
+## default constructor 何时出现
+
+<Term def="无需实参即可构造对象的构造函数，包括隐式生成或用户声明版本。">
+  default constructor
+</Term>
+
+只有类没有用户声明任何构造函数时，编译器才隐式声明默认构造。声明一个带参数构造并不会自动再送一个无参版本。
+
+```cpp
+class Endpoint {
+public:
+    explicit Endpoint(std::string address)
+        : address_{std::move(address)} {}
+private:
+    std::string address_;
+};
+
+static_assert(!std::is_default_constructible_v<Endpoint>);
+```
+
+隐式默认构造会依次默认初始化基类和成员；若某成员没有默认构造，整体默认构造被删除。
+
+<Term def="由程序员显式声明的任何构造函数，它会抑制隐式默认构造的产生。">
+  user-declared constructor
+</Term>
+
+即使写 `T() = default` 也属于显式决定接口，而不是“编译器没管”。
+
+## destructor 不会自动变 virtual
+
+<Term def="对象生命周期结束时按成员与基类逆序执行清理的特殊成员函数。">
+  destructor
+</Term>
+
+隐式析构会调用每个成员与基类析构，但不会因为类有 virtual 函数就自动成为 virtual。
+
+```cpp
+struct Interface {
+    virtual void run() = 0;
+    // ~Interface() 非 virtual，若经 Interface* delete 派生对象会出错
+};
+```
+
+<Term def="允许通过基类指针删除派生对象并调用完整派生析构链的析构函数。">
+  virtual destructor
+</Term>
+
+必须由设计者声明。Item 7 会深入这一约束。
+
+## 隐式 copy 是 memberwise copy
+
+<Term def="以同类型 const reference 为源，构造一个新对象的特殊成员。">
+  copy constructor
+</Term>
+
+与
+
+<Term def="把同类型源对象的值复制到已经存在目标对象的特殊成员。">
+  copy assignment
+</Term>
+
+默认实现不是逐字节 memcpy，而是先复制基类，再按声明顺序对成员执行对应复制操作。
+
+```cpp
+struct NamedCounter : CounterBase {
+    std::string name;
+    std::array<int, 4> buckets;
+    Observer* observer;
+};
+```
+
+生成 copy constructor 调用 `CounterBase` copy constructor、`std::string` 和 `std::array` copy constructor，并复制 `observer` 地址。它不知道 observer 是借用还是所有权。
+
+<Term def="由编译器对每个直接基类和非静态数据成员执行对应复制操作的语义。">
+  memberwise copy
+</Term>
+
+raw pointer 被浅复制不是编译器 bug，而是类型没有表达资源语义。
+
+<EcppMemberwiseOperationMap />
+
+<Callout type="trap">
+  **现象**：类含 owning raw pointer，默认 copy 后两个对象析构重复
+  delete。**原因**：误以为 compiler-generated copy
+  会深复制资源。**修法**：用值成员或智能指针表达所有权，或明确实现/删除复制操作；运行期统计资源身份与释放次数。
+</Callout>
+
+## 子对象能力决定整体能力
+
+<Term def="对象内部的直接基类子对象、成员子对象和数组元素对象。">
+  subobject
+</Term>
+
+若任何必要 subobject 操作被删除、不可访问或有歧义，外层对应特殊成员也不可用。
+
+```cpp
+class NonCopyable {
+public:
+    NonCopyable() = default;
+    NonCopyable(const NonCopyable&) = delete;
+};
+
+struct Service {
+    NonCopyable token;
+};
+
+static_assert(!std::is_copy_constructible_v<Service>);
+```
+
+<Term def="编译器生成外层操作时需要调用，但因 private/protected 或删除而无法使用的子对象函数。">
+  inaccessible subobject operation
+</Term>
+
+编译器不会绕过成员契约。组合自然传播不可复制、不可默认构造等能力。
+
+## 引用成员阻断赋值
+
+<Term def="构造时绑定到对象且之后不能重新绑定的成员引用。">
+  reference member
+</Term>
+
+copy construction 可以让新引用绑定源引用所指对象；copy assignment 无法决定是修改所指对象还是重新绑定，因此生成赋值通常 deleted。
+
+```cpp
+struct View {
+    Buffer& buffer;
+    std::size_t offset{};
+};
+
+static_assert(std::is_copy_constructible_v<View>);
+static_assert(!std::is_copy_assignable_v<View>);
+```
+
+这可能正是 view 类型语义，也可能说明 reference member 不适合。不能只为让 trait 变 true 而写含糊赋值。
+
+## 现代 move 生成规则
+
+<Term def="从右值源转移资源以构造新对象，并让源保持有效但未指定状态的特殊成员。">
+  move constructor
+</Term>
+
+<Term def="把右值源资源转移到已存在目标对象的特殊成员。">move assignment</Term>
+
+通常只有类没有用户声明 copy constructor、copy assignment、move constructor、move assignment 和 destructor 时，编译器才隐式声明 move 操作。
+
+```cpp
+struct Payload {
+    std::vector<std::byte> bytes;
+};
+
+static_assert(std::is_move_constructible_v<Payload>);
+static_assert(std::is_nothrow_move_constructible_v<Payload>);
+```
+
+<Term def="声明某些复制、移动或析构函数后，编译器不再隐式声明 move 操作的规则。">
+  move suppression
+</Term>
+
+尤其“只写一个空析构”可能让容器重分配回落到 copy。原书年代没有 move，但理解“编译器默默写什么”在现代必须包含这一变化。
+
+<Callout type="trap">
+  **现象**：给类添加日志析构后性能下降，却认为 vector
+  或编译器退化。**原因**：user-declared destructor 抑制隐式
+  move，重分配改用复制。**修法**：优先 rule of zero；若确需析构，显式审查并
+  default/delete copy/move，使用 type traits 验证。
+</Callout>
+
+## move 可能调用 copy
+
+<Term def="成员没有 move overload 时，右值仍可绑定 const reference，从而在外层 move 中执行复制。">
+  move fallback to copy
+</Term>
+
+“类型 is_move_constructible 为 true”不一定表示发生廉价资源转移，因为 copy constructor 也可接受右值。
+
+```cpp
+struct CopyOnly {
+    CopyOnly() = default;
+    CopyOnly(const CopyOnly&) {}
+};
+
+static_assert(std::is_move_constructible_v<CopyOnly>); // 可由 copy 接受右值
+```
+
+需要用计数器或性能测试确认行为，不只看 trait 名称。`noexcept` 也影响 vector 是否愿意移动元素。
+
+<Term def="移动操作承诺不抛异常，使容器可在保持强保证时选择移动。">
+  noexcept move
+</Term>
+
+只有真实不抛时才声明 noexcept。
+
+## rule of zero 优先
+
+<Term def="类只由正确管理自身资源的成员组成，不自行声明任何特殊成员的设计。">
+  rule of zero
+</Term>
+
+```cpp
+class Report {
+public:
+    Report(std::string title, std::vector<Row> rows)
+        : title_{std::move(title)}, rows_{std::move(rows)} {}
+private:
+    std::string title_;
+    std::vector<Row> rows_;
+};
+```
+
+string/vector 已定义正确复制、移动和析构，Report 的 compiler-generated functions 组合出正确值语义。
+
+<Term def="类型的复制创建独立等价值，移动转移表示，析构互不干扰的对象语义。">
+  value semantics
+</Term>
+
+让编译器生成函数成为可依赖工具，而非风险。
+
+## 何时需要 rule of five
+
+<Term def="一旦类型直接管理资源并自定义复制、移动或析构，系统审查五个相关操作的经验规则。">
+  rule of five
+</Term>
+
+不是要求五个都手写，而是五个都做决定：`= default`、`= delete` 或自定义。独占 owner 通常删除 copy、默认/自定义 move；共享资源先明确复制是共享还是深拷贝；身份对象可能全部删除。
+
+<EcppSpecialMemberDesignMap />
+
+<Term def="不能合理表示为可独立复制的值，通常与 mutex、线程、文件会话或注册身份绑定的对象。">
+  identity object
+</Term>
+
+对它禁止复制比伪造复制语义更正确。
+
+## 编译期与运行期双重验证
+
+<Term def="在编译期查询类型是否可默认构造、复制、移动、赋值或安全移动的标准库工具。">
+  type traits audit
+</Term>
+
+```cpp
+static_assert(std::is_default_constructible_v<T> == expectedDefault);
+static_assert(std::is_copy_constructible_v<T> == expectedCopy);
+static_assert(std::is_copy_assignable_v<T> == expectedCopyAssign);
+static_assert(std::is_move_constructible_v<T> == expectedMove);
+static_assert(std::is_nothrow_move_constructible_v<T> == expectedNoThrowMove);
+```
+
+traits 证明接口可用性，不证明深拷贝、单次释放或 moved-from 行为。运行期用 InstrumentedMember 统计每个 base/member 的 ctor/copy/move/assign/dtor，并注入异常。
+
+先预测：给一个 rule-of-zero 类添加空 destructor 后，哪些 traits 仍可能为 true，真实 move 是否会回落 copy？运行 vector 重分配计数测试验证。
+
+- 默认构造后所有成员不变量成立。
+- copy 后修改目标不影响源，或按文档共享。
+- self-assignment 与异常路径保持合法状态。
+- move 后目标拥有资源，源可析构和重新赋值。
+- 每个资源在所有对象销毁后恰好释放一次。
+
+## 小结
+
+- 空 class 也可能拥有 compiler-generated default ctor、destructor、copy ctor 和 copy assignment
+- 现代 C++ 还需审查 move ctor/assignment，用户声明 copy/move/destructor 会影响生成
+- 隐式操作逐个调用 base/member 对应操作，raw pointer 只复制地址
+- const/reference 或 deleted/inaccessible 子操作会让整体操作不可用
+- rule of zero 让资源语义由成员组合；直接管理资源时系统决定 rule of five
+- type traits 只证明可调用性，资源与性能语义还需运行期计数和失败注入
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 5"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="compiler-generated functions">
+    编译器按规则隐式声明或定义的对象特殊操作。
+  </GlossaryItem>
+  <GlossaryItem term="特殊成员函数">
+    控制对象创建复制移动与销毁的成员函数。
+  </GlossaryItem>
+  <GlossaryItem term="implicit declaration">
+    编译器把特殊成员签名加入类接口的阶段。
+  </GlossaryItem>
+  <GlossaryItem term="implicit definition">
+    操作被需要时按子对象生成函数体的阶段。
+  </GlossaryItem>
+  <GlossaryItem term="deleted function">
+    被选择调用就编译失败的函数定义状态。
+  </GlossaryItem>
+  <GlossaryItem term="default constructor">
+    无需实参即可构造对象的函数。
+  </GlossaryItem>
+  <GlossaryItem term="user-declared constructor">
+    程序员显式声明并抑制隐式默认构造的构造函数。
+  </GlossaryItem>
+  <GlossaryItem term="destructor">
+    生命周期结束时逆序清理子对象的函数。
+  </GlossaryItem>
+  <GlossaryItem term="virtual destructor">
+    支持经基类指针完成派生析构的析构函数。
+  </GlossaryItem>
+  <GlossaryItem term="copy constructor">
+    从同类型源初始化新对象的特殊成员。
+  </GlossaryItem>
+  <GlossaryItem term="copy assignment">
+    把同类型源值复制到现有目标的特殊成员。
+  </GlossaryItem>
+  <GlossaryItem term="memberwise copy">
+    对每个 base/member 执行对应复制操作的语义。
+  </GlossaryItem>
+  <GlossaryItem term="subobject">
+    对象内部的基类、成员或数组元素对象。
+  </GlossaryItem>
+  <GlossaryItem term="inaccessible subobject operation">
+    生成外层操作时无法调用的子对象函数。
+  </GlossaryItem>
+  <GlossaryItem term="reference member">
+    构造时绑定且之后不可重新绑定的成员引用。
+  </GlossaryItem>
+  <GlossaryItem term="move constructor">
+    从右值源转移资源构造新对象的函数。
+  </GlossaryItem>
+  <GlossaryItem term="move assignment">
+    从右值源转移资源到现有目标的函数。
+  </GlossaryItem>
+  <GlossaryItem term="move suppression">
+    用户声明相关函数后不再隐式生成 move 的规则。
+  </GlossaryItem>
+  <GlossaryItem term="move fallback to copy">
+    右值在缺少 move 时由 copy const reference 接受。
+  </GlossaryItem>
+  <GlossaryItem term="noexcept move">
+    承诺不抛并让容器可安全选择移动的操作。
+  </GlossaryItem>
+  <GlossaryItem term="rule of zero">
+    由资源安全成员组合且不声明特殊成员的设计。
+  </GlossaryItem>
+  <GlossaryItem term="value semantics">
+    复制得独立等价值、移动转移表示的对象语义。
+  </GlossaryItem>
+  <GlossaryItem term="rule of five">
+    直接管理资源时系统决定五个复制移动析构操作。
+  </GlossaryItem>
+  <GlossaryItem term="identity object">
+    不应被表示为独立可复制值的身份绑定对象。
+  </GlossaryItem>
+  <GlossaryItem term="type traits audit">
+    编译期查询类型构造复制移动能力的审计。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：推导生成结果。** 类含 const id、reference view、vector data 和 user-declared destructor，逐项判断六个特殊成员。
+
+<Answer question="如何推导该类的六个特殊成员？">
+  没有其他构造时 default ctor 会因 reference 无默认绑定而 deleted；destructor
+  使用用户版本；copy ctor 可初始化 const、reference 和 vector；copy assignment
+  因 const/reference 不可重新赋值而 deleted；user-declared destructor 抑制隐式
+  move ctor/assignment。右值构造可能仍调用 copy ctor，因此 trait 可能显示
+  move-constructible，需计数证明是否真实移动。
+</Answer>
+
+2. **问题 2：修复 owning pointer。** 一个类以 raw pointer 拥有数组并使用默认 copy，设计 rule-of-zero 与 rule-of-five 两种修复。
+
+  <Answer question="owning raw pointer 类型可如何安全重构？">首选把数组改为 vector 或 `unique_ptr<T[]>` 值成员：若需要值复制用 vector 得到 rule of zero；若独占用 unique_ptr 自动删除 copy 并生成 move。若必须保留 raw pointer，则实现深拷贝 copy ctor、copy assignment 的强保证、noexcept move ctor/assignment 和 destructor，处理 self-assignment 与异常，并测试每个分配恰好释放一次。</Answer>
+
+3. **问题 3：验证容器移动。** 给 rule-of-zero 类型添加日志析构后，设计实验判断 vector 扩容为何从 move 变 copy。
+
+  <Answer question="如何证明 user-declared destructor 抑制 move 并影响容器？">先用 traits 记录 copy/move/noexcept 能力，但注意 copy 可接受右值。给成员加入独立 copy/move 计数，vector reserve 后连续 push 触发扩容；比较添加析构前后的计数。修复可移除不必要析构回到 rule of zero，或显式 default move 并在真实安全时 noexcept，同时明确 copy 决策。</Answer>
+</Exercises>

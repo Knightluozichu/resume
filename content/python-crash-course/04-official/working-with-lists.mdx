@@ -1,0 +1,214 @@
+---
+title: "第4章：Working with Lists"
+type: C
+section: "Part I · Basics"
+order: 4
+description: "掌握for与缩进、range和list comprehension、slice copy、tuple与PEP 8。"
+demo: true
+math: false
+sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
+draft: false
+---
+
+import {
+  PccLoopIndentationLab,
+  PccRangeComprehensionLab,
+  PccSliceCopyTupleLab,
+} from "@/components/mdx/python-crash-course/diagrams/working-with-lists";
+
+<Objectives>
+
+- 能解释for loop与indentation如何定义suite，预测循环内外语句的执行次数
+- 能实现range、数值列表和list comprehension，判断start、stop、step与输出边界
+- 能比较slice、alias、shallow copy与tuple，设计不破坏原列表的处理流程并按PEP 8复查
+
+</Objectives>
+
+## 为什么“处理整个列表”首先是控制流问题
+
+第3章一次读取或修改一个位置；本章把同一操作应用到一组元素。`for item in items`每次把名字item绑定到下一个元素，并执行缩进suite。Python没有花括号，indentation就是语法和控制流，不是可有可无的排版。
+
+先预测一个print多缩进四个空格后会执行几次。若只看语句文本而忽略suite boundary，很容易把“循环完成后汇总”写成“每个元素都汇总”，或者让本应循环的语句只执行一次。
+
+<Term def="由冒号后的同级缩进语句组成、在每次for iteration中共同执行的代码块。">loop suite</Term>
+
+## Looping Through an Entire List
+
+<Stepper>
+  <Step title="切换三种缩进结构">
+    <PccLoopIndentationLab />
+  </Step>
+  <Step title="标出循环变量每次的新绑定">
+    item不是list的副本；它依次引用元素。对immutable value重新绑定item不会改list，对mutable element做mutation可能改内部对象。
+  </Step>
+  <Step title="分别验证循环体与循环后输出">
+    用两个元素产生最小trace，记录每行出现次数；语法错误保留完整IndentationError。
+  </Step>
+</Stepper>
+
+```python
+magicians = ["alice", "david", "carolina"]
+
+for magician in magicians:
+    print(f"{magician.title()}, that was a great trick!")
+    print("I cannot wait to see the next trick.\n")
+
+print("Thank you, everyone. That was a great show!")
+```
+
+<Term def="for语句每取得一个元素并完成一次loop suite的执行周期。">iteration</Term>
+
+### 常见缩进错误对应不同根因
+
+冒号后完全不缩进会IndentationError；少缩进一行会让它提前离开loop suite；多缩进一行可能Unexpected indent，或把语句错误地放进更内层结构；忘记冒号则SyntaxError。修复前先画出期望执行次数，再让缩进表达这个结构。
+
+混用tab和space会让视觉对齐与parser理解不一致。第三版与PEP 8都推荐每层四个spaces，编辑器应显示不可见字符并统一转换。自动格式化可以修复一致性，但不能替你决定一行应该在循环内还是循环外。
+
+## Making Numerical Lists with range
+
+`range(stop)`从0开始且不包含stop；`range(start, stop)`从start开始；第三个参数step决定步长和方向。range本身是惰性range对象，需要展示时可传给list，迭代时无需先构造完整list。
+
+<Stepper>
+  <Step title="调整start、stop与step">
+    <PccRangeComprehensionLab />
+  </Step>
+  <Step title="先验证方向与exclusive stop">
+    正step要求start小于stop，负step要求start大于stop；step为0直接ValueError。
+  </Step>
+  <Step title="将同一序列变换为平方列表">
+    comprehension的左侧expression对每个n求值，结果按iteration顺序写入新list。
+  </Step>
+</Stepper>
+
+<Term def="以start、exclusive stop和step描述整数迭代序列的对象；stop永远不进入结果。">range contract</Term>
+
+```python
+even_numbers = list(range(2, 11, 2))
+squares = []
+for value in range(1, 11):
+    squares.append(value ** 2)
+
+print(even_numbers)
+print(min(squares), max(squares), sum(squares))
+```
+
+min、max、sum要求可比较或可相加的非空数值集合。空列表的sum是0，但min/max会ValueError；这不是API不一致，而是加法有单位元0，最小/最大值在空集合中没有候选。批处理前要决定empty input是合法零结果还是数据缺失。
+
+## List Comprehensions：压缩重复样板，不隐藏复杂流程
+
+`[value ** 2 for value in range(1, 11)]`把“创建结果list、迭代、变换、append”合成一个expression。简单map/filter很清晰；包含多个副作用、异常处理或嵌套分支时，普通for loop更容易调试。
+
+<Term def="用expression、for clause和可选condition声明构造新list的表达式。">list comprehension</Term>
+
+```python
+raw_scores = [5, -1, 12, 8, 20]
+valid_scores = [score for score in raw_scores if 0 <= score <= 10]
+labels = [f"score={score}" for score in valid_scores]
+
+print(raw_scores)
+print(valid_scores)
+print(labels)
+```
+
+comprehension创建新的外层list，不会自动复制元素对象。若元素是dictionary，结果list与输入list仍可能引用同一dictionary；之后修改字段会在两边可见。把“新容器”和“深复制整棵对象图”区分开，是下一节slice copy的同一原则。
+
+### 选择for还是comprehension
+
+判断标准不是行数，而是读者能否一次读出意图。单一转换或过滤适合comprehension；需要中间日志、多个条件原因、捕获具体异常、累计多个输出时使用for。不要在comprehension里调用只为副作用的函数，它应该表达“从输入构造结果”。
+
+## Working with Part of a List：slice与copy
+
+`items[start:stop]`返回新的外层list，仍采用exclusive stop；省略start从头开始，省略stop到末尾。`items[:]`常用于shallow copy，而`alias = items`只是多一个名字指向同一对象。两者遇到nested mutable element时都需要画身份图。
+
+<Stepper>
+  <Step title="选择alias、slice copy或tuple实验">
+    <PccSliceCopyTupleLab />
+  </Step>
+  <Step title="分别判断outer与inner identity">
+    shallow copy只复制外层槽位；槽位中的dictionary/list引用仍指向原元素。
+  </Step>
+  <Step title="用mutation验证预测">
+    先append验证外层是否独立，再修改nested field验证内层是否共享，不能只比较打印值。
+  </Step>
+</Stepper>
+
+<Term def="创建新的外层container并复制元素引用，不递归复制nested mutable objects。">shallow copy</Term>
+
+```python
+foods = ["pizza", "falafel", "carrot cake"]
+friend_foods = foods[:]
+friend_foods.append("ice cream")
+
+print(foods)
+print(friend_foods)
+
+profile = [{"name": "Ada", "active": True}]
+copied = profile[:]
+copied[0]["active"] = False
+print(profile)  # nested dict is still shared
+```
+
+### slice边界允许安全截断
+
+与单元素index不同，slice stop超出长度不会IndexError，而是截到末尾；这让`items[:3]`在长度不足时仍返回现有前缀。安全截断不等于输入一定正确：如果业务要求恰好三项，仍要显式验证len，否则缺失数据会被安静接受。
+
+slice还支持step，例如`items[::2]`取偶数位置，`items[::-1]`创建逆序新list。表达复杂采样前先写start/stop/step的索引序列，避免把负step与默认边界混在一起猜测。
+
+## Tuples：限制槽位变化，不冻结整个对象图
+
+tuple是有序但immutable的sequence，适合表达不应原地替换的一组值，例如屏幕尺寸`(1280, 720)`。不能执行`dimensions[0] = 1920`，但可以让名字`dimensions`重新绑定到新tuple。若tuple内部包含list，该list本身仍可mutation，因此“tuple不可变”只约束tuple槽位。
+
+<Term def="元素槽位不能被原地增加、删除或替换的有序sequence；名字仍可重绑定到另一个tuple。">tuple immutability</Term>
+
+循环tuple与循环list语法一致。API返回固定位置且语义明确的少量值可用tuple；字段很多或位置含义难读时，后续class、dataclass或dictionary更清楚。immutable不是目标本身，它用于减少不需要的状态变化。
+
+## Styling Your Code：PEP 8是协作协议
+
+PEP 8推荐四空格缩进、合理line length、函数与类之间使用blank lines，并通过清晰空白突出结构。style guide的价值是降低review中的无关争论，让差异聚焦行为。自动formatter可统一机械格式，名字、边界和算法可读性仍需人工判断。
+
+Code Review本章应检查：loop suite执行次数是否正确，range stop是否exclusive，comprehension有没有隐藏副作用，slice copy是否误以为deep copy，tuple内部是否仍含mutable state。风格只有服务这些语义检查时才真正有用。
+
+<Callout type="trap" title="items[:] 已经把所有嵌套对象都复制了">
+slice只做shallow copy。新旧外层list身份不同，但nested dictionary/list仍共享；需要独立所有权时显式重建元素、使用copy.deepcopy并评估成本，或重新设计数据边界。
+</Callout>
+
+<Callout type="trap" title="comprehension 总比普通 for 更 Pythonic">
+当流程包含多个副作用、失败原因或中间证据时，压成一行会降低可读性和可测试性。Pythonic首先是clear；简单转换用comprehension，复杂流程用显式for。
+</Callout>
+
+## 本章回顾：从iteration到数据所有权
+
+1. indentation定义loop suite，直接决定每条语句执行次数。
+2. range遵守start、exclusive stop、step；数值聚合要定义empty input。
+3. list comprehension适合清晰的构造与过滤，不用于隐藏复杂副作用。
+4. slice创建shallow copy，outer list独立但nested object可能共享。
+5. tuple immutability限制槽位变化；PEP 8与review共同保护语义可读性。
+
+<Exercises>
+
+**问题 1：为什么循环后的总结语句多缩进四格会改变输出？**
+
+<Answer>冒号后的同级缩进组成loop suite。总结语句多缩进后进入suite，会随每个元素执行一次；放回循环同级则在整个迭代结束后执行一次。先用两个元素记录输出trace，再调整缩进验证次数。</Answer>
+
+**问题 2：用range和comprehension生成10到2的偶数平方，stop如何设置？**
+
+<Answer>可写`[n ** 2 for n in range(10, 1, -2)]`，range产生10、8、6、4、2；stop=1不包含在结果中，negative step要求start大于stop。测试step=0会ValueError，方向不匹配则产生空序列。</Answer>
+
+**问题 3：为何`copied = records[:]`后修改`copied[0]["active"]`仍影响records？**
+
+<Answer>slice只复制外层list和其中的引用，records[0]与copied[0]仍指向同一dictionary。append到copied不会影响records长度，但修改共享dictionary字段双方都可见。需要独立元素时显式复制每个dict或重新设计ownership。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="loop suite" definition="冒号后由同级缩进语句组成、每次迭代共同执行的代码块。" />
+  <GlossaryItem term="iteration" definition="for取得一个元素并完成一次loop suite的执行周期。" />
+  <GlossaryItem term="range contract" definition="用start、exclusive stop和step描述整数迭代序列的规则。" />
+  <GlossaryItem term="list comprehension" definition="用expression和for/condition构造新list的表达式。" />
+  <GlossaryItem term="shallow copy" definition="复制外层container和元素引用但不递归复制nested objects。" />
+  <GlossaryItem term="tuple immutability" definition="tuple槽位不能原地增删替换，但名字可重绑定且内部对象未必immutable。" />
+</Glossary>
+
+<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 4: Working with Lists" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />

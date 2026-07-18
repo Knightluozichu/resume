@@ -393,10 +393,7 @@ export function AaPromptAssemblyDiagram() {
           </text>
 
           {/* ===== 模型回话气泡（左下，第 5 步浮现）===== */}
-          <g
-            ref={replyRef}
-            opacity="0"
-          >
+          <g ref={replyRef} opacity="0">
             <rect
               x={SRC_LEFT}
               y={MODEL_TOP - 4}
@@ -437,8 +434,9 @@ export function AaPromptAssemblyDiagram() {
         />
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
-        一张「纸条」不是随手一句话：先放 system 岗位说明书、再塞 few-shot 范例、最后写 user
-        本次任务，三段叠成一份完整 messages 喂给模型——这就是 tinyagent 组装提示的全过程。
+        一张「纸条」不是随手一句话：先放 system 岗位说明书、再塞 few-shot
+        范例、最后写 user 本次任务，三段叠成一份完整 messages 喂给模型——这就是
+        tinyagent 组装提示的全过程。
       </figcaption>
     </figure>
   );

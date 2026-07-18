@@ -1,0 +1,271 @@
+---
+title: "第9章：优化查找与排序"
+type: C
+section: Optimized C++ · Chapter 9
+order: 9
+description: "对齐第一版第9章 Optimize Searching and Sorting：key/value 表基线与活动分解，set/sequence 和标准搜索算法，手写二分/strcmp/hash/unordered_map，字符键、自定义表及 Stepanov 抽象代价。"
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+draft: false
+---
+
+import {
+  OpcKeyRepresentationPenaltyMap,
+  OpcSearchActivityDecompositionMap,
+  OpcSearchAlgorithmContainerMap,
+} from "@/components/mdx/optimized-cpp/diagrams/searching-and-sorting";
+
+<Objectives>
+
+- 能设计 key/value table 的 baseline measurement，并分析 lookup 的 compare/hash/allocation/traversal/build
+- 能比较 set/map、sequence+find/binary/equal/lower 与 unordered_map，纳入 ordering/update/duplicate/memory
+- 能设计 string/C/fixed/prehashed key 和 custom hash 实验，判断 abstraction penalty 是否值得专门化
+
+</Objectives>
+
+## 从 std::map 和 std::string 的基线开始
+
+原书用 **key/value tables** 展示完整优化流程。`std::map<std::string, Value>` 提供 ordered key、logarithmic operation、value ownership 和 node/reference stability；它不因 pointer chasing/allocation 就“错误”。先说明应用需要什么，再做 **baseline measurement**。
+
+<Term def="按 key 存取 value 的关联结构；性能契约同时包含 build、lookup、insert、erase、iterate、ordering 与 key representation。">
+  key/value tables
+</Term>
+
+<Term def="在固定实现、数据、操作混合和机器上记录替换前各阶段 latency/throughput/allocations/memory 的对照测量。">
+  baseline measurement
+</Term>
+
+baseline dataset 要保存 key count/length/distribution、hit/miss、duplicate、insert/erase/query ratio、ordered iteration/range frequency、peak memory。只测 100% successful lookup 会遗漏 construction、mutation 和 miss path。
+
+```cpp
+using Table = std::map<std::string, Record, std::less<>>;
+
+const Record* findRecord(const Table& table, std::string_view key) {
+    const auto it = table.find(key); // transparent comparison avoids temp string
+    return it == table.end() ? nullptr : &it->second;
+}
+```
+
+`std::less<>` 支持 compatible transparent lookup，先消除 **std::map and std::string** 边界上的 temporary key，再考虑换 structure。要核对 library/standard support 与 comparator strict weak ordering。
+
+<Callout type="trap" title="陷阱：只把 map 换 unordered_map 就宣布完成">
+  unordered_map 失去 ordered/range semantics，改变 reference
+  invalidation/iteration、rehash、memory 与 collision risk；若 key hash
+  扫描长字符串，它未必比 tree 的 early compare 便宜。用同一完整 operation mix
+  A/B， 先证明 contract 等价。
+</Callout>
+
+## Identify the Activity，Decompose the Activity
+
+**identify the activity**：profile 中看到的是 request parsing、lookup、ordered export、insert burst 还是 destruction？container function 只是 call path 一段。**decompose the activity**：把 lookup 拆成 key conversion/copy、hash/compare、bucket/tree traversal、cache misses、allocation/rehash 与 result use。
+
+<Term def="从端到端 profile 确认具体 user operation、phase 与 call path，而非凭 container 名称猜热点。">
+  identify the activity
+</Term>
+
+<Term def="把 activity 拆为 key 创建、compare/hash、allocation、traversal、movement 与 downstream work，以找到真实成本来源。">
+  decompose the activity
+</Term>
+
+只有分解后才 **replace algorithms and data structures**。例如 70% 时间在临时 string conversion 时，transparent lookup 比换 table 风险小；若 ordered iteration 从不用且 lookup/hash dominates，hash table 才是候选。
+
+<OpcSearchActivityDecompositionMap />
+
+## std::set、Sequence Containers 与 Standard Search
+
+`std::set` 只存 key，`std::map` 存 key/value；两者通常 node-based ordered tree。**sequence containers** 如 vector/deque 保存 sequence，sorted vector 可把 search 与 contiguous layout 结合，但 insertion/erase 移动 elements、reallocation 影响 references。
+
+<Term def="按顺序存储 elements 的 vector/deque/list 等容器；与 search algorithm 组合时要计入排序、更新、局部性与稳定性。">
+  sequence containers
+</Term>
+
+`std::find` 对 unsorted range 做 linear equality；`std::binary_search` 只回答是否存在；`std::lower_bound` 返回第一个不小于 key 的位置，可用于 lookup/insert；`std::equal_range` 返回 equivalent interval，适合 duplicates。它们要求 range ordering/comparator 一致。
+
+<Term def="在 sorted range 上返回第一个不小于 key 的位置，是查找、插入点和范围算法的基础。">
+  std::lower_bound
+</Term>
+
+```cpp
+using Entry = std::pair<std::string, Record>;
+
+const Record* findSorted(
+    const std::vector<Entry>& entries,
+    std::string_view key) {
+    const auto it = std::ranges::lower_bound(
+        entries,
+        key,
+        std::less<>{},
+        [](const Entry& entry) -> std::string_view { return entry.first; });
+    if (it == entries.end() || it->first != key) return nullptr;
+    return &it->second;
+}
+```
+
+sorted vector 适合 build-once/read-many；若 insert 频繁、需要 stable reference，tree 可能更合适。`equal_range` 可替换重复 two-sided scans；`binary_search` 不返回 value，因此不要查一次存在再查一次位置。
+
+<OpcSearchAlgorithmContainerMap />
+
+## Handcoded Binary Search 与 strcmp
+
+**handcoded binary search** 常因 boundary/overflow/comparator/duplicate bug 输给标准算法。只有标准 interface 无法表达 measured specialization、且 exhaustive/property tests 与 assembly 证明收益时才保留。`mid = low + (high-low)/2` 也只是基础，iterator/range edge 仍复杂。
+
+`strcmp` 对 **null-terminated string keys** 逐 byte 到 mismatch/terminator；每次 lookup 可能重复 scan，且 buffer 必须有效终止。length-aware `string_view`/fixed key 可避免找 terminator，但 comparison/hash 仍读取 bytes；prefix-heavy keys 会让 tree compare 更贵。
+
+<Term def="以 `\0` 标记结束的 C string key；API 若不携带 length 会在 compare/hash 时扫描并依赖正确终止。">
+  null-terminated string keys
+</Term>
+
+## Hashed Key/Value Tables 与 std::unordered_map
+
+**hashed key/value tables** 先计算 hash 定位 bucket/probe，再用 equality 处理 collision。`std::unordered_map` 提供 average constant lookup，但 cost 包含 hash 全 key、bucket memory、load factor、collision、rehash 和 node allocation（实现相关）。`reserve/rehash/max_load_factor` 应按 measured size 与 memory/tail 调整。
+
+<Term def="用 hash 缩小 candidate bucket/probe，再以 exact equality 解决 collision 的 key/value 结构。">
+  hashed key/value tables
+</Term>
+
+```cpp
+struct FixedKey {
+    std::array<char, 16> bytes{};
+    std::uint8_t size{};
+
+    friend bool operator==(const FixedKey&, const FixedKey&) = default;
+};
+
+struct FixedKeyHash {
+    std::size_t operator()(const FixedKey& key) const noexcept {
+        return hashBytes(std::span(key.bytes.data(), key.size));
+    }
+};
+```
+
+**fixed character array keys** 把 bounded bytes inline，减少 per-key allocation；必须保存 logical length、拒绝/定义 truncation、初始化 padding、约定 encoding。hash 只读有效 bytes，equality 也应与 hash contract 一致。
+
+<Term def="把有界 key bytes 内嵌在固定数组并携带逻辑长度的表示，以可预测 storage 换最大长度/截断契约。">
+  fixed character array keys
+</Term>
+
+**custom hash table** 可针对 fixed domain 做 open addressing/flat layout/interned ID，但要实现 probing、growth、erase tombstone、exception/lifetime、iterator、collision/attack 和 allocator；维护面远大于一个 benchmark。应先比较成熟 flat-hash library 或 standard table 的 transparent lookup/reserve。
+
+<Callout type="trap" title="陷阱：固定数组 key 越长越保险">
+  大 inline key 让每个 slot/bucket 更宽，降低 cache density；truncation
+  又可能制造 equality/collision bug。按真实 length distribution 选择
+  bound，超长走显式 fallback/owned storage；测 total table bytes、cache
+  misses、hash/ compare，不只测 allocation count。
+</Callout>
+
+## Stepanov's Abstraction Penalty 与标准库排序
+
+**Stepanov's abstraction penalty** 指某 abstraction 相对 hand-tuned representation/operation 带来的额外成本；高质量 zero-overhead abstraction 的 penalty 应接近手写等价实现。它是测量问题，不是“抽象必慢”的口号。
+
+<Term def="通用 abstraction 相对同语义专门实现产生的可测额外成本；只有代表性 A/B 才能证明。">
+  Stepanov abstraction penalty
+</Term>
+
+**optimize sorting with the C++ standard library**：优先 `sort/stable_sort/nth_element/partial_sort` 按 output contract 选；避免 comparator 中 allocation/locale conversion/expensive derived key，可用 decorate-sort-undecorate 预计算 key（计入 memory/build）。大型 record 可 sort indices/handles 减少 move，但多一层 indirection。
+
+<OpcKeyRepresentationPenaltyMap />
+
+## 三步完成查找排序案例
+
+<Stepper>
+  <Step title="第一步：建立并分解 baseline">
+    先预测 cost 在 key conversion、compare/hash、allocation、traversal 还是 build/update；记录完整 operation mix 和 key distribution，再用 profile/counters 分解。
+
+    <OpcSearchActivityDecompositionMap />
+
+  </Step>
+  <Step title="第二步：按 contract 比较算法容器">
+    对 find/binary/lower/equal、set/map、sorted sequence、unordered/custom 比较 ordering、duplicates、updates、references、memory 与 worst case，不只测 lookup。
+
+    <OpcSearchAlgorithmContainerMap />
+
+  </Step>
+  <Step title="第三步：最后专门化 key 与 layout">
+    先用 transparent lookup/标准算法，再比较 C/fixed/prehashed key 或 custom table；验证 length/termination/encoding/collision 与 abstraction penalty，保留 rollback。
+
+    <OpcKeyRepresentationPenaltyMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- key/value table 优化从 `std::map<std::string,...>` 完整生命周期 baseline 开始
+- identify/decompose activity 把 key conversion、compare/hash、allocation、traversal、build/update 分开
+- sequence+find/binary/lower/equal、set/map、unordered table 各有 ordering/update/reference/memory contract
+- handcoded binary search 只有在标准算法无法表达且严格验证收益时才值得维护
+- null-terminated、fixed array、owning string、prehashed key 改变 scan/allocation/density，也引入 length/encoding/lifetime 责任
+- hash table 必须 exact equality 处理 collision，custom implementation 还承担 growth/erase/worst-case
+- Stepanov abstraction penalty 要用同语义 A/B 测；标准排序算法应先按 stability/partial-output contract 选
+
+<Attribution
+  adaptedFrom="Optimized C++, First Edition, Chapter 9: Optimize Searching and Sorting"
+  adaptedUrl="https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+/>
+
+<Glossary>
+  <GlossaryItem term="key/value tables">
+    同时承载 build/search/update/iterate 与 key representation 的关联结构。
+  </GlossaryItem>
+  <GlossaryItem term="baseline measurement">
+    替换前固定 workload 与环境的完整性能对照。
+  </GlossaryItem>
+  <GlossaryItem term="identify the activity">
+    从端到端 profile 确认具体操作与 phase。
+  </GlossaryItem>
+  <GlossaryItem term="decompose the activity">
+    把 key、hash/compare、allocation、traversal 等成本分开。
+  </GlossaryItem>
+  <GlossaryItem term="sequence containers">
+    按顺序保存元素、与独立 search/sort algorithm 组合的容器。
+  </GlossaryItem>
+  <GlossaryItem term="std::lower_bound">
+    在有序范围返回首个不小于 key 的位置。
+  </GlossaryItem>
+  <GlossaryItem term="null-terminated string keys">
+    以零 byte 结束、未携带显式长度的 C string key。
+  </GlossaryItem>
+  <GlossaryItem term="hashed key/value tables">
+    用 hash 定位 candidate、exact equality 解决 collision 的表。
+  </GlossaryItem>
+  <GlossaryItem term="fixed character array keys">
+    内嵌 bounded bytes 并携带逻辑长度的 key。
+  </GlossaryItem>
+  <GlossaryItem term="Stepanov abstraction penalty">
+    abstraction 相对同语义专门实现的可测额外成本。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：为 50k 配置键选择结构。** 启动构建一次，运行期 99.9% lookup、偶尔 ordered export；key 为长 common-prefix string。比较 map、sorted vector、unordered_map。
+
+<Answer question="完整 operation mix 会怎样改变选择？">
+  map 支持 export/order 与 incremental insert，但 node/pointer/key compare
+  prefix 成本高；sorted vector build-sort 一次、binary lookup contiguous、export
+  免费，可能适合 read-mostly；unordered lookup 需 hash 全 key、export 需
+  另排。用透明 lookup，测 build、hit/miss、prefix compare/hash
+  bytes、export、RSS/cache、p99；先预测 sorted vector 可能胜，但若
+  value/reference stability 或 dynamic updates 重要，结论可能变。
+</Answer>
+
+2. **问题 2：评审 fixed 16-byte key + custom hash table 提案。** 真实 key p50=8、p99=40、max=200，不能 collision/truncate。给出安全实验。
+
+<Answer question="固定 key 如何避免 truncation 与 cache-density 回归？">
+  不可静默 truncate；可 inline 16 bytes + length/tag + owned overflow，或先
+  intern exact full key 成 ID。hash/equality 必须覆盖完整 logical bytes，构造
+  UTF/byte contract；构造 same-prefix/long/collision corpus。先在 standard/
+  mature table 上测试 representation，再考虑 custom probing。记录 table
+  bytes、allocations、hash/compare bytes、 cache misses、lookup/build/tail；完整
+  property/fuzz、growth/erase 与 rollback 必须通过。
+</Answer>
+
+3. **问题 3：优化按昂贵 derived key 排序的大 records。** comparator 每次 normalize string；只要 top 100。给出标准库方案。
+
+  <Answer question="如何用标准算法删除重复 comparator 工作？">
+    先一次 precompute normalized key 与 index（decorate），用 `nth_element` 选 top 100，再对这 100 用 `sort`
+    获得需要顺序；最终按 index 访问/移动结果。定义 ties/stability/encoding，与原 reference 全量 sort 对照。
+    记录 normalization count、moves、temporary memory、latency；若 n 小或 normalization 缓存占 memory 超收益，
+    回到直接 comparator。无需手写 sort。
+  </Answer>
+</Exercises>

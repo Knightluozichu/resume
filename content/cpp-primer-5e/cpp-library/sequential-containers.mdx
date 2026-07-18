@@ -6,9 +6,11 @@ order: 2
 description: 掌握vector/deque/list/forward_list/array/string六种顺序容器——了解各自内部结构（连续/链表/双端）、操作接口（插入/删除/访问）与性能特征，能根据场景选对容器
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/c-plus-plus-primer-9780321714114"
 draft: false
 ---
+
+import { CppSequentialContainerDecisionDiagram } from "@/components/mdx/cpp-primer-5e/diagrams/sequential-containers";
 
 {/* C 实战型（C++ Primer §9 改编）：六种顺序容器对比 + vector 深度（capacity/size）+ 通用操作 +
    容器适配器（stack/queue/priority_queue）+ 选型原则。
@@ -26,15 +28,15 @@ draft: false
 
 <Objectives>
 
-- 能正确使用迭代器遍历任意顺序容器——通过 `begin()`/`end()` 获取范围、`*iter` 解引用、`++iter` 前进，并识别哪些操作会导致迭代器失效
-- 能根据场景选择合适的容器——需要频繁中间插入选 `list`、需要频繁两端操作选 `deque`、需要随机访问且只末尾插入选 `vector`
+- 能实现使用迭代器遍历任意顺序容器——通过 `begin()`/`end()` 获取范围、`*iter` 解引用、`++iter` 前进，并识别哪些操作会导致迭代器失效
+- 能比较并选择合适的容器——需要频繁中间插入选 `list`、需要频繁两端操作选 `deque`、需要随机访问且只末尾插入选 `vector`
 - 能回答：一个程序用 `vector<int>` 存储数据，不断在开头 `insert` 新元素——运行一段时间后为什么越来越慢？换成什么容器能解决？
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用②工厂流水线——容器是不同规格的物料箱。 */}
 
-## 为什么不能只用一种容器？
+## 直觉：为什么不能只用一种容器？
 
 你已经学了用 `vector` 装数据——它简单好用，往末尾塞数据又快又稳。但如果你的程序需要在开头频繁插入、在中间随机删除、或者数据量巨大——`vector` 就开始喘气了。
 
@@ -57,7 +59,7 @@ draft: false
 - **list**：每个元素独立存储——每个「节点」里除了数据还有两个指针——指向前一个节点和后一个节点。插入删除只改四个指针——O(1)，不搬动任何其他元素。代价是不能随机访问——要找第 N 个必须从头走（O(n)）。
 - **forward_list**：list 的瘦身版——每个节点只存一个 `next` 指针。更省内存，但只能向前走——没有 `--iter`，没有 `push_back`。
 - **array**：固定大小——大小写死在模板参数里。零额外开销——不分配堆内存，没有 capacity 管理。代价是大小不能改——不能 push_back，不能 insert。
-- **string**：专为字符设计——和 `vector<char>` 一样是连续存储，但多了专属武器：`substr` 切子串、`find` 搜索、`compare` 比较、`+` 拼接。短字符串有优化（SSO）——不经堆直接存在对象内部。
+- **string**：专为字符设计——和 `vector<char>` 一样是连续存储，但多了专属武器：`substr` 切子串、`find` 搜索、`compare` 比较、`+` 拼接。许多实现使用短字符串优化（SSO），但这不是标准要求，不能依赖具体内联容量。
 
 ## 所有容器都听你的同一套指令
 
@@ -92,10 +94,9 @@ int main() {
 
 ```cpp
 std::vector<int> a = {1, 2, 3};
-std::list<int>   b = {4, 5, 6};
+std::vector<int> b = {4, 5, 6};
 
-a.swap(b);        // 交换内容——vector 和 list 不能直接 swap，需同类型
-// 但概念上都有 swap——同类型之间交换指针，O(1)
+a.swap(b);        // 同类型容器交换内容；vector 与 list 不能互换
 
 a.assign(5, 42);  // 替换内容为 5 个 42 → [42,42,42,42,42]
 a.clear();        // 清空所有元素——size 变 0
@@ -108,21 +109,69 @@ a.clear();        // 清空所有元素——size 变 0
 **最重要的两个记忆点**：
 
 1. `push_back`——vector/deque/list/string 都有——vector/string 尾部最快（均摊 O(1)），deque O(1)，list O(1)。forward_list 和 array 没有。
-2. `insert`——在任意位置插入——list/forward_list 最快 O(1)（只改指针），vector/deque/string 是 O(n)（要搬元素）。array 不支持。
+2. `insert`——在已知位置插入时，list/forward_list 修改链接为 O(1)；若还要从头查找位置，总成本仍是 O(n)。vector/deque/string 可能搬移元素，array 不支持改变大小。
+
+## 官方 Chapter 9 的完整容器操作契约
+
+原书不是只列出六个容器，而是要求把“选择容器、构造与赋值、增删元素、失效规则、容量管理、string 专用接口、适配器”连成一套决策。容器的渐进复杂度必须和元素移动成本、缓存局部性、查找位置的成本一起判断。
+
+<CppSequentialContainerDecisionDiagram />
+
+### 构造、赋值与 forward_list 的特殊接口
+
+容器可由大小、值、迭代器范围或初始化列表构造。范围构造允许不同但可转换的元素类型，也允许在不同容器类型之间复制元素；普通拷贝构造则要求容器和元素类型一致。`assign` 会替换全部元素，`swap` 交换同类型容器的内容。`array` 的大小是类型的一部分，所以 `array<int, 4>` 与 `array<int, 8>` 是不同类型。
+
+`forward_list` 没有高效的“前一个节点”可用，因此提供 `before_begin()`、`insert_after()` 和 `erase_after()`。若只记住其他容器的 `insert(pos)`，就无法正确表达单链表操作：
+
+```cpp
+std::forward_list<int> values = {2, 3};
+auto before = values.before_begin();
+values.insert_after(before, 1); // {1, 2, 3}
+values.erase_after(before);     // 删除 1，恢复 {2, 3}
+```
+
+### 迭代器失效：修改后还能用什么
+
+<Term def="容器修改后，原有迭代器、指针或引用不再指向可合法访问的原元素或位置。继续解引用失效对象属于未定义行为。">迭代器失效（iterator invalidation）</Term> 必须按容器和操作判断：
+
+- `list` 与 `forward_list` 插入不使已有迭代器失效，删除只使指向被删元素的迭代器、指针和引用失效。
+- `vector` 与 `string` 重分配会使全部迭代器、指针和引用失效；未重分配的插入会使插入点及其后的失效，删除会使删除点及其后的失效。
+- `deque` 在中间插入会使全部迭代器、指针和引用失效；两端插入也会使迭代器失效，但既有元素的引用和指针保持有效。删除规则更细，修改后最稳妥的做法是重新取得位置。
+- 不要缓存 `end()` 后再修改容器。循环中插入或删除时，应使用操作返回的新迭代器，并按该容器规则决定哪些旧位置还能使用。
+
+### string 专用操作与数值转换
+
+<Term def="std::string 在顺序容器接口之外提供的字符搜索、比较、截取、替换和数值转换能力。位置参数越界与未找到结果需要分别处理。">string 操作（string operations）</Term> 包括按位置构造、`substr`、`append`、`replace`、多组 `find` 和 `compare`。搜索失败返回 `string::npos`，它是无符号的 `size_type` 最大值，不能先转成有符号整数再与 `-1` 混用：
+
+```cpp
+std::string text = "name=alice;score=92";
+auto split = text.find(';');
+if (split != std::string::npos) {
+    auto namePart = text.substr(0, split);
+    text.replace(split + 1, 6, "points");
+}
+
+int value = std::stoi("92");
+std::string rendered = std::to_string(value + 8); // "100"
+```
+
+`stoi`、`stol`、`stof`、`stod` 等转换函数可通过位置参数报告解析到哪里，并会在格式无效或超出范围时抛异常。它们比手写字符运算清晰，但处理外部输入时必须捕获并区分失败原因。
 
 ## vector 的隐藏能力：capacity 和 reserve
 
-你已经知道 `v.size()` 返回元素个数。但 vector 还有一个不常被注意的「幕后容量」——<Term def="已分配内存能容纳的元素数量（≥ size）。size 是已存储的元素数，capacity 是已申请的内存槽位数。当 push_back 让 size 超过 capacity 时触发重新分配——分配更大的新内存、拷贝旧元素、释放旧内存。通过 reserve(n) 可预先分配至少 n 个槽位——避免多次 push_back 时反复触发重分配。">capacity</Term> 和 `size` 不是一回事。
+你已经知道 `v.size()` 返回元素个数。但 vector 还有一个不常被注意的「幕后容量」——<Term def="已分配存储当前可容纳的元素数量，且不小于 size。空间不足时 vector 分配更大区域，用移动或拷贝构造迁移元素并释放旧存储。reserve 可提前保证最低容量，但不会创建元素。">capacity</Term> 和 `size` 不是一回事。
 
 <VectorMemoryModelDiagram step={4} />
 
-用 Stepper 一步步看 vector 在 `push_back` 的过程中 capacity 如何变化：
+用 Stepper 一步步看 vector 在 `push_back` 的过程中 capacity 如何变化。图里的 0、1、2、4 是一种常见实现的示意轨迹，不是标准规定的增长倍率；程序只能依赖“容量足够且连续追加具有均摊常数复杂度”。
+
+> 先预测：执行 `reserve(8)` 后，`size()`、`capacity()` 和可安全下标访问的元素数分别是多少？再连续追加 9 个元素，哪些旧迭代器必然在某一刻失效？先写答案，再逐步看图验证。
 
 <Stepper>
 
 <Step title="初始空 vector">
 
-`vector<std::string> v;`——刚构造出来时 size=0，capacity=0。没有分配任何堆内存——三个指针都是 nullptr。
+`vector<std::string> v;`——刚构造出来时 `size()==0`。示意实现同时显示 `capacity()==0`；对象内部如何表示空状态属于实现细节，不能假定它由三个空指针组成。
 
 <VectorMemoryModelDiagram step={1} />
 
@@ -130,7 +179,7 @@ a.clear();        // 清空所有元素——size 变 0
 
 <Step title="第一次 push_back">
 
-`v.push_back("a");`——capacity 不够（0 < 1），分配一块能容纳 1 个元素的新内存，size=1，capacity=1。第一个元素 "a" 占用了唯一的位置。
+`v.push_back("a");`——若当前没有容量，就申请能够容纳新元素的连续存储并构造 "a"。示意实现选择 `capacity()==1`；标准只要求新容量足够，具体数值由实现决定。
 
 <VectorMemoryModelDiagram step={2} />
 
@@ -138,17 +187,17 @@ a.clear();        // 清空所有元素——size 变 0
 
 <Step title="第二次 push_back（触发扩容）">
 
-`v.push_back("b");`——size==capacity==1，没位置了。触发扩容——分配一块**翻倍大小**（capacity=2）的新内存，把 "a" 拷贝过去，释放旧内存，然后在新内存末尾构造 "b"。现在 size=2，capacity=2。
+`v.push_back("b");`——示意轨迹中原存储已满，于是分配更大的连续区域，把 "a" 移动或拷贝构造到新区域，再构造 "b" 并释放旧存储。这里实现选择 `capacity()==2`，不代表所有实现必须翻倍。
 
 <VectorMemoryModelDiagram step={3} />
 
-扩容时发生的事：分配新内存 → 拷贝旧元素 → 释放旧内存 → 构造新元素。`size` 递增 1，`capacity` 翻倍。
+扩容会建立新存储并迁移已有元素，旧地址随后失效；具体构造顺序受实现和异常安全策略影响。`size` 增加 1，`capacity` 增长到某个足够大的值，而不是由标准固定为翻倍。
 
 </Step>
 
 <Step title="第三次 push_back（再次扩容）">
 
-`v.push_back("c");`——又满了（size==capacity==2）——再次触发扩容，capacity 翻倍到 4。3 个已用元素 + 1 个预留槽。旧内存（capacity=2 的那块）已释放。
+`v.push_back("c");`——示意实现再次申请容量 4，于是得到 3 个已构造元素和 1 个预留槽。其他标准库可能选择不同的新容量；共同结果是旧存储上的全部迭代器、指针和引用都失效。
 
 <VectorMemoryModelDiagram step={4} />
 
@@ -172,11 +221,11 @@ scores.shrink_to_fit();  // 回收多余内存（请求，不保证立即释放�
 
 ## 三个适配器——让 deque 变成栈、队列、堆
 
-你已经有了底层容器（deque、vector、list）——但有时候你不想暴露这么多操作。比如需要一个「只能从一端进出」的栈——你不用自己写一个类，C++ 提供了 <Term def="拿一个底层顺序容器（默认 deque），只暴露一部分操作接口而封装出的受限数据结构。三种适配器：stack（只暴露 top/push/pop，LIFO）、queue（只暴露 front/back/push/pop，FIFO）、priority_queue（只暴露 top/push/pop，用堆维护优先级）。你可以指定底层容器——如 stack<int, vector<int>> 用 vector 代替默认的 deque。">容器适配器（container adaptor）</Term>——包装底层容器，只露出你需要的那几个接口。
+你已经有了底层容器（deque、vector、list）——但有时候你不想暴露这么多操作。比如需要一个「只能从一端进出」的栈——你不用自己写一个类，C++ 提供了 <Term def="包装底层容器并只暴露受限操作的数据结构。stack 和 queue 默认使用 deque，priority_queue 默认使用 vector；替换底层容器时必须满足适配器所需操作。">容器适配器（container adaptor）</Term>——包装底层容器，只露出你需要的那几个接口。
 
 <AdapterConceptDiagram />
 
-三层适配器把同一个 `deque` 变成三种完全不同的数据结构：
+三种适配器用受限接口表达不同访问纪律；`stack` 与 `queue` 默认包装 `deque`，`priority_queue` 默认包装 `vector`：
 
 ```cpp
 #include <stack>
@@ -207,7 +256,7 @@ while (!pq.empty()) {           // 输出 5 3 2 1
 }
 ```
 
-**关键规则**——适配器不提供自己的存储，你必须指定底层容器：
+**关键规则**——适配器不提供自己的存储；你可以采用默认底层容器，也可以显式指定满足所需操作的容器：
 
 ```cpp
 // 默认底层容器：
@@ -269,6 +318,7 @@ int main() {
 #include <list>
 #include <string>
 #include <iostream>
+#include <algorithm>
 
 int main() {
     std::list<std::string> cache;
@@ -290,6 +340,8 @@ int main() {
 ```
 
 `splice` 是 `list` 的独门武器——它只修改几个指针，O(1)——比任何「拷贝+删除+插入」的方案快得多。vector 不可能做到这一点——vector 的 erase + insert 需要搬动所有元素，O(n)。
+
+但这个示例用 `std::find` 查找页面，查找本身仍是 O(n)。真正要求访问、移动、淘汰都为 O(1) 的 LRU，通常把 `list` 与 `unordered_map<Key, list::iterator>` 组合：哈希表定位节点，`splice` 只负责移动节点。
 
 ### 场景三：文本编辑器——频繁在中间插入删除字符
 
@@ -316,7 +368,7 @@ int main() {
 }
 ```
 
-`string` 的 `insert` 也会做同样的事——但需要把 'o' 及之后所有字符往后挪一位——O(n)。text editor 场景下每按一个键对 `string` 做一次 O(n) 插入不可接受——`list` 的 O(1) 是正确答案。
+`string` 的 `insert` 需要移动插入点后的字符，单次为 O(n)。`list<char>` 说明了“位置已知时改链接”的复杂度，但它不是成熟文本编辑器的通用答案：逐字符节点有显著内存和缓存代价，随机跳转也慢。真实编辑器通常使用 gap buffer、piece table 或 rope，并按光标局部性、撤销模型和大文件需求选型。
 
 ### 场景四：令牌桶限流器——两端操作
 
@@ -324,7 +376,7 @@ int main() {
   操作模式：定时从后端补充令牌（push_back），请求到来时从前端消耗令牌（pop_front）。两端都要 O(1)。
 </Callout>
 
-`deque` 是唯一选择——`vector` 没有 `pop_front`（O(n) 代价太大），`list` 有但这场景不需要中间插入能力——`deque` 既满足两端 O(1)、又有随机访问能力、内存比 list 紧凑：
+`deque` 是标准顺序容器中的合适默认选择——`vector` 没有 `pop_front`，`list` 虽支持两端操作但承担逐节点分配成本。若只需 FIFO 接口，可直接使用默认基于 `deque` 的 `queue`；固定容量高性能场景还可能采用环形缓冲区。因此这里是基于需求的选择，不是唯一可能实现。
 
 ```cpp
 #include <deque>
@@ -378,13 +430,13 @@ int main() {
 <Callout type="trap">
   **现象**：把 `vector<bool>` 的元素引用存入 `auto &ref = v[0]`——编译错误。
   **原因**：`vector<bool>` 是特化版本——每个 `bool` 只占 1 位（位压缩优化），`v[0]` 返回的是代理对象（`vector<bool>::reference`），不是 `bool&`。不能用 `auto &` 绑定代理对象。
-  **修法**：用 `auto b = v[0]`（按值，通过代理对象隐式转换为 bool）。或用 `vector<char>` 代替 `vector<bool>`——每个 bool 占 1 字节，语义完全正常，空间稍多但远好过诡异的 API。或用 `deque<bool>`——deque 没有 `vector<bool>` 的特殊化。
+  **修法**：需要独立布尔值时写 `bool b = v[0]`。`auto b = v[0]` 通常仍推导成代理类型，之后修改 `b` 可能继续影响容器。需要普通引用语义时可改用 `vector<char>`；是否换容器应由空间与接口需求决定。
 </Callout>
 
 <Callout type="trap">
   **现象**：用 `container.swap(other)` 之后元素的指针/引用仍然指向旧元素——但现在它在另一个容器里了。
-  **原因**：`swap` 交换的是内部指针/数据结构——不移动元素本身。所有指向元素的指针、引用、迭代器在 swap 后仍然有效——但它们所属的容器变了。不是 bug——这是 swap 的保证行为。
-  **修法**：如果你需要的是「把所有元素移动到另一个容器」并且旧的应该清空——用 `swap` 没问题——它的语义就是交换内容。如果你需要「移动语义」——用 `std::move` 或者 C++11 的移动赋值：`other = std::move(container)`——老容器变成「有效但未指定」状态。
+  **原因**：对 `vector`、`list` 等动态容器，常数时间 swap 通常交换内部所有权，元素引用仍指向同一元素，但元素现在属于另一容器；尾后迭代器需重新取得。`array::swap` 则逐元素交换，不能套用这套所有权解释。自定义分配器不满足交换条件时还要核对分配器规则。
+  **修法**：明确你要的是交换两边内容还是把一边转移后清空。swap 后重新获取 `begin/end` 并更新容器归属假设；移动赋值后，源容器只保证有效但状态未指定，不能假定它必然为空。
 </Callout>
 
 {/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 2-3 题含 1 道改代码题 + 1 道独立实现题（C 型），答案折叠。 */}
@@ -393,13 +445,13 @@ int main() {
 
 - 六种顺序容器按底层结构分三类：连续存储（vector/string/array）随机访问 O(1) 但中间插入 O(n)；链式存储（list/forward_list）任意位置插入 O(1) 但不支持随机访问；分段存储（deque）兼顾两端插入 O(1) 和随机访问 O(1)
 - 所有容器共享一套迭代器接口——`begin()`/`end()`、`*iter`、`++iter`——同一套代码可遍历不同容器；vector 的 push_back 扩容会令所有迭代器失效，list 的 erase 只让被删元素的迭代器失效
-- vector 的 `capacity` ≥ `size`——`reserve(n)` 预分配内存避免反复扩容、`shrink_to_fit()` 回收多余内存；扩容策略（通常 2× 翻倍）使 push_back 均摊 O(1)
+- vector 的 `capacity` ≥ `size`——`reserve(n)` 预分配内存避免反复扩容、`shrink_to_fit()` 只是回收请求；实现采用几何增长以提供均摊 O(1) 追加，但标准不规定具体倍率
 - 容器适配器（stack/queue/priority_queue）包装底层容器、只暴露受限接口——默认都用 deque（priority_queue 用 vector）；可根据需要指定底层容器（queue 不能用 vector——没有 pop_front）
 - 选容器先分析最频繁的操作——频繁中间插入选 list、频繁两端操作选 deque、需要排序选 vector、编译期大小确定选 array、处理文本选 string
 
 <Exercises>
 
-**练习 1（改代码型）** 下面代码试图删除 vector 中所有负数——找出 bug 并写出修正后的代码。
+**问题 1（改代码型）** 下面代码试图删除 vector 中所有负数——找出 bug 并写出修正后的代码。
 
 ```cpp
 #include <vector>
@@ -435,7 +487,7 @@ int main() {
 
 </Answer>
 
-**练习 2（独立实现题）** 写一个程序：用 `stack` 和 `queue` 组合检测一个输入字符串是否回文（正反读一样）。用 `std::stack<char>` + `std::queue<char>`，不用其他数据结构。先获取用户输入 `std::string`，逐字符压入两个适配器，再逐个对比（`stack::top()` vs `queue::front()`）。
+**问题 2（独立实现题）** 写一个程序：用 `stack` 和 `queue` 组合检测一个输入字符串是否回文（正反读一样）。用 `std::stack<char>` + `std::queue<char>`，不用其他数据结构。先获取用户输入 `std::string`，逐字符压入两个适配器，再逐个对比（`stack::top()` vs `queue::front()`）。
 
 <Answer>
 
@@ -476,7 +528,7 @@ int main() {
 
 </Answer>
 
-**练习 3（选型题）** 以下三个场景分别应该选哪个容器？各用一句话解释原因。
+**问题 3（选型题）** 以下三个场景分别应该选哪个容器？各用一句话解释原因。
 
 - **A**：需要维护一个「最近访问的 20 个页面」列表——访问某页面时把它移到最前面，超过 20 个则删除最旧的。
 - **B**：读入一个 10 万行日志文件——每行是一条文本，要求支持随机跳转到第 N 行。
@@ -507,15 +559,23 @@ int main() {
 </GlossaryItem>
 
 <GlossaryItem term="capacity">
-  vector/string 独有的概念——已分配内存能容纳的元素数量（≥ size）。size 是已存储的元素数，capacity 是已申请的内存槽位数。当 push_back 让 size 超过 capacity 时触发重新分配——分配更大的新内存、拷贝旧元素、释放旧内存。通过 `reserve(n)` 可预先分配至少 n 个槽位——避免多次 push_back 时反复触发重分配。`shrink_to_fit()` 请求回收多余空间（不保证立即释放）。详见本章「vector 的隐藏能力」一节的 VectorMemoryModelDiagram 和 Stepper 演示。
+  vector/string 已分配存储当前可容纳的元素数，且不小于 size。空间不足时会申请更大区域并移动或拷贝构造已有元素，具体增长倍率由实现决定。`reserve(n)` 保证最低容量但不创建元素，`shrink_to_fit()` 只是回收请求。详见「vector 的隐藏能力」。
 </GlossaryItem>
 
 <GlossaryItem term="容器适配器（container adaptor）">
-  拿一个底层顺序容器（默认 deque），只暴露一部分操作接口而封装出的受限数据结构。三种适配器：① stack——只暴露 top()/push()/pop()，LIFO（后进先出）。② queue——只暴露 front()/back()/push()/pop()，FIFO（先进先出）。③ priority_queue——只暴露 top()/push()/pop()，内部用堆维护优先级（默认最大堆）。可以指定底层容器类型——如 `stack<int, vector<int>>`。queue 不能用 vector 作底层（vector 没有 pop_front），priority_queue 不能用 list（堆需要随机访问）。详见本章「三个适配器」一节的 AdapterConceptDiagram。
+  包装底层容器并只暴露受限接口的数据结构。stack 和 queue 默认使用 deque，priority_queue 默认使用 vector；显式替换底层容器时必须满足适配器所需操作，例如 queue 需要前端删除，priority_queue 需要随机访问。详见「三个适配器」。
+</GlossaryItem>
+
+<GlossaryItem term="迭代器失效（iterator invalidation）">
+  容器修改后，旧迭代器、指针或引用不再能合法访问原元素或位置。规则取决于容器、操作位置以及是否发生重分配；继续解引用失效对象属于未定义行为。详见「迭代器失效」。
+</GlossaryItem>
+
+<GlossaryItem term="string 操作（string operations）">
+  std::string 在通用容器接口之外提供的搜索、比较、截取、替换与数值转换能力。搜索失败返回 string::npos，数值转换可能报告格式或范围错误。详见「string 专用操作与数值转换」。
 </GlossaryItem>
 
 </Glossary>
 
 {/* 9. 出处声明（spec §九）：sourceUrl 为空字符串（改编自 C++ Primer §9），Attribution 标签自动处理。 */}
 
-<Attribution />
+<Attribution source="C++ Primer, Fifth Edition, Chapter 9: Sequential Containers" />

@@ -1,102 +1,354 @@
 ---
-title: 游戏循环
+title: 第 1 章：搭建 SFML 并启动 Timber!!!
 type: A
-section: 游戏编程入门
-order: 5
-description: 游戏循环的五阶段架构、更新与渲染分离、帧率与 delta time——实时游戏的心跳。
+section: Timber!!! 项目
+order: 1
+description: 对齐官方第 3 版第 1 章：配置 C++20 与 SFML，规划 Timber，区分屏幕和内部坐标，创建窗口、游戏循环与背景，并建立错误处理。
 demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
 draft: false
 ---
 
-import { BcgGameLoopArchDiagram } from "@/components/mdx/beginning-cpp-game/diagrams/bcg-game-loop-arch";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  BcgpBackgroundOwnershipMap,
+  BcgpFirstFrameMap,
+  BcgpSetupCoordinateMap,
+} from "@/components/mdx/beginning-cpp-game-programming/diagrams/game-loop";
 
 <Objectives>
-- 能说出游戏循环的五个阶段及其顺序
-- 能解释更新与渲染为何要分离，以及分离带来的好处
-- 能用 delta time 实现帧率无关的移动
+
+- 能设计并验证同一架构和构建模式的 C++20、SFML Graphics/Window/System 与资源目录配置
+- 能实现 Timber!!! 第一版游戏循环，区分窗口事件与实时输入，并按 `clear-draw-display` 顺序绘制背景
+- 能解释屏幕坐标、视图坐标和内部坐标的边界，设计纹理、精灵与窗口的生命周期和加载失败策略
+
 </Objectives>
 
-## 游戏的心跳
+## 从“能打开窗口”而不是“IDE 没有红线”开始
 
-之前写的 C++ 程序跑完就结束。但游戏不同——它要持续运行、实时响应：画面每帧重画、玩家输入随时响应、世界状态不断推进。实现这种「持续运行」的结构就是游戏循环。没有循环就没有实时游戏。
+Beginning C++ Game Programming 第 3 版用四个逐步变复杂的游戏学习 C++20 和 SFML，第一个项目是 Timber!!!。第 1 章的完成标准不是记住 API 名，而是建立一条可重复的证据链：源码按目标语言标准编译、链接到匹配架构的库、运行时能找到资源、窗口能处理事件并持续呈现背景。
 
-<BcgGameLoopArchDiagram />
+<Term def="用于窗口、二维图形、音频、网络和系统能力的 C++ 多媒体库；本书主要使用 Graphics、Window、System 与 Audio 模块。">
+  SFML
+</Term>
+把 OpenGL 上下文、操作系统窗口和常用二维资源封装成 C++ 对象。第三版以 Visual
+Studio 2022 为主要环境，但核心约束不依赖 IDE：编译器架构、Debug/Release
+配置、SFML 二进制和运行库必须一致。
 
-## 五个阶段
+<BcgpSetupCoordinateMap />
 
-游戏循环标准五步：
+## 配置 SFML：头文件、库和运行时是三道门
 
-1. **初始化**：建窗口、加载资源、设置初始状态。只在循环开始前做一次。
-2. **处理输入**：读键盘、鼠标、窗口事件。
-3. **更新状态**：推进物理、AI、计时器，移动所有实体。
-4. **渲染**：把当前世界状态画到屏幕。
-5. **检测退出**：玩家关窗口了？没退出就回到第 2 步，退出则结束循环。
+“能包含头文件”只证明编译阶段找到声明。链接阶段还要找到 `sfml-graphics`、`sfml-window`、`sfml-system` 的对应库；动态链接时，启动阶段还要能找到相同版本与架构的动态库。混用 32/64 位、Debug/Release 或不同编译器 ABI，都会在不同阶段失败。
 
-第 2-5 步每帧重复，这就是「心跳」。一帧约 16ms（60fps），意味着每秒这套流程跑 60 次。
+在 Visual Studio 2022 中，应让项目平台与下载的 SFML 包一致，分别配置包含目录、库目录和依赖项；Debug 配置使用匹配的调试库。跨平台项目可用 CMake 表达同一依赖关系，关键是把配置写进可复现文件，而不是只存在某台机器的 IDE 面板。
 
-## 更新与渲染为何分离
+```cmake
+cmake_minimum_required(VERSION 3.20)
+project(timber LANGUAGES CXX)
 
-关键设计：先**统一更新完所有实体**，再**统一渲染**，而不是边更新边画。
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+find_package(SFML 2.6 COMPONENTS graphics window system REQUIRED)
+
+add_executable(timber src/main.cpp)
+target_link_libraries(timber PRIVATE sfml-graphics sfml-window sfml-system)
+```
+
+这个示例锁定 SFML 2.6 风格 API，与书中代码代际相符。若项目升级到 SFML 3，应同时按其迁移文档调整包名和事件 API，不能只替换二进制。依赖版本是源码契约的一部分。
+
+<Callout type="trap">
+  **现象**：代码补全正常，但链接出现大量 `sf::RenderWindow`
+  未解析符号。**原因**：编译器找到了头文件，却没有链接匹配的
+  Graphics/Window/System
+  库，或架构与配置不一致。**修法**：逐层验证编译、链接、动态加载，不要通过复制随机
+  DLL 掩盖版本错配。
+</Callout>
+
+## 资源目录：相对路径由运行目录解释
+
+书中项目把背景、字体和音效放在资源目录。`loadFromFile("assets/graphics/background.png")` 的相对路径从进程当前工作目录解释，不是从 `.cpp` 文件位置解释。IDE、测试工具和直接双击可执行文件可能给出不同工作目录，因此构建应把资源复制到约定位置，启动日志应报告实际路径上下文。
+
+```cmake
+add_custom_command(TARGET timber POST_BUILD
+  COMMAND ${CMAKE_COMMAND} -E copy_directory
+          "${CMAKE_SOURCE_DIR}/assets"
+          "$<TARGET_FILE_DIR:timber>/assets")
+```
+
+发布包要把可执行文件、匹配动态库与资源一起视为产物。资源加载失败不应继续进入主循环并画一个白色占位：它会把根因延迟成“画面怎么没出来”。初始化阶段一旦缺少必需背景，应输出资源路径并返回非零状态。
+
+## 规划 Timber：把本章交付范围锁小
+
+<Term def="本书第一个逐章完成的伐木主题小游戏；第一章只建立窗口、循环和背景，后续再加入变量、输入、树枝、碰撞、计时与声音。">
+  Timber 项目规划
+</Term>
+遵循垂直切片：本章只要求打开窗口、处理关闭、绘制静态背景。第 2
+章再让云和蜜蜂移动并学习变量、运算符与分支；第 3 章加入字符串、时间、输入和
+HUD；第 4 章加入循环、数组、枚举和函数；第 5 章才完成碰撞、音效与结束条件。
+
+这种范围划分让每章只有一组新增假设。若第一章就加入 delta time、复杂状态机与碰撞，窗口或资源出错时很难定位。先取得稳定的第一帧，再迭代机制。
+
+需求可以写成四条可验收结果：窗口标题正确；关闭按钮能结束进程；背景完整覆盖预期视口；资源加载失败时不进入循环。每条都能通过运行或故障注入验证。
+
+## 屏幕坐标与内部坐标
+
+<Term def="窗口客户区中的像素位置，SFML 默认二维坐标原点在左上，x 向右、y 向下；它描述当前显示表面。">
+  屏幕坐标
+</Term>
+适合表达像素尺寸和鼠标位置。
+<Term def="游戏世界或逻辑空间中的位置单位，由设计者定义；它可经 SFML View 映射到窗口，不必与当前像素一一对应。">
+  内部坐标
+</Term>
+表达玩家、树木和碰撞区域在世界中的位置。第一章默认视图让两者看起来接近，但后续摄像机、缩放、分辨率适配会打破一一对应。
+
+输入也要选择空间。`sf::Mouse::getPosition(window)` 给窗口像素坐标；世界命中测试通常要用 `window.mapPixelToCoords` 映射到当前视图。把 HUD 放在固定屏幕层、把实体放在世界层，可避免相机移动时分数文本跟着漂移。
+
+纹理像素、精灵局部坐标、世界变换和窗口像素是四层概念。调试位置时打印“值属于哪个空间”，比只打印两个数字更有意义。
+
+## 创建窗口与最小入口
+
+<Term def="SFML 同时管理原生窗口、OpenGL 上下文和可绘制目标的对象；其 isOpen 状态控制主循环是否继续。">
+  RenderWindow
+</Term>
+在主函数作用域内创建，使它比循环和绘制操作活得更久。窗口尺寸不应在业务代码各处重复；本章用常量集中初始视口。
 
 ```cpp
-while (window.isOpen()) {
-  processInput();
-  update(dt);    // 所有实体先统一算完新状态
-  render();      // 再统一画出来
+#include <SFML/Graphics.hpp>
+#include <cstdlib>
+
+int main()
+{
+    constexpr unsigned windowWidth = 1280;
+    constexpr unsigned windowHeight = 720;
+
+    sf::RenderWindow window(
+        sf::VideoMode(windowWidth, windowHeight),
+        "Timber!!!",
+        sf::Style::Titlebar | sf::Style::Close);
+
+    if (!window.isOpen())
+        return EXIT_FAILURE;
+
+    while (window.isOpen()) {
+        window.clear(sf::Color::Black);
+        window.display();
+    }
+    return EXIT_SUCCESS;
 }
 ```
 
-分离的好处：一帧内画出来的是「同一时刻」的世界快照。若边更新边画，先更新的实体已移动、后更新的还在旧位置，画面撕裂、状态不一致。另外职责单一——逻辑错了查 update，画面错了查 render，调试容易。
+这段还不能正常关闭，因为它没有处理事件，只用于证明构造和呈现链。若循环占满 CPU，可在开发阶段启用垂直同步或帧率上限，但二者只用于节流，不替代正确的时间步进；计时属于后续章节。
 
-<Callout type="tip">
-更新算「世界是什么样」，渲染算「怎么画出来」。分开后还能让更新频率和渲染频率不同（固定步长更新 + 自由帧率渲染），这是进阶优化的基础。
-</Callout>
+## 游戏循环：先耗尽事件再绘制
 
-## 帧率与 delta time
+<Term def="实时程序在窗口存活期间重复处理事件、更新状态、清屏、绘制并呈现的控制结构。">
+  游戏循环
+</Term>
+使程序从“一次执行完”变为持续响应。第一章世界状态只有窗口与背景，仍应保留清晰阶段；后续机制可以插入更新阶段，而不用重写窗口生命周期。
 
-FPS（每秒帧数）因机器而异。若每帧移动固定量（`x += 5`），快机器 FPS 高、每秒移动多，慢机器移动少——游戏速度随机器变化，不可接受。
+<BcgpFirstFrameMap />
 
-用 delta time（dt，上一帧到本帧的实际耗时秒数）解决：移动改成 `x += speed * dt`，speed 是「每秒移动多少」。这样无论 FPS 多少，每秒移动量恒定。60fps 时 dt≈0.0167 每帧移 1.67 像素，30fps 时 dt≈0.0333 每帧移 3.33 像素，一秒都移 100 像素。
+<Term def="操作系统送给窗口的离散消息队列，包括关闭、尺寸改变、按键和鼠标事件；程序每帧应循环 pollEvent 直到队列为空。">
+  窗口事件
+</Term>
+与实时输入不同。关闭、文本输入和单次按下适合事件；角色持续移动更适合每帧查询键盘状态。只处理一条事件会让队列在快速拖动或按键时积压。
 
-SFML 取 dt：`float dt = clock.restart().asSeconds();`
+```cpp
+while (window.isOpen()) {
+    sf::Event event;
+    while (window.pollEvent(event)) {
+        if (event.type == sf::Event::Closed)
+            window.close();
+        if (event.type == sf::Event::KeyPressed &&
+            event.key.code == sf::Keyboard::Escape)
+            window.close();
+    }
 
-## 掉帧的连锁反应
+    if (!window.isOpen())
+        break;
+
+    window.clear(sf::Color::Black);
+    window.display();
+}
+```
+
+事件处理后再次检查窗口状态，避免关闭后仍提交一帧。SFML 3 使用新的事件接口形式，本页代码面向第三版配套的 SFML 2.6 代际；升级依赖时要整体迁移并重新验证。
 
 <Callout type="trap">
-若更新耗时过长导致掉帧，dt 会变大，物体单帧位移变大，可能穿透碰撞体（tunneling），碰撞检测失效；下一帧做更多修正，dt 更大，陷入「死亡螺旋」。对策：dt 封顶（`dt = min(dt, 0.05)`）或用固定时间步长更新，宁可慢放也不爆炸。
+  **现象**：窗口显示“未响应”，关闭按钮要等很久才生效。**原因**：主循环没有持续抽取事件，或每帧只处理一条导致队列积压。**修法**：每帧用内层
+  `while (pollEvent)` 耗尽队列，把耗时加载移出主循环或拆成可调度任务。
 </Callout>
+
+## 加载背景：纹理拥有资源，精灵只引用
+
+<Term def="SFML 中持有上传到图形设备的图像资源对象；加载成功后必须在所有引用它的精灵绘制期间保持存活。">
+  纹理
+</Term>
+负责资源。
+<Term def="保存纹理关联、纹理矩形、位置、缩放、旋转和颜色等绘制状态的轻量对象；它不拥有所关联纹理。">
+  精灵
+</Term>
+只是借用纹理。把局部纹理绑定给返回的精灵会留下悬空关联，常表现为白块、错误图像或未定义结果。
+
+```cpp
+#include <SFML/Graphics.hpp>
+#include <cstdlib>
+#include <iostream>
+
+int main()
+{
+    sf::RenderWindow window(sf::VideoMode(1280, 720), "Timber!!!");
+    sf::Texture backgroundTexture;
+
+    if (!backgroundTexture.loadFromFile("assets/graphics/background.png")) {
+        std::cerr << "failed to load assets/graphics/background.png\n";
+        return EXIT_FAILURE;
+    }
+
+    sf::Sprite backgroundSprite;
+    backgroundSprite.setTexture(backgroundTexture);
+    backgroundSprite.setPosition(0.0F, 0.0F);
+
+    while (window.isOpen()) {
+        sf::Event event;
+        while (window.pollEvent(event))
+            if (event.type == sf::Event::Closed)
+                window.close();
+
+        if (!window.isOpen())
+            break;
+        window.clear();
+        window.draw(backgroundSprite);
+        window.display();
+    }
+    return EXIT_SUCCESS;
+}
+```
+
+纹理先声明，精灵后声明；离开作用域时精灵先销毁，纹理后销毁，借用关系始终有效。背景尺寸若与窗口不同，应由设计决定裁切、缩放还是 letterbox，不能无条件拉伸并把宽高比失真当成功。
+
+<BcgpBackgroundOwnershipMap />
+
+## clear、draw、display 是一帧事务
+
+<Term def="SFML 构造一帧的三个顺序阶段：清理后缓冲、按层提交可绘制对象、一次呈现完整结果。">
+  clear-draw-display
+</Term>
+的顺序不能随意交换。`clear` 移除上一帧残留，`draw`
+将背景和对象提交到当前后缓冲，`display` 呈现完成帧。漏掉 `clear`
+会留下拖影，漏掉 `display` 会看不到新绘制，多个 `display`
+会把一帧拆成不一致呈现。
+
+绘制顺序决定二维覆盖关系：背景先画，角色和树枝后画，HUD 最后画。第一章只有背景，也应从正确层次开始。背景纹理本身不会自动适配窗口变化；若允许 resize，应处理 `Resized` 事件并更新视图策略。
+
+呈现成功不证明游戏逻辑正确，但它是环境验证的最小闭环。用截图或像素检查确认不是纯黑帧，再进入下一章的动画。
+
+## 错误处理：初始化失败不进入循环
+
+<Term def="在资源加载、窗口创建或运行阶段检查返回状态，携带操作和路径上下文报告，并按一致策略停止或降级。">
+  错误处理
+</Term>
+不能只有一行“failed”。至少要说哪个资源、哪一步、当前约定路径；日志目标也要在无窗口环境可见。必需背景加载失败应返回
+`EXIT_FAILURE`，可选音效在后续章节可以选择禁用并继续，但策略必须显式。
+
+运行期错误与关闭请求不同：关闭是正常生命周期，资源损坏是失败。退出码让脚本和测试区分两者。异常不是唯一方案；SFML 加载 API 通常通过布尔值报告失败，调用者要立即检查。
+
+故障注入最直接：临时改错资源名，程序应打印准确路径、返回非零且不进入循环；恢复路径后应显示背景并可通过关闭按钮退出。只有成功路径和失败路径都符合预期，第 1 章才完成。
+
+> 先预测：函数内创建 `sf::Texture texture`，把绑定它的 `sf::Sprite` 按值返回，调用者绘制会怎样？精灵不拥有纹理，函数返回时纹理销毁，精灵留下失效关联；应让纹理由更长生命周期对象拥有。
 
 ## 小结
 
-- 游戏循环五阶段：初始化 → 处理输入 → 更新 → 渲染 → 检测退出
-- 更新与渲染分离，保证画面是同一时刻的世界快照
-- 用 delta time 让移动帧率无关，速度不随机器变化
-- 掉帧会通过 dt 放大破坏逻辑，需封顶或固定步长
-
-<Attribution
-  adaptedFrom="Beginning C++ Game Programming (Michael Dawson)"
-  adaptedUrl="https://www.packtpub.com/"
-/>
-
-<Glossary>
-<GlossaryItem term="游戏循环">
-游戏程序反复执行「处理输入 → 更新状态 → 渲染 → 检测退出」的核心结构，是实时游戏的心跳，没有循环就没有持续运行的游戏。
-</GlossaryItem>
-<GlossaryItem term="帧">
-游戏循环的一次完整执行，60fps 意味着每秒执行 60 帧，每帧约 16ms 预算。
-</GlossaryItem>
-<GlossaryItem term="delta time">
-上一帧到本帧的实际耗时（秒），用 `speed * dt` 缩放移动可实现帧率无关的速度，让游戏在不同 FPS 下速度一致。
-</GlossaryItem>
-<GlossaryItem term="死亡螺旋">
-掉帧使 dt 变大导致物体单帧位移过大、穿透碰撞体，触发更多修正使耗时更长、dt 更大的恶性循环，需用 dt 封顶或固定步长缓解。
-</GlossaryItem>
-</Glossary>
+- SFML 环境要同时验证编译、链接、动态加载和资源路径，IDE 无红线不是完成证据
+- 第 1 章 Timber 只交付窗口、事件循环和静态背景，后续章节再逐层加入动画与机制
+- 屏幕坐标、视图坐标、世界内部坐标和纹理局部坐标分层，输入命中要经过正确映射
+- 每帧先耗尽窗口事件，再按 `clear-draw-display` 构造并呈现完整画面
+- `sf::Texture` 拥有图形资源，`sf::Sprite` 借用纹理；声明和销毁顺序必须覆盖绘制期
+- 必需资源加载失败时携带路径上下文退出，不能带着无效状态进入主循环
 
 <Exercises>
-  <Answer question="游戏循环的五个阶段是什么？为什么游戏要循环而不是顺序执行到底？">五阶段：初始化 → 处理输入 → 更新状态 → 渲染 → 检测退出（未退出则回到处理输入）。游戏要循环因为它是持续运行、实时响应的程序：画面要每帧重画、输入要随时响应、世界状态要不断推进。顺序执行只能跑一次就结束，无法实现持续变化的世界。循环是游戏的心跳。</Answer>
-  <Answer question="为什么用 delta time 能让游戏速度不随帧率变化？举例说明。">移动写成 `x += speed * dt`，speed 是每秒移动量，dt 是上一帧到本帧的实际耗时秒数。这样无论 FPS 多少，每秒移动量恒定等于 speed。例如 speed=100 像素/秒，60fps 时 dt≈0.0167 每帧移 1.67 像素，30fps 时 dt≈0.0333 每帧移 3.33 像素，一秒都移 100 像素。若用固定量 `x += 5`，快机器每秒移动多、慢机器少，速度就不一致。</Answer>
+
+**问题 1** 设计一份 SFML 环境验收表，怎样分别证明头文件、链接库、动态库和资源目录都正确？
+
+<Answer>
+
+先用 C++20 编译包含 SFML 头的最小源文件证明声明可见；链接创建 `RenderWindow` 的程序证明 Graphics/Window/System 目标与架构、配置匹配；从构建产物目录启动证明运行时动态库可被加载；最后加载并绘制一个已知背景，截图或像素检查证明资源复制、当前工作目录和图像解码都正确。每步都保留失败消息，不能用后一步偶然成功替代前一步配置证据。
+
+</Answer>
+
+**问题 2** 为什么事件处理要用内层 `while (pollEvent)`，而持续移动不应只依赖 `KeyPressed` 事件？写出一帧的阶段顺序。
+
+<Answer>
+
+操作系统一帧内可能排入多条消息，内层循环要耗尽队列，否则关闭、缩放和输入会积压。`KeyPressed` 是离散事件，重复频率受系统设置影响；持续移动应在每帧查询当前按键状态，下一章再用时间缩放速度。一帧顺序是：耗尽事件并处理关闭，采样连续输入，更新世界状态，清屏，按层绘制，最后一次 `display` 呈现。
+
+</Answer>
+
+**问题 3** 背景偶尔显示白块，怎样从所有权与坐标两条线排查？资源失败时程序应保持什么不变量？
+
+<Answer>
+
+所有权线先确认纹理加载成功、纹理对象比精灵存活更久、图形上下文仍有效；坐标线确认精灵位置、缩放、视图和窗口尺寸没有把背景移出或裁掉。必需资源失败后不变量是：不创建依赖该资源的有效游戏状态、不进入主循环、错误包含资源路径与操作、进程返回非零；已取得对象由作用域自动清理。
+
+</Answer>
+
 </Exercises>
+
+<Glossary>
+
+<GlossaryItem term="SFML">
+  封装窗口、二维图形、音频、网络和系统能力的 C++
+  多媒体库，本书以其构建四个渐进游戏项目。
+</GlossaryItem>
+
+<GlossaryItem term="Timber 项目规划">
+  第一章只建立窗口、循环和背景，后续按变量输入、机制、碰撞声音的顺序增量完成
+  Timber!!!。
+</GlossaryItem>
+
+<GlossaryItem term="屏幕坐标">
+  当前窗口客户区的像素位置，默认左上为原点、向右和向下为正，不等同于长期世界坐标。
+</GlossaryItem>
+
+<GlossaryItem term="内部坐标">
+  由游戏定义的世界或逻辑单位，经视图映射到窗口，可独立于分辨率和相机运动。
+</GlossaryItem>
+
+<GlossaryItem term="RenderWindow">
+  SFML 管理原生窗口、OpenGL
+  上下文和绘制目标的对象，其打开状态通常控制主循环生命周期。
+</GlossaryItem>
+
+<GlossaryItem term="游戏循环">
+  窗口存活期间反复处理事件、更新状态、清屏、绘制与呈现的实时程序控制结构。
+</GlossaryItem>
+
+<GlossaryItem term="窗口事件">
+  操作系统排入窗口队列的离散消息，每帧应持续轮询到队列为空，与实时按键状态分开处理。
+</GlossaryItem>
+
+<GlossaryItem term="纹理">
+  拥有图像设备资源的 SFML 对象，必须覆盖所有借用它的精灵绘制生命周期。
+</GlossaryItem>
+
+<GlossaryItem term="精灵">
+  保存纹理关联和二维变换的轻量可绘制对象，不拥有所引用的纹理。
+</GlossaryItem>
+
+<GlossaryItem term="clear-draw-display">
+  一帧依次清理后缓冲、提交可绘制对象并呈现完整画面的 SFML 基本绘制事务。
+</GlossaryItem>
+
+<GlossaryItem term="错误处理">
+  检查窗口和资源操作结果，携带路径与阶段上下文报告，并按必需或可选资源策略退出或降级。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 1"
+  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+/>

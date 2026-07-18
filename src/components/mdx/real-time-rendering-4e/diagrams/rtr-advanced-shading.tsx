@@ -1,63 +1,83 @@
-/**
- * <RtrAdvancedShadingDiagram>：高级着色与BRDF图解。
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * 全部 DESIGN token 配色，无裸 hex。
- */
+import type { ReactNode } from "react";
 
-const VIEW_W = 720;
-const VIEW_H = 400;
+function Frame({ caption, children }: { caption: string; children: ReactNode }) {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption>
+    </figure>
+  );
+}
+
+const pbrPath = [
+  ["Incident radiance", "Li(l) + visibility"],
+  ["Material BRDF", "diffuse + microfacet"],
+  ["Directional integral", "NoL / PDF / samples"],
+  ["Outgoing radiance", "direct + environment"],
+] as const;
 
 export function RtrAdvancedShadingDiagram() {
   return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="高级着色与BRDF图解"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <text x={VIEW_W / 2} y="32" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">
-            高级着色与BRDF
-          </text>
-          <text x={VIEW_W / 2} y="54" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
-            从经验模型到基于物理的BRDF
-          </text>
-
-          <rect x="40" y="80" width="640" height="280" rx="12" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.3" />
-
-          {/* BRDF equation */}
-          <rect x="60" y="100" width="600" height="50" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1" />
-          <text x={VIEW_W / 2} y="130" textAnchor="middle" fontSize="13" fontWeight="600" fill="var(--accent)">BRDF: f_r(L,V) = k_d × f_diffuse + k_s × f_specular</text>
-
-          {/* Empirical vs PBR */}
-          <rect x="60" y="170" width="280" height="130" rx="10" fill="var(--warning)" fillOpacity="0.06" stroke="var(--warning)" strokeWidth="1.2" />
-          <text x="200" y="194" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--warning)">经验模型</text>
-          <text x="200" y="216" textAnchor="middle" fontSize="10" fill="var(--text-primary)">Phong / Blinn-Phong</text>
-          <text x="200" y="234" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">参数无物理意义</text>
-          <text x="200" y="252" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">能量不守恒</text>
-          <text x="200" y="270" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">简单快速</text>
-          <text x="200" y="288" textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">适合风格化渲染</text>
-
-          <rect x="380" y="170" width="280" height="130" rx="10" fill="var(--success)" fillOpacity="0.06" stroke="var(--success)" strokeWidth="1.2" />
-          <text x="520" y="194" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--success)">基于物理（PBR）</text>
-          <text x="520" y="216" textAnchor="middle" fontSize="10" fill="var(--text-primary)">Cook-Torrance / GGX</text>
-          <text x="520" y="234" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">能量守恒</text>
-          <text x="520" y="252" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">微表面理论</text>
-          <text x="520" y="270" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">参数有物理意义</text>
-          <text x="520" y="288" textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">跨引擎一致</text>
-
-          <text x={VIEW_W / 2} y="330" textAnchor="middle" fontSize="11" fill="var(--text-tertiary)">
-            Cook-Torrance: f_spec = D×F×G / (4×(N·L)×(N·V))
-          </text>
-          <text x={VIEW_W / 2} y="348" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
-            D=法线分布(GGX) F=菲涅尔(Fresnel) G=几何遮蔽(Smith)
-          </text>
-        </svg>
+    <Frame caption="PBR 必须让材质模型、方向积分和 direct/IBL 路径使用同一约定。">
+      <div role="img" aria-label="物理着色从入射辐亮度到出射辐亮度的路径" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {pbrPath.map(([title, detail], index) => (
+          <div key={title} className="relative min-h-28 border border-border bg-bg/45 p-3">
+            <span className="text-xs font-bold text-accent">0{index + 1}</span>
+            <strong className="mt-2 block text-sm text-primary">{title}</strong>
+            <span className="mt-2 block text-xs leading-5 text-secondary">{detail}</span>
+            {index < pbrPath.length - 1 && <span aria-hidden="true" className="absolute -right-2 top-12 z-10 text-accent">→</span>}
+          </div>
+        ))}
       </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        高级着色与BRDF——从经验模型到基于物理的微表面理论
-      </figcaption>
-    </figure>
+    </Frame>
+  );
+}
+
+const microfacetTerms = [
+  ["D: distribution", "How much micro-area has normal h", "GGX / anisotropic GGX"],
+  ["F: interface", "How much one microfacet reflects", "IOR / complex IOR / Schlick"],
+  ["G: visibility", "Which microfacets are unmasked", "Smith correlated / uncorrelated"],
+] as const;
+
+export function RtrMicrofacetDiagram() {
+  return (
+    <Frame caption="D 描述朝向、F 描述界面反射、G 描述微面可见性。">
+      <div role="img" aria-label="微表面 BRDF 的 D、F、G 三项职责" className="grid gap-3 md:grid-cols-3">
+        {microfacetTerms.map(([title, question, model], index) => (
+          <div key={title} className="min-h-40 border border-border bg-bg/45 p-3">
+            <span className="grid size-8 place-items-center rounded-full bg-accent/15 text-sm font-bold text-accent">{index + 1}</span>
+            <strong className="mt-3 block text-sm text-primary">{title}</strong>
+            <p className="mb-0 mt-2 text-xs leading-5 text-secondary">{question}</p>
+            <p className="mb-0 mt-3 border-t border-border pt-2 text-xs text-warning">Model: {model}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 text-center font-mono text-sm text-primary">fs = D · F · G / (4 NoL NoV)</div>
+    </Frame>
+  );
+}
+
+const validation = [
+  ["Reciprocity", "swap L and V", "fr(L,V) ≈ fr(V,L)"],
+  ["White furnace", "uniform Li", "no created energy"],
+  ["Parameter sweep", "roughness / F0 / NoV", "continuous plausible lobes"],
+  ["Normal mip", "distance + motion", "stable effective roughness"],
+  ["Direct vs IBL", "same environment", "matching integration"],
+  ["Reference", "path-traced spheres", "bounded image error"],
+] as const;
+
+export function RtrMaterialValidationDiagram() {
+  return (
+    <Frame caption="材质不是凭眼调完：数值约束、参数扫描、时域和 reference 都要通过。">
+      <div role="img" aria-label="PBR 材质六类验证矩阵" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {validation.map(([name, input, expected]) => (
+          <div key={name} className="min-h-28 border border-border bg-bg/45 p-3">
+            <strong className="text-sm text-primary">{name}</strong>
+            <p className="mb-0 mt-2 text-xs text-secondary">Input: {input}</p>
+            <p className="mb-0 mt-2 text-xs text-success">Expect: {expected}</p>
+          </div>
+        ))}
+      </div>
+    </Frame>
   );
 }

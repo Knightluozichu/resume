@@ -1,0 +1,246 @@
+---
+title: "第9章：服务器开发中的常用模块设计"
+type: C
+section: "C++ 服务器开发精髓 · 重连、心跳、日志、错误码与监控"
+order: 9
+description: "对齐原书第 9 章：自动重连、TCP keepalive 与应用心跳、日志系统、错误码和监控端口的生产级设计。"
+demo: true
+math: false
+sourceUrl: "https://book.douban.com/subject/35491437/"
+draft: false
+---
+
+import {
+  CseHeartbeatPolicyLab,
+  CseObservabilityContractLab,
+  CseReconnectBackoffLab,
+} from "@/components/mdx/cpp-server-essence/diagrams/common-server-module-design";
+
+<Objectives>
+
+- 能设计断线自动重连状态机，分类 transient/permanent failure，组合 capped exponential backoff、jitter、network signal、single timer 与 shutdown cancellation
+- 能比较 TCP keepalive、应用层心跳、有代理心跳和带业务数据心跳，计算 detection budget、idle timeout、流量、日志与误判边界
+- 能实现异步结构化日志、网络包/性能日志、错误码系统和受保护监控端口，建立 redaction、correlation、采样、降级与健康语义
+
+</Objectives>
+
+## 为什么通用模块必须共享故障语义
+
+重连模块决定何时恢复，心跳决定何时判定失活，日志/错误码解释发生了什么，监控端口告诉调度系统能否继续接流量。若四者各自使用不同 connection id、reason 和时间口径，故障时无法还原同一次事件。
+
+<Term def="重连、心跳、日志、错误码、metrics 与健康检查共同使用的 connection/request identity、reason taxonomy 与时间语义。">operational fault contract</Term>
+
+本章以“检测 → 分类 → 恢复 → 解释 → 对外暴露状态”为主线，把原书最后一章的常用模块连接成生产闭环。
+
+## 9.1 断线自动重连的场景与逻辑
+
+需要断线自动重连的常见场景包括 client 到 service、service 到 dependency、agent 到 control plane。先区分 local shutdown/cancel、DNS/config/auth permanent error、remote refusal、timeout/reset、rate limit 和 network offline；只有可恢复故障进入重连逻辑。
+
+<Term def="根据 disconnect reason 与 lifecycle state，决定立即停止、等待外部信号或按 backoff 安排下一次 connect 的状态机。">reconnect state machine</Term>
+
+先预测：认证失败、connection refused 和网络离线是否应使用同一重试间隔；再切换图中 failure/attempt，观察 admission decision。
+
+<Stepper>
+  <Step title="分类失败并计算下一次重连">
+    <CseReconnectBackoffLab />
+  </Step>
+  <Step title="保证一个 peer 只有一个 pending timer">
+    reconnect scheduler 由 connection owner 串行修改；新失败更新已有 schedule，连接成功 reset attempt，shutdown 取消 timer 与 in-flight connect。
+  </Step>
+  <Step title="重新握手而不是盲目复用业务状态">
+    connect success 后重新认证、协商 version、恢复 subscription/session；对未确认写请求按 idempotency/replay policy 处理，不能默认重发。
+  </Step>
+</Stepper>
+
+<Term def="重试延迟按指数增长并设置上限，再加入随机抖动，避免故障恢复时大量实例同步冲击依赖。">capped exponential backoff with jitter</Term>
+
+```cpp
+auto Reconnector::next_delay() {
+  const auto cap = std::min(max_delay_, base_delay_ * (1ULL << attempt_));
+  ++attempt_;
+  return random_between(0ms, cap); // full jitter
+}
+```
+
+服务器提供 `Retry-After` 或明确 rate-limit 时优先服从。DNS candidates 轮换、IPv4/IPv6 fallback 和 circuit breaker 也要有总 deadline，避免每层各自重试形成指数放大。
+
+<Callout type="trap" title="断线后 tight loop 立即 connect">
+这会占满 CPU/日志并在依赖恢复时制造 thundering herd。所有重试必须有分类、上限、jitter、取消和指标；永久错误应进入 failed state 等配置修复。
+</Callout>
+
+## 9.2 TCP keepalive 与应用层心跳
+
+TCP keepalive 是 kernel transport probe，在连接长时间 idle 后按平台参数发送 probe，最终发现某些 dead peer/path；它不知道应用 event loop、认证 session 或 dependency 是否健康。应用层心跳包经过协议 handler，可携带 sequence/timestamp 并要求 ack，证明端到端 progress。
+
+<Term def="由 socket option 启用的内核空闲连接探测，通过 idle/interval/count 参数判断 transport path 长期无响应。">TCP keepalive</Term>
+
+<Term def="应用协议定期发送带 identity/sequence/deadline 的 ping/ack，以验证 session 与 handler 仍在推进。">application heartbeat</Term>
+
+```cpp
+int enabled = 1;
+setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &enabled, sizeof(enabled));
+setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(idle));
+setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &interval, sizeof(interval));
+setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &count, sizeof(count));
+```
+
+### 有代理、带业务数据与流量预算
+
+有代理的心跳包机制必须明确每一跳：client↔LB 与 LB↔server 可能是两条 TCP connections，LB idle timeout 也独立。端到端 heartbeat 若被 proxy 本地应答，就不能证明后端 session 存活。
+
+带业务数据的心跳包可捎带 last-seen sequence、load 或 config version，减少额外消息；但会把 liveness 与业务 schema/authorization 耦合。核心 heartbeat 应小、幂等、可独立解析，业务摘要 optional 且受 size/visibility 限制。
+
+<Stepper>
+  <Step title="比较 direct/proxy/mobile 路径">
+    <CseHeartbeatPolicyLab />
+  </Step>
+  <Step title="从 failure budget 反推 interval/timeout">
+    detection time 大致由 interval、miss threshold、scheduler lag 和 RTT 组成；还要小于中间 NAT/LB idle timeout，并纳入移动设备电量与全量连接流量。
+  </Step>
+  <Step title="把 heartbeat debug/log 与普通流量分开">
+    指标记录 sent/ack/missed/RTT/state transition；正常每包日志应采样或关闭，只在异常窗口临时提升 detail，避免日志风暴改变调度。
+  </Step>
+</Stepper>
+
+<Term def="用 heartbeat bytes × 每日次数 × 在线连接数估算的持续带宽、设备电量和日志规模成本。">heartbeat traffic budget</Term>
+
+心跳包与流量、调试、日志必须一起设计。100 万连接每 5 秒一包，即使单包很小也会形成显著 QPS/带宽和 wakeups；不要只看单连接成本。
+
+<Callout type="trap" title="一次 missed heartbeat 就 close">
+event-loop lag、GC/stop-the-world dependency、临时拥塞都可能延迟 ack。使用 sequence、monotonic deadline 和连续 miss threshold，并监控 scheduler lag；阈值过松又会延迟故障检测，需要按 SLO 权衡。
+</Callout>
+
+## 9.3 日志模块：从本地调试到集中关联
+
+日志用于回答离散事件的 who/what/when/where/why，不替代 metrics（聚合数值）或 traces（跨服务因果）。日志系统的技术实现至少包括 structured event schema、level/filter、bounded async queue、formatter、rotation/sink、flush/crash policy 与 redaction。
+
+<Term def="以固定 field names/types 输出 timestamp、severity、service、instance、trace/request/connection id、event 与 result 的机器可查询日志。">structured logging</Term>
+
+```cpp
+LOG_INFO("connection_closed",
+  kv("connection_id", id),
+  kv("peer", redacted_peer),
+  kv("reason", to_string(reason)),
+  kv("error_code", error.code()),
+  kv("pending_bytes", pending));
+```
+
+async logger 的 queue 必须有界；满时不能无条件阻塞 event loop。error/fatal 可使用保底同步 sink，低等级按 sampling/drop policy；所有 dropped events 都计数。
+
+### 网络数据包日志、调试日志与性能日志
+
+在 C/C++ 中输出网络数据包日志时，默认记录 direction、protocol type、length、request id、hash 与有限 hex prefix，而非完整 payload。token/password/cookie/个人数据和密钥必须字段级 redaction；TLS 之前的 plaintext 同样敏感。
+
+<Term def="只记录 packet metadata 与受限/脱敏片段，并绑定 direction、connection/request identity 的网络报文诊断事件。">safe packet log</Term>
+
+```cpp
+PacketLog event{
+  .direction = Direction::Inbound,
+  .message_type = header.type,
+  .payload_length = payload.size(),
+  .payload_hash = sha256_prefix(payload),
+  .trace_id = trace_id,
+};
+```
+
+性能日志记录 operation、duration、queue_wait、bytes、result，并用 monotonic clock；热路径更适合 histogram/trace sampling，不能每次都拼大字符串。debug 时临时提高特定 connection/module 的 level，而不是全局无限 verbose。
+
+### 分文件、集中式/分布式与业务字段
+
+根据类型写不同文件可隔离 audit/access/error，但会增加 rotation、fd 和查询成本；现代集中式日志服务通常由本地 agent 收集 stdout/file，再送 collector/storage，应用不应同步依赖远端 sink。分布式日志必须传播 trace/span/request id 和一致 clock/field schema。
+
+<Term def="由本地 bounded sink/agent 汇聚到可索引存储，并以 correlation ids 关联多实例/服务事件的日志架构。">centralized log pipeline</Term>
+
+一条业务日志应包含稳定 event name、result、business entity 的非敏感 opaque id、actor/service、trace id、latency、error code；不要把整份 request object 序列化。敏感信息按 data classification 选择 omit、mask、tokenize 或受控 encryption，且设 retention/access audit。
+
+### 开发过程中的日志递进缩减
+
+开发阶段可细致 debug，集成阶段收敛到关键 state transition，canary 用 targeted sampling，production 默认 info/warn/error + metrics，incident 再按 module/connection 有时限地动态提升。每次缩减保留能重建生命周期的 started/completed/failed 与 correlation fields。
+
+<Term def="随着功能从开发、联调、灰度到生产，逐步降低常态 detail，同时保留关键状态与按目标临时提级能力的策略。">progressive log reduction</Term>
+
+## 9.4 错误码系统的作用与设计实践
+
+错误码让程序分支、监控聚合、文档检索和跨服务映射有稳定 identity；human message 可变化/本地化，code 不能复用含义。推荐 namespace + subsystem + category + specific id，例如 `CSE-NET-RETRY-003`，同时带 retryability、HTTP/RPC mapping、public/internal message 与 cause chain。
+
+<Term def="稳定、唯一、可分类的机器错误标识，附带 retryability、severity、public mapping 与内部 cause，而非只返回文本。">error code contract</Term>
+
+```cpp
+struct Error {
+  ErrorCode code;
+  bool retryable;
+  std::string public_message;
+  std::string internal_context; // structured and redacted
+  std::error_code cause;
+};
+```
+
+错误码系统设计实践：集中 registry/生成检查避免重复；owner team 与文档明确；边界层映射而不丢原 cause；日志记录 code + context，metrics 以低基数 category 聚合；不要把 user id/URL 等高基数值嵌入 code。
+
+## 9.5 监控端口与管理面隔离
+
+监控端口可暴露 `/health/live`、`/health/ready`、`/metrics`、受控 debug/config snapshot。liveness 只说明 process/event loop 活着；readiness 说明是否可接新流量，draining 时应 false；dependency failure 是否影响 readiness 由服务契约决定。
+
+<Term def="与业务 data plane 分离、受 network policy/auth/rate limit 保护，暴露 health/metrics/受控诊断的管理 endpoint。">monitoring port</Term>
+
+<Stepper>
+  <Step title="组合日志、错误码和监控契约">
+    <CseObservabilityContractLab />
+  </Step>
+  <Step title="按环境决定 detail 与 sink">
+    production 默认结构化低噪声事件 + metrics；incident 动态提级必须带自动到期。network payload 默认关闭并字段级脱敏。
+  </Step>
+  <Step title="隔离管理面并测试语义">
+    monitor 绑定 loopback/management interface，配 auth/ACL/TLS/rate limit；测试 live/ready/drain/dependency failure，不在公开端口泄露 config、stack 或 secrets。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="把 readiness 等同于所有依赖都 100% 健康">
+若一个非关键 dependency 短暂失败就摘除全部实例，会放大故障。readiness 只检查接流量所必需的资源与本地 admission，细粒度 dependency 状态通过 metrics/diagnostics 暴露。
+</Callout>
+
+## 本章回顾：恢复与可观测性是一套状态机
+
+1. 自动重连分类 transient/permanent/cancel，以 capped backoff + jitter 和 single timer 防止重试风暴。
+2. TCP keepalive 检测 transport，应用心跳检测 session progress；代理路径、interval、流量和日志需共同预算。
+3. structured async logs 默认脱敏、有界；packet/performance 日志按目标采样，生产逐步缩减 detail。
+4. 错误码是稳定机器 contract，message/context/cause 另行携带并控制敏感信息。
+5. monitoring port 是受保护管理面，live、ready、metrics 与 debug 各有独立语义。
+
+<Exercises>
+
+**问题 1：10 万 client 在 service 重启后同时每 100 ms 重连，怎样改造？认证失败又应如何处理？**
+
+<Answer>每个 peer 由单 owner timer 管理，transient refusal/timeout 使用 capped exponential backoff + full jitter，尊重 network-online/Retry-After，并限制全局并发 connect；成功后 reset attempt，shutdown 取消。认证失败属于 permanent config/credential error，进入 failed state并报警，等待 credential refresh，而不是无限重试。</Answer>
+
+**问题 2：LB idle timeout 为 60s，业务要求 45s 内发现失活。如何组合 keepalive 与应用心跳？**
+
+<Answer>应用 heartbeat interval/miss threshold 加 scheduler/RTT budget需小于 45s，且 heartbeat 必须穿过 LB，间隔也应明显小于 60s idle timeout；例如 15s interval、连续 2 次 miss需结合实际 lag验证。TCP keepalive作为更底层慢速兜底，不替代应用 progress。计算全量连接流量/电量，并记录 sequence、RTT、miss state transition而非每包全日志。</Answer>
+
+**问题 3：生产 incident 要临时记录网络消息和开放 debug endpoint，怎样避免二次事故？**
+
+<Answer>按 connection/module 定向且有自动到期，packet log只记录 length/type/hash/有限脱敏片段，禁止 secrets/full payload；bounded async queue并统计 drop。debug endpoint 仅绑定管理网，强认证/TLS/ACL/rate limit，输出有 size/time budget并审计访问。结束后自动恢复 level、关闭 endpoint、按 retention清理数据。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="operational fault contract" definition="恢复、心跳和可观测模块共享的 identity/reason/time 语义。" />
+  <GlossaryItem term="reconnect state machine" definition="按失败与 lifecycle 决定停止、等待或 backoff connect 的状态机。" />
+  <GlossaryItem term="capped exponential backoff with jitter" definition="指数增长、封顶并随机化的重试延迟。" />
+  <GlossaryItem term="TCP keepalive" definition="内核按 idle/interval/count 探测空闲 transport 的机制。" />
+  <GlossaryItem term="application heartbeat" definition="协议层 ping/ack 验证 session 与 handler progress。" />
+  <GlossaryItem term="heartbeat traffic budget" definition="按单包、频率和连接规模估算的带宽/电量/日志成本。" />
+  <GlossaryItem term="structured logging" definition="固定 typed fields 的可查询机器日志。" />
+  <GlossaryItem term="safe packet log" definition="绑定方向/identity 且只含受限脱敏 metadata 的报文日志。" />
+  <GlossaryItem term="centralized log pipeline" definition="本地有界 sink/agent 到集中索引存储的日志链。" />
+  <GlossaryItem term="progressive log reduction" definition="开发到生产逐步降低常态 detail并保留定向提级。" />
+  <GlossaryItem term="error code contract" definition="稳定、唯一、可分类并带 retryability/mapping 的机器错误标识。" />
+  <GlossaryItem term="monitoring port" definition="受保护、与业务数据面分离的 health/metrics 管理端口。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++服务器开发精髓，第9章 服务器开发中的常用模块设计"
+  adaptedUrl="https://book.douban.com/subject/35491437/"
+/>

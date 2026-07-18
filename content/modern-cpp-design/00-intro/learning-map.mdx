@@ -1,73 +1,212 @@
 ---
-title: Modern C++ Design 学习路线图
+title: "Modern C++ Design：官方十一章学习路线"
 type: A
-section: Policy 与 Typelist
-order: 1
-description: 全书四大分支概览与推荐学习路径，回答 Policy 设计与模板元编程的核心思想。
+section: Modern C++ Design · First Edition
+order: 0
+description: 按第一版官方结构梳理 Part I Techniques 4章与 Part II Components 7章，标出 Policy、traits、Typelist、lifetime、creation 和 dispatch 的依赖与现代迁移路线。
 demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
 draft: false
 ---
 
-import { McdBookMap } from "@/components/mdx/modern-cpp-design/diagrams/mcd-learning-map";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  McdChapterDependencyMap,
+  McdDecisionTimingMap,
+  McdOfficialChapterRouteMap,
+} from "@/components/mdx/modern-cpp-design/diagrams/learning-map";
 
 <Objectives>
 
-- 能说出全书四大分支各自要解决什么问题、彼此如何衔接
-- 能复述从 Policy/Typelist 基础到设计模式实现的推荐学习路径
-- 能回答：为什么 Alexandrescu 要用模板元编程重新表达设计模式？
+- 能按官方顺序解释 Part I 4章与 Part II 7章各自交付什么，并画出前置依赖
+- 能判断一个设计决定在 compile time、startup 还是 per call 才知道，从而选择 Policy、Factory、Functor、Visitor 或 Multimethod
+- 能把 Loki/C++98 实现迁移到现代标准设施，同时保留 ownership、compatibility、lifetime 与扩展方向的原始问题
 
 </Objectives>
 
-## 全书地图
+## 为什么要按官方 11 章重建路线
 
-当你打开 Modern C++ Design，面对的是一本用 C++ 模板元编程重新诠释设计模式的书。Andrei Alexandrescu 的核心论点是：经典 GoF 设计模式大多依赖运行时多态（虚函数、继承），而 C++ 模板可以把其中很多决策推到编译时，用类型级计算换取零运行时开销与更强的类型安全。这本书不是教 C++ 语法，而是教「如何用模板元编程思想重新设计组件」。
+第一版明确分成 **Part I Techniques**（第1-4章）与 **Part II Components**（第5-11章）。前者不是零散模板技巧，而是逐层建立设计语言：Policy 描述变化轴，compile-time techniques 提供检测/映射，Typelist 提供类型 schema 与 class generation，小对象分配器把这些思想放进真实内存状态机。
 
-<McdBookMap />
+<Term def="第一版第1-4章组成的技术部分，建立 Policy、模板检测、类型列表、类生成与 allocator 分层。">
+  Part I Techniques
+</Term>
 
-全书分为四大分支。第一分支「<Term def="把正交的设计维度拆成可独立替换的模板策略参数，编译时组合。">Policy 与 Typelist</Term>」是基础设施——Policy 设计解耦正交关注点，Typelist 提供编译时类型容器。这是地基：后续所有组件都依赖这两项技术。
+后七章每章造一个完整 component：Functor、SingletonHolder、SmartPtr、Object Factory、Abstract Factory、Visitor、Multimethods。它们同时包含 compile-time generation 与 runtime state；因此把本书概括成“全部零开销模板”会遗漏 type erasure、RTTI、registry、virtual dispatch 和 lifetime。
 
-第二分支「Loki 组件」把 Policy + Typelist 用到三大实用组件上——智能指针、小对象分配器、广义仿函数。每个组件都是一个 Host 模板类加若干 Policy 参数，展示 Policy 化设计如何造出可定制的库组件。
+<Term def="第一版第5-11章组成的组件部分，利用前四章技术构建 callable、lifetime、ownership、creation 与 dispatch 组件。">
+  Part II Components
+</Term>
 
-第三分支「设计模式实现」用模板元编程重新实现 Singleton、对象工厂、抽象工厂，把 GoF 模式从运行时多态升级为编译时生成。
+<McdOfficialChapterRouteMap />
 
-第四分支「编译时哲学」贯穿全书——把尽可能多的决策推到编译时，用模板做类型级计算。
+## 第一阶段：第1章先学变化轴
 
-<Callout type="tip">
-<strong>建议 →</strong> 每学完一个分支，动手写一段最小代码验证。比如学完 Policy，写一个 `Host<PolicyA, PolicyB>` 实例化两种组合；学完 Typelist，手写一个 `Length<TList>` 元函数。
+第1章从 do-it-all interface 与 inheritance matrix 失败出发，要求把独立变化原因拆成 Policies，由 Host 编排。它同时强调 enriched policy、destructor、incomplete instantiation、structure customization 和 incompatible combinations。
+
+<Term def="一个设计选择在构建类型时固定、能与其他选择独立组合且由 Host 协议约束的变化维度。">
+  compile-time Policy axis
+</Term>
+
+```cpp
+template<class Product,
+         template<class> class Creation,
+         class Lifetime,
+         class Threading>
+class Manager;
+```
+
+看到模板参数时先问：这些决定何时知道？若用户在运行中切换 creation mode，把它写成 Policy 会迫使 Manager type 变化；runtime strategy 更合适。Policy 不是默认答案，选择时机才是答案。
+
+## 第二阶段：第2-3章建立元编程语言
+
+第2章给出 `static_assert` 前身、partial specialization、local class、Int2Type、Type2Type、Select、convertibility detection、TypeInfo 与 Type Traits。第3章再把类型组成 sequence，执行 Length/TypeAt/Append/Erase/NoDuplicates/Replace/partial order，并生成 scatter/linear hierarchies。
+
+<Term def="把类型、常量和类型关系作为编译期数据，经过 specialization、overload 与元函数产生新的类型或选择。">
+  compile-time type computation
+</Term>
+
+```cpp
+using Products = TypeList<Button, Menu, Dialog>;
+using Interface = GenScatterHierarchy<Products, AbstractFactoryUnit>;
+```
+
+这两章的现代语法已大幅改善：用 `static_assert`、concepts、`std::type_traits`、parameter packs、tuple/variant。但要保留三个问题：未选路径是否真的不实例化；type list 是否 unique/ordered；生成 hierarchy 的 layout、ABI、compile time 和 diagnostics 是否可接受。
+
+## 第三阶段：第4章用 allocator 检验分层
+
+第4章不是孤立性能技巧。Chunk、FixedAllocator、SmallObjAllocator 三层展示了“每层只拥有一个不变量”：Chunk 管 free blocks，FixedAllocator 管一个 size 的 Chunks，router 按 size 选 pool/fallback。
+
+<Term def="把一个复杂 runtime state machine 拆成 owner 明确、协议窄且可独立验证的层级。">
+  layered runtime component
+</Term>
+
+```cpp
+request(bytes)
+  -> SmallObjAllocator bucket
+  -> FixedAllocator available Chunk
+  -> Chunk free-list pop
+```
+
+今天应先比较 `std::pmr`、mature malloc、monotonic arena；但 alignment、owner、lifetime、thread、retention 与 fallback 这些验收门没有过时。
+
+## 第四阶段：第5-7章统一调用、生命周期和所有权
+
+第5章 Functor 固定 signature、擦除 concrete callable；第6章 SingletonHolder 将 creation/lifetime/thread 变成 Policies；第7章 SmartPtr 将 storage/ownership/conversion/checking 拆开。三章分别回答“怎样调用”“对象活多久”“谁释放资源”。
+
+<Term def="从 callback target、global service 到 resource handle 都明确 owner、copy/move、销毁、late access 与 thread domain 的连续契约。">
+  call-lifetime-ownership chain
+</Term>
+
+Functor 并非纯 static abstraction，它通常有 indirect call 与 heap；Singleton 不是 static namespace，它有 dead reference/Phoenix/longevity；SmartPtr 的 atomic count 也不保证 pointee thread safety。读这一阶段要把方便 API 还原为 runtime cost 与 ownership graph。
+
+## 第五阶段：第8-9章区分一个产品与一族产品
+
+Object Factory 把 runtime ID 映射到 creator，适合 plugin/config 选择一个 concrete product；Abstract Factory 选择完整 compatible family，并由 ProductList 生成每产品 slots。两者可组合：先按 ID 选择 backend factory，再从该 family 创建 Buffer/Texture/Pipeline。
+
+<Term def="以 runtime key 选择单一 creator，或一次选择完整相容产品族的两级 creation boundary。">
+  creation selection boundary
+</Term>
+
+这阶段的真正难点是 duplicate/unknown key、returned owner、creator exception、registry lock、in-flight call、plugin unload 与 family snapshot，不是 `map` 的拼写。
+
+## 第六阶段：第10-11章按动态类型选择操作
+
+Visitor 用 `Accept + Visit` 两次 single dispatch，在稳定 element set 上扩展 operations；Multimethod dispatcher 按多个 dynamic arguments 的 type tuple 查 operation。前者通常是一元 element + operation object，后者可直接管理 `(A,B)` pairs。
+
+<Term def="根据一个或多个对象的动态类型选择 operation，并由 cyclic/acyclic/registry/table 决定开放性与成本。">
+  dynamic dispatch schema
+</Term>
+
+<McdChapterDependencyMap />
+
+## 编译期、启动期还是每次调用期
+
+<McdDecisionTimingMap />
+
+先预测：backend 在进程启动时从配置选择，内部 allocator policy 编译时固定，碰撞对象类型每 frame 变化。这三个决定不应都模板化，也不应都塞进 global registry。分别用 startup AbstractFactory、compile-time Policy、per-call Multimethod 能让 cost 与 evolution boundary 对齐。
+
+<Callout type="trap" title="陷阱：Modern C++ Design 等于把 virtual 全改成 template">
+  Functor、Factories、Visitor 和 Multimethods 本身大量使用 virtual/type erasure/RTTI/lookup。作者真正展示的是把 compile-time 与 runtime 组合成可配置组件；如果选择必须动态发生，模板不能消除它。
 </Callout>
 
-## 核心概念
+## 现代 C++ 迁移矩阵
 
-推荐学习路径是一条递进链：先读 Policy 与 Typelist，掌握「编译时工具」；再读 Loki 组件，看「工具如何造组件」；接着读设计模式实现，看「组件如何重构经典模式」。
+- 手工 compile-time assertion/traits → `static_assert`、concepts、`std::type_traits`
+- 宏 Typelist/有限 arity → parameter packs、tuple、variant、fold expressions
+- Loki Functor → `std::function`、`std::move_only_function` 或窄自定义 wrapper
+- Loki SmartPtr → `unique_ptr`、`shared_ptr`、`weak_ptr`、`span/vector`
+- 手工 Singleton threading → magic static、`call_once`，优先 dependency injection
+- 小对象 pool → `std::pmr` 或目标 allocator，按 workload 测量
+- RTTI wrapper → `std::type_index`；持久化仍用显式 schema ID
 
-这条顺序背后的逻辑是——Policy 和 Typelist 是元编程基础设施，Loki 组件是基础设施的实战，设计模式是实战对经典模式的重新表达。跳过基础设施直接读组件会看不懂模板参数为何那样设计；跳过组件直接读设计模式会不理解 Policy 化如何落地。
+<Term def="用标准设施替换历史机制，同时保留原组件对选择时机、类型契约、所有权和扩展方向的设计审计。">
+  semantic modernization
+</Term>
 
-<Callout type="trap">
-<strong>现象 →</strong> 跳过 Typelist 直接读抽象工厂，看到 `AbstractFactory<TYPELIST_3(...)>` 完全不知道发生了什么。<strong>原因 →</strong> 抽象工厂的自动接口生成完全依赖 Typelist 与 GenScatterHierarchy。<strong>修法 →</strong> 按顺序学习，先吃透 Typelist 的递归结构与元函数，再读基于它的工厂。
+<Callout type="trap" title="陷阱：标准库类名相同就证明设计已完成">
+  换成 shared_ptr/function/pmr 只提供机制；cycle、receiver lifetime、pool retention、plugin unload、family consistency 与 traversal 仍由系统定义。现代化不是搜索替换。
 </Callout>
 
-## 小结与练习
+<Stepper>
+  <Step title="第一步：按官方顺序建立依赖">
+    为每章写“输入技术、输出组件、runtime state、failure mode”；第5-11章必须能回指 Policy/traits/Typelist/allocator 中至少一个基础。
 
-- 全书四大分支：Policy/Typelist 基础 → Loki 组件 → 设计模式实现 → 编译时哲学
-- 推荐路径：基础→组件→模式，顺序由依赖关系决定
-- 每个分支的核心：基础=编译时工具，组件=工具实战，模式=重构经典
-- 核心思想：用模板把运行时决策推到编译时，零开销换类型安全
+    <McdOfficialChapterRouteMap />
+
+  </Step>
+  <Step title="第二步：按选择时机挑机制">
+    对每个变化点标 compile/startup/per-call，比较 type/compile/ABI 与 lookup/RTTI/lifetime 成本；不能回答时先保持简单运行时接口。
+
+    <McdDecisionTimingMap />
+
+  </Step>
+  <Step title="第三步：用现代设施重写并保留证据">
+    替换旧宏/裸 owner/手工线程代码，但保留 compatibility tests、ownership graph、shutdown/unload、schema 与扩展方向评审。
+
+    <McdChapterDependencyMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- 官方第一版是 Part I Techniques 4章与 Part II Components 7章，共11章，不是旧内容中的8个主题
+- Policy、compile-time techniques、Typelist 与 allocator 分层是后七章的设计语言和状态机基础
+- Functor/Singleton/SmartPtr 分别统一 call、global lifecycle 与 resource ownership
+- Object Factory 选一个 product，Abstract Factory 选一族 products；Visitor 与 Multimethod 处理不同 dynamic dispatch schema
+- 决定何时已知比“模板还是虚函数”更关键，compile/startup/per-call 应使用不同机制
+- 现代标准替代大量历史语法，但 compatibility、ownership、lifetime、unload 与 evolution contract 不会自动消失
 
 <Exercises>
-  <Answer question="为什么 Alexandrescu 要用模板元编程重新表达设计模式？">经典 GoF 模式大多依赖运行时多态（虚函数、继承），有运行时开销且类型安全较弱。C++ 模板可以把很多决策（如选哪个具体类、生成哪些接口方法）推到编译时，用类型级计算换取零运行时开销与更强类型安全。例如抽象工厂用 Typelist 自动生成 N 个 Make 方法，省去手写虚函数与 override，且编译时检查类型对应。</Answer>
-  <Answer question="全书四大分支各自解决什么问题？为什么是递进而非并列？">Policy 与 Typelist 解决「编译时如何解耦维度、如何操作类型集合」；Loki 组件解决「如何用基础设施造可定制库组件」；设计模式解决「如何用模板重构经典模式」；编译时哲学贯穿全书。它们递进：基础是工具，组件是工具实战，模式是实战对经典的重新表达。后一分支依赖前一分支，跳级会断层。</Answer>
+  1. **问题 1：为 11 章分组。** 写出 Part I 四章与 Part II 七章，并说明第3章分别被第9、10章如何复用。
+
+  <Answer question="Typelist 如何连接基础与组件？">Part I 是 Policy、Techniques、Typelists、Small-Object Allocation；Part II 是 Functor、Singleton、Smart Pointers、Object Factories、Abstract Factory、Visitor、Multimethods。第9章用 ProductList + scatter/linear hierarchy 生成 family slots，第10章用 element typelist 生成 visit units；两者都需 unique/order/diagnostic contract。</Answer>
+
+  2. **问题 2：按选择时机选机制。** 压缩算法编译时固定，renderer 启动时配置，两个 scene objects 每 frame 交互；分别选择并说明。
+
+  <Answer question="为什么不应统一用一种抽象？">压缩用 Policy/concept 便于 inline；renderer 用 startup Factory/AbstractFactory，保持稳定外部 type；object interaction 用 Visitor/Multimethod runtime dispatch。三者的信息可知时间不同，统一模板会产生类型爆炸，统一 registry 会丢失编译期约束和增加 lookup。</Answer>
+
+  3. **问题 3：现代化一个 Loki 设计。** 团队要把 SmartPtr/Typelist/Functor 全原样搬进 C++23，给出保留与替换清单。
+
+  <Answer question="怎样避免复刻历史限制？">优先用 unique/shared/weak_ptr、parameter packs/tuple/variant、function/move_only_function；保留 Policy 轴识别、type schema generation、copy/ownership/lifetime 和 call signature 设计。只有标准设施无法表达且有证据的语义才自定义，并补 compile diagnostics、ABI、failure 与 benchmark。</Answer>
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="Policy 设计">把类中正交的设计维度（如所有权、检查、线程模型）拆成独立的模板策略参数，编译时组合，避免继承层次的僵化。</GlossaryItem>
-  <GlossaryItem term="Typelist">编译时的类型链表，用递归模板结构（`Node<T, Tail>` + `NullType`）把一组类型当作一等公民操作，是 Loki 元编程的骨架。</GlossaryItem>
-  <GlossaryItem term="Loki">Alexandrescu 随书开源的 C++ 模板库，实现了 SmartPtr、SmallObject、Functor、Singleton、Factory 等基于 Policy 的组件。</GlossaryItem>
-  <GlossaryItem term="编译时哲学">把尽可能多的决策（类型选择、接口生成、优化）推到编译时用模板完成，运行时只剩生成的代码，零动态分发开销。</GlossaryItem>
+  <GlossaryItem term="Part I Techniques">第1-4章组成的 Policy、元编程、Typelist 与 allocator 技术基础。</GlossaryItem>
+  <GlossaryItem term="Part II Components">第5-11章组成的 callable、lifetime、ownership、creation 与 dispatch 组件。</GlossaryItem>
+  <GlossaryItem term="compile-time Policy axis">在构建类型时固定且可独立组合的设计变化轴。</GlossaryItem>
+  <GlossaryItem term="compile-time type computation">以类型和常量为数据，经模板规则产生选择或新类型。</GlossaryItem>
+  <GlossaryItem term="layered runtime component">将复杂状态机拆为 owner 清晰、协议狭窄的多层组件。</GlossaryItem>
+  <GlossaryItem term="call-lifetime-ownership chain">从 callable 到 service 与 resource 都明确复制、销毁和线程域的契约链。</GlossaryItem>
+  <GlossaryItem term="creation selection boundary">选择单产品 creator 或完整 product family 的两级创建边界。</GlossaryItem>
+  <GlossaryItem term="dynamic dispatch schema">按一个或多个动态类型选择操作的结构与扩展契约。</GlossaryItem>
+  <GlossaryItem term="semantic modernization">替换历史机制但保留原设计语义审计的现代化过程。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Modern C++ Design (Andrei Alexandrescu)" adaptedUrl="https://www.oreilly.com/" />
+<Attribution
+  adaptedFrom="Modern C++ Design, First Edition, official 11-chapter table of contents"
+  adaptedUrl="https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+/>

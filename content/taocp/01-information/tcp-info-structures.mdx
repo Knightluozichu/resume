@@ -1,130 +1,275 @@
 ---
-title: "信息结构"
+title: "Volume 1 · Chapter 2 · Information Structures"
 type: B
-section: "信息结构"
+section: "TAOCP · Volume 1"
 order: 2
-description: "线性表、树与多链结构——TAOCP 中数据如何组织与存储"
+description: "重建TAOCP Volume 1 Chapter 2：线性表的顺序与链式分配、循环和双向链接、树遍历与表示、表与垃圾回收、多链结构及动态存储分配。"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/art-of-computer-programming-volume-1-fundamental-algorithms-9780201896831"
 draft: false
 ---
 
-import { TcpInfoStructuresDiagram } from "@/components/mdx/taocp/diagrams/tcp-info-structures";
+import { TcpRepresentationLab, TcpLinkedInsertionLab, TcpDequeLab, TcpSequentialAllocationLab, TcpCircularListLab, TcpDoublyLinkedLab, TcpTreeTraversalLab, TcpChildSiblingLab, TcpTreePropertyLab, TcpGarbageCollectionLab, TcpMultilinkLab, TcpAllocatorLab, TcpInformationCertificateLab } from "@/components/mdx/taocp/diagrams/tcp-info-structures";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能解释线性表、树、多链结构三种信息结构的特点与适用场景
-- 能分析不同信息结构上查找、插入、删除操作的时间复杂度
-- 能根据操作频率选择合适的信息结构
-- 能回答：为什么 Knuth 用「信息结构」而非「数据结构」来描述这些概念？
+
+- 能区分抽象信息关系与顺序、链式、循环、双向等物理表示
+- 能推导线性表更新、树遍历和孩子-兄弟表示的局部与全局不变量
+- 能实现从根可达性驱动的标记清扫并解释循环对象为何可回收
+- 能分析多链结构中一次更新对全部索引链的影响
+- 能设计覆盖形状、链接、可达性和存储所有权的信息结构证书
+
 </Objectives>
 
-## 直觉引入
+## 从“同一序列为什么有两种完全不同的成本”开始
 
-图书馆有两种藏书方式：一种按编号排列在书架上（线性表），一种按分类树层层展开（树结构），还有一种按主题交叉索引（多链结构）。选哪种取决于你怎么找书——按编号找用线性表，按类别浏览用树，按多个关键词交叉查找用多链结构。
+先预测：逻辑序列`A,B,C,D`既可以放在连续地址，也可以由四个任意地址的记录通过链接连接。两者向读者表达同一顺序，按下标访问与中间插入的成本却相反。Volume 1 Chapter 2 · Information Structures（信息结构）的核心不是背结构名称，而是把逻辑关系、物理表示、允许操作和保持条件绑定起来。
 
-信息结构就是数据的「藏书方式」。Knuth 之所以叫「信息结构」而非「数据结构」，是因为他强调的是信息的逻辑关系而非物理存储。
+<TcpRepresentationLab />
 
-## 概念讲解
+<Term def="数据结构在每次合法操作前后必须持续满足的形状、链接、可达性或所有权条件。">表示不变量</Term>是本章共同语言。对长度$n$的线性表，顺序表示通常满足第$i$项地址
 
-### 线性表
+$$
+\operatorname{addr}(i)=B+iL,
+$$
 
-<Term def="线性表是元素排成一列的结构，每个元素有唯一前驱和后继（首尾除外）">线性表</Term>是最简单的信息结构。数组是其顺序存储实现，链表是其链式存储实现。
+其中$B$是首地址、$L$是记录长度；链式表示则通过从头结点追踪$i$次`next`到达第$i$项。前者随机访问常数次地址计算，后者需要与位置成比例的链接读取，但链式表示在已知前驱时无需移动后缀。
 
-### 树结构
+## 2.1 Introduction：先写关系，再选表示
 
-<Term def="树是层次化结构，有一个根节点，每个节点有零个或多个子节点，节点间通过边连接">树结构</Term>把线性的一对一关系扩展为一对多关系。二叉搜索树把查找从 $O(n)$ 降到 $O(\log n)$。
+信息结构由记录、字段和关系组成。关系可以是线性次序、父子层次、多个交叉次序或动态所有权。实现选择要回答四个问题：最常见的查询是什么；更新发生在哪里；内存是否连续且可扩展；哪些引用决定对象存活。
 
-<Term def="多链结构是每个节点包含多个指针域的复杂信息结构，可表达多对多关系">多链结构</Term>是最通用的信息结构。正交表、稀疏矩阵、图都可用多链结构实现。
+把“数组快、链表慢”当结论会忽略操作。数组迭代具有良好局部性，链表已知节点删除只改链接；数组二分查找需要有序且可随机访问，普通链表即使有序也不能直接跳到中点。成本应写成操作与表示的矩阵，而不是给结构贴单一复杂度标签。
 
-## 交互 Demo
+## 2.2 Linear Lists（线性表）
 
-<TcpInfoStructuresDiagram />
+### 栈、队列与双端队列
 
-<Stepper>
-<Step title="第一步：分析操作模式">
-统计高频操作：如果主要是按下标访问，选数组 $O(1)$；如果频繁插入删除，选链表 $O(1)$；如果需要有序查找，选树 $O(\log n)$。
-</Step>
-<Step title="第二步：评估空间开销">
-数组空间紧凑但需预分配或扩容；链表每个节点多一个指针（8 字节）；树需要左右两个指针。空间换时间还是时间换空间取决于场景。
-</Step>
-<Step title="第三步：考虑扩展性">
-如果未来需要多维度查询（如按姓名和按年龄都能查找），多链结构或索引表比单一结构更灵活。静态数据用数组+排序，动态数据用平衡树。
-</Step>
-</Stepper>
+线性表是一条全序关系。栈只在同一端插入和删除，队列在尾插入、头删除，deque开放四个边界操作。它们可以共享数组或链表表示，但溢出、下溢和空表判定必须写进接口。
 
-## 代码对照
+<TcpDequeLab />
 
-```python
-# 三种信息结构的基本操作对比
-from collections import deque
-import bisect
+环形数组队列若只保存头尾下标，`head == tail`可能同时表示空或满；解决方法是额外保存size、浪费一个槽，或保留状态位。每种方案都改变容量与不变量，不能只画两个指针。
 
-# 1. 线性表（数组）—— 擅长随机访问
-arr = [3, 1, 4, 1, 5, 9, 2, 6]
-print(arr[3])  # O(1) 随机访问
-bisect.insort(arr, 7)  # O(n) 有序插入
+### Sequential Allocation（顺序分配）
 
-# 2. 树结构（二叉搜索树）—— 擅长有序查找
-class TreeNode:
-    def __init__(self, val):
-        self.val = val
-        self.left = None
-        self.right = None
+<Term def="把逻辑相邻记录放在连续或可按算术定位的存储单元中。">顺序分配</Term>让地址计算简单、遍历局部性好，但中间插入可能移动后缀，删除会留下孔洞。压缩把存活记录移到连续区域，还必须更新所有指向它们的外部引用。
 
-def bst_insert(root, val):
-    if root is None:
-        return TreeNode(val)
-    if val < root.val:
-        root.left = bst_insert(root.left, val)
-    else:
-        root.right = bst_insert(root.right, val)
-    return root  # 平均 O(log n)
+<TcpSequentialAllocationLab />
 
-# 3. 多链结构（邻接表）—— 擅长关系查询
-graph = {0: [1, 2], 1: [0, 3], 2: [0, 3], 3: [1, 2]}
+若$n$个记录中位置$i$后插入，移动数为$n-i$；均匀插入位置下期望移动约$n/2$。预留间隙、分块数组和分层索引能缓解移动，却也增加查找和维护成本。
+
+### Linked Allocation（链式分配）
+
+<Term def="记录可位于任意存储位置，通过显式链接字段表达逻辑前驱或后继关系。">链式分配</Term>将逻辑顺序与地址顺序分离。已知节点$B$后插入$X$的安全更新顺序是先令`X.next = B.next`，再令`B.next = X`。
+
+<TcpLinkedInsertionLab />
+
+```cpp
+struct Node {
+    int value;
+    Node* next;
+};
+
+void insert_after(Node* current, Node* fresh) {
+    fresh->next = current->next;
+    current->next = fresh;
+}
 ```
 
-## 常见误区
+如果先覆盖`current->next`，原后缀入口会丢失。并发环境还要处理其他线程看到中间状态的问题；本章单线程不变量并不能自动证明无锁实现正确。
 
-<Callout type="trap">
-**误区：认为树结构总是比线性表好。**
-树的优势是有序查找 $O(\log n)$，但代价是每个节点需要两个指针（更多内存）和更复杂的维护逻辑。如果数据量小或只需顺序遍历，数组更高效。树的指针跳转还会破坏 CPU 缓存局部性。
+### Circular and Doubly Linked Lists（循环与双向链）
+
+循环表让尾节点重新指向头，适合轮转调度和重复扫描；终止条件从“遇到null”变为“回到哨兵或起点”。<Term def="不承载普通数据、用于统一空表与边界链接的特殊节点。">哨兵节点</Term>可使空表也形成自环，从而减少首尾特判。
+
+<TcpCircularListLab />
+
+双向链增加`prev`，允许从已知节点常数次删除，但局部不变量也翻倍：
+
+$$
+x.\mathrm{next}.\mathrm{prev}=x,
+\qquad
+x.\mathrm{prev}.\mathrm{next}=x.
+$$
+
+<TcpDoublyLinkedLab />
+
+只从头向后遍历成功，不能证明反向链接没有悬空。测试应正向、反向各走一遍，并确认访问节点集合相同、长度一致、哨兵闭合。
+
+<Callout type="trap" title="常见误区：链表插入删除永远是O(1)">
+
+只有“目标节点或其前驱已经获得”时，改链接是常数次。若必须先按值或位置扫描，定位仍是线性成本；内存分配也可能触发额外工作。复杂度结论必须写出入口条件。
+
 </Callout>
 
-<Callout type="trap">
-**误区：多链结构只用于图。**
-多链结构不限于图。稀疏矩阵用十字链表（行链表+列链表）、数据库索引用 B+ 树（多路搜索树）、操作系统用多重链表管理空闲块。任何需要多维度访问的场景都适用。
+## 2.3 Trees（树）
+
+### 遍历顺序与返回路径
+
+树将每个非根节点绑定到一个父节点。前序在子树前访问根，中序把根放在二叉树左右子树之间，后序在子树后访问根。它们不是三套无关代码，而是根访问相对两个递归调用的位置不同。
+
+<TcpTreeTraversalLab />
+
+```ts
+function postorder(node: Node | null, visit: (n: Node) => void) {
+  if (node === null) return;
+  postorder(node.left, visit);
+  postorder(node.right, visit);
+  visit(node);
+}
+```
+
+递归调用栈保存返回路径；显式栈实现必须保存同等信息，例如“该节点的左子树是否已经处理”。只把节点地址压栈而不记录阶段，常会重复访问或漏掉右子树。
+
+### 普通树的二叉表示
+
+任意有根树可用first-child与next-sibling两个链接表示：向first-child下降一层，沿next-sibling在同层移动。这种表示把不定数量孩子压缩成固定两个链接。
+
+<TcpChildSiblingLab />
+
+<Term def="用first-child表示第一个孩子、next-sibling表示下一个兄弟，从而以两个链接编码任意有根树。">孩子兄弟表示</Term>中，兄弟链的顺序属于树的有序信息；若原问题中的孩子无序，则不同兄弟排列可能代表同一抽象树，需要另行处理等价性。
+
+### 树的基本性质
+
+非空有限树有$n$个节点时恰有$n-1$条边。归纳地，单节点树边数为零；加入一个新叶子必须用一条父边连接，节点数与边数同时增加一。反过来，连通图若有$n-1$条边则无环。
+
+$$
+|E|=|V|-1.
+$$
+
+<TcpTreePropertyLab />
+
+这条性质可做快速证书，却不足以验证父指针、根唯一和全体可达。结构检查需要从根遍历，拒绝重复访问，最终确认访问数等于分配节点数。
+
+## 2.4 Lists and Garbage Collection（表与垃圾回收）
+
+动态链接结构会产生不再可达的记录。标记清扫从根集合$R$出发，反复沿指针边扩展，得到最小可达闭包：
+
+$$
+\operatorname{Reach}(R)
+=\mu S.\left(R\cup\{v\mid \exists u\in S,\ (u,v)\in E\}\right).
+$$
+
+<TcpGarbageCollectionLab />
+
+<Term def="从声明根集合沿指针闭包能够访问到的对象集合；标记清扫据此区分存活与垃圾。">可达性</Term>能回收彼此成环但根不可达的对象，这是单纯引用计数做不到的。实现必须区分对象内位模式和真实指针、处理标记栈空间，并确保清扫时不会把空闲块仍当作对象遍历。
+
+```python
+def mark(roots):
+    seen = set()
+    stack = list(roots)
+    while stack:
+        obj = stack.pop()
+        if obj in seen:
+            continue
+        seen.add(obj)
+        stack.extend(obj.references)
+    return seen
+```
+
+<Callout type="trap" title="常见误区：引用计数为零与不可达完全等价">
+
+引用计数为零通常意味着不可达，但计数大于零的环也可能没有任何根路径。标记清扫以根可达闭包为语义，引用计数则以入边数量为近似，两者的回收能力和暂停/更新成本不同。
+
 </Callout>
+
+## 2.5 Multilinked Structures（多链结构）
+
+一个记录可以同时参加姓名次序、部门次序和时间次序，每个关系拥有独立链接。<Term def="同一记录参加两个或更多独立链接关系，从而支持多种遍历或索引次序的结构。">多链结构</Term>把重复数据替换为共享记录与多个索引，但一次删除必须从每条相关链解除。
+
+<TcpMultilinkLab />
+
+稀疏矩阵的正交表是典型例子：非零元素同时位于一条行链和一条列链。按行访问与按列访问共享同一个数值节点；若只修复行链，列查询会遇到已释放节点。事务式更新与完整性检查因此比单链更重要。
+
+## 2.6 Dynamic Storage Allocation（动态存储分配）
+
+分配器维护已用块与空闲块。first-fit选择地址序中第一个足够大的洞，best-fit选择最小可容纳洞；分裂后残余块回到空闲结构，释放时相邻空闲块应合并。
+
+<TcpAllocatorLab />
+
+<Term def="记录当前未分配存储区间及其大小，并支持查找、分裂、插入和相邻合并的数据结构。">空闲表</Term>的不变量包括区间不重叠、覆盖所有可用空间、与已分配区互斥。总空闲空间足够却没有单块满足请求称外部碎片；已分配块内部未利用空间称内部碎片。
+
+设空闲块集合为$F$、已用块集合为$A$、总空间为$M$，正确所有权满足
+
+$$
+\bigcup F\ \cap\ \bigcup A=\varnothing,
+\qquad
+\left|\bigcup F\right|+\left|\bigcup A\right|=M.
+$$
+
+## 从局部改链到全局证书
+
+<Stepper>
+  <Step title="Step 1 · 写抽象关系与局部更新">
+    先说明线性、父子或多索引关系，再列出一次插入删除涉及的全部链接；按不会丢失入口的顺序提交。
+    <TcpLinkedInsertionLab />
+  </Step>
+  <Step title="Step 2 · 从入口检查全局可达">
+    从表头、树根或GC根遍历，拒绝重复、断链和非法地址，并核对访问集合与分配集合。
+    <TcpGarbageCollectionLab />
+  </Step>
+  <Step title="Step 3 · 核对空间所有权">
+    验证已用区、空闲区不相交且合计覆盖管理区域；对分裂、合并和失败分配做边界测试。
+    <TcpInformationCertificateLab />
+  </Step>
+</Stepper>
+
+<TcpInformationCertificateLab />
+
+## 小结
+
+Chapter 2把Information Structures（信息结构）落实为表示与不变量。Linear Lists（线性表）比较顺序分配、链式分配、循环和双向链接；Trees（树）连接遍历、孩子兄弟表示与$n-1$条边性质；Lists and Garbage Collection（表与垃圾回收）以根可达闭包定义存活；Multilinked Structures（多链结构）要求一次更新维护全部索引；Dynamic Storage Allocation（动态存储分配）维护空闲与已用区的排他所有权。结构是否正确不能只看一张图，而要同时检查局部链接、全局可达和空间覆盖。
 
 <Exercises>
-**问题 1**：什么场景下应该用链表而非数组？
+
+1. 在单向链`A→B→C→D`中把`X`插到`B`后，再删除`C`。写出不会丢失后缀的指针赋值顺序和最终链。
+2. 证明非空有限树有$n-1$条边，并说明为何“节点数和边数满足公式”仍不足以证明给定图是树。
+3. 给对象图`R→A→B→C→B`以及孤立环`D↔E`执行标记清扫，写出标记集与回收集；比较引用计数。
+4. 空闲块大小依次为12、7、20、9，请求6后再请求10。分别追踪first-fit和best-fit，不考虑块头开销，报告残余块。
 
 <Answer>
-频繁在头部或中间插入删除元素时用链表。链表插入删除 $O(1)$（已知位置），数组需要移动元素 $O(n)$。如果数据量未知且频繁增删，链表更优。但若需要随机访问或对缓存友好性要求高，数组更好。
-</Answer>
 
-**问题 2**：为什么 Knuth 用「信息结构」而非「数据结构」来描述这些概念？
+先令`X.next = B.next`，再令`B.next = X`，得到`A→B→X→C→D`。删除`C`时已知前驱`X`，令`X.next = C.next`，最终`A→B→X→D`；之后才能释放`C`，否则先释放再读`C.next`会访问无效内存。
+
+</Answer>
 
 <Answer>
-Knuth 强调的是信息的逻辑组织关系——数据元素之间如何关联、如何被检索——而非具体的物理存储方式。同一个信息结构（如线性表）可以用不同物理方式实现（数组或链表）。「信息结构」更准确地反映了概念层面的抽象。
+
+对节点数归纳：单节点树有零边；从$n-1$节点树增加一个新叶子需要且只需一条父边，因此边数增加到$n-1$。仅满足$|E|=|V|-1$的图仍可能由一个含环分量和一个孤立分量组成，所以还需连通，或等价地从根全体可达且无重复访问。
+
 </Answer>
+
+<Answer>
+
+从根$R$可达$R,A,B,C$，其中$B,C$成环仍被标记；$D,E$虽互相引用但没有根路径，标记清扫会回收它们。引用计数看到$D,E$各有一个入边，无法把计数降到零，因此会泄漏该环。
+
+</Answer>
+
+<Answer>
+
+First-fit请求6选择12，残6；空闲序列为6、7、20、9。再请求10选择20，残10，结果6、7、10、9。Best-fit请求6选择7，残1；序列12、1、20、9。再请求10选择12，残2，结果2、1、20、9。两者总空闲相同，洞分布不同。
+
+</Answer>
+
 </Exercises>
 
 <Glossary>
-<GlossaryItem term="线性表">
-元素排成一列的结构，每个元素有唯一前驱和后继。数组和链表是其两种基本实现。
-</GlossaryItem>
-<GlossaryItem term="树结构">
-层次化结构，有一个根节点，每个节点有零个或多个子节点。二叉搜索树支持 O(log n) 查找。
-</GlossaryItem>
-<GlossaryItem term="多链结构">
-每个节点包含多个指针域的复杂信息结构，可表达多对多关系。适用于稀疏矩阵、图、正交表等场景。
-</GlossaryItem>
-<GlossaryItem term="信息结构">
-Knuth 对数据结构的称呼，强调信息的逻辑组织关系而非物理存储方式。同一信息结构可有不同物理实现。
-</GlossaryItem>
+  <GlossaryItem term="表示不变量">结构在合法操作前后持续满足的形状、链接、可达性或所有权条件。</GlossaryItem>
+  <GlossaryItem term="顺序分配">以连续或算术可定位地址存放逻辑相邻记录。</GlossaryItem>
+  <GlossaryItem term="链式分配">以显式链接表达任意地址记录之间的逻辑关系。</GlossaryItem>
+  <GlossaryItem term="哨兵节点">统一空表和边界处理、不承载普通数据的特殊节点。</GlossaryItem>
+  <GlossaryItem term="孩子兄弟表示">用first-child与next-sibling两个链接编码任意有根树。</GlossaryItem>
+  <GlossaryItem term="可达性">从根集合沿指针闭包能够访问到的对象集合。</GlossaryItem>
+  <GlossaryItem term="多链结构">同一记录参与多个独立链接关系的结构。</GlossaryItem>
+  <GlossaryItem term="空闲表">维护可分配区间并支持查找、分裂与合并的结构。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="计算机程序设计艺术（Donald E. Knuth）" adaptedUrl="https://www-cs-faculty.stanford.edu/~knuth/taocp.html" />
+<Attribution
+  source="The Art of Computer Programming, Volume 1: Fundamental Algorithms, Third Edition"
+  author="Donald E. Knuth"
+  license="本章依据Addison-Wesley官方目录独立重构Chapter 2核心内容；文字、公式、代码、交互和练习均为重新编写。"
+  url="https://www.informit.com/store/art-of-computer-programming-volume-1-fundamental-algorithms-9780201896831"
+/>

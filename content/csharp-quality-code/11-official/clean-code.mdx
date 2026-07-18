@@ -1,0 +1,258 @@
+---
+title: "第11章：代码整洁（建议140-153）"
+type: C
+section: "编写高质量代码 · 可维护性"
+order: 11
+description: "覆盖访问修饰符、大括号与命名、抽象层级/单一职责/长度、最小公开面、参数对象与DRY、表驱动/lambda、event accessors及注释和异常文档。"
+demo: true
+math: false
+sourceUrl: "https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html"
+draft: false
+---
+
+import { CqcContractDocumentationLab, CqcReadableSurfaceLab, CqcRefactoringEvidenceLab } from "@/components/mdx/csharp-quality-code/diagrams/clean-code";
+
+<Objectives>
+
+- 能分析access、braces、names、abstraction level与public surface对阅读和兼容性的影响，并设计最小稳定API
+- 能判断method/class拆分、parameter object、knowledge DRY、table-driven与lambda重构是否有真实change evidence
+- 能比较event accessor、why/hazard comment、public docs和exception docs，设计可测试且不过期的contract说明
+
+</Objectives>
+
+## 为什么整洁代码不是行数、注释数或Method数比赛
+
+短method可能只是把一次阅读变成十次跳转，DRY可能把两个偶然相似的rules绑死，零注释也可能隐藏安全协议。真正目标是让一次change只触及一个cohesive owner、让public caller只依赖稳定capability、让failure和non-obvious constraints可被验证。
+
+先预测：两个相同if是否必然抽取；private method只有一行是否必然更整洁；每个throw都写普通行注释是否足够。答案都是否。需要看knowledge、abstraction与caller contract。
+
+<Term def="外部consumer可调用、读取、修改、继承、订阅或实现的所有public/protected行为及其长期兼容承诺。">public capability</Term>
+
+## Readability与Minimum Surface（建议140-146）
+
+### 建议140：使用默认的访问修饰符
+
+C#默认使top-level type internal、class members private，这有助于least exposure；但“依赖默认”可能让reader在不同context猜visibility。现代做法是保持最小访问级别，并按项目style显式写出关键contract，由analyzer阻止不必要public。重点是capability，不是省一个keyword。
+
+```csharp
+internal sealed class InvoiceNumberSequence
+{
+    private long _current;
+    public long Next() => Interlocked.Increment(ref _current);
+}
+```
+
+### 建议141：不知道该不该用大括号时，就用
+
+if/for/while即使单statement也使用braces，降低后续添加logging/return时脱离control body的风险，并让formatter产生稳定diff。expression-bodied member、switch expression不是“省大括号”的同一问题，应按可读性选择。
+
+```csharp
+if (invoice.IsOverdue)
+{
+    await NotifyAsync(invoice, cancellationToken);
+}
+```
+
+### 建议142：总是提供有意义的命名
+
+名字说明domain role、unit、lifetime或policy distinction，不重复type/scope已知信息。`elapsedMilliseconds`优于`time`，`pendingInvoices`优于`data`；极短local scope的`index`足够，不必写`currentLoopIterationIndex`。
+
+### 建议143：方法抽象级别应在同一层次
+
+orchestrator method每行应处于相同“why/how”层：load、validate、charge、persist；不要夹入SQL column、JSON token和byte offset。low-level mechanism下沉到named operation，但避免只转发一行且没有提高vocabulary的wrapper。
+
+<Term def="一段代码回答同一层why/what/how问题的粒度；同层statements共同形成可顺序阅读的叙事。">abstraction level</Term>
+
+```csharp
+public async Task CompleteCheckoutAsync(OrderId id, CancellationToken token)
+{
+    Order order = await LoadOrderAsync(id, token);
+    Payment payment = await ChargeAsync(order, token);
+    await CommitAsync(order, payment, token);
+}
+```
+
+### 建议144：一个方法只做一件事
+
+“一件事”是一个可命名goal和一个主要failure/transaction boundary，而非只调用一个function。判断方法：能否提取一段并用同一抽象层命名；局部变量是否分成不相交groups；测试是否因多个无关原因改变。
+
+### 建议145：避免过长的方法和过长的类
+
+length是smell，不是阈值。结合cyclomatic complexity、dependency count、state clusters、commit history和reasons to change决定拆分。一个长但线性的data mapping可能比十个跳转method清楚；一个短class若同时负责cache、I/O和policy仍不cohesive。
+
+<Term def="会独立推动module修改、测试和发布的business rule、dependency lifecycle或external contract变化来源。">reason to change</Term>
+
+### 建议146：只对外公布必要的操作
+
+public/protected member一旦被consumer使用就成为compatibility burden。默认private/internal，只公开use-case需要的commands/queries；test不要迫使implementation helper public，可通过public behavior或internal test visibility谨慎验证。
+
+```csharp
+public interface IInvoiceApplication
+{
+    Task<InvoiceView> GetAsync(InvoiceId id, CancellationToken token);
+    Task IssueAsync(IssueInvoice command, CancellationToken token);
+}
+```
+
+<Stepper>
+  <Step title="切换access、braces、name、abstraction与public surface">
+    <CqcReadableSurfaceLab />
+  </Step>
+  <Step title="从caller和change场景读取代码">
+    列出外部真正需要的capabilities、method每行抽象层，以及一次新增statement是否会改变control body。
+  </Step>
+  <Step title="用API diff、formatter和narrative review验收">
+    public API baseline不意外扩大，formatter/analyzer稳定；reviewer不展开helper也能复述orchestrator步骤。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="把每五行抽成一个private method就符合单一职责">
+若抽取没有新domain vocabulary，只增加跳转；职责由reason to change和transaction/failure boundary决定，不由行数决定。
+</Callout>
+
+## Cohesion、Knowledge与Data-Driven Refactoring（建议147-150）
+
+### 建议147：重构多个相关属性为一个类
+
+一组fields在多个signature中共同出现、具有cross-field invariant或共同lifetime时，提取parameter/value object，使illegal combination在construction被拒绝。不要只造无behavior data bag；新type要有domain name、validation、equality/serialization contract。
+
+```csharp
+public readonly record struct DateRange
+{
+    public DateRange(DateOnly start, DateOnly end)
+    {
+        if (end < start) throw new ArgumentException("End precedes start.");
+        (Start, End) = (start, end);
+    }
+
+    public DateOnly Start { get; }
+    public DateOnly End { get; }
+}
+```
+
+### 建议148：不重复代码
+
+DRY针对knowledge duplication：同一business rule、schema mapping或calculation散落多处，变化必须同步。syntax相似但domain meaning不同不应抽到common helper，否则未来variation互相牵制。等到共同rule和variation axis清楚再抽象。
+
+<Term def="同一business rule或contract被编码在多处，导致一次规则变化需要同步修改并可能产生不一致。">knowledge duplication</Term>
+
+### 建议149：使用表驱动法避免过长的if和switch分支
+
+branches只在key、constant或handler上不同且set稳定时，用immutable dictionary/table把data与selection分离；必须定义duplicate/unknown/default和initialization failure。复杂workflow、不同dependencies或开放extension更适合strategy polymorphism。
+
+```csharp
+private static readonly IReadOnlyDictionary<OrderStatus, Func<Order, Transition>> Rules =
+    new Dictionary<OrderStatus, Func<Order, Transition>>
+    {
+        [OrderStatus.Pending] = order => Transition.Pay(order),
+        [OrderStatus.Paid] = order => Transition.Ship(order),
+    };
+```
+
+table不是把logic藏进untyped configuration；entries保持typed，测试覆盖所有keys与unknown。
+
+### 建议150：使用匿名方法、Lambda表达式代替方法
+
+短、一次使用、纯且只在local query/callback有意义的behavior用lambda，减少远距离跳转；复杂、复用、递归、需要独立name/test或需要unsubscribe的handler保留named method。closure lifetime和allocation也要考虑。
+
+```csharp
+Invoice[] overdue = invoices
+    .Where(invoice => invoice.DueDate < today && !invoice.IsPaid)
+    .OrderBy(invoice => invoice.DueDate)
+    .ToArray();
+```
+
+<Stepper>
+  <Step title="切换parameter object、DRY、table、lambda与class split">
+    <CqcRefactoringEvidenceLab />
+  </Step>
+  <Step title="收集change history和invariant证据">
+    看哪些fields总一起出现、哪些copies总同步修改、branches是否只差data、lambda是否会被复用或捕获owner。
+  </Step>
+  <Step title="重构前后跑characterization与mutation测试">
+    保持public behavior，新增一个rule/branch/field，确认修改点减少且没有把独立concept绑进同一abstraction。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="看到两段相似代码就立即抽CommonHelper">
+先问它们是否代表同一knowledge并会因同一原因变化。偶然相似应允许重复，过早共享会把不同domain evolution锁在一起。
+</Callout>
+
+## Event Protection、Comments与Failure Contract（建议151-153）
+
+### 建议151：使用事件访问器替换公开的事件成员变量
+
+公开delegate field允许外部覆盖或raise invocation list；使用event关键字限制外部只能subscribe/unsubscribe，publisher保留raise权。custom add/remove accessor仅在转接、weak subscription或同步policy有明确需求时使用，并保持handler identity/lifetime。
+
+```csharp
+public event EventHandler<InvoiceIssuedEventArgs>? InvoiceIssued;
+
+protected virtual void OnInvoiceIssued(InvoiceIssuedEventArgs args)
+    => InvoiceIssued?.Invoke(this, args);
+```
+
+### 建议152：最少，甚至是不要注释
+
+删除重复代码字面含义、已过期history和被better naming/extraction取代的注释；保留无法从syntax推导的why：protocol constraint、security/concurrency invariant、workaround原因与移除条件、public contract。注释必须随代码review/test维护。
+
+### 建议153：若抛出异常，则必须要注释
+
+对public/protected API，把caller可预防或处理的稳定exceptions写入XML `<exception>` documentation，说明type与condition；无需列举OutOfMemory等所有runtime failures。implementation附近只在throw原因/协议不显然时写why comment，且用tests证明condition。
+
+<Term def="public API明确列出的exception types、触发条件、partial effects与caller recovery/cancellation semantics。">failure documentation</Term>
+
+```csharp
+/// <exception cref="InvoiceConflictException">
+/// The persisted invoice version differs from the command's expected version.
+/// </exception>
+public Task IssueAsync(IssueInvoice command, CancellationToken token) => ExecuteAsync(command, token);
+```
+
+<Stepper>
+  <Step title="切换event、why comment、API docs、exception docs与hazard comment">
+    <CqcContractDocumentationLab />
+  </Step>
+  <Step title="区分syntax可见信息和caller不可见contract">
+    what/how可由代码表达；why、ownership、ordering、exception condition和unsubscribe lifetime才需要doc/comment。
+  </Step>
+  <Step title="用docs build和fault test防止腐烂">
+    XML docs可构建，documented exceptions逐一触发，event外部不能invoke，workaround issue/expiry仍有效。
+  </Step>
+</Stepper>
+
+## 本章回顾：Clean意味着Change可以局部证明
+
+1. access最小化、braces稳定编辑、names表达domain；public surface只包含支持的capabilities。
+2. methods保持同一abstraction level，“一件事”由goal/failure boundary定义，length只提供smell。
+3. related properties在共享invariant时提取value object，DRY只消除knowledge duplication。
+4. table适合data-driven closed branches，lambda适合短local behavior，不机械替代strategy/named method。
+5. event保护raise ownership；comments解释why/hazard，不复述syntax。
+6. public exceptions通过XML docs和tests形成failure contract，不靠散落行注释。
+
+<Exercises>
+
+**问题 1：一个150行method应该怎样决定拆不拆、怎么拆？**
+
+<Answer>先用characterization tests锁定行为，再标出abstraction levels、state/dependency clusters、transaction/failure boundaries与change history。提取能用domain vocabulary命名且有独立reason to change的步骤；线性mapping若拆后只增加跳转可保留。比较重构前后新增需求的修改点与测试范围。</Answer>
+
+**问题 2：两套折扣if/switch很相似，何时DRY、何时table、何时strategy？**
+
+<Answer>若编码同一折扣rule并总一起变化，集中为一个policy；若branches只差稳定key/constant/handler，用typed table并测unknown；若variant有不同dependencies/workflow且开放扩展，用strategy。若只是语法相似但domain规则独立，保留重复避免错误耦合。</Answer>
+
+**问题 3：一个会抛ConflictException并发布事件的public API需要哪些说明和测试？**
+
+<Answer>用event keyword保护raise，说明subscription/thread/failure lifetime；XML exception docs写ConflictException的exact version mismatch、partial effects和caller action，Cancellation另列。测试外部不能invoke/assign event、subscribe/raise/unsubscribe，以及conflict条件、stack/cause和无事件发布。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="public capability" definition="consumer可调用、修改、继承、订阅或实现并形成兼容承诺的全部公开行为。" />
+  <GlossaryItem term="abstraction level" definition="一段代码共同回答同一层why/what/how问题的叙事粒度。" />
+  <GlossaryItem term="reason to change" definition="独立推动module修改、测试和发布的rule、dependency lifecycle或external contract来源。" />
+  <GlossaryItem term="knowledge duplication" definition="同一business rule/contract多处编码，变化需同步且可能产生不一致。" />
+  <GlossaryItem term="failure documentation" definition="public API稳定exception type、条件、partial effect与caller recovery/cancellation contract。" />
+</Glossary>
+
+<Attribution adaptedFrom="编写高质量代码：改善C#程序的157个建议，第11章 代码整洁，建议140-153" adaptedUrl="https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html" />

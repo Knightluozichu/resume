@@ -11,7 +11,7 @@ export function DogDebuggingToolsDiagram() {
 
           {/* 三步卡片 */}
           {[
-            { x: 40, t: "1. 查 GL 错误", d: ["glGetError 查错误码", "KHR_debug 回调主动通知", "INVALID_ENUM/VALUE/OPERATION"], c: "var(--accent)" },
+            { x: 40, t: "1. 查 GL 错误", d: ["WebGL: getError 隔离检查", "原生 GL/ES: KHR_debug", "两条调试路径不可混用"], c: "var(--accent)" },
             { x: 260, t: "2. 查着色器日志", d: ["getShaderInfoLog 编译", "getProgramInfoLog 链接", "失败否则只黑屏"], c: "var(--accent)" },
             { x: 480, t: "3. 抓帧剖析", d: ["Spector.js 抓 WebGL", "RenderDoc 抓桌面", "逐 draw 查状态/像素"], c: "var(--accent)" },
           ].map((s) => (
@@ -30,7 +30,7 @@ export function DogDebuggingToolsDiagram() {
           {[
             { y: 234, t: "顶点 bound", r: "顶点多 / 顶点着色器重 → LOD、剔除、简化着色器" },
             { y: 254, t: "片元 bound", r: "过度绘制 / 片元着色器重 → 前向排序、early-z" },
-            { y: 274, t: "带宽/CPU bound", r: "纹理采样多 / draw call 多 → 压缩纹理图集、批处理实例化" },
+            { y: 274, t: "带宽/CPU bound", r: "附件/采样字节或提交过多 → 格式/分辨率或批处理实例化" },
           ].map((row) => (
             <g key={row.t}>
               <text x="60" y={row.y} fontSize="10" fontWeight="700" fill="var(--accent)">{row.t}</text>
@@ -45,7 +45,43 @@ export function DogDebuggingToolsDiagram() {
           <text x="60" y="368" fontSize="10" fill="var(--text-secondary)">深度测试/混合状态? · 上下文是否丢失? · 逐 draw 用帧抓取器核对管线状态</text>
         </svg>
       </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">先查错误与着色器日志，再用帧抓取器逐 draw 剖析，性能用 GPU timer query 定位瓶颈</figcaption>
+      <figcaption className="mt-2 text-center text-sm text-secondary">WebGL 与原生调试入口分开；先隔离正确性，再用非阻塞 GPU 查询定位性能</figcaption>
+    </figure>
+  );
+}
+
+const ISOLATION_STEPS = [
+  ["输出目标", "把默认/FBO 清成洋红色，确认 viewport、附件和呈现链"],
+  ["固定几何", "只画裁剪空间三角形，排除相机、模型和索引"],
+  ["固定着色", "顶点直通、片元常量色，排除纹理和光照"],
+  ["逐层恢复", "依次恢复 VAO、矩阵、纹理、深度/混合与后处理"],
+  ["抓取证据", "在第一处变化点查看 draw 状态、资源内容和像素历史"],
+] as const;
+
+export function DogBlackFrameIsolationDiagram() {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
+        <div
+          role="img"
+          aria-label="黑屏问题从输出目标到逐层恢复的五步二分隔离流程"
+          className="grid gap-2"
+        >
+          {ISOLATION_STEPS.map(([title, detail], index) => (
+            <div
+              key={title}
+              className="grid min-h-14 grid-cols-[2rem_7rem_1fr] items-center gap-3 rounded-control border border-border bg-bg/40 p-3"
+            >
+              <span className="font-mono text-xs text-secondary">{index + 1}</span>
+              <strong className="text-sm text-accent">{title}</strong>
+              <span className="text-xs leading-5 text-secondary">{detail}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">
+        黑屏调试不是随机改状态，而是用已知输出逐层恢复并找到第一处断点
+      </figcaption>
     </figure>
   );
 }

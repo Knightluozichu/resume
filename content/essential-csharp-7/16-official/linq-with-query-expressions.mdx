@@ -1,0 +1,240 @@
+---
+title: "第16章：LINQ with Query Expressions"
+type: C
+section: "Essential C# 7.0 · Collections and Querying"
+order: 16
+description: "掌握from/where/select/orderby/group/join query expressions、range-variable scope、query translation与provider边界。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-c-sharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7JoinGroupShapeLab, Ec7QueryClauseScopeLab, Ec7QueryTranslationLab } from "@/components/mdx/essential-csharp-7/diagrams/linq-with-query-expressions";
+
+<Objectives>
+
+- 能解释from、where、let、orderby、select/group各clause的input、range-variable scope和result shape
+- 能写出query expression逐段翻译后的Where、Select、SelectMany、OrderBy/ThenBy、Join或GroupBy calls
+- 能比较join、group、group join、left outer pattern及IEnumerable/IQueryable provider的执行边界
+
+</Objectives>
+
+## 为什么Query Syntax不是另一套查询引擎
+
+`from ... where ... select ...`让数据flow接近自然的集合推导，但compiler不会创建一个隐藏SQL引擎。它把clauses按language规则翻译为method invocations；若source是IEnumerable，通常调用Enumerable并执行delegates；若是IQueryable，provider接收expression tree并尝试翻译。语法相同不代表执行地点、支持能力和成本相同。
+
+先预测：where何时执行；两个from为何对应SelectMany；第二个orderby key为何必须ThenBy；let如何让计算结果在后续clause可见；join与group join各返回多少rows；query expression能否调用custom compatible methods；source是database provider时lambda是否在本地运行。然后沿scope、translation和result shape验证。
+
+<Term def="由from开始、以select或group结束，并通过ordered clauses描述sequence transformation的language syntax。">query expression</Term>
+
+## from Establishes a Range Variable
+
+query必须以`from`开始。range variable代表枚举过程中的一个logical element，不是预先创建的collection，也不应在query外任意使用。它的static type通常由source element推断，也可显式指定以执行Cast-like filtering/conversion规则。
+
+```csharp
+IEnumerable<Person> people = LoadPeople();
+
+var query =
+    from person in people
+    where person.IsActive
+    select person.Name;
+```
+
+query expression返回sequence，仍通常deferred；声明query不会立刻遍历people。range variable只在后续允许的clauses中有scope，select/group后当前query结束或通过`into`开启continuation。
+
+<Term def="query每个logical row的命名element，以及clauses推进时哪些names继续可见的作用域规则。">range-variable scope</Term>
+
+<Stepper>
+  <Step title="切换from、where、let、orderby与select">
+    <Ec7QueryClauseScopeLab />
+  </Step>
+  <Step title="标出每个clause的input和scope">
+    from引入person，let添加normalized，后续clauses只能使用当前透明row中仍存在的names。
+  </Step>
+  <Step title="确认final result shape">
+    select投影终止当前query body；group产生keyed groups；into开始新的range scope。
+  </Step>
+</Stepper>
+
+## where, let, and Projection
+
+`where`保留predicate为true的elements，可出现多次。`let`把expression结果绑定为新的range variable，避免后续重复计算，并由compiler通过transparent identifier在method calls间携带旧/new values。`select`决定最终element shape，可返回原element、scalar、named type或anonymous type。
+
+```csharp
+var normalizedNames =
+    from person in people
+    let normalized = person.Name.Trim().ToUpperInvariant()
+    where normalized.StartsWith("A")
+    select new { person.Id, Name = normalized };
+```
+
+let不保证eager cache整个sequence；它在每次enumeration、每个source element上计算一次并随pipeline传递。predicate/projection应尽量pure，避免重复枚举导致side effects。
+
+## orderby and Stable Tie-Breakers
+
+`orderby`可列多个keys，每个可ascending/descending。translation的首key调用OrderBy/OrderByDescending，后续keys调用ThenBy/ThenByDescending；若把第二key误写成新的OrderBy method chain，会重置primary ordering。
+
+```csharp
+var ranked =
+    from person in people
+    where person.IsActive
+    orderby person.Score descending, person.Name ascending
+    select person;
+```
+
+ordering在enumeration时需要读取/buffer source。稳定、可重现结果应给出完整tie-breaker，尤其分页或测试；仅按非unique score排序时同分顺序可能依赖source/provider。
+
+<Callout type="trap" title="query expression按clause逐项流式执行，所以orderby也不需要缓冲">
+语法是deferred，但全局ordering必须在输出首项前看到并排序当前source。deferred描述何时执行，不保证streaming或常量内存。
+</Callout>
+
+## Multiple from Clauses Translate to SelectMany
+
+第二个`from`依赖前一个range variable时表达flat-map：对每个outer element枚举inner sequence，再把pairs投影。compiler通常使用SelectMany及result selector维持两个variables。
+
+```csharp
+var lines =
+    from order in orders
+    from line in order.Lines
+    where line.Quantity > 0
+    select new { order.Id, line.ProductId, line.Quantity };
+```
+
+result cardinality是各outer对应inner counts之和；empty inner不产生row。若inner sequence昂贵或会重复I/O，需测量每个outer的调用次数。
+
+## Query Expressions Translate to Method Invocations
+
+translation是syntactic mapping，不要求方法一定来自`System.Linq.Enumerable`；source/type resolution可找到符合query pattern的methods。标准case中，where→Where，select→Select，multiple from→SelectMany，orderby→OrderBy/ThenBy，join→Join，group→GroupBy。
+
+<Term def="compiler按clause形式生成特定method names、lambdas和transparent projections的确定映射。">query translation contract</Term>
+
+<Stepper>
+  <Step title="切换filter、ordering、multiple from、let与continuation">
+    <Ec7QueryTranslationLab />
+  </Step>
+  <Step title="逐clause写出method chain">
+    let通常先Select成transparent shape；多个from用SelectMany；第二ordering key用ThenBy。
+  </Step>
+  <Step title="核对overload/provider resolution">
+    翻译只给出调用shape，最终选Enumerable、Queryable或custom methods由source static type决定。
+  </Step>
+</Stepper>
+
+```csharp
+var querySyntax =
+    from value in values
+    where value > 0
+    select value * 2;
+
+var methodSyntax = values
+    .Where(value => value > 0)
+    .Select(value => value * 2);
+```
+
+两者通常语义相同，可按可读性混合使用。简单filter/projection常用method chain，复杂join/group或多个from时query syntax更清晰。不要声称query syntax更快；翻译后的operator/provider才决定。
+
+## group and Query Continuations
+
+`group element by key`产生`IGrouping<TKey,TElement>` sequence，每个group有Key并可枚举members。`into name`接在select/group后，结束旧range variables并以result为新range variable继续where/order/select。
+
+```csharp
+var totals =
+    from order in orders
+    group order by order.CustomerId into customerOrders
+    orderby customerOrders.Key
+    select new
+    {
+        CustomerId = customerOrders.Key,
+        Count = customerOrders.Count(),
+        Total = customerOrders.Sum(order => order.Total)
+    };
+```
+
+grouping provider可能翻译为remote aggregate，也可能在memory形成groups；检查generated query与materialization boundary。对无限sequence，GroupBy通常不能产生完整final grouping而不持续buffer。
+
+## join, group join, and Outer-Join Pattern
+
+`join right in rights on leftKey equals rightKey`表达equi-join，产生每个matching pair；`equals`是query keyword，左右key expressions对应各自range scope。`join ... into matches`是group join，为每个left element提供零到多个right matches。
+
+<Term def="join/group/group-join对key、cardinality、缺失匹配与最终projection作出的结果形状约定。">relational result shape</Term>
+
+```csharp
+var customerOrders =
+    from customer in customers
+    join order in orders
+        on customer.Id equals order.CustomerId
+        into matches
+    select new { customer.Name, Orders = matches };
+```
+
+left outer join通常在group join后增加`from match in matches.DefaultIfEmpty()`，让无match的left也产生一row；projection必须处理default/null right。它不是专门`left join` keyword。
+
+<Stepper>
+  <Step title="切换join、group、group join与left outer pattern">
+    <Ec7JoinGroupShapeLab />
+  </Step>
+  <Step title="记录key与cardinality">
+    inner join只保留matching pairs；group join保留每个left及zero/many matches。
+  </Step>
+  <Step title="切换IEnumerable与IQueryable provider">
+    同一syntax可变成delegates或expression trees；检查支持的translation与真正执行位置。
+  </Step>
+</Stepper>
+
+## IEnumerable versus IQueryable
+
+IEnumerable query operators接收compiled delegates并在CLR枚举source；IQueryable operators接收expression trees，provider分析并翻译到SQL/remote language。不是所有C# methods都能翻译，unsupported expression可能在runtime失败；现代providers对client evaluation policy也不同。
+
+<Term def="query translation后由in-memory delegates或remote expression provider决定支持能力、执行位置和成本的边界。">query provider boundary</Term>
+
+```csharp
+IQueryable<Order> remote = db.Orders;
+
+var query =
+    from order in remote
+    where order.Total > 100M
+    select new { order.Id, order.Total };
+```
+
+验证remote query要查看generated command、round trips、selected columns、indexes和materialization point；不能用小型List测试证明database效率。调用AsEnumerable/ToList常成为provider到local boundary，之后operators可能在memory运行。
+
+<Callout type="trap" title="query syntax相同，所以List与database执行完全一致">
+compiler translation shape相似，但source static type决定Enumerable delegates或Queryable expression trees。provider支持、remote semantics、round trips与cost必须单独验证。
+</Callout>
+
+## 本章回顾：先读Scope，再读Translation与Provider
+
+1. from引入range variable，clauses改变scope与row shape，select/group结束当前query。
+2. where过滤、let携带intermediate、orderby建立primary/tie-breaker ordering。
+3. query syntax按规则翻译为standard method calls，多个from使用SelectMany。
+4. group产生keyed sequences，join产生matching pairs，group join保留left到matches关系。
+5. source static type决定Enumerable或Queryable provider；语法相同不保证执行地点和成本相同。
+
+<Exercises>
+
+**问题 1：如何把包含let和两个from的query翻译成method calls？**
+
+<Answer>第一个from确定source；let通常先Select为携带原range variable和计算值的transparent object；依赖outer的第二from翻译为SelectMany，并用result selector保留所需names；后续where/select分别Where/Select。逐clause核对scope，不能只做字符串替换。</Answer>
+
+**问题 2：join、group join和left outer pattern的结果数量有何不同？**
+
+<Answer>inner join为每个matching pair产生row，缺少match的left消失；group join每个left产生一个row及zero/many matches；left outer在group join后对matches.DefaultIfEmpty再次from，无match也产生含default right的row。projection必须处理null/default。</Answer>
+
+**问题 3：怎样证明IQueryable query没有意外在本地执行？**
+
+<Answer>检查source static type与operator chain，查看provider生成的command/SQL、parameters、selected columns、round trips和materialization point；测试unsupported method的failure policy。标出AsEnumerable/ToList之后的local boundary，并用真实provider而非List验证semantics和cost。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="query expression" definition="from开始并以select/group结束的ordered sequence-transformation syntax。" />
+  <GlossaryItem term="range-variable scope" definition="logical row names随clauses引入、保留或由into重置的作用域。" />
+  <GlossaryItem term="query translation contract" definition="clauses映射为method names、lambdas和transparent projections的规则。" />
+  <GlossaryItem term="relational result shape" definition="join/group对keys、cardinality与missing matches的结果约定。" />
+  <GlossaryItem term="query provider boundary" definition="in-memory delegates与remote expression provider的执行/支持分界。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 16: LINQ with Query Expressions" adaptedUrl="https://www.informit.com/store/essential-csharp-7.0-9781509303618" />

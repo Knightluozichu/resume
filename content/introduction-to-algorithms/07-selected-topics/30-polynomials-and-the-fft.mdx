@@ -1,0 +1,298 @@
+---
+title: "Chapter 30 · Polynomials and the FFT"
+type: C
+section: "CLRS4 · 专题"
+order: 30
+description: "按CLRS第四版第30章重建多项式表示、DFT/IFFT、radix-2 FFT、多项式乘法与FFT电路。"
+demo: true
+math: true
+sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+draft: false
+---
+
+import { CLRS4PolynomialRepresentationLab, CLRS4ConvolutionLab, CLRS4RootsOfUnityLab, CLRS4DFTLab, CLRS4InverseDFTLab, CLRS4EvenOddSplitLab, CLRS4ButterflyLab, CLRS4FFTRecursionLab, CLRS4PolynomialMultiplyLab, CLRS4ZeroPaddingLab, CLRS4FFTCircuitLab, CLRS4FFTCertificateLab } from "@/components/mdx/introduction-to-algorithms/diagrams/30-polynomials-and-the-fft";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释coefficient representation、point-value representation、DFT与interpolation的转换关系
+- 能计算roots of unity、单个DFT output、butterfly outputs和product padding length
+- 能实现recursive radix-2 FFT、inverse FFT与FFT-based polynomial multiplication
+- 能分析zero padding、sign convention、normalization和bit reversal导致的错误
+- 能设计包含round-trip、naive convolution、ordering与numerical tolerance的FFT证书
+
+</Objectives>
+
+## 从“乘法在哪种表示里更便宜”开始
+
+先预测：两个degree为$n-1$的polynomials按coefficients直接相乘，需要把每对coefficients组合到相同degree，工作量为quadratic；若先知道它们在足够多points上的values，product只需逐点相乘。真正的问题变成：能否快速来回转换这两种表示？
+
+<Term def="利用roots of unity上的快速求值与插值，把polynomial convolution从quadratic work降到quasilinear work的算法链。">多项式与FFT</Term>不是单独一个transform调用，而是representation change。完整pipeline为coefficient $\to$ point values $\to$ pointwise product $\to$ coefficients。
+
+<CLRS4PolynomialRepresentationLab />
+
+## 30.1 Representing polynomials
+
+### Coefficient representation
+
+<Term def="用a0到a(n-1)存储A(x)各次幂系数，便于加法但普通乘法形成convolution。">多项式表示</Term>最常见的是coefficient vector：
+
+$$
+A(x)=\sum_{j=0}^{n-1}a_jx^j.
+$$
+
+Addition按index相加，花$\Theta(n)$；evaluation by Horner花$\Theta(n)$；两个length-$n$ vectors的naive multiplication会生成length $2n-1$ output：
+
+$$
+c_k=\sum_{j=0}^{k}a_jb_{k-j}.
+$$
+
+这就是discrete convolution。所有合法index pairs总数为quadratic，因此direct method需要$\Theta(n^2)$ scalar operations。
+
+<CLRS4ConvolutionLab />
+
+Coefficient form保留degree、sparsity和exact integer coefficients，适合small或sparse operands。FFT并非所有输入都更快：transform overhead、padding和floating-point conversion可能在small sizes超过naive或Karatsuba-like methods。
+
+### Point-value representation
+
+Degree-bounded polynomial由足够多distinct points上的values唯一确定。Point-value representation保存pairs $(x_k,A(x_k))$。若$A$和$B$使用同一evaluation points，则
+
+$$
+C(x_k)=A(x_k)B(x_k)
+$$
+
+对每个$k$独立成立，product只需linear个pointwise multiplications。之后通过interpolation恢复$C$ coefficients。
+
+任意points上的multipoint evaluation与interpolation仍可能昂贵。FFT选择有algebraic symmetry的roots of unity，使$n$-point evaluation和inverse interpolation都能在$\Theta(n\log n)$完成。
+
+### Degree bound and zero padding
+
+若$\deg A=p$、$\deg B=q$，则product最多有$p+q+1$个coefficients。Transform length必须至少为这个数量；radix-2 implementation通常取不小于它的next power of two。
+
+<CLRS4ZeroPaddingLab />
+
+Padding不足不会只丢末尾zeros，而会把high-degree coefficients circularly wrap到low degrees，得到cyclic convolution。测试若只看transform round-trip而不和naive linear convolution比较，可能漏掉这个semantic error。
+
+## 30.2 The DFT and FFT
+
+### Roots of unity
+
+令primitive $n$th root
+
+$$
+\omega_n=e^{2\pi i/n},
+\qquad
+\omega_n^n=1.
+$$
+
+它的powers $\omega_n^0,\ldots,\omega_n^{n-1}$均匀分布在complex unit circle。Primitive意味着更小positive power不会先回到1。
+
+<CLRS4RootsOfUnityLab />
+
+Roots的两个性质驱动radix-2 split。若$n$为even，$\omega_n^2=\omega_{n/2}$；同时$\omega_n^{k+n/2}=-\omega_n^k$。前者把evaluation points平方后减半，后者让后半outputs由一次sum/difference复用。
+
+### Discrete Fourier transform
+
+<Term def="把length-n coefficient vector映射为polynomial在n个roots of unity上的values的线性变换。">离散傅里叶变换</Term>（DFT）定义为
+
+$$
+y_k=A(\omega_n^k)
+=\sum_{j=0}^{n-1}a_j\omega_n^{jk},
+\qquad 0\le k<n.
+$$
+
+<CLRS4DFTLab />
+
+直接按definition计算$n$个outputs，每个sum有$n$项，仍是$\Theta(n^2)$。Fast Fourier Transform不是另一种transform；<Term def="利用roots-of-unity symmetry在Theta(n log n)时间计算DFT或inverse DFT的一族算法。">快速傅里叶变换</Term>（FFT）是计算同一个DFT的fast algorithm。
+
+Inverse DFT使用inverse root并除以$n$：
+
+$$
+a_j=\frac{1}{n}\sum_{k=0}^{n-1}y_k\omega_n^{-jk}.
+$$
+
+所以同一FFT kernel可通过root sign与final scaling实现inverse。Libraries对forward sign和normalization的约定不同，adapter必须写清，不能从function name猜。
+
+<CLRS4InverseDFTLab />
+
+### Even-odd decomposition
+
+把$A$按coefficient index parity拆成half-size polynomials：
+
+$$
+A(x)=A^{[0]}(x^2)+xA^{[1]}(x^2),
+$$
+
+其中$A^{[0]}$收集$a_0,a_2,\ldots$，$A^{[1]}$收集$a_1,a_3,\ldots$。
+
+<CLRS4EvenOddSplitLab />
+
+递归计算两组DFT后，对$k$从0到$n/2-1$，令$u$为even transform output，$v$为odd transform output：
+
+$$
+y_k=u+\omega_n^kv,
+\qquad
+y_{k+n/2}=u-\omega_n^kv.
+$$
+
+这对sum/difference称为<Term def="把两个half-transform values用一个twiddle factor组合成upper与lower outputs的radix-2计算单元。">蝶形运算</Term>。
+
+<CLRS4ButterflyLab />
+
+```ts
+type Complex = { re: number; im: number };
+
+function fft(values: Complex[], root: Complex): Complex[] {
+  const n = values.length;
+  if (n === 1) return values;
+  const even = fft(values.filter((_, i) => i % 2 === 0), square(root));
+  const odd = fft(values.filter((_, i) => i % 2 === 1), square(root));
+  const out = Array<Complex>(n);
+  let twiddle = { re: 1, im: 0 };
+  for (let k = 0; k < n / 2; k += 1) {
+    const t = multiply(twiddle, odd[k]);
+    out[k] = add(even[k], t);
+    out[k + n / 2] = subtract(even[k], t);
+    twiddle = multiply(twiddle, root);
+  }
+  return out;
+}
+```
+
+伪代码中的`root`必须对应current problem size；recursive call使用squared root。Real implementation还要避免每层`filter` allocation，可用stride/index ranges或iterative in-place circuit。
+
+### Work recurrence
+
+FFT生成两个half-size transforms，并在combine做$\Theta(n)$ work：
+
+$$
+T(n)=2T(n/2)+\Theta(n)=\Theta(n\log n).
+$$
+
+<CLRS4FFTRecursionLab />
+
+每一recursion level总共有$n/2$ butterflies，一共$\log_2 n$ levels。对independent butterflies并行执行时，ideal circuit depth为logarithmic，但实际performance受memory traffic、vector width、cache blocking和twiddle access影响。
+
+### Polynomial multiplication
+
+```text
+FFT-POLYNOMIAL-MULTIPLY(a, b)
+1  choose n >= length(a) + length(b) - 1, convenient for the FFT
+2  zero-pad both coefficient vectors to n
+3  A = FFT(a), B = FFT(b)
+4  for k = 0 to n-1, set C[k] = A[k] * B[k]
+5  c = INVERSE-FFT(C)
+6  trim to the required product length and validate rounding
+```
+
+<CLRS4PolynomialMultiplyLab />
+
+两次forward transforms、一次inverse transform各$\Theta(n\log n)$，pointwise multiply为$\Theta(n)$，总work为$\Theta(n\log n)$。Integer coefficients用complex FFT时需round near-integers并控制error；需要exactness时可使用适合modulus的number-theoretic transform和Chinese remainder reconstruction。
+
+<Callout type="trap" title="Transform length等于较长operand长度">
+Product length取决于两者degree之和。Padding只到max input length会计算cyclic convolution，high-degree terms回卷。修法是先算length(a)+length(b)-1，再选不小于它且适合实现的transform size。
+</Callout>
+
+## 30.3 FFT circuits
+
+### Unrolling recursion
+
+<Term def="把recursive FFT展开为log n stages的butterfly network，明确每stage连接、twiddle与index ordering。">FFT电路</Term>把recursion tree按levels重排。每stage包含$n/2$ independent butterflies，stage之间有data dependencies；这既是hardware pipeline图，也是iterative software loop的dependency graph。
+
+<CLRS4FFTCircuitLab />
+
+Decimation-in-time iterative implementation常先把inputs放成bit-reversed order，再按butterfly width 2、4、8逐stage扩大。Index的binary digits反转，是因为recursive even/odd splits依次抽取原index的least-significant parity bits。
+
+```text
+ITERATIVE-FFT(a)
+1  permute a into bit-reversed index order
+2  for width = 2, 4, 8, ..., n
+3      root_step = primitive root for this width
+4      for every block of this width
+5          run width/2 butterflies with successive twiddles
+6  return a in natural output order
+```
+
+另一些convention保留natural input而返回bit-reversed output，或使用decimation-in-frequency。任何一种都可以正确，但调用方必须与layout contract一致。一个FFT与另一个IFFT如果恰好犯了互相抵消的ordering bug，round-trip test可能通过，而frequency bins仍对外错位。
+
+### Circuit cost and verification
+
+Circuit有$\log_2n$ stages，每stage$n/2$ butterflies，因此size $\Theta(n\log n)$、dependency depth $\Theta(\log n)$。Hardware可为每stage分配units形成高throughput pipeline，也可fold同一组butterflies节省area；latency、throughput与area是不同metrics。
+
+<CLRS4FFTCertificateLab />
+
+FFT测试至少包含四类oracle：
+
+1. small vectors与direct $O(n^2)$ DFT逐bin比较；
+2. forward再inverse的round-trip与scale检查；
+3. polynomial multiplication与naive convolution比较；
+4. impulse、constant、single-frequency等能暴露sign/order的structured cases。
+
+Error tolerance应按input magnitude、$n$和numeric type缩放；用固定tiny epsilon比较所有sizes既可能误报，也可能放过large relative error。
+
+<Callout type="trap" title="Round-trip通过就代表FFT全部正确">
+Forward与inverse可能共享同一个bit-reversal或sign错误并互相抵消。修法是同时对照direct DFT、检查known frequency bins，并用naive linear convolution验证padding与pointwise product。
+</Callout>
+
+<Stepper>
+<Step title="确定表示与长度">
+从operand degrees求product coefficient count，选择足够大的transform length并记录coefficient、frequency-bin ordering约定。
+
+<CLRS4ZeroPaddingLab />
+</Step>
+<Step title="执行transform pipeline">
+Forward FFT两次、逐点复乘、inverse FFT一次；核对root sign、1/n normalization和complex arithmetic。
+
+<CLRS4PolynomialMultiplyLab />
+</Step>
+<Step title="用独立oracle验收">
+小规模对照direct DFT与naive convolution，检查structured spectra、bit reversal和rounding tolerance。
+
+<CLRS4FFTCertificateLab />
+</Step>
+</Stepper>
+
+## 小结
+
+Chapter 30 Polynomials and the FFT先比较representing polynomials的coefficient与point-value forms：前者让加法直接但乘法成为convolution，后者让乘法逐点完成。DFT在roots of unity上完成evaluation，inverse DFT完成interpolation；radix-2 FFT利用even-odd split和cancellation symmetry，以$\Theta(n\log n)$ work计算它们。
+
+FFT circuits把recursion展开为$\log n$ butterfly stages，bit reversal解释iterative layout。完整多项式乘法还必须正确zero-pad、pointwise multiply、inverse-scale并处理numeric error。只有同时通过direct DFT、round-trip、known spectra和naive convolution，才能把transform实现与其调用语义一起证实。
+
+<Exercises>
+
+**问题 1**：Degree 3与degree 5 polynomials相乘，至少需要多少point values？Radix-2 length通常取多少？
+
+<Answer>
+Product degree最多为8，因此有9个coefficients，至少需要9个distinct evaluations。Radix-2 implementation通常取不小于9的next power of two，也就是16。
+</Answer>
+
+**问题 2**：为什么$\omega_n^{k+n/2}=-\omega_n^k$对butterfly有用？
+
+<Answer>
+后半evaluation point与前半只差负号。Even-index polynomial在平方后value相同，odd contribution变号，因此同一对half-transform outputs可用一次sum生成前半、一次difference生成后半，避免重新evaluation。
+</Answer>
+
+**问题 3**：Inverse DFT若漏掉$1/n$会发生什么？
+
+<Answer>
+使用inverse roots的sum会得到原coefficient vector的n倍，而不是原vector。Round-trip shape可能看起来正确，但amplitude整体放大；应显式测试impulse或known vector的exact scale。
+</Answer>
+
+**问题 4**：为什么只做FFT再IFFT round-trip不足以验证polynomial multiplication？
+
+<Answer>
+Round-trip不覆盖zero-padding与linear-versus-cyclic convolution语义，也可能让forward和inverse共享的sign或ordering错误互相抵消。还需将small products与naive coefficient convolution比较，并独立核对frequency bins。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="多项式与FFT">利用roots of unity上的快速求值与插值，把polynomial convolution从quadratic work降到quasilinear work的算法链。</GlossaryItem>
+<GlossaryItem term="多项式表示">用a0到a(n-1)存储A(x)各次幂系数，便于加法但普通乘法形成convolution。</GlossaryItem>
+<GlossaryItem term="离散傅里叶变换">把length-n coefficient vector映射为polynomial在n个roots of unity上的values的线性变换。</GlossaryItem>
+<GlossaryItem term="快速傅里叶变换">利用roots-of-unity symmetry在Theta(n log n)时间计算DFT或inverse DFT的一族算法。</GlossaryItem>
+<GlossaryItem term="蝶形运算">把两个half-transform values用一个twiddle factor组合成upper与lower outputs的radix-2计算单元。</GlossaryItem>
+<GlossaryItem term="FFT电路">把recursive FFT展开为log n stages的butterfly network，明确每stage连接、twiddle与index ordering。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Chapter 30 · Polynomials and the FFT" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

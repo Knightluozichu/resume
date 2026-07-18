@@ -1,0 +1,175 @@
+---
+title: "第9章 几何图元"
+type: C
+section: "3D数学基础 · 方位与几何"
+order: 9
+description: "选择直线、射线、球、包围盒、平面、三角形和多边形的稳定表示。"
+demo: true
+math: true
+sourceUrl: "https://gamemath.com/book/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { Gm3dGeometricPrimitivesConceptLab, Gm3dGeometricPrimitivesTransformLab, Gm3dGeometricPrimitivesEvidenceLab } from "@/components/mdx/game-math-3d/diagrams/gm3d-geometric-primitives";
+
+<Objectives>
+- 能解释参数射线与包围体在三维程序中的职责和约定
+- 能推导平面方程到重心坐标的关键关系并检查前提
+- 能实现多边形三角化的最小实验，用反例和残差完成验收
+</Objectives>
+
+## 先做预测
+
+先预测：改变坐标手性、组合顺序、时间步或退化输入时，数值和画面最先在哪里分叉。选择直线、射线、球、包围盒、平面、三角形和多边形的稳定表示。 本页用<Term def="用起点加方向乘参数表示半直线，并规定参数下界。">参数射线</Term>、<Term def="AABB与包围球用便宜的保守测试筛掉不可能相交的对象。">包围体</Term>、<Term def="单位法线与常数定义平面，也直接给出有符号距离。">平面方程</Term>、<Term def="用三个权重表达三角形内点，并插值顶点属性。">重心坐标</Term>和<Term def="将简单多边形拆为三角形，同时处理凹性、绕序和退化边。">多边形三角化</Term>把原书直觉变成可运行证据。
+
+<Gm3dGeometricPrimitivesConceptLab />
+
+## 原书章节定位
+
+本页一一对应第二版“第9章 几何图元”。作者官网给出完整在线目录和正文；站内不重新编排原书章节，而是在同一章内补充公式推导、交互图、工程实现、失败模式与复现实验。
+
+### 原书小节覆盖
+
+1. Representation Techniques
+2. Lines and Rays
+3. Spheres and Circles
+4. Bounding Boxes
+5. Planes
+6. Best-Fit Plane
+7. Triangles and Area
+8. Barycentric Coordinates
+9. Special Triangle Points
+10. Polygons
+11. Triangulation and Fanning
+
+### 五个核心抓手
+
+1. **参数射线**：用起点加方向乘参数表示半直线，并规定参数下界。
+2. **包围体**：AABB与包围球用便宜的保守测试筛掉不可能相交的对象。
+3. **平面方程**：单位法线与常数定义平面，也直接给出有符号距离。
+4. **重心坐标**：用三个权重表达三角形内点，并插值顶点属性。
+5. **多边形三角化**：将简单多边形拆为三角形，同时处理凹性、绕序和退化边。
+
+## 从空间与约定开始
+
+任何三维公式都先写对象类型、来源空间、目标空间、单位和约定。用起点加方向乘参数表示半直线，并规定参数下界。 AABB与包围球用便宜的保守测试筛掉不可能相交的对象。 若只保存三个或四个浮点数而丢失语义，错误通常会延迟到渲染、碰撞或插值阶段才显现。
+
+$$
+\mathcal C=(\text{object type},\text{source space},\text{target space},\text{units},\text{convention})
+$$
+
+工程接口应让非法组合尽早失败：点与方向不能随意相加，局部法线不能直接与世界光向量点积，度数不能静默传入弧度API。先画出原点和基向量，再检查结果，比只盯最终像素更可解释。
+
+## 可核查推导
+
+$$
+\mathbf r(t)=\mathbf o+t\mathbf d\ (t\ge0),\qquad \mathbf p=\alpha\mathbf a+\beta\mathbf b+\gamma\mathbf c,\quad \alpha+\beta+\gamma=1
+$$
+
+射线上的点只有一个自由参数。三角形平面上的点由三个顶点仿射组合；权重和为一消除整体平移影响，三个权重都非负时点位于三角形内部。 推导时每一步标明使用了定义、正交性、单位化、线性、连续性还是近似；若条件被非均匀缩放、退化图元或有限时间步破坏，就必须切换算法或返回显式状态。
+
+```python
+def barycentric_point(a,b,c,w):
+    assert abs(sum(w)-1) < 1e-9
+    return tuple(w[0]*a[i]+w[1]*b[i]+w[2]*c[i] for i in range(3))
+
+assert barycentric_point((0,0,0),(1,0,0),(0,1,0),(.5,.25,.25)) == (.25,.25,0)
+```
+
+手算、代码和交互图应在一个非对称样例上得到一致结果。单位矩阵、零角度和原点只能做冒烟测试，因为它们经常让转置、符号和顺序错误互相抵消。
+
+## 几何机制与数据流
+
+**参数射线**：用起点加方向乘参数表示半直线，并规定参数下界。
+
+**包围体**：AABB与包围球用便宜的保守测试筛掉不可能相交的对象。
+
+**平面方程**：单位法线与常数定义平面，也直接给出有符号距离。
+
+数据流必须能逐段记录：输入对象先按约定进入数学表示，经变换或求解得到中间状态，再由渲染、物理或工具消费。每个中间状态保留空间标签和残差，才能区分源数据错误、公式错误与下游显示错误。
+
+<Gm3dGeometricPrimitivesTransformLab />
+
+## 数值误差与边界
+
+**重心坐标**：用三个权重表达三角形内点，并插值顶点属性。
+
+**多边形三角化**：将简单多边形拆为三角形，同时处理凹性、绕序和退化边。
+
+边界集至少覆盖零长度、平行、共面、极小尺度、负尺度、角度跨界、时间步变化和浮点接近阈值。相对误差与绝对误差要按量纲选用，不能让一个全局epsilon同时承担位置、角度和点积判断。
+
+$$
+e_{abs}=\|\hat{\mathbf y}-\mathbf y\|,\qquad e_{rel}=\frac{e_{abs}}{\max(\|\mathbf y\|,s_{min})}
+$$
+
+```python
+experiment={"normal":"non-symmetric input","boundary":"degenerate or near threshold","counterexample":"默认射线方向一定单位化，却在距离比较中使用未经归一化的参数t。","replay":"fixed inputs and conventions"}
+assert set(experiment)=={"normal","boundary","counterexample","replay"}
+```
+
+## 工程案例
+
+宽阶段用AABB筛选，窄阶段用射线或三角形测试；所有图元结构同时记录坐标空间、是否归一化和边界包含规则，避免同一接触在不同平台上忽隐忽现。 报告同时保存输入、空间约定、参数、关键中间值、残差与调试图层。若重放后结论改变，先比较约定和数据版本，再比较算法实现。
+
+<Gm3dGeometricPrimitivesEvidenceLab />
+
+```python
+evidence=[("参数射线","definition"),("平面方程","derivation"),("多边形三角化","replay")]
+assert len({name for name,_ in evidence})==3
+```
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定约定"><Gm3dGeometricPrimitivesConceptLab /></Step>
+  <Step title="改变参数"><Gm3dGeometricPrimitivesTransformLab /></Step>
+  <Step title="保存证据"><Gm3dGeometricPrimitivesEvidenceLab /></Step>
+</Stepper>
+
+1. 选一个非对称、可手算的正常样例，记录所有空间、单位和正方向。
+2. 一次只改变一个参数，比较公式、代码与交互图的中间状态。
+3. 加入退化或近阈值输入，确认返回状态与容差策略一致。
+4. 固定输入与时间步重放，保存残差、失败原因和未覆盖范围。
+
+## 验收证书
+
+$$
+\operatorname{accept}=\text{conventions fixed}\land\text{invariants hold}\land\text{error within budget}\land\text{replay succeeds}
+$$
+
+验收证书拒绝“看起来差不多”。它必须回答用了哪套手性和向量约定、哪个不变量被检查、误差预算是多少、退化输入如何返回，以及另一台机器怎样从输入重建结果。
+
+## 常见误区
+
+<Callout type="trap" title="约定或边界被隐藏">默认射线方向一定单位化，却在距离比较中使用未经归一化的参数t。 修复时先让空间、单位、参数范围与退化状态显式化。</Callout>
+
+<Callout type="trap" title="只验收最终画面">把退化三角形继续送入重心坐标除法，产生无限值或随机命中。 应同时检查中间数值、不变量、调试图和可重放反例。</Callout>
+
+## 本章回顾
+
+本章覆盖参数射线、包围体、平面方程、重心坐标、多边形三角化。真正掌握的标准是：能从定义推到公式，能把公式落到代码，能通过可交互图解释参数变化，并能在反例下给出稳定且可复现的失败结果。
+
+<Exercises>
+**问题1：参数射线与包围体怎样协作？**
+<Answer>用起点加方向乘参数表示半直线，并规定参数下界。 AABB与包围球用便宜的保守测试筛掉不可能相交的对象。 回答时必须补充对象、空间和约定。</Answer>
+
+**问题2：如何推导并检查平面方程？**
+<Answer>射线上的点只有一个自由参数。三角形平面上的点由三个顶点仿射组合；权重和为一消除整体平移影响，三个权重都非负时点位于三角形内部。 再用一个非对称小样例对照手算与代码。</Answer>
+
+**问题3：怎样验收多边形三角化？**
+<Answer>将简单多边形拆为三角形，同时处理凹性、绕序和退化边。 使用正常、边界和反例输入，保存残差与重放证据。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="参数射线" definition="用起点加方向乘参数表示半直线，并规定参数下界。" />
+  <GlossaryItem term="包围体" definition="AABB与包围球用便宜的保守测试筛掉不可能相交的对象。" />
+  <GlossaryItem term="平面方程" definition="单位法线与常数定义平面，也直接给出有符号距离。" />
+  <GlossaryItem term="重心坐标" definition="用三个权重表达三角形内点，并插值顶点属性。" />
+  <GlossaryItem term="多边形三角化" definition="将简单多边形拆为三角形，同时处理凹性、绕序和退化边。" />
+  <GlossaryItem term="可重放证据" definition="绑定输入、约定、参数、中间状态、残差和失败原因的验收记录。" />
+</Glossary>
+
+<Attribution adaptedFrom="Fletcher Dunn and Ian Parberry · 3D Math Primer for Graphics and Game Development, 2nd Edition · 第9章 几何图元" adaptedUrl="https://gamemath.com/book/" />

@@ -1,0 +1,365 @@
+---
+title: "Chapter 15：程序化 API（Programmatical APIs）"
+type: A
+section: Pro .NET 内存管理（第2版）· GC 控制、通知与诊断自动化
+order: 15
+description: 对齐原书第 15 章：建立 System.GC 指标口径，安全预算 no-GC region 与本机内存压力，使用完整 GC 通知、EventPipe/DiagnosticsClient 和 ClrMD 形成可重复证据链。
+demo: false
+math: false
+sourceUrl: "https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_15"
+draft: false
+---
+
+import {
+  DnmDiagnosticsEvidenceLab,
+  DnmGcApiDecisionLab,
+  DnmNoGcBudgetLab,
+} from "@/components/mdx/dotnet-memory/diagrams/programmatical-apis";
+
+<Objectives>
+
+- 能区分 `System.GC` 快照、累计计数与干预 API 的口径，解释每个数值对应哪次 GC、哪个线程或哪个进程范围
+- 能设计 `Add/RemoveMemoryPressure`、`TryStart/EndNoGCRegion` 与 full-GC notification 的成对状态机，并写出失败、取消与回滚路径
+- 能实现 DiagnosticsClient/EventPipe 与 ClrMD 的分层诊断流程，从时间窗口定位到对象类型、根路径和可重复报告
+
+</Objectives>
+
+## 为什么 GC API 不是应用层调度器
+
+前 14 章说明 GC 会综合预算、存活、heap kind、模式、容器限制和 OS 压力做决定。`System.GC` 暴露的多数控制项只是请求或提示，不把收集器变成确定性内存管理器。一次 `Collect` 不证明所有“未使用”对象已消失，一次 `GetTotalMemory` 也不是进程内存真值。
+
+这些 System.GC API 必须先按“观察还是干预”分类：观察结果带快照/累计范围，干预调用带暂停、预算或状态机副作用。
+
+<Term def="调用方读取运行时某一时刻或某次回收的状态，但不改变 GC 策略；必须标注范围、时间点和 GCKind。">GC 观察 API</Term>
+
+<Term def="显式请求回收、改变调度提示或进入特殊模式的 API；它们会影响暂停、晋升、预算或运行时状态，必须有前置条件与回滚。">GC 干预 API</Term>
+
+先预测“观察、请求回收、申报本机压力、进入 no-GC region、刷新内存限制”各自会不会暂停运行时，再切换下图核对副作用和证据要求。
+
+<DnmGcApiDecisionLab />
+
+## MaxGeneration、CollectionCount 与 GetGeneration 回答什么
+
+`GC.MaxGeneration` 是该运行时支持的最高代编号，不是当前对象所在代；常见实现为 2。`GC.CollectionCount(generation)` 是进程启动以来目标代被收集次数的累计值，读取前后差值可确认窗口内是否发生过覆盖回收。`GC.GetGeneration(obj)` 只观察调用时对象所在代；JIT early root collection 可能影响实验，应在最后用 `GC.KeepAlive(obj)` 固定观测边界。
+
+```csharp
+int beforeGen0 = GC.CollectionCount(0);
+int beforeGen2 = GC.CollectionCount(2);
+
+RunMeasuredWindow();
+
+Console.WriteLine($"Gen0 delta: {GC.CollectionCount(0) - beforeGen0}");
+Console.WriteLine($"Gen2 delta: {GC.CollectionCount(2) - beforeGen2}");
+```
+
+计数只说明发生次数，不说明触发原因、blocking/background、暂停长度、compact 与否；这些要与 `GCMemoryInfo` 或 GC events 关联。多个请求并发共享进程 GC，不能把全局 delta 直接归因给单个请求。
+
+## GetTotalMemory 与分配计数怎样避免口径混用
+
+`GC.GetTotalMemory(forceFullCollection)` 估算当前托管已分配内存；传 true 会尝试等待/触发回收来改善估计，但调用与读取之间其他线程仍可能分配、对象也可能变不可达，结果不是静止世界。它不包含 native heap、线程栈、JIT code、映射文件和全部 runtime bookkeeping。
+
+`GC.GetAllocatedBytesForCurrentThread()` 是当前线程累计托管分配；async continuation 换线程时不能代表整个操作。`GC.GetTotalAllocatedBytes(precise)` 是进程累计分配量，适合时间窗差值；累计分配不等于 live heap，更不等于 RSS。
+
+```csharp
+long before = GC.GetTotalAllocatedBytes(precise: false);
+await HandleBatchAsync();
+long allocated = GC.GetTotalAllocatedBytes(precise: false) - before;
+
+GCMemoryInfo last = GC.GetGCMemoryInfo();
+Console.WriteLine(new
+{
+    allocated,
+    last.Index,
+    last.HeapSizeBytes,
+    last.FragmentedBytes,
+    last.TotalCommittedBytes,
+    last.PauseTimePercentage,
+});
+```
+
+把 `Index`、采样时间和 runtime version 一起记录，避免把不同回收快照的字段拼成一条假因果链。若要按 AppDomain 查看资源，旧式 `AppDomain.Monitoring*` 属性必须先启用 resource monitoring，且现代 .NET 的隔离模型通常更应按进程/AssemblyLoadContext 设计。
+
+## GetGCMemoryInfo 是哪一次回收的快照
+
+<Term def="由 GetGCMemoryInfo 返回的某次 GC 或运行时当前可用状态结构，包含 heap、commit、fragmentation、pause、generation info 等关联字段。">GCMemoryInfo 快照</Term>
+
+无参调用通常返回最近一次 GC 信息，`GetGCMemoryInfo(GCKind)` 可指定 Any/Ephemeral/FullBlocking/Background 等类别；字段是该快照口径，不是每个字段都代表“此刻”。`GenerationInfo`、`Compacted`、`Concurrent`、`PinnedObjectsCount` 和 `FinalizationPendingCount` 应与第 7–12 章阶段模型一起解释。
+
+```csharp
+GCMemoryInfo info = GC.GetGCMemoryInfo(GCKind.FullBlocking);
+foreach (GCGenerationInfo generation in info.GenerationInfo)
+{
+    Console.WriteLine(new
+    {
+        generation.SizeBeforeBytes,
+        generation.FragmentationBeforeBytes,
+        generation.SizeAfterBytes,
+        generation.FragmentationAfterBytes,
+    });
+}
+```
+
+没有对应 kind 的历史回收、平台实现差异或字段语义演进都会影响值；监控系统应保存 target framework/runtime version，并对不可用/零值做显式处理。
+
+## GC.Collect 何时才有可辩护的用途
+
+`GC.Collect()` 请求所有代回收；重载可指定 generation、`GCCollectionMode`、blocking 与 compacting。它可用于受控测试、已知大阶段切换、进程即将空闲且已证明收益等窄场景，不应在每个请求、timer 或“内存看起来高”时调用。
+
+```csharp
+GCSettings.LargeObjectHeapCompactionMode =
+    GCLargeObjectHeapCompactionMode.CompactOnce;
+
+int before = GC.CollectionCount(2);
+GC.Collect(
+    GC.MaxGeneration,
+    GCCollectionMode.Aggressive,
+    blocking: true,
+    compacting: true);
+
+GCMemoryInfo observed = GC.GetGCMemoryInfo(GCKind.FullBlocking);
+Debug.Assert(GC.CollectionCount(2) > before);
+```
+
+即使如此，也要比较 pause、CPU、throughput、working set、fragmentation 和后续 Gen 2 频率；强制收集可能过早晋升仍会继续存活的对象。`CompactOnce` 只影响下一次适用 LOH compact，设置后不能仅凭源码断言已压缩。
+
+<Callout type="trap" title="陷阱：用 GC.Collect 修复逻辑保留">
+  强制回收不能释放仍有 GC root 路径的对象。若低峰基线持续增长，应先用快照差值、heap stats 与 gcroot/ClrMD 找 owner；周期 Collect 只增加暂停，还可能暂时掩盖高分配而不改变 retained graph。
+</Callout>
+
+## AddMemoryPressure 怎样告诉 GC 托管外成本
+
+<Term def="用 AddMemoryPressure/RemoveMemoryPressure 成对申报由轻量托管包装器持有的大额本机内存，帮助运行时调整回收调度的提示。">本机内存压力</Term>
+
+GC 按 managed allocation budget 触发，无法从一个 32-byte wrapper 推断它持有 500 MiB native buffer。成功取得本机内存后 Add，确实释放后以相同 byte count Remove；扩容/缩容按差值配对。它不是 native allocator、限额或资源所有权机制，也不能替代 Dispose/SafeHandle。
+
+```csharp
+sealed class NativeImage : IDisposable
+{
+    private nuint _bytes;
+    private SafeImageHandle? _handle;
+
+    public NativeImage(nuint bytes)
+    {
+        _handle = NativeApi.AllocateImage(bytes);
+        _bytes = bytes;
+        GC.AddMemoryPressure(checked((long)bytes));
+    }
+
+    public void Dispose()
+    {
+        SafeImageHandle? handle = Interlocked.Exchange(ref _handle, null);
+        if (handle is null) return;
+        handle.Dispose();
+        GC.RemoveMemoryPressure(checked((long)_bytes));
+        _bytes = 0;
+    }
+}
+```
+
+构造失败不得 Add，重复 Dispose 不得重复 Remove；若 SafeHandle 的兜底释放承担遗漏 Dispose，还要确保 pressure 的最终配对策略不会依赖复杂 finalizer 逻辑。过度/重复申报会诱发无收益 Gen 2，漏 Remove 会长期扭曲启发式。
+
+## no-GC region 如何预算和退出
+
+<Term def="TryStartNoGCRegion 在预算可用时尝试让关键路径不发生 GC 的特殊延迟模式；预算超额或显式 GC 会提前终止，End 可能抛异常。">no-GC region</Term>
+
+先从关键路径 SOH/LOH 分配速率与最长时长推导 `totalSize`/`lohSize`，加入并发和隐藏框架分配余量。调用不能嵌套；TryStart 返回 false 时不得假定已进入。`disallowFullBlockingGC`/是否允许进入前 full blocking GC 要按重载和延迟目标选择，进入前的一次长暂停可能比关键区内暂停更糟。
+
+<DnmNoGcBudgetLab />
+
+```csharp
+bool started = GC.TryStartNoGCRegion(
+    totalSize: 96L * 1024 * 1024,
+    lohSize: 16L * 1024 * 1024,
+    disallowFullBlockingGC: true);
+
+if (!started)
+    return RunFallbackPath();
+
+try
+{
+    return RunBoundedCriticalPath();
+}
+finally
+{
+    if (GCSettings.LatencyMode == GCLatencyMode.NoGCRegion)
+        GC.EndNoGCRegion();
+    else
+        RecordBudgetOverrun();
+}
+```
+
+即使状态检查为 NoGCRegion，`EndNoGCRegion` 仍应在外围捕获并记录 `InvalidOperationException`，因为超预算或诱导 GC 会使模式提前结束。验收至少记录 TryStart 成功率、实际 SOH/LOH 分配、关键区时长、End 结果、fallback 延迟和窗口内 GC events。
+
+<Callout type="trap" title="陷阱：只在成功路径 EndNoGCRegion">
+  关键区异常、取消或提前返回都会留下特殊模式，影响后续全进程行为。End 必须在 finally；但也不能无条件调用，因为 TryStart=false、超预算或模式已结束时 End 会抛。把 started、当前模式和 End outcome 都纳入状态机与遥测。
+</Callout>
+
+## RefreshMemoryLimit 为什么不能放进轮询循环
+
+<Term def="宿主或容器内存限制发生真实变化后，让 GC 重新读取并更新限制相关状态的 API；更新过程会暂停并恢复运行时。">内存限制刷新</Term>
+
+`GC.RefreshMemoryLimit()` 适用于动态 memory limit 已改变且运行时需重新计算 heap limit 的场景，不是获取最新指标的 getter。调用会 suspend runtime 更新 GC state，再 resume；频繁轮询会制造人为暂停。先验证 cgroup/job/host limit 已更新，再单次调用并记录前后 `TotalAvailableMemoryBytes`、pause 和错误。
+
+```csharp
+long before = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
+ApplyHostMemoryLimit(newLimitBytes);
+GC.RefreshMemoryLimit();
+long after = GC.GetGCMemoryInfo().TotalAvailableMemoryBytes;
+```
+
+GC heap hard limit 仍不等于进程 RSS 限额，native、stack、code 和映射需要余量。若运行时/hosting configuration 不支持动态刷新，要按 API 异常和部署回滚，而不是重试风暴。
+
+## full-GC notification 是提示而非准时闹钟
+
+<Term def="通过 Register/WaitForFullGCApproach/WaitForFullGCComplete/Cancel 观察 full GC 接近与完成的状态机，可用于负载转移但不保证精确提前量。">full-GC 通知</Term>
+
+注册阈值为 1–99，分别针对 Gen 2 promoted 与 LOH 条件；运行时不会检查每次小分配，其他原因也可触发 full GC，因此通知时间不确定。Approach 与 Complete 应成对处理，等待必须有 timeout/cancellation；background/concurrent 情况下 Complete 可能返回 `NotApplicable`。
+
+```csharp
+GC.RegisterForFullGCNotification(10, 10);
+try
+{
+    while (!shutdown.IsCancellationRequested)
+    {
+        GCNotificationStatus status = GC.WaitForFullGCApproach(500);
+        if (status == GCNotificationStatus.Succeeded)
+            router.DrainNewRequests();
+        else if (status is GCNotificationStatus.Canceled or GCNotificationStatus.NotApplicable)
+            break;
+
+        status = GC.WaitForFullGCComplete(2_000);
+        if (status == GCNotificationStatus.Succeeded)
+            router.ResumeRequests();
+    }
+}
+finally
+{
+    GC.CancelFullGCNotification();
+}
+```
+
+生产状态机还要处理 timeout 后是否恢复、注册失败、进程关闭和重复 drain。通知适合降低某实例关键窗口的负载，不应在收到信号后无条件 `Collect`。
+
+## EventPipe 与 DiagnosticsClient 怎样编程化采集
+
+<Term def="跨平台运行时事件传输机制；DiagnosticsClient 通过诊断端口启动 session、请求 dump 或附加 profiler，事件按 provider、level 与 keyword 过滤。">EventPipe 诊断会话</Term>
+
+`Microsoft.Diagnostics.NETCore.Client` 是 `dotnet-trace`、`dotnet-counters`、`dotnet-dump` 等工具的底层库。自定义工具可对目标 PID 启动 EventPipe session，订阅 runtime GC keyword，并用 TraceEvent 解析 GCStart/Stop、heap stats 与 allocation tick。provider 名、keyword、level、rundown 和 stack 选择决定数据与开销。
+
+```csharp
+var providers = new[]
+{
+    new EventPipeProvider(
+        "Microsoft-Windows-DotNETRuntime",
+        EventLevel.Informational,
+        (long)ClrTraceEventParser.Keywords.GC | 0x40000000L),
+};
+
+var client = new DiagnosticsClient(processId);
+using EventPipeSession session = client.StartEventPipeSession(
+    providers,
+    requestRundown: false);
+using var source = new EventPipeEventSource(session.EventStream);
+source.Clr.GCStart += data => OnGcStart(data);
+source.Clr.GCStop += data => OnGcStop(data);
+source.Process();
+```
+
+`0x40000000` StackKeyword 可让部分 EventPipe 事件后跟 stack walk；它不是所有事件都有栈的保证，并会增加数据量。工具需限制时长/文件大小，处理 dropped events、目标退出、版本 payload 差异，并保存 PID、process start time、runtime 和 provider 配置。
+
+## 诊断端口为什么也是安全边界
+
+诊断端口能抓 dump、trace，并暴露进程详细状态；dump 可能含凭据和用户数据。默认同用户/高权限访问仍未必符合多租户威胁模型。部署应明确 `DOTNET_EnableDiagnostics`、Unix socket/pipe 权限、sidecar 身份、产物加密、保留期和审计；禁用诊断会同时禁用外部 dotnet-* 工具，必须有替代采集通道。
+
+<Callout type="trap" title="陷阱：把诊断 session 当成零开销常驻监控">
+  provider、keyword、stack、采样率与事件量决定开销。全量 allocation stack 或无限 session 会消耗 CPU、内存和 I/O，甚至改变待诊断现象。常驻用低成本 metrics，异常窗口再升级为有界 EventPipe，最后按证据需求抓 dump。
+</Callout>
+
+## ClrMD 怎样把 dump 证明自动化
+
+<Term def="Microsoft.Diagnostics.Runtime 提供的托管诊断库，可加载 dump 或连接目标，枚举 CLR、heap、object、type、root、thread 与 finalizer 等运行时结构。">ClrMD 堆检查</Term>
+
+ClrMD 适合把“每次手工 dumpheap/gcroot”变成固定报告：按 type 汇总 count/size，筛选增长类型，枚举 roots/引用构造保留路径。它读取的是目标 runtime 数据结构，包版本、DAC、架构和 dump 完整度必须兼容；堆损坏或截断时要报告不确定性。
+
+```csharp
+using DataTarget target = DataTarget.LoadDump(dumpPath);
+ClrRuntime runtime = target.ClrVersions.Single().CreateRuntime();
+ClrHeap heap = runtime.Heap;
+
+var topTypes = heap.EnumerateObjects()
+    .Where(obj => obj.IsValid && obj.Type is not null)
+    .GroupBy(obj => obj.Type!.Name ?? "<unknown>")
+    .Select(group => new
+    {
+        Type = group.Key,
+        Count = group.LongCount(),
+        Bytes = group.Sum(obj => checked((long)obj.Size)),
+    })
+    .OrderByDescending(row => row.Bytes)
+    .Take(30);
+```
+
+一次 top-types 只能证明当前体量，不能证明泄漏。保存两个可比负载/低峰快照，比较 type delta，再对增长对象枚举 root path；对象地址跨 GC 不稳定，关联应以类型、业务标识和根类别为主。
+
+<DnmDiagnosticsEvidenceLab />
+
+## 三步把 API 调用变成证据闭环
+
+<Stepper>
+  <Step title="第一步：区分观察与干预">
+    为每个 System.GC 调用写明口径、前置状态、可能暂停和不支持路径；默认先观察，只有基线证明收益才加入 Collect、pressure、no-GC 或 refresh。
+
+    <DnmGcApiDecisionLab />
+  </Step>
+  <Step title="第二步：预算并演练失败状态">
+    根据 SOH/LOH 分配率和最长时长预测 no-GC region，覆盖 TryStart=false、超预算、异常、取消与 End 失败，并保留普通路径回退。
+
+    <DnmNoGcBudgetLab />
+  </Step>
+  <Step title="第三步：从时间线下钻到根路径">
+    低成本指标确定窗口，EventPipe 对齐 GC/分配/栈，dump 证明当前 heap，ClrMD 固化类型差值和 root 报告；保存运行时与采集配置。
+
+    <DnmDiagnosticsEvidenceLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- System.GC 数值有当前线程、进程累计、最近/指定回收快照等不同口径，必须带时间、Index、GCKind 和 runtime 解释
+- GC.Collect、MemoryPressure、NoGCRegion 与 RefreshMemoryLimit 都是有副作用的干预，不是通用降内存开关
+- no-GC region 必须在进入前预算 SOH/LOH，TryStart/End 不可嵌套且 End 可能因超预算或诱导回收失败
+- full-GC notification 的 Approach/Complete/Cancel 是不确定时序状态机，background GC 可能返回 NotApplicable
+- DiagnosticsClient/EventPipe 解释时间过程，dump/ClrMD 证明对象与根；诊断端口、栈和 dump 同时是性能与数据安全边界
+
+<Exercises>
+  1. **问题 1：解释矛盾指标。** `GetTotalAllocatedBytes` 快速增长、`GetTotalMemory` 基本稳定、RSS 上升，分别能和不能证明什么？
+
+  <Answer question="怎样把累计分配、live heap 与进程驻留分开？">累计分配增长证明托管分配吞吐高，不代表对象仍存活；GetTotalMemory 稳定说明估算的 managed live/allocated heap 未同速增长，但不是精确静态快照；RSS 还包含 committed GC pages、native、stack、JIT、映射和池保留。应关联 allocation/GC events、GCMemoryInfo committed/heap、working set 与 native 指标，再按窗口下钻。</Answer>
+
+  2. **问题 2：修复 no-GC 状态机。** 代码忽略 TryStart 返回值，在 finally 无条件 End，并在关键区分配超预算。会发生什么，怎样恢复？
+
+  <Answer question="TryStart、超预算和 End 应怎样闭环？">TryStart=false 时根本没进入，无条件 End 会抛；成功后超预算或显式 GC 可提前结束模式，End 同样可能抛。应先按 SOH/LOH rate×duration 加余量，false 走 fallback；finally 仅对成功状态尝试 End，检查 LatencyMode并记录 InvalidOperationException、实际分配与 GC events，保证异常/取消也退出且不重试风暴。</Answer>
+
+  3. **问题 3：建立泄漏自动证据。** metrics 显示低峰 Gen 2 heap 连续上涨，为什么先抓 EventPipe 再抓两个 dump，ClrMD 报告应包含什么？
+
+  <Answer question="从时间窗口到 root path 的证据链是什么？">metrics 只定位趋势；有界 EventPipe 对齐增长窗口、GC 类型、分配热点和请求栈；相同负载/低峰抓前后 dump，比较回收后 type count/bytes delta。ClrMD 报告应保存 runtime/DAC/架构、top delta、代表对象、root 类别与引用路径，并标注 heap 无效或截断；单次 top types 不能独立证明泄漏。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="GC 观察 API">读取运行时或回收快照且不主动改变调度的接口。</GlossaryItem>
+  <GlossaryItem term="GC 干预 API">请求回收、改变提示或进入特殊模式且可能影响暂停和预算的接口。</GlossaryItem>
+  <GlossaryItem term="GCMemoryInfo 快照">带特定 GC 口径的 heap、commit、fragmentation 与 pause 状态集合。</GlossaryItem>
+  <GlossaryItem term="本机内存压力">成对向运行时申报托管包装器背后的大额 native bytes 的调度提示。</GlossaryItem>
+  <GlossaryItem term="no-GC region">在明确分配预算内尝试抑制 GC 的关键路径模式。</GlossaryItem>
+  <GlossaryItem term="内存限制刷新">宿主限制真实变化后暂停运行时并刷新 GC limit 状态的操作。</GlossaryItem>
+  <GlossaryItem term="full-GC 通知">观察 full GC 接近和完成、用于负载协调的不确定时序状态机。</GlossaryItem>
+  <GlossaryItem term="EventPipe 诊断会话">按 provider、level、keyword 采集跨平台运行时事件的数据流。</GlossaryItem>
+  <GlossaryItem term="ClrMD 堆检查">以托管 API 自动枚举 dump/runtime 的 heap、object、type 与 root。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Pro .NET Memory Management, Second Edition, Chapter 15 Programmatical APIs"
+  adaptedUrl="https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_15"
+/>

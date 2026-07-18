@@ -1,0 +1,224 @@
+---
+title: "Chapter 10. Pattern Matching"
+type: C
+section: "Programming in Lua 4e · Real Programming"
+order: 10
+description: "掌握Lua pattern函数、grammar、captures与replacement，并实现可验证的URL encoding、tab expansion和bounded text scanning。"
+demo: true
+math: false
+sourceUrl: "https://www.lua.org/pil/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PilPatternFunctionLab, PilPatternGrammarLab, PilReplacementLab } from "@/components/mdx/lua-programming/diagrams/pattern-matching";
+
+<Objectives>
+
+- 能区分find、match、gmatch与gsub的输入和返回shape，推导capture对结果数量的影响
+- 能解释Lua pattern item、class、set、quantifier、anchor与special pattern，并判断何时必须使用plain search或parser
+- 能设计string/function/table replacement及URL、tab处理，复现empty match、byte position和替换计数故障
+
+</Objectives>
+
+## 为什么Lua Pattern不是缩小版Regular Expression
+
+Lua pattern是一套独立、紧凑的文本匹配语言，直接由string library实现。它有character classes、sets、captures、repetition、anchors、balanced pair与frontier，却没有regex alternation、brace repetition、lookaround和反斜杠escape。把PCRE pattern原样搬来，常见结果不是报错，而是匹配了另一种含义。
+
+先预测：`string.find`与`string.match`在有capture时各返回什么；`gsub`为何总有第二个返回值；pattern里的`-`何时表示minimal repetition、何时是set range、何时是literal；`()`捕获什么；`%b()`能否解析任意嵌套语言；`.`是否按Unicode code point匹配；literal user input直接当pattern会发生什么。先标byte与pattern boundary再试。
+
+<Term def="Lua string函数使用自有pattern grammar而非通用regex语法，匹配单位、magic characters与可表达结构必须按Lua规则解释。">Lua-pattern boundary</Term>要求API把pattern和literal query分开。Find提供`plain=true`，可在不escape magic characters的情况下搜索literal；其它函数若接untrusted literal，应先使用可靠escape helper或改用plain algorithm。
+
+## The Pattern-Matching Functions
+
+核心函数是`string.find`、`string.match`、`string.gmatch`与`string.gsub`。它们共享pattern grammar，却有不同result shape：find关注位置，match关注提取，gmatch返回iterator，gsub构造新string并报告replacement count。Lua string immutable，任何replacement都返回新value，不修改原string。
+
+<Term def="每个pattern函数明确返回indices、whole match、captures、iterator或replacement count，且增加capture可能改变observable result arity的协议。">match-result shape</Term>防止wrapper只用“匹配成功/失败”覆盖信息。String indices与positions按bytes计，UTF-8文本的用户可见column需要另行解码。
+
+## The function string.find
+
+`string.find(subject, pattern, init, plain)`返回first match的start与end byte indices，随后返回captures；没有match返回nil。Init可从指定position开始，negative position按string尾部计算。Plain为true时禁用pattern interpretation，按literal查找，适合文件名、用户query和protocol token。
+
+End index是inclusive。Empty match可能出现end小于start的边界形态，consumer不能假设match length至少1。循环调用find扫描时必须确保next start严格前进，否则zero-length pattern会形成infinite loop。若只需存在性，仍要区分nil与position 1，不能用错误的numeric truthiness移植逻辑。
+
+## The function string.match
+
+`string.match(subject, pattern, init)`不返回indices；有captures时返回capture values，没有captures时返回whole matched substring。增加一对括号可能把原本的whole match API变成只返回capture，这是behavioral change。需要位置与captures时用find，而不是先match再重新搜索substring。
+
+Multiple captures产生multiple results，assignment与wrapper还会按第6章规则截断。Optional capture可能为nil，调用方要记录arity与语义。Anchored full validation通常写`^pattern$`并检查result，但若pattern有capture，返回的是capture，不一定是whole input；validation最好显式返回boolean与parsed fields。
+
+## The function string.gmatch
+
+`string.gmatch(subject, pattern)`返回iterator，每次yield captures；若pattern没有capture则yield whole match。Matches通常non-overlapping，iterator负责前进。以`^`开头的anchor与全局迭代没有实用组合，因为anchor会阻止从后续位置继续搜索；需要整串validation用match/find，需要scan则移除anchor并明确token boundary。
+
+```lua
+local text = "id=17; state=ready; retries=3"
+
+local start_at, end_at, first_key, first_value =
+  string.find(text, "(%a+)=(%w+)")
+assert(start_at == 1 and first_key == "id" and first_value == "17")
+
+local state = string.match(text, "state=(%a+)")
+assert(state == "ready")
+
+local fields = {}
+for key, value in string.gmatch(text, "(%a+)=(%w+)") do
+  fields[key] = value
+end
+assert(fields.retries == "3")
+```
+
+<PilPatternFunctionLab />
+
+<Stepper>
+  <Step title="切换find、match、gmatch和gsub"><PilPatternFunctionLab /></Step>
+  <Step title="填写Result Ledger">对无capture、一个capture、多个capture、optional capture和no match记录result count、type与byte positions。</Step>
+  <Step title="构造Progress Test">让pattern可匹配empty string，逐次记录start/end与next position，证明scanner有strict progress和input budget。</Step>
+</Stepper>
+
+<Callout type="trap" title="find和match只是一个返回位置、一个返回文本，可以随时互换">
+Find还会在indices后返回captures；match有capture时只返回captures、无capture时才返回whole match。Wrapper、multiple assignment和新增括号都会改变observable shape，必须按API选择。
+</Callout>
+
+## Patterns
+
+Pattern由items组成。Ordinary character匹配自身；`.`匹配任意character unit；`%a`字母、`%d`数字、`%s`空白、`%w`alphanumeric、`%p`punctuation、`%c`control、`%x`hexadecimal、`%z`zero byte等classes匹配一个byte character。大写class如`%A`表示complement。Class结果可能受locale影响，协议解析更适合explicit ASCII sets。
+
+Bracket set如`[abc]`、`[0-9]`或`[^,]`匹配一个集合成员。Set内部range、caret和hyphen位置有特殊规则；class与set组合要按manual，不靠regex经验。Lua strings可含NUL，`%z`可匹配它；C boundary仍要防止NUL truncation。
+
+Magic characters包括括号、点、百分号、加号、减号、星号、问号、方括号、caret与dollar等；要匹配literal magic通常在前面加`%`。Pattern escape是percent，不是backslash。<Term def="Ordinary characters、magic characters、percent classes与bracket sets共同定义单个pattern item，literal data必须在进入grammar前隔离。">pattern-item grammar</Term>是构造dynamic pattern的安全线。
+
+## Repetition、Anchors与Special Patterns
+
+Quantifier作用于前一个pattern item：`+` one-or-more，`*` zero-or-more greedy，`-` zero-or-more minimal，`?` optional。Minimal不等于全局最短match solver，只按Lua matching strategy扩展到后续pattern可成功。Lua pattern没有`|` alternation；有限分支可在Lua code中分别尝试，复杂grammar应使用parser。
+
+Caret只在pattern开头作为start anchor，dollar只在结尾作为end anchor；其它位置通常按literal规则解释。Full-string parse用两端anchors，prefix parse只用caret。遗漏anchor会让validator接受包含合法substring的恶意input。
+
+`%bxy`匹配以x开始、y结束且平衡的substring，例如`%b()`；它处理一类成对delimiter，但不理解quotes、escapes、comments或多种token。`%f[set]`是frontier，匹配当前位置前后从not-in-set到in-set的边界，不消耗character。Backreference `%1`可匹配前面capture的相同text。
+
+<PilPatternGrammarLab />
+
+<Stepper>
+  <Step title="切换Classes/Sets、Repetition、Anchors和Special Patterns"><PilPatternGrammarLab /></Step>
+  <Step title="逐Item展开">把pattern拆成item、quantifier、capture与anchor，列每一步候选byte range，禁止用regex engine术语替代Lua语义。</Step>
+  <Step title="建立Adversarial Corpus">覆盖empty、NUL、multibyte UTF-8、long repeated prefix、unbalanced delimiters、escaped delimiter和locale差异，测correctness与time budget。</Step>
+</Stepper>
+
+## Captures
+
+Parentheses捕获其内部pattern匹配的substring；nested/adjacent captures按opening parenthesis排序。Empty capture `()`不捕获text，而返回当前byte position。<Term def="Capture把匹配中的substring或当前位置暴露为额外results，并按opening order影响find、match、gmatch与gsub callback参数。">capture-arity contract</Term>要求修改pattern时同步修改consumer。
+
+Captured text可在同一pattern中用`%1`等引用，也可在replacement中引用，但两处语法角色不同。Capture数量有实现/语言限制，不应生成无界dynamic captures。UTF-8中的position capture是byte index；tab expansion若按terminal column处理Unicode wide characters，需要专门width算法，不可直接用position modulo。
+
+Captures适合flat extraction，不提供typed conversion。提取数字后用`tonumber`并验证range，提取identifier后验证完整length/character policy。Pattern match成功不等于domain validation成功。
+
+## The function string.gsub与Replacements
+
+`string.gsub(subject, pattern, replacement, limit)`返回new string与实际replacement count。Limit控制最多替换次数。Replacement为string时，`%0`插入whole match，`%1`到`%9`插入captures，literal percent需要escape。Replacement string有自己的percent syntax，不能把pattern escape规则机械复用。
+
+Replacement为function时，若有captures则以captures为arguments，否则传whole match；返回string/number作为replacement，返回nil或false保留原match。Table replacement用first capture作key，无capture时用whole match；lookup为nil/false也保留原match。<Term def="gsub的string、function与table replacement分别定义capture插值、callback参数或lookup key，并用第二返回值证明替换次数。">replacement dispatch contract</Term>避免missing table key被误认为删除。
+
+```lua
+local dictionary = { colour = "color", centre = "center" }
+local normalized, changed = string.gsub(
+  "colour at the centre",
+  "(%a+)",
+  dictionary
+)
+assert(normalized == "color at the center" and changed == 4)
+
+local redacted, secrets = string.gsub("token=abc123", "token=(%w+)", function(value)
+  return "token=" .. string.rep("*", #value)
+end)
+assert(redacted == "token=******" and secrets == 1)
+```
+
+注意changed是pattern match/replacement attempts count；table/function返回nil保留原text时，count的具体语义应按manual和target runtime验证，不要直接当“文本实际发生变化的字符数”。需要audit时callback自己记录matched、replaced、preserved原因。
+
+<PilReplacementLab />
+
+<Stepper>
+  <Step title="切换String、Function、Table和Position Capture"><PilReplacementLab /></Step>
+  <Step title="填写Replacement Matrix">覆盖无capture、多capture、missing key、callback false、literal percent、limit为0/1和result未变化，记录output与count。</Step>
+  <Step title="限制Dynamic Work">为input length、match count与callback cost设上限；对可能empty match的pattern证明gsub前进并在预算内结束。</Step>
+</Stepper>
+
+## URL encoding
+
+URL encoding必须先明确component：query name/value、path segment与完整URL的allowed set不同，不能用一个gsub处理所有位置。Percent-encoding按bytes输出两位hex；UTF-8文本先编码为bytes，再逐byte决定是否保留。Space在HTML form encoding中常变`+`，在一般URI component中通常编码为`%20`；decoder对`+`的解释也取决于component。
+
+```lua
+local function encode_query_component(value)
+  value = string.gsub(value, "\n", "\r\n")
+  value = string.gsub(value, "([^%w%-_%.~ ])", function(byte)
+    return string.format("%%%02X", string.byte(byte))
+  end)
+  return string.gsub(value, " ", "+")
+end
+
+local function expand_tabs(line, width)
+  assert(width > 0)
+  return (string.gsub(line, "()\t", function(position)
+    local column = position - 1
+    return string.rep(" ", width - (column % width))
+  end))
+end
+
+assert(encode_query_component("a+b c") == "a%2Bb+c")
+assert(expand_tabs("ab\tx", 4) == "ab  x")
+```
+
+Encoder必须避免double encoding并限制output growth；decoder要拒绝invalid/incomplete percent triplets，而不是部分吞掉。Security判断应在canonical decode后执行，同时防止多次decode绕过。生产系统优先使用经过测试的URL library，本例用于理解captures与replacement，不替代完整URI标准实现。
+
+## Tab expansion
+
+Tab expansion依赖当前位置。Pattern `()\t`先用position capture返回tab的byte index，callback计算到下一个tab stop的spaces。对于ASCII line，`position-1`可近似当前column；遇到UTF-8 multibyte、combining mark、wide glyph或terminal control sequence时，byte column不等于display column。
+
+Expansion还要声明tab width、起始column、newline处理与是否保留tabs。逐行处理可把position重置；whole file gsub会让position跨lines，需要callback追踪last newline。Reverse operation“spaces变tabs”不是简单逆函数，因为spaces可能是原始内容，必须有layout policy。
+
+## Tricks of the Trade
+
+第一条技巧是选择更简单的API：literal search用plain find，不构造pattern；固定delimiter split可用bounded scanner；nested/quoted language用parser。第二条是anchor与progress：validator加`^`/`$`，scanner确保每轮消费至少一个byte。第三条是避免无约束的leading `.*`搜索和long ambiguous repetitions；必要时anchor、分段查找并设置input limit。
+
+第四条是先normalize还是先validate必须明确。Unicode normalization、case folding和locale classes会改变匹配；security token通常使用ASCII allowlist。第五条是保存证据：gsub count、find positions、parse reason和unmatched remainder都应进入tests，而不是只比最终string。
+
+<Callout type="trap" title="%b()能解析所有带括号的程序文本">
+Balanced pattern只追踪一类delimiter，不理解string literal、escape、comment或多token grammar。它适合受控片段；解析source、JSON或SQL应使用正式parser并限制深度和输入规模。
+</Callout>
+
+## 本章回顾：Pattern、Literal与Parser必须分层
+
+1. Find返回indices与captures，match返回captures或whole match，gmatch迭代，gsub返回new string与count。
+2. Lua pattern有percent classes、sets、四种quantifiers和anchors，不是PCRE语法。
+3. Captures改变result arity；empty capture返回byte position，可驱动位置相关replacement。
+4. Gsub的string/function/table replacement有不同dispatch与nil/false行为，count必须检查。
+5. URL encoding依赖component与bytes，tab expansion依赖column model，二者都不能忽略UTF-8。
+6. Literal query优先plain find，nested language使用parser；所有scanner都要证明progress与资源上限。
+
+<Exercises>
+
+**问题 1：为什么给Match Pattern增加Capture会破坏原Caller？**
+
+<Answer>无capture时string.match返回whole match；有capture后返回capture values。原caller若把首结果当完整token，会静默收到子串；多个captures还改变arity。用find获取位置或让wrapper固定返回record，并为pattern变更测试result count。</Answer>
+
+**问题 2：怎样扫描可能匹配Empty String的Pattern而不死循环？**
+
+<Answer>每轮记录start/end与next position；若match未消费byte，手动按一个byte或一个解码后的code point前进，并处理end-of-input一次性empty match。更好是重写pattern要求non-empty item。加入iteration上限和long empty input测试。</Answer>
+
+**问题 3：Table Replacement的Missing Key为何不会自动删除Match？**
+
+<Answer>Gsub table lookup为nil或false时保留original match，不是替换为空串。要删除就为该key存empty string，或用function明确返回`""`；同时检查replacement count并记录preserved/replaced policy。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="Lua-pattern boundary" definition="Lua string matching使用自有pattern grammar而非通用regex的边界。" />
+  <GlossaryItem term="match-result shape" definition="Pattern函数明确indices、whole match、captures、iterator或count的结果协议。" />
+  <GlossaryItem term="pattern-item grammar" definition="Ordinary/magic characters、percent classes与sets组成单个pattern item的规则。" />
+  <GlossaryItem term="capture-arity contract" definition="Captures按opening order增加substring或position results的数量协议。" />
+  <GlossaryItem term="replacement dispatch contract" definition="Gsub按string、function或table分派capture和replacement行为的协议。" />
+</Glossary>
+
+<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 10: Pattern Matching" adaptedUrl="https://www.lua.org/pil/" />

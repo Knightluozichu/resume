@@ -201,8 +201,9 @@ export function DevelopmentCycleDiagram({ step = 1 }: Props) {
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        编程七步骤形成一个循环：定义目标 → 设计 → 编写 → 编译 → 运行 → 测试 → 维护。
-        每完成一轮，根据反馈回到"定义目标"或"设计"，开始下一轮迭代。
+        编程七步骤形成一个循环：定义目标 → 设计 → 编写 → 编译 → 运行 → 测试 →
+        维护。
+        每完成一轮，根据反馈回到&quot;定义目标&quot;或&quot;设计&quot;，开始下一轮迭代。
       </figcaption>
     </figure>
   );

@@ -1,0 +1,246 @@
+---
+title: "第 12 章 组件的实现原理"
+type: A
+section: "Vue.js设计与实现 · 组件化"
+order: 12
+description: "组件实例汇集自身状态、props、slots、生命周期和子树；effect驱动自更新，父VNode变化驱动被动更新，setup连接组合式API。 本页按权威目录独立教学重构。"
+demo: true
+math: false
+sourceUrl: "https://time.geekbang.org/column/article/740758"
+draft: false
+---
+
+import {
+  Vdi12ComponentImplementationMapLab,
+  Vdi12ComponentImplementationExperimentLab,
+  Vdi12ComponentImplementationEvidenceLab,
+} from "@/components/mdx/vuejs-design-implementation/diagrams/vdi-12-component-implementation";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释第 12 章 组件的实现原理的核心机制，并把它放回6篇18章的实现主线
+- 能实现本页最小算法，比较正常、边界、失败和恢复轨迹
+- 能指出依赖、VNode、组件实例、AST或请求状态的唯一所有者
+- 能设计证据回答“实例在同一身份下复用，自更新和被动更新路径可区分，props只读且可刷新，setup上下文及时恢复，生命周期顺序稳定。”是否成立
+
+</Objectives>
+
+## 直觉：从输入、状态到提交
+
+组件实例汇集自身状态、props、slots、生命周期和子树；effect驱动自更新，父VNode变化驱动被动更新，setup连接组合式API。 本书不是对最终源码逐行翻译，而是从规范与最小模型逐步构造框架。只看最终DOM会隐藏错误依赖、重复移动、陈旧任务和激活错位；先画输入、状态所有者、调度点、输出和清理责任。
+
+<Vdi12ComponentImplementationMapLab />
+
+## 权威目录定位
+
+作者授权数字版前言明确全书分为6篇18章，作者GitHub仓库提供配套代码。本页依照公开完整目录逐项覆盖 **9** 个条目；目录名称仅用于追踪，正文为独立教学重构。
+
+- 12.1 渲染组件
+- 12.2 组件状态与自更新
+- 12.3 组件实例与组件的生命周期
+- 12.4 props与组件的被动更新
+- 12.5 setup函数的作用与实现
+- 12.6 组件事件与emit的实现
+- 12.7 插槽的工作原理与实现
+- 12.8 注册生命周期
+- 12.9 总结
+
+## 核心概念与所有权
+
+<Term def="保存组件状态、props、slots、生命周期和渲染子树的运行对象。">
+  组件实例
+</Term>
+、<Term def="由父组件提供并触发子组件被动更新的只读输入。">props</Term>、
+<Term def="在组件初始化阶段建立组合式状态、方法和渲染上下文的函数。">
+  setup
+</Term>
+、<Term def="按事件名查找并调用父级传入处理器的组件事件机制。">emit</Term>、
+<Term def="由父级提供内容函数、由子级决定调用位置的内容分发机制。">插槽</Term>
+。每个概念都要回答：谁创建输入，哪个结构保存状态，何种操作可以修改，错误如何传播，生命周期结束后谁清理。
+
+|   # | 概念     | 精确定义                                                   |
+| --: | -------- | ---------------------------------------------------------- |
+|   1 | 组件实例 | 保存组件状态、props、slots、生命周期和渲染子树的运行对象。 |
+|   2 | props    | 由父组件提供并触发子组件被动更新的只读输入。               |
+|   3 | setup    | 在组件初始化阶段建立组合式状态、方法和渲染上下文的函数。   |
+|   4 | emit     | 按事件名查找并调用父级传入处理器的组件事件机制。           |
+|   5 | 插槽     | 由父级提供内容函数、由子级决定调用位置的内容分发机制。     |
+
+## 机制拆解
+
+### 1. 建立机制边界
+
+实例保存state、props、isMounted、subTree和mounted钩子。首次effect执行调用render并挂载子树，之后状态变化得到新subTree并patch旧树；currentInstance只在setup和生命周期注册期间有效。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+### 2. 处理关键算法
+
+父组件更新时比较新旧组件VNode，若props变化则复用实例并更新浅响应props，再调度子组件被动更新。attrs与props按声明拆分，props只读语义不能阻止父级提供新值。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+### 3. 签发失败与恢复
+
+setup接收浅只读props和emit、slots等上下文，返回函数可作为render，返回对象则暴露给渲染上下文。slots是返回VNode数组的函数，避免父级内容在错误组件上下文提前求值。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+## 三阶段可视化推演
+
+<Stepper>
+  <Step title="1. 建立最小模型">
+    固定运行时、输入和初始状态，先预测数据结构与执行顺序。
+    <Vdi12ComponentImplementationMapLab />
+  </Step>
+  <Step title="2. 注入算法边界">
+    只改变一个变量，观察分支切换、重复key、请求乱序、非法模板或激活不匹配的首偏离点。
+    <Vdi12ComponentImplementationExperimentLab />
+  </Step>
+  <Step title="3. 清除故障并重放">
+    用相同输入恢复，核对依赖集合、任务队列、宿主节点、组件实例和请求状态是否收敛。
+    <Vdi12ComponentImplementationEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小可运行实验
+
+```js
+const instance = {
+  state: reactive(data()),
+  props: shallowReactive(props),
+  isMounted: false,
+  subTree: null,
+};
+effect(() => {
+  const subTree = render.call(renderContext);
+  instance.isMounted
+    ? patch(instance.subTree, subTree, container)
+    : patch(null, subTree, container);
+  instance.subTree = subTree;
+  instance.isMounted = true;
+});
+```
+
+保存结构化证据，不以一次console输出或最终截图替代过程：
+
+```yaml
+book: Vue.js设计与实现
+page: vdi-12-component-implementation
+sample: normal | boundary | failure | recovery
+runtime: pinned
+input_fixture: fixed
+first_divergence: null
+cleanup_complete: true
+```
+
+故障注入一次只改变一个变量：
+
+```text
+baseline -> inject(one_fault) -> stop_at_first_divergence
+recover -> replay_same_input
+assert -> precise_dependency && stable_identity && ordered_tasks && no_retained_resource
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：每次父组件更新都新建子组件实例，局部状态和生命周期被无意重置。**
+  必须保存输入、执行轨迹和首偏离点，而不是只比较最终结果。
+</Callout>
+
+<Callout type="trap">
+  **误区二：setup结束后仍把currentInstance留在全局，异步回调向错误组件注册生命周期。**
+  必须加入失败与恢复样本，并检查依赖、节点、任务和状态是否清理。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 变化                 | 预期         | 证据           |
+| ---- | -------------------- | ------------ | -------------- |
+| 正常 | 合法输入与稳定身份   | 主链完成     | 输出与轨迹一致 |
+| 边界 | 空值、重复或极限序列 | 有界退化     | 不越界、不重复 |
+| 失败 | 异常、乱序、非法结构 | 首偏离点停止 | 错误显式传播   |
+| 恢复 | 清除故障后同输入重放 | 收敛到正常   | 无旧依赖和资源 |
+
+<Vdi12ComponentImplementationEvidenceLab />
+
+本页签发不变量：**实例在同一身份下复用，自更新和被动更新路径可区分，props只读且可刷新，setup上下文及时恢复，生命周期顺序稳定。**
+
+## 练习
+
+<Exercises>
+
+**问题 1** 第 12 章 组件的实现原理的核心主张是什么？
+
+<Answer>
+  组件实例汇集自身状态、props、slots、生命周期和子树；effect驱动自更新，父VNode变化驱动被动更新，setup连接组合式API。
+</Answer>
+
+**问题 2** 如何把本页目录变成可执行证据？
+
+<Answer>
+  按公开顺序建立追踪表，至少覆盖12.1 渲染组件、12.2 组件状态与自更新、12.3
+  组件实例与组件的生命周期、12.4 props与组件的被动更新、12.5
+  setup函数的作用与实现、12.6 组件事件与emit的实现、12.7
+  插槽的工作原理与实现；其余条目已在上方逐项列出，并为每组条目记录输入、状态、输出、失败与恢复条件。
+</Answer>
+
+**问题 3** 本页怎样签发？
+
+<Answer>
+  实例在同一身份下复用，自更新和被动更新路径可区分，props只读且可刷新，setup上下文及时恢复，生命周期顺序稳定。
+  同一运行时与输入必须能重放正常、边界、失败和恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **组件实例**：保存组件状态、props、slots、生命周期和渲染子树的运行对象。
+- **props**：由父组件提供并触发子组件被动更新的只读输入。
+- **setup**：在组件初始化阶段建立组合式状态、方法和渲染上下文的函数。
+- **emit**：按事件名查找并调用父级传入处理器的组件事件机制。
+- **插槽**：由父级提供内容函数、由子级决定调用位置的内容分发机制。
+- 官方目录、最小实现、故障注入与恢复证据已经放进同一验收链。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="组件实例">
+    保存组件状态、props、slots、生命周期和渲染子树的运行对象。
+  </GlossaryItem>
+  <GlossaryItem term="props">
+    由父组件提供并触发子组件被动更新的只读输入。
+  </GlossaryItem>
+  <GlossaryItem term="setup">
+    在组件初始化阶段建立组合式状态、方法和渲染上下文的函数。
+  </GlossaryItem>
+  <GlossaryItem term="emit">
+    按事件名查找并调用父级传入处理器的组件事件机制。
+  </GlossaryItem>
+  <GlossaryItem term="插槽">
+    由父级提供内容函数、由子级决定调用位置的内容分发机制。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="霍春阳著，人民邮电出版社，2022年1月，501页，ISBN 9787115583864。作者授权数字版前言确认6篇18章的结构与逐章范围，作者GitHub仓库提供配套代码，公开完整目录用于二三级条目追踪；正文为独立教学重构。"
+  adaptedUrl="https://time.geekbang.org/column/article/740758"
+/>
+
+配套代码：https://github.com/HcySunYang/code-for-vue-3-book

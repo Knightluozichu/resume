@@ -1,0 +1,205 @@
+---
+title: "Chapter 33. Threads and States"
+type: C
+section: "Programming in Lua 4e · The C API"
+order: 33
+description: "区分Lua threads、independent states与OS threads，掌握coroutine rooting/resume、跨state消息复制和按需开放标准库。"
+demo: true
+math: false
+sourceUrl: "https://www.lua.org/pil/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PilThreadStateTopologyLab, PilCoroutineApiLab, PilStateIsolationLab } from "@/components/mdx/lua-programming/diagrams/threads-states";
+
+<Objectives>
+
+- 能解释Lua thread、global state和OS thread分别私有/共享什么，并验证同一state不可被并发无锁进入
+- 能实现lua_newthread、registry rooting、lua_resume与lua_xmove流程，处理yield/result/error和coroutine回收
+- 能设计independent states之间的bounded message schema与on-demand library surface，验证隔离、背压和capability
+
+</Objectives>
+
+## 为什么Threads and States先统一三个名词
+
+Lua API中的thread通常指coroutine：它有独立execution stack，却与同一global state中的其它threads共享globals、registry、heap和GC。`lua_State *`既可指main thread也可指coroutine。独立调用`luaL_newstate`才创建另一套global state。OS thread则是native scheduler实体，三者不能混称。
+
+先预测：两个Lua coroutines改同一global table是否互相可见；只有C pointer指向newthread、却把thread object从stack pop且不root，会不会安全；`lua_xmove`能否把table移到另一个`luaL_newstate`；两个OS workers能否同时进入同一state的不同coroutines；独立states间传function要复制什么；只开base/table/string库是否仍自动允许C module loader。
+
+<Term def="Shared-global-state thread拥有独立Lua stack和status，但与同一state内所有threads共享globals、registry、heap、allocator与GC。">shared-global-state thread</Term>提供cooperative concurrency而不是memory isolation。
+
+## Multiple Threads
+
+`lua_newthread(L)`创建coroutine并把thread object压到parent stack，返回其`lua_State *`。C pointer不是GC root：若thread object被pop且没有registry/table reference，suspended coroutine可能被回收。Scheduler先`luaL_ref`保存thread，terminal后`luaL_unref`。
+
+<Term def="Coroutine root reference是在thread object离开临时stack前建立的Lua GC root，保证suspended stack与其values存活到scheduler释放。">coroutine root reference</Term>还应绑定task ID、owner和cancel state。
+
+```c
+typedef struct LuaTask { lua_State *thread; int ref; } LuaTask;
+
+static LuaTask create_task(lua_State *L, const char *function_name) {
+  LuaTask task = {0};
+  task.thread = lua_newthread(L);       /* thread object is on L */
+  task.ref = luaL_ref(L, LUA_REGISTRYINDEX); /* pop and root it */
+  lua_getglobal(task.thread, function_name);
+  if (!lua_isfunction(task.thread, -1)) {
+    lua_settop(task.thread, 0);
+    luaL_unref(L, LUA_REGISTRYINDEX, task.ref);
+    task.thread = NULL; task.ref = LUA_NOREF;
+  }
+  return task;
+}
+
+static int resume_task(lua_State *owner, LuaTask *task, int nargs) {
+  int status = lua_resume(task->thread, owner, nargs); /* Lua 5.3 API */
+  if (status == LUA_YIELD) return status;
+  /* LUA_OK: results; otherwise error object is on the child stack. */
+  lua_settop(task->thread, 0);
+  luaL_unref(owner, LUA_REGISTRYINDEX, task->ref);
+  task->thread = NULL; task->ref = LUA_NOREF;
+  return status;
+}
+```
+
+生产scheduler在clear前复制results/error/traceback，并区分yield values和final results。Lua 5.4的`lua_resume`签名不同，本书面向Lua 5.3，编译时不能混用header/API。
+
+<PilCoroutineApiLab />
+
+<Stepper>
+  <Step title="切换Create、Prepare、Resume和Release"><PilCoroutineApiLab /></Step>
+  <Step title="建立Task Ledger">记录global state、thread pointer、registry ref、status、stack top和owner，覆盖yield、return、error与cancel。</Step>
+  <Step title="做GC Root测试">创建后移除临时stack引用并强制GC，对比有/无registry ref；terminal后unref证明对象可回收。</Step>
+</Stepper>
+
+## lua_xmove、Scheduling与Shared Heap
+
+`lua_xmove(from,to,n)`在共享同一global state的threads之间移动top n values，常用于准备arguments或收集results。它不能跨independent states；目标stack需有capacity。Tables/userdata移动后仍是同一heap object，不是深拷贝。
+
+<Term def="Same-state stack transfer用lua_xmove在共享heap的两个Lua threads间搬运stack references，不提供serialization或isolation。">same-state stack transfer</Term>必须在同一serialized owner上下文执行。一个OS threadresume时，另一个不得同时访问该state、registry或siblings。
+
+<PilThreadStateTopologyLab />
+
+<Stepper>
+  <Step title="切换Lua Thread、Main Thread、Lua State和OS Thread"><PilThreadStateTopologyLab /></Step>
+  <Step title="画Sharing Topology">标每个stack、global table、registry、heap/GC、allocator、OS owner和host resources，找出所有共享边。</Step>
+  <Step title="验证Serialization">让多个native producers只enqueue task commands，由单一state owner执行Lua API；用thread sanitizer/断言拒绝wrong-thread进入。</Step>
+</Stepper>
+
+<Callout type="trap" title="同一State的不同Coroutines可以放到多个OS Threads并行运行">
+它们共享global state、heap与GC，普通Lua构建不允许并发无保护进入。把整个state绑定一个owner并串行resume；需要CPU并行时使用独立states或processes及消息传递。
+</Callout>
+
+## Lua States
+
+每次`luaL_newstate`创建独立global state：不同heap、globals、registry、GC与allocator bookkeeping。两个states之间没有Lua object identity共享，close一个不应触碰另一个。Host可以把每个state绑定到不同OS worker，实现真正并行，但共享native service仍需同步和capability控制。
+
+<Term def="State isolation boundary由独立heap、globals、registry、GC、allocator、library surface与单一OS owner组成。">state isolation boundary</Term>比coroutine强，但不是自动security sandbox：host暴露的C functions仍可共享process authority。
+
+```c
+typedef struct WorkerLua { lua_State *L; size_t memory_limit; } WorkerLua;
+
+static WorkerLua create_worker(size_t memory_limit) {
+  WorkerLua worker = {0};
+  worker.memory_limit = memory_limit;
+  worker.L = lua_newstate(limited_allocator, &worker);
+  if (worker.L == NULL) return worker;
+  /* Libraries are opened explicitly below, before the worker is published. */
+  return worker;
+}
+```
+
+State pointer和其Lua values不跨worker直接使用。Host shutdown先停止新messages、cancel tasks、在owner thread运行cleanup并`lua_close`，最后销毁queue/native context。
+
+## Message passing between independent states
+
+Independent states不能`lua_xmove`。跨state通信先把允许的Lua value编码成host-owned message，再在receiver构造新的Lua values。<Term def="Cross-state message schema定义允许的primitive/container types、version、depth、cycle、size、error和capability字段。">cross-state message schema</Term>拒绝function、thread、full userdata和raw pointer；这些携带state或native identity。
+
+```lua
+-- Data-only envelope; each state gets a fresh decoded table.
+local message = {
+  version = 1,
+  kind = "render-job",
+  request_id = "job-1042",
+  payload = { width = 1280, height = 720, samples = 64 },
+}
+
+-- Sender validates and encodes with byte/depth limits.
+-- Receiver validates version/kind, then grants only its local capabilities.
+```
+
+Serializer处理nil/boolean/integer/number/string和受限tables，定义NaN/Infinity、integer range、duplicate keys、cycles与ordering。Queue必须bounded；full queue阻塞、拒绝或传播backpressure。Message completion/cancel用request ID和generation解决late response。
+
+<PilStateIsolationLab />
+
+<Stepper>
+  <Step title="切换Encode、Queue、Decode和Libraries"><PilStateIsolationLab /></Step>
+  <Step title="做Schema Adversarial Test">覆盖deep/cyclic tables、huge strings、NaN、unknown version、userdata/function和duplicate completion，验证拒绝与queue上限。</Step>
+  <Step title="测量Parallel Scaling">固定workload比较1/2/4 independent states的throughput、memory、serialization cost与tail latency，区分CPU和queue瓶颈。</Step>
+</Stepper>
+
+<Callout type="trap" title="跨State可以直接传Lua Table Pointer，只要不同时访问">
+Table属于创建它的heap/GC，receiver state无法合法解释该value。必须serialize/copy成receiver的新对象，或只传由host同步管理且不伪装成Lua object的外部ID。
+</Callout>
+
+## Opening libraries on demand
+
+`luaL_openlibs`打开完整标准库，适合trusted通用runtime；worker/sandbox应使用`luaL_requiref`逐个打开。Base、table、string、math、utf8、coroutine、package、io、os、debug各有不同authority。打开package会引入searchers/loaders，还需收紧`package.path/cpath`与C loader。
+
+<Term def="On-demand library surface是每个state只注册其任务必需的标准库、module loader和host closures形成的最小capability集合。">on-demand library surface</Term>应进入state configuration version。
+
+```c
+static void open_worker_libraries(lua_State *L) {
+  luaL_requiref(L, "_G", luaopen_base, 1); lua_pop(L, 1);
+  luaL_requiref(L, LUA_TABLIBNAME, luaopen_table, 1); lua_pop(L, 1);
+  luaL_requiref(L, LUA_STRLIBNAME, luaopen_string, 1); lua_pop(L, 1);
+  luaL_requiref(L, LUA_MATHLIBNAME, luaopen_math, 1); lua_pop(L, 1);
+  /* No package/io/os/debug or dynamic C loader for this worker policy. */
+}
+```
+
+Base library本身也要审计可用functions；host可在open后删除不需要的globals，但更可靠的是构造allowlisted environment。Module按需加载可注册到受控preload table，不必允许filesystem/native搜索。
+
+## Parallelism、Failure与Shutdown
+
+Independent state crash/error应转成message failure，不持有另一个state的stack reference。Per-state memory limit、instruction/wall deadline、queue capacity和native service quota共同防止一个worker拖垮process。真正敌对任务仍需process isolation。
+
+Shutdown顺序先停止accept，等待或cancel inflight messages，owner thread回收coroutines/registry refs/userdata，close state，再释放host queues。反序会产生late callback访问已关闭state。
+
+## 本章回顾：Parallelism来自Isolation而非Coroutine数量
+
+1. Lua thread只有stack/status独立，同一state内globals、registry、heap和GC全部共享。
+2. Newthread object必须建立Lua root；C pointer本身不能阻止suspended coroutine被GC。
+3. lua_xmove只在同一global state的threads之间搬引用，不能跨independent states。
+4. 同一state由单一OS owner串行访问；独立states可分配到不同workers实现parallelism。
+5. 跨state只传versioned bounded data messages，receiver重新构造values并授予本地capabilities。
+6. Standard libraries按需开放，package/io/os/debug/C loader都属于明确policy，而非默认便利。
+
+<Exercises>
+
+**问题 1：为什么保存lua_State指针不足以让New Thread存活？**
+
+<Answer>GC追踪Lua references，不追踪任意C pointer。lua_newthread把thread object压栈，离开临时stack前应放入registry/table root；terminal cleanup后再unref并停止使用pointer。</Answer>
+
+**问题 2：什么时候用Coroutines，什么时候用Independent States？**
+
+<Answer>I/O workflow和共享Lua对象图中的合作式并发用coroutines；需要CPU parallelism、独立heap/GC、不同memory/library policy时用independent states，并承担serialization与message queue成本。</Answer>
+
+**问题 3：按需Open Libraries为何仍不等于完整Sandbox？**
+
+<Answer>允许的base/host closures可能泄露capability，CPU/memory/stack和native calls仍需limits，package/searchers也需收紧。Hostile code还要allocator/deadline/IPC与process隔离。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="shared-global-state thread" definition="Stack独立但共享globals、registry、heap、allocator和GC的Lua coroutine。" />
+  <GlossaryItem term="coroutine root reference" definition="保持suspended thread及其stack可达直到scheduler释放的Lua reference。" />
+  <GlossaryItem term="same-state stack transfer" definition="lua_xmove在同一global state的threads间搬stack references的操作。" />
+  <GlossaryItem term="state isolation boundary" definition="由独立heap、globals、registry、GC、allocator、libraries和owner组成的边界。" />
+  <GlossaryItem term="cross-state message schema" definition="规定跨state可复制data类型、version、limits和capability的消息协议。" />
+  <GlossaryItem term="on-demand library surface" definition="每个state按任务最小化开放的标准库、loader和host closures集合。" />
+</Glossary>
+
+<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 33: Threads and States" adaptedUrl="https://www.lua.org/pil/" />

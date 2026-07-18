@@ -1,0 +1,393 @@
+---
+title: "Chapter 20：高级特性（Advanced Features）"
+type: A
+section: Rust 程序设计语言 · Unsafe、Trait/Type、Function 与 Macro
+order: 20
+description: 对齐官方第 20 章：unsafe 五种能力与安全抽象、advanced traits/types、function pointer 与 closure return，以及 declarative/procedural macros 的展开边界。
+demo: false
+math: false
+sourceUrl: "https://doc.rust-lang.org/book/ch20-00-advanced-features.html"
+draft: false
+---
+
+import {
+  RplAdvancedTraitTypeLab,
+  RplMacroExpansionLab,
+  RplUnsafeBoundaryLab,
+} from "@/components/mdx/rust-programming-language/diagrams/advanced-features";
+
+<Objectives>
+
+- 能实现小而可审计的 unsafe boundary，逐项证明 raw pointer、unsafe function、FFI、mutable static、unsafe trait 与 union access 所需 invariant
+- 能比较 associated/generic type、default parameter、fully qualified syntax、supertrait、newtype/alias、never/DST/Sized 和 function/closure type 的契约差异
+- 能设计 macro_rules 与 derive/attribute/function-like procedural macro 的 token input、expansion 和测试门禁，并判断何时应改用普通 function 或 generic
+
+</Objectives>
+
+## 为什么高级特性首先是责任边界，而不是炫技清单
+
+本章特性并不常用，却会出现在标准库、FFI、framework 和 compiler error 建议中。共同点是：它们把普通默认规则中的某个选择显式化。unsafe 把 memory proof 交给 programmer；associated type/newtype 把 API identity 固定进 type system；macro 把一段源 token 变成更多 compile-time code。
+
+应先写清“不用它为什么表达不了”，再把新责任限制在最小 boundary。能用 safe slice API 就不手写 pointer；能用 function 就不写 macro；只为缩短名字用 alias，需要防单位混用才用 newtype。
+
+## 20.1 Unsafe Rust：选择性承担 compiler 无法证明的保证
+
+<Term def="允许执行少量 compiler 不检查 memory safety 的操作、由 programmer 手动维护相同 invariant 的 Rust 子集。">unsafe Rust</Term>
+
+<Term def="用 unsafe 标记的 lexical scope，只在其中允许 unsafe operations；普通 borrow/type checks 仍继续生效。">unsafe block</Term>
+
+unsafe 不会关闭 borrow checker，也不表示 block 内每行都危险；它只解锁五类 <Term def="safe Rust 禁止、必须在 unsafe context 中执行且需要人工证明前置条件的动作。">unsafe operation</Term>：
+
+1. dereference raw pointer
+2. call unsafe function/method
+3. read or write mutable static
+4. implement unsafe trait
+5. access union field
+
+### Raw pointer 与 undefined behavior
+
+<Term def="写作 const/mut pointer、可为 null 或 invalid、无 lifetime 与自动 cleanup 保证的地址值。">raw pointer</Term>
+
+创建 raw pointer 可以在 safe code；dereference 才要求 unsafe。raw pointers 可 alias、可 null，也可能指向已释放/未对齐/未初始化 memory，因此“地址非零”远不足以证明可读写。
+
+```rust
+let mut number = 5;
+let read_ptr = &raw const number;
+let write_ptr = &raw mut number;
+
+unsafe {
+    println!("{}", *read_ptr);
+    *write_ptr = 8;
+}
+```
+
+<Term def="语言语义不规定任何结果，compiler 可基于 invariant 假设优化，表现不只限于 crash 的执行。">undefined behavior</Term>
+
+同时存在 aliasing mutable access、越界 pointer arithmetic、use-after-free 或 invalid value 都可能触发 UB。unsafe 的目标不是“让报错代码编译”，而是用外部 proof 恢复 safe Rust normally enforced guarantees。
+
+### Unsafe function 与 safety contract
+
+<Term def="调用者必须满足文档化 safety preconditions、调用本身要求 unsafe block 的 function。">unsafe function</Term>
+
+<Term def="unsafe API 明确列出的 caller obligations 与 implementation guarantees，用于证明所有 unsafe operations 合法。">safety contract</Term>
+
+```rust
+/// # Safety
+/// ptr must be valid and aligned for one initialized i32.
+unsafe fn read_i32(ptr: *const i32) -> i32 {
+    unsafe { *ptr }
+}
+```
+
+即使在 `unsafe fn` body 中，执行 unsafe operation 仍写独立 unsafe block，使 `unsafe_op_in_unsafe_fn` lint 能缩小审计范围。call site 用 `// SAFETY:` 记录为何满足 contract；注释必须引用可检查事实，而不是“tested and works”。
+
+### Safe abstraction 封装 split_at_mut proof
+
+<Term def="内部使用 unsafe，但 public safe API 的所有合法输入都保证不会违反 memory safety 的封装。">safe abstraction</Term>
+
+```rust
+fn split(values: &mut [i32], mid: usize)
+    -> (&mut [i32], &mut [i32])
+{
+    let len = values.len();
+    let ptr = values.as_mut_ptr();
+    assert!(mid <= len);
+
+    // SAFETY: both ranges stay within the same live allocation and do not overlap.
+    unsafe {
+        (
+            std::slice::from_raw_parts_mut(ptr, mid),
+            std::slice::from_raw_parts_mut(ptr.add(mid), len - mid),
+        )
+    }
+}
+```
+
+proof 要覆盖 pointer provenance、alignment、初始化、range in-bounds、lifetime 和两个 mutable slices 不重叠。safe caller 只提供 slice 和 index，assert 拒绝越界，因此 caller 无需 unsafe。
+
+### FFI、ABI、static、unsafe trait 与 union
+
+<Term def="不同 programming languages 之间声明与调用 functions/data 的 foreign function interface 边界。">FFI</Term>
+
+<Term def="规定参数、返回值、register、stack 与 symbol 如何在 machine level 交接的 application binary interface。">ABI</Term>
+
+`unsafe extern "C"` 声明 foreign symbols；Rust 无法验证 C side 的 pointer/lifetime contract。某个任意 i32 都安全的 item 可在 extern block 中显式 `safe fn`，但这是 programmer promise。向 C export 时固定 ABI，并按 edition 要求处理 no_mangle attribute 和 symbol collision。
+
+<Term def="具有固定全局地址且可变、读写可能跨 thread data race，因此访问要求 unsafe 的 static storage。">mutable static</Term>
+
+mutable static 很难约束 aliasing/concurrency，优先用 atomic、Mutex/OnceLock 等 safe primitives。若必须使用，unsafe function 要文档化 single-thread/serialization proof，并避免创建 static mut reference。
+
+<Term def="其实现必须维护 compiler 无法验证 invariant，使用 unsafe impl 表示承诺的 trait。">unsafe trait</Term>
+
+Send/Sync 是典型：manual unsafe impl 意味着 type 在跨 thread move/share 时满足相应 memory invariant，不是消除 compiler error 的 decoration。
+
+<Term def="读取 union 当前未被正确写入的 field 可能产生 invalid interpretation，因此 field access 要求 unsafe。">union field access</Term>
+
+<Callout type="trap" title="陷阱：unsafe block 让里面所有 pointer 操作自动有效">
+  unsafe 只改变“允许执行”，不生成 proof。每个 dereference 仍需 valid provenance、alignment、initialization、lifetime 和 aliasing 条件；把整个 function 包进大 unsafe block 会隐藏新增风险。缩小 block，并让 safe checks 紧贴 unsafe operation。
+</Callout>
+
+## 20.2 Advanced traits
+
+### Associated type 与 generic parameter
+
+<Term def="由 trait 声明、每个 implementor 在该 trait impl 中选择一次 concrete value 的 type member。">associated type</Term>
+
+```rust
+trait Source {
+    type Item;
+    fn next(&mut self) -> Option<Self::Item>;
+}
+```
+
+一个 Self 对 Source 只有一个 impl，因此 Item 唯一，caller 不需反复 annotation。若写 `trait Source<T>`，同一 Self 可以分别实现 Source String、Source Bytes，caller 可能需要 disambiguate。选择依据是“输出是否属于 implementor 的唯一固有关系”，不是语法长短。
+
+### Default generic parameter 与 operator overload
+
+<Term def="generic parameter 未显式指定时使用的 concrete default，允许常见 case 简洁、少数 case 定制。">default type parameter</Term>
+
+`Add<Rhs = Self>` 默认左右同类型；`impl Add<Meters> for Millimeters` 可覆盖 Rhs。<Term def="通过实现 std::ops 对应 trait 定义已有 operator 对自有类型的行为，不能发明任意新 operator。">operator overloading</Term> 仍受 trait coherence 与明确 Output 约束。
+
+### Same-name methods 与 fully qualified syntax
+
+Human 可同时有 inherent `fly`、Pilot::fly 和 Wizard::fly。method syntax 默认优先 inherent；显式调用 trait method 可写 `Pilot::fly(&person)`。无 self receiver 的 associated function 无法从 receiver 推断 impl，需：
+
+<Term def="用 Trait as Type 的完整路径明确指定某个 associated item 来自哪个 trait impl 的语法。">fully qualified syntax</Term>
+
+```rust
+<Dog as Animal>::baby_name()
+```
+
+它解决名称歧义，不改变 dispatch model。应在 API 命名层避免无意义冲突，只有多个 domain traits 确实共享词汇时再显式限定。
+
+### Supertrait 与 newtype 绕过 orphan restriction
+
+<Term def="某 trait 在定义中要求 implementor 先实现的 prerequisite trait，使 default methods 可使用其 items。">supertrait</Term>
+
+`trait OutlinePrint: Display` 表示只有 Display types 可实现 OutlinePrint，且 outline_print 可以调用 to_string。supertrait 是 capability dependency，不是 inheritance of storage。
+
+<Term def="coherence rule：实现 trait 时，trait 或 target type 至少一个必须由当前 crate 定义。">orphan rule</Term>
+
+不能直接为 foreign Vec 实现 foreign Display。创建 local tuple wrapper 后，target type 变 local：
+
+<Term def="用单字段 tuple struct 包装现有 type，建立新 static identity、API 和可实现 trait 的本地类型模式。">newtype pattern</Term>
+
+```rust
+struct StringList(Vec<String>);
+
+impl std::fmt::Display for StringList {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}]", self.0.join(", "))
+    }
+}
+```
+
+newtype 可防单位混用、隐藏 representation、限制 methods；通常 zero-cost，但 inner methods 不自动暴露，需要 selective delegation。实现 Deref 会重新暴露大部分 inner API，可能破坏封装目的。
+
+## 20.3 Advanced types
+
+### Type alias 只换名字，不换 identity
+
+<Term def="用 type 给已有 type 一个同义名称，不建立新 identity，也不增加 validation 或 trait coherence 能力。">type alias</Term>
+
+`type Kilometers = i32` 与 i32 完全同型，不能防单位混用。alias 适合减少 `Box<dyn Fn() + Send + 'static>`、Result error 或 callback signature 的重复，并以 domain name 表达 intent。
+
+### Never type 与 diverging control flow
+
+<Term def="写作 exclamation mark、没有任何 value，表示 expression 永远不能正常产生结果的类型。">never type</Term>
+
+<Term def="不返回到调用点的 expression/function，例如 panic、loop、return、break 或 continue 路径。">diverging expression</Term>
+
+never 可 coerce 到任意 type，因为不存在实际 value 需要转换。match 一臂返回 u32，另一臂 continue 时，整体仍是 u32；panic branch 也可与任意成功类型统一。这不是 magic default value，而是该分支根本没有正常 completion。
+
+### Dynamically sized type 与 Sized 默认 bound
+
+<Term def="具体 value 大小只能在 runtime 获知、必须通过携带 metadata 的 pointer 使用的 unsized type。">dynamically sized type</Term>
+
+str（不是 `&str`）和 dyn Trait 是 DST。pointer `&str` 携带 address + length，`&dyn Trait` 携带 data + vtable，因此 pointer 自身大小已知。
+
+<Term def="表示 type 在 compile time 具有固定大小的 auto trait；generic parameters 默认隐式要求它。">Sized trait</Term>
+
+`fn generic<T>(value: T)` 隐含 T: Sized。若 function 接受可能 unsized 的 borrowed target，用 <Term def="写作 question Sized，移除 implicit Sized requirement，但参数仍必须放在 pointer 后的放宽 bound。">question Sized bound</Term>：
+
+```rust
+fn inspect<T: ?Sized>(value: &T) {
+    // T may be str or dyn Trait; &T remains sized.
+}
+```
+
+`?Sized` 只能放宽 Sized，不表示“任意缺失 trait bound”。by-value unsized local 仍无法分配固定 stack slot。
+
+<Callout type="trap" title="陷阱：type alias 和 newtype 都能防单位混用">
+  alias 是 synonym，Kilometers 可直接传给 i32 参数；newtype 才有 distinct identity。需要缩短签名选 alias，需要 validation、单位隔离、orphan-rule local target 或受控 method set 选 newtype。
+</Callout>
+
+## 20.4 Advanced functions and closures
+
+<Term def="写作 lowercase fn 的 concrete pointer type，指向不捕获环境的 function code，并实现 Fn traits。">function pointer</Term>
+
+```rust
+fn do_twice(operation: fn(i32) -> i32, value: i32) -> i32 {
+    operation(value) + operation(value)
+}
+```
+
+fn pointer 适合 C callback 或明确拒绝 capturing closure 的 ABI-like interface。多数 Rust API 应用 generic `F: Fn(...)`，既接 named function（fn 实现 Fn/FnMut/FnOnce），也接 closures，并允许 monomorphization。
+
+enum tuple variant constructor 也可作 function pointer，例如 iterator `map(Status::Value)`。
+
+<Term def="返回 capture-specific anonymous closure type 的 API，需要 impl Fn 或 boxed dyn Fn 表达。">closure return</Term>
+
+<Term def="在 return position 隐藏一个固定 concrete closure type，提供静态分派且同一 function 只能返回一种具体类型。">impl Fn return</Term>
+
+```rust
+fn make_adder(amount: i32) -> impl Fn(i32) -> i32 {
+    move |value| value + amount
+}
+```
+
+不同 branches 创建的 closures 即使 signature 相同也有不同 anonymous types，不能由单一 impl Trait return 混合。需要 runtime choice 时用 <Term def="把不同 closure concrete types 擦除到统一 boxed dynamic Fn interface 的 return。">boxed dyn Fn return</Term>，承担 heap allocation/dynamic dispatch；或把 choice 放进 enum。
+
+## 20.5 Macros：在 type checking 前生成代码
+
+<Term def="接收 source syntax 并在 compile time 生成替换 Rust code 的语言扩展家族。">macro</Term>
+
+<Term def="程序把代码作为输入生成更多代码，以减少重复或创建普通 function 无法表达的 syntax abstraction。">metaprogramming</Term>
+
+macro 能接 variable argument count、生成 impl/items，并在 compiler 理解最终类型前展开；function 只能接类型已确定的 runtime values。代价是 definition 更复杂、错误跨 expansion、compile time 增加且 scope/order 有要求。
+
+### macro_rules declarative macro
+
+<Term def="用 macro_rules 定义、按 token pattern 匹配 input 并以 transcriber 替换的 declarative macro。">declarative macro</Term>
+
+```rust
+macro_rules! vec_like {
+    ($( $item:expr ),* $(,)?) => {{
+        let mut output = Vec::new();
+        $( output.push($item); )*
+        output
+    }};
+}
+```
+
+<Term def="macro pattern 中捕获 fragment 的 dollar-prefixed name，以及用 dollar-parenthesis-star/plus 重复匹配和展开的机制。">repetition metavariable</Term>
+
+input 是 token tree，不是 runtime Vec；`expr` fragment 约束每项必须可解析为 expression，重复次数在 expansion 中对应。调试应查看 expanded code、为 representative inputs 写 compile/pass/fail tests，并避免重复 evaluation 造成 side effects。
+
+### Procedural macro 与 TokenStream
+
+<Term def="以 Rust function 接收 token stream、解析/变换后返回新 token stream 的 compile-time macro。">procedural macro</Term>
+
+<Term def="compiler 与 procedural macro 之间传递的 lexical tokens 序列，比 raw string 保留 Rust token structure。">TokenStream</Term>
+
+proc macros 位于 proc-macro crate。通常用 syn parse AST、quote 生成 tokens，并把错误定位回 input span。
+
+<Term def="由 derive attribute 触发、针对 struct/enum 生成 trait impl 等附加 code 的 procedural macro。">custom derive macro</Term>
+
+`#[derive(HelloMacro)] struct Pancakes;` 可生成 HelloMacro impl；trait crate 与 derive crate 常分别发布。derive 只能挂在 struct/enum，并应保留 generics、where clauses 与 hygienic paths。
+
+<Term def="自定义 attribute 接收 attribute arguments 与被标注 item 两个 token streams，可变换 function/module 等 item。">attribute-like macro</Term>
+
+route macro 可读 `GET, "/"` 与 function item，生成 registration/wrapper；必须明确是否保留 visibility、attributes、signature 与 original body。
+
+<Term def="外观像 macro call、接收括号内任意 tokens 并由 Rust parser code 生成 output 的 procedural macro。">function-like macro</Term>
+
+`sql!(SELECT ...)` 可在 compile time parse DSL 并生成 checked Rust；它比 macro_rules 有更强 parsing logic，也有更高维护/diagnostic 责任。
+
+<Callout type="trap" title="陷阱：减少重复就应该写 macro">
+  普通 function、generic、trait 和 build data 更易读、可测试、IDE 友好。只有需要 variable syntax、生成 items/impl、compile-time DSL 检查或调用方无法写出的 boilerplate 时，macro 的复杂性才有明确回报。
+</Callout>
+
+## 三步审计高级特性的新增责任
+
+<Stepper>
+  <Step title="第一步：把 unsafe proof 缩到一个 boundary">
+    先预测 pointer provenance、mid 与 overlap 哪个条件会破坏 split invariant，再切换验证。每个 unsafe operation 前写具体 SAFETY facts，public safe API 必须拒绝所有违约输入。
+
+    <RplUnsafeBoundaryLab />
+  </Step>
+  <Step title="第二步：区分名称复用与 static identity">
+    associated/generic 决定同一 Self 可有几个 impl；alias/newtype 决定是否产生新 type。尝试混合单位并观察 orphan-rule capability，避免把四种工具当成语法糖。
+
+    <RplAdvancedTraitTypeLab />
+  </Step>
+  <Step title="第三步：把 macro 当作 compiler phase API">
+    写出 accepted token grammar、generated code、span error 和 expansion tests。切换四类 macro，比较 input/output shape；若普通 function/generic 可表达，优先降低 compile-time indirection。
+
+    <RplMacroExpansionLab />
+  </Step>
+</Stepper>
+
+本章的 **高级类型** 覆盖 alias/newtype、never 与 DST；callable 边界覆盖 **函数指针** 与返回闭包；metaprogramming 则明确区分 **声明宏** 和 **过程宏**。
+
+## 小结
+
+- unsafe 只解锁五类 operations，不关闭其他 checks；每个 operation 仍需人工证明完整 memory safety contract
+- safe abstraction 把 raw pointer proof 封装在局部 block，使 safe caller 无法构造 UB
+- associated type 固定 implementor relation，generic parameter 允许多个 instantiations；FQS 消除 item ambiguity，supertrait 声明 capability dependency
+- newtype 建立 identity/API/orphan target，alias 只缩短同一 type 名称；never 表示 diverge，DST 必须在带 metadata pointer 后使用
+- function pointer 是 concrete fn type，capturing closure return 用 impl Fn 或 boxed dyn Fn 选择静态/动态统一
+- macro_rules 匹配 token grammar；derive、attribute-like、function-like proc macro 都以 TokenStream 做 compile-time transformation
+
+<Exercises>
+  1. **问题 1：评审 safe split API。** 实现只断言 mid 小于等于 len，却从整数 address 构造 pointer，并让 right 从 mid-1 开始。为什么即使测试通过也不能 safe，完整 proof 包含什么？
+
+  <Answer question="unsafe block 外必须证明哪些 invariant？">整数 address 没有可证明 provenance、allocation、alignment、initialization 与 lifetime；mid-1 又让左右 mutable slices overlap，违反独占 alias rule。proof 至少要保证 pointer 来自当前 live slice、element aligned/initialized、两个 ranges 都在 allocation 内、长度计算不 overflow、ranges 不重叠且返回 references 不超过原 borrow。无法由 safe inputs 保证时 public function 必须 unsafe 或改变 API。</Answer>
+
+  2. **问题 2：选择 alias/newtype 与 associated/generic。** 单位 API 要防 Meters/Millimeters 混用，同时 Source 对每个 implementor 只有一个 Item；日志 callback 只是签名太长。各用什么？
+
+  <Answer question="identity、impl multiplicity 与 naming 分别由谁负责？">单位用两个 tuple newtypes，建立 distinct identity 并可实现 conversion/Add；Source 用 associated Item，把每个 implementor 的唯一输出固定进 contract。日志 callback 用 type alias 缩短同一 boxed Fn signature，不需要新 identity。若同一 Self 必须针对多个输出分别实现，才改用 generic trait parameter。</Answer>
+
+  3. **问题 3：决定 function 还是 macro。** API 只把两个 i32 相加，却计划写 function-like proc macro；另一 API 要从 SQL tokens 生成 typed query；第三处要为许多 structs 生成相同 trait impl。怎样选并验证？
+
+  <Answer question="compile-time code generation 何时有必要？">两数相加用普通 function/generic，macro 没有新增表达力。SQL DSL 需要 parse caller tokens、compile-time validate 并生成 typed code，适合 function-like proc macro；批量 trait impl 适合 custom derive。两种 proc macro 都应做 valid expansion tests、compile-fail diagnostics、generic/where/span cases，并审查 expanded code 与依赖/compile-time 成本。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="unsafe Rust">把少量 memory-safety proof 交给 programmer 的 Rust 子集。</GlossaryItem>
+  <GlossaryItem term="unsafe block">允许 unsafe operations 的局部 lexical scope。</GlossaryItem>
+  <GlossaryItem term="unsafe operation">必须人工证明前置条件的五类 low-level 动作。</GlossaryItem>
+  <GlossaryItem term="raw pointer">无自动 validity、lifetime 与 cleanup 保证的 const/mut address。</GlossaryItem>
+  <GlossaryItem term="undefined behavior">语言不规定结果、compiler 可假设永不发生的执行。</GlossaryItem>
+  <GlossaryItem term="unsafe function">调用者必须履行 safety contract 的 function。</GlossaryItem>
+  <GlossaryItem term="safety contract">unsafe API 的 caller obligations 与 implementation guarantees。</GlossaryItem>
+  <GlossaryItem term="safe abstraction">内部 unsafe、外部合法 safe input 均保持 memory safety 的封装。</GlossaryItem>
+  <GlossaryItem term="FFI">不同语言之间声明和调用 code/data 的边界。</GlossaryItem>
+  <GlossaryItem term="ABI">machine level 的 call、layout 与 symbol 约定。</GlossaryItem>
+  <GlossaryItem term="mutable static">固定全局地址且可变、访问可能 data race 的 storage。</GlossaryItem>
+  <GlossaryItem term="unsafe trait">impl 必须维护 compiler 无法验证 invariant 的 trait。</GlossaryItem>
+  <GlossaryItem term="union field access">解释 union 当前 storage 为指定 field 的 unsafe 操作。</GlossaryItem>
+  <GlossaryItem term="associated type">每个 implementor 在 trait impl 中选择一次的 type member。</GlossaryItem>
+  <GlossaryItem term="default type parameter">未指定 generic argument 时使用的默认 type。</GlossaryItem>
+  <GlossaryItem term="operator overloading">实现 std::ops trait 定义已有 operator 行为。</GlossaryItem>
+  <GlossaryItem term="fully qualified syntax">用 Trait-as-Type 路径消除 associated item 歧义的语法。</GlossaryItem>
+  <GlossaryItem term="supertrait">一个 trait 要求 implementor 先具备的 prerequisite trait。</GlossaryItem>
+  <GlossaryItem term="orphan rule">trait 或 target type 至少一个必须 local 的 coherence rule。</GlossaryItem>
+  <GlossaryItem term="newtype pattern">单字段 tuple struct 建立新 identity 与受控 API 的模式。</GlossaryItem>
+  <GlossaryItem term="type alias">给同一 existing type 增加同义名称的声明。</GlossaryItem>
+  <GlossaryItem term="never type">无任何 value、表示不会正常返回的 exclamation type。</GlossaryItem>
+  <GlossaryItem term="diverging expression">不会回到当前 continuation 的 control-flow expression。</GlossaryItem>
+  <GlossaryItem term="dynamically sized type">大小仅 runtime 可知、必须放在 metadata pointer 后的 type。</GlossaryItem>
+  <GlossaryItem term="Sized trait">表示 compile-time 固定 size 的 auto trait。</GlossaryItem>
+  <GlossaryItem term="question Sized bound">移除 generic implicit Sized requirement 的放宽 bound。</GlossaryItem>
+  <GlossaryItem term="function pointer">lowercase fn 的 concrete code pointer type。</GlossaryItem>
+  <GlossaryItem term="closure return">从 function 返回匿名 capture-specific closure type 的 API。</GlossaryItem>
+  <GlossaryItem term="impl Fn return">隐藏一个固定 closure concrete type 的静态 return。</GlossaryItem>
+  <GlossaryItem term="boxed dyn Fn return">统一多个 closure types 的 boxed dynamic return。</GlossaryItem>
+  <GlossaryItem term="macro">在 compile time 接收 syntax 并生成 Rust code 的扩展。</GlossaryItem>
+  <GlossaryItem term="metaprogramming">以代码为输入生成更多代码的技术。</GlossaryItem>
+  <GlossaryItem term="declarative macro">macro_rules token-pattern 与 transcriber macro。</GlossaryItem>
+  <GlossaryItem term="repetition metavariable">macro fragment capture 与重复匹配/展开机制。</GlossaryItem>
+  <GlossaryItem term="procedural macro">以 Rust function 变换 TokenStream 的 macro。</GlossaryItem>
+  <GlossaryItem term="TokenStream">proc macro 输入输出的 lexical token 序列。</GlossaryItem>
+  <GlossaryItem term="custom derive macro">derive attribute 触发并生成 trait impl 的 proc macro。</GlossaryItem>
+  <GlossaryItem term="attribute-like macro">以 attribute args 与 item 为输入的 proc macro。</GlossaryItem>
+  <GlossaryItem term="function-like macro">外观像 call、解析括号 tokens 的 proc macro。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Rust Programming Language, Chapter 20 Advanced Features"
+  adaptedUrl="https://doc.rust-lang.org/book/ch20-00-advanced-features.html"
+/>

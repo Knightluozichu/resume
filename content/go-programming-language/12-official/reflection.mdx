@@ -1,0 +1,260 @@
+---
+title: "第12章：Reflection"
+type: C
+section: "Go 程序设计语言 · 运行时类型检查与通用编码"
+order: 12
+description: "对齐原书第 12 章：Type/Value、Display、S-expression codec、setting、struct tags、methods 与 reflection caution。"
+demo: true
+math: false
+sourceUrl: "https://www.gopl.io/"
+draft: false
+---
+
+import {
+  GoplReflectCodecLab,
+  GoplReflectMutationTagLab,
+  GoplReflectTypeValueLab,
+} from "@/components/mdx/go-programming-language/diagrams/reflection";
+
+<Objectives>
+
+- 能解释 reflect.Type/Value/Kind/Interface 与 invalid/nil distinctions，沿 recursive value graph 做 safe dispatch
+- 能实现 Display 与 S-expression encoder/decoder，限制 depth/cycles/size并把 unsupported kinds、path、destination errors显式返回
+- 能判断 addressable/settable Values、struct tags 与 method sets，选择 reflection、interface、generics或 generated code 的适用边界
+
+</Objectives>
+
+## 为什么 Reflection 必须被限制在运行时边界
+
+reflection 的价值来自“调用时才知道 concrete type”，代价则是把 static checks 推迟到 runtime。学习本章时始终同时追踪两条线：它替通用 library 解决了什么 shape 问题，以及需要哪些 validation/limits 才不会把 panic 和 schema 漂移扩散到业务层。
+
+## 12.1 Why Reflection?：在不知道 static type 时检查 shape
+
+有些 library 必须处理编译时未知的 concrete types，例如 fmt、encoding/json、template、ORM/validation、test diff。interface 只允许调用已知 methods；reflection 可检查 dynamic type的 fields/elements/methods，并在运行时读写，但把 compile-time proof转换为 runtime checks/panics。
+
+<Term def="reflect.Type 描述 interface 中的 dynamic concrete type，reflect.Value 持有对应 value；Type/ValueOf 从 interface pair进入反射，nil interface产生 nil Type和invalid Value。">reflection type-value pair</Term>
+
+先预测：Type与Kind是否相同，ValueOf(x) 是否可直接 Set，nil pointer 与 invalid Value如何区别，recursive Display遇 cycle会怎样，decoder为何必须接收 non-nil pointer，以及 StructTag是普通string还是独立schema contract。
+
+## 12.2 reflect.Type and reflect.Value：type identity 与 value access
+
+`reflect.TypeOf(x)` 返回 x interface 的 dynamic type；`reflect.ValueOf(x)` 返回 Value。Type有 Name、PkgPath、Kind、Elem、Field、Method等元数据；Value有 Type、Kind、Interface、Int/String/Len/Index/Field等按 kind操作的方法。
+
+<Term def="reflect.Kind 把具体types归类为 Bool、Int、Struct、Slice、Map、Ptr、Interface等representation category；同Kind types仍可能拥有不同identity与methods。">kind dispatch</Term>
+
+<Stepper>
+  <Step title="切换 string/slice/struct/pointer/nil interface">
+    <GoplReflectTypeValueLab />
+  </Step>
+  <Step title="比较 Type 与 Kind">
+    `time.Duration` Type有named identity，Kind仍是 Int64；dispatch representation用Kind，保留schema/semantics用Type。
+  </Step>
+  <Step title="从 pointer.Elem 取得原变量">
+    ValueOf(non-pointer)通常不可设置；ValueOf(&x).Elem()指向addressable x，仍需CanSet与export rules检查。
+  </Step>
+</Stepper>
+
+```go
+value := reflect.ValueOf(input)
+if !value.IsValid() {
+    return "<nil>"
+}
+fmt.Printf("type=%s kind=%s value=%v\n", value.Type(), value.Kind(), value.Interface())
+```
+
+调用与Kind不匹配的方法会panic，例如对String Value调用Int。先 switch Kind或使用CanX检查。Value.Interface把 reflection value重新装入interface；unexported field调用Interface可能panic，library不能绕过可见性。
+
+nil适用于 Chan/Func/Interface/Map/Ptr/Slice，使用IsNil前先检查Kind；zero Value的IsValid false。typed nil pointer有valid Type/Kind Ptr但IsNil true，与nil interface不同。
+
+## 12.3 Display, a Recursive Value Printer
+
+原书Display递归打印arbitrary value paths：struct fields、slice/array indices、map keys/values、pointer Elem、interface dynamic value。它展示Kind switch如何把通用value graph展开，也暴露cycle、unexported、nondeterministic map order与huge graph问题。
+
+<Stepper>
+  <Step title="切换 Display/S-expression encode/decode">
+    <GoplReflectCodecLab />
+  </Step>
+  <Step title="增加 depth 或制造 pointer cycle">
+    递归必须维护path、visited pointer identities、depth/node/byte limits；超过时返回error marker而非stack overflow。
+  </Step>
+  <Step title="对每个 Kind选择明确 operation">
+    primitive直接格式化，aggregate递归，pointer/interface先处理nil，unsupported Chan/Func/UnsafePointer等返回typed error。
+  </Step>
+</Stepper>
+
+```go
+func display(path string, v reflect.Value, seen map[visit]bool, depth int) error {
+    if depth > maxDepth { return fmt.Errorf("%s: depth limit", path) }
+    switch v.Kind() {
+    case reflect.Invalid:
+        fmt.Printf("%s = nil\n", path)
+    case reflect.Slice, reflect.Array:
+        for i := 0; i < v.Len(); i++ {
+            if err := display(fmt.Sprintf("%s[%d]", path, i), v.Index(i), seen, depth+1); err != nil { return err }
+        }
+    case reflect.Struct:
+        for i := 0; i < v.NumField(); i++ {
+            field := v.Type().Field(i)
+            if err := display(path+"."+field.Name, v.Field(i), seen, depth+1); err != nil { return err }
+        }
+    }
+    return nil
+}
+```
+
+map iteration order未指定；diagnostic output需排序可比较/format-safe keys，或明确nondeterministic。pointer address只能用于当前 traversal cycle detection，不应输出为stable identity。
+
+<Callout type="trap" title="对任意 input 无限制递归 reflection">
+attacker可构造deep/wide/cyclic graph消耗stack/CPU/memory。所有通用printer/codec定义depth、nodes、bytes、collection length、cycle与unsupported-kind policy。
+</Callout>
+
+## 12.4 Example: Encoding S-Expressions
+
+S-expression encoder把 primitive编码为 atoms/quoted strings，把 array/slice/struct递归编码为lists。设计必须明确 field names、map form、nil、pointer、interface dynamic type、unsupported values与deterministic ordering。原书示例是教学子集，不是完整wire schema。
+
+<Term def="reflection codec 在 runtime把Go value shape映射到外部representation，并承担type support、field schema、nil/number规则、limits、determinism与version compatibility。">reflective codec boundary</Term>
+
+```go
+func encode(buf *bytes.Buffer, v reflect.Value) error {
+    switch v.Kind() {
+    case reflect.String:
+        fmt.Fprintf(buf, "%q", v.String())
+    case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+        fmt.Fprintf(buf, "%d", v.Int())
+    case reflect.Slice, reflect.Array:
+        buf.WriteByte('(')
+        for i := 0; i < v.Len(); i++ { if err := encode(buf, v.Index(i)); err != nil { return err } }
+        buf.WriteByte(')')
+    default:
+        return fmt.Errorf("unsupported type %s at %s", v.Type(), path)
+    }
+    return nil
+}
+```
+
+encoder error包含type与path；不要默默跳过unsupported fields。wire格式一旦持久化/跨服务使用，需要explicit version/golden vectors，而不是依赖field order/Go type name偶然稳定。
+
+## 12.5 Setting Variables with reflect.Value：addressable 与 settable
+
+Value可addressable不一定settable；CanAddr/CanSet检查权限。`reflect.ValueOf(x)`接收interface copy，不能修改original；`reflect.ValueOf(&x).Elem()`通过pointer指向original。Set前目标/来源types必须assignable，或显式Convert且conversion合法。
+
+<Term def="Value 可寻址表示它指向可取地址storage；可设置还要求通过可写路径取得且未被unexported field规则禁止。mutation前检查CanSet与exact target type。">addressable settable value</Term>
+
+```go
+func setString(target any, text string) error {
+    value := reflect.ValueOf(target)
+    if value.Kind() != reflect.Ptr || value.IsNil() { return errors.New("target must be non-nil pointer") }
+    value = value.Elem()
+    if value.Kind() != reflect.String || !value.CanSet() { return fmt.Errorf("cannot set %s", value.Type()) }
+    value.SetString(text)
+    return nil
+}
+```
+
+SetInt/SetString等按Kind设置，Set需要Value。unexported fields不可由普通reflection修改，即使addressable；unsafe绕过会破坏package encapsulation，通用decoder不应这样做。
+
+## 12.6 Example: Decoding S-Expressions
+
+decoder先parse tokens为syntax tree，再把nodes赋给typed destination，或边parse边递归。public API接受 `Decode(data, &out)`，验证destination是non-nil pointer且Elem settable。每个assignment检查expected Kind/type/range、missing/duplicate/unknown fields与path。
+
+```go
+func Decode(data []byte, out any) error {
+    target := reflect.ValueOf(out)
+    if target.Kind() != reflect.Ptr || target.IsNil() {
+        return errors.New("Decode requires a non-nil pointer")
+    }
+    node, err := parse(data)
+    if err != nil { return err }
+    temporary := reflect.New(target.Elem().Type()).Elem()
+    if err := decodeNode(node, temporary, "root"); err != nil { return err }
+    target.Elem().Set(temporary)
+    return nil
+}
+```
+
+decode into temporary并在成功后commit，避免error留下partial mutation。numeric overflow用OverflowInt/Uint/Float检查；map/slice allocation设置size limits。untrusted data不允许创建任意named type或调用methods。
+
+## 12.7 Accessing Struct Field Tags
+
+struct tag 是field declaration后的string literal，reflect.StructField.Tag提供 `Get/Lookup(key)`。encoding/json、validation、DB mapper用namespaced keys解释metadata。tag语法是约定协议，compiler不验证每个library的value语义。
+
+<Term def="附着在 struct field declaration、通过 reflect.StructTag按key查询的metadata字符串；每个consumer定义自己的name/options grammar，构成schema的一部分。">struct tag metadata</Term>
+
+<Stepper>
+  <Step title="切换 addressable、exported field 与 tag">
+    <GoplReflectMutationTagLab />
+  </Step>
+  <Step title="观察 CanAddr/CanSet gate">
+    pointer.Elem提供addressable path；unexported field仍不可Set。decoder先检查，再返回path error，不让reflection panic逃出。
+  </Step>
+  <Step title="切换 T/*T method enumeration">
+    Type.NumMethod/Method按method set列exported methods；*T含pointer receiver methods，T不含，和interface satisfaction一致。
+  </Step>
+</Stepper>
+
+```go
+type Movie struct {
+    Title string `json:"title,omitempty" validate:"required"`
+}
+
+field, _ := reflect.TypeOf(Movie{}).FieldByName("Title")
+jsonName := field.Tag.Get("json")
+rule, present := field.Tag.Lookup("validate")
+```
+
+Get不能区分missing key与explicit empty value，需Lookup。tag改变可能是wire/schema breaking change；用golden/compatibility tests。不要把复杂business logic塞进opaque tags，超过简单declarative metadata时用typed configuration/API。
+
+## 12.8 Displaying the Methods of a Type
+
+reflect.Type.NumMethod/Method遍历exported methods，Method包含Name、Type、Func、Index。method expression式的Type把receiver作为第一个parameter。T与*T method sets不同；interface Type的方法描述contract。
+
+反射调用 `Value.Method(i).Call(args)` 需要exact Value types并会panic on mismatch，plugin/RPC框架必须在注册阶段验证signature并把panic转换为configuration error。普通代码优先interface直接调用，保留compile-time checking。
+
+## 12.9 A Word of Caution：把反射限制在边界
+
+reflection code难以读、static analysis弱、错误晚到runtime且可能panic，性能也常低于typed code。使用顺序：具体type/普通function优先；共同behavior用interface；同一shape operations现代Go可考虑generics；schema重复可用generated code；只有runtime未知shape才用reflection。
+
+反射应封装在小package，public API保持typed，入口集中validate，错误包含path/type，tests覆盖nil/unexported/unsupported/cycle/limits。benchmark只在它是hotspot时优化，不要为避免几行重复引入全局runtime machinery。
+
+<Callout type="trap" title="用 reflection 消除所有类型重复">
+若type set在compile time已知，generics/interface/generated code通常保留更多proof和tooling。reflection只在真正runtime shape边界使用，并把panic-prone calls包在validated core内。
+</Callout>
+
+## 本章回顾：运行时通用性要用显式限制换取
+
+1. Type/ValueOf从interface dynamic pair进入反射；Kind只描述representation category。
+2. Display与codec用Kind递归，必须处理invalid/nil、cycles、limits、path与unsupported types。
+3. mutation需要addressable+settable Value，通常由non-nil pointer Elem取得，unexported field仍受保护。
+4. struct tags是schema metadata，method enumeration遵守T/*T method sets。
+5. reflection适合runtime未知shape的窄边界；普通业务优先concrete/interface/generics/generated code。
+
+<Exercises>
+
+**问题 1：写通用 Display 时，怎样区分 nil interface、typed nil pointer 与 cycle？**
+
+<Answer>入口ValueOf(nilinterface)得到Invalid，先IsValid；typednilpointer是valid Kind Ptr且IsNil true，输出typed nil而不Elem。非nilpointer进入前用type+pointeraddress组成visitkey，当前recursionpath已见则报告cycle；退出path可移除以区分sharedDAG与cycle。所有IsNil/Pointer调用前检查Kind，并限制depth/nodes/bytes。</Answer>
+
+**问题 2：S-expression Decode 为什么应写入 temporary value，怎样处理 tags 与 numeric overflow？**
+
+<Answer>直接写destination在中途error会留下partial state；先New(targetType).Elem递归decode，全部成功后一次Set commit。StructTag.Lookup解析field name/options并定义missing/unknown/duplicate policy；只设置exported/CanSet fields。numeric node在SetInt/Uint前用target bits与Overflow检查，error包含source offset和field path，collection/depth有limits。</Answer>
+
+**问题 3：一个 validation library 应选 interface、generics、generated code 还是 reflection？**
+
+<Answer>若domain type能实现Validate，interface最简单；同一compile-timeshape算法可用generics；大量稳定schemas且性能/compile-time diagnostics重要时generated code更合适；只有调用者传入runtime未知struct并依赖tags时用reflection。无论选择，public API typed、错误带path、rules版本化；reflection core预验证nil/kind/export/tags并测试cycle/limits/panic boundaries。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="reflection type-value pair" definition="reflect.Type 与 reflect.Value 描述 interface 的 dynamic concrete value。" />
+  <GlossaryItem term="kind dispatch" definition="按 Struct/Slice/Ptr 等 representation category 选择反射操作。" />
+  <GlossaryItem term="reflective codec boundary" definition="runtime shape 与外部representation之间的受限映射。" />
+  <GlossaryItem term="addressable settable value" definition="可取地址且通过可写路径取得、允许反射修改的Value。" />
+  <GlossaryItem term="struct tag metadata" definition="field declaration上由consumer按key解释的schema字符串。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Go Programming Language, Chapter 12: Reflection"
+  adaptedUrl="https://www.gopl.io/"
+/>

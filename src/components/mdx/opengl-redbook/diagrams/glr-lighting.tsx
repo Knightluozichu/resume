@@ -1,37 +1,5 @@
-/**
- * <GlrLightingDiagram>
- *
- * Phong光照：法线变换→环境光+漫反射+镜面反射
- */
-
-export function GlrLightingDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox="0 0 720 400" role="img" aria-label="Phong光照：法线变换→环境光+漫反射+镜面反射" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x="360" y="30" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">OpenGL光照模型</text>
-<text x="360" y="50" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">Phong: 环境+漫反射+镜面</text>
-<circle cx="560" cy="120" r="18" fill="var(--warning)" fillOpacity="0.3" stroke="var(--warning)" strokeWidth="1.5" />
-<text x="560" y="100" textAnchor="middle" fontSize="10" fill="var(--warning)">光源</text>
-<rect x="120" y="250" width="360" height="40" rx="4" fill="var(--success)" fillOpacity="0.15" stroke="var(--success)" strokeWidth="1.5" />
-<text x="300" y="275" textAnchor="middle" fontSize="11" fill="var(--success)">物体表面+材质</text>
-<line x1="325" y1="250" x2="325" y2="190" stroke="var(--accent)" strokeWidth="1.5" strokeDasharray="4 2" />
-<text x="345" y="200" fontSize="10" fill="var(--accent)">N(法线)</text>
-<line x1="545" y1="138" x2="340" y2="240" stroke="var(--warning)" strokeWidth="1.5" markerEnd="url(#arrow)" />
-<rect x="48" y="320" width="190" height="40" rx="6" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" strokeWidth="1" />
-<text x="143" y="345" textAnchor="middle" fontSize="10" fill="var(--accent)">环境光 k_a</text>
-<rect x="265" y="320" width="190" height="40" rx="6" fill="var(--success)" fillOpacity="0.1" stroke="var(--success)" strokeWidth="1" />
-<text x="360" y="345" textAnchor="middle" fontSize="10" fill="var(--success)">漫反射 k_d*N.L</text>
-<rect x="482" y="320" width="190" height="40" rx="6" fill="var(--warning)" fillOpacity="0.1" stroke="var(--warning)" strokeWidth="1" />
-<text x="577" y="345" textAnchor="middle" fontSize="10" fill="var(--warning)">镜面 k_s*(R.V)^n</text>
-          <defs>
-            <marker id="glr-lighting-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-              <path d="M0 0 L6 3 L0 6 z" fill="var(--text-secondary)" />
-            </marker>
-          </defs>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">Phong光照：法线变换→环境光+漫反射+镜面反射</figcaption>
-    </figure>
-  );
-}
+import type { ReactNode } from "react";
+function Frame({caption,children}:{caption:string;children:ReactNode}){return <figure className="mdx-figure not-prose mx-auto my-6"><div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div><figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption></figure>}
+export function GlrLightingDiagram(){const terms=[["Geometry","P · N · V · L"],["Material","diffuse · specular · shininess"],["Light","radiance · distance · cone"],["Visibility","shadow comparison"],["Output","linear color → encode"]];return <Frame caption="局部光照输出由统一空间几何、材质、光源、可见性和颜色编码共同决定。"><div role="img" aria-label="光照五项合同" className="grid gap-2 md:grid-cols-5">{terms.map(([a,b],i)=><div key={a} className="grid min-h-24 content-center rounded-control border border-border bg-bg/45 p-3 text-center"><span className="text-xs font-bold text-accent">0{i+1}</span><strong className="mt-1 text-xs text-primary">{a}</strong><span className="mt-2 text-xs text-secondary">{b}</span></div>)}</div></Frame>}
+export function GlrLightingSpacesDiagram(){const rows=[["position","model → world","point, w=1"],["direction","linear transform","vector, w=0"],["normal","inverse-transpose","renormalize"],["TBN detail","tangent → world","handle handedness"]];return <Frame caption="类型都可能是 vec3，但位置、方向和法线遵守不同变换。"><div role="img" aria-label="光照向量空间变换" className="overflow-hidden rounded-control border border-border text-xs"><div className="grid grid-cols-3 gap-px bg-border">{['Quantity','Transform','Invariant'].map(x=><strong key={x} className="bg-bg p-3 text-primary">{x}</strong>)}{rows.flatMap(r=>r.map((x,i)=><span key={`${r[0]}-${x}`} className={i===0?"bg-accent/10 p-3 font-semibold text-accent":"bg-elevated p-3 text-secondary"}>{x}</span>))}</div></div></Frame>}
+export function GlrShadowMapDiagram(){const stages=[["Light pass","world → light clip → depth"],["Camera pass","world → light texture coordinate"],["Compare","receiver depth − bias vs map"],["Filter","PCF neighborhood / custom resolve"]];return <Frame caption="阴影映射先建立光源最近深度，再投影接收点比较并过滤。"><div role="img" aria-label="阴影映射两阶段链" className="grid gap-2 md:grid-cols-4">{stages.map(([a,b])=><div key={a} className="rounded-control border border-border bg-bg/45 p-3"><strong className="text-xs text-primary">{a}</strong><p className="mb-0 mt-2 text-xs leading-5 text-secondary">{b}</p></div>)}</div></Frame>}

@@ -1,0 +1,218 @@
+---
+title: "Chapter 23. Assembly Loading and Reflection"
+type: C
+section: "CLR via C# 4e · Core Facilities"
+order: 23
+description: "贯通assembly load identity/context、反射发现/构造/调用、插件生命周期、性能缓存与Runtime*Handle低内存绑定。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcAddinLifecycleLab, CvcAssemblyLoadLab, CvcReflectionBindingLab } from "@/components/mdx/clr-via-csharp/diagrams/assembly-loading-reflection";
+
+<Objectives>
+
+- 能比较identity/path/metadata-only/collectible loading，分析resolver、type identity与安全边界
+- 能实现type/member discovery、construction和invocation，验证BindingFlags、signature、异常与AOT
+- 能设计add-in discover/load/run/unload lifecycle，并用typed delegate/handles减少反射成本和root泄漏
+
+</Objectives>
+
+## 为什么Reflection问题通常先是Loading问题
+
+Reflection读取的是某个runtime Assembly/Type universe。若assembly从错误context/version加载，后续GetType/IsAssignableFrom/cast都可能错；若为了“查看metadata”直接load外部DLL，还可能执行module/type initialization或解析不可信dependencies。先选择loading boundary，再谈member discovery和invoke。
+
+先预测：`Assembly.LoadFrom`同一路径是否总返回新instance；GetTypes失败是否一个type坏就丢全部；Activator.CreateInstance何时执行user code；MethodInfo.Invoke如何包装target exception；cache Type/MethodInfo是否阻止collectible ALC unload；RuntimeTypeHandle能否跨进程/版本持久化。后文从load、binding、plugin lifecycle回答。
+
+<Term def="某个AssemblyLoadContext/AppDomain内可见、共享或私有的managed/native dependencies及其type identity规则。">assembly dependency universe</Term>
+
+## Assembly Loading
+
+Identity load按AssemblyName让context resolver选择；path load在指定ALC从canonical absolute file加载；byte load可能没有location/dependency context；metadata-only读取PE不执行。Framework Load/LoadFrom/LoadFile contexts有历史差异，现代使用AssemblyLoadContext与AssemblyDependencyResolver，不能混用造成duplicate identity。
+
+```csharp
+sealed class AddinLoadContext : AssemblyLoadContext
+{
+    private readonly AssemblyDependencyResolver _resolver;
+
+    public AddinLoadContext(string mainPath) : base(isCollectible: true) =>
+        _resolver = new(mainPath);
+
+    protected override Assembly? Load(AssemblyName name)
+    {
+        if (name.Name == typeof(IAddin).Assembly.GetName().Name) return null;
+        string? path = _resolver.ResolveAssemblyToPath(name);
+        return path is null ? null : LoadFromAssemblyPath(path);
+    }
+}
+```
+
+共享contract由Default提供，plugin private dependencies由custom context加载。Resolver限制plugin root和allowed native paths；ALC不限制文件/network权限。Loading evidence包含requested identity、context、resolved path/hash、references和native assets。
+
+<Stepper>
+  <Step title="切换identity、path、metadata与collectible loading"><CvcAssemblyLoadLab /></Step>
+  <Step title="建立Bind ledger">记录requested/selected identity、path/hash、context、resolver candidates和失败原因。</Step>
+  <Step title="制造Duplicate identity">私载contract副本复现cast失败，再共享Default contract并验证type equality/unload。</Step>
+</Stepper>
+
+<Callout type="trap" title="文件名和Type FullName相同就能安全Cast">
+Defining assembly identity与load context共同参与runtime type identity。打印AssemblyQualifiedName、Assembly实例和ALC，不能只比较名字。
+</Callout>
+
+## Using Reflection to Build a Dynamically Extensible Application
+
+可扩展应用分四阶段：静态discover manifest/metadata，不执行；validate id/version/capabilities/signature/contract；load into context/process；construct/run/stop/unload。不要扫描目录后立即Activator所有types。External plugin不可信时独立process，reflection/ALC只做dependency tooling。
+
+Plugin contract小而稳定：IAddin start/stop, host services, CancellationToken, DTO; no implementation Type crosses boundary。Lifecycle owner持context、instance、subscriptions/tasks/timers/native handles，停止时逐项清。
+
+## Reflection Performance
+
+`typeof`/Object.GetType/type handle很快；名称查找、GetMethods、binder conversion、MethodInfo.Invoke较慢并分配Object arrays/boxing。Startup一次扫描通常没问题，hot path应cache exact MemberInfo或编译typed delegate/expression/source generate。先profile，不为少量管理路径制造复杂cache。
+
+Cache key包含runtime Type/member signature/context；static dictionary会root collectible types/assemblies。使用context-owned cache、ConditionalWeakTable或在unload clear。Trimming/AOT下反射target可能被移除或dynamic code禁用，source generator是稳定alternative。
+
+## Discovering Types Defined in an Assembly
+
+`Assembly.GetTypes`返回所有defined types，但一个dependency/type load failure可抛ReflectionTypeLoadException，`Types`含null、LoaderExceptions含原因。`DefinedTypes`/ExportedTypes按需求选择。Discovery筛选nonabstract、assignable、public constructor/attribute，但IsAssignableFrom只在同contract identity有效。
+
+```csharp
+static IEnumerable<Type> LoadableTypes(Assembly assembly)
+{
+    try
+    {
+        return assembly.GetTypes();
+    }
+    catch (ReflectionTypeLoadException error)
+    {
+        foreach (Exception? loaderError in error.LoaderExceptions)
+            Console.Error.WriteLine(loaderError);
+        return error.Types.OfType<Type>();
+    }
+}
+```
+
+对untrusted file优先System.Reflection.Metadata列TypeDefinitions，不load。Type enumeration会让runtime创建Type objects并解析部分dependencies，memory/lifetime要考虑。
+
+## What Exactly Is a Type Object?
+
+`System.Type`是runtime type metadata/handle的managed view；`typeof(T)`与obj.GetType返回相同identity的Type object。Generic definition/construction、array/pointer/byref、nested type都有不同Type。Type不是实例factory本身，但提供construct/member/assignability APIs。
+
+<Term def="Runtime对一个精确type identity的managed metadata视图，关联定义assembly、generic shape和method/field信息。">runtime Type object</Term>
+
+Type object由runtime/context持有，保存到global cache可延长assembly context。TypeHandle只在当前process/runtime有效，不做persistent id。Stable business type id用显式name/version registry。
+
+## Building a Hierarchy of Exception-Derived Types
+
+Reflection可扫描Exception-derived types建立taxonomy文档/handler，但不要用Type hierarchy替代明确error policy。Exception Type discovery也可能触发load issues；跨plugin exceptions不应穿越context/process为具体implementation type，映射stable error DTO。
+
+原书以exception hierarchy展示Type.BaseType/IsSubclassOf/IsAssignableFrom。Assignability需注意interface、generic variance、open types与null；用实际closed contract测试。
+
+## Constructing an Instance of a Type
+
+Activator/ConstructorInfo选择constructor并执行type initializer/constructor user code。Default binder可做conversion/culture，容易意外选错overload；获取exact parameter types的ConstructorInfo或typed factory。DI container还要处理dependencies/lifetime/cycles，startup validate all registrations。
+
+```csharp
+ConstructorInfo constructor = addinType.GetConstructor(Type.EmptyTypes)
+    ?? throw new InvalidOperationException($"{addinType} needs public parameterless constructor");
+
+var instance = (IAddin)constructor.Invoke(parameters: null);
+```
+
+Constructor exception被TargetInvocationException包inner；记录并translate。Uninitialized object APIs绕过constructor会破坏invariant，仅legacy formatter/internal runtime使用，不做普通factory。
+
+## Designing an Application That Supports Add-Ins
+
+Manifest先声明addin id/version/contract range/capabilities/entry type。Host验证路径、hash/signature policy和duplicate，不执行；按trust选择ALC/process；health后activate。升级side-by-side load new、切流、drain old、Stop/Dispose/unload，失败rollback。
+
+<Term def="Add-in从静态发现、兼容校验、加载、运行、停止、去root到可证明卸载的完整owner协议。">add-in lifecycle contract</Term>
+
+ALC unload测试把load/run/stop放non-inlined helper，返回WeakReference，清除host references后Collect/Wait/Collect仅用于test。若native global/thread不合作，process exit才可靠。
+
+<Stepper>
+  <Step title="切换discover、load、run与unload"><CvcAddinLifecycleLab /></Step>
+  <Step title="填写Add-in ledger">记录contract/deps/context、tasks/events/timers/handles/cache、trust和shutdown deadline。</Step>
+  <Step title="演练升级故障">在discover/load/start/run/stop每阶段失败，验证当前版不受污染且旧context/process释放。</Step>
+</Stepper>
+
+<Callout type="trap" title="AssemblyLoadContext隔离可以安全运行不可信Add-in">
+ALC不撤销进程权限，也不隔离crash、CPU、native globals。Untrusted或resource-heavy add-in用worker process/container和explicit RPC。
+</Callout>
+
+## Using Reflection to Discover a Type's Members and Discovering a Type's Members
+
+GetMembers/GetMethods/GetProperties等受BindingFlags控制：Public/NonPublic、Instance/Static、DeclaredOnly、FlattenHierarchy；不指定会有默认public范围。Overloads用name+parameter types+generic arity+return/ref modifiers精确匹配，不能只First(name)。Interface maps、explicit implementation、base private members需要专门API。
+
+<Term def="由name、declaring type、static/instance、generic arity、parameters/ref modifiers与return组成的精确成员身份。">reflection member signature</Term>
+
+Metadata order不是业务顺序；attributes multiple也不要依赖枚举序。Nullable/custom modifiers/tuple names可在metadata attributes/modifiers中，完整API tooling用System.Reflection.Metadata或MetadataLoadContext。
+
+## Invoking a Type's Members
+
+MethodInfo.Invoke接收target与Object[] args，处理boxing、binder conversion、ref/out回写，target exception包装。PropertyInfo GetValue/SetValue调用accessors；FieldInfo直接storage；EventInfo add/remove调用accessors。每次hot invoke可CreateDelegate：typed, fewer allocations, target exception直接传播。
+
+```csharp
+MethodInfo method = addinType.GetMethod(
+    nameof(IAddin.Execute),
+    BindingFlags.Public | BindingFlags.Instance,
+    binder: null,
+    types: [typeof(AddinRequest)],
+    modifiers: null)
+    ?? throw new MissingMethodException(addinType.FullName, nameof(IAddin.Execute));
+
+var execute = method.CreateDelegate<Func<AddinRequest, AddinResult>>(instance);
+AddinResult result = execute(request);
+```
+
+Private reflection绕过encapsulation且trimming脆弱，不作为长期integration。DynamicMethod/expression compile可能需要dynamic code，AOT受限；source-generated dispatch最稳。
+
+## Using Binding Handles to Reduce Your Process's Memory Consumption
+
+原书介绍RuntimeTypeHandle/RuntimeMethodHandle/RuntimeFieldHandle用轻量value保存runtime binding，按需通过Type.GetTypeFromHandle/MethodBase.GetMethodFromHandle恢复，减少长期持有完整reflection objects的场景。Handle仍关联runtime/context，不是可序列化token，也可能影响unload语义；generic member恢复常需declaring type handle。
+
+<Term def="仅在当前runtime/context有效、可按需恢复Type/Method/Field metadata view的轻量运行时句柄。">runtime binding handle</Term>
+
+现代优化优先避免无界reflection cache、用source-generated registry/typed delegates。Handle memory收益需测，并确保context-owned cache unload时clear。不把MetadataToken单独持久化，它只在module/version内有意义。
+
+<Stepper>
+  <Step title="切换type discovery、member discovery、construct与invoke"><CvcReflectionBindingLab /></Step>
+  <Step title="建立Binding worksheet">记录exact Type/context、BindingFlags、signature、constructor side effects、AOT preservation和exception unwrap。</Step>
+  <Step title="替换Hot invoke">Profile确认后CreateDelegate/source generate，对比allocation/latency并做context unload test。</Step>
+</Stepper>
+
+## 本章回顾：Reflection越接近执行，门禁越严格
+
+1. Loading先决定assembly/type universe；metadata inspection不应直接执行untrusted code。
+2. Type/member discovery需exact identity/BindingFlags/signature并处理partial load errors。
+3. Construction/invocation执行user code、包装异常并受trimming/AOT限制。
+4. Add-in按discover/validate/load/run/stop/unload分阶段，高风险使用process isolation。
+5. Typed delegates/source generation通常优于hot MethodInfo.Invoke；handles/cache不得阻止collectible unload。
+
+<Exercises>
+
+**问题 1：GetTypes抛ReflectionTypeLoadException，怎样保留可用信息？**
+
+<Answer>记录每个LoaderException及assembly bind evidence，使用`error.Types.OfType<Type>()`继续处理已加载types，但不要静默视为完整。若用于plugin资格，dependency缺失应让该plugin失败；静态inventory改用System.Reflection.Metadata避免runtime type load。</Answer>
+
+**问题 2：MethodInfo.Invoke热点如何优化且保持Unload？**
+
+<Answer>先锁定exact MethodInfo/signature，CreateDelegate成typed callable并在plugin/context owner内cache；unload时clear cache/instance/delegate。若AOT或大规模已知types，用source generator生成registry。对比latency/allocation并用WeakReference确认context回收。</Answer>
+
+**问题 3：怎样防止Plugin reflection discovery执行恶意代码？**
+
+<Answer>先读PE raw metadata/manifest，限制size/depth并验证hash/signature/allowlist，不load/Activator。通过后按trust在worker process或受控ALC load；构造即execution boundary，设置lifecycle/deadline。Attribute数据也优先CustomAttributeData/raw读取。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="assembly dependency universe" definition="Load context内共享/私有依赖与type identity规则。" />
+  <GlossaryItem term="runtime Type object" definition="精确runtime type identity的managed metadata view。" />
+  <GlossaryItem term="add-in lifecycle contract" definition="Discover到可证明unload的完整owner流程。" />
+  <GlossaryItem term="reflection member signature" definition="Name、arity、parameters与modifiers组成的精确member身份。" />
+  <GlossaryItem term="runtime binding handle" definition="当前runtime/context内按需恢复reflection view的轻量handle。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 23: Assembly Loading and Reflection" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

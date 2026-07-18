@@ -1,107 +1,213 @@
 ---
-title: "着色基础与光照模型"
+title: "着色、光色与外观表示"
 type: B
 section: "计算机图形学与渲染"
 order: 3
-description: "Phong光照模型三分量分解——环境光、漫反射、镜面反射"
+description: "承载官方 Ch5、Ch8、Ch10、Ch13-15：着色基础、辐射度量、局部照明、非多边形表示、体积与 NPR"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://www.realtimerendering.com/"
 draft: false
 ---
 
-import { RtrShadingBasicsDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-shading-basics";
+import { RtrShadingBasicsDiagram, RtrRadiometryDiagram, RtrAppearanceFamiliesDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-shading-basics";
+import { RtrStepFlowDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能用一句话解释Phong光照模型的三个分量
-- 能写出Lambert余弦定律的公式并解释含义
-- 能区分Phong和Blinn-Phong的差异
-- 能回答：为什么max(N·L, 0)的max是必要的？
+
+- 能区分 irradiance、radiance、luminance、线性 RGB 与显示编码值
+- 能分析 shading frequency、插值、法线和局部光源采样对最终像素的影响
+- 能比较 mesh、particle/billboard、implicit/volume 和 stylized representation
+- 能推导 Beer-Lambert 透射并设计局部照明、体积和 NPR 的正确性测试
+
 </Objectives>
 
-## 直觉引入
+## 直觉：外观不是三个颜色相加
 
-想象一个房间。环境光像房间的整体照明——均匀照亮每个角落，没有方向性。漫反射像墙壁——光打上去后向四面八方散射，看起来哑光。镜面反射像镜子或金属——光在特定方向反射，形成高光点。
+先预测：把 sRGB 纹理值直接相加再写回 sRGB framebuffer，亮度会正确吗？把雾简单写成 `mix(scene, fogColor, distance)`，不同步长下结果会一致吗？答案都是否定的；着色必须追踪量的物理含义、工作色域、采样位置和表示方式。
 
-Phong模型就是把这三种光加在一起：环境光（兜底）+ 漫反射（主体）+ 镜面反射（高光）。虽然简单，但它是所有着色模型的基础。
-
-## 概念讲解
-
-### Phong光照模型
+Ch5 建立着色计算，Ch8 定义光与颜色的量，Ch10 讨论局部光源，Ch13-15 则把外观扩展到点/粒子/隐式表示、参与介质和非真实感风格。它们共享同一条链：**representation → incident light → material/medium response → sampling/filtering → display transform**。
 
 <RtrShadingBasicsDiagram />
 
-<Term def="Phong模型将光照分解为环境光、漫反射和镜面反射三个分量的经验光照模型">Phong模型</Term>的核心公式：I = k_a×I_a + k_d×I×max(N·L,0) + k_s×I×max(R·V,0)^n。
+## Ch5 Shading Basics：在哪里算、插什么值
 
-<Term def="Lambert余弦定律描述漫反射光强与表面法线和光源方向夹角余弦成正比">Lambert余弦定律</Term>是漫反射分量的理论基础：N·L就是法线与光源方向的点积。
+<Term def="在几何样本处根据材质、光、视线和局部微分属性求出离开辐亮度的过程">着色</Term>不仅是一个光照公式，还包括计算频率和属性来源。flat shading 每个图元一次，Gouraud 在顶点求光照再插值颜色，per-pixel/per-sample shading 插值属性后求光照；三者对小高光、法线贴图和边缘采样的保真度不同。
 
-<Term def="Blinn-Phong模型用半角向量H替代反射向量R，是Phong模型的优化版本">Blinn-Phong</Term>用H=(L+V)/|L+V|替代R，计算更高效且高光更自然。
+三角形内部通常对投影后的属性做 perspective-correct interpolation。若顶点属性为 $a_i$、clip-space 的 $w_i$、屏幕重心权重为 $\lambda_i$：
 
-## 交互Demo
+$$
+a=\frac{\sum_i \lambda_i a_i/w_i}{\sum_i \lambda_i/w_i}.
+$$
 
-<Stepper>
-<Step title="第一步：环境光分量">环境光模拟间接光，给所有表面一个基础亮度。它是常数，不依赖法线或光源方向，避免阴影区域纯黑。</Step>
-<Step title="第二步：漫反射分量">
-漫反射由Lambert余弦定律决定。观察N·L如何控制亮度——法线正对光源时最亮，侧对时变暗，背对时为零。
-<RtrShadingBasicsDiagram />
-</Step>
-<Step title="第三步：镜面反射分量">镜面反射由反射方向R与视线方向V的夹角决定。指数n控制高光锐度——n越大高光越小越锐利。</Step>
-</Stepper>
+直接线性插值 UV 会产生透视游动。法线、切线和由插值得到的方向通常还需归一化；shader derivative 可估计纹理 footprint，但在非均匀控制流、helper invocation 和不连续属性附近要谨慎。
 
-## 代码对照
+### 经验模型的边界
+
+Lambert 漫反射 BRDF 为 $f_d=\rho_d/\pi$，直接光项含 $max(\mathbf n\cdot\mathbf l,0)$。Phong/Blinn-Phong 是经验镜面模型，不保证能量守恒；所谓 ambient 常数只是补光近似，不等于真实间接光。
+
+Blinn-Phong 用半角向量 $\mathbf h=normalize(\mathbf l+\mathbf v)$，Phong 用反射向量。两者指数不可直接互换，哪个更快依硬件、编译器和实现，不能断言 Blinn-Phong 必然更自然或更高效。背光时还要限制镜面项，避免光从表面背面泄漏。
+
+## Ch8 Light and Color：先知道正在计算什么
+
+<RtrRadiometryDiagram />
+
+<Term def="单位投影面积、单位立体角方向上的辐射功率；在真空直线路径上保持不变，是渲染方程的核心量">辐亮度</Term> $L$ 的单位是 $W\,m^{-2}\,sr^{-1}$。与它相邻的辐射度量不能混用：
+
+- radiant flux $\Phi$：总功率，单位 W；
+- radiant intensity $I=d\Phi/d\omega$：单位立体角功率，$W/sr$；
+- irradiance $E=d\Phi/dA$：落到表面的单位面积功率，$W/m^2$；
+- radiance $L=d^2\Phi/(dA\cos\theta\,d\omega)$：带方向的面积密度。
+
+点光源的 irradiance 在无介质时近似按 $1/r^2$ 衰减。把 attenuation 写成任意线性函数可以服务艺术需求，但不再是物理距离模型。
+
+<Term def="由人眼明视觉敏感度函数对光谱辐射量加权得到的视觉量；例如 luminance 的单位为 cd/m²">光度量</Term>不是 RGB 三通道的同义词。颜色管线还需区分 spectrum、CIE XYZ、色域 primaries、white point、linear RGB 和 transfer function。
+
+sRGB 数值通常带非线性传递函数；纹理采样后应解码到线性光空间再做光照和混合，输出阶段再经 tone mapping、gamut mapping 与显示编码。normal、roughness、metalness 等数据纹理不应做 sRGB 解码。
+
+## Ch10 Local Illumination：局部光源仍需要积分
+
+表面一点的直接照明是对可见光源方向的积分：
+
+$$
+L_o(\mathbf x,\mathbf v)=\int_{\Omega}f_r(\mathbf l,\mathbf v)L_i(\mathbf l)
+V(\mathbf x,\mathbf l)(\mathbf n\cdot\mathbf l)^+d\omega.
+$$
+
+directional、point 和 spot light 可视为理想化 delta light，通常单次求值；area light、emissive mesh 和 environment map 有有限角域，需要采样并处理 visibility。只取面光源中心会得到过硬且随尺寸错误的结果。
+
+<Term def="按目标积分贡献分布选择样本，并用概率密度除权以降低 Monte Carlo 方差的方法">重要性采样</Term>可按光源功率、立体角、BRDF 或 environment luminance 分布采样。多重要性采样组合 light sampling 与 BRDF sampling；实时系统也可用预积分、LTC、clustered light lists 或 reservoir reuse，但都要保留 estimator/近似的适用边界。
 
 ```glsl
-// Blinn-Phong 光照模型实现
-vec3 blinnPhong(vec3 N, vec3 L, vec3 V, vec3 lightColor,
-              vec3 ambient, vec3 diffuse, vec3 specular, float shininess) {
-    // 环境光
-    vec3 amb = ambient * lightColor;
-    
-    // 漫反射 (Lambert)
-    float diff = max(dot(N, L), 0.0);
-    vec3 dif = diff * diffuse * lightColor;
-    
-    // 镜面反射 (Blinn-Phong)
-    vec3 H = normalize(L + V);  // 半角向量
-    float spec = pow(max(dot(N, H), 0.0), shininess);
-    vec3 spe = spec * specular * lightColor;
-    
-    return amb + dif + spe;
+vec3 evaluateDirect(Surface s, LightSample ls, vec3 V) {
+    vec3 L = normalize(ls.position - s.position);
+    float NoL = max(dot(s.normal, L), 0.0);
+    if (NoL == 0.0 || !ls.visible) return vec3(0.0);
+
+    vec3 f = evaluateBRDF(s, L, V);       // BRDF, not pre-multiplied color
+    vec3 Li = ls.radiance;                // linear radiometric quantity
+    return f * Li * NoL / max(ls.pdf, 1e-6);
 }
 ```
+
+单位测试要检查 inverse-square ratio、零距离保护、背光、遮挡、PDF 和单位；图像测试则扫光源尺寸、roughness、距离和 HDR 强度。
+
+## Ch13 Beyond Polygons：表示决定采样规则
+
+“超越多边形”不表示完全不用三角形，而是场景原语与表面定义不局限于静态 polygon mesh：
+
+- point sprites、billboards、particles：适合火花、植被 impostor 和大量小元素；要处理相机朝向、排序、soft intersection 与 temporal stability；
+- implicit surface / signed distance field：用 $f(\mathbf x)=0$ 或距离场定义边界，可 ray march、mesh extraction 或用于碰撞/阴影；
+- voxel、height field、procedural geometry：按规则生成或采样，适合地形、破坏和稠密空间数据；
+- hair/ribbon/curve primitives：需要各向异性着色、抗锯齿和细几何覆盖处理。
+
+<Term def="用到最近表面的带符号距离定义空间，零等值面表示边界；准确 SDF 可支持保守步进和法线估计">有符号距离场</Term>的 sphere tracing 步长依赖距离下界。任意缩放或不准确 field 会破坏保守性；应限制步长、最大迭代与命中 epsilon，并记录 miss/iteration 分布。
+
+## Ch14 Volumetric and Translucency Rendering：路径中也会吸收和散射
+
+<RtrAppearanceFamiliesDiagram />
+
+<Term def="光穿过参与介质而未发生吸收或外散射的比例；均匀介质中遵循 Beer-Lambert 指数衰减">透射率</Term>在均匀介质距离 $d$ 上为：
+
+$$
+T(d)=e^{-\sigma_t d},\qquad \sigma_t=\sigma_a+\sigma_s.
+$$
+
+$\sigma_a$ 是吸收系数，$\sigma_s$ 是外散射系数，phase function 描述散射方向分布。沿 ray 的辐射传输包含 attenuated background 与 in-scattering 积分；“距离线性混雾”通常不具备步长不变性和正确遮挡。
+
+实时体积常用 froxel grid、ray marching、shadow map、temporal reprojection 和 blue-noise/jitter。每步应由 segment transmittance 合成，早停基于累计透射率；改变 step size 后结果应收敛。半透明表面 alpha blending 是覆盖/合成模型，不自动等同体吸收；straight 与 premultiplied alpha 的混合因子也不同。
+
+皮肤、蜡等 translucent material 还涉及 subsurface scattering。屏幕空间模糊便宜但会跨轮廓泄漏，profile diffusion、texture-space 或 path-based 方法对厚度与几何更准确。
+
+## Ch15 Non-Photorealistic Rendering：风格也是可测的系统
+
+NPR 通过选择性省略、夸张和符号化传达形状或语义。toon shading 可量化 diffuse/specular ramp；轮廓可从 geometry silhouette、inverted hull 或 depth/normal image-space edge 提取；hatching/stipple 需要随表面与运动稳定，而不是在屏幕上游泳。
+
+<Term def="不以摄影真实为唯一目标，通过色阶、轮廓、笔触和形状夸张控制视觉信息与风格一致性的渲染方法">非真实感渲染</Term>仍需正确的空间、遮挡和抗锯齿。验收应包含风格 reference、轮廓连续性、时间稳定性、可读性和性能，而非只比较物理误差。
+
+## 三步外观诊断
+
+<Stepper>
+<Step title="第一步：标注量与空间">
+
+为每个输入标出 linear/encoded、radiance/reflectance/data、world/tangent/view space，以及 surface/volume/stylized representation。
+
+<RtrStepFlowDiagram caption="先阻断色彩空间和物理量混用。" stage={1} stages={["Classify：quantity、units、color/coordinate space、representation"]} />
+
+</Step>
+<Step title="第二步：建立解析基线">
+
+用 Lambert white furnace、inverse-square 点光、Beer-Lambert 均匀介质和固定轮廓场景得到可预测输出。
+
+<RtrStepFlowDiagram caption="解析案例让光、介质和风格错误可以分别归因。" stage={2} stages={["Classify：quantity、units、color/coordinate space、representation", "Measure：analytic ratios、reference pixels、edges、transmittance"]} />
+
+</Step>
+<Step title="第三步：扫参数并验证稳定性">
+
+扫描曝光、色域、light size、roughness、step size、粒子密度和相机运动；比较误差、闪烁、GPU 时间与 reference。
+
+<RtrStepFlowDiagram caption="最终门槛同时包含数值、图像、时间稳定和实时成本。" stage={3} stages={["Classify：quantity、units、color/coordinate space、representation", "Measure：analytic ratios、reference pixels、edges、transmittance", "Validate：parameter sweeps、temporal stability、quality and cost"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**误区：忘记max(N·L, 0)中的max。**
-当法线背对光源时，N·L为负。如果不clamp到0，漫反射会变成负值，从其他分量中「减去」光，导致颜色异常。max操作确保背光面只有环境光。
+**现象 →** 灯越多画面越快过曝，混合结果偏暗。**原因 →** 在 sRGB 编码值上做光照或 blending。**修法 →** 颜色纹理解码到线性工作空间，光照/合成在线性量上进行，最后统一显示变换。
 </Callout>
 
 <Callout type="trap">
-**误区：认为Phong模型是物理正确的。**
-Phong是经验模型，参数k_a/k_d/k_s没有物理意义，也不保证能量守恒。真实渲染需要基于物理的BRDF（如Cook-Torrance），但Phong适合风格化渲染和学习入门。
+**现象 →** 用常数 ambient 声称得到了间接光，或断言 Blinn-Phong 一定更快。**原因 →** 经验近似被当作物理事实或硬件事实。**修法 →** 标明模型边界，用 reference 与 profiler 分别验证质量和成本。
 </Callout>
 
+<Callout type="trap">
+**现象 →** 体积步长减半后雾明显变浓，NPR 轮廓在运动中断裂。**原因 →** 合成未按 segment transmittance，或轮廓/笔触缺少时空一致性。**修法 →** 做 step-size 收敛测试，并加入相机轨迹的 temporal regression。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题 1**：Phong模型的三个光照分量分别模拟什么现象？
+
+**问题 1：为什么 sRGB albedo 与 normal texture 的采样设置不同？**
 
 <Answer>
-环境光模拟间接光（光线弹射后均匀照亮所有表面）；漫反射模拟粗糙表面对光的均匀散射（Lambert余弦定律）；镜面反射模拟光滑表面的方向性反射高光。三者相加得到最终颜色。
+albedo 表示颜色，存储值通常经 sRGB transfer function 编码，采样后应解码为线性 RGB；normal 是数值数据，直接映射到向量分量，不应做 sRGB 解码。两者都要按项目约定进入正确坐标/颜色空间。
 </Answer>
 
-**问题 2**：Blinn-Phong相比Phong有什么改进？
+**问题 2：怎样验证点光源的距离衰减与面光源采样？**
 
 <Answer>
-Blinn-Phong用半角向量H=(L+V)/2替代反射向量R=reflect(-L,N)。优势：1）计算H比计算R更简单（加法+归一化 vs 反射公式）；2）H与N的夹角是R与V夹角的一半，高光过渡更平滑自然；3）半角向量在概念上更接近微表面理论。
+固定法线、BRDF 和曝光，将点光距离加倍，无遮挡 irradiance 应约为四分之一；对面光源增加样本并与高样本 reference 比较均值和方差，同时检查 PDF、可见性与光源面积变化。
 </Answer>
+
+**问题 3：体积 ray marcher 的步长减半时什么应保持稳定？**
+
+<Answer>
+累计 transmittance、in-scattering 和最终颜色应向同一 reference 收敛，而不是随步数线性变亮或变暗；还要比较 shadow sampling、jitter、temporal accumulation、迭代数和 GPU 时间。
+</Answer>
+
+**问题 4：NPR 为什么不能只做颜色量化？**
+
+<Answer>
+风格还依赖轮廓、材质区域、笔触方向、遮挡和时间稳定。只有色阶量化会保留错误边界且运动时可能闪烁；应以风格 reference 验收形状可读性、轮廓连续、表面附着与性能。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+Ch5、8、10、13、14、15 把外观从表面局部公式扩展为量、颜色、表示、介质和风格的完整系统。可靠实现必须知道每个值是什么、在哪个空间、如何采样与过滤，并用解析基线、reference、参数扫描和时间序列共同验收。
+
 <Glossary>
-<GlossaryItem term="Phong模型">将光照分解为环境光、漫反射、镜面反射三个分量的经验光照模型。</GlossaryItem>
-<GlossaryItem term="Lambert余弦定律">漫反射光强与表面法线和光源方向夹角的余弦成正比，即I_diff = N·L。</GlossaryItem>
-<GlossaryItem term="Blinn-Phong">Phong的优化版本，用半角向量H替代反射向量R，更高效且高光更自然。</GlossaryItem>
-<GlossaryItem term="半角向量">光源方向L和视线方向V的中间方向H=normalize(L+V)，用于Blinn-Phong镜面计算。</GlossaryItem>
+<GlossaryItem term="着色">由几何、材质、光和视线求离开辐亮度的过程。</GlossaryItem>
+<GlossaryItem term="辐亮度">单位投影面积和单位立体角上的辐射功率。</GlossaryItem>
+<GlossaryItem term="光度量">以人眼视觉敏感度加权后的光学量。</GlossaryItem>
+<GlossaryItem term="重要性采样">按贡献分布采样并以 PDF 除权以降低方差的方法。</GlossaryItem>
+<GlossaryItem term="有符号距离场">以到表面的带符号距离定义零等值边界的场。</GlossaryItem>
+<GlossaryItem term="透射率">光穿过介质而未被吸收或外散射的比例。</GlossaryItem>
+<GlossaryItem term="非真实感渲染">以风格化和信息表达而非摄影真实为唯一目标的渲染。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="实时渲染第4版" adaptedUrl="https://www.realtimerendering.com/" />
+<Attribution adaptedFrom="Real-Time Rendering 4e, Chapters 5, 8, 10 and 13-15" adaptedUrl="https://www.realtimerendering.com/" />

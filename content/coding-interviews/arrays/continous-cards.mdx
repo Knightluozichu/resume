@@ -1,130 +1,372 @@
 ---
-title: 扑克牌中的顺子
+title: "面试题61：扑克牌中的顺子"
 type: C
-section: 数组
-order: 16
-description: 对含大小王（0）场景做去重排序后判断是否为连续序列，关注缺口统计与重复检测。
+section: "第6章 面试中的各项能力"
+order: 73
+description: "把大小王视为0，排序后拒绝非零重复并累计相邻空缺，用万能牌预算判定五张牌能否组成顺子。"
 demo: true
 math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/61_ContinousCards/ContinousCards.cpp"
 draft: false
 ---
 
-{/* 知识点清单：排序、去重、缺口计数、特殊牌替代（0）；原书章节：扑克牌中的顺子。 */}
+import { ContinuousCardsSortDiagram, ContinuousCardsGapLab, ContinuousCardsJokerBudgetMap, ContinuousCardsContractDiagram, ContinuousCardsOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/continous-cards";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能解释 0（大小王）如何作为“可补齐资源”工作。
-- 能给出排序后只靠首尾缺口判断的 $O(n\log n)$ 方案。
-- 能处理重复非零牌导致失败的边界。
+- 能解释大小王作为0时为何是一份可分配的缺牌预算
+- 能计算排序后所有相邻非零数字之间的空缺总数
+- 能实现作者原地排序与现代无副作用两种判定
+- 能分析非零重复、全为0、A的取值和非法牌面边界
+- 能设计覆盖12组官方场景与等价值域条件的测试
 
 </Objectives>
 
-## 直觉引入
+## 从“一张王能补哪一个位置”开始
 
-把牌从小到大排好后，非零牌若有重复则必定不能构成顺子。  
-其余缺口由 0 来补齐即可：`max-min` 不能超过 4，并且总缺口数不超过 0 的数量。
+抽到0、3、2、6、4时，0可以代表5，重排后得到2、3、4、5、6；抽到0、3、1、6、4时，非零牌之间同时缺2和5，一张王只能补一个位置，因此失败。
 
-## 概念讲解
+这道“**扑克牌中的顺子**”不是寻找最长连续子序列，而是问固定的五张牌能否重新排列并把大小王替换成合适点数，使最终五个点数连续。
 
-对排序后的数组：
+作者约定2到10使用数字本身，A为1，J为11，Q为12，K为13，并让“**大小王作为0**”。0是一张<Term def="可以替换为某个缺失点数、但仍只能占据一个位置的大小王牌。">万能牌</Term>；有两个0就有两次替换机会，不能把一张王同时补两个缺口。
 
-1. 统计所有 `0`（空牌），记为 `jokers`。
-2. 从第一个非零开始，相邻牌 `nums[i]` 与 `nums[i+1]`：
-   - 若相同，直接失败（除 0 外）。
-   - 若有间隙，累加 `gap += nums[i+1]-nums[i]-1`。
-3. 成立条件：`gap <= jokers` 且最大最小值差值在 `[0,4]`。
+$$
+\operatorname{rank}(A)=1,\quad
+\operatorname{rank}(J)=11,\quad
+\operatorname{rank}(Q)=12,\quad
+\operatorname{rank}(K)=13,\quad
+\operatorname{rank}(\text{joker})=0
+$$
 
-## 思考引导
+<ContinuousCardsSortDiagram />
 
-### 1) 先问问题，不先比大小
-这题的真实问题是“是否可重排为连续区间”，不是“最长是什么”。顺子成立与否取决于间距覆盖，不取决于原始先后顺序。
+先预测排序后0的数量和非零空缺，再判断结果。不要先套“最大值减最小值不超过4”，因为全0、重复牌和接口长度都会让未经定义的下标或错误前提混进判断。
 
-### 2) 识别不变式
-在去重后，连续性可由“最小值到最大值之间长度”和“有效元素数量是否一致”判断。重复牌会制造零间距，需要优先剥离。
+## 排序把三个问题同时显露出来
 
-### 3) 为什么它一定成立
-若一组数是连续的，除了去掉重复后，其值域长度与元素数量必须一致，且每个相邻步长差应满足可接续关系。这个条件来自整数集合的闭包性质。
+作者调用qsort原地排序。排序后的0全部聚在左侧，非零牌递增排列；于是一次扫描就能完成三件事：
 
-### 4) 常见误区
-把重复数直接参与 gap 统计会把间隙压缩，让错误结果看起来“更小”。另外排序本身只负责规范化，不是最终判断。
+1. 从头统计连续0的数量。
+2. 比较相邻<Term def="牌面不为0的普通牌；在顺子中每个有效点数最多出现一次。">非零牌</Term>，相等立即失败。
+3. 把相邻差值减1累加，得到需要万能牌填补的位置数。
 
-### 5) 你能找到一个反例吗
-输入 [1,2,2,3] 会被错误地判作可连续，如果不先去重。用这一组会检验你是否把去重写进了核心判断。
+这种先统一顺序再做局部判定的过程称为<Term def="把无序牌面重排为0在前、非零点数递增的标准形态。">排序归一化</Term>。原抽牌顺序与顺子是否成立无关，但排序会修改调用者传入的数组，这是作者接口可见的副作用。
 
-### 6) 迁移到下一题
-任何要判定“按区间覆盖是否无缺失”的题，优先先标准化元素集合，再用值域长度、最小/最大值做可行域约束。
-## 交互 Demo
+## 空缺数如何由相邻差得到
 
-你可以观察当牌面出现重复或缺口时，`gap` 如何累加、`0` 如何逐步消耗。
+设排序后有r张互不相同的非零牌，依次为x1到xr。相邻两张之间缺少的整数个数是后一张减前一张再减1；全部相加就是<Term def="排序后相邻非零牌之间尚未出现、必须由大小王填入的点数数量。">空缺数</Term>。
 
-<GreedyAlgorithmDiagram />
+$$
+G=\sum_{i=1}^{r-1}(x_{i+1}-x_i-1)
+  =x_r-x_1-(r-1)
+$$
 
-## 实现代码
+例如排序结果0、0、1、3、5的相邻空缺是1到3之间缺2、3到5之间缺4，总空缺G等于2；两个0恰好替换2和4。
+
+<ContinuousCardsJokerBudgetMap />
+
+令z为0的数量。每张王只能填一个内部空缺，因此通过条件是G不大于z。z就是<Term def="可用于填补缺失点数的0的数量；每填一个内部空缺消耗一份。">替代预算</Term>。
+
+如果预算有剩余，可以把多余的王放在非零区间左端或右端。例如0、0、0、0、3没有内部空缺，四张王可以组成1、2、4、5，最终得到1到5；不要求所有王都必须填在两张已有牌之间。
+
+## 非零重复为什么必须先失败
+
+顺子的每个点数只出现一次。若排序后相邻非零数字相等，例如0、0、0、1、1，即使有三张王也无法改变两张1本身；王可以补缺牌，不能删除或改写普通牌。
+
+$$
+x_i=x_{i+1}
+\quad\Longrightarrow\quad
+\text{not a straight}
+$$
+
+这就是原章规则“**非零数字不能重复**”。重复不能被当作“空缺为负一”参与求和，否则它可能抵消真正的正空缺，让错误输入看起来预算充足。
+
+<Callout type="trap" title="让重复值抵消空缺">
+相邻差为0时，差值减1会得到负数。若继续累计，重复牌可能把总空缺压小；正确顺序是先检查非零相等并立即返回false，再计算正空缺。
+</Callout>
+
+## 忠实还原作者实现
+
+作者只拒绝空指针或length小于1，没有强制length等于5；算法本身确实可以判断任意正长度的“可否补成同长度连续整数”。但题面和全部正常测试都是五张牌，生产接口应明确是保留作者泛化行为，还是严格执行五张牌契约。
 
 ```cpp
-#include <algorithm>
-#include <vector>
+int Compare(const void* left,
+            const void* right) {
+    return *static_cast<const int*>(left)
+         - *static_cast<const int*>(right);
+}
 
-class Solution {
-public:
-    bool isContinuous(const std::vector<int>& nums) {
-        if (nums.size() != 5) {
+bool IsContinuous(int* numbers, int length) {
+    if (numbers == nullptr || length < 1)
+        return false;
+
+    qsort(numbers,
+          length,
+          sizeof(int),
+          Compare);
+
+    int numberOfZero = 0;
+    int numberOfGap = 0;
+
+    for (int i = 0;
+         i < length && numbers[i] == 0;
+         ++i) {
+        ++numberOfZero;
+    }
+
+    int small = numberOfZero;
+    int big = small + 1;
+    while (big < length) {
+        if (numbers[small] ==
+            numbers[big]) {
             return false;
         }
 
-        std::vector<int> arr = nums;
-        std::sort(arr.begin(), arr.end());
-
-        int jokers = 0;
-        int i = 0;
-        while (i < 5 && arr[i] == 0) {
-            ++jokers;
-            ++i;
-        }
-
-        int gap = 0;
-        for (; i < 4; ++i) {
-            if (arr[i] == arr[i + 1]) {
-                return false; // 非零重复
-            }
-            gap += arr[i + 1] - arr[i] - 1;
-        }
-
-        return gap <= jokers && (arr[4] - arr[jokers] <= 4);
+        numberOfGap +=
+            numbers[big]
+          - numbers[small] - 1;
+        small = big;
+        ++big;
     }
-};
-```
 
-```typescript
-function isStraight(cards: number[]): boolean {
-  if (cards.length !== 5) return false;
-  const arr = [...cards].sort((a, b) => a - b);
-
-  let jokers = 0;
-  let i = 0;
-  while (i < arr.length && arr[i] === 0) {
-    jokers++;
-    i++;
-  }
-
-  let gap = 0;
-  for (; i < arr.length - 1; i++) {
-    if (arr[i] === arr[i + 1]) return false;
-    gap += arr[i + 1] - arr[i] - 1;
-  }
-
-  return gap <= jokers && arr[arr.length - 1] - arr[jokers] <= 4;
+    return numberOfGap <= numberOfZero;
 }
 ```
 
-<Callout type="trap">
-  <strong>现象 →</strong> 明明能组成顺子却返回 false。  
-  <strong>原因 →</strong> 把 “重复判断” 也当作可用 0 补齐了。  
-  <strong>修复 →</strong> 非零重复应直接判定失败，0 不能替代重复牌。
+当所有牌都是0时，numberOfZero等于length，small和big都位于末尾之后，但while条件立即为假，从未解引用numbers[small]，最终0个空缺不超过length张王，所以返回true。
+
+旧页额外判断数组末项减去第一个非零项不超过4。这个条件在固定五张、非零互异时本来就由“空缺不超过0数量”推出，不仅冗余，还会在五张全0时访问arr[5]越界；旧TypeScript版本则因undefined参与计算而错误返回false。作者源码没有这个问题。
+
+## 为什么空缺预算条件充要
+
+必要性很直接：每个内部缺失点数都必须由不同的王占据，所以G不能大于z；非零重复也不可能出现在连续序列中。
+
+充分性也成立：若非零牌互异且G不大于z，先用G张王填完x1到xr之间的全部缺口，已有区间就连续。剩余z-G张王依次放在区间两端，仍能保持整体连续。牌面边界是否允许扩展到1以下或13以上，应由题目契约限制；作者只把王称为任意数字，没有额外范围检查。
+
+对于长度L、非零牌数量r和王数z，L等于r加z。由空缺公式可得到：
+
+$$
+G\le z
+\quad\Longleftrightarrow\quad
+x_r-x_1-(r-1)\le L-r
+\quad\Longleftrightarrow\quad
+x_r-x_1\le L-1
+$$
+
+所以固定五张且至少有一张非零牌时，“最大非零值减最小非零值不超过4”与“空缺数不超过王数”等价，前提仍然是非零牌不重复。两者无需同时写；同时写并不能增加正确性。
+
+<ContinuousCardsGapLab />
+
+## 现代五张牌接口
+
+题面固定抽5张，现代实现可以复制输入后排序，避免修改调用者；同时验证牌面在0到13内。作者的Compare通过两个int相减返回顺序，在合法牌面范围内安全，但若把函数泛化给任意int，减法可能溢出，违反qsort比较器契约。std::sort的比较函数直接使用小于关系更稳妥。
+
+```cpp
+#include <algorithm>
+#include <array>
+#include <span>
+
+bool isStraight(
+    std::span<const int> cards) {
+    if (cards.size() != 5)
+        return false;
+
+    std::array<int, 5> sorted{};
+    std::copy(cards.begin(),
+              cards.end(),
+              sorted.begin());
+
+    if (std::any_of(
+            sorted.begin(),
+            sorted.end(),
+            [](int rank) {
+                return rank < 0 || rank > 13;
+            })) {
+        return false;
+    }
+
+    std::sort(sorted.begin(), sorted.end());
+
+    std::size_t first = 0;
+    while (first < sorted.size() &&
+           sorted[first] == 0) {
+        ++first;
+    }
+
+    int gaps = 0;
+    for (std::size_t i = first + 1;
+         i < sorted.size();
+         ++i) {
+        if (sorted[i - 1] == sorted[i])
+            return false;
+        gaps += sorted[i]
+              - sorted[i - 1] - 1;
+    }
+
+    const int jokers =
+        static_cast<int>(first);
+    return gaps <= jokers;
+}
+```
+
+first等于5时，循环从6开始但不解引用数组，最终gaps为0、jokers为5，正确接受全王。若编码规范不希望无符号first加1越界，可先对first等于size的情况显式返回true，再进入循环。
+
+## A只按1参与作者判定
+
+作者明确映射A为1，没有把A同时视为14。因此1、10、11、12、13不是顺子；排序后的空缺从1到10之间就有8个。
+
+0、10、11、12、13可以成立，因为王可替换为9，得到9到13，并不需要把A解释为14。若产品规则要支持10、J、Q、K、A的皇家顺子，必须另写规则分支，不能悄悄改变作者的牌面映射。
+
+<ContinuousCardsContractDiagram />
+
+作者也没有验证负数或大于13。对真实扑克牌接口，接受-2、-1、0、1、2并判成连续显然不合理；输入域校验应在算法前完成。
+
+## 不排序的固定牌面解法
+
+牌面只有0到13共14种，可用位集合记录非零牌是否出现，同时维护最小和最大非零点数。遇到重复立即失败；五张牌条件下，只要值域跨度不超过4，剩余王就足以补齐内部和两端。
+
+```cpp
+#include <bitset>
+#include <span>
+
+bool isStraightLinear(
+    std::span<const int> cards) {
+    if (cards.size() != 5)
+        return false;
+
+    std::bitset<14> seen;
+    int minimum = 14;
+    int maximum = 0;
+
+    for (int rank : cards) {
+        if (rank < 0 || rank > 13)
+            return false;
+        if (rank == 0)
+            continue;
+        if (seen.test(rank))
+            return false;
+
+        seen.set(rank);
+        minimum = std::min(minimum, rank);
+        maximum = std::max(maximum, rank);
+    }
+
+    return maximum == 0 ||
+           maximum - minimum <= 4;
+}
+```
+
+这个版本时间O(L)、额外空间O(1)，其中L固定为5；排序版时间O(L log L)。在本题常量规模下性能差异没有实际意义，作者排序版更直接展示“统计相邻数字空缺”的推理，因此应先掌握原解，再把位集合视为等价优化。
+
+## 作者12组测试逐项覆盖
+
+作者的Test会先调用IsContinuous，再与expected布尔值比较并打印Passed或Failed。Test1到Test10覆盖从0张到5张王、预算恰好与不足；Test11专门检查非零对子；Test12传空指针和长度0做鲁棒性测试。
+
+<ContinuousCardsOfficialCaseLab />
+
+边界最有价值的是Test9与Test10：3加四张王返回true，全为0也返回true。它们证明“没有相邻非零牌”不是失败，剩余王可以自由构造一段连续值。
+
+作者没有测试非法牌面、非5长度、输入是否被排序修改、A高位顺子规则和比较器极值。若实现选择严格五张牌接口，应为这些契约单独加断言，不能拿作者的任意正长度行为当作题面要求。
+
+```cpp
+#include <array>
+#include <cassert>
+
+void testStraightContract() {
+    assert(isStraight(
+        std::array{1, 3, 2, 5, 4}));
+    assert(!isStraight(
+        std::array{1, 3, 2, 6, 4}));
+    assert(isStraight(
+        std::array{0, 3, 2, 6, 4}));
+    assert(!isStraight(
+        std::array{0, 3, 1, 6, 4}));
+    assert(isStraight(
+        std::array{0, 0, 0, 0, 0}));
+    assert(!isStraight(
+        std::array{1, 0, 0, 1, 0}));
+    assert(!isStraight(
+        std::array{-1, 0, 1, 2, 3}));
+    assert(!isStraight(
+        std::array{1, 10, 11, 12, 13}));
+}
+```
+
+还可以对所有0到13的五元组做穷举，让排序版与位集合版对拍。14的5次方约53.8万，测试规模很小；这比只举几个手写例子更能发现重复、全王和值域边界的分歧。
+
+<Callout type="trap" title="默认 A 可以同时作 1 和 14">
+作者只定义A为1。若业务规则允许皇家顺子，应把它写成显式额外模式并增加测试；不能让同一张普通A在通用空缺算法里自动环绕。
 </Callout>
 
+<Stepper>
+  <Step title="排序并分离大小王">
+    <ContinuousCardsSortDiagram />
+    0聚在左侧，非零牌递增，原始抽牌顺序不参与判定。
+  </Step>
+  <Step title="累计相邻非零空缺">
+    <ContinuousCardsGapLab />
+    每个差值减1得到缺牌数，重复非零值必须先失败。
+  </Step>
+  <Step title="用王的预算覆盖缺口">
+    <ContinuousCardsJokerBudgetMap />
+    空缺不超过0数量即可，剩余王可延伸连续区间两端。
+  </Step>
+  <Step title="明确牌面与接口契约">
+    <ContinuousCardsContractDiagram />
+    区分作者任意正长度实现和题面固定五张牌规则。
+  </Step>
+  <Step title="复现12组官方测试">
+    <ContinuousCardsOfficialCaseLab />
+    特别核对全王、单非零、对子与空指针四类边界。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 扑克牌中的顺子允许重排，普通牌映射1到13，大小王作为0。
+2. 排序后先数0，再拒绝非零重复，最后统计相邻数字空缺。
+3. 每个0提供一份替代预算，空缺总数不超过0数量即可补齐。
+4. 剩余王可以放在已有连续区间两端，因此无需恰好耗尽预算。
+5. 固定五张时，非零互异前提下，空缺条件等价于最大最小非零值之差不超过4。
+6. 作者原地qsort并接受任意正长度；严格题面接口应固定5张、验证0到13并避免修改输入。
+7. 全为0应返回true；旧页额外首尾判断会越界或误判。
+8. A在作者规则中只等于1，皇家顺子需要独立契约。
+9. 作者12组测试覆盖王数、空缺、对子和空指针，仍需补输入域与接口测试。
+
+<Exercises>
+
+**问题 1：为什么0、0、1、3、5可以组成顺子？**
+
+<Answer>非零牌缺少2和4，共两个空缺，恰好由两张王替换；最终得到1、2、3、4、5。替代预算等于空缺数。</Answer>
+
+**问题 2：为什么0、0、0、1、1即使王很多也必须失败？**
+
+<Answer>两张普通牌1无法同时出现在点数各异的顺子中。王只能补缺失点数，不能删除或改变已有非零牌，所以非零重复立即失败。</Answer>
+
+**问题 3：固定五张时，空缺不超过王数为何等价于非零最大最小差不超过4？**
+
+<Answer>若有r张互异非零牌和z张王，r+z=5，空缺G=max-min-(r-1)。G不超过z等价于max-min不超过4；全王需单独接受。</Answer>
+
+**问题 4：旧页的额外首尾差判断为什么危险？**
+
+<Answer>它在非零互异的五张牌场景下是冗余条件；当五张全为0时，第一个非零下标等于5，访问arr[5]越界，TypeScript中则得到undefined并误判。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="万能牌">可替换一个缺失点数的大小王，在输入中编码为0。</GlossaryItem>
+  <GlossaryItem term="非零牌">A到K的普通牌，编码为1到13，顺子中不能重复。</GlossaryItem>
+  <GlossaryItem term="排序归一化">把0聚到左侧并让非零牌递增的标准化步骤。</GlossaryItem>
+  <GlossaryItem term="空缺数">所有相邻非零牌之间缺少的整数点数总量。</GlossaryItem>
+  <GlossaryItem term="替代预算">可用于填补空缺的0的数量，每张王提供一份。</GlossaryItem>
+</Glossary>
+
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题61"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/61_ContinousCards/ContinousCards.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

@@ -1,180 +1,281 @@
 ---
-title: 动态规划
-type: B
-section: 策略与规划
+title: "第11章 动态规划"
+type: C
+section: "算法图解（第2版）"
 order: 11
-description: DP 表格——缓存重叠子问题的答案，把指数级重复计算变成多项式填表。
+description: "从4磅背包网格出发，掌握状态定义、选与不选转移、表格FAQ、方案回溯，以及最长公共子串与子序列。"
 demo: true
-math: true
-sourceUrl: https://www.manning.com/books/grokking-algorithms-second-edition
+math: false
+sourceUrl: "https://livebook.manning.com/book/grokking-algorithms-second-edition/chapter-11"
 draft: false
 ---
 
-{/* 知识点清单：动态规划/重叠子问题/状态转移方程/背包问题/最长公共子序列/DP表；原书章节：Dynamic programming。 */}
+import { KnapsackGridDiagram, KnapsackDecisionLab, StringMatchGridDiagram, DpDesignMap } from "@/components/mdx/grokking-algorithms-2e/diagrams/dynamic-programming";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能推导背包问题的 DP 状态转移方程并徒手填一张 4×4 的 DP 表。
-- 能用自己的话解释「重叠子问题」如何让朴素递归指数爆炸，DP 又如何通过缓存降维。
-- 能回答：什么情况下 DP 适用——什么情况下贪心或分治更合适。
+- 能解释动态规划如何把问题拆成离散子问题，并判断最优子结构与重叠子问题
+- 能定义0/1背包单元格语义，计算选与不选两种候选并填完整网格
+- 能分析新增物品、改变行顺序与列粒度对表格和最终答案的影响
+- 能实现背包DP并从表格回溯恢复选择，说明时间复杂度的伪多项式性质
+- 能区分最长公共子串与最长公共子序列，写出各自状态转移和回溯方法
 
 </Objectives>
 
-## 先玩一遍
+## 从2的n次方个背包组合开始
 
-动态规划不是玄学填表——它是把一件大东西拆成小东西，把每个小东西的答案存进表格，组装大东西时直接查表不再重算。像一个旅行者在打包行李箱：箱子容量有限，面对一堆物品，每次问自己「装这个，剩下的空间还能塞多少价值？」
+先预测：4磅背包有吉他、音响、笔记本三件物品，每件只能整件拿或不拿。检查所有组合只需8次；若增加到30件，还能逐个组合尝试吗？
 
-<AlgorithmPlayground
-  mode="dynamic-programming"
-  title="动态规划 · 交互动画"
-  focus="DP 的本质：把重复计算变成一次填表、无限查表。"
-/>
+背包问题的简单穷举需要2^n。每增加一件物品，已有每个组合都分裂为“拿新物品”和“不拿新物品”两种，组合数翻倍。下面的位掩码实现能得到精确答案，但运行次数直接等于幂集大小：
 
-<Callout type="tip">
-  <strong>猜一猜：</strong>把步骤滑块推到下一格，dp[i][w] 这个格子是从上一行的 w 列（不取）和
-  上一行的 w - weight[i] 列（取）中选大的——你看懂这个「二选一」的决策结构了吗？
-</Callout>
+```python
+def brute_force_knapsack(
+    items: list[tuple[str, int, int]], capacity: int
+) -> tuple[int, list[str]]:
+    best_value = 0
+    best_items: list[str] = []
+    for mask in range(1 << len(items)):
+        total_weight = 0
+        total_value = 0
+        chosen: list[str] = []
+        for index, (name, weight, value) in enumerate(items):
+            if mask & (1 << index):
+                total_weight += weight
+                total_value += value
+                chosen.append(name)
+        if total_weight <= capacity and total_value > best_value:
+            best_value = total_value
+            best_items = chosen
+    return best_value, best_items
 
-## 分步动画
+items = [("吉他", 1, 1500), ("音响", 4, 3000), ("笔记本", 3, 2000)]
+assert brute_force_knapsack(items, 4) == (3500, ["吉他", "笔记本"])
+```
 
-<DynamicProgrammingDiagram />
+30件物品对应超过十亿个子集。上一章的贪心能快速给某个答案，却不保证0/1背包精确最优。<Term def="把问题拆成一组可枚举状态的子问题，保存每个子问题答案并由小到大组合的算法设计方法。">动态规划</Term>提供另一条路：不枚举完整选择序列，而是只求“前若干物品、给定容量”这些真正影响后续的子问题。
+
+## 4磅背包网格
+
+动态规划把问题拆成离散子问题。对原章的三件物品，动态规划表格每行对应物品，表格每列对应容量1、2、3、4磅。<Term def="以有限索引表示问题状态的子问题，例如前i件物品与容量w的组合。">离散子问题</Term>由两个坐标标识：
+
+- 行 `i` 表示只允许使用前 `i` 件物品。
+- 列 `w` 表示背包容量上限为 `w`。
+- 单元格表示当前物品和容量下的最大价值，即 `cell[i][w]`。
+
+<KnapsackGridDiagram />
+
+第一行只有1磅、1500美元的吉他，容量1到4都能放入它，所以各格都是1500。第二行加入4磅、3000美元的音响：容量1到3仍只能选择吉他，容量4比较吉他1500与音响3000，写入3000。第三行加入3磅、2000美元的笔记本：容量4可以把笔记本与剩余1磅格中的吉他组合，得到3500，超过不选笔记本的3000。
 
 <Stepper>
-  <Step title="看输入结构——物品、重量、价值、背包容量">
-    背包问题：给定 n 个物品，每个有重量 wᵢ 和价值 vᵢ，背包容量 W。
-    问：选哪几个物品使总价值最大且总重量不超过 W？
-    暴力枚举 2ⁿ 种组合——n=30 时已经是十亿级。DP 用 O(nW) 的表解决。
-    <AlgorithmPlayground mode="dynamic-programming" title="动态规划 · 输入定义" currentStep={1} />
-  </Step>
-  <Step title="执行关键动作——逐格填表、二选一">
-    dp[i][w] 的含义：考虑前 i 个物品，容量为 w 时的最大价值。
-    填法：对每个物品 i 和容量 w，dp[i][w] = max(dp[i-1][w], dp[i-1][w-wᵢ] + vᵢ)。
-    翻译成人话：要么不取 i（价值 = 上一行同列），要么取 i（价值 = 物品 i 的价值 + 上一行减去 i 重量的那一列）。选大的。
-    <AlgorithmPlayground mode="dynamic-programming" title="动态规划 · 填表过程" currentStep={2} />
-  </Step>
-  <Step title="收缩问题规模——每填一格都复用了所有子问题的答案">
-    填到 dp[i][w] 时，它依赖的两个格子 dp[i-1][w] 和 dp[i-1][w-wᵢ] 都已经算好放在表里了。
-    不需要递归重新探索——O(1) 查表。整张表填完只需 n×W 步，而非指数级。
-    这就是 DP 把「时间换空间」反过来用的精髓：用表空间换掉重复计算的时间。
-    <AlgorithmPlayground mode="dynamic-programming" title="动态规划 · 依赖关系" currentStep={3} />
-  </Step>
-  <Step title="读出结论——回溯 DP 表得到答案路径">
-    右下角 dp[n][W] 是最大总价值。但 DP 不止给数值——从 dp[n][W] 倒推：
-    如果 dp[i][w] ≠ dp[i-1][w]，说明取了物品 i，跳到 dp[i-1][w-wᵢ]；
-    否则没取，跳到 dp[i-1][w]。回溯到顶就是最优解包含的物品列表。
-    <AlgorithmPlayground mode="dynamic-programming" title="动态规划 · 回溯答案" currentStep={4} />
-  </Step>
+  <Step title="给每个格子一句完整定义"><KnapsackGridDiagram />`cell[i][w]` 表示只看前i件物品、容量不超过w时的最大价值，不是“当前物品价值”。</Step>
+  <Step title="先写不选择候选">不选择当前物品时继承上一行：物品集合退回前i-1件，容量保持w。</Step>
+  <Step title="再写选择候选"><KnapsackDecisionLab />选择当前物品时加上剩余容量最优值：当前价值加上一行的 `w-weight[i]` 列。</Step>
+  <Step title="取两种方案最大值">取选择与不选择两种方案最大值写入当前格；若物品装不下，只能继承上一行。</Step>
 </Stepper>
 
-## 核心概念
+## 状态转移为何不能少定义
 
-<Term def="一种算法设计范式：将问题分解为重叠子问题，用表格缓存子问题解避免重复计算，从子问题解构建全局最优解。">动态规划（DP）</Term>
-是算法设计中最强大的武器之一。它的核心洞察是：如果问题的子问题会重复出现（「重叠子问题」），那把每个子问题只算一遍存在表里，遇到相同子问题直接查表——指数时间变多项式时间。DP 需要用备忘录（自上而下递归+缓存）或 DP 表（自底向上迭代）实现。
+<Term def="存放所有离散子问题答案、并按依赖顺序填充的网格或数组。">DP表格</Term>不是算法本身，状态语义才决定格子如何解释。0/1背包转移可写成：
 
-<Term def="在递归求解过程中，完全相同的子问题被反复计算多次——这是 DP 可以优化的标志。">重叠子问题</Term>
-是判断 «该用 DP 还是分治» 的判据。分治的子问题互不相交（如归并排序拆两半各管各），DP 的子问题大量重叠（如斐波那契 fib(5) 依赖 fib(4) 和 fib(3)，而 fib(4) 又依赖 fib(3) 和 fib(2)，fib(3) 算了两次）。重叠越严重，缓存收益越大。
+`cell[i][w] = cell[i-1][w]`，当当前物品重量大于容量；
 
-<Term def="描述子问题解如何由更小子问题的解构建的数学关系式。">状态转移方程</Term>
-是 DP 的心脏。它要回答一个精确的问题：已知所有比当前问题「小一号」的子问题答案，当前问题的答案怎么算出来？背包问题的转移式 dp[i][w] = max( dp[i-1][w], dp[i-1][w-wᵢ] + vᵢ ) 就是一个典型——两个子问题解之间取 max。
+否则比较 `cell[i-1][w]` 与 `value[i] + cell[i-1][w-weight[i]]`，取较大值。
 
-<Term def="给定一组物品各有重量和价值，在总重量不超过 W 的前提下最大化总价值。">背包问题</Term>
-是 DP 的招牌例题。0-1 背包（每个物品要么取要么不取）是最经典的 DP 表格问题——二维表格，物品一行、容量一列。完全背包（物品可以取无限次）只需改一行：转移时算 dp[i][w-wᵢ] + vᵢ 而非 dp[i-1][w-wᵢ] + vᵢ（同一物品可继续用）。
+两个候选都读上一行，因为第i件物品一旦选择，剩余容量只能继续使用前i-1件物品。若选择分支错误地读取当前行，就可能再次使用第i件，把0/1背包变成允许重复拿同类物品的完全背包。
 
-## 小公式
+<Term def="完整问题的最优解可由若干子问题的最优解组合得到的性质。">最优子结构</Term>解释了为何可以复用剩余容量的最优值：如果一个最优方案选择了笔记本，那么拿掉笔记本后，余下物品必须是“前两件、容量1磅”的最优方案；否则换成更好的余下方案就能改善原答案，和最优性矛盾。动态规划依赖最优子结构。
 
-本节把背包 DP 的数学核心拆开——每个符号、每步推理都要有「人话翻译」。
+<Term def="不同决策路径会反复到达同一个状态，使缓存该状态答案可以避免重复求解的性质。">重叠子问题</Term>解释了为何表格比递归枚举快。许多选择序列会留下相同的“处理到第i件、剩余容量w”；动态规划复用重叠子问题，让每个 `(i,w)` 只求一次。
 
-**符号表**：n = 物品数；W = 背包容量；wᵢ = 第 i 个物品重量；vᵢ = 第 i 个物品价值；dp[i][w] = 考虑前 i 个物品、容量为 w 时的最大价值。
-
-**状态定义**：
-
-$$
-dp[i][w] = \text{前 } i \text{ 个物品放进容量 } w \text{ 的背包的最大价值}
-$$
-
-这个式子在说：dp[i][w] 回答的不是「所有物品」的最优，而是「只给你前 i 个，容量只给你 w」的最优。小一号的问题就是 i 和 w 各减一点。
-
-**转移方程**：
-
-$$
-dp[i][w] =
-\begin{cases}
-dp[i-1][w], & \text{如果 } w_i > w \text{（装不下第 } i \text{ 个）} \\
-\max\bigl(dp[i-1][w],\; dp[i-1][w-w_i] + v_i\bigr), & \text{装得下时二选一}
-\end{cases}
-$$
-
-人话翻译：如果第 i 个物品太重装不下，答案就是前 i-1 个在容量 w 下的最优（和它无关）。装得下时，面临一个二选一的决定——要么不取它（答案 = 行上格），要么取它（答案 = 取它的价值 + 剩余容量在剩余物品中的最优解）。选大的。
-
-**复杂度**：
-
-$$
-\text{Time} = O(nW),\quad \text{Space} = O(nW) \text{（可优化至 } O(W) \text{ 滚动数组）}
-$$
-
-n 个物品 × W 个容量格子 = 每格 O(1) 填表。W 可能很大——这就是 DP 的致命弱点：当 W 是 10⁹ 时 O(nW) 也不可行。这时需要换策略（如分支定界法或近似算法）。
-
-## 常见误区
-
-- **现象 →** 没定义清楚 dp[i][w] 的含义就开始写转移方程，导致维度混乱。**原因 →** DP 的第一步永远是«定义状态的含义»——一个能用人话说清楚的物理含义。**修法 →** 写出 dp[i][w] 的含义并用一个具体例子验证：i=2, w=3 时 dp[2][3] 的值能用人话解释吗？
-
-- **现象 →** 混淆 0-1 背包和完全背包的转移。**原因 →** 0-1 背包看上一行 dp[i-1][w-wᵢ]，同一物品不可复用；完全背包看同行 dp[i][w-wᵢ]，同一物品可继续取。**修法 →** 背一个口诀：«0-1 向上看（i-1），完全向左看（同 i）».
-
-- **现象 →** DP 解完只返回最优值，丢失了解路径。**原因 →** 填表过程只维护 dp 值，没有记录 dp[i][w] 是从哪个选择来的。**修法 →** 加一张 choice[i][w] 布尔表，记录«是否选了物品 i»。回溯时从 dp[n][W] 开始，根据 choice 表逆向跟踪路径。
-
-<Callout type="trap">
-  <strong>现象 →</strong> 觉得 DP 需要先找「最优子结构」+「重叠子问题」才能用，被术语劝退。<strong>原因 →</strong>{" "}
-  术语把简单直觉包装了。最优子结构 = 大问题答案能由小问题答案拼出来（大多数问题都是）；
-  重叠子问题 = 递归探索时小问题会重复访问（斐波那契/背包/编辑距离都会）。<strong>修法 →</strong>{" "}
-  尝试先用朴素递归写一遍问题，画出调用树——如果同一参数出现了多次，DP 就该出马。
+<Callout type="trap" title="只要写递归就一定适合动态规划">
+递归只是控制流。DP需要状态可复用，并且转移能由已解子问题构成；若子问题互不重叠，缓存可能没有收益；若状态遗漏影响未来的信息，表格会合并本不等价的情况并给出错误答案。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 在 W 非常大（如 10⁹）的问题上硬套 DP 表格，O(nW) 仍超时。<strong>原因 →</strong>{" "}
-  DP 的复杂度是和 W 值大小有关的（伪多项式时间），而非常规的 O(n log n)。<strong>修法 →</strong>{" "}
-  当 W 巨大时，转为贪心近似、分支定界、或按价值做 DP（dp[i][v] = 达到价值 v 的最小重量）。
+## 实现填表并回溯选择
+
+下面实现同时保存最大价值表与是否选择当前物品的布尔表。<Term def="从最终状态沿转移来源逆向移动，恢复构成最优值的具体决策。">回溯</Term>从右下角开始：若当前格选择了物品，就记录名称并减去重量；否则只移动到上一行。
+
+```python
+def knapsack_dp(
+    items: list[tuple[str, int, int]], capacity: int
+) -> tuple[int, list[str]]:
+    rows = len(items) + 1
+    cell = [[0] * (capacity + 1) for _ in range(rows)]
+    take = [[False] * (capacity + 1) for _ in range(rows)]
+
+    for i, (_, weight, value) in enumerate(items, start=1):
+        for current_capacity in range(capacity + 1):
+            without_item = cell[i - 1][current_capacity]
+            cell[i][current_capacity] = without_item
+            if weight <= current_capacity:
+                with_item = value + cell[i - 1][current_capacity - weight]
+                if with_item > without_item:
+                    cell[i][current_capacity] = with_item
+                    take[i][current_capacity] = True
+
+    chosen: list[str] = []
+    current_capacity = capacity
+    for i in range(len(items), 0, -1):
+        if take[i][current_capacity]:
+            name, weight, _ = items[i - 1]
+            chosen.append(name)
+            current_capacity -= weight
+    chosen.reverse()
+    return cell[-1][-1], chosen
+
+assert knapsack_dp(items, 4) == (3500, ["吉他", "笔记本"])
+```
+
+时间和表空间都是 `O(nW)`。这里的 `W` 是容量数值而不是输入位数；当容量以二进制编码时，`W` 可能相对输入长度指数大，因此0/1背包DP是<Term def="复杂度对数值大小呈多项式，但对表示该数值所需位数不一定是多项式。">伪多项式时间</Term>，不能简单说它解决了一般背包的多项式时间精确求解。
+
+若只求最优值，可把表压成一行并让容量从大到小更新，空间降为 `O(W)`；若还要恢复选择，需要保留二维表、父指针或额外重算。工程上先决定输出只需数值还是还需方案，再选择存储结构。
+
+## 背包FAQ：新增、顺序与粒度
+
+<DpDesignMap />
+
+新增物品只需新增一行，因为旧表已经包含“不使用新物品”的全部子问题。新行逐列比较旧答案与“新物品价值加剩余容量旧答案”，无需重新枚举原物品组合。
+
+改变物品行顺序不改变最优值：中间行代表的“前i件物品”集合会变化，单元格可能不同，但最后一行仍考虑全部物品，最终可行组合相同。前提是每件物品恰好处理一次，转移与初始化保持一致。
+
+列粒度决定可表示的重量。若列步长是1磅，就不能直接表示0.5磅物品；可以把所有重量乘2，以半磅为一单位，但列数也相应翻倍。若重量是高精度连续数，简单容量网格可能不可行，需要重新离散化、换状态维度或使用其他算法。
+
+不可分割物品与分数背包不同。0/1背包的格子只比较整件拿或不拿；分数背包允许拿一部分，按价值密度贪心可精确填满容量。不能在0/1表中用“剩余半件”补空位。
+
+<Stepper>
+  <Step title="新增物品时追加一行"><DpDesignMap />上一行已经总结所有旧物品组合，新行只引入拿或不拿新物品的二选一。</Step>
+  <Step title="重排行时检查最终不变量">逐行中间值会变，但每件物品处理一次后，最后一行仍覆盖同一可行方案集合。</Step>
+  <Step title="由最小重量单位设计列">把0.5磅缩放为1个单位，把4磅容量缩放为8个单位；先估算表宽能否接受。</Step>
+  <Step title="从右下角回溯恢复选择"><KnapsackDecisionLab />比较当前格的来源；选择物品则减少容量，不选择则只上移一行。</Step>
+</Stepper>
+
+<Callout type="trap" title="O(nW)就是关于输入长度的多项式时间">
+W是容量数值。容量10亿只需约30个二进制位，却会产生10亿列；因此该算法是伪多项式时间。复杂度评估必须同时看数值范围和编码长度。
 </Callout>
 
-## 小结与练习
+## 最长公共子串与最长公共子序列
 
-- DP = 拆问题 + 存答案 + 复用：把指数次重复计算降为表格的一次填充。
-- 状态定义回答«dp[i][w] 是什么»，转移方程回答«怎么从更小的 dp 算出当前 dp»。
-- 0-1 背包看 i-1 行，完全背包看 i 行同列——一字之差决定复用性。
-- DP 的代价是 O(nW) 空间时间——W 太大时需换策略。
+背包按物品与容量建立网格，字符串也能按两个字符位置建立网格。相似的表形不代表同一转移：必须先决定“连续匹配”还是“允许跳过字符”。
+
+<StringMatchGridDiagram />
+
+<Term def="同时出现在两个字符串中且字符连续的最长片段。">最长公共子串</Term>要求连续。若当前字符相同，格子等于左上角加1；若不同，连续链被打断，格子归零。最大值可能出现在表内任意位置，记录最大值结束坐标即可恢复子串。HISH与FISH的最长公共子串是ISH，长度3。
+
+<Term def="同时保持两个字符串字符相对顺序、但允许跳过字符的最长序列。">最长公共子序列</Term>不要求连续。字符相同时取左上角加1；字符不同时，取上方和左方较大值，表示跳过某一侧字符。答案在右下角；从表格回溯，相等时收集字符并斜向移动，不等时走向较大邻格。FOSH与FISH的最长公共子序列可为FSH，长度3。
+
+```python
+def longest_common_substring(a: str, b: str) -> str:
+    cell = [[0] * (len(b) + 1) for _ in range(len(a) + 1)]
+    best_length = 0
+    best_end = 0
+    for i in range(1, len(a) + 1):
+        for j in range(1, len(b) + 1):
+            if a[i - 1] == b[j - 1]:
+                cell[i][j] = cell[i - 1][j - 1] + 1
+                if cell[i][j] > best_length:
+                    best_length = cell[i][j]
+                    best_end = i
+    return a[best_end - best_length:best_end]
+
+def longest_common_subsequence(a: str, b: str) -> str:
+    cell = [[0] * (len(b) + 1) for _ in range(len(a) + 1)]
+    for i in range(1, len(a) + 1):
+        for j in range(1, len(b) + 1):
+            if a[i - 1] == b[j - 1]:
+                cell[i][j] = cell[i - 1][j - 1] + 1
+            else:
+                cell[i][j] = max(cell[i - 1][j], cell[i][j - 1])
+
+    chars: list[str] = []
+    i, j = len(a), len(b)
+    while i > 0 and j > 0:
+        if a[i - 1] == b[j - 1]:
+            chars.append(a[i - 1])
+            i -= 1
+            j -= 1
+        elif cell[i - 1][j] >= cell[i][j - 1]:
+            i -= 1
+        else:
+            j -= 1
+    return "".join(reversed(chars))
+
+assert longest_common_substring("HISH", "FISH") == "ISH"
+assert longest_common_subsequence("FOSH", "FISH") == "FSH"
+```
+
+<Stepper>
+  <Step title="先定义匹配是否必须连续"><StringMatchGridDiagram />子串要求连续，子序列只保持顺序；这一句话决定不匹配时是归零还是继承邻格。</Step>
+  <Step title="定义行列为字符前缀">`cell[i][j]` 只看两个字符串的前i与前j个字符，空前缀行列初始化为0。</Step>
+  <Step title="按依赖方向填表">相等都读左上角；子串不等写0，子序列不等取上方与左方最大值。</Step>
+  <Step title="按答案位置回溯">子串从全表最大格向前截取连续片段；子序列从右下角沿转移来源逆向收集字符。</Step>
+</Stepper>
+
+<Callout type="trap" title="公共子串和公共子序列只差名字">
+两者状态转移与答案位置不同。把子序列的不匹配继承规则用于子串，会错误地把分散字符拼成不连续片段；把子串归零规则用于子序列，则会漏掉可跳过字符的更长答案。
+</Callout>
+
+## 原章概念回查
+
+背包问题的简单穷举需要2^n，动态规划把问题拆成离散子问题。动态规划表格每行对应物品，表格每列对应容量，单元格表示当前物品和容量下的最大价值。
+
+不选择当前物品时继承上一行；选择当前物品时加上剩余容量最优值；取选择与不选择两种方案最大值。
+
+改变物品行顺序不改变最优值，新增物品只需新增一行，列粒度决定可表示的重量，不可分割物品与分数背包不同。
+
+动态规划依赖最优子结构，动态规划复用重叠子问题。最长公共子串要求连续，最长公共子序列只保持顺序；从表格回溯恢复选择或匹配字符。
+
+## 本章回顾
+
+1. n个0/1选择形成2的n次方个组合。
+2. DP只保留能影响未来的离散状态，不保留完整决策历史。
+3. 背包格子定义为前i件物品在容量w下的最大价值。
+4. 不选当前物品读取上一行同列。
+5. 选择当前物品读取上一行剩余容量列并加当前价值。
+6. 最优子结构保证可用子问题最优值组合大问题答案。
+7. 重叠子问题让表格缓存避免重复求解。
+8. 新物品追加一行，物品行顺序不改变最终最优值。
+9. 容量粒度控制可表示重量，也控制表格宽度。
+10. O(nW)背包DP是伪多项式时间。
+11. 公共子串不匹配归零，公共子序列不匹配继承邻格最大值。
+12. 最优数值与具体方案是两种输出，后者需要记录并回溯转移来源。
 
 <Exercises>
-  <Answer question="推导：背包问题的朴素递归（不带缓存）的时间复杂度是多少？为什么？">
-    每个物品有两种选择（取/不取），决策树是一棵高度 n 的完全二叉树，叶子数 2ⁿ。没有缓存时，每条路径都被独立探索——O(2ⁿ)。这就是 DP 缓存降维的来源：把一棵真正的树变成一张每格只填一次的表。
-  </Answer>
-  <Answer question="如果物品 w={2,1,3,2}, v={12,10,20,15}, W=5，徒手填 DP 表并给出最优答案。">
-    dp 表如下（行=物品 1..4，列=容量 0..5）：第 0 行全 0。i=1(w=2,v=12)：[0,0,12,12,12,12]。i=2(w=1,v=10)：[0,10,12,22,22,22]。i=3(w=3,v=20)：[0,10,12,22,22,32]。i=4(w=2,v=15)：[0,10,15,22,25,37]。最优值=37，回溯：取物品 4(v=15)→剩余 W=3 到 dp[3][3]=22 → 22 来自不取物品 3（dp[2][3]=22）→ dp[2][3]=22 来自取物品 2(v=10)+dp[1][2]=12 → 取物品 1(v=12)。最优组合：物品 1,2,4。
-  </Answer>
+
+**问题 1：4磅背包的吉他、音响、笔记本表中，右下角3500是怎样计算出来的？**
+
+<Answer>不选笔记本时继承上一行容量4的3000。选择笔记本时得到其价值2000，加上上一行剩余容量1的最优值1500，也就是吉他，总计3500。取两者最大值，因此写3500并记录选择笔记本。</Answer>
+
+**问题 2：把物品行顺序改成笔记本、吉他、音响，最终最优值会改变吗？**
+
+<Answer>不会。中间行代表的物品集合不同，单元格会变化，但最后一行仍考虑同样三件物品，每件最多一次，可行组合集合相同，所以最终最优值仍是3500。若实现错误地读取当前行或重复物品，才可能改变结论。</Answer>
+
+**问题 3：背包含0.5磅物品而表格列步长为1磅，应如何处理？**
+
+<Answer>若所有重量都是0.5磅的整数倍，可统一乘2，把半磅作为一个容量单位：4磅容量变成8列单位。若重量精度更细或为任意实数，列数可能不可接受，需要重新离散化、改变状态或换算法。</Answer>
+
+**问题 4：为什么HISH与FISH的公共子串可以是ISH，而FOSH与FISH的公共子序列可以是FSH？**
+
+<Answer>ISH在两个字符串中都连续出现，所以是长度3的公共子串。FSH在FOSH和FISH中都按F、S、H顺序出现，但中间各跳过一个不同字符，因此是公共子序列而不是公共子串。</Answer>
+
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="动态规划（DP）">
-    一种算法范式：把大问题拆成子问题，用表格/缓存存下每个子问题的解，组装时不重复计算。核心条件是问题有最优子结构和重叠子问题。
-  </GlossaryItem>
-  <GlossaryItem term="重叠子问题">
-    在递归求解过程中，完全相同的子问题被反复多次计算。这是 DP 可以发挥缓存优势的信号——没有重叠则分治更自然。
-  </GlossaryItem>
-  <GlossaryItem term="状态转移方程">
-    描述当前问题的最优解如何从比它「小一号」的子问题最优解计算得到的数学公式。是 DP 的心脏。
-  </GlossaryItem>
-  <GlossaryItem term="背包问题">
-    DP 的招牌例题。0-1 背包：每个物品取或不取；完全背包：物品可无限次取。用二维表格 dp[i][w] 记录「前 i 个物品在容量 w 下的最大价值」。
-  </GlossaryItem>
-  <GlossaryItem term="最优子结构">
-    全局最优解可由子问题最优解组合而成。有最优子结构 = DP 和贪心都可能适用；没有 = 两者都不行。
-  </GlossaryItem>
-  <GlossaryItem term="DP 表">
-    动态规划的核心数据结构——二维（或多维）表格，每个格子存一个子问题的最优解。不同问题的表格形状和填充顺序不同，但原则不变：填当前格前依赖于的格子必须已填好。
-  </GlossaryItem>
+  <GlossaryItem term="动态规划">把问题拆成可复用离散子问题、保存答案并由小到大组合的算法设计方法。</GlossaryItem>
+  <GlossaryItem term="离散子问题">由有限状态索引描述的子问题，例如前i件物品与容量w。</GlossaryItem>
+  <GlossaryItem term="DP表格">按状态与依赖顺序存放子问题答案的网格或数组。</GlossaryItem>
+  <GlossaryItem term="最优子结构">完整问题最优解可由子问题最优解组合得到的性质。</GlossaryItem>
+  <GlossaryItem term="重叠子问题">不同决策路径会反复到达相同状态的性质。</GlossaryItem>
+  <GlossaryItem term="状态转移">由已解子问题计算当前状态答案的规则。</GlossaryItem>
+  <GlossaryItem term="伪多项式时间">对数值大小为多项式、但对数值编码位数未必为多项式的复杂度。</GlossaryItem>
+  <GlossaryItem term="回溯">从最终状态沿转移来源逆向恢复具体决策的方法。</GlossaryItem>
+  <GlossaryItem term="最长公共子串">两个字符串共同拥有的最长连续字符片段。</GlossaryItem>
+  <GlossaryItem term="最长公共子序列">两个字符串中保持相对顺序但允许跳过字符的最长公共序列。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Grokking Algorithms, Second Edition"
-  adaptedUrl="https://www.manning.com/books/grokking-algorithms-second-edition"
+  adaptedFrom="Grokking Algorithms, Second Edition, Chapter 11: Dynamic programming"
+  adaptedUrl="https://livebook.manning.com/book/grokking-algorithms-second-edition/chapter-11"
 />

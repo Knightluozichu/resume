@@ -1,0 +1,250 @@
+---
+title: "Chapter 8 · Sorting in Linear Time"
+type: C
+section: "CLRS4 · 排序与顺序统计"
+order: 8
+description: "按CLRS第四版第8章重建比较排序决策树下界、稳定计数排序、低位优先基数排序与均匀分布桶排序的正确性和条件化线性成本。"
+demo: true
+math: true
+sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+draft: false
+---
+
+import { CLRS4DecisionTreeLab, CLRS4ComparisonLowerBoundLab, CLRS4CountingHistogramLab, CLRS4CountingPrefixLab, CLRS4CountingStableLab, CLRS4CountingRangeLab, CLRS4RadixPassLab, CLRS4RadixCostLab, CLRS4BucketScatterLab, CLRS4DistributionFitLab } from "@/components/mdx/introduction-to-algorithms/diagrams/08-sorting-in-linear-time";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释比较决策树为何要求任意最坏比较排序执行至少Ω(n lg n)次比较
+- 能计算计数排序的前缀位置、基数排序的轮数与桶排序的期望局部成本
+- 能实现稳定计数排序、低位优先基数排序和区间映射正确的桶排序
+- 能分析三种线性时间排序各自依赖的键域、稳定性或概率分布假设
+- 能设计包含模型边界、键范围、辅助空间、分布验证和退化路径的排序证书
+
+</Objectives>
+
+## 从“排序下界为什么还能被突破”开始
+
+先预测：既然比较排序需要$\Omega(n\lg n)$，计数排序为什么可以是$\Theta(n)$？因为下界只约束通过元素两两比较获取次序信息的模型。若键是小范围整数，可以直接把键解释为数组索引，一次获得比“谁大谁小”更丰富的信息。
+
+Sorting in Linear Time不是推翻下界，而是改变可用操作和输入假设。本章每个线性结论都要连同模型一起阅读。
+
+## 8.1 Lower bounds for sorting
+
+### 比较决策树
+
+<Term def="把比较排序对两个键的每次二元比较表示为内部节点、比较结果表示为边、最终排列表示为叶子的二叉树模型。">比较决策树</Term>固定输入规模$n$后，描述算法对所有可能比较结果的控制流。一个输入排列沿根到叶路径执行，路径长度就是比较次数。
+
+<CLRS4DecisionTreeLab />
+
+若$n$个键互异，存在$n!$种输入排列。正确算法必须能够把每一种排列映射到相应有序输出，因此决策树至少有$n!$个可达叶子。高度为$h$的二叉树最多有$2^h$个叶子：
+
+$$
+n!\le2^h
+\quad\Longrightarrow\quad
+h\ge\lg(n!).
+$$
+
+<CLRS4ComparisonLowerBoundLab />
+
+由Stirling公式：
+
+$$
+\lg(n!)
+=n\lg n-\Theta(n)
+=\Theta(n\lg n).
+$$
+
+所以任何比较排序在最坏情况下需要$\Omega(n\lg n)$次比较；mergesort和heapsort达到$O(n\lg n)$，因此在比较模型中渐近最优。
+
+<Term def="通过决策树叶子数证明任意比较排序最坏情况至少执行Ω(n lg n)次比较的模型内下界。">比较排序下界</Term>也可延伸到平均情况：在均匀随机排列下，足够多叶子的二叉树平均深度仍为$\Omega(n\lg n)$。随机化比较排序若必须对每个输入正确，也不能在所有输入上把期望比较数降到$o(n\lg n)$。
+
+下界不计算数据移动、缓存未命中或比较器成本；它只说比较次数不能渐近更少。对昂贵记录，算法仍可能通过减少移动、间接排序索引或利用并行性得到实际改进。
+
+<Callout type="trap" title="把Ω(n lg n)套到所有排序问题">
+决策树证明假设算法只通过二元比较获取键顺序。整数索引、位提取或已知分布提供额外信息，不受同一模型限制。修法是先声明操作模型，再引用对应下界。
+</Callout>
+
+## 8.2 Counting sort
+
+### 频数、前缀和与输出位置
+
+<Term def="对小范围整数键直接统计频数，再用前缀计数把记录稳定放入输出数组的非比较排序。">计数排序</Term>假设每个键位于整数区间$0,\ldots,k$。第一遍令`C[key]`累加频数，成本$\Theta(n+k)$，其中初始化计数数组需要$\Theta(k)$。
+
+<CLRS4CountingHistogramLab />
+
+第二遍计算前缀和：
+
+$$
+C[i]\gets C[i]+C[i-1].
+$$
+
+此时`C[i]`等于输入中不大于$i$的元素数，也就是键$i$在输出中的最右位置。一基伪代码中把记录`A[j]`放到`B[C[A[j]]]`，再递减对应计数。
+
+<CLRS4CountingPrefixLab />
+
+```cpp
+std::vector<Record> counting_sort(const std::vector<Record>& input, int k) {
+    std::vector<int> count(k + 1, 0);
+    std::vector<Record> output(input.size());
+    for (const auto& item : input) ++count[item.key];
+    for (int key = 1; key <= k; ++key) count[key] += count[key - 1];
+    for (int j = static_cast<int>(input.size()) - 1; j >= 0; --j) {
+        output[--count[input[j].key]] = input[j];
+    }
+    return output;
+}
+```
+
+反向扫描输入保证稳定：两个相等键中，原来靠后的记录先占据该键的最右空位，原来靠前的记录随后进入更左位置，顺序不反转。
+
+<CLRS4CountingStableLab />
+
+正确性还要证明没有位置冲突或空洞。对键$v$，前缀计数在放置开始前给出所有不大于$v$的记录总数；每放置一条键$v$记录就把该计数减1，因此这些记录恰好占据连续区间“键小于$v$的记录数”之后。不同键的区间按键值排列且互不重叠，所有区间长度之和为$n$，所以输出既包含原多重集，又按非降序覆盖每个位置一次。
+
+若只把频数展开成整数序列，记录身份会消失，无法谈稳定性；若记录带payload，稳定放置才能保证相等键的原始顺序。这个差异会影响后续radix正确性，因此接口应明确输入是裸键还是键值记录。
+
+稳定性对单纯整数排序似乎无关，却是基数排序逐位组合的正确性条件。若只需键值而无附带记录，可直接按频数输出，不需要稳定辅助数组；contract变化会改变空间与代码。
+
+### 键范围决定是否真线性
+
+总时间和辅助空间分别为：
+
+$$
+T(n,k)=\Theta(n+k),
+\qquad
+S(n,k)=\Theta(n+k)
+$$
+
+（输出数组计入辅助空间时）。只有$k=O(n)$，才可简写为$\Theta(n)$。若100个键分布在32位全集，分配数十亿计数格既慢又浪费，应压缩键、使用哈希频数，或选择比较排序。
+
+<CLRS4CountingRangeLab />
+
+键可从负数区间$[L,U]$平移为索引`key-L`，数组长度是$U-L+1$；必须防止差值溢出并验证每个键落在contract范围。前缀计数还支持区间计数查询：区间$[a,b]$中的键数为$C[b]-C[a-1]$。
+
+## 8.3 Radix sort
+
+### 稳定地从低位到高位
+
+<Term def="把键拆成固定数量的数字位，按位调用稳定排序，从最低有效位到最高有效位逐轮建立全键次序的算法。">基数排序</Term>假设每个键有$d$位，每位取值在$0,\ldots,k$。低位优先版本先排最低位，再依次排更高位。
+
+<CLRS4RadixPassLab />
+
+正确性对已处理位数归纳。第一轮后记录按最低位排序；假设第$i-1$轮后按低$i-1$位有序，第$i$轮按新位稳定排序：新位较小的整体在前，新位相等的记录保留原有低位顺序，因此结果按低$i$位有序。处理$d$位后即按完整键有序。
+
+```text
+RADIX-SORT(A, d)
+1  for digit = 1 to d
+2      use a stable sort to sort A on digit
+```
+
+若每位用计数排序，时间为：
+
+$$
+\Theta(d(n+k)).
+$$
+
+<CLRS4RadixCostLab />
+
+对$w$ bit键，每次处理$r$ bits，则$d=\lceil w/r\rceil$、位域大小$k+1=2^r$。增大$r$减少轮数却扩大计数数组；最优选择受缓存容量、内存带宽、键宽和$n$影响。对固定机器字宽，合适$r$可取得近线性性能，但不能把$w$随输入增长的成本悄悄视为常数。
+
+最高位优先radix会先按高位分桶，再递归各桶，不要求跨桶稳定，但边界、空桶和递归深度不同。LSD与MSD是不同contract，不能把一个版本的稳定性证明直接套到另一个。
+
+<Callout type="trap" title="逐位排序可以使用任意子排序">
+LSD radix依赖稳定性保留先前低位次序。若位排序不稳定，同一高位组内低位关系会被破坏。修法是使用稳定计数排序或证明子过程等价地保留已处理位。
+</Callout>
+
+## 8.4 Bucket sort
+
+### 有序区间加局部排序
+
+<Term def="按值域把记录散入有序桶，各桶内部排序后按桶顺序连接；均匀独立输入下具有期望线性时间。">桶排序</Term>对独立均匀分布在$[0,1)$的$n$个实数创建$n$个桶，把$x$放入$\lfloor nx\rfloor$号桶。桶区间天然有序：较小编号桶中的任意值不大于较大编号桶中的值。
+
+<CLRS4BucketScatterLab />
+
+每桶可用插入排序。设第$i$桶元素数为$n_i$，散入和连接为$\Theta(n)$，局部排序总成本由$\sum_iO(n_i^2)$控制。均匀独立假设下：
+
+$$
+\mathbb E\!\left[\sum_{i=0}^{n-1}n_i^2\right]
+=O(n),
+$$
+
+所以期望总时间$\Theta(n)$。该结论不是最坏界：若所有值落入同一桶，插入排序会退化为$\Theta(n^2)$。
+
+线性期望可从二阶矩看得更具体。把$n_i^2$展开为桶$i$中“有序元素对”数量：自身对贡献期望$n$，两个不同元素落入同一桶的概率为$1/n$，共有$n(n-1)$个有序对，贡献$n-1$。因此$\mathbb E[\sum_i n_i^2]=2n-1$。这里用到每个键独立且每个桶等概率；若键相关，即使单个键的边缘分布均匀，成对同桶概率也可能更高。
+
+<CLRS4DistributionFitLab />
+
+正确性与性能依赖不同条件。正确性只要求桶映射保持全局区间次序且桶内排序正确；均匀分布用于证明期望负载小。对已知非均匀分布，可用累计分布函数做等概率映射，或基于样本选择分位数边界；若分布漂移，需监控最大桶负载并回退到$n\lg n$排序。
+
+浮点边界要明确：输入若允许1.0，公式$\lfloor nx\rfloor$会得到越界索引$n$，必须限制为半开区间或夹到最后桶。NaN没有普通全序，应由前置验证、单独桶或比较器政策处理。
+
+```text
+BUCKET-SORT(A)
+1  create ordered buckets B[0..n-1]
+2  append x to B[floor(n*x)] for every x in A
+3  sort each bucket locally
+4  concatenate buckets in index order
+```
+
+<Stepper>
+<Step title="先声明信息模型">
+确认算法只使用比较，还是可以读取整数键、数字位或概率分布；只在对应模型下引用下界。
+
+<CLRS4DecisionTreeLab />
+</Step>
+<Step title="再证明局部过程可组合">
+计数排序证明前缀位置和稳定性，radix证明已处理位归纳，bucket证明桶间区间有序。
+
+<CLRS4CountingStableLab />
+</Step>
+<Step title="最后核对线性条件">
+把$k$、$d$、位宽、桶负载和辅助空间保留在成本式中，并为稀疏键或分布漂移准备回退。
+
+<CLRS4DistributionFitLab />
+</Step>
+</Stepper>
+
+## 小结
+
+Chapter 8 Sorting in Linear Time先用比较决策树证明$n!$个排列要求$\Omega(n\lg n)$最坏比较；这个下界只属于比较模型。计数排序利用小整数键域在$\Theta(n+k)$时间稳定输出，基数排序依赖稳定位排序并花$\Theta(d(n+k))$，桶排序在有序区间映射和均匀独立分布下获得期望$\Theta(n)$。
+
+三种方法都以更强输入结构换取更快时间。正确报告必须保留键范围、位数、辅助空间、稳定性和分布条件；当条件不满足时，算法可能只是不再线性，也可能直接越界或错误。模型边界是算法contract的一部分。
+
+<Exercises>
+
+**问题 1**：为什么至少$n!$个叶子推出比较排序最坏$\Omega(n\lg n)$？
+
+<Answer>
+高度$h$二叉树至多有$2^h$个叶子，正确排序互异键必须区分$n!$种排列，所以$2^h\ge n!$，即$h\ge\lg(n!)$。Stirling公式给$\lg(n!)=\Theta(n\lg n)$。
+</Answer>
+
+**问题 2**：计数排序为何要反向扫描输入才能稳定？
+
+<Answer>
+前缀计数给出某键当前最右空位。反向扫描使原来靠后的相等记录先占右侧位置，随后靠前记录占更左位置，因此相对顺序保持；正向扫描配合同样递减位置会反转等值记录。
+</Answer>
+
+**问题 3**：LSD radix的位排序不稳定会破坏什么归纳假设？
+
+<Answer>
+处理第$i$位前，数组已按低$i-1$位有序。第$i$位相等的记录必须保留这个低位顺序；不稳定子排序可能任意打乱它们，导致处理完第$i$位后并未按低$i$位排序。
+</Answer>
+
+**问题 4**：桶排序输入全部集中在一个桶时，正确性和成本分别怎样变化？
+
+<Answer>
+只要该桶内部排序正确、桶区间映射正确，最终结果仍正确；但局部插入排序处理$n$个元素，成本退化为$\Theta(n^2)$。这说明均匀分布是假设用于期望性能，而非基本排序正确性。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="比较决策树">把比较排序对两个键的每次二元比较表示为内部节点、比较结果表示为边、最终排列表示为叶子的二叉树模型。</GlossaryItem>
+<GlossaryItem term="比较排序下界">通过决策树叶子数证明任意比较排序最坏情况至少执行Ω(n lg n)次比较的模型内下界。</GlossaryItem>
+<GlossaryItem term="计数排序">对小范围整数键直接统计频数，再用前缀计数把记录稳定放入输出数组的非比较排序。</GlossaryItem>
+<GlossaryItem term="基数排序">把键拆成固定数量的数字位，按位调用稳定排序，从最低有效位到最高有效位逐轮建立全键次序的算法。</GlossaryItem>
+<GlossaryItem term="桶排序">按值域把记录散入有序桶，各桶内部排序后按桶顺序连接；均匀独立输入下具有期望线性时间。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Chapter 8 · Sorting in Linear Time" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

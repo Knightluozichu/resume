@@ -1,0 +1,228 @@
+---
+title: "第 10 章 Source Control and Other Tips：资源与存档交付"
+type: A
+section: "Unity 脚本设计 · 资源与交付"
+order: 10
+description: "覆盖 Git、Resources、外部文件、AssetBundles、持久数据与存档，建立可版本化交付闭环。"
+demo: true
+math: false
+sourceUrl: "https://www.packtpub.com/en-us/product/mastering-unity-scripting-9781784390655"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Usc10SourceControlOtherTipsMapLab,
+  Usc10SourceControlOtherTipsExperimentLab,
+  Usc10SourceControlOtherTipsEvidenceLab,
+} from "@/components/mdx/unity-scripting/diagrams/usc-10-source-control-other-tips";
+
+<Objectives>
+
+- 能实现包含 .meta、文本序列化、忽略规则和可回滚提交的 Unity Git 工作流
+
+- 能解释 Resources、外部文件、AssetBundle 与 Addressables 的身份和生命周期
+
+- 能复现并验证带版本、校验、原子写入、备份和迁移策略的持久化存档
+
+</Objectives>
+
+## 问题：为什么场景能在本机打开不代表项目和存档可以被另一台机器复现
+
+先预测：只提交 .unity 和 .prefab，不提交对应 .meta，另一台机器会得到相同引用吗？最后一章把 Git、Resources/external files、AssetBundles 与 persistent data/save games 放在一起，讨论脚本如何离开单次运行并成为可协作、可下载、可升级和可恢复的交付物。资源身份、版本和写入原子性是共同主线。
+
+<Usc10SourceControlOtherTipsMapLab />
+
+## 原书边界与官方小节
+
+官方目录为 Git - source control、Resources folder and external files、AssetBundles and external files、Persistent data and saved games。原章产品页还概括为 revision control、resource folders/external files、loading and saving games。现代 Addressables 可作迁移对照，但不计作第五个原始小节。
+
+- **Git - source control**
+- **Resources folder and external files**
+- **AssetBundles and external files**
+- **Persistent data and saved games**
+
+这些小节按官方目录唯一归属。本站重新组织解释、代码和实验，不逐字复制原文；现代补充必须放在迁移段，不能替换或重复计算原始单元。
+
+## 身份、版本、寻址、加载与恢复
+
+Git 保存源资产和 .meta 身份，提交形成可回滚历史；Resources 把已知路径资源打进构建，外部文件通过平台路径加载，AssetBundle 把资源及依赖打成可分发包。存档把运行状态序列化到 persistentDataPath，并需要 schema version、校验、临时文件和替换策略。每个外部输入都要验证版本、完整性、依赖与失败恢复。
+
+<Usc10SourceControlOtherTipsExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="由 GUID 与 .meta 等元数据稳定关联资产引用的标识。">资源身份</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="记录可追踪变更、支持协作、比较与回滚的历史系统。">版本控制</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="从逻辑键或路径定位可加载资产的规则。">资源寻址</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="标识序列化数据结构、驱动兼容迁移的版本号。">存档模式版本</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="先写临时文件并成功落盘后替换正式文件，避免半写损坏。">原子写入</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+术语若不能落到具体对象、状态和观测点，就仍停留在记忆层。读者应能为每个术语写出生产者、变换规则、消费者、正常值、边界值和失败信号。
+
+## 关键对象与数据流
+
+交付实验从一个 Prefab 及其 .meta 开始，提交后在干净目录检出并验证引用；再把同一配置放入 Resources、外部文件和 Bundle，比较构建体积、更新方式、卸载与缺失依赖。存档写入版本化 DTO，故意中断写入、篡改校验和加载旧版本，验证备份与迁移。
+
+排查时从最早可控输入开始，逐段检查中间状态和最终消费者。最终结果正确但中间链不符合预测，也不能立即签发，因为它可能依赖未记录的缓存、时序或 Editor 状态。
+
+## 三步可重复实验
+
+动手前先预测：只改变当前步骤的一项输入后，哪个日志、状态或像素应最先变化？实验期间固定 Unity 版本、场景、对象数量、时间步与目标平台，避免多个变量一起漂移。
+
+<Stepper>
+  <Step title="验证仓库可复原">
+    <Usc10SourceControlOtherTipsMapLab />
+
+提交 Assets、Packages、ProjectSettings 与 .meta，在干净目录检出，打开场景并检查 GUID 引用；确认 Library 等生成目录被忽略。
+
+```text
+Assets/
+ProjectSettings/
+Packages/
+.gitignore -> Library/, Temp/, Logs/, Build/
+```
+
+  </Step>
+  <Step title="比较三种资源入口">
+    <Usc10SourceControlOtherTipsExperimentLab />
+
+用同一资产测试 Resources、外部路径和 AssetBundle，记录寻址、依赖、构建体积、异步加载、卸载和缺失文件。
+
+```csharp
+var save = new SaveData { Version = CurrentVersion, Score = score };
+var json = JsonUtility.ToJson(save);
+File.WriteAllText(tempPath, json);
+File.Move(tempPath, finalPath, overwrite: true);
+```
+
+  </Step>
+  <Step title="破坏并恢复存档">
+    <Usc10SourceControlOtherTipsEvidenceLab />
+
+实现版本与临时文件，分别模拟半写、校验失败、旧 schema 和磁盘不可写，验证备份、迁移与用户提示。
+
+```csharp
+if (save.Version < CurrentVersion) save = migrations.Upgrade(save);
+ValidateChecksum(save);
+Apply(save);
+```
+
+  </Step>
+</Stepper>
+
+## Git 保存的是可重建工程，不只是脚本文本
+
+Unity 资源引用依赖 GUID，因此资源文件和对应 .meta 必须成对提交。场景、Prefab 和 ScriptableObject 使用可读文本序列化后才适合审查与合并；Library、Temp 和本机生成目录应忽略。一次可验收提交应在干净目录检出，使用记录的 Unity 版本导入，打开目标场景并完成 Player 构建。原机器缓存中能运行不能证明仓库完整。
+
+Resources、外部文件和 AssetBundle 解决不同问题。Resources 通过约定路径把资产打进构建并在运行时按字符串加载，简单但依赖和卸载边界隐蔽；外部文件适合平台允许访问的非 Unity 数据，需要自行管理路径、权限和版本；AssetBundle 保留 Unity 资产身份与依赖，却要求构建目标、版本、依赖和卸载策略一致。Addressables 可以现代化寻址和远端目录，但不自动消除生命周期与版本问题。
+
+## 存档写入与恢复协议
+
+- 数据结构包含明确 schemaVersion，不把当前 C# 类型布局当作永久格式。
+- 先写临时文件，刷新并校验后原子替换主文件，保留最后一次有效备份。
+- 加载先验证长度、版本、校验和与字段范围，再构造运行时对象。
+- 每个旧版本提供单向迁移步骤，迁移失败不得覆盖原始存档。
+- 在无权限、磁盘不足、写入中断、损坏内容和跨版本升级下分别保存结果。
+
+交付验收把源码、资源和用户状态串在一起：固定提交构建出固定资源目录，运行时生成带版本存档，新版本读取并迁移，损坏输入回退到备份并报告原因。现代服务或云存档可以替换传输位置，却不能省略身份、原子性、校验、迁移和恢复这五项不变量。
+
+AssetBundle 或远端目录还要处理“代码版本与内容版本不匹配”。客户端应记录目录版本、Bundle 哈希、依赖版本和最低兼容 schema，在下载完成且校验通过后再切换活动目录；失败继续使用上一份完整集合，不能把新旧文件混装。测试在主 Bundle 已更新而依赖未更新、下载中断和缓存损坏三种情况下启动，确认系统给出可理解错误并回退。Git 提交、构建产物、远端资源和用户存档由不同版本号管理，但发布记录必须能把它们关联到同一次可重放交付。
+
+## 正常、边界与失败样本
+
+每章至少保存一个正常样本、一个极端边界和一个故意破坏配置。正常样本证明主路径，边界样本说明适用范围，失败样本证明诊断方法真的能抓到错误。
+
+<Callout type="trap">
+  **因果陷阱**：忽略 .meta 会让 GUID 重建，场景和 Prefab
+  引用可能在另一台机器静默断裂。
+</Callout>
+
+<Callout type="trap">
+  **版本陷阱**：直接覆盖正式存档遇到崩溃或磁盘满会留下半个文件，应使用临时文件、替换与备份。
+</Callout>
+
+## 从 2015 年到现代 Unity
+
+Git 与 .meta 仍是现代 Unity 协作基础；Plastic/Unity Version Control 是可选替代。Resources 和手工 AssetBundle 常映射到 Addressables，但原章的寻址、依赖、版本、加载与卸载问题不变。现代云存档还要处理并发冲突和账户身份，不能因此省略本地 schema、校验与恢复。
+
+迁移记录采用五列：原书载体、稳定不变量、现代实现、不可等价处、目标平台证据。允许替换工具和 API，不允许抹去原始问题或倒写历史。
+
+## 验收证据
+
+验收包含干净检出、引用完整、提交历史、三种资源入口对照、Bundle 依赖与卸载、正常/损坏/旧版/不可写存档。交付结论必须在第二个目录或 CI 环境重放，不能以开发机缓存为证据。
+
+证据包同时记录场景路径、代码版本、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜测隐藏状态即可重放，才算掌握而不只是读完。
+
+## 小结
+
+- Unity 仓库必须保存源资产、项目设置、包配置和 .meta 身份
+- 资源加载方案由寻址、更新、依赖、内存和平台边界决定
+- 存档需要版本、校验、原子写入、备份和迁移
+- Addressables 等现代载体不改变可复原交付的核心问题
+
+<Exercises>
+
+**问题 1** 为什么 Library 不应提交而 .meta 必须提交？
+
+<Answer>
+  Library 是可重建缓存，.meta 保存稳定 GUID 和导入设置，决定资产引用。
+</Answer>
+
+**问题 2** Resources 的主要工程代价是什么？
+
+<Answer>
+  路径字符串、构建时整体收集、难以细粒度更新和内存生命周期不透明。
+</Answer>
+
+**问题 3** 如何验证存档原子性？
+
+<Answer>
+  在临时写入、flush
+  和替换阶段模拟失败，正式文件应保持旧的完整版本或可从备份恢复。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="资源身份">
+    由 GUID 与 .meta 等元数据稳定关联资产引用的标识。
+  </GlossaryItem>
+  <GlossaryItem term="版本控制">
+    记录可追踪变更、支持协作、比较与回滚的历史系统。
+  </GlossaryItem>
+  <GlossaryItem term="资源寻址">
+    从逻辑键或路径定位可加载资产的规则。
+  </GlossaryItem>
+  <GlossaryItem term="存档模式版本">
+    标识序列化数据结构、驱动兼容迁移的版本号。
+  </GlossaryItem>
+  <GlossaryItem term="原子写入">
+    先写临时文件并成功落盘后替换正式文件，避免半写损坏。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Alan Thorn《Mastering Unity Scripting》第一版官方目录与中文版身份资料"
+  adaptedUrl="https://www.packtpub.com/en-us/product/mastering-unity-scripting-9781784390655"
+/>

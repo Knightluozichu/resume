@@ -1,0 +1,309 @@
+---
+title: "第6章 · 大事化小、小事化了——分治"
+type: C
+section: "分治方法"
+order: 6
+description: "按图解版第6章重建分治原理、与动态规划的区别、快速幂、Karatsuba、矩阵分块与Strassen、线性结构、树上通信与换根、地图路径分解。"
+demo: true
+math: true
+sourceUrl: "https://www.tenlong.com.tw/products/9787522615059?list_name=rd"
+draft: false
+---
+
+import { CAIDivideTreeLab, CAIDivideVsDPLab, CAICellExponentiationLab, CAIKaratsubaLab, CAIMatrixBlockLab, CAIStrassenLab, CAILinearMergeLab, CAITreeDistanceLab, CAIRerootLab, CAIMapSeparatorLab } from "@/components/mdx/competitive-algorithms/diagrams/06-divide-and-conquer";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释分治的divide、conquer、combine与base case，并区分分治和动态规划的重复子问题边界
+- 能计算递归树层数、快速幂乘法数、Karatsuba与Strassen递推、跨中点合并和换根公式
+- 能实现快速幂、Karatsuba骨架、线性结构分治、树上距离与换根传播
+- 能分析子问题是否独立、combine是否完备、代数减少子调用是否抵消额外开销
+- 能设计线性、树形和地图问题的分隔边界、局部摘要、正确性证明与性能证书
+
+</Objectives>
+
+## 从“递归调用两次就是分治吗”开始
+
+先预测：Fibonacci递归把$n$拆成$n-1$和$n-2$，为什么不被视为高效分治？因为两个子问题高度重叠，递归树反复计算同一状态。分治的收益来自子问题规模缩小且大体独立，再用受控成本合并。
+
+<Term def="把一个问题拆成若干规模更小且结构相同的子问题，分别求解后通过combine步骤得到原问题答案的算法范式。">分治</Term>必须明确四件事：何时停止、怎样切分、子答案表示什么、怎样合并而不漏掉跨边界解。
+
+<CAIDivideTreeLab />
+
+## 6.1 分治基本介绍
+
+### 6.1.1 原理
+
+分治基本介绍的原理可写为递推：
+
+$$
+T(n)=aT(n/b)+f(n)
+$$
+
+$a$是子问题数，$n/b$是子问题规模，$f(n)$是切分与合并成本。<Term def="把递推的每个子调用画成节点、按深度汇总每层成本，用于理解总工作量的树形分析模型。">递归树</Term>让总成本可见。
+
+若$a=b=2$且每层合并总成本$\Theta(n)$，树高$\log_2n$：
+
+$$
+T(n)=2T(n/2)+\Theta(n)=\Theta(n\log n)
+$$
+
+Base case必须把规模真正降到可直接求解；若切分产生与原问题同样大的子问题，递归不会终止。
+
+### 6.1.2 分治和动态规划的区别
+
+分治和动态规划的区别不在“递归还是循环”，而在状态依赖：
+
+- 分治子问题通常由不相交输入区间产生，各算一次后combine；
+- 动态规划的不同路径频繁到达同一状态，需要memo或表格合并；
+- 二者都依赖最优子结构或可组合摘要，也可组合使用。
+
+<CAIDivideVsDPLab />
+
+归并排序是分治；Fibonacci记忆化是DP；矩阵链DP又会在每个区间状态枚举分割点。算法名称不应替代依赖图分析。
+
+## 6.2 数乘型分治
+
+数乘型分治利用数字表示的结构减少重复乘法或大整数子乘法。
+
+### 6.2.1 疯狂的细胞分裂
+
+疯狂的细胞分裂可把“每代乘增长因子$r$，共$t$代”写为$r^t$。逐代乘需要$t-1$次；<Term def="利用偶数指数平方、奇数指数额外乘底数，把幂运算乘法次数降到对数级的方法。">快速幂</Term>按指数奇偶递归：
+
+$$
+r^t=
+\begin{cases}
+(r^{t/2})^2,&t\text{ even}\\
+r(r^{\lfloor t/2\rfloor})^2,&t\text{ odd}
+\end{cases}
+$$
+
+<CAICellExponentiationLab />
+
+```cpp
+long long power(long long base, unsigned long long exponent) {
+    long long result = 1;
+    while (exponent > 0) {
+        if (exponent & 1ULL) result *= base;
+        exponent >>= 1ULL;
+        if (exponent) base *= base;
+    }
+    return result;
+}
+```
+
+整数会快速溢出；竞赛题常要求模幂，应把每次乘法用足够宽的中间类型后取模。矩阵快速幂把标量乘法替换为矩阵乘法，可计算线性递推。
+
+### 6.2.2 简单的乘法
+
+简单的乘法把大整数按base$B$拆成$x=aB+b,y=cB+d$。直接展开需要四个半长乘法：
+
+$$
+xy=acB^2+(ad+bc)B+bd
+$$
+
+<Term def="通过计算ac、bd与(a+b)(c+d)三个半规模乘积恢复交叉项，使大整数乘法复杂度低于平方级的分治算法。">Karatsuba乘法</Term>利用：
+
+$$
+ad+bc=(a+b)(c+d)-ac-bd
+$$
+
+<CAIKaratsubaLab />
+
+```cpp
+BigInt karatsuba(BigInt x, BigInt y) {
+    if (small(x) || small(y)) return x * y;
+    auto [a, b] = split(x);
+    auto [c, d] = split(y);
+    BigInt z2 = karatsuba(a, c);
+    BigInt z0 = karatsuba(b, d);
+    BigInt z1 = karatsuba(a + b, c + d) - z2 - z0;
+    return shift2(z2) + shift1(z1) + z0;
+}
+```
+
+递推$T(n)=3T(n/2)+O(n)$，得到$O(n^{\log_23})\approx O(n^{1.585})$。小整数上额外分配与加减成本更大，应设置阈值回退普通乘法。
+
+## 6.3 矩阵乘法的分治
+
+### 6.3.1 神秘数字
+
+矩阵乘法的分治先观察神秘数字“8”：把两个$n\times n$矩阵各切成四块，结果每块是两个块乘积之和，总共需要8个$n/2$规模矩阵乘法。
+
+<CAIMatrixBlockLab />
+
+递推为：
+
+$$
+T(n)=8T(n/2)+\Theta(n^2)=\Theta(n^3)
+$$
+
+仅仅分块没有改变指数，但改善cache locality，并为减少递归乘法数提供代数入口。
+
+### 6.3.2 Strassen快速矩阵乘法
+
+Strassen快速矩阵乘法通过特定加减组合，只做7个半规模乘法，再重建四个结果块：
+
+$$
+T(n)=7T(n/2)+\Theta(n^2)=\Theta(n^{\log_27})\approx\Theta(n^{2.807})
+$$
+
+<CAIStrassenLab />
+
+<Term def="用七个半规模块乘法与额外矩阵加减替代经典八个块乘法，从而降低矩阵乘法渐近指数的算法。">Strassen算法</Term>的渐近优势不代表任意规模更快：padding、临时矩阵、cache、并行库和浮点误差都会提高交叉点。生产实现通常在大块上Strassen、小块回退高度优化的经典kernel。
+
+<Callout type="trap" title="子调用少一个就一定更快">
+减少乘法可能增加大量加法、复制和临时内存。修法是先写递推得到渐近结论，再测目标数据类型、规模与硬件上的crossover；不要把渐近改进当作所有输入的秒表结论。
+</Callout>
+
+## 6.4 线性结构问题的分治
+
+线性结构问题的分治把数组按中点切开。完整答案有三类：全在左半、全在右半、跨越中点。Combine必须构造第三类，否则只取两个子答案会漏解。
+
+### 6.4.1 自助餐厅（一）
+
+自助餐厅（一）可先建立线性区间模型：每个位置有收益或等待代价，目标找总和最大的连续选择。左、右子问题给出各自最优区间；跨中点答案由左半最佳suffix加右半最佳prefix组成。
+
+<CAILinearMergeLab />
+
+```cpp
+long long max_subarray(std::span<const long long> a) {
+    if (a.size() == 1) return a[0];
+    const std::size_t mid = a.size() / 2;
+    long long left = max_subarray(a.first(mid));
+    long long right = max_subarray(a.subspan(mid));
+    long long suffix = best_suffix(a.first(mid));
+    long long prefix = best_prefix(a.subspan(mid));
+    return std::max({left, right, suffix + prefix});
+}
+```
+
+每层combine线性扫描，总成本$O(n\log n)$。它不是该问题最快算法，线性扫描DP可达$O(n)$；价值在于学习“跨边界摘要”怎样使combine完备。
+
+### 6.4.2 自助餐厅（二）
+
+自助餐厅（二）进一步把摘要作为接口设计。一个区间若保存总和、最佳prefix、最佳suffix、最佳subarray，两个相邻区间可在$O(1)$合并：
+
+$$
+\begin{aligned}
+sum&=sum_L+sum_R\\
+prefix&=\max(prefix_L,sum_L+prefix_R)\\
+suffix&=\max(suffix_R,sum_R+suffix_L)\\
+best&=\max(best_L,best_R,suffix_L+prefix_R)
+\end{aligned}
+$$
+
+这个monoid式摘要还能用于segment tree：静态分治变成支持区间查询和点更新的数据结构。
+
+## 6.5 树形结构问题的分治
+
+树天然由根和若干子树组成。树形结构问题的分治先postorder汇总子树，再preorder把根外信息传给孩子。
+
+### 6.5.1 沟通成本
+
+沟通成本设某节点为中心，目标为它到所有节点距离和。对一个固定root，DFS可同时求depth与subtree size，根答案为：
+
+$$
+ans[root]=\sum_{v\in V}depth[v]
+$$
+
+<CAITreeDistanceLab />
+
+若对每个节点都重新DFS，成本$O(n^2)$。相邻根之间的大部分距离变化具有统一规律，可以复用。
+
+### 6.5.2 换根策略
+
+换根策略把根从父节点$u$移动到孩子$v$。$v$子树内的$size[v]$个节点距离都减1，其余$n-size[v]$个节点距离都加1：
+
+$$
+ans[v]=ans[u]+n-2\,size[v]
+$$
+
+<CAIRerootLab />
+
+```cpp
+void reroot(int u, int parent) {
+    for (int v : graph[u]) {
+        if (v == parent) continue;
+        answer[v] = answer[u] + node_count - 2 * subtree_size[v];
+        reroot(v, u);
+    }
+}
+```
+
+一次postorder求size和初始答案，一次preorder传播所有答案，总成本$O(n)$。这是树上的divide/combine与信息复用结合。
+
+## 6.6 再看路径规划——地图上的分治
+
+再看路径规划——地图上的分治把大地图切成regions，在每个区域内部预计算边界portal之间的距离，查询时只在起点区域、终点区域和高层边界图上搜索。
+
+<CAIMapSeparatorLab />
+
+正确combine要求任何跨区路径都经过已列出的边界接口；局部摘要必须保存足够的portal-to-portal成本。分区过小会使边界图巨大，分区过大又让局部搜索昂贵，层次化分割需要在预处理、内存与查询时间之间平衡。
+
+<Callout type="trap" title="只解左右子问题，忘记跨边界答案">
+最近点对、最大子数组、地图路径都可能由两侧元素共同构成。修法是在切分前写出答案分类，明确combine所需摘要，并证明每个跨界解都被检查。
+</Callout>
+
+<Stepper>
+<Step title="定义切分与base case">
+证明每个子问题严格变小，所有原始元素都归入某个子问题或边界集合。
+
+<CAIDivideTreeLab />
+</Step>
+<Step title="设计可组合摘要">
+摘要既要足以重建跨边界答案，又要小到能低成本合并。
+
+<CAILinearMergeLab />
+</Step>
+<Step title="解递推并测交叉点">
+分别计算子调用、combine、额外空间与cache行为；为小规模保留直接算法。
+
+<CAIStrassenLab />
+</Step>
+</Stepper>
+
+## 小结
+
+本章从分治基本介绍与原理出发，区分分治和动态规划；在数乘型分治中用疯狂的细胞分裂理解快速幂，用简单的乘法理解Karatsuba。矩阵乘法的神秘数字8引出Strassen快速矩阵乘法的7个递归乘积。
+
+线性结构问题的分治通过自助餐厅（一）与（二）建立跨中点摘要；树形结构问题用沟通成本与换根策略把平方重复降为线性；地图上的分治则把局部路径与边界portal组合。参考文献应继续追踪算法的适用前提、数值稳定性和工程crossover，而不是只保留复杂度指数。
+
+<Exercises>
+
+**问题 1**：用递归树解释$T(n)=2T(n/2)+n$为何是$\Theta(n\log n)$。
+
+<Answer>
+第$i$层有$2^i$个规模$n/2^i$子问题，每个combine成本与规模成正比，所以该层总成本为$2^i\cdot n/2^i=n$。树高$\log_2n$，共有对数个线性成本层，总和$\Theta(n\log n)$。
+</Answer>
+
+**问题 2**：Karatsuba怎样用三个乘积恢复$ad+bc$？
+
+<Answer>
+计算$z_2=ac,z_0=bd,z=(a+b)(c+d)$。展开$z=ac+ad+bc+bd$，因此$z_1=ad+bc=z-z_2-z_0$。最后结果为$z_2B^2+z_1B+z_0$。
+</Answer>
+
+**问题 3**：最大子数组分治为何必须保存最佳prefix和suffix？
+
+<Answer>
+跨中点最优区间由左半某个suffix和右半某个prefix连接。只有左右各自最佳subarray无法构造这种第三类答案；保存最佳suffix与prefix后，跨界最优值恰为二者之和，三类候选覆盖全部连续区间。
+</Answer>
+
+**问题 4**：推导树上距离和换根公式。
+
+<Answer>
+根从$u$移到孩子$v$时，$v$子树内$size[v]$个节点各近1，总和减少$size[v]$；其余$n-size[v]$个节点各远1，总和增加$n-size[v]$。净变化为$n-2size[v]$，所以$ans[v]=ans[u]+n-2size[v]$。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="分治">把一个问题拆成若干规模更小且结构相同的子问题，分别求解后通过combine步骤得到原问题答案的算法范式。</GlossaryItem>
+<GlossaryItem term="递归树">把递推的每个子调用画成节点、按深度汇总每层成本，用于理解总工作量的树形分析模型。</GlossaryItem>
+<GlossaryItem term="快速幂">利用偶数指数平方、奇数指数额外乘底数，把幂运算乘法次数降到对数级的方法。</GlossaryItem>
+<GlossaryItem term="Karatsuba乘法">通过计算ac、bd与(a+b)(c+d)三个半规模乘积恢复交叉项，使大整数乘法复杂度低于平方级的分治算法。</GlossaryItem>
+<GlossaryItem term="Strassen算法">用七个半规模块乘法与额外矩阵加减替代经典八个块乘法，从而降低矩阵乘法渐近指数的算法。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="《深入浅出算法竞赛（图解版）》第6章“大事化小、小事化了——分治”" adaptedUrl="https://www.tenlong.com.tw/products/9787522615059?list_name=rd" />

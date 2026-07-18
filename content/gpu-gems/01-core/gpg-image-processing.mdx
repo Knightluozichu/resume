@@ -1,122 +1,255 @@
 ---
-title: "图像处理与后处理"
+title: "图像处理：三卷 24 章复现"
 type: B
 section: "计算机图形学与渲染"
 order: 4
-description: "用后处理管线实现 Bloom、色调映射、屏幕空间特效"
+description: "从 glow、颜色、DOF、过滤、OpenEXR 和图像图，到光栅化、LUT、impostor、法线烘焙、线性光、矢量与视频"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems"
 draft: false
 ---
 
-import { GpgImageProcessingDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-image-processing";
+import { GpgImageProcessingDiagram, GpgImageChapterMatrixDiagram, GpgImageEvidenceDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-image-processing";
+import { GpgStepFlowDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能解释后处理管线的多 Pass 流程与渲染目标切换
-- 能用降采样金字塔实现高性能 Bloom
-- 能回答：为什么 HDR 渲染需要色调映射？
-- 能区分 Reinhard 和 ACES 色调映射的视觉效果差异
+
+- 能描述三卷 24 个图像相关原章的输入、滤波域、输出表示和主要误差
+- 能推导卷积、纹理足迹、景深 CoC、运动曝光积分和线性颜色合成的核心关系
+- 能比较图像处理图、LUT/OpenEXR 色彩管线、抗锯齿/预滤波与视频检测
+- 能解释 impostor、normal baking、off-screen particles 和 Nalu hair 为何也依赖图像表示
+
 </Objectives>
 
-## 直觉引入
+## 直觉：图像处理不仅是“最终画面加滤镜”
 
-拍完照片后用滤镜调色、加光晕、提亮暗部——这就是后处理。游戏渲染也一样：先渲染出 HDR 场景（颜色值可以超过 1.0），再通过一系列屏幕空间 Pass 加工成最终画面。每个 Pass 读上一帧的纹理、写入新的渲染目标，像流水线一样逐级加工。
+这 24 章处理的是离散信号：有的在 HDR/颜色域，有的在纹理/覆盖域，有的把几何烘焙为图像，有的从视频图像提取对象。滤波核、采样足迹、编码和时间曝光决定结果，不能用 Bloom + tone mapping 概括。
 
-## 概念讲解
+先预测：在线性 RGB 上做模糊与在 sRGB 数值上做同一核，结果是否相同？不相同。卷积是线性运算，必须先把非线性编码解码到正确工作域。
 
-### 后处理管线
+<Term def="明确输入采样、工作颜色/几何域、滤波或重采样算子、输出编码和边界条件的图像处理约定">图像算子合同</Term>是跨 24 章的统一验收单位。
 
 <GpgImageProcessingDiagram />
 
-<Term def="HDR 是高动态范围，颜色值可超过 1.0 以表达真实世界的亮度差异">
-HDR
-</Term>
+## 24 个原章与独立核心
 
-后处理管线从 HDR 场景开始：提取平均亮度用于曝光控制，提取高光区域做 Bloom 模糊叠加，最后用色调映射把 HDR 压缩到 LDR（0-1）输出到显示器。
+<GpgImageChapterMatrixDiagram />
 
-<Term def="色调映射是把 HDR 高动态范围颜色压缩到 LDR 显示范围的数学变换">
-色调映射
-</Term>
+### GPU Gems 1 Ch21-27：HDR、颜色、过滤与框架
 
-## 交互Demo
+- **Real-Time Glow**：提取/扩散高亮并合成，建立早期 HDR glow 数据流；
+- **Color Controls**：曝光、对比、饱和度和颜色变换的顺序与工作域；
+- **Depth of Field: A Survey of Techniques**：比较 accumulation、分层与 post-process 景深伪影；
+- **High-Quality Filtering**：用 GPU 纹理取样组合更高阶重建/缩放核；
+- **Fast Filter-Width Estimates with Texture Maps**：在缺少方便导数时估计映射足迹宽度；
+- **The OpenEXR Image File Format**：half、HDR 通道、压缩、窗口/元数据和生产交换；
+- **A Framework for Image Processing**：将 GPU filter 组织成资源、pass 和依赖图。
 
-<Stepper>
-<Step title="第一步：HDR 场景渲染">
-正常渲染场景，颜色值允许超过 1.0（太阳可以到 10.0）。同时输出深度和法线 G-Buffer 供后续屏幕空间特效使用。这一步决定了所有后处理的输入质量。
-<GpgImageProcessingDiagram />
-</Step>
-<Step title="第二步：Bloom 降采样金字塔">
-提取亮度超过阈值的像素，逐级降采样到 1/16 分辨率。每级降采样后做高斯模糊再叠加回上一级。用小纹理做大模糊，性能远优于全分辨率模糊。
-</Step>
-<Step title="第三步：色调映射与输出">
-用 ACES 曲线把 HDR 压缩到 LDR，暗部和亮部细节都保留。最后加 Gamma 校正输出到显示器。Bloom 叠加在色调映射之前或之后效果不同，需根据风格选择。
-</Step>
-</Stepper>
+离散卷积：
 
-## 代码对照
+$$
+y[p]=\sum_{q\in K}k[q]x[p-q].
+$$
+
+<Term def="为每个输出样本定义源图像邻域和权重，用于重建、缩放、模糊、锐化或特征提取的离散函数">重建滤波核</Term>应说明是否归一化、是否有负 lobes、边界如何扩展及在哪个颜色域执行。
 
 ```glsl
-// ACES 色调映射（电影工业标准）
-vec3 ACESFilm(vec3 x) {
-    float a = 2.51;
-    float b = 0.03;
-    float c = 2.43;
-    float d = 0.59;
-    float e = 0.14;
-    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
-}
-
-// Reinhard 色调映射（简单版）
-vec3 reinhard(vec3 hdr) {
-    return hdr / (hdr + 1.0);
-}
-
-// Bloom 降采样：取 4 个邻域像素加权平均
-vec3 downsample(sampler2D src, vec2 uv, vec2 texelSize) {
-    vec3 color = vec3(0.0);
-    vec2 offsets[4] = vec2[](
-        vec2(-1,-1), vec2(1,-1), vec2(-1,1), vec2(1,1)
-    );
-    for (int i = 0; i < 4; i++) {
-        color += texture(src, uv + offsets[i] * texelSize).rgb;
-    }
-    return color * 0.25;
+vec3 convolveLinear(sampler2D src, vec2 uv, vec2 texel) {
+  vec3 sum = vec3(0.0); float weight = 0.0;
+  for (int i=0; i<tapCount; ++i) {
+    vec3 c = decodeToLinear(texture(src, uv + offsets[i]*texel).rgb);
+    sum += weights[i] * c; weight += weights[i];
+  }
+  return sum / weight;
 }
 ```
+
+Glow/Bloom 的阈值、软膝、降采样和合成位置由创作目标决定。若是模拟镜头散射，通常在 scene-linear/high-range 域工作；若是显示风格光晕，也可能在显示映射后设计。不存在无条件“必须在 tone mapping 前”。
+
+### Footprint、DOF 与 OpenEXR
+
+纹理足迹可由导数近似，LOD：
+
+$$
+\lambda\approx\log_2\max(\|\partial(u,v)/\partial x\|,\|\partial(u,v)/\partial y\|).
+$$
+
+Fast Filter-Width Estimates 与 Mipmap-Level Measurement 都要求把像素覆盖的纹理区域可视化，而非只看最终纹理是否模糊。
+
+薄透镜景深的 circle of confusion（比例形式）随焦距差增大：
+
+$$
+c\propto A\left|\frac{z-z_f}{z}\right|,
+$$
+
+其中 $A$ 与光圈相关、$z_f$ 为焦平面。后处理 DOF 缺少被前景遮挡的背景信息，容易 foreground bleed；分层/散射 gather 与真实多样本各有边界。
+
+<Term def="支持高动态范围像素、16 位 half、任意通道、data/display window、压缩和元数据的生产图像交换格式">OpenEXR</Term>不是“让画面自动 HDR”。读写必须保持 channel name/type、色度/颜色空间和 premultiplication 元数据约定。
+
+### GPU Gems 2 Ch20-28：高质量采样与生产图像管线
+
+- **Fast Third-Order Texture Filtering**：以有限硬件采样组合三阶核；
+- **High-Quality Antialiased Rasterization**：提高 coverage/subpixel 采样质量；
+- **Fast Prefiltered Lines**：用预积分线核稳定渲染亚像素线；
+- **Hair Animation and Rendering in the Nalu Demo**：毛发模拟、深度/alpha 与各向异性外观形成图像层；
+- **Using Lookup Tables to Accelerate Color Transformations**：1D/3D LUT 近似复杂颜色映射；
+- **GPU Image Processing in Apple's Motion**：可组合效果、资源生命周期和实时创作工作流；
+- **Implementing Improved Perlin Noise**：连续程序信号及其 GPU 实现；
+- **Advanced High-Quality Filtering**：更广核、更高阶和 separable/优化实现；
+- **Mipmap-Level Measurement**：测量实际 minification level 和 footprint 误差。
+
+<Term def="把多维颜色变换预采样为网格，运行时通过一维或三维插值近似原函数的查找结构">颜色查找表</Term>必须固定输入/输出颜色空间、range、grid 分辨率和插值。LUT 误差要用色差/最大误差测量，不能只目测。
+
+```cpp
+ImageGraph graph;
+graph.add("decode", input, linearWorkingImage);
+graph.add("color-lut", linearWorkingImage, gradedImage);
+graph.add("filter", gradedImage, filteredImage);
+graph.add("encode", filteredImage, displayOutput);
+graph.compileResourceLifetimes();
+graph.executeWithGpuQueries();
+```
+
+Nalu hair 不只是粒子：图像侧要处理多层透明排序/近似、深度阴影和 alpha filtering。Improved Perlin Noise 在本书自然页已有算法复现，此处关注它作为可过滤图像信号进入 Motion/texture pipeline 的频谱与 aliasing。
+
+### GPU Gems 3 Ch21-28：几何图像化与屏幕时空效果
+
+- **True Impostors**：在 impostor 纹理中编码深度/表面并按视线重建，不是普通 billboard；
+- **Baking Normal Maps on the GPU**：从高低模对应关系生成切线空间 normal map，并处理 cage/UV 接缝；
+- **High-Speed, Off-Screen Particles**：把不可见/离屏粒子更新和存储从可见渲染路径解耦；
+- **The Importance of Being Linear**：纹理解码、光照、过滤、混合与显示编码的颜色合同；
+- **Rendering Vector Art on the GPU**：曲线/边界的解析或近似 coverage，而非先高分辨率截图；
+- **Object Detection by Color: Using the GPU for Real-Time Video Image Processing**：颜色分类、形态处理/连通区域与视频流延迟；
+- **Motion Blur as a Post-Processing Effect**：用深度/速度重建曝光期轨迹并处理遮挡；
+- **Practical Post-Process Depth of Field**：可部署 DOF 的分层、scatter/gather 和伪影控制。
+
+<GpgImageEvidenceDiagram />
+
+## 线性光与颜色出口
+
+<Term def="与辐射/光子贡献近似成比例、可以进行加权平均和能量合成的颜色数值域">场景线性颜色</Term>是 lighting、filtering、resampling 和 alpha composite 的默认工作域。sRGB 是编码传输函数，不是“gamma 2.2 精确等价”。
+
+直通 alpha 合成在线性域：
+
+$$
+C_o=\alpha_sC_s+(1-\alpha_s)C_d.
+$$
+
+若源为 premultiplied，存储 $C'_s=\alpha_sC_s$，则 $C'_o=C'_s+(1-\alpha_s)C'_d$。OpenEXR、粒子、hair 和后处理图之间必须统一 straight/premultiplied。
+
+## Impostor、Normal Baking 与 Vector Coverage
+
+True Impostors 用深度/层信息让平面表示产生视差和正确交点；验收旋转视角、silhouette、层穿插与深度写入。Normal baking 要比较高模几何法线经 tangent basis 编码后的结果，检查 mirrored UV handedness 和 cage miss。
+
+矢量图形的核心是像素对曲线/填充区域的 coverage。预滤波线把距离到线的积分/lookup 映射为 alpha；High-Quality Antialiased Rasterization 和 Rendering Vector Art on the GPU 都要以 subpixel reference 检查边缘面积，而不是只看锯齿少。
+
+## 时域：Motion Blur、DOF 与视频
+
+曝光运动模糊近似积分：
+
+$$
+C=\frac1{\Delta t}\int_{t_0}^{t_0+\Delta t}L(x(t),t)dt.
+$$
+
+post-process velocity blur 只有当前可见层的速度/深度，disocclusion 无历史背景；需要 neighborhood clamp、前后景分离和相机/物体速度正确性。DOF 也有类似层缺失问题。
+
+视频颜色检测要固定 camera transfer、white balance 和颜色空间；阈值后还需形态学/连通性，并记录端到端 latency。GPU 更快不代表分类在光照变化下稳健。
+
+```glsl
+vec3 accumulateMotion(sampler2D color, sampler2D depth, vec2 uv, vec2 velocity) {
+  vec3 sum = vec3(0.0); float w = 0.0;
+  for (int i=0; i<sampleCount; ++i) {
+    float t = (i + 0.5) / sampleCount - 0.5;
+    vec2 q = uv + t * velocity;
+    float accept = depthCompatible(depth, uv, q);
+    sum += accept * texture(color, q).rgb; w += accept;
+  }
+  return sum / max(w, 1e-5);
+}
+```
+
+## 三步 24 章验收
+
+<Stepper>
+<Step title="第一步：固定信号与工作域">
+
+为每章记录输入采样、颜色编码、alpha、深度/速度/法线和边界扩展；用 impulse、step edge、斜线与色卡作探针。
+
+<GpgStepFlowDiagram caption="标准信号让 filter、coverage 和颜色错误可量化。" stage={1} stages={["Signal：impulse、edge、line、color chart、depth layers"]} />
+
+</Step>
+<Step title="第二步：比较参考与中间层">
+
+用 CPU 高精度卷积、subpixel raster、multi-sample DOF/motion 和高模法线作 oracle；输出 footprint、CoC、velocity、LUT 坐标与 coverage。
+
+<GpgStepFlowDiagram caption="最终图像无法单独区分重建、编码和遮挡错误。" stage={2} stages={["Signal：impulse、edge、line、color chart、depth layers", "Inspect：kernel、footprint、CoC、velocity、coverage、color transform"]} />
+
+</Step>
+<Step title="第三步：时空与性能回归">
+
+扫描缩放、旋转、曝光、焦点、视角、视频光照和粒子数量；保存时序差、PSNR/色差、边缘误差和 GPU pass 时间。
+
+<GpgStepFlowDiagram caption="图像算法必须在尺度、时间和编码变化中保持合同。" stage={3} stages={["Signal：impulse、edge、line、color chart、depth layers", "Inspect：kernel、footprint、CoC、velocity、coverage、color transform", "Validate：spatial error、temporal artifacts、latency、GPU cost"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**误区：Bloom 在全分辨率上做高斯模糊。**
-全分辨率大半径模糊极其昂贵。正确做法是构建降采样金字塔，在最小 mip 上做大模糊，再逐级上采样叠加。5 级金字塔的 Bloom 性能比全分辨率快数十倍。
+**现象 →** 页面只讲 Bloom 和 tone mapping，却宣称覆盖 GPU Gems 图像章节。
+**原因 →** 忽略过滤、格式、图像图、几何烘焙、矢量覆盖、视频和时域重建。
+**修法 →** 按 24 章清单分别保留信号、工作域、边界和参考判据。
 </Callout>
 
 <Callout type="trap">
-**误区：色调映射在 Bloom 之前做。**
-如果先色调映射再做 Bloom，高光已被压缩到 1.0 以内，Bloom 的光晕会不明显。正确顺序是先在 HDR 空间做 Bloom 叠加，再统一色调映射。
+**现象 →** 直接在 sRGB 数值上模糊/缩放后出现暗边。
+**原因 →** 在非线性编码域做线性加权。
+**修法 →** 先解码到约定工作域，正确处理 premultiplied alpha，过滤后再编码输出。
 </Callout>
 
+<Callout type="trap">
+**现象 →** post-process DOF/运动模糊在轮廓泄漏背景或前景颜色。
+**原因 →** 单层 depth/velocity 无法表示被遮挡表面，且采样未做层兼容。
+**修法 →** 分层/散射或 depth-aware 权重，明确 disocclusion 回退，并与多样本参考序列比较。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题 1**：为什么 HDR 渲染需要色调映射？
+
+**问题 1：High-Quality Filtering 与 The Importance of Being Linear 如何相互约束？**
 
 <Answer>
-HDR 颜色值可超过 1.0（如太阳=10.0），但显示器只能显示 0-1 的 LDR。直接截断会让所有超过 1.0 的区域变成纯白，丢失亮部细节。色调映射用非线性曲线压缩动态范围，让暗部和亮部细节同时可见。
+高质量核只有在正确信号域加权才有意义。若输入为 sRGB 编码或 straight-alpha 边缘，直接卷积会改变亮度/引入色边；应解码线性并通常预乘 alpha，再应用核和重新编码。
 </Answer>
 
-**问题 2**：Bloom 降采样金字塔为什么比全分辨率模糊快？
+**问题 2：True Impostor 与普通 billboard 的差异怎么验证？**
 
 <Answer>
-降采样金字塔每级把分辨率减半，1/16 分辨率的像素数只有全分辨率的 1/256。在大模糊半径下，用小纹理做模糊的计算量是全分辨率的几百分之一。再逐级上采样叠加恢复细节，总开销远低于全分辨率方案。
+从离轴视角和相互穿插场景检查内部视差、silhouette、深度测试与遮挡。普通 billboard 只是一张平面颜色；true impostor 利用深度/表面表示沿视线重建交点。
 </Answer>
+
+**问题 3：设计覆盖 24 章的图像回归包。**
+
+<Answer>
+包含 HDR/OpenEXR 色卡、impulse/edge/线条/矢量、缩放纹理、hair/particle alpha、impostor/normal bake 模型、视频颜色目标，以及焦点和运动轨迹；保存线性中间图、coverage、depth/velocity、LUT 坐标和参考误差。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+三卷图像章节是一套采样、表示、颜色和时空重建方法，不是单一后处理链。完整复现要覆盖 24 个原章，明确每个算子的工作域与边界，用高精度空间/时间参考和中间缓冲证明结果。
+
 <Glossary>
-<GlossaryItem term="HDR">高动态范围，颜色值允许超过 1.0 以表达真实世界的亮度差异，是后处理的基础。</GlossaryItem>
-<GlossaryItem term="色调映射">把 HDR 颜色非线性压缩到 LDR 显示范围的数学变换，ACES 是电影工业标准。</GlossaryItem>
-<GlossaryItem term="Bloom">高光溢出效果，提取亮区模糊后叠加回原图，模拟镜头无法处理强光的物理现象。</GlossaryItem>
-<GlossaryItem term="降采样金字塔">逐级降低分辨率的纹理链，用于高效实现大半径模糊等屏幕空间特效。</GlossaryItem>
+<GlossaryItem term="图像算子合同">输入采样、工作域、算子、输出编码与边界的约定。</GlossaryItem>
+<GlossaryItem term="重建滤波核">定义输出样本如何加权源邻域的离散函数。</GlossaryItem>
+<GlossaryItem term="OpenEXR">支持 HDR/half、任意通道和生产元数据的图像交换格式。</GlossaryItem>
+<GlossaryItem term="颜色查找表">把颜色变换预采样为网格并运行时插值的结构。</GlossaryItem>
+<GlossaryItem term="场景线性颜色">与光贡献近似成比例、适合加权与合成的颜色域。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="GPU Gems 系列" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3" />
+<Attribution adaptedFrom="GPU Gems 1 Ch21-27, GPU Gems 2 Ch20-28, GPU Gems 3 Ch21-28" adaptedUrl="https://developer.nvidia.com/gpugems" />

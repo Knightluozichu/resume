@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 
 /**
- * lg 以下的章节树抽屉（最小 client 壳：只包汉堡按钮 + 抽屉容器）。
- * 章节树本体经 children 传入，仍是 Server Component。
+ * 同一份章节树在 lg+ 作为固定侧栏，lg 以下作为抽屉。
+ * 章节树本体经 children 传入，避免桌面与移动端重复序列化数据。
  * 开合动效：200ms expand 档 + ease-standard，只动 transform。
  */
 export function ChapterDrawer({ children }: { children: React.ReactNode }) {
@@ -68,7 +68,7 @@ export function ChapterDrawer({ children }: { children: React.ReactNode }) {
           // 点中章节链接后自动收起
           if ((e.target as HTMLElement).closest("a")) setOpen(false);
         }}
-        className={`fixed inset-y-0 left-0 z-30 w-72 max-w-[85vw] overflow-y-auto border-r border-border bg-elevated px-4 py-8 transition-transform duration-(--duration-expand) ease-standard lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-30 w-72 max-w-[85vw] overflow-y-auto border-r border-border bg-elevated px-4 py-8 transition-transform duration-(--duration-expand) ease-standard lg:sticky lg:top-12 lg:bottom-auto lg:z-0 lg:h-[calc(100vh-3rem)] lg:max-w-none lg:shrink-0 lg:self-start lg:translate-x-0 ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
       >

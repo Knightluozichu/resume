@@ -1,0 +1,281 @@
+---
+title: "2.4 Priority Queues：二叉堆、动态极值与堆排序"
+type: B
+section: "排序"
+order: 8
+description: "按官方2.4从优先队列API与初级实现出发，重建1-based二叉堆、swim/sink、动态扩容、索引优先队列及heapify与heapsort。"
+demo: true
+math: true
+sourceUrl: "https://algs4.cs.princeton.edu/24pq/"
+draft: false
+---
+
+import { Algs4PriorityQueueApiMap, Algs4PriorityQueueTradeoffLab, Algs4BinaryHeapIndexMap, Algs4HeapSwimLab, Algs4HeapSinkLab, Algs4PriorityQueuePracticalMap, Algs4HeapsortLab, Algs4HeapCostLab } from "@/components/mdx/algorithms-4e/diagrams/priority-queues";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释priority queue API为何只维护动态extreme而不要求所有items随时全序
+- 能计算无序/有序实现成本、1-based heap亲属indices、height与swim/sink上界
+- 能实现resizing MaxPQ、indexed priority queue核心映射和in-place heapsort
+- 能分析empty deletion、错误child选择、mutable keys、stale references与resize thrashing
+- 能设计以independent multiset、heap certificate、operation trace和sort oracle交叉验收
+
+</Objectives>
+
+## 从“只要当前最大项，不要全排序”开始
+
+优先队列（<Term def="允许动态插入items并反复访问或删除当前最大或最小key，而不要求其余items全序的数据类型。">优先队列</Term>，priority queues）服务于“边收集边处理最重要项”的场景。Job scheduler收到新任务后取最高priority，event simulation取最早time，TopM client只保留最大的M条transaction；这些问题若每次都重排所有items，会做大量不需要的工作。
+
+先预测维护一个变量 `maxSoFar` 是否足以支持删除最大项。第一次max可以常数返回，但删除后必须从剩余items重新发现下一最大，除非另外维护结构。优先队列的难点不是看见当前maximum，而是在insert与delMax交错时持续维护它。
+
+官方2.4按 **Priority queue API、Elementary implementations、Heap definitions、Algorithms on heaps、Heap-based priority queue、Practical considerations、Heapsort** 展开。抽象API决定observable behavior，binary heap只是让insert和delete extreme都快的一种representation。
+
+<Algs4PriorityQueueApiMap />
+
+## 2.4.1 Priority queue API：动态极值而非全序容器
+
+优先队列API（<Term def="由insert、max或min、delete extreme、isEmpty与size等operations组成的动态极值contract。">优先队列API</Term>，priority queue API）对max-oriented queue的核心是：
+
+```java
+MaxPQ()
+MaxPQ(int capacity)
+void insert(Key key)
+Key max()
+Key delMax()
+boolean isEmpty()
+int size()
+```
+
+Generic Key遵守Comparable total order；也可由Comparator注入顺序。Duplicate maximum存在时，API可返回任意一个largest-key record，除非另行声明stability或tie-break。Empty `max`/`delMax` 应抛明确异常，null key通常拒绝，不能返回null同时表示“empty”和“合法key”。
+
+`TopM` 使用minimum-oriented PQ限制size为M：每读一条transaction就insert；若size超过M就delMin；最终得到largest M。这个client说明方向选择取决于保留策略：为了保留最大M，内部反而不断淘汰minimum。
+
+## 2.4.2 Elementary implementations：把线性成本放在哪一端
+
+初级实现（<Term def="以无序或有序array/linked list实现priority queue，使insert或delete extreme至少一端worst-case linear。">初级实现</Term>，elementary implementations）直接复用stack与selection/insertion sort思想：
+
+- Unordered array尾插是Theta(1)，delMax需扫描N项后与尾项交换，Theta(N)。
+- Ordered array插入要移动items保持顺序，Theta(N)，max与delMax在末端，Theta(1)。
+- Unordered linked list头插constant，delete max需linear scan并维护predecessor。
+- Reverse-ordered linked list插入linear，delete max从head unlink constant。
+
+<Algs4PriorityQueueTradeoffLab />
+
+若workload几乎全是insert而极少delMax，无序array可胜过heap；若大量max查询而更新少，有序表示可能更合适。Binary heap的价值是两种mutating operations都保证logarithmic，不是所有workload都常数最优。
+
+## 2.4.3 Binary heap：complete shape加partial order
+
+二叉堆（<Term def="以level order存入1-based array的complete heap-ordered binary tree。">二叉堆</Term>，binary heap）结合两个约束。Shape是complete binary tree，除最后一层外全满、最后层从左填；order是每个parent key不小于children。它不是binary search tree：siblings无序，左subtree与右subtree之间没有全序关系。
+
+Official max heap使用 `pq[1..n]`，`pq[0]` 留空。对index k：
+
+$$
+parent(k)=\left\lfloor\frac{k}{2}\right\rfloor,
+\qquad
+left(k)=2k,
+\qquad
+right(k)=2k+1
+$$
+
+<Algs4BinaryHeapIndexMap />
+
+Heap order（<Term def="max heap中每条parent-child edge都满足parent key不小于child key的partial-order invariant。">堆有序</Term>，heap order）立即推出root是maximum，但不能推出minimum位置；minimum可能在任一leaf，查找仍需Theta(N)。Complete shape使height：
+
+$$
+h=\lfloor\lg n\rfloor
+$$
+
+Array无需存child pointers，size n就隐含shape。Certificate可在linear time遍历所有parent-child edges；只检查root maximum不足以发现深层violation。
+
+## 2.4.4 Heap operations：局部破坏，沿一路修复
+
+堆操作（<Term def="通过swim与sink沿一条root-leaf path恢复heap order，并组成insert与delete extreme。">堆操作</Term>，heap operations）先做一个可能破坏局部order的简单变更，再reheapify。因为变更只影响一条ancestor path，不需扫描全树。
+
+Bottom-up reheapify `swim(k)` 处理新node比parent大的情况：
+
+```java
+private void swim(int k) {
+    while (k > 1 && less(k / 2, k)) {
+        exch(k, k / 2);
+        k = k / 2;
+    }
+}
+```
+
+<Algs4HeapSwimLab />
+
+每次exchange后，moving key与两个children的关系已正确，但可能仍大于新parent；到root或parent不小于它时结束。Insert先确保capacity，写到 `pq[++n]`，再swim。
+
+Top-down reheapify `sink(k)` 处理root或internal node比child小的情况：
+
+```java
+private void sink(int k) {
+    while (2 * k <= n) {
+        int j = 2 * k;
+        if (j < n && less(j, j + 1)) j++;
+        if (!less(k, j)) break;
+        exch(k, j);
+        k = j;
+    }
+}
+```
+
+<Algs4HeapSinkLab />
+
+必须与较大child交换。若选较小child，moving key可能仍小于另一个child，当前层order没有修复。DelMax保存root，根尾交换、令n减1、把旧tail slot设null避免loitering，再从root sink；capacity过大时可halve。
+
+```java
+public Key delMax() {
+    if (isEmpty()) throw new NoSuchElementException();
+    Key max = pq[1];
+    exch(1, n--);
+    sink(1);
+    pq[n + 1] = null;
+    if (n > 0 && n == (pq.length - 1) / 4)
+        resize(pq.length / 2);
+    return max;
+}
+```
+
+在n-item heap中，insert最多约 `1 + lg n` compares，delMax最多约 `2 lg n` compares：
+
+$$
+C_{insert}(n)\le 1+\lg n,
+\qquad
+C_{delMax}(n)\le 2\lg n
+$$
+
+<Callout type="trap" title="sink时固定选择left child">
+Right child可能更大。与left交换后，原node若仍小于right，heap order当场失败。实现和测试都要覆盖只有left child、right更大、children equal以及moving key已经足够大四种branch。
+</Callout>
+
+## 2.4.5 Practical considerations：容量、key ownership与index
+
+动态数组（<Term def="随priority queue size按几何比例扩缩capacity，并保持amortized logarithmic operations的storage策略。">动态数组</Term>）在full时double、size降到capacity四分之一附近时halve，保留hysteresis避免每次insert/delete来回resize。由于copy是linear，单次operation可能linear，但sequence amortized bound仍logarithmic dominated。
+
+<Algs4PriorityQueuePracticalMap />
+
+Client不应在item进入PQ后修改参与比较的key。Heap只在operations时局部修复；外部mutation可让child突然大于parent，结构对此毫无通知。解决方式是immutable keys、defensive copy，或提供显式changeKey并执行swim/sink。
+
+索引优先队列（<Term def="以client integer index引用队中items，并用pq、qp互逆映射支持contains与changeKey。">索引优先队列</Term>，indexed priority queue）维护 `pq[position]=clientIndex` 与 `qp[clientIndex]=position`，再用keys保存priority。Every exchange必须同步更新pq和qp；否则contains、changeKey会操作错误item。Dijkstra shortest path后续正需要按vertex index降低key。
+
+Multiway heap把branching factor改成d，height约为log_d N；swim层数变少，sink每层却要找d个children中的extreme。选择d要根据cache、comparison cost与operation mix测量，不能只看tree更矮。
+
+<Callout type="trap" title="允许client静默修改队内key">
+Mutable priority会绕过swim/sink，root可能不再maximum。普通heap API应要求key immutable；indexed PQ若支持changeKey，必须定位position后根据新旧方向调用swim或sink，并验证pq/qp互逆。
+</Callout>
+
+## 2.4.6 Heapsort：在输入数组内复用heap
+
+堆排序（<Term def="先bottom-up构造max heap，再反复把root maximum交换到右侧并缩小heap的in-place sort。">堆排序</Term>，heapsort）放弃PQ representation封装，直接把input array视为heap。它有两个phase：
+
+1. Heap construction：从最后一个internal node向root逐个sink，建立max heap。
+2. Sortdown：root与heap末尾交换，heap size减1，root sink；右侧sorted suffix逐项增长。
+
+```java
+public static void sort(Comparable[] pq) {
+    int n = pq.length;
+    for (int k = n / 2; k >= 1; k--)
+        sink(pq, k, n);
+
+    int k = n;
+    while (k > 1) {
+        exch(pq, 1, k--);
+        sink(pq, 1, k);
+    }
+}
+```
+
+Official `Heap.java` 对client array用offset helper模拟1-based indices。Sortdown invariant是 `pq[1..k]` 为max heap，`pq[k+1..N]` 已按升序固定，且heap中每项不大于sorted suffix首项。
+
+<Algs4HeapsortLab />
+
+Bottom-up heap construction是linear。高度r的node最多sink r层，而高node很少、低node很多；总exchanges可由height distribution界定：
+
+$$
+\sum_{r\ge 0}\frac{N}{2^{r+1}}r < N
+$$
+
+因此heapify少于N exchanges、至多约2N compares；若逐项insert建heap则是N log N上界，丢失这个结构性收益。完整heapsort少于约 `2N lg N` compares与exchanges，worst-case N log N，额外array space constant。
+
+<Algs4HeapCostLab />
+
+Heapsort不稳定，且array access locality通常不如quicksort；优势是原地且worst-case linearithmic。不能把heap priority queue的extra capacity与heapsort混淆：PQ为动态size维护独立array，heapsort直接复用input storage。
+
+## 统一验收：从API序列到两阶段排序
+
+<Stepper>
+  <Step title="用multiset oracle核对PQ语义">
+    <Algs4PriorityQueueApiMap />
+    每次insert/delMax后与独立frequency map比较size、maximum、duplicates与empty behavior。
+  </Step>
+  <Step title="逐edge验证binary heap">
+    <Algs4BinaryHeapIndexMap />
+    检查1-based bounds、complete shape和每条parent-child heap-order relation。
+  </Step>
+  <Step title="分别追踪swim与sink">
+    <Algs4HeapSwimLab />
+    <Algs4HeapSinkLab />
+    确认violation只沿一条path移动，并覆盖single-child与larger-right-child分支。
+  </Step>
+  <Step title="验证capacity与index映射">
+    <Algs4PriorityQueuePracticalMap />
+    在resize边界检查items不丢失，在每次exchange后检查pq与qp互逆。
+  </Step>
+  <Step title="分开验收heapify与sortdown">
+    <Algs4HeapsortLab />
+    Heapify后certify全heap；每次sortdown后同时检查剩余heap和右侧sorted suffix。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. Priority queue维护动态maximum/minimum，不要求其他items随时全序。
+2. Unordered与ordered初级实现把linear成本分别放在delete或insert。
+3. Binary heap是1-based complete heap-ordered tree，root直接给出maximum。
+4. Insert尾插后swim，delMax根尾交换后sink，两者沿单一路径logarithmic。
+5. Dynamic resizing、immutable keys与indexed inverse mapping属于必须明确的工程contract。
+6. Heapsort先linear bottom-up heapify，再N log N sortdown，原地且worst-case linearithmic。
+7. Heap只保证partial order；搜索minimum、稳定遍历或sorted iteration都需要额外工作。
+
+<Exercises>
+
+**问题 1：1-based heap中index 7的parent和children是什么？若n等于13，哪些children存在？**
+
+<Answer>Parent是floor(7/2)等于3；children是14和15。N只有13，因此两个children都不存在，index 7是leaf。</Answer>
+
+**问题 2：为什么delMax的sink必须选择两个children中较大的一个？**
+
+<Answer>Max heap要求parent不小于两者。若只与较小child交换，moving key仍可能小于较大child，当前层保持violation；与较大child交换后new parent同时不小于两个children。</Answer>
+
+**问题 3：频繁insert、极少delMax时，无序array和heap哪个可能更合适？**
+
+<Answer>无序array的insert是constant，而heap insert logarithmic；若delete极少且N允许偶尔linear scan，无序array可能总成本更低。应按operation mix而非单项worst bound选择。</Answer>
+
+**问题 4：Bottom-up heapify为什么不是N lg N？**
+
+<Answer>只有少数靠近root的nodes能sink很多层，大量nodes是leaves或只高一层。按node height加总可得exchanges少于N、compares至多约2N，因此linear。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="优先队列">动态插入并访问或删除当前extreme key的ADT。</GlossaryItem>
+  <GlossaryItem term="优先队列API">insert、extreme query/delete、size与empty组成的contract。</GlossaryItem>
+  <GlossaryItem term="初级实现">让insert或delete extreme一端worst-case linear的简单表示。</GlossaryItem>
+  <GlossaryItem term="二叉堆">1-based array表示的complete heap-ordered binary tree。</GlossaryItem>
+  <GlossaryItem term="堆有序">每个parent key不小于children的max-heap partial order。</GlossaryItem>
+  <GlossaryItem term="堆操作">用swim/sink沿单一路径恢复heap order的operations。</GlossaryItem>
+  <GlossaryItem term="动态数组">按几何比例扩缩capacity的amortized storage。</GlossaryItem>
+  <GlossaryItem term="索引优先队列">以client index和pq/qp互逆映射定位队内items的PQ。</GlossaryItem>
+  <GlossaryItem term="堆排序">bottom-up heapify后反复sortdown的in-place sort。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Algorithms, 4th Edition · Section 2.4 Priority Queues"
+  href="https://algs4.cs.princeton.edu/24pq/"
+  author="Robert Sedgewick and Kevin Wayne"
+  license="原书、官方页面与Java示例版权归Robert Sedgewick、Kevin Wayne及Addison-Wesley所有；本页依据作者官方2.4 synopsis及MaxPQ、MinPQ、IndexMinPQ、Heap、Multiway当前代码独立重构教学内容"
+/>

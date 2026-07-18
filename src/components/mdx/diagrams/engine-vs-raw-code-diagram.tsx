@@ -12,17 +12,41 @@ const ITEM_GAP = 8;
 type ColumnItem = { label: string; detail: string; tone: "risk" | "success" };
 
 const LEFT_ITEMS: ColumnItem[] = [
-  { label: "手写图形 API 调用", detail: "glDrawArrays、创建窗口、处理上下文", tone: "risk" },
-  { label: "手写物理计算", detail: "碰撞检测、刚体模拟、约束求解", tone: "risk" },
+  {
+    label: "手写图形 API 调用",
+    detail: "glDrawArrays、创建窗口、处理上下文",
+    tone: "risk",
+  },
+  {
+    label: "手写物理计算",
+    detail: "碰撞检测、刚体模拟、约束求解",
+    tone: "risk",
+  },
   { label: "手写音频处理", detail: "加载 WAV、混音、空间化", tone: "risk" },
   { label: "手写输入系统", detail: "键鼠、手柄、触屏一一适配", tone: "risk" },
 ];
 
 const RIGHT_ITEMS: ColumnItem[] = [
-  { label: "引擎封装 API", detail: "Scene → Draw，引擎替你组织渲染", tone: "success" },
-  { label: "内置物理引擎", detail: "加 RigidBody + Collider，碰了就弹", tone: "success" },
-  { label: "音频子系统", detail: "PlaySound(位置, 资源)，空间化自动", tone: "success" },
-  { label: "统一输入抽象", detail: "GetAxis(\"Horizontal\")，跨平台一致", tone: "success" },
+  {
+    label: "引擎封装 API",
+    detail: "Scene → Draw，引擎替你组织渲染",
+    tone: "success",
+  },
+  {
+    label: "内置物理引擎",
+    detail: "加 RigidBody + Collider，碰了就弹",
+    tone: "success",
+  },
+  {
+    label: "音频子系统",
+    detail: "PlaySound(位置, 资源)，空间化自动",
+    tone: "success",
+  },
+  {
+    label: "统一输入抽象",
+    detail: 'GetAxis("Horizontal")，跨平台一致',
+    tone: "success",
+  },
 ];
 
 export const EngineVsRawCodeDiagram: FC = () => (
@@ -33,7 +57,7 @@ export const EngineVsRawCodeDiagram: FC = () => (
         没有引擎 vs 有引擎：开发者要关心什么
       </h4>
       <p className="mt-1 text-xs leading-5 text-secondary">
-        引擎的价值不是"帮你写代码"，而是把基础设施藏起来，让你只写玩法。
+        引擎的价值不是&quot;帮你写代码&quot;，而是把基础设施藏起来，让你只写玩法。
       </p>
     </figcaption>
 

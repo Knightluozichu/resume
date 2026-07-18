@@ -1,0 +1,439 @@
+---
+title: "Item 11：在 operator= 中处理 self-assignment"
+type: A
+section: Chapter 2 · Constructors, Destructors, and Assignment Operators
+order: 11
+description: 对齐 Effective C++ 第三版 Item 11：识别直接和别名导致的 self-assignment，比较 identity test、copy-before-delete 与 copy-and-swap，并验证异常安全和 self-move。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppAliasingSourcesMap,
+  EcppSelfAssignmentFailureMap,
+  EcppSelfAssignmentStrategyMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-11-self-assignment";
+
+<Objectives>
+
+- 能复现 delete-before-copy 在直接或间接 self-assignment 中造成的 use-after-free、dangling pointer 与 double delete
+- 能比较 identity test、copy-before-delete、copy-and-swap 与 rule of zero 的正确性、异常保证和成本
+- 能设计覆盖 pointer/reference/base alias、异常注入与 self-move 的 assignment 测试，证明目标保持合法
+
+</Objectives>
+
+## 从“不同名字可能是同一个对象”开始
+
+<Term def="assignment 的左、右操作数最终引用同一对象，要求操作后对象仍保持预期值和不变量。">
+  self-assignment
+</Term>
+
+最明显是 `w = w`，但真实代码更常由 alias 形成：
+
+```cpp
+Widget* px = &widget;
+Widget* py = &widget;
+*px = *py;
+```
+
+<Term def="两个不同表达式、指针或引用指向同一对象或重叠存储的关系。">
+  aliasing
+</Term>
+
+operator= 只看到 `this` 与 `rhs`，不能假定调用点名称不同就没有 alias。
+
+<EcppAliasingSourcesMap />
+
+## 经典错误：先 delete 再 copy
+
+```cpp
+class Bitmap {
+public:
+    Bitmap& operator=(const Bitmap& rhs)
+    {
+        delete image_;
+        image_ = new Image(*rhs.image_);
+        return *this;
+    }
+private:
+    Image* image_{};
+};
+```
+
+如果 `this == &rhs`，delete image* 同时让 rhs.image* 指向已释放对象，下一行从 dangling pointer 复制。
+
+<Term def="释放对象后仍保存并使用其地址的指针。">dangling pointer</Term>
+
+<Term def="读取或写入生命周期已结束存储的未定义行为。">use-after-free</Term>
+
+即使不是 self-assignment，`new Image` 抛异常后 image\_ 仍悬空，析构会再次 delete。
+
+<EcppSelfAssignmentFailureMap />
+
+<Callout type="trap">
+  **现象**：生产调用点从不显式写 `a = a`，于是删除 self-assignment
+  测试。**原因**：忽略 pointer、reference、容器元素和基类视图形成的
+  alias。**修法**：测试不同表达式共享同一地址，而不只测试同名变量。
+</Callout>
+
+## 策略一：identity test
+
+<Term def="在赋值开头比较 this 与 rhs 地址，相同则立即返回的防护。">
+  identity test
+</Term>
+
+```cpp
+Bitmap& Bitmap::operator=(const Bitmap& rhs)
+{
+    if (this == &rhs)
+        return *this;
+
+    delete image_;
+    image_ = new Image(*rhs.image_);
+    return *this;
+}
+```
+
+修复直接 self-assignment，却没有修复 `new` 抛异常后目标悬空。
+
+<Term def="操作失败时对象仍可析构且不变量成立，但值可能已经改变的异常保证。">
+  basic exception guarantee
+</Term>
+
+上述实现甚至不满足 basic guarantee。identity test 只处理一个别名分支，不是完整资源提交策略。
+
+## identity test 的成本
+
+<Term def="为极少发生的分支增加比较，并可能影响常见路径分支预测与优化的成本。">
+  defensive branch cost
+</Term>
+
+地址比较通常很小，但如果实现本来能自然安全处理 self-assignment，就无需专门分支。是否保留应由语义和测量决定。
+
+```cpp
+if (this != &rhs) {
+    // expensive replacement
+}
+return *this;
+```
+
+<Term def="即使左右相同也执行后结果正确，且不会释放仍需读取资源的操作设计。">
+  self-assignment-safe by construction
+</Term>
+
+通常比特殊分支更可靠。
+
+## 策略二：先复制候选，再释放旧资源
+
+```cpp
+Bitmap& Bitmap::operator=(const Bitmap& rhs)
+{
+    Image* candidate = new Image(*rhs.image_);
+    delete image_;
+    image_ = candidate;
+    return *this;
+}
+```
+
+<Term def="在改变目标前完整复制源资源，成功后才释放旧状态并提交候选。">
+  copy-before-delete
+</Term>
+
+self-assignment 时 candidate 在旧 image 仍有效时创建；分配失败时 this 完全没变。
+
+<Term def="操作失败时目标对象的可观察值与调用前完全相同。">
+  strong exception guarantee
+</Term>
+
+该单资源实现满足强保证。若提交多成员可能抛，还需 no-throw commit 或更完整候选对象。
+
+## 策略三：copy-and-swap
+
+<Term def="先构造完整候选副本，再用不抛 swap 替换目标表示的赋值习惯。">
+  copy-and-swap
+</Term>
+
+```cpp
+class Bitmap {
+public:
+    Bitmap& operator=(Bitmap rhs)
+    {
+        swap(rhs);
+        return *this;
+    }
+
+    void swap(Bitmap& other) noexcept
+    {
+        using std::swap;
+        swap(image_, other.image_);
+    }
+};
+```
+
+按值参数在函数体前 copy/move 构造候选；若失败 this 未变；swap 后旧资源由 rhs 析构。`bitmap = bitmap` 只是多复制一次，语义安全。
+
+<Term def="把可能失败的候选准备与不会失败的目标状态替换分开的设计。">
+  prepare-then-commit
+</Term>
+
+是 self-assignment 与异常安全共同解法。
+
+<EcppSelfAssignmentStrategyMap />
+
+## rule of zero 消除手写风险
+
+<Term def="资源由 vector、string、smart pointer 等成员管理，外层类不手写特殊成员的设计。">
+  rule of zero
+</Term>
+
+```cpp
+class Bitmap {
+public:
+    explicit Bitmap(Image image) : image_{std::move(image)} {}
+private:
+    Image image_;
+};
+```
+
+如果 Image 是正确值类型，生成 assignment 组合其保证。优先重构 owning raw pointer，而不是不断加防护。
+
+<Term def="复制后目标与源具有独立等价值，修改一方不会意外影响另一方。">
+  independent value semantics
+</Term>
+
+是生成复制自然安全的前提。
+
+## alias 不只发生在整个对象
+
+<Term def="赋值源通过 view、span 或 reference 指向目标内部数据，目标修改可能使源失效。">
+  subobject aliasing
+</Term>
+
+```cpp
+Text& Text::operator=(std::string_view source)
+{
+    storage_.assign(source); // source 可能指向 storage_ 自身
+    return *this;
+}
+```
+
+即使 `this` 与 rhs 类型不同，source 也可能来自 `text.view()`。修改 storage\_ 可先使 source 悬空。
+
+<Term def="在可能重分配目标前，把别名源复制到独立临时存储的策略。">
+  alias-safe candidate
+</Term>
+
+```cpp
+Text& Text::operator=(std::string_view source)
+{
+    std::string candidate{source};
+    storage_.swap(candidate);
+    return *this;
+}
+```
+
+更一般地，任何 source view 可能重叠目标表示时都先准备独立候选。
+
+<Callout type="trap">
+  **现象**：只比较 `this == &rhs` 就宣称处理了所有 alias。**原因**：跨类型 view
+  或子对象引用没有可比较同类型地址。**修法**：采用
+  prepare-then-commit，使读取源在修改目标之前完成。
+</Callout>
+
+## 基类引用形成间接 self-assignment
+
+<Term def="多个 Base& 指向同一 Derived 对象的基类子对象，从而形成别名赋值。">
+  base-subobject alias
+</Term>
+
+```cpp
+Derived object;
+Base& left = object;
+Base& right = object;
+left = right;
+```
+
+Base::operator= 应对自身 base subobject 安全。若 Derived assignment 先调用 Base::operator= 再复制成员，Item 12 还要求完整复制所有部分。
+
+<Term def="不同路径最终引用同一个最派生对象或其重叠子对象的关系。">
+  inheritance aliasing
+</Term>
+
+多重继承下地址可能有调整，不能用未经类型语义的 void\* 比较替代稳健赋值。
+
+## self-move assignment
+
+<Term def="目标与显式右值源是同一对象，例如 `x = std::move(x)`。">
+  self-move assignment
+</Term>
+
+```cpp
+Buffer& Buffer::operator=(Buffer&& rhs) noexcept
+{
+    if (this != &rhs) {
+        release();
+        data_ = std::exchange(rhs.data_, nullptr);
+        size_ = std::exchange(rhs.size_, 0);
+    }
+    return *this;
+}
+```
+
+<Term def="标准库或泛型操作因别名、swap/rotate 实现而可能产生源目标相同的 move assignment。">
+  generic self-move path
+</Term>
+
+用户类型最好让 self-move 保持有效可析构状态；是否保持原值要文档化。guard 可保持值，swap-based move 也常自然安全。
+
+## copy-and-swap 的取舍
+
+<Term def="为获得统一强保证而额外构造完整候选、可能增加分配或复制的成本。">
+  transactional copy cost
+</Term>
+
+copy-and-swap 清晰但不总是最快：大对象可复用现有容量，成员逐项赋值可能更高效。优化版仍应先分配可能失败资源，再以 no-throw 操作提交。
+
+```cpp
+Buffer& Buffer::assign(const Buffer& rhs)
+{
+    if (capacity_ < rhs.size_)
+        return replace_with_candidate(rhs);
+    copy_into_existing_storage(rhs); // 必须处理重叠或先检查身份
+    size_ = rhs.size_;
+    return *this;
+}
+```
+
+<Term def="在保持 alias 和异常保证前提下复用目标已有容量以减少分配的赋值路径。">
+  capacity-reuse assignment
+</Term>
+
+必须用基准证明收益，并比 copy-and-swap 增加更多边界测试。
+
+## 失败注入矩阵
+
+<Term def="让复制资源的第 N 个分配或成员操作抛异常，验证每个失败点对象状态的测试。">
+  assignment failure injection
+</Term>
+
+先预测：delete-before-copy 在 self-assignment 时每一步的 image\_ 指向什么；copy-before-delete 在 candidate 分配抛异常时目标值是什么。再运行 sanitizer 和资源计数。
+
+- `a = a`、两个 pointer/reference alias、Base alias 都保持合法值。
+- 子串 view 赋值先复制候选，不读取失效存储。
+- 每个候选分配点抛异常时目标满足承诺保证。
+- self-move 后对象可析构、可重新赋值且资源不重复释放。
+- 返回引用地址始终为 this。
+- 资源 create/destroy 计数在作用域结束后相等。
+
+## 小结
+
+- self-assignment 包括直接同名，也包括 pointer、reference、base 和 subobject alias
+- delete-before-copy 会先摧毁源，并同时违反异常安全
+- identity test 修复直接 self-assignment，但不能单独提供异常保证
+- copy-before-delete 与 copy-and-swap 通过 prepare-then-commit 自然处理别名
+- rule of zero 优先消除手写资源 assignment
+- self-move 与跨类型 view 也要有明确有效状态和失败测试
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 11"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="self-assignment">
+    赋值左右最终引用同一对象的情况。
+  </GlossaryItem>
+  <GlossaryItem term="aliasing">
+    不同表达式指向同一或重叠存储的关系。
+  </GlossaryItem>
+  <GlossaryItem term="dangling pointer">
+    资源释放后仍保存其地址的指针。
+  </GlossaryItem>
+  <GlossaryItem term="use-after-free">
+    访问生命周期已经结束存储的未定义行为。
+  </GlossaryItem>
+  <GlossaryItem term="identity test">
+    比较 this 与 rhs 地址并在相同时返回的防护。
+  </GlossaryItem>
+  <GlossaryItem term="basic exception guarantee">
+    失败后对象仍有效但值可能改变的保证。
+  </GlossaryItem>
+  <GlossaryItem term="defensive branch cost">
+    为少见自赋值分支加入比较的常见路径成本。
+  </GlossaryItem>
+  <GlossaryItem term="self-assignment-safe by construction">
+    无需特殊分支也能正确处理自赋值的设计。
+  </GlossaryItem>
+  <GlossaryItem term="copy-before-delete">
+    先完整复制源候选再释放目标旧状态。
+  </GlossaryItem>
+  <GlossaryItem term="strong exception guarantee">
+    失败后目标可观察值完全不变的保证。
+  </GlossaryItem>
+  <GlossaryItem term="copy-and-swap">
+    候选复制后用 no-throw swap 提交的赋值习惯。
+  </GlossaryItem>
+  <GlossaryItem term="prepare-then-commit">
+    分离可能失败准备与不抛状态替换的设计。
+  </GlossaryItem>
+  <GlossaryItem term="rule of zero">
+    由资源安全成员组合且不手写特殊成员的设计。
+  </GlossaryItem>
+  <GlossaryItem term="independent value semantics">
+    复制得到独立等价值的语义。
+  </GlossaryItem>
+  <GlossaryItem term="subobject aliasing">
+    源 view/reference 指向目标内部表示的别名。
+  </GlossaryItem>
+  <GlossaryItem term="alias-safe candidate">
+    修改目标前从别名源创建独立候选。
+  </GlossaryItem>
+  <GlossaryItem term="base-subobject alias">
+    多个基类引用指向同一派生对象基类部分。
+  </GlossaryItem>
+  <GlossaryItem term="inheritance aliasing">
+    不同继承路径引用同一最派生或重叠子对象。
+  </GlossaryItem>
+  <GlossaryItem term="self-move assignment">
+    目标与右值源是同一对象的移动赋值。
+  </GlossaryItem>
+  <GlossaryItem term="generic self-move path">
+    泛型算法因别名可能产生的 self-move。
+  </GlossaryItem>
+  <GlossaryItem term="transactional copy cost">
+    构造完整候选以获得强保证的额外成本。
+  </GlossaryItem>
+  <GlossaryItem term="capacity-reuse assignment">
+    保持保证时复用目标容量的优化赋值。
+  </GlossaryItem>
+  <GlossaryItem term="assignment failure injection">
+    在复制各阶段主动抛异常验证状态的测试。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：修复 delete-before-copy。** 分别用 identity test、copy-before-delete 和 copy-and-swap 改写，比较保证。
+
+<Answer question="三种 self-assignment 修复分别提供什么？">
+  identity test 只跳过
+  this==&rhs，原剩余路径仍可能异常破坏目标；copy-before-delete
+  先构造资源候选，失败目标不变，成功后提交，支持强保证；copy-and-swap
+  构造完整对象候选并 no-throw swap，自然处理 self-assignment 和多成员状态。优先
+  rule of zero 或后两种完整策略。
+</Answer>
+
+2. **问题 2：处理子对象 alias。** Text 从 string_view 赋值，而 view 可能来自 Text 自身子串，设计安全实现。
+
+<Answer question="为什么地址 identity test 无法处理 string_view alias？">
+  源类型和 this 不同，无法用 this==&rhs 判断，view 可能指向 storage 内部；直接
+  assign 若重分配会使源失效。先用 source 构造独立 string candidate，成功后
+  swap/commit 到
+  storage，既处理重叠又提供强保证。测试完整视图、子串、空串和分配异常。
+</Answer>
+
+3. **问题 3：验证 self-move。** 为独占 Buffer 设计 `x = std::move(x)` 的协议和测试。
+
+  <Answer question="独占资源类型怎样处理 self-move？">可用地址 guard 让 self-move 保持原值，或采用自然安全 swap/exchange 让其进入有效空状态，但必须文档化；绝不能先 release 再从同一已清空源取资源导致 dangling/double free。测试资源计数、返回地址、随后析构和重新赋值，并在泛型容器操作中覆盖别名路径。</Answer>
+</Exercises>

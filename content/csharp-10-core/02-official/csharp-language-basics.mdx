@@ -1,0 +1,202 @@
+---
+title: "Chapter 2. C# Language Basics"
+type: C
+section: "C# 10 Nutshell · Language"
+order: 2
+description: "覆盖编译、类型/数值/字符串/数组、变量参数、表达式、null、语句与namespace，以copy/alias、overflow和scope证据掌握语言基础。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch02.html"
+draft: false
+---
+
+import { CtcNumericBoundaryLab, CtcStorageSemanticsLab, CtcSyntaxFlowLab } from "@/components/mdx/csharp-10-core/diagrams/csharp-language-basics";
+
+<Objectives>
+
+- 能解释value/reference/ref/array的copy与alias语义，分析stack/heap说法何时会误导
+- 能比较integral、floating-point、decimal、bool、string与array边界，设计overflow/rounding/null tests
+- 能写出expression、statement、namespace与compilation各自规则，用compile fixtures验证definite assignment和name lookup
+
+</Objectives>
+
+## 为什么基础语法必须用Storage与Boundary来学
+
+语言基础不是标点速查表。真正造成错误的是“赋值复制了什么”“转换是否丢信息”“表达式何时求值”“变量是否一定已赋值”“using改变的是name lookup还是dependency”。本章用copy/alias、range/precision、evaluation/scope三个模型串起原书13个一级主题。
+
+先预测：所有value type都在stack吗；string变量赋值会复制字符吗；decimal能精确表示所有除法吗；array covariance是完全type-safe的吗；null-conditional会吞掉receiver以外的异常。答案都是否。
+
+<Term def="一次assignment、argument pass或return究竟复制value representation、object reference还是storage alias的规则。">copy and alias contract</Term>
+
+## A First C# Program
+
+Top-level statements减少入口样板，compiler仍生成assembly、entry point和metadata。Program从statement开始执行，method把input映射到output，type declaration提供可复用shape。第一段代码就应显式区分process exit、console I/O和pure calculation；否则测试只能启动整个进程。
+
+```csharp
+Console.WriteLine(FeetToInches(30));
+
+static int FeetToInches(int feet)
+{
+    checked { return feet * 12; }
+}
+```
+
+把calculation提成static function后可测normal/negative/overflow；Console留在boundary。Top-level syntax不能与同文件的explicit entry point任意混用，file order与generated context仍受compiler rules约束。
+
+## Compilation
+
+Build经历parse、binding/type checking、lowering、emit；project references/reference assemblies决定可解析symbols，LangVersion决定syntax，TFM决定API surface。Warnings可通过nullable/analyzers提升为errors。Runtime load/JIT是之后阶段，不能用运行错误解释compile-time name/type failure。
+
+验收保存exact SDK、command、configuration和generated diagnostics。多target project为每个TFM编译；conditional compilation会形成不同programs，也要分别测试。若IDE成功而CI失败，先比较SDK/workload/global.json与restore inputs。
+
+## Syntax
+
+Identifiers区分大小写，keywords可用`@`转义但不宜滥用；literals、punctuators与operators由grammar结合。Whitespace多数不影响syntax，但line directives、preprocessor和string literals例外。Comments不应承担会过期的type contract，public behavior写入tests/docs/analyzers。
+
+Syntax sugar需知道observable lowering boundary：`using` statement涉及finally disposal，interpolated string可能使用handler，range/index转换为相应types。无需背compiler字段名，但必须知道allocation、evaluation order和exception可能变化。
+
+## Type Basics
+
+Type定义possible values与allowed operations。Value type variable包含value representation，assignment通常复制该value；reference type variable包含reference，assignment产生alias。Value type也可box到heap object，reference可存于stack/local/register或object field，所以“struct在stack、class在heap”不是可靠semantics。
+
+Ref local/parameter/return别名化storage location，lifetime由compiler escape analysis限制。Readonly ref防止经该alias写，但不保证referent深度immutable。Default value、definite assignment和nullable annotation是三种不同问题。
+
+<Stepper>
+  <Step title="切换value、reference、ref与array"><CtcStorageSemanticsLab /></Step>
+  <Step title="画assignment前后对象图">标variables、storage locations、objects和aliases，分别执行reassign与member mutation。</Step>
+  <Step title="用identity/value tests验收">比较ReferenceEquals、value equality、old copy与ref write，覆盖boxing和mutable struct陷阱。</Step>
+</Stepper>
+
+<Callout type="trap" title="Struct一定在Stack且天然更快">
+Struct可嵌在heap object/array、box或被复制；大struct和interface call可能增加copy/boxing。按value semantics、size、mutation和measurement选择，不按stack口号。
+</Callout>
+
+## Numeric Types
+
+Integral types有固定range与signedness，conversion分implicit/explicit；arithmetic overflow在checked context抛出，在unchecked可能wrap。8/16-bit operands常先提升为int。Floating-point遵循binary representation，NaN不等于自身且ordering特殊；decimal更适合base-10 financial quantities，但仍有有限scale与rounding。
+
+<Term def="为numeric operation明确range、overflow mode、precision、rounding和unit，而不依赖默认转换的契约。">numeric boundary policy</Term>
+
+```csharp
+int wrapped = unchecked(int.MaxValue + 1);
+decimal money = decimal.Round(10m / 3m, 2, MidpointRounding.ToEven);
+double approximate = 0.1 + 0.2;
+
+bool sameMoney = money == 3.33m;
+bool closeDouble = Math.Abs(approximate - 0.3) < 1e-12;
+```
+
+Parsing使用culture和NumberStyles，serialization固定invariant/wire format，domain value携带unit/currency。Boundary tests覆盖min/max、zero、negative、NaN/infinity、midpoint与cross-culture。不要用epsilon万能比较money，也不要用exact equality比较所有measured double。
+
+<Stepper>
+  <Step title="切换checked、unchecked、double与decimal"><CtcNumericBoundaryLab /></Step>
+  <Step title="建立range/precision table">每个domain quantity写type、unit、accepted range、rounding point和wire representation。</Step>
+  <Step title="执行boundary matrix">在checked/unchecked与cultures下跑min/max/overflow/midpoint/NaN，保存expected outcome。</Step>
+</Stepper>
+
+## Boolean Type and Operators
+
+`bool`只有true/false，不与integer隐式互换。`&&`/`||`short-circuit，右侧可能不执行；`&`/`|`用于bool时会评价两边。Nullable bool有three-state lifted semantics，业务上需说明unknown如何处理。把effect放在condition右侧会让执行次数依赖左侧value，review时应显式。
+
+Equality与comparison需要区分value/reference/operator overload。String `==`比较内容，普通class默认reference equality；NaN特殊。Complex predicates提取named functions，并用truth table覆盖每个组合与short-circuit effect count。
+
+## Strings and Characters
+
+`char`是UTF-16 code unit，不等于Unicode scalar或用户感知grapheme；一个emoji可能占两个chars，组合字符可能多个scalars。String immutable，赋值复制reference，concatenation产生new string或被compiler优化。大量构造用StringBuilder，文本边界明确Encoding。
+
+<Term def="区分UTF-16 code units、Unicode scalars、grapheme clusters与encoded bytes的文本处理边界。">text representation boundary</Term>
+
+Comparison必须指定ordinal/culture与case policy。Identifier/token/protocol通常用Ordinal/OrdinalIgnoreCase；用户排序/搜索用明确CultureInfo。测试补充surrogate、combining marks、Turkish casing、empty与invalid bytes。
+
+## Arrays
+
+Array是reference type，长度固定，elements连续存储；element本身保留value/reference semantics。Rectangular multidimensional array与jagged array shape不同。Index/Range简化访问，但slice是否copy取决于receiver API；array range通常创建new array，Span slice是view。
+
+Array covariance允许`string[]`赋给`object[]`，写入不兼容对象会运行时ArrayTypeMismatchException。Generic collections通常更安全。Bounds checks提供memory safety但可能抛；performance优化先measurement，再考虑Span/ref与JIT elimination。
+
+## Variables and Parameters
+
+Local variable必须definitely assigned后读取；fields有default value。Value parameter复制value/reference，`ref` alias caller storage，`out`要求callee赋值，`in`提供readonly ref view但可能产生defensive copy。Optional/named arguments影响call-site metadata/API compatibility。
+
+<Term def="Compiler以control-flow证明local在每条到达读取点的路径上已赋值的规则。">definite-assignment proof</Term>
+
+```csharp
+static void Swap<T>(ref T left, ref T right) => (left, right) = (right, left);
+
+int x = 1, y = 2;
+Swap(ref x, ref y);
+
+ReadOnlySpan<char> token = "abc".AsSpan(1);
+```
+
+Ref escape rules防止返回已失效storage；closure capture通常捕获variable而非当时value。Loop/deferred invocation需测试capture timing。API设计优先普通return/tuple，只有性能与mutation semantics明确时使用ref/out。
+
+## Expressions and Operators
+
+Expression产生value或void，operator precedence决定parse tree，associativity不等于operand evaluation可随意重排。C#通常按左到右评价operands，但overload、short-circuit、null propagation和exceptions会影响observable flow。复杂expression若含多次I/O/allocation/mutation，应拆出named steps。
+
+Assignment本身是expression；increment同时读写；conditional expression与switch expression有target typing。测试不只结果，还可用recording operands验证evaluation order，尤其在重构LINQ/async前。
+
+## Null Operators
+
+`??`只在左侧null时评价右侧；`??=`按需赋值；`?.`/`?[]`传播receiver null，但后续method内部异常仍抛出。Nullable reference types是compile-time flow analysis/annotation，不改变CLR reference representation。`!`只抑制warning，不产生runtime check。
+
+Null policy应在boundary把absence转Option/result/default或拒绝，core避免null sentinel。与database/JSON interop时区分missing、explicit null、default和empty，contract tests覆盖round trip。
+
+<Callout type="trap" title="Null-Conditional会让整条调用链安全">
+它只在receiver为null时短路；argument evaluation、getter和method body仍可能抛异常。连续链还需看括号是否打断propagation，不能用`?.`隐藏invalid state。
+</Callout>
+
+## Statements
+
+Declaration/expression/selection/iteration/jump statements控制flow。`if`、switch、loops形成definite-assignment与reachability graph；`break/continue/return/throw`改变exit paths。`using`、lock、try/finally建立cleanup/synchronization semantics，不只是缩进结构。
+
+Loop选择取决于ownership和enumeration：foreach会获取enumerator并在适用时dispose；修改collection可能使enumerator失效。Cancellation/exception path也必须释放resource。Complex loop先写invariant与termination，再考虑LINQ重构。
+
+## Namespaces
+
+Namespace组织logical names，不建立assembly/security/deployment boundary。Using directive只影响name lookup；global using作用于compilation，file-scoped namespace减少嵌套；alias解决collision但不改变runtime type identity。Assembly由project/build决定，一个namespace可跨多个assemblies。
+
+<Stepper>
+  <Step title="切换expression、statement、namespace与compile"><CtcSyntaxFlowLab /></Step>
+  <Step title="标四层错误">Parse/bind/type、control flow、name lookup、runtime behavior分别记录最早失败阶段。</Step>
+  <Step title="建立compile fixtures">对definite assignment、ambiguous using、operator precedence与TFM API做positive/negative cases。</Step>
+</Stepper>
+
+## 本章回顾：基础规则决定高级抽象的边界
+
+1. Assignment可能复制value、reference或建立storage alias，先画对象图再推理。
+2. Numeric correctness需要range、overflow、precision、rounding和culture policy。
+3. String的char不是完整Unicode字符，array是reference type且covariance有运行时风险。
+4. Expressions产值，statements控制flow，namespace只组织names，compilation建立type/API证据。
+5. Null operators、ref参数与using等便利syntax都有明确evaluation/lifetime边界。
+
+<Exercises>
+
+**问题 1：怎样解释“value type在stack，reference type在heap”为何错误？**
+
+<Answer>Value/reference描述变量持有value representation还是object reference，不决定物理位置。Struct可在class field/array中位于heap或box，reference local可能在stack/register。用copy/alias/boxing语义和measurement讨论，不用位置口号。</Answer>
+
+**问题 2：金融金额的numeric policy应写什么？**
+
+<Answer>写currency/unit、decimal scale、accepted range、conversion/overflow、rounding mode与发生时点、wire culture。测试min/max、midpoint、negative、cross-culture和aggregate rounding，不能只选择decimal就结束设计。</Answer>
+
+**问题 3：`?.`与NRT共同使用时仍需哪些测试？**
+
+<Answer>覆盖receiver null、non-null getter/method fault、argument fault、chain parentheses、external unannotated API和serialization missing/null。NRT只给compile warning flow，`?.`只传播receiver null，domain invariant仍由boundary验证。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="copy and alias contract" definition="Assignment/pass/return复制value、reference或storage alias的规则。" />
+  <GlossaryItem term="numeric boundary policy" definition="Range、overflow、precision、rounding和unit约定。" />
+  <GlossaryItem term="text representation boundary" definition="Code unit、scalar、grapheme与bytes的区分。" />
+  <GlossaryItem term="definite-assignment proof" definition="Compiler对每条control-flow path的local赋值证明。" />
+  <GlossaryItem term="name-lookup boundary" definition="Namespace/using/alias对compile-time name resolution的作用域。" />
+</Glossary>
+
+<Term def="Namespace、using、global using与alias只改变compile-time名称解析，不改变assembly identity的边界。">name-lookup boundary</Term>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 2: C# Language Basics" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch02.html" />

@@ -1,0 +1,273 @@
+---
+title: "第4章 · AI的思维模式——搜索"
+type: C
+section: "搜索与动态规划"
+order: 4
+description: "按图解版第4章重建深度优先搜索、零钱搭配、油漆桶连通性、记忆化、井字棋、数独、拼图、迭代加深、扫雷与现代AI方法的统一搜索框架。"
+demo: true
+math: true
+sourceUrl: "https://www.tenlong.com.tw/products/9787522615059?list_name=rd"
+draft: false
+---
+
+import { CAIDFSTraceLab, CAICoinChangeSearchLab, CAIFloodFillLab, CAIMemoizationLab, CAITicTacToeLab, CAISudokuConstraintLab, CAISlidingPuzzleLab, CAIIterativeDeepeningLab, CAIMinesweeperSearchLab, CAIModernAIMap } from "@/components/mdx/competitive-algorithms/diagrams/04-search-and-ai";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释深度优先搜索、连通性、记忆化、对抗搜索与迭代加深共享的状态空间模型
+- 能计算搜索树分支数、深度界、重复状态数量、Manhattan下界与minimax值
+- 能实现DFS、flood fill、带记忆化搜索、negamax和深度受限搜索
+- 能分析零钱、井字棋、数独、拼图和扫雷中状态、动作、约束、剪枝与终止条件
+- 能设计包含状态编码、cycle detection、启发式、资源上限和现代AI评估的搜索系统
+
+</Objectives>
+
+## 从“AI是不是在凭直觉下棋”开始
+
+先预测：井字棋程序若没有任何训练数据，能不能做到永不输？可以。只要把棋盘编码为状态，列出合法落子，递归评估对手的最佳回应，就能从有限博弈树中算出安全策略。第4章所谓AI的思维模式，首先是把问题看成状态空间中的搜索。
+
+搜索需要四个合同：
+
+- **State**：到达未来所需的全部信息；
+- **Action**：从当前状态生成哪些合法后继；
+- **Goal / value**：怎样判断成功、失败或优劣；
+- **Resource policy**：怎样控制重复状态、深度、时间与内存。
+
+<CAIDFSTraceLab />
+
+## 4.1 深度优先搜索
+
+<Term def="沿一个后继分支持续深入，无法继续时回退到最近未完成状态的系统搜索算法。">深度优先搜索</Term>可以由递归调用栈实现，也可显式维护stack。图上还必须记录visited，否则环会让递归永不结束。
+
+```cpp
+void dfs(int u, const Graph& graph, std::vector<bool>& visited) {
+    visited[u] = true;
+    for (int v : graph[u]) {
+        if (!visited[v]) dfs(v, graph, visited);
+    }
+}
+```
+
+若图有$V$个顶点、$E$条边，邻接表DFS时间为$O(V+E)$，额外空间为visited加最深递归栈$O(V)$。在树形决策问题里没有全局visited，因为不同路径可能代表不同资源使用；状态合同决定“相同节点”如何判定。
+
+$$
+T_{\mathrm{DFS}}(V,E)=\Theta(V+E)
+$$
+
+### 4.1.1 零钱搭配
+
+零钱搭配可以搜索每种面额使用多少枚。状态可写成`(coin_index, remaining)`；动作是当前面额取0枚到可取上限；目标是remaining为0，目标值可以是方案数或最少硬币数。
+
+<CAICoinChangeSearchLab />
+
+```cpp
+int solve(int index, int remaining) {
+    if (remaining == 0) return 0;
+    if (index == coin_count || remaining < 0) return INF;
+    int best = INF;
+    for (int count = 0; count * coin[index] <= remaining; ++count) {
+        best = std::min(best, count + solve(index + 1, remaining - count * coin[index]));
+    }
+    return best;
+}
+```
+
+候选顺序只影响何时发现好答案，不影响完整搜索的正确性。先尝试大面额可能更早得到较小上界，从而剪掉“已用硬币数不小于best”的分支；但它不是任意币制上的贪心证明。
+
+### 4.1.2 “油漆桶”与连通性
+
+图像编辑器的油漆桶与连通性是同一问题：像素是顶点，四邻域或八邻域定义边，起点颜色相同且可达的像素组成一个<Term def="在给定邻接关系下，内部任意两个顶点可通过路径互达且不能再扩大的顶点集合。">连通分量</Term>。
+
+<CAIFloodFillLab />
+
+Flood fill从seed出发，只把原颜色相同的邻居压入stack。必须先标记再入栈，若等到弹出才标记，同一像素可能被多个邻居重复加入。大图递归深度可能超过语言栈限制，应改用显式stack或scanline fill。
+
+## 4.2 记忆化
+
+零钱搜索中，许多不同选择顺序会到达同一`(index, remaining)`。如果后续答案只由这个状态决定，就可用<Term def="缓存函数在一个状态上的求值结果，使以后到达同一状态时直接复用而不重复展开。">记忆化</Term>把递归树合并为有向状态图。
+
+<CAIMemoizationLab />
+
+```cpp
+int solve(int index, int remaining) {
+    if (remaining == 0) return 0;
+    if (index == coin_count || remaining < 0) return INF;
+    auto key = std::pair{index, remaining};
+    if (auto it = memo.find(key); it != memo.end()) return it->second;
+    int skip = solve(index + 1, remaining);
+    int take = 1 + solve(index, remaining - coin[index]);
+    return memo[key] = std::min(skip, take);
+}
+```
+
+若有$m$种面额、目标$A$，状态数至多$O(mA)$。但缓存键必须包含影响未来的全部信息；若遗漏“剩余使用次数”或“上一动作”，两个未来不同的路径会被错误合并。
+
+$$
+N_{\mathrm{states}}\le(m+1)(A+1)
+$$
+
+## 4.3 在游戏中制胜的AI
+
+在游戏中制胜的AI需要面对对手也会选择最优动作。对零和、完全信息、轮流行动游戏，可用<Term def="在自己的回合最大化结果、在对手回合最小化结果，递归求有限博弈树最优值的方法。">极小化极大</Term>。
+
+若终局从当前玩家视角得分为`win=1, draw=0, loss=-1`，negamax利用零和对称：
+
+$$
+V(s)=\max_{a\in A(s)}-V(T(s,a))
+$$
+
+### 4.3.1 永远的平局——井字棋
+
+永远的平局——井字棋是有限搜索的理想实验。棋盘最多9格，合法状态远少于$3^9$，完整minimax可以证明：双方最优时初始状态价值为0。
+
+<CAITicTacToeLab />
+
+```cpp
+int negamax(Board board, Player turn) {
+    if (board.is_terminal()) return board.score_for(turn);
+    int best = -1;
+    for (Move move : board.legal_moves()) {
+        best = std::max(best, -negamax(board.play(move, turn), other(turn)));
+    }
+    return best;
+}
+```
+
+利用旋转、镜像对称可把等价棋盘规范化后缓存。Alpha-beta剪枝还可跳过不可能改变祖先选择的分支，但最终值与完整minimax相同。
+
+### 4.3.2 一起来解谜——数独
+
+一起来解谜——数独不是和对手博弈，而是约束满足。每个空格的domain为1到9，行、列、宫格要求all-different。选择候选最少的空格先分支，是minimum remaining values启发式；它不删合法解，只让矛盾更早出现。
+
+<CAISudokuConstraintLab />
+
+Propagation先反复填入唯一候选；若某格domain为空，立即回退。若需要判断题目是否唯一，找到第一个解不能停止，必须继续搜索直到第二个解或空间耗尽。
+
+### 4.3.3 速战速决——拼图
+
+速战速决——拼图的状态数量远大于井字棋。滑块拼图动作是空格与相邻方块交换，目标是达到固定排列。只用DFS可能深入很差路径；A*按$f=g+h$选择候选，其中$g$是已走步数，$h$是剩余步数下界。
+
+<CAISlidingPuzzleLab />
+
+Manhattan距离把每个方块到目标位置的行列距离相加。每次移动只移动一个方块一步，因此真实剩余步数至少是该和；它是admissible heuristic，A*在正确duplicate handling下仍能找最短解。
+
+## 4.4 迭代加深
+
+若解很浅但不知道深度，BFS能找最浅解却保存整层节点；DFS省内存却可能先钻入无限深分支。<Term def="从小到大重复执行深度受限DFS，在第一次找到目标时获得最浅深度解的搜索策略。">迭代加深</Term>结合二者：limit依次为0、1、2，直到找到解。
+
+```cpp
+Result iddfs(State start) {
+    for (int limit = 0; ; ++limit) {
+        Result result = depth_limited(start, limit);
+        if (result.found) return result;
+        if (!result.cutoff) return Result::failure();
+    }
+}
+```
+
+### 4.4.1 搜索的深度
+
+搜索的深度既是资源上限，也是问题结构。分支因子$b$、最浅解深度$d$时，最后一层约$b^d$个节点。此前各轮重复的浅层节点相对较少：
+
+$$
+1+b+\cdots+b^d=\frac{b^{d+1}-1}{b-1}\in O(b^d)
+$$
+
+<CAIIterativeDeepeningLab />
+
+Depth-limited search必须区分三种返回：found、cutoff、failure。Cutoff表示可能有更深解，应增大limit；failure表示该分支无解，继续加深也无意义。
+
+### 4.4.2 加深加深再加深——扫雷
+
+加深加深再加深——扫雷可以把未知格视为Boolean变量，已揭示数字是周围mine数量约束。Constraint propagation能直接推出必雷或必安全格；推不动时，假设一个未知格并向下搜索。
+
+<CAIMinesweeperSearchLab />
+
+迭代加深可限制“同时做多少个未经证明的假设”，优先寻找短证明。若目标是计算每格为雷概率，则需要枚举所有满足约束的assignment并按剩余全局雷数加权，任意找到一个可行assignment并不等于概率答案。
+
+<Callout type="trap" title="把递归函数直接叫DFS">
+若状态能形成环却没有visited或path-set，递归可能无限循环；若缓存键缺字段，搜索会错误合并状态。修法是先定义状态等价，再决定全局visited、当前路径去环或完全不去重。
+</Callout>
+
+<Callout type="trap" title="启发式值小就一定更接近答案">
+启发式只是排序或下界。若要A*保证最短路，$h$必须不高估，并正确处理更短路径重新到达状态；未经证明的评分可以加速经验搜索，但不能继承最优性结论。
+</Callout>
+
+## 4.5 那些更复杂的AI——现代人工智能技术选讲
+
+那些更复杂的AI——现代人工智能技术选讲把显式搜索扩展到学习。监督学习从样本学习状态到答案，强化学习学习状态到动作的policy，生成模型学习上下文中的条件分布；它们可以提供启发式、价值函数、候选动作或表示。
+
+<CAIModernAIMap />
+
+现代AI仍逃不开搜索合同：
+
+- 表示是否保留决策需要的信息；
+- 动作或输出是否满足硬约束；
+- 训练目标是否和真实评价一致；
+- 分布外输入怎样失败；
+- 结果是否需要确定性验证或人工复核。
+
+AlphaGo类系统把神经网络的policy/value与树搜索结合，就是“学习缩小搜索”和“搜索校验局部选择”的组合，不是二者互相替代。
+
+<Stepper>
+<Step title="先定义状态与转移">
+删除不能影响未来的信息，但保留资源、轮次、约束和对手状态。
+
+<CAIDFSTraceLab />
+</Step>
+<Step title="再压缩重复与非法分支">
+用visited、memo、constraint propagation和lower bound减少展开，不改变答案集合。
+
+<CAIMemoizationLab />
+</Step>
+<Step title="最后决定搜索策略">
+浅解用BFS或迭代加深，带成本用Dijkstra/A*，对抗问题用minimax，学习模型可提供排序与估值。
+
+<CAIModernAIMap />
+</Step>
+</Stepper>
+
+## 小结
+
+本章从深度优先搜索进入零钱搭配和油漆桶与连通性，再用记忆化把重复递归树合并为状态图。在游戏中制胜的AI部分，井字棋展示minimax，数独展示constraint propagation，拼图展示启发式最短路。
+
+搜索的深度引出迭代加深，扫雷展示约束与假设的组合。现代人工智能技术可以学习表示、policy与value，但状态、动作、目标、资源和证据仍是共同骨架。
+
+<Exercises>
+
+**问题 1**：图DFS为什么通常在入栈或递归前标记visited，而不是处理完节点后再标记？
+
+<Answer>
+若晚标记，一个尚未处理完的节点可能被多个邻居再次发现并重复入栈；有环时还会沿环无限加入。发现时立即标记保证每个顶点至多进入工作集一次，从而维持$O(V+E)$成本。
+</Answer>
+
+**问题 2**：零钱状态只缓存`remaining`何时错误？
+
+<Answer>
+当面额只能按固定顺序使用、每种数量受限，或不同阶段允许的动作不同，未来还依赖`coin_index`或剩余库存。两个相同remaining但可用面额不同的状态答案可能不同；缓存键必须包含所有影响后继与目标值的字段。
+</Answer>
+
+**问题 3**：为什么Manhattan距离是滑块拼图剩余步数的下界？
+
+<Answer>
+一次合法移动只让一个非空方块在行或列方向移动一格，因此所有方块到目标位置的Manhattan距离总和每步最多减少1。要把总和从$h$降到0至少需要$h$步，所以它不会高估真实剩余步数。
+</Answer>
+
+**问题 4**：设计一个迭代加深返回合同，解释cutoff和failure的区别。
+
+<Answer>
+返回`found(path)`表示找到目标；`cutoff`表示当前分支因depth limit停止，继续增大limit仍可能找到解；`failure`表示在限制内完整展开且没有更深后继，增加limit也不会产生解。顶层只有看到cutoff才进入下一轮。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="深度优先搜索">沿一个后继分支持续深入，无法继续时回退到最近未完成状态的系统搜索算法。</GlossaryItem>
+<GlossaryItem term="连通分量">在给定邻接关系下，内部任意两个顶点可通过路径互达且不能再扩大的顶点集合。</GlossaryItem>
+<GlossaryItem term="记忆化">缓存函数在一个状态上的求值结果，使以后到达同一状态时直接复用而不重复展开。</GlossaryItem>
+<GlossaryItem term="极小化极大">在自己的回合最大化结果、在对手回合最小化结果，递归求有限博弈树最优值的方法。</GlossaryItem>
+<GlossaryItem term="迭代加深">从小到大重复执行深度受限DFS，在第一次找到目标时获得最浅深度解的搜索策略。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="《深入浅出算法竞赛（图解版）》第4章“AI的思维模式——搜索”" adaptedUrl="https://www.tenlong.com.tw/products/9787522615059?list_name=rd" />

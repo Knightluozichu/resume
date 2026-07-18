@@ -1,0 +1,217 @@
+---
+title: "Chapter 21. Advanced Threading"
+type: C
+section: "C# 10 Nutshell · Concurrency and Low-level"
+order: 21
+description: "覆盖同步模型、Monitor/Mutex与读写/容量锁、事件信号、Barrier、Lazy、ThreadLocal和Timer，建立锁顺序、信号状态与生命周期契约。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch21.html"
+draft: false
+---
+
+import { CtcLockPrimitiveLab, CtcSignalPhaseLab, CtcThreadLifetimeLab } from "@/components/mdx/csharp-10-core/diagrams/advanced-threading";
+
+<Objectives>
+
+- 能比较Monitor、Mutex、ReaderWriterLockSlim和Semaphore的scope、owner、cost与failure semantics
+- 能分析event wait handle与Barrier的stored state、participant和lost-signal风险，判断正确primitive
+- 能设计Lazy、ThreadLocal和Timer生命周期，并复现deadlock、reentrancy、overlap与shutdown竞态
+
+</Objectives>
+
+## 为什么Synchronization保护的是Invariant
+
+锁不是“让代码变线程安全”的装饰。先写共享状态必须始终满足的invariant，再确定哪些读写组成一个原子transition、由哪个primitive串行化，以及所有访问路径是否遵守同一规则。同步还建立memory ordering，使获得锁的一方看到释放锁前的写入。
+
+先预测：给每个field单独lock就能保护跨field invariant吗；named Mutex owner崩溃后下一个waiter正常进入且无提示吗；AutoResetEvent每次Set都累计一个事件吗；Lazy默认会对所有模式缓存异常吗；Timer callback保证前一次结束后才触发下一次吗。答案都是否。
+
+<Term def="列出共享状态、合法关系、所有读写入口及其共同同步边界的可审计记录。">synchronization invariant ledger</Term>
+
+## Synchronization Overview
+
+同步primitive分为exclusive lock、nonexclusive capacity/read-write control、event signaling和phase coordination。选择维度包括进程内/跨进程、thread ownership、是否可async wait、kernel transition、fairness、timeout/cancel和abandonment。优先减少共享mutable state，用immutable snapshot、message/channel和single owner。
+
+Blocking wait占线程，async路径优先SemaphoreSlim.WaitAsync、Channel、TaskCompletionSource等awaitable机制。Monitor/EventWaitHandle不能安全跨await。所有等待要有诊断：lock name、owner/holder、wait duration和timeout policy，但不能在热路径无限记录。
+
+## Exclusive Locking
+
+`lock`编译为Monitor.Enter/Exit的try/finally，提供reentrant in-process mutual exclusion。Lock object必须private且稳定，不使用this、typeof、string intern或外部可访问对象。临界区短小，不做network、user callback、阻塞I/O或未知代码。
+
+Monitor.Wait原子释放锁并等待Pulse/PulseAll，唤醒后重新竞争并持有锁返回。Condition必须用while循环重新检查，因为多个waiter和状态变化可能使条件失效；Pulse不是持久queue，没有waiter时信号消失。
+
+```csharp
+sealed class BoundedBuffer<T>
+{
+    private readonly object _gate = new();
+    private readonly Queue<T> _items = new();
+    private readonly int _capacity;
+
+    public void Put(T item)
+    {
+        lock (_gate)
+        {
+            while (_items.Count == _capacity) Monitor.Wait(_gate);
+            _items.Enqueue(item);
+            Monitor.PulseAll(_gate);
+        }
+    }
+}
+```
+
+生产异步队列优先Channel&lt;T&gt;，上例用于理解condition protocol。多个锁建立全局order，禁止在持A时等待持A才可进展的工作。
+
+## Mutex
+
+Mutex是kernel primitive，支持跨进程named mutex且具有thread ownership和递归计数，成本高于Monitor。Owner thread必须ReleaseMutex相同次数；Dispose handle不等于释放ownership。Named object的global/local namespace、ACL和name collision是安全边界。
+
+Owner进程/线程异常退出会产生abandoned mutex；下一个acquirer获得mutex同时收到AbandonedMutexException，意味着受保护状态可能中途损坏。Catch后必须验证/恢复或拒绝继续，不能只忽略异常。跨进程文件更新仍应配合journal/atomic replace。
+
+<Stepper>
+  <Step title="切换Monitor、Mutex、ReaderWriter与Semaphore"><CtcLockPrimitiveLab /></Step>
+  <Step title="填写primitive contract">记录scope、owner、recursion、capacity、wait mode、timeout、abandonment和release规则。</Step>
+  <Step title="执行failure matrix">覆盖owner crash、double release、lock inversion、wait timeout和外部callback重入。</Step>
+</Stepper>
+
+<Callout type="trap" title="锁住每个读写就自动线程安全">
+跨多个fields/步骤的invariant必须在同一原子边界内检查并更新。不同锁或遗漏路径会暴露不可能状态，即使单个field访问都受锁。
+</Callout>
+
+<Term def="所有可能同时持有的锁使用单一全局顺序，消除循环等待边的规则。">lock-order contract</Term>
+
+## Locking and Thread Safety
+
+Thread-safe API需定义实例成员、static成员、enumeration、callback与Dispose能否并发。锁内调用event/delegate/virtual member会把未知代码带入临界区，可能重入或反向取锁；应复制需要的数据，释放锁后调用。返回内部mutable collection会绕过同步，改为snapshot或受控操作。
+
+Deadlock四要素中循环等待最可控：用lock order、single lock或message ownership消除。Timeout可暴露症状但不能恢复一半transition。性能分析看contention duration和critical-section work，不仅看lock调用次数。
+
+## Nonexclusive Locking
+
+Semaphore/SemaphoreSlim允许最多N个entrant，适合资源池和并发限制；它不表示某个thread拥有permit，任何代码都可Release，因此每次成功Wait后必须try/finally释放一次。Semaphore是kernel/cross-process可用，SemaphoreSlim为进程内且支持WaitAsync。
+
+ReaderWriterLockSlim允许多reader或一个writer，并有upgradeable read。它适合读取明显占优、临界区足够长且测量证明收益；简单状态用普通lock通常更稳。禁止递归默认更易发现设计问题，upgrade必须遵守唯一upgradeable owner，避免read-to-write deadlock。
+
+```csharp
+sealed class Catalog
+{
+    private readonly ReaderWriterLockSlim _lock = new();
+    private Dictionary<string, Item> _items = new();
+
+    public Item? Find(string id)
+    {
+        _lock.EnterReadLock();
+        try { return _items.GetValueOrDefault(id); }
+        finally { _lock.ExitReadLock(); }
+    }
+
+    public void Replace(Dictionary<string, Item> next)
+    {
+        _lock.EnterWriteLock();
+        try { _items = next; }
+        finally { _lock.ExitWriteLock(); }
+    }
+}
+```
+
+Dispose lock only when no concurrent users remain；lifecycle gate通常由外层host管理。
+
+## Signaling with Event Wait Handles
+
+AutoResetEvent像最多保存一个permit的gate：Set释放一个waiter或保留signaled，连续多次Set可coalesce，不能计数每个事件。ManualResetEvent Set后所有waiter通过，直到Reset；Reset与新waiter有竞态，状态owner必须明确。ManualResetEventSlim优化短等待但WaitHandle访问可升级kernel object。
+
+EventWaitHandle适合同步thread等待，不适合大量async operation。CountdownEvent从N递减到0，适合等待已知工作完成；每个producer必须恰好Signal一次。若需要传结果/异常，用Task/WhenAll而不是只有bit state的event。
+
+<Term def="明确signal是可累计permit、单bit gate还是phase completion，并规定谁Set/Reset/consume的状态语义。">signal-state contract</Term>
+
+## The Barrier Class
+
+Barrier协调固定或动态participants逐phase rendezvous：每个participant完成本phase后SignalAndWait，全部到齐才进入下一phase。Post-phase action由一个参与者执行，可汇总状态，但异常会影响所有参与者。Participant中途退出必须RemoveParticipant，否则其余永远等待。
+
+Barrier适合迭代算法，不适合不确定到达的request。Timeout/cancellation后系统要决定整个barrier broken/abort还是调整participant count，不能让部分进入下一phase。
+
+<Stepper>
+  <Step title="切换AutoReset、ManualReset、Countdown与Barrier"><CtcSignalPhaseLab /></Step>
+  <Step title="画state machine">记录Set/Reset/Wait、stored signal、waiter count、participant count、phase和timeout transition。</Step>
+  <Step title="注入丢失参与者">在Set前后、Reset竞态、producer未Signal和Barrier participant崩溃点测试恢复策略。</Step>
+</Stepper>
+
+<Callout type="trap" title="AutoResetEvent会记录每一次Set">
+它通常只保存一个signaled bit；无人等待时连续Set会合并。若每个item都必须计数，使用Semaphore、Channel或真正队列。
+</Callout>
+
+## Lazy Initialization
+
+Lazy&lt;T&gt;把factory推迟到Value首次访问。默认ExecutionAndPublication让一个thread执行且发布同一结果，并缓存factory异常；PublicationOnly允许多个thread竞争计算，采用一个成功结果且异常不缓存；None不提供线程安全。Factory递归访问同一Lazy可能抛异常或递归失败。
+
+LazyThreadSafetyMode必须按factory成本、副作用和retry policy选择。Factory应尽量无副作用；需重试/async初始化时用显式state machine或`Lazy<Task<T>>`并定义faulted Task是否替换。`??=`只保证赋值表达式语义，不自动让复杂初始化只执行一次。
+
+<Term def="规定factory可执行次数、winner发布、异常是否缓存、递归和retry的Lazy初始化协议。">lazy publication policy</Term>
+
+## Thread-Local Storage
+
+[ThreadStatic]为每个physical thread保存static field，但initializer只在一个thread执行，其他thread得到default；ThreadLocal&lt;T&gt;支持per-thread factory、Values聚合（需trackAllValues）和Dispose。Thread pool thread会跨request复用，线程局部值不会按logical operation自动清理。
+
+AsyncLocal&lt;T&gt;沿ExecutionContext流动，表示logical async context，不是thread local；它也会增加context propagation成本并造成隐式依赖。Request data优先显式参数。ThreadLocal中的IDisposable values需要逐项清理，长期pool thread可能让大对象长期存活。
+
+## Timers
+
+System.Threading.Timer在线程池执行callback，period到达时前一次可能仍运行，造成overlap/reentrancy。Owner必须持有Timer引用并Dispose；callback与Dispose可竞态，shutdown用Dispose(WaitHandle)/DisposeAsync或外层in-flight tracking等待。System.Timers.Timer和UI timer有不同callback/context semantics。
+
+PeriodicTimer适合单个async consumer，WaitForNextTickAsync顺序等待，missed ticks可coalesce；Dispose/cancellation结束循环。Timer基于时钟调度，不保证实时精度；长pause、sleep和clock behavior需测试。业务deadline用单调elapsed time，calendar schedule用timezone-aware scheduler。
+
+```csharp
+static async Task RunPeriodicAsync(PeriodicTimer timer, CancellationToken ct)
+{
+    try
+    {
+        while (await timer.WaitForNextTickAsync(ct))
+            await RefreshSnapshotAsync(ct);
+    }
+    catch (OperationCanceledException) when (ct.IsCancellationRequested) { }
+    finally { timer.Dispose(); }
+}
+```
+
+<Stepper>
+  <Step title="切换Lazy、ThreadLocal、Timer与PeriodicTimer"><CtcThreadLifetimeLab /></Step>
+  <Step title="绑定owner lifetime">标出创建、factory/callback、thread/ExecutionContext、Dispose、shutdown drain和异常观察。</Step>
+  <Step title="执行重入与复用测试">让callback慢于period、pool thread复用、Lazy factory fault/递归，并验证无overlap与无残留状态。</Step>
+</Stepper>
+
+<Term def="Timer到点只表示可调度，不保证前次callback结束；必须定义overlap、coalescing与shutdown drain。">timer overlap contract</Term>
+
+## 本章回顾：Primitive必须匹配State Semantics
+
+1. Lock保护跨状态invariant，所有入口遵守同一boundary和order。
+2. Mutex支持跨进程但有kernel成本与abandonment恢复责任。
+3. Reader/writer与semaphore解决读占优和容量，不是通用“更快锁”。
+4. Event保存bit/permit，Barrier等待participant phase；两者都可能因owner缺失永久等待。
+5. Lazy、ThreadLocal和Timer的正确性取决于factory/callback与host lifetime对齐。
+
+<Exercises>
+
+**问题 1：怎样诊断两个锁造成的deadlock？**
+
+<Answer>抓取多组all-thread stacks，建立wait-for graph：thread A持Lock1等Lock2，thread B持Lock2等Lock1。修复为全局order或合并owner，增加lock identity/contention telemetry；测试在高并发和callback重入下不再形成循环。</Answer>
+
+**问题 2：AutoResetEvent为什么不适合表示队列item数？**
+
+<Answer>它最多保存一个signaled state，多次Set可合并，消费者会少处理。用Channel传item，或Semaphore按每个enqueue Release一次并配合受锁queue；每个成功Wait消费一个item，shutdown另有completion signal。</Answer>
+
+**问题 3：周期刷新如何避免callback重叠？**
+
+<Answer>用单consumer PeriodicTimer顺序await Refresh，或Timer callback以Interlocked gate拒绝/合并重入；传播shutdown token，观察异常，并在Dispose后等待in-flight结束。测试工作时长大于period、取消中I/O和Dispose竞态。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="synchronization invariant ledger" definition="共享状态关系、入口和同步边界记录。" />
+  <GlossaryItem term="lock-order contract" definition="多锁全局获取顺序。" />
+  <GlossaryItem term="signal-state contract" definition="Permit、gate或phase信号状态语义。" />
+  <GlossaryItem term="lazy publication policy" definition="Factory、winner、异常缓存和retry规则。" />
+  <GlossaryItem term="timer overlap contract" definition="Callback重叠、合并与停机等待规则。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 21: Advanced Threading" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch21.html" />

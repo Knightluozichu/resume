@@ -11,12 +11,13 @@ draft: false
 ---
 
 import { RtwFinalSceneDiagram } from "@/components/mdx/ray-tracing-weekend/diagrams/rtw-final-scene";
+import { RtwStepFlowDiagram } from "@/components/mdx/ray-tracing-weekend/diagrams/rtw-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能用程序化方式批量生成随机球体场景
-- 能合理分配三种材质让画面层次丰富
-- 能选择合适的采样数与递归深度平衡画质和耗时
+- 能实现可复现的程序化随机球体场景
+- 能设计三种材质的概率分配并解释它对画面测试覆盖的作用
+- 能计算样本数、递归深度与场景规模如何共同决定渲染耗时
 - 能回答：为什么最终场景要大量小球而不是几个大球？
 </Objectives>
 
@@ -41,6 +42,29 @@ import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercis
 - `max_depth`：递归深度，决定反射能弹几次，太浅玻璃和镜面发暗。
 - `image_width`/`aspect`：分辨率与宽高比。
 
+### 随机场景首先是回归测试，不是装饰
+
+<Term def="程序化场景：由循环、确定的随机数序列和参数化规则批量生成的几何体与材质集合。固定种子后，同一输入必须重建出同一场景，才可用于渲染回归比较。">程序化场景</Term>的价值不只是“球很多”。同一个场景同时包含漫反射、模糊金属、清晰金属和玻璃，可让法线方向、折射率比、背景采样和递归深度在一张图中一起接受检验。若每次运行都完全改变随机序列，画面差异可能来自场景变化而非代码修改，无法判断修复是否真的有效。
+
+因此开发阶段应提供显式随机种子：先用固定种子生成基准 PPM，修改求交或材质后仍用同一粒子布局重渲；只有想探索不同构图时才换种子。<Term def="可复现随机性：随机过程使用显式种子，在相同平台与算法下生成相同的材质选择、位置和颜色序列。它让随机渲染能够做图像差异与性能回归。">可复现随机性</Term>并不会消除路径采样噪点，但它把“场景随机性”和“每像素路径随机性”分开，方便定位问题。
+
+### 主角排除区是几何约束
+
+随机小球的中心不是任意可取。<Term def="主角排除半径：随机物体中心与主角中心必须保持的最小距离，用于防止生成物体与主角相交或几乎相切，避免把布局缺陷误判为求交或阴影错误。">主角排除半径</Term>应至少覆盖小球半径、主角半径与可见空隙。示例的 `0.9` 是为半径 0.2 的小球避开右侧主角而选的视觉间隔；如果你改大随机球半径或移动主角，阈值也必须一起改。仅检查中心距离大于零不足以防相交。
+
+场景还应避免把小球直接生成在巨大地面球内部。小球中心 y=0.2、半径=0.2 使它刚好与 y=0 的平面相切；这正是用半径 1000 的“地面球”近似平面的好处：局部看似平坦，却仍使用同一套球体求交与法线代码。
+
+### 渲染预算的三个乘数
+
+<Term def="渲染预算：一次离线路径追踪需要评估的近似工作量。它受像素数、每像素样本数、平均路径长度和每次求交的场景测试成本共同影响。">渲染预算</Term>可先用一个粗略上界预估，而不必等到风扇转起来才发现设置过大：
+
+$$
+\mathrm{work}\approx W\times H\times\mathrm{samples\_per\_pixel}
+\times\mathrm{average\_bounces}\times\mathrm{objects\_tested}
+$$
+
+`max_depth` 是平均弹跳次数的上界而非保证值，许多路径会更早射向天空或被材质吸收。没有 BVH 的列表场景中，`objects_tested` 会随随机小球数量近似线性增长；所以把分辨率、样本数和物体数同时翻倍，耗时远不止两倍。调试时应先使用低分辨率、少样本、固定种子验证逻辑，再单独提高一个维度观察质量收益。
+
 ## 交互Demo
 
 > 猜一猜：把 max_depth 从 50 降到 1，玻璃球会变成什么样？
@@ -49,12 +73,18 @@ import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercis
 
 <Stepper>
 <Step title="第一步：搭地面与主角">
+<RtwStepFlowDiagram caption="最终场景第 1 步：先建立能验证三种材质的稳定画面骨架。" stage={1} stages={["放置地面和主角球", "按概率生成小球", "用采样与深度输出图像"]} />
+
 加一个巨大的漫反射球当地面，再放哑光、金属、玻璃三个主角球，构成画面骨架。
 </Step>
 <Step title="第二步：撒随机小球">
+<RtwStepFlowDiagram caption="最终场景第 2 步：随机位置和材质让多条反射、折射路径同时被测试。" stage={2} stages={["放置地面和主角球", "按概率生成小球", "用采样与深度输出图像"]} />
+
 循环生成上百个小球，随机大小与位置，按概率分配材质与颜色，填充画面细节。
 </Step>
 <Step title="第三步：调参渲染">
+<RtwStepFlowDiagram caption="最终场景第 3 步：样本数与递归深度共同决定可见噪点和计算成本。" stage={3} stages={["放置地面和主角球", "按概率生成小球", "用采样与深度输出图像"]} />
+
 设定采样数与递归深度，逐像素发射光线递归着色，输出 PPM 图片。
 </Step>
 </Stepper>
@@ -99,12 +129,46 @@ for (int a = -11; a < 11; a++) {
   }
 }
 
-// 相机与渲染参数
-camera cam(20, 16.0/9.0, /*aperture*/ 0.1, /*focus_dist*/ 10.0);
+// 相机与渲染参数：构造器顺序为 focus_dist 后 aperture。
+camera cam(20, 16.0/9.0, /*focus_dist*/ 10.0, /*aperture*/ 0.1);
 cam.render(world, /*samples*/ 500, /*max_depth*/ 50);
 ```
 
 `choose_mat` 的概率分段让多数小球是哑光、少数反光/折射，画面既丰富又有视觉重点。
+
+将随机种子与预算集中成配置，能让“修复前后是否相同场景”成为可验证条件：
+
+```cpp
+struct render_settings {
+  int image_width = 400;
+  int samples_per_pixel = 100;
+  int max_depth = 25;
+  uint64_t scene_seed = 20260711;
+};
+
+const render_settings settings{};
+random_engine rng(settings.scene_seed);  // 场景生成只读取此 rng
+auto world = random_scene(rng);
+camera cam(20, 16.0 / 9.0, 10.0, 0.1);
+cam.render(world, settings.samples_per_pixel, settings.max_depth);
+```
+
+这份配置适合第一次验收：图像小、样本数有限、场景固定。确认玻璃、金属和地面都正确后，再把样本数提高到 500 或更高；不要在首轮就同时提高分辨率和深度，否则任何错误都会被漫长渲染时间掩盖。
+
+```cpp
+bool overlaps_hero(const point3& center, double small_radius,
+                   const point3& hero_center, double hero_radius) {
+  const auto required_gap = small_radius + hero_radius + 0.05;
+  return (center - hero_center).length() < required_gap;
+}
+
+// 将三个主角都放入检查列表，而不是只排除其中一个。
+if (!overlaps_any_hero(center, 0.2, hero_spheres)) {
+  world.add(make_shared<sphere>(center, 0.2, sphere_mat));
+}
+```
+
+把布局约束提取为函数，也会让场景修改更安全：新增或移动主角时，排除规则不会继续偷偷使用旧的中心与阈值。
 
 ## 常见误区
 
@@ -123,24 +187,41 @@ cam.render(world, /*samples*/ 500, /*max_depth*/ 50);
 ## 练习
 
 <Exercises>
-**问题**：为什么最终场景要大量随机小球而不是几个大球？材质按概率分配有什么好处？
+**问题 1**：为什么最终场景要大量随机小球而不是几个大球？材质按概率分配有什么好处？
 
 <Answer>
 大量随机小球能提供丰富的反射/折射细节——玻璃球里映出无数小球的倒影、金属球表面反射出周围的彩色小球，能充分检验光线追踪是否正确（反射/折射方向对不对）。按概率分配材质（多漫反射、少金属/玻璃）让画面分布自然、有视觉重点，避免全是镜面或全是哑光的呆板感，更接近真实场景的材质比例。
 </Answer>
 
-**问题**：采样数和递归深度分别影响什么？为什么两者都不能太小也不能盲目调大？
+**问题 2**：采样数和递归深度分别影响什么？为什么两者都不能太小也不能盲目调大？
 
 <Answer>
 采样数影响噪点：太少画面满是噪点，太多耗时线性增长但画质提升递减（√N 收敛）。递归深度影响反射/折射的层次：太浅玻璃和镜面发黑（光没弹出来），太深则大多数深层贡献趋近于 0 却白白消耗计算。两者都要在画质与耗时间权衡，典型取 samples=500、depth=50。
 </Answer>
+
+**问题 3**：为什么排查“改了折射代码后玻璃是否变好”时，应固定场景种子和相机参数，而不是每次都随机生成一批小球？
+
+<Answer>
+如果场景、相机和材质布局都变化，玻璃中的倒影、遮挡关系与光线路径会同时改变，无法把最终图像差异归因于折射代码。固定种子使小球位置、材质与颜色保持不变；固定相机使同一像素观察同一几何关系。这样可比较修复前后的 PPM 或局部像素值，差异才有诊断意义。
+</Answer>
 </Exercises>
+
+## 小结
+
+- 随机球场景应以固定种子作为回归输入，而不是每次运行的不可控装饰。
+- 主角排除半径必须随球体半径和主角位置共同维护，避免布局相交污染求交测试。
+- 样本数压低随机噪点，递归深度保留反射与折射链，场景数量决定每次路径的求交成本。
+- 首轮使用小预算验证几何和材质，再逐项提高分辨率、样本和深度，才能定位质量与性能变化的来源。
 
 <Glossary>
 <GlossaryItem term="程序化场景">用循环和随机数批量生成几何体与材质，避免手工排列，画面丰富自然。</GlossaryItem>
 <GlossaryItem term="材质抽样">按概率随机选择材质类型，使多种材质在场景中按自然比例分布。</GlossaryItem>
 <GlossaryItem term="采样数">每像素发射的光线条数，决定噪点多少与渲染耗时。</GlossaryItem>
 <GlossaryItem term="递归深度">光线散射的最大层数，决定反射/折射能弹几次，影响玻璃与镜面亮度。</GlossaryItem>
+<GlossaryItem term="程序化场景">由循环、确定的随机数序列和参数化规则批量生成的几何体与材质集合，固定种子后可用于渲染回归比较。</GlossaryItem>
+<GlossaryItem term="可复现随机性">随机过程使用显式种子，在相同算法下生成相同的材质选择、位置和颜色序列，便于图像差异与性能回归。</GlossaryItem>
+<GlossaryItem term="主角排除半径">随机物体中心与主角中心必须保持的最小距离，用于防止对象相交或几乎相切。</GlossaryItem>
+<GlossaryItem term="渲染预算">一次离线路径追踪的近似工作量，受像素数、样本数、平均路径长度和每次求交成本共同影响。</GlossaryItem>
 </Glossary>
 
 <Attribution adaptedFrom="Ray Tracing in One Weekend (Peter Shirley)" adaptedUrl="https://raytracing.github.io/books/RayTracingInOneWeekend.html" />

@@ -1,0 +1,143 @@
+---
+title: "Chapter 6. Functional error handling"
+type: C
+section: "Functional C# 1e · Becoming functional"
+order: 6
+description: "覆盖typed outcomes、failure chaining、Either validation、client translation与Either variants，区分absence、validation、business rejection和unexpected fault。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-6"
+draft: false
+---
+
+import { CfpFailureChainLab, CfpOutcomeTaxonomyLab, CfpValidationClientLab } from "@/components/mdx/csharp-functional-programming/diagrams/functional-error-handling";
+
+<Objectives>
+
+- 能区分Option、Either/Result、Validation与exception适用的absence/failure contract，保留必要诊断
+- 能推导Right/Left上的Map、Bind与recovery flow，复现dependent operation的short-circuit
+- 能设计fail-fast与error accumulation validation，并把domain error稳定翻译为client response
+
+</Objectives>
+
+## 为什么Error也必须成为可组合Data
+
+Exception适合unexpected fault和跨层unwind，但routine validation、not-found、business rejection若全靠throw/catch，signature隐藏outcomes，caller也难以组合。Functional error handling把expected outcomes放进return type，让success/failure沿同一data flow移动。
+
+先预测：所有exception都应变Left吗；Option和Either只差error message吗；validation fields应总fail-fast吗；catch后转500是否保留domain contract；Either右侧一定是成功业务状态吗。答案都是否。
+
+<Term def="以return value显式表示success、absence或expected failure，使caller在type-guided flow中处理。">typed outcome channel</Term>
+
+## A safer way to represent outcomes
+
+Option表示routine absence，Either/Result表示typed expected failure或success，Validation可积累independent errors；unexpected DB outage、bug或invariant corruption通常保留exception/cause到recovery boundary。Taxonomy决定retry、status、logging owner，不能只按“会不会失败”选择wrapper。
+
+```csharp
+Either<Error, Customer> Validate(CustomerDto dto) =>
+    EmailAddress.Parse(dto.Email)
+        .Map(email => new Customer(email));
+```
+
+<Term def="按routine absence、validation、business rejection、dependency fault与defect分类，并为每类指定owner/policy。">failure taxonomy</Term>
+
+<Stepper>
+  <Step title="切换Option、Either、Validation与exception"><CfpOutcomeTaxonomyLab /></Step>
+  <Step title="写出每类consumer policy">Fallback、client correction、business response、retry/alert与crash boundary分别归谁。</Step>
+  <Step title="用错误混淆案例验收">确保timeout不变None、invalid input不变500、not-found不丢成generic exception。</Step>
+</Stepper>
+
+<Callout type="trap" title="Functional Error Handling就是Never Throw">
+把OutOfMemory、cancellation、programmer defect和network cause都塞入一个Error union会制造无法处理的Left并丢stack。Expected outcomes typed；unexpected faults在真正恢复/translation boundary处理。
+</Callout>
+
+## Chaining operations that may fail
+
+Either的Right承载success，Left承载error。Map只转换Right；Bind接收`T -> Either<Error,R>`并在Left short-circuit。Later operation只在前置依赖成功时运行，避免每步if/return。Recovery必须显式，不能用宽泛default吞error。
+
+```csharp
+Either<Error, Receipt> result =
+    Parse(request)
+        .Bind(Validate)
+        .Bind(Reserve)
+        .Bind(Charge);
+```
+
+<Term def="Dependent chain遇到首个Left后跳过后续operations并原样传播failure的控制语义。">left short-circuit</Term>
+
+<Stepper>
+  <Step title="切换Right、Left、Map与Recover"><CfpFailureChainLab /></Step>
+  <Step title="记录每步是否执行">用counter/spy验证Left后Reserve/Charge不运行，Map不改变error。</Step>
+  <Step title="注入每个stage fault">检查first failure、cleanup、cause和recovery只针对明确error type。</Step>
+</Stepper>
+
+## Validation: a perfect use case for Either
+
+Dependent validation需Bind fail-fast，例如只有parse出Date后才能检查range；independent fields可Apply/Validation accumulation，一次返回email、name、age全部错误。Either默认常是one Left/one Right，是否积累取决于error semigroup/combinator，不是type name自动决定。
+
+<Term def="多个independent checks都执行并以定义的combine规则收集全部errors的validation语义。">validation accumulation</Term>
+
+## Representing outcomes to client applications
+
+Delivery boundary把domain errors映射HTTP/problem details、UI message或CLI exit code。Mapping应stable且不泄露stack/secrets；internal log保留correlation与cause。Business conflict可能409，invalid input 400，not-found 404，dependency fault 503/500，具体由API contract决定。
+
+```csharp
+return result.Match(
+    Left: error => Problem(error.Code, error.Message, ToStatus(error)),
+    Right: value => Ok(ToDto(value)));
+```
+
+<Term def="把internal typed outcome映射为stable external status/schema，同时保留internal cause与observability。">outcome translation boundary</Term>
+
+<Stepper>
+  <Step title="切换fail-fast、accumulate、HTTP与unexpected"><CfpValidationClientLab /></Step>
+  <Step title="建立error-to-response table">列domain code、status、safe message、retryable、log level和cause visibility。</Step>
+  <Step title="用contract/fault tests验收">验证多field errors、unknown error、secret redaction、correlation和unexpected cause chain。</Step>
+</Stepper>
+
+<Callout type="trap" title="给Client返回所有Internal Error最透明">
+Stack、SQL、path和provider message会泄露实现/secret且不稳定。External error是versioned contract；内部diagnostic通过correlation id与secure logs保留。
+</Callout>
+
+## Variations on the Either theme
+
+Result、Exceptional、Validation、Try等variants调整error type、accumulation、laziness或exception capture。选型按domain states和composition需求，不按命名。Library boundary最好统一少数canonical types，adapter负责第三方差异。
+
+### Compatibility and observability gate
+
+Public outcome一旦被client消费，error code、status、field path与retryable就是versioned contract；内部更换Either实现或异常库不能顺手改变它。发布前建立consumer matrix，逐项验证旧client、unknown code fallback、message redaction和cancellation的独立映射。Metrics按stable code聚合，secure log保留cause chain与correlation id，trace标记failure stage但不复制secret。这样expected rejection、client cancellation与unexpected fault既能分别告警，也不会因翻译层升级破坏调用者。
+
+## 本章回顾：Expected Failure走Data，Unexpected Fault保留Cause
+
+1. Outcome taxonomy先区分absence、validation、business rejection与unexpected fault。
+2. Either Map/Bind只推进Right，Left short-circuit dependent work。
+3. Independent validation可accumulate，dependent validation必须有序。
+4. Delivery boundary稳定翻译domain outcome，不泄露internal cause。
+5. Variant type必须对应真实error semantics，不能用一个Left吞所有世界。
+
+<Exercises>
+
+**问题 1：登录密码错误、用户不存在和数据库超时分别如何表示？**
+
+<Answer>为防enumeration，前两者可统一expected AuthenticationRejected domain error；DB timeout保留dependency exception/typed infrastructure fault供retry/503 policy，不能伪装成密码错误。测试status一致、timing/diagnostic安全与cause保留。</Answer>
+
+**问题 2：表单validation何时accumulate、何时Bind？**
+
+<Answer>Email/name/age格式彼此独立可Apply积累；只有parse成功后才能做domain range，或需要前一步id加载后续对象时用Bind。测试全部空、一个invalid、dependent parse failure，确认无无效后续effect。</Answer>
+
+**问题 3：怎样避免Either pipeline吞掉unexpected exception？**
+
+<Answer>只在明确boundary捕获已知recoverable exceptions并映射typed error，保留InnerException/cause；programmer defects继续到top-level handler。测试known mapping、unknown rethrow/top-level 500、cancellation不误转Left和secret redaction。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="typed outcome channel" definition="Return type显式承载success/absence/expected failure。" />
+  <GlossaryItem term="failure taxonomy" definition="按outcome性质分配owner与policy的分类。" />
+  <GlossaryItem term="left short-circuit" definition="Either Left跳过后续dependent operations。" />
+  <GlossaryItem term="validation accumulation" definition="组合independent checks并收集全部errors。" />
+  <GlossaryItem term="outcome translation boundary" definition="Internal outcome到stable external response的映射边界。" />
+</Glossary>
+
+<Attribution adaptedFrom="Functional Programming in C#, First Edition, Chapter 6: Functional error handling" adaptedUrl="https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-6" />

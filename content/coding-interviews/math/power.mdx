@@ -1,236 +1,321 @@
 ---
-title: 数值的整数次方
-type: B
-section: 数学
-order: 1
-description: 实现 pow(x, n)，深入理解快速幂算法与底数/指数边界条件。
-demo: false
+title: "面试题16：数值的整数次方"
+type: C
+section: "第3章 高质量的代码"
+order: 17
+description: "先定义零底数与负指数契约，再用指数折半或二进制分解在O(log n)次乘法内计算幂。"
+demo: true
 math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviews
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/16_Power/Power.cpp"
 draft: false
 ---
 
-{/* 知识点清单：快速幂 / 浮点数精度 / 整数溢出 / 边界处理 / 时间复杂度 O(log n)；原书章节：面试题16：数值的整数次方。 */}
+import { ExponentHalvingDiagram, BinaryExponentStateMap, PowerContractMap, PowerCaseLab } from "@/components/mdx/coding-interviews/diagrams/power";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能解释快速幂（Binary Exponentiation）算法的核心直觉，并推导其从 $O(n)$ 到 $O(\log n)$ 的复杂度降维过程。
-- 能说出为何在 C++ 中不能直接用 `==` 判断 double 类型是否为 0，并写出正确的绝对误差比对逻辑。
-- 能阐明当指数为 `INT_MIN` 时引发整数溢出的机理，并给出 C++ 与 TypeScript 中的防御编码策略。
-- 能分别用 C++ 和 TypeScript 实现高鲁棒性、无边界漏洞的数值次方算法。
+- 能解释指数折半为何把线性次乘法降为对数层
+- 能计算指数13的递归分解和二进制迭代状态
+- 能实现安全处理负指数与最小32位指数的递归、迭代快速幂
+- 能分析零底数、零指数、负底数和浮点溢出下溢契约
+- 能设计覆盖作者七类输入并区分数值结果与错误状态的测试
 
 </Objectives>
 
-## 直觉引入
+## 从乘 13 次能否只做几次乘法开始
 
-想象一下，你手中有一张平整的超大白纸。如果要把这张白纸折叠成具有 $1024$ 层厚度的纸折叠物，你需要折叠多少次？
+先预测：直接计算`x^13`需要连续乘12次；若先得到`x^6`，平方得到`x^12`再乘`x`，而`x^6`又可由`x^3`平方得到，指数经历`13→6→3→1`。工作量为什么随指数位数而不是指数本身增长？
 
-直觉上，你肯定不会去买 $1024$ 张纸一张张粘起来（这相当于 $O(n)$ 的朴素累乘）。你只需要把这张纸**对折**即可。
-- 对折 1 次：$2$ 层厚度
-- 对折 2 次：$4$ 层厚度
-- 对折 3 次：$8$ 层厚度
-- ...
-- 对折 10 次：$1024$ 层厚度！
+“数值的整数次方”要求实现`Power(double base, int exponent)`，不能调用库幂函数。除了效率，真正考点是把输入分类：正指数、零指数、负指数，正负底数，以及**底数为0的边界**。
 
-每次对折，厚度都会翻倍。原本需要堆叠 $1024$ 次的操作，通过连续对折，只需要 $10$ 次就能搞定。
+对非零底数，整数次幂可定义为：
 
-这种「对折翻倍」的降维打击，就是本章我们要研究的 <Term def="一种通过折半减小乘法次数的高效计算 $x^n$ 的算法，其核心思想是二进制分解或分治，将时间复杂度从 $O(n)$ 降至 $O(\log n)$。">快速幂</Term> 算法。我们要解决的核心问题是：如何在计算机内存中高效计算 $x^n$，同时应对浮点数精度丧失、负指数以及整型边界溢出等一系列真实的工程地雷。
+$$
+x^n=
+\begin{cases}
+x\cdot x\cdots x, & n>0,\\
+1, & n=0,\\
+1/x^{-n}, & n<0.
+\end{cases}
+$$
 
-## 概念讲解
+<Term def="函数被数学与接口契约允许处理的输入集合，以及非法输入应如何表达。">定义域</Term>先于算法。`0`的正指数为0，作者约定`0^0=1`，而`0`的负指数需要除以0，应报告非法输入。若不先锁定这些规则，快速幂循环再正确也无法决定返回什么。
 
-计算 $x^n$（$x$ 为双精度浮点数，$n$ 为整数）最朴素的想法是循环累乘 $n$ 次，时间复杂度为 $O(n)$。但当 $n$ 达到上亿级别时，这种方法在时限内几乎注定超时。
+<PowerContractMap />
 
-### 分治递推公式：快速幂的数学核心
+## 递归快速幂只求一次半次幂
 
-利用分治法，我们可以把 $x^n$ 的计算折半拆解：
-- 当指数 $n$ 为偶数时：
-  $$x^n = x^{n/2} \cdot x^{n/2} = (x^{n/2})^2$$
-- 当指数 $n$ 为奇数时：
-  $$x^n = x \cdot x^{(n-1)/2} \cdot x^{(n-1)/2} = x \cdot (x^{(n-1)/2})^2$$
+<Term def="把规模为n的问题拆成规模约n/2的子问题，再由子结果组合原结果。">分治</Term>利用指数奇偶性：
 
-通过这种拆分，计算 $x^n$ 转化为计算 $x^{n/2}$，计算规模每次减半，总共只需要进行 $\log n$ 次乘法。
+$$
+x^n=
+\begin{cases}
+\bigl(x^{n/2}\bigr)^2, & n\text{为偶数},\\
+\bigl(x^{\lfloor n/2\rfloor}\bigr)^2x, & n\text{为奇数}.
+\end{cases}
+$$
 
-例如，要计算 $x^{32}$：
-$$x^{32} = (x^{16})^2 \rightarrow x^{16} = (x^8)^2 \rightarrow x^8 = (x^4)^2 \rightarrow x^4 = (x^2)^2 \rightarrow x^2 = (x)^2$$
-原本需要 $31$ 次乘法，现在只需 $5$ 次。
+重点是半次幂只递归计算一次，保存后平方。若写成`power(x,n/2) * power(x,n/2)`，两棵相同递归树会把复杂度重新扩大。每层指数右移一位，递归深度和乘法次数都是`O(log |n|)`。
 
----
+<Term def="通过指数折半或二进制分解，用对数次乘法计算整数次幂的算法。">快速幂</Term>的无符号核心如下：
 
-### 三大工程地雷与边界防护
-
-看似简单的算法在实际面试和工程实现中却布满陷阱，主要包含以下三个核心考点：
-
-#### 1. 浮点数精度陷阱
-
-在计算机中，浮点数采用 IEEE 754 规范以二进制分数近似表示。因为很多十进制小数（如 `0.1`）无法用二进制精确表达，计算过程中会产生微小的舍入误差。
-- **错误写法**：`if (base == 0.0)`
-- **后果**：可能因为精度丢失导致 `base` 极度接近 0（如 `1e-18`）但并不完全等于 0.0，从而绕过判断，导致后续出现除以 0 的崩溃。
-- **防御策略**：利用 <Term def="由于计算机采用 IEEE 754 浮点数规范表示实数，无法精确表示所有十进制小数，因此直接做等号比较是不安全的，必须使用误差限判断。">浮点数精度限制</Term>，判断其差值的绝对值是否小于一个极小的阈值（如 `1e-9`）：
-  ```cpp
-  if (std::abs(base - 0.0) < 1e-9)
-  ```
-
-#### 2. 负指数与除零危机
-
-当指数 $n$ 为负数时，根据数学公式 $x^{-n} = \frac{1}{x^n}$，我们需要先求出 $x$ 的正次方，然后再取倒数。
-但这里必须防范底数 $x=0$。
-- 如果 $x = 0$ 且 $n < 0$，求倒数相当于计算 $1/0$，在计算机中会引发 division by zero 崩溃或产生非法的 `Infinity` 结果。
-- **防御策略**：在计算前判断，若底数为 0 且指数小于等于 0，必须视为非法输入（报错、抛异常或返回 0）。
-
-#### 3. INT_MIN 有符号整型溢出陷阱
-
-在 C++ 等底层语言中，32 位有符号整型 `int` 的范围是 `[-2147483648, 2147483647]`。
-- **致命陷阱**：当 $n = \text{INT\_MIN} = -2147483648$ 时，如果直接将其转为正数 `absN = -n`，所得的 `2147483648` 超出了 `int` 的最大上限 `2147483647`。
-- **后果**：在 C++ 中，这会导致 <Term def="计算机整型变量超出其最大表示范围时发生的现象。在 32 位有符号数中，-INT_MIN 无法用同等类型表示，会引发越界或未定义行为。">整型溢出</Term>，产生未定义行为，`-n` 结果仍会变回 `-2147483648`，使程序陷入死循环或算出荒谬的 0 值。
-- **防御策略**：在转换符号前，先将 $n$ 强转为 64 位有符号整型 `long long` 或者无符号整型 `unsigned int`，再取绝对值：
-  ```cpp
-  long long absN = std::abs(static_cast<long long>(n));
-  ```
-
-## 代码对照
-
-为了实现高效率，我们通常采用**非递归（迭代）快速幂**。它不需要消耗额外的调用栈空间。
-
-以下是 C++（带完整的浮点数比对及 64 位整型溢出防护）与 TypeScript（带安全数值取整防御）的实现对照：
-
-<CodeTabs>
-  <Tab label="C++">
 ```cpp
-#include <cmath>
-#include <stdexcept>
+#include <cstdint>
 
-class Solution {
-public:
-    double myPow(double x, int n) {
-        // 边界防护 1：底数为 0 且指数为负，抛出非法数学输入异常
-        if (std::abs(x - 0.0) < 1e-9 && n < 0) {
-            throw std::invalid_argument("Division by zero: 0 raised to a negative power is invalid.");
-        }
+double powerUnsignedRecursive(double base,
+                              std::uint64_t exponent) {
+    if (exponent == 0) return 1.0;
+    if (exponent == 1) return base;
 
-        // 边界防护 2：0 的 0 次方或正次方
-        if (std::abs(x - 0.0) < 1e-9) {
-            return 0.0;
-        }
-        if (n == 0) {
-            return 1.0;
-        }
+    double half = powerUnsignedRecursive(base, exponent >> 1U);
+    double result = half * half;
+    if ((exponent & 1U) != 0) result *= base;
+    return result;
+}
 
-        // 防御性转换：用 64 位 long long 承接 n 的绝对值，避免 INT_MIN 取反后发生有符号整数溢出
-        long long absN = n;
-        if (n < 0) {
-            absN = -absN; // 安全转为正数 2147483648
-        }
-
-        double result = 1.0;
-        double currentProduct = x;
-
-        // 迭代快速幂主循环：O(log n)
-        while (absN > 0) {
-            // 通过位运算判断当前指数最低位是否为 1（奇数）
-            if ((absN & 1) == 1) {
-                result *= currentProduct;
-            }
-            currentProduct *= currentProduct; // 底数自乘翻倍
-            absN >>= 1;                       // 指数减半（右移 1 位）
-        }
-
-        // 若原指数为负数，返回结果的倒数
-        return n < 0 ? 1.0 / result : result;
-    }
+struct PowerResult {
+    double value;
+    bool valid;
 };
-```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-function myPow(x: number, n: number): number {
-  // 边界防护 1：在 JavaScript/TypeScript 中底数为 0 且指数为负数时，数学上是非法的
-  if (x === 0 && n < 0) {
-    throw new Error("Division by zero: 0 raised to a negative power is invalid.");
-  }
 
-  // 边界防护 2：底数为 0 的正数次方
-  if (x === 0) {
-    return 0;
-  }
-  if (n === 0) {
-    return 1;
-  }
-
-  // TS/JS 的 number 是双精度浮点数，直接取绝对值没有 32 位整型溢出问题
-  let absN = Math.abs(n);
-  let result = 1.0;
-  let currentProduct = x;
-
-  // 迭代快速幂
-  while (absN > 0) {
-    // 避开 JS 32位位操作溢出限制，使用算术模运算判断奇偶性
-    if (absN % 2 === 1) {
-      result *= currentProduct;
+PowerResult powerRecursive(double base, std::int32_t exponent) {
+    if (base == 0.0 && exponent < 0) {
+        return {0.0, false};
     }
-    currentProduct *= currentProduct;
-    // 使用 Math.floor 除以 2 代替位移，防止超大指数在位运算时发生 32 位截断
-    absN = Math.floor(absN / 2);
-  }
 
-  return n < 0 ? 1.0 / result : result;
+    const auto wideExponent = static_cast<std::int64_t>(exponent);
+    const std::uint64_t magnitude =
+        wideExponent < 0
+            ? static_cast<std::uint64_t>(-wideExponent)
+            : static_cast<std::uint64_t>(wideExponent);
+
+    double value = powerUnsignedRecursive(base, magnitude);
+    if (exponent < 0) value = 1.0 / value;
+    return {value, true};
 }
 ```
-  </Tab>
-</CodeTabs>
 
-## 常见误区
+先把32位指数提升到64位有符号数，再取负，避免最小32位整数取反溢出。得到的<Term def="忽略指数正负号后用于无符号快速幂核心的非负大小。">指数绝对值</Term>可放入`uint64_t`；核心不再关心负指数，包装层最后统一取倒数。
 
-<Callout type="trap">
-  <strong>现象 →</strong> 在 C++ 中输入底数 2.0，指数为 -2147483648 (INT_MIN)，程序卡死，出现超时（Time Limit Exceeded）或发生运行时内存越界。
-  <strong>原因 →</strong> 使用 `int absN = -n;` 企图转换负指数，由于 `-INT_MIN` 在 32 位有符号整数中发生溢出，运算结果依然是 `-2147483648`，这导致循环条件 `absN > 0` 永远成立或导致位移溢出，使得程序陷入无限死循环。
-  <strong>修法 →</strong> 在求绝对值前，必须将指数升级为 64 位的 `long long` 类型的临时变量，再进行绝对值转换：`long long absN = std::abs((long long)n);`。
+<ExponentHalvingDiagram />
+
+## 迭代版按指数二进制位选择因子
+
+任何非负指数都可展开为二进制位：
+
+$$
+n=\sum_{i=0}^{b-1}\beta_i2^i
+\quad\Longrightarrow\quad
+x^n=\prod_{i:\,\beta_i=1}x^{2^i},
+\qquad \beta_i\in\{0,1\}.
+$$
+
+迭代版维护`factor=x^(2^i)`。当前最低位为1就把`factor`乘入结果；随后`factor`平方，指数右移，进入下一二进制位。指数13是`1101₂`，选择`x、x^4、x^8`，乘积为`x^13`。
+
+<BinaryExponentStateMap />
+
+```cpp
+PowerResult powerIterative(double base, std::int32_t exponent) {
+    if (base == 0.0 && exponent < 0) {
+        return {0.0, false};
+    }
+
+    const auto wideExponent = static_cast<std::int64_t>(exponent);
+    std::uint64_t remaining =
+        wideExponent < 0
+            ? static_cast<std::uint64_t>(-wideExponent)
+            : static_cast<std::uint64_t>(wideExponent);
+
+    double result = 1.0;
+    double factor = base;
+    while (remaining != 0) {
+        if ((remaining & 1U) != 0) {
+            result *= factor;
+        }
+        remaining >>= 1U;
+        if (remaining != 0) {
+            factor *= factor;
+        }
+    }
+
+    if (exponent < 0) result = 1.0 / result;
+    return {result, true};
+}
+```
+
+循环中的<Term def="每轮开始与结束都成立，用于连接程序状态与目标数学结果的关系。">循环不变量</Term>可写为：
+
+$$
+\text{result}\cdot
+\text{factor}^{\text{remaining}}
+=x^{|n|}.
+$$
+
+处理最低位后，若该位为1就把一个`factor`移到`result`；指数除2、因子平方后等式仍成立。终止时`remaining=0`，右侧待处理因子为1，因此`result=x^{|n|}`。迭代版时间`O(log |n|)`、额外空间`O(1)`，递归版栈空间`O(log |n|)`。
+
+## 负指数与最小整数陷阱
+
+负指数不是在循环中不断乘倒数最清晰，而是先对`|n|`执行同一个无符号核心，再取一次倒数。这样奇偶分支、复杂度和测试都只维护一份。
+
+作者源码先在`int`上计算`-exponent`。当`exponent=INT_MIN`时，其正值超出`int`最大范围，有符号溢出是未定义行为。先强转无符号再取反也容易得到意外语义；提升到更宽的`int64_t`后再取负，才覆盖整个32位输入域。
+
+<Callout type="trap" title="用int absExponent = -exponent">
+普通负指数测试会通过，但`INT_MIN`没有对应的正`int`。必须先提升到能容纳其绝对值的更宽类型，或使用不发生有符号取反的无符号变换。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 输入底数 0.0，指数为负数时，程序成功执行但返回了 `Infinity`（无无穷大值）或者返回 1.0，没有检测出输入异常。
-  <strong>原因 →</strong> 缺少了对底数为 0 且指数小于 0 的独立条件拦截。直接执行除倒数会导致 `1.0 / 0.0`，在部分编译器/解释器中这会产生 `Infinity`，掩盖了严重的除零逻辑漏洞。
-  <strong>修法 →</strong> 前置边界拦截，判断 `std::abs(x - 0.0) < 1e-9 && n < 0` 并将其作为异常处理或返回特殊定义的标记。
+负底数的符号无需特判。偶指数的二进制乘法最终得到正数，奇指数多乘一次负底数得到负数；负指数取倒数不会改变符号奇偶规律。额外分支反而可能让`-0.0`、无穷等浮点值处理不一致。
+
+## 底数为 0 的边界与浮点比较
+
+作者用绝对误差`1e-7`判断底数是否“等于0”，再拒绝负指数。这会把`1e-8`这样的非零底数误判为零，尽管它的负次幂在浮点范围内可能有定义。定义域判断应使用`base == 0.0`，它同时识别正零和负零；近似比较只用于验证计算结果。
+
+<Term def="浮点运算因有限精度、舍入、上溢与下溢而只近似表示实数结果的性质。">浮点近似</Term>要求测试同时考虑绝对误差和相对误差。接近0时绝对误差有意义，数值很大时应按结果规模放宽；不能用同一个固定 epsilon 同时比较`1e-12`和`1e100`。
+
+<Callout type="trap" title="用epsilon决定底数是否属于定义域">
+`1e-8`虽接近0但并不等于0，其负指数不是数学除零。epsilon适合比较近似结果，不适合把一段合法输入改判为非法。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 在 JS/TS 代码中，输入大指数（如 `n = 2147483648`），发现快速幂运算返回了错误值 `1`。
-  <strong>原因 →</strong> 在 JS/TS 中使用了位操作符 `absN >>= 1` 和 `absN & 1`。JS 中的位操作会自动将 64 位浮点数强转为 32 位有符号整型。`2147483648` 的二进制第 31 位是 1，强转为 32 位有符号整型会变成负数 `-2147483648`，导致循环直接跳出或逻辑失控。
-  <strong>修法 →</strong> 在 JS/TS 中处理大指数，应使用算术运算 `absN % 2 === 1` 和 `absN = Math.floor(absN / 2)`，避免使用按位右移和按位与操作符。
-</Callout>
+作者把`0^0`约定为1，因为无符号核心指数0返回乘法单位元1。数学文献对`0^0`语境不同可能有不同约定，API 必须明确；本页忠实采用作者测试。`0`的正指数自然通过乘法得到0，只有零底数负指数返回非法状态。
 
-## 小结与练习
+## 错误状态不应藏在全局变量里
 
-- 朴素 $x^n$ 的乘法复杂度为 $O(n)$，**快速幂算法**利用折半分治思想将其优化为 $O(\log n)$。
-- 在底数判断中，由于浮点误差，**切忌直接使用 `== 0.0`**，应该使用 `abs(x - 0.0) < 1e-9` 进行误差限容差判断。
-- 有符号 32 位整型 `INT_MIN` 无法直接取反，必须先**拓宽为 64 位 `long long`**，防止整型溢出导致的死循环。
-- 迭代快速幂相比于递归，能将空间复杂度从 $O(\log n)$ 降低为 $O(1)$，消除了系统栈溢出风险。
+作者使用全局`g_InvalidInput`区分合法结果0与非法输入。每次入口虽先清零，但全局状态不是线程安全的，调用者还可能忘记在读取返回值后同步检查标志。返回`PowerResult`、`optional<double>`或`expected<double,Error>`能把值和状态绑定在一次调用结果中。
+
+错误与浮点上溢也应区分。`2^2000`可能得到正无穷，极小底数大正指数可能下溢到0；这不是零底数负指数的定义域错误，而是`double`表示范围问题。接口可以允许 IEEE 754 无穷/零，也可以用`isfinite`检测并报告数值范围错误，但不能都压成同一个布尔标志。
+
+NaN 输入会传播 NaN；正负无穷遵循浮点乘法和倒数规则。原题明确“不需要考虑大数问题”，面试实现可不扩展这些状态，但工程文档应说明采用平台浮点语义还是主动拒绝非有限输入。
+
+## 乘法顺序会影响浮点近似
+
+实数乘法满足结合律，但有限精度浮点每次乘法后都舍入，`(a·b)·c`与`a·(b·c)`可能差几个末位。朴素连续乘、递归平方和二进制迭代的乘法顺序不同，因此结果不保证逐位相同；测试应比较容差或 ULP，而不是要求所有实现的`double`位模式一致。
+
+平方还可能更早上溢。比如因子已经很大时`factor *= factor`先得到无穷，即使某些后续数学组合在扩展精度中仍可表达；负指数则可能先算出巨大正次幂为无穷，再取倒数成为0。另一种做法是先把底数取倒数再计算正指数，它可能改成逐步下溢。两者都受`double`范围限制，只是舍入路径不同。
+
+若需求强调数值稳定性，可使用更宽浮点类型、中途缩放并记录指数、对数域计算，或调用经过验证的数学库。算法题的`O(log n)`乘法次数说明性能，不自动提供最小误差；“更少乘法”通常减少舍入机会，但平方会放大已有相对误差。
+
+整数模幂则没有浮点近似问题，但必须在每次乘法后取模并防止中间乘积溢出。它复用相同二进制指数框架，却属于不同数值域；不能把`double`版本简单强转成整数后声称支持密码学模幂。
+
+## 用指数律做性质测试
+
+除官方固定样例外，可在安全数值范围随机生成`x、a、b`，检查`power(x,a+b)`近似等于`power(x,a)·power(x,b)`；对非零`x`检查`power(x,-a)·power(x,a)`近似为1；对偶指数检查`power(-x,2a)`与`power(x,2a)`相等。
+
+性质测试的前置条件必须过滤指数相加溢出、零底数负指数、结果非有限和严重下溢。若一边已经是无穷、另一边是`0·∞`得到 NaN，指数律在实数上成立也不能直接转换成浮点断言。先限制`|x|`与指数范围，才能让失败更可能指向算法而非表示范围。
+
+还可以记录实际乘法次数：无符号指数为0时0次，非零指数每处理一个二进制位最多一次平方，每个1位最多一次乘入结果。次数应随`bit_width(n)`增长，而不随`n`线性增长；这能发现误把快速幂写成循环乘`n`次的性能回归。
+
+递归与迭代实现互为结构不同的预言机，但两者可能共享绝对值转换错误，所以`INT_MIN`必须单独断言。固定样例、代数性质、乘法计数和标准库参考共同组成比单一结果表更强的验证。
+
+## 官方七组测试覆盖输入分类
+
+作者测试`2^3=8`、`(-2)^3=-8`、`2^-3=0.125`、`2^0=1`、`0^0=1`、`0^4=0`，以及`0^-4`返回0并设置非法标志。它们覆盖符号、倒数、零指数和定义域错误。
+
+现代测试还应加入负底数偶指数、指数1与`INT_MIN`、极小非零底数，以及递归/迭代对随机安全范围输入的交叉验证。结果预言机可使用`std::pow`，但被测实现本身不能调用它。
+
+```cpp
+#include <algorithm>
+#include <cassert>
+#include <cmath>
+#include <cstdint>
+#include <limits>
+
+bool nearlyEqual(double actual, double expected) {
+    const double difference = std::abs(actual - expected);
+    const double scale = std::max(
+        {1.0, std::abs(actual), std::abs(expected)});
+    return difference <= 1e-12 * scale;
+}
+
+void testPower() {
+    const struct {
+        double base;
+        std::int32_t exponent;
+        double expected;
+        bool valid;
+    } cases[] = {
+        {2.0, 3, 8.0, true},
+        {-2.0, 3, -8.0, true},
+        {2.0, -3, 0.125, true},
+        {2.0, 0, 1.0, true},
+        {0.0, 0, 1.0, true},
+        {0.0, 4, 0.0, true},
+        {0.0, -4, 0.0, false},
+    };
+
+    for (const auto& test : cases) {
+        const auto recursive =
+            powerRecursive(test.base, test.exponent);
+        const auto iterative =
+            powerIterative(test.base, test.exponent);
+        assert(recursive.valid == test.valid);
+        assert(iterative.valid == test.valid);
+        if (test.valid) {
+            assert(nearlyEqual(recursive.value, test.expected));
+            assert(nearlyEqual(iterative.value, test.expected));
+        }
+    }
+
+    const auto minimumExponent = powerIterative(
+        1.0, std::numeric_limits<std::int32_t>::min());
+    assert(minimumExponent.valid);
+    assert(minimumExponent.value == 1.0);
+}
+```
+
+这里`nearlyEqual`只在状态合法时比较值；非法用例不要求伪返回值等于某个数。若先只比较0再检查错误标志，合法的`0^4`和非法的`0^-4`容易被测试混在一起。
+
+<PowerCaseLab />
+
+<Stepper>
+  <Step title="先分类定义域与零指数"><PowerContractMap />明确0的负指数非法，作者约定0的0次方为1，其余输入进入统一核心。</Step>
+  <Step title="递归把指数每层减半"><ExponentHalvingDiagram />半次幂只计算一次，平方后按奇偶决定是否额外乘底数。</Step>
+  <Step title="迭代消费指数二进制位"><BinaryExponentStateMap />最低位为1就乘入当前因子，每轮因子平方、指数右移。</Step>
+  <Step title="用结果与状态双重回归"><PowerCaseLab />正负底数、负指数、零指数和零底数错误共同覆盖作者契约。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 数值的整数次方先按指数符号和零底数确定定义域。
+2. 快速幂利用偶次平方、奇次平方后乘底数，把时间降为`O(log |n|)`。
+3. 递归版栈空间`O(log |n|)`，迭代二进制版额外空间`O(1)`。
+4. 负指数先计算指数绝对值次幂，再取一次倒数。
+5. `INT_MIN`不能在32位`int`中直接取负，必须先提升到更宽类型。
+6. 底数是否为零属于定义域判断，应精确比较；epsilon只用于近似结果测试。
+7. 作者约定`0^0=1`，`0`的负指数通过显式错误状态报告。
+8. 全局错误标志应替换为携带值与状态的返回类型，便于线程安全和完整测试。
 
 <Exercises>
-  <Answer question="既然快速幂有递归和迭代两种实现，它们在执行效率和调用栈上有何本质区别？">
-    递归实现自顶向下分治，在每次折半时都会发生函数压栈，因此需要 $O(\log n)$ 的系统栈空间，如果递归层数过深，可能会导致栈溢出。
-    迭代实现从底向上利用循环和位移，只需要定义几个辅助变量，空间复杂度为 $O(1)$。它完全没有函数调用的额外开销，因此在运行效率和空间安全性上都优于递归实现。
-  </Answer>
-  <Answer question="为什么在 $x^n$ 中 $0^0$ 在数学上常常是未定义的，而在各种编程语言的数学库中（如 C++ 的 pow(0, 0)）通常返回 1.0？">
-    在极限分析中，$0^y \rightarrow 0$（当 $y > 0$ 时），而 $x^0 \rightarrow 1$（当 $x > 0$ 时），因此当底数和指数同时趋近于 0 时极限不唯一，在纯数学中是未定义的。
-    但在代数与工程计算中，为了保证多项式公式 $P(x) = \sum a_k x^k$ 在 $x=0$ 且 $k=0$ 时第一项能正确输出常数 $a_0$，且为了避免大多数幂运算中频繁产生未定义错，工程实现统一约定 $0^0 = 1$。
-  </Answer>
+
+**问题 1：为什么递归中半次幂必须保存后再平方？**
+
+<Answer>两次独立调用power(x,n/2)会重复整棵子树，递推变成两个规模减半子问题；保存一次结果后只剩一个子问题和常数次乘法，递归深度与总层数才是O(log n)。</Answer>
+
+**问题 2：指数`INT_MIN`怎样安全转换为绝对值？**
+
+<Answer>先转为int64_t，此时最小32位值可以安全表示，再在64位中取负并转成uint64_t。不能先在int32_t中执行负号，因为正值超出其范围。</Answer>
+
+**问题 3：迭代版的循环不变量说明了什么？**
+
+<Answer>result乘factor的remaining次方始终等于原始base的绝对指数次方。每次消费最低二进制位并平方factor后等式保持；remaining归零时result就是目标。</Answer>
+
+**问题 4：为什么`1e-8`的负指数不应按零底数拒绝？**
+
+<Answer>它是非零浮点值，取倒数在数学上有定义，结果是否溢出是数值范围问题。固定epsilon把接近零误当成等于零，会错误缩小合法定义域。</Answer>
+
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="快速幂">
-    一种利用二进制拆分或折半分治，大幅减少连续相乘次数的高效幂运算算法。详见「概念讲解」节。
-  </GlossaryItem>
-  <GlossaryItem term="浮点数精度限制">
-    计算机使用有限二进制位数（IEEE 754 规范）来存储实数，导致无法无误差地存储无限循环二进制小数，在等值比对时需要容差阀值。详见「概念讲解」节。
-  </GlossaryItem>
-  <GlossaryItem term="整型溢出">
-    当计算结果或数据转换超出了计算机硬件数据类型所能表示的最大/最小范围时，数据发生回绕、截断或引发未定义行为的现象。详见「常见误区」节。
-  </GlossaryItem>
+  <GlossaryItem term="定义域">函数契约允许处理的输入集合及非法输入表达方式。</GlossaryItem>
+  <GlossaryItem term="分治">把问题拆成更小子问题并由子结果组合原结果的方法。</GlossaryItem>
+  <GlossaryItem term="快速幂">通过指数折半或二进制分解在对数次乘法内计算幂。</GlossaryItem>
+  <GlossaryItem term="指数绝对值">去掉指数符号后交给无符号核心处理的非负大小。</GlossaryItem>
+  <GlossaryItem term="循环不变量">每轮循环前后都成立、用于证明程序状态与目标结果关系的断言。</GlossaryItem>
+  <GlossaryItem term="浮点近似">有限精度浮点运算产生舍入、溢出和下溢的数值性质。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+  adaptedFrom="《剑指Offer（第2版）》面试题16及何海涛官方源码 Power.cpp"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/16_Power/Power.cpp"
 />

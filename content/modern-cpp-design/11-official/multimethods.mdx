@@ -1,0 +1,276 @@
+---
+title: "第11章：Multimethods"
+type: A
+section: Modern C++ Design · Part II Components
+order: 11
+description: 对齐第一版第11章 Multimethods：双动态类型需求、brute-force 与自动化、对称分派、对数 FnDispatcher、Functor、cast 安全、常数时间引擎及 BasicDispatcher Policies。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+draft: false
+---
+
+import {
+  McdDispatcherSafetyMap,
+  McdDispatcherStrategyMap,
+  McdMultimethodProblemMap,
+} from "@/components/mdx/modern-cpp-design/diagrams/multimethods";
+
+<Objectives>
+
+- 能解释 what/when multimethods are needed，并把 operation key 从单 receiver type 扩展为多个动态参数类型 tuple
+- 能实现 brute-force、logarithmic FnDispatcher 与 constant-time dispatcher，处理 symmetry、unknown pair、registration 和 callable storage
+- 能判断 static_cast/dynamic_cast 的证明条件，并用 BasicDispatcher/BasicFastDispatcher Policies 比较速度、内存、开放扩展与安全
+
+</Objectives>
+
+## 为什么需要先问 What Are Multimethods?
+
+**What Are Multimethods?** 普通 virtual method 只按一个 receiver 的 dynamic type 选择；multimethod 根据两个或更多 arguments 的 dynamic types 共同选择 operation。CLOS 等语言原生支持，C++ 需要 Visitor、RTTI registry 或 generated table 模拟。
+
+<Term def="根据多个参数的运行时类型组合选择最具体操作的多重动态分派机制。">
+  multimethod
+</Term>
+
+collision 是典型例子：`collide(GameObject&, GameObject&)` 对 Ship/Asteroid、Ship/Station、Asteroid/Asteroid 的行为不同。把方法放进 lhs class 仍只 dispatch lhs，rhs 要再判断；把方法放进 operation object 也面临同样问题。
+
+<McdMultimethodProblemMap />
+
+## When Are Multimethods Needed?
+
+**When Are Multimethods Needed?** 要同时满足：参与对象来自开放/多态 hierarchy；operation 真正依赖多个 dynamic types；把逻辑放进任一 class 都造成 cross-type coupling；组合数量足以让 hand-written conditionals 漂移。
+
+<Term def="当操作语义由多个独立多态对象的具体类型共同决定、且单分派归属会产生耦合时的使用条件。">
+  multimethod need
+</Term>
+
+如果一边类型集合很小且稳定，Visitor double dispatch 更简单；若数据本来是 closed `variant`, `std::visit` 可在 compile time 穷举组合；若行为主要由值/状态而非 type 决定，规则引擎或 ordinary branching 更合适。
+
+<Callout type="trap" title="陷阱：两个参数出现 dynamic_cast 就必须建 multimethod engine">
+  一两个稳定组合的显式分支往往更清楚。Dispatcher 引入 registry、key、unknown policy、thread/module lifetime；只有组合扩展与解耦收益超过这些成本才值得。
+</Callout>
+
+## Double Switch-on-Type：Brute Force
+
+**Double Switch-on-Type: Brute Force** 对第一个 object 逐类 dynamic_cast，命中后再对第二个逐类 cast。N 种 types 最坏有 N² pairs，central function 知道所有 concrete classes。
+
+<Term def="通过嵌套 dynamic type tests 穷举两个参数具体类型组合并直接调用对应函数的方法。">
+  brute-force double dispatch
+</Term>
+
+```cpp
+void collide(GameObject& lhs, GameObject& rhs) {
+    if (auto* ship = dynamic_cast<Ship*>(&lhs)) {
+        if (auto* asteroid = dynamic_cast<Asteroid*>(&rhs)) {
+            return collideShipAsteroid(*ship, *asteroid);
+        }
+        if (auto* station = dynamic_cast<Station*>(&rhs)) {
+            return dockOrReject(*ship, *station);
+        }
+    }
+    if (auto* asteroid = dynamic_cast<Asteroid*>(&lhs)) {
+        if (auto* other = dynamic_cast<Asteroid*>(&rhs)) {
+            return collideAsteroids(*asteroid, *other);
+        }
+    }
+    throw UnknownCollision{};
+}
+```
+
+优点是可读、无需 registry，compiler 能看见所有 branches；缺点是 extension 修改 central code、pair symmetry 重复、test coverage 与顺序容易漏。对少量 types 它可能正是 pragmatic baseline。
+
+## The Brute-Force Approach Automated
+
+**The Brute-Force Approach Automated** 用 Typelist 与 template recursion 生成嵌套 type tests。算法按 list1 尝试 lhs，再按 list2 尝试 rhs，命中后调用 typed executor；列表末端走 error policy。
+
+<Term def="以类型列表生成嵌套 dynamic type tests，消除手写 pair 分支但保留穷举查找性质的 dispatcher。">
+  automated brute-force dispatcher
+</Term>
+
+自动化保证 list 中每种 type 都进入结构，却不保证每个 pair 有合理语义。default executor、compile-time coverage matrix 或 explicit unsupported set 仍需定义。模板展开还会增加 code size 和 compile diagnostics。
+
+## Symmetry with the Brute-Force Dispatcher
+
+**Symmetry with the Brute-Force Dispatcher** 处理 `f(A,B) == f(B,A)` 的 operation。dispatcher 可把 type pair canonicalize，例如按 type index 排序；若交换 inputs，还要在调用 typed handler 时恢复它期望的 argument roles。
+
+<Term def="当交换两个参数不改变操作语义时，把两个有序类型 pair 规范为一个注册项并正确调整实参次序。">
+  symmetric dispatch
+</Term>
+
+不是所有碰撞都对称：Ship docking Station 与 Station docking Ship 可能角色不同；damage source/target 更明显。symmetry 是 operation property，不是 type pair property。同一个 pair 对 overlap test 可对称，对 apply-damage 可不对称。
+
+## The Logarithmic Double Dispatcher
+
+**The Logarithmic Double Dispatcher** 用 ordered map，将 `(type_info(lhs), type_info(rhs))` 映射到 callback。lookup O(log M)，M 是已注册 pairs；新增 concrete type/operation 通过 registration，不改 central chain。
+
+<Term def="以有序动态类型 pair 为键、在关联容器中对数查找已注册 callback 的双分派引擎。">
+  logarithmic double dispatcher
+</Term>
+
+```cpp
+using Key = std::pair<std::type_index, std::type_index>;
+using Callback = std::function<void(GameObject&, GameObject&)>;
+
+class Dispatcher {
+public:
+    template<class L, class R, class F>
+    void add(F function) {
+        table_[{typeid(L), typeid(R)}] =
+            [fn = std::move(function)](GameObject& l, GameObject& r) {
+                fn(dynamic_cast<L&>(l), dynamic_cast<R&>(r));
+            };
+    }
+private:
+    std::map<Key, Callback> table_;
+};
+```
+
+registry lookup 命中后 adapter 仍做 checked cast，验证 key/object agreement。若 callback code 来自 plugin，registration entry、in-flight call 与 objects 都要持 module lease；问题与第 8 章 Factory 相同。
+
+<McdDispatcherStrategyMap />
+
+## FnDispatcher and Symmetry
+
+**FnDispatcher and Symmetry** 将 pair normalization 封装在 registration/lookup：对 symmetric operation，只注册 canonical key；调用顺序反转时，adapter 交换 objects 后再传 typed function。unknown pair 由 error function、default callback 或 no-op 处理。
+
+<Term def="保存 function callbacks、处理 type-pair lookup 与可选 symmetry normalization 的运行时 dispatcher。">
+  FnDispatcher
+</Term>
+
+canonical ordering 不能依赖 `type_info::name()`；同进程可用 `std::type_index` strict order 或内部 type IDs。若 IDs 来自 registration 顺序，多线程/plugin load order 会影响数值但不应影响语义。
+
+## Double Dispatch to Functors
+
+**Double Dispatch to Functors** 用第 5 章 generalized Functor 取代裸函数指针：handler 可捕获 state、调用 member function、组合 logging/metrics。统一 erased signature 常为 `Base&,Base&`; registration adapter 保留 typed `L&,R&` target。
+
+<Term def="把每个动态类型 pair 映射到可保存状态且类型擦除的 callable，而不只支持 free function pointer。">
+  Functor multimethod
+</Term>
+
+Functor 带来 heap/indirect call/copy semantics；dispatcher table 本身也有 allocation。operation 很重时可忽略，physics narrow phase 每秒百万次则应测 direct matrix、function pointer 与 inlined closed variant。
+
+## Converting Arguments：static_cast or dynamic_cast?
+
+**Converting Arguments: static_cast or dynamic_cast?** 取决于 registry invariant 是否足以证明 object dynamic types 与 key 相同。`dynamic_cast<L&>` 检查并在 mismatch 抛 `bad_cast`; `static_cast<L&>` 在证明错误时产生 undefined behavior。
+
+<Term def="在 erased Base references 转回 registered concrete references 时，选择运行时验证或依赖外部 type-key invariant 的边界。">
+  dispatch argument conversion
+</Term>
+
+```cpp
+template<class L, class R, class F>
+auto checkedAdapter(F fn) {
+    return [fn = std::move(fn)](Base& left, Base& right) {
+        auto* l = dynamic_cast<L*>(&left);
+        auto* r = dynamic_cast<R*>(&right);
+        if (!l || !r) throw DispatcherInvariantViolation{};
+        return fn(*l, *r);
+    };
+}
+```
+
+可先在 debug/validation build 用 dynamic_cast，在 production 若 measurement 证明 cast 显著且 key 由 `typeid(objects)` 当场生成，可在封闭 adapter 内 static_cast；不要让 unsafe cast 扩散到 handlers。多重/虚继承还需要 pointer adjustment，static_cast from correct Base can perform it，但前提依旧是 dynamic type 确定。
+
+<McdDispatcherSafetyMap />
+
+<Callout type="trap" title="陷阱：lookup 命中就足以证明 static_cast 安全">
+  如果 caller 可传自定义 key、cache key 与 object 脱节、plugin RTTI/ABI 不一致，命中不代表对象类型。最安全是 key 从本次 objects 的 `typeid` 直接构造，registration adapter 封闭转换，并用断言/checked build 守 invariant。
+</Callout>
+
+## Constant-Time Multimethods：Raw Speed
+
+**Constant-Time Multimethods: Raw Speed** 为每个 concrete type 分配 dense integer ID，用二维 table `handlers[idL][idR]` 直接索引；或 unordered map pair 期望 O(1)。dense matrix 速度稳定，但 memory O(N²)，sparse operations 浪费大量 slots。
+
+<Term def="把动态类型映射为紧凑索引并直接访问二维 handler table，以常数时间选择 pair operation 的引擎。">
+  constant-time multimethod
+</Term>
+
+type ID 分配、table resize、plugin unload 和 concurrent registration 成为新成本。IDs 若复用，live objects 的旧 ID 会误命中新 type；需要 generation/version 或 process-lifetime non-reused IDs。matrix publish 可用 immutable snapshot 避免 lookup lock。
+
+## BasicDispatcher and BasicFastDispatcher as Policies
+
+**BasicDispatcher and BasicFastDispatcher as Policies** 把 lookup engine 作为 Policy：前者可用 map/logarithmic storage，后者用 hash/dense table；外层 Multimethod 保持 register/go/error/symmetry API。其他 Policies 可定义 cast、callback、unknown 与 threading。
+
+<Term def="分别封装通用对数查找与快速常数查找的数据结构 Policy，供同一 multimethod Host 选择。">
+  dispatcher storage Policy
+</Term>
+
+Policy compatibility 要求 key/callback/registration semantics 一致。Fast policy 若不支持 unregister 或 stable iterator，Host 不能假定这些能力；可用 concepts 表达 optional operations。切换 storage policy 不应改变 symmetric/default handler 等业务语义。
+
+## Looking Forward
+
+**Looking Forward** 到现代 C++，closed type sets 可用 `std::variant` + `std::visit` 生成 compile-time Cartesian dispatch；open sets 可用 type_index registry；性能敏感 ECS 常用 explicit type IDs/tables；future language pattern matching 进一步改善 closed sum types。
+
+<Term def="根据类型集合开放性、扩展方向与性能选择 Visitor、variant visit、registry 或 dense type-ID table 的演进视角。">
+  multimethod design horizon
+</Term>
+
+先预测：8 types 的 dense matrix 只有 64 slots，constant-time 简单；500 plugin types 有 250,000 pairs，实际只注册 800 个，map/hash 更省内存。先量 N、M、dispatch frequency、operation cost 和 mutation frequency，再选 engine。
+
+<Stepper>
+  <Step title="第一步：确认多分派与 symmetry">
+    列出 dynamic arguments、所有已知 pairs、unsupported behavior，并对每个 operation 单独判断交换参数是否等价。
+
+    <McdMultimethodProblemMap />
+
+  </Step>
+  <Step title="第二步：以 brute force 建 correctness baseline">
+    手写少量 dynamic_cast branches 与 pair tests，确认角色、fallback 和 exception；再决定是否值得自动/registry 化。
+
+    <McdDispatcherStrategyMap />
+
+  </Step>
+  <Step title="第三步：选择 lookup 与安全边界">
+    比较 N² tests、log M、dense O(1) 的时间/空间/扩展；让 key 从 objects 生成，adapter 封闭 casts，并测试 registration/unload/concurrency。
+
+    <McdDispatcherSafetyMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- multimethod 根据多个动态参数类型 tuple 选择操作，适用于 cross-type behavior 无自然单一 owner 的场景
+- brute-force double switch 是清楚 baseline，Typelist 可自动生成但仍有 O(N²) 测试/代码结构
+- symmetry 属于 operation；canonical pair 必须在反转输入时保持 typed argument roles
+- logarithmic dispatcher 用 type pair map，FnDispatcher/Functor 支持开放注册与 stateful callbacks
+- argument conversion 应默认 checked，只有 key/object invariant 封闭可证明且测得收益时才考虑 static_cast
+- constant-time matrix 用速度换 O(N²) memory 与 type-ID lifecycle；sparse open sets 更适合 map/hash
+- BasicDispatcher/BasicFastDispatcher 将 lookup storage Policy 化，外层语义应保持一致
+- closed sets 可用 variant visit，open plugin sets 可用 registry，ECS/热路径可用 dense IDs；先按 N、M、频率与扩展选择
+
+<Exercises>
+  1. **问题 1：判断 symmetry。** 碰撞 overlap query、damage application、chemical reaction 三种 operation 是否可把 (A,B)/(B,A) 合并？
+
+  <Answer question="symmetry 应怎样逐 operation 判断？">overlap 通常几何上对称，可 canonicalize；damage 有 attacker/target 角色，通常不对称；chemical reaction 若只产出无方向结果可对称，若记录 catalyst/source role则不对称。不能因为 types 相同就对所有 operations 共用 symmetry flag。</Answer>
+
+  2. **问题 2：选择 lookup engine。** 12 个 closed types，144 pairs 中 120 有处理，每 frame 调 200 万次；另一个 plugin 系统 400 types 只注册 600 pairs且启动后很少调用，分别选择。
+
+  <Answer question="dense 与 sparse 怎样取舍？">12 types 的 144-slot dense matrix 很小且 hot，direct type ID lookup适合；400² matrix 16 万 slots 对仅 600 entries 浪费，map/unordered pair registry 更合适且扩展开放。两者都要以实际 benchmark、ID generation 和 operation cost验证。</Answer>
+
+  3. **问题 3：证明 cast 安全。** dispatcher key 当场由 `typeid(lhs/rhs)` 生成，entry 只由 typed registration adapter 创建；说明 static_cast 仍需哪些边界测试。
+
+  <Answer question="外部 invariant 包含哪些条件？">Base 必须 polymorphic且 ABI/RTTI 一致；key 不能由 caller伪造或 stale cache提供；registration type pair 与 adapter L/R一致；symmetry swap 后 object order 同步；plugin code/type metadata 在调用期间 live。debug 用 dynamic_cast/assert验证，只有 profiling证明 cast 成本重要才在封闭 adapter 改 static_cast。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="multimethod">按多个运行时参数类型组合选择操作的动态分派。</GlossaryItem>
+  <GlossaryItem term="multimethod need">cross-type behavior 同时依赖多个多态类型且单一归属造成耦合的条件。</GlossaryItem>
+  <GlossaryItem term="brute-force double dispatch">用嵌套类型测试穷举两个动态参数组合的方法。</GlossaryItem>
+  <GlossaryItem term="automated brute-force dispatcher">由类型列表生成嵌套 tests 的自动化穷举引擎。</GlossaryItem>
+  <GlossaryItem term="symmetric dispatch">将交换参数语义相同的两个有序 pair 合并为一个处理项。</GlossaryItem>
+  <GlossaryItem term="logarithmic double dispatcher">在有序 type-pair map 中对数查找 callback 的引擎。</GlossaryItem>
+  <GlossaryItem term="FnDispatcher">保存 function callbacks 并处理 pair lookup/symmetry 的分派器。</GlossaryItem>
+  <GlossaryItem term="Functor multimethod">把 type pair 映射到可保存状态的擦除 callable。</GlossaryItem>
+  <GlossaryItem term="dispatch argument conversion">从 Base references 恢复 registered concrete references 的转换边界。</GlossaryItem>
+  <GlossaryItem term="constant-time multimethod">用 dense type IDs 与 table 常数时间选择 handler 的引擎。</GlossaryItem>
+  <GlossaryItem term="dispatcher storage Policy">封装 map/hash/matrix 查找结构供同一 Host 选择的策略。</GlossaryItem>
+  <GlossaryItem term="multimethod design horizon">按开放性、扩展和性能选择现代多分派表示的视角。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Modern C++ Design, First Edition, Chapter 11: Multimethods"
+  adaptedUrl="https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+/>

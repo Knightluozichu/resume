@@ -1,0 +1,81 @@
+---
+title: "第9章 测试和性能"
+type: C
+section: "Go实战 · 工程"
+order: 9
+description: "使用单元与表驱动测试、httptest、Example和Benchmark建立行为、HTTP文档与性能证据。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/go-in-action/chapter-9"
+draft: false
+---
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GiaUnitTestLab, GiaHttpExampleLab, GiaBenchmarkLab } from "@/components/mdx/go-in-action/diagrams/gia-testing-packaging";
+
+<Objectives>
+- 能实现单元、表驱动和subtest，覆盖正常、边界和错误路径
+- 能设计httptest Recorder或Server测试，并实现可执行Example文档
+- 能比较多个基准样本，隔离setup、记录分配并判断差异是否可信
+</Objectives>
+
+## 从测试应在开发期间运行开始
+先预测：一次benchmark快5%能否认定优化？不能，必须多次采样、统计比较并确认语义等价。
+测试和性能不是结束阶段。<Term def="固定输入、调用、期望、实际结果和失败诊断的可重复行为证据。">unit test contract</Term>随`go test`进入日常反馈。
+
+<GiaUnitTestLab />
+
+## 单元与表驱动测试
+Test函数接收`*testing.T`，表驱动case减少重复，subtest提供名字与隔离。<Term def="每个case独立声明输入、期望和比较策略的测试组织。">table-driven case</Term>要避免循环变量捕获和共享状态。
+
+```go
+func TestAdd(t *testing.T) {
+    if got := Add(2, 3); got != 5 { t.Fatalf("got %d", got) }
+}
+```
+
+## HTTP测试
+Recorder直接测handler，Server提供真实本地HTTP给client。<Term def="在不依赖外网时验证method、path、status、header、body和关闭的协议测试。">httptest protocol boundary</Term>选择取决于要测试哪一侧。
+
+```go
+rr := httptest.NewRecorder()
+handler.ServeHTTP(rr, httptest.NewRequest("GET", "/", nil))
+```
+
+## Example与包文档
+Example可被go test执行，`Output:`注释比较stdout并进入文档。<Term def="同时展示推荐API用法并以稳定输出接受测试的示例。">executable example contract</Term>不应依赖随机顺序和时间。
+
+<GiaHttpExampleLab />
+
+## Benchmark
+Benchmark循环`b.N`，setup移出计时区，结果必须被消费。<Term def="固定语义和环境下测量单位操作时间、吞吐与分配的实验。">benchmark evidence</Term>不是跑一次的数字。
+
+```go
+func BenchmarkFormat(b *testing.B) {
+    for i := 0; i < b.N; i++ { sink = strconv.Itoa(i) }
+}
+```
+
+## 参数与统计比较
+使用`-bench`、`-benchmem`、`-count`，再以benchstat比较分布。<Term def="控制CPU、频率、输入、并发和样本次数后比较等价实现。">performance comparison protocol</Term>避免把setup和GC噪声误作改进。
+
+报告中的ns/op描述单位操作耗时，B/op和allocs/op暴露分配成本；三者可能朝不同方向变化。比较前应保存CPU、Go版本、样本次数和输入规模，先确认功能测试等价，再判断差异是否超过噪声区间。
+
+<GiaBenchmarkLab />
+<Stepper><Step title="构造Case"><GiaUnitTestLab /></Step><Step title="测HTTP与文档"><GiaHttpExampleLab /></Step><Step title="比较基准"><GiaBenchmarkLab /></Step></Stepper>
+
+## 验收实验：从失败消息到统计结论
+为解析函数建立正常、空值、坏格式和边界表格，故意制造失败以检查case名称和差异；对HTTP同时测试handler与client边界；让Example进入文档。基准运行多次，报告allocs/op并用benchstat比较。若新实现语义不同或setup进入计时，性能数字无效。
+
+<Callout type="trap" title="覆盖率高就等于测试好">覆盖只表示执行到，不证明断言和边界有效。</Callout>
+<Callout type="trap" title="一次Benchmark更快就是优化">需多次样本、统计比较和语义等价。</Callout>
+
+## 本章回顾
+本章覆盖测试和性能、单元测试、使用httptest测试HTTP、Example、用示例代码编写包文档、Benchmark，以及go test与基准参数。行为证据和性能证据都必须可重复且可诊断。
+<Exercises>
+**问题 1：何时用httptest.Server？**<Answer>测试HTTP client和真实协议往返时。</Answer>
+**问题 2：Example怎样被验证？**<Answer>go test执行并比较Output注释。</Answer>
+**问题 3：基准如何排除setup？**<Answer>在循环外准备或调用ResetTimer。</Answer>
+</Exercises>
+## 术语表
+<Glossary><GlossaryItem term="unit test contract" definition="输入期望实际和诊断组成的测试。" /><GlossaryItem term="table-driven case" definition="独立输入期望case。" /><GlossaryItem term="httptest protocol boundary" definition="本地HTTP协议测试边界。" /><GlossaryItem term="executable example contract" definition="可执行文档示例。" /><GlossaryItem term="benchmark evidence" definition="单位操作性能实验。" /><GlossaryItem term="performance comparison protocol" definition="受控统计性能比较。" /></Glossary>
+<Attribution adaptedFrom="Go in Action Chapter 9 Testing and benchmarking" adaptedUrl="https://livebook.manning.com/book/go-in-action/chapter-9" />

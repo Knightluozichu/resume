@@ -1,94 +1,279 @@
 ---
-title: 总复习
-type: A
-section: 优化实践
-order: 10
-description: 全书五板块串联——性能思维建立测量驱动方法论，字符串与算法从高频操作要速度，内存管理减少分配开销，I/O 与并发榨取硬件红利，优化实践用工具链固化。
+title: "Optimized C++：十三章综合复盘"
+type: C
+section: Optimized C++ · Final Review
+order: 99
+description: "以遥测摄取服务 p99 事故串联官方 13 章：从目标、机器行为和测量，到字符串/算法/所有权/热点/库/查找/容器，再到 I/O、并发和内存管理的分波次实验与发布门。"
 demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.oreilly.com/library/view/optimized-c/9781491922057/"
 draft: false
 ---
 
-import { OpcFinalMindMap } from "@/components/mdx/optimized-cpp/diagrams/opc-final-review";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  OpcExperimentWaveMap,
+  OpcIntegratedIncidentMap,
+  OpcReleaseDecisionGateMap,
+} from "@/components/mdx/optimized-cpp/diagrams/final-review";
 
 <Objectives>
 
-- 能串联全书五板块的核心要点
-- 能说出「低风险高收益」的优化手段及其优先级
-- 能规划一个 C++ 项目从「能跑」到「高性能」的优化路线图
+- 能分析一个端到端性能事故，把 13 章机制映射到可证伪 cause、证据与 Amdahl 上限
+- 能设计解析/表示/查找/I-O/并发/存储的单变量 wave，逐轮 reprofile 并保留 rollback
+- 能判断优化何时发布或停止，覆盖 correctness、p99/throughput、CPU/RSS/queue、failure/shutdown 与 guard
 
 </Objectives>
 
-## 全书回顾
+## 从一次跨章节事故开始
 
-《C++ 性能优化指南》的核心方法论是测量驱动的闭环优化——先建立基线、定位热点，再针对性优化，最后验证提升且无回归。全书五板块围绕这条主线展开：
+遥测摄取服务的生产目标：12k events/s 时 p99 从 220 ms 降到 110 ms，throughput 至少 15k events/s，CPU 不增加，RSS 不超过 1.2 GiB；输出顺序/bytes/error policy 不变，overload 和 shutdown 不丢超出契约的数据。
 
-<OpcFinalMindMap />
+<Term def="把用户可见 metric、负载、correctness、resource 和 failure/lifecycle 限制写成同一可验收性能合同。">
+  end-to-end performance contract
+</Term>
 
-## 五板块串联
+```cpp
+struct ServiceGoal {
+    std::uint32_t inputEventsPerSecond{12'000};
+    std::chrono::milliseconds maximumP99{110};
+    std::uint32_t minimumThroughput{15'000};
+    std::size_t maximumRssBytes{1'200'000'000};
+    bool requireIdenticalOrderedOutput{true};
+};
+```
 
-- **性能思维**：建立「测量→分析→优化→验证」的闭环。90/10 法则——聚焦热点，不在非热点上浪费时间。
-- **字符串与算法**：`string_view` 零拷贝、`reserve` 预分配、`move`/RVO 转移所有权；算法选择不只看大 O，还要看常数因子和缓存友好性。
-- **内存管理**：栈优先于堆、对象池/arena 批量分配、`unique_ptr` 零开销替代 `shared_ptr`。
-- **I/O 与并发**：缓冲减少系统调用、批量增大传输量、异步让 I/O 与计算重叠；锁竞争用细粒度锁，false sharing 用 `alignas(64)` 对齐。
-- **优化实践**：benchmark 建基线、perf 定位热点、Valgrind 深挖细节，工具链纳入 CI 防回归。
+这份 contract 是第 1 章策略门、第 3 章测量边界和最终 stop rule。没有它，“parser 快 3 倍”“allocator 快 20%”都无法判断是否有产品价值。
 
-## 低风险高收益的优化优先级
-
-<Term def="性能优化应从低风险高收益入手：算法与数据结构 → 数据布局与缓存 → 内存分配 → 并发">优化优先级</Term>
-
-1. **测量驱动**（前提）：先建基线和热点定位能力
-2. **字符串优化**（低风险高收益）：改传参方式、加 `reserve`、确保 `move`
-3. **数据结构与算法选择**（低风险高收益）：`vector` 替代 `list`、选对算法
-4. **内存分配优化**（中风险高收益）：对象池、`thread_local` 缓冲、`make_shared`
-5. **并发与 I/O**（高风险高收益）：单线程极致后再上多核，分段锁/无锁、异步 I/O
-
-## 从「能跑」到「高性能」的路线图
-
-一个 C++ 项目的性能优化应遵循五阶段路线图：
-
-1. **建立测量基础设施**：集成 google-benchmark、配置 perf/Valgrind、CI 回归检测
-2. **低垂果实**：字符串优化、数据结构选择、`unique_ptr` 替代 `shared_ptr`
-3. **内存与分配优化**：热路径去 `malloc`、数据布局扁平化、减少临时对象
-4. **算法与缓存优化**：选对算法、缓存友好布局、SIMD 向量化
-5. **并发与 I/O**：单线程极致后上多核、异步 I/O、零拷贝
-
-<Callout type="tip">
-核心原则：每阶段都先剖析再动手。优化到「够用」就停——过度优化的代码可维护性差，边际收益递减。把 benchmark 纳入 CI，防止性能随重构流失。
+<Callout type="trap" title="陷阱：把所有观察到的慢点一次改完">
+  parser、container、writer、queue、allocator
+  同时改变后，结果无法归因，correctness 回归也难定位。先冻结 replay/
+  baseline，每 wave 只移动一个主要 lever；wave 结束后重新
+  profile，未通过就回滚，不把失败复杂度带入下一轮。
 </Callout>
 
-## 常见误区
+## 事故快照与十三章因果链
 
-<Callout type="trap">
-<strong>现象 →</strong> 不测量就上多核优化，8 核只比 1 核快 1.5 倍。 <strong>原因 →</strong> 单线程没吃满就并行，只是「把烂代码跑多份」。锁竞争和 false sharing 进一步拖累。 <strong>修法 →</strong> 先在单线程上榨干性能（字符串、算法、内存），确认单线程瓶颈后再上并发。并发是最后手段，不是第一手段。
+replay/profile 得到：45% CPU 在 parse/normalize；20% 在 `map<string,...>` lookup；15% wall 在逐 event write/flush；10% 在 global queue mutex/wait；5% 在 allocation，其他 5%。burst 时 queue 从 1k 增至 2M，RSS 持续涨，shutdown 偶发等待。
+
+<OpcIntegratedIncidentMap />
+
+<Term def="把端到端 symptom 拆成 goal/machine/work/representation/boundary/resource 等可单独测量的原因链。">
+  causal performance decomposition
+</Term>
+
+### 第1-3章：目标、机器行为与测量
+
+先用 Amdahl 判断：parse 占 45%，若快 2 倍，整体理论 speedup `1/(0.55+0.45/2)≈1.29x`；单靠 parse 不足以从 220 ms 到 110 ms。必须组合多个高占比 wave，但仍逐个实验。
+
+机器假设：临时 string 导致 allocation/bytes moved，prefix-heavy map 造成 compare/pointer misses，每 event write 放大 boundary，无界 queue 把 service-time gap 转成等待/RSS。用 alloc counters、key bytes/hash/compare、cache/branch、writes/batch、queue depth/age 验证。
+
+<Term def="按 hotspot fraction 与局部加速计算系统 speedup 上限，用来拒绝不可能达成目标的局部方案。">
+  Amdahl ceiling
+</Term>
+
+### 第4-5章：字符串事件与算法改造
+
+旧 parser 每字段先 `C string -> std::string -> normalize -> substr copy`，随后 repeated find。第一 wave 改成 length-aware input + one-pass state machine + borrowed slices，只在事件进入 owning queue 时复制必要 bytes；显式定义 UTF/invalid input。
+
+```cpp
+struct ParseResult {
+    Event event;
+    std::uint32_t allocations;
+    std::uint64_t bytesCopied;
+    bool matchedReference;
+};
+
+ParseResult parseMeasured(std::span<const std::byte> input);
+```
+
+比较 old/new 的 bytes/result、invalid corpus、allocations、bytes moved、CPU/p99；不能因 borrowed view 快就让它超过 input buffer lifetime。若 one-pass 已删除大部分 allocation，第 13 章 custom manager 上限随之下降。
+
+### 第6-8章：所有权、热点调用与库边界
+
+旧路径把 event 包成 `shared_ptr<Node>`，穿过 6 层 virtual `processOne` wrappers。服务其实由 batch pipeline 唯一拥有 event。改为 owning contiguous batch + index/generation handle；新增 additive `processBatch(span, output&)`，保留旧 API/adapter rollback。
+
+热点 loop 外提 schema/version、一次 resolve handler，callee 内遍历 batch；authorization/validation/error mapping 层保留。不是把所有职责压成 god function，也不为删除 virtual boundary 移除正确 virtual destructor。
+
+<Term def="以最小兼容改动新增 batch/range path，保留旧行为和 rollback，逐步减少 per-item allocation/dispatch 的方式。">
+  additive batch migration
+</Term>
+
+### 第9-10章：查找与容器
+
+`map<string, Schema>` 的完整 operation mix 是启动构建一次、运行期 read-only lookup、偶尔 ordered debug export。候选：transparent map、sorted vector + lower_bound、prevalidated interned key ID + flat vector。先分解 key conversion/compare、tree traversal、build/export/RSS，再单变量替换。
+
+若 intern ID，在 setup 对 full bytes exact equality，runtime handle 携带 generation，不能把 hash collision 当 identity。sorted/flat 方案需证明 export order、schema reload 和 stale ID。只测 lookup 会漏掉 build/reload correctness。
+
+<Term def="把 lookup、build、update、iteration/export、key representation、memory 与 reference contract 一起纳入的容器实验。">
+  full-lifecycle structure experiment
+</Term>
+
+### 第11章：I/O
+
+writer 从每 event format/write/flush 改为复用 64 KiB buffer，并以 size 或 deadline flush；扫 4 KiB/64 KiB/1 MiB，记录 records/write、write calls、throughput、p99 publish、first-result、RSS、flush/close/disk-full。durability/ordering 不可静默改变。
+
+### 第12章：并发与背压
+
+global queue 改 bounded queue，CPU workers 从 32 sweep 到 1/4/8/12；producer capacity 以 latency/RSS budget 选择，定义 block/reject/coalesce。condition predicate 包含 `closed || !empty`，shutdown 执行 stop → wake → drain/cancel → join。
+
+<Term def="当 producer 超过 consumer service rate 时，用 capacity 与 block/reject/drop/coalesce policy 限制 queue age、latency 和 memory。">
+  bounded backpressure
+</Term>
+
+### 第13章：内存管理
+
+只有前三波后 allocation 仍显著，才比较 request-scoped arena/pmr 与 default allocator。object/storage lifetime、alignment、constructor throw、destructor stack、thread confinement 和 peak retention 必须先通过。若 allocation 已降到 1%，custom arena 即使局部快 5 倍，系统上限也不足以覆盖维护风险。
+
+<Term def="在 work/copy 已删除后，allocation 仍是 material hotspot 且 size/lifetime/thread pattern 稳定时才采用的专用 storage 策略。">
+  storage specialization gate
+</Term>
+
+## 五波单变量实验
+
+<OpcExperimentWaveMap />
+
+<Term def="一次只改变一个主要 performance mechanism、带独立 correctness/resource gate 和 rollback 的优化批次。">
+  optimization wave
+</Term>
+
+```cpp
+struct WaveResult {
+    std::string name;
+    bool outputIdentical;
+    double throughputPerSecond;
+    std::chrono::milliseconds p99;
+    double cpuCores;
+    std::size_t peakRss;
+    std::size_t maximumQueueDepth;
+    bool shutdownCompleted;
+};
+```
+
+每波保存 raw samples 和 old/new feature flag。Wave 1 结束后，若 parse 从 45% 降到 10%，下一波 Amdahl 分布必须用新 profile；不能沿旧占比预先保证 Wave 2/3 的收益。
+
+<Callout type="trap" title="陷阱：为了公平，每波都必须做完">
+  不是。每波都重新计算最高杠杆和风险；若 Wave 1+2 已达到 110
+  ms，资源/生命周期全通过，后续 custom manager
+  可以不做。停止无收益/高风险工作也是优化能力，不是任务未完成。
 </Callout>
 
-## 小结与练习
+## 发布与停止规则
 
-- 全书主线：测量优先 → 从高频操作到内存分配 → 从 I/O 到并发 → 用工具链固化
-- 低风险高收益优先：字符串 → 数据结构 → 内存 → 并发
-- 五阶段路线图：测量基础设施 → 低垂果实 → 内存优化 → 算法与缓存 → 并发与 I/O
-- 每阶段先剖析再动手，优化到「够用」就停，benchmark 纳入 CI 防回归
+<OpcReleaseDecisionGateMap />
 
-<Exercises>
-  <Answer question="全书的核心方法论是什么？用一句话概括。">测量驱动的闭环优化——先用 benchmark 建立基线，用剖析器定位热点，针对热点优化，再回到 benchmark 验证提升且无回归，不达标则迭代。一句话：先测量再优化，每一步都拿数据说话。</Answer>
-  <Answer question="如果只能选三个优化手段应用到现有项目，选哪三个？为什么？">1. 测量驱动工作流（perf + google-benchmark）——一切优化的前提；2. 字符串优化（string_view + reserve + move）——最高频操作，改动小收益大；3. 减少热路径动态分配（对象池/thread_local 缓冲）——malloc 是最昂贵的常见操作。选择标准：收益大、风险低、适用面广。</Answer>
-</Exercises>
+<Term def="同时满足 correctness、material product metric、resource bound、failure/lifecycle 和 sustainable rollback 才允许发布的决策。">
+  multidimensional release gate
+</Term>
 
-## 名词解释
+```cpp
+bool canRelease(const WaveResult& result, const ServiceGoal& goal) {
+    return result.outputIdentical &&
+           result.p99 <= goal.maximumP99 &&
+           result.throughputPerSecond >= goal.minimumThroughput &&
+           result.peakRss <= goal.maximumRssBytes &&
+           result.shutdownCompleted;
+}
+```
+
+真实 gate 还要比较 CPU、queue age、error/overload/disk-full、race/lifetime，以及置信区间/环境噪声。达到 goal 后停止继续压榨，并把 scenario、correctness oracle、resource threshold、queue/shutdown 监控写入 regression guard。
+
+## 三步闭卷复盘
+
+<Stepper>
+  <Step title="第一步：从症状重建十三章因果链">
+    不看答案，按 goal/machine/measure、work/ownership/call/library、lookup/container、I-O/concurrency/storage 写 cause 与可推翻证据。
+
+    <OpcIntegratedIncidentMap />
+
+  </Step>
+  <Step title="第二步：按最高杠杆排实验 wave">
+    先预测每个候选 Amdahl 上限和 correctness risk；每 wave 单变量、带 oracle/resource gate/rollback，结束后 reprofile 决定是否继续。
+
+    <OpcExperimentWaveMap />
+
+  </Step>
+  <Step title="第三步：用发布门而非局部倍数收口">
+    检查 p99/throughput/CPU/RSS/queue、failure/shutdown、output/race/lifetime、guard/rollback；满足目标就停，不为技术炫目追加高风险方案。
+
+    <OpcReleaseDecisionGateMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- 13 章共同解释一个端到端事故：目标/机器/测量 → work/表示/边界 → 系统资源
+- Amdahl ceiling 先判断局部方案是否可能产生 material system effect
+- string/parser 先删除 conversion/temporary/repeated scan，并证明 borrowed lifetime
+- ownership/batch/library 改造用 additive path 保留兼容与 rollback
+- lookup/container 必须测完整 build/update/export/key/RSS，不只测 successful lookup
+- I/O batching 同时控制 first-result、flush/durability；并发 queue 必须 bounded 且 shutdown 可终止
+- custom memory manager 只有在 allocation 仍是 hotspot 且 pattern 稳定时才进入
+- 发布由 correctness、goal、resource、failure/lifecycle、guard/rollback 五道门共同决定
+- 每波结束后 reprofile；达到目标或收益不足时停止，是闭环的一部分
+
+<Attribution
+  adaptedFrom="Optimized C++, First Edition: integrated review of all thirteen chapters"
+  adaptedUrl="https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+/>
 
 <Glossary>
-<GlossaryItem term="测量驱动优化">
-性能优化的核心方法论：先建基线、定位热点，再针对性优化，最后验证提升且无回归，不达标则迭代。
-</GlossaryItem>
-<GlossaryItem term="低垂果实">
-低风险高收益的优化手段：字符串优化、数据结构选择、unique_ptr 替代 shared_ptr。改动小、风险低、全局收益大。
-</GlossaryItem>
-<GlossaryItem term="防回归">
-把 benchmark 纳入 CI，每次发版自动对比基线，性能退化超阈值自动告警。性能优化不只是「改快」，更是「持续保持快」。
-</GlossaryItem>
+  <GlossaryItem term="end-to-end performance contract">
+    把 workload、用户 metric、correctness、resource 和 lifecycle 写成同一目标。
+  </GlossaryItem>
+  <GlossaryItem term="causal performance decomposition">
+    把 symptom 拆成可独立测量和推翻的原因链。
+  </GlossaryItem>
+  <GlossaryItem term="Amdahl ceiling">
+    由 hotspot fraction 与局部加速得到的整体收益上限。
+  </GlossaryItem>
+  <GlossaryItem term="additive batch migration">
+    新增兼容 batch path 并保留旧 API/rollback 的迁移。
+  </GlossaryItem>
+  <GlossaryItem term="full-lifecycle structure experiment">
+    同时测 build/search/update/export/key/memory 的结构实验。
+  </GlossaryItem>
+  <GlossaryItem term="bounded backpressure">
+    以 queue capacity 和 overload policy 限制等待与 memory。
+  </GlossaryItem>
+  <GlossaryItem term="storage specialization gate">
+    专用 manager 进入候选前的 hotspot 与 pattern 条件。
+  </GlossaryItem>
+  <GlossaryItem term="optimization wave">
+    单一主要 mechanism、独立 gate 和 rollback 的优化批次。
+  </GlossaryItem>
+  <GlossaryItem term="multidimensional release gate">
+    correctness/performance/resource/lifecycle/sustainability 的联合发布门。
+  </GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Optimized C++ (Kurt Guntheroth)" adaptedUrl="https://www.oreilly.com/" />
+<Exercises>
+  1. **问题 1：复算事故优化顺序。** 另一个 profile 是 20% parse、40% blocked I/O、25% queue wait、10% lookup、5% allocation。给出前三个 wave，说明为何与正文不同。
+
+<Answer question="为什么优化路线必须随当前 profile 改变？">
+  先验证 I/O wait 是 per-record boundary/device 还是 queue；Wave1 做
+  buffered/batch writer并保留 durability；Wave2 bounded
+  queue+worker/backpressure/shutdown，减少 wait/RSS；reprofile 后再在
+  parse/lookup 中选最高 Amdahl 候选。 allocation 5% 的 manager
+  上限低，先不做。章节顺序提供工具，但实验顺序由当前 causal distribution
+  与风险决定。
+</Answer>
+
+2. **问题 2：Wave 2 lookup 快 3 倍，但 RSS 从 800 MiB 升到 1.5 GiB，p99 只降 4 ms。** 给出决定与下一步。
+
+<Answer question="怎样用多维发布门拒绝漂亮局部结果？">
+  超过 1.2 GiB resource gate，端到端 4 ms 也不 material，拒绝/回滚。分解内存来自
+  duplicated keys、oversized buckets 还是 dual index；可先试 transparent
+  lookup、compact key/flat structure 或仅 rollout 单 index，但每个是新 wave。
+  保留 raw data 和 rejected hypothesis，不能因 lookup microbenchmark 3x
+  就放宽系统 contract。
+</Answer>
+
+3. **问题 3：达到 p99 105 ms 后，团队仍想上 lock-free queue 和 custom arena。** 写出允许继续的条件与默认决定。
+
+  <Answer question="优化到够用何时应该停止？">
+    默认停止并写 regression guard。只有新产品目标/容量预测表明现状不足，且新 profile 显示 queue/allocation 是 material
+    hotspot、Amdahl 上限覆盖风险，才分别开启新 wave。lock-free 需 memory reclamation/MPMC correctness；arena 需
+    alignment/lifetime/thread/throw。两者必须独立 A/B/rollback，不能以“可能更快”越过已满足的 release gate。
+  </Answer>
+</Exercises>

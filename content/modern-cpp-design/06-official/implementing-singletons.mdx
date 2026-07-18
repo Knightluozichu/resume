@@ -1,0 +1,254 @@
+---
+title: "第6章：实现 Singletons"
+type: A
+section: Modern C++ Design · Part II Components
+order: 6
+description: 对齐第一版第6章 Implementing Singletons：唯一性、创建销毁、dead reference、Phoenix、longevity、多线程初始化，以及 Creation/Lifetime/Threading Policy 组成的 SingletonHolder。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+draft: false
+---
+
+import {
+  McdDeadReferenceTimelineMap,
+  McdSingletonHolderMap,
+  McdStaticVersusSingletonMap,
+} from "@/components/mdx/modern-cpp-design/diagrams/implementing-singletons";
+
+<Objectives>
+
+- 能解释为何 static data + static functions 不等于 Singleton，并实现构造受限、延迟创建和唯一实例访问
+- 能分析 destruction order、dead reference、Phoenix 与 longevity 的不同语义，画出跨 Singleton shutdown dependency
+- 能设计 SingletonHolder 的 Creation/Lifetime/Threading Policies，并比较 magic static、显式 dependency injection 与全局 holder 的边界
+
+</Objectives>
+
+## 为什么静态函数集合不等于 Singleton
+
+**Static Data + Static Functions != Singleton**。一组静态函数更接近 namespace：没有对象身份、constructor invariant、可替换 implementation 或明确 destruction protocol。Singleton pattern 则声明“系统中恰有一个 T instance，并由受控入口创建、发布和销毁”。
+
+<Term def="为某个类型提供唯一受控实例与全局访问点，并显式承担创建、发布和销毁协议的模式。">
+  Singleton
+</Term>
+
+Singleton 仍是 global state，会隐藏 dependency、污染 test isolation、制造 shutdown coupling。书中实现技巧的价值是把生命周期问题暴露并参数化，不是证明所有 service 都应成为 Singleton。能由 application root 构造并传入的 dependency，通常更容易测试和推理。
+
+<McdStaticVersusSingletonMap />
+
+## The Basic C++ Idioms Supporting Singleton
+
+**The Basic C++ Idioms Supporting Singleton** 包括 private/protected constructor、deleted copy、static access function、保存 instance pointer，以及延迟初始化。class 自身阻止外部构造，holder 或 friend 负责创建。
+
+<Term def="利用访问控制、静态函数和不可复制语义限制外部构造，使 instance 只能经统一入口取得的语言组合。">
+  Singleton idiom
+</Term>
+
+```cpp
+class Logger {
+public:
+    static Logger& instance() {
+        static Logger value;
+        return value;
+    }
+    Logger(const Logger&) = delete;
+    Logger& operator=(const Logger&) = delete;
+private:
+    Logger() = default;
+};
+```
+
+现代 function-local static 从 C++11 起保证一次性线程安全初始化，解决书中手工 double-checked locking 的许多问题；但它仍不自动解决退出期依赖、可替换性、fork/plugin lifetime 或销毁后再次访问。
+
+## Enforcing the Singleton's Uniqueness
+
+**Enforcing the Singleton's Uniqueness** 不只把 constructor private。还要禁止 copy/assignment，控制 derived construction，避免另一个 module 各自实例化 header-only holder，并定义 shared-library/DSO 边界。template `SingletonHolder<T>` 的每个 T/Policy combination 都是独立 static state，换一个 Policy 就可能得到第二个实例。
+
+<Term def="确保所有合法访问路径与二进制边界都指向同一 live instance，而非仅隐藏一个 constructor。">
+  uniqueness invariant
+</Term>
+
+若 type 在多个 dynamic libraries 中有不同 runtime copy，语言层“一个 static”未必等于进程级一个。需要由 host module 导出唯一 accessor，或把 ownership 放入显式 service registry，并为 unload/reload 定义协议。
+
+<Callout type="trap" title="陷阱：private constructor 已经证明全进程唯一">
+  copy、template specialization、不同 DSO、fork 后地址空间和反序列化都可能改变“唯一”的范围。先定义是 thread、module、process、tenant 还是 request singleton，再验证该范围。
+</Callout>
+
+## Destroying the Singleton
+
+**Destroying the Singleton** 有三种常见选择：永不销毁并让 OS 回收；注册 `atexit` 在正常退出时销毁；由 application owner 显式停止。泄漏式 lifetime 避免 static destruction order，但会跳过 flush、transaction close 与 sanitizer leak expectations。
+
+<Term def="决定唯一实例何时停止服务、执行 destructor、释放存储，以及之后访问如何处理的生命周期阶段。">
+  Singleton destruction
+</Term>
+
+```cpp
+static T* instance_ = nullptr;
+static bool destroyed_ = false;
+
+static void destroySingleton() noexcept {
+    delete instance_;
+    instance_ = nullptr;
+    destroyed_ = true;
+}
+```
+
+destroy function 的状态顺序很重要：destructor 可能间接调用 `Instance()`，此时 pointer/flag 应让 dead-reference policy 看见一致状态。destructor 抛异常会在 `atexit` 路径造成严重后果，shutdown 应设计为 no-throw 或显式错误收集。
+
+## The Dead Reference Problem
+
+**The Dead Reference Problem** 是某 Singleton 已销毁，另一个 static object's destructor 随后再次访问它。构造顺序若跨 translation units 不确定，销毁逆序也不能给出可靠 dependency order；延迟创建只把顺序变成“首次访问顺序”，依赖 cycle 仍存在。
+
+<Term def="唯一实例销毁后，仍存活的静态对象或退出回调再次请求该实例所形成的非法生命周期访问。">
+  dead reference
+</Term>
+
+<McdDeadReferenceTimelineMap />
+
+正确分析要画 shutdown graph：节点是 global services，边 `B -> A` 表示 B destructor 需要 A；销毁必须按边的反向拓扑。若有 cycle，单纯调整 registration order 无法满足，需拆除 destructor dependency、引入 explicit shutdown phase 或允许某节点延长/泄漏。
+
+## Addressing Dead Reference I：The Phoenix Singleton
+
+**The Phoenix Singleton** 在销毁后再次请求时重新创建 instance，像 Phoenix 重生。它适用于可无损重建、晚期调用仍有意义且能再次安排销毁的 service。书中 LifetimePolicy 可在 `OnDeadReference` 中决定重建还是抛错。
+
+<Term def="在 Singleton 已销毁后收到访问时允许重新创建实例的生命周期策略。">
+  Phoenix Singleton
+</Term>
+
+重生不是恢复原状态：cache、file position、transaction、metrics sink 都可能已关闭；dependent object 看到的是第二代 identity。若调用者要求同一状态，Phoenix 会掩盖 bug。它还可能在 shutdown 期间反复 create/destroy，必须有 generation 与 registration guard。
+
+## Addressing Dead Reference II：Singletons with Longevity
+
+**Singletons with Longevity** 为每个 instance 分配 longevity value；销毁管理器让数值较大的对象活得更久，按定义顺序调用 destroyer。这样 dependency 可以显式表达：被依赖 service 的 longevity 高于依赖者。
+
+<Term def="以显式 longevity 值排序多个全局对象销毁时机，使依赖者先销毁、被依赖者后销毁的策略。">
+  longevity ordering
+</Term>
+
+longevity 是 partial dependency graph 的数值编码。若两个对象有复杂条件依赖，数字很快变成隐晦 priority；更稳妥的是显式 DAG/topological shutdown。数字相等时也要定义 stable tie-break，否则 nondeterminism 重新出现。
+
+## Implementing Singletons with Longevity
+
+**Implementing Singletons with Longevity** 保存一组 `LifetimeTracker`，每项记录 longevity 与 polymorphic destroyer；注册时按顺序插入，`atexit` callback 每次销毁当前应退出的对象并安排下一项。
+
+```cpp
+struct LifetimeTracker {
+    explicit LifetimeTracker(unsigned longevity) : longevity_(longevity) {}
+    virtual ~LifetimeTracker() = default;
+    virtual void destroy() noexcept = 0;
+    unsigned longevity_;
+};
+
+template<class T>
+struct ConcreteLifetimeTracker final : LifetimeTracker {
+    ConcreteLifetimeTracker(T* p, unsigned value)
+        : LifetimeTracker(value), pointer_(p) {}
+    void destroy() noexcept override { delete pointer_; }
+    T* pointer_;
+};
+```
+
+tracker registry 本身也是 global lifetime state，必须先于 trackers 可用且最后消失；这会出现“管理 Singleton 的 Singleton”递归。实现常选择 intentionally leaked registry 或 function-local static，并把 allocation failure 与 duplicate registration 纳入测试。
+
+## Living in a Multithreaded World
+
+**Living in a Multithreaded World** 的核心是 safe publication：多个 threads 首次调用时只能构造一次，其他线程看到 fully initialized T；destroy 与 concurrent access 也不能 data race。旧式检查 pointer、加锁、再检查在弱 memory model 下容易读到未完全构造对象。
+
+<Term def="让唯一实例只构造一次，并以符合 memory model 的同步把完整对象发布给所有并发访问者。">
+  safe publication
+</Term>
+
+modern magic static 或 `std::call_once` 应优先于手写 double-checked locking。若 instance 可在运行中销毁/reload，reference 返回就无法自动保护 lifetime，需要 shared ownership、epoch/hazard 机制或外部 stop-the-world protocol。
+
+<Callout type="trap" title="陷阱：初始化线程安全就等于 Singleton 线程安全">
+  magic static 只保证构造一次；T 的成员状态、shutdown 与每次操作仍需自己的 synchronization。ThreadingPolicy 不能替业务对象自动建立所有数据不变量。
+</Callout>
+
+## Putting It All Together
+
+**Putting It All Together** 时，holder 状态机大致为 `never-created -> alive -> destroyed`，dead-reference policy 可能从 destroyed 回到 alive。CreationPolicy 负责 raw create/destroy，LifetimePolicy 注册退出并处理 dead access，ThreadingModel 保护初始化临界区。
+
+<Term def="把创建、生命周期和线程三个变化轴组合，并集中保存 instance pointer 与 destroyed state 的通用 holder。">
+  SingletonHolder
+</Term>
+
+<McdSingletonHolderMap />
+
+policy boundaries 要清楚：CreationPolicy 不决定何时创建；LifetimePolicy 不直接知道 mutex；ThreadingModel 不改变 T 的业务 thread safety。若三个策略互相读取私有状态，回到第 1 章的不兼容 Policy 问题。
+
+## Working with SingletonHolder
+
+**Working with SingletonHolder** 通常通过 alias 定义一个具体 service：选择 creation/lifetime/thread policies，再只暴露窄 accessor。不要让业务代码到处拼不同 Policy combinations，否则“同一个 T”可能产生多个 Holder specializations。
+
+<Term def="为某个 T 固定 Holder Policies 与唯一 accessor，并限制业务调用者不能随意产生第二种组合的集成方式。">
+  holder binding
+</Term>
+
+testing 可通过把核心业务依赖写成 interface/reference，在 production composition root 才绑定 SingletonHolder；unit tests 注入 fake。若函数内部直接调用 `GlobalLogger::Instance()`，任何 test 都隐式共享 state，顺序与并行执行容易互相污染。
+
+先预测：一个 metrics registry 被 Phoenix 重生后，退出期新产生的 metric 无处 flush，还可能再次注册 atexit。与其重生，不如让 late logging 写到 emergency sink 或拒绝；Policy 选择必须来自 shutdown product behavior。
+
+<Stepper>
+  <Step title="第一步：定义唯一范围与依赖边界">
+    说明唯一性是 module/process/tenant 哪一层，列出谁创建、谁访问、能否替换；能显式注入的服务先不用全局 holder。
+
+    <McdStaticVersusSingletonMap />
+
+  </Step>
+  <Step title="第二步：画构造与销毁时间线">
+    对 every global accessor 记录首次访问、atexit registration、destructor dependencies 和 late callbacks；识别 dead reference 与 cycle。
+
+    <McdDeadReferenceTimelineMap />
+
+  </Step>
+  <Step title="第三步：选择并验证 Policies">
+    固定 Creation/Lifetime/Threading 组合，测试 concurrent first access、constructor failure、shutdown order、dead access 与 DSO boundary。
+
+    <McdSingletonHolderMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- static namespace 没有完整 instance lifecycle；Singleton 还需唯一性、创建、发布与销毁协议
+- private constructor 只是起点，模板组合、DSO 与 scope 会改变唯一范围
+- destroying Singleton 必须定义 late access；dead reference 来自退出期依赖顺序
+- Phoenix 允许重建但改变 identity/state，longevity 用顺序编码 dependency，都不是普遍修复
+- safe publication 应使用 magic static/call_once 等 memory-model-aware primitive，业务状态仍另需同步
+- SingletonHolder 用 Creation/Lifetime/Threading Policies 组合变化点，集成层要固定唯一 alias
+- 显式 dependency injection 通常更可测试；Holder 应限制在真正 process-global 且生命周期可证明的服务
+
+<Exercises>
+  1. **问题 1：分析 shutdown graph。** Renderer destructor 要写 Logger，Logger destructor 要提交 Metrics，Metrics 不依赖其他服务；给出构造/销毁要求和比 longevity 数字更清晰的方案。
+
+  <Answer question="三个服务应如何停止？">销毁顺序应 Renderer、Logger、Metrics，使被依赖者活得更久。可在 application root 显式调用 `renderer.stop(); logger.flush(); metrics.shutdown();`，再按 owning members 的逆序析构；这比散落 longevity 数字更直接。若必须全局管理，则把 DAG 注册到 lifecycle manager 并拓扑排序。</Answer>
+
+  2. **问题 2：选择 Phoenix。** 配置 cache 销毁后有晚期 destructor 查询配置，cache 原状态含动态 reload；判断 Phoenix 是否安全。
+
+  <Answer question="为什么重生可能掩盖错误？">新 cache 不包含原 generation/reload state，晚期 caller 看到不同配置却以为是同一 service；重生还可能重新注册 watcher/atexit。更安全是消除 destructor 查询、在依赖者中保存所需 snapshot，或让 late access 明确失败。只有重建无状态且语义允许新 identity 时才用 Phoenix。</Answer>
+
+  3. **问题 3：审计线程安全。** `Instance()` 用 magic static 返回 registry，但 registry 的 map 被多个线程写；指出已保证和未保证的部分。
+
+  <Answer question="magic static 解决了什么？">它只保证 registry constructor 一次执行并安全发布完整对象；之后 map 的读写、iteration 与 shutdown 并未自动同步。registry 仍需 mutex/concurrent structure，调用者还要在 shutdown 后停止访问。初始化安全与业务操作线程安全是两个 contract。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Singleton">提供唯一受控实例与访问点并承担生命周期协议的模式。</GlossaryItem>
+  <GlossaryItem term="Singleton idiom">用访问控制、静态入口和不可复制性限制实例创建的语言组合。</GlossaryItem>
+  <GlossaryItem term="uniqueness invariant">所有合法路径在定义范围内都指向同一 live instance 的约束。</GlossaryItem>
+  <GlossaryItem term="Singleton destruction">停止服务、析构释放并定义之后访问的生命周期阶段。</GlossaryItem>
+  <GlossaryItem term="dead reference">实例销毁后仍有退出期代码再次访问它的问题。</GlossaryItem>
+  <GlossaryItem term="Phoenix Singleton">销毁后访问时允许重新创建实例的生命周期策略。</GlossaryItem>
+  <GlossaryItem term="longevity ordering">用显式寿命值控制多个全局对象销毁先后的策略。</GlossaryItem>
+  <GlossaryItem term="safe publication">一次构造并通过同步让其他线程看到完整对象的协议。</GlossaryItem>
+  <GlossaryItem term="SingletonHolder">组合创建、生命周期和线程策略并保存唯一状态的通用模板。</GlossaryItem>
+  <GlossaryItem term="holder binding">在集成层固定 T 与 Policies、限制第二种 Holder 组合的方式。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Modern C++ Design, First Edition, Chapter 6: Implementing Singletons"
+  adaptedUrl="https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+/>

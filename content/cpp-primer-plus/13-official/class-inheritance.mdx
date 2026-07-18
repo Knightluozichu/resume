@@ -1,0 +1,255 @@
+---
+title: "Chapter 13：Class Inheritance"
+type: A
+section: C++ Primer Plus 6e · is-a、虚函数与抽象基类
+order: 13
+description: 对齐第6版 Chapter 13：掌握 public inheritance、派生构造、静态/动态绑定、virtual function、对象切片、虚析构与 abstract base class。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+draft: false
+---
+
+import {
+  EppConstructionDispatchFlow,
+  EppInheritanceContractMap,
+  EppPolymorphismLab,
+} from "@/components/mdx/cpp-primer-plus/diagrams/class-inheritance";
+
+<Objectives>
+
+- 能判断 public inheritance 是否满足 is-a 替换契约，并比较 private、protected 与 public 成员在派生边界的可见性
+- 能实现基类/派生类的构造、override 与 virtual destructor，复现完整对象的构造和逆序析构路径
+- 能解释 static and dynamic binding、对象切片与 pure virtual function，并设计可由基类引用驱动的多态接口
+
+</Objectives>
+
+## 为什么复用几行代码不足以证明应该继承
+
+公有继承（public inheritance）承诺 Derived is-a Base：任何只依赖 Base 公有契约的代码，都应能接收 Derived 而不被惊讶。它不是“Derived 内部碰巧需要 Base 的几个成员”。若只想复用实现而不承诺替换，包含（has-a）通常更准确。
+
+<Term def="派生类公开保留基类公有接口，并承诺派生对象可替代基类对象的继承关系。">
+  公有继承
+</Term>
+
+替换性要求派生 override 不加强前置条件、不削弱后置条件，并保持基类不变量。例如 `Shape::area()` 承诺返回有限非负面积，Circle 不能在半径为零时突然拒绝调用，也不能返回负值。
+
+## 派生对象包含一个完整基类子对象
+
+派生类声明基类后，会先构造 Base subobject，再构造派生成员，最后执行派生构造函数体。派生构造函数用初始化列表选择基类构造函数；若省略，只会尝试基类默认构造。
+
+```cpp
+#include <string>
+
+class Person {
+public:
+    explicit Person(std::string name) : name_{std::move(name)} {}
+    const std::string& name() const { return name_; }
+
+private:
+    std::string name_;
+};
+
+class Student : public Person {
+public:
+    Student(std::string name, int cohort)
+        : Person{std::move(name)}, cohort_{cohort} {}
+
+private:
+    int cohort_;
+};
+```
+
+派生构造函数不能直接初始化基类 private member，而是调用基类构造函数建立其不变量。销毁顺序相反：先执行派生析构函数体与派生成员清理，再销毁基类子对象。
+
+<EppInheritanceContractMap />
+
+## protected 是对所有未来派生实现的承诺
+
+private member 只能由基类成员/friend 访问；protected member 还允许派生类实现直接访问；public member 对普通调用者开放。protected 看似方便，却把表示暴露给所有派生类，使基类难以改变布局和约束。优先保持数据 private，提供窄 protected/public operation。
+
+<Term def="允许类自身、友元和派生类实现访问，但普通外部调用者不可直接访问的成员访问级别。">
+  protected
+</Term>
+
+```cpp
+class Account {
+protected:
+    bool applyDebit(double amount) {
+        if (amount <= 0.0 || amount > balance_) return false;
+        balance_ -= amount;
+        return true;
+    }
+
+private:
+    double balance_{0.0};
+};
+```
+
+这里派生类能请求“扣款”而不能直接把 balance 写成任意值；不变量仍由基类控制。
+
+<Callout type="trap" title="陷阱：protected 字段仍然是封装良好的私有实现">
+  protected 字段对普通用户隐藏，却向所有派生实现永久暴露布局和修改权限。新增派生类后依赖面会继续扩大；用受约束方法暴露能力通常更稳。
+</Callout>
+
+## virtual function 把调用绑定到动态类型
+
+非 virtual 调用按表达式的静态类型在编译期绑定；virtual function 通过基类 pointer/reference 调用时，根据对象的动态类型选择最终 override，这就是多态继承（polymorphic inheritance）。
+
+<Term def="声明可在派生类覆盖，并通过基类引用或指针按对象动态类型分派的成员函数。">
+  虚函数
+</Term>
+
+<Term def="调用目标由表达式编译期类型决定，不查看对象运行时派生类型的绑定方式。">
+  静态绑定
+</Term>
+
+<Term def="virtual 调用通过对象运行时类型选择最终覆盖实现的绑定方式。">
+  动态绑定
+</Term>
+
+```cpp
+class Shape {
+public:
+    virtual ~Shape() = default;
+    virtual double area() const = 0;
+    virtual void draw(std::ostream& out) const = 0;
+};
+
+class Circle final : public Shape {
+public:
+    explicit Circle(double radius) : radius_{radius} {}
+    double area() const override { return 3.141592653589793 * radius_ * radius_; }
+    void draw(std::ostream& out) const override { out << "circle"; }
+
+private:
+    double radius_;
+};
+```
+
+`override` 让编译器验证签名确实覆盖基类 virtual，避免 const、参数或拼写差异悄悄创建新函数。`final` 可表达不允许进一步派生或覆盖的设计决定。
+
+## 基类引用保留身份，按值传递会切片
+
+`render(const Shape&)` 绑定 Circle 时没有复制完整对象，动态类型仍是 Circle，virtual call 能分派到 Circle override。`render(Shape value)` 试图只复制 Base subobject，派生状态被切掉，称为 object slicing；抽象基类甚至不能按值构造。
+
+```cpp
+void render(const Shape& shape, std::ostream& out) {
+    shape.draw(out);             // dynamic binding
+    out << " area=" << shape.area();
+}
+
+Circle circle{2.0};
+render(circle, std::cout);
+```
+
+多态集合通常保存 owning smart pointer 或受控的 pointer/reference，不能保存 Base value 期待保留派生身份。借用还要保证完整派生对象活过所有调用。
+
+<Term def="把派生对象按基类值复制，只保留基类子对象并丢失派生状态和动态身份的现象。">
+  对象切片
+</Term>
+
+先预测四种调用使用静态还是动态绑定、是否切片或禁止实例化，再切换实验面板核对。证明需要同时记录表达式静态类型、对象动态类型、成员是否 virtual。
+
+<EppPolymorphismLab />
+
+## virtual destructor 关闭完整派生生命周期
+
+只要基类可能被多态使用并通过 Base pointer 删除，析构函数就应是 virtual。这样 `delete base` 先调用派生析构，再调用基类析构；否则只销毁 Base 部分是未定义行为，派生资源可能泄漏。
+
+```cpp
+Shape* shape = new Circle{3.0};
+delete shape;  // requires virtual Shape::~Shape
+```
+
+更常见的 owner 是 `std::unique_ptr<Shape>`，但智能指针默认 deleter 最终仍执行 `delete Shape*`，不能替代虚析构契约。若基类明确不允许多态删除，可把非虚析构设为 protected，阻止外部通过 Base pointer delete。
+
+<Callout type="trap" title="陷阱：只要有 virtual 方法，构造函数中调用它就会进入派生 override">
+  构造基类时派生不变量尚未建立，分派只到当前构造层；析构时派生层已关闭，同样不会进入更派生 override。不要让构造/析构依赖尚未有效的层。
+</Callout>
+
+## 构造与析构期间动态类型逐层打开和关闭
+
+基类构造先完成，派生层才可建立；完整生命周期中 virtual dispatch 到 most-derived override；析构则先关闭派生层。把虚调用放在构造/析构中通常意味着初始化协议不清，应改成构造后显式启动或非虚 helper。
+
+<EppConstructionDispatchFlow />
+
+## abstract base class 定义共同协议
+
+含 pure virtual function（`= 0`）的类是抽象基类（abstract base class, ABC），不能直接实例化，但可拥有数据、普通函数、构造函数和 pure virtual 的定义。ABC 应表达稳定共同协议，而不是塞入所有派生类可能需要的操作。
+
+<Term def="至少含一个纯虚函数、不能直接实例化、用于定义派生类型共同多态协议的类。">
+  抽象基类
+</Term>
+
+```cpp
+double totalArea(const std::vector<std::unique_ptr<Shape>>& shapes) {
+    double sum = 0.0;
+    for (const auto& shape : shapes) {
+        sum += shape->area();
+    }
+    return sum;
+}
+```
+
+具体派生类必须实现仍为 pure 的操作才能实例化。调用者依赖 Shape 接口，不需要枚举 Circle、Rectangle 等具体类型；新增类型时主要新增实现而不是修改分支。
+
+## 三步验证多态层次
+
+<Stepper>
+  <Step title="第一步：证明 is-a 替换性">
+    用基类前置/后置条件测试每个派生对象，区分需要替换的 public inheritance 与只需复用的 containment。
+
+    <EppInheritanceContractMap />
+  </Step>
+  <Step title="第二步：追踪完整生命周期">
+    记录 Base/Derived 构造、成员、构造体、完整对象、派生析构和基类析构，验证阶段内 virtual dispatch。
+
+    <EppConstructionDispatchFlow />
+  </Step>
+  <Step title="第三步：对照静态与动态绑定">
+    分别以 Base value、reference 和 pointer 调用 virtual/nonvirtual 方法，并检查 slicing、override 与 virtual destructor。
+
+    <EppPolymorphismLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- public inheritance 是 is-a 替换承诺；只为实现复用应优先 containment
+- 派生对象先构造基类子对象，析构顺序相反；protected 数据会扩大表示依赖
+- static binding 看表达式类型，dynamic binding 需要基类 pointer/reference 与 virtual function
+- 按 Base value 传递会 object slicing；多态接口通过引用/指针保留动态身份
+- polymorphic base 需要 virtual destructor，构造/析构期间的 virtual dispatch 只到当前层
+- abstract base classes 以 pure virtual operation 定义共同协议，不能直接实例化
+
+<Exercises>
+  1. **问题 1：选择继承或包含。** `Car` 需要复用 `Engine` 的 start/stop，实现应写 `class Car : public Engine` 吗？
+
+  <Answer question="is-a 测试怎样决定关系？">普通接受 Engine 的代码不应把 Car 当成 Engine，Car 也不应公开替代全部 Engine 契约；关系是 Car has-an Engine，应使用 private member containment。只有领域上每个 Derived 都能替换 Base 并维持其契约时才用 public inheritance。</Answer>
+
+  2. **问题 2：预测调用。** `Base& ref` 绑定 Derived，Base 有 virtual f 和非 virtual g，分别调用哪个版本？按 Base value 复制后呢？
+
+  <Answer question="绑定证据有哪些？">ref.f() 根据动态类型进入 Derived::f；ref.g() 按静态类型调用 Base::g。按 Base value 复制会 slicing，只剩 Base subobject，之后 f/g 都作用于一个 Base 对象。使用 override 检查 f 签名，记录静态类型、动态类型和 virtual 属性。</Answer>
+
+  3. **问题 3：审计删除。** `unique_ptr<Base>` 持有 Derived，为何仍必须检查 Base 析构？
+
+  <Answer question="智能指针是否替代虚析构？">默认 deleter 最终执行 delete Base*；若 Base 析构非 virtual，删除派生对象是未定义行为，Derived 资源不会得到可靠清理。把多态基类析构设为 public virtual；若禁止多态删除，则用 protected nonvirtual 并让 owner 类型表达具体销毁策略。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="公有继承">承诺派生对象可替代基类对象的 is-a 关系。</GlossaryItem>
+  <GlossaryItem term="protected">向派生实现开放但不向普通调用者开放的访问级别。</GlossaryItem>
+  <GlossaryItem term="虚函数">通过基类引用或指针按动态类型选择 override 的成员函数。</GlossaryItem>
+  <GlossaryItem term="静态绑定">按表达式编译期类型决定调用目标。</GlossaryItem>
+  <GlossaryItem term="动态绑定">运行时按对象动态类型选择 virtual override。</GlossaryItem>
+  <GlossaryItem term="对象切片">按基类值复制时丢失派生部分和动态身份。</GlossaryItem>
+  <GlossaryItem term="抽象基类">含纯虚函数、不可直接实例化的共同多态协议类。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++ Primer Plus, Sixth Edition, Chapter 13 Class Inheritance"
+  adaptedUrl="https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+/>

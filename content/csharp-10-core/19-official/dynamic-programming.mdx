@@ -1,0 +1,196 @@
+---
+title: "Chapter 19. Dynamic Programming"
+type: C
+section: "C# 10 Nutshell · Metadata and Dynamic"
+order: 19
+description: "覆盖DLR、动态数值与成员重载、visitor和泛型调用、DynamicObject、ExpandoObject及动态语言互操作，建立运行时绑定边界。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch19.html"
+draft: false
+---
+
+import { CtcDynamicBindingLab, CtcDynamicDispatchLab, CtcDynamicObjectLab } from "@/components/mdx/csharp-10-core/diagrams/dynamic-programming";
+
+<Objectives>
+
+- 能解释DLR call site、binder、restriction与rule cache，分析dynamic错误为什么在运行时出现
+- 能比较numeric、overload、visitor和generic动态分派，判断语义、性能与可测试性代价
+- 能设计DynamicObject/ExpandoObject互操作边界，实现shape验证、错误归一和typed DTO转换
+
+</Objectives>
+
+## 为什么Dynamic是延迟Binding，不是取消类型系统
+
+`dynamic`在编译期绕过该表达式的静态成员检查，运行时仍根据实际Type、成员、参数和C#绑定规则选择操作。结果要么是明确值，要么抛绑定异常；对象自身没有“dynamic类型”，同一个object引用换成dynamic变量才改变调用方式。
+
+先预测：dynamic调用每次都完整反射扫描吗；dynamic numeric会统一转decimal吗；返回dynamic的方法能保证调用方知道shape吗；ExpandoObject是thread-safe dictionary吗；TryGetMember抛异常和返回false等价吗。答案都是否。
+
+<Term def="由binder、runtime argument types、context和缓存restriction共同决定一个dynamic调用如何解析的协议。">dynamic binding contract</Term>
+
+## The Dynamic Language Runtime
+
+编译器把dynamic operation生成DLR call site。CallSite&lt;T&gt;持有binder与target delegate；首次执行binder根据runtime values产生rule，包含实现和适用restrictions，后续相同shape直接命中。Type/instance/version限制变化时rebind并扩展或替换cache。
+
+C# runtime binder遵循C# overload、conversion、accessibility和operator语义；foreign dynamic object可通过IDynamicMetaObjectProvider提供自己的binding。绑定失败常为RuntimeBinderException。Call site按源码位置缓存，不是全局“每个成员一次”。
+
+```csharp
+static string Render(dynamic value)
+{
+    // Compiler emits a runtime call site for Normalize(value).
+    dynamic normalized = value.Normalize();
+    return normalized.ToString("G", CultureInfo.InvariantCulture);
+}
+```
+
+上述两个dynamic调用是两个site，错误可在Normalize或后续ToString才出现。Boundary尽快转typed result可缩短错误距离。
+
+<Stepper>
+  <Step title="切换static、first bind、cached rule与dynamic result"><CtcDynamicBindingLab /></Step>
+  <Step title="记录call-site key">写出源码site、binder operation、runtime argument types、context与restriction。</Step>
+  <Step title="改变runtime shape">交替输入不同类型、null、missing member和不同overload，观察bind、cache hit与failure位置。</Step>
+</Stepper>
+
+<Callout type="trap" title="Dynamic只是语法更短的Reflection">
+DLR使用语言binder、表达式规则和call-site cache，语义与手工GetMethod/Invoke不同；异常、转换和缓存也不同。
+</Callout>
+
+<Term def="Call site保存针对一组runtime type/shape限制的已编译规则，命中时跳过重新绑定。">call-site rule cache</Term>
+
+## Numeric Type Unification
+
+泛型无法直接对任意T使用`+`（现代generic math接口另有静态抽象方案），dynamic可让runtime选择内置或用户定义operator。它不把数值统一成单一类型：byte运算常提升为int，decimal与double没有隐式混合，checked context和user operator仍影响结果。
+
+Null、nullable、enum和自定义numeric type需要单独测试。返回类型随输入而变会污染下游；数值边界通常先定义accepted types、overflow/precision policy，再convert成decimal/double/BigInteger或typed generic math。
+
+## Dynamic Member Overload Resolution
+
+只要调用参数或receiver之一是dynamic，overload resolution延迟到runtime，并使用实际类型而非变量静态类型。Optional/named arguments、params、generic inference、extension methods与user conversions都参与，但extension method discovery仍依赖编译context，dynamic receiver不能像静态语法一样直接发现所有extension。
+
+Null dynamic缺少runtime type，多个reference overload可能ambiguous。API演化新增overload可能改变旧dynamic caller行为，因此跨组件协议不能依赖开放式overload集合。
+
+## Simplifying the Visitor Pattern
+
+Dynamic可实现简洁multiple dispatch：`Visit((dynamic)node)`让runtime按node实际类型选择overload。它减少double-dispatch boilerplate，却把“所有node都有handler”的穷尽性从编译期移到测试/运行时。Fallback `Visit(Node)`若过宽会静默吞掉新type。
+
+```csharp
+abstract record Node;
+sealed record NumberNode(decimal Value) : Node;
+sealed record AddNode(Node Left, Node Right) : Node;
+
+sealed class Evaluator
+{
+    public decimal Evaluate(Node node) => Visit((dynamic)node);
+    private decimal Visit(NumberNode node) => node.Value;
+    private decimal Visit(AddNode node) => Evaluate(node.Left) + Evaluate(node.Right);
+    private decimal Visit(Node node) => throw new NotSupportedException(node.GetType().FullName);
+}
+```
+
+Test枚举所有concrete node types并确认对应overload。Closed hierarchy更适合pattern matching，dynamic visitor适合独立扩展操作但仍需coverage gate。
+
+## Anonymously Calling Members of a Generic Type
+
+当caller只有object且对象实现某个未知closed generic surface，dynamic可调用其公开成员而不先构造MethodInfo。例如未知`IEnumerable<T>`调用Count-like property。但返回继续dynamic，参数转换和missing member都推迟。
+
+更稳健方案是non-generic base interface、covariant interface、reflection生成cached typed adapter或source generation。Dynamic适合边界小、surface固定、输入受控的adapter，不应用作整个domain model。
+
+<Stepper>
+  <Step title="切换numeric、overload、visitor与generic调用"><CtcDynamicDispatchLab /></Step>
+  <Step title="建立dispatch matrix">列出runtime input types、候选members/operators、conversion、selected result type和failure。</Step>
+  <Step title="执行演化测试">加入新numeric/node/overload/closed generic，检查旧caller是否歧义、fallback或类型漂移。</Step>
+</Stepper>
+
+<Term def="把原本由编译器验证的候选集合、转换、穷尽性和返回shape转成运行时测试责任。">deferred type-safety debt</Term>
+
+## Implementing Dynamic Objects
+
+实现IDynamicMetaObjectProvider可完全控制binding expression和restrictions，适合ORM proxy、language bridge等框架级场景，但复杂且易产生错误cache restriction。普通业务优先DynamicObject，它提供TryGetMember、TrySetMember、TryInvokeMember、TryConvert、TryBinaryOperation等hook。
+
+Hook返回true表示已处理并设置result，false让binder产生正常missing/invalid operation异常；业务执行失败应抛自己的异常，不能用false伪装不存在。Member name casing、allowed operations、argument schema与thread safety进入契约。
+
+## DynamicObject
+
+DynamicObject基类实现IDynamicMetaObjectProvider并把binder操作分派到Try... virtual methods。它适合包裹dictionary/remote object，但每次remote get都可能I/O，调用方从属性语法看不出。禁止在dynamic getter里隐藏无界network等待，或明确使用可观察typed async API。
+
+```csharp
+sealed class ConfigObject : DynamicObject
+{
+    private readonly IReadOnlyDictionary<string, JsonElement> _values;
+
+    public override bool TryGetMember(GetMemberBinder binder, out object? result)
+    {
+        if (!_values.TryGetValue(binder.Name, out JsonElement value))
+        {
+            result = null;
+            return false;
+        }
+        result = value.ValueKind == JsonValueKind.String ? value.GetString() : value.Clone();
+        return true;
+    }
+}
+```
+
+输入dictionary在constructor复制/冻结，JsonElement lifetime需Clone或共同owner。对允许members建立schema和typed conversion tests。
+
+## ExpandoObject
+
+ExpandoObject同时实现IDynamicMetaObjectProvider、IDictionary&lt;string, object?&gt;和INotifyPropertyChanged，可运行时增删member。可先以dictionary验证/枚举，再通过dynamic访问。Shape变化会使call-site rule rebind；高频不同shape影响性能。
+
+它不提供业务schema、deep immutability或并发mutation保证。JSON/XML/COM数据可短暂落入Expando，但进入domain前应验证required/unknown/null/type并映射到typed record。Event subscription也需owner释放。
+
+## Interoperating with Dynamic Languages
+
+DLR语言对象可参与C# dynamic binding，各语言的member lookup、truthiness、numeric、exception和threading语义不同。Boundary adapter限定允许操作，转换primitive/DTO，统一异常并记录language/runtime/version。不要让foreign object穿透核心层和长期cache。
+
+COM automation也常通过dynamic简化optional/ref参数，但apartment、RCW lifetime、HRESULT和release仍存在。大量/高风险互操作使用typed interop或显式adapter更可审计。
+
+<Stepper>
+  <Step title="切换DynamicObject、Expando、COM与language bridge"><CtcDynamicObjectLab /></Step>
+  <Step title="定义boundary schema">列required/optional members、types、null、unknown、side effects、thread和lifetime。</Step>
+  <Step title="归一成typed result">对missing、wrong type、foreign exception和shape mutation做负测，边界外只返回DTO/domain error。</Step>
+</Stepper>
+
+<Callout type="trap" title="ExpandoObject可直接替代Domain Model">
+它没有编译期required/type/invariant，shape还可随时变化。用它承接动态输入，验证后尽快转成typed immutable model。
+</Callout>
+
+<Term def="动态对象只存在于adapter内，经过shape、type、null、error和lifetime验证后转换为typed数据。">dynamic boundary normalization</Term>
+
+## 本章回顾：把动态范围压缩到边界
+
+1. DLR在call site按runtime shape绑定并缓存rule，不是无类型执行。
+2. Numeric和overload仍遵循语言规则，但错误、歧义与结果类型延迟到runtime。
+3. Dynamic visitor简化分派，却需要穷尽性和演化测试补回静态保障。
+4. DynamicObject/Expando定义运行时shape，不自动提供schema、线程安全或资源管理。
+5. Foreign dynamic data在边界验证并转换成typed DTO，避免debt扩散。
+
+<Exercises>
+
+**问题 1：怎样测试dynamic visitor没有漏掉新Node？**
+
+<Answer>反射或显式注册枚举所有非抽象Node类型，为每个构造代表实例并调用Evaluate，断言不进入base fallback；同时检查Evaluator存在对应private overload。新增Node的测试/CI应失败，迫使实现分派。</Answer>
+
+**问题 2：DynamicObject的TryGetMember何时返回false，何时throw？**
+
+<Answer>Member按契约不存在时返回false，让binder产生标准missing-member错误；member存在但读取发生业务失败、格式错误或权限拒绝时抛明确domain异常。无论哪种都设置out result，且不能把远程timeout伪装成不存在。</Answer>
+
+**问题 3：如何防止dynamic数据污染核心代码？**
+
+<Answer>只在adapter接收dynamic/Expando/foreign object，先以dictionary或明确member表验证required、unknown、null和type，限制副作用与deadline，再映射到typed immutable DTO/domain result。Core API不暴露dynamic返回值。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="dynamic binding contract" definition="Runtime binder、types、context与rules共同决定调用。" />
+  <GlossaryItem term="call-site rule cache" definition="按runtime restrictions复用动态绑定规则。" />
+  <GlossaryItem term="deferred type-safety debt" definition="静态检查转移到运行时测试的责任。" />
+  <GlossaryItem term="dynamic boundary normalization" definition="动态shape验证后转typed DTO。" />
+  <GlossaryItem term="shape evolution matrix" definition="Dynamic成员增删和类型变化对caller的兼容表。" />
+</Glossary>
+
+<Term def="列出动态对象旧新members、types、null/unknown和各版本caller结果的兼容矩阵。">shape evolution matrix</Term>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 19: Dynamic Programming" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch19.html" />

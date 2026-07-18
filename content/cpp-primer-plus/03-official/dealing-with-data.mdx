@@ -1,0 +1,197 @@
+---
+title: "Chapter 3：Dealing with Data"
+type: A
+section: C++ Primer Plus 6e · 数值表示与转换
+order: 3
+description: 对齐第6版 Chapter 3：按值域与精度选择整数和浮点类型，理解 const、字面量、算术运算、通常转换、显式转换与窄化边界。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+draft: false
+---
+
+import {
+  EppDataConversionFlow,
+  EppDataRepresentationMap,
+  EppNumericBoundaryLab,
+} from "@/components/mdx/cpp-primer-plus/diagrams/dealing-with-data";
+
+<Objectives>
+
+- 能比较整数、浮点、字符与布尔类型的值域、精度和语义，并用 sizeof 与 numeric_limits 验证当前实现
+- 能推导混合类型表达式的运算类型、整数除法和 signed/unsigned 比较结果，识别未定义溢出
+- 能设计隐式/显式转换与窄化实验，在赋值前验证源值能否由目标类型表示
+
+</Objectives>
+
+## 为什么数据类型是一个可验证的表示选择
+
+选择类型不是给变量贴标签，而是在声明可表示的值集合、运算规则、精度和错误边界。本章把整数类型、浮点数、const 限定符、算术运算符和类型转换放进同一条数据证据链。人数需要离散且非负，不代表盲目使用 unsigned；金额需要小数，也不代表 binary floating point 能精确表示十进制分币。先写领域范围和允许误差，再选择类型并用实现证据确认。
+
+<Term def="某个类型在当前实现中能够表示的最小值、最大值、离散步长及特殊值集合。">
+  可表示范围
+</Term>
+
+<EppDataRepresentationMap />
+
+## 整数类型提供离散精确值但范围有限
+
+`short`、`int`、`long`、`long long` 至少按该顺序不减小宽度，但标准不保证固定字节数。signed 类型表达正负整数；unsigned 算术按模回绕，但混入 signed 表达式可能把负数转换成巨大无符号值。
+
+<Term def="表示有限离散整数集合的内置类型家族，包含不同最小宽度及 signed/unsigned 形式。">
+  整数类型
+</Term>
+
+```cpp
+#include <iostream>
+#include <limits>
+
+int main() {
+    std::cout << "sizeof(int) = " << sizeof(int) << '\n';
+    std::cout << std::numeric_limits<int>::min() << " .. "
+              << std::numeric_limits<int>::max() << '\n';
+}
+```
+
+若协议需要恰好 32 位，可使用 `<cstdint>` 中可用的定宽类型；若只是容器大小，常用 `std::size_t`，但与 signed 下标比较时要显式设计边界。类型选择应附上“为什么这个范围足够”的证据。
+
+<Callout type="trap" title="陷阱：unsigned 能自动消灭负数错误">
+  负 signed 值与 unsigned 比较时可能先转换成很大的无符号值，导致边界判断反转。业务校验先在语义清楚的类型中拒绝负数，再转换到大小类型。
+</Callout>
+
+## 字面量的写法会影响源类型
+
+整数可用十进制、八进制和十六进制形式，后缀可请求 unsigned、long 等类型；浮点字面量默认是 double，`f` 后缀表示 float。字符字面量如 `'A'` 与字符串字面量 `"A"` 的类型和存储形状不同。
+
+```cpp
+auto decimal = 42;       // int
+auto hexadecimal = 0x2A;
+auto large = 42LL;       // long long
+auto ratio = 0.5;        // double
+auto smallRatio = 0.5F;  // float
+```
+
+不要把进制写法与内存表示混为一谈：`42`、`052` 和 `0x2A` 表达同一个数值。输出使用哪种格式又是流的表示选择，不会改变对象中的数学值。
+
+## 浮点类型用有限精度近似实数
+
+`float`、`double` 和 `long double` 以有限位数表示极大范围中的离散近似值。它们可以表示小数和指数范围，但多数十进制小数在二进制中不能有限展开；连续运算会积累舍入误差。
+
+<Term def="浮点类型能可靠携带的有效数字数量及其舍入边界，而不是小数点后固定多少位。">
+  浮点精度
+</Term>
+
+用 `std::numeric_limits<double>::digits10` 查看可安全往返的十进制有效位，用 `std::setprecision` 观察真实存储近似。需要精确分币时可用有界整数表示最小货币单位，或采用明确十进制类型。
+
+<Callout type="trap" title="陷阱：0.1 + 0.2 必须与 0.3 精确相等">
+  二进制浮点通常只能近似这些十进制值。比较时根据领域尺度使用绝对/相对容差；容差本身也要有业务依据，不能固定复制一个 epsilon。
+</Callout>
+
+## const 把不可修改意图交给类型系统
+
+`const` 限定符要求对象初始化后不能经该名字修改。它适合命名单位换算、边界和只读接口条件；它不是“编译期常量”的同义词，是否可用于常量表达式还取决于初始化和值类别。
+
+<Term def="限制通过某个对象或访问路径进行修改的类型限定，使只读意图可由编译器检查。">
+  const 限定符
+</Term>
+
+```cpp
+const double kilometersPerMile{1.609344};
+double miles{12.0};
+double kilometers{miles * kilometersPerMile};
+```
+
+命名常量比散落字面量更能表达单位，但仍要检查单位组合。`miles * kilometersPerMile` 的结果是公里；若变量名缺少单位，类型系统不会自动发现英里和公里混用。
+
+## 算术结果先由操作数类型决定
+
+两个 int 做 `/` 得到整数商，小数部分在结果形成前已丢失；之后再赋给 double 只能得到 `2.0`，无法恢复 `5 / 2` 被截去的部分。余数 `%` 用于整数，运算符优先级决定无括号表达式的分组。
+
+```cpp
+double wrong = 5 / 2;              // 2.0
+double right = static_cast<double>(5) / 2;  // 2.5
+```
+
+有符号整数结果超出范围是未定义行为，不能先溢出再检查；无符号回绕虽有定义，也不等于业务正确。加法前可判断 `a > max - b`，或使用经过验证的 checked arithmetic 工具。
+
+## 通常算术转换发生在目标赋值之前
+
+混合表达式会先执行整数提升和通常算术转换，形成共同类型后再运算。只有结果完成后，才转换到赋值目标。因此诊断应沿字面量、操作数、共同类型、运算、目标类型逐步展开。
+
+<Term def="小整数类型参与表达式时先转换为 int 或 unsigned int 等更适合运算类型的规则。">
+  整数提升
+</Term>
+
+<EppDataConversionFlow />
+
+显式 `static_cast<T>` 表达转换意图，但不会自动证明值安全。把 `double` 转 int 会丢弃小数，把大整数转较小类型可能改变值；应先验证范围，再转换。
+
+<Term def="目标类型无法保留源值全部范围或精度、可能丢失信息的转换。">
+  窄化转换
+</Term>
+
+列表初始化会拒绝许多可在编译期识别的窄化，例如 `int n{3.9};`。但运行时值仍需显式检查：来源是 double 变量时，编译器不知道当前值是否落在 int 范围。
+
+## 四类边界实验必须先预测
+
+<EppNumericBoundaryLab />
+
+实验输出应包含操作数类型、边界值、表达式结果和判断理由。不要实际执行有符号溢出来“观察规则”，因为未定义行为没有可依赖结果；对它应通过边界判断或 sanitizer 演示风险，而非把某次回绕当保证。
+
+## 三步审计一个数值表达式
+
+<Stepper>
+  <Step title="第一步：写值域与精度契约">
+    列出合法最小/最大值、是否允许负数、需要的有效位和单位，再用 numeric_limits 验证候选类型。
+
+    <EppDataRepresentationMap />
+  </Step>
+  <Step title="第二步：推导每个中间类型">
+    标出字面量类型、整数提升、共同类型、运算结果和目标类型；尤其检查 signed/unsigned 与整数除法。
+
+    <EppDataConversionFlow />
+  </Step>
+  <Step title="第三步：覆盖边界与故障">
+    预测整数除法、最大值边界、浮点比较和窄化；对未定义行为只验证保护条件，不依赖一次运行结果。
+
+    <EppNumericBoundaryLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 整数类型精确表示有限离散集合，实际宽度应以当前实现的 sizeof 和 numeric_limits 取证
+- 浮点类型扩大范围但使用有限精度近似，十进制小数不保证二进制精确表示
+- const 表达只读访问意图；类型、单位和值域仍需要领域契约
+- 算术结果由操作数和通常转换决定，目标赋值发生得更晚，不能修复已经发生的整数除法或溢出
+- 显式转换只说明意图，窄化前仍要验证范围和精度
+
+<Exercises>
+  1. **问题 1：选择类型。** 人口数量、温度测量和精确分币分别需要哪些类型证据？
+
+  <Answer question="怎样从领域需求选择数值类型？">人口需要非负和值域上界，但读入校验可先用 signed 宽类型；温度需要负值与明确误差，可用 double 并声明精度；分币需要十进制精确，可用足够宽整数表示最小单位。三者都用 limits 和边界测试证明范围。</Answer>
+
+  2. **问题 2：推导表达式。** 为什么 `double result = 5 / 2;` 得到 2.0，如何得到 2.5？
+
+  <Answer question="整数除法何时丢失小数？">两个操作数都是 int，先执行整数除法得到 int 2，赋给 double 才转成 2.0。必须在除法前让至少一个操作数成为浮点，例如 `5.0 / 2` 或 `static_cast<double>(5) / 2`。</Answer>
+
+  3. **问题 3：设计转换闸门。** 把用户输入 double 转为 int 数量前要检查什么？
+
+  <Answer question="运行时窄化应怎样验证？">先确认输入解析成功且有限，再判断是否允许小数；按业务规则拒绝或取整；检查结果位于 int 的 min/max 范围；最后使用 static_cast 明确转换。测试最小/最大、边界外、NaN、无穷和带小数输入。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="可表示范围">类型可表达的最小、最大、步长和特殊值集合。</GlossaryItem>
+  <GlossaryItem term="整数类型">表示有限离散整数集合的内置类型家族。</GlossaryItem>
+  <GlossaryItem term="浮点精度">浮点表示可可靠携带的有效数字和舍入边界。</GlossaryItem>
+  <GlossaryItem term="const 限定符">限制通过特定对象或访问路径修改状态的类型限定。</GlossaryItem>
+  <GlossaryItem term="整数提升">小整数类型在表达式中转换为适合运算类型的规则。</GlossaryItem>
+  <GlossaryItem term="窄化转换">可能丢失源值范围或精度的信息损失转换。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++ Primer Plus, Sixth Edition, Chapter 3 Dealing with Data"
+  adaptedUrl="https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+/>

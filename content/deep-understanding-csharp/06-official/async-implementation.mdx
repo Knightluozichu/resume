@@ -1,0 +1,155 @@
+---
+title: "Chapter 6. Async implementation"
+type: C
+section: "C# in Depth 4e · C# 2-5"
+order: 6
+description: "覆盖generated code structure、simple MoveNext、control-flow lowering、execution context flow与custom task builders，建立async底层状态机模型。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-6"
+draft: false
+---
+
+import { DcsGeneratedAsyncLab, DcsMoveNextControlLab, DcsContextBuilderLab } from "@/components/mdx/deep-understanding-csharp/diagrams/async-implementation";
+
+<Objectives>
+
+- 能描述async stub、generated state machine、awaiter fields与method builder的职责并绘制first-call/resume timeline
+- 能推导if、loop、try/catch/finally跨await时的MoveNext states、hoisted locals与cleanup edges
+- 能区分ExecutionContext、SynchronizationContext、TaskScheduler和custom builder，复现logical context flow
+
+</Objectives>
+
+## 为什么理解Async Lowering能消除错误直觉
+
+Source看起来在await处“暂停方法”，runtime实际上只看到generated type与continuation calls。Compiler把需要跨suspension保存的locals提升成fields，用state选择resume point，用awaiter通知completion，用builder完成Task。这个模型解释同步fast path、allocation、exception timing和context flow。
+
+先预测：每个async调用是否必然new一个heap state machine；await前locals是否全部hoist；fault是否由awaiter.OnCompleted抛出；ExecutionContext是否等于SynchronizationContext。答案都是否。
+
+<Term def="compiler把async source改写为stub与保存program counter、locals、awaiter和builder的generated type。">async lowering contract</Term>
+
+## Structure of the generated code
+
+概念上，原method变成stub：创建state machine，初始化builder与initial state，调用builder.Start触发第一次MoveNext，然后返回builder.Task。Generated type在无suspension fast path可能保持struct且避免heap allocation；一旦需异步continuation，runtime/builder可box或持有其state。具体优化随compiler/runtime变化，semantics不依赖layout。
+
+只有跨await仍live的locals需要hoist，temporary若在suspension前已结束可保持stack/local。Debug build常生成更易调试但不同形状的code；不要把某次decompile字段数量当language guarantee。
+
+```csharp
+// Conceptual lowering, not compiler-emitted source.
+var machine = new StateMachine { state = -1, builder = Builder.Create() };
+machine.builder.Start(ref machine);
+return machine.builder.Task;
+```
+
+<Stepper>
+  <Step title="切换stub、state、awaiter field与builder"><DcsGeneratedAsyncLab /></Step>
+  <Step title="把source symbols映射到generated fields">只标记跨incomplete await仍live的parameter/local、current awaiter与control state。</Step>
+  <Step title="比较sync与async completion lowering">同一method用completed/pending awaitable运行，记录task status、allocation与MoveNext次数。</Step>
+</Stepper>
+
+<Callout type="trap" title="Async state machine必然在heap分配一次">
+Compiler/builder可让同步完成路径避免boxing，也可能因Task、closure或awaiter产生其他allocation。Layout是优化细节，必须针对目标SDK/runtime量测。
+</Callout>
+
+## A simple MoveNext() implementation
+
+MoveNext以state选择入口：initial path执行同步前缀；遇await获取awaiter，若未完成则保存awaiter与next state，调用builder的Await(On/UnsafeOn)Completed注册continuation并return；resume后恢复awaiter、清field/state，调用GetResult并继续。
+
+Method正常结束调用builder.SetResult；任何未处理exception由outer try/catch捕获并SetException。Cancellation通常也是exception path进入Task canceled semantics，取决于builder/associated token rules。Awaiter completion callback本身负责再次调用MoveNext，而不是重新调用原method。
+
+```csharp
+if (!awaiter.IsCompleted)
+{
+    state = 0;
+    savedAwaiter = awaiter;
+    builder.AwaitUnsafeOnCompleted(ref awaiter, ref this);
+    return;
+}
+var result = awaiter.GetResult();
+```
+
+<Term def="state machine中根据program counter执行initial或resume segment，并最终调用builder完成result/fault的方法。">MoveNext transition</Term>
+
+## How control flow affects MoveNext()
+
+If/loop只需把source control graph切分到suspension points；loop index、enumerator与accumulator若跨await则hoist。Serial loop每iteration await一次，语义正确但可能不满足throughput；是否parallelize是API decision，不是lowering优化。
+
+Try/catch/finally更复杂，因为exception region与pending leave必须跨states保留。Awaited task的fault在`GetResult`处抛入MoveNext，因此source catch可处理；finally在normal、fault或early exit路径运行。Async iterator还有另一套builder/protocol，不能把普通async Task lowering原样套用。
+
+<Stepper>
+  <Step title="切换if、loop、try/finally与catch"><DcsMoveNextControlLab /></Step>
+  <Step title="切割每个suspension segment">为source画control-flow graph，只在await边保存state和live values，标出exception regions。</Step>
+  <Step title="注入每段fault与early exit">在await前、GetResult、continuation body和finally分别fault，确认Task与cleanup outcome。</Step>
+</Stepper>
+
+<Callout type="trap" title="Exception在线程池continuation中抛出，所以source catch抓不到">
+Awaiter.GetResult在恢复的MoveNext内传播fault，仍位于compiler重建的source try/catch region。是否哪个thread执行不改变logical exception scope。
+</Callout>
+
+## Execution contexts and flow
+
+ExecutionContext承载AsyncLocal、culture/security等logical ambient state，通常随async flow捕获/恢复。SynchronizationContext是environment提供的continuation scheduling abstraction，如UI single-thread dispatcher；TaskScheduler调度Tasks。三者可以交互但不是同一对象或“当前线程”的同义词。
+
+Awaiter的`OnCompleted`要求flow ExecutionContext，`UnsafeOnCompleted`允许builder/runtime优化flow handling，但application不应据方法名猜ambient state丢失。`ConfigureAwait(false)`主要请求不捕获current context用于continuation；它不保证thread pool、不抑制ExecutionContext，也不改变operation本身。
+
+AsyncLocal方便trace/correlation，却会形成implicit dependency与retention。测试应在nested tasks、suppressed flow和parallel branches中验证，核心domain仍优先显式参数。
+
+```csharp
+correlationId.Value = request.Id;
+await SaveAsync(request, token).ConfigureAwait(false);
+logger.LogInformation("Saved {CorrelationId}", correlationId.Value);
+```
+
+<Term def="随logical async control flow传播的ambient values集合，与具体thread identity分离。">logical execution context</Term>
+
+<Term def="environment用于安排continuation回到特定model（如UI dispatcher）的abstraction，不等于ExecutionContext。">continuation scheduling context</Term>
+
+## Custom task types revisited
+
+Task-like type通过`AsyncMethodBuilderAttribute`关联builder。Builder需Create、Start、Task、SetResult/SetException及await registration methods，并与awaiter protocol一致。它可以优化domain-specific completion，但若错误处理boxing、multiple await、context flow或exception，会破坏language期待。
+
+Custom builder conformance至少覆盖：无await同步完成、一个/多个pending await、throw before/after await、cancellation、nested async、context/ExecutionContext、debugger与multiple consumers。没有这种test matrix和profile，不值得替换Task。
+
+<Term def="compiler通过AsyncMethodBuilder连接generated state machine与custom task-like result的可替换协议。">method builder protocol</Term>
+
+<Stepper>
+  <Step title="切换ExecutionContext、SyncContext、scheduler与builder"><DcsContextBuilderLab /></Step>
+  <Step title="分开ambient values和continuation target">对每个await写出logical data是否flow、continuation由谁queue、是否要求UI affinity。</Step>
+  <Step title="运行context与builder conformance matrix">跨nested/parallel/fault/cancel记录AsyncLocal、thread、task status和consumer behavior。</Step>
+</Stepper>
+
+## 本章回顾：Source Control Flow被精确编码而非消失
+
+1. Stub创建并启动state machine，builder把generated execution连接到caller task。
+2. Incomplete await保存next state/awaiter/live locals并注册continuation；complete fast path不suspend。
+3. MoveNext中的GetResult恢复source exception semantics，SetResult/SetException完成task。
+4. Branch/loop/try/finally被切割成states，cleanup与catch仍按logical source scope工作。
+5. ExecutionContext、SynchronizationContext、TaskScheduler与builder必须分层解释和测试。
+
+<Exercises>
+
+**问题 1：如何判断一个local是否会成为state-machine field？**
+
+<Answer>做liveness分析：若local/parameter在可能incomplete await之后仍被读取，必须跨suspension保存，通常hoist为field；await前生命周期已结束则可不保存。用Release/Debug decompile验证实现，但把语义建立在liveness而非字段名/layout上。</Answer>
+
+**问题 2：try/finally跨await时，fault如何传播并cleanup？**
+
+<Answer>Awaited task fault在resume的MoveNext调用GetResult时抛出，进入generated exception regions；source catch可处理，离开try时finally path执行，未处理fault最终SetException。分别注入operation与cleanup fault，确保primary cause不被无意覆盖。</Answer>
+
+**问题 3：ConfigureAwait(false)没有做什么？**
+
+<Answer>它不启动thread、不保证thread pool、不抑制ExecutionContext/AsyncLocal、不改变awaited operation，也不自动防全部deadlock；主要是不请求恢复到captured SynchronizationContext/scheduler语义。以single-thread context和AsyncLocal trace分别验证scheduling与logical flow。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="async lowering contract" definition="async source到stub与generated state machine的compiler transformation。" />
+  <GlossaryItem term="MoveNext transition" definition="按state执行initial/resume segment并完成builder的transition。" />
+  <GlossaryItem term="logical execution context" definition="跨async flow传播且与thread identity分离的ambient values。" />
+  <GlossaryItem term="continuation scheduling context" definition="安排continuation到特定execution model的environment abstraction。" />
+  <GlossaryItem term="method builder protocol" definition="连接generated state machine与custom task-like result的compiler protocol。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# in Depth, Fourth Edition, Chapter 6: Async implementation" adaptedUrl="https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-6" />

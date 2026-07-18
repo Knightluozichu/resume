@@ -1,0 +1,267 @@
+---
+title: "第 10 章 函数"
+type: A
+section: "JavaScript高级程序设计（第4版） · 类型与对象"
+order: 10
+description: "函数同时是可调用对象、词法闭包和this调用边界；参数、调用形式与生命周期共同决定行为。"
+demo: true
+math: false
+sourceUrl: "https://uat.store.wiley.com/en-us/professional-javascript-for-web-developers-4th-edition-p-9781119366577"
+draft: false
+---
+
+import {
+  Jpg10FunctionsMapLab,
+  Jpg10FunctionsExperimentLab,
+  Jpg10FunctionsEvidenceLab,
+} from "@/components/mdx/javascript-pro-guide/diagrams/jpg-10-functions";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释第 10 章 函数的核心机制，并把它放回28章与4个附录的主线
+- 能比较正常、边界、失败和恢复样本，指出首个执行或状态偏离点
+- 能实现最小JavaScript实验，记录浏览器版本、输入、任务顺序与资源所有权
+- 能设计证据回答“函数的参数、this与构造能力由契约定义；闭包只保留必要状态；递归和尾调用不依赖未保证优化。”是否成立
+
+</Objectives>
+
+## 直觉：先画执行与所有权
+
+函数同时是可调用对象、词法闭包和this调用边界；参数、调用形式与生命周期共同决定行为。 真正的难点不是让一次示例得到预期输出，而是让绑定、对象、任务、权限和资源在异常、取消、重复与版本切换后仍可解释。先预测：若只保存最终截图，最可能隐藏哪一种陈旧状态？
+
+<Jpg10FunctionsMapLab />
+
+## 权威目录定位
+
+本页依据 Wiley 第4版官方31页目录样章与中文版公开完整目录锁定范围。目录名称用于一对一追踪，正文为独立教学重构；新浏览器差异、安全与可观察性补充会明确披露：
+
+- 10.1 箭头函数
+- 10.2 函数名
+- 10.3 理解参数
+- 箭头函数中的参数
+- 10.4 没有重载
+- 10.5 默认参数值
+- 默认参数作用域与暂时性死区
+- 10.6 参数扩展与收集
+- 10.6.1 扩展参数
+- 10.6.2 收集参数
+- 10.7 函数声明与函数表达式
+- 10.8 函数作为值
+- 10.9 函数内部
+- 10.9.1 arguments
+- 10.9.2 this
+- 10.9.3 caller
+- 10.9.4 new.target
+- 10.10 函数属性与方法
+- 10.11 函数表达式
+- 10.12 递归
+- 10.13 尾调用优化
+- 10.13.1 尾调用优化的条件
+- 10.13.2 尾调用优化的代码
+- 10.14 闭包
+- 10.14.1 this对象
+- 10.14.2 内存泄漏
+- 10.15 立即调用的函数表达式
+- 10.16 私有变量
+- 10.16.1 静态私有变量
+- 10.16.2 模块模式
+- 10.16.3 模块增强模式
+- 10.17 小结
+
+本页逐项覆盖 **32** 个公开目录条目，并纳入正常、边界、失败和恢复验收。
+
+## 核心概念与所有权
+
+<Term def="没有自身this、arguments、super和new.target、从词法环境捕获这些值的函数表达式。">
+  箭头函数
+</Term>
+、<Term def="普通函数中表示实参数量与值的类数组对象。">arguments</Term>、
+<Term def="由调用形式或显式绑定决定普通函数执行时接收者的规则。">this绑定</Term>
+、<Term def="函数连同其定义位置可访问的词法环境形成的组合。">闭包</Term>、
+<Term def="函数返回位置直接返回另一个调用结果、理论上可复用调用栈的调用形式。">
+  尾调用
+</Term>
+。每个概念都要回答：谁创建输入，状态保存在哪里，哪个任务或版本可修改它，结束后由谁清理。
+
+|   # | 概念      | 工程含义                                                                       |
+| --: | --------- | ------------------------------------------------------------------------------ |
+|   1 | 箭头函数  | 没有自身this、arguments、super和new.target、从词法环境捕获这些值的函数表达式。 |
+|   2 | arguments | 普通函数中表示实参数量与值的类数组对象。                                       |
+|   3 | this绑定  | 由调用形式或显式绑定决定普通函数执行时接收者的规则。                           |
+|   4 | 闭包      | 函数连同其定义位置可访问的词法环境形成的组合。                                 |
+|   5 | 尾调用    | 函数返回位置直接返回另一个调用结果、理论上可复用调用栈的调用形式。             |
+
+## 机制拆解
+
+### 1. 调用形式决定普通函数this
+
+方法调用、独立调用、call/apply/bind与new有不同绑定规则；箭头函数则捕获外层this。把需要动态接收者的方法写成箭头属性，会改变原型共享和重绑定能力。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+### 2. 参数是独立初始化作用域
+
+默认参数从左到右求值，可以引用前面参数，但存在自己的暂时性死区。剩余参数是真数组，arguments是类数组且在严格模式不与形参联动；API应优先用显式参数对象表达可选项。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+### 3. 闭包保留的是环境绑定
+
+循环中使用let会为每次迭代创建绑定，var则共享函数绑定。闭包能实现私有状态和工厂，但也会延长环境中对象可达性；只捕获必要值，并为长期回调设计取消。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+## 六阶段证据链
+
+可操作链条是：声明函数边界 → 解析参数默认值 → 确定this与new.target → 执行函数体 → 保留闭包环境 → 释放或返回结果。正常样本证明能力，边界样本证明预算，失败样本证明拒绝，恢复样本证明任务、状态和资源重新收敛。
+
+<Stepper>
+  <Step title="1. 声明函数边界与解析参数默认值">
+    固定浏览器版本、输入、初始DOM与时钟，运行正常和边界样本。
+    <Jpg10FunctionsMapLab />
+  </Step>
+  <Step title="2. 确定this与new.target与执行函数体">
+    注入异常、取消、重复事件、权限拒绝或旧缓存，要求在首偏离点停止。
+    <Jpg10FunctionsExperimentLab />
+  </Step>
+  <Step title="3. 保留闭包环境与释放或返回结果">
+    清除故障后重放相同输入，核对输出、任务队列、DOM摘要、监听器与资源数量。
+    <Jpg10FunctionsEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小可运行实验
+
+以下代码用于独立观察本页机制；生产实现还需加入输入验证、兼容策略、权限、取消与清理。
+
+```js
+function describe(prefix = "value", ...items) {
+  return `${prefix}:${items.join(",")}`;
+}
+const bound = describe.bind(null, "items");
+console.assert(bound(1, 2) === "items:1,2");
+```
+
+证据记录把目录、运行时与状态摘要放在一起：
+
+```yaml
+book: JavaScript高级程序设计（第4版）
+page: jpg-10-functions
+official_entries: 32
+sample: normal | boundary | failure | recovery
+browser_version: fixed
+input_fixture: fixed
+first_divergence: null
+cleanup_complete: true
+```
+
+故障脚本一次只改变一个变量：
+
+```text
+baseline -> inject(exception | cancel | duplicate | denied | stale-cache)
+observe -> stop_at_first_divergence
+recover -> replay_same_runtime_and_input
+assert -> one_state_owner && stable_output && no_stale_task && no_resource_leak
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：把对象方法写成箭头函数后期待call改变this。**
+  必须保存输入、任务顺序、状态摘要与首次拒绝原因，而不是只看最终页面。
+</Callout>
+
+<Callout type="trap">
+  **误区二：长期事件回调闭包捕获整个页面模型，组件销毁后仍被保留。**
+  必须加入边界、失败与恢复样本，证明错误没有跨入下一阶段。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 输入与环境变化                   | 预期状态       | 通过条件                     |
+| ---- | -------------------------------- | -------------- | ---------------------------- |
+| 正常 | 合法输入、权限、顺序与版本       | 六阶段完成     | 输出和状态摘要一致           |
+| 边界 | 空值、极限容量、重复事件或慢任务 | 达到预算不越界 | 主线程与内存有界             |
+| 失败 | 异常、取消、拒权、断网或旧产物   | 首偏离点停止   | 明确传播、回滚或降级         |
+| 恢复 | 修复后重放同一输入               | 收敛到正常轨迹 | 无陈旧任务、监听器和资源泄漏 |
+
+<Jpg10FunctionsEvidenceLab />
+
+本页签发不变量是：**函数的参数、this与构造能力由契约定义；闭包只保留必要状态；递归和尾调用不依赖未保证优化。** 单次成功、平均耗时或最终截图不能替代运行时版本、执行轨迹、首偏离点与清理证据。
+
+## 练习
+
+<Exercises>
+
+**问题 1** 为什么不能只以最终页面结果正确作为验收？
+
+<Answer>
+  最终结果会隐藏重复副作用、旧任务覆盖、错误吞没和资源泄漏。必须比较输入、执行顺序、状态所有者、首偏离点与清理结果。
+</Answer>
+
+**问题 2** 如何把本页公开目录变成可执行学习证据？
+
+<Answer>
+  按公开顺序建立追踪表，为每组条目写出输入、状态、输出、失败与恢复条件。本页重点包括：10.1
+  箭头函数、10.2 函数名、10.3 理解参数、箭头函数中的参数、10.4 没有重载、10.5
+  默认参数值、默认参数作用域与暂时性死区、10.6
+  参数扩展与收集；其余条目已在上方逐项列出。
+</Answer>
+
+**问题 3** 本页的最小通过条件是什么？
+
+<Answer>
+  函数的参数、this与构造能力由契约定义；闭包只保留必要状态；递归和尾调用不依赖未保证优化。
+  并且相同浏览器版本、输入与初始状态可以重放正常、边界、失败和恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **箭头函数**：没有自身this、arguments、super和new.target、从词法环境捕获这些值的函数表达式。
+- **arguments**：普通函数中表示实参数量与值的类数组对象。
+- **this绑定**：由调用形式或显式绑定决定普通函数执行时接收者的规则。
+- **闭包**：函数连同其定义位置可访问的词法环境形成的组合。
+- **尾调用**：函数返回位置直接返回另一个调用结果、理论上可复用调用栈的调用形式。
+- 六阶段机制链已经映射到正常、边界、失败与恢复证据。
+- 官方目录逐项追踪，现代补充不会冒充原书正式分节。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="箭头函数">
+    没有自身this、arguments、super和new.target、从词法环境捕获这些值的函数表达式。
+  </GlossaryItem>
+  <GlossaryItem term="arguments">
+    普通函数中表示实参数量与值的类数组对象。
+  </GlossaryItem>
+  <GlossaryItem term="this绑定">
+    由调用形式或显式绑定决定普通函数执行时接收者的规则。
+  </GlossaryItem>
+  <GlossaryItem term="闭包">
+    函数连同其定义位置可访问的词法环境形成的组合。
+  </GlossaryItem>
+  <GlossaryItem term="尾调用">
+    函数返回位置直接返回另一个调用结果、理论上可复用调用栈的调用形式。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Matt Frisbie 著，李松峰译，人民邮电出版社，2020年9月，866页，ISBN 9787115545381；英文原版 Professional JavaScript for Web Developers, 4th Edition，Wiley，2019年10月，1200页，印刷版 ISBN 9781119366447、电子版 ISBN 9781119366577。Wiley官方31页目录样章与中文版公开目录确认28章、4个附录和757个二三级目录条目。正文为独立教学重构。"
+  adaptedUrl="https://uat.store.wiley.com/en-us/professional-javascript-for-web-developers-4th-edition-p-9781119366577"
+/>

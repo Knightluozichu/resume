@@ -1,0 +1,261 @@
+---
+title: "Chapter 7 · Quicksort"
+type: C
+section: "CLRS4 · 排序与顺序统计"
+order: 7
+description: "按CLRS第四版第7章重建PARTITION不变式、快速排序性能、随机化主元，以及基于元素对比较概率的期望O(n lg n)分析。"
+demo: true
+math: true
+sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+draft: false
+---
+
+import { CLRS4PartitionTraceLab, CLRS4PartitionInvariantLab, CLRS4QuicksortTreeLab, CLRS4BestWorstLab, CLRS4BalancedSplitLab, CLRS4RandomPivotLab, CLRS4RandomizedBoundaryLab, CLRS4ExpectedComparisonsLab, CLRS4DuplicateKeysLab, CLRS4QuicksortCertificateLab } from "@/components/mdx/introduction-to-algorithms/diagrams/07-quicksort";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释PARTITION怎样把主元放到最终秩位置并保持两侧区域不变式
+- 能计算平衡、固定比例不平衡与退化划分对应的递归深度和总成本
+- 能实现Lomuto partition、随机化快速排序、尾递归消除和三路划分
+- 能分析任意元素对被比较的概率并推出随机化快速排序的期望比较次数
+- 能设计包含排列保持、严格缩小、随机源边界与栈深限制的快速排序证书
+
+</Objectives>
+
+## 从“主元一次就能站到最终位置”开始
+
+先预测：一次partition之后，主元左边元素都不大于它、右边都大于它，这是否意味着两边已经排序？不是。只确定了主元的最终秩；两侧内部仍无序，需要递归解决。
+
+<Term def="选择主元，把数组划分为不大于主元与大于主元的两部分，再递归排序两侧的原地分治排序算法。">快速排序</Term>的combine步骤为空，因为partition已在原数组中完成跨侧次序。
+
+<CLRS4PartitionTraceLab />
+
+## 7.1 Description of quicksort
+
+### PARTITION与四个区域
+
+<Term def="围绕一个主元重排子数组，使主元到达最终位置、左侧键不大于它、右侧键大于它并返回主元索引的过程。">PARTITION</Term>在CLRS的Lomuto版本中使用末元素$x=A[r]$为主元。索引$i$指向“已知不大于$x$”区域末尾，索引$j$扫描未知区域。
+
+```cpp
+int partition(std::vector<int>& a, int p, int r) {
+    int pivot = a[r];
+    int i = p - 1;
+    for (int j = p; j < r; ++j) {
+        if (a[j] <= pivot) {
+            ++i;
+            std::swap(a[i], a[j]);
+        }
+    }
+    std::swap(a[i + 1], a[r]);
+    return i + 1;
+}
+```
+
+<Term def="扫描partition时持续成立的区域命题：左区不大于主元，中区大于主元，后续区尚未检查，末端保存主元。">划分循环不变式</Term>在每轮开始时声明：
+
+1. `A[p..i]`中每个元素不大于$x$。
+2. `A[i+1..j-1]`中每个元素大于$x$。
+3. `A[j..r-1]`尚未分类，`A[r]`仍保存$x$。
+4. 各区域合起来与原子数组拥有相同多重集。
+
+<CLRS4PartitionInvariantLab />
+
+若`A[j]`不大于主元，就扩大左区并把它交换进去；否则只扩大大于区。扫描结束后未知区为空，把主元交换到$i+1$，四区命题推出返回索引$q=i+1$已是主元最终位置。
+
+```cpp
+void quicksort(std::vector<int>& a, int p, int r) {
+    if (p >= r) return;
+    int q = partition(a, p, r);
+    quicksort(a, p, q - 1);
+    quicksort(a, q + 1, r);
+}
+```
+
+递归区间必须排除$q$，否则单元素或极端主元可能不缩小，导致无限递归。空区间与单元素区间直接满足有序后置条件。
+
+全算法正确性可对区间长度做归纳。PARTITION先保持原多重集，并返回一个满足“左侧键不大于主元、右侧键大于主元”的$q$；两个递归区间都严格更短，归纳假设保证它们各自有序。由于左区任意键不大于主元、右区任意键大于主元，把“有序左区、主元、有序右区”连接起来就是整个区间的非降序排列。这个证明同时依赖划分正确性与递归终止，不能只证明其中一半。
+
+Lomuto PARTITION对长度$m$子数组恰好检查$m-1$个非主元元素，因此比较成本为$\Theta(m)$，交换次数取决于主元秩。它通常不稳定：一个跨区域swap可能让相等记录改变原始先后。若业务要求稳定排序，必须增加索引作为次级键、使用额外缓冲区，或选择天然稳定的算法，不能从“相等键进入左区”推导稳定性。
+
+Hoare partition使用左右指针向中间扫描，通常交换更少，但它返回的是两段的分界索引，主元不一定停在返回位置。于是递归区间常写`[p,q]`与`[q+1,r]`，不能直接套用Lomuto的`q-1`与`q+1`。两种方案都能正确实现quicksort，前提是调用者遵守各自返回contract；混合伪代码的边界约定会造成漏元素或不缩小递归。选择哪种实现之前，应先把“返回最终主元索引”还是“返回有效分界”写进接口说明和测试。
+
+## 7.2 Performance of quicksort
+
+### 成本取决于划分平衡
+
+每次PARTITION线性扫描当前子数组。若主元总是最小或最大，递推为：
+
+$$
+T(n)=T(n-1)+T(0)+\Theta(n)=\Theta(n^2).
+$$
+
+<CLRS4BestWorstLab />
+
+若每次恰好对半：
+
+$$
+T(n)=2T(n/2)+\Theta(n)=\Theta(n\lg n).
+$$
+
+更一般地，只要每次两边都是固定比例，例如$9n/10$与$n/10$，最长路径仍为$\Theta(\lg n)$，各深度上的partition总工作至多$\Theta(n)$，所以总成本仍为$\Theta(n\lg n)$。完美平衡不是必要条件。
+
+<CLRS4BalancedSplitLab />
+
+<CLRS4QuicksortTreeLab />
+
+已排序输入对“总选末元素”版本产生退化划分，但对选择中位数或随机主元的版本不一定坏。性能结论必须绑定具体pivot策略，不能只写“quicksort平均为$n\lg n$”而省略平均对象。
+
+### 栈空间和尾递归
+
+退化递归不仅耗时$\Theta(n^2)$，还可能占$\Theta(n)$调用栈。实现可循环处理较大一侧，只递归较小一侧：每次递归参数至多减半，从而把额外栈深限制在$O(\lg n)$，即使分区序列不平衡，时间成本仍由原划分决定。
+
+```text
+TAIL-BOUNDED-QUICKSORT(A, p, r)
+1  while p < r
+2      q = PARTITION(A, p, r)
+3      recursively sort the smaller side
+4      continue the loop on the larger side
+```
+
+缓存局部性解释了quicksort为何常在实践中胜过同阶算法：partition顺序扫描数组，原地交换，常数较小。小区间上常切换插入排序；阈值和pivot采样策略属于实现参数，应通过代表性workload测量。
+
+实际pivot策略常用median-of-three或小样本中位数来减少极端划分。它们改善常数和常见输入，却仍是确定性规则，理论上可构造专门输入反复诱导坏主元。随机采样把这种构造难度转移到随机源模型；introsort则监控递归深度，在坏路径真正出现时切换heapsort。三者分别优化常见情况、对抗性输入与确定最坏界，不能用一个模糊的“主元更好”替代各自保证。
+
+<Callout type="trap" title="只写平均O(n lg n)而没有概率空间">
+固定末元素的确定性版本若输入分布未知，没有自动的平均保证。修法是声明输入排列均匀，或让算法随机选主元并对内部随机位取期望。
+</Callout>
+
+## 7.3 A randomized version of quicksort
+
+### 随机主元把顺序控制权收回算法
+
+<Term def="每次从当前子数组均匀选择主元，再执行确定性partition，使期望性能不依赖固定输入排列的快速排序。">随机化快速排序</Term>先随机选$i\in[p,r]$，把`A[i]`与`A[r]`交换，然后复用PARTITION。随机性不改变正确性contract，只改变主元秩的概率分布。
+
+<CLRS4RandomPivotLab />
+
+```cpp
+int randomized_partition(std::vector<int>& a, int p, int r, Rng& rng) {
+    std::uniform_int_distribution<int> pick(p, r);
+    int i = pick(rng);
+    std::swap(a[i], a[r]);
+    return partition(a, p, r);
+}
+```
+
+对任何固定且键互异的输入，当前子数组每个元素成为主元的概率相同。期望在算法随机位上取，不要求外部输入已随机。若随机源可被对手预测，或对手能在执行中自适应修改键，分析模型需要加强。
+
+另一种等价视角是先生成输入键的均匀随机排列，再总选末元素为主元。只要算法的控制流只依赖比较结果，这两种过程产生相同的主元秩分布；但在实现上，逐层随机选主元不必提前洗牌整个数组。等价性用于分析，不表示可以使用有偏洗牌或重复随机索引来代替均匀抽样。
+
+随机调用次数与递归节点数相关：每个非空、长度至少2的子数组选择一次主元，最多线性次。生成随机数的成本通常被partition扫描吸收，但在极小分区上可能占明显常数，这也是小数组切换插入排序的另一个理由。复现实验应记录种子；性能结论则应跨多个独立种子报告分布，而不是挑一个顺利运行。
+
+<CLRS4RandomizedBoundaryLab />
+
+随机化降低持续坏划分的概率，却没有删除最坏执行路径；仍可能连续选到极端主元，只是概率很低。需要确定性最坏界时，可使用introsort：递归深度超过阈值后切换heapsort。
+
+## 7.4 Analysis of quicksort
+
+### 用元素对而不是递归式计数
+
+把最终有序键记为$z_1\lt z_2\lt\cdots\lt z_n$。定义<Term def="对每对有序秩i和j，在算法中两元素曾直接比较时取1、否则取0的指示器。">元素对比较指示器</Term>$X_{ij}$。任意一对元素最多直接比较一次：第一次从包含二者的同一子数组选出主元后，它们要么相互比较，要么被主元永久分开。
+
+区间$Z_{ij}=\{z_i,\ldots,z_j\}$中，只有$z_i$或$z_j$最先被选为主元时二者才会比较，所以：
+
+$$
+\Pr\{X_{ij}=1\}=\frac{2}{j-i+1}.
+$$
+
+<CLRS4ExpectedComparisonsLab />
+
+总比较数$X=\sum_{i\lt j}X_{ij}$。由期望线性性：
+
+$$
+\begin{aligned}
+\mathbb E[X]
+&=\sum_{i=1}^{n-1}\sum_{j=i+1}^{n}\frac{2}{j-i+1}\\
+&\le2\sum_{i=1}^{n-1}\sum_{k=1}^{n}\frac1k\\
+&=2(n-1)H_n=O(n\lg n).
+\end{aligned}
+$$
+
+这个证明不要求各$X_{ij}$独立。它绕开“左右子问题规模相关”的递推困难，直接计算所有可能比较的发生概率。加上每次交换与比较的常数工作，得到随机化快速排序的期望时间$O(n\lg n)$。
+
+更精确地整理双重和可得到期望比较次数$2(n+1)H_n-4n$，首项约为$2n\ln n$。这不是说每次运行都接近期望；期望只控制均值。若系统关心延迟尾部，还需分析坏划分连续出现的概率、设置递归深度保护，或用高概率界描述超过阈值的风险。
+
+元素对证明还解释了距离效应：最终秩相邻的两键一定比较，因为它们之间没有第三个主元可以先分开；相距很远的两键只有区间端点最先成为主元时才比较，概率随距离下降。总比较数之所以是$n\lg n$而非$n^2$，正来自远距离元素对被比较的概率很小。
+
+### 重复键与三路划分
+
+上述秩证明假设键互异。大量重复键时，二路Lomuto partition可能把所有等于主元的元素塞入一侧，造成不必要递归。三路划分维护“小于、等于、大于”三个区间，partition后只递归两边，等值块已处于最终范围。
+
+<CLRS4DuplicateKeysLab />
+
+三路版本不改变互异键上的期望量级，却能把全相等输入降到线性一次划分。比较器必须满足严格弱序；若比较结果不传递，任何基于分区的排序都可能破坏不变式。
+
+<Callout type="trap" title="随机主元自动解决所有重复键">
+随机化只均匀选择某个元素，无法改变大量元素键值相同的事实。二路划分仍可能产生极不平衡的等值侧。修法是使用三路划分或显式聚合等值区域。
+</Callout>
+
+<CLRS4QuicksortCertificateLab />
+
+<Stepper>
+<Step title="先证明partition">
+用四区域不变式证明元素不丢失、主元到最终位置，并确认返回索引被递归区间排除。
+
+<CLRS4PartitionInvariantLab />
+</Step>
+<Step title="再声明pivot模型">
+区分固定策略、随机输入与内部随机主元，说明期望对哪个概率空间计算。
+
+<CLRS4RandomizedBoundaryLab />
+</Step>
+<Step title="最后控制工程边界">
+对元素对求期望比较数，同时处理重复键、小区间阈值、随机源质量和最坏栈深。
+
+<CLRS4ExpectedComparisonsLab />
+</Step>
+</Stepper>
+
+## 小结
+
+Chapter 7 Quicksort的核心是PARTITION：一次线性扫描把主元放到最终位置，并把原问题拆成两个无combine的子问题。平衡或固定比例划分给$\Theta(n\lg n)$，连续极端主元给$\Theta(n^2)$；尾递归策略可以独立把栈深限制为$O(\lg n)$。
+
+随机化快速排序对每个固定输入均匀选择主元。元素对比较指示器证明秩距为$d$的两元素以$2/(d+1)$概率比较，求和得到期望$O(n\lg n)$，无需比较事件独立。大量重复键需三路划分，确定最坏界可用introsort兜底；性能、随机性和正确性是三项不同证书。
+
+<Exercises>
+
+**问题 1**：写出Lomuto PARTITION在扫描结束但交换主元之前的区域状态。
+
+<Answer>
+`A[p..i]`全部不大于主元$x$，`A[i+1..r-1]`全部大于$x$，未知区已为空，`A[r]=x`。把`A[i+1]`与`A[r]`交换后，主元位于最终索引$i+1$且多重集保持。
+</Answer>
+
+**问题 2**：为什么每次$1/10$与$9/10$划分仍为$\Theta(n\lg n)$？
+
+<Answer>
+最长路径每次乘$9/10$，深度为$\log_{10/9}n=\Theta(\lg n)$；每个深度的互不相交子数组总长度至多$n$，partition工作$O(n)$。存在相应层工作下界，因此总量为$\Theta(n\lg n)$。
+</Answer>
+
+**问题 3**：秩为$i\lt j$的两个元素为什么以$2/(j-i+1)$概率比较？
+
+<Answer>
+只看闭区间$z_i,\ldots,z_j$。其中最先成为主元的元素若是任一内部键，就会先把两端分开；只有两端之一最先被选时，它们才直接比较。区间各键等可能最先，故概率为$2/(j-i+1)$。
+</Answer>
+
+**问题 4**：怎样同时限制quicksort栈深并保留原地性质？
+
+<Answer>
+每次partition后只递归较小侧，较大侧通过循环继续。递归侧规模最多为当前一半，所以栈深$O(\lg n)$；partition仍在原数组交换，只增加常数索引状态，保留原地空间性质。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="快速排序">选择主元，把数组划分为不大于主元与大于主元的两部分，再递归排序两侧的原地分治排序算法。</GlossaryItem>
+<GlossaryItem term="PARTITION">围绕一个主元重排子数组，使主元到达最终位置、左侧键不大于它、右侧键大于它并返回主元索引的过程。</GlossaryItem>
+<GlossaryItem term="划分循环不变式">扫描partition时持续成立的区域命题：左区不大于主元，中区大于主元，后续区尚未检查，末端保存主元。</GlossaryItem>
+<GlossaryItem term="随机化快速排序">每次从当前子数组均匀选择主元，再执行确定性partition，使期望性能不依赖固定输入排列的快速排序。</GlossaryItem>
+<GlossaryItem term="元素对比较指示器">对每对有序秩i和j，在算法中两元素曾直接比较时取1、否则取0的指示器。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Chapter 7 · Quicksort" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

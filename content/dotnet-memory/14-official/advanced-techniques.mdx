@@ -1,0 +1,348 @@
+---
+title: "Chapter 14：高级技术（Advanced Techniques）"
+type: A
+section: Pro .NET 内存管理（第2版）· Span、Memory 与无分配管线
+order: 14
+description: 对齐原书第 14 章：从 ref-like 基础推导 Span/Memory 表示与切片，建立 owner-consumer-lease 契约，正确使用 stackalloc、ArrayPool、MemoryPool 和分段管线。
+demo: false
+math: false
+sourceUrl: "https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_14"
+draft: false
+---
+
+import {
+  DnmAllocationPipelineLab,
+  DnmBufferLeaseLab,
+  DnmSpanSliceLab,
+} from "@/components/mdx/dotnet-memory/diagrams/advanced-techniques";
+
+<Objectives>
+
+- 能解释 `Span<T>`/`ReadOnlySpan<T>` 如何统一数组、字符串、栈与本机内存，并推导 Slice 为什么不复制底层元素
+- 能设计同步 `Span<T>`、异步 `Memory<T>` 与 `IMemoryOwner<T>` API，明确 owner、consumer、lease 和终止时点
+- 能比较直接分配、`stackalloc`、`ArrayPool<T>`、`MemoryPool<T>` 与分段序列，在真实负载下验证分配、复制、保留和尾延迟
+
+</Objectives>
+
+## 为什么本章必须建立在 ref 安全之上
+
+上一章说明了 ref local、ref return 与 ref struct 的逃逸边界。本章的高级 API 不是另一套魔法：`Span<T>` 本质上是“首元素引用 + 长度”的 byref-like 视图，`Memory<T>` 则是可以进入托管堆并跨异步边界的描述符。两者都不拥有所指向的数据，正确性仍由底层存储 owner 和借用期限决定。
+
+<Term def="由首元素托管引用与长度描述的一段连续可写内存视图；创建、转换和 Slice 通常只复制视图元数据，不复制元素。">Span 视图</Term>
+
+<Term def="Span 的只读对应类型，可查看数组、本机区和字符串等连续存储，但不能通过该视图写入元素。">ReadOnlySpan 视图</Term>
+
+```text
+Span<T> conceptually:
+  ref T first
+  int length
+
+Slice(start, length):
+  ref T newFirst = ref first[start]
+  int newLength = length
+```
+
+真实实现由运行时低级代码优化，概念模型足以推理边界：view 复制很小，元素仍属于原 buffer；原 owner 提前释放、归还池或让本机内存失效，所有切片同时失效。
+
+## Span 怎样统一四种连续存储
+
+数组 `T[]`、字符串、`stackalloc` 和 unmanaged pointer 都可以提供连续范围。可写性由来源和类型决定：数组/栈通常给 `Span<T>`，字符串只能给 `ReadOnlySpan<char>`；本机 pointer 的可写性与存储契约相关。Span 的 API 统一不等于四种存储拥有相同生命周期。
+
+```csharp
+int[] numbers = [10, 20, 30, 40];
+Span<int> writable = numbers.AsSpan(1, 2);
+writable[0] = 21; // numbers[1] changes
+
+ReadOnlySpan<char> text = "type=42";
+ReadOnlySpan<char> value = text[(text.IndexOf('=') + 1)..];
+int parsed = int.Parse(value);
+```
+
+`AsSpan`/`Slice` 不创建子数组或 substring，只有在显式 `ToArray`/`ToString` 等 materialize 操作时才复制。调用方若最终需要长期拥有结果，应在所有权边界显式复制，而不是让一个短期 view 暗中逃逸。
+
+先预测同一个 slice 在四类后备存储上能否写入、能否跨 `await`、由谁保活，再切换下图验证；如果只答“Span 不分配”，说明仍遗漏生命周期这一半契约。
+
+<DnmSpanSliceLab />
+
+## 切片与范围检查怎样保持安全
+
+Span 保存长度并在索引/Slice 时检查范围；JIT 在可证明的循环中可消除重复 bounds checks。不要用 `Unsafe.Add` 预先绕开检查来“优化”，除非反汇编证明检查仍是热点且调用不变量有专门测试。一次错误的长度推导会从受控异常变为任意内存访问。
+
+```csharp
+static ReadOnlySpan<byte> Payload(ReadOnlySpan<byte> frame)
+{
+    if (frame.Length < 4) throw new InvalidDataException();
+    int length = BinaryPrimitives.ReadUInt16LittleEndian(frame[2..]);
+    if ((uint)length > (uint)(frame.Length - 4))
+        throw new InvalidDataException();
+    return frame.Slice(4, length);
+}
+```
+
+把验证放在产生切片的边界，并用无符号比较或先减后比避免整数溢出。返回的 span 仍借用 `frame` 后备存储；它可以同步返回给调用者，因为编译器会验证引用逃逸，但不能保存进普通对象字段。
+
+## stackalloc 如何成为有上限的临时 fast path
+
+<Term def="在当前栈帧分配一段连续内存并以 Span 或 pointer 使用；它无托管堆分配，但容量必须严格有界且不能逃出 frame。">stackalloc 缓冲区</Term>
+
+栈不是自动回收的小型对象池，而是每线程有限空间。常量或经严格上限约束的小缓冲适合 `stackalloc`；输入长度可被外部控制时必须设置阈值，超过阈值改用数组池或普通数组。循环内多次 stackalloc 可能一直占用到方法返回，应移到循环外复用。
+
+```csharp
+const int StackLimit = 256;
+byte[]? rented = null;
+Span<byte> scratch = required <= StackLimit
+    ? stackalloc byte[StackLimit]
+    : (rented = ArrayPool<byte>.Shared.Rent(required));
+
+try
+{
+    Span<byte> active = scratch[..required];
+    Transform(input, active);
+}
+finally
+{
+    if (rented is not null)
+        ArrayPool<byte>.Shared.Return(rented, clearArray: true);
+}
+```
+
+上例固定 stack 分配为 256 bytes，避免不同分支的长度混淆；数组池返回的数组可能比请求大，业务必须只使用 `[..required]`。是否清零取决于敏感数据和 `T` 引用保留，清零本身也有带宽成本。
+
+<Callout type="trap" title="陷阱：对用户输入长度直接 stackalloc">
+  即使语法允许，外部长度可以耗尽线程栈并终止进程；stack overflow 通常不能像普通异常一样可靠恢复。所有 stackalloc 都应有代码可见的常量上限，大缓冲转入池或堆，并在基准中覆盖最坏尺寸。
+</Callout>
+
+## 用 Span 解析和格式化怎样消除临时对象
+
+<Term def="在输入视图上直接扫描、切片并用 TryParse/TryFormat 写入调用方缓冲，从而避免 substring、Split、中间数组和格式化字符串。">基于 Span 的解析</Term>
+
+典型优化不是把某个 `new` 换成 Span，而是重画整个管线：输入保持一个 owner，解析器只借用切片，产出领域值或写进目标 buffer。`int.TryParse(ReadOnlySpan<char>)`、UTF-8 parser、`TryFormat(Span<char>)` 等 API 可避免物化中间字符串。
+
+```csharp
+static bool TryReadPair(ReadOnlySpan<char> line, out int left, out int right)
+{
+    int comma = line.IndexOf(',');
+    if (comma < 0)
+    {
+        left = right = default;
+        return false;
+    }
+
+    return int.TryParse(line[..comma], out left)
+        && int.TryParse(line[(comma + 1)..], out right);
+}
+```
+
+不要返回指向复用输入缓冲的字符串视图并在下一次读取后继续使用。同步解析应尽快把必要字段转换为独立值；确实需要长期文本时，在所有权边界调用 `ToString`，这一份有意复制比隐藏 use-after-reuse 更正确。
+
+## Memory 为什么能跨异步边界
+
+<Term def="可保存到普通托管对象并跨 await 的连续内存描述符；通过 Span 属性在当前同步片段取得临时 ref-like 视图。">Memory 视图</Term>
+
+`Memory<T>`/`ReadOnlyMemory<T>` 不含直接 ref 字段，可由数组、字符串或 `MemoryManager<T>` 支持，因此能放进状态机和对象字段。异步方法应在每个 `await` 前结束局部 Span 使用，等待后重新从 Memory 取得 `.Span`；不要跨越 await 保存 span 或 pointer。
+
+```csharp
+static async ValueTask<int> ReadHeaderAsync(
+    Stream stream,
+    Memory<byte> destination,
+    CancellationToken cancellationToken)
+{
+    int read = await stream.ReadAsync(destination, cancellationToken);
+    ReadOnlySpan<byte> bytes = destination.Span[..read];
+    return bytes.Length >= 4
+        ? BinaryPrimitives.ReadInt32LittleEndian(bytes)
+        : throw new InvalidDataException();
+}
+```
+
+Memory 可跨 async 不代表 owner 自动延长。若 caller 在 Task 完成前复用/归还 buffer，异步消费者仍会看到数据竞态。契约应规定 lease 到 Task 成功、失败或取消的 terminal state 才结束。
+
+## owner、consumer 与 lease 怎样约束缓冲区
+
+<Term def="负责创建、转移或最终销毁/归还缓冲区的唯一角色；同一时刻只能有一个 owner。">缓冲区所有者</Term>
+
+<Term def="被允许在限定时间窗读写缓冲区的角色；可以不是 owner，但不能超过 lease 或与未同步消费者冲突。">缓冲区租约</Term>
+
+同步 `Span<T>` 参数天然把 lease 限制在调用附近；接受 `Memory<T>` 并返回 `Task` 的方法，lease 通常持续到 Task terminal；接受 `IMemoryOwner<T>` 参数则表示接收 ownership，调用方之后不应继续使用或 Dispose。类型签名应尽量让这些不同语义可见。
+
+<DnmBufferLeaseLab />
+
+```csharp
+static async Task SendAsync(
+    ReadOnlyMemory<byte> payload,
+    CancellationToken cancellationToken)
+{
+    // consumer lease ends only when returned Task reaches terminal state
+    await transport.WriteAsync(payload, cancellationToken);
+}
+
+sealed class OwnedMessage(IMemoryOwner<byte> owner) : IDisposable
+{
+    public ReadOnlyMemory<byte> Payload => owner.Memory;
+    public void Dispose() => owner.Dispose();
+}
+```
+
+第二个 API 接受 owner 即转移所有权；生产代码还需防重复 Dispose，并把实际有效长度与 capacity 分开。只有 `Memory<byte>` 参数则通常只是 lease，不应被被调用方擅自 Dispose underlying owner。
+
+## ArrayPool 怎样复用数组而不改变数组语义
+
+<Term def="按尺寸桶复用数组的共享池；Rent 返回至少请求长度的普通数组，Return 结束当前 lease，但不承诺数组一定缓存或下次仍返回同一实例。">ArrayPool 租借</Term>
+
+池减少高频数组分配和 GC 压力，但引入 stale contents、有效长度、重复归还、use-after-return 和池保留。调用方必须保存 `rented` 原数组用于 Return，不能把切片或替换后的数组归还；所有异常/提前返回路径用 `finally` 闭环。
+
+```csharp
+byte[] rented = ArrayPool<byte>.Shared.Rent(required);
+try
+{
+    Span<byte> active = rented.AsSpan(0, required);
+    active.Clear();
+    Produce(active);
+    Consume(active);
+}
+finally
+{
+    ArrayPool<byte>.Shared.Return(rented, clearArray: false);
+}
+```
+
+敏感数据应在归还前清理，含引用数组可能需要清零以解除对象保留；但不含敏感数据时重复清零会增加带宽。池化超大数组可能把高水位容量长期留在进程中，工作集不会像 allocation count 一样下降，需同时看 GC heap、RSS 与 pool counters/traces。
+
+<Callout type="trap" title="陷阱：Return 后仍保存 Memory 或 Span">
+  Return 只把数组 lease 交回池，不会让旧 view 自动失效。下一位租用者可立刻覆盖同一数组，旧消费者会读到他人数据或破坏其内容。任何 view、async Task、callback 和本机指针都必须在 Return 前结束。
+</Callout>
+
+## MemoryPool 与 IMemoryOwner 怎样显式表达所有权
+
+<Term def="通过 Rent 返回 IMemoryOwner 的缓冲池抽象，可由托管、本机或自定义 MemoryManager 后备；Dispose owner 才结束租约。">MemoryPool 所有权</Term>
+
+`MemoryPool<T>.Rent(minSize)` 返回 `IMemoryOwner<T>`，其 `Memory` 长度可能大于请求。与 ArrayPool 相比，owner 对象把 Dispose 和 memory 绑定，API 更容易表达所有权转移，也可由本机/固定存储实现；代价是 owner 对象和更复杂的生命周期。
+
+```csharp
+using IMemoryOwner<byte> owner = MemoryPool<byte>.Shared.Rent(required);
+Memory<byte> buffer = owner.Memory[..required];
+await FillAsync(buffer, cancellationToken);
+await ConsumeAsync(buffer, cancellationToken);
+// owner.Dispose only after both consumers finish
+```
+
+若把 owner 传给另一个组件并声明转移，当前 `using` 就不能再 Dispose；应使用显式 holder 或返回值表示 ownership move。C# 没有线性类型，团队只能靠 API 形状、状态标记和测试防双重所有权。
+
+## 零拷贝为什么不等于零成本
+
+<Term def="多个阶段共享同一后备存储并通过 view/position 传递数据，避免 payload materialization；仍有扫描、边界检查、同步、缓存和生命周期成本。">零拷贝管线</Term>
+
+Span slice 避免复制，池避免部分分配，但 pin、引用保留、分支、复杂状态机和缓存 miss 仍存在。连续 `Span<T>` 也不能表示天然分段的 pipe buffer；强制 `ToArray` 合并会重新引入大复制。`ReadOnlySequence<T>` 用多个 segment 表示逻辑序列，`SequenceReader<T>` 处理 delimiter 可能跨段的情况。
+
+```csharp
+static bool TryReadLine(
+    ref ReadOnlySequence<byte> buffer,
+    out ReadOnlySequence<byte> line)
+{
+    SequencePosition? newline = buffer.PositionOf((byte)'\n');
+    if (newline is null)
+    {
+        line = default;
+        return false;
+    }
+
+    line = buffer.Slice(0, newline.Value);
+    buffer = buffer.Slice(buffer.GetPosition(1, newline.Value));
+    return true;
+}
+```
+
+返回的 line 只在 pipe owner 允许的消费窗口内有效；推进 reader 后不得长期保存。解析器必须分别测试 delimiter 位于当前 span、中间边界、空 segment、超长消息和取消路径。
+
+## MemoryMarshal 与 Cast 何时值得使用
+
+`MemoryMarshal.Cast<TFrom,TTo>` 可把无引用的 span 按位重新解释，常用于协议、SIMD 或批量二进制处理；它不做 endianness 转换，也不验证业务对齐/格式。长度会按总字节数折算，尾部不足一个目标元素的字节不会形成元素。对外部数据先验证长度与编码，再使用 `BinaryPrimitives` 表达 endian 通常更清晰。
+
+```csharp
+ReadOnlySpan<byte> bytes = packet;
+if ((bytes.Length & 3) != 0)
+    throw new InvalidDataException("int32 payload must be aligned by length");
+
+ReadOnlySpan<int> words = MemoryMarshal.Cast<byte, int>(bytes);
+// native-endian reinterpretation; not a portable wire decoder
+```
+
+`Unsafe`/`MemoryMarshal` 适合封装在小而可测试的底层 helper，公开层仍暴露 Span/Memory 和清晰不变量。任何绕过类型/范围检查的代码都要有 fuzz、边界尺寸、架构和 endian 测试。
+
+## 用指标验收无分配管线
+
+基线至少记录每请求 allocation、Gen 0/1 频率、总 CPU、吞吐、p50/p99、工作集、pool rent/return 和异常路径。优化后 allocation 降为零但池高水位把 RSS 拉高，或复杂 parser 让 CPU/p99 变差，都需要重新权衡。
+
+<DnmAllocationPipelineLab />
+
+```text
+experiment matrix:
+  payload: 32 B / 2 KiB / 128 KiB / multi-segment
+  mode: contiguous / segmented / cancelled / malformed
+  implementation: allocate / span / pooled / sequence
+  observe: alloc B-op, copies, CPU, p99, RSS, pool retention
+```
+
+使用生产相同 runtime、GC flavor、CPU quota 和 TieredPGO；预热后测稳定态，也单独测冷启动。只有热点路径、生命周期审计和端到端指标全部通过，才保留低级实现。
+
+## 三步构建可证明的高性能缓冲管线
+
+<Stepper>
+  <Step title="第一步：把物化对象改为有界 view">
+    标出 substring、Split 和子数组复制点，改为 Span slice/TryParse；记录 backing storage、可变性和哪一步必须显式物化独立结果。
+
+    <DnmSpanSliceLab />
+  </Step>
+  <Step title="第二步：签署 owner-consumer-lease 契约">
+    同步参数优先 Span，跨 await 使用 Memory；转移 `IMemoryOwner` 后发送者停止使用，Rent/Return 或 Dispose 覆盖成功、失败与取消路径。
+
+    <DnmBufferLeaseLab />
+  </Step>
+  <Step title="第三步：比较整条管线而非一个 new">
+    覆盖连续/分段、最小/最大消息和异常输入，比较 allocation、copy、CPU、p99、RSS 与池高水位，并设置可回滚阈值。
+
+    <DnmAllocationPipelineLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Span/ReadOnlySpan 是连续存储的短期 view，Slice 复制元数据而非元素，所有切片共享 backing owner
+- stackalloc 只适合有严格常量上限的栈帧临时区；大或外部可控尺寸转入池/堆
+- 同步借用优先 Span，跨 async 使用 Memory；Task terminal、Return 或 owner.Dispose 是必须明确的 lease 终点
+- ArrayPool 降低数组分配但引入有效长度、残留数据和归还后失效；MemoryPool/IMemoryOwner 更显式地表达所有权
+- 零拷贝不等于零成本，分段输入用 ReadOnlySequence/SequenceReader，最终以整条管线的 CPU、p99、RSS 和 GC 验收
+
+<Exercises>
+  1. **问题 1：改造文本解析。** `line.Split(',')` 后对两个 substring 调用 `int.Parse`，怎样改为 Span 且不让 view 逃逸？
+
+  <Answer question="Span 解析怎样消除中间字符串？">在原 string 的 ReadOnlySpan 上找 comma，分别切片并调用 `int.TryParse(ReadOnlySpan<char>)`，产出两个独立 int；整个过程同步完成，切片不保存到对象或异步状态机。若结果必须保留原文本，则只在所有权边界对所需片段显式 ToString，而不是物化全部中间数组。</Answer>
+
+  2. **问题 2：审计池化异步 I/O。** caller Rent 数组，调用 `SendAsync(memory)` 后立即 Return，再 await Task。为什么会数据串扰，正确终点是什么？
+
+  <Answer question="异步 Memory lease 何时结束？">Memory 可以跨 await，但不拥有数组；SendAsync 返回的 Task 未 terminal 前 transport 仍可能读取。立即 Return 允许其他租用者覆盖同一 backing。caller 必须先 await Task 的成功、失败或取消，再在 finally Return；或把 IMemoryOwner 所有权转给发送组件，由它在操作终止后 Dispose，二者只能选一个 owner。</Answer>
+
+  3. **问题 3：选择连续或分段管线。** 网络消息经常跨两个 pipe segment，强制 `ToArray` 后 Span 解析虽无其他分配，为什么仍不是零拷贝？
+
+  <Answer question="ReadOnlySequence 怎样避免合并复制？">ToArray 会按消息长度分配并复制所有 segments，只是后续 Span 阶段无额外分配。应在 ReadOnlySequence 上查 delimiter/length，用 SequenceReader 处理跨段字段；只有单个字段确实需要连续且很小时才复制到有界 scratch。验收要覆盖 delimiter 恰在 segment 边界、超长和 malformed 输入。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Span 视图">以首元素引用和长度表示的连续可写短期内存视图。</GlossaryItem>
+  <GlossaryItem term="ReadOnlySpan 视图">只能读取底层连续存储、不能通过视图修改元素的 ref-like 类型。</GlossaryItem>
+  <GlossaryItem term="stackalloc 缓冲区">在当前栈帧分配、必须有界且不能逃逸的临时连续存储。</GlossaryItem>
+  <GlossaryItem term="基于 Span 的解析">直接在输入切片上 TryParse/TryFormat，避免物化中间对象。</GlossaryItem>
+  <GlossaryItem term="Memory 视图">可进入托管堆并跨异步边界的连续内存描述符。</GlossaryItem>
+  <GlossaryItem term="缓冲区所有者">唯一负责创建、转移和最终释放或归还 buffer 的角色。</GlossaryItem>
+  <GlossaryItem term="缓冲区租约">consumer 被允许访问 buffer 的有限时间窗。</GlossaryItem>
+  <GlossaryItem term="ArrayPool 租借">从尺寸桶取得普通数组并在 finally 归还的复用协议。</GlossaryItem>
+  <GlossaryItem term="MemoryPool 所有权">通过 IMemoryOwner 把 Memory 和 Dispose 生命周期绑定的池化模式。</GlossaryItem>
+  <GlossaryItem term="零拷贝管线">阶段间共享后备存储并传递 view/position、避免 payload 物化的管线。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Pro .NET Memory Management, Second Edition, Chapter 14 Advanced Techniques"
+  adaptedUrl="https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_14"
+/>

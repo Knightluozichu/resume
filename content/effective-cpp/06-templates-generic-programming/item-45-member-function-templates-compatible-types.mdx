@@ -1,0 +1,403 @@
+---
+title: "Item 45：用 member function templates 接受所有兼容类型"
+type: A
+section: Chapter 7 · Templates and Generic Programming
+order: 45
+description: 对齐 Effective C++ 第三版 Item 45：为 SmartPtr 编写 generalized copy constructor 与 assignment，以底层 pointer conversion 限定兼容类型，并区分 member templates 和普通 copy special members 的独立职责。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppCompatiblePointerLatticeMap,
+  EcppGeneralizedCopyConstructorMap,
+  EcppMemberTemplateSpecialMembersMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-45-member-function-templates-compatible-types";
+
+<Objectives>
+
+- 能解释为什么 `SmartPtr<Derived>` 应转换为 `SmartPtr<Base>`，并判断 downcast、增加 const 与去 const 的合法方向
+- 能实现受底层 pointer conversion 约束的 generalized copy constructor 与 converting assignment
+- 能区分 member function template 和普通 copy special members，设计同类型与跨类型的完整测试矩阵
+
+</Objectives>
+
+## 从原始指针的兼容转换开始
+
+```cpp
+class Top {};
+class Middle : public Top {};
+class Bottom : public Middle {};
+
+Bottom* bottom = new Bottom;
+Middle* middle = bottom;
+Top* top = bottom;
+const Top* readonlyTop = bottom;
+```
+
+原始 pointers 天然支持 public inheritance 的 upcast，也允许增加 const。一个通用 smart pointer 若只能同类型复制，就失去了这组基础表达能力。
+
+<Term def="编译器允许从源类型安全形成目标类型、无需显式 cast 的类型关系。">
+  compatible type conversion
+</Term>
+
+<Term def="类模板内部自身也是 template、可为不同调用参数独立推导类型的成员函数。">
+  member function template
+</Term>
+
+Item 45 的原则是 Use member function templates to accept all compatible types（用成员函数模板接受所有兼容类型）。
+
+<EcppCompatiblePointerLatticeMap />
+
+先预测：若 `SmartPtr<Bottom>` 可转成 `SmartPtr<Top>`，反方向是否也应自动成立？wrapper 不应赋予原始 pointer 本来没有的隐式权限。
+
+## 单一类型 copy constructor 不够
+
+```cpp
+template<class T>
+class SmartPtr {
+public:
+    SmartPtr(const SmartPtr& other);
+};
+```
+
+这个 constructor 的参数实际是 `const SmartPtr<T>&`，只处理相同 T。`SmartPtr<Bottom>` 与 `SmartPtr<Top>` 是两个不同 class types，普通 copy constructor 无法连接它们。
+
+<Term def="source 和 destination 拥有相同 class template arguments 的复制。">
+  same-specialization copy
+</Term>
+
+若为每一对层级手写 overload，类型数量增长后转换边会组合爆炸，也无法覆盖用户未来定义的 derived types。
+
+<Term def="为每一组源目标类型人工声明转换 overload 导致的组合增长。">
+  conversion overload explosion
+</Term>
+
+## generalized copy constructor
+
+```cpp
+template<class T>
+class SmartPtr {
+public:
+    template<class U>
+    SmartPtr(const SmartPtr<U>& other);
+};
+```
+
+<Term def="以另一个 specialization 为参数、可在不同 element types 间构造的成员模板。">
+  generalized copy constructor
+</Term>
+
+U 在调用时从 source 推导，因此一个 declaration 可表达任意 `SmartPtr<U> -> SmartPtr<T>` 候选。但“任意候选”不等于“任意转换都合法”。
+
+```cpp
+SmartPtr<Bottom> bottom;
+SmartPtr<Top> top(bottom); // desired
+
+SmartPtr<Top> source;
+// SmartPtr<Bottom> invalid(source); // must reject
+```
+
+若 constructor body 只是共享无类型 control block，却没有验证 U/T 关系，危险 downcast 也可能被接受。
+
+<Callout type="trap" title="陷阱：成员模板天然只接受兼容类型">
+  `template<class U>` 本身接受所有 U 作为候选。必须让 signature、constraints 或底层初始化实际验证 `U*` 能否转换为 `T*`。
+</Callout>
+
+## 让 held pointer 执行兼容性检查
+
+```cpp
+template<class T>
+class SmartPtr {
+public:
+    template<class U>
+    SmartPtr(const SmartPtr<U>& other)
+        : heldPtr_(other.get()) {}
+
+    T* get() const noexcept { return heldPtr_; }
+
+private:
+    T* heldPtr_ = nullptr;
+};
+```
+
+<Term def="通过 U pointer 初始化 T pointer，让语言内建转换规则决定跨 specialization 是否成立。">
+  underlying pointer gate
+</Term>
+
+若 `U* -> T*` 合法，member initializer 成功；否则实例化失败。Bottom-to-Top 和 T-to-const-T 可用，Top-to-Bottom 与 const-T-to-T 被拒绝。
+
+<EcppGeneralizedCopyConstructorMap />
+
+<Term def="从 derived element wrapper 转为 base element wrapper 的安全跨类型构造。">
+  smart pointer upcast
+</Term>
+
+<Term def="通过 wrapper 转换移除底层对象 const 限定、必须拒绝的行为。">
+  smart pointer const stripping
+</Term>
+
+## 用现代 constraints 把错误移到接口
+
+初始化失败能保证安全，但诊断可能深入 constructor body。C++20 可直接约束成员模板。
+
+```cpp
+template<class T>
+class SmartPtr {
+public:
+    template<class U>
+        requires std::convertible_to<U*, T*>
+    SmartPtr(const SmartPtr<U>& other)
+        : heldPtr_(other.get()) {}
+
+private:
+    T* heldPtr_ = nullptr;
+};
+```
+
+<Term def="在 overload candidate 边界声明源 pointer 必须可隐式转为目标 pointer 的约束。">
+  pointer-convertibility constraint
+</Term>
+
+constraint 不改变 Item 45 的本质，只把 underlying pointer gate 提前到 candidate selection，改善 diagnostics 和 type traits 查询。
+
+```cpp
+static_assert(std::constructible_from<SmartPtr<Top>, SmartPtr<Bottom>>);
+static_assert(!std::constructible_from<SmartPtr<Bottom>, SmartPtr<Top>>);
+```
+
+<Term def="用编译期 traits 验证哪些 source/destination specialization 可以构造的测试。">
+  conversion constructibility test
+</Term>
+
+## 访问另一个 specialization 的内部状态
+
+不同 specialization 是不同 classes，`SmartPtr<T>` 不自动拥有 `SmartPtr<U>` 的 private access。公开 `get()` 是一种边界；也可声明所有 specializations 互为 friends。
+
+```cpp
+template<class T>
+class SmartPtr {
+    template<class>
+    friend class SmartPtr;
+
+    template<class U>
+        requires std::convertible_to<U*, T*>
+    SmartPtr(const SmartPtr<U>& other)
+        : heldPtr_(other.heldPtr_) {}
+
+    T* heldPtr_ = nullptr;
+};
+```
+
+<Term def="允许同一 class template 的不同 specializations 访问彼此 private representation 的友元声明。">
+  cross-specialization friendship
+</Term>
+
+公开 get 降低内部耦合，也为 pointer-like API 提供观察；friend 可直接共享 control block，但会把 specializations 的 representation 紧密绑定。
+
+## ownership 语义必须与 pointer 类型一起转换
+
+真实 smart pointer 不只保存 T pointer，还保存 deleter、control block、alias offset 或 allocator。跨类型构造必须共享正确 ownership，而不是创建第二个独立 owner。
+
+<Term def="不同 element-type wrappers 指向同一资源时必须共享同一控制记录与销毁次数。">
+  cross-type ownership identity
+</Term>
+
+```cpp
+template<class U>
+    requires std::convertible_to<U*, T*>
+SmartPtr(const SmartPtr<U>& other) noexcept
+    : heldPtr_(other.heldPtr_), control_(other.control_) {
+    retain(control_);
+}
+```
+
+<Term def="跨类型复制时增加同一 control block 的引用计数，而不是重新接管 raw pointer。">
+  shared control-block transfer
+</Term>
+
+测试必须确认 Top/Bottom wrappers 销毁后资源只释放一次，并由能正确销毁动态对象的 deleter 执行。
+
+<Callout type="trap" title="陷阱：用 other.get 构造一个新的独立 owner">
+  对 shared ownership，这会让两个 control blocks 最终 double delete
+  同一对象。generalized constructor 必须复制 ownership
+  identity，不只是复制地址。
+</Callout>
+
+## member template 不会成为 copy constructor
+
+这是 Item 45 最容易漏掉的规则：constructor template 即使 U 可推导为 T，也不是语言定义的 copy constructor。
+
+<Term def="参数为本类引用的非模板特殊成员，控制同类型对象复制。">
+  ordinary copy constructor
+</Term>
+
+<Term def="constructor template 不抑制 compiler 隐式声明普通 copy constructor 的规则。">
+  special-member non-suppression
+</Term>
+
+```cpp
+template<class T>
+class SmartPtr {
+public:
+    SmartPtr(const SmartPtr& other);
+
+    template<class U>
+        requires std::convertible_to<U*, T*>
+    SmartPtr(const SmartPtr<U>& other);
+};
+```
+
+若同类型 copy 需要 retain control block、线程同步或自定义 exception guarantee，就必须显式声明；不能以为 generalized copy constructor 已接管。
+
+<EcppMemberTemplateSpecialMembersMap />
+
+## assignment 同样有两条路径
+
+```cpp
+SmartPtr& operator=(const SmartPtr& rhs);
+
+template<class U>
+    requires std::convertible_to<U*, T*>
+SmartPtr& operator=(const SmartPtr<U>& rhs);
+```
+
+<Term def="在兼容 element types 的 smart pointer specializations 间进行赋值的成员模板。">
+  generalized copy assignment
+</Term>
+
+普通 copy assignment 与 converting assignment 独立。二者都要处理 self-assignment、先 retain 后 release、异常安全和旧资源销毁；同类型调用通常优先选择 non-template overload。
+
+<Term def="候选质量相同时，普通函数通常优先于函数模板的 overload selection 规则。">
+  non-template overload preference
+</Term>
+
+## explicit 还是 implicit
+
+若底层 `U* -> T*` 是普通隐式 pointer conversion，smart wrapper 通常也应允许隐式转换，以便传递 `SmartPtr<Derived>` 给接收 `SmartPtr<Base>` 的函数。
+
+```cpp
+void consume(SmartPtr<Top> value);
+SmartPtr<Bottom> child;
+consume(child);
+```
+
+<Term def="wrapper 转换是否允许由 compiler 自动插入的 API 决策。">
+  conversion explicitness policy
+</Term>
+
+但 ownership model、成本或生命周期变化较大时，可把 constructor 设为 explicit。原则是模拟安全原始 pointer 语义，而不是盲目追求方便。
+
+## 转换矩阵必须包含失败案例
+
+至少验证：
+
+1. T 到 T 的 copy/move/assignment。
+2. Derived 到 Base。
+3. Derived 到 const Base。
+4. T 到 const T。
+5. Base 到 Derived 被拒绝。
+6. const T 到 T 被拒绝。
+7. private/ambiguous inheritance 被拒绝。
+8. 多重 wrappers 共享 control block 并只销毁一次。
+
+<Term def="覆盖同类型、继承、cv、访问与 ownership 的正反跨类型检查表。">
+  smart pointer conversion matrix
+</Term>
+
+先预测每个 `constructible_from` 与 `assignable_from` 结果，再编译；运行期配合析构计数器和 sanitizer 验证 ownership。
+
+## 小结
+
+- member function templates 让一个 class template specialization 接受任意候选 U
+- generalized copy constructor 连接 `SmartPtr<U>` 与 `SmartPtr<T>`，但必须验证 U pointer 到 T pointer 的兼容性
+- safe upcast 与增加 const 应通过，downcast 和去 const 必须拒绝
+- 真实 smart pointer 还必须共享 control block，不能从 raw address 新建独立 owner
+- constructor/assignment templates 不会抑制普通 copy special members，二者都要明确设计
+- constraints 改善候选边界和诊断，正反 conversion matrix 证明接口没有放宽类型安全
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 45"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="compatible type conversion">
+    无需 cast 的安全类型转换。
+  </GlossaryItem>
+  <GlossaryItem term="member function template">
+    类中可独立推导参数的函数模板。
+  </GlossaryItem>
+  <GlossaryItem term="same-specialization copy">
+    相同模板实参对象间的复制。
+  </GlossaryItem>
+  <GlossaryItem term="conversion overload explosion">
+    手写所有转换边导致的组合增长。
+  </GlossaryItem>
+  <GlossaryItem term="generalized copy constructor">
+    接受另一个 specialization 的构造模板。
+  </GlossaryItem>
+  <GlossaryItem term="underlying pointer gate">
+    用底层 pointer conversion 验证兼容性。
+  </GlossaryItem>
+  <GlossaryItem term="smart pointer upcast">
+    derived wrapper 到 base wrapper 的转换。
+  </GlossaryItem>
+  <GlossaryItem term="smart pointer const stripping">
+    经 wrapper 非法移除 const。
+  </GlossaryItem>
+  <GlossaryItem term="pointer-convertibility constraint">
+    源 pointer 可转目标 pointer 的约束。
+  </GlossaryItem>
+  <GlossaryItem term="conversion constructibility test">
+    编译期验证转换构造边界。
+  </GlossaryItem>
+  <GlossaryItem term="cross-specialization friendship">
+    不同实例互访 private 状态的友元。
+  </GlossaryItem>
+  <GlossaryItem term="cross-type ownership identity">
+    跨类型 wrappers 共享的所有权身份。
+  </GlossaryItem>
+  <GlossaryItem term="shared control-block transfer">
+    复制同一控制块并增加引用。
+  </GlossaryItem>
+  <GlossaryItem term="ordinary copy constructor">
+    控制同类型复制的非模板特殊成员。
+  </GlossaryItem>
+  <GlossaryItem term="special-member non-suppression">
+    成员模板不抑制普通特殊成员生成。
+  </GlossaryItem>
+  <GlossaryItem term="generalized copy assignment">
+    兼容 specializations 间的赋值模板。
+  </GlossaryItem>
+  <GlossaryItem term="non-template overload preference">
+    同等匹配时优先普通函数。
+  </GlossaryItem>
+  <GlossaryItem term="conversion explicitness policy">
+    是否允许自动 wrapper 转换的策略。
+  </GlossaryItem>
+  <GlossaryItem term="smart pointer conversion matrix">
+    覆盖类型与 ownership 的正反测试表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：实现 SmartPtr 跨类型构造。** 要允许 Derived 到 Base 和增加 const，拒绝反方向。
+
+  <Answer question="signature 与验证应怎样设计？">声明 `template<class U>` constructor，并约束 `convertible_to<U*, T*>`；初始化 held pointer 与同一 control block，retain 一次。用 constructible_from 覆盖 Derived-to-Base、Derived-to-const-Base、Base-to-Derived 和 const stripping，再用析构计数验证单次释放。</Answer>
+
+2. **问题 2：只声明 generalized copy constructor 后，同类型复制走了 compiler 生成版本。** 修复 ownership bug。
+
+<Answer question="为什么模板没有接管，怎样补齐？">
+  constructor template 不是 copy constructor，不会抑制隐式 copy member。显式声明
+  `SmartPtr(const SmartPtr&)` 和普通 copy assignment，执行 control block
+  retain/release；跨类型 versions 继续受约束。测试 overload
+  选择、self-assignment、move 后状态和引用计数。
+</Answer>
+
+3. **问题 3：跨类型 assignment 先释放旧资源再 retain 新资源。** 当两者共享 control block 时分析风险。
+
+  <Answer question="怎样提供稳健赋值顺序？">先取得并 retain rhs control block 与 converted pointer，确保新 ownership 已稳定，再 release 当前 control block，最后提交成员；或用受约束 converting constructor 建临时对象后 swap。测试 alias/shared-control 自赋值、最后一个 owner、异常注入和线程安全引用计数。</Answer>
+</Exercises>

@@ -1,0 +1,273 @@
+---
+title: "Chapter 27 · Online Algorithms"
+type: C
+section: "CLRS4 · 专题"
+order: 27
+description: "按CLRS第四版第27章重建在线决策、竞争分析、等待电梯、搜索列表与在线缓存。"
+demo: true
+math: true
+sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+draft: false
+---
+
+import { CLRS4OnlineTimelineLab, CLRS4CompetitiveRatioLab, CLRS4ElevatorThresholdLab, CLRS4ElevatorAdversaryLab, CLRS4SearchListCostLab, CLRS4MoveToFrontLab, CLRS4InversionPotentialLab, CLRS4CacheTraceLab, CLRS4CachePhaseLab, CLRS4CacheAdversaryLab, CLRS4OnlineCertificateLab } from "@/components/mdx/introduction-to-algorithms/diagrams/27-online-algorithms";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释online information boundary、offline optimum、competitive ratio与adversary的关系
+- 能计算等待电梯threshold policy在不同arrival time下的cost和最坏竞争比
+- 能实现move-to-front search list、LRU cache与request-phase partition
+- 能分析inversion potential、cache phases和deterministic lower bound如何形成证明
+- 能设计包含request model、legal actions、cost、OPT baseline与ratio inequality的在线证书
+
+</Objectives>
+
+## 从“未来只差一秒，但现在看不见”开始
+
+先预测：你决定放弃等电梯并迈上楼梯的一刻，电梯门打开了。事后看，错误显而易见；但评价一个算法时，不能把尚未到达的信息偷偷交给它，也不能只挑一次幸运运行。
+
+<Term def="输入以requests或events逐步到达，算法必须只依据当前prefix立即作出不可撤销或有代价的决定。">在线算法</Term>研究的不是“运行在网络上”，而是information arrival。与普通离线算法相比，困难不一定来自计算量，而来自决策发生时缺少future suffix。
+
+<CLRS4OnlineTimelineLab />
+
+设完整request sequence为$\sigma$，在线算法$A$与知道整个$\sigma$的offline optimum在相同cost model上运行。对minimization problem，若存在常数$\alpha$和与sequence length无关的$\beta$，使所有合法$\sigma$满足
+
+$$
+C_A(\sigma)\le \alpha C_{\mathrm{OPT}}(\sigma)+\beta,
+$$
+
+则称$A$为$\alpha$-competitive。<Term def="把在线策略在同一完整输入上的cost与知道未来的optimal offline cost比较，并对所有合法序列给出最坏界。">竞争分析</Term>不要求OPT可高效计算；它是performance benchmark，不是部署方案。
+
+<CLRS4CompetitiveRatioLab />
+
+Additive constant $\beta$用来吸收initial state或最后一个未完整phase的边界成本。若问题规模增大而$\beta$也随之增长，就不能借“常数”隐藏坏行为。Competitive ratio也不是average latency：它承诺在adversarial sequence上仍不超过某个倍数，因此经常保守，却能明确算法对unknown future付出的代价。
+
+### 先固定比较契约
+
+一份可审计的在线分析必须先写清六件事：request何时revealed；算法可执行哪些actions；每种action的cost；initial state；OPT是否拥有同样resource；adversary能否根据random choices调整后续请求。缺少其中任一项，ratio可能只是把两个不同问题相除。
+
+<Callout type="trap" title="用实际轨迹上的最好离线结果证明在线算法正确">
+一条trace只能给observed ratio，不能证明worst-case guarantee。修法是对任意sequence建立inequality，或把sequence划成每段都有统一upper/lower bound的结构；实测用于比较常数和workload fit，不替代证明。
+</Callout>
+
+## 27.1 Waiting for an elevator
+
+### Rent-or-buy模型
+
+<Term def="在未知电梯到达时间下，于继续等待和支付固定走楼梯时间之间作在线选择的rent-or-buy模型。">等待电梯</Term>把现实细节压缩成两个量：走楼梯固定耗时$b$；电梯还需等待$\ell$时间到达，而$\ell$事先未知。把电梯到达后的共同乘坐时间归一化掉，offline optimum知道$\ell$：
+
+$$
+C_{\mathrm{OPT}}(\ell)=\min\{\ell,b\}.
+$$
+
+Always-stairs在$\ell$很小时支付$b$而OPT几乎立刻乘梯；always-wait在$\ell$很大时持续付waiting cost而OPT早已走楼梯。两个extreme policies都没有与$b$无关的好界。
+
+### Hedging threshold
+
+一个确定性hedge是先等待$b$ units；若电梯在此之前到达就乘梯，否则立刻走楼梯。它不预测arrival distribution，只把继续等待的累计沉没成本限制在一次stairs cost：
+
+```text
+WAIT-OR-WALK(stair_time b)
+1  wait until the elevator arrives or elapsed time reaches b
+2  if the elevator arrives, take it
+3  otherwise take the stairs immediately
+```
+
+若$\ell\le b$，online与OPT都等待$\ell$；若$\ell>b$，online先等待$b$再花$b$走楼梯，而OPT直接走楼梯。因此
+
+$$
+C_{\mathrm{HEDGE}}(\ell)
+=
+\begin{cases}
+\ell, & \ell\le b,\\
+2b, & \ell>b,
+\end{cases}
+\qquad
+C_{\mathrm{HEDGE}}(\ell)\le 2C_{\mathrm{OPT}}(\ell).
+$$
+
+<CLRS4ElevatorThresholdLab />
+
+这个证明的重点不是电梯，而是“何时停止租用并购买”的threshold design。Cloud instance按小时租或预留、idle machine维持高功耗或进入sleep、反复修补或一次重建，都可以先问：持续成本累积到一次切换成本时，是否应该hedge？
+
+### Threshold为何取$b$
+
+设策略等待$t$后走楼梯。若$t$远小于$b$，adversary可让电梯在放弃后不久到达，online支付$t+b$而OPT等待略多于$t$；若$t$远大于$b$，adversary让电梯迟迟不来，online支付$t+b$而OPT支付$b$。平衡两类损失会把$t$放在$b$附近。
+
+<CLRS4ElevatorAdversaryLab />
+
+这里的adversary不是必须存在的恶意乘客，而是worst-case input construction。它帮助验证一个claim是否依赖运气：先固定deterministic threshold，再选择最不利的arrival time。若引入randomized threshold，必须说明adversary是否在random bits之前固定sequence；否则期待值竞争比没有明确语义。
+
+## 27.2 Maintaining a search list
+
+### Access与reorganization cost
+
+<Term def="面对逐个到达的item requests，动态调整线性表次序以降低未来sequential-search cost的问题。">维护搜索列表</Term>保存$n$个items。Access item $x$需要从head扫描到当前位置，cost为one-based rank。一次request处理完后，可把刚访问item向前移动；具体move是否免费必须在模型里声明。
+
+<CLRS4SearchListCostLab />
+
+如果未来frequency distribution已知，静态最优顺序会优先放高频items。但在线状态下既不知道frequency是否稳定，也不知道下一次request。Counting heuristic响应长期frequency，<Term def="每次访问后把该item移到list head，并保持其他items相对次序不变的self-organizing heuristic。">移到前端</Term>（move-to-front，MTF）则立即响应recency：
+
+```text
+MOVE-TO-FRONT(L, x)
+1  scan L from the head until x is found
+2  pay the current rank of x
+3  unlink x from its current position
+4  insert x at the head of L
+```
+
+<CLRS4MoveToFrontLab />
+
+MTF对burst和working set有直观优势：刚访问的item下一次cost为1，反复未访问的items自然向后退。它也会被alternating patterns扰动，所以不能只说“符合locality”；需要与能够提前知道整个request sequence并重排list的OPT比较。
+
+### Inversion potential proof
+
+令在线MTF list为$L$，offline comparator list为$L^*$。一对items若在$L$和$L^*$中的relative order不同，就构成inversion。取potential为inversion count：
+
+$$
+\Phi(L,L^*)=
+\left|\{(x,y):x\text{ precedes }y\text{ in }L
+\text{ but follows }y\text{ in }L^*\}\right|.
+$$
+
+<CLRS4InversionPotentialLab />
+
+访问$x$时，假设$x$在MTF中rank为$k$，在OPT中rank为$j$。MTF把$x$移到front，会消除那些“在MTF中位于$x$前、但在OPT中位于$x$后”的inversions，也可能新增另一类inversions。共同位于$x$前面的items数量不会超过$j-1$，因此actual access cost与potential change之和可由OPT本次access和paid transpositions的常数倍控制。
+
+把每次amortized inequality在整个sequence上求和，potential terms telescoping；只剩初始与最终potential的additive boundary。标准free-move-after-access模型下可得到MTF相对允许同类重组的OPT的constant competitive bound；在只按access rank且OPT额外transposition付费的常见模型中，紧分析给出2倍界。若把move-to-front自身每次adjacent swap也计费，cost定义改变，证明中的常数也会改变。
+
+这说明potential不是为了猜未来，而是给“当前多付但改善了list state”记账。相同技巧也用于amortized data structures，但在线分析多了一个reference state：potential衡量online与offline states的距离，而不只是单一数据结构的stored credit。
+
+<Callout type="trap" title="忽略重排成本仍宣称同一个竞争比">
+Access rank、free move、paid adjacent transposition是不同cost models。修法是先写出MTF与OPT各自允许的操作及价格，再定义potential和per-request amortized inequality；不能把一个模型的2倍结论直接搬到另一个模型。
+</Callout>
+
+## 27.3 Online caching
+
+### Hits, faults, and eviction
+
+<Term def="在capacity有限的fast store中处理page request，miss时必须装入并可能逐出resident page的在线问题。">在线缓存</Term>有capacity $k$，每次请求一个page。Hit cost归一为0；miss或page fault cost为1，并在cache满时必须evict一个page。Offline furthest-in-future policy知道未来，而online replacement policy只能看到prefix。
+
+LRU逐出最久未被请求的resident page：
+
+```ts
+function accessLRU(cache: string[], page: string, capacity: number) {
+  const hit = cache.indexOf(page);
+  if (hit >= 0) cache.splice(hit, 1);
+  if (hit < 0 && cache.length === capacity) cache.shift();
+  cache.push(page); // left is least recent, right is most recent
+  return hit < 0;
+}
+```
+
+<CLRS4CacheTraceLab />
+
+FIFO按进入cache的时间逐出，LRU按最近request时间逐出；它们对同一trace可能产生不同faults，但可以共享一个coarse worst-case proof。LIFO和least-frequently-used在合适adversarial sequence上可能长期保留坏pages，不能仅凭名称推出competitive guarantee。
+
+### Phase partition
+
+把request sequence划成maximal $k$-phases：每个phase最多包含$k$个distinct pages，下一次出现第$k+1$个distinct page时开始新phase。Phase由input决定，不依赖LRU内部state。
+
+<CLRS4CachePhaseLab />
+
+LRU在一个phase中对每个distinct page至多fault一次，因为phase内再次访问会使该page保持得比所有上个phase残留但未访问的pages更recent。因此每个完整phase至多$k$ faults。
+
+另一方面，从一个phase过渡到下一个phase会引入一个不属于上一phase distinct set的新page。任何capacity同为$k$的offline algorithm不可能在所有phase transitions上永远零fault；把相邻phase的lower bound适当charge，可得到
+
+$$
+C_{\mathrm{LRU}}(\sigma)
+\le k\,C_{\mathrm{OPT}}(\sigma)+O(k).
+$$
+
+同类conservative/marking argument也给FIFO一个$k$-competitive upper bound。这个bound不能证明LRU与FIFO在真实locality workload上等好，只说明最坏情况下两者落入同一asymptotic class。
+
+### Deterministic lower bound
+
+为什么$k$看起来很大却难以避免？考虑$k+1$个pages。对任何deterministic online cache，adversary总请求当前不在cache的page，使online每次fault。Offline知道未来，可在每组请求里选择未来最晚使用的page逐出，使其fault frequency低得多。由此任何deterministic online paging algorithm在同capacity comparator下都不能保证优于$k$量级的competitive ratio。
+
+<CLRS4CacheAdversaryLab />
+
+这一下界与LRU upper bound相遇，说明问题来自information gap，不只是LRU实现不够聪明。Randomization可在oblivious-adversary模型下改善bound，但必须把expected cost、random source和adversary power写进定义；本章确定性结论不能自动转成随机化结论。
+
+### Resource augmentation
+
+比较时cache capacities也必须相同或显式标注。若online有$k$ slots而OPT只有$h$ slots，phase argument可得到与$k-h+1$相关的更细界；额外少量cache可能显著改变ratio。工程benchmark中若一个policy实际上用了metadata cache、prefetch buffer或victim cache，而baseline没有，这也是resource augmentation，不应包装成纯replacement-policy胜利。
+
+```text
+AUDIT-ONLINE-CACHE(trace, k)
+1  replay exactly the same trace for policy and OPT baseline
+2  record initial cache, capacity, prefetch, and write policy
+3  separate hits, compulsory faults, replacement faults, and dirty costs
+4  partition the trace into k-distinct phases
+5  report both worst-case certificate and measured workload behavior
+```
+
+## 从证明到工程决策
+
+Competitive analysis回答“没有future oracle时最坏会损失多少”，trace simulation回答“这批workload上实际发生什么”。两者应同时存在：证明防止策略在罕见输入上失控，measurement暴露constant factors、cache hierarchy、prefetch和distribution shift。
+
+<CLRS4OnlineCertificateLab />
+
+<Stepper>
+<Step title="定义信息与成本">
+列出每个request何时可见、哪些actions不可撤销、initial state、resource capacity和每项cost；禁止策略读取future suffix。
+
+<CLRS4OnlineTimelineLab />
+</Step>
+<Step title="建立upper与lower bound">
+给online policy按threshold、potential或phase求upper bound；给同一sequence上的OPT构造lower bound，再形成ratio inequality。
+
+<CLRS4CachePhaseLab />
+</Step>
+<Step title="审计比较契约">
+检查OPT是否拥有相同输入和资源、additive constant是否真正独立于sequence length，并用adversarial和real traces双重验证。
+
+<CLRS4OnlineCertificateLab />
+</Step>
+</Stepper>
+
+## 小结
+
+Chapter 27 Online Algorithms把“未来未知”变成可证明的模型。Waiting for an elevator用threshold hedging在继续等待和走楼梯之间取得2-competitive guarantee；maintaining a search list用move-to-front响应recency，并以online/OPT list之间的inversion potential支付重排带来的状态差；online caching用$k$-distinct phases证明LRU与FIFO的worst-case upper bound，再以$k+1$ pages构造deterministic lower bound。
+
+在线证书的核心不是报一个ratio，而是同时交付information boundary、legal actions、cost model、offline comparator、adversary assumptions、upper-bound proof和lower-bound witness。模型一旦改变，例如transposition是否付费、cache capacity是否相同、adversary是否看见random choices，结论就必须重新证明。
+
+<Exercises>
+
+**问题 1**：走楼梯时间$b=9$，电梯在$\ell=14$时到达。等待$b$后改走楼梯的策略与OPT各花多少时间，ratio是多少？
+
+<Answer>
+电梯在threshold之后到达，hedge先等9再走9，cost为18；OPT知道未来，直接走楼梯，cost为9；ratio为2。若电梯在9之前到达，hedge与OPT都等待同一$\ell$。
+</Answer>
+
+**问题 2**：为什么MTF证明需要online list与OPT list之间的inversions，而只数MTF自己的rank不够？
+
+<Answer>
+Rank只描述当前access cost，不能记录一次move对未来state的改善。Inversion potential量化两个lists的relative-order disagreement；MTF多付的当前成本可由被消除的disagreement抵消，求和后potential telescopes，才能与OPT整个sequence cost建立常数倍关系。
+</Answer>
+
+**问题 3**：capacity为3的LRU在一个3-distinct phase内为何至多fault 3次？
+
+<Answer>
+Phase内只有至多3个distinct pages。每个page第一次出现可能fault；一旦在本phase被访问，它就比所有尚未在本phase访问的旧resident更recent，LRU不会在phase结束前逐出它。因此同一page不会在该phase第二次fault，总数至多3。
+</Answer>
+
+**问题 4**：为什么“LRU是$k$-competitive”不能证明它在所有实际trace上都比FIFO好？
+
+<Answer>
+Competitive bound只给两者相对OPT的worst-case upper bound，而且这个coarse phase proof对LRU和FIFO都可能给同一个$k$。它不比较二者在特定locality、write cost或prefetch条件下的fault count；实际优劣还需同资源、同trace measurement。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="在线算法">输入以requests或events逐步到达，算法必须只依据当前prefix立即作出不可撤销或有代价的决定。</GlossaryItem>
+<GlossaryItem term="竞争分析">把在线策略在同一完整输入上的cost与知道未来的optimal offline cost比较，并对所有合法序列给出最坏界。</GlossaryItem>
+<GlossaryItem term="等待电梯">在未知电梯到达时间下，于继续等待和支付固定走楼梯时间之间作在线选择的rent-or-buy模型。</GlossaryItem>
+<GlossaryItem term="维护搜索列表">面对逐个到达的item requests，动态调整线性表次序以降低未来sequential-search cost的问题。</GlossaryItem>
+<GlossaryItem term="移到前端">每次访问后把该item移到list head，并保持其他items相对次序不变的self-organizing heuristic。</GlossaryItem>
+<GlossaryItem term="在线缓存">在capacity有限的fast store中处理page request，miss时必须装入并可能逐出resident page的在线问题。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Chapter 27 · Online Algorithms" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

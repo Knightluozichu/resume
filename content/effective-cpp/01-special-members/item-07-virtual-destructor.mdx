@@ -1,0 +1,375 @@
+---
+title: "Item 7：为多态基类声明 virtual destructor"
+type: A
+section: Chapter 2 · Constructors, Destructors, and Assignment Operators
+order: 7
+description: 对齐 Effective C++ 第三版 Item 7：分析经 base pointer 删除派生对象的完整析构链，选择 public virtual、protected non-virtual 或 pure virtual destructor，并验证所有权与 ABI。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppDestructorPolicyMap,
+  EcppPolymorphicDeletionMap,
+  EcppVirtualDestructorCostMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-07-virtual-destructor";
+
+<Objectives>
+
+- 能解释 `delete Base*` 对实际 Derived 对象为何需要 virtual destructor，并追踪最派生到基类的完整销毁顺序
+- 能比较 public virtual、protected non-virtual、pure virtual destructor、custom deleter 与 destroy function 的所有权语义
+- 能设计计数、sanitizer、factory 和 ABI 测试，验证多态销毁完整且非多态值类型没有无意引入 virtual 布局
+
+</Objectives>
+
+## 从“删除成功为何仍可能未定义”开始
+
+设工厂隐藏实现类型：
+
+```cpp
+class TimeKeeper {
+public:
+    virtual std::chrono::system_clock::time_point now() const = 0;
+};
+
+class AtomicClock : public TimeKeeper {
+public:
+    ~AtomicClock();
+    std::chrono::system_clock::time_point now() const override;
+private:
+    std::unique_ptr<NativeClock> clock_;
+};
+
+std::unique_ptr<TimeKeeper> make_clock();
+```
+
+如果 TimeKeeper destructor 非 virtual，`unique_ptr<TimeKeeper>` 的默认 deleter 最终执行 `delete TimeKeeper*`，而实际对象是 AtomicClock。
+
+<Term def="通过基类指针或引用调用 virtual 接口，运行时按实际派生类型选择实现的类型体系。">
+  polymorphic hierarchy
+</Term>
+
+需要
+
+<Term def="通过基类指针删除时按动态类型进入最派生析构链的 virtual 析构函数。">
+  virtual destructor
+</Term>
+
+。否则行为未定义，不只是“可能少打一条日志”。
+
+<EcppPolymorphicDeletionMap />
+
+## delete-expression 同时依赖静态与动态类型
+
+<Term def="源码中指针表达式声明的类型，例如 delete Base* 中的 Base。">
+  static type
+</Term>
+
+<Term def="对象运行时实际构造的最派生类型，例如 Base* 指向的 Derived。">
+  dynamic type
+</Term>
+
+非 virtual destructor 只让 delete-expression 看见静态 Base 析构；动态 Derived 的资源与成员无法获得可靠完整销毁。
+
+```cpp
+class TimeKeeper {
+public:
+    virtual ~TimeKeeper() = default;
+    virtual TimePoint now() const = 0;
+};
+```
+
+<Term def="从最派生析构体开始，依次销毁成员、直接基类直到根基类的调用序列。">
+  dynamic destruction chain
+</Term>
+
+完整链路先执行 AtomicClock::~AtomicClock，释放 clock\_，再执行 TimeKeeper::~TimeKeeper，最后释放存储。
+
+<Callout type="trap">
+  **现象**：测试中 delete Base* 没崩溃，就认定非 virtual
+  安全。**原因**：未定义行为可能只表现为派生资源泄漏，allocator
+  恰好容忍。**修法**：声明 virtual destructor，并用派生析构计数和 sanitizer
+  证明完整链，而不是依赖肉眼。
+</Callout>
+
+## 何时必须声明 virtual destructor
+
+<Term def="设计上允许由调用方持有 Base* 所有权，并经该接口销毁实际派生对象。">
+  polymorphic deletion contract
+</Term>
+
+满足时基类 destructor 应 public virtual。一个实用判断：类含任何 virtual function，且对象可能经 base pointer 销毁，就必须审查 destructor。
+Declare destructors virtual in polymorphic base classes（为多态基类声明 virtual destructor）描述的正是这一所有权条件；若基类明确禁止外部 base-pointer deletion，则应以 protected non-virtual destructor 表达另一种契约。
+
+```cpp
+class Plugin {
+public:
+    virtual ~Plugin() = default;
+    virtual void start() = 0;
+    virtual void stop() noexcept = 0;
+};
+
+std::unique_ptr<Plugin> load_plugin(const Config&);
+```
+
+Factory 返回 `unique_ptr<Base>` 本身就是强烈证据：default_delete 需要正确 base deletion。
+
+<Term def="以基类智能指针表达实际派生对象唯一所有权，并由基类接口触发销毁。">
+  polymorphic owner
+</Term>
+
+shared_ptr 从 `shared_ptr<Derived>` 构造时可能在 control block 保存 Derived deleter，但不能把这种细节当基类设计借口；其他 Base\* 删除仍危险。
+
+## public virtual 与 protected non-virtual
+
+如果基类用于多态调用但不允许通过 Base\* 删除，可让 destructor protected non-virtual：
+
+```cpp
+class StackOnlyInterface {
+public:
+    virtual void run() = 0;
+protected:
+    ~StackOnlyInterface() = default;
+};
+```
+
+<Term def="析构函数不可由外部通过基类指针调用，但派生析构仍可销毁基类子对象的设计。">
+  protected non-virtual destructor
+</Term>
+
+这把不合法 delete 拒绝在编译期。代价是不能直接使用 `unique_ptr<Base>` default deleter，所有权必须由具体类型或 custom deleter 管理。
+
+<Term def="智能指针随所有权对象保存、在销毁时执行特定释放逻辑的函数对象。">
+  custom deleter
+</Term>
+
+可用于 C ABI 或模块边界，但接口复杂度更高。
+
+<EcppDestructorPolicyMap />
+
+## pure virtual destructor 仍需定义
+
+<Term def="声明为 `= 0`、使类成为 abstract，同时仍会在派生析构链中被调用的析构函数。">
+  pure virtual destructor
+</Term>
+
+```cpp
+class AbstractSession {
+public:
+    virtual ~AbstractSession() = 0;
+};
+
+AbstractSession::~AbstractSession() = default;
+```
+
+<Term def="不能直接实例化、只用于规定派生接口或共享实现的类。">
+  abstract base class
+</Term>
+
+即使 pure virtual，派生对象析构仍必须执行基类 destructor，因此需要定义；缺失会在链接阶段失败。若类已有其他 pure virtual，析构无需再设 pure 才能抽象。
+
+## 不要继承没有多态契约的标准值类型
+
+std::string、std::vector 等没有 virtual destructor，因为它们不是设计给 public polymorphic inheritance 的基类。
+
+<Term def="复制移动表示独立值，通常不用于运行期替换和 base-pointer deletion 的类型。">
+  value type
+</Term>
+
+```cpp
+class TaggedString : public std::string { /* 危险 public 继承 */ };
+
+std::string* text = new TaggedString;
+delete text; // undefined behavior
+```
+
+<Term def="通过 public 继承使用一个没有多态销毁契约的基类，并允许基类指针指向派生的设计错误。">
+  non-polymorphic base misuse
+</Term>
+
+应组合 string 成员，或定义自己的多态接口。
+
+## 不是所有 destructor 都应 virtual
+
+<Term def="明确禁止进一步派生的类，编译器可据此优化且不存在派生销毁链。">
+  final class
+</Term>
+
+值类型或 final class 没有 base-pointer deletion 场景，virtual destructor 只会改变类型性质。
+
+```cpp
+class Point final {
+public:
+    Point(double x, double y) : x_{x}, y_{y} {}
+private:
+    double x_{};
+    double y_{};
+};
+```
+
+<Term def="实现中通常存于每个多态对象、指向虚函数表的隐藏指针。">vptr</Term>
+
+首个 virtual 常增加对象大小、对齐和 ABI 约束；已有其他 virtual 的多态类通常已付出 vptr 成本，析构不 virtual 却保留致命漏洞。
+
+<EcppVirtualDestructorCostMap />
+
+<Callout type="trap">
+  **现象**：编码规范要求所有 class destructor 一律
+  virtual。**原因**：把多态销毁规则误推广到值类型。**修法**：按语义选择：public
+  virtual 支持 base deletion，protected non-virtual 禁止它，值/final 类型保持
+  non-virtual。
+</Callout>
+
+## ABI 与插件边界
+
+<Term def="已编译模块之间对对象布局、vtable、allocator 和调用约定的二进制契约。">
+  binary interface
+</Term>
+
+给已发布 class 新增首个 virtual 会改变布局和 ABI。若跨 DLL/共享库分配与释放，常用配对 factory/destroy function：
+
+```cpp
+extern "C" Plugin* create_plugin(const HostApi* host);
+extern "C" void destroy_plugin(Plugin* plugin) noexcept;
+```
+
+<Term def="由创建模块提供并使用同一 allocator 销毁对象的配对释放接口。">
+  destroy function
+</Term>
+
+调用方用 custom deleter 包装：
+
+```cpp
+using PluginPtr = std::unique_ptr<Plugin, void (*)(Plugin*)>;
+PluginPtr plugin{create_plugin(&host), &destroy_plugin};
+```
+
+这不是 virtual destructor 的通用替代，而是明确跨模块所有权与 allocator。模块内部仍可使用 virtual destructor 保证层次正确。
+
+## 析构访问与所有权必须一致
+
+<Term def="析构函数是 public、protected 或 private，从而决定哪些调用方能结束对象生命周期。">
+  destructor accessibility
+</Term>
+
+public virtual 表示“任何 owner 可经 Base 销毁”；protected non-virtual 表示“外部不能经 Base 销毁”；private destructor 常配 factory/release 或 intrusive lifetime。
+
+<Term def="接口明确说明谁拥有对象、通过何种静态类型和释放函数结束生命周期的规则。">
+  destruction ownership protocol
+</Term>
+
+不能一边返回 owning Base\*，一边让 destructor protected；类型和工厂签名必须一致。
+
+## 测试动态析构链
+
+<Term def="记录每一层析构是否执行、执行顺序和资源释放次数的测试。">
+  destruction-chain test
+</Term>
+
+```cpp
+struct Probe {
+    std::vector<std::string>& log;
+    std::string name;
+    ~Probe() { log.push_back(name); }
+};
+```
+
+在 Derived/Base 各放 Probe，经 `unique_ptr<Base>` 销毁，断言派生成员、Derived body、基类成员与 Base body 的预期顺序。AddressSanitizer/LeakSanitizer 捕获泄漏和错误 deallocation。
+
+先预测：给一个已有 virtual method 但 non-virtual destructor 的接口，通过 factory 创建派生再释放，会执行哪些析构？改为 virtual 后重新写出链路并验证。
+
+- `std::has_virtual_destructor_v<Base>` 与设计预期一致。
+- `unique_ptr<Base>` 销毁派生时派生资源计数回零。
+- protected non-virtual base 的 `delete Base*` 是 compile-fail test。
+- pure virtual destructor 有定义且派生销毁可链接。
+- final/value 类型大小和 trivial 性没有被无意 virtual 改变。
+- 插件 create/destroy 在同一模块 allocator 下配对。
+
+## 小结
+
+- 经 Base\* 删除实际 Derived 时，polymorphic base 必须有 virtual destructor
+- virtual 分派进入最派生析构，再按成员与基类逆序完成完整销毁
+- public virtual 支持 base deletion；protected non-virtual 在编译期禁止外部 base delete
+- pure virtual destructor 可使类抽象，但仍必须提供定义
+- 没有多态用途的 value/final 类型不应无故添加 virtual
+- ABI 边界可用配对 destroy function/custom deleter，但仍要明确唯一销毁协议
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 7"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="polymorphic hierarchy">
+    通过 virtual 接口按动态类型选择实现的体系。
+  </GlossaryItem>
+  <GlossaryItem term="virtual destructor">
+    经基类指针删除时进入最派生析构链的析构函数。
+  </GlossaryItem>
+  <GlossaryItem term="static type">指针表达式在源码中声明的类型。</GlossaryItem>
+  <GlossaryItem term="dynamic type">
+    对象运行时实际构造的最派生类型。
+  </GlossaryItem>
+  <GlossaryItem term="dynamic destruction chain">
+    从最派生到根基类的完整析构序列。
+  </GlossaryItem>
+  <GlossaryItem term="polymorphic deletion contract">
+    允许经 Base* 所有者销毁派生对象的契约。
+  </GlossaryItem>
+  <GlossaryItem term="polymorphic owner">
+    以基类智能指针拥有实际派生对象的所有者。
+  </GlossaryItem>
+  <GlossaryItem term="protected non-virtual destructor">
+    禁止外部经 Base* delete 的析构策略。
+  </GlossaryItem>
+  <GlossaryItem term="custom deleter">
+    智能指针保存并在销毁时执行的释放函数对象。
+  </GlossaryItem>
+  <GlossaryItem term="pure virtual destructor">
+    声明为纯虚但仍需定义并执行的析构函数。
+  </GlossaryItem>
+  <GlossaryItem term="abstract base class">
+    不可直接实例化、用于规定派生接口的类。
+  </GlossaryItem>
+  <GlossaryItem term="value type">
+    具有独立值语义且不用于运行期基类替换的类型。
+  </GlossaryItem>
+  <GlossaryItem term="non-polymorphic base misuse">
+    继承未设计多态销毁的值类型作为 public 基类。
+  </GlossaryItem>
+  <GlossaryItem term="final class">明确禁止继续派生的类。</GlossaryItem>
+  <GlossaryItem term="vptr">
+    多态对象中通常指向虚函数表的隐藏指针。
+  </GlossaryItem>
+  <GlossaryItem term="binary interface">
+    模块间对象布局、vtable、allocator 与调用约定。
+  </GlossaryItem>
+  <GlossaryItem term="destroy function">
+    由创建模块提供的配对对象释放接口。
+  </GlossaryItem>
+  <GlossaryItem term="destructor accessibility">
+    析构访问级别对可销毁调用方的限制。
+  </GlossaryItem>
+  <GlossaryItem term="destruction ownership protocol">
+    规定 owner、静态类型和释放动作的协议。
+  </GlossaryItem>
+  <GlossaryItem term="destruction-chain test">
+    验证每层析构顺序和资源释放次数的测试。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：选择析构策略。** 为 factory 返回的 Plugin、栈上策略接口和 final Point 分别设计 destructor。
+
+  <Answer question="三类对象应选择什么 destructor 策略？">factory 返回 `unique_ptr<Plugin>` 且实际为派生，Plugin 使用 public virtual destructor；栈上策略接口若禁止外部通过 Base* 拥有删除，使用 protected non-virtual destructor，并由具体类型管理生命周期；final Point 不参与继承，保持普通 non-virtual destructor/rule of zero。选择由销毁所有权语义决定。</Answer>
+
+2. **问题 2：证明析构完整。** 设计一个不依赖“程序没崩”的多态删除测试。
+
+  <Answer question="怎样证明 Base owner 完整销毁 Derived？">在 Derived 独有资源、Derived body、Base 成员与 Base body 放顺序 probe，经 factory 返回 `unique_ptr<Base>` 后 reset，断言每个 probe 恰好执行一次且顺序正确；资源计数归零；启用 ASan/LSan。再静态断言 `has_virtual_destructor<Base>`，并用非 virtual 对照在 sanitizer 下复现缺陷。</Answer>
+
+3. **问题 3：设计插件 ABI。** 对象由动态库创建、主程序持有，说明 virtual destructor 与 destroy function 如何取舍。
+
+  <Answer question="跨模块对象销毁为何常需要 destroy function？">主程序直接 delete 可能跨 allocator/CRT 边界，也可能受类 ABI 变化影响。库导出 create 与 noexcept destroy，调用方用 `unique_ptr<Base, deleter>` 保证回到创建模块释放；库内部 Base 仍应有 virtual destructor，确保 destroy 中 delete Base* 可完整销毁派生。测试加载、失败、卸载前销毁和 allocator 配对。</Answer>
+</Exercises>

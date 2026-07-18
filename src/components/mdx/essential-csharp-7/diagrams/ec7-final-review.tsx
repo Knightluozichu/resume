@@ -1,155 +1,45 @@
-/**
- * <Ec7FinalReviewDiagram>：总复习思维导图（C# 7.0 本质论 收尾章）。
- *
- * 中心节点「C# 7.0 本质论」，四条分支辐射到四角：
- *   - C# 基础（accent 紫）：类型系统、运算符、控制流
- *   - 面向对象（success 绿）：类与对象、继承与接口
- *   - 泛型与委托（warning 暖）：泛型约束、委托与事件
- *   - 高级特性（danger 红）：LINQ、async/await
- *
- * 纯静态展示，无交互。Server Component。
- * viewBox 720×420，四周留白 ≥32，字号 ≥11。
- */
+"use client";
 
-const VIEW_W = 720;
-const VIEW_H = 420;
+import { useState } from "react";
 
-const accent = "var(--accent)";
-const success = "var(--success)";
-const warning = "var(--warning)";
-const danger = "var(--danger)";
-const primary = "var(--text-primary)";
-const secondary = "var(--text-secondary)";
-const border = "var(--border)";
-const elevated = "var(--bg-elevated)";
-
-const CX = 360;
-const CY = 210;
-
-interface Branch {
-  name: string;
-  color: string;
-  x: number;
-  y: number;
-  children: { label: string; x: number; y: number }[];
-}
-
-const BRANCHES: readonly Branch[] = [
-  {
-    name: "C# 基础",
-    color: accent,
-    x: 180,
-    y: 110,
-    children: [
-      { label: "值类型/引用类型", x: 70, y: 70 },
-      { label: "var 类型推断", x: 70, y: 100 },
-      { label: "运算符优先级", x: 70, y: 130 },
-    ],
-  },
-  {
-    name: "面向对象",
-    color: success,
-    x: 540,
-    y: 110,
-    children: [
-      { label: "封装/属性", x: 650, y: 70 },
-      { label: "virtual/override", x: 650, y: 100 },
-      { label: "接口多实现", x: 650, y: 130 },
-    ],
-  },
-  {
-    name: "泛型与委托",
-    color: warning,
-    x: 180,
-    y: 310,
-    children: [
-      { label: "where 约束", x: 70, y: 290 },
-      { label: "Func/Action", x: 70, y: 320 },
-      { label: "event 发布订阅", x: 70, y: 350 },
-    ],
-  },
-  {
-    name: "高级特性",
-    color: danger,
-    x: 540,
-    y: 310,
-    children: [
-      { label: "LINQ 流水线", x: 650, y: 290 },
-      { label: "延迟执行", x: 650, y: 320 },
-      { label: "async/await", x: 650, y: 350 },
-    ],
-  },
+const reviewCases = [
+  { label: "Ch 1-5", invariant: "a value has a compile-time type; binding and evaluation follow explicit rules", contracts: "conversion, expression, control and parameter contracts", inspect: "compiler diagnostics, overload choice, observable side effects", pass: "predict result and failure before execution" },
+  { label: "Ch 6-11", invariant: "public type preserves construction, substitution, equality, disposal and failure rules", contracts: "class/interface/value/object/exception contracts", inspect: "API tests, equality properties, disposal and stack trace", pass: "consumer cannot create invalid state through public API" },
+  { label: "Ch 12-18", invariant: "types and behavior compose without losing timing, lifetime or provider semantics", contracts: "generic, delegate/event, enumeration/query and metadata contracts", inspect: "allocation, invocation list, enumerator state, expression tree", pass: "state when work executes and who retains whom" },
+  { label: "Ch 19-21", invariant: "operation, shared state and native memory each have explicit owner and end condition", contracts: "Task/cancel, lock/wait, ABI/pointer/callback contracts", inspect: "timeline, wait graph, buffer length and unregister/drain", pass: "fault/cancel/dispose cannot leak or corrupt shared state" },
+  { label: "Ch 22", invariant: "contract, artifact and execution stage are not conflated", contracts: "CLI/CTS/CLS, API target, assembly/metadata, JIT/AOT", inspect: "manifest, CIL, loader resolution and runtime target", pass: "locate portability/load/performance failure in the correct layer" },
 ];
 
-export function Ec7FinalReviewDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="C# 7.0 本质论总复习思维导图。中心节点 C# 7.0 本质论，四条分支辐射：左上 C# 基础（紫色，值类型引用类型、var 类型推断、运算符优先级）；右上面向对象（绿色，封装属性、virtual override、接口多实现）；左下泛型与委托（暖色，where 约束、Func Action、event 发布订阅）；右下高级特性（红色，LINQ 流水线、延迟执行、async await）。"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          {/* 主标题 */}
-          <text x={VIEW_W / 2} y={24} textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>
-            C# 7.0 本质论 · 总复习
-          </text>
+export function Ec7OfficialReviewMatrixLab() {
+  const [selected, setSelected] = useState(0);
+  const item = reviewCases[selected];
+  return <figure className="mdx-figure not-prose mx-auto my-6"><div className="border border-border bg-elevated p-4 sm:p-5"><div className="grid grid-cols-3 gap-2 sm:grid-cols-5">{reviewCases.map((entry, index) => <button key={entry.label} type="button" onClick={() => setSelected(index)} className={`min-h-12 border px-2 text-xs ${selected === index ? "border-cyan-500 bg-cyan-500/15 text-primary" : "border-border bg-bg text-secondary"}`}>{entry.label}</button>)}</div><div className="mt-4 grid gap-3 md:grid-cols-2">{[["central invariant", item.invariant], ["contracts", item.contracts], ["inspect evidence", item.inspect], ["pass condition", item.pass]].map(([title, value]) => <div key={title} className="border border-border bg-bg p-4"><span className="text-xs text-secondary">{title}</span><strong className="mt-2 block text-sm leading-6 text-primary">{value}</strong></div>)}</div></div><figcaption className="mt-2 text-center text-sm text-secondary">用五段矩阵复核官方22章的核心不变量、证据与通过条件。</figcaption></figure>;
+}
 
-          {/* 中心 → 分支 连线 */}
-          {BRANCHES.map((b) => (
-            <line key={`cb-${b.name}`} x1={CX} y1={CY} x2={b.x} y2={b.y} stroke={b.color} strokeWidth="2.2" strokeOpacity="0.55" />
-          ))}
+const integratedCases = [
+  { label: "typed parser", chapters: "Ch 2-5, 9-12", input: "text tokens and parse policy", chain: "value conversion → control flow → method contract → result value/exception", boundary: "culture, overflow, nullable and equality", evidence: "table-driven tests for valid, invalid and boundary inputs" },
+  { label: "plugin catalog", chapters: "Ch 6-8, 12-18, 22", input: "assemblies and metadata", chain: "interface contract → generic registry → reflection discovery → typed activation", boundary: "load/type failure, duplicate identity, event subscription", evidence: "manifest/type diagnostics and lifecycle-safe unload policy" },
+  { label: "bounded importer", chapters: "Ch 11-20", input: "async stream of records", chain: "query/iterator → Task/cancel → bounded concurrency → synchronized commit", boundary: "partial effects, callback exception, deadlock and timer overlap", evidence: "cancel/fault timeline plus invariant and throughput tests" },
+  { label: "native bridge", chapters: "Ch 9-11, 18, 21-22", input: "native header, library and callbacks", chain: "layout → DllImport/marshalling → delegate rooting → loader/runtime", boundary: "width, charset, ownership, in-flight callback", evidence: "sizeof/offset/ABI tests and unregister-drain proof" },
+  { label: "portable library", chapters: "Ch 6-18, 21-22", input: "public API and target contract", chain: "well-formed types → CLS surface → .NET Standard references → package", boundary: "platform API, reflection/AOT and native dependency", evidence: "cross-target compile, load and behavior matrix" },
+];
 
-          {/* 分支 → 子节点 连线 + 子节点 */}
-          {BRANCHES.map((b) => (
-            <g key={`br-${b.name}`}>
-              {b.children.map((c) => (
-                <line key={`cl-${b.name}-${c.label}`} x1={b.x} y1={b.y} x2={c.x} y2={c.y} stroke={b.color} strokeWidth="1.4" strokeOpacity="0.4" />
-              ))}
-              {b.children.map((c) => (
-                <g key={`cn-${b.name}-${c.label}`}>
-                  <rect x={c.x - 58} y={c.y - 12} width="116" height="24" rx="12" fill={elevated} stroke={b.color} strokeWidth="1.4" strokeOpacity="0.6" />
-                  <text x={c.x} y={c.y + 4} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>
-                    {c.label}
-                  </text>
-                </g>
-              ))}
-            </g>
-          ))}
+export function Ec7IntegratedCaseLab() {
+  const [selected, setSelected] = useState(1);
+  const item = integratedCases[selected];
+  return <figure className="mdx-figure not-prose mx-auto my-6"><div className="border border-border bg-elevated p-4 sm:p-5"><div className="grid grid-cols-3 gap-2 sm:grid-cols-5">{integratedCases.map((entry, index) => <button key={entry.label} type="button" onClick={() => setSelected(index)} className={`min-h-12 border px-2 text-xs ${selected === index ? "border-violet-500 bg-violet-500/15 text-primary" : "border-border bg-bg text-secondary"}`}>{entry.label}</button>)}</div><div className="mt-4 grid gap-3 md:grid-cols-[0.45fr_1.55fr]"><div className="border border-border bg-bg p-4 text-sm font-semibold text-primary">{item.chapters}</div><div className="border border-border bg-bg p-4 text-sm text-secondary">input: {item.input}</div></div><div className="mt-3 grid gap-3 md:grid-cols-3"><div className="border border-cyan-500/40 bg-cyan-500/10 p-3 text-sm text-primary">chain: {item.chain}</div><div className="border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-primary">boundary: {item.boundary}</div><div className="border border-emerald-500/40 bg-emerald-500/10 p-3 text-sm text-primary">evidence: {item.evidence}</div></div></div><figcaption className="mt-2 text-center text-sm text-secondary">切换五个综合系统，把章节知识连接成输入、契约、边界与证据链。</figcaption></figure>;
+}
 
-          {/* 分支节点 */}
-          {BRANCHES.map((b) => (
-            <g key={`bn-${b.name}`}>
-              <rect x={b.x - 62} y={b.y - 16} width="124" height="32" rx="10" fill={b.color} fillOpacity="0.16" stroke={b.color} strokeWidth="1.8" />
-              <text x={b.x} y={b.y + 5} textAnchor="middle" fontSize="12" fontWeight="700" fill={b.color}>
-                {b.name}
-              </text>
-            </g>
-          ))}
+const diagnosisCases = [
+  { label: "wrong overload", symptom: "unexpected method selected or ambiguous compile", start: "Ch 2-5", inspect: "static type, conversions, parameter modifiers and candidate set", fix: "make contract/conversion explicit; do not patch runtime branch" },
+  { label: "lifecycle leak", symptom: "subscriber, iterator or native handle never releases", start: "Ch 10, 14-18, 21", inspect: "strong-reference owner and registration/disposal path", fix: "one owner, deterministic unsubscribe/dispose and in-flight coordination" },
+  { label: "deadlock", symptom: "tasks remain incomplete and threads wait", start: "Ch 19-20", inspect: "operation timeline, captured context, lock/permit wait-for graph", fix: "async-all-the-way, stable lock order and bounded critical section" },
+  { label: "memory corruption", symptom: "failure appears after P/Invoke return", start: "Ch 9, 21", inspect: "ABI width/calling/layout, capacity, pointer validity and callback root", fix: "rederive signature from header and validate ownership on every path" },
+  { label: "load/AOT failure", symptom: "assembly/type missing only on target or publish", start: "Ch 18, 22", inspect: "manifest identity, references, metadata roots, target API/native assets", fix: "make dependency/reachability explicit and test target artifact" },
+];
 
-          {/* 中心节点 */}
-          <circle cx={CX} cy={CY} r="62" fill={primary} fillOpacity="0.06" stroke={primary} strokeWidth="2.4" />
-          <text x={CX} y={CY - 10} textAnchor="middle" fontSize="12" fontWeight="700" fill={primary}>
-            C# 7.0
-          </text>
-          <text x={CX} y={CY + 8} textAnchor="middle" fontSize="12" fontWeight="700" fill={primary}>
-            本质论
-          </text>
-          <text x={CX} y={CY + 26} textAnchor="middle" fontSize="10" fill={secondary} fontFamily="monospace">
-            类型安全
-          </text>
-
-          {/* 底部说明 */}
-          <line x1={32} y1={390} x2={VIEW_W - 32} y2={390} stroke={border} strokeWidth="1" strokeDasharray="4 3" />
-          <text x={VIEW_W / 2} y={408} textAnchor="middle" fontSize="11" fill={secondary}>
-            四大板块一图收束：基础筑底，面向对象建骨，泛型委托强筋，高级特性冲刺
-          </text>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        总复习思维导图：中心「C# 7.0 本质论」辐射四分支——C# 基础（类型/运算符）、面向对象（封装/继承）、泛型与委托（约束/事件）、高级特性（LINQ/异步）。
-      </figcaption>
-    </figure>
-  );
+export function Ec7DiagnosisRouteLab() {
+  const [selected, setSelected] = useState(0);
+  const item = diagnosisCases[selected];
+  return <figure className="mdx-figure not-prose mx-auto my-6"><div className="border border-border bg-elevated p-4 sm:p-5"><div className="grid grid-cols-3 gap-2 sm:grid-cols-5">{diagnosisCases.map((entry, index) => <button key={entry.label} type="button" onClick={() => setSelected(index)} className={`min-h-12 border px-2 text-xs ${selected === index ? "border-amber-500 bg-amber-500/15 text-primary" : "border-border bg-bg text-secondary"}`}>{entry.label}</button>)}</div><div className="mt-4 grid gap-3 md:grid-cols-2">{[["symptom", item.symptom], ["start chapters", item.start], ["inspect", item.inspect], ["repair direction", item.fix]].map(([title, value]) => <div key={title} className="border border-border bg-bg p-4"><span className="text-xs text-secondary">{title}</span><strong className="mt-2 block text-sm leading-6 text-primary">{value}</strong></div>)}</div></div><figcaption className="mt-2 text-center text-sm text-secondary">从症状选择诊断路线，回到定义该contract与lifetime的确切章节。</figcaption></figure>;
 }

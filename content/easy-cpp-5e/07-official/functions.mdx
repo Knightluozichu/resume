@@ -1,0 +1,217 @@
+---
+title: "Lesson 7：函数"
+type: A
+section: Easy C++（第5版）· 程序分解
+order: 7
+description: 对齐原书 Lesson 7「関数」：把函数理解为输入、前置条件、结果和副作用契约，掌握声明、定义、调用、按值/引用参数、返回值、默认实参与重载。
+demo: false
+math: false
+sourceUrl: "https://www.sbcr.jp/product/4797392593/"
+draft: false
+---
+
+import {
+  EcpFunctionsContractMap,
+  EcpFunctionsOverloadLab,
+  EcpFunctionsParameterFlow,
+} from "@/components/mdx/easy-cpp-5e/diagrams/functions";
+
+<Objectives>
+
+- 能解释函数声明、定义和调用如何由同一签名连接，并指出链接失败的证据
+- 能实现按值、const 引用和可写引用参数，判断修改是否应传播给调用者
+- 能分析返回路径、默认实参和重载候选，发现悬空引用、二义性与隐藏副作用
+
+</Objectives>
+
+## 为什么函数首先是一份契约
+
+函数把一段计算命名，使调用者不必知道每条内部语句。但“减少重复”只是表面收益；更重要的是建立边界：调用者提供什么输入、哪些输入合法、函数返回什么、会不会修改外部状态、失败如何表达。边界越清楚，内部实现越能独立修改和测试。
+
+<Term def="具有名字、参数与返回类型，可被调用执行一段封装计算的程序单元。">函数</Term>
+
+```cpp
+double rectangleArea(double width, double height) {
+    return width * height;
+}
+```
+
+这份接口接收两个 `double`，返回一个 `double`，没有显式外部副作用。还应写清前置条件，例如宽高不得为负；否则类型允许的值域大于业务允许域。
+
+<EcpFunctionsContractMap />
+
+## 声明、定义与调用必须一致
+
+函数声明让编译器在调用点知道名字、返回类型和参数类型；定义提供函数体；调用传入实参并把控制权交给函数。声明末尾有分号，定义后跟函数体。
+
+<Term def="向编译器介绍函数名字、返回类型和参数类型而不提供函数体的语句。">函数声明</Term>
+
+<Term def="提供函数签名对应实现体、在调用时实际执行的代码。">函数定义</Term>
+
+```cpp
+double rectangleArea(double width, double height); // 声明
+
+int main() {
+    double area = rectangleArea(3.0, 4.0);          // 调用
+}
+
+double rectangleArea(double width, double height) { // 定义
+    return width * height;
+}
+```
+
+没有可见声明时，编译器无法检查调用；有声明却没有任何匹配定义时，单个源文件可能编译成功，但链接器报告未定义符号。若声明参数是 `int`、定义参数是 `double`，它们是不同签名，不会自动配对。
+
+<Callout type="trap" title="陷阱：头文件里声明过，函数就已经实现">
+  声明只建立接口可见性，不产生函数体。链接失败时核对定义是否参与构建、命名空间与参数类型是否完全匹配，而不是反复修改调用语法。
+</Callout>
+
+## 形参与实参通过调用建立映射
+
+定义中的 `width`、`height` 是形参，调用中的 `3.0`、`4.0` 是实参。按值参数在调用时用实参值初始化独立局部对象，函数内修改形参不会改变调用者变量。
+
+<Term def="调用点提供的值称实参，函数接口接收并在函数体内使用的局部名字称形参。">形参与实参</Term>
+
+```cpp
+void addOne(int value) {
+    ++value;
+}
+
+int count = 4;
+addOne(count); // count 仍为 4
+```
+
+按值传递适合小型值和函数需要独立副本的情况。它不是“传入原变量再自动恢复”，而是从一开始就有两个对象。
+
+## 引用参数表达借用与可写权限
+
+引用形参直接绑定调用者对象。`const T&` 表示借用但不通过该参数修改，`T&` 表示函数可能写回。对于大型对象，const 引用可避免复制；对于输出参数，可写引用必须在名字和文档中明确。
+
+```cpp
+void normalizeScore(int& score) {
+    if (score < 0) score = 0;
+    if (score > 100) score = 100;
+}
+
+void printName(const std::string& name) {
+    std::cout << name << '\n';
+}
+```
+
+引用不是“更快的默认写法”。小型 `int` 按值更清楚，且不会让函数暗中修改调用者。只有接口语义需要共享身份或避免大对象复制时，才选择引用，并用 const 表达只读。
+
+<EcpFunctionsParameterFlow />
+
+<Callout type="trap" title="陷阱：所有参数都改成引用就更高效">
+  可写引用扩大副作用，const 引用对小标量还可能增加间接访问。先表达所有权与修改语义，再根据实际复制成本选择；性能不能取代契约。
+</Callout>
+
+## 返回值把结果交还调用者
+
+`return expression;` 结束当前函数并产生结果，返回表达式必须能转换为声明返回类型。`void` 函数不产生普通返回值，可写 `return;` 提前结束。所有可能到达末尾的非 void 路径都应返回值。
+
+<Term def="函数结束时按声明返回类型交还给调用者的结果；其生命周期与返回方式由类型规则决定。">返回值</Term>
+
+```cpp
+int absolute(int value) {
+    if (value >= 0) {
+        return value;
+    }
+    return -value;
+}
+```
+
+不要返回局部变量的引用或指针：函数结束后局部对象生命周期终止，调用者得到悬空访问。返回普通值通常最安全，编译器可以通过返回值优化消除多余复制。
+
+## 局部作用域隔离每次调用
+
+参数和函数体内变量只在该次调用的局部作用域中存在。递归或多次调用会各自拥有独立局部状态；`static` 局部变量例外，它跨调用保留状态，因此会改变测试隔离、线程安全和重入性质。
+
+函数应尽量通过参数接收依赖、通过返回值交出结果。过度依赖全局或 static 状态，会让相同输入产生不同输出，调用顺序成为隐藏条件。
+
+## 默认实参只补调用点省略项
+
+默认实参允许调用者省略尾部参数，编译器在调用点补上默认表达式。它适合有稳定常用值的配置，不适合隐藏重要业务选择。
+
+```cpp
+void printLine(char fill = '-', int width = 40);
+
+printLine();
+printLine('=');
+printLine('*', 10);
+```
+
+默认值通常放在头文件声明中，保证调用者看到同一契约；同一作用域不要重复指定。带默认值的参数之后也必须有默认值，否则无法按位置判断省略哪项。
+
+## 重载用同名表达同一概念的多种签名
+
+函数重载允许同一作用域中使用相同名字、不同参数列表。编译器根据实参数量、类型和所需转换选择最佳可行候选；返回类型不同不能单独构成重载，因为调用时常没有足够信息按返回类型选择。
+
+<Term def="同一作用域中多个同名函数以不同参数列表表达同一概念，调用时由实参匹配选择候选。">函数重载</Term>
+
+```cpp
+int maxValue(int a, int b);
+double maxValue(double a, double b);
+```
+
+若调用 `maxValue(1, 2.0)`，一个候选要转换第二项，另一个要转换第一项，可能没有唯一最佳选择。重载集合应让常见调用自然命中；默认实参与重载混用还可能产生“两个候选都可用”的二义性。
+
+<EcpFunctionsOverloadLab />
+
+## 三步验证函数边界
+
+<Stepper>
+  <Step title="第一步：写契约和签名">
+    写出输入、前置条件、返回值、副作用和失败策略，再确定声明；检查定义与声明在类型、命名空间和限定符上完全一致。
+
+    <EcpFunctionsContractMap />
+  </Step>
+  <Step title="第二步：追踪参数身份">
+    先预测按值、const 引用和可写引用调用后调用者变量是否变化，再运行最小样例；任何写回应在接口名字中可见。
+
+    <EcpFunctionsParameterFlow />
+  </Step>
+  <Step title="第三步：审计候选和返回路径">
+    列出每个重载候选所需转换，验证非 void 的所有路径返回，并故意制造未定义函数和混合类型调用观察诊断。
+
+    <EcpFunctionsOverloadLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 函数是输入、前置条件、结果、副作用和失败策略组成的契约，不只是代码复用块
+- 声明提供接口可见性，定义提供实现，调用按签名连接；声明存在不代表链接时一定有定义
+- 按值形参是独立对象，const 引用只读借用，可写引用明确允许修改调用者
+- 非 void 函数所有可达路径都应返回，不能返回已结束生命周期的局部引用
+- 默认实参在调用点补省略值，重载按实参匹配选择候选；二者混用要防二义性
+
+<Exercises>
+  1. **问题 1：区分阶段。** 有声明、调用也能编译，但链接报未定义符号，最可能缺什么？
+
+  <Answer question="为什么有函数声明仍可能链接失败？">声明只让编译器检查调用，链接器还要找到完全匹配签名的定义。定义可能未编写、未加入构建，或命名空间/参数类型不同；应从符号签名和参与链接的目标文件核对。</Answer>
+
+  2. **问题 2：选择参数。** `int` 输入、大型字符串只读、需要归一化并写回的分数，分别用什么形式？
+
+  <Answer question="三类参数应如何选择传递方式？">小型 int 通常按值；大型字符串只读用 const std::string& 避免复制并禁止写；需要直接修改调用者分数用 int&，并通过函数命名和契约明确写回副作用。</Answer>
+
+  3. **问题 3：分析重载。** 为什么只改变返回类型不能重载，混合 `int/double` 实参又可能二义？
+
+  <Answer question="重载为何不能只靠返回类型，混合类型为何会二义？">候选选择主要依据调用提供的实参数量和类型，调用点可能忽略返回值，无法仅靠返回类型区分。混合实参可能让两个候选各自在一项转换上更优，没有唯一最佳函数，编译器必须拒绝。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="函数">封装计算并具有名字、参数和返回类型的程序单元。</GlossaryItem>
+  <GlossaryItem term="函数声明">介绍签名但不提供函数体的接口语句。</GlossaryItem>
+  <GlossaryItem term="函数定义">为签名提供实际执行函数体的实现。</GlossaryItem>
+  <GlossaryItem term="形参与实参">函数接口中的局部接收者与调用点提供的值。</GlossaryItem>
+  <GlossaryItem term="返回值">函数结束时按声明类型交还调用者的结果。</GlossaryItem>
+  <GlossaryItem term="函数重载">同名函数以不同参数列表形成候选集合的机制。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="やさしいC++ 第5版, Lesson 7 関数"
+  adaptedUrl="https://www.sbcr.jp/product/4797392593/"
+/>

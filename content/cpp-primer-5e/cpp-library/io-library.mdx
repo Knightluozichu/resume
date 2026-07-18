@@ -6,9 +6,11 @@ order: 1
 description: 掌握C++的输入输出体系——iostream/fstream/sstream三种流，文件读写、字符串流格式化、流状态管理
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/c-plus-plus-primer-9780321714114"
 draft: false
 ---
+
+import { CppIOLibraryContractDiagram } from "@/components/mdx/cpp-primer-5e/diagrams/io-library";
 
 {/* C 实战型（C++ Primer §8 改编）：iostream 继承体系、fstream 文件读写、sstream 字符串流、流状态管理、格式化操纵符。
    重心在交互 Demo Stepper(§5) + 代码对照(§6)，概念讲解(§3)压缩，数学省略(math:false)。
@@ -25,15 +27,15 @@ draft: false
 
 <Objectives>
 
-- 能选择正确的流类型（iostream/fstream/sstream）完成输入输出——打开文件、逐行读取、用格式化操纵符对齐输出到控制台
-- 能检测和恢复流状态——通过 `good()`/`fail()`/`eof()` 判断读是否成功，并在读到 EOF 后用 `clear()`+`seekg()` 重新读取
+- 能比较并选择正确的流类型（iostream/fstream/sstream）完成输入输出——打开文件、逐行读取、用格式化操纵符对齐输出到控制台
+- 能分析并恢复流状态——通过 `good()`/`fail()`/`eof()` 判断读是否成功，并在读到 EOF 后用 `clear()`+`seekg()` 重新读取
 - 能回答：用 `while (file >> num)` 读文件里的整数，循环为什么会在读到末尾时自动停止？如果下一次再跑同样的循环会怎样？怎么修正？
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用②工厂流水线——IO流像原料输送带。 */}
 
-## 程序靠什么和外界说话？
+## 直觉：程序靠什么和外界说话？
 
 你已经用 `cin` 读键盘输入、用 `cout` 往屏幕上打字——这是程序和外界的两次对话。但真实的程序不会只和键盘屏幕打交道——它要读配置文件、写日志文件、解析 CSV 数据、把内存里的结果拼成格式化报告。
 
@@ -45,31 +47,59 @@ draft: false
 
 ## IO 流家族：一张继承树看清三条分支
 
-在 C++ 里，<Term def="C++ 输入输出的抽象概念。流是一个字符序列——你可以从中读取字符（输入流）或向其写入字符（输出流）。C++ 标准库提供了统一的流接口（>> 和 << 运算符、getline 等），无论数据来自键盘、文件还是内存字符串，操作方式完全一致。">流（stream）</Term> 是你读写数据的统一通道。所有流类都源自同一个基础——一张继承树把三条分支清楚分开：
+在 C++ 里，<Term def="C++ 输入输出的抽象概念。流是一个字符序列，你可以从中读取字符或向其写入字符。标准库提供统一的提取、插入和 getline 接口，不同设备可复用同一套操作。">流（stream）</Term> 是你读写数据的统一通道。所有流类都源自同一个基础——一张继承树把三条分支清楚分开：
 
 <IOClassHierarchyDiagram />
 
 看上面的继承树——`ios_base` 是根，管理格式状态（精度、进制、宽度）和流状态（正常/失败/结束等）。`ios` 继承它，增加了对缓冲区的管理。从 `ios` 分出两条腿：`istream`（只负责读）和 `ostream`（只负责写）。然后三条分支各自展开：
 
-- **<Term def="标准控制台 IO 流，包含 cin（标准输入）、cout（标准输出）、cerr（标准错误，无缓冲）、clog（标准日志，有缓冲）。#include <iostream> 即可使用，不需要显式打开或关闭。">iostream</Term> 分支**：`iostream` 同时继承 `istream` 和 `ostream`——既能读又能写。你每天用的 `cin` 就是 `istream` 对象，`cout` 就是 `ostream` 对象。
+- **<Term def="标准控制台 IO 流，包含 cin、cout、cerr 和 clog。cerr 默认设置 unitbuf，每次输出操作后刷新；clog 通常使用常规缓冲。引入 iostream 头文件即可使用。">iostream</Term> 分支**：`iostream` 同时继承 `istream` 和 `ostream`——既能读又能写。你每天用的 `cin` 就是 `istream` 对象，`cout` 就是 `ostream` 对象。`cerr` 的准确说法是默认启用 `unitbuf` 自动刷新，而不是承诺底层完全没有缓冲。
 
-- **<Term def="文件 IO 流。ifstream 从文件读取，ofstream 写入文件，fstream 同时读写同一个文件。通过构造函数的文件名参数打开文件，析构时自动关闭。支持多种打开模式（in/out/app/binary 等）。">fstream</Term> 分支**：`ifstream`（读文件）继承 `istream`，`ofstream`（写文件）继承 `ostream`，`fstream`（读写文件）继承 `iostream`。所以 `ifstream` 有 `>>` 和 `getline`——和 `cin` 的用法一模一样。
+- **<Term def="文件 IO 流。ifstream 从文件读取，ofstream 写入文件，fstream 同时读写同一个文件。可通过构造函数或 open 打开，析构时关闭，并支持 in、out、app、ate、trunc 和 binary 模式。">fstream</Term> 分支**：`ifstream`（读文件）继承 `istream`，`ofstream`（写文件）继承 `ostream`，`fstream`（读写文件）继承 `iostream`。所以 `ifstream` 有 `>>` 和 `getline`——和 `cin` 的用法一模一样。
 
 - **<Term def="字符串 IO 流。istringstream 从字符串中读取，ostringstream 把各种类型的数据拼接输出到字符串，stringstream 同时支持读写。它们把字符串当作流的「数据源」或「数据目标」——用法和 cin/cout 完全一致。">sstream</Term> 分支**：`istringstream`（读字符串）继承 `istream`，`ostringstream`（写字符串）继承 `ostream`，`stringstream`（读写字符串）继承 `iostream`。所以 `istringstream` 和 `cin` 用法一样——只是数据来源变成了一段内存里的字符串。
 
-三层共用同一个接口的根源：它们都继承自 `ios_base` 的格式状态和流状态管理，继承自 `istream`/`ostream` 的操作接口（`>>`/`<<`/`getline` 等），还共用同一套 <Term def="流对象通过一块内存区域（缓冲区）来批量读写——一次从硬盘读满一整个缓冲区，后续的 >> 操作直接从内存缓冲区取数据，比逐字节读硬盘快几百倍。输出时数据先写入输出缓冲区，缓冲区满了或用 endl/flush 时才真正写入目标。流对象被销毁时也会自动刷新（flush）缓冲区。">缓冲区（buffer）</Term> 机制——这就是为什么对 cin 学会的东西在文件和字符串上完全能用。
+三层共用同一个接口的根源：它们都继承自 `ios_base` 的格式状态和流状态管理，继承自 `istream`/`ostream` 的操作接口（`>>`/`<<`/`getline` 等），还共用同一套 <Term def="流通过 streambuf 管理的内存区域批量传递字符，减少直接访问设备的次数。输出缓冲可在缓冲满、显式 flush、关联流操作或文件关闭时提交。">缓冲区（buffer）</Term> 机制——这就是为什么对 cin 学会的东西在文件和字符串上完全能用。缓冲策略由具体流和设备决定，不能用固定字节数或固定倍数概括；通用 `ostream` 的析构也不等于一次可检查的成功刷新。
 
 <Callout type="tip">
   **核心设计思想**：把函数的形参声明为 `istream &` 而不是 `ifstream &`——这样同一个函数既可以接受 `cin`（控制台输入），也可以接受 `ifstream` 对象（文件输入），还可以接受 `istringstream` 对象（字符串输入）。这是面向对象设计的精髓——针对基类的引用或指针写代码。
 </Callout>
 
+## 官方 Chapter 8 的三层 IO 契约
+
+原书把这一章分成 IO 类、文件输入输出和 string 流三层。统一接口只是表面，真正需要掌握的是“操作、缓冲、条件状态”如何协作：一次提取可能成功并同时抵达文件尾，状态位也可能组合出现，输出进入缓冲并不代表外部设备已经持久化。
+
+<CppIOLibraryContractDiagram />
+
+### IO 类、条件状态与输出缓冲
+
+IO 对象不能拷贝或赋值，所以接受或返回流的函数通常使用引用。读写函数也返回流引用，这才允许 `out << a << b` 连续操作。流的条件状态是位掩码而不是互斥枚举：`eofbit`、`failbit`、`badbit` 可以同时存在；只有状态值恰好为 `goodbit` 时 `good()` 才为真，而 `fail()` 会检查 `failbit` 或 `badbit`。
+
+流在布尔上下文中的判断基于 `!fail()`。因此 `while (in >> value)` 的准确含义是：**先尝试一次提取，再检查提取后的流是否仍可用**。它不等价于只检查状态而不读取的 `while (!in.fail())`，后者若把提取写在循环体内，很容易多处理一次旧值。
+
+输出缓冲有几种常见提交时机：程序正常结束刷新标准输出、缓冲区满、使用 `endl` 或 `flush`、设置 `unitbuf`，以及读取与之绑定的输入流。`cin` 默认绑定 `cout`，所以读取前会刷新提示文字。`endl` 同时写换行并刷新，普通 `'\n'` 只写换行；无需立刻显示或持久化时，不应为每行强制刷新。
+
+```cpp
+std::cout << "name: " << std::flush; // 立刻显示提示
+std::cin >> name;
+
+auto *old = std::cin.tie(nullptr);    // 解除绑定，需自行管理刷新
+std::cin.tie(old);                    // 恢复原绑定
+```
+
+对文件输出，析构会关闭文件并尝试提交缓冲，但析构阶段无法让调用者可靠处理写入失败。需要确认数据落盘时，应显式 `flush()` 或 `close()`，随后检查流状态；磁盘已满、设备错误等情况不能被“RAII 一定不丢数据”掩盖。
+
 ## 文件流：把数据存到硬盘、从硬盘读回来
 
 程序跑完数据就没了——除非你把它写进文件。<Term def="创建 ifstream/ofstream/fstream 对象时传给构造函数的第二个参数（默认有合理值）。共六种：in（读）、out（写，默认截断）、app（追加，每次写前自动 seek 到文件末尾）、ate（打开时 seek 到末尾）、trunc（截断，打开时清空文件内容）、binary（禁止换行符转换，Windows 尤其重要）。多个模式用 | 组合（如 ios::in | ios::binary）。">打开模式（open mode）</Term> 告诉流你要对文件做什么操作——只读？追加？还是覆盖？
 
+模式组合有约束：`trunc` 需要同时启用 `out`；`app` 隐含输出且不能与 `trunc` 同用；`ifstream` 只能以输入为主，`ofstream` 只能以输出为主，`fstream` 才能组合 `in | out`。仅使用 `out` 打开现有文件通常会截断；要保留内容，应明确选择 `app`，或在 `fstream` 上组合 `in | out` 并自行定位。`ate` 只在打开时定位到末尾，之后仍可移动；`app` 则在每次写之前回到末尾。
+
 用文件流做三件事：打开、读写、关闭。整个过程像一个闭环——打开把文件句柄领到手，读写操作数据，关闭归还句柄。看下面的 Stepper 演示每一步做了什么事。
 
 ### 文件流生命周期：一步一步走
+
+> 先预测：文件只含 `10 20` 且末尾没有换行时，第二次成功读出 `20` 后 `eof()` 和 `fail()` 分别是什么？循环为了确认再无下一个整数而执行第三次提取后，两者又是什么？先写下答案，再用后面的状态图和 `rdstate()` 验证；关键是区分“已抵达末尾”和“本次没有提取到值”。
 
 <Stepper>
 
@@ -125,7 +155,7 @@ std::ofstream log("app.log", std::ios::app);           // 追加写模式：新�
 ```
 
 <Callout type="warn">
-  `>>` 和 `getline` 混用注意：`>>` 读完数据后会留下 `\n` 在缓冲区——紧接着的 `getline` 第一个读到就是那个残留换行符。混用时在 `>>` 之后加一个 `file.ignore()` 吞掉残留空白再开始 getline。
+  `>>` 和 `getline` 混用注意：格式化提取通常把行尾留在缓冲区，紧接着的 `getline` 可能先读到空行。只调用无参数 `ignore()` 最多丢一个字符，前面若还有空格并不可靠。若要丢弃本行剩余内容，用 `ignore(numeric_limits<streamsize>::max(), '\n')`；若允许跳过下一行开头空白，可用 `getline(file >> std::ws, line)`。
 </Callout>
 
 </Step>
@@ -167,7 +197,7 @@ std::ofstream log("app.log", std::ios::app);           // 追加写模式：新�
 }  // ⑤ 离开作用域析构——即使忘了 close()，析构函数也会自动关闭文件
 ```
 
-析构函数保证——哪怕程序中途抛异常，文件也会被正确关闭（不会丢数据、不会占住句柄不放）。这就是 RAII（资源获取即初始化）：构造时获取资源、析构时释放资源——绝不会忘。
+文件流析构会关闭句柄，因此异常展开时资源仍能释放，这就是 RAII（资源获取即初始化）。但“关闭被尝试”不等于“数据一定写成功”：析构不能把晚到的写入错误可靠交给业务代码。重要输出应显式 `close()` 并检查流状态。
 
 </Step>
 
@@ -220,7 +250,7 @@ while (words >> w)                      // 逐个读出三个词
 - **`badbit`**：流崩溃、不可恢复——底层系统 IO 错误、缓冲区损坏。`bad()` 返回 true。这个流基本废了。
 
 <Callout type="tip">
-  **最重要的检查口决**：`while (file >> value)` 等价于 `while (!file.fail())`——只要流没进入 fail 或 bad 状态就继续读。读到 EOF 后的第一次 `>>` 会同时设置 eofbit 和 failbit——循环自动停止。所以这种循环不需要额外写 `!file.eof()` 判断。
+  **最重要的检查口诀**：把提取本身放进条件——`while (file >> value)` 先读取，再依据结果决定是否进入循环体。成功读出最后一个值时可能只设置 eofbit，值仍应处理；下一次无法再提取时才会设置 failbit 并停止。因此不要写 `while (!file.eof())`，也不要把它简化成预先检查 `!fail()`。
 </Callout>
 
 状态管理只靠三个操作：
@@ -238,11 +268,11 @@ if (file.eof()) {
 file.setstate(std::ios::failbit);   // 手动设置 failbit——模拟失败场景
 ```
 
-**不先 `clear()` 就 `seekg()` 是 bug**——流处于错误状态时所有操作都失败，seekg 也不例外。正确的顺序是 clear() 先恢复流、再 seekg() 移位置。
+失败提取后应先 `clear()` 再重新定位：C++11 的 `seekg` 会先清除 eofbit，但不会替你清掉 failbit 或 badbit；这些失败位仍在时定位不会按预期工作。稳定顺序是先恢复状态，再 `seekg()` 移位置，并检查定位结果。
 
 ## 格式化输出：让数字和文字排版整齐
 
-往控制台或文件输出数据时——原始数字挤在一起根本没法看。C++ 的 <Term def="对 IO 流插入（<<）或提取（>>）的特殊函数或对象，用来改变流的格式行为。如 std::setw(n) 设字段宽度、std::fixed 固定小数格式、std::hex 切十六进制。定义在 <iomanip> 头文件。注意 setw 只对下一次输出生效，其余（fixed/hex/left 等）一旦设置就持久生效。">格式化操纵符（manipulator）</Term> 就是排版工具——控制宽度、精度、进制、对齐方式。
+往控制台或文件输出数据时——原始数字挤在一起根本没法看。C++ 的 <Term def="插入或提取到 IO 流的特殊函数或对象，用来改变格式行为。例如 setw 设字段宽度、fixed 设固定小数格式、hex 切换十六进制；带参数的工具位于 iomanip 头文件。">格式化操纵符（manipulator）</Term> 就是排版工具——控制宽度、精度、进制、对齐方式。
 
 <IOManipulatorTable />
 
@@ -376,7 +406,7 @@ left 让单词左对齐、right 让数字右对齐、setw 给每列固定宽度�
 <Callout type="trap">
   **现象**：`getline(file, line)` 循环和 `file >> num` 混用时，第一个 getline 读到的是一行空白。
   **原因**：`>>` 读完数字后把 `\n` 留在输入缓冲区里——下一个 `getline` 直接读到了这个残留的换行符，整行就是空的。
-  **修法**：在 `>>` 和 `getline` 之间加一个 `file.ignore()` 吞掉残留的空白。更推荐的做法是统一只用 getline 读行、再用 istringstream 解析每行内容——彻底分离「读行」和「解析」两个阶段。
+  **修法**：若要丢弃本行剩余字符，使用 `file.ignore(std::numeric_limits<std::streamsize>::max(), '\n')`；单次无参数 `ignore()` 不足以处理多个空格。更推荐统一用 getline 读行、再用 istringstream 解析——彻底分离「读行」和「解析」。
 </Callout>
 
 <Callout type="trap">
@@ -409,7 +439,7 @@ left 让单词左对齐、right 让数字右对齐、setw 给每列固定宽度�
 
 <Exercises>
 
-**练习 1（改代码型）** 下面这段代码从文件读取整数并求和——但它有一个常见 bug：第一行是标题 "Scores:"，导致程序不能正确处理。找出 bug 并写出修正后的代码。
+**问题 1（改代码型）** 下面这段代码从文件读取整数并求和——但它有一个常见 bug：第一行是标题 "Scores:"，导致程序不能正确处理。找出 bug 并写出修正后的代码。
 
 ```cpp
 #include <iostream>
@@ -458,7 +488,7 @@ int main() {
 
 </Answer>
 
-**练习 2（独立实现题）** 写一个程序：读取 `data.txt` 文件（每行是 `姓名 数学 语文 英语` 的格式，如 `"Alice 92 88 95"`），计算每个人的平均分，把结果输出到 `results.txt`——格式化成整齐的表格（名字左对齐 12 字符、各科右对齐 6 字符、平均分右对齐 8 字符且保留一位小数）。输出示例：`"Alice           92    88    95    91.7"`。
+**问题 2（独立实现题）** 写一个程序：读取 `data.txt` 文件（每行是 `姓名 数学 语文 英语` 的格式，如 `"Alice 92 88 95"`），计算每个人的平均分，把结果输出到 `results.txt`——格式化成整齐的表格（名字左对齐 12 字符、各科右对齐 6 字符、平均分右对齐 8 字符且保留一位小数）。输出示例：`"Alice           92    88    95    91.7"`。
 
 <Answer>
 
@@ -502,7 +532,7 @@ int main() {
 
 </Answer>
 
-**练习 3（问答型）** 本章 §5 Stepper 演示了文件流生命周期——从打开、读取、处理到关闭。如果把整个程序改成「所有数据源一律从 `istream &` 引用参数传入」，文件的读法和键盘的读法在一个函数里怎么统一？写出函数签名和简短的调用示例。
+**问题 3（问答型）** 本章 §5 Stepper 演示了文件流生命周期——从打开、读取、处理到关闭。如果把整个程序改成「所有数据源一律从 `istream &` 引用参数传入」，文件的读法和键盘的读法在一个函数里怎么统一？写出函数签名和简短的调用示例。
 
 <Answer>
 
@@ -555,7 +585,7 @@ int main() {
 </GlossaryItem>
 
 <GlossaryItem term="iostream">
-  标准控制台 IO 流，包含 cin（标准输入）、cout（标准输出）、cerr（标准错误，无缓冲）、clog（标准日志，有缓冲）。#include &lt;iostream&gt; 即可使用，不需要显式打开或关闭。cin 是 istream 的对象，cout/cerr/clog 是 ostream 的对象。详见本章「IO 流家族」一节的继承树最左侧分支。
+  标准控制台 IO 流，包含 cin（标准输入）、cout（标准输出）、cerr 和 clog（标准错误/日志）。cerr 默认启用 unitbuf，每次输出操作后刷新，但不应简单等同于底层完全无缓冲。引入 iostream 头文件即可使用。详见本章「IO 流家族」。
 </GlossaryItem>
 
 <GlossaryItem term="fstream">
@@ -571,7 +601,7 @@ int main() {
 </GlossaryItem>
 
 <GlossaryItem term="打开模式（open mode）">
-  创建 ifstream/ofstream/fstream 对象时传给构造函数的第二个参数（默认有合理值）。共六种：in（读）、out（写，默认截断）、app（追加，每次写前自动 seek 到文件末尾——防止多进程覆盖）、ate（打开时 seek 到末尾，之后可自由 seek）、trunc（截断，打开时清空文件内容）、binary（禁止换行符转换——\n 不转 \r\n，Windows 上写二进制数据必须加）。多个模式用 | 组合——如 ios::in | ios::binary。详见本章「文件流」一节的 Stepper 第一步。
+  打开文件时指定的位掩码。in 读、out 写、app 在每次写前定位到末尾、ate 只在打开后定位一次、trunc 清空、binary 禁止文本模式转换。app 并不自动提供跨进程写入原子性；并发写文件仍需额外同步。多个模式可用按位或组合。详见「文件流」。
 </GlossaryItem>
 
 <GlossaryItem term="流状态（stream state）">
@@ -579,7 +609,7 @@ int main() {
 </GlossaryItem>
 
 <GlossaryItem term="缓冲区（buffer）">
-  流对象通过一块内存区域（缓冲区）来批量读写——一次从硬盘读满一整个缓冲区（通常是 4096 字节），后续的 >> 操作直接从内存缓冲区取数据，比逐字节读硬盘快几百倍。输出时数据先写入输出缓冲区，缓冲区满了或用 endl/flush 时才真正写入目标。流对象析构时也会自动刷新（flush）缓冲区，保证数据不丢失。缓冲区由 streambuf 对象管理（ios 持有它的指针）。
+  由 streambuf 管理、位于程序值与外部设备之间的字符区域。它减少设备访问并维护读写位置；输出可因缓冲满、flush、unitbuf、关联流操作或文件关闭而提交。缓冲大小与策略由实现和设备决定，析构关闭也不能证明外部写入必然成功。
 </GlossaryItem>
 
 <GlossaryItem term="格式化操纵符（manipulator）">
@@ -590,4 +620,4 @@ int main() {
 
 {/* 9. 出处声明（spec §九）：sourceUrl 为空字符串（原创章节），Attribution 标签自动处理。 */}
 
-<Attribution />
+<Attribution source="C++ Primer, Fifth Edition, Chapter 8: The IO Library" />

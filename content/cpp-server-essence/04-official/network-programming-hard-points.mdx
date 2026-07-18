@@ -1,0 +1,345 @@
+---
+title: "第4章：网络编程重难点解析"
+type: A
+section: "C++ 服务器开发精髓 · Socket 状态机与 I/O 多路复用"
+order: 4
+description: "对齐原书第 4 章：TCP socket 流程、跨平台差异、阻塞/非阻塞 I/O、select/poll/epoll、EINTR/SIGPIPE、向量 I/O、字节序与域名解析。"
+demo: true
+math: false
+sourceUrl: "https://book.douban.com/subject/35491437/"
+draft: false
+---
+
+import {
+  CseEpollTriggerLab,
+  CseNonblockingIoLab,
+  CseTcpFlowLab,
+} from "@/components/mdx/cpp-server-essence/diagrams/network-programming-hard-points";
+
+<Objectives>
+
+- 能解释 socket/bind/listen/accept/connect/send/recv/shutdown/close 的 TCP 状态转换，并比较 Linux 与 Windows 返回值和错误码
+- 能分析 blocking/nonblocking send、recv、connect、EINTR、SIGPIPE、partial I/O 和 zero-byte operation，写出不丢数据的连接状态机
+- 能比较 select、poll、epoll LT/ET/EPOLLONESHOT，设计 readv/writev、network byte order 与 getaddrinfo 的可移植边界
+
+</Objectives>
+
+## 为什么网络 API 必须作为状态机学习
+
+socket API 返回的不是“成功/失败”两个答案，而是连接状态、readiness、buffer progress 和 asynchronous error 的组合。一次 `send` 不保证发送完整 buffer，一次 `recv` 不对应一个消息，nonblocking `connect` 返回失败码也可能表示握手正在进行。
+
+<Term def="把每次 socket 调用的返回值、errno/WSAGetLastError、buffer offset 与连接阶段映射为下一状态的协议执行模型。">socket state machine</Term>
+
+原书第 4 章从基础函数一路推进到 epoll、向量 I/O、字节序和 DNS，真正主线是：不把 byte stream 猜成 message，不把 readiness 猜成 operation success，不把 platform coincidence 猜成 portable contract。
+
+## 4.1 应掌握哪些 socket 函数
+
+Linux 先用 `man 2 socket`、`man 2 recv`、`man 7 socket` 区分 syscall 与协议选项；Windows 查 Winsock 文档并先 `WSAStartup`。核心函数族包括 endpoint 创建与配置、地址绑定、监听与接入、连接、数据传输、关闭、错误查询和地址解析。
+
+```text
+socket / setsockopt / getsockopt
+bind / listen / accept / connect
+send / recv / sendto / recvfrom / readv / writev
+shutdown / close (Linux) / closesocket (Windows)
+select / poll / epoll_wait
+getaddrinfo / freeaddrinfo
+```
+
+<Term def="只负责监听并从 accept queue 取出连接的 socket；它不承载某个客户端的业务 byte stream。">listening socket</Term>
+
+`accept` 返回新的 connected socket；listening socket 继续接收后续连接。把二者放进同一个“connection object”而不区分角色，会导致错误 close、错误 event registration 或把 listen error 当 session error。
+
+## 4.2 TCP 通信基本流程
+
+server 通常按 `socket → setsockopt → bind → listen → accept`，client 按 `socket → connect`，双方随后 send/recv，最后通过 shutdown/close 进入 half-close 或 full-close。TCP handshake 与 accept 是两个层次：kernel 可先完成握手并排队，应用之后才 `accept`。
+
+先预测：当 server 已 `listen` 但还没 `accept` 时，client 的 blocking `connect` 是否一定等待应用 accept？切换下面阶段，观察 kernel queue 与应用 fd 的边界。
+
+<Stepper>
+  <Step title="沿 TCP endpoint 阶段检查角色">
+    <CseTcpFlowLab />
+  </Step>
+  <Step title="分别保存 listen fd 与 connected fd">
+    listen fd 只注册 accept readiness；每个 accepted fd 拥有独立 input/output buffer、peer address、timeout 与 close state。
+  </Step>
+  <Step title="把关闭纳入状态机">
+    `recv == 0` 表示 peer orderly shutdown；本地仍可能发送剩余数据。主动 close、被动 FIN、RST 和 timeout 必须产生不同诊断。
+  </Step>
+</Stepper>
+
+## 4.3 跨平台网络通信库的边界
+
+Linux socket 是 integer file descriptor，失败常返回 `-1` 并设置 `errno`；Winsock 使用 `SOCKET`，无效值是 `INVALID_SOCKET`，调用失败后取 `WSAGetLastError()`，关闭用 `closesocket`。不要把 `SOCKET` 截断成 `int`。
+
+```cpp
+#ifdef _WIN32
+using NativeSocket = SOCKET;
+constexpr NativeSocket kInvalidSocket = INVALID_SOCKET;
+int last_socket_error() { return WSAGetLastError(); }
+#else
+using NativeSocket = int;
+constexpr NativeSocket kInvalidSocket = -1;
+int last_socket_error() { return errno; }
+#endif
+```
+
+<Term def="在统一高层接口下保留 native socket type、invalid sentinel、close function、error domain 和 readiness 差异的适配层。">portable socket boundary</Term>
+
+Windows 旧式 `select` 的第一个参数会被忽略；POSIX 要传 `maxfd + 1`。Linux 的 would-block 可是 `EAGAIN` 或 `EWOULDBLOCK`；Winsock 对应 `WSAEWOULDBLOCK`。返回值适配必须先按平台解析，再转成统一 enum，不应直接搬运整数错误码。
+
+## 4.4 bind：地址、端口与重启语义
+
+绑定 `127.0.0.1` 只接受 loopback，绑定某个 interface address 限定网卡，`0.0.0.0`/`::` 是 wildcard。production 服务要显式决定暴露范围；“为了能连上”绑定 wildcard 可能扩大攻击面。
+
+<Term def="bind 时选择所有本地接口的 unspecified address，例如 IPv4 0.0.0.0；它不等于可对外路由的具体地址。">wildcard bind</Term>
+
+端口 `0` 让 kernel 分配 ephemeral port，可用 `getsockname` 读取，适合测试。`SO_REUSEADDR` 的具体语义依 OS 而异，通常帮助 server 在旧连接处于 `TIME_WAIT` 时重启，但不等于允许任意多个 listener 抢同一地址；`SO_REUSEPORT` 又是独立策略。
+
+```cpp
+sockaddr_in address{};
+address.sin_family = AF_INET;
+address.sin_port = htons(8080);
+address.sin_addr.s_addr = htonl(INADDR_ANY);
+if (::bind(fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) < 0) {
+  throw SocketError("bind", errno);
+}
+```
+
+<Callout type="trap" title="把 TIME_WAIT 归咎于 listen socket 泄漏">
+`TIME_WAIT` 属于完成主动关闭的一端，用于处理延迟 segment 和避免旧连接污染新连接。先核对四元组、close direction 与连接速率，不要通过危险选项掩盖生命周期问题。
+</Callout>
+
+## 4.5 select：集合会被修改，复杂度与上限都要计算
+
+`select` 以 `fd_set` 传入关注集合，返回时把它们改写为 ready subset，所以循环每轮必须从 master set 复制；timeout 也可能被修改。POSIX 还受 `FD_SETSIZE` 约束，并按 `nfds` 线性扫描。
+
+```cpp
+fd_set readable = master_readable;
+timeval timeout{.tv_sec = 1, .tv_usec = 0};
+int n = select(max_fd + 1, &readable, nullptr, nullptr, &timeout);
+if (n < 0 && errno == EINTR) continue;
+```
+
+<Term def="I/O 多路复用 API 报告某操作现在执行不会按该 API 定义阻塞；它不保证传输完整，也不保证连接成功。">I/O readiness</Term>
+
+Windows `select` 的 fd_set 实现更像 socket array，限制和 POSIX 不同。跨平台封装应暴露 readiness event，而不是假设底层 bitset layout 相同。
+
+## 4.6 阻塞与非阻塞 send/recv
+
+blocking socket 允许调用线程睡眠；它仍可能 partial send、被 signal 打断或因 timeout 失败。nonblocking socket 立即返回当前 progress；would-block 不是错误终态，而是“等待下一次对应 readiness”。
+
+<Term def="send/write 只接受请求 buffer 的前 n bytes；调用者必须保留 offset，在后续 writable event 继续发送。">partial write</Term>
+
+```cpp
+while (offset < bytes.size()) {
+  ssize_t n = ::send(fd, bytes.data() + offset, bytes.size() - offset,
+                     MSG_NOSIGNAL);
+  if (n > 0) { offset += static_cast<std::size_t>(n); continue; }
+  if (n < 0 && errno == EINTR) continue;
+  if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+    enable_write_interest(fd);
+    break;
+  }
+  fail_connection(errno);
+  break;
+}
+```
+
+`recv > 0` 表示收到 bytes，`recv == 0` 表示 peer 发来 FIN 且 stream 已读到 EOF，`recv < 0` 再区分 EINTR、would-block 与 fatal error。不能把 `0` 当作“本轮暂无数据”。
+
+<Stepper>
+  <Step title="先预测 nonblocking 返回值">
+    <CseNonblockingIoLab />
+  </Step>
+  <Step title="只按实际 n 推进 buffer offset">
+    send/recv 的 requested length 只是上限。每次保存进度；would-block 注册 readiness，FIN/error 转换连接状态。
+  </Step>
+  <Step title="把 platform error 映射为语义 enum">
+    统一层至少区分 progress、would-block、interrupted、peer-closed、connect-pending、fatal，不能只返回 bool。
+  </Step>
+</Stepper>
+
+## 4.7 发送 0 字节不是健康探测
+
+长度为 0 的 stream send/recv 通常不会在 wire 上产生可供对端业务读取的 payload，返回值也不能证明 peer application 健康。TCP 存活判断应结合真实 I/O error、keepalive 或应用层 heartbeat；不要依赖 zero-byte send 的平台偶然行为。
+
+## 4.8 nonblocking connect：writable 之后查询 SO_ERROR
+
+nonblocking `connect` 在 Linux 常返回 `-1/EINPROGRESS`，Winsock 常返回 `SOCKET_ERROR/WSAEWOULDBLOCK`。这表示 handshake pending。把 fd 同时关注 writable/error；事件到来后调用 `getsockopt(SOL_SOCKET, SO_ERROR)`，0 才成功，其他值是异步连接错误。
+
+```cpp
+int error = 0;
+socklen_t size = sizeof(error);
+if (getsockopt(fd, SOL_SOCKET, SO_ERROR, &error, &size) < 0 || error != 0) {
+  fail_connect(error == 0 ? errno : error);
+} else {
+  on_connected(fd);
+}
+```
+
+<Term def="nonblocking connect 在 handshake 完成或失败后产生的 writable/error readiness；必须读取 SO_ERROR 才能确定结果。">connect completion</Term>
+
+连接同时发送第一组数据可以减少状态切换，但必须等 connect completion 成功后进入 normal output buffer；不能因 writable 就直接丢弃 connect state。
+
+## 4.9 接收第一组数据与连接状态
+
+协议若由 server greeting 开始，client connect 后应关注 readable；若由 client request 开始，连接完成后 flush output buffer。把“连接建立”“首包发送”“首包接收”“鉴权完成”分成独立 states，timeout 也分别统计，才能定位 DNS、handshake 或 application stall。
+
+## 4.10 查询当前可读字节数的局限
+
+Linux `ioctl(fd, FIONREAD, &bytes)` 或 Windows `ioctlsocket(FIONREAD)` 可查询当前 receive buffer 中可读 bytes，但值立即可能变化，也不表示完整 frame 已到。对于 length-prefixed protocol，应先累积固定 header，再解析 declared length，最后等待完整 body。
+
+```cpp
+int available = 0;
+if (ioctl(fd, FIONREAD, &available) == 0) {
+  metrics.observe_kernel_readable_bytes(available);
+}
+// parsing still uses the application receive buffer, not this snapshot
+```
+
+## 4.11 EINTR：重试前先看操作和 deadline
+
+Linux blocking syscall 可能因 signal handler 返回 `-1/EINTR`。是否重试要看 operation 是否产生 partial progress、是否设置 `SA_RESTART`、deadline/cancellation 是否已到。无限 `while (errno == EINTR)` 会让 shutdown signal 无法终止等待。
+
+<Term def="系统调用在完成前被 signal handler 打断的 Linux errno；调用者需根据 progress、deadline 与取消状态决定是否重试。">EINTR policy</Term>
+
+## 4.12 SIGPIPE：写入已关闭连接的进程级风险
+
+向已收到 RST/已关闭的 stream 写入，Linux 可能让 send 返回 `EPIPE` 并产生 `SIGPIPE`；默认 disposition 会终止进程。服务器可全局忽略 SIGPIPE，或每次 send 使用 `MSG_NOSIGNAL`，BSD/macOS 也有 `SO_NOSIGPIPE`。无论屏蔽方式如何，都必须处理 `EPIPE` 并关闭 connection state。
+
+<Callout type="trap" title="只忽略 SIGPIPE 却不处理 EPIPE">
+忽略 signal 只是避免整个进程被终止；该连接仍已失败。继续把数据塞回 output queue 会造成忙循环、内存增长和重复错误日志。
+</Callout>
+
+## 4.13 poll：去掉 fd_set，但仍是 level-triggered 扫描
+
+`poll` 使用 `pollfd[]`，没有 `maxfd + 1` 与 `FD_SETSIZE` bitset 约束，返回 `revents`；输入 `events` 可保留。但每轮仍要把数组交给 kernel 并扫描 ready entries，规模大时成本随 fd 数增长。
+
+```cpp
+std::vector<pollfd> entries = {{listen_fd, POLLIN, 0}, {client_fd, POLLIN, 0}};
+int n = poll(entries.data(), entries.size(), timeout_ms);
+for (auto& entry : entries) {
+  if (entry.revents & (POLLERR | POLLHUP | POLLNVAL)) handle_error(entry.fd);
+  if (entry.revents & POLLIN) handle_readable(entry.fd);
+}
+```
+
+## 4.14 epoll：interest list、ready list 与触发模式
+
+Linux epoll 用 `epoll_create1` 创建 instance，`epoll_ctl` 管理 interest，`epoll_wait` 取 ready events。它避免每轮重传完整 fd set，但应用仍需正确管理 fd lifetime、重复 registration 与 stale event。
+
+<Term def="只要 fd 当前仍满足 readiness，epoll_wait 就可重复报告事件的 level-triggered 模式。">epoll LT</Term>
+
+<Term def="主要在 readiness 状态发生变化时报告事件的 edge-triggered 模式；handler 必须使用 nonblocking I/O drain 到 EAGAIN。">epoll ET</Term>
+
+<Term def="事件交付一次后临时禁用该 fd，处理者完成后必须 EPOLL_CTL_MOD rearm 的并发保护选项。">EPOLLONESHOT</Term>
+
+<Stepper>
+  <Step title="改变 trigger 与本次读取量">
+    <CseEpollTriggerLab />
+  </Step>
+  <Step title="ET 始终 drain 到 EAGAIN">
+    fd 必须 nonblocking；read/accept/write 循环处理所有当前 progress，would-block 才返回 event loop。
+  </Step>
+  <Step title="ONESHOT 完成 ownership 后 rearm">
+    worker 拥有 fd 处理权；更新 interest 与 state 后 `EPOLL_CTL_MOD`。忘记 rearm 会让连接永久沉默。
+  </Step>
+</Stepper>
+
+`epoll_wait` 与 `poll` 都报告 readiness，不替你读取数据。ET 不天然更快；它减少重复通知的同时增加 drain loop、fairness budget 和 state complexity。单连接持续有大量数据时应限制每轮 bytes/messages，避免饿死其他 fd。
+
+## 4.15 readv/writev：scatter/gather 仍要处理 partial progress
+
+`readv` 把 stream bytes scatter 到多个 iovec，`writev` 把 header/body 等 gather 成一次 syscall。返回值是所有 vectors 合计完成的 bytes，可能停在某个 vector 中间；output queue 必须同时推进 vector index 与 intra-vector offset。
+
+```cpp
+iovec vectors[2] = {
+  {.iov_base = header.data(), .iov_len = header.size()},
+  {.iov_base = body.data(), .iov_len = body.size()},
+};
+ssize_t n = writev(fd, vectors, 2);
+output.consume(static_cast<std::size_t>(n));
+```
+
+<Term def="一次 syscall 从多个 buffers 读取或写入数据的 scatter/gather I/O；它减少拼接复制，但不改变 partial-I/O 语义。">vectored I/O</Term>
+
+## 4.16 主机字节序与网络字节序
+
+network byte order 是 big-endian。16/32-bit integer 可用 `htons/htonl/ntohs/ntohl`；64-bit 与 floating point 应使用明确的 protocol encoding，不要直接发送 C++ struct，因为 padding、alignment、width、endianness 与 ABI 都可能变化。
+
+```cpp
+std::uint32_t encode_u32(std::uint32_t host) {
+  return htonl(host);
+}
+
+std::uint32_t decode_u32(std::uint32_t network) {
+  return ntohl(network);
+}
+```
+
+<Term def="多字节整数在网络协议中的标准 big-endian 表示，使不同 host endianness 能交换字段。">network byte order</Term>
+
+## 4.17 域名解析：不要只支持 IPv4
+
+`getaddrinfo(host, service, hints, &result)` 同时返回 IPv4/IPv6 candidates，并把 DNS/service lookup 与 sockaddr construction 统一。遍历 candidates，逐个 socket/connect；保存解析与连接各自的 timeout/error。结束后 `freeaddrinfo`。
+
+```cpp
+addrinfo hints{};
+hints.ai_family = AF_UNSPEC;
+hints.ai_socktype = SOCK_STREAM;
+addrinfo* result = nullptr;
+int rc = getaddrinfo(host.c_str(), service.c_str(), &hints, &result);
+if (rc != 0) throw ResolveError(gai_strerror(rc));
+```
+
+<Term def="把 hostname/service 解析为一组带 family、socket type、protocol 与 sockaddr 的连接候选项的可重入 API。">getaddrinfo candidate list</Term>
+
+DNS 成功不代表 connect 成功；缓存 TTL、IPv6/IPv4 fallback、resolver thread blocking 和 cancellation 都要在调用层建模。不要用 `gethostbyname` 的 static storage 与 IPv4-only contract 构建新库。
+
+## 本章回顾：返回值驱动连接状态
+
+1. listen socket、connected socket、application session 是三个不同 ownership 层。
+2. send/recv 的 partial、would-block、FIN、EINTR 与 fatal error 必须分支处理。
+3. nonblocking connect 在 writable 后读取 `SO_ERROR`，readiness 不是 success。
+4. select/poll/epoll 都只报告 readiness；ET 要 drain，ONESHOT 要 rearm。
+5. readv/writev、byte order 和 getaddrinfo 提升效率与可移植性，但不改变 stream/state-machine 基础。
+
+<Exercises>
+
+**问题 1：nonblocking client 收到 writable event 后立即把 connection 标为 connected，并调用 send；为什么可能错误？写出正确检查链。**
+
+<Answer>writable 可能表示 TCP handshake 成功，也可能表示异步失败。fd 仍处于 connect-pending 时应调用 getsockopt(SOL_SOCKET, SO_ERROR)；返回成功且 error 为 0 才转 connected，否则记录具体错误并关闭。成功后 send 仍可能 partial 或 would-block，必须用 output buffer offset 继续。</Answer>
+
+**问题 2：ET 模式收到 12 bytes，只读 4 bytes 就返回 event loop。之后连接沉默，问题在哪里？LT 和 EPOLLONESHOT 又分别怎样处理？**
+
+<Answer>ET 主要报告 readiness 边沿，buffer 中仍有 8 bytes 却没有新边沿，因此可能不再通知；fd 必须 nonblocking 并循环读取到 EAGAIN。LT 在仍 readable 时会再次报告，但仍应控制公平预算。EPOLLONESHOT 处理时也应 drain，并在更新 state/interest 后用 EPOLL_CTL_MOD rearm。</Answer>
+
+**问题 3：设计跨平台 send wrapper 时，哪些结果至少必须独立表达？为什么返回 bool 不够？**
+
+<Answer>至少表达 progress(n bytes)、would-block、interrupted、peer/fatal error，连接阶段还要表达 connect-pending/completed；Linux 与 Windows native error 先映射到这些语义。bool 会丢失已发送字节数，导致重复发送或丢数据，也会把 EAGAIN 当断线、把 EINPROGRESS 当失败。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="socket state machine" definition="由 socket 返回值、错误码、buffer progress 与连接阶段共同驱动的状态模型。" />
+  <GlossaryItem term="listening socket" definition="监听地址并从 accept queue 取出新连接的 socket。" />
+  <GlossaryItem term="portable socket boundary" definition="保留 native type/error/close 差异并对上层提供统一语义的适配层。" />
+  <GlossaryItem term="wildcard bind" definition="绑定 unspecified address 以监听所有本地接口的策略。" />
+  <GlossaryItem term="I/O readiness" definition="I/O 操作按 API 定义现在不会阻塞的提示，不保证完整或成功。" />
+  <GlossaryItem term="partial write" definition="一次发送只接受 requested buffer 前 n bytes 的正常结果。" />
+  <GlossaryItem term="connect completion" definition="异步连接产生 readiness 后通过 SO_ERROR 判定的最终结果。" />
+  <GlossaryItem term="EINTR policy" definition="syscall 被 signal 打断后结合 progress、deadline 与取消状态决定重试的规则。" />
+  <GlossaryItem term="epoll LT" definition="fd 保持 ready 时可重复报告的 level-triggered 模式。" />
+  <GlossaryItem term="epoll ET" definition="readiness 转换时报告、要求 nonblocking drain-to-EAGAIN 的 edge-triggered 模式。" />
+  <GlossaryItem term="EPOLLONESHOT" definition="事件交付一次后需显式 rearm 的 epoll 并发控制选项。" />
+  <GlossaryItem term="vectored I/O" definition="用多个 iovec 执行 scatter/gather 的 readv/writev。" />
+  <GlossaryItem term="network byte order" definition="协议多字节整数使用的 big-endian 标准表示。" />
+  <GlossaryItem term="getaddrinfo candidate list" definition="hostname/service 解析所得的 IPv4/IPv6 sockaddr 候选集合。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++服务器开发精髓，第4章 网络编程重难点解析"
+  adaptedUrl="https://book.douban.com/subject/35491437/"
+/>

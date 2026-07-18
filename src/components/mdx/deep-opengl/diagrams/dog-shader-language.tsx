@@ -44,10 +44,10 @@ export function DogShaderLanguageDiagram() {
           <line x1="360" y1="88" x2="160" y2="120" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" strokeDasharray="3 3" />
           <line x1="360" y1="88" x2="560" y2="120" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" strokeDasharray="3 3" />
 
-          <text x="360" y="306" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">out 与 in 同名即连接，管线自动插值</text>
+          <text x="360" y="306" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">阶段接口须满足名称、类型、精度与插值契约</text>
           <rect x="40" y="324" width="640" height="50" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" />
           <text x="360" y="346" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">限定符：uniform（共享常量）· in/out（顶点片元传值）· precision（精度）</text>
-          <text x="360" y="364" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">片元必须显式声明 float 精度；ES3 用 in/out 取代 ES2 的 attribute/varying</text>
+          <text x="360" y="364" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">片元 float 无默认精度；ES3 用 in/out 取代 ES2 的 attribute/varying</text>
 
           <defs>
             <marker id="slArrow" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto">
@@ -56,7 +56,44 @@ export function DogShaderLanguageDiagram() {
           </defs>
         </svg>
       </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">顶点 out 与片元 in 同名连接，光栅化按重心坐标插值 varying</figcaption>
+      <figcaption className="mt-2 text-center text-sm text-secondary">顶点输出与片元输入按完整接口契约链接，光栅化再按限定规则插值</figcaption>
+    </figure>
+  );
+}
+
+const INTERFACE_ROWS = [
+  ["顶点输入", "in / attribute", "VAO 属性槽提供逐顶点数据"],
+  ["绘制常量", "uniform / uniform block", "一次绘制或一组绘制共享"],
+  ["阶段接口", "vertex out → fragment in", "类型与限定符匹配后由光栅化插值"],
+  ["纹理资源", "sampler + texture unit", "sampler 值选择纹理单元，不保存纹理本身"],
+  ["片元输出", "out vec4", "写入当前 draw buffer 对应的颜色附件"],
+] as const;
+
+export function DogShaderInterfaceDiagram() {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
+        <div
+          role="img"
+          aria-label="GLSL ES 数据从应用到顶点和片元阶段的接口契约"
+          className="grid gap-2"
+        >
+          {INTERFACE_ROWS.map(([stage, syntax, contract], index) => (
+            <div
+              key={stage}
+              className="grid min-h-14 gap-2 rounded-control border border-border bg-bg/40 p-3 md:grid-cols-[2rem_7rem_12rem_1fr] md:items-center"
+            >
+              <span className="font-mono text-xs text-secondary">{index + 1}</span>
+              <strong className="text-sm text-primary">{stage}</strong>
+              <code className="text-xs text-accent">{syntax}</code>
+              <span className="text-xs leading-5 text-secondary">{contract}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">
+        着色器变量必须同时满足数据来源、阶段接口和资源绑定三层契约
+      </figcaption>
     </figure>
   );
 }

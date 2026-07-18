@@ -1,37 +1,37 @@
 import type { ReviewQuestion } from "./types";
 
-/** 学习地图 复习题 */
+/** Pro .NET Memory Management, Second Edition · 15 章学习地图复习题 */
 export const dnmMemoryModelQuestions: ReviewQuestion[] = [
   {
     id: "dnm-memory-model-1",
     chapter: "dnm-memory-model",
     level: 1,
-    question: `.NET 中托管堆与栈的核心区别是什么？`,
-    answer: `托管堆由 CLR 的 GC 自动管理内存分配和回收，存放引用类型实例；栈由操作系统管理，存放值类型和局部变量。栈分配只需移动指针极快；堆分配需 GC 参与。栈帧方法返回时释放，堆对象 GC 确认不可达后回收。`,
-    tags: ["托管堆","栈","值类型","引用类型"],
+    question: "原书 15 章为什么按基础测量、GC 实现、生命周期/高阶内存、程序化 API 四阶段学习，哪些前置关系不能颠倒？",
+    answer: "Ch1-4 统一对象、OS/CPU、指标与 CLR/JIT 口径；Ch5-11 才能从 heap/allocation 推导 mark/plan/sweep/compact 和 flavors；Ch12-14 在可达性与 ref safety 上建立资源和 buffer owner/lease；Ch15 再安全观察或干预。没有前置模型，配置/API 只会变成无证据开关。",
+    tags: ["权威目录", "15 章", "学习路径"],
   },
   {
     id: "dnm-memory-model-2",
     chapter: "dnm-memory-model",
     level: 2,
-    question: `本书四大板块的学习顺序是什么？为什么？`,
-    answer: `内存基础 → SOS 调试工具 → 内存模式 → 高级主题。建立因果链：内存基础是前提，SOS 让你实际观察验证理论，内存模式解释具体性能问题，高级主题是综合应用。`,
-    tags: ["学习路径","四大板块"],
+    question: "生产出现分配高、暂停长、回收后保留、RSS 上升或互操作 pin 时，最短回读路径的共同第一步是什么？",
+    answer: "先回 Ch3 确认时间窗、线程/进程范围、累计/快照和能证明的边界，再进入对应机制。分配走 Ch6/13/14，暂停走 Ch7-11，保留走 Ch8/12/15，RSS 分叉走 Ch2/12/15，pin 走 Ch5/9-10/12-14；都以量化验收结束。",
+    tags: ["症状路由", "测量口径", "证据"],
   },
   {
     id: "dnm-memory-model-3",
     chapter: "dnm-memory-model",
     level: 3,
-    question: `一个引用类型对象从 new 到被回收经历了哪些阶段？`,
-    answer: `1.new 在 Gen0 分配内存。2.初始化对象头+方法表指针+字段。3.构造函数执行。4.被根引用持有。5.根引用消失变为不可达。6.GC 标记不可达为垃圾。7.若有 Finalizer 移入 freachable 队列。8.终结后内存被回收（Gen0/1 压缩，Gen2/LOH 可能不压缩）。`,
-    tags: ["对象生命周期","GC","分配","回收"],
+    question: "为什么值类型不等于栈、Span 不等于所有权、GetTotalMemory 不等于 RSS？",
+    answer: "值类型定义复制语义，实际可位于寄存器、栈、对象字段、数组或装箱对象；Span 只是 ref+length 的借用 view，底层 owner 决定寿命；GetTotalMemory 估算托管范围，RSS 还含 committed pages、native、stack、JIT 和映射。三者都必须回到存储与指标口径。",
+    tags: ["值类型", "Span", "RSS"],
   },
   {
     id: "dnm-memory-model-4",
     chapter: "dnm-memory-model",
     level: 4,
-    question: `为什么说不理解 .NET 内存模型就无法写出高性能 C#？从三个场景说明。`,
-    answer: `1.装箱：用 ArrayList<int> 导致每次装箱产生 Gen0 临时对象，应用 List<int>。2.LOH：循环 new 大数组进 LOH 触发 Full GC，应用 ArrayPool。3.Finalizer：加 ~析构器但没 Dispose，对象在 freachable 队列堆积需两次 GC，应用 Dispose+SuppressFinalize。`,
-    tags: ["装箱","LOH","Finalizer","性能"],
-  }
+    question: "怎样用建模、测量、推演、所有权设计和自动化五种产物证明已经掌握全书？",
+    answer: "提交对象/heap/机器层级图；保存可复现 counter/event/dump 口径；手推一次 GC 并预测存活/pin/碎片成本；画资源与 buffer owner/lease 的异常取消状态机；最后用 EventPipe/ClrMD 自动报告根路径并以 throughput、p99、allocation、heap/RSS 与回滚阈值验收。",
+    tags: ["能力矩阵", "毕业作业", "回滚"],
+  },
 ];

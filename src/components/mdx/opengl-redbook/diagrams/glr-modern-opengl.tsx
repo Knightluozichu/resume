@@ -1,43 +1,5 @@
-/**
- * <GlrModernOpenglDiagram>
- *
- * 现代OpenGL实践：实例化、间接绘制、DSA、SPIRV
- */
-
-export function GlrModernOpenglDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox="0 0 720 400" role="img" aria-label="现代OpenGL实践：实例化、间接绘制、DSA、SPIRV" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x="360" y="30" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">现代OpenGL实践</text>
-<text x="360" y="50" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">性能优化与最佳实践</text>
-<rect x="36" y="72" width="153" height="32" rx="8" fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeWidth="1.2" />
-<text x="112" y="93" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">实例化</text>
-<rect x="36" y="118" width="153" height="30" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-<text x="112" y="137" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">glDrawArraysInstanced</text>
-<rect x="206" y="72" width="153" height="32" rx="8" fill="var(--success)" fillOpacity="0.12" stroke="var(--success)" strokeWidth="1.2" />
-<text x="282" y="93" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--success)">间接绘制</text>
-<rect x="206" y="118" width="153" height="30" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-<text x="282" y="137" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">glMultiDrawElementsIndirect</text>
-<rect x="376" y="72" width="153" height="32" rx="8" fill="var(--warning)" fillOpacity="0.12" stroke="var(--warning)" strokeWidth="1.2" />
-<text x="452" y="93" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--warning)">DSA</text>
-<rect x="376" y="118" width="153" height="30" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-<text x="452" y="137" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">直接状态访问</text>
-<rect x="546" y="72" width="153" height="32" rx="8" fill="var(--danger)" fillOpacity="0.12" stroke="var(--danger)" strokeWidth="1.2" />
-<text x="622" y="93" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--danger)">SPIRV</text>
-<rect x="546" y="118" width="153" height="30" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-<text x="622" y="137" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">预编译着色器</text>
-<rect x="48" y="320" width="624" height="40" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" />
-<text x="360" y="338" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-primary)">核心: 减少CPU-GPU通信、状态切换、Draw Call</text>
-
-          <defs>
-            <marker id="glr-modern-opengl-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-              <path d="M0 0 L6 3 L0 6 z" fill="var(--text-secondary)" />
-            </marker>
-          </defs>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">现代OpenGL实践：实例化、间接绘制、DSA、SPIRV</figcaption>
-    </figure>
-  );
-}
+import type { ReactNode } from "react";
+function Frame({caption,children}:{caption:string;children:ReactNode}){return <figure className="mdx-figure not-prose mx-auto my-6"><div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div><figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption></figure>}
+export function GlrModernOpenglDiagram(){const rows=[["Objects","DSA + immutable storage"],["Batch","instancing + state sort"],["Generate","compute culling + commands"],["Submit","multi-draw indirect"],["Measure","CPU/GPU queries"]];return <Frame caption="现代提交把资源配置、批次、命令生成、提交和测量组成闭环。"><div role="img" aria-label="现代 OpenGL 提交闭环" className="grid gap-2 md:grid-cols-5">{rows.map(([a,b],i)=><div key={a} className="grid min-h-24 content-center rounded-control border border-border bg-bg/45 p-3 text-center"><span className="text-xs font-bold text-accent">0{i+1}</span><strong className="mt-1 text-xs text-primary">{a}</strong><span className="mt-2 text-xs text-secondary">{b}</span></div>)}</div></Frame>}
+export function GlrSubmissionDiagram(){const paths=[["CPU-driven","objects → sort → draws"],["Instanced","compatible objects → instance stream → draw"],["GPU-driven","bounds → compute cull → command buffer → MDI"]];return <Frame caption="三条路径的取舍取决于对象数、状态兼容、可见率和 CPU/GPU 瓶颈。"><div role="img" aria-label="CPU 实例化与 GPU 驱动提交对比" className="grid gap-3 md:grid-cols-3">{paths.map(([a,b])=><div key={a} className="rounded-control border border-border bg-bg/45 p-4"><strong className="text-sm text-primary">{a}</strong><p className="mb-0 mt-2 text-xs leading-5 text-secondary">{b}</p></div>)}</div></Frame>}
+export function GlrProfilingDiagram(){const rows=[["CPU","submit wall time","thread profiler"],["GPU","pass duration","timestamp query"],["Work","invocations/primitives/samples","pipeline statistics"],["Correctness","messages + image hash","debug/capture"]];return <Frame caption="时间说明是否变快，工作量计数解释为什么，图像与调试信息证明没有换掉结果。"><div role="img" aria-label="OpenGL 性能证据矩阵" className="overflow-hidden rounded-control border border-border text-xs"><div className="grid grid-cols-3 gap-px bg-border">{['Evidence','Question','Instrument'].map(x=><strong key={x} className="bg-bg p-3 text-primary">{x}</strong>)}{rows.flatMap(r=>r.map((x,i)=><span key={`${r[0]}-${x}`} className={i===0?"bg-accent/10 p-3 font-semibold text-accent":"bg-elevated p-3 text-secondary"}>{x}</span>))}</div></div></Frame>}

@@ -1,104 +1,346 @@
 ---
-title: 数字序列中的某位数字
-type: C
-section: 数学
-order: 3
-description: 按位段数公式定位第 n 位，避免逐字符枚举。
+title: "面试题44：数字序列中某一位的数字"
+type: B
+section: "第5章 优化时间和空间效率"
+order: 48
+description: "把01234567891011…按一位数、两位数、三位数分块，先跳过完整字符块，再用整除和取模定位具体数字及数字内部位置。"
 demo: true
 math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/44_DigitsInSequence/DigitsInSequence.cpp"
 draft: false
 ---
 
-{/* 知识点清单：按位统计、区间长度剥离、定位位偏移；原书章节：数字序列中的某位数字。 */}
+import { DigitSequenceBlocksDiagram, DigitSequenceLocationLab, DigitInsideNumberDiagram, DigitSequenceContractDiagram, DigitsInSequenceOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/digits-in-sequence";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能推导 1 位、2 位、3 位区间贡献长度。
-- 能用 `n` 的偏移量在数字范围内定位具体数字和具体位。
-- 能处理越界和大数 n 的减法边界。
+- 能解释一位数块为何包含0到9共10个字符
+- 能计算索引189、190及1000到1002的分块定位
+- 能实现整段跳过、数字定位和数字内取位三个步骤
+- 能分析0基边界、整数乘法、pow转换与输入上限风险
+- 能设计覆盖作者九组用例和朴素字符串参考的测试
 
 </Objectives>
 
-## 直觉引入
+## 从“不生成无限字符串”开始
 
-把序列 `0,1,2,3,...` 看成块状拼接：1 位数 10 个，2 位数 90 个，3 位数 900 个...  
-你可以先减掉整块，再在当前块内做局部定位，省下枚举成本。
+先预测：把非负整数连续写成 `0123456789101112…`。索引0是0，索引9是9，索引10已经进入数字10的首字符1。若要查索引一百万，没有必要真的拼接前一百万个字符；它必然落在某个固定数字长度的区间里。
 
-## 概念讲解
+题目“**数字序列中某一位的数字**”使用<Term def="从序列第一个字符0开始编号为0的位置；作者所有测试均按0基解释。">全局索引</Term>。作者先按“一位数、两位数、三位数”分组，执行“**跳过整段位数区间**”，再在目标块中“**定位具体数字和具体位**”。
 
-`len=1` 时有 9 个（通常不含 0，可按题目约定）；每位数个数为 `9*10^(len-1)`，总字符数是 `count*len`。  
-定位到某个数字后，通过 `(offset / len)` 和 `offset % len` 得到目标字符。
+<DigitSequenceBlocksDiagram />
 
-## 思考引导
+## 位数块的数量与字符长度
 
-### 1) 先问问题，不先拼字符串
-核心不是打印 1..∞，而是从“位级块”上定位第 n 位。直接构造太慢，关键是先做层级缩放。
+一位数包括0到9，共10个数字；这是作者模型与旧页最关键的差异。从两位数开始，d位正整数从10的d减1次幂到10的d次幂减1，共9乘10的d减1次幂个。
 
-### 2) 识别不变式
-1 位数块有 `9` 个，2 位数块有 `90*2` 位，`k` 位数块有 `9*10^(k-1)*k` 位。每次去掉完整块后 `n` 的规模严格减小。
+$$
+N_d=
+\begin{cases}
+10, & d=1 \\
+9\cdot 10^{d-1}, & d\ge 2
+\end{cases}
+$$
 
-### 3) 为什么它一定成立
-数字长度分层后，每层元素长度固定，位置映射就变成整除与取模问题，不再受前缀内容影响。
+每个数字贡献d个字符，所以一个<Term def="所有十进制长度相同的连续数字组成的序列区间。">位数块</Term>包含的字符数为：
 
-### 4) 常见误区
-常见错误是把起始块设成 0 位，或把每层长度写成 10^k，忽略首位不能为 0 的约束。
+$$
+B_d=d\cdot N_d
+$$
 
-### 5) 你能找到一个反例吗
-n 在边界 10、100 附近时最容易暴露层划分和减法顺序是否准确。
+一位数块占索引0到9共10位；两位数块占接下来的180位，即全局索引10到189；三位数块从190开始，占2700位。边界判断必须用“剩余index严格小于块长”，等于块长说明恰好落在下一块首位。
 
-### 6) 迁移到下一题
-任何“序列位置反查”问题都能先分段，再在段内定位。先把映射变成数学求解，而不是枚举。
-## 交互 Demo
+## 先跳过整块
 
-每轮剥离一个位数块，直到 `n` 落在某个“同位数区间”，更清晰地看到位级索引折算。
-
-<BinarySearchDiagram />
+作者从digits等于1开始。若index不在当前块，减去 `numbers * digits` 并把digits加1；进入目标块后，index不再是全局位置，而是该块首字符起算的<Term def="扣除所有较短数字块后，相对当前位数块首字符的0基位置。">块内偏移</Term>。
 
 ```cpp
-#include <string>
-
-class Solution {
-public:
-    int kthNumberChar(int n) {
-        long long len = 1;
-        long long base = 1;
-        while (n > (base * 9 * len)) {
-            n -= base * 9 * len;
-            base *= 10;
-            len++;
-        }
-        long long index = (n - 1) / len;
-        long long digit = (n - 1) % len;
-        long long num = base + index;
-        return std::to_string(num)[digit] - '0';
+int countOfIntegers(int digits) {
+    if (digits == 1) {
+        return 10;
     }
-};
-```
+    const int count =
+        static_cast<int>(
+            std::pow(10, digits - 1));
+    return 9 * count;
+}
 
-```typescript
-function kthNumberChar(n: number): number {
-  let len = 1;
-  let base = 1;
-  while (n > base * 9 * len) {
-    n -= base * 9 * len;
-    base *= 10;
-    len++;
-  }
-  const index = Math.floor((n - 1) / len);
-  const digit = (n - 1) % len;
-  const num = base + index;
-  return Number(String(num).charAt(digit));
+int beginNumber(int digits) {
+    if (digits == 1) {
+        return 0;
+    }
+    return static_cast<int>(
+        std::pow(10, digits - 1));
+}
+
+int digitAtIndex(int index) {
+    if (index < 0) {
+        return -1;
+    }
+
+    int digits = 1;
+    while (true) {
+        const int numbers =
+            countOfIntegers(digits);
+        if (index < numbers * digits) {
+            return digitAtIndex(
+                index, digits);
+        }
+
+        index -= digits * numbers;
+        ++digits;
+    }
 }
 ```
 
-<Callout type="trap">
-  <strong>现象 →</strong> 第 n 位定位偏移一个位置。  
-  <strong>原因 →</strong> 常见 off-by-one（`n-1` 处理遗漏）。  
-  <strong>修复 →</strong> 在计算 `index` 与 `digit` 前先用 `n-1` 建模为 0 基索引。
+例如索引1000先减一位数块10，得到990；再减两位数块180，得到三位数块内偏移810。整个过程只遍历位数种类，不遍历具体数字。
+
+<DigitSequenceLocationLab />
+
+## 用商定位数字、余数定位字符
+
+当前块起始数字记为S，块内偏移记为r，数字长度为d。每个数字占d位，因此整除给出这是块内第几个数字，取模给出该数字内从左起第几个字符：
+
+$$
+number=S+\left\lfloor\frac{r}{d}\right\rfloor,
+\qquad
+inside=r\bmod d
+$$
+
+对r等于810、d等于3、S等于100，目标数字是370，数内偏移0，对应字符3。r等于811和812时整除商仍是270，目标仍是370，只是数内偏移变成1和2。
+
+这个<Term def="块内整除后得到、实际包含待查询字符的那个十进制整数。">目标数字</Term>不会因同一数字内的不同字符变化；只有当r跨过d的整数倍时才进入下一个数字。
+
+## 作者从右侧做整数除法
+
+数内偏移是左侧0基下标。作者把它转换成从右数第几位：`indexFromRight = digits - index % digits`，然后除以10共indexFromRight减1次，最后取模10。
+
+$$
+digit=
+\left\lfloor
+\frac{number}{10^{d-1-inside}}
+\right\rfloor
+\bmod 10
+$$
+
+这里的<Term def="目标数字内部从最左字符开始的0基位置，由块内偏移对数字长度取模得到。">数内偏移</Term>若为0，就除10的d减1次取最高位；若为d减1，就不除直接取个位。
+
+```cpp
+int digitAtIndex(int index, int digits) {
+    int number =
+        beginNumber(digits) + index / digits;
+    const int indexFromRight =
+        digits - index % digits;
+
+    for (int i = 1;
+         i < indexFromRight; ++i) {
+        number /= 10;
+    }
+    return number % 10;
+}
+```
+
+<DigitInsideNumberDiagram />
+
+作者不用to_string取字符，完全以整数运算定位。两种写法都可行，但字符串版应明确编码和负号，本题数字均非负且每个十进制字符一字节，整数版契约更直接。
+
+## 189与190为何是关键边界
+
+一位数块10位，两位数块180位，累计190位覆盖全局索引0到189。索引189减去10后块内偏移179，数字序号是89，起始10加89得到99，数内偏移1，结果是末位9。
+
+索引190先减10得到180；它不严格小于两位数块长度180，因此还要完整减掉两位数块，进入三位数块偏移0。起始数字100，数内偏移0，结果为首位1。
+
+<Callout type="trap" title="把等于块长的索引留在当前块">
+块内合法偏移从0到块长减1。剩余index等于块长时已越过当前块，必须继续扣除；否则索引190会被错误映射到两位数后的不存在位置。
 </Callout>
 
+## 1000到1002连续定位370
+
+索引1000扣除前两块后为810。810整除3是270，所以数字是100加270，即370；余数0取3。索引1001、1002的商仍是270，余数依次1、2，分别取7和0。
+
+连续三个测试同时证明两层映射：商在同一数字的三个字符间不变，余数按0、1、2移动；下一索引1003才会把商推进到271，对应数字371首位3。
+
+若错误使用1基偏移或先减1，三个结果会整体错位。作者的全局索引、块内偏移和数内偏移始终都是0基，无需额外n减1。
+
+## 正确性证明
+
+所有非负整数按十进制位数形成互不重叠、顺序连续的块。外层每次减去一个完整块长度，因此不跳过目标字符，也不会重复计数；首次满足剩余偏移小于当前块长时，目标唯一落在该块。
+
+块内每d个字符对应一个数字，欧几里得除法把r唯一写成商乘d加余数，其中余数范围是0到d减1。商唯一确定目标数字，余数唯一确定数内字符。最后按10的幂右移并取个位，得到该位置十进制数字。
+
+三个步骤都是双射式定位：块前缀长度、数字序号、字符序号合起来能恢复原全局索引。因此算法既不会返回另一位置，也不会漏掉任何非负索引。
+
+## 复杂度与作者实现边界
+
+目标数字有d位时，外层检查d个块，最终取位最多除10共d减1次，时间O(d)，也就是O(log index)；额外空间O(1)。作者使用int，理论无限序列并不等于实现支持任意大索引。
+
+<DigitSequenceContractDiagram />
+
+`numbers * digits`、累计减法与10的幂都可能超出int。`std::pow`返回double后再转int，大位数还会遇到舍入或越界；源码也没有显式包含标准头 `cmath`，依赖间接声明不具可移植性。工程版应使用整数位权递推与宽类型。
+
+<Callout type="trap" title="数学序列无限，所以int循环也一定结束">
+块长度溢出后可能变负或回绕，index比较和减法不再单调，while循环可能错误定位甚至不结束。必须给输入域和中间乘法设上限。
+</Callout>
+
+下面接口接受非负int64索引；对这个输入域，uint64足以容纳所需块计算。负索引返回nullopt，不再占用数字-1做哨兵。
+
+```cpp
+#include <cstdint>
+#include <optional>
+
+std::optional<int> digitAt(
+    std::int64_t signedIndex) {
+    if (signedIndex < 0) {
+        return std::nullopt;
+    }
+
+    std::uint64_t index =
+        static_cast<std::uint64_t>(signedIndex);
+    std::uint64_t digits = 1;
+    std::uint64_t start = 0;
+    std::uint64_t count = 10;
+
+    while (true) {
+        const std::uint64_t block =
+            count * digits;
+        if (index < block) {
+            break;
+        }
+        index -= block;
+        ++digits;
+
+        if (digits == 2) {
+            start = 10;
+        } else {
+            start *= 10;
+        }
+        count = 9 * start;
+    }
+
+    std::uint64_t number =
+        start + index / digits;
+    const std::uint64_t inside =
+        index % digits;
+    std::uint64_t shifts =
+        digits - 1 - inside;
+    while (shifts-- > 0) {
+        number /= 10;
+    }
+    return static_cast<int>(number % 10);
+}
+```
+
+若接口扩展到完整uint64索引，`count * digits`可能在19位块溢出，要用检查乘法或更宽中间类型。宽输入并不自动保证宽中间结果，边界证明必须与公开输入域一致。
+
+## 作者九组测试的准确语义
+
+作者直接比较 `digitAtIndex(inputIndex)` 与期望：
+
+1. 索引0、1、9分别返回0、1、9，覆盖一位数块。
+2. 索引10返回1，是数字10的首位。
+3. 索引189返回9，是数字99的末位。
+4. 索引190返回1，是数字100的首位。
+5. 索引1000、1001、1002分别返回3、7、0，对应数字370三位。
+
+<DigitsInSequenceOfficialCaseLab />
+
+源码没有负索引测试，尽管函数定义返回-1；也没有11到188的两位数内部样本、1003、三位块末尾2889、四位块起点2890或大索引溢出测试。
+
+朴素参考可不断把整数转字符串并拼接到超过目标索引，用于短范围差分。边界测试应对每个位数块起点前一位、起点和起点后一位成组三测，最容易发现严格小于、起始数字和0基偏移错误。
+
+```cpp
+#include <cassert>
+#include <string>
+
+int bruteDigit(std::size_t index) {
+    std::string sequence;
+    for (std::size_t value = 0;
+         sequence.size() <= index; ++value) {
+        sequence += std::to_string(value);
+    }
+    return sequence[index] - '0';
+}
+
+void testDigitsInSequence() {
+    for (std::int64_t index = 0;
+         index <= 5000; ++index) {
+        assert(digitAt(index).value() ==
+               bruteDigit(index));
+    }
+    assert(!digitAt(-1).has_value());
+    assert(digitAt(189).value() == 9);
+    assert(digitAt(190).value() == 1);
+    assert(digitAt(1000).value() == 3);
+    assert(digitAt(1001).value() == 7);
+    assert(digitAt(1002).value() == 0);
+}
+```
+
+朴素字符串会占O(index)内存，只适合测试小索引。生产算法的优势正是不会生成此前字符，测试参考不应被误用为线上实现。
+
+## 序列定义改变时怎样迁移
+
+若序列从1而不是0开始，一位数块只有9项，所有后续全局索引比作者模型左移1；不能只改beginNumber而不改count和测试。若索引改成1基，入口应先统一转换一次，内部仍保持0基，避免每层散落减1。
+
+若连接的是偶数、质数或固定进制表示，位数块数量公式会改变，但“跳整块、商定位对象、余数定位对象内部位置”的框架仍可复用。二进制或十六进制还要定义字符表和大小写。
+
+若数字之间插入逗号，分隔符也是序列字符，固定d字符一组的映射失效。可把每项长度改为数字位数加分隔符长度，并单独处理最后一项是否带分隔符。
+
+面向超长十进制索引时，连index本身都可能是大整数；可用十进制字符串做块长比较和减法，再把落入目标块后的商余数转成可管理范围。这与作者int接口是不同问题，应明确扩展边界。
+
+<Stepper>
+  <Step title="先按位数建立完整块"><DigitSequenceBlocksDiagram />一位数含0到9，两位数和三位数依次贡献180与2700位。</Step>
+  <Step title="扣除所有更短数字块"><DigitSequenceLocationLab />剩余值成为目标位数块内的0基偏移。</Step>
+  <Step title="用商和余数做两层定位"><DigitInsideNumberDiagram />商找到具体数字，余数找到数字内具体位。</Step>
+  <Step title="检查索引和乘法输入域"><DigitSequenceContractDiagram />无限数学定义必须落到有限、可证明不溢出的实现范围。</Step>
+  <Step title="跑完九组作者测试"><DigitsInSequenceOfficialCaseLab />锁定0、10、99、100边界及370的连续三位。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 作者序列从字符0开始，索引与所有内部偏移均为0基。
+2. 一位数块有10个数字；d位块从两位起有9乘10的d减1次幂个数字。
+3. 先减去完整块字符数，直到剩余偏移落入当前块。
+4. 块内偏移整除d定位目标数字，取模d定位数内字符。
+5. 作者从右侧反复除10，再取个位得到目标数字。
+6. 索引189是99末位，190是100首位，严格边界不能混淆。
+7. 索引1000到1002依次命中370的3、7、0。
+8. 算法O(log index)、O(1)，但作者int与pow实现需防溢出和转换。
+
+<Exercises>
+
+**问题 1：为什么一位数块是10位而不是9位？**
+
+<Answer>作者序列从数字0开始，0到9共10个一位数字，每个贡献一个字符，因此全局索引0到9都属于一位数块。</Answer>
+
+**问题 2：索引189怎样定位到99的末位？**
+
+<Answer>先减一位数块10得到179；179整除2为89，起始数字10加89得到99；179对2取模为1，指向第二个字符9。</Answer>
+
+**问题 3：索引190为何不能留在两位数块？**
+
+<Answer>减去一位数块后剩180，恰等于两位数块长度。合法块内偏移最大179，所以必须继续减180，进入三位数块偏移0，对应100首位1。</Answer>
+
+**问题 4：索引1001怎样得到数字7？**
+
+<Answer>扣除10和180后偏移811；811整除3为270，目标数字100加270等于370；余数1表示左侧第二位，所以结果7。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="全局索引">从无限拼接序列首字符0开始的0基位置。</GlossaryItem>
+  <GlossaryItem term="位数块">所有十进制长度相同数字构成的连续字符区间。</GlossaryItem>
+  <GlossaryItem term="块内偏移">扣除较短数字块后，相对当前块首字符的位置。</GlossaryItem>
+  <GlossaryItem term="目标数字">块内整除后确定的、包含待查询字符的整数。</GlossaryItem>
+  <GlossaryItem term="数内偏移">目标数字中从左起算的0基字符位置。</GlossaryItem>
+</Glossary>
+
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题44"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/44_DigitsInSequence/DigitsInSequence.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

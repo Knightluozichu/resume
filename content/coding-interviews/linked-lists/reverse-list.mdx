@@ -1,281 +1,262 @@
 ---
-title: 反转链表
+title: "面试题24：反转链表"
 type: C
-section: 链表
-order: 5
-description: 熟练掌握迭代法三指针动态重定向与递归反转单链表的本质区别。
+section: "第3章 高质量的代码"
+order: 26
+description: "按保存后继、反向链接、推进双指针的顺序原地反转单链表，并验证新头新尾、节点身份和异常边界。"
 demo: true
-math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviews
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/24_ReverseList/ReverseList.cpp"
 draft: false
 ---
 
-{/* 知识点清单：单向链表遍历 / 三指针原地反转 / 递归回溯反转 / 链表断裂防范 / 边界特特判 / 调用栈开销；原书章节：面试题24：反转链表。 */}
+import { ReversePointerOrderDiagram, ReverseInvariantMap, ReverseHeadTailDiagram, ReverseOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/reverse-list";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能熟练运用迭代法和“三指针”（`prev`、`curr`、`next`）原地反转单链表，达到 $O(n)$ 时间复杂度和 $O(1)$ 空间复杂度。
-- 能阐明递归反转链表的底层调用栈执行过程，并指出其在回溯阶段如何将原尾元素提升为新链表的头节点。
-- 能准确指出并防范反转过程中极易发生的“链表断裂（Connection Loss）”缺陷，并说出正确的更新步骤。
-- 能安全地处理空链表、单节点链表以及两节点链表等边界测试用例。
+- 能解释previous、current、next分别保存已反转段、当前节点和剩余入口
+- 能计算每轮改链后新头、当前位置与未处理后缀的变化
+- 能实现作者记录原尾为新头的迭代反转版本
+- 能分析更新顺序、递归栈、所有权、环和并发修改风险
+- 能设计空链、单节点、多节点与双重反转的身份测试
 
 </Objectives>
 
-## 直觉引入
+## 从“先改next会失去什么”开始
 
-在推导算法前，我们先通过两个生活中的小例子建立直觉：
+先预测：链表 1→2→3 中，current指向1。若第一步直接执行 current->next=previous，而 previous 为空，之后怎样找到节点2？原来通向2的唯一链接已经被覆盖；如果没有其他变量保存它，2和3形成的后缀将不可达。
 
-*   **场景 A（火车挂钩重组）**：想象有一列行驶中的绿皮火车，车厢 1 连着车厢 2，2 连着 3。现在需要将火车的行驶方向完全反转，变成 3 连着 2，2 连着 1。如果要把车厢连接倒过来，我们不能直接解开所有的挂钩（这样火车会散架），而必须在每个连接点（挂钩处），先把后一节车厢拉住（`next`），解开挂钩，将当前车厢的反向接头扣在前一节车厢（`prev`）上。
-    
-*   **场景 B（悬挂档案袋）**：想象你桌上挂着一叠堆在一起的档案夹，每个档案夹底下都有一个皮套挂在下一个档案夹上（形成从上到下的悬挂链）。如果要将挂扣顺序彻底翻转，你必须先拿稳原本悬挂在最底下的下一个档案夹（`next`），剪断当前的向下挂套，把挂套翻上去挂在原本上面的那一个（`prev`）上。由于每次挂套只能改一个，如果不先把底下的那个档案袋拿稳，底下的所有档案夹就会全部摔到地上摔碎。这就是为什么需要三指针配合的原因。
+所以反转链表不是把箭头“一起翻面”，而是逐节点迁移。每轮都要先保存下一个节点，再把当前next反向，最后推进处理位置。原书核心短语“**前驱、当前与后继指针**”对应三个职责，顺序不能交换。
 
-## 概念讲解
+把 previous 指向的部分称为<Term def="已经完成next反向、以previous为入口并最终以空结束的链表前缀。">已反转前缀</Term>，把 current 及其后面仍维持原方向的部分称为<Term def="尚未改写next、仍由current进入的原方向链表后缀。">未处理后缀</Term>。算法每轮从后缀头取一个节点，放到反转前缀头。
 
-### 1. 迭代法：三指针原地重定向
+<ReversePointerOrderDiagram />
 
-迭代法的核心思想是**“原地反转”**。我们使用三个指针在一次遍历中完成指针指向的改变：
-- `prev`：指向已经反转部分的头部（初始为 `null`）。
-- `curr`：指向当前正在处理的节点（初始为 `head`）。
-- `next`：作为临时指针，在修改 `curr.next` 之前暂存下一个节点。
+## 四条语句为什么必须按这个顺序
 
-#### 迭代基本步骤（一轮循环）
-1. **暂存后继**：`next = curr.next` （防止链表断开后，丢失与剩余链表的联系）。
-2. **指针重定向**：`curr.next = prev` （将当前节点的 next 指向其前驱，完成局部反转）。
-3. **指针前移**：
-   - `prev = curr` （当前节点升级为新的已反转部分头部）。
-   - `curr = next` （前移到下一个待处理的节点）。
+一轮更新依次是：
 
-```
-初始状态：
-null   [1] -> [2] -> [3] -> null
- ^      ^
-prev   curr
+1. next=current->next，保存未处理后缀剩余入口。
+2. current->next=previous，把当前节点接到已反转前缀前面。
+3. previous=current，让previous成为扩大后前缀的新头。
+4. current=next，恢复并进入尚未处理的后缀。
 
-步骤 1-2：暂存 next=2，并将 1 指向 null
-null <- [1]    [2] -> [3] -> null
- ^       ^      ^
-prev   curr    next
+第一步叫<Term def="在覆盖current的next之前，把原后继地址保存到独立变量以维持剩余链表可达。">后继暂存</Term>。若省略，剩余节点并非立即释放，而是失去所有可达路径，最终造成逻辑丢失和内存泄漏。若先推进 current 再改链，又会失去需要修改的旧当前节点。
 
-步骤 3：指针前移
-null <- [1]    [2] -> [3] -> null
-         ^      ^
-        prev   curr
-```
+<ReverseInvariantMap />
 
-当 `curr` 变为 `null` 时，说明所有节点均已被重定向。此时 `prev` 刚好指向原链表的最后一个节点，即反转后的新头节点。
+每轮结束时，previous前缀已反转且尾部指向空，current仍是未处理后缀入口。两个部分覆盖原链表全部节点且互不重叠。current最终为空时，未处理后缀为空，previous就覆盖全部节点。
 
----
+<Callout type="trap" title="先重写current->next再读取后继">
+单向节点只有一条前向链接。覆盖后再从current读取next得到的是previous，而不是原后继；循环可能在已反转前缀中打转，原后缀永久丢失。必须先保存下一个节点。
+</Callout>
 
-### 2. 递归法：堆栈回溯逆向修改
+## 忠实实现作者的迭代版本
 
-递归法则是通过**递归栈**一路深入到链表的尾部，然后**自底向上（回溯阶段）**地反向修改指针。
+作者维护 pReversedHead、pNode、pPrev。每轮先取得 pNext；当 pNext 为空时，当前节点是原尾，作者把它记录为<Term def="反转完成后用于进入整条链表的节点，等于原链表尾节点。">新头</Term>。随后再反向链接并推进。
 
-#### 执行流程
-- **“递”去**：递归函数通过 `reverseList(head.next)` 深入，直到遇到 `head === null` 或 `head.next === null`（尾节点），此时将其作为 `newHead`（新头节点）直接返回。
-- **“归”回（回溯阶段）**：对于每一层递归（假设当前节点为 `head`，其后继为 `head.next`）：
-  1. 通过执行 `head.next.next = head` 让后继节点反过来指向自己。
-  2. 必须执行 `head.next = null` 切断原有的正向链接，防止成环。
-  3. 返回 `newHead` 传递给上一层，直至最外层。
-
-```
-回溯到节点 3（head = 3，其 next 为尾节点 4）：
-3 -> [4] -> null
-
-执行 3.next.next = 3：
-3 <-> 4
-
-执行 3.next = null：
-null <- 3 <- 4 (此时 4 作为 newHead 向上层返回)
-```
-
-## 交互 Demo
-
-点击切换选项，以单步调试方式观察迭代反转链表（三指针跳转与指针重定向）的运行流程与调试终端状态：
-
-<ReverseListDiagram />
-
-## 代码对照
-
-### 核心实现 A：迭代原地反转
-
-迭代法仅使用常数个辅助变量，空间复杂度为 $O(1)$，在生产环境中最为推荐。
-
-<CodeTabs>
-  <Tab label="C++ (迭代反转)">
 ```cpp
 struct ListNode {
-    int m_nValue;
-    ListNode* m_pNext;
-    ListNode(int val) : m_nValue(val), m_pNext(nullptr) {}
+    int value;
+    ListNode* next = nullptr;
 };
 
-class Solution {
-public:
-    ListNode* ReverseList(ListNode* pHead) {
-        // 空值守卫
-        if (pHead == nullptr || pHead->m_pNext == nullptr) {
-            return pHead;
+ListNode* reverseList(ListNode* head) {
+    ListNode* reversedHead = nullptr;
+    ListNode* current = head;
+    ListNode* previous = nullptr;
+
+    while (current != nullptr) {
+        ListNode* next = current->next;
+
+        if (next == nullptr) {
+            reversedHead = current;
         }
 
-        ListNode* pPrev = nullptr;
-        ListNode* pCurr = pHead;
-
-        while (pCurr != nullptr) {
-            ListNode* pNext = pCurr->m_pNext; // 1. 暂存后继
-            pCurr->m_pNext = pPrev;           // 2. 指针反转
-            pPrev = pCurr;                    // 3. prev 前移
-            pCurr = pNext;                    // 4. curr 前移
-        }
-
-        return pPrev; // 返回新链表头节点
+        current->next = previous;
+        previous = current;
+        current = next;
     }
-};
-```
-  </Tab>
-  <Tab label="TypeScript (迭代反转)">
-```typescript
-class ListNode {
-    val: number;
-    next: ListNode | null = null;
-    constructor(val: number) {
-        this.val = val;
-    }
-}
-
-function reverseList(head: ListNode | null): ListNode | null {
-    // 空链表与单节点守卫
-    if (head === null || head.next === null) {
-        return head;
-    }
-
-    let prev: ListNode | null = null;
-    let curr: ListNode | null = head;
-
-    while (curr !== null) {
-        const nextTemp: ListNode | null = curr.next; // 1. 暂存后继
-        curr.next = prev;                            // 2. 指针反转
-        prev = curr;                                 // 3. prev 前移
-        curr = nextTemp;                             // 4. curr 前移
-    }
-
-    return prev; // 返回新链表头节点
+    return reversedHead;
 }
 ```
-  </Tab>
-</CodeTabs>
 
-### 核心实现 B：递归回溯反转
+空链表时循环零次，reversedHead保持空；单节点时 next立即为空，该节点同时被记录为新头，并把它的next设为previous即空；多节点时只有原尾满足 next为空。三类输入无需额外分支。
 
-递归法依赖系统堆栈完成回溯修改，空间复杂度为 $O(n)$。在链表长度较长时，存在系统栈溢出（Stack Overflow）风险。
+更常见的简化版直接在循环结束时返回 previous，因为它同样指向原尾。作者显式记录 reversedHead 的写法把“在哪一刻识别新头”展示出来。重构原书时应保留这层含义，再说明两种实现等价。
 
-<CodeTabs>
-  <Tab label="C++ (递归反转)">
+<ReverseHeadTailDiagram />
+
+原书要求函数“**返回新的头节点**”。调用者必须用返回值替换旧head；若忽略返回值，旧head现在是尾节点且next为空，看起来链表只剩一个节点，实际其余节点仍由新头可达。
+
+## 正确性来自前缀与后缀不变量
+
+初始 previous为空，可视为长度0的正确反转前缀；current=head，未处理后缀是完整原链。不变量成立。
+
+假设一轮开始不变量成立。next保存后缀除current外的入口；current指向previous后，扩大后的前缀顺序恰为原已处理节点的逆序；previous和current推进后，剩余后缀仍保持原方向。节点没有丢失或重复，不变量恢复。
+
+循环结束 current为空，所有原节点都在previous前缀中，且next方向与原顺序完全相反。原头最先被处理，它的next被设为空，成为新尾；原尾最后被处理，成为新头。因此返回reversedHead正确。
+
+## 时间、空间与节点身份
+
+current依次访问每个节点一次，每轮做常数次指针赋值，时间 O(n)。只使用三个工作指针和一个结果指针，额外空间 O(1)。算法没有分配、复制或释放节点，只改变next。
+
+这种操作称为<Term def="复用原节点存储、仅修改链接完成变换，不为节点序列分配同规模辅助空间。">原地反转</Term>。所有节点地址和value保持不变，但由head可达的顺序改变。外部持有某节点指针仍指向同一对象，不过它看到的next已经不同。
+
+返回值不转移节点所有权，它只是新的借用入口。若链表由容器拥有，容器必须更新内部head；若调用者继续让旧head承担销毁入口，只会释放原头一个节点并泄漏其余节点。
+
+## 递归版本如何对照
+
+递归可以先反转 head->next 后缀，再让原后继的next指回head，并把head->next设为空。它更接近数学归纳，却需要每个节点一层调用栈：
+
 ```cpp
-class Solution {
-public:
-    ListNode* ReverseListRecursive(ListNode* pHead) {
-        // 递归终止条件（递归基）
-        if (pHead == nullptr || pHead->m_pNext == nullptr) {
-            return pHead;
-        }
-
-        // 递去：寻找尾节点作为新头节点
-        ListNode* pNewHead = ReverseListRecursive(pHead->m_pNext);
-
-        // 归回：将当前节点反向连接
-        pHead->m_pNext->m_pNext = pHead;
-        pHead->m_pNext = nullptr; // 切断正向链接防止成环
-
-        return pNewHead;
-    }
-};
-```
-  </Tab>
-  <Tab label="TypeScript (递归反转)">
-```typescript
-function reverseListRecursive(head: ListNode | null): ListNode | null {
-    // 递归终止条件（递归基）
-    if (head === null || head.next === null) {
+ListNode* reverseRecursive(ListNode* head) {
+    if (head == nullptr || head->next == nullptr) {
         return head;
     }
 
-    // 递去：获取反转后的新头节点
-    const newHead = reverseListRecursive(head.next);
-
-    // 归回：将当前节点 head 接在它的后继节点的后面
-    head.next.next = head;
-    head.next = null; // 切断旧的指向，避免产生双向环
-
+    ListNode* newHead = reverseRecursive(head->next);
+    head->next->next = head;
+    head->next = nullptr;
     return newHead;
 }
 ```
-  </Tab>
-</CodeTabs>
 
-## 常见误区
+head->next=nullptr不能省略。回溯前原来有 head→successor，回溯中又建立 successor→head；不切断旧边就形成二节点环。递归时间仍为 O(n)，但调用栈 O(n)，超长链表可能栈溢出。
 
-<Callout type="trap">
-  <strong>现象 →</strong> 反转后的链表发生了死循环（成环），在后续遍历时导致无限循环或栈溢出。
-  <strong>原因 →</strong> 初始时没有将 `prev` 设为 `null`，或者在递归回溯步骤中忘记将 `head.next` 指向 `null`。这导致反转后的新尾节点（即原头节点）仍然循环指向自身或指向第二个节点，形成环路。
-  <strong>修复 →</strong> 迭代初始化时确保 <code>prev = null</code>；递归时在回溯步骤必须显式执行 <code>head.next = null</code>。
+作者源码只实现迭代版，递归应作为理解和比较，不应替换原书主答案。生产环境通常优先迭代：空间边界清晰，也不会受语言递归深度限制。
+
+## 环、共享尾和并发是输入契约
+
+算法假设链表无环。若有环，current永远不会为空；更危险的是逐步改链后结构变化，可能提前回到已处理节点，结果不可定义。处理不可信结构前应先判圈，或由容器类型保证无环。
+
+若两条链共享尾部，反转其中一条会修改共享节点next，从而破坏另一条链。唯一所有权链表不会共享节点；裸指针API必须把“调用者拥有整条独占无环链”写进前置条件。
+
+并发读者可能观察到链表被分成两个暂时部分，或看到部分箭头已反向。反转不是原子操作，必须在独占锁下完成，或构造新不可变链后原子发布新头。只把head设为原子变量不能保护内部next修改。
+
+如果节点析构或移动会抛异常，本算法不触碰value也不销毁节点，因此指针赋值本身通常无异常。自定义智能指针或写屏障可能改变这一点；需要事务语义时，应先确认链接赋值保证。
+
+<Callout type="trap" title="忽略返回值继续使用旧head">
+反转后旧head已是尾节点，next为空。函数内部结构完全正确，但调用者若不保存新头，会只看到一个节点并可能泄漏其余节点。接口调用必须写成head=reverseList(head)。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 链表发生“断裂”，反转后的链表只剩下一个节点，后面的节点全部丢失。
-  <strong>原因 →</strong> 指针更新顺序颠倒。在没有暂存 `curr.next` 之前就修改了 `curr.next = prev`。此时，`curr.next` 原本指向的剩余链表已经无法通过任何指针访问，导致数据丢失与内存泄漏。
-  <strong>修复 →</strong> 严格遵循“先存后改再移位”的顺序：<code>next = curr.next; curr.next = prev; prev = curr; curr = next;</code>。
-</Callout>
+## 部分反转与双向链表扩展
 
-<Callout type="trap">
-  <strong>现象 →</strong> 在 C++ 中执行递归反转超长链表时，程序因段错误（Segmentation Fault）崩溃。
-  <strong>原因 →</strong> 递归法依赖系统调用栈，每一层递归都会将局部变量、参数和返回地址入栈。超长链表（如长度为 $10^5$）会导致系统栈溢出崩溃。
-  <strong>修复 →</strong> 在超长链表场景下，严禁使用递归反转，应使用空间复杂度仅为 $O(1)$ 的迭代法原地反转。
-</Callout>
+只反转位置 m 到 n 时，需要保存三条边界：区间前驱、原区间头和区间后继。区间内部仍使用同一三指针循环，完成后让前驱连到区间新头，让原区间头连到后继。哨兵节点可统一m=1边界。
 
-## 小结与练习
+反转双向链表时，每个节点的next与prev都要交换，遍历方向也要改为交换后的prev即原next。最后原尾成为新头。只改next会让prev不变量失效，后向遍历得到旧结构。
 
-- **迭代法** 的时间复杂度为 $O(n)$，空间复杂度为 $O(1)$，是实际开发中的首选方案。
-- **递归法** 的时间复杂度为 $O(n)$，空间复杂度为 $O(n)$（由调用栈深度决定），容易受链表长度限制而发生栈溢出。
-- 防范 **链表断裂** 的黄金法则是 **“先存后改”**，必须提前暂存 `curr.next` 才能安全重写指向。
+持久化不可变链表不能原地改next。可从原头遍历，每次创建新节点并让它指向已构造前缀，自然得到逆序副本；时间 O(n)、新节点空间 O(n)，原链仍可共享给读者。
+
+## 作者三组测试与增强断言
+
+Test1 构造1到5并打印反转前后；Test2测试单节点；Test3传空。打印能演示结果，但自动验收应检查返回地址、完整值序列、原头成为尾、每个原节点恰好出现一次。
+
+<ReverseOfficialCaseLab />
+
+双重反转是有力的变形性质：对无环链表反转两次，应恢复原head、原next关系和地址顺序。它不能替代单次期望断言，因为某些对称错误可能两次后恢复，但能发现节点丢失和错误成环。
+
+```cpp
+#include <array>
+#include <cassert>
+
+void testReverseList() {
+    ListNode n5{5, nullptr};
+    ListNode n4{4, &n5};
+    ListNode n3{3, &n4};
+    ListNode n2{2, &n3};
+    ListNode n1{1, &n2};
+
+    ListNode* reversed = reverseList(&n1);
+    const std::array<ListNode*, 5> expected{
+        &n5, &n4, &n3, &n2, &n1
+    };
+    ListNode* cursor = reversed;
+    for (ListNode* node : expected) {
+        assert(cursor == node);
+        cursor = cursor->next;
+    }
+    assert(cursor == nullptr);
+    assert(n1.next == nullptr);
+
+    assert(reverseList(reversed) == &n1);
+
+    ListNode only{9, nullptr};
+    assert(reverseList(&only) == &only);
+    assert(reverseList(nullptr) == nullptr);
+}
+```
+
+地址数组比只比较1到5的值更严格：即使实现交换了value而没有反转节点，也会被发现。遍历最终必须到空；可增加最多n步的保护，避免错误成环让测试挂死。
+
+使用堆节点时，应从反转后的新头统一销毁。测试若仍从旧头DestroyList，只会释放新尾；正确的夹具生命周期也是算法契约的一部分。
+
+## 工程接口如何表达副作用
+
+reverseList会修改传入链表，名称和类型应清楚表达可变操作。只接收 const ListNode* 的函数不能合法反转；强制const_cast会违背调用者只读承诺。
+
+可让容器成员函数 reverse 返回void并内部更新head，减少调用者忽略返回值的风险；自由函数则返回新头，适合算法题和裸链。若失败不可能发生，不必返回状态与新头二元组。
+
+在调试构建中可先检测环并统计节点数，反转后再验证长度、多重集合和无环；生产构建若容器已维护不变量，可省去额外遍历。检查层级应与输入可信度匹配。
+
+## 正确性与复杂度收束
+
+循环每轮把一个节点从未处理后缀转移到已反转前缀，后缀长度严格减一，所以有限无环链表必终止。后继暂存保证转移前后两段入口都可达，重写next保证新前缀顺序正确。
+
+终止时后缀为空，前缀包含所有且仅有原节点。原尾成为前缀头、原头next为空，故结果是原顺序的精确逆序。每节点常数操作，总时间O(n)、额外空间O(1)。
+
+<Stepper>
+  <Step title="先保存后继再改链接"><ReversePointerOrderDiagram />next保住剩余链表入口，current才能安全指向previous。</Step>
+  <Step title="维护前缀与后缀不变量"><ReverseInvariantMap />previous段已反转，current段保持原方向；每轮只迁移一个节点。</Step>
+  <Step title="核对新头和新尾身份"><ReverseHeadTailDiagram />原尾next为空时被记录为新头，原头最先指向空成为新尾。</Step>
+  <Step title="用三类输入与双反转封口"><ReverseOfficialCaseLab />多节点、单节点、空链和身份恢复共同检查完整性。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 反转链表必须使用前驱、当前与后继指针分工。
+2. 每轮先保存下一个节点，再把current->next改为previous。
+3. previous是已反转前缀入口，current是未处理后缀入口。
+4. 作者在pNext为空时记录原尾，并返回新的头节点。
+5. 原头第一轮指向空，最终成为新尾，避免形成环。
+6. 迭代时间O(n)、额外空间O(1)，递归另需O(n)调用栈。
+7. 输入应是独占、无环、遍历期间不变的链表。
+8. 测试应比较节点地址、完整序列、新尾为空和双重反转。
 
 <Exercises>
-  <Answer question="如果需要反转双向链表（Doubly Linked List），迭代法的逻辑需要做哪些调整？">
-    在双向链表中，每个节点同时有 `next` 和 `prev` 指针。反转的本质是**交换每个节点的所有前驱与后继指向**。
-    在迭代遍历时，我们只需要对每个节点交换 `curr.next` 和 `curr.prev`：
-    ```typescript
-    const temp = curr.next;
-    curr.next = curr.prev;
-    curr.prev = temp;
-    ```
-    交换完成后，由于当前节点的 `prev` 已经变成了原后继，所以我们应该执行 `curr = curr.prev` 来继续向前移动。当遍历结束时，返回之前访问的最后一个非空节点（即交换完成后的新头节点）。时间复杂度 $O(n)$，空间复杂度 $O(1)$。
-  </Answer>
-  <Answer question="如何实现局部反转链表（例如仅反转链表从位置 m 到 n 的节点）？">
-    这是经典扩展题。基本步骤如下：
-    1. **定位前驱和后继边界**：先让指针移动 $m-1$ 步，定位到反转部分的前驱节点 `con`，和反转部分的起始尾节点 `tail = con.next`。
-    2. **局部迭代反转**：从第 $m$ 个节点开始，使用标准迭代三指针法执行 $n-m$ 次指针反转。
-    3. **重新链接**：反转结束后，局部已反转部分的新头部为 `prev`，后继剩余部分为 `curr`。执行 `con.next = prev`（连接反转后的头部）和 `tail.next = curr`（连接反转后的尾部与剩余链表）。
-    4. **哨兵兜底**：使用虚拟头节点 `dummy` 辅助处理 $m=1$（头节点被反转）的边界情况。
-  </Answer>
+
+**问题 1：为什么必须先保存current的next？**
+
+<Answer>current->next是未处理后缀的唯一入口。重写为previous后，若没有独立next变量，就无法找到原后继，后面所有节点会失去可达路径；先保存才能在改链后继续遍历。</Answer>
+
+**问题 2：循环结束为什么previous就是新头？**
+
+<Answer>每轮把current接到previous前面，再让previous指向current。最后一个处理的是原尾，它成为整个已反转前缀最前端；current随后为空，所以previous覆盖全部节点并指向新头。</Answer>
+
+**问题 3：递归版本为什么必须把head->next设为空？**
+
+<Answer>回溯时先建立原后继指回head的反向边，原来的head指向后继仍存在；若不切断，两节点互相指向形成环。设为空也让最外层原头成为新尾。</Answer>
+
+**问题 4：怎样测试实现没有只交换value？**
+
+<Answer>构造时保存每个节点地址，反转后按预期逆序逐个比较地址，并确认value仍附着在原对象。只比较值序列无法区分反向链接和交换节点内容。</Answer>
+
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="三指针原地重定向">
-    在迭代反转链表时，利用 prev（前驱）、curr（当前）和 next（后继）三个指针协同工作，在不申请新内存的前提下，改变链表节点 next 指针指向的操作。详见「概念讲解 1」节。
-  </GlossaryItem>
-  <GlossaryItem term="递归回溯法">
-    通过递归调用一路压栈直至链表尾部（递去），再在函数出栈回溯时（归回）反向修改节点指针方向的算法实现。详见「概念讲解 2」节。
-  </GlossaryItem>
-  <GlossaryItem term="链表断裂 (Connection Loss)">
-    在修改链表指针时，由于更新顺序不当，在未暂存后续节点指针的情况下断开了前向指针，导致后续节点无法被引用而丢失的逻辑错误。详见「常见误区」节。
-  </GlossaryItem>
-  <GlossaryItem term="调用栈开销 (Call Stack Overhead)">
-    递归执行时由操作系统分配给每个线程的栈内存消耗。每次递归调用都会将参数及上下文信息压栈，深度过大时会造成栈溢出。详见「常见误区」节。
-  </GlossaryItem>
+  <GlossaryItem term="已反转前缀">已经完成next反向、以previous为入口并以空结束的节点段。</GlossaryItem>
+  <GlossaryItem term="未处理后缀">仍保持原next方向、由current进入的剩余节点段。</GlossaryItem>
+  <GlossaryItem term="后继暂存">覆盖current的next前先保存原后继地址的操作。</GlossaryItem>
+  <GlossaryItem term="新头">反转后整条链表的入口节点，等于原链表尾节点。</GlossaryItem>
+  <GlossaryItem term="原地反转">不创建同规模节点副本，只修改原节点链接完成逆序。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题24"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/24_ReverseList/ReverseList.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

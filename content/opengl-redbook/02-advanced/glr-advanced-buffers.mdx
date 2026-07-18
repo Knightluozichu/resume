@@ -1,111 +1,231 @@
 ---
-title: "高级缓冲技术"
+title: "内存布局、同步与 Compute Shader"
 type: B
 section: "计算机图形学与渲染"
 order: 7
-description: "UBO/SSBO/Transform Feedback等高级缓冲"
+description: "UBO、SSBO、std140/std430、原子操作、内存屏障、持久映射、同步对象与计算着色器"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://www.informit.com/store/opengl-programming-guide-the-official-guide-to-learning-9780134495552"
 draft: false
 ---
 
-import { GlrAdvancedBuffersDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-advanced-buffers";
+import {
+  GlrAdvancedBuffersDiagram,
+  GlrBufferLayoutDiagram,
+  GlrMemoryDependencyDiagram,
+} from "@/components/mdx/opengl-redbook/diagrams/glr-advanced-buffers";
+import { GlrStepFlowDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 理解UBO(Uniform Buffer Object)的原理
-- 掌握SSBO与计算着色器
-- 了解Transform Feedback
-- 能选择合适的缓冲类型
+
+- 能按容量、访问权限、布局与阶段选择普通 uniform、UBO、SSBO、atomic counter 或 vertex buffer
+- 能计算 std140/std430 中标量、向量、数组和结构体的对齐与偏移，并用反射验证
+- 能写出 compute shader 的 work group、共享内存、原子更新和越界保护
+- 能根据生产者与消费者选择 memory barrier、fence、flush 和持久映射所有权协议
+
 </Objectives>
 
-## 直觉引入
+## 直觉：缓冲只是字节，合同决定这些字节何时有效
 
-高级缓冲就像不同的储物柜——UBO是共享储物柜(所有着色器都能读，放常用数据如矩阵)，SSBO是大型仓库(可读写，适合粒子数据)，Transform Feedback是传送带(捕获顶点着色器输出到缓冲)。
+同一个 buffer object 可以先作为 SSBO 被 compute 写入，再作为 vertex buffer 或 indirect command 被绘制消费。问题不在“它究竟是哪种缓冲”，而在每次访问的绑定点、布局、读写权限、执行顺序和可见性。
 
-## 概念讲解
+先预测：compute 已更新 indirect command，随后 draw 偶尔仍使用旧 count。仅在 shader 内调用 `barrier()` 能解决吗？不能；它只覆盖同一 work group 内 invocation，跨命令消费者需要 API 级 memory barrier。
 
-<Term def="Uniform缓冲对象，让多个着色器程序共享uniform数据">UBO</Term><Term def="Shader Storage缓冲对象，可读写随机访问，大小无限制">SSBO</Term><Term def="捕获顶点着色器输出到缓冲而不光栅化">Transform Feedback</Term><Term def="持续映射的缓冲指针，实现零拷贝更新">Persistent Mapping</Term>
-
-### UBO
-多个着色器共享同一组uniform(如MVP矩阵)。用Uniform Block和Binding Point关联。
-
-### SSBO
-可读写、随机访问、大小无限制。适合计算着色器做GPU粒子、排序等。
-
-### Transform Feedback
-捕获顶点着色器(或几何着色器)输出到缓冲，下一帧用作输入。适合GPU粒子系统。
-
-## 交互Demo
-
-> 猜一猜：GPU粒子系统为什么用Transform Feedback而不是CPU更新？
+<Term def="把 buffer 的一段范围连接到着色器声明的 indexed binding point，使多个 program block 能访问同一存储的绑定机制">索引缓冲绑定</Term>把对象存储与 shader block 解耦。
 
 <GlrAdvancedBuffersDiagram />
 
-<Stepper>
-<Step title="第一步：理解UBO">
-创建UBO存储共享uniform(如ViewProjection矩阵)，多个着色器通过binding point访问同一数据。
-</Step>
-<Step title="第二步：使用SSBO">
-创建SSBO存储大数据(如粒子位置)，计算着色器读写更新，渲染时直接使用。
-</Step>
-<Step title="第三步：Transform Feedback">
-配置捕获变量，渲染时输出到缓冲而非屏幕，下帧作为顶点输入。
-</Step>
-</Stepper>
+## UBO、SSBO 与限制查询
 
-## 代码对照
+UBO 供 shader 只读，适合相机、光源和帧常量；SSBO 可读写并支持更大范围、运行时数组和原子操作。二者都有实现限制，不能写“SSBO 大小无限制”。应查询 `GL_MAX_UNIFORM_BLOCK_SIZE`、`GL_MAX_SHADER_STORAGE_BLOCK_SIZE`、每阶段 block 数和总 binding 数。
 
 ```cpp
-// UBO: 共享ViewProjection矩阵
-GLuint ubo;
-glGenBuffers(1, &ubo);
-glBindBuffer(GL_UNIFORM_BUFFER, ubo);
-glBufferData(GL_UNIFORM_BUFFER, 2*sizeof(glm::mat4), NULL, GL_STATIC_DRAW);
-glBindBufferBase(GL_UNIFORM_BUFFER, 0, ubo); // binding=0
-// 着色器中: layout(std140, binding=0) uniform Matrices {
-//     mat4 view; mat4 projection;
-// };
+GLint64 maxSsboBytes = 0;
+glGetInteger64v(GL_MAX_SHADER_STORAGE_BLOCK_SIZE, &maxSsboBytes);
+if (requiredBytes > static_cast<size_t>(maxSsboBytes)) {
+  fail("SSBO exceeds implementation limit");
+}
+
+glCreateBuffers(1, &sceneBuffer);
+glNamedBufferStorage(sceneBuffer, bytes, initialData, GL_DYNAMIC_STORAGE_BIT);
+glBindBufferRange(GL_SHADER_STORAGE_BUFFER, 2, sceneBuffer, offset, range);
 ```
 
-UBO通过binding point共享数据，避免每个着色器程序重复设置uniform。layout(std140)保证内存布局一致。
+UBO/SSBO 的 offset 还必须满足 `GL_UNIFORM_BUFFER_OFFSET_ALIGNMENT` 或 `GL_SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT`。绑定成功不代表 C++ 结构布局与 GLSL 一致。
+
+## std140 与 std430 布局
+
+<Term def="GLSL interface block 的标准布局规则；std140 对数组和结构体采用更保守的 vec4 级对齐，std430 允许部分标量/向量更紧凑排列">标准缓冲布局</Term>决定每个成员的 base alignment、offset、array stride 和 matrix stride。
+
+若当前偏移为 $o$，成员对齐为 $a$，则下一个成员起点为：
+
+$$
+offset=\left\lceil\frac{o}{a}\right\rceil a.
+$$
+
+`vec3` 通常按 16 字节对齐，但其有效分量只有 12 字节；结构体/数组规则会影响后续 padding。不要依赖主机编译器默认布局，使用显式 padding、生成代码或 program-interface reflection 查询。
+
+```glsl
+layout(std430, binding = 2) buffer Particles {
+    vec4 position[]; // runtime-sized array 必须是 block 最后成员
+};
+
+layout(std140, binding = 0) uniform Camera {
+    mat4 view;
+    mat4 projection;
+    vec4 eye;
+};
+```
+
+<GlrBufferLayoutDiagram />
+
+## Compute 的执行层级
+
+<Term def="不经过图元装配与光栅化、按三维工作组派发通用 GPU invocation 的可编程阶段">计算着色器</Term>由 `glDispatchCompute(nx, ny, nz)` 创建 work groups，每组尺寸由 shader `local_size` 固定或专门化。
+
+$$
+\text{globalInvocation}=\text{workGroupID}\cdot\text{workGroupSize}+\text{localInvocationID}.
+$$
+
+总 invocation 数可能大于数据量，所以每个 kernel 都需要边界检查。组内 `shared` 内存只在本组可见；`barrier()` 建立组内执行汇合，配合相应 memory semantics 处理组内生产者/消费者。不同 work group 不能在同一次 dispatch 中用全局 barrier 可靠互等。
+
+```glsl
+layout(local_size_x = 256) in;
+layout(std430, binding = 0) readonly buffer Input { float x[]; };
+layout(std430, binding = 1) writeonly buffer Output { float y[]; };
+uniform uint count;
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= count) return;
+    y[i] = max(x[i], 0.0);
+}
+```
+
+`glDispatchComputeIndirect` 的组数来自 buffer，应用必须保证参数不会越过实现限制；间接派发不会替你做同等 CPU 参数验证。
+
+## 原子操作不是完整算法
+
+atomic operation 对一个内存位置执行不可分割读改写，适合计数、索引分配和局部归约。它保证该位置更新不丢失，不保证跨地址事务、全局顺序或低争用。
+
+若 $N$ 个 invocation 都竞争一个计数器，理论工作量仍是 $N$ 次原子串行点。更好的归约通常先在 work group shared memory 中树形合并，再由每组一次 global atomic。树形归约轮数近似：
+
+$$
+R=\lceil\log_2 L\rceil
+$$
+
+其中 $L$ 是组内元素数。性能必须用计时与争用规模验证，不按“GPU 并行”推断。
+
+## Memory barrier：声明后续消费者
+
+<Term def="在已排序命令之间，使指定类型的先前 shader/资源写入对指定后续访问可见的 API 级依赖声明">内存屏障</Term>按**后续消费者**选择 bit。compute 写 SSBO 后供 vertex fetch 使用，需要包含 shader-storage 与 vertex-attrib 相关 barrier；生成 indirect command 后要包含 command barrier。
+
+```cpp
+glUseProgram(cullProgram);
+glDispatchCompute(groups, 1, 1);
+glMemoryBarrier(GL_SHADER_STORAGE_BARRIER_BIT |
+                GL_COMMAND_BARRIER_BIT |
+                GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT);
+
+glBindBuffer(GL_DRAW_INDIRECT_BUFFER, commandBuffer);
+glMultiDrawElementsIndirect(GL_TRIANGLES, GL_UNSIGNED_INT,
+                            nullptr, maxDraws, sizeof(Command));
+```
+
+`GL_ALL_BARRIER_BITS` 可作诊断对照，不应代替访问图。它也不是 CPU 等待 GPU 完成的 fence。
+
+<GlrMemoryDependencyDiagram />
+
+## Fence、映射与所有权
+
+sync object/fence 表示 GPU 命令流到达某点；`glClientWaitSync` 让 CPU 查询或等待。persistent mapping 让指针长期有效，但不等于零拷贝，也不等于 CPU/GPU 可同时无协议读写同一区域。
+
+<Term def="映射指针跨多次命令保持有效的 buffer storage 模式；应用仍需用分区、fence 和 coherent/flush 规则管理 CPU/GPU 所有权">持久映射</Term>通常配 ring buffer。CPU 只写未被 GPU 使用的 segment；提交后插 fence；回绕前确认 fence 完成。
+
+对非 coherent 映射，CPU 写后按映射规则 flush；GPU 写供 CPU 读时，先等待完成并满足 client-mapped 可见性要求。孤立、双/三缓冲和 persistent ring 是不同策略，按更新频率、延迟与驱动实测选择。
+
+## 三步内存验证
+
+<Stepper>
+<Step title="第一步：证明布局">
+
+查询实现限制与 binding alignment；反射 block offset/stride，并用哨兵数据验证 CPU 与 GLSL 解释一致。
+
+<GlrStepFlowDiagram caption="先证明相同字节在两端具有相同布局。" stage={1} stages={["Layout：limits、alignment、offset、stride、reflection"]} />
+
+</Step>
+<Step title="第二步：证明执行与访问">
+
+用小数据比较 CPU oracle；检查 dispatch 组数、越界保护、原子计数和组内 shared/barrier。
+
+<GlrStepFlowDiagram caption="执行规模、访问范围与组内依赖分别验证。" stage={2} stages={["Layout：limits、alignment、offset、stride、reflection", "Execution：dispatch、bounds、shared、atomic counters"]} />
+
+</Step>
+<Step title="第三步：证明可见性与所有权">
+
+画出每个资源的生产者/消费者，选 barrier bit；对 CPU 映射区域记录 segment、fence、flush 与回绕证据。
+
+<GlrStepFlowDiagram caption="结果算完、对消费者可见、存储可复用是三个不同时刻。" stage={3} stages={["Layout：limits、alignment、offset、stride、reflection", "Execution：dispatch、bounds、shared、atomic counters", "Visibility：barrier、fence、flush、ring ownership"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** 用UBO存储每帧变化的数据。
-**原因 →** UBO可以存任何uniform。
-**修法 →** UBO适合共享只读数据(如VP矩阵)。频繁变化的大数据用SSBO+持久映射更高效，避免每帧glBufferSubData。
+**现象 →** C++ `sizeof` 看似正确，SSBO 第二个成员仍错位。
+**原因 →** 用主机结构默认 padding 猜 std140/std430。
+**修法 →** 按 base alignment 计算，显式 padding，并用 program-interface reflection 和哨兵值核对。
 </Callout>
 
 <Callout type="trap">
-**现象 →** SSBO当VBO用。
-**原因 →** SSBO也能存顶点数据。
-**修法 →** SSBO绑定到GL_ARRAY_BUFFER可能有性能问题。SSBO设计用于随机读写(计算着色器)，VBO用于顺序读取(顶点拉取)。按用途选择。
+**现象 →** dispatch 后立刻 draw 偶尔读旧数据，于是加入 `barrier()`。
+**原因 →** 混淆 shader 内组同步与 API 命令间内存可见性。
+**修法 →** 在 dispatch 与消费者命令之间调用匹配访问类型的 `glMemoryBarrier`。
+</Callout>
+
+<Callout type="trap">
+**现象 →** persistent pointer 可用便让 CPU 覆写 GPU 正在读取的 segment。
+**原因 →** 把长期映射误解为无需所有权和等待。
+**修法 →** 使用 ring segment 和 fence；回绕前确认完成，并正确处理 coherent/flush 规则。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：UBO是什么？有什么优势？
+
+**问题 1：为什么不能说 SSBO 大小无限制？**
 
 <Answer>
-Uniform缓冲对象，让多个着色器程序共享同一组uniform数据。优势：避免重复设置uniform、可存更多数据、跨程序共享。
+规范要求实现提供至少某些下限，但实际最大 block size、每阶段 block 数和 binding 数都可查询且有限。应用必须针对运行设备检查并分块或改用其他表示。
 </Answer>
 
-**问题**：SSBO和UBO的区别？
+**问题 2：compute 生成 indirect command 后，正确依赖链是什么？**
 
 <Answer>
-SSBO可读写随机访问、大小无限制、适合计算着色器。UBO只读、有大小限制(64KB)、适合共享变换矩阵等常量。
+compute 对 SSBO/command buffer 写入并结束 dispatch；API 在 draw 前调用覆盖 shader-storage 和 command 消费者的 memory barrier；随后 indirect draw 读取参数。若 CPU 读取，还需另加 fence/映射合同。
 </Answer>
+
+**问题 3：设计 persistent ring 的压力测试。**
+
+<Answer>
+划分至少三段，每帧写带序号和校验和的数据，提交后给该段插 fence；模拟 GPU 延迟和 CPU 快速回绕，确认未完成段不会被覆盖。分别测试 coherent 与显式 flush，并记录等待次数、吞吐和错误计数。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+高级缓冲的统一模型是：存储只有字节，block layout 解释字节，dispatch/draw 产生访问，barrier 建立 GPU 消费者可见性，fence 与映射协议管理 CPU/GPU 所有权。Compute、SSBO 和 persistent mapping 并不自动正确或更快，必须以布局反射、参考值和访问图验收。
+
 <Glossary>
-<GlossaryItem term="UBO">Uniform缓冲对象，让多个着色器程序共享uniform数据。</GlossaryItem>
-<GlossaryItem term="SSBO">Shader Storage缓冲对象，可读写随机访问，大小无限制。</GlossaryItem>
-<GlossaryItem term="Transform Feedback">捕获顶点着色器输出到缓冲区而不经过光栅化。</GlossaryItem>
-<GlossaryItem term="Persistent Mapping">持续映射的缓冲指针，实现零拷贝数据更新。</GlossaryItem>
+<GlossaryItem term="索引缓冲绑定">把 buffer range 连接到 shader block binding point 的机制。</GlossaryItem>
+<GlossaryItem term="标准缓冲布局">std140/std430 定义的成员对齐、偏移与 stride 规则。</GlossaryItem>
+<GlossaryItem term="计算着色器">按三维工作组派发、不经过图形光栅阶段的通用 GPU 阶段。</GlossaryItem>
+<GlossaryItem term="内存屏障">使指定先前写入对指定后续 GPU 访问可见的 API 声明。</GlossaryItem>
+<GlossaryItem term="持久映射">映射指针长期有效、但仍需所有权和同步协议的存储模式。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="OpenGL 红宝书" adaptedUrl="" />
+<Attribution adaptedFrom="OpenGL Programming Guide, 9th Edition, Chapters 11 and 12" adaptedUrl="https://www.informit.com/store/opengl-programming-guide-the-official-guide-to-learning-9780134495552" />

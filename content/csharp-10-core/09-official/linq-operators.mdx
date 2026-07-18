@@ -1,0 +1,204 @@
+---
+title: "Chapter 9. LINQ Operators"
+type: C
+section: "C# 10 Nutshell · .NET and Data"
+order: 9
+description: "覆盖filter/project/join/order/group/set/conversion/element/aggregate/quantifier/generation operators，以shape、cardinality和empty契约选型。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch09.html"
+draft: false
+---
+
+import { CtcOperatorShapeLab, CtcOrderingSetLab, CtcTerminalOperatorLab } from "@/components/mdx/csharp-10-core/diagrams/linq-operators";
+
+<Objectives>
+
+- 能比较filter/project/SelectMany/join的input-output shape和cardinality，复现deferred effect count
+- 能分析ordering/grouping/set operators的comparer、duplicates与tie behavior，设计deterministic output
+- 能设计conversion/element/aggregation/quantifier/generation的empty、overflow、materialization与short-circuit tests
+
+</Objectives>
+
+## 为什么Operator选择先看Shape和Cardinality
+
+Where、Select、SelectMany、Join看起来都是链式method，却分别保留、变换、展开或组合cardinality。First/Single只差一个词，但对many input contract完全不同；All对empty返回true，Aggregate无seed可能抛。选operator前写`input shape -> output shape`、order、duplicates、empty与evaluation时机。
+
+先预测：SelectMany永远等于nested foreach吗；Distinct会排序吗；GroupBy完全streaming吗；All(empty)是false吗；ToDictionary遇duplicate key会保留最后一个吗。答案都是否。
+
+<Term def="Operator对sequence/value的input-output shape、zero/one/many cardinality和flatten/group行为的约定。">operator shape contract</Term>
+
+## Overview
+
+Operators可分sequence-to-sequence（deferred为主）、sequence-to-element/value（terminal为主）、void-to-sequence generation。Local IEnumerable semantics与IQueryable provider translation分开验证。本章先讲logical contract，再检查复杂度、buffering和provider。
+
+```text
+Where:       Seq<A> -> Seq<A>
+Select:      Seq<A> -> Seq<B>
+SelectMany:  Seq<A> -> (A -> Seq<B>) -> Seq<B>
+GroupBy:     Seq<A> -> Seq<Group<K,A>>
+First/Count: Seq<A> -> A / int
+```
+
+## Filtering
+
+Where按predicate保留elements，Take/Skip按position，TakeWhile/SkipWhile按prefix condition，Distinct/DistinctBy按equality key去重。Filtering通常保留source relative order，但provider/parallel source另有contract。Predicate有index overload时index是enumeration位置。
+
+Untrusted Take count和pagination需limit；TakeWhile遇first false后停止。Distinct需要memory存seen keys，unbounded stream会增长。Comparer固定，key projection不能变化。
+
+## Projecting
+
+Select一对一转换，SelectMany把每个input映射到inner sequence再flatten；result selector可保留outer/inner。SelectMany对empty inner产生零输出，cardinality可能爆炸。Projection可避免暴露entity/多列，也可产生anonymous/named DTO。
+
+<Stepper>
+  <Step title="切换filter、select、select many与join"><CtcOperatorShapeLab /></Step>
+  <Step title="写shape/cardinality">每个operator列empty/one/many input到输出数量和order，标是否buffer。</Step>
+  <Step title="用counting sources验收">记录source/predicate/selector次数，覆盖empty、duplicates、large inner与partial consumption。</Step>
+</Stepper>
+
+<Callout type="trap" title="SelectMany只是在Syntax上少一层Loop">
+它改变cardinality并可能为每个outer启动I/O/查询，形成N+1或笛卡尔增长。先量化inner数量与execution boundary。
+</Callout>
+
+## Joining
+
+Join做inner equijoin，GroupJoin为每个outer提供matching group并可表达left join；Zip按position配对并在短source结束。Join的key comparer、duplicate keys与source order决定输出数量。Local Join通常对一侧构建lookup，provider翻译为SQL join。
+
+```csharp
+var rows = customers.GroupJoin(
+    orders,
+    customer => customer.Id,
+    order => order.CustomerId,
+    (customer, matches) => new
+    {
+        customer.Name,
+        OrderCount = matches.Count(),
+        Total = matches.Sum(order => order.Total)
+    });
+```
+
+Empty group的Sum/DefaultIfEmpty语义需定义；remote aggregate null semantics可能不同。Tests覆盖0/1/many matches、duplicate keys、case comparer和Zip length mismatch。
+
+## Ordering
+
+OrderBy建立primary order，ThenBy追加secondary；再次OrderBy会替换先前primary。Local ordering通常stable但需buffer全部source；provider只保证显式ORDER BY。Pagination必须total order，以unique key作为最后tie-breaker。
+
+Comparer culture/version影响结果，null/NaN策略明确。Descending不是reverse arbitrary prior sequence的等价物。大型local sort测memory/time，remote检查index/plan。
+
+<Term def="Primary/secondary comparers、null/tie规则与unique tie-breaker共同保证可重复序列顺序。">deterministic order contract</Term>
+
+## Grouping
+
+GroupBy按key/comparer产生IGrouping，local implementation通常在开始输出group前枚举并buffer source；group order/member order不应跨provider无条件假设。ToLookup立即materialize且支持重复keys/empty group retrieval，不同于Dictionary。
+
+Group之后重复enumerate members通常访问buffer，但source-specific semantics仍看implementation。Streaming large data按key聚合可用ordered scan/database aggregate，避免全量GroupBy memory。
+
+## Set Operators
+
+Concat只拼接并保留duplicates；Union/Distinct去重；Intersect保留第一侧存在于第二侧的distinct elements；Except排除。By variants使用key selector。它们依赖IEqualityComparer而非ordering comparer，output order在LINQ to Objects虽有观察行为，也不要作为跨provider长期contract，除非随后OrderBy。
+
+Set semantics对entity按哪个key必须显式；record full-value equality可能与business identity不同。Large/unbounded source的seen set需capacity评估。
+
+<Stepper>
+  <Step title="切换order、group、set与zip"><CtcOrderingSetLab /></Step>
+  <Step title="标comparer和duplicates">每个operator写equality/order key、null、duplicate、tie和output-order guarantee。</Step>
+  <Step title="运行permutation properties">Shuffle input、重复keys、culture/comparer变化，验证set membership与explicit ordering。</Step>
+</Stepper>
+
+## Conversion Methods
+
+OfType过滤兼容runtime types，Cast对不兼容element抛；ToArray/List materialize snapshot；ToDictionary要求unique keys并在duplicate抛；ToLookup允许multi-values；AsEnumerable/AsQueryable改变binding surface而非必然执行。
+
+Materialization是重要boundary：执行全部upstream、分配memory、把live/deferred变snapshot并移动exception时点。先limit/project再materialize。Dictionary duplicate policy若想last-wins，显式Group/loop，不假设ToDictionary。
+
+<Term def="ToList/Array/Dictionary/Lookup触发完整evaluation、allocation并冻结当前结果的边界。">materialization boundary</Term>
+
+## Element Operators
+
+First允许many取首，Single要求恰好一个；OrDefault把empty映射default，但default可能与合法value混淆。Last可能遍历全部，ElementAt对非-indexed source O(n)。MinBy/MaxBy对empty和tie行为需确认。
+
+Use case cardinality决定operator：数据库unique invariant用Single可检测corruption；只需任意/ordered first用First；absence最好Option/explicit result而非default sentinel。Tests列empty/one/many。
+
+## Aggregation Methods
+
+Count/LongCount、Sum/Average/Min/Max与Aggregate折叠sequence。Aggregate有seed可定义empty identity；无seed empty抛。Numeric overflow/precision和nullable overload语义不同，provider translation也可能返回null。`Count()>0`通常不如Any短路。
+
+```csharp
+var summary = values.Aggregate(
+    seed: new Summary(0, 0m),
+    func: (state, value) => state with
+    {
+        Count = checked(state.Count + 1),
+        Total = checked(state.Total + value)
+    });
+```
+
+Parallel fold要求associative combiner/identity；side-effect accumulator会破坏。Money定义currency与rounding point，large count用LongCount。
+
+<Term def="对empty identity、overflow/precision、associativity和provider null semantics明确的fold/reduction约定。">aggregation contract</Term>
+
+## Quantifiers
+
+Any无predicate检查nonempty并可在first停止；Any(predicate)找到first true停止；All找到first false停止，empty按vacuous truth返回true；Contains使用equality comparer；SequenceEqual比较length/order/elements。Predicate side effect次数取决于short-circuit。
+
+Authorization“所有项满足”前先判断是否允许empty，不能误用vacuous truth。Remote Any常翻译EXISTS，比Count高效。Fault/effect tests验证早停。
+
+## Generation Methods
+
+Empty返回空sequence，Range生成连续ints，Repeat重复同一个value reference而非clone object。自定义infinite generator与deferred effects需配Take/cancellation/capacity。Generation可作为tests输入，但property tests记录seed。
+
+不要用Repeat(new Mutable(), n)期待n个独立objects；使用Range.Select(_ => new Mutable())。Range overflow/count invalid明确失败。
+
+<Stepper>
+  <Step title="切换element、aggregate、quantifier与materialize"><CtcTerminalOperatorLab /></Step>
+  <Step title="建立empty/one/many表">每个terminal写result/default/throw、short-circuit和source consumption。</Step>
+  <Step title="注入overflow/duplicate/fault">用throwing enumerable定位最远MoveNext，验证duplicate ToDictionary、Aggregate seed和All empty policy。</Step>
+</Stepper>
+
+<Callout type="trap" title="OrDefault总能安全表达Absence">
+Value type default可能是合法0，reference default是null且NRT无法证明。业务absence使用Try/Option或额外found flag，避免silent ambiguity。
+</Callout>
+
+## Operator review and performance gate
+
+Review checklist：shape/cardinality、deferred/terminal、order/duplicates/comparer、empty/one/many、buffering/memory、short-circuit、provider translation。Benchmark只针对真实hot path并保留correctness corpus；不要为避免小allocation改坏语义。
+
+Remote query还检查generated SQL、rows/bytes/round trips。Local large sequence检查multiple enumeration与materialization peak。Telemetry以query/operator pipeline名称记录，不在lambda逐项打高基数日志。
+
+## 本章回顾：Operator名称不如契约重要
+
+1. Filter、Select、SelectMany、Join分别保留、变换、展开和组合cardinality。
+2. Ordering/grouping/set依赖comparer、duplicates、buffer和tie规则。
+3. Materialization触发evaluation并冻结snapshot，ToDictionary要求unique keys。
+4. Element/aggregate/quantifier对empty/one/many与short-circuit不同。
+5. Provider与local execution分别验证，不能从同名operator推断相同计划。
+
+<Exercises>
+
+**问题 1：First与Single如何选择？**
+
+<Answer>Use case允许many并只需按order首项用First；业务/数据库invariant要求恰好一个用Single来检测duplicate。两者都定义empty是否throw/Option；测试empty/one/many与provider SQL。</Answer>
+
+**问题 2：为什么GroupBy可能导致内存峰值？**
+
+<Answer>LINQ to Objects通常需读完整source并为keys/members建lookup后输出groups。Large/unbounded source会增长；改用remote aggregate、ordered streaming fold或bounded windows，并测peak allocation。</Answer>
+
+**问题 3：All在权限检查中有什么陷阱？**
+
+<Answer>All(empty)=true（vacuous truth）。若空权限集合不应授权，先要求Any再All或明确domain rule。测试empty和predicate short-circuit，避免副作用依赖完整遍历。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="operator shape contract" definition="Sequence/value shape与zero/one/many变化。" />
+  <GlossaryItem term="deterministic order contract" definition="Primary/secondary/tie-breaker保证可重复order。" />
+  <GlossaryItem term="materialization boundary" definition="完整执行、分配并冻结当前snapshot。" />
+  <GlossaryItem term="aggregation contract" definition="Empty identity、overflow、precision与associativity约定。" />
+  <GlossaryItem term="empty-sequence policy" definition="Operator面对empty时value/default/throw/true的业务映射。" />
+</Glossary>
+
+<Term def="对empty input明确返回value、default、exception或vacuous truth并映射到业务语义的策略。">empty-sequence policy</Term>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 9: LINQ Operators" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch09.html" />

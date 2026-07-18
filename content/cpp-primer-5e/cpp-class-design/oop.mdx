@@ -6,9 +6,11 @@ order: 3
 description: 掌握C++面向对象编程——基类/派生类、虚函数与动态绑定、抽象基类、访问控制与继承——使用多态构建可扩展的类体系
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/c-plus-plus-primer-9780321714114"
 draft: false
 ---
+
+import { CppOOPContractDiagram } from "@/components/mdx/cpp-primer-5e/diagrams/oop";
 
 {/* C 实战型（C++ Primer §15 改编）：面向对象程序设计——"类设计者工具"第三篇。
    重心在 VTableDiagram Stepper(§5) + 代码对照(§6)，概念讲解(§3)配四个 SVG 图示，数学省略(math:false)。
@@ -50,13 +52,77 @@ draft: false
 
 {/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用②工厂流水线——基类是通用模具，派生类是加了配件的特殊型号。 */}
 
-## 一模多型：从一张图纸到一整条产品线
+## 直觉：一模多型，从一张图纸到一整条产品线
 
 你已经学会了设计一个类——封装数据、定义接口、管理资源。但现在遇到一个新问题：你的书店系统里有普通书籍，还有批量折扣书、限量版精装书——它们都是"书"，有很多共性，但计算价格的方式各不相同。你不想写三个几乎一模一样的类，然后把 `if (type == BULK) {...}` 的判断洒满整个代码库。
 
 想象工厂的模具系统——有一张"书"的基础模具，压出来只带编号和单价。批量折扣书是这张模具加了一个"买够多少本打折"的附件。限量版再加一个"编号签名"的附件。三种产品共用同一个基础模具，各自在上面的附件不同。你对外只说"这是书"，但送进计价口时，每本书按自己的附件自动算出不同的价格。
 
 **这一章解决什么问题？** 教你用 C++ 的三个核心机制——基类/派生类建立"是什么"的关系、虚函数在运行时自动选择正确版本、抽象基类作为体系蓝图——来构建一个可扩展的类体系。没有它们，你就得在所有用到多态的地方手动写类型判断和分支——每新增一种书就要改遍所有地方、漏一处就是一个 bug。
+
+## 官方 Chapter 15 的完整继承契约
+
+继承体系不仅是“virtual 调到派生版本”。访问控制决定向上转换是否可见，类作用域决定候选名字能否进入重载集，构造与拷贝控制维护每层子对象，容器则必须保存多态所有者而不是发生对象切片。
+
+<CppOOPContractDiagram />
+
+### 访问控制与继承
+
+public 继承表达可替换的 IS-A 关系，派生对象可在可访问语境中隐式转换为基类指针或引用。protected/private 继承会限制这种转换对用户代码的可见性，更接近实现复用而非公共子类型；它们并非“一律错误”，但组合通常让依赖关系更显式。
+
+protected 还有对象限制：派生类成员可通过**派生类对象**访问继承来的 protected 成员，却不能借任意 Base 对象访问 Base 的 protected。这样能防止某个派生类修改与自己无关的其他基类子对象。
+
+### 继承中的类作用域
+
+<Term def="派生类作用域嵌套在基类作用域之内。名字查找先找到最近层声明，再进行类型检查与重载决议；同名派生成员会隐藏基类的全部同名重载。">继承中的类作用域（class scope under inheritance）</Term> 解释了为什么签名不同也会隐藏：
+
+```cpp
+struct Base { virtual void f(int); void f(double); };
+struct Derived : Base {
+    using Base::f;       // 把基类重载重新引入当前作用域
+    void f(int) override;
+    void f(const char*); // 新重载
+};
+```
+
+名字查找先于参数匹配；没有 `using Base::f` 时，只要 Derived 找到任意 `f`，就不会继续把 Base 的其他 f 加入候选。显式限定调用 `obj.Base::f(1)` 会绕过虚分派，只有确实要调用基类实现时才这样写。
+
+### 构造函数、拷贝控制与虚析构
+
+派生构造函数只直接初始化其**直接基类**，基类再负责更上层。用户自定义派生拷贝/移动构造时应在初始化列表调用对应基类操作；若完全使用合成派生拷贝控制，编译器会自动对基类子对象执行相应操作。不能把“手写时要显式调用”误解成所有派生拷贝都要手写。
+
+<Term def="声明为 virtual 的基类析构函数。通过基类指针删除派生对象时，它保证先执行派生析构再逐层执行基类析构；面向多态删除的基类必须提供它。">虚析构函数（virtual destructor）</Term> 是所有权接口的一部分。只要类可能通过基类指针被删除，析构就必须 virtual；若基类从不负责多态删除，可采用 protected 非虚析构阻止外部误删，而不是机械地给所有基类增加虚函数。
+
+构造与析构期间，虚调用只分派到当前正在构造或析构的层级，因为更派生部分尚未建立或已经销毁。这是语言语义；实现常用逐层调整虚表指针，但标准不规定必须存在某种 vptr 布局。
+
+### 容器与继承：Basket 和 clone
+
+<Term def="容器通过基类智能指针保存不同派生对象，并借虚函数保持动态行为的设计。若要把左值对象加入容器，通常提供虚 clone 复制其真实动态类型。">多态容器（containers and inheritance）</Term> 不能直接存 `Quote` 值，否则派生部分被切片。只接受 shared_ptr 会把所有权决策推给调用方；增加 clone 可提供值式入口：
+
+```cpp
+class Quote {
+public:
+    virtual std::shared_ptr<Quote> clone() const {
+        return std::shared_ptr<Quote>(new Quote(*this));
+    }
+    virtual ~Quote() {}
+};
+
+class Bulk_quote : public Quote {
+public:
+    std::shared_ptr<Quote> clone() const override {
+        return std::shared_ptr<Quote>(new Bulk_quote(*this));
+    }
+};
+```
+
+Basket 的 `multiset<shared_ptr<Quote>, Compare>` 按 ISBN 组织项目，`add_item(const Quote&)` 调用 clone，结算时通过基类引用调用 `net_price`。容器持有对象，调用点无需知道具体派生类型，也不会发生切片。
+
+### 文本查询再探：表达式也是类体系
+
+Chapter 12 的 WordQuery 可扩展成 `Query_base` 抽象接口：`eval` 执行查询，`rep` 生成表达式文本；`WordQuery` 处理单词，`NotQuery` 包装一元操作，`AndQuery`/`OrQuery` 派生自保存左右 Query 的 `BinaryQuery`。对外的 Query 句柄持有 `shared_ptr<Query_base>`，并通过重载 `~`、`&`、`|` 组合表达式树。
+
+这个设计把所有权和多态分开：Query 是小型值式句柄，Query_base 层次负责动态行为，shared_ptr 负责共享表达式节点。用户写 `fiery & bird | wind` 时得到组合对象，不需要 `dynamic_cast` 或类型枚举分支。
 
 {/* 3. 概念讲解（spec §三，C 型压缩"是什么"，篇幅让给 §5 §6）：一小节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图。 */}
 
@@ -106,9 +172,9 @@ public:
 
 `virtual` 只需要在基类声明——派生类自动也是虚函数（即使不加 `virtual` 关键字）。但 `override` 是派生类**显式表明意图**的最佳方式——读到这行就知道"这是在覆盖基类的虚函数"。如果某个派生类想阻止更下一层再覆盖——在该函数声明末尾加 <Term def="C++11 关键字。放在虚函数声明末尾——禁止派生类再覆盖此函数（void f() final;）。放在类名后——禁止此类再被继承（class Last final : Base {};）。">`final`</Term>。
 
-## 虚函数是怎么工作的：vptr → vtable → 函数地址
+## 虚函数常见实现模型：vptr → vtable → 函数地址
 
-下面用 Stepper 的三步图把动态绑定的底层机制掰开。每一步配一张 VTableDiagram 让你直观看到数据是怎么跳转的。
+下面用主流 ABI 的 vptr/vtable 模型解释一种常见实现。C++ 语言只保证最终覆写函数被调用，不规定对象必须含 vptr、指针位置与大小、表项顺序或是否去虚拟化；图不能当作可移植内存布局。
 
 > 猜一猜：`Quote *p = new Bulk_quote; p->net_price(10);`——编译器只知道 `p` 是 `Quote*`，那它到底执行的是 `Quote::net_price` 还是 `Bulk_quote::net_price`？怎么做到的？用 Stepper 一步步验证。
 
@@ -117,31 +183,31 @@ public:
 
     <VTableDiagram step={1} />
 
-    每个包含虚函数的类——在编译后每个对象的内存头部多了一个 8 字节的隐藏指针——<Term def="Virtual Pointer 的缩写——每个含虚函数的对象都有的隐藏指针成员（对象头部 8 字节），指向该对象所属类的虚函数表（vtable）。在构造函数中逐层设置——构造到哪一层就指向哪一层的 vtable。它是动态绑定三步跳转的第一步。">vptr（virtual pointer）</Term>。基类对象和派生类对象各自的 vptr 指向**不同**的虚函数表——这就是运行时能区分调哪个版本的物质基础。图中左边是 `Quote` 对象——vptr 指向 `Quote` 的 vtable；右边是 `Bulk_quote` 对象——vptr 指向 `Bulk_quote` 的 vtable。注意 vptr 是自动生成的——你不需要手动管理。
+    主流实现会在多态对象中保存 <Term def="主流 C++ ABI 用于定位虚函数表的隐藏实现指针。它常随构造和析构阶段调整，但标准不要求其存在、位置或大小，程序不能直接依赖。">vptr（virtual pointer）</Term>，让不同动态类型定位到不同的虚函数表。图把它画在对象头部只是示意；32/64 位、虚继承、多重继承和编译器 ABI 都可能改变布局。
   </Step>
   <Step title="② 虚函数表：一张函数指针数组">
 
     <VTableDiagram step={2} />
 
-    <Term def="Virtual Table 的缩写——每个含虚函数的类编译后生成的一张函数指针数组。每个虚函数在表中占一个固定槽位（按声明顺序）。派生类覆盖虚函数时，对应槽位被替换为派生类版本的函数地址。基类指针/引用调用虚函数时通过此表找到实际函数地址。">虚函数表（vtable）</Term>是编译后每个类各有一张的"函数地址对照表"。`Quote` 的 vtable 存的是 `&Quote::net_price`——基类版本的地址。`Bulk_quote` 的 vtable 存的是 `&Bulk_quote::net_price`——派生类覆盖版本的地址。同一个槽位（槽 0）——两个不同的地址。这就是动态绑定全部的秘密——编译器生成一条"取对象 vptr → 查 vtable 第 0 槽 → 调槽里的函数"的代码，运行时不关心槽里具体是谁——谁的 vtable 就是谁的版本。
+    <Term def="主流 ABI 为多态类生成的虚调用分派表，通常保存函数地址或调整入口。表的存在、布局与槽位顺序都不是 C++ 标准接口。">虚函数表（vtable）</Term> 可让 Quote 与 Bulk_quote 在对应调用位置保存不同入口。图中的“槽 0”是教学编号，不代表按源码声明顺序可移植索引，也不能由业务代码读取。
   </Step>
   <Step title="③ 动态绑定：三步跳转到正确版本">
 
     <VTableDiagram step={3} />
 
-    完整的三步跳转链路：`对象 → vptr → vtable[槽号] → 函数地址 → 调用`。看图中 `print_total` 的代码——参数 `const Quote &item` 的静态类型是 `Quote&`。编译器知道该调 `net_price`，但不知道 `item` 实际是 `Quote` 还是 `Bulk_quote`——于是生成 "取 item.vptr → 查 vtable → 调槽中函数" 的代码。运行时：如果 item 引用的是 `Bulk_quote`，vptr→vtable→ `Bulk_quote::net_price`——自动用了折扣价。整个过程没有 if-else、没有手动判断类型——编译器替你生成了正确但"不问不查"的代码。
+    在未去虚拟化的常见实现中，调用可概念化为“对象 → vptr → 表项 → 最终覆写函数”。语言层面只需记住：通过基类指针或引用调用虚函数，会根据动态类型选择 final overrider；编译器若能证明动态类型，也可直接调用而不经过表。
   </Step>
 </Stepper>
 
 <Callout type="tip">
-  这个 Stepper 的核心教具价值：让你亲眼看到虚函数调用不是魔法——就是多了一次指针跳转（vptr→vtable→函数地址）。理解了这一步，你才能理解为什么"不在构造/析构中调虚函数"、为什么"基类析构必须是 virtual"、为什么"虚函数有一点点额外开销但绝大多数场景完全可以忽略"。
+  这张图用于理解常见间接分派成本，不是语言定律。构造/析构期分派和虚析构需求来自对象生命周期语义；性能则受去虚拟化、内联、分支预测与调用频率影响，应通过基准和生成代码判断。
 </Callout>
 
 ## 抽象基类：为整个体系画一张蓝图
 
 有时候你不想让用户直接创建基类对象——基类只应该作为"接口蓝图"而存在，具体实例只能是它的派生类。比如 `Quote`——在现实业务中，从不存在一个"普通书"——每本书要么是批量折扣书、要么是限量版、要么是电子版。`Quote` 应该只定义"什么是书"的接口，而永远不被直接构造。
 
-<Term def="在虚函数声明末尾写 = 0 而得到的虚函数——形式为 virtual void f() = 0;。它不需要（通常也不提供）函数体，只是作为「你必须实现这个功能」的强制要求。包含纯虚函数的类 = 抽象基类，不能直接创建对象。">纯虚函数（pure virtual function）</Term>就这么实现它——在虚函数声明末尾加 `= 0`：
+<Term def="在虚函数声明中使用 pure-specifier 的函数，使包含它的类成为抽象类。纯虚函数仍可在类外提供定义；纯虚析构函数必须有定义，因为析构链会调用它。">纯虚函数（pure virtual function）</Term>通过声明末尾的 `= 0` 指定：
 
 ```cpp
 class Quote {
@@ -162,11 +228,11 @@ private:
 
 两个容易遗漏的点，一句话就能说清，但考试和查 bug 时经常遇到。
 
-**友元关系不继承**。基类的友元不能自动访问派生类的 private/protected 成员——每个类的"朋友圈"是独立的。基类把某个函数声明为 `friend`，这个函数只在操作基类对象时享有特权——对于派生类对象，该函数和其他外部函数没有区别。
+**友元关系不继承**。基类友元可访问派生对象中的**基类子对象**私有成员，因为那仍是 Base 的部分，但不能因此访问 Derived 自己新增的 private/protected 成员；派生类也不会自动成为基类友元的友元。
 
 **基类的 static 成员在整个继承体系中只存在唯一实例**。`class Base { public: static int count; };`——`Base::count`、`Derived::count`、`MoreDerived::count` 访问的都是**同一个** `count`。不管有多少层派生、多少个派生类——static 成员只有一份、大家共享。
 
-<Term def="一个 public/protected/private 继承类别。public 继承保持基类成员的访问级别不变——表达 IS-A 关系，最常见。protected 继承把基类 public+protected 成员都变成派生类的 protected——外部不可见。private 继承把基类所有成员都变成派生类的 private——表达「用基类实现自己」（HAS-A 关系），极不推荐，优先用组合代替。">继承的访问控制</Term>影响的是基类成员在派生类中"对外"的可见级别：
+<Term def="public、protected 或 private 继承对基类 public/protected 成员可见性与派生到基类转换可访问性的控制。public 表达公开子类型，非 public 继承主要用于受限实现复用。">继承的访问控制</Term>影响成员可见性，也影响用户代码能否执行派生到基类转换：
 
 <AccessInheritanceTable />
 
@@ -178,11 +244,11 @@ private:
 
 <InheritanceLifetimeDiagram />
 
-**构造顺序**：基类构造（先初始化基类部分，vptr 指向基类 vtable）→ 派生类成员按声明顺序初始化（vptr 更新为派生类 vtable）→ 派生类构造函数体执行。**析构顺序**：构造顺序的严格逆序——派生类析构先执行→派生类成员逆序销毁→基类析构。vptr 在析构过程中逐层回退——析构到哪一层就切回那一层的 vtable。
+**构造顺序**：虚基类（由最派生类负责）→直接基类→数据成员按声明顺序→派生构造函数体。**析构顺序**严格反向：派生析构函数体→成员逆序→直接基类→虚基类。初始化列表的书写顺序不会改变这套次序。
 
-这解释了为什么**在构造函数或析构函数中调用虚函数不会走动态绑定**——调用的是"当前这层"的版本。构造 `Bulk_quote` 时，先执行 `Quote` 的构造函数——此时 `Bulk_quote` 部分还没初始化，vptr 指向 `Quote` 的 vtable。如果 `Quote` 的构造函数调用了 `net_price()`，走的是 `Quote::net_price()`——不会"跳"到 `Bulk_quote::net_price()`（那部分还没构造好，去调就是访问未初始化的成员）。
+构造或析构期间调用虚函数，最终覆写函数只考虑当前正在构造/析构的层级，不会进入尚未构造或已经销毁的更派生部分。主流实现常通过逐层调整分派信息实现，但应记语言后置条件而不是依赖 vptr 细节。
 
-拷贝控制也要精心处理——派生类的拷贝/移动构造必须显式调用基类的对应版本：
+拷贝控制也要精心处理：**当你自定义**派生拷贝/移动构造或赋值时，要显式处理基类子对象；若使用合成版本，编译器会自动调用基类对应操作：
 
 ```cpp
 class Bulk_quote : public Quote {
@@ -205,7 +271,7 @@ public:
 };
 ```
 
-派生类的拷贝/移动只负责自己新增的那几个成员——基类部分的拷贝/移动必须委托给基类的对应函数。如果你忘了在拷贝构造的初始化列表里写 `Quote(rhs)`，基类部分就会被**默认构造**——丢失了源对象的数据且可能不匹配。拷贝赋值同理——不显式调用 `Quote::operator=(rhs)` 就只更新了派生类自己的成员，基类部分纹丝不动。
+在用户自定义派生拷贝构造中漏掉 `Quote(rhs)` 会默认初始化基类部分；在用户自定义赋值中漏掉 `Quote::operator=(rhs)` 会保留目标原有基类状态。合成派生操作没有这个遗漏，它按成员与基类逐项处理。
 
 {/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
 
@@ -291,7 +357,7 @@ double print_total(std::ostream &os, const Quote &item, std::size_t n) {
     return ret;
 }
 ```
-参数用 `const Quote&`——不是值传递。值传递会导致对象切片——把 `Bulk_quote` 对象的派生部分切除，只留下基类部分。引用保持多态性——传递的是对象本身，vptr 保持指向正确的 vtable。`item.net_price(n)` 是虚调用——三步跳转到正确版本。`item.isbn()` 不是虚调用——编译期直接绑定到 `Quote::isbn`——因为获取 ISBN 在基类和派生类之间没有差异。
+参数用 `const Quote&` 而不是值传递。值传递会构造独立 Quote 并切除派生部分；引用仍指向原始动态对象，`item.net_price(n)` 按动态类型调用最终覆写函数。`item.isbn()` 非虚，按静态类型绑定到 Quote::isbn。
 
 ### 容器存储多态对象
 
@@ -302,8 +368,9 @@ double print_total(std::ostream &os, const Quote &item, std::size_t n) {
 // 存指针（不能存对象——对象切片）
 std::vector<std::unique_ptr<Quote>> basket;
 
-basket.push_back(std::make_unique<Bulk_quote>("0-201-1", 50, 10, 0.25));
-basket.push_back(std::make_unique<Quote>("0-201-2", 30));
+basket.push_back(std::unique_ptr<Quote>(
+    new Bulk_quote("0-201-1", 50, 10, 0.25)));
+basket.push_back(std::unique_ptr<Quote>(new Quote("0-201-2", 30)));
 
 double total = 0;
 for (const auto &item : basket)
@@ -317,7 +384,7 @@ for (const auto &item : basket)
 
 <Callout type="trap">
   **现象** → 基类析构没写 virtual，`delete` 基类指针指向的派生类对象时——派生类的析构没被调用，派生类新增的资源（堆内存、文件句柄）泄漏了。valgrind 报"definitely lost"。
-  **原因** → `delete` 根据指针的静态类型调用析构——`Base *p = new Derived; delete p;` 走的是 `~Base()`。如果这个析构不是 virtual——编译器编译期就绑死了，不会通过 vtable 动态派发到 `~Derived()`。只释放了基类部分，派生类的资源永远没人释放。
+  **原因** → 通过基类指针删除派生对象而基类析构非 virtual，行为未定义；不能依赖它固定表现为“只调用 Base 析构并泄漏”。
   **修法** → 基类析构函数加 `virtual`——`virtual ~Base() = default;`。这是单行代码避免资源泄漏的铁律——只要有被继承的可能，析构就写 virtual。即使当前不需要，留有余地。
 </Callout>
 
@@ -329,14 +396,14 @@ for (const auto &item : basket)
 
 <Callout type="trap">
   **现象** → 在构造函数中调用虚函数——期望走派生类版本，实际走的是基类版本。看代码看不出任何问题——运行时结果却和预期不符。
-  **原因** → 执行基类构造函数时，派生类部分尚未初始化——vptr 此时指向基类 vtable。构造函数中所有虚调用都走**静态绑定**——强制使用当前构造层的版本。同理在析构函数中调虚函数——派生类部分已销毁，vptr 已回退为基类的 vtable。
+  **原因** → 构造基类子对象时更派生部分尚未建立，析构基类时更派生部分已经销毁；语言规定虚调用只考虑当前层级的最终覆写函数。常见 ABI 用调整分派信息实现，但这不等同于普通静态绑定。
   **修法** → 构造函数和析构函数中避免调用虚函数——或者在文档中明确标注"此处调用的是当前基类版本"。如果确实需要在构造时根据不同派生类做不同的事——把差异化行为从构造函数中移出去，让调用方在构造完成后再调一个虚的 `init()` 或类似函数。
 </Callout>
 
 <Callout type="trap">
   **现象** → `vector<Quote> v; v.push_back(Bulk_quote(...));`——编译通过，运行正确——但 `v[0].net_price(100)` 没有打折，和普通 Quote 一样。`dynamic_cast<Bulk_quote*>(&v[0])` 返回 nullptr——对象已经不是 Bulk_quote 了。
-  **原因** → 往 `vector<Quote>` 中 `push_back` 一个 `Bulk_quote` 时——容器空间分配的是 `Quote` 的大小（不含派生类新增成员）。拷贝（或移动）构造只调用 `Quote(const Quote&)`——派生类部分被直接**切除**（对象切片）。存进去的就是一个纯 `Quote` 对象——不带 `min_qty`、不带 `discount`、vptr 指回 Quote 的 vtable。
-  **修法** → 容器存指针（智能指针）——`vector<unique_ptr<Quote>>` 或 `vector<shared_ptr<Quote>>`。指针存的是地址——对象本身在堆上保持完整的多态性——vptr 不变、数据不丢、虚函数正常动态绑定。
+  **原因** → `vector<Quote>` 的元素按 Quote 值构造，派生对象转换为 Quote 时只复制基类子对象，派生状态被切除。容器里得到的动态类型就是 Quote，不再具有 Bulk_quote 行为。
+  **修法** → 容器保存 `unique_ptr<Quote>` 或 `shared_ptr<Quote>`，由智能指针拥有完整派生对象；通过基类接口调用虚函数时保持动态分派。
 </Callout>
 
 {/* 8. 小结与练习（spec §八）：≤5 bullet 呼应 §1；2-3 题含 1 改代码 + 1 独立实现（C 型）；答案折叠。 */}
@@ -344,14 +411,14 @@ for (const auto &item : basket)
 ## 小结
 
 - 继承建立 IS-A 层次（"Bulk_quote 是一种 Quote"）——派生类自动获得基类成员，可扩展新成员、覆盖虚函数行为。基类 private 成员派生类不可直接访问——用 protected 为派生类开放窗口
-- 虚函数 + 动态绑定 = 运行时自动选择正确版本——vptr→vtable→函数地址 三步跳转，不用手动 if-else 判断类型。`override` 让编译器帮你检查签名、`final` 禁止再覆盖
+- 虚函数通过基类引用/指针按动态类型选择最终覆写函数；vptr/vtable 只是常见 ABI 模型，override 检查覆盖签名，final 阻止继续覆盖
 - 抽象基类包含纯虚函数（`= 0`）——不能实例化但定义统一接口。派生类必须覆盖纯虚函数，覆盖了才能实例化——这是编译器强制执行的"契约"
-- 构造和析构有严格顺序——基类先构造后析构，派生类后构造先析构。构造/析构中虚调用不走动态绑定。派生类拷贝/移动控制要显式调用基类版本
-- 静态成员全体系共享唯一实例——基类和所有派生类访问同一份。友元不继承——每个类的"朋友圈"独立
+- 构造和析构按虚基类、直接基类、成员、派生层逐步建立并反向销毁；期间虚调用不进入更派生层，用户自定义派生拷贝控制要显式处理基类子对象
+- 静态成员在体系中共享；友元关系不继承，但基类友元仍可访问派生对象里的基类子对象私有部分
 
 <Exercises>
 
-**练习 1（改代码型）** 下面的代码有至少三个与面向对象设计相关的问题——找出并修正。
+**问题 1（改代码型）** 下面的代码有至少三个与面向对象设计相关的问题——找出并修正。
 
 ```cpp
 class Base {
@@ -382,11 +449,11 @@ int main() {
 
 三个问题及答案：
 
-**问题 1**：`p->f()` 输出 `Base` 而不是 `Derived`——`f()` 不是虚函数，走静态绑定。修法：基类 `f()` 加 `virtual`，派生类 `f()` 加 `override`。
+**缺陷一**：`p->f()` 输出 `Base` 而不是 `Derived`——`f()` 不是虚函数，走静态绑定。修法：基类 `f()` 加 `virtual`，派生类 `f()` 加 `override`。
 
-**问题 2**：`delete p` 只调 `~Base()`——`Derived` 的 `data` 没有被释放，内存泄漏。修法：`virtual ~Base() = default;`。
+**缺陷二**：通过 Base* 删除 Derived 而 Base 析构非 virtual，行为未定义。修法：为承担多态删除的基类提供 `virtual ~Base() = default;`。
 
-**问题 3**：`vector<Base>` 发生对象切片——`Derived()` 被切成 `Base` 对象，丢失 `data` 成员且析构时 `data` 永远无法被释放。修法：`vector<unique_ptr<Base>>`、存指针。
+**缺陷三**：`vector<Base>` 按值构造 Base 元素，Derived 的动态类型和派生状态被切除。切片不必然导致泄漏，但一定丢失多态行为；容器应保存拥有完整派生对象的智能指针。
 
 修正版本：
 
@@ -401,17 +468,17 @@ class Derived : public Base {
 public:
     void f() override { std::cout << "Derived"; }
 private:
-    std::string *data;
+    std::string data;
 public:
-    Derived() : data(new std::string("hello")) {}
-    ~Derived() override { delete data; }  // 加上资源释放
+    Derived() : data("hello") {}
+    ~Derived() override = default;
 };
 ```
 
-当基类有了虚析构后——`delete` 基类指针能正确派生到派生类析构 → 释放 `data`。`vector<unique_ptr<Base>>` 避免了对象切片。
+虚析构保证多态删除按 Derived 到 Base 的顺序执行；RAII 字符串成员自行清理。`vector<unique_ptr<Base>>` 则避免对象切片。
 </Answer>
 
-**练习 2（独立实现题）** 设计并实现一个 `Employee` 抽象类体系：
+**问题 2（独立实现题）** 设计并实现一个 `Employee` 抽象类体系：
 - `Employee` 包含：`name`（string）、`id`（int）—— protected；纯虚函数 `double salary() const = 0;`；非虚函数 `string getName() const { return name; }`；虚析构
 - `HourlyEmployee` 继承 `Employee`：`hourlyRate` + `hoursWorked`——`salary()` 返回两者乘积
 - `SalariedEmployee` 继承 `Employee`：`annualSalary`——`salary()` 返回月薪（年/12）
@@ -456,8 +523,10 @@ private:
 
 int main() {
     std::vector<std::unique_ptr<Employee>> staff;
-    staff.push_back(std::make_unique<HourlyEmployee>("Alice", 1, 50.0, 160));
-    staff.push_back(std::make_unique<SalariedEmployee>("Bob", 2, 120000));
+    staff.push_back(std::unique_ptr<Employee>(
+        new HourlyEmployee("Alice", 1, 50.0, 160)));
+    staff.push_back(std::unique_ptr<Employee>(
+        new SalariedEmployee("Bob", 2, 120000)));
 
     for (const auto &e : staff) {
         std::cout << e->getName() << ": " << e->salary() << '\n';
@@ -469,15 +538,15 @@ int main() {
 设计要点：① `name` 和 `id` 是 protected——派生类可直接访问，用户不可见 ② `salary()` 纯虚——两种雇员必须各自定义 ③ `getName()` 非虚——所有雇员名字获取方式相同 ④ 容器存指针——避免切片。调用方只需知道"有 Employee"，不论小时工还是月薪工——虚函数自动分派正确版本。
 </Answer>
 
-**练习 3（问答型）** `class C : public A, public B {};`——如果 `A` 和 `B` 都有一个 `virtual void f()`，`C` 必须覆盖 `f()` 吗？如果 `C` 不覆盖，通过 `C` 对象调 `f()` 会怎样？通过 `A*` 和 `B*` 分别指向 `C` 对象调用 `f()` 呢？
+**问题 3（问答型）** `class C : public A, public B {};`——如果 `A` 和 `B` 都有一个 `virtual void f()`，`C` 必须覆盖 `f()` 吗？如果 `C` 不覆盖，通过 `C` 对象调 `f()` 会怎样？通过 `A*` 和 `B*` 分别指向 `C` 对象调用 `f()` 呢？
 
 <Answer>
 
-1. **C 必须覆盖 `f()` 吗？** 如果 A::f() 和 B::f() 都是纯虚（`= 0`）——C 必须覆盖，否则 C 也是抽象类无法实例化。如果至少有一方提供了实现——C 可以覆盖也可以不覆盖，但如果 A 和 B 的实现不同，不覆盖会引发歧义。
+1. **C 必须覆盖 `f()` 吗？** 若任一继承路径上的 f 仍为纯虚且没有最终覆写，C 是抽象类；C 定义一个同签名 f 可同时覆盖 A::f 与 B::f。若两边都有具体实现，C 可不覆盖，但直接按名字调用会二义。
 
-2. **如果 C 不覆盖，通过 C 对象调 `f()`**：`C c; c.f();` 编译报错（ambiguous）——编译器不知道你要调 `A::f()` 还是 `B::f()`。
+2. **如果 C 为具体类且不覆盖，通过 C 对象调 `f()`**：`C c; c.f();` 因名字查找二义而编译失败；可显式写 `c.A::f()` 或 `c.B::f()`。若仍有纯虚路径，则 `C c` 本身就不能定义。
 
-3. **通过 A* 和 B* 分别调用**：`A *pa = &c; pa->f();` 调的是 `A::f()`（通过 A 的 vtable）。`B *pb = &c; pb->f();` 调的是 `B::f()`（通过 B 的 vtable）。两个路径各自查自己子对象的 vtable——不会互相干扰。C 对象内部有两张独立的 vtable——一张对应 A 子对象、一张对应 B 子对象。
+3. **通过 A* 和 B* 分别调用**：`A *pa = &c; pa->f();` 调用 A 这条继承路径的最终覆写函数，`B *pb = &c; pb->f();` 调用 B 路径的版本。语言保证结果，不规定 C 对象内部必须放几张表或几个隐藏指针。
 
 解决歧义：C 覆盖 `f()`——在 C 中写 `void f() override { A::f(); }` 或 `void f() override { B::f(); }` 或自己实现一个新版——这样通过 C 对象、A*、B* 三个入口走的都是 C 的版本。这是多重继承中处理同名虚函数的标准方式。
 </Answer>
@@ -507,15 +576,15 @@ int main() {
 </GlossaryItem>
 
 <GlossaryItem term="vptr（virtual pointer）">
-  每个含有虚函数的对象自动拥有的隐藏指针——在对象内存头部占用 8 字节（64 位系统）。指向该对象所属类的虚函数表（vtable）。在构造/析构中逐层设置——构造到哪一层就指向哪一层的 vtable。是动态绑定三步跳转的第一步——对象 → vptr。
+  主流 C++ ABI 用于定位虚函数表的隐藏实现指针，常随构造与析构阶段调整。C++ 标准不要求它存在，也不规定位置、数量或大小；图中对象头布局只是教学模型。
 </GlossaryItem>
 
 <GlossaryItem term="虚函数表（vtable）">
-  每个含虚函数的类在编译后生成的一张函数指针数组。每个虚函数在表中占一个固定槽位（按声明顺序）。派生类覆盖虚函数时——对应槽位的函数指针被替换为派生类版本的地址。动态绑定第二步和第三步：vptr → vtable[槽号] → 函数地址 → 调用。详见本章 VTableDiagram 图示。
+  主流 ABI 为多态类生成的分派表，通常保存函数地址或调整入口。表的存在、布局、槽位顺序都不是标准接口，编译器还可在已知动态类型时去虚拟化直接调用。
 </GlossaryItem>
 
 <GlossaryItem term="纯虚函数（pure virtual function）">
-  在虚函数声明末尾加 `= 0`——`virtual void f() = 0;`。不需要（通常也不提供）函数体——只是作为"你必须实现这个功能"的接口契约。包含纯虚函数的类称为抽象基类——不能直接创建对象。派生类必须覆盖纯虚函数才能实例化——否则自己也变成抽象类。
+  声明中带 pure-specifier 的虚函数，使类成为抽象类。纯虚函数仍可在类外提供定义；纯虚析构必须有定义，因为派生对象析构链会调用它。派生类需提供最终覆写才能成为具体类。
 </GlossaryItem>
 
 <GlossaryItem term="抽象基类（abstract base class）">
@@ -531,11 +600,23 @@ int main() {
 </GlossaryItem>
 
 <GlossaryItem term="继承的访问控制">
-  三种继承方式对基类成员在派生类中对外可见级别的影响。public 继承保持级别不变（最常见）。protected 继承将 public 和 protected 都降为 protected。private 继承将所有成员都降为 private。无论何种继承——基类的 private 成员派生类永远不可直接访问。struct 默认 public 继承，class 默认 private 继承。
+  public/protected/private 继承对基类 public/protected 成员可见性和派生到基类转换可访问性的控制。public 表达公开子类型，非 public 继承用于受限实现复用；基类 private 成员始终不可由派生类直接访问。
+</GlossaryItem>
+
+<GlossaryItem term="继承中的类作用域（class scope under inheritance）">
+  派生类作用域嵌套在基类作用域内。名字查找先在最近层停止，再做重载决议，所以派生同名成员会隐藏基类整组重载；using 声明可把基类重载重新引入。
+</GlossaryItem>
+
+<GlossaryItem term="虚析构函数（virtual destructor）">
+  声明为 virtual 的基类析构。通过基类指针删除派生对象时，保证派生到基类逐层析构；承担多态删除的基类必须提供它。
+</GlossaryItem>
+
+<GlossaryItem term="多态容器（containers and inheritance）">
+  容器通过基类智能指针拥有不同派生对象，并借虚函数保持动态行为。直接保存基类值会切片；clone 接口可为左值对象复制真实动态类型。
 </GlossaryItem>
 
 </Glossary>
 
 {/* 9. 出处声明（spec §九）：本章为 C++ Primer §15 改编重写，sourceUrl 自动注入。 */}
 
-<Attribution />
+<Attribution source="C++ Primer, Fifth Edition, Chapter 15: Object-Oriented Programming" />

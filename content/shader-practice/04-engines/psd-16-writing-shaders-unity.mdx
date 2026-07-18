@@ -1,0 +1,161 @@
+---
+title: "第16章 在Unity中编写着色器"
+type: C
+section: "Shader开发实战 · 引擎落地"
+order: 16
+description: "沿Practical Shader Development正式目录掌握Unity Material、ShaderLab、CGPROGRAM、Unity宏、C#属性传递。"
+demo: true
+math: true
+sourceUrl: "https://link.springer.com/book/10.1007/978-1-4842-4457-9"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PsdWritingShadersUnityPipelineLab, PsdWritingShadersUnityCompareLab, PsdWritingShadersUnityEvidenceLab } from "@/components/mdx/shader-practice/diagrams/psd-16-writing-shaders-unity";
+
+<Objectives>
+- 能解释Unity Material、ShaderLab和CGPROGRAM在渲染数据流中的作用
+- 能推导本页公式并用GLSL、应用状态或引擎材质实现最小实验
+- 能复现C#属性传递，以参考图、GPU捕获、边界输入和反例验收
+</Objectives>
+
+## 从画面开始
+
+先预测顶点、片元、深度和帧时间会如何变化，再只调整一个参数观察变化。本章不是重新发明前15章，而是把GLSL概念映射到Unity：顶点与片元入口改为HLSL语义，ShaderLab管理Pass和状态，内置宏提供矩阵与灯光。移植Blinn-Phong时逐项核对空间、混合和多光源；共享材质实例与PropertyBlock语义要区分。 本页用<Term def="保存Shader与属性值并参与渲染提交的Unity资源。">Unity Material</Term>、<Term def="声明Properties、SubShader、Pass、标签和状态的Unity语言。">ShaderLab</Term>、<Term def="在旧版内置管线Pass中包裹Cg或HLSL程序的代码块。">CGPROGRAM</Term>、<Term def="提供矩阵、光照、阴影与平台适配的包含文件和宏。">Unity宏</Term>、<Term def="通过Material或MaterialPropertyBlock把运行时参数传给Shader。">C#属性传递</Term>建立对象、阶段、状态和证据之间的联系。
+
+<PsdWritingShadersUnityPipelineLab />
+
+## 第一版权威目录定位
+
+本页一一对应Kyle Halladay《Practical Shader Development: Vertex and Fragment Shaders for Game Developers》第一版第16章 在Unity中编写着色器。Springer/Apress正式目录确认2019年第一版、18章、附录代码、ISBN 978-1-4842-4456-2和XXI+381页；清华大学出版社官方样章确认2021中文第一版《Shader开发实战》、ISBN 9787302583349及对应中文目录。
+
+### 原书小节覆盖
+
+1. 16.1 Unity中的Shader和材质
+2. 16.2 ShaderLab简介
+3. 16.3 纯色Shader
+4. 16.4 移植Blinn-Phong
+5. 16.5 半透明Shader
+6. 16.6 多光源
+7. 16.7 C#传数据
+8. 16.8 ShaderGraph和未来
+
+### 核心对象
+
+1. **Unity Material**：保存Shader与属性值并参与渲染提交的Unity资源。
+2. **ShaderLab**：声明Properties、SubShader、Pass、标签和状态的Unity语言。
+3. **CGPROGRAM**：在旧版内置管线Pass中包裹Cg或HLSL程序的代码块。
+4. **Unity宏**：提供矩阵、光照、阴影与平台适配的包含文件和宏。
+5. **C#属性传递**：通过Material或MaterialPropertyBlock把运行时参数传给Shader。
+
+## 数据流与公式
+
+本章不是重新发明前15章，而是把GLSL概念映射到Unity：顶点与片元入口改为HLSL语义，ShaderLab管理Pass和状态，内置宏提供矩阵与灯光。移植Blinn-Phong时逐项核对空间、混合和多光源；共享材质实例与PropertyBlock语义要区分。 前15章以OpenGL 4.1、GLSL和openFrameworks为实验环境；第16至18章再映射到Unity、UE4与Godot。所有代码都要把可编程Shader与应用侧资源绑定、Draw状态、深度和混合分开记录。
+
+$$
+GLSL\ concept\leftrightarrow Unity\ binding
+$$
+
+$$
+p_c=UnityObjectToClipPos(p)
+$$
+
+$$
+C=ambient+diffuse+specular
+$$
+
+$$
+draws=passes\times objects
+$$
+
+公式中的位置、方向、颜色、深度和时间必须标注空间、范围与单位。片元输出只是候选颜色，最终结果还经过裁剪、深度、模板、混合与颜色编码。
+
+## 最小实现
+
+```glsl
+Shader "Custom/Ported" { SubShader { Pass { CGPROGRAM
+#pragma vertex vert
+#pragma fragment frag
+ENDCG } } }
+```
+
+实现顺序固定为常量输出、输入可视化、核心公式、应用状态和优化。先验证Shader编译与链接，再检查属性位置、uniform、纹理单元和Framebuffer；只有画面与状态都正确后才比较性能。
+
+<PsdWritingShadersUnityCompareLab />
+
+## 应用与引擎侧契约
+
+```cpp
+shader.begin();
+shader.setUniform1f("time", elapsedSeconds);
+shader.setUniformTexture("mainTex", texture, 0);
+mesh.draw();
+shader.end();
+```
+
+应用侧保存网格布局、索引、纹理格式、采样器、矩阵顺序、混合与深度状态。引擎章节则把同一概念映射到Material、节点图或ShaderMaterial；语法可以变化，输入空间与合成语义不能靠猜。
+
+## 边界、精度与性能
+
+测试零向量、退化UV、负缩放、近远裁剪面、透明交叉、纹理边缘、大世界坐标、长时间运行和高过度绘制。性能实验固定硬件、分辨率、VSync与场景，先判断CPU还是GPU受限，再用捕获定位具体Draw和Shader阶段。
+
+```text
+renderer: OpenGL 4.1 / named engine and version
+scene: fixed mesh, camera, lights, textures
+state: depth, cull, blend, target
+evidence: image diff, frame capture, CPU/GPU ms
+counterexample: smallest reproducible failure
+```
+
+<PsdWritingShadersUnityEvidenceLab />
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定输入和状态"><PsdWritingShadersUnityPipelineLab /></Step>
+  <Step title="逐阶段实现与比较"><PsdWritingShadersUnityCompareLab /></Step>
+  <Step title="捕获画面和性能"><PsdWritingShadersUnityEvidenceLab /></Step>
+</Stepper>
+
+1. 用最小网格与常量颜色验证Shader编译、链接和Draw状态。
+2. 可视化位置、UV、法线、深度或光照项，确认范围和空间。
+3. 打开本章核心效果并保存基线与候选画面。
+4. 构造边界与失败输入，用GPU捕获和计时解释差异。
+
+## 验收证书
+
+证书包含源码与编译版本、应用绑定、资源哈希、状态、参考图、GPU事件、CPU与GPU帧时间和失败反例。把原书GLSL代码机械替换语法，未映射Unity坐标、纹理方向和多光源Pass。 修复后必须重放同一输入并说明差异来自哪个阶段。
+
+## 常见误区
+
+<Callout type="trap" title="把语法当原理">把原书GLSL代码机械替换语法，未映射Unity坐标、纹理方向和多光源Pass。</Callout>
+
+<Callout type="trap" title="只看最终画面">画面相似不证明空间、深度、混合和性能等价。必须保存中间调试视图、固定状态和GPU捕获。</Callout>
+
+## 本章回顾
+
+本页覆盖Unity Material、ShaderLab、CGPROGRAM、Unity宏、C#属性传递。掌握标准是能画出数据流，写出最小实现，说明应用或引擎状态，再用边界、精度与性能证据复现结论。
+
+<Exercises>
+**问题1：Unity Material与ShaderLab如何连接？**
+<Answer>保存Shader与属性值并参与渲染提交的Unity资源。 声明Properties、SubShader、Pass、标签和状态的Unity语言。 回答时标注阶段和输入来源。</Answer>
+
+**问题2：怎样调试CGPROGRAM？**
+<Answer>先输出常量，再把相关中间值映射为颜色；随后核对应用绑定、固定状态和GPU事件。</Answer>
+
+**问题3：如何验收C#属性传递？**
+<Answer>通过Material或MaterialPropertyBlock把运行时参数传给Shader。 同时保存正常例、边界例、失败反例和CPU/GPU计时。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="Unity Material" definition="保存Shader与属性值并参与渲染提交的Unity资源。" />
+  <GlossaryItem term="ShaderLab" definition="声明Properties、SubShader、Pass、标签和状态的Unity语言。" />
+  <GlossaryItem term="CGPROGRAM" definition="在旧版内置管线Pass中包裹Cg或HLSL程序的代码块。" />
+  <GlossaryItem term="Unity宏" definition="提供矩阵、光照、阴影与平台适配的包含文件和宏。" />
+  <GlossaryItem term="C#属性传递" definition="通过Material或MaterialPropertyBlock把运行时参数传给Shader。" />
+  <GlossaryItem term="可复现实验" definition="固定源码、应用状态、资源、硬件和捕获后可再次得到同一结论的实验。" />
+</Glossary>
+
+<Attribution adaptedFrom="Kyle Halladay · Practical Shader Development · 第16章 在Unity中编写着色器" adaptedUrl="https://link.springer.com/book/10.1007/978-1-4842-4457-9" />

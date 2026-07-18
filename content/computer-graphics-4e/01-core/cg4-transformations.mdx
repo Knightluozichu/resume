@@ -1,109 +1,327 @@
 ---
-title: "几何变换与坐标系"
+title: "二维/三维变换、观察与层次建模"
 type: B
 section: "计算机图形学与渲染"
 order: 3
-description: "MVP矩阵变换链与坐标空间转换"
+description: "从齐次点/向量和组合顺序，到窗口视口、相机逆变换、投影、法线与场景层次"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://www.pearson.com/en-gb/subject-catalog/p/computer-graphics-with-open-gl-pearson-new-international-edition/P200000004424/9781292037196"
 draft: false
 ---
 
-import { Cg4TransformationsDiagram } from "@/components/mdx/computer-graphics-4e/diagrams/cg4-transformations";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  Cg4TransformationsDiagram,
+  Cg4TransformRolesDiagram,
+} from "@/components/mdx/computer-graphics-4e/diagrams/cg4-transformations";
+import { Cg4StepFlowDiagram } from "@/components/mdx/computer-graphics-4e/diagrams/cg4-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 理解模型、世界、视图、裁剪四个坐标空间
-- 掌握齐次坐标与4x4变换矩阵
-- 区分透视投影与正交投影
-- 能推导View矩阵的构造过程
+
+- 能描述二维/三维点、方向、法线、坐标系和层次节点各自的变换规则
+- 能实现 window→viewport、TRS/pivot、look-at view、orthographic/perspective projection 的数值测试
+- 能推导相机 world transform 的逆和非均匀缩放下的 normal inverse-transpose
+- 能比较向量约定、矩阵组合顺序与内存行/列主序，避免把三者混为一谈
+
 </Objectives>
 
-## 直觉引入
+## 变换是在两个坐标系之间陈述同一对象
 
-几何变换就像用GPS导航——同一个地点在不同坐标系中有不同地址。模型空间是物体局部坐标，世界空间是全局地图坐标，视图空间是以摄像机为原点的坐标，裁剪空间是投影后的坐标。MVP矩阵就是地址转换器。
+**Two-Dimensional Geometric Transformations / 二维几何变换**与 **Three-Dimensional Geometric Transformations / 三维几何变换**的共同核心不是记矩阵，而是明确源空间、目标空间、对象类型和组合顺序。同一个空间位置在局部、世界和相机坐标中有不同数值，但代表同一几何点。
 
-## 概念讲解
+<Term def="用额外分量把仿射点、方向和投影统一到线性矩阵框架；有限点通常 w=1，方向 w=0">齐次坐标</Term>让平移成为矩阵乘法：
 
-<Term def="用(x,y,z,w)表示3D点，w=1是点w=0是方向">齐次坐标</Term><Term def="将顶点从模型局部空间变换到世界空间的矩阵">模型矩阵</Term><Term def="将世界空间变换到摄像机空间的矩阵">视图矩阵</Term><Term def="将3D摄像机空间投影到2D裁剪空间的矩阵">投影矩阵</Term>
+$$
+\begin{bmatrix}x'\\y'\\z'\\1\end{bmatrix}=
+\begin{bmatrix}
+R_{3\times3}&\mathbf t\\
+\mathbf0^T&1
+\end{bmatrix}
+\begin{bmatrix}x\\y\\z\\1\end{bmatrix}.
+$$
 
-### MVP变换链
-v_clip = P * V * M * v_local，矩阵从右向左作用。
-
-### 齐次坐标
-4D向量(x,y,z,w)统一表示点和方向，使平移可用矩阵乘法。
-
-### View矩阵推导
-1) f=normalize(target-eye) 2) r=normalize(cross(f,up)) 3) u=cross(r,f) 4) View=[r u -f行; 平移分量]。先平移-eye再做基变换。
-
-## 交互Demo
-
-> 猜一猜：为什么矩阵乘法顺序是P*V*M而不是M*V*P？
+方向使用 w=0，因此平移列不生效。齐次向量还具有尺度等价：$p_h$与 $kp_h$（$k\ne0$）表示同一投影点，最终通过除 w 归一化。
 
 <Cg4TransformationsDiagram />
 
-<Stepper>
-<Step title="第一步：模型变换">
-Model=T(位置)*R(旋转)*S(缩放)，将物体从局部坐标放到世界。
-</Step>
-<Step title="第二步：视图变换">
-View矩阵将摄像机移到原点看向-Z，本质是摄像机变换的逆矩阵。
-</Step>
-<Step title="第三步：投影变换">
-透视投影产生近大远小（w与z相关），正交投影保持平行线（w恒为1）。
-</Step>
-</Stepper>
+## 向量约定、乘法顺序与内存布局是三件事
 
-## 代码对照
+本章采用**列向量**：$p'=Mp$。因此组合 $p'=TRSp$表示先 scale、再 rotate、再 translate。若使用行向量 $p'=pM$，书写顺序相反，但几何可以完全等价。
+
+Row-major/column-major 主要描述矩阵元素在内存中的排列；它不自动决定向量在左还是右、矩阵语义或函数组合顺序。OpenGL 接口的数组解释、GLSL 列向量习惯、GLM 默认存储/运算约定需要分别核对，不能用一句“OpenGL 是列主序”推导所有行为。
+
+矩阵通常不可交换：
+
+$$
+TR\ne RT.
+$$
+
+“绕自身中心旋转”若模型 pivot 不在原点，需要把 pivot 移到原点、旋转、再移回：
+
+$$
+M=T(\mathbf p)R\,T(-\mathbf p).
+$$
 
 ```cpp
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-glm::mat4 model = glm::translate(glm::mat4(1.0f), glm::vec3(0,0,-3));
-model = glm::rotate(model, glm::radians(45.0f), glm::vec3(0,1,0));
-glm::mat4 view = glm::lookAt(glm::vec3(0,0,5), glm::vec3(0,0,0), glm::vec3(0,1,0));
-glm::mat4 proj = glm::perspective(glm::radians(45.0f), 800.0f/600.0f, 0.1f, 100.0f);
-glm::mat4 mvp = proj * view * model;
+Mat4 rotateAround(Vec3 pivot, Quat rotation) {
+  return translate(pivot) * mat4(rotation) * translate(-pivot);
+}
+
+Vec4 pointWorld = model * Vec4(pointLocal, 1.0f);
+Vec4 directionWorld = model * Vec4(directionLocal, 0.0f);
 ```
 
-GLM矩阵是列主序（与OpenGL一致），lookAt自动完成View矩阵推导。乘法顺序P*V*M从右向左作用。
+若 model 含缩放，方向长度会改变；若只需要方向，应取线性部分并按用途归一化。
+
+## 二维观察：Window、Viewport 与裁剪
+
+**Two-Dimensional Viewing / 二维观察**把世界或用户定义 window 映射到屏幕 viewport。对 window $[x_{w0},x_{w1}]$ 和 viewport $[x_{v0},x_{v1}]$：
+
+$$
+x_v=x_{v0}+(x_w-x_{w0})\frac{x_{v1}-x_{v0}}{x_{w1}-x_{w0}}.
+$$
+
+y 同理。若两个矩形 aspect ratio 不同，图形会被非均匀拉伸；可选择 letterbox/pillarbox、裁剪或改变观察范围。Window clipping 应在映射前定义保留区，viewport/scissor 则限制最终屏幕区域，二者语义不同。
+
+```cpp
+Vec2 windowToViewport(Vec2 p, Rect window, Rect viewport) {
+  Vec2 normalized = {
+    (p.x - window.min.x) / window.width(),
+    (p.y - window.min.y) / window.height(),
+  };
+  return viewport.min + normalized * viewport.size();
+}
+```
+
+当 window width/height 为 0 时映射未定义，必须拒绝；屏幕 y 轴向下的 UI 与数学 y 轴向上的场景还需明确翻转位置。
+
+## 三维旋转与刚体变换
+
+绕单位轴 $\hat u$旋转角 $\theta$可用 Rodrigues 公式：
+
+$$
+R\mathbf v=\mathbf v\cos\theta+
+(\hat u\times\mathbf v)\sin\theta+
+\hat u(\hat u\cdot\mathbf v)(1-\cos\theta).
+$$
+
+Rotation matrix 应近似正交且 determinant 为 +1。Euler angles 依赖旋转轴顺序并可能出现 gimbal lock；quaternion 适合组合和插值，但仍需归一化，并注意 $q$与 $-q$代表同一旋转。
+
+刚体变换保持长度和角度；一般 affine transform 可含非均匀 scale/shear，不能再用转置代替逆矩阵。
+
+## View Matrix 是相机姿态的逆
+
+**Three-Dimensional Viewing / 三维观察**先建立相机 frame，再把世界坐标表达成相机坐标。若 camera-to-world 为：
+
+$$
+C=\begin{bmatrix}R&\mathbf e\\0&1\end{bmatrix},
+$$
+
+其中 R 为正交相机基、e 为世界位置，则 world-to-view：
+
+$$
+V=C^{-1}=\begin{bmatrix}R^T&-R^T\mathbf e\\0&1\end{bmatrix}.
+$$
+
+<Term def="把世界坐标表达为相机局部坐标的矩阵，等于相机 frame 的 world transform 的逆">观察矩阵</Term>不是“把相机对象本身移到原点”的副作用，而是坐标基变换。
+
+```cpp
+Mat4 makeView(Vec3 eye, Vec3 target, Vec3 upHint) {
+  Vec3 forward = normalize(target - eye);
+  if (length2(cross(forward, upHint)) < 1e-10f) {
+    throw InvalidCamera("up is parallel to view direction");
+  }
+  Vec3 right = normalize(cross(forward, upHint));
+  Vec3 up = cross(right, forward);
+  return inverseRigidFrame(right, up, -forward, eye); // 右手、相机看 -Z 的约定
+}
+```
+
+Cross product 顺序、forward 是 +Z 还是 -Z 取决于 handedness 和 API convention。不要只背 `cross(f, up)`；用测试验证 eye 映射到原点、target 映射到相机前方、基向量正交。
+
+## Projection 产出 Clip Coordinates
+
+<Term def="把 view-space 观察体映射到 homogeneous clip volume 的矩阵；透视投影让 w 与深度相关，正交投影保持平行">投影矩阵</Term>输出 clip coordinates，不直接输出屏幕像素。
+
+Orthographic projection 是 affine map；perspective projection通过 $w_c$使除 w 后出现近大远小。在右手、相机朝 -Z 的常见约定中：
+
+$$
+x_{ndc}=\frac{x_v}{-z_v\tan(fov_y/2)\,aspect},\qquad
+y_{ndc}=\frac{y_v}{-z_v\tan(fov_y/2)}.
+$$
+
+Near/far 必须满足目标矩阵约定；near 不能为 0。Depth clip/NDC range 在 OpenGL 与其他 API、GLM 编译配置中可能不同。错误混用会导致裁剪和深度重建失配。
+
+标准透视 depth 精度随距离非线性分布，near plane 过小会严重浪费远处精度。Reverse-Z 和 floating-point depth 可改善精度，但需要配套 projection、clear、compare 和 depth range，不能只翻转 compare op。
+
+```cpp
+struct CameraMatrices {
+  Mat4 view;
+  Mat4 projection;
+  Mat4 viewProjection;
+};
+
+CameraMatrices buildCamera(const Camera& c, const ClipConvention& convention) {
+  Mat4 view = makeView(c.eye, c.target, c.up);
+  Mat4 projection = perspective(
+      c.verticalFov, c.aspect, c.nearPlane, c.farPlane, convention);
+  return {view, projection, projection * view};
+}
+```
+
+## 法线不是普通方向
+
+<Term def="保持与变换后切向量正交的协向量；一般仿射变换下使用线性部分的 inverse-transpose">法线变换</Term>在 model 线性部分 A 下为：
+
+$$
+\mathbf n'=(A^{-1})^T\mathbf n.
+$$
+
+推导来自切向量 $\mathbf n^T\mathbf t=0$：要求 $\mathbf n'^T(A\mathbf t)=0$，所以取 inverse-transpose。只有纯旋转或统一缩放后归一化等特殊情况，直接乘 A 才等价。
+
+<Cg4TransformRolesDiagram />
+
+```cpp
+Mat3 normalMatrix = transpose(inverse(mat3(model)));
+Vec3 worldNormal = normalize(normalMatrix * localNormal);
+```
+
+若 A singular（某轴 scale=0），逆不存在；引擎应拒绝用于表面着色的退化变换或定义专门处理。
+
+## 层次建模是坐标 frame 的树
+
+**Hierarchical Modeling / 层次建模**把每个节点保存为相对父节点的 local transform。对于列向量约定：
+
+$$
+W_{child}=W_{parent}L_{child}.
+$$
+
+机械臂肩、肘、腕各在自己的 pivot frame 中旋转，父节点变化自动传递给后代。Mesh geometry 通常绑定在节点 local frame；动画更新 local parameters，遍历再生成 world matrices。
+
+```cpp
+void updateWorld(Node& node, const Mat4& parentWorld) {
+  node.world = parentWorld * node.local;
+  for (Node* child : node.children) updateWorld(*child, node.world);
+}
+```
+
+需防止 scene graph cycle；reparent 时若要保持 world pose，应计算新 local：$L'=(W'_{parent})^{-1}W_{old}$。缓存 world transform 需要 dirty propagation 或版本号，否则父变更后子节点会使用旧矩阵。
+
+## 三步建立变换测试台
+
+<Stepper>
+<Step title="第一步：冻结约定">
+
+写明列/行向量、handedness、camera forward、clip/depth range、viewport origin 与矩阵存储；建立点/方向单元测试。
+
+<Cg4StepFlowDiagram
+  caption="约定是矩阵测试的输入，不能等画面错了再猜。"
+  stage={1}
+  stages={["Conventions：vectors、handedness、clip/depth、viewport、storage"]}
+/>
+
+</Step>
+<Step title="第二步：验证局部算子">
+
+分别测试 translation/rotation/scale/pivot、window→viewport、camera inverse、projection planes 与 normal matrix。
+
+<Cg4StepFlowDiagram
+  caption="每个算子先用已知点、方向、切线和法线验证，再组合。"
+  stage={2}
+  stages={[
+    "Conventions：vectors、handedness、clip/depth、viewport、storage",
+    "Operators：TRS/pivot、view inverse、projection、normal inverse-transpose",
+  ]}
+/>
+
+</Step>
+<Step title="第三步：验证层次链">
+
+构造机械臂和相机场景，检查 parent×local、reparent 保持 pose、clip/NDC/viewport 快照与 CPU/GPU 结果。
+
+<Cg4StepFlowDiagram
+  caption="组合验证保存每个空间的中间值，定位第一处变换偏差。"
+  stage={3}
+  stages={[
+    "Conventions：vectors、handedness、clip/depth、viewport、storage",
+    "Operators：TRS/pivot、view inverse、projection、normal inverse-transpose",
+    "Composition：hierarchy、camera、clip/NDC/screen snapshots、GPU compare",
+  ]}
+/>
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** 矩阵乘法顺序写反。
-**原因 →** 矩阵乘法直觉上从左到右读。
-**修法 →** 矩阵乘法不可交换，v_clip=P*V*M*v表示先M再V再P（从右向左作用）。记忆：靠近顶点的矩阵先作用。
+**现象 →** 矩阵传入 GPU 后结果像转置错误，开发者不断切换 transpose flag。
+**原因 →** 把内存 row/column-major、向量在左/右和组合顺序混成一个概念。
+**修法 →** 分别记录三项约定，用一个非对称已知矩阵和已知点测试 CPU、上传和 shader 结果，不靠视觉试错。
 </Callout>
 
 <Callout type="trap">
-**现象 →** 混淆行主序和列主序。
-**原因 →** 数学课本用行主序，OpenGL用列主序。
-**修法 →** OpenGL/GLM使用列主序。如数学推导用行主序，传入前需转置或使用transpose参数。
+**现象 →** 模型非均匀缩放后位置正确但光照歪斜。
+**原因 →** 法线直接乘 model 线性部分，变换后不再与切面正交。
+**修法 →** 使用 inverse-transpose normal matrix并归一化；对 singular scale 明确拒绝或重建几何法线。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 相机接近正上方看时画面突然翻转或出现 NaN。
+**原因 →** upHint 与 view direction 平行，cross product 长度接近 0，无法构造相机基。
+**修法 →** 检测退化，选择稳定备用 up 或约束相机；用连续 orientation/quaternion避免临界跳变。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：为什么用4x4矩阵而不是3x3？
+
+1. **组合顺序：** 列向量约定下，点 (1,0,0) 先绕原点旋转 90°，再平移 (2,0,0)。矩阵写法和结果是什么？
 
 <Answer>
-3x3只能表示线性变换（旋转、缩放），无法表示平移。通过增加第4维齐次坐标，用4x4矩阵第4列实现平移，使所有仿射变换统一为矩阵乘法且可连乘合并。
+写作 $p'=T(2,0,0)R_z(90°)p$。旋转先得到 (0,1,0)，平移后为 (2,1,0)。若写成 RT，则先把点平移到 (3,0,0)，再旋转到 (0,3,0)，说明矩阵不可交换。
 </Answer>
 
-**问题**：给定eye=(0,0,5),target=(0,0,0),up=(0,1,0)，z=0顶点变换后位置？
+2. **观察矩阵：** 相机 world rotation 为 R、位置 e。为什么 view 平移不是简单的 -e？
 
 <Answer>
-f=(0,0,-1)，r=(1,0,0)，u=(0,1,0)。View先平移-eye=(0,0,-5)再做基变换（标准基不变）。z=0顶点平移到z=-5，变换后(0,0,-5)。
+View 是 camera world matrix 的逆：$V=[R^T,-R^Te;0,1]$。世界位置先减 e，再表达进相机基；矩阵形式的平移列因此是 $-R^Te$。只有 R 为 identity 时才等于简单 -e。
 </Answer>
+
+3. **法线：** 模型沿 x 缩放 2、y 缩放 1。局部切线 t=(1,1,0)，法线 n=(1,-1,0)。直接乘 A 与 inverse-transpose 哪个保持正交？
+
+<Answer>
+$A=diag(2,1,1)$，变换切线 $t'=(2,1,0)$。直接乘法线得 (2,-1,0)，点积为 3，不正交。$(A^{-1})^Tn=(0.5,-1,0)$，与 t' 点积 $1-1=0$，保持正交；随后归一化用于光照。
+</Answer>
+
 </Exercises>
 
+## 本章回顾
+
+- 二维/三维 transform 与 viewing 都先声明源/目标 frame、对象类型和约定；
+- View 是 camera world frame 的逆，projection 输出 clip coordinates，除 w 后才是 NDC；
+- 内存布局不等于向量乘法约定，矩阵组合顺序必须用已知数值测试；
+- Normal 使用 inverse-transpose，层次节点使用 parentWorld×local 并管理 dirty/cycle/reparent。
+
+## 术语表
+
 <Glossary>
-<GlossaryItem term="齐次坐标">用(x,y,z,w)表示3D点，w=1是点w=0是方向，使平移可用矩阵乘法。</GlossaryItem>
-<GlossaryItem term="模型矩阵">将顶点从模型局部空间变换到世界空间的矩阵。</GlossaryItem>
-<GlossaryItem term="视图矩阵">将世界空间变换到摄像机空间的矩阵，是摄像机变换的逆。</GlossaryItem>
-<GlossaryItem term="投影矩阵">将3D摄像机空间投影到2D裁剪空间的矩阵，分透视和正交。</GlossaryItem>
+<GlossaryItem term="齐次坐标">用额外分量统一有限点、方向、仿射变换和投影的表示。</GlossaryItem>
+<GlossaryItem term="观察矩阵">把世界坐标表达为相机局部坐标的矩阵，是相机 world frame 的逆。</GlossaryItem>
+<GlossaryItem term="投影矩阵">把 view-space 观察体映射到 homogeneous clip volume 的矩阵。</GlossaryItem>
+<GlossaryItem term="法线变换">以线性部分 inverse-transpose 保持法线与变换后切面正交的规则。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="计算机图形学第4版" adaptedUrl="" />
+<Attribution adaptedFrom="Computer Graphics with OpenGL, 4th Edition" adaptedUrl="https://www.pearson.com/en-gb/subject-catalog/p/computer-graphics-with-open-gl-pearson-new-international-edition/P200000004424/9781292037196" />

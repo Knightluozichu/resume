@@ -1,88 +1,30 @@
-/**
- * <GilImportanceSamplingDiagram>: 重要性采样原理
- *
- * 均匀采样 -> BRDF采样 -> 光源采样 -> MIS组合
- * Server Component, viewBox 720x400, CSS variables.
- */
+import type { ReactNode } from "react";
 
-const primary = "var(--text-primary)";
-const secondary = "var(--text-secondary)";
-const border = "var(--border)";
-const elevated = "var(--bg-elevated)";
-const accent = "var(--accent)";
-const success = "var(--success)";
-const warning = "var(--warning)";
-const danger = "var(--danger)";
+function Frame({ caption, children }: { caption: string; children: ReactNode }) {
+  return <figure className="mdx-figure not-prose mx-auto my-6"><div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div><figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption></figure>;
+}
 
 export function GilImportanceSamplingDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox="0 0 720 400" role="img" aria-label="重要性采样：让采样分布匹配被积函数，MIS组合BRDF采样和光源采样取最优。" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x={360} y={30} textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>{`
-            重要性采样原理
-          `}</text>
-          <text x={360} y={50} textAnchor="middle" fontSize="11" fill={secondary}>{`
-            均匀采样 -> BRDF采样 -> 光源采样 -> MIS组合
-          `}</text>
-          <g>
-            <rect x={36} y={70} width={648} height={69} rx="8" fill={accent} fillOpacity="0.06" stroke={accent} strokeWidth="1.2" strokeOpacity="0.4" />
-            <text x={52} y={92} fontSize="13" fontWeight="700" fill={accent}>{`数学原理`}</text>
-            <rect x={158} y={92} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={228} y={112} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`p 正比 |f|`}</text>
-            <rect x={310} y={92} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={380} y={112} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`方差最小`}</text>
-            <line x1={298} y1={108} x2={310} y2={108} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-            <rect x={462} y={92} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={532} y={112} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`Cauchy-Schwarz`}</text>
-            <line x1={450} y1={108} x2={462} y2={108} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          </g>
-          <g>
-            <rect x={36} y={147} width={648} height={69} rx="8" fill={success} fillOpacity="0.06" stroke={success} strokeWidth="1.2" strokeOpacity="0.4" />
-            <text x={52} y={169} fontSize="13" fontWeight="700" fill={success}>{`BRDF采样`}</text>
-            <rect x={158} y={169} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={228} y={190} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`按反射分布`}</text>
-            <rect x={310} y={169} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={380} y={190} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`光泽表面高效`}</text>
-            <line x1={298} y1={186} x2={310} y2={186} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-            <rect x={462} y={169} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={532} y={190} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`小光源噪声大`}</text>
-            <line x1={450} y1={186} x2={462} y2={186} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          </g>
-          <g>
-            <rect x={36} y={224} width={648} height={69} rx="8" fill={warning} fillOpacity="0.06" stroke={warning} strokeWidth="1.2" strokeOpacity="0.4" />
-            <text x={52} y={246} fontSize="13" fontWeight="700" fill={warning}>{`光源采样`}</text>
-            <rect x={158} y={246} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={228} y={266} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`按光源面积`}</text>
-            <rect x={310} y={246} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={380} y={266} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`直接光高效`}</text>
-            <line x1={298} y1={262} x2={310} y2={262} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-            <rect x={462} y={246} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={532} y={266} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`光泽面可能浪费`}</text>
-            <line x1={450} y1={262} x2={462} y2={262} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          </g>
-          <g>
-            <rect x={36} y={301} width={648} height={69} rx="8" fill={danger} fillOpacity="0.06" stroke={danger} strokeWidth="1.2" strokeOpacity="0.4" />
-            <text x={52} y={323} fontSize="13" fontWeight="700" fill={danger}>{`MIS组合`}</text>
-            <rect x={158} y={323} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={228} y={344} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`balance heuristic`}</text>
-            <rect x={310} y={323} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={380} y={344} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`取各自最优`}</text>
-            <line x1={298} y1={340} x2={310} y2={340} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-            <rect x={462} y={323} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={532} y={344} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`方差可控`}</text>
-            <line x1={450} y1={340} x2={462} y2={340} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          </g>
-          <defs>
-            <marker id="gilImportanceSampling-arrow" markerWidth="8" markerHeight="8" refX="4" refY="3" orient="auto">
-              <path d="M0 0 L6 3 L0 6 z" fill="var(--text-secondary)" />
-            </marker>
-          </defs>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        重要性采样：p∝|f|最优，BRDF和光源采样各有优劣，MIS组合保证鲁棒。
-      </figcaption>
-    </figure>
-  );
+  const stages = [
+    ["Domain", "x ∈ D", "被积域与测度"],
+    ["Sampler", "X ~ p(x)", "样本与 PDF"],
+    ["Weight", "f(X) / p(X)", "无偏贡献"],
+    ["Reduce", "Σ / N", "估计值与误差"],
+  ] as const;
+  return <Frame caption="Monte Carlo 的正确性来自样本分布和 1/p 权重配对；采样位置本身不等于估计器。"><div role="img" aria-label="蒙特卡洛积分从定义域采样到加权平均的估计器结构" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{stages.map(([title, formula, body], i) => <section key={title} className="min-h-32 border border-border bg-bg/40 p-3"><span className="text-xs font-bold text-accent">0{i + 1}</span><strong className="ml-2 text-sm text-primary">{title}</strong><code className="mt-3 block border-l-2 border-success pl-2 text-sm text-success">{formula}</code><p className="mb-0 mt-3 text-xs text-secondary">{body}</p></section>)}</div></Frame>;
+}
+
+export function GilSamplingTransformDiagram() {
+  return <Frame caption="反演法把均匀随机数经 CDF 变成目标变量；拒绝法则在容易采样的包络下接受或丢弃候选点。"><div role="img" aria-label="反演采样和拒绝采样的生成流程比较" className="grid gap-4 md:grid-cols-2"><section className="border border-border bg-bg/40 p-4"><strong className="text-sm text-primary">Inverse CDF</strong><div className="mt-4 grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-2 text-center text-xs"><code className="border border-border bg-elevated p-2 text-accent">u~U[0,1)</code><span>→</span><code className="border border-border bg-elevated p-2 text-warning">F⁻¹(u)</code><span>→</span><code className="border border-border bg-elevated p-2 text-success">x~p</code></div><p className="mb-0 mt-4 text-xs leading-5 text-secondary">适合 CDF 可积且可逆；分段离散分布可用 table / binary search。</p></section><section className="border border-border bg-bg/40 p-4"><strong className="text-sm text-primary">Rejection sampling</strong><div className="mt-4 grid grid-cols-[1fr_auto_1fr_auto_1fr] items-center gap-2 text-center text-xs"><code className="border border-border bg-elevated p-2 text-accent">x~q</code><span>→</span><code className="border border-border bg-elevated p-2 text-warning">u≤p/Mq?</code><span>→</span><code className="border border-border bg-elevated p-2 text-success">accept</code></div><p className="mb-0 mt-4 text-xs leading-5 text-secondary">不要求反函数，但包络常数 M 过大会使接受率下降。</p></section></div></Frame>;
+}
+
+const tools = [
+  ["Importance", "让 p 跟随 |f|", "降低单样本幅度差"],
+  ["Stratification", "每个子域固定配额", "覆盖低频结构"],
+  ["Quasi-MC", "低差异确定序列", "减少空间空洞/团簇"],
+  ["Russian roulette", "随机终止并补权", "控制路径成本"],
+] as const;
+
+export function GilVarianceToolkitDiagram() {
+  return <Frame caption="方差缩减方法作用于不同原因：分布不匹配、覆盖不均、序列差异和无限递归成本。"><div role="img" aria-label="重要性采样分层低差异序列和俄罗斯轮盘的方差成本矩阵" className="overflow-x-auto"><div className="min-w-[620px] border border-border"><div className="grid grid-cols-[1fr_1.2fr_1.5fr] bg-bg px-3 py-2 text-xs font-bold text-primary"><span>Tool</span><span>操作</span><span>主要修复</span></div>{tools.map(([name, action, target], i) => <div key={name} className={`grid min-h-12 grid-cols-[1fr_1.2fr_1.5fr] items-center gap-3 px-3 py-2 text-xs ${i % 2 ? "bg-bg/40" : "bg-elevated"}`}><strong className="text-accent">{name}</strong><span className="text-primary">{action}</span><span className="text-secondary">{target}</span></div>)}</div></div></Frame>;
 }

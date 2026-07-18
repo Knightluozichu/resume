@@ -1,64 +1,110 @@
-/**
- * <VkgVulkanBasicsDiagram>：Vulkan 基础概念与同步原语
- * 纯静态 SVG，无交互。Server Component。
- */
-export function VkgVulkanBasicsDiagram() {
+const objectLayers = [
+  {
+    label: "Instance",
+    detail: "loader 版本、实例扩展、validation 与 debug messenger",
+    tone: "border-sky-500/45 bg-sky-500/10",
+  },
+  {
+    label: "Physical device",
+    detail: "properties、features、extensions、formats 与 queue families",
+    tone: "border-emerald-500/45 bg-emerald-500/10",
+  },
+  {
+    label: "Logical device",
+    detail: "只启用已查询且路径需要的 feature 与 device extension",
+    tone: "border-amber-500/45 bg-amber-500/10",
+  },
+  {
+    label: "Queues and resources",
+    detail: "queue、memory、buffer/image、pipeline、command 与同步对象",
+    tone: "border-rose-500/45 bg-rose-500/10",
+  },
+] as const;
+
+const syncRows = [
+  ["Pipeline barrier", "命令流内部", "stage/access、layout、ownership", "不能跨 queue submission signal"],
+  ["Binary semaphore", "queue / WSI", "acquire、submit、present 的一次接力", "host 不能直接等待"],
+  ["Timeline semaphore", "queue / 应用进度", "单调 value、跨提交或跨队列依赖", "WSI acquire/present 不使用 timeline"],
+  ["Fence", "queue → host", "host 判断一次提交何时完成", "不建立命令流内的资源屏障"],
+] as const;
+
+function Figure({
+  caption,
+  children,
+}: {
+  caption: string;
+  children: React.ReactNode;
+}) {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox="0 0 720 400" role="img" aria-label="Vulkan 对象层次与同步原语" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x="360" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">对象层次 + 同步：栅栏(CPU⇄GPU) vs 信号量(GPU⇄GPU)</text>
-
-          {/* 对象层次 */}
-          <rect x="40" y="56" width="120" height="44" rx="8" fill="var(--bg)" stroke="var(--accent)" strokeWidth="1.4" />
-          <text x="100" y="84" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent)">Instance</text>
-          <rect x="180" y="56" width="120" height="44" rx="8" fill="var(--bg)" stroke="var(--accent)" strokeWidth="1.4" />
-          <text x="240" y="80" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--accent)">物理设备</text>
-          <text x="240" y="94" textAnchor="middle" fontSize="8.5" fill="var(--text-secondary)">查能力</text>
-          <rect x="320" y="56" width="120" height="44" rx="8" fill="var(--bg)" stroke="var(--accent)" strokeWidth="1.4" />
-          <text x="380" y="80" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--accent)">逻辑设备</text>
-          <text x="380" y="94" textAnchor="middle" fontSize="8.5" fill="var(--text-secondary)">建资源</text>
-          <rect x="460" y="56" width="120" height="44" rx="8" fill="var(--bg)" stroke="var(--accent)" strokeWidth="1.4" />
-          <text x="520" y="80" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--accent)">队列族</text>
-          <text x="520" y="94" textAnchor="middle" fontSize="8.5" fill="var(--text-secondary)">图形/呈现</text>
-          {[160, 300, 440].map((x) => (
-            <line key={x} x1={x} y1="78" x2={x + 12} y2="78" stroke="var(--accent)" strokeWidth="1.2" markerEnd="url(#vbArrow)" />
-          ))}
-
-          {/* 验证层 */}
-          <rect x="610" y="56" width="90" height="44" rx="8" fill="var(--accent)" fillOpacity="0.10" stroke="var(--accent)" strokeWidth="1.2" />
-          <text x="655" y="80" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--accent)">验证层</text>
-          <text x="655" y="94" textAnchor="middle" fontSize="8.5" fill="var(--text-secondary)">调试期</text>
-
-          {/* 同步原语对比 */}
-          <rect x="40" y="130" width="320" height="150" rx="8" fill="var(--bg)" stroke="var(--border)" strokeWidth="1.2" />
-          <text x="200" y="154" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-primary)">栅栏 Fence（CPU 等 GPU）</text>
-          <text x="60" y="180" fontSize="10" fill="var(--text-secondary)">vkQueueSubmit(.., fence)</text>
-          <text x="60" y="200" fontSize="10" fill="var(--text-secondary)">vkWaitForFences → CPU 阻塞</text>
-          <text x="60" y="226" fontSize="10" fill="var(--accent)">用途：等命令缓冲执行完以便重用</text>
-          <text x="60" y="252" fontSize="9.5" fill="var(--text-secondary)">CPU ──等──&gt; GPU 完成</text>
-
-          <rect x="380" y="130" width="300" height="150" rx="8" fill="var(--bg)" stroke="var(--border)" strokeWidth="1.2" />
-          <text x="530" y="154" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-primary)">信号量 Semaphore（GPU 内部）</text>
-          <text x="400" y="180" fontSize="10" fill="var(--text-secondary)">imageAvailable: 取图像→绘制</text>
-          <text x="400" y="200" fontSize="10" fill="var(--text-secondary)">renderFinished: 绘制→呈现</text>
-          <text x="400" y="226" fontSize="10" fill="var(--accent)">用途：串 GPU 内部命令顺序</text>
-          <text x="400" y="252" fontSize="9.5" fill="var(--text-secondary)">GPU 命令 A ──接力──&gt; GPU 命令 B</text>
-
-          {/* 底部 */}
-          <rect x="40" y="300" width="640" height="76" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" />
-          <text x="360" y="322" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">栅栏 = CPU⇄GPU 同步（命令缓冲可重用）；信号量 = GPU⇄GPU 同步（取图→绘→现顺序）</text>
-          <text x="360" y="342" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">验证层开发期开、发布期关；队列族需查 GRAPHICS_BIT + 呈现支持</text>
-          <text x="360" y="360" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">二者不可互换：栅栏不串 GPU 内部顺序，信号量不被 CPU 直接等</text>
-
-          <defs>
-            <marker id="vbArrow" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto">
-              <path d="M0,0 L7,4.5 L0,9 z" fill="var(--accent)" />
-            </marker>
-          </defs>
-        </svg>
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">
+        {children}
       </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">对象层层嵌套，栅栏管 CPU 等 GPU、信号量管 GPU 内部命令顺序</figcaption>
+      <figcaption className="mt-2 text-center text-sm text-secondary">
+        {caption}
+      </figcaption>
     </figure>
+  );
+}
+
+export function VkgVulkanBasicsDiagram() {
+  return (
+    <Figure caption="创建对象之前先形成能力合同；下层对象只能使用上层已协商并启用的能力。">
+      <div role="img" aria-label="Vulkan 对象层级和能力协商关系" className="grid gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-3">
+          <strong className="text-sm text-primary">Vulkan 对象与能力合同</strong>
+          <span className="text-xs text-secondary">query → verify → enable → use</span>
+        </div>
+        <div className="grid gap-3 lg:grid-cols-4">
+          {objectLayers.map((item, index) => (
+            <div key={item.label} className={`min-h-36 rounded-control border p-4 ${item.tone}`}>
+              <div className="mb-3 flex items-center gap-2">
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-bg text-xs font-bold text-primary">
+                  {index + 1}
+                </span>
+                <strong className="text-sm text-primary">{item.label}</strong>
+              </div>
+              <p className="m-0 text-xs leading-5 text-secondary">{item.detail}</p>
+            </div>
+          ))}
+        </div>
+        <div className="grid gap-2 text-xs text-secondary sm:grid-cols-3">
+          <span className="rounded-control border border-border bg-bg/45 p-3">查询到不等于已启用</span>
+          <span className="rounded-control border border-border bg-bg/45 p-3">扩展存在不等于 feature 为 true</span>
+          <span className="rounded-control border border-border bg-bg/45 p-3">验证层无报错不等于同步最优</span>
+        </div>
+      </div>
+    </Figure>
+  );
+}
+
+export function VkgSynchronizationMatrixDiagram() {
+  return (
+    <Figure caption="先判断依赖发生在哪个边界，再选择 barrier、semaphore 或 fence。">
+      <div role="img" aria-label="Vulkan 同步工具选择矩阵" className="overflow-x-auto">
+        <div className="min-w-[720px]">
+          <div className="grid grid-cols-[1.2fr_1fr_2fr_1.7fr] gap-px overflow-hidden rounded-control border border-border bg-border text-xs">
+            {[
+              "工具",
+              "边界",
+              "它建立什么",
+              "不能替代什么",
+            ].map((heading) => (
+              <strong key={heading} className="bg-bg p-3 text-primary">{heading}</strong>
+            ))}
+            {syncRows.flatMap((row) =>
+              row.map((cell, index) => (
+                <span
+                  key={`${row[0]}-${cell}`}
+                  className={`p-3 leading-5 ${index === 0 ? "bg-accent/10 font-semibold text-accent" : "bg-elevated text-secondary"}`}
+                >
+                  {cell}
+                </span>
+              )),
+            )}
+          </div>
+        </div>
+      </div>
+    </Figure>
   );
 }

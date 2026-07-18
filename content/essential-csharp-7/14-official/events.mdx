@@ -1,0 +1,231 @@
+---
+title: "第14章：Events"
+type: C
+section: "Essential C# 7.0 · Functional Building Blocks"
+order: 14
+description: "掌握publish-subscribe、multicast delegate基础、event封装、EventHandler/EventArgs、unsubscribe、异常与生命周期。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-csharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7EventEncapsulationLab, Ec7EventLifecycleLab, Ec7PublishSubscribeLab } from "@/components/mdx/essential-csharp-7/diagrams/events";
+
+<Objectives>
+
+- 能解释publisher、event、multicast invocation list与多个subscribers之间的notification流程
+- 能比较public delegate field、event member、custom accessors与interface event的访问控制
+- 能设计EventHandler/EventArgs payload和subscribe/unsubscribe lifecycle，并验证异常、保活与并发边界
+
+</Objectives>
+
+## 为什么通知需要publisher独占控制
+
+publish-subscribe让publisher只宣布“某事发生”，不知道AuditView、StatusBar或Telemetry的具体实现。subscriber可独立加入/离开。但若publisher公开普通delegate field，外部代码就能清空全部handlers、替换list甚至伪造raise，破坏事件事实的所有权。event在delegate之上增加关键封装：外部只能订阅和退订。
+
+先预测：无subscriber时raise会怎样；三个handlers按什么顺序；第二个throw后第三个是否执行；外部能否`publisher.OrderPlaced = null`；lambda订阅后如何退订；长期publisher如何保活短期subscriber；sender与EventArgs各放什么。随后沿publish、access和lifecycle三条轨迹验证。
+
+<Term def="唯一有权声明事件已发生的对象、触发条件以及每次notification所承诺data的约定。">publisher contract</Term>
+
+## Publish-Subscribe with Multicast Delegates
+
+publisher内部保存multicast delegate invocation list。`+=`按顺序加入handler，`-=`移除匹配的最后一个handler；raise时同步按list顺序调用。没有handlers时delegate为null，使用null-conditional调用可安全no-op。
+
+<Term def="publisher当前保存的ordered handler entries，以及每次raise所使用的subscriber集合。">subscription list</Term>
+
+```csharp
+public sealed class OrderService
+{
+    public event Action<int> OrderPlaced;
+
+    public void Place(int orderId)
+    {
+        // Persist order first; only publisher decides when the fact is true.
+        OrderPlaced?.Invoke(orderId);
+    }
+}
+
+var service = new OrderService();
+service.OrderPlaced += id => Console.WriteLine($"audit {id}");
+service.OrderPlaced += id => Console.WriteLine($"status {id}");
+service.Place(42);
+```
+
+notification不是command response aggregation。publisher通常不依赖subscriber return value，标准events使用void handlers。若handler抛exception，默认multicast invocation停止，后续handlers不执行且exception回到publisher；需要隔离时publisher必须定义逐handler policy，但这会改变普通event预期，应谨慎。
+
+<Stepper>
+  <Step title="订阅或退订三个observers">
+    <Ec7PublishSubscribeLab />
+  </Step>
+  <Step title="由publisher raise一次事实">
+    只有OrderService决定OrderPlaced何时成立，handlers按subscription顺序同步执行。
+  </Step>
+  <Step title="核对empty与failure behavior">
+    空list no-op；默认某handler throw会停止后续calls，不能假设自动隔离。
+  </Step>
+</Stepper>
+
+## event versus Public Delegate
+
+public delegate field允许consumer读取invocation list、整体assignment和invoke。event member在declaring type外只允许`+=`/`-=`；外部不能读取、replace或raise。declaring type内部可像delegate一样检查/调用backing event。
+
+<Term def="event把delegate的外部权限限制为add/remove，并将read、assignment与raise保留给declaring publisher。">event encapsulation</Term>
+
+```csharp
+public sealed class UnsafePublisher
+{
+    public Action Changed; // consumers can replace or invoke it
+}
+
+public sealed class SafePublisher
+{
+    public event Action Changed;
+    public void Update() => Changed?.Invoke();
+}
+```
+
+event也可声明custom add/remove accessors，把handlers转发、锁保护或存入自定义structure。accessors必须保持对称并明确定义duplicate subscription。interface可声明event add/remove contract，implementation仍拥有raise decision。
+
+<Stepper>
+  <Step title="切换delegate、event、custom与interface surface">
+    <Ec7EventEncapsulationLab />
+  </Step>
+  <Step title="从outside code检查权限">
+    event consumers只能add/remove；不能清空别人的handlers或伪造notification。
+  </Step>
+  <Step title="确认publisher ownership">
+    declaring type控制raise与payload；custom accessors只改变storage/policy，不转移事实所有权。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="event只是给delegate换了一个更语义化的名字">
+event改变可访问操作：外部只能订阅/退订，不能读取、replace或invoke。这个访问边界正是publisher能够保护事件真实性的原因。
+</Callout>
+
+## Standard EventHandler and EventArgs Pattern
+
+.NET标准event常使用`EventHandler`或generic `EventHandler<TEventArgs>`。第一个parameter `sender`是raise的publisher object，第二个携带event-specific immutable data。无额外data用`EventArgs.Empty`；有data定义以EventArgs结尾的class。
+
+<Term def="一次notification携带的immutable事实快照，包含subscriber处理该事件所需而非查询mutable publisher的data。">event payload</Term>
+
+```csharp
+public sealed class OrderPlacedEventArgs : EventArgs
+{
+    public OrderPlacedEventArgs(int orderId, decimal total)
+    {
+        OrderId = orderId;
+        Total = total;
+    }
+
+    public int OrderId { get; }
+    public decimal Total { get; }
+}
+
+public sealed class OrderService
+{
+    public event EventHandler<OrderPlacedEventArgs> OrderPlaced;
+
+    protected virtual void OnOrderPlaced(OrderPlacedEventArgs args)
+    {
+        OrderPlaced?.Invoke(this, args);
+    }
+}
+```
+
+`OnEventName` protected virtual pattern允许derived publisher在raise前后扩展，但constructor中不要raise virtual event hook。payload应描述当时事实；若handler稍后读取publisher mutable properties，可能看到不同state。
+
+## Subscription and Unsubscription Identity
+
+退订需要与订阅时相等的delegate。named method最易配对；直接写两个外观相同的capturing lambdas通常是不同delegate/closure，第二个不能移除第一个。若使用lambda，应保存delegate variable或返回IDisposable subscription token。
+
+<Term def="publisher对handler target的strong reference从subscribe建立到matching unsubscribe/dispose解除的存活责任。">subscription lifetime</Term>
+
+```csharp
+EventHandler<OrderPlacedEventArgs> handler = (sender, args) =>
+    Console.WriteLine(args.OrderId);
+
+service.OrderPlaced += handler;
+try
+{
+    service.Place(42);
+}
+finally
+{
+    service.OrderPlaced -= handler;
+}
+```
+
+publisher invocation list强引用delegate，delegate又强引用instance handler target/closure。若publisher比subscriber活得久，忘记退订会让subscriber及其object graph无法GC；static event尤其长寿。ownership可由subscriber Dispose时退订、publisher短生命周期、weak-event机制或subscription token管理。
+
+<Stepper>
+  <Step title="切换subscribe、unsubscribe、forgotten与throw cases">
+    <Ec7EventLifecycleLab />
+  </Step>
+  <Step title="核对sender、payload与handler identity">
+    sender标识publisher，immutable args保存事实；退订必须匹配原delegate。
+  </Step>
+  <Step title="检查保活与raise snapshot">
+    长期publisher强引用subscriber；raise前复制delegate到local可稳定本次null/read，但不自动串行化handlers。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="subscriber不再被业务代码引用就会自动回收">
+只要publisher event invocation list仍保存instance handler，subscriber就有strong path。生命周期不对称时必须明确退订或dispose机制。
+</Callout>
+
+## Raising Safely under Concurrency
+
+经典写法先复制event delegate到local再null-check/invoke，避免check后另一个thread移除最后subscriber导致null race；C# null-conditional invocation也提供单次读取语义。它不保证handlers之间串行、不防止subscribe/unsubscribe与本次snapshot交错，也不让payload mutable state线程安全。
+
+```csharp
+protected virtual void OnOrderPlaced(OrderPlacedEventArgs args)
+{
+    EventHandler<OrderPlacedEventArgs> handlers = OrderPlaced;
+    handlers?.Invoke(this, args);
+}
+```
+
+若publisher要求特定UI thread、serialized delivery、async queue或exception isolation，必须在event contract中声明并实现调度。普通event调用是同步的，slow subscriber会阻塞publisher。
+
+## Subscriber Failure and Reentrancy
+
+handler可在raise期间订阅、退订、再次调用publisher或抛exception，形成reentrancy。publisher在改变内部state后raise时，应先恢复稳定invariant，再通知；不要在持有内部lock时调用未知subscriber code，否则可能deadlock或重入破坏state。
+
+需要“所有handlers都尝试执行”的telemetry场景，可复制GetInvocationList逐项catch并汇总，但异常policy、order和logging ownership必须公开。业务critical event通常让failure传播更诚实，或改用durable message/queue提供delivery guarantees。
+
+## 本章回顾：谁能Raise，谁负责离开
+
+1. publish-subscribe由publisher保存ordered subscriber list，普通event同步调用并继承multicast异常行为。
+2. event限制外部只能add/remove，publisher独占read/assignment/raise。
+3. EventHandler使用sender与EventArgs payload，data应是事件发生时的immutable snapshot。
+4. subscription建立publisher到subscriber的strong reference，退订需要matching delegate identity。
+5. local snapshot只解决部分raise race；thread、exception、reentrancy和lifecycle仍需明确contract。
+
+<Exercises>
+
+**问题 1：为什么public delegate field不能替代event member？**
+
+<Answer>public delegate允许consumer整体assignment、清空其他handlers、读取list和直接invoke，外部可伪造事件。event在declaring type外只暴露add/remove，publisher保留raise和payload控制。测试应证明outside code无法赋null/invoke，而多个合法subscribers仍可独立加入离开。</Answer>
+
+**问题 2：如何设计一个可安全退订的lambda subscription？**
+
+<Answer>把lambda转换结果保存到EventHandler variable，用同一variable执行+=和-=，或让subscribe API返回IDisposable token并在Dispose中移除。不能再写一个外观相同的capturing lambda期待相等。还要让短期subscriber在lifecycle结束时finally/Dispose退订长期publisher。</Answer>
+
+**问题 3：某个event handler抛异常时怎样选择策略？**
+
+<Answer>默认multicast会停止后续handlers并把exception传播给publisher；若这是业务failure，保留传播或在明确boundary转换。若是独立telemetry callbacks且要求all-attempt，可对invocation list逐项try/catch、记录每个outcome并汇总。不要静默吞掉，也不要在持lock时调用未知handlers。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="publisher contract" definition="谁能声明事件发生、触发条件和每次notification data的约定。" />
+  <GlossaryItem term="subscription list" definition="publisher按订阅顺序保存并在raise时调用的handlers集合。" />
+  <GlossaryItem term="event encapsulation" definition="外部只add/remove，declaring publisher独占read/assignment/raise的边界。" />
+  <GlossaryItem term="event payload" definition="一次notification携带的immutable事实快照。" />
+  <GlossaryItem term="subscription lifetime" definition="subscribe建立strong reference到matching unsubscribe解除的存活周期。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 14: Events" adaptedUrl="https://www.informit.com/store/essential-csharp-7.0-9781509303618" />

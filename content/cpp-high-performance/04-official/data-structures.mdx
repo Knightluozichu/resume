@@ -1,0 +1,230 @@
+---
+title: "第4章：数据结构"
+type: A
+section: C++ High Performance · Chapter 4
+order: 4
+description: 对齐第一版第4章 Data Structures：计算机内存特性、顺序与关联容器、容器适配器、哈希策略，以及parallel arrays的数据布局取舍。
+demo: false
+math: false
+sourceUrl: "https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
+draft: false
+---
+
+import {
+  ChpAssociativeParallelArrayMap,
+  ChpMemoryAccessLayoutMap,
+  ChpSequenceContainerDecisionMap,
+} from "@/components/mdx/cpp-high-performance/diagrams/data-structures";
+
+<Objectives>
+
+- 能解释cache line、spatial locality与pointer chasing如何影响容器实际成本
+- 能比较array、vector、deque、list以及ordered/unordered containers的复杂度、稳定性和内存代价
+- 能设计container adaptor、hash policy与parallel arrays布局，并用代表性访问模式验证选择
+
+</Objectives>
+
+## 从“算法访问了哪些字节”开始
+
+容器选择不能只查 complexity table。CPU执行load/store时面对的是地址序列：这些地址是否连续、能否prefetch、每条cache line里有多少有用字节、需要追多少pointer、working set是否跨越cache或page。两个同为 $O(n)$ 的遍历，可以因数据布局不同产生完全不同的stall和bandwidth。
+
+<Term def="程序在较短时间内反复访问附近地址或同一数据的倾向，使cache line与预取能够复用已传输的数据。">
+  locality
+</Term>
+
+先预测目标workload的主要操作：append、middle insert、random lookup、sorted iteration、stable reference、top element还是逐字段批处理。然后写下input size、mutation/read ratio、element size与lifetime要求。容器不是“越高级越快”，而是用representation交换不同成本。
+
+## 计算机内存不是等成本数组
+
+properties of computer memory 首先体现在层次结构。register与cache容量小但接近core；DRAM容量大、访问延迟更高；virtual memory又以page映射地址。CPU通常按cache line搬运连续字节，所以只使用line中的一个小字段仍支付整行传输成本。连续数据让hardware prefetcher更容易预测下一地址，node-based结构则常因pointer chasing形成串行依赖。
+
+<ChpMemoryAccessLayoutMap />
+
+<Term def="cache与内存之间传输和一致性管理的固定大小连续字节块；访问其中一个字节通常会把整行带入cache。">
+  cache line
+</Term>
+
+alignment会影响对象是否跨line，padding会扩大array stride。更紧凑不总是更好：多线程频繁写同一line内的不同字段会产生false sharing；但为每个小对象过度填充也会浪费capacity与bandwidth。TLB缓存virtual-to-physical page translation，巨大且稀疏的working set会同时施压cache和TLB。
+
+measure时要区分 cold traversal、warm repeated traversal 与 random access。只用小到完全驻留L1的数据，会掩盖production working set；只随机化每次访问，又可能破坏真实局部性。memory properties必须绑定实际机器与访问序列，而不是背诵固定的“内存比cache慢多少倍”。
+
+## array与vector：连续值序列
+
+`std::array<T, N>` 把固定元素数编码进type，对象内直接包含storage；它没有capacity growth，适合compile-time known extent与value semantics。`std::vector<T>` 运行时管理一段连续动态storage，`size`是已构造元素数，`capacity`是无需重新分配即可容纳的元素数。
+
+```cpp
+std::vector<Particle> particles;
+particles.reserve(estimated_peak);
+
+for (const auto& spawn : spawns) {
+    particles.emplace_back(spawn.position, spawn.velocity);
+}
+
+particles.erase(
+    std::remove_if(particles.begin(), particles.end(), isExpired),
+    particles.end());
+```
+
+vector的连续布局支持random access、cache-friendly iteration与bulk transfer。尾部append摊还常数，但reallocation会移动/复制元素并使iterator、pointer和reference失效；middle insertion/erase需要移动后缀，是线性成本。`reserve`用于已知或可估计上界，`resize`则改变已构造元素数，两者不能混用。
+
+<Term def="容器结构变化后，先前取得的iterator、pointer或reference不再指向原元素或不再可用的现象。">
+  iterator invalidation
+</Term>
+
+vector的高性能往往来自“移动数据而不是追pointer”。即使middle erase是 $O(n)$，移动紧凑trivially-copyable元素也可能胜过list定位后的unlink，因为list还需先遍历且每个node分散。element很大或需要稳定地址时，可以让vector存small handle/index/owner pointer，但这会改变ownership与间接访问成本。
+
+## deque与list：分段或节点序列
+
+`std::deque`通常由多个固定大小block和索引结构组成，支持两端常数时间push/pop与random access；元素不保证全局连续，因此不能把整个deque当作单span交给C API。相比vector，它避免每次前插移动全部元素，但遍历跨block，representation与invalidation rules也更复杂。
+
+`std::list`是双向node sequence，已知iterator位置的insert/erase为常数，并可在不移动元素的情况下splice nodes；代价是每元素额外links、allocation、较差locality，且按index查找为线性。只有真的需要stable iterator/reference、频繁已定位splice或不可移动元素时，这些性质才可能抵消node成本。
+
+<ChpSequenceContainerDecisionMap />
+
+<Callout type="trap" title="陷阱：中间插入多就应该选list">
+  complexity
+  table通常假设插入位置已经找到；若每次先线性遍历，list仍要O(n)定位，并承担allocation与cache
+  miss。先用真实element size和read/write
+  ratio测vector移动成本，再决定稳定性是否值得节点布局。
+</Callout>
+
+## sequence containers的选择协议
+
+sequence containers包括 `array`、`vector`、`deque` 与 `list`，但选择顺序应从contract开始：extent固定吗，必须连续吗，主要操作在哪一端，是否要求stable address，是否需要splice，最大size能否预估。默认候选通常是vector，因为连续representation简单且遍历高效；只有具体约束否定它时再换。
+
+```cpp
+template <class Sequence>
+Metrics exerciseSequence(Sequence& values, const Workload& workload) {
+    applyMutations(values, workload.mutations);
+    benchmark::DoNotOptimize(scanChecksum(values));
+    return collectMetrics(values); // time, allocations, bytes, peak RSS
+}
+```
+
+比较容器必须保持logical workload相同，而不是让一个容器跑擅长的操作、另一个跑不同语义。记录construction、mutation和iteration separately；同时记录allocation count、bytes与peak memory。若需要stable handles，可比较index+generation、indirection pool与node container，而不是只比较标准容器名字。
+
+## ordered associative containers
+
+`std::set`/`std::map`维护ordered keys，通常以balanced tree实现。lookup、insert与erase提供对数复杂度，iteration按key order，lower_bound/range query自然可用。node-based storage通常让未被erase元素的iterator/reference保持有效，但每个node有links、metadata与allocation成本。
+
+<Term def="按严格弱序维护key的set/map类容器，支持有序遍历和边界查询，典型操作为对数复杂度。">
+  ordered associative container
+</Term>
+
+comparator必须满足strict weak ordering；若比较关系在元素进入container后因外部mutable state改变，tree invariant会失效。key equivalence由comparator定义，不一定等于 `operator==`。需要排序输出、range query、最坏复杂度保证或iterator stability时，ordered container的契约可能比平均lookup数字更重要。
+
+## unordered containers与hash policy
+
+`std::unordered_set`/`std::unordered_map`通过hash映射bucket，平均lookup/insert常数，但worst case可线性。性能取决于hash quality、key equality、load factor、bucket count、allocation和access distribution。equal keys必须产生相同hash；hash collision不表示key相等，仍需equality确认。
+
+<Term def="控制bucket count、maximum load factor、rehash时机以及hash/equality一致性的策略集合。">
+  hash policy
+</Term>
+
+```cpp
+std::unordered_map<Key, Value, KeyHash> cache;
+cache.max_load_factor(0.75F);
+cache.reserve(expected_entries);
+
+for (const auto& entry : source) {
+    cache.try_emplace(entry.key, buildValue(entry));
+}
+```
+
+`reserve`按预期element count准备bucket，降低growth中的rehash；更低load factor通常减少collision path，却增大bucket memory与working set。rehash会重分配bucket并使iterator失效，reference/pointer规则应按标准和具体操作核对。benchmark必须覆盖hit/miss、key distribution、table size和adversarial risk，不能只用连续整数key证明“hash更快”。
+
+<Callout type="trap" title="陷阱：unordered意味着稳定O(1)且总比map快">
+  常数复杂度是平均语境，poor hash、high load或攻击性输入可形成长bucket
+  chain；小表、需要排序/range query或重视最坏保证时，ordered
+  tree可能更合适。选择时同时测memory与rehash spike。
+</Callout>
+
+## container adaptors限制接口
+
+container adaptors不提供新element representation，而在underlying container上暴露受限操作。`std::stack`给LIFO接口，`std::queue`给FIFO接口，`std::priority_queue`在heap上维护top-priority element。接口限制能表达algorithm invariant，避免调用者在任意位置修改而破坏语义。
+
+priority queues通常由random-access sequence承载，push/pop为对数成本，top为常数；它不提供按排序次序遍历所有元素。若要更新任意元素priority，需要额外index/handle或不同data structure。选择underlying container时仍要检查contiguity、growth与invalidation，不能认为adaptor隐藏后成本就消失。
+
+## parallel arrays与AoS/SoA
+
+parallel arrays把不同字段放进平行sequence，常称 structure of arrays (SoA)；传统 `vector<Particle>` 是 array of structures (AoS)。若hot loop只更新position，SoA只流过需要的position/velocity字段，减少无用字节进入cache并利于SIMD；若每次处理一个完整object，AoS的字段共址更自然。
+
+<Term def="把同一逻辑记录的各字段分别存入长度一致的数组，以便按字段进行紧凑批处理的数据布局。">
+  parallel arrays
+</Term>
+
+<ChpAssociativeParallelArrayMap />
+
+SoA的风险是数组长度或index identity失配。应把parallel arrays封装进一个type，由单一operation同时insert/erase/swap所有字段；或提供stable entity ID到dense index的映射。hybrid AoSoA按小block组织字段，可在cache/SIMD与完整对象访问间折中，但block width必须由目标hardware和workload验证。
+
+## 第4章实验协议
+
+1. 比较相同元素数下vector与list的顺序遍历，记录时间、allocation、cache与TLB事件。
+2. 对vector记录size/capacity与invalidation点，分别测试reserve和无reserve的append tail。
+3. 用已定位insert与“先查找再insert”两种workload比较vector/list，避免偷换前提。
+4. 比较deque两端操作与vector前端操作，同时测完整遍历和memory footprint。
+5. 对map/unordered_map覆盖hit、miss、range query、rehash与不同load factor。
+6. 验证custom hash满足equal keys same hash，并加入collision-heavy input。
+7. 用priority_queue实现top-k，和全量sort比较目标规模下的time/memory。
+8. 将particle update改为AoS、SoA与小block AoSoA，按真实字段访问比例测量。
+
+## 小结
+
+- memory按cache line和page分层，连续访问、working set与pointer dependency决定实际stall
+- array表示固定连续值，vector表示动态连续值；capacity growth会引发迁移与invalidation
+- deque适合两端操作并保持分段random access，list用node成本换已定位修改和稳定性
+- ordered containers提供排序、range query与对数保证；unordered containers依赖hash policy和分布
+- stack、queue与priority_queue用受限接口表达语义，underlying representation成本仍然存在
+- parallel arrays以字段连续性服务批处理，但必须封装同步修改和identity
+- 容器结论要同时报告time、allocation、memory、tail与目标访问模式
+
+<Attribution
+  adaptedFrom="C++ High Performance, First Edition, Chapter 4: Data Structures"
+  adaptedUrl="https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
+/>
+
+<Glossary>
+  <GlossaryItem term="locality">
+    短时间复用同一或邻近地址的访问特征。
+  </GlossaryItem>
+  <GlossaryItem term="cache line">
+    cache与内存之间传输的一段固定大小连续字节。
+  </GlossaryItem>
+  <GlossaryItem term="iterator invalidation">
+    结构变化使旧iterator或引用不再可用。
+  </GlossaryItem>
+  <GlossaryItem term="ordered associative container">
+    按key顺序维护并支持边界查询的set/map。
+  </GlossaryItem>
+  <GlossaryItem term="hash policy">
+    bucket、load factor、rehash与hash/equality的一组策略。
+  </GlossaryItem>
+  <GlossaryItem term="parallel arrays">
+    把记录字段分别存进等长数组的数据布局。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：为“百万个小对象，95%顺序读取、5%删除”选择vector或list。** 说明complexity table之外的证据。
+
+<Answer question="为什么默认候选通常是vector？">
+  读取占主导时，vector连续布局减少node metadata、allocation和pointer
+  chasing，cache
+  line中的有效元素更多；删除虽移动后缀，但仅占5%，可用swap-and-pop处理无序集合或批量remove/erase。只有必须保持顺序且element移动极贵、稳定地址又无法用handle解决时，list才可能值得。用production
+  size与element type测完整read/delete mix、allocation、cache miss和peak
+  memory后决定。
+</Answer>
+
+2. **问题 2：unordered_map查询平均更快，但上线后p99抖动，怎样排查hash policy？** 覆盖input、load与rehash。
+
+<Answer question="如何把p99关联到hash行为？">
+  记录table size、bucket count、load factor、bucket-size
+  distribution和rehash时刻，并按hit/miss与key来源分层latency；检查equal/hash一致性与攻击性collision。预先reserve避免关键窗口rehash，实验不同max_load_factor和hash
+  function，同时观察memory。若需要ordered
+  range或最坏界，比较map；不能只把平均lookup当成完整契约。
+</Answer>
+
+3. **问题 3：把Particle从AoS改成parallel arrays时，如何保证正确性并验证收益？** 设计封装和实验。
+
+  <Answer question="SoA改造需要哪些不变量？">由一个owner同时管理position、velocity、lifetime等arrays，任何insert/erase/swap必须原子地更新全部字段，并用entity ID映射dense index，禁止外部独立改长度。以真实hot loop分别测只更新position、完整对象访问和render gathering，比较AoS/SoA/AoSoA的time、bandwidth、cache miss与memory；若完整对象访问退化超过批处理收益，就选择hybrid或保留AoS。</Answer>
+</Exercises>

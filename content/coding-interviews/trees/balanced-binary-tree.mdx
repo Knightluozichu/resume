@@ -1,148 +1,347 @@
 ---
-title: 平衡二叉树
+title: "面试题55（二）：平衡二叉树"
 type: C
-section: 树
-order: 14
-description: 判断树是否平衡（任意节点左右子树高度差 <= 1）。
+section: "第6章 面试中的各项能力"
+order: 63
+description: "比较重复求子树深度的直观方案与一次后序遍历方案，同时返回平衡状态和当前深度。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/55_02_BalancedBinaryTree/BalancedBinaryTree.cpp"
 draft: false
 ---
 
-{/* 知识点清单：后序遍历、子树高度、失衡短路、递归复杂度优化；原书章节：面试题55。 */}
+import { BalancedBinaryTreeLocalRuleDiagram, BalancedBinaryTreePostorderLab, BalancedBinaryTreeWorkDiagram, BalancedBinaryTreeContractMap, BalancedBinaryTreeOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/balanced-binary-tree";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能解释后序遍历为什么天然适合树高度类问题。
-- 能在一次遍历中同时返回“高度”和“平衡状态”。
-- 能写出 C++ 与 TypeScript 解法并说明复杂度。
+- 能解释平衡约束为何必须在每个节点而非只在根检查
+- 能计算作者两套方案在同一棵树上的深度与布尔返回过程
+- 能实现深度出参版和负一哨兵版的一次后序遍历
+- 能分析重复求深度、短路、无效出参、树高与完全性边界
+- 能设计覆盖作者7种树形并同时验证两套方案的测试
 
 </Objectives>
 
-## 直觉引入
+## 从“根看起来不歪”开始
 
-平衡树要求“局部约束”严格控制在每个节点：左右子树高度差不能超过 1。
-如果每个节点都要比较左高、右高，这个信息只有在处理完两个子树后才知道，所以前序或中序都不适合；
-**后序（子问题先算完）**才能在一次递归中高效收敛答案。
+先预测：一棵树的根左右子树深度相同，是否就一定平衡？不一定。某个子树内部仍可能是一条长链，根处差值为0，却有更深节点的左右深度差超过1。
 
-## 算法思路
+作者定义的**平衡二叉树**要求**任意节点左右子树深度差不超过1**。某节点左深度减右深度称为<Term def="某节点左子树深度减去右子树深度的差，平衡时位于负1到1。">平衡因子</Term>；所有节点都满足阈值才是<Term def="当前节点左右子树均平衡，且两侧深度差绝对值不超过1。">局部平衡</Term>。
 
-1. 递归函数 `height(node)`：返回该子树高度；一旦检测到该子树失衡，返回 `-1`。
-2. 遍历到空节点返回高度 `0`。
-3. 左右子树分别得到 `left`、`right`。
-4. 任一子树高度为 `-1` 时直接返回 `-1`，避免无效继续计算。
-5. 若 `abs(left - right) > 1`，返回 `-1`。
-6. 否则返回 `max(left, right) + 1`。
+<BalancedBinaryTreeLocalRuleDiagram />
 
-根节点返回值不是 `-1`，说明树平衡。
+完全二叉树一定平衡，但平衡树不一定完全。作者Test2故意构造有空缺的树，最长左右深度只差1，期望true；它防止实现把“每层是否填满”误当成平衡条件。
 
-<BalancedTreeDiagram />
+## 方案一：在每个节点重新求深度
 
-## 思考引导
+作者先复用上一题TreeDepth。对当前节点分别求左右深度，差值超界就返回false；当前节点通过后，再递归检查左右孩子。
 
-### 1) 先问问题，不先数层
-平衡树问题是最坏路径风险控制，不是求某条路径长度。你要问：树是否允许退化？
-
-### 2) 识别不变式
-以任一节点为根，左右子树高度差绝对值不能超过 1（或约定范围）。这是平衡判定局部不变式。
-
-### 3) 为什么它一定成立
-若任一子树偏斜超过阈值，则从该点到叶子的最长路径被放大，最坏查询复杂度失控。
-
-### 4) 常见误区
-只在某一层抽样检查而不做递归聚合会误判。高度是自底向上决定的。
-
-### 5) 你能找到一个反例吗
-一棵左偏链表形状树高度极大，却可能叶子很少。最坏深度指标才是关键。
-
-### 6) 迁移到下一题
-数据库索引和缓存树结构都面临这个风险。先确定可接受的路径上界，再定义是否必须平衡。
-## 代码对照
-
-<CodeTabs>
-  <Tab label="C++">
 ```cpp
-struct TreeNode {
-    int val;
-    TreeNode* left;
-    TreeNode* right;
-    TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
-};
-
-class Solution {
-public:
-    bool isBalanced(TreeNode* root) {
-        return height(root) != -1;
+int TreeDepth(
+    const BinaryTreeNode* pRoot) {
+    if (pRoot == nullptr) {
+        return 0;
     }
-
-private:
-    int height(TreeNode* node) {
-        if (node == nullptr) return 0;
-
-        int left = height(node->left);
-        if (left == -1) return -1;
-
-        int right = height(node->right);
-        if (right == -1) return -1;
-
-        if (left - right > 1 || right - left > 1) return -1;
-        return std::max(left, right) + 1;
-    }
-};
-```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-class TreeNode {
-    val: number;
-    left: TreeNode | null;
-    right: TreeNode | null;
-    constructor(val: number) {
-        this.val = val;
-        this.left = null;
-        this.right = null;
-    }
+    int nLeft =
+        TreeDepth(pRoot->m_pLeft);
+    int nRight =
+        TreeDepth(pRoot->m_pRight);
+    return nLeft > nRight
+        ? nLeft + 1
+        : nRight + 1;
 }
 
-function isBalanced(root: TreeNode | null): boolean {
-    function height(node: TreeNode | null): number {
-        if (!node) return 0;
-
-        const left = height(node.left);
-        if (left === -1) return -1;
-
-        const right = height(node.right);
-        if (right === -1) return -1;
-
-        if (Math.abs(left - right) > 1) return -1;
-        return Math.max(left, right) + 1;
+bool IsBalanced_Solution1(
+    const BinaryTreeNode* pRoot) {
+    if (pRoot == nullptr) {
+        return true;
     }
 
-    return height(root) !== -1;
+    int left =
+        TreeDepth(pRoot->m_pLeft);
+    int right =
+        TreeDepth(pRoot->m_pRight);
+    int diff = left - right;
+    if (diff > 1 || diff < -1) {
+        return false;
+    }
+
+    return IsBalanced_Solution1(
+               pRoot->m_pLeft) &&
+           IsBalanced_Solution1(
+               pRoot->m_pRight);
 }
 ```
-  </Tab>
-</CodeTabs>
 
-## 常见误区
+这版逻辑直观，直接对应定义，也能正确短路：当前节点失衡时不检查孩子；左子树返回false时，逻辑与不会再检查右子树。
 
-<Callout type="trap">
-  <strong>现象 →</strong> 结果偶尔会错误但看不出来。
-  <strong>原因 →</strong> 用前序遍历重复统计高度，虽然看起来正确但复杂度退化。
-  <strong>修复 →</strong> 换成后序返回高度，并用 `-1` 做失衡短路。
+问题是深度计算和后续平衡检查相互独立。同一子树可能先被祖先的TreeDepth遍历，又在自己的节点上再次求孩子深度。一般可用O(nh)描述其重复工作上界，朴素最坏上界可到O(n平方)；平衡满树也会出现跨层重复，常见代价O(n log n)。
+
+精确耗时受短路位置影响：纯长链在根处很快发现巨大差值，未必触发最坏重复；但不能据此把方案一宣传成稳定O(n)。作者给出它是为了从定义出发，再引出不重复访问的方案二。
+
+## 方案二：一次返回状态和深度
+
+判断当前节点是否平衡，需要先知道左右子树是否平衡以及各自深度。这天然对应<Term def="先处理左右子树，再根据其返回状态和深度处理当前节点的遍历顺序。">后序遍历</Term>。
+
+作者让布尔返回值表示平衡状态，并通过int指针把子树深度写给调用方。这个第二输出称为<Term def="由调用方提供地址、被递归函数写入当前子树深度的输出参数。">深度出参</Term>。
+
+```cpp
+bool IsBalanced(
+    const BinaryTreeNode* pRoot,
+    int* pDepth);
+
+bool IsBalanced_Solution2(
+    const BinaryTreeNode* pRoot) {
+    int depth = 0;
+    return IsBalanced(pRoot, &depth);
+}
+
+bool IsBalanced(
+    const BinaryTreeNode* pRoot,
+    int* pDepth) {
+    if (pRoot == nullptr) {
+        *pDepth = 0;
+        return true;
+    }
+
+    int left;
+    int right;
+    if (IsBalanced(
+            pRoot->m_pLeft, &left) &&
+        IsBalanced(
+            pRoot->m_pRight, &right)) {
+        int diff = left - right;
+        if (diff <= 1 && diff >= -1) {
+            *pDepth =
+                1 + (left > right
+                    ? left
+                    : right);
+            return true;
+        }
+    }
+    return false;
+}
+```
+
+空树同时返回true并写深度0。非空节点只有在左右子树都平衡、当前差值也合法时，才写自身深度并返回true。
+
+<BalancedBinaryTreePostorderLab />
+
+图中的Test2树先从叶节点返回，再由5、2、3汇总到根1。每个节点的深度就在平衡检查那一次计算中产生，不再另启TreeDepth遍历。
+
+## false路径为何不需要写深度
+
+逻辑与从左到右短路。左子树失衡时，右子树不会执行；任一孩子失衡或当前差值超界时，函数返回false，但可能没有给当前pDepth写值。
+
+这在作者调用链中安全：父层只有在子调用返回true时才读取对应left或right；外层IsBalanced_Solution2只返回布尔值，也不读取失败时的depth。
+
+<Callout type="trap" title="返回false后仍读取深度出参">
+失败路径上的深度不是接口承诺，可能保持旧值或未初始化。调用方必须先检查布尔返回值；若希望无论成功失败都得到深度，就要修改实现并明确新契约。
 </Callout>
 
-## 小结
+pDepth本身也必须非空。公开包装始终传入局部变量地址，递归也传入left和right地址，因此作者没有检查nullptr。若把核心函数暴露为公共API，应改用引用、结构化返回值，或检查指针。
 
-- 后序遍历让“子树信息”先生成。
-- 以返回码携带失败状态，能把不平衡传播到根节点，且只遍历一次。
+作者固定先检查左子树。左侧失败后，逻辑与会跳过右侧，因此在左右两边都失衡时，实际首先发现的是左侧反例；把调用顺序交换后，最终布尔结果不变，但访问节点数和首个诊断位置可能不同。若函数只承诺true或false，这种差异不可观察；若扩展为返回“第一个失衡节点”，就必须规定前序优先级或返回全部反例，测试也不能只比较布尔值。
 
-<Callout type="tip">
-  <strong>复习提醒：</strong> 记住这类题的模式：递归返回一个“值”，并用特定常量表示非法/失败状态。
+取消信号和访问预算也适合沿失败通道传播，但不应与“结构失衡”共用同一个false而丢失原因。工程版可返回枚举状态：平衡、失衡、输入损坏、资源超限，再附带有效深度。这样调用方能区分树本身不平衡和本次检查未完成，避免把超时误报成业务结论。
+
+## 负一哨兵是等价改写
+
+旧页只有“高度为-1表示失衡”的写法。它是方案二的常见现代化改写，但不是作者源码中的函数签名。合法深度从0开始，所以-1可作为不冲突的失败哨兵。
+
+```cpp
+#include <algorithm>
+#include <cstdlib>
+
+int BalancedHeight(
+    const BinaryTreeNode* root) {
+    if (root == nullptr) {
+        return 0;
+    }
+
+    const int left =
+        BalancedHeight(root->m_pLeft);
+    if (left == -1) {
+        return -1;
+    }
+
+    const int right =
+        BalancedHeight(root->m_pRight);
+    if (right == -1) {
+        return -1;
+    }
+
+    if (std::abs(left - right) > 1) {
+        return -1;
+    }
+    return std::max(left, right) + 1;
+}
+
+bool IsBalancedSentinel(
+    const BinaryTreeNode* root) {
+    return BalancedHeight(root) != -1;
+}
+```
+
+布尔加出参与单一哨兵返回值都在做<Term def="子树一旦失衡，就把失败状态向父层传递并停止无意义的剩余计算。">失败传播</Term>。前者类型含义更明确，后者代码更紧凑；若合法值域可能包含-1，则应改用结构体或optional，不能硬套哨兵。
+
+也可以返回结构体，其中包含balanced与depth两个字段。这样即使未来要附带首个失衡节点、左右深度或诊断信息，也不会依赖魔法数字。
+
+诊断结构还可以记录反例节点的左右深度。父层收到失败后应原样上送最深处或最先发现的反例，而不是用祖先覆盖它；否则日志只显示根不平衡，却看不到真正跨过阈值的位置。若需要所有失衡节点，就不能在第一次false时短路，时间仍是O(n)，但会遍历完整棵树并收集结果，语义和作者的快速布尔判断不同。
+
+## 正确性：局部条件如何推出全树
+
+对空树，函数返回平衡和深度0，符合定义。假设左右子树返回值正确：若任一子树不平衡，整棵当前树必然不平衡，失败传播正确；若两边都平衡，只需检查当前根的深度差。
+
+差值在负1到1时，当前节点也局部平衡，且自身深度为较大子树深度加1；否则当前节点本身就是反例，应返回false。由结构归纳，根返回true当且仅当每个节点都满足条件。
+
+<Callout type="trap" title="只比较根节点的左右深度">
+根差值合法只能证明根这一处局部平衡，不能证明孩子内部。必须递归取得左右子树的平衡状态，不能只调用两次TreeDepth后直接返回true。
 </Callout>
+
+优化版的每个节点只在一次后序调用中处理。短路可能让某些未访问分支更少，但不会让任何节点被重复处理，因此时间O(n)上界，递归栈空间O(h)。
+
+## 完全、满、搜索与平衡是不同属性
+
+平衡只约束左右子树深度差。它不要求节点值有序，因此普通二叉树也能判断平衡；不需要二叉搜索树性质。
+
+完全二叉树要求除最后一层外都填满，最后一层从左连续；满二叉树常指每个节点孩子数为0或2，或每层都满，具体术语还需确认。它们都不是本题判断条件。
+
+一棵只缺少某些叶位置的树可以平衡，一棵二叉搜索树也可能退化为长链而不平衡。平衡属性描述形状，不自动说明它采用AVL旋转、红黑规则或其他自平衡维护机制。
+
+<BalancedBinaryTreeContractMap />
+
+空树被定义为平衡，单节点也平衡。平衡判定期间树必须有限无环；带环指针会导致递归无法到达基例。
+
+## 两套方案的工作量对照
+
+<BalancedBinaryTreeWorkDiagram />
+
+方案一适合先验证定义和快速写出正确答案；方案二把“深度”和“平衡”合并到一个子树摘要中，是树形动态规划的典型模式。父节点只依赖孩子摘要，不需要重新扫描孩子内部。
+
+若同一棵可变树要频繁查询平衡状态，可以在节点维护高度，并在插入删除后沿祖先更新；AVL树就是把高度差约束与旋转维护结合起来。作者题目只做一次离线判断，不修改树，也不要求修复失衡。
+
+并发修改会让一次遍历混合不同版本结构。const指针仅防止当前函数写节点，不提供线程同步；生产接口应在不可变快照、读锁或单线程所有权下运行。
+
+## 作者7组测试与14次核对
+
+Test函数对每棵树先运行Solution1，再运行Solution2，因此7个场景共14次结果核对：
+
+1. 7节点完全二叉树，期望true。
+2. 非完全但每个节点差值不超过1，期望true。
+3. 普通树中根或内部节点深度差为2，期望false。
+4. 5节点纯左链，期望false。
+5. 5节点纯右链，期望false。
+6. 单节点树，期望true。
+7. 空树，期望true。
+
+<BalancedBinaryTreeOfficialCaseLab />
+
+左右单链成对出现，防止实现只正确处理一个差值符号；Test2防止把完全性误当平衡；空树和单节点锁定递归基例。
+
+```cpp
+#include <cassert>
+
+void assertBothSolutions(
+    const BinaryTreeNode* root,
+    bool expected) {
+    assert(IsBalanced_Solution1(root)
+           == expected);
+    assert(IsBalanced_Solution2(root)
+           == expected);
+    assert(IsBalancedSentinel(root)
+           == expected);
+}
+
+void testBalancedTrees(
+    const BinaryTreeNode* complete,
+    const BinaryTreeNode* irregular,
+    const BinaryTreeNode* unbalanced,
+    const BinaryTreeNode* leftChain,
+    const BinaryTreeNode* rightChain,
+    const BinaryTreeNode* single) {
+    assertBothSolutions(complete, true);
+    assertBothSolutions(irregular, true);
+    assertBothSolutions(unbalanced, false);
+    assertBothSolutions(leftChain, false);
+    assertBothSolutions(rightChain, false);
+    assertBothSolutions(single, true);
+    assertBothSolutions(nullptr, true);
+}
+```
+
+随机对拍可生成有限无环树，用作者两版和哨兵版比较布尔结果。还可用独立参考函数先为每个节点计算深度，再枚举检查所有差值，作为不共享实现细节的判定器。
+
+性质测试包括：左右镜像不改变平衡结果；给叶节点增加一个孩子不会立即破坏该叶平衡，但可能让祖先跨过阈值；完全树删除最右侧某个叶子后仍可能平衡。
+
+<Stepper>
+  <Step title="在每个节点检查局部阈值">
+    <BalancedBinaryTreeLocalRuleDiagram />
+    任意一处深度差绝对值超过1，整棵树即失衡。
+  </Step>
+  <Step title="比较作者两套工作方式">
+    <BalancedBinaryTreeWorkDiagram />
+    方案一重复求深度，方案二让孩子直接返回摘要。
+  </Step>
+  <Step title="按后序汇总状态与深度">
+    <BalancedBinaryTreePostorderLab />
+    左右孩子先完成，当前节点只处理一次。
+  </Step>
+  <Step title="核对短路和出参契约">
+    <BalancedBinaryTreeContractMap />
+    false路径传播失败，不再承诺深度输出。
+  </Step>
+  <Step title="执行7种树形14次核对">
+    <BalancedBinaryTreeOfficialCaseLab />
+    完全、非完全、失衡、双向单链、单节点和空树均覆盖。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 平衡二叉树要求任意节点左右子树深度差不超过1。
+2. 只检查根不够，每棵子树也必须平衡。
+3. 作者方案一在每个节点重新求深度，正确但有重复遍历。
+4. 方案二通过后序遍历同时返回布尔状态和深度出参。
+5. 优化版让每个节点只遍历一次，时间O(n)、栈空间O(h)。
+6. false路径通过短路向上传播，调用方不能再读取未承诺的深度。
+7. -1高度哨兵是等价改写，不是作者原函数签名。
+8. 作者7组场景对两套方案各检查一次，共14次核对。
+
+<Exercises>
+
+**问题 1：根左右深度都为4，为什么整棵树仍可能不平衡？**
+
+<Answer>根处差值0只说明根局部平衡。某个高度4的子树内部可能存在深度差2的节点，因此还必须递归检查左右子树的布尔状态。</Answer>
+
+**问题 2：作者方案二为何只有返回true时才写当前深度？**
+
+<Answer>父层只在子树平衡时需要其深度继续比较；一旦false，整条祖先路径都会失败，深度不再参与合法计算。调用方必须把布尔值当成读取出参的前置条件。</Answer>
+
+**问题 3：Test2不是完全二叉树，为何期望true？**
+
+<Answer>平衡只看每个节点左右子树深度差，不要求节点按层连续填充。Test2所有局部差值都在负1到1，因此平衡。</Answer>
+
+**问题 4：负一哨兵版和作者出参版如何对应？**
+
+<Answer>作者false对应哨兵-1，作者true加pDepth对应非负高度。两者都先处理孩子、失衡即传播、成功则返回较大深度加1，只是状态编码不同。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="平衡因子">节点左子树深度减右子树深度的差。</GlossaryItem>
+  <GlossaryItem term="局部平衡">两个子树均平衡且当前深度差绝对值不超过1。</GlossaryItem>
+  <GlossaryItem term="后序遍历">先处理左右子树，再处理当前节点的顺序。</GlossaryItem>
+  <GlossaryItem term="深度出参">函数通过调用方提供的地址写回子树深度。</GlossaryItem>
+  <GlossaryItem term="失败传播">子树失衡后把失败状态向祖先返回并短路后续工作。</GlossaryItem>
+</Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题55（二）"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/55_02_BalancedBinaryTree/BalancedBinaryTree.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

@@ -1,61 +1,11 @@
-/**
- * <PyaFinalReviewDiagram>：Python高级编程总复习图解。
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * 全部 DESIGN token 配色，无裸 hex。
- */
-
-const VIEW_W = 720;
-const VIEW_H = 400;
-
-export function PyaFinalReviewDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="Python高级编程总复习图解"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <text x={VIEW_W / 2} y="36" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">
-            Python高级编程总复习
-          </text>
-          <text x={VIEW_W / 2} y="58" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
-            串联全书四大板块——从对象模型到工程实践的完整知识体系
-          </text>
-
-          <rect x="60" y="80" width="600" height="280" rx="12" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.3" />
-
-          <text x={VIEW_W / 2} y="130" textAnchor="middle" fontSize="14" fontWeight="700" fill="var(--accent)">
-            知识体系
-          </text>
-
-          <text x={VIEW_W / 2} y="170" textAnchor="middle" fontSize="12" fill="var(--text-primary)">
-            知识体系：核心概念
-          </text>
-          <text x={VIEW_W / 2} y="195" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
-            通过图解可视化关键原理与执行流程
-          </text>
-
-          <rect x="160" y="230" width="180" height="40" rx="8" fill="var(--success)" fillOpacity="0.1" stroke="var(--success)" strokeWidth="1.2" />
-          <text x="250" y="255" textAnchor="middle" fontSize="12" fill="var(--success)">输入</text>
-
-          <text x="380" y="255" textAnchor="middle" fontSize="14" fill="var(--text-tertiary)">&rarr;</text>
-
-          <rect x="400" y="230" width="180" height="40" rx="8" fill="var(--warning)" fillOpacity="0.1" stroke="var(--warning)" strokeWidth="1.2" />
-          <text x="490" y="255" textAnchor="middle" fontSize="12" fill="var(--warning)">处理/输出</text>
-
-          <text x={VIEW_W / 2} y="320" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
-            关键洞察：想象你在学武功。基础内省是内功心法（不懂内力招式都是花架子），高级语法...
-          </text>
-          <text x={VIEW_W / 2} y="340" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
-            复杂度：视具体实现而定
-          </text>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        串联全书四大板块——从对象模型到工程实践的完整知识体系
-      </figcaption>
-    </figure>
-  );
-}
+import { PythonAdvancedOfficialLab, type PythonAdvancedCase } from "./official-lab";
+const cases: PythonAdvancedCase[] = [
+  { label: "可读语法", input: "需求与输入", action: "迭代器、装饰器、上下文管理器和类机制应让资源与协议更清楚，而不是追求技巧密度。", evidence: "可读语法的测试与迁移记录", invariant: "迭代器、装饰器、上下文管理器和类机制应让资源与协议更清楚，而不是追求技巧密度。" },
+  { label: "可分发系统", input: "可读语法", action: "包元数据、模块边界、可重建环境和发布制品把脚本提升为可安装系统。", evidence: "可分发系统的测试与迁移记录", invariant: "包元数据、模块边界、可重建环境和发布制品把脚本提升为可安装系统。" },
+  { label: "可追踪生命周期", input: "可分发系统", action: "版本、任务、CI、文档和测试把需求到发布证据串成可重放链。", evidence: "可追踪生命周期的测试与迁移记录", invariant: "版本、任务、CI、文档和测试把需求到发布证据串成可重放链。" },
+  { label: "测量后优化", input: "可追踪生命周期", action: "用户目标、基线、剖析和回归测试先于数据结构、并发与缓存方案。", evidence: "测量后优化的测试与迁移记录", invariant: "用户目标、基线、剖析和回归测试先于数据结构、并发与缓存方案。" },
+  { label: "Python化设计", input: "测量后优化", action: "协议、组合和函数是一等选择，只有扩展轴确实稳定时才引入更重的模式。", evidence: "Python化设计的测试与迁移记录", invariant: "协议、组合和函数是一等选择，只有扩展轴确实稳定时才引入更重的模式。" },
+];
+export function PyaFinalReviewModelLab(){return <PythonAdvancedOfficialLab title="全书总复习：执行链" caption="沿需求、实现和证据追踪本章核心。" cases={cases} tone="cyan" />;}
+export function PyaFinalReviewBoundaryLab(){return <PythonAdvancedOfficialLab title="全书总复习：边界" caption="切换单元，比较历史工具与现代迁移边界。" cases={cases} tone="amber" initial={1} />;}
+export function PyaFinalReviewEvidenceLab(){return <PythonAdvancedOfficialLab title="全书总复习：证据" caption="用测试、环境和制品证明结果可重放。" cases={cases} tone="emerald" initial={2} />;}

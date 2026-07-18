@@ -1,0 +1,192 @@
+---
+title: "Chapter 22. Parallel Programming"
+type: C
+section: "C# 10 Nutshell · Concurrency and Low-level"
+order: 22
+description: "覆盖PFX、PLINQ、Parallel、任务并行与调度器、AggregateException、并发集合和生产者消费者队列，建立可测量的并行分解。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch22.html"
+draft: false
+---
+
+import { CtcParallelModelLab, CtcParallelSpeedupLab, CtcProducerConsumerLab } from "@/components/mdx/csharp-10-core/diagrams/parallel-programming";
+
+<Objectives>
+
+- 能分析sequential fraction、work granularity、partition balance与coordination cost，判断并行收益
+- 能比较PLINQ、Parallel loop、Task DAG和TaskScheduler，设计有界degree与确定归并
+- 能实现bounded producer/consumer queue，复现fault、cancel、completion和backpressure竞态
+
+</Objectives>
+
+## 为什么Parallel首先需要Sequential Baseline
+
+并行只加速可独立执行的CPU工作，串行部分、调度、同步、cache miss和结果merge都会限制收益。先用正确的顺序版本记录输入规模、CPU时间、wall time、allocation和结果，再逐步增加degree。I/O等待优先async concurrency，不应占多条线程假装CPU并行。
+
+先预测：CPU有16核就能让任何loop快16倍吗；AsParallel保持输入顺序吗；Parallel.For自动让共享List线程安全吗；TaskCreationOptions.LongRunning总是创建专属线程吗；ConcurrentQueue能提供等待和完成信号吗。答案都是否。
+
+<Term def="记录顺序与各degree下work、wall/CPU time、throughput、allocation、contention和结果一致性的证据。">parallel speedup ledger</Term>
+
+## PFX Concepts
+
+Parallel Framework/PFX以Task、PLINQ、Parallel和concurrent collections支持data/task parallelism。Data parallel把同一操作应用到partitioned inputs；task parallel把不同操作作为DAG；pipeline让stages并发并通过bounded queue传递。
+
+适合并行的work应CPU-bound、粒度足够大、依赖少、可分区且merge便宜。Degree通常围绕available processors测量，不把logical core数当固定最优。Nested parallelism会oversubscribe，library不应擅自占满全机资源。
+
+<Stepper>
+  <Step title="切换sequential、fine、coarse与oversubscribed"><CtcParallelSpeedupLab /></Step>
+  <Step title="拆分work budget">估算串行setup/merge、每item CPU、partition imbalance、scheduler和lock成本。</Step>
+  <Step title="跑degree sweep">在1、2、4到上限核数比较结果、wall/CPU、tail、allocation和系统共存负载。</Step>
+</Stepper>
+
+<Callout type="trap" title="增加并行度只会更快或不变">
+Oversubscription会增加context switch、cache争用、GC压力和下游竞争，甚至拖慢整机。Degree必须有上限并用真实负载选择。
+</Callout>
+
+## PLINQ
+
+`source.AsParallel()`创建ParallelQuery，operators由runtime partition和merge。默认不保序以提高吞吐；需要输入order时AsOrdered，但排序/merge成本上升。AsUnordered可在不再需要order后释放约束。ForAll让consumer并行执行且无序，适合无副作用或线程安全sink。
+
+WithDegreeOfParallelism限制最多并发，WithCancellation传播token，WithExecutionMode可强制并行但通常应尊重planner。查询包含小输入、cheap selector、顺序operator或昂贵merge时可能不值得并行。
+
+```csharp
+var totals = orders
+    .AsParallel()
+    .WithDegreeOfParallelism(degree)
+    .WithCancellation(ct)
+    .Where(order => order.IsReady)
+    .Select(order => Score(order))
+    .GroupBy(score => score.Region)
+    .ToDictionary(group => group.Key, group => group.Sum(x => x.Value));
+```
+
+Selector不得修改共享非线程安全状态。Floating reduction因结合顺序变化会有rounding差异；需要bitwise deterministic时固定partition/merge或顺序归并。
+
+<Term def="明确并行查询是否保序、如何partition、何时merge以及side effects是否允许的协议。">parallel query shape</Term>
+
+## The Parallel Class
+
+Parallel.For/ForEach/Invoke同步阻塞caller直到工作完成或失败。Partitioner决定range/item分配，localInit/body/localFinally允许每partition使用局部accumulator，最后少量同步merge。LoopState.Stop不再要求更高index，Break保留最低break iteration语义；已开始iteration可能继续。
+
+ParallelOptions提供CancellationToken、MaxDegreeOfParallelism和TaskScheduler。Cancellation与Stop/Break语义不同。Async I/O body不要塞进普通Parallel.ForEach；现代异步工作可用Parallel.ForEachAsync或bounded Task/Channel，但它仍是并发而非CPU speedup保证。
+
+```csharp
+long total = 0;
+Parallel.ForEach(
+    Partitioner.Create(0, values.Length),
+    new ParallelOptions { MaxDegreeOfParallelism = degree, CancellationToken = ct },
+    () => 0L,
+    (range, _, local) =>
+    {
+        for (int i = range.Item1; i < range.Item2; i++) local += Transform(values[i]);
+        return local;
+    },
+    local => Interlocked.Add(ref total, local));
+```
+
+Local reduction减少共享lock/false sharing。操作非associative时必须定义merge order。
+
+## Task Parallelism
+
+Task parallelism把independent work或dependencies表达成tasks。Task.Run适合把CPU work排到default scheduler；StartNew参数多且容易产生`Task<Task>`，async delegate通常用Task.Run。Attached child、DenyChildAttach与continuation options影响completion tree，新代码优先清晰async/WhenAll。
+
+Task graph owner必须观察每个branch的result/fault/cancel。Speculative/hedged work需要取消losers。LongRunning只是scheduler hint，default scheduler可能创建dedicated thread；不用于大量短任务。
+
+## Task Schedulers
+
+TaskScheduler决定Task排队、执行和inline policy。Default基于ThreadPool work stealing；FromCurrentSynchronizationContext把工作投递到UI context。ConcurrentExclusiveSchedulerPair提供concurrent readers/exclusive writers样式调度，custom scheduler可实现affinity或容量，但必须正确处理TryExecuteTaskInline和queue lifecycle。
+
+Scheduler不是CPU quota或security boundary。Library通常不硬编码UI/custom scheduler，接受调用方context或显式TaskScheduler。Continuation在哪执行要记录，避免在limited scheduler上sync-wait导致deadlock。
+
+<Stepper>
+  <Step title="切换PLINQ、Parallel、Task DAG与scheduler"><CtcParallelModelLab /></Step>
+  <Step title="画partition/DAG">标出independent nodes、degree、local state、merge edge、scheduler和caller blocking点。</Step>
+  <Step title="注入skew与nested parallel">让少数items超重、内层再并行，观察work stealing、oversubscription和tail latency。</Step>
+</Stepper>
+
+<Callout type="trap" title="并发集合能修复并行Body里的任意共享状态">
+单个方法原子不代表多步check-then-act原子，也不修复跨对象invariant。优先partition-local state后归并，必要时用集合提供的复合原子API。
+</Callout>
+
+## Working with AggregateException
+
+Parallel/Task组合可能同时产生多个fault。Wait/Result等同步观察常抛AggregateException；await通常重新抛一个代表异常，但Task.Exception仍含aggregate。Flatten展开nested aggregates，Handle只标记已处理类型，未处理者会重新抛。
+
+不要只记录第一个异常而丢失其他partition证据，也不要把OperationCanceledException与真实fault混为全部取消。为每个error关联input partition/task id；cleanup后按API contract返回aggregate、domain report或fail-fast。
+
+<Term def="在多个并行branch失败时保留每个input/task身份、fault/cancel分类和cleanup结果的记录。">parallel failure ledger</Term>
+
+## Concurrent Collections
+
+ConcurrentDictionary、ConcurrentQueue、ConcurrentStack、ConcurrentBag和BlockingCollection提供线程安全operations。ConcurrentDictionary的GetOrAdd/AddOrUpdate value factory可能执行多次且在锁外，副作用必须幂等；返回winner不一定是本次factory结果。Enumeration通常是弱一致snapshot-like view，不代表单一时刻事务。
+
+ConcurrentQueue只提供TryEnqueue/Dequeue式原子操作，不负责blocking、capacity或completion。BlockingCollection把IProducerConsumerCollection包装成bounded blocking queue，Add/Take可等待，CompleteAdding终止producer，GetConsumingEnumerable消费到完成。
+
+## Writing a Producer/Consumer Queue
+
+完整queue contract包括capacity/backpressure、producer count、item ownership、ordering、consumer concurrency、completion、fault propagation、cancellation和shutdown drain。无界queue会把速度差转成内存增长。BlockingCollection适合同步worker；Channel&lt;T&gt;适合async pipeline并可选择Wait/Drop full mode。
+
+```csharp
+static async Task RunPipelineAsync(
+    ChannelReader<Job> reader, CancellationToken ct)
+{
+    await foreach (Job job in reader.ReadAllAsync(ct))
+        await ProcessAsync(job, ct);
+}
+
+var channel = Channel.CreateBounded<Job>(new BoundedChannelOptions(256)
+{
+    FullMode = BoundedChannelFullMode.Wait,
+    SingleReader = false,
+    SingleWriter = false
+});
+```
+
+Owner在所有producers成功后TryComplete；任何producer fault应Complete(exception)并取消siblings，consumers观察completion。Item若持buffer/stream，enqueue转移ownership；drop/cancel路径负责Dispose。Shutdown先停producer，再complete，等待consumers drain到deadline，之后取消。
+
+<Stepper>
+  <Step title="切换ConcurrentQueue、BlockingCollection、Channel与local reduction"><CtcProducerConsumerLab /></Step>
+  <Step title="填写pipeline ledger">记录capacity、full mode、item owner、producer completion、consumer fault、ordering和drain deadline。</Step>
+  <Step title="执行慢端与失败测试">让producer/consumer分别变慢，在queue满、mid-item fault、cancel和shutdown点验证无丢失/泄漏/永久等待。</Step>
+</Stepper>
+
+<Term def="通过有限capacity让producer速度受consumer处理能力约束，防止排队内存无限增长。">bounded backpressure</Term>
+
+## 本章回顾：并行优化必须证明收益与确定性
+
+1. 顺序baseline、粒度、串行比例和共存负载决定可实现speedup。
+2. PLINQ默认无序，Parallel loop需local state/merge并限制degree。
+3. Task DAG和scheduler表达依赖与执行策略，不自动观察所有fault。
+4. Concurrent collection保证单项operation，不保证跨步骤业务invariant。
+5. Producer/consumer queue必须有capacity、completion、fault owner和shutdown drain。
+
+<Exercises>
+
+**问题 1：一个PLINQ查询变慢，应按什么顺序排查？**
+
+<Answer>先与相同Release输入的顺序版本比较；测selector成本、输入规模、partition skew、AsOrdered/merge、shared lock和degree。逐项移除排序/side effect，做degree sweep并看CPU利用率与wall time；若work太细或串行merge占主导就保留顺序。</Answer>
+
+**问题 2：GetOrAdd factory为什么必须无副作用？**
+
+<Answer>ConcurrentDictionary可让多个线程并发执行factory，最终只存一个winner，其他结果丢弃。Factory可能执行多次，不能直接发送消息/扣款；先生成可丢弃值，或把side effect移到确定winner后的外部幂等协议。</Answer>
+
+**问题 3：如何验证bounded Channel正确停机？**
+
+<Answer>停止接收新producer，等待/取消producers后由owner Complete，consumers ReadAllAsync drain；所有item ownership在成功write时转移，失败/drop由producer释放。注入满队列、producer fault、consumer fault和deadline，断言completion被观察且无hang/泄漏。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="parallel speedup ledger" definition="顺序和各degree的收益、成本与一致性证据。" />
+  <GlossaryItem term="parallel query shape" definition="PLINQ order、partition、merge和side-effect契约。" />
+  <GlossaryItem term="parallel failure ledger" definition="多branch fault/cancel及input身份记录。" />
+  <GlossaryItem term="bounded backpressure" definition="有限capacity把producer速度约束到consumer能力。" />
+  <GlossaryItem term="deterministic reduction" definition="明确partition local结果与固定merge语义的归并。" />
+</Glossary>
+
+<Term def="每个partition先产生local result，再按定义顺序和associative规则合并成可复现结果。">deterministic reduction</Term>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 22: Parallel Programming" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch22.html" />

@@ -1,0 +1,386 @@
+---
+title: "Unity Web：发布设置、Wasm 2023 与 Chrome DevTools"
+type: C
+section: "Unity Web 构建、发布与 Profiling"
+order: 1
+description: "按 Unity 6 官方指南第 92—96 页复现 Web 帧调度、发布设置、Wasm 2023 与 Chrome DevTools 证据链。"
+demo: true
+math: false
+draft: false
+sourceUrl: "https://unity.com/resources/mobile-xr-web-game-performance-optimization-unity-6"
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Mxrw16UnityWebMapLab,
+  Mxrw16UnityWebExperimentLab,
+  Mxrw16UnityWebEvidenceLab,
+} from "@/components/mdx/mobile-xr-web-optimization/diagrams/mxrw-16-unity-web";
+
+<Objectives>
+
+- 能解释官方单元 16在Unity 6官方跨平台优化流程中的责任与前后依赖
+- 能复现“浏览器环境 → 页面可见性 → 帧调度 → Unity循环 → GPU呈现 → 体验签发”并保存目标设备中间证据
+- 能设计失败实验，判断“Web性能结论记录浏览器版本、设备、显示刷新、可见状态、页面模板和服务器配置，并在前台真实页面复验。”是否成立
+
+</Objectives>
+
+## 问题：怎样证明掌握的是官方单元 16，而不是背下一组技巧？
+
+先预测：若只报告修改后FPS，没有设备、构建、场景、输入、热状态和画面合同，另一位开发者能否证明收益来自这次修改？不能。跨平台优化首先是受控实验，其次才是技巧选择。
+
+Unity Web运行在浏览器调度、显示刷新、JavaScript主线程和Web内存约束中。帧率通常由requestAnimationFrame驱动，后台标签会节流，不能照搬桌面Player假设。
+
+<Mxrw16UnityWebMapLab />
+
+## 官方目录边界
+
+本页严格对应Unity Technologies《Optimize your game performance for mobile, XR, and the web in Unity》Unity 6版第92—96页。以下目录项必须进入实现或证据：
+
+- **Platform-specific tips for Unity Web Builds**
+- **Framerate**
+- **Browser refresh rate**
+- **requestAnimationFrame**
+- **Background tab throttling**
+- **Web memory constraints**
+- **Publishing settings for Unity Web**
+- **Compression**
+- **Strip engine code**
+- **Choose None in the Enable Exceptions setting**
+- **Target WebAssembly 2023 feature set**
+- **Code Optimization settings**
+- **Profiling Unity Web Builds**
+- **Chrome DevTools**
+- **Performance panel**
+- **Network panel**
+- **WebAssembly call stacks**
+- **Long tasks**
+
+本站重新组织中文讲解、代码和实验，不逐字复制原文。平台API和包能力随Unity与设备版本变化，实际项目要固定版本并保存迁移差异。
+
+## 核心模型与不可变条件
+
+Unity Web运行在浏览器调度、显示刷新、JavaScript主线程和Web内存约束中。帧率通常由requestAnimationFrame驱动，后台标签会节流，不能照搬桌面Player假设。
+
+不可变条件是：**Web性能结论记录浏览器版本、设备、显示刷新、可见状态、页面模板和服务器配置，并在前台真实页面复验。** 如果测试上下文、视觉或玩法结果发生变化，就不能把两次数字直接相减。先解释变化，再决定是否建立新基线。
+
+## 五个必须落到证据的术语
+
+<Term def="编译为WebAssembly并在浏览器环境运行的Unity Player">
+  Unity Web Build
+</Term>
+
+它必须落到“浏览器环境 → 页面可见性 → 帧调度 → Unity循环 → GPU呈现 → 体验签发”的证据链，不能只作为术语记忆。
+
+<Term def="浏览器在下一次绘制前调度动画回调的API">requestAnimationFrame</Term>
+
+它必须落到“浏览器环境 → 页面可见性 → 帧调度 → Unity循环 → GPU呈现 → 体验签发”的证据链，不能只作为术语记忆。
+
+<Term def="浏览器降低后台页面计时器和绘制频率的行为">标签页节流</Term>
+
+它必须落到“浏览器环境 → 页面可见性 → 帧调度 → Unity循环 → GPU呈现 → 体验签发”的证据链，不能只作为术语记忆。
+
+<Term def="承载Unity Canvas加载脚本和页面集成的Web模板">页面模板</Term>
+
+它必须落到“浏览器环境 → 页面可见性 → 帧调度 → Unity循环 → GPU呈现 → 体验签发”的证据链，不能只作为术语记忆。
+
+<Term def="用于覆盖不同浏览器设备和图形后端的测试组合">浏览器矩阵</Term>
+
+它必须落到“浏览器环境 → 页面可见性 → 帧调度 → Unity循环 → GPU呈现 → 体验签发”的证据链，不能只作为术语记忆。
+
+## 从输入到发布的证据链
+
+主链为：**浏览器环境 → 页面可见性 → 帧调度 → Unity循环 → GPU呈现 → 体验签发**。每个节点保存平台、设备、浏览器或运行时、Unity与包版本、构建提交、场景检查点、预算、实际值和首个异常。后一节点只消费前一节点已验证事实。
+
+### 1. 帧调度
+
+浏览器requestAnimationFrame通常与显示同步，Application.targetFrameRate与桌面Player语义不同。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 2. 刷新率
+
+60、90或120 Hz显示改变调度上限，报告帧时间而不是只报FPS。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 3. 可见性
+
+后台标签和省电策略会节流；采集脚本记录document.visibilityState并剔除非目标阶段。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 4. 主线程
+
+页面JavaScript、DOM和Unity WebAssembly共享浏览器资源，嵌入站点脚本也可能形成长任务。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 5. 内存
+
+浏览器与WebAssembly内存限制比桌面进程严格，下载、解压和运行峰值都进入预算。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 6. 输入音频
+
+用户手势、焦点和浏览器权限影响输入与音频启动，性能测试要走真实页面交互。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 7. 矩阵
+
+Chrome、Firefox、Safari及移动浏览器能力不同，按支持声明执行功能与性能回归。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+<Mxrw16UnityWebExperimentLab />
+
+## 发布设置、Wasm 2023 与传输预算
+
+主链为：**构建设置 → 代码剥离 → 压缩产物 → 服务器响应 → 浏览器启动 → 兼容签发**。每个节点保存平台、设备、浏览器或运行时、Unity与包版本、构建提交、场景检查点、预算、实际值和首个异常。后一节点只消费前一节点已验证事实。
+
+### 1. 压缩
+
+Brotli通常体积更小，Gzip兼容广；CDN和服务器必须设置Content-Encoding与正确MIME。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 2. 代码剥离
+
+Strip Engine Code减少下载，但反射、动态加载和插件依赖要用完整功能回归防止误删。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 3. 异常
+
+None可减小成本，却降低运行诊断；开发、预发布与生产可使用不同策略并保留符号映射。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 4. Wasm 2023
+
+现代特性可能改善代码生成和运行，启用前核对目标浏览器支持与降级策略。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 5. 代码优化
+
+选择速度或大小以真实下载和运行瓶颈为依据，不用单一默认覆盖所有产品。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 6. 启动链
+
+分别测DNS、下载、解压、编译实例化、数据加载与首个可交互时间，避免只看文件大小。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 7. 缓存更新
+
+文件哈希、CDN缓存和版本回滚进入发布合同，旧页面不能加载新旧混合资源。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+## Chrome DevTools 与浏览器侧归因
+
+主链为：**清洁会话 → Network启动 → Performance录制 → 长任务分流 → Unity标记关联 → 浏览器复验**。每个节点保存平台、设备、浏览器或运行时、Unity与包版本、构建提交、场景检查点、预算、实际值和首个异常。后一节点只消费前一节点已验证事实。
+
+### 1. 清洁环境
+
+使用无扩展或独立Profile，固定浏览器版本、硬件加速、页面可见性和DevTools设置。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 2. Network
+
+禁用缓存用于首次访问，启用缓存用于复访；检查压缩、MIME、并发、资源优先级和首字节。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 3. Performance
+
+预热后录固定交互，观察Main线程长任务、帧、GPU和GC，标记加载与玩法区间。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 4. 调用栈
+
+Wasm符号和Source Map决定可读性；发布构建可保留受控符号在安全环境复现。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 5. 页面脚本
+
+Unity外的DOM、分析、广告和框架代码也共享主线程，责任归因需要URL与调用栈证据。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 6. Unity关联
+
+同一场景使用Unity Profiler或自定义标记记录帧号，把浏览器长任务与引擎阶段对齐。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 7. 复验
+
+关闭DevTools后重新测用户体验，因为采集会改变时序；修复同时验证启动和运行两条链。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+发布结论必须把构建报告、服务器响应头、Network 传输、Performance 长任务和 Unity Profiler 标记串到同一构建 ID。下载更小但解压峰值、启动时间或运行帧时间恶化时，发布门仍应拒绝。
+
+## 三步复现与分步观察
+
+<Stepper>
+  <Step title="1. 冻结平台合同与输入">
+    固定设备或浏览器、构建、场景、画质、预热、输入和结果合同，写出唯一假设及反证条件。
+    <Mxrw16UnityWebMapLab />
+  </Step>
+  <Step title="2. 找首因并只改一个变量">
+    沿“浏览器环境 → 页面可见性 → 帧调度 → Unity循环 → GPU呈现 →
+    体验签发”保存中间值，在首个越界点停止下钻；一次只修改一个主要因素。
+    <Mxrw16UnityWebExperimentLab />
+  </Step>
+  <Step title="3. 同输入复验并签发">
+    恢复相同热状态和检查点，重放基线输入，同时检查性能、内存、画面、玩法与维护副作用。
+    <Mxrw16UnityWebEvidenceLab />
+  </Step>
+</Stepper>
+
+## 可执行实现骨架
+
+```csharp
+public sealed class WebVisibilityProbe : MonoBehaviour
+{
+    public void OnVisibilityChanged(bool visible)
+    {
+        telemetry.Mark(visible ? "web.foreground" : "web.background");
+        enabled = visible;
+    }
+}
+```
+
+每份采集都保存结构化上下文，报告与原始文件必须通过ID互相引用：
+
+```json
+{
+  "chapter": "mxrw-16-unity-web",
+  "officialPages": "第92—96页",
+  "chain": [
+    "浏览器环境",
+    "页面可见性",
+    "帧调度",
+    "Unity循环",
+    "GPU呈现",
+    "体验签发"
+  ],
+  "platform": "mobile-web-or-xr",
+  "device": "representative-target",
+  "build": "commit-unity-packages",
+  "scenario": "fixed-checkpoint",
+  "normal": true,
+  "boundary": true,
+  "failureReplay": true
+}
+```
+
+自动门必须保留数值、结果合同和拒绝原因：
+
+```text
+PASS context=platform+device+build+scene+quality+input
+PASS chain=浏览器环境 -> 页面可见性 -> 帧调度 -> Unity循环 -> GPU呈现 -> 体验签发
+PASS invariant=Web性能结论记录浏览器版本、设备、显示刷新、可见状态、页面模板和服务器配置，并在前台真实页面复验。
+REJECT changed-context | hidden-quality-loss | shifted-cost | missing-failure-replay
+```
+
+## 两个必须主动制造的失败样本
+
+<Callout type="trap" title="官方边界或测试上下文丢失">
+  在后台标签页采集帧率，浏览器节流后把低FPS误判成Unity渲染瓶颈。
+  保存错误结论、首个偏离节点和原始数据，再恢复官方边界与相同条件复验。
+</Callout>
+
+<Callout type="trap" title="数字变好但结果或维护成本恶化">
+  故意降低画质、跳过玩法工作、扩大永久缓存或增加难以维护的平台分支。若主指标改善但视觉、行为、内存、热量或发布可靠性变差，发布门必须拒绝。
+</Callout>
+
+## 证据矩阵与签发标准
+
+| 维度       | 正常样本         | 边界样本           | 失败样本         | 签发条件       |
+| ---------- | ---------------- | ------------------ | ---------------- | -------------- |
+| 平台上下文 | 代表设备固定构建 | 最低规格或长时运行 | 故意改变一项条件 | 差异可解释     |
+| 主证据链   | 六节点均记录     | 接近预算输入       | 首个节点注入偏差 | 能定位首因     |
+| 性能结果   | 达到预算         | 无长尾越界         | 主动制造回归     | 同输入可复验   |
+| 正确性     | 视觉玩法一致     | 生命周期完整       | 降质或转移成本   | 所有门同时通过 |
+
+<Mxrw16UnityWebEvidenceLab />
+
+## 练习：把官方单元 16变成可审计交付
+
+<Exercises>
+
+**问题 1** 写出“浏览器环境”到“体验签发”每一步的输入、观测工具、阈值和输出。
+
+<Answer>
+  每一步都引用同一测试上下文，输出包含数值、原始文件与下一动作理由，不能只写工具或设置名称。
+</Answer>
+
+**问题 2** 主动制造“在后台标签页采集帧率，浏览器节流后把低FPS误判成Unity渲染瓶颈。”，保存错误结论与首个偏离节点，再用同一输入证明修复。
+
+<Answer>
+  合格答案包含故障上下文、反证实验、修复后原始数据，以及性能和正确性双重结果。
+</Answer>
+
+**问题 3** 为“Web性能结论记录浏览器版本、设备、显示刷新、可见状态、页面模板和服务器配置，并在前台真实页面复验。”设计正常、预算边界和失败三组测试。
+
+<Answer>
+  三组测试只改变计划输入，统一记录平台、构建、设备、帧或快照ID、预算、实际值、首个异常和复验状态。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- 是否逐项覆盖本页官方目录，而没有用通用建议替代？
+- 是否沿“浏览器环境 → 页面可见性 → 帧调度 → Unity循环 → GPU呈现 → 体验签发”保存可追溯中间证据？
+- 是否在真实移动、浏览器或XR目标中验证，而非只看Editor？
+- 是否主动制造失败，并证明优化没有转移成本或破坏结果？
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="Unity Web Build">
+    编译为WebAssembly并在浏览器环境运行的Unity Player。
+  </GlossaryItem>
+  <GlossaryItem term="requestAnimationFrame">
+    浏览器在下一次绘制前调度动画回调的API。
+  </GlossaryItem>
+  <GlossaryItem term="标签页节流">
+    浏览器降低后台页面计时器和绘制频率的行为。
+  </GlossaryItem>
+  <GlossaryItem term="页面模板">
+    承载Unity Canvas加载脚本和页面集成的Web模板。
+  </GlossaryItem>
+  <GlossaryItem term="浏览器矩阵">
+    用于覆盖不同浏览器设备和图形后端的测试组合。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Unity Technologies《Optimize your game performance for mobile, XR, and the web in Unity》(Unity 6 edition)，2024，101页"
+  adaptedUrl="https://unity.com/resources/mobile-xr-web-game-performance-optimization-unity-6"
+/>

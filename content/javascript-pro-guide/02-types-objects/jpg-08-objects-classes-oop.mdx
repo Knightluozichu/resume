@@ -1,0 +1,269 @@
+---
+title: "第 8 章 对象、类与面向对象编程"
+type: A
+section: "JavaScript高级程序设计（第4版） · 类型与对象"
+order: 8
+description: "JavaScript对象模型以属性描述符和原型委托为基础，class是更清晰的语法边界而不是另一套继承机制。"
+demo: true
+math: false
+sourceUrl: "https://uat.store.wiley.com/en-us/professional-javascript-for-web-developers-4th-edition-p-9781119366577"
+draft: false
+---
+
+import {
+  Jpg08ObjectsClassesOopMapLab,
+  Jpg08ObjectsClassesOopExperimentLab,
+  Jpg08ObjectsClassesOopEvidenceLab,
+} from "@/components/mdx/javascript-pro-guide/diagrams/jpg-08-objects-classes-oop";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释第 8 章 对象、类与面向对象编程的核心机制，并把它放回28章与4个附录的主线
+- 能比较正常、边界、失败和恢复样本，指出首个执行或状态偏离点
+- 能实现最小JavaScript实验，记录浏览器版本、输入、任务顺序与资源所有权
+- 能设计证据回答“实例自有状态彼此隔离；共享行为位于明确原型；属性描述符和继承关系不破坏对象不变量。”是否成立
+
+</Objectives>
+
+## 直觉：先画执行与所有权
+
+JavaScript对象模型以属性描述符和原型委托为基础，class是更清晰的语法边界而不是另一套继承机制。 真正的难点不是让一次示例得到预期输出，而是让绑定、对象、任务、权限和资源在异常、取消、重复与版本切换后仍可解释。先预测：若只保存最终截图，最可能隐藏哪一种陈旧状态？
+
+<Jpg08ObjectsClassesOopMapLab />
+
+## 权威目录定位
+
+本页依据 Wiley 第4版官方31页目录样章与中文版公开完整目录锁定范围。目录名称用于一对一追踪，正文为独立教学重构；新浏览器差异、安全与可观察性补充会明确披露：
+
+- 8.1 理解对象
+- 8.1.1 属性的类型
+- 8.1.2 定义多个属性
+- 8.1.3 读取属性的特性
+- 8.1.4 合并对象
+- 8.1.5 对象标识及相等判定
+- 8.1.6 增强的对象语法
+- 8.1.7 对象解构
+- 8.2 创建对象
+- 8.2.1 概述
+- 8.2.2 工厂模式
+- 8.2.3 构造函数模式
+- 8.2.4 原型模式
+- 8.2.5 对象迭代
+- 8.3 继承
+- 8.3.1 原型链
+- 8.3.2 盗用构造函数
+- 8.3.3 组合继承
+- 8.3.4 原型式继承
+- 8.3.5 寄生式继承
+- 8.3.6 寄生式组合继承
+- 8.4 类
+- 8.4.1 类定义
+- 8.4.2 类构造函数
+- 8.4.3 实例、原型和类成员
+- 8.4.4 继承
+- 8.5 小结
+
+本页逐项覆盖 **27** 个公开目录条目，并纳入正常、边界、失败和恢复验收。
+
+## 核心概念与所有权
+
+<Term def="以value/get/set和writable/enumerable/configurable描述对象属性行为的记录。">
+  属性描述符
+</Term>
+、<Term def="对象在自身缺少属性时继续查找的另一个对象。">原型</Term>、
+<Term def="配合new创建对象、绑定原型并初始化实例状态的可调用对象。">
+  构造函数
+</Term>
+、<Term def="由对象的内部原型逐级连接形成的属性委托查找路径。">原型链</Term>、
+<Term def="为构造、原型方法、继承和静态成员提供统一语法的严格模式定义。">
+  类
+</Term>
+。每个概念都要回答：谁创建输入，状态保存在哪里，哪个任务或版本可修改它，结束后由谁清理。
+
+|   # | 概念       | 工程含义                                                                  |
+| --: | ---------- | ------------------------------------------------------------------------- |
+|   1 | 属性描述符 | 以value/get/set和writable/enumerable/configurable描述对象属性行为的记录。 |
+|   2 | 原型       | 对象在自身缺少属性时继续查找的另一个对象。                                |
+|   3 | 构造函数   | 配合new创建对象、绑定原型并初始化实例状态的可调用对象。                   |
+|   4 | 原型链     | 由对象的内部原型逐级连接形成的属性委托查找路径。                          |
+|   5 | 类         | 为构造、原型方法、继承和静态成员提供统一语法的严格模式定义。              |
+
+## 机制拆解
+
+### 1. 属性不只有键和值
+
+访问器属性可计算或验证状态，数据属性的可写、可枚举与可配置标志决定反射行为。Object.defineProperty默认缺失标志为false，批量定义前要明确每项契约。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+### 2. 继承是对象间委托
+
+构造函数的prototype成为实例原型，属性查找沿链向上。组合继承等旧模式要处理父构造重复调用；现代class extends与super简化写法，但实例方法仍位于原型上。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+### 3. 私有状态与实例共享要分开
+
+写在构造函数里的函数每个实例一份，原型方法由实例共享；闭包私有变量会改变内存和调试特性。选择封装方式时要同时考虑身份检查、序列化、子类扩展与方法共享。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+## 六阶段证据链
+
+可操作链条是：定义对象不变量 → 配置属性描述符 → 建立原型委托 → 初始化实例状态 → 扩展继承关系 → 检查身份与封装。正常样本证明能力，边界样本证明预算，失败样本证明拒绝，恢复样本证明任务、状态和资源重新收敛。
+
+<Stepper>
+  <Step title="1. 定义对象不变量与配置属性描述符">
+    固定浏览器版本、输入、初始DOM与时钟，运行正常和边界样本。
+    <Jpg08ObjectsClassesOopMapLab />
+  </Step>
+  <Step title="2. 建立原型委托与初始化实例状态">
+    注入异常、取消、重复事件、权限拒绝或旧缓存，要求在首偏离点停止。
+    <Jpg08ObjectsClassesOopExperimentLab />
+  </Step>
+  <Step title="3. 扩展继承关系与检查身份与封装">
+    清除故障后重放相同输入，核对输出、任务队列、DOM摘要、监听器与资源数量。
+    <Jpg08ObjectsClassesOopEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小可运行实验
+
+以下代码用于独立观察本页机制；生产实现还需加入输入验证、兼容策略、权限、取消与清理。
+
+```js
+class Counter {
+  #value = 0;
+  increment() {
+    this.#value += 1;
+    return this.#value;
+  }
+}
+const a = new Counter();
+const b = new Counter();
+console.assert(a.increment() === 1 && b.increment() === 1);
+```
+
+证据记录把目录、运行时与状态摘要放在一起：
+
+```yaml
+book: JavaScript高级程序设计（第4版）
+page: jpg-08-objects-classes-oop
+official_entries: 27
+sample: normal | boundary | failure | recovery
+browser_version: fixed
+input_fixture: fixed
+first_divergence: null
+cleanup_complete: true
+```
+
+故障脚本一次只改变一个变量：
+
+```text
+baseline -> inject(exception | cancel | duplicate | denied | stale-cache)
+observe -> stop_at_first_divergence
+recover -> replay_same_runtime_and_input
+assert -> one_state_owner && stable_output && no_stale_task && no_resource_leak
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：把class当成与原型无关的新对象模型，调试属性查找时失去路径。**
+  必须保存输入、任务顺序、状态摘要与首次拒绝原因，而不是只看最终页面。
+</Callout>
+
+<Callout type="trap">
+  **误区二：在共享原型上放可变数组，所有实例意外共享内容。**
+  必须加入边界、失败与恢复样本，证明错误没有跨入下一阶段。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 输入与环境变化                   | 预期状态       | 通过条件                     |
+| ---- | -------------------------------- | -------------- | ---------------------------- |
+| 正常 | 合法输入、权限、顺序与版本       | 六阶段完成     | 输出和状态摘要一致           |
+| 边界 | 空值、极限容量、重复事件或慢任务 | 达到预算不越界 | 主线程与内存有界             |
+| 失败 | 异常、取消、拒权、断网或旧产物   | 首偏离点停止   | 明确传播、回滚或降级         |
+| 恢复 | 修复后重放同一输入               | 收敛到正常轨迹 | 无陈旧任务、监听器和资源泄漏 |
+
+<Jpg08ObjectsClassesOopEvidenceLab />
+
+本页签发不变量是：**实例自有状态彼此隔离；共享行为位于明确原型；属性描述符和继承关系不破坏对象不变量。** 单次成功、平均耗时或最终截图不能替代运行时版本、执行轨迹、首偏离点与清理证据。
+
+## 练习
+
+<Exercises>
+
+**问题 1** 为什么不能只以最终页面结果正确作为验收？
+
+<Answer>
+  最终结果会隐藏重复副作用、旧任务覆盖、错误吞没和资源泄漏。必须比较输入、执行顺序、状态所有者、首偏离点与清理结果。
+</Answer>
+
+**问题 2** 如何把本页公开目录变成可执行学习证据？
+
+<Answer>
+  按公开顺序建立追踪表，为每组条目写出输入、状态、输出、失败与恢复条件。本页重点包括：8.1
+  理解对象、8.1.1 属性的类型、8.1.2 定义多个属性、8.1.3 读取属性的特性、8.1.4
+  合并对象、8.1.5 对象标识及相等判定、8.1.6 增强的对象语法、8.1.7
+  对象解构；其余条目已在上方逐项列出。
+</Answer>
+
+**问题 3** 本页的最小通过条件是什么？
+
+<Answer>
+  实例自有状态彼此隔离；共享行为位于明确原型；属性描述符和继承关系不破坏对象不变量。
+  并且相同浏览器版本、输入与初始状态可以重放正常、边界、失败和恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **属性描述符**：以value/get/set和writable/enumerable/configurable描述对象属性行为的记录。
+- **原型**：对象在自身缺少属性时继续查找的另一个对象。
+- **构造函数**：配合new创建对象、绑定原型并初始化实例状态的可调用对象。
+- **原型链**：由对象的内部原型逐级连接形成的属性委托查找路径。
+- **类**：为构造、原型方法、继承和静态成员提供统一语法的严格模式定义。
+- 六阶段机制链已经映射到正常、边界、失败与恢复证据。
+- 官方目录逐项追踪，现代补充不会冒充原书正式分节。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="属性描述符">
+    以value/get/set和writable/enumerable/configurable描述对象属性行为的记录。
+  </GlossaryItem>
+  <GlossaryItem term="原型">
+    对象在自身缺少属性时继续查找的另一个对象。
+  </GlossaryItem>
+  <GlossaryItem term="构造函数">
+    配合new创建对象、绑定原型并初始化实例状态的可调用对象。
+  </GlossaryItem>
+  <GlossaryItem term="原型链">
+    由对象的内部原型逐级连接形成的属性委托查找路径。
+  </GlossaryItem>
+  <GlossaryItem term="类">
+    为构造、原型方法、继承和静态成员提供统一语法的严格模式定义。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Matt Frisbie 著，李松峰译，人民邮电出版社，2020年9月，866页，ISBN 9787115545381；英文原版 Professional JavaScript for Web Developers, 4th Edition，Wiley，2019年10月，1200页，印刷版 ISBN 9781119366447、电子版 ISBN 9781119366577。Wiley官方31页目录样章与中文版公开目录确认28章、4个附录和757个二三级目录条目。正文为独立教学重构。"
+  adaptedUrl="https://uat.store.wiley.com/en-us/professional-javascript-for-web-developers-4th-edition-p-9781119366577"
+/>

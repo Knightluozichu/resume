@@ -19,7 +19,7 @@ export function DogWebglBasicsDiagram() {
           <rect x="210" y="56" width="160" height="80" rx="8" fill="var(--accent)" fillOpacity="0.10" stroke="var(--accent)" strokeWidth="1.2" />
           <text x="290" y="80" textAnchor="middle" fontSize="11" fontWeight="700" fill="var(--accent)">WebGL 上下文</text>
           <text x="290" y="98" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">webgl2 优先</text>
-          <text x="290" y="116" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">回退 webgl1</text>
+          <text x="290" y="116" textAnchor="middle" fontSize="9.5" fill="var(--text-secondary)">或选择独立 WebGL1 路径</text>
           <line x1="180" y1="96" x2="210" y2="96" stroke="var(--accent)" strokeWidth="1.3" markerEnd="url(#wbArrow)" />
 
           {/* 资源 */}
@@ -44,9 +44,9 @@ export function DogWebglBasicsDiagram() {
 
           {/* 底部说明 */}
           <rect x="40" y="288" width="640" height="86" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" />
-          <text x="360" y="310" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">WebGL2 ≈ ES3（3D 纹理/UBO/MRT/原生 VAO/实例化）· WebGL1 ≈ ES2</text>
+          <text x="360" y="310" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">WebGL2 以 ES 3.0 为基线；WebGL1 以 ES 2.0 为基线</text>
           <text x="360" y="328" textAnchor="middle" fontSize="10.5" fill="var(--text-secondary)">上下文丢失时所有 GL 资源失效，必须在 restored 里重建</text>
-          <text x="360" y="346" textAnchor="middle" fontSize="10.5" fill="var(--text-secondary)">uniform/attribute 位置在链接后查询；返回 -1 表示被优化掉，跳过设定</text>
+          <text x="360" y="346" textAnchor="middle" fontSize="10.5" fill="var(--text-secondary)">位置属于链接后的 program；恢复后必须随 program 一起重查</text>
           <text x="360" y="364" textAnchor="middle" fontSize="10.5" fill="var(--text-primary)">render 循环检测 resourcesValid，失效期间跳过绘制</text>
 
           <defs>
@@ -56,7 +56,39 @@ export function DogWebglBasicsDiagram() {
           </defs>
         </svg>
       </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">canvas 取上下文建资源，丢失时 preventDefault、恢复时重建全部资源</figcaption>
+      <figcaption className="mt-2 text-center text-sm text-secondary">canvas 选择明确版本路径；丢失时暂停，浏览器恢复后重建全部 GPU 资源</figcaption>
+    </figure>
+  );
+}
+
+export function DogCanvasSizeDiagram() {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
+        <div
+          role="img"
+          aria-label="CSS 显示尺寸、canvas 绘图缓冲尺寸和 WebGL viewport 的对应关系"
+          className="grid gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr] md:items-stretch"
+        >
+          <section className="rounded-control border border-border bg-bg/40 p-4">
+            <h3 className="text-sm font-bold text-primary">CSS 显示尺寸</h3>
+            <p className="mt-2 text-xs leading-5 text-secondary">clientWidth × clientHeight，决定页面上占多大空间</p>
+          </section>
+          <span className="self-center text-center text-accent">→</span>
+          <section className="rounded-control border border-accent/50 bg-accent/10 p-4">
+            <h3 className="text-sm font-bold text-accent">绘图缓冲尺寸</h3>
+            <p className="mt-2 text-xs leading-5 text-secondary">CSS 像素 × devicePixelRatio，并受实现上限约束</p>
+          </section>
+          <span className="self-center text-center text-accent">→</span>
+          <section className="rounded-control border border-border bg-bg/40 p-4">
+            <h3 className="text-sm font-bold text-primary">viewport</h3>
+            <p className="mt-2 text-xs leading-5 text-secondary">把裁剪空间映射到 drawingBufferWidth × drawingBufferHeight</p>
+          </section>
+        </div>
+      </div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">
+        只改 CSS 或只改 canvas 属性都会造成拉伸、模糊或裁剪映射错误
+      </figcaption>
     </figure>
   );
 }

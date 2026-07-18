@@ -1,0 +1,217 @@
+---
+title: "Chapter 21 · Minimum Spanning Trees"
+type: C
+section: "CLRS4 · 图算法"
+order: 21
+description: "按CLRS第四版第21章重建安全边与割性质，并统一讲解Kruskal和Prim最小生成树算法。"
+demo: true
+math: true
+sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+draft: false
+---
+
+import { CLRS4MSTContractLab, CLRS4CutLightEdgeLab, CLRS4SafeEdgeExchangeLab, CLRS4GenericMSTInvariantLab, CLRS4KruskalSortLab, CLRS4KruskalForestLab, CLRS4PrimFrontierLab, CLRS4PrimKeysLab, CLRS4MSTCompareLab, CLRS4MSTCertificateLab } from "@/components/mdx/introduction-to-algorithms/diagrams/21-minimum-spanning-trees";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释spanning tree、cut、respect、light edge与safe edge之间的正确性链条
+- 能计算一个weighted undirected graph的Kruskal排序过程、Prim keys和最终tree weight
+- 能实现GENERIC-MST、Kruskal配合union-find及Prim配合min-priority queue
+- 能分析cut-property exchange proof以及equal weights、negative weights和disconnected input边界
+- 能设计包含forest invariant、respecting cut、light-edge witness、connectivity与weight audit的MST证书
+
+</Objectives>
+
+## 从“每次选最便宜edge为什么会成环”开始
+
+先预测：把所有edges按weight从小到大拿，是否一定得到tree？不一定。若不检查components，三角形的三条cheap edges会形成cycle。安全choice不是“全局最小”四个字，而是“对当前forest某个respecting cut的light crossing edge”。
+
+<Term def="连通无向weighted graph中覆盖所有vertices、无cycle且总edge weight最小的spanning tree。">最小生成树</Term>优化的是连接全部vertices的基础设施总成本，不是source到各vertex路径之和。任意spanning tree有$|V|-1$条edges：
+
+$$
+|T|=|V|-1,
+\qquad
+w(T)=\sum_{e\in T}w(e).
+$$
+
+<CLRS4MSTContractLab />
+
+## 21.1 Growing a minimum spanning tree
+
+### The extendable forest invariant
+
+<Term def="从空forest开始，每次加入可保证仍被某棵MST包含的safe edge，直到得到V减1条edges的通用过程。">生成最小生成树</Term>维护edge set $A$，invariant是“存在一棵MST $T$使$A\subseteq T$”。初始$A=\varnothing$显然成立；每次只加safe edge。
+
+```text
+GENERIC-MST(G, w)
+1  A = empty set
+2  while A does not form a spanning tree
+3      find an edge (u,v) that is safe for A
+4      A = A union {(u,v)}
+5  return A
+```
+
+<CLRS4GenericMSTInvariantLab />
+
+### Cuts and light edges
+
+<Term def="把vertex集合分成S与V减S两部分的partition；一个edge crossing该割当且仅当两endpoints分处两侧。">割</Term>$(S,V-S)$ respects $A$，若$A$中没有edge crossing该cut。对cut的light edge是所有crossing edges中weight最小者，equal minimum可以有多个。
+
+$$
+\delta(S)=\{(u,v)\in E:u\in S,\ v\notin S\}.
+$$
+
+<CLRS4CutLightEdgeLab />
+
+<Term def="加入当前edge后，已有forest仍可扩展成某棵MST；对respecting cut的light edge必为safe。">安全边</Term>由cut property保证。设$A$被MST $T$包含，light crossing edge $(u,v)$不在$T$。把它加入$T$会产生唯一cycle；cycle必有另一条crossing edge $(x,y)$。因为$(u,v)$是light：
+
+$$
+w(u,v)\le w(x,y).
+$$
+
+移除$(x,y)$得到spanning tree $T'$，其weight不大于$T$；$T$已经minimum，所以$T'$也是MST且包含$A\cup\{(u,v)\}$。
+
+<CLRS4SafeEdgeExchangeLab />
+
+这份exchange proof解释了negative weights完全可接受：比较只依赖相对weight。Equal weights可产生多个MST，safe edge不必唯一；deterministic tie order只决定witness。
+
+<Callout type="trap" title="选择当前全局最轻但不检查cut">
+若edge endpoints已经在同一forest component，加入会成cycle，且不存在respecting component cut让它cross。修法是明确当前$A$的components，并只从跨component edges中选择light edge。
+</Callout>
+
+## 21.2 The algorithms of Kruskal and Prim
+
+### Kruskal algorithm
+
+<Term def="按weight非降序扫描edges，用disjoint sets接受连接不同components的edge并拒绝成环edge的MST算法。">Kruskal算法</Term>让$A$保持forest。每个component定义一个cut；当前最轻的跨component edge是该cut的light edge，因此safe。
+
+<CLRS4KruskalSortLab />
+
+```cpp
+vector<Edge> kruskal(Graph g) {
+    DisjointSet sets(g.vertices);
+    sort(g.edges.begin(), g.edges.end(), by_weight_then_id);
+    vector<Edge> tree;
+    for (const Edge& edge : g.edges) {
+        if (sets.find(edge.u) != sets.find(edge.v)) {
+            tree.push_back(edge);
+            sets.unite(edge.u, edge.v);
+        }
+    }
+    return tree;
+}
+```
+
+<CLRS4KruskalForestLab />
+
+Sorting需要$O(E\log E)=O(E\log V)$；union-find $O(E\alpha(V))$，整体由sort主导。若weights为小整数可用counting/radix等更快排序，但cycle test仍需要components。
+
+Disconnected graph不会得到spanning tree，而得到minimum spanning forest。API应选择reject disconnected input，或明确返回每个component的MSF；不能把少于$V-1$ edges的结果标成MST。
+
+### Prim algorithm
+
+<Term def="从任意root开始维持一棵growing tree，每次以priority queue加入与tree相连的最低key vertex。">Prim算法</Term>的cut固定为当前tree vertices $S$与其余vertices。对每个$v\notin S$，`key[v]`是已知连接$v$到$S$的最轻edge weight，`parent[v]`记录该edge。
+
+<CLRS4PrimFrontierLab />
+
+```text
+MST-PRIM(G, w, r)
+1  for each vertex u: key[u] = infinity, parent[u] = NIL
+2  key[r] = 0; put all vertices in a min-priority queue Q
+3  while Q is not empty
+4      u = EXTRACT-MIN(Q)
+5      for each v adjacent to u
+6          if v is in Q and w(u,v) < key[v]
+7              parent[v] = u
+8              DECREASE-KEY(Q, v, w(u,v))
+```
+
+<CLRS4PrimKeysLab />
+
+每次extract-min选当前cut的light crossing edge，故safe。Binary heap与adjacency list给$O(E\log V)$；Fibonacci heap理论上为$O(E+V\log V)$。Dense matrix配简单array可为$O(V^2)$，并可能优于heap的常数与memory overhead。
+
+Root只影响MST witness，最优weight不变。`key`不是source shortest distance：它只记录一条crossing edge的weight，不累加root path。
+
+<Callout type="trap" title="把Prim的key当成Dijkstra distance">
+Prim最小化连接vertex到当前tree的单edge，Dijkstra最小化source到vertex的累计path。修法是区分invariant：Prim的parent edges共同最小化tree总重，Dijkstra的parents分别证明shortest paths。
+</Callout>
+
+<CLRS4MSTCompareLab />
+
+### Final certificate
+
+完成时$A$应有$V-1$ edges、无cycle且connected。仅重算weight不足以证明minimum；算法trace应为每个accepted edge保留其respecting cut或等价component/frontier witness。
+
+$$
+A\text{ acyclic and }|A|=|V|-1
+\quad\Longrightarrow\quad
+A\text{ is a spanning tree}
+$$
+
+前提是vertices都在同一connected component。生产验证还需检查edge确实来自input、多重edge identity、integer overflow与floating-point tie policy。
+
+<CLRS4MSTCertificateLab />
+
+<Stepper>
+<Step title="维护可扩展forest">
+从empty $A$开始，检查无cycle，并明确存在某棵MST包含当前所有accepted edges。
+
+<CLRS4GenericMSTInvariantLab />
+</Step>
+<Step title="为choice给出respecting cut">
+Kruskal使用component cut，Prim使用growing-tree cut；证明chosen edge是该cut的light edge。
+
+<CLRS4CutLightEdgeLab />
+</Step>
+<Step title="完成结构与成本审计">
+验证connected、edge count、acyclic、total weight、tie policy和算法对应的数据结构复杂度。
+
+<CLRS4MSTCertificateLab />
+</Step>
+</Stepper>
+
+## 小结
+
+Chapter 21 Minimum Spanning Trees先以growing a minimum spanning tree建立extendable forest invariant、cut、light edge与safe-edge exchange theorem。Kruskal按global edge order扩张多个components，Prim用priority queue扩张一棵tree；二者选择不同cut，却共享同一正确性定理。
+
+MST允许negative和equal weights，但要求undirected connected input。交付结果应包含$V-1$ edge tree、weight、tie policy与safe-choice trace；disconnected时明确返回forest或报错，不能静默把不完整forest称作tree。
+
+<Exercises>
+
+**问题 1**：为什么respecting cut要求当前$A$没有edge crossing？
+
+<Answer>
+这样cut两侧与$A$的既有forest结构兼容，加入一条crossing light edge不会与$A$内已有crossing连接直接冲突。Exchange proof移除cycle上的另一条crossing edge时，也能保证不会移除$A$中的edge，从而保持$A$被new MST包含。
+</Answer>
+
+**问题 2**：Kruskal为何拒绝endpoints已在同一component的edge？
+
+<Answer>
+Forest内两endpoints已有唯一路径，再加该edge会形成cycle。Spanning tree不需要cycle edge；该edge也不cross当前component cut，因此不能作为扩张不同components的safe choice。
+</Answer>
+
+**问题 3**：Prim的`key[v]`和Dijkstra的distance有何不同？
+
+<Answer>
+Prim key只是一条从current tree crossing到$v$的最轻edge weight，不累加root path；Dijkstra distance是source到$v$的完整path weight和。两者可能使用相似priority queue代码，但优化目标与证明不变量不同。
+</Answer>
+
+**问题 4**：Equal edge weights会让MST算法失效吗？
+
+<Answer>
+不会。一个cut可以有多个light edges，任一都safe，可能生成不同但同weight的MST。实现应固定edge id等次排序键以便复现，并让验证器接受所有满足结构与minimum weight的合法witness。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="最小生成树">连通无向weighted graph中覆盖所有vertices、无cycle且总edge weight最小的spanning tree。</GlossaryItem>
+<GlossaryItem term="生成最小生成树">从空forest开始，每次加入可保证仍被某棵MST包含的safe edge，直到得到V减1条edges的通用过程。</GlossaryItem>
+<GlossaryItem term="割">把vertex集合分成S与V减S两部分的partition；一个edge crossing该割当且仅当两endpoints分处两侧。</GlossaryItem>
+<GlossaryItem term="安全边">加入当前edge后，已有forest仍可扩展成某棵MST；对respecting cut的light edge必为safe。</GlossaryItem>
+<GlossaryItem term="Kruskal算法">按weight非降序扫描edges，用disjoint sets接受连接不同components的edge并拒绝成环edge的MST算法。</GlossaryItem>
+<GlossaryItem term="Prim算法">从任意root开始维持一棵growing tree，每次以priority queue加入与tree相连的最低key vertex。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Chapter 21 · Minimum Spanning Trees" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

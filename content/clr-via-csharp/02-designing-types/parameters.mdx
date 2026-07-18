@@ -1,0 +1,191 @@
+---
+title: "Chapter 9. Parameters"
+type: C
+section: "CLR via C# 4e · Designing Types"
+order: 9
+description: "解释named/optional默认值、DefaultParameterValue/Optional、var、value/ref/out/in、params、返回设计与C# const边界。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcArgumentBindingLab, CvcParameterApiLab, CvcParameterPassingLab } from "@/components/mdx/clr-via-csharp/diagrams/parameters";
+
+<Objectives>
+
+- 能分析positional/named/optional arguments的绑定时机、默认值内嵌和source compatibility
+- 能比较value、ref、out、in与params的storage alias、赋值权、allocation和lifetime
+- 能设计清晰的parameter/return contract，并判断readonly、immutable与const-ness各自能保证什么
+
+</Objectives>
+
+## 为什么Parameter就是Call Boundary
+
+Parameter定义caller交出什么：值的copy、对象reference的copy、caller variable的alias、可变长array，还是省略后由call-site填入default。选择会影响binary version、overload resolution、allocation、nullability、aliasing和跨语言消费。一个签名看似只是括号内列表，实际是最频繁执行的协议边界。
+
+先预测：修改optional default后旧binary是否自动采用；named argument是否让parameter name成为compatibility surface；`ref`传reference type是否会复制对象；`in`是否保证对象不可变；`params`每次是否一定分配；`var`是否让local变成dynamic。把答案分别标注为compile binding、storage alias、immutability和type inference。
+
+<Term def="Caller与callee对参数绑定、存储别名、默认值、所有权、失败和返回结果形成的协议。">call boundary contract</Term>
+
+## Optional and Named Arguments
+
+Named argument按source parameter name绑定，提升布尔/同类型参数可读性，但parameter rename会让重新编译consumer失败，因此public parameter names也进入source contract。Named与positional可按语言规则混用；不要依赖复杂顺序让调用难读。很多可选项且持续演进时，用options type通常比十几个optional parameters稳定。
+
+Optional parameter在declaration提供compile-time constant default，caller省略时compiler把值写进call instruction。因此provider改变default后，旧binary仍传旧值。Default适合永久稳定的方便值；需要由部署、culture、clock或业务策略决定的默认，应传sentinel/null再由callee运行时解析，或用overload读当前policy。
+
+```csharp
+public static Report BuildReport(
+    ReportData data,
+    ReportFormat format = ReportFormat.Pdf,
+    bool includeDiagnostics = false)
+{
+    ArgumentNullException.ThrowIfNull(data);
+    return new ReportBuilder(data)
+        .WithFormat(format)
+        .IncludeDiagnostics(includeDiagnostics)
+        .Build();
+}
+
+Report report = BuildReport(data, includeDiagnostics: true);
+```
+
+<Term def="Optional argument被省略时，compiler把声明处常量写进consumer调用点而不是运行时查询provider。">default argument embedding</Term>
+
+<Stepper>
+  <Step title="切换positional、named、optional与options type"><CvcArgumentBindingLab /></Step>
+  <Step title="建立调用点账本">列出每个consumer是否显式传值、使用name、依赖哪个编译版本的default。</Step>
+  <Step title="执行版本实验">保持旧binary不重编，只更换default；再重编比较，证明旧新caller分裂并选择迁移策略。</Step>
+</Stepper>
+
+<Callout type="trap" title="Optional default属于被调用方法，所以替换Library后所有Caller都会更新">
+省略参数时default通常被compiler嵌入caller。Library v2改默认只影响新编译调用点；旧binary继续显式传v1值。
+</Callout>
+
+## Rules and Guidelines
+
+Required parameters在前，optional在后；parameter name清楚稳定；避免连续多个bool与同类型primitive让位置难辨；公开API检查null、range、format与互斥条件并使用准确`ArgumentException`派生类型。CancellationToken通常最后且命名`cancellationToken`，不存入长期对象；async API不要用`ref/out`，通过result type返回多个结果。
+
+过多参数通常表示多个职责或缺少domain object，但把无关值塞进巨型options也不是答案。按cohesive invariant组合：分页、重试、格式等各自有validated value type。Sensitive value不要在`ToString`/logging自动暴露。Parameter object若mutable并被callee长期保存，要copy或明确ownership。
+
+## The DefaultParameterValue and Optional Attributes
+
+CLR metadata可用`OptionalAttribute`标记可省略参数，用`DefaultParameterValueAttribute`表达默认值，常用于跨语言/COM interop。本书展示它们如何对应compiler optional syntax；C#中优先用`param = constant`，不要同时写冲突attribute。Reflection caller必须自己决定如何处理`Missing.Value`与default metadata，不能假设所有binder行为一致。
+
+```csharp
+public static void Export(
+    string path,
+    [Optional, DefaultParameterValue("utf-8")] object encoding)
+{
+    string selected = ReferenceEquals(encoding, Missing.Value)
+        ? "utf-8"
+        : Convert.ToString(encoding, CultureInfo.InvariantCulture) ?? "utf-8";
+    // Interop adapter validates then delegates to a typed core API.
+}
+```
+
+跨语言测试要检查consumer compiler是否识别metadata default、numeric/enum类型是否可表达、Missing如何传递。把interop signature放adapter，核心API保持强类型，避免Object/Optional语义扩散。
+
+## Implicitly Typed Local Variables
+
+`var`让compiler从initializer推导静态类型，生成的local仍是明确CLR type，不是dynamic。它减少重复generic type并突出意图，但initializer类型不明显、numeric literal或匿名类型时要检查推导结果。`var value = 1`是Int32，`var value = 1L`是Int64；它不会根据后续赋值改变类型。
+
+Local type inference不改变public signature、runtime representation或nullability事实。使用原则是右侧/变量名能清楚表达类型时用var；类型本身传达单位、所有权或conversion风险时显式写出。Code review应关注语义而非全局风格战。
+
+<Term def="Compiler从initializer确定local的精确静态类型，不把成员绑定推迟到运行期。">local type inference</Term>
+
+## Passing Parameters by Reference to a Method
+
+默认by value：value type复制值，reference type复制reference；callee可修改referenced object，却不能替换caller variable。`ref`传caller storage alias，要求调用前赋值，callee可读写；`out`同样传alias但callee正常返回前必须赋值；`in`传readonly reference，适合避免大型struct copy，但调用non-readonly member可能生成defensive copy。
+
+```csharp
+static bool TryTake(ref int available, int requested, out int remaining)
+{
+    if (requested < 0) throw new ArgumentOutOfRangeException(nameof(requested));
+    if (available < requested)
+    {
+        remaining = available;
+        return false;
+    }
+
+    available -= requested;
+    remaining = available;
+    return true;
+}
+```
+
+`ref`扩大aliasing：callee可让caller状态在中途改变，异常时可能partial update。公共API优先return new value/result；只有interop、high-performance span/struct mutation或明确swap等场景使用。Ref return/ref local还涉及storage lifetime，不能返回指向即将结束stack local的引用；compiler ref safety会阻止常见逃逸。
+
+<Term def="Callee直接读写caller变量storage，造成可观察替换、别名和lifetime约束的传参方式。">parameter aliasing</Term>
+
+<Stepper>
+  <Step title="切换value、ref、out与in"><CvcParameterPassingLab /></Step>
+  <Step title="画storage关系">标出caller variable、copied value/reference、callee alias、referenced object及异常前已发生的写入。</Step>
+  <Step title="验证copy与allocation">用mutable struct/class、readonly member和benchmark分别确认defensive copy、boxing与ref优化。</Step>
+</Stepper>
+
+<Callout type="trap" title="Reference type按Value传递就不能修改Caller看到的状态">
+按值复制的是reference；callee不能让caller变量指向新对象，却能通过复制的reference修改同一mutable object。要隔离需immutable object或defensive copy。
+</Callout>
+
+## Passing a Variable Number of Arguments to a Method
+
+`params T[]`允许caller传显式array或展开的零到多个arguments，parameter必须最后。展开调用通常构造array，hot path可能有allocation；传现有array则callee获得同一mutable array reference。不要保存或修改caller array，除非contract明确；可copy或使用`ReadOnlySpan<T>`等现代alternative，但public async/iterator与span lifetime需要额外约束。
+
+Overload与params组合可能让空调用、null literal和单array argument出现歧义。API设计应测试每种source call形态与其他语言consumer。大量items可用`IEnumerable<T>`stream，但要说明deferred enumeration、single/multiple pass、exception与ownership。
+
+## Parameter and Return Type Guidelines
+
+Parameter type表达所需最小capability：只枚举用`IEnumerable<T>`，需要count/index用`IReadOnlyList<T>`，需要mutation才用mutable interface；但也要说明是否多次枚举、是否snapshot。不要接受Object再内部猜类型。返回具体immutable/read-only type可给consumer更强保证，返回内部mutable collection会泄漏invariant。
+
+主要结果用return；普通“未找到”可用Try pattern，多个紧密结果可ValueTuple，但长期public contract更适合命名result type，便于加字段、文档与validation。Exception不应替代普通false，但I/O/取消/contract violation要有清楚taxonomy。Async method返回Task/ValueTask，不能用out/ref，因为completion跨越调用stack。
+
+## Const-ness
+
+C#没有C++式沿object graph传播的const reference。`readonly field`限制重赋值，`in parameter`限制通过该alias赋值，`IReadOnlyList`限制surface，均不保证底层对象无人修改。真正const intent通过immutable type、readonly struct、copy-on-write/snapshot和capability interface表达。
+
+<Term def="调用者与被调用者对值、引用和对象图是否可变的明确承诺，而非单一readonly关键字。">const intent</Term>
+
+对input collection若需稳定snapshot，入口复制为immutable array；若只在调用期间同步读取，可接受read-only span/list并禁止保存。对reference type `in`通常收益有限且不会冻结对象。API文档应写“不会修改”“不会保留引用”“返回独立snapshot”中的具体保证。
+
+<Stepper>
+  <Step title="切换params、return/result与const intent"><CvcParameterApiLab /></Step>
+  <Step title="填写API worksheet">记录capability、枚举次数、mutation、retention、allocation、cancellation、failure和version扩展点。</Step>
+  <Step title="做adversarial调用">传mutable array、lazy enumerable、null、huge input、cancelled token和旧optional caller，验证contract没有隐式假设。</Step>
+</Stepper>
+
+## 本章回顾：签名必须暴露Ownership与Evolution
+
+1. Named argument提高可读性也让parameter name成为source contract；optional default嵌入call site。
+2. Optional/DefaultParameterValue attributes主要服务metadata/interop，typed core应保持明确。
+3. Var是compile-time local type inference，不是dynamic。
+4. Value/ref/out/in决定是否alias caller storage；params决定variadic convenience与array allocation/ownership。
+5. C# const intent依靠immutable type、readonly surface和copy/snapshot contract组合实现。
+
+<Exercises>
+
+**问题 1：Library把timeout optional default从5秒改成30秒，为何部分服务仍传5秒？**
+
+<Answer>旧consumer在编译时已把5秒constant写入call site，替换library不会更新。枚举并重编consumer，或改成nullable/sentinel由callee读取runtime policy；对长期演进的多个设置使用options type。增加old-binary fixture防止再次误判。</Answer>
+
+**问题 2：`in LargeStruct`一定比by-value快吗？**
+
+<Answer>不一定。In可避免入口copy，但调用非readonly members时compiler可能产生defensive copies，JIT也可能对小/寄存器值优化。用readonly struct、真实call pattern和benchmark/disassembly验证；若struct很大且频繁传递，也要重新评估类型设计。</Answer>
+
+**问题 3：怎样保证方法读取的collection在执行期间不变化？**
+
+<Answer>IReadOnlyList只限制当前surface，不阻止其它alias修改。需要稳定视图时入口copy为array/immutable collection并声明snapshot；若性能不允许，要求caller持锁或传版本化immutable snapshot，并把并发修改行为写进contract。不要把readonly interface当深度immutability。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="call boundary contract" definition="参数绑定、别名、默认、所有权、失败与返回的调用协议。" />
+  <GlossaryItem term="default argument embedding" definition="Optional default被compiler写进consumer调用点。" />
+  <GlossaryItem term="local type inference" definition="Compiler从initializer确定local的静态类型。" />
+  <GlossaryItem term="parameter aliasing" definition="Ref/out/in等让callee直接关联caller storage的关系。" />
+  <GlossaryItem term="const intent" definition="对值、引用和对象图可变性的显式承诺。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 9: Parameters" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

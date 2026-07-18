@@ -1,0 +1,129 @@
+---
+title: "第12章 元编程"
+type: C
+section: "Rust之道 · 元编程与安全边界"
+order: 12
+description: "从TypeId、Any与向下转型进入声明宏和三类过程宏，追踪token到展开代码的编译过程，并界定稳定扩展点。"
+demo: true
+math: false
+sourceUrl: "https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53297"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RswReflectionLab, RswMacroKindLab, RswMacroCompileLab } from "@/components/mdx/rust-way/diagrams/rsw-macros";
+
+<Objectives>
+- 能比较TypeId、Any、向下转型与泛型Trait的适用范围，并处理生命周期和失败通道
+- 能实现声明宏、derive宏和属性或函数式过程宏，解释输入输出token与卫生性
+- 能追踪宏展开、名称解析、类型借用检查和代码生成，并选择稳定过程宏、build.rs或lint扩展点
+</Objectives>
+
+## 从“程序能否观察自己的类型”开始
+
+Rust没有任意枚举字段和方法的完整运行期反射。它提供`TypeId`比较`'static`类型，`Any`对类型擦除值做受检向下转型，更多结构信息通常通过Trait、泛型或编译期代码生成表达。<Term def="程序在运行期识别被擦除具体类型、并在检查成功后恢复受限访问的能力。">bounded runtime reflection</Term>是刻意受限的，不应替代正常类型设计。
+
+先预测：`downcast_ref`失败会返回None，而不是把错误类型引用强制解释为目标类型；这使失败仍在safe边界内。
+
+```rust
+use std::any::Any;
+
+fn as_text(value: &dyn Any) -> Option<&str> {
+    value.downcast_ref::<String>().map(String::as_str)
+}
+
+assert_eq!(as_text(&String::from("meta")), Some("meta"));
+assert_eq!(as_text(&42_u32), None);
+```
+
+<RswReflectionLab />
+
+## 类型检查、向下转型与生命周期
+
+`Any`通常要求`'static`具体类型，因此包含短借用的值不能随意放入长期类型擦除容器。<Term def="把具体类型藏在统一接口后，再通过TypeId一致性安全恢复具体引用的协议。">checked downcast protocol</Term>必须保留失败分支和借用寿命。若实现集合在编译期已知，enum或泛型通常更清楚；若只需要行为，dyn Trait优于反复downcast。
+
+## 宏的起源与token模型
+
+宏解决重复语法、样板实现和领域语言表达。它接收token tree或TokenStream并生成新token，生成物会回到编译管线继续解析和检查。<Term def="以token而非运行期值为输入，在编译阶段产生Rust语法片段的转换。">compile-time token transformation</Term>意味着宏不能读取运行期变量值，只能生成访问这些值的代码。
+
+## 声明宏：模式与替换
+
+`macro_rules!`用matcher捕获表达式、类型、标识符和重复序列，再在transcriber中展开。宏卫生性减少局部名字意外捕获，但路径、导出和edition边界仍需设计。<Term def="由多条token matcher和transcriber规则组成的声明式语法转换。">declarative macro rule</Term>适合少量结构化重复，不适合复杂语义分析。
+
+```rust
+macro_rules! string_vec {
+    ($($value:expr),* $(,)?) => {
+        vec![$($value.to_string()),*]
+    };
+}
+
+assert_eq!(string_vec!["a", 2], vec!["a", "2"]);
+```
+
+## 过程宏：derive、属性与函数式
+
+过程宏是独立proc-macro crate导出的编译期函数。Derive接收struct或enum item并附加impl；attribute接收属性参数和item；function-like接收调用内token并可生成任意合法语法。<Term def="在独立编译期crate中解析TokenStream、验证输入并生成TokenStream的扩展点。">procedural macro boundary</Term>应使用完整限定路径、保留span并返回精确compile error。
+
+```rust
+// proc-macro crate中的轮廓
+#[proc_macro_derive(Describe)]
+pub fn derive_describe(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let ast = syn::parse_macro_input!(input as syn::DeriveInput);
+    expand_describe(ast).unwrap_or_else(syn::Error::into_compile_error).into()
+}
+```
+
+<RswMacroKindLab />
+
+## 宏的编译过程与调试
+
+编译器先解析足够语法定位宏，执行展开，再进行名称解析、类型检查、借用检查、MIR与codegen。<Term def="从宏调用、token展开、解析、名称和类型检查到最终代码生成的阶段链。">macro expansion pipeline</Term>帮助定位“宏接受了输入但生成代码类型不对”。调试时检查展开结果、最小输入、span和compile-fail测试，不要只盯宏实现。
+
+<RswMacroCompileLab />
+
+<Stepper>
+  <Step title="先选择静态表达"><RswReflectionLab /></Step>
+  <Step title="选择宏类型"><RswMacroKindLab /></Step>
+  <Step title="检查生成物">展开最小调用，阅读生成路径、泛型bound、where子句和错误span，再执行compile-pass与compile-fail测试。</Step>
+</Stepper>
+
+## 编译器插件与稳定替代
+
+早期编译器插件直接依赖内部API，难以跨版本维护。稳定需求优先用声明宏、过程宏、build.rs、Cargo子命令或lint工具；只有编译器开发场景才绑定nightly内部。<Term def="在稳定工具链支持范围内选择宏、构建脚本或外部分析工具的扩展策略。">stable compiler extension</Term>把升级成本和信任边界写进工程决策。
+
+<Callout type="trap" title="宏展开后就是字符串拼接">
+宏处理token与语法坐标，不是文本模板。忽略span、路径和卫生性会产生调用点难懂错误；过程宏还必须防止panic和不确定环境依赖。
+</Callout>
+
+<Callout type="trap" title="能用宏就比普通函数更抽象">
+函数接受值并受普通类型系统约束，IDE和调试体验更直接。只有需要生成item、实现Trait或改变语法形状时才优先宏。
+</Callout>
+
+## 本章回顾
+
+本章覆盖元编程中的反射、类型检查与向下转型，宏的起源、类型与编译过程，声明宏、过程宏和编译器插件。顺序是先用类型与函数，再用受限反射，最后才用生成代码；宏生成物仍必须通过完整编译检查。
+
+<Exercises>
+**问题 1：何时用Any，何时用dyn Trait？**
+<Answer>只需统一行为时用dyn Trait；确实需要存储异构值并按少数具体类型恢复时用Any。实现集合封闭时enum通常比downcast更可检查。</Answer>
+
+**问题 2：声明宏如何接受可选尾逗号？**
+<Answer>在重复后使用`$(,)?`匹配零或一个逗号；仍需测试空列表、单项、多项和错误token，确保diagnostic定位调用点。</Answer>
+
+**问题 3：过程宏为何应有compile-fail测试？**
+<Answer>它的产品是生成代码和诊断。仅测试成功展开无法验证非法字段、重复属性、缺少bound等输入是否在正确span给出稳定错误。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="bounded runtime reflection" definition="受限的运行期类型识别与恢复能力。" />
+  <GlossaryItem term="checked downcast protocol" definition="经TypeId一致性检查恢复具体引用的协议。" />
+  <GlossaryItem term="compile-time token transformation" definition="在编译期以token输入输出生成语法。" />
+  <GlossaryItem term="declarative macro rule" definition="matcher与transcriber组成的声明宏规则。" />
+  <GlossaryItem term="procedural macro boundary" definition="独立proc-macro crate解析并生成TokenStream的边界。" />
+  <GlossaryItem term="macro expansion pipeline" definition="宏调用到生成代码完整检查与codegen的阶段链。" />
+  <GlossaryItem term="stable compiler extension" definition="基于稳定宏、build script或外部工具的扩展策略。" />
+</Glossary>
+
+<Attribution adaptedFrom="《Rust编程之道》第12章 元编程" adaptedUrl="https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53297" />

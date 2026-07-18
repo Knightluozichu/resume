@@ -470,8 +470,10 @@ export function VisitorDiagram() {
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        accept(v) 内部回调 v.visitX(this)——第一次分派按元素类型选 accept，第二次按
-        Visitor 类型选 visitX。新增操作只需加一个 ConcreteVisitor，元素类层次完全不用动；反之新增元素类型则所有 Visitor 都要改。
+        accept(v) 内部回调 v.visitX(this)——第一次分派按元素类型选
+        accept，第二次按 Visitor 类型选 visitX。新增操作只需加一个
+        ConcreteVisitor，元素类层次完全不用动；反之新增元素类型则所有 Visitor
+        都要改。
       </figcaption>
     </figure>
   );

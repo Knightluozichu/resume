@@ -1,110 +1,304 @@
 ---
-title: 二叉树中和为某一值的路径
+title: "面试题34：二叉树中和为某一值的路径"
 type: C
-section: 树
-order: 7
-description: 判断是否存在一条从根到叶子节点和为目标值的路径。
+section: "第4章 解决面试题的思路"
+order: 38
+description: "以前序深度优先维护根到当前节点的路径与累计和，只在叶子命中目标时输出，并在返回父节点前成对回溯状态。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/34_PathInTree/PathInTree.cpp"
 draft: false
 ---
 
-{/* 知识点清单：树 DFS、剩余值递减、根到叶终止条件；原书章节：面试题34。 */}
+import { RootLeafPathDiagram, PathBacktrackStateMap, RootLeafConditionMap, PathInTreeOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/path-in-tree";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能解释为什么“叶子节点条件”必须独立判断。
-- 能写出递归和迭代两种思路中的任意一种。
-- 能处理负数、空树、空目标值边界。
+- 能解释目标和命中为何还必须同时满足叶子条件
+- 能计算递归进入退出时路径容器与累计和的成对变化
+- 能实现作者打印全部路径及返回二维结果的现代版本
+- 能分析负数、整数溢出、输出成本、共享节点与深树边界
+- 能设计覆盖作者六组双路径、无解、单链、单点与空树测试
 
 </Objectives>
 
-## 直觉引入
+## 从“10加5等于15，为什么不算答案”开始
 
-路径和可以看作每往下一层就“消耗”一个目标值。
-一旦剩余目标变成 0 且当前是叶子，说明这条根到叶路径成立。
+先预测：树根10的左孩子5还有孩子4和7，目标是15。10加5已经等于15，应立即输出吗？不能。题目把路径定义为从根开始、沿父子关系一直到叶节点；5不是叶子，这只是一个内部前缀。
 
-## 算法思路
+“**二叉树中和为某一值的路径**”要求打印全部匹配，不是只判断存在性。原题路径必须“**从根节点到叶节点**”，所以开始位置、连续方向和结束位置都固定。Test1目标22同时得到10、5、7与10、12两条答案。
 
-1. 递归参数 `target`。
-2. 每次减去当前节点值：`target -= node->val`。
-3. 递归到叶子时检查 `target == 0`。
+<RootLeafPathDiagram />
 
-<TreeDiagram />
+把当前递归链称为<Term def="从根到当前节点的有序值序列；进入节点压入，离开节点弹出。">路径栈</Term>。作者用vector实现它，并用currentSum保存同一路径的累计值。
 
-## 思考引导
+## 前序遍历中的路径栈与回溯
 
-### 1) 先问问题，不先固定根
-“和为某一值的路径”要先分清“起点固定”还是“任意起点”。这一步决定是否二层 DFS。
+进入节点时先把节点值加入currentSum并push到path，然后检查当前状态，再递归左、右孩子，最后撤销当前节点。这是<Term def="先处理当前节点，再按左、右顺序递归子树的遍历；当前节点状态自然覆盖整个子树调用。">前序遍历</Term>形态。
 
-### 2) 识别不变式
-路径累计可以用前缀和表示，每个节点同时服务于“以它为起点”和“延续上层路径”两类状态。
+父节点先进入路径，孩子递归时path正好包含完整祖先链。左子树完成并撤销后，右子树从相同父状态开始，不会携带左分支节点。
 
-### 3) 为什么它一定成立
-树上路径是连续父子关系，前缀差提供了子路径判定条件。若不使用前缀和会重复枚举多个起点。
+<PathBacktrackStateMap />
 
-### 4) 常见误区
-不回溯路径和会污染同支递归；又或把全局和误当路径和。
+进入与退出必须对称：加节点值对应减节点值，push_back对应pop_back。把这种恢复称为<Term def="递归返回父节点前撤销当前分支造成的状态修改，使兄弟分支从共同父状态开始。">回溯</Term>。
 
-### 5) 你能找到一个反例吗
-节点值 [1, -1, 1] 的简单树可检验是否真正支持任意起点。
+## 叶子条件与目标和必须同时成立
 
-### 6) 迁移到下一题
-事件链累计、账务差分区间也可看成路径和问题，先定起点模型再决定是否前缀优化。
-## 代码对照
+作者先判断左右孩子都为空得到isLeaf，然后只有currentSum等于expectedSum并且isLeaf时打印path。两个条件缺一不可。
 
-<CodeTabs>
-  <Tab label="C++">
+<RootLeafConditionMap />
+
+不能在currentSum超过目标时剪枝，因为节点值没有声明全为正数；后代负值可能把和降回来。即使当前和等于目标，后代若包含0或正负抵消，仍可能在更深叶子再次命中，必须继续遍历到叶。
+
+空树与目标0也不构成路径。作者入口看到nullptr直接返回，路径至少包含一个真实节点。单节点树的根同时是叶子，值等于目标时就是一条合法路径。
+
+<Callout type="trap" title="累计和一等于目标就输出当前前缀">
+Test2会错误输出10、5，但5还有孩子。原题只接受根到叶路径，必须把currentSum命中与左右孩子都为空同时判断。
+</Callout>
+
+## 忠实还原作者路径栈实现
+
+外层FindPath负责空根保护、创建空path与currentSum，再调用递归重载。递归函数假设pRoot非空，因此只从孩子非空分支进入。
+
 ```cpp
-struct TreeNode {
-    int val;
-    TreeNode* left;
-    TreeNode* right;
-    TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
+#include <cstdio>
+#include <vector>
+
+struct BinaryTreeNode {
+    int m_nValue;
+    BinaryTreeNode* m_pLeft;
+    BinaryTreeNode* m_pRight;
 };
 
-class Solution {
-public:
-    bool hasPathSum(TreeNode* root, int target) {
-        if (!root) return false;
+void FindPath(BinaryTreeNode* pRoot,
+              int expectedSum,
+              std::vector<int>& path,
+              int& currentSum) {
+    currentSum += pRoot->m_nValue;
+    path.push_back(pRoot->m_nValue);
 
-        int next = target - root->val;
-        if (!root->left && !root->right) {
-            return next == 0;
+    const bool isLeaf =
+        pRoot->m_pLeft == nullptr &&
+        pRoot->m_pRight == nullptr;
+
+    if (currentSum == expectedSum && isLeaf) {
+        std::printf("A path is found: ");
+        for (int value : path) {
+            std::printf("%d\t", value);
         }
-
-        return hasPathSum(root->left, next) || hasPathSum(root->right, next);
+        std::printf("\n");
     }
+
+    if (pRoot->m_pLeft != nullptr) {
+        FindPath(pRoot->m_pLeft,
+                 expectedSum, path, currentSum);
+    }
+    if (pRoot->m_pRight != nullptr) {
+        FindPath(pRoot->m_pRight,
+                 expectedSum, path, currentSum);
+    }
+
+    currentSum -= pRoot->m_nValue;
+    path.pop_back();
+}
+
+void FindPath(BinaryTreeNode* pRoot, int expectedSum) {
+    if (pRoot == nullptr) return;
+    std::vector<int> path;
+    int currentSum = 0;
+    FindPath(pRoot, expectedSum, path, currentSum);
+}
+```
+
+作者先递归左子树再递归右子树，所以输出顺序稳定：Test1先打印10、5、7，再打印10、12。题目未要求按路径长度或字典序排序，不应在遍历后擅自重排。
+
+currentSum按引用传递，依赖回溯恢复；path也按引用复用同一个vector，避免每层复制。任何提前return、异常或新增分支若绕过末尾撤销，都会污染祖先状态。
+
+## 返回全部路径的异常更稳健版本
+
+现代接口可让累计和按值传递，天然为每个递归调用保存独立数值；path仍复用并用作用域清理保证退出时弹栈。下面使用64位和，降低多个int相加溢出的风险：
+
+```cpp
+#include <cstdint>
+#include <vector>
+
+struct TreeNode {
+    int value;
+    TreeNode* left = nullptr;
+    TreeNode* right = nullptr;
 };
-```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-class TreeNode {
-    val: number;
-    left: TreeNode | null;
-    right: TreeNode | null;
-    constructor(val: number) {
-        this.val = val;
-        this.left = null;
-        this.right = null;
+
+void collectPaths(
+    const TreeNode* node,
+    std::int64_t target,
+    std::int64_t sum,
+    std::vector<int>& path,
+    std::vector<std::vector<int>>& result) {
+    if (node == nullptr) return;
+
+    path.push_back(node->value);
+    struct PopGuard {
+        std::vector<int>& path;
+        ~PopGuard() { path.pop_back(); }
+    } guard{path};
+
+    sum += node->value;
+    const bool isLeaf =
+        node->left == nullptr && node->right == nullptr;
+    if (isLeaf && sum == target) {
+        result.push_back(path);
     }
+
+    collectPaths(node->left, target, sum, path, result);
+    collectPaths(node->right, target, sum, path, result);
 }
 
-function hasPathSum(root: TreeNode | null, targetSum: number): boolean {
-    if (!root) return false;
-
-    const next = targetSum - root.val;
-    if (!root.left && !root.right) return next === 0;
-
-    return hasPathSum(root.left, next) || hasPathSum(root.right, next);
+std::vector<std::vector<int>> pathsWithSum(
+    const TreeNode* root, std::int64_t target) {
+    std::vector<std::vector<int>> result;
+    std::vector<int> path;
+    collectPaths(root, target, 0, path, result);
+    return result;
 }
 ```
-  </Tab>
-</CodeTabs>
+
+PopGuard在正常返回和异常展开时都pop，避免result复制分配失败后留下脏path。它引用的vector必须比guard活得久；这里两者在同一调用作用域内满足。
+
+若只需判断存在性，可以在找到第一条后短路；但作者要求打印全部路径，不能复用布尔短路而漏掉右子树答案。流式回调可逐条交付，回调失败时应明确停止并传播错误。
+
+## 为什么不是任意起点路径和
+
+另一类题允许路径从任意节点向下开始，通常使用前缀和计数表；那需要在每个节点匹配“当前前缀减目标”的祖先前缀。原题起点固定为根，path天然只有一条当前根前缀，不需要第二层起点枚举或哈希表。
+
+把任意起点解法混进本题会改变答案集合：例如根100的孩子10、5形成10到5的目标15，任意起点题接受，原题拒绝，因为没有从根100开始。先明确路径契约比选择算法更重要。
+
+同样，原题必须到叶；有些平台的hasPathSum也是根到叶，有些“路径和计数”允许在内部结束。函数名相似不能替代题目定义。
+
+## 作者六组测试覆盖什么
+
+Test1树为根10，左5、右12，5的孩子4与7，目标22；应找到10、5、7和10、12两条。它验证全部答案收集与左右递归顺序。
+
+Test2使用同一棵树和目标15，10、5前缀命中但不是叶子，预期0条。Test3全左链5、4、3、2、1，总和15，预期1条。Test4全右链1到5，总和15但目标16，预期0条。
+
+Test5单节点1、目标1，根也是叶，预期1条。Test6空树、目标0，预期0条。源码总计六组。
+
+<PathInTreeOfficialCaseLab />
+
+```cpp
+#include <cassert>
+#include <vector>
+
+void testPathsWithSum() {
+    TreeNode n4{4}, n7{7}, n12{12};
+    TreeNode n5{5, &n4, &n7};
+    TreeNode n10{10, &n5, &n12};
+
+    assert(pathsWithSum(&n10, 22) ==
+           (std::vector<std::vector<int>>{
+               {10, 5, 7}, {10, 12}}));
+    assert(pathsWithSum(&n10, 15).empty());
+
+    TreeNode n1{1}, n2{2, &n1, nullptr};
+    TreeNode n3{3, &n2, nullptr};
+    TreeNode chain4{4, &n3, nullptr};
+    TreeNode chain5{5, &chain4, nullptr};
+    assert(pathsWithSum(&chain5, 15) ==
+           (std::vector<std::vector<int>>{
+               {5, 4, 3, 2, 1}}));
+
+    TreeNode only{1};
+    assert(pathsWithSum(&only, 1) ==
+           (std::vector<std::vector<int>>{{1}}));
+    assert(pathsWithSum(nullptr, 0).empty());
+}
+```
+
+还应加入负数路径，例如1、-2、3的某条根叶链，确保实现没有在sum超过target时剪枝；加入极值验证64位累计。对回溯实现，可在每次递归出口断言path长度与入口前相同。
+
+<Callout type="trap" title="找到第一条路径后直接return整个递归">
+Test1有两条目标22路径。布尔存在性短路会在左侧10、5、7命中后跳过右侧10、12，违反“打印全部路径”的输出契约。
+</Callout>
+
+## 时间、空间与输出成本
+
+不计输出复制，每个节点进入一次，基础遍历时间O(n)。每发现一条答案，打印或复制其整条路径需要与路径长度成正比；把所有答案长度总和称为<Term def="所有匹配根叶路径所含节点数之和K，决定打印、复制与结果存储的实际成本。">输出总长度</Term>K，总时间O(n+K)。若笼统只写O(n)，会漏掉题目要求打印全部路径的不可避免成本。
+
+递归栈和当前path长度都是树高h，辅助空间O(h)。返回结果另占O(K)。偏斜树h等于n，可能调用栈溢出；可用显式栈保存“进入/退出”帧，退出帧负责回溯。
+
+K在多叶树中可能显著大于n：若很多深叶都满足目标，每条答案都会复制共享的长祖先前缀。返回二维vector必须为这些重复前缀分别存储；流式打印或逐条回调仍需花O(K)时间，但只保留当前O(h)路径。若下游最终也要保存全部答案，流式接口只是把结果所有权移给调用方，并没有消除O(K)总内存。
+
+还可以让回调接收只读span视图，避免为每条路径先复制一份；该视图只在回调期间有效，因为后续回溯会修改path。若调用方需要异步保存，必须在回调内复制。接口文档应明确临时视图的生命周期，防止把vector内部地址留到下一次push或pop之后。
+
+currentSum使用int时可能有有符号溢出，C++行为未定义。即使单节点值是int，多节点和也应提升到int64_t；若节点数和绝对值仍可能超过64位，使用检查加法或大整数。
+
+## 正确性证明
+
+<Term def="进入某节点后，path恰为根到该节点序列，currentSum恰等于其中所有值之和。">路径状态不变量</Term>在根前为空成立。进入节点时同时加值和压栈，故对当前节点成立；递归孩子时，它的父路径已完整存在。
+
+只有叶子且和等于目标时输出，所以每个输出都是合法根到叶目标路径。反过来，深度优先会访问每个叶子；任意合法路径对应其唯一叶节点，访问该叶时path恰为该根叶序列、sum恰为目标，因而必被输出。
+
+退出节点时减值并pop，恢复到调用前父路径状态，左右兄弟互不污染。由树结构每个叶子路径唯一，算法不漏、不重，并按左子树后右子树顺序输出。
+
+## 树契约与并发边界
+
+输入应为有限无环树且每个节点唯一父亲。共享孩子会从不同父路径访问多次；这在DAG中可能代表两条不同根路径，是否去重取决于业务定义。成环会无限递归，需输入校验或visited加当前递归链检测。
+
+仅用全局visited会错误丢掉DAG中指向同一节点的不同路径；若路径按边序列计数，应只检测当前调用链中的环，退出时移除标记。原题是树，不需要额外集合。
+
+并发写线程可能修改孩子或值，使path与sum来自不同快照；使用不可变树、读锁或复制。回调输出不要在持有树写锁时执行未知用户代码，以免死锁。
+
+<Stepper>
+  <Step title="进入节点时压入路径并累加"><PathBacktrackStateMap />path和currentSum共同描述根到当前节点，任何孩子都继承这份状态。</Step>
+  <Step title="只在叶子同时核对目标"><RootLeafConditionMap />内部前缀命中不能输出，负数存在时也不能按大小提前剪枝。</Step>
+  <Step title="输出全部匹配根叶路径"><RootLeafPathDiagram />Test1左侧和右侧各有一条22路径，遍历不能在首个命中后停止。</Step>
+  <Step title="跑完六组官方树形"><PathInTreeOfficialCaseLab />双路径、内部前缀、左右链、单点和空树锁定完整契约。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 原题路径固定从根开始并在叶节点结束。
+2. 前序进入节点时把值压入path并加入currentSum。
+3. 当前和等于目标且当前是叶子，才输出一条答案。
+4. 左右子树都要遍历，题目要求打印全部路径。
+5. 返回父节点前必须同时减和与pop，恢复兄弟分支状态。
+6. 节点可有负数，不能因当前和超过目标就剪枝。
+7. 基础遍历O(n)，打印或复制答案另有O(K)成本，辅助空间O(h)。
+8. 六组官方测试中目标15专门防止把内部前缀当完整路径。
+
+<Exercises>
+
+**问题 1：Test1为什么有两条而不是一条路径？**
+
+<Answer>10、5、7到叶7的和是22；10、12到叶12的和也是22。算法先遍历左子树打印第一条，再遍历右子树打印第二条，必须收集全部命中。</Answer>
+
+**问题 2：为什么10、5不能作为目标15的路径？**
+
+<Answer>5仍有孩子4和7，不是叶节点。原题路径必须从根一直到叶；累计和命中只满足数值条件，没有满足终点条件。</Answer>
+
+**问题 3：回溯时若只pop而不减currentSum会怎样？**
+
+<Answer>path回到父节点形状，但sum仍含已离开分支的值；随后右兄弟继承污染后的和，可能漏报或误报。两个状态更新必须成对撤销。</Answer>
+
+**问题 4：为什么复杂度应写O(n+K)？**
+
+<Answer>遍历每个节点是O(n)，但每条答案必须输出或复制整条路径。K是所有匹配路径长度总和，这部分工作无法省略；结果很多且路径很深时可超过n。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="路径栈">按顺序保存根到当前节点值的可回溯容器。</GlossaryItem>
+  <GlossaryItem term="前序遍历">先处理当前节点，再递归左、右子树的遍历次序。</GlossaryItem>
+  <GlossaryItem term="回溯">离开递归分支时撤销该分支对共享状态的修改。</GlossaryItem>
+  <GlossaryItem term="路径状态不变量">path与currentSum始终精确对应根到当前节点的关系。</GlossaryItem>
+  <GlossaryItem term="输出总长度">所有匹配路径包含节点数之和K，决定结果复制或打印成本。</GlossaryItem>
+</Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题34"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/34_PathInTree/PathInTree.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

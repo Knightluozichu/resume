@@ -1,0 +1,298 @@
+---
+title: "第5章：Methods and Parameters"
+type: C
+section: "Essential C# 7.0 · Language Foundations"
+order: 5
+description: "掌握method调用与声明、using directive、Main、parameter modes、recursion、overloading、optional arguments和validation。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-c-sharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7CallStackValidationLab, Ec7MethodResolutionLab, Ec7ParameterModeLab } from "@/components/mdx/essential-csharp-7/diagrams/methods-and-parameters";
+
+<Objectives>
+
+- 能解释method invocation从candidate lookup、argument binding到return或exception的完整过程
+- 能比较value、ref、out、in与params parameter modes，并设计清晰的caller/callee contract
+- 能判断recursion、overloading、optional/named arguments和local functions的适用边界并写出validation
+
+</Objectives>
+
+## 为什么method不是一段“可复用代码”这么简单
+
+method同时建立命名、输入、输出、failure和state change的boundary。调用者根据name与arguments寻找candidate，compiler执行overload resolution并生成call；callee建立parameters与locals，可能递归调用、修改共享storage、返回value或抛exception。只看method body，会漏掉调用点承担的conversion、default argument和parameter mode。
+
+先预测：`Print(7)`面对int/long/object overload会选谁；普通class parameter和`ref` class parameter是否相同；optional default由caller还是callee决定；recursive factorial何时停止；`return`与`throw`怎样离开call stack。先写调用前、method内、返回后的state，再运行实验。
+
+<Term def="method name、type arguments和arguments在compile time绑定到一个具体callable member的过程。">invocation contract</Term>
+
+## Calling a Method
+
+method invocation通常包含receiver、method name、可选type arguments和argument list。instance method通过object/reference调用，static method通过type调用。compiler先做member lookup，再判断applicable candidates、argument conversions与最佳member；runtime执行已绑定的call，virtual dispatch等动态选择将在继承章节展开。
+
+arguments默认按declaration顺序映射到parameters；named argument可显式按name映射。每个argument expression在call前求值，可能触发method call、property access或exception，所以不应在一个argument list里堆叠依赖顺序的side effects。
+
+```csharp
+string raw = Console.ReadLine();
+int count;
+if (!int.TryParse(raw, out count))
+    throw new FormatException("count must be an integer");
+
+string report = Formatter.Format(count, width: 8);
+Console.WriteLine(report);
+```
+
+上例包含三个不同contract：`ReadLine`返回可能为null的text，`TryParse`以bool和out value表达parse outcome，`Format`按value与named argument产生result。调用链应记录每个failure，而不是把整个line视作一个黑箱。
+
+## Declaring a Method and Its Signature
+
+declaration指定accessibility、static/instance、return type、method name、type parameters、parameter list与body。对普通method，signature核心由name、type parameter数量以及parameter types/modes组成；return type不用于区分overload。因此不能只让两个methods返回不同type而parameters相同。
+
+<Term def="用于区分method与参与overload resolution的name、generic arity和parameter type/mode组合。">method signature</Term>
+
+```csharp
+public static double Average(int left, int right)
+{
+    return (left + right) / 2.0;
+}
+
+// Invalid as a second overload: return type alone is not enough.
+// public static decimal Average(int left, int right) { ... }
+```
+
+expression-bodied member适合单一清晰expression；有validation、多步state或多个exit paths时block body更可读。method应有单一可陈述responsibility，并用name表达result或effect，例如`TryRead`、`CalculateTotal`、`Save`。
+
+C# 7引入local functions：在method内声明，只对enclosing region可见，可访问outer locals，并可递归。它适合把只属于一个algorithm的helper靠近使用点，同时让outer method先完成argument validation。与lambda相比，local function有method-like declaration，可支持generic、ref/out等能力，并不必分配delegate。
+
+```csharp
+static long Factorial(int value)
+{
+    if (value < 0) throw new ArgumentOutOfRangeException(nameof(value));
+
+    long MultiplyDown(int current)
+    {
+        return current <= 1 ? 1 : current * MultiplyDown(current - 1);
+    }
+
+    return MultiplyDown(value);
+}
+```
+
+## The using Directive
+
+`using` directive让source用short names引用namespace/type，或引入static members；它不复制code，也不改变runtime dependency。`using System.Text;`让`StringBuilder`可解析，alias directive可消除同名type歧义，`using static System.Math;`允许直接写`Sqrt`。
+
+```csharp
+using TextBuilder = System.Text.StringBuilder;
+using static System.Math;
+
+TextBuilder builder = new TextBuilder();
+double diagonal = Sqrt(3 * 3 + 4 * 4);
+```
+
+directive与`using (...)` statement不是一回事：前者影响name resolution，后者为`IDisposable` resource建立deterministic cleanup scope。alias只在当前compilation unit可见，不创建新type。
+
+<Callout type="trap" title="using directive会把namespace加载进内存">
+directive只是compile-time name lookup convenience。assembly references与runtime loading是另一层；resource cleanup则由using statement负责，三者不能混为一谈。
+</Callout>
+
+## Main: Process Entry and Exit
+
+console application由runtime进入合格的static `Main`。本版常见forms返回`void`或`int`，参数可为`string[] args`；`int` return成为process exit code，0通常表示success，非0表示failure category。若存在多个candidate Main，需要project startup object等配置消除歧义。
+
+```csharp
+static int Main(string[] args)
+{
+    if (args.Length != 1)
+    {
+        Console.Error.WriteLine("usage: app <input-path>");
+        return 2;
+    }
+
+    return Run(args[0]) ? 0 : 1;
+}
+```
+
+stdout适合normal output，stderr适合diagnostics；shell和CI只看到exit code，不会理解自然语言。因此Main要把domain outcome映射为稳定process contract。async Main是C# 7.1 language feature，不应在严格C# 7.0配置中默认使用。
+
+## Parameter Passing Modes
+
+普通parameter是by value：argument value被复制到parameter。若type是class，复制的是reference，callee可修改共享object，但reassign parameter不会修改caller variable。`ref`让parameter成为caller variable的alias，调用前必须definitely assigned，callee可读写；`out`也按reference传递，但caller不必先赋值，callee在normal return前必须赋值。
+
+`params`只能用于最后一个parameter，让caller传零个或多个arguments，callee接收array。它改善调用语法，但通常会构造array，并可能与overloads形成歧义。C# 7.0还支持ref returns/ref locals，让method返回storage alias；caller必须尊重lifetime和mutation contract。
+
+<Term def="argument与parameter之间是copy、read/write alias、required output、readonly alias还是variadic array的绑定方式。">parameter mode</Term>
+
+<Stepper>
+  <Step title="切换value、ref、out、in与params">
+    <Ec7ParameterModeLab />
+  </Step>
+  <Step title="追踪caller storage">
+    记录调用前definite assignment、method内可读写权限以及return后的observable value。
+  </Step>
+  <Step title="核对language version">
+    `in` readonly reference parameter属于C# 7.2；严格C# 7.0项目只能使用本版已支持的modes。
+  </Step>
+</Stepper>
+
+```csharp
+static void Swap(ref int left, ref int right)
+{
+    int temporary = left;
+    left = right;
+    right = temporary;
+}
+
+static bool TryDivide(int dividend, int divisor, out int quotient)
+{
+    if (divisor == 0)
+    {
+        quotient = 0;
+        return false;
+    }
+    quotient = dividend / divisor;
+    return true;
+}
+
+static int Sum(params int[] values)
+{
+    int total = 0;
+    foreach (int value in values) total += value;
+    return total;
+}
+```
+
+`in` parameter作为readonly reference parameter在C# 7.2加入；它可能减少大型struct copy，但不保证所有call都无copy，也不应为微优化牺牲API清晰度。标题为C# 7.0的学习路径必须把这项能力标为版本扩展，而不是混入基础语义。
+
+## Overload Resolution
+
+overloading允许同名methods表达同一concept的不同input shapes。compiler收集同名candidates，检查argument count、parameter modes、generic inference和implicit conversions，然后选better function member；若没有candidate或没有唯一best member，compile失败。return type不参与普通overload选择。
+
+<Stepper>
+  <Step title="切换argument static type">
+    <Ec7MethodResolutionLab />
+  </Step>
+  <Step title="列出applicable candidates">
+    对每个argument标记exact match、numeric/reference conversion、boxing或invalid conversion。
+  </Step>
+  <Step title="选择唯一best member">
+    若两个candidates同样好，就调整API或在call site显式cast，不要依赖猜测。
+  </Step>
+</Stepper>
+
+```csharp
+static string Print(int value) => $"int:{value}";
+static string Print(long value) => $"long:{value}";
+static string Print(object value) => $"object:{value}";
+
+Console.WriteLine(Print(7));   // int overload
+Console.WriteLine(Print(7L));  // long overload
+```
+
+overload set应让常见calls有明显winner。大量numeric overloads、optional parameters、params和generic candidates叠加后容易产生ambiguous calls，尤其是`null` literal。API review要用实际call matrix验证，而不是只看每个declaration单独合法。
+
+## Optional Parameters and Named Arguments
+
+optional parameter在declaration提供compile-time constant default，并位于required parameters之后。caller省略argument时，compiler把default value写入call site；library以后改变default，未重新compile的caller仍可能使用旧value。因此会演进的policy不宜只靠public optional default传播。
+
+named arguments按parameter name绑定，提高多个同type arguments的可读性，也允许在规则许可时改变书写顺序。parameter names因此可能成为public source compatibility的一部分；随意rename会破坏使用named arguments的caller。
+
+```csharp
+static string Format(int value, int width = 4, char fill = '0')
+{
+    return value.ToString().PadLeft(width, fill);
+}
+
+string first = Format(23);
+string second = Format(value: 23, fill: ' ', width: 6);
+```
+
+<Callout type="trap" title="optional default总由最新callee declaration提供">
+省略的argument通常在caller compile时嵌入。更新library但不重编caller，旧default可能继续存在；重要versioned policy可用overload转发到一个central implementation。
+</Callout>
+
+## Recursion and the Call Stack
+
+recursive method直接或间接调用自身。正确recursion包含base case、每步向base case推进的smaller problem，以及把sub-result组合成result的规则。每个未完成call都保留frame，depth过大会导致stack overflow，而且通常不能像普通exception一样可靠恢复。
+
+<Term def="recursive method以base case停止、以strictly smaller problem推进，并在unwind阶段组合sub-result的约定。">recursion contract</Term>
+
+<Stepper>
+  <Step title="改变input与recursive depth">
+    <Ec7CallStackValidationLab />
+  </Step>
+  <Step title="找到base case并逐层unwind">
+    每个frame保存自己的parameter/local，child return后才完成当前乘法。
+  </Step>
+  <Step title="让validation先于递归">
+    negative input立即throw，不进入无法到达base case的call chain。
+  </Step>
+</Stepper>
+
+```csharp
+static int SumRange(int start, int end)
+{
+    if (start > end) return 0;
+    return start + SumRange(start + 1, end);
+}
+```
+
+recursion适合tree traversal、divide-and-conquer和天然递归grammar；线性大范围累加更适合loop，避免不必要frames。测试base case、base前一步、一般case、invalid input与足够大的depth。
+
+## Basic Error Handling and Argument Validation
+
+public method应在boundary尽早验证arguments，并用最具体的exception表达contract violation。null用`ArgumentNullException`，range用`ArgumentOutOfRangeException`，不符合跨参数条件可用`ArgumentException`；`nameof(parameter)`让rename安全并提供正确parameter name。
+
+<Term def="method在执行核心工作前检查arguments、拒绝非法state并以明确exception说明失败的边界。">validation boundary</Term>
+
+```csharp
+static decimal Percentage(decimal part, decimal whole)
+{
+    if (whole <= 0)
+        throw new ArgumentOutOfRangeException(nameof(whole), "whole must be positive");
+    if (part < 0 || part > whole)
+        throw new ArgumentOutOfRangeException(nameof(part));
+
+    return part / whole * 100M;
+}
+```
+
+`throw`中断normal return并沿call stack寻找compatible catch。不要catch后静默返回假成功，也不要把argument bug转成含糊null。Try-pattern适合预期且频繁的input failure；exception适合无法履行method contract的情况。
+
+## 本章回顾：调用边界必须可追踪
+
+1. invocation从lookup、applicability和best-member selection开始，argument expressions在call前求值。
+2. method signature不靠return type区分；local function可封装只属于一个algorithm的helper。
+3. using directive只影响names；Main把process input/output/exit code连到runtime。
+4. value/ref/out/in/params定义不同storage contract，且`in`需标明C# 7.2版本边界。
+5. recursion必须有base/progress；optional defaults位于caller；validation应在核心工作前失败。
+
+<Exercises>
+
+**问题 1：为什么普通class parameter不是“按引用传递”，何时才需要ref？**
+
+<Answer>普通parameter按值复制object reference，因此callee和caller可经两个reference观察同一object，但callee reassign parameter不改变caller variable。只有需要callee替换caller variable本身，或直接alias其storage时才考虑ref；单纯修改object fields不需要ref，并应评估这种mutation是否清晰。</Answer>
+
+**问题 2：怎样设计一个不会产生歧义的overload/optional parameter组合？**
+
+<Answer>列出真实call matrix，为每组argument static types标出applicable candidates与conversion quality，确保唯一best member。避免同时叠加相近numeric overload、params和多个optional tails；对null或literal歧义可拆method name。public optional default会嵌入caller，易演进policy可用无参overload转发。</Answer>
+
+**问题 3：如何验收一个recursive method的正确性与安全边界？**
+
+<Answer>证明base case直接返回；证明每个recursive step缩小problem并最终到达base；证明unwind组合规则正确。测试base、邻近值、一般值、invalid input和较大depth。若depth随线性input无限增长或可能来自外部大值，改为iteration或显式stack，并在递归前validation。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="invocation contract" definition="name与arguments绑定到具体method并产生return或exception的调用约定。" />
+  <GlossaryItem term="method signature" definition="name、generic arity及parameter types/modes构成的overload身份。" />
+  <GlossaryItem term="parameter mode" definition="copy、alias、required output、readonly alias或variadic array的argument绑定方式。" />
+  <GlossaryItem term="recursion contract" definition="base case、problem progress与unwind combination共同保证递归终止和正确。" />
+  <GlossaryItem term="validation boundary" definition="核心工作前拒绝非法arguments并提供明确failure evidence的边界。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 5: Methods and Parameters" adaptedUrl="https://www.informit.com/store/essential-c-sharp-7.0-9781509303618" />

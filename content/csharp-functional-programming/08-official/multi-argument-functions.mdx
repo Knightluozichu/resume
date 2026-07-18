@@ -1,0 +1,146 @@
+---
+title: "Chapter 8. Working effectively with multi-argument functions"
+type: C
+section: "Functional C# 1e · Becoming functional"
+order: 8
+description: "覆盖elevated function application、functor/applicative/monad、monad laws、LINQ composition与Bind/Apply选择，处理多个contextual inputs。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-8"
+draft: false
+---
+
+import { CfpBindApplyDecisionLab, CfpCompositionLawsLab, CfpElevatedApplicationLab } from "@/components/mdx/csharp-functional-programming/diagrams/multi-argument-functions";
+
+<Objectives>
+
+- 能推导Map、Apply、Bind、Traverse在plain/elevated function与values之间的type shape
+- 能解释functor、applicative与monad laws的refactoring意义，设计property tests验证custom context
+- 能判断independent/dependent/mixed effects选择Apply、Bind、LINQ或explicit staging
+
+</Objectives>
+
+## 为什么Multi-Argument Function遇到Context就需要新工具
+
+普通`Func<A,B,R>`接plain A/B；现实中inputs常是Option A、Validation B、Task A。先unwrap再if会重复control flow。Applicative Apply把elevated function用于elevated values，Bind处理later input依赖earlier value，Traverse翻转list/context。工具选择来自dependency graph。
+
+先预测：两个Options组合一定用Bind吗；Apply是否可以让dependent validation工作；能写SelectMany是否证明monad laws；LINQ query syntax是否只用于IEnumerable；Task+Either是否能直接flatten为一种effect。答案都是否。
+
+<Term def="Value或function位于Option、Either、Task等context内，而非plain type层的状态。">elevated value</Term>
+
+## Function application in the elevated world
+
+Map处理一个elevated value；Apply处理elevated function和elevated argument，多次Apply可组合multi-arg function。Independent field validations可全部运行并积累error。Bind适合function本身返回context且依赖前值；Traverse把多个contextual computations聚合成一个contextual list。
+
+```csharp
+Validation<Func<Name, Email, Customer>> create = Valid(Customer.Create);
+Validation<Customer> customer = create
+    .Apply(ValidateName(dto.Name))
+    .Apply(ValidateEmail(dto.Email));
+```
+
+<Term def="把context中的function应用到context中的argument，并按该context规则组合effects/errors。">applicative apply</Term>
+
+<Stepper>
+  <Step title="切换Map、Apply、Bind与Traverse"><CfpElevatedApplicationLab /></Step>
+  <Step title="画出plain/elevated types">标function位于哪层、argument位于哪层、result有几层以及谁负责combine。</Step>
+  <Step title="用None/Left/multi-error/list cases验收">检查调用次数、error accumulation、ordering和empty traversal identity。</Step>
+</Stepper>
+
+## Functors, applicatives, monads
+
+Functor提供Map；applicative增加pure/lift与Apply；monad增加Bind。它们是能力层级和laws，不是class inheritance要求。一个context可以有Map/Apply/Bind，但若实现不满足laws，重构/组合会改变semantics。
+
+名字帮助跨Option/Either/Task/IEnumerable识别pattern，domain code仍应使用业务词。不要在每个call site讲category theory；library implementer和reviewer必须理解laws，workflow reader看清data/failure flow即可。
+
+<Term def="Context提供Map/Apply/Bind等组合能力并满足对应identity/composition/associativity laws的语义约定。">context composition contract</Term>
+
+## The monad laws
+
+Left identity：把value放入context再Bind f，等价f(value)；right identity：m Bind pure等价m；associativity：`(m Bind f) Bind g`等价`m Bind (x => f(x) Bind g)`。Equality按context observable semantics，例如sequence order/error choice/effect count。
+
+```csharp
+Prop.ForAll<Value>(value =>
+    Pure(value).Bind(Parse).Equals(Parse(value)));
+```
+
+<Stepper>
+  <Step title="切换functor、applicative、monad与effect equality"><CfpCompositionLawsLab /></Step>
+  <Step title="定义context equivalence">值、error order、sequence order、effect count和laziness哪些属于observable contract。</Step>
+  <Step title="用property tests验收laws">生成Some/None、Left/Right和empty/many，验证identity、composition和associativity。</Step>
+</Stepper>
+
+<Callout type="trap" title="Laws只是理论，Production实现能跑就行">
+Violation会让提取helper、重排query或替换Map/Bind后行为改变，造成难定位bug。Laws是允许安全refactor的contract，custom Option/Either必须测试。
+</Callout>
+
+### Equality and effect evidence
+
+Law test先定义“相等”再生成样本：Option比较Some/None和值，Either还比较chosen error，IEnumerable比较元素与顺序，Task则需同时观察completion、fault、cancellation及effect trace。对会访问时钟、网络或日志的function，用recording interpreter收集调用次数、参数与顺序，不能只比较最终value，否则重复执行effect的错误仍会伪装成law成立。Generator还应覆盖empty、boundary、Left/Right与throwing function，并在失败时保留可复现seed和最小反例。
+
+## Improving readability by using LINQ with any monad
+
+C# query syntax通过Select/SelectMany/Where pattern可用于自定义Option/Either等context。From clauses为intermediate values命名，适合dependent chain；最终compiler仍调用methods，不自动处理mixed contexts或验证laws。
+
+```csharp
+var result =
+    from customer in FindCustomer(id)
+    from order in FindLatestOrder(customer.Id)
+    select BuildSummary(customer, order);
+```
+
+LINQ提高readability的前提是一个consistent context和abstraction level。若每行转换Task/Either/Option层，explicit named helpers可能更清楚。
+
+<Term def="C# query syntax把Select/SelectMany chains投影为可命名intermediate values的monadic composition。">LINQ monadic notation</Term>
+
+## When to use Bind vs. Apply
+
+Independent computations用Apply，可parallel或accumulate；dependent computations用Bind，后一步需要前值且前失败就跳过。选择是data dependency，不是个人style。Task+Validation等mixed effects需Traverse/helper或分阶段；不要用嵌套Bind制造金字塔。
+
+<Stepper>
+  <Step title="切换independent、dependent、LINQ与mixed effects"><CfpBindApplyDecisionLab /></Step>
+  <Step title="画dependency DAG">没有edge的inputs可Apply；有value edge的stage用Bind；external effect另标owner。</Step>
+  <Step title="验证error/order/concurrency">Independent errors是否全收集，dependent后续是否跳过，parallel ordering是否符合contract。</Step>
+</Stepper>
+
+<Callout type="trap" title="Apply总比Bind更Parallel、更好">
+Apply只适用于independent inputs；若B需要A产生的id，强行Apply会预先执行无效/昂贵work。Dependency correctness先于parallel opportunity。
+</Callout>
+
+<Term def="Later computation是否需要earlier successful value，从而决定Apply并行组合或Bind有序short-circuit。">dependency-shaped composition</Term>
+
+## 本章回顾：Context里的多参数组合由Dependency决定
+
+1. Map、Apply、Bind、Traverse对应不同plain/elevated shapes。
+2. Functor/applicative/monad是能力+laws，不是标签。
+3. Laws保护regrouping与refactor的observable equivalence。
+4. LINQ可表达monadic dependent chains，但不解决mixed effects。
+5. Independent用Apply，dependent用Bind，复杂layers显式staging。
+
+<Exercises>
+
+**问题 1：Name和Email validation为什么适合Apply？**
+
+<Answer>两者independent，都可在没有对方result时执行；Apply组合Customer constructor并积累errors。若Email rule依赖parsed Country，则该部分改Bind。测试both invalid返回两错、single invalid和valid construction。</Answer>
+
+**问题 2：Custom Option应测试哪些laws？**
+
+<Answer>Map identity/composition，Bind left/right identity与associativity；Some/None都覆盖。定义value equality和function purity assumptions，记录function invocation count，确保None short-circuit。</Answer>
+
+**问题 3：Task of Either list如何组合？**
+
+<Answer>先决定failure/cancellation/concurrency policy；用Traverse把list of async typed outcomes变成one async aggregate，或分阶段await facts再Validation。明确fail-fast/accumulate、degree/order和cancellation，避免盲目nested Bind。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="elevated value" definition="位于Option/Either/Task等context中的value/function。" />
+  <GlossaryItem term="applicative apply" definition="Context内function应用context内argument。" />
+  <GlossaryItem term="context composition contract" definition="Map/Apply/Bind能力及其laws。" />
+  <GlossaryItem term="LINQ monadic notation" definition="Query syntax对Select/SelectMany chain的可读表示。" />
+  <GlossaryItem term="dependency-shaped composition" definition="按input dependency选择Apply或Bind。" />
+</Glossary>
+
+<Attribution adaptedFrom="Functional Programming in C#, First Edition, Chapter 8: Working effectively with multi-argument functions" adaptedUrl="https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-8" />

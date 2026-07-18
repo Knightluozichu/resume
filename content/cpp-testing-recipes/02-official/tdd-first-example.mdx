@@ -1,0 +1,327 @@
+---
+title: "Chapter 2：Test-Driven Development: A First Example"
+type: A
+section: 现代 C++ 测试驱动开发 · Soundex 实战
+order: 2
+description: 对齐原书 Chapter 2：以 Soundex 类完成第一条端到端 TDD 主线，从单一失败例、小步实现和夹具出发，逐步加入补零、辅音编码、元音、长度与重复规则，再在全绿状态下提取单一职责。
+demo: false
+math: false
+sourceUrl: "https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/"
+draft: false
+---
+
+import {
+  CtrRedGreenRefactorEvidence,
+  CtrSoundexBoundaryLab,
+  CtrSoundexRuleLadder,
+} from "@/components/mdx/cpp-testing-recipes/diagrams/tdd-first-example";
+
+<Objectives>
+
+- 能用 Soundex 类完成连续的红、绿、重构小循环，并说明每一步只新增了哪一个可观察行为
+- 能使用测试夹具和 setup 消除机械重复，同时保持每个测试独立、清晰地表达输入与期望
+- 能区分测试驱动与事后测试，通过长度、元音、重复编码和空输入边界发现设计责任与遗漏测试
+
+</Objectives>
+
+## 为什么第一个例子要足够小，却不能只是加法
+
+`2 + 2 == 4` 能证明框架工作，却不会产生设计压力。Soundex 把英文姓名转换成首字母加三个数字的音码：规则不多，但包含字符分类、状态、长度边界和输出格式，足以展示测试如何逐步塑造实现。
+
+<Term def="接收姓名字符串并返回固定长度音码的教学类；本章通过逐条示例驱动它的接口、规则和内部职责。">
+  Soundex 类
+</Term>
+
+本章采用原书示例的教学规则梯子，而不是一次宣称实现某个外部 Soundex 规范的全部变体。每轮只选择一个例子，先预测失败，再写最小代码，最后根据测试暴露的重复提取职责。
+
+<CtrSoundexRuleLadder />
+
+## 第一轮：只保留首字母并补零
+
+<Term def="通过一连串可验证的小行为扩展系统，每一步都保留之前证据，而不是一次实现全部需求。">
+  增量开发
+</Term>
+
+先写最窄的公开接口：`Soundex::encode` 接收字符串并返回字符串。例子 `A -> A000` 同时包含两个行为，会不会太大？可以先让空实现返回固定值建立绿灯，再用第二个输入迫使实现读取首字母。关键是每次红灯只对应一个可解释缺口。
+
+```cpp
+#include "Soundex.h"
+#include <gtest/gtest.h>
+
+TEST(SoundexEncoding, RetainsTheFirstLetter) {
+    Soundex soundex;
+    EXPECT_EQ("A000", soundex.encode("A"));
+}
+
+TEST(SoundexEncoding, PadsWithZerosToFourCharacters) {
+    Soundex soundex;
+    EXPECT_EQ("B000", soundex.encode("B"));
+}
+```
+
+第一条测试允许最小实现暂时返回 `"A000"`；第二条变红后，固定值不再成立，才需要读取输入首字母。不要在第一轮提前写完整辅音表，因为当前没有测试能区分正确映射与错映射。
+
+<Term def="先写一个因缺少目标行为而失败的测试，再写使其通过的最小实现，用测试顺序持续塑造接口和设计。">
+  测试驱动
+</Term>
+
+```cpp
+std::string Soundex::encode(const std::string& word) const {
+    return zeroPad(word.substr(0, 1));
+}
+
+std::string Soundex::zeroPad(const std::string& encoding) const {
+    return encoding + std::string(4 - encoding.length(), '0');
+}
+```
+
+此实现还假设输入非空且长度不超过 4。它不是最终安全实现，但在当前前置条件和测试下足够绿。未定义边界必须记入待办，不能悄悄忘记。
+
+## 每轮红、绿、重构都要有独立证据
+
+红灯不是“项目有错误”，而是刚写的测试以预期原因失败。如果测试因拼写错误不能编译，或另一条旧测试先失败，尚未证明新行为缺失。绿灯也不是只跑当前测试；必须确认全部旧行为仍成立。
+
+<Term def="先看见目标测试以正确原因失败，再用最小实现让全部测试通过，最后在全绿保护下改善结构的三阶段循环。">
+  红绿重构
+</Term>
+
+<CtrRedGreenRefactorEvidence />
+
+重构阶段不添加新行为。可以提取 `zeroPad`、改善名字或消除测试重复；若要增加元音规则，先结束当前重构并重新进入红灯。把行为变化夹在重构中，会失去错误来自结构调整还是新规则的判断依据。
+
+## 用夹具集中共同 setup，而不是隐藏意图
+
+随着测试增加，每个用例都创建 `Soundex soundex`。GoogleTest 的 fixture 可以集中对象初始化，并在每个测试前创建新的 fixture 实例，避免状态在用例间泄漏。
+
+<Term def="为一组测试提供共同对象和生命周期钩子的测试结构；GoogleTest 会为每个 TEST_F 创建独立实例。">
+  测试夹具
+</Term>
+
+<Term def="在每个测试执行前建立所需初始状态的步骤；它应保持轻量、确定并且不隐藏本测试关键输入。">
+  setup
+</Term>
+
+```cpp
+class SoundexEncoding : public ::testing::Test {
+protected:
+    Soundex soundex;
+};
+
+TEST_F(SoundexEncoding, RetainsTheFirstLetter) {
+    EXPECT_EQ("A000", soundex.encode("A"));
+}
+
+TEST_F(SoundexEncoding, EncodesBAsOne) {
+    EXPECT_EQ("A100", soundex.encode("Ab"));
+}
+```
+
+fixture 适合共享稳定对象，不适合把本测试的姓名和期望值塞进隐式全局状态。读者应在测试体中直接看到 `"Ab"` 与 `"A100"`，否则失败时必须跳转 setup 才能理解行为。
+
+<Callout type="trap" title="陷阱：把所有准备动作都移进 setup">
+  共同且与断言无关的机械初始化可以集中；决定本用例意义的输入、边界和期望应留在测试体。过重 setup 会让测试相互看似相同，也会增加不必要的共享状态。
+</Callout>
+
+## 一次只驱动一个编码规则
+
+辅音映射可先从一个组开始：`B/F/P/V -> 1`。让 `Ab -> A100` 变红，再实现一个最小字符映射。随后用 `Ac -> A200` 迫使实现扩展到下一组。若第一条测试就输入包含所有组的长姓名，失败只说明“大结果不对”，无法指出哪条规则缺失。
+
+```cpp
+char Soundex::encodedDigit(char letter) const {
+    const std::string one = "BFPV";
+    const std::string two = "CGJKQSXZ";
+    const std::string three = "DT";
+    const std::string four = "L";
+    const std::string five = "MN";
+    const std::string six = "R";
+
+    const std::string groups[] = {one, two, three, four, five, six};
+    for (std::size_t i = 0; i < std::size(groups); ++i) {
+        if (groups[i].find(letter) != std::string::npos) {
+            return static_cast<char>('1' + i);
+        }
+    }
+    return '0';
+}
+```
+
+代码先表达行为即可，之后可把映射数据改为静态表或 `switch`。重构是否值得，不看“更聪明”，而看是否减少重复、提高名字与边界可读性，并且全套测试持续为绿。
+
+## 元音规则迫使扫描与输出分离
+
+元音不产生编码数字。若实现把 `encodedDigit` 返回的 `'0'` 直接追加，`Ae -> A000` 可能偶然通过，因为最终输出本来就补零；这个例子没有区分“跳过元音”和“编码成零”。应加入元音夹在辅音之间的测试，例如 `Aeb -> A100`，并观察输出序列。
+
+<Term def="只为一个最小行为选择能区分正确与错误实现的例子，在该行为通过前不同时加入其他规则。">
+  一次一件事
+</Term>
+
+```cpp
+std::string Soundex::encode(const std::string& word) const {
+    std::string encoding(1, word.front());
+    for (auto it = std::next(word.begin()); it != word.end(); ++it) {
+        const char digit = encodedDigit(*it);
+        if (digit != '0') {
+            encoding += digit;
+        }
+    }
+    return zeroPad(encoding);
+}
+```
+
+这个版本仍会生成超过四位的结果，也不会合并相邻同码。测试驱动不是要求一次写完，而是要求明确知道当前版本有哪些已证明行为和哪些未证明行为。
+
+## 长度边界应改变控制流
+
+输出最多四位，即首字母加三个数字。先写一个恰好产生三个数字的例子，再写第四个数字应被忽略的例子。第二条测试会迫使循环在编码完成后停止，而不是先生成任意长字符串再盲目补零。
+
+<Term def="把固定输出长度、空输入、元音跳过和重复编码等极端位置写成示例，用来约束循环停止与 API 前置条件。">
+  边界规则
+</Term>
+
+```cpp
+constexpr std::size_t MaxCodeLength = 4;
+
+for (auto it = std::next(word.begin());
+     it != word.end() && encoding.length() < MaxCodeLength;
+     ++it) {
+    const char digit = encodedDigit(*it);
+    if (digit != '0') {
+        encoding += digit;
+    }
+}
+```
+
+当行为通过后再提取 `isComplete(encoding)`，名字会比裸长度比较更直接。这个提取来自新规则产生的设计压力，而不是预先猜测未来需要多少 helper。
+
+<CtrSoundexBoundaryLab />
+
+## 重复编码引入最小状态
+
+相邻字母可能映射到同一数字，例如 `B/F/P/V` 都是 1。测试 `Abfp -> A100` 会让当前实现得到 `A111`。实现需要记住上一个有效编码，并只在新数字不同的时候追加；元音是否中断重复组，应由你采用的规则版本通过独立测试明确，而不是靠循环顺序偶然决定。
+
+```cpp
+char lastDigit = '\0';
+for (auto it = std::next(word.begin());
+     it != word.end() && !isComplete(encoding);
+     ++it) {
+    const char digit = encodedDigit(*it);
+    if (digit != '0' && digit != lastDigit) {
+        encoding += digit;
+    }
+    if (digit != '0') {
+        lastDigit = digit;
+    }
+}
+```
+
+这里出现了扫描、映射、去重、停止和补零五种责任。测试仍从公开 `encode` 驱动行为，但实现可以在绿灯下提取窄函数，让每个名字说明一条规则。
+
+## 测试驱动与事后测试的差别在反馈时机
+
+<Term def="用失败测试决定下一条行为和设计压力的开发方式，与实现完成后只验证既有结构的事后测试形成对比。">
+  测试驱动与事后测试
+</Term>
+
+事后测试可以发现回归，也有价值；但它通常围绕已经存在的函数和分支书写，较难反向改善接口。测试驱动在实现前先问“调用者希望怎样表达行为”，因此 `encode(word)`、固定长度结果和错误契约会在代码结构冻结前得到反馈。
+
+不要把差别简化成“先写测试就是 TDD”。若先在脑中设计并实现完整算法，只是把代码录入顺序改成测试文件在前，仍没有让每个红灯引导下一步。真正证据是提交或实验记录中能看到连续的小失败、小实现和全绿重构。
+
+## 从辅助函数中提取单一职责
+
+<Term def="一个模块或函数只有一个主要变化原因，使编码映射、输出完成判断和补零策略能够独立理解与修改。">
+  单一职责原则
+</Term>
+
+当 `encode` 同时承担五个动作，可以提取：`head` 保留首字母，`encodedDigit` 负责映射，`isComplete` 判断长度，`isDuplicate` 比较状态，`zeroPad` 负责输出格式。不是每行都做成函数，而是把不同变化原因命名并隔离。
+
+```cpp
+std::string Soundex::encode(const std::string& word) const {
+    std::string encoding = head(word);
+    encodeTail(word, encoding);
+    return zeroPad(encoding);
+}
+```
+
+此时测试仍只依赖公开行为，内部 helper 可以自由重构。若测试直接调用每个 private helper，内部结构会被测试锁死；除非 helper 本身成为独立公共概念，否则优先通过外部结果证明它们协作正确。
+
+## 清晰测试要说明规则，而不是复述实现
+
+测试名应表达领域结果，例如 `IgnoresVowels`、`StopsAfterThreeEncodedDigits`、`CombinesAdjacentDuplicateEncodings`。名称 `CallsEncodedDigitThreeTimes` 绑定实现步骤，重构循环后即使行为不变也会失败。
+
+断言失败消息应让人直接看到输入、期望与实际。参数化测试适合在规则稳定后压缩多个辅音映射案例；在发现新规则时，先保留单独测试，让每个例子清楚说明为什么存在。
+
+<Callout type="trap" title="陷阱：一个大表格从一开始覆盖全部规则">
+  大表格能提高数据覆盖，却会把多个缺失行为合成一次红灯。先用独立例子驱动每条规则和设计；规则稳定后再参数化重复结构，同时保留关键边界的命名测试。
+</Callout>
+
+## 主动列出尚未证明的测试
+
+<Term def="当前实现具有路径或输入契约，但测试集合尚未提供可区分证据的行为缺口。">
+  遗漏测试
+</Term>
+
+完成基本规则后检查：空字符串怎样处理，大小写是否统一，非 ASCII 字符是否允许，首字母后的 `H/W/Y` 如何影响相邻编码，输入包含标点时怎样处理。这些问题不应由 `word.front()` 或字符表偶然决定。
+
+本章不需要一次决定所有外部规范，但必须把前置条件写清。例如暂时规定输入至少含一个 ASCII 字母，那么空输入测试应验证明确拒绝；若 API 承诺接受任意字符串，就要定义规范化和错误返回。遗漏清单是下一轮红灯来源，不是“以后再说”的垃圾桶。
+
+<Stepper>
+  <Step title="第一步：沿规则梯子一次推进一个行为">
+    从保留首字母与补零开始，再逐组加入辅音、元音、长度和重复规则；每次选择能区分正确与错误实现的最小例子。
+
+    <CtrSoundexRuleLadder />
+  </Step>
+  <Step title="第二步：为每轮保存红绿重构证据">
+    确认红灯原因正确，只写让全部测试变绿的最小代码，再在绿灯下提取有单一职责的名字。
+
+    <CtrRedGreenRefactorEvidence />
+  </Step>
+  <Step title="第三步：用边界和遗漏测试审查契约">
+    检查空输入、元音、长度、重复编码和大小写；先决定 API 契约，再让一个失败测试暴露当前实现的缺口。
+
+    <CtrSoundexBoundaryLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Soundex 类足够小，却能用字符映射、状态与长度边界产生真实设计反馈
+- 增量开发要求每个例子只引入一个可观察行为，旧测试持续保护已完成规则
+- 红灯、绿灯和重构各有独立证据；行为变化不能藏在结构重构中
+- 测试夹具集中共同 setup，但关键输入与期望应留在测试体中
+- 测试驱动在实现前影响接口和责任，事后测试主要验证已经形成的结构
+- 长度、元音、重复和空输入边界会暴露单一职责与遗漏测试
+
+<Exercises>
+  1. **问题 1：设计下一小步。** 当前 `encode("A") == "A000"` 已通过，下一条测试应怎样避免让实现一次跨越太多规则？
+
+  <Answer question="怎样选择第二个 Soundex 例子？">先用 `B -> B000` 迫使实现从固定 `A000` 过渡到读取首字母，仍不引入辅音编码；随后再用 `Ab -> A100` 只引入 B/F/P/V 到 1 的映射。每个红灯都只有一个新的可观察差异。</Answer>
+
+  2. **问题 2：识别偶然通过。** 为什么 `Ae -> A000` 不能单独证明元音被忽略？
+
+  <Answer question="怎样写能区分跳过元音和追加零的测试？">因为错误实现可能给 E 追加字符 `0`，最终仍得到 A000。使用元音夹在可编码辅音之前的例子，如 `Aeb -> A100`，或检查多个元音不会消耗三位数字容量；这些结果能区分“跳过”与“编码为零”。</Answer>
+
+  3. **问题 3：安排重构。** `encode` 已同时做扫描、映射、去重、长度判断和补零，何时以及怎样拆分？
+
+  <Answer question="怎样在不改变行为时落实单一职责？">先确保代表各规则和边界的测试全绿，再只做结构改动：提取 `encodedDigit`、`isComplete`、`isDuplicate`、`zeroPad` 等按变化原因命名的 helper；每次小提取后跑全套。不要同时新增大小写或空输入行为，否则无法判断失败来源。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Soundex 类">把姓名转换为固定长度音码、用来承载本章增量 TDD 规则的教学类。</GlossaryItem>
+  <GlossaryItem term="增量开发">通过连续可验证的小行为扩展系统并保留旧证据的开发方式。</GlossaryItem>
+  <GlossaryItem term="测试驱动">先写正确失败的测试，再写最小实现，让测试持续引导接口和设计。</GlossaryItem>
+  <GlossaryItem term="红绿重构">正确失败、全部通过、在绿灯下改善结构的三阶段循环。</GlossaryItem>
+  <GlossaryItem term="测试夹具">为每个测试提供独立共同对象和生命周期钩子的结构。</GlossaryItem>
+  <GlossaryItem term="setup">每个测试前建立必要初始状态的轻量确定步骤。</GlossaryItem>
+  <GlossaryItem term="一次一件事">每轮只引入一个能被例子区分的新行为。</GlossaryItem>
+  <GlossaryItem term="边界规则">约束空输入、固定长度、跳过字符和重复状态等极端位置的行为。</GlossaryItem>
+  <GlossaryItem term="测试驱动与事后测试">分别让失败测试在实现前引导设计，或在实现后验证既有结构的两种反馈时机。</GlossaryItem>
+  <GlossaryItem term="单一职责原则">让模块或函数只有一个主要变化原因的设计原则。</GlossaryItem>
+  <GlossaryItem term="遗漏测试">实现已有相关路径但测试尚不能区分其正确与错误行为的缺口。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Modern C++ Programming with Test-Driven Development, Chapter 2 Test-Driven Development: A First Example"
+  adaptedUrl="https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/"
+/>

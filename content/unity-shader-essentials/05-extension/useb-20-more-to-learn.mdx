@@ -1,0 +1,158 @@
+---
+title: "第20章 还有更多内容吗"
+type: C
+section: "Unity Shader精要 · 扩展篇"
+order: 20
+description: "建立从本书到图形学基础、API文档、论文、GPU工具和现代Unity管线的持续学习路线。"
+demo: true
+math: true
+sourceUrl: "https://www.cnblogs.com/xiaowangba/p/6314640.html"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { UsebMoreToLearnPipelineLab, UsebMoreToLearnCompareLab, UsebMoreToLearnEvidenceLab } from "@/components/mdx/unity-shader-essentials/diagrams/useb-20-more-to-learn";
+
+<Objectives>
+- 能解释渲染知识树、最小实验和原始资料在Unity渲染链中的位置
+- 能推导本页公式并实现最小Shader，用调试视图比较中间值
+- 能复现学习证据，用Frame Debugger、边界场景和性能数据验收
+</Objectives>
+
+## 从效果开始
+
+先预测画面、Draw Call和中间缓冲会如何变化，再调整一个参数观察变化。完成本书不等于背完效果。继续学习应按问题找原始资料：矩阵和采样回到图形学教材，状态和语义回到API规范，Unity行为查对应版本手册，复杂技术阅读论文与源码。面对URP、HDRP或新Shader编译器，要先映射概念，再重做最小实验，避免机械复制旧代码。 本页用<Term def="把数学、图形API、光照、材质、后处理、性能和引擎管线连接起来的路线图。">渲染知识树</Term>、<Term def="一次只改变一个渲染变量并保存输入输出和帧调试证据的工程样例。">最小实验</Term>、<Term def="引擎手册、API规范、论文、演讲和源码等可追溯的一手来源。">原始资料</Term>、<Term def="把书中Unity 5做法映射到当前管线时记录等价概念与不兼容点。">迁移笔记</Term>、<Term def="可运行Shader、对比图、GPU捕获、性能数据和失败反例组成的掌握证明。">学习证据</Term>串联视觉目标、GPU数据流、渲染状态和验收证据。
+
+<UsebMoreToLearnPipelineLab />
+
+## 第一版权威目录定位
+
+本页一一对应冯乐乐《Unity Shader入门精要》第一版第20章 还有更多内容吗。作者发布的完整目录明确列出5篇20章，人民邮电出版社书目记录确认2016年第一版、ISBN 9787115423054和369页，作者GitHub保存随书源代码与勘误入口。
+
+### 原书小节覆盖
+
+1. 20.1 如果想深入了解渲染
+2. 20.2 世界那么大
+3. 参考文献
+
+### 核心对象
+
+1. **渲染知识树**：把数学、图形API、光照、材质、后处理、性能和引擎管线连接起来的路线图。
+2. **最小实验**：一次只改变一个渲染变量并保存输入输出和帧调试证据的工程样例。
+3. **原始资料**：引擎手册、API规范、论文、演讲和源码等可追溯的一手来源。
+4. **迁移笔记**：把书中Unity 5做法映射到当前管线时记录等价概念与不兼容点。
+5. **学习证据**：可运行Shader、对比图、GPU捕获、性能数据和失败反例组成的掌握证明。
+
+## 数据流与公式
+
+任何Shader效果都先写清五项契约：输入属性来自哪里，当前值位于哪个坐标或色彩空间，可编程阶段输出什么，ShaderLab状态如何合并结果，以及目标平台和Unity版本是什么。
+
+$$
+knowledge=concept+experiment+evidence
+$$
+
+$$
+\Delta=legacy-current
+$$
+
+$$
+confidence=reproduction\times explanation
+$$
+
+$$
+next=weakest\ dependency
+$$
+
+完成本书不等于背完效果。继续学习应按问题找原始资料：矩阵和采样回到图形学教材，状态和语义回到API规范，Unity行为查对应版本手册，复杂技术阅读论文与源码。面对URP、HDRP或新Shader编译器，要先映射概念，再重做最小实验，避免机械复制旧代码。 公式不是孤立记忆项；每个向量都标注空间，每个颜色都标注线性或sRGB，每个深度都标注设备、NDC或观察距离，每个纹理通道都标注数据语义。
+
+## 最小Shader实现
+
+```hlsl
+// 每个新概念保留可切换的A/B实验
+#pragma shader_feature_local __ EXPERIMENT_ON
+#ifdef EXPERIMENT_ON
+  color = candidatePath(input);
+#else
+  color = baselinePath(input);
+#endif
+```
+
+实现顺序固定为常量颜色、输入可视化、核心公式、材质参数和优化。每新增一个步骤都保留开关，这样画面异常时可以二分定位。编译成功只证明语法和部分类型成立，不证明空间、状态或色彩处理正确。
+
+<UsebMoreToLearnCompareLab />
+
+## Unity侧设置与渲染状态
+
+```csharp
+var material = renderer.sharedMaterial;
+material.SetFloat("_DebugMode", debugMode);
+material.EnableKeyword(debugMode > 0 ? "DEBUG_VIEW" : "BASELINE_VIEW");
+Debug.Assert(material.shader.isSupported);
+```
+
+材质、相机和光源属于实验输入，不能只保存Shader文件。用Frame Debugger检查实际选择的SubShader和Pass、关键字变体、渲染队列、RenderTarget、深度写入和混合；用Profiler或GPU捕获确认成本来自提交、顶点、片元还是带宽。
+
+## 边界与平台差异
+
+测试零向量、负缩放、非统一缩放、UV边界、透明物体交叉、近远裁剪面、HDR亮度、不同纹理导入设置和移动精度。原书以Unity 5时代内置管线为语境；迁移到当前Unity、URP或HDRP时，应把概念映射和API替换单独记录，不能把新管线行为倒写成原书内容。
+
+```text
+scene: fixed reference scene
+unity: exact editor version
+pipeline: built-in or named SRP
+platform: graphics API and GPU
+evidence: image diff + frame events + timings
+```
+
+<UsebMoreToLearnEvidenceLab />
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定输入与参考图"><UsebMoreToLearnPipelineLab /></Step>
+  <Step title="逐阶段打开效果"><UsebMoreToLearnCompareLab /></Step>
+  <Step title="保存状态与性能"><UsebMoreToLearnEvidenceLab /></Step>
+</Stepper>
+
+1. 建立只有一个网格、一个相机和一个主光的参考场景，保存Unity版本与平台。
+2. 输出UV、法线、深度或光照项等中间值，确认数据空间和范围。
+3. 启用本章核心效果，用Frame Debugger逐Pass检查输入、状态和目标。
+4. 构造边界与失败场景，比较参考图、像素差异、Draw Call和GPU时间。
+
+## 验收证书
+
+验收包至少包含Shader与脚本、材质参数、测试场景、参考图和候选图、Frame Debugger事件、编译关键字、目标平台、帧时间与反例。只收集大量教程链接却不建立可运行实验和版本标记，几个月后无法判断哪些结论仍成立。 修复后必须重放同一输入，确认画面和性能变化都能由证据解释。
+
+## 常见误区
+
+<Callout type="trap" title="只看最终截图">只收集大量教程链接却不建立可运行实验和版本标记，几个月后无法判断哪些结论仍成立。</Callout>
+
+<Callout type="trap" title="忽略版本与状态">同一段HLSL在不同Unity版本、渲染管线、关键字和纹理导入设置下可能走不同Pass或解释不同数据。修复时把版本、平台、状态和资源设置纳入实验输入。</Callout>
+
+## 本章回顾
+
+本页覆盖渲染知识树、最小实验、原始资料、迁移笔记、学习证据。掌握标准是能从视觉目标画出数据流，写出最小实现，逐阶段可视化中间值，再用渲染状态、边界样例和性能数据完成复现。
+
+<Exercises>
+**问题1：渲染知识树与最小实验如何连接？**
+<Answer>把数学、图形API、光照、材质、后处理、性能和引擎管线连接起来的路线图。 一次只改变一个渲染变量并保存输入输出和帧调试证据的工程样例。 回答时标注执行阶段和输入空间。</Answer>
+
+**问题2：如何调试原始资料？**
+<Answer>先输出常量，再把相关中间值映射为颜色；逐项关闭纹理、光照和状态，最后用Frame Debugger确认实际Pass。</Answer>
+
+**问题3：如何验收学习证据？**
+<Answer>可运行Shader、对比图、GPU捕获、性能数据和失败反例组成的掌握证明。 同时保存正常图、边界图、失败反例、状态记录和性能基线。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="渲染知识树" definition="把数学、图形API、光照、材质、后处理、性能和引擎管线连接起来的路线图。" />
+  <GlossaryItem term="最小实验" definition="一次只改变一个渲染变量并保存输入输出和帧调试证据的工程样例。" />
+  <GlossaryItem term="原始资料" definition="引擎手册、API规范、论文、演讲和源码等可追溯的一手来源。" />
+  <GlossaryItem term="迁移笔记" definition="把书中Unity 5做法映射到当前管线时记录等价概念与不兼容点。" />
+  <GlossaryItem term="学习证据" definition="可运行Shader、对比图、GPU捕获、性能数据和失败反例组成的掌握证明。" />
+  <GlossaryItem term="Shader实验单" definition="记录Unity版本、目标平台、场景、材质、源码、截图和性能的一页式证据。" />
+</Glossary>
+
+<Attribution adaptedFrom="冯乐乐 · Unity Shader入门精要 · 第20章 还有更多内容吗" adaptedUrl="https://www.cnblogs.com/xiaowangba/p/6314640.html" />

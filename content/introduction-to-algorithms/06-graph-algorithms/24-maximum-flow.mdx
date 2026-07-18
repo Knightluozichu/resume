@@ -1,0 +1,250 @@
+---
+title: "Chapter 24 · Maximum Flow"
+type: C
+section: "CLRS4 · 图算法"
+order: 24
+description: "按CLRS第四版第24章重建流网络、Ford-Fulkerson、最大流最小割与最大二分匹配归约。"
+demo: true
+math: true
+sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+draft: false
+---
+
+import { CLRS4FlowNetworkLab, CLRS4FlowConservationLab, CLRS4ResidualEdgeLab, CLRS4AugmentingPathLab, CLRS4FordFulkersonTraceLab, CLRS4MinCutLab, CLRS4MaxFlowMinCutLab, CLRS4IntegralFlowLab, CLRS4BipartiteReductionLab, CLRS4MatchingFlowLab, CLRS4FlowCertificateLab } from "@/components/mdx/introduction-to-algorithms/diagrams/24-maximum-flow";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释capacity constraint、flow conservation、residual reverse edge与cut capacity的统一语义
+- 能计算augmenting path bottleneck、flow value、residual capacities和source-side cut capacity
+- 能实现residual graph更新、Ford-Fulkerson augmentation、Edmonds-Karp与matching reduction
+- 能分析augmenting-path absence、max-flow min-cut equality与integrality为何证明最优
+- 能设计包含primal feasibility、residual reachability、tight cut和matching extraction的flow证书
+
+</Objectives>
+
+## 从“为什么已经发送的flow还能撤回”开始
+
+先预测：第一次把1 unit沿$u\to v$发送，后来发现应该走另一条route。若只看原graph，choice似乎不可撤销；residual graph会新增$v\to u$ capacity 1，允许后续augmenting path取消这1 unit并重新分配。
+
+<Term def="在directed capacitated network中，从source向sink发送满足edge容量与内部vertex守恒约束的最大总flow。">最大流</Term>不是找一条最宽path，而是允许多条paths共享与竞争capacities。输出必须同时给edge flows和value，且可由cut独立验证optimality。
+
+<CLRS4FlowNetworkLab />
+
+## 24.1 Flow networks
+
+### Capacity and conservation
+
+<Term def="含source、sink与非负capacity directed edges的图，flow必须不超过capacity并在其他vertices保持inflow等于outflow。">流网络</Term>$G=(V,E)$中$c(u,v)\ge0$。标准约束：
+
+$$
+0\le f(u,v)\le c(u,v)
+\quad\text{for each }(u,v)\in E.
+$$
+
+对每个$v\in V-\{s,t\}$：
+
+$$
+\sum_{u}f(u,v)=\sum_{w}f(v,w).
+$$
+
+<CLRS4FlowConservationLab />
+
+Flow value是source净流出，也等于sink净流入：
+
+$$
+|f|=\sum_v f(s,v)-\sum_v f(v,s).
+$$
+
+若input允许antiparallel original edges，应为每个directed edge保存独立capacity与flow，再构造residual contribution；不要用单一矩阵slot覆盖两条业务edges。
+
+### Residual networks
+
+<Term def="表示相对当前flow还能增加或撤回多少的directed network，包含forward剩余capacity和reverse cancellation capacity。">残量网络</Term>$G_f$对original edge $(u,v)$提供：
+
+$$
+c_f(u,v)=c(u,v)-f(u,v),
+\qquad
+c_f(v,u)\mathrel{+}=f(u,v).
+$$
+
+<CLRS4ResidualEdgeLab />
+
+Residual reverse edge不是原network可发送的新业务方向，而是取消旧flow的记账动作。Augmentation后，若path走forward就增加original flow，走reverse就减少对应original flow。
+
+### Cuts
+
+一个$s$-$t$ cut $(S,T)$满足$s\in S,t\in T$。Cut capacity只sum original edges从$S$到$T$：
+
+$$
+c(S,T)=\sum_{u\in S}\sum_{v\in T}c(u,v).
+$$
+
+任意feasible flow都满足$|f|\le c(S,T)$，因为跨cut净flow等于flow value，forward flow受capacity限制，reverse flow只会降低净值。
+
+<CLRS4MinCutLab />
+
+## 24.2 The Ford-Fulkerson method
+
+### Augmenting paths
+
+<Term def="在residual network反复寻找source到sink path，并按path最小residual capacity增加flow直到无路可增的方法。">Ford-Fulkerson方法</Term>以zero flow开始。Residual $s$-$t$ path $p$的bottleneck：
+
+$$
+c_f(p)=\min_{(u,v)\in p}c_f(u,v).
+$$
+
+<CLRS4AugmentingPathLab />
+
+```cpp
+void augment(const vector<ResidualEdge>& path) {
+    Capacity delta = path_min_residual(path);
+    for (const auto& edge : path) {
+        if (edge.is_forward) flow[edge.original] += delta;
+        else flow[edge.original] -= delta;
+        update_residual_pair(edge, delta);
+    }
+}
+```
+
+<CLRS4FordFulkersonTraceLab />
+
+每次augmentation保持capacity与conservation，并令flow value增加bottleneck。Integer capacities下delta为positive integer，因此最多$|f^*|$次augmentation，朴素上界$O(E|f^*|)$；这是pseudo-polynomial，依赖数值而非bit length。
+
+Path strategy很重要。对irrational capacities，任意选择的Ford-Fulkerson甚至可能不终止收敛到optimum。Edmonds-Karp每次用BFS选residual edge数最少的augmenting path，保证：
+
+$$
+O(VE^2).
+$$
+
+```text
+EDMONDS-KARP(G, s, t)
+1  initialize zero flow and residual graph
+2  while BFS finds an s-to-t residual path p
+3      delta = minimum residual capacity on p
+4      augment forward and reverse residual edges by delta
+5  return flow
+```
+
+### Max-flow min-cut theorem
+
+<Term def="一份flow为maximum当且仅当residual graph无augmenting path，也当且仅当存在cut使flow value等于cut capacity。">最大流最小割定理</Term>连接算法termination与optimality。
+
+当residual中无$s$到$t$ path，令$S$为从$s$ residual-reachable vertices，$T=V-S$。从$S$到$T$的original edges必须saturated，否则有forward residual edge；从$T$到$S$的flow必须0，否则有reverse residual edge。故：
+
+$$
+|f|=f(S,T)-f(T,S)=c(S,T).
+$$
+
+任意flow不超过任意cut，而当前flow达到一个cut上界，因此二者都optimal。
+
+<CLRS4MaxFlowMinCutLab />
+
+<Callout type="trap" title="最后一次BFS失败只说明算法卡住">
+在residual graph中失败不是局部停滞，而是构造minimum cut的证据。修法是保留BFS reachable set $S$，核对所有$S$到$T$ edges saturated、所有$T$到$S$ flows为0并报告相等value。
+</Callout>
+
+### Integrality
+
+若capacities为integers，存在integer maximum flow，Ford-Fulkerson从zero开始会产生一份，因为每次bottleneck与flow update都integer。
+
+<CLRS4IntegralFlowLab />
+
+Integrality不是说所有optimal flows都integer，而是至少存在一份integer optimum；linear programming solver也可能返回fractional convex combination。
+
+## 24.3 Maximum bipartite matching
+
+### Reduction to unit-capacity flow
+
+<Term def="在bipartite graph中选择最多edges，使任何vertex最多成为一条selected edge的endpoint。">最大二分匹配</Term>将$G=(L\cup R,E)$转为flow network：
+
+1. 新source $s$向每个$u\in L$连capacity 1。
+2. 每条bipartite edge从$L$指向$R$，capacity 1。
+3. 每个$v\in R$向sink $t$连capacity 1。
+
+<CLRS4BipartiteReductionLab />
+
+Unit capacities与flow conservation保证integer flow中每个left/right vertex最多通过1 unit。Matching $M$对应value $|M|$的flow；反之把flow为1的$L$到$R$ edges取出即matching。
+
+$$
+|f|=|M|.
+$$
+
+<CLRS4MatchingFlowLab />
+
+```cpp
+for (const Edge& edge : bipartite_edges)
+    if (flow[left(edge)][right(edge)] == 1)
+        matching.push_back(edge);
+```
+
+一般max-flow算法可求maximum bipartite matching；专门算法会在第25章进一步提升并扩展到stable marriage与assignment。
+
+<Callout type="trap" title="只看left-to-right edge flow而不检查integrality">
+Fractional flow例如两个edges各0.5不对应离散matching。修法是使用unit integer capacities及integral max-flow theorem，或显式验证提取的edge flows都为0或1且endpoints不重复。
+</Callout>
+
+<CLRS4FlowCertificateLab />
+
+<Stepper>
+<Step title="验证feasible flow">
+逐edge检查0到capacity，并对每个internal vertex核对inflow等于outflow和source/sink value一致。
+
+<CLRS4FlowConservationLab />
+</Step>
+<Step title="维护residual pair">
+每次augmentation同时更新forward剩余量与reverse取消量，按path bottleneck保持非负residual。
+
+<CLRS4ResidualEdgeLab />
+</Step>
+<Step title="用tight cut封闭证明">
+终止BFS reachable set给$S$；验证无residual crossing、flow value等于cut capacity，并提取应用witness。
+
+<CLRS4FlowCertificateLab />
+</Step>
+</Stepper>
+
+## 小结
+
+Chapter 24 Maximum Flow从flow networks的capacity、conservation、value、residual network与cut开始。Ford-Fulkerson method反复沿augmenting paths增加bottleneck，Edmonds-Karp用BFS给出polynomial bound；max-flow min-cut theorem把无augmenting path转成tight cut certificate。
+
+Maximum bipartite matching用unit-capacity network归约，integrality让1-unit flows与matching edges一一对应。可靠交付应包含original edge flows、residual graph、value、source reachable cut与application witness，而不只是一个最大数值。
+
+<Exercises>
+
+**问题 1**：Residual reverse edge为什么不会违反original edge direction？
+
+<Answer>
+它表示取消此前在opposite original edge上发送的flow，不是新增业务capacity。沿reverse residual方向augmentation时，相应original flow减少，最终original edge仍满足0到capacity约束。
+</Answer>
+
+**问题 2**：为何augmenting path按minimum residual capacity增加？
+
+<Answer>
+该minimum是path bottleneck；增加更多会让至少一条edge residual变negative并超过capacity或取消过量。增加恰好delta保持所有edge合法，并至少saturate一条residual edge。
+</Answer>
+
+**问题 3**：无augmenting path如何直接构造minimum cut？
+
+<Answer>
+取residual graph中从source可达的vertices为$S$。任何$S$到$T$ original edge都saturated，任何$T$到$S$ original flow都为0，因此net flow等于$c(S,T)$；结合weak dual bound证明flow maximum、cut minimum。
+</Answer>
+
+**问题 4**：Unit-capacity flow为何能提取bipartite matching？
+
+<Answer>
+Integer capacities保证存在integer maximum flow。Source-left与right-sink capacities均为1，所以每个bipartite vertex最多承载1 unit；取所有flow为1的left-right edges，不会共享endpoint，数量等于flow value。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="最大流">在directed capacitated network中，从source向sink发送满足edge容量与内部vertex守恒约束的最大总flow。</GlossaryItem>
+<GlossaryItem term="流网络">含source、sink与非负capacity directed edges的图，flow必须不超过capacity并在其他vertices保持inflow等于outflow。</GlossaryItem>
+<GlossaryItem term="残量网络">表示相对当前flow还能增加或撤回多少的directed network，包含forward剩余capacity和reverse cancellation capacity。</GlossaryItem>
+<GlossaryItem term="Ford-Fulkerson方法">在residual network反复寻找source到sink path，并按path最小residual capacity增加flow直到无路可增的方法。</GlossaryItem>
+<GlossaryItem term="最大流最小割定理">一份flow为maximum当且仅当residual graph无augmenting path，也当且仅当存在cut使flow value等于cut capacity。</GlossaryItem>
+<GlossaryItem term="最大二分匹配">在bipartite graph中选择最多edges，使任何vertex最多成为一条selected edge的endpoint。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Chapter 24 · Maximum Flow" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

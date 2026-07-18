@@ -1,149 +1,356 @@
 ---
-title: 队列的最大值
+title: "面试题59（二）：队列的最大值"
 type: C
-section: 栈和队列
-order: 1
-description: 使用两个栈实现队列，并在 O(1) 摊还复杂度下查询当前最大值。
+section: "第6章 面试中的各项能力"
+order: 71
+description: "以完整数据队列保存FIFO元素，以单调候选队列维护当前最大值，并用唯一索引同步过期。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/59_02_QueueWithMax/QueueWithMax.cpp"
 draft: false
 ---
 
-{/* 知识点清单：双栈模拟队列、辅助最大栈、摊还复杂度；原书章节：面试题59-I。 */}
+import { QueueWithMaxDataDiagram, QueueWithMaxOperationLab, QueueWithMaxDuplicateMap, QueueWithMaxContractDiagram, QueueWithMaxOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/queue-with-max";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能解释为何要在入队栈和出队栈分别维护最大值。
-- 能给出 `push`、`pop`、`max` 的摊还 O(1) 复杂度。
-- 能实现 C++ 与 TypeScript 的完整数据结构。
+- 能解释完整FIFO数据与单调最大候选为何必须分开维护
+- 能计算作者14步操作中两个deque和当前最大值的变化
+- 能实现原模板版和安全异常、宽索引的现代版
+- 能分析相等值身份、空队列、索引溢出和摊还复杂度
+- 能设计重复最大值、连续出队与随机操作的模型对拍
 
 </Objectives>
 
-## 直觉引入
+## 从“队首不是最大值”开始
 
-核心是“延迟搬运”：`
-`appendTail` 先进 `inStack`，`deleteHead` 从 `outStack` 弹出；
-当 `outStack` 空时整体倒到 `outStack`。
-每个栈里再各存一份当前最大值，查询最大值时只取两栈最大值的较大者。
+普通队列只能O(1)读取队首，无法直接知道所有剩余元素中的最大值。每次max扫描整队需要O(n)；每次入队后重新排序又破坏FIFO或增加维护成本。
 
-## 算法思路
+作者维护两个结构：<Term def="按入队顺序保存每一个元素及其唯一索引，负责真实FIFO语义。">数据队列</Term>保存全部元素；<Term def="数据队列的单调递减候选子序列，队首始终是当前最大值。">候选最大值队列</Term>只保存仍可能接任最大值的元素。
 
-1. `push(x)`：入 `inStack` 时同步更新 `inMax`。
-2. `max()`：比较 `inMax` 栈顶和 `outMax` 栈顶。
-3. `pop()`：若 `outStack` 为空，把 `inStack` 全部转移到 `outStack`。
-4. `pop` 元素时返回 `outStack` 栈顶，并同步弹出 `outMax`。
+<QueueWithMaxDataDiagram />
 
-<QueueStackDiagram />
+这就是原章概念“**数据队列与候选最大值队列**”。旧页使用入队栈、出队栈和两份最大栈，是可行的另一种设计，却不是作者59（二）的源码结构。
 
-## 思考引导
+## push如何删除永远无用的候选
 
-### 1) 先问问题，不先写 API
-普通队列要支持最大值查询，你要先问是“时间复杂度约束”还是“空间约束”。两者都不满足时才考虑替代结构。
+新元素入队时，先从maximums队尾持续删除数值小于或等于它的旧候选。旧候选更早到达、不会比新值大，也会更早出队，今后不可能优先成为最大值。
 
-### 2) 识别不变式
-主队列按入队顺序保留元素，辅队列保留单调候选。弹出时若辅队列头等于弹出值才失效。
+这种“**插入时删除更小候选**”以及相等旧候选的行为称为<Term def="新元素更晚且不小于队尾候选时，永久删除被完全压制的旧候选。">支配淘汰</Term>。
 
-### 3) 为什么它一定成立
-每次插入时删除比新值小的候选尾，确保辅队列从前到后非递增。这样前端始终是当前窗口最大值。
+随后同一个InternalData同时压入data和maximums，currentIndex递增。maximums的数值严格递减，索引严格递增。
 
-### 4) 常见误区
-只维护 one stack 会失去先出先出语义，导致最大值查询错位；只维护值序列也无法剔除已出队失效项。
+## pop为何必须比较唯一索引
 
-### 5) 你能找到一个反例吗
-操作 1,3,2, 出队, 查询最大值，若没同步辅队列失效，马上暴露错误。
+pop_front总是删除data.front。只有当这个数据元素与maximums.front是同一个入队实例时，才同步弹出最大候选。
 
-### 6) 迁移到下一题
-有“数据结构同时满足查询与淘汰”的系统里，主副结构协同是常用模板，先确认更新与失效同步。
-## 代码对照
+作者给每次入队分配currentIndex。这个区分同值不同实例的标识称为<Term def="为每次入队分配的唯一序号，用来判断数据队首和候选队首是否为同一元素。">索引身份</Term>。
 
-<CodeTabs>
-  <Tab label="C++">
+<QueueWithMaxDuplicateMap />
+
+两个5依次入队时，新5会从候选队尾淘汰旧5，但数据队列仍保留两个。第一次pop删除旧5，候选队首是新5；若只比较数值，会错误删除新候选，队列中明明还有5却失去最大值。
+
+<Callout type="trap" title="pop时只比较数值">
+相等值可能代表不同入队实例。必须比较唯一索引；数值相同不能证明被删除的数据队首就是当前候选队首。
+</Callout>
+
+## 忠实还原作者模板
+
+源码注释误复制了上一题“滑动窗口最大值”的题面，但实际类名、操作与测试都是“队列的最大值”。以下按可执行类还原。
+
 ```cpp
-#include <vector>
-#include <climits>
+#include <deque>
+#include <exception>
 
-class MaxQueue {
+template<typename T>
+class QueueWithMax {
 public:
-    void push_back(int value) {
-        in.push_back(value);
-        int mx = inMax.empty() ? value : std::max(value, inMax.back());
-        inMax.push_back(mx);
+    QueueWithMax() : currentIndex(0) {}
+
+    void push_back(T number) {
+        while (!maximums.empty() &&
+               number >=
+                   maximums.back().number) {
+            maximums.pop_back();
+        }
+
+        InternalData item{
+            number, currentIndex};
+        data.push_back(item);
+        maximums.push_back(item);
+        ++currentIndex;
     }
 
-    int pop_front() {
-        if (out.empty()) transfer();
-        int value = out.back();
-        out.pop_back();
-        outMax.pop_back();
-        return value;
+    void pop_front() {
+        if (maximums.empty()) {
+            throw new std::exception(
+                \"queue is empty\");
+        }
+
+        if (maximums.front().index ==
+            data.front().index) {
+            maximums.pop_front();
+        }
+        data.pop_front();
     }
 
-    int max() const {
-        int left = inMax.empty() ? INT_MIN : inMax.back();
-        int right = outMax.empty() ? INT_MIN : outMax.back();
-        return left > right ? left : right;
+    T max() const {
+        if (maximums.empty()) {
+            throw new std::exception(
+                \"queue is empty\");
+        }
+        return maximums.front().number;
     }
 
 private:
-    void transfer() {
-        while (!in.empty()) {
-            int x = in.back();
-            in.pop_back();
-            inMax.pop_back();
+    struct InternalData {
+        T number;
+        int index;
+    };
 
-            out.push_back(x);
-            int mx = outMax.empty() ? x : std::max(x, outMax.back());
-            outMax.push_back(mx);
-        }
-    }
-
-    std::vector<int> in, inMax;
-    std::vector<int> out, outMax;
+    std::deque<InternalData> data;
+    std::deque<InternalData> maximums;
+    int currentIndex;
 };
 ```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-class MaxQueue {
-    private in: number[] = [];
-    private inMax: number[] = [];
-    private out: number[] = [];
-    private outMax: number[] = [];
 
-    push(value: number): void {
-        this.in.push(value);
-        this.inMax.push(this.inMax.length ? Math.max(this.inMax[this.inMax.length - 1], value) : value);
-    }
+maximums为空与data为空在类不变式下等价，所以作者用maximums判断空队列。更直接的公共语义是检查data.empty。
 
-    pop(): number {
-        if (this.out.length === 0) this.transfer();
-        if (this.out.length === 0) throw new Error('queue is empty');
+max只读取maximums.front，不修改结构。pop_front返回void，作者测试只关心删除后的最大值；若业务还要被删值，可在删除前复制data.front.number并返回。
 
-        this.outMax.pop();
-        return this.out.pop()!;
-    }
+## 操作序列如何演化
 
-    getMax(): number {
-        const left = this.inMax.length ? this.inMax[this.inMax.length - 1] : Number.NEGATIVE_INFINITY;
-        const right = this.outMax.length ? this.outMax[this.outMax.length - 1] : Number.NEGATIVE_INFINITY;
-        return Math.max(left, right);
-    }
+先预测前三次push之后data与maximums的内容，再对照图中的逐步状态。预测时必须同时写出数值和索引；若只写数值，就无法检验两个相等最大值先后出队时，候选队首是否与真实数据队首属于同一实例。
 
-    private transfer(): void {
-        while (this.in.length > 0) {
-            const x = this.in.pop()!;
-            this.inMax.pop();
-            this.out.push(x);
-            this.outMax.push(this.outMax.length ? Math.max(this.outMax[this.outMax.length - 1], x) : x);
+作者依次push 2、3、4、2。前三个递增值各自淘汰旧候选，maximums先为2，再3，再4；最后一个2更小，候选变成4、2。
+
+连续pop三个元素时，删除2#0和3#1不会影响候选队首4#2；删除4#2时索引相等，同步弹出，最大值降为2。
+
+随后push 6、2、5，候选由2变6，再6、2，再6、5。pop旧2不影响候选；pop 6时最大值交接给5。
+
+<QueueWithMaxOperationLab />
+
+最后push 1得到数据5、1，候选也是5、1，最大值保持5。
+
+## 复杂度的严格说法
+
+max只读一个队首，最坏O(1)。pop_front最多从两个deque各弹一次，最坏O(1)。
+
+push_back可能在一次调用中连续弹出多个maximums元素，单次最坏O(n)。但每个候选只被加入一次，也最多被支配淘汰一次，所以一串m次push的总队尾弹出不超过m。
+
+把总成本平均到整个操作序列，每次push是<Term def="单次可能处理多个候选，但每个候选全程只删除一次，因此操作序列平均为常数。">摊还常数</Term>。常见概括“**max、push_back、pop_front都是O(1)**”应理解为max和pop最坏常数、push摊还常数，而不是三个操作都具备相同最坏界。
+
+<QueueWithMaxContractDiagram />
+
+数据队列空间O(n)，候选队列最多O(n)。与普通队列相比，额外候选空间最坏线性；严格递减输入会保留所有候选。
+
+## 为什么max队首一定正确
+
+maximums中的值严格递减，所以队首是候选中最大值。任何不在maximums但仍在data中的元素，都曾被一个更晚且不小的元素淘汰；后者在前者之后出队，因此只要前者仍在队列，支配它的候选也仍在或又被更强候选支配。
+
+因此被淘汰元素不可能重新成为最大值。pop时只有真实最大候选离开data才同步删maximums.front，新的队首就是剩余最大值。
+
+这个不变式与上一题固定窗口单调队列相同，只是“过期”不再由下标和窗口大小计算，而由显式pop_front操作触发。
+
+## 空队列异常需要现代化
+
+作者执行throw new exception，抛出堆上指针而非异常对象；标准std::exception也不保证字符串构造器。这依赖旧MSVC并容易泄漏。
+
+<Callout type="trap" title="复制throw new异常模式">
+按指针抛出要求调用方捕获指针并负责释放，普通catch引用接不到。现代C++应按值抛std::out_of_range，或让pop和max返回optional。
+</Callout>
+
+安全版还应把currentIndex改为uint64_t，避免长生命周期队列自增int溢出。即使队列长度很小，反复push/pop累计次数也可能很大。
+
+```cpp
+#include <cstdint>
+#include <deque>
+#include <optional>
+
+template<typename T>
+class SafeQueueWithMax {
+    struct Item {
+        T value;
+        std::uint64_t id;
+    };
+
+public:
+    void push_back(T value) {
+        while (!maxima_.empty() &&
+               value >=
+                   maxima_.back().value) {
+            maxima_.pop_back();
         }
+        Item item{
+            std::move(value), nextId_++};
+        data_.push_back(item);
+        maxima_.push_back(item);
     }
+
+    std::optional<T> pop_front() {
+        if (data_.empty()) {
+            return std::nullopt;
+        }
+        Item item =
+            std::move(data_.front());
+        if (maxima_.front().id == item.id) {
+            maxima_.pop_front();
+        }
+        data_.pop_front();
+        return item.value;
+    }
+
+    std::optional<T> max() const {
+        if (maxima_.empty()) {
+            return std::nullopt;
+        }
+        return maxima_.front().value;
+    }
+
+private:
+    std::deque<Item> data_;
+    std::deque<Item> maxima_;
+    std::uint64_t nextId_ = 0;
+};
+```
+
+复制同一个Item到两个deque要求T可复制；上面先move到item，随后两次push仍会复制。若T昂贵或仅可移动，可以让队列保存共享节点、稳定迭代器或只在候选队列保存id与可比较键。
+
+模板还隐含T支持大于等于比较。更通用设计应接收比较器，并明确“最大”相对于哪种排序。
+
+## 旧页双栈设计如何定位
+
+两个栈模拟队列并分别维护栈内最大值，同样可以让push与pop摊还O(1)、max最坏O(1)。它在out栈为空时把in栈整体倒过去，每个元素最多搬运一次。
+
+但那套结构需要四个栈，并通过两个栈顶最大值取全局最大；作者则直接使用两个deque和单调候选。两者正确性证明、元素生命周期和异常路径不同，不能把双栈代码写成作者源码复刻。
+
+作者方案的pop始终最坏O(1)，双栈方案某次pop可能触发O(n)搬运、只具备摊还O(1)。这也是选择结构时可见的延迟差异。
+
+## currentIndex回绕与复位
+
+int自增溢出在标准C++中是未定义行为。即使改成uint64_t，理论上仍会模回绕；工程上可在队列彻底为空时把nextId重置为0，因为没有存活身份会冲突。
+
+若队列非空且id接近上限，可重新编号data中的存活元素并同步重建maximums，或使用不会在系统生命周期耗尽的宽计数。不能只把currentIndex清零，否则新元素可能与尚未出队的旧元素同id。
+
+该类也不是线程安全的。push、pop、max并发需要外部锁或专门并发设计，否则两个deque和id更新可能暂时不一致。
+
+## 作者14次最大值检查
+
+main没有独立Test函数逐场景建队，而是在同一个queue上连续操作并每步调用max：
+
+1. push 2、3、4，最大值依次2、3、4。
+2. push 2，最大值仍4。
+3. pop三次，队列依次3、4、2；4、2；2，最大值4、4、2。
+4. push 6、2、5，最大值都为6。
+5. pop三次，最大值依次6、5、5。
+6. push 1，最大值保持5。
+
+共14次检查。源码把push 5后的标签再次写成Test9，后续直接从Test10继续；这是标签重复，不是漏掉操作或断言。
+
+<QueueWithMaxOfficialCaseLab />
+
+作者未测试空队列max与pop，也未测试相等最大值。现代测试必须补这两类，因为它们分别验证错误通道和索引身份。
+
+```cpp
+#include <cassert>
+#include <deque>
+#include <random>
+
+void testQueueWithMax() {
+    SafeQueueWithMax<int> queue;
+    assert(!queue.max().has_value());
+    assert(!queue.pop_front().has_value());
+
+    queue.push_back(5);
+    queue.push_back(5);
+    assert(queue.max() == 5);
+    assert(queue.pop_front() == 5);
+    assert(queue.max() == 5);
+    assert(queue.pop_front() == 5);
+    assert(!queue.max().has_value());
+
+    queue.push_back(2);
+    queue.push_back(6);
+    queue.push_back(2);
+    queue.push_back(5);
+    assert(queue.max() == 6);
+    assert(queue.pop_front() == 2);
+    assert(queue.max() == 6);
+    assert(queue.pop_front() == 6);
+    assert(queue.max() == 5);
 }
 ```
-  </Tab>
-</CodeTabs>
+
+随机模型对拍可用普通deque保存全部值，每次max用max_element扫描作为参考。随机交错push、pop、max，检查返回值、空状态和FIFO顺序；虽然参考慢，却能独立验证优化结构。
+
+<Stepper>
+  <Step title="分开真实数据与最大候选">
+    <QueueWithMaxDataDiagram />
+    data负责FIFO，maximums只保留单调候选。
+  </Step>
+  <Step title="观察push、pop与max联动">
+    <QueueWithMaxOperationLab />
+    push从队尾淘汰，pop按队首索引同步失效。
+  </Step>
+  <Step title="用重复值验证索引身份">
+    <QueueWithMaxDuplicateMap />
+    相等数值不代表同一入队实例，不能只比值。
+  </Step>
+  <Step title="核对复杂度与异常契约">
+    <QueueWithMaxContractDiagram />
+    max和pop最坏常数，push为摊还常数。
+  </Step>
+  <Step title="复现作者14次检查">
+    <QueueWithMaxOfficialCaseLab />
+    同一队列上的连续状态变化比孤立用例更能验证同步。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 队列的最大值由数据队列与候选最大值队列协同维护。
+2. push_back插入时删除更小候选，相等时保留更新实例。
+3. pop_front只在数据队首与候选队首索引相同时同步删除。
+4. 索引身份解决重复值下的新旧实例区分。
+5. max和pop最坏O(1)，push单次最坏O(n)、摊还O(1)。
+6. 作者使用两个deque，不是旧页的四栈模拟队列。
+7. throw new exception与int索引都需要现代化。
+8. 作者连续执行14次max检查，其中Test9标签重复。
+
+<Exercises>
+
+**问题 1：为什么push一个更大的新值能删除多个旧候选？**
+
+<Answer>旧候选值不大于新值且更早出队，在两者共存期间永远不会优先成为最大值；新值又活得更久，所以旧候选被完全支配。</Answer>
+
+**问题 2：两个5入队后第一次pop为何不能弹出maximums.front？**
+
+<Answer>maximums只保留较新的5，第一次pop删除的是数据队列中的旧5。数值相同但索引不同，新的5仍在队列且仍是最大值。</Answer>
+
+**问题 3：为什么push不能说最坏O(1)？**
+
+<Answer>一个很大的新值可能在单次push中弹出所有候选，单次O(n)。但每个候选全程只被弹一次，所以一串操作平均到每次是摊还O(1)。</Answer>
+
+**问题 4：作者deque方案与旧页双栈方案最明显的延迟差异是什么？**
+
+<Answer>作者pop最多删除两个队首，最坏O(1)；双栈在out为空时某次pop要搬运全部in元素，单次O(n)，只在操作序列上摊还O(1)。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="数据队列">保存所有元素并承担真实FIFO顺序的deque。</GlossaryItem>
+  <GlossaryItem term="候选最大值队列">值递减的候选子序列，队首为当前最大值。</GlossaryItem>
+  <GlossaryItem term="支配淘汰">新元素更晚且不小时删除旧候选。</GlossaryItem>
+  <GlossaryItem term="索引身份">区分同值不同入队实例的唯一序号。</GlossaryItem>
+  <GlossaryItem term="摊还常数">把每个候选至多一次删除分摊到整串操作后的平均成本。</GlossaryItem>
+</Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题59（二）"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/59_02_QueueWithMax/QueueWithMax.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

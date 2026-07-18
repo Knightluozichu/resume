@@ -1,36 +1,5 @@
-/**
- * <GlrAdvancedBuffersDiagram>
- *
- * UBO/SSBO/TFO等高级缓冲技术对比
- */
-
-export function GlrAdvancedBuffersDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox="0 0 720 400" role="img" aria-label="UBO/SSBO/TFO等高级缓冲技术对比" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x="360" y="30" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">高级缓冲技术对比</text>
-<rect x="30" y="72" width="310" height="290" rx="8" fill="var(--accent)" fillOpacity="0.05" stroke="var(--accent)" strokeWidth="1.2" />
-<text x="185" y="96" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--accent)">UBO (Uniform Buffer)</text>
-<text x="185" y="130" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">全局只读数据</text>
-<text x="185" y="155" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">所有着色器共享</text>
-<text x="185" y="180" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">大小限制(通常64KB)</text>
-<text x="185" y="205" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">适合变换矩阵/光照参数</text>
-<rect x="380" y="72" width="310" height="290" rx="8" fill="var(--success)" fillOpacity="0.05" stroke="var(--success)" strokeWidth="1.2" />
-<text x="535" y="96" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--success)">SSBO (Shader Storage)</text>
-<text x="535" y="130" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">可读写随机访问</text>
-<text x="535" y="155" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">大小无限制</text>
-<text x="535" y="180" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">适合计算着色器</text>
-<text x="535" y="205" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">粒子/GPU排序/删除</text>
-
-          <defs>
-            <marker id="glr-advanced-buffers-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-              <path d="M0 0 L6 3 L0 6 z" fill="var(--text-secondary)" />
-            </marker>
-          </defs>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">UBO/SSBO/TFO等高级缓冲技术对比</figcaption>
-    </figure>
-  );
-}
+import type { ReactNode } from "react";
+function Frame({caption,children}:{caption:string;children:ReactNode}){return <figure className="mdx-figure not-prose mx-auto my-6"><div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div><figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption></figure>}
+export function GlrAdvancedBuffersDiagram(){const rows=[["Storage","buffer bytes"],["Layout","std140 / std430"],["Execute","draw / dispatch"],["Visible","memory barrier"],["Reuse","fence / ownership"]];return <Frame caption="缓冲正确性要依次证明存储、布局、执行、可见性与复用时机。"><div role="img" aria-label="高级缓冲五层合同" className="grid gap-2 md:grid-cols-5">{rows.map(([a,b],i)=><div key={a} className="grid min-h-24 content-center rounded-control border border-border bg-bg/45 p-3 text-center"><span className="text-xs font-bold text-accent">0{i+1}</span><strong className="mt-1 text-xs text-primary">{a}</strong><span className="mt-2 text-xs text-secondary">{b}</span></div>)}</div></Frame>}
+export function GlrBufferLayoutDiagram(){const rows=[["float","4","4"],["vec3","16","12 + padding context"],["mat4","16","4 column vectors"],["array","element alignment","array stride"]];return <Frame caption="有效数据大小不等于成员对齐；offset 必须向上对齐并遵守数组/结构规则。"><div role="img" aria-label="std140 std430 对齐示意" className="overflow-hidden rounded-control border border-border text-xs"><div className="grid grid-cols-3 gap-px bg-border">{['Member','Base alignment','Storage note'].map(x=><strong key={x} className="bg-bg p-3 text-primary">{x}</strong>)}{rows.flatMap(r=>r.map((x,i)=><span key={`${r[0]}-${x}`} className={i===0?"bg-accent/10 p-3 font-semibold text-accent":"bg-elevated p-3 text-secondary"}>{x}</span>))}</div></div></Frame>}
+export function GlrMemoryDependencyDiagram(){const paths=[["compute writes SSBO","SHADER_STORAGE barrier","shader reads SSBO"],["compute writes commands","COMMAND barrier","indirect draw"],["compute writes vertices","VERTEX_ATTRIB barrier","vertex fetch"],["GPU uses mapped segment","fence + wait","CPU reuses segment"]];return <Frame caption="同步由具体生产者和消费者决定，不存在一条可替代所有边界的通用调用。"><div role="img" aria-label="OpenGL 内存依赖路径" className="grid gap-2">{paths.map(([a,b,c])=><div key={a} className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-control border border-border bg-bg/45 p-3 text-xs"><span className="text-primary">{a}</span><strong className="text-accent">{b}</strong><span className="text-right text-primary">{c}</span></div>)}</div></Frame>}

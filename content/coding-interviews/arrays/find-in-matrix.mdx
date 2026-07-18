@@ -1,204 +1,258 @@
 ---
-title: 二维数组中的查找
+title: "面试题4：二维数组中的查找"
 type: C
-section: 数组
-order: 1
-description: 在行列均为有序的二维数组中，利用边界元素的排他性，实现 O(m+n) 的高效查找。
+section: "第2章 面试需要的基础知识"
+order: 5
+description: "从右上角维护候选矩形，每次用行列单调性排除一行或一列，在O(m+n)时间内查找目标。"
 demo: true
-math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviews
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/04_FindInPartiallySortedMatrix/FindInPartiallySortedMatrix.cpp"
 draft: false
 ---
 
-{/* 知识点清单：二维数组查找 / 双指针 / 行列排他性 / 边界缩减 / 鞍点查找；原书章节：面试题4：二维数组中的查找。 */}
+import { MonotoneMatrixDiagram, EliminationProofMap, SearchPathLab, MatrixContractLab } from "@/components/mdx/coding-interviews/diagrams/find-in-matrix";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能解释为何不能从矩阵的中心或任意角（如左上角、右下角）开始查找。
-- 能描述并画出利用右上角（或左下角）元素进行行/列排除的逻辑路径。
-- 能正确实现 C++（使用 `std::vector`）和 TypeScript 的 `find-in-matrix` 算法，并能防范越界与空数组等边界坑点。
+- 能解释右上角和左下角为什么提供唯一的行列排除方向
+- 能描述候选矩形不变式，并证明每次移动不会漏掉目标
+- 能实现扁平连续矩阵与嵌套数组两种存储下的查找
+- 能分析路径长度上界，写出`O(m+n)`时间与`O(1)`空间
+- 能设计命中、缺失、边界、范围外、空矩阵和锯齿数组测试
 
 </Objectives>
 
-## 直觉引入
+## 从右上角为什么特殊开始
 
-假设你站在一个奇特的梯田景区前，这片梯田由网格状的石板路组成。这里的规矩很特别：从西往东走，海拔会越来越高；从北往南走，海拔同样越来越高。现在，有人告诉你梯田中藏着一个特定的高度，让你去寻找它。
+先预测：在下面的矩阵中查找7，从左上角1开始，目标更大时该向右还是向下？两个方向都可能。若从右上角9开始，9大于7时却只有一个安全动作：当前列下方都不小于9，因此整列都不可能是7，可以向左。
 
-如果景区漫无边际，你却只能一个石板一个石板去测，那得测到什么时候？更糟糕的是，如果目标高度根本不存在，盲目搜寻只会让你精疲力竭。这章要解决的核心问题是：在这样一个双向递增的网格世界中，如何以最快的速度精准定位目标，或者确定它根本不在这个网格中？
+这道“二维数组中的查找”给出一个矩形矩阵，**每行从左到右递增，每列从上到下递增**。这里的递增按非递减理解也成立，重复值不会破坏排除逻辑。目标是判断某个整数是否存在，官方实现从右上角开始；左下角是完全对称的另一个起点。
 
-如果我们毫无策略地搜索，就只能像扫地一样测遍每一个角落。而利用网格中蕴含的特定方向规律，我们每测一次就能排除掉一整片区域，让搜索范围以惊人的速度缩小。
+<Term def="每一行沿列方向不减、每一列沿行方向不减的二维矩形数据。">行列单调矩阵</Term>比整体排序弱：把所有元素按行展开后不一定全局有序，因此不能直接对整块内存做一次普通二分。它又比一般矩阵强，足以让边界角点每次排除整行或整列。
 
-## 概念讲解
+<MonotoneMatrixDiagram />
 
-### 为什么不能从左上角或右下角开始？
+## 为什么不是另外两个角
 
-当我们想要在这个网格中查找一个目标值（Target）时，一个自然的直觉是：能不能从最边缘的角开始看？
+右上角在当前候选区域中，同时是当前行最大值和当前列最小值。若它大于目标，同列下方只会更大，所以删除当前列；若它小于目标，同行左侧只会更小，所以删除当前行。两种比较各自对应唯一动作。
 
-假设我们从左上角开始。左上角是整个网格的最小值。如果我们要找的 Target 比左上角大（这很常见），接下来该往右走还是往下走？因为向右和向下都是变大，我们无法做出唯一选择，查找路径就会产生分叉，这就失去了单向排除的优势。同理，右下角是最大值，如果 Target 比它小，向左和向上都是变小，同样无法选择。
+左下角则是当前行最小值、当前列最大值。它大于目标时向上，小于目标时向右，也能保持单向路径。右上角和左下角都可用，选择一个后要让循环边界和移动方向保持一致。
 
-### 鞍点：右上角与左下角的排他妙处
+左上角是当前行和当前列的共同最小值。当前值小于目标时，向右和向下都可能命中，无法整行或整列排除；右下角同理。中心点也只能排除一个象限，剩余候选往往分裂成多个区域，失去一条单调路径。
 
-要实现无分叉的单向排除，关键在于选择一个「一侧变大、另一侧变小」的特殊位置。在数学和算法中，这种点类似于<Term def="在两个维度上表现相反单调性的位置：在一个轴向上是最大值，而在另一个轴向上是最小值。">鞍点</Term>。
+<Term def="当前尚未被证明不含目标的连续行列交叉区域。">候选矩形</Term>初始覆盖整个矩阵。以右上角搜索时，它可表示为行`row..rows-1`与列`0..column`的交叉区域。每一步只删除候选矩形最上面一行或最右边一列。
 
-网格的**右上角**就是一个完美的鞍点：
+<EliminationProofMap />
 
-- 它是当前行的**最大值**（因为往左走会变小）。
-- 它是当前列的**最小值**（因为往下走会变大）。
+## 逐步查找7
 
-同样，**左下角**也是一个完美的鞍点（是当前行的最小值、当前列的最大值）。下面我们以右上角为例，看看它是如何工作的。
+作者官方测试矩阵为：
 
-### 边界消去法的运行机制
+```text
+ 1   2   8   9
+ 2   4   9  12
+ 4   7  10  13
+ 6   8  11  15
+```
 
-假设我们从右上角出发，将当前格子的值与 Target 进行对比：
+从9开始，9大于7，删除第3列；8仍大于7，删除第2列；2小于7，删除第0行；4小于7，删除第1行；到`(2,1)`命中7。路径依次为9、8、2、4、7。
 
-1. **若当前值 > Target**：因为当前列下方的元素都比当前值还要大，所以 Target 绝对不可能在当前列中。我们可以直接排除当前列。这相当于指针**向左移动一格**（列索引减一）。
-2. **若当前值 < Target**：因为当前行左侧的元素都比当前值还要小，所以 Target 绝对不可能在当前行中。我们可以直接排除当前行。这相当于指针**向下移动一格**（行索引加一）。
-3. **若当前值 == Target**：直接找到目标！
+<SearchPathLab />
 
-通过这套规则，每次比较都能至少排除一行或一列，搜索边界像拉链一样迅速收紧，查找效率极其高效。
+<Term def="每次比较前目标若存在就必定位于当前候选矩形内，移动后这个条件仍成立。">排除不变式</Term>给出正确性证明。当前值大于目标时，删除列中的每个值都不小于当前值，不可能等于目标；当前值小于目标时，删除行中的每个值都不大于当前值，也不可能等于目标。命中则直接返回。
 
-## 交互 Demo
+若`row == rows`，说明所有候选行都被删除；若`column < 0`，说明所有候选列都被删除。候选矩形为空仍未命中，目标不存在。这个终止条件同时控制越界和正确性。
 
-猜一猜：如果把查找目标 Target 从 7 调大到 16（大于网格最大值），指针会沿着什么路径移动？需要比较多少次才能确定 16 不在网格中？
+## 忠实实现扁平连续矩阵
 
-下面我们以在 $4 \times 4$ 网格中查找目标值 `7` 为例，点击下方控制按钮，一步步体验行/列逐步排除的动态过程：
+作者接口接收`int* matrix`、行数和列数，二维矩阵按行连续存储。逻辑坐标`(row,column)`映射到一维位置`row * columns + column`，这叫<Term def="把二维坐标(row,column)映射为连续行优先缓冲区下标row*columns+column。">行优先映射</Term>。
 
-<FindInMatrixDiagram />
-
-## 代码对照
-
-为了确保代码能够安全运行在各种面试或线上评测系统中，我们在设计核心的双指针逻辑之外，必须严格保证对<Term def="程序在极端或特殊输入（如空指针、零维数组）下的保护屏障，防止代码因越界而崩溃。">边界条件</Term>的有效防护。
-
-以下是 C++ 与 TypeScript 的具体实现对比：
-
-<CodeTabs>
-  <Tab label="C++">
 ```cpp
-#include <vector>
+#include <cstddef>
+#include <span>
 
-class Solution {
-public:
-bool findNumberIn2DArray(std::vector<std::vector<int>>& matrix, int target) {
-// 边界情况防护：防止空矩阵导致越界崩溃
-if (matrix.empty() || matrix[0].empty()) {
-return false;
-}
-
-        int rows = matrix.size();
-        int cols = matrix[0].size();
-
-        // 从右上角 (0, cols - 1) 开始查找
-        int row = 0;
-        int col = cols - 1;
-
-        // 保证指针在有效矩阵区域内移动
-        while (row < rows && col >= 0) {
-            int num = matrix[row][col];
-            if (num == target) {
-                return true;  // 命中目标
-            } else if (num > target) {
-                col--;  // 排除当前列，向左移动
-            } else {
-                row++;  // 排除当前行，向下移动
-            }
-        }
-        return false;  // 越界仍未找到，说明目标不存在
+bool find_in_matrix(
+    std::span<const int> matrix,
+    std::size_t rows,
+    std::size_t columns,
+    int target
+) {
+    if (rows == 0 || columns == 0) {
+        return false;
     }
-
-};
-
-````
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-function findNumberIn2DArray(matrix: number[][], target: number): boolean {
-    // 边界情况防护：确保输入不为空且拥有合法的行和列
-    if (!matrix || matrix.length === 0 || matrix[0].length === 0) {
+    if (rows > matrix.size() / columns ||
+        rows * columns != matrix.size()) {
         return false;
     }
 
-    const rows = matrix.length;
-    const cols = matrix[0].length;
-
-    // 从右上角 (0, cols - 1) 开始查找
-    let row = 0;
-    let col = cols - 1;
-
-    // 指针边界控制：行递增上限 rows，列递减下限 0
-    while (row < rows && col >= 0) {
-        const num = matrix[row][col];
-        if (num === target) {
-            return true; // 命中目标
-        } else if (num > target) {
-            col--; // 排除当前列，向左移动
+    std::size_t row = 0;
+    std::size_t column = columns - 1;
+    while (row < rows) {
+        const int value = matrix[row * columns + column];
+        if (value == target) {
+            return true;
+        }
+        if (value > target) {
+            if (column == 0) {
+                return false;
+            }
+            --column;
         } else {
-            row++; // 排除当前行，向下移动
+            ++row;
         }
     }
-    return false; // 越界仍未找到，说明目标不存在
+    return false;
 }
-````
+```
 
-  </Tab>
-</CodeTabs>
+官方代码使用有符号`int column`，循环条件可以写`column >= 0`。上面的现代版本用`std::size_t`，它是无符号类型，不能递减到`-1`再比较；因此在`column == 0`且仍需向左时直接返回。类型改变后，边界写法也必须一起改变。
 
-## 常见误区
+尺寸验证先用除法避免`rows * columns`在比较前溢出，再确认缓冲区元素数恰好匹配矩形。若接口另有步长或padding，映射应改为`row * stride + column`，不能继续假定紧密行优先。
 
-<Callout type="trap">
-  <strong>现象 →</strong> 运行程序直接崩溃，抛出空指针或数组下标越界异常。
-  <strong>原因 →</strong> 未对输入进行边界检查，直接通过 `matrix[0]`
-  读取列数，或者当矩阵为空时尝试访问元素。<strong>修法 →</strong> 在函数开头增加
-  `matrix.empty() || matrix[0].empty()`（TS 中为 `!matrix || matrix.length === 0
-  || matrix[0].length === 0`）的安全保护，确认矩阵不为空且有列再做后续操作。
+<Callout type="trap" title="把无符号column写成column >= 0">
+无符号数永远不小于0。`column--`从0下溢后会变成巨大值，下一次数组访问越界。可以使用有符号列下标，或在无符号列为0时显式终止。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 查找某些特定目标值时程序死循环，或者越界访问。<strong>原因 →</strong> 循环终止条件写错（如写成 `row <= rows` 导致行越界，或者 `col > 0` 导致漏掉第 0 列）。<strong>修法 →</strong> 严格控制指针边界：`row < rows` 且 `col >= 0`。注意网格的索引从 `0` 到 `N-1`，递增越界上限是 `rows`，递减越界下限是 `0`。
+## 嵌套数组要先验证矩形形状
+
+在TypeScript或`vector<vector<int>>`中，每行是独立容器，可能形成<Term def="各行长度不一致、不能由统一列数安全索引的二维嵌套数组。">锯齿数组</Term>。算法每次用同一个`column`访问不同行，必须先验证所有行长度相同。
+
+```ts
+function findInMatrix(
+  matrix: readonly (readonly number[])[],
+  target: number,
+): boolean {
+  if (matrix.length === 0 || matrix[0].length === 0) return false;
+
+  const columns = matrix[0].length;
+  if (matrix.some((row) => row.length !== columns)) return false;
+
+  let row = 0;
+  let column = columns - 1;
+  while (row < matrix.length && column >= 0) {
+    const value = matrix[row][column];
+    if (value === target) return true;
+    if (value > target) column -= 1;
+    else row += 1;
+  }
+  return false;
+}
+```
+
+这个函数假定行列单调性由调用者保证。若输入来自外部不可信数据，可以先验证每行与每列，但验证本身要`O(mn)`，可能高于一次查找成本。真实系统应在数据建立或写入阶段维护不变式，而不是每次查询都重新证明。
+
+<MatrixContractLab />
+
+<Callout type="trap" title="只检查matrix[0]就认为所有行都安全">
+嵌套数组可能第一行有4列、后续某行只有2列。固定`column`在向下移动后会读到`undefined`或越界。要么接口只接受真正矩形类型，要么先验证每行长度。
 </Callout>
 
-## 小结与练习
+## 复杂度来自路径而不是面积
 
-- 鞍点查找选择右上角或左下角，利用单向单调性避免搜索路径分叉。
-- 每次对比必定可以排除一行或一列，因此最多移动 $m+n$ 步。
-- <Term def="评估算法运行效率的度量。本算法由于每次比较最少排除一行或一列，移动路径长度不超过行数加上列数，因此时间复杂度为 O(m+n)。">
-    时间复杂度
-  </Term>
-  为 $O(m+n)$，空间复杂度为 $O(1)$，不需要额外辅助空间。
-- 必须先做空矩阵边界检查，防止 `matrix[0]` 崩溃或空指针访问。
+设矩阵有`m`行、`n`列。从右上角开始，`row`最多增加`m`次，`column`最多减少`n`次；每次循环至少发生一种移动。比较次数上界为`m+n-1`量级，因此时间复杂度是`O(m+n)`。
+
+算法只保存行、列、当前值等常数状态，额外空间`O(1)`。它不会访问所有`mn`个元素；对于近似方阵，路径长度与边长成正比，而不是与面积成正比。
+
+也不能宣称`O(log(mn))`。虽然每次排除一整行或一列，但不是每次删除一半候选。若矩阵只有一行，路径最坏可能横向走完所有列；只有额外的全局行间有序条件，才能把矩阵看成整体有序数组二分。
+
+范围外目标会很快沿边界退出。目标小于矩阵最小值时，路径持续向左；目标大于最大值时，路径持续向下。不存在但落在值域内部的5，则会交替移动，最终候选矩形为空。
+
+## 用反例校验移动方向
+
+移动规则最容易被写反。仍以右上角为起点：当前值大于目标时，如果错误地向下，就进入同一列更大的数字，既没有缩小“过大”方向，也可能直接跳过左侧答案。例如在原矩阵中查找7，从9错误向下会看到12、13、15并退出，真实答案`(2,1)`从未进入路径。
+
+当前值小于目标时，如果错误地向左，同行左侧只会更小，同样不会接近目标；更严重的是，向左后若删除当前列，就可能丢掉下方较大的候选。每条移动规则都要用“被删除区域为什么全部不可能”等价描述，不能只背“大小决定方向”。
+
+重复值不会破坏算法，只要行列保持非递减。当前值等于目标立即命中；当前值大于目标时，同列下方即使有相同当前值也仍大于目标，可整列删除；当前值小于目标时，同行左侧的相同值仍小于目标，可整行删除。算法不负责返回第一个、最左或全部位置，布尔存在性不要求稳定命中顺序。
+
+单行矩阵退化为从最右端向左扫描：目标较大可能在第一次比较后向下越界，目标较小则最多访问所有列。单列矩阵退化为从顶端向下扫描：目标较小会在首列左越界，目标较大则最多访问所有行。这两个退化例子也说明最坏路径确实可达到`m+n`量级，不能无条件声称对数时间。
+
+一行为空而其他行非空的嵌套数据不是合法矩形，不能把列数取0后直接返回“目标不存在”，因为这会掩盖输入形状错误。若接口用布尔值合并非法与未找到，至少要在文档中说明；更严格的边界层可先解析成矩形值对象，再让核心查找只接受已验证形状。
+
+## 多次查询与动态更新的边界
+
+单次查询使用`O(m+n)`路径很合适。若同一只读矩阵要回答大量查询，可以考虑为每行保存范围并在候选行内二分、建立哈希集合，或在满足更强全局有序条件时按扁平数组二分。预处理会增加构建时间和空间，是否值得取决于查询次数、矩阵大小与更新频率。
+
+矩阵若频繁插入或修改，维护“每行向右不减、每列向下不减”可能比查询本身更难。任意单点更新会同时受左右上下邻居约束；若更新破坏单调性，旧查找会静默漏解，而不一定崩溃。生产系统应把更新验证放在数据结构边界，并用版本或不可变快照保证一次查询期间视图稳定。
+
+并发读取只读快照没有额外问题；若另一个线程在搜索路径经过前后修改元素，排除不变式可能基于互不一致的状态。`const`或`readonly`只限制当前函数的写入，不自动冻结共享底层数据。需要锁、复制快照、持久化结构或版本重试来建立一致读取语义。
+
+最后，数值比较还要有全序语义。整数满足；若把算法泛化到浮点数，`NaN`与任意值比较都不满足普通大小关系，会落入错误分支。泛型版本应要求比较器提供与矩阵构造一致的全序，并用同一比较器验证单调性。
+
+## 官方测试与更完整回归
+
+作者源码验证：7存在、5不存在、最小值1存在、最大值15存在、0小于最小值、16大于最大值，以及空指针输入。现代嵌套接口还要增加空行、锯齿数组、单行、单列和重复值。
+
+```ts
+const matrix = [
+  [1, 2, 8, 9],
+  [2, 4, 9, 12],
+  [4, 7, 10, 13],
+  [6, 8, 11, 15],
+] as const;
+
+console.assert(findInMatrix(matrix, 7));
+console.assert(!findInMatrix(matrix, 5));
+console.assert(findInMatrix(matrix, 1));
+console.assert(findInMatrix(matrix, 15));
+console.assert(!findInMatrix(matrix, 0));
+console.assert(!findInMatrix(matrix, 16));
+console.assert(!findInMatrix([], 7));
+console.assert(!findInMatrix([[1, 2], [3]], 3));
+```
+
+测试不能只验证布尔结果，还应在可观测版本中记录访问路径，确认每一步行只增、列只减；这能定位移动方向写反、漏掉第0列和`row <= rows`越界等错误。
+
+<Stepper>
+  <Step title="先确认矩形与行列单调契约"><MatrixContractLab />空矩阵、尺寸不符、锯齿数组或单调性被破坏时，排除证明都不能直接使用。</Step>
+  <Step title="从右上角建立候选矩形"><MonotoneMatrixDiagram />右上角是当前行最大值和当前列最小值，使大小比较对应唯一移动。</Step>
+  <Step title="每步附带排除证明"><EliminationProofMap />大于目标删除列，小于目标删除行，确保目标若存在始终留在候选矩形。</Step>
+  <Step title="沿单调路径验证边界"><SearchPathLab />用7、5、1、15、0和16观察命中、内部缺失与范围外退出路径。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 行列单调矩阵满足每行从左到右递增、每列从上到下递增。
+2. 右上角和左下角分别提供两个方向相反的单调性，因此不会产生搜索分叉。
+3. 右上角当前值大于目标时排除当前列，小于目标时排除当前行。
+4. 候选矩形不变式保证每次排除都不会漏掉仍可能存在的目标。
+5. 行坐标只增加、列坐标只减少，时间`O(m+n)`、额外空间`O(1)`。
+6. 扁平矩阵用`row*columns+column`映射；嵌套数组必须防御锯齿形状。
+7. 有符号与无符号列下标的退出条件不同，不能机械复制`column >= 0`。
+8. 官方测试覆盖命中、缺失、两端、范围外与空输入，工程接口还要覆盖尺寸和单调性契约。
 
 <Exercises>
-  <Answer question="如果不从右上角或左下角出发，而是从矩阵的中心点开始查找，会遇到什么问题？">
-    中心点的值虽然是这一行/列的中间值，但对于剩下的四个象限（左上、右上、左下、右下），如果
-    Target
-    大于中心点，我们只能排除左上象限（都是比中心点更小的），而右上和左下象限可能包含
-    Target。此时无法进行单一方向的行/列消去，会演变成复杂的分治或递归查找，无法保证
-    $O(m+n)$ 效率。
-  </Answer>
-  <Answer question="如果本题的矩阵改用一维数组存储，行长度为 col_count，应该如何处理指针移动的映射？">
-    当一维数组逻辑上表示为 $rows \times cols$ 的矩阵时，可以用逻辑坐标 `(r, c)`
-    来表示右上角位置 `(0, cols - 1)`。每次将一维索引映射为 `index = r * cols +
-    c`。向左移时 `c--`，向下移时 `r++`，逻辑完全一致。
-  </Answer>
+
+**问题 1：从左上角开始，当前值小于目标时为什么无法唯一移动？**
+
+<Answer>左上角的右侧和下方都不小于当前值，目标更大时两个方向都仍可能包含目标，不能整行或整列排除。右上角一边向左变小、一边向下变大，比较结果才对应唯一排除方向。</Answer>
+
+**问题 2：为什么目标5不存在时算法仍能确定失败？**
+
+<Answer>每一步都只删除由单调性证明不可能含5的行或列，排除不变式始终成立。最终`row`越过末行或`column`越过首列，候选矩形为空；若5存在就应仍在候选中，产生矛盾，因此可返回false。</Answer>
+
+**问题 3：一维连续缓冲区里坐标`(r,c)`如何映射？**
+
+<Answer>紧密行优先存储使用`r * columns + c`。若每行有额外padding，应使用`r * stride + c`。调用前必须确认缓冲区大小、行列数和步长一致，避免乘法溢出和越界。</Answer>
+
+**问题 4：什么额外条件能让整个矩阵直接二分为`O(log(mn))`？**
+
+<Answer>除了每行有序，还需上一行最后一个元素不大于下一行第一个元素，使按行展开后的整个序列全局有序。原题只保证行列分别递增，不保证这种跨行边界关系，所以不能直接整体二分。</Answer>
+
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="鞍点">
-    在一个方向上是最大值，在另一个方向上是最小值的网格交叉点。在本题中，右上角
-    and
-    左下角都扮演了这一角色，允许我们无二义性地进行单向排除。详见「概念讲解」节。
-  </GlossaryItem>
-  <GlossaryItem term="边界条件">
-    程序在极端或特殊输入（如空输入、无效长度）下的运行状态。本题的空矩阵检查是预防崩溃的关键边界。详见「常见误区」与「代码对照」节。
-  </GlossaryItem>
-  <GlossaryItem term="时间复杂度">
-    评估算法运行效率的度量。本算法由于每次比较最少排除一行或一列，移动路径长度不超过行数加上列数，因此时间复杂度为
-    $O(m+n)$。详见「小结与练习」与「概念讲解」节。
-  </GlossaryItem>
+  <GlossaryItem term="行列单调矩阵">每行向右不减、每列向下不减的矩形二维数据。</GlossaryItem>
+  <GlossaryItem term="候选矩形">尚未被证明不含目标的连续行列交叉区域。</GlossaryItem>
+  <GlossaryItem term="排除不变式">目标若存在就始终留在当前候选矩形内的循环条件。</GlossaryItem>
+  <GlossaryItem term="行优先映射">把二维坐标映射为连续缓冲区下标row*columns+column。</GlossaryItem>
+  <GlossaryItem term="锯齿数组">各行长度不一致、不能用统一列数安全索引的嵌套数组。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+  adaptedFrom="《剑指Offer（第2版）》面试题4及何海涛官方源码 FindInPartiallySortedMatrix.cpp"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/04_FindInPartiallySortedMatrix/FindInPartiallySortedMatrix.cpp"
 />

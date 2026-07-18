@@ -1,122 +1,240 @@
 ---
-title: "建模与表示方法"
+title: "形状表示、曲面与网格"
 type: B
 section: "计算机图形学与渲染"
 order: 7
-description: "多边形网格、参数曲面、体素与CSG对比"
+description: "承载第三版 Ch8、Ch9、Ch14、Ch22-25：形状表示、网格函数、样条细分、隐式曲面和网格生命周期"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
 draft: false
 ---
 
-import { CgpModelingDiagram } from "@/components/mdx/cg-principles-practice/diagrams/cgp-modeling";
+import { CgpModelingDiagram, CgpCurveSurfaceDiagram, CgpMeshLifecycleDiagram } from "@/components/mdx/cg-principles-practice/diagrams/cgp-modeling";
+import { CgpStepFlowDiagram } from "@/components/mdx/cg-principles-practice/diagrams/cgp-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能说出四种3D表示方法及其特点
-- 能解释多边形网格为什么是GPU的标准格式
-- 能描述Bezier曲线和NURBS的控制原理
-- 能回答：细分曲面如何从低模生成光滑曲面？
+
+- 能比较 boundary、parametric、implicit、sampled 与 hierarchical representation 的查询和误差
+- 能在 mesh 上定义并插值 position、normal、UV、scalar/vector function，识别 topology 与 attribute seam
+- 能推导 Hermite/Catmull-Rom/B-spline、Bézier patch 与 Catmull-Clark 的连续性和局部支撑
+- 能设计 implicit-to-mesh、mesh repair、LOD 和 representation conversion 的正确性测试
+
 </Objectives>
 
-## 直觉引入
+## 直觉：最好的表示取决于要问什么
 
-想象你在做雕塑。方案A（多边形网格）：用很多小三角形拼出形状——简单但不够光滑。方案B（参数曲面）：用控制点拉出光滑曲面——光滑但GPU不直接支持。方案C（体素）：用小方块堆叠——像Minecraft。方案D（CSG）：用基本体做布尔运算（并/交/差）——像搭积木。
+先预测：判断 point 是否在 solid 内，triangle soup、signed-distance field 和 CSG tree 哪个最直接？编辑光滑汽车外壳、做 collision、做 raster display 又可能得到不同答案。representation 不是“先进程度”，而是 query、accuracy、editability、storage 与 execution 的合同。
 
-每种表示方法都有适用场景。GPU只认多边形网格，所以其他表示方法最终都要转换（tessellation）成网格才能渲染。
-
-## 概念讲解
-
-### 3D表示方法
+Ch8/9 从简单 shape 与 mesh function 建立离散表示；Ch14 比较标准近似；Ch22/23 讨论 spline/subdivision curve/surface；Ch24 讨论 implicit shape；Ch25 把 mesh topology、geometry、LOD、repair 和 ordering 汇总为生产结构。
 
 <CgpModelingDiagram />
 
-<Term def="多边形网格是用顶点、边、面表示3D物体的离散表示方法">多边形网格</Term>：GPU原生支持，简单高效，但光滑度受面数限制。
+## Ch8 A Simple Way to Describe Shape in 2D and 3D
 
-<Term def="参数曲面是用数学函数和控制点定义的光滑曲面，如Bezier和B-spline">参数曲面</Term>：精确光滑，适合CAD，需tessellation转网格。
+<Term def="为形状选择数据、参数和允许操作的方式，并明确内部/边界、精度、拓扑与可执行查询">形状表示</Term>常见类别：
 
-<Term def="体素是用3D规则网格表示体积数据的表示方法">体素</Term>：适合体积数据（医学CT/MRI），内存消耗大。
+- boundary representation：curve/surface/mesh 描述边界，surface rendering 直接；solid inside test 需 closed/oriented/watertight；
+- parametric：$C(t)$ 或 $S(u,v)$ 直接生成点与 tangent，适合 evaluation/editing；inverse mapping/trim 可能困难；
+- implicit：$f(x)=0$ 描述 boundary，sign 可表达 inside/outside；参数化与纹理更难；
+- sampled field：voxel/image/grid 保存离散值，regular access 简单但分辨率和 memory 明确；
+- constructive/hierarchical：CSG/scene graph 保存生成历史和组合关系，query 需递归求值。
 
-<Term def="CSG是用布尔运算（并/交/差）组合基本体的建模方法">CSG</Term>：适合CAD，参数化精确，渲染需转网格。
+二维 polygon、三维 polyhedron 不是“连续对象本身”，而是 vertices、incidence、orientation 与 embedding 的组合。一个 closed polygon 的 fill rule（non-zero/even-odd）会改变 self-intersection 的内部定义。
 
-<Term def="细分曲面是通过迭代细化多边形网格生成光滑曲面的技术">细分曲面</Term>：Catmull-Clark/Loop细分，动画电影标配。
+## Ch9 Functions on Meshes
 
-## 交互Demo
+mesh geometry 把 topology 嵌入空间；function 可定义在 vertices、edges、faces 或 corners。position 是 vector-valued vertex function，temperature 是 scalar，UV/normal/material index 可能因 seam 需要 per-corner，而不是共享 vertex。
 
-<Stepper>
-<Step title="第一步：多边形网格">顶点+边+面。GPU原生格式，最通用。三角形是最小图元，任何多边形都可三角化。理解为什么GPU只支持三角形。</Step>
-<Step title="第二步：参数曲面与细分">
-Bezier/B-spline/NURBS用控制点定义曲面。细分曲面（Catmull-Clark）迭代细化网格到光滑。动画电影用低模控制+细分生成高模。
-<CgpModelingDiagram />
-</Step>
-<Step title="第三步：体素与CSG">体素适合体积数据（CT/MRI/地形）。CSG用布尔运算组合基本体（球/柱/方），适合CAD参数化建模。两者渲染时都需转换。</Step>
-</Stepper>
+<Term def="定义在网格顶点、边、面或角上的标量/向量数据，并通过离散基函数在元素内部求值的函数">网格函数</Term>在 triangle 内常用 barycentric interpolation：
 
-## 代码对照
+$$
+f(p)=\lambda_0f_0+\lambda_1f_1+\lambda_2f_2,
+\qquad \sum_i\lambda_i=1.
+$$
+
+它对 affine function 精确，但 normal 插值后通常要 normalize；perspective raster 中还需 $1/w$ correction。硬 normal、UV/material seam 要复制 corners/vertices，不能让 position sharing 强迫所有属性连续。
+
+half-edge/winged-edge 等 adjacency structure 支持 one-ring、boundary traversal、edge flip/collapse；triangle index buffer 更紧凑但邻接 query 需额外构建。选择取决于 editing/query 与 rendering layout。
+
+## Ch14 Standard Approximations and Representations
+
+<Term def="用计算可承受的模型替代理想物理或几何对象，并记录它在尺度、频率、视角和操作上的误差边界">标准近似</Term>贯穿 graphics：finite precision real、ray optics、polygonal distant object、volume sample、scene graph、material/translucency/luminaire model。
+
+评价 representation 至少问：
+
+1. 能表示哪些对象，是否 closed under transform/Boolean/deformation；
+2. evaluation、intersection、inside、closest point、sampling 的 cost；
+3. approximation error 能否量化，是否随 view/scale 改变；
+4. topology/continuity/energy 等 invariants 是否保留；
+5. conversion 是否 lossless、stable、invertible。
+
+LOD 不应只由距离决定。若 object-space deviation 为 $e$，viewport 高 $H$，view depth $z$，vertical FOV $\theta$，screen error 近似：
+
+$$
+e_{px}\approx\frac{eH}{2z\tan(\theta/2)}.
+$$
+
+silhouette、normal/material frequency、animation skin 和 shadow 还会增加 perceptual error。切换需 hysteresis/cross-fade，且 bounds/collision representation 可能与 render LOD 不同。
+
+## Ch22 Splines and Subdivision Curves
+
+<CgpCurveSurfaceDiagram />
+
+Hermite cubic 由 endpoints $P_0,P_1$ 和 tangents $T_0,T_1$ 定义；Catmull-Rom 从邻近 points 自动估 tangent，并插值 data points。多个 segment 连接时区分 $C^0$ position、$C^1$ derivative 与 $G^1$ tangent-direction continuity。
+
+<Term def="由控制点、degree 与 knot vector 定义的分段多项式曲线，具有局部支撑和可控制连续性">B-spline</Term>写为：
+
+$$
+C(t)=\sum_iN_{i,p}(t)P_i.
+$$
+
+移动一个 control point 只影响有限 knot span；knot multiplicity 会降低 continuity。de Boor algorithm 稳定 evaluation，subdivision/corner cutting 可从 refinement 角度得到同一极限曲线。
+
+曲线 test 要检查 endpoint/interpolation contract、partition of unity、affine invariance、local support、derivative continuity、arc-length approximation 与 degenerate knots。
+
+## Ch23 Splines and Subdivision Surfaces
+
+tensor-product Bézier patch 由二维 Bernstein basis 定义：
+
+$$
+S(u,v)=\sum_{i=0}^{m}\sum_{j=0}^{n}B_i^m(u)B_j^n(v)P_{ij}.
+$$
+
+partial derivatives $S_u,S_v$ 给 tangent，cross product 给 normal。相邻 patch 的 shared edge control points 保证 positional continuity；切向 control relation 决定更高 continuity。trim、parameter distortion 与 patch tessellation seam 都要单独处理。
+
+**Spline Surfaces（样条曲面）**把曲线的 basis、knots 和 continuity 推广到二维参数域；tensor-product B-spline patch 具有局部支撑，而 patch network 在 extraordinary topology 处不能只靠规则矩形参数化覆盖。
+
+<Term def="反复细化控制网格并定义其光滑极限曲面的表示；规则区域等价于 spline patch，非规则顶点需专门规则">细分曲面</Term>中 Catmull-Clark 处理任意 polygon control mesh，规则 quad region 对应 bicubic B-spline；extraordinary vertex 附近 continuity/evaluation 不同。crease/boundary rule 是模型语义，不能靠事后 normal split 代替。
+
+## Ch24 Implicit Representations of Shape
+
+<Term def="把形状边界定义为标量函数的等值集 f(x)=c，并可用函数符号表达内外的表示">隐式表示</Term>的 sphere 可写 $f(x)=\|x-c\|-r=0$。signed-distance field 额外要求数值近似到 surface distance，gradient 提供 normal：
+
+$$
+n=\frac{\nabla f}{\|\nabla f\|}.
+$$
+
+一般 implicit function 不一定是 SDF；对它用 sphere tracing 的 `step=f(x)` 可能越过 surface。transform、smooth Boolean 或 interpolation 也会破坏 distance property，需要 Lipschitz bound/保守步长。
+
+implicit → mesh 可用 marching squares/cubes、dual contouring 等 iso-surface extraction；要处理 ambiguous case、topology、crack、normal 和 adaptive cell transition。mesh → implicit 可基于 signed distance/winding/voxelization，但 open/nonmanifold mesh 会让 sign 不确定。
+
+ray tracing implicit surface 可 root-find $f(o+td)=0$；解析、interval、bracketing/Newton 或 conservative marching 各有 convergence 边界。必须记录 iteration、residual 和 miss reason。
+
+## Ch25 Meshes
+
+<CgpMeshLifecycleDiagram />
+
+<Term def="由拓扑 incidence、空间 geometry 与角/顶点/面属性共同构成的离散曲面表示">多边形网格</Term>的质量维度包括 manifoldness、orientation、boundary、degenerate/duplicate/self-intersection、aspect ratio、attribute seam 与 scale。
 
 ```cpp
-// 多边形网格数据结构
-struct Mesh {
-    std::vector<vec3> vertices;   // 顶点位置
-    std::vector<vec3> normals;    // 顶点法线
-    std::vector<vec2> uvs;        // 纹理坐标
-    std::vector<int> indices;     // 索引（三角形）
+struct HalfEdge {
+    VertexId origin;
+    FaceId face;
+    HalfEdgeId next;
+    HalfEdgeId twin; // invalid on boundary
 };
 
-// 渲染时提交给GPU
-void render(Mesh& mesh) {
-    glBindBuffer(GL_ARRAY_BUFFER, mesh.vbo);
-    glBufferData(GL_ARRAY_BUFFER, 
-        mesh.vertices.size() * sizeof(vec3),
-        mesh.vertices.data(), GL_STATIC_DRAW);
-    // ... 绑定法线、UV等
-    glDrawElements(GL_TRIANGLES, 
-        mesh.indices.size(), 
-        GL_UNSIGNED_INT, 0);
-}
-
-// Catmull-Clark 细分（简化）
-Mesh subdivide(Mesh& m) {
-    // 1. 每个面添加面点（顶点平均）
-    // 2. 每条边添加边点（邻接顶点+面点平均）
-    // 3. 更新原顶点（周围点加权平均）
-    // 4. 重新连接生成新面
-    return refinedMesh;
+bool canCollapse(Edge e) {
+    return preservesLinkCondition(e) &&
+           preservesBoundaryAndSeams(e) &&
+           !createsFlippedOrDegenerateFaces(e);
 }
 ```
+
+mesh simplification 的 edge collapse 要在 geometry error 外保护 boundary、UV/normal/material seam、skin weights 和 topology。quadric error metric 给几何 proxy，不自动保证 silhouette/texture/shadow。mesh repair 也不能无条件封洞：医学 scan、cloth 和 CAD shell 对“正确拓扑”定义不同。
+
+triangle-order/vertex-cache optimization 改 layout 不应改 geometry；quantization/compression 改表示精度，要记录 bounds 和 worst-case error。现代 GPU 主要高效处理 triangles，但也可通过 tessellation/mesh/compute/ray/procedural primitives 生成或查询其他表示，“GPU 只认三角形”不是普遍架构事实。
+
+## 表示转换的误差账本
+
+每次 conversion 都要记录：source semantics、target capability、tolerance、topology change、attribute transfer 和 inverse/check。例：Bézier patch tessellation 需 screen/curvature error 与 shared-edge factor；SDF extraction 需 iso-value/cell size；mesh LOD 需 correspondence 和 transition。
+
+最可靠的 pipeline 不是“一律转 mesh”，而是在 authoring/simulation/query/render 各阶段保留适合表示，并在边界处做显式、有测试的 conversion。
+
+## 三步建模验收
+
+<Stepper>
+<Step title="第一步：声明对象、query 与 invariants">
+
+明确 boundary/solid、units、topology、continuity、inside rule、需要的 evaluation/intersection/edit/render query。
+
+<CgpStepFlowDiagram caption="先按任务选择表示，而不是按格式流行度。" stage={1} stages={["Specify：object semantics + queries + topology + continuity + error"]} />
+
+</Step>
+<Step title="第二步：可视化参数、邻接与转换">
+
+显示 control polygon/knots/patch derivatives、half-edge one-ring、implicit field/gradient、conversion cells 与 seams。
+
+<CgpStepFlowDiagram caption="中间表示和 correspondence 必须可观察。" stage={2} stages={["Specify：object semantics + queries + topology + continuity + error", "Inspect：controls + adjacency + fields + derivatives + conversion mapping"]} />
+
+</Step>
+<Step title="第三步：性质、误差与退化输入">
+
+验证 affine invariance/continuity/manifold、Hausdorff/screen error、shared edges，并覆盖 knot multiplicity、extraordinary vertex、open mesh 和 thin feature。
+
+<CgpStepFlowDiagram caption="几何、拓扑、属性和运行成本共同通过。" stage={3} stages={["Specify：object semantics + queries + topology + continuity + error", "Inspect：controls + adjacency + fields + derivatives + conversion mapping", "Validate：properties + degenerates + topology + geometric/screen error + cost"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**误区：认为多边形网格不能表示光滑曲面。**
-多边形网格本身是离散的，但通过增加面数可以达到任意光滑度。细分曲面技术（Catmull-Clark）可以从低模自动生成高模光滑曲面——皮克斯的所有动画电影都用这种方法，最终渲染时仍是多边形网格。
+**现象 →** 声称增加 triangles 就能让 mesh 达到任意光滑。**原因 →** 只看采样密度，忽略 topology、normal/parameter continuity 与 approximation strategy。**修法 →** 以 geometry/normal/silhouette error 和 seam/crack 验收，不以 face count 代替质量。
 </Callout>
 
 <Callout type="trap">
-**误区：认为NURBS比多边形网格更先进应该取代它。**
-NURBS在CAD领域确实更精确（参数化、可编辑），但GPU只支持三角形渲染。NURBS需要tessellation（曲面细分）转换成三角形才能渲染，转换的开销和复杂度限制了它在实时渲染中的应用。多边形网格+细分曲面是实时渲染的主流方案。
+**现象 →** 把任意 implicit function 当 SDF 做 sphere tracing。**原因 →** 混淆 zero set 与 distance property。**修法 →** 证明/估计 Lipschitz bound，使用保守步长和 bracketing，并记录 residual/iteration。
 </Callout>
 
+<Callout type="trap">
+**现象 →** 自动 repair 封闭所有 boundary、合并所有近邻 vertex。**原因 →** 没有对象语义和 tolerance。**修法 →** 先分类 intentional boundary/seam/shell，再以单位和 downstream query 定义 repair policy。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题 1**：四种3D表示方法各有什么特点和适用场景？
+
+**问题 1：为何 position 可共享而 UV/normal 可能不能共享？**
 
 <Answer>
-多边形网格：顶点+边+面，GPU原生支持，简单高效，适合实时渲染和游戏。参数曲面（Bezier/NURBS）：控制点定义光滑曲面，精确可编辑，适合CAD/工业设计，需tessellation转网格。体素：3D规则网格表示体积，适合医学成像/地形/流体模拟，内存消耗大。CSG：布尔运算组合基本体，参数化精确，适合CAD建模，渲染需转网格。选择依据：实时渲染用网格，精确设计用参数曲面/CSG，体积数据用体素。
+同一几何位置可以位于 UV atlas 两个 island 或 hard normal 两侧。若只允许 per-vertex 单值，就必须复制 vertex/corner；否则插值会跨 seam。topology sharing 与 attribute continuity 是两套关系。
 </Answer>
 
-**问题 2**：细分曲面如何从低模生成光滑曲面？
+**问题 2：B-spline 的 local support 有什么工程意义？**
 
 <Answer>
-细分曲面通过迭代规则细化多边形网格，每次细分将一个面分成更多小面，新顶点位置由周围顶点加权计算，经过多次迭代后网格收敛到光滑曲面。Catmull-Clark细分（皮克斯发明的标准）：1)每个面添加面点（面顶点平均）；2)每条边添加边点（邻接顶点和面点的平均）；3)更新原顶点（周围面点和边点的加权平均）；4)重新连接生成4边形面。经过2-3次迭代，低模就变成光滑的高模。动画师只需控制低模，细分自动生成光滑效果。
+移动一个 control point 只影响有限 knot spans，局部编辑不会改变整条曲线，也使 evaluation/refinement 可局部更新。影响范围由 degree 与 knot vector 决定，并需验证 continuity。
 </Answer>
+
+**问题 3：Catmull-Clark 在 extraordinary vertex 为什么要特别测试？**
+
+<Answer>
+规则 valence-4 quad 区域等价于 bicubic B-spline，extraordinary valence 处使用不同 subdivision matrix，极限位置、tangent 和 continuity 性质不同，容易出现 pinching 或 tessellation/normal artifact。
+</Answer>
+
+**问题 4：如何证明一次 mesh simplification 可接受？**
+
+<Answer>
+检查 topology/boundary/seams/skin invariants，测 object/Hausdorff 与 screen/silhouette error，在多视角、animation、shadow 下比较 reference，并记录 triangles、memory、build 与 render time；QEM 数值本身不足以证明。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+Ch8、9、14、22-25 建立了表示工程：shape semantics 决定 query，curve/surface/implicit/mesh 各保留不同性质，conversion 引入可量化误差。完成标准是 control、topology、field、seam、退化输入与转换证据全部可追踪。
+
 <Glossary>
-<GlossaryItem term="多边形网格">用顶点、边、面表示3D物体的离散表示方法，GPU原生支持的标准格式。</GlossaryItem>
-<GlossaryItem term="参数曲面">用数学函数和控制点定义的光滑曲面（Bezier/B-spline/NURBS），需tessellation转网格渲染。</GlossaryItem>
-<GlossaryItem term="体素">用3D规则网格表示体积数据的表示方法，适合医学成像和流体模拟。</GlossaryItem>
-<GlossaryItem term="细分曲面">通过迭代细化多边形网格生成光滑曲面的技术，Catmull-Clark/Loop细分是动画电影标配。</GlossaryItem>
+<GlossaryItem term="形状表示">定义形状数据、拓扑、精度和可执行查询的方式。</GlossaryItem>
+<GlossaryItem term="网格函数">定义在 mesh 顶点、边、面或角上并在元素内求值的数据。</GlossaryItem>
+<GlossaryItem term="标准近似">以可承受模型替代理想对象并声明误差边界的方法。</GlossaryItem>
+<GlossaryItem term="B-spline">由控制点、degree 和 knots 定义且具有局部支撑的分段多项式曲线。</GlossaryItem>
+<GlossaryItem term="细分曲面">通过递归细化控制网格定义光滑极限曲面的表示。</GlossaryItem>
+<GlossaryItem term="隐式表示">以标量函数等值集定义形状边界的表示。</GlossaryItem>
+<GlossaryItem term="多边形网格">由拓扑、空间 geometry 与属性组成的离散曲面表示。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="计算机图形学：原理及实践" adaptedUrl="https://www.cgpp.net/" />
+<Attribution adaptedFrom="Computer Graphics: Principles and Practice, Third Edition, Chapters 8, 9, 14 and 22-25" adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707" />

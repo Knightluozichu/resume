@@ -1,0 +1,348 @@
+---
+title: "Item 14：确定不抛出异常的函数声明 noexcept"
+type: A
+section: Chapter 3 · Moving to Modern C++
+order: 14
+description: 对齐 Effective Modern C++ Item 14：把 noexcept 作为异常不得逃逸的接口承诺，理解 vector move_if_noexcept 的迁移优化，区分宽契约与窄契约，并用 conditional noexcept 组合成员能力。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch03.html"
+draft: false
+---
+
+import {
+  EmcppConditionalNoexceptCompositionMap,
+  EmcppNoexceptContractMap,
+  EmcppVectorRelocationDecisionMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-14-noexcept";
+
+<Objectives>
+
+- 能解释 declare functions noexcept（声明 noexcept）的接口承诺、异常逃逸后的 terminate 行为和优化依据
+- 能分析 vector reallocation 的 copy/move 选择，并判断 move operation optimization（移动操作优化）何时成立
+- 能区分 wide contract（宽契约）与窄契约，设计 conditional noexcept（条件 noexcept）并用 traits 固定组合结果
+
+</Objectives>
+
+## 从“noexcept 是承诺，不是愿望”开始
+
+Item 14 的原则是 Declare functions noexcept if they will not emit exceptions（确定不抛出异常的函数声明 noexcept）。`noexcept` 告诉 caller、standard library 和 optimizer：异常不会越过这个函数边界。
+
+<Term def="函数异常规范承诺调用不会向外传播 exception；若异常逃逸，运行时调用 terminate。">
+  noexcept contract
+</Term>
+
+```cpp
+void commit() noexcept {
+    persist();
+}
+```
+
+先预测：若 `persist()` 抛出而 commit 不捕获，caller 不能用 try/catch 恢复，程序会进入 `std::terminate`。
+
+<EmcppNoexceptContractMap />
+
+## 异常逃逸会 terminate
+
+```cpp
+void closeSession() noexcept {
+    flushPendingWrites(); // may throw
+}
+```
+
+<Term def="异常穿过 noexcept boundary 时由运行时触发的不可恢复终止路径。">
+  noexcept violation termination
+</Term>
+
+编译器通常不拒绝在 noexcept function 中调用可能抛出的函数，因为被调函数也许不会在该输入上抛，或当前函数会捕获。责任属于实现者：所有内部异常必须被吸收、转换成状态，或证明不可发生。
+
+<Callout type="trap" title="陷阱：写上 noexcept 后，内部调用就不会抛异常">
+  noexcept 不改变 callee 行为，也不是静态 exception
+  checker。它只改变异常越过边界时的结果：不再 stack unwind 给 caller，而是
+  terminate。必须审计 allocation、logging、callbacks 与 destructors。
+</Callout>
+
+## noexcept 是函数接口的一部分
+
+caller 可在编译期查询表达式是否 noexcept，generic library 可据此选择实现路径：
+
+```cpp
+static_assert(noexcept(std::declval<Widget&>().swap(
+    std::declval<Widget&>()
+)));
+```
+
+<Term def="使用 noexcept expression 在不执行调用的情况下查询该表达式是否承诺不抛异常。">
+  noexcept expression
+</Term>
+
+删除 noexcept 会使依赖该属性的 traits、overloads 或 containers 改走保守路径。因此它不是只影响函数 body 的注释，而是公开 contract。
+
+## optimizer 可减少异常清理负担
+
+对可能抛异常的函数，compiler 需要保留足够信息以便异常发生时销毁已构造对象并沿 stack unwinding 转移控制。noexcept boundary 无需为“传播到 caller”保留同样路径。
+
+<Term def="异常传播时按作用域逆序销毁自动对象并转移到匹配 handler 的机制。">
+  stack unwinding path
+</Term>
+
+具体机器码收益由 compiler 与函数体决定，不能承诺固定百分比；更稳定的收益是 library 能基于 contract 做算法选择。
+
+## vector reallocation 需要强异常保证
+
+vector 扩容通常分配新 storage，再把旧 elements 搬过去。若搬到一半 move 抛异常，而已 move 的旧 elements 已改变，container 很难恢复原状态。
+
+<Term def="操作失败抛异常时，对象保持调用前可观察状态的异常安全保证。">
+  strong exception guarantee
+</Term>
+
+```cpp
+class Widget {
+public:
+    Widget(const Widget&);
+    Widget(Widget&&) noexcept;
+};
+```
+
+当 move constructor noexcept，vector 可确信搬迁不会中途抛出，安全使用 move；若 move 可能抛且 copy 可用，vector 往往复制旧 elements，以便失败时丢弃新 storage、保留旧 vector。
+
+<Term def="容器根据 move 是否 noexcept 和 copy 是否可用，在迁移时选择 move 或 copy 的策略。">
+  move-if-noexcept relocation
+</Term>
+
+<EmcppVectorRelocationDecisionMap />
+
+## move operation optimization 来自调用方信任
+
+移动操作优化不是 noexcept 让一次 move 指令更快，而是让 vector、optional、variant 或 generic algorithm 敢于选择 move path。
+
+<Term def="因 move operation 明确不抛异常，调用方可跳过保守 copy 或 rollback 方案的优化。">
+  move operation optimization
+</Term>
+
+```cpp
+static_assert(std::is_nothrow_move_constructible_v<Widget>);
+```
+
+若 Widget 只持有 vector/string 等成员，其默认生成 move 往往根据成员能力自动获得适当 noexcept；手写 destructor/copy/move 后则要重新检查 special member generation 与 exception specification。
+
+## 不要为追求 move 强行撒谎
+
+```cpp
+Widget::Widget(Widget&& other) noexcept
+    : resource(acquireReplacement()) { // allocation may throw
+}
+```
+
+<Term def="函数实际存在可逃逸异常路径，却声明 noexcept 以追求性能，导致 terminate 风险的错误契约。">
+  false noexcept promise
+</Term>
+
+如果 move 需要 allocation、user callback 或可能抛的 validation，就不能仅为让 vector move 而标 noexcept。正确方案可能是重构 representation，让 move 只交换 handles；否则接受 copy fallback。
+
+<Callout type="trap" title="陷阱：所有 move constructors 都必须 noexcept">
+  “优先 noexcept move”要求实现真的不抛。错误承诺会把可处理 allocation/callback
+  failure 变成进程终止； 性能目标不能覆盖异常语义真实性。
+</Callout>
+
+## wide contract 更适合稳定 noexcept
+
+wide contract function 对所有满足类型要求的 inputs 都定义行为，没有额外 runtime preconditions。若实现也不产生异常，noexcept 承诺通常稳定。
+
+<Term def="对参数类型可表示的全部输入都定义行为，不要求 caller 满足额外前置条件的函数契约。">
+  wide contract
+</Term>
+
+```cpp
+void swap(Widget& lhs, Widget& rhs) noexcept;
+```
+
+释放内存函数、destructors 和只交换 non-throwing handles 的 swap 是典型候选。标准 destructors 默认隐式 noexcept，除非成员/base destructor 可能抛或显式改变。
+
+## narrow contract 需要先决定违约策略
+
+narrow contract 只在额外 precondition 成立时定义行为，例如 index 必须有效。违约后可能 assert、undefined behavior、error return 或 exception。
+
+<Term def="除了类型外还要求 caller 满足范围、状态或顺序前置条件的函数契约。">
+  narrow contract
+</Term>
+
+```cpp
+const Widget& atUnchecked(std::size_t index) const noexcept {
+    return widgets[index]; // precondition: index < size
+}
+```
+
+若设计明确规定 precondition violation 是 undefined behavior/assert-terminate，noexcept 可合理；若 API 承诺抛 `out_of_range`，就不能 noexcept。wide/narrow 本身不机械决定异常规范，关键是所有合法路径与违约策略。
+
+## 大多数函数应保持 exception-neutral
+
+不是 noexcept 的函数不表示“一定抛”，只表示允许异常传播。中间层通常应清理自身资源并把底层异常交给更了解恢复策略的 caller。
+
+<Term def="函数保证自身 invariants 和资源安全，但允许无法处理的异常继续传播。">
+  exception-neutral function
+</Term>
+
+把所有函数标 noexcept 会切断错误恢复链。只对长期能保证 will not emit exceptions（不抛出异常）的边界承诺。
+
+## conditional noexcept 传播成员能力
+
+generic wrapper 的 swap/move 是否不抛，取决于 T 的对应操作。硬编码 true 或 false 都可能错，应使用条件异常规范。
+
+```cpp
+template<typename T>
+class Box {
+public:
+    void swap(Box& other)
+        noexcept(noexcept(std::swap(value, other.value))) {
+        using std::swap;
+        swap(value, other.value);
+    }
+
+private:
+    T value;
+};
+```
+
+<Term def="以编译期布尔表达式决定函数是否 noexcept，使 wrapper contract 跟随成员能力。">
+  conditional noexcept
+</Term>
+
+更常见的 trait 形式：
+
+```cpp
+Box(Box&&) noexcept(std::is_nothrow_move_constructible_v<T>) = default;
+```
+
+<Term def="由所有 base/member 操作的 nothrow traits 合取形成外层操作的异常承诺。">
+  nothrow capability composition
+</Term>
+
+<EmcppConditionalNoexceptCompositionMap />
+
+## swap 应沿层次传播 noexcept
+
+标准容器 swap 的 noexcept 通常取决于 element/allocator swap。自定义 type 应从 member swap 逐层组合，而不是顶层盲写。
+
+<Term def="从 leaf member 到 aggregate 再到 public free swap 逐层传播异常规范的设计。">
+  noexcept propagation chain
+</Term>
+
+```cpp
+void swap(Widget& lhs, Widget& rhs)
+    noexcept(noexcept(lhs.swap(rhs))) {
+    lhs.swap(rhs);
+}
+```
+
+generic algorithms 查询 free swap 时便能获得真实 contract。
+
+## noexcept 承诺的演化成本
+
+今天不抛的函数，未来可能加入 allocation、telemetry callback 或 plugin hook。已有 noexcept 会迫使新实现捕获/转换异常，或形成 breaking contract change。
+
+<Term def="公开不抛承诺限制未来实现与错误处理方式的长期维护成本。">
+  noexcept commitment cost
+</Term>
+
+因此只在语义上自然不抛、实现依赖也可控时声明。不要因为当前版本恰好没 throw statement 就承诺永久不抛。
+
+## noexcept 验收矩阵
+
+<Term def="覆盖 trait、异常注入、容器迁移、conditional composition 与违约终止的测试集合。">
+  noexcept contract matrix
+</Term>
+
+1. static assertions 固定 move/swap 的 nothrow traits。
+2. copy/move counters 验证 vector reallocation 选择预期路径。
+3. throwing member type 使 wrapper conditional noexcept 自动为 false。
+4. non-throwing member type 使 wrapper 为 true。
+5. 可抛 dependency 注入时，noexcept function 必须捕获转换或测试终止策略。
+6. wide/narrow API 文档与异常规范一致。
+
+先预测所有潜在 throw edges 与 caller algorithm，再声明 noexcept；“测试没抛过”不能证明未来所有输入都不抛。
+
+## 小结
+
+- noexcept 是异常不得逃逸的接口承诺；违约会 terminate，不是自动禁止内部抛异常
+- caller 和 generic library 可通过 noexcept expression/traits 选择更强实现路径
+- vector 为保持 strong exception guarantee，可能在 throwing move 与可用 copy 之间选择 copy
+- truthful noexcept move 启用 move operation optimization，错误承诺则把可恢复错误变成终止
+- wide contract 且所有实现路径不抛时适合稳定 noexcept；narrow contract 要明确前置条件违约策略
+- 多数中间层应 exception-neutral，而非一律 noexcept
+- conditional noexcept 将 wrapper 能力与成员/base 的 nothrow traits 组合
+- 最终验收需要 trait、异常注入和容器迁移证据，不能只搜索 throw 关键字
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 14"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch03.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="noexcept contract">异常不得逃逸的函数承诺。</GlossaryItem>
+  <GlossaryItem term="noexcept violation termination">
+    异常越过边界后的终止路径。
+  </GlossaryItem>
+  <GlossaryItem term="noexcept expression">
+    编译期查询表达式异常规范。
+  </GlossaryItem>
+  <GlossaryItem term="stack unwinding path">
+    异常传播时的栈清理路径。
+  </GlossaryItem>
+  <GlossaryItem term="strong exception guarantee">
+    失败后对象保持原状态。
+  </GlossaryItem>
+  <GlossaryItem term="move-if-noexcept relocation">
+    按异常能力选择 copy 或 move。
+  </GlossaryItem>
+  <GlossaryItem term="move operation optimization">
+    不抛 move 启用的调用方优化。
+  </GlossaryItem>
+  <GlossaryItem term="false noexcept promise">
+    实现可能抛却声明不抛。
+  </GlossaryItem>
+  <GlossaryItem term="wide contract">没有额外输入前置条件的契约。</GlossaryItem>
+  <GlossaryItem term="narrow contract">要求额外前置条件的契约。</GlossaryItem>
+  <GlossaryItem term="exception-neutral function">
+    资源安全但允许异常传播。
+  </GlossaryItem>
+  <GlossaryItem term="conditional noexcept">
+    由编译期条件决定异常规范。
+  </GlossaryItem>
+  <GlossaryItem term="nothrow capability composition">
+    组合成员的不抛能力。
+  </GlossaryItem>
+  <GlossaryItem term="noexcept propagation chain">
+    逐层传播真实异常规范。
+  </GlossaryItem>
+  <GlossaryItem term="noexcept commitment cost">
+    不抛承诺对未来实现的约束。
+  </GlossaryItem>
+  <GlossaryItem term="noexcept contract matrix">
+    异常规范和迁移策略测试表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：Widget 同时可 copy 和 move，move 未声明 noexcept。** vector 扩容可能走哪条路径？
+
+<Answer question="决策依据与验证方式是什么？">
+  为保持 strong exception guarantee，vector 通常在 copy 可用而 move 可能抛时选择
+  copy；move 明确 noexcept 后可安全选择 move。用 copy/move counters 触发
+  reallocation，并用 nothrow move trait static assertion
+  固定能力，不假设所有实现细节完全相同。
+</Answer>
+
+2. **问题 2：Box 的 move 取决于成员 T。** 不能硬编码 always noexcept。
+
+<Answer question="如何声明 conditional contract？">
+  把 Box move 的 noexcept condition 绑定到 T 的 nothrow move-constructible
+  trait；swap 则查询实际 member swap expression。分别用 throwing/non-throwing
+  test types 验证 false/true 两条实例化路径， 确保 wrapper
+  不夸大也不隐藏成员能力。
+</Answer>
+
+3. **问题 3：unchecked index accessor 要不要 noexcept？** precondition 是 index 小于 size。
+
+  <Answer question="wide/narrow contract 如何影响决策？">它是 narrow contract。若 API 明确规定违约为 assertion/undefined behavior，且所有合法路径不抛，可声明 noexcept；若承诺越界抛异常，就不能声明。测试合法路径的 trait，并单独验证 debug assertion 或 checked accessor 的错误模型，不把 narrow 自动等同于 noexcept。</Answer>
+</Exercises>

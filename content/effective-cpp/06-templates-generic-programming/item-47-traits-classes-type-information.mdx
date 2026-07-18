@@ -1,0 +1,372 @@
+---
+title: "Item 47：使用 traits classes 表现类型信息"
+type: A
+section: Chapter 7 · Templates and Generic Programming
+order: 47
+description: 对齐 Effective C++ 第三版 Item 47：用 iterator_traits 主模板与 pointer partial specialization 统一获取类型信息，以 iterator category tags 对 advance 做编译期分派，并验证能力、复杂度和扩展边界。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppIteratorTagDispatchMap,
+  EcppIteratorTraitsLookupMap,
+  EcppTraitsDesignWorkflowMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-47-traits-classes-type-information";
+
+<Objectives>
+
+- 能解释 traits class 如何在不增加对象运行状态的前提下统一提供 class 与 raw pointer 的类型信息
+- 能实现 iterator_traits 主模板、pointer partial specialization 和五类 iterator category tags
+- 能设计 tag dispatch 版 advance，并验证不同能力的操作、负距离规则与复杂度保证
+
+</Objectives>
+
+## 从“iterator 属于哪一类”开始
+
+generic `advance` 需要把 iterator 向前或向后移动 distance。不同 iterator 能力差异很大：
+
+- input iterator 只能逐步前进
+- bidirectional iterator 可逐步前进和后退
+- random-access iterator 可直接 `+= distance`
+
+<Term def="与某个类型相关、供泛型算法在编译期查询的属性集合。">
+  type information
+</Term>
+
+<Term def="通过 class template 及 specializations 把类型属性映射为 nested types 或 constants 的结构。">
+  traits class
+</Term>
+
+Item 47 的原则是 Use traits classes for information about types（使用 traits classes 表现类型信息）。
+
+若算法只写循环，可支持所有 iterators，却浪费 random-access 的常量时间能力；若无条件写 `+=`，input iterator 无法编译。
+
+先预测：运行期 `if` 检查 category 是否足够？两个 branches 仍需对当前 iterator 都是可编译 expressions，且类型事实本来在编译期已知。
+
+## iterator class 可以提供 nested category
+
+```cpp
+struct input_iterator_tag {};
+struct output_iterator_tag {};
+struct forward_iterator_tag : input_iterator_tag {};
+struct bidirectional_iterator_tag : forward_iterator_tag {};
+struct random_access_iterator_tag : bidirectional_iterator_tag {};
+
+template<class T>
+class ListIterator {
+public:
+    using iterator_category = bidirectional_iterator_tag;
+};
+```
+
+<Term def="以空类型表示 iterator 能力类别，用于 overload resolution 而非保存数据。">
+  iterator category tag
+</Term>
+
+<Term def="类型在自身定义中公开、描述其关联类型或属性的名称。">
+  nested trait member
+</Term>
+
+category tag 不是 enum runtime value，而是一个 type。继承层级表达能力包含：random-access 也满足 bidirectional、forward 和 input 的基本要求。
+
+## raw pointer 也是 iterator，但没有成员
+
+```cpp
+int values[] = {1, 2, 3};
+int* iter = values;
+iter += 2;
+```
+
+pointer 支持 random access，却不能为 `int*` 增加 `iterator_category` nested type。如果算法直接写 `Iter::iterator_category`，raw pointers 被排除。
+
+<Term def="无法修改或没有 class body 来提供 nested traits 的既有类型，如 raw pointer。">
+  non-intrusive trait target
+</Term>
+
+解决方案是把查询移到独立 traits template。
+
+## iterator_traits 主模板
+
+```cpp
+template<class Iter>
+struct iterator_traits {
+    using iterator_category = typename Iter::iterator_category;
+    using value_type = typename Iter::value_type;
+    using difference_type = typename Iter::difference_type;
+    using pointer = typename Iter::pointer;
+    using reference = typename Iter::reference;
+};
+```
+
+<Term def="处理常规类型、通常把查询转发到类型自身 nested members 的 traits 定义。">
+  traits primary template
+</Term>
+
+generic code 只写 `iterator_traits<Iter>::iterator_category`，不关心信息来自 iterator 自身还是 specialization。
+
+## pointer partial specialization
+
+```cpp
+template<class T>
+struct iterator_traits<T*> {
+    using iterator_category = random_access_iterator_tag;
+    using value_type = std::remove_cv_t<T>;
+    using difference_type = std::ptrdiff_t;
+    using pointer = T*;
+    using reference = T&;
+};
+```
+
+<Term def="为一族仍含自由参数的模板实参形状提供更具体定义，如所有 T pointers。">
+  partial specialization
+</Term>
+
+<Term def="通过 traits specialization 为外部或内建类型提供类型信息，而无需修改目标类型。">
+  non-intrusive adaptation
+</Term>
+
+`iterator_traits<int*>` 选择 pointer specialization，`iterator_traits<ListIterator<int>>` 选择 primary template，两者提供相同查询 names。
+
+<EcppIteratorTraitsLookupMap />
+
+<Callout type="trap" title="陷阱：只支持自家 iterator 的 nested typedef">
+  generic algorithm 若绕过 `iterator_traits` 直接访问 Iter 成员，会丢失 pointer
+  和其他适配类型。统一查询入口是 traits 的核心价值。
+</Callout>
+
+## tag dispatch 的三个实现
+
+```cpp
+template<class Iter, class Distance>
+void doAdvance(Iter& iter, Distance n, random_access_iterator_tag) {
+    iter += n;
+}
+
+template<class Iter, class Distance>
+void doAdvance(Iter& iter, Distance n, bidirectional_iterator_tag) {
+    if (n >= 0) while (n--) ++iter;
+    else while (n++) --iter;
+}
+
+template<class Iter, class Distance>
+void doAdvance(Iter& iter, Distance n, input_iterator_tag) {
+    if (n < 0) throw std::out_of_range("negative distance");
+    while (n--) ++iter;
+}
+```
+
+<Term def="把类型属性实例化为空 tag 参数，利用 overload resolution 选择算法实现。">
+  tag dispatch
+</Term>
+
+<Term def="针对特定 capability 提供操作和复杂度更合适的内部 overload。">
+  capability-specific overload
+</Term>
+
+forward iterator 的 tag 可转换为 input tag，random-access tag 也可转换到更弱 tags；overload resolution 选择最具体 exact match。
+
+## public wrapper 获取 trait 并分派
+
+```cpp
+template<class Iter, class Distance>
+void advance(Iter& iter, Distance n) {
+    using Category = typename iterator_traits<Iter>::iterator_category;
+    doAdvance(iter, n, Category{});
+}
+```
+
+<Term def="公开统一接口查询 trait，再把具体 category 传给内部 overload set 的薄函数。">
+  traits dispatch wrapper
+</Term>
+
+客户只调用 `advance`；category 在编译期选择实现，没有 per-call virtual dispatch 或 runtime branch。
+
+<EcppIteratorTagDispatchMap />
+
+## tag hierarchy 是能力关系，不只是名字列表
+
+forward tag public 继承 input tag，bidirectional 继承 forward，random-access 继承 bidirectional。这让只提供弱能力 overload 的算法也能接受更强 iterator。
+
+<Term def="更强 category tag 可隐式转换为较弱 tag，从而复用基础实现的继承结构。">
+  capability tag hierarchy
+</Term>
+
+output iterator 与 input 链表达不同写入语义，不应为了方便强行纳入同一可读层级。
+
+<Term def="类型声明的 tag 必须真实反映其 operations、multi-pass 与复杂度保证。">
+  category semantic contract
+</Term>
+
+若一个 iterator 宣称 random-access 却让 `+=` 线性执行，程序可能结果正确但违反算法复杂度假设。
+
+<Callout type="trap" title="陷阱：tag 只是为了让代码编译">
+  category 是 semantic 和 complexity
+  contract。错误高报能力比低报更危险，会让算法选择不满足前置条件或复杂度的实现。
+</Callout>
+
+## traits 不限于 types
+
+traits 还可提供 compile-time constants：
+
+```cpp
+template<class T>
+struct serialization_traits {
+    static constexpr bool fixed_size = false;
+    using wire_type = T;
+};
+```
+
+<Term def="traits 中用 static constexpr 暴露、可参与编译期选择的值属性。">
+  trait value member
+</Term>
+
+标准库中的 `numeric_limits`、`allocator_traits`、`char_traits` 和 `pointer_traits` 都体现相似模式：一个统一查询 facade，背后由主模板和 specializations 提供事实。
+
+## 用户 specialization 的所有权边界
+
+并非所有 traits 都允许用户对任意标准类型添加 specialization。必须遵守该 traits 的定制契约；对自己拥有的 user-defined type 通常最安全。
+
+<Term def="谁有权为哪些类型提供 traits specialization 的 API 与标准规则。">
+  trait specialization ownership
+</Term>
+
+自定义 traits 应说明：primary template 是否有默认、缺少信息时报何种错误、用户 specialization 必须提供哪些 members。
+
+## 现代 concepts 与 if constexpr
+
+现代 ranges 使用 iterator concepts；算法可写：
+
+```cpp
+template<class Iter, class Distance>
+void modernAdvance(Iter& iter, Distance n) {
+    if constexpr (std::random_access_iterator<Iter>) {
+        iter += n;
+    } else if constexpr (std::bidirectional_iterator<Iter>) {
+        // loop both directions
+    } else {
+        // input path
+    }
+}
+```
+
+<Term def="根据 compile-time condition 丢弃未选择 branch，使无效 expressions 不被实例化的语句。">
+  if constexpr dispatch
+</Term>
+
+concepts 可直接检查 operations，减少类型谎报；但关联 types、policy constants 和第三方适配仍常通过 traits 提供。Item 47 的信息抽取与静态选择模型没有过时。
+
+<Term def="通过所需 expressions 和语义要求直接描述类型能力的命名约束。">
+  capability concept
+</Term>
+
+## traits class 的设计流程
+
+1. 识别 generic algorithm 需要的类型事实。
+2. 为每项事实确定稳定 nested name 或 constant。
+3. 编写 primary template，决定转发、自省或无默认。
+4. 为 raw pointers 等不能自描述的类型提供 specializations。
+5. 用 tag overload、`if constexpr` 或 specialization 消费信息。
+6. 测试 class types、pointers、cv variants、边界操作与复杂度。
+
+<Term def="从信息命名、主模板、特化、消费到契约测试的 traits 建模步骤。">
+  traits design workflow
+</Term>
+
+<EcppTraitsDesignWorkflowMap />
+
+先预测 custom iterator、const pointer 和 input-only iterator 分别选择哪个 overload，再用 operation counter 验证 random-access 只执行一次 `+=`。
+
+## 小结
+
+- traits classes 在编译期提供关于 types 的统一信息，不需要修改目标类型或增加运行状态
+- iterator_traits 主模板读取 class nested members，pointer partial specialization 适配 raw pointers
+- category tags 用类型和继承表达 iterator capability hierarchy
+- public advance 查询 trait 后进行 tag dispatch，在编译期选择最具体实现
+- category 不只影响可编译性，还承诺 operations、multi-pass 和复杂度
+- concepts 与 if constexpr 是现代消费方式，traits 仍适合关联类型、常量和非侵入适配
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 47"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="type information">泛型算法查询的类型属性。</GlossaryItem>
+  <GlossaryItem term="traits class">
+    把类型映射为关联类型或常量的模板。
+  </GlossaryItem>
+  <GlossaryItem term="iterator category tag">
+    表示 iterator 能力的空类型。
+  </GlossaryItem>
+  <GlossaryItem term="nested trait member">
+    类型自身公开的关联属性名称。
+  </GlossaryItem>
+  <GlossaryItem term="non-intrusive trait target">
+    无法自行添加 nested members 的类型。
+  </GlossaryItem>
+  <GlossaryItem term="traits primary template">
+    处理常规类型的默认 traits 定义。
+  </GlossaryItem>
+  <GlossaryItem term="partial specialization">
+    为一族模板实参形状提供的具体定义。
+  </GlossaryItem>
+  <GlossaryItem term="non-intrusive adaptation">
+    不修改目标类型的 traits 适配。
+  </GlossaryItem>
+  <GlossaryItem term="tag dispatch">
+    用 tag 参数和重载选择静态实现。
+  </GlossaryItem>
+  <GlossaryItem term="capability-specific overload">
+    针对某类能力优化的内部函数。
+  </GlossaryItem>
+  <GlossaryItem term="traits dispatch wrapper">
+    查询 trait 并调用实现的公开薄层。
+  </GlossaryItem>
+  <GlossaryItem term="capability tag hierarchy">
+    强能力 tag 可转为弱能力 tag 的层级。
+  </GlossaryItem>
+  <GlossaryItem term="category semantic contract">
+    tag 对操作和复杂度的真实承诺。
+  </GlossaryItem>
+  <GlossaryItem term="trait value member">
+    traits 暴露的编译期常量。
+  </GlossaryItem>
+  <GlossaryItem term="trait specialization ownership">
+    traits 定制的类型所有权边界。
+  </GlossaryItem>
+  <GlossaryItem term="if constexpr dispatch">
+    按静态条件丢弃分支的选择。
+  </GlossaryItem>
+  <GlossaryItem term="capability concept">
+    直接描述有效操作的命名约束。
+  </GlossaryItem>
+  <GlossaryItem term="traits design workflow">
+    类型信息建模与消费流程。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：让 advance 同时接受 ListIterator 和 raw pointer。** 两者分别是 bidirectional 与 random-access。
+
+<Answer question="traits 与 dispatch 应怎样连接？">
+  ListIterator 提供 iterator_category nested type，iterator_traits primary
+  转发；pointer partial specialization 直接给出 random-access tag。public
+  advance 取 Category 并传给 doAdvance overload。用计数器验证 list
+  逐步增减，pointer 只执行一次加等操作。
+</Answer>
+
+2. **问题 2：一个 iterator 把自己标成 random-access，但加等操作线性循环。** 分析后果与修复。
+
+<Answer question="为什么结果正确仍是 contract bug？">
+  random-access tag 承诺常量时间跳转，generic algorithms
+  会据此选择复杂度更激进的路径；线性实现可能把整体算法从线性退化为平方级。应降级到真实
+  category，或实现真正常量时间跳转，并加入 operation-count complexity tests。
+</Answer>
+
+3. **问题 3：为第三方不可修改 handle 类型提供 serialization trait。** 需要 wire type 与 fixed-size 常量。
+
+  <Answer question="怎样设计非侵入适配和所有权边界？">定义自有 serialization_traits primary template，明确无默认或安全默认；对第三方 handle 在自己的 traits 命名空间提供允许的 specialization，暴露 wire_type 和 fixed_size。用 static assertions、cv/ref normalization、编码 round-trip 和未知类型 compile-fail 测试，不修改第三方 class。</Answer>
+</Exercises>

@@ -1,0 +1,290 @@
+---
+title: "第7章：Inheritance"
+type: C
+section: "Essential C# 7.0 · Object-Oriented Foundations"
+order: 7
+description: "掌握derivation、virtual/override/new/base、abstract classes、System.Object、is patterns、switch patterns与as conversion。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-c-sharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7DerivationContractLab, Ec7DispatchLab, Ec7TypePatternLab } from "@/components/mdx/essential-csharp-7/diagrams/inheritance";
+
+<Objectives>
+
+- 能解释single class inheritance、upcast与base/derived state construction的完整关系
+- 能比较virtual override、base invocation和new member hiding在static/runtime type下的dispatch结果
+- 能设计abstract contract，并判断is declaration pattern、switch pattern与as conversion的成功和失败路径
+
+</Objectives>
+
+## 为什么继承首先是可替代性承诺
+
+写下`Invoice : Document`不只是复用fields和methods，而是在声明：任何需要Document contract的地方都可接收Invoice，并且Invoice仍遵守Document的可观察规则。若derived type改变preconditions、破坏invariant或让base operations失效，即使compiler接受，设计也不成立。
+
+先预测：derived reference赋给base variable是否产生新object；base variable调用virtual method会选base还是derived body；`new` hidden method是否与override相同；`value is Invoice invoice`在null时怎样；`as`失败是throw还是null。然后分别沿assignment、dispatch和type evidence轨迹验证。
+
+<Term def="derived type继承base contract并允许derived instance隐式用作base value的type relationship。">derivation contract</Term>
+
+## Derivation and Single Class Inheritance
+
+C# class最多直接继承一个class base type，但可实现多个interfaces。若未显式写base class，最终仍继承`System.Object`。derived class继承可访问members，不能直接访问base private fields；constructors不被继承，每次derived construction必须先完成base construction。
+
+从derived reference到base reference的implicit conversion叫upcast，不创建或切片object，只复制一个指向同一identity的reference。base static type只暴露base surface，但runtime object仍是derived。反向downcast需要runtime check，且不一定成功。
+
+<Term def="derived object经base reference使用时必须保持base operations、invariants与可观察结果成立的边界。">substitution boundary</Term>
+
+<Stepper>
+  <Step title="切换Document、Invoice与Image">
+    <Ec7DerivationContractLab />
+  </Step>
+  <Step title="读取继承chain与available surface">
+    derived拥有自己的members并继承accessible base members；base variable只暴露其static contract。
+  </Step>
+  <Step title="判断assignment方向">
+    derived到base可implicit upcast且identity不变；siblings之间没有直接class conversion。
+  </Step>
+</Stepper>
+
+```csharp
+public class Document
+{
+    public string Title { get; set; }
+}
+
+public sealed class Invoice : Document
+{
+    public decimal Total { get; set; }
+}
+
+Invoice invoice = new Invoice { Title = "July", Total = 25M };
+Document document = invoice; // same object, base static surface
+```
+
+inheritance适合稳定“is-a” relationship。仅为了拿到helper code或几个fields而继承，往往把不相关lifecycle和public surface绑死；composition可以让一个class持有并委托另一个object，通常更容易替换和测试。
+
+## Base Construction and Member Access
+
+derived constructor通过`base(...)`选择base constructor；base state先建立，再执行derived field initialization/body。若base没有accessible parameterless constructor，derived必须显式传arguments。constructor中的virtual call危险，因为override可能在derived fields尚未初始化时执行。
+
+```csharp
+public class Document
+{
+    public Document(string title)
+    {
+        if (string.IsNullOrWhiteSpace(title))
+            throw new ArgumentException(nameof(title));
+        Title = title;
+    }
+
+    public string Title { get; }
+}
+
+public sealed class Invoice : Document
+{
+    public Invoice(string title, decimal total) : base(title)
+    {
+        if (total < 0M) throw new ArgumentOutOfRangeException(nameof(total));
+        Total = total;
+    }
+
+    public decimal Total { get; }
+}
+```
+
+`base.Member`在derived code中明确选择base implementation，常用于override先复用base behavior再扩展；它不是把runtime object转换成独立base object。
+
+## Overriding, Hiding, and Base Members
+
+base member必须声明`virtual`、`abstract`或已`override`，derived才能用`override`加入同一virtual dispatch chain。调用virtual member时，compiler根据static type确认member存在，runtime根据actual type选择most-derived override。这是polymorphism的核心。
+
+`new` modifier显式隐藏inherited member，创建另一个member identity；调用选择主要受reference static type影响。它不是override，base callers看不到hidden behavior。若不写new却意外同名，compiler warning提示可能的设计错误。
+
+<Term def="virtual member在base建立的dispatch identity，derived override复用该slot并由runtime type选择implementation。">virtual slot</Term>
+
+<Stepper>
+  <Step title="切换override、base与new hiding">
+    <Ec7DispatchLab />
+  </Step>
+  <Step title="分开记录static type和runtime type">
+    static type决定可见member set；runtime type只对virtual slot决定most-derived override。
+  </Step>
+  <Step title="确认selected implementation">
+    base调用显式选base body；new hidden member随static lookup变化，不能冒充多态。
+  </Step>
+</Stepper>
+
+```csharp
+public class Document
+{
+    public virtual string Render() => "document";
+    public string Export() => "base export";
+}
+
+public class Invoice : Document
+{
+    public override string Render() => "invoice";
+    public new string Export() => "invoice export";
+}
+
+Document value = new Invoice();
+Console.WriteLine(value.Render()); // invoice: virtual dispatch
+Console.WriteLine(value.Export()); // base export: nonvirtual static lookup
+```
+
+override不能任意收紧access或改变contract。derived method可调用`base.Render()`组合behavior，但要避免重复side effects。sealed override可终止更深层override chain，用于锁定invariant。
+
+<Callout type="trap" title="new和override都能换掉base method，所以等价">
+override参与同一virtual slot，base reference也会dispatch到derived body；new建立hidden member，selection依赖static type。混用会让同一object因variable type不同产生意外结果。
+</Callout>
+
+## Abstract Classes and Members
+
+abstract class不能直接实例化，可包含state、constructors、implemented members与abstract members。abstract member没有body，concrete derived class必须实现，除非它也abstract。它适合多个types共享base invariant与部分implementation，同时保留必须变化的operation。
+
+<Term def="abstract base规定derived types必须实现的members，并可同时提供共享state、construction与default behavior。">abstract contract</Term>
+
+```csharp
+public abstract class Shape
+{
+    protected Shape(string name) { Name = name; }
+    public string Name { get; }
+    public abstract double Area { get; }
+    public virtual string Describe() => $"{Name}: {Area:N2}";
+}
+
+public sealed class Circle : Shape
+{
+    public Circle(double radius) : base("circle") { Radius = radius; }
+    public double Radius { get; }
+    public override double Area => Math.PI * Radius * Radius;
+}
+```
+
+abstract class仍受single inheritance限制。若只需要capability contract而不需要共享class state，interface通常更灵活；第8章专门比较。
+
+## Every Class Derives from System.Object
+
+`System.Object`提供`ToString`、`Equals`、`GetHashCode`、`GetType`等基础members。override `ToString`可提供诊断representation；value equality若override Equals，必须同步设计GetHashCode，保证equal objects产生相同hash。`GetType`返回exact runtime type且不可override。
+
+```csharp
+public override string ToString() => $"Invoice({Title}, {Total:C})";
+
+object item = invoice;
+Console.WriteLine(item.GetType() == typeof(Invoice)); // True
+Console.WriteLine(item.ToString());                   // virtual override if supplied
+```
+
+不要把default `ToString`当serialization format，也不要用mutable fields做hash key后再修改。well-formed type的equality contract将在第10章系统展开。
+
+## Type Checking with is and Declaration Patterns
+
+`is`检查runtime value是否与target type compatible；null对普通type test返回false。C# 7 declaration pattern把test和安全转换合并：`value is Invoice invoice`成功时在true path引入已赋值variable，避免先is再cast两次。
+
+<Term def="runtime value通过is/as/pattern match提供的兼容type事实，以及该事实有效的control-flow region。">runtime type evidence</Term>
+
+```csharp
+static decimal ReadTotal(object value)
+{
+    if (value is Invoice invoice)
+        return invoice.Total;
+
+    return 0M;
+}
+```
+
+pattern variable scope与definite assignment受control flow控制；只有match成功path可安全使用。若频繁按derived types写长if chain，可能说明base/interface缺少应该virtual化的operation，但serialization、UI routing等边界仍会合理需要type inspection。
+
+## Pattern Matching in switch
+
+C# 7 switch可使用type declaration patterns和`when` guard。case顺序重要：更具体或有guard的patterns应在会吞掉它们的广泛case之前；compiler会拒绝明显unreachable cases。null需要单独case，因为type pattern不匹配null。
+
+<Stepper>
+  <Step title="切换Invoice、Image、Document、null与int">
+    <Ec7TypePatternLab />
+  </Step>
+  <Step title="比较is与as结果">
+    declaration pattern成功产生typed variable；as失败返回null，仅适用于reference/nullable target。
+  </Step>
+  <Step title="读取第一个matching switch case">
+    先放具体type/guard，再放base pattern、null与default，并测试每一branch。
+  </Step>
+</Stepper>
+
+```csharp
+static string Describe(object value)
+{
+    switch (value)
+    {
+        case Invoice invoice when invoice.Total > 0M:
+            return $"invoice {invoice.Total:C}";
+        case Image image:
+            return $"image {image.Pixels} pixels";
+        case Document document:
+            return document.Title;
+        case null:
+            return "missing";
+        default:
+            return "unsupported";
+    }
+}
+```
+
+## Conversion Using the as Operator
+
+`as`尝试reference或nullable conversion，成功返回typed reference/value，失败返回null而不抛`InvalidCastException`。因此caller必须立即检查null。它不能用于普通non-nullable value type，也不能表达“failure不可能”；若contract保证type且失败代表bug，explicit cast可能更诚实。
+
+```csharp
+object value = Load();
+Invoice invoice = value as Invoice;
+if (invoice == null)
+{
+    Console.WriteLine("not an invoice");
+    return;
+}
+Console.WriteLine(invoice.Total);
+```
+
+`as`后忘记null check只是把conversion failure推迟成NullReferenceException，丢失真正原因。C# 7中通常优先declaration pattern，把test、conversion与scope写在一起。
+
+<Callout type="trap" title="as比explicit cast更安全，所以总该用as">
+as把不兼容变成null，只有当failure是预期branch且会立即处理时更合适。若type mismatch违反contract，explicit cast的即时exception更能暴露错误；declaration pattern通常最清晰。
+</Callout>
+
+## 本章回顾：Static Surface与Runtime Behavior要分开
+
+1. derived到base upcast保持同一object identity；single class inheritance必须满足substitution boundary。
+2. base construction先建立base invariant，constructors不被继承。
+3. override复用virtual slot并按runtime type dispatch；new hiding按static lookup选择。
+4. abstract class组合required members与共享state/behavior；所有classes最终继承System.Object。
+5. is/as/switch patterns提供runtime type evidence，必须处理null、default和failure path。
+
+<Exercises>
+
+**问题 1：如何证明Invoice可以安全替代Document？**
+
+<Answer>列出Document所有public preconditions、postconditions、invariants与virtual operations；用Invoice经Document reference执行同一tests。Invoice不能要求更严格输入、返回破坏base承诺的结果或使base operation失效。upcast应保持同一identity，derived新增state也必须在base-visible operations后仍有效。</Answer>
+
+**问题 2：为什么同一Invoice object调用Render和Export会因声明方式得到不同结果？**
+
+<Answer>Render在base是virtual且derived override同一slot，compiler确认base surface后runtime按Invoice actual type选择override。Export是nonvirtual且derived用new隐藏，Document static reference绑定base member；只有Invoice static reference才看到hidden member。必须同时写出static type、runtime type和member kind。</Answer>
+
+**问题 3：is declaration pattern、switch pattern、as和explicit cast怎样选择？**
+
+<Answer>单一预期branch用`is T value`同时test和bind；多个runtime shapes用按specificity排序的switch patterns，并覆盖null/default；expected conversion failure且target可null时用as并立即null-check；contract保证type、mismatch应立即失败时用explicit cast。频繁type switching还应检查是否缺少virtual/interface operation。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="derivation contract" definition="derived继承base surface并可implicit用作base value的type relationship。" />
+  <GlossaryItem term="substitution boundary" definition="derived经base contract使用时必须维持base observable rules。" />
+  <GlossaryItem term="virtual slot" definition="base建立、override复用并由runtime type选择implementation的dispatch identity。" />
+  <GlossaryItem term="abstract contract" definition="concrete derived type必须实现的members与base共享behavior组合。" />
+  <GlossaryItem term="runtime type evidence" definition="type test/conversion在特定control-flow path提供的兼容事实。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 7: Inheritance" adaptedUrl="https://www.informit.com/store/essential-csharp-7.0-9781509303618" />

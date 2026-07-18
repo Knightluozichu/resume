@@ -1,0 +1,353 @@
+---
+title: "Item 11：优先使用删除函数而非私有未定义函数"
+type: A
+section: Chapter 3 · Moving to Modern C++
+order: 11
+description: 对齐 Effective Modern C++ Item 11：用 deleted functions 在首次使用点产生编译期错误，替代 private undefined copy control，并以删除重载和模板特化封锁危险隐式转换与不支持指针类型。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch03.html"
+draft: false
+---
+
+import {
+  EmcppDeletedFunctionFailureMap,
+  EmcppDeletedOverloadFirewallMap,
+  EmcppDeletedPointerSpecializationMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-11-deleted-functions";
+
+<Objectives>
+
+- 能比较 deleted functions（删除函数）与 private undefined functions（私有未定义函数）的可访问性、诊断阶段和 friend/member 行为
+- 能设计 delete overload（删除重载）集合，阻止 bool、char 与 floating-point 参数静默转换进整数 API
+- 能实现 pointer template specialization 的删除策略，并用 compile-time error（编译期错误）矩阵验证所有 cv 变体
+
+</Objectives>
+
+## 从“禁止调用必须由语言直接表达”开始
+
+Item 11 的原则是 Prefer deleted functions to private undefined ones（优先使用删除函数而非私有未定义函数）。如果某个操作不应存在，最佳契约是在 declaration 上明确 `= delete`，让任何调用者都在语义检查阶段失败。
+
+<Term def="在函数声明末尾写 = delete，声明该函数参与查找但禁止任何 odr-use 或调用。">
+  deleted function
+</Term>
+
+```cpp
+class Widget {
+public:
+    Widget(const Widget&) = delete;
+    Widget& operator=(const Widget&) = delete;
+};
+```
+
+先预测普通 caller、member 和 friend：三者都不能调用 deleted copy operations，失败发生在 compile time。
+
+<EmcppDeletedFunctionFailureMap />
+
+## C++98 用 private declaration 模拟不可复制
+
+旧式写法把 copy constructor 与 copy assignment 放在 private，并故意不提供 definition：
+
+```cpp
+class Widget {
+private:
+    Widget(const Widget&);
+    Widget& operator=(const Widget&);
+};
+```
+
+<Term def="只声明在 private 区域且故意没有 definition，用 access control 与链接失败模拟禁止调用的函数。">
+  private undefined function
+</Term>
+
+普通 caller 首先被 access control 拒绝；但 class member 与 friend 有 private access，可以通过编译，直到 linker 找不到 definition 才失败。
+
+<Term def="调用在编译阶段被允许，却因没有函数定义在最终链接阶段才暴露的错误。">
+  deferred link failure
+</Term>
+
+这让禁止契约依赖调用者身份，诊断位置也远离错误源。
+
+<Callout type="trap" title="陷阱：private 足以保证函数永远不会被调用">
+  member 和 friend 拥有 private access。若函数只有 declaration 没有
+  definition，它们的调用可能通过编译， 最后以 unresolved symbol
+  失败；模板或未链接测试还可能暂时掩盖问题。
+</Callout>
+
+## delete 在首次非法使用点失败
+
+```cpp
+class Widget {
+public:
+    Widget(const Widget&) = delete;
+    Widget& operator=(const Widget&) = delete;
+};
+```
+
+<Term def="compiler 在分析调用表达式时直接指出 selected function 已删除，不等待链接阶段。">
+  deleted-call diagnostic
+</Term>
+
+deleted declaration 通常放 public：调用先完成 overload resolution，再得到“use of deleted function”这一直接诊断，而不是较次要的 private-access error。
+
+<Term def="把 deleted declaration 放在 public，使所有调用路径得到一致且面向契约的错误信息。">
+  public deletion contract
+</Term>
+
+即使 member 或 friend 选中该函数，delete 仍禁止使用；权限不能绕过删除状态。
+
+## deleted function 仍参与 overload resolution
+
+删除函数不是从 candidate set 消失。它仍参与 name lookup 与 overload ranking；如果它是最佳匹配，调用明确失败，不会退回一个较差但可调用的 overload。
+
+<Term def="被删除函数仍作为候选参与匹配，若成为最佳候选则产生编译错误。">
+  deleted candidate selection
+</Term>
+
+这项特性使 delete 能建立类型防火墙，而不只是控制 special member functions。
+
+## 删除重载阻止危险隐式转换
+
+假设 API 只接受有业务含义的整数：
+
+```cpp
+bool isLucky(int number);
+
+isLucky('a');  // char promotes to int
+isLucky(true); // bool promotes to int
+isLucky(3.5);  // double converts to int
+```
+
+<Term def="参数通过 promotion 或 conversion 进入本不应接受该语义的目标 overload。">
+  accidental scalar conversion
+</Term>
+
+添加精确 deleted overloads：
+
+```cpp
+bool isLucky(int number);
+bool isLucky(char) = delete;
+bool isLucky(bool) = delete;
+bool isLucky(double) = delete;
+```
+
+<Term def="为不支持的输入类型声明更精确的 deleted candidate，阻止其转入宽泛 API。">
+  deleted overload firewall
+</Term>
+
+`isLucky(true)` 现在对 bool deleted overload 是 exact match；它被选中后立即 compile-time error，而不是退回 int。
+
+<EmcppDeletedOverloadFirewallMap />
+
+## 一个 double 删除重载还能拦截 float
+
+float argument 到 double 是 floating-point promotion，到 int 是 conversion；deleted double candidate 更优，因此也会阻止 float。
+
+<Term def="利用 overload conversion rank，让一个 deleted candidate 覆盖一族可提升到该类型的输入。">
+  conversion-rank firewall
+</Term>
+
+但 long double 到 double 与到 int 的等级可能需要单独审查。公共 API 应通过 compile-fail tests 列出所有禁止类型，不靠猜测 conversion ranking。
+
+<Callout
+  type="trap"
+  title="陷阱：deleted overload 不参与匹配，所以 compiler 会找下一个可用函数"
+>
+  delete 的目的恰恰依赖它参与匹配。最佳候选一旦 deleted，调用失败；若 compiler
+  自动跳过它，危险输入 仍会落入 int overload，类型防火墙就不存在。
+</Callout>
+
+## any function 都可以 deleted
+
+constructors、ordinary functions、conversion operators、member/non-member overloads 都能删除。设计目标是表达“不支持这个精确调用”，而非局限于 noncopyable idiom。
+
+```cpp
+class Token {
+public:
+    Token(int value);
+    Token(bool) = delete;
+};
+```
+
+<Term def="通过删除特定 constructor 或 conversion 路径，阻止模糊领域值进入对象。">
+  construction conversion gate
+</Term>
+
+还可以删除 rvalue-qualified overload，防止从 temporary owner 返回 view；关键是 deleted signature 必须精准对应禁止路径。
+
+## 删除 pointer template 的不支持实例
+
+```cpp
+template<typename T>
+void processPointer(T* pointer);
+```
+
+若 API 不支持 void pointer 与 character pointers，可删除 explicit specializations：
+
+```cpp
+template<>
+void processPointer<void>(void*) = delete;
+
+template<>
+void processPointer<char>(char*) = delete;
+```
+
+<Term def="为 function template 的特定模板参数提供 = delete specialization，禁止该实例。">
+  deleted template specialization
+</Term>
+
+这比在 function body 中 static assertion 更早表达 overload contract，也能让 declaration-only consumers 看到限制。
+
+## cv 变体必须完整枚举
+
+删除 `void*` 不会自动覆盖 `const void*`；删除 `char*` 也不会覆盖 signed/unsigned/const/volatile character pointers。
+
+```cpp
+template<>
+void processPointer<const void>(const void*) = delete;
+
+template<>
+void processPointer<const char>(const char*) = delete;
+
+template<>
+void processPointer<unsigned char>(unsigned char*) = delete;
+```
+
+<Term def="对 pointee 的 const、volatile、signedness 与字符类别逐项覆盖禁止实例的集合。">
+  pointer specialization matrix
+</Term>
+
+<EmcppDeletedPointerSpecializationMap />
+
+遗漏一个 cv 组合会让调用绕过规则，因此应从“支持哪些 semantic pointee types”设计 constraints，而不是零散追加删除。
+
+## specialization 不能靠 private access 模拟
+
+member function template 的 explicit specialization 必须声明在 namespace scope，而不是 class scope 的 private 区域；也不能为 specialization 单独赋予 private access。
+
+<Term def="explicit specialization 的声明位置由语言规定，不能通过 class access section 单独隐藏。">
+  specialization scope rule
+</Term>
+
+delete 不依赖 access control，因此可在合法 specialization 位置直接表达禁止实例。这是 private undefined idiom 无法等价覆盖的场景。
+
+## delete 与 constraints 的选择
+
+C++20 concepts 可从 candidate set 约束 supported types；C++11/14 项目则常用 deleted overloads、SFINAE 或 traits。两者诊断语义不同：
+
+<Term def="明确列举少量危险输入时优先 deleted overload，定义广泛支持集合时优先 constraint 的选择原则。">
+  rejection strategy boundary
+</Term>
+
+- 少量已知危险 implicit conversions：deleted overload 清晰。
+- 支持集合可由 trait/concept 描述：constraint 更可扩展。
+- 需要告诉 caller “这个精确签名故意禁止”：delete 提供直接诊断。
+- 需要候选根本不存在：SFINAE/constraint 更符合模型。
+
+## 编译期错误矩阵就是验收物
+
+<Term def="把允许调用编译成功、禁止调用必须失败及诊断原因固定下来的测试集合。">
+  compile-time rejection matrix
+</Term>
+
+1. copy construction/assignment 对 caller、member、friend 都 compile-fail。
+2. int 正常调用，char/bool/double/float 选择 deleted overload。
+3. supported object pointer 编译通过。
+4. void/character pointer 的全部目标 cv 组合失败。
+5. diagnostics 包含 selected deleted declaration，而不是 linker failure。
+6. overload 新增后重新运行矩阵，防止较优候选绕过 firewall。
+
+```cpp
+static_assert(!std::is_copy_constructible_v<Widget>);
+static_assert(!std::is_copy_assignable_v<Widget>);
+```
+
+先预测 candidate set 与 conversion rank，再用 compile-pass/compile-fail harness 验证；runtime test 无法覆盖“代码必须不能形成”这一契约。
+
+## 小结
+
+- private undefined functions 依赖 access control，member/friend 可能到 link time 才失败
+- deleted function 在任何调用路径的语义检查阶段产生 compile-time error
+- deleted declarations 通常放 public，以获得一致、直接的诊断
+- deleted candidate 仍参与 overload resolution，最佳匹配被删除后调用失败而不回退
+- delete overload 可封锁 char、bool、floating-point 到 int 的危险隐式转换
+- 任意函数都可 deleted，不限 copy constructor/assignment
+- deleted template specialization 可禁止 void/character pointers，但必须完整覆盖 cv 与 signedness 组合
+- 最终证据是 compile-time rejection matrix，而非运行期没有观察到错误
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 11"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch03.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="deleted function">
+    声明存在但禁止使用的函数。
+  </GlossaryItem>
+  <GlossaryItem term="private undefined function">
+    私有且故意没有定义的旧式禁止函数。
+  </GlossaryItem>
+  <GlossaryItem term="deferred link failure">
+    非法使用延迟到链接阶段失败。
+  </GlossaryItem>
+  <GlossaryItem term="deleted-call diagnostic">
+    使用点直接报告 deleted function。
+  </GlossaryItem>
+  <GlossaryItem term="public deletion contract">
+    公开声明统一的删除契约。
+  </GlossaryItem>
+  <GlossaryItem term="deleted candidate selection">
+    删除函数仍参与最佳候选选择。
+  </GlossaryItem>
+  <GlossaryItem term="accidental scalar conversion">
+    标量意外转换进入不相关 API。
+  </GlossaryItem>
+  <GlossaryItem term="deleted overload firewall">
+    用精确删除重载封锁危险输入。
+  </GlossaryItem>
+  <GlossaryItem term="conversion-rank firewall">
+    借转换等级覆盖输入类型族。
+  </GlossaryItem>
+  <GlossaryItem term="construction conversion gate">
+    删除 constructor 阻止错误构造来源。
+  </GlossaryItem>
+  <GlossaryItem term="deleted template specialization">
+    被明确删除的模板特化。
+  </GlossaryItem>
+  <GlossaryItem term="pointer specialization matrix">
+    指针类型及 cv 禁止组合表。
+  </GlossaryItem>
+  <GlossaryItem term="specialization scope rule">
+    模板特化的合法声明位置规则。
+  </GlossaryItem>
+  <GlossaryItem term="rejection strategy boundary">
+    delete 与 constraint 的选择边界。
+  </GlossaryItem>
+  <GlossaryItem term="compile-time rejection matrix">
+    允许和禁止调用的编译测试表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：迁移 private undefined copy operations。** class 的 friend 仍会尝试复制。
+
+<Answer question="为何应 public delete，怎样证明？">
+  把 copy constructor 与 copy assignment 声明为 public deleted functions。普通
+  caller、member 和 friend 选择后都会在 compile time 报 use of deleted
+  function，不再出现 access-dependent 或 linker error。 用 type traits 与三组
+  compile-fail cases 固定契约。
+</Answer>
+
+2. **问题 2：isLucky 只接受 int。** char、bool、double 和 float 都必须失败。
+
+<Answer question="删除哪些 overload，如何验证 ranking？">
+  保留 int overload，删除 char、bool 与 double overload；float 到 double 的
+  promotion 通常使 deleted double candidate 优于 int
+  conversion。为四种禁止类型分别建立 compile-fail test，并保留 int 的
+  compile-pass test，避免未来新增 overload 改变 candidate ranking。
+</Answer>
+
+3. **问题 3：processPointer 禁止 void 与 text buffers。** 支持普通 object pointers。
+
+  <Answer question="specialization matrix 怎样列？">删除 void、const/volatile void，以及 char、signed char、unsigned char 和所需 cv 组合的 specializations；普通 Widget pointer 保持可用。若组合持续增长，改用 trait/SFINAE 定义 supported pointee set。测试每个禁止组合在 declaration consumer 中直接 compile-fail。</Answer>
+</Exercises>

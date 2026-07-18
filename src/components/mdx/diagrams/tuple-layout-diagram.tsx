@@ -1,10 +1,10 @@
 /**
- * <TupleLayoutDiagram step={1|2|3|4}>：tuple 内存布局与 get<> 访问过程图。
+ * <TupleLayoutDiagram step={1|2|3|4}>：tuple 逻辑元素与 get<> 访问过程图。
  *
- * Step 1: tuple 整体——连续内存存储所有元素
+ * Step 1: tuple 整体——展示三个逻辑元素，不承诺对象布局
  * Step 2: get<0> 访问——通过索引在编译期定位元素0
  * Step 3: get<1> 访问——索引1定位第二个元素
- * Step 4: 结构化绑定——auto [a,b,c] 语法糖批量解包
+ * Step 4: std::tie——将元素赋给已有变量
  *
  * Server Component（纯展示，静态 SVG，无交互）。token 色，无阴影。
  */
@@ -43,16 +43,16 @@ export function TupleLayoutDiagram({ step = 1 }: TupleLayoutDiagramProps) {
         <svg
           viewBox={`0 0 ${w} ${h}`}
           role="img"
-          aria-label="tuple 内存布局——连续存储异构类型的三元素组"
+          aria-label="tuple 的三个逻辑元素及编译期索引访问"
           className="mx-auto block h-auto w-full max-w-[800px]"
         >
           <text x={cx} y="30" fontSize="14" fontWeight="700" fill={primary} textAnchor="middle">
-            tuple 内存布局：连续存储异构类型
+            tuple 逻辑视图：布局由实现决定
           </text>
 
           {/* Tuple type declaration */}
           <text x={cx} y="58" fontSize="11" fill={secondary} textAnchor="middle" fontFamily="monospace">
-            tuple&lt;int, double, string&gt; t(42, 3.14, "hello");
+            tuple&lt;int, double, string&gt; t(42, 3.14, &quot;hello&quot;);
           </text>
 
           {/* Memory blocks */}
@@ -146,10 +146,10 @@ export function TupleLayoutDiagram({ step = 1 }: TupleLayoutDiagramProps) {
               <g transform={`translate(${startX - 16}, 36)`}>
                 <rect x="0" y="0" width={totalW + 32} height="42" rx="8" fill={accent} fillOpacity="0.08" stroke={accent} strokeWidth="2" />
                 <text x={(totalW + 32) / 2} y="18" fontSize="11" fontWeight="700" fill={accent} textAnchor="middle">
-                  结构化绑定：auto [a, b, c] = t;
+                  C++11 解包：tie(a, b, c) = t;
                 </text>
                 <text x={(totalW + 32) / 2} y="34" fontSize="10" fill={secondary} textAnchor="middle" fontFamily="monospace">
-                  a=42  b=3.14  c="hello"
+                  a=42  b=3.14  c=&quot;hello&quot;
                 </text>
               </g>
             </g>
@@ -158,10 +158,10 @@ export function TupleLayoutDiagram({ step = 1 }: TupleLayoutDiagramProps) {
           {/* Step indicator bar */}
           <rect x={cx - 220} y={h - 42} width="440" height="28" rx="6" fill={accent} fillOpacity="0.06" stroke={border} />
           <text x={cx} y={h - 22} fontSize="11" fill={accent} textAnchor="middle" fontFamily="monospace">
-            {step === 1 && "① tuple 把不同类型的数据打包成一个对象——连续存储在内存中"}
+            {step === 1 && "① tuple 把不同类型的数据打包成一个对象——标准不规定元素的物理布局"}
             {step === 2 && "② get<0>(t) 在编译期根据索引定位到 int 元素——返回引用"}
             {step === 3 && "③ get<1>(t) / get<2>(t) 依次访问后续元素——索引写错编译期就报错"}
-            {step === 4 && "④ C++17 结构化绑定：auto [a,b,c] = t 一次性拆成三个独立变量"}
+            {step === 4 && "④ C++11 std::tie：把三个元素赋给三个已经声明的变量"}
           </text>
 
           {/* Source code panel */}
@@ -172,22 +172,22 @@ export function TupleLayoutDiagram({ step = 1 }: TupleLayoutDiagramProps) {
               {step === 1 && ' int x = get<0>(t);'}
               {step === 2 && ' double y = get<1>(t);'}
               {step === 3 && ' string z = get<2>(t);'}
-              {step === 4 && ' auto [x, y, z] = t;  // 等价于上面三行的语法糖'}
+              {step === 4 && ' tie(x, y, z) = t;  // x、y、z 必须先声明'}
             </text>
             <text x="16" y="28" fontSize="10" fill={step >= 1 ? good : secondary} fontFamily="monospace">
               {step === 1 && "// x = 42"}
               {step === 2 && "// x = 42, y = 3.14"}
               {step === 3 && "// x = 42, y = 3.14, z = \"hello\""}
-              {step === 4 && "// x = 42, y = 3.14, z = \"hello\"  (一行搞定)"}
+              {step === 4 && "// x = 42, y = 3.14, z = \"hello\""}
             </text>
           </g>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        {step === 1 && "第一步：tuple 将不同类型的值打包成一个连续内存块——索引 0 是 int，索引 1 是 double，索引 2 是 string。"}
+        {step === 1 && "第一步：tuple 将不同类型的值打包成一个对象。索引表示逻辑位置，不代表标准规定的连续内存布局。"}
         {step === 2 && "第二步：get<0>(t) 在编译期按索引找到第一个元素。类型已在编译期确定——返回 int&。"}
         {step === 3 && "第三步：get<N>(t) 的 N 必须是编译期常量。写成 get<" + `3` + ">(t) 编译器直接报错——因为只有三个元素（索引 0-2）。"}
-        {step === 4 && "第四步：C++17 结构化绑定是 get<> 的语法糖——auto [a,b,c] = t 把三个元素一次性拆包成独立变量。"}
+        {step === 4 && "第四步：C++11 可用 std::tie 将 tuple 元素赋给已经声明的变量，并用 std::ignore 跳过位置。"}
       </figcaption>
     </figure>
   );

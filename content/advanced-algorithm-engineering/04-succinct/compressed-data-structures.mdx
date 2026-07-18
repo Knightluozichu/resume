@@ -1,0 +1,288 @@
+---
+title: "第15章 Compressed Data Structures：压缩数据结构"
+type: B
+section: "压缩数据结构"
+order: 14
+description: "以 Rank/Select 取代指针，构造二进制数组的 succinct/ Elias–Fano 表示、树的2n-bit导航结构，以及 WebGraph 与 k²-tree 图编码。"
+demo: true
+math: true
+sourceUrl: "https://www.cambridge.org/core/books/abs/pearls-of-algorithm-engineering/compressed-data-structures/38C0C4B5457942AAD0BEF764414A0BF7"
+draft: false
+---
+
+import { PaePointerlessLayoutDiagram, PaeRankSelectLab, PaeRankDirectoryDiagram, PaeSparseEliasFanoLab, PaeBinaryTreeEncodingLab, PaeOrderedTreeParenthesesLab, PaeWebGraphReferenceLab, PaeK2TreeMatrixLab } from "@/components/mdx/advanced-algorithm-engineering/diagrams/compressed-data-structures";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释 compressed、succinct 与 pointerless representation 的区别
+- 能计算 bitvector 的 Rank/Select 与 Elias–Fano Access
+- 能实现二进制树和有序树的2n-bit形状编码
+- 能分析 WebGraph 的 reference、interval 与 residual streams
+- 能设计 k²-tree 的矩阵递归和查询取舍
+
+</Objectives>
+
+## 从“指针为何比节点内容还贵”开始
+
+compressed data structures（<Term def="让表示接近信息论下界，同时仍直接支持访问、导航和查询，而非先整体解压的数据结构。">压缩数据结构</Term>）关注的不只是 storage bytes。普通 compressor 把对象变成短 bitstream，查询前往往要恢复全部或大块数据；compressed structure 则把操作本身重新表达在 compressed representation 上。
+
+先预测一棵每节点只有1-byte label 的二叉树。64-bit 机器上 left/right pointers 各8 bytes，结构开销是 payload 的16倍；allocator metadata、alignment 与 cache miss 还未计入。问题不是 gzip 能否把 dump 压小，而是运行时能否不创建这些 pointers 仍执行 parent、child、Rank 或 neighbor query。
+
+pointerless programming 把“第 i 个对象在哪里”改写成紧凑数组上的数值操作。若所有 strings 拼成 payload D，并以 bitvector B 标出每个 string start：
+
+- Select1(B,i) 返回第 i 个 string 的起点。
+- Rank1(B,p) 返回 position p 属于第几个 string。
+- 相邻两个 Select 的差给出 string length。
+
+<PaePointerlessLayoutDiagram />
+
+这种布局连续、可 mmap、prefetch 友好，也不需要 relocation。代价是 pointer dereference 变成 Rank/Select；本章的关键是用 o(n) auxiliary bits 让这些 primitive 保持常数时间。
+
+## 15.1 Compressed Representation of Binary Arrays
+
+compressed representation of binary arrays（<Term def="以接近 bitvector 本身或其组合下界的空间保存0/1序列，并高效支持 Access、Rank 与 Select。">二进制数组压缩表示</Term>）是 pointerless structures 的基座。对 B[1..m]：
+
+$$
+\operatorname{Rank}_1(i)
+=
+\sum_{j=1}^{i}B[j],
+\qquad
+\operatorname{Select}_1(k)
+=
+\min\{i:\operatorname{Rank}_1(i)=k\}
+$$
+
+<PaeRankSelectLab />
+
+上图采用 inclusive Rank；实现也常定义 half-open Rank(B[0..i))。两种都正确，但公式、directory 和 tests 必须统一。Select0/Rank0 可由1操作与位置长度推得，也可为速度单独建目录。
+
+### Rank：superblock、block 与共享微表
+
+为每个位置保存 prefix count 需要 m log m bits，比 B 本身还大。succinct 方案把 B 切成大 superblocks 与小 blocks：
+
+1. 每个 superblock 保存从 B 开头到该块前的1总数，字段宽 O(log m)。
+2. 每个小 block 保存相对所在 superblock 开头的1总数，只需 O(log log m) bits。
+3. query 剩余的短尾块作为 bit pattern，查全局共享 table 得内部 popcount。
+
+<PaeRankDirectoryDiagram />
+
+典型取 superblock 长约 log²m、block 长约一半 log m。superblock entries 数 m/log²m，第一层占 O(m/log m) bits；第二层与微表也都是 o(m)。于是总空间 m+o(m) bits，Rank O(1)。
+
+现代 CPU 有 popcount，可把微表替换为 word operation；理论分块仍说明为何 directory 是 sublinear。工程上 block size 还要按 cache line、SIMD width 与 serialized format 调整。
+
+```text
+Rank1(i):
+  s = floor(i / superblockBits)
+  b = floor(i / blockBits)
+  return superPrefix[s]
+       + blockOffset[b]
+       + popcount(bits from block start through i)
+```
+
+### Select：按“1的数量”切块
+
+Select 的困难是目标 position 未知，不能先按 position 找 block。原章采用多级 decomposition：每 K 个1划一个 big block。若该 block 跨越的 bit range 很长，称 sparse，直接保存其中1的 positions；否则称 dense，再每 k 个1切 small blocks。
+
+dense small block 若跨度仍长就显式存相对 positions；跨度短则整个 bit pattern 足够短，用共享 table 回答“第 r 个1在何处”。K、k 与稀疏阈值选成 log m 的幂后，所有显式 positions 与 tables 合计 o(m)，Select O(1)。
+
+这与 Rank 的“按固定位置分块”不同：Select 的 blocks 按固定 one-count 分组，才能由 k 直接算目标 big block id。Rank 与 Select directories 可以共享 B，却有不同 sampling geometry。
+
+<Callout type="trap" title="把理论 o(n) 当成实际零开销">
+sublinear 只描述渐近比例。多层 offsets、alignment、通用 select tables 和对象 header 在中小 bitvector 上可能很大；实现必须报告 payload bits 与 auxiliary bits，并为短数组提供 plain fallback。
+</Callout>
+
+### Elias–Fano：稀疏1位置的压缩解法
+
+plain B 总要 m bits。当只有 n 个1且 n 远小于 m，信息下界约为：
+
+$$
+\log_2 {m\choose n}
+\approx
+n\log_2\frac{m}{n}+O(n)
+$$
+
+把1的位置提取成递增数组 A[1..n]，就能用 Chapter 11 的 Elias–Fano。取 ℓ≈log2(m/n)，每个 A[i] 的 ℓ 个 low bits 定宽存入 L，high parts 以 unary bucket bitvector H 保存。
+
+<PaeSparseEliasFanoLab />
+
+示例 B=`01100001010` 的1位置 A=[2,3,8,10]。Access(i) 从 L 取 low，再用 Select1(H,i)-i 得 high bucket；拼接恢复 A[i]。NextGEQ(x) 先在 H 定位 high bucket，再比较该 bucket 的 low values。
+
+空间约：
+
+$$
+n\log_2\frac{m}{n}+2n
+\text{ bits}
+$$
+
+H 上 Select 的 auxiliary space 是 o(n)，相对 number of ones 而非 m。选择 plain bitvector 还是 Elias–Fano 要看 density 与 query mix：dense B 的 direct word Access/Rank 更快；sparse B 的 EF 可显著省 cache traffic。
+
+## 15.2 Succinct Representation of Trees
+
+succinct representation of trees（<Term def="以接近树形数量的信息下界保存结构，并通过 bitvector primitive 支持 parent、child、degree、subtree 等导航。">树的简洁表示</Term>）先把 labels/payload 与 shape 分开。n-node ordered binary trees 的数量是 Catalan number：
+
+$$
+C_n=\frac{1}{n+1}{2n\choose n},
+\qquad
+\log_2 C_n=2n-\Theta(\log n)
+$$
+
+因此任何能表示所有 shape 的编码都约需2n bits；传统2n pointers 却要16n bytes。
+
+### Binary tree：node/null preorder
+
+preorder 扫描时，真实 node 写1，null child 写0。n个 nodes 有n+1个 null links，总长2n+1 bits，且可递归唯一解析：读1就创建 node 并解析 left/right，读0就返回 null。
+
+<PaeBinaryTreeEncodingLab />
+
+```text
+EncodeBinary(node):
+  if node is null:
+    emit 0
+    return
+  emit 1
+  EncodeBinary(node.left)
+  EncodeBinary(node.right)
+```
+
+labels 按 preorder 独立排成 compact array。structure bit position 与 preorder node id 由 Rank1 互转；Select1(id) 找该 node 的 opening bit。进一步加 excess/min-max directories，可在 O(1) 导航而不递归扫描整棵 subtree。
+
+### Arbitrary rooted ordered tree：balanced parentheses
+
+进入 node 写 open bit 1，离开 node 写 close bit 0，n节点恰好2n bits。open position 的 excess 是当前 depth；matching close 界定 subtree interval。第一个 child 是 open 后紧随的 open；next sibling 是 matching close 后的 open；parent 可用 enclosing-open query。
+
+<PaeOrderedTreeParenthesesLab />
+
+Jacobson 的核心贡献是给这种 bit sequence 加 o(n)-bit index，在常数时间支持 Rank/Select 与括号导航，达到2n+o(n) bits。任意 degree 不再需要每节点 child array；degree、k-th child、subtree size、preorder/postorder number 都可归约为 parentheses primitive。
+
+若 node 有 labels，按 preorder 存 label sequence；若还要 child(u,c)，可在 label array 上加 wavelet tree/Rank。结构、标签、payload 各用最合适的 compressed representation，而不是把节点对象整体 serialize。
+
+## 15.3 Succinct Representation of Graphs
+
+succinct representation of graphs（<Term def="压缩 adjacency 信息与边界，同时在压缩域支持邻居枚举、边查询或矩阵区域查询。">图的简洁表示</Term>）没有一种方案对所有 graph 都最优。arbitrary directed graph 的 adjacency matrix 有 n² bits；若恰有 m 条边，组合下界约：
+
+$$
+\log_2{n^2\choose m}
+\approx
+m\log_2\frac{n^2}{m}+O(m)
+$$
+
+但 Web graph 有 URL locality、similarity 与 small gaps；spatial/sparse matrix 则有 empty quadrants。原章分别用结构专门化方案说明压缩不是一个万能 codec。
+
+### WebGraph：相邻 adjacency lists 高度相似
+
+WebGraph（<Term def="利用网页排序后的 locality、相邻邻接表相似性、intervals 和 gap-coded residuals 压缩 Web link graph。">WebGraph</Term>）先把 URLs 排成使相关 pages 靠近的 node ids。页面 v 的 outgoing neighbors 往往与前面某个 reference page 相似：
+
+1. 编码 reference distance。
+2. 用 copy mask 指出 reference list 的哪些 neighbors 被复用。
+3. 把连续 target ids 变成 intervals。
+4. 剩余 links 排序做 d-gap，再用 Elias gamma/delta 等整数码。
+
+<PaeWebGraphReferenceLab />
+
+每个 adjacency list 的 bit offset 形成单调数组，可再用 Elias–Fano 保存，支持 Access 到第 v 个 list。解码一个 list 可能递归依赖 reference chain，因此格式限制 chain depth 或周期性写 materialized lists；否则随机访问会退化。
+
+原书还强调 neighbor ids 与 current node 的差通常小，URL/node ordering 直接影响 gaps。压缩评测要固定 ordering，分别报告 bits/link、reference depth、list decode ns/edge 与 random node latency。
+
+### k²-tree：递归编码 adjacency matrix 的非空块
+
+k²-tree（<Term def="把 adjacency matrix 递归切成 k² 个子矩阵，为非空块写1并继续展开、为空块写0停止的稀疏图表示。">k²-tree</Term>）从 n×n binary adjacency matrix 开始。每层把当前 region 切为 k×k blocks，按固定顺序写 occupancy bits；只递归值为1的 blocks。所有内部层 bits level-order 存 T，最后一层存 L。
+
+<PaeK2TreeMatrixLab />
+
+若 edge clusters 只占少量 quadrants，大量0会在高层终止，不再为内部 cells 付费。child offset 不是 pointer：某个1之前的 Rank1 决定它拥有的 k² children 在下一层的起点。
+
+```text
+Children(bitPosition):
+  if T[bitPosition] is 0:
+    return empty
+  childGroup = Rank1(T, bitPosition) * k * k
+  return the k*k consecutive bits at childGroup
+```
+
+neighbor query 固定 matrix row，沿与该 row 相交的 child blocks 下降；edge(u,v) 每层只走一个 quadrant，成本 O(log_k n)；range query 剪掉不相交或 empty regions。k=2 树更深、每 node 4 bits；更大 k 树浅但每 node fanout bitmap 更宽，需按 graph clustering 和 cache width调参。
+
+<Callout type="trap" title="只按 compressed file bytes 选择图表示">
+WebGraph 可能 bits/link 很低，却因 reference chains 让随机 neighbor access 变慢；k²-tree 对 clustered matrix 很强，对随机 edges 会展开大量 blocks。必须把 ordering、query workload、decode amplification 与 auxiliary offsets一起比较。
+</Callout>
+
+## 统一视角：Rank/Select 是压缩域里的地址计算
+
+<Stepper>
+  <Step title="先把对象拆成 payload 与边界">
+    <PaePointerlessLayoutDiagram />
+    连续存数据，用 bitvector 表示 starts/ends，避免逐对象指针和 allocator 开销。
+  </Step>
+  <Step title="为密集 bitvector 建 succinct directory">
+    <PaeRankDirectoryDiagram />
+    superblock + block + word/table tail 在 m+o(m) bits 内支持 O(1) Rank。
+  </Step>
+  <Step title="稀疏边界改用 Elias–Fano">
+    <PaeSparseEliasFanoLab />
+    把1 positions 视为 monotone integers，按 m/n density 选择 high/low split。
+  </Step>
+  <Step title="树结构改写成括号序列">
+    <PaeOrderedTreeParenthesesLab />
+    node id、parent、children 与 subtree 都归约到 matching、excess、Rank/Select。
+  </Step>
+  <Step title="图按真实结构选择编码">
+    <PaeK2TreeMatrixLab />
+    Web links 用 reference/gaps；matrix clusters 用 k² recursive occupancy，避免一刀切。
+  </Step>
+</Stepper>
+
+工程验收分三层。space 报告 raw payload、main compressed bits、Rank/Select auxiliary bits、alignment 与 object headers；time 报告 Access/Rank/Select latency、tree navigation、neighbors ns/edge、cold-cache 与 mmap first-touch；correctness 做 forward/reference decoder round-trip、所有 boundary positions、empty/full bitvector、deep tree、isolated vertex、self-loop 与 malformed offsets。
+
+真正的收益常来自 memory hierarchy：少占空间意味着更多 working set 进入 LLC、少读 DRAM/SSD，即使每次 query 多几条 bit operations，端到端仍可能更快。反过来，对极小或极热数据，plain arrays 往往胜过复杂 succinct indexes；格式应保留 density/size based fallback。
+
+## 本章回顾
+
+1. 压缩数据结构在 compressed representation 上直接查询，不要求先整体解压。
+2. pointerless programming 用 contiguous payload 与 bitvector boundary 取代4/8-byte offsets。
+3. Rank 统计前缀1，Select 定位第k个1，是数组、树、图导航的共同 primitive。
+4. plain bitvector 配两级 directory 与微表可在 m+o(m) bits 内常数 Rank/Select。
+5. 稀疏 bitvector 可转1-position monotone array，用 Elias–Fano 接近 n log(m/n)+2n。
+6. binary tree 的 node/null preorder 用2n+1 bits，接近 Catalan shape 下界。
+7. arbitrary ordered tree 的 balanced parentheses 恰用2n bits，导航归约到括号查询。
+8. WebGraph 利用 URL locality、reference copy、interval 与 residual gap coding。
+9. adjacency-list offsets 可用 Elias–Fano；reference chain depth控制随机访问。
+10. k²-tree 只展开非空 matrix quadrants，以 Rank 计算 child groups 而无需 pointers。
+
+<Exercises>
+
+**问题 1：B=`01100001010` 时 Rank1(8)、Select1(3) 分别是多少？**
+
+<Answer>前8位是01100001，共3个1，所以Rank1(8)=3。1出现在positions 2、3、8、10，因此第三个1位于8，Select1(3)=8。这里采用1-based position和inclusive Rank。</Answer>
+
+**问题 2：为什么 plain bitvector 的 Rank directory 可以是 o(m) bits？**
+
+<Answer>长度log²m的superblock只需约m/log²m个、每项log m bits，总计m/log m；长度约半log m的小块约m/log m个、每项log log m bits，总计m loglogm/logm；短尾模式共享表也可做sublinear。三者都是o(m)。</Answer>
+
+**问题 3：n节点 binary tree 的 node/null preorder 为什么有2n+1 bits？**
+
+<Answer>每个真实node写1，共n个。二叉树共有2n child slots，其中n-1条连接真实child，其余2n-(n-1)=n+1个null slots写0，所以总长n+n+1=2n+1，而且递归语法唯一可解。</Answer>
+
+**问题 4：k²-tree 中为何 Rank1 能替代 child pointer？**
+
+<Answer>level-order布局只给值为1的parent分配固定k²个children。某parent之前有r个1，就恰有r组children排在它之前，因此它的child group起点由r×k²确定。Rank1返回r，无需为每个node存offset。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="压缩数据结构">接近信息下界且直接支持查询的表示，不是必须整体解压的档案。</GlossaryItem>
+  <GlossaryItem term="二进制数组压缩表示">支持 Access、Rank、Select 的 succinct 或 sparse bitvector。</GlossaryItem>
+  <GlossaryItem term="树的简洁表示">以约2n bits 保存树形并支持 parent、child、subtree 导航。</GlossaryItem>
+  <GlossaryItem term="图的简洁表示">压缩 adjacency 信息同时支持 edge/neighbor/range 查询。</GlossaryItem>
+  <GlossaryItem term="WebGraph">利用 Web adjacency-list 相似、interval 与 gaps 的图压缩方案。</GlossaryItem>
+  <GlossaryItem term="k²-tree">递归编码非空 adjacency-matrix quadrants 的 pointerless tree。</GlossaryItem>
+  <GlossaryItem term="Rank/Select">分别统计 bit prefix 与定位第k个目标 bit 的基础操作。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Pearls of Algorithm Engineering · Chapter 15 Compressed Data Structures"
+  href="https://www.cambridge.org/core/books/abs/pearls-of-algorithm-engineering/compressed-data-structures/38C0C4B5457942AAD0BEF764414A0BF7"
+  author="Paolo Ferragina"
+  license="原书版权归作者与 Cambridge University Press 所有；本章依据 Cambridge 官方章节摘要、目录、索引及作者公开研究资料独立重构教学内容"
+/>

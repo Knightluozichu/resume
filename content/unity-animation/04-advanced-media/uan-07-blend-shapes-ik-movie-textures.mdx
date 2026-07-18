@@ -1,0 +1,231 @@
+---
+title: "第 7 章 Blend Shapes, IK, and Movie Textures：三条高级表现链"
+type: A
+section: "Unity 游戏动画设计 · 变形、IK 与视频"
+order: 7
+description: "覆盖 Blend Shape 顶点变形、IK 末端约束和 Movie Texture 视频纹理，并给出 VideoPlayer 现代迁移。"
+demo: true
+math: false
+sourceUrl: "https://www.packtpub.com/en-us/product/unity-animation-essentials-9781782174813"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Uan07BlendShapesIkMovieTexturesMapLab,
+  Uan07BlendShapesIkMovieTexturesExperimentLab,
+  Uan07BlendShapesIkMovieTexturesEvidenceLab,
+} from "@/components/mdx/unity-animation/diagrams/uan-07-blend-shapes-ik-movie-textures";
+
+<Objectives>
+
+- 能解释 Blend Shape 权重在同拓扑顶点状态之间的插值
+
+- 能实现带目标、权重和可达性检查的 IK 末端约束
+
+- 能比较 MovieTexture 与 VideoPlayer 的解码、音频、材质和平台边界
+
+</Objectives>
+
+## 问题：为什么 Blend Shape、IK 和视频纹理能放在同一终章却不能混为一种动画
+
+先预测：改变表情、让手抓住把手、在场景屏幕播放影片，三者是否都在修改骨骼？不是。Blend Shape 改变同拓扑网格顶点，IK 从末端目标反求骨骼链，Movie Texture 解码预渲染像素。终章把三条非普通 Clip 路径并列，要求读者按数据载体、求值位置、输出对象和性能瓶颈分别诊断。
+
+<Uan07BlendShapesIkMovieTexturesMapLab />
+
+## 原书边界与官方小节
+
+官方目录只有三个核心专题：Blend Shapes、Inverse Kinematics、Movie textures。原书使用 Unity 5 的 MovieTexture 和 OGV 工作流；现代迁移必须保留视频作为纹理投射与音频同步问题，同时明确 API 已由 VideoPlayer 等方案替代。
+
+- **Blend Shapes**
+- **Inverse Kinematics**
+- **Movie textures**
+
+这些小节按官方目录唯一归属。本站重新组织解释、代码与实验，不逐字复制原文；现代补充放在迁移段，不能替换或重复计算原始单元。
+
+## 顶点、骨骼和像素三类输出
+
+Blend Shape 在同一顶点索引集合上按权重混合目标形状，适合表情与局部形变；IK 接收手脚目标和权重，在骨骼约束内求解中间关节；视频路径按时间解码帧，写入 RenderTexture 或材质并同步音频。三者分别受拓扑一致性、目标可达性和解码吞吐约束。统一控制面只应管理时间和权重，不能隐藏数据类型差异。
+
+<Uan07BlendShapesIkMovieTexturesExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="在拓扑一致的基础网格与目标顶点状态之间按权重插值的形变。">
+  Blend Shape
+</Term>
+必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+
+<Term def="给定末端目标后反求骨骼链姿态的逆向运动学过程。">IK</Term>
+必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+
+<Term def="控制动画原姿态与 IK 求解姿态混合比例的值。">IK Weight</Term>
+必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+
+<Term def="旧 Unity 中把解码视频作为纹理播放到材质上的机制。">
+  Movie Texture
+</Term>
+必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+
+<Term def="现代 Unity 负责视频准备、播放、输出纹理和音频路由的组件。">
+  VideoPlayer
+</Term>
+必须落到本章的输入、时间、求值器与输出链，指出正常值、边界值和最早失败信号。
+
+术语若不能落到具体资产、时间点、对象属性和观测值，就仍停留在记忆层。读者应能为每个术语写出生产者、变化规则、消费者、正常样本和失败样本。
+
+## 关键对象与数据流
+
+表情实验在 0、50、100 权重记录顶点和轮廓；IK 实验让手目标从可达区移动到超出臂长，记录末端误差、肘向和权重；视频实验固定分辨率、帧率与时长，等待 Prepare 完成后同时启动纹理和音频，记录首帧延迟、掉帧与声画偏差。三个实验共享时间轴，但分别保留网格、骨骼和解码证据。
+
+排查时从最早可控输入开始，逐段检查导入设置、中间状态和最终像素。最终画面正确但链路不符合预测，也不能立即签发，因为它可能依赖未记录的帧率、缓存、随机种子或编辑器状态。
+
+## 三步可重复实验
+
+动手前先预测：只改变当前步骤的一项输入后，哪个状态、骨骼、粒子、纹理或像素应最先变化？实验期间固定 Unity 版本、资产版本、帧率、场景、随机种子与目标平台。
+
+<Stepper>
+  <Step title="验证顶点形变">
+    <Uan07BlendShapesIkMovieTexturesMapLab />
+
+确认 Blend Shape 名称与索引，采样 0、50、100 权重，检查法线、轮廓、穿插和多形状叠加。
+
+```csharp
+skinnedMesh.SetBlendShapeWeight(smileIndex, Mathf.Lerp(0f, 100f, expression));
+```
+
+  </Step>
+  <Step title="验证 IK 可达边界">
+    <Uan07BlendShapesIkMovieTexturesExperimentLab />
+
+启用 IK Pass，逐步移动手部目标穿过最大臂长，记录末端误差、关节翻转、目标权重和恢复过程。
+
+```csharp
+animator.SetIKPositionWeight(AvatarIKGoal.RightHand, handWeight);
+animator.SetIKPosition(AvatarIKGoal.RightHand, handTarget.position);
+```
+
+  </Step>
+  <Step title="迁移视频纹理">
+    <Uan07BlendShapesIkMovieTexturesEvidenceLab />
+
+用 VideoPlayer 输出到 RenderTexture 或材质，固定媒体参数，记录准备时间、首帧、音频路由、循环点和目标平台解码结果。
+
+```csharp
+videoPlayer.Prepare();
+videoPlayer.prepareCompleted += player => player.Play();
+```
+
+  </Step>
+</Stepper>
+
+## 三条链共享时间，却拥有不同失败根因
+
+Blend Shape 的前提是基础网格与目标形状顶点拓扑一致，运行时只改变权重。权重范围和命名来自模型导入，多个表情同时启用时可能产生非线性组合或穿插。验收在零、中间和最大权重记录关键顶点或屏幕轮廓，并测试两个形状叠加；若重新导出模型改变顶点顺序，即使名称相同也不能假设结果等价。
+
+IK 在 Animator 求值后根据末端目标修正骨骼链。目标位置、旋转权重、Avatar 配置、层的 IK Pass 和回调时机都必须成立。目标超出手臂长度时，求解器只能尽量接近，角色根或肩部是否允许补偿要由设计决定。权重从零渐变到一可以避免跳变，但目标本身抖动仍会传入骨骼；测试要记录末端误差、权重、目标速度和关节极限。
+
+视频路径先 Prepare，再按时间解码帧，输出到 RenderTexture、材质或相机平面，并单独路由音频。黑屏可能来自未准备、URL 不可访问、编解码器不支持、目标纹理未绑定或材质不显示；音画不同步则要继续检查时钟来源和跳帧策略。旧 MovieTexture 的 OGV 工作流不能直接映射为现代 VideoPlayer 的所有平台行为。
+
+## 终章分项证据
+
+- Blend Shape：模型版本、形状索引、权重曲线、叠加组合和顶点结果。
+- IK：Avatar、IK Pass、目标 Transform、位置与旋转权重、末端误差和不可达样本。
+- 视频：源格式、准备耗时、分辨率、帧率、输出纹理、音频路由和平台结果。
+- 统一控制只管理时间、启停与权重，不得用一个“动画成功”状态隐藏三类错误。
+- 性能报告分别记录蒙皮或形变、IK 求解和视频解码成本。
+
+综合实验让角色看向屏幕、抬手触碰目标并改变表情，同时播放视频。然后分别破坏拓扑身份、移远 IK 目标和更换不支持编码，验证每条链的最早失败信号互不混淆。
+
+三条链同时运行时还要检查更新顺序和资源寿命。表情权重应在 Animator 覆盖前后选择一致写入点，IK 目标在角色根移动后更新，视频 RenderTexture 在场景卸载或分辨率变化时正确释放与重建。用时间戳记录输入、Animator 更新、IK 回调和视频帧到达顺序，并连续加载卸载场景比较资源数量，才能排除只在单次播放中不明显的延迟和泄漏。
+
+暂停、跳转和恢复时再核对三条时间线，确认表情与 IK 不依赖视频解码帧率，视频音频也不会因游戏慢动作产生未声明漂移。
+
+目标平台上的相同操作序列也要进入证据包，不能只以编辑器播放结果签发。
+
+## 正常、边界与失败样本
+
+每章至少保存一个正常样本、一个极端边界和一个故意破坏配置。正常样本证明主路径，边界样本说明适用范围，失败样本证明诊断方法真的能抓到错误。
+
+<Callout type="trap">
+  **因果陷阱**：Blend Shape
+  目标若拓扑或顶点顺序不一致，权重插值会产生破碎几何，不能靠调曲线修复。
+</Callout>
+
+<Callout type="trap">
+  **版本陷阱**：把旧 MovieTexture 示例原样复制到现代 Unity 会直接遇到 API
+  和格式失效，必须显式迁移到当前视频管线。
+</Callout>
+
+## 从 Unity 5 到现代 Unity
+
+Blend Shape 和 Animator IK 概念仍有效，现代项目还可使用 Animation Rigging 约束。MovieTexture 已被移除，VideoPlayer 可输出 Camera、RenderTexture、Material Override 或 API Only，并有独立音频输出模式。平台编解码能力、URL/StreamingAssets、准备阶段和色彩空间都必须重新验证，不能假定旧 OGV 建议仍通用。
+
+迁移记录采用五列：原书载体、稳定不变量、现代实现、不可等价处、目标平台证据。允许替换工具和 API，不允许抹去原始问题或倒写历史。
+
+## 验收证据
+
+验收包含 Blend Shape 三权重截图与拓扑检查、IK 可达和不可达曲线、目标权重过渡，以及视频的编码信息、Prepare 时长、首帧延迟、平均掉帧、音频同步、循环点和至少一个目标平台结果。每条路径都有故意失败样本。
+
+证据包同时记录场景路径、代码版本、资产 GUID、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜测隐藏状态即可重放，才算掌握而不只是看过。
+
+## 小结
+
+- Blend Shape、IK 与视频分别修改顶点、骨骼和像素
+- 权重统一了控制形式，但不能消除三类数据约束
+- IK 必须测试目标可达性、关节方向和权重过渡
+- MovieTexture 的现代复现必须迁移到 VideoPlayer 并验证平台解码
+
+<Exercises>
+
+**问题 1** Blend Shape 为什么要求一致拓扑？
+
+<Answer>
+  目标形状按相同顶点索引存储位移，顶点数量或顺序变化会把位移应用到错误位置。
+</Answer>
+
+**问题 2** IK 目标超出臂长时应观察什么？
+
+<Answer>末端误差、链条拉直、关节翻转、权重和求解器的限制策略。</Answer>
+
+**问题 3** 视频 Prepare 为什么要单独验收？
+
+<Answer>
+  解码器和资源加载需要异步准备，未完成就播放会出现黑帧、延迟或声画不同步。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Blend Shape">
+    在拓扑一致的基础网格与目标顶点状态之间按权重插值的形变。
+  </GlossaryItem>
+  <GlossaryItem term="IK">
+    给定末端目标后反求骨骼链姿态的逆向运动学过程。
+  </GlossaryItem>
+  <GlossaryItem term="IK Weight">
+    控制动画原姿态与 IK 求解姿态混合比例的值。
+  </GlossaryItem>
+  <GlossaryItem term="Movie Texture">
+    旧 Unity 中把解码视频作为纹理播放到材质上的机制。
+  </GlossaryItem>
+  <GlossaryItem term="VideoPlayer">
+    现代 Unity 负责视频准备、播放、输出纹理和音频路由的组件。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Alan Thorn《Unity Animation Essentials》第一版官方目录与中文版《Unity游戏动画设计》身份资料"
+  adaptedUrl="https://www.packtpub.com/en-us/product/unity-animation-essentials-9781782174813"
+/>

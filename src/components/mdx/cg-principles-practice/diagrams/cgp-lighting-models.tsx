@@ -1,67 +1,23 @@
-/**
- * <CgpLightingModelsDiagram>：光照模型与着色图解。
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * 全部 DESIGN token 配色，无裸 hex。
- */
+import type { ReactNode } from "react";
 
-const VIEW_W = 720;
-const VIEW_H = 400;
+function Frame({ caption, children }: { caption: string; children: ReactNode }) {
+  return <figure className="mdx-figure not-prose mx-auto my-6"><div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div><figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption></figure>;
+}
+
+const chain = [["Light", "spectrum + radiance"], ["Geometry", "direction + visibility"], ["Material", "BSDF / volume response"], ["Color", "XYZ + working RGB"], ["Shader", "sample + approximate"], ["Display", "tone + gamut + transfer"]] as const;
 
 export function CgpLightingModelsDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="光照模型与着色图解"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <text x={VIEW_W / 2} y="32" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">
-            光照模型与着色
-          </text>
-          <text x={VIEW_W / 2} y="54" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
-            Flat / Gouraud / Phong 三种着色频率
-          </text>
+  return <Frame caption="物理光经几何和材质成为辐亮度，再由颜色与显示管线形成观察信号。"><div role="img" aria-label="光几何材质颜色着色器显示完整数据链" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">{chain.map(([title, detail], index) => <div key={title} className="relative min-h-28 border border-border bg-bg/45 p-3"><span className="text-xs font-bold text-accent">0{index + 1}</span><strong className="mt-2 block text-sm text-primary">{title}</strong><span className="mt-2 block text-xs text-secondary">{detail}</span>{index < chain.length - 1 && <span aria-hidden="true" className="absolute -right-2 top-11 z-10 text-accent">→</span>}</div>)}</div></Frame>;
+}
 
-          <rect x="40" y="80" width="640" height="280" rx="12" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.3" />
+const scattering = [["Surface reflection", "BRDF", "coating / rough interface"], ["Surface transmission", "BTDF", "refraction / absorption"], ["Subsurface", "BSSRDF / diffusion", "skin / wax / milk"], ["Volume", "phase + extinction", "fog / smoke"], ["Object / layered", "mixture + geometry", "fiber / flake / layers"]] as const;
 
-          {/* Flat */}
-          <rect x="60" y="110" width="180" height="140" rx="10" fill="var(--success)" fillOpacity="0.06" stroke="var(--success)" strokeWidth="1.2" />
-          <text x="150" y="134" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--success)">Flat 着色</text>
-          <text x="150" y="156" textAnchor="middle" fontSize="10" fill="var(--text-primary)">逐面计算</text>
-          <text x="150" y="174" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">每个三角形一个颜色</text>
-          <text x="150" y="196" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">法线 = 面法线</text>
-          <text x="150" y="218" textAnchor="middle" fontSize="10" fill="var(--text-primary)">最快但最粗糙</text>
-          <text x="150" y="238" textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">适合Low-poly风格</text>
+export function CgpScatteringDiagram() {
+  return <Frame caption="材质接口要区分反射、透射、次表面、体积和层状对象级散射。"><div role="img" aria-label="五类材质散射模型与典型对象" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">{scattering.map(([name, model, use]) => <div key={name} className="min-h-32 border border-border bg-bg/45 p-3"><strong className="text-sm text-primary">{name}</strong><p className="mb-0 mt-2 text-xs text-success">Model: {model}</p><p className="mb-0 mt-2 border-t border-border pt-2 text-xs text-secondary">Use: {use}</p></div>)}</div></Frame>;
+}
 
-          {/* Gouraud */}
-          <rect x="260" y="110" width="180" height="140" rx="10" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.2" />
-          <text x="350" y="134" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--accent)">Gouraud 着色</text>
-          <text x="350" y="156" textAnchor="middle" fontSize="10" fill="var(--text-primary)">逐顶点计算</text>
-          <text x="350" y="174" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">顶点处算光照</text>
-          <text x="350" y="196" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">颜色在面内插值</text>
-          <text x="350" y="218" textAnchor="middle" fontSize="10" fill="var(--text-primary)">高光可能丢失</text>
-          <text x="350" y="238" textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">性能与质量折中</text>
+const shader = [["Vertex / primitive", "geometry + attributes", "per vertex / primitive"], ["Interpolation", "perspective varyings", "per covered sample"], ["Fragment / sample", "material + light", "pixel/sample/VRS"], ["Scene-linear output", "radiance + alpha", "before display transform"], ["Post / display", "tone + gamut + encode", "per output pixel"]] as const;
 
-          {/* Phong shading */}
-          <rect x="460" y="110" width="200" height="140" rx="10" fill="var(--warning)" fillOpacity="0.06" stroke="var(--warning)" strokeWidth="1.2" />
-          <text x="560" y="134" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--warning)">Phong 着色</text>
-          <text x="560" y="156" textAnchor="middle" fontSize="10" fill="var(--text-primary)">逐像素计算</text>
-          <text x="560" y="174" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">法线在面内插值</text>
-          <text x="560" y="196" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">每像素算光照</text>
-          <text x="560" y="218" textAnchor="middle" fontSize="10" fill="var(--text-primary)">高光锐利准确</text>
-          <text x="560" y="238" textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">GPU标准方案</text>
-
-          {/* Comparison */}
-          <rect x="60" y="280" width="600" height="60" rx="8" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.3" />
-          <text x={VIEW_W / 2} y="304" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--accent)">着色频率 = 光照计算的粒度</text>
-          <text x={VIEW_W / 2} y="324" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">Flat(面) &lt; Gouraud(顶点) &lt; Phong(像素)：质量递增，性能递减</text>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        光照模型与着色——Flat/Gouraud/Phong三种着色频率对比
-      </figcaption>
-    </figure>
-  );
+export function CgpShaderColorDiagram() {
+  return <Frame caption="每个 shader stage 都要声明输入空间、插值、执行频率与输出颜色语义。"><div role="img" aria-label="顶点插值片段场景线性输出和显示着色流程" className="grid gap-2 md:grid-cols-5">{shader.map(([title, data, frequency], index) => <div key={title} className="relative min-h-32 border border-border bg-bg/45 p-3"><strong className="text-sm text-primary">{title}</strong><p className="mb-0 mt-2 text-xs text-secondary">Data: {data}</p><p className="mb-0 mt-2 text-xs text-warning">Frequency: {frequency}</p>{index < shader.length - 1 && <span aria-hidden="true" className="absolute -right-2 top-12 z-10 text-accent">→</span>}</div>)}</div></Frame>;
 }

@@ -124,6 +124,38 @@ import { FramebufferPassContractDiagram } from "./learnopengl/diagrams/framebuff
 import { CubemapCapabilityDiagram } from "./learnopengl/diagrams/cubemaps";
 import { BufferUpdateHazardDiagram } from "./learnopengl/diagrams/advanced-data";
 import { Std140PackingDiagram } from "./learnopengl/diagrams/advanced-glsl";
+import {
+  GeometryExplodeSpaceDiagram,
+  GeometryShaderOutputContractDiagram,
+} from "./learnopengl/diagrams/geometry-shader";
+import {
+  InstancingBatchContractDiagram,
+  InstancingMatrixLayoutDiagram,
+} from "./learnopengl/diagrams/instancing";
+import { MsaaResolveContractDiagram } from "./learnopengl/diagrams/anti-aliasing";
+import {
+  BlinnExponentMatchDiagram,
+  BlinnPhongBoundaryDiagram,
+} from "./learnopengl/diagrams/blinn-phong";
+import {
+  GammaAttenuationContractDiagram,
+  GammaPipelineContractDiagram,
+} from "./learnopengl/diagrams/gamma-correction";
+import { ShadowMapBoundaryContractDiagram } from "./learnopengl/diagrams/shadow-mapping";
+import {
+  PointShadowCubemapContractDiagram,
+  PointShadowRenderPathsDiagram,
+} from "./learnopengl/diagrams/point-shadows";
+import { NormalMapSpaceContractDiagram } from "./learnopengl/diagrams/normal-mapping";
+import { ParallaxSamplingContractDiagram } from "./learnopengl/diagrams/parallax-mapping";
+import { HdrOutputContractDiagram } from "./learnopengl/diagrams/hdr";
+import { BloomCompositionContractDiagram } from "./learnopengl/diagrams/bloom";
+import { DeferredGBufferContractDiagram } from "./learnopengl/diagrams/deferred-shading";
+import { SsaoSamplingContractDiagram } from "./learnopengl/diagrams/ssao";
+import { PbrBrdfContractDiagram } from "./learnopengl/diagrams/theory";
+import { PbrLightingContractDiagram } from "./learnopengl/diagrams/lighting";
+import { IblDiffuseIrradianceContractDiagram } from "./learnopengl/diagrams/ibl-diffuse-irradiance";
+import { IblSpecularContractDiagram } from "./learnopengl/diagrams/ibl-specular";
 import { ShaderIODiagram } from "./diagrams/shader-io-diagram";
 import { TextureCoordDiagram } from "./diagrams/texture-coord-diagram";
 import { CompilationPipelineDiagram } from "./diagrams/compilation-pipeline-diagram";
@@ -725,6 +757,116 @@ import { AaToolInvokeSafetyDiagram } from "./ai-agent/tool-invoke-safety-diagram
 import { AaToolSafetyPlayground } from "./ai-agent/tool-safety-playground";
 import { EngineArchLab } from "./enginearch/engine-arch-lab";
 import { GameEngineAnatomyDiagram } from "./enginearch/game-engine-anatomy-diagram";
+import {
+  Gea3OfficialLearningMapMapLab,
+  Gea3OfficialLearningMapExperimentLab,
+  Gea3OfficialLearningMapEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-official-learning-map";
+import {
+  Gea3PrefaceMapLab,
+  Gea3PrefaceExperimentLab,
+  Gea3PrefaceEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-preface";
+import {
+  Gea3Chapter01IntroductionMapLab,
+  Gea3Chapter01IntroductionExperimentLab,
+  Gea3Chapter01IntroductionEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-chapter-01-introduction";
+import {
+  Gea3Chapter02ToolsOfTheTradeMapLab,
+  Gea3Chapter02ToolsOfTheTradeExperimentLab,
+  Gea3Chapter02ToolsOfTheTradeEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-chapter-02-tools-of-the-trade";
+import {
+  Gea3Chapter03SoftwareEngineeringMapLab,
+  Gea3Chapter03SoftwareEngineeringExperimentLab,
+  Gea3Chapter03SoftwareEngineeringEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-chapter-03-software-engineering";
+import {
+  Gea3Chapter04ParallelismConcurrencyMapLab,
+  Gea3Chapter04ParallelismConcurrencyExperimentLab,
+  Gea3Chapter04ParallelismConcurrencyEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-chapter-04-parallelism-concurrency";
+import {
+  Gea3Chapter053dMathMapLab,
+  Gea3Chapter053dMathExperimentLab,
+  Gea3Chapter053dMathEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-chapter-05-3d-math";
+import {
+  Gea3Chapter06EngineSupportMapLab,
+  Gea3Chapter06EngineSupportExperimentLab,
+  Gea3Chapter06EngineSupportEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-chapter-06-engine-support";
+import {
+  Gea3Chapter07ResourcesFileSystemMapLab,
+  Gea3Chapter07ResourcesFileSystemExperimentLab,
+  Gea3Chapter07ResourcesFileSystemEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-chapter-07-resources-file-system";
+import {
+  Gea3Chapter08GameLoopMapLab,
+  Gea3Chapter08GameLoopExperimentLab,
+  Gea3Chapter08GameLoopEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-chapter-08-game-loop";
+import {
+  Gea3Chapter09HumanInterfaceMapLab,
+  Gea3Chapter09HumanInterfaceExperimentLab,
+  Gea3Chapter09HumanInterfaceEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-chapter-09-human-interface";
+import {
+  Gea3Chapter10DebuggingDevelopmentMapLab,
+  Gea3Chapter10DebuggingDevelopmentExperimentLab,
+  Gea3Chapter10DebuggingDevelopmentEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-chapter-10-debugging-development";
+import {
+  Gea3Chapter11RenderingEngineMapLab,
+  Gea3Chapter11RenderingEngineExperimentLab,
+  Gea3Chapter11RenderingEngineEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-chapter-11-rendering-engine";
+import {
+  Gea3Chapter12AnimationSystemsMapLab,
+  Gea3Chapter12AnimationSystemsExperimentLab,
+  Gea3Chapter12AnimationSystemsEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-chapter-12-animation-systems";
+import {
+  Gea3Chapter13CollisionRigidBodyMapLab,
+  Gea3Chapter13CollisionRigidBodyExperimentLab,
+  Gea3Chapter13CollisionRigidBodyEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-chapter-13-collision-rigid-body";
+import {
+  Gea3Chapter14AudioMapLab,
+  Gea3Chapter14AudioExperimentLab,
+  Gea3Chapter14AudioEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-chapter-14-audio";
+import {
+  Gea3Chapter15GameplayIntroductionMapLab,
+  Gea3Chapter15GameplayIntroductionExperimentLab,
+  Gea3Chapter15GameplayIntroductionEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-chapter-15-gameplay-introduction";
+import {
+  Gea3Chapter16RuntimeGameplayMapLab,
+  Gea3Chapter16RuntimeGameplayExperimentLab,
+  Gea3Chapter16RuntimeGameplayEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-chapter-16-runtime-gameplay";
+import {
+  Gea3Chapter17MoreMapLab,
+  Gea3Chapter17MoreExperimentLab,
+  Gea3Chapter17MoreEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-chapter-17-more";
+import {
+  Gea3BibliographyMapLab,
+  Gea3BibliographyExperimentLab,
+  Gea3BibliographyEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-bibliography";
+import {
+  Gea3IndexMapLab,
+  Gea3IndexExperimentLab,
+  Gea3IndexEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-index";
+import {
+  Gea3OfficialFinalReviewMapLab,
+  Gea3OfficialFinalReviewExperimentLab,
+  Gea3OfficialFinalReviewEvidenceLab,
+} from "./game-engine-architecture-3e/diagrams/gea3-official-final-review";
 import { EngineArchitectureLayersDiagram } from "./diagrams/engine-architecture-layers-diagram";
 import { EngineVsRawCodeDiagram } from "./diagrams/engine-vs-raw-code-diagram";
 import { RuntimeSubsystemsDiagram } from "./diagrams/runtime-subsystems-diagram";
@@ -824,19 +966,151 @@ import { InterpreterDiagram } from "./design-patterns/diagrams/interpreter-diagr
 import { CompoundPatternDiagram } from "./design-patterns/diagrams/compound-pattern-diagram";
 import { DecisionTreeDiagram } from "./design-patterns/diagrams/decision-tree-diagram";
 // 游戏编程模式
-import { GppCategoryMap } from "./game-programming-patterns/diagrams/gpp-category-map";
-import { GameLoopDiagram } from "./game-programming-patterns/diagrams/game-loop-diagram";
-import { UpdateMethodDiagram } from "./game-programming-patterns/diagrams/update-method-diagram";
-import { DoubleBufferDiagram } from "./game-programming-patterns/diagrams/double-buffer-diagram";
-import { SubclassSandboxDiagram } from "./game-programming-patterns/diagrams/subclass-sandbox-diagram";
-import { TypeObjectDiagram } from "./game-programming-patterns/diagrams/type-object-diagram";
-import { ComponentDiagram } from "./game-programming-patterns/diagrams/component-diagram";
-import { EventQueueDiagram } from "./game-programming-patterns/diagrams/event-queue-diagram";
-import { ServiceLocatorDiagram } from "./game-programming-patterns/diagrams/service-locator-diagram";
-import { DataLocalityDiagram } from "./game-programming-patterns/diagrams/data-locality-diagram";
-import { DirtyFlagDiagram } from "./game-programming-patterns/diagrams/dirty-flag-diagram";
-import { GppObjectPoolDiagram } from "./game-programming-patterns/diagrams/object-pool-diagram";
-import { SpatialPartitionDiagram } from "./game-programming-patterns/diagrams/spatial-partition-diagram";
+import {
+  GppOfficialLearningMapMapLab,
+  GppOfficialLearningMapExperimentLab,
+  GppOfficialLearningMapEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-official-learning-map";
+import {
+  GppAcknowledgementsMapLab,
+  GppAcknowledgementsExperimentLab,
+  GppAcknowledgementsEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-acknowledgements";
+import {
+  GppIntroductionMapLab,
+  GppIntroductionExperimentLab,
+  GppIntroductionEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-introduction";
+import {
+  GppChapter01ArchitecturePerformanceGamesMapLab,
+  GppChapter01ArchitecturePerformanceGamesExperimentLab,
+  GppChapter01ArchitecturePerformanceGamesEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-chapter-01-architecture-performance-games";
+import {
+  GppDesignPatternsRevisitedMapLab,
+  GppDesignPatternsRevisitedExperimentLab,
+  GppDesignPatternsRevisitedEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-design-patterns-revisited";
+import {
+  GppChapter02CommandMapLab,
+  GppChapter02CommandExperimentLab,
+  GppChapter02CommandEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-chapter-02-command";
+import {
+  GppChapter03FlyweightMapLab,
+  GppChapter03FlyweightExperimentLab,
+  GppChapter03FlyweightEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-chapter-03-flyweight";
+import {
+  GppChapter04ObserverMapLab,
+  GppChapter04ObserverExperimentLab,
+  GppChapter04ObserverEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-chapter-04-observer";
+import {
+  GppChapter05PrototypeMapLab,
+  GppChapter05PrototypeExperimentLab,
+  GppChapter05PrototypeEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-chapter-05-prototype";
+import {
+  GppChapter06SingletonMapLab,
+  GppChapter06SingletonExperimentLab,
+  GppChapter06SingletonEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-chapter-06-singleton";
+import {
+  GppChapter07StateMapLab,
+  GppChapter07StateExperimentLab,
+  GppChapter07StateEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-chapter-07-state";
+import {
+  GppSequencingPatternsMapLab,
+  GppSequencingPatternsExperimentLab,
+  GppSequencingPatternsEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-sequencing-patterns";
+import {
+  GppChapter08DoubleBufferMapLab,
+  GppChapter08DoubleBufferExperimentLab,
+  GppChapter08DoubleBufferEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-chapter-08-double-buffer";
+import {
+  GppChapter09GameLoopMapLab,
+  GppChapter09GameLoopExperimentLab,
+  GppChapter09GameLoopEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-chapter-09-game-loop";
+import {
+  GppChapter10UpdateMethodMapLab,
+  GppChapter10UpdateMethodExperimentLab,
+  GppChapter10UpdateMethodEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-chapter-10-update-method";
+import {
+  GppBehavioralPatternsMapLab,
+  GppBehavioralPatternsExperimentLab,
+  GppBehavioralPatternsEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-behavioral-patterns";
+import {
+  GppChapter11BytecodeMapLab,
+  GppChapter11BytecodeExperimentLab,
+  GppChapter11BytecodeEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-chapter-11-bytecode";
+import {
+  GppChapter12SubclassSandboxMapLab,
+  GppChapter12SubclassSandboxExperimentLab,
+  GppChapter12SubclassSandboxEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-chapter-12-subclass-sandbox";
+import {
+  GppChapter13TypeObjectMapLab,
+  GppChapter13TypeObjectExperimentLab,
+  GppChapter13TypeObjectEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-chapter-13-type-object";
+import {
+  GppDecouplingPatternsMapLab,
+  GppDecouplingPatternsExperimentLab,
+  GppDecouplingPatternsEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-decoupling-patterns";
+import {
+  GppChapter14ComponentMapLab,
+  GppChapter14ComponentExperimentLab,
+  GppChapter14ComponentEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-chapter-14-component";
+import {
+  GppChapter15EventQueueMapLab,
+  GppChapter15EventQueueExperimentLab,
+  GppChapter15EventQueueEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-chapter-15-event-queue";
+import {
+  GppChapter16ServiceLocatorMapLab,
+  GppChapter16ServiceLocatorExperimentLab,
+  GppChapter16ServiceLocatorEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-chapter-16-service-locator";
+import {
+  GppOptimizationPatternsMapLab,
+  GppOptimizationPatternsExperimentLab,
+  GppOptimizationPatternsEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-optimization-patterns";
+import {
+  GppChapter17DataLocalityMapLab,
+  GppChapter17DataLocalityExperimentLab,
+  GppChapter17DataLocalityEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-chapter-17-data-locality";
+import {
+  GppChapter18DirtyFlagMapLab,
+  GppChapter18DirtyFlagExperimentLab,
+  GppChapter18DirtyFlagEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-chapter-18-dirty-flag";
+import {
+  GppChapter19ObjectPoolMapLab,
+  GppChapter19ObjectPoolExperimentLab,
+  GppChapter19ObjectPoolEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-chapter-19-object-pool";
+import {
+  GppChapter20SpatialPartitionMapLab,
+  GppChapter20SpatialPartitionExperimentLab,
+  GppChapter20SpatialPartitionEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-chapter-20-spatial-partition";
+import {
+  GppOfficialFinalReviewMapLab,
+  GppOfficialFinalReviewExperimentLab,
+  GppOfficialFinalReviewEvidenceLab,
+} from "./game-programming-patterns/diagrams/gpp-official-final-review";
 // 代码质量与重构
 import { CqrCategoryMap } from "./code-quality/diagrams/cqr-category-map";
 import { CleanCodeValueDiagram } from "./code-quality/diagrams/clean-code-value-diagram";
@@ -929,106 +1203,6 @@ import { EfcTmpConceptsDiagram } from "./effective-cpp/diagrams/efc-tmp-concepts
 import { EfcNewDeleteDiagram } from "./effective-cpp/diagrams/efc-new-delete";
 import { EfcConventionsDiagram } from "./effective-cpp/diagrams/efc-conventions";
 import { EfcFinalMindMap } from "./effective-cpp/diagrams/efc-final-mindmap";
-import { EmcBookMap } from "./effective-modern-cpp/diagrams/emc-book-map";
-import { EmcTypeDeductionChart } from "./effective-modern-cpp/diagrams/emc-type-deduction-chart";
-import { EmcAutoUsageDiagram } from "./effective-modern-cpp/diagrams/emc-auto-usage";
-import { EmcSmartPtrComparisonDiagram } from "./effective-modern-cpp/diagrams/emc-smart-ptr-comparison";
-import { EmcMakeUniqueSharedDiagram } from "./effective-modern-cpp/diagrams/emc-make-unique-shared";
-import { EmcMoveVsCopyDiagram } from "./effective-modern-cpp/diagrams/emc-move-vs-copy";
-import { EmcForwardingDiagram } from "./effective-modern-cpp/diagrams/emc-forwarding";
-import { EmcLambdaAnatomyDiagram } from "./effective-modern-cpp/diagrams/emc-lambda-anatomy";
-import { EmcConcurrencyModelDiagram } from "./effective-modern-cpp/diagrams/emc-concurrency-model";
-import { EmcFinalMindMap } from "./effective-modern-cpp/diagrams/emc-final-mindmap";
-import { ChpBookMap } from "./cpp-high-performance/diagrams/chp-book-map";
-import { ChpPerfPipelineDiagram } from "./cpp-high-performance/diagrams/chp-perf-pipeline";
-import { ChpCacheHierarchyDiagram } from "./cpp-high-performance/diagrams/chp-cache-hierarchy";
-import { ChpCacheFriendlyDiagram } from "./cpp-high-performance/diagrams/chp-cache-friendly";
-import { ChpMemoryLayoutDiagram } from "./cpp-high-performance/diagrams/chp-memory-layout";
-import { ChpDataStructurePerfDiagram } from "./cpp-high-performance/diagrams/chp-data-structure-perf";
-import { ChpAlgorithmComplexityDiagram } from "./cpp-high-performance/diagrams/chp-algorithm-complexity";
-import { ChpConcurrencyModelDiagram } from "./cpp-high-performance/diagrams/chp-concurrency-model";
-import { ChpProfilingToolsDiagram } from "./cpp-high-performance/diagrams/chp-profiling-tools";
-import { ChpFinalMindMap } from "./cpp-high-performance/diagrams/chp-final-mindmap";
-import { IcoBookMap } from "./inside-cpp-object-model/diagrams/ico-book-map";
-import { IcoObjectModelsDiagram } from "./inside-cpp-object-model/diagrams/ico-object-models";
-import { IcoConstructionSequenceDiagram } from "./inside-cpp-object-model/diagrams/ico-construction-sequence";
-import { IcoMemberLayoutDiagram } from "./inside-cpp-object-model/diagrams/ico-member-layout";
-import { IcoFunctionModelDiagram } from "./inside-cpp-object-model/diagrams/ico-function-model";
-import { IcoVtableLayoutDiagram } from "./inside-cpp-object-model/diagrams/ico-vtable-layout";
-import { IcoRttiMechanismDiagram } from "./inside-cpp-object-model/diagrams/ico-rtti-mechanism";
-import { IcoMultipleInheritanceDiagram } from "./inside-cpp-object-model/diagrams/ico-multiple-inheritance";
-import { IcoObjectLifecycleDiagram } from "./inside-cpp-object-model/diagrams/ico-object-lifecycle";
-import { IcoFinalMindMap } from "./inside-cpp-object-model/diagrams/ico-final-mindmap";
-import { OpcBookMap } from "./optimized-cpp/diagrams/opc-learning-map";
-import { OpcPerfMindsetDiagram } from "./optimized-cpp/diagrams/opc-performance-mindset";
-import { OpcStringOptDiagram } from "./optimized-cpp/diagrams/opc-string-optimization";
-import { OpcAlgoSelectDiagram } from "./optimized-cpp/diagrams/opc-algorithm-selection";
-import { OpcDynAllocDiagram } from "./optimized-cpp/diagrams/opc-dynamic-allocation";
-import { OpcSmartPtrPerfDiagram } from "./optimized-cpp/diagrams/opc-smart-pointers";
-import { OpcIoOptDiagram } from "./optimized-cpp/diagrams/opc-io-optimization";
-import { OpcConcurrencyDiagram } from "./optimized-cpp/diagrams/opc-concurrency";
-import { OpcProfilingDiagram } from "./optimized-cpp/diagrams/opc-profiling";
-import { OpcFinalMindMap } from "./optimized-cpp/diagrams/opc-final-review";
-import { McdBookMap } from "./modern-cpp-design/diagrams/mcd-learning-map";
-import { McdPolicyDesignDiagram } from "./modern-cpp-design/diagrams/mcd-policy-design";
-import { McdTypelistDiagram } from "./modern-cpp-design/diagrams/mcd-typelist";
-import { McdSmartPtrDesignDiagram } from "./modern-cpp-design/diagrams/mcd-smart-pointers";
-import { McdSmallObjectDiagram } from "./modern-cpp-design/diagrams/mcd-small-object";
-import { McdGeneralizedFunctorDiagram } from "./modern-cpp-design/diagrams/mcd-generalized-functor";
-import { McdSingletonDiagram } from "./modern-cpp-design/diagrams/mcd-singleton";
-import { McdObjectFactoryDiagram } from "./modern-cpp-design/diagrams/mcd-object-factory";
-import { McdAbstractFactoryDiagram } from "./modern-cpp-design/diagrams/mcd-abstract-factory";
-import { McdFinalMindMap } from "./modern-cpp-design/diagrams/mcd-final-review";
-import { CpcBookMap } from "./cpu-eye-cpp/diagrams/cpc-learning-map";
-import { CpcCompilationDiagram } from "./cpu-eye-cpp/diagrams/cpc-compilation";
-import { CpcMemoryModelDiagram } from "./cpu-eye-cpp/diagrams/cpc-memory-model";
-import { CpcFunctionCallsDiagram } from "./cpu-eye-cpp/diagrams/cpc-function-calls";
-import { CpcVirtualFunctionsDiagram } from "./cpu-eye-cpp/diagrams/cpc-virtual-functions";
-import { CpcExceptionHandlingDiagram } from "./cpu-eye-cpp/diagrams/cpc-exception-handling";
-import { CpcInlineDiagram } from "./cpu-eye-cpp/diagrams/cpc-inline";
-import { CpcCacheFriendlyDiagram } from "./cpu-eye-cpp/diagrams/cpc-cache-friendly";
-import { CpcCompilerOptimizationDiagram } from "./cpu-eye-cpp/diagrams/cpc-compiler-optimization";
-import { CpcFinalMindMap } from "./cpu-eye-cpp/diagrams/cpc-final-review";
-import { EcpBookMap } from "./easy-cpp-5e/diagrams/ecp-learning-map";
-import { EcpFirstProgramDiagram } from "./easy-cpp-5e/diagrams/ecp-first-program";
-import { EcpVariablesTypesDiagram } from "./easy-cpp-5e/diagrams/ecp-variables-types";
-import { EcpControlFlowDiagram } from "./easy-cpp-5e/diagrams/ecp-control-flow";
-import { EcpFunctionsDiagram } from "./easy-cpp-5e/diagrams/ecp-functions";
-import { EcpClassesDiagram } from "./easy-cpp-5e/diagrams/ecp-classes";
-import { EcpInheritanceDiagram } from "./easy-cpp-5e/diagrams/ecp-inheritance";
-import { EcpTemplatesDiagram } from "./easy-cpp-5e/diagrams/ecp-templates";
-import { EcpStlDiagram } from "./easy-cpp-5e/diagrams/ecp-stl";
-import { EcpFinalMindMap } from "./easy-cpp-5e/diagrams/ecp-final-review";
-import { EppBookMap } from "./cpp-primer-plus/diagrams/epp-learning-map";
-import { EppCppBasicsDiagram } from "./cpp-primer-plus/diagrams/epp-cpp-basics";
-import { EppDataTypesDiagram } from "./cpp-primer-plus/diagrams/epp-data-types";
-import { EppControlStatementsDiagram } from "./cpp-primer-plus/diagrams/epp-control-statements";
-import { EppFunctionsRefDiagram } from "./cpp-primer-plus/diagrams/epp-functions-references";
-import { EppClassesObjectsDiagram } from "./cpp-primer-plus/diagrams/epp-classes-objects";
-import { EppInheritanceDiagram } from "./cpp-primer-plus/diagrams/epp-inheritance";
-import { EppTemplatesGenericsDiagram } from "./cpp-primer-plus/diagrams/epp-templates-generics";
-import { EppStlAlgorithmsDiagram } from "./cpp-primer-plus/diagrams/epp-stl-algorithms";
-import { EppFinalMindMap } from "./cpp-primer-plus/diagrams/epp-final-review";
-import { CtrBookMap } from "./cpp-testing-recipes/diagrams/ctr-learning-map";
-import { CtrBasicsTestDiagram } from "./cpp-testing-recipes/diagrams/ctr-basics-test";
-import { CtrMemoryTestDiagram } from "./cpp-testing-recipes/diagrams/ctr-memory-test";
-import { CtrStlTestDiagram } from "./cpp-testing-recipes/diagrams/ctr-stl-test";
-import { CtrTemplateTestDiagram } from "./cpp-testing-recipes/diagrams/ctr-template-test";
-import { CtrConcurrencyTestDiagram } from "./cpp-testing-recipes/diagrams/ctr-concurrency-test";
-import { CtrDesignTestDiagram } from "./cpp-testing-recipes/diagrams/ctr-design-test";
-import { CtrAlgorithmTestDiagram } from "./cpp-testing-recipes/diagrams/ctr-algorithm-test";
-import { CtrDebuggingTestDiagram } from "./cpp-testing-recipes/diagrams/ctr-debugging-test";
-import { CtrFinalMindMap } from "./cpp-testing-recipes/diagrams/ctr-final-review";
-import { CseLearningMapDiagram } from "./cpp-server-essence/diagrams/cse-learning-map";
-import { CseIoModelDiagram } from "./cpp-server-essence/diagrams/cse-io-model";
-import { CseEventDrivenDiagram } from "./cpp-server-essence/diagrams/cse-event-driven";
-import { CseThreadPoolDiagram } from "./cpp-server-essence/diagrams/cse-thread-pool";
-import { CseConnectionMgmtDiagram } from "./cpp-server-essence/diagrams/cse-connection-mgmt";
-import { CseBufferDesignDiagram } from "./cpp-server-essence/diagrams/cse-buffer-design";
-import { CseProtocolDesignDiagram } from "./cpp-server-essence/diagrams/cse-protocol-design";
-import { CseTimerWheelDiagram } from "./cpp-server-essence/diagrams/cse-timer-wheel";
-import { CsePerformanceTuningDiagram } from "./cpp-server-essence/diagrams/cse-performance-tuning";
-import { CseFinalReviewDiagram } from "./cpp-server-essence/diagrams/cse-final-review";
 import { HfdLearningMapDiagram } from "./head-first-design-patterns/diagrams/hfd-learning-map";
 import { HfdStrategyDiagram } from "./head-first-design-patterns/diagrams/hfd-strategy";
 import { HfdObserverDiagram } from "./head-first-design-patterns/diagrams/hfd-observer";
@@ -1039,76 +1213,6 @@ import { HfdCommandDiagram } from "./head-first-design-patterns/diagrams/hfd-com
 import { HfdAdapterFacadeDiagram } from "./head-first-design-patterns/diagrams/hfd-adapter-facade";
 import { HfdTemplateMethodDiagram } from "./head-first-design-patterns/diagrams/hfd-template-method";
 import { HfdFinalReviewDiagram } from "./head-first-design-patterns/diagrams/hfd-final-review";
-import { Ec7LearningMapDiagram } from "./essential-csharp-7/diagrams/ec7-learning-map";
-import { Ec7TypesVariablesDiagram } from "./essential-csharp-7/diagrams/ec7-types-variables";
-import { Ec7OperatorsControlDiagram } from "./essential-csharp-7/diagrams/ec7-operators-control";
-import { Ec7ClassesObjectsDiagram } from "./essential-csharp-7/diagrams/ec7-classes-objects";
-import { Ec7InheritanceInterfacesDiagram } from "./essential-csharp-7/diagrams/ec7-inheritance-interfaces";
-import { Ec7GenericsDiagram } from "./essential-csharp-7/diagrams/ec7-generics";
-import { Ec7DelegatesEventsDiagram } from "./essential-csharp-7/diagrams/ec7-delegates-events";
-import { Ec7LinqDiagram } from "./essential-csharp-7/diagrams/ec7-linq";
-import { Ec7AsyncAwaitDiagram } from "./essential-csharp-7/diagrams/ec7-async-await";
-import { Ec7FinalReviewDiagram } from "./essential-csharp-7/diagrams/ec7-final-review";
-import { CqcLearningMapDiagram } from "./csharp-quality-code/diagrams/cqc-learning-map";
-import { CqcNullableRefDiagram } from "./csharp-quality-code/diagrams/cqc-nullable-ref";
-import { CqcExceptionPracticeDiagram } from "./csharp-quality-code/diagrams/cqc-exception-practice";
-import { CqcAsyncPatternDiagram } from "./csharp-quality-code/diagrams/cqc-async-pattern";
-import { CqcCollectionChoiceDiagram } from "./csharp-quality-code/diagrams/cqc-collection-choice";
-import { CqcLinqPerformanceDiagram } from "./csharp-quality-code/diagrams/cqc-linq-performance";
-import { CqcMemoryAllocationDiagram } from "./csharp-quality-code/diagrams/cqc-memory-allocation";
-import { CqcThreadSafetyDiagram } from "./csharp-quality-code/diagrams/cqc-thread-safety";
-import { CqcApiDesignDiagram } from "./csharp-quality-code/diagrams/cqc-api-design";
-import { CqcFinalReviewDiagram } from "./csharp-quality-code/diagrams/cqc-final-review";
-import { EcsLearningMapDiagram } from "./effective-csharp/diagrams/ecs-learning-map";
-import { EcsPropertyPreferDiagram } from "./effective-csharp/diagrams/ecs-property-prefer";
-import { EcsReadonlyConstDiagram } from "./effective-csharp/diagrams/ecs-readonly-const";
-import { EcsIDisposableDiagram } from "./effective-csharp/diagrams/ecs-idisposable";
-import { EcsGenericConstraintsDiagram } from "./effective-csharp/diagrams/ecs-generic-constraints";
-import { EcsLinqDeferredDiagram } from "./effective-csharp/diagrams/ecs-linq-deferred";
-import { EcsExceptionUsageDiagram } from "./effective-csharp/diagrams/ecs-exception-usage";
-import { EcsParallelAsyncDiagram } from "./effective-csharp/diagrams/ecs-parallel-async";
-import { EcsEqualityDiagram } from "./effective-csharp/diagrams/ecs-equality";
-import { EcsFinalReviewDiagram } from "./effective-csharp/diagrams/ecs-final-review";
-import { DcsLearningMapDiagram } from "./deep-understanding-csharp/diagrams/dcs-learning-map";
-import { DcsCsharpHistoryDiagram } from "./deep-understanding-csharp/diagrams/dcs-csharp-history";
-import { DcsDelegatesEventsDiagram } from "./deep-understanding-csharp/diagrams/dcs-delegates-events";
-import { DcsIteratorYieldDiagram } from "./deep-understanding-csharp/diagrams/dcs-iterator-yield";
-import { DcsLambdaClosureDiagram } from "./deep-understanding-csharp/diagrams/dcs-lambda-closure";
-import { DcsDynamicLanguageDiagram } from "./deep-understanding-csharp/diagrams/dcs-dynamic-language";
-import { DcsAsyncInternalsDiagram } from "./deep-understanding-csharp/diagrams/dcs-async-internals";
-import { DcsPatternMatchingDiagram } from "./deep-understanding-csharp/diagrams/dcs-pattern-matching";
-import { DcsRecordsTuplesDiagram } from "./deep-understanding-csharp/diagrams/dcs-records-tuples";
-import { DcsFinalReviewDiagram } from "./deep-understanding-csharp/diagrams/dcs-final-review";
-import { CfpLearningMapDiagram } from "./csharp-functional-programming/diagrams/cfp-learning-map";
-import { CfpFunctionsFirstDiagram } from "./csharp-functional-programming/diagrams/cfp-functions-first";
-import { CfpHigherOrderDiagram } from "./csharp-functional-programming/diagrams/cfp-higher-order";
-import { CfpCurryingDiagram } from "./csharp-functional-programming/diagrams/cfp-currying";
-import { CfpImmutableDataDiagram } from "./csharp-functional-programming/diagrams/cfp-immutable-data";
-import { CfpPatternMatchingFpDiagram } from "./csharp-functional-programming/diagrams/cfp-pattern-matching-fp";
-import { CfpLazyEvalDiagram } from "./csharp-functional-programming/diagrams/cfp-lazy-eval";
-import { CfpMonadsDiagram } from "./csharp-functional-programming/diagrams/cfp-monads";
-import { CfpErrorHandlingFpDiagram } from "./csharp-functional-programming/diagrams/cfp-error-handling-fp";
-import { CfpFinalReviewDiagram } from "./csharp-functional-programming/diagrams/cfp-final-review";
-import { CtcLearningMapDiagram } from "./csharp-10-core/diagrams/ctc-learning-map";
-import { CtcTypesOverviewDiagram } from "./csharp-10-core/diagrams/ctc-types-overview";
-import { CtcGenericsDeepDiagram } from "./csharp-10-core/diagrams/ctc-generics-deep";
-import { CtcDelegatesEventsDiagram } from "./csharp-10-core/diagrams/ctc-delegates-events";
-import { CtcAsyncDeepDiagram } from "./csharp-10-core/diagrams/ctc-async-deep";
-import { CtcParallelTplDiagram } from "./csharp-10-core/diagrams/ctc-parallel-tpl";
-import { CtcPatternsDiagram } from "./csharp-10-core/diagrams/ctc-patterns";
-import { CtcRecordsStructsDiagram } from "./csharp-10-core/diagrams/ctc-records-structs";
-import { CtcSourceGeneratorsDiagram } from "./csharp-10-core/diagrams/ctc-source-generators";
-import { CtcFinalReviewDiagram } from "./csharp-10-core/diagrams/ctc-final-review";
-import { CvcLearningMapDiagram } from "./clr-via-csharp/diagrams/cvc-learning-map";
-import { CvcClrExecutionDiagram } from "./clr-via-csharp/diagrams/cvc-clr-execution";
-import { CvcTypeFundamentalsDiagram } from "./clr-via-csharp/diagrams/cvc-type-fundamentals";
-import { CvcInterfacesDesignDiagram } from "./clr-via-csharp/diagrams/cvc-interfaces-design";
-import { CvcValueReferenceDiagram } from "./clr-via-csharp/diagrams/cvc-value-reference";
-import { CvcGcMemoryDiagram } from "./clr-via-csharp/diagrams/cvc-gc-memory";
-import { CvcExceptionHandlingDiagram } from "./clr-via-csharp/diagrams/cvc-exception-handling";
-import { CvcAsyncClrDiagram } from "./clr-via-csharp/diagrams/cvc-async-clr";
-import { CvcReflectionAttributesDiagram } from "./clr-via-csharp/diagrams/cvc-reflection-attributes";
-import { CvcFinalReviewDiagram } from "./clr-via-csharp/diagrams/cvc-final-review";
 // === Auto-generated imports for book diagram components ===
 import { Al4FinalReviewDiagram } from "./algorithms-4e/diagrams/al4-final-review";
 import { Al4FundamentalsDiagram } from "./algorithms-4e/diagrams/al4-fundamentals";
@@ -1120,117 +1224,528 @@ import { Al4SearchingStDiagram } from "./algorithms-4e/diagrams/al4-searching-st
 import { Al4SortingElementaryDiagram } from "./algorithms-4e/diagrams/al4-sorting-elementary";
 import { Al4SortingMergeQuickDiagram } from "./algorithms-4e/diagrams/al4-sorting-merge-quick";
 import { Al4StringsDiagram } from "./algorithms-4e/diagrams/al4-strings";
-import { AalAmsPmsDiagram } from "./android-advanced-light/diagrams/aal-ams-pms";
-import { AalBinderIpcDiagram } from "./android-advanced-light/diagrams/aal-binder-ipc";
-import { AalClassloaderDiagram } from "./android-advanced-light/diagrams/aal-classloader";
-import { AalDalvikArtDiagram } from "./android-advanced-light/diagrams/aal-dalvik-art";
-import { AalFinalReviewDiagram } from "./android-advanced-light/diagrams/aal-final-review";
-import { AalLearningMapDiagram } from "./android-advanced-light/diagrams/aal-learning-map";
-import { AalPackagemanagerDiagram } from "./android-advanced-light/diagrams/aal-packagemanager";
-import { AalPerformanceAdvancedDiagram } from "./android-advanced-light/diagrams/aal-performance-advanced";
-import { AalSystemArchitectureDiagram } from "./android-advanced-light/diagrams/aal-system-architecture";
-import { AalWmsWindowDiagram } from "./android-advanced-light/diagrams/aal-wms-window";
-import { AdaeActivityLifecycleDiagram } from "./android-art-exploration/diagrams/adae-activity-lifecycle";
-import { AdaeDrawableAnimDiagram } from "./android-art-exploration/diagrams/adae-drawable-anim";
-import { AdaeFinalReviewDiagram } from "./android-art-exploration/diagrams/adae-final-review";
-import { AdaeHandlerMessageDiagram } from "./android-art-exploration/diagrams/adae-handler-message";
-import { AdaeIpcBinderDiagram } from "./android-art-exploration/diagrams/adae-ipc-binder";
-import { AdaeLearningMapDiagram } from "./android-art-exploration/diagrams/adae-learning-map";
-import { AdaePerformanceOptimizeDiagram } from "./android-art-exploration/diagrams/adae-performance-optimize";
-import { AdaeRemoteViewsDiagram } from "./android-art-exploration/diagrams/adae-remote-views";
-import { AdaeThreadAsyncDiagram } from "./android-art-exploration/diagrams/adae-thread-async";
-import { AdaeViewSystemDiagram } from "./android-art-exploration/diagrams/adae-view-system";
-import { AcaArchitectureDesignDiagram } from "./android-component-arch/diagrams/aca-architecture-design";
-import { AcaBuildDeployDiagram } from "./android-component-arch/diagrams/aca-build-deploy";
-import { AcaComponentCommunicationDiagram } from "./android-component-arch/diagrams/aca-component-communication";
-import { AcaComponentIntroDiagram } from "./android-component-arch/diagrams/aca-component-intro";
-import { AcaDependencyInjectionDiagram } from "./android-component-arch/diagrams/aca-dependency-injection";
-import { AcaFinalReviewDiagram } from "./android-component-arch/diagrams/aca-final-review";
-import { AcaLearningMapDiagram } from "./android-component-arch/diagrams/aca-learning-map";
-import { AcaLifecycleManagementDiagram } from "./android-component-arch/diagrams/aca-lifecycle-management";
-import { AcaPracticeCaseDiagram } from "./android-component-arch/diagrams/aca-practice-case";
-import { AcaRouterNavigationDiagram } from "./android-component-arch/diagrams/aca-router-navigation";
-import { ApoCpuPowerDiagram } from "./android-perf-optimization/diagrams/apo-cpu-power";
-import { ApoFinalReviewDiagram } from "./android-perf-optimization/diagrams/apo-final-review";
-import { ApoLayoutOptimizationDiagram } from "./android-perf-optimization/diagrams/apo-layout-optimization";
-import { ApoLearningMapDiagram } from "./android-perf-optimization/diagrams/apo-learning-map";
-import { ApoMemoryOptimizationDiagram } from "./android-perf-optimization/diagrams/apo-memory-optimization";
-import { ApoNetworkOptimizationDiagram } from "./android-perf-optimization/diagrams/apo-network-optimization";
-import { ApoPerfToolsDiagram } from "./android-perf-optimization/diagrams/apo-perf-tools";
-import { ApoRenderingOptimizationDiagram } from "./android-perf-optimization/diagrams/apo-rendering-optimization";
-import { ApoStabilityMonitoringDiagram } from "./android-perf-optimization/diagrams/apo-stability-monitoring";
-import { ApoStorageOptimizationDiagram } from "./android-perf-optimization/diagrams/apo-storage-optimization";
+
 import { TimelineControls } from "./anim/timeline-controls";
-import { AupComplexityFutureDiagram } from "./art-of-unix-programming/diagrams/aup-complexity-future";
-import { AupFinalReviewDiagram } from "./art-of-unix-programming/diagrams/aup-final-review";
-import { AupHistoryCultureDiagram } from "./art-of-unix-programming/diagrams/aup-history-culture";
-import { AupLearningMapDiagram } from "./art-of-unix-programming/diagrams/aup-learning-map";
-import { AupMinifaceDiagram } from "./art-of-unix-programming/diagrams/aup-miniface";
-import { AupModularityDiagram } from "./art-of-unix-programming/diagrams/aup-modularity";
-import { AupOptimizationDiagram } from "./art-of-unix-programming/diagrams/aup-optimization";
-import { AupTextualityDiagram } from "./art-of-unix-programming/diagrams/aup-textuality";
-import { AupTransparencyDiagram } from "./art-of-unix-programming/diagrams/aup-transparency";
-import { AupUnixPhilosophyDiagram } from "./art-of-unix-programming/diagrams/aup-unix-philosophy";
-import { AvcApplicationLayerDiagram } from "./autosar-vehicle-controller/diagrams/avc-application-layer";
-import { AvcAutosarOverviewDiagram } from "./autosar-vehicle-controller/diagrams/avc-autosar-overview";
-import { AvcBswStackDiagram } from "./autosar-vehicle-controller/diagrams/avc-bsw-stack";
-import { AvcCommunicationStackDiagram } from "./autosar-vehicle-controller/diagrams/avc-communication-stack";
-import { AvcDiagnosticSafetyDiagram } from "./autosar-vehicle-controller/diagrams/avc-diagnostic-safety";
-import { AvcFinalReviewDiagram } from "./autosar-vehicle-controller/diagrams/avc-final-review";
-import { AvcLearningMapDiagram } from "./autosar-vehicle-controller/diagrams/avc-learning-map";
-import { AvcMcalDriversDiagram } from "./autosar-vehicle-controller/diagrams/avc-mcal-drivers";
-import { AvcMethodologyRteDiagram } from "./autosar-vehicle-controller/diagrams/avc-methodology-rte";
-import { AvcToolchainPracticeDiagram } from "./autosar-vehicle-controller/diagrams/avc-toolchain-practice";
-import { Bl3AnimationDiagram } from "./blender-3d/diagrams/bl3-animation";
-import { Bl3FinalReviewDiagram } from "./blender-3d/diagrams/bl3-final-review";
-import { Bl3GameExportDiagram } from "./blender-3d/diagrams/bl3-game-export";
-import { Bl3InterfaceDiagram } from "./blender-3d/diagrams/bl3-interface";
-import { Bl3LearningMapDiagram } from "./blender-3d/diagrams/bl3-learning-map";
-import { Bl3LightingDiagram } from "./blender-3d/diagrams/bl3-lighting";
-import { Bl3ModelingDiagram } from "./blender-3d/diagrams/bl3-modeling";
-import { Bl3RenderingDiagram } from "./blender-3d/diagrams/bl3-rendering";
-import { Bl3SculptingDiagram } from "./blender-3d/diagrams/bl3-sculpting";
-import { Bl3TexturingDiagram } from "./blender-3d/diagrams/bl3-texturing";
-import { BdpContractPatternsDiagram } from "./blockchain-dev-practice/diagrams/bdp-contract-patterns";
-import { BdpDappArchitectureDiagram } from "./blockchain-dev-practice/diagrams/bdp-dapp-architecture";
-import { BdpDefiNftPracticeDiagram } from "./blockchain-dev-practice/diagrams/bdp-defi-nft-practice";
-import { BdpDeploymentMainnetDiagram } from "./blockchain-dev-practice/diagrams/bdp-deployment-mainnet";
-import { BdpDevEnvironmentDiagram } from "./blockchain-dev-practice/diagrams/bdp-dev-environment";
-import { BdpFinalReviewDiagram } from "./blockchain-dev-practice/diagrams/bdp-final-review";
-import { BdpLearningMapDiagram } from "./blockchain-dev-practice/diagrams/bdp-learning-map";
-import { BdpSolidityBasicsDiagram } from "./blockchain-dev-practice/diagrams/bdp-solidity-basics";
-import { BdpTestingSecurityDiagram } from "./blockchain-dev-practice/diagrams/bdp-testing-security";
-import { BdpWeb3IntegrationDiagram } from "./blockchain-dev-practice/diagrams/bdp-web3-integration";
-import { BpApplicationsFutureDiagram } from "./blockchain-plain/diagrams/bp-applications-future";
-import { BpBlockchainBasicsDiagram } from "./blockchain-plain/diagrams/bp-blockchain-basics";
-import { BpConsensusMechanismsDiagram } from "./blockchain-plain/diagrams/bp-consensus-mechanisms";
-import { BpCryptographyDiagram } from "./blockchain-plain/diagrams/bp-cryptography";
-import { BpFinalReviewDiagram } from "./blockchain-plain/diagrams/bp-final-review";
-import { BpLearningMapDiagram } from "./blockchain-plain/diagrams/bp-learning-map";
-import { BpPublicPrivateChainsDiagram } from "./blockchain-plain/diagrams/bp-public-private-chains";
-import { BpSmartContractsDiagram } from "./blockchain-plain/diagrams/bp-smart-contracts";
-import { BpTransactionsBlocksDiagram } from "./blockchain-plain/diagrams/bp-transactions-blocks";
-import { BpWalletsAccountsDiagram } from "./blockchain-plain/diagrams/bp-wallets-accounts";
-import { BlaAgentApplicationsDiagram } from "./building-llm-applications/diagrams/bla-agent-applications";
-import { BlaFinalReviewDiagram } from "./building-llm-applications/diagrams/bla-final-review";
-import { BlaFineTuningAppsDiagram } from "./building-llm-applications/diagrams/bla-fine-tuning-apps";
-import { BlaLearningMapDiagram } from "./building-llm-applications/diagrams/bla-learning-map";
-import { BlaLlmLandscapeDiagram } from "./building-llm-applications/diagrams/bla-llm-landscape";
-import { BlaMultimodalAppsDiagram } from "./building-llm-applications/diagrams/bla-multimodal-apps";
-import { BlaOrchestrationFrameworksDiagram } from "./building-llm-applications/diagrams/bla-orchestration-frameworks";
-import { BlaProductionDeploymentDiagram } from "./building-llm-applications/diagrams/bla-production-deployment";
-import { BlaPromptEngineeringDiagram } from "./building-llm-applications/diagrams/bla-prompt-engineering";
-import { BlaRagApplicationsDiagram } from "./building-llm-applications/diagrams/bla-rag-applications";
-import { CsiBodyInteriorDiagram } from "./car-structure-illustrated/diagrams/csi-body-interior";
-import { CsiChassisSuspensionDiagram } from "./car-structure-illustrated/diagrams/csi-chassis-suspension";
-import { CsiElectricalElectronicsDiagram } from "./car-structure-illustrated/diagrams/csi-electrical-electronics";
-import { CsiEngineSystemDiagram } from "./car-structure-illustrated/diagrams/csi-engine-system";
-import { CsiFinalReviewDiagram } from "./car-structure-illustrated/diagrams/csi-final-review";
-import { CsiHvacComfortDiagram } from "./car-structure-illustrated/diagrams/csi-hvac-comfort";
-import { CsiLearningMapDiagram } from "./car-structure-illustrated/diagrams/csi-learning-map";
-import { CsiSafetySystemsDiagram } from "./car-structure-illustrated/diagrams/csi-safety-systems";
-import { CsiSteeringBrakingDiagram } from "./car-structure-illustrated/diagrams/csi-steering-braking";
-import { CsiTransmissionDrivetrainDiagram } from "./car-structure-illustrated/diagrams/csi-transmission-drivetrain";
+import {
+  TaoupOfficialLearningMapCompositionLab,
+  TaoupOfficialLearningMapRepresentationLab,
+  TaoupOfficialLearningMapEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-official-learning-map";
+import {
+  TaoupPrefaceCompositionLab,
+  TaoupPrefaceRepresentationLab,
+  TaoupPrefaceEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-preface";
+import {
+  TaoupPart01CompositionLab,
+  TaoupPart01RepresentationLab,
+  TaoupPart01EvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-part-01";
+import {
+  TaoupChapter01PhilosophyCompositionLab,
+  TaoupChapter01PhilosophyRepresentationLab,
+  TaoupChapter01PhilosophyEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-chapter-01-philosophy";
+import {
+  TaoupChapter02HistoryCompositionLab,
+  TaoupChapter02HistoryRepresentationLab,
+  TaoupChapter02HistoryEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-chapter-02-history";
+import {
+  TaoupChapter03ContrastsCompositionLab,
+  TaoupChapter03ContrastsRepresentationLab,
+  TaoupChapter03ContrastsEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-chapter-03-contrasts";
+import {
+  TaoupPart02CompositionLab,
+  TaoupPart02RepresentationLab,
+  TaoupPart02EvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-part-02";
+import {
+  TaoupChapter04ModularityCompositionLab,
+  TaoupChapter04ModularityRepresentationLab,
+  TaoupChapter04ModularityEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-chapter-04-modularity";
+import {
+  TaoupChapter05TextualityCompositionLab,
+  TaoupChapter05TextualityRepresentationLab,
+  TaoupChapter05TextualityEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-chapter-05-textuality";
+import {
+  TaoupChapter06TransparencyCompositionLab,
+  TaoupChapter06TransparencyRepresentationLab,
+  TaoupChapter06TransparencyEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-chapter-06-transparency";
+import {
+  TaoupChapter07MultiprogrammingCompositionLab,
+  TaoupChapter07MultiprogrammingRepresentationLab,
+  TaoupChapter07MultiprogrammingEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-chapter-07-multiprogramming";
+import {
+  TaoupChapter08MinilanguagesCompositionLab,
+  TaoupChapter08MinilanguagesRepresentationLab,
+  TaoupChapter08MinilanguagesEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-chapter-08-minilanguages";
+import {
+  TaoupChapter09GenerationCompositionLab,
+  TaoupChapter09GenerationRepresentationLab,
+  TaoupChapter09GenerationEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-chapter-09-generation";
+import {
+  TaoupChapter10ConfigurationCompositionLab,
+  TaoupChapter10ConfigurationRepresentationLab,
+  TaoupChapter10ConfigurationEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-chapter-10-configuration";
+import {
+  TaoupChapter11InterfacesCompositionLab,
+  TaoupChapter11InterfacesRepresentationLab,
+  TaoupChapter11InterfacesEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-chapter-11-interfaces";
+import {
+  TaoupChapter12OptimizationCompositionLab,
+  TaoupChapter12OptimizationRepresentationLab,
+  TaoupChapter12OptimizationEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-chapter-12-optimization";
+import {
+  TaoupChapter13ComplexityCompositionLab,
+  TaoupChapter13ComplexityRepresentationLab,
+  TaoupChapter13ComplexityEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-chapter-13-complexity";
+import {
+  TaoupPart03CompositionLab,
+  TaoupPart03RepresentationLab,
+  TaoupPart03EvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-part-03";
+import {
+  TaoupChapter14LanguagesCompositionLab,
+  TaoupChapter14LanguagesRepresentationLab,
+  TaoupChapter14LanguagesEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-chapter-14-languages";
+import {
+  TaoupChapter15ToolsCompositionLab,
+  TaoupChapter15ToolsRepresentationLab,
+  TaoupChapter15ToolsEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-chapter-15-tools";
+import {
+  TaoupChapter16ReuseCompositionLab,
+  TaoupChapter16ReuseRepresentationLab,
+  TaoupChapter16ReuseEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-chapter-16-reuse";
+import {
+  TaoupPart04CompositionLab,
+  TaoupPart04RepresentationLab,
+  TaoupPart04EvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-part-04";
+import {
+  TaoupChapter17PortabilityCompositionLab,
+  TaoupChapter17PortabilityRepresentationLab,
+  TaoupChapter17PortabilityEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-chapter-17-portability";
+import {
+  TaoupChapter18DocumentationCompositionLab,
+  TaoupChapter18DocumentationRepresentationLab,
+  TaoupChapter18DocumentationEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-chapter-18-documentation";
+import {
+  TaoupChapter19OpenSourceCompositionLab,
+  TaoupChapter19OpenSourceRepresentationLab,
+  TaoupChapter19OpenSourceEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-chapter-19-open-source";
+import {
+  TaoupChapter20FuturesCompositionLab,
+  TaoupChapter20FuturesRepresentationLab,
+  TaoupChapter20FuturesEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-chapter-20-futures";
+import {
+  TaoupAppendixAGlossaryOfAbbreviationsCompositionLab,
+  TaoupAppendixAGlossaryOfAbbreviationsRepresentationLab,
+  TaoupAppendixAGlossaryOfAbbreviationsEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-appendix-a-glossary-of-abbreviations";
+import {
+  TaoupAppendixBReferencesCompositionLab,
+  TaoupAppendixBReferencesRepresentationLab,
+  TaoupAppendixBReferencesEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-appendix-b-references";
+import {
+  TaoupAppendixCContributorsCompositionLab,
+  TaoupAppendixCContributorsRepresentationLab,
+  TaoupAppendixCContributorsEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-appendix-c-contributors";
+import {
+  TaoupAppendixDRootlessRootCompositionLab,
+  TaoupAppendixDRootlessRootRepresentationLab,
+  TaoupAppendixDRootlessRootEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-appendix-d-rootless-root";
+import {
+  TaoupColophonCompositionLab,
+  TaoupColophonRepresentationLab,
+  TaoupColophonEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-colophon";
+import {
+  TaoupIndexCompositionLab,
+  TaoupIndexRepresentationLab,
+  TaoupIndexEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-index";
+import {
+  TaoupOfficialFinalReviewCompositionLab,
+  TaoupOfficialFinalReviewRepresentationLab,
+  TaoupOfficialFinalReviewEvidenceLab,
+} from "./art-of-unix-programming/diagrams/taoup-official-final-review";
+import {
+  Avc2OfficialLearningMapArchitectureLab,
+  Avc2OfficialLearningMapConfigurationLab,
+  Avc2OfficialLearningMapEvidenceLab,
+} from "./autosar-vehicle-controller/diagrams/avc2-official-learning-map";
+import {
+  Avc201AutomotiveElectronicsArchitectureLab,
+  Avc201AutomotiveElectronicsConfigurationLab,
+  Avc201AutomotiveElectronicsEvidenceLab,
+} from "./autosar-vehicle-controller/diagrams/avc2-01-automotive-electronics";
+import {
+  Avc202AutosarFoundationsArchitectureLab,
+  Avc202AutosarFoundationsConfigurationLab,
+  Avc202AutosarFoundationsEvidenceLab,
+} from "./autosar-vehicle-controller/diagrams/avc2-02-autosar-foundations";
+import {
+  Avc203ExampleSolutionsArchitectureLab,
+  Avc203ExampleSolutionsConfigurationLab,
+  Avc203ExampleSolutionsEvidenceLab,
+} from "./autosar-vehicle-controller/diagrams/avc2-03-example-solutions";
+import {
+  Avc204SwcDevelopmentArchitectureLab,
+  Avc204SwcDevelopmentConfigurationLab,
+  Avc204SwcDevelopmentEvidenceLab,
+} from "./autosar-vehicle-controller/diagrams/avc2-04-swc-development";
+import {
+  Avc205SystemDesignConfigurationArchitectureLab,
+  Avc205SystemDesignConfigurationConfigurationLab,
+  Avc205SystemDesignConfigurationEvidenceLab,
+} from "./autosar-vehicle-controller/diagrams/avc2-05-system-design-configuration";
+import {
+  Avc206RteBswArchitectureLab,
+  Avc206RteBswConfigurationLab,
+  Avc206RteBswEvidenceLab,
+} from "./autosar-vehicle-controller/diagrams/avc2-06-rte-bsw";
+import {
+  Avc207McalArchitectureLab,
+  Avc207McalConfigurationLab,
+  Avc207McalEvidenceLab,
+} from "./autosar-vehicle-controller/diagrams/avc2-07-mcal";
+import {
+  Avc208IntegrationDebuggingArchitectureLab,
+  Avc208IntegrationDebuggingConfigurationLab,
+  Avc208IntegrationDebuggingEvidenceLab,
+} from "./autosar-vehicle-controller/diagrams/avc2-08-integration-debugging";
+import {
+  Avc209FunctionalSafetyArchitectureLab,
+  Avc209FunctionalSafetyConfigurationLab,
+  Avc209FunctionalSafetyEvidenceLab,
+} from "./autosar-vehicle-controller/diagrams/avc2-09-functional-safety";
+import {
+  Avc210OutlookArchitectureLab,
+  Avc210OutlookConfigurationLab,
+  Avc210OutlookEvidenceLab,
+} from "./autosar-vehicle-controller/diagrams/avc2-10-outlook";
+import {
+  Avc2ReferencesArchitectureLab,
+  Avc2ReferencesConfigurationLab,
+  Avc2ReferencesEvidenceLab,
+} from "./autosar-vehicle-controller/diagrams/avc2-references";
+import {
+  Avc2OfficialFinalReviewArchitectureLab,
+  Avc2OfficialFinalReviewConfigurationLab,
+  Avc2OfficialFinalReviewEvidenceLab,
+} from "./autosar-vehicle-controller/diagrams/avc2-official-final-review";
+import {
+  BdpOfficialLearningMapFlowLab,
+  BdpOfficialLearningMapExperimentLab,
+  BdpOfficialLearningMapEvidenceLab,
+} from "./blockchain-dev-practice/diagrams/bdp-official-learning-map";
+import {
+  BdpPrefaceFlowLab,
+  BdpPrefaceExperimentLab,
+  BdpPrefaceEvidenceLab,
+} from "./blockchain-dev-practice/diagrams/bdp-preface";
+import {
+  Bdp01UnderstandBlockchainFlowLab,
+  Bdp01UnderstandBlockchainExperimentLab,
+  Bdp01UnderstandBlockchainEvidenceLab,
+} from "./blockchain-dev-practice/diagrams/bdp-01-understand-blockchain";
+import {
+  Bdp02PracticePreparationFlowLab,
+  Bdp02PracticePreparationExperimentLab,
+  Bdp02PracticePreparationEvidenceLab,
+} from "./blockchain-dev-practice/diagrams/bdp-02-practice-preparation";
+import {
+  Bdp03EthereumIntroductionFlowLab,
+  Bdp03EthereumIntroductionExperimentLab,
+  Bdp03EthereumIntroductionEvidenceLab,
+} from "./blockchain-dev-practice/diagrams/bdp-03-ethereum-introduction";
+import {
+  Bdp04CompileInstallRunFlowLab,
+  Bdp04CompileInstallRunExperimentLab,
+  Bdp04CompileInstallRunEvidenceLab,
+} from "./blockchain-dev-practice/diagrams/bdp-04-compile-install-run";
+import {
+  Bdp05PrivateChainFlowLab,
+  Bdp05PrivateChainExperimentLab,
+  Bdp05PrivateChainEvidenceLab,
+} from "./blockchain-dev-practice/diagrams/bdp-05-private-chain";
+import {
+  Bdp06ProgrammingInterfacesFlowLab,
+  Bdp06ProgrammingInterfacesExperimentLab,
+  Bdp06ProgrammingInterfacesEvidenceLab,
+} from "./blockchain-dev-practice/diagrams/bdp-06-programming-interfaces";
+import {
+  Bdp07SolidityIdeQuickstartFlowLab,
+  Bdp07SolidityIdeQuickstartExperimentLab,
+  Bdp07SolidityIdeQuickstartEvidenceLab,
+} from "./blockchain-dev-practice/diagrams/bdp-07-solidity-ide-quickstart";
+import {
+  Bdp08SoliditySyntaxFlowLab,
+  Bdp08SoliditySyntaxExperimentLab,
+  Bdp08SoliditySyntaxEvidenceLab,
+} from "./blockchain-dev-practice/diagrams/bdp-08-solidity-syntax";
+import {
+  Bdp09ContractCompileDeployFlowLab,
+  Bdp09ContractCompileDeployExperimentLab,
+  Bdp09ContractCompileDeployEvidenceLab,
+} from "./blockchain-dev-practice/diagrams/bdp-09-contract-compile-deploy";
+import {
+  Bdp10TruffleFlowLab,
+  Bdp10TruffleExperimentLab,
+  Bdp10TruffleEvidenceLab,
+} from "./blockchain-dev-practice/diagrams/bdp-10-truffle";
+import {
+  Bdp11DappsPracticeFlowLab,
+  Bdp11DappsPracticeExperimentLab,
+  Bdp11DappsPracticeEvidenceLab,
+} from "./blockchain-dev-practice/diagrams/bdp-11-dapps-practice";
+import {
+  BdpAppendixABitcoinPrinciplesFlowLab,
+  BdpAppendixABitcoinPrinciplesExperimentLab,
+  BdpAppendixABitcoinPrinciplesEvidenceLab,
+} from "./blockchain-dev-practice/diagrams/bdp-appendix-a-bitcoin-principles";
+import {
+  BdpAppendixBBitcoinCliFlowLab,
+  BdpAppendixBBitcoinCliExperimentLab,
+  BdpAppendixBBitcoinCliEvidenceLab,
+} from "./blockchain-dev-practice/diagrams/bdp-appendix-b-bitcoin-cli";
+import {
+  BdpAppendixCBitcoinApisFlowLab,
+  BdpAppendixCBitcoinApisExperimentLab,
+  BdpAppendixCBitcoinApisEvidenceLab,
+} from "./blockchain-dev-practice/diagrams/bdp-appendix-c-bitcoin-apis";
+import {
+  BdpOfficialFinalReviewFlowLab,
+  BdpOfficialFinalReviewExperimentLab,
+  BdpOfficialFinalReviewEvidenceLab,
+} from "./blockchain-dev-practice/diagrams/bdp-official-final-review";
+import {
+  BpOfficialLearningMapFlowLab,
+  BpOfficialLearningMapExperimentLab,
+  BpOfficialLearningMapEvidenceLab,
+} from "./blockchain-plain/diagrams/bp-official-learning-map";
+import {
+  BpTechnicalReviewFlowLab,
+  BpTechnicalReviewExperimentLab,
+  BpTechnicalReviewEvidenceLab,
+} from "./blockchain-plain/diagrams/bp-technical-review";
+import {
+  BpPrefaceFlowLab,
+  BpPrefaceExperimentLab,
+  BpPrefaceEvidenceLab,
+} from "./blockchain-plain/diagrams/bp-preface";
+import {
+  Bp01FirstBlockchainFlowLab,
+  Bp01FirstBlockchainExperimentLab,
+  Bp01FirstBlockchainEvidenceLab,
+} from "./blockchain-plain/diagrams/bp-01-first-blockchain";
+import {
+  Bp02ApplicationDevelopmentFlowLab,
+  Bp02ApplicationDevelopmentExperimentLab,
+  Bp02ApplicationDevelopmentEvidenceLab,
+} from "./blockchain-plain/diagrams/bp-02-application-development";
+import {
+  Bp03CryptographyFlowLab,
+  Bp03CryptographyExperimentLab,
+  Bp03CryptographyEvidenceLab,
+} from "./blockchain-plain/diagrams/bp-03-cryptography";
+import {
+  Bp04ConsensusFlowLab,
+  Bp04ConsensusExperimentLab,
+  Bp04ConsensusEvidenceLab,
+} from "./blockchain-plain/diagrams/bp-04-consensus";
+import {
+  Bp05ScalingSidechainsLightningFlowLab,
+  Bp05ScalingSidechainsLightningExperimentLab,
+  Bp05ScalingSidechainsLightningEvidenceLab,
+} from "./blockchain-plain/diagrams/bp-05-scaling-sidechains-lightning";
+import {
+  Bp06EthereumFlowLab,
+  Bp06EthereumExperimentLab,
+  Bp06EthereumEvidenceLab,
+} from "./blockchain-plain/diagrams/bp-06-ethereum";
+import {
+  Bp07HyperledgerFlowLab,
+  Bp07HyperledgerExperimentLab,
+  Bp07HyperledgerEvidenceLab,
+} from "./blockchain-plain/diagrams/bp-07-hyperledger";
+import {
+  Bp08BuildMiniChainFlowLab,
+  Bp08BuildMiniChainExperimentLab,
+  Bp08BuildMiniChainEvidenceLab,
+} from "./blockchain-plain/diagrams/bp-08-build-mini-chain";
+import {
+  Bp09PotentialProblemsFlowLab,
+  Bp09PotentialProblemsExperimentLab,
+  Bp09PotentialProblemsEvidenceLab,
+} from "./blockchain-plain/diagrams/bp-09-potential-problems";
+import {
+  BpAfterwordProgrammableSocietyFlowLab,
+  BpAfterwordProgrammableSocietyExperimentLab,
+  BpAfterwordProgrammableSocietyEvidenceLab,
+} from "./blockchain-plain/diagrams/bp-afterword-programmable-society";
+import {
+  BpOfficialFinalReviewFlowLab,
+  BpOfficialFinalReviewExperimentLab,
+  BpOfficialFinalReviewEvidenceLab,
+} from "./blockchain-plain/diagrams/bp-official-final-review";
+import {
+  BlaOfficialLearningMapFlowLab,
+  BlaOfficialLearningMapExperimentLab,
+  BlaOfficialLearningMapEvidenceLab,
+} from "./building-llm-applications/diagrams/bla-official-learning-map";
+import {
+  BlaPrefaceFlowLab,
+  BlaPrefaceExperimentLab,
+  BlaPrefaceEvidenceLab,
+} from "./building-llm-applications/diagrams/bla-preface";
+import {
+  Bla01IntroductionToLargeLanguageModelsFlowLab,
+  Bla01IntroductionToLargeLanguageModelsExperimentLab,
+  Bla01IntroductionToLargeLanguageModelsEvidenceLab,
+} from "./building-llm-applications/diagrams/bla-01-introduction-to-large-language-models";
+import {
+  Bla02LlmsForAiPoweredApplicationsFlowLab,
+  Bla02LlmsForAiPoweredApplicationsExperimentLab,
+  Bla02LlmsForAiPoweredApplicationsEvidenceLab,
+} from "./building-llm-applications/diagrams/bla-02-llms-for-ai-powered-applications";
+import {
+  Bla03ChoosingAnLlmFlowLab,
+  Bla03ChoosingAnLlmExperimentLab,
+  Bla03ChoosingAnLlmEvidenceLab,
+} from "./building-llm-applications/diagrams/bla-03-choosing-an-llm";
+import {
+  Bla04PromptEngineeringFlowLab,
+  Bla04PromptEngineeringExperimentLab,
+  Bla04PromptEngineeringEvidenceLab,
+} from "./building-llm-applications/diagrams/bla-04-prompt-engineering";
+import {
+  Bla05EmbeddingLlmsInApplicationsFlowLab,
+  Bla05EmbeddingLlmsInApplicationsExperimentLab,
+  Bla05EmbeddingLlmsInApplicationsEvidenceLab,
+} from "./building-llm-applications/diagrams/bla-05-embedding-llms-in-applications";
+import {
+  Bla06ConversationalApplicationsFlowLab,
+  Bla06ConversationalApplicationsExperimentLab,
+  Bla06ConversationalApplicationsEvidenceLab,
+} from "./building-llm-applications/diagrams/bla-06-conversational-applications";
+import {
+  Bla07SearchRecommendationFlowLab,
+  Bla07SearchRecommendationExperimentLab,
+  Bla07SearchRecommendationEvidenceLab,
+} from "./building-llm-applications/diagrams/bla-07-search-recommendation";
+import {
+  Bla08StructuredDataFlowLab,
+  Bla08StructuredDataExperimentLab,
+  Bla08StructuredDataEvidenceLab,
+} from "./building-llm-applications/diagrams/bla-08-structured-data";
+import {
+  Bla09WorkingWithCodeFlowLab,
+  Bla09WorkingWithCodeExperimentLab,
+  Bla09WorkingWithCodeEvidenceLab,
+} from "./building-llm-applications/diagrams/bla-09-working-with-code";
+import {
+  Bla10MultimodalApplicationsFlowLab,
+  Bla10MultimodalApplicationsExperimentLab,
+  Bla10MultimodalApplicationsEvidenceLab,
+} from "./building-llm-applications/diagrams/bla-10-multimodal-applications";
+import {
+  Bla11FineTuningFlowLab,
+  Bla11FineTuningExperimentLab,
+  Bla11FineTuningEvidenceLab,
+} from "./building-llm-applications/diagrams/bla-11-fine-tuning";
+import {
+  Bla12ResponsibleAiFlowLab,
+  Bla12ResponsibleAiExperimentLab,
+  Bla12ResponsibleAiEvidenceLab,
+} from "./building-llm-applications/diagrams/bla-12-responsible-ai";
+import {
+  Bla13EmergingTrendsFlowLab,
+  Bla13EmergingTrendsExperimentLab,
+  Bla13EmergingTrendsEvidenceLab,
+} from "./building-llm-applications/diagrams/bla-13-emerging-trends";
+import {
+  BlaOtherBooksFlowLab,
+  BlaOtherBooksExperimentLab,
+  BlaOtherBooksEvidenceLab,
+} from "./building-llm-applications/diagrams/bla-other-books";
+import {
+  BlaIndexFlowLab,
+  BlaIndexExperimentLab,
+  BlaIndexEvidenceLab,
+} from "./building-llm-applications/diagrams/bla-index";
+import {
+  BlaOfficialFinalReviewFlowLab,
+  BlaOfficialFinalReviewExperimentLab,
+  BlaOfficialFinalReviewEvidenceLab,
+} from "./building-llm-applications/diagrams/bla-official-final-review";
+import {
+  Csi23OfficialLearningMapSystemLab,
+  Csi23OfficialLearningMapAssemblyLab,
+  Csi23OfficialLearningMapEvidenceLab,
+} from "./car-structure-illustrated/diagrams/csi23-official-learning-map";
+import {
+  Csi23BookGuideSystemLab,
+  Csi23BookGuideAssemblyLab,
+  Csi23BookGuideEvidenceLab,
+} from "./car-structure-illustrated/diagrams/csi23-book-guide";
+import {
+  Csi23PrologueSystemLab,
+  Csi23PrologueAssemblyLab,
+  Csi23PrologueEvidenceLab,
+} from "./car-structure-illustrated/diagrams/csi23-prologue";
+import {
+  Csi2301VehicleStructureSystemLab,
+  Csi2301VehicleStructureAssemblyLab,
+  Csi2301VehicleStructureEvidenceLab,
+} from "./car-structure-illustrated/diagrams/csi23-01-vehicle-structure";
+import {
+  Csi2302ProductionSystemLab,
+  Csi2302ProductionAssemblyLab,
+  Csi2302ProductionEvidenceLab,
+} from "./car-structure-illustrated/diagrams/csi23-02-production";
+import {
+  Csi2303EcoCarsSystemLab,
+  Csi2303EcoCarsAssemblyLab,
+  Csi2303EcoCarsEvidenceLab,
+} from "./car-structure-illustrated/diagrams/csi23-03-eco-cars";
+import {
+  Csi23FinalFutureSystemLab,
+  Csi23FinalFutureAssemblyLab,
+  Csi23FinalFutureEvidenceLab,
+} from "./car-structure-illustrated/diagrams/csi23-final-future";
+import {
+  Csi23IndexSystemLab,
+  Csi23IndexAssemblyLab,
+  Csi23IndexEvidenceLab,
+} from "./car-structure-illustrated/diagrams/csi23-index";
+import {
+  Csi23OfficialFinalReviewSystemLab,
+  Csi23OfficialFinalReviewAssemblyLab,
+  Csi23OfficialFinalReviewEvidenceLab,
+} from "./car-structure-illustrated/diagrams/csi23-official-final-review";
 import { Cgp2dGraphicsDiagram } from "./cg-principles-practice/diagrams/cgp-2d-graphics";
 import { Cgp3dGraphicsDiagram } from "./cg-principles-practice/diagrams/cgp-3d-graphics";
 import { CgpAdvancedTopicsDiagram } from "./cg-principles-practice/diagrams/cgp-advanced-topics";
@@ -1241,36 +1756,571 @@ import { CgpLightingModelsDiagram } from "./cg-principles-practice/diagrams/cgp-
 import { CgpModelingDiagram } from "./cg-principles-practice/diagrams/cgp-modeling";
 import { CgpRasterGraphicsDiagram } from "./cg-principles-practice/diagrams/cgp-raster-graphics";
 import { CgpRenderingAlgorithmsDiagram } from "./cg-principles-practice/diagrams/cgp-rendering-algorithms";
-import { CgptAlignmentRlhfDiagram } from "./chatgpt-principles-practice/diagrams/cgpt-alignment-rlhf";
-import { CgptEcosystemFutureDiagram } from "./chatgpt-principles-practice/diagrams/cgpt-ecosystem-future";
-import { CgptFinalReviewDiagram } from "./chatgpt-principles-practice/diagrams/cgpt-final-review";
-import { CgptFinetuningPracticeDiagram } from "./chatgpt-principles-practice/diagrams/cgpt-finetuning-practice";
-import { CgptGptArchitectureDiagram } from "./chatgpt-principles-practice/diagrams/cgpt-gpt-architecture";
-import { CgptInferenceServingDiagram } from "./chatgpt-principles-practice/diagrams/cgpt-inference-serving";
-import { CgptLearningMapDiagram } from "./chatgpt-principles-practice/diagrams/cgpt-learning-map";
-import { CgptPluginToolsDiagram } from "./chatgpt-principles-practice/diagrams/cgpt-plugin-tools";
-import { CgptPretrainingDiagram } from "./chatgpt-principles-practice/diagrams/cgpt-pretraining";
-import { CgptPromptTechniquesDiagram } from "./chatgpt-principles-practice/diagrams/cgpt-prompt-techniques";
-import { Cc2CodeQualityDiagram } from "./code-complete-2e/diagrams/cc2-code-quality";
-import { Cc2ControlFlowDiagram } from "./code-complete-2e/diagrams/cc2-control-flow";
-import { Cc2DebuggingTuningDiagram } from "./code-complete-2e/diagrams/cc2-debugging-tuning";
-import { Cc2DesignPrinciplesDiagram } from "./code-complete-2e/diagrams/cc2-design-principles";
-import { Cc2FinalReviewDiagram } from "./code-complete-2e/diagrams/cc2-final-review";
-import { Cc2LearningMapDiagram } from "./code-complete-2e/diagrams/cc2-learning-map";
-import { Cc2RefactoringIntegrationDiagram } from "./code-complete-2e/diagrams/cc2-refactoring-integration";
-import { Cc2SoftwareConstructionDiagram } from "./code-complete-2e/diagrams/cc2-software-construction";
-import { Cc2TeamCraftDiagram } from "./code-complete-2e/diagrams/cc2-team-craft";
-import { Cc2VariablesNamesDiagram } from "./code-complete-2e/diagrams/cc2-variables-names";
-import { CrvCareerGrowthDiagram } from "./coder-revolution/diagrams/crv-career-growth";
-import { CrvDatabaseCacheDiagram } from "./coder-revolution/diagrams/crv-database-cache";
-import { CrvDevopsCloudDiagram } from "./coder-revolution/diagrams/crv-devops-cloud";
-import { CrvDistributedDiagram } from "./coder-revolution/diagrams/crv-distributed";
-import { CrvFinalReviewDiagram } from "./coder-revolution/diagrams/crv-final-review";
-import { CrvJvmLanguageDiagram } from "./coder-revolution/diagrams/crv-jvm-language";
-import { CrvLearningMapDiagram } from "./coder-revolution/diagrams/crv-learning-map";
-import { CrvOopDataDiagram } from "./coder-revolution/diagrams/crv-oop-data";
-import { CrvProgrammingWorldDiagram } from "./coder-revolution/diagrams/crv-programming-world";
-import { CrvWebNetworkDiagram } from "./coder-revolution/diagrams/crv-web-network";
+import {
+  Cc2eOfficialLearningMapStructureLab,
+  Cc2eOfficialLearningMapTestLab,
+  Cc2eOfficialLearningMapEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-official-learning-map";
+import {
+  Cc2ePrefaceStructureLab,
+  Cc2ePrefaceTestLab,
+  Cc2ePrefaceEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-preface";
+import {
+  Cc2eAcknowledgmentsStructureLab,
+  Cc2eAcknowledgmentsTestLab,
+  Cc2eAcknowledgmentsEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-acknowledgments";
+import {
+  Cc2eChecklistIndexStructureLab,
+  Cc2eChecklistIndexTestLab,
+  Cc2eChecklistIndexEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-checklist-index";
+import {
+  Cc2eTableIndexStructureLab,
+  Cc2eTableIndexTestLab,
+  Cc2eTableIndexEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-table-index";
+import {
+  Cc2eFigureIndexStructureLab,
+  Cc2eFigureIndexTestLab,
+  Cc2eFigureIndexEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-figure-index";
+import {
+  Cc2ePart01FoundationsStructureLab,
+  Cc2ePart01FoundationsTestLab,
+  Cc2ePart01FoundationsEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-part-01-foundations";
+import {
+  Cc2e01ConstructionWorldStructureLab,
+  Cc2e01ConstructionWorldTestLab,
+  Cc2e01ConstructionWorldEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-01-construction-world";
+import {
+  Cc2e02SoftwareMetaphorsStructureLab,
+  Cc2e02SoftwareMetaphorsTestLab,
+  Cc2e02SoftwareMetaphorsEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-02-software-metaphors";
+import {
+  Cc2e03PrerequisitesStructureLab,
+  Cc2e03PrerequisitesTestLab,
+  Cc2e03PrerequisitesEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-03-prerequisites";
+import {
+  Cc2e04ConstructionDecisionsStructureLab,
+  Cc2e04ConstructionDecisionsTestLab,
+  Cc2e04ConstructionDecisionsEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-04-construction-decisions";
+import {
+  Cc2ePart02HighQualityCodeStructureLab,
+  Cc2ePart02HighQualityCodeTestLab,
+  Cc2ePart02HighQualityCodeEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-part-02-high-quality-code";
+import {
+  Cc2e05DesignInConstructionStructureLab,
+  Cc2e05DesignInConstructionTestLab,
+  Cc2e05DesignInConstructionEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-05-design-in-construction";
+import {
+  Cc2e06WorkingClassesStructureLab,
+  Cc2e06WorkingClassesTestLab,
+  Cc2e06WorkingClassesEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-06-working-classes";
+import {
+  Cc2e07HighQualityRoutinesStructureLab,
+  Cc2e07HighQualityRoutinesTestLab,
+  Cc2e07HighQualityRoutinesEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-07-high-quality-routines";
+import {
+  Cc2e08DefensiveProgrammingStructureLab,
+  Cc2e08DefensiveProgrammingTestLab,
+  Cc2e08DefensiveProgrammingEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-08-defensive-programming";
+import {
+  Cc2e09PseudocodeProgrammingProcessStructureLab,
+  Cc2e09PseudocodeProgrammingProcessTestLab,
+  Cc2e09PseudocodeProgrammingProcessEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-09-pseudocode-programming-process";
+import {
+  Cc2ePart03VariablesStructureLab,
+  Cc2ePart03VariablesTestLab,
+  Cc2ePart03VariablesEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-part-03-variables";
+import {
+  Cc2e10GeneralVariableUseStructureLab,
+  Cc2e10GeneralVariableUseTestLab,
+  Cc2e10GeneralVariableUseEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-10-general-variable-use";
+import {
+  Cc2e11PowerOfVariableNamesStructureLab,
+  Cc2e11PowerOfVariableNamesTestLab,
+  Cc2e11PowerOfVariableNamesEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-11-power-of-variable-names";
+import {
+  Cc2e12FundamentalDataTypesStructureLab,
+  Cc2e12FundamentalDataTypesTestLab,
+  Cc2e12FundamentalDataTypesEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-12-fundamental-data-types";
+import {
+  Cc2e13UnusualDataTypesStructureLab,
+  Cc2e13UnusualDataTypesTestLab,
+  Cc2e13UnusualDataTypesEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-13-unusual-data-types";
+import {
+  Cc2ePart04StatementsStructureLab,
+  Cc2ePart04StatementsTestLab,
+  Cc2ePart04StatementsEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-part-04-statements";
+import {
+  Cc2e14StraightLineCodeStructureLab,
+  Cc2e14StraightLineCodeTestLab,
+  Cc2e14StraightLineCodeEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-14-straight-line-code";
+import {
+  Cc2e15ConditionalsStructureLab,
+  Cc2e15ConditionalsTestLab,
+  Cc2e15ConditionalsEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-15-conditionals";
+import {
+  Cc2e16LoopsStructureLab,
+  Cc2e16LoopsTestLab,
+  Cc2e16LoopsEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-16-loops";
+import {
+  Cc2e17UnusualControlStructuresStructureLab,
+  Cc2e17UnusualControlStructuresTestLab,
+  Cc2e17UnusualControlStructuresEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-17-unusual-control-structures";
+import {
+  Cc2e18TableDrivenMethodsStructureLab,
+  Cc2e18TableDrivenMethodsTestLab,
+  Cc2e18TableDrivenMethodsEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-18-table-driven-methods";
+import {
+  Cc2e19GeneralControlIssuesStructureLab,
+  Cc2e19GeneralControlIssuesTestLab,
+  Cc2e19GeneralControlIssuesEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-19-general-control-issues";
+import {
+  Cc2ePart05CodeImprovementStructureLab,
+  Cc2ePart05CodeImprovementTestLab,
+  Cc2ePart05CodeImprovementEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-part-05-code-improvement";
+import {
+  Cc2e20SoftwareQualityLandscapeStructureLab,
+  Cc2e20SoftwareQualityLandscapeTestLab,
+  Cc2e20SoftwareQualityLandscapeEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-20-software-quality-landscape";
+import {
+  Cc2e21CollaborativeConstructionStructureLab,
+  Cc2e21CollaborativeConstructionTestLab,
+  Cc2e21CollaborativeConstructionEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-21-collaborative-construction";
+import {
+  Cc2e22DeveloperTestingStructureLab,
+  Cc2e22DeveloperTestingTestLab,
+  Cc2e22DeveloperTestingEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-22-developer-testing";
+import {
+  Cc2e23DebuggingStructureLab,
+  Cc2e23DebuggingTestLab,
+  Cc2e23DebuggingEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-23-debugging";
+import {
+  Cc2e24RefactoringStructureLab,
+  Cc2e24RefactoringTestLab,
+  Cc2e24RefactoringEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-24-refactoring";
+import {
+  Cc2e25CodeTuningStrategiesStructureLab,
+  Cc2e25CodeTuningStrategiesTestLab,
+  Cc2e25CodeTuningStrategiesEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-25-code-tuning-strategies";
+import {
+  Cc2e26CodeTuningTechniquesStructureLab,
+  Cc2e26CodeTuningTechniquesTestLab,
+  Cc2e26CodeTuningTechniquesEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-26-code-tuning-techniques";
+import {
+  Cc2ePart06SystemConsiderationsStructureLab,
+  Cc2ePart06SystemConsiderationsTestLab,
+  Cc2ePart06SystemConsiderationsEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-part-06-system-considerations";
+import {
+  Cc2e27ProgramSizeStructureLab,
+  Cc2e27ProgramSizeTestLab,
+  Cc2e27ProgramSizeEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-27-program-size";
+import {
+  Cc2e28ManagingConstructionStructureLab,
+  Cc2e28ManagingConstructionTestLab,
+  Cc2e28ManagingConstructionEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-28-managing-construction";
+import {
+  Cc2e29IntegrationStructureLab,
+  Cc2e29IntegrationTestLab,
+  Cc2e29IntegrationEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-29-integration";
+import {
+  Cc2e30ProgrammingToolsStructureLab,
+  Cc2e30ProgrammingToolsTestLab,
+  Cc2e30ProgrammingToolsEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-30-programming-tools";
+import {
+  Cc2ePart07SoftwareCraftsmanshipStructureLab,
+  Cc2ePart07SoftwareCraftsmanshipTestLab,
+  Cc2ePart07SoftwareCraftsmanshipEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-part-07-software-craftsmanship";
+import {
+  Cc2e31LayoutAndStyleStructureLab,
+  Cc2e31LayoutAndStyleTestLab,
+  Cc2e31LayoutAndStyleEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-31-layout-and-style";
+import {
+  Cc2e32SelfDocumentingCodeStructureLab,
+  Cc2e32SelfDocumentingCodeTestLab,
+  Cc2e32SelfDocumentingCodeEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-32-self-documenting-code";
+import {
+  Cc2e33PersonalCharacterStructureLab,
+  Cc2e33PersonalCharacterTestLab,
+  Cc2e33PersonalCharacterEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-33-personal-character";
+import {
+  Cc2e34SoftwareCraftsmanshipStructureLab,
+  Cc2e34SoftwareCraftsmanshipTestLab,
+  Cc2e34SoftwareCraftsmanshipEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-34-software-craftsmanship";
+import {
+  Cc2e35MoreInformationStructureLab,
+  Cc2e35MoreInformationTestLab,
+  Cc2e35MoreInformationEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-35-more-information";
+import {
+  Cc2eReferencesStructureLab,
+  Cc2eReferencesTestLab,
+  Cc2eReferencesEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-references";
+import {
+  Cc2eIndexStructureLab,
+  Cc2eIndexTestLab,
+  Cc2eIndexEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-index";
+import {
+  Cc2eOfficialFinalReviewStructureLab,
+  Cc2eOfficialFinalReviewTestLab,
+  Cc2eOfficialFinalReviewEvidenceLab,
+} from "./code-complete-2e/diagrams/cc2e-official-final-review";
+import {
+  Crv18OfficialLearningMapModelLab,
+  Crv18OfficialLearningMapFlowLab,
+  Crv18OfficialLearningMapEvidenceLab,
+} from "./coder-revolution/diagrams/crv18-official-learning-map";
+import {
+  Crv18PrefaceModelLab,
+  Crv18PrefaceFlowLab,
+  Crv18PrefaceEvidenceLab,
+} from "./coder-revolution/diagrams/crv18-preface";
+import {
+  Crv18Chapter01ModelLab,
+  Crv18Chapter01FlowLab,
+  Crv18Chapter01EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-chapter-01";
+import {
+  Crv18Section0101ModelLab,
+  Crv18Section0101FlowLab,
+  Crv18Section0101EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-01-01";
+import {
+  Crv18Section0102ModelLab,
+  Crv18Section0102FlowLab,
+  Crv18Section0102EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-01-02";
+import {
+  Crv18Section0103ModelLab,
+  Crv18Section0103FlowLab,
+  Crv18Section0103EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-01-03";
+import {
+  Crv18Section0104ModelLab,
+  Crv18Section0104FlowLab,
+  Crv18Section0104EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-01-04";
+import {
+  Crv18Section0105ModelLab,
+  Crv18Section0105FlowLab,
+  Crv18Section0105EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-01-05";
+import {
+  Crv18Section0106ModelLab,
+  Crv18Section0106FlowLab,
+  Crv18Section0106EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-01-06";
+import {
+  Crv18Section0107ModelLab,
+  Crv18Section0107FlowLab,
+  Crv18Section0107EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-01-07";
+import {
+  Crv18Section0108ModelLab,
+  Crv18Section0108FlowLab,
+  Crv18Section0108EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-01-08";
+import {
+  Crv18Section0109ModelLab,
+  Crv18Section0109FlowLab,
+  Crv18Section0109EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-01-09";
+import {
+  Crv18Section0110ModelLab,
+  Crv18Section0110FlowLab,
+  Crv18Section0110EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-01-10";
+import {
+  Crv18Section0111ModelLab,
+  Crv18Section0111FlowLab,
+  Crv18Section0111EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-01-11";
+import {
+  Crv18Section0112ModelLab,
+  Crv18Section0112FlowLab,
+  Crv18Section0112EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-01-12";
+import {
+  Crv18Section0113ModelLab,
+  Crv18Section0113FlowLab,
+  Crv18Section0113EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-01-13";
+import {
+  Crv18Section0114ModelLab,
+  Crv18Section0114FlowLab,
+  Crv18Section0114EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-01-14";
+import {
+  Crv18Chapter02ModelLab,
+  Crv18Chapter02FlowLab,
+  Crv18Chapter02EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-chapter-02";
+import {
+  Crv18Section0201ModelLab,
+  Crv18Section0201FlowLab,
+  Crv18Section0201EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-02-01";
+import {
+  Crv18Section0202ModelLab,
+  Crv18Section0202FlowLab,
+  Crv18Section0202EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-02-02";
+import {
+  Crv18Section0203ModelLab,
+  Crv18Section0203FlowLab,
+  Crv18Section0203EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-02-03";
+import {
+  Crv18Section0204ModelLab,
+  Crv18Section0204FlowLab,
+  Crv18Section0204EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-02-04";
+import {
+  Crv18Section0205ModelLab,
+  Crv18Section0205FlowLab,
+  Crv18Section0205EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-02-05";
+import {
+  Crv18Section0206ModelLab,
+  Crv18Section0206FlowLab,
+  Crv18Section0206EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-02-06";
+import {
+  Crv18Section0207ModelLab,
+  Crv18Section0207FlowLab,
+  Crv18Section0207EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-02-07";
+import {
+  Crv18Section0208ModelLab,
+  Crv18Section0208FlowLab,
+  Crv18Section0208EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-02-08";
+import {
+  Crv18Section0209ModelLab,
+  Crv18Section0209FlowLab,
+  Crv18Section0209EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-02-09";
+import {
+  Crv18Section0210ModelLab,
+  Crv18Section0210FlowLab,
+  Crv18Section0210EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-02-10";
+import {
+  Crv18Section0211ModelLab,
+  Crv18Section0211FlowLab,
+  Crv18Section0211EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-02-11";
+import {
+  Crv18Section0212ModelLab,
+  Crv18Section0212FlowLab,
+  Crv18Section0212EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-02-12";
+import {
+  Crv18Section0213ModelLab,
+  Crv18Section0213FlowLab,
+  Crv18Section0213EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-02-13";
+import {
+  Crv18Section0214ModelLab,
+  Crv18Section0214FlowLab,
+  Crv18Section0214EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-02-14";
+import {
+  Crv18Chapter03ModelLab,
+  Crv18Chapter03FlowLab,
+  Crv18Chapter03EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-chapter-03";
+import {
+  Crv18Section0301ModelLab,
+  Crv18Section0301FlowLab,
+  Crv18Section0301EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-03-01";
+import {
+  Crv18Section0302ModelLab,
+  Crv18Section0302FlowLab,
+  Crv18Section0302EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-03-02";
+import {
+  Crv18Section0303ModelLab,
+  Crv18Section0303FlowLab,
+  Crv18Section0303EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-03-03";
+import {
+  Crv18Section0304ModelLab,
+  Crv18Section0304FlowLab,
+  Crv18Section0304EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-03-04";
+import {
+  Crv18Section0305ModelLab,
+  Crv18Section0305FlowLab,
+  Crv18Section0305EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-03-05";
+import {
+  Crv18Section0306ModelLab,
+  Crv18Section0306FlowLab,
+  Crv18Section0306EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-03-06";
+import {
+  Crv18Section0307ModelLab,
+  Crv18Section0307FlowLab,
+  Crv18Section0307EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-03-07";
+import {
+  Crv18Section0308ModelLab,
+  Crv18Section0308FlowLab,
+  Crv18Section0308EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-03-08";
+import {
+  Crv18Section0309ModelLab,
+  Crv18Section0309FlowLab,
+  Crv18Section0309EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-03-09";
+import {
+  Crv18Section0310ModelLab,
+  Crv18Section0310FlowLab,
+  Crv18Section0310EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-03-10";
+import {
+  Crv18Chapter04ModelLab,
+  Crv18Chapter04FlowLab,
+  Crv18Chapter04EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-chapter-04";
+import {
+  Crv18Section0401ModelLab,
+  Crv18Section0401FlowLab,
+  Crv18Section0401EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-04-01";
+import {
+  Crv18Section0402ModelLab,
+  Crv18Section0402FlowLab,
+  Crv18Section0402EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-04-02";
+import {
+  Crv18Section0403ModelLab,
+  Crv18Section0403FlowLab,
+  Crv18Section0403EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-04-03";
+import {
+  Crv18Section0404ModelLab,
+  Crv18Section0404FlowLab,
+  Crv18Section0404EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-04-04";
+import {
+  Crv18Section0405ModelLab,
+  Crv18Section0405FlowLab,
+  Crv18Section0405EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-04-05";
+import {
+  Crv18Chapter05ModelLab,
+  Crv18Chapter05FlowLab,
+  Crv18Chapter05EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-chapter-05";
+import {
+  Crv18Section0501ModelLab,
+  Crv18Section0501FlowLab,
+  Crv18Section0501EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-05-01";
+import {
+  Crv18Section0502ModelLab,
+  Crv18Section0502FlowLab,
+  Crv18Section0502EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-05-02";
+import {
+  Crv18Section0503ModelLab,
+  Crv18Section0503FlowLab,
+  Crv18Section0503EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-05-03";
+import {
+  Crv18Section0504ModelLab,
+  Crv18Section0504FlowLab,
+  Crv18Section0504EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-05-04";
+import {
+  Crv18Section0505ModelLab,
+  Crv18Section0505FlowLab,
+  Crv18Section0505EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-05-05";
+import {
+  Crv18Chapter06ModelLab,
+  Crv18Chapter06FlowLab,
+  Crv18Chapter06EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-chapter-06";
+import {
+  Crv18Section0601ModelLab,
+  Crv18Section0601FlowLab,
+  Crv18Section0601EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-06-01";
+import {
+  Crv18Section0602ModelLab,
+  Crv18Section0602FlowLab,
+  Crv18Section0602EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-06-02";
+import {
+  Crv18Section0603ModelLab,
+  Crv18Section0603FlowLab,
+  Crv18Section0603EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-06-03";
+import {
+  Crv18Section0604ModelLab,
+  Crv18Section0604FlowLab,
+  Crv18Section0604EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-06-04";
+import {
+  Crv18Section0605ModelLab,
+  Crv18Section0605FlowLab,
+  Crv18Section0605EvidenceLab,
+} from "./coder-revolution/diagrams/crv18-section-06-05";
+import {
+  Crv18OfficialFinalReviewModelLab,
+  Crv18OfficialFinalReviewFlowLab,
+  Crv18OfficialFinalReviewEvidenceLab,
+} from "./coder-revolution/diagrams/crv18-official-final-review";
 import { CaContestBasicsDiagram } from "./competitive-algorithms/diagrams/ca-contest-basics";
 import { CaDpDiagram } from "./competitive-algorithms/diagrams/ca-dp";
 import { CaFinalReviewDiagram } from "./competitive-algorithms/diagrams/ca-final-review";
@@ -1291,36 +2341,182 @@ import { Cg4RasterizationDiagram } from "./computer-graphics-4e/diagrams/cg4-ras
 import { Cg4TexturingDiagram } from "./computer-graphics-4e/diagrams/cg4-texturing";
 import { Cg4TransformationsDiagram } from "./computer-graphics-4e/diagrams/cg4-transformations";
 import { Cg4VisibilityDiagram } from "./computer-graphics-4e/diagrams/cg4-visibility";
-import { CntApplicationLayerDiagram } from "./computer-networks-top-down/diagrams/cnt-application-layer";
-import { CntCongestionControlDiagram } from "./computer-networks-top-down/diagrams/cnt-congestion-control";
-import { CntFinalReviewDiagram } from "./computer-networks-top-down/diagrams/cnt-final-review";
-import { CntLearningMapDiagram } from "./computer-networks-top-down/diagrams/cnt-learning-map";
-import { CntLinkLayerDiagram } from "./computer-networks-top-down/diagrams/cnt-link-layer";
-import { CntNetworkLayerDiagram } from "./computer-networks-top-down/diagrams/cnt-network-layer";
-import { CntNetworkSecurityDiagram } from "./computer-networks-top-down/diagrams/cnt-network-security";
-import { CntRoutingAlgorithmsDiagram } from "./computer-networks-top-down/diagrams/cnt-routing-algorithms";
-import { CntTransportLayerDiagram } from "./computer-networks-top-down/diagrams/cnt-transport-layer";
-import { CntWirelessMobileDiagram } from "./computer-networks-top-down/diagrams/cnt-wireless-mobile";
-import { CmBinomialDiagram } from "./concrete-mathematics/diagrams/cm-binomial";
-import { CmDiscreteProbDiagram } from "./concrete-mathematics/diagrams/cm-discrete-prob";
-import { CmFinalReviewDiagram } from "./concrete-mathematics/diagrams/cm-final-review";
-import { CmGeneratingFuncsDiagram } from "./concrete-mathematics/diagrams/cm-generating-funcs";
-import { CmIntegerFunctionsDiagram } from "./concrete-mathematics/diagrams/cm-integer-functions";
-import { CmLearningMapDiagram } from "./concrete-mathematics/diagrams/cm-learning-map";
-import { CmNumberTheoryDiagram } from "./concrete-mathematics/diagrams/cm-number-theory";
-import { CmRecurrentProblemsDiagram } from "./concrete-mathematics/diagrams/cm-recurrent-problems";
-import { CmStirlingDiagram } from "./concrete-mathematics/diagrams/cm-stirling";
-import { CmSumsDiagram } from "./concrete-mathematics/diagrams/cm-sums";
-import { CrcCodeGenerationDiagram } from "./crafting-compiler/diagrams/crc-code-generation";
-import { CrcCompilerArchitectureDiagram } from "./crafting-compiler/diagrams/crc-compiler-architecture";
-import { CrcFinalReviewDiagram } from "./crafting-compiler/diagrams/crc-final-review";
-import { CrcIntermediateCodeDiagram } from "./crafting-compiler/diagrams/crc-intermediate-code";
-import { CrcLearningMapDiagram } from "./crafting-compiler/diagrams/crc-learning-map";
-import { CrcLexerGeneratorDiagram } from "./crafting-compiler/diagrams/crc-lexer-generator";
-import { CrcLinkerLoaderDiagram } from "./crafting-compiler/diagrams/crc-linker-loader";
-import { CrcOptimizationDiagram } from "./crafting-compiler/diagrams/crc-optimization";
-import { CrcParserGeneratorDiagram } from "./crafting-compiler/diagrams/crc-parser-generator";
-import { CrcSemanticsDiagram } from "./crafting-compiler/diagrams/crc-semantics";
+import {
+  Cnt8OfficialLearningMapMapLab,
+  Cnt8OfficialLearningMapExperimentLab,
+  Cnt8OfficialLearningMapEvidenceLab,
+} from "./computer-networks-top-down/diagrams/cnt8-official-learning-map";
+import {
+  Cnt801InternetMapLab,
+  Cnt801InternetExperimentLab,
+  Cnt801InternetEvidenceLab,
+} from "./computer-networks-top-down/diagrams/cnt8-01-internet";
+import {
+  Cnt802ApplicationMapLab,
+  Cnt802ApplicationExperimentLab,
+  Cnt802ApplicationEvidenceLab,
+} from "./computer-networks-top-down/diagrams/cnt8-02-application";
+import {
+  Cnt803TransportMapLab,
+  Cnt803TransportExperimentLab,
+  Cnt803TransportEvidenceLab,
+} from "./computer-networks-top-down/diagrams/cnt8-03-transport";
+import {
+  Cnt804DataPlaneMapLab,
+  Cnt804DataPlaneExperimentLab,
+  Cnt804DataPlaneEvidenceLab,
+} from "./computer-networks-top-down/diagrams/cnt8-04-data-plane";
+import {
+  Cnt805ControlPlaneMapLab,
+  Cnt805ControlPlaneExperimentLab,
+  Cnt805ControlPlaneEvidenceLab,
+} from "./computer-networks-top-down/diagrams/cnt8-05-control-plane";
+import {
+  Cnt806LinkLansMapLab,
+  Cnt806LinkLansExperimentLab,
+  Cnt806LinkLansEvidenceLab,
+} from "./computer-networks-top-down/diagrams/cnt8-06-link-lans";
+import {
+  Cnt807WirelessMobileMapLab,
+  Cnt807WirelessMobileExperimentLab,
+  Cnt807WirelessMobileEvidenceLab,
+} from "./computer-networks-top-down/diagrams/cnt8-07-wireless-mobile";
+import {
+  Cnt808SecurityMapLab,
+  Cnt808SecurityExperimentLab,
+  Cnt808SecurityEvidenceLab,
+} from "./computer-networks-top-down/diagrams/cnt8-08-security";
+import {
+  Cnt8OfficialFinalReviewMapLab,
+  Cnt8OfficialFinalReviewExperimentLab,
+  Cnt8OfficialFinalReviewEvidenceLab,
+} from "./computer-networks-top-down/diagrams/cnt8-official-final-review";
+
+import {
+  CrcOfficialLearningMapMapLab,
+  CrcOfficialLearningMapExperimentLab,
+  CrcOfficialLearningMapEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-official-learning-map";
+import {
+  Crc01StartCompilerMapLab,
+  Crc01StartCompilerExperimentLab,
+  Crc01StartCompilerEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-01-start-compiler";
+import {
+  Crc02CflatCbcMapLab,
+  Crc02CflatCbcExperimentLab,
+  Crc02CflatCbcEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-02-cflat-cbc";
+import {
+  Crc03ParsingOverviewMapLab,
+  Crc03ParsingOverviewExperimentLab,
+  Crc03ParsingOverviewEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-03-parsing-overview";
+import {
+  Crc04LexicalAnalysisMapLab,
+  Crc04LexicalAnalysisExperimentLab,
+  Crc04LexicalAnalysisEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-04-lexical-analysis";
+import {
+  Crc05JavaccParserMapLab,
+  Crc05JavaccParserExperimentLab,
+  Crc05JavaccParserEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-05-javacc-parser";
+import {
+  Crc06SyntaxAnalysisMapLab,
+  Crc06SyntaxAnalysisExperimentLab,
+  Crc06SyntaxAnalysisEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-06-syntax-analysis";
+import {
+  Crc07JavaccActionsAstMapLab,
+  Crc07JavaccActionsAstExperimentLab,
+  Crc07JavaccActionsAstEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-07-javacc-actions-ast";
+import {
+  Crc08BuildAstMapLab,
+  Crc08BuildAstExperimentLab,
+  Crc08BuildAstEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-08-build-ast";
+import {
+  Crc09ReferenceResolutionMapLab,
+  Crc09ReferenceResolutionExperimentLab,
+  Crc09ReferenceResolutionEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-09-reference-resolution";
+import {
+  Crc10StaticTypeCheckingMapLab,
+  Crc10StaticTypeCheckingExperimentLab,
+  Crc10StaticTypeCheckingEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-10-static-type-checking";
+import {
+  Crc11IrConversionMapLab,
+  Crc11IrConversionExperimentLab,
+  Crc11IrConversionEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-11-ir-conversion";
+import {
+  Crc12X86OverviewMapLab,
+  Crc12X86OverviewExperimentLab,
+  Crc12X86OverviewEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-12-x86-overview";
+import {
+  Crc13X86AssemblyMapLab,
+  Crc13X86AssemblyExperimentLab,
+  Crc13X86AssemblyEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-13-x86-assembly";
+import {
+  Crc14FunctionsVariablesMapLab,
+  Crc14FunctionsVariablesExperimentLab,
+  Crc14FunctionsVariablesEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-14-functions-variables";
+import {
+  Crc15CompileExpressionsStatementsMapLab,
+  Crc15CompileExpressionsStatementsExperimentLab,
+  Crc15CompileExpressionsStatementsEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-15-compile-expressions-statements";
+import {
+  Crc16StackFrameMapLab,
+  Crc16StackFrameExperimentLab,
+  Crc16StackFrameEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-16-stack-frame";
+import {
+  Crc17OptimizationMapLab,
+  Crc17OptimizationExperimentLab,
+  Crc17OptimizationEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-17-optimization";
+import {
+  Crc18ObjectFilesMapLab,
+  Crc18ObjectFilesExperimentLab,
+  Crc18ObjectFilesEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-18-object-files";
+import {
+  Crc19LinkingLibrariesMapLab,
+  Crc19LinkingLibrariesExperimentLab,
+  Crc19LinkingLibrariesEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-19-linking-libraries";
+import {
+  Crc20ProgramLoadingMapLab,
+  Crc20ProgramLoadingExperimentLab,
+  Crc20ProgramLoadingEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-20-program-loading";
+import {
+  Crc21PositionIndependentCodeMapLab,
+  Crc21PositionIndependentCodeExperimentLab,
+  Crc21PositionIndependentCodeEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-21-position-independent-code";
+import {
+  Crc22FurtherReadingMapLab,
+  Crc22FurtherReadingExperimentLab,
+  Crc22FurtherReadingEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-22-further-reading";
+import {
+  CrcAppendixResourcesMapLab,
+  CrcAppendixResourcesExperimentLab,
+  CrcAppendixResourcesEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-appendix-resources";
+import {
+  CrcOfficialFinalReviewMapLab,
+  CrcOfficialFinalReviewExperimentLab,
+  CrcOfficialFinalReviewEvidenceLab,
+} from "./crafting-compiler/diagrams/crc-official-final-review";
 import { CraAdvancedUiDiagram } from "./crazy-android/diagrams/cra-advanced-ui";
 import { CraAndroidQuickstartDiagram } from "./crazy-android/diagrams/cra-android-quickstart";
 import { CraDataPersistenceDiagram } from "./crazy-android/diagrams/cra-data-persistence";
@@ -1331,36 +2527,81 @@ import { CraMultimediaDiagram } from "./crazy-android/diagrams/cra-multimedia";
 import { CraServiceBroadcastDiagram } from "./crazy-android/diagrams/cra-service-broadcast";
 import { CraUiComponentsDiagram } from "./crazy-android/diagrams/cra-ui-components";
 import { CraWebNetworkDiagram } from "./crazy-android/diagrams/cra-web-network";
-import { CapDataRepresentationDiagram } from "./csapp/diagrams/cap-data-representation";
-import { CapExceptionalControlDiagram } from "./csapp/diagrams/cap-exceptional-control";
-import { CapFinalReviewDiagram } from "./csapp/diagrams/cap-final-review";
-import { CapLearningMapDiagram } from "./csapp/diagrams/cap-learning-map";
-import { CapLinkingLoadingDiagram } from "./csapp/diagrams/cap-linking-loading";
-import { CapMachineLevelDiagram } from "./csapp/diagrams/cap-machine-level";
-import { CapMemoryHierarchyDiagram } from "./csapp/diagrams/cap-memory-hierarchy";
-import { CapProcessorArchitectureDiagram } from "./csapp/diagrams/cap-processor-architecture";
-import { CapSystemLevelIoDiagram } from "./csapp/diagrams/cap-system-level-io";
-import { CapVirtualMemoryDiagram } from "./csapp/diagrams/cap-virtual-memory";
-import { CsecBackgroundPatternsDiagram } from "./css-secrets/diagrams/csec-background-patterns";
-import { CsecBorderShapesDiagram } from "./css-secrets/diagrams/csec-border-shapes";
-import { CsecClipPathDiagram } from "./css-secrets/diagrams/csec-clip-path";
-import { CsecFinalReviewDiagram } from "./css-secrets/diagrams/csec-final-review";
-import { CsecFontFeaturesDiagram } from "./css-secrets/diagrams/csec-font-features";
-import { CsecLearningMapDiagram } from "./css-secrets/diagrams/csec-learning-map";
-import { CsecMotionVisualDiagram } from "./css-secrets/diagrams/csec-motion-visual";
-import { CsecPseudoElementsDiagram } from "./css-secrets/diagrams/csec-pseudo-elements";
-import { CsecTextEffectsDiagram } from "./css-secrets/diagrams/csec-text-effects";
-import { CsecUserExperienceDiagram } from "./css-secrets/diagrams/csec-user-experience";
-import { CswAnimationTransitionDiagram } from "./css-world/diagrams/csw-animation-transition";
-import { CswBoxModelDiagram } from "./css-world/diagrams/csw-box-model";
-import { CswFinalReviewDiagram } from "./css-world/diagrams/csw-final-review";
-import { CswFlexLayoutDiagram } from "./css-world/diagrams/csw-flex-layout";
-import { CswFlowBfcDiagram } from "./css-world/diagrams/csw-flow-bfc";
-import { CswGridLayoutDiagram } from "./css-world/diagrams/csw-grid-layout";
-import { CswLearningMapDiagram } from "./css-world/diagrams/csw-learning-map";
-import { CswTextDecorationDiagram } from "./css-world/diagrams/csw-text-decoration";
-import { CswTransformPerspectiveDiagram } from "./css-world/diagrams/csw-transform-perspective";
-import { CswVerticalRhythmDiagram } from "./css-world/diagrams/csw-vertical-rhythm";
+import {
+  CapOfficialLearningMapMapLab,
+  CapOfficialLearningMapExperimentLab,
+  CapOfficialLearningMapEvidenceLab,
+} from "./csapp/diagrams/cap-official-learning-map";
+import {
+  Cap01SystemTourMapLab,
+  Cap01SystemTourExperimentLab,
+  Cap01SystemTourEvidenceLab,
+} from "./csapp/diagrams/cap-01-system-tour";
+import {
+  Cap02InformationMapLab,
+  Cap02InformationExperimentLab,
+  Cap02InformationEvidenceLab,
+} from "./csapp/diagrams/cap-02-information";
+import {
+  Cap03MachineLevelMapLab,
+  Cap03MachineLevelExperimentLab,
+  Cap03MachineLevelEvidenceLab,
+} from "./csapp/diagrams/cap-03-machine-level";
+import {
+  Cap04ProcessorArchitectureMapLab,
+  Cap04ProcessorArchitectureExperimentLab,
+  Cap04ProcessorArchitectureEvidenceLab,
+} from "./csapp/diagrams/cap-04-processor-architecture";
+import {
+  Cap05OptimizationMapLab,
+  Cap05OptimizationExperimentLab,
+  Cap05OptimizationEvidenceLab,
+} from "./csapp/diagrams/cap-05-optimization";
+import {
+  Cap06MemoryHierarchyMapLab,
+  Cap06MemoryHierarchyExperimentLab,
+  Cap06MemoryHierarchyEvidenceLab,
+} from "./csapp/diagrams/cap-06-memory-hierarchy";
+import {
+  Cap07LinkingMapLab,
+  Cap07LinkingExperimentLab,
+  Cap07LinkingEvidenceLab,
+} from "./csapp/diagrams/cap-07-linking";
+import {
+  Cap08ExceptionalControlMapLab,
+  Cap08ExceptionalControlExperimentLab,
+  Cap08ExceptionalControlEvidenceLab,
+} from "./csapp/diagrams/cap-08-exceptional-control";
+import {
+  Cap09VirtualMemoryMapLab,
+  Cap09VirtualMemoryExperimentLab,
+  Cap09VirtualMemoryEvidenceLab,
+} from "./csapp/diagrams/cap-09-virtual-memory";
+import {
+  Cap10SystemIoMapLab,
+  Cap10SystemIoExperimentLab,
+  Cap10SystemIoEvidenceLab,
+} from "./csapp/diagrams/cap-10-system-io";
+import {
+  Cap11NetworkProgrammingMapLab,
+  Cap11NetworkProgrammingExperimentLab,
+  Cap11NetworkProgrammingEvidenceLab,
+} from "./csapp/diagrams/cap-11-network-programming";
+import {
+  Cap12ConcurrentProgrammingMapLab,
+  Cap12ConcurrentProgrammingExperimentLab,
+  Cap12ConcurrentProgrammingEvidenceLab,
+} from "./csapp/diagrams/cap-12-concurrent-programming";
+import {
+  CapAppendixAErrorHandlingMapLab,
+  CapAppendixAErrorHandlingExperimentLab,
+  CapAppendixAErrorHandlingEvidenceLab,
+} from "./csapp/diagrams/cap-appendix-a-error-handling";
+import {
+  CapOfficialFinalReviewMapLab,
+  CapOfficialFinalReviewExperimentLab,
+  CapOfficialFinalReviewEvidenceLab,
+} from "./csapp/diagrams/cap-official-final-review";
 import { DsvArraysLinkedDiagram } from "./data-structures-visual/diagrams/dsv-arrays-linked";
 import { DsvComplexityDiagram } from "./data-structures-visual/diagrams/dsv-complexity";
 import { DsvFinalReviewDiagram } from "./data-structures-visual/diagrams/dsv-final-review";
@@ -1371,116 +2612,806 @@ import { DsvSearchingDiagram } from "./data-structures-visual/diagrams/dsv-searc
 import { DsvSortingDiagram } from "./data-structures-visual/diagrams/dsv-sorting";
 import { DsvStacksQueuesDiagram } from "./data-structures-visual/diagrams/dsv-stacks-queues";
 import { DsvTreesBstDiagram } from "./data-structures-visual/diagrams/dsv-trees-bst";
-import { DscConcurrencyControlDiagram } from "./database-system-concepts/diagrams/dsc-concurrency-control";
-import { DscDatabaseDesignDiagram } from "./database-system-concepts/diagrams/dsc-database-design";
-import { DscFinalReviewDiagram } from "./database-system-concepts/diagrams/dsc-final-review";
-import { DscLearningMapDiagram } from "./database-system-concepts/diagrams/dsc-learning-map";
-import { DscQueryProcessingDiagram } from "./database-system-concepts/diagrams/dsc-query-processing";
-import { DscRecoverySystemsDiagram } from "./database-system-concepts/diagrams/dsc-recovery-systems";
-import { DscRelationalModelDiagram } from "./database-system-concepts/diagrams/dsc-relational-model";
-import { DscSqlRelationalAlgebraDiagram } from "./database-system-concepts/diagrams/dsc-sql-relational-algebra";
-import { DscStorageIndexingDiagram } from "./database-system-concepts/diagrams/dsc-storage-indexing";
-import { DscTransactionsDiagram } from "./database-system-concepts/diagrams/dsc-transactions";
-import { DdiBatchStreamDiagram } from "./ddia/diagrams/ddi-batch-stream";
-import { DdiConsistencyConsensusDiagram } from "./ddia/diagrams/ddi-consistency-consensus";
-import { DdiDerivedDataDiagram } from "./ddia/diagrams/ddi-derived-data";
-import { DdiFinalReviewDiagram } from "./ddia/diagrams/ddi-final-review";
-import { DdiFoundationsDiagram } from "./ddia/diagrams/ddi-foundations";
-import { DdiFutureDirectionsDiagram } from "./ddia/diagrams/ddi-future-directions";
-import { DdiLearningMapDiagram } from "./ddia/diagrams/ddi-learning-map";
-import { DdiPartitioningDiagram } from "./ddia/diagrams/ddi-partitioning";
-import { DdiReplicationDiagram } from "./ddia/diagrams/ddi-replication";
-import { DdiTransactionsDiagram } from "./ddia/diagrams/ddi-transactions";
-import { DakAmsComponentDiagram } from "./deep-android-kernel/diagrams/dak-ams-component";
-import { DakAndroidArchitectureDiagram } from "./deep-android-kernel/diagrams/dak-android-architecture";
-import { DakAudioCameraDiagram } from "./deep-android-kernel/diagrams/dak-audio-camera";
-import { DakBinderSystemDiagram } from "./deep-android-kernel/diagrams/dak-binder-system";
-import { DakFinalReviewDiagram } from "./deep-android-kernel/diagrams/dak-final-review";
-import { DakHandlerThreadDiagram } from "./deep-android-kernel/diagrams/dak-handler-thread";
-import { DakInitBootDiagram } from "./deep-android-kernel/diagrams/dak-init-boot";
-import { DakLearningMapDiagram } from "./deep-android-kernel/diagrams/dak-learning-map";
-import { DakPmsPackageDiagram } from "./deep-android-kernel/diagrams/dak-pms-package";
-import { DakWmsViewDiagram } from "./deep-android-kernel/diagrams/dak-wms-view";
-import { DavAmsDeepDiagram } from "./deep-android-volumes/diagrams/dav-ams-deep";
-import { DavBinderDeepDiagram } from "./deep-android-volumes/diagrams/dav-binder-deep";
-import { DavFinalReviewDiagram } from "./deep-android-volumes/diagrams/dav-final-review";
-import { DavInitZygoteDiagram } from "./deep-android-volumes/diagrams/dav-init-zygote";
-import { DavJavaFrameworkDiagram } from "./deep-android-volumes/diagrams/dav-java-framework";
-import { DavLearningMapDiagram } from "./deep-android-volumes/diagrams/dav-learning-map";
-import { DavMediaAudioDiagram } from "./deep-android-volumes/diagrams/dav-media-audio";
-import { DavNativeLayerDiagram } from "./deep-android-volumes/diagrams/dav-native-layer";
-import { DavPmsDeepDiagram } from "./deep-android-volumes/diagrams/dav-pms-deep";
-import { DavWmsDeepDiagram } from "./deep-android-volumes/diagrams/dav-wms-deep";
-import { DlsApplicationsDiagram } from "./deep-learning-from-scratch/diagrams/dls-applications";
-import { DlsBackpropagationDiagram } from "./deep-learning-from-scratch/diagrams/dls-backpropagation";
-import { DlsCnnDiagram } from "./deep-learning-from-scratch/diagrams/dls-cnn";
-import { DlsDeepLearningDiagram } from "./deep-learning-from-scratch/diagrams/dls-deep-learning";
-import { DlsFinalReviewDiagram } from "./deep-learning-from-scratch/diagrams/dls-final-review";
-import { DlsLearningMapDiagram } from "./deep-learning-from-scratch/diagrams/dls-learning-map";
-import { DlsLearningTechniquesDiagram } from "./deep-learning-from-scratch/diagrams/dls-learning-techniques";
-import { DlsNeuralNetworkDiagram } from "./deep-learning-from-scratch/diagrams/dls-neural-network";
-import { DlsPerceptronDiagram } from "./deep-learning-from-scratch/diagrams/dls-perceptron";
-import { DlsPythonNumpyDiagram } from "./deep-learning-from-scratch/diagrams/dls-python-numpy";
-import { Dl2AutomaticDifferentiationDiagram } from "./deep-learning-from-scratch-2/diagrams/dl2-automatic-differentiation";
-import { Dl2FinalReviewDiagram } from "./deep-learning-from-scratch-2/diagrams/dl2-final-review";
-import { Dl2GradientBackpropDiagram } from "./deep-learning-from-scratch-2/diagrams/dl2-gradient-backprop";
-import { Dl2LayersModulesDiagram } from "./deep-learning-from-scratch-2/diagrams/dl2-layers-modules";
-import { Dl2LearningMapDiagram } from "./deep-learning-from-scratch-2/diagrams/dl2-learning-map";
-import { Dl2ModelArchitectureDiagram } from "./deep-learning-from-scratch-2/diagrams/dl2-model-architecture";
-import { Dl2NeuralNetFrameworkDiagram } from "./deep-learning-from-scratch-2/diagrams/dl2-neural-net-framework";
-import { Dl2OptimizersDiagram } from "./deep-learning-from-scratch-2/diagrams/dl2-optimizers";
-import { Dl2TrainingEvaluationDiagram } from "./deep-learning-from-scratch-2/diagrams/dl2-training-evaluation";
-import { Dl2VariableFunctionsDiagram } from "./deep-learning-from-scratch-2/diagrams/dl2-variable-functions";
-import { DlgAutoencoderVaeDiagram } from "./deep-learning-gen-models/diagrams/dlg-autoencoder-vae";
-import { DlgDcganDiagram } from "./deep-learning-gen-models/diagrams/dlg-dcgan";
-import { DlgDiffusionModelsDiagram } from "./deep-learning-gen-models/diagrams/dlg-diffusion-models";
-import { DlgEvaluationEthicsDiagram } from "./deep-learning-gen-models/diagrams/dlg-evaluation-ethics";
-import { DlgFinalReviewDiagram } from "./deep-learning-gen-models/diagrams/dlg-final-review";
-import { DlgFlowModelsDiagram } from "./deep-learning-gen-models/diagrams/dlg-flow-models";
-import { DlgGanBasicsDiagram } from "./deep-learning-gen-models/diagrams/dlg-gan-basics";
-import { DlgGenerativeModelsBasicsDiagram } from "./deep-learning-gen-models/diagrams/dlg-generative-models-basics";
-import { DlgLearningMapDiagram } from "./deep-learning-gen-models/diagrams/dlg-learning-map";
-import { DlgTextToImageDiagram } from "./deep-learning-gen-models/diagrams/dlg-text-to-image";
-import { DnaAttentionDiagram } from "./deep-learning-nlp-advanced/diagrams/dna-attention";
-import { DnaFinalReviewDiagram } from "./deep-learning-nlp-advanced/diagrams/dna-final-review";
-import { DnaLearningMapDiagram } from "./deep-learning-nlp-advanced/diagrams/dna-learning-map";
-import { DnaNlpBasicsDiagram } from "./deep-learning-nlp-advanced/diagrams/dna-nlp-basics";
-import { DnaRnnLstmDiagram } from "./deep-learning-nlp-advanced/diagrams/dna-rnn-lstm";
-import { DnaSeq2seqDiagram } from "./deep-learning-nlp-advanced/diagrams/dna-seq2seq";
-import { DnaTextGenerationDiagram } from "./deep-learning-nlp-advanced/diagrams/dna-text-generation";
-import { DnaTransformerDiagram } from "./deep-learning-nlp-advanced/diagrams/dna-transformer";
-import { DnaWordEmbeddingsDiagram } from "./deep-learning-nlp-advanced/diagrams/dna-word-embeddings";
-import { DnaWord2vecCbowDiagram } from "./deep-learning-nlp-advanced/diagrams/dna-word2vec-cbow";
-import { DlrDeepQNetworkDiagram } from "./deep-learning-rl-from-scratch/diagrams/dlr-deep-q-network";
-import { DlrDynamicProgrammingDiagram } from "./deep-learning-rl-from-scratch/diagrams/dlr-dynamic-programming";
-import { DlrFinalReviewDiagram } from "./deep-learning-rl-from-scratch/diagrams/dlr-final-review";
-import { DlrLearningMapDiagram } from "./deep-learning-rl-from-scratch/diagrams/dlr-learning-map";
-import { DlrMdpDiagram } from "./deep-learning-rl-from-scratch/diagrams/dlr-mdp";
-import { DlrMonteCarloTdDiagram } from "./deep-learning-rl-from-scratch/diagrams/dlr-monte-carlo-td";
-import { DlrPolicyGradientDiagram } from "./deep-learning-rl-from-scratch/diagrams/dlr-policy-gradient";
-import { DlrQLearningDiagram } from "./deep-learning-rl-from-scratch/diagrams/dlr-q-learning";
-import { DlrRlBasicsDiagram } from "./deep-learning-rl-from-scratch/diagrams/dlr-rl-basics";
-import { DlrValueFunctionsDiagram } from "./deep-learning-rl-from-scratch/diagrams/dlr-value-functions";
-import { DltConvRnnDiagram } from "./deep-learning-textbook/diagrams/dlt-conv-rnn";
-import { DltDeepNetworksDiagram } from "./deep-learning-textbook/diagrams/dlt-deep-networks";
-import { DltFinalReviewDiagram } from "./deep-learning-textbook/diagrams/dlt-final-review";
-import { DltLearningMapDiagram } from "./deep-learning-textbook/diagrams/dlt-learning-map";
-import { DltLinearAlgebraDiagram } from "./deep-learning-textbook/diagrams/dlt-linear-algebra";
-import { DltMlBasicsDiagram } from "./deep-learning-textbook/diagrams/dlt-ml-basics";
-import { DltOptimizationDiagram } from "./deep-learning-textbook/diagrams/dlt-optimization";
-import { DltProbabilityInfoDiagram } from "./deep-learning-textbook/diagrams/dlt-probability-info";
-import { DltRegularizationDiagram } from "./deep-learning-textbook/diagrams/dlt-regularization";
-import { DltResearchFrontiersDiagram } from "./deep-learning-textbook/diagrams/dlt-research-frontiers";
-import { DnjAsyncProgrammingDiagram } from "./deep-nodejs/diagrams/dnj-async-programming";
-import { DnjEventLoopAdvDiagram } from "./deep-nodejs/diagrams/dnj-event-loop-adv";
-import { DnjFinalReviewDiagram } from "./deep-nodejs/diagrams/dnj-final-review";
-import { DnjLearningMapDiagram } from "./deep-nodejs/diagrams/dnj-learning-map";
-import { DnjNpmModuleDiagram } from "./deep-nodejs/diagrams/dnj-npm-module";
-import { DnjStreamImplementationDiagram } from "./deep-nodejs/diagrams/dnj-stream-implementation";
-import { DnjTcpHttpDiagram } from "./deep-nodejs/diagrams/dnj-tcp-http";
-import { DnjTestingDeployDiagram } from "./deep-nodejs/diagrams/dnj-testing-deploy";
-import { DnjV8EngineDiagram } from "./deep-nodejs/diagrams/dnj-v8-engine";
-import { DnjWebsocketDiagram } from "./deep-nodejs/diagrams/dnj-websocket";
+import {
+  DlsOfficialLearningMapMapLab,
+  DlsOfficialLearningMapExperimentLab,
+  DlsOfficialLearningMapEvidenceLab,
+} from "./deep-learning-from-scratch/diagrams/dls-official-learning-map";
+import {
+  Dls01PythonIntroductionMapLab,
+  Dls01PythonIntroductionExperimentLab,
+  Dls01PythonIntroductionEvidenceLab,
+} from "./deep-learning-from-scratch/diagrams/dls-01-python-introduction";
+import {
+  Dls02PerceptronMapLab,
+  Dls02PerceptronExperimentLab,
+  Dls02PerceptronEvidenceLab,
+} from "./deep-learning-from-scratch/diagrams/dls-02-perceptron";
+import {
+  Dls03NeuralNetworkMapLab,
+  Dls03NeuralNetworkExperimentLab,
+  Dls03NeuralNetworkEvidenceLab,
+} from "./deep-learning-from-scratch/diagrams/dls-03-neural-network";
+import {
+  Dls04NeuralNetworkLearningMapLab,
+  Dls04NeuralNetworkLearningExperimentLab,
+  Dls04NeuralNetworkLearningEvidenceLab,
+} from "./deep-learning-from-scratch/diagrams/dls-04-neural-network-learning";
+import {
+  Dls05BackpropagationMapLab,
+  Dls05BackpropagationExperimentLab,
+  Dls05BackpropagationEvidenceLab,
+} from "./deep-learning-from-scratch/diagrams/dls-05-backpropagation";
+import {
+  Dls06LearningTechniquesMapLab,
+  Dls06LearningTechniquesExperimentLab,
+  Dls06LearningTechniquesEvidenceLab,
+} from "./deep-learning-from-scratch/diagrams/dls-06-learning-techniques";
+import {
+  Dls07CnnMapLab,
+  Dls07CnnExperimentLab,
+  Dls07CnnEvidenceLab,
+} from "./deep-learning-from-scratch/diagrams/dls-07-cnn";
+import {
+  Dls08DeepLearningMapLab,
+  Dls08DeepLearningExperimentLab,
+  Dls08DeepLearningEvidenceLab,
+} from "./deep-learning-from-scratch/diagrams/dls-08-deep-learning";
+import {
+  DlsAppendixSoftmaxLossMapLab,
+  DlsAppendixSoftmaxLossExperimentLab,
+  DlsAppendixSoftmaxLossEvidenceLab,
+} from "./deep-learning-from-scratch/diagrams/dls-appendix-softmax-loss";
+import {
+  DlsOfficialFinalReviewMapLab,
+  DlsOfficialFinalReviewExperimentLab,
+  DlsOfficialFinalReviewEvidenceLab,
+} from "./deep-learning-from-scratch/diagrams/dls-official-final-review";
+import {
+  Dl2OfficialLearningMapMapLab,
+  Dl2OfficialLearningMapExperimentLab,
+  Dl2OfficialLearningMapEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-official-learning-map";
+import {
+  Dl2Step01VariableBoxMapLab,
+  Dl2Step01VariableBoxExperimentLab,
+  Dl2Step01VariableBoxEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-01-variable-box";
+import {
+  Dl2Step02FunctionCreatorMapLab,
+  Dl2Step02FunctionCreatorExperimentLab,
+  Dl2Step02FunctionCreatorEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-02-function-creator";
+import {
+  Dl2Step03FunctionChainMapLab,
+  Dl2Step03FunctionChainExperimentLab,
+  Dl2Step03FunctionChainEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-03-function-chain";
+import {
+  Dl2Step04NumericalDifferentiationMapLab,
+  Dl2Step04NumericalDifferentiationExperimentLab,
+  Dl2Step04NumericalDifferentiationEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-04-numerical-differentiation";
+import {
+  Dl2Step05BackpropTheoryMapLab,
+  Dl2Step05BackpropTheoryExperimentLab,
+  Dl2Step05BackpropTheoryEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-05-backprop-theory";
+import {
+  Dl2Step06ManualBackpropMapLab,
+  Dl2Step06ManualBackpropExperimentLab,
+  Dl2Step06ManualBackpropEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-06-manual-backprop";
+import {
+  Dl2Step07AutomaticBackpropMapLab,
+  Dl2Step07AutomaticBackpropExperimentLab,
+  Dl2Step07AutomaticBackpropEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-07-automatic-backprop";
+import {
+  Dl2Step08RecursionToLoopMapLab,
+  Dl2Step08RecursionToLoopExperimentLab,
+  Dl2Step08RecursionToLoopEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-08-recursion-to-loop";
+import {
+  Dl2Step09UsableFunctionsMapLab,
+  Dl2Step09UsableFunctionsExperimentLab,
+  Dl2Step09UsableFunctionsEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-09-usable-functions";
+import {
+  Dl2Step10TestingMapLab,
+  Dl2Step10TestingExperimentLab,
+  Dl2Step10TestingEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-10-testing";
+import {
+  Dl2Step11VariadicForwardMapLab,
+  Dl2Step11VariadicForwardExperimentLab,
+  Dl2Step11VariadicForwardEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-11-variadic-forward";
+import {
+  Dl2Step12VariadicImprovementsMapLab,
+  Dl2Step12VariadicImprovementsExperimentLab,
+  Dl2Step12VariadicImprovementsEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-12-variadic-improvements";
+import {
+  Dl2Step13VariadicBackwardMapLab,
+  Dl2Step13VariadicBackwardExperimentLab,
+  Dl2Step13VariadicBackwardEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-13-variadic-backward";
+import {
+  Dl2Step14ReusedVariableMapLab,
+  Dl2Step14ReusedVariableExperimentLab,
+  Dl2Step14ReusedVariableEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-14-reused-variable";
+import {
+  Dl2Step15ComplexGraphTheoryMapLab,
+  Dl2Step15ComplexGraphTheoryExperimentLab,
+  Dl2Step15ComplexGraphTheoryEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-15-complex-graph-theory";
+import {
+  Dl2Step16ComplexGraphImplementationMapLab,
+  Dl2Step16ComplexGraphImplementationExperimentLab,
+  Dl2Step16ComplexGraphImplementationEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-16-complex-graph-implementation";
+import {
+  Dl2Step17MemoryCyclesMapLab,
+  Dl2Step17MemoryCyclesExperimentLab,
+  Dl2Step17MemoryCyclesEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-17-memory-cycles";
+import {
+  Dl2Step18MemoryModeMapLab,
+  Dl2Step18MemoryModeExperimentLab,
+  Dl2Step18MemoryModeEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-18-memory-mode";
+import {
+  Dl2Step19UsableVariableMapLab,
+  Dl2Step19UsableVariableExperimentLab,
+  Dl2Step19UsableVariableEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-19-usable-variable";
+import {
+  Dl2Step20OperatorOverloadOneMapLab,
+  Dl2Step20OperatorOverloadOneExperimentLab,
+  Dl2Step20OperatorOverloadOneEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-20-operator-overload-one";
+import {
+  Dl2Step21OperatorOverloadTwoMapLab,
+  Dl2Step21OperatorOverloadTwoExperimentLab,
+  Dl2Step21OperatorOverloadTwoEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-21-operator-overload-two";
+import {
+  Dl2Step22OperatorOverloadThreeMapLab,
+  Dl2Step22OperatorOverloadThreeExperimentLab,
+  Dl2Step22OperatorOverloadThreeEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-22-operator-overload-three";
+import {
+  Dl2Step23PackageMapLab,
+  Dl2Step23PackageExperimentLab,
+  Dl2Step23PackageEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-23-package";
+import {
+  Dl2Step24ComplexDerivativesMapLab,
+  Dl2Step24ComplexDerivativesExperimentLab,
+  Dl2Step24ComplexDerivativesEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-24-complex-derivatives";
+import {
+  Dl2Step25GraphvizOneMapLab,
+  Dl2Step25GraphvizOneExperimentLab,
+  Dl2Step25GraphvizOneEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-25-graphviz-one";
+import {
+  Dl2Step26GraphvizTwoMapLab,
+  Dl2Step26GraphvizTwoExperimentLab,
+  Dl2Step26GraphvizTwoEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-26-graphviz-two";
+import {
+  Dl2Step27TaylorDerivativeMapLab,
+  Dl2Step27TaylorDerivativeExperimentLab,
+  Dl2Step27TaylorDerivativeEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-27-taylor-derivative";
+import {
+  Dl2Step28FunctionOptimizationMapLab,
+  Dl2Step28FunctionOptimizationExperimentLab,
+  Dl2Step28FunctionOptimizationEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-28-function-optimization";
+import {
+  Dl2Step29ManualNewtonMapLab,
+  Dl2Step29ManualNewtonExperimentLab,
+  Dl2Step29ManualNewtonEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-29-manual-newton";
+import {
+  Dl2Step30HigherOrderPreparationMapLab,
+  Dl2Step30HigherOrderPreparationExperimentLab,
+  Dl2Step30HigherOrderPreparationEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-30-higher-order-preparation";
+import {
+  Dl2Step31HigherOrderTheoryMapLab,
+  Dl2Step31HigherOrderTheoryExperimentLab,
+  Dl2Step31HigherOrderTheoryEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-31-higher-order-theory";
+import {
+  Dl2Step32HigherOrderImplementationMapLab,
+  Dl2Step32HigherOrderImplementationExperimentLab,
+  Dl2Step32HigherOrderImplementationEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-32-higher-order-implementation";
+import {
+  Dl2Step33AutomaticNewtonMapLab,
+  Dl2Step33AutomaticNewtonExperimentLab,
+  Dl2Step33AutomaticNewtonEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-33-automatic-newton";
+import {
+  Dl2Step34SinHigherOrderMapLab,
+  Dl2Step34SinHigherOrderExperimentLab,
+  Dl2Step34SinHigherOrderEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-34-sin-higher-order";
+import {
+  Dl2Step35HigherOrderGraphMapLab,
+  Dl2Step35HigherOrderGraphExperimentLab,
+  Dl2Step35HigherOrderGraphEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-35-higher-order-graph";
+import {
+  Dl2Step36DoubleBackpropMapLab,
+  Dl2Step36DoubleBackpropExperimentLab,
+  Dl2Step36DoubleBackpropEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-36-double-backprop";
+import {
+  Dl2Step37TensorMapLab,
+  Dl2Step37TensorExperimentLab,
+  Dl2Step37TensorEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-37-tensor";
+import {
+  Dl2Step38ReshapeTransposeMapLab,
+  Dl2Step38ReshapeTransposeExperimentLab,
+  Dl2Step38ReshapeTransposeEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-38-reshape-transpose";
+import {
+  Dl2Step39SumMapLab,
+  Dl2Step39SumExperimentLab,
+  Dl2Step39SumEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-39-sum";
+import {
+  Dl2Step40BroadcastMapLab,
+  Dl2Step40BroadcastExperimentLab,
+  Dl2Step40BroadcastEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-40-broadcast";
+import {
+  Dl2Step41MatrixProductMapLab,
+  Dl2Step41MatrixProductExperimentLab,
+  Dl2Step41MatrixProductEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-41-matrix-product";
+import {
+  Dl2Step42LinearRegressionMapLab,
+  Dl2Step42LinearRegressionExperimentLab,
+  Dl2Step42LinearRegressionEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-42-linear-regression";
+import {
+  Dl2Step43NeuralNetworkMapLab,
+  Dl2Step43NeuralNetworkExperimentLab,
+  Dl2Step43NeuralNetworkEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-43-neural-network";
+import {
+  Dl2Step44ParameterLayerMapLab,
+  Dl2Step44ParameterLayerExperimentLab,
+  Dl2Step44ParameterLayerEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-44-parameter-layer";
+import {
+  Dl2Step45ModelLayerMapLab,
+  Dl2Step45ModelLayerExperimentLab,
+  Dl2Step45ModelLayerEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-45-model-layer";
+import {
+  Dl2Step46OptimizerMapLab,
+  Dl2Step46OptimizerExperimentLab,
+  Dl2Step46OptimizerEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-46-optimizer";
+import {
+  Dl2Step47SoftmaxCrossEntropyMapLab,
+  Dl2Step47SoftmaxCrossEntropyExperimentLab,
+  Dl2Step47SoftmaxCrossEntropyEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-47-softmax-cross-entropy";
+import {
+  Dl2Step48MulticlassMapLab,
+  Dl2Step48MulticlassExperimentLab,
+  Dl2Step48MulticlassEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-48-multiclass";
+import {
+  Dl2Step49DatasetPreprocessMapLab,
+  Dl2Step49DatasetPreprocessExperimentLab,
+  Dl2Step49DatasetPreprocessEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-49-dataset-preprocess";
+import {
+  Dl2Step50DataloaderMapLab,
+  Dl2Step50DataloaderExperimentLab,
+  Dl2Step50DataloaderEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-50-dataloader";
+import {
+  Dl2Step51MnistMapLab,
+  Dl2Step51MnistExperimentLab,
+  Dl2Step51MnistEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-51-mnist";
+import {
+  Dl2Step52GpuMapLab,
+  Dl2Step52GpuExperimentLab,
+  Dl2Step52GpuEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-52-gpu";
+import {
+  Dl2Step53SaveLoadMapLab,
+  Dl2Step53SaveLoadExperimentLab,
+  Dl2Step53SaveLoadEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-53-save-load";
+import {
+  Dl2Step54DropoutTestModeMapLab,
+  Dl2Step54DropoutTestModeExperimentLab,
+  Dl2Step54DropoutTestModeEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-54-dropout-test-mode";
+import {
+  Dl2Step55CnnMechanismOneMapLab,
+  Dl2Step55CnnMechanismOneExperimentLab,
+  Dl2Step55CnnMechanismOneEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-55-cnn-mechanism-one";
+import {
+  Dl2Step56CnnMechanismTwoMapLab,
+  Dl2Step56CnnMechanismTwoExperimentLab,
+  Dl2Step56CnnMechanismTwoEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-56-cnn-mechanism-two";
+import {
+  Dl2Step57Conv2dPoolingMapLab,
+  Dl2Step57Conv2dPoolingExperimentLab,
+  Dl2Step57Conv2dPoolingEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-57-conv2d-pooling";
+import {
+  Dl2Step58Vgg16MapLab,
+  Dl2Step58Vgg16ExperimentLab,
+  Dl2Step58Vgg16EvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-58-vgg16";
+import {
+  Dl2Step59RnnMapLab,
+  Dl2Step59RnnExperimentLab,
+  Dl2Step59RnnEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-59-rnn";
+import {
+  Dl2Step60LstmDataloaderMapLab,
+  Dl2Step60LstmDataloaderExperimentLab,
+  Dl2Step60LstmDataloaderEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-step-60-lstm-dataloader";
+import {
+  Dl2AppendixAInPlaceMapLab,
+  Dl2AppendixAInPlaceExperimentLab,
+  Dl2AppendixAInPlaceEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-appendix-a-in-place";
+import {
+  Dl2AppendixBGetItemMapLab,
+  Dl2AppendixBGetItemExperimentLab,
+  Dl2AppendixBGetItemEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-appendix-b-get-item";
+import {
+  Dl2AppendixCColabMapLab,
+  Dl2AppendixCColabExperimentLab,
+  Dl2AppendixCColabEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-appendix-c-colab";
+import {
+  Dl2OfficialFinalReviewMapLab,
+  Dl2OfficialFinalReviewExperimentLab,
+  Dl2OfficialFinalReviewEvidenceLab,
+} from "./deep-learning-from-scratch-2/diagrams/dl2-official-final-review";
+import {
+  DlgOfficialLearningMapMapLab,
+  DlgOfficialLearningMapExperimentLab,
+  DlgOfficialLearningMapEvidenceLab,
+} from "./deep-learning-gen-models/diagrams/dlg-official-learning-map";
+import {
+  Dlg01NormalDistributionMapLab,
+  Dlg01NormalDistributionExperimentLab,
+  Dlg01NormalDistributionEvidenceLab,
+} from "./deep-learning-gen-models/diagrams/dlg-01-normal-distribution";
+import {
+  Dlg02MaximumLikelihoodMapLab,
+  Dlg02MaximumLikelihoodExperimentLab,
+  Dlg02MaximumLikelihoodEvidenceLab,
+} from "./deep-learning-gen-models/diagrams/dlg-02-maximum-likelihood";
+import {
+  Dlg03MultivariateNormalMapLab,
+  Dlg03MultivariateNormalExperimentLab,
+  Dlg03MultivariateNormalEvidenceLab,
+} from "./deep-learning-gen-models/diagrams/dlg-03-multivariate-normal";
+import {
+  Dlg04GaussianMixtureMapLab,
+  Dlg04GaussianMixtureExperimentLab,
+  Dlg04GaussianMixtureEvidenceLab,
+} from "./deep-learning-gen-models/diagrams/dlg-04-gaussian-mixture";
+import {
+  Dlg05EmAlgorithmMapLab,
+  Dlg05EmAlgorithmExperimentLab,
+  Dlg05EmAlgorithmEvidenceLab,
+} from "./deep-learning-gen-models/diagrams/dlg-05-em-algorithm";
+import {
+  Dlg06NeuralNetworkMapLab,
+  Dlg06NeuralNetworkExperimentLab,
+  Dlg06NeuralNetworkEvidenceLab,
+} from "./deep-learning-gen-models/diagrams/dlg-06-neural-network";
+import {
+  Dlg07VaeMapLab,
+  Dlg07VaeExperimentLab,
+  Dlg07VaeEvidenceLab,
+} from "./deep-learning-gen-models/diagrams/dlg-07-vae";
+import {
+  Dlg08DiffusionTheoryMapLab,
+  Dlg08DiffusionTheoryExperimentLab,
+  Dlg08DiffusionTheoryEvidenceLab,
+} from "./deep-learning-gen-models/diagrams/dlg-08-diffusion-theory";
+import {
+  Dlg09DiffusionImplementationMapLab,
+  Dlg09DiffusionImplementationExperimentLab,
+  Dlg09DiffusionImplementationEvidenceLab,
+} from "./deep-learning-gen-models/diagrams/dlg-09-diffusion-implementation";
+import {
+  Dlg10DiffusionApplicationsMapLab,
+  Dlg10DiffusionApplicationsExperimentLab,
+  Dlg10DiffusionApplicationsEvidenceLab,
+} from "./deep-learning-gen-models/diagrams/dlg-10-diffusion-applications";
+import {
+  DlgAppendixAMultivariateMleMapLab,
+  DlgAppendixAMultivariateMleExperimentLab,
+  DlgAppendixAMultivariateMleEvidenceLab,
+} from "./deep-learning-gen-models/diagrams/dlg-appendix-a-multivariate-mle";
+import {
+  DlgAppendixBJensenMapLab,
+  DlgAppendixBJensenExperimentLab,
+  DlgAppendixBJensenEvidenceLab,
+} from "./deep-learning-gen-models/diagrams/dlg-appendix-b-jensen";
+import {
+  DlgAppendixCHierarchicalVaeMapLab,
+  DlgAppendixCHierarchicalVaeExperimentLab,
+  DlgAppendixCHierarchicalVaeEvidenceLab,
+} from "./deep-learning-gen-models/diagrams/dlg-appendix-c-hierarchical-vae";
+import {
+  DlgAppendixDNotationMapLab,
+  DlgAppendixDNotationExperimentLab,
+  DlgAppendixDNotationEvidenceLab,
+} from "./deep-learning-gen-models/diagrams/dlg-appendix-d-notation";
+import {
+  DlgOfficialFinalReviewMapLab,
+  DlgOfficialFinalReviewExperimentLab,
+  DlgOfficialFinalReviewEvidenceLab,
+} from "./deep-learning-gen-models/diagrams/dlg-official-final-review";
+import {
+  DnaOfficialLearningMapMapLab,
+  DnaOfficialLearningMapExperimentLab,
+  DnaOfficialLearningMapEvidenceLab,
+} from "./deep-learning-nlp-advanced/diagrams/dna-official-learning-map";
+import {
+  Dna01NeuralNetworkReviewMapLab,
+  Dna01NeuralNetworkReviewExperimentLab,
+  Dna01NeuralNetworkReviewEvidenceLab,
+} from "./deep-learning-nlp-advanced/diagrams/dna-01-neural-network-review";
+import {
+  Dna02DistributedWordRepresentationsMapLab,
+  Dna02DistributedWordRepresentationsExperimentLab,
+  Dna02DistributedWordRepresentationsEvidenceLab,
+} from "./deep-learning-nlp-advanced/diagrams/dna-02-distributed-word-representations";
+import {
+  Dna03Word2vecMapLab,
+  Dna03Word2vecExperimentLab,
+  Dna03Word2vecEvidenceLab,
+} from "./deep-learning-nlp-advanced/diagrams/dna-03-word2vec";
+import {
+  Dna04Word2vecAccelerationMapLab,
+  Dna04Word2vecAccelerationExperimentLab,
+  Dna04Word2vecAccelerationEvidenceLab,
+} from "./deep-learning-nlp-advanced/diagrams/dna-04-word2vec-acceleration";
+import {
+  Dna05RnnMapLab,
+  Dna05RnnExperimentLab,
+  Dna05RnnEvidenceLab,
+} from "./deep-learning-nlp-advanced/diagrams/dna-05-rnn";
+import {
+  Dna06GatedRnnMapLab,
+  Dna06GatedRnnExperimentLab,
+  Dna06GatedRnnEvidenceLab,
+} from "./deep-learning-nlp-advanced/diagrams/dna-06-gated-rnn";
+import {
+  Dna07RnnTextGenerationMapLab,
+  Dna07RnnTextGenerationExperimentLab,
+  Dna07RnnTextGenerationEvidenceLab,
+} from "./deep-learning-nlp-advanced/diagrams/dna-07-rnn-text-generation";
+import {
+  Dna08AttentionMapLab,
+  Dna08AttentionExperimentLab,
+  Dna08AttentionEvidenceLab,
+} from "./deep-learning-nlp-advanced/diagrams/dna-08-attention";
+import {
+  DnaAppendixAActivationDerivativesMapLab,
+  DnaAppendixAActivationDerivativesExperimentLab,
+  DnaAppendixAActivationDerivativesEvidenceLab,
+} from "./deep-learning-nlp-advanced/diagrams/dna-appendix-a-activation-derivatives";
+import {
+  DnaAppendixBWordnetMapLab,
+  DnaAppendixBWordnetExperimentLab,
+  DnaAppendixBWordnetEvidenceLab,
+} from "./deep-learning-nlp-advanced/diagrams/dna-appendix-b-wordnet";
+import {
+  DnaAppendixCGruMapLab,
+  DnaAppendixCGruExperimentLab,
+  DnaAppendixCGruEvidenceLab,
+} from "./deep-learning-nlp-advanced/diagrams/dna-appendix-c-gru";
+import {
+  DnaOfficialFinalReviewMapLab,
+  DnaOfficialFinalReviewExperimentLab,
+  DnaOfficialFinalReviewEvidenceLab,
+} from "./deep-learning-nlp-advanced/diagrams/dna-official-final-review";
+import {
+  DlrOfficialLearningMapMapLab,
+  DlrOfficialLearningMapExperimentLab,
+  DlrOfficialLearningMapEvidenceLab,
+} from "./deep-learning-rl-from-scratch/diagrams/dlr-official-learning-map";
+import {
+  Dlr01BanditMapLab,
+  Dlr01BanditExperimentLab,
+  Dlr01BanditEvidenceLab,
+} from "./deep-learning-rl-from-scratch/diagrams/dlr-01-bandit";
+import {
+  Dlr02MdpMapLab,
+  Dlr02MdpExperimentLab,
+  Dlr02MdpEvidenceLab,
+} from "./deep-learning-rl-from-scratch/diagrams/dlr-02-mdp";
+import {
+  Dlr03BellmanMapLab,
+  Dlr03BellmanExperimentLab,
+  Dlr03BellmanEvidenceLab,
+} from "./deep-learning-rl-from-scratch/diagrams/dlr-03-bellman";
+import {
+  Dlr04DynamicProgrammingMapLab,
+  Dlr04DynamicProgrammingExperimentLab,
+  Dlr04DynamicProgrammingEvidenceLab,
+} from "./deep-learning-rl-from-scratch/diagrams/dlr-04-dynamic-programming";
+import {
+  Dlr05MonteCarloMapLab,
+  Dlr05MonteCarloExperimentLab,
+  Dlr05MonteCarloEvidenceLab,
+} from "./deep-learning-rl-from-scratch/diagrams/dlr-05-monte-carlo";
+import {
+  Dlr06TdMapLab,
+  Dlr06TdExperimentLab,
+  Dlr06TdEvidenceLab,
+} from "./deep-learning-rl-from-scratch/diagrams/dlr-06-td";
+import {
+  Dlr07NeuralQLearningMapLab,
+  Dlr07NeuralQLearningExperimentLab,
+  Dlr07NeuralQLearningEvidenceLab,
+} from "./deep-learning-rl-from-scratch/diagrams/dlr-07-neural-q-learning";
+import {
+  Dlr08DqnMapLab,
+  Dlr08DqnExperimentLab,
+  Dlr08DqnEvidenceLab,
+} from "./deep-learning-rl-from-scratch/diagrams/dlr-08-dqn";
+import {
+  Dlr09PolicyGradientMapLab,
+  Dlr09PolicyGradientExperimentLab,
+  Dlr09PolicyGradientEvidenceLab,
+} from "./deep-learning-rl-from-scratch/diagrams/dlr-09-policy-gradient";
+import {
+  Dlr10FurtherMapLab,
+  Dlr10FurtherExperimentLab,
+  Dlr10FurtherEvidenceLab,
+} from "./deep-learning-rl-from-scratch/diagrams/dlr-10-further";
+import {
+  DlrAppendixAOffPolicyMcMapLab,
+  DlrAppendixAOffPolicyMcExperimentLab,
+  DlrAppendixAOffPolicyMcEvidenceLab,
+} from "./deep-learning-rl-from-scratch/diagrams/dlr-appendix-a-off-policy-mc";
+import {
+  DlrAppendixBNstepTdMapLab,
+  DlrAppendixBNstepTdExperimentLab,
+  DlrAppendixBNstepTdEvidenceLab,
+} from "./deep-learning-rl-from-scratch/diagrams/dlr-appendix-b-n-step-td";
+import {
+  DlrAppendixCDoubleDqnMapLab,
+  DlrAppendixCDoubleDqnExperimentLab,
+  DlrAppendixCDoubleDqnEvidenceLab,
+} from "./deep-learning-rl-from-scratch/diagrams/dlr-appendix-c-double-dqn";
+import {
+  DlrAppendixDPolicyGradientProofMapLab,
+  DlrAppendixDPolicyGradientProofExperimentLab,
+  DlrAppendixDPolicyGradientProofEvidenceLab,
+} from "./deep-learning-rl-from-scratch/diagrams/dlr-appendix-d-policy-gradient-proof";
+import {
+  DlrOfficialFinalReviewMapLab,
+  DlrOfficialFinalReviewExperimentLab,
+  DlrOfficialFinalReviewEvidenceLab,
+} from "./deep-learning-rl-from-scratch/diagrams/dlr-official-final-review";
+import {
+  DltOfficialLearningMapMapLab,
+  DltOfficialLearningMapExperimentLab,
+  DltOfficialLearningMapEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-official-learning-map";
+import {
+  Dlt01IntroductionMapLab,
+  Dlt01IntroductionExperimentLab,
+  Dlt01IntroductionEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-01-introduction";
+import {
+  Dlt02LinearAlgebraMapLab,
+  Dlt02LinearAlgebraExperimentLab,
+  Dlt02LinearAlgebraEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-02-linear-algebra";
+import {
+  Dlt03ProbabilityInformationMapLab,
+  Dlt03ProbabilityInformationExperimentLab,
+  Dlt03ProbabilityInformationEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-03-probability-information";
+import {
+  Dlt04NumericalComputationMapLab,
+  Dlt04NumericalComputationExperimentLab,
+  Dlt04NumericalComputationEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-04-numerical-computation";
+import {
+  Dlt05MachineLearningBasicsMapLab,
+  Dlt05MachineLearningBasicsExperimentLab,
+  Dlt05MachineLearningBasicsEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-05-machine-learning-basics";
+import {
+  Dlt06FeedforwardNetworksMapLab,
+  Dlt06FeedforwardNetworksExperimentLab,
+  Dlt06FeedforwardNetworksEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-06-feedforward-networks";
+import {
+  Dlt07RegularizationMapLab,
+  Dlt07RegularizationExperimentLab,
+  Dlt07RegularizationEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-07-regularization";
+import {
+  Dlt08OptimizationMapLab,
+  Dlt08OptimizationExperimentLab,
+  Dlt08OptimizationEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-08-optimization";
+import {
+  Dlt09ConvolutionalNetworksMapLab,
+  Dlt09ConvolutionalNetworksExperimentLab,
+  Dlt09ConvolutionalNetworksEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-09-convolutional-networks";
+import {
+  Dlt10SequenceModelingMapLab,
+  Dlt10SequenceModelingExperimentLab,
+  Dlt10SequenceModelingEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-10-sequence-modeling";
+import {
+  Dlt11PracticalMethodologyMapLab,
+  Dlt11PracticalMethodologyExperimentLab,
+  Dlt11PracticalMethodologyEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-11-practical-methodology";
+import {
+  Dlt12ApplicationsMapLab,
+  Dlt12ApplicationsExperimentLab,
+  Dlt12ApplicationsEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-12-applications";
+import {
+  Dlt13LinearFactorModelsMapLab,
+  Dlt13LinearFactorModelsExperimentLab,
+  Dlt13LinearFactorModelsEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-13-linear-factor-models";
+import {
+  Dlt14AutoencodersMapLab,
+  Dlt14AutoencodersExperimentLab,
+  Dlt14AutoencodersEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-14-autoencoders";
+import {
+  Dlt15RepresentationLearningMapLab,
+  Dlt15RepresentationLearningExperimentLab,
+  Dlt15RepresentationLearningEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-15-representation-learning";
+import {
+  Dlt16StructuredProbabilisticModelsMapLab,
+  Dlt16StructuredProbabilisticModelsExperimentLab,
+  Dlt16StructuredProbabilisticModelsEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-16-structured-probabilistic-models";
+import {
+  Dlt17MonteCarloMapLab,
+  Dlt17MonteCarloExperimentLab,
+  Dlt17MonteCarloEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-17-monte-carlo";
+import {
+  Dlt18PartitionFunctionMapLab,
+  Dlt18PartitionFunctionExperimentLab,
+  Dlt18PartitionFunctionEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-18-partition-function";
+import {
+  Dlt19ApproximateInferenceMapLab,
+  Dlt19ApproximateInferenceExperimentLab,
+  Dlt19ApproximateInferenceEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-19-approximate-inference";
+import {
+  Dlt20DeepGenerativeModelsMapLab,
+  Dlt20DeepGenerativeModelsExperimentLab,
+  Dlt20DeepGenerativeModelsEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-20-deep-generative-models";
+import {
+  DltOfficialFinalReviewMapLab,
+  DltOfficialFinalReviewExperimentLab,
+  DltOfficialFinalReviewEvidenceLab,
+} from "./deep-learning-textbook/diagrams/dlt-official-final-review";
+import {
+  DnjOfficialLearningMapMapLab,
+  DnjOfficialLearningMapExperimentLab,
+  DnjOfficialLearningMapEvidenceLab,
+} from "./deep-nodejs/diagrams/dnj-official-learning-map";
+import {
+  Dnj01NodeIntroductionMapLab,
+  Dnj01NodeIntroductionExperimentLab,
+  Dnj01NodeIntroductionEvidenceLab,
+} from "./deep-nodejs/diagrams/dnj-01-node-introduction";
+import {
+  Dnj02ModuleMechanismMapLab,
+  Dnj02ModuleMechanismExperimentLab,
+  Dnj02ModuleMechanismEvidenceLab,
+} from "./deep-nodejs/diagrams/dnj-02-module-mechanism";
+import {
+  Dnj03AsyncIoMapLab,
+  Dnj03AsyncIoExperimentLab,
+  Dnj03AsyncIoEvidenceLab,
+} from "./deep-nodejs/diagrams/dnj-03-async-io";
+import {
+  Dnj04AsyncProgrammingMapLab,
+  Dnj04AsyncProgrammingExperimentLab,
+  Dnj04AsyncProgrammingEvidenceLab,
+} from "./deep-nodejs/diagrams/dnj-04-async-programming";
+import {
+  Dnj05MemoryControlMapLab,
+  Dnj05MemoryControlExperimentLab,
+  Dnj05MemoryControlEvidenceLab,
+} from "./deep-nodejs/diagrams/dnj-05-memory-control";
+import {
+  Dnj06BufferMapLab,
+  Dnj06BufferExperimentLab,
+  Dnj06BufferEvidenceLab,
+} from "./deep-nodejs/diagrams/dnj-06-buffer";
+import {
+  Dnj07NetworkProgrammingMapLab,
+  Dnj07NetworkProgrammingExperimentLab,
+  Dnj07NetworkProgrammingEvidenceLab,
+} from "./deep-nodejs/diagrams/dnj-07-network-programming";
+import {
+  Dnj08WebApplicationMapLab,
+  Dnj08WebApplicationExperimentLab,
+  Dnj08WebApplicationEvidenceLab,
+} from "./deep-nodejs/diagrams/dnj-08-web-application";
+import {
+  Dnj09ProcessesMapLab,
+  Dnj09ProcessesExperimentLab,
+  Dnj09ProcessesEvidenceLab,
+} from "./deep-nodejs/diagrams/dnj-09-processes";
+import {
+  Dnj10TestingMapLab,
+  Dnj10TestingExperimentLab,
+  Dnj10TestingEvidenceLab,
+} from "./deep-nodejs/diagrams/dnj-10-testing";
+import {
+  Dnj11ProductizationMapLab,
+  Dnj11ProductizationExperimentLab,
+  Dnj11ProductizationEvidenceLab,
+} from "./deep-nodejs/diagrams/dnj-11-productization";
+import {
+  DnjAppendixAInstallationMapLab,
+  DnjAppendixAInstallationExperimentLab,
+  DnjAppendixAInstallationEvidenceLab,
+} from "./deep-nodejs/diagrams/dnj-appendix-a-installation";
+import {
+  DnjAppendixBDebuggingMapLab,
+  DnjAppendixBDebuggingExperimentLab,
+  DnjAppendixBDebuggingEvidenceLab,
+} from "./deep-nodejs/diagrams/dnj-appendix-b-debugging";
+import {
+  DnjAppendixCCodingStyleMapLab,
+  DnjAppendixCCodingStyleExperimentLab,
+  DnjAppendixCCodingStyleEvidenceLab,
+} from "./deep-nodejs/diagrams/dnj-appendix-c-coding-style";
+import {
+  DnjAppendixDLocalNpmMapLab,
+  DnjAppendixDLocalNpmExperimentLab,
+  DnjAppendixDLocalNpmEvidenceLab,
+} from "./deep-nodejs/diagrams/dnj-appendix-d-local-npm";
+import {
+  DnjOfficialFinalReviewMapLab,
+  DnjOfficialFinalReviewExperimentLab,
+  DnjOfficialFinalReviewEvidenceLab,
+} from "./deep-nodejs/diagrams/dnj-official-final-review";
 import { DogCrossPlatformDiagram } from "./deep-opengl/diagrams/dog-cross-platform";
 import { DogDebuggingToolsDiagram } from "./deep-opengl/diagrams/dog-debugging-tools";
 import { DogFboTechniquesDiagram } from "./deep-opengl/diagrams/dog-fbo-techniques";
@@ -1490,17 +3421,8 @@ import { DogOpenglArchitectureDiagram } from "./deep-opengl/diagrams/dog-opengl-
 import { DogOpenglEsDiagram } from "./deep-opengl/diagrams/dog-opengl-es";
 import { DogRenderingOptimizationDiagram } from "./deep-opengl/diagrams/dog-rendering-optimization";
 import { DogShaderLanguageDiagram } from "./deep-opengl/diagrams/dog-shader-language";
+import { DogStepFlowDiagram } from "./deep-opengl/diagrams/dog-step-flow";
 import { DogWebglBasicsDiagram } from "./deep-opengl/diagrams/dog-webgl-basics";
-import { DrlActorCriticDiagram } from "./deep-reinforcement-learning/diagrams/drl-actor-critic";
-import { DrlAdvancedAlgorithmsDiagram } from "./deep-reinforcement-learning/diagrams/drl-advanced-algorithms";
-import { DrlApplicationsDiagram } from "./deep-reinforcement-learning/diagrams/drl-applications";
-import { DrlExplorationDiagram } from "./deep-reinforcement-learning/diagrams/drl-exploration";
-import { DrlFinalReviewDiagram } from "./deep-reinforcement-learning/diagrams/drl-final-review";
-import { DrlLearningMapDiagram } from "./deep-reinforcement-learning/diagrams/drl-learning-map";
-import { DrlPolicyGradientDiagram } from "./deep-reinforcement-learning/diagrams/drl-policy-gradient";
-import { DrlRewardDesignDiagram } from "./deep-reinforcement-learning/diagrams/drl-reward-design";
-import { DrlRlFoundationsDiagram } from "./deep-reinforcement-learning/diagrams/drl-rl-foundations";
-import { DrlValueBasedDiagram } from "./deep-reinforcement-learning/diagrams/drl-value-based";
 import { DujClassLoaderDiagram } from "./deep-understanding-jvm/diagrams/duj-class-loader";
 import { DujCompileOptimizeDiagram } from "./deep-understanding-jvm/diagrams/duj-compile-optimize";
 import { DujExecutionEngineDiagram } from "./deep-understanding-jvm/diagrams/duj-execution-engine";
@@ -1514,26 +3436,96 @@ import { DujPracticeTuningDiagram } from "./deep-understanding-jvm/diagrams/duj-
 import { StranglerFigDiagram } from "./diagrams/StranglerFigDiagram";
 import { PatternDiagramViewport } from "./diagrams/agentic-pattern-diagram-shell";
 import { CValuePassingDiagram } from "./diagrams/c-value-passing-diagram";
-import { DnmFinalReviewDiagram } from "./dotnet-memory/diagrams/dnm-final-review";
-import { DnmFinalizationDiagram } from "./dotnet-memory/diagrams/dnm-finalization";
-import { DnmFragOptimizationDiagram } from "./dotnet-memory/diagrams/dnm-frag-optimization";
-import { DnmGcBasicsDiagram } from "./dotnet-memory/diagrams/dnm-gc-basics";
-import { DnmLargeObjectDiagram } from "./dotnet-memory/diagrams/dnm-large-object";
-import { DnmMemoryModelDiagram } from "./dotnet-memory/diagrams/dnm-memory-model";
-import { DnmMemoryPressureDiagram } from "./dotnet-memory/diagrams/dnm-memory-pressure";
-import { DnmPinningDiagram } from "./dotnet-memory/diagrams/dnm-pinning";
-import { DnmSosDumpDiagram } from "./dotnet-memory/diagrams/dnm-sos-dump";
-import { DnmSosHeapDiagram } from "./dotnet-memory/diagrams/dnm-sos-heap";
-import { DbcCodeGenerationDiagram } from "./dragon-book-compilers/diagrams/dbc-code-generation";
-import { DbcFinalReviewDiagram } from "./dragon-book-compilers/diagrams/dbc-final-review";
-import { DbcLearningMapDiagram } from "./dragon-book-compilers/diagrams/dbc-learning-map";
-import { DbcLexicalAnalysisDiagram } from "./dragon-book-compilers/diagrams/dbc-lexical-analysis";
-import { DbcMachineDependentOptDiagram } from "./dragon-book-compilers/diagrams/dbc-machine-dependent-opt";
-import { DbcMachineIndependentOptDiagram } from "./dragon-book-compilers/diagrams/dbc-machine-independent-opt";
-import { DbcRuntimeEnvironmentDiagram } from "./dragon-book-compilers/diagrams/dbc-runtime-environment";
-import { DbcSymTablesDiagram } from "./dragon-book-compilers/diagrams/dbc-sym-tables";
-import { DbcSyntaxAnalysisDiagram } from "./dragon-book-compilers/diagrams/dbc-syntax-analysis";
-import { DbcTypeCheckingDiagram } from "./dragon-book-compilers/diagrams/dbc-type-checking";
+import {
+  DnmGcReconstructionLab,
+  DnmIncidentTriageLab,
+  DnmInterventionTradeoffLab,
+} from "./dotnet-memory/diagrams/dnm-final-review";
+import {
+  DnmCompetencyMatrixLab,
+  DnmOfficialBookMap,
+  DnmSymptomRouteLab,
+} from "./dotnet-memory/diagrams/dnm-memory-model";
+import {
+  DbcOfficialLearningMapMapLab,
+  DbcOfficialLearningMapExperimentLab,
+  DbcOfficialLearningMapEvidenceLab,
+} from "./dragon-book-compilers/diagrams/dbc-official-learning-map";
+import {
+  Dbc01IntroductionMapLab,
+  Dbc01IntroductionExperimentLab,
+  Dbc01IntroductionEvidenceLab,
+} from "./dragon-book-compilers/diagrams/dbc-01-introduction";
+import {
+  Dbc02SimpleSyntaxDirectedTranslatorMapLab,
+  Dbc02SimpleSyntaxDirectedTranslatorExperimentLab,
+  Dbc02SimpleSyntaxDirectedTranslatorEvidenceLab,
+} from "./dragon-book-compilers/diagrams/dbc-02-simple-syntax-directed-translator";
+import {
+  Dbc03LexicalAnalysisMapLab,
+  Dbc03LexicalAnalysisExperimentLab,
+  Dbc03LexicalAnalysisEvidenceLab,
+} from "./dragon-book-compilers/diagrams/dbc-03-lexical-analysis";
+import {
+  Dbc04SyntaxAnalysisMapLab,
+  Dbc04SyntaxAnalysisExperimentLab,
+  Dbc04SyntaxAnalysisEvidenceLab,
+} from "./dragon-book-compilers/diagrams/dbc-04-syntax-analysis";
+import {
+  Dbc05SyntaxDirectedTranslationMapLab,
+  Dbc05SyntaxDirectedTranslationExperimentLab,
+  Dbc05SyntaxDirectedTranslationEvidenceLab,
+} from "./dragon-book-compilers/diagrams/dbc-05-syntax-directed-translation";
+import {
+  Dbc06IntermediateCodeGenerationMapLab,
+  Dbc06IntermediateCodeGenerationExperimentLab,
+  Dbc06IntermediateCodeGenerationEvidenceLab,
+} from "./dragon-book-compilers/diagrams/dbc-06-intermediate-code-generation";
+import {
+  Dbc07RuntimeEnvironmentsMapLab,
+  Dbc07RuntimeEnvironmentsExperimentLab,
+  Dbc07RuntimeEnvironmentsEvidenceLab,
+} from "./dragon-book-compilers/diagrams/dbc-07-runtime-environments";
+import {
+  Dbc08CodeGenerationMapLab,
+  Dbc08CodeGenerationExperimentLab,
+  Dbc08CodeGenerationEvidenceLab,
+} from "./dragon-book-compilers/diagrams/dbc-08-code-generation";
+import {
+  Dbc09MachineIndependentOptimizationsMapLab,
+  Dbc09MachineIndependentOptimizationsExperimentLab,
+  Dbc09MachineIndependentOptimizationsEvidenceLab,
+} from "./dragon-book-compilers/diagrams/dbc-09-machine-independent-optimizations";
+import {
+  Dbc10InstructionLevelParallelismMapLab,
+  Dbc10InstructionLevelParallelismExperimentLab,
+  Dbc10InstructionLevelParallelismEvidenceLab,
+} from "./dragon-book-compilers/diagrams/dbc-10-instruction-level-parallelism";
+import {
+  Dbc11ParallelismLocalityMapLab,
+  Dbc11ParallelismLocalityExperimentLab,
+  Dbc11ParallelismLocalityEvidenceLab,
+} from "./dragon-book-compilers/diagrams/dbc-11-parallelism-locality";
+import {
+  Dbc12InterproceduralAnalysisMapLab,
+  Dbc12InterproceduralAnalysisExperimentLab,
+  Dbc12InterproceduralAnalysisEvidenceLab,
+} from "./dragon-book-compilers/diagrams/dbc-12-interprocedural-analysis";
+import {
+  DbcAppendixACompleteFrontEndMapLab,
+  DbcAppendixACompleteFrontEndExperimentLab,
+  DbcAppendixACompleteFrontEndEvidenceLab,
+} from "./dragon-book-compilers/diagrams/dbc-appendix-a-complete-front-end";
+import {
+  DbcAppendixBLinearIndependentSolutionsMapLab,
+  DbcAppendixBLinearIndependentSolutionsExperimentLab,
+  DbcAppendixBLinearIndependentSolutionsEvidenceLab,
+} from "./dragon-book-compilers/diagrams/dbc-appendix-b-linear-independent-solutions";
+import {
+  DbcOfficialFinalReviewMapLab,
+  DbcOfficialFinalReviewExperimentLab,
+  DbcOfficialFinalReviewEvidenceLab,
+} from "./dragon-book-compilers/diagrams/dbc-official-final-review";
 import { DsaComplexityDiagram } from "./dsa-cpp/diagrams/dsa-complexity-analysis";
 import { DsaDisjointSetsDiagram } from "./dsa-cpp/diagrams/dsa-disjoint-sets";
 import { DsaDynamicProgrammingDiagram } from "./dsa-cpp/diagrams/dsa-dynamic-programming";
@@ -1544,16 +3536,76 @@ import { DsaBookMap } from "./dsa-cpp/diagrams/dsa-learning-map";
 import { DsaListsDiagram } from "./dsa-cpp/diagrams/dsa-lists";
 import { DsaSortingDiagram } from "./dsa-cpp/diagrams/dsa-sorting";
 import { DsaTreesDiagram } from "./dsa-cpp/diagrams/dsa-trees";
-import { EexConclusionDiagram } from "./effective-executive/diagrams/eex-conclusion";
-import { EexContributionDiagram } from "./effective-executive/diagrams/eex-contribution";
-import { EexDecisionProcessDiagram } from "./effective-executive/diagrams/eex-decision-process";
-import { EexEffectiveDecisionsDiagram } from "./effective-executive/diagrams/eex-effective-decisions";
-import { EexEffectivenessDiagram } from "./effective-executive/diagrams/eex-effectiveness";
-import { EexFinalReviewDiagram } from "./effective-executive/diagrams/eex-final-review";
-import { EexLearningMapDiagram } from "./effective-executive/diagrams/eex-learning-map";
-import { EexPrioritiesDiagram } from "./effective-executive/diagrams/eex-priorities";
-import { EexStrengthsDiagram } from "./effective-executive/diagrams/eex-strengths";
-import { EexTimeManagementDiagram } from "./effective-executive/diagrams/eex-time-management";
+import {
+  Eex19OfficialLearningMapMapLab,
+  Eex19OfficialLearningMapExperimentLab,
+  Eex19OfficialLearningMapEvidenceLab,
+} from "./effective-executive/diagrams/eex19-official-learning-map";
+import {
+  Eex19Recommendation01MapLab,
+  Eex19Recommendation01ExperimentLab,
+  Eex19Recommendation01EvidenceLab,
+} from "./effective-executive/diagrams/eex19-recommendation-01";
+import {
+  Eex19Recommendation02MapLab,
+  Eex19Recommendation02ExperimentLab,
+  Eex19Recommendation02EvidenceLab,
+} from "./effective-executive/diagrams/eex19-recommendation-02";
+import {
+  Eex19Recommendation03MapLab,
+  Eex19Recommendation03ExperimentLab,
+  Eex19Recommendation03EvidenceLab,
+} from "./effective-executive/diagrams/eex19-recommendation-03";
+import {
+  Eex19PrefaceMapLab,
+  Eex19PrefaceExperimentLab,
+  Eex19PrefaceEvidenceLab,
+} from "./effective-executive/diagrams/eex19-preface";
+import {
+  Eex19Chapter01MapLab,
+  Eex19Chapter01ExperimentLab,
+  Eex19Chapter01EvidenceLab,
+} from "./effective-executive/diagrams/eex19-chapter-01";
+import {
+  Eex19Chapter02MapLab,
+  Eex19Chapter02ExperimentLab,
+  Eex19Chapter02EvidenceLab,
+} from "./effective-executive/diagrams/eex19-chapter-02";
+import {
+  Eex19Chapter03MapLab,
+  Eex19Chapter03ExperimentLab,
+  Eex19Chapter03EvidenceLab,
+} from "./effective-executive/diagrams/eex19-chapter-03";
+import {
+  Eex19Chapter04MapLab,
+  Eex19Chapter04ExperimentLab,
+  Eex19Chapter04EvidenceLab,
+} from "./effective-executive/diagrams/eex19-chapter-04";
+import {
+  Eex19Chapter05MapLab,
+  Eex19Chapter05ExperimentLab,
+  Eex19Chapter05EvidenceLab,
+} from "./effective-executive/diagrams/eex19-chapter-05";
+import {
+  Eex19Chapter06MapLab,
+  Eex19Chapter06ExperimentLab,
+  Eex19Chapter06EvidenceLab,
+} from "./effective-executive/diagrams/eex19-chapter-06";
+import {
+  Eex19Chapter07MapLab,
+  Eex19Chapter07ExperimentLab,
+  Eex19Chapter07EvidenceLab,
+} from "./effective-executive/diagrams/eex19-chapter-07";
+import {
+  Eex19Chapter08MapLab,
+  Eex19Chapter08ExperimentLab,
+  Eex19Chapter08EvidenceLab,
+} from "./effective-executive/diagrams/eex19-chapter-08";
+import {
+  Eex19OfficialFinalReviewMapLab,
+  Eex19OfficialFinalReviewExperimentLab,
+  Eex19OfficialFinalReviewEvidenceLab,
+} from "./effective-executive/diagrams/eex19-official-final-review";
 import { EjvClassesInterfacesDiagram } from "./effective-java/diagrams/ejv-classes-interfaces";
 import { EjvCommonMethodsDiagram } from "./effective-java/diagrams/ejv-common-methods";
 import { EjvConcurrencyDiagram } from "./effective-java/diagrams/ejv-concurrency";
@@ -1564,16 +3616,91 @@ import { EjvGenericsDiagram } from "./effective-java/diagrams/ejv-generics";
 import { EjvLambdasStreamsDiagram } from "./effective-java/diagrams/ejv-lambdas-streams";
 import { EjvLearningMapDiagram } from "./effective-java/diagrams/ejv-learning-map";
 import { EjvMethodsDiagram } from "./effective-java/diagrams/ejv-methods";
-import { EacCodeOptimizationDiagram } from "./engineering-a-compiler/diagrams/eac-code-optimization";
-import { EacCompilerOverviewDiagram } from "./engineering-a-compiler/diagrams/eac-compiler-overview";
-import { EacContextSensitiveDiagram } from "./engineering-a-compiler/diagrams/eac-context-sensitive";
-import { EacFinalReviewDiagram } from "./engineering-a-compiler/diagrams/eac-final-review";
-import { EacInstructionSelectionDiagram } from "./engineering-a-compiler/diagrams/eac-instruction-selection";
-import { EacIrGenerationDiagram } from "./engineering-a-compiler/diagrams/eac-ir-generation";
-import { EacLearningMapDiagram } from "./engineering-a-compiler/diagrams/eac-learning-map";
-import { EacParsingDiagram } from "./engineering-a-compiler/diagrams/eac-parsing";
-import { EacRegisterAllocationDiagram } from "./engineering-a-compiler/diagrams/eac-register-allocation";
-import { EacScanningDiagram } from "./engineering-a-compiler/diagrams/eac-scanning";
+import {
+  EacOfficialLearningMapMapLab,
+  EacOfficialLearningMapExperimentLab,
+  EacOfficialLearningMapEvidenceLab,
+} from "./engineering-a-compiler/diagrams/eac-official-learning-map";
+import {
+  Eac01OverviewCompilationMapLab,
+  Eac01OverviewCompilationExperimentLab,
+  Eac01OverviewCompilationEvidenceLab,
+} from "./engineering-a-compiler/diagrams/eac-01-overview-compilation";
+import {
+  Eac02ScannersMapLab,
+  Eac02ScannersExperimentLab,
+  Eac02ScannersEvidenceLab,
+} from "./engineering-a-compiler/diagrams/eac-02-scanners";
+import {
+  Eac03ParsersMapLab,
+  Eac03ParsersExperimentLab,
+  Eac03ParsersEvidenceLab,
+} from "./engineering-a-compiler/diagrams/eac-03-parsers";
+import {
+  Eac04ContextSensitiveAnalysisMapLab,
+  Eac04ContextSensitiveAnalysisExperimentLab,
+  Eac04ContextSensitiveAnalysisEvidenceLab,
+} from "./engineering-a-compiler/diagrams/eac-04-context-sensitive-analysis";
+import {
+  Eac05IntermediateRepresentationsMapLab,
+  Eac05IntermediateRepresentationsExperimentLab,
+  Eac05IntermediateRepresentationsEvidenceLab,
+} from "./engineering-a-compiler/diagrams/eac-05-intermediate-representations";
+import {
+  Eac06ProcedureAbstractionMapLab,
+  Eac06ProcedureAbstractionExperimentLab,
+  Eac06ProcedureAbstractionEvidenceLab,
+} from "./engineering-a-compiler/diagrams/eac-06-procedure-abstraction";
+import {
+  Eac07CodeShapeMapLab,
+  Eac07CodeShapeExperimentLab,
+  Eac07CodeShapeEvidenceLab,
+} from "./engineering-a-compiler/diagrams/eac-07-code-shape";
+import {
+  Eac08IntroductionOptimizationMapLab,
+  Eac08IntroductionOptimizationExperimentLab,
+  Eac08IntroductionOptimizationEvidenceLab,
+} from "./engineering-a-compiler/diagrams/eac-08-introduction-optimization";
+import {
+  Eac09DataFlowAnalysisMapLab,
+  Eac09DataFlowAnalysisExperimentLab,
+  Eac09DataFlowAnalysisEvidenceLab,
+} from "./engineering-a-compiler/diagrams/eac-09-data-flow-analysis";
+import {
+  Eac10ScalarOptimizationsMapLab,
+  Eac10ScalarOptimizationsExperimentLab,
+  Eac10ScalarOptimizationsEvidenceLab,
+} from "./engineering-a-compiler/diagrams/eac-10-scalar-optimizations";
+import {
+  Eac11InstructionSelectionMapLab,
+  Eac11InstructionSelectionExperimentLab,
+  Eac11InstructionSelectionEvidenceLab,
+} from "./engineering-a-compiler/diagrams/eac-11-instruction-selection";
+import {
+  Eac12InstructionSchedulingMapLab,
+  Eac12InstructionSchedulingExperimentLab,
+  Eac12InstructionSchedulingEvidenceLab,
+} from "./engineering-a-compiler/diagrams/eac-12-instruction-scheduling";
+import {
+  Eac13RegisterAllocationMapLab,
+  Eac13RegisterAllocationExperimentLab,
+  Eac13RegisterAllocationEvidenceLab,
+} from "./engineering-a-compiler/diagrams/eac-13-register-allocation";
+import {
+  EacAppendixAIlocMapLab,
+  EacAppendixAIlocExperimentLab,
+  EacAppendixAIlocEvidenceLab,
+} from "./engineering-a-compiler/diagrams/eac-appendix-a-iloc";
+import {
+  EacAppendixBDataStructuresMapLab,
+  EacAppendixBDataStructuresExperimentLab,
+  EacAppendixBDataStructuresEvidenceLab,
+} from "./engineering-a-compiler/diagrams/eac-appendix-b-data-structures";
+import {
+  EacOfficialFinalReviewMapLab,
+  EacOfficialFinalReviewExperimentLab,
+  EacOfficialFinalReviewEvidenceLab,
+} from "./engineering-a-compiler/diagrams/eac-official-final-review";
 import { FlaActivityDiagram } from "./first-line-android/diagrams/fla-activity";
 import { FlaAdvancedFeaturesDiagram } from "./first-line-android/diagrams/fla-advanced-features";
 import { FlaAndroidBasicsDiagram } from "./first-line-android/diagrams/fla-android-basics";
@@ -1584,106 +3711,401 @@ import { FlaLearningMapDiagram } from "./first-line-android/diagrams/fla-learnin
 import { FlaNetworkDiagram } from "./first-line-android/diagrams/fla-network";
 import { FlaServiceDiagram } from "./first-line-android/diagrams/fla-service";
 import { FlaUiLayoutDiagram } from "./first-line-android/diagrams/fla-ui-layout";
-import { FlpClosuresDecoratorsDiagram } from "./fluent-python/diagrams/flp-closures-decorators";
-import { FlpDataModelDiagram } from "./fluent-python/diagrams/flp-data-model";
-import { FlpDictSetsDiagram } from "./fluent-python/diagrams/flp-dict-sets";
-import { FlpFinalReviewDiagram } from "./fluent-python/diagrams/flp-final-review";
-import { FlpFunctionsFirstClassDiagram } from "./fluent-python/diagrams/flp-functions-first-class";
-import { FlpGeneratorsDiagram } from "./fluent-python/diagrams/flp-generators";
-import { FlpLearningMapDiagram } from "./fluent-python/diagrams/flp-learning-map";
-import { FlpProtocolsAbcDiagram } from "./fluent-python/diagrams/flp-protocols-abc";
-import { FlpSequencesDiagram } from "./fluent-python/diagrams/flp-sequences";
-import { FlpTypeHintsDiagram } from "./fluent-python/diagrams/flp-type-hints";
-import { FengCiPipelineDiagram } from "./frontend-engineering/diagrams/feng-ci-pipeline";
-import { FengDeployStrategyDiagram } from "./frontend-engineering/diagrams/feng-deploy-strategy";
-import { FengErrorTrackingDiagram } from "./frontend-engineering/diagrams/feng-error-tracking";
-import { FengFinalReviewDiagram } from "./frontend-engineering/diagrams/feng-final-review";
-import { FengLearningMapDiagram } from "./frontend-engineering/diagrams/feng-learning-map";
-import { FengModuleFederationDiagram } from "./frontend-engineering/diagrams/feng-module-federation";
-import { FengPerformanceMonitorDiagram } from "./frontend-engineering/diagrams/feng-performance-monitor";
-import { FengTestingStrategyDiagram } from "./frontend-engineering/diagrams/feng-testing-strategy";
-import { FengTypescriptEslintDiagram } from "./frontend-engineering/diagrams/feng-typescript-eslint";
-import { FengWebpackViteDiagram } from "./frontend-engineering/diagrams/feng-webpack-vite";
-import { GdfAestheticsDiagram } from "./game-design-fundamentals/diagrams/gdf-aesthetics";
-import { GdfBalancingDiagram } from "./game-design-fundamentals/diagrams/gdf-balancing";
-import { GdfDynamicsDiagram } from "./game-design-fundamentals/diagrams/gdf-dynamics";
-import { GdfFinalReviewDiagram } from "./game-design-fundamentals/diagrams/gdf-final-review";
-import { GdfLearningMapDiagram } from "./game-design-fundamentals/diagrams/gdf-learning-map";
-import { GdfLevelDesignDiagram } from "./game-design-fundamentals/diagrams/gdf-level-design";
-import { GdfMdfFrameworkDiagram } from "./game-design-fundamentals/diagrams/gdf-mdf-framework";
-import { GdfMechanicsDiagram } from "./game-design-fundamentals/diagrams/gdf-mechanics";
-import { GdfPlayerExperienceDiagram } from "./game-design-fundamentals/diagrams/gdf-player-experience";
-import { GdfPrototypingDiagram } from "./game-design-fundamentals/diagrams/gdf-prototyping";
-import { Gep1EngineArchitectureDiagram } from "./game-engine-practice-vol1/diagrams/gep1-engine-architecture";
-import { Gep1EventSystemDiagram } from "./game-engine-practice-vol1/diagrams/gep1-event-system";
-import { Gep1FinalReviewDiagram } from "./game-engine-practice-vol1/diagrams/gep1-final-review";
-import { Gep1LearningMapDiagram } from "./game-engine-practice-vol1/diagrams/gep1-learning-map";
-import { Gep1MathLibraryDiagram } from "./game-engine-practice-vol1/diagrams/gep1-math-library";
-import { Gep1MemorySystemDiagram } from "./game-engine-practice-vol1/diagrams/gep1-memory-system";
-import { Gep1RenderPipelineDiagram } from "./game-engine-practice-vol1/diagrams/gep1-render-pipeline";
-import { Gep1ResourceManagementDiagram } from "./game-engine-practice-vol1/diagrams/gep1-resource-management";
-import { Gep1SceneGraphDiagram } from "./game-engine-practice-vol1/diagrams/gep1-scene-graph";
-import { Gep1TransformSystemDiagram } from "./game-engine-practice-vol1/diagrams/gep1-transform-system";
-import { Gep2AnimationBlendDiagram } from "./game-engine-practice-vol2/diagrams/gep2-animation-blend";
-import { Gep2AudioSystemDiagram } from "./game-engine-practice-vol2/diagrams/gep2-audio-system";
-import { Gep2CollisionSystemDiagram } from "./game-engine-practice-vol2/diagrams/gep2-collision-system";
-import { Gep2EditorFrameworkDiagram } from "./game-engine-practice-vol2/diagrams/gep2-editor-framework";
-import { Gep2FinalReviewDiagram } from "./game-engine-practice-vol2/diagrams/gep2-final-review";
-import { Gep2LearningMapDiagram } from "./game-engine-practice-vol2/diagrams/gep2-learning-map";
-import { Gep2NetworkArchitectureDiagram } from "./game-engine-practice-vol2/diagrams/gep2-network-architecture";
-import { Gep2PhysicsEngineDiagram } from "./game-engine-practice-vol2/diagrams/gep2-physics-engine";
-import { Gep2ScriptingSystemDiagram } from "./game-engine-practice-vol2/diagrams/gep2-scripting-system";
-import { Gep2SkeletalAnimationDiagram } from "./game-engine-practice-vol2/diagrams/gep2-skeletal-animation";
-import { GmaContinuousSimulationDiagram } from "./game-mechanics-advanced/diagrams/gma-continuous-simulation";
-import { GmaDiscreteSimulationDiagram } from "./game-mechanics-advanced/diagrams/gma-discrete-simulation";
-import { GmaEconomyDesignDiagram } from "./game-mechanics-advanced/diagrams/gma-economy-design";
-import { GmaFinalReviewDiagram } from "./game-mechanics-advanced/diagrams/gma-final-review";
-import { GmaLearningMapDiagram } from "./game-mechanics-advanced/diagrams/gma-learning-map";
-import { GmaMdfFrameworkDiagram } from "./game-mechanics-advanced/diagrams/gma-mdf-framework";
-import { GmaMechanicsDesignDiagram } from "./game-mechanics-advanced/diagrams/gma-mechanics-design";
-import { GmaMechanismTuningDiagram } from "./game-mechanics-advanced/diagrams/gma-mechanism-tuning";
-import { GmaProbabilityMechanicsDiagram } from "./game-mechanics-advanced/diagrams/gma-probability-mechanics";
-import { GmaPuzzleDesignDiagram } from "./game-mechanics-advanced/diagrams/gma-puzzle-design";
-import { GncAntiCheatDiagram } from "./game-network-core-tech/diagrams/gnc-anti-cheat";
-import { GncBandwidthOptimizationDiagram } from "./game-network-core-tech/diagrams/gnc-bandwidth-optimization";
-import { GncCongestionControlDiagram } from "./game-network-core-tech/diagrams/gnc-congestion-control";
-import { GncEncryptionDiagram } from "./game-network-core-tech/diagrams/gnc-encryption";
-import { GncFinalReviewDiagram } from "./game-network-core-tech/diagrams/gnc-final-review";
-import { GncFrameSyncDiagram } from "./game-network-core-tech/diagrams/gnc-frame-sync";
-import { GncLatencyCompensationDiagram } from "./game-network-core-tech/diagrams/gnc-latency-compensation";
-import { GncLearningMapDiagram } from "./game-network-core-tech/diagrams/gnc-learning-map";
-import { GncStateSyncAdvDiagram } from "./game-network-core-tech/diagrams/gnc-state-sync-adv";
-import { GncUdpReliableDiagram } from "./game-network-core-tech/diagrams/gnc-udp-reliable";
-import { GmpAlgorithmsDiagram } from "./game-programmer-path/diagrams/gmp-algorithms";
-import { GmpCareerPathDiagram } from "./game-programmer-path/diagrams/gmp-career-path";
-import { GmpCppFoundationDiagram } from "./game-programmer-path/diagrams/gmp-cpp-foundation";
-import { GmpDataStructuresDiagram } from "./game-programmer-path/diagrams/gmp-data-structures";
-import { GmpEngineBasicsDiagram } from "./game-programmer-path/diagrams/gmp-engine-basics";
-import { GmpFinalReviewDiagram } from "./game-programmer-path/diagrams/gmp-final-review";
-import { GmpGameplayCodingDiagram } from "./game-programmer-path/diagrams/gmp-gameplay-coding";
-import { GmpGraphicsDiagram } from "./game-programmer-path/diagrams/gmp-graphics";
-import { GmpInterviewDiagram } from "./game-programmer-path/diagrams/gmp-interview";
-import { GmpLearningMapDiagram } from "./game-programmer-path/diagrams/gmp-learning-map";
-import { GsaActorModelDiagram } from "./game-server-architecture/diagrams/gsa-actor-model";
-import { GsaCapacityPlanningDiagram } from "./game-server-architecture/diagrams/gsa-capacity-planning";
-import { GsaCiCdDiagram } from "./game-server-architecture/diagrams/gsa-ci-cd";
-import { GsaCoroutineModelDiagram } from "./game-server-architecture/diagrams/gsa-coroutine-model";
-import { GsaDbShardingDiagram } from "./game-server-architecture/diagrams/gsa-db-sharding";
-import { GsaFinalReviewDiagram } from "./game-server-architecture/diagrams/gsa-final-review";
-import { GsaLearningMapDiagram } from "./game-server-architecture/diagrams/gsa-learning-map";
-import { GsaMemoryPoolDiagram } from "./game-server-architecture/diagrams/gsa-memory-pool";
-import { GsaRedisClusterDiagram } from "./game-server-architecture/diagrams/gsa-redis-cluster";
-import { GsaServerTopologyDiagram } from "./game-server-architecture/diagrams/gsa-server-topology";
-import { GspCacheStrategyDiagram } from "./game-server-programming/diagrams/gsp-cache-strategy";
-import { GspDataPersistenceDiagram } from "./game-server-programming/diagrams/gsp-data-persistence";
-import { GspFinalReviewDiagram } from "./game-server-programming/diagrams/gsp-final-review";
-import { GspLearningMapDiagram } from "./game-server-programming/diagrams/gsp-learning-map";
-import { GspLoadBalanceDiagram } from "./game-server-programming/diagrams/gsp-load-balance";
-import { GspProtocolDesignDiagram } from "./game-server-programming/diagrams/gsp-protocol-design";
-import { GspSecurityAnticheatDiagram } from "./game-server-programming/diagrams/gsp-security-anticheat";
-import { GspServerArchitectureDiagram } from "./game-server-programming/diagrams/gsp-server-architecture";
-import { GspTcpSocketDiagram } from "./game-server-programming/diagrams/gsp-tcp-socket";
-import { GspThreadModelDiagram } from "./game-server-programming/diagrams/gsp-thread-model";
+import {
+  FengOfficialLearningMapMapLab,
+  FengOfficialLearningMapExperimentLab,
+  FengOfficialLearningMapEvidenceLab,
+} from "./frontend-engineering/diagrams/feng-official-learning-map";
+import {
+  Feng01HistoryMapLab,
+  Feng01HistoryExperimentLab,
+  Feng01HistoryEvidenceLab,
+} from "./frontend-engineering/diagrams/feng-01-history";
+import {
+  Feng02ScaffoldingMapLab,
+  Feng02ScaffoldingExperimentLab,
+  Feng02ScaffoldingEvidenceLab,
+} from "./frontend-engineering/diagrams/feng-02-scaffolding";
+import {
+  Feng03BuildMapLab,
+  Feng03BuildExperimentLab,
+  Feng03BuildEvidenceLab,
+} from "./frontend-engineering/diagrams/feng-03-build";
+import {
+  Feng04LocalDevServerMapLab,
+  Feng04LocalDevServerExperimentLab,
+  Feng04LocalDevServerEvidenceLab,
+} from "./frontend-engineering/diagrams/feng-04-local-dev-server";
+import {
+  Feng05DeploymentMapLab,
+  Feng05DeploymentExperimentLab,
+  Feng05DeploymentEvidenceLab,
+} from "./frontend-engineering/diagrams/feng-05-deployment";
+import {
+  Feng06WorkflowMapLab,
+  Feng06WorkflowExperimentLab,
+  Feng06WorkflowEvidenceLab,
+} from "./frontend-engineering/diagrams/feng-06-workflow";
+import {
+  Feng07FutureMapLab,
+  Feng07FutureExperimentLab,
+  Feng07FutureEvidenceLab,
+} from "./frontend-engineering/diagrams/feng-07-future";
+import {
+  FengOfficialFinalReviewMapLab,
+  FengOfficialFinalReviewExperimentLab,
+  FengOfficialFinalReviewEvidenceLab,
+} from "./frontend-engineering/diagrams/feng-official-final-review";
+import {
+  Gdf3eOfficialLearningMapMapLab,
+  Gdf3eOfficialLearningMapExperimentLab,
+  Gdf3eOfficialLearningMapEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-official-learning-map";
+import {
+  Gdf3eIntroductionMapLab,
+  Gdf3eIntroductionExperimentLab,
+  Gdf3eIntroductionEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-introduction";
+import {
+  Gdf3e01GamesVideoGamesMapLab,
+  Gdf3e01GamesVideoGamesExperimentLab,
+  Gdf3e01GamesVideoGamesEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-01-games-video-games";
+import {
+  Gdf3e02DesigningDevelopingGamesMapLab,
+  Gdf3e02DesigningDevelopingGamesExperimentLab,
+  Gdf3e02DesigningDevelopingGamesEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-02-designing-developing-games";
+import {
+  Gdf3e03MajorGenresMapLab,
+  Gdf3e03MajorGenresExperimentLab,
+  Gdf3e03MajorGenresEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-03-major-genres";
+import {
+  Gdf3e04UnderstandingPlayerMapLab,
+  Gdf3e04UnderstandingPlayerExperimentLab,
+  Gdf3e04UnderstandingPlayerEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-04-understanding-player";
+import {
+  Gdf3e05UnderstandingMachineMapLab,
+  Gdf3e05UnderstandingMachineExperimentLab,
+  Gdf3e05UnderstandingMachineEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-05-understanding-machine";
+import {
+  Gdf3e06MakingMoneyMapLab,
+  Gdf3e06MakingMoneyExperimentLab,
+  Gdf3e06MakingMoneyEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-06-making-money";
+import {
+  Gdf3e07GameConceptsMapLab,
+  Gdf3e07GameConceptsExperimentLab,
+  Gdf3e07GameConceptsEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-07-game-concepts";
+import {
+  Gdf3e08GameWorldsMapLab,
+  Gdf3e08GameWorldsExperimentLab,
+  Gdf3e08GameWorldsEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-08-game-worlds";
+import {
+  Gdf3e09CreativeExpressivePlayMapLab,
+  Gdf3e09CreativeExpressivePlayExperimentLab,
+  Gdf3e09CreativeExpressivePlayEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-09-creative-expressive-play";
+import {
+  Gdf3e10CharacterDevelopmentMapLab,
+  Gdf3e10CharacterDevelopmentExperimentLab,
+  Gdf3e10CharacterDevelopmentEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-10-character-development";
+import {
+  Gdf3e11StorytellingMapLab,
+  Gdf3e11StorytellingExperimentLab,
+  Gdf3e11StorytellingEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-11-storytelling";
+import {
+  Gdf3e12CreatingUserExperienceMapLab,
+  Gdf3e12CreatingUserExperienceExperimentLab,
+  Gdf3e12CreatingUserExperienceEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-12-creating-user-experience";
+import {
+  Gdf3e13GameplayMapLab,
+  Gdf3e13GameplayExperimentLab,
+  Gdf3e13GameplayEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-13-gameplay";
+import {
+  Gdf3e14CoreMechanicsMapLab,
+  Gdf3e14CoreMechanicsExperimentLab,
+  Gdf3e14CoreMechanicsEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-14-core-mechanics";
+import {
+  Gdf3e15GameBalancingMapLab,
+  Gdf3e15GameBalancingExperimentLab,
+  Gdf3e15GameBalancingEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-15-game-balancing";
+import {
+  Gdf3e16LevelDesignMapLab,
+  Gdf3e16LevelDesignExperimentLab,
+  Gdf3e16LevelDesignEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-16-level-design";
+import {
+  Gdf3e17OnlineGamingMapLab,
+  Gdf3e17OnlineGamingExperimentLab,
+  Gdf3e17OnlineGamingEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-17-online-gaming";
+import {
+  Gdf3eGlossaryMapLab,
+  Gdf3eGlossaryExperimentLab,
+  Gdf3eGlossaryEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-glossary";
+import {
+  Gdf3eReferencesMapLab,
+  Gdf3eReferencesExperimentLab,
+  Gdf3eReferencesEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-references";
+import {
+  Gdf3eIndexMapLab,
+  Gdf3eIndexExperimentLab,
+  Gdf3eIndexEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-index";
+import {
+  Gdf3eOfficialFinalReviewMapLab,
+  Gdf3eOfficialFinalReviewExperimentLab,
+  Gdf3eOfficialFinalReviewEvidenceLab,
+} from "./game-design-fundamentals/diagrams/gdf-3e-official-final-review";
+import {
+  Gep1OfficialLearningMapMapLab,
+  Gep1OfficialLearningMapExperimentLab,
+  Gep1OfficialLearningMapEvidenceLab,
+} from "./game-engine-practice-vol1/diagrams/gep1-official-learning-map";
+import {
+  Gep1FrontMatterMapLab,
+  Gep1FrontMatterExperimentLab,
+  Gep1FrontMatterEvidenceLab,
+} from "./game-engine-practice-vol1/diagrams/gep1-front-matter";
+import {
+  Gep1Chapter01EngineConflictMapLab,
+  Gep1Chapter01EngineConflictExperimentLab,
+  Gep1Chapter01EngineConflictEvidenceLab,
+} from "./game-engine-practice-vol1/diagrams/gep1-chapter-01-engine-conflict";
+import {
+  Gep1Chapter02SettingSailMapLab,
+  Gep1Chapter02SettingSailExperimentLab,
+  Gep1Chapter02SettingSailEvidenceLab,
+} from "./game-engine-practice-vol1/diagrams/gep1-chapter-02-setting-sail";
+import {
+  Gep1Chapter03BasicSystemMapLab,
+  Gep1Chapter03BasicSystemExperimentLab,
+  Gep1Chapter03BasicSystemEvidenceLab,
+} from "./game-engine-practice-vol1/diagrams/gep1-chapter-03-basic-system";
+import {
+  Gep1Chapter04DataStructuresMapLab,
+  Gep1Chapter04DataStructuresExperimentLab,
+  Gep1Chapter04DataStructuresEvidenceLab,
+} from "./game-engine-practice-vol1/diagrams/gep1-chapter-04-data-structures";
+import {
+  Gep1Chapter05MathLibraryMapLab,
+  Gep1Chapter05MathLibraryExperimentLab,
+  Gep1Chapter05MathLibraryEvidenceLab,
+} from "./game-engine-practice-vol1/diagrams/gep1-chapter-05-math-library";
+import {
+  Gep1Chapter06InitializationDestructionMapLab,
+  Gep1Chapter06InitializationDestructionExperimentLab,
+  Gep1Chapter06InitializationDestructionEvidenceLab,
+} from "./game-engine-practice-vol1/diagrams/gep1-chapter-06-initialization-destruction";
+import {
+  Gep1Chapter07ApplicationFrameworkMapLab,
+  Gep1Chapter07ApplicationFrameworkExperimentLab,
+  Gep1Chapter07ApplicationFrameworkEvidenceLab,
+} from "./game-engine-practice-vol1/diagrams/gep1-chapter-07-application-framework";
+import {
+  Gep1Chapter08ObjectSystemMapLab,
+  Gep1Chapter08ObjectSystemExperimentLab,
+  Gep1Chapter08ObjectSystemEvidenceLab,
+} from "./game-engine-practice-vol1/diagrams/gep1-chapter-08-object-system";
+import {
+  Gep1Chapter09ResourceManagementMapLab,
+  Gep1Chapter09ResourceManagementExperimentLab,
+  Gep1Chapter09ResourceManagementEvidenceLab,
+} from "./game-engine-practice-vol1/diagrams/gep1-chapter-09-resource-management";
+import {
+  Gep1Chapter10DesignPhilosophyMapLab,
+  Gep1Chapter10DesignPhilosophyExperimentLab,
+  Gep1Chapter10DesignPhilosophyEvidenceLab,
+} from "./game-engine-practice-vol1/diagrams/gep1-chapter-10-design-philosophy";
+import {
+  Gep1Chapter11SceneManagementMapLab,
+  Gep1Chapter11SceneManagementExperimentLab,
+  Gep1Chapter11SceneManagementEvidenceLab,
+} from "./game-engine-practice-vol1/diagrams/gep1-chapter-11-scene-management";
+import {
+  Gep1Chapter12ModelsTexturesMapLab,
+  Gep1Chapter12ModelsTexturesExperimentLab,
+  Gep1Chapter12ModelsTexturesEvidenceLab,
+} from "./game-engine-practice-vol1/diagrams/gep1-chapter-12-models-textures";
+import {
+  Gep1Chapter13LodMapLab,
+  Gep1Chapter13LodExperimentLab,
+  Gep1Chapter13LodEvidenceLab,
+} from "./game-engine-practice-vol1/diagrams/gep1-chapter-13-lod";
+import {
+  Gep1OfficialFinalReviewMapLab,
+  Gep1OfficialFinalReviewExperimentLab,
+  Gep1OfficialFinalReviewEvidenceLab,
+} from "./game-engine-practice-vol1/diagrams/gep1-official-final-review";
+import {
+  Gep2OfficialLearningMapMapLab,
+  Gep2OfficialLearningMapExperimentLab,
+  Gep2OfficialLearningMapEvidenceLab,
+} from "./game-engine-practice-vol2/diagrams/gep2-official-learning-map";
+import {
+  Gep2FrontMatterMapLab,
+  Gep2FrontMatterExperimentLab,
+  Gep2FrontMatterEvidenceLab,
+} from "./game-engine-practice-vol2/diagrams/gep2-front-matter";
+import {
+  Gep2Chapter01SkeletalSkinningBasicsMapLab,
+  Gep2Chapter01SkeletalSkinningBasicsExperimentLab,
+  Gep2Chapter01SkeletalSkinningBasicsEvidenceLab,
+} from "./game-engine-practice-vol2/diagrams/gep2-chapter-01-skeletal-skinning-basics";
+import {
+  Gep2Chapter02AnimationPlaybackSlotsMapLab,
+  Gep2Chapter02AnimationPlaybackSlotsExperimentLab,
+  Gep2Chapter02AnimationPlaybackSlotsEvidenceLab,
+} from "./game-engine-practice-vol2/diagrams/gep2-chapter-02-animation-playback-slots";
+import {
+  Gep2Chapter03AnimationBlendingMapLab,
+  Gep2Chapter03AnimationBlendingExperimentLab,
+  Gep2Chapter03AnimationBlendingEvidenceLab,
+} from "./game-engine-practice-vol2/diagrams/gep2-chapter-03-animation-blending";
+import {
+  Gep2Chapter04MorphAnimationBlendingMapLab,
+  Gep2Chapter04MorphAnimationBlendingExperimentLab,
+  Gep2Chapter04MorphAnimationBlendingEvidenceLab,
+} from "./game-engine-practice-vol2/diagrams/gep2-chapter-04-morph-animation-blending";
+import {
+  Gep2Chapter05IkCharactersMapLab,
+  Gep2Chapter05IkCharactersExperimentLab,
+  Gep2Chapter05IkCharactersEvidenceLab,
+} from "./game-engine-practice-vol2/diagrams/gep2-chapter-05-ik-characters";
+import {
+  Gep2Chapter06LightingRenderingHistoryMapLab,
+  Gep2Chapter06LightingRenderingHistoryExperimentLab,
+  Gep2Chapter06LightingRenderingHistoryEvidenceLab,
+} from "./game-engine-practice-vol2/diagrams/gep2-chapter-06-lighting-rendering-history";
+import {
+  Gep2Chapter07RendererInterfaceMapLab,
+  Gep2Chapter07RendererInterfaceExperimentLab,
+  Gep2Chapter07RendererInterfaceEvidenceLab,
+} from "./game-engine-practice-vol2/diagrams/gep2-chapter-07-renderer-interface";
+import {
+  Gep2Chapter08MaterialsMapLab,
+  Gep2Chapter08MaterialsExperimentLab,
+  Gep2Chapter08MaterialsEvidenceLab,
+} from "./game-engine-practice-vol2/diagrams/gep2-chapter-08-materials";
+import {
+  Gep2Chapter09RenderPipelineArchitectureMapLab,
+  Gep2Chapter09RenderPipelineArchitectureExperimentLab,
+  Gep2Chapter09RenderPipelineArchitectureEvidenceLab,
+} from "./game-engine-practice-vol2/diagrams/gep2-chapter-09-render-pipeline-architecture";
+import {
+  Gep2Chapter10LightingMaterialsMapLab,
+  Gep2Chapter10LightingMaterialsExperimentLab,
+  Gep2Chapter10LightingMaterialsEvidenceLab,
+} from "./game-engine-practice-vol2/diagrams/gep2-chapter-10-lighting-materials";
+import {
+  Gep2Chapter11PostEffectsMapLab,
+  Gep2Chapter11PostEffectsExperimentLab,
+  Gep2Chapter11PostEffectsEvidenceLab,
+} from "./game-engine-practice-vol2/diagrams/gep2-chapter-11-post-effects";
+import {
+  Gep2Chapter12ShadowsMapLab,
+  Gep2Chapter12ShadowsExperimentLab,
+  Gep2Chapter12ShadowsEvidenceLab,
+} from "./game-engine-practice-vol2/diagrams/gep2-chapter-12-shadows";
+import {
+  Gep2Chapter13MultithreadingMapLab,
+  Gep2Chapter13MultithreadingExperimentLab,
+  Gep2Chapter13MultithreadingEvidenceLab,
+} from "./game-engine-practice-vol2/diagrams/gep2-chapter-13-multithreading";
+import {
+  Gep2Chapter14DynamicBuffersProfilerMapLab,
+  Gep2Chapter14DynamicBuffersProfilerExperimentLab,
+  Gep2Chapter14DynamicBuffersProfilerEvidenceLab,
+} from "./game-engine-practice-vol2/diagrams/gep2-chapter-14-dynamic-buffers-profiler";
+import {
+  Gep2OfficialFinalReviewMapLab,
+  Gep2OfficialFinalReviewExperimentLab,
+  Gep2OfficialFinalReviewEvidenceLab,
+} from "./game-engine-practice-vol2/diagrams/gep2-official-final-review";
+import {
+  Gmp17OfficialLearningMapMapLab,
+  Gmp17OfficialLearningMapExperimentLab,
+  Gmp17OfficialLearningMapEvidenceLab,
+} from "./game-programmer-path/diagrams/gmp17-official-learning-map";
+import {
+  Gmp1700ProgrammingPreschoolMapLab,
+  Gmp1700ProgrammingPreschoolExperimentLab,
+  Gmp1700ProgrammingPreschoolEvidenceLab,
+} from "./game-programmer-path/diagrams/gmp17-00-programming-preschool";
+import {
+  Gmp1701ComputerScienceMapLab,
+  Gmp1701ComputerScienceExperimentLab,
+  Gmp1701ComputerScienceEvidenceLab,
+} from "./game-programmer-path/diagrams/gmp17-01-computer-science";
+import {
+  Gmp1702ProgrammingLanguagesMapLab,
+  Gmp1702ProgrammingLanguagesExperimentLab,
+  Gmp1702ProgrammingLanguagesEvidenceLab,
+} from "./game-programmer-path/diagrams/gmp17-02-programming-languages";
+import {
+  Gmp1703SoftwareDevelopmentMapLab,
+  Gmp1703SoftwareDevelopmentExperimentLab,
+  Gmp1703SoftwareDevelopmentEvidenceLab,
+} from "./game-programmer-path/diagrams/gmp17-03-software-development";
+import {
+  Gmp1704GameMathematicsMapLab,
+  Gmp1704GameMathematicsExperimentLab,
+  Gmp1704GameMathematicsEvidenceLab,
+} from "./game-programmer-path/diagrams/gmp17-04-game-mathematics";
+import {
+  Gmp1705GameProgrammingMapLab,
+  Gmp1705GameProgrammingExperimentLab,
+  Gmp1705GameProgrammingEvidenceLab,
+} from "./game-programmer-path/diagrams/gmp17-05-game-programming";
+import {
+  Gmp1706GameEngineDevelopmentMapLab,
+  Gmp1706GameEngineDevelopmentExperimentLab,
+  Gmp1706GameEngineDevelopmentEvidenceLab,
+} from "./game-programmer-path/diagrams/gmp17-06-game-engine-development";
+import {
+  Gmp1707ComputerGraphicsMapLab,
+  Gmp1707ComputerGraphicsExperimentLab,
+  Gmp1707ComputerGraphicsEvidenceLab,
+} from "./game-programmer-path/diagrams/gmp17-07-computer-graphics";
+import {
+  Gmp1708GameAudioMapLab,
+  Gmp1708GameAudioExperimentLab,
+  Gmp1708GameAudioEvidenceLab,
+} from "./game-programmer-path/diagrams/gmp17-08-game-audio";
+import {
+  Gmp1709GamePhysicsAnimationMapLab,
+  Gmp1709GamePhysicsAnimationExperimentLab,
+  Gmp1709GamePhysicsAnimationEvidenceLab,
+} from "./game-programmer-path/diagrams/gmp17-09-game-physics-animation";
+import {
+  Gmp1710GameAiMapLab,
+  Gmp1710GameAiExperimentLab,
+  Gmp1710GameAiEvidenceLab,
+} from "./game-programmer-path/diagrams/gmp17-10-game-ai";
+import {
+  Gmp1711MultiplayerProgrammingMapLab,
+  Gmp1711MultiplayerProgrammingExperimentLab,
+  Gmp1711MultiplayerProgrammingEvidenceLab,
+} from "./game-programmer-path/diagrams/gmp17-11-multiplayer-programming";
+import {
+  Gmp17OfficialFinalReviewMapLab,
+  Gmp17OfficialFinalReviewExperimentLab,
+  Gmp17OfficialFinalReviewEvidenceLab,
+} from "./game-programmer-path/diagrams/gmp17-official-final-review";
 import { GchConcurrentGcDiagram } from "./gc-handbook/diagrams/gch-concurrent-gc";
 import { GchCopyingCollectionDiagram } from "./gc-handbook/diagrams/gch-copying-collection";
 import { GchFinalReviewDiagram } from "./gc-handbook/diagrams/gch-final-review";
@@ -1694,16 +4116,6 @@ import { GchMarkCompactDiagram } from "./gc-handbook/diagrams/gch-mark-compact";
 import { GchMarkSweepDiagram } from "./gc-handbook/diagrams/gch-mark-sweep";
 import { GchModernGcDiagram } from "./gc-handbook/diagrams/gch-modern-gc";
 import { GchRealtimeGcDiagram } from "./gc-handbook/diagrams/gch-realtime-gc";
-import { GdsBvhDiagram } from "./geometric-data-structures/diagrams/gds-bvh";
-import { GdsCollisionDetectionDiagram } from "./geometric-data-structures/diagrams/gds-collision-detection";
-import { GdsFinalReviewDiagram } from "./geometric-data-structures/diagrams/gds-final-review";
-import { GdsGeomPrimitivesDiagram } from "./geometric-data-structures/diagrams/gds-geom-primitives";
-import { GdsLearningMapDiagram } from "./geometric-data-structures/diagrams/gds-learning-map";
-import { GdsQuadtreesDiagram } from "./geometric-data-structures/diagrams/gds-quadtrees";
-import { GdsRayTracingStructDiagram } from "./geometric-data-structures/diagrams/gds-ray-tracing-struct";
-import { GdsSpatialIndexingDiagram } from "./geometric-data-structures/diagrams/gds-spatial-indexing";
-import { GdsTriangulationDiagram } from "./geometric-data-structures/diagrams/gds-triangulation";
-import { GdsVoronoiDiagram } from "./geometric-data-structures/diagrams/gds-voronoi";
 import { GilAdvancedTechniquesDiagram } from "./global-illumination/diagrams/gil-advanced-techniques";
 import { GilBiasUnbiasedDiagram } from "./global-illumination/diagrams/gil-bias-unbiased";
 import { GilDirectIndirectDiagram } from "./global-illumination/diagrams/gil-direct-indirect";
@@ -1714,36 +4126,6 @@ import { GilPathTracingDiagram } from "./global-illumination/diagrams/gil-path-t
 import { GilPhotonMappingDiagram } from "./global-illumination/diagrams/gil-photon-mapping";
 import { GilRadiosityDiagram } from "./global-illumination/diagrams/gil-radiosity";
 import { GilRealtimeGiDiagram } from "./global-illumination/diagrams/gil-realtime-gi";
-import { GiaArraysSlicesDiagram } from "./go-in-action/diagrams/gia-arrays-slices";
-import { GiaChannelsDiagram } from "./go-in-action/diagrams/gia-channels";
-import { GiaConcurrencyPatternsDiagram } from "./go-in-action/diagrams/gia-concurrency-patterns";
-import { GiaFinalReviewDiagram } from "./go-in-action/diagrams/gia-final-review";
-import { GiaGoPhilosophyDiagram } from "./go-in-action/diagrams/gia-go-philosophy";
-import { GiaGoroutinesDiagram } from "./go-in-action/diagrams/gia-goroutines";
-import { GiaLearningMapDiagram } from "./go-in-action/diagrams/gia-learning-map";
-import { GiaMapStructDiagram } from "./go-in-action/diagrams/gia-map-struct";
-import { GiaStandardLibDiagram } from "./go-in-action/diagrams/gia-standard-lib";
-import { GiaTestingPackagingDiagram } from "./go-in-action/diagrams/gia-testing-packaging";
-import { GplChannelsDiagram } from "./go-programming-language/diagrams/gpl-channels";
-import { GplFinalReviewDiagram } from "./go-programming-language/diagrams/gpl-final-review";
-import { GplFunctionsDiagram } from "./go-programming-language/diagrams/gpl-functions";
-import { GplGoroutinesDiagram } from "./go-programming-language/diagrams/gpl-goroutines";
-import { GplInterfacesDiagram } from "./go-programming-language/diagrams/gpl-interfaces";
-import { GplLearningMapDiagram } from "./go-programming-language/diagrams/gpl-learning-map";
-import { GplPackagesDiagram } from "./go-programming-language/diagrams/gpl-packages";
-import { GplSelectDiagram } from "./go-programming-language/diagrams/gpl-select";
-import { GplTestingDiagram } from "./go-programming-language/diagrams/gpl-testing";
-import { GplTypesVariablesDiagram } from "./go-programming-language/diagrams/gpl-types-variables";
-import { GwpAuthenticationDiagram } from "./go-web-programming/diagrams/gwp-authentication";
-import { GwpDatabaseDiagram } from "./go-web-programming/diagrams/gwp-database";
-import { GwpDeploymentDiagram } from "./go-web-programming/diagrams/gwp-deployment";
-import { GwpFinalReviewDiagram } from "./go-web-programming/diagrams/gwp-final-review";
-import { GwpHttpBasicsDiagram } from "./go-web-programming/diagrams/gwp-http-basics";
-import { GwpJsonApiDiagram } from "./go-web-programming/diagrams/gwp-json-api";
-import { GwpLearningMapDiagram } from "./go-web-programming/diagrams/gwp-learning-map";
-import { GwpMiddlewareDiagram } from "./go-web-programming/diagrams/gwp-middleware";
-import { GwpRoutingDiagram } from "./go-web-programming/diagrams/gwp-routing";
-import { GwpTemplatesDiagram } from "./go-web-programming/diagrams/gwp-templates";
 import { GpgAdvancedTechniquesDiagram } from "./gpu-gems/diagrams/gpg-advanced-techniques";
 import { GpgFinalReviewDiagram } from "./gpu-gems/diagrams/gpg-final-review";
 import { GpgGeometryDiagram } from "./gpu-gems/diagrams/gpg-geometry";
@@ -1754,16 +4136,6 @@ import { GpgLightingShadowsDiagram } from "./gpu-gems/diagrams/gpg-lighting-shad
 import { GpgMaterialsShadersDiagram } from "./gpu-gems/diagrams/gpg-materials-shaders";
 import { GpgNaturalEffectsDiagram } from "./gpu-gems/diagrams/gpg-natural-effects";
 import { GpgParticleSystemsDiagram } from "./gpu-gems/diagrams/gpg-particle-systems";
-import { GpoAdvancedShadingDiagram } from "./gpu-pro/diagrams/gpo-advanced-shading";
-import { GpoFinalReviewDiagram } from "./gpu-pro/diagrams/gpo-final-review";
-import { GpoGpuSimulationDiagram } from "./gpu-pro/diagrams/gpo-gpu-simulation";
-import { GpoImageSpaceDiagram } from "./gpu-pro/diagrams/gpo-image-space";
-import { GpoLearningMapDiagram } from "./gpu-pro/diagrams/gpo-learning-map";
-import { GpoLightingShadowsDiagram } from "./gpu-pro/diagrams/gpo-lighting-shadows";
-import { GpoMobileRenderingDiagram } from "./gpu-pro/diagrams/gpo-mobile-rendering";
-import { GpoProceduralDiagram } from "./gpu-pro/diagrams/gpo-procedural";
-import { GpoRenderingTechniquesDiagram } from "./gpu-pro/diagrams/gpo-rendering-techniques";
-import { GpoVolumeRenderingDiagram } from "./gpu-pro/diagrams/gpo-volume-rendering";
 import { HdArithmeticTricksDiagram } from "./hackers-delight/diagrams/hd-arithmetic-tricks";
 import { HdBitManipulationDiagram } from "./hackers-delight/diagrams/hd-bit-manipulation";
 import { HdCrcErrorDiagram } from "./hackers-delight/diagrams/hd-crc-error";
@@ -1784,116 +4156,751 @@ import { HfjLearningMapDiagram } from "./head-first-java/diagrams/hfj-learning-m
 import { HfjNetworkingDiagram } from "./head-first-java/diagrams/hfj-networking";
 import { HfjOopFundamentalsDiagram } from "./head-first-java/diagrams/hfj-oop-fundamentals";
 import { HfjSwingGuiDiagram } from "./head-first-java/diagrams/hfj-swing-gui";
-import { HfsCentralTendencyDiagram } from "./head-first-statistics/diagrams/hfs-central-tendency";
-import { HfsConfidenceIntervalsDiagram } from "./head-first-statistics/diagrams/hfs-confidence-intervals";
-import { HfsContinuousDistributionsDiagram } from "./head-first-statistics/diagrams/hfs-continuous-distributions";
-import { HfsDataDisplayDiagram } from "./head-first-statistics/diagrams/hfs-data-display";
-import { HfsDiscreteDistributionsDiagram } from "./head-first-statistics/diagrams/hfs-discrete-distributions";
-import { HfsDispersionDiagram } from "./head-first-statistics/diagrams/hfs-dispersion";
-import { HfsFinalReviewDiagram } from "./head-first-statistics/diagrams/hfs-final-review";
-import { HfsBookMap } from "./head-first-statistics/diagrams/hfs-learning-map";
-import { HfsProbabilityDiagram } from "./head-first-statistics/diagrams/hfs-probability";
-import { HfsSamplingDiagram } from "./head-first-statistics/diagrams/hfs-sampling";
-import { HpmFinalReviewDiagram } from "./high-performance-mysql/diagrams/hpm-final-review";
-import { HpmIndexDesignDiagram } from "./high-performance-mysql/diagrams/hpm-index-design";
-import { HpmLearningMapDiagram } from "./high-performance-mysql/diagrams/hpm-learning-map";
-import { HpmMonitoringDiagram } from "./high-performance-mysql/diagrams/hpm-monitoring";
-import { HpmMysqlArchitectureDiagram } from "./high-performance-mysql/diagrams/hpm-mysql-architecture";
-import { HpmOsTuningDiagram } from "./high-performance-mysql/diagrams/hpm-os-tuning";
-import { HpmQueryOptimizationDiagram } from "./high-performance-mysql/diagrams/hpm-query-optimization";
-import { HpmReplicationDiagram } from "./high-performance-mysql/diagrams/hpm-replication";
-import { HpmScalingHaDiagram } from "./high-performance-mysql/diagrams/hpm-scaling-ha";
-import { HpmSchemaDesignDiagram } from "./high-performance-mysql/diagrams/hpm-schema-design";
-import { HcwAssemblyLanguageDiagram } from "./how-computers-work/diagrams/hcw-assembly-language";
-import { HcwBinaryNumbersDiagram } from "./how-computers-work/diagrams/hcw-binary-numbers";
-import { HcwCompilerLinkerDiagram } from "./how-computers-work/diagrams/hcw-compiler-linker";
-import { HcwCpuArchitectureDiagram } from "./how-computers-work/diagrams/hcw-cpu-architecture";
-import { HcwDataRepresentationDiagram } from "./how-computers-work/diagrams/hcw-data-representation";
-import { HcwFileSystemDiagram } from "./how-computers-work/diagrams/hcw-file-system";
-import { HcwFinalReviewDiagram } from "./how-computers-work/diagrams/hcw-final-review";
-import { HcwLearningMapDiagram } from "./how-computers-work/diagrams/hcw-learning-map";
-import { HcwMemoryHierarchyDiagram } from "./how-computers-work/diagrams/hcw-memory-hierarchy";
-import { HcwOsFundamentalsDiagram } from "./how-computers-work/diagrams/hcw-os-fundamentals";
-import { HpwDynamicLinkingDiagram } from "./how-programs-work/diagrams/hpw-dynamic-linking";
-import { HpwFinalReviewDiagram } from "./how-programs-work/diagrams/hpw-final-review";
-import { HpwGarbageCollectionDiagram } from "./how-programs-work/diagrams/hpw-garbage-collection";
-import { HpwLearningMapDiagram } from "./how-programs-work/diagrams/hpw-learning-map";
-import { HpwMachineInstructionsDiagram } from "./how-programs-work/diagrams/hpw-machine-instructions";
-import { HpwMemoryBasicsDiagram } from "./how-programs-work/diagrams/hpw-memory-basics";
-import { HpwPointersDiagram } from "./how-programs-work/diagrams/hpw-pointers";
-import { HpwProcessSchedulingDiagram } from "./how-programs-work/diagrams/hpw-process-scheduling";
-import { HpwStackHeapDiagram } from "./how-programs-work/diagrams/hpw-stack-heap";
-import { HpwSystemCallsDiagram } from "./how-programs-work/diagrams/hpw-system-calls";
-import { HdgAuthenticationDiagram } from "./http-definitive-guide/diagrams/hdg-authentication";
-import { HdgCachingDiagram } from "./http-definitive-guide/diagrams/hdg-caching";
-import { HdgContentNegotiationDiagram } from "./http-definitive-guide/diagrams/hdg-content-negotiation";
-import { HdgFinalReviewDiagram } from "./http-definitive-guide/diagrams/hdg-final-review";
-import { HdgHttpMessagesDiagram } from "./http-definitive-guide/diagrams/hdg-http-messages";
-import { HdgHttpsSslDiagram } from "./http-definitive-guide/diagrams/hdg-https-ssl";
-import { HdgLearningMapDiagram } from "./http-definitive-guide/diagrams/hdg-learning-map";
-import { HdgProxyGatewayDiagram } from "./http-definitive-guide/diagrams/hdg-proxy-gateway";
-import { HdgUrlResourceDiagram } from "./http-definitive-guide/diagrams/hdg-url-resource";
-import { HdgWebHostingDiagram } from "./http-definitive-guide/diagrams/hdg-web-hosting";
-import { IaiAiEthicsDiagram } from "./illustrated-ai/diagrams/iai-ai-ethics";
-import { IaiAiHistoryDiagram } from "./illustrated-ai/diagrams/iai-ai-history";
-import { IaiComputerVisionDiagram } from "./illustrated-ai/diagrams/iai-computer-vision";
-import { IaiDeepLearningDiagram } from "./illustrated-ai/diagrams/iai-deep-learning";
-import { IaiFinalReviewDiagram } from "./illustrated-ai/diagrams/iai-final-review";
-import { IaiLearningMapDiagram } from "./illustrated-ai/diagrams/iai-learning-map";
-import { IaiMachineLearningDiagram } from "./illustrated-ai/diagrams/iai-machine-learning";
-import { IaiNlpDiagram } from "./illustrated-ai/diagrams/iai-nlp";
-import { IaiReinforcementLearningDiagram } from "./illustrated-ai/diagrams/iai-reinforcement-learning";
-import { IaiSearchAlgorithmsDiagram } from "./illustrated-ai/diagrams/iai-search-algorithms";
-import { IdlApplicationsDiagram } from "./illustrated-dl/diagrams/idl-applications";
-import { IdlBackpropagationDiagram } from "./illustrated-dl/diagrams/idl-backpropagation";
-import { IdlCnnDiagram } from "./illustrated-dl/diagrams/idl-cnn";
-import { IdlFinalReviewDiagram } from "./illustrated-dl/diagrams/idl-final-review";
-import { IdlForwardPropagationDiagram } from "./illustrated-dl/diagrams/idl-forward-propagation";
-import { IdlGenerativeModelsDiagram } from "./illustrated-dl/diagrams/idl-generative-models";
-import { IdlLearningMapDiagram } from "./illustrated-dl/diagrams/idl-learning-map";
-import { IdlNnFundamentalsDiagram } from "./illustrated-dl/diagrams/idl-nn-fundamentals";
-import { IdlRegularizationDiagram } from "./illustrated-dl/diagrams/idl-regularization";
-import { IdlRnnDiagram } from "./illustrated-dl/diagrams/idl-rnn";
-import { IlhAuthenticationDiagram } from "./illustrated-http/diagrams/ilh-authentication";
-import { IlhCachingDiagram } from "./illustrated-http/diagrams/ilh-caching";
-import { IlhFinalReviewDiagram } from "./illustrated-http/diagrams/ilh-final-review";
-import { IlhHeadersDiagram } from "./illustrated-http/diagrams/ilh-headers";
-import { IlhHttpBasicsDiagram } from "./illustrated-http/diagrams/ilh-http-basics";
-import { IlhHttpMethodsDiagram } from "./illustrated-http/diagrams/ilh-http-methods";
-import { IlhHttpsSecurityDiagram } from "./illustrated-http/diagrams/ilh-https-security";
-import { IlhLearningMapDiagram } from "./illustrated-http/diagrams/ilh-learning-map";
-import { IlhStatusCodesDiagram } from "./illustrated-http/diagrams/ilh-status-codes";
-import { IlhWebArchitectureDiagram } from "./illustrated-http/diagrams/ilh-web-architecture";
-import { ImlClassificationDiagram } from "./illustrated-ml/diagrams/iml-classification";
-import { ImlDecisionTreesDiagram } from "./illustrated-ml/diagrams/iml-decision-trees";
-import { ImlFinalReviewDiagram } from "./illustrated-ml/diagrams/iml-final-review";
-import { ImlLearningMapDiagram } from "./illustrated-ml/diagrams/iml-learning-map";
-import { ImlLinearModelsDiagram } from "./illustrated-ml/diagrams/iml-linear-models";
-import { ImlMlBasicsDiagram } from "./illustrated-ml/diagrams/iml-ml-basics";
-import { ImlModelEvaluationDiagram } from "./illustrated-ml/diagrams/iml-model-evaluation";
-import { ImlNeuralNetworksDiagram } from "./illustrated-ml/diagrams/iml-neural-networks";
-import { ImlSupportVectorDiagram } from "./illustrated-ml/diagrams/iml-support-vector";
-import { ImlUnsupervisedDiagram } from "./illustrated-ml/diagrams/iml-unsupervised";
-import { IneBatterySystemDiagram } from "./illustrated-nev/diagrams/ine-battery-system";
-import { IneBmsThermalDiagram } from "./illustrated-nev/diagrams/ine-bms-thermal";
-import { IneChargingSystemDiagram } from "./illustrated-nev/diagrams/ine-charging-system";
-import { IneChassisBodyDiagram } from "./illustrated-nev/diagrams/ine-chassis-body";
-import { IneFinalReviewDiagram } from "./illustrated-nev/diagrams/ine-final-review";
-import { IneLearningMapDiagram } from "./illustrated-nev/diagrams/ine-learning-map";
-import { IneMotorControlDiagram } from "./illustrated-nev/diagrams/ine-motor-control";
-import { IneNevOverviewDiagram } from "./illustrated-nev/diagrams/ine-nev-overview";
-import { InePowerElectronicsDiagram } from "./illustrated-nev/diagrams/ine-power-electronics";
-import { IneSafetyFutureDiagram } from "./illustrated-nev/diagrams/ine-safety-future";
-import { IsnDnsCdnDiagram } from "./illustrated-server-network/diagrams/isn-dns-cdn";
-import { IsnFinalReviewDiagram } from "./illustrated-server-network/diagrams/isn-final-review";
-import { IsnFirewallSecurityDiagram } from "./illustrated-server-network/diagrams/isn-firewall-security";
-import { IsnHighAvailabilityDiagram } from "./illustrated-server-network/diagrams/isn-high-availability";
-import { IsnLearningMapDiagram } from "./illustrated-server-network/diagrams/isn-learning-map";
-import { IsnLoadBalancingDiagram } from "./illustrated-server-network/diagrams/isn-load-balancing";
-import { IsnMicroserviceNetworkDiagram } from "./illustrated-server-network/diagrams/isn-microservice-network";
-import { IsnPerformanceTuningDiagram } from "./illustrated-server-network/diagrams/isn-performance-tuning";
-import { IsnReverseProxyDiagram } from "./illustrated-server-network/diagrams/isn-reverse-proxy";
-import { IsnServerBasicsDiagram } from "./illustrated-server-network/diagrams/isn-server-basics";
+import {
+  HcwOfficialLearningMapMapLab,
+  HcwOfficialLearningMapExperimentLab,
+  HcwOfficialLearningMapEvidenceLab,
+} from "./how-computers-work/diagrams/hcw-official-learning-map";
+import {
+  Hcw01ThreePrinciplesMapLab,
+  Hcw01ThreePrinciplesExperimentLab,
+  Hcw01ThreePrinciplesEvidenceLab,
+} from "./how-computers-work/diagrams/hcw-01-three-principles";
+import {
+  Hcw02BuildComputerMapLab,
+  Hcw02BuildComputerExperimentLab,
+  Hcw02BuildComputerEvidenceLab,
+} from "./how-computers-work/diagrams/hcw-02-build-computer";
+import {
+  Hcw03ManualAssemblyMapLab,
+  Hcw03ManualAssemblyExperimentLab,
+  Hcw03ManualAssemblyEvidenceLab,
+} from "./how-computers-work/diagrams/hcw-03-manual-assembly";
+import {
+  Hcw04ProgramFlowMapLab,
+  Hcw04ProgramFlowExperimentLab,
+  Hcw04ProgramFlowEvidenceLab,
+} from "./how-computers-work/diagrams/hcw-04-program-flow";
+import {
+  Hcw05AlgorithmsMapLab,
+  Hcw05AlgorithmsExperimentLab,
+  Hcw05AlgorithmsEvidenceLab,
+} from "./how-computers-work/diagrams/hcw-05-algorithms";
+import {
+  Hcw06DataStructuresMapLab,
+  Hcw06DataStructuresExperimentLab,
+  Hcw06DataStructuresEvidenceLab,
+} from "./how-computers-work/diagrams/hcw-06-data-structures";
+import {
+  Hcw07OopMapLab,
+  Hcw07OopExperimentLab,
+  Hcw07OopEvidenceLab,
+} from "./how-computers-work/diagrams/hcw-07-oop";
+import {
+  Hcw08DatabaseMapLab,
+  Hcw08DatabaseExperimentLab,
+  Hcw08DatabaseEvidenceLab,
+} from "./how-computers-work/diagrams/hcw-08-database";
+import {
+  Hcw09TcpIpMapLab,
+  Hcw09TcpIpExperimentLab,
+  Hcw09TcpIpEvidenceLab,
+} from "./how-computers-work/diagrams/hcw-09-tcp-ip";
+import {
+  Hcw10EncryptionMapLab,
+  Hcw10EncryptionExperimentLab,
+  Hcw10EncryptionEvidenceLab,
+} from "./how-computers-work/diagrams/hcw-10-encryption";
+import {
+  Hcw11XmlMapLab,
+  Hcw11XmlExperimentLab,
+  Hcw11XmlEvidenceLab,
+} from "./how-computers-work/diagrams/hcw-11-xml";
+import {
+  Hcw12SystemEngineeringMapLab,
+  Hcw12SystemEngineeringExperimentLab,
+  Hcw12SystemEngineeringEvidenceLab,
+} from "./how-computers-work/diagrams/hcw-12-system-engineering";
+import {
+  HcwOfficialFinalReviewMapLab,
+  HcwOfficialFinalReviewExperimentLab,
+  HcwOfficialFinalReviewEvidenceLab,
+} from "./how-computers-work/diagrams/hcw-official-final-review";
+import {
+  HpwOfficialLearningMapMapLab,
+  HpwOfficialLearningMapExperimentLab,
+  HpwOfficialLearningMapEvidenceLab,
+} from "./how-programs-work/diagrams/hpw-official-learning-map";
+import {
+  Hpw01CpuMapLab,
+  Hpw01CpuExperimentLab,
+  Hpw01CpuEvidenceLab,
+} from "./how-programs-work/diagrams/hpw-01-cpu";
+import {
+  Hpw02BinaryMapLab,
+  Hpw02BinaryExperimentLab,
+  Hpw02BinaryEvidenceLab,
+} from "./how-programs-work/diagrams/hpw-02-binary";
+import {
+  Hpw03FloatingPointMapLab,
+  Hpw03FloatingPointExperimentLab,
+  Hpw03FloatingPointEvidenceLab,
+} from "./how-programs-work/diagrams/hpw-03-floating-point";
+import {
+  Hpw04MemoryMapLab,
+  Hpw04MemoryExperimentLab,
+  Hpw04MemoryEvidenceLab,
+} from "./how-programs-work/diagrams/hpw-04-memory";
+import {
+  Hpw05MemoryDiskMapLab,
+  Hpw05MemoryDiskExperimentLab,
+  Hpw05MemoryDiskEvidenceLab,
+} from "./how-programs-work/diagrams/hpw-05-memory-disk";
+import {
+  Hpw06CompressionMapLab,
+  Hpw06CompressionExperimentLab,
+  Hpw06CompressionEvidenceLab,
+} from "./how-programs-work/diagrams/hpw-06-compression";
+import {
+  Hpw07RuntimeEnvironmentMapLab,
+  Hpw07RuntimeEnvironmentExperimentLab,
+  Hpw07RuntimeEnvironmentEvidenceLab,
+} from "./how-programs-work/diagrams/hpw-07-runtime-environment";
+import {
+  Hpw08SourceExecutableMapLab,
+  Hpw08SourceExecutableExperimentLab,
+  Hpw08SourceExecutableEvidenceLab,
+} from "./how-programs-work/diagrams/hpw-08-source-executable";
+import {
+  Hpw09OsApplicationsMapLab,
+  Hpw09OsApplicationsExperimentLab,
+  Hpw09OsApplicationsEvidenceLab,
+} from "./how-programs-work/diagrams/hpw-09-os-applications";
+import {
+  Hpw10AssemblyMapLab,
+  Hpw10AssemblyExperimentLab,
+  Hpw10AssemblyEvidenceLab,
+} from "./how-programs-work/diagrams/hpw-10-assembly";
+import {
+  Hpw11HardwareControlMapLab,
+  Hpw11HardwareControlExperimentLab,
+  Hpw11HardwareControlEvidenceLab,
+} from "./how-programs-work/diagrams/hpw-11-hardware-control";
+import {
+  Hpw12ThinkingMapLab,
+  Hpw12ThinkingExperimentLab,
+  Hpw12ThinkingEvidenceLab,
+} from "./how-programs-work/diagrams/hpw-12-thinking";
+import {
+  HpwAppendixCMapLab,
+  HpwAppendixCExperimentLab,
+  HpwAppendixCEvidenceLab,
+} from "./how-programs-work/diagrams/hpw-appendix-c";
+import {
+  HpwOfficialFinalReviewMapLab,
+  HpwOfficialFinalReviewExperimentLab,
+  HpwOfficialFinalReviewEvidenceLab,
+} from "./how-programs-work/diagrams/hpw-official-final-review";
+import {
+  Hdg1OfficialLearningMapMessageLab,
+  Hdg1OfficialLearningMapDecisionLab,
+  Hdg1OfficialLearningMapEvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-official-learning-map";
+import {
+  Hdg1Part1MessageLab,
+  Hdg1Part1DecisionLab,
+  Hdg1Part1EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-part-1";
+import {
+  Hdg101MessageLab,
+  Hdg101DecisionLab,
+  Hdg101EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-01";
+import {
+  Hdg102MessageLab,
+  Hdg102DecisionLab,
+  Hdg102EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-02";
+import {
+  Hdg103MessageLab,
+  Hdg103DecisionLab,
+  Hdg103EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-03";
+import {
+  Hdg104MessageLab,
+  Hdg104DecisionLab,
+  Hdg104EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-04";
+import {
+  Hdg1Part2MessageLab,
+  Hdg1Part2DecisionLab,
+  Hdg1Part2EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-part-2";
+import {
+  Hdg105MessageLab,
+  Hdg105DecisionLab,
+  Hdg105EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-05";
+import {
+  Hdg106MessageLab,
+  Hdg106DecisionLab,
+  Hdg106EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-06";
+import {
+  Hdg107MessageLab,
+  Hdg107DecisionLab,
+  Hdg107EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-07";
+import {
+  Hdg108MessageLab,
+  Hdg108DecisionLab,
+  Hdg108EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-08";
+import {
+  Hdg109MessageLab,
+  Hdg109DecisionLab,
+  Hdg109EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-09";
+import {
+  Hdg110MessageLab,
+  Hdg110DecisionLab,
+  Hdg110EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-10";
+import {
+  Hdg1Part3MessageLab,
+  Hdg1Part3DecisionLab,
+  Hdg1Part3EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-part-3";
+import {
+  Hdg111MessageLab,
+  Hdg111DecisionLab,
+  Hdg111EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-11";
+import {
+  Hdg112MessageLab,
+  Hdg112DecisionLab,
+  Hdg112EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-12";
+import {
+  Hdg113MessageLab,
+  Hdg113DecisionLab,
+  Hdg113EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-13";
+import {
+  Hdg114MessageLab,
+  Hdg114DecisionLab,
+  Hdg114EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-14";
+import {
+  Hdg1Part4MessageLab,
+  Hdg1Part4DecisionLab,
+  Hdg1Part4EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-part-4";
+import {
+  Hdg115MessageLab,
+  Hdg115DecisionLab,
+  Hdg115EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-15";
+import {
+  Hdg116MessageLab,
+  Hdg116DecisionLab,
+  Hdg116EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-16";
+import {
+  Hdg117MessageLab,
+  Hdg117DecisionLab,
+  Hdg117EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-17";
+import {
+  Hdg1Part5MessageLab,
+  Hdg1Part5DecisionLab,
+  Hdg1Part5EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-part-5";
+import {
+  Hdg118MessageLab,
+  Hdg118DecisionLab,
+  Hdg118EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-18";
+import {
+  Hdg119MessageLab,
+  Hdg119DecisionLab,
+  Hdg119EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-19";
+import {
+  Hdg120MessageLab,
+  Hdg120DecisionLab,
+  Hdg120EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-20";
+import {
+  Hdg121MessageLab,
+  Hdg121DecisionLab,
+  Hdg121EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-21";
+import {
+  Hdg1Part6MessageLab,
+  Hdg1Part6DecisionLab,
+  Hdg1Part6EvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-part-6";
+import {
+  Hdg1AppendixAMessageLab,
+  Hdg1AppendixADecisionLab,
+  Hdg1AppendixAEvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-appendix-a";
+import {
+  Hdg1AppendixBMessageLab,
+  Hdg1AppendixBDecisionLab,
+  Hdg1AppendixBEvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-appendix-b";
+import {
+  Hdg1AppendixCMessageLab,
+  Hdg1AppendixCDecisionLab,
+  Hdg1AppendixCEvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-appendix-c";
+import {
+  Hdg1AppendixDMessageLab,
+  Hdg1AppendixDDecisionLab,
+  Hdg1AppendixDEvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-appendix-d";
+import {
+  Hdg1AppendixEMessageLab,
+  Hdg1AppendixEDecisionLab,
+  Hdg1AppendixEEvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-appendix-e";
+import {
+  Hdg1AppendixFMessageLab,
+  Hdg1AppendixFDecisionLab,
+  Hdg1AppendixFEvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-appendix-f";
+import {
+  Hdg1AppendixGMessageLab,
+  Hdg1AppendixGDecisionLab,
+  Hdg1AppendixGEvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-appendix-g";
+import {
+  Hdg1AppendixHMessageLab,
+  Hdg1AppendixHDecisionLab,
+  Hdg1AppendixHEvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-appendix-h";
+import {
+  Hdg1IndexMessageLab,
+  Hdg1IndexDecisionLab,
+  Hdg1IndexEvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-index";
+import {
+  Hdg1OfficialFinalReviewMessageLab,
+  Hdg1OfficialFinalReviewDecisionLab,
+  Hdg1OfficialFinalReviewEvidenceLab,
+} from "./http-definitive-guide/diagrams/hdg1-official-final-review";
+import {
+  IaiOfficialLearningMapMapLab,
+  IaiOfficialLearningMapExperimentLab,
+  IaiOfficialLearningMapEvidenceLab,
+} from "./illustrated-ai/diagrams/iai-official-learning-map";
+import {
+  Iai01AiPastPresentFutureMapLab,
+  Iai01AiPastPresentFutureExperimentLab,
+  Iai01AiPastPresentFutureEvidenceLab,
+} from "./illustrated-ai/diagrams/iai-01-ai-past-present-future";
+import {
+  Iai02RuleSystemsVariantsMapLab,
+  Iai02RuleSystemsVariantsExperimentLab,
+  Iai02RuleSystemsVariantsEvidenceLab,
+} from "./illustrated-ai/diagrams/iai-02-rule-systems-variants";
+import {
+  Iai03AutomataArtificialLifeMapLab,
+  Iai03AutomataArtificialLifeExperimentLab,
+  Iai03AutomataArtificialLifeEvidenceLab,
+} from "./illustrated-ai/diagrams/iai-03-automata-artificial-life";
+import {
+  Iai04WeightingOptimalSolutionsMapLab,
+  Iai04WeightingOptimalSolutionsExperimentLab,
+  Iai04WeightingOptimalSolutionsEvidenceLab,
+} from "./illustrated-ai/diagrams/iai-04-weighting-optimal-solutions";
+import {
+  Iai05WeightingOptimizationProgramsMapLab,
+  Iai05WeightingOptimizationProgramsExperimentLab,
+  Iai05WeightingOptimizationProgramsEvidenceLab,
+} from "./illustrated-ai/diagrams/iai-05-weighting-optimization-programs";
+import {
+  Iai06StatisticalMlProbabilityModelingMapLab,
+  Iai06StatisticalMlProbabilityModelingExperimentLab,
+  Iai06StatisticalMlProbabilityModelingEvidenceLab,
+} from "./illustrated-ai/diagrams/iai-06-statistical-ml-probability-modeling";
+import {
+  Iai07StatisticalMlSupervisedUnsupervisedMapLab,
+  Iai07StatisticalMlSupervisedUnsupervisedExperimentLab,
+  Iai07StatisticalMlSupervisedUnsupervisedEvidenceLab,
+} from "./illustrated-ai/diagrams/iai-07-statistical-ml-supervised-unsupervised";
+import {
+  Iai08ReinforcementDistributedAiMapLab,
+  Iai08ReinforcementDistributedAiExperimentLab,
+  Iai08ReinforcementDistributedAiEvidenceLab,
+} from "./illustrated-ai/diagrams/iai-08-reinforcement-distributed-ai";
+import {
+  Iai09DeepLearningMapLab,
+  Iai09DeepLearningExperimentLab,
+  Iai09DeepLearningEvidenceLab,
+} from "./illustrated-ai/diagrams/iai-09-deep-learning";
+import {
+  Iai10ImageSpeechPatternRecognitionMapLab,
+  Iai10ImageSpeechPatternRecognitionExperimentLab,
+  Iai10ImageSpeechPatternRecognitionEvidenceLab,
+} from "./illustrated-ai/diagrams/iai-10-image-speech-pattern-recognition";
+import {
+  Iai11NlpMachineLearningMapLab,
+  Iai11NlpMachineLearningExperimentLab,
+  Iai11NlpMachineLearningEvidenceLab,
+} from "./illustrated-ai/diagrams/iai-11-nlp-machine-learning";
+import {
+  Iai12KnowledgeRepresentationDataStructuresMapLab,
+  Iai12KnowledgeRepresentationDataStructuresExperimentLab,
+  Iai12KnowledgeRepresentationDataStructuresEvidenceLab,
+} from "./illustrated-ai/diagrams/iai-12-knowledge-representation-data-structures";
+import {
+  Iai13DistributedComputingMapLab,
+  Iai13DistributedComputingExperimentLab,
+  Iai13DistributedComputingEvidenceLab,
+} from "./illustrated-ai/diagrams/iai-13-distributed-computing";
+import {
+  Iai14BigDataIotMapLab,
+  Iai14BigDataIotExperimentLab,
+  Iai14BigDataIotEvidenceLab,
+} from "./illustrated-ai/diagrams/iai-14-big-data-iot";
+import {
+  IaiOfficialFinalReviewMapLab,
+  IaiOfficialFinalReviewExperimentLab,
+  IaiOfficialFinalReviewEvidenceLab,
+} from "./illustrated-ai/diagrams/iai-official-final-review";
+import {
+  IdlOfficialLearningMapMapLab,
+  IdlOfficialLearningMapExperimentLab,
+  IdlOfficialLearningMapEvidenceLab,
+} from "./illustrated-dl/diagrams/idl-official-learning-map";
+import {
+  Idl01IntroductionMapLab,
+  Idl01IntroductionExperimentLab,
+  Idl01IntroductionEvidenceLab,
+} from "./illustrated-dl/diagrams/idl-01-introduction";
+import {
+  Idl02NeuralNetworksMapLab,
+  Idl02NeuralNetworksExperimentLab,
+  Idl02NeuralNetworksEvidenceLab,
+} from "./illustrated-dl/diagrams/idl-02-neural-networks";
+import {
+  Idl03ConvolutionalNeuralNetworksMapLab,
+  Idl03ConvolutionalNeuralNetworksExperimentLab,
+  Idl03ConvolutionalNeuralNetworksEvidenceLab,
+} from "./illustrated-dl/diagrams/idl-03-convolutional-neural-networks";
+import {
+  Idl04RestrictedBoltzmannMachinesMapLab,
+  Idl04RestrictedBoltzmannMachinesExperimentLab,
+  Idl04RestrictedBoltzmannMachinesEvidenceLab,
+} from "./illustrated-dl/diagrams/idl-04-restricted-boltzmann-machines";
+import {
+  Idl05AutoencodersMapLab,
+  Idl05AutoencodersExperimentLab,
+  Idl05AutoencodersEvidenceLab,
+} from "./illustrated-dl/diagrams/idl-05-autoencoders";
+import {
+  Idl06ImprovingGeneralizationMapLab,
+  Idl06ImprovingGeneralizationExperimentLab,
+  Idl06ImprovingGeneralizationEvidenceLab,
+} from "./illustrated-dl/diagrams/idl-06-improving-generalization";
+import {
+  Idl07DeepLearningToolsMapLab,
+  Idl07DeepLearningToolsExperimentLab,
+  Idl07DeepLearningToolsEvidenceLab,
+} from "./illustrated-dl/diagrams/idl-07-deep-learning-tools";
+import {
+  Idl08PresentAndFutureMapLab,
+  Idl08PresentAndFutureExperimentLab,
+  Idl08PresentAndFutureEvidenceLab,
+} from "./illustrated-dl/diagrams/idl-08-present-and-future";
+import {
+  IdlOfficialFinalReviewMapLab,
+  IdlOfficialFinalReviewExperimentLab,
+  IdlOfficialFinalReviewEvidenceLab,
+} from "./illustrated-dl/diagrams/idl-official-final-review";
+import {
+  IlhOfficialLearningMapFlowLab,
+  IlhOfficialLearningMapExperimentLab,
+  IlhOfficialLearningMapEvidenceLab,
+} from "./illustrated-http/diagrams/ilh-official-learning-map";
+import {
+  Ilh01WebNetworkFoundationsFlowLab,
+  Ilh01WebNetworkFoundationsExperimentLab,
+  Ilh01WebNetworkFoundationsEvidenceLab,
+} from "./illustrated-http/diagrams/ilh-01-web-network-foundations";
+import {
+  Ilh02SimpleHttpProtocolFlowLab,
+  Ilh02SimpleHttpProtocolExperimentLab,
+  Ilh02SimpleHttpProtocolEvidenceLab,
+} from "./illustrated-http/diagrams/ilh-02-simple-http-protocol";
+import {
+  Ilh03HttpMessageInformationFlowLab,
+  Ilh03HttpMessageInformationExperimentLab,
+  Ilh03HttpMessageInformationEvidenceLab,
+} from "./illustrated-http/diagrams/ilh-03-http-message-information";
+import {
+  Ilh04HttpStatusCodesFlowLab,
+  Ilh04HttpStatusCodesExperimentLab,
+  Ilh04HttpStatusCodesEvidenceLab,
+} from "./illustrated-http/diagrams/ilh-04-http-status-codes";
+import {
+  Ilh05WebServersCooperationFlowLab,
+  Ilh05WebServersCooperationExperimentLab,
+  Ilh05WebServersCooperationEvidenceLab,
+} from "./illustrated-http/diagrams/ilh-05-web-servers-cooperation";
+import {
+  Ilh06HttpHeadersFlowLab,
+  Ilh06HttpHeadersExperimentLab,
+  Ilh06HttpHeadersEvidenceLab,
+} from "./illustrated-http/diagrams/ilh-06-http-headers";
+import {
+  Ilh07HttpsSecurityFlowLab,
+  Ilh07HttpsSecurityExperimentLab,
+  Ilh07HttpsSecurityEvidenceLab,
+} from "./illustrated-http/diagrams/ilh-07-https-security";
+import {
+  Ilh08UserAuthenticationFlowLab,
+  Ilh08UserAuthenticationExperimentLab,
+  Ilh08UserAuthenticationEvidenceLab,
+} from "./illustrated-http/diagrams/ilh-08-user-authentication";
+import {
+  Ilh09HttpExtensionsFlowLab,
+  Ilh09HttpExtensionsExperimentLab,
+  Ilh09HttpExtensionsEvidenceLab,
+} from "./illustrated-http/diagrams/ilh-09-http-extensions";
+import {
+  Ilh10WebContentTechnologiesFlowLab,
+  Ilh10WebContentTechnologiesExperimentLab,
+  Ilh10WebContentTechnologiesEvidenceLab,
+} from "./illustrated-http/diagrams/ilh-10-web-content-technologies";
+import {
+  Ilh11WebAttackTechniquesFlowLab,
+  Ilh11WebAttackTechniquesExperimentLab,
+  Ilh11WebAttackTechniquesEvidenceLab,
+} from "./illustrated-http/diagrams/ilh-11-web-attack-techniques";
+import {
+  IlhOfficialFinalReviewFlowLab,
+  IlhOfficialFinalReviewExperimentLab,
+  IlhOfficialFinalReviewEvidenceLab,
+} from "./illustrated-http/diagrams/ilh-official-final-review";
+import {
+  ImlOfficialLearningMapMapLab,
+  ImlOfficialLearningMapExperimentLab,
+  ImlOfficialLearningMapEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-official-learning-map";
+import {
+  Iml01WhatIsMachineLearningMapLab,
+  Iml01WhatIsMachineLearningExperimentLab,
+  Iml01WhatIsMachineLearningEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-01-what-is-machine-learning";
+import {
+  Iml02LearningModelsMapLab,
+  Iml02LearningModelsExperimentLab,
+  Iml02LearningModelsEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-02-learning-models";
+import {
+  Iml03LeastSquaresLearningMapLab,
+  Iml03LeastSquaresLearningExperimentLab,
+  Iml03LeastSquaresLearningEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-03-least-squares-learning";
+import {
+  Iml04ConstrainedLeastSquaresMapLab,
+  Iml04ConstrainedLeastSquaresExperimentLab,
+  Iml04ConstrainedLeastSquaresEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-04-constrained-least-squares";
+import {
+  Iml05SparseLearningMapLab,
+  Iml05SparseLearningExperimentLab,
+  Iml05SparseLearningEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-05-sparse-learning";
+import {
+  Iml06RobustLearningMapLab,
+  Iml06RobustLearningExperimentLab,
+  Iml06RobustLearningEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-06-robust-learning";
+import {
+  Iml07LeastSquaresClassificationMapLab,
+  Iml07LeastSquaresClassificationExperimentLab,
+  Iml07LeastSquaresClassificationEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-07-least-squares-classification";
+import {
+  Iml08SupportVectorClassificationMapLab,
+  Iml08SupportVectorClassificationExperimentLab,
+  Iml08SupportVectorClassificationEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-08-support-vector-classification";
+import {
+  Iml09EnsembleClassificationMapLab,
+  Iml09EnsembleClassificationExperimentLab,
+  Iml09EnsembleClassificationEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-09-ensemble-classification";
+import {
+  Iml10ProbabilisticClassificationMapLab,
+  Iml10ProbabilisticClassificationExperimentLab,
+  Iml10ProbabilisticClassificationEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-10-probabilistic-classification";
+import {
+  Iml11SequenceClassificationMapLab,
+  Iml11SequenceClassificationExperimentLab,
+  Iml11SequenceClassificationEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-11-sequence-classification";
+import {
+  Iml12AnomalyDetectionMapLab,
+  Iml12AnomalyDetectionExperimentLab,
+  Iml12AnomalyDetectionEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-12-anomaly-detection";
+import {
+  Iml13UnsupervisedDimensionalityReductionMapLab,
+  Iml13UnsupervisedDimensionalityReductionExperimentLab,
+  Iml13UnsupervisedDimensionalityReductionEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-13-unsupervised-dimensionality-reduction";
+import {
+  Iml14ClusteringMapLab,
+  Iml14ClusteringExperimentLab,
+  Iml14ClusteringEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-14-clustering";
+import {
+  Iml15OnlineLearningMapLab,
+  Iml15OnlineLearningExperimentLab,
+  Iml15OnlineLearningEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-15-online-learning";
+import {
+  Iml16SemiSupervisedLearningMapLab,
+  Iml16SemiSupervisedLearningExperimentLab,
+  Iml16SemiSupervisedLearningEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-16-semi-supervised-learning";
+import {
+  Iml17SupervisedDimensionalityReductionMapLab,
+  Iml17SupervisedDimensionalityReductionExperimentLab,
+  Iml17SupervisedDimensionalityReductionEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-17-supervised-dimensionality-reduction";
+import {
+  Iml18TransferLearningMapLab,
+  Iml18TransferLearningExperimentLab,
+  Iml18TransferLearningEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-18-transfer-learning";
+import {
+  Iml19MultiTaskLearningMapLab,
+  Iml19MultiTaskLearningExperimentLab,
+  Iml19MultiTaskLearningEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-19-multi-task-learning";
+import {
+  Iml20SummaryOutlookMapLab,
+  Iml20SummaryOutlookExperimentLab,
+  Iml20SummaryOutlookEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-20-summary-outlook";
+import {
+  ImlOfficialFinalReviewMapLab,
+  ImlOfficialFinalReviewExperimentLab,
+  ImlOfficialFinalReviewEvidenceLab,
+} from "./illustrated-ml/diagrams/iml-official-final-review";
+import {
+  Ine23OfficialLearningMapEnergyLab,
+  Ine23OfficialLearningMapComponentLab,
+  Ine23OfficialLearningMapEvidenceLab,
+} from "./illustrated-nev/diagrams/ine23-official-learning-map";
+import {
+  Ine23ContentSummaryEnergyLab,
+  Ine23ContentSummaryComponentLab,
+  Ine23ContentSummaryEvidenceLab,
+} from "./illustrated-nev/diagrams/ine23-content-summary";
+import {
+  Ine23PrefaceEnergyLab,
+  Ine23PrefaceComponentLab,
+  Ine23PrefaceEvidenceLab,
+} from "./illustrated-nev/diagrams/ine23-preface";
+import {
+  Ine2301ClassificationEnergyLab,
+  Ine2301ClassificationComponentLab,
+  Ine2301ClassificationEvidenceLab,
+} from "./illustrated-nev/diagrams/ine23-01-classification";
+import {
+  Ine2302MotorsEnergyLab,
+  Ine2302MotorsComponentLab,
+  Ine2302MotorsEvidenceLab,
+} from "./illustrated-nev/diagrams/ine23-02-motors";
+import {
+  Ine2303BatteriesEnergyLab,
+  Ine2303BatteriesComponentLab,
+  Ine2303BatteriesEvidenceLab,
+} from "./illustrated-nev/diagrams/ine23-03-batteries";
+import {
+  Ine2304BatteryElectricVehiclesEnergyLab,
+  Ine2304BatteryElectricVehiclesComponentLab,
+  Ine2304BatteryElectricVehiclesEvidenceLab,
+} from "./illustrated-nev/diagrams/ine23-04-battery-electric-vehicles";
+import {
+  Ine2305HybridVehiclesEnergyLab,
+  Ine2305HybridVehiclesComponentLab,
+  Ine2305HybridVehiclesEvidenceLab,
+} from "./illustrated-nev/diagrams/ine23-05-hybrid-vehicles";
+import {
+  Ine2306FuelCellVehiclesEnergyLab,
+  Ine2306FuelCellVehiclesComponentLab,
+  Ine2306FuelCellVehiclesEvidenceLab,
+} from "./illustrated-nev/diagrams/ine23-06-fuel-cell-vehicles";
+import {
+  Ine2307NaturalGasVehiclesEnergyLab,
+  Ine2307NaturalGasVehiclesComponentLab,
+  Ine2307NaturalGasVehiclesEvidenceLab,
+} from "./illustrated-nev/diagrams/ine23-07-natural-gas-vehicles";
+import {
+  Ine2308LpgVehiclesEnergyLab,
+  Ine2308LpgVehiclesComponentLab,
+  Ine2308LpgVehiclesEvidenceLab,
+} from "./illustrated-nev/diagrams/ine23-08-lpg-vehicles";
+import {
+  Ine23ReferencesEnergyLab,
+  Ine23ReferencesComponentLab,
+  Ine23ReferencesEvidenceLab,
+} from "./illustrated-nev/diagrams/ine23-references";
+import {
+  Ine23OfficialFinalReviewEnergyLab,
+  Ine23OfficialFinalReviewComponentLab,
+  Ine23OfficialFinalReviewEvidenceLab,
+} from "./illustrated-nev/diagrams/ine23-official-final-review";
+import {
+  IsnOfficialLearningMapPlanLab,
+  IsnOfficialLearningMapFaultLab,
+  IsnOfficialLearningMapEvidenceLab,
+} from "./illustrated-server-network/diagrams/isn-official-learning-map";
+import {
+  Isn00BookUsagePlanLab,
+  Isn00BookUsageFaultLab,
+  Isn00BookUsageEvidenceLab,
+} from "./illustrated-server-network/diagrams/isn-00-book-usage";
+import {
+  Isn01PhysicalDesignPlanLab,
+  Isn01PhysicalDesignFaultLab,
+  Isn01PhysicalDesignEvidenceLab,
+} from "./illustrated-server-network/diagrams/isn-01-physical-design";
+import {
+  Isn02LogicalDesignPlanLab,
+  Isn02LogicalDesignFaultLab,
+  Isn02LogicalDesignEvidenceLab,
+} from "./illustrated-server-network/diagrams/isn-02-logical-design";
+import {
+  Isn03SecurityLoadBalancingPlanLab,
+  Isn03SecurityLoadBalancingFaultLab,
+  Isn03SecurityLoadBalancingEvidenceLab,
+} from "./illustrated-server-network/diagrams/isn-03-security-load-balancing";
+import {
+  Isn04HighAvailabilityPlanLab,
+  Isn04HighAvailabilityFaultLab,
+  Isn04HighAvailabilityEvidenceLab,
+} from "./illustrated-server-network/diagrams/isn-04-high-availability";
+import {
+  Isn05ManagementDesignPlanLab,
+  Isn05ManagementDesignFaultLab,
+  Isn05ManagementDesignEvidenceLab,
+} from "./illustrated-server-network/diagrams/isn-05-management-design";
+import {
+  IsnOfficialFinalReviewPlanLab,
+  IsnOfficialFinalReviewFaultLab,
+  IsnOfficialFinalReviewEvidenceLab,
+} from "./illustrated-server-network/diagrams/isn-official-final-review";
 import { IalBinarySearchTreesDiagram } from "./introduction-to-algorithms/diagrams/ial-binary-search-trees";
 import { IalDataStructuresDiagram } from "./introduction-to-algorithms/diagrams/ial-data-structures";
 import { IalDpAdvancedDiagram } from "./introduction-to-algorithms/diagrams/ial-dp-advanced";
@@ -1914,46 +4921,6 @@ import { JctJavaFundamentalsDiagram } from "./java-core-tech/diagrams/jct-java-f
 import { JctLearningMapDiagram } from "./java-core-tech/diagrams/jct-learning-map";
 import { JctOopDesignDiagram } from "./java-core-tech/diagrams/jct-oop-design";
 import { JctXmlNetworkDiagram } from "./java-core-tech/diagrams/jct-xml-network";
-import { JdgArraysObjectsDiagram } from "./javascript-definitive-guide/diagrams/jdg-arrays-objects";
-import { JdgBrowserApisDiagram } from "./javascript-definitive-guide/diagrams/jdg-browser-apis";
-import { JdgClassesModulesDiagram } from "./javascript-definitive-guide/diagrams/jdg-classes-modules";
-import { JdgCollectionsMetaprogrammingDiagram } from "./javascript-definitive-guide/diagrams/jdg-collections-metaprogramming";
-import { JdgDomEventsDiagram } from "./javascript-definitive-guide/diagrams/jdg-dom-events";
-import { JdgFinalReviewDiagram } from "./javascript-definitive-guide/diagrams/jdg-final-review";
-import { JdgFunctionsClosuresDiagram } from "./javascript-definitive-guide/diagrams/jdg-functions-closures";
-import { JdgLearningMapDiagram } from "./javascript-definitive-guide/diagrams/jdg-learning-map";
-import { JdgLexiconGrammarDiagram } from "./javascript-definitive-guide/diagrams/jdg-lexicon-grammar";
-import { JdgTypesValuesDiagram } from "./javascript-definitive-guide/diagrams/jdg-types-values";
-import { JfsAuthSecurityDiagram } from "./javascript-fullstack/diagrams/jfs-auth-security";
-import { JfsExpressKoaDiagram } from "./javascript-fullstack/diagrams/jfs-express-koa";
-import { JfsFinalReviewDiagram } from "./javascript-fullstack/diagrams/jfs-final-review";
-import { JfsGraphqlApiDiagram } from "./javascript-fullstack/diagrams/jfs-graphql-api";
-import { JfsLearningMapDiagram } from "./javascript-fullstack/diagrams/jfs-learning-map";
-import { JfsMongodbMongooseDiagram } from "./javascript-fullstack/diagrams/jfs-mongodb-mongoose";
-import { JfsNodejsServerDiagram } from "./javascript-fullstack/diagrams/jfs-nodejs-server";
-import { JfsReactEssentialsDiagram } from "./javascript-fullstack/diagrams/jfs-react-essentials";
-import { JfsStateManagementDiagram } from "./javascript-fullstack/diagrams/jfs-state-management";
-import { JfsTestingDeployDiagram } from "./javascript-fullstack/diagrams/jfs-testing-deploy";
-import { JpgDomBomDiagram } from "./javascript-pro-guide/diagrams/jpg-dom-bom";
-import { JpgEventLoopDiagram } from "./javascript-pro-guide/diagrams/jpg-event-loop";
-import { JpgFinalReviewDiagram } from "./javascript-pro-guide/diagrams/jpg-final-review";
-import { JpgLearningMapDiagram } from "./javascript-pro-guide/diagrams/jpg-learning-map";
-import { JpgModulesDiagram } from "./javascript-pro-guide/diagrams/jpg-modules";
-import { JpgObjectsOopDiagram } from "./javascript-pro-guide/diagrams/jpg-objects-oop";
-import { JpgPromiseAsyncDiagram } from "./javascript-pro-guide/diagrams/jpg-promise-async";
-import { JpgPrototypeChainDiagram } from "./javascript-pro-guide/diagrams/jpg-prototype-chain";
-import { JpgScopeClosureDiagram } from "./javascript-pro-guide/diagrams/jpg-scope-closure";
-import { JpgTypesVariablesDiagram } from "./javascript-pro-guide/diagrams/jpg-types-variables";
-import { JpcAdvancedComposeDiagram } from "./jetpack-compose/diagrams/jpc-advanced-compose";
-import { JpcAnimationsDiagram } from "./jetpack-compose/diagrams/jpc-animations";
-import { JpcComposeBasicsDiagram } from "./jetpack-compose/diagrams/jpc-compose-basics";
-import { JpcFinalReviewDiagram } from "./jetpack-compose/diagrams/jpc-final-review";
-import { JpcLayoutModifiersDiagram } from "./jetpack-compose/diagrams/jpc-layout-modifiers";
-import { JpcLearningMapDiagram } from "./jetpack-compose/diagrams/jpc-learning-map";
-import { JpcNavigationDiagram } from "./jetpack-compose/diagrams/jpc-navigation";
-import { JpcStateManagementDiagram } from "./jetpack-compose/diagrams/jpc-state-management";
-import { JpcThemeStylingDiagram } from "./jetpack-compose/diagrams/jpc-theme-styling";
-import { JpcViewInteropDiagram } from "./jetpack-compose/diagrams/jpc-view-interop";
 import { Jg1FinalReviewDiagram } from "./jvm-g1-tuning/diagrams/jg1-final-review";
 import { Jg1FullGcDiagram } from "./jvm-g1-tuning/diagrams/jg1-full-gc";
 import { Jg1G1OverviewDiagram } from "./jvm-g1-tuning/diagrams/jg1-g1-overview";
@@ -1974,136 +4941,293 @@ import { JvtLearningMapDiagram } from "./jvm-troubleshooting/diagrams/jvt-learni
 import { JvtMemoryLeakDiagram } from "./jvm-troubleshooting/diagrams/jvt-memory-leak";
 import { JvtMemoryModelDiagram } from "./jvm-troubleshooting/diagrams/jvt-memory-model";
 import { JvtThreadAnalysisDiagram } from "./jvm-troubleshooting/diagrams/jvt-thread-analysis";
-import { KfkAdminOpsDiagram } from "./kafka-definitive-guide/diagrams/kfk-admin-ops";
-import { KfkConsumersDiagram } from "./kafka-definitive-guide/diagrams/kfk-consumers";
-import { KfkFinalReviewDiagram } from "./kafka-definitive-guide/diagrams/kfk-final-review";
-import { KfkKafkaInternalsDiagram } from "./kafka-definitive-guide/diagrams/kfk-kafka-internals";
-import { KfkKafkaIntroDiagram } from "./kafka-definitive-guide/diagrams/kfk-kafka-intro";
-import { KfkKafkaStreamsDiagram } from "./kafka-definitive-guide/diagrams/kfk-kafka-streams";
-import { KfkLearningMapDiagram } from "./kafka-definitive-guide/diagrams/kfk-learning-map";
-import { KfkProducersDiagram } from "./kafka-definitive-guide/diagrams/kfk-producers";
-import { KfkReliabilityDiagram } from "./kafka-definitive-guide/diagrams/kfk-reliability";
-import { KfkTopicsPartitionsDiagram } from "./kafka-definitive-guide/diagrams/kfk-topics-partitions";
-import { KgaAdvancedTopicsDiagram } from "./kong-gateway/diagrams/kga-advanced-topics";
-import { KgaApiGatewayIntroDiagram } from "./kong-gateway/diagrams/kga-api-gateway-intro";
-import { KgaAuthenticationDiagram } from "./kong-gateway/diagrams/kga-authentication";
-import { KgaDeploymentHaDiagram } from "./kong-gateway/diagrams/kga-deployment-ha";
-import { KgaFinalReviewDiagram } from "./kong-gateway/diagrams/kga-final-review";
-import { KgaKongArchitectureDiagram } from "./kong-gateway/diagrams/kga-kong-architecture";
-import { KgaLearningMapDiagram } from "./kong-gateway/diagrams/kga-learning-map";
-import { KgaRoutingPluginsDiagram } from "./kong-gateway/diagrams/kga-routing-plugins";
-import { KgaSecurityPluginsDiagram } from "./kong-gateway/diagrams/kga-security-plugins";
-import { KgaTrafficControlDiagram } from "./kong-gateway/diagrams/kga-traffic-control";
-import { KdgAdvancedTypesDiagram } from "./kotlin-definitive-guide/diagrams/kdg-advanced-types";
-import { KdgClassesObjectsDiagram } from "./kotlin-definitive-guide/diagrams/kdg-classes-objects";
-import { KdgCoroutinesDiagram } from "./kotlin-definitive-guide/diagrams/kdg-coroutines";
-import { KdgDslDiagram } from "./kotlin-definitive-guide/diagrams/kdg-dsl";
-import { KdgFinalReviewDiagram } from "./kotlin-definitive-guide/diagrams/kdg-final-review";
-import { KdgFunctionsDiagram } from "./kotlin-definitive-guide/diagrams/kdg-functions";
-import { KdgKotlinAndroidDiagram } from "./kotlin-definitive-guide/diagrams/kdg-kotlin-android";
-import { KdgKotlinBasicsDiagram } from "./kotlin-definitive-guide/diagrams/kdg-kotlin-basics";
-import { KdgLearningMapDiagram } from "./kotlin-definitive-guide/diagrams/kdg-learning-map";
-import { KdgTestingDiagram } from "./kotlin-definitive-guide/diagrams/kdg-testing";
-import { KiaClassesInterfacesDiagram } from "./kotlin-in-action/diagrams/kia-classes-interfaces";
-import { KiaConcurrencyDiagram } from "./kotlin-in-action/diagrams/kia-concurrency";
-import { KiaDslPatternsDiagram } from "./kotlin-in-action/diagrams/kia-dsl-patterns";
-import { KiaFinalReviewDiagram } from "./kotlin-in-action/diagrams/kia-final-review";
-import { KiaFunctionsDiagram } from "./kotlin-in-action/diagrams/kia-functions";
-import { KiaKotlinBasicsDiagram } from "./kotlin-in-action/diagrams/kia-kotlin-basics";
-import { KiaKotlinIntroDiagram } from "./kotlin-in-action/diagrams/kia-kotlin-intro";
-import { KiaLambdaMembersDiagram } from "./kotlin-in-action/diagrams/kia-lambda-members";
-import { KiaLearningMapDiagram } from "./kotlin-in-action/diagrams/kia-learning-map";
-import { KiaTypeSystemDiagram } from "./kotlin-in-action/diagrams/kia-type-system";
-import { K8sConfigSecretsDiagram } from "./kubernetes-in-action/diagrams/k8s-config-secrets";
-import { K8sContainerOrchestrationDiagram } from "./kubernetes-in-action/diagrams/k8s-container-orchestration";
-import { K8sDeploymentsDiagram } from "./kubernetes-in-action/diagrams/k8s-deployments";
-import { K8sFinalReviewDiagram } from "./kubernetes-in-action/diagrams/k8s-final-review";
-import { K8sLearningMapDiagram } from "./kubernetes-in-action/diagrams/k8s-learning-map";
-import { K8sPodsDiagram } from "./kubernetes-in-action/diagrams/k8s-pods";
-import { K8sSchedulingDiagram } from "./kubernetes-in-action/diagrams/k8s-scheduling";
-import { K8sSecurityOpsDiagram } from "./kubernetes-in-action/diagrams/k8s-security-ops";
-import { K8sServicesNetworkingDiagram } from "./kubernetes-in-action/diagrams/k8s-services-networking";
-import { K8sVolumesStorageDiagram } from "./kubernetes-in-action/diagrams/k8s-volumes-storage";
-import { LcpAdvancedChainsDiagram } from "./langchain-programming/diagrams/lcp-advanced-chains";
-import { LcpChainsSequencesDiagram } from "./langchain-programming/diagrams/lcp-chains-sequences";
-import { LcpFinalReviewDiagram } from "./langchain-programming/diagrams/lcp-final-review";
-import { LcpLangchainOverviewDiagram } from "./langchain-programming/diagrams/lcp-langchain-overview";
-import { LcpLearningMapDiagram } from "./langchain-programming/diagrams/lcp-learning-map";
-import { LcpMemoryStateDiagram } from "./langchain-programming/diagrams/lcp-memory-state";
-import { LcpModelsPromptsDiagram } from "./langchain-programming/diagrams/lcp-models-prompts";
-import { LcpProductionDeploymentDiagram } from "./langchain-programming/diagrams/lcp-production-deployment";
-import { LcpRagImplementationDiagram } from "./langchain-programming/diagrams/lcp-rag-implementation";
-import { LcpToolsAgentsDiagram } from "./langchain-programming/diagrams/lcp-tools-agents";
-import { LlmArchitectureDiagram } from "./large-language-models/diagrams/llm-architecture";
-import { LlmEvaluationDiagram } from "./large-language-models/diagrams/llm-evaluation";
-import { LlmFinalReviewDiagram } from "./large-language-models/diagrams/llm-final-review";
-import { LlmFoundationsDiagram } from "./large-language-models/diagrams/llm-foundations";
-import { LlmFrontiersDiagram } from "./large-language-models/diagrams/llm-frontiers";
-import { LlmInferenceDiagram } from "./large-language-models/diagrams/llm-inference";
-import { LlmLearningMapDiagram } from "./large-language-models/diagrams/llm-learning-map";
-import { LlmPosttrainingDiagram } from "./large-language-models/diagrams/llm-posttraining";
-import { LlmPretrainingDataDiagram } from "./large-language-models/diagrams/llm-pretraining-data";
-import { LlmScalingLawsDiagram } from "./large-language-models/diagrams/llm-scaling-laws";
-import { LslAlignmentTechniquesDiagram } from "./large-scale-llm-practice/diagrams/lsl-alignment-techniques";
-import { LslDataPipelineDiagram } from "./large-scale-llm-practice/diagrams/lsl-data-pipeline";
-import { LslDeploymentCaseDiagram } from "./large-scale-llm-practice/diagrams/lsl-deployment-case";
-import { LslDistributedTrainingDiagram } from "./large-scale-llm-practice/diagrams/lsl-distributed-training";
-import { LslEvaluationTestingDiagram } from "./large-scale-llm-practice/diagrams/lsl-evaluation-testing";
-import { LslFinalReviewDiagram } from "./large-scale-llm-practice/diagrams/lsl-final-review";
-import { LslLearningMapDiagram } from "./large-scale-llm-practice/diagrams/lsl-learning-map";
-import { LslModelArchitectureDiagram } from "./large-scale-llm-practice/diagrams/lsl-model-architecture";
-import { LslServingInferenceDiagram } from "./large-scale-llm-practice/diagrams/lsl-serving-inference";
-import { LslTheoryFoundationsDiagram } from "./large-scale-llm-practice/diagrams/lsl-theory-foundations";
-import { LadComplexVectorsDiagram } from "./linear-algebra-done-right/diagrams/lad-complex-vectors";
-import { LadDetTraceDiagram } from "./linear-algebra-done-right/diagrams/lad-det-trace";
-import { LadEigenvaluesDiagram } from "./linear-algebra-done-right/diagrams/lad-eigenvalues";
-import { LadFinalReviewDiagram } from "./linear-algebra-done-right/diagrams/lad-final-review";
-import { LadInnerProductDiagram } from "./linear-algebra-done-right/diagrams/lad-inner-product";
-import { LadLearningMapDiagram } from "./linear-algebra-done-right/diagrams/lad-learning-map";
-import { LadLinearMapsDiagram } from "./linear-algebra-done-right/diagrams/lad-linear-maps";
-import { LadMatricesDiagram } from "./linear-algebra-done-right/diagrams/lad-matrices";
-import { LadOperatorsDiagram } from "./linear-algebra-done-right/diagrams/lad-operators";
-import { LadVectorSpacesDiagram } from "./linear-algebra-done-right/diagrams/lad-vector-spaces";
-import { LkdFinalReviewDiagram } from "./linux-kernel-design/diagrams/lkd-final-review";
-import { LkdInterruptsDiagram } from "./linux-kernel-design/diagrams/lkd-interrupts";
-import { LkdKernelSyncDiagram } from "./linux-kernel-design/diagrams/lkd-kernel-sync";
-import { LkdLearningMapDiagram } from "./linux-kernel-design/diagrams/lkd-learning-map";
-import { LkdLinuxKernelIntroDiagram } from "./linux-kernel-design/diagrams/lkd-linux-kernel-intro";
-import { LkdMemoryManagementDiagram } from "./linux-kernel-design/diagrams/lkd-memory-management";
-import { LkdProcessManagementDiagram } from "./linux-kernel-design/diagrams/lkd-process-management";
-import { LkdSchedulingDiagram } from "./linux-kernel-design/diagrams/lkd-scheduling";
-import { LkdSystemCallsDiagram } from "./linux-kernel-design/diagrams/lkd-system-calls";
-import { LkdVirtualFilesystemDiagram } from "./linux-kernel-design/diagrams/lkd-virtual-filesystem";
-import { LkeFilesystemDiagram } from "./linux-kernel-essence/diagrams/lke-filesystem";
-import { LkeFinalReviewDiagram } from "./linux-kernel-essence/diagrams/lke-final-review";
-import { LkeIoSubsystemDiagram } from "./linux-kernel-essence/diagrams/lke-io-subsystem";
-import { LkeKernelArchitectureDiagram } from "./linux-kernel-essence/diagrams/lke-kernel-architecture";
-import { LkeKernelDebuggingDiagram } from "./linux-kernel-essence/diagrams/lke-kernel-debugging";
-import { LkeKernelSynchronizationDiagram } from "./linux-kernel-essence/diagrams/lke-kernel-synchronization";
-import { LkeLearningMapDiagram } from "./linux-kernel-essence/diagrams/lke-learning-map";
-import { LkeMemoryManagementDiagram } from "./linux-kernel-essence/diagrams/lke-memory-management";
-import { LkeNetworkStackDiagram } from "./linux-kernel-essence/diagrams/lke-network-stack";
-import { LkeProcessSchedulingDiagram } from "./linux-kernel-essence/diagrams/lke-process-scheduling";
-import { LopCommandLineDiagram } from "./linux-os-practice/diagrams/lop-command-line";
-import { LopFilePermissionsDiagram } from "./linux-os-practice/diagrams/lop-file-permissions";
-import { LopFinalReviewDiagram } from "./linux-os-practice/diagrams/lop-final-review";
-import { LopFirewallSecurityDiagram } from "./linux-os-practice/diagrams/lop-firewall-security";
-import { LopLearningMapDiagram } from "./linux-os-practice/diagrams/lop-learning-map";
-import { LopNetworkConfigDiagram } from "./linux-os-practice/diagrams/lop-network-config";
-import { LopPackageManagementDiagram } from "./linux-os-practice/diagrams/lop-package-management";
-import { LopShellScriptingDiagram } from "./linux-os-practice/diagrams/lop-shell-scripting";
-import { LopSystemdServicesDiagram } from "./linux-os-practice/diagrams/lop-systemd-services";
-import { LopUserManagementDiagram } from "./linux-os-practice/diagrams/lop-user-management";
-import { LaeAgentDevelopmentDiagram } from "./llm-app-dev-essentials/diagrams/lae-agent-development";
-import { LaeApiDevelopmentDiagram } from "./llm-app-dev-essentials/diagrams/lae-api-development";
-import { LaeEvaluationDeploymentDiagram } from "./llm-app-dev-essentials/diagrams/lae-evaluation-deployment";
-import { LaeFinalReviewDiagram } from "./llm-app-dev-essentials/diagrams/lae-final-review";
-import { LaeFineTuningDiagram } from "./llm-app-dev-essentials/diagrams/lae-fine-tuning";
-import { LaeLearningMapDiagram } from "./llm-app-dev-essentials/diagrams/lae-learning-map";
-import { LaeLlmFoundationsDiagram } from "./llm-app-dev-essentials/diagrams/lae-llm-foundations";
-import { LaeProductionPatternsDiagram } from "./llm-app-dev-essentials/diagrams/lae-production-patterns";
-import { LaePromptEngineeringDiagram } from "./llm-app-dev-essentials/diagrams/lae-prompt-engineering";
-import { LaeRagSystemDiagram } from "./llm-app-dev-essentials/diagrams/lae-rag-system";
+
+import {
+  LslOfficialLearningMapPipelineLab,
+  LslOfficialLearningMapTrainingLab,
+  LslOfficialLearningMapEvidenceLab,
+} from "./large-scale-llm-practice/diagrams/lsl-official-learning-map";
+import {
+  LslPrefacePipelineLab,
+  LslPrefaceTrainingLab,
+  LslPrefaceEvidenceLab,
+} from "./large-scale-llm-practice/diagrams/lsl-preface";
+import {
+  LslMathematicalNotationPipelineLab,
+  LslMathematicalNotationTrainingLab,
+  LslMathematicalNotationEvidenceLab,
+} from "./large-scale-llm-practice/diagrams/lsl-mathematical-notation";
+import {
+  Lsl01IntroductionPipelineLab,
+  Lsl01IntroductionTrainingLab,
+  Lsl01IntroductionEvidenceLab,
+} from "./large-scale-llm-practice/diagrams/lsl-01-introduction";
+import {
+  Lsl02LlmFoundationsPipelineLab,
+  Lsl02LlmFoundationsTrainingLab,
+  Lsl02LlmFoundationsEvidenceLab,
+} from "./large-scale-llm-practice/diagrams/lsl-02-llm-foundations";
+import {
+  Lsl03PretrainingDataPipelineLab,
+  Lsl03PretrainingDataTrainingLab,
+  Lsl03PretrainingDataEvidenceLab,
+} from "./large-scale-llm-practice/diagrams/lsl-03-pretraining-data";
+import {
+  Lsl04DistributedTrainingPipelineLab,
+  Lsl04DistributedTrainingTrainingLab,
+  Lsl04DistributedTrainingEvidenceLab,
+} from "./large-scale-llm-practice/diagrams/lsl-04-distributed-training";
+import {
+  Lsl05SupervisedFinetuningPipelineLab,
+  Lsl05SupervisedFinetuningTrainingLab,
+  Lsl05SupervisedFinetuningEvidenceLab,
+} from "./large-scale-llm-practice/diagrams/lsl-05-supervised-finetuning";
+import {
+  Lsl06ReinforcementLearningPipelineLab,
+  Lsl06ReinforcementLearningTrainingLab,
+  Lsl06ReinforcementLearningEvidenceLab,
+} from "./large-scale-llm-practice/diagrams/lsl-06-reinforcement-learning";
+import {
+  Lsl07LlmApplicationsPipelineLab,
+  Lsl07LlmApplicationsTrainingLab,
+  Lsl07LlmApplicationsEvidenceLab,
+} from "./large-scale-llm-practice/diagrams/lsl-07-llm-applications";
+import {
+  Lsl08LlmEvaluationPipelineLab,
+  Lsl08LlmEvaluationTrainingLab,
+  Lsl08LlmEvaluationEvidenceLab,
+} from "./large-scale-llm-practice/diagrams/lsl-08-llm-evaluation";
+import {
+  LslReferencesPipelineLab,
+  LslReferencesTrainingLab,
+  LslReferencesEvidenceLab,
+} from "./large-scale-llm-practice/diagrams/lsl-references";
+import {
+  LslIndexPipelineLab,
+  LslIndexTrainingLab,
+  LslIndexEvidenceLab,
+} from "./large-scale-llm-practice/diagrams/lsl-index";
+import {
+  LslOfficialFinalReviewPipelineLab,
+  LslOfficialFinalReviewTrainingLab,
+  LslOfficialFinalReviewEvidenceLab,
+} from "./large-scale-llm-practice/diagrams/lsl-official-final-review";
+
+import {
+  LkdOfficialLearningMapMapLab,
+  LkdOfficialLearningMapExperimentLab,
+  LkdOfficialLearningMapEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-official-learning-map";
+import {
+  Lkd01LinuxKernelIntroMapLab,
+  Lkd01LinuxKernelIntroExperimentLab,
+  Lkd01LinuxKernelIntroEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-01-linux-kernel-intro";
+import {
+  Lkd02GettingStartedMapLab,
+  Lkd02GettingStartedExperimentLab,
+  Lkd02GettingStartedEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-02-getting-started";
+import {
+  Lkd03ProcessManagementMapLab,
+  Lkd03ProcessManagementExperimentLab,
+  Lkd03ProcessManagementEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-03-process-management";
+import {
+  Lkd04ProcessSchedulingMapLab,
+  Lkd04ProcessSchedulingExperimentLab,
+  Lkd04ProcessSchedulingEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-04-process-scheduling";
+import {
+  Lkd05SystemCallsMapLab,
+  Lkd05SystemCallsExperimentLab,
+  Lkd05SystemCallsEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-05-system-calls";
+import {
+  Lkd06KernelDataStructuresMapLab,
+  Lkd06KernelDataStructuresExperimentLab,
+  Lkd06KernelDataStructuresEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-06-kernel-data-structures";
+import {
+  Lkd07InterruptsMapLab,
+  Lkd07InterruptsExperimentLab,
+  Lkd07InterruptsEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-07-interrupts";
+import {
+  Lkd08BottomHalvesMapLab,
+  Lkd08BottomHalvesExperimentLab,
+  Lkd08BottomHalvesEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-08-bottom-halves";
+import {
+  Lkd09SyncIntroMapLab,
+  Lkd09SyncIntroExperimentLab,
+  Lkd09SyncIntroEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-09-sync-intro";
+import {
+  Lkd10SyncMethodsMapLab,
+  Lkd10SyncMethodsExperimentLab,
+  Lkd10SyncMethodsEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-10-sync-methods";
+import {
+  Lkd11TimersTimeMapLab,
+  Lkd11TimersTimeExperimentLab,
+  Lkd11TimersTimeEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-11-timers-time";
+import {
+  Lkd12MemoryManagementMapLab,
+  Lkd12MemoryManagementExperimentLab,
+  Lkd12MemoryManagementEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-12-memory-management";
+import {
+  Lkd13VfsMapLab,
+  Lkd13VfsExperimentLab,
+  Lkd13VfsEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-13-vfs";
+import {
+  Lkd14BlockIoMapLab,
+  Lkd14BlockIoExperimentLab,
+  Lkd14BlockIoEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-14-block-io";
+import {
+  Lkd15ProcessAddressSpaceMapLab,
+  Lkd15ProcessAddressSpaceExperimentLab,
+  Lkd15ProcessAddressSpaceEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-15-process-address-space";
+import {
+  Lkd16PageCacheWritebackMapLab,
+  Lkd16PageCacheWritebackExperimentLab,
+  Lkd16PageCacheWritebackEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-16-page-cache-writeback";
+import {
+  Lkd17DevicesModulesMapLab,
+  Lkd17DevicesModulesExperimentLab,
+  Lkd17DevicesModulesEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-17-devices-modules";
+import {
+  Lkd18DebuggingMapLab,
+  Lkd18DebuggingExperimentLab,
+  Lkd18DebuggingEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-18-debugging";
+import {
+  Lkd19PortabilityMapLab,
+  Lkd19PortabilityExperimentLab,
+  Lkd19PortabilityEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-19-portability";
+import {
+  Lkd20PatchesCommunityMapLab,
+  Lkd20PatchesCommunityExperimentLab,
+  Lkd20PatchesCommunityEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-20-patches-community";
+import {
+  LkdOfficialFinalReviewMapLab,
+  LkdOfficialFinalReviewExperimentLab,
+  LkdOfficialFinalReviewEvidenceLab,
+} from "./linux-kernel-design/diagrams/lkd-official-final-review";
+import {
+  LkeOfficialLearningMapMapLab,
+  LkeOfficialLearningMapExperimentLab,
+  LkeOfficialLearningMapEvidenceLab,
+} from "./linux-kernel-essence/diagrams/lke-official-learning-map";
+import {
+  Lke01KernelIntroMapLab,
+  Lke01KernelIntroExperimentLab,
+  Lke01KernelIntroEvidenceLab,
+} from "./linux-kernel-essence/diagrams/lke-01-kernel-intro";
+import {
+  Lke02ResourceManagementMapLab,
+  Lke02ResourceManagementExperimentLab,
+  Lke02ResourceManagementEvidenceLab,
+} from "./linux-kernel-essence/diagrams/lke-02-resource-management";
+import {
+  Lke03FilesystemsMapLab,
+  Lke03FilesystemsExperimentLab,
+  Lke03FilesystemsEvidenceLab,
+} from "./linux-kernel-essence/diagrams/lke-03-filesystems";
+import {
+  Lke04NetworkingMapLab,
+  Lke04NetworkingExperimentLab,
+  Lke04NetworkingEvidenceLab,
+} from "./linux-kernel-essence/diagrams/lke-04-networking";
+import {
+  Lke05VirtualizationMapLab,
+  Lke05VirtualizationExperimentLab,
+  Lke05VirtualizationEvidenceLab,
+} from "./linux-kernel-essence/diagrams/lke-05-virtualization";
+import {
+  Lke06PowerSavingMapLab,
+  Lke06PowerSavingExperimentLab,
+  Lke06PowerSavingEvidenceLab,
+} from "./linux-kernel-essence/diagrams/lke-06-power-saving";
+import {
+  Lke07DebuggingMapLab,
+  Lke07DebuggingExperimentLab,
+  Lke07DebuggingEvidenceLab,
+} from "./linux-kernel-essence/diagrams/lke-07-debugging";
+import {
+  Lke08ProfilingTracingMapLab,
+  Lke08ProfilingTracingExperimentLab,
+  Lke08ProfilingTracingEvidenceLab,
+} from "./linux-kernel-essence/diagrams/lke-08-profiling-tracing";
+import {
+  LkeOfficialFinalReviewMapLab,
+  LkeOfficialFinalReviewExperimentLab,
+  LkeOfficialFinalReviewEvidenceLab,
+} from "./linux-kernel-essence/diagrams/lke-official-final-review";
+import {
+  LopOfficialLearningMapMapLab,
+  LopOfficialLearningMapExperimentLab,
+  LopOfficialLearningMapEvidenceLab,
+} from "./linux-os-practice/diagrams/lop-official-learning-map";
+import {
+  Lop01RecognizingLinuxMapLab,
+  Lop01RecognizingLinuxExperimentLab,
+  Lop01RecognizingLinuxEvidenceLab,
+} from "./linux-os-practice/diagrams/lop-01-recognizing-linux";
+import {
+  Lop02UsingLinuxMapLab,
+  Lop02UsingLinuxExperimentLab,
+  Lop02UsingLinuxEvidenceLab,
+} from "./linux-os-practice/diagrams/lop-02-using-linux";
+import {
+  Lop03UserManagementMapLab,
+  Lop03UserManagementExperimentLab,
+  Lop03UserManagementEvidenceLab,
+} from "./linux-os-practice/diagrams/lop-03-user-management";
+import {
+  Lop04SoftwareManagementMapLab,
+  Lop04SoftwareManagementExperimentLab,
+  Lop04SoftwareManagementEvidenceLab,
+} from "./linux-os-practice/diagrams/lop-04-software-management";
+import {
+  Lop05ProgrammingEnvironmentMapLab,
+  Lop05ProgrammingEnvironmentExperimentLab,
+  Lop05ProgrammingEnvironmentEvidenceLab,
+} from "./linux-os-practice/diagrams/lop-05-programming-environment";
+import {
+  Lop06NetworkConfigurationMapLab,
+  Lop06NetworkConfigurationExperimentLab,
+  Lop06NetworkConfigurationEvidenceLab,
+} from "./linux-os-practice/diagrams/lop-06-network-configuration";
+import {
+  Lop07ShellProgrammingMapLab,
+  Lop07ShellProgrammingExperimentLab,
+  Lop07ShellProgrammingEvidenceLab,
+} from "./linux-os-practice/diagrams/lop-07-shell-programming";
+import {
+  Lop08RegularExpressionsMapLab,
+  Lop08RegularExpressionsExperimentLab,
+  Lop08RegularExpressionsEvidenceLab,
+} from "./linux-os-practice/diagrams/lop-08-regular-expressions";
+import {
+  Lop09TetrisProjectMapLab,
+  Lop09TetrisProjectExperimentLab,
+  Lop09TetrisProjectEvidenceLab,
+} from "./linux-os-practice/diagrams/lop-09-tetris-project";
+import {
+  LopOfficialFinalReviewMapLab,
+  LopOfficialFinalReviewExperimentLab,
+  LopOfficialFinalReviewEvidenceLab,
+} from "./linux-os-practice/diagrams/lop-official-final-review";
 import { LupCApiDiagram } from "./lua-programming/diagrams/lup-c-api";
 import { LupClosuresDiagram } from "./lua-programming/diagrams/lup-closures";
 import { LupCoroutinesDiagram } from "./lua-programming/diagrams/lup-coroutines";
@@ -2114,56 +5238,376 @@ import { LupLearningMapDiagram } from "./lua-programming/diagrams/lup-learning-m
 import { LupMetatablesDiagram } from "./lua-programming/diagrams/lup-metatables";
 import { LupStatementsDiagram } from "./lua-programming/diagrams/lup-statements";
 import { LupTypesValuesDiagram } from "./lua-programming/diagrams/lup-types-values";
-import { MlwBayesianDiagram } from "./machine-learning-watermelon/diagrams/mlw-bayesian";
-import { MlwClusteringDimreductionDiagram } from "./machine-learning-watermelon/diagrams/mlw-clustering-dimreduction";
-import { MlwDecisionTreesDiagram } from "./machine-learning-watermelon/diagrams/mlw-decision-trees";
-import { MlwEnsembleDiagram } from "./machine-learning-watermelon/diagrams/mlw-ensemble";
-import { MlwFinalReviewDiagram } from "./machine-learning-watermelon/diagrams/mlw-final-review";
-import { MlwHypothesisSpaceDiagram } from "./machine-learning-watermelon/diagrams/mlw-hypothesis-space";
-import { MlwLearningMapDiagram } from "./machine-learning-watermelon/diagrams/mlw-learning-map";
-import { MlwLinearModelsDiagram } from "./machine-learning-watermelon/diagrams/mlw-linear-models";
-import { MlwNeuralNetworksDiagram } from "./machine-learning-watermelon/diagrams/mlw-neural-networks";
-import { MlwSupportVectorDiagram } from "./machine-learning-watermelon/diagrams/mlw-support-vector";
-import { MisBeyondBasicsDiagram } from "./make-it-stick/diagrams/mis-beyond-basics";
-import { MisElaborationDiagram } from "./make-it-stick/diagrams/mis-elaboration";
-import { MisFeedbackReflectionDiagram } from "./make-it-stick/diagrams/mis-feedback-reflection";
-import { MisFinalReviewDiagram } from "./make-it-stick/diagrams/mis-final-review";
-import { MisLearningMapDiagram } from "./make-it-stick/diagrams/mis-learning-map";
-import { MisLearningMythsDiagram } from "./make-it-stick/diagrams/mis-learning-myths";
-import { MisLifelongLearningDiagram } from "./make-it-stick/diagrams/mis-lifelong-learning";
-import { MisMemoryModelsDiagram } from "./make-it-stick/diagrams/mis-memory-models";
-import { MisRetrievalPracticeDiagram } from "./make-it-stick/diagrams/mis-retrieval-practice";
-import { MisSpacedInterleavingDiagram } from "./make-it-stick/diagrams/mis-spaced-interleaving";
-import { MbtAdvancedTopicsDiagram } from "./mastering-bitcoin/diagrams/mbt-advanced-topics";
-import { MbtBitcoinOverviewDiagram } from "./mastering-bitcoin/diagrams/mbt-bitcoin-overview";
-import { MbtBlockchainLedgerDiagram } from "./mastering-bitcoin/diagrams/mbt-blockchain-ledger";
-import { MbtFinalReviewDiagram } from "./mastering-bitcoin/diagrams/mbt-final-review";
-import { MbtKeysAddressesDiagram } from "./mastering-bitcoin/diagrams/mbt-keys-addresses";
-import { MbtLearningMapDiagram } from "./mastering-bitcoin/diagrams/mbt-learning-map";
-import { MbtMiningConsensusDiagram } from "./mastering-bitcoin/diagrams/mbt-mining-consensus";
-import { MbtP2pNetworkDiagram } from "./mastering-bitcoin/diagrams/mbt-p2p-network";
-import { MbtTransactionsDiagram } from "./mastering-bitcoin/diagrams/mbt-transactions";
-import { MbtWalletsUsageDiagram } from "./mastering-bitcoin/diagrams/mbt-wallets-usage";
-import { MetAccountsKeysDiagram } from "./mastering-ethereum/diagrams/met-accounts-keys";
-import { MetDappsOraclesDiagram } from "./mastering-ethereum/diagrams/met-dapps-oracles";
-import { MetEthereumOverviewDiagram } from "./mastering-ethereum/diagrams/met-ethereum-overview";
-import { MetEvmBytecodeDiagram } from "./mastering-ethereum/diagrams/met-evm-bytecode";
-import { MetFinalReviewDiagram } from "./mastering-ethereum/diagrams/met-final-review";
-import { MetLearningMapDiagram } from "./mastering-ethereum/diagrams/met-learning-map";
-import { MetSmartContractSecurityDiagram } from "./mastering-ethereum/diagrams/met-smart-contract-security";
-import { MetSolidityProgrammingDiagram } from "./mastering-ethereum/diagrams/met-solidity-programming";
-import { MetTokensStandardsDiagram } from "./mastering-ethereum/diagrams/met-tokens-standards";
-import { MetTransactionsGasDiagram } from "./mastering-ethereum/diagrams/met-transactions-gas";
-import { MrsAdvancedTypesDiagram } from "./mastering-rust-2e/diagrams/mrs-advanced-types";
-import { MrsConcurrencyDeepDiagram } from "./mastering-rust-2e/diagrams/mrs-concurrency-deep";
-import { MrsFinalReviewDiagram } from "./mastering-rust-2e/diagrams/mrs-final-review";
-import { MrsLearningMapDiagram } from "./mastering-rust-2e/diagrams/mrs-learning-map";
-import { MrsMacrosDeepDiagram } from "./mastering-rust-2e/diagrams/mrs-macros-deep";
-import { MrsMemoryMgmtDiagram } from "./mastering-rust-2e/diagrams/mrs-memory-mgmt";
-import { MrsNetworkingDiagram } from "./mastering-rust-2e/diagrams/mrs-networking";
-import { MrsTraitsAdvancedDiagram } from "./mastering-rust-2e/diagrams/mrs-traits-advanced";
-import { MrsUnsafeDeepDiagram } from "./mastering-rust-2e/diagrams/mrs-unsafe-deep";
-import { MrsWebAssemblyDiagram } from "./mastering-rust-2e/diagrams/mrs-web-assembly";
+import {
+  MlwOfficialLearningMapMapLab,
+  MlwOfficialLearningMapExperimentLab,
+  MlwOfficialLearningMapEvidenceLab,
+} from "./machine-learning-watermelon/diagrams/mlw-official-learning-map";
+import {
+  Mlw01IntroductionMapLab,
+  Mlw01IntroductionExperimentLab,
+  Mlw01IntroductionEvidenceLab,
+} from "./machine-learning-watermelon/diagrams/mlw-01-introduction";
+import {
+  Mlw02ModelAssessmentSelectionMapLab,
+  Mlw02ModelAssessmentSelectionExperimentLab,
+  Mlw02ModelAssessmentSelectionEvidenceLab,
+} from "./machine-learning-watermelon/diagrams/mlw-02-model-assessment-selection";
+import {
+  Mlw03LinearModelsMapLab,
+  Mlw03LinearModelsExperimentLab,
+  Mlw03LinearModelsEvidenceLab,
+} from "./machine-learning-watermelon/diagrams/mlw-03-linear-models";
+import {
+  Mlw04DecisionTreesMapLab,
+  Mlw04DecisionTreesExperimentLab,
+  Mlw04DecisionTreesEvidenceLab,
+} from "./machine-learning-watermelon/diagrams/mlw-04-decision-trees";
+import {
+  Mlw05NeuralNetworksMapLab,
+  Mlw05NeuralNetworksExperimentLab,
+  Mlw05NeuralNetworksEvidenceLab,
+} from "./machine-learning-watermelon/diagrams/mlw-05-neural-networks";
+import {
+  Mlw06SupportVectorMachinesMapLab,
+  Mlw06SupportVectorMachinesExperimentLab,
+  Mlw06SupportVectorMachinesEvidenceLab,
+} from "./machine-learning-watermelon/diagrams/mlw-06-support-vector-machines";
+import {
+  Mlw07BayesianClassifiersMapLab,
+  Mlw07BayesianClassifiersExperimentLab,
+  Mlw07BayesianClassifiersEvidenceLab,
+} from "./machine-learning-watermelon/diagrams/mlw-07-bayesian-classifiers";
+import {
+  Mlw08EnsembleLearningMapLab,
+  Mlw08EnsembleLearningExperimentLab,
+  Mlw08EnsembleLearningEvidenceLab,
+} from "./machine-learning-watermelon/diagrams/mlw-08-ensemble-learning";
+import {
+  Mlw09ClusteringMapLab,
+  Mlw09ClusteringExperimentLab,
+  Mlw09ClusteringEvidenceLab,
+} from "./machine-learning-watermelon/diagrams/mlw-09-clustering";
+import {
+  Mlw10DimensionalityReductionMetricLearningMapLab,
+  Mlw10DimensionalityReductionMetricLearningExperimentLab,
+  Mlw10DimensionalityReductionMetricLearningEvidenceLab,
+} from "./machine-learning-watermelon/diagrams/mlw-10-dimensionality-reduction-metric-learning";
+import {
+  Mlw11FeatureSelectionSparseLearningMapLab,
+  Mlw11FeatureSelectionSparseLearningExperimentLab,
+  Mlw11FeatureSelectionSparseLearningEvidenceLab,
+} from "./machine-learning-watermelon/diagrams/mlw-11-feature-selection-sparse-learning";
+import {
+  Mlw12ComputationalLearningTheoryMapLab,
+  Mlw12ComputationalLearningTheoryExperimentLab,
+  Mlw12ComputationalLearningTheoryEvidenceLab,
+} from "./machine-learning-watermelon/diagrams/mlw-12-computational-learning-theory";
+import {
+  Mlw13SemiSupervisedLearningMapLab,
+  Mlw13SemiSupervisedLearningExperimentLab,
+  Mlw13SemiSupervisedLearningEvidenceLab,
+} from "./machine-learning-watermelon/diagrams/mlw-13-semi-supervised-learning";
+import {
+  Mlw14ProbabilisticGraphicalModelsMapLab,
+  Mlw14ProbabilisticGraphicalModelsExperimentLab,
+  Mlw14ProbabilisticGraphicalModelsEvidenceLab,
+} from "./machine-learning-watermelon/diagrams/mlw-14-probabilistic-graphical-models";
+import {
+  Mlw15RuleLearningMapLab,
+  Mlw15RuleLearningExperimentLab,
+  Mlw15RuleLearningEvidenceLab,
+} from "./machine-learning-watermelon/diagrams/mlw-15-rule-learning";
+import {
+  Mlw16ReinforcementLearningMapLab,
+  Mlw16ReinforcementLearningExperimentLab,
+  Mlw16ReinforcementLearningEvidenceLab,
+} from "./machine-learning-watermelon/diagrams/mlw-16-reinforcement-learning";
+import {
+  MlwAppendicesMapLab,
+  MlwAppendicesExperimentLab,
+  MlwAppendicesEvidenceLab,
+} from "./machine-learning-watermelon/diagrams/mlw-appendices";
+import {
+  MlwOfficialFinalReviewMapLab,
+  MlwOfficialFinalReviewExperimentLab,
+  MlwOfficialFinalReviewEvidenceLab,
+} from "./machine-learning-watermelon/diagrams/mlw-official-final-review";
+import {
+  Mis18OfficialLearningMapScheduleLab,
+  Mis18OfficialLearningMapRetrievalLab,
+  Mis18OfficialLearningMapCalibrationLab,
+} from "./make-it-stick/diagrams/mis18-official-learning-map";
+import {
+  Mis18Recommendation01ScheduleLab,
+  Mis18Recommendation01RetrievalLab,
+  Mis18Recommendation01CalibrationLab,
+} from "./make-it-stick/diagrams/mis18-recommendation-01";
+import {
+  Mis18Recommendation02ScheduleLab,
+  Mis18Recommendation02RetrievalLab,
+  Mis18Recommendation02CalibrationLab,
+} from "./make-it-stick/diagrams/mis18-recommendation-02";
+import {
+  Mis18PrefaceScheduleLab,
+  Mis18PrefaceRetrievalLab,
+  Mis18PrefaceCalibrationLab,
+} from "./make-it-stick/diagrams/mis18-preface";
+import {
+  Mis18Chapter01ScheduleLab,
+  Mis18Chapter01RetrievalLab,
+  Mis18Chapter01CalibrationLab,
+} from "./make-it-stick/diagrams/mis18-chapter-01";
+import {
+  Mis18Chapter02ScheduleLab,
+  Mis18Chapter02RetrievalLab,
+  Mis18Chapter02CalibrationLab,
+} from "./make-it-stick/diagrams/mis18-chapter-02";
+import {
+  Mis18Chapter03ScheduleLab,
+  Mis18Chapter03RetrievalLab,
+  Mis18Chapter03CalibrationLab,
+} from "./make-it-stick/diagrams/mis18-chapter-03";
+import {
+  Mis18Chapter04ScheduleLab,
+  Mis18Chapter04RetrievalLab,
+  Mis18Chapter04CalibrationLab,
+} from "./make-it-stick/diagrams/mis18-chapter-04";
+import {
+  Mis18Chapter05ScheduleLab,
+  Mis18Chapter05RetrievalLab,
+  Mis18Chapter05CalibrationLab,
+} from "./make-it-stick/diagrams/mis18-chapter-05";
+import {
+  Mis18Chapter06ScheduleLab,
+  Mis18Chapter06RetrievalLab,
+  Mis18Chapter06CalibrationLab,
+} from "./make-it-stick/diagrams/mis18-chapter-06";
+import {
+  Mis18Chapter07ScheduleLab,
+  Mis18Chapter07RetrievalLab,
+  Mis18Chapter07CalibrationLab,
+} from "./make-it-stick/diagrams/mis18-chapter-07";
+import {
+  Mis18Chapter08ScheduleLab,
+  Mis18Chapter08RetrievalLab,
+  Mis18Chapter08CalibrationLab,
+} from "./make-it-stick/diagrams/mis18-chapter-08";
+import {
+  Mis18SuggestedReadingScheduleLab,
+  Mis18SuggestedReadingRetrievalLab,
+  Mis18SuggestedReadingCalibrationLab,
+} from "./make-it-stick/diagrams/mis18-suggested-reading";
+import {
+  Mis18AcknowledgmentsScheduleLab,
+  Mis18AcknowledgmentsRetrievalLab,
+  Mis18AcknowledgmentsCalibrationLab,
+} from "./make-it-stick/diagrams/mis18-acknowledgments";
+import {
+  Mis18OfficialFinalReviewScheduleLab,
+  Mis18OfficialFinalReviewRetrievalLab,
+  Mis18OfficialFinalReviewCalibrationLab,
+} from "./make-it-stick/diagrams/mis18-official-final-review";
+import {
+  Mbt3OfficialLearningMapFlowLab,
+  Mbt3OfficialLearningMapExperimentLab,
+  Mbt3OfficialLearningMapEvidenceLab,
+} from "./mastering-bitcoin/diagrams/mbt3-official-learning-map";
+import {
+  Mbt3PrefaceFlowLab,
+  Mbt3PrefaceExperimentLab,
+  Mbt3PrefaceEvidenceLab,
+} from "./mastering-bitcoin/diagrams/mbt3-preface";
+import {
+  Mbt301IntroductionFlowLab,
+  Mbt301IntroductionExperimentLab,
+  Mbt301IntroductionEvidenceLab,
+} from "./mastering-bitcoin/diagrams/mbt3-01-introduction";
+import {
+  Mbt302HowBitcoinWorksFlowLab,
+  Mbt302HowBitcoinWorksExperimentLab,
+  Mbt302HowBitcoinWorksEvidenceLab,
+} from "./mastering-bitcoin/diagrams/mbt3-02-how-bitcoin-works";
+import {
+  Mbt303BitcoinCoreFlowLab,
+  Mbt303BitcoinCoreExperimentLab,
+  Mbt303BitcoinCoreEvidenceLab,
+} from "./mastering-bitcoin/diagrams/mbt3-03-bitcoin-core";
+import {
+  Mbt304KeysAddressesFlowLab,
+  Mbt304KeysAddressesExperimentLab,
+  Mbt304KeysAddressesEvidenceLab,
+} from "./mastering-bitcoin/diagrams/mbt3-04-keys-addresses";
+import {
+  Mbt305WalletRecoveryFlowLab,
+  Mbt305WalletRecoveryExperimentLab,
+  Mbt305WalletRecoveryEvidenceLab,
+} from "./mastering-bitcoin/diagrams/mbt3-05-wallet-recovery";
+import {
+  Mbt306TransactionsFlowLab,
+  Mbt306TransactionsExperimentLab,
+  Mbt306TransactionsEvidenceLab,
+} from "./mastering-bitcoin/diagrams/mbt3-06-transactions";
+import {
+  Mbt307AuthorizationAuthenticationFlowLab,
+  Mbt307AuthorizationAuthenticationExperimentLab,
+  Mbt307AuthorizationAuthenticationEvidenceLab,
+} from "./mastering-bitcoin/diagrams/mbt3-07-authorization-authentication";
+import {
+  Mbt308DigitalSignaturesFlowLab,
+  Mbt308DigitalSignaturesExperimentLab,
+  Mbt308DigitalSignaturesEvidenceLab,
+} from "./mastering-bitcoin/diagrams/mbt3-08-digital-signatures";
+import {
+  Mbt309TransactionFeesFlowLab,
+  Mbt309TransactionFeesExperimentLab,
+  Mbt309TransactionFeesEvidenceLab,
+} from "./mastering-bitcoin/diagrams/mbt3-09-transaction-fees";
+import {
+  Mbt310BitcoinNetworkFlowLab,
+  Mbt310BitcoinNetworkExperimentLab,
+  Mbt310BitcoinNetworkEvidenceLab,
+} from "./mastering-bitcoin/diagrams/mbt3-10-bitcoin-network";
+import {
+  Mbt311BlockchainFlowLab,
+  Mbt311BlockchainExperimentLab,
+  Mbt311BlockchainEvidenceLab,
+} from "./mastering-bitcoin/diagrams/mbt3-11-blockchain";
+import {
+  Mbt312MiningConsensusFlowLab,
+  Mbt312MiningConsensusExperimentLab,
+  Mbt312MiningConsensusEvidenceLab,
+} from "./mastering-bitcoin/diagrams/mbt3-12-mining-consensus";
+import {
+  Mbt313SecurityFlowLab,
+  Mbt313SecurityExperimentLab,
+  Mbt313SecurityEvidenceLab,
+} from "./mastering-bitcoin/diagrams/mbt3-13-security";
+import {
+  Mbt314SecondLayerApplicationsFlowLab,
+  Mbt314SecondLayerApplicationsExperimentLab,
+  Mbt314SecondLayerApplicationsEvidenceLab,
+} from "./mastering-bitcoin/diagrams/mbt3-14-second-layer-applications";
+import {
+  Mbt3AppendixAWhitepaperFlowLab,
+  Mbt3AppendixAWhitepaperExperimentLab,
+  Mbt3AppendixAWhitepaperEvidenceLab,
+} from "./mastering-bitcoin/diagrams/mbt3-appendix-a-whitepaper";
+import {
+  Mbt3AppendixBWhitepaperErrataFlowLab,
+  Mbt3AppendixBWhitepaperErrataExperimentLab,
+  Mbt3AppendixBWhitepaperErrataEvidenceLab,
+} from "./mastering-bitcoin/diagrams/mbt3-appendix-b-whitepaper-errata";
+import {
+  Mbt3AppendixCBipsFlowLab,
+  Mbt3AppendixCBipsExperimentLab,
+  Mbt3AppendixCBipsEvidenceLab,
+} from "./mastering-bitcoin/diagrams/mbt3-appendix-c-bips";
+import {
+  Mbt3OfficialFinalReviewFlowLab,
+  Mbt3OfficialFinalReviewExperimentLab,
+  Mbt3OfficialFinalReviewEvidenceLab,
+} from "./mastering-bitcoin/diagrams/mbt3-official-final-review";
+import {
+  Met2OfficialLearningMapFlowLab,
+  Met2OfficialLearningMapExperimentLab,
+  Met2OfficialLearningMapEvidenceLab,
+} from "./mastering-ethereum/diagrams/met2-official-learning-map";
+import {
+  Met2PrefaceFlowLab,
+  Met2PrefaceExperimentLab,
+  Met2PrefaceEvidenceLab,
+} from "./mastering-ethereum/diagrams/met2-preface";
+import {
+  Met201WhatIsEthereumFlowLab,
+  Met201WhatIsEthereumExperimentLab,
+  Met201WhatIsEthereumEvidenceLab,
+} from "./mastering-ethereum/diagrams/met2-01-what-is-ethereum";
+import {
+  Met202EthereumBasicsFlowLab,
+  Met202EthereumBasicsExperimentLab,
+  Met202EthereumBasicsEvidenceLab,
+} from "./mastering-ethereum/diagrams/met2-02-ethereum-basics";
+import {
+  Met203EthereumNodesFlowLab,
+  Met203EthereumNodesExperimentLab,
+  Met203EthereumNodesEvidenceLab,
+} from "./mastering-ethereum/diagrams/met2-03-ethereum-nodes";
+import {
+  Met204CryptographyFlowLab,
+  Met204CryptographyExperimentLab,
+  Met204CryptographyEvidenceLab,
+} from "./mastering-ethereum/diagrams/met2-04-cryptography";
+import {
+  Met205WalletsFlowLab,
+  Met205WalletsExperimentLab,
+  Met205WalletsEvidenceLab,
+} from "./mastering-ethereum/diagrams/met2-05-wallets";
+import {
+  Met206TransactionsFlowLab,
+  Met206TransactionsExperimentLab,
+  Met206TransactionsEvidenceLab,
+} from "./mastering-ethereum/diagrams/met2-06-transactions";
+import {
+  Met207SmartContractsSolidityFlowLab,
+  Met207SmartContractsSolidityExperimentLab,
+  Met207SmartContractsSolidityEvidenceLab,
+} from "./mastering-ethereum/diagrams/met2-07-smart-contracts-solidity";
+import {
+  Met208SmartContractsVyperFlowLab,
+  Met208SmartContractsVyperExperimentLab,
+  Met208SmartContractsVyperEvidenceLab,
+} from "./mastering-ethereum/diagrams/met2-08-smart-contracts-vyper";
+import {
+  Met209SmartContractSecurityFlowLab,
+  Met209SmartContractSecurityExperimentLab,
+  Met209SmartContractSecurityEvidenceLab,
+} from "./mastering-ethereum/diagrams/met2-09-smart-contract-security";
+import {
+  Met210TokensFlowLab,
+  Met210TokensExperimentLab,
+  Met210TokensEvidenceLab,
+} from "./mastering-ethereum/diagrams/met2-10-tokens";
+import {
+  Met211OraclesFlowLab,
+  Met211OraclesExperimentLab,
+  Met211OraclesEvidenceLab,
+} from "./mastering-ethereum/diagrams/met2-11-oracles";
+import {
+  Met212DecentralizedApplicationsFlowLab,
+  Met212DecentralizedApplicationsExperimentLab,
+  Met212DecentralizedApplicationsEvidenceLab,
+} from "./mastering-ethereum/diagrams/met2-12-decentralized-applications";
+import {
+  Met213DecentralizedFinanceFlowLab,
+  Met213DecentralizedFinanceExperimentLab,
+  Met213DecentralizedFinanceEvidenceLab,
+} from "./mastering-ethereum/diagrams/met2-13-decentralized-finance";
+import {
+  Met214EthereumVirtualMachineFlowLab,
+  Met214EthereumVirtualMachineExperimentLab,
+  Met214EthereumVirtualMachineEvidenceLab,
+} from "./mastering-ethereum/diagrams/met2-14-ethereum-virtual-machine";
+import {
+  Met215ConsensusFlowLab,
+  Met215ConsensusExperimentLab,
+  Met215ConsensusEvidenceLab,
+} from "./mastering-ethereum/diagrams/met2-15-consensus";
+import {
+  Met216ScalingEthereumFlowLab,
+  Met216ScalingEthereumExperimentLab,
+  Met216ScalingEthereumEvidenceLab,
+} from "./mastering-ethereum/diagrams/met2-16-scaling-ethereum";
+import {
+  Met217ZeroKnowledgeProofsFlowLab,
+  Met217ZeroKnowledgeProofsExperimentLab,
+  Met217ZeroKnowledgeProofsEvidenceLab,
+} from "./mastering-ethereum/diagrams/met2-17-zero-knowledge-proofs";
+import {
+  Met2OfficialFinalReviewFlowLab,
+  Met2OfficialFinalReviewExperimentLab,
+  Met2OfficialFinalReviewEvidenceLab,
+} from "./mastering-ethereum/diagrams/met2-official-final-review";
 import { MglAlgorithmsDiagram } from "./math-girl/diagrams/mgl-algorithms";
 import { MglCombinatoricsDiagram } from "./math-girl/diagrams/mgl-combinatorics";
 import { MglEquationsDiagram } from "./math-girl/diagrams/mgl-equations";
@@ -2174,116 +5618,811 @@ import { MglBookMap } from "./math-girl/diagrams/mgl-learning-map";
 import { MglMachineLearningDiagram } from "./math-girl/diagrams/mgl-machine-learning";
 import { MglNumberTheoryDiagram } from "./math-girl/diagrams/mgl-number-theory";
 import { MglProbabilityDiagram } from "./math-girl/diagrams/mgl-probability";
-import { MfcComInterfaceDiagram } from "./mfc-deep-dive/diagrams/mfc-com-interface";
-import { MfcCppMechanicsDiagram } from "./mfc-deep-dive/diagrams/mfc-cpp-mechanics";
-import { MfcDocumentViewDiagram } from "./mfc-deep-dive/diagrams/mfc-document-view";
-import { MfcFinalReviewDiagram } from "./mfc-deep-dive/diagrams/mfc-final-review";
-import { MfcLearningMapDiagram } from "./mfc-deep-dive/diagrams/mfc-learning-map";
-import { MfcMessageRoutingDiagram } from "./mfc-deep-dive/diagrams/mfc-message-routing";
-import { MfcPersistenceSerializationDiagram } from "./mfc-deep-dive/diagrams/mfc-persistence-serialization";
-import { MfcRttiDynamicCreationDiagram } from "./mfc-deep-dive/diagrams/mfc-rtti-dynamic-creation";
-import { MfcTemplateMethodDiagram } from "./mfc-deep-dive/diagrams/mfc-template-method";
-import { MfcWin32FoundationDiagram } from "./mfc-deep-dive/diagrams/mfc-win32-foundation";
-import { MspApiGatewayDiagram } from "./microservices-patterns/diagrams/msp-api-gateway";
-import { MspCqrsDiagram } from "./microservices-patterns/diagrams/msp-cqrs";
-import { MspDeploymentPatternsDiagram } from "./microservices-patterns/diagrams/msp-deployment-patterns";
-import { MspEventSourcingDiagram } from "./microservices-patterns/diagrams/msp-event-sourcing";
-import { MspFinalReviewDiagram } from "./microservices-patterns/diagrams/msp-final-review";
-import { MspInterServiceCommDiagram } from "./microservices-patterns/diagrams/msp-inter-service-comm";
-import { MspLearningMapDiagram } from "./microservices-patterns/diagrams/msp-learning-map";
-import { MspMonolithToMicroservicesDiagram } from "./microservices-patterns/diagrams/msp-monolith-to-microservices";
-import { MspSagaPatternDiagram } from "./microservices-patterns/diagrams/msp-saga-pattern";
-import { MspServiceDiscoveryDiagram } from "./microservices-patterns/diagrams/msp-service-discovery";
-import { MsgBusinessLeadershipDiagram } from "./mindset-growth/diagrams/msg-business-leadership";
-import { MsgFinalReviewDiagram } from "./mindset-growth/diagrams/msg-final-review";
-import { MsgFixedMindsetDiagram } from "./mindset-growth/diagrams/msg-fixed-mindset";
-import { MsgGrowthMindsetDiagram } from "./mindset-growth/diagrams/msg-growth-mindset";
-import { MsgLearningMapDiagram } from "./mindset-growth/diagrams/msg-learning-map";
-import { MsgMindsetInActionDiagram } from "./mindset-growth/diagrams/msg-mindset-in-action";
-import { MsgParentsTeachersDiagram } from "./mindset-growth/diagrams/msg-parents-teachers";
-import { MsgRelationshipsDiagram } from "./mindset-growth/diagrams/msg-relationships";
-import { MsgSportsChampionsDiagram } from "./mindset-growth/diagrams/msg-sports-champions";
-import { MsgTwoMindsetsDiagram } from "./mindset-growth/diagrams/msg-two-mindsets";
-import { MosDeadlockDiagram } from "./modern-os/diagrams/mos-deadlock";
-import { MosDiskSchedulingDiagram } from "./modern-os/diagrams/mos-disk-scheduling";
-import { MosFileSystemDiagram } from "./modern-os/diagrams/mos-file-system";
-import { MosFinalReviewDiagram } from "./modern-os/diagrams/mos-final-review";
-import { MosLearningMapDiagram } from "./modern-os/diagrams/mos-learning-map";
-import { MosMemoryManagementDiagram } from "./modern-os/diagrams/mos-memory-management";
-import { MosPageReplacementDiagram } from "./modern-os/diagrams/mos-page-replacement";
-import { MosProcessManagementDiagram } from "./modern-os/diagrams/mos-process-management";
-import { MosSecurityProtectionDiagram } from "./modern-os/diagrams/mos-security-protection";
-import { MosThreadModelDiagram } from "./modern-os/diagrams/mos-thread-model";
-import { MasAgentFoundationsDiagram } from "./multiagent-systems/diagrams/mas-agent-foundations";
-import { MasApplicationsFutureDiagram } from "./multiagent-systems/diagrams/mas-applications-future";
-import { MasCommunicationNegotiationDiagram } from "./multiagent-systems/diagrams/mas-communication-negotiation";
-import { MasCoordinationCooperationDiagram } from "./multiagent-systems/diagrams/mas-coordination-cooperation";
-import { MasDistributedProblemSolvingDiagram } from "./multiagent-systems/diagrams/mas-distributed-problem-solving";
-import { MasFinalReviewDiagram } from "./multiagent-systems/diagrams/mas-final-review";
-import { MasGameTheoryDiagram } from "./multiagent-systems/diagrams/mas-game-theory";
-import { MasLearningMapDiagram } from "./multiagent-systems/diagrams/mas-learning-map";
-import { MasMultiagentInteractionDiagram } from "./multiagent-systems/diagrams/mas-multiagent-interaction";
-import { MasRationalAgentsDiagram } from "./multiagent-systems/diagrams/mas-rational-agents";
-import { MgaCsModelDiagram } from "./multiplayer-game-architecture/diagrams/mga-cs-model";
-import { MgaFaultToleranceDiagram } from "./multiplayer-game-architecture/diagrams/mga-fault-tolerance";
-import { MgaFinalReviewDiagram } from "./multiplayer-game-architecture/diagrams/mga-final-review";
-import { MgaGatewayProxyDiagram } from "./multiplayer-game-architecture/diagrams/mga-gateway-proxy";
-import { MgaInterestManagementDiagram } from "./multiplayer-game-architecture/diagrams/mga-interest-management";
-import { MgaLearningMapDiagram } from "./multiplayer-game-architecture/diagrams/mga-learning-map";
-import { MgaMicroserviceDiagram } from "./multiplayer-game-architecture/diagrams/mga-microservice";
-import { MgaMonitoringDiagram } from "./multiplayer-game-architecture/diagrams/mga-monitoring";
-import { MgaShardingDiagram } from "./multiplayer-game-architecture/diagrams/mga-sharding";
-import { MgaStateReplicationDiagram } from "./multiplayer-game-architecture/diagrams/mga-state-replication";
-import { MgpConnectionManagementDiagram } from "./multiplayer-game-programming/diagrams/mgp-connection-management";
-import { MgpEntityInterpolationDiagram } from "./multiplayer-game-programming/diagrams/mgp-entity-interpolation";
-import { MgpFinalReviewDiagram } from "./multiplayer-game-programming/diagrams/mgp-final-review";
-import { MgpFlowControlDiagram } from "./multiplayer-game-programming/diagrams/mgp-flow-control";
-import { MgpInternetProtocolDiagram } from "./multiplayer-game-programming/diagrams/mgp-internet-protocol";
-import { MgpLearningMapDiagram } from "./multiplayer-game-programming/diagrams/mgp-learning-map";
-import { MgpNatPunchThroughDiagram } from "./multiplayer-game-programming/diagrams/mgp-nat-punch-through";
-import { MgpPredictionReconciliationDiagram } from "./multiplayer-game-programming/diagrams/mgp-prediction-reconciliation";
-import { MgpReliableUdpDiagram } from "./multiplayer-game-programming/diagrams/mgp-reliable-udp";
-import { MgpUdpTcpDiagram } from "./multiplayer-game-programming/diagrams/mgp-udp-tcp";
-import { MseAdvancedSqlDiagram } from "./mysql-essentials/diagrams/mse-advanced-sql";
-import { MseDatabaseDesignDiagram } from "./mysql-essentials/diagrams/mse-database-design";
-import { MseDbAdministrationDiagram } from "./mysql-essentials/diagrams/mse-db-administration";
-import { MseFinalReviewDiagram } from "./mysql-essentials/diagrams/mse-final-review";
-import { MseIndexOptimizationDiagram } from "./mysql-essentials/diagrams/mse-index-optimization";
-import { MseLearningMapDiagram } from "./mysql-essentials/diagrams/mse-learning-map";
-import { MseMysqlBasicsDiagram } from "./mysql-essentials/diagrams/mse-mysql-basics";
-import { MseSecurityBackupDiagram } from "./mysql-essentials/diagrams/mse-security-backup";
-import { MseSqlFundamentalsDiagram } from "./mysql-essentials/diagrams/mse-sql-fundamentals";
-import { MseTransactionsDiagram } from "./mysql-essentials/diagrams/mse-transactions";
-import { MmmArchitectureDesignDiagram } from "./mythical-man-month/diagrams/mmm-architecture-design";
-import { MmmCommunicationDiagram } from "./mythical-man-month/diagrams/mmm-communication";
-import { MmmFinalReviewDiagram } from "./mythical-man-month/diagrams/mmm-final-review";
-import { MmmLearningMapDiagram } from "./mythical-man-month/diagrams/mmm-learning-map";
-import { MmmLessonsFutureDiagram } from "./mythical-man-month/diagrams/mmm-lessons-future";
-import { MmmManMonthDiagram } from "./mythical-man-month/diagrams/mmm-man-month";
-import { MmmNoSilverBulletDiagram } from "./mythical-man-month/diagrams/mmm-no-silver-bullet";
-import { MmmSecondSystemDiagram } from "./mythical-man-month/diagrams/mmm-second-system";
-import { MmmSurgicalTeamDiagram } from "./mythical-man-month/diagrams/mmm-surgical-team";
-import { MmmTarPitDiagram } from "./mythical-man-month/diagrams/mmm-tar-pit";
-import { NdbgAsyncTracingDiagram } from "./nodejs-debugging-guide/diagrams/ndbg-async-tracing";
-import { NdbgCpuProfilingDiagram } from "./nodejs-debugging-guide/diagrams/ndbg-cpu-profiling";
-import { NdbgDevtoolsDiagram } from "./nodejs-debugging-guide/diagrams/ndbg-devtools";
-import { NdbgFinalReviewDiagram } from "./nodejs-debugging-guide/diagrams/ndbg-final-review";
-import { NdbgFlameGraphDiagram } from "./nodejs-debugging-guide/diagrams/ndbg-flame-graph";
-import { NdbgHeapSnapshotDiagram } from "./nodejs-debugging-guide/diagrams/ndbg-heap-snapshot";
-import { NdbgInspectorProtocolDiagram } from "./nodejs-debugging-guide/diagrams/ndbg-inspector-protocol";
-import { NdbgLearningMapDiagram } from "./nodejs-debugging-guide/diagrams/ndbg-learning-map";
-import { NdbgMemoryLeaksDiagram } from "./nodejs-debugging-guide/diagrams/ndbg-memory-leaks";
-import { NdbgProductionDebugDiagram } from "./nodejs-debugging-guide/diagrams/ndbg-production-debug";
-import { NdgBufferFilesystemDiagram } from "./nodejs-definitive-guide/diagrams/ndg-buffer-filesystem";
-import { NdgClusterWorkerDiagram } from "./nodejs-definitive-guide/diagrams/ndg-cluster-worker";
-import { NdgEventLoopDiagram } from "./nodejs-definitive-guide/diagrams/ndg-event-loop";
-import { NdgFinalReviewDiagram } from "./nodejs-definitive-guide/diagrams/ndg-final-review";
-import { NdgHttpServerDiagram } from "./nodejs-definitive-guide/diagrams/ndg-http-server";
-import { NdgLearningMapDiagram } from "./nodejs-definitive-guide/diagrams/ndg-learning-map";
-import { NdgModuleSystemDiagram } from "./nodejs-definitive-guide/diagrams/ndg-module-system";
-import { NdgPerformanceDebugDiagram } from "./nodejs-definitive-guide/diagrams/ndg-performance-debug";
-import { NdgStreamPipeDiagram } from "./nodejs-definitive-guide/diagrams/ndg-stream-pipe";
-import { NdgTcpTlsDiagram } from "./nodejs-definitive-guide/diagrams/ndg-tcp-tls";
+import {
+  MfcOfficialLearningMapMapLab,
+  MfcOfficialLearningMapExperimentLab,
+  MfcOfficialLearningMapEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-official-learning-map";
+import {
+  Mfc00ReadingGuideMapLab,
+  Mfc00ReadingGuideExperimentLab,
+  Mfc00ReadingGuideEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-00-reading-guide";
+import {
+  Mfc01Win32ProgramConceptsMapLab,
+  Mfc01Win32ProgramConceptsExperimentLab,
+  Mfc01Win32ProgramConceptsEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-01-win32-program-concepts";
+import {
+  Mfc02CppEssentialPropertiesMapLab,
+  Mfc02CppEssentialPropertiesExperimentLab,
+  Mfc02CppEssentialPropertiesEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-02-cpp-essential-properties";
+import {
+  Mfc03SixKeyTechniquesSimulationMapLab,
+  Mfc03SixKeyTechniquesSimulationExperimentLab,
+  Mfc03SixKeyTechniquesSimulationEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-03-six-key-techniques-simulation";
+import {
+  Mfc04VisualCppIdeMapLab,
+  Mfc04VisualCppIdeExperimentLab,
+  Mfc04VisualCppIdeEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-04-visual-cpp-ide";
+import {
+  Mfc05ApplicationFrameworkOverviewMapLab,
+  Mfc05ApplicationFrameworkOverviewExperimentLab,
+  Mfc05ApplicationFrameworkOverviewEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-05-application-framework-overview";
+import {
+  Mfc06ProgramLifecycleMapLab,
+  Mfc06ProgramLifecycleExperimentLab,
+  Mfc06ProgramLifecycleEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-06-program-lifecycle";
+import {
+  Mfc07FrameworkSkeletonMapLab,
+  Mfc07FrameworkSkeletonExperimentLab,
+  Mfc07FrameworkSkeletonEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-07-framework-skeleton";
+import {
+  Mfc08DocumentViewMapLab,
+  Mfc08DocumentViewExperimentLab,
+  Mfc08DocumentViewEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-08-document-view";
+import {
+  Mfc09MessageMapCommandRoutingMapLab,
+  Mfc09MessageMapCommandRoutingExperimentLab,
+  Mfc09MessageMapCommandRoutingEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-09-message-map-command-routing";
+import {
+  Mfc10DialogsMapLab,
+  Mfc10DialogsExperimentLab,
+  Mfc10DialogsEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-10-dialogs";
+import {
+  Mfc11ViewAndRedrawMapLab,
+  Mfc11ViewAndRedrawExperimentLab,
+  Mfc11ViewAndRedrawEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-11-view-and-redraw";
+import {
+  Mfc12PrintPreviewMapLab,
+  Mfc12PrintPreviewExperimentLab,
+  Mfc12PrintPreviewEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-12-print-preview";
+import {
+  Mfc13MultipleDocumentsViewsMapLab,
+  Mfc13MultipleDocumentsViewsExperimentLab,
+  Mfc13MultipleDocumentsViewsEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-13-multiple-documents-views";
+import {
+  Mfc14MultithreadingMapLab,
+  Mfc14MultithreadingExperimentLab,
+  Mfc14MultithreadingEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-14-multithreading";
+import {
+  Mfc15CustomAppwizardMapLab,
+  Mfc15CustomAppwizardExperimentLab,
+  Mfc15CustomAppwizardEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-15-custom-appwizard";
+import {
+  Mfc16ComponentsActivexMapLab,
+  Mfc16ComponentsActivexExperimentLab,
+  Mfc16ComponentsActivexEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-16-components-activex";
+import {
+  MfcAppendixALearningRoadmapMapLab,
+  MfcAppendixALearningRoadmapExperimentLab,
+  MfcAppendixALearningRoadmapEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-appendix-a-learning-roadmap";
+import {
+  MfcAppendixBScribbleStep5SourceMapLab,
+  MfcAppendixBScribbleStep5SourceExperimentLab,
+  MfcAppendixBScribbleStep5SourceEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-appendix-b-scribble-step5-source";
+import {
+  MfcAppendixCSampleCatalogMapLab,
+  MfcAppendixCSampleCatalogExperimentLab,
+  MfcAppendixCSampleCatalogEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-appendix-c-sample-catalog";
+import {
+  MfcAppendixDDbwinMapLab,
+  MfcAppendixDDbwinExperimentLab,
+  MfcAppendixDDbwinEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-appendix-d-dbwin";
+import {
+  MfcOfficialFinalReviewMapLab,
+  MfcOfficialFinalReviewExperimentLab,
+  MfcOfficialFinalReviewEvidenceLab,
+} from "./mfc-deep-dive/diagrams/mfc-official-final-review";
+import {
+  AdpOfficialLearningMapArchitectureLab,
+  AdpOfficialLearningMapCounterexampleLab,
+  AdpOfficialLearningMapEvidenceLab,
+} from "./android-design-patterns/diagrams/adp-official-learning-map";
+import {
+  AdpPrefaceArchitectureLab,
+  AdpPrefaceCounterexampleLab,
+  AdpPrefaceEvidenceLab,
+} from "./android-design-patterns/diagrams/adp-preface";
+import {
+  Adp01AndroidAppBasicStructureArchitectureLab,
+  Adp01AndroidAppBasicStructureCounterexampleLab,
+  Adp01AndroidAppBasicStructureEvidenceLab,
+} from "./android-design-patterns/diagrams/adp-01-android-app-basic-structure";
+import {
+  Adp02MvvmApplicationStructureArchitectureLab,
+  Adp02MvvmApplicationStructureCounterexampleLab,
+  Adp02MvvmApplicationStructureEvidenceLab,
+} from "./android-design-patterns/diagrams/adp-02-mvvm-application-structure";
+import {
+  Adp03MvpApplicationStructureArchitectureLab,
+  Adp03MvpApplicationStructureCounterexampleLab,
+  Adp03MvpApplicationStructureEvidenceLab,
+} from "./android-design-patterns/diagrams/adp-03-mvp-application-structure";
+import {
+  Adp04IncrementalDevelopmentDesignArchitectureLab,
+  Adp04IncrementalDevelopmentDesignCounterexampleLab,
+  Adp04IncrementalDevelopmentDesignEvidenceLab,
+} from "./android-design-patterns/diagrams/adp-04-incremental-development-design";
+import {
+  Adp05DesignerRoleInOssArchitectureLab,
+  Adp05DesignerRoleInOssCounterexampleLab,
+  Adp05DesignerRoleInOssEvidenceLab,
+} from "./android-design-patterns/diagrams/adp-05-designer-role-in-oss";
+import {
+  Adp06FluxArchitectureArchitectureLab,
+  Adp06FluxArchitectureCounterexampleLab,
+  Adp06FluxArchitectureEvidenceLab,
+} from "./android-design-patterns/diagrams/adp-06-flux-architecture";
+import {
+  Adp07TeamAndArchitectureArchitectureLab,
+  Adp07TeamAndArchitectureCounterexampleLab,
+  Adp07TeamAndArchitectureEvidenceLab,
+} from "./android-design-patterns/diagrams/adp-07-team-and-architecture";
+import {
+  Adp08AndroidArchitectureComponentsArchitectureLab,
+  Adp08AndroidArchitectureComponentsCounterexampleLab,
+  Adp08AndroidArchitectureComponentsEvidenceLab,
+} from "./android-design-patterns/diagrams/adp-08-android-architecture-components";
+import {
+  AdpAfterwordArchitectureLab,
+  AdpAfterwordCounterexampleLab,
+  AdpAfterwordEvidenceLab,
+} from "./android-design-patterns/diagrams/adp-afterword";
+import {
+  AdpIndexArchitectureLab,
+  AdpIndexCounterexampleLab,
+  AdpIndexEvidenceLab,
+} from "./android-design-patterns/diagrams/adp-index";
+import {
+  AdpAuthorProfilesArchitectureLab,
+  AdpAuthorProfilesCounterexampleLab,
+  AdpAuthorProfilesEvidenceLab,
+} from "./android-design-patterns/diagrams/adp-author-profiles";
+import {
+  AdpOfficialFinalReviewArchitectureLab,
+  AdpOfficialFinalReviewCounterexampleLab,
+  AdpOfficialFinalReviewEvidenceLab,
+} from "./android-design-patterns/diagrams/adp-official-final-review";
+import {
+  Aad8OfficialLearningMapTraceLab,
+  Aad8OfficialLearningMapFaultLab,
+  Aad8OfficialLearningMapEvidenceLab,
+} from "./android-advanced-decryption/diagrams/aad8-official-learning-map";
+import {
+  Aad801AndroidSystemArchitectureTraceLab,
+  Aad801AndroidSystemArchitectureFaultLab,
+  Aad801AndroidSystemArchitectureEvidenceLab,
+} from "./android-advanced-decryption/diagrams/aad8-01-android-system-architecture";
+import {
+  Aad802AndroidSystemStartupTraceLab,
+  Aad802AndroidSystemStartupFaultLab,
+  Aad802AndroidSystemStartupEvidenceLab,
+} from "./android-advanced-decryption/diagrams/aad8-02-android-system-startup";
+import {
+  Aad803AppProcessStartupTraceLab,
+  Aad803AppProcessStartupFaultLab,
+  Aad803AppProcessStartupEvidenceLab,
+} from "./android-advanced-decryption/diagrams/aad8-03-app-process-startup";
+import {
+  Aad804FourComponentsWorkflowTraceLab,
+  Aad804FourComponentsWorkflowFaultLab,
+  Aad804FourComponentsWorkflowEvidenceLab,
+} from "./android-advanced-decryption/diagrams/aad8-04-four-components-workflow";
+import {
+  Aad805ContextTraceLab,
+  Aad805ContextFaultLab,
+  Aad805ContextEvidenceLab,
+} from "./android-advanced-decryption/diagrams/aad8-05-context";
+import {
+  Aad806ActivityManagerServiceTraceLab,
+  Aad806ActivityManagerServiceFaultLab,
+  Aad806ActivityManagerServiceEvidenceLab,
+} from "./android-advanced-decryption/diagrams/aad8-06-activity-manager-service";
+import {
+  Aad807WindowManagerTraceLab,
+  Aad807WindowManagerFaultLab,
+  Aad807WindowManagerEvidenceLab,
+} from "./android-advanced-decryption/diagrams/aad8-07-window-manager";
+import {
+  Aad808WindowManagerServiceTraceLab,
+  Aad808WindowManagerServiceFaultLab,
+  Aad808WindowManagerServiceEvidenceLab,
+} from "./android-advanced-decryption/diagrams/aad8-08-window-manager-service";
+import {
+  Aad809JniTraceLab,
+  Aad809JniFaultLab,
+  Aad809JniEvidenceLab,
+} from "./android-advanced-decryption/diagrams/aad8-09-jni";
+import {
+  Aad810JavaVirtualMachineTraceLab,
+  Aad810JavaVirtualMachineFaultLab,
+  Aad810JavaVirtualMachineEvidenceLab,
+} from "./android-advanced-decryption/diagrams/aad8-10-java-virtual-machine";
+import {
+  Aad811DalvikArtTraceLab,
+  Aad811DalvikArtFaultLab,
+  Aad811DalvikArtEvidenceLab,
+} from "./android-advanced-decryption/diagrams/aad8-11-dalvik-art";
+import {
+  Aad812ClassLoaderTraceLab,
+  Aad812ClassLoaderFaultLab,
+  Aad812ClassLoaderEvidenceLab,
+} from "./android-advanced-decryption/diagrams/aad8-12-class-loader";
+import {
+  Aad813HotfixTraceLab,
+  Aad813HotfixFaultLab,
+  Aad813HotfixEvidenceLab,
+} from "./android-advanced-decryption/diagrams/aad8-13-hotfix";
+import {
+  Aad814HookTraceLab,
+  Aad814HookFaultLab,
+  Aad814HookEvidenceLab,
+} from "./android-advanced-decryption/diagrams/aad8-14-hook";
+import {
+  Aad815PluginizationTraceLab,
+  Aad815PluginizationFaultLab,
+  Aad815PluginizationEvidenceLab,
+} from "./android-advanced-decryption/diagrams/aad8-15-pluginization";
+import {
+  Aad816RenderingOptimizationTraceLab,
+  Aad816RenderingOptimizationFaultLab,
+  Aad816RenderingOptimizationEvidenceLab,
+} from "./android-advanced-decryption/diagrams/aad8-16-rendering-optimization";
+import {
+  Aad817MemoryOptimizationTraceLab,
+  Aad817MemoryOptimizationFaultLab,
+  Aad817MemoryOptimizationEvidenceLab,
+} from "./android-advanced-decryption/diagrams/aad8-17-memory-optimization";
+import {
+  Aad8OfficialFinalReviewTraceLab,
+  Aad8OfficialFinalReviewFaultLab,
+  Aad8OfficialFinalReviewEvidenceLab,
+} from "./android-advanced-decryption/diagrams/aad8-official-final-review";
+import {
+  MspOfficialLearningMapPatternLab,
+  MspOfficialLearningMapFailureLab,
+  MspOfficialLearningMapEvidenceLab,
+} from "./microservices-patterns/diagrams/msp-official-learning-map";
+import {
+  Msp01EscapingMonolithicHellPatternLab,
+  Msp01EscapingMonolithicHellFailureLab,
+  Msp01EscapingMonolithicHellEvidenceLab,
+} from "./microservices-patterns/diagrams/msp-01-escaping-monolithic-hell";
+import {
+  Msp02DecompositionStrategiesPatternLab,
+  Msp02DecompositionStrategiesFailureLab,
+  Msp02DecompositionStrategiesEvidenceLab,
+} from "./microservices-patterns/diagrams/msp-02-decomposition-strategies";
+import {
+  Msp03InterprocessCommunicationPatternLab,
+  Msp03InterprocessCommunicationFailureLab,
+  Msp03InterprocessCommunicationEvidenceLab,
+} from "./microservices-patterns/diagrams/msp-03-interprocess-communication";
+import {
+  Msp04ManagingTransactionsWithSagasPatternLab,
+  Msp04ManagingTransactionsWithSagasFailureLab,
+  Msp04ManagingTransactionsWithSagasEvidenceLab,
+} from "./microservices-patterns/diagrams/msp-04-managing-transactions-with-sagas";
+import {
+  Msp05DesigningBusinessLogicPatternLab,
+  Msp05DesigningBusinessLogicFailureLab,
+  Msp05DesigningBusinessLogicEvidenceLab,
+} from "./microservices-patterns/diagrams/msp-05-designing-business-logic";
+import {
+  Msp06EventSourcingPatternLab,
+  Msp06EventSourcingFailureLab,
+  Msp06EventSourcingEvidenceLab,
+} from "./microservices-patterns/diagrams/msp-06-event-sourcing";
+import {
+  Msp07ImplementingQueriesPatternLab,
+  Msp07ImplementingQueriesFailureLab,
+  Msp07ImplementingQueriesEvidenceLab,
+} from "./microservices-patterns/diagrams/msp-07-implementing-queries";
+import {
+  Msp08ExternalApiPatternsPatternLab,
+  Msp08ExternalApiPatternsFailureLab,
+  Msp08ExternalApiPatternsEvidenceLab,
+} from "./microservices-patterns/diagrams/msp-08-external-api-patterns";
+import {
+  Msp09TestingPart1PatternLab,
+  Msp09TestingPart1FailureLab,
+  Msp09TestingPart1EvidenceLab,
+} from "./microservices-patterns/diagrams/msp-09-testing-part-1";
+import {
+  Msp10TestingPart2PatternLab,
+  Msp10TestingPart2FailureLab,
+  Msp10TestingPart2EvidenceLab,
+} from "./microservices-patterns/diagrams/msp-10-testing-part-2";
+import {
+  Msp11ProductionReadyServicesPatternLab,
+  Msp11ProductionReadyServicesFailureLab,
+  Msp11ProductionReadyServicesEvidenceLab,
+} from "./microservices-patterns/diagrams/msp-11-production-ready-services";
+import {
+  Msp12DeployingMicroservicesPatternLab,
+  Msp12DeployingMicroservicesFailureLab,
+  Msp12DeployingMicroservicesEvidenceLab,
+} from "./microservices-patterns/diagrams/msp-12-deploying-microservices";
+import {
+  Msp13RefactoringToMicroservicesPatternLab,
+  Msp13RefactoringToMicroservicesFailureLab,
+  Msp13RefactoringToMicroservicesEvidenceLab,
+} from "./microservices-patterns/diagrams/msp-13-refactoring-to-microservices";
+import {
+  MspOfficialFinalReviewPatternLab,
+  MspOfficialFinalReviewFailureLab,
+  MspOfficialFinalReviewEvidenceLab,
+} from "./microservices-patterns/diagrams/msp-official-final-review";
+import {
+  Msg17OfficialLearningMapDiagnosisLab,
+  Msg17OfficialLearningMapExperimentLab,
+  Msg17OfficialLearningMapTransferLab,
+} from "./mindset-growth/diagrams/msg17-official-learning-map";
+import {
+  Msg17IntroductionDiagnosisLab,
+  Msg17IntroductionExperimentLab,
+  Msg17IntroductionTransferLab,
+} from "./mindset-growth/diagrams/msg17-introduction";
+import {
+  Msg17Chapter01DiagnosisLab,
+  Msg17Chapter01ExperimentLab,
+  Msg17Chapter01TransferLab,
+} from "./mindset-growth/diagrams/msg17-chapter-01";
+import {
+  Msg17Chapter02DiagnosisLab,
+  Msg17Chapter02ExperimentLab,
+  Msg17Chapter02TransferLab,
+} from "./mindset-growth/diagrams/msg17-chapter-02";
+import {
+  Msg17Chapter03DiagnosisLab,
+  Msg17Chapter03ExperimentLab,
+  Msg17Chapter03TransferLab,
+} from "./mindset-growth/diagrams/msg17-chapter-03";
+import {
+  Msg17Chapter04DiagnosisLab,
+  Msg17Chapter04ExperimentLab,
+  Msg17Chapter04TransferLab,
+} from "./mindset-growth/diagrams/msg17-chapter-04";
+import {
+  Msg17Chapter05DiagnosisLab,
+  Msg17Chapter05ExperimentLab,
+  Msg17Chapter05TransferLab,
+} from "./mindset-growth/diagrams/msg17-chapter-05";
+import {
+  Msg17Chapter06DiagnosisLab,
+  Msg17Chapter06ExperimentLab,
+  Msg17Chapter06TransferLab,
+} from "./mindset-growth/diagrams/msg17-chapter-06";
+import {
+  Msg17Chapter07DiagnosisLab,
+  Msg17Chapter07ExperimentLab,
+  Msg17Chapter07TransferLab,
+} from "./mindset-growth/diagrams/msg17-chapter-07";
+import {
+  Msg17Chapter08DiagnosisLab,
+  Msg17Chapter08ExperimentLab,
+  Msg17Chapter08TransferLab,
+} from "./mindset-growth/diagrams/msg17-chapter-08";
+import {
+  Msg17PublishingPostscriptDiagnosisLab,
+  Msg17PublishingPostscriptExperimentLab,
+  Msg17PublishingPostscriptTransferLab,
+} from "./mindset-growth/diagrams/msg17-publishing-postscript";
+import {
+  Msg17OfficialFinalReviewDiagnosisLab,
+  Msg17OfficialFinalReviewExperimentLab,
+  Msg17OfficialFinalReviewTransferLab,
+} from "./mindset-growth/diagrams/msg17-official-final-review";
+import {
+  MosOfficialLearningMapMapLab,
+  MosOfficialLearningMapExperimentLab,
+  MosOfficialLearningMapEvidenceLab,
+} from "./modern-os/diagrams/mos-official-learning-map";
+import {
+  Mos01IntroductionMapLab,
+  Mos01IntroductionExperimentLab,
+  Mos01IntroductionEvidenceLab,
+} from "./modern-os/diagrams/mos-01-introduction";
+import {
+  Mos02ProcessesThreadsMapLab,
+  Mos02ProcessesThreadsExperimentLab,
+  Mos02ProcessesThreadsEvidenceLab,
+} from "./modern-os/diagrams/mos-02-processes-threads";
+import {
+  Mos03MemoryManagementMapLab,
+  Mos03MemoryManagementExperimentLab,
+  Mos03MemoryManagementEvidenceLab,
+} from "./modern-os/diagrams/mos-03-memory-management";
+import {
+  Mos04FileSystemsMapLab,
+  Mos04FileSystemsExperimentLab,
+  Mos04FileSystemsEvidenceLab,
+} from "./modern-os/diagrams/mos-04-file-systems";
+import {
+  Mos05InputOutputMapLab,
+  Mos05InputOutputExperimentLab,
+  Mos05InputOutputEvidenceLab,
+} from "./modern-os/diagrams/mos-05-input-output";
+import {
+  Mos06DeadlocksMapLab,
+  Mos06DeadlocksExperimentLab,
+  Mos06DeadlocksEvidenceLab,
+} from "./modern-os/diagrams/mos-06-deadlocks";
+import {
+  Mos07VirtualizationCloudMapLab,
+  Mos07VirtualizationCloudExperimentLab,
+  Mos07VirtualizationCloudEvidenceLab,
+} from "./modern-os/diagrams/mos-07-virtualization-cloud";
+import {
+  Mos08MultipleProcessorSystemsMapLab,
+  Mos08MultipleProcessorSystemsExperimentLab,
+  Mos08MultipleProcessorSystemsEvidenceLab,
+} from "./modern-os/diagrams/mos-08-multiple-processor-systems";
+import {
+  Mos09SecurityMapLab,
+  Mos09SecurityExperimentLab,
+  Mos09SecurityEvidenceLab,
+} from "./modern-os/diagrams/mos-09-security";
+import {
+  Mos10UnixLinuxAndroidMapLab,
+  Mos10UnixLinuxAndroidExperimentLab,
+  Mos10UnixLinuxAndroidEvidenceLab,
+} from "./modern-os/diagrams/mos-10-unix-linux-android";
+import {
+  Mos11Windows8MapLab,
+  Mos11Windows8ExperimentLab,
+  Mos11Windows8EvidenceLab,
+} from "./modern-os/diagrams/mos-11-windows-8";
+import {
+  Mos12OsDesignMapLab,
+  Mos12OsDesignExperimentLab,
+  Mos12OsDesignEvidenceLab,
+} from "./modern-os/diagrams/mos-12-os-design";
+import {
+  Mos13BibliographyMapLab,
+  Mos13BibliographyExperimentLab,
+  Mos13BibliographyEvidenceLab,
+} from "./modern-os/diagrams/mos-13-bibliography";
+import {
+  MosOfficialFinalReviewMapLab,
+  MosOfficialFinalReviewExperimentLab,
+  MosOfficialFinalReviewEvidenceLab,
+} from "./modern-os/diagrams/mos-official-final-review";
+import {
+  MasOfficialLearningMapModelLab,
+  MasOfficialLearningMapGameLab,
+  MasOfficialLearningMapEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-official-learning-map";
+import {
+  MasPrefaceModelLab,
+  MasPrefaceGameLab,
+  MasPrefaceEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-preface";
+import {
+  MasPart01SettingSceneModelLab,
+  MasPart01SettingSceneGameLab,
+  MasPart01SettingSceneEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-part-01-setting-scene";
+import {
+  Mas01IntroductionModelLab,
+  Mas01IntroductionGameLab,
+  Mas01IntroductionEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-01-introduction";
+import {
+  MasPart02IntelligentAutonomousAgentsModelLab,
+  MasPart02IntelligentAutonomousAgentsGameLab,
+  MasPart02IntelligentAutonomousAgentsEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-part-02-intelligent-autonomous-agents";
+import {
+  Mas02IntelligentAgentsModelLab,
+  Mas02IntelligentAgentsGameLab,
+  Mas02IntelligentAgentsEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-02-intelligent-agents";
+import {
+  Mas03DeductiveReasoningAgentsModelLab,
+  Mas03DeductiveReasoningAgentsGameLab,
+  Mas03DeductiveReasoningAgentsEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-03-deductive-reasoning-agents";
+import {
+  Mas04PracticalReasoningAgentsModelLab,
+  Mas04PracticalReasoningAgentsGameLab,
+  Mas04PracticalReasoningAgentsEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-04-practical-reasoning-agents";
+import {
+  Mas05ReactiveHybridAgentsModelLab,
+  Mas05ReactiveHybridAgentsGameLab,
+  Mas05ReactiveHybridAgentsEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-05-reactive-hybrid-agents";
+import {
+  MasPart03CommunicationCooperationModelLab,
+  MasPart03CommunicationCooperationGameLab,
+  MasPart03CommunicationCooperationEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-part-03-communication-cooperation";
+import {
+  Mas06UnderstandingEachOtherModelLab,
+  Mas06UnderstandingEachOtherGameLab,
+  Mas06UnderstandingEachOtherEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-06-understanding-each-other";
+import {
+  Mas07CommunicatingModelLab,
+  Mas07CommunicatingGameLab,
+  Mas07CommunicatingEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-07-communicating";
+import {
+  Mas08WorkingTogetherModelLab,
+  Mas08WorkingTogetherGameLab,
+  Mas08WorkingTogetherEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-08-working-together";
+import {
+  Mas09MethodologiesModelLab,
+  Mas09MethodologiesGameLab,
+  Mas09MethodologiesEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-09-methodologies";
+import {
+  Mas10ApplicationsModelLab,
+  Mas10ApplicationsGameLab,
+  Mas10ApplicationsEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-10-applications";
+import {
+  MasPart04MultiagentDecisionMakingModelLab,
+  MasPart04MultiagentDecisionMakingGameLab,
+  MasPart04MultiagentDecisionMakingEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-part-04-multiagent-decision-making";
+import {
+  Mas11MultiagentInteractionsModelLab,
+  Mas11MultiagentInteractionsGameLab,
+  Mas11MultiagentInteractionsEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-11-multiagent-interactions";
+import {
+  Mas12MakingGroupDecisionsModelLab,
+  Mas12MakingGroupDecisionsGameLab,
+  Mas12MakingGroupDecisionsEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-12-making-group-decisions";
+import {
+  Mas13FormingCoalitionsModelLab,
+  Mas13FormingCoalitionsGameLab,
+  Mas13FormingCoalitionsEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-13-forming-coalitions";
+import {
+  Mas14AllocatingScarceResourcesModelLab,
+  Mas14AllocatingScarceResourcesGameLab,
+  Mas14AllocatingScarceResourcesEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-14-allocating-scarce-resources";
+import {
+  Mas15BargainingModelLab,
+  Mas15BargainingGameLab,
+  Mas15BargainingEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-15-bargaining";
+import {
+  Mas16ArguingModelLab,
+  Mas16ArguingGameLab,
+  Mas16ArguingEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-16-arguing";
+import {
+  Mas17LogicalFoundationsModelLab,
+  Mas17LogicalFoundationsGameLab,
+  Mas17LogicalFoundationsEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-17-logical-foundations";
+import {
+  MasCodaModelLab,
+  MasCodaGameLab,
+  MasCodaEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-coda";
+import {
+  MasAppendixAHistoryLessonModelLab,
+  MasAppendixAHistoryLessonGameLab,
+  MasAppendixAHistoryLessonEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-appendix-a-history-lesson";
+import {
+  MasAppendixBAfterwordModelLab,
+  MasAppendixBAfterwordGameLab,
+  MasAppendixBAfterwordEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-appendix-b-afterword";
+import {
+  MasOfficialFinalReviewModelLab,
+  MasOfficialFinalReviewGameLab,
+  MasOfficialFinalReviewEvidenceLab,
+} from "./multiagent-systems/diagrams/mas-official-final-review";
+import {
+  Tmm40OfficialLearningMapDependencyLab,
+  Tmm40OfficialLearningMapScheduleLab,
+  Tmm40OfficialLearningMapEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-official-learning-map";
+import {
+  Tmm40TranslatorPrefaceDependencyLab,
+  Tmm40TranslatorPrefaceScheduleLab,
+  Tmm40TranslatorPrefaceEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-translator-preface";
+import {
+  Tmm4020thAnniversaryPrefaceDependencyLab,
+  Tmm4020thAnniversaryPrefaceScheduleLab,
+  Tmm4020thAnniversaryPrefaceEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-20th-anniversary-preface";
+import {
+  Tmm40FirstEditionPrefaceDependencyLab,
+  Tmm40FirstEditionPrefaceScheduleLab,
+  Tmm40FirstEditionPrefaceEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-first-edition-preface";
+import {
+  Tmm4001TarPitDependencyLab,
+  Tmm4001TarPitScheduleLab,
+  Tmm4001TarPitEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-01-tar-pit";
+import {
+  Tmm4002ManMonthDependencyLab,
+  Tmm4002ManMonthScheduleLab,
+  Tmm4002ManMonthEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-02-man-month";
+import {
+  Tmm4003SurgicalTeamDependencyLab,
+  Tmm4003SurgicalTeamScheduleLab,
+  Tmm4003SurgicalTeamEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-03-surgical-team";
+import {
+  Tmm4004ConceptualIntegrityDependencyLab,
+  Tmm4004ConceptualIntegrityScheduleLab,
+  Tmm4004ConceptualIntegrityEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-04-conceptual-integrity";
+import {
+  Tmm4005SecondSystemEffectDependencyLab,
+  Tmm4005SecondSystemEffectScheduleLab,
+  Tmm4005SecondSystemEffectEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-05-second-system-effect";
+import {
+  Tmm4006PassingTheWordDependencyLab,
+  Tmm4006PassingTheWordScheduleLab,
+  Tmm4006PassingTheWordEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-06-passing-the-word";
+import {
+  Tmm4007BabelDependencyLab,
+  Tmm4007BabelScheduleLab,
+  Tmm4007BabelEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-07-babel";
+import {
+  Tmm4008CallingTheShotDependencyLab,
+  Tmm4008CallingTheShotScheduleLab,
+  Tmm4008CallingTheShotEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-08-calling-the-shot";
+import {
+  Tmm4009TenPoundsDependencyLab,
+  Tmm4009TenPoundsScheduleLab,
+  Tmm4009TenPoundsEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-09-ten-pounds";
+import {
+  Tmm4010DocumentaryHypothesisDependencyLab,
+  Tmm4010DocumentaryHypothesisScheduleLab,
+  Tmm4010DocumentaryHypothesisEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-10-documentary-hypothesis";
+import {
+  Tmm4011PlanToThrowOneAwayDependencyLab,
+  Tmm4011PlanToThrowOneAwayScheduleLab,
+  Tmm4011PlanToThrowOneAwayEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-11-plan-to-throw-one-away";
+import {
+  Tmm4012SharpToolsDependencyLab,
+  Tmm4012SharpToolsScheduleLab,
+  Tmm4012SharpToolsEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-12-sharp-tools";
+import {
+  Tmm4013WholeAndPartsDependencyLab,
+  Tmm4013WholeAndPartsScheduleLab,
+  Tmm4013WholeAndPartsEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-13-whole-and-parts";
+import {
+  Tmm4014HatchingCatastropheDependencyLab,
+  Tmm4014HatchingCatastropheScheduleLab,
+  Tmm4014HatchingCatastropheEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-14-hatching-catastrophe";
+import {
+  Tmm4015OtherFaceDependencyLab,
+  Tmm4015OtherFaceScheduleLab,
+  Tmm4015OtherFaceEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-15-other-face";
+import {
+  Tmm4016NoSilverBulletDependencyLab,
+  Tmm4016NoSilverBulletScheduleLab,
+  Tmm4016NoSilverBulletEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-16-no-silver-bullet";
+import {
+  Tmm4017NoSilverBulletRefiredDependencyLab,
+  Tmm4017NoSilverBulletRefiredScheduleLab,
+  Tmm4017NoSilverBulletRefiredEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-17-no-silver-bullet-refired";
+import {
+  Tmm4018PropositionsDependencyLab,
+  Tmm4018PropositionsScheduleLab,
+  Tmm4018PropositionsEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-18-propositions";
+import {
+  Tmm4019TwentyYearsLaterDependencyLab,
+  Tmm4019TwentyYearsLaterScheduleLab,
+  Tmm4019TwentyYearsLaterEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-19-twenty-years-later";
+import {
+  Tmm40NotesReferencesDependencyLab,
+  Tmm40NotesReferencesScheduleLab,
+  Tmm40NotesReferencesEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-notes-references";
+import {
+  Tmm40AppendixPracticeDependencyLab,
+  Tmm40AppendixPracticeScheduleLab,
+  Tmm40AppendixPracticeEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-appendix-practice";
+import {
+  Tmm40OfficialFinalReviewDependencyLab,
+  Tmm40OfficialFinalReviewScheduleLab,
+  Tmm40OfficialFinalReviewEvidenceLab,
+} from "./mythical-man-month/diagrams/tmm40-official-final-review";
+import {
+  NdbgOfficialLearningMapMapLab,
+  NdbgOfficialLearningMapExperimentLab,
+  NdbgOfficialLearningMapEvidenceLab,
+} from "./nodejs-debugging-guide/diagrams/ndbg-official-learning-map";
+import {
+  Ndbg01CpuMapLab,
+  Ndbg01CpuExperimentLab,
+  Ndbg01CpuEvidenceLab,
+} from "./nodejs-debugging-guide/diagrams/ndbg-01-cpu";
+import {
+  Ndbg02MemoryMapLab,
+  Ndbg02MemoryExperimentLab,
+  Ndbg02MemoryEvidenceLab,
+} from "./nodejs-debugging-guide/diagrams/ndbg-02-memory";
+import {
+  Ndbg03CodeMapLab,
+  Ndbg03CodeExperimentLab,
+  Ndbg03CodeEvidenceLab,
+} from "./nodejs-debugging-guide/diagrams/ndbg-03-code";
+import {
+  Ndbg04ToolsMapLab,
+  Ndbg04ToolsExperimentLab,
+  Ndbg04ToolsEvidenceLab,
+} from "./nodejs-debugging-guide/diagrams/ndbg-04-tools";
+import {
+  Ndbg05LoggingMapLab,
+  Ndbg05LoggingExperimentLab,
+  Ndbg05LoggingEvidenceLab,
+} from "./nodejs-debugging-guide/diagrams/ndbg-05-logging";
+import {
+  Ndbg06ApmMapLab,
+  Ndbg06ApmExperimentLab,
+  Ndbg06ApmEvidenceLab,
+} from "./nodejs-debugging-guide/diagrams/ndbg-06-apm";
+import {
+  Ndbg07MonitoringMapLab,
+  Ndbg07MonitoringExperimentLab,
+  Ndbg07MonitoringEvidenceLab,
+} from "./nodejs-debugging-guide/diagrams/ndbg-07-monitoring";
+import {
+  Ndbg08ApplicationsMapLab,
+  Ndbg08ApplicationsExperimentLab,
+  Ndbg08ApplicationsEvidenceLab,
+} from "./nodejs-debugging-guide/diagrams/ndbg-08-applications";
+import {
+  NdbgOfficialFinalReviewMapLab,
+  NdbgOfficialFinalReviewExperimentLab,
+  NdbgOfficialFinalReviewEvidenceLab,
+} from "./nodejs-debugging-guide/diagrams/ndbg-official-final-review";
 import { GlrAdvancedBuffersDiagram } from "./opengl-redbook/diagrams/glr-advanced-buffers";
 import { GlrFinalReviewDiagram } from "./opengl-redbook/diagrams/glr-final-review";
 import { GlrFramebufferDiagram } from "./opengl-redbook/diagrams/glr-framebuffer";
@@ -2375,46 +6514,406 @@ import {
   GlsTransformFeedbackDiagram,
   GlsVertexProcessingDiagram,
 } from "./opengl-superbible/diagrams/gls-vertex-processing";
-import { OptDecisionMakingDiagram } from "./org-problem-tools/diagrams/opt-decision-making";
-import { OptEvaluationMetricsDiagram } from "./org-problem-tools/diagrams/opt-evaluation-metrics";
-import { OptFinalReviewDiagram } from "./org-problem-tools/diagrams/opt-final-review";
-import { OptInnovationCreativityDiagram } from "./org-problem-tools/diagrams/opt-innovation-creativity";
-import { OptLearningMapDiagram } from "./org-problem-tools/diagrams/opt-learning-map";
-import { OptProblemAnalysisDiagram } from "./org-problem-tools/diagrams/opt-problem-analysis";
-import { OptProcessImprovementDiagram } from "./org-problem-tools/diagrams/opt-process-improvement";
-import { OptRootCauseDiagram } from "./org-problem-tools/diagrams/opt-root-cause";
-import { OptStrategyPlanningDiagram } from "./org-problem-tools/diagrams/opt-strategy-planning";
-import { OptTeamCollaborationDiagram } from "./org-problem-tools/diagrams/opt-team-collaboration";
-import { OscDeadlocksDiagram } from "./os-concepts/diagrams/osc-deadlocks";
-import { OscFileSystemImplDiagram } from "./os-concepts/diagrams/osc-file-system-impl";
-import { OscFinalReviewDiagram } from "./os-concepts/diagrams/osc-final-review";
-import { OscLearningMapDiagram } from "./os-concepts/diagrams/osc-learning-map";
-import { OscMassStorageDiagram } from "./os-concepts/diagrams/osc-mass-storage";
-import { OscMemoryStrategiesDiagram } from "./os-concepts/diagrams/osc-memory-strategies";
-import { OscOsStructureDiagram } from "./os-concepts/diagrams/osc-os-structure";
-import { OscProcessSchedulingDiagram } from "./os-concepts/diagrams/osc-process-scheduling";
-import { OscThreadsSynchronizationDiagram } from "./os-concepts/diagrams/osc-threads-synchronization";
-import { OscVirtualMemoryDiagram } from "./os-concepts/diagrams/osc-virtual-memory";
-import { OocBioMachinesDiagram } from "./out-of-control/diagrams/ooc-bio-machines";
-import { OocCoevolutionDiagram } from "./out-of-control/diagrams/ooc-coevolution";
-import { OocControlFailuresDiagram } from "./out-of-control/diagrams/ooc-control-failures";
-import { OocEcosystemsDiagram } from "./out-of-control/diagrams/ooc-ecosystems";
-import { OocEmergenceDiagram } from "./out-of-control/diagrams/ooc-emergence";
-import { OocFinalReviewDiagram } from "./out-of-control/diagrams/ooc-final-review";
-import { OocFutureTrendsDiagram } from "./out-of-control/diagrams/ooc-future-trends";
-import { OocLearningMapDiagram } from "./out-of-control/diagrams/ooc-learning-map";
-import { OocNetworkEconomyDiagram } from "./out-of-control/diagrams/ooc-network-economy";
-import { OocSwarmIntelligenceDiagram } from "./out-of-control/diagrams/ooc-swarm-intelligence";
-import { PrlFinalReviewDiagram } from "./pattern-recognition-ml/diagrams/prl-final-review";
-import { PrlGraphicalModelsDiagram } from "./pattern-recognition-ml/diagrams/prl-graphical-models";
-import { PrlKernelMethodsDiagram } from "./pattern-recognition-ml/diagrams/prl-kernel-methods";
-import { PrlLearningMapDiagram } from "./pattern-recognition-ml/diagrams/prl-learning-map";
-import { PrlLinearClassificationDiagram } from "./pattern-recognition-ml/diagrams/prl-linear-classification";
-import { PrlLinearModelsRegressionDiagram } from "./pattern-recognition-ml/diagrams/prl-linear-models-regression";
-import { PrlMixtureEmDiagram } from "./pattern-recognition-ml/diagrams/prl-mixture-em";
-import { PrlNeuralNetworksDiagram } from "./pattern-recognition-ml/diagrams/prl-neural-networks";
-import { PrlProbabilityTheoryDiagram } from "./pattern-recognition-ml/diagrams/prl-probability-theory";
-import { PrlSparseKernelsDiagram } from "./pattern-recognition-ml/diagrams/prl-sparse-kernels";
+import {
+  Opt23OfficialLearningMapMapLab,
+  Opt23OfficialLearningMapExperimentLab,
+  Opt23OfficialLearningMapEvidenceLab,
+} from "./org-problem-tools/diagrams/opt-23-official-learning-map";
+import {
+  Opt23IntroductionMapLab,
+  Opt23IntroductionExperimentLab,
+  Opt23IntroductionEvidenceLab,
+} from "./org-problem-tools/diagrams/opt-23-introduction";
+import {
+  Opt23Chapter01MapLab,
+  Opt23Chapter01ExperimentLab,
+  Opt23Chapter01EvidenceLab,
+} from "./org-problem-tools/diagrams/opt-23-chapter-01";
+import {
+  Opt23Chapter02MapLab,
+  Opt23Chapter02ExperimentLab,
+  Opt23Chapter02EvidenceLab,
+} from "./org-problem-tools/diagrams/opt-23-chapter-02";
+import {
+  Opt23Chapter03MapLab,
+  Opt23Chapter03ExperimentLab,
+  Opt23Chapter03EvidenceLab,
+} from "./org-problem-tools/diagrams/opt-23-chapter-03";
+import {
+  Opt23Chapter04MapLab,
+  Opt23Chapter04ExperimentLab,
+  Opt23Chapter04EvidenceLab,
+} from "./org-problem-tools/diagrams/opt-23-chapter-04";
+import {
+  Opt23AfterwordMapLab,
+  Opt23AfterwordExperimentLab,
+  Opt23AfterwordEvidenceLab,
+} from "./org-problem-tools/diagrams/opt-23-afterword";
+import {
+  Opt23OfficialFinalReviewMapLab,
+  Opt23OfficialFinalReviewExperimentLab,
+  Opt23OfficialFinalReviewEvidenceLab,
+} from "./org-problem-tools/diagrams/opt-23-official-final-review";
+import {
+  OscOfficialLearningMapMapLab,
+  OscOfficialLearningMapExperimentLab,
+  OscOfficialLearningMapEvidenceLab,
+} from "./os-concepts/diagrams/osc-official-learning-map";
+import {
+  Osc01IntroductionMapLab,
+  Osc01IntroductionExperimentLab,
+  Osc01IntroductionEvidenceLab,
+} from "./os-concepts/diagrams/osc-01-introduction";
+import {
+  Osc02OsStructuresMapLab,
+  Osc02OsStructuresExperimentLab,
+  Osc02OsStructuresEvidenceLab,
+} from "./os-concepts/diagrams/osc-02-os-structures";
+import {
+  Osc03ProcessesMapLab,
+  Osc03ProcessesExperimentLab,
+  Osc03ProcessesEvidenceLab,
+} from "./os-concepts/diagrams/osc-03-processes";
+import {
+  Osc04ThreadsConcurrencyMapLab,
+  Osc04ThreadsConcurrencyExperimentLab,
+  Osc04ThreadsConcurrencyEvidenceLab,
+} from "./os-concepts/diagrams/osc-04-threads-concurrency";
+import {
+  Osc05CpuSchedulingMapLab,
+  Osc05CpuSchedulingExperimentLab,
+  Osc05CpuSchedulingEvidenceLab,
+} from "./os-concepts/diagrams/osc-05-cpu-scheduling";
+import {
+  Osc06SynchronizationToolsMapLab,
+  Osc06SynchronizationToolsExperimentLab,
+  Osc06SynchronizationToolsEvidenceLab,
+} from "./os-concepts/diagrams/osc-06-synchronization-tools";
+import {
+  Osc07SynchronizationExamplesMapLab,
+  Osc07SynchronizationExamplesExperimentLab,
+  Osc07SynchronizationExamplesEvidenceLab,
+} from "./os-concepts/diagrams/osc-07-synchronization-examples";
+import {
+  Osc08DeadlocksMapLab,
+  Osc08DeadlocksExperimentLab,
+  Osc08DeadlocksEvidenceLab,
+} from "./os-concepts/diagrams/osc-08-deadlocks";
+import {
+  Osc09MainMemoryMapLab,
+  Osc09MainMemoryExperimentLab,
+  Osc09MainMemoryEvidenceLab,
+} from "./os-concepts/diagrams/osc-09-main-memory";
+import {
+  Osc10VirtualMemoryMapLab,
+  Osc10VirtualMemoryExperimentLab,
+  Osc10VirtualMemoryEvidenceLab,
+} from "./os-concepts/diagrams/osc-10-virtual-memory";
+import {
+  Osc11MassStorageMapLab,
+  Osc11MassStorageExperimentLab,
+  Osc11MassStorageEvidenceLab,
+} from "./os-concepts/diagrams/osc-11-mass-storage";
+import {
+  Osc12IoSystemsMapLab,
+  Osc12IoSystemsExperimentLab,
+  Osc12IoSystemsEvidenceLab,
+} from "./os-concepts/diagrams/osc-12-io-systems";
+import {
+  Osc13FileSystemInterfaceMapLab,
+  Osc13FileSystemInterfaceExperimentLab,
+  Osc13FileSystemInterfaceEvidenceLab,
+} from "./os-concepts/diagrams/osc-13-file-system-interface";
+import {
+  Osc14FileSystemImplementationMapLab,
+  Osc14FileSystemImplementationExperimentLab,
+  Osc14FileSystemImplementationEvidenceLab,
+} from "./os-concepts/diagrams/osc-14-file-system-implementation";
+import {
+  Osc15FileSystemInternalsMapLab,
+  Osc15FileSystemInternalsExperimentLab,
+  Osc15FileSystemInternalsEvidenceLab,
+} from "./os-concepts/diagrams/osc-15-file-system-internals";
+import {
+  Osc16SecurityMapLab,
+  Osc16SecurityExperimentLab,
+  Osc16SecurityEvidenceLab,
+} from "./os-concepts/diagrams/osc-16-security";
+import {
+  Osc17ProtectionMapLab,
+  Osc17ProtectionExperimentLab,
+  Osc17ProtectionEvidenceLab,
+} from "./os-concepts/diagrams/osc-17-protection";
+import {
+  Osc18VirtualMachinesMapLab,
+  Osc18VirtualMachinesExperimentLab,
+  Osc18VirtualMachinesEvidenceLab,
+} from "./os-concepts/diagrams/osc-18-virtual-machines";
+import {
+  Osc19NetworkDistributedMapLab,
+  Osc19NetworkDistributedExperimentLab,
+  Osc19NetworkDistributedEvidenceLab,
+} from "./os-concepts/diagrams/osc-19-network-distributed";
+import {
+  Osc20LinuxMapLab,
+  Osc20LinuxExperimentLab,
+  Osc20LinuxEvidenceLab,
+} from "./os-concepts/diagrams/osc-20-linux";
+import {
+  Osc21Windows10MapLab,
+  Osc21Windows10ExperimentLab,
+  Osc21Windows10EvidenceLab,
+} from "./os-concepts/diagrams/osc-21-windows-10";
+import {
+  OscOfficialFinalReviewMapLab,
+  OscOfficialFinalReviewExperimentLab,
+  OscOfficialFinalReviewEvidenceLab,
+} from "./os-concepts/diagrams/osc-official-final-review";
+import {
+  Ooc16OfficialLearningMapMapLab,
+  Ooc16OfficialLearningMapExperimentLab,
+  Ooc16OfficialLearningMapEvidenceLab,
+} from "./out-of-control/diagrams/ooc16-official-learning-map";
+import {
+  Ooc16ChinesePrefaceMapLab,
+  Ooc16ChinesePrefaceExperimentLab,
+  Ooc16ChinesePrefaceEvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chinese-preface";
+import {
+  Ooc16Chapter01MapLab,
+  Ooc16Chapter01ExperimentLab,
+  Ooc16Chapter01EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-01";
+import {
+  Ooc16Chapter02MapLab,
+  Ooc16Chapter02ExperimentLab,
+  Ooc16Chapter02EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-02";
+import {
+  Ooc16Chapter03MapLab,
+  Ooc16Chapter03ExperimentLab,
+  Ooc16Chapter03EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-03";
+import {
+  Ooc16Chapter04MapLab,
+  Ooc16Chapter04ExperimentLab,
+  Ooc16Chapter04EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-04";
+import {
+  Ooc16Chapter05MapLab,
+  Ooc16Chapter05ExperimentLab,
+  Ooc16Chapter05EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-05";
+import {
+  Ooc16Chapter06MapLab,
+  Ooc16Chapter06ExperimentLab,
+  Ooc16Chapter06EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-06";
+import {
+  Ooc16Chapter07MapLab,
+  Ooc16Chapter07ExperimentLab,
+  Ooc16Chapter07EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-07";
+import {
+  Ooc16Chapter08MapLab,
+  Ooc16Chapter08ExperimentLab,
+  Ooc16Chapter08EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-08";
+import {
+  Ooc16Chapter09MapLab,
+  Ooc16Chapter09ExperimentLab,
+  Ooc16Chapter09EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-09";
+import {
+  Ooc16Chapter10MapLab,
+  Ooc16Chapter10ExperimentLab,
+  Ooc16Chapter10EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-10";
+import {
+  Ooc16Chapter11MapLab,
+  Ooc16Chapter11ExperimentLab,
+  Ooc16Chapter11EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-11";
+import {
+  Ooc16Chapter12MapLab,
+  Ooc16Chapter12ExperimentLab,
+  Ooc16Chapter12EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-12";
+import {
+  Ooc16Chapter13MapLab,
+  Ooc16Chapter13ExperimentLab,
+  Ooc16Chapter13EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-13";
+import {
+  Ooc16Chapter14MapLab,
+  Ooc16Chapter14ExperimentLab,
+  Ooc16Chapter14EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-14";
+import {
+  Ooc16Chapter15MapLab,
+  Ooc16Chapter15ExperimentLab,
+  Ooc16Chapter15EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-15";
+import {
+  Ooc16Chapter16MapLab,
+  Ooc16Chapter16ExperimentLab,
+  Ooc16Chapter16EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-16";
+import {
+  Ooc16Chapter17MapLab,
+  Ooc16Chapter17ExperimentLab,
+  Ooc16Chapter17EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-17";
+import {
+  Ooc16Chapter18MapLab,
+  Ooc16Chapter18ExperimentLab,
+  Ooc16Chapter18EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-18";
+import {
+  Ooc16Chapter19MapLab,
+  Ooc16Chapter19ExperimentLab,
+  Ooc16Chapter19EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-19";
+import {
+  Ooc16Chapter20MapLab,
+  Ooc16Chapter20ExperimentLab,
+  Ooc16Chapter20EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-20";
+import {
+  Ooc16Chapter21MapLab,
+  Ooc16Chapter21ExperimentLab,
+  Ooc16Chapter21EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-21";
+import {
+  Ooc16Chapter22MapLab,
+  Ooc16Chapter22ExperimentLab,
+  Ooc16Chapter22EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-22";
+import {
+  Ooc16Chapter23MapLab,
+  Ooc16Chapter23ExperimentLab,
+  Ooc16Chapter23EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-23";
+import {
+  Ooc16Chapter24MapLab,
+  Ooc16Chapter24ExperimentLab,
+  Ooc16Chapter24EvidenceLab,
+} from "./out-of-control/diagrams/ooc16-chapter-24";
+import {
+  Ooc16TranslatorPostscriptMapLab,
+  Ooc16TranslatorPostscriptExperimentLab,
+  Ooc16TranslatorPostscriptEvidenceLab,
+} from "./out-of-control/diagrams/ooc16-translator-postscript";
+import {
+  Ooc16OfficialFinalReviewMapLab,
+  Ooc16OfficialFinalReviewExperimentLab,
+  Ooc16OfficialFinalReviewEvidenceLab,
+} from "./out-of-control/diagrams/ooc16-official-final-review";
+import {
+  PrlOfficialLearningMapMapLab,
+  PrlOfficialLearningMapExperimentLab,
+  PrlOfficialLearningMapEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-official-learning-map";
+import {
+  Prl01IntroductionMapLab,
+  Prl01IntroductionExperimentLab,
+  Prl01IntroductionEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-01-introduction";
+import {
+  Prl02ProbabilityDistributionsMapLab,
+  Prl02ProbabilityDistributionsExperimentLab,
+  Prl02ProbabilityDistributionsEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-02-probability-distributions";
+import {
+  Prl03LinearRegressionMapLab,
+  Prl03LinearRegressionExperimentLab,
+  Prl03LinearRegressionEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-03-linear-regression";
+import {
+  Prl04LinearClassificationMapLab,
+  Prl04LinearClassificationExperimentLab,
+  Prl04LinearClassificationEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-04-linear-classification";
+import {
+  Prl05NeuralNetworksMapLab,
+  Prl05NeuralNetworksExperimentLab,
+  Prl05NeuralNetworksEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-05-neural-networks";
+import {
+  Prl06KernelMethodsMapLab,
+  Prl06KernelMethodsExperimentLab,
+  Prl06KernelMethodsEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-06-kernel-methods";
+import {
+  Prl07SparseKernelMachinesMapLab,
+  Prl07SparseKernelMachinesExperimentLab,
+  Prl07SparseKernelMachinesEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-07-sparse-kernel-machines";
+import {
+  Prl08GraphicalModelsMapLab,
+  Prl08GraphicalModelsExperimentLab,
+  Prl08GraphicalModelsEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-08-graphical-models";
+import {
+  Prl09MixtureModelsEmMapLab,
+  Prl09MixtureModelsEmExperimentLab,
+  Prl09MixtureModelsEmEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-09-mixture-models-em";
+import {
+  Prl10ApproximateInferenceMapLab,
+  Prl10ApproximateInferenceExperimentLab,
+  Prl10ApproximateInferenceEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-10-approximate-inference";
+import {
+  Prl11SamplingMethodsMapLab,
+  Prl11SamplingMethodsExperimentLab,
+  Prl11SamplingMethodsEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-11-sampling-methods";
+import {
+  Prl12ContinuousLatentVariablesMapLab,
+  Prl12ContinuousLatentVariablesExperimentLab,
+  Prl12ContinuousLatentVariablesEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-12-continuous-latent-variables";
+import {
+  Prl13SequentialDataMapLab,
+  Prl13SequentialDataExperimentLab,
+  Prl13SequentialDataEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-13-sequential-data";
+import {
+  Prl14CombiningModelsMapLab,
+  Prl14CombiningModelsExperimentLab,
+  Prl14CombiningModelsEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-14-combining-models";
+import {
+  PrlAppendixADataSetsMapLab,
+  PrlAppendixADataSetsExperimentLab,
+  PrlAppendixADataSetsEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-appendix-a-data-sets";
+import {
+  PrlAppendixBProbabilityDistributionsMapLab,
+  PrlAppendixBProbabilityDistributionsExperimentLab,
+  PrlAppendixBProbabilityDistributionsEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-appendix-b-probability-distributions";
+import {
+  PrlAppendixCPropertiesMatricesMapLab,
+  PrlAppendixCPropertiesMatricesExperimentLab,
+  PrlAppendixCPropertiesMatricesEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-appendix-c-properties-matrices";
+import {
+  PrlAppendixDCalculusVariationsMapLab,
+  PrlAppendixDCalculusVariationsExperimentLab,
+  PrlAppendixDCalculusVariationsEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-appendix-d-calculus-variations";
+import {
+  PrlAppendixELagrangeMultipliersMapLab,
+  PrlAppendixELagrangeMultipliersExperimentLab,
+  PrlAppendixELagrangeMultipliersEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-appendix-e-lagrange-multipliers";
+import {
+  PrlOfficialFinalReviewMapLab,
+  PrlOfficialFinalReviewExperimentLab,
+  PrlOfficialFinalReviewEvidenceLab,
+} from "./pattern-recognition-ml/diagrams/prl-official-final-review";
 import {
   PbtBxdfDiagram,
   PbtBxdfLobesDiagram,
@@ -2479,56 +6978,843 @@ import {
   PbtVolumeProcessesDiagram,
   PbtVolumeScatteringDiagram,
 } from "./pbrt-book/diagrams/pbt-volume-scattering";
-import { PdpCoachingFeedbackDiagram } from "./peak-deliberate-practice/diagrams/pdp-coaching-feedback";
-import { PdpCrossingPlateausDiagram } from "./peak-deliberate-practice/diagrams/pdp-crossing-plateaus";
-import { PdpDeliberatePracticeDiagram } from "./peak-deliberate-practice/diagrams/pdp-deliberate-practice";
-import { PdpEverydayLifeDiagram } from "./peak-deliberate-practice/diagrams/pdp-everyday-life";
-import { PdpExpertiseLifeDiagram } from "./peak-deliberate-practice/diagrams/pdp-expertise-life";
-import { PdpFinalReviewDiagram } from "./peak-deliberate-practice/diagrams/pdp-final-review";
-import { PdpGoldenStandardDiagram } from "./peak-deliberate-practice/diagrams/pdp-golden-standard";
-import { PdpLearningMapDiagram } from "./peak-deliberate-practice/diagrams/pdp-learning-map";
-import { PdpMentalRepresentationsDiagram } from "./peak-deliberate-practice/diagrams/pdp-mental-representations";
-import { PdpWhatIsPracticeDiagram } from "./peak-deliberate-practice/diagrams/pdp-what-is-practice";
-import { PhaArchitectureEvolutionDiagram } from "./phoenix-architecture/diagrams/pha-architecture-evolution";
-import { PhaCachingPatternsDiagram } from "./phoenix-architecture/diagrams/pha-caching-patterns";
-import { PhaConsensusConsistencyDiagram } from "./phoenix-architecture/diagrams/pha-consensus-consistency";
-import { PhaDistributedFundamentalsDiagram } from "./phoenix-architecture/diagrams/pha-distributed-fundamentals";
-import { PhaDistributedTransactionsDiagram } from "./phoenix-architecture/diagrams/pha-distributed-transactions";
-import { PhaFinalReviewDiagram } from "./phoenix-architecture/diagrams/pha-final-review";
-import { PhaFutureArchitectureDiagram } from "./phoenix-architecture/diagrams/pha-future-architecture";
-import { PhaLearningMapDiagram } from "./phoenix-architecture/diagrams/pha-learning-map";
-import { PhaMonolithToMicroserviceDiagram } from "./phoenix-architecture/diagrams/pha-monolith-to-microservice";
-import { PhaReliableCommunicationDiagram } from "./phoenix-architecture/diagrams/pha-reliable-communication";
-import { PoaConcurrencySessionDiagram } from "./poeaa-enterprise-patterns/diagrams/poa-concurrency-session";
-import { PoaDataSourceDiagram } from "./poeaa-enterprise-patterns/diagrams/poa-data-source";
-import { PoaDistributionDiagram } from "./poeaa-enterprise-patterns/diagrams/poa-distribution";
-import { PoaDomainLogicDiagram } from "./poeaa-enterprise-patterns/diagrams/poa-domain-logic";
-import { PoaFinalReviewDiagram } from "./poeaa-enterprise-patterns/diagrams/poa-final-review";
-import { PoaLayeredArchitectureDiagram } from "./poeaa-enterprise-patterns/diagrams/poa-layered-architecture";
-import { PoaLearningMapDiagram } from "./poeaa-enterprise-patterns/diagrams/poa-learning-map";
-import { PoaObjectRelationalDiagram } from "./poeaa-enterprise-patterns/diagrams/poa-object-relational";
-import { PoaSpecialPatternsDiagram } from "./poeaa-enterprise-patterns/diagrams/poa-special-patterns";
-import { PoaWebPresentationDiagram } from "./poeaa-enterprise-patterns/diagrams/poa-web-presentation";
-import { PpApproachDiagram } from "./pragmatic-programmer/diagrams/pp-approach";
-import { PpBasicToolsDiagram } from "./pragmatic-programmer/diagrams/pp-basic-tools";
-import { PpCodecraftDiagram } from "./pragmatic-programmer/diagrams/pp-codecraft";
-import { PpConcurrencyDiagram } from "./pragmatic-programmer/diagrams/pp-concurrency";
-import { PpDefensiveProgrammingDiagram } from "./pragmatic-programmer/diagrams/pp-defensive-programming";
+import {
+  Pdp16OfficialLearningMapDesignLab,
+  Pdp16OfficialLearningMapFeedbackLab,
+  Pdp16OfficialLearningMapTransferLab,
+} from "./peak-deliberate-practice/diagrams/pdp16-official-learning-map";
+import {
+  Pdp16CopyrightDesignLab,
+  Pdp16CopyrightFeedbackLab,
+  Pdp16CopyrightTransferLab,
+} from "./peak-deliberate-practice/diagrams/pdp16-copyright";
+import {
+  Pdp16ToReadersDesignLab,
+  Pdp16ToReadersFeedbackLab,
+  Pdp16ToReadersTransferLab,
+} from "./peak-deliberate-practice/diagrams/pdp16-to-readers";
+import {
+  Pdp16PraiseDesignLab,
+  Pdp16PraiseFeedbackLab,
+  Pdp16PraiseTransferLab,
+} from "./peak-deliberate-practice/diagrams/pdp16-praise";
+import {
+  Pdp16RecommendationDesignLab,
+  Pdp16RecommendationFeedbackLab,
+  Pdp16RecommendationTransferLab,
+} from "./peak-deliberate-practice/diagrams/pdp16-recommendation";
+import {
+  Pdp16AuthorStatementDesignLab,
+  Pdp16AuthorStatementFeedbackLab,
+  Pdp16AuthorStatementTransferLab,
+} from "./peak-deliberate-practice/diagrams/pdp16-author-statement";
+import {
+  Pdp16IntroductionDesignLab,
+  Pdp16IntroductionFeedbackLab,
+  Pdp16IntroductionTransferLab,
+} from "./peak-deliberate-practice/diagrams/pdp16-introduction";
+import {
+  Pdp16Chapter01DesignLab,
+  Pdp16Chapter01FeedbackLab,
+  Pdp16Chapter01TransferLab,
+} from "./peak-deliberate-practice/diagrams/pdp16-chapter-01";
+import {
+  Pdp16Chapter02DesignLab,
+  Pdp16Chapter02FeedbackLab,
+  Pdp16Chapter02TransferLab,
+} from "./peak-deliberate-practice/diagrams/pdp16-chapter-02";
+import {
+  Pdp16Chapter03DesignLab,
+  Pdp16Chapter03FeedbackLab,
+  Pdp16Chapter03TransferLab,
+} from "./peak-deliberate-practice/diagrams/pdp16-chapter-03";
+import {
+  Pdp16Chapter04DesignLab,
+  Pdp16Chapter04FeedbackLab,
+  Pdp16Chapter04TransferLab,
+} from "./peak-deliberate-practice/diagrams/pdp16-chapter-04";
+import {
+  Pdp16Chapter05DesignLab,
+  Pdp16Chapter05FeedbackLab,
+  Pdp16Chapter05TransferLab,
+} from "./peak-deliberate-practice/diagrams/pdp16-chapter-05";
+import {
+  Pdp16Chapter06DesignLab,
+  Pdp16Chapter06FeedbackLab,
+  Pdp16Chapter06TransferLab,
+} from "./peak-deliberate-practice/diagrams/pdp16-chapter-06";
+import {
+  Pdp16Chapter07DesignLab,
+  Pdp16Chapter07FeedbackLab,
+  Pdp16Chapter07TransferLab,
+} from "./peak-deliberate-practice/diagrams/pdp16-chapter-07";
+import {
+  Pdp16Chapter08DesignLab,
+  Pdp16Chapter08FeedbackLab,
+  Pdp16Chapter08TransferLab,
+} from "./peak-deliberate-practice/diagrams/pdp16-chapter-08";
+import {
+  Pdp16Chapter09DesignLab,
+  Pdp16Chapter09FeedbackLab,
+  Pdp16Chapter09TransferLab,
+} from "./peak-deliberate-practice/diagrams/pdp16-chapter-09";
+import {
+  Pdp16ReferencesNotesDesignLab,
+  Pdp16ReferencesNotesFeedbackLab,
+  Pdp16ReferencesNotesTransferLab,
+} from "./peak-deliberate-practice/diagrams/pdp16-references-notes";
+import {
+  Pdp16OfficialFinalReviewDesignLab,
+  Pdp16OfficialFinalReviewFeedbackLab,
+  Pdp16OfficialFinalReviewTransferLab,
+} from "./peak-deliberate-practice/diagrams/pdp16-official-final-review";
+import {
+  Poeaa24OfficialLearningMapBoundaryLab,
+  Poeaa24OfficialLearningMapMappingLab,
+  Poeaa24OfficialLearningMapTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-official-learning-map";
+import {
+  Poeaa24TranslatorPrefaceBoundaryLab,
+  Poeaa24TranslatorPrefaceMappingLab,
+  Poeaa24TranslatorPrefaceTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-translator-preface";
+import {
+  Poeaa24PrefaceBoundaryLab,
+  Poeaa24PrefaceMappingLab,
+  Poeaa24PrefaceTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-preface";
+import {
+  Poeaa24PatternListBoundaryLab,
+  Poeaa24PatternListMappingLab,
+  Poeaa24PatternListTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-list";
+import {
+  Poeaa24IntroductionBoundaryLab,
+  Poeaa24IntroductionMappingLab,
+  Poeaa24IntroductionTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-introduction";
+import {
+  Poeaa24Part01NarrativesBoundaryLab,
+  Poeaa24Part01NarrativesMappingLab,
+  Poeaa24Part01NarrativesTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-part-01-narratives";
+import {
+  Poeaa24Chapter01LayeringBoundaryLab,
+  Poeaa24Chapter01LayeringMappingLab,
+  Poeaa24Chapter01LayeringTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-chapter-01-layering";
+import {
+  Poeaa24Chapter02OrganizingDomainLogicBoundaryLab,
+  Poeaa24Chapter02OrganizingDomainLogicMappingLab,
+  Poeaa24Chapter02OrganizingDomainLogicTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-chapter-02-organizing-domain-logic";
+import {
+  Poeaa24Chapter03RelationalMappingBoundaryLab,
+  Poeaa24Chapter03RelationalMappingMappingLab,
+  Poeaa24Chapter03RelationalMappingTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-chapter-03-relational-mapping";
+import {
+  Poeaa24Chapter04WebPresentationBoundaryLab,
+  Poeaa24Chapter04WebPresentationMappingLab,
+  Poeaa24Chapter04WebPresentationTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-chapter-04-web-presentation";
+import {
+  Poeaa24Chapter05ConcurrencyBoundaryLab,
+  Poeaa24Chapter05ConcurrencyMappingLab,
+  Poeaa24Chapter05ConcurrencyTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-chapter-05-concurrency";
+import {
+  Poeaa24Chapter06SessionStateBoundaryLab,
+  Poeaa24Chapter06SessionStateMappingLab,
+  Poeaa24Chapter06SessionStateTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-chapter-06-session-state";
+import {
+  Poeaa24Chapter07DistributionStrategiesBoundaryLab,
+  Poeaa24Chapter07DistributionStrategiesMappingLab,
+  Poeaa24Chapter07DistributionStrategiesTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-chapter-07-distribution-strategies";
+import {
+  Poeaa24Chapter08PuttingTogetherBoundaryLab,
+  Poeaa24Chapter08PuttingTogetherMappingLab,
+  Poeaa24Chapter08PuttingTogetherTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-chapter-08-putting-together";
+import {
+  Poeaa24Part02PatternsBoundaryLab,
+  Poeaa24Part02PatternsMappingLab,
+  Poeaa24Part02PatternsTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-part-02-patterns";
+import {
+  Poeaa24Chapter09DomainLogicPatternsBoundaryLab,
+  Poeaa24Chapter09DomainLogicPatternsMappingLab,
+  Poeaa24Chapter09DomainLogicPatternsTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-chapter-09-domain-logic-patterns";
+import {
+  Poeaa24Pattern01TransactionScriptBoundaryLab,
+  Poeaa24Pattern01TransactionScriptMappingLab,
+  Poeaa24Pattern01TransactionScriptTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-01-transaction-script";
+import {
+  Poeaa24Pattern02DomainModelBoundaryLab,
+  Poeaa24Pattern02DomainModelMappingLab,
+  Poeaa24Pattern02DomainModelTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-02-domain-model";
+import {
+  Poeaa24Pattern03TableModuleBoundaryLab,
+  Poeaa24Pattern03TableModuleMappingLab,
+  Poeaa24Pattern03TableModuleTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-03-table-module";
+import {
+  Poeaa24Pattern04ServiceLayerBoundaryLab,
+  Poeaa24Pattern04ServiceLayerMappingLab,
+  Poeaa24Pattern04ServiceLayerTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-04-service-layer";
+import {
+  Poeaa24Chapter10DataSourcePatternsBoundaryLab,
+  Poeaa24Chapter10DataSourcePatternsMappingLab,
+  Poeaa24Chapter10DataSourcePatternsTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-chapter-10-data-source-patterns";
+import {
+  Poeaa24Pattern05TableDataGatewayBoundaryLab,
+  Poeaa24Pattern05TableDataGatewayMappingLab,
+  Poeaa24Pattern05TableDataGatewayTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-05-table-data-gateway";
+import {
+  Poeaa24Pattern06RowDataGatewayBoundaryLab,
+  Poeaa24Pattern06RowDataGatewayMappingLab,
+  Poeaa24Pattern06RowDataGatewayTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-06-row-data-gateway";
+import {
+  Poeaa24Pattern07ActiveRecordBoundaryLab,
+  Poeaa24Pattern07ActiveRecordMappingLab,
+  Poeaa24Pattern07ActiveRecordTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-07-active-record";
+import {
+  Poeaa24Pattern08DataMapperBoundaryLab,
+  Poeaa24Pattern08DataMapperMappingLab,
+  Poeaa24Pattern08DataMapperTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-08-data-mapper";
+import {
+  Poeaa24Chapter11ObjectRelationalBehaviorBoundaryLab,
+  Poeaa24Chapter11ObjectRelationalBehaviorMappingLab,
+  Poeaa24Chapter11ObjectRelationalBehaviorTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-chapter-11-object-relational-behavior";
+import {
+  Poeaa24Pattern09UnitOfWorkBoundaryLab,
+  Poeaa24Pattern09UnitOfWorkMappingLab,
+  Poeaa24Pattern09UnitOfWorkTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-09-unit-of-work";
+import {
+  Poeaa24Pattern10IdentityMapBoundaryLab,
+  Poeaa24Pattern10IdentityMapMappingLab,
+  Poeaa24Pattern10IdentityMapTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-10-identity-map";
+import {
+  Poeaa24Pattern11LazyLoadBoundaryLab,
+  Poeaa24Pattern11LazyLoadMappingLab,
+  Poeaa24Pattern11LazyLoadTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-11-lazy-load";
+import {
+  Poeaa24Chapter12ObjectRelationalStructureBoundaryLab,
+  Poeaa24Chapter12ObjectRelationalStructureMappingLab,
+  Poeaa24Chapter12ObjectRelationalStructureTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-chapter-12-object-relational-structure";
+import {
+  Poeaa24Pattern12IdentityFieldBoundaryLab,
+  Poeaa24Pattern12IdentityFieldMappingLab,
+  Poeaa24Pattern12IdentityFieldTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-12-identity-field";
+import {
+  Poeaa24Pattern13ForeignKeyMappingBoundaryLab,
+  Poeaa24Pattern13ForeignKeyMappingMappingLab,
+  Poeaa24Pattern13ForeignKeyMappingTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-13-foreign-key-mapping";
+import {
+  Poeaa24Pattern14AssociationTableMappingBoundaryLab,
+  Poeaa24Pattern14AssociationTableMappingMappingLab,
+  Poeaa24Pattern14AssociationTableMappingTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-14-association-table-mapping";
+import {
+  Poeaa24Pattern15DependentMappingBoundaryLab,
+  Poeaa24Pattern15DependentMappingMappingLab,
+  Poeaa24Pattern15DependentMappingTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-15-dependent-mapping";
+import {
+  Poeaa24Pattern16EmbeddedValueBoundaryLab,
+  Poeaa24Pattern16EmbeddedValueMappingLab,
+  Poeaa24Pattern16EmbeddedValueTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-16-embedded-value";
+import {
+  Poeaa24Pattern17SerializedLobBoundaryLab,
+  Poeaa24Pattern17SerializedLobMappingLab,
+  Poeaa24Pattern17SerializedLobTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-17-serialized-lob";
+import {
+  Poeaa24Pattern18SingleTableInheritanceBoundaryLab,
+  Poeaa24Pattern18SingleTableInheritanceMappingLab,
+  Poeaa24Pattern18SingleTableInheritanceTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-18-single-table-inheritance";
+import {
+  Poeaa24Pattern19ClassTableInheritanceBoundaryLab,
+  Poeaa24Pattern19ClassTableInheritanceMappingLab,
+  Poeaa24Pattern19ClassTableInheritanceTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-19-class-table-inheritance";
+import {
+  Poeaa24Pattern20ConcreteTableInheritanceBoundaryLab,
+  Poeaa24Pattern20ConcreteTableInheritanceMappingLab,
+  Poeaa24Pattern20ConcreteTableInheritanceTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-20-concrete-table-inheritance";
+import {
+  Poeaa24Pattern21InheritanceMappersBoundaryLab,
+  Poeaa24Pattern21InheritanceMappersMappingLab,
+  Poeaa24Pattern21InheritanceMappersTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-21-inheritance-mappers";
+import {
+  Poeaa24Chapter13ObjectRelationalMetadataBoundaryLab,
+  Poeaa24Chapter13ObjectRelationalMetadataMappingLab,
+  Poeaa24Chapter13ObjectRelationalMetadataTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-chapter-13-object-relational-metadata";
+import {
+  Poeaa24Pattern22MetadataMappingBoundaryLab,
+  Poeaa24Pattern22MetadataMappingMappingLab,
+  Poeaa24Pattern22MetadataMappingTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-22-metadata-mapping";
+import {
+  Poeaa24Pattern23QueryObjectBoundaryLab,
+  Poeaa24Pattern23QueryObjectMappingLab,
+  Poeaa24Pattern23QueryObjectTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-23-query-object";
+import {
+  Poeaa24Pattern24RepositoryBoundaryLab,
+  Poeaa24Pattern24RepositoryMappingLab,
+  Poeaa24Pattern24RepositoryTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-24-repository";
+import {
+  Poeaa24Chapter14WebPresentationPatternsBoundaryLab,
+  Poeaa24Chapter14WebPresentationPatternsMappingLab,
+  Poeaa24Chapter14WebPresentationPatternsTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-chapter-14-web-presentation-patterns";
+import {
+  Poeaa24Pattern25ModelViewControllerBoundaryLab,
+  Poeaa24Pattern25ModelViewControllerMappingLab,
+  Poeaa24Pattern25ModelViewControllerTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-25-model-view-controller";
+import {
+  Poeaa24Pattern26PageControllerBoundaryLab,
+  Poeaa24Pattern26PageControllerMappingLab,
+  Poeaa24Pattern26PageControllerTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-26-page-controller";
+import {
+  Poeaa24Pattern27FrontControllerBoundaryLab,
+  Poeaa24Pattern27FrontControllerMappingLab,
+  Poeaa24Pattern27FrontControllerTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-27-front-controller";
+import {
+  Poeaa24Pattern28TemplateViewBoundaryLab,
+  Poeaa24Pattern28TemplateViewMappingLab,
+  Poeaa24Pattern28TemplateViewTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-28-template-view";
+import {
+  Poeaa24Pattern29TransformViewBoundaryLab,
+  Poeaa24Pattern29TransformViewMappingLab,
+  Poeaa24Pattern29TransformViewTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-29-transform-view";
+import {
+  Poeaa24Pattern30TwoStepViewBoundaryLab,
+  Poeaa24Pattern30TwoStepViewMappingLab,
+  Poeaa24Pattern30TwoStepViewTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-30-two-step-view";
+import {
+  Poeaa24Pattern31ApplicationControllerBoundaryLab,
+  Poeaa24Pattern31ApplicationControllerMappingLab,
+  Poeaa24Pattern31ApplicationControllerTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-31-application-controller";
+import {
+  Poeaa24Chapter15DistributionPatternsBoundaryLab,
+  Poeaa24Chapter15DistributionPatternsMappingLab,
+  Poeaa24Chapter15DistributionPatternsTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-chapter-15-distribution-patterns";
+import {
+  Poeaa24Pattern32RemoteFacadeBoundaryLab,
+  Poeaa24Pattern32RemoteFacadeMappingLab,
+  Poeaa24Pattern32RemoteFacadeTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-32-remote-facade";
+import {
+  Poeaa24Pattern33DataTransferObjectBoundaryLab,
+  Poeaa24Pattern33DataTransferObjectMappingLab,
+  Poeaa24Pattern33DataTransferObjectTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-33-data-transfer-object";
+import {
+  Poeaa24Chapter16OfflineConcurrencyPatternsBoundaryLab,
+  Poeaa24Chapter16OfflineConcurrencyPatternsMappingLab,
+  Poeaa24Chapter16OfflineConcurrencyPatternsTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-chapter-16-offline-concurrency-patterns";
+import {
+  Poeaa24Pattern34OptimisticOfflineLockBoundaryLab,
+  Poeaa24Pattern34OptimisticOfflineLockMappingLab,
+  Poeaa24Pattern34OptimisticOfflineLockTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-34-optimistic-offline-lock";
+import {
+  Poeaa24Pattern35PessimisticOfflineLockBoundaryLab,
+  Poeaa24Pattern35PessimisticOfflineLockMappingLab,
+  Poeaa24Pattern35PessimisticOfflineLockTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-35-pessimistic-offline-lock";
+import {
+  Poeaa24Pattern36CoarseGrainedLockBoundaryLab,
+  Poeaa24Pattern36CoarseGrainedLockMappingLab,
+  Poeaa24Pattern36CoarseGrainedLockTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-36-coarse-grained-lock";
+import {
+  Poeaa24Pattern37ImplicitLockBoundaryLab,
+  Poeaa24Pattern37ImplicitLockMappingLab,
+  Poeaa24Pattern37ImplicitLockTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-37-implicit-lock";
+import {
+  Poeaa24Chapter17SessionStatePatternsBoundaryLab,
+  Poeaa24Chapter17SessionStatePatternsMappingLab,
+  Poeaa24Chapter17SessionStatePatternsTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-chapter-17-session-state-patterns";
+import {
+  Poeaa24Pattern38ClientSessionStateBoundaryLab,
+  Poeaa24Pattern38ClientSessionStateMappingLab,
+  Poeaa24Pattern38ClientSessionStateTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-38-client-session-state";
+import {
+  Poeaa24Pattern39ServerSessionStateBoundaryLab,
+  Poeaa24Pattern39ServerSessionStateMappingLab,
+  Poeaa24Pattern39ServerSessionStateTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-39-server-session-state";
+import {
+  Poeaa24Pattern40DatabaseSessionStateBoundaryLab,
+  Poeaa24Pattern40DatabaseSessionStateMappingLab,
+  Poeaa24Pattern40DatabaseSessionStateTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-40-database-session-state";
+import {
+  Poeaa24Chapter18BasePatternsBoundaryLab,
+  Poeaa24Chapter18BasePatternsMappingLab,
+  Poeaa24Chapter18BasePatternsTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-chapter-18-base-patterns";
+import {
+  Poeaa24Pattern41GatewayBoundaryLab,
+  Poeaa24Pattern41GatewayMappingLab,
+  Poeaa24Pattern41GatewayTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-41-gateway";
+import {
+  Poeaa24Pattern42MapperBoundaryLab,
+  Poeaa24Pattern42MapperMappingLab,
+  Poeaa24Pattern42MapperTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-42-mapper";
+import {
+  Poeaa24Pattern43LayerSupertypeBoundaryLab,
+  Poeaa24Pattern43LayerSupertypeMappingLab,
+  Poeaa24Pattern43LayerSupertypeTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-43-layer-supertype";
+import {
+  Poeaa24Pattern44SeparatedInterfaceBoundaryLab,
+  Poeaa24Pattern44SeparatedInterfaceMappingLab,
+  Poeaa24Pattern44SeparatedInterfaceTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-44-separated-interface";
+import {
+  Poeaa24Pattern45RegistryBoundaryLab,
+  Poeaa24Pattern45RegistryMappingLab,
+  Poeaa24Pattern45RegistryTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-45-registry";
+import {
+  Poeaa24Pattern46ValueObjectBoundaryLab,
+  Poeaa24Pattern46ValueObjectMappingLab,
+  Poeaa24Pattern46ValueObjectTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-46-value-object";
+import {
+  Poeaa24Pattern47MoneyBoundaryLab,
+  Poeaa24Pattern47MoneyMappingLab,
+  Poeaa24Pattern47MoneyTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-47-money";
+import {
+  Poeaa24Pattern48SpecialCaseBoundaryLab,
+  Poeaa24Pattern48SpecialCaseMappingLab,
+  Poeaa24Pattern48SpecialCaseTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-48-special-case";
+import {
+  Poeaa24Pattern49PluginBoundaryLab,
+  Poeaa24Pattern49PluginMappingLab,
+  Poeaa24Pattern49PluginTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-49-plugin";
+import {
+  Poeaa24Pattern50ServiceStubBoundaryLab,
+  Poeaa24Pattern50ServiceStubMappingLab,
+  Poeaa24Pattern50ServiceStubTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-50-service-stub";
+import {
+  Poeaa24Pattern51RecordSetBoundaryLab,
+  Poeaa24Pattern51RecordSetMappingLab,
+  Poeaa24Pattern51RecordSetTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-pattern-51-record-set";
+import {
+  Poeaa24ReferencesBoundaryLab,
+  Poeaa24ReferencesMappingLab,
+  Poeaa24ReferencesTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-references";
+import {
+  Poeaa24OfficialFinalReviewBoundaryLab,
+  Poeaa24OfficialFinalReviewMappingLab,
+  Poeaa24OfficialFinalReviewTransactionLab,
+} from "./poeaa-enterprise-patterns/diagrams/poeaa24-official-final-review";
+import {
+  Tpp20OfficialLearningMapSystemLab,
+  Tpp20OfficialLearningMapFeedbackLab,
+  Tpp20OfficialLearningMapEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-official-learning-map";
+import {
+  Tpp20ForewordSystemLab,
+  Tpp20ForewordFeedbackLab,
+  Tpp20ForewordEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-foreword";
+import {
+  Tpp20SecondEditionPrefaceSystemLab,
+  Tpp20SecondEditionPrefaceFeedbackLab,
+  Tpp20SecondEditionPrefaceEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-second-edition-preface";
+import {
+  Tpp20FirstEditionPrefaceSystemLab,
+  Tpp20FirstEditionPrefaceFeedbackLab,
+  Tpp20FirstEditionPrefaceEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-first-edition-preface";
+import {
+  Tpp20Chapter01PragmaticPhilosophySystemLab,
+  Tpp20Chapter01PragmaticPhilosophyFeedbackLab,
+  Tpp20Chapter01PragmaticPhilosophyEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-chapter-01-pragmatic-philosophy";
+import {
+  Tpp20Topic01YourLifeSystemLab,
+  Tpp20Topic01YourLifeFeedbackLab,
+  Tpp20Topic01YourLifeEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-01-your-life";
+import {
+  Tpp20Topic02CatAteSourceCodeSystemLab,
+  Tpp20Topic02CatAteSourceCodeFeedbackLab,
+  Tpp20Topic02CatAteSourceCodeEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-02-cat-ate-source-code";
+import {
+  Tpp20Topic03SoftwareEntropySystemLab,
+  Tpp20Topic03SoftwareEntropyFeedbackLab,
+  Tpp20Topic03SoftwareEntropyEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-03-software-entropy";
+import {
+  Tpp20Topic04StoneSoupBoiledFrogsSystemLab,
+  Tpp20Topic04StoneSoupBoiledFrogsFeedbackLab,
+  Tpp20Topic04StoneSoupBoiledFrogsEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-04-stone-soup-boiled-frogs";
+import {
+  Tpp20Topic05GoodEnoughSoftwareSystemLab,
+  Tpp20Topic05GoodEnoughSoftwareFeedbackLab,
+  Tpp20Topic05GoodEnoughSoftwareEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-05-good-enough-software";
+import {
+  Tpp20Topic06KnowledgePortfolioSystemLab,
+  Tpp20Topic06KnowledgePortfolioFeedbackLab,
+  Tpp20Topic06KnowledgePortfolioEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-06-knowledge-portfolio";
+import {
+  Tpp20Topic07CommunicateSystemLab,
+  Tpp20Topic07CommunicateFeedbackLab,
+  Tpp20Topic07CommunicateEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-07-communicate";
+import {
+  Tpp20Chapter02PragmaticApproachSystemLab,
+  Tpp20Chapter02PragmaticApproachFeedbackLab,
+  Tpp20Chapter02PragmaticApproachEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-chapter-02-pragmatic-approach";
+import {
+  Tpp20Topic08EssenceGoodDesignSystemLab,
+  Tpp20Topic08EssenceGoodDesignFeedbackLab,
+  Tpp20Topic08EssenceGoodDesignEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-08-essence-good-design";
+import {
+  Tpp20Topic09DryDuplicationSystemLab,
+  Tpp20Topic09DryDuplicationFeedbackLab,
+  Tpp20Topic09DryDuplicationEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-09-dry-duplication";
+import {
+  Tpp20Topic10OrthogonalitySystemLab,
+  Tpp20Topic10OrthogonalityFeedbackLab,
+  Tpp20Topic10OrthogonalityEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-10-orthogonality";
+import {
+  Tpp20Topic11ReversibilitySystemLab,
+  Tpp20Topic11ReversibilityFeedbackLab,
+  Tpp20Topic11ReversibilityEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-11-reversibility";
+import {
+  Tpp20Topic12TracerBulletsSystemLab,
+  Tpp20Topic12TracerBulletsFeedbackLab,
+  Tpp20Topic12TracerBulletsEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-12-tracer-bullets";
+import {
+  Tpp20Topic13PrototypesPostItNotesSystemLab,
+  Tpp20Topic13PrototypesPostItNotesFeedbackLab,
+  Tpp20Topic13PrototypesPostItNotesEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-13-prototypes-post-it-notes";
+import {
+  Tpp20Topic14DomainLanguagesSystemLab,
+  Tpp20Topic14DomainLanguagesFeedbackLab,
+  Tpp20Topic14DomainLanguagesEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-14-domain-languages";
+import {
+  Tpp20Topic15EstimatingSystemLab,
+  Tpp20Topic15EstimatingFeedbackLab,
+  Tpp20Topic15EstimatingEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-15-estimating";
+import {
+  Tpp20Chapter03BasicToolsSystemLab,
+  Tpp20Chapter03BasicToolsFeedbackLab,
+  Tpp20Chapter03BasicToolsEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-chapter-03-basic-tools";
+import {
+  Tpp20Topic16PowerPlainTextSystemLab,
+  Tpp20Topic16PowerPlainTextFeedbackLab,
+  Tpp20Topic16PowerPlainTextEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-16-power-plain-text";
+import {
+  Tpp20Topic17ShellGamesSystemLab,
+  Tpp20Topic17ShellGamesFeedbackLab,
+  Tpp20Topic17ShellGamesEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-17-shell-games";
+import {
+  Tpp20Topic18PowerEditingSystemLab,
+  Tpp20Topic18PowerEditingFeedbackLab,
+  Tpp20Topic18PowerEditingEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-18-power-editing";
+import {
+  Tpp20Topic19VersionControlSystemLab,
+  Tpp20Topic19VersionControlFeedbackLab,
+  Tpp20Topic19VersionControlEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-19-version-control";
+import {
+  Tpp20Topic20DebuggingSystemLab,
+  Tpp20Topic20DebuggingFeedbackLab,
+  Tpp20Topic20DebuggingEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-20-debugging";
+import {
+  Tpp20Topic21TextManipulationSystemLab,
+  Tpp20Topic21TextManipulationFeedbackLab,
+  Tpp20Topic21TextManipulationEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-21-text-manipulation";
+import {
+  Tpp20Topic22EngineeringDaybooksSystemLab,
+  Tpp20Topic22EngineeringDaybooksFeedbackLab,
+  Tpp20Topic22EngineeringDaybooksEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-22-engineering-daybooks";
+import {
+  Tpp20Chapter04PragmaticParanoiaSystemLab,
+  Tpp20Chapter04PragmaticParanoiaFeedbackLab,
+  Tpp20Chapter04PragmaticParanoiaEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-chapter-04-pragmatic-paranoia";
+import {
+  Tpp20Topic23DesignByContractSystemLab,
+  Tpp20Topic23DesignByContractFeedbackLab,
+  Tpp20Topic23DesignByContractEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-23-design-by-contract";
+import {
+  Tpp20Topic24DeadProgramsTellNoLiesSystemLab,
+  Tpp20Topic24DeadProgramsTellNoLiesFeedbackLab,
+  Tpp20Topic24DeadProgramsTellNoLiesEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-24-dead-programs-tell-no-lies";
+import {
+  Tpp20Topic25AssertiveProgrammingSystemLab,
+  Tpp20Topic25AssertiveProgrammingFeedbackLab,
+  Tpp20Topic25AssertiveProgrammingEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-25-assertive-programming";
+import {
+  Tpp20Topic26BalanceResourcesSystemLab,
+  Tpp20Topic26BalanceResourcesFeedbackLab,
+  Tpp20Topic26BalanceResourcesEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-26-balance-resources";
+import {
+  Tpp20Topic27HeadlightsSystemLab,
+  Tpp20Topic27HeadlightsFeedbackLab,
+  Tpp20Topic27HeadlightsEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-27-headlights";
+import {
+  Tpp20Chapter05BendOrBreakSystemLab,
+  Tpp20Chapter05BendOrBreakFeedbackLab,
+  Tpp20Chapter05BendOrBreakEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-chapter-05-bend-or-break";
+import {
+  Tpp20Topic28DecouplingSystemLab,
+  Tpp20Topic28DecouplingFeedbackLab,
+  Tpp20Topic28DecouplingEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-28-decoupling";
+import {
+  Tpp20Topic29JugglingRealWorldSystemLab,
+  Tpp20Topic29JugglingRealWorldFeedbackLab,
+  Tpp20Topic29JugglingRealWorldEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-29-juggling-real-world";
+import {
+  Tpp20Topic30TransformingProgrammingSystemLab,
+  Tpp20Topic30TransformingProgrammingFeedbackLab,
+  Tpp20Topic30TransformingProgrammingEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-30-transforming-programming";
+import {
+  Tpp20Topic31InheritanceTaxSystemLab,
+  Tpp20Topic31InheritanceTaxFeedbackLab,
+  Tpp20Topic31InheritanceTaxEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-31-inheritance-tax";
+import {
+  Tpp20Topic32ConfigurationSystemLab,
+  Tpp20Topic32ConfigurationFeedbackLab,
+  Tpp20Topic32ConfigurationEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-32-configuration";
+import {
+  Tpp20Chapter06ConcurrencySystemLab,
+  Tpp20Chapter06ConcurrencyFeedbackLab,
+  Tpp20Chapter06ConcurrencyEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-chapter-06-concurrency";
+import {
+  Tpp20Topic33BreakingTemporalCouplingSystemLab,
+  Tpp20Topic33BreakingTemporalCouplingFeedbackLab,
+  Tpp20Topic33BreakingTemporalCouplingEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-33-breaking-temporal-coupling";
+import {
+  Tpp20Topic34SharedStateSystemLab,
+  Tpp20Topic34SharedStateFeedbackLab,
+  Tpp20Topic34SharedStateEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-34-shared-state";
+import {
+  Tpp20Topic35ActorsProcessesSystemLab,
+  Tpp20Topic35ActorsProcessesFeedbackLab,
+  Tpp20Topic35ActorsProcessesEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-35-actors-processes";
+import {
+  Tpp20Topic36BlackboardsSystemLab,
+  Tpp20Topic36BlackboardsFeedbackLab,
+  Tpp20Topic36BlackboardsEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-36-blackboards";
+import {
+  Tpp20Chapter07WhileCodingSystemLab,
+  Tpp20Chapter07WhileCodingFeedbackLab,
+  Tpp20Chapter07WhileCodingEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-chapter-07-while-coding";
+import {
+  Tpp20Topic37LizardBrainSystemLab,
+  Tpp20Topic37LizardBrainFeedbackLab,
+  Tpp20Topic37LizardBrainEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-37-lizard-brain";
+import {
+  Tpp20Topic38ProgrammingByCoincidenceSystemLab,
+  Tpp20Topic38ProgrammingByCoincidenceFeedbackLab,
+  Tpp20Topic38ProgrammingByCoincidenceEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-38-programming-by-coincidence";
+import {
+  Tpp20Topic39AlgorithmSpeedSystemLab,
+  Tpp20Topic39AlgorithmSpeedFeedbackLab,
+  Tpp20Topic39AlgorithmSpeedEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-39-algorithm-speed";
+import {
+  Tpp20Topic40RefactoringSystemLab,
+  Tpp20Topic40RefactoringFeedbackLab,
+  Tpp20Topic40RefactoringEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-40-refactoring";
+import {
+  Tpp20Topic41TestToCodeSystemLab,
+  Tpp20Topic41TestToCodeFeedbackLab,
+  Tpp20Topic41TestToCodeEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-41-test-to-code";
+import {
+  Tpp20Topic42PropertyBasedTestingSystemLab,
+  Tpp20Topic42PropertyBasedTestingFeedbackLab,
+  Tpp20Topic42PropertyBasedTestingEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-42-property-based-testing";
+import {
+  Tpp20Topic43StaySafeSystemLab,
+  Tpp20Topic43StaySafeFeedbackLab,
+  Tpp20Topic43StaySafeEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-43-stay-safe";
+import {
+  Tpp20Topic44NamingThingsSystemLab,
+  Tpp20Topic44NamingThingsFeedbackLab,
+  Tpp20Topic44NamingThingsEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-44-naming-things";
+import {
+  Tpp20Chapter08BeforeProjectSystemLab,
+  Tpp20Chapter08BeforeProjectFeedbackLab,
+  Tpp20Chapter08BeforeProjectEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-chapter-08-before-project";
+import {
+  Tpp20Topic45RequirementsPitSystemLab,
+  Tpp20Topic45RequirementsPitFeedbackLab,
+  Tpp20Topic45RequirementsPitEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-45-requirements-pit";
+import {
+  Tpp20Topic46ImpossiblePuzzlesSystemLab,
+  Tpp20Topic46ImpossiblePuzzlesFeedbackLab,
+  Tpp20Topic46ImpossiblePuzzlesEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-46-impossible-puzzles";
+import {
+  Tpp20Topic47WorkingTogetherSystemLab,
+  Tpp20Topic47WorkingTogetherFeedbackLab,
+  Tpp20Topic47WorkingTogetherEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-47-working-together";
+import {
+  Tpp20Topic48EssenceAgilitySystemLab,
+  Tpp20Topic48EssenceAgilityFeedbackLab,
+  Tpp20Topic48EssenceAgilityEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-48-essence-agility";
+import {
+  Tpp20Chapter09PragmaticProjectsSystemLab,
+  Tpp20Chapter09PragmaticProjectsFeedbackLab,
+  Tpp20Chapter09PragmaticProjectsEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-chapter-09-pragmatic-projects";
+import {
+  Tpp20Topic49PragmaticTeamsSystemLab,
+  Tpp20Topic49PragmaticTeamsFeedbackLab,
+  Tpp20Topic49PragmaticTeamsEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-49-pragmatic-teams";
+import {
+  Tpp20Topic50CoconutsDontCutItSystemLab,
+  Tpp20Topic50CoconutsDontCutItFeedbackLab,
+  Tpp20Topic50CoconutsDontCutItEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-50-coconuts-dont-cut-it";
+import {
+  Tpp20Topic51StarterKitSystemLab,
+  Tpp20Topic51StarterKitFeedbackLab,
+  Tpp20Topic51StarterKitEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-51-starter-kit";
+import {
+  Tpp20Topic52DelightUsersSystemLab,
+  Tpp20Topic52DelightUsersFeedbackLab,
+  Tpp20Topic52DelightUsersEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-52-delight-users";
+import {
+  Tpp20Topic53PridePrejudiceSystemLab,
+  Tpp20Topic53PridePrejudiceFeedbackLab,
+  Tpp20Topic53PridePrejudiceEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-topic-53-pride-prejudice";
+import {
+  Tpp20PostfaceSystemLab,
+  Tpp20PostfaceFeedbackLab,
+  Tpp20PostfaceEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-postface";
+import {
+  Tpp20BibliographySystemLab,
+  Tpp20BibliographyFeedbackLab,
+  Tpp20BibliographyEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-bibliography";
+import {
+  Tpp20ExerciseAnswersSystemLab,
+  Tpp20ExerciseAnswersFeedbackLab,
+  Tpp20ExerciseAnswersEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-exercise-answers";
+import {
+  Tpp20TranslatorPostfaceSystemLab,
+  Tpp20TranslatorPostfaceFeedbackLab,
+  Tpp20TranslatorPostfaceEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-translator-postface";
+import {
+  Tpp20OfficialFinalReviewSystemLab,
+  Tpp20OfficialFinalReviewFeedbackLab,
+  Tpp20OfficialFinalReviewEvidenceLab,
+} from "./pragmatic-programmer/diagrams/tpp20-official-final-review";
 import { PpFinalReviewDiagram } from "./programming-pearls/diagrams/pp-final-review";
 import { PpLearningMapDiagram } from "./programming-pearls/diagrams/pp-learning-map";
-import { PpMetaprogrammingDiagram } from "./pragmatic-programmer/diagrams/pp-metaprogramming";
-import { PpPragmaticPhilosophyDiagram } from "./pragmatic-programmer/diagrams/pp-pragmatic-philosophy";
-import { PpTeamDeliveryDiagram } from "./pragmatic-programmer/diagrams/pp-team-delivery";
-import { PmZeroAndOneDiagram } from "./programmers-math/diagrams/pm-0-and-1";
-import { PmDistributionsDiagram } from "./programmers-math/diagrams/pm-distributions";
-import { PmEncryptionDiagram } from "./programmers-math/diagrams/pm-encryption";
-import { PmFinalReviewDiagram } from "./programmers-math/diagrams/pm-final-review";
-import { PmBookMap } from "./programmers-math/diagrams/pm-learning-map";
-import { PmPermutationsDiagram } from "./programmers-math/diagrams/pm-permutations";
-import { PmProbabilityDiagram } from "./programmers-math/diagrams/pm-probability";
-import { PmRandomVariablesDiagram } from "./programmers-math/diagrams/pm-random-variables";
-import { PmRecurrenceDiagram } from "./programmers-math/diagrams/pm-recurrence";
-import { PmStatisticsDiagram } from "./programmers-math/diagrams/pm-statistics";
 import { PpBackOfEnvelopeDiagram } from "./programming-pearls/diagrams/pp-back-of-envelope";
 import { PpBinarySearchDiagram } from "./programming-pearls/diagrams/pp-binary-search";
 import { PpBitVectorsDiagram } from "./programming-pearls/diagrams/pp-bit-vectors";
@@ -2537,46 +7823,6 @@ import { PpCrackingProblemsDiagram } from "./programming-pearls/diagrams/pp-crac
 import { PpDesignPrinciplesDiagram } from "./programming-pearls/diagrams/pp-design-principles";
 import { PpEpilogDiagram } from "./programming-pearls/diagrams/pp-epilog";
 import { PpPerspectivesDiagram } from "./programming-pearls/diagrams/pp-perspectives";
-import { PyaAsyncioDiagram } from "./python-advanced/diagrams/pya-asyncio";
-import { PyaCythonDiagram } from "./python-advanced/diagrams/pya-cython";
-import { PyaDecoratorsMetaDiagram } from "./python-advanced/diagrams/pya-decorators-meta";
-import { PyaFinalReviewDiagram } from "./python-advanced/diagrams/pya-final-review";
-import { PyaIteratorsGeneratorsDiagram } from "./python-advanced/diagrams/pya-iterators-generators";
-import { PyaLearningMapDiagram } from "./python-advanced/diagrams/pya-learning-map";
-import { PyaMultiprocessingDiagram } from "./python-advanced/diagrams/pya-multiprocessing";
-import { PyaPackagingDiagram } from "./python-advanced/diagrams/pya-packaging";
-import { PyaPythonInternalsDiagram } from "./python-advanced/diagrams/pya-python-internals";
-import { PyaTestingDiagram } from "./python-advanced/diagrams/pya-testing";
-import { PccClassesDiagram } from "./python-crash-course/diagrams/pcc-classes";
-import { PccDataVizDiagram } from "./python-crash-course/diagrams/pcc-data-viz";
-import { PccFilesExceptionsDiagram } from "./python-crash-course/diagrams/pcc-files-exceptions";
-import { PccFinalReviewDiagram } from "./python-crash-course/diagrams/pcc-final-review";
-import { PccFunctionsDiagram } from "./python-crash-course/diagrams/pcc-functions";
-import { PccGameDevDiagram } from "./python-crash-course/diagrams/pcc-game-dev";
-import { PccIfLoopsDiagram } from "./python-crash-course/diagrams/pcc-if-loops";
-import { PccLearningMapDiagram } from "./python-crash-course/diagrams/pcc-learning-map";
-import { PccTestingDiagram } from "./python-crash-course/diagrams/pcc-testing";
-import { PccVariablesListsDiagram } from "./python-crash-course/diagrams/pcc-variables-lists";
-import { PopConfigMgmtDiagram } from "./python-ops/diagrams/pop-config-mgmt";
-import { PopFileOpsDiagram } from "./python-ops/diagrams/pop-file-ops";
-import { PopFinalReviewDiagram } from "./python-ops/diagrams/pop-final-review";
-import { PopLearningMapDiagram } from "./python-ops/diagrams/pop-learning-map";
-import { PopMonitoringAlertingDiagram } from "./python-ops/diagrams/pop-monitoring-alerting";
-import { PopNetworkAutomationDiagram } from "./python-ops/diagrams/pop-network-automation";
-import { PopProcessMgmtDiagram } from "./python-ops/diagrams/pop-process-mgmt";
-import { PopPythonOpsBasicsDiagram } from "./python-ops/diagrams/pop-python-ops-basics";
-import { PopSshParamikoDiagram } from "./python-ops/diagrams/pop-ssh-paramiko";
-import { PopWebScrapingDiagram } from "./python-ops/diagrams/pop-web-scraping";
-import { RmqAmqpBasicsDiagram } from "./rabbitmq-practice/diagrams/rmq-amqp-basics";
-import { RmqClusteringDiagram } from "./rabbitmq-practice/diagrams/rmq-clustering";
-import { RmqConsumersDiagram } from "./rabbitmq-practice/diagrams/rmq-consumers";
-import { RmqFinalReviewDiagram } from "./rabbitmq-practice/diagrams/rmq-final-review";
-import { RmqHighAvailabilityDiagram } from "./rabbitmq-practice/diagrams/rmq-high-availability";
-import { RmqLearningMapDiagram } from "./rabbitmq-practice/diagrams/rmq-learning-map";
-import { RmqMessagingPatternsDiagram } from "./rabbitmq-practice/diagrams/rmq-messaging-patterns";
-import { RmqMonitoringOpsDiagram } from "./rabbitmq-practice/diagrams/rmq-monitoring-ops";
-import { RmqPerformanceTuningDiagram } from "./rabbitmq-practice/diagrams/rmq-performance-tuning";
-import { RmqProducersDiagram } from "./rabbitmq-practice/diagrams/rmq-producers";
 import { RtwCameraDiagram } from "./ray-tracing-weekend/diagrams/rtw-camera";
 import { RtwDefocusBlurDiagram } from "./ray-tracing-weekend/diagrams/rtw-defocus-blur";
 import { RtwDiffuseDiagram } from "./ray-tracing-weekend/diagrams/rtw-diffuse";
@@ -2587,16 +7833,92 @@ import { RtwMaterialsDiagram } from "./ray-tracing-weekend/diagrams/rtw-material
 import { RtwMetalDielectricDiagram } from "./ray-tracing-weekend/diagrams/rtw-metal-dielectric";
 import { RtwRayBasicsDiagram } from "./ray-tracing-weekend/diagrams/rtw-ray-basics";
 import { RtwSphereHittableDiagram } from "./ray-tracing-weekend/diagrams/rtw-sphere-hittable";
-import { RtcdBvTypesDiagram } from "./real-time-collision-detection/diagrams/rtcd-bv-types";
-import { RtcdCollisionTypesDiagram } from "./real-time-collision-detection/diagrams/rtcd-collision-types";
-import { RtcdContinuousCollisionDiagram } from "./real-time-collision-detection/diagrams/rtcd-continuous-collision";
-import { RtcdFinalReviewDiagram } from "./real-time-collision-detection/diagrams/rtcd-final-review";
-import { RtcdGjkDiagram } from "./real-time-collision-detection/diagrams/rtcd-gjk";
-import { RtcdLearningMapDiagram } from "./real-time-collision-detection/diagrams/rtcd-learning-map";
-import { RtcdOptimizationStrategiesDiagram } from "./real-time-collision-detection/diagrams/rtcd-optimization-strategies";
-import { RtcdSatDiagram } from "./real-time-collision-detection/diagrams/rtcd-sat";
-import { RtcdSpatialPartitioningDiagram } from "./real-time-collision-detection/diagrams/rtcd-spatial-partitioning";
-import { RtcdSweepPruneDiagram } from "./real-time-collision-detection/diagrams/rtcd-sweep-prune";
+import { RtwStepFlowDiagram } from "./ray-tracing-weekend/diagrams/rtw-step-flow";
+import {
+  RtcdOfficialLearningMapMapLab,
+  RtcdOfficialLearningMapExperimentLab,
+  RtcdOfficialLearningMapEvidenceLab,
+} from "./real-time-collision-detection/diagrams/rtcd-official-learning-map";
+import {
+  RtcdFrontMatterMapLab,
+  RtcdFrontMatterExperimentLab,
+  RtcdFrontMatterEvidenceLab,
+} from "./real-time-collision-detection/diagrams/rtcd-front-matter";
+import {
+  RtcdChapter01IntroductionMapLab,
+  RtcdChapter01IntroductionExperimentLab,
+  RtcdChapter01IntroductionEvidenceLab,
+} from "./real-time-collision-detection/diagrams/rtcd-chapter-01-introduction";
+import {
+  RtcdChapter02DesignIssuesMapLab,
+  RtcdChapter02DesignIssuesExperimentLab,
+  RtcdChapter02DesignIssuesEvidenceLab,
+} from "./real-time-collision-detection/diagrams/rtcd-chapter-02-design-issues";
+import {
+  RtcdChapter03MathGeometryPrimerMapLab,
+  RtcdChapter03MathGeometryPrimerExperimentLab,
+  RtcdChapter03MathGeometryPrimerEvidenceLab,
+} from "./real-time-collision-detection/diagrams/rtcd-chapter-03-math-geometry-primer";
+import {
+  RtcdChapter04BoundingVolumesMapLab,
+  RtcdChapter04BoundingVolumesExperimentLab,
+  RtcdChapter04BoundingVolumesEvidenceLab,
+} from "./real-time-collision-detection/diagrams/rtcd-chapter-04-bounding-volumes";
+import {
+  RtcdChapter05BasicPrimitiveTestsMapLab,
+  RtcdChapter05BasicPrimitiveTestsExperimentLab,
+  RtcdChapter05BasicPrimitiveTestsEvidenceLab,
+} from "./real-time-collision-detection/diagrams/rtcd-chapter-05-basic-primitive-tests";
+import {
+  RtcdChapter06BoundingVolumeHierarchiesMapLab,
+  RtcdChapter06BoundingVolumeHierarchiesExperimentLab,
+  RtcdChapter06BoundingVolumeHierarchiesEvidenceLab,
+} from "./real-time-collision-detection/diagrams/rtcd-chapter-06-bounding-volume-hierarchies";
+import {
+  RtcdChapter07SpatialPartitioningMapLab,
+  RtcdChapter07SpatialPartitioningExperimentLab,
+  RtcdChapter07SpatialPartitioningEvidenceLab,
+} from "./real-time-collision-detection/diagrams/rtcd-chapter-07-spatial-partitioning";
+import {
+  RtcdChapter08BspTreeHierarchiesMapLab,
+  RtcdChapter08BspTreeHierarchiesExperimentLab,
+  RtcdChapter08BspTreeHierarchiesEvidenceLab,
+} from "./real-time-collision-detection/diagrams/rtcd-chapter-08-bsp-tree-hierarchies";
+import {
+  RtcdChapter09ConvexityMethodsMapLab,
+  RtcdChapter09ConvexityMethodsExperimentLab,
+  RtcdChapter09ConvexityMethodsEvidenceLab,
+} from "./real-time-collision-detection/diagrams/rtcd-chapter-09-convexity-methods";
+import {
+  RtcdChapter10GpuAssistedMapLab,
+  RtcdChapter10GpuAssistedExperimentLab,
+  RtcdChapter10GpuAssistedEvidenceLab,
+} from "./real-time-collision-detection/diagrams/rtcd-chapter-10-gpu-assisted";
+import {
+  RtcdChapter11NumericalRobustnessMapLab,
+  RtcdChapter11NumericalRobustnessExperimentLab,
+  RtcdChapter11NumericalRobustnessEvidenceLab,
+} from "./real-time-collision-detection/diagrams/rtcd-chapter-11-numerical-robustness";
+import {
+  RtcdChapter12GeometricalRobustnessMapLab,
+  RtcdChapter12GeometricalRobustnessExperimentLab,
+  RtcdChapter12GeometricalRobustnessEvidenceLab,
+} from "./real-time-collision-detection/diagrams/rtcd-chapter-12-geometrical-robustness";
+import {
+  RtcdChapter13OptimizationMapLab,
+  RtcdChapter13OptimizationExperimentLab,
+  RtcdChapter13OptimizationEvidenceLab,
+} from "./real-time-collision-detection/diagrams/rtcd-chapter-13-optimization";
+import {
+  RtcdBackMatterMapLab,
+  RtcdBackMatterExperimentLab,
+  RtcdBackMatterEvidenceLab,
+} from "./real-time-collision-detection/diagrams/rtcd-back-matter";
+import {
+  RtcdOfficialFinalReviewMapLab,
+  RtcdOfficialFinalReviewExperimentLab,
+  RtcdOfficialFinalReviewEvidenceLab,
+} from "./real-time-collision-detection/diagrams/rtcd-official-final-review";
 import { RtrAdvancedShadingDiagram } from "./real-time-rendering-4e/diagrams/rtr-advanced-shading";
 import { RtrFinalReviewDiagram } from "./real-time-rendering-4e/diagrams/rtr-final-review";
 import { RtrGlobalIlluminationDiagram } from "./real-time-rendering-4e/diagrams/rtr-global-illumination";
@@ -2607,26 +7929,36 @@ import { RtrShadingBasicsDiagram } from "./real-time-rendering-4e/diagrams/rtr-s
 import { RtrShadowsDiagram } from "./real-time-rendering-4e/diagrams/rtr-shadows";
 import { RtrTexturingDiagram } from "./real-time-rendering-4e/diagrams/rtr-texturing";
 import { RtrTransformsDiagram } from "./real-time-rendering-4e/diagrams/rtr-transforms";
-import { RdiDataStructuresDiagram } from "./redis-design-implementation/diagrams/rdi-data-structures";
-import { RdiDatabaseImplDiagram } from "./redis-design-implementation/diagrams/rdi-database-impl";
-import { RdiEventDrivenDiagram } from "./redis-design-implementation/diagrams/rdi-event-driven";
-import { RdiFinalReviewDiagram } from "./redis-design-implementation/diagrams/rdi-final-review";
-import { RdiLearningMapDiagram } from "./redis-design-implementation/diagrams/rdi-learning-map";
-import { RdiObjectSystemDiagram } from "./redis-design-implementation/diagrams/rdi-object-system";
-import { RdiPersistenceDiagram } from "./redis-design-implementation/diagrams/rdi-persistence";
-import { RdiPubsubSentinelDiagram } from "./redis-design-implementation/diagrams/rdi-pubsub-sentinel";
-import { RdiReplicationClusterDiagram } from "./redis-design-implementation/diagrams/rdi-replication-cluster";
-import { RdiTransactionsDiagram } from "./redis-design-implementation/diagrams/rdi-transactions";
-import { RlcBackpropCDiagram } from "./rl-deep-learning-c/diagrams/rlc-backprop-c";
-import { RlcDqnCDiagram } from "./rl-deep-learning-c/diagrams/rlc-dqn-c";
-import { RlcEnvironmentsDiagram } from "./rl-deep-learning-c/diagrams/rlc-environments";
-import { RlcFinalReviewDiagram } from "./rl-deep-learning-c/diagrams/rlc-final-review";
-import { RlcLearningMapDiagram } from "./rl-deep-learning-c/diagrams/rlc-learning-map";
-import { RlcNeuralNetworksCDiagram } from "./rl-deep-learning-c/diagrams/rlc-neural-networks-c";
-import { RlcPolicyGradientCDiagram } from "./rl-deep-learning-c/diagrams/rlc-policy-gradient-c";
-import { RlcPracticalApplicationsDiagram } from "./rl-deep-learning-c/diagrams/rlc-practical-applications";
-import { RlcQLearningCDiagram } from "./rl-deep-learning-c/diagrams/rlc-q-learning-c";
-import { RlcRlFoundationsDiagram } from "./rl-deep-learning-c/diagrams/rlc-rl-foundations";
+import {
+  RlcOfficialLearningMapMapLab,
+  RlcOfficialLearningMapExperimentLab,
+  RlcOfficialLearningMapEvidenceLab,
+} from "./rl-deep-learning-c/diagrams/rlc-official-learning-map";
+import {
+  Rlc01RlDeepLearningMapLab,
+  Rlc01RlDeepLearningExperimentLab,
+  Rlc01RlDeepLearningEvidenceLab,
+} from "./rl-deep-learning-c/diagrams/rlc-01-rl-deep-learning";
+import {
+  Rlc02ReinforcementImplementationMapLab,
+  Rlc02ReinforcementImplementationExperimentLab,
+  Rlc02ReinforcementImplementationEvidenceLab,
+} from "./rl-deep-learning-c/diagrams/rlc-02-reinforcement-implementation";
+import {
+  Rlc03DeepLearningTechniquesMapLab,
+  Rlc03DeepLearningTechniquesExperimentLab,
+  Rlc03DeepLearningTechniquesEvidenceLab,
+} from "./rl-deep-learning-c/diagrams/rlc-03-deep-learning-techniques";
+import {
+  Rlc04DeepReinforcementLearningMapLab,
+  Rlc04DeepReinforcementLearningExperimentLab,
+  Rlc04DeepReinforcementLearningEvidenceLab,
+} from "./rl-deep-learning-c/diagrams/rlc-04-deep-reinforcement-learning";
+import {
+  RlcOfficialFinalReviewMapLab,
+  RlcOfficialFinalReviewExperimentLab,
+  RlcOfficialFinalReviewEvidenceLab,
+} from "./rl-deep-learning-c/diagrams/rlc-official-final-review";
 import { RubBlocksProcsDiagram } from "./ruby-programming/diagrams/rub-blocks-procs";
 import { RubClassesDiagram } from "./ruby-programming/diagrams/rub-classes";
 import { RubControlFlowDiagram } from "./ruby-programming/diagrams/rub-control-flow";
@@ -2637,60 +7969,65 @@ import { RubMetaprogrammingDiagram } from "./ruby-programming/diagrams/rub-metap
 import { RubModulesMixinsDiagram } from "./ruby-programming/diagrams/rub-modules-mixins";
 import { RubObjectsVariablesDiagram } from "./ruby-programming/diagrams/rub-objects-variables";
 import { RubStringsDiagram } from "./ruby-programming/diagrams/rub-strings";
-import { RplAsyncDiagram } from "./rust-programming-language/diagrams/rpl-async";
-import { RplBorrowingDiagram } from "./rust-programming-language/diagrams/rpl-borrowing";
-import { RplConcurrencyDiagram } from "./rust-programming-language/diagrams/rpl-concurrency";
-import { RplErrorHandlingDiagram } from "./rust-programming-language/diagrams/rpl-error-handling";
-import { RplFinalReviewDiagram } from "./rust-programming-language/diagrams/rpl-final-review";
-import { RplGenericsDiagram } from "./rust-programming-language/diagrams/rpl-generics";
-import { RplLearningMapDiagram } from "./rust-programming-language/diagrams/rpl-learning-map";
-import { RplLifetimesDiagram } from "./rust-programming-language/diagrams/rpl-lifetimes";
-import { RplOwnershipDiagram } from "./rust-programming-language/diagrams/rpl-ownership";
-import { RplTraitsDiagram } from "./rust-programming-language/diagrams/rpl-traits";
-import { RswAsyncRuntimeDiagram } from "./rust-way/diagrams/rsw-async-runtime";
-import { RswConcurrencyDiagram } from "./rust-way/diagrams/rsw-concurrency";
-import { RswErrorHandlingDiagram } from "./rust-way/diagrams/rsw-error-handling";
-import { RswFinalReviewDiagram } from "./rust-way/diagrams/rsw-final-review";
-import { RswLearningMapDiagram } from "./rust-way/diagrams/rsw-learning-map";
-import { RswLifetimesDiagram } from "./rust-way/diagrams/rsw-lifetimes";
-import { RswMacrosDiagram } from "./rust-way/diagrams/rsw-macros";
-import { RswOwnershipBorrowDiagram } from "./rust-way/diagrams/rsw-ownership-borrow";
-import { RswTraitsGenericsDiagram } from "./rust-way/diagrams/rsw-traits-generics";
-import { RswUnsafeRustDiagram } from "./rust-way/diagrams/rsw-unsafe-rust";
 import { ShaderCanvas } from "./shader/shader-canvas";
 import { ShaderEditorCanvas } from "./shader/shader-editor-canvas";
 import { ShaderEditor } from "./shader/shader-editor";
 import { UniformControls } from "./shader/uniform-controls";
-import { ShpAdvancedEffectsDiagram } from "./shader-practice/diagrams/shp-advanced-effects";
-import { ShpFinalReviewDiagram } from "./shader-practice/diagrams/shp-final-review";
-import { ShpHlslBasicsDiagram } from "./shader-practice/diagrams/shp-hlsl-basics";
-import { ShpLearningMapDiagram } from "./shader-practice/diagrams/shp-learning-map";
-import { ShpLightingShadersDiagram } from "./shader-practice/diagrams/shp-lighting-shaders";
-import { ShpOptimizationDiagram } from "./shader-practice/diagrams/shp-optimization";
-import { ShpPixelShadersDiagram } from "./shader-practice/diagrams/shp-pixel-shaders";
-import { ShpPostProcessingDiagram } from "./shader-practice/diagrams/shp-post-processing";
-import { ShpRenderPipelineDiagram } from "./shader-practice/diagrams/shp-render-pipeline";
-import { ShpVertexShadersDiagram } from "./shader-practice/diagrams/shp-vertex-shaders";
-import { SxxEnvironmentDiagram } from "./shaderx/diagrams/sxx-environment";
-import { SxxFinalReviewDiagram } from "./shaderx/diagrams/sxx-final-review";
-import { SxxLearningMapDiagram } from "./shaderx/diagrams/sxx-learning-map";
-import { SxxLightingModelsDiagram } from "./shaderx/diagrams/sxx-lighting-models";
-import { SxxPerformanceDiagram } from "./shaderx/diagrams/sxx-performance";
-import { SxxPixelShadersDiagram } from "./shaderx/diagrams/sxx-pixel-shaders";
-import { SxxPostProcessingDiagram } from "./shaderx/diagrams/sxx-post-processing";
-import { SxxProceduralTexturingDiagram } from "./shaderx/diagrams/sxx-procedural-texturing";
-import { SxxShadowTechniquesDiagram } from "./shaderx/diagrams/sxx-shadow-techniques";
-import { SxxVertexShadersDiagram } from "./shaderx/diagrams/sxx-vertex-shaders";
-import { SoaAdaptivePlatformDiagram } from "./soa-vehicle-architecture/diagrams/soa-adaptive-platform";
-import { SoaCaseStudyDiagram } from "./soa-vehicle-architecture/diagrams/soa-case-study";
-import { SoaCommunicationProtocolsDiagram } from "./soa-vehicle-architecture/diagrams/soa-communication-protocols";
-import { SoaFinalReviewDiagram } from "./soa-vehicle-architecture/diagrams/soa-final-review";
-import { SoaLearningMapDiagram } from "./soa-vehicle-architecture/diagrams/soa-learning-map";
-import { SoaMethodologyToolsDiagram } from "./soa-vehicle-architecture/diagrams/soa-methodology-tools";
-import { SoaServiceDesignDiagram } from "./soa-vehicle-architecture/diagrams/soa-service-design";
-import { SoaServiceDiscoveryDiagram } from "./soa-vehicle-architecture/diagrams/soa-service-discovery";
-import { SoaSoaFundamentalsDiagram } from "./soa-vehicle-architecture/diagrams/soa-soa-fundamentals";
-import { SoaVehicleArchitectureDiagram } from "./soa-vehicle-architecture/diagrams/soa-vehicle-architecture";
+import {
+  Aes23OfficialLearningMapTopologyLab,
+  Aes23OfficialLearningMapProtocolLab,
+  Aes23OfficialLearningMapEvidenceLab,
+} from "./soa-vehicle-architecture/diagrams/aes23-official-learning-map";
+import {
+  Aes23ForewordTopologyLab,
+  Aes23ForewordProtocolLab,
+  Aes23ForewordEvidenceLab,
+} from "./soa-vehicle-architecture/diagrams/aes23-foreword";
+import {
+  Aes23PrefaceTopologyLab,
+  Aes23PrefaceProtocolLab,
+  Aes23PrefaceEvidenceLab,
+} from "./soa-vehicle-architecture/diagrams/aes23-preface";
+import {
+  Aes2301ArchitectureTopologyLab,
+  Aes2301ArchitectureProtocolLab,
+  Aes2301ArchitectureEvidenceLab,
+} from "./soa-vehicle-architecture/diagrams/aes23-01-architecture";
+import {
+  Aes2302NetworksTopologyLab,
+  Aes2302NetworksProtocolLab,
+  Aes2302NetworksEvidenceLab,
+} from "./soa-vehicle-architecture/diagrams/aes23-02-networks";
+import {
+  Aes2303SoftwareTopologyLab,
+  Aes2303SoftwareProtocolLab,
+  Aes2303SoftwareEvidenceLab,
+} from "./soa-vehicle-architecture/diagrams/aes23-03-software";
+import {
+  Aes2304SoaTopologyLab,
+  Aes2304SoaProtocolLab,
+  Aes2304SoaEvidenceLab,
+} from "./soa-vehicle-architecture/diagrams/aes23-04-soa";
+import {
+  Aes2305DevelopmentOtaTopologyLab,
+  Aes2305DevelopmentOtaProtocolLab,
+  Aes2305DevelopmentOtaEvidenceLab,
+} from "./soa-vehicle-architecture/diagrams/aes23-05-development-ota";
+import {
+  Aes23AfterwordTopologyLab,
+  Aes23AfterwordProtocolLab,
+  Aes23AfterwordEvidenceLab,
+} from "./soa-vehicle-architecture/diagrams/aes23-afterword";
+import {
+  Aes23ReferencesTopologyLab,
+  Aes23ReferencesProtocolLab,
+  Aes23ReferencesEvidenceLab,
+} from "./soa-vehicle-architecture/diagrams/aes23-references";
+import {
+  Aes23OfficialFinalReviewTopologyLab,
+  Aes23OfficialFinalReviewProtocolLab,
+  Aes23OfficialFinalReviewEvidenceLab,
+} from "./soa-vehicle-architecture/diagrams/aes23-official-final-review";
 import { SiaAopDiagram } from "./spring-in-action/diagrams/sia-aop";
 import { SiaBeanWiringDiagram } from "./spring-in-action/diagrams/sia-bean-wiring";
 import { SiaDataJpaDiagram } from "./spring-in-action/diagrams/sia-data-jpa";
@@ -2701,272 +8038,934 @@ import { SiaSpringCloudDiagram } from "./spring-in-action/diagrams/sia-spring-cl
 import { SiaSpringCoreDiagram } from "./spring-in-action/diagrams/sia-spring-core";
 import { SiaSpringMvcDiagram } from "./spring-in-action/diagrams/sia-spring-mvc";
 import { SiaSpringSecurityDiagram } from "./spring-in-action/diagrams/sia-spring-security";
-import { SqtAdvancedSqlDiagram } from "./sql-ten-minutes/diagrams/sqt-advanced-sql";
-import { SqtAggregationDiagram } from "./sql-ten-minutes/diagrams/sqt-aggregation";
-import { SqtFilteringDataDiagram } from "./sql-ten-minutes/diagrams/sqt-filtering-data";
-import { SqtFinalReviewDiagram } from "./sql-ten-minutes/diagrams/sqt-final-review";
-import { SqtFunctionsDiagram } from "./sql-ten-minutes/diagrams/sqt-functions";
-import { SqtJoinsDiagram } from "./sql-ten-minutes/diagrams/sqt-joins";
-import { SqtLearningMapDiagram } from "./sql-ten-minutes/diagrams/sqt-learning-map";
-import { SqtSortingFilteringDiagram } from "./sql-ten-minutes/diagrams/sqt-sorting-filtering";
-import { SqtSqlBasicsDiagram } from "./sql-ten-minutes/diagrams/sqt-sql-basics";
-import { SqtSubqueriesDiagram } from "./sql-ten-minutes/diagrams/sqt-subqueries";
-import { SlmBoostingDiagram } from "./statistical-learning-methods/diagrams/slm-boosting";
-import { SlmDecisionTreeDiagram } from "./statistical-learning-methods/diagrams/slm-decision-tree";
-import { SlmEmHmmDiagram } from "./statistical-learning-methods/diagrams/slm-em-hmm";
-import { SlmFinalReviewDiagram } from "./statistical-learning-methods/diagrams/slm-final-review";
-import { SlmKnnDiagram } from "./statistical-learning-methods/diagrams/slm-knn";
-import { SlmLearningMapDiagram } from "./statistical-learning-methods/diagrams/slm-learning-map";
-import { SlmLogisticRegressionDiagram } from "./statistical-learning-methods/diagrams/slm-logistic-regression";
-import { SlmNaiveBayesDiagram } from "./statistical-learning-methods/diagrams/slm-naive-bayes";
-import { SlmPerceptronDiagram } from "./statistical-learning-methods/diagrams/slm-perceptron";
-import { SlmSvmDiagram } from "./statistical-learning-methods/diagrams/slm-svm";
+import {
+  SlmOfficialLearningMapMapLab,
+  SlmOfficialLearningMapExperimentLab,
+  SlmOfficialLearningMapEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-official-learning-map";
+import {
+  Slm01IntroductionMapLab,
+  Slm01IntroductionExperimentLab,
+  Slm01IntroductionEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-01-introduction";
+import {
+  Slm02PerceptronMapLab,
+  Slm02PerceptronExperimentLab,
+  Slm02PerceptronEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-02-perceptron";
+import {
+  Slm03KnnMapLab,
+  Slm03KnnExperimentLab,
+  Slm03KnnEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-03-knn";
+import {
+  Slm04NaiveBayesMapLab,
+  Slm04NaiveBayesExperimentLab,
+  Slm04NaiveBayesEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-04-naive-bayes";
+import {
+  Slm05DecisionTreeMapLab,
+  Slm05DecisionTreeExperimentLab,
+  Slm05DecisionTreeEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-05-decision-tree";
+import {
+  Slm06LogisticMaxentMapLab,
+  Slm06LogisticMaxentExperimentLab,
+  Slm06LogisticMaxentEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-06-logistic-maxent";
+import {
+  Slm07SvmMapLab,
+  Slm07SvmExperimentLab,
+  Slm07SvmEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-07-svm";
+import {
+  Slm08BoostingMapLab,
+  Slm08BoostingExperimentLab,
+  Slm08BoostingEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-08-boosting";
+import {
+  Slm09EmMapLab,
+  Slm09EmExperimentLab,
+  Slm09EmEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-09-em";
+import {
+  Slm10HmmMapLab,
+  Slm10HmmExperimentLab,
+  Slm10HmmEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-10-hmm";
+import {
+  Slm11CrfMapLab,
+  Slm11CrfExperimentLab,
+  Slm11CrfEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-11-crf";
+import {
+  Slm12SupervisedSummaryMapLab,
+  Slm12SupervisedSummaryExperimentLab,
+  Slm12SupervisedSummaryEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-12-supervised-summary";
+import {
+  Slm13UnsupervisedIntroductionMapLab,
+  Slm13UnsupervisedIntroductionExperimentLab,
+  Slm13UnsupervisedIntroductionEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-13-unsupervised-introduction";
+import {
+  Slm14ClusteringMapLab,
+  Slm14ClusteringExperimentLab,
+  Slm14ClusteringEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-14-clustering";
+import {
+  Slm15SvdMapLab,
+  Slm15SvdExperimentLab,
+  Slm15SvdEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-15-svd";
+import {
+  Slm16PcaMapLab,
+  Slm16PcaExperimentLab,
+  Slm16PcaEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-16-pca";
+import {
+  Slm17LsaMapLab,
+  Slm17LsaExperimentLab,
+  Slm17LsaEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-17-lsa";
+import {
+  Slm18PlsaMapLab,
+  Slm18PlsaExperimentLab,
+  Slm18PlsaEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-18-plsa";
+import {
+  Slm19McmcMapLab,
+  Slm19McmcExperimentLab,
+  Slm19McmcEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-19-mcmc";
+import {
+  Slm20LdaMapLab,
+  Slm20LdaExperimentLab,
+  Slm20LdaEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-20-lda";
+import {
+  Slm21PageRankMapLab,
+  Slm21PageRankExperimentLab,
+  Slm21PageRankEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-21-pagerank";
+import {
+  Slm22UnsupervisedSummaryMapLab,
+  Slm22UnsupervisedSummaryExperimentLab,
+  Slm22UnsupervisedSummaryEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-22-unsupervised-summary";
+import {
+  SlmAppendicesMapLab,
+  SlmAppendicesExperimentLab,
+  SlmAppendicesEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-appendices";
+import {
+  SlmOfficialFinalReviewMapLab,
+  SlmOfficialFinalReviewExperimentLab,
+  SlmOfficialFinalReviewEvidenceLab,
+} from "./statistical-learning-methods/diagrams/slm-official-final-review";
 import { TcpArithmeticDiagram } from "./taocp/diagrams/tcp-arithmetic";
 import { TcpEfficientSearchingDiagram } from "./taocp/diagrams/tcp-efficient-searching";
 import { TcpFinalReviewDiagram } from "./taocp/diagrams/tcp-final-review";
 import { TcpGf2Diagram } from "./taocp/diagrams/tcp-gf2";
-import { TcpInfoStructuresDiagram } from "./taocp/diagrams/tcp-info-structures";
 import { TcpBookMap } from "./taocp/diagrams/tcp-learning-map";
-import { TcpMathPreliminariesDiagram } from "./taocp/diagrams/tcp-mathematical-preliminaries";
 import { TcpPolynomialsDiagram } from "./taocp/diagrams/tcp-polynomials";
-import { TcpRandomNumbersDiagram } from "./taocp/diagrams/tcp-random-numbers";
 import { TcpSequencesDiagram } from "./taocp/diagrams/tcp-sequences";
-import { TipApplicationProtocolsDiagram } from "./tcp-ip-illustrated-vol1/diagrams/tip-application-protocols";
-import { TipFinalReviewDiagram } from "./tcp-ip-illustrated-vol1/diagrams/tip-final-review";
-import { TipIcmpIgmpDiagram } from "./tcp-ip-illustrated-vol1/diagrams/tip-icmp-igmp";
-import { TipIpProtocolDiagram } from "./tcp-ip-illustrated-vol1/diagrams/tip-ip-protocol";
-import { TipLearningMapDiagram } from "./tcp-ip-illustrated-vol1/diagrams/tip-learning-map";
-import { TipLinkLayerDiagram } from "./tcp-ip-illustrated-vol1/diagrams/tip-link-layer";
-import { TipRoutingProtocolsDiagram } from "./tcp-ip-illustrated-vol1/diagrams/tip-routing-protocols";
-import { TipTcpProtocolDiagram } from "./tcp-ip-illustrated-vol1/diagrams/tip-tcp-protocol";
-import { TipTcpTimersDiagram } from "./tcp-ip-illustrated-vol1/diagrams/tip-tcp-timers";
-import { TipUdpProtocolDiagram } from "./tcp-ip-illustrated-vol1/diagrams/tip-udp-protocol";
+import {
+  Tip2OfficialLearningMapProtocolLab,
+  Tip2OfficialLearningMapStateLab,
+  Tip2OfficialLearningMapEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-official-learning-map";
+import {
+  Tip2ForewordProtocolLab,
+  Tip2ForewordStateLab,
+  Tip2ForewordEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-foreword";
+import {
+  Tip2PrefaceSecondEditionProtocolLab,
+  Tip2PrefaceSecondEditionStateLab,
+  Tip2PrefaceSecondEditionEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-preface-second-edition";
+import {
+  Tip2AdaptedPrefaceFirstEditionProtocolLab,
+  Tip2AdaptedPrefaceFirstEditionStateLab,
+  Tip2AdaptedPrefaceFirstEditionEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-adapted-preface-first-edition";
+import {
+  Tip201IntroductionProtocolLab,
+  Tip201IntroductionStateLab,
+  Tip201IntroductionEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-01-introduction";
+import {
+  Tip202AddressArchitectureProtocolLab,
+  Tip202AddressArchitectureStateLab,
+  Tip202AddressArchitectureEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-02-address-architecture";
+import {
+  Tip203LinkLayerProtocolLab,
+  Tip203LinkLayerStateLab,
+  Tip203LinkLayerEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-03-link-layer";
+import {
+  Tip204ArpProtocolLab,
+  Tip204ArpStateLab,
+  Tip204ArpEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-04-arp";
+import {
+  Tip205InternetProtocolProtocolLab,
+  Tip205InternetProtocolStateLab,
+  Tip205InternetProtocolEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-05-internet-protocol";
+import {
+  Tip206DhcpAutoconfigurationProtocolLab,
+  Tip206DhcpAutoconfigurationStateLab,
+  Tip206DhcpAutoconfigurationEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-06-dhcp-autoconfiguration";
+import {
+  Tip207FirewallsNatProtocolLab,
+  Tip207FirewallsNatStateLab,
+  Tip207FirewallsNatEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-07-firewalls-nat";
+import {
+  Tip208IcmpProtocolLab,
+  Tip208IcmpStateLab,
+  Tip208IcmpEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-08-icmp";
+import {
+  Tip209BroadcastMulticastProtocolLab,
+  Tip209BroadcastMulticastStateLab,
+  Tip209BroadcastMulticastEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-09-broadcast-multicast";
+import {
+  Tip210UdpFragmentationProtocolLab,
+  Tip210UdpFragmentationStateLab,
+  Tip210UdpFragmentationEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-10-udp-fragmentation";
+import {
+  Tip211DnsProtocolLab,
+  Tip211DnsStateLab,
+  Tip211DnsEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-11-dns";
+import {
+  Tip212TcpPreliminariesProtocolLab,
+  Tip212TcpPreliminariesStateLab,
+  Tip212TcpPreliminariesEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-12-tcp-preliminaries";
+import {
+  Tip213TcpConnectionManagementProtocolLab,
+  Tip213TcpConnectionManagementStateLab,
+  Tip213TcpConnectionManagementEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-13-tcp-connection-management";
+import {
+  Tip214TcpTimeoutRetransmissionProtocolLab,
+  Tip214TcpTimeoutRetransmissionStateLab,
+  Tip214TcpTimeoutRetransmissionEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-14-tcp-timeout-retransmission";
+import {
+  Tip215TcpDataFlowWindowProtocolLab,
+  Tip215TcpDataFlowWindowStateLab,
+  Tip215TcpDataFlowWindowEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-15-tcp-data-flow-window";
+import {
+  Tip216TcpCongestionControlProtocolLab,
+  Tip216TcpCongestionControlStateLab,
+  Tip216TcpCongestionControlEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-16-tcp-congestion-control";
+import {
+  Tip217TcpKeepaliveProtocolLab,
+  Tip217TcpKeepaliveStateLab,
+  Tip217TcpKeepaliveEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-17-tcp-keepalive";
+import {
+  Tip218SecurityProtocolLab,
+  Tip218SecurityStateLab,
+  Tip218SecurityEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-18-security";
+import {
+  Tip2GlossaryAcronymsProtocolLab,
+  Tip2GlossaryAcronymsStateLab,
+  Tip2GlossaryAcronymsEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-glossary-acronyms";
+import {
+  Tip2IndexProtocolLab,
+  Tip2IndexStateLab,
+  Tip2IndexEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-index";
+import {
+  Tip2OfficialFinalReviewProtocolLab,
+  Tip2OfficialFinalReviewStateLab,
+  Tip2OfficialFinalReviewEvidenceLab,
+} from "./tcp-ip-illustrated-vol1/diagrams/tip2-official-final-review";
 import { TextureCanvas } from "./texture/texture-canvas";
-import { TcgContextAttentionDiagram } from "./this-is-chatgpt/diagrams/tcg-context-attention";
-import { TcgEmbeddingsDiagram } from "./this-is-chatgpt/diagrams/tcg-embeddings";
-import { TcgFinalReviewDiagram } from "./this-is-chatgpt/diagrams/tcg-final-review";
-import { TcgFutureImplicationsDiagram } from "./this-is-chatgpt/diagrams/tcg-future-implications";
-import { TcgLanguageFoundationsDiagram } from "./this-is-chatgpt/diagrams/tcg-language-foundations";
-import { TcgLearningMapDiagram } from "./this-is-chatgpt/diagrams/tcg-learning-map";
-import { TcgNeuralNetworksDiagram } from "./this-is-chatgpt/diagrams/tcg-neural-networks";
-import { TcgPredictionGenerationDiagram } from "./this-is-chatgpt/diagrams/tcg-prediction-generation";
-import { TcgTrainingProcessDiagram } from "./this-is-chatgpt/diagrams/tcg-training-process";
-import { TcgTransformersDiagram } from "./this-is-chatgpt/diagrams/tcg-transformers";
-import { TbcActivationRecordsDiagram } from "./tiger-book-compiler/diagrams/tbc-activation-records";
-import { TbcCanonicalizationDiagram } from "./tiger-book-compiler/diagrams/tbc-canonicalization";
-import { TbcFinalReviewDiagram } from "./tiger-book-compiler/diagrams/tbc-final-review";
-import { TbcInstructionSelectionDiagram } from "./tiger-book-compiler/diagrams/tbc-instruction-selection";
-import { TbcLearningMapDiagram } from "./tiger-book-compiler/diagrams/tbc-learning-map";
-import { TbcLexingDiagram } from "./tiger-book-compiler/diagrams/tbc-lexing";
-import { TbcParsingDiagram } from "./tiger-book-compiler/diagrams/tbc-parsing";
-import { TbcRegisterAllocationDiagram } from "./tiger-book-compiler/diagrams/tbc-register-allocation";
-import { TbcSemanticAnalysisDiagram } from "./tiger-book-compiler/diagrams/tbc-semantic-analysis";
-import { TbcTranslationIrDiagram } from "./tiger-book-compiler/diagrams/tbc-translation-ir";
-import { TwsArraysHashDiagram } from "./two-week-scripting-language/diagrams/tws-arrays-hash";
-import { TwsAstDiagram } from "./two-week-scripting-language/diagrams/tws-ast";
-import { TwsClassesDiagram } from "./two-week-scripting-language/diagrams/tws-classes";
-import { TwsEvaluatorDiagram } from "./two-week-scripting-language/diagrams/tws-evaluator";
-import { TwsFinalReviewDiagram } from "./two-week-scripting-language/diagrams/tws-final-review";
-import { TwsFunctionsDiagram } from "./two-week-scripting-language/diagrams/tws-functions";
-import { TwsLearningMapDiagram } from "./two-week-scripting-language/diagrams/tws-learning-map";
-import { TwsLexerDiagram } from "./two-week-scripting-language/diagrams/tws-lexer";
-import { TwsParserDiagram } from "./two-week-scripting-language/diagrams/tws-parser";
-import { TwsTypesErrorsDiagram } from "./two-week-scripting-language/diagrams/tws-types-errors";
-import { UapArchDesignDiagram } from "./unity-advanced-programming/diagrams/uap-arch-design";
-import { UapCiCdDiagram } from "./unity-advanced-programming/diagrams/uap-ci-cd";
-import { UapDesignPatternsDiagram } from "./unity-advanced-programming/diagrams/uap-design-patterns";
-import { UapFinalReviewDiagram } from "./unix-advanced-programming/diagrams/uap-final-review";
-import { UapHotUpdateDiagram } from "./unity-advanced-programming/diagrams/uap-hot-update";
-import { UapLearningMapDiagram } from "./unix-advanced-programming/diagrams/uap-learning-map";
-import { UapMemoryManagementDiagram } from "./unity-advanced-programming/diagrams/uap-memory-management";
-import { UapNetworkSyncDiagram } from "./unity-advanced-programming/diagrams/uap-network-sync";
-import { UapRenderingOptimizationDiagram } from "./unity-advanced-programming/diagrams/uap-rendering-optimization";
-import { UapUiFrameworkDiagram } from "./unity-advanced-programming/diagrams/uap-ui-framework";
-import { UanAnimationBasicsDiagram } from "./unity-animation/diagrams/uan-animation-basics";
-import { UanAnimatorControllerDiagram } from "./unity-animation/diagrams/uan-animator-controller";
-import { UanBlendTreesDiagram } from "./unity-animation/diagrams/uan-blend-trees";
-import { UanIkSystemDiagram } from "./unity-animation/diagrams/uan-ik-system";
-import { UanLearningMapDiagram } from "./unity-animation/diagrams/uan-learning-map";
-import { UanStateMachineDiagram } from "./unity-animation/diagrams/uan-state-machine";
-import { UanTimelineDiagram } from "./unity-animation/diagrams/uan-timeline";
-import { UctAssetPipelineDiagram } from "./unity-core-tech/diagrams/uct-asset-pipeline";
-import { UctAudioSystemDiagram } from "./unity-core-tech/diagrams/uct-audio-system";
-import { UctBuildDeployDiagram } from "./unity-core-tech/diagrams/uct-build-deploy";
-import { UctFinalReviewDiagram } from "./unity-core-tech/diagrams/uct-final-review";
-import { UctLearningMapDiagram } from "./unity-core-tech/diagrams/uct-learning-map";
-import { UctMemoryManagementDiagram } from "./unity-core-tech/diagrams/uct-memory-management";
-import { UctNavigationDiagram } from "./unity-core-tech/diagrams/uct-navigation";
-import { UctPhysicsEngineDiagram } from "./unity-core-tech/diagrams/uct-physics-engine";
-import { UctRenderingPipelineDiagram } from "./unity-core-tech/diagrams/uct-rendering-pipeline";
-import { UctSceneManagementDiagram } from "./unity-core-tech/diagrams/uct-scene-management";
-import { UcnCppServerBaseDiagram } from "./unity-cpp-network-game/diagrams/ucn-cpp-server-base";
-import { UcnFinalReviewDiagram } from "./unity-cpp-network-game/diagrams/ucn-final-review";
-import { UcnLearningMapDiagram } from "./unity-cpp-network-game/diagrams/ucn-learning-map";
-import { UcnMessageRoutingDiagram } from "./unity-cpp-network-game/diagrams/ucn-message-routing";
-import { UcnNetworkFrameworkDiagram } from "./unity-cpp-network-game/diagrams/ucn-network-framework";
-import { UcnProtobufDesignDiagram } from "./unity-cpp-network-game/diagrams/ucn-protobuf-design";
-import { UcnRealtimeSyncDiagram } from "./unity-cpp-network-game/diagrams/ucn-realtime-sync";
-import { UcnRoomManagementDiagram } from "./unity-cpp-network-game/diagrams/ucn-room-management";
-import { UcnSocketProgrammingDiagram } from "./unity-cpp-network-game/diagrams/ucn-socket-programming";
-import { UcnUnityIntegrationDiagram } from "./unity-cpp-network-game/diagrams/ucn-unity-integration";
-import { Ugc2dPlatformerDiagram } from "./unity-game-cases/diagrams/ugc-2d-platformer";
-import { Ugc3dActionDiagram } from "./unity-game-cases/diagrams/ugc-3d-action";
-import { UgcFinalReviewDiagram } from "./unity-game-cases/diagrams/ugc-final-review";
-import { UgcFpsBasicsDiagram } from "./unity-game-cases/diagrams/ugc-fps-basics";
-import { UgcGamePolishDiagram } from "./unity-game-cases/diagrams/ugc-game-polish";
-import { UgcLearningMapDiagram } from "./unity-game-cases/diagrams/ugc-learning-map";
-import { UgcPuzzleGameDiagram } from "./unity-game-cases/diagrams/ugc-puzzle-game";
-import { UgcRacingGameDiagram } from "./unity-game-cases/diagrams/ugc-racing-game";
-import { UgcRpgBasicsDiagram } from "./unity-game-cases/diagrams/ugc-rpg-basics";
-import { UgcStrategyGameDiagram } from "./unity-game-cases/diagrams/ugc-strategy-game";
-import { UhmAdvancedHmiDiagram } from "./unity-hmi/diagrams/uhm-advanced-hmi";
-import { UhmAnimationDiagram } from "./unity-hmi/diagrams/uhm-animation";
-import { UhmDataBindingDiagram } from "./unity-hmi/diagrams/uhm-data-binding";
-import { UhmDeploymentDiagram } from "./unity-hmi/diagrams/uhm-deployment";
-import { UhmFinalReviewDiagram } from "./unity-hmi/diagrams/uhm-final-review";
-import { UhmHmiBasicsDiagram } from "./unity-hmi/diagrams/uhm-hmi-basics";
-import { UhmInputHandlingDiagram } from "./unity-hmi/diagrams/uhm-input-handling";
-import { UhmLearningMapDiagram } from "./unity-hmi/diagrams/uhm-learning-map";
-import { UhmPerformanceDiagram } from "./unity-hmi/diagrams/uhm-performance";
-import { UhmUiFrameworkDiagram } from "./unity-hmi/diagrams/uhm-ui-framework";
-import { UmsAdvancedScriptingDiagram } from "./unity-master/diagrams/ums-advanced-scripting";
-import { UmsAssetManagementDiagram } from "./unity-master/diagrams/ums-asset-management";
-import { UmsEditorExtensionDiagram } from "./unity-master/diagrams/ums-editor-extension";
-import { UmsEditorMasteryDiagram } from "./unity-master/diagrams/ums-editor-mastery";
-import { UmsFinalReviewDiagram } from "./unity-master/diagrams/ums-final-review";
-import { UmsLearningMapDiagram } from "./unity-master/diagrams/ums-learning-map";
-import { UmsPerformanceProfilingDiagram } from "./unity-master/diagrams/ums-performance-profiling";
-import { UmsSrpMasteryDiagram } from "./unity-master/diagrams/ums-srp-mastery";
-import { UmsTeamCollaborationDiagram } from "./unity-master/diagrams/ums-team-collaboration";
-import { UmsWorkflowOptimizationDiagram } from "./unity-master/diagrams/ums-workflow-optimization";
-import { UmmAoiSystemDiagram } from "./unity-mmo-game/diagrams/umm-aoi-system";
-import { UmmCharacterSystemDiagram } from "./unity-mmo-game/diagrams/umm-character-system";
-import { UmmCombatSystemDiagram } from "./unity-mmo-game/diagrams/umm-combat-system";
-import { UmmDeploymentDiagram } from "./unity-mmo-game/diagrams/umm-deployment";
-import { UmmFinalReviewDiagram } from "./unity-mmo-game/diagrams/umm-final-review";
-import { UmmLearningMapDiagram } from "./unity-mmo-game/diagrams/umm-learning-map";
-import { UmmNetworkClientDiagram } from "./unity-mmo-game/diagrams/umm-network-client";
-import { UmmOptimizationDiagram } from "./unity-mmo-game/diagrams/umm-optimization";
-import { UmmSceneStreamingDiagram } from "./unity-mmo-game/diagrams/umm-scene-streaming";
-import { UmmStateSyncDiagram } from "./unity-mmo-game/diagrams/umm-state-sync";
-import { UsfAdvancedEffectsDiagram } from "./unity-screen-effects/diagrams/usf-advanced-effects";
-import { UsfBloomGlowDiagram } from "./unity-screen-effects/diagrams/usf-bloom-glow";
-import { UsfColorGradingDiagram } from "./unity-screen-effects/diagrams/usf-color-grading";
-import { UsfDepthEffectsDiagram } from "./unity-screen-effects/diagrams/usf-depth-effects";
-import { UsfFinalReviewDiagram } from "./unity-screen-effects/diagrams/usf-final-review";
-import { UsfImageEffectsDiagram } from "./unity-screen-effects/diagrams/usf-image-effects";
-import { UsfLearningMapDiagram } from "./unity-screen-effects/diagrams/usf-learning-map";
-import { UsfLightEffectsDiagram } from "./unity-screen-effects/diagrams/usf-light-effects";
-import { UsfPostProcessingDiagram } from "./unity-screen-effects/diagrams/usf-post-processing";
-import { UsfScreenBasicsDiagram } from "./unity-screen-effects/diagrams/usf-screen-basics";
-import { UscAdvancedCodingDiagram } from "./unity-scripting/diagrams/usc-advanced-coding";
-import { UscComponentSystemDiagram } from "./unity-scripting/diagrams/usc-component-system";
-import { UscCoroutinesDiagram } from "./unity-scripting/diagrams/usc-coroutines";
-import { UscFinalReviewDiagram } from "./unity-scripting/diagrams/usc-final-review";
-import { UscInputSystemDiagram } from "./unity-scripting/diagrams/usc-input-system";
-import { UscLearningMapDiagram } from "./unity-scripting/diagrams/usc-learning-map";
-import { UscLifecycleDiagram } from "./unity-scripting/diagrams/usc-lifecycle";
-import { UscMonoBasicsDiagram } from "./unity-scripting/diagrams/usc-mono-basics";
-import { UscPhysicsDiagram } from "./unity-scripting/diagrams/usc-physics";
-import { UscScriptableObjectsDiagram } from "./unity-scripting/diagrams/usc-scriptable-objects";
-import { UsgBuildDeployDiagram } from "./unity-scripting-game-dev/diagrams/usg-build-deploy";
-import { UsgComponentPatternDiagram } from "./unity-scripting-game-dev/diagrams/usg-component-pattern";
-import { UsgCoroutineEventDiagram } from "./unity-scripting-game-dev/diagrams/usg-coroutine-event";
-import { UsgCsharpBasicsDiagram } from "./unity-scripting-game-dev/diagrams/usg-csharp-basics";
-import { UsgDataPersistenceDiagram } from "./unity-scripting-game-dev/diagrams/usg-data-persistence";
-import { UsgFinalReviewDiagram } from "./unity-scripting-game-dev/diagrams/usg-final-review";
-import { UsgGameLoopDiagram } from "./unity-scripting-game-dev/diagrams/usg-game-loop";
-import { UsgLearningMapDiagram } from "./unity-scripting-game-dev/diagrams/usg-learning-map";
-import { UsgOptimizationDiagram } from "./unity-scripting-game-dev/diagrams/usg-optimization";
-import { UsgUnityApiDiagram } from "./unity-scripting-game-dev/diagrams/usg-unity-api";
-import { UseAdvancedShaderDiagram } from "./unity-shader-essentials/diagrams/use-advanced-shader";
-import { UseAlphaBlendingDiagram } from "./unity-shader-essentials/diagrams/use-alpha-blending";
-import { UseDepthNormalDiagram } from "./unity-shader-essentials/diagrams/use-depth-normal";
-import { UseFinalReviewDiagram } from "./unity-shader-essentials/diagrams/use-final-review";
-import { UseLearningMapDiagram } from "./unity-shader-essentials/diagrams/use-learning-map";
-import { UseLightingModelsDiagram } from "./unity-shader-essentials/diagrams/use-lighting-models";
-import { UsePostEffectsDiagram } from "./unity-shader-essentials/diagrams/use-post-effects";
-import { UseShaderBasicsDiagram } from "./unity-shader-essentials/diagrams/use-shader-basics";
-import { UseShaderlabSyntaxDiagram } from "./unity-shader-essentials/diagrams/use-shaderlab-syntax";
-import { UseVertexFragmentDiagram } from "./unity-shader-essentials/diagrams/use-vertex-fragment";
-import { UslAdvancedTechniquesDiagram } from "./unity-shaderlab/diagrams/usl-advanced-techniques";
-import { UslCommandBufferDiagram } from "./unity-shaderlab/diagrams/usl-command-buffer";
-import { UslFinalReviewDiagram } from "./unity-shaderlab/diagrams/usl-final-review";
-import { UslGrabpassDiagram } from "./unity-shaderlab/diagrams/usl-grabpass";
-import { UslLearningMapDiagram } from "./unity-shaderlab/diagrams/usl-learning-map";
-import { UslLightingModelsDiagram } from "./unity-shaderlab/diagrams/usl-lighting-models";
-import { UslPropertiesBlockDiagram } from "./unity-shaderlab/diagrams/usl-properties-block";
-import { UslShaderlabStructureDiagram } from "./unity-shaderlab/diagrams/usl-shaderlab-structure";
-import { UslSubshaderPassDiagram } from "./unity-shaderlab/diagrams/usl-subshader-pass";
-import { UslSurfaceShadersDiagram } from "./unity-shaderlab/diagrams/usl-surface-shaders";
-import { UidAnimationsDiagram } from "./unity-ui-design/diagrams/uid-animations";
-import { UidFinalReviewDiagram } from "./unity-ui-design/diagrams/uid-final-review";
-import { UidInteractiveDiagram } from "./unity-ui-design/diagrams/uid-interactive";
-import { UidLayoutSystemDiagram } from "./unity-ui-design/diagrams/uid-layout-system";
-import { UidLearningMapDiagram } from "./unity-ui-design/diagrams/uid-learning-map";
-import { UidOptimizationDiagram } from "./unity-ui-design/diagrams/uid-optimization";
-import { UidResponsiveDiagram } from "./unity-ui-design/diagrams/uid-responsive";
-import { UidUguiBasicsDiagram } from "./unity-ui-design/diagrams/uid-ugui-basics";
-import { UidUiSystemDiagram } from "./unity-ui-design/diagrams/uid-ui-system";
-import { UidUitoolkitDiagram } from "./unity-ui-design/diagrams/uid-uitoolkit";
-import { UusCustomPassDiagram } from "./unity-urp-shaders/diagrams/uus-custom-pass";
-import { UusFinalReviewDiagram } from "./unity-urp-shaders/diagrams/uus-final-review";
-import { UusLearningMapDiagram } from "./unity-urp-shaders/diagrams/uus-learning-map";
-import { UusLitUnlitDiagram } from "./unity-urp-shaders/diagrams/uus-lit-unlit";
-import { UusUrpBasicsDiagram } from "./unity-urp-shaders/diagrams/uus-urp-basics";
-import { UusUrpLightingDiagram } from "./unity-urp-shaders/diagrams/uus-urp-lighting";
-import { UusUrpOptimizationDiagram } from "./unity-urp-shaders/diagrams/uus-urp-optimization";
-import { UusUrpPostProcessingDiagram } from "./unity-urp-shaders/diagrams/uus-urp-post-processing";
-import { UusUrpShaderGraphDiagram } from "./unity-urp-shaders/diagrams/uus-urp-shader-graph";
-import { UusUrpShadowsDiagram } from "./unity-urp-shaders/diagrams/uus-urp-shadows";
-import { UvfAnimationVfxDiagram } from "./unity-vfx/diagrams/uvf-animation-vfx";
-import { UvfCombatVfxDiagram } from "./unity-vfx/diagrams/uvf-combat-vfx";
-import { UvfFinalReviewDiagram } from "./unity-vfx/diagrams/uvf-final-review";
-import { UvfLearningMapDiagram } from "./unity-vfx/diagrams/uvf-learning-map";
-import { UvfParticleAdvancedDiagram } from "./unity-vfx/diagrams/uvf-particle-advanced";
-import { UvfParticleBasicsDiagram } from "./unity-vfx/diagrams/uvf-particle-basics";
-import { UvfPhysicsVfxDiagram } from "./unity-vfx/diagrams/uvf-physics-vfx";
-import { UvfPostProcessingDiagram } from "./unity-vfx/diagrams/uvf-post-processing";
-import { UvfShaderVfxDiagram } from "./unity-vfx/diagrams/uvf-shader-vfx";
-import { UvfUiVfxDiagram } from "./unity-vfx/diagrams/uvf-ui-vfx";
-import { UapAdvancedIoDiagram } from "./unix-advanced-programming/diagrams/uap-advanced-io";
-import { UapFileIoDiagram } from "./unix-advanced-programming/diagrams/uap-file-io";
-import { UapFilesDirectoriesDiagram } from "./unix-advanced-programming/diagrams/uap-files-directories";
-import { UapProcessControlDiagram } from "./unix-advanced-programming/diagrams/uap-process-control";
-import { UapProcessEnvDiagram } from "./unix-advanced-programming/diagrams/uap-process-env";
-import { UapProcessIpcDiagram } from "./unix-advanced-programming/diagrams/uap-process-ipc";
-import { UapSignalsDiagram } from "./unix-advanced-programming/diagrams/uap-signals";
-import { UapThreadsDiagram } from "./unix-advanced-programming/diagrams/uap-threads";
-import { UnpAdvancedIoDiagram } from "./unix-network-programming-vol1/diagrams/unp-advanced-io";
-import { UnpAdvancedSocketsDiagram } from "./unix-network-programming-vol1/diagrams/unp-advanced-sockets";
-import { UnpDaemonIpcDiagram } from "./unix-network-programming-vol1/diagrams/unp-daemon-ipc";
-import { UnpFinalReviewDiagram } from "./unix-network-programming-vol1/diagrams/unp-final-review";
-import { UnpIoModelsDiagram } from "./unix-network-programming-vol1/diagrams/unp-io-models";
-import { UnpIpv6Diagram } from "./unix-network-programming-vol1/diagrams/unp-ipv6";
-import { UnpLearningMapDiagram } from "./unix-network-programming-vol1/diagrams/unp-learning-map";
-import { UnpSocketIntroDiagram } from "./unix-network-programming-vol1/diagrams/unp-socket-intro";
-import { UnpTcpSocketsDiagram } from "./unix-network-programming-vol1/diagrams/unp-tcp-sockets";
-import { UnpUdpSocketsDiagram } from "./unix-network-programming-vol1/diagrams/unp-udp-sockets";
-import { VdiAsyncComponentDiagram } from "./vuejs-design-implementation/diagrams/vdi-async-component";
-import { VdiBuiltInComponentsDiagram } from "./vuejs-design-implementation/diagrams/vdi-built-in-components";
-import { VdiCompilerArchitectureDiagram } from "./vuejs-design-implementation/diagrams/vdi-compiler-architecture";
-import { VdiComponentModelDiagram } from "./vuejs-design-implementation/diagrams/vdi-component-model";
-import { VdiDiffAlgorithmDiagram } from "./vuejs-design-implementation/diagrams/vdi-diff-algorithm";
-import { VdiEffectSchedulerDiagram } from "./vuejs-design-implementation/diagrams/vdi-effect-scheduler";
-import { VdiFinalReviewDiagram } from "./vuejs-design-implementation/diagrams/vdi-final-review";
-import { VdiLearningMapDiagram } from "./vuejs-design-implementation/diagrams/vdi-learning-map";
-import { VdiReactiveDesignDiagram } from "./vuejs-design-implementation/diagrams/vdi-reactive-design";
-import { VdiRendererArchitectureDiagram } from "./vuejs-design-implementation/diagrams/vdi-renderer-architecture";
-import { VjpBuildDeployDiagram } from "./vuejs-practice/diagrams/vjp-build-deploy";
-import { VjpComponentDesignDiagram } from "./vuejs-practice/diagrams/vjp-component-design";
-import { VjpCompositionApiDiagram } from "./vuejs-practice/diagrams/vjp-composition-api";
-import { VjpFinalReviewDiagram } from "./vuejs-practice/diagrams/vjp-final-review";
-import { VjpLearningMapDiagram } from "./vuejs-practice/diagrams/vjp-learning-map";
-import { VjpReactivitySystemDiagram } from "./vuejs-practice/diagrams/vjp-reactivity-system";
-import { VjpRouterGuardDiagram } from "./vuejs-practice/diagrams/vjp-router-guard";
-import { VjpSsrSsgDiagram } from "./vuejs-practice/diagrams/vjp-ssr-ssg";
-import { VjpTemplateSyntaxDiagram } from "./vuejs-practice/diagrams/vjp-template-syntax";
-import { VjpVuexPiniaDiagram } from "./vuejs-practice/diagrams/vjp-vuex-pinia";
+import {
+  TbcOfficialLearningMapMapLab,
+  TbcOfficialLearningMapExperimentLab,
+  TbcOfficialLearningMapEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-official-learning-map";
+import {
+  Tbc01IntroductionMapLab,
+  Tbc01IntroductionExperimentLab,
+  Tbc01IntroductionEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-01-introduction";
+import {
+  Tbc02LexicalAnalysisMapLab,
+  Tbc02LexicalAnalysisExperimentLab,
+  Tbc02LexicalAnalysisEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-02-lexical-analysis";
+import {
+  Tbc03ParsingMapLab,
+  Tbc03ParsingExperimentLab,
+  Tbc03ParsingEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-03-parsing";
+import {
+  Tbc04AbstractSyntaxMapLab,
+  Tbc04AbstractSyntaxExperimentLab,
+  Tbc04AbstractSyntaxEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-04-abstract-syntax";
+import {
+  Tbc05SemanticAnalysisMapLab,
+  Tbc05SemanticAnalysisExperimentLab,
+  Tbc05SemanticAnalysisEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-05-semantic-analysis";
+import {
+  Tbc06ActivationRecordsMapLab,
+  Tbc06ActivationRecordsExperimentLab,
+  Tbc06ActivationRecordsEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-06-activation-records";
+import {
+  Tbc07TranslationIntermediateCodeMapLab,
+  Tbc07TranslationIntermediateCodeExperimentLab,
+  Tbc07TranslationIntermediateCodeEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-07-translation-intermediate-code";
+import {
+  Tbc08BasicBlocksTracesMapLab,
+  Tbc08BasicBlocksTracesExperimentLab,
+  Tbc08BasicBlocksTracesEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-08-basic-blocks-traces";
+import {
+  Tbc09InstructionSelectionMapLab,
+  Tbc09InstructionSelectionExperimentLab,
+  Tbc09InstructionSelectionEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-09-instruction-selection";
+import {
+  Tbc10LivenessAnalysisMapLab,
+  Tbc10LivenessAnalysisExperimentLab,
+  Tbc10LivenessAnalysisEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-10-liveness-analysis";
+import {
+  Tbc11RegisterAllocationMapLab,
+  Tbc11RegisterAllocationExperimentLab,
+  Tbc11RegisterAllocationEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-11-register-allocation";
+import {
+  Tbc12PuttingItAllTogetherMapLab,
+  Tbc12PuttingItAllTogetherExperimentLab,
+  Tbc12PuttingItAllTogetherEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-12-putting-it-all-together";
+import {
+  Tbc13GarbageCollectionMapLab,
+  Tbc13GarbageCollectionExperimentLab,
+  Tbc13GarbageCollectionEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-13-garbage-collection";
+import {
+  Tbc14ObjectOrientedLanguagesMapLab,
+  Tbc14ObjectOrientedLanguagesExperimentLab,
+  Tbc14ObjectOrientedLanguagesEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-14-object-oriented-languages";
+import {
+  Tbc15FunctionalLanguagesMapLab,
+  Tbc15FunctionalLanguagesExperimentLab,
+  Tbc15FunctionalLanguagesEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-15-functional-languages";
+import {
+  Tbc16PolymorphicTypesMapLab,
+  Tbc16PolymorphicTypesExperimentLab,
+  Tbc16PolymorphicTypesEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-16-polymorphic-types";
+import {
+  Tbc17DataflowAnalysisMapLab,
+  Tbc17DataflowAnalysisExperimentLab,
+  Tbc17DataflowAnalysisEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-17-dataflow-analysis";
+import {
+  Tbc18LoopOptimizationsMapLab,
+  Tbc18LoopOptimizationsExperimentLab,
+  Tbc18LoopOptimizationsEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-18-loop-optimizations";
+import {
+  Tbc19StaticSingleAssignmentMapLab,
+  Tbc19StaticSingleAssignmentExperimentLab,
+  Tbc19StaticSingleAssignmentEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-19-static-single-assignment";
+import {
+  Tbc20SchedulingPipeliningMapLab,
+  Tbc20SchedulingPipeliningExperimentLab,
+  Tbc20SchedulingPipeliningEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-20-scheduling-pipelining";
+import {
+  Tbc21MemoryHierarchiesMapLab,
+  Tbc21MemoryHierarchiesExperimentLab,
+  Tbc21MemoryHierarchiesEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-21-memory-hierarchies";
+import {
+  TbcAppendixTigerLanguageReferenceMapLab,
+  TbcAppendixTigerLanguageReferenceExperimentLab,
+  TbcAppendixTigerLanguageReferenceEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-appendix-tiger-language-reference";
+import {
+  TbcOfficialFinalReviewMapLab,
+  TbcOfficialFinalReviewExperimentLab,
+  TbcOfficialFinalReviewEvidenceLab,
+} from "./tiger-book-compiler/diagrams/tbc-official-final-review";
+import {
+  TwsOfficialLearningMapMapLab,
+  TwsOfficialLearningMapExperimentLab,
+  TwsOfficialLearningMapEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-official-learning-map";
+import {
+  Tws01WhatToBuildMapLab,
+  Tws01WhatToBuildExperimentLab,
+  Tws01WhatToBuildEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-01-what-to-build";
+import {
+  Tws02LanguageDesignMapLab,
+  Tws02LanguageDesignExperimentLab,
+  Tws02LanguageDesignEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-02-language-design";
+import {
+  Tws03TokenizationMapLab,
+  Tws03TokenizationExperimentLab,
+  Tws03TokenizationEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-03-tokenization";
+import {
+  Tws04ProgramObjectsMapLab,
+  Tws04ProgramObjectsExperimentLab,
+  Tws04ProgramObjectsEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-04-program-objects";
+import {
+  Tws05ParserDesignMapLab,
+  Tws05ParserDesignExperimentLab,
+  Tws05ParserDesignEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-05-parser-design";
+import {
+  Tws06InterpreterExecutionMapLab,
+  Tws06InterpreterExecutionExperimentLab,
+  Tws06InterpreterExecutionEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-06-interpreter-execution";
+import {
+  Tws07FunctionsClosuresMapLab,
+  Tws07FunctionsClosuresExperimentLab,
+  Tws07FunctionsClosuresEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-07-functions-closures";
+import {
+  Tws08JavaInteropMapLab,
+  Tws08JavaInteropExperimentLab,
+  Tws08JavaInteropEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-08-java-interop";
+import {
+  Tws09ObjectOrientedLanguageMapLab,
+  Tws09ObjectOrientedLanguageExperimentLab,
+  Tws09ObjectOrientedLanguageEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-09-object-oriented-language";
+import {
+  Tws10ArraysMapLab,
+  Tws10ArraysExperimentLab,
+  Tws10ArraysEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-10-arrays";
+import {
+  Tws11FastVariableAccessMapLab,
+  Tws11FastVariableAccessExperimentLab,
+  Tws11FastVariableAccessEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-11-fast-variable-access";
+import {
+  Tws12FastObjectAccessMapLab,
+  Tws12FastObjectAccessExperimentLab,
+  Tws12FastObjectAccessEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-12-fast-object-access";
+import {
+  Tws13BytecodeInterpreterMapLab,
+  Tws13BytecodeInterpreterExperimentLab,
+  Tws13BytecodeInterpreterEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-13-bytecode-interpreter";
+import {
+  Tws14StaticTypesMapLab,
+  Tws14StaticTypesExperimentLab,
+  Tws14StaticTypesEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-14-static-types";
+import {
+  Tws15HandwrittenLexerMapLab,
+  Tws15HandwrittenLexerExperimentLab,
+  Tws15HandwrittenLexerEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-15-handwritten-lexer";
+import {
+  Tws16ParsingMethodsMapLab,
+  Tws16ParsingMethodsExperimentLab,
+  Tws16ParsingMethodsEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-16-parsing-methods";
+import {
+  Tws17ParserLibraryInternalsMapLab,
+  Tws17ParserLibraryInternalsExperimentLab,
+  Tws17ParserLibraryInternalsEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-17-parser-library-internals";
+import {
+  Tws18GluonjMapLab,
+  Tws18GluonjExperimentLab,
+  Tws18GluonjEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-18-gluonj";
+import {
+  Tws19AstDesignPatternsMapLab,
+  Tws19AstDesignPatternsExperimentLab,
+  Tws19AstDesignPatternsEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-19-ast-design-patterns";
+import {
+  TwsOfficialFinalReviewMapLab,
+  TwsOfficialFinalReviewExperimentLab,
+  TwsOfficialFinalReviewEvidenceLab,
+} from "./two-week-scripting-language/diagrams/tws-official-final-review";
+import {
+  Uhm24OfficialLearningMapMapLab,
+  Uhm24OfficialLearningMapExperimentLab,
+  Uhm24OfficialLearningMapEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-official-learning-map";
+import {
+  Uhm24Slide01CoverMapLab,
+  Uhm24Slide01CoverExperimentLab,
+  Uhm24Slide01CoverEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-01-cover";
+import {
+  Uhm24Slide02NewChapterMapLab,
+  Uhm24Slide02NewChapterExperimentLab,
+  Uhm24Slide02NewChapterEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-02-new-chapter";
+import {
+  Uhm24Slide03MadeWithUnityMapLab,
+  Uhm24Slide03MadeWithUnityExperimentLab,
+  Uhm24Slide03MadeWithUnityEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-03-made-with-unity";
+import {
+  Uhm24Slide04ProductionEvidenceMapLab,
+  Uhm24Slide04ProductionEvidenceExperimentLab,
+  Uhm24Slide04ProductionEvidenceEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-04-production-evidence";
+import {
+  Uhm24Slide05BeijingAutoShowMapLab,
+  Uhm24Slide05BeijingAutoShowExperimentLab,
+  Uhm24Slide05BeijingAutoShowEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-05-beijing-auto-show";
+import {
+  Uhm24Slide06ModelPerformanceBudgetMapLab,
+  Uhm24Slide06ModelPerformanceBudgetExperimentLab,
+  Uhm24Slide06ModelPerformanceBudgetEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-06-model-performance-budget";
+import {
+  Uhm24Slide07SocOsCompatibilityMapLab,
+  Uhm24Slide07SocOsCompatibilityExperimentLab,
+  Uhm24Slide07SocOsCompatibilityEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-07-soc-os-compatibility";
+import {
+  Uhm24Slide08ArchitectureCombinationsMapLab,
+  Uhm24Slide08ArchitectureCombinationsExperimentLab,
+  Uhm24Slide08ArchitectureCombinationsEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-08-architecture-combinations";
+import {
+  Uhm24Slide09EcosystemMapLab,
+  Uhm24Slide09EcosystemExperimentLab,
+  Uhm24Slide09EcosystemEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-09-ecosystem";
+import {
+  Uhm24Slide10HeadUnitEditionMapLab,
+  Uhm24Slide10HeadUnitEditionExperimentLab,
+  Uhm24Slide10HeadUnitEditionEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-10-head-unit-edition";
+import {
+  Uhm24Slide11TuanjieHeadUnitMapLab,
+  Uhm24Slide11TuanjieHeadUnitExperimentLab,
+  Uhm24Slide11TuanjieHeadUnitEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-11-tuanjie-head-unit";
+import {
+  Uhm24Slide12QnxSupportMapLab,
+  Uhm24Slide12QnxSupportExperimentLab,
+  Uhm24Slide12QnxSupportEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-12-qnx-support";
+import {
+  Uhm24Slide13EmbeddedLinuxSupportMapLab,
+  Uhm24Slide13EmbeddedLinuxSupportExperimentLab,
+  Uhm24Slide13EmbeddedLinuxSupportEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-13-embedded-linux-support";
+import {
+  Uhm24Slide14TuanjieEngineMapLab,
+  Uhm24Slide14TuanjieEngineExperimentLab,
+  Uhm24Slide14TuanjieEngineEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-14-tuanjie-engine";
+import {
+  Uhm24Slide15UrasArchitectureMapLab,
+  Uhm24Slide15UrasArchitectureExperimentLab,
+  Uhm24Slide15UrasArchitectureEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-15-uras-architecture";
+import {
+  Uhm24Slide16UrasUnifiedRenderingMapLab,
+  Uhm24Slide16UrasUnifiedRenderingExperimentLab,
+  Uhm24Slide16UrasUnifiedRenderingEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-16-uras-unified-rendering";
+import {
+  Uhm24Slide17UrasViewIsolationMapLab,
+  Uhm24Slide17UrasViewIsolationExperimentLab,
+  Uhm24Slide17UrasViewIsolationEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-17-uras-view-isolation";
+import {
+  Uhm24Slide18UnityChinaMapLab,
+  Uhm24Slide18UnityChinaExperimentLab,
+  Uhm24Slide18UnityChinaEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-18-unity-china";
+import {
+  Uhm24Slide19TimelineMapLab,
+  Uhm24Slide19TimelineExperimentLab,
+  Uhm24Slide19TimelineEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-19-timeline";
+import {
+  Uhm24Slide20CapabilityFoundationMapLab,
+  Uhm24Slide20CapabilityFoundationExperimentLab,
+  Uhm24Slide20CapabilityFoundationEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-20-capability-foundation";
+import {
+  Uhm24Slide21ServiceModelMapLab,
+  Uhm24Slide21ServiceModelExperimentLab,
+  Uhm24Slide21ServiceModelEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-21-service-model";
+import {
+  Uhm24Slide22InnovationScenariosMapLab,
+  Uhm24Slide22InnovationScenariosExperimentLab,
+  Uhm24Slide22InnovationScenariosEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-22-innovation-scenarios";
+import {
+  Uhm24Slide23EvidenceClosureMapLab,
+  Uhm24Slide23EvidenceClosureExperimentLab,
+  Uhm24Slide23EvidenceClosureEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-slide-23-evidence-closure";
+import {
+  Uhm24OfficialFinalReviewMapLab,
+  Uhm24OfficialFinalReviewExperimentLab,
+  Uhm24OfficialFinalReviewEvidenceLab,
+} from "./unity-hmi/diagrams/uhm-2024-official-final-review";
+import {
+  UapOfficialLearningMapMapLab,
+  UapOfficialLearningMapExperimentLab,
+  UapOfficialLearningMapEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-official-learning-map";
+import {
+  UapUnixBasicsMapLab,
+  UapUnixBasicsExperimentLab,
+  UapUnixBasicsEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-unix-basics";
+import {
+  UapStandardsImplementationsMapLab,
+  UapStandardsImplementationsExperimentLab,
+  UapStandardsImplementationsEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-standards-implementations";
+import {
+  UapFileIoMapLab,
+  UapFileIoExperimentLab,
+  UapFileIoEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-file-io";
+import {
+  UapFilesDirectoriesMapLab,
+  UapFilesDirectoriesExperimentLab,
+  UapFilesDirectoriesEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-files-directories";
+import {
+  UapStandardIoMapLab,
+  UapStandardIoExperimentLab,
+  UapStandardIoEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-standard-io";
+import {
+  UapSystemDataInformationMapLab,
+  UapSystemDataInformationExperimentLab,
+  UapSystemDataInformationEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-system-data-information";
+import {
+  UapProcessEnvironmentMapLab,
+  UapProcessEnvironmentExperimentLab,
+  UapProcessEnvironmentEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-process-environment";
+import {
+  UapProcessControlMapLab,
+  UapProcessControlExperimentLab,
+  UapProcessControlEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-process-control";
+import {
+  UapProcessRelationshipsMapLab,
+  UapProcessRelationshipsExperimentLab,
+  UapProcessRelationshipsEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-process-relationships";
+import {
+  UapSignalsMapLab,
+  UapSignalsExperimentLab,
+  UapSignalsEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-signals";
+import {
+  UapThreadsMapLab,
+  UapThreadsExperimentLab,
+  UapThreadsEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-threads";
+import {
+  UapThreadControlMapLab,
+  UapThreadControlExperimentLab,
+  UapThreadControlEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-thread-control";
+import {
+  UapDaemonProcessesMapLab,
+  UapDaemonProcessesExperimentLab,
+  UapDaemonProcessesEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-daemon-processes";
+import {
+  UapAdvancedIoMapLab,
+  UapAdvancedIoExperimentLab,
+  UapAdvancedIoEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-advanced-io";
+import {
+  UapInterprocessCommunicationMapLab,
+  UapInterprocessCommunicationExperimentLab,
+  UapInterprocessCommunicationEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-interprocess-communication";
+import {
+  UapNetworkIpcSocketsMapLab,
+  UapNetworkIpcSocketsExperimentLab,
+  UapNetworkIpcSocketsEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-network-ipc-sockets";
+import {
+  UapAdvancedIpcMapLab,
+  UapAdvancedIpcExperimentLab,
+  UapAdvancedIpcEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-advanced-ipc";
+import {
+  UapTerminalIoMapLab,
+  UapTerminalIoExperimentLab,
+  UapTerminalIoEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-terminal-io";
+import {
+  UapPseudoTerminalsMapLab,
+  UapPseudoTerminalsExperimentLab,
+  UapPseudoTerminalsEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-pseudo-terminals";
+import {
+  UapDatabaseLibraryMapLab,
+  UapDatabaseLibraryExperimentLab,
+  UapDatabaseLibraryEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-database-library";
+import {
+  UapNetworkPrinterMapLab,
+  UapNetworkPrinterExperimentLab,
+  UapNetworkPrinterEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-network-printer";
+import {
+  UapAppendixAFunctionPrototypesMapLab,
+  UapAppendixAFunctionPrototypesExperimentLab,
+  UapAppendixAFunctionPrototypesEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-appendix-a-function-prototypes";
+import {
+  UapAppendixBSourceCodeMapLab,
+  UapAppendixBSourceCodeExperimentLab,
+  UapAppendixBSourceCodeEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-appendix-b-source-code";
+import {
+  UapAppendixCExerciseSolutionsMapLab,
+  UapAppendixCExerciseSolutionsExperimentLab,
+  UapAppendixCExerciseSolutionsEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-appendix-c-exercise-solutions";
+import {
+  UapOfficialFinalReviewMapLab,
+  UapOfficialFinalReviewExperimentLab,
+  UapOfficialFinalReviewEvidenceLab,
+} from "./unix-advanced-programming/diagrams/uap-official-final-review";
+import {
+  UnpOfficialLearningMapMapLab,
+  UnpOfficialLearningMapExperimentLab,
+  UnpOfficialLearningMapEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-official-learning-map";
+import {
+  Unp01IntroductionMapLab,
+  Unp01IntroductionExperimentLab,
+  Unp01IntroductionEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-01-introduction";
+import {
+  Unp02TransportLayerMapLab,
+  Unp02TransportLayerExperimentLab,
+  Unp02TransportLayerEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-02-transport-layer";
+import {
+  Unp03SocketsIntroductionMapLab,
+  Unp03SocketsIntroductionExperimentLab,
+  Unp03SocketsIntroductionEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-03-sockets-introduction";
+import {
+  Unp04ElementaryTcpSocketsMapLab,
+  Unp04ElementaryTcpSocketsExperimentLab,
+  Unp04ElementaryTcpSocketsEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-04-elementary-tcp-sockets";
+import {
+  Unp05TcpClientServerExampleMapLab,
+  Unp05TcpClientServerExampleExperimentLab,
+  Unp05TcpClientServerExampleEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-05-tcp-client-server-example";
+import {
+  Unp06IoMultiplexingMapLab,
+  Unp06IoMultiplexingExperimentLab,
+  Unp06IoMultiplexingEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-06-io-multiplexing";
+import {
+  Unp07SocketOptionsMapLab,
+  Unp07SocketOptionsExperimentLab,
+  Unp07SocketOptionsEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-07-socket-options";
+import {
+  Unp08ElementaryUdpSocketsMapLab,
+  Unp08ElementaryUdpSocketsExperimentLab,
+  Unp08ElementaryUdpSocketsEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-08-elementary-udp-sockets";
+import {
+  Unp09ElementarySctpSocketsMapLab,
+  Unp09ElementarySctpSocketsExperimentLab,
+  Unp09ElementarySctpSocketsEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-09-elementary-sctp-sockets";
+import {
+  Unp10SctpClientServerExampleMapLab,
+  Unp10SctpClientServerExampleExperimentLab,
+  Unp10SctpClientServerExampleEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-10-sctp-client-server-example";
+import {
+  Unp11NameAddressConversionsMapLab,
+  Unp11NameAddressConversionsExperimentLab,
+  Unp11NameAddressConversionsEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-11-name-address-conversions";
+import {
+  Unp12Ipv4Ipv6InteroperabilityMapLab,
+  Unp12Ipv4Ipv6InteroperabilityExperimentLab,
+  Unp12Ipv4Ipv6InteroperabilityEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-12-ipv4-ipv6-interoperability";
+import {
+  Unp13DaemonInetdMapLab,
+  Unp13DaemonInetdExperimentLab,
+  Unp13DaemonInetdEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-13-daemon-inetd";
+import {
+  Unp14AdvancedIoFunctionsMapLab,
+  Unp14AdvancedIoFunctionsExperimentLab,
+  Unp14AdvancedIoFunctionsEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-14-advanced-io-functions";
+import {
+  Unp15UnixDomainProtocolsMapLab,
+  Unp15UnixDomainProtocolsExperimentLab,
+  Unp15UnixDomainProtocolsEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-15-unix-domain-protocols";
+import {
+  Unp16NonblockingIoMapLab,
+  Unp16NonblockingIoExperimentLab,
+  Unp16NonblockingIoEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-16-nonblocking-io";
+import {
+  Unp17IoctlOperationsMapLab,
+  Unp17IoctlOperationsExperimentLab,
+  Unp17IoctlOperationsEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-17-ioctl-operations";
+import {
+  Unp18RoutingSocketsMapLab,
+  Unp18RoutingSocketsExperimentLab,
+  Unp18RoutingSocketsEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-18-routing-sockets";
+import {
+  Unp19KeyManagementSocketsMapLab,
+  Unp19KeyManagementSocketsExperimentLab,
+  Unp19KeyManagementSocketsEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-19-key-management-sockets";
+import {
+  Unp20BroadcastingMapLab,
+  Unp20BroadcastingExperimentLab,
+  Unp20BroadcastingEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-20-broadcasting";
+import {
+  Unp21MulticastingMapLab,
+  Unp21MulticastingExperimentLab,
+  Unp21MulticastingEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-21-multicasting";
+import {
+  Unp22AdvancedUdpMapLab,
+  Unp22AdvancedUdpExperimentLab,
+  Unp22AdvancedUdpEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-22-advanced-udp";
+import {
+  Unp23AdvancedSctpMapLab,
+  Unp23AdvancedSctpExperimentLab,
+  Unp23AdvancedSctpEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-23-advanced-sctp";
+import {
+  Unp24OutOfBandDataMapLab,
+  Unp24OutOfBandDataExperimentLab,
+  Unp24OutOfBandDataEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-24-out-of-band-data";
+import {
+  Unp25SignalDrivenIoMapLab,
+  Unp25SignalDrivenIoExperimentLab,
+  Unp25SignalDrivenIoEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-25-signal-driven-io";
+import {
+  Unp26ThreadsMapLab,
+  Unp26ThreadsExperimentLab,
+  Unp26ThreadsEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-26-threads";
+import {
+  Unp27IpOptionsMapLab,
+  Unp27IpOptionsExperimentLab,
+  Unp27IpOptionsEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-27-ip-options";
+import {
+  Unp28RawSocketsMapLab,
+  Unp28RawSocketsExperimentLab,
+  Unp28RawSocketsEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-28-raw-sockets";
+import {
+  Unp29DatalinkAccessMapLab,
+  Unp29DatalinkAccessExperimentLab,
+  Unp29DatalinkAccessEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-29-datalink-access";
+import {
+  Unp30ClientServerDesignMapLab,
+  Unp30ClientServerDesignExperimentLab,
+  Unp30ClientServerDesignEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-30-client-server-design";
+import {
+  Unp31StreamsMapLab,
+  Unp31StreamsExperimentLab,
+  Unp31StreamsEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-31-streams";
+import {
+  UnpAppendixAInternetProtocolsMapLab,
+  UnpAppendixAInternetProtocolsExperimentLab,
+  UnpAppendixAInternetProtocolsEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-appendix-a-internet-protocols";
+import {
+  UnpAppendixBVirtualNetworksMapLab,
+  UnpAppendixBVirtualNetworksExperimentLab,
+  UnpAppendixBVirtualNetworksEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-appendix-b-virtual-networks";
+import {
+  UnpAppendixCDebuggingTechniquesMapLab,
+  UnpAppendixCDebuggingTechniquesExperimentLab,
+  UnpAppendixCDebuggingTechniquesEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-appendix-c-debugging-techniques";
+import {
+  UnpAppendixDMiscSourceCodeMapLab,
+  UnpAppendixDMiscSourceCodeExperimentLab,
+  UnpAppendixDMiscSourceCodeEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-appendix-d-misc-source-code";
+import {
+  UnpAppendixESelectedSolutionsMapLab,
+  UnpAppendixESelectedSolutionsExperimentLab,
+  UnpAppendixESelectedSolutionsEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-appendix-e-selected-solutions";
+import {
+  UnpOfficialFinalReviewMapLab,
+  UnpOfficialFinalReviewExperimentLab,
+  UnpOfficialFinalReviewEvidenceLab,
+} from "./unix-network-programming-vol1/diagrams/unp-official-final-review";
 import { VkgAdvancedFeaturesDiagram } from "./vulkan-guide/diagrams/vkg-advanced-features";
 import { VkgCommandBuffersDiagram } from "./vulkan-guide/diagrams/vkg-command-buffers";
 import { VkgFinalReviewDiagram } from "./vulkan-guide/diagrams/vkg-final-review";
@@ -2977,46 +8976,311 @@ import { VkgRenderPassDiagram } from "./vulkan-guide/diagrams/vkg-render-pass";
 import { VkgSwapchainDiagram } from "./vulkan-guide/diagrams/vkg-swapchain";
 import { VkgTexturesShadersDiagram } from "./vulkan-guide/diagrams/vkg-textures-shaders";
 import { VkgVulkanBasicsDiagram } from "./vulkan-guide/diagrams/vkg-vulkan-basics";
-import { WjFileIoDiagram } from "./windows-journey/diagrams/wj-file-io";
-import { WjFinalReviewDiagram } from "./windows-journey/diagrams/wj-final-review";
-import { WjGdiRenderingDiagram } from "./windows-journey/diagrams/wj-gdi-rendering";
-import { WjLearningMapDiagram } from "./windows-journey/diagrams/wj-learning-map";
-import { WjMessageLoopDiagram } from "./windows-journey/diagrams/wj-message-loop";
-import { WjNetworkProgrammingDiagram } from "./windows-journey/diagrams/wj-network-programming";
-import { WjProcessThreadWinDiagram } from "./windows-journey/diagrams/wj-process-thread-win";
-import { WjRegistryServiceDiagram } from "./windows-journey/diagrams/wj-registry-service";
-import { WjWin32ApiDiagram } from "./windows-journey/diagrams/wj-win32-api";
-import { WjWindowManagementDiagram } from "./windows-journey/diagrams/wj-window-management";
-import { WkpDriverFundamentalsDiagram } from "./windows-kernel-programming/diagrams/wkp-driver-fundamentals";
-import { WkpFinalReviewDiagram } from "./windows-kernel-programming/diagrams/wkp-final-review";
-import { WkpInterruptDpcDiagram } from "./windows-kernel-programming/diagrams/wkp-interrupt-dpc";
-import { WkpIrpIoManagerDiagram } from "./windows-kernel-programming/diagrams/wkp-irp-io-manager";
-import { WkpKernelMemoryDiagram } from "./windows-kernel-programming/diagrams/wkp-kernel-memory";
-import { WkpLearningMapDiagram } from "./windows-kernel-programming/diagrams/wkp-learning-map";
-import { WkpMdlMemoryDescriptorDiagram } from "./windows-kernel-programming/diagrams/wkp-mdl-memory-descriptor";
-import { WkpPnpPowerDiagram } from "./windows-kernel-programming/diagrams/wkp-pnp-power";
-import { WkpSynchronizationPrimitivesDiagram } from "./windows-kernel-programming/diagrams/wkp-synchronization-primitives";
-import { WkpWdmWdfDiagram } from "./windows-kernel-programming/diagrams/wkp-wdm-wdf";
-import { WpaCaptureFiltersDiagram } from "./wireshark-packet-analysis/diagrams/wpa-capture-filters";
-import { WpaDisplayFiltersDiagram } from "./wireshark-packet-analysis/diagrams/wpa-display-filters";
-import { WpaDnsDhcpDiagram } from "./wireshark-packet-analysis/diagrams/wpa-dns-dhcp";
-import { WpaEthernetIpDiagram } from "./wireshark-packet-analysis/diagrams/wpa-ethernet-ip";
-import { WpaFinalReviewDiagram } from "./wireshark-packet-analysis/diagrams/wpa-final-review";
-import { WpaHttpAnalysisDiagram } from "./wireshark-packet-analysis/diagrams/wpa-http-analysis";
-import { WpaLearningMapDiagram } from "./wireshark-packet-analysis/diagrams/wpa-learning-map";
-import { WpaNetworkSecurityDiagram } from "./wireshark-packet-analysis/diagrams/wpa-network-security";
-import { WpaTcpUdpDiagram } from "./wireshark-packet-analysis/diagrams/wpa-tcp-udp";
-import { WpaWiresharkBasicsDiagram } from "./wireshark-packet-analysis/diagrams/wpa-wireshark-basics";
-import { YdkAsyncPerformanceDiagram } from "./you-dont-know-js/diagrams/ydk-async-performance";
-import { YdkFinalReviewDiagram } from "./you-dont-know-js/diagrams/ydk-final-review";
-import { YdkGeneratorsDiagram } from "./you-dont-know-js/diagrams/ydk-generators";
-import { YdkGrammarNativesDiagram } from "./you-dont-know-js/diagrams/ydk-grammar-natives";
-import { YdkHoistingDiagram } from "./you-dont-know-js/diagrams/ydk-hoisting";
-import { YdkLearningMapDiagram } from "./you-dont-know-js/diagrams/ydk-learning-map";
-import { YdkPrototypesDiagram } from "./you-dont-know-js/diagrams/ydk-prototypes";
-import { YdkScopeClosuresDiagram } from "./you-dont-know-js/diagrams/ydk-scope-closures";
-import { YdkThisBindingDiagram } from "./you-dont-know-js/diagrams/ydk-this-binding";
-import { YdkTypeCoercionDiagram } from "./you-dont-know-js/diagrams/ydk-type-coercion";
+import {
+  WjOfficialLearningMapMapLab,
+  WjOfficialLearningMapExperimentLab,
+  WjOfficialLearningMapEvidenceLab,
+} from "./windows-journey/diagrams/wj-official-learning-map";
+import {
+  Wj01GameDevelopmentLandscapeMapLab,
+  Wj01GameDevelopmentLandscapeExperimentLab,
+  Wj01GameDevelopmentLandscapeEvidenceLab,
+} from "./windows-journey/diagrams/wj-01-game-development-landscape";
+import {
+  Wj02VisualStudioMapLab,
+  Wj02VisualStudioExperimentLab,
+  Wj02VisualStudioEvidenceLab,
+} from "./windows-journey/diagrams/wj-02-visual-studio";
+import {
+  Wj03WindowsProgrammingMapLab,
+  Wj03WindowsProgrammingExperimentLab,
+  Wj03WindowsProgrammingEvidenceLab,
+} from "./windows-journey/diagrams/wj-03-windows-programming";
+import {
+  Wj04GdiFoundationsMapLab,
+  Wj04GdiFoundationsExperimentLab,
+  Wj04GdiFoundationsEvidenceLab,
+} from "./windows-journey/diagrams/wj-04-gdi-foundations";
+import {
+  Wj05GdiDrawingMapLab,
+  Wj05GdiDrawingExperimentLab,
+  Wj05GdiDrawingEvidenceLab,
+} from "./windows-journey/diagrams/wj-05-gdi-drawing";
+import {
+  Wj06WindowsAnimationMapLab,
+  Wj06WindowsAnimationExperimentLab,
+  Wj06WindowsAnimationEvidenceLab,
+} from "./windows-journey/diagrams/wj-06-windows-animation";
+import {
+  Wj07InputMessagesMapLab,
+  Wj07InputMessagesExperimentLab,
+  Wj07InputMessagesEvidenceLab,
+} from "./windows-journey/diagrams/wj-07-input-messages";
+import {
+  Wj08PhysicsParticlesMapLab,
+  Wj08PhysicsParticlesExperimentLab,
+  Wj08PhysicsParticlesEvidenceLab,
+} from "./windows-journey/diagrams/wj-08-physics-particles";
+import {
+  Wj09TurnBasedGameMapLab,
+  Wj09TurnBasedGameExperimentLab,
+  Wj09TurnBasedGameEvidenceLab,
+} from "./windows-journey/diagrams/wj-09-turn-based-game";
+import {
+  Wj10DirectxOverviewMapLab,
+  Wj10DirectxOverviewExperimentLab,
+  Wj10DirectxOverviewEvidenceLab,
+} from "./windows-journey/diagrams/wj-10-directx-overview";
+import {
+  Wj11Direct3dFoundationsMapLab,
+  Wj11Direct3dFoundationsExperimentLab,
+  Wj11Direct3dFoundationsEvidenceLab,
+} from "./windows-journey/diagrams/wj-11-direct3d-foundations";
+import {
+  Wj12Direct3dDrawingMapLab,
+  Wj12Direct3dDrawingExperimentLab,
+  Wj12Direct3dDrawingEvidenceLab,
+} from "./windows-journey/diagrams/wj-12-direct3d-drawing";
+import {
+  Wj13FourTransformsMapLab,
+  Wj13FourTransformsExperimentLab,
+  Wj13FourTransformsEvidenceLab,
+} from "./windows-journey/diagrams/wj-13-four-transforms";
+import {
+  Wj14LightingMaterialsMapLab,
+  Wj14LightingMaterialsExperimentLab,
+  Wj14LightingMaterialsEvidenceLab,
+} from "./windows-journey/diagrams/wj-14-lighting-materials";
+import {
+  Wj15DirectinputMapLab,
+  Wj15DirectinputExperimentLab,
+  Wj15DirectinputEvidenceLab,
+} from "./windows-journey/diagrams/wj-15-directinput";
+import {
+  Wj16TextureMappingMapLab,
+  Wj16TextureMappingExperimentLab,
+  Wj16TextureMappingEvidenceLab,
+} from "./windows-journey/diagrams/wj-16-texture-mapping";
+import {
+  Wj17MeshLoadingMapLab,
+  Wj17MeshLoadingExperimentLab,
+  Wj17MeshLoadingEvidenceLab,
+} from "./windows-journey/diagrams/wj-17-mesh-loading";
+import {
+  Wj18AlphaBlendingMapLab,
+  Wj18AlphaBlendingExperimentLab,
+  Wj18AlphaBlendingEvidenceLab,
+} from "./windows-journey/diagrams/wj-18-alpha-blending";
+import {
+  Wj19DepthZBufferMapLab,
+  Wj19DepthZBufferExperimentLab,
+  Wj19DepthZBufferEvidenceLab,
+} from "./windows-journey/diagrams/wj-19-depth-z-buffer";
+import {
+  Wj20StencilTechniquesMapLab,
+  Wj20StencilTechniquesExperimentLab,
+  Wj20StencilTechniquesEvidenceLab,
+} from "./windows-journey/diagrams/wj-20-stencil-techniques";
+import {
+  Wj21GameCameraMapLab,
+  Wj21GameCameraExperimentLab,
+  Wj21GameCameraEvidenceLab,
+} from "./windows-journey/diagrams/wj-21-game-camera";
+import {
+  Wj22TerrainMapLab,
+  Wj22TerrainExperimentLab,
+  Wj22TerrainEvidenceLab,
+} from "./windows-journey/diagrams/wj-22-terrain";
+import {
+  Wj23SkyboxMapLab,
+  Wj23SkyboxExperimentLab,
+  Wj23SkyboxEvidenceLab,
+} from "./windows-journey/diagrams/wj-23-skybox";
+import {
+  Wj24ParticleSystemMapLab,
+  Wj24ParticleSystemExperimentLab,
+  Wj24ParticleSystemEvidenceLab,
+} from "./windows-journey/diagrams/wj-24-particle-system";
+import {
+  Wj25MultiModelLoadingMapLab,
+  Wj25MultiModelLoadingExperimentLab,
+  Wj25MultiModelLoadingEvidenceLab,
+} from "./windows-journey/diagrams/wj-25-multi-model-loading";
+import {
+  Wj26GameEnginesMapLab,
+  Wj26GameEnginesExperimentLab,
+  Wj26GameEnginesEvidenceLab,
+} from "./windows-journey/diagrams/wj-26-game-engines";
+import {
+  WjAppendixAReadingGuideMapLab,
+  WjAppendixAReadingGuideExperimentLab,
+  WjAppendixAReadingGuideEvidenceLab,
+} from "./windows-journey/diagrams/wj-appendix-a-reading-guide";
+import {
+  WjOfficialFinalReviewMapLab,
+  WjOfficialFinalReviewExperimentLab,
+  WjOfficialFinalReviewEvidenceLab,
+} from "./windows-journey/diagrams/wj-official-final-review";
+import {
+  WkpOfficialLearningMapMapLab,
+  WkpOfficialLearningMapExperimentLab,
+  WkpOfficialLearningMapEvidenceLab,
+} from "./windows-kernel-programming/diagrams/wkp-official-learning-map";
+import {
+  Wkp01WindowsInternalsOverviewMapLab,
+  Wkp01WindowsInternalsOverviewExperimentLab,
+  Wkp01WindowsInternalsOverviewEvidenceLab,
+} from "./windows-kernel-programming/diagrams/wkp-01-windows-internals-overview";
+import {
+  Wkp02GettingStartedKernelDevelopmentMapLab,
+  Wkp02GettingStartedKernelDevelopmentExperimentLab,
+  Wkp02GettingStartedKernelDevelopmentEvidenceLab,
+} from "./windows-kernel-programming/diagrams/wkp-02-getting-started-kernel-development";
+import {
+  Wkp03KernelProgrammingBasicsMapLab,
+  Wkp03KernelProgrammingBasicsExperimentLab,
+  Wkp03KernelProgrammingBasicsEvidenceLab,
+} from "./windows-kernel-programming/diagrams/wkp-03-kernel-programming-basics";
+import {
+  Wkp04DriverStartToFinishMapLab,
+  Wkp04DriverStartToFinishExperimentLab,
+  Wkp04DriverStartToFinishEvidenceLab,
+} from "./windows-kernel-programming/diagrams/wkp-04-driver-start-to-finish";
+import {
+  Wkp05DebuggingMapLab,
+  Wkp05DebuggingExperimentLab,
+  Wkp05DebuggingEvidenceLab,
+} from "./windows-kernel-programming/diagrams/wkp-05-debugging";
+import {
+  Wkp06KernelMechanismsMapLab,
+  Wkp06KernelMechanismsExperimentLab,
+  Wkp06KernelMechanismsEvidenceLab,
+} from "./windows-kernel-programming/diagrams/wkp-06-kernel-mechanisms";
+import {
+  Wkp07IoRequestPacketMapLab,
+  Wkp07IoRequestPacketExperimentLab,
+  Wkp07IoRequestPacketEvidenceLab,
+} from "./windows-kernel-programming/diagrams/wkp-07-io-request-packet";
+import {
+  Wkp08ProcessThreadNotificationsMapLab,
+  Wkp08ProcessThreadNotificationsExperimentLab,
+  Wkp08ProcessThreadNotificationsEvidenceLab,
+} from "./windows-kernel-programming/diagrams/wkp-08-process-thread-notifications";
+import {
+  Wkp09ObjectRegistryNotificationsMapLab,
+  Wkp09ObjectRegistryNotificationsExperimentLab,
+  Wkp09ObjectRegistryNotificationsEvidenceLab,
+} from "./windows-kernel-programming/diagrams/wkp-09-object-registry-notifications";
+import {
+  Wkp10FileSystemMinifiltersMapLab,
+  Wkp10FileSystemMinifiltersExperimentLab,
+  Wkp10FileSystemMinifiltersEvidenceLab,
+} from "./windows-kernel-programming/diagrams/wkp-10-file-system-minifilters";
+import {
+  Wkp11MiscellaneousTopicsMapLab,
+  Wkp11MiscellaneousTopicsExperimentLab,
+  Wkp11MiscellaneousTopicsEvidenceLab,
+} from "./windows-kernel-programming/diagrams/wkp-11-miscellaneous-topics";
+import {
+  WkpOfficialFinalReviewMapLab,
+  WkpOfficialFinalReviewExperimentLab,
+  WkpOfficialFinalReviewEvidenceLab,
+} from "./windows-kernel-programming/diagrams/wkp-official-final-review";
+import {
+  Ppa3OfficialLearningMapPacketLab,
+  Ppa3OfficialLearningMapDiagnosisLab,
+  Ppa3OfficialLearningMapEvidenceLab,
+} from "./wireshark-packet-analysis/diagrams/ppa3-official-learning-map";
+import {
+  Ppa3IntroductionPacketLab,
+  Ppa3IntroductionDiagnosisLab,
+  Ppa3IntroductionEvidenceLab,
+} from "./wireshark-packet-analysis/diagrams/ppa3-introduction";
+import {
+  Ppa301PacketAnalysisNetworkBasicsPacketLab,
+  Ppa301PacketAnalysisNetworkBasicsDiagnosisLab,
+  Ppa301PacketAnalysisNetworkBasicsEvidenceLab,
+} from "./wireshark-packet-analysis/diagrams/ppa3-01-packet-analysis-network-basics";
+import {
+  Ppa302TappingIntoWirePacketLab,
+  Ppa302TappingIntoWireDiagnosisLab,
+  Ppa302TappingIntoWireEvidenceLab,
+} from "./wireshark-packet-analysis/diagrams/ppa3-02-tapping-into-wire";
+import {
+  Ppa303IntroductionWiresharkPacketLab,
+  Ppa303IntroductionWiresharkDiagnosisLab,
+  Ppa303IntroductionWiresharkEvidenceLab,
+} from "./wireshark-packet-analysis/diagrams/ppa3-03-introduction-wireshark";
+import {
+  Ppa304WorkingCapturedPacketsPacketLab,
+  Ppa304WorkingCapturedPacketsDiagnosisLab,
+  Ppa304WorkingCapturedPacketsEvidenceLab,
+} from "./wireshark-packet-analysis/diagrams/ppa3-04-working-captured-packets";
+import {
+  Ppa305AdvancedWiresharkFeaturesPacketLab,
+  Ppa305AdvancedWiresharkFeaturesDiagnosisLab,
+  Ppa305AdvancedWiresharkFeaturesEvidenceLab,
+} from "./wireshark-packet-analysis/diagrams/ppa3-05-advanced-wireshark-features";
+import {
+  Ppa306CommandLineAnalysisPacketLab,
+  Ppa306CommandLineAnalysisDiagnosisLab,
+  Ppa306CommandLineAnalysisEvidenceLab,
+} from "./wireshark-packet-analysis/diagrams/ppa3-06-command-line-analysis";
+import {
+  Ppa307NetworkLayerProtocolsPacketLab,
+  Ppa307NetworkLayerProtocolsDiagnosisLab,
+  Ppa307NetworkLayerProtocolsEvidenceLab,
+} from "./wireshark-packet-analysis/diagrams/ppa3-07-network-layer-protocols";
+import {
+  Ppa308TransportLayerProtocolsPacketLab,
+  Ppa308TransportLayerProtocolsDiagnosisLab,
+  Ppa308TransportLayerProtocolsEvidenceLab,
+} from "./wireshark-packet-analysis/diagrams/ppa3-08-transport-layer-protocols";
+import {
+  Ppa309UpperLayerProtocolsPacketLab,
+  Ppa309UpperLayerProtocolsDiagnosisLab,
+  Ppa309UpperLayerProtocolsEvidenceLab,
+} from "./wireshark-packet-analysis/diagrams/ppa3-09-upper-layer-protocols";
+import {
+  Ppa310RealWorldScenariosPacketLab,
+  Ppa310RealWorldScenariosDiagnosisLab,
+  Ppa310RealWorldScenariosEvidenceLab,
+} from "./wireshark-packet-analysis/diagrams/ppa3-10-real-world-scenarios";
+import {
+  Ppa311FightingSlowNetworkPacketLab,
+  Ppa311FightingSlowNetworkDiagnosisLab,
+  Ppa311FightingSlowNetworkEvidenceLab,
+} from "./wireshark-packet-analysis/diagrams/ppa3-11-fighting-slow-network";
+import {
+  Ppa312SecurityAnalysisPacketLab,
+  Ppa312SecurityAnalysisDiagnosisLab,
+  Ppa312SecurityAnalysisEvidenceLab,
+} from "./wireshark-packet-analysis/diagrams/ppa3-12-security-analysis";
+import {
+  Ppa313WirelessAnalysisPacketLab,
+  Ppa313WirelessAnalysisDiagnosisLab,
+  Ppa313WirelessAnalysisEvidenceLab,
+} from "./wireshark-packet-analysis/diagrams/ppa3-13-wireless-analysis";
+import {
+  Ppa3AppendixAPacketLab,
+  Ppa3AppendixADiagnosisLab,
+  Ppa3AppendixAEvidenceLab,
+} from "./wireshark-packet-analysis/diagrams/ppa3-appendix-a";
+import {
+  Ppa3AppendixBPacketLab,
+  Ppa3AppendixBDiagnosisLab,
+  Ppa3AppendixBEvidenceLab,
+} from "./wireshark-packet-analysis/diagrams/ppa3-appendix-b";
+import {
+  Ppa3IndexPacketLab,
+  Ppa3IndexDiagnosisLab,
+  Ppa3IndexEvidenceLab,
+} from "./wireshark-packet-analysis/diagrams/ppa3-index";
+import {
+  Ppa3OfficialFinalReviewPacketLab,
+  Ppa3OfficialFinalReviewDiagnosisLab,
+  Ppa3OfficialFinalReviewEvidenceLab,
+} from "./wireshark-packet-analysis/diagrams/ppa3-official-final-review";
 
 /**
  * MDX 结构教学组件 map（HEL-20）。
@@ -3389,6 +9653,8 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CubemapCapabilityDiagram,
   BufferUpdateHazardDiagram,
   Std140PackingDiagram,
+  GeometryExplodeSpaceDiagram,
+  GeometryShaderOutputContractDiagram,
   FrameStageDiagram,
   VertexPipelineDiagram,
   ShaderIODiagram,
@@ -3447,6 +9713,26 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   InstancingDiagram,
   AttribDivisorDiagram,
   DrawcallCompareDiagram,
+  InstancingBatchContractDiagram,
+  InstancingMatrixLayoutDiagram,
+  MsaaResolveContractDiagram,
+  BlinnExponentMatchDiagram,
+  BlinnPhongBoundaryDiagram,
+  GammaAttenuationContractDiagram,
+  GammaPipelineContractDiagram,
+  ShadowMapBoundaryContractDiagram,
+  PointShadowCubemapContractDiagram,
+  PointShadowRenderPathsDiagram,
+  NormalMapSpaceContractDiagram,
+  ParallaxSamplingContractDiagram,
+  HdrOutputContractDiagram,
+  BloomCompositionContractDiagram,
+  DeferredGBufferContractDiagram,
+  SsaoSamplingContractDiagram,
+  PbrBrdfContractDiagram,
+  PbrLightingContractDiagram,
+  IblDiffuseIrradianceContractDiagram,
+  IblSpecularContractDiagram,
   AliasingDiagram,
   MsaaSampleDiagram,
   SsaaVsMsaaDiagram,
@@ -3779,6 +10065,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   StdinBufferDiagram,
   MenuDriverDiagram,
   Stepper,
+  Steps: Stepper,
   Step,
   Slider,
   Toggle,
@@ -3990,6 +10277,72 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   AaToolSafetyPlayground,
   EngineArchLab,
   GameEngineAnatomyDiagram,
+  Gea3OfficialLearningMapMapLab,
+  Gea3OfficialLearningMapExperimentLab,
+  Gea3OfficialLearningMapEvidenceLab,
+  Gea3PrefaceMapLab,
+  Gea3PrefaceExperimentLab,
+  Gea3PrefaceEvidenceLab,
+  Gea3Chapter01IntroductionMapLab,
+  Gea3Chapter01IntroductionExperimentLab,
+  Gea3Chapter01IntroductionEvidenceLab,
+  Gea3Chapter02ToolsOfTheTradeMapLab,
+  Gea3Chapter02ToolsOfTheTradeExperimentLab,
+  Gea3Chapter02ToolsOfTheTradeEvidenceLab,
+  Gea3Chapter03SoftwareEngineeringMapLab,
+  Gea3Chapter03SoftwareEngineeringExperimentLab,
+  Gea3Chapter03SoftwareEngineeringEvidenceLab,
+  Gea3Chapter04ParallelismConcurrencyMapLab,
+  Gea3Chapter04ParallelismConcurrencyExperimentLab,
+  Gea3Chapter04ParallelismConcurrencyEvidenceLab,
+  Gea3Chapter053dMathMapLab,
+  Gea3Chapter053dMathExperimentLab,
+  Gea3Chapter053dMathEvidenceLab,
+  Gea3Chapter06EngineSupportMapLab,
+  Gea3Chapter06EngineSupportExperimentLab,
+  Gea3Chapter06EngineSupportEvidenceLab,
+  Gea3Chapter07ResourcesFileSystemMapLab,
+  Gea3Chapter07ResourcesFileSystemExperimentLab,
+  Gea3Chapter07ResourcesFileSystemEvidenceLab,
+  Gea3Chapter08GameLoopMapLab,
+  Gea3Chapter08GameLoopExperimentLab,
+  Gea3Chapter08GameLoopEvidenceLab,
+  Gea3Chapter09HumanInterfaceMapLab,
+  Gea3Chapter09HumanInterfaceExperimentLab,
+  Gea3Chapter09HumanInterfaceEvidenceLab,
+  Gea3Chapter10DebuggingDevelopmentMapLab,
+  Gea3Chapter10DebuggingDevelopmentExperimentLab,
+  Gea3Chapter10DebuggingDevelopmentEvidenceLab,
+  Gea3Chapter11RenderingEngineMapLab,
+  Gea3Chapter11RenderingEngineExperimentLab,
+  Gea3Chapter11RenderingEngineEvidenceLab,
+  Gea3Chapter12AnimationSystemsMapLab,
+  Gea3Chapter12AnimationSystemsExperimentLab,
+  Gea3Chapter12AnimationSystemsEvidenceLab,
+  Gea3Chapter13CollisionRigidBodyMapLab,
+  Gea3Chapter13CollisionRigidBodyExperimentLab,
+  Gea3Chapter13CollisionRigidBodyEvidenceLab,
+  Gea3Chapter14AudioMapLab,
+  Gea3Chapter14AudioExperimentLab,
+  Gea3Chapter14AudioEvidenceLab,
+  Gea3Chapter15GameplayIntroductionMapLab,
+  Gea3Chapter15GameplayIntroductionExperimentLab,
+  Gea3Chapter15GameplayIntroductionEvidenceLab,
+  Gea3Chapter16RuntimeGameplayMapLab,
+  Gea3Chapter16RuntimeGameplayExperimentLab,
+  Gea3Chapter16RuntimeGameplayEvidenceLab,
+  Gea3Chapter17MoreMapLab,
+  Gea3Chapter17MoreExperimentLab,
+  Gea3Chapter17MoreEvidenceLab,
+  Gea3BibliographyMapLab,
+  Gea3BibliographyExperimentLab,
+  Gea3BibliographyEvidenceLab,
+  Gea3IndexMapLab,
+  Gea3IndexExperimentLab,
+  Gea3IndexEvidenceLab,
+  Gea3OfficialFinalReviewMapLab,
+  Gea3OfficialFinalReviewExperimentLab,
+  Gea3OfficialFinalReviewEvidenceLab,
   EngineArchitectureLayersDiagram,
   EngineVsRawCodeDiagram,
   RuntimeSubsystemsDiagram,
@@ -4086,19 +10439,93 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   InterpreterDiagram,
   CompoundPatternDiagram,
   DecisionTreeDiagram,
-  GppCategoryMap,
-  GameLoopDiagram,
-  UpdateMethodDiagram,
-  DoubleBufferDiagram,
-  SubclassSandboxDiagram,
-  TypeObjectDiagram,
-  ComponentDiagram,
-  EventQueueDiagram,
-  ServiceLocatorDiagram,
-  DataLocalityDiagram,
-  DirtyFlagDiagram,
-  GppObjectPoolDiagram,
-  SpatialPartitionDiagram,
+  GppOfficialLearningMapMapLab,
+  GppOfficialLearningMapExperimentLab,
+  GppOfficialLearningMapEvidenceLab,
+  GppAcknowledgementsMapLab,
+  GppAcknowledgementsExperimentLab,
+  GppAcknowledgementsEvidenceLab,
+  GppIntroductionMapLab,
+  GppIntroductionExperimentLab,
+  GppIntroductionEvidenceLab,
+  GppChapter01ArchitecturePerformanceGamesMapLab,
+  GppChapter01ArchitecturePerformanceGamesExperimentLab,
+  GppChapter01ArchitecturePerformanceGamesEvidenceLab,
+  GppDesignPatternsRevisitedMapLab,
+  GppDesignPatternsRevisitedExperimentLab,
+  GppDesignPatternsRevisitedEvidenceLab,
+  GppChapter02CommandMapLab,
+  GppChapter02CommandExperimentLab,
+  GppChapter02CommandEvidenceLab,
+  GppChapter03FlyweightMapLab,
+  GppChapter03FlyweightExperimentLab,
+  GppChapter03FlyweightEvidenceLab,
+  GppChapter04ObserverMapLab,
+  GppChapter04ObserverExperimentLab,
+  GppChapter04ObserverEvidenceLab,
+  GppChapter05PrototypeMapLab,
+  GppChapter05PrototypeExperimentLab,
+  GppChapter05PrototypeEvidenceLab,
+  GppChapter06SingletonMapLab,
+  GppChapter06SingletonExperimentLab,
+  GppChapter06SingletonEvidenceLab,
+  GppChapter07StateMapLab,
+  GppChapter07StateExperimentLab,
+  GppChapter07StateEvidenceLab,
+  GppSequencingPatternsMapLab,
+  GppSequencingPatternsExperimentLab,
+  GppSequencingPatternsEvidenceLab,
+  GppChapter08DoubleBufferMapLab,
+  GppChapter08DoubleBufferExperimentLab,
+  GppChapter08DoubleBufferEvidenceLab,
+  GppChapter09GameLoopMapLab,
+  GppChapter09GameLoopExperimentLab,
+  GppChapter09GameLoopEvidenceLab,
+  GppChapter10UpdateMethodMapLab,
+  GppChapter10UpdateMethodExperimentLab,
+  GppChapter10UpdateMethodEvidenceLab,
+  GppBehavioralPatternsMapLab,
+  GppBehavioralPatternsExperimentLab,
+  GppBehavioralPatternsEvidenceLab,
+  GppChapter11BytecodeMapLab,
+  GppChapter11BytecodeExperimentLab,
+  GppChapter11BytecodeEvidenceLab,
+  GppChapter12SubclassSandboxMapLab,
+  GppChapter12SubclassSandboxExperimentLab,
+  GppChapter12SubclassSandboxEvidenceLab,
+  GppChapter13TypeObjectMapLab,
+  GppChapter13TypeObjectExperimentLab,
+  GppChapter13TypeObjectEvidenceLab,
+  GppDecouplingPatternsMapLab,
+  GppDecouplingPatternsExperimentLab,
+  GppDecouplingPatternsEvidenceLab,
+  GppChapter14ComponentMapLab,
+  GppChapter14ComponentExperimentLab,
+  GppChapter14ComponentEvidenceLab,
+  GppChapter15EventQueueMapLab,
+  GppChapter15EventQueueExperimentLab,
+  GppChapter15EventQueueEvidenceLab,
+  GppChapter16ServiceLocatorMapLab,
+  GppChapter16ServiceLocatorExperimentLab,
+  GppChapter16ServiceLocatorEvidenceLab,
+  GppOptimizationPatternsMapLab,
+  GppOptimizationPatternsExperimentLab,
+  GppOptimizationPatternsEvidenceLab,
+  GppChapter17DataLocalityMapLab,
+  GppChapter17DataLocalityExperimentLab,
+  GppChapter17DataLocalityEvidenceLab,
+  GppChapter18DirtyFlagMapLab,
+  GppChapter18DirtyFlagExperimentLab,
+  GppChapter18DirtyFlagEvidenceLab,
+  GppChapter19ObjectPoolMapLab,
+  GppChapter19ObjectPoolExperimentLab,
+  GppChapter19ObjectPoolEvidenceLab,
+  GppChapter20SpatialPartitionMapLab,
+  GppChapter20SpatialPartitionExperimentLab,
+  GppChapter20SpatialPartitionEvidenceLab,
+  GppOfficialFinalReviewMapLab,
+  GppOfficialFinalReviewExperimentLab,
+  GppOfficialFinalReviewEvidenceLab,
   CqrCategoryMap,
   CleanCodeValueDiagram,
   NamingPrinciplesDiagram,
@@ -4190,106 +10617,6 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   EfcNewDeleteDiagram,
   EfcConventionsDiagram,
   EfcFinalMindMap,
-  EmcBookMap,
-  EmcTypeDeductionChart,
-  EmcAutoUsageDiagram,
-  EmcSmartPtrComparisonDiagram,
-  EmcMakeUniqueSharedDiagram,
-  EmcMoveVsCopyDiagram,
-  EmcForwardingDiagram,
-  EmcLambdaAnatomyDiagram,
-  EmcConcurrencyModelDiagram,
-  EmcFinalMindMap,
-  ChpBookMap,
-  ChpPerfPipelineDiagram,
-  ChpCacheHierarchyDiagram,
-  ChpCacheFriendlyDiagram,
-  ChpMemoryLayoutDiagram,
-  ChpDataStructurePerfDiagram,
-  ChpAlgorithmComplexityDiagram,
-  ChpConcurrencyModelDiagram,
-  ChpProfilingToolsDiagram,
-  ChpFinalMindMap,
-  IcoBookMap,
-  IcoObjectModelsDiagram,
-  IcoConstructionSequenceDiagram,
-  IcoMemberLayoutDiagram,
-  IcoFunctionModelDiagram,
-  IcoVtableLayoutDiagram,
-  IcoRttiMechanismDiagram,
-  IcoMultipleInheritanceDiagram,
-  IcoObjectLifecycleDiagram,
-  IcoFinalMindMap,
-  OpcBookMap,
-  OpcPerfMindsetDiagram,
-  OpcStringOptDiagram,
-  OpcAlgoSelectDiagram,
-  OpcDynAllocDiagram,
-  OpcSmartPtrPerfDiagram,
-  OpcIoOptDiagram,
-  OpcConcurrencyDiagram,
-  OpcProfilingDiagram,
-  OpcFinalMindMap,
-  McdBookMap,
-  McdPolicyDesignDiagram,
-  McdTypelistDiagram,
-  McdSmartPtrDesignDiagram,
-  McdSmallObjectDiagram,
-  McdGeneralizedFunctorDiagram,
-  McdSingletonDiagram,
-  McdObjectFactoryDiagram,
-  McdAbstractFactoryDiagram,
-  McdFinalMindMap,
-  CpcBookMap,
-  CpcCompilationDiagram,
-  CpcMemoryModelDiagram,
-  CpcFunctionCallsDiagram,
-  CpcVirtualFunctionsDiagram,
-  CpcExceptionHandlingDiagram,
-  CpcInlineDiagram,
-  CpcCacheFriendlyDiagram,
-  CpcCompilerOptimizationDiagram,
-  CpcFinalMindMap,
-  EcpBookMap,
-  EcpFirstProgramDiagram,
-  EcpVariablesTypesDiagram,
-  EcpControlFlowDiagram,
-  EcpFunctionsDiagram,
-  EcpClassesDiagram,
-  EcpInheritanceDiagram,
-  EcpTemplatesDiagram,
-  EcpStlDiagram,
-  EcpFinalMindMap,
-  EppBookMap,
-  EppCppBasicsDiagram,
-  EppDataTypesDiagram,
-  EppControlStatementsDiagram,
-  EppFunctionsRefDiagram,
-  EppClassesObjectsDiagram,
-  EppInheritanceDiagram,
-  EppTemplatesGenericsDiagram,
-  EppStlAlgorithmsDiagram,
-  EppFinalMindMap,
-  CtrBookMap,
-  CtrBasicsTestDiagram,
-  CtrMemoryTestDiagram,
-  CtrStlTestDiagram,
-  CtrTemplateTestDiagram,
-  CtrConcurrencyTestDiagram,
-  CtrDesignTestDiagram,
-  CtrAlgorithmTestDiagram,
-  CtrDebuggingTestDiagram,
-  CtrFinalMindMap,
-  CseLearningMapDiagram,
-  CseIoModelDiagram,
-  CseEventDrivenDiagram,
-  CseThreadPoolDiagram,
-  CseConnectionMgmtDiagram,
-  CseBufferDesignDiagram,
-  CseProtocolDesignDiagram,
-  CseTimerWheelDiagram,
-  CsePerformanceTuningDiagram,
-  CseFinalReviewDiagram,
   HfdLearningMapDiagram,
   HfdStrategyDiagram,
   HfdObserverDiagram,
@@ -4300,109 +10627,10 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   HfdAdapterFacadeDiagram,
   HfdTemplateMethodDiagram,
   HfdFinalReviewDiagram,
-  Ec7LearningMapDiagram,
-  Ec7TypesVariablesDiagram,
-  Ec7OperatorsControlDiagram,
-  Ec7ClassesObjectsDiagram,
-  Ec7InheritanceInterfacesDiagram,
-  Ec7GenericsDiagram,
-  Ec7DelegatesEventsDiagram,
-  Ec7LinqDiagram,
-  Ec7AsyncAwaitDiagram,
-  Ec7FinalReviewDiagram,
-  CqcLearningMapDiagram,
-  CqcNullableRefDiagram,
-  CqcExceptionPracticeDiagram,
-  CqcAsyncPatternDiagram,
-  CqcCollectionChoiceDiagram,
-  CqcLinqPerformanceDiagram,
-  CqcMemoryAllocationDiagram,
-  CqcThreadSafetyDiagram,
-  CqcApiDesignDiagram,
-  CqcFinalReviewDiagram,
-  EcsLearningMapDiagram,
-  EcsPropertyPreferDiagram,
-  EcsReadonlyConstDiagram,
-  EcsIDisposableDiagram,
-  EcsGenericConstraintsDiagram,
-  EcsLinqDeferredDiagram,
-  EcsExceptionUsageDiagram,
-  EcsParallelAsyncDiagram,
-  EcsEqualityDiagram,
-  EcsFinalReviewDiagram,
-  DcsLearningMapDiagram,
-  DcsCsharpHistoryDiagram,
-  DcsDelegatesEventsDiagram,
-  DcsIteratorYieldDiagram,
-  DcsLambdaClosureDiagram,
-  DcsDynamicLanguageDiagram,
-  DcsAsyncInternalsDiagram,
-  DcsPatternMatchingDiagram,
-  DcsRecordsTuplesDiagram,
-  DcsFinalReviewDiagram,
-  CfpLearningMapDiagram,
-  CfpFunctionsFirstDiagram,
-  CfpHigherOrderDiagram,
-  CfpCurryingDiagram,
-  CfpImmutableDataDiagram,
-  CfpPatternMatchingFpDiagram,
-  CfpLazyEvalDiagram,
-  CfpMonadsDiagram,
-  CfpErrorHandlingFpDiagram,
-  CfpFinalReviewDiagram,
-  CtcLearningMapDiagram,
-  CtcTypesOverviewDiagram,
-  CtcGenericsDeepDiagram,
-  CtcDelegatesEventsDiagram,
-  CtcAsyncDeepDiagram,
-  CtcParallelTplDiagram,
-  CtcPatternsDiagram,
-  CtcRecordsStructsDiagram,
-  CtcSourceGeneratorsDiagram,
-  CtcFinalReviewDiagram,
-  CvcLearningMapDiagram,
-  CvcClrExecutionDiagram,
-  CvcTypeFundamentalsDiagram,
-  CvcInterfacesDesignDiagram,
-  CvcValueReferenceDiagram,
-  CvcGcMemoryDiagram,
-  CvcExceptionHandlingDiagram,
-  CvcAsyncClrDiagram,
-  CvcReflectionAttributesDiagram,
-  CvcFinalReviewDiagram,
   Term,
   Glossary,
   // === Auto-generated component registrations ===
-  AalAmsPmsDiagram,
-  AalBinderIpcDiagram,
-  AalClassloaderDiagram,
-  AalDalvikArtDiagram,
-  AalFinalReviewDiagram,
-  AalLearningMapDiagram,
-  AalPackagemanagerDiagram,
-  AalPerformanceAdvancedDiagram,
-  AalSystemArchitectureDiagram,
-  AalWmsWindowDiagram,
-  AcaArchitectureDesignDiagram,
-  AcaBuildDeployDiagram,
-  AcaComponentCommunicationDiagram,
-  AcaComponentIntroDiagram,
-  AcaDependencyInjectionDiagram,
-  AcaFinalReviewDiagram,
-  AcaLearningMapDiagram,
-  AcaLifecycleManagementDiagram,
-  AcaPracticeCaseDiagram,
-  AcaRouterNavigationDiagram,
-  AdaeActivityLifecycleDiagram,
-  AdaeDrawableAnimDiagram,
-  AdaeFinalReviewDiagram,
-  AdaeHandlerMessageDiagram,
-  AdaeIpcBinderDiagram,
-  AdaeLearningMapDiagram,
-  AdaePerformanceOptimizeDiagram,
-  AdaeRemoteViewsDiagram,
-  AdaeThreadAsyncDiagram,
-  AdaeViewSystemDiagram,
+
   Al4FinalReviewDiagram,
   Al4FundamentalsDiagram,
   Al4GraphsDirectedDiagram,
@@ -4413,76 +10641,291 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Al4SortingElementaryDiagram,
   Al4SortingMergeQuickDiagram,
   Al4StringsDiagram,
-  ApoCpuPowerDiagram,
-  ApoFinalReviewDiagram,
-  ApoLayoutOptimizationDiagram,
-  ApoLearningMapDiagram,
-  ApoMemoryOptimizationDiagram,
-  ApoNetworkOptimizationDiagram,
-  ApoPerfToolsDiagram,
-  ApoRenderingOptimizationDiagram,
-  ApoStabilityMonitoringDiagram,
-  ApoStorageOptimizationDiagram,
-  AupComplexityFutureDiagram,
-  AupFinalReviewDiagram,
-  AupHistoryCultureDiagram,
-  AupLearningMapDiagram,
-  AupMinifaceDiagram,
-  AupModularityDiagram,
-  AupOptimizationDiagram,
-  AupTextualityDiagram,
-  AupTransparencyDiagram,
-  AupUnixPhilosophyDiagram,
-  AvcApplicationLayerDiagram,
-  AvcAutosarOverviewDiagram,
-  AvcBswStackDiagram,
-  AvcCommunicationStackDiagram,
-  AvcDiagnosticSafetyDiagram,
-  AvcFinalReviewDiagram,
-  AvcLearningMapDiagram,
-  AvcMcalDriversDiagram,
-  AvcMethodologyRteDiagram,
-  AvcToolchainPracticeDiagram,
-  BdpContractPatternsDiagram,
-  BdpDappArchitectureDiagram,
-  BdpDefiNftPracticeDiagram,
-  BdpDeploymentMainnetDiagram,
-  BdpDevEnvironmentDiagram,
-  BdpFinalReviewDiagram,
-  BdpLearningMapDiagram,
-  BdpSolidityBasicsDiagram,
-  BdpTestingSecurityDiagram,
-  BdpWeb3IntegrationDiagram,
-  Bl3AnimationDiagram,
-  Bl3FinalReviewDiagram,
-  Bl3GameExportDiagram,
-  Bl3InterfaceDiagram,
-  Bl3LearningMapDiagram,
-  Bl3LightingDiagram,
-  Bl3ModelingDiagram,
-  Bl3RenderingDiagram,
-  Bl3SculptingDiagram,
-  Bl3TexturingDiagram,
-  BlaAgentApplicationsDiagram,
-  BlaFinalReviewDiagram,
-  BlaFineTuningAppsDiagram,
-  BlaLearningMapDiagram,
-  BlaLlmLandscapeDiagram,
-  BlaMultimodalAppsDiagram,
-  BlaOrchestrationFrameworksDiagram,
-  BlaProductionDeploymentDiagram,
-  BlaPromptEngineeringDiagram,
-  BlaRagApplicationsDiagram,
-  BpApplicationsFutureDiagram,
-  BpBlockchainBasicsDiagram,
-  BpConsensusMechanismsDiagram,
-  BpCryptographyDiagram,
-  BpFinalReviewDiagram,
-  BpLearningMapDiagram,
-  BpPublicPrivateChainsDiagram,
-  BpSmartContractsDiagram,
-  BpTransactionsBlocksDiagram,
-  BpWalletsAccountsDiagram,
+  TaoupOfficialLearningMapCompositionLab,
+  TaoupOfficialLearningMapRepresentationLab,
+  TaoupOfficialLearningMapEvidenceLab,
+  TaoupPrefaceCompositionLab,
+  TaoupPrefaceRepresentationLab,
+  TaoupPrefaceEvidenceLab,
+  TaoupPart01CompositionLab,
+  TaoupPart01RepresentationLab,
+  TaoupPart01EvidenceLab,
+  TaoupChapter01PhilosophyCompositionLab,
+  TaoupChapter01PhilosophyRepresentationLab,
+  TaoupChapter01PhilosophyEvidenceLab,
+  TaoupChapter02HistoryCompositionLab,
+  TaoupChapter02HistoryRepresentationLab,
+  TaoupChapter02HistoryEvidenceLab,
+  TaoupChapter03ContrastsCompositionLab,
+  TaoupChapter03ContrastsRepresentationLab,
+  TaoupChapter03ContrastsEvidenceLab,
+  TaoupPart02CompositionLab,
+  TaoupPart02RepresentationLab,
+  TaoupPart02EvidenceLab,
+  TaoupChapter04ModularityCompositionLab,
+  TaoupChapter04ModularityRepresentationLab,
+  TaoupChapter04ModularityEvidenceLab,
+  TaoupChapter05TextualityCompositionLab,
+  TaoupChapter05TextualityRepresentationLab,
+  TaoupChapter05TextualityEvidenceLab,
+  TaoupChapter06TransparencyCompositionLab,
+  TaoupChapter06TransparencyRepresentationLab,
+  TaoupChapter06TransparencyEvidenceLab,
+  TaoupChapter07MultiprogrammingCompositionLab,
+  TaoupChapter07MultiprogrammingRepresentationLab,
+  TaoupChapter07MultiprogrammingEvidenceLab,
+  TaoupChapter08MinilanguagesCompositionLab,
+  TaoupChapter08MinilanguagesRepresentationLab,
+  TaoupChapter08MinilanguagesEvidenceLab,
+  TaoupChapter09GenerationCompositionLab,
+  TaoupChapter09GenerationRepresentationLab,
+  TaoupChapter09GenerationEvidenceLab,
+  TaoupChapter10ConfigurationCompositionLab,
+  TaoupChapter10ConfigurationRepresentationLab,
+  TaoupChapter10ConfigurationEvidenceLab,
+  TaoupChapter11InterfacesCompositionLab,
+  TaoupChapter11InterfacesRepresentationLab,
+  TaoupChapter11InterfacesEvidenceLab,
+  TaoupChapter12OptimizationCompositionLab,
+  TaoupChapter12OptimizationRepresentationLab,
+  TaoupChapter12OptimizationEvidenceLab,
+  TaoupChapter13ComplexityCompositionLab,
+  TaoupChapter13ComplexityRepresentationLab,
+  TaoupChapter13ComplexityEvidenceLab,
+  TaoupPart03CompositionLab,
+  TaoupPart03RepresentationLab,
+  TaoupPart03EvidenceLab,
+  TaoupChapter14LanguagesCompositionLab,
+  TaoupChapter14LanguagesRepresentationLab,
+  TaoupChapter14LanguagesEvidenceLab,
+  TaoupChapter15ToolsCompositionLab,
+  TaoupChapter15ToolsRepresentationLab,
+  TaoupChapter15ToolsEvidenceLab,
+  TaoupChapter16ReuseCompositionLab,
+  TaoupChapter16ReuseRepresentationLab,
+  TaoupChapter16ReuseEvidenceLab,
+  TaoupPart04CompositionLab,
+  TaoupPart04RepresentationLab,
+  TaoupPart04EvidenceLab,
+  TaoupChapter17PortabilityCompositionLab,
+  TaoupChapter17PortabilityRepresentationLab,
+  TaoupChapter17PortabilityEvidenceLab,
+  TaoupChapter18DocumentationCompositionLab,
+  TaoupChapter18DocumentationRepresentationLab,
+  TaoupChapter18DocumentationEvidenceLab,
+  TaoupChapter19OpenSourceCompositionLab,
+  TaoupChapter19OpenSourceRepresentationLab,
+  TaoupChapter19OpenSourceEvidenceLab,
+  TaoupChapter20FuturesCompositionLab,
+  TaoupChapter20FuturesRepresentationLab,
+  TaoupChapter20FuturesEvidenceLab,
+  TaoupAppendixAGlossaryOfAbbreviationsCompositionLab,
+  TaoupAppendixAGlossaryOfAbbreviationsRepresentationLab,
+  TaoupAppendixAGlossaryOfAbbreviationsEvidenceLab,
+  TaoupAppendixBReferencesCompositionLab,
+  TaoupAppendixBReferencesRepresentationLab,
+  TaoupAppendixBReferencesEvidenceLab,
+  TaoupAppendixCContributorsCompositionLab,
+  TaoupAppendixCContributorsRepresentationLab,
+  TaoupAppendixCContributorsEvidenceLab,
+  TaoupAppendixDRootlessRootCompositionLab,
+  TaoupAppendixDRootlessRootRepresentationLab,
+  TaoupAppendixDRootlessRootEvidenceLab,
+  TaoupColophonCompositionLab,
+  TaoupColophonRepresentationLab,
+  TaoupColophonEvidenceLab,
+  TaoupIndexCompositionLab,
+  TaoupIndexRepresentationLab,
+  TaoupIndexEvidenceLab,
+  TaoupOfficialFinalReviewCompositionLab,
+  TaoupOfficialFinalReviewRepresentationLab,
+  TaoupOfficialFinalReviewEvidenceLab,
+  Avc2OfficialLearningMapArchitectureLab,
+  Avc2OfficialLearningMapConfigurationLab,
+  Avc2OfficialLearningMapEvidenceLab,
+  Avc201AutomotiveElectronicsArchitectureLab,
+  Avc201AutomotiveElectronicsConfigurationLab,
+  Avc201AutomotiveElectronicsEvidenceLab,
+  Avc202AutosarFoundationsArchitectureLab,
+  Avc202AutosarFoundationsConfigurationLab,
+  Avc202AutosarFoundationsEvidenceLab,
+  Avc203ExampleSolutionsArchitectureLab,
+  Avc203ExampleSolutionsConfigurationLab,
+  Avc203ExampleSolutionsEvidenceLab,
+  Avc204SwcDevelopmentArchitectureLab,
+  Avc204SwcDevelopmentConfigurationLab,
+  Avc204SwcDevelopmentEvidenceLab,
+  Avc205SystemDesignConfigurationArchitectureLab,
+  Avc205SystemDesignConfigurationConfigurationLab,
+  Avc205SystemDesignConfigurationEvidenceLab,
+  Avc206RteBswArchitectureLab,
+  Avc206RteBswConfigurationLab,
+  Avc206RteBswEvidenceLab,
+  Avc207McalArchitectureLab,
+  Avc207McalConfigurationLab,
+  Avc207McalEvidenceLab,
+  Avc208IntegrationDebuggingArchitectureLab,
+  Avc208IntegrationDebuggingConfigurationLab,
+  Avc208IntegrationDebuggingEvidenceLab,
+  Avc209FunctionalSafetyArchitectureLab,
+  Avc209FunctionalSafetyConfigurationLab,
+  Avc209FunctionalSafetyEvidenceLab,
+  Avc210OutlookArchitectureLab,
+  Avc210OutlookConfigurationLab,
+  Avc210OutlookEvidenceLab,
+  Avc2ReferencesArchitectureLab,
+  Avc2ReferencesConfigurationLab,
+  Avc2ReferencesEvidenceLab,
+  Avc2OfficialFinalReviewArchitectureLab,
+  Avc2OfficialFinalReviewConfigurationLab,
+  Avc2OfficialFinalReviewEvidenceLab,
+  BdpOfficialLearningMapFlowLab,
+  BdpOfficialLearningMapExperimentLab,
+  BdpOfficialLearningMapEvidenceLab,
+  BdpPrefaceFlowLab,
+  BdpPrefaceExperimentLab,
+  BdpPrefaceEvidenceLab,
+  Bdp01UnderstandBlockchainFlowLab,
+  Bdp01UnderstandBlockchainExperimentLab,
+  Bdp01UnderstandBlockchainEvidenceLab,
+  Bdp02PracticePreparationFlowLab,
+  Bdp02PracticePreparationExperimentLab,
+  Bdp02PracticePreparationEvidenceLab,
+  Bdp03EthereumIntroductionFlowLab,
+  Bdp03EthereumIntroductionExperimentLab,
+  Bdp03EthereumIntroductionEvidenceLab,
+  Bdp04CompileInstallRunFlowLab,
+  Bdp04CompileInstallRunExperimentLab,
+  Bdp04CompileInstallRunEvidenceLab,
+  Bdp05PrivateChainFlowLab,
+  Bdp05PrivateChainExperimentLab,
+  Bdp05PrivateChainEvidenceLab,
+  Bdp06ProgrammingInterfacesFlowLab,
+  Bdp06ProgrammingInterfacesExperimentLab,
+  Bdp06ProgrammingInterfacesEvidenceLab,
+  Bdp07SolidityIdeQuickstartFlowLab,
+  Bdp07SolidityIdeQuickstartExperimentLab,
+  Bdp07SolidityIdeQuickstartEvidenceLab,
+  Bdp08SoliditySyntaxFlowLab,
+  Bdp08SoliditySyntaxExperimentLab,
+  Bdp08SoliditySyntaxEvidenceLab,
+  Bdp09ContractCompileDeployFlowLab,
+  Bdp09ContractCompileDeployExperimentLab,
+  Bdp09ContractCompileDeployEvidenceLab,
+  Bdp10TruffleFlowLab,
+  Bdp10TruffleExperimentLab,
+  Bdp10TruffleEvidenceLab,
+  Bdp11DappsPracticeFlowLab,
+  Bdp11DappsPracticeExperimentLab,
+  Bdp11DappsPracticeEvidenceLab,
+  BdpAppendixABitcoinPrinciplesFlowLab,
+  BdpAppendixABitcoinPrinciplesExperimentLab,
+  BdpAppendixABitcoinPrinciplesEvidenceLab,
+  BdpAppendixBBitcoinCliFlowLab,
+  BdpAppendixBBitcoinCliExperimentLab,
+  BdpAppendixBBitcoinCliEvidenceLab,
+  BdpAppendixCBitcoinApisFlowLab,
+  BdpAppendixCBitcoinApisExperimentLab,
+  BdpAppendixCBitcoinApisEvidenceLab,
+  BdpOfficialFinalReviewFlowLab,
+  BdpOfficialFinalReviewExperimentLab,
+  BdpOfficialFinalReviewEvidenceLab,
+  BlaOfficialLearningMapFlowLab,
+  BlaOfficialLearningMapExperimentLab,
+  BlaOfficialLearningMapEvidenceLab,
+  BlaPrefaceFlowLab,
+  BlaPrefaceExperimentLab,
+  BlaPrefaceEvidenceLab,
+  Bla01IntroductionToLargeLanguageModelsFlowLab,
+  Bla01IntroductionToLargeLanguageModelsExperimentLab,
+  Bla01IntroductionToLargeLanguageModelsEvidenceLab,
+  Bla02LlmsForAiPoweredApplicationsFlowLab,
+  Bla02LlmsForAiPoweredApplicationsExperimentLab,
+  Bla02LlmsForAiPoweredApplicationsEvidenceLab,
+  Bla03ChoosingAnLlmFlowLab,
+  Bla03ChoosingAnLlmExperimentLab,
+  Bla03ChoosingAnLlmEvidenceLab,
+  Bla04PromptEngineeringFlowLab,
+  Bla04PromptEngineeringExperimentLab,
+  Bla04PromptEngineeringEvidenceLab,
+  Bla05EmbeddingLlmsInApplicationsFlowLab,
+  Bla05EmbeddingLlmsInApplicationsExperimentLab,
+  Bla05EmbeddingLlmsInApplicationsEvidenceLab,
+  Bla06ConversationalApplicationsFlowLab,
+  Bla06ConversationalApplicationsExperimentLab,
+  Bla06ConversationalApplicationsEvidenceLab,
+  Bla07SearchRecommendationFlowLab,
+  Bla07SearchRecommendationExperimentLab,
+  Bla07SearchRecommendationEvidenceLab,
+  Bla08StructuredDataFlowLab,
+  Bla08StructuredDataExperimentLab,
+  Bla08StructuredDataEvidenceLab,
+  Bla09WorkingWithCodeFlowLab,
+  Bla09WorkingWithCodeExperimentLab,
+  Bla09WorkingWithCodeEvidenceLab,
+  Bla10MultimodalApplicationsFlowLab,
+  Bla10MultimodalApplicationsExperimentLab,
+  Bla10MultimodalApplicationsEvidenceLab,
+  Bla11FineTuningFlowLab,
+  Bla11FineTuningExperimentLab,
+  Bla11FineTuningEvidenceLab,
+  Bla12ResponsibleAiFlowLab,
+  Bla12ResponsibleAiExperimentLab,
+  Bla12ResponsibleAiEvidenceLab,
+  Bla13EmergingTrendsFlowLab,
+  Bla13EmergingTrendsExperimentLab,
+  Bla13EmergingTrendsEvidenceLab,
+  BlaOtherBooksFlowLab,
+  BlaOtherBooksExperimentLab,
+  BlaOtherBooksEvidenceLab,
+  BlaIndexFlowLab,
+  BlaIndexExperimentLab,
+  BlaIndexEvidenceLab,
+  BlaOfficialFinalReviewFlowLab,
+  BlaOfficialFinalReviewExperimentLab,
+  BlaOfficialFinalReviewEvidenceLab,
+  BpOfficialLearningMapFlowLab,
+  BpOfficialLearningMapExperimentLab,
+  BpOfficialLearningMapEvidenceLab,
+  BpTechnicalReviewFlowLab,
+  BpTechnicalReviewExperimentLab,
+  BpTechnicalReviewEvidenceLab,
+  BpPrefaceFlowLab,
+  BpPrefaceExperimentLab,
+  BpPrefaceEvidenceLab,
+  Bp01FirstBlockchainFlowLab,
+  Bp01FirstBlockchainExperimentLab,
+  Bp01FirstBlockchainEvidenceLab,
+  Bp02ApplicationDevelopmentFlowLab,
+  Bp02ApplicationDevelopmentExperimentLab,
+  Bp02ApplicationDevelopmentEvidenceLab,
+  Bp03CryptographyFlowLab,
+  Bp03CryptographyExperimentLab,
+  Bp03CryptographyEvidenceLab,
+  Bp04ConsensusFlowLab,
+  Bp04ConsensusExperimentLab,
+  Bp04ConsensusEvidenceLab,
+  Bp05ScalingSidechainsLightningFlowLab,
+  Bp05ScalingSidechainsLightningExperimentLab,
+  Bp05ScalingSidechainsLightningEvidenceLab,
+  Bp06EthereumFlowLab,
+  Bp06EthereumExperimentLab,
+  Bp06EthereumEvidenceLab,
+  Bp07HyperledgerFlowLab,
+  Bp07HyperledgerExperimentLab,
+  Bp07HyperledgerEvidenceLab,
+  Bp08BuildMiniChainFlowLab,
+  Bp08BuildMiniChainExperimentLab,
+  Bp08BuildMiniChainEvidenceLab,
+  Bp09PotentialProblemsFlowLab,
+  Bp09PotentialProblemsExperimentLab,
+  Bp09PotentialProblemsEvidenceLab,
+  BpAfterwordProgrammableSocietyFlowLab,
+  BpAfterwordProgrammableSocietyExperimentLab,
+  BpAfterwordProgrammableSocietyEvidenceLab,
+  BpOfficialFinalReviewFlowLab,
+  BpOfficialFinalReviewExperimentLab,
+  BpOfficialFinalReviewEvidenceLab,
   CValuePassingDiagram,
   CaContestBasicsDiagram,
   CaDpDiagram,
@@ -4494,26 +10937,204 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CaSegmentTreeDiagram,
   CaStringAlgosDiagram,
   CaUnionFindDiagram,
-  CapDataRepresentationDiagram,
-  CapExceptionalControlDiagram,
-  CapFinalReviewDiagram,
-  CapLearningMapDiagram,
-  CapLinkingLoadingDiagram,
-  CapMachineLevelDiagram,
-  CapMemoryHierarchyDiagram,
-  CapProcessorArchitectureDiagram,
-  CapSystemLevelIoDiagram,
-  CapVirtualMemoryDiagram,
-  Cc2CodeQualityDiagram,
-  Cc2ControlFlowDiagram,
-  Cc2DebuggingTuningDiagram,
-  Cc2DesignPrinciplesDiagram,
-  Cc2FinalReviewDiagram,
-  Cc2LearningMapDiagram,
-  Cc2RefactoringIntegrationDiagram,
-  Cc2SoftwareConstructionDiagram,
-  Cc2TeamCraftDiagram,
-  Cc2VariablesNamesDiagram,
+  CapOfficialLearningMapMapLab,
+  CapOfficialLearningMapExperimentLab,
+  CapOfficialLearningMapEvidenceLab,
+  Cap01SystemTourMapLab,
+  Cap01SystemTourExperimentLab,
+  Cap01SystemTourEvidenceLab,
+  Cap02InformationMapLab,
+  Cap02InformationExperimentLab,
+  Cap02InformationEvidenceLab,
+  Cap03MachineLevelMapLab,
+  Cap03MachineLevelExperimentLab,
+  Cap03MachineLevelEvidenceLab,
+  Cap04ProcessorArchitectureMapLab,
+  Cap04ProcessorArchitectureExperimentLab,
+  Cap04ProcessorArchitectureEvidenceLab,
+  Cap05OptimizationMapLab,
+  Cap05OptimizationExperimentLab,
+  Cap05OptimizationEvidenceLab,
+  Cap06MemoryHierarchyMapLab,
+  Cap06MemoryHierarchyExperimentLab,
+  Cap06MemoryHierarchyEvidenceLab,
+  Cap07LinkingMapLab,
+  Cap07LinkingExperimentLab,
+  Cap07LinkingEvidenceLab,
+  Cap08ExceptionalControlMapLab,
+  Cap08ExceptionalControlExperimentLab,
+  Cap08ExceptionalControlEvidenceLab,
+  Cap09VirtualMemoryMapLab,
+  Cap09VirtualMemoryExperimentLab,
+  Cap09VirtualMemoryEvidenceLab,
+  Cap10SystemIoMapLab,
+  Cap10SystemIoExperimentLab,
+  Cap10SystemIoEvidenceLab,
+  Cap11NetworkProgrammingMapLab,
+  Cap11NetworkProgrammingExperimentLab,
+  Cap11NetworkProgrammingEvidenceLab,
+  Cap12ConcurrentProgrammingMapLab,
+  Cap12ConcurrentProgrammingExperimentLab,
+  Cap12ConcurrentProgrammingEvidenceLab,
+  CapAppendixAErrorHandlingMapLab,
+  CapAppendixAErrorHandlingExperimentLab,
+  CapAppendixAErrorHandlingEvidenceLab,
+  CapOfficialFinalReviewMapLab,
+  CapOfficialFinalReviewExperimentLab,
+  CapOfficialFinalReviewEvidenceLab,
+  Cc2eOfficialLearningMapStructureLab,
+  Cc2eOfficialLearningMapTestLab,
+  Cc2eOfficialLearningMapEvidenceLab,
+  Cc2ePrefaceStructureLab,
+  Cc2ePrefaceTestLab,
+  Cc2ePrefaceEvidenceLab,
+  Cc2eAcknowledgmentsStructureLab,
+  Cc2eAcknowledgmentsTestLab,
+  Cc2eAcknowledgmentsEvidenceLab,
+  Cc2eChecklistIndexStructureLab,
+  Cc2eChecklistIndexTestLab,
+  Cc2eChecklistIndexEvidenceLab,
+  Cc2eTableIndexStructureLab,
+  Cc2eTableIndexTestLab,
+  Cc2eTableIndexEvidenceLab,
+  Cc2eFigureIndexStructureLab,
+  Cc2eFigureIndexTestLab,
+  Cc2eFigureIndexEvidenceLab,
+  Cc2ePart01FoundationsStructureLab,
+  Cc2ePart01FoundationsTestLab,
+  Cc2ePart01FoundationsEvidenceLab,
+  Cc2e01ConstructionWorldStructureLab,
+  Cc2e01ConstructionWorldTestLab,
+  Cc2e01ConstructionWorldEvidenceLab,
+  Cc2e02SoftwareMetaphorsStructureLab,
+  Cc2e02SoftwareMetaphorsTestLab,
+  Cc2e02SoftwareMetaphorsEvidenceLab,
+  Cc2e03PrerequisitesStructureLab,
+  Cc2e03PrerequisitesTestLab,
+  Cc2e03PrerequisitesEvidenceLab,
+  Cc2e04ConstructionDecisionsStructureLab,
+  Cc2e04ConstructionDecisionsTestLab,
+  Cc2e04ConstructionDecisionsEvidenceLab,
+  Cc2ePart02HighQualityCodeStructureLab,
+  Cc2ePart02HighQualityCodeTestLab,
+  Cc2ePart02HighQualityCodeEvidenceLab,
+  Cc2e05DesignInConstructionStructureLab,
+  Cc2e05DesignInConstructionTestLab,
+  Cc2e05DesignInConstructionEvidenceLab,
+  Cc2e06WorkingClassesStructureLab,
+  Cc2e06WorkingClassesTestLab,
+  Cc2e06WorkingClassesEvidenceLab,
+  Cc2e07HighQualityRoutinesStructureLab,
+  Cc2e07HighQualityRoutinesTestLab,
+  Cc2e07HighQualityRoutinesEvidenceLab,
+  Cc2e08DefensiveProgrammingStructureLab,
+  Cc2e08DefensiveProgrammingTestLab,
+  Cc2e08DefensiveProgrammingEvidenceLab,
+  Cc2e09PseudocodeProgrammingProcessStructureLab,
+  Cc2e09PseudocodeProgrammingProcessTestLab,
+  Cc2e09PseudocodeProgrammingProcessEvidenceLab,
+  Cc2ePart03VariablesStructureLab,
+  Cc2ePart03VariablesTestLab,
+  Cc2ePart03VariablesEvidenceLab,
+  Cc2e10GeneralVariableUseStructureLab,
+  Cc2e10GeneralVariableUseTestLab,
+  Cc2e10GeneralVariableUseEvidenceLab,
+  Cc2e11PowerOfVariableNamesStructureLab,
+  Cc2e11PowerOfVariableNamesTestLab,
+  Cc2e11PowerOfVariableNamesEvidenceLab,
+  Cc2e12FundamentalDataTypesStructureLab,
+  Cc2e12FundamentalDataTypesTestLab,
+  Cc2e12FundamentalDataTypesEvidenceLab,
+  Cc2e13UnusualDataTypesStructureLab,
+  Cc2e13UnusualDataTypesTestLab,
+  Cc2e13UnusualDataTypesEvidenceLab,
+  Cc2ePart04StatementsStructureLab,
+  Cc2ePart04StatementsTestLab,
+  Cc2ePart04StatementsEvidenceLab,
+  Cc2e14StraightLineCodeStructureLab,
+  Cc2e14StraightLineCodeTestLab,
+  Cc2e14StraightLineCodeEvidenceLab,
+  Cc2e15ConditionalsStructureLab,
+  Cc2e15ConditionalsTestLab,
+  Cc2e15ConditionalsEvidenceLab,
+  Cc2e16LoopsStructureLab,
+  Cc2e16LoopsTestLab,
+  Cc2e16LoopsEvidenceLab,
+  Cc2e17UnusualControlStructuresStructureLab,
+  Cc2e17UnusualControlStructuresTestLab,
+  Cc2e17UnusualControlStructuresEvidenceLab,
+  Cc2e18TableDrivenMethodsStructureLab,
+  Cc2e18TableDrivenMethodsTestLab,
+  Cc2e18TableDrivenMethodsEvidenceLab,
+  Cc2e19GeneralControlIssuesStructureLab,
+  Cc2e19GeneralControlIssuesTestLab,
+  Cc2e19GeneralControlIssuesEvidenceLab,
+  Cc2ePart05CodeImprovementStructureLab,
+  Cc2ePart05CodeImprovementTestLab,
+  Cc2ePart05CodeImprovementEvidenceLab,
+  Cc2e20SoftwareQualityLandscapeStructureLab,
+  Cc2e20SoftwareQualityLandscapeTestLab,
+  Cc2e20SoftwareQualityLandscapeEvidenceLab,
+  Cc2e21CollaborativeConstructionStructureLab,
+  Cc2e21CollaborativeConstructionTestLab,
+  Cc2e21CollaborativeConstructionEvidenceLab,
+  Cc2e22DeveloperTestingStructureLab,
+  Cc2e22DeveloperTestingTestLab,
+  Cc2e22DeveloperTestingEvidenceLab,
+  Cc2e23DebuggingStructureLab,
+  Cc2e23DebuggingTestLab,
+  Cc2e23DebuggingEvidenceLab,
+  Cc2e24RefactoringStructureLab,
+  Cc2e24RefactoringTestLab,
+  Cc2e24RefactoringEvidenceLab,
+  Cc2e25CodeTuningStrategiesStructureLab,
+  Cc2e25CodeTuningStrategiesTestLab,
+  Cc2e25CodeTuningStrategiesEvidenceLab,
+  Cc2e26CodeTuningTechniquesStructureLab,
+  Cc2e26CodeTuningTechniquesTestLab,
+  Cc2e26CodeTuningTechniquesEvidenceLab,
+  Cc2ePart06SystemConsiderationsStructureLab,
+  Cc2ePart06SystemConsiderationsTestLab,
+  Cc2ePart06SystemConsiderationsEvidenceLab,
+  Cc2e27ProgramSizeStructureLab,
+  Cc2e27ProgramSizeTestLab,
+  Cc2e27ProgramSizeEvidenceLab,
+  Cc2e28ManagingConstructionStructureLab,
+  Cc2e28ManagingConstructionTestLab,
+  Cc2e28ManagingConstructionEvidenceLab,
+  Cc2e29IntegrationStructureLab,
+  Cc2e29IntegrationTestLab,
+  Cc2e29IntegrationEvidenceLab,
+  Cc2e30ProgrammingToolsStructureLab,
+  Cc2e30ProgrammingToolsTestLab,
+  Cc2e30ProgrammingToolsEvidenceLab,
+  Cc2ePart07SoftwareCraftsmanshipStructureLab,
+  Cc2ePart07SoftwareCraftsmanshipTestLab,
+  Cc2ePart07SoftwareCraftsmanshipEvidenceLab,
+  Cc2e31LayoutAndStyleStructureLab,
+  Cc2e31LayoutAndStyleTestLab,
+  Cc2e31LayoutAndStyleEvidenceLab,
+  Cc2e32SelfDocumentingCodeStructureLab,
+  Cc2e32SelfDocumentingCodeTestLab,
+  Cc2e32SelfDocumentingCodeEvidenceLab,
+  Cc2e33PersonalCharacterStructureLab,
+  Cc2e33PersonalCharacterTestLab,
+  Cc2e33PersonalCharacterEvidenceLab,
+  Cc2e34SoftwareCraftsmanshipStructureLab,
+  Cc2e34SoftwareCraftsmanshipTestLab,
+  Cc2e34SoftwareCraftsmanshipEvidenceLab,
+  Cc2e35MoreInformationStructureLab,
+  Cc2e35MoreInformationTestLab,
+  Cc2e35MoreInformationEvidenceLab,
+  Cc2eReferencesStructureLab,
+  Cc2eReferencesTestLab,
+  Cc2eReferencesEvidenceLab,
+  Cc2eIndexStructureLab,
+  Cc2eIndexTestLab,
+  Cc2eIndexEvidenceLab,
+  Cc2eOfficialFinalReviewStructureLab,
+  Cc2eOfficialFinalReviewTestLab,
+  Cc2eOfficialFinalReviewEvidenceLab,
   Cg4AdvancedRenderingDiagram,
   Cg4CurvesSurfacesDiagram,
   Cg4FinalReviewDiagram,
@@ -4534,36 +11155,37 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CgpModelingDiagram,
   CgpRasterGraphicsDiagram,
   CgpRenderingAlgorithmsDiagram,
-  CgptAlignmentRlhfDiagram,
-  CgptEcosystemFutureDiagram,
-  CgptFinalReviewDiagram,
-  CgptFinetuningPracticeDiagram,
-  CgptGptArchitectureDiagram,
-  CgptInferenceServingDiagram,
-  CgptLearningMapDiagram,
-  CgptPluginToolsDiagram,
-  CgptPretrainingDiagram,
-  CgptPromptTechniquesDiagram,
-  CmBinomialDiagram,
-  CmDiscreteProbDiagram,
-  CmFinalReviewDiagram,
-  CmGeneratingFuncsDiagram,
-  CmIntegerFunctionsDiagram,
-  CmLearningMapDiagram,
-  CmNumberTheoryDiagram,
-  CmRecurrentProblemsDiagram,
-  CmStirlingDiagram,
-  CmSumsDiagram,
-  CntApplicationLayerDiagram,
-  CntCongestionControlDiagram,
-  CntFinalReviewDiagram,
-  CntLearningMapDiagram,
-  CntLinkLayerDiagram,
-  CntNetworkLayerDiagram,
-  CntNetworkSecurityDiagram,
-  CntRoutingAlgorithmsDiagram,
-  CntTransportLayerDiagram,
-  CntWirelessMobileDiagram,
+
+  Cnt8OfficialLearningMapMapLab,
+  Cnt8OfficialLearningMapExperimentLab,
+  Cnt8OfficialLearningMapEvidenceLab,
+  Cnt801InternetMapLab,
+  Cnt801InternetExperimentLab,
+  Cnt801InternetEvidenceLab,
+  Cnt802ApplicationMapLab,
+  Cnt802ApplicationExperimentLab,
+  Cnt802ApplicationEvidenceLab,
+  Cnt803TransportMapLab,
+  Cnt803TransportExperimentLab,
+  Cnt803TransportEvidenceLab,
+  Cnt804DataPlaneMapLab,
+  Cnt804DataPlaneExperimentLab,
+  Cnt804DataPlaneEvidenceLab,
+  Cnt805ControlPlaneMapLab,
+  Cnt805ControlPlaneExperimentLab,
+  Cnt805ControlPlaneEvidenceLab,
+  Cnt806LinkLansMapLab,
+  Cnt806LinkLansExperimentLab,
+  Cnt806LinkLansEvidenceLab,
+  Cnt807WirelessMobileMapLab,
+  Cnt807WirelessMobileExperimentLab,
+  Cnt807WirelessMobileEvidenceLab,
+  Cnt808SecurityMapLab,
+  Cnt808SecurityExperimentLab,
+  Cnt808SecurityEvidenceLab,
+  Cnt8OfficialFinalReviewMapLab,
+  Cnt8OfficialFinalReviewExperimentLab,
+  Cnt8OfficialFinalReviewEvidenceLab,
   CraAdvancedUiDiagram,
   CraAndroidQuickstartDiagram,
   CraDataPersistenceDiagram,
@@ -4574,176 +11196,828 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   CraServiceBroadcastDiagram,
   CraUiComponentsDiagram,
   CraWebNetworkDiagram,
-  CrcCodeGenerationDiagram,
-  CrcCompilerArchitectureDiagram,
-  CrcFinalReviewDiagram,
-  CrcIntermediateCodeDiagram,
-  CrcLearningMapDiagram,
-  CrcLexerGeneratorDiagram,
-  CrcLinkerLoaderDiagram,
-  CrcOptimizationDiagram,
-  CrcParserGeneratorDiagram,
-  CrcSemanticsDiagram,
-  CrvCareerGrowthDiagram,
-  CrvDatabaseCacheDiagram,
-  CrvDevopsCloudDiagram,
-  CrvDistributedDiagram,
-  CrvFinalReviewDiagram,
-  CrvJvmLanguageDiagram,
-  CrvLearningMapDiagram,
-  CrvOopDataDiagram,
-  CrvProgrammingWorldDiagram,
-  CrvWebNetworkDiagram,
-  CsecBackgroundPatternsDiagram,
-  CsecBorderShapesDiagram,
-  CsecClipPathDiagram,
-  CsecFinalReviewDiagram,
-  CsecFontFeaturesDiagram,
-  CsecLearningMapDiagram,
-  CsecMotionVisualDiagram,
-  CsecPseudoElementsDiagram,
-  CsecTextEffectsDiagram,
-  CsecUserExperienceDiagram,
-  CsiBodyInteriorDiagram,
-  CsiChassisSuspensionDiagram,
-  CsiElectricalElectronicsDiagram,
-  CsiEngineSystemDiagram,
-  CsiFinalReviewDiagram,
-  CsiHvacComfortDiagram,
-  CsiLearningMapDiagram,
-  CsiSafetySystemsDiagram,
-  CsiSteeringBrakingDiagram,
-  CsiTransmissionDrivetrainDiagram,
-  CswAnimationTransitionDiagram,
-  CswBoxModelDiagram,
-  CswFinalReviewDiagram,
-  CswFlexLayoutDiagram,
-  CswFlowBfcDiagram,
-  CswGridLayoutDiagram,
-  CswLearningMapDiagram,
-  CswTextDecorationDiagram,
-  CswTransformPerspectiveDiagram,
-  CswVerticalRhythmDiagram,
-  DakAmsComponentDiagram,
-  DakAndroidArchitectureDiagram,
-  DakAudioCameraDiagram,
-  DakBinderSystemDiagram,
-  DakFinalReviewDiagram,
-  DakHandlerThreadDiagram,
-  DakInitBootDiagram,
-  DakLearningMapDiagram,
-  DakPmsPackageDiagram,
-  DakWmsViewDiagram,
-  DavAmsDeepDiagram,
-  DavBinderDeepDiagram,
-  DavFinalReviewDiagram,
-  DavInitZygoteDiagram,
-  DavJavaFrameworkDiagram,
-  DavLearningMapDiagram,
-  DavMediaAudioDiagram,
-  DavNativeLayerDiagram,
-  DavPmsDeepDiagram,
-  DavWmsDeepDiagram,
-  DbcCodeGenerationDiagram,
-  DbcFinalReviewDiagram,
-  DbcLearningMapDiagram,
-  DbcLexicalAnalysisDiagram,
-  DbcMachineDependentOptDiagram,
-  DbcMachineIndependentOptDiagram,
-  DbcRuntimeEnvironmentDiagram,
-  DbcSymTablesDiagram,
-  DbcSyntaxAnalysisDiagram,
-  DbcTypeCheckingDiagram,
-  DdiBatchStreamDiagram,
-  DdiConsistencyConsensusDiagram,
-  DdiDerivedDataDiagram,
-  DdiFinalReviewDiagram,
-  DdiFoundationsDiagram,
-  DdiFutureDirectionsDiagram,
-  DdiLearningMapDiagram,
-  DdiPartitioningDiagram,
-  DdiReplicationDiagram,
-  DdiTransactionsDiagram,
-  Dl2AutomaticDifferentiationDiagram,
-  Dl2FinalReviewDiagram,
-  Dl2GradientBackpropDiagram,
-  Dl2LayersModulesDiagram,
-  Dl2LearningMapDiagram,
-  Dl2ModelArchitectureDiagram,
-  Dl2NeuralNetFrameworkDiagram,
-  Dl2OptimizersDiagram,
-  Dl2TrainingEvaluationDiagram,
-  Dl2VariableFunctionsDiagram,
-  DlgAutoencoderVaeDiagram,
-  DlgDcganDiagram,
-  DlgDiffusionModelsDiagram,
-  DlgEvaluationEthicsDiagram,
-  DlgFinalReviewDiagram,
-  DlgFlowModelsDiagram,
-  DlgGanBasicsDiagram,
-  DlgGenerativeModelsBasicsDiagram,
-  DlgLearningMapDiagram,
-  DlgTextToImageDiagram,
-  DlrDeepQNetworkDiagram,
-  DlrDynamicProgrammingDiagram,
-  DlrFinalReviewDiagram,
-  DlrLearningMapDiagram,
-  DlrMdpDiagram,
-  DlrMonteCarloTdDiagram,
-  DlrPolicyGradientDiagram,
-  DlrQLearningDiagram,
-  DlrRlBasicsDiagram,
-  DlrValueFunctionsDiagram,
-  DlsApplicationsDiagram,
-  DlsBackpropagationDiagram,
-  DlsCnnDiagram,
-  DlsDeepLearningDiagram,
-  DlsFinalReviewDiagram,
-  DlsLearningMapDiagram,
-  DlsLearningTechniquesDiagram,
-  DlsNeuralNetworkDiagram,
-  DlsPerceptronDiagram,
-  DlsPythonNumpyDiagram,
-  DltConvRnnDiagram,
-  DltDeepNetworksDiagram,
-  DltFinalReviewDiagram,
-  DltLearningMapDiagram,
-  DltLinearAlgebraDiagram,
-  DltMlBasicsDiagram,
-  DltOptimizationDiagram,
-  DltProbabilityInfoDiagram,
-  DltRegularizationDiagram,
-  DltResearchFrontiersDiagram,
-  DnaAttentionDiagram,
-  DnaFinalReviewDiagram,
-  DnaLearningMapDiagram,
-  DnaNlpBasicsDiagram,
-  DnaRnnLstmDiagram,
-  DnaSeq2seqDiagram,
-  DnaTextGenerationDiagram,
-  DnaTransformerDiagram,
-  DnaWord2vecCbowDiagram,
-  DnaWordEmbeddingsDiagram,
-  DnjAsyncProgrammingDiagram,
-  DnjEventLoopAdvDiagram,
-  DnjFinalReviewDiagram,
-  DnjLearningMapDiagram,
-  DnjNpmModuleDiagram,
-  DnjStreamImplementationDiagram,
-  DnjTcpHttpDiagram,
-  DnjTestingDeployDiagram,
-  DnjV8EngineDiagram,
-  DnjWebsocketDiagram,
-  DnmFinalReviewDiagram,
-  DnmFinalizationDiagram,
-  DnmFragOptimizationDiagram,
-  DnmGcBasicsDiagram,
-  DnmLargeObjectDiagram,
-  DnmMemoryModelDiagram,
-  DnmMemoryPressureDiagram,
-  DnmPinningDiagram,
-  DnmSosDumpDiagram,
-  DnmSosHeapDiagram,
+  CrcOfficialLearningMapMapLab,
+  CrcOfficialLearningMapExperimentLab,
+  CrcOfficialLearningMapEvidenceLab,
+  Crc01StartCompilerMapLab,
+  Crc01StartCompilerExperimentLab,
+  Crc01StartCompilerEvidenceLab,
+  Crc02CflatCbcMapLab,
+  Crc02CflatCbcExperimentLab,
+  Crc02CflatCbcEvidenceLab,
+  Crc03ParsingOverviewMapLab,
+  Crc03ParsingOverviewExperimentLab,
+  Crc03ParsingOverviewEvidenceLab,
+  Crc04LexicalAnalysisMapLab,
+  Crc04LexicalAnalysisExperimentLab,
+  Crc04LexicalAnalysisEvidenceLab,
+  Crc05JavaccParserMapLab,
+  Crc05JavaccParserExperimentLab,
+  Crc05JavaccParserEvidenceLab,
+  Crc06SyntaxAnalysisMapLab,
+  Crc06SyntaxAnalysisExperimentLab,
+  Crc06SyntaxAnalysisEvidenceLab,
+  Crc07JavaccActionsAstMapLab,
+  Crc07JavaccActionsAstExperimentLab,
+  Crc07JavaccActionsAstEvidenceLab,
+  Crc08BuildAstMapLab,
+  Crc08BuildAstExperimentLab,
+  Crc08BuildAstEvidenceLab,
+  Crc09ReferenceResolutionMapLab,
+  Crc09ReferenceResolutionExperimentLab,
+  Crc09ReferenceResolutionEvidenceLab,
+  Crc10StaticTypeCheckingMapLab,
+  Crc10StaticTypeCheckingExperimentLab,
+  Crc10StaticTypeCheckingEvidenceLab,
+  Crc11IrConversionMapLab,
+  Crc11IrConversionExperimentLab,
+  Crc11IrConversionEvidenceLab,
+  Crc12X86OverviewMapLab,
+  Crc12X86OverviewExperimentLab,
+  Crc12X86OverviewEvidenceLab,
+  Crc13X86AssemblyMapLab,
+  Crc13X86AssemblyExperimentLab,
+  Crc13X86AssemblyEvidenceLab,
+  Crc14FunctionsVariablesMapLab,
+  Crc14FunctionsVariablesExperimentLab,
+  Crc14FunctionsVariablesEvidenceLab,
+  Crc15CompileExpressionsStatementsMapLab,
+  Crc15CompileExpressionsStatementsExperimentLab,
+  Crc15CompileExpressionsStatementsEvidenceLab,
+  Crc16StackFrameMapLab,
+  Crc16StackFrameExperimentLab,
+  Crc16StackFrameEvidenceLab,
+  Crc17OptimizationMapLab,
+  Crc17OptimizationExperimentLab,
+  Crc17OptimizationEvidenceLab,
+  Crc18ObjectFilesMapLab,
+  Crc18ObjectFilesExperimentLab,
+  Crc18ObjectFilesEvidenceLab,
+  Crc19LinkingLibrariesMapLab,
+  Crc19LinkingLibrariesExperimentLab,
+  Crc19LinkingLibrariesEvidenceLab,
+  Crc20ProgramLoadingMapLab,
+  Crc20ProgramLoadingExperimentLab,
+  Crc20ProgramLoadingEvidenceLab,
+  Crc21PositionIndependentCodeMapLab,
+  Crc21PositionIndependentCodeExperimentLab,
+  Crc21PositionIndependentCodeEvidenceLab,
+  Crc22FurtherReadingMapLab,
+  Crc22FurtherReadingExperimentLab,
+  Crc22FurtherReadingEvidenceLab,
+  CrcAppendixResourcesMapLab,
+  CrcAppendixResourcesExperimentLab,
+  CrcAppendixResourcesEvidenceLab,
+  CrcOfficialFinalReviewMapLab,
+  CrcOfficialFinalReviewExperimentLab,
+  CrcOfficialFinalReviewEvidenceLab,
+  Crv18OfficialLearningMapModelLab,
+  Crv18OfficialLearningMapFlowLab,
+  Crv18OfficialLearningMapEvidenceLab,
+  Crv18PrefaceModelLab,
+  Crv18PrefaceFlowLab,
+  Crv18PrefaceEvidenceLab,
+  Crv18Chapter01ModelLab,
+  Crv18Chapter01FlowLab,
+  Crv18Chapter01EvidenceLab,
+  Crv18Section0101ModelLab,
+  Crv18Section0101FlowLab,
+  Crv18Section0101EvidenceLab,
+  Crv18Section0102ModelLab,
+  Crv18Section0102FlowLab,
+  Crv18Section0102EvidenceLab,
+  Crv18Section0103ModelLab,
+  Crv18Section0103FlowLab,
+  Crv18Section0103EvidenceLab,
+  Crv18Section0104ModelLab,
+  Crv18Section0104FlowLab,
+  Crv18Section0104EvidenceLab,
+  Crv18Section0105ModelLab,
+  Crv18Section0105FlowLab,
+  Crv18Section0105EvidenceLab,
+  Crv18Section0106ModelLab,
+  Crv18Section0106FlowLab,
+  Crv18Section0106EvidenceLab,
+  Crv18Section0107ModelLab,
+  Crv18Section0107FlowLab,
+  Crv18Section0107EvidenceLab,
+  Crv18Section0108ModelLab,
+  Crv18Section0108FlowLab,
+  Crv18Section0108EvidenceLab,
+  Crv18Section0109ModelLab,
+  Crv18Section0109FlowLab,
+  Crv18Section0109EvidenceLab,
+  Crv18Section0110ModelLab,
+  Crv18Section0110FlowLab,
+  Crv18Section0110EvidenceLab,
+  Crv18Section0111ModelLab,
+  Crv18Section0111FlowLab,
+  Crv18Section0111EvidenceLab,
+  Crv18Section0112ModelLab,
+  Crv18Section0112FlowLab,
+  Crv18Section0112EvidenceLab,
+  Crv18Section0113ModelLab,
+  Crv18Section0113FlowLab,
+  Crv18Section0113EvidenceLab,
+  Crv18Section0114ModelLab,
+  Crv18Section0114FlowLab,
+  Crv18Section0114EvidenceLab,
+  Crv18Chapter02ModelLab,
+  Crv18Chapter02FlowLab,
+  Crv18Chapter02EvidenceLab,
+  Crv18Section0201ModelLab,
+  Crv18Section0201FlowLab,
+  Crv18Section0201EvidenceLab,
+  Crv18Section0202ModelLab,
+  Crv18Section0202FlowLab,
+  Crv18Section0202EvidenceLab,
+  Crv18Section0203ModelLab,
+  Crv18Section0203FlowLab,
+  Crv18Section0203EvidenceLab,
+  Crv18Section0204ModelLab,
+  Crv18Section0204FlowLab,
+  Crv18Section0204EvidenceLab,
+  Crv18Section0205ModelLab,
+  Crv18Section0205FlowLab,
+  Crv18Section0205EvidenceLab,
+  Crv18Section0206ModelLab,
+  Crv18Section0206FlowLab,
+  Crv18Section0206EvidenceLab,
+  Crv18Section0207ModelLab,
+  Crv18Section0207FlowLab,
+  Crv18Section0207EvidenceLab,
+  Crv18Section0208ModelLab,
+  Crv18Section0208FlowLab,
+  Crv18Section0208EvidenceLab,
+  Crv18Section0209ModelLab,
+  Crv18Section0209FlowLab,
+  Crv18Section0209EvidenceLab,
+  Crv18Section0210ModelLab,
+  Crv18Section0210FlowLab,
+  Crv18Section0210EvidenceLab,
+  Crv18Section0211ModelLab,
+  Crv18Section0211FlowLab,
+  Crv18Section0211EvidenceLab,
+  Crv18Section0212ModelLab,
+  Crv18Section0212FlowLab,
+  Crv18Section0212EvidenceLab,
+  Crv18Section0213ModelLab,
+  Crv18Section0213FlowLab,
+  Crv18Section0213EvidenceLab,
+  Crv18Section0214ModelLab,
+  Crv18Section0214FlowLab,
+  Crv18Section0214EvidenceLab,
+  Crv18Chapter03ModelLab,
+  Crv18Chapter03FlowLab,
+  Crv18Chapter03EvidenceLab,
+  Crv18Section0301ModelLab,
+  Crv18Section0301FlowLab,
+  Crv18Section0301EvidenceLab,
+  Crv18Section0302ModelLab,
+  Crv18Section0302FlowLab,
+  Crv18Section0302EvidenceLab,
+  Crv18Section0303ModelLab,
+  Crv18Section0303FlowLab,
+  Crv18Section0303EvidenceLab,
+  Crv18Section0304ModelLab,
+  Crv18Section0304FlowLab,
+  Crv18Section0304EvidenceLab,
+  Crv18Section0305ModelLab,
+  Crv18Section0305FlowLab,
+  Crv18Section0305EvidenceLab,
+  Crv18Section0306ModelLab,
+  Crv18Section0306FlowLab,
+  Crv18Section0306EvidenceLab,
+  Crv18Section0307ModelLab,
+  Crv18Section0307FlowLab,
+  Crv18Section0307EvidenceLab,
+  Crv18Section0308ModelLab,
+  Crv18Section0308FlowLab,
+  Crv18Section0308EvidenceLab,
+  Crv18Section0309ModelLab,
+  Crv18Section0309FlowLab,
+  Crv18Section0309EvidenceLab,
+  Crv18Section0310ModelLab,
+  Crv18Section0310FlowLab,
+  Crv18Section0310EvidenceLab,
+  Crv18Chapter04ModelLab,
+  Crv18Chapter04FlowLab,
+  Crv18Chapter04EvidenceLab,
+  Crv18Section0401ModelLab,
+  Crv18Section0401FlowLab,
+  Crv18Section0401EvidenceLab,
+  Crv18Section0402ModelLab,
+  Crv18Section0402FlowLab,
+  Crv18Section0402EvidenceLab,
+  Crv18Section0403ModelLab,
+  Crv18Section0403FlowLab,
+  Crv18Section0403EvidenceLab,
+  Crv18Section0404ModelLab,
+  Crv18Section0404FlowLab,
+  Crv18Section0404EvidenceLab,
+  Crv18Section0405ModelLab,
+  Crv18Section0405FlowLab,
+  Crv18Section0405EvidenceLab,
+  Crv18Chapter05ModelLab,
+  Crv18Chapter05FlowLab,
+  Crv18Chapter05EvidenceLab,
+  Crv18Section0501ModelLab,
+  Crv18Section0501FlowLab,
+  Crv18Section0501EvidenceLab,
+  Crv18Section0502ModelLab,
+  Crv18Section0502FlowLab,
+  Crv18Section0502EvidenceLab,
+  Crv18Section0503ModelLab,
+  Crv18Section0503FlowLab,
+  Crv18Section0503EvidenceLab,
+  Crv18Section0504ModelLab,
+  Crv18Section0504FlowLab,
+  Crv18Section0504EvidenceLab,
+  Crv18Section0505ModelLab,
+  Crv18Section0505FlowLab,
+  Crv18Section0505EvidenceLab,
+  Crv18Chapter06ModelLab,
+  Crv18Chapter06FlowLab,
+  Crv18Chapter06EvidenceLab,
+  Crv18Section0601ModelLab,
+  Crv18Section0601FlowLab,
+  Crv18Section0601EvidenceLab,
+  Crv18Section0602ModelLab,
+  Crv18Section0602FlowLab,
+  Crv18Section0602EvidenceLab,
+  Crv18Section0603ModelLab,
+  Crv18Section0603FlowLab,
+  Crv18Section0603EvidenceLab,
+  Crv18Section0604ModelLab,
+  Crv18Section0604FlowLab,
+  Crv18Section0604EvidenceLab,
+  Crv18Section0605ModelLab,
+  Crv18Section0605FlowLab,
+  Crv18Section0605EvidenceLab,
+  Crv18OfficialFinalReviewModelLab,
+  Crv18OfficialFinalReviewFlowLab,
+  Crv18OfficialFinalReviewEvidenceLab,
+  Csi23OfficialLearningMapSystemLab,
+  Csi23OfficialLearningMapAssemblyLab,
+  Csi23OfficialLearningMapEvidenceLab,
+  Csi23BookGuideSystemLab,
+  Csi23BookGuideAssemblyLab,
+  Csi23BookGuideEvidenceLab,
+  Csi23PrologueSystemLab,
+  Csi23PrologueAssemblyLab,
+  Csi23PrologueEvidenceLab,
+  Csi2301VehicleStructureSystemLab,
+  Csi2301VehicleStructureAssemblyLab,
+  Csi2301VehicleStructureEvidenceLab,
+  Csi2302ProductionSystemLab,
+  Csi2302ProductionAssemblyLab,
+  Csi2302ProductionEvidenceLab,
+  Csi2303EcoCarsSystemLab,
+  Csi2303EcoCarsAssemblyLab,
+  Csi2303EcoCarsEvidenceLab,
+  Csi23FinalFutureSystemLab,
+  Csi23FinalFutureAssemblyLab,
+  Csi23FinalFutureEvidenceLab,
+  Csi23IndexSystemLab,
+  Csi23IndexAssemblyLab,
+  Csi23IndexEvidenceLab,
+  Csi23OfficialFinalReviewSystemLab,
+  Csi23OfficialFinalReviewAssemblyLab,
+  Csi23OfficialFinalReviewEvidenceLab,
+  DbcOfficialLearningMapMapLab,
+  DbcOfficialLearningMapExperimentLab,
+  DbcOfficialLearningMapEvidenceLab,
+  Dbc01IntroductionMapLab,
+  Dbc01IntroductionExperimentLab,
+  Dbc01IntroductionEvidenceLab,
+  Dbc02SimpleSyntaxDirectedTranslatorMapLab,
+  Dbc02SimpleSyntaxDirectedTranslatorExperimentLab,
+  Dbc02SimpleSyntaxDirectedTranslatorEvidenceLab,
+  Dbc03LexicalAnalysisMapLab,
+  Dbc03LexicalAnalysisExperimentLab,
+  Dbc03LexicalAnalysisEvidenceLab,
+  Dbc04SyntaxAnalysisMapLab,
+  Dbc04SyntaxAnalysisExperimentLab,
+  Dbc04SyntaxAnalysisEvidenceLab,
+  Dbc05SyntaxDirectedTranslationMapLab,
+  Dbc05SyntaxDirectedTranslationExperimentLab,
+  Dbc05SyntaxDirectedTranslationEvidenceLab,
+  Dbc06IntermediateCodeGenerationMapLab,
+  Dbc06IntermediateCodeGenerationExperimentLab,
+  Dbc06IntermediateCodeGenerationEvidenceLab,
+  Dbc07RuntimeEnvironmentsMapLab,
+  Dbc07RuntimeEnvironmentsExperimentLab,
+  Dbc07RuntimeEnvironmentsEvidenceLab,
+  Dbc08CodeGenerationMapLab,
+  Dbc08CodeGenerationExperimentLab,
+  Dbc08CodeGenerationEvidenceLab,
+  Dbc09MachineIndependentOptimizationsMapLab,
+  Dbc09MachineIndependentOptimizationsExperimentLab,
+  Dbc09MachineIndependentOptimizationsEvidenceLab,
+  Dbc10InstructionLevelParallelismMapLab,
+  Dbc10InstructionLevelParallelismExperimentLab,
+  Dbc10InstructionLevelParallelismEvidenceLab,
+  Dbc11ParallelismLocalityMapLab,
+  Dbc11ParallelismLocalityExperimentLab,
+  Dbc11ParallelismLocalityEvidenceLab,
+  Dbc12InterproceduralAnalysisMapLab,
+  Dbc12InterproceduralAnalysisExperimentLab,
+  Dbc12InterproceduralAnalysisEvidenceLab,
+  DbcAppendixACompleteFrontEndMapLab,
+  DbcAppendixACompleteFrontEndExperimentLab,
+  DbcAppendixACompleteFrontEndEvidenceLab,
+  DbcAppendixBLinearIndependentSolutionsMapLab,
+  DbcAppendixBLinearIndependentSolutionsExperimentLab,
+  DbcAppendixBLinearIndependentSolutionsEvidenceLab,
+  DbcOfficialFinalReviewMapLab,
+  DbcOfficialFinalReviewExperimentLab,
+  DbcOfficialFinalReviewEvidenceLab,
+  Dl2OfficialLearningMapMapLab,
+  Dl2OfficialLearningMapExperimentLab,
+  Dl2OfficialLearningMapEvidenceLab,
+  Dl2Step01VariableBoxMapLab,
+  Dl2Step01VariableBoxExperimentLab,
+  Dl2Step01VariableBoxEvidenceLab,
+  Dl2Step02FunctionCreatorMapLab,
+  Dl2Step02FunctionCreatorExperimentLab,
+  Dl2Step02FunctionCreatorEvidenceLab,
+  Dl2Step03FunctionChainMapLab,
+  Dl2Step03FunctionChainExperimentLab,
+  Dl2Step03FunctionChainEvidenceLab,
+  Dl2Step04NumericalDifferentiationMapLab,
+  Dl2Step04NumericalDifferentiationExperimentLab,
+  Dl2Step04NumericalDifferentiationEvidenceLab,
+  Dl2Step05BackpropTheoryMapLab,
+  Dl2Step05BackpropTheoryExperimentLab,
+  Dl2Step05BackpropTheoryEvidenceLab,
+  Dl2Step06ManualBackpropMapLab,
+  Dl2Step06ManualBackpropExperimentLab,
+  Dl2Step06ManualBackpropEvidenceLab,
+  Dl2Step07AutomaticBackpropMapLab,
+  Dl2Step07AutomaticBackpropExperimentLab,
+  Dl2Step07AutomaticBackpropEvidenceLab,
+  Dl2Step08RecursionToLoopMapLab,
+  Dl2Step08RecursionToLoopExperimentLab,
+  Dl2Step08RecursionToLoopEvidenceLab,
+  Dl2Step09UsableFunctionsMapLab,
+  Dl2Step09UsableFunctionsExperimentLab,
+  Dl2Step09UsableFunctionsEvidenceLab,
+  Dl2Step10TestingMapLab,
+  Dl2Step10TestingExperimentLab,
+  Dl2Step10TestingEvidenceLab,
+  Dl2Step11VariadicForwardMapLab,
+  Dl2Step11VariadicForwardExperimentLab,
+  Dl2Step11VariadicForwardEvidenceLab,
+  Dl2Step12VariadicImprovementsMapLab,
+  Dl2Step12VariadicImprovementsExperimentLab,
+  Dl2Step12VariadicImprovementsEvidenceLab,
+  Dl2Step13VariadicBackwardMapLab,
+  Dl2Step13VariadicBackwardExperimentLab,
+  Dl2Step13VariadicBackwardEvidenceLab,
+  Dl2Step14ReusedVariableMapLab,
+  Dl2Step14ReusedVariableExperimentLab,
+  Dl2Step14ReusedVariableEvidenceLab,
+  Dl2Step15ComplexGraphTheoryMapLab,
+  Dl2Step15ComplexGraphTheoryExperimentLab,
+  Dl2Step15ComplexGraphTheoryEvidenceLab,
+  Dl2Step16ComplexGraphImplementationMapLab,
+  Dl2Step16ComplexGraphImplementationExperimentLab,
+  Dl2Step16ComplexGraphImplementationEvidenceLab,
+  Dl2Step17MemoryCyclesMapLab,
+  Dl2Step17MemoryCyclesExperimentLab,
+  Dl2Step17MemoryCyclesEvidenceLab,
+  Dl2Step18MemoryModeMapLab,
+  Dl2Step18MemoryModeExperimentLab,
+  Dl2Step18MemoryModeEvidenceLab,
+  Dl2Step19UsableVariableMapLab,
+  Dl2Step19UsableVariableExperimentLab,
+  Dl2Step19UsableVariableEvidenceLab,
+  Dl2Step20OperatorOverloadOneMapLab,
+  Dl2Step20OperatorOverloadOneExperimentLab,
+  Dl2Step20OperatorOverloadOneEvidenceLab,
+  Dl2Step21OperatorOverloadTwoMapLab,
+  Dl2Step21OperatorOverloadTwoExperimentLab,
+  Dl2Step21OperatorOverloadTwoEvidenceLab,
+  Dl2Step22OperatorOverloadThreeMapLab,
+  Dl2Step22OperatorOverloadThreeExperimentLab,
+  Dl2Step22OperatorOverloadThreeEvidenceLab,
+  Dl2Step23PackageMapLab,
+  Dl2Step23PackageExperimentLab,
+  Dl2Step23PackageEvidenceLab,
+  Dl2Step24ComplexDerivativesMapLab,
+  Dl2Step24ComplexDerivativesExperimentLab,
+  Dl2Step24ComplexDerivativesEvidenceLab,
+  Dl2Step25GraphvizOneMapLab,
+  Dl2Step25GraphvizOneExperimentLab,
+  Dl2Step25GraphvizOneEvidenceLab,
+  Dl2Step26GraphvizTwoMapLab,
+  Dl2Step26GraphvizTwoExperimentLab,
+  Dl2Step26GraphvizTwoEvidenceLab,
+  Dl2Step27TaylorDerivativeMapLab,
+  Dl2Step27TaylorDerivativeExperimentLab,
+  Dl2Step27TaylorDerivativeEvidenceLab,
+  Dl2Step28FunctionOptimizationMapLab,
+  Dl2Step28FunctionOptimizationExperimentLab,
+  Dl2Step28FunctionOptimizationEvidenceLab,
+  Dl2Step29ManualNewtonMapLab,
+  Dl2Step29ManualNewtonExperimentLab,
+  Dl2Step29ManualNewtonEvidenceLab,
+  Dl2Step30HigherOrderPreparationMapLab,
+  Dl2Step30HigherOrderPreparationExperimentLab,
+  Dl2Step30HigherOrderPreparationEvidenceLab,
+  Dl2Step31HigherOrderTheoryMapLab,
+  Dl2Step31HigherOrderTheoryExperimentLab,
+  Dl2Step31HigherOrderTheoryEvidenceLab,
+  Dl2Step32HigherOrderImplementationMapLab,
+  Dl2Step32HigherOrderImplementationExperimentLab,
+  Dl2Step32HigherOrderImplementationEvidenceLab,
+  Dl2Step33AutomaticNewtonMapLab,
+  Dl2Step33AutomaticNewtonExperimentLab,
+  Dl2Step33AutomaticNewtonEvidenceLab,
+  Dl2Step34SinHigherOrderMapLab,
+  Dl2Step34SinHigherOrderExperimentLab,
+  Dl2Step34SinHigherOrderEvidenceLab,
+  Dl2Step35HigherOrderGraphMapLab,
+  Dl2Step35HigherOrderGraphExperimentLab,
+  Dl2Step35HigherOrderGraphEvidenceLab,
+  Dl2Step36DoubleBackpropMapLab,
+  Dl2Step36DoubleBackpropExperimentLab,
+  Dl2Step36DoubleBackpropEvidenceLab,
+  Dl2Step37TensorMapLab,
+  Dl2Step37TensorExperimentLab,
+  Dl2Step37TensorEvidenceLab,
+  Dl2Step38ReshapeTransposeMapLab,
+  Dl2Step38ReshapeTransposeExperimentLab,
+  Dl2Step38ReshapeTransposeEvidenceLab,
+  Dl2Step39SumMapLab,
+  Dl2Step39SumExperimentLab,
+  Dl2Step39SumEvidenceLab,
+  Dl2Step40BroadcastMapLab,
+  Dl2Step40BroadcastExperimentLab,
+  Dl2Step40BroadcastEvidenceLab,
+  Dl2Step41MatrixProductMapLab,
+  Dl2Step41MatrixProductExperimentLab,
+  Dl2Step41MatrixProductEvidenceLab,
+  Dl2Step42LinearRegressionMapLab,
+  Dl2Step42LinearRegressionExperimentLab,
+  Dl2Step42LinearRegressionEvidenceLab,
+  Dl2Step43NeuralNetworkMapLab,
+  Dl2Step43NeuralNetworkExperimentLab,
+  Dl2Step43NeuralNetworkEvidenceLab,
+  Dl2Step44ParameterLayerMapLab,
+  Dl2Step44ParameterLayerExperimentLab,
+  Dl2Step44ParameterLayerEvidenceLab,
+  Dl2Step45ModelLayerMapLab,
+  Dl2Step45ModelLayerExperimentLab,
+  Dl2Step45ModelLayerEvidenceLab,
+  Dl2Step46OptimizerMapLab,
+  Dl2Step46OptimizerExperimentLab,
+  Dl2Step46OptimizerEvidenceLab,
+  Dl2Step47SoftmaxCrossEntropyMapLab,
+  Dl2Step47SoftmaxCrossEntropyExperimentLab,
+  Dl2Step47SoftmaxCrossEntropyEvidenceLab,
+  Dl2Step48MulticlassMapLab,
+  Dl2Step48MulticlassExperimentLab,
+  Dl2Step48MulticlassEvidenceLab,
+  Dl2Step49DatasetPreprocessMapLab,
+  Dl2Step49DatasetPreprocessExperimentLab,
+  Dl2Step49DatasetPreprocessEvidenceLab,
+  Dl2Step50DataloaderMapLab,
+  Dl2Step50DataloaderExperimentLab,
+  Dl2Step50DataloaderEvidenceLab,
+  Dl2Step51MnistMapLab,
+  Dl2Step51MnistExperimentLab,
+  Dl2Step51MnistEvidenceLab,
+  Dl2Step52GpuMapLab,
+  Dl2Step52GpuExperimentLab,
+  Dl2Step52GpuEvidenceLab,
+  Dl2Step53SaveLoadMapLab,
+  Dl2Step53SaveLoadExperimentLab,
+  Dl2Step53SaveLoadEvidenceLab,
+  Dl2Step54DropoutTestModeMapLab,
+  Dl2Step54DropoutTestModeExperimentLab,
+  Dl2Step54DropoutTestModeEvidenceLab,
+  Dl2Step55CnnMechanismOneMapLab,
+  Dl2Step55CnnMechanismOneExperimentLab,
+  Dl2Step55CnnMechanismOneEvidenceLab,
+  Dl2Step56CnnMechanismTwoMapLab,
+  Dl2Step56CnnMechanismTwoExperimentLab,
+  Dl2Step56CnnMechanismTwoEvidenceLab,
+  Dl2Step57Conv2dPoolingMapLab,
+  Dl2Step57Conv2dPoolingExperimentLab,
+  Dl2Step57Conv2dPoolingEvidenceLab,
+  Dl2Step58Vgg16MapLab,
+  Dl2Step58Vgg16ExperimentLab,
+  Dl2Step58Vgg16EvidenceLab,
+  Dl2Step59RnnMapLab,
+  Dl2Step59RnnExperimentLab,
+  Dl2Step59RnnEvidenceLab,
+  Dl2Step60LstmDataloaderMapLab,
+  Dl2Step60LstmDataloaderExperimentLab,
+  Dl2Step60LstmDataloaderEvidenceLab,
+  Dl2AppendixAInPlaceMapLab,
+  Dl2AppendixAInPlaceExperimentLab,
+  Dl2AppendixAInPlaceEvidenceLab,
+  Dl2AppendixBGetItemMapLab,
+  Dl2AppendixBGetItemExperimentLab,
+  Dl2AppendixBGetItemEvidenceLab,
+  Dl2AppendixCColabMapLab,
+  Dl2AppendixCColabExperimentLab,
+  Dl2AppendixCColabEvidenceLab,
+  Dl2OfficialFinalReviewMapLab,
+  Dl2OfficialFinalReviewExperimentLab,
+  Dl2OfficialFinalReviewEvidenceLab,
+  DlgOfficialLearningMapMapLab,
+  DlgOfficialLearningMapExperimentLab,
+  DlgOfficialLearningMapEvidenceLab,
+  Dlg01NormalDistributionMapLab,
+  Dlg01NormalDistributionExperimentLab,
+  Dlg01NormalDistributionEvidenceLab,
+  Dlg02MaximumLikelihoodMapLab,
+  Dlg02MaximumLikelihoodExperimentLab,
+  Dlg02MaximumLikelihoodEvidenceLab,
+  Dlg03MultivariateNormalMapLab,
+  Dlg03MultivariateNormalExperimentLab,
+  Dlg03MultivariateNormalEvidenceLab,
+  Dlg04GaussianMixtureMapLab,
+  Dlg04GaussianMixtureExperimentLab,
+  Dlg04GaussianMixtureEvidenceLab,
+  Dlg05EmAlgorithmMapLab,
+  Dlg05EmAlgorithmExperimentLab,
+  Dlg05EmAlgorithmEvidenceLab,
+  Dlg06NeuralNetworkMapLab,
+  Dlg06NeuralNetworkExperimentLab,
+  Dlg06NeuralNetworkEvidenceLab,
+  Dlg07VaeMapLab,
+  Dlg07VaeExperimentLab,
+  Dlg07VaeEvidenceLab,
+  Dlg08DiffusionTheoryMapLab,
+  Dlg08DiffusionTheoryExperimentLab,
+  Dlg08DiffusionTheoryEvidenceLab,
+  Dlg09DiffusionImplementationMapLab,
+  Dlg09DiffusionImplementationExperimentLab,
+  Dlg09DiffusionImplementationEvidenceLab,
+  Dlg10DiffusionApplicationsMapLab,
+  Dlg10DiffusionApplicationsExperimentLab,
+  Dlg10DiffusionApplicationsEvidenceLab,
+  DlgAppendixAMultivariateMleMapLab,
+  DlgAppendixAMultivariateMleExperimentLab,
+  DlgAppendixAMultivariateMleEvidenceLab,
+  DlgAppendixBJensenMapLab,
+  DlgAppendixBJensenExperimentLab,
+  DlgAppendixBJensenEvidenceLab,
+  DlgAppendixCHierarchicalVaeMapLab,
+  DlgAppendixCHierarchicalVaeExperimentLab,
+  DlgAppendixCHierarchicalVaeEvidenceLab,
+  DlgAppendixDNotationMapLab,
+  DlgAppendixDNotationExperimentLab,
+  DlgAppendixDNotationEvidenceLab,
+  DlgOfficialFinalReviewMapLab,
+  DlgOfficialFinalReviewExperimentLab,
+  DlgOfficialFinalReviewEvidenceLab,
+  DlrOfficialLearningMapMapLab,
+  DlrOfficialLearningMapExperimentLab,
+  DlrOfficialLearningMapEvidenceLab,
+  Dlr01BanditMapLab,
+  Dlr01BanditExperimentLab,
+  Dlr01BanditEvidenceLab,
+  Dlr02MdpMapLab,
+  Dlr02MdpExperimentLab,
+  Dlr02MdpEvidenceLab,
+  Dlr03BellmanMapLab,
+  Dlr03BellmanExperimentLab,
+  Dlr03BellmanEvidenceLab,
+  Dlr04DynamicProgrammingMapLab,
+  Dlr04DynamicProgrammingExperimentLab,
+  Dlr04DynamicProgrammingEvidenceLab,
+  Dlr05MonteCarloMapLab,
+  Dlr05MonteCarloExperimentLab,
+  Dlr05MonteCarloEvidenceLab,
+  Dlr06TdMapLab,
+  Dlr06TdExperimentLab,
+  Dlr06TdEvidenceLab,
+  Dlr07NeuralQLearningMapLab,
+  Dlr07NeuralQLearningExperimentLab,
+  Dlr07NeuralQLearningEvidenceLab,
+  Dlr08DqnMapLab,
+  Dlr08DqnExperimentLab,
+  Dlr08DqnEvidenceLab,
+  Dlr09PolicyGradientMapLab,
+  Dlr09PolicyGradientExperimentLab,
+  Dlr09PolicyGradientEvidenceLab,
+  Dlr10FurtherMapLab,
+  Dlr10FurtherExperimentLab,
+  Dlr10FurtherEvidenceLab,
+  DlrAppendixAOffPolicyMcMapLab,
+  DlrAppendixAOffPolicyMcExperimentLab,
+  DlrAppendixAOffPolicyMcEvidenceLab,
+  DlrAppendixBNstepTdMapLab,
+  DlrAppendixBNstepTdExperimentLab,
+  DlrAppendixBNstepTdEvidenceLab,
+  DlrAppendixCDoubleDqnMapLab,
+  DlrAppendixCDoubleDqnExperimentLab,
+  DlrAppendixCDoubleDqnEvidenceLab,
+  DlrAppendixDPolicyGradientProofMapLab,
+  DlrAppendixDPolicyGradientProofExperimentLab,
+  DlrAppendixDPolicyGradientProofEvidenceLab,
+  DlrOfficialFinalReviewMapLab,
+  DlrOfficialFinalReviewExperimentLab,
+  DlrOfficialFinalReviewEvidenceLab,
+  DlsOfficialLearningMapMapLab,
+  DlsOfficialLearningMapExperimentLab,
+  DlsOfficialLearningMapEvidenceLab,
+  Dls01PythonIntroductionMapLab,
+  Dls01PythonIntroductionExperimentLab,
+  Dls01PythonIntroductionEvidenceLab,
+  Dls02PerceptronMapLab,
+  Dls02PerceptronExperimentLab,
+  Dls02PerceptronEvidenceLab,
+  Dls03NeuralNetworkMapLab,
+  Dls03NeuralNetworkExperimentLab,
+  Dls03NeuralNetworkEvidenceLab,
+  Dls04NeuralNetworkLearningMapLab,
+  Dls04NeuralNetworkLearningExperimentLab,
+  Dls04NeuralNetworkLearningEvidenceLab,
+  Dls05BackpropagationMapLab,
+  Dls05BackpropagationExperimentLab,
+  Dls05BackpropagationEvidenceLab,
+  Dls06LearningTechniquesMapLab,
+  Dls06LearningTechniquesExperimentLab,
+  Dls06LearningTechniquesEvidenceLab,
+  Dls07CnnMapLab,
+  Dls07CnnExperimentLab,
+  Dls07CnnEvidenceLab,
+  Dls08DeepLearningMapLab,
+  Dls08DeepLearningExperimentLab,
+  Dls08DeepLearningEvidenceLab,
+  DlsAppendixSoftmaxLossMapLab,
+  DlsAppendixSoftmaxLossExperimentLab,
+  DlsAppendixSoftmaxLossEvidenceLab,
+  DlsOfficialFinalReviewMapLab,
+  DlsOfficialFinalReviewExperimentLab,
+  DlsOfficialFinalReviewEvidenceLab,
+  DltOfficialLearningMapMapLab,
+  DltOfficialLearningMapExperimentLab,
+  DltOfficialLearningMapEvidenceLab,
+  Dlt01IntroductionMapLab,
+  Dlt01IntroductionExperimentLab,
+  Dlt01IntroductionEvidenceLab,
+  Dlt02LinearAlgebraMapLab,
+  Dlt02LinearAlgebraExperimentLab,
+  Dlt02LinearAlgebraEvidenceLab,
+  Dlt03ProbabilityInformationMapLab,
+  Dlt03ProbabilityInformationExperimentLab,
+  Dlt03ProbabilityInformationEvidenceLab,
+  Dlt04NumericalComputationMapLab,
+  Dlt04NumericalComputationExperimentLab,
+  Dlt04NumericalComputationEvidenceLab,
+  Dlt05MachineLearningBasicsMapLab,
+  Dlt05MachineLearningBasicsExperimentLab,
+  Dlt05MachineLearningBasicsEvidenceLab,
+  Dlt06FeedforwardNetworksMapLab,
+  Dlt06FeedforwardNetworksExperimentLab,
+  Dlt06FeedforwardNetworksEvidenceLab,
+  Dlt07RegularizationMapLab,
+  Dlt07RegularizationExperimentLab,
+  Dlt07RegularizationEvidenceLab,
+  Dlt08OptimizationMapLab,
+  Dlt08OptimizationExperimentLab,
+  Dlt08OptimizationEvidenceLab,
+  Dlt09ConvolutionalNetworksMapLab,
+  Dlt09ConvolutionalNetworksExperimentLab,
+  Dlt09ConvolutionalNetworksEvidenceLab,
+  Dlt10SequenceModelingMapLab,
+  Dlt10SequenceModelingExperimentLab,
+  Dlt10SequenceModelingEvidenceLab,
+  Dlt11PracticalMethodologyMapLab,
+  Dlt11PracticalMethodologyExperimentLab,
+  Dlt11PracticalMethodologyEvidenceLab,
+  Dlt12ApplicationsMapLab,
+  Dlt12ApplicationsExperimentLab,
+  Dlt12ApplicationsEvidenceLab,
+  Dlt13LinearFactorModelsMapLab,
+  Dlt13LinearFactorModelsExperimentLab,
+  Dlt13LinearFactorModelsEvidenceLab,
+  Dlt14AutoencodersMapLab,
+  Dlt14AutoencodersExperimentLab,
+  Dlt14AutoencodersEvidenceLab,
+  Dlt15RepresentationLearningMapLab,
+  Dlt15RepresentationLearningExperimentLab,
+  Dlt15RepresentationLearningEvidenceLab,
+  Dlt16StructuredProbabilisticModelsMapLab,
+  Dlt16StructuredProbabilisticModelsExperimentLab,
+  Dlt16StructuredProbabilisticModelsEvidenceLab,
+  Dlt17MonteCarloMapLab,
+  Dlt17MonteCarloExperimentLab,
+  Dlt17MonteCarloEvidenceLab,
+  Dlt18PartitionFunctionMapLab,
+  Dlt18PartitionFunctionExperimentLab,
+  Dlt18PartitionFunctionEvidenceLab,
+  Dlt19ApproximateInferenceMapLab,
+  Dlt19ApproximateInferenceExperimentLab,
+  Dlt19ApproximateInferenceEvidenceLab,
+  Dlt20DeepGenerativeModelsMapLab,
+  Dlt20DeepGenerativeModelsExperimentLab,
+  Dlt20DeepGenerativeModelsEvidenceLab,
+  DltOfficialFinalReviewMapLab,
+  DltOfficialFinalReviewExperimentLab,
+  DltOfficialFinalReviewEvidenceLab,
+  DnaOfficialLearningMapMapLab,
+  DnaOfficialLearningMapExperimentLab,
+  DnaOfficialLearningMapEvidenceLab,
+  Dna01NeuralNetworkReviewMapLab,
+  Dna01NeuralNetworkReviewExperimentLab,
+  Dna01NeuralNetworkReviewEvidenceLab,
+  Dna02DistributedWordRepresentationsMapLab,
+  Dna02DistributedWordRepresentationsExperimentLab,
+  Dna02DistributedWordRepresentationsEvidenceLab,
+  Dna03Word2vecMapLab,
+  Dna03Word2vecExperimentLab,
+  Dna03Word2vecEvidenceLab,
+  Dna04Word2vecAccelerationMapLab,
+  Dna04Word2vecAccelerationExperimentLab,
+  Dna04Word2vecAccelerationEvidenceLab,
+  Dna05RnnMapLab,
+  Dna05RnnExperimentLab,
+  Dna05RnnEvidenceLab,
+  Dna06GatedRnnMapLab,
+  Dna06GatedRnnExperimentLab,
+  Dna06GatedRnnEvidenceLab,
+  Dna07RnnTextGenerationMapLab,
+  Dna07RnnTextGenerationExperimentLab,
+  Dna07RnnTextGenerationEvidenceLab,
+  Dna08AttentionMapLab,
+  Dna08AttentionExperimentLab,
+  Dna08AttentionEvidenceLab,
+  DnaAppendixAActivationDerivativesMapLab,
+  DnaAppendixAActivationDerivativesExperimentLab,
+  DnaAppendixAActivationDerivativesEvidenceLab,
+  DnaAppendixBWordnetMapLab,
+  DnaAppendixBWordnetExperimentLab,
+  DnaAppendixBWordnetEvidenceLab,
+  DnaAppendixCGruMapLab,
+  DnaAppendixCGruExperimentLab,
+  DnaAppendixCGruEvidenceLab,
+  DnaOfficialFinalReviewMapLab,
+  DnaOfficialFinalReviewExperimentLab,
+  DnaOfficialFinalReviewEvidenceLab,
+  DnjOfficialLearningMapMapLab,
+  DnjOfficialLearningMapExperimentLab,
+  DnjOfficialLearningMapEvidenceLab,
+  Dnj01NodeIntroductionMapLab,
+  Dnj01NodeIntroductionExperimentLab,
+  Dnj01NodeIntroductionEvidenceLab,
+  Dnj02ModuleMechanismMapLab,
+  Dnj02ModuleMechanismExperimentLab,
+  Dnj02ModuleMechanismEvidenceLab,
+  Dnj03AsyncIoMapLab,
+  Dnj03AsyncIoExperimentLab,
+  Dnj03AsyncIoEvidenceLab,
+  Dnj04AsyncProgrammingMapLab,
+  Dnj04AsyncProgrammingExperimentLab,
+  Dnj04AsyncProgrammingEvidenceLab,
+  Dnj05MemoryControlMapLab,
+  Dnj05MemoryControlExperimentLab,
+  Dnj05MemoryControlEvidenceLab,
+  Dnj06BufferMapLab,
+  Dnj06BufferExperimentLab,
+  Dnj06BufferEvidenceLab,
+  Dnj07NetworkProgrammingMapLab,
+  Dnj07NetworkProgrammingExperimentLab,
+  Dnj07NetworkProgrammingEvidenceLab,
+  Dnj08WebApplicationMapLab,
+  Dnj08WebApplicationExperimentLab,
+  Dnj08WebApplicationEvidenceLab,
+  Dnj09ProcessesMapLab,
+  Dnj09ProcessesExperimentLab,
+  Dnj09ProcessesEvidenceLab,
+  Dnj10TestingMapLab,
+  Dnj10TestingExperimentLab,
+  Dnj10TestingEvidenceLab,
+  Dnj11ProductizationMapLab,
+  Dnj11ProductizationExperimentLab,
+  Dnj11ProductizationEvidenceLab,
+  DnjAppendixAInstallationMapLab,
+  DnjAppendixAInstallationExperimentLab,
+  DnjAppendixAInstallationEvidenceLab,
+  DnjAppendixBDebuggingMapLab,
+  DnjAppendixBDebuggingExperimentLab,
+  DnjAppendixBDebuggingEvidenceLab,
+  DnjAppendixCCodingStyleMapLab,
+  DnjAppendixCCodingStyleExperimentLab,
+  DnjAppendixCCodingStyleEvidenceLab,
+  DnjAppendixDLocalNpmMapLab,
+  DnjAppendixDLocalNpmExperimentLab,
+  DnjAppendixDLocalNpmEvidenceLab,
+  DnjOfficialFinalReviewMapLab,
+  DnjOfficialFinalReviewExperimentLab,
+  DnjOfficialFinalReviewEvidenceLab,
+  DnmGcReconstructionLab,
+  DnmIncidentTriageLab,
+  DnmInterventionTradeoffLab,
+  DnmCompetencyMatrixLab,
+  DnmOfficialBookMap,
+  DnmSymptomRouteLab,
   DogCrossPlatformDiagram,
   DogDebuggingToolsDiagram,
   DogFboTechniquesDiagram,
@@ -4753,17 +12027,8 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   DogOpenglEsDiagram,
   DogRenderingOptimizationDiagram,
   DogShaderLanguageDiagram,
+  DogStepFlowDiagram,
   DogWebglBasicsDiagram,
-  DrlActorCriticDiagram,
-  DrlAdvancedAlgorithmsDiagram,
-  DrlApplicationsDiagram,
-  DrlExplorationDiagram,
-  DrlFinalReviewDiagram,
-  DrlLearningMapDiagram,
-  DrlPolicyGradientDiagram,
-  DrlRewardDesignDiagram,
-  DrlRlFoundationsDiagram,
-  DrlValueBasedDiagram,
   DsaBookMap,
   DsaComplexityDiagram,
   DsaDisjointSetsDiagram,
@@ -4774,16 +12039,6 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   DsaListsDiagram,
   DsaSortingDiagram,
   DsaTreesDiagram,
-  DscConcurrencyControlDiagram,
-  DscDatabaseDesignDiagram,
-  DscFinalReviewDiagram,
-  DscLearningMapDiagram,
-  DscQueryProcessingDiagram,
-  DscRecoverySystemsDiagram,
-  DscRelationalModelDiagram,
-  DscSqlRelationalAlgebraDiagram,
-  DscStorageIndexingDiagram,
-  DscTransactionsDiagram,
   DsvArraysLinkedDiagram,
   DsvBookMap,
   DsvComplexityDiagram,
@@ -4804,26 +12059,99 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   DujMemoryModelDiagram,
   DujMemoryRegionDiagram,
   DujPracticeTuningDiagram,
-  EacCodeOptimizationDiagram,
-  EacCompilerOverviewDiagram,
-  EacContextSensitiveDiagram,
-  EacFinalReviewDiagram,
-  EacInstructionSelectionDiagram,
-  EacIrGenerationDiagram,
-  EacLearningMapDiagram,
-  EacParsingDiagram,
-  EacRegisterAllocationDiagram,
-  EacScanningDiagram,
-  EexConclusionDiagram,
-  EexContributionDiagram,
-  EexDecisionProcessDiagram,
-  EexEffectiveDecisionsDiagram,
-  EexEffectivenessDiagram,
-  EexFinalReviewDiagram,
-  EexLearningMapDiagram,
-  EexPrioritiesDiagram,
-  EexStrengthsDiagram,
-  EexTimeManagementDiagram,
+  EacOfficialLearningMapMapLab,
+  EacOfficialLearningMapExperimentLab,
+  EacOfficialLearningMapEvidenceLab,
+  Eac01OverviewCompilationMapLab,
+  Eac01OverviewCompilationExperimentLab,
+  Eac01OverviewCompilationEvidenceLab,
+  Eac02ScannersMapLab,
+  Eac02ScannersExperimentLab,
+  Eac02ScannersEvidenceLab,
+  Eac03ParsersMapLab,
+  Eac03ParsersExperimentLab,
+  Eac03ParsersEvidenceLab,
+  Eac04ContextSensitiveAnalysisMapLab,
+  Eac04ContextSensitiveAnalysisExperimentLab,
+  Eac04ContextSensitiveAnalysisEvidenceLab,
+  Eac05IntermediateRepresentationsMapLab,
+  Eac05IntermediateRepresentationsExperimentLab,
+  Eac05IntermediateRepresentationsEvidenceLab,
+  Eac06ProcedureAbstractionMapLab,
+  Eac06ProcedureAbstractionExperimentLab,
+  Eac06ProcedureAbstractionEvidenceLab,
+  Eac07CodeShapeMapLab,
+  Eac07CodeShapeExperimentLab,
+  Eac07CodeShapeEvidenceLab,
+  Eac08IntroductionOptimizationMapLab,
+  Eac08IntroductionOptimizationExperimentLab,
+  Eac08IntroductionOptimizationEvidenceLab,
+  Eac09DataFlowAnalysisMapLab,
+  Eac09DataFlowAnalysisExperimentLab,
+  Eac09DataFlowAnalysisEvidenceLab,
+  Eac10ScalarOptimizationsMapLab,
+  Eac10ScalarOptimizationsExperimentLab,
+  Eac10ScalarOptimizationsEvidenceLab,
+  Eac11InstructionSelectionMapLab,
+  Eac11InstructionSelectionExperimentLab,
+  Eac11InstructionSelectionEvidenceLab,
+  Eac12InstructionSchedulingMapLab,
+  Eac12InstructionSchedulingExperimentLab,
+  Eac12InstructionSchedulingEvidenceLab,
+  Eac13RegisterAllocationMapLab,
+  Eac13RegisterAllocationExperimentLab,
+  Eac13RegisterAllocationEvidenceLab,
+  EacAppendixAIlocMapLab,
+  EacAppendixAIlocExperimentLab,
+  EacAppendixAIlocEvidenceLab,
+  EacAppendixBDataStructuresMapLab,
+  EacAppendixBDataStructuresExperimentLab,
+  EacAppendixBDataStructuresEvidenceLab,
+  EacOfficialFinalReviewMapLab,
+  EacOfficialFinalReviewExperimentLab,
+  EacOfficialFinalReviewEvidenceLab,
+  Eex19OfficialLearningMapMapLab,
+  Eex19OfficialLearningMapExperimentLab,
+  Eex19OfficialLearningMapEvidenceLab,
+  Eex19Recommendation01MapLab,
+  Eex19Recommendation01ExperimentLab,
+  Eex19Recommendation01EvidenceLab,
+  Eex19Recommendation02MapLab,
+  Eex19Recommendation02ExperimentLab,
+  Eex19Recommendation02EvidenceLab,
+  Eex19Recommendation03MapLab,
+  Eex19Recommendation03ExperimentLab,
+  Eex19Recommendation03EvidenceLab,
+  Eex19PrefaceMapLab,
+  Eex19PrefaceExperimentLab,
+  Eex19PrefaceEvidenceLab,
+  Eex19Chapter01MapLab,
+  Eex19Chapter01ExperimentLab,
+  Eex19Chapter01EvidenceLab,
+  Eex19Chapter02MapLab,
+  Eex19Chapter02ExperimentLab,
+  Eex19Chapter02EvidenceLab,
+  Eex19Chapter03MapLab,
+  Eex19Chapter03ExperimentLab,
+  Eex19Chapter03EvidenceLab,
+  Eex19Chapter04MapLab,
+  Eex19Chapter04ExperimentLab,
+  Eex19Chapter04EvidenceLab,
+  Eex19Chapter05MapLab,
+  Eex19Chapter05ExperimentLab,
+  Eex19Chapter05EvidenceLab,
+  Eex19Chapter06MapLab,
+  Eex19Chapter06ExperimentLab,
+  Eex19Chapter06EvidenceLab,
+  Eex19Chapter07MapLab,
+  Eex19Chapter07ExperimentLab,
+  Eex19Chapter07EvidenceLab,
+  Eex19Chapter08MapLab,
+  Eex19Chapter08ExperimentLab,
+  Eex19Chapter08EvidenceLab,
+  Eex19OfficialFinalReviewMapLab,
+  Eex19OfficialFinalReviewExperimentLab,
+  Eex19OfficialFinalReviewEvidenceLab,
   EjvClassesInterfacesDiagram,
   EjvCommonMethodsDiagram,
   EjvConcurrencyDiagram,
@@ -4834,16 +12162,33 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   EjvLambdasStreamsDiagram,
   EjvLearningMapDiagram,
   EjvMethodsDiagram,
-  FengCiPipelineDiagram,
-  FengDeployStrategyDiagram,
-  FengErrorTrackingDiagram,
-  FengFinalReviewDiagram,
-  FengLearningMapDiagram,
-  FengModuleFederationDiagram,
-  FengPerformanceMonitorDiagram,
-  FengTestingStrategyDiagram,
-  FengTypescriptEslintDiagram,
-  FengWebpackViteDiagram,
+  FengOfficialLearningMapMapLab,
+  FengOfficialLearningMapExperimentLab,
+  FengOfficialLearningMapEvidenceLab,
+  Feng01HistoryMapLab,
+  Feng01HistoryExperimentLab,
+  Feng01HistoryEvidenceLab,
+  Feng02ScaffoldingMapLab,
+  Feng02ScaffoldingExperimentLab,
+  Feng02ScaffoldingEvidenceLab,
+  Feng03BuildMapLab,
+  Feng03BuildExperimentLab,
+  Feng03BuildEvidenceLab,
+  Feng04LocalDevServerMapLab,
+  Feng04LocalDevServerExperimentLab,
+  Feng04LocalDevServerEvidenceLab,
+  Feng05DeploymentMapLab,
+  Feng05DeploymentExperimentLab,
+  Feng05DeploymentEvidenceLab,
+  Feng06WorkflowMapLab,
+  Feng06WorkflowExperimentLab,
+  Feng06WorkflowEvidenceLab,
+  Feng07FutureMapLab,
+  Feng07FutureExperimentLab,
+  Feng07FutureEvidenceLab,
+  FengOfficialFinalReviewMapLab,
+  FengOfficialFinalReviewExperimentLab,
+  FengOfficialFinalReviewEvidenceLab,
   FlaActivityDiagram,
   FlaAdvancedFeaturesDiagram,
   FlaAndroidBasicsDiagram,
@@ -4854,16 +12199,6 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   FlaNetworkDiagram,
   FlaServiceDiagram,
   FlaUiLayoutDiagram,
-  FlpClosuresDecoratorsDiagram,
-  FlpDataModelDiagram,
-  FlpDictSetsDiagram,
-  FlpFinalReviewDiagram,
-  FlpFunctionsFirstClassDiagram,
-  FlpGeneratorsDiagram,
-  FlpLearningMapDiagram,
-  FlpProtocolsAbcDiagram,
-  FlpSequencesDiagram,
-  FlpTypeHintsDiagram,
   GchConcurrentGcDiagram,
   GchCopyingCollectionDiagram,
   GchFinalReviewDiagram,
@@ -4874,56 +12209,174 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   GchMarkSweepDiagram,
   GchModernGcDiagram,
   GchRealtimeGcDiagram,
-  GdfAestheticsDiagram,
-  GdfBalancingDiagram,
-  GdfDynamicsDiagram,
-  GdfFinalReviewDiagram,
-  GdfLearningMapDiagram,
-  GdfLevelDesignDiagram,
-  GdfMdfFrameworkDiagram,
-  GdfMechanicsDiagram,
-  GdfPlayerExperienceDiagram,
-  GdfPrototypingDiagram,
-  GdsBvhDiagram,
-  GdsCollisionDetectionDiagram,
-  GdsFinalReviewDiagram,
-  GdsGeomPrimitivesDiagram,
-  GdsLearningMapDiagram,
-  GdsQuadtreesDiagram,
-  GdsRayTracingStructDiagram,
-  GdsSpatialIndexingDiagram,
-  GdsTriangulationDiagram,
-  GdsVoronoiDiagram,
-  Gep1EngineArchitectureDiagram,
-  Gep1EventSystemDiagram,
-  Gep1FinalReviewDiagram,
-  Gep1LearningMapDiagram,
-  Gep1MathLibraryDiagram,
-  Gep1MemorySystemDiagram,
-  Gep1RenderPipelineDiagram,
-  Gep1ResourceManagementDiagram,
-  Gep1SceneGraphDiagram,
-  Gep1TransformSystemDiagram,
-  Gep2AnimationBlendDiagram,
-  Gep2AudioSystemDiagram,
-  Gep2CollisionSystemDiagram,
-  Gep2EditorFrameworkDiagram,
-  Gep2FinalReviewDiagram,
-  Gep2LearningMapDiagram,
-  Gep2NetworkArchitectureDiagram,
-  Gep2PhysicsEngineDiagram,
-  Gep2ScriptingSystemDiagram,
-  Gep2SkeletalAnimationDiagram,
-  GiaArraysSlicesDiagram,
-  GiaChannelsDiagram,
-  GiaConcurrencyPatternsDiagram,
-  GiaFinalReviewDiagram,
-  GiaGoPhilosophyDiagram,
-  GiaGoroutinesDiagram,
-  GiaLearningMapDiagram,
-  GiaMapStructDiagram,
-  GiaStandardLibDiagram,
-  GiaTestingPackagingDiagram,
+  Gdf3eOfficialLearningMapMapLab,
+  Gdf3eOfficialLearningMapExperimentLab,
+  Gdf3eOfficialLearningMapEvidenceLab,
+  Gdf3eIntroductionMapLab,
+  Gdf3eIntroductionExperimentLab,
+  Gdf3eIntroductionEvidenceLab,
+  Gdf3e01GamesVideoGamesMapLab,
+  Gdf3e01GamesVideoGamesExperimentLab,
+  Gdf3e01GamesVideoGamesEvidenceLab,
+  Gdf3e02DesigningDevelopingGamesMapLab,
+  Gdf3e02DesigningDevelopingGamesExperimentLab,
+  Gdf3e02DesigningDevelopingGamesEvidenceLab,
+  Gdf3e03MajorGenresMapLab,
+  Gdf3e03MajorGenresExperimentLab,
+  Gdf3e03MajorGenresEvidenceLab,
+  Gdf3e04UnderstandingPlayerMapLab,
+  Gdf3e04UnderstandingPlayerExperimentLab,
+  Gdf3e04UnderstandingPlayerEvidenceLab,
+  Gdf3e05UnderstandingMachineMapLab,
+  Gdf3e05UnderstandingMachineExperimentLab,
+  Gdf3e05UnderstandingMachineEvidenceLab,
+  Gdf3e06MakingMoneyMapLab,
+  Gdf3e06MakingMoneyExperimentLab,
+  Gdf3e06MakingMoneyEvidenceLab,
+  Gdf3e07GameConceptsMapLab,
+  Gdf3e07GameConceptsExperimentLab,
+  Gdf3e07GameConceptsEvidenceLab,
+  Gdf3e08GameWorldsMapLab,
+  Gdf3e08GameWorldsExperimentLab,
+  Gdf3e08GameWorldsEvidenceLab,
+  Gdf3e09CreativeExpressivePlayMapLab,
+  Gdf3e09CreativeExpressivePlayExperimentLab,
+  Gdf3e09CreativeExpressivePlayEvidenceLab,
+  Gdf3e10CharacterDevelopmentMapLab,
+  Gdf3e10CharacterDevelopmentExperimentLab,
+  Gdf3e10CharacterDevelopmentEvidenceLab,
+  Gdf3e11StorytellingMapLab,
+  Gdf3e11StorytellingExperimentLab,
+  Gdf3e11StorytellingEvidenceLab,
+  Gdf3e12CreatingUserExperienceMapLab,
+  Gdf3e12CreatingUserExperienceExperimentLab,
+  Gdf3e12CreatingUserExperienceEvidenceLab,
+  Gdf3e13GameplayMapLab,
+  Gdf3e13GameplayExperimentLab,
+  Gdf3e13GameplayEvidenceLab,
+  Gdf3e14CoreMechanicsMapLab,
+  Gdf3e14CoreMechanicsExperimentLab,
+  Gdf3e14CoreMechanicsEvidenceLab,
+  Gdf3e15GameBalancingMapLab,
+  Gdf3e15GameBalancingExperimentLab,
+  Gdf3e15GameBalancingEvidenceLab,
+  Gdf3e16LevelDesignMapLab,
+  Gdf3e16LevelDesignExperimentLab,
+  Gdf3e16LevelDesignEvidenceLab,
+  Gdf3e17OnlineGamingMapLab,
+  Gdf3e17OnlineGamingExperimentLab,
+  Gdf3e17OnlineGamingEvidenceLab,
+  Gdf3eGlossaryMapLab,
+  Gdf3eGlossaryExperimentLab,
+  Gdf3eGlossaryEvidenceLab,
+  Gdf3eReferencesMapLab,
+  Gdf3eReferencesExperimentLab,
+  Gdf3eReferencesEvidenceLab,
+  Gdf3eIndexMapLab,
+  Gdf3eIndexExperimentLab,
+  Gdf3eIndexEvidenceLab,
+  Gdf3eOfficialFinalReviewMapLab,
+  Gdf3eOfficialFinalReviewExperimentLab,
+  Gdf3eOfficialFinalReviewEvidenceLab,
+  Gep1OfficialLearningMapMapLab,
+  Gep1OfficialLearningMapExperimentLab,
+  Gep1OfficialLearningMapEvidenceLab,
+  Gep1FrontMatterMapLab,
+  Gep1FrontMatterExperimentLab,
+  Gep1FrontMatterEvidenceLab,
+  Gep1Chapter01EngineConflictMapLab,
+  Gep1Chapter01EngineConflictExperimentLab,
+  Gep1Chapter01EngineConflictEvidenceLab,
+  Gep1Chapter02SettingSailMapLab,
+  Gep1Chapter02SettingSailExperimentLab,
+  Gep1Chapter02SettingSailEvidenceLab,
+  Gep1Chapter03BasicSystemMapLab,
+  Gep1Chapter03BasicSystemExperimentLab,
+  Gep1Chapter03BasicSystemEvidenceLab,
+  Gep1Chapter04DataStructuresMapLab,
+  Gep1Chapter04DataStructuresExperimentLab,
+  Gep1Chapter04DataStructuresEvidenceLab,
+  Gep1Chapter05MathLibraryMapLab,
+  Gep1Chapter05MathLibraryExperimentLab,
+  Gep1Chapter05MathLibraryEvidenceLab,
+  Gep1Chapter06InitializationDestructionMapLab,
+  Gep1Chapter06InitializationDestructionExperimentLab,
+  Gep1Chapter06InitializationDestructionEvidenceLab,
+  Gep1Chapter07ApplicationFrameworkMapLab,
+  Gep1Chapter07ApplicationFrameworkExperimentLab,
+  Gep1Chapter07ApplicationFrameworkEvidenceLab,
+  Gep1Chapter08ObjectSystemMapLab,
+  Gep1Chapter08ObjectSystemExperimentLab,
+  Gep1Chapter08ObjectSystemEvidenceLab,
+  Gep1Chapter09ResourceManagementMapLab,
+  Gep1Chapter09ResourceManagementExperimentLab,
+  Gep1Chapter09ResourceManagementEvidenceLab,
+  Gep1Chapter10DesignPhilosophyMapLab,
+  Gep1Chapter10DesignPhilosophyExperimentLab,
+  Gep1Chapter10DesignPhilosophyEvidenceLab,
+  Gep1Chapter11SceneManagementMapLab,
+  Gep1Chapter11SceneManagementExperimentLab,
+  Gep1Chapter11SceneManagementEvidenceLab,
+  Gep1Chapter12ModelsTexturesMapLab,
+  Gep1Chapter12ModelsTexturesExperimentLab,
+  Gep1Chapter12ModelsTexturesEvidenceLab,
+  Gep1Chapter13LodMapLab,
+  Gep1Chapter13LodExperimentLab,
+  Gep1Chapter13LodEvidenceLab,
+  Gep1OfficialFinalReviewMapLab,
+  Gep1OfficialFinalReviewExperimentLab,
+  Gep1OfficialFinalReviewEvidenceLab,
+  Gep2OfficialLearningMapMapLab,
+  Gep2OfficialLearningMapExperimentLab,
+  Gep2OfficialLearningMapEvidenceLab,
+  Gep2FrontMatterMapLab,
+  Gep2FrontMatterExperimentLab,
+  Gep2FrontMatterEvidenceLab,
+  Gep2Chapter01SkeletalSkinningBasicsMapLab,
+  Gep2Chapter01SkeletalSkinningBasicsExperimentLab,
+  Gep2Chapter01SkeletalSkinningBasicsEvidenceLab,
+  Gep2Chapter02AnimationPlaybackSlotsMapLab,
+  Gep2Chapter02AnimationPlaybackSlotsExperimentLab,
+  Gep2Chapter02AnimationPlaybackSlotsEvidenceLab,
+  Gep2Chapter03AnimationBlendingMapLab,
+  Gep2Chapter03AnimationBlendingExperimentLab,
+  Gep2Chapter03AnimationBlendingEvidenceLab,
+  Gep2Chapter04MorphAnimationBlendingMapLab,
+  Gep2Chapter04MorphAnimationBlendingExperimentLab,
+  Gep2Chapter04MorphAnimationBlendingEvidenceLab,
+  Gep2Chapter05IkCharactersMapLab,
+  Gep2Chapter05IkCharactersExperimentLab,
+  Gep2Chapter05IkCharactersEvidenceLab,
+  Gep2Chapter06LightingRenderingHistoryMapLab,
+  Gep2Chapter06LightingRenderingHistoryExperimentLab,
+  Gep2Chapter06LightingRenderingHistoryEvidenceLab,
+  Gep2Chapter07RendererInterfaceMapLab,
+  Gep2Chapter07RendererInterfaceExperimentLab,
+  Gep2Chapter07RendererInterfaceEvidenceLab,
+  Gep2Chapter08MaterialsMapLab,
+  Gep2Chapter08MaterialsExperimentLab,
+  Gep2Chapter08MaterialsEvidenceLab,
+  Gep2Chapter09RenderPipelineArchitectureMapLab,
+  Gep2Chapter09RenderPipelineArchitectureExperimentLab,
+  Gep2Chapter09RenderPipelineArchitectureEvidenceLab,
+  Gep2Chapter10LightingMaterialsMapLab,
+  Gep2Chapter10LightingMaterialsExperimentLab,
+  Gep2Chapter10LightingMaterialsEvidenceLab,
+  Gep2Chapter11PostEffectsMapLab,
+  Gep2Chapter11PostEffectsExperimentLab,
+  Gep2Chapter11PostEffectsEvidenceLab,
+  Gep2Chapter12ShadowsMapLab,
+  Gep2Chapter12ShadowsExperimentLab,
+  Gep2Chapter12ShadowsEvidenceLab,
+  Gep2Chapter13MultithreadingMapLab,
+  Gep2Chapter13MultithreadingExperimentLab,
+  Gep2Chapter13MultithreadingEvidenceLab,
+  Gep2Chapter14DynamicBuffersProfilerMapLab,
+  Gep2Chapter14DynamicBuffersProfilerExperimentLab,
+  Gep2Chapter14DynamicBuffersProfilerEvidenceLab,
+  Gep2OfficialFinalReviewMapLab,
+  Gep2OfficialFinalReviewExperimentLab,
+  Gep2OfficialFinalReviewEvidenceLab,
   GilAdvancedTechniquesDiagram,
   GilBiasUnbiasedDiagram,
   GilDirectIndirectDiagram,
@@ -5005,36 +12458,48 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   GlsMathTransformDiagram,
   GlsTransformFeedbackDiagram,
   GlsVertexProcessingDiagram,
-  GmaContinuousSimulationDiagram,
-  GmaDiscreteSimulationDiagram,
-  GmaEconomyDesignDiagram,
-  GmaFinalReviewDiagram,
-  GmaLearningMapDiagram,
-  GmaMdfFrameworkDiagram,
-  GmaMechanicsDesignDiagram,
-  GmaMechanismTuningDiagram,
-  GmaProbabilityMechanicsDiagram,
-  GmaPuzzleDesignDiagram,
-  GmpAlgorithmsDiagram,
-  GmpCareerPathDiagram,
-  GmpCppFoundationDiagram,
-  GmpDataStructuresDiagram,
-  GmpEngineBasicsDiagram,
-  GmpFinalReviewDiagram,
-  GmpGameplayCodingDiagram,
-  GmpGraphicsDiagram,
-  GmpInterviewDiagram,
-  GmpLearningMapDiagram,
-  GncAntiCheatDiagram,
-  GncBandwidthOptimizationDiagram,
-  GncCongestionControlDiagram,
-  GncEncryptionDiagram,
-  GncFinalReviewDiagram,
-  GncFrameSyncDiagram,
-  GncLatencyCompensationDiagram,
-  GncLearningMapDiagram,
-  GncStateSyncAdvDiagram,
-  GncUdpReliableDiagram,
+  Gmp17OfficialLearningMapMapLab,
+  Gmp17OfficialLearningMapExperimentLab,
+  Gmp17OfficialLearningMapEvidenceLab,
+  Gmp1700ProgrammingPreschoolMapLab,
+  Gmp1700ProgrammingPreschoolExperimentLab,
+  Gmp1700ProgrammingPreschoolEvidenceLab,
+  Gmp1701ComputerScienceMapLab,
+  Gmp1701ComputerScienceExperimentLab,
+  Gmp1701ComputerScienceEvidenceLab,
+  Gmp1702ProgrammingLanguagesMapLab,
+  Gmp1702ProgrammingLanguagesExperimentLab,
+  Gmp1702ProgrammingLanguagesEvidenceLab,
+  Gmp1703SoftwareDevelopmentMapLab,
+  Gmp1703SoftwareDevelopmentExperimentLab,
+  Gmp1703SoftwareDevelopmentEvidenceLab,
+  Gmp1704GameMathematicsMapLab,
+  Gmp1704GameMathematicsExperimentLab,
+  Gmp1704GameMathematicsEvidenceLab,
+  Gmp1705GameProgrammingMapLab,
+  Gmp1705GameProgrammingExperimentLab,
+  Gmp1705GameProgrammingEvidenceLab,
+  Gmp1706GameEngineDevelopmentMapLab,
+  Gmp1706GameEngineDevelopmentExperimentLab,
+  Gmp1706GameEngineDevelopmentEvidenceLab,
+  Gmp1707ComputerGraphicsMapLab,
+  Gmp1707ComputerGraphicsExperimentLab,
+  Gmp1707ComputerGraphicsEvidenceLab,
+  Gmp1708GameAudioMapLab,
+  Gmp1708GameAudioExperimentLab,
+  Gmp1708GameAudioEvidenceLab,
+  Gmp1709GamePhysicsAnimationMapLab,
+  Gmp1709GamePhysicsAnimationExperimentLab,
+  Gmp1709GamePhysicsAnimationEvidenceLab,
+  Gmp1710GameAiMapLab,
+  Gmp1710GameAiExperimentLab,
+  Gmp1710GameAiEvidenceLab,
+  Gmp1711MultiplayerProgrammingMapLab,
+  Gmp1711MultiplayerProgrammingExperimentLab,
+  Gmp1711MultiplayerProgrammingEvidenceLab,
+  Gmp17OfficialFinalReviewMapLab,
+  Gmp17OfficialFinalReviewExperimentLab,
+  Gmp17OfficialFinalReviewEvidenceLab,
   GpgAdvancedTechniquesDiagram,
   GpgFinalReviewDiagram,
   GpgGeometryDiagram,
@@ -5045,66 +12510,48 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   GpgMaterialsShadersDiagram,
   GpgNaturalEffectsDiagram,
   GpgParticleSystemsDiagram,
-  GplChannelsDiagram,
-  GplFinalReviewDiagram,
-  GplFunctionsDiagram,
-  GplGoroutinesDiagram,
-  GplInterfacesDiagram,
-  GplLearningMapDiagram,
-  GplPackagesDiagram,
-  GplSelectDiagram,
-  GplTestingDiagram,
-  GplTypesVariablesDiagram,
-  GpoAdvancedShadingDiagram,
-  GpoFinalReviewDiagram,
-  GpoGpuSimulationDiagram,
-  GpoImageSpaceDiagram,
-  GpoLearningMapDiagram,
-  GpoLightingShadowsDiagram,
-  GpoMobileRenderingDiagram,
-  GpoProceduralDiagram,
-  GpoRenderingTechniquesDiagram,
-  GpoVolumeRenderingDiagram,
-  GsaActorModelDiagram,
-  GsaCapacityPlanningDiagram,
-  GsaCiCdDiagram,
-  GsaCoroutineModelDiagram,
-  GsaDbShardingDiagram,
-  GsaFinalReviewDiagram,
-  GsaLearningMapDiagram,
-  GsaMemoryPoolDiagram,
-  GsaRedisClusterDiagram,
-  GsaServerTopologyDiagram,
-  GspCacheStrategyDiagram,
-  GspDataPersistenceDiagram,
-  GspFinalReviewDiagram,
-  GspLearningMapDiagram,
-  GspLoadBalanceDiagram,
-  GspProtocolDesignDiagram,
-  GspSecurityAnticheatDiagram,
-  GspServerArchitectureDiagram,
-  GspTcpSocketDiagram,
-  GspThreadModelDiagram,
-  GwpAuthenticationDiagram,
-  GwpDatabaseDiagram,
-  GwpDeploymentDiagram,
-  GwpFinalReviewDiagram,
-  GwpHttpBasicsDiagram,
-  GwpJsonApiDiagram,
-  GwpLearningMapDiagram,
-  GwpMiddlewareDiagram,
-  GwpRoutingDiagram,
-  GwpTemplatesDiagram,
-  HcwAssemblyLanguageDiagram,
-  HcwBinaryNumbersDiagram,
-  HcwCompilerLinkerDiagram,
-  HcwCpuArchitectureDiagram,
-  HcwDataRepresentationDiagram,
-  HcwFileSystemDiagram,
-  HcwFinalReviewDiagram,
-  HcwLearningMapDiagram,
-  HcwMemoryHierarchyDiagram,
-  HcwOsFundamentalsDiagram,
+  HcwOfficialLearningMapMapLab,
+  HcwOfficialLearningMapExperimentLab,
+  HcwOfficialLearningMapEvidenceLab,
+  Hcw01ThreePrinciplesMapLab,
+  Hcw01ThreePrinciplesExperimentLab,
+  Hcw01ThreePrinciplesEvidenceLab,
+  Hcw02BuildComputerMapLab,
+  Hcw02BuildComputerExperimentLab,
+  Hcw02BuildComputerEvidenceLab,
+  Hcw03ManualAssemblyMapLab,
+  Hcw03ManualAssemblyExperimentLab,
+  Hcw03ManualAssemblyEvidenceLab,
+  Hcw04ProgramFlowMapLab,
+  Hcw04ProgramFlowExperimentLab,
+  Hcw04ProgramFlowEvidenceLab,
+  Hcw05AlgorithmsMapLab,
+  Hcw05AlgorithmsExperimentLab,
+  Hcw05AlgorithmsEvidenceLab,
+  Hcw06DataStructuresMapLab,
+  Hcw06DataStructuresExperimentLab,
+  Hcw06DataStructuresEvidenceLab,
+  Hcw07OopMapLab,
+  Hcw07OopExperimentLab,
+  Hcw07OopEvidenceLab,
+  Hcw08DatabaseMapLab,
+  Hcw08DatabaseExperimentLab,
+  Hcw08DatabaseEvidenceLab,
+  Hcw09TcpIpMapLab,
+  Hcw09TcpIpExperimentLab,
+  Hcw09TcpIpEvidenceLab,
+  Hcw10EncryptionMapLab,
+  Hcw10EncryptionExperimentLab,
+  Hcw10EncryptionEvidenceLab,
+  Hcw11XmlMapLab,
+  Hcw11XmlExperimentLab,
+  Hcw11XmlEvidenceLab,
+  Hcw12SystemEngineeringMapLab,
+  Hcw12SystemEngineeringExperimentLab,
+  Hcw12SystemEngineeringEvidenceLab,
+  HcwOfficialFinalReviewMapLab,
+  HcwOfficialFinalReviewExperimentLab,
+  HcwOfficialFinalReviewEvidenceLab,
   HdArithmeticTricksDiagram,
   HdBitManipulationDiagram,
   HdCrcErrorDiagram,
@@ -5115,16 +12562,120 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   HdLearningMapDiagram,
   HdPowerDiagram,
   HdUnusualBasesDiagram,
-  HdgAuthenticationDiagram,
-  HdgCachingDiagram,
-  HdgContentNegotiationDiagram,
-  HdgFinalReviewDiagram,
-  HdgHttpMessagesDiagram,
-  HdgHttpsSslDiagram,
-  HdgLearningMapDiagram,
-  HdgProxyGatewayDiagram,
-  HdgUrlResourceDiagram,
-  HdgWebHostingDiagram,
+  Hdg1OfficialLearningMapMessageLab,
+  Hdg1OfficialLearningMapDecisionLab,
+  Hdg1OfficialLearningMapEvidenceLab,
+  Hdg1Part1MessageLab,
+  Hdg1Part1DecisionLab,
+  Hdg1Part1EvidenceLab,
+  Hdg101MessageLab,
+  Hdg101DecisionLab,
+  Hdg101EvidenceLab,
+  Hdg102MessageLab,
+  Hdg102DecisionLab,
+  Hdg102EvidenceLab,
+  Hdg103MessageLab,
+  Hdg103DecisionLab,
+  Hdg103EvidenceLab,
+  Hdg104MessageLab,
+  Hdg104DecisionLab,
+  Hdg104EvidenceLab,
+  Hdg1Part2MessageLab,
+  Hdg1Part2DecisionLab,
+  Hdg1Part2EvidenceLab,
+  Hdg105MessageLab,
+  Hdg105DecisionLab,
+  Hdg105EvidenceLab,
+  Hdg106MessageLab,
+  Hdg106DecisionLab,
+  Hdg106EvidenceLab,
+  Hdg107MessageLab,
+  Hdg107DecisionLab,
+  Hdg107EvidenceLab,
+  Hdg108MessageLab,
+  Hdg108DecisionLab,
+  Hdg108EvidenceLab,
+  Hdg109MessageLab,
+  Hdg109DecisionLab,
+  Hdg109EvidenceLab,
+  Hdg110MessageLab,
+  Hdg110DecisionLab,
+  Hdg110EvidenceLab,
+  Hdg1Part3MessageLab,
+  Hdg1Part3DecisionLab,
+  Hdg1Part3EvidenceLab,
+  Hdg111MessageLab,
+  Hdg111DecisionLab,
+  Hdg111EvidenceLab,
+  Hdg112MessageLab,
+  Hdg112DecisionLab,
+  Hdg112EvidenceLab,
+  Hdg113MessageLab,
+  Hdg113DecisionLab,
+  Hdg113EvidenceLab,
+  Hdg114MessageLab,
+  Hdg114DecisionLab,
+  Hdg114EvidenceLab,
+  Hdg1Part4MessageLab,
+  Hdg1Part4DecisionLab,
+  Hdg1Part4EvidenceLab,
+  Hdg115MessageLab,
+  Hdg115DecisionLab,
+  Hdg115EvidenceLab,
+  Hdg116MessageLab,
+  Hdg116DecisionLab,
+  Hdg116EvidenceLab,
+  Hdg117MessageLab,
+  Hdg117DecisionLab,
+  Hdg117EvidenceLab,
+  Hdg1Part5MessageLab,
+  Hdg1Part5DecisionLab,
+  Hdg1Part5EvidenceLab,
+  Hdg118MessageLab,
+  Hdg118DecisionLab,
+  Hdg118EvidenceLab,
+  Hdg119MessageLab,
+  Hdg119DecisionLab,
+  Hdg119EvidenceLab,
+  Hdg120MessageLab,
+  Hdg120DecisionLab,
+  Hdg120EvidenceLab,
+  Hdg121MessageLab,
+  Hdg121DecisionLab,
+  Hdg121EvidenceLab,
+  Hdg1Part6MessageLab,
+  Hdg1Part6DecisionLab,
+  Hdg1Part6EvidenceLab,
+  Hdg1AppendixAMessageLab,
+  Hdg1AppendixADecisionLab,
+  Hdg1AppendixAEvidenceLab,
+  Hdg1AppendixBMessageLab,
+  Hdg1AppendixBDecisionLab,
+  Hdg1AppendixBEvidenceLab,
+  Hdg1AppendixCMessageLab,
+  Hdg1AppendixCDecisionLab,
+  Hdg1AppendixCEvidenceLab,
+  Hdg1AppendixDMessageLab,
+  Hdg1AppendixDDecisionLab,
+  Hdg1AppendixDEvidenceLab,
+  Hdg1AppendixEMessageLab,
+  Hdg1AppendixEDecisionLab,
+  Hdg1AppendixEEvidenceLab,
+  Hdg1AppendixFMessageLab,
+  Hdg1AppendixFDecisionLab,
+  Hdg1AppendixFEvidenceLab,
+  Hdg1AppendixGMessageLab,
+  Hdg1AppendixGDecisionLab,
+  Hdg1AppendixGEvidenceLab,
+  Hdg1AppendixHMessageLab,
+  Hdg1AppendixHDecisionLab,
+  Hdg1AppendixHEvidenceLab,
+  Hdg1IndexMessageLab,
+  Hdg1IndexDecisionLab,
+  Hdg1IndexEvidenceLab,
+  Hdg1OfficialFinalReviewMessageLab,
+  Hdg1OfficialFinalReviewDecisionLab,
+  Hdg1OfficialFinalReviewEvidenceLab,
   HfjConcurrencyDiagram,
   HfjEventHandlingDiagram,
   HfjFinalReviewDiagram,
@@ -5135,46 +12686,99 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   HfjNetworkingDiagram,
   HfjOopFundamentalsDiagram,
   HfjSwingGuiDiagram,
-  HfsBookMap,
-  HfsCentralTendencyDiagram,
-  HfsConfidenceIntervalsDiagram,
-  HfsContinuousDistributionsDiagram,
-  HfsDataDisplayDiagram,
-  HfsDiscreteDistributionsDiagram,
-  HfsDispersionDiagram,
-  HfsFinalReviewDiagram,
-  HfsProbabilityDiagram,
-  HfsSamplingDiagram,
-  HpmFinalReviewDiagram,
-  HpmIndexDesignDiagram,
-  HpmLearningMapDiagram,
-  HpmMonitoringDiagram,
-  HpmMysqlArchitectureDiagram,
-  HpmOsTuningDiagram,
-  HpmQueryOptimizationDiagram,
-  HpmReplicationDiagram,
-  HpmScalingHaDiagram,
-  HpmSchemaDesignDiagram,
-  HpwDynamicLinkingDiagram,
-  HpwFinalReviewDiagram,
-  HpwGarbageCollectionDiagram,
-  HpwLearningMapDiagram,
-  HpwMachineInstructionsDiagram,
-  HpwMemoryBasicsDiagram,
-  HpwPointersDiagram,
-  HpwProcessSchedulingDiagram,
-  HpwStackHeapDiagram,
-  HpwSystemCallsDiagram,
-  IaiAiEthicsDiagram,
-  IaiAiHistoryDiagram,
-  IaiComputerVisionDiagram,
-  IaiDeepLearningDiagram,
-  IaiFinalReviewDiagram,
-  IaiLearningMapDiagram,
-  IaiMachineLearningDiagram,
-  IaiNlpDiagram,
-  IaiReinforcementLearningDiagram,
-  IaiSearchAlgorithmsDiagram,
+  HpwOfficialLearningMapMapLab,
+  HpwOfficialLearningMapExperimentLab,
+  HpwOfficialLearningMapEvidenceLab,
+  Hpw01CpuMapLab,
+  Hpw01CpuExperimentLab,
+  Hpw01CpuEvidenceLab,
+  Hpw02BinaryMapLab,
+  Hpw02BinaryExperimentLab,
+  Hpw02BinaryEvidenceLab,
+  Hpw03FloatingPointMapLab,
+  Hpw03FloatingPointExperimentLab,
+  Hpw03FloatingPointEvidenceLab,
+  Hpw04MemoryMapLab,
+  Hpw04MemoryExperimentLab,
+  Hpw04MemoryEvidenceLab,
+  Hpw05MemoryDiskMapLab,
+  Hpw05MemoryDiskExperimentLab,
+  Hpw05MemoryDiskEvidenceLab,
+  Hpw06CompressionMapLab,
+  Hpw06CompressionExperimentLab,
+  Hpw06CompressionEvidenceLab,
+  Hpw07RuntimeEnvironmentMapLab,
+  Hpw07RuntimeEnvironmentExperimentLab,
+  Hpw07RuntimeEnvironmentEvidenceLab,
+  Hpw08SourceExecutableMapLab,
+  Hpw08SourceExecutableExperimentLab,
+  Hpw08SourceExecutableEvidenceLab,
+  Hpw09OsApplicationsMapLab,
+  Hpw09OsApplicationsExperimentLab,
+  Hpw09OsApplicationsEvidenceLab,
+  Hpw10AssemblyMapLab,
+  Hpw10AssemblyExperimentLab,
+  Hpw10AssemblyEvidenceLab,
+  Hpw11HardwareControlMapLab,
+  Hpw11HardwareControlExperimentLab,
+  Hpw11HardwareControlEvidenceLab,
+  Hpw12ThinkingMapLab,
+  Hpw12ThinkingExperimentLab,
+  Hpw12ThinkingEvidenceLab,
+  HpwAppendixCMapLab,
+  HpwAppendixCExperimentLab,
+  HpwAppendixCEvidenceLab,
+  HpwOfficialFinalReviewMapLab,
+  HpwOfficialFinalReviewExperimentLab,
+  HpwOfficialFinalReviewEvidenceLab,
+  IaiOfficialLearningMapMapLab,
+  IaiOfficialLearningMapExperimentLab,
+  IaiOfficialLearningMapEvidenceLab,
+  Iai01AiPastPresentFutureMapLab,
+  Iai01AiPastPresentFutureExperimentLab,
+  Iai01AiPastPresentFutureEvidenceLab,
+  Iai02RuleSystemsVariantsMapLab,
+  Iai02RuleSystemsVariantsExperimentLab,
+  Iai02RuleSystemsVariantsEvidenceLab,
+  Iai03AutomataArtificialLifeMapLab,
+  Iai03AutomataArtificialLifeExperimentLab,
+  Iai03AutomataArtificialLifeEvidenceLab,
+  Iai04WeightingOptimalSolutionsMapLab,
+  Iai04WeightingOptimalSolutionsExperimentLab,
+  Iai04WeightingOptimalSolutionsEvidenceLab,
+  Iai05WeightingOptimizationProgramsMapLab,
+  Iai05WeightingOptimizationProgramsExperimentLab,
+  Iai05WeightingOptimizationProgramsEvidenceLab,
+  Iai06StatisticalMlProbabilityModelingMapLab,
+  Iai06StatisticalMlProbabilityModelingExperimentLab,
+  Iai06StatisticalMlProbabilityModelingEvidenceLab,
+  Iai07StatisticalMlSupervisedUnsupervisedMapLab,
+  Iai07StatisticalMlSupervisedUnsupervisedExperimentLab,
+  Iai07StatisticalMlSupervisedUnsupervisedEvidenceLab,
+  Iai08ReinforcementDistributedAiMapLab,
+  Iai08ReinforcementDistributedAiExperimentLab,
+  Iai08ReinforcementDistributedAiEvidenceLab,
+  Iai09DeepLearningMapLab,
+  Iai09DeepLearningExperimentLab,
+  Iai09DeepLearningEvidenceLab,
+  Iai10ImageSpeechPatternRecognitionMapLab,
+  Iai10ImageSpeechPatternRecognitionExperimentLab,
+  Iai10ImageSpeechPatternRecognitionEvidenceLab,
+  Iai11NlpMachineLearningMapLab,
+  Iai11NlpMachineLearningExperimentLab,
+  Iai11NlpMachineLearningEvidenceLab,
+  Iai12KnowledgeRepresentationDataStructuresMapLab,
+  Iai12KnowledgeRepresentationDataStructuresExperimentLab,
+  Iai12KnowledgeRepresentationDataStructuresEvidenceLab,
+  Iai13DistributedComputingMapLab,
+  Iai13DistributedComputingExperimentLab,
+  Iai13DistributedComputingEvidenceLab,
+  Iai14BigDataIotMapLab,
+  Iai14BigDataIotExperimentLab,
+  Iai14BigDataIotEvidenceLab,
+  IaiOfficialFinalReviewMapLab,
+  IaiOfficialFinalReviewExperimentLab,
+  IaiOfficialFinalReviewEvidenceLab,
   IalBinarySearchTreesDiagram,
   IalDataStructuresDiagram,
   IalDpAdvancedDiagram,
@@ -5185,56 +12789,204 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   IalLearningMapDiagram,
   IalSelectionDiagram,
   IalSortingDiagram,
-  IdlApplicationsDiagram,
-  IdlBackpropagationDiagram,
-  IdlCnnDiagram,
-  IdlFinalReviewDiagram,
-  IdlForwardPropagationDiagram,
-  IdlGenerativeModelsDiagram,
-  IdlLearningMapDiagram,
-  IdlNnFundamentalsDiagram,
-  IdlRegularizationDiagram,
-  IdlRnnDiagram,
-  IlhAuthenticationDiagram,
-  IlhCachingDiagram,
-  IlhFinalReviewDiagram,
-  IlhHeadersDiagram,
-  IlhHttpBasicsDiagram,
-  IlhHttpMethodsDiagram,
-  IlhHttpsSecurityDiagram,
-  IlhLearningMapDiagram,
-  IlhStatusCodesDiagram,
-  IlhWebArchitectureDiagram,
-  ImlClassificationDiagram,
-  ImlDecisionTreesDiagram,
-  ImlFinalReviewDiagram,
-  ImlLearningMapDiagram,
-  ImlLinearModelsDiagram,
-  ImlMlBasicsDiagram,
-  ImlModelEvaluationDiagram,
-  ImlNeuralNetworksDiagram,
-  ImlSupportVectorDiagram,
-  ImlUnsupervisedDiagram,
-  IneBatterySystemDiagram,
-  IneBmsThermalDiagram,
-  IneChargingSystemDiagram,
-  IneChassisBodyDiagram,
-  IneFinalReviewDiagram,
-  IneLearningMapDiagram,
-  IneMotorControlDiagram,
-  IneNevOverviewDiagram,
-  InePowerElectronicsDiagram,
-  IneSafetyFutureDiagram,
-  IsnDnsCdnDiagram,
-  IsnFinalReviewDiagram,
-  IsnFirewallSecurityDiagram,
-  IsnHighAvailabilityDiagram,
-  IsnLearningMapDiagram,
-  IsnLoadBalancingDiagram,
-  IsnMicroserviceNetworkDiagram,
-  IsnPerformanceTuningDiagram,
-  IsnReverseProxyDiagram,
-  IsnServerBasicsDiagram,
+  IdlOfficialLearningMapMapLab,
+  IdlOfficialLearningMapExperimentLab,
+  IdlOfficialLearningMapEvidenceLab,
+  Idl01IntroductionMapLab,
+  Idl01IntroductionExperimentLab,
+  Idl01IntroductionEvidenceLab,
+  Idl02NeuralNetworksMapLab,
+  Idl02NeuralNetworksExperimentLab,
+  Idl02NeuralNetworksEvidenceLab,
+  Idl03ConvolutionalNeuralNetworksMapLab,
+  Idl03ConvolutionalNeuralNetworksExperimentLab,
+  Idl03ConvolutionalNeuralNetworksEvidenceLab,
+  Idl04RestrictedBoltzmannMachinesMapLab,
+  Idl04RestrictedBoltzmannMachinesExperimentLab,
+  Idl04RestrictedBoltzmannMachinesEvidenceLab,
+  Idl05AutoencodersMapLab,
+  Idl05AutoencodersExperimentLab,
+  Idl05AutoencodersEvidenceLab,
+  Idl06ImprovingGeneralizationMapLab,
+  Idl06ImprovingGeneralizationExperimentLab,
+  Idl06ImprovingGeneralizationEvidenceLab,
+  Idl07DeepLearningToolsMapLab,
+  Idl07DeepLearningToolsExperimentLab,
+  Idl07DeepLearningToolsEvidenceLab,
+  Idl08PresentAndFutureMapLab,
+  Idl08PresentAndFutureExperimentLab,
+  Idl08PresentAndFutureEvidenceLab,
+  IdlOfficialFinalReviewMapLab,
+  IdlOfficialFinalReviewExperimentLab,
+  IdlOfficialFinalReviewEvidenceLab,
+  IlhOfficialLearningMapFlowLab,
+  IlhOfficialLearningMapExperimentLab,
+  IlhOfficialLearningMapEvidenceLab,
+  Ilh01WebNetworkFoundationsFlowLab,
+  Ilh01WebNetworkFoundationsExperimentLab,
+  Ilh01WebNetworkFoundationsEvidenceLab,
+  Ilh02SimpleHttpProtocolFlowLab,
+  Ilh02SimpleHttpProtocolExperimentLab,
+  Ilh02SimpleHttpProtocolEvidenceLab,
+  Ilh03HttpMessageInformationFlowLab,
+  Ilh03HttpMessageInformationExperimentLab,
+  Ilh03HttpMessageInformationEvidenceLab,
+  Ilh04HttpStatusCodesFlowLab,
+  Ilh04HttpStatusCodesExperimentLab,
+  Ilh04HttpStatusCodesEvidenceLab,
+  Ilh05WebServersCooperationFlowLab,
+  Ilh05WebServersCooperationExperimentLab,
+  Ilh05WebServersCooperationEvidenceLab,
+  Ilh06HttpHeadersFlowLab,
+  Ilh06HttpHeadersExperimentLab,
+  Ilh06HttpHeadersEvidenceLab,
+  Ilh07HttpsSecurityFlowLab,
+  Ilh07HttpsSecurityExperimentLab,
+  Ilh07HttpsSecurityEvidenceLab,
+  Ilh08UserAuthenticationFlowLab,
+  Ilh08UserAuthenticationExperimentLab,
+  Ilh08UserAuthenticationEvidenceLab,
+  Ilh09HttpExtensionsFlowLab,
+  Ilh09HttpExtensionsExperimentLab,
+  Ilh09HttpExtensionsEvidenceLab,
+  Ilh10WebContentTechnologiesFlowLab,
+  Ilh10WebContentTechnologiesExperimentLab,
+  Ilh10WebContentTechnologiesEvidenceLab,
+  Ilh11WebAttackTechniquesFlowLab,
+  Ilh11WebAttackTechniquesExperimentLab,
+  Ilh11WebAttackTechniquesEvidenceLab,
+  IlhOfficialFinalReviewFlowLab,
+  IlhOfficialFinalReviewExperimentLab,
+  IlhOfficialFinalReviewEvidenceLab,
+  ImlOfficialLearningMapMapLab,
+  ImlOfficialLearningMapExperimentLab,
+  ImlOfficialLearningMapEvidenceLab,
+  Iml01WhatIsMachineLearningMapLab,
+  Iml01WhatIsMachineLearningExperimentLab,
+  Iml01WhatIsMachineLearningEvidenceLab,
+  Iml02LearningModelsMapLab,
+  Iml02LearningModelsExperimentLab,
+  Iml02LearningModelsEvidenceLab,
+  Iml03LeastSquaresLearningMapLab,
+  Iml03LeastSquaresLearningExperimentLab,
+  Iml03LeastSquaresLearningEvidenceLab,
+  Iml04ConstrainedLeastSquaresMapLab,
+  Iml04ConstrainedLeastSquaresExperimentLab,
+  Iml04ConstrainedLeastSquaresEvidenceLab,
+  Iml05SparseLearningMapLab,
+  Iml05SparseLearningExperimentLab,
+  Iml05SparseLearningEvidenceLab,
+  Iml06RobustLearningMapLab,
+  Iml06RobustLearningExperimentLab,
+  Iml06RobustLearningEvidenceLab,
+  Iml07LeastSquaresClassificationMapLab,
+  Iml07LeastSquaresClassificationExperimentLab,
+  Iml07LeastSquaresClassificationEvidenceLab,
+  Iml08SupportVectorClassificationMapLab,
+  Iml08SupportVectorClassificationExperimentLab,
+  Iml08SupportVectorClassificationEvidenceLab,
+  Iml09EnsembleClassificationMapLab,
+  Iml09EnsembleClassificationExperimentLab,
+  Iml09EnsembleClassificationEvidenceLab,
+  Iml10ProbabilisticClassificationMapLab,
+  Iml10ProbabilisticClassificationExperimentLab,
+  Iml10ProbabilisticClassificationEvidenceLab,
+  Iml11SequenceClassificationMapLab,
+  Iml11SequenceClassificationExperimentLab,
+  Iml11SequenceClassificationEvidenceLab,
+  Iml12AnomalyDetectionMapLab,
+  Iml12AnomalyDetectionExperimentLab,
+  Iml12AnomalyDetectionEvidenceLab,
+  Iml13UnsupervisedDimensionalityReductionMapLab,
+  Iml13UnsupervisedDimensionalityReductionExperimentLab,
+  Iml13UnsupervisedDimensionalityReductionEvidenceLab,
+  Iml14ClusteringMapLab,
+  Iml14ClusteringExperimentLab,
+  Iml14ClusteringEvidenceLab,
+  Iml15OnlineLearningMapLab,
+  Iml15OnlineLearningExperimentLab,
+  Iml15OnlineLearningEvidenceLab,
+  Iml16SemiSupervisedLearningMapLab,
+  Iml16SemiSupervisedLearningExperimentLab,
+  Iml16SemiSupervisedLearningEvidenceLab,
+  Iml17SupervisedDimensionalityReductionMapLab,
+  Iml17SupervisedDimensionalityReductionExperimentLab,
+  Iml17SupervisedDimensionalityReductionEvidenceLab,
+  Iml18TransferLearningMapLab,
+  Iml18TransferLearningExperimentLab,
+  Iml18TransferLearningEvidenceLab,
+  Iml19MultiTaskLearningMapLab,
+  Iml19MultiTaskLearningExperimentLab,
+  Iml19MultiTaskLearningEvidenceLab,
+  Iml20SummaryOutlookMapLab,
+  Iml20SummaryOutlookExperimentLab,
+  Iml20SummaryOutlookEvidenceLab,
+  ImlOfficialFinalReviewMapLab,
+  ImlOfficialFinalReviewExperimentLab,
+  ImlOfficialFinalReviewEvidenceLab,
+  Ine23OfficialLearningMapEnergyLab,
+  Ine23OfficialLearningMapComponentLab,
+  Ine23OfficialLearningMapEvidenceLab,
+  Ine23ContentSummaryEnergyLab,
+  Ine23ContentSummaryComponentLab,
+  Ine23ContentSummaryEvidenceLab,
+  Ine23PrefaceEnergyLab,
+  Ine23PrefaceComponentLab,
+  Ine23PrefaceEvidenceLab,
+  Ine2301ClassificationEnergyLab,
+  Ine2301ClassificationComponentLab,
+  Ine2301ClassificationEvidenceLab,
+  Ine2302MotorsEnergyLab,
+  Ine2302MotorsComponentLab,
+  Ine2302MotorsEvidenceLab,
+  Ine2303BatteriesEnergyLab,
+  Ine2303BatteriesComponentLab,
+  Ine2303BatteriesEvidenceLab,
+  Ine2304BatteryElectricVehiclesEnergyLab,
+  Ine2304BatteryElectricVehiclesComponentLab,
+  Ine2304BatteryElectricVehiclesEvidenceLab,
+  Ine2305HybridVehiclesEnergyLab,
+  Ine2305HybridVehiclesComponentLab,
+  Ine2305HybridVehiclesEvidenceLab,
+  Ine2306FuelCellVehiclesEnergyLab,
+  Ine2306FuelCellVehiclesComponentLab,
+  Ine2306FuelCellVehiclesEvidenceLab,
+  Ine2307NaturalGasVehiclesEnergyLab,
+  Ine2307NaturalGasVehiclesComponentLab,
+  Ine2307NaturalGasVehiclesEvidenceLab,
+  Ine2308LpgVehiclesEnergyLab,
+  Ine2308LpgVehiclesComponentLab,
+  Ine2308LpgVehiclesEvidenceLab,
+  Ine23ReferencesEnergyLab,
+  Ine23ReferencesComponentLab,
+  Ine23ReferencesEvidenceLab,
+  Ine23OfficialFinalReviewEnergyLab,
+  Ine23OfficialFinalReviewComponentLab,
+  Ine23OfficialFinalReviewEvidenceLab,
+  IsnOfficialLearningMapPlanLab,
+  IsnOfficialLearningMapFaultLab,
+  IsnOfficialLearningMapEvidenceLab,
+  Isn00BookUsagePlanLab,
+  Isn00BookUsageFaultLab,
+  Isn00BookUsageEvidenceLab,
+  Isn01PhysicalDesignPlanLab,
+  Isn01PhysicalDesignFaultLab,
+  Isn01PhysicalDesignEvidenceLab,
+  Isn02LogicalDesignPlanLab,
+  Isn02LogicalDesignFaultLab,
+  Isn02LogicalDesignEvidenceLab,
+  Isn03SecurityLoadBalancingPlanLab,
+  Isn03SecurityLoadBalancingFaultLab,
+  Isn03SecurityLoadBalancingEvidenceLab,
+  Isn04HighAvailabilityPlanLab,
+  Isn04HighAvailabilityFaultLab,
+  Isn04HighAvailabilityEvidenceLab,
+  Isn05ManagementDesignPlanLab,
+  Isn05ManagementDesignFaultLab,
+  Isn05ManagementDesignEvidenceLab,
+  IsnOfficialFinalReviewPlanLab,
+  IsnOfficialFinalReviewFaultLab,
+  IsnOfficialFinalReviewEvidenceLab,
   JctAdvancedFeaturesDiagram,
   JctCollectionsGenericsDiagram,
   JctConcurrencyDiagram,
@@ -5245,26 +12997,6 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   JctLearningMapDiagram,
   JctOopDesignDiagram,
   JctXmlNetworkDiagram,
-  JdgArraysObjectsDiagram,
-  JdgBrowserApisDiagram,
-  JdgClassesModulesDiagram,
-  JdgCollectionsMetaprogrammingDiagram,
-  JdgDomEventsDiagram,
-  JdgFinalReviewDiagram,
-  JdgFunctionsClosuresDiagram,
-  JdgLearningMapDiagram,
-  JdgLexiconGrammarDiagram,
-  JdgTypesValuesDiagram,
-  JfsAuthSecurityDiagram,
-  JfsExpressKoaDiagram,
-  JfsFinalReviewDiagram,
-  JfsGraphqlApiDiagram,
-  JfsLearningMapDiagram,
-  JfsMongodbMongooseDiagram,
-  JfsNodejsServerDiagram,
-  JfsReactEssentialsDiagram,
-  JfsStateManagementDiagram,
-  JfsTestingDeployDiagram,
   Jg1FinalReviewDiagram,
   Jg1FullGcDiagram,
   Jg1G1OverviewDiagram,
@@ -5275,26 +13007,6 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   Jg1RegionManagementDiagram,
   Jg1RememberedSetDiagram,
   Jg1YoungGcDiagram,
-  JpcAdvancedComposeDiagram,
-  JpcAnimationsDiagram,
-  JpcComposeBasicsDiagram,
-  JpcFinalReviewDiagram,
-  JpcLayoutModifiersDiagram,
-  JpcLearningMapDiagram,
-  JpcNavigationDiagram,
-  JpcStateManagementDiagram,
-  JpcThemeStylingDiagram,
-  JpcViewInteropDiagram,
-  JpgDomBomDiagram,
-  JpgEventLoopDiagram,
-  JpgFinalReviewDiagram,
-  JpgLearningMapDiagram,
-  JpgModulesDiagram,
-  JpgObjectsOopDiagram,
-  JpgPromiseAsyncDiagram,
-  JpgPrototypeChainDiagram,
-  JpgScopeClosureDiagram,
-  JpgTypesVariablesDiagram,
   JvtCpuPerformanceDiagram,
   JvtFinalReviewDiagram,
   JvtGarbageCollectionDiagram,
@@ -5305,136 +13017,178 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   JvtMemoryLeakDiagram,
   JvtMemoryModelDiagram,
   JvtThreadAnalysisDiagram,
-  K8sConfigSecretsDiagram,
-  K8sContainerOrchestrationDiagram,
-  K8sDeploymentsDiagram,
-  K8sFinalReviewDiagram,
-  K8sLearningMapDiagram,
-  K8sPodsDiagram,
-  K8sSchedulingDiagram,
-  K8sSecurityOpsDiagram,
-  K8sServicesNetworkingDiagram,
-  K8sVolumesStorageDiagram,
-  KdgAdvancedTypesDiagram,
-  KdgClassesObjectsDiagram,
-  KdgCoroutinesDiagram,
-  KdgDslDiagram,
-  KdgFinalReviewDiagram,
-  KdgFunctionsDiagram,
-  KdgKotlinAndroidDiagram,
-  KdgKotlinBasicsDiagram,
-  KdgLearningMapDiagram,
-  KdgTestingDiagram,
-  KfkAdminOpsDiagram,
-  KfkConsumersDiagram,
-  KfkFinalReviewDiagram,
-  KfkKafkaInternalsDiagram,
-  KfkKafkaIntroDiagram,
-  KfkKafkaStreamsDiagram,
-  KfkLearningMapDiagram,
-  KfkProducersDiagram,
-  KfkReliabilityDiagram,
-  KfkTopicsPartitionsDiagram,
-  KgaAdvancedTopicsDiagram,
-  KgaApiGatewayIntroDiagram,
-  KgaAuthenticationDiagram,
-  KgaDeploymentHaDiagram,
-  KgaFinalReviewDiagram,
-  KgaKongArchitectureDiagram,
-  KgaLearningMapDiagram,
-  KgaRoutingPluginsDiagram,
-  KgaSecurityPluginsDiagram,
-  KgaTrafficControlDiagram,
-  KiaClassesInterfacesDiagram,
-  KiaConcurrencyDiagram,
-  KiaDslPatternsDiagram,
-  KiaFinalReviewDiagram,
-  KiaFunctionsDiagram,
-  KiaKotlinBasicsDiagram,
-  KiaKotlinIntroDiagram,
-  KiaLambdaMembersDiagram,
-  KiaLearningMapDiagram,
-  KiaTypeSystemDiagram,
-  LadComplexVectorsDiagram,
-  LadDetTraceDiagram,
-  LadEigenvaluesDiagram,
-  LadFinalReviewDiagram,
-  LadInnerProductDiagram,
-  LadLearningMapDiagram,
-  LadLinearMapsDiagram,
-  LadMatricesDiagram,
-  LadOperatorsDiagram,
-  LadVectorSpacesDiagram,
-  LaeAgentDevelopmentDiagram,
-  LaeApiDevelopmentDiagram,
-  LaeEvaluationDeploymentDiagram,
-  LaeFinalReviewDiagram,
-  LaeFineTuningDiagram,
-  LaeLearningMapDiagram,
-  LaeLlmFoundationsDiagram,
-  LaeProductionPatternsDiagram,
-  LaePromptEngineeringDiagram,
-  LaeRagSystemDiagram,
-  LcpAdvancedChainsDiagram,
-  LcpChainsSequencesDiagram,
-  LcpFinalReviewDiagram,
-  LcpLangchainOverviewDiagram,
-  LcpLearningMapDiagram,
-  LcpMemoryStateDiagram,
-  LcpModelsPromptsDiagram,
-  LcpProductionDeploymentDiagram,
-  LcpRagImplementationDiagram,
-  LcpToolsAgentsDiagram,
-  LkdFinalReviewDiagram,
-  LkdInterruptsDiagram,
-  LkdKernelSyncDiagram,
-  LkdLearningMapDiagram,
-  LkdLinuxKernelIntroDiagram,
-  LkdMemoryManagementDiagram,
-  LkdProcessManagementDiagram,
-  LkdSchedulingDiagram,
-  LkdSystemCallsDiagram,
-  LkdVirtualFilesystemDiagram,
-  LkeFilesystemDiagram,
-  LkeFinalReviewDiagram,
-  LkeIoSubsystemDiagram,
-  LkeKernelArchitectureDiagram,
-  LkeKernelDebuggingDiagram,
-  LkeKernelSynchronizationDiagram,
-  LkeLearningMapDiagram,
-  LkeMemoryManagementDiagram,
-  LkeNetworkStackDiagram,
-  LkeProcessSchedulingDiagram,
-  LlmArchitectureDiagram,
-  LlmEvaluationDiagram,
-  LlmFinalReviewDiagram,
-  LlmFoundationsDiagram,
-  LlmFrontiersDiagram,
-  LlmInferenceDiagram,
-  LlmLearningMapDiagram,
-  LlmPosttrainingDiagram,
-  LlmPretrainingDataDiagram,
-  LlmScalingLawsDiagram,
-  LopCommandLineDiagram,
-  LopFilePermissionsDiagram,
-  LopFinalReviewDiagram,
-  LopFirewallSecurityDiagram,
-  LopLearningMapDiagram,
-  LopNetworkConfigDiagram,
-  LopPackageManagementDiagram,
-  LopShellScriptingDiagram,
-  LopSystemdServicesDiagram,
-  LopUserManagementDiagram,
-  LslAlignmentTechniquesDiagram,
-  LslDataPipelineDiagram,
-  LslDeploymentCaseDiagram,
-  LslDistributedTrainingDiagram,
-  LslEvaluationTestingDiagram,
-  LslFinalReviewDiagram,
-  LslLearningMapDiagram,
-  LslModelArchitectureDiagram,
-  LslServingInferenceDiagram,
-  LslTheoryFoundationsDiagram,
+
+  LkdOfficialLearningMapMapLab,
+  LkdOfficialLearningMapExperimentLab,
+  LkdOfficialLearningMapEvidenceLab,
+  Lkd01LinuxKernelIntroMapLab,
+  Lkd01LinuxKernelIntroExperimentLab,
+  Lkd01LinuxKernelIntroEvidenceLab,
+  Lkd02GettingStartedMapLab,
+  Lkd02GettingStartedExperimentLab,
+  Lkd02GettingStartedEvidenceLab,
+  Lkd03ProcessManagementMapLab,
+  Lkd03ProcessManagementExperimentLab,
+  Lkd03ProcessManagementEvidenceLab,
+  Lkd04ProcessSchedulingMapLab,
+  Lkd04ProcessSchedulingExperimentLab,
+  Lkd04ProcessSchedulingEvidenceLab,
+  Lkd05SystemCallsMapLab,
+  Lkd05SystemCallsExperimentLab,
+  Lkd05SystemCallsEvidenceLab,
+  Lkd06KernelDataStructuresMapLab,
+  Lkd06KernelDataStructuresExperimentLab,
+  Lkd06KernelDataStructuresEvidenceLab,
+  Lkd07InterruptsMapLab,
+  Lkd07InterruptsExperimentLab,
+  Lkd07InterruptsEvidenceLab,
+  Lkd08BottomHalvesMapLab,
+  Lkd08BottomHalvesExperimentLab,
+  Lkd08BottomHalvesEvidenceLab,
+  Lkd09SyncIntroMapLab,
+  Lkd09SyncIntroExperimentLab,
+  Lkd09SyncIntroEvidenceLab,
+  Lkd10SyncMethodsMapLab,
+  Lkd10SyncMethodsExperimentLab,
+  Lkd10SyncMethodsEvidenceLab,
+  Lkd11TimersTimeMapLab,
+  Lkd11TimersTimeExperimentLab,
+  Lkd11TimersTimeEvidenceLab,
+  Lkd12MemoryManagementMapLab,
+  Lkd12MemoryManagementExperimentLab,
+  Lkd12MemoryManagementEvidenceLab,
+  Lkd13VfsMapLab,
+  Lkd13VfsExperimentLab,
+  Lkd13VfsEvidenceLab,
+  Lkd14BlockIoMapLab,
+  Lkd14BlockIoExperimentLab,
+  Lkd14BlockIoEvidenceLab,
+  Lkd15ProcessAddressSpaceMapLab,
+  Lkd15ProcessAddressSpaceExperimentLab,
+  Lkd15ProcessAddressSpaceEvidenceLab,
+  Lkd16PageCacheWritebackMapLab,
+  Lkd16PageCacheWritebackExperimentLab,
+  Lkd16PageCacheWritebackEvidenceLab,
+  Lkd17DevicesModulesMapLab,
+  Lkd17DevicesModulesExperimentLab,
+  Lkd17DevicesModulesEvidenceLab,
+  Lkd18DebuggingMapLab,
+  Lkd18DebuggingExperimentLab,
+  Lkd18DebuggingEvidenceLab,
+  Lkd19PortabilityMapLab,
+  Lkd19PortabilityExperimentLab,
+  Lkd19PortabilityEvidenceLab,
+  Lkd20PatchesCommunityMapLab,
+  Lkd20PatchesCommunityExperimentLab,
+  Lkd20PatchesCommunityEvidenceLab,
+  LkdOfficialFinalReviewMapLab,
+  LkdOfficialFinalReviewExperimentLab,
+  LkdOfficialFinalReviewEvidenceLab,
+  LkeOfficialLearningMapMapLab,
+  LkeOfficialLearningMapExperimentLab,
+  LkeOfficialLearningMapEvidenceLab,
+  Lke01KernelIntroMapLab,
+  Lke01KernelIntroExperimentLab,
+  Lke01KernelIntroEvidenceLab,
+  Lke02ResourceManagementMapLab,
+  Lke02ResourceManagementExperimentLab,
+  Lke02ResourceManagementEvidenceLab,
+  Lke03FilesystemsMapLab,
+  Lke03FilesystemsExperimentLab,
+  Lke03FilesystemsEvidenceLab,
+  Lke04NetworkingMapLab,
+  Lke04NetworkingExperimentLab,
+  Lke04NetworkingEvidenceLab,
+  Lke05VirtualizationMapLab,
+  Lke05VirtualizationExperimentLab,
+  Lke05VirtualizationEvidenceLab,
+  Lke06PowerSavingMapLab,
+  Lke06PowerSavingExperimentLab,
+  Lke06PowerSavingEvidenceLab,
+  Lke07DebuggingMapLab,
+  Lke07DebuggingExperimentLab,
+  Lke07DebuggingEvidenceLab,
+  Lke08ProfilingTracingMapLab,
+  Lke08ProfilingTracingExperimentLab,
+  Lke08ProfilingTracingEvidenceLab,
+  LkeOfficialFinalReviewMapLab,
+  LkeOfficialFinalReviewExperimentLab,
+  LkeOfficialFinalReviewEvidenceLab,
+  LopOfficialLearningMapMapLab,
+  LopOfficialLearningMapExperimentLab,
+  LopOfficialLearningMapEvidenceLab,
+  Lop01RecognizingLinuxMapLab,
+  Lop01RecognizingLinuxExperimentLab,
+  Lop01RecognizingLinuxEvidenceLab,
+  Lop02UsingLinuxMapLab,
+  Lop02UsingLinuxExperimentLab,
+  Lop02UsingLinuxEvidenceLab,
+  Lop03UserManagementMapLab,
+  Lop03UserManagementExperimentLab,
+  Lop03UserManagementEvidenceLab,
+  Lop04SoftwareManagementMapLab,
+  Lop04SoftwareManagementExperimentLab,
+  Lop04SoftwareManagementEvidenceLab,
+  Lop05ProgrammingEnvironmentMapLab,
+  Lop05ProgrammingEnvironmentExperimentLab,
+  Lop05ProgrammingEnvironmentEvidenceLab,
+  Lop06NetworkConfigurationMapLab,
+  Lop06NetworkConfigurationExperimentLab,
+  Lop06NetworkConfigurationEvidenceLab,
+  Lop07ShellProgrammingMapLab,
+  Lop07ShellProgrammingExperimentLab,
+  Lop07ShellProgrammingEvidenceLab,
+  Lop08RegularExpressionsMapLab,
+  Lop08RegularExpressionsExperimentLab,
+  Lop08RegularExpressionsEvidenceLab,
+  Lop09TetrisProjectMapLab,
+  Lop09TetrisProjectExperimentLab,
+  Lop09TetrisProjectEvidenceLab,
+  LopOfficialFinalReviewMapLab,
+  LopOfficialFinalReviewExperimentLab,
+  LopOfficialFinalReviewEvidenceLab,
+  LslOfficialLearningMapPipelineLab,
+  LslOfficialLearningMapTrainingLab,
+  LslOfficialLearningMapEvidenceLab,
+  LslPrefacePipelineLab,
+  LslPrefaceTrainingLab,
+  LslPrefaceEvidenceLab,
+  LslMathematicalNotationPipelineLab,
+  LslMathematicalNotationTrainingLab,
+  LslMathematicalNotationEvidenceLab,
+  Lsl01IntroductionPipelineLab,
+  Lsl01IntroductionTrainingLab,
+  Lsl01IntroductionEvidenceLab,
+  Lsl02LlmFoundationsPipelineLab,
+  Lsl02LlmFoundationsTrainingLab,
+  Lsl02LlmFoundationsEvidenceLab,
+  Lsl03PretrainingDataPipelineLab,
+  Lsl03PretrainingDataTrainingLab,
+  Lsl03PretrainingDataEvidenceLab,
+  Lsl04DistributedTrainingPipelineLab,
+  Lsl04DistributedTrainingTrainingLab,
+  Lsl04DistributedTrainingEvidenceLab,
+  Lsl05SupervisedFinetuningPipelineLab,
+  Lsl05SupervisedFinetuningTrainingLab,
+  Lsl05SupervisedFinetuningEvidenceLab,
+  Lsl06ReinforcementLearningPipelineLab,
+  Lsl06ReinforcementLearningTrainingLab,
+  Lsl06ReinforcementLearningEvidenceLab,
+  Lsl07LlmApplicationsPipelineLab,
+  Lsl07LlmApplicationsTrainingLab,
+  Lsl07LlmApplicationsEvidenceLab,
+  Lsl08LlmEvaluationPipelineLab,
+  Lsl08LlmEvaluationTrainingLab,
+  Lsl08LlmEvaluationEvidenceLab,
+  LslReferencesPipelineLab,
+  LslReferencesTrainingLab,
+  LslReferencesEvidenceLab,
+  LslIndexPipelineLab,
+  LslIndexTrainingLab,
+  LslIndexEvidenceLab,
+  LslOfficialFinalReviewPipelineLab,
+  LslOfficialFinalReviewTrainingLab,
+  LslOfficialFinalReviewEvidenceLab,
   LupCApiDiagram,
   LupClosuresDiagram,
   LupCoroutinesDiagram,
@@ -5445,56 +13199,276 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   LupMetatablesDiagram,
   LupStatementsDiagram,
   LupTypesValuesDiagram,
-  MasAgentFoundationsDiagram,
-  MasApplicationsFutureDiagram,
-  MasCommunicationNegotiationDiagram,
-  MasCoordinationCooperationDiagram,
-  MasDistributedProblemSolvingDiagram,
-  MasFinalReviewDiagram,
-  MasGameTheoryDiagram,
-  MasLearningMapDiagram,
-  MasMultiagentInteractionDiagram,
-  MasRationalAgentsDiagram,
-  MbtAdvancedTopicsDiagram,
-  MbtBitcoinOverviewDiagram,
-  MbtBlockchainLedgerDiagram,
-  MbtFinalReviewDiagram,
-  MbtKeysAddressesDiagram,
-  MbtLearningMapDiagram,
-  MbtMiningConsensusDiagram,
-  MbtP2pNetworkDiagram,
-  MbtTransactionsDiagram,
-  MbtWalletsUsageDiagram,
-  MetAccountsKeysDiagram,
-  MetDappsOraclesDiagram,
-  MetEthereumOverviewDiagram,
-  MetEvmBytecodeDiagram,
-  MetFinalReviewDiagram,
-  MetLearningMapDiagram,
-  MetSmartContractSecurityDiagram,
-  MetSolidityProgrammingDiagram,
-  MetTokensStandardsDiagram,
-  MetTransactionsGasDiagram,
-  MfcComInterfaceDiagram,
-  MfcCppMechanicsDiagram,
-  MfcDocumentViewDiagram,
-  MfcFinalReviewDiagram,
-  MfcLearningMapDiagram,
-  MfcMessageRoutingDiagram,
-  MfcPersistenceSerializationDiagram,
-  MfcRttiDynamicCreationDiagram,
-  MfcTemplateMethodDiagram,
-  MfcWin32FoundationDiagram,
-  MgaCsModelDiagram,
-  MgaFaultToleranceDiagram,
-  MgaFinalReviewDiagram,
-  MgaGatewayProxyDiagram,
-  MgaInterestManagementDiagram,
-  MgaLearningMapDiagram,
-  MgaMicroserviceDiagram,
-  MgaMonitoringDiagram,
-  MgaShardingDiagram,
-  MgaStateReplicationDiagram,
+  MasOfficialLearningMapModelLab,
+  MasOfficialLearningMapGameLab,
+  MasOfficialLearningMapEvidenceLab,
+  MasPrefaceModelLab,
+  MasPrefaceGameLab,
+  MasPrefaceEvidenceLab,
+  MasPart01SettingSceneModelLab,
+  MasPart01SettingSceneGameLab,
+  MasPart01SettingSceneEvidenceLab,
+  Mas01IntroductionModelLab,
+  Mas01IntroductionGameLab,
+  Mas01IntroductionEvidenceLab,
+  MasPart02IntelligentAutonomousAgentsModelLab,
+  MasPart02IntelligentAutonomousAgentsGameLab,
+  MasPart02IntelligentAutonomousAgentsEvidenceLab,
+  Mas02IntelligentAgentsModelLab,
+  Mas02IntelligentAgentsGameLab,
+  Mas02IntelligentAgentsEvidenceLab,
+  Mas03DeductiveReasoningAgentsModelLab,
+  Mas03DeductiveReasoningAgentsGameLab,
+  Mas03DeductiveReasoningAgentsEvidenceLab,
+  Mas04PracticalReasoningAgentsModelLab,
+  Mas04PracticalReasoningAgentsGameLab,
+  Mas04PracticalReasoningAgentsEvidenceLab,
+  Mas05ReactiveHybridAgentsModelLab,
+  Mas05ReactiveHybridAgentsGameLab,
+  Mas05ReactiveHybridAgentsEvidenceLab,
+  MasPart03CommunicationCooperationModelLab,
+  MasPart03CommunicationCooperationGameLab,
+  MasPart03CommunicationCooperationEvidenceLab,
+  Mas06UnderstandingEachOtherModelLab,
+  Mas06UnderstandingEachOtherGameLab,
+  Mas06UnderstandingEachOtherEvidenceLab,
+  Mas07CommunicatingModelLab,
+  Mas07CommunicatingGameLab,
+  Mas07CommunicatingEvidenceLab,
+  Mas08WorkingTogetherModelLab,
+  Mas08WorkingTogetherGameLab,
+  Mas08WorkingTogetherEvidenceLab,
+  Mas09MethodologiesModelLab,
+  Mas09MethodologiesGameLab,
+  Mas09MethodologiesEvidenceLab,
+  Mas10ApplicationsModelLab,
+  Mas10ApplicationsGameLab,
+  Mas10ApplicationsEvidenceLab,
+  MasPart04MultiagentDecisionMakingModelLab,
+  MasPart04MultiagentDecisionMakingGameLab,
+  MasPart04MultiagentDecisionMakingEvidenceLab,
+  Mas11MultiagentInteractionsModelLab,
+  Mas11MultiagentInteractionsGameLab,
+  Mas11MultiagentInteractionsEvidenceLab,
+  Mas12MakingGroupDecisionsModelLab,
+  Mas12MakingGroupDecisionsGameLab,
+  Mas12MakingGroupDecisionsEvidenceLab,
+  Mas13FormingCoalitionsModelLab,
+  Mas13FormingCoalitionsGameLab,
+  Mas13FormingCoalitionsEvidenceLab,
+  Mas14AllocatingScarceResourcesModelLab,
+  Mas14AllocatingScarceResourcesGameLab,
+  Mas14AllocatingScarceResourcesEvidenceLab,
+  Mas15BargainingModelLab,
+  Mas15BargainingGameLab,
+  Mas15BargainingEvidenceLab,
+  Mas16ArguingModelLab,
+  Mas16ArguingGameLab,
+  Mas16ArguingEvidenceLab,
+  Mas17LogicalFoundationsModelLab,
+  Mas17LogicalFoundationsGameLab,
+  Mas17LogicalFoundationsEvidenceLab,
+  MasCodaModelLab,
+  MasCodaGameLab,
+  MasCodaEvidenceLab,
+  MasAppendixAHistoryLessonModelLab,
+  MasAppendixAHistoryLessonGameLab,
+  MasAppendixAHistoryLessonEvidenceLab,
+  MasAppendixBAfterwordModelLab,
+  MasAppendixBAfterwordGameLab,
+  MasAppendixBAfterwordEvidenceLab,
+  MasOfficialFinalReviewModelLab,
+  MasOfficialFinalReviewGameLab,
+  MasOfficialFinalReviewEvidenceLab,
+  Mbt3OfficialLearningMapFlowLab,
+  Mbt3OfficialLearningMapExperimentLab,
+  Mbt3OfficialLearningMapEvidenceLab,
+  Mbt3PrefaceFlowLab,
+  Mbt3PrefaceExperimentLab,
+  Mbt3PrefaceEvidenceLab,
+  Mbt301IntroductionFlowLab,
+  Mbt301IntroductionExperimentLab,
+  Mbt301IntroductionEvidenceLab,
+  Mbt302HowBitcoinWorksFlowLab,
+  Mbt302HowBitcoinWorksExperimentLab,
+  Mbt302HowBitcoinWorksEvidenceLab,
+  Mbt303BitcoinCoreFlowLab,
+  Mbt303BitcoinCoreExperimentLab,
+  Mbt303BitcoinCoreEvidenceLab,
+  Mbt304KeysAddressesFlowLab,
+  Mbt304KeysAddressesExperimentLab,
+  Mbt304KeysAddressesEvidenceLab,
+  Mbt305WalletRecoveryFlowLab,
+  Mbt305WalletRecoveryExperimentLab,
+  Mbt305WalletRecoveryEvidenceLab,
+  Mbt306TransactionsFlowLab,
+  Mbt306TransactionsExperimentLab,
+  Mbt306TransactionsEvidenceLab,
+  Mbt307AuthorizationAuthenticationFlowLab,
+  Mbt307AuthorizationAuthenticationExperimentLab,
+  Mbt307AuthorizationAuthenticationEvidenceLab,
+  Mbt308DigitalSignaturesFlowLab,
+  Mbt308DigitalSignaturesExperimentLab,
+  Mbt308DigitalSignaturesEvidenceLab,
+  Mbt309TransactionFeesFlowLab,
+  Mbt309TransactionFeesExperimentLab,
+  Mbt309TransactionFeesEvidenceLab,
+  Mbt310BitcoinNetworkFlowLab,
+  Mbt310BitcoinNetworkExperimentLab,
+  Mbt310BitcoinNetworkEvidenceLab,
+  Mbt311BlockchainFlowLab,
+  Mbt311BlockchainExperimentLab,
+  Mbt311BlockchainEvidenceLab,
+  Mbt312MiningConsensusFlowLab,
+  Mbt312MiningConsensusExperimentLab,
+  Mbt312MiningConsensusEvidenceLab,
+  Mbt313SecurityFlowLab,
+  Mbt313SecurityExperimentLab,
+  Mbt313SecurityEvidenceLab,
+  Mbt314SecondLayerApplicationsFlowLab,
+  Mbt314SecondLayerApplicationsExperimentLab,
+  Mbt314SecondLayerApplicationsEvidenceLab,
+  Mbt3AppendixAWhitepaperFlowLab,
+  Mbt3AppendixAWhitepaperExperimentLab,
+  Mbt3AppendixAWhitepaperEvidenceLab,
+  Mbt3AppendixBWhitepaperErrataFlowLab,
+  Mbt3AppendixBWhitepaperErrataExperimentLab,
+  Mbt3AppendixBWhitepaperErrataEvidenceLab,
+  Mbt3AppendixCBipsFlowLab,
+  Mbt3AppendixCBipsExperimentLab,
+  Mbt3AppendixCBipsEvidenceLab,
+  Mbt3OfficialFinalReviewFlowLab,
+  Mbt3OfficialFinalReviewExperimentLab,
+  Mbt3OfficialFinalReviewEvidenceLab,
+  Met2OfficialLearningMapFlowLab,
+  Met2OfficialLearningMapExperimentLab,
+  Met2OfficialLearningMapEvidenceLab,
+  Met2PrefaceFlowLab,
+  Met2PrefaceExperimentLab,
+  Met2PrefaceEvidenceLab,
+  Met201WhatIsEthereumFlowLab,
+  Met201WhatIsEthereumExperimentLab,
+  Met201WhatIsEthereumEvidenceLab,
+  Met202EthereumBasicsFlowLab,
+  Met202EthereumBasicsExperimentLab,
+  Met202EthereumBasicsEvidenceLab,
+  Met203EthereumNodesFlowLab,
+  Met203EthereumNodesExperimentLab,
+  Met203EthereumNodesEvidenceLab,
+  Met204CryptographyFlowLab,
+  Met204CryptographyExperimentLab,
+  Met204CryptographyEvidenceLab,
+  Met205WalletsFlowLab,
+  Met205WalletsExperimentLab,
+  Met205WalletsEvidenceLab,
+  Met206TransactionsFlowLab,
+  Met206TransactionsExperimentLab,
+  Met206TransactionsEvidenceLab,
+  Met207SmartContractsSolidityFlowLab,
+  Met207SmartContractsSolidityExperimentLab,
+  Met207SmartContractsSolidityEvidenceLab,
+  Met208SmartContractsVyperFlowLab,
+  Met208SmartContractsVyperExperimentLab,
+  Met208SmartContractsVyperEvidenceLab,
+  Met209SmartContractSecurityFlowLab,
+  Met209SmartContractSecurityExperimentLab,
+  Met209SmartContractSecurityEvidenceLab,
+  Met210TokensFlowLab,
+  Met210TokensExperimentLab,
+  Met210TokensEvidenceLab,
+  Met211OraclesFlowLab,
+  Met211OraclesExperimentLab,
+  Met211OraclesEvidenceLab,
+  Met212DecentralizedApplicationsFlowLab,
+  Met212DecentralizedApplicationsExperimentLab,
+  Met212DecentralizedApplicationsEvidenceLab,
+  Met213DecentralizedFinanceFlowLab,
+  Met213DecentralizedFinanceExperimentLab,
+  Met213DecentralizedFinanceEvidenceLab,
+  Met214EthereumVirtualMachineFlowLab,
+  Met214EthereumVirtualMachineExperimentLab,
+  Met214EthereumVirtualMachineEvidenceLab,
+  Met215ConsensusFlowLab,
+  Met215ConsensusExperimentLab,
+  Met215ConsensusEvidenceLab,
+  Met216ScalingEthereumFlowLab,
+  Met216ScalingEthereumExperimentLab,
+  Met216ScalingEthereumEvidenceLab,
+  Met217ZeroKnowledgeProofsFlowLab,
+  Met217ZeroKnowledgeProofsExperimentLab,
+  Met217ZeroKnowledgeProofsEvidenceLab,
+  Met2OfficialFinalReviewFlowLab,
+  Met2OfficialFinalReviewExperimentLab,
+  Met2OfficialFinalReviewEvidenceLab,
+  MfcOfficialLearningMapMapLab,
+  MfcOfficialLearningMapExperimentLab,
+  MfcOfficialLearningMapEvidenceLab,
+  Mfc00ReadingGuideMapLab,
+  Mfc00ReadingGuideExperimentLab,
+  Mfc00ReadingGuideEvidenceLab,
+  Mfc01Win32ProgramConceptsMapLab,
+  Mfc01Win32ProgramConceptsExperimentLab,
+  Mfc01Win32ProgramConceptsEvidenceLab,
+  Mfc02CppEssentialPropertiesMapLab,
+  Mfc02CppEssentialPropertiesExperimentLab,
+  Mfc02CppEssentialPropertiesEvidenceLab,
+  Mfc03SixKeyTechniquesSimulationMapLab,
+  Mfc03SixKeyTechniquesSimulationExperimentLab,
+  Mfc03SixKeyTechniquesSimulationEvidenceLab,
+  Mfc04VisualCppIdeMapLab,
+  Mfc04VisualCppIdeExperimentLab,
+  Mfc04VisualCppIdeEvidenceLab,
+  Mfc05ApplicationFrameworkOverviewMapLab,
+  Mfc05ApplicationFrameworkOverviewExperimentLab,
+  Mfc05ApplicationFrameworkOverviewEvidenceLab,
+  Mfc06ProgramLifecycleMapLab,
+  Mfc06ProgramLifecycleExperimentLab,
+  Mfc06ProgramLifecycleEvidenceLab,
+  Mfc07FrameworkSkeletonMapLab,
+  Mfc07FrameworkSkeletonExperimentLab,
+  Mfc07FrameworkSkeletonEvidenceLab,
+  Mfc08DocumentViewMapLab,
+  Mfc08DocumentViewExperimentLab,
+  Mfc08DocumentViewEvidenceLab,
+  Mfc09MessageMapCommandRoutingMapLab,
+  Mfc09MessageMapCommandRoutingExperimentLab,
+  Mfc09MessageMapCommandRoutingEvidenceLab,
+  Mfc10DialogsMapLab,
+  Mfc10DialogsExperimentLab,
+  Mfc10DialogsEvidenceLab,
+  Mfc11ViewAndRedrawMapLab,
+  Mfc11ViewAndRedrawExperimentLab,
+  Mfc11ViewAndRedrawEvidenceLab,
+  Mfc12PrintPreviewMapLab,
+  Mfc12PrintPreviewExperimentLab,
+  Mfc12PrintPreviewEvidenceLab,
+  Mfc13MultipleDocumentsViewsMapLab,
+  Mfc13MultipleDocumentsViewsExperimentLab,
+  Mfc13MultipleDocumentsViewsEvidenceLab,
+  Mfc14MultithreadingMapLab,
+  Mfc14MultithreadingExperimentLab,
+  Mfc14MultithreadingEvidenceLab,
+  Mfc15CustomAppwizardMapLab,
+  Mfc15CustomAppwizardExperimentLab,
+  Mfc15CustomAppwizardEvidenceLab,
+  Mfc16ComponentsActivexMapLab,
+  Mfc16ComponentsActivexExperimentLab,
+  Mfc16ComponentsActivexEvidenceLab,
+  MfcAppendixALearningRoadmapMapLab,
+  MfcAppendixALearningRoadmapExperimentLab,
+  MfcAppendixALearningRoadmapEvidenceLab,
+  MfcAppendixBScribbleStep5SourceMapLab,
+  MfcAppendixBScribbleStep5SourceExperimentLab,
+  MfcAppendixBScribbleStep5SourceEvidenceLab,
+  MfcAppendixCSampleCatalogMapLab,
+  MfcAppendixCSampleCatalogExperimentLab,
+  MfcAppendixCSampleCatalogEvidenceLab,
+  MfcAppendixDDbwinMapLab,
+  MfcAppendixDDbwinExperimentLab,
+  MfcAppendixDDbwinEvidenceLab,
+  MfcOfficialFinalReviewMapLab,
+  MfcOfficialFinalReviewExperimentLab,
+  MfcOfficialFinalReviewEvidenceLab,
   MglAlgorithmsDiagram,
   MglBookMap,
   MglCombinatoricsDiagram,
@@ -5505,146 +13479,618 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   MglMachineLearningDiagram,
   MglNumberTheoryDiagram,
   MglProbabilityDiagram,
-  MgpConnectionManagementDiagram,
-  MgpEntityInterpolationDiagram,
-  MgpFinalReviewDiagram,
-  MgpFlowControlDiagram,
-  MgpInternetProtocolDiagram,
-  MgpLearningMapDiagram,
-  MgpNatPunchThroughDiagram,
-  MgpPredictionReconciliationDiagram,
-  MgpReliableUdpDiagram,
-  MgpUdpTcpDiagram,
-  MisBeyondBasicsDiagram,
-  MisElaborationDiagram,
-  MisFeedbackReflectionDiagram,
-  MisFinalReviewDiagram,
-  MisLearningMapDiagram,
-  MisLearningMythsDiagram,
-  MisLifelongLearningDiagram,
-  MisMemoryModelsDiagram,
-  MisRetrievalPracticeDiagram,
-  MisSpacedInterleavingDiagram,
-  MlwBayesianDiagram,
-  MlwClusteringDimreductionDiagram,
-  MlwDecisionTreesDiagram,
-  MlwEnsembleDiagram,
-  MlwFinalReviewDiagram,
-  MlwHypothesisSpaceDiagram,
-  MlwLearningMapDiagram,
-  MlwLinearModelsDiagram,
-  MlwNeuralNetworksDiagram,
-  MlwSupportVectorDiagram,
-  MmmArchitectureDesignDiagram,
-  MmmCommunicationDiagram,
-  MmmFinalReviewDiagram,
-  MmmLearningMapDiagram,
-  MmmLessonsFutureDiagram,
-  MmmManMonthDiagram,
-  MmmNoSilverBulletDiagram,
-  MmmSecondSystemDiagram,
-  MmmSurgicalTeamDiagram,
-  MmmTarPitDiagram,
-  MosDeadlockDiagram,
-  MosDiskSchedulingDiagram,
-  MosFileSystemDiagram,
-  MosFinalReviewDiagram,
-  MosLearningMapDiagram,
-  MosMemoryManagementDiagram,
-  MosPageReplacementDiagram,
-  MosProcessManagementDiagram,
-  MosSecurityProtectionDiagram,
-  MosThreadModelDiagram,
-  MrsAdvancedTypesDiagram,
-  MrsConcurrencyDeepDiagram,
-  MrsFinalReviewDiagram,
-  MrsLearningMapDiagram,
-  MrsMacrosDeepDiagram,
-  MrsMemoryMgmtDiagram,
-  MrsNetworkingDiagram,
-  MrsTraitsAdvancedDiagram,
-  MrsUnsafeDeepDiagram,
-  MrsWebAssemblyDiagram,
-  MseAdvancedSqlDiagram,
-  MseDatabaseDesignDiagram,
-  MseDbAdministrationDiagram,
-  MseFinalReviewDiagram,
-  MseIndexOptimizationDiagram,
-  MseLearningMapDiagram,
-  MseMysqlBasicsDiagram,
-  MseSecurityBackupDiagram,
-  MseSqlFundamentalsDiagram,
-  MseTransactionsDiagram,
-  MsgBusinessLeadershipDiagram,
-  MsgFinalReviewDiagram,
-  MsgFixedMindsetDiagram,
-  MsgGrowthMindsetDiagram,
-  MsgLearningMapDiagram,
-  MsgMindsetInActionDiagram,
-  MsgParentsTeachersDiagram,
-  MsgRelationshipsDiagram,
-  MsgSportsChampionsDiagram,
-  MsgTwoMindsetsDiagram,
-  MspApiGatewayDiagram,
-  MspCqrsDiagram,
-  MspDeploymentPatternsDiagram,
-  MspEventSourcingDiagram,
-  MspFinalReviewDiagram,
-  MspInterServiceCommDiagram,
-  MspLearningMapDiagram,
-  MspMonolithToMicroservicesDiagram,
-  MspSagaPatternDiagram,
-  MspServiceDiscoveryDiagram,
-  NdbgAsyncTracingDiagram,
-  NdbgCpuProfilingDiagram,
-  NdbgDevtoolsDiagram,
-  NdbgFinalReviewDiagram,
-  NdbgFlameGraphDiagram,
-  NdbgHeapSnapshotDiagram,
-  NdbgInspectorProtocolDiagram,
-  NdbgLearningMapDiagram,
-  NdbgMemoryLeaksDiagram,
-  NdbgProductionDebugDiagram,
-  NdgBufferFilesystemDiagram,
-  NdgClusterWorkerDiagram,
-  NdgEventLoopDiagram,
-  NdgFinalReviewDiagram,
-  NdgHttpServerDiagram,
-  NdgLearningMapDiagram,
-  NdgModuleSystemDiagram,
-  NdgPerformanceDebugDiagram,
-  NdgStreamPipeDiagram,
-  NdgTcpTlsDiagram,
-  OocBioMachinesDiagram,
-  OocCoevolutionDiagram,
-  OocControlFailuresDiagram,
-  OocEcosystemsDiagram,
-  OocEmergenceDiagram,
-  OocFinalReviewDiagram,
-  OocFutureTrendsDiagram,
-  OocLearningMapDiagram,
-  OocNetworkEconomyDiagram,
-  OocSwarmIntelligenceDiagram,
-  OptDecisionMakingDiagram,
-  OptEvaluationMetricsDiagram,
-  OptFinalReviewDiagram,
-  OptInnovationCreativityDiagram,
-  OptLearningMapDiagram,
-  OptProblemAnalysisDiagram,
-  OptProcessImprovementDiagram,
-  OptRootCauseDiagram,
-  OptStrategyPlanningDiagram,
-  OptTeamCollaborationDiagram,
-  OscDeadlocksDiagram,
-  OscFileSystemImplDiagram,
-  OscFinalReviewDiagram,
-  OscLearningMapDiagram,
-  OscMassStorageDiagram,
-  OscMemoryStrategiesDiagram,
-  OscOsStructureDiagram,
-  OscProcessSchedulingDiagram,
-  OscThreadsSynchronizationDiagram,
-  OscVirtualMemoryDiagram,
+  Mis18OfficialLearningMapScheduleLab,
+  Mis18OfficialLearningMapRetrievalLab,
+  Mis18OfficialLearningMapCalibrationLab,
+  Mis18Recommendation01ScheduleLab,
+  Mis18Recommendation01RetrievalLab,
+  Mis18Recommendation01CalibrationLab,
+  Mis18Recommendation02ScheduleLab,
+  Mis18Recommendation02RetrievalLab,
+  Mis18Recommendation02CalibrationLab,
+  Mis18PrefaceScheduleLab,
+  Mis18PrefaceRetrievalLab,
+  Mis18PrefaceCalibrationLab,
+  Mis18Chapter01ScheduleLab,
+  Mis18Chapter01RetrievalLab,
+  Mis18Chapter01CalibrationLab,
+  Mis18Chapter02ScheduleLab,
+  Mis18Chapter02RetrievalLab,
+  Mis18Chapter02CalibrationLab,
+  Mis18Chapter03ScheduleLab,
+  Mis18Chapter03RetrievalLab,
+  Mis18Chapter03CalibrationLab,
+  Mis18Chapter04ScheduleLab,
+  Mis18Chapter04RetrievalLab,
+  Mis18Chapter04CalibrationLab,
+  Mis18Chapter05ScheduleLab,
+  Mis18Chapter05RetrievalLab,
+  Mis18Chapter05CalibrationLab,
+  Mis18Chapter06ScheduleLab,
+  Mis18Chapter06RetrievalLab,
+  Mis18Chapter06CalibrationLab,
+  Mis18Chapter07ScheduleLab,
+  Mis18Chapter07RetrievalLab,
+  Mis18Chapter07CalibrationLab,
+  Mis18Chapter08ScheduleLab,
+  Mis18Chapter08RetrievalLab,
+  Mis18Chapter08CalibrationLab,
+  Mis18SuggestedReadingScheduleLab,
+  Mis18SuggestedReadingRetrievalLab,
+  Mis18SuggestedReadingCalibrationLab,
+  Mis18AcknowledgmentsScheduleLab,
+  Mis18AcknowledgmentsRetrievalLab,
+  Mis18AcknowledgmentsCalibrationLab,
+  Mis18OfficialFinalReviewScheduleLab,
+  Mis18OfficialFinalReviewRetrievalLab,
+  Mis18OfficialFinalReviewCalibrationLab,
+  MlwOfficialLearningMapMapLab,
+  MlwOfficialLearningMapExperimentLab,
+  MlwOfficialLearningMapEvidenceLab,
+  Mlw01IntroductionMapLab,
+  Mlw01IntroductionExperimentLab,
+  Mlw01IntroductionEvidenceLab,
+  Mlw02ModelAssessmentSelectionMapLab,
+  Mlw02ModelAssessmentSelectionExperimentLab,
+  Mlw02ModelAssessmentSelectionEvidenceLab,
+  Mlw03LinearModelsMapLab,
+  Mlw03LinearModelsExperimentLab,
+  Mlw03LinearModelsEvidenceLab,
+  Mlw04DecisionTreesMapLab,
+  Mlw04DecisionTreesExperimentLab,
+  Mlw04DecisionTreesEvidenceLab,
+  Mlw05NeuralNetworksMapLab,
+  Mlw05NeuralNetworksExperimentLab,
+  Mlw05NeuralNetworksEvidenceLab,
+  Mlw06SupportVectorMachinesMapLab,
+  Mlw06SupportVectorMachinesExperimentLab,
+  Mlw06SupportVectorMachinesEvidenceLab,
+  Mlw07BayesianClassifiersMapLab,
+  Mlw07BayesianClassifiersExperimentLab,
+  Mlw07BayesianClassifiersEvidenceLab,
+  Mlw08EnsembleLearningMapLab,
+  Mlw08EnsembleLearningExperimentLab,
+  Mlw08EnsembleLearningEvidenceLab,
+  Mlw09ClusteringMapLab,
+  Mlw09ClusteringExperimentLab,
+  Mlw09ClusteringEvidenceLab,
+  Mlw10DimensionalityReductionMetricLearningMapLab,
+  Mlw10DimensionalityReductionMetricLearningExperimentLab,
+  Mlw10DimensionalityReductionMetricLearningEvidenceLab,
+  Mlw11FeatureSelectionSparseLearningMapLab,
+  Mlw11FeatureSelectionSparseLearningExperimentLab,
+  Mlw11FeatureSelectionSparseLearningEvidenceLab,
+  Mlw12ComputationalLearningTheoryMapLab,
+  Mlw12ComputationalLearningTheoryExperimentLab,
+  Mlw12ComputationalLearningTheoryEvidenceLab,
+  Mlw13SemiSupervisedLearningMapLab,
+  Mlw13SemiSupervisedLearningExperimentLab,
+  Mlw13SemiSupervisedLearningEvidenceLab,
+  Mlw14ProbabilisticGraphicalModelsMapLab,
+  Mlw14ProbabilisticGraphicalModelsExperimentLab,
+  Mlw14ProbabilisticGraphicalModelsEvidenceLab,
+  Mlw15RuleLearningMapLab,
+  Mlw15RuleLearningExperimentLab,
+  Mlw15RuleLearningEvidenceLab,
+  Mlw16ReinforcementLearningMapLab,
+  Mlw16ReinforcementLearningExperimentLab,
+  Mlw16ReinforcementLearningEvidenceLab,
+  MlwAppendicesMapLab,
+  MlwAppendicesExperimentLab,
+  MlwAppendicesEvidenceLab,
+  MlwOfficialFinalReviewMapLab,
+  MlwOfficialFinalReviewExperimentLab,
+  MlwOfficialFinalReviewEvidenceLab,
+  Tmm40OfficialLearningMapDependencyLab,
+  Tmm40OfficialLearningMapScheduleLab,
+  Tmm40OfficialLearningMapEvidenceLab,
+  Tmm40TranslatorPrefaceDependencyLab,
+  Tmm40TranslatorPrefaceScheduleLab,
+  Tmm40TranslatorPrefaceEvidenceLab,
+  Tmm4020thAnniversaryPrefaceDependencyLab,
+  Tmm4020thAnniversaryPrefaceScheduleLab,
+  Tmm4020thAnniversaryPrefaceEvidenceLab,
+  Tmm40FirstEditionPrefaceDependencyLab,
+  Tmm40FirstEditionPrefaceScheduleLab,
+  Tmm40FirstEditionPrefaceEvidenceLab,
+  Tmm4001TarPitDependencyLab,
+  Tmm4001TarPitScheduleLab,
+  Tmm4001TarPitEvidenceLab,
+  Tmm4002ManMonthDependencyLab,
+  Tmm4002ManMonthScheduleLab,
+  Tmm4002ManMonthEvidenceLab,
+  Tmm4003SurgicalTeamDependencyLab,
+  Tmm4003SurgicalTeamScheduleLab,
+  Tmm4003SurgicalTeamEvidenceLab,
+  Tmm4004ConceptualIntegrityDependencyLab,
+  Tmm4004ConceptualIntegrityScheduleLab,
+  Tmm4004ConceptualIntegrityEvidenceLab,
+  Tmm4005SecondSystemEffectDependencyLab,
+  Tmm4005SecondSystemEffectScheduleLab,
+  Tmm4005SecondSystemEffectEvidenceLab,
+  Tmm4006PassingTheWordDependencyLab,
+  Tmm4006PassingTheWordScheduleLab,
+  Tmm4006PassingTheWordEvidenceLab,
+  Tmm4007BabelDependencyLab,
+  Tmm4007BabelScheduleLab,
+  Tmm4007BabelEvidenceLab,
+  Tmm4008CallingTheShotDependencyLab,
+  Tmm4008CallingTheShotScheduleLab,
+  Tmm4008CallingTheShotEvidenceLab,
+  Tmm4009TenPoundsDependencyLab,
+  Tmm4009TenPoundsScheduleLab,
+  Tmm4009TenPoundsEvidenceLab,
+  Tmm4010DocumentaryHypothesisDependencyLab,
+  Tmm4010DocumentaryHypothesisScheduleLab,
+  Tmm4010DocumentaryHypothesisEvidenceLab,
+  Tmm4011PlanToThrowOneAwayDependencyLab,
+  Tmm4011PlanToThrowOneAwayScheduleLab,
+  Tmm4011PlanToThrowOneAwayEvidenceLab,
+  Tmm4012SharpToolsDependencyLab,
+  Tmm4012SharpToolsScheduleLab,
+  Tmm4012SharpToolsEvidenceLab,
+  Tmm4013WholeAndPartsDependencyLab,
+  Tmm4013WholeAndPartsScheduleLab,
+  Tmm4013WholeAndPartsEvidenceLab,
+  Tmm4014HatchingCatastropheDependencyLab,
+  Tmm4014HatchingCatastropheScheduleLab,
+  Tmm4014HatchingCatastropheEvidenceLab,
+  Tmm4015OtherFaceDependencyLab,
+  Tmm4015OtherFaceScheduleLab,
+  Tmm4015OtherFaceEvidenceLab,
+  Tmm4016NoSilverBulletDependencyLab,
+  Tmm4016NoSilverBulletScheduleLab,
+  Tmm4016NoSilverBulletEvidenceLab,
+  Tmm4017NoSilverBulletRefiredDependencyLab,
+  Tmm4017NoSilverBulletRefiredScheduleLab,
+  Tmm4017NoSilverBulletRefiredEvidenceLab,
+  Tmm4018PropositionsDependencyLab,
+  Tmm4018PropositionsScheduleLab,
+  Tmm4018PropositionsEvidenceLab,
+  Tmm4019TwentyYearsLaterDependencyLab,
+  Tmm4019TwentyYearsLaterScheduleLab,
+  Tmm4019TwentyYearsLaterEvidenceLab,
+  Tmm40NotesReferencesDependencyLab,
+  Tmm40NotesReferencesScheduleLab,
+  Tmm40NotesReferencesEvidenceLab,
+  Tmm40AppendixPracticeDependencyLab,
+  Tmm40AppendixPracticeScheduleLab,
+  Tmm40AppendixPracticeEvidenceLab,
+  Tmm40OfficialFinalReviewDependencyLab,
+  Tmm40OfficialFinalReviewScheduleLab,
+  Tmm40OfficialFinalReviewEvidenceLab,
+  MosOfficialLearningMapMapLab,
+  MosOfficialLearningMapExperimentLab,
+  MosOfficialLearningMapEvidenceLab,
+  Mos01IntroductionMapLab,
+  Mos01IntroductionExperimentLab,
+  Mos01IntroductionEvidenceLab,
+  Mos02ProcessesThreadsMapLab,
+  Mos02ProcessesThreadsExperimentLab,
+  Mos02ProcessesThreadsEvidenceLab,
+  Mos03MemoryManagementMapLab,
+  Mos03MemoryManagementExperimentLab,
+  Mos03MemoryManagementEvidenceLab,
+  Mos04FileSystemsMapLab,
+  Mos04FileSystemsExperimentLab,
+  Mos04FileSystemsEvidenceLab,
+  Mos05InputOutputMapLab,
+  Mos05InputOutputExperimentLab,
+  Mos05InputOutputEvidenceLab,
+  Mos06DeadlocksMapLab,
+  Mos06DeadlocksExperimentLab,
+  Mos06DeadlocksEvidenceLab,
+  Mos07VirtualizationCloudMapLab,
+  Mos07VirtualizationCloudExperimentLab,
+  Mos07VirtualizationCloudEvidenceLab,
+  Mos08MultipleProcessorSystemsMapLab,
+  Mos08MultipleProcessorSystemsExperimentLab,
+  Mos08MultipleProcessorSystemsEvidenceLab,
+  Mos09SecurityMapLab,
+  Mos09SecurityExperimentLab,
+  Mos09SecurityEvidenceLab,
+  Mos10UnixLinuxAndroidMapLab,
+  Mos10UnixLinuxAndroidExperimentLab,
+  Mos10UnixLinuxAndroidEvidenceLab,
+  Mos11Windows8MapLab,
+  Mos11Windows8ExperimentLab,
+  Mos11Windows8EvidenceLab,
+  Mos12OsDesignMapLab,
+  Mos12OsDesignExperimentLab,
+  Mos12OsDesignEvidenceLab,
+  Mos13BibliographyMapLab,
+  Mos13BibliographyExperimentLab,
+  Mos13BibliographyEvidenceLab,
+  MosOfficialFinalReviewMapLab,
+  MosOfficialFinalReviewExperimentLab,
+  MosOfficialFinalReviewEvidenceLab,
+  Msg17OfficialLearningMapDiagnosisLab,
+  Msg17OfficialLearningMapExperimentLab,
+  Msg17OfficialLearningMapTransferLab,
+  Msg17IntroductionDiagnosisLab,
+  Msg17IntroductionExperimentLab,
+  Msg17IntroductionTransferLab,
+  Msg17Chapter01DiagnosisLab,
+  Msg17Chapter01ExperimentLab,
+  Msg17Chapter01TransferLab,
+  Msg17Chapter02DiagnosisLab,
+  Msg17Chapter02ExperimentLab,
+  Msg17Chapter02TransferLab,
+  Msg17Chapter03DiagnosisLab,
+  Msg17Chapter03ExperimentLab,
+  Msg17Chapter03TransferLab,
+  Msg17Chapter04DiagnosisLab,
+  Msg17Chapter04ExperimentLab,
+  Msg17Chapter04TransferLab,
+  Msg17Chapter05DiagnosisLab,
+  Msg17Chapter05ExperimentLab,
+  Msg17Chapter05TransferLab,
+  Msg17Chapter06DiagnosisLab,
+  Msg17Chapter06ExperimentLab,
+  Msg17Chapter06TransferLab,
+  Msg17Chapter07DiagnosisLab,
+  Msg17Chapter07ExperimentLab,
+  Msg17Chapter07TransferLab,
+  Msg17Chapter08DiagnosisLab,
+  Msg17Chapter08ExperimentLab,
+  Msg17Chapter08TransferLab,
+  Msg17PublishingPostscriptDiagnosisLab,
+  Msg17PublishingPostscriptExperimentLab,
+  Msg17PublishingPostscriptTransferLab,
+  Msg17OfficialFinalReviewDiagnosisLab,
+  Msg17OfficialFinalReviewExperimentLab,
+  Msg17OfficialFinalReviewTransferLab,
+  AdpOfficialLearningMapArchitectureLab,
+  AdpOfficialLearningMapCounterexampleLab,
+  AdpOfficialLearningMapEvidenceLab,
+  AdpPrefaceArchitectureLab,
+  AdpPrefaceCounterexampleLab,
+  AdpPrefaceEvidenceLab,
+  Adp01AndroidAppBasicStructureArchitectureLab,
+  Adp01AndroidAppBasicStructureCounterexampleLab,
+  Adp01AndroidAppBasicStructureEvidenceLab,
+  Adp02MvvmApplicationStructureArchitectureLab,
+  Adp02MvvmApplicationStructureCounterexampleLab,
+  Adp02MvvmApplicationStructureEvidenceLab,
+  Adp03MvpApplicationStructureArchitectureLab,
+  Adp03MvpApplicationStructureCounterexampleLab,
+  Adp03MvpApplicationStructureEvidenceLab,
+  Adp04IncrementalDevelopmentDesignArchitectureLab,
+  Adp04IncrementalDevelopmentDesignCounterexampleLab,
+  Adp04IncrementalDevelopmentDesignEvidenceLab,
+  Adp05DesignerRoleInOssArchitectureLab,
+  Adp05DesignerRoleInOssCounterexampleLab,
+  Adp05DesignerRoleInOssEvidenceLab,
+  Adp06FluxArchitectureArchitectureLab,
+  Adp06FluxArchitectureCounterexampleLab,
+  Adp06FluxArchitectureEvidenceLab,
+  Adp07TeamAndArchitectureArchitectureLab,
+  Adp07TeamAndArchitectureCounterexampleLab,
+  Adp07TeamAndArchitectureEvidenceLab,
+  Adp08AndroidArchitectureComponentsArchitectureLab,
+  Adp08AndroidArchitectureComponentsCounterexampleLab,
+  Adp08AndroidArchitectureComponentsEvidenceLab,
+  AdpAfterwordArchitectureLab,
+  AdpAfterwordCounterexampleLab,
+  AdpAfterwordEvidenceLab,
+  AdpIndexArchitectureLab,
+  AdpIndexCounterexampleLab,
+  AdpIndexEvidenceLab,
+  AdpAuthorProfilesArchitectureLab,
+  AdpAuthorProfilesCounterexampleLab,
+  AdpAuthorProfilesEvidenceLab,
+  AdpOfficialFinalReviewArchitectureLab,
+  AdpOfficialFinalReviewCounterexampleLab,
+  AdpOfficialFinalReviewEvidenceLab,
+  Aad8OfficialLearningMapTraceLab,
+  Aad8OfficialLearningMapFaultLab,
+  Aad8OfficialLearningMapEvidenceLab,
+  Aad801AndroidSystemArchitectureTraceLab,
+  Aad801AndroidSystemArchitectureFaultLab,
+  Aad801AndroidSystemArchitectureEvidenceLab,
+  Aad802AndroidSystemStartupTraceLab,
+  Aad802AndroidSystemStartupFaultLab,
+  Aad802AndroidSystemStartupEvidenceLab,
+  Aad803AppProcessStartupTraceLab,
+  Aad803AppProcessStartupFaultLab,
+  Aad803AppProcessStartupEvidenceLab,
+  Aad804FourComponentsWorkflowTraceLab,
+  Aad804FourComponentsWorkflowFaultLab,
+  Aad804FourComponentsWorkflowEvidenceLab,
+  Aad805ContextTraceLab,
+  Aad805ContextFaultLab,
+  Aad805ContextEvidenceLab,
+  Aad806ActivityManagerServiceTraceLab,
+  Aad806ActivityManagerServiceFaultLab,
+  Aad806ActivityManagerServiceEvidenceLab,
+  Aad807WindowManagerTraceLab,
+  Aad807WindowManagerFaultLab,
+  Aad807WindowManagerEvidenceLab,
+  Aad808WindowManagerServiceTraceLab,
+  Aad808WindowManagerServiceFaultLab,
+  Aad808WindowManagerServiceEvidenceLab,
+  Aad809JniTraceLab,
+  Aad809JniFaultLab,
+  Aad809JniEvidenceLab,
+  Aad810JavaVirtualMachineTraceLab,
+  Aad810JavaVirtualMachineFaultLab,
+  Aad810JavaVirtualMachineEvidenceLab,
+  Aad811DalvikArtTraceLab,
+  Aad811DalvikArtFaultLab,
+  Aad811DalvikArtEvidenceLab,
+  Aad812ClassLoaderTraceLab,
+  Aad812ClassLoaderFaultLab,
+  Aad812ClassLoaderEvidenceLab,
+  Aad813HotfixTraceLab,
+  Aad813HotfixFaultLab,
+  Aad813HotfixEvidenceLab,
+  Aad814HookTraceLab,
+  Aad814HookFaultLab,
+  Aad814HookEvidenceLab,
+  Aad815PluginizationTraceLab,
+  Aad815PluginizationFaultLab,
+  Aad815PluginizationEvidenceLab,
+  Aad816RenderingOptimizationTraceLab,
+  Aad816RenderingOptimizationFaultLab,
+  Aad816RenderingOptimizationEvidenceLab,
+  Aad817MemoryOptimizationTraceLab,
+  Aad817MemoryOptimizationFaultLab,
+  Aad817MemoryOptimizationEvidenceLab,
+  Aad8OfficialFinalReviewTraceLab,
+  Aad8OfficialFinalReviewFaultLab,
+  Aad8OfficialFinalReviewEvidenceLab,
+  MspOfficialLearningMapPatternLab,
+  MspOfficialLearningMapFailureLab,
+  MspOfficialLearningMapEvidenceLab,
+  Msp01EscapingMonolithicHellPatternLab,
+  Msp01EscapingMonolithicHellFailureLab,
+  Msp01EscapingMonolithicHellEvidenceLab,
+  Msp02DecompositionStrategiesPatternLab,
+  Msp02DecompositionStrategiesFailureLab,
+  Msp02DecompositionStrategiesEvidenceLab,
+  Msp03InterprocessCommunicationPatternLab,
+  Msp03InterprocessCommunicationFailureLab,
+  Msp03InterprocessCommunicationEvidenceLab,
+  Msp04ManagingTransactionsWithSagasPatternLab,
+  Msp04ManagingTransactionsWithSagasFailureLab,
+  Msp04ManagingTransactionsWithSagasEvidenceLab,
+  Msp05DesigningBusinessLogicPatternLab,
+  Msp05DesigningBusinessLogicFailureLab,
+  Msp05DesigningBusinessLogicEvidenceLab,
+  Msp06EventSourcingPatternLab,
+  Msp06EventSourcingFailureLab,
+  Msp06EventSourcingEvidenceLab,
+  Msp07ImplementingQueriesPatternLab,
+  Msp07ImplementingQueriesFailureLab,
+  Msp07ImplementingQueriesEvidenceLab,
+  Msp08ExternalApiPatternsPatternLab,
+  Msp08ExternalApiPatternsFailureLab,
+  Msp08ExternalApiPatternsEvidenceLab,
+  Msp09TestingPart1PatternLab,
+  Msp09TestingPart1FailureLab,
+  Msp09TestingPart1EvidenceLab,
+  Msp10TestingPart2PatternLab,
+  Msp10TestingPart2FailureLab,
+  Msp10TestingPart2EvidenceLab,
+  Msp11ProductionReadyServicesPatternLab,
+  Msp11ProductionReadyServicesFailureLab,
+  Msp11ProductionReadyServicesEvidenceLab,
+  Msp12DeployingMicroservicesPatternLab,
+  Msp12DeployingMicroservicesFailureLab,
+  Msp12DeployingMicroservicesEvidenceLab,
+  Msp13RefactoringToMicroservicesPatternLab,
+  Msp13RefactoringToMicroservicesFailureLab,
+  Msp13RefactoringToMicroservicesEvidenceLab,
+  MspOfficialFinalReviewPatternLab,
+  MspOfficialFinalReviewFailureLab,
+  MspOfficialFinalReviewEvidenceLab,
+  NdbgOfficialLearningMapMapLab,
+  NdbgOfficialLearningMapExperimentLab,
+  NdbgOfficialLearningMapEvidenceLab,
+  Ndbg01CpuMapLab,
+  Ndbg01CpuExperimentLab,
+  Ndbg01CpuEvidenceLab,
+  Ndbg02MemoryMapLab,
+  Ndbg02MemoryExperimentLab,
+  Ndbg02MemoryEvidenceLab,
+  Ndbg03CodeMapLab,
+  Ndbg03CodeExperimentLab,
+  Ndbg03CodeEvidenceLab,
+  Ndbg04ToolsMapLab,
+  Ndbg04ToolsExperimentLab,
+  Ndbg04ToolsEvidenceLab,
+  Ndbg05LoggingMapLab,
+  Ndbg05LoggingExperimentLab,
+  Ndbg05LoggingEvidenceLab,
+  Ndbg06ApmMapLab,
+  Ndbg06ApmExperimentLab,
+  Ndbg06ApmEvidenceLab,
+  Ndbg07MonitoringMapLab,
+  Ndbg07MonitoringExperimentLab,
+  Ndbg07MonitoringEvidenceLab,
+  Ndbg08ApplicationsMapLab,
+  Ndbg08ApplicationsExperimentLab,
+  Ndbg08ApplicationsEvidenceLab,
+  NdbgOfficialFinalReviewMapLab,
+  NdbgOfficialFinalReviewExperimentLab,
+  NdbgOfficialFinalReviewEvidenceLab,
+  Ooc16OfficialLearningMapMapLab,
+  Ooc16OfficialLearningMapExperimentLab,
+  Ooc16OfficialLearningMapEvidenceLab,
+  Ooc16ChinesePrefaceMapLab,
+  Ooc16ChinesePrefaceExperimentLab,
+  Ooc16ChinesePrefaceEvidenceLab,
+  Ooc16Chapter01MapLab,
+  Ooc16Chapter01ExperimentLab,
+  Ooc16Chapter01EvidenceLab,
+  Ooc16Chapter02MapLab,
+  Ooc16Chapter02ExperimentLab,
+  Ooc16Chapter02EvidenceLab,
+  Ooc16Chapter03MapLab,
+  Ooc16Chapter03ExperimentLab,
+  Ooc16Chapter03EvidenceLab,
+  Ooc16Chapter04MapLab,
+  Ooc16Chapter04ExperimentLab,
+  Ooc16Chapter04EvidenceLab,
+  Ooc16Chapter05MapLab,
+  Ooc16Chapter05ExperimentLab,
+  Ooc16Chapter05EvidenceLab,
+  Ooc16Chapter06MapLab,
+  Ooc16Chapter06ExperimentLab,
+  Ooc16Chapter06EvidenceLab,
+  Ooc16Chapter07MapLab,
+  Ooc16Chapter07ExperimentLab,
+  Ooc16Chapter07EvidenceLab,
+  Ooc16Chapter08MapLab,
+  Ooc16Chapter08ExperimentLab,
+  Ooc16Chapter08EvidenceLab,
+  Ooc16Chapter09MapLab,
+  Ooc16Chapter09ExperimentLab,
+  Ooc16Chapter09EvidenceLab,
+  Ooc16Chapter10MapLab,
+  Ooc16Chapter10ExperimentLab,
+  Ooc16Chapter10EvidenceLab,
+  Ooc16Chapter11MapLab,
+  Ooc16Chapter11ExperimentLab,
+  Ooc16Chapter11EvidenceLab,
+  Ooc16Chapter12MapLab,
+  Ooc16Chapter12ExperimentLab,
+  Ooc16Chapter12EvidenceLab,
+  Ooc16Chapter13MapLab,
+  Ooc16Chapter13ExperimentLab,
+  Ooc16Chapter13EvidenceLab,
+  Ooc16Chapter14MapLab,
+  Ooc16Chapter14ExperimentLab,
+  Ooc16Chapter14EvidenceLab,
+  Ooc16Chapter15MapLab,
+  Ooc16Chapter15ExperimentLab,
+  Ooc16Chapter15EvidenceLab,
+  Ooc16Chapter16MapLab,
+  Ooc16Chapter16ExperimentLab,
+  Ooc16Chapter16EvidenceLab,
+  Ooc16Chapter17MapLab,
+  Ooc16Chapter17ExperimentLab,
+  Ooc16Chapter17EvidenceLab,
+  Ooc16Chapter18MapLab,
+  Ooc16Chapter18ExperimentLab,
+  Ooc16Chapter18EvidenceLab,
+  Ooc16Chapter19MapLab,
+  Ooc16Chapter19ExperimentLab,
+  Ooc16Chapter19EvidenceLab,
+  Ooc16Chapter20MapLab,
+  Ooc16Chapter20ExperimentLab,
+  Ooc16Chapter20EvidenceLab,
+  Ooc16Chapter21MapLab,
+  Ooc16Chapter21ExperimentLab,
+  Ooc16Chapter21EvidenceLab,
+  Ooc16Chapter22MapLab,
+  Ooc16Chapter22ExperimentLab,
+  Ooc16Chapter22EvidenceLab,
+  Ooc16Chapter23MapLab,
+  Ooc16Chapter23ExperimentLab,
+  Ooc16Chapter23EvidenceLab,
+  Ooc16Chapter24MapLab,
+  Ooc16Chapter24ExperimentLab,
+  Ooc16Chapter24EvidenceLab,
+  Ooc16TranslatorPostscriptMapLab,
+  Ooc16TranslatorPostscriptExperimentLab,
+  Ooc16TranslatorPostscriptEvidenceLab,
+  Ooc16OfficialFinalReviewMapLab,
+  Ooc16OfficialFinalReviewExperimentLab,
+  Ooc16OfficialFinalReviewEvidenceLab,
+  Opt23OfficialLearningMapMapLab,
+  Opt23OfficialLearningMapExperimentLab,
+  Opt23OfficialLearningMapEvidenceLab,
+  Opt23IntroductionMapLab,
+  Opt23IntroductionExperimentLab,
+  Opt23IntroductionEvidenceLab,
+  Opt23Chapter01MapLab,
+  Opt23Chapter01ExperimentLab,
+  Opt23Chapter01EvidenceLab,
+  Opt23Chapter02MapLab,
+  Opt23Chapter02ExperimentLab,
+  Opt23Chapter02EvidenceLab,
+  Opt23Chapter03MapLab,
+  Opt23Chapter03ExperimentLab,
+  Opt23Chapter03EvidenceLab,
+  Opt23Chapter04MapLab,
+  Opt23Chapter04ExperimentLab,
+  Opt23Chapter04EvidenceLab,
+  Opt23AfterwordMapLab,
+  Opt23AfterwordExperimentLab,
+  Opt23AfterwordEvidenceLab,
+  Opt23OfficialFinalReviewMapLab,
+  Opt23OfficialFinalReviewExperimentLab,
+  Opt23OfficialFinalReviewEvidenceLab,
+  OscOfficialLearningMapMapLab,
+  OscOfficialLearningMapExperimentLab,
+  OscOfficialLearningMapEvidenceLab,
+  Osc01IntroductionMapLab,
+  Osc01IntroductionExperimentLab,
+  Osc01IntroductionEvidenceLab,
+  Osc02OsStructuresMapLab,
+  Osc02OsStructuresExperimentLab,
+  Osc02OsStructuresEvidenceLab,
+  Osc03ProcessesMapLab,
+  Osc03ProcessesExperimentLab,
+  Osc03ProcessesEvidenceLab,
+  Osc04ThreadsConcurrencyMapLab,
+  Osc04ThreadsConcurrencyExperimentLab,
+  Osc04ThreadsConcurrencyEvidenceLab,
+  Osc05CpuSchedulingMapLab,
+  Osc05CpuSchedulingExperimentLab,
+  Osc05CpuSchedulingEvidenceLab,
+  Osc06SynchronizationToolsMapLab,
+  Osc06SynchronizationToolsExperimentLab,
+  Osc06SynchronizationToolsEvidenceLab,
+  Osc07SynchronizationExamplesMapLab,
+  Osc07SynchronizationExamplesExperimentLab,
+  Osc07SynchronizationExamplesEvidenceLab,
+  Osc08DeadlocksMapLab,
+  Osc08DeadlocksExperimentLab,
+  Osc08DeadlocksEvidenceLab,
+  Osc09MainMemoryMapLab,
+  Osc09MainMemoryExperimentLab,
+  Osc09MainMemoryEvidenceLab,
+  Osc10VirtualMemoryMapLab,
+  Osc10VirtualMemoryExperimentLab,
+  Osc10VirtualMemoryEvidenceLab,
+  Osc11MassStorageMapLab,
+  Osc11MassStorageExperimentLab,
+  Osc11MassStorageEvidenceLab,
+  Osc12IoSystemsMapLab,
+  Osc12IoSystemsExperimentLab,
+  Osc12IoSystemsEvidenceLab,
+  Osc13FileSystemInterfaceMapLab,
+  Osc13FileSystemInterfaceExperimentLab,
+  Osc13FileSystemInterfaceEvidenceLab,
+  Osc14FileSystemImplementationMapLab,
+  Osc14FileSystemImplementationExperimentLab,
+  Osc14FileSystemImplementationEvidenceLab,
+  Osc15FileSystemInternalsMapLab,
+  Osc15FileSystemInternalsExperimentLab,
+  Osc15FileSystemInternalsEvidenceLab,
+  Osc16SecurityMapLab,
+  Osc16SecurityExperimentLab,
+  Osc16SecurityEvidenceLab,
+  Osc17ProtectionMapLab,
+  Osc17ProtectionExperimentLab,
+  Osc17ProtectionEvidenceLab,
+  Osc18VirtualMachinesMapLab,
+  Osc18VirtualMachinesExperimentLab,
+  Osc18VirtualMachinesEvidenceLab,
+  Osc19NetworkDistributedMapLab,
+  Osc19NetworkDistributedExperimentLab,
+  Osc19NetworkDistributedEvidenceLab,
+  Osc20LinuxMapLab,
+  Osc20LinuxExperimentLab,
+  Osc20LinuxEvidenceLab,
+  Osc21Windows10MapLab,
+  Osc21Windows10ExperimentLab,
+  Osc21Windows10EvidenceLab,
+  OscOfficialFinalReviewMapLab,
+  OscOfficialFinalReviewExperimentLab,
+  OscOfficialFinalReviewEvidenceLab,
   PatternDiagramViewport,
   PbtBxdfDiagram,
   PbtBxdfLobesDiagram,
@@ -5690,164 +14136,649 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   PbtTransmittanceDiagram,
   PbtVolumeProcessesDiagram,
   PbtVolumeScatteringDiagram,
-  PccClassesDiagram,
-  PccDataVizDiagram,
-  PccFilesExceptionsDiagram,
-  PccFinalReviewDiagram,
-  PccFunctionsDiagram,
-  PccGameDevDiagram,
-  PccIfLoopsDiagram,
-  PccLearningMapDiagram,
-  PccTestingDiagram,
-  PccVariablesListsDiagram,
-  PdpCoachingFeedbackDiagram,
-  PdpCrossingPlateausDiagram,
-  PdpDeliberatePracticeDiagram,
-  PdpEverydayLifeDiagram,
-  PdpExpertiseLifeDiagram,
-  PdpFinalReviewDiagram,
-  PdpGoldenStandardDiagram,
-  PdpLearningMapDiagram,
-  PdpMentalRepresentationsDiagram,
-  PdpWhatIsPracticeDiagram,
-  PhaArchitectureEvolutionDiagram,
-  PhaCachingPatternsDiagram,
-  PhaConsensusConsistencyDiagram,
-  PhaDistributedFundamentalsDiagram,
-  PhaDistributedTransactionsDiagram,
-  PhaFinalReviewDiagram,
-  PhaFutureArchitectureDiagram,
-  PhaLearningMapDiagram,
-  PhaMonolithToMicroserviceDiagram,
-  PhaReliableCommunicationDiagram,
-  PmBookMap,
-  PmDistributionsDiagram,
-  PmEncryptionDiagram,
-  PmFinalReviewDiagram,
-  PmPermutationsDiagram,
-  PmProbabilityDiagram,
-  PmRandomVariablesDiagram,
-  PmRecurrenceDiagram,
-  PmStatisticsDiagram,
-  PmZeroAndOneDiagram,
-  PoaConcurrencySessionDiagram,
-  PoaDataSourceDiagram,
-  PoaDistributionDiagram,
-  PoaDomainLogicDiagram,
-  PoaFinalReviewDiagram,
-  PoaLayeredArchitectureDiagram,
-  PoaLearningMapDiagram,
-  PoaObjectRelationalDiagram,
-  PoaSpecialPatternsDiagram,
-  PoaWebPresentationDiagram,
-  PopConfigMgmtDiagram,
-  PopFileOpsDiagram,
-  PopFinalReviewDiagram,
-  PopLearningMapDiagram,
-  PopMonitoringAlertingDiagram,
-  PopNetworkAutomationDiagram,
-  PopProcessMgmtDiagram,
-  PopPythonOpsBasicsDiagram,
-  PopSshParamikoDiagram,
-  PopWebScrapingDiagram,
-  PpApproachDiagram,
+  Pdp16OfficialLearningMapDesignLab,
+  Pdp16OfficialLearningMapFeedbackLab,
+  Pdp16OfficialLearningMapTransferLab,
+  Pdp16CopyrightDesignLab,
+  Pdp16CopyrightFeedbackLab,
+  Pdp16CopyrightTransferLab,
+  Pdp16ToReadersDesignLab,
+  Pdp16ToReadersFeedbackLab,
+  Pdp16ToReadersTransferLab,
+  Pdp16PraiseDesignLab,
+  Pdp16PraiseFeedbackLab,
+  Pdp16PraiseTransferLab,
+  Pdp16RecommendationDesignLab,
+  Pdp16RecommendationFeedbackLab,
+  Pdp16RecommendationTransferLab,
+  Pdp16AuthorStatementDesignLab,
+  Pdp16AuthorStatementFeedbackLab,
+  Pdp16AuthorStatementTransferLab,
+  Pdp16IntroductionDesignLab,
+  Pdp16IntroductionFeedbackLab,
+  Pdp16IntroductionTransferLab,
+  Pdp16Chapter01DesignLab,
+  Pdp16Chapter01FeedbackLab,
+  Pdp16Chapter01TransferLab,
+  Pdp16Chapter02DesignLab,
+  Pdp16Chapter02FeedbackLab,
+  Pdp16Chapter02TransferLab,
+  Pdp16Chapter03DesignLab,
+  Pdp16Chapter03FeedbackLab,
+  Pdp16Chapter03TransferLab,
+  Pdp16Chapter04DesignLab,
+  Pdp16Chapter04FeedbackLab,
+  Pdp16Chapter04TransferLab,
+  Pdp16Chapter05DesignLab,
+  Pdp16Chapter05FeedbackLab,
+  Pdp16Chapter05TransferLab,
+  Pdp16Chapter06DesignLab,
+  Pdp16Chapter06FeedbackLab,
+  Pdp16Chapter06TransferLab,
+  Pdp16Chapter07DesignLab,
+  Pdp16Chapter07FeedbackLab,
+  Pdp16Chapter07TransferLab,
+  Pdp16Chapter08DesignLab,
+  Pdp16Chapter08FeedbackLab,
+  Pdp16Chapter08TransferLab,
+  Pdp16Chapter09DesignLab,
+  Pdp16Chapter09FeedbackLab,
+  Pdp16Chapter09TransferLab,
+  Pdp16ReferencesNotesDesignLab,
+  Pdp16ReferencesNotesFeedbackLab,
+  Pdp16ReferencesNotesTransferLab,
+  Pdp16OfficialFinalReviewDesignLab,
+  Pdp16OfficialFinalReviewFeedbackLab,
+  Pdp16OfficialFinalReviewTransferLab,
+  Poeaa24OfficialLearningMapBoundaryLab,
+  Poeaa24OfficialLearningMapMappingLab,
+  Poeaa24OfficialLearningMapTransactionLab,
+  Poeaa24TranslatorPrefaceBoundaryLab,
+  Poeaa24TranslatorPrefaceMappingLab,
+  Poeaa24TranslatorPrefaceTransactionLab,
+  Poeaa24PrefaceBoundaryLab,
+  Poeaa24PrefaceMappingLab,
+  Poeaa24PrefaceTransactionLab,
+  Poeaa24PatternListBoundaryLab,
+  Poeaa24PatternListMappingLab,
+  Poeaa24PatternListTransactionLab,
+  Poeaa24IntroductionBoundaryLab,
+  Poeaa24IntroductionMappingLab,
+  Poeaa24IntroductionTransactionLab,
+  Poeaa24Part01NarrativesBoundaryLab,
+  Poeaa24Part01NarrativesMappingLab,
+  Poeaa24Part01NarrativesTransactionLab,
+  Poeaa24Chapter01LayeringBoundaryLab,
+  Poeaa24Chapter01LayeringMappingLab,
+  Poeaa24Chapter01LayeringTransactionLab,
+  Poeaa24Chapter02OrganizingDomainLogicBoundaryLab,
+  Poeaa24Chapter02OrganizingDomainLogicMappingLab,
+  Poeaa24Chapter02OrganizingDomainLogicTransactionLab,
+  Poeaa24Chapter03RelationalMappingBoundaryLab,
+  Poeaa24Chapter03RelationalMappingMappingLab,
+  Poeaa24Chapter03RelationalMappingTransactionLab,
+  Poeaa24Chapter04WebPresentationBoundaryLab,
+  Poeaa24Chapter04WebPresentationMappingLab,
+  Poeaa24Chapter04WebPresentationTransactionLab,
+  Poeaa24Chapter05ConcurrencyBoundaryLab,
+  Poeaa24Chapter05ConcurrencyMappingLab,
+  Poeaa24Chapter05ConcurrencyTransactionLab,
+  Poeaa24Chapter06SessionStateBoundaryLab,
+  Poeaa24Chapter06SessionStateMappingLab,
+  Poeaa24Chapter06SessionStateTransactionLab,
+  Poeaa24Chapter07DistributionStrategiesBoundaryLab,
+  Poeaa24Chapter07DistributionStrategiesMappingLab,
+  Poeaa24Chapter07DistributionStrategiesTransactionLab,
+  Poeaa24Chapter08PuttingTogetherBoundaryLab,
+  Poeaa24Chapter08PuttingTogetherMappingLab,
+  Poeaa24Chapter08PuttingTogetherTransactionLab,
+  Poeaa24Part02PatternsBoundaryLab,
+  Poeaa24Part02PatternsMappingLab,
+  Poeaa24Part02PatternsTransactionLab,
+  Poeaa24Chapter09DomainLogicPatternsBoundaryLab,
+  Poeaa24Chapter09DomainLogicPatternsMappingLab,
+  Poeaa24Chapter09DomainLogicPatternsTransactionLab,
+  Poeaa24Pattern01TransactionScriptBoundaryLab,
+  Poeaa24Pattern01TransactionScriptMappingLab,
+  Poeaa24Pattern01TransactionScriptTransactionLab,
+  Poeaa24Pattern02DomainModelBoundaryLab,
+  Poeaa24Pattern02DomainModelMappingLab,
+  Poeaa24Pattern02DomainModelTransactionLab,
+  Poeaa24Pattern03TableModuleBoundaryLab,
+  Poeaa24Pattern03TableModuleMappingLab,
+  Poeaa24Pattern03TableModuleTransactionLab,
+  Poeaa24Pattern04ServiceLayerBoundaryLab,
+  Poeaa24Pattern04ServiceLayerMappingLab,
+  Poeaa24Pattern04ServiceLayerTransactionLab,
+  Poeaa24Chapter10DataSourcePatternsBoundaryLab,
+  Poeaa24Chapter10DataSourcePatternsMappingLab,
+  Poeaa24Chapter10DataSourcePatternsTransactionLab,
+  Poeaa24Pattern05TableDataGatewayBoundaryLab,
+  Poeaa24Pattern05TableDataGatewayMappingLab,
+  Poeaa24Pattern05TableDataGatewayTransactionLab,
+  Poeaa24Pattern06RowDataGatewayBoundaryLab,
+  Poeaa24Pattern06RowDataGatewayMappingLab,
+  Poeaa24Pattern06RowDataGatewayTransactionLab,
+  Poeaa24Pattern07ActiveRecordBoundaryLab,
+  Poeaa24Pattern07ActiveRecordMappingLab,
+  Poeaa24Pattern07ActiveRecordTransactionLab,
+  Poeaa24Pattern08DataMapperBoundaryLab,
+  Poeaa24Pattern08DataMapperMappingLab,
+  Poeaa24Pattern08DataMapperTransactionLab,
+  Poeaa24Chapter11ObjectRelationalBehaviorBoundaryLab,
+  Poeaa24Chapter11ObjectRelationalBehaviorMappingLab,
+  Poeaa24Chapter11ObjectRelationalBehaviorTransactionLab,
+  Poeaa24Pattern09UnitOfWorkBoundaryLab,
+  Poeaa24Pattern09UnitOfWorkMappingLab,
+  Poeaa24Pattern09UnitOfWorkTransactionLab,
+  Poeaa24Pattern10IdentityMapBoundaryLab,
+  Poeaa24Pattern10IdentityMapMappingLab,
+  Poeaa24Pattern10IdentityMapTransactionLab,
+  Poeaa24Pattern11LazyLoadBoundaryLab,
+  Poeaa24Pattern11LazyLoadMappingLab,
+  Poeaa24Pattern11LazyLoadTransactionLab,
+  Poeaa24Chapter12ObjectRelationalStructureBoundaryLab,
+  Poeaa24Chapter12ObjectRelationalStructureMappingLab,
+  Poeaa24Chapter12ObjectRelationalStructureTransactionLab,
+  Poeaa24Pattern12IdentityFieldBoundaryLab,
+  Poeaa24Pattern12IdentityFieldMappingLab,
+  Poeaa24Pattern12IdentityFieldTransactionLab,
+  Poeaa24Pattern13ForeignKeyMappingBoundaryLab,
+  Poeaa24Pattern13ForeignKeyMappingMappingLab,
+  Poeaa24Pattern13ForeignKeyMappingTransactionLab,
+  Poeaa24Pattern14AssociationTableMappingBoundaryLab,
+  Poeaa24Pattern14AssociationTableMappingMappingLab,
+  Poeaa24Pattern14AssociationTableMappingTransactionLab,
+  Poeaa24Pattern15DependentMappingBoundaryLab,
+  Poeaa24Pattern15DependentMappingMappingLab,
+  Poeaa24Pattern15DependentMappingTransactionLab,
+  Poeaa24Pattern16EmbeddedValueBoundaryLab,
+  Poeaa24Pattern16EmbeddedValueMappingLab,
+  Poeaa24Pattern16EmbeddedValueTransactionLab,
+  Poeaa24Pattern17SerializedLobBoundaryLab,
+  Poeaa24Pattern17SerializedLobMappingLab,
+  Poeaa24Pattern17SerializedLobTransactionLab,
+  Poeaa24Pattern18SingleTableInheritanceBoundaryLab,
+  Poeaa24Pattern18SingleTableInheritanceMappingLab,
+  Poeaa24Pattern18SingleTableInheritanceTransactionLab,
+  Poeaa24Pattern19ClassTableInheritanceBoundaryLab,
+  Poeaa24Pattern19ClassTableInheritanceMappingLab,
+  Poeaa24Pattern19ClassTableInheritanceTransactionLab,
+  Poeaa24Pattern20ConcreteTableInheritanceBoundaryLab,
+  Poeaa24Pattern20ConcreteTableInheritanceMappingLab,
+  Poeaa24Pattern20ConcreteTableInheritanceTransactionLab,
+  Poeaa24Pattern21InheritanceMappersBoundaryLab,
+  Poeaa24Pattern21InheritanceMappersMappingLab,
+  Poeaa24Pattern21InheritanceMappersTransactionLab,
+  Poeaa24Chapter13ObjectRelationalMetadataBoundaryLab,
+  Poeaa24Chapter13ObjectRelationalMetadataMappingLab,
+  Poeaa24Chapter13ObjectRelationalMetadataTransactionLab,
+  Poeaa24Pattern22MetadataMappingBoundaryLab,
+  Poeaa24Pattern22MetadataMappingMappingLab,
+  Poeaa24Pattern22MetadataMappingTransactionLab,
+  Poeaa24Pattern23QueryObjectBoundaryLab,
+  Poeaa24Pattern23QueryObjectMappingLab,
+  Poeaa24Pattern23QueryObjectTransactionLab,
+  Poeaa24Pattern24RepositoryBoundaryLab,
+  Poeaa24Pattern24RepositoryMappingLab,
+  Poeaa24Pattern24RepositoryTransactionLab,
+  Poeaa24Chapter14WebPresentationPatternsBoundaryLab,
+  Poeaa24Chapter14WebPresentationPatternsMappingLab,
+  Poeaa24Chapter14WebPresentationPatternsTransactionLab,
+  Poeaa24Pattern25ModelViewControllerBoundaryLab,
+  Poeaa24Pattern25ModelViewControllerMappingLab,
+  Poeaa24Pattern25ModelViewControllerTransactionLab,
+  Poeaa24Pattern26PageControllerBoundaryLab,
+  Poeaa24Pattern26PageControllerMappingLab,
+  Poeaa24Pattern26PageControllerTransactionLab,
+  Poeaa24Pattern27FrontControllerBoundaryLab,
+  Poeaa24Pattern27FrontControllerMappingLab,
+  Poeaa24Pattern27FrontControllerTransactionLab,
+  Poeaa24Pattern28TemplateViewBoundaryLab,
+  Poeaa24Pattern28TemplateViewMappingLab,
+  Poeaa24Pattern28TemplateViewTransactionLab,
+  Poeaa24Pattern29TransformViewBoundaryLab,
+  Poeaa24Pattern29TransformViewMappingLab,
+  Poeaa24Pattern29TransformViewTransactionLab,
+  Poeaa24Pattern30TwoStepViewBoundaryLab,
+  Poeaa24Pattern30TwoStepViewMappingLab,
+  Poeaa24Pattern30TwoStepViewTransactionLab,
+  Poeaa24Pattern31ApplicationControllerBoundaryLab,
+  Poeaa24Pattern31ApplicationControllerMappingLab,
+  Poeaa24Pattern31ApplicationControllerTransactionLab,
+  Poeaa24Chapter15DistributionPatternsBoundaryLab,
+  Poeaa24Chapter15DistributionPatternsMappingLab,
+  Poeaa24Chapter15DistributionPatternsTransactionLab,
+  Poeaa24Pattern32RemoteFacadeBoundaryLab,
+  Poeaa24Pattern32RemoteFacadeMappingLab,
+  Poeaa24Pattern32RemoteFacadeTransactionLab,
+  Poeaa24Pattern33DataTransferObjectBoundaryLab,
+  Poeaa24Pattern33DataTransferObjectMappingLab,
+  Poeaa24Pattern33DataTransferObjectTransactionLab,
+  Poeaa24Chapter16OfflineConcurrencyPatternsBoundaryLab,
+  Poeaa24Chapter16OfflineConcurrencyPatternsMappingLab,
+  Poeaa24Chapter16OfflineConcurrencyPatternsTransactionLab,
+  Poeaa24Pattern34OptimisticOfflineLockBoundaryLab,
+  Poeaa24Pattern34OptimisticOfflineLockMappingLab,
+  Poeaa24Pattern34OptimisticOfflineLockTransactionLab,
+  Poeaa24Pattern35PessimisticOfflineLockBoundaryLab,
+  Poeaa24Pattern35PessimisticOfflineLockMappingLab,
+  Poeaa24Pattern35PessimisticOfflineLockTransactionLab,
+  Poeaa24Pattern36CoarseGrainedLockBoundaryLab,
+  Poeaa24Pattern36CoarseGrainedLockMappingLab,
+  Poeaa24Pattern36CoarseGrainedLockTransactionLab,
+  Poeaa24Pattern37ImplicitLockBoundaryLab,
+  Poeaa24Pattern37ImplicitLockMappingLab,
+  Poeaa24Pattern37ImplicitLockTransactionLab,
+  Poeaa24Chapter17SessionStatePatternsBoundaryLab,
+  Poeaa24Chapter17SessionStatePatternsMappingLab,
+  Poeaa24Chapter17SessionStatePatternsTransactionLab,
+  Poeaa24Pattern38ClientSessionStateBoundaryLab,
+  Poeaa24Pattern38ClientSessionStateMappingLab,
+  Poeaa24Pattern38ClientSessionStateTransactionLab,
+  Poeaa24Pattern39ServerSessionStateBoundaryLab,
+  Poeaa24Pattern39ServerSessionStateMappingLab,
+  Poeaa24Pattern39ServerSessionStateTransactionLab,
+  Poeaa24Pattern40DatabaseSessionStateBoundaryLab,
+  Poeaa24Pattern40DatabaseSessionStateMappingLab,
+  Poeaa24Pattern40DatabaseSessionStateTransactionLab,
+  Poeaa24Chapter18BasePatternsBoundaryLab,
+  Poeaa24Chapter18BasePatternsMappingLab,
+  Poeaa24Chapter18BasePatternsTransactionLab,
+  Poeaa24Pattern41GatewayBoundaryLab,
+  Poeaa24Pattern41GatewayMappingLab,
+  Poeaa24Pattern41GatewayTransactionLab,
+  Poeaa24Pattern42MapperBoundaryLab,
+  Poeaa24Pattern42MapperMappingLab,
+  Poeaa24Pattern42MapperTransactionLab,
+  Poeaa24Pattern43LayerSupertypeBoundaryLab,
+  Poeaa24Pattern43LayerSupertypeMappingLab,
+  Poeaa24Pattern43LayerSupertypeTransactionLab,
+  Poeaa24Pattern44SeparatedInterfaceBoundaryLab,
+  Poeaa24Pattern44SeparatedInterfaceMappingLab,
+  Poeaa24Pattern44SeparatedInterfaceTransactionLab,
+  Poeaa24Pattern45RegistryBoundaryLab,
+  Poeaa24Pattern45RegistryMappingLab,
+  Poeaa24Pattern45RegistryTransactionLab,
+  Poeaa24Pattern46ValueObjectBoundaryLab,
+  Poeaa24Pattern46ValueObjectMappingLab,
+  Poeaa24Pattern46ValueObjectTransactionLab,
+  Poeaa24Pattern47MoneyBoundaryLab,
+  Poeaa24Pattern47MoneyMappingLab,
+  Poeaa24Pattern47MoneyTransactionLab,
+  Poeaa24Pattern48SpecialCaseBoundaryLab,
+  Poeaa24Pattern48SpecialCaseMappingLab,
+  Poeaa24Pattern48SpecialCaseTransactionLab,
+  Poeaa24Pattern49PluginBoundaryLab,
+  Poeaa24Pattern49PluginMappingLab,
+  Poeaa24Pattern49PluginTransactionLab,
+  Poeaa24Pattern50ServiceStubBoundaryLab,
+  Poeaa24Pattern50ServiceStubMappingLab,
+  Poeaa24Pattern50ServiceStubTransactionLab,
+  Poeaa24Pattern51RecordSetBoundaryLab,
+  Poeaa24Pattern51RecordSetMappingLab,
+  Poeaa24Pattern51RecordSetTransactionLab,
+  Poeaa24ReferencesBoundaryLab,
+  Poeaa24ReferencesMappingLab,
+  Poeaa24ReferencesTransactionLab,
+  Poeaa24OfficialFinalReviewBoundaryLab,
+  Poeaa24OfficialFinalReviewMappingLab,
+  Poeaa24OfficialFinalReviewTransactionLab,
   PpBackOfEnvelopeDiagram,
-  PpBasicToolsDiagram,
   PpBinarySearchDiagram,
   PpBitVectorsDiagram,
   PpCodeTuningDiagram,
-  PpCodecraftDiagram,
-  PpConcurrencyDiagram,
   PpCrackingProblemsDiagram,
-  PpDefensiveProgrammingDiagram,
   PpDesignPrinciplesDiagram,
   PpEpilogDiagram,
+  Tpp20OfficialLearningMapSystemLab,
+  Tpp20OfficialLearningMapFeedbackLab,
+  Tpp20OfficialLearningMapEvidenceLab,
+  Tpp20ForewordSystemLab,
+  Tpp20ForewordFeedbackLab,
+  Tpp20ForewordEvidenceLab,
+  Tpp20SecondEditionPrefaceSystemLab,
+  Tpp20SecondEditionPrefaceFeedbackLab,
+  Tpp20SecondEditionPrefaceEvidenceLab,
+  Tpp20FirstEditionPrefaceSystemLab,
+  Tpp20FirstEditionPrefaceFeedbackLab,
+  Tpp20FirstEditionPrefaceEvidenceLab,
+  Tpp20Chapter01PragmaticPhilosophySystemLab,
+  Tpp20Chapter01PragmaticPhilosophyFeedbackLab,
+  Tpp20Chapter01PragmaticPhilosophyEvidenceLab,
+  Tpp20Topic01YourLifeSystemLab,
+  Tpp20Topic01YourLifeFeedbackLab,
+  Tpp20Topic01YourLifeEvidenceLab,
+  Tpp20Topic02CatAteSourceCodeSystemLab,
+  Tpp20Topic02CatAteSourceCodeFeedbackLab,
+  Tpp20Topic02CatAteSourceCodeEvidenceLab,
+  Tpp20Topic03SoftwareEntropySystemLab,
+  Tpp20Topic03SoftwareEntropyFeedbackLab,
+  Tpp20Topic03SoftwareEntropyEvidenceLab,
+  Tpp20Topic04StoneSoupBoiledFrogsSystemLab,
+  Tpp20Topic04StoneSoupBoiledFrogsFeedbackLab,
+  Tpp20Topic04StoneSoupBoiledFrogsEvidenceLab,
+  Tpp20Topic05GoodEnoughSoftwareSystemLab,
+  Tpp20Topic05GoodEnoughSoftwareFeedbackLab,
+  Tpp20Topic05GoodEnoughSoftwareEvidenceLab,
+  Tpp20Topic06KnowledgePortfolioSystemLab,
+  Tpp20Topic06KnowledgePortfolioFeedbackLab,
+  Tpp20Topic06KnowledgePortfolioEvidenceLab,
+  Tpp20Topic07CommunicateSystemLab,
+  Tpp20Topic07CommunicateFeedbackLab,
+  Tpp20Topic07CommunicateEvidenceLab,
+  Tpp20Chapter02PragmaticApproachSystemLab,
+  Tpp20Chapter02PragmaticApproachFeedbackLab,
+  Tpp20Chapter02PragmaticApproachEvidenceLab,
+  Tpp20Topic08EssenceGoodDesignSystemLab,
+  Tpp20Topic08EssenceGoodDesignFeedbackLab,
+  Tpp20Topic08EssenceGoodDesignEvidenceLab,
+  Tpp20Topic09DryDuplicationSystemLab,
+  Tpp20Topic09DryDuplicationFeedbackLab,
+  Tpp20Topic09DryDuplicationEvidenceLab,
+  Tpp20Topic10OrthogonalitySystemLab,
+  Tpp20Topic10OrthogonalityFeedbackLab,
+  Tpp20Topic10OrthogonalityEvidenceLab,
+  Tpp20Topic11ReversibilitySystemLab,
+  Tpp20Topic11ReversibilityFeedbackLab,
+  Tpp20Topic11ReversibilityEvidenceLab,
+  Tpp20Topic12TracerBulletsSystemLab,
+  Tpp20Topic12TracerBulletsFeedbackLab,
+  Tpp20Topic12TracerBulletsEvidenceLab,
+  Tpp20Topic13PrototypesPostItNotesSystemLab,
+  Tpp20Topic13PrototypesPostItNotesFeedbackLab,
+  Tpp20Topic13PrototypesPostItNotesEvidenceLab,
+  Tpp20Topic14DomainLanguagesSystemLab,
+  Tpp20Topic14DomainLanguagesFeedbackLab,
+  Tpp20Topic14DomainLanguagesEvidenceLab,
+  Tpp20Topic15EstimatingSystemLab,
+  Tpp20Topic15EstimatingFeedbackLab,
+  Tpp20Topic15EstimatingEvidenceLab,
+  Tpp20Chapter03BasicToolsSystemLab,
+  Tpp20Chapter03BasicToolsFeedbackLab,
+  Tpp20Chapter03BasicToolsEvidenceLab,
+  Tpp20Topic16PowerPlainTextSystemLab,
+  Tpp20Topic16PowerPlainTextFeedbackLab,
+  Tpp20Topic16PowerPlainTextEvidenceLab,
+  Tpp20Topic17ShellGamesSystemLab,
+  Tpp20Topic17ShellGamesFeedbackLab,
+  Tpp20Topic17ShellGamesEvidenceLab,
+  Tpp20Topic18PowerEditingSystemLab,
+  Tpp20Topic18PowerEditingFeedbackLab,
+  Tpp20Topic18PowerEditingEvidenceLab,
+  Tpp20Topic19VersionControlSystemLab,
+  Tpp20Topic19VersionControlFeedbackLab,
+  Tpp20Topic19VersionControlEvidenceLab,
+  Tpp20Topic20DebuggingSystemLab,
+  Tpp20Topic20DebuggingFeedbackLab,
+  Tpp20Topic20DebuggingEvidenceLab,
+  Tpp20Topic21TextManipulationSystemLab,
+  Tpp20Topic21TextManipulationFeedbackLab,
+  Tpp20Topic21TextManipulationEvidenceLab,
+  Tpp20Topic22EngineeringDaybooksSystemLab,
+  Tpp20Topic22EngineeringDaybooksFeedbackLab,
+  Tpp20Topic22EngineeringDaybooksEvidenceLab,
+  Tpp20Chapter04PragmaticParanoiaSystemLab,
+  Tpp20Chapter04PragmaticParanoiaFeedbackLab,
+  Tpp20Chapter04PragmaticParanoiaEvidenceLab,
+  Tpp20Topic23DesignByContractSystemLab,
+  Tpp20Topic23DesignByContractFeedbackLab,
+  Tpp20Topic23DesignByContractEvidenceLab,
+  Tpp20Topic24DeadProgramsTellNoLiesSystemLab,
+  Tpp20Topic24DeadProgramsTellNoLiesFeedbackLab,
+  Tpp20Topic24DeadProgramsTellNoLiesEvidenceLab,
+  Tpp20Topic25AssertiveProgrammingSystemLab,
+  Tpp20Topic25AssertiveProgrammingFeedbackLab,
+  Tpp20Topic25AssertiveProgrammingEvidenceLab,
+  Tpp20Topic26BalanceResourcesSystemLab,
+  Tpp20Topic26BalanceResourcesFeedbackLab,
+  Tpp20Topic26BalanceResourcesEvidenceLab,
+  Tpp20Topic27HeadlightsSystemLab,
+  Tpp20Topic27HeadlightsFeedbackLab,
+  Tpp20Topic27HeadlightsEvidenceLab,
+  Tpp20Chapter05BendOrBreakSystemLab,
+  Tpp20Chapter05BendOrBreakFeedbackLab,
+  Tpp20Chapter05BendOrBreakEvidenceLab,
+  Tpp20Topic28DecouplingSystemLab,
+  Tpp20Topic28DecouplingFeedbackLab,
+  Tpp20Topic28DecouplingEvidenceLab,
+  Tpp20Topic29JugglingRealWorldSystemLab,
+  Tpp20Topic29JugglingRealWorldFeedbackLab,
+  Tpp20Topic29JugglingRealWorldEvidenceLab,
+  Tpp20Topic30TransformingProgrammingSystemLab,
+  Tpp20Topic30TransformingProgrammingFeedbackLab,
+  Tpp20Topic30TransformingProgrammingEvidenceLab,
+  Tpp20Topic31InheritanceTaxSystemLab,
+  Tpp20Topic31InheritanceTaxFeedbackLab,
+  Tpp20Topic31InheritanceTaxEvidenceLab,
+  Tpp20Topic32ConfigurationSystemLab,
+  Tpp20Topic32ConfigurationFeedbackLab,
+  Tpp20Topic32ConfigurationEvidenceLab,
+  Tpp20Chapter06ConcurrencySystemLab,
+  Tpp20Chapter06ConcurrencyFeedbackLab,
+  Tpp20Chapter06ConcurrencyEvidenceLab,
+  Tpp20Topic33BreakingTemporalCouplingSystemLab,
+  Tpp20Topic33BreakingTemporalCouplingFeedbackLab,
+  Tpp20Topic33BreakingTemporalCouplingEvidenceLab,
+  Tpp20Topic34SharedStateSystemLab,
+  Tpp20Topic34SharedStateFeedbackLab,
+  Tpp20Topic34SharedStateEvidenceLab,
+  Tpp20Topic35ActorsProcessesSystemLab,
+  Tpp20Topic35ActorsProcessesFeedbackLab,
+  Tpp20Topic35ActorsProcessesEvidenceLab,
+  Tpp20Topic36BlackboardsSystemLab,
+  Tpp20Topic36BlackboardsFeedbackLab,
+  Tpp20Topic36BlackboardsEvidenceLab,
+  Tpp20Chapter07WhileCodingSystemLab,
+  Tpp20Chapter07WhileCodingFeedbackLab,
+  Tpp20Chapter07WhileCodingEvidenceLab,
+  Tpp20Topic37LizardBrainSystemLab,
+  Tpp20Topic37LizardBrainFeedbackLab,
+  Tpp20Topic37LizardBrainEvidenceLab,
+  Tpp20Topic38ProgrammingByCoincidenceSystemLab,
+  Tpp20Topic38ProgrammingByCoincidenceFeedbackLab,
+  Tpp20Topic38ProgrammingByCoincidenceEvidenceLab,
+  Tpp20Topic39AlgorithmSpeedSystemLab,
+  Tpp20Topic39AlgorithmSpeedFeedbackLab,
+  Tpp20Topic39AlgorithmSpeedEvidenceLab,
+  Tpp20Topic40RefactoringSystemLab,
+  Tpp20Topic40RefactoringFeedbackLab,
+  Tpp20Topic40RefactoringEvidenceLab,
+  Tpp20Topic41TestToCodeSystemLab,
+  Tpp20Topic41TestToCodeFeedbackLab,
+  Tpp20Topic41TestToCodeEvidenceLab,
+  Tpp20Topic42PropertyBasedTestingSystemLab,
+  Tpp20Topic42PropertyBasedTestingFeedbackLab,
+  Tpp20Topic42PropertyBasedTestingEvidenceLab,
+  Tpp20Topic43StaySafeSystemLab,
+  Tpp20Topic43StaySafeFeedbackLab,
+  Tpp20Topic43StaySafeEvidenceLab,
+  Tpp20Topic44NamingThingsSystemLab,
+  Tpp20Topic44NamingThingsFeedbackLab,
+  Tpp20Topic44NamingThingsEvidenceLab,
+  Tpp20Chapter08BeforeProjectSystemLab,
+  Tpp20Chapter08BeforeProjectFeedbackLab,
+  Tpp20Chapter08BeforeProjectEvidenceLab,
+  Tpp20Topic45RequirementsPitSystemLab,
+  Tpp20Topic45RequirementsPitFeedbackLab,
+  Tpp20Topic45RequirementsPitEvidenceLab,
+  Tpp20Topic46ImpossiblePuzzlesSystemLab,
+  Tpp20Topic46ImpossiblePuzzlesFeedbackLab,
+  Tpp20Topic46ImpossiblePuzzlesEvidenceLab,
+  Tpp20Topic47WorkingTogetherSystemLab,
+  Tpp20Topic47WorkingTogetherFeedbackLab,
+  Tpp20Topic47WorkingTogetherEvidenceLab,
+  Tpp20Topic48EssenceAgilitySystemLab,
+  Tpp20Topic48EssenceAgilityFeedbackLab,
+  Tpp20Topic48EssenceAgilityEvidenceLab,
+  Tpp20Chapter09PragmaticProjectsSystemLab,
+  Tpp20Chapter09PragmaticProjectsFeedbackLab,
+  Tpp20Chapter09PragmaticProjectsEvidenceLab,
+  Tpp20Topic49PragmaticTeamsSystemLab,
+  Tpp20Topic49PragmaticTeamsFeedbackLab,
+  Tpp20Topic49PragmaticTeamsEvidenceLab,
+  Tpp20Topic50CoconutsDontCutItSystemLab,
+  Tpp20Topic50CoconutsDontCutItFeedbackLab,
+  Tpp20Topic50CoconutsDontCutItEvidenceLab,
+  Tpp20Topic51StarterKitSystemLab,
+  Tpp20Topic51StarterKitFeedbackLab,
+  Tpp20Topic51StarterKitEvidenceLab,
+  Tpp20Topic52DelightUsersSystemLab,
+  Tpp20Topic52DelightUsersFeedbackLab,
+  Tpp20Topic52DelightUsersEvidenceLab,
+  Tpp20Topic53PridePrejudiceSystemLab,
+  Tpp20Topic53PridePrejudiceFeedbackLab,
+  Tpp20Topic53PridePrejudiceEvidenceLab,
+  Tpp20PostfaceSystemLab,
+  Tpp20PostfaceFeedbackLab,
+  Tpp20PostfaceEvidenceLab,
+  Tpp20BibliographySystemLab,
+  Tpp20BibliographyFeedbackLab,
+  Tpp20BibliographyEvidenceLab,
+  Tpp20ExerciseAnswersSystemLab,
+  Tpp20ExerciseAnswersFeedbackLab,
+  Tpp20ExerciseAnswersEvidenceLab,
+  Tpp20TranslatorPostfaceSystemLab,
+  Tpp20TranslatorPostfaceFeedbackLab,
+  Tpp20TranslatorPostfaceEvidenceLab,
+  Tpp20OfficialFinalReviewSystemLab,
+  Tpp20OfficialFinalReviewFeedbackLab,
+  Tpp20OfficialFinalReviewEvidenceLab,
   PpFinalReviewDiagram,
   PpLearningMapDiagram,
-  PpMetaprogrammingDiagram,
   PpPerspectivesDiagram,
-  PpPragmaticPhilosophyDiagram,
-  PpTeamDeliveryDiagram,
-  PrlFinalReviewDiagram,
-  PrlGraphicalModelsDiagram,
-  PrlKernelMethodsDiagram,
-  PrlLearningMapDiagram,
-  PrlLinearClassificationDiagram,
-  PrlLinearModelsRegressionDiagram,
-  PrlMixtureEmDiagram,
-  PrlNeuralNetworksDiagram,
-  PrlProbabilityTheoryDiagram,
-  PrlSparseKernelsDiagram,
-  PyaAsyncioDiagram,
-  PyaCythonDiagram,
-  PyaDecoratorsMetaDiagram,
-  PyaFinalReviewDiagram,
-  PyaIteratorsGeneratorsDiagram,
-  PyaLearningMapDiagram,
-  PyaMultiprocessingDiagram,
-  PyaPackagingDiagram,
-  PyaPythonInternalsDiagram,
-  PyaTestingDiagram,
-  RdiDataStructuresDiagram,
-  RdiDatabaseImplDiagram,
-  RdiEventDrivenDiagram,
-  RdiFinalReviewDiagram,
-  RdiLearningMapDiagram,
-  RdiObjectSystemDiagram,
-  RdiPersistenceDiagram,
-  RdiPubsubSentinelDiagram,
-  RdiReplicationClusterDiagram,
-  RdiTransactionsDiagram,
-  RlcBackpropCDiagram,
-  RlcDqnCDiagram,
-  RlcEnvironmentsDiagram,
-  RlcFinalReviewDiagram,
-  RlcLearningMapDiagram,
-  RlcNeuralNetworksCDiagram,
-  RlcPolicyGradientCDiagram,
-  RlcPracticalApplicationsDiagram,
-  RlcQLearningCDiagram,
-  RlcRlFoundationsDiagram,
-  RmqAmqpBasicsDiagram,
-  RmqClusteringDiagram,
-  RmqConsumersDiagram,
-  RmqFinalReviewDiagram,
-  RmqHighAvailabilityDiagram,
-  RmqLearningMapDiagram,
-  RmqMessagingPatternsDiagram,
-  RmqMonitoringOpsDiagram,
-  RmqPerformanceTuningDiagram,
-  RmqProducersDiagram,
-  RplAsyncDiagram,
-  RplBorrowingDiagram,
-  RplConcurrencyDiagram,
-  RplErrorHandlingDiagram,
-  RplFinalReviewDiagram,
-  RplGenericsDiagram,
-  RplLearningMapDiagram,
-  RplLifetimesDiagram,
-  RplOwnershipDiagram,
-  RplTraitsDiagram,
-  RswAsyncRuntimeDiagram,
-  RswConcurrencyDiagram,
-  RswErrorHandlingDiagram,
-  RswFinalReviewDiagram,
-  RswLearningMapDiagram,
-  RswLifetimesDiagram,
-  RswMacrosDiagram,
-  RswOwnershipBorrowDiagram,
-  RswTraitsGenericsDiagram,
-  RswUnsafeRustDiagram,
-  RtcdBvTypesDiagram,
-  RtcdCollisionTypesDiagram,
-  RtcdContinuousCollisionDiagram,
-  RtcdFinalReviewDiagram,
-  RtcdGjkDiagram,
-  RtcdLearningMapDiagram,
-  RtcdOptimizationStrategiesDiagram,
-  RtcdSatDiagram,
-  RtcdSpatialPartitioningDiagram,
-  RtcdSweepPruneDiagram,
+  PrlOfficialLearningMapMapLab,
+  PrlOfficialLearningMapExperimentLab,
+  PrlOfficialLearningMapEvidenceLab,
+  Prl01IntroductionMapLab,
+  Prl01IntroductionExperimentLab,
+  Prl01IntroductionEvidenceLab,
+  Prl02ProbabilityDistributionsMapLab,
+  Prl02ProbabilityDistributionsExperimentLab,
+  Prl02ProbabilityDistributionsEvidenceLab,
+  Prl03LinearRegressionMapLab,
+  Prl03LinearRegressionExperimentLab,
+  Prl03LinearRegressionEvidenceLab,
+  Prl04LinearClassificationMapLab,
+  Prl04LinearClassificationExperimentLab,
+  Prl04LinearClassificationEvidenceLab,
+  Prl05NeuralNetworksMapLab,
+  Prl05NeuralNetworksExperimentLab,
+  Prl05NeuralNetworksEvidenceLab,
+  Prl06KernelMethodsMapLab,
+  Prl06KernelMethodsExperimentLab,
+  Prl06KernelMethodsEvidenceLab,
+  Prl07SparseKernelMachinesMapLab,
+  Prl07SparseKernelMachinesExperimentLab,
+  Prl07SparseKernelMachinesEvidenceLab,
+  Prl08GraphicalModelsMapLab,
+  Prl08GraphicalModelsExperimentLab,
+  Prl08GraphicalModelsEvidenceLab,
+  Prl09MixtureModelsEmMapLab,
+  Prl09MixtureModelsEmExperimentLab,
+  Prl09MixtureModelsEmEvidenceLab,
+  Prl10ApproximateInferenceMapLab,
+  Prl10ApproximateInferenceExperimentLab,
+  Prl10ApproximateInferenceEvidenceLab,
+  Prl11SamplingMethodsMapLab,
+  Prl11SamplingMethodsExperimentLab,
+  Prl11SamplingMethodsEvidenceLab,
+  Prl12ContinuousLatentVariablesMapLab,
+  Prl12ContinuousLatentVariablesExperimentLab,
+  Prl12ContinuousLatentVariablesEvidenceLab,
+  Prl13SequentialDataMapLab,
+  Prl13SequentialDataExperimentLab,
+  Prl13SequentialDataEvidenceLab,
+  Prl14CombiningModelsMapLab,
+  Prl14CombiningModelsExperimentLab,
+  Prl14CombiningModelsEvidenceLab,
+  PrlAppendixADataSetsMapLab,
+  PrlAppendixADataSetsExperimentLab,
+  PrlAppendixADataSetsEvidenceLab,
+  PrlAppendixBProbabilityDistributionsMapLab,
+  PrlAppendixBProbabilityDistributionsExperimentLab,
+  PrlAppendixBProbabilityDistributionsEvidenceLab,
+  PrlAppendixCPropertiesMatricesMapLab,
+  PrlAppendixCPropertiesMatricesExperimentLab,
+  PrlAppendixCPropertiesMatricesEvidenceLab,
+  PrlAppendixDCalculusVariationsMapLab,
+  PrlAppendixDCalculusVariationsExperimentLab,
+  PrlAppendixDCalculusVariationsEvidenceLab,
+  PrlAppendixELagrangeMultipliersMapLab,
+  PrlAppendixELagrangeMultipliersExperimentLab,
+  PrlAppendixELagrangeMultipliersEvidenceLab,
+  PrlOfficialFinalReviewMapLab,
+  PrlOfficialFinalReviewExperimentLab,
+  PrlOfficialFinalReviewEvidenceLab,
+  RlcOfficialLearningMapMapLab,
+  RlcOfficialLearningMapExperimentLab,
+  RlcOfficialLearningMapEvidenceLab,
+  Rlc01RlDeepLearningMapLab,
+  Rlc01RlDeepLearningExperimentLab,
+  Rlc01RlDeepLearningEvidenceLab,
+  Rlc02ReinforcementImplementationMapLab,
+  Rlc02ReinforcementImplementationExperimentLab,
+  Rlc02ReinforcementImplementationEvidenceLab,
+  Rlc03DeepLearningTechniquesMapLab,
+  Rlc03DeepLearningTechniquesExperimentLab,
+  Rlc03DeepLearningTechniquesEvidenceLab,
+  Rlc04DeepReinforcementLearningMapLab,
+  Rlc04DeepReinforcementLearningExperimentLab,
+  Rlc04DeepReinforcementLearningEvidenceLab,
+  RlcOfficialFinalReviewMapLab,
+  RlcOfficialFinalReviewExperimentLab,
+  RlcOfficialFinalReviewEvidenceLab,
+  RtcdOfficialLearningMapMapLab,
+  RtcdOfficialLearningMapExperimentLab,
+  RtcdOfficialLearningMapEvidenceLab,
+  RtcdFrontMatterMapLab,
+  RtcdFrontMatterExperimentLab,
+  RtcdFrontMatterEvidenceLab,
+  RtcdChapter01IntroductionMapLab,
+  RtcdChapter01IntroductionExperimentLab,
+  RtcdChapter01IntroductionEvidenceLab,
+  RtcdChapter02DesignIssuesMapLab,
+  RtcdChapter02DesignIssuesExperimentLab,
+  RtcdChapter02DesignIssuesEvidenceLab,
+  RtcdChapter03MathGeometryPrimerMapLab,
+  RtcdChapter03MathGeometryPrimerExperimentLab,
+  RtcdChapter03MathGeometryPrimerEvidenceLab,
+  RtcdChapter04BoundingVolumesMapLab,
+  RtcdChapter04BoundingVolumesExperimentLab,
+  RtcdChapter04BoundingVolumesEvidenceLab,
+  RtcdChapter05BasicPrimitiveTestsMapLab,
+  RtcdChapter05BasicPrimitiveTestsExperimentLab,
+  RtcdChapter05BasicPrimitiveTestsEvidenceLab,
+  RtcdChapter06BoundingVolumeHierarchiesMapLab,
+  RtcdChapter06BoundingVolumeHierarchiesExperimentLab,
+  RtcdChapter06BoundingVolumeHierarchiesEvidenceLab,
+  RtcdChapter07SpatialPartitioningMapLab,
+  RtcdChapter07SpatialPartitioningExperimentLab,
+  RtcdChapter07SpatialPartitioningEvidenceLab,
+  RtcdChapter08BspTreeHierarchiesMapLab,
+  RtcdChapter08BspTreeHierarchiesExperimentLab,
+  RtcdChapter08BspTreeHierarchiesEvidenceLab,
+  RtcdChapter09ConvexityMethodsMapLab,
+  RtcdChapter09ConvexityMethodsExperimentLab,
+  RtcdChapter09ConvexityMethodsEvidenceLab,
+  RtcdChapter10GpuAssistedMapLab,
+  RtcdChapter10GpuAssistedExperimentLab,
+  RtcdChapter10GpuAssistedEvidenceLab,
+  RtcdChapter11NumericalRobustnessMapLab,
+  RtcdChapter11NumericalRobustnessExperimentLab,
+  RtcdChapter11NumericalRobustnessEvidenceLab,
+  RtcdChapter12GeometricalRobustnessMapLab,
+  RtcdChapter12GeometricalRobustnessExperimentLab,
+  RtcdChapter12GeometricalRobustnessEvidenceLab,
+  RtcdChapter13OptimizationMapLab,
+  RtcdChapter13OptimizationExperimentLab,
+  RtcdChapter13OptimizationEvidenceLab,
+  RtcdBackMatterMapLab,
+  RtcdBackMatterExperimentLab,
+  RtcdBackMatterEvidenceLab,
+  RtcdOfficialFinalReviewMapLab,
+  RtcdOfficialFinalReviewExperimentLab,
+  RtcdOfficialFinalReviewEvidenceLab,
   RtrAdvancedShadingDiagram,
   RtrFinalReviewDiagram,
   RtrGlobalIlluminationDiagram,
@@ -5868,6 +14799,7 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   RtwMetalDielectricDiagram,
   RtwRayBasicsDiagram,
   RtwSphereHittableDiagram,
+  RtwStepFlowDiagram,
   RubBlocksProcsDiagram,
   RubClassesDiagram,
   RubControlFlowDiagram,
@@ -5881,16 +14813,6 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   ShaderCanvas,
   ShaderEditor,
   ShaderEditorCanvas,
-  ShpAdvancedEffectsDiagram,
-  ShpFinalReviewDiagram,
-  ShpHlslBasicsDiagram,
-  ShpLearningMapDiagram,
-  ShpLightingShadersDiagram,
-  ShpOptimizationDiagram,
-  ShpPixelShadersDiagram,
-  ShpPostProcessingDiagram,
-  ShpRenderPipelineDiagram,
-  ShpVertexShadersDiagram,
   SiaAopDiagram,
   SiaBeanWiringDiagram,
   SiaDataJpaDiagram,
@@ -5901,295 +14823,602 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   SiaSpringCoreDiagram,
   SiaSpringMvcDiagram,
   SiaSpringSecurityDiagram,
-  SlmBoostingDiagram,
-  SlmDecisionTreeDiagram,
-  SlmEmHmmDiagram,
-  SlmFinalReviewDiagram,
-  SlmKnnDiagram,
-  SlmLearningMapDiagram,
-  SlmLogisticRegressionDiagram,
-  SlmNaiveBayesDiagram,
-  SlmPerceptronDiagram,
-  SlmSvmDiagram,
-  SoaAdaptivePlatformDiagram,
-  SoaCaseStudyDiagram,
-  SoaCommunicationProtocolsDiagram,
-  SoaFinalReviewDiagram,
-  SoaLearningMapDiagram,
-  SoaMethodologyToolsDiagram,
-  SoaServiceDesignDiagram,
-  SoaServiceDiscoveryDiagram,
-  SoaSoaFundamentalsDiagram,
-  SoaVehicleArchitectureDiagram,
-  SqtAdvancedSqlDiagram,
-  SqtAggregationDiagram,
-  SqtFilteringDataDiagram,
-  SqtFinalReviewDiagram,
-  SqtFunctionsDiagram,
-  SqtJoinsDiagram,
-  SqtLearningMapDiagram,
-  SqtSortingFilteringDiagram,
-  SqtSqlBasicsDiagram,
-  SqtSubqueriesDiagram,
+  SlmOfficialLearningMapMapLab,
+  SlmOfficialLearningMapExperimentLab,
+  SlmOfficialLearningMapEvidenceLab,
+  Slm01IntroductionMapLab,
+  Slm01IntroductionExperimentLab,
+  Slm01IntroductionEvidenceLab,
+  Slm02PerceptronMapLab,
+  Slm02PerceptronExperimentLab,
+  Slm02PerceptronEvidenceLab,
+  Slm03KnnMapLab,
+  Slm03KnnExperimentLab,
+  Slm03KnnEvidenceLab,
+  Slm04NaiveBayesMapLab,
+  Slm04NaiveBayesExperimentLab,
+  Slm04NaiveBayesEvidenceLab,
+  Slm05DecisionTreeMapLab,
+  Slm05DecisionTreeExperimentLab,
+  Slm05DecisionTreeEvidenceLab,
+  Slm06LogisticMaxentMapLab,
+  Slm06LogisticMaxentExperimentLab,
+  Slm06LogisticMaxentEvidenceLab,
+  Slm07SvmMapLab,
+  Slm07SvmExperimentLab,
+  Slm07SvmEvidenceLab,
+  Slm08BoostingMapLab,
+  Slm08BoostingExperimentLab,
+  Slm08BoostingEvidenceLab,
+  Slm09EmMapLab,
+  Slm09EmExperimentLab,
+  Slm09EmEvidenceLab,
+  Slm10HmmMapLab,
+  Slm10HmmExperimentLab,
+  Slm10HmmEvidenceLab,
+  Slm11CrfMapLab,
+  Slm11CrfExperimentLab,
+  Slm11CrfEvidenceLab,
+  Slm12SupervisedSummaryMapLab,
+  Slm12SupervisedSummaryExperimentLab,
+  Slm12SupervisedSummaryEvidenceLab,
+  Slm13UnsupervisedIntroductionMapLab,
+  Slm13UnsupervisedIntroductionExperimentLab,
+  Slm13UnsupervisedIntroductionEvidenceLab,
+  Slm14ClusteringMapLab,
+  Slm14ClusteringExperimentLab,
+  Slm14ClusteringEvidenceLab,
+  Slm15SvdMapLab,
+  Slm15SvdExperimentLab,
+  Slm15SvdEvidenceLab,
+  Slm16PcaMapLab,
+  Slm16PcaExperimentLab,
+  Slm16PcaEvidenceLab,
+  Slm17LsaMapLab,
+  Slm17LsaExperimentLab,
+  Slm17LsaEvidenceLab,
+  Slm18PlsaMapLab,
+  Slm18PlsaExperimentLab,
+  Slm18PlsaEvidenceLab,
+  Slm19McmcMapLab,
+  Slm19McmcExperimentLab,
+  Slm19McmcEvidenceLab,
+  Slm20LdaMapLab,
+  Slm20LdaExperimentLab,
+  Slm20LdaEvidenceLab,
+  Slm21PageRankMapLab,
+  Slm21PageRankExperimentLab,
+  Slm21PageRankEvidenceLab,
+  Slm22UnsupervisedSummaryMapLab,
+  Slm22UnsupervisedSummaryExperimentLab,
+  Slm22UnsupervisedSummaryEvidenceLab,
+  SlmAppendicesMapLab,
+  SlmAppendicesExperimentLab,
+  SlmAppendicesEvidenceLab,
+  SlmOfficialFinalReviewMapLab,
+  SlmOfficialFinalReviewExperimentLab,
+  SlmOfficialFinalReviewEvidenceLab,
+  Aes23OfficialLearningMapTopologyLab,
+  Aes23OfficialLearningMapProtocolLab,
+  Aes23OfficialLearningMapEvidenceLab,
+  Aes23ForewordTopologyLab,
+  Aes23ForewordProtocolLab,
+  Aes23ForewordEvidenceLab,
+  Aes23PrefaceTopologyLab,
+  Aes23PrefaceProtocolLab,
+  Aes23PrefaceEvidenceLab,
+  Aes2301ArchitectureTopologyLab,
+  Aes2301ArchitectureProtocolLab,
+  Aes2301ArchitectureEvidenceLab,
+  Aes2302NetworksTopologyLab,
+  Aes2302NetworksProtocolLab,
+  Aes2302NetworksEvidenceLab,
+  Aes2303SoftwareTopologyLab,
+  Aes2303SoftwareProtocolLab,
+  Aes2303SoftwareEvidenceLab,
+  Aes2304SoaTopologyLab,
+  Aes2304SoaProtocolLab,
+  Aes2304SoaEvidenceLab,
+  Aes2305DevelopmentOtaTopologyLab,
+  Aes2305DevelopmentOtaProtocolLab,
+  Aes2305DevelopmentOtaEvidenceLab,
+  Aes23AfterwordTopologyLab,
+  Aes23AfterwordProtocolLab,
+  Aes23AfterwordEvidenceLab,
+  Aes23ReferencesTopologyLab,
+  Aes23ReferencesProtocolLab,
+  Aes23ReferencesEvidenceLab,
+  Aes23OfficialFinalReviewTopologyLab,
+  Aes23OfficialFinalReviewProtocolLab,
+  Aes23OfficialFinalReviewEvidenceLab,
   StranglerFigDiagram,
-  SxxEnvironmentDiagram,
-  SxxFinalReviewDiagram,
-  SxxLearningMapDiagram,
-  SxxLightingModelsDiagram,
-  SxxPerformanceDiagram,
-  SxxPixelShadersDiagram,
-  SxxPostProcessingDiagram,
-  SxxProceduralTexturingDiagram,
-  SxxShadowTechniquesDiagram,
-  SxxVertexShadersDiagram,
-  TbcActivationRecordsDiagram,
-  TbcCanonicalizationDiagram,
-  TbcFinalReviewDiagram,
-  TbcInstructionSelectionDiagram,
-  TbcLearningMapDiagram,
-  TbcLexingDiagram,
-  TbcParsingDiagram,
-  TbcRegisterAllocationDiagram,
-  TbcSemanticAnalysisDiagram,
-  TbcTranslationIrDiagram,
-  TcgContextAttentionDiagram,
-  TcgEmbeddingsDiagram,
-  TcgFinalReviewDiagram,
-  TcgFutureImplicationsDiagram,
-  TcgLanguageFoundationsDiagram,
-  TcgLearningMapDiagram,
-  TcgNeuralNetworksDiagram,
-  TcgPredictionGenerationDiagram,
-  TcgTrainingProcessDiagram,
-  TcgTransformersDiagram,
+  TbcOfficialLearningMapMapLab,
+  TbcOfficialLearningMapExperimentLab,
+  TbcOfficialLearningMapEvidenceLab,
+  Tbc01IntroductionMapLab,
+  Tbc01IntroductionExperimentLab,
+  Tbc01IntroductionEvidenceLab,
+  Tbc02LexicalAnalysisMapLab,
+  Tbc02LexicalAnalysisExperimentLab,
+  Tbc02LexicalAnalysisEvidenceLab,
+  Tbc03ParsingMapLab,
+  Tbc03ParsingExperimentLab,
+  Tbc03ParsingEvidenceLab,
+  Tbc04AbstractSyntaxMapLab,
+  Tbc04AbstractSyntaxExperimentLab,
+  Tbc04AbstractSyntaxEvidenceLab,
+  Tbc05SemanticAnalysisMapLab,
+  Tbc05SemanticAnalysisExperimentLab,
+  Tbc05SemanticAnalysisEvidenceLab,
+  Tbc06ActivationRecordsMapLab,
+  Tbc06ActivationRecordsExperimentLab,
+  Tbc06ActivationRecordsEvidenceLab,
+  Tbc07TranslationIntermediateCodeMapLab,
+  Tbc07TranslationIntermediateCodeExperimentLab,
+  Tbc07TranslationIntermediateCodeEvidenceLab,
+  Tbc08BasicBlocksTracesMapLab,
+  Tbc08BasicBlocksTracesExperimentLab,
+  Tbc08BasicBlocksTracesEvidenceLab,
+  Tbc09InstructionSelectionMapLab,
+  Tbc09InstructionSelectionExperimentLab,
+  Tbc09InstructionSelectionEvidenceLab,
+  Tbc10LivenessAnalysisMapLab,
+  Tbc10LivenessAnalysisExperimentLab,
+  Tbc10LivenessAnalysisEvidenceLab,
+  Tbc11RegisterAllocationMapLab,
+  Tbc11RegisterAllocationExperimentLab,
+  Tbc11RegisterAllocationEvidenceLab,
+  Tbc12PuttingItAllTogetherMapLab,
+  Tbc12PuttingItAllTogetherExperimentLab,
+  Tbc12PuttingItAllTogetherEvidenceLab,
+  Tbc13GarbageCollectionMapLab,
+  Tbc13GarbageCollectionExperimentLab,
+  Tbc13GarbageCollectionEvidenceLab,
+  Tbc14ObjectOrientedLanguagesMapLab,
+  Tbc14ObjectOrientedLanguagesExperimentLab,
+  Tbc14ObjectOrientedLanguagesEvidenceLab,
+  Tbc15FunctionalLanguagesMapLab,
+  Tbc15FunctionalLanguagesExperimentLab,
+  Tbc15FunctionalLanguagesEvidenceLab,
+  Tbc16PolymorphicTypesMapLab,
+  Tbc16PolymorphicTypesExperimentLab,
+  Tbc16PolymorphicTypesEvidenceLab,
+  Tbc17DataflowAnalysisMapLab,
+  Tbc17DataflowAnalysisExperimentLab,
+  Tbc17DataflowAnalysisEvidenceLab,
+  Tbc18LoopOptimizationsMapLab,
+  Tbc18LoopOptimizationsExperimentLab,
+  Tbc18LoopOptimizationsEvidenceLab,
+  Tbc19StaticSingleAssignmentMapLab,
+  Tbc19StaticSingleAssignmentExperimentLab,
+  Tbc19StaticSingleAssignmentEvidenceLab,
+  Tbc20SchedulingPipeliningMapLab,
+  Tbc20SchedulingPipeliningExperimentLab,
+  Tbc20SchedulingPipeliningEvidenceLab,
+  Tbc21MemoryHierarchiesMapLab,
+  Tbc21MemoryHierarchiesExperimentLab,
+  Tbc21MemoryHierarchiesEvidenceLab,
+  TbcAppendixTigerLanguageReferenceMapLab,
+  TbcAppendixTigerLanguageReferenceExperimentLab,
+  TbcAppendixTigerLanguageReferenceEvidenceLab,
+  TbcOfficialFinalReviewMapLab,
+  TbcOfficialFinalReviewExperimentLab,
+  TbcOfficialFinalReviewEvidenceLab,
   TcpArithmeticDiagram,
   TcpBookMap,
   TcpEfficientSearchingDiagram,
   TcpFinalReviewDiagram,
   TcpGf2Diagram,
-  TcpInfoStructuresDiagram,
-  TcpMathPreliminariesDiagram,
   TcpPolynomialsDiagram,
-  TcpRandomNumbersDiagram,
   TcpSequencesDiagram,
   TextureCanvas,
   TimelineControls,
-  TipApplicationProtocolsDiagram,
-  TipFinalReviewDiagram,
-  TipIcmpIgmpDiagram,
-  TipIpProtocolDiagram,
-  TipLearningMapDiagram,
-  TipLinkLayerDiagram,
-  TipRoutingProtocolsDiagram,
-  TipTcpProtocolDiagram,
-  TipTcpTimersDiagram,
-  TipUdpProtocolDiagram,
-  TwsArraysHashDiagram,
-  TwsAstDiagram,
-  TwsClassesDiagram,
-  TwsEvaluatorDiagram,
-  TwsFinalReviewDiagram,
-  TwsFunctionsDiagram,
-  TwsLearningMapDiagram,
-  TwsLexerDiagram,
-  TwsParserDiagram,
-  TwsTypesErrorsDiagram,
-  UanAnimationBasicsDiagram,
-  UanAnimatorControllerDiagram,
-  UanBlendTreesDiagram,
-  UanIkSystemDiagram,
-  UanLearningMapDiagram,
-  UanStateMachineDiagram,
-  UanTimelineDiagram,
-  UapAdvancedIoDiagram,
-  UapArchDesignDiagram,
-  UapCiCdDiagram,
-  UapDesignPatternsDiagram,
-  UapFileIoDiagram,
-  UapFilesDirectoriesDiagram,
-  UapFinalReviewDiagram,
-  UapHotUpdateDiagram,
-  UapLearningMapDiagram,
-  UapMemoryManagementDiagram,
-  UapNetworkSyncDiagram,
-  UapProcessControlDiagram,
-  UapProcessEnvDiagram,
-  UapProcessIpcDiagram,
-  UapRenderingOptimizationDiagram,
-  UapSignalsDiagram,
-  UapThreadsDiagram,
-  UapUiFrameworkDiagram,
-  UcnCppServerBaseDiagram,
-  UcnFinalReviewDiagram,
-  UcnLearningMapDiagram,
-  UcnMessageRoutingDiagram,
-  UcnNetworkFrameworkDiagram,
-  UcnProtobufDesignDiagram,
-  UcnRealtimeSyncDiagram,
-  UcnRoomManagementDiagram,
-  UcnSocketProgrammingDiagram,
-  UcnUnityIntegrationDiagram,
-  UctAssetPipelineDiagram,
-  UctAudioSystemDiagram,
-  UctBuildDeployDiagram,
-  UctFinalReviewDiagram,
-  UctLearningMapDiagram,
-  UctMemoryManagementDiagram,
-  UctNavigationDiagram,
-  UctPhysicsEngineDiagram,
-  UctRenderingPipelineDiagram,
-  UctSceneManagementDiagram,
-  Ugc2dPlatformerDiagram,
-  Ugc3dActionDiagram,
-  UgcFinalReviewDiagram,
-  UgcFpsBasicsDiagram,
-  UgcGamePolishDiagram,
-  UgcLearningMapDiagram,
-  UgcPuzzleGameDiagram,
-  UgcRacingGameDiagram,
-  UgcRpgBasicsDiagram,
-  UgcStrategyGameDiagram,
-  UhmAdvancedHmiDiagram,
-  UhmAnimationDiagram,
-  UhmDataBindingDiagram,
-  UhmDeploymentDiagram,
-  UhmFinalReviewDiagram,
-  UhmHmiBasicsDiagram,
-  UhmInputHandlingDiagram,
-  UhmLearningMapDiagram,
-  UhmPerformanceDiagram,
-  UhmUiFrameworkDiagram,
-  UidAnimationsDiagram,
-  UidFinalReviewDiagram,
-  UidInteractiveDiagram,
-  UidLayoutSystemDiagram,
-  UidLearningMapDiagram,
-  UidOptimizationDiagram,
-  UidResponsiveDiagram,
-  UidUguiBasicsDiagram,
-  UidUiSystemDiagram,
-  UidUitoolkitDiagram,
-  UmmAoiSystemDiagram,
-  UmmCharacterSystemDiagram,
-  UmmCombatSystemDiagram,
-  UmmDeploymentDiagram,
-  UmmFinalReviewDiagram,
-  UmmLearningMapDiagram,
-  UmmNetworkClientDiagram,
-  UmmOptimizationDiagram,
-  UmmSceneStreamingDiagram,
-  UmmStateSyncDiagram,
-  UmsAdvancedScriptingDiagram,
-  UmsAssetManagementDiagram,
-  UmsEditorExtensionDiagram,
-  UmsEditorMasteryDiagram,
-  UmsFinalReviewDiagram,
-  UmsLearningMapDiagram,
-  UmsPerformanceProfilingDiagram,
-  UmsSrpMasteryDiagram,
-  UmsTeamCollaborationDiagram,
-  UmsWorkflowOptimizationDiagram,
+  Tip2OfficialLearningMapProtocolLab,
+  Tip2OfficialLearningMapStateLab,
+  Tip2OfficialLearningMapEvidenceLab,
+  Tip2ForewordProtocolLab,
+  Tip2ForewordStateLab,
+  Tip2ForewordEvidenceLab,
+  Tip2PrefaceSecondEditionProtocolLab,
+  Tip2PrefaceSecondEditionStateLab,
+  Tip2PrefaceSecondEditionEvidenceLab,
+  Tip2AdaptedPrefaceFirstEditionProtocolLab,
+  Tip2AdaptedPrefaceFirstEditionStateLab,
+  Tip2AdaptedPrefaceFirstEditionEvidenceLab,
+  Tip201IntroductionProtocolLab,
+  Tip201IntroductionStateLab,
+  Tip201IntroductionEvidenceLab,
+  Tip202AddressArchitectureProtocolLab,
+  Tip202AddressArchitectureStateLab,
+  Tip202AddressArchitectureEvidenceLab,
+  Tip203LinkLayerProtocolLab,
+  Tip203LinkLayerStateLab,
+  Tip203LinkLayerEvidenceLab,
+  Tip204ArpProtocolLab,
+  Tip204ArpStateLab,
+  Tip204ArpEvidenceLab,
+  Tip205InternetProtocolProtocolLab,
+  Tip205InternetProtocolStateLab,
+  Tip205InternetProtocolEvidenceLab,
+  Tip206DhcpAutoconfigurationProtocolLab,
+  Tip206DhcpAutoconfigurationStateLab,
+  Tip206DhcpAutoconfigurationEvidenceLab,
+  Tip207FirewallsNatProtocolLab,
+  Tip207FirewallsNatStateLab,
+  Tip207FirewallsNatEvidenceLab,
+  Tip208IcmpProtocolLab,
+  Tip208IcmpStateLab,
+  Tip208IcmpEvidenceLab,
+  Tip209BroadcastMulticastProtocolLab,
+  Tip209BroadcastMulticastStateLab,
+  Tip209BroadcastMulticastEvidenceLab,
+  Tip210UdpFragmentationProtocolLab,
+  Tip210UdpFragmentationStateLab,
+  Tip210UdpFragmentationEvidenceLab,
+  Tip211DnsProtocolLab,
+  Tip211DnsStateLab,
+  Tip211DnsEvidenceLab,
+  Tip212TcpPreliminariesProtocolLab,
+  Tip212TcpPreliminariesStateLab,
+  Tip212TcpPreliminariesEvidenceLab,
+  Tip213TcpConnectionManagementProtocolLab,
+  Tip213TcpConnectionManagementStateLab,
+  Tip213TcpConnectionManagementEvidenceLab,
+  Tip214TcpTimeoutRetransmissionProtocolLab,
+  Tip214TcpTimeoutRetransmissionStateLab,
+  Tip214TcpTimeoutRetransmissionEvidenceLab,
+  Tip215TcpDataFlowWindowProtocolLab,
+  Tip215TcpDataFlowWindowStateLab,
+  Tip215TcpDataFlowWindowEvidenceLab,
+  Tip216TcpCongestionControlProtocolLab,
+  Tip216TcpCongestionControlStateLab,
+  Tip216TcpCongestionControlEvidenceLab,
+  Tip217TcpKeepaliveProtocolLab,
+  Tip217TcpKeepaliveStateLab,
+  Tip217TcpKeepaliveEvidenceLab,
+  Tip218SecurityProtocolLab,
+  Tip218SecurityStateLab,
+  Tip218SecurityEvidenceLab,
+  Tip2GlossaryAcronymsProtocolLab,
+  Tip2GlossaryAcronymsStateLab,
+  Tip2GlossaryAcronymsEvidenceLab,
+  Tip2IndexProtocolLab,
+  Tip2IndexStateLab,
+  Tip2IndexEvidenceLab,
+  Tip2OfficialFinalReviewProtocolLab,
+  Tip2OfficialFinalReviewStateLab,
+  Tip2OfficialFinalReviewEvidenceLab,
+  TwsOfficialLearningMapMapLab,
+  TwsOfficialLearningMapExperimentLab,
+  TwsOfficialLearningMapEvidenceLab,
+  Tws01WhatToBuildMapLab,
+  Tws01WhatToBuildExperimentLab,
+  Tws01WhatToBuildEvidenceLab,
+  Tws02LanguageDesignMapLab,
+  Tws02LanguageDesignExperimentLab,
+  Tws02LanguageDesignEvidenceLab,
+  Tws03TokenizationMapLab,
+  Tws03TokenizationExperimentLab,
+  Tws03TokenizationEvidenceLab,
+  Tws04ProgramObjectsMapLab,
+  Tws04ProgramObjectsExperimentLab,
+  Tws04ProgramObjectsEvidenceLab,
+  Tws05ParserDesignMapLab,
+  Tws05ParserDesignExperimentLab,
+  Tws05ParserDesignEvidenceLab,
+  Tws06InterpreterExecutionMapLab,
+  Tws06InterpreterExecutionExperimentLab,
+  Tws06InterpreterExecutionEvidenceLab,
+  Tws07FunctionsClosuresMapLab,
+  Tws07FunctionsClosuresExperimentLab,
+  Tws07FunctionsClosuresEvidenceLab,
+  Tws08JavaInteropMapLab,
+  Tws08JavaInteropExperimentLab,
+  Tws08JavaInteropEvidenceLab,
+  Tws09ObjectOrientedLanguageMapLab,
+  Tws09ObjectOrientedLanguageExperimentLab,
+  Tws09ObjectOrientedLanguageEvidenceLab,
+  Tws10ArraysMapLab,
+  Tws10ArraysExperimentLab,
+  Tws10ArraysEvidenceLab,
+  Tws11FastVariableAccessMapLab,
+  Tws11FastVariableAccessExperimentLab,
+  Tws11FastVariableAccessEvidenceLab,
+  Tws12FastObjectAccessMapLab,
+  Tws12FastObjectAccessExperimentLab,
+  Tws12FastObjectAccessEvidenceLab,
+  Tws13BytecodeInterpreterMapLab,
+  Tws13BytecodeInterpreterExperimentLab,
+  Tws13BytecodeInterpreterEvidenceLab,
+  Tws14StaticTypesMapLab,
+  Tws14StaticTypesExperimentLab,
+  Tws14StaticTypesEvidenceLab,
+  Tws15HandwrittenLexerMapLab,
+  Tws15HandwrittenLexerExperimentLab,
+  Tws15HandwrittenLexerEvidenceLab,
+  Tws16ParsingMethodsMapLab,
+  Tws16ParsingMethodsExperimentLab,
+  Tws16ParsingMethodsEvidenceLab,
+  Tws17ParserLibraryInternalsMapLab,
+  Tws17ParserLibraryInternalsExperimentLab,
+  Tws17ParserLibraryInternalsEvidenceLab,
+  Tws18GluonjMapLab,
+  Tws18GluonjExperimentLab,
+  Tws18GluonjEvidenceLab,
+  Tws19AstDesignPatternsMapLab,
+  Tws19AstDesignPatternsExperimentLab,
+  Tws19AstDesignPatternsEvidenceLab,
+  TwsOfficialFinalReviewMapLab,
+  TwsOfficialFinalReviewExperimentLab,
+  TwsOfficialFinalReviewEvidenceLab,
+  UapOfficialLearningMapMapLab,
+  UapOfficialLearningMapExperimentLab,
+  UapOfficialLearningMapEvidenceLab,
+  UapUnixBasicsMapLab,
+  UapUnixBasicsExperimentLab,
+  UapUnixBasicsEvidenceLab,
+  UapStandardsImplementationsMapLab,
+  UapStandardsImplementationsExperimentLab,
+  UapStandardsImplementationsEvidenceLab,
+  UapFileIoMapLab,
+  UapFileIoExperimentLab,
+  UapFileIoEvidenceLab,
+  UapFilesDirectoriesMapLab,
+  UapFilesDirectoriesExperimentLab,
+  UapFilesDirectoriesEvidenceLab,
+  UapStandardIoMapLab,
+  UapStandardIoExperimentLab,
+  UapStandardIoEvidenceLab,
+  UapSystemDataInformationMapLab,
+  UapSystemDataInformationExperimentLab,
+  UapSystemDataInformationEvidenceLab,
+  UapProcessEnvironmentMapLab,
+  UapProcessEnvironmentExperimentLab,
+  UapProcessEnvironmentEvidenceLab,
+  UapProcessControlMapLab,
+  UapProcessControlExperimentLab,
+  UapProcessControlEvidenceLab,
+  UapProcessRelationshipsMapLab,
+  UapProcessRelationshipsExperimentLab,
+  UapProcessRelationshipsEvidenceLab,
+  UapSignalsMapLab,
+  UapSignalsExperimentLab,
+  UapSignalsEvidenceLab,
+  UapThreadsMapLab,
+  UapThreadsExperimentLab,
+  UapThreadsEvidenceLab,
+  UapThreadControlMapLab,
+  UapThreadControlExperimentLab,
+  UapThreadControlEvidenceLab,
+  UapDaemonProcessesMapLab,
+  UapDaemonProcessesExperimentLab,
+  UapDaemonProcessesEvidenceLab,
+  UapAdvancedIoMapLab,
+  UapAdvancedIoExperimentLab,
+  UapAdvancedIoEvidenceLab,
+  UapInterprocessCommunicationMapLab,
+  UapInterprocessCommunicationExperimentLab,
+  UapInterprocessCommunicationEvidenceLab,
+  UapNetworkIpcSocketsMapLab,
+  UapNetworkIpcSocketsExperimentLab,
+  UapNetworkIpcSocketsEvidenceLab,
+  UapAdvancedIpcMapLab,
+  UapAdvancedIpcExperimentLab,
+  UapAdvancedIpcEvidenceLab,
+  UapTerminalIoMapLab,
+  UapTerminalIoExperimentLab,
+  UapTerminalIoEvidenceLab,
+  UapPseudoTerminalsMapLab,
+  UapPseudoTerminalsExperimentLab,
+  UapPseudoTerminalsEvidenceLab,
+  UapDatabaseLibraryMapLab,
+  UapDatabaseLibraryExperimentLab,
+  UapDatabaseLibraryEvidenceLab,
+  UapNetworkPrinterMapLab,
+  UapNetworkPrinterExperimentLab,
+  UapNetworkPrinterEvidenceLab,
+  UapAppendixAFunctionPrototypesMapLab,
+  UapAppendixAFunctionPrototypesExperimentLab,
+  UapAppendixAFunctionPrototypesEvidenceLab,
+  UapAppendixBSourceCodeMapLab,
+  UapAppendixBSourceCodeExperimentLab,
+  UapAppendixBSourceCodeEvidenceLab,
+  UapAppendixCExerciseSolutionsMapLab,
+  UapAppendixCExerciseSolutionsExperimentLab,
+  UapAppendixCExerciseSolutionsEvidenceLab,
+  UapOfficialFinalReviewMapLab,
+  UapOfficialFinalReviewExperimentLab,
+  UapOfficialFinalReviewEvidenceLab,
+  Uhm24OfficialLearningMapMapLab,
+  Uhm24OfficialLearningMapExperimentLab,
+  Uhm24OfficialLearningMapEvidenceLab,
+  Uhm24Slide01CoverMapLab,
+  Uhm24Slide01CoverExperimentLab,
+  Uhm24Slide01CoverEvidenceLab,
+  Uhm24Slide02NewChapterMapLab,
+  Uhm24Slide02NewChapterExperimentLab,
+  Uhm24Slide02NewChapterEvidenceLab,
+  Uhm24Slide03MadeWithUnityMapLab,
+  Uhm24Slide03MadeWithUnityExperimentLab,
+  Uhm24Slide03MadeWithUnityEvidenceLab,
+  Uhm24Slide04ProductionEvidenceMapLab,
+  Uhm24Slide04ProductionEvidenceExperimentLab,
+  Uhm24Slide04ProductionEvidenceEvidenceLab,
+  Uhm24Slide05BeijingAutoShowMapLab,
+  Uhm24Slide05BeijingAutoShowExperimentLab,
+  Uhm24Slide05BeijingAutoShowEvidenceLab,
+  Uhm24Slide06ModelPerformanceBudgetMapLab,
+  Uhm24Slide06ModelPerformanceBudgetExperimentLab,
+  Uhm24Slide06ModelPerformanceBudgetEvidenceLab,
+  Uhm24Slide07SocOsCompatibilityMapLab,
+  Uhm24Slide07SocOsCompatibilityExperimentLab,
+  Uhm24Slide07SocOsCompatibilityEvidenceLab,
+  Uhm24Slide08ArchitectureCombinationsMapLab,
+  Uhm24Slide08ArchitectureCombinationsExperimentLab,
+  Uhm24Slide08ArchitectureCombinationsEvidenceLab,
+  Uhm24Slide09EcosystemMapLab,
+  Uhm24Slide09EcosystemExperimentLab,
+  Uhm24Slide09EcosystemEvidenceLab,
+  Uhm24Slide10HeadUnitEditionMapLab,
+  Uhm24Slide10HeadUnitEditionExperimentLab,
+  Uhm24Slide10HeadUnitEditionEvidenceLab,
+  Uhm24Slide11TuanjieHeadUnitMapLab,
+  Uhm24Slide11TuanjieHeadUnitExperimentLab,
+  Uhm24Slide11TuanjieHeadUnitEvidenceLab,
+  Uhm24Slide12QnxSupportMapLab,
+  Uhm24Slide12QnxSupportExperimentLab,
+  Uhm24Slide12QnxSupportEvidenceLab,
+  Uhm24Slide13EmbeddedLinuxSupportMapLab,
+  Uhm24Slide13EmbeddedLinuxSupportExperimentLab,
+  Uhm24Slide13EmbeddedLinuxSupportEvidenceLab,
+  Uhm24Slide14TuanjieEngineMapLab,
+  Uhm24Slide14TuanjieEngineExperimentLab,
+  Uhm24Slide14TuanjieEngineEvidenceLab,
+  Uhm24Slide15UrasArchitectureMapLab,
+  Uhm24Slide15UrasArchitectureExperimentLab,
+  Uhm24Slide15UrasArchitectureEvidenceLab,
+  Uhm24Slide16UrasUnifiedRenderingMapLab,
+  Uhm24Slide16UrasUnifiedRenderingExperimentLab,
+  Uhm24Slide16UrasUnifiedRenderingEvidenceLab,
+  Uhm24Slide17UrasViewIsolationMapLab,
+  Uhm24Slide17UrasViewIsolationExperimentLab,
+  Uhm24Slide17UrasViewIsolationEvidenceLab,
+  Uhm24Slide18UnityChinaMapLab,
+  Uhm24Slide18UnityChinaExperimentLab,
+  Uhm24Slide18UnityChinaEvidenceLab,
+  Uhm24Slide19TimelineMapLab,
+  Uhm24Slide19TimelineExperimentLab,
+  Uhm24Slide19TimelineEvidenceLab,
+  Uhm24Slide20CapabilityFoundationMapLab,
+  Uhm24Slide20CapabilityFoundationExperimentLab,
+  Uhm24Slide20CapabilityFoundationEvidenceLab,
+  Uhm24Slide21ServiceModelMapLab,
+  Uhm24Slide21ServiceModelExperimentLab,
+  Uhm24Slide21ServiceModelEvidenceLab,
+  Uhm24Slide22InnovationScenariosMapLab,
+  Uhm24Slide22InnovationScenariosExperimentLab,
+  Uhm24Slide22InnovationScenariosEvidenceLab,
+  Uhm24Slide23EvidenceClosureMapLab,
+  Uhm24Slide23EvidenceClosureExperimentLab,
+  Uhm24Slide23EvidenceClosureEvidenceLab,
+  Uhm24OfficialFinalReviewMapLab,
+  Uhm24OfficialFinalReviewExperimentLab,
+  Uhm24OfficialFinalReviewEvidenceLab,
   UniformControls,
-  UnpAdvancedIoDiagram,
-  UnpAdvancedSocketsDiagram,
-  UnpDaemonIpcDiagram,
-  UnpFinalReviewDiagram,
-  UnpIoModelsDiagram,
-  UnpIpv6Diagram,
-  UnpLearningMapDiagram,
-  UnpSocketIntroDiagram,
-  UnpTcpSocketsDiagram,
-  UnpUdpSocketsDiagram,
-  UscAdvancedCodingDiagram,
-  UscComponentSystemDiagram,
-  UscCoroutinesDiagram,
-  UscFinalReviewDiagram,
-  UscInputSystemDiagram,
-  UscLearningMapDiagram,
-  UscLifecycleDiagram,
-  UscMonoBasicsDiagram,
-  UscPhysicsDiagram,
-  UscScriptableObjectsDiagram,
-  UseAdvancedShaderDiagram,
-  UseAlphaBlendingDiagram,
-  UseDepthNormalDiagram,
-  UseFinalReviewDiagram,
-  UseLearningMapDiagram,
-  UseLightingModelsDiagram,
-  UsePostEffectsDiagram,
-  UseShaderBasicsDiagram,
-  UseShaderlabSyntaxDiagram,
-  UseVertexFragmentDiagram,
-  UsfAdvancedEffectsDiagram,
-  UsfBloomGlowDiagram,
-  UsfColorGradingDiagram,
-  UsfDepthEffectsDiagram,
-  UsfFinalReviewDiagram,
-  UsfImageEffectsDiagram,
-  UsfLearningMapDiagram,
-  UsfLightEffectsDiagram,
-  UsfPostProcessingDiagram,
-  UsfScreenBasicsDiagram,
-  UsgBuildDeployDiagram,
-  UsgComponentPatternDiagram,
-  UsgCoroutineEventDiagram,
-  UsgCsharpBasicsDiagram,
-  UsgDataPersistenceDiagram,
-  UsgFinalReviewDiagram,
-  UsgGameLoopDiagram,
-  UsgLearningMapDiagram,
-  UsgOptimizationDiagram,
-  UsgUnityApiDiagram,
-  UslAdvancedTechniquesDiagram,
-  UslCommandBufferDiagram,
-  UslFinalReviewDiagram,
-  UslGrabpassDiagram,
-  UslLearningMapDiagram,
-  UslLightingModelsDiagram,
-  UslPropertiesBlockDiagram,
-  UslShaderlabStructureDiagram,
-  UslSubshaderPassDiagram,
-  UslSurfaceShadersDiagram,
-  UusCustomPassDiagram,
-  UusFinalReviewDiagram,
-  UusLearningMapDiagram,
-  UusLitUnlitDiagram,
-  UusUrpBasicsDiagram,
-  UusUrpLightingDiagram,
-  UusUrpOptimizationDiagram,
-  UusUrpPostProcessingDiagram,
-  UusUrpShaderGraphDiagram,
-  UusUrpShadowsDiagram,
-  UvfAnimationVfxDiagram,
-  UvfCombatVfxDiagram,
-  UvfFinalReviewDiagram,
-  UvfLearningMapDiagram,
-  UvfParticleAdvancedDiagram,
-  UvfParticleBasicsDiagram,
-  UvfPhysicsVfxDiagram,
-  UvfPostProcessingDiagram,
-  UvfShaderVfxDiagram,
-  UvfUiVfxDiagram,
-  VdiAsyncComponentDiagram,
-  VdiBuiltInComponentsDiagram,
-  VdiCompilerArchitectureDiagram,
-  VdiComponentModelDiagram,
-  VdiDiffAlgorithmDiagram,
-  VdiEffectSchedulerDiagram,
-  VdiFinalReviewDiagram,
-  VdiLearningMapDiagram,
-  VdiReactiveDesignDiagram,
-  VdiRendererArchitectureDiagram,
-  VjpBuildDeployDiagram,
-  VjpComponentDesignDiagram,
-  VjpCompositionApiDiagram,
-  VjpFinalReviewDiagram,
-  VjpLearningMapDiagram,
-  VjpReactivitySystemDiagram,
-  VjpRouterGuardDiagram,
-  VjpSsrSsgDiagram,
-  VjpTemplateSyntaxDiagram,
-  VjpVuexPiniaDiagram,
+  UnpOfficialLearningMapMapLab,
+  UnpOfficialLearningMapExperimentLab,
+  UnpOfficialLearningMapEvidenceLab,
+  Unp01IntroductionMapLab,
+  Unp01IntroductionExperimentLab,
+  Unp01IntroductionEvidenceLab,
+  Unp02TransportLayerMapLab,
+  Unp02TransportLayerExperimentLab,
+  Unp02TransportLayerEvidenceLab,
+  Unp03SocketsIntroductionMapLab,
+  Unp03SocketsIntroductionExperimentLab,
+  Unp03SocketsIntroductionEvidenceLab,
+  Unp04ElementaryTcpSocketsMapLab,
+  Unp04ElementaryTcpSocketsExperimentLab,
+  Unp04ElementaryTcpSocketsEvidenceLab,
+  Unp05TcpClientServerExampleMapLab,
+  Unp05TcpClientServerExampleExperimentLab,
+  Unp05TcpClientServerExampleEvidenceLab,
+  Unp06IoMultiplexingMapLab,
+  Unp06IoMultiplexingExperimentLab,
+  Unp06IoMultiplexingEvidenceLab,
+  Unp07SocketOptionsMapLab,
+  Unp07SocketOptionsExperimentLab,
+  Unp07SocketOptionsEvidenceLab,
+  Unp08ElementaryUdpSocketsMapLab,
+  Unp08ElementaryUdpSocketsExperimentLab,
+  Unp08ElementaryUdpSocketsEvidenceLab,
+  Unp09ElementarySctpSocketsMapLab,
+  Unp09ElementarySctpSocketsExperimentLab,
+  Unp09ElementarySctpSocketsEvidenceLab,
+  Unp10SctpClientServerExampleMapLab,
+  Unp10SctpClientServerExampleExperimentLab,
+  Unp10SctpClientServerExampleEvidenceLab,
+  Unp11NameAddressConversionsMapLab,
+  Unp11NameAddressConversionsExperimentLab,
+  Unp11NameAddressConversionsEvidenceLab,
+  Unp12Ipv4Ipv6InteroperabilityMapLab,
+  Unp12Ipv4Ipv6InteroperabilityExperimentLab,
+  Unp12Ipv4Ipv6InteroperabilityEvidenceLab,
+  Unp13DaemonInetdMapLab,
+  Unp13DaemonInetdExperimentLab,
+  Unp13DaemonInetdEvidenceLab,
+  Unp14AdvancedIoFunctionsMapLab,
+  Unp14AdvancedIoFunctionsExperimentLab,
+  Unp14AdvancedIoFunctionsEvidenceLab,
+  Unp15UnixDomainProtocolsMapLab,
+  Unp15UnixDomainProtocolsExperimentLab,
+  Unp15UnixDomainProtocolsEvidenceLab,
+  Unp16NonblockingIoMapLab,
+  Unp16NonblockingIoExperimentLab,
+  Unp16NonblockingIoEvidenceLab,
+  Unp17IoctlOperationsMapLab,
+  Unp17IoctlOperationsExperimentLab,
+  Unp17IoctlOperationsEvidenceLab,
+  Unp18RoutingSocketsMapLab,
+  Unp18RoutingSocketsExperimentLab,
+  Unp18RoutingSocketsEvidenceLab,
+  Unp19KeyManagementSocketsMapLab,
+  Unp19KeyManagementSocketsExperimentLab,
+  Unp19KeyManagementSocketsEvidenceLab,
+  Unp20BroadcastingMapLab,
+  Unp20BroadcastingExperimentLab,
+  Unp20BroadcastingEvidenceLab,
+  Unp21MulticastingMapLab,
+  Unp21MulticastingExperimentLab,
+  Unp21MulticastingEvidenceLab,
+  Unp22AdvancedUdpMapLab,
+  Unp22AdvancedUdpExperimentLab,
+  Unp22AdvancedUdpEvidenceLab,
+  Unp23AdvancedSctpMapLab,
+  Unp23AdvancedSctpExperimentLab,
+  Unp23AdvancedSctpEvidenceLab,
+  Unp24OutOfBandDataMapLab,
+  Unp24OutOfBandDataExperimentLab,
+  Unp24OutOfBandDataEvidenceLab,
+  Unp25SignalDrivenIoMapLab,
+  Unp25SignalDrivenIoExperimentLab,
+  Unp25SignalDrivenIoEvidenceLab,
+  Unp26ThreadsMapLab,
+  Unp26ThreadsExperimentLab,
+  Unp26ThreadsEvidenceLab,
+  Unp27IpOptionsMapLab,
+  Unp27IpOptionsExperimentLab,
+  Unp27IpOptionsEvidenceLab,
+  Unp28RawSocketsMapLab,
+  Unp28RawSocketsExperimentLab,
+  Unp28RawSocketsEvidenceLab,
+  Unp29DatalinkAccessMapLab,
+  Unp29DatalinkAccessExperimentLab,
+  Unp29DatalinkAccessEvidenceLab,
+  Unp30ClientServerDesignMapLab,
+  Unp30ClientServerDesignExperimentLab,
+  Unp30ClientServerDesignEvidenceLab,
+  Unp31StreamsMapLab,
+  Unp31StreamsExperimentLab,
+  Unp31StreamsEvidenceLab,
+  UnpAppendixAInternetProtocolsMapLab,
+  UnpAppendixAInternetProtocolsExperimentLab,
+  UnpAppendixAInternetProtocolsEvidenceLab,
+  UnpAppendixBVirtualNetworksMapLab,
+  UnpAppendixBVirtualNetworksExperimentLab,
+  UnpAppendixBVirtualNetworksEvidenceLab,
+  UnpAppendixCDebuggingTechniquesMapLab,
+  UnpAppendixCDebuggingTechniquesExperimentLab,
+  UnpAppendixCDebuggingTechniquesEvidenceLab,
+  UnpAppendixDMiscSourceCodeMapLab,
+  UnpAppendixDMiscSourceCodeExperimentLab,
+  UnpAppendixDMiscSourceCodeEvidenceLab,
+  UnpAppendixESelectedSolutionsMapLab,
+  UnpAppendixESelectedSolutionsExperimentLab,
+  UnpAppendixESelectedSolutionsEvidenceLab,
+  UnpOfficialFinalReviewMapLab,
+  UnpOfficialFinalReviewExperimentLab,
+  UnpOfficialFinalReviewEvidenceLab,
   VkgAdvancedFeaturesDiagram,
   VkgCommandBuffersDiagram,
   VkgFinalReviewDiagram,
@@ -6200,45 +15429,188 @@ export const mdxComponents: NonNullable<MDXRemoteProps["components"]> = {
   VkgSwapchainDiagram,
   VkgTexturesShadersDiagram,
   VkgVulkanBasicsDiagram,
-  WjFileIoDiagram,
-  WjFinalReviewDiagram,
-  WjGdiRenderingDiagram,
-  WjLearningMapDiagram,
-  WjMessageLoopDiagram,
-  WjNetworkProgrammingDiagram,
-  WjProcessThreadWinDiagram,
-  WjRegistryServiceDiagram,
-  WjWin32ApiDiagram,
-  WjWindowManagementDiagram,
-  WkpDriverFundamentalsDiagram,
-  WkpFinalReviewDiagram,
-  WkpInterruptDpcDiagram,
-  WkpIrpIoManagerDiagram,
-  WkpKernelMemoryDiagram,
-  WkpLearningMapDiagram,
-  WkpMdlMemoryDescriptorDiagram,
-  WkpPnpPowerDiagram,
-  WkpSynchronizationPrimitivesDiagram,
-  WkpWdmWdfDiagram,
-  WpaCaptureFiltersDiagram,
-  WpaDisplayFiltersDiagram,
-  WpaDnsDhcpDiagram,
-  WpaEthernetIpDiagram,
-  WpaFinalReviewDiagram,
-  WpaHttpAnalysisDiagram,
-  WpaLearningMapDiagram,
-  WpaNetworkSecurityDiagram,
-  WpaTcpUdpDiagram,
-  WpaWiresharkBasicsDiagram,
-  YdkAsyncPerformanceDiagram,
-  YdkFinalReviewDiagram,
-  YdkGeneratorsDiagram,
-  YdkGrammarNativesDiagram,
-  YdkHoistingDiagram,
-  YdkLearningMapDiagram,
-  YdkPrototypesDiagram,
-  YdkScopeClosuresDiagram,
-  YdkThisBindingDiagram,
-  YdkTypeCoercionDiagram,
+  WjOfficialLearningMapMapLab,
+  WjOfficialLearningMapExperimentLab,
+  WjOfficialLearningMapEvidenceLab,
+  Wj01GameDevelopmentLandscapeMapLab,
+  Wj01GameDevelopmentLandscapeExperimentLab,
+  Wj01GameDevelopmentLandscapeEvidenceLab,
+  Wj02VisualStudioMapLab,
+  Wj02VisualStudioExperimentLab,
+  Wj02VisualStudioEvidenceLab,
+  Wj03WindowsProgrammingMapLab,
+  Wj03WindowsProgrammingExperimentLab,
+  Wj03WindowsProgrammingEvidenceLab,
+  Wj04GdiFoundationsMapLab,
+  Wj04GdiFoundationsExperimentLab,
+  Wj04GdiFoundationsEvidenceLab,
+  Wj05GdiDrawingMapLab,
+  Wj05GdiDrawingExperimentLab,
+  Wj05GdiDrawingEvidenceLab,
+  Wj06WindowsAnimationMapLab,
+  Wj06WindowsAnimationExperimentLab,
+  Wj06WindowsAnimationEvidenceLab,
+  Wj07InputMessagesMapLab,
+  Wj07InputMessagesExperimentLab,
+  Wj07InputMessagesEvidenceLab,
+  Wj08PhysicsParticlesMapLab,
+  Wj08PhysicsParticlesExperimentLab,
+  Wj08PhysicsParticlesEvidenceLab,
+  Wj09TurnBasedGameMapLab,
+  Wj09TurnBasedGameExperimentLab,
+  Wj09TurnBasedGameEvidenceLab,
+  Wj10DirectxOverviewMapLab,
+  Wj10DirectxOverviewExperimentLab,
+  Wj10DirectxOverviewEvidenceLab,
+  Wj11Direct3dFoundationsMapLab,
+  Wj11Direct3dFoundationsExperimentLab,
+  Wj11Direct3dFoundationsEvidenceLab,
+  Wj12Direct3dDrawingMapLab,
+  Wj12Direct3dDrawingExperimentLab,
+  Wj12Direct3dDrawingEvidenceLab,
+  Wj13FourTransformsMapLab,
+  Wj13FourTransformsExperimentLab,
+  Wj13FourTransformsEvidenceLab,
+  Wj14LightingMaterialsMapLab,
+  Wj14LightingMaterialsExperimentLab,
+  Wj14LightingMaterialsEvidenceLab,
+  Wj15DirectinputMapLab,
+  Wj15DirectinputExperimentLab,
+  Wj15DirectinputEvidenceLab,
+  Wj16TextureMappingMapLab,
+  Wj16TextureMappingExperimentLab,
+  Wj16TextureMappingEvidenceLab,
+  Wj17MeshLoadingMapLab,
+  Wj17MeshLoadingExperimentLab,
+  Wj17MeshLoadingEvidenceLab,
+  Wj18AlphaBlendingMapLab,
+  Wj18AlphaBlendingExperimentLab,
+  Wj18AlphaBlendingEvidenceLab,
+  Wj19DepthZBufferMapLab,
+  Wj19DepthZBufferExperimentLab,
+  Wj19DepthZBufferEvidenceLab,
+  Wj20StencilTechniquesMapLab,
+  Wj20StencilTechniquesExperimentLab,
+  Wj20StencilTechniquesEvidenceLab,
+  Wj21GameCameraMapLab,
+  Wj21GameCameraExperimentLab,
+  Wj21GameCameraEvidenceLab,
+  Wj22TerrainMapLab,
+  Wj22TerrainExperimentLab,
+  Wj22TerrainEvidenceLab,
+  Wj23SkyboxMapLab,
+  Wj23SkyboxExperimentLab,
+  Wj23SkyboxEvidenceLab,
+  Wj24ParticleSystemMapLab,
+  Wj24ParticleSystemExperimentLab,
+  Wj24ParticleSystemEvidenceLab,
+  Wj25MultiModelLoadingMapLab,
+  Wj25MultiModelLoadingExperimentLab,
+  Wj25MultiModelLoadingEvidenceLab,
+  Wj26GameEnginesMapLab,
+  Wj26GameEnginesExperimentLab,
+  Wj26GameEnginesEvidenceLab,
+  WjAppendixAReadingGuideMapLab,
+  WjAppendixAReadingGuideExperimentLab,
+  WjAppendixAReadingGuideEvidenceLab,
+  WjOfficialFinalReviewMapLab,
+  WjOfficialFinalReviewExperimentLab,
+  WjOfficialFinalReviewEvidenceLab,
+  WkpOfficialLearningMapMapLab,
+  WkpOfficialLearningMapExperimentLab,
+  WkpOfficialLearningMapEvidenceLab,
+  Wkp01WindowsInternalsOverviewMapLab,
+  Wkp01WindowsInternalsOverviewExperimentLab,
+  Wkp01WindowsInternalsOverviewEvidenceLab,
+  Wkp02GettingStartedKernelDevelopmentMapLab,
+  Wkp02GettingStartedKernelDevelopmentExperimentLab,
+  Wkp02GettingStartedKernelDevelopmentEvidenceLab,
+  Wkp03KernelProgrammingBasicsMapLab,
+  Wkp03KernelProgrammingBasicsExperimentLab,
+  Wkp03KernelProgrammingBasicsEvidenceLab,
+  Wkp04DriverStartToFinishMapLab,
+  Wkp04DriverStartToFinishExperimentLab,
+  Wkp04DriverStartToFinishEvidenceLab,
+  Wkp05DebuggingMapLab,
+  Wkp05DebuggingExperimentLab,
+  Wkp05DebuggingEvidenceLab,
+  Wkp06KernelMechanismsMapLab,
+  Wkp06KernelMechanismsExperimentLab,
+  Wkp06KernelMechanismsEvidenceLab,
+  Wkp07IoRequestPacketMapLab,
+  Wkp07IoRequestPacketExperimentLab,
+  Wkp07IoRequestPacketEvidenceLab,
+  Wkp08ProcessThreadNotificationsMapLab,
+  Wkp08ProcessThreadNotificationsExperimentLab,
+  Wkp08ProcessThreadNotificationsEvidenceLab,
+  Wkp09ObjectRegistryNotificationsMapLab,
+  Wkp09ObjectRegistryNotificationsExperimentLab,
+  Wkp09ObjectRegistryNotificationsEvidenceLab,
+  Wkp10FileSystemMinifiltersMapLab,
+  Wkp10FileSystemMinifiltersExperimentLab,
+  Wkp10FileSystemMinifiltersEvidenceLab,
+  Wkp11MiscellaneousTopicsMapLab,
+  Wkp11MiscellaneousTopicsExperimentLab,
+  Wkp11MiscellaneousTopicsEvidenceLab,
+  WkpOfficialFinalReviewMapLab,
+  WkpOfficialFinalReviewExperimentLab,
+  WkpOfficialFinalReviewEvidenceLab,
+  Ppa3OfficialLearningMapPacketLab,
+  Ppa3OfficialLearningMapDiagnosisLab,
+  Ppa3OfficialLearningMapEvidenceLab,
+  Ppa3IntroductionPacketLab,
+  Ppa3IntroductionDiagnosisLab,
+  Ppa3IntroductionEvidenceLab,
+  Ppa301PacketAnalysisNetworkBasicsPacketLab,
+  Ppa301PacketAnalysisNetworkBasicsDiagnosisLab,
+  Ppa301PacketAnalysisNetworkBasicsEvidenceLab,
+  Ppa302TappingIntoWirePacketLab,
+  Ppa302TappingIntoWireDiagnosisLab,
+  Ppa302TappingIntoWireEvidenceLab,
+  Ppa303IntroductionWiresharkPacketLab,
+  Ppa303IntroductionWiresharkDiagnosisLab,
+  Ppa303IntroductionWiresharkEvidenceLab,
+  Ppa304WorkingCapturedPacketsPacketLab,
+  Ppa304WorkingCapturedPacketsDiagnosisLab,
+  Ppa304WorkingCapturedPacketsEvidenceLab,
+  Ppa305AdvancedWiresharkFeaturesPacketLab,
+  Ppa305AdvancedWiresharkFeaturesDiagnosisLab,
+  Ppa305AdvancedWiresharkFeaturesEvidenceLab,
+  Ppa306CommandLineAnalysisPacketLab,
+  Ppa306CommandLineAnalysisDiagnosisLab,
+  Ppa306CommandLineAnalysisEvidenceLab,
+  Ppa307NetworkLayerProtocolsPacketLab,
+  Ppa307NetworkLayerProtocolsDiagnosisLab,
+  Ppa307NetworkLayerProtocolsEvidenceLab,
+  Ppa308TransportLayerProtocolsPacketLab,
+  Ppa308TransportLayerProtocolsDiagnosisLab,
+  Ppa308TransportLayerProtocolsEvidenceLab,
+  Ppa309UpperLayerProtocolsPacketLab,
+  Ppa309UpperLayerProtocolsDiagnosisLab,
+  Ppa309UpperLayerProtocolsEvidenceLab,
+  Ppa310RealWorldScenariosPacketLab,
+  Ppa310RealWorldScenariosDiagnosisLab,
+  Ppa310RealWorldScenariosEvidenceLab,
+  Ppa311FightingSlowNetworkPacketLab,
+  Ppa311FightingSlowNetworkDiagnosisLab,
+  Ppa311FightingSlowNetworkEvidenceLab,
+  Ppa312SecurityAnalysisPacketLab,
+  Ppa312SecurityAnalysisDiagnosisLab,
+  Ppa312SecurityAnalysisEvidenceLab,
+  Ppa313WirelessAnalysisPacketLab,
+  Ppa313WirelessAnalysisDiagnosisLab,
+  Ppa313WirelessAnalysisEvidenceLab,
+  Ppa3AppendixAPacketLab,
+  Ppa3AppendixADiagnosisLab,
+  Ppa3AppendixAEvidenceLab,
+  Ppa3AppendixBPacketLab,
+  Ppa3AppendixBDiagnosisLab,
+  Ppa3AppendixBEvidenceLab,
+  Ppa3IndexPacketLab,
+  Ppa3IndexDiagnosisLab,
+  Ppa3IndexEvidenceLab,
+  Ppa3OfficialFinalReviewPacketLab,
+  Ppa3OfficialFinalReviewDiagnosisLab,
+  Ppa3OfficialFinalReviewEvidenceLab,
   GlossaryItem,
 };

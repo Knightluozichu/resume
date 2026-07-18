@@ -4,7 +4,7 @@
  * 一图讲透「几何 pass 用 MRT 一次输出 G-buffer 的几张纹理，都不含光照」：
  *  并排画 G-buffer 的三张纹理缩略图，每张存的是同一片元的某个几何属性：
  *   ①位置图 gPosition：每片元的世界坐标 xyz 当 rgb 存 → 彩色渐变（远近/方位编码成颜色）。
- *   ②法线图 gNormal：每片元法线 n*0.5+0.5 当 rgb 存 → 整体偏蓝紫（朝外的法线 z≈1 → 蓝紫）。
+ *   ②法线图 gNormal：浮点附件中直接存归一化法线；图中以 n*0.5+0.5 的调试显示编码画成偏蓝紫。
  *   ③反照率图 gAlbedoSpec：每片元的物体本色（漫反射底色）+ 镜面强度塞 a 通道 → 物体本来的颜色。
  *  顶部标「几何 pass 一次 MRT 输出这几张，都不含光照」，底部点明「光照 pass 再采这几张算一次光」。
  *
@@ -83,7 +83,7 @@ export function GBufferDiagram() {
         <svg
           viewBox="0 0 520 230"
           role="img"
-          aria-label="G-buffer 几何缓冲三图示意。几何 pass 用多渲染目标 MRT 一次输出几张纹理，每张存同一片元的一个几何属性，都不含光照。第一张是位置图 gPosition，把每个片元的世界坐标 xyz 当作 rgb 存进去，画面呈现彩色的位置编码。第二张是法线图 gNormal，把法线乘 0.5 加 0.5 映射到 0 到 1 当作 rgb 存，朝外的法线让画面整体偏蓝紫。第三张是反照率图 gAlbedoSpec，存物体本来的漫反射颜色，镜面强度塞进 alpha 通道，画面就是物体本色。这一步只登记几何属性、完全不算光照，留到后面的光照 pass 再采样这三张图对每个可见片元算一次光。"
+          aria-label="G-buffer 几何缓冲三图示意。几何 pass 用多渲染目标 MRT 一次输出几张纹理，每张存同一片元的一个几何属性，都不含光照。第一张是位置图 gPosition，把每个片元的世界坐标 xyz 当作 rgb 存进去，画面呈现彩色的位置编码。第二张是法线图 gNormal，在浮点附件中保存归一化法线；图中把它临时乘 0.5 加 0.5 作为调试显示，所以整体偏蓝紫。第三张是反照率图 gAlbedoSpec，存物体本来的漫反射颜色，镜面强度塞进 alpha 通道，画面就是物体本色。这一步只登记几何属性、完全不算光照，留到后面的光照 pass 再采样这三张图对每个可见片元算一次光。"
           className="mx-auto block h-auto w-full max-w-[520px]"
         >
           <defs>
@@ -93,7 +93,7 @@ export function GBufferDiagram() {
               <stop offset="50%" stopColor="var(--success)" />
               <stop offset="100%" stopColor="var(--accent)" />
             </linearGradient>
-            {/* 法线图：偏蓝紫（朝外法线 z≈1 → 蓝紫，用品牌紫表征） */}
+          {/* 法线的调试显示：n*0.5+0.5 后偏蓝紫（存储本身保持浮点原值） */}
             <linearGradient id="gb-nrm" x1="0" y1="0" x2="0.7" y2="1">
               <stop offset="0%" stopColor="var(--accent)" />
               <stop
@@ -137,7 +137,7 @@ export function GBufferDiagram() {
           <GTexture
             x={tx2}
             title="② 法线 normal"
-            channels="gNormal · n*0.5+0.5"
+            channels="gNormal · RGBA16F（图为调试显示）"
             accent="var(--accent)"
           >
             <rect
@@ -203,7 +203,7 @@ export function GBufferDiagram() {
       <figcaption className="mt-2 text-center text-xs text-secondary">
         几何 pass 靠 <strong>MRT</strong> 一次输出 G-buffer 的几张纹理：
         <strong>位置</strong>（<code>xyz→rgb</code>）、<strong>法线</strong>（
-        <code>n*0.5+0.5</code> 偏蓝紫）、<strong>反照率</strong>
+        <code>RGBA16F</code> 原值；图中 <code>n*0.5+0.5</code> 仅作调试显示）、<strong>反照率</strong>
         （物体本色 + 镜面强度塞 <code>a</code>）。
         <strong>都不含光照</strong>——光只在后面的光照 pass 算一次。
       </figcaption>

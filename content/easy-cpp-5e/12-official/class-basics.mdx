@@ -1,0 +1,220 @@
+---
+title: "Lesson 12：类的基本"
+type: A
+section: Easy C++（第5版）· 面向对象基础
+order: 12
+description: 对齐原书 Lesson 12「クラスの基本」：从类、对象、数据成员、成员函数与访问控制建立封装边界，用公开操作维护对象不变量。
+demo: false
+math: false
+sourceUrl: "https://www.sbcr.jp/product/4797392593/"
+draft: false
+---
+
+import {
+  EcpClassBasicsBoundaryMap,
+  EcpClassBasicsInvariantLab,
+  EcpClassBasicsMessageFlow,
+} from "@/components/mdx/easy-cpp-5e/diagrams/class-basics";
+
+<Objectives>
+
+- 能解释类是类型定义、对象是该类型实例，并区分数据成员与成员函数
+- 能实现 public/private 边界，让状态只能通过保持不变量的操作修改
+- 能分析对象创建、成员访问与方法调用路径，发现未初始化状态和泄漏表示的问题
+
+</Objectives>
+
+## 为什么公开字段不足以维护规则
+
+结构体可以把数据组合成记录，但若任何代码都能直接把余额写成非法值、把分数设为 500，规则就分散在所有调用点。类把数据和操作放进同一类型，并通过访问控制决定调用者能直接看到什么。
+
+<Term def="定义一种用户类型的状态表示、可用操作和访问边界的语言结构。">类</Term>
+
+<Term def="按某个类类型创建、拥有自身状态与生命周期的具体实例。">对象</Term>
+
+```cpp
+class Score {
+public:
+    void set(int value);
+    int get() const;
+
+private:
+    int value_ = 0;
+};
+```
+
+调用者看到 `set/get` 契约，看不到 `value_` 的表示细节。未来即使把存储改成较小整数或增加有效标志，只要公开接口不变，调用代码无需理解内部变化。
+
+<EcpClassBasicsBoundaryMap />
+
+## 数据成员保存每个对象的状态
+
+数据成员属于对象。两个 Score 对象各自拥有一份 `value_`；修改一个不会自动修改另一个。成员声明顺序还会影响初始化顺序，后续学习构造函数时必须以声明顺序为准。
+
+<Term def="作为类对象组成部分、为每个对象保存状态的成员变量。">数据成员</Term>
+
+```cpp
+Score math;
+Score english;
+
+math.set(95);
+english.set(88);
+```
+
+状态应使用能表达不变量的最小集合。若一个字段可以从其他字段计算出来，同时保存两份就需要永久同步；能在需要时计算的派生值通常不应成为独立可写成员。
+
+## 成员函数操作当前对象
+
+成员函数定义类提供的行为，普通非 static 成员调用时隐含当前对象。`math.set(95)` 选择 math 为当前对象，再把 95 传入参数；函数体访问的 `value_` 因而属于 math。
+
+<Term def="属于类接口或实现、调用时可访问当前对象状态的函数。">成员函数</Term>
+
+```cpp
+void Score::set(int value) {
+    if (value < 0) value = 0;
+    if (value > 100) value = 100;
+    value_ = value;
+}
+
+int Score::get() const {
+    return value_;
+}
+```
+
+类外定义使用 `Score::` 指明成员所属作用域。声明末尾的 `const` 表示该调用不通过当前对象修改其可观察状态，因此 const Score 也能调用 get。
+
+<EcpClassBasicsMessageFlow />
+
+## public 与 private 建立访问边界
+
+`public` 成员是调用者可依赖的接口，`private` 成员只允许类自身和特定友元访问。class 默认 private，struct 默认 public；二者都可以拥有方法、访问标签和构造函数，核心差异不是“struct 只能放数据”。
+
+<Term def="用 public、private 等标签规定哪些成员可被外部代码直接访问的机制。">访问控制</Term>
+
+```cpp
+Score score;
+score.set(120);       // 公开操作，内部归一化为 100
+std::cout << score.get();
+// score.value_ = 120; // private，外部不可直接写
+```
+
+private 不等于安全加密，也不防对象自身实现写错；它缩小可直接破坏状态的代码范围，使不变量只需在少数入口维护。
+
+<Callout type="trap" title="陷阱：给每个 private 字段自动生成 getter/setter 就完成封装">
+  若 setter 允许任意写回，公开接口只是换了语法，仍泄漏内部表示。接口应表达领域操作，如 deposit、withdraw 或 rename，而不是机械映射每个字段。
+</Callout>
+
+## 类不变量定义所有公开操作后的合法状态
+
+**类不变量**是在对象可被外部观察的每个稳定时刻都应成立的事实。Score 的不变量是 `0 <= value_ <= 100`。每个构造入口和可写 public 成员都必须保持它；只读成员可以依赖它。
+
+<Term def="对象在构造完成后及每次公开操作完成后都必须成立的状态约束。">类不变量</Term>
+
+只在调用点检查不够，因为可能有多个调用者；只在 get 时修正又让对象长期处于非法状态。最好在状态进入对象的边界验证，使内部方法在统一前提下工作。
+
+<EcpClassBasicsInvariantLab />
+
+## 对象创建必须建立首个合法状态
+
+上例用 `int value_ = 0` 给成员默认初始化器，因此默认创建 Score 后不变量成立。若成员没有可靠初值，对象在第一次 set 前可能无效。下一课会系统学习构造函数；此处先建立最低标准：对象一旦构造完成，就应可安全调用所有公开方法。
+
+```cpp
+class Counter {
+public:
+    int value() const { return value_; }
+    void increment() { ++value_; }
+
+private:
+    int value_ = 0;
+};
+```
+
+成员默认初始化器是建立初值的一种方式。涉及参数校验、资源获取或多个成员依赖时，需要构造函数集中完成。
+
+## 点运算符与箭头运算符选择对象路径
+
+对象使用 `.` 调用成员，指针使用 `->`，后者等价于先解引用再用点：`pointer->get()` 对应 `(*pointer).get()`。无论哪条路径，成员访问仍受 public/private 约束。
+
+```cpp
+Score current;
+Score* pointer = &current;
+
+current.set(70);
+pointer->set(80);
+```
+
+通过指针调用前还要证明指针有效；类封装保护状态规则，不会替调用者修复空指针或悬空生命周期。
+
+## this 表示当前对象
+
+成员函数内部可以用 `this` 指针访问当前对象，`this->value_` 与无歧义时的 `value_` 等价。参数与成员同名时常见 `this->value = value`，但使用尾部下划线等命名规则可以减少遮蔽。
+
+`this` 不应泄漏成长期悬空地址。若成员函数返回 `this` 或把它注册到外部回调，必须确保外部使用期不超过对象生命周期。
+
+<Callout type="trap" title="陷阱：成员函数里拿到 this，就可以永久保存给任何地方">
+  this 只在当前对象仍存活时有效。外部保存裸指针不会延长对象生命周期；对象销毁后回调再使用会悬空，必须定义所有权、注销和存活期。
+</Callout>
+
+## 从接口测试而不是窥探 private
+
+测试 Score 应通过公开接口输入 -1、0、100、101，再观察 get；无需直接访问 value_。这种测试对内部表示重构更稳定，也验证了真实调用者能依赖的契约。
+
+先预测每个输入后的稳定状态，并检查多个对象互不影响。若测试必须破解 private 才能建立状态，通常说明公开接口缺少必要操作，或测试过度绑定实现。
+
+## 三步设计最小类
+
+<Stepper>
+  <Step title="第一步：写状态与不变量">
+    列出对象必须保存的最小状态，删除可计算重复字段，并写出构造完成后始终成立的范围与关联规则。
+
+    <EcpClassBasicsBoundaryMap />
+  </Step>
+  <Step title="第二步：设计领域操作">
+    把保持不变量的操作设为 public，把表示设为 private；追踪对象、参数、this 与数据成员的调用路径。
+
+    <EcpClassBasicsMessageFlow />
+  </Step>
+  <Step title="第三步：边界与多对象实验">
+    先预测非法边界如何归一化或拒绝，再用两个对象验证状态独立，并从 public API 检查每次操作后不变量。
+
+    <EcpClassBasicsInvariantLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 类定义状态、操作与访问边界，对象是拥有独立状态和生命周期的具体实例
+- 数据成员保存每个对象状态，成员函数通过当前对象操作这些成员
+- public 是调用者可依赖的接口，private 缩小直接破坏表示的范围但不替代正确实现
+- 类不变量必须在构造完成和每个公开操作结束后成立，接口应表达领域行为而非机械字段映射
+- 点访问对象、箭头访问指针目标；封装不会自动解决调用路径的空指针和生命周期问题
+
+<Exercises>
+  1. **问题 1：区分类与对象。** `class Score` 与 `Score math; Score english;` 分别是什么？
+
+  <Answer question="类定义和两个对象是什么关系？">class Score 定义一种类型的状态、操作和访问规则；math 与 english 是两个独立实例，各自拥有 value_ 与生命周期。调用 math.set 只改变 math，除非设计显式共享 static 或外部状态。</Answer>
+
+  2. **问题 2：检查封装。** 为什么公开 `setValue(any int)` 不一定比 public 字段更好？
+
+  <Answer question="机械 setter 为什么可能仍泄漏表示？">若 setter 不验证并一一映射内部字段，任何调用者仍能写入非法状态，只是多了一层函数语法。公开接口应表达领域允许的状态转换，并在入口维护不变量，使表示可以独立变化。</Answer>
+
+  3. **问题 3：验证不变量。** Score 对 -1、0、100、101 应如何测试，为什么不用直接读 private？
+
+  <Answer question="如何从公开接口验证 Score 不变量？">通过 set 输入四个边界值，再用 get 观察约定的拒绝或归一化结果，确认稳定状态始终在 0 到 100。private 是实现细节，测试真实 public 契约才能在内部表示改变后继续有效。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="类">定义用户类型状态、操作和访问边界的结构。</GlossaryItem>
+  <GlossaryItem term="对象">按类类型创建并拥有独立状态与生命周期的实例。</GlossaryItem>
+  <GlossaryItem term="数据成员">为每个对象保存状态的成员变量。</GlossaryItem>
+  <GlossaryItem term="成员函数">可访问当前对象状态的类内函数。</GlossaryItem>
+  <GlossaryItem term="访问控制">用 public/private 等标签限制成员可见性的机制。</GlossaryItem>
+  <GlossaryItem term="类不变量">构造与每次公开操作后都应成立的状态约束。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="やさしいC++ 第5版, Lesson 12 クラスの基本"
+  adaptedUrl="https://www.sbcr.jp/product/4797392593/"
+/>

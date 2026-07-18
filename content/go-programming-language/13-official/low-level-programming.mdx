@@ -1,0 +1,222 @@
+---
+title: "第13章：Low-Level Programming"
+type: C
+section: "Go 程序设计语言 · Layout、unsafe 与 cgo 边界"
+order: 13
+description: "对齐原书第 13 章：unsafe.Sizeof/Alignof/Offsetof、unsafe.Pointer、deep equivalence、cgo 与低层编程警戒线。"
+demo: true
+math: false
+sourceUrl: "https://www.gopl.io/"
+draft: false
+---
+
+import {
+  GoplDeepEqualCgoLab,
+  GoplUnsafeLayoutLab,
+  GoplUnsafePointerLab,
+} from "@/components/mdx/go-programming-language/diagrams/low-level-programming";
+
+<Objectives>
+
+- 能解释 unsafe.Sizeof/Alignof/Offsetof 的 target-dependent layout，计算 field padding并区分descriptor与referenced storage
+- 能判断 unsafe.Pointer/uintptr conversion pattern、same-allocation arithmetic、alignment/bounds/lifetime与GC visibility
+- 能实现 cycle-safe deep equivalence并设计 cgo copy/pointer/pinning/free boundary，评估 unsafe/cgo 的portability、test和fallback成本
+
+</Objectives>
+
+## 为什么 Low-Level Programming 需要比普通 Go 更窄的证明范围
+
+unsafe 与 cgo 能表达layout/foreign ABI等必要边界，也能绕过type safety、GC pointer tracking和Go compatibility。正确使用不是“它在本机能跑”，而是把target ABI、allocation、bounds、lifetime、ownership与toolchain assumptions缩进一个可审计小package。
+
+<Term def="unsafe.Sizeof/Alignof/Offsetof 在当前 target type layout上产生的uintptr constant；它描述Go object本身，不递归计算slice/string/map指向的数据，也不承诺跨architecture稳定。">layout constant</Term>
+
+先预测：Sizeof(slice)是否随len增长，uintptr是否能阻止GC回收，pointer能否指向allocation末尾后一字节，reflect.DeepEqual对NaN如何处理，C.CString由谁free，以及C能否长期保存任意Go pointer。
+
+## 13.1 unsafe.Sizeof, Alignof, and Offsetof
+
+`unsafe.Sizeof(x)` 返回x value占用bytes，不执行x；对于string/slice/interface只计算descriptor，不含backing data。`Alignof(x)`返回假设变量所需alignment，`Offsetof(s.field)`返回field相对struct起点offset。很多结果可作compile-time constants。
+
+<Stepper>
+  <Step title="切换 32/64-bit pointer size 与 field order">
+    <GoplUnsafeLayoutLab />
+  </Step>
+  <Step title="观察 alignment padding 与 field offsets">
+    每field起点向上对齐，struct末尾补到最大alignment倍数；不同GOARCH/ABI可能产生不同Sizeof/Offsetof。
+  </Step>
+  <Step title="把 layout 与 wire/storage schema分离">
+    不直接memcpy Go struct作为协议/文件；显式编码endianness、width、version与padding，layout constants只用于受控interop/optimization。
+  </Step>
+</Stepper>
+
+```go
+type Header struct {
+    Flag bool
+    Ptr  *byte
+    Code uint16
+}
+
+fmt.Println(unsafe.Sizeof(Header{}))
+fmt.Println(unsafe.Alignof(Header{}))
+fmt.Println(unsafe.Offsetof(Header{}.Code))
+```
+
+field reorder可减padding，却改变offset/size，可能破坏cgo/mmap/assembly contract。普通domain struct优先可读性；只有profile证明layout影响cache/memory且无外部ABI时才优化，并对supported architectures写compile-time/runtime tests。
+
+array Sizeof包含全部elements；slice Sizeof固定descriptor。一个small slice可能保留巨大backing array，Sizeof看不出来；内存诊断结合heap profile与ownership，而不是只求sizeof。
+
+<Callout type="trap" title="把 unsafe.Sizeof(struct) 写进网络包长度">
+结果包含target padding并随architecture/layout改变，且endianness未定义。wire format用encoding/binary或显式codec固定字段width/order/version，测试golden bytes。
+</Callout>
+
+## 13.2 unsafe.Pointer：type bridge，不是自由指针算术
+
+`unsafe.Pointer` 可与任意 `*T`互转，也可在官方允许pattern中经uintptr做offset arithmetic。它让compiler暂时失去pointee type，却仍由GC视为pointer。`uintptr`只是integer，不是reference，不保证object存活或位置关系。
+
+<Term def="可在不同 typed pointers间桥接的特殊pointer type；操作仍必须满足original allocation、alignment、bounds、lifetime与pointee representation，不能任意制造地址。">unsafe pointer bridge</Term>
+
+<Stepper>
+  <Step title="切换 field-offset、stored uintptr 与 out-of-bounds pattern">
+    <GoplUnsafePointerLab />
+  </Step>
+  <Step title="保持 uintptr arithmetic 与 Pointer conversion在同一expression">
+    GC只追踪pointer；若先把uintptr存入variable并跨safe point再转换，原object可能已不live，违反官方conversion pattern。
+  </Step>
+  <Step title="验证结果仍位于original allocation">
+    pointer可移动到同一object/array内的field/element，不能越过end，alignment和targetrepresentation也必须成立。
+  </Step>
+</Stepper>
+
+<Term def="足以保存pointer bits的unsigned integer type；它可做受限address arithmetic，但GC不把它当pointer，也不因其存在保活或更新object。">uintptr non-pointer integer</Term>
+
+```go
+field := (*uint16)(unsafe.Pointer(
+    uintptr(unsafe.Pointer(&header)) + unsafe.Offsetof(header.Code),
+))
+fmt.Println(*field)
+```
+
+当前 [unsafe package documentation](https://pkg.go.dev/unsafe) 列出允许conversion patterns，并强调arithmetic/result必须留在original allocated object内。现代 `unsafe.Add`、`unsafe.Slice`减少某些conversion拼写，但不取消bounds/lifetime/alignment条件。
+
+`runtime.KeepAlive(x)`只在必要interop/finalizer场景延长liveness到call point，不修复out-of-bounds或长期stored uintptr。`-gcflags=all=-d=checkptr`/race/tests可发现部分错误，不是unsafe correctness proof。
+
+pointer reinterpretation还受representation/endianness/unaligned access影响。读取binary data优先encoding/binary，zero-copy conversion只有profile证明且API保证alignment/lifetime/immutability时考虑。
+
+## 13.3 Example: Deep Equivalence
+
+原书用reflection实现通用deep equality，展示low-level generic traversal的语义选择。basic comparable values可==；arrays/structs递归；slices/maps比较elements；pointers/interfaces解引用；functions通常只有both nil可视相等。cycles需要记录已比较pointer pairs避免无限递归。
+
+<Term def="对recursive values定义的domain equality relation；必须明确type identity、nil/empty、NaN、functions、unexported fields、maps、cycles、aliasing与custom Equal semantics。">deep equivalence relation</Term>
+
+<Stepper>
+  <Step title="切换 deep equivalence 与 cgo boundary">
+    <GoplDeepEqualCgoLab />
+  </Step>
+  <Step title="加入matching cycles并记录visited pairs">
+    visited key包含两边addresses与type；重复pair停止递归。shared DAG与cycle如何处理取决于比较的是value还是alias topology。
+  </Step>
+  <Step title="加入NaN与特殊kinds">
+    NaN != NaN；function non-nil不可比较；nil slice与empty slice是否相等是domain policy，不能盲目套一个通用helper。
+  </Step>
+</Stepper>
+
+```go
+type visit struct {
+    left, right unsafe.Pointer
+    typ         reflect.Type
+}
+
+func equal(x, y reflect.Value, seen map[visit]bool) bool {
+    if !x.IsValid() || !y.IsValid() { return x.IsValid() == y.IsValid() }
+    if x.Type() != y.Type() { return false }
+    // Dispatch by Kind; record pointer pairs before recursive descent.
+    return equalByKind(x, y, seen)
+}
+```
+
+`reflect.DeepEqual`有defined semantics但不必等于业务equality；time、proto、AST等types可能有Equal method或需要忽略cache/unexported metadata。测试工具可用cmp/options显式policy，security/auth decisions不要依赖反射式“看起来相等”。
+
+## 13.4 Calling C Code with cgo
+
+cgo在含 `import "C"` 的Go file中连接C declarations/definitions。紧邻import C前的comment是preamble，`#cgo` directives提供CFLAGS/LDFLAGS/pkg-config。C types通过`C.int`等names访问，`void*`对应unsafe.Pointer。
+
+<Term def="Go GC-managed memory、C allocator memory与foreign call之间的ownership contract；每个value需定义copy/borrow/pin/retain/free、thread/callback与error translation。">cgo ownership boundary</Term>
+
+```go
+package native
+
+/*
+#include <stdlib.h>
+size_t strlen(const char*);
+*/
+import "C"
+import "unsafe"
+
+func Length(text string) int {
+    cText := C.CString(text)
+    defer C.free(unsafe.Pointer(cText))
+    return int(C.strlen(cText))
+}
+```
+
+`C.CString`复制到C heap，caller必须C.free；`C.GoString`复制回Go string。C allocation不受Go GC管理。errno-style C API先按C return convention判断失败，再使用cgo返回的error，不能假设non-nil errno必然代表call失败。
+
+当前 [cgo command documentation](https://pkg.go.dev/cmd/cgo) 规定Go pointer传C时必须指向pinned memory，且reachable Go pointers也受限制；C不能在call后保留未合法pin的Go pointer。string/slice/map/channel/function/interface等包含Go pointers的values不能随意长期retained。跨boundary长期引用优先copy到C memory或使用 `runtime/cgo.Handle`传opaque handle。
+
+call overhead、scheduler transition、C blocking/thread-local/callback与signal规则都需测量/隔离。wrapper package把C status映射为Go error，隐藏C types，提供Close/Destroy并防double free/use-after-free；finalizer只作leak backstop，不替代explicit close。
+
+build依赖C compiler/headers/libs，cross compilation和static/dynamic linking更复杂。提供build tags/fallback或明确supported targets，并在CI真实编译/运行C boundary、sanitizer/valgrind（适用时）与Go race/checkptr tests。
+
+<Callout type="trap" title="把 Go slice pointer 交给 C 保存后立即返回">
+slice包含Go pointer且C长期保存会违反pointer passing/liveness规则。复制到C-owned buffer并明确free，或在严格允许场景使用pinning/handle；不要用unsafe隐藏指针让runtime检查失效。
+</Callout>
+
+## 13.5 Another Word of Caution：unsafe assumptions 不受普通兼容承诺保护
+
+导入unsafe意味着代码可能non-portable，并且依赖implementation detail。每个unsafe block前写明assumptions：supported GOOS/GOARCH、object type/layout、alignment、bounds、lifetime、mutability、GC/cgo relation；封装在internal package并提供safe typed API。
+
+优先替代方案：serialization用encoding/binary/json/protobuf，performance用profile+algorithm/allocation优化，generic traversal用interface/generics/codegen，OS调用用syscall/x/sys typed wrappers，foreign library用小cgo adapter。只有替代方案无法满足已测需求时保留unsafe。
+
+验证矩阵包含不同architectures、compiler/toolchain upgrades、race/checkptr、fuzz/bounds、cgo pointer checks与clean builds。任何依赖field offsets的代码在type变更时必须同commit更新tests；不允许copy/paste unsafe conversion到业务各处。
+
+<Callout type="trap" title="unsafe优化没有benchmark和safe fallback">
+没有profile无法证明收益，没有fallback无法对照correctness。保留slow typed reference implementation/golden tests，benchmark确认收益覆盖维护与portability成本。
+</Callout>
+
+## 本章回顾：越靠近内存，越需要显式证据
+
+1. Sizeof/Alignof/Offsetof只描述当前target Go layout，descriptor不含referenced storage，不能直接当wire schema。
+2. unsafe.Pointer桥接typed pointers；uintptr不受GC追踪，arithmetic必须在same allocation、bounds、alignment与lifetime内。
+3. deep equivalence需定义domain relation并处理cycles/NaN/functions/nil/aliasing，不等同于业务equality。
+4. cgo boundary明确copy/pin/retain/free与error/thread rules，C memory不由Go GC释放。
+5. unsafe/cgo封装在小边界，记录assumptions，跨architecture/toolchain测试并保留safe reference/fallback。
+
+<Exercises>
+
+**问题 1：为什么 `unsafe.Sizeof([]byte{...})` 不能用于估算实际cache内存，怎样测？**
+
+<Answer>Sizeof(slice)只返回pointer/len/cap descriptor大小，与len/cap/backingarray无关；cache还保留array、map buckets、keys/values、allocator overhead和aliases。按ownership统计logical bytes，使用heap/allocation profile观察retained/allocated memory，并在代表性workload测RSS/GC；避免double-count sharedbacking arrays，必要时copy right-size以释放大buffer。</Answer>
+
+**问题 2：pointer-to-field conversion 哪些条件缺一不可，为什么不能把 uintptr 存入 struct稍后还原？**
+
+<Answer>base必须是liveallocatedobject，offset来自同object field/element，结果不越bounds且满足targetalignment/representation；Pointer→uintptr arithmetic→Pointer应在官方允许的同一expression形态。uintptr只是integer，GC不把它当reference，存储后原object可能不再live且地址关系失去保证；KeepAlive只延长liveness，不能修复非法conversion或bounds。</Answer>
+
+**问题 3：包装 C library 返回 handle 时，怎样关闭 ownership、pointer与error chain？**
+
+<Answer>Go wrapper持C-ownedopaque pointer并提供idempotentClose，成功create后任何失败path都destroy，Close后标记closed防use-after-free/doublefree；finalizer仅backstop。strings/buffers按API copy或call-duration borrow，C不得保留未合法pinnedGo pointer，长期Go value用cgo.Handle。按C status判断success再翻译errno，保留operation/context；CI覆盖real library、race/checkptr和supportedtargets。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="layout constant" definition="当前target下Sizeof/Alignof/Offsetof产生的Go object layout值。" />
+  <GlossaryItem term="unsafe pointer bridge" definition="在typed pointers间转换但仍受allocation/bounds/lifetime限制的Pointer。" />
+  <GlossaryItem term="uintptr non-pointer integer" definition="可保存address bits但不被GC当reference的integer。" />
+  <GlossaryItem term="deep equivalence relation" definition="对recursive values显式定义的domain equality规则。" />
+  <GlossaryItem term="cgo ownership boundary" definition="Go/C memory间copy、pin、retain与free责任。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Go Programming Language, Chapter 13: Low-Level Programming"
+  adaptedUrl="https://www.gopl.io/"
+/>

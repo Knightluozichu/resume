@@ -1,0 +1,214 @@
+---
+title: "第 3 章：控件，控件，你必须学会控件"
+type: A
+section: "Unity UI 设计 · 控件与响应式"
+order: 3
+description: "逐一掌握 Text、Image、RawImage、Button、Selectable、Toggle、Slider、ScrollRect、Mask、动画与导航。"
+demo: true
+math: false
+sourceUrl: "https://api.pageplace.de/preview/DT0400.9781783553624_A24173589/preview-9781783553624_A24173589.pdf"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Uid03ControlControlMapLab,
+  Uid03ControlControlExperimentLab,
+  Uid03ControlControlEvidenceLab,
+} from "@/components/mdx/unity-ui-design/diagrams/uid-03-control-control";
+
+<Objectives>
+
+- 能比较 Text、Image 四种类型与 RawImage 的纹理、网格和交互语义
+- 能解释 Selectable 状态机、UnityEvent、ToggleGroup、Slider 与导航如何协作
+- 能复现 ScrollRect、Mask、方向导航和动态事件参数的完整控件场景
+
+</Objectives>
+
+## 问题：为什么把控件拖进 Canvas 并不等于真正理解它的状态与数据流
+
+先预测：一个 Button 变灰但仍能被代码选中，问题在 Image、Selectable、Navigation 还是 EventSystem？本章不只列控件，而是从文字、图像、效果和动画一路追到 Selectable 状态机、事件、菜单导航、ToggleGroup、Slider、ScrollRect、Mask 与 Shader。每种控件都是视觉数据、交互状态和事件输出的组合。
+
+<Uid03ControlControlMapLab />
+
+## 原书边界：Chapter 3 · Control, Control, You Must Learn Control
+
+原书 Chapter 3 包含 Dealing with text、FPS control、input、shadows/effects、images 与 Simple/Sliced/Tiled/Filled 类型、animation、RawImage、Button、Selectable、events、menu、directional navigation、Toggle grouping、dynamic event properties、Slider、Scroll Rect、Masking、Navigation 和 shaders。必须按这条实际控件路径覆盖。
+
+- **Dealing with text；A simple FPS control；Adding interaction with input；Shadows and effects**
+- **Bring on the images；Image types；Simple、Sliced、Tiled 与 Filled Images；RawImage**
+- **Adding animation to the mix；Button；What makes it Selectable?；An event occurred**
+- **The ultimate awesome menu；Which direction to travel?；Navigation**
+- **Grouping toggles；Dynamic event properties；Sliding opportunities**
+- **Scroll Rect；Masking；A word on shaders**
+
+这些小节按出版社目录保持唯一归属；本站的实验、现代迁移与复习只是教学增强，不改变原章身份，也不拿一个现代主题重复补多个原始单元。
+
+## 核心模型：从对象到可观察结果
+
+Graphic 类控件先生成可渲染顶点：Text 依据字体与字符串生成字形网格，Image 依据 Sprite border 和 type 生成简单、九宫格、平铺或填充几何，RawImage 直接映射 Texture 与 uvRect。Selectable 再叠加 Normal、Highlighted、Pressed、Selected、Disabled 状态，并用颜色、Sprite Swap 或 Animation 驱动目标 Graphic。视觉与交互是组合关系，不是继承名称自动保证。
+
+<Term def="生成 UI 顶点、颜色、材质并参与 Canvas 渲染与射线检测的基类。">
+  Graphic
+</Term>
+用于本章的可观察模型；判断它是否成立时，要回到输入、状态、几何或事件日志，而不是只凭最终截图。
+
+<Term def="利用 Sprite border 将图像分成九宫格，在拉伸时保留边角的 Image 类型。">
+  Sliced Image
+</Term>
+用于本章的可观察模型；判断它是否成立时，要回到输入、状态、几何或事件日志，而不是只凭最终截图。
+
+<Term def="统一管理可交互控件状态转换、导航和 interactable 状态的基类。">
+  Selectable
+</Term>
+用于本章的可观察模型；判断它是否成立时，要回到输入、状态、几何或事件日志，而不是只凭最终截图。
+
+<Term def="约束一组 Toggle 的互斥选择并管理当前激活项的组件。">
+  Toggle Group
+</Term>
+用于本章的可观察模型；判断它是否成立时，要回到输入、状态、几何或事件日志，而不是只凭最终截图。
+
+<Term def="把拖动、滚轮与惯性转换为内容矩形位移，并提供规范化位置的控件。">
+  Scroll Rect
+</Term>
+用于本章的可观察模型；判断它是否成立时，要回到输入、状态、几何或事件日志，而不是只凭最终截图。
+
+## 关键对象与生产者到消费者链
+
+一次菜单操作从 EventSystem 当前选中对象开始，Navigation 根据方向寻找下一个 Selectable，Move/Submit/Cancel 事件改变状态并触发 UnityEvent。ToggleGroup 维护互斥选择，Slider 把指针位置映射到规范化值，ScrollRect 把拖动与惯性转换为 content anchoredPosition，Mask/RectMask2D 决定可见区。任何一环配置错误都可能表现为按钮不亮、手柄迷路、滚动穿透或内容越界。
+
+为了避免“改完好像对了”，先写下生产者、变换规则、消费者与可观测量。每个对象都必须能在层级、Inspector、事件日志、坐标记录或渲染结果中找到证据；没有观测点的解释不能进入结论。
+
+## 三步可重复实验
+
+先预测：只改变当前步骤的一个参数后，哪一项几何、状态或事件指标应首先变化？如果最终画面变化但中间证据不符合预测，应把它当作未归因结果，而不是成功。
+
+<Stepper>
+<Step title="固定范围与基线">
+    <Uid03ControlControlMapLab />
+    先构建 Text、四类 Image、RawImage 与效果对照，观察顶点、边框和 UV 的变化。
+
+```csharp
+button.onClick.AddListener(OpenSettings);
+slider.onValueChanged.AddListener(SetVolume);
+toggle.onValueChanged.AddListener(SetFullscreen);
+```
+
+  </Step>
+<Step title="运行单变量实验">
+    <Uid03ControlControlExperimentLab />
+    加入 Button、ToggleGroup、Slider 和动画状态，记录 Selectable 状态与 UnityEvent 参数。
+
+```csharp
+var nav = first.navigation;
+nav.mode = Navigation.Mode.Explicit;
+nav.selectOnRight = second;
+first.navigation = nav;
+```
+
+  </Step>
+<Step title="复测并签发证据">
+    <Uid03ControlControlEvidenceLab />
+    完成 ScrollRect、Mask 与显式手柄导航，使用四类输入重放同一菜单流程。
+
+```csharp
+scrollRect.verticalNormalizedPosition = 1f;
+Debug.Log($"selected={EventSystem.current.currentSelectedGameObject?.name}");
+```
+
+  </Step>
+</Stepper>
+
+## 失败边界与常见误判
+
+<Callout type="trap">
+  **边界一**：使用 Sliced Image 却未设置 Sprite border，会得到和 Simple
+  类似的拉伸结果；问题不在布局，而在资源元数据。
+</Callout>
+
+<Callout type="trap">
+  **边界二**：Automatic Navigation
+  在不规则布局中可能选错目标。发布前必须用真实手柄走遍边界，并对关键菜单改用
+  Explicit。
+</Callout>
+
+失败样本要保留输入、层级、关键参数和日志。只保存一张错误截图，会丢掉父矩形、相机、输入模块、射线排序或版本差异这些真正决定行为的条件。
+
+## 从 Unity 4.6/5 到现代 Unity
+
+现代项目通常用 TextMeshProUGUI 替代旧 Text，并可用 SpriteAtlas、Input System 与 RectMask2D 改善资源和输入。Selectable 与 UnityEvent 的核心行为仍适用。UI Toolkit 的 Button、ScrollView 和 USS 状态选择器使用另一套树与事件传播；可以比较能力，但不能把它们混进本章原始控件清单。
+
+迁移报告采用四列：原书对象、稳定不变量、现代载体、已知差异。若现代载体改变事件模型、坐标空间或序列化方式，就应判为“功能近似，需要重新验收”，不能写成无差别替换。
+
+## 验收证据包
+
+验收场景是一套可用鼠标、触摸、键盘和手柄操作的设置菜单，包含九宫格面板、Filled 血条、RawImage 预览、按钮、ToggleGroup、Slider 和滚动列表。保存每个 Selectable 的状态转换、当前选中对象、事件参数、scroll normalizedPosition、mask 边界和渲染输出。
+
+验收还要包含正常、边界和失败三类样本。正常样本证明主路径，边界样本证明约束，失败样本证明诊断方法确实能抓到错误。三者使用同一场景与记录格式，下一版本才能直接回归。
+
+## 小结
+
+- Graphic 决定视觉网格，Selectable 决定交互状态与导航
+- Image 类型要与 Sprite border、填充目标和纹理来源匹配
+- Toggle、Slider、ScrollRect 都是输入到状态再到事件的映射器
+- 控件验收必须覆盖鼠标、触摸、键盘和手柄路径
+
+<Exercises>
+
+**问题 1** Filled Image 与 Slider 的职责有什么不同？
+
+<Answer>
+  Filled Image 只根据 fillAmount 改变视觉填充；Slider
+  还处理输入、范围、方向、handle 和 value changed 事件，常用 Slider 驱动 Filled
+  Image。
+</Answer>
+
+**问题 2** 为什么 RawImage 不适合替代所有 Image？
+
+<Answer>
+  RawImage 直接引用 Texture，缺少 Sprite border、atlas 和 Image type
+  语义，容易增加纹理切换；它更适合 RenderTexture 或动态纹理。
+</Answer>
+
+**问题 3** 怎样验收一个可访问的手柄菜单？
+
+<Answer>
+  记录每个方向的显式或自动邻居，验证 disabled
+  项跳过、默认焦点、循环边界、Submit/Cancel 和视觉选中状态，并用事件日志重放。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Graphic">
+    生成 UI 顶点、颜色、材质并参与 Canvas 渲染与射线检测的基类。
+  </GlossaryItem>
+  <GlossaryItem term="Sliced Image">
+    利用 Sprite border 将图像分成九宫格，在拉伸时保留边角的 Image 类型。
+  </GlossaryItem>
+  <GlossaryItem term="Selectable">
+    统一管理可交互控件状态转换、导航和 interactable 状态的基类。
+  </GlossaryItem>
+  <GlossaryItem term="Toggle Group">
+    约束一组 Toggle 的互斥选择并管理当前激活项的组件。
+  </GlossaryItem>
+  <GlossaryItem term="Scroll Rect">
+    把拖动、滚轮与惯性转换为内容矩形位移，并提供规范化位置的控件。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Simon Jackson《Unity 3D UI Essentials》官方目录与中文版身份资料"
+  adaptedUrl="https://darkgenesis.zenithmoon.com/announcing-unity-3d-ui-essentials.html"
+/>

@@ -1,0 +1,204 @@
+---
+title: "Chapter 10. Properties"
+type: C
+section: "CLR via C# 4e · Designing Types"
+order: 10
+description: "拆解property/accessor metadata、auto property、initializer、anonymous type/Tuple、indexer、性能、可访问性与泛型限制。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcIndexerAccessorLab, CvcInitializerShapeLab, CvcPropertyMethodLab } from "@/components/mdx/clr-via-csharp/diagrams/properties";
+
+<Objectives>
+
+- 能描述property在metadata中由accessor methods实现，并判断何时应改用field或method
+- 能分析object/collection initializer、anonymous type和Tuple的构造顺序与版本边界
+- 能设计indexer和accessor visibility，验证成本、异常、aliasing、泛型与工具兼容
+
+</Objectives>
+
+## 为什么Property不是“更漂亮的Field”
+
+Property在CLR中通过get/set methods执行，metadata Property row把accessors关联起来。它能验证、计算、lazy load、virtual dispatch或抛异常，因此调用者需要的是行为contract，而不是“点语法等于直接读内存”的错觉。好的property表现得像值：快速、可重复、无显著side effect；昂贵I/O、异步、状态转移和可能失败的搜索更适合method。
+
+先预测：auto property能否以后无损加入validation；getter是否保证只执行一次；object initializer能否绕过constructor invariant；anonymous type能否作为跨assembly public return；Tuple元素名是否属于runtime identity；indexer是否可以是async。把答案分别放进binary/source compatibility、call semantics、construction sequencing和metadata。
+
+<Term def="Property由get/set方法、可访问性、virtual dispatch、异常与值语义共同形成的访问协议。">accessor contract</Term>
+
+## Parameterless Properties
+
+普通property不带调用方显式参数，getter返回值，setter接收隐式`value`。Accessor可static、instance、virtual、abstract或interface implementation。Compiler把`obj.Name`变成method call；JIT可能inline，但语义仍允许代码执行。Getter不应秘密改变重要状态、启动网络或返回每次不同的消耗性值，否则改名为method暴露动作。
+
+```csharp
+public sealed class Temperature
+{
+    private decimal _celsius;
+
+    public decimal Celsius
+    {
+        get => _celsius;
+        private set
+        {
+            if (value < -273.15m)
+                throw new ArgumentOutOfRangeException(nameof(value));
+            _celsius = value;
+        }
+    }
+
+    public void Calibrate(decimal delta) => Celsius += delta;
+}
+```
+
+Property返回mutable object时要说明live view还是snapshot。每次返回new copy会产生allocation；直接返回内部collection会泄漏invariant。可返回`IReadOnlyList<T>`但底层仍可能变化，真正snapshot要copy/immutable。线程安全也不是property自动拥有：多个accessor之间的复合read-modify-write仍需同步。
+
+## Automatically Implemented Properties
+
+Auto property让compiler生成匿名backing field与accessors，适合没有额外逻辑的状态。`init`/required是现代C#扩展，可约束初始化surface，但原书时代主要是get/set。Auto property backing field名称是compiler detail，reflection/serialization不应持久依赖；以后改成手写property通常保持source call，但field-based serializer、binary serialization或reflection consumer可能观察差异。
+
+<Term def="由compiler生成backing field与accessors、但仍以普通property contract暴露的声明。">auto-property storage</Term>
+
+Public setter允许对象在任意时刻进入新状态；若多个properties必须共同满足invariant，constructor/factory或cohesive method比逐个set安全。Private init/set可缩小写入owner。不要把每个DTO习惯机械复制到domain entity。
+
+## Defining Properties Intelligently
+
+Framework design原则包括：getter快速且不抛普通可预期错误；同一状态重复读取稳定；setter完成后getter反映相同逻辑值；属性命名为名词/形容词；boolean用肯定含义；昂贵/异步操作用method。若值可能缺失，可nullable/Try method/Option表达，不要让getter偶尔阻塞重试。
+
+Property can cache，但需要定义invalidating、thread safety和memory retention。Lazy initialization若factory失败是否重试也要明确。Virtual property相当于两个可能独立override的方法；base code在constructor中读取virtual property会触及未初始化derived state，应避免。
+
+<Stepper>
+  <Step title="切换field、property、auto property与method"><CvcPropertyMethodLab /></Step>
+  <Step title="填写访问成本表">记录每个getter/setter的复杂度、allocation、I/O、异常、缓存、线程与snapshot/live语义。</Step>
+  <Step title="执行重复访问实验">连续读取、并发读写、序列化和derived override，验证值语义与invariant没有被语法掩盖。</Step>
+</Stepper>
+
+<Callout type="trap" title="Property Getter只是读值，所以可以安全执行远程I/O">
+点语法让caller预期快速、可重复访问；远程I/O有延迟、取消和失败，应使用`Get...Async`方法并显式接受CancellationToken。
+</Callout>
+
+## Object and Collection Initializers
+
+Object initializer先调用constructor，再按源顺序调用set/init accessors或写accessible fields。它不原子：第三个setter抛异常时，前两个side effects已发生，虽然对象通常尚未赋给caller变量。Constructor必须先建立基本有效状态；跨properties invariant不能只依赖caller恰好按顺序设置。
+
+```csharp
+var request = new ExportRequest(requiredPath)
+{
+    Format = ExportFormat.Csv,
+    IncludeHeader = true,
+};
+
+var tags = new TagSet
+{
+    "runtime",
+    "metadata",
+    { "edition", "fourth" }, // 对应适用的Add overload
+};
+```
+
+Collection initializer在construction后调用一个或多个`Add`方法，每项失败可能留下partial collection。用于临时local通常可接受；若Add触发外部side effects或对象马上发布，使用builder/factory先验证全部输入。Initializer语法不绕过accessibility，也不直接写private backing field。
+
+<Term def="Constructor完成后，initializer按源顺序继续调用members/Add而形成的非原子初始化阶段。">initializer sequencing</Term>
+
+## Anonymous Types
+
+Anonymous type由compiler生成internal sealed immutable-like type，properties从initializer推断，适合方法内部projection、LINQ与短生命周期结构。相同assembly中相同name/type/order shape可能复用compiler type，但不要依赖为public contract、serialization identity或跨assemblycast。`var`通常是持有anonymous value的唯一方式。
+
+Anonymous equality/hash按properties结构值生成，若property是mutable reference，其内部改变仍会影响行为。跨layer需要稳定DTO/record，给字段、validation、version和documentation明确身份。
+
+## The System.Tuple Type
+
+原书介绍reference-type `System.Tuple<...>`，通过`Tuple.Create`/Item1等组合多个值；现代C#更常用value-type `ValueTuple`和tuple syntax `(Name, Count)`。二者适合局部multiple return，不适合长期public protocol：Item位置难演进，元素名主要是compiler metadata/便捷，不构成独立runtime type identity。
+
+```csharp
+static (int Success, int Failed) CountResults(IEnumerable<Result> results)
+{
+    int success = 0, failed = 0;
+    foreach (Result result in results)
+        if (result.IsSuccess) success++; else failed++;
+    return (success, failed);
+}
+
+(int ok, int bad) = CountResults(results);
+```
+
+若结果字段有unit、invariant、未来可选项或跨process serialization，创建命名record/class。Tuple适合“调用点附近即可理解”的组合，不应让`Item7.Rest.Item2`成为系统contract。
+
+<Stepper>
+  <Step title="切换object init、collection init、anonymous type与Tuple"><CvcInitializerShapeLab /></Step>
+  <Step title="追踪构造顺序">记录constructor、每个setter/Add、异常位置、对象何时发布和失败时哪些side effects已发生。</Step>
+  <Step title="判断shape寿命">局部projection保留anonymous/tuple；跨method/layer/version的shape升级为命名immutable contract。</Step>
+</Stepper>
+
+<Callout type="trap" title="Object Initializer会一次性建立完整对象">
+它是constructor之后的一串member assignments，不是transaction。跨字段invariant应在constructor/factory中一次验证，外部副作用需失败补偿。
+</Callout>
+
+## Parameterful Properties
+
+CLR允许property带parameters；C#把默认命名property映射为indexer `this[...]`，metadata中常名`Item`并可由IndexerNameAttribute改变。Indexer适合collection、matrix、lookup等自然索引语义。若查找可能不存在，要决定抛KeyNotFound、返回nullable、TryGet还是提供Contains；getter不应悄悄插入default值。
+
+Multi-dimensional indexer要定义bounds、ordering与复杂度。String key要说明comparer/culture；并发collection indexer只保证单次access语义，不保证“先读后写”原子。Indexer setter若改变多个内部结构，应维持整体invariant。
+
+## The Performance of Calling Property Accessor Methods
+
+Accessor是method，JIT可能inline简单body，使成本接近field；virtual/interface/reflection、large body或跨AOT边界可能不inline。不要因理论call overhead公开field，也不要在getter藏O(n)、allocation或锁争用。用benchmark、CPU profile和allocation trace测真实hot path。
+
+Caching property结果可降低计算却增加synchronization、staleness和retention。Span/ref return可避免copy但暴露lifetime/aliasing。性能优化必须保持contract；若调用成本不再符合property直觉，改method并命名成本。
+
+## Property Accessor Accessibility
+
+Accessor可以比property更窄，例如public get/private set或public get/internal set；不能比property更宽。这表达外部只读、owner可写，但不等于值深度immutable。Protected setter同样创建derived mutation contract；serializer/ORM可能要求特定visibility，要通过explicit configuration/source generation满足，不要无条件public set。
+
+<Term def="Property整体与单个get/set accessor分别选择consumer，从而控制读写能力的边界。">accessor visibility</Term>
+
+## Generic Property Accessor Methods
+
+CLR metadata中的accessor是methods，但C# property自身不能像generic method那样声明新的type parameters；它可以使用containing generic type的参数。例如`Box<T>.Value`的accessors随closed `T`工作。若一次读取需要caller提供新类型`Get<T>()`，应使用generic method而非伪装property。
+
+Reflection调用generic owner property时，先构造closed declaring type再取PropertyInfo；open type上的accessor包含未绑定parameters，不能普通Invoke。Dynamic binding也按runtime type/property metadata选择，不会把property变成任意generic converter。
+
+<Stepper>
+  <Step title="切换indexer、accessor visibility、ref return与generic owner"><CvcIndexerAccessorLab /></Step>
+  <Step title="审计lookup协议">写出key/index bounds、missing、comparer、cost、thread safety、mutation和returned reference lifetime。</Step>
+  <Step title="验证工具consumer">从reflection、serializer、other CLR language和AOT/trimming目标访问，确认metadata与preservation满足。</Step>
+</Stepper>
+
+## 本章回顾：Property必须表现为Value Access
+
+1. Property是accessor methods和metadata association，不是field；昂贵/异步/动作使用method。
+2. Auto property生成backing field，public setter与field-based tool仍会冻结实现契约。
+3. Object/collection initializer按顺序调用members/Add，不原子；anonymous/tuple适合局部shape。
+4. Indexer是parameterful property，要明确missing、cost、comparer、bounds和并发。
+5. Accessor visibility控制读写surface；C# property不能声明自己的method-like generic parameters。
+
+<Exercises>
+
+**问题 1：一个getter偶尔需要两秒并可能超时，应如何改造？**
+
+<Answer>把远程/昂贵访问改为`Get...Async(CancellationToken)`，明确Task、timeout、retry和failure；property只返回已缓存snapshot/状态并注明freshness，或删除。采集latency与cache evidence，不让点语法隐藏I/O。</Answer>
+
+**问题 2：Object initializer第三个setter失败，前两个写入外部审计日志，问题在哪？**
+
+<Answer>Initializer是顺序calls，不提供rollback。Setter不应执行跨系统side effects；让constructor/builder先验证所有值并建立对象，再由显式command执行事务性side effect。若不可避免，为每一步设计idempotency/compensation并做fault injection。</Answer>
+
+**问题 3：什么时候tuple应升级为命名结果类型？**
+
+<Answer>当结果跨layer/public API、需要version/serialization/documentation、字段有unit/invariant、调用点远离定义或预计扩展时，用record/class。Tuple只适合附近可读的短生命周期multiple return；元素名不是强runtime identity和长期版本协议。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="accessor contract" definition="Get/set方法共同形成的property行为协议。" />
+  <GlossaryItem term="auto-property storage" definition="Compiler为auto property生成的backing field与accessors。" />
+  <GlossaryItem term="initializer sequencing" definition="Constructor后按源顺序执行members/Add的非原子阶段。" />
+  <GlossaryItem term="accessor visibility" definition="Property与单个accessor分别控制读写consumer的范围。" />
+  <GlossaryItem term="shape lifetime" definition="Anonymous或tuple数据形状适合局部还是需要长期命名contract的边界。" />
+</Glossary>
+
+<Term def="决定临时projection何时升级为可版本化命名DTO/record的使用跨度。">shape lifetime</Term>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 10: Properties" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

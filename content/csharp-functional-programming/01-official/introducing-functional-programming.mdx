@@ -1,0 +1,155 @@
+---
+title: "Chapter 1. Introducing functional programming"
+type: C
+section: "Functional C# 1e · Core concepts"
+order: 1
+description: "覆盖first-class functions、避免mutation、strong guarantees、C#函数式能力、function representation、HOF去重与收益，以显式behavior和effect boundary入门。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-1"
+draft: false
+---
+
+import { CfpFunctionRepresentationLab, CfpHofLifecycleLab, CfpParadigmBoundaryLab } from "@/components/mdx/csharp-functional-programming/diagrams/introducing-functional-programming";
+
+<Objectives>
+
+- 能解释first-class functions、immutability与strong guarantees如何改变dependency、state transition和reasoning boundary
+- 能比较method group、delegate、lambda、adapter与function factory的binding/capture语义，复现同一behavior的不同表示
+- 能设计setup/execute/teardown型higher-order function，区分消除duplication与隐藏control flow的边界
+
+</Objectives>
+
+## 为什么Functional Programming先改变思考单位
+
+Imperative code常把“做什么、按什么顺序、改了谁”写在同一块；functional style尝试把behavior当value，把data transition写成从input到output的mapping，把不可避免的I/O留给明确boundary。重点不是禁止class、loop或mutation，而是让reasoning所需信息尽量出现在signature和value flow里。
+
+先预测：使用lambda是否就等于functional；LINQ query不修改source是否就保证整个program pure；把setup/teardown包进HOF是否永远更清楚；同一个capturing lambda多次执行是否必然给相同结果。答案都是否。
+
+<Term def="Function可以像其他value一样被赋值、作为argument传入、作为result返回并组成更大behavior。">first-class behavior</Term>
+
+## What is this thing called functional programming?
+
+本书用三条可操作特征切入：functions as first-class values、avoiding state mutation、writing programs with strong guarantees。First-class让依赖behavior不必硬编码；immutable transformations让旧state仍可观察；strong guarantee让caller能依据explicit input推理result与failure，而不必先扫描global variables。
+
+Mutation不是语法罪名，而是alias和ordering成本。`List<T>.Sort()`原地改变list，所有持有alias的code都观察到变化；`OrderBy`返回新的sequence view，source保持不变。后者仍可能deferred、capture或访问I/O，因此“non-mutating API”不自动等于pure。
+
+```csharp
+var source = new[] { 3, 1, 2 };
+var ordered = source.OrderBy(value => value).ToArray();
+
+// source remains [3, 1, 2]; ordered is [1, 2, 3]
+```
+
+<Term def="Operation用新value表达state变化，不通过已有alias修改原value的设计方式。">immutable transformation</Term>
+
+<Stepper>
+  <Step title="切换first-class、mutation、immutable与guarantee"><CfpParadigmBoundaryLab /></Step>
+  <Step title="标出visible与hidden inputs">列argument、captured variable、clock、store、global state及可能被修改的alias。</Step>
+  <Step title="用repeat与alias observation验收">相同input重复调用，保留original alias，比较result、source state与external effects。</Step>
+</Stepper>
+
+<Callout type="trap" title="只要没有赋值语句，函数就是Pure">
+读取clock/random/global、enumerate remote query、抛依赖异常或修改传入对象都可能是effect。Purity按observable dependency/effect判断，不按source里有没有等号判断。
+</Callout>
+
+## How functional a language is C#?
+
+C#是multi-paradigm language。Delegates/lambdas把functions变成values，LINQ提供Map/Filter/Bind-like composition，generics表达container operations，C# 6/7又加入expression-bodied members、tuples、pattern等更适合value flow的syntax。但C#不会强制purity，也没有built-in algebraic data types或自动effect tracking。
+
+因此functionality来自discipline和library design：immutable inputs、honest signatures、pure core、explicit effect shell。Modern C# records、nullable references与new patterns属于第二版及之后语境；本第一版正文保持C# 6/7边界，后续只作为versioned alternatives。
+
+## Thinking in functions
+
+把function看作数学mapping并不要求所有business code都能写成公式，而是要求问：domain是什么、codomain是什么、哪些inputs未写出来、哪些outputs通过mutation或exception偷偷传递。C# method只有在转换到delegate/expression type后才作为value参与composition。
+
+```csharp
+Func<Order, decimal> total = order => order.Lines.Sum(line => line.Price);
+Func<decimal, string> format = value => value.ToString("C", culture);
+Func<Order, string> display = order => format(total(order));
+```
+
+<Term def="Method、lambda或delegate从input domain映射到output codomain，并把hidden dependencies最小化的视角。">function-as-map model</Term>
+
+<Stepper>
+  <Step title="切换method、lambda、adapter与factory"><CfpFunctionRepresentationLab /></Step>
+  <Step title="写出target type和capture">记录delegate/expression target、captured storage、exception/effect以及是否每次创建新closure。</Step>
+  <Step title="做substitution与lifetime测试">替换equivalent function，改变captured value，检查result、allocation和retention是否符合contract。</Step>
+</Stepper>
+
+## Higher-order functions
+
+Higher-order function接收function、返回function，或两者兼有。`Where`依赖predicate，adapter把一个signature转换为另一个，factory通过capture生成specialized behavior。它让variation成为explicit argument，减少inheritance/config flags带来的隐形branch。
+
+HOF也可能过度抽象：若传入functions数量太多、generic types难以读、control flow跨多层，reader只能在debugger里恢复执行顺序。判断标准是调用点是否更像domain sentence，effect/lifetime是否更明确。
+
+<Term def="接收或产生function value，从而抽象behavior variation、policy或lifecycle的function。">higher-order function</Term>
+
+## Using HOFs to avoid duplication
+
+典型重复不是业务action，而是数据库connection的open/close、transaction commit/rollback或lock acquire/release。HOF可以拥有setup和teardown，把差异action作为function传入。它必须通过`using`/`try-finally`保证normal与fault cleanup，并声明resource由谁拥有。
+
+```csharp
+static T WithConnection<T>(Func<IDbConnection, T> use)
+{
+    using var connection = OpenConnection();
+    connection.Open();
+    return use(connection);
+}
+
+var customer = WithConnection(db => LoadCustomer(db, id));
+```
+
+把`using`变HOF的收益是lifecycle policy集中；代价是stack trace、async support、transaction boundary和multiple operations可能变复杂。Modern async resource需要separate async HOF/`await using`，不能让sync wrapper阻塞Task。
+
+<Stepper>
+  <Step title="切换setup、execute、teardown与tradeoff"><CfpHofLifecycleLab /></Step>
+  <Step title="画出resource ownership和所有退出路径">标open、callback、return、callback throw、cleanup throw与primary exception policy。</Step>
+  <Step title="用fault injection验收HOF">在setup/action/teardown分别抛错，检查dispose次数、cause chain与是否允许callback泄露resource。</Step>
+</Stepper>
+
+<Callout type="trap" title="把Using包装成HOF后Resource一定不会泄漏">
+Callback可返回deferred sequence、Task或保存resource alias，使work逃出HOF scope；cleanup fault还可能遮蔽primary fault。Return type和tests必须禁止lifetime escape。
+</Callout>
+
+## Benefits of functional programming
+
+收益来自上述约束的组合：pure function容易test与parallelize；immutable value减少alias reasoning；composition让workflow按types连接；HOF集中policy；explicit outcomes减少exception/null surprise。它不是用更学术的词替换OOP，而是在适合的boundary降低可变状态与隐形依赖。
+
+<Term def="给定相同显式inputs时，可用value substitution替换function call而不改变program observable behavior的性质。">substitution guarantee</Term>
+
+## 本章回顾：Behavior、Data与Effect各有位置
+
+1. Functional style把behavior当value、state change当transformation、effect留给owner boundary。
+2. C#提供delegates、lambdas、LINQ和generics，但purity与immutability依赖设计纪律。
+3. Function-as-map迫使signature暴露domain、codomain与hidden dependency。
+4. HOF可抽象policy和lifecycle，必须保留control flow与resource ownership。
+5. Purity、immutability和composition共同带来testability、concurrency与maintenance收益。
+
+<Exercises>
+
+**问题 1：一个lambda读取DateTime.Now但不写任何state，它pure吗？**
+
+<Answer>不pure；clock是hidden input，相同arguments可产生不同result。把Instant/clock function作为argument，在imperative shell读取真实时间，pure core接收value。测试固定时间、boundary和repeatability。</Answer>
+
+**问题 2：怎样判断resource HOF是否比重复using更好？**
+
+<Answer>比较是否真正统一owner/cleanup policy、callback signature是否阻止deferred escape、调用点是否更清楚、sync/async是否正确分离。注入setup/action/cleanup faults并检查dispose与cause；若wrapper隐藏transaction或使types难读，保留显式using。</Answer>
+
+**问题 3：First-class function最直接改善哪类dependency？**
+
+<Answer>把易变policy/behavior从hard-coded call变成typed argument，例如pricing、validation、retry decision。Caller/composition root选择function，core只依赖signature。用两个implementations和substitution tests证明behavior可替换而不用改core。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="first-class behavior" definition="可赋值、传入、返回和组合的function value。" />
+  <GlossaryItem term="immutable transformation" definition="返回新value而不通过alias修改原value。" />
+  <GlossaryItem term="function-as-map model" definition="以domain、codomain和explicit inputs描述function。" />
+  <GlossaryItem term="higher-order function" definition="接收或产生function以抽象behavior或policy。" />
+  <GlossaryItem term="substitution guarantee" definition="Function call可被相同result替换而不改变observable behavior。" />
+</Glossary>
+
+<Attribution adaptedFrom="Functional Programming in C#, First Edition, Chapter 1: Introducing functional programming" adaptedUrl="https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-1" />

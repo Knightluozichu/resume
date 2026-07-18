@@ -1,0 +1,411 @@
+---
+title: "Item 17：以独立语句把 newed object 存入 smart pointer"
+type: A
+section: Chapter 3 · Resource Management
+order: 17
+description: 对齐 Effective C++ 第三版 Item 17：解释旧函数实参求值交错导致的 ownership gap，以独立 smart pointer 语句和 make_unique/make_shared 消除泄漏，并说明 C++17 sequencing。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppLegacyEvaluationLeakMap,
+  EcppMakeSharedTradeoffMap,
+  EcppStandaloneOwnerStatementMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-17-smart-pointer-statement";
+
+<Objectives>
+
+- 能复现旧标准中 `new`、smart pointer construction 与其他 function argument evaluation 交错造成的 resource leak
+- 能实现 standalone smart-pointer statement、make_unique/make_shared 与 owning factory，明确 borrow 和 ownership transfer
+- 能比较 C++17 sequencing、make_shared control block 生命周期和 custom deleter 例外，并设计失败注入测试
+
+</Objectives>
+
+## 从一个看似安全的函数调用开始
+
+原书示例等价于：
+
+```cpp
+processWidget(
+    std::shared_ptr<Widget>(new Widget),
+    priority());
+```
+
+表面上 raw pointer 立刻写进 shared_ptr constructor，但函数调用包含多个可独立求值步骤。
+
+<Term def="函数调用中为每个实参计算值并执行其子表达式的过程。">
+  function argument evaluation
+</Term>
+
+<Term def="new 成功到 smart pointer constructor 完成接管之间，资源暂时没有 owner 的区间。">
+  ownership gap
+</Term>
+
+在原书对应的旧规则下，编译器可先执行 `new Widget`，再执行 `priority()`，最后构造 shared_ptr。
+
+<EcppLegacyEvaluationLeakMap />
+
+## 异常如何落入 gap
+
+若 priority 抛异常，Widget 已分配却没有管理对象：
+
+```text
+new Widget succeeds
+  -> priority() throws
+  -> stack unwinds
+  -> shared_ptr was never constructed
+  -> no destructor owns Widget
+```
+
+<Term def="异常传播时只销毁已经完成构造的自动对象，尚未构造的 smart pointer 不参与清理。">
+  constructed-owner requirement
+</Term>
+
+RAII 只有 owner 真正存在后才生效。
+
+<Term def="resource allocation 成功后因后续实参抛异常而永远丢失 raw pointer 的泄漏。">
+  argument-evaluation leak
+</Term>
+
+这不是 shared_ptr destructor 的问题，而是它尚未开始生命周期。
+
+<Callout type="trap">
+  **现象**：raw new 与 shared_ptr
+  写在同一行，就认定“立即接管”。**原因**：源码相邻不等于求值不可交错，且 owner
+  constructor 尚未完成。**修法**：用 make 函数，或在前一个完整语句先建立 owner。
+</Callout>
+
+## 原书修复：独立语句先建立 owner
+
+<Term def="一个完整表达式结束点，所有 value computation 与 side effects 必须完成后才进入下一语句。">
+  full-expression boundary
+</Term>
+
+```cpp
+std::shared_ptr<Widget> widget(new Widget);
+processWidget(widget, priority());
+```
+
+第一条完整语句结束时 shared_ptr 已构造。priority 再抛异常，widget destructor 在 stack unwinding 中 delete Widget。
+
+<Term def="在单独完整语句中完成 raw resource 到 smart pointer owner 的交接。">
+  standalone smart-pointer statement
+</Term>
+
+正是 Item 17 的原始建议：Store newed objects in smart pointers in standalone statements（以独立语句把 newed objects 存入 smart pointers）。
+
+<EcppStandaloneOwnerStatementMap />
+
+## 现代首选 make_unique
+
+<Term def="分配构造对象并直接返回 unique_ptr、不给调用方暴露 raw new 的标准 factory。">
+  make_unique
+</Term>
+
+```cpp
+auto widget = std::make_unique<Widget>();
+processWidget(*widget, priority()); // borrow
+consumeWidget(std::move(widget));  // transfer ownership
+```
+
+owner 在单一 library call 中建立，类型只写一次，异常清理由实现保证。
+
+<Term def="函数签名和调用表达式明确区分临时借用与取得 unique ownership。">
+  ownership-explicit call
+</Term>
+
+`*widget` 是 borrow，`std::move(widget)` 是 transfer。
+
+## make_shared 的安全与分配优势
+
+<Term def="分配构造对象并返回 shared_ptr，通常把对象和 control block 放入一次 allocation。">
+  make_shared
+</Term>
+
+```cpp
+auto widget = std::make_shared<Widget>();
+processShared(widget, priority());
+```
+
+相比 `shared_ptr<Widget>(new Widget)` 通常减少一次 allocation，改善局部性，也没有 raw ownership gap。
+
+<Term def="shared_ptr/weak_ptr 保存引用计数和 deleter 等共享状态的结构。">
+  control block
+</Term>
+
+make_shared 并非所有场景必选，需理解生命周期与 deleter。
+
+<EcppMakeSharedTradeoffMap />
+
+## weak_ptr 可能延长整块 allocation
+
+make_shared 将对象与 control block 合并。strong count 归零时对象 destructor 执行，但仍有 weak_ptr 时 control block 必须保留，整块 allocation 可能直到 weak count 归零才释放。
+
+<Term def="对象生命周期已结束，但包含 control block 的合并存储因 weak observers 仍存在而延迟归还。">
+  combined-allocation retention
+</Term>
+
+大对象且 weak_ptr 长寿命时，分离 `shared_ptr(new T)` 可能更早释放对象存储，代价是两次分配。
+
+<Term def="strong owner 归零时对象销毁，但 weak control state 继续存在直到所有 weak observer 消失。">
+  weak-control lifetime
+</Term>
+
+需要测量真实内存压力。
+
+## custom deleter 与 make_shared
+
+<Term def="shared/unique owner 析构时用于替代普通 delete 的释放策略对象。">
+  custom deleter
+</Term>
+
+make_shared 不接受任意 object deleter；平台资源或特殊 pool 可能需要：
+
+```cpp
+std::shared_ptr<Resource> resource(
+    acquire_resource(),
+    [](Resource* value) noexcept { release_resource(value); });
+```
+
+<Term def="显式 smart pointer constructor 将 raw resource 与特定 deleter 一次绑定的操作。">
+  deleter-binding construction
+</Term>
+
+仍应让 acquire 结果立即进入这一 constructor，最好由 factory 封装，避免调用点重复 raw pattern。
+
+## owning factory 消除调用点 new
+
+<Term def="内部完成资源创建与 owner 绑定，只向调用方返回 smart pointer 的函数。">
+  owning factory
+</Term>
+
+```cpp
+ResourcePtr acquireResource()
+{
+    Resource* raw = platform_acquire();
+    if (!raw)
+        throw AcquireError{};
+    return ResourcePtr{raw, PlatformRelease{}};
+}
+```
+
+<Term def="factory 内 raw resource 从创建到 owner 绑定之间不执行任何可抛业务操作的局部规则。">
+  factory ownership handoff
+</Term>
+
+若 deleter 构造可能抛，先设计其 no-throw/value 语义；否则 raw 仍可能泄漏。
+
+<Callout type="trap">
+  **现象**：把所有 raw new 移进 factory，却在 factory
+  中先记录日志、查配置，再构造 owner。**原因**：ownership gap
+  只是换了位置。**修法**：raw acquire 后下一操作就是 no-throw owner
+  binding，其他工作放前面或 owner 建立后。
+</Callout>
+
+## C++17 sequencing 改变了什么
+
+<Term def="C++17 起函数各实参求值彼此 indeterminately sequenced，不再交错子表达式，但先后顺序仍未指定。">
+  C++17 argument sequencing
+</Term>
+
+在 C++17 及以后，某一 argument 的完整求值不会与另一个 argument 子求值交错。因此原始 `shared_ptr(new Widget), priority()` 的特定 leak 场景被语言规则消除。
+
+<Term def="两个求值必有一个先完整发生，但标准不指定哪一个先的关系。">
+  indeterminately sequenced
+</Term>
+
+不过顺序仍未指定：不要让 arguments 依赖彼此 side effects。
+
+```cpp
+f(readState(), mutateState()); // 哪个先仍不应依赖
+```
+
+Item 17 的现代价值仍在：避免 raw new、缩短 ownership gap、明确 owner、兼容旧编译模式，并让审查更容易。
+
+## 历史规则与当前基线都要记录
+
+<Term def="代码必须遵守的最低 C++ 标准版本及其求值顺序保证。">
+  language-version baseline
+</Term>
+
+维护 C++14 库、嵌入式旧编译器或跨版本 header 时，原风险仍实际存在。文档和 CI 要明确标准模式。
+
+<Term def="同一关键所有权代码在多个标准模式/编译器下构建测试的策略。">
+  cross-standard verification
+</Term>
+
+不能用当前开发机 C++20 的行为替旧目标背书。
+
+## 多资源函数调用
+
+<Term def="一个函数调用需要多个新资源，每个资源都必须在调用前先进入独立 owner 的场景。">
+  multi-resource argument setup
+</Term>
+
+```cpp
+auto input = openInput(path);
+auto output = openOutput(target);
+transform(*input, *output, options());
+```
+
+若 openOutput/options 抛，input owner 自动清理。把两个 raw acquire 都塞进 arguments 会让证明复杂。
+
+<Term def="依次建立每个 owner，前一步完成后再进行下一个可能失败操作的资源准备顺序。">
+  staged ownership establishment
+</Term>
+
+清楚的多语句代码比压缩成一行更安全可审计。
+
+## shared_from_this 与重复 control block
+
+<Term def="同一 raw pointer 被分别交给两个 shared_ptr constructor，形成两个独立 control block 的错误。">
+  duplicate control block
+</Term>
+
+```cpp
+Widget* raw = new Widget;
+std::shared_ptr<Widget> first(raw);
+std::shared_ptr<Widget> second(raw); // double delete
+```
+
+make_shared 一开始就建立唯一 control block；需要对象内部获得 shared owner 时使用 `enable_shared_from_this`，且对象已由 shared_ptr 管理。
+
+<Term def="对象从现有 control block 获取 shared owner，而不是从 this 新建 control block 的机制。">
+  shared_from_this ownership
+</Term>
+
+constructor 中调用 shared_from_this 也过早，因为 control block 关联可能尚未建立。
+
+## owner 建立测试
+
+<Term def="记录 raw acquire、owner construction、其他实参和 release 的顺序与失败点的测试。">
+  ownership-handoff trace
+</Term>
+
+先预测旧标准三种可能顺序，并指出哪一种泄漏；再比较独立 owner 语句与 make 函数。
+
+- raw acquire 后下一事件是 owner construction，不夹可抛操作。
+- priority/options 抛异常时 resource ledger acquire/release 配对。
+- multi-resource 第 N 步失败时此前 owner 逆序释放。
+- duplicate control block 测试被 factory/API 设计阻止。
+- C++14/C++17 构建模式记录求值规则，行为不依赖实参顺序。
+- make_shared weak retention 用大对象与 weak lifetime 内存测试量化。
+
+## 小结
+
+- 原书旧规则下，new、其他 argument 与 smart pointer construction 可交错并形成泄漏
+- 独立完整语句先建立 owner，可让后续实参异常由 RAII 清理
+- 现代优先 make_unique/make_shared 或 owning factory，避免调用点 raw new
+- make_shared 通常单次分配，但 weak_ptr 可延长合并 allocation，custom deleter 也有例外
+- C++17 阻止实参子求值交错，但参数先后仍未指定，旧标准目标仍需原规则
+- 多资源调用分阶段建立 owner，并用 ownership-handoff trace 验证每个失败点
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 17"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="function argument evaluation">
+    计算函数每个实参及其子表达式的过程。
+  </GlossaryItem>
+  <GlossaryItem term="ownership gap">
+    new 成功到 smart pointer 接管之间的无 owner 区间。
+  </GlossaryItem>
+  <GlossaryItem term="constructed-owner requirement">
+    只有完成构造的 owner 才参与栈展开清理。
+  </GlossaryItem>
+  <GlossaryItem term="argument-evaluation leak">
+    其他实参异常发生在 owner 建立前造成的泄漏。
+  </GlossaryItem>
+  <GlossaryItem term="full-expression boundary">
+    一个完整表达式全部求值结束的语句边界。
+  </GlossaryItem>
+  <GlossaryItem term="standalone smart-pointer statement">
+    独立语句完成 raw 到 smart owner 的交接。
+  </GlossaryItem>
+  <GlossaryItem term="make_unique">
+    直接创建并返回 unique_ptr 的标准 factory。
+  </GlossaryItem>
+  <GlossaryItem term="ownership-explicit call">
+    调用表达式明确 borrow 或 transfer ownership。
+  </GlossaryItem>
+  <GlossaryItem term="make_shared">
+    通常单次分配对象/control block 并返回 shared_ptr。
+  </GlossaryItem>
+  <GlossaryItem term="control block">
+    保存 shared/weak count 与 deleter 的结构。
+  </GlossaryItem>
+  <GlossaryItem term="combined-allocation retention">
+    weak observer 使 make_shared 合并存储延迟释放。
+  </GlossaryItem>
+  <GlossaryItem term="weak-control lifetime">
+    对象销毁后 control state 继续存活的阶段。
+  </GlossaryItem>
+  <GlossaryItem term="custom deleter">
+    owner 析构时替代 delete 的释放策略。
+  </GlossaryItem>
+  <GlossaryItem term="deleter-binding construction">
+    raw resource 与 deleter 一次绑定的 owner 构造。
+  </GlossaryItem>
+  <GlossaryItem term="owning factory">
+    内部完成创建和 owner 绑定并返回 smart pointer 的函数。
+  </GlossaryItem>
+  <GlossaryItem term="factory ownership handoff">
+    factory 内 acquire 后立即绑定 owner 的规则。
+  </GlossaryItem>
+  <GlossaryItem term="C++17 argument sequencing">
+    实参彼此不交错但顺序仍未指定的规则。
+  </GlossaryItem>
+  <GlossaryItem term="indeterminately sequenced">
+    两求值完整先后但顺序不指定的关系。
+  </GlossaryItem>
+  <GlossaryItem term="language-version baseline">
+    项目要求的最低 C++ 版本及保证。
+  </GlossaryItem>
+  <GlossaryItem term="cross-standard verification">
+    在多个标准模式验证关键代码的策略。
+  </GlossaryItem>
+  <GlossaryItem term="multi-resource argument setup">
+    调用前需要建立多个资源 owner 的场景。
+  </GlossaryItem>
+  <GlossaryItem term="staged ownership establishment">
+    逐个完整建立 owner 再执行下一失败步骤。
+  </GlossaryItem>
+  <GlossaryItem term="duplicate control block">
+    同一 raw pointer 被多个 shared control block 管理。
+  </GlossaryItem>
+  <GlossaryItem term="shared_from_this ownership">
+    从现有 control block 获取 shared owner 的机制。
+  </GlossaryItem>
+  <GlossaryItem term="ownership-handoff trace">
+    记录 acquire、owner、实参与 release 顺序的测试。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：复现旧风险。** 在 C++14 语义下分析 `process(shared_ptr<T>(new T), priority())` 的可选求值序列。
+
+<Answer question="旧标准下哪种求值顺序会泄漏？">
+  若先执行 new T，随后 priority() 抛异常，最后本应执行的 shared_ptr constructor
+  尚未开始，stack unwinding 没有 owner 可 delete raw
+  T，发生泄漏。修复为前一完整语句先构造 shared_ptr，或使用 make_shared；resource
+  ledger 验证 priority 异常时释放一次。
+</Answer>
+
+2. **问题 2：选择 make_shared 例外。** 大对象有长寿命 weak cache，且另一个资源需 custom deleter，分别设计 owner。
+
+<Answer question="哪些场景不一定使用 make_shared？">
+  大对象 strong count 归零但 weak 长期存在时，make_shared 合并 allocation
+  可能保留大块内存；可用 shared_ptr(new T) 分离对象/control
+  block并测量。平台资源需特定 release 时，用 shared_ptr(raw, custom deleter) 或
+  typed factory。两者都在 factory 内立即绑定 owner，不暴露 raw gap。
+</Answer>
+
+3. **问题 3：重构多资源调用。** 一个函数参数同时打开输入、输出并计算会抛的 options，设计失败安全顺序。
+
+  <Answer question="多个资源实参怎样建立安全调用边界？">先独立语句 `auto input=openInput()`，再 `auto output=openOutput()`，再计算 options 或按成本顺序调整；每个 factory 直接返回 owner。最后调用 transform 只传 borrow 或明确 move owner。第 N 步失败时此前 owners 栈展开逆序释放，ownership-handoff trace 不出现 raw 无 owner 窗口。</Answer>
+</Exercises>

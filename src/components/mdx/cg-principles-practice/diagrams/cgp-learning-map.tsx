@@ -1,78 +1,34 @@
-/**
- * <CgpLearningMapDiagram>：计算机图形学：原理及实践 全书学习地图图解。
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * 全部 DESIGN token 配色，无裸 hex。
- */
+import type { ReactNode } from "react";
 
-const VIEW_W = 720;
-const VIEW_H = 400;
+function Frame({ caption, children }: { caption: string; children: ReactNode }) {
+  return <figure className="mdx-figure not-prose mx-auto my-6"><div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div><figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption></figure>;
+}
+
+const lenses = [
+  ["Perception", "what the observer can see and use"],
+  ["Physics", "light, material, camera, motion"],
+  ["Mathematics", "space, functions, integrals, probability"],
+  ["Algorithms", "sample, reconstruct, solve, query"],
+  ["Systems", "platform, GPU, interaction, latency"],
+] as const;
 
 export function CgpLearningMapDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="计算机图形学原理及实践全书学习地图图解"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <text x={VIEW_W / 2} y="32" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">
-            计算机图形学：原理及实践 全书学习地图
-          </text>
-          <text x={VIEW_W / 2} y="54" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
-            导论→光栅→2D/3D→渲染→光照→建模→高级
-          </text>
+  return <Frame caption="第三版用五个视角解释同一个图形系统，而不是只沿渲染管线排列。"><div role="img" aria-label="感知、物理、数学、算法与系统五视角学习地图" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">{lenses.map(([title, detail], index) => <div key={title} className="min-h-32 border border-border bg-bg/45 p-3"><span className="grid size-8 place-items-center rounded-full bg-accent/15 text-sm font-bold text-accent">{index + 1}</span><strong className="mt-3 block text-sm text-primary">{title}</strong><span className="mt-2 block text-xs leading-5 text-secondary">{detail}</span></div>)}</div></Frame>;
+}
 
-          <rect x="40" y="78" width="640" height="290" rx="12" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.3" />
+const owners = [
+  ["Intro", "1, 5, 21", "perception + interaction"], ["2D", "2, 4, 10, 12", "platform + affine"],
+  ["3D", "3, 6, 7, 11, 13, 16", "math + camera + platform"], ["Raster", "15, 17-20, 38", "image signal + hardware"],
+  ["Model", "8, 9, 14, 22-25", "shape representations"], ["Light", "26-28, 33", "light + material + color"],
+  ["Render", "29-32, 36-37", "transport + visibility"], ["Advanced", "34-35", "expression + motion"],
+] as const;
 
-          <rect x="60" y="100" width="140" height="50" rx="8" fill="var(--success)" fillOpacity="0.12" stroke="var(--success)" strokeWidth="1.2" />
-          <text x="130" y="122" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--success)">基础导论</text>
-          <text x="130" y="138" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">历史/光栅</text>
+export function CgpChapterOwnershipDiagram() {
+  return <Frame caption="38 章唯一分配到 8 个正文页；地图和复习页不替代正文。"><div role="img" aria-label="官方38章到八个正文主题的唯一责任映射" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{owners.map(([name, chapters, scope]) => <div key={name} className="min-h-28 border border-border bg-bg/45 p-3"><strong className="text-sm text-primary">{name}</strong><span className="mt-2 block text-xs font-semibold text-accent">Ch {chapters}</span><span className="mt-2 block text-xs text-secondary">{scope}</span></div>)}</div></Frame>;
+}
 
-          <rect x="220" y="100" width="140" height="50" rx="8" fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeWidth="1.2" />
-          <text x="290" y="122" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--accent)">2D/3D图形</text>
-          <text x="290" y="138" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">变换/投影</text>
+const evidence = [["Principle", "state assumptions"], ["Representation", "data + spaces"], ["Algorithm", "math + implementation"], ["Failure", "edge cases + error"], ["Evidence", "reference + budget"]] as const;
 
-          <rect x="380" y="100" width="140" height="50" rx="8" fill="var(--warning)" fillOpacity="0.12" stroke="var(--warning)" strokeWidth="1.2" />
-          <text x="450" y="122" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--warning)">渲染光照</text>
-          <text x="450" y="138" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">算法/模型</text>
-
-          <rect x="540" y="100" width="120" height="50" rx="8" fill="var(--text-tertiary)" fillOpacity="0.15" stroke="var(--text-tertiary)" strokeWidth="1.2" />
-          <text x="600" y="122" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--text-primary)">高级专题</text>
-          <text x="600" y="138" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">建模/动画</text>
-
-          <text x="130" y="180" textAnchor="middle" fontSize="20" fill="var(--text-tertiary)">&darr;</text>
-          <text x="290" y="180" textAnchor="middle" fontSize="20" fill="var(--text-tertiary)">&darr;</text>
-          <text x="450" y="180" textAnchor="middle" fontSize="20" fill="var(--text-tertiary)">&darr;</text>
-          <text x="600" y="180" textAnchor="middle" fontSize="20" fill="var(--text-tertiary)">&darr;</text>
-
-          <rect x="60" y="200" width="600" height="44" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" />
-          <text x={VIEW_W / 2} y="222" textAnchor="middle" fontSize="12" fill="var(--text-primary)">
-            核心主线：从「像素原理」到「完整图形系统」
-          </text>
-          <text x={VIEW_W / 2} y="238" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
-            数学是工具，算法是手段，视觉是目标
-          </text>
-
-          <text x={VIEW_W / 2} y="282" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--accent)">
-            学习路径
-          </text>
-          <text x={VIEW_W / 2} y="304" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
-            导论（领域认知） → 光栅（像素原理） → 2D/3D（坐标变换）
-          </text>
-          <text x={VIEW_W / 2} y="322" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
-            → 渲染算法（可见性） → 光照（着色） → 建模（表示） → 高级（动画）
-          </text>
-
-          <text x={VIEW_W / 2} y="352" textAnchor="middle" fontSize="11" fill="var(--text-tertiary)">
-            关键洞察：CGP 是图形学的「百科全书」，理论与实践并重
-          </text>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        计算机图形学原理及实践全书学习地图——从像素原理到完整图形系统
-      </figcaption>
-    </figure>
-  );
+export function CgpEvidenceLoopDiagram() {
+  return <Frame caption="每章都要从原理走到可复查证据，再由失败结果反向修正表示与算法。"><div role="img" aria-label="原理、表示、算法、失败与证据闭环" className="grid gap-2 md:grid-cols-5">{evidence.map(([title, detail], index) => <div key={title} className="relative min-h-24 border border-border bg-bg/45 p-3"><strong className="text-sm text-primary">{title}</strong><span className="mt-2 block text-xs text-secondary">{detail}</span>{index < evidence.length - 1 && <span className="absolute -right-2 top-9 z-10 text-accent" aria-hidden="true">→</span>}</div>)}</div></Frame>;
 }

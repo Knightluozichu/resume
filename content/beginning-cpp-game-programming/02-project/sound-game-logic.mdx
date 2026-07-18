@@ -1,0 +1,411 @@
+---
+title: 第 16 章：SoundEngine、游戏逻辑与对象通信
+type: A
+section: Run! 项目
+order: 16
+description: 对齐官方第 3 版第 16 章：实现 SoundEngine 类，建立 Run! 的游戏逻辑帧，使用事件、命令和稳定 ID 完成对象间通信，并把 Player 接入 Factory。
+demo: false
+math: false
+sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+draft: false
+---
+
+import {
+  BcgpGameLogicFrameMap,
+  BcgpObjectCommunicationMap,
+  BcgpSoundEngineMap,
+} from "@/components/mdx/beginning-cpp-game-programming/diagrams/sound-game-logic";
+
+<Objectives>
+
+- 能实现预加载 Buffer、有界 voice 池和事件映射组成的 SoundEngine 类，并保证重启时没有旧声音残留
+- 能设计输入、模拟、检测、命令提交和结果通知分阶段的游戏逻辑，使一帧结果不依赖对象遍历顺序
+- 能设计稳定 GameObjectId、GameEvent、WorldCommand 和只读查询组成的对象间通信，并通过 Factory 构造可测试 Player
+
+</Objectives>
+
+## 从“谁有权宣布玩家已经落地”开始
+
+第 15 章让 GameObject 组合 Update 与 Graphics 行为。本章继续完成 Run! 的
+
+<Term def="决定玩家运动、碰撞结果、得分、生成和终局转换的规则计算；它是玩法事实的唯一写入者。">
+  游戏逻辑
+</Term>
+
+。音频、HUD 和渲染只能观察已提交结果，不能各自重新判断“是否落地”。否则同一碰撞可能让规则层判定失败、声音层却播放成功音效。
+
+<Term def="在一次固定帧中按输入、模拟、检测、提交和通知顺序推进世界的阶段协议。">
+  逻辑帧
+</Term>
+
+把写操作集中在可检查的边界。先预测：若对象在遍历 vector 时立即删除自己，后续迭代器、对象地址和本帧事件会发生什么？
+
+<BcgpGameLogicFrameMap />
+
+## 输入先变成 PlayerIntent
+
+<Term def="由输入层生成的玩家本帧意图值，只表达移动、跳跃或操作请求，不直接修改世界。">
+  PlayerIntent
+</Term>
+
+隔离键盘 API 与 Player 规则。输入层可读取实时按键和事件边沿，但产物是普通值，因此回放和单元测试不需要创建窗口。
+
+```cpp
+struct PlayerIntent {
+    float moveAxis{};
+    bool jumpPressed{};
+};
+
+PlayerIntent readIntent(const sf::Event* event)
+{
+    const bool left{sf::Keyboard::isKeyPressed(sf::Keyboard::A)};
+    const bool right{sf::Keyboard::isKeyPressed(sf::Keyboard::D)};
+    return {
+        static_cast<float>(right) - static_cast<float>(left),
+        event && event->type == sf::Event::KeyPressed &&
+            event->key.code == sf::Keyboard::Space,
+    };
+}
+```
+
+水平移动是持续状态，跳跃使用按下边沿。若把跳跃也写成实时状态，按住空格可能在每次落地后立刻再次起跳。意图还应在菜单和暂停阶段被过滤，避免恢复游戏时消费旧事件。
+
+## Player 拥有状态，行为执行规则
+
+<Term def="Run 中由输入意图驱动、拥有速度和地面状态，并通过命令与事件影响世界的玩家对象。">
+  Player
+</Term>
+
+需要位置、速度、是否着地和生命等确定性状态。PlayerUpdate 读取意图与只读世界，计算候选速度，再由碰撞结果修正 Transform。
+
+```cpp
+struct PlayerState {
+    sf::Vector2f velocity{};
+    bool grounded{};
+    int health{3};
+};
+
+void PlayerUpdate::update(Transform& transform,
+                          PlayerState& player,
+                          const PlayerIntent& intent,
+                          float dt,
+                          UpdateContext& context)
+{
+    player.velocity.x = intent.moveAxis * runSpeed_;
+    if (intent.jumpPressed && player.grounded) {
+        player.velocity.y = -jumpSpeed_;
+        player.grounded = false;
+        context.events.push_back(PlayerJumped{ownerId_});
+    }
+    player.velocity.y += gravity_ * dt;
+    context.commands.push_back(MoveObject{
+        ownerId_, player.velocity * dt});
+}
+```
+
+<Term def="由规则层确认玩家起跳、落地、受伤或死亡后产生的不可变事实记录。">
+  玩家事件
+</Term>
+
+使用过去式命名，因为事件不是“试着跳”的请求。jump 条件失败时不产生 PlayerJumped，声音和动画自然不会误触发。
+
+<Callout type="trap">
+  **现象**：按住跳跃键时落地音与跳跃音同帧反复出现。**原因**：输入状态直接控制声音，并在碰撞提交前把
+  grounded
+  来回改写。**修法**：按键先变成意图，规则提交状态边沿后只产生一次过去式事件，SoundEngine
+  只消费事件。
+</Callout>
+
+## SoundEngine 类只负责声音
+
+<Term def="拥有声音 Buffer、复用播放 voice 并把 GameEvent 映射为音效策略的独立音频服务。">
+  SoundEngine 类
+</Term>
+
+启动时加载资源，运行时不能在每次跳跃时从磁盘读文件。`sf::Sound` 借用 `sf::SoundBuffer`，所以 Buffer 的生命周期必须长于所有正在播放的 voice。
+
+```cpp
+enum class SoundId { Jump, Land, Hurt, Death };
+
+class SoundEngine {
+public:
+    explicit SoundEngine(const SoundCatalog& catalog);
+    void handle(const GameEvent& event);
+    void update();
+    void reset();
+
+private:
+    const sf::SoundBuffer& buffer(SoundId id) const;
+    sf::Sound& acquireVoice();
+
+    std::unordered_map<SoundId, sf::SoundBuffer> buffers_;
+    std::array<sf::Sound, 16> voices_;
+};
+```
+
+<Term def="预先创建并循环复用的一组 sf::Sound 播放实例，用固定容量限制并发音效数量。">
+  voice 池
+</Term>
+
+先找 Stopped voice；全忙时按明确策略丢弃低优先级声音，或替换最旧的同类音效。不能每个事件都 `new sf::Sound`，也不能只用一个 voice 导致连续落地声互相截断。
+
+<BcgpSoundEngineMap />
+
+## 从事件映射到一次播放
+
+<Term def="把玩法事实类型转换成 SoundId、音量、音高和抢占优先级的纯配置关系。">
+  音效映射
+</Term>
+
+让 SoundEngine 不读取 Player 内部状态。规则已经确认死亡，音频只决定播放哪段声音。
+
+```cpp
+void SoundEngine::handle(const GameEvent& event)
+{
+    const std::optional<SoundId> cue{std::visit(Overloaded{
+        [](const PlayerJumped&) { return std::optional{SoundId::Jump}; },
+        [](const PlayerLanded&) { return std::optional{SoundId::Land}; },
+        [](const PlayerHurt&) { return std::optional{SoundId::Hurt}; },
+        [](const PlayerDied&) { return std::optional{SoundId::Death}; },
+        [](const auto&) { return std::optional<SoundId>{}; },
+    }, event)};
+
+    if (!cue)
+        return;
+    sf::Sound& voice{acquireVoice()};
+    voice.setBuffer(buffer(*cue));
+    voice.play();
+}
+```
+
+<Term def="音频系统在并发通道全忙时决定丢弃、替换或保留哪个声音的可测试规则。">
+  抢占策略
+</Term>
+
+应保证死亡提示不被雨声挤掉。`reset()` 停止所有 voice 并清空待消费事件；销毁时先销毁 Sound，再销毁 Buffer，可通过成员声明顺序或显式停止保证。
+
+## 对象间通信不用长期裸指针
+
+<Term def="Player、平台、触发器和世界服务之间交换查询、请求与事实，而不共享可随意修改的内部状态。">
+  对象间通信
+</Term>
+
+最危险的做法是 Platform 保存 Player 裸指针、Player 保存当前 Platform 裸指针。对象一旦由命令删除，另一方下一帧就可能解引用悬空地址。
+
+<Term def="世界为每个对象分配的稳定整数身份，跨帧通信先用它查询当前对象是否仍存在。">
+  GameObjectId
+</Term>
+
+不是 vector 下标。容器重排不改变 id；查询返回空值表示目标已离开世界，调用者必须正常处理。
+
+<BcgpObjectCommunicationMap />
+
+## 事件、命令与查询各有方向
+
+<Term def="描述已经发生的玩法事实、可供声音 HUD 和统计等多个消费者只读处理的值。">
+  GameEvent
+</Term>
+
+是向外通知；
+
+<Term def="请求世界在安全提交点生成、移动、伤害或销毁对象的值，提交时仍需校验目标。">
+  WorldCommand
+</Term>
+
+是向世界请求；只读查询则回答“附近地面在哪里”，不暴露写权限。
+
+```cpp
+using WorldCommand = std::variant<
+    MoveObject,
+    SpawnObject,
+    DamageObject,
+    DestroyObject>;
+
+struct UpdateContext {
+    const ReadOnlyWorld& world;
+    std::vector<WorldCommand>& commands;
+    std::vector<GameEvent>& events;
+};
+```
+
+<Term def="本帧由对象行为追加、在遍历结束后由世界按规则统一验证和应用的命令序列。">
+  CommandBuffer
+</Term>
+
+避免更新对象 A 时删除对象 B 导致遍历失效。若 A、B 同帧都伤害同一目标，提交器按明确规则合并；结果不应因 vector 顺序改变。
+
+<Callout type="trap">
+  **现象**：同样输入偶尔得到不同分数，或删除平台后随机崩溃。**原因**：对象持有彼此地址，并在
+  update 遍历中直接增删容器。**修法**：跨帧只保存 GameObjectId，update 只收集
+  WorldCommand，遍历结束后集中提交并产生 GameEvent。
+</Callout>
+
+## Factory 把 Player 的依赖一次装完整
+
+第 15 章的
+
+<Term def="验证资源与参数、组装对象行为并只返回完整 GameObject 的创建边界。">
+  Factory
+</Term>
+
+在本章加入 PlayerState、PlayerUpdate、PlayerGraphics 和声音所需事件能力。Factory 不把 SoundEngine 指针注入 Player；否则规则对象可绕过事件协议直接播放。
+
+```cpp
+std::unique_ptr<GameObject> GameObjectFactory::createPlayer(
+    GameObjectId id, sf::Vector2f spawn) const
+{
+    PlayerState state{};
+    state.health = config_.startingHealth;
+
+    auto update = std::make_unique<PlayerUpdate>(
+        id, config_.runSpeed, config_.jumpSpeed, config_.gravity);
+    auto graphics = std::make_unique<PlayerGraphics>(
+        textures_.get(TextureId::Player));
+
+    return std::make_unique<GameObject>(
+        id, Transform{spawn}, std::move(state),
+        std::move(update), std::move(graphics));
+}
+```
+
+<Term def="Factory 返回对象前必须满足的资源存在、身份唯一、状态合法和行为齐全等条件。">
+  构造不变量
+</Term>
+
+应由测试覆盖。缺纹理、非法生命或重复 id 时构造失败，世界仍保持原状；成功后对象所有权一次移动进世界。
+
+## 一帧的完整提交顺序
+
+<Term def="在对象更新结束后统一应用命令、生成最终事件并发布渲染快照的原子阶段。">
+  帧提交
+</Term>
+
+建议顺序如下：
+
+1. 收集事件边沿并生成 PlayerIntent。
+2. 用受限 `dt` 更新 Player 和其他 GameObject，只追加命令与候选事件。
+3. 碰撞器计算接触，规则层确认落地、伤害和死亡事实。
+4. 世界验证 CommandBuffer，应用移动、生成和销毁。
+5. 产生提交后的 GameEvent；SoundEngine、HUD 和统计依次消费。
+6. 生成只读快照，交给下一章的图形与相机阶段。
+
+若命令目标已不存在，提交器记录并忽略可容忍请求；若违反必须成立的不变量，则在开发构建中断言。不要让 SoundEngine 的播放失败回滚玩法结果，音频属于可降级表现层。
+
+## 验证：不创建窗口也能测规则
+
+<Term def="记录输入意图、固定时间步和初始世界后可重复得到同一命令事件序列的性质。">
+  确定性
+</Term>
+
+使 Player 规则测试只需伪造 ReadOnlyWorld：
+
+- 地面上按一次 jump，恰好产生一个 PlayerJumped 和一个移动命令；空中按 jump 不产生事件。
+- 两个对象同帧请求销毁同一平台，提交后只销毁一次，两个请求都不留下悬空引用。
+- SoundEngine 收到 PlayerDied 时选择 Death cue；voice 池满时遵守抢占策略。
+- Factory 缺 Player 纹理时不向世界发布对象；资源齐全时构造不变量全部成立。
+- reset 后所有 voice 停止，事件队列为空，旧关卡声音不会进入新局。
+
+## 故障诊断：沿事实边界定位
+
+遇到“画面跳了但没有声音”，不要先在 Player 中补一行 `play()`。按链路检查：输入日志是否只有一个 jumpPressed 边沿；PlayerUpdate 是否在 grounded 为真时生成候选事件；世界提交后是否保留 PlayerJumped；SoundEngine 是否找到 Jump Buffer；voice 是否被更高优先级声音占用。每一处日志都带帧号、对象 id 和事件类型，才能判断事实在哪一段丢失。
+
+若“声音响了但玩家没跳”，说明事件发布早于命令提交，或候选事件被误当成最终事实。把事件分成内部候选结果与外部 GameEvent，只有移动和碰撞提交成功后才发布后者。若“同一跳跃响两次”，检查多个消费者是否把事件重新放回队列，以及事件队列是否在每帧消费后清空。
+
+对象删除故障同样沿边界查：命令收集时只记录 id，提交时查询 id，销毁后从索引移除，之后的命令得到“目标不存在”而不是地址。测试还应随机打乱对象存储顺序；若结果改变，说明某个规则仍依赖遍历顺序或在提交前读取了其他对象的半更新状态。
+
+## 小结
+
+- 游戏逻辑拥有玩法事实，输入只生成意图，表现系统只观察提交结果
+- SoundEngine 类预加载 Buffer、复用有界 voice 池，并通过音效映射消费 GameEvent
+- 对象间通信使用稳定 GameObjectId、GameEvent、WorldCommand 和只读查询
+- Player 通过命令影响世界，通过过去式事件通知结果，不直接调用声音或 HUD
+- Factory 负责一次构造完整 Player，不负责运行期对象协作
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 16"
+  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+/>
+
+<Glossary>
+  <GlossaryItem term="游戏逻辑">
+    决定运动、碰撞、得分、生成和状态转换的规则层，是玩法事实的唯一写入者。
+  </GlossaryItem>
+  <GlossaryItem term="逻辑帧">
+    按输入、模拟、检测、提交和通知顺序推进一次世界状态的阶段协议。
+  </GlossaryItem>
+  <GlossaryItem term="PlayerIntent">
+    输入层生成的普通意图值，表达移动与跳跃请求但不直接修改世界。
+  </GlossaryItem>
+  <GlossaryItem term="Player">
+    Run 中由意图驱动、保存速度和地面状态并通过命令事件协作的玩家对象。
+  </GlossaryItem>
+  <GlossaryItem term="玩家事件">
+    规则确认起跳、落地、受伤或死亡后产生的过去式事实。
+  </GlossaryItem>
+  <GlossaryItem term="SoundEngine 类">
+    拥有 Buffer 与 voice 池、把玩法事件映射为声音策略的服务。
+  </GlossaryItem>
+  <GlossaryItem term="voice 池">
+    固定容量、循环复用的一组声音播放实例。
+  </GlossaryItem>
+  <GlossaryItem term="音效映射">
+    从 GameEvent 类型到声音资源、音量和优先级的配置。
+  </GlossaryItem>
+  <GlossaryItem term="抢占策略">
+    所有 voice 忙时决定保留、丢弃或替换声音的规则。
+  </GlossaryItem>
+  <GlossaryItem term="对象间通信">
+    对象通过查询、请求和事实协作而不互相开放内部可写状态。
+  </GlossaryItem>
+  <GlossaryItem term="GameObjectId">
+    对象的稳定整数身份，不随容器重排变化。
+  </GlossaryItem>
+  <GlossaryItem term="GameEvent">
+    描述已经发生的玩法事实、供多个消费者只读处理的值。
+  </GlossaryItem>
+  <GlossaryItem term="WorldCommand">
+    请求世界在安全提交点修改对象的值。
+  </GlossaryItem>
+  <GlossaryItem term="CommandBuffer">
+    对象更新时收集、遍历结束后统一应用的命令序列。
+  </GlossaryItem>
+  <GlossaryItem term="Factory">
+    验证参数与资源并只返回完整对象的创建边界。
+  </GlossaryItem>
+  <GlossaryItem term="构造不变量">
+    对象发布前必须满足的身份、状态、资源与行为约束。
+  </GlossaryItem>
+  <GlossaryItem term="帧提交">
+    统一验证命令、应用世界变化并发布最终事件快照的阶段。
+  </GlossaryItem>
+  <GlossaryItem term="确定性">
+    同一初始状态、输入和时间步重复得到同一命令事件序列的性质。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：追踪跳跃音效链路。** 画出一次 Space 按下从 PlayerIntent 到 voice.play 的数据流，并标出规则事实的提交点。
+
+<Answer question="设计一次 Player 跳跃从按键到声音的完整链路，并说明每层不能越过的边界。">
+  输入层把 Space 的 KeyPressed 边沿转换为 PlayerIntent；PlayerUpdate 检查
+  grounded 后追加移动命令和候选跳跃事实；碰撞与命令提交确认状态后发布
+  PlayerJumped；SoundEngine 把该事件映射为 Jump cue，从 voice
+  池取得通道并播放。输入层不能直接改 Player，Player 不能直接调用
+  SoundEngine，SoundEngine 不能重新判断 grounded。
+</Answer>
+
+2. **问题 2：区分事实和请求。** 分析“生成平台”和“平台已生成”分别应使用哪种消息，并说明失败语义。
+
+<Answer question="为什么对象间通信需要同时有 GameEvent 和 WorldCommand，而不是共用一个消息类型？">
+  GameEvent 是过去式事实，可被声音、HUD、统计等多个消费者只读观察；WorldCommand
+  是请求世界未来修改状态，提交时可能因目标消失或约束失败而被拒绝。区分二者能避免把尚未成功的请求当成事实，也让权限和失败语义清晰。
+</Answer>
+
+3. **问题 3：验证生命周期。** 为声音重置、Factory 构造失败和重复销毁各写一个测试场景及预期结果。
+
+  <Answer question="为 SoundEngine、Factory 和世界提交器各设计一个能暴露生命周期问题的测试。">
+    SoundEngine 测试 reset 后所有 voice 停止且旧事件清空；Factory
+    测试资源加载中途失败时不发布半对象且已构造组件自动释放；世界提交器测试两个命令同帧销毁同一
+    id 时只销毁一次，后续查询返回空值且不存在悬空引用。
+  </Answer>
+</Exercises>

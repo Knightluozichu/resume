@@ -1,0 +1,305 @@
+---
+title: "Chapter 3：通用编程概念（Common Programming Concepts）"
+type: A
+section: Rust 程序设计语言 · 语法与类型地基
+order: 3
+description: 对齐官方第 3 章：掌握变量、可变性、常量、遮蔽、标量与复合类型、函数、语句和表达式、注释，以及 if、loop、while、for 控制流。
+demo: false
+math: false
+sourceUrl: "https://doc.rust-lang.org/book/ch03-00-common-programming-concepts.html"
+draft: false
+---
+
+import {
+  RplBindingSemanticsLab,
+  RplControlFlowLab,
+  RplTypeBoundaryLab,
+} from "@/components/mdx/rust-programming-language/diagrams/common-programming-concepts";
+
+<Objectives>
+
+- 能区分不可变绑定、`mut`、`const` 与 shadowing 的语义，并判断哪些改写会改变绑定身份或类型
+- 能分析整数、浮点、布尔、`char`、tuple 与 array 的表示边界，并选择显式溢出和索引处理策略
+- 能解释函数参数、返回表达式、语句/表达式差异，并设计 `if`、`loop`、`while`、`for` 的正确退出与返回路径
+
+</Objectives>
+
+## 从“编译器必须知道什么”开始
+
+Rust 的基础语法与其他命令式语言相似，但它把许多约束提前到编译期：绑定默认不可变、每个值具有静态类型、函数参数必须标注类型、条件必须是 `bool`、分支表达式要产生兼容类型。学习这些规则的目标不是记标点，而是理解编译器如何据此拒绝含糊或越界程序。
+
+<Term def="编译器在生成程序前必须确定每个值和表达式的类型，并据此验证所有操作是否合法的类型系统属性。">静态类型</Term>
+
+类型推断减少重复标注，但不会让类型在运行时随意变化。`let x = 5` 通常推断为 `i32`；`"42".parse()` 有多个可能目标，若没有使用上下文就必须写 `let value: u32` 或 `parse::<u32>()`。推断的本质是从约束求解唯一类型，不是弱化类型检查。
+
+## 变量默认不可变，mut 是显式意图
+
+<Term def="用 let 建立的名称和值之间的关系；默认不能给同一绑定重新赋值，添加 mut 才允许在保持同一类型时修改值。">变量绑定</Term>
+
+```rust
+fn main() {
+    let x = 5;
+    println!("x = {x}");
+    // x = 6; // E0384: cannot assign twice to immutable variable
+
+    let mut count = 0;
+    count += 1;
+    println!("count = {count}");
+}
+```
+
+默认不可变把“这个名称会不会在别处变化”变成编译器可验证的契约。`mut` 不是失败逃生门，而是表达这个绑定在其作用域内确实需要状态变化；把可变范围压到最小，后续阅读者就能更容易推导值。
+
+<Term def="始终不可变、必须显式标注类型，并且初始化式必须是编译期可求值常量表达式的命名值；可声明在模块级作用域。">常量</Term>
+
+```rust
+const THREE_HOURS_IN_SECONDS: u32 = 60 * 60 * 3;
+```
+
+常量使用 `const`，不能写 `mut`，命名约定是大写加下划线。它与不可变变量并非同义：不可变 `let` 仍可以绑定运行时函数结果；`const` 的初始化必须满足常量求值规则，并且要求显式类型。
+
+## Shadowing 创建的是新绑定
+
+<Term def="在同一或内层作用域再次用 let 声明同名变量；新绑定遮蔽旧绑定，可使用旧值计算，并可具有不同类型。">变量遮蔽</Term>
+
+```rust
+let x = 5;
+let x = x + 1; // 新绑定，值为 6
+
+{
+    let x = x * 2; // 内层新绑定，值为 12
+    println!("inner = {x}");
+}
+
+println!("outer = {x}"); // 6
+
+let spaces = "   ";
+let spaces = spaces.len(); // &str -> usize
+```
+
+`mut` 修改同一绑定，所以类型必须保持一致；shadowing 执行新的 `let`，旧绑定仍可出现在右侧，随后新绑定接管名称。内层作用域结束时，外层绑定重新可见。Chapter 2 用这一机制让原始 `String` 与解析后的 `u32` 共用业务名 `guess`。
+
+<RplBindingSemanticsLab />
+
+先预测四种模式：不可变绑定重新赋值会在编译期失败；`mut` 可改值但不能换类型；shadowing 可换类型，因为它不是赋值；常量既不能改值，也不能绑定运行时结果。切换后观察“同一绑定/两个绑定”这一列，它是判断差异的关键。
+
+<Callout type="trap" title="陷阱：为了通过编译给所有变量加 mut">
+  这会丢失不可变契约，扩大可变状态搜索范围，也不能解决类型变化。若代码是在逐步净化或转换一个值，shadowing 往往更准确；若状态确实随循环或算法变化，再使用最小作用域的 `mut`。
+</Callout>
+
+## 标量类型：一个值也有精确边界
+
+<Term def="表示单个值的基础类型；Rust 的主要标量类型是整数、浮点数、bool 和 char。">标量类型</Term>
+
+整数按有无符号和位宽区分：`i8/i16/i32/i64/i128/isize` 与对应的 `u*`。`isize/usize` 跟随目标架构宽度，`usize` 常用于索引和集合长度。无上下文整数默认 `i32`；字面量可以写后缀和分隔符，例如 `57u8`、`1_000_000`、`0xff`、`0b1010`。
+
+```rust
+let signed: i8 = -128;
+let index: usize = 4;
+let hex = 0xff_u16;
+
+let safe = u8::MAX.checked_add(1);      // None
+let wrapped = u8::MAX.wrapping_add(1);  // 0
+let saturated = u8::MAX.saturating_add(1); // 255
+```
+
+整数溢出不能依赖构建模式偶然行为。debug 构建通常检查并 panic；普通 release 算术可能发生二进制补码环绕。需要预期溢出时，应明确选择 `checked_*`、`wrapping_*`、`overflowing_*` 或 `saturating_*`，让领域语义可见。
+
+浮点类型是 `f32` 与 `f64`，默认 `f64`。它们遵循 IEEE-754，许多十进制小数不能被二进制精确表示，所以金融金额等精确小数领域不能直接把 `f64` 等号当作业务相等。`bool` 只有 `true/false`，Rust 不把整数隐式当条件。
+
+`char` 是 4 字节 Unicode scalar value，而不是一个 UTF-8 字节，也不保证等于用户感知的单个字形。中文字符可放入一个 `char`，组合字符或多个 code point 形成的字形则可能需要多个 `char`；Chapter 8 会继续处理 UTF-8 String。
+
+## 复合类型：固定形状的 tuple 与 array
+
+<Term def="把多个值组合成一个值的类型；Rust 的两个原生复合类型是固定长度 tuple 和固定长度 array。">复合类型</Term>
+
+tuple 的元素类型可以不同，长度固定。可用模式解构，或用 `.0`、`.1` 按位置访问。空 tuple `()` 称为 unit，函数没有其他返回值时隐式返回 unit。
+
+```rust
+let point: (i32, f64, u8) = (500, 6.4, 1);
+let (x, y, z) = point;
+let middle = point.1;
+let unit: () = ();
+```
+
+array 的元素类型相同，长度也是类型的一部分：`[i32; 5]` 与 `[i32; 4]` 是不同类型。`[3; 5]` 表示五个 3。动态索引在运行时做边界检查，越界会 panic，不会像未检查指针那样读取任意内存；需要可增长集合时通常使用 Chapter 8 的 `Vec<T>`。
+
+```rust
+let months: [&str; 12] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+let first = months[0];
+```
+
+<RplTypeBoundaryLab />
+
+切换类型观察表示与合法操作，再拖动数组索引。编译器知道数组长度，但若索引是运行时输入，只能在运行时验证；索引 5 对长度 5 的数组已经越界，因为合法位置是 0 到 4。
+
+<Callout type="trap" title="陷阱：把 char 当成字符串索引单位">
+  UTF-8 的字节、Unicode scalar value 和用户感知字形是三个不同层级。Rust String 不允许直接用整数索引，就是为了避免把可变宽编码误装成固定宽字符数组；文本处理要明确需要 bytes、chars 还是 grapheme clusters。
+</Callout>
+
+## 函数参数必须显式，函数体仍可推断
+
+<Term def="用 fn 声明的可调用单元；参数必须写出类型，返回类型写在返回箭头后，调用表达式产生返回值。">函数</Term>
+
+Rust 函数与变量使用 snake_case 命名。参数类型必须显式标注，让函数签名成为稳定接口；函数体内局部变量通常可由上下文推断。定义位置不要求在调用之前，只要在可见作用域内即可。
+
+```rust
+fn main() {
+    let answer = plus_one(41);
+    print_measurement(answer, 'm');
+}
+
+fn print_measurement(value: i32, unit: char) {
+    println!("measurement: {value}{unit}");
+}
+
+fn plus_one(x: i32) -> i32 {
+    x + 1
+}
+```
+
+`plus_one` 最后一行没有分号，因为它是函数体的尾表达式，值作为返回结果。写成 `x + 1;` 会把它变成语句，结果是 unit `()`，与声明的 `i32` 不匹配。
+
+## 语句执行动作，表达式产生值
+
+<Term def="执行动作但不产生可供外层使用的值的结构，例如 let 绑定；多数语句以分号结束。">语句</Term>
+
+<Term def="求值后产生一个值的结构；函数调用、宏调用、代码块、if 与 loop 都可以是表达式。">表达式</Term>
+
+```rust
+let y = {
+    let x = 3; // 语句
+    x + 1      // 尾表达式，整个块的值为 4
+};
+```
+
+`let y = 6` 不是一个可再嵌入其他赋值的表达式；代码块则可以产生值。这个差异解释了为什么 `if` 可以直接出现在 `let` 右侧，也解释了 `break value` 如何成为 `loop` 的结果。
+
+## 注释解释“为什么”，不修补代码含义
+
+普通行注释从 `//` 开始，可独占一行，也可放在语句末尾。多行说明通常继续使用多行 `//`，便于格式化和逐行修改；文档注释 `///` 与 `//!` 会被 rustdoc 处理，Chapter 14 再展开公开 API 文档。
+
+```rust
+// 换算一次，避免调用点散落魔法数字。
+const SECONDS_PER_HOUR: u32 = 60 * 60;
+
+let timeout = 3 * SECONDS_PER_HOUR; // 领域单位是秒
+```
+
+注释应补充约束、单位、权衡或非显然原因，而不是复述 `count += 1` 等代码动作。过期注释比没有注释更危险，因此能用类型、函数名或常量表达的约束应优先写进代码。
+
+## if 要求布尔条件并产生兼容类型
+
+Rust 不会把整数自动转换为真假，必须写出 `number != 0`。`if` 是表达式，可以绑定结果；但所有可能分支必须产生兼容类型，因为变量在编译期只有一个静态类型。
+
+```rust
+let number = 6;
+let parity = if number % 2 == 0 { "even" } else { "odd" };
+```
+
+`else if` 只是连续条件分支。条件很多且围绕同一个枚举或模式时，`match` 往往更能表达状态空间；简单布尔条件则用 `if` 更直接。
+
+## loop、while 与 for 表达不同重复契约
+
+`loop` 无条件重复，适合不知道迭代次数、通过内部事件退出的过程；`break` 可带返回值。循环嵌套时可用标签 `'outer: loop` 明确 break/continue 的目标。
+
+```rust
+let mut counter = 0;
+let result = loop {
+    counter += 1;
+    if counter == 10 {
+        break counter * 2;
+    }
+};
+assert_eq!(result, 20);
+```
+
+`while condition` 每轮先判断条件，适合条件驱动状态；`for item in collection` 通过迭代器逐项访问，避免手工维护索引和边界，遍历集合时通常更清晰可靠。
+
+```rust
+let mut number = 3;
+while number != 0 {
+    println!("{number}");
+    number -= 1;
+}
+
+for value in [10, 20, 30] {
+    println!("{value}");
+}
+
+for number in (1..4).rev() {
+    println!("{number}");
+}
+```
+
+<RplControlFlowLab />
+
+先预测四种控制流的退出证据：`if` 选一个值；`loop` 由 break 提供值；`while` 在条件为 false 时退出；`for` 在迭代器耗尽时退出。逐步执行轨迹能看到，选择结构和重复结构都可以用“状态、条件、结果”统一分析。
+
+<Callout type="trap" title="陷阱：遍历固定数组时手工维护索引">
+  `while index < values.len()` 可以正确，但同时维护索引、长度与递增，更容易产生越界或遗漏。只需逐项读取时用 `for value in values`；只有算法确实需要位置时再用 `enumerate()` 或显式索引。
+</Callout>
+
+## 三步建立基础程序推导框架
+
+<Stepper>
+  <Step title="第一步：识别绑定身份">
+    先判断名称对应的是不可变绑定、可变绑定、常量还是新 shadow binding；再问值是否变化、类型是否变化、作用域结束后哪个绑定重新可见。
+
+    <RplBindingSemanticsLab />
+  </Step>
+  <Step title="第二步：明确类型与边界">
+    对每个值写出标量或复合类型，检查位宽、编码、长度与索引。溢出和越界不要依赖构建模式或偶然输入，而要选择显式策略。
+
+    <RplTypeBoundaryLab />
+  </Step>
+  <Step title="第三步：追踪表达式结果">
+    区分语句和表达式，为函数、if 与 loop 标出产生的值；为 while 与 for 标出继续条件和退出条件，再验证所有路径类型兼容。
+
+    <RplControlFlowLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- `let` 默认不可变，`mut` 修改同一绑定，shadowing 创建可换类型的新绑定，`const` 要求显式类型和常量表达式
+- Rust 在编译期确定静态类型；标量包括整数、浮点、bool、char，复合类型包括固定形状的 tuple 和 array
+- 整数溢出与数组越界都有明确边界；需要预期溢出时使用 checked、wrapping、overflowing 或 saturating API
+- 函数参数必须写类型，尾表达式决定返回值；分号会把表达式变成返回 unit 的语句
+- `if` 和 `loop` 可以产生值，`while` 适合条件循环，`for` 适合迭代集合；选择结构时应明确条件、状态和退出证据
+
+<Exercises>
+  1. **问题 1：比较 mut 与 shadowing。** 为什么 `let mut spaces = "   "; spaces = spaces.len();` 失败，而两次 `let spaces = ...` 可以通过？
+
+  <Answer question="绑定身份如何决定能否换类型？">mut 允许修改同一绑定的值，但绑定的静态类型仍是 &str，所以不能赋 usize。第二次 `let spaces = spaces.len()` 创建新的 usize 绑定并遮蔽旧 &str；右侧读取旧绑定，完成后同名解析到新绑定。换类型来自新绑定，而不是可变性。</Answer>
+
+  2. **问题 2：选择整数溢出语义。** 计数器达到 u8::MAX 后，业务要求“无法再增加时返回失败，不修改原值”。应选择哪类 API，为什么 wrapping 或 saturating 不符合？
+
+  <Answer question="不同溢出 API 表达什么领域契约？">使用 `checked_add`，它在溢出时返回 None，调用方可显式处理且原变量无需改变。wrapping_add 会回到 0，saturating_add 会停在 255，都把失败折叠成一个数值；若业务要求报告失败，这两种语义不匹配。</Answer>
+
+  3. **问题 3：推导表达式类型。** `let result = loop { if ready { break 42; } };` 中 loop 的类型是什么？若另一路写 `break "done"` 会发生什么？
+
+  <Answer question="为什么所有 break value 必须类型兼容？">`break 42` 使 loop 表达式产生整数，结合默认推断通常是 i32，因此 result 为 i32。若另一条可达路径 break 一个 &str，同一 loop 将出现不兼容结果类型，编译器拒绝；一个表达式在编译期只能有统一静态类型。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="静态类型">在编译期确定每个值和表达式类型，并据此验证操作合法性的系统。</GlossaryItem>
+  <GlossaryItem term="变量绑定">由 let 建立的名称和值关系，默认不可重新赋值。</GlossaryItem>
+  <GlossaryItem term="常量">显式标注类型、由常量表达式初始化且始终不可变的命名值。</GlossaryItem>
+  <GlossaryItem term="变量遮蔽">用新 let 绑定复用名称，并允许新绑定具有不同类型。</GlossaryItem>
+  <GlossaryItem term="标量类型">整数、浮点、bool、char 等表示单个值的基础类型。</GlossaryItem>
+  <GlossaryItem term="复合类型">把多个值组合成固定形状的类型，本章包括 tuple 与 array。</GlossaryItem>
+  <GlossaryItem term="函数">带显式参数类型和可选返回类型的可调用代码单元。</GlossaryItem>
+  <GlossaryItem term="语句">执行动作但不向外层产生值的程序结构。</GlossaryItem>
+  <GlossaryItem term="表达式">求值后产生一个值的程序结构，包括块、if 和 loop。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Rust Programming Language, Chapter 3 Common Programming Concepts"
+  adaptedUrl="https://doc.rust-lang.org/book/ch03-00-common-programming-concepts.html"
+/>

@@ -105,7 +105,8 @@ export function AaTemperatureCompareDiagram() {
             fontSize="11"
             fill="var(--text-secondary)"
           >
-            prompt：「写一句关于猫的话」 · 温度只改「挑 token 的随机度」，不改谁分高
+            prompt：「写一句关于猫的话」 · 温度只改「挑 token
+            的随机度」，不改谁分高
           </text>
 
           {/* ===== 两栏（各自独立分组，无外层容器框）===== */}
@@ -173,7 +174,9 @@ export function AaTemperatureCompareDiagram() {
                   fontSize="10"
                   fill="var(--text-secondary)"
                 >
-                  {c.id === "low" ? "↑ 陡：基本只挑第一个" : "↑ 平：六个都可能被挑"}
+                  {c.id === "low"
+                    ? "↑ 陡：基本只挑第一个"
+                    : "↑ 平：六个都可能被挑"}
                 </text>
 
                 {/* 样例输出（三句，纵向排，不与条形区重叠） */}
@@ -203,8 +206,8 @@ export function AaTemperatureCompareDiagram() {
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        温度低，分布陡、模型死板照搬同一句；温度高，分布平、模型天马行空各不相同——但温度只改「挑 token
-        的随机度」，不改「谁本来分高」。
+        温度低，分布陡、模型死板照搬同一句；温度高，分布平、模型天马行空各不相同——但温度只改「挑
+        token 的随机度」，不改「谁本来分高」。
       </figcaption>
     </figure>
   );

@@ -1,111 +1,210 @@
 ---
-title: "纹理与采样器"
+title: "纹理、采样器与过程信号"
 type: B
 section: "计算机图形学与渲染"
 order: 4
-description: "OpenGL纹理创建、采样器与过滤模式"
+description: "纹理存储、视图、采样器、过滤、稀疏纹理，以及噪声、过程纹理和凹凸映射"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://www.informit.com/store/opengl-programming-guide-the-official-guide-to-learning-9780134495552"
 draft: false
 ---
 
-import { GlrTexturesDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-textures";
+import {
+  GlrTexturesDiagram,
+  GlrTextureFootprintDiagram,
+  GlrProceduralSignalDiagram,
+} from "@/components/mdx/opengl-redbook/diagrams/glr-textures";
+import { GlrStepFlowDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 掌握OpenGL纹理创建与配置
-- 理解采样器对象与纹理过滤
-- 学会Mipmap生成与使用
-- 了解纹理环绕模式
+
+- 能区分 texture storage、texture view、sampler object、texture unit 与 shader sampler uniform
+- 能根据屏幕空间纹理足迹解释 min/mag、mipmap、各向异性过滤与走样
+- 能设计颜色、法线、深度和整数数据各自正确的格式、过滤和 mip 生成策略
+- 能实现可带限的过程纹理、noise 与 bump mapping，并识别稀疏/无绑定纹理的驻留风险
+
 </Objectives>
 
-## 直觉引入
+## 直觉：纹理是“存储 + 解释 + 采样”
 
-纹理就像贴纸——把一张图片贴到3D物体表面。采样器是「放大镜」，决定怎么看：最近邻取最近一个点(快但锯齿)，双线性取周围4个点平均(平滑)，远处用Mipmap(预缩小版本)。
+纹理不是贴纸。它可以存颜色、法线、深度、整数标签、查找表或体数据。texture object 定义存储和子资源，texture view 复用存储并改变可见层级/层/兼容格式，sampler object 独立定义过滤、环绕和比较行为，shader sampler 决定访问类型。
 
-## 概念讲解
+先预测：把法线贴图的 RGB 当 sRGB 上传并自动生成 mip，会只改变亮度，还是会扭曲方向？后者，因为非线性解码和普通颜色平均都破坏向量语义。
 
-<Term def="OpenGL中存储图像数据的GPU缓冲区">纹理对象</Term><Term def="定义如何从纹理中采样的状态对象">采样器</Term><Term def="预生成的多级纹理，减少远处aliasing">Mipmap</Term><Term def="UV超出[0,1]时的处理方式">纹理环绕</Term>
-
-### 纹理创建流程
-glGenTextures->glBindTexture->glTexParameteri(过滤/环绕)->glTexImage2D->glGenerateMipmap
-
-### 过滤模式
-GL_NEAREST(最近邻)、GL_LINEAR(双线性)、GL_LINEAR_MIPMAP_LINEAR(三线性)
-
-### 环绕模式
-GL_REPEAT(重复)、GL_MIRRORED_REPEAT(镜像)、GL_CLAMP_TO_EDGE(边缘拉伸)、GL_CLAMP_TO_BORDER(边界色)
-
-## 交互Demo
-
-> 猜一猜：为什么MAG_FILTER不能用Mipmap过滤？
+<Term def="为纹理目标一次性分配固定格式、尺寸、层级和数组层的不可变存储；之后只能更新内容而不能重定义形状">不可变纹理存储</Term>让完整性和 mip 层级边界更明确。
 
 <GlrTexturesDiagram />
 
-<Stepper>
-<Step title="第一步：创建纹理">
-glGenTextures生成纹理对象，glBindTexture绑定。
-</Step>
-<Step title="第二步：设置参数">
-配置过滤模式(MIN/MAG_FILTER)和环绕模式(WRAP_S/WRAP_T)。MIN推荐Mipmap线性。
-</Step>
-<Step title="第三步：上传数据">
-glTexImage2D上传图像数据，glGenerateMipmap生成多级纹理。
-</Step>
-</Stepper>
+## 存储、视图与上传合同
 
-## 代码对照
+`glTextureStorage*` 分配 immutable storage；`glTextureSubImage*` 上传像素。上传还受 `GL_UNPACK_ALIGNMENT`、row length、skip 和数据 type 影响，不能只看图像宽高。
 
 ```cpp
-GLuint texture;
-glGenTextures(1, &texture);
-glBindTexture(GL_TEXTURE_2D, texture);
-glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
-glGenerateMipmap(GL_TEXTURE_2D);
+glCreateTextures(GL_TEXTURE_2D, 1, &albedo);
+glTextureStorage2D(albedo, levels, GL_SRGB8_ALPHA8, width, height);
+glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+glTextureSubImage2D(albedo, 0, 0, 0, width, height,
+                    GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+glGenerateTextureMipmap(albedo);
 ```
 
-MAG_FILTER只能用GL_NEAREST或GL_LINEAR(放大时没有更高级别)。MIN_FILTER可用Mipmap过滤模式。
+<Term def="在兼容格式类内复用另一纹理存储，并限定可见 mip 层和数组层的对象，不复制底层 texel">纹理视图</Term>可把数组的一层当 2D texture，或以兼容格式解释同一位模式。它不是任意类型转换，格式兼容和生命周期仍由共享存储约束。
+
+## Texture unit、sampler 与 shader 类型
+
+texture unit 同时持有各 target 的 texture binding 和 sampler binding；shader 中 `sampler2D` uniform 保存 unit 编号。sampler object 覆盖纹理对象内的采样参数，使同一存储能被最近邻、线性或 shadow comparison 等不同方式复用。
+
+```cpp
+glCreateSamplers(1, &linearSampler);
+glSamplerParameteri(linearSampler, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+glSamplerParameteri(linearSampler, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+glSamplerParameteri(linearSampler, GL_TEXTURE_WRAP_S, GL_REPEAT);
+glBindTextureUnit(3, albedo);
+glBindSampler(3, linearSampler);
+glProgramUniform1i(program, albedoLocation, 3);
+```
+
+<Term def="独立保存 min/mag filter、wrap、LOD、anisotropy 与 comparison 等采样状态，并在 texture unit 上覆盖纹理采样参数的对象">采样器对象</Term>不能修复 shader sampler 类型与纹理格式类别不匹配的问题；整数纹理应配 `isampler`/`usampler` 且通常使用 nearest。
+
+## 足迹、LOD 与各向异性
+
+缩小时一个屏幕样本覆盖多个 texel。硬件用纹理坐标导数估计足迹。对二维坐标 $(u,v)$，常见尺度近似为：
+
+$$
+\rho=\max\left(\sqrt{u_x^2+v_x^2},\sqrt{u_y^2+v_y^2}\right),
+\qquad \lambda=\log_2\rho.
+$$
+
+实际导数还与纹理尺寸有关。三线性在相邻 mip 间插值，适合近似各向同性足迹；斜视表面的足迹是细长椭圆，需要 anisotropic filtering 沿长轴增加样本。`MAG_FILTER` 没有 mip 选项，因为放大选择基级邻域，而不是更低分辨率层。
+
+<GlrTextureFootprintDiagram />
+
+<Term def="为不同采样尺度预过滤的纹理金字塔；每级代表对更大 texel 区域的低通近似，而不只是缩小图片">Mipmap</Term>只有在生成规则符合数据语义时才正确。albedo 可在线性光空间平均；法线要解码、平均、重归一化；roughness 可能要保守统计；alpha mask 需保持覆盖率；depth/min-max 金字塔采用指定归约运算。
+
+## 环绕、边界与坐标
+
+纹理坐标不天然限制在 $[0,1]$。repeat、mirrored repeat、clamp-to-edge 和 clamp-to-border 定义域外行为。atlas 边界需 padding/gutter 和正确 mip，单纯 clamp 无法阻止低 mip 跨图块污染。
+
+矩形纹理、数组纹理、cube map 和 multisample texture 使用不同坐标/层语义。cube map 由方向选择 face；接缝过滤依赖相邻 face 的一致投影与采样设置。
+
+## 过程纹理与噪声
+
+<Term def="在对象/世界/纹理坐标上由函数直接生成颜色或材质参数，而不是从固定图像逐 texel 读取的信号">过程纹理</Term>可保持分辨率无关和参数化，但高频函数仍会走样。周期条纹 $f(x)=\frac12+\frac12\sin(2\pi kx)$ 经过像素足迹宽度 $w$ 的盒式平均，其振幅近似乘以：
+
+$$
+\operatorname{sinc}(kw)=\frac{\sin(\pi kw)}{\pi kw}.
+$$
+
+这说明只在像素中心求值不是过滤。可以基于 `fwidth` 做解析抗锯齿，或限制噪声 octave：当频率超过 Nyquist/足迹带宽时停止累加。
+
+```glsl
+float bandLimitedStripe(float x, float frequency) {
+    float phase = x * frequency;
+    float width = max(fwidth(phase), 1e-5);
+    float lo = phase - 0.5 * width;
+    float hi = phase + 0.5 * width;
+    return (integralSquareWave(hi) - integralSquareWave(lo)) / width;
+}
+```
+
+value noise、gradient noise 等噪声函数要关注连续性、谱和重复周期。fBm 以递增频率、递减振幅叠加 octave；domain warping 改变采样坐标。随机哈希不等于平滑 noise。
+
+<GlrProceduralSignalDiagram />
+
+## Bump、normal 与 displacement
+
+bump mapping 由高度函数梯度扰动法线，不改变轮廓；normal mapping 直接存切线空间方向；displacement mapping 真正移动几何，通常需要足够细分。
+
+若切线参数为 $(u,v)$、高度为 $h$，局部扰动可由偏导构造。实现中需统一 TBN 基、纹理 Y 方向和 handedness，并对插值后的 TBN 正交化。过程 noise 作为高度时也要过滤，否则远处分量产生闪烁。
+
+## Sparse 与 bindless 边界
+
+sparse texture 把巨型虚拟纹理存储与物理页面提交分开；访问未提交页面的结果受规范定义和实现能力约束，应用要维护 residency、页面粒度和反馈。bindless texture 用句柄减少 unit 绑定，但句柄必须 resident，生命周期与同步更显式。
+
+二者解决绑定/容量扩展，不自动解决数据流送、过滤接缝或显存超额。工程上必须记录页命中率、上传带宽、驻留峰值和回退图块。
+
+## 三步纹理验证
+
+<Stepper>
+<Step title="第一步：验证存储字节">
+
+固定 2×2 彩色/整数图案，检查内部格式、上传 type、pixel-store、各 mip 尺寸和 view 范围。
+
+<GlrStepFlowDiagram caption="先证明 texel 的位模式和子资源边界。" stage={1} stages={["Storage：format、pixel-store、levels、layers、views"]} />
+
+</Step>
+<Step title="第二步：验证采样合同">
+
+分别测试 unit、sampler、wrap、min/mag、LOD、comparison 和整数类型；用导数/LOD 调试色显示实际选择。
+
+<GlrStepFlowDiagram caption="采样状态与 shader 类型必须一一对应。" stage={2} stages={["Storage：format、pixel-store、levels、layers、views", "Sampling：unit、sampler、footprint、LOD、wrap"]} />
+
+</Step>
+<Step title="第三步：验证信号语义">
+
+远近距离、斜视和边界相机轨迹下比较参考图；检查颜色空间、法线 mip、过程频谱和 sparse residency。
+
+<GlrStepFlowDiagram caption="静态近景正确不代表尺度变化和驻留切换正确。" stage={3} stages={["Storage：format、pixel-store、levels、layers、views", "Sampling：unit、sampler、footprint、LOD、wrap", "Signal：semantic mips、band limit、residency、reference images"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** MIN_FILTER用GL_LINEAR不用Mipmap。
-**原因 →** 忘记Mipmap。
-**修法 →** 不用Mipmap远处纹理产生摩尔纹/闪烁。MIN_FILTER应设GL_LINEAR_MIPMAP_LINEAR。
+**现象 →** 所有纹理都调用普通 `glGenerateMipmap`。
+**原因 →** 把 texel 一律当线性颜色。
+**修法 →** 按语义生成 mip：法线重归一化、深度做 min/max、alpha 保覆盖、颜色在线性空间过滤。
 </Callout>
 
 <Callout type="trap">
-**现象 →** 纹理未激活纹理单元。
-**原因 →** 直接绑定纹理以为着色器能用。
-**修法 →** 必须glActiveTexture(GL_TEXTURE0)然后绑定纹理，着色器中设uniform值为纹理单元编号。
+**现象 →** 过程棋盘近看正常，远处闪烁。
+**原因 →** 每像素只求中心值，没有按足迹带限高频。
+**修法 →** 用导数估计宽度做解析积分，或限制 octave/频率并与预过滤表示比较。
+</Callout>
+
+<Callout type="trap">
+**现象 →** sparse/bindless 开启后偶发黑块或设备差异。
+**原因 →** 页面或句柄未 resident，生命周期与反馈流没有验收。
+**修法 →** 显式追踪提交/驻留，提供回退页，并记录页粒度、命中、上传和显存证据。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：纹理过滤模式有哪些？区别？
+
+**问题 1：texture view 与复制纹理有什么区别？**
 
 <Answer>
-GL_NEAREST最近邻快但锯齿，GL_LINEAR双线性平滑，GL_LINEAR_MIPMAP_LINEAR三线性最佳。MAG只能NEAREST或LINEAR。
+view 不复制 texel，而是在兼容格式类内共享存储并限制可见 mip/层；修改共享存储会被其他视图观察。复制则产生独立存储和生命周期。
 </Answer>
 
-**问题**：UV超出[0,1]范围时怎么处理？
+**问题 2：为什么三线性不能完全解决斜视地面模糊？**
 
 <Answer>
-环绕模式：GL_REPEAT重复，GL_MIRRORED_REPEAT镜像，GL_CLAMP_TO_EDGE边缘拉伸，GL_CLAMP_TO_BORDER边界色。
+三线性用单一近似 LOD 处理近圆形足迹；斜视足迹沿两个方向尺度差异很大。各向异性过滤沿长轴取多个样本，才能在抑制走样时保留短轴细节。
 </Answer>
+
+**问题 3：设计过程噪声的抗锯齿验收。**
+
+<Answer>
+固定相机轨迹逐渐缩小并倾斜表面，保存未过滤、导数限频和高采样参考三组图；比较时间稳定性和频谱/像素误差。逐 octave 显示贡献，确认超过足迹带宽后不再注入能量。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+纹理系统由存储、视图、采样状态、shader 类型和信号语义组成。mipmap/anisotropy 解决尺度足迹，过程纹理也必须带限；法线、深度和标签不能沿用颜色规则。sparse 与 bindless 扩展容量和绑定模型，同时要求更严格的驻留证据。
+
 <Glossary>
-<GlossaryItem term="纹理对象">OpenGL中存储图像数据的GPU缓冲区。</GlossaryItem>
-<GlossaryItem term="采样器">定义如何从纹理采样的状态(过滤模式、环绕模式)。</GlossaryItem>
-<GlossaryItem term="Mipmap">预生成多级纹理减少远处aliasing，代价1/3内存。</GlossaryItem>
-<GlossaryItem term="纹理环绕">UV超出[0,1]时处理：REPEAT/MIRRORED/CLAMP等。</GlossaryItem>
+<GlossaryItem term="不可变纹理存储">一次确定格式、尺寸、层级和层数的固定纹理存储。</GlossaryItem>
+<GlossaryItem term="纹理视图">复用兼容存储并限定格式、mip 和数组层可见范围的对象。</GlossaryItem>
+<GlossaryItem term="采样器对象">独立保存过滤、环绕、LOD 和比较采样状态的对象。</GlossaryItem>
+<GlossaryItem term="Mipmap">按采样尺度预过滤的纹理层级金字塔。</GlossaryItem>
+<GlossaryItem term="过程纹理">由坐标和函数动态生成，而非直接读取固定图像的纹理信号。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="OpenGL 红宝书" adaptedUrl="" />
+<Attribution adaptedFrom="OpenGL Programming Guide, 9th Edition, Chapters 6 and 8" adaptedUrl="https://www.informit.com/store/opengl-programming-guide-the-official-guide-to-learning-9780134495552" />

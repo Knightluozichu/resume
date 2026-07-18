@@ -1,0 +1,252 @@
+---
+title: "面试题10：斐波那契数列"
+type: C
+section: "第2章 面试需要的基础知识"
+order: 11
+description: "从重复子问题出发，比较递归、滚动迭代与矩阵快速幂，并把同一递推迁移到青蛙跳台阶。"
+demo: true
+math: true
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/10_Fibonacci/Fibonacci.cpp"
+draft: false
+---
+
+import { FibonacciRecursionOverlapDiagram, FibonacciRollingStateMap, FibonacciMethodLab, FrogStepCorrespondenceDiagram } from "@/components/mdx/coding-interviews/diagrams/fibonacci";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释斐波那契递归树中哪些子问题被重复计算
+- 能计算滚动迭代每轮三个变量的含义和更新顺序
+- 能实现作者的递归、循环与二阶矩阵快速幂三种方案
+- 能分析三种方案的时间、空间、栈深度和整数溢出边界
+- 能设计青蛙跳台阶的状态、最后一步分类、初值与测试
+
+</Objectives>
+
+## 从定义直译为何会变慢开始
+
+先预测：计算`F(6)`时，递归函数会求几次`F(4)`和`F(2)`？如果把`n`增加到40，返回值只有`102334155`，为什么作者把朴素递归列为“不实用”的第一种解法？
+
+<Term def="以0、1为初值，后续每一项等于前两项之和的数列。">斐波那契数列</Term>在本题中的下标从0开始：
+
+$$
+F(n)=
+\begin{cases}
+0, & n=0,\\
+1, & n=1,\\
+F(n-1)+F(n-2), & n\ge 2.
+\end{cases}
+$$
+
+把数学定义直接翻译成函数十分简洁，但`F(n-1)`和`F(n-2)`的递归树大量重叠。计算`F(6)`的左分支会计算`F(4)`，右分支本身又是`F(4)`；更小的`F(3)`、`F(2)`会在更多路径中反复出现。这些被不同分支请求、输入完全相同的计算叫<Term def="递归的不同分支多次请求同一个状态，使同一结果被反复求值。">重复子问题</Term>。也就是说，**递归会重复计算**相同输入，而函数没有保存任何结果。
+
+<FibonacciRecursionOverlapDiagram />
+
+## 递归版正确，但调用数指数增长
+
+作者的`Fibonacci_Solution1`对`n=0`返回0，对`n=1`返回1，其余情况递归相加。它在结构上与定义完全一致，因此容易证明：假设更小下标都返回正确值，则两个递归结果相加就是`F(n)`。
+
+```cpp
+long long fibonacciRecursive(unsigned int n) {
+    if (n == 0) return 0;
+    if (n == 1) return 1;
+    return fibonacciRecursive(n - 1)
+         + fibonacciRecursive(n - 2);
+}
+```
+
+正确不等于高效。若`C(n)`表示调用次数，它也满足近似斐波那契递推：
+
+$$
+C(n)=C(n-1)+C(n-2)+1=\Theta(\varphi^n),
+\qquad
+\varphi=\frac{1+\sqrt{5}}{2}.
+$$
+
+时间按指数增长，递归路径最大深度为`n`，所以调用栈空间是`O(n)`。作者测试还调用递归版`F(40)`，这恰好能直观看出它与循环、矩阵方案的巨大耗时差距，但生产测试不应反复执行更大的朴素递归输入。
+
+加入哈希表或数组记忆化后，每个下标只求一次，时间降为`O(n)`，但仍需`O(n)`缓存和`O(n)`递归栈。既然每个状态只依赖前两项，更直接的做法是改变计算方向。
+
+<Callout type="trap" title="递归写法短，所以复杂度也是线性的">
+源代码行数不能代表运行工作量。没有缓存的两个递归分支形成重叠调用树，`F(40)`会重复求大量小下标；必须按调用树或递推式分析，而不是数函数中的语句。
+</Callout>
+
+## 从下往上计算只保留前两项
+
+作者的`Fibonacci_Solution2`先处理`n`小于2的情况，然后从`i=2`循环到`n`。每轮开始时，`fibNMinusTwo`保存`F(i-2)`，`fibNMinusOne`保存`F(i-1)`；两者相加得到`F(i)`，再把窗口向前滚动一格。
+
+这就是**从下往上计算**：先得到已知小问题，再按依赖顺序构造大问题。只保存下一状态依赖的有限个历史值称为<Term def="用固定数量变量承载最近若干状态，每轮计算后整体向前推进。">滚动变量</Term>。每个下标只访问一次，时间`O(n)`；只保存两个历史值和当前值，额外空间`O(1)`。
+
+<FibonacciRollingStateMap />
+
+更新顺序不能随意交换。若先把`previousOne`覆盖成`current`，再用它更新`previousTwo`，就会丢失旧的`F(i-1)`。使用独立`next`临时变量能让右侧都读取旧状态，再一次性滚动：
+
+```cpp
+#include <limits>
+#include <stdexcept>
+
+unsigned long long fibonacci(unsigned int n) {
+    if (n < 2) return n;
+
+    unsigned long long previousTwo = 0;
+    unsigned long long previousOne = 1;
+    for (unsigned int i = 2; i <= n; ++i) {
+        if (previousOne >
+            std::numeric_limits<unsigned long long>::max() - previousTwo) {
+            throw std::overflow_error("Fibonacci overflow");
+        }
+        const auto next = previousOne + previousTwo;
+        previousTwo = previousOne;
+        previousOne = next;
+    }
+    return previousOne;
+}
+```
+
+作者返回`long long`。在有符号64位整数中，`F(92)=7540113804746346429`仍可表示，`F(93)=12200160415121876738`已经超过最大值；无符号64位能再容纳`F(93)`，但`F(94)`仍溢出。接口应根据需求选择检查溢出、大整数或模运算，不能让有符号溢出默默发生。
+
+## 矩阵把线性递推变成快速幂
+
+斐波那契的相邻两项可以写成固定线性变换。令`Q`为二阶矩阵：
+
+$$
+Q=
+\begin{bmatrix}
+1&1\\
+1&0
+\end{bmatrix},
+\qquad
+Q^n=
+\begin{bmatrix}
+F(n+1)&F(n)\\
+F(n)&F(n-1)
+\end{bmatrix}
+\quad(n\ge1).
+$$
+
+因此计算`F(n)`可以转化为求`Q`的幂。作者使用<Term def="把线性递推写成固定矩阵的幂，再按指数的二进制结构反复平方求值。">矩阵快速幂</Term>：`Fibonacci_Solution3`求`MatrixPower(n-1)`并返回左上角；当`n`为偶数时先求半次幂再平方，为奇数时平方后再乘一次`Q`。指数每层减半，矩阵大小固定，所以时间`O(log n)`，递归栈`O(log n)`。
+
+<FibonacciMethodLab />
+
+矩阵快速幂降低的是加法和乘法次数，不会自动解决数值增长。固定宽度整数仍会在同一下标附近溢出，而且矩阵乘法的中间乘积可能先越界。若题目要求对某个模数取余，应在每次乘加后取模并使用足够宽的中间类型；若要求精确大整数，复杂度还要计入大数乘法成本。
+
+迭代二进制快速幂可以把递归栈降为`O(1)`：维护结果矩阵为单位矩阵，指数当前位为1时乘入底数，每轮底数平方、指数右移。面试中若`n`规模普通，滚动迭代通常更清晰；矩阵法展示的是如何把固定维线性递推加速到对数轮次。
+
+## 三种方案如何按约束选择
+
+三种方案不是按“越高级越好”排序。朴素递归最接近定义，适合解释递推和展示重复子问题，但不适合中大输入；记忆化适合状态依赖复杂、无法只保留固定窗口的问题；滚动迭代代码最短、常数小，是本题普通整数范围的首选；矩阵快速幂只有在下标巨大、按模计算或需要推广固定维线性递推时才显出对数轮次优势。
+
+选择前先问输出类型。若要求精确`F(100000)`，即使循环轮数或矩阵乘法轮数很少，结果本身也有数万位，固定64位接口无法交付；需要大整数，并把复杂度写成随数字位数增长。若只要求`F(n) mod M`，矩阵乘加可逐步取模，时间优势才更容易保留。
+
+还要问调用模式。连续查询`F(0)`到`F(N)`时，一次线性预计算并缓存整个表比对每个下标重复做快速幂更合适；只查询一个极大下标时，快速幂更合适；输入上限只有92时，滚动循环最多92轮，微小且易审计。复杂度结论必须放在真实约束中解释。
+
+## 青蛙跳台阶先找最后一步
+
+相关题“青蛙跳台阶”规定一次可以跳1级或2级，求到达`n`级的跳法数。不要因为题目提到斐波那契就直接套式子；先按最后一步分类。由较小状态计算当前状态的规则称为<Term def="从已定义的小状态及当前选择推导目标状态的关系。">状态转移</Term>：最后跳1级的方案，在此之前必须到达`n-1`级；最后跳2级的方案，在此之前必须到达`n-2`级。两类互斥且覆盖所有方案，所以：
+
+$$
+J(n)=J(n-1)+J(n-2),
+\qquad
+J(1)=1,quad J(2)=2,
+\qquad
+J(n)=F(n+1).
+$$
+
+<FrogStepCorrespondenceDiagram />
+
+若把“0级台阶”视为已经到达，有一种空方案，可定义`J(0)=1`，递推从`n=2`开始保持一致。若业务把`n=0`定义为0种，入口可以单独处理，但必须明确契约；不同初值会让相同递推产生不同数列。
+
+原书还可把同一思路迁移到`2×n`矩形用`2×1`小矩形覆盖：最左侧竖放后剩`2×(n-1)`，横放时必须上下两块成对，剩`2×(n-2)`，因此仍是两类完备分解。真正可迁移的能力是“状态加最后选择”，不是记住某个答案长得像斐波那契。
+
+<Callout type="trap" title="递推式相同就可以忽略初值">
+斐波那契本题是`F(0)=0、F(1)=1`，跳台阶常用`J(1)=1、J(2)=2`。它们递推式相同但下标错开一位；不先写语义和初值，`n=1`、`n=2`最容易错。
+</Callout>
+
+## 测试要分算法正确性与数值边界
+
+作者对三种方案都检查`n=0`到`10`，预期依次为`0,1,1,2,3,5,8,13,21,34,55`，并检查`F(40)=102334155`。这覆盖两个初值、第一次递推、多个普通项和能拉开性能差距的较大输入。
+
+测试优化方案时，可以让滚动版和矩阵版在`0`到安全上限范围内逐项互相校验；递归版只对小`n`参与，避免测试本身指数爆炸。溢出检查要覆盖“最后一个可表示值”和“第一个不可表示值”，并确认错误不会返回伪造结果。
+
+```cpp
+#include <array>
+#include <cassert>
+
+void testSmallFibonacci() {
+    constexpr std::array<unsigned long long, 11> expected{
+        0, 1, 1, 2, 3, 5, 8, 13, 21, 34, 55
+    };
+    for (unsigned int n = 0; n < expected.size(); ++n) {
+        assert(fibonacci(n) == expected[n]);
+        if (n <= 10) {
+            assert(fibonacciRecursive(n) == expected[n]);
+        }
+    }
+    assert(fibonacci(40) == 102334155ULL);
+}
+
+void testFrogSteps() {
+    assert(frogWays(1) == 1);
+    assert(frogWays(2) == 2);
+    assert(frogWays(5) == 8);
+}
+```
+
+跳台阶还应枚举小规模方案验证计数，例如`n=3`恰有`1+1+1、1+2、2+1`三种；只检查大数无法发现初值偏移。若允许的步长集合改变为`1,3,5`，状态转移也必须相应改写，不能继续沿用两项递推。
+
+负数输入也要在接口层说清楚。作者参数是`unsigned int`，调用者若把`-1`隐式转换进去，会得到一个巨大的无符号数，而不是自然的错误。因此外部输入应先以有符号或字符串形式解析、验证非负和上限，再转换到核心函数类型。测试只覆盖无符号函数内部的0并不能证明调用边界安全。
+
+性能基准应把编译优化、输入和算法分开记录。若直接让朴素递归跑`F(40)`、循环只跑一次，测得的巨大差距能说明数量级，却不能精确比较常数；更规范的基准会让快速方案重复足够次数、消费返回值防止优化删除，并把溢出检查开销纳入同一配置。
+
+<Stepper>
+  <Step title="先展开小递归树"><FibonacciRecursionOverlapDiagram />标出F(4)、F(3)、F(2)的重复出现，确认性能问题来自重复子问题。</Step>
+  <Step title="改为按下标递增计算"><FibonacciRollingStateMap />每轮只保留F(i-2)和F(i-1)，相加后按正确顺序滚动。</Step>
+  <Step title="按规模选择三种方案"><FibonacciMethodLab />小输入可演示递归，常规计算用循环，超大下标或线性递推加速考虑矩阵快速幂。</Step>
+  <Step title="从最后一步建立新模型"><FrogStepCorrespondenceDiagram />把跳1级与跳2级两类方案相加，再用语义确定初值。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 斐波那契数列由`F(0)=0、F(1)=1`和前两项求和定义。
+2. 朴素递归会重复计算相同下标，时间为指数级、调用栈为`O(n)`。
+3. 从下往上计算每个状态一次，滚动变量方案时间`O(n)`、空间`O(1)`。
+4. 矩阵快速幂把固定二阶递推压缩为`O(log n)`轮矩阵运算。
+5. 快速算法不消除整数溢出，有符号64位只能精确容纳到`F(92)`。
+6. 青蛙跳台阶通过最后一步分类得到同一递推，但初值使它等于`F(n+1)`。
+7. 递推建模必须同时写状态语义、转移、初值、计算顺序和数值范围。
+8. 测试应覆盖小值表、作者的`F(40)`、算法交叉校验和溢出边界。
+
+<Exercises>
+
+**问题 1：为什么给朴素递归加记忆化后是O(n)时间？**
+
+<Answer>输入下标只有0到n共n加1种。缓存后每个下标首次计算时做常数次查表、加法和两个缓存调用，之后直接返回；因此总计算状态数线性。缓存与递归栈仍各可能占O(n)空间。</Answer>
+
+**问题 2：滚动迭代中为何要先保存next再更新两个历史变量？**
+
+<Answer>next必须同时读取更新前的F(i-2)和F(i-1)。若先覆盖任一变量，后续加法或赋值会混入新状态，破坏循环不变量；临时值让一次迭代的所有右侧都基于同一旧快照。</Answer>
+
+**问题 3：矩阵快速幂为何是O(log n)而不是O(n)？**
+
+<Answer>每次把指数减半：偶数幂先求半次幂再平方，奇数幂在平方后多乘一次底矩阵。递归层数等于指数二进制位数，每层只做常数个2×2矩阵乘法，因此为O(log n)。</Answer>
+
+**问题 4：青蛙一次可跳1、2或3级时，递推和初值如何改变？**
+
+<Answer>按最后一步分类得到J(n)=J(n-1)+J(n-2)+J(n-3)。若采用J(0)=1的空方案约定，可令负下标为0，于是J(1)=1、J(2)=2、J(3)=4；计算前必须先固定0级语义。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="斐波那契数列">以0、1为初值，后续项等于前两项之和的数列。</GlossaryItem>
+  <GlossaryItem term="重复子问题">递归的不同分支多次请求同一个状态，导致相同结果被反复计算。</GlossaryItem>
+  <GlossaryItem term="滚动变量">只保存下一状态真正依赖的有限个历史值，以常数空间执行动态规划。</GlossaryItem>
+  <GlossaryItem term="矩阵快速幂">把线性递推写成矩阵幂，并按指数二进制分解在对数轮次内求幂。</GlossaryItem>
+  <GlossaryItem term="状态转移">从较小状态和当前选择推导目标状态的递推关系。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="《剑指Offer（第2版）》面试题10及何海涛官方源码 Fibonacci.cpp"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/10_Fibonacci/Fibonacci.cpp"
+/>

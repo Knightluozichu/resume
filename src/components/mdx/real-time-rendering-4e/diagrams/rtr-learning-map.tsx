@@ -1,81 +1,9 @@
-/**
- * <RtrLearningMapDiagram>：实时渲染第4版全书学习地图图解。
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * 全部 DESIGN token 配色，无裸 hex。
- */
-
-const VIEW_W = 720;
-const VIEW_H = 400;
-
-export function RtrLearningMapDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="实时渲染第4版全书学习地图图解"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <text x={VIEW_W / 2} y="32" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">
-            实时渲染第4版全书学习地图
-          </text>
-          <text x={VIEW_W / 2} y="54" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
-            管线基础 → 变换着色 → 高级技术 → 优化加速
-          </text>
-
-          <rect x="40" y="78" width="640" height="290" rx="12" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.3" />
-
-          <rect x="70" y="100" width="130" height="50" rx="8" fill="var(--success)" fillOpacity="0.12" stroke="var(--success)" strokeWidth="1.2" />
-          <text x="135" y="122" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--success)">管线基础</text>
-          <text x="135" y="138" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">管线/变换</text>
-
-          <rect x="220" y="100" width="130" height="50" rx="8" fill="var(--accent)" fillOpacity="0.12" stroke="var(--accent)" strokeWidth="1.2" />
-          <text x="285" y="122" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--accent)">着色纹理</text>
-          <text x="285" y="138" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">光照/BRDF</text>
-
-          <rect x="370" y="100" width="130" height="50" rx="8" fill="var(--warning)" fillOpacity="0.12" stroke="var(--warning)" strokeWidth="1.2" />
-          <text x="435" y="122" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--warning)">高级技术</text>
-          <text x="435" y="138" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">阴影/GI</text>
-
-          <rect x="520" y="100" width="130" height="50" rx="8" fill="var(--text-tertiary)" fillOpacity="0.15" stroke="var(--text-tertiary)" strokeWidth="1.2" />
-          <text x="585" y="122" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--text-primary)">优化加速</text>
-          <text x="585" y="138" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">剔除/LOD</text>
-
-          <text x="135" y="180" textAnchor="middle" fontSize="20" fill="var(--text-tertiary)">&darr;</text>
-          <text x="285" y="180" textAnchor="middle" fontSize="20" fill="var(--text-tertiary)">&darr;</text>
-          <text x="435" y="180" textAnchor="middle" fontSize="20" fill="var(--text-tertiary)">&darr;</text>
-          <text x="585" y="180" textAnchor="middle" fontSize="20" fill="var(--text-tertiary)">&darr;</text>
-
-          <rect x="70" y="200" width="580" height="44" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" />
-          <text x={VIEW_W / 2} y="222" textAnchor="middle" fontSize="12" fill="var(--text-primary)">
-            核心主线：从「理解管线」到「控制质量与性能」
-          </text>
-          <text x={VIEW_W / 2} y="238" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
-            管线是骨架，着色是血肉，优化是工程化能力
-          </text>
-
-          <text x={VIEW_W / 2} y="282" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--accent)">
-            学习路径
-          </text>
-          <text x={VIEW_W / 2} y="304" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
-            管线（架构认知） → 变换（空间理解） → 着色（视觉效果）
-          </text>
-          <text x={VIEW_W / 2} y="322" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
-            → 纹理（细节控制） → BRDF（物理精度） → 阴影GI（真实感）
-          </text>
-          <text x={VIEW_W / 2} y="340" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
-            → 优化（工程落地）
-          </text>
-
-          <text x={VIEW_W / 2} y="352" textAnchor="middle" fontSize="11" fill="var(--text-tertiary)">
-            关键洞察：RTR4 是实时渲染的百科全书，理论与实践并重
-          </text>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        实时渲染第4版全书学习地图——从管线基础到优化加速的进阶路径
-      </figcaption>
-    </figure>
-  );
-}
+import manifest from "../../../../../quality/fidelity-manifests.json";
+import type { ReactNode } from "react";
+type Unit={id:string;title:string};
+const units=manifest.books["real-time-rendering-4e"].units as Unit[];
+const groups=[["Pipeline / Hardware","4","1-3, 23"],["Transform / Representation","3","4, 16-17"],["Shading / Forms","6","5, 8, 10, 13-15"],["Texture / Image","2","6, 12"],["Shadows","1","7"],["Physical Shading","1","9"],["Light Transport","2","11, 26"],["Systems / Acceleration","7","18-22, 24-25"]] as const;
+function Frame({caption,children}:{caption:string;children:ReactNode}){return <figure className="mdx-figure not-prose mx-auto my-6"><div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div><figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption></figure>}
+export function RtrLearningMapDiagram(){const layers=[["Frame","pipeline · GPU · hardware"],["Represent","transform · mesh · curve · volume"],["Appearance","shade · texture · color · style"],["Transport","shadow · GI · ray tracing"],["System","optimize · VR/AR · query · collision"]];return <Frame caption="第四版以五层系统连接 26 章，不止是从顶点到像素的单线流程。"><div role="img" aria-label="Real-Time Rendering 第四版五层体系" className="grid gap-2 md:grid-cols-5">{layers.map(([a,b],i)=><div key={a} className="grid min-h-24 content-center rounded-control border border-border bg-bg/45 p-3 text-center"><span className="text-xs font-bold text-accent">0{i+1}</span><strong className="mt-1 text-xs text-primary">{a}</strong><span className="mt-2 text-xs text-secondary">{b}</span></div>)}</div></Frame>}
+export function RtrChapterMappingDiagram(){return <Frame caption="八个内容页主归属集合互不重叠，总数严格等于 26。"><div role="img" aria-label="官方二十六章到八个内容页的映射" className="overflow-hidden rounded-control border border-border text-xs"><div className="grid grid-cols-[1.4fr_.4fr_1.6fr] gap-px bg-border">{['Content page','Count','Official chapters'].map(x=><strong key={x} className="bg-bg p-3 text-primary">{x}</strong>)}{groups.flatMap(r=>r.map((x,i)=><span key={`${r[0]}-${x}`} className={i===0?"bg-accent/10 p-3 font-semibold text-accent":"bg-elevated p-3 text-secondary"}>{x}</span>))}</div></div></Frame>}
+export function RtrOfficialInventoryDiagram(){return <Frame caption="26 个标题直接来自权威 manifest，与评分覆盖使用同一清单。"><div role="img" aria-label="Real-Time Rendering 第四版二十六章官方目录" className="grid gap-x-6 gap-y-1 md:grid-cols-2">{units.map(unit=><div key={unit.id} className="grid grid-cols-[3.6rem_1fr] border-b border-border/60 py-2 text-xs"><span className="font-mono font-semibold text-accent">{unit.id.toUpperCase()}</span><span className="text-secondary">{unit.title}</span></div>)}</div></Frame>}

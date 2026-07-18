@@ -3,22 +3,23 @@ title: 文件输入/输出
 type: A
 section: C高级主题
 order: 13
-description: 掌握 fopen/fclose/fprintf/fscanf/fgets/fputs、文件模式、文本/二进制I/O、随机访问fseek/ftell，能读写持久化数据文件
+description: 掌握文件流模式、文本与二进制传输、更新流方向切换、随机访问和可验证的关闭提交
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/c-primer-plus-9780321928429"
 draft: false
 ---
 
+import { CPrimerFileIOStateDiagram } from "@/components/mdx/c-primer-plus/diagrams/file-io";
 
 
 
 
 <Objectives>
 
-- 能说明 FILE* 是什么、stdio 缓冲起什么作用，并写出 fopen 检查 NULL、fclose 成对关闭的模板
-- 能根据场景选对 fopen 模式（读已有、覆盖写、追加、读写混合），并区分文本与二进制（`"rb"`/`"wb"`）
-- 能用 fprintf/fscanf、fgets/fputs 处理文本行，用 fread/fwrite 保存结构体或数组，并用 fseek/ftell 实现随机访问
+- 能写出检查 fopen、每次传输与 fclose 返回值的单一清理路径，并区分 EOF 与 I/O 错误
+- 能比较 r/w/a 与带加号更新模式，正确安排同一流上输入、输出、fflush 和定位操作
+- 能实现文本行和定长二进制字段读写，并解释结构体快照为何不能作为跨平台文件格式
 
 </Objectives>
 
@@ -32,6 +33,8 @@ C 不让你直接操作硬盘扇区，而是提供一套**标准 I/O（stdio）*
 
 这一章掌握：打开/关闭、读写函数、文本与二进制、以及用 `fseek`/`ftell` 在文件里「跳转」。
 
+<CPrimerFileIOStateDiagram />
+
 ## fopen 与 fclose：打开与关闭
 
 ```c
@@ -43,7 +46,10 @@ if (fp == NULL) {
     return 1;
 }
 /* 使用 fp ... */
-fclose(fp);
+if (fclose(fp) == EOF) {
+    perror("scores.txt");
+    return 1;
+}
 ```
 
 <Term def={'按 mode 关联程序与路径上的文件，成功返回 FILE*，失败 NULL。需包含 stdio.h 头文件。'}>fopen</Term> 的第二个参数是**模式字符串**。选错模式会截断文件、无法读取或只能追加。
@@ -55,9 +61,46 @@ fclose(fp);
 - 只读已有文件 → `"r"`
 - 新建或**清空**后写 → `"w"`
 - 在末尾**追加** → `"a"`
-- 既要读又要写 → `"r+"`（须存在）或 `"w+"`（会清空）
+- 读写已有文件 → `"r+"`（须存在）
+- 读写并先清空 → `"w+"`
+- 读写且所有输出追加到末尾 → `"a+"`（不存在则创建）
 
-<Term def="关闭流，刷新输出缓冲，释放与文件关联的资源；之后不得再使用该 FILE*。">fclose</Term> 与 fopen 成对。`main` 返回前未 fclose，短程序往往还能工作，但缓冲可能未落盘；长跑服务会耗尽文件描述符。
+`b` 可以与上述模式组合成 `rb`、`w+b` 等二进制模式。模式字符串字符的合法组合由标准规定，不要自行拼接未定义形式。
+
+<Term def="刷新待写数据并解除流与文件的关联；成功返回0，失败返回EOF。调用后无论成功失败都不能再使用该FILE指针。">fclose</Term> 与 fopen 成对。缓冲输出的错误可能直到刷新或关闭才被发现，所以“前面的 fprintf 成功”不能替代检查 fclose。调用 fclose 后流已解除关联，即使它报告失败也不能再次 fclose 同一指针。
+
+### 更新流：加号模式需要方向切换协议
+
+<Term def="以带加号模式打开、同时允许输入和输出的流；在读写方向切换时必须按标准要求执行刷新或文件定位操作。">更新流（update stream）</Term> 不能任意交替调用读写函数：
+
+- 输出后改为输入：中间执行 `fflush(fp)` 或文件定位函数
+- 输入后改为输出：中间执行文件定位函数，除非刚才的输入操作遇到 EOF
+
+```c
+int update_counter(void) {
+    FILE *fp = fopen("counter.bin", "r+b");
+    unsigned value;
+    int ok = 0;
+
+    if (fp == NULL)
+        return 1;
+    if (fread(&value, sizeof value, 1, fp) != 1)
+        goto cleanup;
+    value++;
+    if (fseek(fp, 0L, SEEK_SET) != 0)
+        goto cleanup;             /* 输入切到输出前重新定位 */
+    if (fwrite(&value, sizeof value, 1, fp) != 1)
+        goto cleanup;
+    ok = 1;
+
+cleanup:
+    if (fclose(fp) == EOF)
+        ok = 0;
+    return ok ? 0 : 1;
+}
+```
+
+示例只演示方向切换，不是可移植文件格式：unsigned 的宽度和字节序仍由实现决定。ok 保留传输结果，关闭失败也会把最终结果改为失败。
 
 ## 标准流程：打开 → 读写 → 检查 → 关闭
 
@@ -78,7 +121,7 @@ fclose(fp);
   </Step>
   <Step title="第四步：fclose 关闭">
     <FileReadWriteFlowDiagram step={4} />
-    刷新缓冲区，断开与 OS 文件句柄的关联。多个 return 路径都要 fclose，或集中用 `goto cleanup`。
+    刷新缓冲并解除关联；检查 fclose 是否返回 EOF，因为最后一批输出可能此时才失败。多个退出路径可集中到 cleanup，但要保留此前失败状态。
   </Step>
 </Stepper>
 
@@ -87,20 +130,26 @@ fclose(fp);
 与终端上的 `printf`/`scanf` 类似，只是第一个参数换成 `FILE *`：
 
 ```c
-fprintf(fp, "%s %d\n", name, score);
-fscanf(fp, "%63s %d", name, &score);   /* 注意 &score */
+if (fprintf(fp, "%s %d\n", name, score) < 0)
+    /* 记录写错误 */;
+if (fscanf(fp, "%63s %d", name, &score) == 2)
+    /* 仅在两个转换都成功时使用 name 和 score */;
 ```
 
-读一整行（保留或不含换行取决于实现，通常 `fgets` 会读入 `\n`）：
+`%63s` 只适用于容量至少 64 的 name，并会在空白处停止；复杂记录更适合先读整行再解析。fscanf 返回成功赋值的项目数，不能忽略。
+
+fgets 在遇到换行时会把该换行存入数组；若缓冲区先满，则本次结果没有换行且同一记录仍有剩余：
 
 ```c
 char line[256];
 while (fgets(line, sizeof line, fp) != NULL) {
     fputs(line, stdout);
 }
+if (ferror(fp))
+    perror("grades.txt");
 ```
 
-<Term def="从流读取至多 size-1 个字符到 buf，写入 '\\0' 结尾；遇换行或 EOF 停止；成功返回 buf，失败/EOF 返回 NULL。">fgets</Term> 比 `gets` 安全——**永远不要使用已废弃的 gets**。`fputs` 写字符串，**不**自动加换行（与 `puts` 不同）。
+<Term def="从流读取至多size-1个字符；若遇换行会存入换行，成功时追加空字符并返回目标指针；尚未读到字符就遇EOF或错误时返回空指针。">fgets</Term> 的空指针返回值本身不区分正常结束和错误，要查询 feof/ferror。fputs 写字符串且不自动加换行；返回 EOF 表示失败，也应检查。gets 已被 C11 移除。
 
 ## 块 I/O：fread 与 fwrite
 
@@ -108,7 +157,8 @@ while (fgets(line, sizeof line, fp) != NULL) {
 
 ```c
 int data[] = {10, 20, 30};
-fwrite(data, sizeof data[0], 3, fp);
+if (fwrite(data, sizeof data[0], 3, fp) != 3)
+    /* 写入不完整 */;
 
 int buf[3];
 size_t n = fread(buf, sizeof buf[0], 3, fp);
@@ -121,10 +171,7 @@ size_t n = fread(buf, sizeof buf[0], 3, fp);
 
 <BinaryVsTextIODiagram />
 
-在模式后加 **`b`** 即二进制：`fopen("game.sav", "wb")`。二进制下：
-
-- 无 `\n` ↔ `\r\n` 转换
-- `fread`/`fwrite` 按字节原样传输
+在模式后加 b 即二进制：`fopen("game.sav", "wb")`。有些系统不区分文本和二进制，但可移植代码仍应按数据语义选择模式。二进制流不会执行文本流允许的实现定义转换；文本流可能进行换行映射，并可能对字符集合或文件尾表示作处理。
 
 保存 `struct Player { int hp; char name[32]; }` 时常用：
 
@@ -133,19 +180,22 @@ fwrite(&player, sizeof player, 1, fp);
 fread(&player, sizeof player, 1, fp);
 ```
 
-注意：**不同编译器/平台的 struct 对齐与字节序可能不同**，二进制存档未必跨机器通用。纯文本 JSON/CSV 更便携。
+直接写结构体对象表示只适合同一程序和明确受控 ABI 下的临时数据。结构体可能含填充字节，成员宽度、字节序和浮点表示会变化，指针成员写出的地址也没有持久化意义；未初始化填充还可能泄露进程内存片段。稳定格式应逐字段定义宽度、字节序、版本和长度，再显式编码。文本格式也必须定义编码、转义和数值规则，不能仅凭“JSON/CSV”名称自动获得兼容性。
 
 ## 随机访问：fseek、ftell、rewind
 
-顺序读写时，内部有个**当前位置**指针。想改第 5 条记录而不读遍前面四条，用：
+顺序读写时，流维护 <Term def="流中下一次读写所使用的位置状态；二进制流常可按字符偏移，文本流的位置可能只能通过ftell返回的令牌恢复。">文件位置指示器</Term>。定位调用都要检查结果：
 
 ```c
-fseek(fp, 5L * sizeof(int), SEEK_SET);  /* 从文件头偏移 */
-ftell(fp);   /* 返回当前字节偏移 */
-rewind(fp);  /* 等价 fseek(fp, 0, SEEK_SET) */
+if (fseek(fp, 5L * (long)sizeof(int), SEEK_SET) != 0)
+    perror("seek");
+long position = ftell(fp);
+if (position == -1L)
+    perror("tell");
+rewind(fp);  /* 回到开头并清除 EOF 与错误状态，但不返回失败信息 */
 ```
 
-`fseek` 的 `whence`：`SEEK_SET`（头）、`SEEK_CUR`（当前）、`SEEK_END`（尾）。文本流上 `fseek`/`ftell` 在某些实现上有限制；需要精确字节定位时用**二进制模式**。
+fseek 的 whence 可为 SEEK_SET、SEEK_CUR、SEEK_END。对文本流，可移植定位通常只使用零偏移，或把同一流先前 ftell 返回的值原样交给 SEEK_SET；ftell 的值不必是字节数。二进制流的偏移以字符为单位，但实现也可以不支持相对 SEEK_END 的任意定位。成功的 fseek 会清除 EOF 状态并撤销 ungetc 的效果；需要可诊断地回到开头时，用 fseek 而不是无返回值的 rewind。
 
 ## 代码详解：持久化成绩表
 
@@ -156,11 +206,14 @@ rewind(fp);  /* 等价 fseek(fp, 0, SEEK_SET) */
 
 int main(void) {
     FILE *fp = fopen("grades.txt", "w");
+    int ok = 1;
     if (fp == NULL) return 1;
-    fprintf(fp, "Alice 95\n");
-    fprintf(fp, "Bob 88\n");
-    fclose(fp);
-    return 0;
+    if (fprintf(fp, "Alice 95\n") < 0 ||
+        fprintf(fp, "Bob 88\n") < 0)
+        ok = 0;
+    if (fclose(fp) == EOF)
+        ok = 0;
+    return ok ? 0 : 1;
 }
 ```
 
@@ -172,11 +225,19 @@ int main(void) {
 int main(void) {
     char line[128];
     FILE *fp = fopen("grades.txt", "r");
+    int ok = 1;
     if (fp == NULL) return 1;
-    while (fgets(line, sizeof line, fp) != NULL)
-        fputs(line, stdout);
-    fclose(fp);
-    return 0;
+    while (fgets(line, sizeof line, fp) != NULL) {
+        if (fputs(line, stdout) == EOF) {
+            ok = 0;
+            break;
+        }
+    }
+    if (ferror(fp))
+        ok = 0;
+    if (fclose(fp) == EOF)
+        ok = 0;
+    return ok ? 0 : 1;
 }
 ```
 
@@ -187,16 +248,24 @@ int main(void) {
 
 int main(void) {
     int scores[] = {90, 85, 78};
+    int buf[3];
     FILE *fp = fopen("scores.bin", "wb");
     if (fp == NULL) return 1;
-    fwrite(scores, sizeof scores[0], 3, fp);
-    fclose(fp);
+    if (fwrite(scores, sizeof scores[0], 3, fp) != 3) {
+        fclose(fp);
+        return 1;
+    }
+    if (fclose(fp) == EOF)
+        return 1;
 
     fp = fopen("scores.bin", "rb");
     if (fp == NULL) return 1;
-    int buf[3];
-    fread(buf, sizeof buf[0], 3, fp);
-    fclose(fp);
+    if (fread(buf, sizeof buf[0], 3, fp) != 3) {
+        fclose(fp);
+        return 1;
+    }
+    if (fclose(fp) == EOF)
+        return 1;
     return 0;
 }
 ```
@@ -232,20 +301,22 @@ int main(void) {
 - `FILE*` 代表已打开的流；stdio 经缓冲区与磁盘交换数据
 - `fopen`/`fclose` 成对；失败返回 NULL 必须检查
 - 模式：`r` 只读、`w` 清空写、`a` 追加；加 `b` 为二进制；`+` 允许读写
+- 更新流切换读写方向时需要 fflush 或定位操作；具体规则取决于切换方向和是否遇到 EOF
 - 文本：`fprintf`/`fscanf`、`fgets`/`fputs`；块：`fread`/`fwrite`
-- 随机访问：`fseek`/`ftell`/`rewind`；二进制存档注意对齐与可移植性
+- 读写由本次函数返回值驱动，再用 feof/ferror 区分短读原因；输出还要检查 fclose
+- 文本 ftell 值不保证是字节偏移；稳定二进制格式应逐字段定义宽度、字节序和版本
 
 <Exercises>
 
-**练习 1（问答型）** `"a"` 与 `"w"` 打开已存在文件时，行为有何关键区别？
+**问题 1（问答型）** `"a"` 与 `"w"` 打开已存在文件时，行为有何关键区别？
 
 <Answer>
 
-**`w`** 会**截断**文件，原内容清空后从头发写。**`a`** **不截断**，所有写入发生在**文件末尾**追加。若需保留旧日志并继续写，应选 `"a"`。
+**`w`** 会**截断**文件，原内容清空后从头写。**`a`** **不截断**，所有写入发生在**文件末尾**追加。若需保留旧日志并继续写，应选 `"a"`。
 
 </Answer>
 
-**练习 2（改代码型）** 下面循环有什么问题？如何改？
+**问题 2（改代码型）** 下面循环有什么问题？如何改？
 
 ```c
 while (!feof(fp)) {
@@ -267,7 +338,7 @@ while (fscanf(fp, "%d", &n) == 1)
 
 </Answer>
 
-**练习 3（综合实现型）** 写程序：用 `"w"` 创建 `data.txt` 写入两行 `10` 和 `20`；再以 `"r"` 读回并打印两数之和。
+**问题 3（综合实现型）** 写程序：用 `"w"` 创建 `data.txt` 写入两行 `10` 和 `20`；再以 `"r"` 读回并打印两数之和。
 
 <Answer>
 
@@ -278,15 +349,21 @@ int main(void) {
     FILE *fp = fopen("data.txt", "w");
     int a, b;
     if (fp == NULL) return 1;
-    fprintf(fp, "%d\n%d\n", 10, 20);
-    fclose(fp);
+    if (fprintf(fp, "%d\n%d\n", 10, 20) < 0) {
+        fclose(fp);
+        return 1;
+    }
+    if (fclose(fp) == EOF)
+        return 1;
 
     fp = fopen("data.txt", "r");
     if (fp == NULL) return 1;
-    if (fscanf(fp, "%d %d", &a, &b) == 2)
-        printf("sum = %d\n", a + b);
-    fclose(fp);
-    return 0;
+    if (fscanf(fp, "%d %d", &a, &b) != 2) {
+        fclose(fp);
+        return 1;
+    }
+    printf("sum = %d\n", a + b);
+    return fclose(fp) == 0 ? 0 : 1;
 }
 ```
 
@@ -311,7 +388,7 @@ int main(void) {
 </GlossaryItem>
 
 <GlossaryItem term="fclose">
-  关闭流、刷新缓冲、释放资源；之后 fp 不可再用。
+  刷新待写数据并解除流关联；成功返回 0，失败返回 EOF。关闭错误可能是输出提交的首次错误信号，调用后不得再使用该流。
 </GlossaryItem>
 
 <GlossaryItem term="文本模式">
@@ -323,7 +400,7 @@ int main(void) {
 </GlossaryItem>
 
 <GlossaryItem term="fgets">
-  安全读行到缓冲区；指定最大长度防溢出。
+  读取至多 size-1 个字符，遇到换行会保存换行，成功时追加空字符。无换行结果可能是文件末尾，也可能是记录截断。
 </GlossaryItem>
 
 <GlossaryItem term="fread / fwrite">
@@ -335,13 +412,25 @@ int main(void) {
 </GlossaryItem>
 
 <GlossaryItem term="ftell">
-  返回当前位置距文件开头的字节偏移（long）。
+  返回可用于恢复流位置的 long 值，失败为 -1L。二进制流上常对应字符偏移，文本流上不保证是字节数。
 </GlossaryItem>
 
 <GlossaryItem term="feof">
   流是否在读到 EOF 后处于结束状态；不宜单独作为循环唯一条件。
 </GlossaryItem>
 
+<GlossaryItem term="更新流（update stream）">
+  以带加号模式打开、同时允许输入输出的流。切换方向时须按规则使用 fflush 或文件定位函数，不能任意交替读写。
+</GlossaryItem>
+
+<GlossaryItem term="文件位置指示器">
+  流维护的下一次读写位置状态。fseek 修改、ftell 查询；文本流位置可能只能作为不透明令牌恢复。
+</GlossaryItem>
+
+<GlossaryItem term="ferror">
+  查询流的错误指示器。短读或 fgets 返回空指针后，与 feof 配合区分正常输入结束和 I/O 失败。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution />
+<Attribution title="C Primer Plus, Sixth Edition, Chapter 13: File Input/Output" url="https://www.informit.com/store/c-primer-plus-9780321928429" />

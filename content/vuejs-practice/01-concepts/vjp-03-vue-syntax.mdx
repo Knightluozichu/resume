@@ -1,0 +1,259 @@
+---
+title: "第 3 章 Vue语法"
+type: A
+section: "Vue.js从入门到项目实战 · 概念与语法"
+order: 3
+description: "逐项掌握插值、属性、事件、v-model、条件与列表渲染，并用安全和身份稳定性约束模板。"
+demo: true
+math: false
+sourceUrl: "https://www.tup.com.cn/bookscenter/book_08226301.html"
+draft: false
+---
+
+import {
+  Vjp03VueSyntaxMapLab,
+  Vjp03VueSyntaxExperimentLab,
+  Vjp03VueSyntaxEvidenceLab,
+} from "@/components/mdx/vuejs-practice/diagrams/vjp-03-vue-syntax";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释第 3 章 Vue语法的核心机制，并把它放回11章、5个附录的学习主线
+- 能比较正常、边界、失败和恢复样本，指出首个状态、身份、任务或资源偏离点
+- 能实现本页最小Vue 2实验，记录运行时、输入、事件顺序、状态所有者与清理动作
+- 能设计证据回答“模板只读取可解释状态，原始HTML经过可信净化，事件更新路径明确，列表身份在插入、删除和排序后保持稳定。”是否成立
+
+</Objectives>
+
+## 直觉：先画状态、身份与交付链
+
+逐项掌握插值、属性、事件、v-model、条件与列表渲染，并用安全和身份稳定性约束模板。 模板语法是状态到视图的声明式契约：插值负责内容，v-bind负责属性，v-on负责命令，v-model组合值与更新事件，条件和列表指令决定结构。 真正掌握本页，不是让一次演示碰巧得到正确截图，而是能解释输入从哪里来、谁拥有可变状态、哪次事件触发更新、失败后如何停止，以及组件和外部资源何时释放。先预测：只看最终页面，最容易遗漏哪条陈旧请求、重复事件或错误身份？
+
+<Vjp03VueSyntaxMapLab />
+
+## 权威目录定位
+
+本书依据清华大学出版社官方书目与官方目录核对：刘汉伟著，2019年4月出版，ISBN 9787302523888。原书处于Vue 2、Vue CLI、Vuex和当时webpack的技术语境；Vue 3、Pinia、Vite或Nuxt只会作为明确的迁移注记，不会冒充原书正式分节。
+
+本页按官方目录顺序逐项覆盖 **19** 个公开条目；目录名称只用于一对一追踪，正文为独立教学重构。
+
+- 3.1 插值绑定
+- 3.1.1 文本插值
+- 3.1.2 HTML插值
+- 3.2 属性绑定
+- 3.2.1 指令v-bind
+- 3.2.2 类名和样式绑定
+- 3.3 事件绑定
+- 3.3.1 指令v-on
+- 3.3.2 常见修饰符
+- 3.3.3 按键修饰符
+- 3.3.4 组合修饰符
+- 3.4 双向绑定
+- 3.4.1 指令v-model
+- 3.4.2 v-model与修饰符
+- 3.4.3 v-model与自定义组件
+- 3.5 条件渲染和列表渲染
+- 3.5.1 指令v-if和v-show
+- 3.5.2 指令v-for
+- 3.5.3 列表渲染中的key
+
+## 核心概念与所有权
+
+<Term def="用双花括号把表达式结果转成文本节点并安全显示的绑定方式。">
+  文本插值
+</Term>
+、
+<Term def="把表达式结果绑定到元素属性、组件prop、类名或样式的指令。">
+  v-bind
+</Term>
+、<Term def="声明DOM或组件事件监听器，并可附加事件修饰符的指令。">v-on</Term>、
+<Term def="按控件或组件约定组合值输入与更新事件的双向绑定语法糖。">
+  v-model
+</Term>
+、<Term def="在列表更新中标识节点身份、帮助复用和移动判断的稳定值。">key</Term>
+。这些概念不是孤立名词：每一个都要回答“输入由谁创建、状态保存在哪里、哪个事件可以修改、失败如何传播、离开页面后由谁清理”。
+
+|   # | 概念     | 工程含义                                                 |
+| --: | -------- | -------------------------------------------------------- |
+|   1 | 文本插值 | 用双花括号把表达式结果转成文本节点并安全显示的绑定方式。 |
+|   2 | v-bind   | 把表达式结果绑定到元素属性、组件prop、类名或样式的指令。 |
+|   3 | v-on     | 声明DOM或组件事件监听器，并可附加事件修饰符的指令。      |
+|   4 | v-model  | 按控件或组件约定组合值输入与更新事件的双向绑定语法糖。   |
+|   5 | key      | 在列表更新中标识节点身份、帮助复用和移动判断的稳定值。   |
+
+## 机制拆解
+
+### 1. 内容、属性与事件分工
+
+文本插值默认转义HTML，v-html会写入原始内容并扩大注入风险；v-bind提供属性值，v-on把用户动作转成方法调用。模板表达式应保持轻量，复杂转换放在计算属性中，副作用放在方法或侦听器中。
+
+先预测：若省略这一层，状态、组件身份、异步任务或构建产物会在哪里首次偏离？
+
+### 2. v-model是一组明确契约
+
+在文本框上，v-model通常组合value与input；在自定义组件上，Vue 2默认组合value prop与input事件。lazy、number和trim改变提交时机或规范化方式，必须用空值、中文输入和非法数字验证。
+
+先预测：若省略这一层，状态、组件身份、异步任务或构建产物会在哪里首次偏离？
+
+### 3. 结构指令与身份
+
+v-if真正创建和销毁分支，v-show保留节点只切换显示；高频切换通常偏向v-show。v-for必须使用与业务实体一致的稳定key，数组索引无法在插入、排序后保持身份，可能让输入框或组件状态错位。
+
+先预测：若省略这一层，状态、组件身份、异步任务或构建产物会在哪里首次偏离？
+
+## 三阶段可视化推演
+
+<Stepper>
+  <Step title="1. 建立目录与状态地图">
+    固定Vue运行时、工具链、输入数据和初始URL，先画出正常路径与唯一状态所有者。
+    <Vjp03VueSyntaxMapLab />
+  </Step>
+  <Step title="2. 注入边界与失败">
+    只改变一个变量，观察空值、重复事件、请求乱序、资源拒绝或旧缓存造成的首偏离点。
+    <Vjp03VueSyntaxExperimentLab />
+  </Step>
+  <Step title="3. 清除故障并重放">
+    使用相同输入恢复，核对DOM摘要、状态版本、监听器、定时器、请求和构建资源是否收敛。
+    <Vjp03VueSyntaxEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小可运行实验
+
+下面的最小实现聚焦本页核心。先在独立页面运行，再加入空输入、快速重复操作和销毁重建；不要直接把演示代码当成完整生产方案。
+
+```js
+<div id="app">
+  <input v-model.trim="query" @keyup.enter="search">
+  <article v-for="item in results" :key="item.id">
+    {{ item.title }}
+  </article>
+</div>
+```
+
+证据记录必须同时保存目录坐标、运行时和状态摘要：
+
+```yaml
+book: Vue.js从入门到项目实战
+page: vjp-03-vue-syntax
+sample: normal | boundary | failure | recovery
+runtime: Vue 2.x + pinned toolchain
+input_fixture: fixed
+first_divergence: null
+cleanup_complete: true
+```
+
+故障脚本保持一次只改变一个变量：
+
+```text
+baseline -> run_same_input
+inject -> stale-state | duplicate-event | denied-resource | broken-build
+observe -> stop_at_first_divergence
+recover -> clear_fault_and_replay
+assert -> one_state_owner && stable_output && no_stale_task && no_resource_leak
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：把不可信字符串直接交给v-html，既跳过文本转义又让内容边界失去审计。**
+  最终截图可能仍正确，但状态轨迹、资源数量或下一次交互已经偏离；必须保存首次偏离前后的输入与事件。
+</Callout>
+
+<Callout type="trap">
+  **误区二：在可重排列表中使用数组索引作key，导致DOM和组件内部状态绑定到错误实体。**
+  用正常样本无法暴露这一问题，要增加边界、失败和恢复样本，并在销毁后检查残留任务。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 输入与环境变化               | 预期状态       | 通过条件               |
+| ---- | ---------------------------- | -------------- | ---------------------- |
+| 正常 | 合法数据、稳定身份、固定版本 | 完成主链       | 输出与状态摘要一致     |
+| 边界 | 空值、极限数量、快速重复事件 | 有界退化       | 不越界、不重复、不阻塞 |
+| 失败 | 请求拒绝、旧缓存、资源缺失   | 首偏离点停止   | 错误显式传播或降级     |
+| 恢复 | 清除故障后重放同一输入       | 收敛到正常轨迹 | 无陈旧任务和资源泄漏   |
+
+<Vjp03VueSyntaxEvidenceLab />
+
+本页签发不变量是：**模板只读取可解释状态，原始HTML经过可信净化，事件更新路径明确，列表身份在插入、删除和排序后保持稳定。** 单次成功、平均耗时或最终截图不能代替运行时版本、事件轨迹、首偏离点和清理证据。
+
+## 练习
+
+<Exercises>
+
+**问题 1** 第 3 章 Vue语法的核心主张是什么？为什么只看最终页面不足以验收？
+
+<Answer>
+  模板语法是状态到视图的声明式契约：插值负责内容，v-bind负责属性，v-on负责命令，v-model组合值与更新事件，条件和列表指令决定结构。
+  最终页面会隐藏重复副作用、旧任务覆盖、错误吞没和资源泄漏，所以必须比较输入、状态所有者、事件顺序、首偏离点与清理结果。
+</Answer>
+
+**问题 2** 如何把本页公开目录变成可执行学习证据？
+
+<Answer>
+  按官方顺序建立追踪表，为每组条目写出输入、状态、输出、失败与恢复条件。本页首先覆盖3.1
+  插值绑定、3.1.1 文本插值、3.1.2 HTML插值、3.2 属性绑定、3.2.1
+  指令v-bind、3.2.2 类名和样式绑定、3.3 事件绑定、3.3.1
+  指令v-on；其余条目已在上方逐项列出。
+</Answer>
+
+**问题 3** 本页的最小通过条件是什么？
+
+<Answer>
+  模板只读取可解释状态，原始HTML经过可信净化，事件更新路径明确，列表身份在插入、删除和排序后保持稳定。
+  并且同一运行时、输入与初始状态可以重放正常、边界、失败和恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **文本插值**：用双花括号把表达式结果转成文本节点并安全显示的绑定方式。
+- **v-bind**：把表达式结果绑定到元素属性、组件prop、类名或样式的指令。
+- **v-on**：声明DOM或组件事件监听器，并可附加事件修饰符的指令。
+- **v-model**：按控件或组件约定组合值输入与更新事件的双向绑定语法糖。
+- **key**：在列表更新中标识节点身份、帮助复用和移动判断的稳定值。
+- 本页已经把官方目录、机制链、最小实现、故障注入和恢复证据放在同一条验收路径上。
+- 原书Vue 2技术语境与现代迁移说明保持清晰边界。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="文本插值">
+    用双花括号把表达式结果转成文本节点并安全显示的绑定方式。
+  </GlossaryItem>
+  <GlossaryItem term="v-bind">
+    把表达式结果绑定到元素属性、组件prop、类名或样式的指令。
+  </GlossaryItem>
+  <GlossaryItem term="v-on">
+    声明DOM或组件事件监听器，并可附加事件修饰符的指令。
+  </GlossaryItem>
+  <GlossaryItem term="v-model">
+    按控件或组件约定组合值输入与更新事件的双向绑定语法糖。
+  </GlossaryItem>
+  <GlossaryItem term="key">
+    在列表更新中标识节点身份、帮助复用和移动判断的稳定值。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="刘汉伟著，清华大学出版社，2019年4月，ISBN 9787302523888。清华大学出版社官方书目与官方目录确认全书分为概念篇和实战篇，共11章、5个附录；正文为独立教学重构，不复制原书段落。"
+  adaptedUrl="https://www.tup.com.cn/bookscenter/book_08226301.html"
+/>
+
+官方目录：https://www.tup.com.cn/bookscenter/bookcatalog?id=08226301

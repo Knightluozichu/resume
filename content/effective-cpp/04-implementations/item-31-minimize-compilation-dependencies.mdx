@@ -1,0 +1,504 @@
+---
+title: "Item 31：将文件间的编译依赖降至最低"
+type: A
+section: Chapter 5 · Implementations
+order: 31
+description: 对齐 Effective C++ 第三版 Item 31：区分完整类型与前置声明需求，以 pimpl handle class 和 abstract interface class 隔离实现，正确处理 incomplete type 析构、复制、factory、ABI 与 modules 边界。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppDependencyModelDecisionMap,
+  EcppIncludeBlastRadiusMap,
+  EcppPimplTranslationBoundaryMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-31-minimize-compilation-dependencies";
+
+<Objectives>
+
+- 能解释 public header 的 textual include 如何形成 compilation dependency blast radius
+- 能实现 forward declaration 加 pimpl handle class，正确处理 incomplete unique owner 的 destructor/copy/move
+- 能比较 handle class、interface class、header-only template 与 module 的编译、运行和 ABI 取舍
+
+</Objectives>
+
+## 从 Address 私有字段导致全库重编译开始
+
+Person header 直接包含所有字段类型：
+
+```cpp
+#include "address.hpp"
+#include "date.hpp"
+#include <string>
+
+class Person {
+public:
+    Person(std::string name, Date birthday, Address address);
+
+private:
+    std::string name_;
+    Date birthday_;
+    Address address_;
+};
+```
+
+Address 只增加一个 private cache，却会改变 address.hpp；person.hpp 包含它，所有包含 Person 的 translation units 都可能重编译。
+
+<Term def="一个文件必须看见另一个声明或定义才能正确解析、布局或生成代码的关系。">
+  compilation dependency
+</Term>
+
+Item 31 的原则是 Minimize compilation dependencies between files（将文件间的编译依赖降至最低）。目标不是让 include 数量好看，而是让 implementation change 不沿 public interface 扩散。
+
+<Term def="一个 header 变化沿 include graph 触发重新解析和编译的下游范围。">
+  rebuild blast radius
+</Term>
+
+<EcppIncludeBlastRadiusMap />
+
+## interface 与 implementation 应分离
+
+Person 用户需要知道可调用 operations，不一定需要知道 name/address/date 怎样存储。
+
+<Term def="调用者为编译使用代码必须了解的公开类型、函数与契约集合。">
+  compilation interface
+</Term>
+
+<Term def="完成契约所用字段、containers、helper types 与算法，理应只在实现单元可见。">
+  compilation implementation
+</Term>
+
+public header 泄漏 private by-value members 时，C++ access control 隐藏访问权限，却没有隐藏 layout/compile dependency。
+
+<Term def="private member 仍必须出现在 class definition，从而让 compiler 和客户依赖其完整类型与布局。">
+  private-layout exposure
+</Term>
+
+需要额外间接层把 storage 从 public class layout 移走。
+
+## forward declaration 能声明 incomplete type
+
+```cpp
+class Date;
+class Address;
+class PersonImpl;
+```
+
+<Term def="只声明类型名称而不提供字段、base 和 sizeof 等完整定义。">
+  forward declaration
+</Term>
+
+compiler 可声明 pointer/reference 和只涉及它们的函数：
+
+```cpp
+void printAddress(const Address& value);
+Address* findAddress(PersonId id);
+```
+
+<Term def="名称已知但 layout、成员和大小尚不可用的类型。">incomplete type</Term>
+
+函数 definition 解引用、访问 member 或构造 Address 时仍需 include 完整定义。
+
+## 何时必须完整类型
+
+by-value data member 需要 sizeof/alignment，base class 必须完整，inline body 若调用 member 也需要 definition。
+
+<Term def="compiler 已知对象大小、alignment、members、bases 和 destructor 等完整信息的类型。">
+  complete type
+</Term>
+
+```cpp
+class Address;
+
+class InvalidPerson {
+    Address address_; // 错误：layout 需要完整 Address
+};
+```
+
+pointer/reference 自身大小已知，因此可指向 incomplete type。
+
+<Term def="某项语言操作需要 sizeof、layout、member lookup 或 destructor 定义的最早位置。">
+  completeness requirement point
+</Term>
+
+<Callout type="trap">
+  **现象**：把 include 全换成 forward declaration，编译器开始报
+  sizeof/member/destructor 错误。**原因**：前置声明只提供名字，不能支持 by-value
+  layout 或 member access。**修法**：逐处标注 completeness requirement，在
+  public header 只保留真正必要的完整类型。
+</Callout>
+
+## pimpl 建立 handle class
+
+public Person 只保存 implementation owner：
+
+```cpp
+// person.hpp
+#pragma once
+#include <memory>
+#include <string_view>
+
+class PersonImpl;
+
+class Person {
+public:
+    Person(std::string_view name, const Date& birthday, const Address& address);
+    ~Person();
+
+    Person(Person&&) noexcept;
+    Person& operator=(Person&&) noexcept;
+
+    std::string name() const;
+
+private:
+    std::unique_ptr<PersonImpl> pImpl_;
+};
+```
+
+<Term def="public object 只持有 implementation owner，并把 operations 转交隐藏实现的 class。">
+  handle class
+</Term>
+
+<Term def="pointer to implementation，把 private representation 移入 source-visible type 的习惯。">
+  pimpl idiom
+</Term>
+
+Person layout 只包含固定大小 unique owner；Address/Date/container changes 不再改变 public layout。
+
+<EcppPimplTranslationBoundaryMap />
+
+## unique owner 的 destructor 要放在完整类型可见处
+
+`unique_ptr<PersonImpl>` 可以声明时指向 incomplete type，但默认 deleter 真正 delete 时需要 PersonImpl 完整。
+
+<Term def="在 header 只声明 destructor，在 source file 看到完整 Impl 后再定义的方式。">
+  out-of-line destructor
+</Term>
+
+```cpp
+// person.cpp
+#include "person.hpp"
+#include "person_impl.hpp"
+
+Person::~Person() = default;
+Person::Person(Person&&) noexcept = default;
+Person& Person::operator=(Person&&) noexcept = default;
+```
+
+<Term def="smart owner 的 deleter 在实例化销毁代码时必须知道 pointee 完整定义的约束。">
+  incomplete-owner destruction rule
+</Term>
+
+将 destructor inline/defaulted 在 header 可能过早实例化 delete 路径。move/copy operations 也应按 compiler/library 行为放在 source 并测试。
+
+<Callout type="trap">
+  **现象**：pimpl header 使用 unique_ptr 后在某些客户 TU 报 incomplete type
+  错误。**原因**：Person destructor 在 header 隐式生成，default deleter 需要
+  Impl 完整。**修法**：显式声明 destructor，在包含 impl definition 的 source
+  file `= default`。
+</Callout>
+
+## handle class 要明确 value 与 ownership 语义
+
+unique pimpl 默认让 Person 不可复制。若 Person 应是 value type，需要实现 deep copy：
+
+```cpp
+Person::Person(const Person& rhs)
+    : pImpl_(std::make_unique<PersonImpl>(*rhs.pImpl_)) {}
+
+Person& Person::operator=(Person rhs) {
+    swap(rhs);
+    return *this;
+}
+```
+
+<Term def="复制 handle 时创建独立 implementation 副本，使两个 public values 生命周期互不依赖。">
+  deep-copy pimpl
+</Term>
+
+若应共享 identity，可用 shared owner，但要明确 thread safety、copy-on-write 与 cycle。不能让 pointer 选择偶然决定 public semantics。
+
+<Term def="public handle 的 copy/move/destruction 必须表达 underlying implementation 的值或身份契约。">
+  handle ownership semantics
+</Term>
+
+copy-and-swap 还能提供 strong assignment guarantee，但成本需测量。
+
+## inline forwarding 会重新引入实现依赖
+
+Person operations 通常在 source 中转交：
+
+```cpp
+std::string Person::name() const {
+    return pImpl_->name();
+}
+```
+
+若把 body 写进 header，compiler 需要看见 PersonImpl member declarations，pimpl 边界被打穿。
+
+<Term def="handle method 在 source file 中调用 implementation operation 的薄转交层。">
+  out-of-line forwarding function
+</Term>
+
+<Term def="inline body 访问 Impl members，迫使 public header 包含完整 implementation 的反模式。">
+  implementation-revealing inline
+</Term>
+
+LTO 可在构建时跨 source 优化 forwarding，不必为内联永久泄漏 header dependency。
+
+## interface class 隐藏全部 concrete representation
+
+另一策略是 pure abstract interface：
+
+```cpp
+class Person {
+public:
+    virtual ~Person() = default;
+    virtual std::string name() const = 0;
+    virtual Date birthday() const = 0;
+
+    static std::unique_ptr<Person> create(
+        std::string_view name,
+        const Date& birthday,
+        const Address& address);
+};
+```
+
+<Term def="只声明 pure virtual contract、没有 concrete data representation 的抽象 base。">
+  interface class
+</Term>
+
+factory 在 source 中构造 concrete implementation，客户只依赖 abstract API。
+
+<Term def="隐藏 concrete type construction，并返回 interface owner 的创建边界。">
+  polymorphic factory
+</Term>
+
+它适合 runtime replaceability/plugin，但引入 virtual dispatch、heap allocation 和 pointer ownership。
+
+## handle class 与 interface class 的取舍
+
+handle class 保留普通 value-like syntax、固定 public layout 和非 virtual API；interface class 支持多个 implementations 和 runtime polymorphism。
+
+<Term def="以固定 public handle 转发到单一/少量实现，强调值语义和 ABI 隔离的模型。">
+  handle implementation model
+</Term>
+
+<Term def="以 pure virtual contract 允许多个 concrete types 在运行期替换的模型。">
+  interface implementation model
+</Term>
+
+<EcppDependencyModelDecisionMap />
+
+不要为了减少 rebuild 把所有小 value types 都 heap/polymorphic 化；间接访问、allocation、cache locality 与复杂 ownership 是真实成本。
+
+## 标准库类型不要自行前置声明
+
+不能在 `namespace std` 手写 `class string;`；标准类型可能是 template specialization/alias，实现声明由标准 header 负责。
+
+<Term def="只通过标准规定 header 获得标准库实体声明，不向 std 添加自定义 forward declaration 的规则。">
+  standard-library declaration boundary
+</Term>
+
+可在 public API 使用 string_view/span 等轻量 vocabulary types，但仍 include 对应标准 header。
+
+<Term def="跨模块表达数据借用、ownership 或结果语义的稳定公共类型。">
+  vocabulary type
+</Term>
+
+前置声明仅用于自己控制且声明形式稳定的 user types。
+
+## include what you use 与最小依赖并不冲突
+
+header 必须 self-contained：单独 include 时能编译；不应依赖客户先包含某个文件。
+
+<Term def="header 自己包含完成其 public declarations 所需定义，独立编译不依赖 include 顺序。">
+  self-contained header
+</Term>
+
+最小依赖指移除不必要完整定义，不是制造隐式 include order。
+
+<Term def="把 public header 单独作为 translation unit 编译，验证其依赖声明完整。">
+  header isolation test
+</Term>
+
+source file 仍应显式 include implementation 真正使用的 headers。
+
+## modules 减少文本解析但不取消语义依赖
+
+C++ modules 可把 exported interface 与 private implementation partitions 分开，避免每个 TU 重复预处理相同 headers。
+
+<Term def="以编译后的 module interface 向 importers 暴露 declarations，而非文本复制 include。">
+  module interface unit
+</Term>
+
+但 exported by-value field/layout、inline/template body 和 ABI 变化仍会使 importers 语义依赖；module cache 也需重建。
+
+<Term def="即使没有 textual include，客户仍依赖 exported layout、template 或 inline behavior 的关系。">
+  semantic compilation dependency
+</Term>
+
+pimpl/interface separation 在 modules 时代仍用于 ABI 和变化隔离，不只是加速 parser。
+
+## ABI 稳定需要定义可变范围
+
+pimpl 让 Person public sizeof/alignment 稳定，新增 Impl fields 不改变客户 layout。它不能自动保证 vtable、exception ABI、allocator 和 semantic compatibility。
+
+<Term def="已编译客户对公开 layout、symbol、calling convention 和 ownership 规则的二进制依赖。">
+  binary compatibility surface
+</Term>
+
+<Term def="实现变化不改变 public layout/symbol，但仍可能改变行为契约的兼容维度。">
+  semantic compatibility
+</Term>
+
+版本测试要同时检查 ABI diff 和 behavior contract。
+
+## 用 include graph 与触碰实验验收
+
+先预测修改 PersonImpl 一个 private field 会重编译哪些 translation units，再执行验证：
+
+- include graph/`-ftime-trace` 找出 public header 重依赖和解析热点。
+- touch Address implementation/header，统计增量重编译 targets。
+- header isolation tests 验证每个 public header 自包含。
+- compile-negative tests 确认 public header 不能访问 incomplete Impl members。
+- pimpl destructor/copy/move 在只 include person.hpp 的客户 TU 编译链接运行。
+- ABI checker 比较 Person sizeof/alignment/symbols 在 Impl 修改前后稳定。
+- interface factory tests 覆盖 create failure、virtual destruction 和多个 implementations。
+- runtime benchmark 测量 allocation、indirection、virtual dispatch 与 cache locality 成本。
+- modules on/off 构建比较 parser 时间，同时验证 semantic dependency 未被误判为消失。
+
+<Term def="记录 header edge、触发重编译范围、完整类型需求、ABI 与运行成本的审计表。">
+  compilation dependency matrix
+</Term>
+
+重构成功的证据是实现变化只重编译拥有实现的少量 targets，而不是 include 数量下降。
+
+## 小结
+
+- public header 包含 implementation definitions 会让小改动沿 include graph 形成 rebuild blast radius
+- forward declaration 只提供 incomplete type 名称；by-value layout、inheritance 和 member access 需要 complete type
+- pimpl handle class 以固定大小 owner 隔离表示，destructor/copy/move 应在完整 Impl 可见处定义
+- interface class 加 polymorphic factory 完全隐藏 concrete representation，代价是 virtual/heap/ownership
+- self-contained header 与最小依赖并不冲突；标准库类型必须包含标准 header
+- modules 减少 textual parsing，但 layout、template、inline 和 ABI 的 semantic dependency 仍存在
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 31"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="compilation dependency">
+    文件为解析布局或生成代码依赖另一文件的关系。
+  </GlossaryItem>
+  <GlossaryItem term="rebuild blast radius">
+    header 变化触发的下游重编译范围。
+  </GlossaryItem>
+  <GlossaryItem term="compilation interface">
+    客户编译所需的公开声明和契约。
+  </GlossaryItem>
+  <GlossaryItem term="compilation implementation">
+    应局限于实现单元的字段算法与 helper。
+  </GlossaryItem>
+  <GlossaryItem term="private-layout exposure">
+    private fields 仍暴露 layout 编译依赖。
+  </GlossaryItem>
+  <GlossaryItem term="forward declaration">
+    只声明类型名字而不提供完整定义。
+  </GlossaryItem>
+  <GlossaryItem term="incomplete type">
+    名字已知但 layout/members 未知的类型。
+  </GlossaryItem>
+  <GlossaryItem term="complete type">
+    大小、alignment、members 与 bases 已知的类型。
+  </GlossaryItem>
+  <GlossaryItem term="completeness requirement point">
+    语言操作首次需要完整定义的位置。
+  </GlossaryItem>
+  <GlossaryItem term="handle class">
+    持有 implementation owner 并转交操作的 public class。
+  </GlossaryItem>
+  <GlossaryItem term="pimpl idiom">
+    以 pointer-to-implementation 隐藏 private representation。
+  </GlossaryItem>
+  <GlossaryItem term="out-of-line destructor">
+    在 source 的完整类型环境定义 destructor。
+  </GlossaryItem>
+  <GlossaryItem term="incomplete-owner destruction rule">
+    deleter 销毁时需完整 pointee 的约束。
+  </GlossaryItem>
+  <GlossaryItem term="deep-copy pimpl">
+    复制 handle 时创建独立 implementation。
+  </GlossaryItem>
+  <GlossaryItem term="handle ownership semantics">
+    handle copy/move 映射的值或身份契约。
+  </GlossaryItem>
+  <GlossaryItem term="out-of-line forwarding function">
+    source 中转交到 Impl 的薄操作。
+  </GlossaryItem>
+  <GlossaryItem term="implementation-revealing inline">
+    要求 header 看见 Impl 的 inline body。
+  </GlossaryItem>
+  <GlossaryItem term="interface class">
+    仅含 pure virtual contract 的抽象 base。
+  </GlossaryItem>
+  <GlossaryItem term="polymorphic factory">
+    隐藏 concrete creation 并返回 interface owner。
+  </GlossaryItem>
+  <GlossaryItem term="handle implementation model">
+    固定 handle 转发并强调值/ABI 的模型。
+  </GlossaryItem>
+  <GlossaryItem term="interface implementation model">
+    pure virtual 支持运行期替换的模型。
+  </GlossaryItem>
+  <GlossaryItem term="standard-library declaration boundary">
+    只从标准 header 获得 std 声明。
+  </GlossaryItem>
+  <GlossaryItem term="vocabulary type">
+    公共边界表达数据和 ownership 的稳定类型。
+  </GlossaryItem>
+  <GlossaryItem term="self-contained header">
+    不依赖 include 顺序即可独立编译的 header。
+  </GlossaryItem>
+  <GlossaryItem term="header isolation test">
+    单独编译 public header 的验证。
+  </GlossaryItem>
+  <GlossaryItem term="module interface unit">
+    向 importers 导出 declarations 的模块单元。
+  </GlossaryItem>
+  <GlossaryItem term="semantic compilation dependency">
+    对 exported layout/template/inline 的语义依赖。
+  </GlossaryItem>
+  <GlossaryItem term="binary compatibility surface">
+    已编译客户依赖的 layout 和 symbols。
+  </GlossaryItem>
+  <GlossaryItem term="semantic compatibility">
+    公开行为契约的跨版本兼容。
+  </GlossaryItem>
+  <GlossaryItem term="compilation dependency matrix">
+    依赖、重编译、ABI 和成本的审计表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：把 Person 改为 pimpl。** 要求客户只 include person.hpp，支持 move 和 deep copy，请列出关键定义位置。
+
+  <Answer question="pimpl header/source 怎样组织才能处理 incomplete type？">header forward declare PersonImpl，只保存 `unique_ptr<PersonImpl>`，声明 destructor、copy/move 和 public operations；source include PersonImpl 完整定义，再 default destructor/move，并用 `make_unique` deep-copy Impl 实现 copy，assignment 可 copy-and-swap。客户 TU 只 include public header 编译链接；Impl 字段变化不触发客户重编译。</Answer>
+
+2. **问题 2：选择 handle class 或 interface class。** 值对象只有一个实现但需 ABI 稳定；插件有多个运行期实现，分别选择。
+
+<Answer question="两种隔离模型怎样匹配需求？">
+  单一值对象用 pimpl handle class，保留 value syntax、固定 public
+  layout，并明确定义 deep/shared copy；插件用 pure virtual interface class 和
+  factory 返回 polymorphic owner，支持 runtime replacement 与 virtual
+  destruction。分别测量 pointer indirection/allocation 与 virtual
+  dispatch，不能只为减少 include 把所有类型多态化。
+</Answer>
+
+3. **问题 3：审计 modules 迁移。** 团队认为改为 import 后可以公开全部 fields/templates 而不再有编译依赖，请纠正并验证。
+
+  <Answer question="modules 消除了什么，没有消除什么？">modules 减少 textual preprocessing 和重复解析，可缓存 interface；但 exported by-value layout、inline/template bodies、ABI 与 semantic contract 仍被 importers 依赖，变化会使 module cache/客户重建或二进制不兼容。用 touch experiment、module rebuild graph、ABI diff 和 behavior tests 验证；pimpl/interface boundary 仍用于变化与 ABI 隔离。</Answer>
+</Exercises>

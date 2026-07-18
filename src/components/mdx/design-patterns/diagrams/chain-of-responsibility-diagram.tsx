@@ -273,7 +273,8 @@ export function ChainOfResponsibilityDiagram() {
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
         Client 只需把请求交给链首，无需知道谁会处理。每个 Handler
-        决定自己处理还是传给 successor——发送者与接收者解耦，链的组装可在运行时调整。
+        决定自己处理还是传给
+        successor——发送者与接收者解耦，链的组装可在运行时调整。
       </figcaption>
     </figure>
   );

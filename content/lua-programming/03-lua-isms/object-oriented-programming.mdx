@@ -1,0 +1,223 @@
+---
+title: "Chapter 21. Object-Oriented Programming"
+type: C
+section: "Programming in Lua 4e · Lua-isms"
+order: 21
+description: "掌握Lua class pattern、single/multiple inheritance、privacy、single-method object与dual representation，并验证identity、dispatch和capability。"
+demo: true
+math: false
+sourceUrl: "https://www.lua.org/pil/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PilClassDispatchLab, PilInheritanceLab, PilObjectPrivacyLab } from "@/components/mdx/lua-programming/diagrams/object-oriented-programming";
+
+<Objectives>
+
+- 能解释class table、instance state、constructor与colon dispatch，复现method shadow和shared-default故障
+- 能推导single/multiple inheritance的lookup graph、override、super call、conflict和cache invalidation
+- 能设计closure privacy、single-method与dual representation，判断reference leak和lifecycle边界
+
+</Objectives>
+
+## 为什么Lua对象先是Identity与Lookup协议
+
+Lua没有内建class declaration。Object可只是table，method只是function，colon只是隐式传self，inheritance只是`__index`链或search function。所谓class pattern必须自己保证：谁创建identity、哪些fields属于instance、哪些methods共享、missing lookup去哪、谁能修改class table。
+
+先预测：两个instances共享class上的table default时修改一处会怎样；instance写入与method同名field后colon call会不会成功；subclass调用base method时self是谁；multiple parents都有`save`时选哪个；private state table泄露后closure还能算private吗；public object被GC后dual map是否释放state。先画reference graph。
+
+<Term def="Lua对象由独立identity、per-instance state、共享method source、lookup chain与constructor invariant共同定义。">object dispatch contract</Term>比“table加metatable”完整。Class与instance都是ordinary tables，API必须限制外部mutation，或接受monkey patch是正式能力。
+
+## Classes
+
+常见class table同时作method repository和instance metatable：class的`__index`指向自身；constructor创建table、验证state、`setmetatable(instance,class)`。Methods用colon定义/调用。Instance raw field优先，class只处理missing read，因此同名instance field会shadow method。
+
+<Term def="Constructor创建新instance identity、建立完整state、验证参数并只在成功后附加正确class metatable。">constructor invariant</Term>要求失败不发布half-built object。Mutable defaults不要放class table；constructor为每个instance创建独立table，immutable scalar default可共享。
+
+```lua
+local Account = {}
+Account.__index = Account
+
+function Account.new(initial)
+  assert(type(initial) == "number" and initial >= 0)
+  return setmetatable({ balance = initial }, Account)
+end
+
+function Account:deposit(amount)
+  assert(type(amount) == "number" and amount > 0)
+  self.balance = self.balance + amount
+  return self.balance
+end
+
+function Account:withdraw(amount)
+  assert(amount > 0 and amount <= self.balance)
+  self.balance = self.balance - amount
+  return self.balance
+end
+
+local first, second = Account.new(10), Account.new(20)
+first:deposit(5)
+assert(first.balance == 15 and second.balance == 20)
+```
+
+Constructor用dot形式避免把class当隐式self；也可设计`Class:new`以支持subclass polymorphic construction，但要统一。Method取出后`local f=obj.deposit; f(5)`缺self，必须`f(obj,5)`或closure bind。
+
+<PilClassDispatchLab />
+
+<Stepper>
+  <Step title="切换Class Table、Instance、Colon Call和Constructor"><PilClassDispatchLab /></Step>
+  <Step title="画Raw/Prototype Fields">对每个name标instance raw value、class method/default与shadow结果；写入nil后再次观察lookup。</Step>
+  <Step title="验证Construction">覆盖invalid input、two-instance independence、dot/colon mismatch、method field shadow和metatable tampering。</Step>
+</Stepper>
+
+<Callout type="trap" title="Class上的Table Default会自动复制给每个Instance">
+`__index`返回同一个class field identity，所有未shadow instances共享它。Mutable state必须在constructor中逐实例创建，或明确声明shared class state。
+</Callout>
+
+## Inheritance
+
+Subclass可由base class创建，或设置metatable让missing subclass methods委托base；instances的metatable是subclass，于是lookup形成instance到subclass再到base。<Term def="Single inheritance把instance missing lookup沿subclass到base的有向prototype chain解析，first hit决定method。">single-inheritance lookup chain</Term>不复制methods，base后续修改会影响未override lookup。
+
+Override只在subclass定义同名method。调用super不是关键字：显式`Base.method(self,args)`，self仍是derived instance。不要写`Base:method(args)`，那会把Base自己当self。Constructor chaining同样显式，避免base constructor返回另一个metatable identity覆盖subclass。
+
+```lua
+local LimitedAccount = setmetatable({}, { __index = Account })
+LimitedAccount.__index = LimitedAccount
+
+function LimitedAccount.new(initial, limit)
+  local instance = Account.new(initial)
+  instance.limit = assert(limit)
+  return setmetatable(instance, LimitedAccount)
+end
+
+function LimitedAccount:withdraw(amount)
+  if self.balance - amount < -self.limit then return nil, "limit" end
+  self.balance = self.balance - amount
+  return self.balance
+end
+
+function LimitedAccount:deposit(amount)
+  return Account.deposit(self, amount)
+end
+
+local account = LimitedAccount.new(10, 5)
+assert(account:deposit(2) == 12)
+assert(select(2, account:withdraw(20)) == "limit")
+```
+
+Type check可沿prototype graph，但不要只比较getmetatable(instance)==Base，否则subclass不是base。提供explicit predicate/tag并保护tag ownership；security authorization不能只信mutable class marker。
+
+## Multiple Inheritance
+
+Multiple inheritance用`__index` function按ordered parents搜索。<Term def="Multiple inheritance为每个missing member按声明顺序搜索parents，并对duplicate names、diamonds和cache invalidation给出确定策略。">multiple-inheritance resolution</Term>要求parent list是sequence，不用pairs。Conflict可以first-wins、显式override或construction-time reject；silent first-wins必须文档化。
+
+Search result可rawset到child class cache，提升后续lookup，但parent hot patch不会反映；class definitions若immutable即可缓存，否则维护version/invalidation。Diamond中同一ancestor应识别identity，避免重复constructor/side effect。State initialization比method lookup更难，推荐composition而非多重继承共享mutable bases。
+
+## Privacy
+
+Table field按约定private并不阻止caller读取。真正privacy来自lexical reachability：factory创建private state，返回closures或public methods而不泄露state。<Term def="Private state只被lexical closures或hidden mapping引用，public references不直接到达mutable representation。">privacy by reachability</Term>是capability boundary，不是命名下划线。
+
+Closure methods每instance分配functions，但实现直观。共享methods可把public self映射到private state table；这个map必须hidden，并考虑weak keys/lifecycle。Error/debug formatting不能把private table返回。
+
+## The Single-Method Approach
+
+Single-method object本身是closure：调用时传operation与arguments，由closure访问private state并dispatch。它把identity和唯一capability合并，适合窄接口，如counter、iterator或withdraw-only account。Operation names、arguments与results构成protocol；typo必须error，不silent ignore。
+
+与多method table相比，它难以discover/extend，也容易形成大if chain。可以返回多个narrow closures，各自只拥有必要capability，而不是一个万能operation dispatcher。
+
+## Dual Representation
+
+Dual representation把public interface object与private state分开。Methods接收public self，再从hidden map查state；public table可只含identity/metatable。<Term def="Public interface identity与private representation identity分离，并由不可泄露mapping维持一对一lifecycle。">dual-representation ownership</Term>可共享methods且隐藏state，但map若强引用public keys会阻止GC。
+
+```lua
+local private = setmetatable({}, { __mode = "k" })
+local SecureAccount = {}
+SecureAccount.__index = SecureAccount
+
+function SecureAccount.new(initial)
+  local public = setmetatable({}, SecureAccount)
+  private[public] = { balance = initial }
+  return public
+end
+
+function SecureAccount:balance()
+  local state = assert(private[self], "invalid-account")
+  return state.balance
+end
+
+function SecureAccount:deposit(amount)
+  local state = assert(private[self], "invalid-account")
+  state.balance = state.balance + amount
+  return state.balance
+end
+
+local account = SecureAccount.new(5)
+assert(account:deposit(2) == 7 and rawget(account, "balance") == nil)
+```
+
+Weak-key map允许public object不可达后entry回收；state value不能反向强引用public key，否则可能影响ephemeron/GC语义，详见第23章。Copy/serialization public table不会自动复制private state，必须提供explicit snapshot/restore。
+
+<PilInheritanceLab />
+
+<Stepper>
+  <Step title="切换Single、Super Call、Multiple和Cached Lookup"><PilInheritanceLab /></Step>
+  <Step title="画Prototype Graph">标每个method first hit、override、explicit super edge与diamond；冲突在class creation时报告。</Step>
+  <Step title="测试Mutation与Cache">Parent method替换前后比较uncached/cached child，确认采用immutable classes还是version invalidation。</Step>
+</Stepper>
+
+<PilObjectPrivacyLab />
+
+<Stepper>
+  <Step title="切换Closure Privacy、Single Method、Dual Representation和Facade"><PilObjectPrivacyLab /></Step>
+  <Step title="做Reachability Audit">从caller每个reference出发，检查能否到private table、map、nested mutable value或privileged closure。</Step>
+  <Step title="验证Lifecycle">释放public object、保留/释放method closures并观察private state；测试serialization、invalid self和mapping cleanup。</Step>
+</Stepper>
+
+<Callout type="trap" title="把字段放到另一个Table就自动Private且无泄漏">
+只要backing/map reference、debug hook或privileged closure泄露，caller仍可修改；strong-key map还会永久保留public objects。Privacy需要完整reachability和lifecycle审计。
+</Callout>
+
+## Composition、Identity与API Evolution
+
+Inheritance适合稳定is-a method reuse；多个independent capabilities更适合composition，把logger/storage/policy作为fields或private dependencies。Composition避免diamond initialization，却仍需明确owner和mutation。
+
+Object equality默认identity。Content equality metamethod、serialization ID与domain ID不要混淆。API新增method通常兼容，重命名/改变result protocol需wrapper/version；class tablehot patch可能让旧instances行为变化，生产部署应偏向immutable module versions。
+
+## 本章回顾：OOP是Reference Graph与Dispatch Policy
+
+1. Class pattern由constructor、instance state、shared methods与`__index` dispatch组成。
+2. Mutable class defaults会共享，instance fields可shadow methods，colon/dot决定self位置。
+3. Single inheritance沿prototype chain；super call显式调用base function并保留derived self。
+4. Multiple inheritance必须规定parent order、conflict/diamond与cache invalidation。
+5. Privacy来自lexical reachability；single-method object把窄capability封装进closure。
+6. Dual representation分离public/private identity并需hidden mapping、weak lifecycle和explicit serialization。
+
+<Exercises>
+
+**问题 1：为什么Subclass的Super Call应写`Base.method(self, x)`？**
+
+<Answer>Dot取得base implementation，再显式传derived instance self，使base逻辑操作同一object。`Base:method(x)`会把Base table当self，状态错误。测试override调用后derived fields仍可见。</Answer>
+
+**问题 2：Multiple Parents都有同名Method时怎样处理？**
+
+<Answer>定义ordered parent sequence并选择first-wins，或更严格地在class creation检测duplicate并要求child explicit override。不要用pairs。Diamond还要按parent identity去重，constructor side effects只能执行一次。</Answer>
+
+**问题 3：Dual Representation为何常用Weak Keys？**
+
+<Answer>Hidden map若强引用public object作key，即使caller释放它也仍reachable，private state泄漏。Weak keys允许entry随public identity回收；同时避免state value强回指key，并测试GC/lifecycle。业务资源仍需explicit close。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="object dispatch contract" definition="Object identity、instance state、shared methods、lookup与constructor组成的协议。" />
+  <GlossaryItem term="constructor invariant" definition="创建完整独立state、验证输入并附加正确class metatable的约束。" />
+  <GlossaryItem term="single-inheritance lookup chain" definition="Instance缺失成员沿subclass到base first-hit解析的原型链。" />
+  <GlossaryItem term="multiple-inheritance resolution" definition="Ordered parents对conflict、diamond与cache给出确定策略的查找。" />
+  <GlossaryItem term="privacy by reachability" definition="Private mutable state只由未泄露lexical references到达的边界。" />
+  <GlossaryItem term="dual-representation ownership" definition="Public identity与private state分离并由hidden mapping维持生命周期。" />
+</Glossary>
+
+<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 21: Object-Oriented Programming" adaptedUrl="https://www.lua.org/pil/" />

@@ -1,103 +1,332 @@
 ---
-title: 数组中只出现一次的两个数字
+title: "面试题56（一）：数组中只出现一次的两个数字"
 type: C
-section: 数组
-order: 12
-description: 通过总体异或得到两个目标分割位，再将数组按该位分组找各自异或值。
+section: "第6章 面试中的各项能力"
+order: 64
+description: "先异或全体得到两个目标的差异位，再按该位分组，使成对元素组内抵消并分别恢复两个答案。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/56_01_NumbersAppearOnce/NumbersAppearOnce.cpp"
 draft: false
 ---
 
-{/* 知识点清单：异或分组、最低有效位、配对消除；原书章节：数组中只出现一次的两个数字。 */}
+import { NumbersAppearOnceXorDiagram, NumbersAppearOnceSplitBitLab, NumbersAppearOnceGroupMap, NumbersAppearOnceContractDiagram, NumbersAppearOnceOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/numbers-appear-once";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能解释“先求全局异或，再按分组位分离”。
-- 能正确提取低位分组掩码。
-- 能处理任意顺序和负数输入。
+- 能解释全部元素异或后为何只剩两个目标的异或值
+- 能计算作者从右侧寻找首个置位及两组的最终结果
+- 能实现作者辅助函数和无符号可移植分组版本
+- 能分析非法契约、负数右移、输出指针、顺序与偶数次扩展
+- 能设计覆盖作者3组用例并用频次参考实现对拍的测试
 
 </Objectives>
 
-## 直觉引入
+## 从“相同数字如何消失”开始
 
-所有数异或后留下的是两个只出现一次数字的异或结果 `xor2`。  
-`xor2` 的某一位为 1，说明两个目标数在该位上不同。  
-依据这一位将数组分成两组，分别异或即可解出两位数。
+先预测：数组2、4、3、6、3、2、5、5中，除了4和6，其他数字都出现两次。若建立哈希表当然能计数，但会使用O(n)额外空间；题目要求O(n)时间和O(1)空间。
 
-## 概念讲解
+异或满足同一个数与自身异或为0、0与任意数异或仍为该数，并且交换顺序不影响结果。因此2与2、3与3、5与5都能消失。这种偶数次同值归零称为<Term def="相同位模式出现偶数次时，连续异或的结果为0。">异或抵消</Term>。
 
-选择 `mask = xor2 & -xor2`（最低位 1），让两个只出现一次数被分入不同组；重复值会在组内成对抵消。
+<NumbersAppearOnceXorDiagram />
 
-## 思考引导
+把**所有数字异或**后，示例只剩4异或6，结果为2。这个聚合值称为<Term def="输入数组全部元素逐项异或后的值，合法输入下等于两个唯一目标的异或。">总体异或</Term>。
 
-### 1) 先问问题，不先回归朴素
-两个只出现一次的数意味着“全体成对后剩两个异或结果”，不是直接分组。关键是如何找到稳定的划分位。
+## 一个总体异或为何还不够
 
-### 2) 识别不变式
-全体异或得到一个非零差分位。这个位能把两个目标严格分到两组，组内仍满足成对可消除。
+设两个只出现一次的数字为a和b。总体异或等于a异或b，但仅凭这个值通常不能唯一还原a与b；许多数字对可能得到同一个异或结果。
 
-### 3) 为什么它一定成立
-两个不同数在该位上必不同，按此位拆分后，其他配对元素仍在各组成对，异或后即可恢复目标。
+关键是a与b不同，所以a异或b必定非0，二进制中至少有一位为1。该位为1意味着a与b在这一位不同：一个是1，另一个是0。选择这样的位作为<Term def="总体异或结果中任意一个为1的二进制位，用来把输入划分成两组。">分组位</Term>。
 
-### 4) 常见误区
-随意选取分组位会把两个目标落同组，导致再次异或后仍是成对，答案消失。必须以异或差分位作为分界。
+然后**按异或结果中某一位分组**。a和b会被分开；任意一对相同数字每一位都相同，所以必定一起进入同一组，绝不会被拆散。最终**两个数字分别落入不同组**，每组其余配对值继续抵消。
 
-### 5) 你能找到一个反例吗
-数组 [1,1,2,3] 如果你固定按最低位分组可行，但若无差分位指导，部分输入会被误划。
+<NumbersAppearOnceSplitBitLab />
 
-### 6) 迁移到下一题
-这类题训练“先提炼可分离特征再局部归约”，可迁移到错误项双识别、双异常检测。
-## 交互 Demo
+作者选择从右向左第一个为1的位。这是方便而唯一确定的选择，不是正确性的唯一选择。总体异或中任何为1的位都能分开a与b，安全提取最高置位同样正确。
 
-图上可看见“按某一位切分后，两个单独数字被隔离，组内两两抵消”的过程。
+## 忠实还原作者三段函数
 
-<HashTableDiagram />
+入口先异或全体，再调用FindFirstBitIs1得到位下标；第二轮调用IsBit1决定分组，并分别异或到两个输出。
 
 ```cpp
-#include <vector>
+unsigned int FindFirstBitIs1(int num);
+bool IsBit1(
+    int num,
+    unsigned int indexBit);
 
-class Solution {
-public:
-    std::vector<int> singleNumbers(const std::vector<int>& nums) {
-        int xorAll = 0;
-        for (int x : nums) xorAll ^= x;
-
-        int mask = xorAll & (-xorAll);
-        int a = 0, b = 0;
-        for (int x : nums) {
-            if (x & mask) a ^= x;
-            else b ^= x;
-        }
-        return {a, b};
+void FindNumsAppearOnce(
+    int data[],
+    int length,
+    int* num1,
+    int* num2) {
+    if (data == nullptr || length < 2) {
+        return;
     }
-};
-```
 
-```typescript
-function singleNumbers(nums: number[]): number[] {
-  let xorAll = 0;
-  for (const x of nums) xorAll ^= x;
-  const mask = xorAll & -xorAll;
+    int resultExclusiveOR = 0;
+    for (int i = 0; i < length; ++i) {
+        resultExclusiveOR ^= data[i];
+    }
 
-  let a = 0;
-  let b = 0;
-  for (const x of nums) {
-    if (x & mask) a ^= x;
-    else b ^= x;
-  }
-  return [a, b];
+    unsigned int indexOf1 =
+        FindFirstBitIs1(resultExclusiveOR);
+
+    *num1 = *num2 = 0;
+    for (int j = 0; j < length; ++j) {
+        if (IsBit1(data[j], indexOf1)) {
+            *num1 ^= data[j];
+        } else {
+            *num2 ^= data[j];
+        }
+    }
+}
+
+unsigned int FindFirstBitIs1(int num) {
+    int indexBit = 0;
+    while ((num & 1) == 0 &&
+           indexBit <
+               8 * sizeof(int)) {
+        num = num >> 1;
+        ++indexBit;
+    }
+    return indexBit;
+}
+
+bool IsBit1(
+    int num,
+    unsigned int indexBit) {
+    num = num >> indexBit;
+    return (num & 1);
 }
 ```
 
-<Callout type="trap">
-  <strong>现象 →</strong> 只找到一个数或重复值。  
-  <strong>原因 →</strong> `mask` 提取错误（例如取了最高位）。  
-  <strong>修复 →</strong> 使用 `xor & -xor` 保证最低不同位分组。
+作者先把num1和num2都清零，再做第二轮。位为1组写num1，位为0组写num2，但对外题意不承诺这两个输出的次序，测试同时接受4、6和6、4。
+
+<NumbersAppearOnceGroupMap />
+
+相同数字完整留在同一组的性质称为<Term def="一对相同元素依据同一位分类时必定进入同组，因此仍可在组内异或归零。">同组配对</Term>。它是分组后抵消仍成立的核心，不是“随机拆成两半”。
+
+## 正确性分三步证明
+
+第一步，所有出现偶数次的数字在总体异或中归零，因此结果只剩a异或b。
+
+第二步，a不等于b保证总体异或非0；选中的置位表示a和b在该位不同，所以它们一定进入不同组。任意相同数字在该位相同，因此一对不会跨组。
+
+第三步，每组内部的重复数字逐对抵消。位为1组只剩a或b中的一个，位为0组只剩另一个，于是两个输出正好是目标集合。
+
+算法读取数组两轮，每轮O(n)，总时间O(n)；除几个整数外不分配随输入增长的空间，额外空间O(1)。
+
+“两轮”是接口前提的一部分。数组可随机访问，所以第一轮得到分组位后可以从头再读；若输入是网络流、只进迭代器或消费即丢的数据源，第一轮结束时此前元素已经不可重放，第二轮无法完成。此时要么把全部元素缓存到O(n)内存或临时文件，要么让上游支持重放，要么采用两个阶段的分布式作业。空间O(1)只描述算法在可重复扫描数组上的工作内存，不包含为不可回放输入补出的存储。
+
+第一轮总体异或很适合并行归约：每个分片先异或本地元素，再把分片结果异或得到全局xorAll。分组位确定后，第二轮各分片分别计算位为0和位为1的局部异或，最后按组归并。由于异或满足结合律与交换律，分片边界和合并顺序不影响答案；但所有工作节点必须使用同一分组位，并且两轮看到的是同一数据快照。
+
+若两轮之间数组被修改，即使长度不变，也可能让第一轮分组位与第二轮成员不匹配，最终输出没有意义。并发场景应锁定输入、读取不可变快照或记录版本号并在结束时校验。const数组指针只限制当前函数写入，不能阻止其他线程修改底层内存。
+
+## 作者契约未被代码完整验证
+
+<NumbersAppearOnceContractDiagram />
+
+合法题目保证恰有两个不同目标，所以总体异或必定非0。若调用方传入所有值都成对、两个目标其实相同、目标数不是两个，结果可能为0。
+
+当FindFirstBitIs1收到0，它会循环到int位宽并返回该位宽；随后IsBit1把int右移完整位宽，这是C++未定义行为。源码依赖题目契约，不把函数当输入验证器。
+
+<Callout type="trap" title="总体异或为0后仍继续分组">
+0没有任何置位，不能把两个不同目标分开。工程接口应在选位前检查结果是否为0并返回错误；这仍无法证明所有频次都合法，只能拒绝一个明显矛盾。
 </Callout>
 
+data为空或length小于2时入口直接return，不给num1和num2写任何值。若调用方传入未初始化局部变量再读取，会得到未定义值；应预先初始化或使用带状态的返回类型。
+
+也不宜用输出0、0表示失败，因为0本身可以是两个合法目标之一，而总体异或非0时两个目标不会同时为0。显式布尔返回值、optional pair或结果加错误码能把“找到包含0的答案”与“没有执行”可靠分开，调用方不必猜测哨兵含义。
+
+num1与num2也必须是有效可写指针。作者没有检查它们，在合法长度下传nullptr会直接解引用崩溃。两个指针若指向同一地址，先清零无问题，但两组异或会混在同一变量中，失去两个独立答案。
+
+## 负数与有符号右移
+
+旧页声称方案可直接处理任意负数，但作者辅助函数对signed int做右移。C++对负有符号数右移的结果由实现定义；常见平台使用算术右移，位测试通常符合补码直觉，但可移植实现不应依赖它。
+
+常见表达式xorAll与负xorAll按位与能提取最低置位，但若xorAll是INT_MIN，对有符号值取负会溢出。把聚合值和掩码转换到对应无符号类型后，可用补码模运算安全提取。
+
+```cpp
+#include <optional>
+#include <type_traits>
+#include <utility>
+
+std::optional<std::pair<int, int>>
+findNumsAppearOnce(
+    const int* data,
+    int length) {
+    if (data == nullptr || length < 2) {
+        return std::nullopt;
+    }
+
+    using U = std::make_unsigned_t<int>;
+    U xorAll = 0;
+    for (int i = 0; i < length; ++i) {
+        xorAll ^= static_cast<U>(data[i]);
+    }
+    if (xorAll == 0) {
+        return std::nullopt;
+    }
+
+    const U mask =
+        xorAll & (~xorAll + U{1});
+    int first = 0;
+    int second = 0;
+    for (int i = 0; i < length; ++i) {
+        if ((static_cast<U>(data[i])
+             & mask) != 0) {
+            first ^= data[i];
+        } else {
+            second ^= data[i];
+        }
+    }
+    return std::pair{first, second};
+}
+```
+
+这里无符号转换按模2的位宽保留整数位模式，分组测试不再右移负数；两个答案仍用int异或，返回原始数值。nullopt表示入口明显无效或总体异或为0。
+
+即使xorAll非0，也可能存在三个或更多奇数频次值，函数仍会返回两个组的异或聚合，而不是真正的两个原值。完整验证必须统计频次，会使用额外空间或先排序改变复杂度。
+
+<Callout type="trap" title="把任意置位误判成只能选最低位">
+作者选最低置位只是确定性实现。总体异或中最高位或其他任意1位都能分开两个目标；真正错误的是选择值为0的位，因为两个目标在该位相同。
+</Callout>
+
+## Test3揭示偶数次扩展
+
+题面说其他数字都出现两次，但作者Test3使用4、6、1、1、1、1，数字1出现四次。四个相同数异或仍为0，所以算法通过。
+
+这说明正确性实际需要的是“除两个目标外，每个值出现偶数次”，两次只是更具体的题目约束。若出现六次、八次也会抵消；出现三次则等价于剩一次，会混入目标集合。
+
+不要据此改写原题契约。复刻时应说明题面是两次、测试额外覆盖四次，算法可自然推广到任意偶数次。
+
+## 输出顺序与稳定接口
+
+作者测试采用集合语义：expected1和expected2可与result1、result2同序或交换。这种不承诺先后称为<Term def="两个正确答案作为无序集合返回，调用方不得依赖哪个写入第一个输出。">输出无序性</Term>。
+
+输出的具体顺序由选中的分组位和num1对应哪一组决定。若改选另一个置位，顺序可能交换；输入重排不会改变每组异或结果，但也不应把当前顺序当公开协议。
+
+需要稳定序列化、快照或单元测试时，可在返回前比较并把较小值放前面。排序两个数是O(1)工作，但它属于接口规范增强，不是作者源码行为。
+
+## 作者3组测试逐项还原
+
+1. 2、4、3、6、3、2、5、5，普通三对加两个目标，期望4与6。
+2. 4、6，只有两个目标，没有任何重复值，期望4与6。
+3. 4、6、1、1、1、1，重复值出现四次仍抵消，期望4与6。
+
+<NumbersAppearOnceOfficialCaseLab />
+
+作者没有测试空输入、长度1、空输出指针、负数或契约损坏。前两者会静默返回，后两类分别涉及指针安全和位操作可移植性，应由工程版补充。
+
+```cpp
+#include <algorithm>
+#include <array>
+#include <cassert>
+
+void assertPair(
+    int* data,
+    int length,
+    int expectedA,
+    int expectedB) {
+    int first = 0;
+    int second = 0;
+    FindNumsAppearOnce(
+        data, length, &first, &second);
+    std::array<int, 2> actual{
+        first, second};
+    std::array<int, 2> expected{
+        expectedA, expectedB};
+    std::sort(
+        actual.begin(), actual.end());
+    std::sort(
+        expected.begin(), expected.end());
+    assert(actual == expected);
+}
+
+void testNumbersAppearOnce() {
+    int ordinary[] =
+        {2, 4, 3, 6, 3, 2, 5, 5};
+    int minimal[] = {4, 6};
+    int fourCopies[] =
+        {4, 6, 1, 1, 1, 1};
+    assertPair(ordinary, 8, 4, 6);
+    assertPair(minimal, 2, 4, 6);
+    assertPair(fourCopies, 6, 4, 6);
+}
+```
+
+随机对拍可先随机选两个不同目标，再生成若干不同配对值各放入偶数次，整体打乱。参考实现用哈希计数找奇数频次值，断言优化版返回的无序集合一致。
+
+若要测负数可移植性，应针对无符号掩码版加入INT_MIN、-1、0和正数组合，并在不同编译器与优化级别运行；不要用作者signed右移的偶然平台行为作为语言保证。
+
+<Stepper>
+  <Step title="让所有重复对先抵消">
+    <NumbersAppearOnceXorDiagram />
+    全体异或只留下两个目标的异或值。
+  </Step>
+  <Step title="从差异中选择分组位">
+    <NumbersAppearOnceSplitBitLab />
+    总体异或的置位保证两个目标在该位不同。
+  </Step>
+  <Step title="保持重复元素同组">
+    <NumbersAppearOnceGroupMap />
+    每对相同数字完整落入一组并继续抵消。
+  </Step>
+  <Step title="核对指针与位操作契约">
+    <NumbersAppearOnceContractDiagram />
+    非零总体异或和有效输出地址都由调用方保证。
+  </Step>
+  <Step title="执行作者3组测试">
+    <NumbersAppearOnceOfficialCaseLab />
+    最小输入与四次重复扩展不能省略。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 数组中只出现一次的两个数字可在O(n)时间、O(1)空间内恢复。
+2. 所有数字异或后，偶数次值抵消，只剩两个目标的异或。
+3. 按异或结果中某一位分组，使两个数字分别落入不同组。
+4. 相同数字必然同组，因此组内仍能成对抵消。
+5. 任意置位都正确，作者固定选择从右起第一个1。
+6. 总体异或为0时没有合法分组位，源码会产生越界位移风险。
+7. 无符号掩码避免负数右移和INT_MIN取负的可移植性问题。
+8. 作者Test3证明偶数次重复也能抵消，输出顺序不受承诺。
+
+<Exercises>
+
+**问题 1：为什么不能直接把总体异或当成其中一个答案？**
+
+<Answer>总体异或等于两个目标a异或b，通常既不等于a也不等于b，而且同一结果可由许多数字对产生。必须用它的差异位把目标分开后分别异或。</Answer>
+
+**问题 2：选择总体异或中的最高置位是否错误？**
+
+<Answer>不错误。任何为1的位都表示两个目标在该位不同，都能把它们分开；作者选最低置位只是方便且确定。选择为0的位才无法保证分离。</Answer>
+
+**问题 3：为何数字1出现四次仍会从Test3中消失？**
+
+<Answer>1异或1为0，两对1分别归零；更一般地，同一位模式出现任意偶数次都抵消。题面要求两次，但算法性质更宽。</Answer>
+
+**问题 4：为何只检查xorAll非0还不能完整验证输入？**
+
+<Answer>三个或更多奇数频次值的总体异或也可能非0，分组后得到的是各组聚合值，不保证是两个原值。完整验证需要频次统计或其他额外约束检查。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="异或抵消">相同位模式出现偶数次后异或归零。</GlossaryItem>
+  <GlossaryItem term="总体异或">数组全部元素的异或聚合值。</GlossaryItem>
+  <GlossaryItem term="分组位">总体异或中用于区分两个目标的任意置位。</GlossaryItem>
+  <GlossaryItem term="同组配对">相同元素依据同一位分类后必定进入同组。</GlossaryItem>
+  <GlossaryItem term="输出无序性">两个答案正确但先后次序不属于接口承诺。</GlossaryItem>
+</Glossary>
+
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题56（一）"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/56_01_NumbersAppearOnce/NumbersAppearOnce.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

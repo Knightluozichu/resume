@@ -1,0 +1,284 @@
+---
+title: "第1章 Introduction：从数学契约到 C++ 数据抽象"
+type: C
+section: "导论与分析"
+order: 0
+description: "按第3版原章依次建立数学复习、递归、C++类与所有权、模板契约和矩阵包装，为后续数据结构实现与分析统一语言。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+draft: false
+---
+
+import { DsaIntroductionScopeMap, DsaMathReviewLab, DsaRecursionStackLab, DsaClassContractDiagram, DsaCopyOwnershipLab, DsaTemplateContractLab, DsaMatrixLayoutLab } from "@/components/mdx/dsa-cpp/diagrams/introduction";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释第3版第1章怎样连接数学、抽象数据类型与 C++ 实现
+- 能计算指数、对数、级数和模运算在算法中的具体含义
+- 能实现具有正确复制、赋值和析构语义的资源所有类
+- 能分析递归终止条件、调用栈和引用生命周期的失效方式
+- 能设计满足隐式类型契约的函数模板与二维矩阵包装
+
+</Objectives>
+
+## 从“数据结构为什么先讲 C++”开始
+
+本书讨论什么（<Term def="用数学分析预测算法成本，再用边界清楚的 C++ 抽象把数据结构实现出来。">本书讨论什么</Term>）？答案不是“复习语法”，也不是“背一份容器目录”。Mark Allen Weiss 把本书定位在基础数据结构课程和算法分析课程之间：每个结构都要同时回答接口语义、表示不变量、操作实现和运行时间。
+
+先预测两段都能输出正确答案的程序。一段把节点、指针和循环都写在 `main` 中；另一段把 `find`、`insert`、复制和销毁封装成 class。只看一次运行，两者没有区别；当元素类型改变、对象被复制、输入放大或实现从数组换成链表时，前者的隐含假设会一起泄漏。第1章因此先建立后续十二章共同使用的表达语言。
+
+<DsaIntroductionScopeMap />
+
+官方第3版目录的七个单元必须按原顺序读：**what's the book about、mathematics review、brief introduction to recursion、C++ classes、C++ details、templates、using matrices**。前两项规定怎样陈述成本，中间三项规定怎样陈述状态和所有权，最后两项让一个数据结构对多种元素类型和二维数据复用。
+
+## 1.1 What's the Book About?
+
+抽象数据类型把“能做什么”与“怎样存”分开。一个 Stack ADT 承诺 `push`、`pop`、`top`、`isEmpty`；它可以由连续数组或链表实现。调用者不应依赖节点地址，结构实现则必须证明每个操作保持不变量，并给出 cost。
+
+这种分层带来三份契约：
+
+1. **语义契约**：空栈 `pop` 怎样处理，复制后两个栈是否独立。
+2. **表示契约**：`size` 是否等于有效元素数，链表尾部是否保持 null。
+3. **成本契约**：操作是 worst-case constant、amortized constant 还是 logarithmic。
+
+后续章节的 BST、hash table、heap 和 disjoint set 都沿用这三层。C++ 只是表达契约的工具；若语言细节让对象在 copy 或 destruction 时失效，那么算法即使正确也不能称为数据结构实现。
+
+## 1.2 Mathematics Review
+
+数学复习（<Term def="用于描述规模增长、循环累计、地址映射和可处理性边界的指数、对数、级数与模运算。">数学复习</Term>）只选后文反复出现的工具。
+
+### 指数、对数与级数
+
+指数描述倍增。高度为 h 的满二叉树节点数是：
+
+$$
+1+2+\cdots+2^h=2^{h+1}-1
+$$
+
+反过来，容纳 N 个节点只需要约 log2 N 层，所以平衡树查找是 logarithmic。每轮把问题缩成一半的 binary search 同样最多执行：
+
+$$
+\lfloor\log_2 N\rfloor+1
+$$
+
+级数把逐轮成本相加。两层循环不一定都是 quadratic；若内层次数依赖外层 i，则必须写出求和：
+
+$$
+\sum_{i=1}^{N} i = \frac{N(N+1)}{2}
+$$
+
+几何级数解释 divide-and-conquer 中不同层的总工作。若第 i 层工作是 N/2^i，则所有层之和小于2N，而不是 N log N。
+
+<DsaMathReviewLab />
+
+### 模运算与 “P Word”
+
+模运算把整数映射到有限环形区间：
+
+$$
+(a+b)\bmod m
+=
+\big((a\bmod m)+(b\bmod m)\big)\bmod m
+$$
+
+它会在 Chapter 5 的 hash address、Chapter 6 的 circular representation 和 randomized algorithms 中出现。等式允许先缩小中间值，但负数 `%`、overflow 和非素数 table size 都是实现层要另行处理的细节。
+
+“P Word”是 polynomial。输入规模 N 的多项式时间通常被视为可处理性的基础边界；指数时间在 N 增长后迅速失效。但 polynomial 并不自动等于实践可行：N^4 对亿级输入仍不可接受，而带良好局部性的 N log N 实现也可能比理论更优但常数巨大的方案可靠。
+
+## 1.3 A Brief Introduction to Recursion
+
+递归简介（<Term def="用同一问题的更小实例定义计算，并同时给出可达的终止条件。">递归简介</Term>）的重点不是函数调用自身，而是证明 progress。作者官方示例定义：
+
+```cpp
+int f(int x) {
+    if (x == 0)
+        return 0;
+    return 2 * f(x - 1) + x * x;
+}
+```
+
+对非负 x，每次调用把参数减1，最终到0，因此会终止。对负数却永远远离 base case；“有 `if`”不等于递归正确。递归证明通常包含：
+
+1. base case 直接正确；
+2. 假设规模更小的调用正确；
+3. 当前调用只依赖更小调用并正确组合结果；
+4. 规模度量严格下降且有下界。
+
+<DsaRecursionStackLab />
+
+另一个官方示例 `printOut(1369)` 先递归处理 `n / 10`，返回时再输出 `n % 10`。它演示调用顺序与输出顺序相反，也说明递归栈保存了尚未完成的余数。递归深度是额外空间：深度 N 的链式递归即使总时间 linear，也可能 stack overflow；平衡树深度 logarithmic 则通常可控。
+
+<Callout type="trap" title="只检查 base case，不检查输入域">
+`x == 0` 能终止非负输入，却不能终止负输入。递归接口必须限制前置条件，或让每个合法输入都沿良基度量靠近终止状态。
+</Callout>
+
+## 1.4 C++ Classes
+
+C++类（<Term def="把 public ADT、private representation、构造/复制/销毁语义和 const 约束绑定在一个类型中。">C++类</Term>）先由最小 `IntCell` 演示。public methods 是调用者可见的契约，private data member 是可替换的表示。
+
+```cpp
+class IntCell {
+public:
+    explicit IntCell(int initialValue = 0);
+    IntCell(const IntCell& rhs);
+    ~IntCell();
+    const IntCell& operator=(const IntCell& rhs);
+
+    int read() const;
+    void write(int x);
+private:
+    int* storedValue;
+};
+```
+
+`explicit` 阻止整数悄悄转成 `IntCell`；`read() const` 承诺不修改对象可观察状态；private pointer 表示对象拥有动态分配的 `int`。一旦 class 拥有资源，默认 memberwise copy 就不再符合“值对象”语义。
+
+<DsaClassContractDiagram />
+
+第3版使用 Big Three：destructor、copy constructor、copy assignment。三者分别负责释放现有资源、从新对象创建独立副本、以及让已存在对象改成右值副本。assignment 还要处理 self-assignment，并返回 `*this` 允许链式赋值。
+
+<DsaCopyOwnershipLab />
+
+如果 a 与 b 浅复制同一 pointer，修改 a 会意外改变 b，两个 destructor 还会 double delete。深复制为 b 分配新 `int`，复制值而非地址。现代 C++ 可用值成员、`std::unique_ptr` 或 Rule of Zero 降低手工所有权风险，但读懂 Big Three 仍是分析旧代码和数据结构节点 ownership 的基础。
+
+## 1.5 C++ Details
+
+C++细节（<Term def="会改变对象身份、复制成本、生命周期与接口可用性的指针、参数传递、引用和标准容器规则。">C++细节</Term>）必须与算法语义一起看。
+
+### 指针、参数和返回值
+
+- pass by value 创建副本，成本依赖对象大小和复制实现；
+- pass by `const T&` 不复制且禁止通过该引用修改；
+- pass by `T&` 表示函数可修改调用者对象；
+- pointer 可以为空并支持重新指向，reference 一经绑定不能重绑；
+- 返回 reference 只在被引用对象比函数调用活得更久时有效。
+
+`findMax` 返回 `const Comparable&`，因为结果就是输入 vector 中的现有元素。只要调用者的 vector 仍存在且没有发生使引用失效的 reallocation，这能避免复制；若函数返回局部变量引用，则调用结束后立即 dangling。
+
+`vector` 提供 contiguous storage 和 random access，growth 可能重新分配；`string` 管理字符序列；二者都把手写 allocation 隐藏在值语义后。后续 Chapter 3 会重新实现 vector/list，正是为了把这些保证拆开观察。
+
+<Callout type="trap" title="把 const reference 当成永久地址">
+`const` 只限制通过当前引用修改，不延长普通对象生命周期，也不阻止 vector reallocation。保存元素引用前必须同时检查 owner lifetime 与 invalidation rules。
+</Callout>
+
+## 1.6 Templates
+
+模板（<Term def="在编译期按类型生成函数或类，并要求实参类型满足被模板表达式实际使用的操作。">模板</Term>）让数据结构不绑定 `int`。第3版的 `findMax` 可以处理 `int`、`double` 和 `string`：
+
+```cpp
+template <typename Comparable>
+const Comparable& findMax(const std::vector<Comparable>& a) {
+    int maxIndex = 0;
+    for (int i = 1; i < static_cast<int>(a.size()); ++i)
+        if (a[maxIndex] < a[i])
+            maxIndex = i;
+    return a[maxIndex];
+}
+```
+
+它的隐式契约包括：vector 非空、Comparable 支持 `operator<`、元素引用在返回后仍有效。官方 `IntCell` 没定义 comparison，因而 `findMax(vector<IntCell>)` 无法实例化。这是有价值的编译错误：算法所需操作没有被类型满足。
+
+<DsaTemplateContractLab />
+
+class template `MemoryCell<Object>` 把存储类型参数化。default value 用 `Object()` 构造，constructor 和 `write` 采用 const reference 避免不必要复制，`read` 返回 const reference。模板不是动态多态；每组实参在编译期形成 specialization，定义通常必须在实例化点可见，附录 A 会专门讨论分离编译。
+
+## 1.7 Using Matrices
+
+矩阵类（<Term def="以嵌套 vector 封装行列尺寸与二维下标操作的 class template。">矩阵类</Term>）是本章最后一个 glue abstraction。官方 `matrix.h` 用 `vector<vector<Object>>` 保存 rows，每行 resize 到相同 cols，并同时提供 const 与 non-const `operator[]`：
+
+```cpp
+template <class Object>
+class matrix {
+public:
+    matrix(int rows, int cols) : array(rows) {
+        for (int i = 0; i < rows; ++i)
+            array[i].resize(cols);
+    }
+    const std::vector<Object>& operator[](int row) const { return array[row]; }
+    std::vector<Object>& operator[](int row) { return array[row]; }
+private:
+    std::vector<std::vector<Object>> array;
+};
+```
+
+<DsaMatrixLayoutLab />
+
+两次 `operator[]` 产生 `m[row][col]`。第一层返回 row vector，第二层由 vector 取 element。这个表示简单且 ownership 自动，但每行可能单独 allocation，并不保证整张矩阵一块连续；若矩阵乘法追求 cache locality，可改成单个 vector，以 `row * cols + col` 计算偏移。ADT 接口和 representation trade-off 再次分离。
+
+## 把第1章变成后续章节的检查表
+
+<Stepper>
+  <Step title="先把问题写成 ADT 契约">
+    <DsaIntroductionScopeMap />
+    列出操作、前置条件、失败语义和复杂度目标，暂不暴露数组或节点。
+  </Step>
+  <Step title="为增长率选择数学工具">
+    <DsaMathReviewLab />
+    减半过程用 logarithm，逐层累计写 series，环形地址写 modular arithmetic。
+  </Step>
+  <Step title="证明递归确实推进">
+    <DsaRecursionStackLab />
+    指定 base case、严格下降的规模度量、最大深度和每层保存的状态。
+  </Step>
+  <Step title="核对所有权与类型契约">
+    <DsaCopyOwnershipLab />
+    owning resource 必须有一致 copy/destroy 语义；template 实参必须满足所用操作。
+  </Step>
+  <Step title="最后选择可替换表示">
+    <DsaMatrixLayoutLab />
+    先用最简单的正确表示，再根据实测的 allocation、cache 和操作比例替换。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 第1章的任务是统一数学、ADT 与 C++ 实现语言，而不是独立的语法速查。
+2. 指数描述倍增，对数描述反复缩小，级数累计循环成本，模运算映射有限地址。
+3. 递归必须具有正确 base case、严格进展和可接受的调用深度。
+4. class 以 public interface 隔离 private representation，并用 const/explicit 收紧契约。
+5. 拥有动态资源的值类型必须处理复制构造、复制赋值和析构的一致性。
+6. pointer/reference 的 lifetime 与 container invalidation 是正确性问题，不只是优化细节。
+7. template 的类型契约由实际表达式决定；缺少 comparison 的类型不能用于 `findMax`。
+8. matrix wrapper 展示了二维接口与嵌套 vector 表示可以独立演进。
+
+<Exercises>
+
+**问题 1：`f(x)=2f(x-1)+x², f(0)=0` 时 f(4) 是多少？递归深度是多少？**
+
+<Answer>依次得到f(1)=1、f(2)=6、f(3)=21、f(4)=58。若把f(4)到f(0)都计作active frame，最大深度为5；时间和额外栈空间都随x线性增长。</Answer>
+
+**问题 2：为什么只给 owning-pointer class 写 destructor 仍然错误？**
+
+<Answer>destructor解决释放，却让编译器生成的copy constructor和copy assignment继续复制地址。两个对象随后共享同一 allocation，修改相互影响并发生double delete。必须同时定义复制语义，或改用能自动表达所有权的值成员/智能指针。</Answer>
+
+**问题 3：`findMax` 为什么不能直接接受原章未定义 `operator<` 的 `IntCell`？**
+
+<Answer>模板实例化会编译函数体中的`a[maxIndex] < a[i]`。IntCell不满足该表达式的类型契约，所以编译失败。修复应明确提供符合语义的比较，或向模板传入comparison policy，而不是绕过类型检查。</Answer>
+
+**问题 4：嵌套 vector 矩阵与单 vector 矩阵分别适合什么目标？**
+
+<Answer>嵌套vector实现直观、每行天然是一个容器，适合教学和行级操作；但多次allocation且全矩阵不连续。单vector用row×cols+col寻址，allocation少、遍历局部性更可预测，适合密集数值计算，但要自行维护尺寸和索引不变量。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="本书讨论什么">同时建立数据结构抽象、C++实现和算法分析能力。</GlossaryItem>
+  <GlossaryItem term="数学复习">指数、对数、级数、模运算与多项式可处理性。</GlossaryItem>
+  <GlossaryItem term="递归简介">以更小实例定义计算，并证明终止与栈成本。</GlossaryItem>
+  <GlossaryItem term="C++类">绑定接口、表示、所有权和const约束的类型边界。</GlossaryItem>
+  <GlossaryItem term="C++细节">会影响身份、复制、生命周期和成本的语言规则。</GlossaryItem>
+  <GlossaryItem term="模板">按类型实例化并要求实参满足操作契约的编译期机制。</GlossaryItem>
+  <GlossaryItem term="矩阵类">用class template封装二维尺寸、存储与下标操作。</GlossaryItem>
+  <GlossaryItem term="Big Three">析构函数、复制构造函数和复制赋值运算符。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Data Structures and Algorithm Analysis in C++, 3rd Edition · Chapter 1 Introduction"
+  href="https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+  author="Mark Allen Weiss"
+  license="原书与官方示例代码版权归作者及 Pearson/Addison-Wesley 所有；本章依据官方完整目录、作者公开的第3版代码与勘误独立重构教学内容"
+/>

@@ -1,0 +1,137 @@
+---
+title: "第16章 使用 Rust 构建桌面应用"
+type: C
+section: "精通Rust 2e · 跨平台与调试"
+order: 16
+description: "按 原书第16章 Building Desktop Applications with Rust 一比一重建核心知识：GUI 事件循环、GTK 与 gtk-rs、Hacker News 应用、状态与消息、桌面框架选择。"
+demo: true
+math: false
+sourceUrl: "https://www.packtpub.com/en-us/product/mastering-rust-9781789346572"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { MrsDesktopApplicationsModelLab, MrsDesktopApplicationsBoundaryLab, MrsDesktopApplicationsEvidenceLab } from "@/components/mdx/mastering-rust-2e/diagrams/mrs-desktop-applications";
+
+<Objectives>
+- 能解释GUI 事件循环与GTK 与 gtk-rs在本章执行链中的责任
+- 能区分Hacker News 应用和状态与消息的适用边界与失败语义
+- 能实现并复现一个围绕桌面框架选择的最小实验
+</Objectives>
+
+## 先做预测
+
+先回答：示例能够编译并运行，是否已经证明设计正确？不能。编译成功只说明当前程序满足类型与语法约束，还要验证输入边界、失败路径、资源生命周期、并发或外部系统条件。<Term def="桌面界面由事件循环驱动，UI状态只能在规定线程更新；耗时网络与解析任务移到worker，再用消息把不可变结果送回界面。">GUI 事件循环</Term>是本章的起点，<Term def="原书以GTK和gtk-rs展示原生组件绑定、信号与对象生命周期；具体API版本会变化，但主线程规则、回调所有权和资源释放必须保留。">GTK 与 gtk-rs</Term>则把起点放进可重复的工程过程。
+
+<MrsDesktopApplicationsModelLab />
+
+## 原书章节骨架
+
+Packt 官方目录把本章组织为GUI 事件循环、GTK 与 gtk-rs、Hacker News 应用、状态与消息、桌面框架选择。这里保留原书问题顺序，再把2019年前后的案例放到当前Rust工程语境中理解：概念不因crate版本变化而失效，但命令、依赖和框架API必须以当前项目锁定版本的官方文档为准。
+
+官方核心单元核对：GUI事件循环；GTK框架；gtk-rs Hacker News应用；GUI练习；桌面框架选择。
+
+<Term def="示例应用把HTTP获取、JSON解析、列表模型和点击事件串联；请求取消、加载态、空态、错误态与缓存是完整体验的一部分。">Hacker News 应用</Term>不是孤立语法。它承接GUI 事件循环给出的目标，并通过GTK 与 gtk-rs进入真实项目。阅读代码时要沿着输入、所有权或状态、动作、结果和证据五个节点追踪，而不是只记函数名。
+
+```rust
+enum Msg {
+    Refresh,
+    Loaded(Vec<Story>),
+    Failed(String),
+}
+
+enum ViewState {
+    Loading,
+    Ready(Vec<Story>),
+    Failed(String),
+}
+```
+
+## 机制一：从类型到行为
+
+桌面界面由事件循环驱动，UI状态只能在规定线程更新；耗时网络与解析任务移到worker，再用消息把不可变结果送回界面。 原书以GTK和gtk-rs展示原生组件绑定、信号与对象生命周期；具体API版本会变化，但主线程规则、回调所有权和资源释放必须保留。 两者协作时，先写出谁拥有数据、谁可以修改、失败由谁处理，再决定具体API。这样可以把编译器诊断还原为契约冲突，而不是把错误信息当成需要逐条消除的噪声。
+
+<Term def="把界面状态建模为Loading、Ready、Empty和Failed，消息驱动状态迁移；回调不应直接修改多个隐式全局变量。">状态与消息</Term>进一步约束运行行为。它说明“类型正确”与“协议正确”是两层证据：前者由编译器帮助证明，后者还需要测试、时间线和边界输入。
+
+<MrsDesktopApplicationsBoundaryLab />
+
+```rust
+fn update(state: &mut ViewState, message: Msg) {
+    *state = match message {
+        Msg::Refresh => ViewState::Loading,
+        Msg::Loaded(items) => ViewState::Ready(items),
+        Msg::Failed(error) => ViewState::Failed(error),
+    };
+}
+```
+
+## 机制二：失败、资源与边界
+
+示例应用把HTTP获取、JSON解析、列表模型和点击事件串联；请求取消、加载态、空态、错误态与缓存是完整体验的一部分。 把界面状态建模为Loading、Ready、Empty和Failed，消息驱动状态迁移；回调不应直接修改多个隐式全局变量。 失败实验至少覆盖正常、空值或零长度、上限附近、显式错误和资源中断。涉及线程、网络、数据库、GUI或FFI时，还要加入超时、取消、部分完成与关闭路径。
+
+不要把原书示例的依赖版本直接复制到新项目。先固定Rust edition与最小支持版本，再查询维护中的crate文档和迁移说明；保留原书要讲的架构边界，按当前API重写适配层。
+
+```text
+UI thread: click -> Refresh -> render Loading
+worker: HTTP -> parse -> Loaded | Failed
+UI thread: receive message -> update state -> render
+```
+
+## 机制三：可复现证据
+
+<Term def="选择框架要比较平台覆盖、可访问性、打包体积、渲染模型和维护状态；一次演示成功不能证明更新、签名和崩溃恢复可用。">桌面框架选择</Term>负责把本章收束成证据。选择框架要比较平台覆盖、可访问性、打包体积、渲染模型和维护状态；一次演示成功不能证明更新、签名和崩溃恢复可用。 一次可靠验收要保存输入、工具链、依赖锁定、命令、退出状态、关键输出和失败样本。性能结论还要记录release构建、样本数与环境噪声；并发结论则要记录任务边界、超时和关闭结果。
+
+<MrsDesktopApplicationsEvidenceLab />
+
+## 分步实验
+
+<Stepper>
+  <Step title="建立模型"><MrsDesktopApplicationsModelLab /></Step>
+  <Step title="注入边界"><MrsDesktopApplicationsBoundaryLab /></Step>
+  <Step title="保留证据"><MrsDesktopApplicationsEvidenceLab /></Step>
+</Stepper>
+
+## 验收清单
+
+1. 在隔离目录运行三段示例，先预测结果和所有权变化，再记录实际编译诊断。
+2. 为主路径增加一个正常测试和至少三个边界测试，错误断言检查类别与上下文，而不只匹配整段文本。
+3. 清理构建产物后重跑，确认没有依赖本地缓存、环境变量或未声明工具。
+4. 若章节涉及外部系统，使用本地测试服务或临时数据库，设置时间预算并验证资源最终释放。
+
+## 常见误区
+
+<Callout type="trap" title="把编译通过当成章节验收">
+编译器不能证明业务输入完整、超时合理、协议有背压或外部副作用已回滚。必须补充失败测试与可观察证据。
+</Callout>
+
+<Callout type="trap" title="把2019年的crate API当成固定标准">
+本书核心结构值得保留，但框架和工具API会变化。新代码应锁定版本、查阅维护中的官方文档，并把迁移集中在适配边界。
+</Callout>
+
+## 本章回顾
+
+本章按照官方目录逐项覆盖GUI 事件循环、GTK 与 gtk-rs、Hacker News 应用、状态与消息、桌面框架选择。核心方法是先用类型表达资源与能力，再用运行期协议约束超时、顺序和外部失败，最后用测试、日志或调试记录证明结果可重复。
+
+<Exercises>
+**问题 1：如何解释GUI 事件循环与GTK 与 gtk-rs的协作？**
+<Answer>桌面界面由事件循环驱动，UI状态只能在规定线程更新；耗时网络与解析任务移到worker，再用消息把不可变结果送回界面。 原书以GTK和gtk-rs展示原生组件绑定、信号与对象生命周期；具体API版本会变化，但主线程规则、回调所有权和资源释放必须保留。</Answer>
+
+**问题 2：Hacker News 应用和状态与消息的边界是什么？**
+<Answer>示例应用把HTTP获取、JSON解析、列表模型和点击事件串联；请求取消、加载态、空态、错误态与缓存是完整体验的一部分。 把界面状态建模为Loading、Ready、Empty和Failed，消息驱动状态迁移；回调不应直接修改多个隐式全局变量。</Answer>
+
+**问题 3：怎样验收桌面框架选择？**
+<Answer>选择框架要比较平台覆盖、可访问性、打包体积、渲染模型和维护状态；一次演示成功不能证明更新、签名和崩溃恢复可用。 使用正常、边界、错误和资源中断输入，保存工具链、命令、退出状态和可复查输出。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="GUI 事件循环" definition="桌面界面由事件循环驱动，UI状态只能在规定线程更新" />
+  <GlossaryItem term="GTK 与 gtk-rs" definition="原书以GTK和gtk-rs展示原生组件绑定、信号与对象生命周期" />
+  <GlossaryItem term="Hacker News 应用" definition="示例应用把HTTP获取、JSON解析、列表模型和点击事件串联" />
+  <GlossaryItem term="状态与消息" definition="把界面状态建模为Loading、Ready、Empty和Failed，消息驱动状态迁移" />
+  <GlossaryItem term="桌面框架选择" definition="选择框架要比较平台覆盖、可访问性、打包体积、渲染模型和维护状态" />
+  <GlossaryItem term="章节验收边界" definition="用输入、失败、资源、证据和迁移约束验证章节核心。" />
+</Glossary>
+
+<Attribution adaptedFrom="Mastering Rust, Second Edition · 原书第16章 Building Desktop Applications with Rust" adaptedUrl="https://www.packtpub.com/en-us/product/mastering-rust-9781789346572" />

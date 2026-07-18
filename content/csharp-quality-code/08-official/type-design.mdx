@@ -1,0 +1,302 @@
+---
+title: "第8章：类型设计（建议102-112）"
+type: C
+section: "编写高质量代码 · 类型边界"
+order: 8
+description: "覆盖接口/抽象类、组合/继承、多态，单例/静态构造/静态类、sealed，以及嵌套类型、enum与rich class、双向耦合和类/命名空间建模。"
+demo: true
+math: false
+sourceUrl: "https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html"
+draft: false
+---
+
+import { CqcLifetimeTypeLab, CqcModelBoundaryLab, CqcReuseBoundaryLab } from "@/components/mdx/csharp-quality-code/diagrams/type-design";
+
+<Objectives>
+
+- 能比较interface、abstract class、composition和inheritance的state、variation与substitutability contract，并设计最小扩展面
+- 能分析private singleton、static constructor/class、DI lifetime和sealed type的construction、failure与test isolation
+- 能判断nested type、enum/rich class、one-way dependency和namespace是否形成清晰domain与module boundary
+
+</Objectives>
+
+## 为什么类型图首先是一张Ownership和Dependency图
+
+继承箭头、namespace和singleton写法很容易画，困难的是证明caller能安全替换subtype、shared instance由谁创建/释放、两个objects谁依赖谁，以及一组values是closed set还是会携带持续演化的behavior。类型设计的质量来自这些约束，而不是使用了多少pattern。
+
+先预测：只为复用三行代码是否足以继承；private constructor的singleton是否天然易测试；把enum改成class是否永远更面向对象。答案都是否。先定义variation、lifetime、dependency direction和compatibility，再选择language shape。
+
+<Term def="每个subtype对base contract的precondition、postcondition、invariant、exception和lifetime逐项保持，使base caller无需识别具体type。">substitutability proof</Term>
+
+## Contract、Reuse与Polymorphic Branch（建议102-104）
+
+### 建议102：区分接口和抽象类的应用场合
+
+interface表达role/capability，让unrelated types实现多个contracts，适合dependency boundary；abstract class适合一条有共同state、protected invariant和设计过virtual hooks的hierarchy。现代default interface members能帮助部分API演进，但不让interface变成shared instance-state owner。
+
+```csharp
+public interface IClock
+{
+    DateTimeOffset UtcNow { get; }
+}
+
+public abstract class AuditedEntity
+{
+    protected AuditedEntity(EntityId id, DateTimeOffset createdAt)
+        => (Id, CreatedAt) = (id, createdAt);
+
+    public EntityId Id { get; }
+    public DateTimeOffset CreatedAt { get; }
+}
+```
+
+若caller只需要clock capability，不应被迫继承base class。若derived types必须共享construction invariant，abstract base比复制interface implementation更诚实。
+
+### 建议103：区分组合和继承的应用场合
+
+composition显式持有collaborators，variation可独立替换，默认更适合代码复用；inheritance要求真实is-a和完整substitutability proof，并把derived生命周期绑在base evolution上。不要为复用implementation继承一个语义不匹配的type。
+
+<Term def="owner只通过明确interface持有collaborator，并定义其creation、lifetime与调用能力，使behavior可独立替换的边界。">composition boundary</Term>
+
+```csharp
+public sealed class InvoiceService
+{
+    private readonly ITaxPolicy _taxPolicy;
+    private readonly IInvoiceStore _store;
+
+    public InvoiceService(ITaxPolicy taxPolicy, IInvoiceStore store)
+        => (_taxPolicy, _store) = (taxPolicy, store);
+}
+```
+
+composition也可能变成层层转发。只有存在真实variation/ownership或隔离外部依赖时引入collaborator，不为每个method制造interface。
+
+### 建议104：用多态代替条件语句
+
+switch反复按同一type/kind分支且每次添加variant都修改多处时，strategy/polymorphism把behavior放回variant；但小型closed enum、exhaustive pattern matching和一次性branch可能更清晰。目标是减少shotgun modification，不是消灭所有条件语句。
+
+```csharp
+public interface IShippingPolicy
+{
+    Money Quote(Shipment shipment);
+}
+
+public sealed class ExpressShippingPolicy : IShippingPolicy
+{
+    public Money Quote(Shipment shipment) => shipment.Weight * Rates.Express;
+}
+```
+
+验收要新增一个variant：是否只增加implementation和registration，还是修改多个unrelated consumers；同时确认strategy没有把data access、logging等全部塞进一个class。
+
+<Stepper>
+  <Step title="切换interface、abstract、composition、inheritance与polymorphism">
+    <CqcReuseBoundaryLab />
+  </Step>
+  <Step title="标出state owner与variation axis">
+    说明谁构造/释放collaborator、哪些invariant共享、caller依赖role还是hierarchy，以及新variant修改哪些files。
+  </Step>
+  <Step title="执行substitutability与new-variant测试">
+    用同一contract suite运行所有implementations，替换一个collaborator并增加一个variant，观察是否破坏base caller。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="组合优先意味着不能使用继承">
+继承适合有稳定is-a语义、共享base invariant且能证明LSP的hierarchy。组合是默认起点，不是禁止规则；选择要由variation和ownership证据支撑。
+</Callout>
+
+## Global Lifetime、Initialization与Extensibility（建议105-108）
+
+### 建议105：使用私有构造函数强化单例
+
+private constructor阻止外部new，配合static holder或`Lazy<T>`可保证一个process/type-context instance。但singleton隐藏global dependency、共享mutable state与test order；现代application service通常由DI container以singleton lifetime创建，并让consumer依赖interface。
+
+```csharp
+public sealed class LegacyRegistry
+{
+    private static readonly Lazy<LegacyRegistry> Current = new(() => new LegacyRegistry());
+    private LegacyRegistry() { }
+    public static LegacyRegistry Instance => Current.Value;
+}
+```
+
+只有确实global identity且无request/user scope时才用。clock、random、cache、configuration等更适合inject，测试可替换且disposal由host拥有。
+
+<Term def="一个instance从application/type context启动持续到结束、被所有consumer共享并可能造成跨request与跨test state传播的生命周期。">global lifetime</Term>
+
+### 建议106：为静态类添加静态构造函数
+
+explicit static constructor可执行一次type initialization，并影响runtime的beforefieldinit优化时机；适合必须原子建立的in-memory deterministic state。不要在其中做network/file I/O、依赖ambient configuration或长时间阻塞，失败会形成TypeInitializationException，使后续type使用持续失败且难恢复。
+
+```csharp
+public static class UnitTable
+{
+    public static readonly ImmutableDictionary<string, decimal> Factors;
+
+    static UnitTable()
+    {
+        Factors = new Dictionary<string, decimal>(StringComparer.Ordinal)
+        {
+            ["m"] = 1m,
+            ["cm"] = 0.01m,
+        }.ToImmutableDictionary(StringComparer.Ordinal);
+    }
+}
+```
+
+能用inline field initializer清楚表达时无需额外static ctor。外部failure-prone initialization放到host startup service并显式报告/retry。
+
+### 建议107：区分静态类和单例
+
+static class没有instance、不能实现instance interface或参与普通polymorphism，适合stateless pure helpers/constants；singleton仍是object，可实现interface、持有disposable dependencies并由lifetime owner管理。static mutable state和singleton mutable state都可能global coupling，区别不在关键词而在ownership/substitution。
+
+```csharp
+public static class MoneyMath
+{
+    public static decimal Round(decimal amount) => decimal.Round(amount, 2);
+}
+
+public sealed class ExchangeRateService : IExchangeRateService, IAsyncDisposable
+{
+    // Instance dependencies and lifecycle belong to the host.
+}
+```
+
+### 建议108：将类型标识为sealed
+
+未明确支持inheritance的concrete type可sealed，关闭未知override、保护constructor/dispose invariant并保留未来内部变化自由。unsealed public class事实上承诺了extension surface；一旦外部subclass依赖protected/virtual behavior，compatibility成本上升。
+
+sealed不是单纯performance micro-optimization，也不妨碍type实现interfaces供substitution。只有为继承设计、记录virtual contracts并提供contract tests时才开放。
+
+<Stepper>
+  <Step title="切换private singleton、static ctor/class、DI singleton与sealed">
+    <CqcLifetimeTypeLab />
+  </Step>
+  <Step title="写出creation、failure、disposal和replacement owner">
+    标注初始化何时发生、失败能否重试、shared state范围、consumer如何替换，以及谁负责Dispose。
+  </Step>
+  <Step title="执行并发首次访问与test-isolation测试">
+    并发触发initialization，模拟constructor failure，运行不同配置tests并验证state不串扰；sealed type仍可通过interface替换。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="private constructor加Instance属性就解决了生命周期">
+它只限制construction数量，没有解决disposal、configuration、test reset、multi-tenant scope和failure recovery。优先让host/container拥有shared service lifetime。
+</Callout>
+
+## Modeling、Coupling与Namespace（建议109-112）
+
+### 建议109：谨慎使用嵌套类
+
+private nested type适合只服务owner implementation、共享concept/lifetime且外部无独立意义的helper；public nested type把consumer命名与outer type绑定，容易形成过强coupling和发现困难。C# nested type即使private access规则便利，也不意味着自动共享outer instance。
+
+```csharp
+public sealed class LruCache<TKey, TValue> where TKey : notnull
+{
+    private sealed class Entry
+    {
+        public required TKey Key { get; init; }
+        public required TValue Value { get; set; }
+    }
+}
+```
+
+若nested type开始被多个owners使用、拥有独立tests或public identity，应提升到namespace/module级type。
+
+### 建议110：用类来代替enum
+
+当每个named value需要behavior、metadata、validation、外部扩展或版本映射时，用sealed rich value class/record或strategy比不断扩大的switch更合适。若集合确实small、closed、无额外state且用于flags/state，enum更简单、可exhaustive分析。
+
+<Term def="成员由协议或domain固定、consumer可以合理exhaustive处理且新增值被视为compatibility事件的值集合。">closed value set</Term>
+
+```csharp
+public sealed record PaymentMethod(string Code, bool RequiresRedirect)
+{
+    public static readonly PaymentMethod Card = new("card", false);
+    public static readonly PaymentMethod BankRedirect = new("bank_redirect", true);
+}
+```
+
+“smart enum”仍要处理equality、serialization、unknown value和registry extension；不要只把enum成员搬成static fields。
+
+### 建议111：避免双向耦合
+
+A直接持有B、B又调用A会形成construction、lifetime、testing和change cycle。确定dependency direction：stable domain定义port，orchestrator注入implementation；反向通知通过return value、domain event或narrow callback完成。event subscription若双方互持也可能形成lifetime cycle。
+
+<Term def="compile-time与runtime依赖从policy/owner指向明确abstraction或从outer orchestrator连接两端，使变化和lifetime不形成闭环。">dependency direction</Term>
+
+```csharp
+public sealed class CheckoutService
+{
+    private readonly IPaymentGateway _gateway;
+    private readonly IOrderRepository _orders;
+
+    public CheckoutService(IPaymentGateway gateway, IOrderRepository orders)
+        => (_gateway, _orders) = (gateway, orders);
+}
+```
+
+domain aggregate内部的parent-child back reference有时合理，但要由aggregate owner控制、不可跨module任意调用，并测试serialization/lifetime。
+
+### 建议112：将现实世界中的对象抽象为类，将可复用对象圈起来就是命名空间
+
+不要逐字把每个现实名词变class；model只包含系统需要维护的identity、value、behavior和rules。namespace用于组织cohesive public vocabulary与discoverability，但不提供runtime isolation、deployment或dependency enforcement；真正module boundary还需要assembly/project/package、visibility和dependency rules。
+
+```csharp
+namespace Billing.Invoicing;
+
+public sealed class Invoice { }
+public readonly record struct InvoiceId(Guid Value);
+internal sealed class InvoiceNumberSequence { }
+```
+
+以bounded context/use case命名，不建`Helpers`、`Common`等无限收纳空间。可复用应由稳定contract和真实多个consumer证明，而非先圈一个namespace。
+
+<Stepper>
+  <Step title="切换nested、enum/rich class、one-way dependency与namespace">
+    <CqcModelBoundaryLab />
+  </Step>
+  <Step title="标出closed/open set与module owner">
+    说明values是否允许外部扩展、type是否有独立identity、依赖箭头方向，以及namespace之外由哪个assembly/package执行边界。
+  </Step>
+  <Step title="做新增value、移动type和替换dependency演练">
+    增加一种payment method、把helper移出owner、替换gateway，记录修改面和compatibility，验证没有hidden reverse call。
+  </Step>
+</Stepper>
+
+## 本章回顾：Type Shape要匹配Variation、Lifetime与Dependency
+
+1. interface表达role，abstract class拥有shared hierarchy invariant；composition默认隔离variation，inheritance必须证明LSP。
+2. polymorphism减少重复type switch，但small closed branch可保留enum/pattern matching。
+3. private singleton和static state都是global lifetime风险；DI singleton让creation、replacement与disposal显式。
+4. static constructor保持快速确定，sealed关闭未承诺的继承扩展面。
+5. nested type只服务owner时有价值，rich class只在enum values需要behavior/open extension时成立。
+6. dependency保持单向，namespace组织词汇但不代替assembly/package边界。
+
+<Exercises>
+
+**问题 1：何时选abstract class而不是interface+composition？**
+
+<Answer>当存在真实单一hierarchy、base必须拥有construction/state invariant且derived只在设计过的virtual points变化时选abstract class，并用同一contract suite验证subtypes。若只是多个unrelated types提供capability或替换behavior/dependency，interface+composition更低耦合。不要为复用几行implementation建立继承。</Answer>
+
+**问题 2：一个共享cache为何更适合DI singleton而不是static Instance？**
+
+<Answer>container可显式配置application scope、constructor dependencies、startup validation和Dispose；consumer依赖ICache可替换测试实现，不共享跨test global state。static Instance隐藏creation/failure与tenant scope。只有无dependency、真正process-global且替换无意义的极少对象才考虑private singleton。</Answer>
+
+**问题 3：什么时候enum应保留，什么时候升级为rich class或strategy？**
+
+<Answer>值集合small/closed、仅表示flags/state且consumer可exhaustive处理时保留enum；每个value需要behavior/metadata/validation、外部扩展或独立版本映射时用rich value/strategy。升级后仍要定义equality、unknown serialization和registration，测试新增value的修改面。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="substitutability proof" definition="每个subtype保持base pre/postcondition、invariant、exception和lifetime contract的逐项证据。" />
+  <GlossaryItem term="composition boundary" definition="owner通过明确interface持有collaborator并控制creation/lifetime的可替换边界。" />
+  <GlossaryItem term="global lifetime" definition="instance跨application/type context长期共享并可能传播跨request/test state的生命周期。" />
+  <GlossaryItem term="closed value set" definition="成员固定、可exhaustive处理且新增值属于compatibility事件的集合。" />
+  <GlossaryItem term="dependency direction" definition="依赖沿明确abstraction/owner单向连接，避免compile-time与lifetime闭环的规则。" />
+</Glossary>
+
+<Attribution adaptedFrom="编写高质量代码：改善C#程序的157个建议，第8章 类型设计，建议102-112" adaptedUrl="https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html" />

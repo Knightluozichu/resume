@@ -1,0 +1,276 @@
+---
+title: "第4章 栈与队列"
+type: C
+section: "大话数据结构 · 线性结构"
+order: 4
+description: "以LIFO/FIFO契约实现顺序栈、共享栈、链栈、循环队列与链队列，并用递归和中缀/后缀表达式展示受限线性结构如何控制执行顺序。"
+demo: true
+math: false
+sourceUrl: "https://www.tup.tsinghua.edu.cn/bookscenter/bookcatalog?id=08952301"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { DsvStackRepresentationLab, DsvExpressionStackLab, DsvQueueRepresentationLab } from "@/components/mdx/data-structures-visual/diagrams/stacks-and-queues";
+
+<Objectives>
+
+- 能实现栈与队列ADT的顺序/链式表示，证明LIFO/FIFO、容量、长度与失败后不变式
+- 能推导递归调用栈和四则运算表达式求值过程，正确处理中缀转后缀、优先级、结合性与操作数顺序
+- 能比较两栈共享空间、循环队列和链队列的适用条件，并设计溢出、下溢、分配失败与环绕测试
+
+</Objectives>
+
+## 从“只能在一端或两端操作”开始
+
+栈与队列都来自线性表，却故意限制可访问位置。栈只允许在同一端push/pop，形成后进先出；队列在rear入、front出，形成先进先出。限制减少自由，却让撤销、调用、解析、任务调度等顺序规则可由结构本身保证。
+
+先预测：栈中依次压入`A,B,C`后弹出为何得到`C,B,A`；队列依次入队后为何得到`A,B,C`；若API在空结构上pop/dequeue，是返回sentinel值、status还是异常？失败语义必须在元素可能取任意值时仍可区分。
+
+## 栈的定义与抽象数据类型
+
+<Term def="只允许在线性表同一端插入和删除，遵守后进先出LIFO的受限线性表。">栈</Term>把允许操作的一端称为栈顶，另一端为栈底。栈的抽象数据类型包含init、empty、size、push、peek、pop和clear；`pop`既改变状态又返回栈顶，`peek`只观察。
+
+<Term def="任何时刻元素弹出顺序都与尚未弹出的压入顺序严格相反。">LIFO不变量</Term>应通过模型测试验证。空栈pop是下溢，满固定栈push是溢出；两者都不得部分修改top或输出参数。
+
+## 栈的顺序存储与链式存储
+
+<DsvStackRepresentationLab />
+
+<Stepper>
+  <Step title="切换顺序、共享、链式和调用栈"><DsvStackRepresentationLab /></Step>
+  <Step title="运行Push/Pop轨迹">对空、单元素、满容量和交错序列记录top/head、size与输出。</Step>
+  <Step title="注入失败">在满栈、空栈、malloc失败和深递归下确认原状态与错误结果明确。</Step>
+</Stepper>
+
+<Term def="用连续数组和top索引保存栈元素，有效区间为data[0..top)。">顺序栈</Term>把栈顶放在数组尾端，push/pop不移动其它元素。
+
+```c
+#include <stdbool.h>
+#include <stddef.h>
+
+enum { STACK_CAPACITY = 64 };
+typedef int Value;
+
+typedef struct {
+    Value data[STACK_CAPACITY];
+    size_t top; /* size and next free slot */
+} Stack;
+
+bool stack_push(Stack *stack, Value value) {
+    if (stack == NULL || stack->top >= STACK_CAPACITY) return false;
+    stack->data[stack->top++] = value;
+    return true;
+}
+
+bool stack_pop(Stack *stack, Value *out) {
+    if (stack == NULL || stack->top == 0) return false;
+    Value value = stack->data[stack->top - 1];
+    --stack->top;
+    if (out != NULL) *out = value;
+    return true;
+}
+```
+
+### 两栈共享空间
+
+<Term def="让两个同类型顺序栈分别从数组两端向中间增长，以互补峰值共享容量。">两栈共享空间</Term>适用于两个栈总元素数受同一上限约束且峰值互补。左栈top从`-1`向上，右栈top从`capacity`向下；当`left_top + 1 == right_top`才真正满。若两个栈同时长期接近峰值，共享不能创造容量；若元素类型不同，也不能直接共用同一数组。
+
+### 栈的链式存储
+
+<Term def="以链表首结点作为栈顶，push/pop都在链首改链接的表示。">链栈</Term>没有固定容量但会分配失败，每元素附带next。`push`先成功分配并初始化，再链接到head；`pop`先保存head和value，再前移head并释放。若payload拥有资源，owner规则与第3章一致。
+
+<Callout type="trap" title="动态链栈不会溢出，所以push一定成功">
+链栈仍受地址空间、allocator和业务容量限制。无上限栈可能耗尽进程内存；API应报告分配失败并可设置最大深度。
+</Callout>
+
+## 栈的应用：递归
+
+<Term def="函数直接或间接调用自身，并把问题缩小到可终止基例的求解方式。">递归</Term>由调用栈保存每层参数、局部变量和返回位置。递归正确需要基例、规模严格缩小和组合规则；空间复杂度包含最大同时活动frame数。
+
+斐波那契的朴素递归忠实表达定义，却重复计算相同子问题并呈指数增长；迭代或memoization更适合求值。递归不是“高级所以更快”，它适合树遍历、分治和回溯等天然嵌套结构，但必须控制深度。
+
+```c
+#include <stdint.h>
+
+bool factorial(unsigned n, uint64_t *out) {
+    if (out == NULL) return false;
+    if (n == 0) { *out = 1; return true; }
+    uint64_t previous;
+    if (!factorial(n - 1, &previous)) return false;
+    if (previous > UINT64_MAX / n) return false;
+    *out = previous * n;
+    return true;
+}
+```
+
+即使有基例，超大`n`也会先遇到数值或调用栈边界。生产实现可迭代并在每步检查溢出。递归trace应记录depth、remaining problem和返回值，证明每层最终弹栈。
+
+## 栈的应用：四则运算表达式求值
+
+表达式处理分为词法、转换与求值。中缀表达式符合人类习惯，但优先级和括号使执行顺序隐含；后缀（逆波兰）表示法把操作符放在操作数后，使求值只需一个操作数栈。中缀转后缀则需要操作符栈。
+
+<Term def="操作符位于两个操作数之间、依靠优先级、结合性和括号确定顺序的表示。">中缀表达式</Term>如`3 + 4 * 2`。<Term def="操作符位于操作数之后、无需括号即可唯一表达求值顺序的表示。">后缀表达式</Term>对应`3 4 2 * +`。
+
+<DsvExpressionStackLab />
+
+<Stepper>
+  <Step title="切换词法、转换、求值和验证"><DsvExpressionStackLab /></Step>
+  <Step title="逐Token记录栈">对`3 + 4 * 2 / (1 - 5)`记录operator/output或operand stack每一步。</Step>
+  <Step title="注入语法错误">覆盖空输入、连续操作符、括号不配对、操作数不足/过多、除零和整数溢出。</Step>
+</Stepper>
+
+### 中缀表达式转后缀表达式
+
+扫描数字就输出；左括号入操作符栈；右括号弹到左括号并丢弃配对括号；普通操作符把栈顶优先级更高的操作符弹出，若当前是左结合，还弹出同优先级，再压入当前操作符。扫描结束后若仍有括号即错误，否则弹完操作符。
+
+一元负号不能随便当二元减法，tokenizer/parser需根据上下文识别。幂运算常为右结合，弹栈条件与加减不同。转换输出必须附带token位置，运行时错误才能指回source。
+
+### 后缀表达式计算结果
+
+扫描后缀token：数字push；二元操作符pop出`right`，再pop出`left`，计算`left op right`并push。结束后必须恰好一个值；不足说明缺操作数，多余说明缺操作符。
+
+```c
+typedef enum { OP_ADD, OP_SUB, OP_MUL, OP_DIV } Operator;
+
+bool apply_binary(Stack *values, Operator op) {
+    Value right, left, result;
+    if (!stack_pop(values, &right) || !stack_pop(values, &left)) return false;
+    switch (op) {
+        case OP_ADD: result = left + right; break;
+        case OP_SUB: result = left - right; break;
+        case OP_MUL: result = left * right; break;
+        case OP_DIV:
+            if (right == 0) return false;
+            result = left / right;
+            break;
+        default: return false;
+    }
+    return stack_push(values, result);
+}
+```
+
+示例省略了有符号溢出检查，完整实现必须在算术前验证，且失败时决定是否恢复已弹出的操作数。更稳妥的求值可先peek两个值、验证并计算成功后再commit栈状态，提供strong failure guarantee。
+
+## 队列的定义与抽象数据类型
+
+<Term def="只允许在rear插入、在front删除，遵守先进先出FIFO的受限线性表。">队列</Term>的ADT包含enqueue、front/peek、dequeue、size、empty和clear。<Term def="尚未出队的元素，其出队次序与成功入队次序相同。">FIFO不变量</Term>不等于并发公平性；单线程ADT先保证顺序，线程安全另有同步协议。
+
+简单顺序队列若每次dequeue移动全部元素为`Theta(n)`；若只增加front，则数组前部空槽不复用，rear到末端时出现“假溢出”。循环队列通过模运算重用槽位。
+
+## 循环队列
+
+<Term def="把固定数组的末端与开端逻辑相连，使front/rear按容量取模循环移动的队列。">循环队列</Term>必须选择可区分空/满的状态方案：空一槽、额外length或tag。本文空一槽，`front == rear`为空，`(rear + 1) % capacity == front`为满，可用容量是`capacity - 1`。
+
+```c
+enum { QUEUE_CAPACITY = 8 };
+typedef struct {
+    Value data[QUEUE_CAPACITY];
+    size_t front;
+    size_t rear;
+} RingQueue;
+
+bool queue_enqueue(RingQueue *q, Value value) {
+    if (q == NULL) return false;
+    size_t next = (q->rear + 1) % QUEUE_CAPACITY;
+    if (next == q->front) return false;
+    q->data[q->rear] = value;
+    q->rear = next;
+    return true;
+}
+
+bool queue_dequeue(RingQueue *q, Value *out) {
+    if (q == NULL || q->front == q->rear) return false;
+    Value value = q->data[q->front];
+    q->front = (q->front + 1) % QUEUE_CAPACITY;
+    if (out != NULL) *out = value;
+    return true;
+}
+```
+
+逻辑长度为`(rear + capacity - front) % capacity`。测试必须让索引多次环绕，而不是只跑未越过数组末端的示例。Capacity为0/1要在类型或初始化时拒绝；`rear+1`若capacity接近size上限需避免溢出实现。
+
+## 队列的链式存储
+
+<Term def="以链表保存FIFO次序，并维护front sentinel与rear尾指针实现常数入队出队。">链队列</Term>入队在尾部挂结点，出队删除sentinel后的首元结点。删除最后一个数据结点后，rear必须重置为sentinel；否则rear悬空，下一次enqueue会写已释放内存。
+
+<DsvQueueRepresentationLab />
+
+<Stepper>
+  <Step title="切换线性、循环、链式和并发边界"><DsvQueueRepresentationLab /></Step>
+  <Step title="验证环绕">用小capacity执行enqueue/dequeue交错，强制front/rear各绕数组两圈并和reference FIFO比较。</Step>
+  <Step title="验证链队列尾边界">空->一项->空->再入队，检查rear始终指向最后结点或sentinel。</Step>
+</Stepper>
+
+<Callout type="trap" title="front等于rear既表示空又表示满，运行时再猜就行">
+必须固定区分方案。空一槽、length和tag都可行，但初始化、判空、判满、长度与容量必须使用同一套定义，否则会覆盖未出队元素或误报满。
+</Callout>
+
+## 操作、故障与性能验证
+
+对栈生成push/pop序列，与简单vector末端模型比较；对队列与数组头索引reference比较。每次成功/失败后检查size、peek/front和完整输出顺序。固定容量覆盖刚好满、再push/enqueue、清空再复用；链式覆盖每次malloc失败和clear幂等。
+
+表达式工具分层测试：tokenizer只负责token与位置；转换器比较期望postfix；evaluator只接受typed postfix并验证错误。不要把所有工作塞进一个循环，否则语法错误、算术错误和栈错误无法区分。
+
+### 递归改写要显式保存frame状态
+
+把递归改成迭代不是简单删除函数调用。递归frame隐式保存“当前结点、下一步分支、部分结果和返回点”；显式栈必须保存同样信息。二叉树后序遍历若只压结点，会忘记左子树是否完成，必须增加visited flag或frame phase。改写前先画frame schema，再证明push/pop轨迹与递归调用/返回轨迹一一对应。
+
+尾递归在支持优化的语言中可能复用frame，但C标准不保证编译器消除；深度来自不可信输入时，显式栈更容易设置容量、报告过深并放到heap。无论隐式还是显式，最大深度都是空间预算，不能因为源码没有数组就声称`O(1)`。
+
+### 有界队列把容量变成协议
+
+生产者快于消费者时，无界链队列会把延迟转成内存增长，直到进程失败；有界循环队列在满时必须选择：拒绝、阻塞、超时、丢最旧/最新或让上游减速。这个选择称为backpressure policy，属于系统语义，不是enqueue内部的实现细节。
+
+如果enqueue失败但生产者无条件重试，会形成忙等；若持有消费者所需的锁再阻塞，会死锁；若丢弃任务却仍返回成功，会破坏FIFO可观察结果。单线程ADT的`FULL`status为并发系统提供必要信号，但线程安全实现还需定义等待、唤醒、公平和shutdown。
+
+### 从顺序测试升级为状态机测试
+
+对每次操作记录前状态、command、result和后状态：成功push使size加一且peek等于新值；失败push状态不变；成功pop返回reference model末项；队列同理比较头项。随机生成数千条命令，并在每个prefix检查不变量，可复现seed写进失败报告。
+
+表达式测试除固定例子外可生成小AST，分别渲染为带括号中缀和后缀，再用独立AST evaluator作oracle。这样能系统覆盖优先级与结合性；对invalid token stream单独生成括号缺失、运算符位置错误和操作数计数错误，避免只测合法语法。
+
+性能实验需要防止优化器删除结果，并分开测顺序表示、分配和同步。顺序栈/环形队列可批量预热后测steady state；链式结构报告allocator配置；并发队列还报告生产/消费线程数和contention。大O相同不意味着吞吐相同，但任何性能优化都不能改变LIFO/FIFO与失败契约。
+
+## 本章回顾：限制接口换来顺序保证
+
+1. 栈是LIFO受限线性表，顺序栈、共享栈和链栈实现同一ADT但容量/分配不同。
+2. 递归由调用栈保存frame，必须有基例、规模缩小和深度/数值边界。
+3. 中缀转后缀用操作符栈，后缀求值用操作数栈，二元操作先弹right再弹left。
+4. 队列是FIFO受限线性表，循环队列复用数组前部，链队列维护sentinel与rear。
+5. 溢出、下溢、分配失败、环绕和错误后状态都属于ADT验收，而非附加细节。
+
+<Exercises>
+
+**问题 1：两栈共享空间何时比两个独立数组更合适？**
+
+<Answer>两栈元素类型相同、总峰值可界定且各自峰值互补时，可从同一数组两端增长；满条件是两top相邻。若两者同时接近峰值、容量需独立保证或类型不同，共享不合适。</Answer>
+
+**问题 2：为什么后缀求值必须先弹right再弹left？**
+
+<Answer>后缀`a b op`先把a、b依次压栈，栈顶是b，所以第一次pop得到右操作数。加乘看不出顺序错误，减除会暴露；用`8 2 /`应得4做测试。</Answer>
+
+**问题 3：怎样证明循环队列环绕后仍保持FIFO？**
+
+<Answer>选择小capacity，交错入队出队让front/rear多次取模，和reference队列逐项比较；每步检查空/满、逻辑长度和未出队序列，覆盖空、满、从满出队再入队及索引相等边界。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="栈" definition="只在同一端插入删除、遵守LIFO的受限线性表。" />
+  <GlossaryItem term="LIFO不变量" definition="弹出顺序与尚未弹出元素的压入顺序严格相反。" />
+  <GlossaryItem term="顺序栈" definition="用连续数组和top索引保存有效栈前缀。" />
+  <GlossaryItem term="两栈共享空间" definition="两个栈从同一数组两端向中间增长的表示。" />
+  <GlossaryItem term="链栈" definition="以链首为栈顶、在首部push/pop的链式表示。" />
+  <GlossaryItem term="递归" definition="调用自身并把问题缩小到可终止基例的求解方式。" />
+  <GlossaryItem term="中缀表达式" definition="操作符在操作数间并依赖优先级括号的表示。" />
+  <GlossaryItem term="后缀表达式" definition="操作符在操作数后、无需括号即可确定顺序的表示。" />
+  <GlossaryItem term="队列" definition="rear入front出、遵守FIFO的受限线性表。" />
+  <GlossaryItem term="FIFO不变量" definition="尚未出队元素按成功入队的先后次序出队。" />
+  <GlossaryItem term="循环队列" definition="front/rear在固定数组中取模循环移动的队列。" />
+  <GlossaryItem term="链队列" definition="维护front sentinel和rear尾指针的FIFO链式表示。" />
+</Glossary>
+
+<Attribution adaptedFrom="大话数据结构（溢彩加强版），第4章 栈与队列" adaptedUrl="https://www.tup.tsinghua.edu.cn/bookscenter/bookcatalog?id=08952301" />

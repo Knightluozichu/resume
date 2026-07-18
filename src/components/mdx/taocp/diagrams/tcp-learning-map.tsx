@@ -1,87 +1,84 @@
-/**
- * <TcpBookMap>：《计算机程序设计艺术》全书学习地图（taocp 入门章）。
- *
- * 四列布局对应全书四大板块。纯静态展示，无交互。Server Component。
- */
+"use client";
 
-const VIEW_W = 720;
-const VIEW_H = 460;
-const COL_W = 156;
-const COL_GAP = 12;
-const COL_MARGIN = 36;
-const CARDS_TOP_Y = 168;
-const CARD_H = 32;
-const CARD_GAP = 10;
-const CARD_ROW = CARD_H + CARD_GAP;
+import { useState, type ReactNode } from "react";
 
-const colX = (i: number) => COL_MARGIN + i * (COL_W + COL_GAP);
+function Panel({ children }: { children: ReactNode }) {
+  return <div className="border border-border bg-elevated p-4 sm:p-5">{children}</div>;
+}
 
-const COLUMNS: readonly { name: string; color: string; chapters: string[] }[] = [
-  { name: "基础概念", color: "var(--accent)", chapters: ["0. 学习地图", "1. 数学预备"] },
-  { name: "信息结构", color: "var(--success)", chapters: ["2. 信息结构", "3. 序列"] },
-  { name: "随机性", color: "var(--warning)", chapters: ["4. 随机数", "5. 算术", "6. 多项式"] },
-  { name: "高级主题", color: "var(--danger)", chapters: ["7. GF(2)", "8. 高效搜索", "9. 总复习"] },
-];
+function Figure({ children, caption }: { children: ReactNode; caption: string }) {
+  return <figure className="mdx-figure not-prose mx-auto my-6"><Panel>{children}</Panel><figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption></figure>;
+}
+
+function Stat({ label, value, tone = "accent" }: { label: string; value: string; tone?: "accent" | "warning" | "success" | "danger" }) {
+  const classes = { accent: "border-accent text-accent", warning: "border-warning text-warning", success: "border-success text-success", danger: "border-danger text-danger" }[tone];
+  return <div className={`min-w-0 border p-3 text-center ${classes}`}><div className="text-xs">{label}</div><div className="mt-1 break-words font-mono text-sm">{value}</div></div>;
+}
+
+const volumes = [
+  { id: "1", title: "Fundamental Algorithms", edition: "3rd", chapters: ["1 · Basic Concepts", "2 · Information Structures"], color: "border-accent text-accent" },
+  { id: "2", title: "Seminumerical Algorithms", edition: "3rd", chapters: ["3 · Random Numbers", "4 · Arithmetic"], color: "border-success text-success" },
+  { id: "3", title: "Sorting and Searching", edition: "2nd", chapters: ["5 · Sorting", "6 · Searching"], color: "border-warning text-warning" },
+  { id: "4A", title: "Combinatorial Algorithms, Part 1", edition: "1st", chapters: ["7 · Zeros, ones, and generation"], color: "border-danger text-danger" },
+  { id: "4B", title: "Combinatorial Algorithms, Part 2", edition: "1st", chapters: ["7 · Backtracking, DLX, and SAT"], color: "border-accent text-accent" },
+] as const;
 
 export function TcpBookMap() {
+  const [selected, setSelected] = useState("1");
+  const volume = volumes.find((entry) => entry.id === selected)!;
   return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="全书学习地图。从左到右对应四大板块：基础概念（2章：0. 学习地图、1. 数学预备）；信息结构（2章：2. 信息结构、3. 序列）；随机性（3章：4. 随机数、5. 算术、6. 多项式）；高级主题（3章：7. GF(2)、8. 高效搜索、9. 总复习）。"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <text x={VIEW_W / 2} y="36" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">
-            计算机程序设计艺术 · 全书学习地图
-          </text>
-          <text x={VIEW_W / 2} y="58" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
-            从数学 → 结构 → 随机性 → 高级主题，四段递进覆盖算法艺术全貌
-          </text>
+    <Figure caption="The published TAOCP spine contains five physical volumes and eight teaching units: Chapters 1–6 plus Chapter 7 split across 4A and 4B.">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">{volumes.map((entry) => <button key={entry.id} type="button" className={`min-h-14 border bg-background p-2 text-sm font-semibold ${entry.id === selected ? entry.color : "border-border text-secondary"}`} onClick={() => setSelected(entry.id)}>Volume {entry.id}</button>)}</div>
+      <div className={`mt-4 border p-4 ${volume.color}`}><div className="text-xs">Volume {volume.id} · {volume.edition} edition</div><div className="mt-1 text-base font-semibold text-primary">{volume.title}</div><div className="mt-4 grid gap-2 sm:grid-cols-2">{volume.chapters.map((chapter) => <div key={chapter} className="border border-border bg-background p-3 text-sm text-primary">{chapter}</div>)}</div></div>
+      <div className="mt-4 grid grid-cols-3 gap-2"><Stat label="published volumes" value="5" /><Stat label="numbered chapters" value="1..7" /><Stat label="course units" value="8" tone="success" /></div>
+    </Figure>
+  );
+}
 
-          <rect x={COL_MARGIN} y="76" width={VIEW_W - COL_MARGIN * 2} height="32" rx="10" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.4" />
-          <text x={VIEW_W / 2} y="97" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
-            <tspan fontWeight="700" fill="var(--accent)" fontSize="13">学习路径</tspan>
-            <tspan>{"　"}</tspan>
-            <tspan fill="var(--text-primary)">数学奠基 → 结构支撑 → 随机性 → 高级综合</tspan>
-          </text>
+export function TcpPublishedScopeLab() {
+  const [publishedOnly, setPublishedOnly] = useState(true);
+  const future = ["Volume 4C · in-progress fascicles", "Volume 5 · in preparation", "Volumes 6–7 · future plans"];
+  return (
+    <Figure caption="The quality boundary follows the publisher's current Volumes 1–4B boxed set; drafts and planned volumes remain visible as context, not completion requirements.">
+      <label className="flex items-center gap-2 border border-border bg-background p-3 text-sm font-semibold text-primary"><input type="checkbox" checked={publishedOnly} onChange={(event) => setPublishedOnly(event.target.checked)} />published boxed-set scope only</label>
+      <div className="mt-4 grid gap-2 sm:grid-cols-2"><div className="border border-success p-4"><div className="font-semibold text-success">Acceptance scope</div><div className="mt-2 text-sm text-primary">Volumes 1, 2, 3, 4A, 4B</div></div><div className={`border p-4 ${publishedOnly ? "border-border opacity-45" : "border-warning"}`}><div className="font-semibold text-warning">Outside current scope</div>{future.map((entry) => <div key={entry} className="mt-2 text-sm text-primary">{entry}</div>)}</div></div>
+      <div className="mt-4"><Stat label="scope state" value={publishedOnly ? "published corpus" : "published + roadmap"} tone={publishedOnly ? "success" : "warning"} /></div>
+    </Figure>
+  );
+}
 
-          {COLUMNS.map((col, ci) => {
-            const x = colX(ci);
-            return (
-              <g key={col.name}>
-                <rect x={x} y="124" width={COL_W} height="32" rx="8" fill={col.color} fillOpacity="0.12" stroke={col.color} strokeWidth="1.2" />
-                <text x={x + COL_W / 2} y="145" textAnchor="middle" fontSize="13" fontWeight="700" fill={col.color}>{col.name}（{col.chapters.length}）</text>
-                {col.chapters.map((name, pi) => {
-                  const cy = CARDS_TOP_Y + pi * CARD_ROW;
-                  return (
-                    <g key={name}>
-                      <rect x={x} y={cy} width={COL_W} height={CARD_H} rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-                      <circle cx={x + 12} cy={cy + CARD_H / 2} r="3" fill={col.color} />
-                      <text x={x + COL_W / 2} y={cy + CARD_H / 2 + 4} textAnchor="middle" fontSize="11" fill="var(--text-primary)">{name}</text>
-                      {pi < col.chapters.length - 1 && (
-                        <line x1={x + COL_W / 2} y1={cy + CARD_H} x2={x + COL_W / 2} y2={cy + CARD_ROW - 2} stroke={col.color} strokeWidth="1.4" strokeOpacity="0.6" />
-                      )}
-                    </g>
-                  );
-                })}
-              </g>
-            );
-          })}
+const chapterSpine = [
+  { id: 1, label: "Basic Concepts", inputs: "algorithm + mathematics", output: "analysis contract" },
+  { id: 2, label: "Information Structures", inputs: "records + links", output: "representation invariants" },
+  { id: 3, label: "Random Numbers", inputs: "state + recurrence", output: "tested random stream" },
+  { id: 4, label: "Arithmetic", inputs: "digits + radix", output: "exact/rounded operations" },
+  { id: 5, label: "Sorting", inputs: "records + order", output: "ordered sequence" },
+  { id: 6, label: "Searching", inputs: "keys + structure", output: "retrieval result" },
+  { id: 7, label: "Combinatorial Searching", inputs: "objects + constraints", output: "generated/solved space" },
+];
 
-          <rect x="60" y="384" width={VIEW_W - 120} height="52" rx="12" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.4" strokeOpacity="0.4" />
-          <text x={VIEW_W / 2} y="407" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--text-primary)">
-            全书 10 章 · 四段递进
-          </text>
-          <text x={VIEW_W / 2} y="426" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
-            先打数学地基，再建信息结构，然后用随机性与算术支撑概率算法，最后综合运用于高级主题
-          </text>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        从数学 → 结构 → 随机性 → 高级主题，四段递进覆盖算法艺术全貌
-      </figcaption>
-    </figure>
+export function TcpChapterSpineLab() {
+  const [chapter, setChapter] = useState(1);
+  const selected = chapterSpine[chapter - 1];
+  return (
+    <Figure caption="Every chapter pairs a representation with an algorithm and a measurable claim; selecting a chapter exposes that input-to-certificate contract.">
+      <label className="text-sm font-semibold text-primary">chapter = {chapter}<input className="mt-2 w-full accent-current" type="range" min="1" max="7" value={chapter} onChange={(event) => setChapter(Number(event.target.value))} /></label>
+      <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-2"><Stat label="input" value={selected.inputs} /><div className="text-xl text-accent">→</div><Stat label="certificate" value={selected.output} tone="success" /></div>
+      <div className="mt-3 border border-border bg-background p-3 text-center text-sm font-semibold text-primary">Chapter {selected.id} · {selected.label}</div>
+    </Figure>
+  );
+}
+
+export function TcpReadingContractLab() {
+  const [specification, setSpecification] = useState(true);
+  const [invariant, setInvariant] = useState(false);
+  const [analysis, setAnalysis] = useState(true);
+  const [experiment, setExperiment] = useState(false);
+  const complete = specification && invariant && analysis && experiment;
+  return (
+    <Figure caption="A TAOCP reading unit is complete only when its specification, invariant, quantitative analysis, and executable experiment agree.">
+      <div className="grid gap-3 sm:grid-cols-4"><label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={specification} onChange={(event) => setSpecification(event.target.checked)} />specification</label><label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={invariant} onChange={(event) => setInvariant(event.target.checked)} />invariant</label><label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={analysis} onChange={(event) => setAnalysis(event.target.checked)} />analysis</label><label className="flex items-center gap-2 text-sm font-semibold text-primary"><input type="checkbox" checked={experiment} onChange={(event) => setExperiment(event.target.checked)} />experiment</label></div>
+      <div className="mt-4"><Stat label="reading certificate" value={complete ? "complete" : "incomplete"} tone={complete ? "success" : "warning"} /></div>
+    </Figure>
   );
 }

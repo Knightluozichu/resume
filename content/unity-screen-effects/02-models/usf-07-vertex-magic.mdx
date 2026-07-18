@@ -1,0 +1,153 @@
+---
+title: "第7章 顶点魔法"
+type: C
+section: "Unity屏幕特效秘笈 · 模型与顶点"
+order: 7
+description: "沿第一版正式目录掌握顶点颜色、顶点函数、顶点动画、插值、地形混合。"
+demo: true
+math: true
+sourceUrl: "https://books.google.com/books/about/Unity%E7%9D%80%E8%89%B2%E5%99%A8%E5%92%8C%E5%B1%8F%E5%B9%95%E7%89%B9%E6%95%88%E5%BC%80%E5%8F%91%E7%A7%98.html?id=kvHbjgEACAAJ"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { Usf07VertexMagicPipelineLab, Usf07VertexMagicCompareLab, Usf07VertexMagicEvidenceLab } from "@/components/mdx/unity-screen-effects/diagrams/usf-07-vertex-magic";
+
+<Objectives>
+- 能解释顶点颜色、顶点函数和顶点动画在材质或屏幕链中的职责
+- 能实现本章最小Surface Shader、C#脚本或全屏Blit实验
+- 能验收地形混合，保存源码、状态、画面、GPU事件和失败反例
+</Objectives>
+
+## 先预测，再观察
+
+先预测顶点、片元、颜色、深度、Draw次数或帧时间会如何变化，再只调整一个变量观察变化。先把顶点颜色直接输出验证网格数据，再用顶点函数实现可控动画，最后将RGBA作为地形纹理权重。对比低密度和高密度网格，说明顶点效果的空间频率受拓扑限制。 本章用<Term def="存储在网格顶点上的RGBA属性，可作颜色或混合权重。">顶点颜色</Term>、<Term def="在Surface Shader生成路径前修改顶点位置或自定义数据的函数。">顶点函数</Term>、<Term def="按时间与顶点属性改变几何位置形成运动。">顶点动画</Term>、<Term def="顶点属性在三角形内部传到片元的线性重建。">插值</Term>、<Term def="利用顶点颜色通道在多层地表材质之间选择权重。">地形混合</Term>建立输入、计算、状态与证据之间的关系。
+
+<Usf07VertexMagicPipelineLab />
+
+## 第一版权威目录定位
+
+本页一一对应Kenny Lammers《Unity Shaders and Effects Cookbook》第一版中译本《Unity着色器和屏幕特效开发秘笈》第7章 顶点魔法。书目确认机械工业出版社2014年出版、晏伟译、ISBN 9787111480563；正式目录确认全书11章。原书基于早期Unity内置渲染管线，现代Unity项目应复用原理并单独映射API。
+
+### 原章核心配方
+
+1. 访问顶点颜色
+2. Surface Shader顶点动画
+3. 地形中使用顶点颜色
+4. 网格密度边界
+
+### 五个核心对象
+
+1. **顶点颜色**：存储在网格顶点上的RGBA属性，可作颜色或混合权重。
+2. **顶点函数**：在Surface Shader生成路径前修改顶点位置或自定义数据的函数。
+3. **顶点动画**：按时间与顶点属性改变几何位置形成运动。
+4. **插值**：顶点属性在三角形内部传到片元的线性重建。
+5. **地形混合**：利用顶点颜色通道在多层地表材质之间选择权重。
+
+## 数据流与公式
+
+先把顶点颜色直接输出验证网格数据，再用顶点函数实现可控动画，最后将RGBA作为地形纹理权重。对比低密度和高密度网格，说明顶点效果的空间频率受拓扑限制。 先画出材质属性、纹理、Surface或顶点函数、生成Pass、脚本回调、RenderTexture和固定状态的生产者到消费者链，再把本章对象放到对应阶段。
+
+$$
+p2=p+A*sin(k*x+w*t)*n
+$$
+
+$$
+colorFragment=interp(colorVertex)
+$$
+
+$$
+terrain=sum(weight_i*layer_i)
+$$
+
+$$
+cost=vertices*vertexWork
+$$
+
+公式中的方向、颜色、UV、时间与深度必须标注空间、范围和单位。Surface输出或全屏片元输出只是候选结果，最终仍受Pass选择、深度、混合、目标格式和颜色空间影响。
+
+## 最小实现
+
+```shaderlab
+void vert(inout appdata_full v){v.vertex.xyz+=v.normal*_Amount;}
+```
+
+实现顺序固定为常量输出、输入可视化、核心公式、材质或脚本绑定和固定状态。先确认Shader支持、实际Pass与源目标正确，再解释画面变化。
+
+<Usf07VertexMagicCompareLab />
+
+## Unity脚本与材质契约
+
+```csharp
+material.SetFloat("_DebugMode", debugMode);
+material.SetTexture("_MainTex", sourceTexture);
+Debug.Assert(material.shader.isSupported);
+```
+
+保存Unity版本、相机、灯光、网格、材质关键字、纹理导入设置、RenderTexture格式与调用次序。对于屏幕效果还要保存源图和每个中间目标；对于Surface Shader还要检查生成代码与实际渲染路径。
+
+## 边界、精度与性能
+
+测试零向量、退化UV、镜像UV、负缩放、透明交叉、纯黑纯白、HDR颜色、不同宽高比、多效果串联和高过度绘制。性能实验固定目标设备、分辨率、VSync与场景，先判断CPU还是GPU受限，再定位具体Draw、采样与Shader阶段。
+
+```text
+unity: exact editor and player version
+pipeline: Built-in and named rendering path
+resources: mesh, texture import, material and target format
+state: queue, depth, cull, blend and pass order
+evidence: image diff, frame debugger, GPU capture, CPU/GPU ms
+failure: smallest replayable counterexample
+```
+
+<Usf07VertexMagicEvidenceLab />
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定输入与路径"><Usf07VertexMagicPipelineLab /></Step>
+  <Step title="逐阶段实现与比较"><Usf07VertexMagicCompareLab /></Step>
+  <Step title="捕获画面与性能"><Usf07VertexMagicEvidenceLab /></Step>
+</Stepper>
+
+1. 用常量颜色或原样Blit确认材质、脚本、Pass和目标可执行。
+2. 可视化UV、法线、深度、遮罩、单个光照项或中间纹理。
+3. 打开本章效果，保存基线、候选和参数。
+4. 构造边界与失败输入，用帧调试和GPU捕获解释差异。
+
+## 验收证书
+
+证书包含源码版本、Unity与图形API、脚本绑定、资源哈希、Pass状态、源图和中间图、GPU事件、CPU/GPU帧时间与失败反例。在顶点极少的平面上实现高频波浪，继续提高频率却没有增加可表达的几何采样。 修复后必须用同一输入重放，并指出变化发生在哪个阶段。
+
+## 常见误区
+
+<Callout type="trap" title="配方没有执行证据">在顶点极少的平面上实现高频波浪，继续提高频率却没有增加可表达的几何采样。</Callout>
+
+<Callout type="trap" title="只看最终画面">画面相似不证明实际Pass、空间、纹理、混合和性能等价。必须保存中间调试视图、固定状态和帧捕获。</Callout>
+
+## 本章回顾
+
+本页覆盖顶点颜色、顶点函数、顶点动画、插值、地形混合。掌握标准是能画出数据流，写出最小实现，说明材质与脚本契约，再用正确性、边界、精度和性能证据复现结论。
+
+<Exercises>
+**问题1：顶点颜色与顶点函数如何连接？**
+<Answer>存储在网格顶点上的RGBA属性，可作颜色或混合权重。 在Surface Shader生成路径前修改顶点位置或自定义数据的函数。 回答时标注实际Pass、空间和输入来源。</Answer>
+
+**问题2：怎样调试顶点动画？**
+<Answer>先输出常量，再把相关中间值映射为颜色或中间纹理；随后核对脚本绑定、固定状态、Frame Debugger与GPU事件。</Answer>
+
+**问题3：如何验收地形混合？**
+<Answer>利用顶点颜色通道在多层地表材质之间选择权重。 同时保存正常例、边界例、失败反例和CPU/GPU计时。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="顶点颜色" definition="存储在网格顶点上的RGBA属性，可作颜色或混合权重。" />
+  <GlossaryItem term="顶点函数" definition="在Surface Shader生成路径前修改顶点位置或自定义数据的函数。" />
+  <GlossaryItem term="顶点动画" definition="按时间与顶点属性改变几何位置形成运动。" />
+  <GlossaryItem term="插值" definition="顶点属性在三角形内部传到片元的线性重建。" />
+  <GlossaryItem term="地形混合" definition="利用顶点颜色通道在多层地表材质之间选择权重。" />
+  <GlossaryItem term="可复现实验" definition="固定源码、Unity版本、资源、状态、设备与捕获后可再次得到同一结论的实验。" />
+</Glossary>
+
+<Attribution adaptedFrom="Kenny Lammers · Unity Shaders and Effects Cookbook · 第7章 顶点魔法" adaptedUrl="https://books.google.com/books/about/Unity%E7%9D%80%E8%89%B2%E5%99%A8%E5%92%8C%E5%B1%8F%E5%B9%95%E7%89%B9%E6%95%88%E5%BC%80%E5%8F%91%E7%A7%98.html?id=kvHbjgEACAAJ" />

@@ -1,116 +1,245 @@
 ---
-title: "光照与阴影技术"
+title: "光照与阴影：三卷 24 章复现"
 type: B
 section: "计算机图形学与渲染"
 order: 2
-description: "从硬阴影到软阴影再到全局光照近似的光照技术演进"
+description: "逐章覆盖 shadow volume/map、PCF/VSM/PSSM、延迟着色、环境光、AO、介质散射、折射与风格化"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://developer.nvidia.com/gpugems"
 draft: false
 ---
 
-import { GpgLightingShadowsDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-lighting-shadows";
+import { GpgLightingShadowsDiagram, GpgLightingChapterMatrixDiagram, GpgShadowDecisionDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-lighting-shadows";
+import { GpgStepFlowDiagram } from "@/components/mdx/gpu-gems/diagrams/gpg-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能解释 Shadow Map 的工作原理与硬阴影的成因
-- 能用 PCF 实现软阴影并理解采样数与质量的关系
-- 能回答：阴影的「软」来自什么物理因素？
-- 能区分体积阴影与普通阴影的应用场景
+
+- 能描述三卷 24 个光照阴影原章的独立问题、核心表示与现代承载路径
+- 能推导 shadow map/volume、PCF、VSM、级联、AO 和体积散射的关键不变量
+- 能比较前向可见性、deferred shading、irradiance/BTF、艺术灯光与材质/纹理架构
+- 能针对 aliasing、bias、light leaking、过度遮蔽和屏幕空间缺失设计诊断证据
+
 </Objectives>
 
-## 直觉引入
+## 直觉：这些章节不构成“硬阴影到软阴影”的单线演进
 
-想象你站在路灯下。灯是一个点时，你的影子边缘锐利；灯是一根长灯管时，影子边缘模糊——离脚越远越模糊。这个日常现象揭示了阴影的核心物理：阴影的软硬由光源面积决定，离遮挡物越远、光源越大，阴影越软。
+24 章同时讨论阴影表示、可见性管理、光照架构、材质数据、间接光、非真实感、天空介质、水面和后处理。shadow volume 与 shadow map 是不同可见性表示；deferred shading 是数据/执行架构；AO 是间接可见性近似；大气散射和折射又属于介质传输。
 
-GPU 渲染阴影就是模拟这个过程：先从光源视角拍一张「深度照片」，再在渲染时比较像素深度判断是否被遮挡。
+先预测：把 3×3 PCF 核扩大能否自动产生随遮挡距离增大的物理半影？不能。固定核只过滤 shadow test，半影几何需要光源尺寸、blocker 与接收距离关系。
 
-## 概念讲解
-
-### 阴影技术演进
+<Term def="从光源到接收点的路径是否被几何阻断；阴影图、阴影体和光线查询只是不同离散表示">光可见性</Term>是阴影技术共享的不变量。
 
 <GpgLightingShadowsDiagram />
 
-<Term def="Shadow Map 是从光源视角渲染的深度图，用于判断场景中每点是否被光源遮挡">
-Shadow Map（阴影图）
-</Term>
+## 24 个原章与核心承载
 
-硬阴影只做单次深度比较，边缘锯齿明显；PCF（百分比渐近过滤）在邻域多次采样取平均，边缘平滑过渡；体积阴影存透射率函数，能处理毛发等半透明物；全局光照用球谐函数近似间接光。
+<GpgLightingChapterMatrixDiagram />
 
-<Term def="PCF 是 Percentage-Closer Filtering 的缩写，对阴影图邻域多点采样取平均实现软边缘">
-PCF
-</Term>
+### GPU Gems 1 Ch9-15：阴影表示与艺术灯光
 
-## 交互Demo
+- **Efficient Shadow Volume Rendering**：轮廓边挤出、z-pass/z-fail、封闭体与 stencil fill-rate；
+- **Cinematic Lighting**：以 artist controls 组织灯形、衰减、cookie 和分层贡献，而非只套一个 BRDF；
+- **Shadow Map Antialiasing**：对深度比较结果做 percentage-closer filtering（PCF）；
+- **Omnidirectional Shadow Mapping**：点光源六方向/cubemap 深度与面边界；
+- **Generating Soft Shadows Using Occlusion Interval Maps**：静态遮挡区间预计算与移动光路径上的软影；
+- **Perspective Shadow Maps: Care and Feeding**：用后投影视锥重分配 shadow texel，并处理奇异/退化情况；
+- **Managing Visibility for Per-Pixel Lighting**：按光体积和物体/光源可见集减少 batch 与像素工作。
 
-<Stepper>
-<Step title="第一步：生成阴影图">
-从光源位置渲染整个场景，只存深度值到纹理。这张深度图就是「光源能看到什么、看不到什么」的记录。阴影图分辨率决定了阴影质量——太低会出锯齿。
-<GpgLightingShadowsDiagram />
-</Step>
-<Step title="第二步：深度比较判断遮挡">
-渲染主场景时，把每个像素变换到光源空间，与阴影图对应位置的深度比较。如果像素深度大于阴影图深度，说明被遮挡，处于阴影中。
-</Step>
-<Step title="第三步：PCF 软化边缘">
-单次比较产生硬边。PCF 在当前像素周围采样多个点，计算被遮挡的比例作为阴影强度，边缘从全黑渐变到全亮，模拟面光源的半影效果。
-</Step>
-</Stepper>
+shadow map 比较可写为：
 
-## 代码对照
+$$
+V(\mathbf p)=\mathbf 1[z_L(\mathbf p)-b\le D_L(x_L,y_L)].
+$$
+
+<Term def="对 shadow map 邻域的多个深度样本分别执行比较，再平均二值结果以过滤采样边界的技术">Percentage-closer filtering</Term>主要处理离散 aliasing；固定核不包含面光源几何，不能称为物理正确软影。
 
 ```glsl
-// Shadow Map + PCF 软阴影
-float shadowCalc(vec4 fragPosLightSpace, sampler2D shadowMap) {
-    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-    projCoords = projCoords * 0.5 + 0.5;
-    float currentDepth = projCoords.z;
-
-    // PCF 3x3 采样
-    float shadow = 0.0;
-    vec2 texelSize = 1.0 / textureSize(shadowMap, 0);
-    for (int x = -1; x <= 1; ++x) {
-        for (int y = -1; y <= 1; ++y) {
-            float closestDepth = texture(shadowMap,
-                projCoords.xy + vec2(x, y) * texelSize).r;
-            shadow += currentDepth > closestDepth + 0.005 ? 1.0 : 0.0;
-        }
-    }
-    return shadow / 9.0; // 9 个采样点取平均
+float pcf(sampler2DShadow sm, vec3 q, vec2 texel) {
+  float visible = 0.0;
+  for (int y=-1; y<=1; ++y)
+    for (int x=-1; x<=1; ++x)
+      visible += texture(sm, vec3(q.xy + vec2(x,y)*texel, q.z));
+  return visible / 9.0;
 }
 ```
+
+shadow volume 不受 shadow-map 分辨率影响，却依赖稳健 silhouette、封闭体、stencil 和几何/fill 成本。现代 geometry/mesh shader 可生成体，但 CPU 预处理或 compute compact 也可能更好，必须测场景拓扑。
+
+### GPU Gems 2 Ch9-19：渲染架构、材质与介质
+
+- **Deferred Shading in S.T.A.L.K.E.R.**：G-buffer 解耦几何与多光源着色，同时承担带宽、透明和 MSAA 代价；
+- **Real-Time Computation of Dynamic Irradiance Environment Maps**：在线更新环境 irradiance，而非只使用静态 cubemap；
+- **Approximate Bidirectional Texture Functions**：压缩/查表近似 BTF 的视向和光向变化；
+- **Tile-Based Texture Mapping**：用有限 tile 合成大面积细节并抑制重复；
+- **Implementing the mental images Phenomena Renderer on the GPU**：把生产级 shader/phenomena 抽象映射到 GPU；
+- **Dynamic Ambient Occlusion and Indirect Lighting**：用 surface elements/disk form factor 近似动态 AO 与一次间接光；
+- **Blueprint Rendering and "Sketchy Drawings"**：轮廓、线条纹理和抖动构造非真实感表达；
+- **Accurate Atmospheric Scattering**：沿视线积分大气内散射和透射；
+- **Efficient Soft-Edged Shadows Using Pixel Shader Branching**：利用分支提前结束无须软边计算的像素；
+- **Using Vertex Texture Displacement for Realistic Water Rendering**：顶点纹理位移与几何/法线一致；
+- **Generic Refraction Simulation**：屏幕空间/环境纹理偏移近似折射并处理遮挡边界。
+
+<Term def="先把可见表面材质与几何属性写入 G-buffer，再按光源读取并着色的多阶段架构">延迟着色</Term>把复杂度由“物体×光源提交”转为可见像素上的光体积计算，但不保证更快。近似工作量可比较：
+
+$$
+C_{forward}\sim\sum_o L_oP_o,\qquad
+C_{deferred}\sim G+\sum_l P_l+B_{gbuffer}.
+$$
+
+其中 $B_{gbuffer}$ 是读写带宽。透明表面仍需前向/其他路径；现代 MSAA、tile/clustered 路径改变权衡，但不抹去原章的数据分解。
+
+```cpp
+renderGeometryToGBuffer();
+for (Light light : visibleLights) {
+  setLightVolume(light);
+  shadePixelsInsideVolume(gbuffer, light);
+}
+renderForwardTransparent();
+```
+
+大气单散射沿视线可概括为：
+
+$$
+L(s)=T(0,s)L_0+\int_0^s T(t,s)\,\sigma_s\,p(\theta)\,L_i(t)\,dt.
+$$
+
+步长、相函数、密度尺度高度和太阳遮挡决定误差。Generic Refraction Simulation 的屏幕纹理缺失背面/屏外信息，必须显式回退，不能冒充完整光线传输。
+
+### GPU Gems 3 Ch8-13：可过滤阴影、级联、AO 与后处理介质
+
+- **Summed-Area Variance Shadow Maps**：存深度矩并用 variance/Chebyshev 上界过滤，SAT 支持大可变核；
+- **Interactive Cinematic Relighting with Global Illumination**：预计算传输/分解，使艺术家交互改变灯光并保留 GI 响应；
+- **Parallel-Split Shadow Maps on Programmable GPUs**：把相机视锥分段，为近远区域分配独立 shadow map；
+- **Efficient and Robust Shadow Volumes Using Hierarchical Occlusion Culling and Geometry Shaders**：结合层次遮挡与 GPU 挤出减少 shadow-volume 工作；
+- **High-Quality Ambient Occlusion**：更高质量采样/层次近似环境遮蔽；
+- **Volumetric Light Scattering as a Post-Process**：从光源屏幕位置沿图像径向采样，近似 god rays。
+
+VSM 保存一、二阶矩 $\mu=E[z]$、$m_2=E[z^2]$，方差 $\sigma^2=m_2-\mu^2$。当接收深度 $t>\mu$ 时用：
+
+$$
+P(z\ge t)\le\frac{\sigma^2}{\sigma^2+(t-\mu)^2}.
+$$
+
+<Term def="存储深度一、二阶矩并用概率上界估计可见性，使阴影可用普通线性过滤的表示">Variance shadow map</Term>支持大核，但会 light leaking；minimum variance、bleeding reduction 只是缓解，不能恢复丢失的多峰深度分布。
+
+PSSM/CSM 级联 split 可混合均匀与对数分割：
+
+$$
+d_i=\lambda n(f/n)^{i/m}+(1-\lambda)\left[n+(f-n)i/m\right].
+$$
+
+验收包括 texel density、级联接缝、稳定投影和相机移动 shimmering。
+
+<GpgShadowDecisionDiagram />
+
+## AO 与 GI：遮蔽不是光
+
+<Term def="半球方向中被几何遮挡比例的局部近似，用于减弱环境光；本身不包含光源、颜色反弹或完整传输">环境光遮蔽</Term>常写为：
+
+$$
+A(\mathbf x)=\frac{1}{\pi}\int_{\Omega}V(\mathbf x,\omega)(\mathbf n\cdot\omega)^+d\omega.
+$$
+
+Dynamic AO and Indirect Lighting 与 High-Quality Ambient Occlusion 都比“屏幕变暗”更强调几何采样；但任何有限元素/屏幕近似都有漏采、尺度和 bias。Interactive Cinematic Relighting 的 GI 则包含光照变化下的预计算传输响应，不能与 AO 合并称同一算法。
+
+## 现代复现的资源与证据
+
+24 章的现代路径可用 layered depth、compute filtering、clustered/deferred lighting、probe/SH、screen-space buffers 和 ray query；但每次迁移要保留原章输入/输出和失败边界。
+
+```cpp
+EvidenceFrame evidence;
+evidence.shadowDepth = captureShadowLayers();
+evidence.visibility = captureVisibilityEstimate();
+evidence.gbuffer = captureGBuffer();
+evidence.ao = captureAoTerms();
+evidence.scattering = captureTransmittanceAndInscatter();
+evidence.gpuTimes = readDelayedQueries();
+```
+
+图像证据至少包含 shadow bias、PCF/VSM 核、级联 index、G-buffer 通道、AO 半径/样本、atmosphere transmittance 和 post-process 遮挡 mask；性能证据分开报告 shadow pass、filter、lighting 和带宽。
+
+## 三步 24 章验收
+
+<Stepper>
+<Step title="第一步：按表示做最小探针">
+
+平面+遮挡块验证 shadow map/volume；球体阵列验证 deferred/BTF/AO；大气层和水面验证介质/折射。
+
+<GpgStepFlowDiagram caption="不同表示必须在能暴露其边界的最小场景中验证。" stage={1} stages={["Probe：visibility、lighting architecture、indirect、media"]} />
+
+</Step>
+<Step title="第二步：逐中间量比较">
+
+保存深度/矩、stencil、G-buffer、irradiance、AO、transmittance，与 CPU/解析参考或高质量离线结果比较。
+
+<GpgStepFlowDiagram caption="最终颜色相似不能证明深度、可见性和能量正确。" stage={2} stages={["Probe：visibility、lighting architecture、indirect、media", "Inspect：depth/moments、stencil、G-buffer、AO、transmittance"]} />
+
+</Step>
+<Step title="第三步：扫描边界和成本">
+
+扫描 bias、核、光源尺寸、级联、光数量、AO 半径、介质步长和屏幕边缘；记录误差、闪烁、泄漏和 GPU 时间。
+
+<GpgStepFlowDiagram caption="技术选择由伪影边界、可用信息和预算共同决定。" stage={3} stages={["Probe：visibility、lighting architecture、indirect、media", "Inspect：depth/moments、stencil、G-buffer、AO、transmittance", "Validate：artifacts、temporal stability、bandwidth、GPU time"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**误区：用模糊滤镜让硬阴影变软。**
-对硬阴影做高斯模糊只是在「模糊锯齿」，物理上不正确。真正的软阴影应该用 PCF 或 PCSS，根据遮挡距离自适应采样范围——离遮挡物越远半影越大。
+**现象 →** 扩大 PCF 核后称其为物理面光源软阴影。
+**原因 →** 混淆深度比较过滤与 blocker/receiver 半影几何。
+**修法 →** PCF 用于过滤；要距离相关半影需引入光源尺寸和 blocker 搜索/其他面积光近似，并做接触硬化验收。
 </Callout>
 
 <Callout type="trap">
-**误区：阴影图分辨率越高越好。**
-阴影图占显存且渲染开销随分辨率平方增长。正确做法是用级联阴影图（CSM），近处用高分辨率、远处用低分辨率，在有限带宽下最大化可视质量。
+**现象 →** VSM 大核很平滑，却在薄墙后漏光。
+**原因 →** 两个矩无法表示多峰深度，概率上界过松。
+**修法 →** 显示矩和 variance，调最小方差/bleeding reduction，并在不可接受场景换 EVSM/MSM/深度比较路径。
 </Callout>
 
+<Callout type="trap">
+**现象 →** AO 加深角落后称为全局光照完成。
+**原因 →** 遮蔽比例没有光源、方向、反弹颜色和能量传输。
+**修法 →** AO 只调制合适的间接环境项；GI 另行验证 irradiance/transfer 和光照变化响应。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题 1**：阴影的「软」来自什么物理因素？
+
+**问题 1：Shadow Map Antialiasing 与 Summed-Area Variance Shadow Maps 的核心差异是什么？**
 
 <Answer>
-来自光源的面积。点光源产生硬阴影（全影无半影）；面光源产生软阴影，因为光源不同部分投射的阴影相互错开形成半影区。遮挡物离投影面越远，半影区越宽，阴影越软。
+PCF 对多个深度比较结果平均，保留非线性比较；VSM 过滤深度矩并用概率上界估计可见性，可高效大核/SAT，但会因矩信息不足发生 light leaking。两者误差模式不同。
 </Answer>
 
-**问题 2**：PCF 和直接模糊阴影图有什么本质区别？
+**问题 2：Deferred Shading 何时可能比前向更差？**
 
 <Answer>
-PCF 是在深度比较阶段对多个采样点分别判断遮挡再取平均，每个点的遮挡关系是物理正确的。直接模糊是对比较结果做后处理，会把本该锐利的接触阴影也糊掉。PCSS 进一步根据遮挡距离自适应采样半径，物理上更准确。
+光少、材质简单或带宽受限时，G-buffer 写读成本可能超过省下的重复着色；透明、复杂 MSAA 和多材质数据也增加额外路径。应测可见光体积像素、G-buffer 带宽和目标 GPU。
 </Answer>
+
+**问题 3：为 24 章设计一个综合场景。**
+
+<Answer>
+室外城市含方向光级联、点光 cubemap、shadow volume 对照、VSM/PCF 切换、deferred G-buffer、动态 irradiance/AO、风格化建筑、水面折射与大气；提供每项中间附件和固定相机序列，扫描光数、核、级联和介质参数。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+三卷 24 章覆盖的是多种可见性表示、着色架构、材质数据、间接光和介质近似。完整复现必须保留每章独立身份，纠正 PCF/AO 等常见过度解读，并用深度、矩、G-buffer、AO、透射和性能证据选择技术。
+
 <Glossary>
-<GlossaryItem term="Shadow Map">从光源视角渲染的深度纹理，记录光源到各场景点的最近距离，用于判断遮挡。</GlossaryItem>
-<GlossaryItem term="PCF">百分比渐近过滤，对阴影图邻域多点采样取平均，实现物理正确的软阴影边缘。</GlossaryItem>
-<GlossaryItem term="体积阴影">存储透射率函数而非单一深度的阴影技术，能处理毛发、烟雾等半透明物体的自阴影。</GlossaryItem>
-<GlossaryItem term="CSM">级联阴影图，将视锥体分段用不同分辨率阴影图覆盖，近处高清远处低清。</GlossaryItem>
+<GlossaryItem term="光可见性">光源到接收点路径是否被几何阻断的函数。</GlossaryItem>
+<GlossaryItem term="Percentage-closer filtering">对多个深度比较结果求平均的 shadow-map 过滤。</GlossaryItem>
+<GlossaryItem term="延迟着色">先写 G-buffer，再按光源读取可见表面属性着色的架构。</GlossaryItem>
+<GlossaryItem term="Variance shadow map">以深度矩和概率上界估计可见性的可过滤阴影表示。</GlossaryItem>
+<GlossaryItem term="环境光遮蔽">对局部半球几何遮挡比例的近似，不等于完整间接光。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="GPU Gems 系列" adaptedUrl="https://developer.nvidia.com/gpugems/gpugems3" />
+<Attribution adaptedFrom="GPU Gems 1 Ch9-15, GPU Gems 2 Ch9-19, GPU Gems 3 Ch8-13" adaptedUrl="https://developer.nvidia.com/gpugems" />

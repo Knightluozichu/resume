@@ -1,0 +1,372 @@
+---
+title: "Item 19：用 shared_ptr 管理共享资源"
+type: A
+section: Chapter 4 · Smart Pointers
+order: 19
+description: 对齐 Effective Modern C++ Item 19：理解 shared_ptr 的共享所有权、两指针对象布局、control block/reference count 成本，避免重复控制块，并掌握 custom deleter type erasure 与 enable_shared_from_this。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch04.html"
+draft: false
+---
+
+import {
+  EmcppDuplicateControlBlockFailureMap,
+  EmcppSharedControlBlockAnatomyMap,
+  EmcppSharedDeleterTypeErasureMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-19-shared-ptr";
+
+<Objectives>
+
+- 能解释 shared_ptr（共享智能指针）的 shared ownership（共享所有权）、copy/move 与最后一个 owner 释放语义
+- 能绘制 control block（控制块）中的 reference count（引用计数）、weak count、deleter 与 allocator，并分析成本
+- 能设计 custom deleter（自定义删除器）和 enable_shared_from_this 路径，避免同一 raw pointer 产生重复 control blocks
+
+</Objectives>
+
+## 从“多个 owner 必须共享同一份生命周期状态”开始
+
+Item 19 的原则是 Use std::shared_ptr for shared-ownership resource management（用 shared_ptr 管理共享资源）。多个 owners 可以独立 copy/reset；资源在最后一个 owning reference 消失时销毁。
+
+<Term def="通过共享 control block 记录 ownership count，在最后一个 owner 消失时调用 deleter 的智能指针。">
+  shared_ptr
+</Term>
+
+<Term def="多个相互独立的 owner 共同延长同一资源生命周期，无法预先指定哪一个最后释放。">
+  shared ownership
+</Term>
+
+```cpp
+auto first = std::make_shared<Widget>();
+auto second = first; // reference count increments
+
+first.reset();       // resource remains alive
+second.reset();      // last owner destroys resource
+```
+
+先预测：copy 创建新 owner，move 只是转移一个 owner token，通常不需增加 reference count。
+
+<EmcppSharedControlBlockAnatomyMap />
+
+## shared_ptr object 通常保存两根指针
+
+一个 shared_ptr 通常包含：指向被访问 object 的 pointer，以及指向 control block 的 pointer。因此大小常为 raw pointer 的两倍。
+
+<Term def="shared_ptr 本体中指向 managed/aliased object、由 operator arrow 与 get 返回的地址。">
+  stored object pointer
+</Term>
+
+<Term def="shared_ptr 本体中指向 ownership metadata 的地址，所有相关 owners 共享。">
+  control-block pointer
+</Term>
+
+这两根 pointer 不必指向同一 allocation；aliasing constructor 可让 stored pointer 指向 subobject，而 control block 仍拥有完整 parent。
+
+<Term def="共享 parent 的 control block，但让 shared_ptr 对外指向 parent 内部 subobject 的构造方式。">
+  aliasing shared pointer
+</Term>
+
+## control block 保存 ownership metadata
+
+典型 control block 包含 strong reference count、weak count、deleter、allocator，以及实现需要的 type-erased machinery。
+
+<Term def="保存共享/弱引用计数、deleter、allocator 等生命周期元数据的动态对象。">
+  control block
+</Term>
+
+<Term def="当前 owning shared_ptr 数量；降为零时销毁 managed object。">
+  reference count
+</Term>
+
+<Term def="跟踪 weak observers 与 control block 自身可回收时机的计数/状态。">
+  weak reference count
+</Term>
+
+object destruction 与 control-block destruction 是两个事件：strong count 为零先删除 object；weak observers 全部消失后才释放 control block。
+
+## reference count 带来同步成本
+
+不同 threads 可操作指向同一 control block 的不同 shared_ptr objects，因此 count 更新通常使用 atomic operations。
+
+<Term def="为保证多线程 owner copy/reset 正确而执行的原子引用计数增减。">
+  atomic reference-count traffic
+</Term>
+
+这不表示 managed Widget 自动线程安全；shared_ptr 只同步 ownership metadata，不保护 `*pointer` 的 fields。
+
+<Callout
+  type="trap"
+  title="陷阱：shared_ptr 的引用计数线程安全，所以对象访问也线程安全"
+>
+  不同 shared_ptr handles 可并发 copy/destroy，但多个线程读写 managed object
+  仍需 Widget 自己的 synchronization。 生命周期安全与数据 race 安全是不同层。
+</Callout>
+
+## copy 与 move 的成本不同
+
+```cpp
+auto copy = owner;            // increment strong count
+auto moved = std::move(owner); // transfer handle, owner becomes empty
+```
+
+<Term def="复制 shared owner 时对 control block strong count 执行原子增加，并在销毁时减少。">
+  shared-owner copy cost
+</Term>
+
+move 通常复制两根内部 pointers 并清空 source，不改变 owner 总数，因此可避免一次 increment/decrement pair。pass-by-value pipeline 应利用 move，而不是反复 copy named shared_ptr。
+
+## control block 在哪些入口创建
+
+常见规则：`make_shared` 总是创建 control block；从 unique_ptr move 构造 shared_ptr 时创建；从 raw pointer 构造 shared_ptr 时也创建新的 control block。
+
+<Term def="为尚未进入共享 ownership 的 object 建立唯一生命周期 metadata 的时刻。">
+  control-block creation point
+</Term>
+
+```cpp
+auto first = std::make_shared<Widget>();
+
+auto unique = std::make_unique<Widget>();
+std::shared_ptr<Widget> second = std::move(unique);
+
+std::shared_ptr<Widget> third(new Widget);
+```
+
+危险在第三类：constructor 无法知道另一个 shared_ptr 是否已为同一 raw address 建立 control block。
+
+## 同一 raw pointer 绝不能独立构造两次
+
+```cpp
+auto raw = new Widget;
+
+std::shared_ptr<Widget> ownerA(raw);
+std::shared_ptr<Widget> ownerB(raw); // separate control block: fatal
+```
+
+<Term def="同一 managed address 被两个互不知情的 control blocks 各自视为独占删除目标。">
+  duplicate control block
+</Term>
+
+ownerA/ownerB 的 counts 都从 1 开始，各自降为零时都执行 delete，产生 double free/use-after-free。
+
+<EmcppDuplicateControlBlockFailureMap />
+
+<Callout
+  type="trap"
+  title="陷阱：两个 shared_ptr 的 get 相同就会自动合并 control block"
+>
+  control block 在 construction 时确定，不会按 raw address
+  做全局查表或合并。pointer equality 不能证明 ownership identity 相同；可用
+  owner_before/owner_equal 类语义检查 control-block identity。
+</Callout>
+
+## 优先 make_shared 建立唯一入口
+
+```cpp
+auto owner = std::make_shared<Widget>(arguments);
+```
+
+<Term def="在一个标准 factory call 中同时构造 object 与其唯一 control block。">
+  make_shared ownership entry
+</Term>
+
+这避免 raw pointer 暴露，并通常把 object 与 control block 合并为单次 allocation。Item 21 将进一步比较其例外与 lifetime tradeoffs。
+
+## custom deleter 不进入 shared_ptr 类型
+
+unique_ptr 的 deleter 是 template parameter；shared_ptr 的 deleter 被 type-erase 并存入 control block。
+
+```cpp
+auto logDelete = [](Widget* pointer) noexcept {
+    logClose(pointer);
+    delete pointer;
+};
+
+std::shared_ptr<Widget> first(new Widget, logDelete);
+std::shared_ptr<Widget> second(new Widget, otherDelete);
+```
+
+<Term def="存储在 control block 中、在 strong count 降为零时调用的资源释放策略。">
+  shared custom deleter
+</Term>
+
+两者 concrete type 都是 `std::shared_ptr<Widget>`，可放进同一 container 或传给同一 API。
+
+<Term def="把不同 deleter concrete types 隐藏在统一 runtime interface 后，shared_ptr type 不随 deleter 改变。">
+  deleter type erasure
+</Term>
+
+<EmcppSharedDeleterTypeErasureMap />
+
+## deleter 状态增加 control block 而非 handle 尺寸
+
+stateful deleter 的 capture/pool pointer 存入 control block。shared_ptr handle 通常仍为两根 pointers，但 control block allocation 变大。
+
+<Term def="custom deleter 的 capture/context 随 control block 存储，不直接扩展 shared_ptr object。">
+  control-block deleter state
+</Term>
+
+deleter 仍应 noexcept；最后 owner reset/destructor 中异常逃逸会终止程序。
+
+## shared_ptr from this 必须复用现有 control block
+
+member function 若直接写 `std::shared_ptr<Widget>(this)`，会为同一 object 创建第二 control block。
+
+```cpp
+class Widget : public std::enable_shared_from_this<Widget> {
+public:
+    void registerSelf() {
+        registry.add(shared_from_this());
+    }
+};
+```
+
+<Term def="让 object 从已存在的 shared ownership 获取共享同一 control block 的 shared_ptr。">
+  enable_shared_from_this
+</Term>
+
+它内部通过 weak link 连接原 control block。调用前 object 必须已经由 shared_ptr 管理，否则 `shared_from_this()` 抛 `bad_weak_ptr`（版本相关行为应按标准/实现验证）。
+
+<Term def="在 object 尚未进入 shared ownership 时调用 shared_from_this 的生命周期前置条件违约。">
+  premature shared_from_this
+</Term>
+
+因此这类 class 通常通过 factory 创建，并避免 public raw/new construction。
+
+## shared ownership 不是默认 ownership
+
+如果生命周期有明确单 owner，shared_ptr 的 control block、atomic count 和不确定 destruction timing 都是额外成本。
+
+<Term def="只有多个独立 owner 确实共同决定 lifetime 时才选择 reference-count ownership 的原则。">
+  shared-ownership justification
+</Term>
+
+observer、parent-child、cache entry 不一定是 owner。可使用 raw/reference（有严格 lifetime）、weak_ptr（可过期 observer）或 unique_ptr（单 owner）。Item 20 处理 weak observation 和 cycle。
+
+## reference cycles 会阻止归零
+
+两个 objects 互持 shared_ptr 时，即使外部 owners 消失，双方 strong counts 仍大于零。
+
+<Term def="shared ownership graph 中的强引用环使所有节点 reference count 永远无法降为零。">
+  shared ownership cycle
+</Term>
+
+图设计必须区分 owning edge 与 observing/back edge；通常至少一条反向边使用 weak_ptr。
+
+## shared_ptr 验收矩阵
+
+<Term def="覆盖引用计数、control-block identity、custom deletion、from-this 与 cycle 的测试集合。">
+  shared ownership contract matrix
+</Term>
+
+1. copy/move/reset 后 use_count 与 destruction timing 符合预期。
+2. object 只销毁一次，control block 在 weak observers 消失后释放。
+3. 禁止从同一 raw pointer 独立构造多个 owners。
+4. 不同 custom deleters 的 shared_ptr type 相同且各执行一次。
+5. shared_from_this 与原 owner 共享 control block。
+6. ownership graph 无全强边 cycle。
+7. managed object 的并发读写另有 synchronization tests。
+
+先画 ownership graph 与 control-block creation points，再写 shared_ptr；“很多地方需要地址”不等于“很多地方都拥有生命周期”。
+
+## 小结
+
+- shared_ptr 通过同一 control block/reference count 表达 shared ownership
+- handle 通常有 object pointer 与 control-block pointer，control block 动态保存 counts/deleter/allocator
+- reference count 更新通常是 atomic，但不保护 managed object data
+- copy 增减 count，move 转移 owner token，通常不改变 count
+- 从同一 raw pointer 独立构造两次会创建 duplicate control blocks 并 double delete
+- custom deleter 被 type-erase 到 control block，不进入 shared_ptr concrete type
+- enable_shared_from_this 让 this 复用现有 control block，前提是 object 已被 shared_ptr 管理
+- shared ownership 需要明确理由，强引用 cycle 必须由 weak edge 打破
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 19"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch04.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="shared_ptr">引用计数共享 owner。</GlossaryItem>
+  <GlossaryItem term="shared ownership">
+    多个 owner 共同延长 lifetime。
+  </GlossaryItem>
+  <GlossaryItem term="stored object pointer">
+    shared_ptr 对外访问的对象地址。
+  </GlossaryItem>
+  <GlossaryItem term="control-block pointer">
+    指向共享 metadata 的内部指针。
+  </GlossaryItem>
+  <GlossaryItem term="aliasing shared pointer">
+    共享 parent ownership 并指向 subobject。
+  </GlossaryItem>
+  <GlossaryItem term="control block">
+    保存 counts 与 deletion policy 的对象。
+  </GlossaryItem>
+  <GlossaryItem term="reference count">当前 strong owners 数量。</GlossaryItem>
+  <GlossaryItem term="weak reference count">
+    控制弱观察者和 block lifetime 的状态。
+  </GlossaryItem>
+  <GlossaryItem term="atomic reference-count traffic">
+    原子 owner count 更新成本。
+  </GlossaryItem>
+  <GlossaryItem term="shared-owner copy cost">
+    复制 owner 的计数增减成本。
+  </GlossaryItem>
+  <GlossaryItem term="control-block creation point">
+    首次建立共享 metadata 的入口。
+  </GlossaryItem>
+  <GlossaryItem term="duplicate control block">
+    同一对象的多个独立生命周期块。
+  </GlossaryItem>
+  <GlossaryItem term="make_shared ownership entry">
+    统一创建 object 与 control block。
+  </GlossaryItem>
+  <GlossaryItem term="shared custom deleter">
+    存于 control block 的删除策略。
+  </GlossaryItem>
+  <GlossaryItem term="deleter type erasure">
+    隐藏具体 deleter type。
+  </GlossaryItem>
+  <GlossaryItem term="control-block deleter state">
+    存于控制块的删除上下文。
+  </GlossaryItem>
+  <GlossaryItem term="enable_shared_from_this">
+    从 object 获取同 block owner 的机制。
+  </GlossaryItem>
+  <GlossaryItem term="premature shared_from_this">
+    进入 shared ownership 前错误取 owner。
+  </GlossaryItem>
+  <GlossaryItem term="shared-ownership justification">
+    只在真正多 owner 时共享。
+  </GlossaryItem>
+  <GlossaryItem term="shared ownership cycle">
+    强引用环阻止计数归零。
+  </GlossaryItem>
+  <GlossaryItem term="shared ownership contract matrix">
+    共享生命周期测试表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：两个 shared_ptr 从同一 raw Widget 分别构造。** 说明 failure timeline。
+
+<Answer question="为什么 pointer 相同仍会 double delete？">
+  每次 raw-pointer constructor 都创建独立 control block，两边 strong count 都是
+  1；ownerA 归零先 delete Widget，ownerB 仍以为 object 存活，随后访问悬空或再次
+  delete。改用一次 make shared，再 copy owner； 用 destructor counter 和 ASan
+  验证只销毁一次。
+</Answer>
+
+2. **问题 2：两个 custom deleter types 要存入同一 vector。** 比较 unique_ptr 与 shared_ptr。
+
+<Answer question="shared_ptr 为什么无需统一 deleter template type？">
+  shared pointer concrete type只由 element type决定，deleter 被 type-erase
+  并存入各自 control block，因此 不同 deleter owners 可进入同一 vector；handle
+  尺寸通常不变，control block 大小可能增加。测试每个 deleter state 跟随
+  ownership 且只调用一次。
+</Answer>
+
+3. **问题 3：Widget member 要把自己注册到异步 registry。** 禁止 shared_ptr of this。
+
+  <Answer question="如何复用 control block 并验证前置条件？">让 Widget 继承 enable shared from this，只允许 factory/make shared 创建；member 调用 shared_from_this 得到与原 owner 相同 control block 的 handle。用 owner identity、use count 和 destruction timing 测试；另设 object 未被 shared owner 管理时的失败测试，避免 premature call。</Answer>
+</Exercises>

@@ -1,0 +1,271 @@
+---
+title: "第5章：深入迭代器"
+type: A
+section: C++ High Performance · Chapter 5
+order: 5
+description: 对齐第一版第5章 A Deeper Look at Iterators：迭代器概念与类别、类指针和generator语义、traits/tag dispatch、自定义linear/bidirectional iterator及iterator pair range。
+demo: false
+math: false
+sourceUrl: "https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
+draft: false
+---
+
+import {
+  ChpIteratorContractCategoryMap,
+  ChpIteratorTraitsDispatchMap,
+  ChpLinearRangeStateMap,
+} from "@/components/mdx/cpp-high-performance/diagrams/deeper-look-at-iterators";
+
+<Objectives>
+
+- 能解释iterator concept与categories如何把语法、遍历能力和复杂度保证交给generic algorithm
+- 能实现使用pointer-mimicking syntax的linear range iterator，并正确处理end sentinel与状态推进
+- 能推导iterator_traits和tag dispatch如何选择算法路径，再设计iterator pair与make_linear_range接口
+
+</Objectives>
+
+## 从“算法只依赖遍历契约”开始
+
+迭代器把“元素存在哪里”和“怎样逐个得到元素”从算法中分离。`std::find`不需要知道range来自vector、list、stream adapter还是计算生成器，只要求当前元素可读、iterator可推进、并能判断是否到达end。抽象并不自动零成本；只有iterator state紧凑、操作可内联、category声明真实，compiler才有机会把generic loop化成目标结构的直接访问。
+
+<Term def="一组由表达式有效性、关联类型、语义和复杂度共同组成的遍历契约，使generic algorithm无需知道底层表示。">
+  iterator concept
+</Term>
+
+先预测算法真正需要的最弱能力，再选择category。只读一遍input不应伪装成random access；反过来，把连续iterator只声明为input会阻止算法使用constant-time distance、跳跃或更强优化。category不是装饰标签，而是调用方可依赖的behavior promise。
+
+## 类指针语法承载抽象
+
+pointer-mimicking syntax包括 `*it` 访问当前值、`it->member` 访问成员、`++it` 前进以及iterator equality比较位置。raw pointer天然满足多种iterator要求，自定义iterator则通过operator overload复现必要语法。`operator*`返回value、reference还是proxy，会影响copy、writability与lifetime；`operator->`也必须与dereference语义一致。
+
+```cpp
+template <class T>
+class StrideIterator {
+public:
+    using value_type = T;
+    using difference_type = std::ptrdiff_t;
+    using reference = T&;
+    using pointer = T*;
+    using iterator_category = std::forward_iterator_tag;
+
+    reference operator*() const { return *current_; }
+    pointer operator->() const { return current_; }
+    StrideIterator& operator++() { current_ += stride_; return *this; }
+
+private:
+    T* current_ = nullptr;
+    difference_type stride_ = 1;
+};
+```
+
+这是结构骨架，不是完整forward iterator：还需constructor、post-increment、equality，并证明multi-pass guarantee。若两个iterator指向同一logical position却携带不同stride，equality如何定义必须写进invariant。返回悬空reference、让end也可dereference，或在copy后共享会被推进的hidden cursor，都会破坏标准算法假设。
+
+<Term def="用解引用、成员访问、递增和比较运算符模拟pointer使用方式，使对象能进入基于iterator的generic algorithms。">
+  pointer-mimicking syntax
+</Term>
+
+## iterator categories是能力阶梯
+
+传统iterator categories从input/output开始，forward增加multi-pass，bidirectional增加decrement，random access增加constant-time jump/difference，contiguous再保证元素在内存连续。它们不是简单“继承越深越好”：output关注写入，input iterator允许single-pass；forward才保证复制出的iterator可独立多次遍历同一range。
+
+<ChpIteratorContractCategoryMap />
+
+算法应声明最弱requirement以扩大适用面，同时在更强category上选择更快实现。例如计算distance时，input/forward需要逐步递增为线性成本，random-access iterator可直接相减为常数。错误地把linked traversal标成random access，会让调用方相信不存在的复杂度保证。
+
+<Term def="描述iterator支持的遍历能力与复杂度保证的类别层级，用于限制算法并选择不同实现。">
+  iterator category
+</Term>
+
+<Callout type="trap" title="陷阱：只要补齐operator+就能声明random access">
+  random
+  access要求的不只是语法可编译，还包括jump、difference、ordering、indexing等完整语义与constant-time复杂度。若operator+内部循环n次，category就是谎言，依赖该保证的算法可能出现隐藏的二次成本。
+</Callout>
+
+## iterators as generators
+
+iterator不必保存collection address；它也可以保存生成下一个value所需的state。linear sequence、Fibonacci、filtered view或input stream都可由iterator每次increment推进状态。此时dereference可能返回计算值或proxy，不一定是稳定的`T&`。single-pass generator的iterator copy常共享source，推进一个copy可能影响另一个，所以最多满足input iterator。
+
+```cpp
+class LinearIterator {
+public:
+    using value_type = int;
+    using difference_type = std::ptrdiff_t;
+    using iterator_category = std::input_iterator_tag;
+
+    int operator*() const { return value_; }
+    LinearIterator& operator++() { value_ += step_; return *this; }
+
+    friend bool operator==(const LinearIterator& a,
+                           const LinearIterator& b) {
+        return a.value_ == b.value_;
+    }
+
+private:
+    int value_ = 0;
+    int step_ = 1;
+};
+```
+
+若range结束条件是“越过bound”而不是“value恰好等于bound”，仅比较两个value会在step不能整除distance时永不到end。更稳妥的设计让iterator/sentinel equality显式检查direction与bound，或在构造时计算count，让position index决定结束。overflow、zero step和negative step也必须进入precondition或error contract。
+
+<Term def="把生成下一元素所需状态存入iterator，并在递增时计算新状态，而非简单移动到已存储对象。">
+  iterator generator
+</Term>
+
+## iterator_traits恢复关联类型
+
+generic algorithm需要知道`value_type`、`difference_type`、`reference`、`pointer`与`iterator_category`。class iterator可提供nested aliases，raw pointer却不能；`std::iterator_traits<It>`统一读取两者，并允许用户类型通过合规成员或specialization暴露关联类型。
+
+```cpp
+template <class Iterator>
+auto spanLength(Iterator first, Iterator last) {
+    using category =
+        typename std::iterator_traits<Iterator>::iterator_category;
+    return spanLengthImpl(first, last, category{});
+}
+
+template <class Iterator>
+auto spanLengthImpl(Iterator first, Iterator last,
+                    std::random_access_iterator_tag) {
+    return last - first;
+}
+
+template <class Iterator, class Category>
+auto spanLengthImpl(Iterator first, Iterator last, Category) {
+    typename std::iterator_traits<Iterator>::difference_type count = 0;
+    while (first != last) { ++first; ++count; }
+    return count;
+}
+```
+
+<Term def="从iterator类型统一提取value、difference、reference、pointer和category等关联类型的type traits接口。">
+  iterator traits
+</Term>
+
+`difference_type`应能表示同一range内两个positions距离，通常是signed；用`size_t`会让negative difference失真。`value_type`描述去掉reference后的元素值，而`reference`可以是真引用或proxy。algorithm若强行写`value_type&`，会拒绝合法proxy iterator；应优先从表达式或traits得到正确类型。
+
+## tag dispatch按能力选择实现
+
+tag dispatch把category object作为overload参数，在compile time选择路径。stronger category tags传统上继承weaker tags，因此forward/bidirectional也可落入通用increment实现，random access命中特化的subtraction实现。dispatch没有runtime branch，且小函数通常可inline。
+
+<ChpIteratorTraitsDispatchMap />
+
+现代C++也可用concepts、`if constexpr`或ranges customization表达同类选择，但第一版这一章的关键仍是：读取iterator capability，不探测具体container type。针对`std::vector`写special overload会漏掉raw pointer和其他contiguous iterator；针对category/operation写约束更贴近真正需求。
+
+<Callout type="trap" title="陷阱：iterator_traits只解决类型名，不验证语义">
+  一个类型可以声称`random_access_iterator_tag`并让所有表达式编译，但traits不会测试复杂度、multi-pass或reference
+  lifetime。需要property
+  tests验证复制、递增、distance、round-trip与边界不变量，并在代表性range上测复杂度增长。
+</Callout>
+
+## linear range iterator的状态机
+
+linear range iterator可生成等差序列：state包含current、step和termination rule。positive step要求current向upper bound推进，negative step要求反向推进；zero step应拒绝。end最好表示“完成状态”而非一个可能永远精确命中的数值。若需要bidirectional iterator，还必须能从当前位置`--`回到前一元素，并保证increment/decrement互逆。
+
+<ChpLinearRangeStateMap />
+
+<Term def="按固定步长生成线性数值序列的iterator；其正确性依赖方向、边界、结束状态和溢出规则。">
+  linear range iterator
+</Term>
+
+bidirectional iterator在forward要求上增加pre-decrement与post-decrement。`--end()`通常应得到最后一个元素，这要求end iterator保留range context或由common end position可逆推出last value。generator若只保存“已完成”布尔值而丢失bound/step，就无法正确后退，因此representation必须从最强承诺反推。
+
+## iterator pair构成range
+
+经典STL用half-open iterator pair `[first, last)` 表示range：first可dereference时是首元素，last只标记结束且不可dereference；empty range满足`first == last`。half-open设计使length、partition与相邻range组合更自然，不需要“最后元素加一”的特殊分支。
+
+```cpp
+template <class Iterator>
+class IteratorRange {
+public:
+    Iterator begin() const { return first_; }
+    Iterator end() const { return last_; }
+
+private:
+    Iterator first_;
+    Iterator last_;
+};
+
+auto samples = make_linear_range(0, 20, 3); // 0, 3, 6, ... 18
+for (const auto value : samples) consume(value);
+```
+
+`IteratorRange`本身可以只存iterator pair，不own元素；它的lifetime不延长underlying sequence。factory `make_linear_range(begin, end, step)`负责validate step/direction并构造matching begin/end states，让caller不必手写容易不一致的iterator。若返回range借用临时container，iterator会悬空；generator range则own自己的small state，不借用外部元素。
+
+<Term def="由begin与end组成的half-open区间，封装一对iterator并提供统一遍历入口，但通常不拥有底层元素。">
+  iterator pair range
+</Term>
+
+## 第5章实验协议
+
+1. 为pointer、vector iterator、list iterator和generator列出最强真实category与复杂度。
+2. 实现StrideIterator的完整equality、post-increment与tests，验证copy后的multi-pass行为。
+3. 对linear range覆盖正step、负step、不可整除bound、empty、zero step与overflow附近输入。
+4. 实现input-only与forward generator，对比iterator copy后推进一个副本的结果。
+5. 用iterator_traits同时接受raw pointer和custom iterator，不对container type做分支。
+6. 用tag dispatch实现distance，测list和vector随n增长的操作次数。
+7. 为bidirectional linear iterator验证`++`后`--`回到原position，以及`--end()`得到last。
+8. 对iterator pair range运行find、accumulate和copy，检查empty与lifetime边界。
+
+## 小结
+
+- iterator concept由语法、关联类型、语义和复杂度共同组成，不只是operator集合
+- pointer-mimicking syntax让算法统一dereference、advance和compare不同representation
+- category必须声明真实能力；random access尤其要求constant-time jump与difference
+- generator iterator以state计算元素，single-pass与reference lifetime需要明确
+- iterator_traits统一custom iterator与raw pointer的关联类型
+- tag dispatch按capability在compile time选择实现，不依赖具体container名字
+- linear/bidirectional iterator的end、direction、step和可逆状态必须共同设计
+- iterator pair使用half-open range；make_linear_range集中验证并生成一致端点
+
+<Attribution
+  adaptedFrom="C++ High Performance, First Edition, Chapter 5: A Deeper Look at Iterators"
+  adaptedUrl="https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
+/>
+
+<Glossary>
+  <GlossaryItem term="iterator concept">
+    算法可依赖的遍历表达式、类型、语义与复杂度契约。
+  </GlossaryItem>
+  <GlossaryItem term="pointer-mimicking syntax">
+    以解引用、递增和比较模拟pointer使用方式。
+  </GlossaryItem>
+  <GlossaryItem term="iterator category">
+    表示遍历能力和复杂度保证的类别。
+  </GlossaryItem>
+  <GlossaryItem term="iterator generator">
+    递增时根据内部状态计算下一元素的iterator。
+  </GlossaryItem>
+  <GlossaryItem term="iterator traits">
+    统一提取iterator关联类型的type traits接口。
+  </GlossaryItem>
+  <GlossaryItem term="linear range iterator">
+    按固定step生成有界等差序列的iterator。
+  </GlossaryItem>
+  <GlossaryItem term="iterator pair range">
+    封装half-open begin/end iterator pair的非拥有range。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：一个iterator提供operator+但内部逐步循环，应该声明什么category？** 说明语法与复杂度契约。
+
+<Answer question="为什么不能声明random access？">
+  random
+  access不只要求operator+可用，还要求jump、difference、index等操作满足constant-time及完整语义。内部循环使jump为O(n)，因此最多按它真正支持的multi-pass与direction声明forward或bidirectional。若算法需要加速，可用tag
+  dispatch让该iterator走逐步版本；同时用operation counter验证增长率。
+</Answer>
+
+2. **问题 2：设计make_linear_range(10, -1, -3)及不可整除边界的end。** 处理zero step与反向遍历。
+
+<Answer question="怎样避免永远到不了精确end？">
+  factory先拒绝zero
+  step并验证step方向朝向bound；iterator以crossed-bound或剩余count定义完成，而不是要求current==bound。10到-1步长-3生成10、7、4、1，下一步-2越过exclusive
+  bound后进入end。若承诺bidirectional，end还须保留bound、step和last
+  position，使--end()恢复1；并为算术overflow定义限制或checked update。
+</Answer>
+
+3. **问题 3：为generic distance实现traits/tag dispatch并验证没有隐藏二次成本。** 同时接受pointer与list iterator。
+
+  <Answer question="dispatch与验证应怎样组织？">入口从iterator_traits读取iterator_category；random-access overload直接返回last-first，通用input/forward/bidirectional overload逐步++并计数。raw pointer应命中constant-time路径，list iterator命中linear路径。用不同n记录increment次数和wall time，确认pointer操作数不随n增长、list约为n；不要根据container类型或iterator类名分支。</Answer>
+</Exercises>

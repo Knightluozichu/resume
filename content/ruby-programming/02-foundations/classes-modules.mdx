@@ -1,0 +1,241 @@
+---
+title: "第8章 类和模块"
+type: C
+section: "たのしいRuby 第5版 · Ruby的基础"
+order: 8
+description: "建立class/instance构造与state边界，掌握self、accessor、visibility、继承、alias/undef、singleton class、module namespace、Mixin与duck typing。"
+demo: true
+math: false
+sourceUrl: "https://tanoshiiruby.github.io/5/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RubyClassConstructionLab, RubyMethodLookupLab, RubyModuleProtocolLab } from "@/components/mdx/ruby-programming/diagrams/classes-modules";
+
+<Objectives>
+
+- 能设计由initialize建立不变量、由实例方法维护state且只暴露必要accessor的类
+- 能分析prepend/class/include/superclass方法查找、继承、reopen、alias/undef和singleton class影响
+- 能实现module namespace、include/extend Mixin与duck-typed protocol，并验证替换实现
+
+</Objectives>
+
+## 从“把数据装进class”这个不足开始
+
+Class的价值不是把若干instance variables包起来，而是让每个object在构造后始终满足业务不变量，并通过有限messages改变state。<Term def="对象在initialize完成后必须成立，并由所有public method持续维护的状态约束。">object invariant boundary</Term>决定constructor、accessor、visibility和error policy。
+
+先预测：给余额类直接`attr_accessor :balance`是否足够？它允许任何caller写负数、String或nil，绕过存取规则。应暴露`deposit`/`withdraw`等意图方法，只给真正不破坏约束的数据reader。
+
+## 类是什么：类和实例
+
+Class对象保存instance method definitions并能构造instances。Instance通过其class和ancestor chain查找method，每个instance拥有自己的instance variables。`Class`本身也是class，因此class method通常是class object的singleton method。
+
+`instance_of?`只匹配精确class，`is_a?`/`kind_of?`沿class与included modules判断。业务protocol通常不应先硬性class-check；只在serialization/security boundary或不同domain type确需分流时使用。
+
+### 继承
+
+Subclass继承method lookup关系，不复制superclass object state。`class PremiumAccount < Account`表示is-a替换承诺：任何期望Account protocol的caller都应能安全使用PremiumAccount。<Term def="Subclass必须保持父类可观察协议、结果约束和错误语义，不能只复用代码。">substitution contract</Term>限制继承。
+
+如果只是“使用另一个对象的能力”，composition通常比inheritance更清楚。深层hierarchy容易让state owner、super顺序和override不变量分散；先写protocol与tests，再决定继承是否合适。
+
+## 创建类：class语句与initialize方法
+
+`class Name ... end`打开或reopen一个Class constant。`Name.new`通常allocate instance并调用private `initialize`；initialize返回值不会替代new返回的instance。Constructor应验证required data并建立完整state，避免“半初始化后再调用setup”。
+
+```ruby
+class Account
+  attr_reader :balance
+
+  def initialize(balance = 0)
+    amount = Integer(balance)
+    raise ArgumentError, "negative balance" if amount < 0
+
+    @balance = amount
+  end
+
+  def deposit(amount)
+    value = Integer(amount)
+    raise ArgumentError, "amount must be positive" unless value > 0
+
+    @balance += value
+  end
+end
+```
+
+Constructor做I/O会让对象创建慢且失败边界混乱；可用factory先加载/解析，再把validated value交给initialize。若对象有多种清晰来源，命名factory如`from_csv`比一个接受任意options的constructor更可读。
+
+### 实例变量与实例方法
+
+`@balance`附着于当前receiver，未初始化读取为nil。不要依赖这个宽松行为：constructor建立所有required instance variables，optional state也用明确nil semantics。Instance method默认访问当前self的instance variables，无法直接读取另一个object的`@balance`，除非reflection绕过边界。
+
+### 存取器
+
+`attr_reader`生成reader，`attr_writer`生成writer，`attr_accessor`两者皆有。Accessor仍是method，可在后续自定义validation，但一开始公开writer就形成API。<Term def="对外只公开维持不变量所需的读写消息，而非机械暴露全部instance variables。">accessor exposure policy</Term>鼓励intent methods。
+
+### 特殊变量self
+
+`self`是当前receiver：顶层、class body、class method、instance method和block中可能不同。Setter调用常需`self.name = value`，否则`name = value`被解析为local assignment。Private method通常不能用显式receiver调用，self也不例外（setter语法等版本细节需测试）。
+
+<RubyClassConstructionLab />
+
+<Stepper>
+  <Step title="切换new、instance、self和visibility"><RubyClassConstructionLab /></Step>
+  <Step title="画Object边界">记录constructor input、instance variables、public messages、mutation owner、invalid transition和error。</Step>
+  <Step title="移除危险Writer"><RubyClassConstructionLab /></Step>
+</Stepper>
+
+## 类方法、常量与类变量
+
+Class method定义在class object上，适合factory/registry查询；class body中的constant提供namespace内固定绑定。`@@variable`沿inheritance hierarchy共享，subclass写入可能影响其它class。若每个class应独立持有state，使用class-instance variable，并明确subclass是否inherit default。
+
+```ruby
+class Parser
+  FORMATS = [:json, :csv].freeze
+  @default_format = :json
+
+  class << self
+    attr_reader :default_format
+
+    def supports?(format)
+      FORMATS.include?(format)
+    end
+  end
+end
+```
+
+Mutable registry作为class state仍需同步、reset test hook与lifecycle。Constant Array freeze只冻结外层；这里Symbol elements immutable。第4章已建立binding与object mutation差异，本章把owner放进class object。
+
+## 限制方法的调用
+
+`public`是外部API，`private`通常只能以implicit receiver调用，`protected`允许相关instances间以receiver方式协作。<Term def="Public、protected和private表达哪些caller/receiver形式属于稳定API的约定。">method visibility boundary</Term>帮助缩小可依赖surface，不是security sandbox。
+
+Visibility可用关键字影响后续definitions，或`private :method_name`指定。Public method应少而稳定；private method可重构，但tests最好经public behavior验证，避免锁死实现。Protected较少使用，账户间比较等同class/private helper常是典型场景。
+
+<Callout type="trap" title="private方法无法被任何外部代码执行，因此可以信任输入">
+Visibility是普通调用约定，reflection的`send`等机制可绕过；Ruby对象运行在同一process capability内。安全边界依赖输入validation、最小权限与进程/资源隔离，而不是private关键字。
+</Callout>
+
+## 扩展类：在原有类的基础上添加方法
+
+再次写`class String ... end`会reopen现有class，新增或替换method，影响process中所有instances。Core extension可能与未来Ruby/library方法冲突；优先wrapper、module function、refinement（版本/作用域需验证）或domain value object。
+
+Monkey patch确有必要时记录owner、目标version、method是否已存在，并有contract tests与移除计划。Load order决定最后definition，部署环境差异可能只在特定require顺序出现。
+
+### 继承中的override与super
+
+Override改变subclass behavior，`super`继续ancestor lookup。Bare `super`转发当前arguments/block，`super()`不传arguments；差异会导致constructor或wrapper的隐蔽arity bug。<Term def="Override调用super时明确是否转发原参数、显式新参数与block的规则。">super forwarding contract</Term>必须由测试覆盖。
+
+## alias与undef
+
+`alias new_name old_name`在执行时复制当前method entry到新name；以后重定义old不自动更新alias。`alias_method`是Module method，便于dynamic name。Wrapper更常用prepend+super，保留lookup可组合性。
+
+`undef method_name`使当前class/module阻止该name继续沿ancestor lookup，`remove_method`只删除当前owner definition并可能暴露ancestor implementation。两者语义不同，framework patch尤其要谨慎。
+
+## 单例类
+
+每个object可有singleton class，singleton methods定义在其中并优先于普通class lookup。`def object.label`或`class << object`打开它。Class methods本质上也是class object的singleton methods。
+
+Singleton method适合测试替身或一个对象的窄适配，但大量per-object behavior会让method owner难追踪且影响对象可复制/序列化。通常把策略放独立object/module并注入更透明。
+
+<RubyMethodLookupLab />
+
+<Stepper>
+  <Step title="切换prepend、class、include和superclass"><RubyMethodLookupLab /></Step>
+  <Step title="输出Ancestors">用`klass.ancestors`、`method(:name).owner`与`source_location`验证实际lookup链。</Step>
+  <Step title="比较super与super()"><RubyMethodLookupLab /></Step>
+</Stepper>
+
+## 模块是什么：Mixin与命名空间
+
+Module不能像Class那样new普通instances，却可组织constants/methods并进入method lookup chain。<Term def="Module要么组织名称，要么向receiver提供行为协议；两种责任可组合但应分别说明。">module composition role</Term>区分namespace和Mixin。
+
+Namespace如`Billing::Invoice`避免constant collision，并让file layout/load path有清楚映射。Mixin则假设receiver提供某些primitive methods，再组合出higher-level behavior；这个隐式requirement必须写成protocol并在include时验证。
+
+## 创建模块与Mix-in
+
+```ruby
+module Printable
+  def print_to(output)
+    output.puts(to_text)
+  end
+end
+
+class Receipt
+  include Printable
+
+  def initialize(total)
+    @total = total
+  end
+
+  def to_text
+    "total=#{@total}"
+  end
+end
+```
+
+Printable要求receiver响应`to_text`，并提供`print_to`。这是duck-typed internal protocol。Module中的constants按lexical/qualified rules访问；module method可用`module_function`或`extend self`创建，但两者visibility/copy语义不同，要按目标设计。
+
+### 查找方法的规则
+
+简化lookup顺序为object singleton class、prepended modules、class、included modules、superclass及其同类链；实际还有BasicObject等终点。Include顺序和多次include会影响chain，使用`ancestors`验证，不靠记忆猜。
+
+### extend方法
+
+`object.extend(Mod)`把Mod加入该object singleton class的ancestor chain，使module instance methods成为该object可调用methods。`SomeClass.extend(Mod)`因此常提供class-level API；它不同于`include`给SomeClass instances加methods。
+
+<RubyModuleProtocolLab />
+
+<Stepper>
+  <Step title="切换Namespace、include、extend和Duck type"><RubyModuleProtocolLab /></Step>
+  <Step title="写Mixin要求">列出module调用receiver的required messages、输入、返回、异常、state与线程规则。</Step>
+  <Step title="替换第二种实现"><RubyModuleProtocolLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="include和extend都只是把module方法复制过去">
+它们改变的是lookup chain：include面向class instances，extend面向一个object的singleton class。Method owner和super组合依赖这个位置，不是静态copy。
+</Callout>
+
+## 面向对象程序设计与鸭子类型
+
+Object-oriented design围绕协作objects与messages组织，封装state变化，使用polymorphism替代散布type switch。Duck typing问“能否履行protocol”，不要求共同superclass。<Term def="由required messages及其结果、错误、副作用和时序语义共同定义的行为接口。">duck typed protocol</Term>远比`respond_to?`更完整。
+
+例如output只需响应`write`/`puts`，可传File、StringIO或test spy；clock只需提供monotonic time，测试可传fake。Contract tests应对至少两个独立implementations运行，证明caller依赖行为而非具体class。遇到NoMethodError时先查protocol是否未满足，不要立即加入宽泛class check。
+
+## 本章回顾：Class维护不变量，Module组合名称与行为
+
+1. Initialize建立object invariant，instance methods维护state，accessor只暴露必要能力。
+2. Self决定当前receiver；class/instance state与@@hierarchy sharing必须分清owner。
+3. Visibility缩小稳定API，inheritance须满足substitution；reopen、alias/undef和singleton class会改变lookup。
+4. Include、extend、prepend和super把module/class放在不同lookup位置，使用ancestors与method owner验证。
+5. Duck typing依赖完整behavior protocol；namespace组织constants，Mixin在明确requirement上复用behavior。
+
+<Exercises>
+
+**问题 1：怎样把危险的attr_accessor重构为不变量API？**
+
+<Answer>列出合法state与transition，只保留必要reader，删除writer，新增意图method并在每次transition验证。测试constructor invalid input、合法变化、越界变化、共享/冻结对象以及异常后state不变。</Answer>
+
+**问题 2：如何定位一个method究竟来自class、include还是prepend？**
+
+<Answer>输出`receiver.class.ancestors`，查看`receiver.method(:name).owner`和`source_location`，再检查singleton class。测试require顺序、super forwarding和module顺序，不能只搜索最后一个同名def。</Answer>
+
+**问题 3：怎样证明两个类满足同一个duck-typed protocol？**
+
+<Answer>写共享contract tests，覆盖required messages、正常结果、boundary/错误、副作用和资源/时序语义，对至少两个独立实现运行。Respond_to?只能作早期诊断，不能替代behavior tests。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="object invariant boundary" definition="构造后成立并由public methods持续维护的对象状态约束。" />
+  <GlossaryItem term="substitution contract" definition="Subclass保持父类可观察协议与错误语义的承诺。" />
+  <GlossaryItem term="accessor exposure policy" definition="只公开维持不变量所需读写消息的策略。" />
+  <GlossaryItem term="method visibility boundary" definition="Public、protected、private表达稳定调用surface的边界。" />
+  <GlossaryItem term="super forwarding contract" definition="Override调用super时参数与block如何转发的规则。" />
+  <GlossaryItem term="module composition role" definition="Module承担namespace或行为Mixin的组合角色。" />
+  <GlossaryItem term="duck typed protocol" definition="由消息及其完整语义定义的行为接口。" />
+</Glossary>
+
+<Attribution adaptedFrom="たのしいRuby 第5版 / Ruby基础教程（第5版），第8章 类和模块" adaptedUrl="https://tanoshiiruby.github.io/5/" />

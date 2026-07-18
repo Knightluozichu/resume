@@ -1,0 +1,264 @@
+---
+title: "第 21 章 错误处理与调试"
+type: A
+section: "JavaScript高级程序设计（第4版） · 数据、网络与存储"
+order: 21
+description: "错误处理要在能恢复的边界捕获并保留因果，调试则用可复现输入、断点和结构化证据定位首个偏离。"
+demo: true
+math: false
+sourceUrl: "https://uat.store.wiley.com/en-us/professional-javascript-for-web-developers-4th-edition-p-9781119366577"
+draft: false
+---
+
+import {
+  Jpg21ErrorHandlingDebuggingMapLab,
+  Jpg21ErrorHandlingDebuggingExperimentLab,
+  Jpg21ErrorHandlingDebuggingEvidenceLab,
+} from "@/components/mdx/javascript-pro-guide/diagrams/jpg-21-error-handling-debugging";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释第 21 章 错误处理与调试的核心机制，并把它放回28章与4个附录的主线
+- 能比较正常、边界、失败和恢复样本，指出首个执行或状态偏离点
+- 能实现最小JavaScript实验，记录浏览器版本、输入、任务顺序与资源所有权
+- 能设计证据回答“异常不会被静默吞掉；错误保留cause与操作上下文；相同输入能复现并由回归测试覆盖根因。”是否成立
+
+</Objectives>
+
+## 直觉：先画执行与所有权
+
+错误处理要在能恢复的边界捕获并保留因果，调试则用可复现输入、断点和结构化证据定位首个偏离。 真正的难点不是让一次示例得到预期输出，而是让绑定、对象、任务、权限和资源在异常、取消、重复与版本切换后仍可解释。先预测：若只保存最终截图，最可能隐藏哪一种陈旧状态？
+
+<Jpg21ErrorHandlingDebuggingMapLab />
+
+## 权威目录定位
+
+本页依据 Wiley 第4版官方31页目录样章与中文版公开完整目录锁定范围。目录名称用于一对一追踪，正文为独立教学重构；新浏览器差异、安全与可观察性补充会明确披露：
+
+- 21.1 浏览器错误报告
+- 21.1.1 桌面控制台
+- 21.1.2 移动控制台
+- 21.2 错误处理
+- 21.2.1 try/catch语句
+- 21.2.2 抛出错误
+- 21.2.3 error事件
+- 21.2.4 错误处理策略
+- 21.2.5 识别错误
+- 21.2.6 区分重大与非重大错误
+- 21.2.7 把错误记录到服务器中
+- 21.3 调试技术
+- 21.3.1 把消息记录到控制台
+- 21.3.2 理解控制台运行时
+- 21.3.3 使用JavaScript调试器
+- 21.3.4 在页面中打印消息
+- 21.3.5 补充控制台方法
+- 21.3.6 抛出错误
+- 21.4 旧版IE的常见错误
+- 21.4.1 无效字符
+- 21.4.2 未找到成员
+- 21.4.3 未知运行时错误
+- 21.4.4 语法错误
+- 21.4.5 系统找不到指定资源
+- 21.5 小结
+
+本页逐项覆盖 **25** 个公开目录条目，并纳入正常、边界、失败和恢复验收。
+
+## 核心概念与所有权
+
+<Term def="承载错误名称、消息、堆栈及可选原因的异常值基类。">Error对象</Term>、
+<Term def="throw沿调用栈向外寻找最近匹配处理边界的控制流。">异常传播</Term>、
+<Term def="能够添加上下文、恢复、转换或终止操作的明确捕获位置。">错误边界</Term>
+、
+<Term def="在满足位置或条件时暂停执行、检查当前运行状态的调试器设施。">
+  断点
+</Term>
+、<Term def="把转换或压缩后的代码位置映射回原始源文件位置的数据。">源映射</Term>
+。每个概念都要回答：谁创建输入，状态保存在哪里，哪个任务或版本可修改它，结束后由谁清理。
+
+|   # | 概念      | 工程含义                                                   |
+| --: | --------- | ---------------------------------------------------------- |
+|   1 | Error对象 | 承载错误名称、消息、堆栈及可选原因的异常值基类。           |
+|   2 | 异常传播  | throw沿调用栈向外寻找最近匹配处理边界的控制流。            |
+|   3 | 错误边界  | 能够添加上下文、恢复、转换或终止操作的明确捕获位置。       |
+|   4 | 断点      | 在满足位置或条件时暂停执行、检查当前运行状态的调试器设施。 |
+|   5 | 源映射    | 把转换或压缩后的代码位置映射回原始源文件位置的数据。       |
+
+## 机制拆解
+
+### 1. 只捕获能处理的异常
+
+catch后静默会把失败变成错误成功。边界可以补充操作ID和输入摘要、包装cause后重抛，或展示可恢复反馈；finally只做无条件清理，不应覆盖原返回或异常。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+### 2. 错误分类指导处置
+
+TypeError等编程错误通常应暴露并修复，用户输入错误应转为字段反馈，网络超时可能重试但需幂等，安全违规应拒绝并限量记录。分类基于责任与恢复策略，不基于消息字符串。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+### 3. 调试从首个偏离开始
+
+固定版本、输入与时序，用条件断点、日志点、网络面板和性能记录比较正常与失败轨迹。生产源映射要控制访问，结构化日志避免敏感数据，并把最终根因变成自动测试。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+## 六阶段证据链
+
+可操作链条是：复现固定输入 → 保存原始异常 → 定位首偏离点 → 检查调用与异步链 → 在责任边界恢复 → 记录回归测试。正常样本证明能力，边界样本证明预算，失败样本证明拒绝，恢复样本证明任务、状态和资源重新收敛。
+
+<Stepper>
+  <Step title="1. 复现固定输入与保存原始异常">
+    固定浏览器版本、输入、初始DOM与时钟，运行正常和边界样本。
+    <Jpg21ErrorHandlingDebuggingMapLab />
+  </Step>
+  <Step title="2. 定位首偏离点与检查调用与异步链">
+    注入异常、取消、重复事件、权限拒绝或旧缓存，要求在首偏离点停止。
+    <Jpg21ErrorHandlingDebuggingExperimentLab />
+  </Step>
+  <Step title="3. 在责任边界恢复与记录回归测试">
+    清除故障后重放相同输入，核对输出、任务队列、DOM摘要、监听器与资源数量。
+    <Jpg21ErrorHandlingDebuggingEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小可运行实验
+
+以下代码用于独立观察本页机制；生产实现还需加入输入验证、兼容策略、权限、取消与清理。
+
+```js
+async function load() {
+  try {
+    return await fetch("/api").then((r) => {
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.json();
+    });
+  } catch (cause) {
+    throw new Error("load failed", { cause });
+  }
+}
+```
+
+证据记录把目录、运行时与状态摘要放在一起：
+
+```yaml
+book: JavaScript高级程序设计（第4版）
+page: jpg-21-error-handling-debugging
+official_entries: 25
+sample: normal | boundary | failure | recovery
+browser_version: fixed
+input_fixture: fixed
+first_divergence: null
+cleanup_complete: true
+```
+
+故障脚本一次只改变一个变量：
+
+```text
+baseline -> inject(exception | cancel | duplicate | denied | stale-cache)
+observe -> stop_at_first_divergence
+recover -> replay_same_runtime_and_input
+assert -> one_state_owner && stable_output && no_stale_task && no_resource_leak
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：catch所有异常后只console.log，调用方继续提交错误状态。**
+  必须保存输入、任务顺序、状态摘要与首次拒绝原因，而不是只看最终页面。
+</Callout>
+
+<Callout type="trap">
+  **误区二：只盯最终报错行，没有比较状态第一次变坏的位置。**
+  必须加入边界、失败与恢复样本，证明错误没有跨入下一阶段。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 输入与环境变化                   | 预期状态       | 通过条件                     |
+| ---- | -------------------------------- | -------------- | ---------------------------- |
+| 正常 | 合法输入、权限、顺序与版本       | 六阶段完成     | 输出和状态摘要一致           |
+| 边界 | 空值、极限容量、重复事件或慢任务 | 达到预算不越界 | 主线程与内存有界             |
+| 失败 | 异常、取消、拒权、断网或旧产物   | 首偏离点停止   | 明确传播、回滚或降级         |
+| 恢复 | 修复后重放同一输入               | 收敛到正常轨迹 | 无陈旧任务、监听器和资源泄漏 |
+
+<Jpg21ErrorHandlingDebuggingEvidenceLab />
+
+本页签发不变量是：**异常不会被静默吞掉；错误保留cause与操作上下文；相同输入能复现并由回归测试覆盖根因。** 单次成功、平均耗时或最终截图不能替代运行时版本、执行轨迹、首偏离点与清理证据。
+
+## 练习
+
+<Exercises>
+
+**问题 1** 为什么不能只以最终页面结果正确作为验收？
+
+<Answer>
+  最终结果会隐藏重复副作用、旧任务覆盖、错误吞没和资源泄漏。必须比较输入、执行顺序、状态所有者、首偏离点与清理结果。
+</Answer>
+
+**问题 2** 如何把本页公开目录变成可执行学习证据？
+
+<Answer>
+  按公开顺序建立追踪表，为每组条目写出输入、状态、输出、失败与恢复条件。本页重点包括：21.1
+  浏览器错误报告、21.1.1 桌面控制台、21.1.2 移动控制台、21.2 错误处理、21.2.1
+  try/catch语句、21.2.2 抛出错误、21.2.3 error事件、21.2.4
+  错误处理策略；其余条目已在上方逐项列出。
+</Answer>
+
+**问题 3** 本页的最小通过条件是什么？
+
+<Answer>
+  异常不会被静默吞掉；错误保留cause与操作上下文；相同输入能复现并由回归测试覆盖根因。
+  并且相同浏览器版本、输入与初始状态可以重放正常、边界、失败和恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **Error对象**：承载错误名称、消息、堆栈及可选原因的异常值基类。
+- **异常传播**：throw沿调用栈向外寻找最近匹配处理边界的控制流。
+- **错误边界**：能够添加上下文、恢复、转换或终止操作的明确捕获位置。
+- **断点**：在满足位置或条件时暂停执行、检查当前运行状态的调试器设施。
+- **源映射**：把转换或压缩后的代码位置映射回原始源文件位置的数据。
+- 六阶段机制链已经映射到正常、边界、失败与恢复证据。
+- 官方目录逐项追踪，现代补充不会冒充原书正式分节。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="Error对象">
+    承载错误名称、消息、堆栈及可选原因的异常值基类。
+  </GlossaryItem>
+  <GlossaryItem term="异常传播">
+    throw沿调用栈向外寻找最近匹配处理边界的控制流。
+  </GlossaryItem>
+  <GlossaryItem term="错误边界">
+    能够添加上下文、恢复、转换或终止操作的明确捕获位置。
+  </GlossaryItem>
+  <GlossaryItem term="断点">
+    在满足位置或条件时暂停执行、检查当前运行状态的调试器设施。
+  </GlossaryItem>
+  <GlossaryItem term="源映射">
+    把转换或压缩后的代码位置映射回原始源文件位置的数据。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Matt Frisbie 著，李松峰译，人民邮电出版社，2020年9月，866页，ISBN 9787115545381；英文原版 Professional JavaScript for Web Developers, 4th Edition，Wiley，2019年10月，1200页，印刷版 ISBN 9781119366447、电子版 ISBN 9781119366577。Wiley官方31页目录样章与中文版公开目录确认28章、4个附录和757个二三级目录条目。正文为独立教学重构。"
+  adaptedUrl="https://uat.store.wiley.com/en-us/professional-javascript-for-web-developers-4th-edition-p-9781119366577"
+/>

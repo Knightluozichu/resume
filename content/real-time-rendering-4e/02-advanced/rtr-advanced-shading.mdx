@@ -1,128 +1,207 @@
 ---
-title: "高级着色与BRDF"
+title: "物理着色与微表面 BRDF"
 type: B
 section: "计算机图形学与渲染"
 order: 5
-description: "从经验模型到基于物理的微表面理论"
+description: "承载官方 Ch9 Physically Based Shading：BRDF 约束、GGX 微表面、Fresnel、材质工作流和验证"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://www.realtimerendering.com/"
 draft: false
 ---
 
-import { RtrAdvancedShadingDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-advanced-shading";
+import { RtrAdvancedShadingDiagram, RtrMicrofacetDiagram, RtrMaterialValidationDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-advanced-shading";
+import { RtrStepFlowDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能写出BRDF的一般形式并解释漫反射+镜面反射的分解
-- 能解释Cook-Torrance模型的三个微表面函数(D/F/G)
-- 能区分经验模型和PBR的核心差异
-- 能回答：为什么PBR需要能量守恒？
+
+- 能从 rendering equation 定义 BRDF，并检查 reciprocity、非负性与能量约束
+- 能解释 GGX 微表面模型中 D、F、G 的统计与光学含义
+- 能区分 dielectric、conductor、metalness workflow 与 complex IOR 的适用边界
+- 能设计 white furnace、roughness sweep、grazing angle 和 normal-map 过滤测试
+
 </Objectives>
 
-## 直觉引入
+## 直觉：看起来合理不等于可迁移
 
-想象你在鉴定宝石。经验模型（Phong）像用肉眼估光泽——看起来差不多就行。基于物理的BRDF像用光谱仪测量——每个参数都有物理意义，能量必须守恒。Phong说「这个高光看起来对」就够了，PBR说「这个材质在不同光照下都对」。
+先预测：把 roughness 从 0.2 改成 0.4，高光峰值和总反射能量会怎样变化？把 normal map 缩到远处，若只平均法线而不调整 roughness，是否仍稳定？物理着色的价值不是“用了金属度”，而是模型在光照、视角、尺度和引擎之间保持可解释行为。
 
-PBR的核心是微表面理论：表面由无数微小镜面组成，它们的朝向分布决定了反射模式。粗糙表面微镜面朝向混乱，反射光散开；光滑表面微镜面整齐，反射光集中。
-
-## 概念讲解
-
-### 基于物理的BRDF
+Ch9 Physically Based Shading 从经验高光推进到受物理约束的反射模型、材质参数化与生产验证。PBR 仍包含近似；每个近似都应声明输入域、单位、色彩空间、能量和采样假设。
 
 <RtrAdvancedShadingDiagram />
 
-<Term def="BRDF是双向反射分布函数，描述光线从入射方向到反射方向的能量分布">BRDF</Term>的一般形式：f_r = k_d×f_diffuse + k_s×f_specular。
+## BRDF 与渲染方程
 
-<Term def="Cook-Torrance模型是基于微表面理论的物理BRDF，镜面项为D×F×G/(4(N·L)(N·V))">Cook-Torrance</Term>模型的三个关键函数：
-- <Term def="D是法线分布函数，描述微表面法线与半角向量对齐的比例，常用GGX">D（法线分布）</Term>：控制高光形状和锐度
-- <Term def="F是菲涅尔项，描述反射率随入射角增大而增大的现象，常用Schlick近似">F（菲涅尔）</Term>：掠射角反射增强
-- <Term def="G是几何遮蔽函数，描述微表面之间相互遮挡的比例，常用Smith">G（几何遮蔽）</Term>：边缘暗化效果
+<Term def="表面一点上，某入射方向的微分 irradiance 对某出射方向产生的微分 radiance 比值，单位为 sr⁻¹">BRDF</Term>定义为：
 
-## 交互Demo
+$$
+f_r(\mathbf l,\mathbf v)=\frac{dL_o(\mathbf v)}{dE_i(\mathbf l)}.
+$$
 
-<Stepper>
-<Step title="第一步：从经验到物理">Phong的参数是任意调的，PBR的参数有物理意义（粗糙度、金属度）。理解为什么能量守恒是PBR的核心约束。</Step>
-<Step title="第二步：微表面三函数">
-D控制高光大小（粗糙度），F控制反射强度（角度依赖），G控制边缘暗化（遮蔽）。三者相乘除以归一化项。
-<RtrAdvancedShadingDiagram />
-</Step>
-<Step title="第三步：PBR实践">金属度工作流：金属用F0=反射率，非金属用F0=0.04。粗糙度映射到GGX的alpha参数。跨引擎一致是PBR的关键优势。</Step>
-</Stepper>
+不发光表面的反射项进入渲染方程：
 
-## 代码对照
+$$
+L_o(\mathbf v)=\int_{\Omega^+} f_r(\mathbf l,\mathbf v)L_i(\mathbf l)
+(\mathbf n\cdot\mathbf l)d\omega_l.
+$$
+
+物理可行 BRDF 通常要求非负、Helmholtz reciprocity $f_r(\mathbf l,\mathbf v)=f_r(\mathbf v,\mathbf l)$，以及对任意出射方向：
+
+$$
+\int_{\Omega^+}f_r(\mathbf l,\mathbf v)(\mathbf n\cdot\mathbf l)d\omega_l\le 1.
+$$
+
+“diffuse 权重 + specular 权重不超过 1”只是特定分解的启发式检查，不能代替对完整 BRDF 与采样/积分实现的能量验证。
+
+## 微表面 Cook-Torrance：D、F、G 各管一件事
+
+<RtrMicrofacetDiagram />
+
+<Term def="把宏观表面视为微小镜面集合，用法线分布、Fresnel 与几何遮蔽统计其单次镜面反射的模型">微表面模型</Term>的常见镜面 BRDF 为：
+
+$$
+f_s(\mathbf l,\mathbf v)=\frac{D(\mathbf h)F(\mathbf v,\mathbf h)G(\mathbf l,\mathbf v)}
+{4|\mathbf n\cdot\mathbf l||\mathbf n\cdot\mathbf v|}.
+$$
+
+- **D, normal distribution function**：微法线朝向 $\mathbf h$ 的面积密度。GGX/Trowbridge-Reitz 有长尾高光；NDF 必须按投影面积归一化。
+- **F, Fresnel**：单个微镜面反射比例，随角度、波长和折射率变化；掠射角趋近 1。
+- **G, masking-shadowing**：从入射和出射方向可见的微镜面比例。Smith 模型可配 GGX，相关/不相关近似并不等价。
+
+<Term def="具有长尾高光的 Trowbridge-Reitz 法线分布；其 alpha 参数控制微表面斜率分布宽度">GGX 分布</Term>常见各向同性形式：
+
+$$
+D_{GGX}(\mathbf h)=\frac{\alpha^2}{\pi[(\mathbf n\cdot\mathbf h)^2(\alpha^2-1)+1]^2}.
+$$
+
+perceptual roughness 到 $\alpha$ 的映射是引擎约定，常见 `alpha = roughness²`，但不能跨实现盲目复用；还要设最小值避免 delta-like lobe 的数值问题。
+
+## Fresnel、介质与导体
+
+<Term def="界面反射率随入射角、介质折射率和波长变化的光学现象；掠射角反射增强">Fresnel 反射</Term>对无吸收介质，法线入射反射率为：
+
+$$
+F_0=\left(\frac{\eta_i-\eta_t}{\eta_i+\eta_t}\right)^2.
+$$
+
+Schlick 近似 $F=F_0+(1-F_0)(1-\mathbf v\cdot\mathbf h)^5$ 便宜但不是所有 IOR/导体的精确解。导体使用复折射率 $\eta+i\kappa$，产生有色 specular，体内透射快速吸收，通常没有常规模型下的 diffuse lobe。
+
+<Term def="以 base color、metalness、roughness 等艺术友好参数在介质与导体端点间构造材质的生产参数化">金属度工作流</Term>把 metalness 视作端点/混合约定：非金属 base color 主要代表 diffuse，F0 由 IOR/规范值给出；金属 base color 代表 specular F0。中间 metalness 常用于材质混合或抗锯齿，不意味着现实中存在“半金属分子”。
+
+非金属 F0 并非永远 `0.04`；它约对应 IOR 1.5 的空气界面。水、皮肤涂层、宝石等范围不同。资产规范应给出允许范围并保留超出值的例外通道。
+
+## 漫反射、能量与多次散射
+
+Lambert $f_d=\rho/pi$ 是理想漫反射。粗糙介质可用 Oren-Nayar 等模型；皮肤/蜡还需要 subsurface。简单 `diffuse *= (1-F)` 能降低单次界面反射后的剩余能量，却不自动解决 GGX 微表面内部多次散射、方向积分和 diffuse/specular 耦合。
+
+单次散射微表面模型在高 roughness 下可能显著变暗，因为被 mask 的能量被当作吸收。multiple-scattering compensation、方向 albedo LUT 或多次散射 BRDF 可回收部分能量；选择必须与 IBL 预积分和 direct-light 路径一致。
 
 ```glsl
-// Cook-Torrance BRDF 实现 (GLSL)
+vec3 evaluateMicrofacet(Surface s, vec3 L, vec3 V) {
+    float NoL = max(dot(s.N, L), 0.0);
+    float NoV = max(dot(s.N, V), 0.0);
+    if (NoL == 0.0 || NoV == 0.0) return vec3(0.0);
 
-// GGX 法线分布函数 D
-float D_GGX(float NdotH, float roughness) {
-    float a = roughness * roughness;
-    float a2 = a * a;
-    float NdotH2 = NdotH * NdotH;
-    float denom = NdotH2 * (a2 - 1.0) + 1.0;
-    return a2 / (3.14159265 * denom * denom);
-}
-
-// Schlick 菲涅尔近似 F
-vec3 F_Schlick(float cosTheta, vec3 F0) {
-    return F0 + (1.0 - F0) * pow(1.0 - cosTheta, 5.0);
-}
-
-// Smith 几何遮蔽 G
-float G_Smith(float NdotV, float NdotL, float roughness) {
-    float r = roughness + 1.0;
-    float k = (r * r) / 8.0;
-    float gv = NdotV / (NdotV * (1.0 - k) + k);
-    float gl = NdotL / (NdotL * (1.0 - k) + k);
-    return gv * gl;
-}
-
-// 最终 BRDF
-vec3 cookTorrance(vec3 N, vec3 L, vec3 V, vec3 F0, float roughness) {
     vec3 H = normalize(L + V);
-    float NdotL = max(dot(N, L), 0.0);
-    float NdotV = max(dot(N, V), 0.0);
-    float NdotH = max(dot(N, H), 0.0);
-    float D = D_GGX(NdotH, roughness);
-    vec3 F = F_Schlick(max(dot(H, V), 0.0), F0);
-    float G = G_Smith(NdotV, NdotL, roughness);
-    vec3 spec = (D * F * G) / (4.0 * NdotL * NdotV + 0.001);
-    return spec * NdotL;
+    float alpha = max(s.perceptualRoughness * s.perceptualRoughness, 0.002);
+    float D = D_GGX(s.N, H, alpha);
+    float G = G_SmithCorrelated(NoL, NoV, alpha);
+    vec3 F = F_Schlick(max(dot(V, H), 0.0), s.F0);
+    return D * G * F / max(4.0 * NoL * NoV, 1e-6);
 }
 ```
+
+函数返回 BRDF，不应在内部又乘 `NoL` 后被调用方重复乘；接口命名与单位比短代码更重要。
+
+## 材质采样、法线与 IBL
+
+normal map 改变微观/中尺度方向，却不会自动调整 roughness。缩小时平均向量长度下降，直接归一化会恢复过强高频法线并产生 specular aliasing。Toksvig、LEAN/CLEAN、normal variance 到 roughness、几何 normal anti-aliasing 等方法用不同代价保留分布方差。
+
+environment lighting 对 BRDF 与球面 radiance 积分。常见 split-sum IBL 预过滤 environment 的 GGX lobe，并以 2D LUT 近似 Fresnel/visibility 积分；其 roughness mapping、NDF sampling、mip convention 与 runtime BRDF 必须一致。diffuse irradiance、specular prefilter、BRDF LUT 和 exposure 任一空间不一致都会让材质失真。
+
+<RtrMaterialValidationDiagram />
+
+## 三步材质验收
+
+<Stepper>
+<Step title="第一步：冻结约定与输入范围">
+
+记录 linear color、F0/IOR、metalness、roughness→alpha、normal convention、BRDF variant 和 IBL LUT/pre-filter 版本。
+
+<RtrStepFlowDiagram caption="先让 direct、IBL、资产工具使用同一套模型。" stage={1} stages={["Specify：units、ranges、roughness mapping、BRDF and IBL variants"]} />
+
+</Step>
+<Step title="第二步：跑解析和炉箱测试">
+
+用 reciprocity sample、BRDF hemisphere integral、white furnace、GGX roughness/angle sweep 和已知 IOR 球验证能量与形状。
+
+<RtrStepFlowDiagram caption="灰球好看不能代替 BRDF 数值与能量检查。" stage={2} stages={["Specify：units、ranges、roughness mapping、BRDF and IBL variants", "Measure：reciprocity、integral、furnace、IOR and lobe sweeps"]} />
+
+</Step>
+<Step title="第三步：资产与时空回归">
+
+在多 HDRI、光源尺寸、曝光、距离和 normal mip 下比较 reference，记录 firefly、aliasing、能量和 GPU 时间。
+
+<RtrStepFlowDiagram caption="材质必须跨光照、尺度和运动保持一致。" stage={3} stages={["Specify：units、ranges、roughness mapping、BRDF and IBL variants", "Measure：reciprocity、integral、furnace、IOR and lobe sweeps", "Validate：HDRIs、normal mips、temporal stability、reference、cost"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**误区：把粗糙度和金属度混为一谈。**
-粗糙度控制高光的扩散程度（光滑→锐利高光，粗糙→散开高光），金属度控制反射率和颜色（金属=反射率高且无漫反射，非金属=反射率低且有漫反射）。两者是完全独立的材质属性。
+**现象 →** 所有非金属 F0 固定 0.04，所有 metalness 中间值都视为物理材质。**原因 →** 把生产工作流端点当完整光学模型。**修法 →** 用 IOR/测量范围约束介质，明确 metalness 中间值用于混合还是材质本身。
 </Callout>
 
 <Callout type="trap">
-**误区：忽略能量守恒。**
-PBR要求反射光能量不超过入射光能量。如果k_d + k_s > 1，表面会「发光」。正确做法是从Fresnel计算k_s，然后k_d = 1 - k_s（对金属k_d=0），保证总能量守恒。
+**现象 →** 高 roughness 球明显变暗，却声称 `k_d=1-F` 已保证能量守恒。**原因 →** 忽略微表面 multiple scattering 与完整方向积分。**修法 →** 做 white-furnace/integral 测试，按选择的 BRDF 加入一致的能量补偿。
 </Callout>
 
+<Callout type="trap">
+**现象 →** 远处 normal-mapped 表面像闪粉。**原因 →** mip 只平均法线后重新归一化，丢掉方向分布方差。**修法 →** 过滤 normal variance 到 roughness，并做距离/运动下的 specular aliasing 回归。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题 1**：Cook-Torrance模型的D、F、G三个函数分别描述什么物理现象？
+
+**问题 1：D、F、G 分别不能互相替代什么？**
 
 <Answer>
-D（法线分布函数）描述微表面法线与半角向量H对齐的比例，控制高光的形状和锐度（GGX比Blinn更真实）；F（菲涅尔项）描述反射率随入射角增大而增大的现象（掠射角时接近全反射）；G（几何遮蔽函数）描述微表面之间相互遮挡的比例，产生边缘暗化效果。三者乘积除以归一化因子4(N·L)(N·V)得到镜面反射BRDF。
+D 统计微法线朝向，决定 lobe 分布；F 是单微面界面的角度/波长反射率；G 统计从入射和出射方向可见的微面比例。改 D 不能代替 Fresnel，改 F 不能修复 masking，三者还必须与 denominator 和采样 PDF 配套。
 </Answer>
 
-**问题 2**：为什么PBR需要能量守恒？不守恒会怎样？
+**问题 2：white furnace 测试可以发现什么？**
 
 <Answer>
-能量守恒保证反射光不超过入射光，这是物理定律。不守恒时：1）表面可能「发光」（反射比入射还亮）；2）在不同光照条件下材质表现不一致（白天看起来对、夜晚太亮）；3）无法跨场景复用材质参数。PBR通过Fresnel计算k_s再用k_d=(1-k_s)保证漫反射+镜面反射之和不超过入射能量，使同一组参数在任何光照下都正确。
+在均匀白色入射 radiance 下，表面输出应符合其方向反照率，不应凭空增能；它能暴露 BRDF 归一化、double NoL、direct/IBL 不一致、粗糙多次散射损失和 LUT/roughness mapping 错误。
 </Answer>
+
+**问题 3：为什么 normal map 缩小时要影响 roughness？**
+
+<Answer>
+一个远处像素覆盖多个不同方向的法线，平均向量长度编码了方向方差。只归一化平均法线会把分布重新压成单方向，使高光过尖并闪烁；应把未解析法线方差转入有效 roughness 或专用分布表示。
+</Answer>
+
+**问题 4：怎样证明 direct light 与 IBL 使用同一 BRDF？**
+
+<Answer>
+固定材质和方向，分别用高样本 environment 积分、预过滤 IBL 与大量离散方向光近似同一环境；比较 roughness/NoV/F0 sweep。检查 alpha mapping、Fresnel、G、multiple-scattering compensation 和 PDF/LUT convention。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+Ch9 Physically Based Shading 的核心不是一段 Cook-Torrance 代码，而是 BRDF 约束、材质参数、采样与预积分的一致系统。D/F/G、F0/IOR、roughness、normal filtering 和 multiple scattering 都需要明确模型，并以积分、炉箱、reference 与时间稳定性闭环。
+
 <Glossary>
-<GlossaryItem term="BRDF">双向反射分布函数，描述光线从入射方向到反射方向的能量分布比例。</GlossaryItem>
-<GlossaryItem term="Cook-Torrance">基于微表面理论的物理BRDF模型，镜面项由D（法线分布）、F（菲涅尔）、G（几何遮蔽）三个函数组成。</GlossaryItem>
-<GlossaryItem term="微表面理论">假设表面由无数微小镜面组成，它们的朝向统计分布决定宏观反射特性的理论模型。</GlossaryItem>
-<GlossaryItem term="能量守恒">PBR的核心约束，要求反射光能量不超过入射光能量，通过Fresnel和漫反射/镜面反射的权重分配实现。</GlossaryItem>
+<GlossaryItem term="BRDF">入射微分 irradiance 到出射微分 radiance 的比例函数。</GlossaryItem>
+<GlossaryItem term="微表面模型">以微镜面法线分布和可见性统计构造宏观反射的模型。</GlossaryItem>
+<GlossaryItem term="GGX 分布">具有长尾高光的 Trowbridge-Reitz 微表面法线分布。</GlossaryItem>
+<GlossaryItem term="Fresnel 反射">界面反射率随角度、折射率和波长变化的现象。</GlossaryItem>
+<GlossaryItem term="金属度工作流">在介质和导体端点间组织 base color、metalness 与 roughness 的生产参数化。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="实时渲染第4版" adaptedUrl="https://www.realtimerendering.com/" />
+<Attribution adaptedFrom="Real-Time Rendering 4e, Chapter 9: Physically Based Shading" adaptedUrl="https://www.realtimerendering.com/" />

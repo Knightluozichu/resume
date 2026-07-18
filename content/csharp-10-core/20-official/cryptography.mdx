@@ -1,0 +1,200 @@
+---
+title: "Chapter 20. Cryptography"
+type: C
+section: "C# 10 Nutshell · Metadata and Dynamic"
+order: 20
+description: "覆盖密码学目标、Windows DPAPI、hash/HMAC、密码KDF、认证对称加密、密钥管理及公钥加密与签名，建立可轮换加密信封。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch20.html"
+draft: false
+---
+
+import { CtcAsymmetricOperationLab, CtcCryptoPrimitiveLab, CtcKeyProtectionLab } from "@/components/mdx/csharp-10-core/diagrams/cryptography";
+
+<Objectives>
+
+- 能区分hash、HMAC、password KDF、AEAD、encryption与signature，判断primitive是否匹配threat
+- 能设计包含algorithm、key id、nonce/salt、tag、version和AAD的可迁移加密信封
+- 能实现密码验证、AES-GCM与RSA签名路径，并复现tamper、wrong key、nonce reuse和rotation失败
+
+</Objectives>
+
+## Overview
+
+## 为什么Cryptography必须从Threat开始
+
+密码学先定义security goal和attacker capability：confidentiality防读取，integrity防篡改，authenticity证明持有某key，signature还支持public verification。Hash不保密，encryption不自动认证，encoding完全不是安全措施。优先使用平台高层primitive与标准协议，不设计算法或padding。
+
+先预测：SHA-256(password)适合存密码吗；同key重复AES-GCM nonce只影响相同明文吗；签名时加密私钥就等于验证身份吗；DPAPI LocalMachine只允许当前服务账户解密吗；解密成功后再验证tag是否安全。答案都是否。
+
+<Term def="把attacker、资产、confidentiality/integrity/authenticity目标与允许算法/参数明确对应的决策记录。">cryptographic threat contract</Term>
+
+RandomNumberGenerator用于key、salt、nonce等不可预测随机量；普通Random只用于模拟。比较MAC/hash/token使用CryptographicOperations.FixedTimeEquals，避免数据相关提前退出。所有binary格式固定version、algorithm id和length limits，解析失败不泄露密钥相关细节。
+
+<Stepper>
+  <Step title="切换hash、HMAC、password KDF与AEAD"><CtcCryptoPrimitiveLab /></Step>
+  <Step title="填写goal-to-primitive表">为每个字段写secrecy、tamper、sender proof、offline guessing、replay和retention要求。</Step>
+  <Step title="执行misuse tests">用普通hash存密码、无key hash验消息、复用nonce和跳过tag验证，观察哪项目标失效。</Step>
+</Stepper>
+
+<Callout type="trap" title="使用强算法名称就自动安全">
+Nonce reuse、错误mode/padding、弱key storage、未认证metadata和不可轮换格式都能破坏安全。Primitive必须嵌入完整协议和生命周期。
+</Callout>
+
+## Windows Data Protection
+
+ProtectedData封装Windows DPAPI，按DataProtectionScope.CurrentUser或LocalMachine绑定用户profile/机器凭据，无需应用直接保存主密钥。它仅在Windows支持；CurrentUser依赖相同用户profile，LocalMachine允许该机器上的其他账户在满足OS访问条件时解密，不是应用级隔离。
+
+Optional entropy是额外输入，不替代访问控制或高熵key；解密必须提供相同值。服务迁移、profile未加载、机器重建和备份恢复会影响可解密性。Web farm/容器/跨平台服务更适合有共享key ring与轮换的ASP.NET Core Data Protection或外部KMS。
+
+DPAPI输出仍需安全文件ACL、owner、backup和version metadata。先测试目标service identity和disaster recovery，再决定scope。
+
+<Term def="ProtectedData密文绑定Windows用户或机器凭据，并受profile、ACL、迁移与恢复条件约束的范围。">DPAPI scope boundary</Term>
+
+## Hashing
+
+Cryptographic hash把任意bytes映射到固定长度digest，目标包括preimage与collision resistance。SHA-256/384/512用于内容摘要；MD5/SHA-1不用于新安全协议。Hash只能检测“内容不同”，攻击者可同时替换内容和hash，所以认证不可信消息使用HMAC或signature。
+
+HMAC(key, canonical message)提供shared-key authenticity。双方必须对相同bytes计算：固定encoding、field order、length和domain separation。不要使用`hash(key || message)`自造MAC。Verify前检查长度，再FixedTimeEquals。
+
+```csharp
+static bool VerifyMac(ReadOnlySpan<byte> key, ReadOnlySpan<byte> message,
+    ReadOnlySpan<byte> expected)
+{
+    Span<byte> actual = stackalloc byte[32];
+    HMACSHA256.HashData(key, message, actual);
+    return expected.Length == actual.Length &&
+           CryptographicOperations.FixedTimeEquals(actual, expected);
+}
+```
+
+Streaming hash使用IncrementalHash或HashAlgorithm.TransformBlock/stream API，仍要限制总输入。Digest格式标algorithm/version，避免未来迁移歧义。
+
+## Hashing Passwords
+
+密码低熵，必须用专用password KDF放慢离线猜测。每个credential生成独立随机salt，保存algorithm、parameters、salt和derived value；salt不需保密。Work factor按目标硬件定期校准到可接受认证延迟，并限制并发防DoS。Pepper若使用，应存KMS/HSM并版本化。
+
+PBKDF2可用静态Rfc2898DeriveBytes.Pbkdf2并显式SHA-256/更强PRF；现代系统也可按平台策略采用经过评审的memory-hard KDF。不要固定相信多年不变的iteration数字，登录成功后若stored parameters低于现行policy则rehash。
+
+```csharp
+static byte[] DerivePassword(
+    ReadOnlySpan<char> password, ReadOnlySpan<byte> salt, int iterations)
+{
+    if (salt.Length < 16) throw new ArgumentException("salt too short", nameof(salt));
+    if (iterations < PasswordPolicy.MinimumIterations)
+        throw new ArgumentOutOfRangeException(nameof(iterations));
+
+    return Rfc2898DeriveBytes.Pbkdf2(
+        password, salt, iterations, HashAlgorithmName.SHA256, outputLength: 32);
+}
+```
+
+Verification读取record参数导出candidate并constant-time compare；unknown algorithm/version拒绝。Error对“用户不存在”和“密码错误”保持一致，rate limit、MFA和breach detection属于协议另一层。
+
+<Term def="Algorithm、salt、cost参数、derived value和版本共同组成可校准、可rehash的密码验证记录。">password KDF record</Term>
+
+## Symmetric Encryption
+
+对称key同用于encrypt/decrypt，适合大量数据。新协议优先AEAD，如AesGcm/AesCcm，在一次操作中产生ciphertext和authentication tag；AAD不加密但被认证，可绑定tenant、record id、version和key id。Receiver在tag验证前不得使用plaintext。
+
+AES-GCM要求同一key下nonce唯一；随机96-bit nonce需评估消息数量和collision policy，高规模系统用counter/partition allocation。Tag长度固定进format。CBC等非AEAD模式若为兼容保留，必须使用经过验证的encrypt-then-MAC协议，不能自拼padding/MAC顺序。
+
+```csharp
+static Envelope Encrypt(ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> key,
+    ReadOnlySpan<byte> associatedData, string keyId)
+{
+    byte[] nonce = RandomNumberGenerator.GetBytes(12);
+    byte[] ciphertext = new byte[plaintext.Length];
+    byte[] tag = new byte[16];
+
+    using var aes = new AesGcm(key, tagSizeInBytes: tag.Length);
+    aes.Encrypt(nonce, plaintext, ciphertext, tag, associatedData);
+    return new Envelope(1, "A256GCM", keyId, nonce, ciphertext, tag);
+}
+```
+
+Decrypt先验证version/algorithm/key id和所有length上限，重建相同AAD，再调用Decrypt；CryptographicException统一视为认证失败，不区分wrong key/tag/ciphertext细节。
+
+<Stepper>
+  <Step title="切换CurrentUser、LocalMachine、data key与KEK"><CtcKeyProtectionLab /></Step>
+  <Step title="画envelope key hierarchy">标出KMS/HSM KEK、wrapped DEK、key id/version、nonce allocator、AAD和ciphertext owner。</Step>
+  <Step title="演练rotation与恢复">新写用active key，旧读按key id；禁用/丢失/回滚key并验证告警、备份和迁移批次。</Step>
+</Stepper>
+
+<Callout type="trap" title="AES-GCM的Nonce公开，所以可以重复">
+Nonce确实可公开，但同一key下必须唯一。重复会泄露plaintext关系并破坏authentication，属于协议级灾难而非轻微降级。
+</Callout>
+
+## Key Management
+
+Key的生成、存储、授权、使用、轮换、撤销、备份和销毁通常比算法更难。应用不把master key放源码、普通配置或日志；生产使用KMS/HSM/OS keystore，按service identity和least privilege授权。Envelope encryption为每个对象/分区生成DEK，由KEK wrap，数据格式保存KEK/key id与算法版本。
+
+Rotation区分rotate write key、rewrap DEK和reencrypt data；前两者通常成本较低。Reader在迁移窗口支持明确旧版本，writer只用active version。Audit记录key id与operation，不记录secret/plaintext。内存中key bytes用完尽量CryptographicOperations.ZeroMemory，但managed copies、GC和dump意味着这不是绝对擦除。
+
+Backup必须包含恢复密钥与访问流程，并定期演练。撤销被泄露key时评估所有受影响ciphertext/signature，不能只生成新key即结束。
+
+<Term def="密文携带algorithm/version/key id/nonce/tag/AAD schema，使reader可按策略轮换和迁移的格式。">versioned cryptographic envelope</Term>
+
+## Public-Key Encryption and Signing
+
+公钥可分发，私钥必须受保护。RSA encryption只适合小payload，使用显式OAEP-SHA-256或策略批准padding；大数据采用hybrid encryption：随机DEK做AEAD，recipient public key/KEM只封装DEK。不要用private-key“加密”模拟signature。
+
+Signature用private key对canonical bytes签名，public key验证。RSA-PSS适合新RSA签名；ECDSA也常用。Signed payload绑定protocol/domain、algorithm、key id、issuer/audience、timestamp/expiry和nonce/message id以防跨协议与replay。Public key必须来自可信certificate/key registry，不能由消息自己声明后直接信任。
+
+```csharp
+static byte[] Sign(ReadOnlySpan<byte> canonicalPayload, RSA privateKey) =>
+    privateKey.SignData(canonicalPayload, HashAlgorithmName.SHA256,
+        RSASignaturePadding.Pss);
+
+static bool Verify(ReadOnlySpan<byte> canonicalPayload, ReadOnlySpan<byte> signature,
+    RSA trustedPublicKey) => trustedPublicKey.VerifyData(
+        canonicalPayload, signature, HashAlgorithmName.SHA256,
+        RSASignaturePadding.Pss);
+```
+
+Certificate validation包括chain、hostname/EKU、time、revocation policy和trust anchors。Verify返回false或错误前先做size/algorithm allowlist，避免algorithm confusion。
+
+<Stepper>
+  <Step title="切换encrypt、decrypt、sign与verify"><CtcAsymmetricOperationLab /></Step>
+  <Step title="写message format">固定canonicalization、domain、algorithm、key id、recipient/issuer、expiry、nonce和payload hash。</Step>
+  <Step title="执行adversarial matrix">篡改payload/header、换key、改algorithm、重放、过期、错误padding和未知key id，全部应fail closed。</Step>
+</Stepper>
+
+## 本章回顾：算法只是协议的一部分
+
+1. Hash、HMAC、KDF、AEAD、encryption和signature解决不同目标。
+2. DPAPI是Windows用户/机器scope，不等于跨机key management或应用sandbox。
+3. Password record保存salt/cost/version并支持登录后rehash，不能用快速hash。
+4. AEAD必须保证nonce uniqueness并在使用plaintext前验证tag。
+5. Key id、algorithm/version、AAD、rotation与恢复共同构成可运营的加密系统。
+
+<Exercises>
+
+**问题 1：怎样设计可轮换的AES-GCM record？**
+
+<Answer>保存format version、algorithm、key id、96-bit nonce、ciphertext、固定tag及AAD schema；key id从受控registry取得DEK/unwrap key。Writer只用active key，reader按allowlist读旧版；同key nonce唯一，认证失败统一fail closed，并演练rewrap/reencrypt。</Answer>
+
+**问题 2：密码验证为什么需要每用户Salt和可调Cost？**
+
+<Answer>随机salt阻止相同密码共享digest和预计算表复用；cost提高每次离线猜测成本。Record保存algorithm/parameters，服务按硬件与延迟预算调整policy，成功登录发现旧参数时重新derive并原子更新。</Answer>
+
+**问题 3：签名验收除Verify=true还检查什么？**
+
+<Answer>Public key必须来自可信registry/certificate chain；固定algorithm和canonical bytes，绑定domain、issuer/audience、expiry与nonce/message id。测试tamper、wrong key、unknown algorithm、过期和replay；成功后才解析/执行受保护语义。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="cryptographic threat contract" definition="Attacker、资产、安全目标到primitive的映射。" />
+  <GlossaryItem term="DPAPI scope boundary" definition="Windows用户/机器凭据绑定与迁移条件。" />
+  <GlossaryItem term="password KDF record" definition="Salt、cost、algorithm、version和derived value。" />
+  <GlossaryItem term="versioned cryptographic envelope" definition="可轮换密文的算法、key、nonce、tag与AAD格式。" />
+  <GlossaryItem term="nonce uniqueness ledger" definition="证明同一AEAD key下nonce不重复的分配记录。" />
+</Glossary>
+
+<Term def="按key/partition记录nonce生成策略、容量上限和轮换点，证明AEAD nonce不会重复。">nonce uniqueness ledger</Term>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 20: Cryptography" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch20.html" />

@@ -1,111 +1,383 @@
 ---
-title: 无重复字符的最长子串
+title: "面试题48：最长不含重复字符的子字符串"
 type: C
-section: 字符串
-order: 3
-description: 在字符串中找出不含重复字符的最长连续子串。
+section: "第5章 优化时间和空间效率"
+order: 52
+description: "先还原逐个候选子串查重的蛮力法，再用字符上次出现位置在线维护以当前位置结尾的最长无重复后缀。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/48_LongestSubstringWithoutDup/LongestSubstringWithoutDup.cpp"
 draft: false
 ---
 
-{/* 知识点清单：滑动窗口、最近出现位置、字符频率表；原书章节：面试题48。 */}
+import { LongestSubstringTraceLab, DuplicateDecisionDiagram, BruteForceSearchMap, LowercaseAlphabetContractDiagram, LongestSubstringOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/longest-substring-without-dup";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能画出滑动窗口收缩时机与不变量。
-- 能给出 C++ 与 TypeScript 线性解法。
-- 能处理全重复、全不重复、空字符串边界。
+- 能解释最长不含重复字符的子字符串为何必须连续而不是任意选字符
+- 能计算abcacfrar逐字符扫描时当前长度、上次位置与历史最大值
+- 能实现作者蛮力查重法和线性动态规划法
+- 能分析距离等于当前长度、空串、全重复与非小写输入边界
+- 能设计覆盖作者10组用例并返回实际最优区间的扩展测试
 
 </Objectives>
 
-## 直觉引入
+## 从“子字符串必须连续”开始
 
-维持一个窗口 `[l, r]`，窗口中永远不允许重复字符。
-当 `r` 扩张遇到重复，就把 `l` 移到重复字符上一次出现位置后；这样每个字符只进出一次，整体线性。
+先预测：输入abcacfrar的答案不是把所有不同字母a、b、c、f、r各挑一个得到5，因为那会跳过中间字符，属于子序列。题目要求的**最长不含重复字符的子字符串**必须是原串中一段连续区间；其中acfr连续且无重复，长度为4。
 
-## 算法思路
+扫描到某个位置i时，先不追问全局答案，只问“以i结尾的最长无重复连续后缀有多长”。这个量称为<Term def="必须以当前字符结尾，且内部没有重复字符的最长连续后缀长度。">当前无重复后缀</Term>。它能由前一个状态和当前字符的历史位置在线更新。
 
-1. 记录每个字符上一次出现位置 `last[char]`（初始为 `-1`）。
-2. 遍历字符索引 `r`：
-   - 若 `last[ch] >= l`，说明在窗口内重复，令 `l = last[ch] + 1`。
-   - 更新 `last[ch] = r`。
-   - 更新答案 `maxLen = max(maxLen, r-l+1)`。
+作者题设还限定字符串只含小写a到z，因此可用长度26的数组记录<Term def="某字符在当前下标之前最近一次出现的索引，未出现时记为负1。">最近出现位置</Term>。数组下标是字符减去a。
 
-<StringFunctionTableDiagram />
+<LongestSubstringTraceLab />
 
-## 思考引导
+图中curLength不是“到目前为止的历史最大值”，而是以当前字符结尾的局部状态；maxLength才是所有结束位置中的最大值。把两者混用，会在后面的重复字符到来时丢掉此前已找到的答案。
 
-### 1) 先问问题，不先穷举
-目标是最长无重复子串，要把“是否有冲突”变成可在线更新而非重复检索。
+## 作者第一解：蛮力枚举候选子串
 
-### 2) 识别不变式
-窗口左边界只会右移；每次新字符若重复，左边界跳到重复字符上次出现+1。
+作者先展示直接做法。外层固定start，内层让end从start向右延伸，每次用substr复制当前候选，再调用hasDuplication从头检查是否重复。若第一次发现重复，就停止当前start，因为继续向右扩展不可能消除已经存在的重复。
 
-### 3) 为什么它一定成立
-字符串字符重复位置有界性。更新左边界后，旧冲突的字符必不在新窗口内，因而可直接舍弃。
+<BruteForceSearchMap />
 
-### 4) 常见误区
-只用 set 但不维护上次出现位置，会在重复字符回退时做多次移动，复杂度与正确性都变差。
-
-### 5) 你能找到一个反例吗
-"abba" 能暴露处理重复时窗口重置策略是否正确：第二个 b 到来后 l=2，a 位置也需更新。
-
-### 6) 迁移到下一题
-连续行为、登录异常窗口、点击去重都可套“窗口+最近出现位置”范式。
-## 代码对照
-
-<CodeTabs>
-  <Tab label="C++">
 ```cpp
 #include <string>
-#include <array>
 
-class Solution {
-public:
-    int longestSubstringWithoutDup(const std::string& s) {
-        std::array<int, 256> last;
-        last.fill(-1);
+bool hasDuplication(
+    const std::string& str,
+    int position[]) {
+    for (int i = 0; i < 26; ++i) {
+        position[i] = -1;
+    }
 
-        int left = 0;
-        int best = 0;
+    for (int i = 0;
+         i < static_cast<int>(str.length());
+         ++i) {
+        const int index = str[i] - 'a';
+        if (position[index] >= 0) {
+            return true;
+        }
+        position[index] = index;
+    }
+    return false;
+}
 
-        for (int right = 0; right < (int)s.size(); ++right) {
-            unsigned char c = static_cast<unsigned char>(s[right]);
-            if (last[c] >= left) {
-                left = last[c] + 1;
+int longestSubstringWithoutDuplication_1(
+    const std::string& str) {
+    int longest = 0;
+    int* position = new int[26];
+
+    for (int start = 0;
+         start < static_cast<int>(str.length());
+         ++start) {
+        for (int end = start;
+             end < static_cast<int>(str.length());
+             ++end) {
+            const int count = end - start + 1;
+            const std::string substring =
+                str.substr(start, count);
+
+            if (!hasDuplication(
+                    substring, position)) {
+                if (count > longest) {
+                    longest = count;
+                }
+            } else {
+                break;
             }
-            last[c] = right;
-            best = std::max(best, right - left + 1);
         }
-        return best;
     }
-};
-```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-function longestSubstringWithoutDup(s: string): number {
-    const last = new Array(256).fill(-1);
-    let left = 0;
-    let best = 0;
 
-    for (let right = 0; right < s.length; right++) {
-        const code = s.charCodeAt(right) & 0xff;
-        if (last[code] >= left) {
-            left = last[code] + 1;
-        }
-        last[code] = right;
-        best = Math.max(best, right - left + 1);
-    }
-    return best;
+    delete[] position;
+    return longest;
 }
 ```
-  </Tab>
-</CodeTabs>
+
+hasDuplication里的position只被当作“见过或未见过”的标记，所以源码写入字符自己的0到25编号，而不是字符串下标，也能正确判断布尔结果。但这个数组不能据此回答字符在原串哪里出现；动态规划版本会改为保存真实下标。
+
+若把字符集规模也视为可增长，外层起点、内层终点和每次从头查重形成O(n立方)时间，substr还反复分配内存。固定26个小写字母时，无重复候选长度最多26，实际扫描有更紧的常数界；不过这不改变蛮力法重复检查同一片段的本质。
+
+## 线性状态到底保存什么
+
+处理下标i之前，curLength表示以i减1结尾的当前无重复后缀长度。设当前字符上次出现于prevIndex，距离d等于i减prevIndex。用这个距离与当前长度比较、判断旧字符是否仍在合法区间内，称为<Term def="比较当前位置到最近重复位置的距离与当前后缀长度，以判断旧字符是否仍在区间内。">距离判定</Term>。
+
+分三种情况：
+
+1. 字符从未出现，直接把当前后缀延长1。
+2. 字符出现过，但距离d大于curLength，旧字符已经在当前后缀左侧之外，仍可延长1。
+3. 距离d小于或等于curLength，旧字符就在当前后缀内；新后缀必须从旧字符之后开始，长度改为d。
+
+这里真正的判定是“**重复字符是否落在当前窗口内**”，不能只看它是否在整段前缀出现过。记录**字符上次出现位置**，正是为了用一次比较区分窗口内重复和窗口外历史。
+
+<DuplicateDecisionDiagram />
+
+<Callout type="trap" title="把大于写成大于等于">
+当距离恰好等于curLength，旧字符位于当前无重复后缀的最左端，仍在区间内。加入新字符会重复，必须走重置分支；作者Test8的abcdaef专门能暴露这个边界。
+</Callout>
+
+例如扫描abcdaef到第二个a时，旧a位于0，处理前curLength为4，距离也是4。不能把abcda延长成5，因为首尾a重复；应移除旧a，得到bcda，长度仍为4，再由e、f扩展到6。
+
+## 作者第二解：以结束位置做动态规划
+
+源码注释把第二种方法称为动态规划。每个状态只依赖上一个状态与最近出现位置，时间为O(n)，长度26的position数组使额外空间为O(1)。
+
+```cpp
+#include <string>
+
+int longestSubstringWithoutDuplication_2(
+    const std::string& str) {
+    int curLength = 0;
+    int maxLength = 0;
+
+    int* position = new int[26];
+    for (int i = 0; i < 26; ++i) {
+        position[i] = -1;
+    }
+
+    for (int i = 0;
+         i < static_cast<int>(str.length());
+         ++i) {
+        const int prevIndex =
+            position[str[i] - 'a'];
+
+        if (prevIndex < 0 ||
+            i - prevIndex > curLength) {
+            ++curLength;
+        } else {
+            if (curLength > maxLength) {
+                maxLength = curLength;
+            }
+            curLength = i - prevIndex;
+        }
+
+        position[str[i] - 'a'] = i;
+    }
+
+    if (curLength > maxLength) {
+        maxLength = curLength;
+    }
+
+    delete[] position;
+    return maxLength;
+}
+```
+
+作者只在发生窗口内重复时把旧curLength写入maxLength，并在循环结束后补一次比较。这是正确的，因为没有重置时curLength只会增长；也可以每轮更新后统一执行maxLength取较大值，逻辑更直接。
+
+以abcacfrar为例，curLength依次为1、2、3、3、2、3、4、4、2，maxLength最终为4。扫描第二个c时，它上次在2，距离2不大于此前长度3，因此新后缀只能是索引3到4的ac，长度2。
+
+## 动态规划或滑动窗口其实是同一状态
+
+若用窗口写法，令<Term def="当前无重复连续区间的最小下标；扫描过程中它只能保持不变或向右移动。">窗口左端</Term>left为当前无重复区间左端，right为扫描位置。只有当当前字符上次位置不小于left时，才把left跳到旧位置加1。窗口长度是right减left加1。
+
+动态版在处理right前有curLength，因此旧窗口左端等于right减curLength。条件“prevIndex小于旧left”等价于“right减prevIndex大于curLength”。两种表述只是保存变量不同：
+
+```text
+动态规划：
+    curLength = 以right结尾的无重复后缀长度
+
+滑动窗口：
+    left = 该后缀的左边界
+
+互相换算：
+    left = right - curLength + 1
+    curLength = right - left + 1
+```
+
+所以原书单元中的“**动态规划或滑动窗口**”不是两道互不相关的算法。它们共享同一个不变量：处理完成后，保存的区间以当前位置结尾、内部无重复，并且在所有以当前位置结尾的合法区间中最长。
+
+窗口左端永不左移。若某字符旧位置已在窗口外，使用last加1直接赋值会让left倒退；必须先判断last是否不小于left，或写成left等于left与last加1的较大值。旧页虽然给出窗口代码，但没有还原作者curLength距离判定，也没有解释两者的等价关系。
+
+## 正确性：为什么只看最近一次出现
+
+假设当前字符c此前出现过多次。若最近一次c已在当前后缀之外，更早的c一定更靠左，也都在外；可以安全延长。若最近一次c在当前后缀内，为消除重复，左端至少要越过它；越过最近一次后，所有更早的c也自然被排除。
+
+因此只保存最近位置既充分又必要，无需字符的完整位置列表。重置后的区间从prevIndex加1到i，内部原有字符原本就互不重复，删除前缀不会制造重复，再加入的新c与旧c已分离，所以新区间合法。
+
+它还是最长的：任何以i结尾且无重复的区间都不能包含prevIndex处的c，左端至少是prevIndex加1；选择这个最早合法左端得到最大长度i减prevIndex。若旧c在窗口外，沿用旧左端并加入c已经是最长。
+
+全局答案取所有结束位置的当前无重复后缀最大值。任意连续子字符串都有唯一结束位置，因此不会漏掉最优区间。
+
+## 字符集契约不能被256数组掩盖
+
+作者严格假设输入只含a到z。输入允许哪些字符、以及字符如何映射到状态数组下标，构成<Term def="约定输入可用字符范围以及每个字符如何映射到状态表索引。">字符集契约</Term>。表达式str[i]减a在此条件下得到0到25；大写、标点或UTF-8中文会产生负下标或超过25，导致越界访问和未定义行为。
+
+<LowercaseAlphabetContractDiagram />
+
+<Callout type="trap" title="把数组扩成256就宣称支持Unicode">
+256槽最多覆盖单字节值。UTF-8中的一个中文字符由多个字节组成，按字节扫描会把字符拆开；真正的Unicode版本应先解码为码点或字素簇，再用映射记录其上次位置。
+</Callout>
+
+即使只处理单字节，也要把char转换成unsigned char后再作数组下标，因为某些平台char有符号。若输入字符集未知，使用unordered_map保存最近位置能避免固定表越界，但不会自动解决UTF-8码点边界。
+
+## 返回实际区间的工程扩展
+
+作者只返回长度。若产品还要显示子字符串，更新历史最大值时同步保存bestStart即可。下面版本面向任意字节串，并明确返回字节区间；它不声称按Unicode字符计数。
+
+```cpp
+#include <array>
+#include <string_view>
+#include <utility>
+
+std::pair<std::size_t, std::size_t>
+longestUniqueByteRange(std::string_view text) {
+    std::array<std::size_t, 256> last;
+    last.fill(std::string_view::npos);
+
+    std::size_t left = 0;
+    std::size_t bestStart = 0;
+    std::size_t bestLength = 0;
+
+    for (std::size_t right = 0;
+         right < text.size();
+         ++right) {
+        const auto byte =
+            static_cast<unsigned char>(text[right]);
+        if (last[byte] != std::string_view::npos &&
+            last[byte] >= left) {
+            left = last[byte] + 1;
+        }
+        last[byte] = right;
+
+        const std::size_t length =
+            right - left + 1;
+        if (length > bestLength) {
+            bestStart = left;
+            bestLength = length;
+        }
+    }
+    return {bestStart, bestLength};
+}
+```
+
+并列最长区间时，这段代码保留最早出现者，因为只在严格更长时更新。若需求是保留最后一个、返回全部并列区间或按字典序选择，必须在相等分支中定义规则。
+
+空字符串循环不执行，返回起点0、长度0；单字符返回0、1。对超大输入使用size_t避免把length强制缩为int，但若对外协议只接受32位长度，转换前仍要检查范围。
+
+## 作者10组测试的覆盖意图
+
+作者main实际调用test1到test10，每组都让蛮力法和动态规划法与同一个expected比较：
+
+1. abcacfrar期望4，最优段在中后部。
+2. acfrarabc期望4，最优段可出现在前部和尾部。
+3. arabcacfr期望4，重复分布错位。
+4. aaaa期望1，连续相同字符每次重置为1。
+5. abcdefg期望7，整串无重复，循环结束才刷新最大值。
+6. aaabbbccc期望2，跨字符分段可形成ab或bc。
+7. abcdcba期望4，中心向两侧重复。
+8. abcdaef期望6，覆盖距离等于当前长度的边界。
+9. a期望1，最小非空输入。
+10. 空字符串期望0，两版循环都不进入。
+
+<LongestSubstringOfficialCaseLab />
+
+源码的test函数只打印passed或FAILED，不用断言中止；自动化环境应让失败产生非零退出码。作者未覆盖非法大写、标点、UTF-8、超长输入、返回实际区间或并列选择规则，因为这些都不在原题公开契约中。
+
+```cpp
+#include <cassert>
+
+void testLongestSubstring() {
+    assert(longestSubstringWithoutDuplication_2(
+        "abcacfrar") == 4);
+    assert(longestSubstringWithoutDuplication_2(
+        "acfrarabc") == 4);
+    assert(longestSubstringWithoutDuplication_2(
+        "arabcacfr") == 4);
+    assert(longestSubstringWithoutDuplication_2(
+        "aaaa") == 1);
+    assert(longestSubstringWithoutDuplication_2(
+        "abcdefg") == 7);
+    assert(longestSubstringWithoutDuplication_2(
+        "aaabbbccc") == 2);
+    assert(longestSubstringWithoutDuplication_2(
+        "abcdcba") == 4);
+    assert(longestSubstringWithoutDuplication_2(
+        "abcdaef") == 6);
+    assert(longestSubstringWithoutDuplication_2(
+        "a") == 1);
+    assert(longestSubstringWithoutDuplication_2(
+        "") == 0);
+}
+```
+
+随机小写字符串可让两版作者算法对拍。蛮力法适合作为可信参考，但测试生成长度应受控；若两版都复用同一个最近位置辅助函数，就会降低发现共享错误的能力。
+
+## 复杂度与方案选择
+
+作者动态版对每个字符做常数次读取和写入，时间O(n)；position固定26项，额外空间O(1)。若字符集规模记为k，初始化和存储可写成O(k)，总时间O(n加k)。
+
+滑动窗口配set也能做到O(n)：遇重复时逐个移除左端字符，左右指针都最多走n步。但最近位置表可一次跳过整段，更直接表达作者的距离状态。不能因为set版本有内层while就误判为O(n平方)，摊还分析要统计每个字符最多进入和离开一次。
+
+需要列出所有无重复子串时，输出规模本身可能是O(n平方)，线性算法只能给最长值或有限个代表区间。需要在线处理字符流时，最近位置与left可持续维护；若只保留窗口内容而不保留全部历史，仍能输出当前最长长度，但要保存历史最佳文本则需额外拷贝。
+
+<Stepper>
+  <Step title="先区分子字符串与子序列">
+    <BruteForceSearchMap />
+    连续扩展候选，发现重复后当前起点无需继续。
+  </Step>
+  <Step title="定义以当前位置结尾的状态">
+    <LongestSubstringTraceLab />
+    curLength记录局部后缀，maxLength保存历史全局最大。
+  </Step>
+  <Step title="用距离判断重复是否仍在窗口">
+    <DuplicateDecisionDiagram />
+    未出现或距离更大时增长，否则长度重置为距离。
+  </Step>
+  <Step title="固定字符集与索引契约">
+    <LowercaseAlphabetContractDiagram />
+    作者数组仅服务a到z，通用文本必须重新定义字符单位。
+  </Step>
+  <Step title="跑完10组作者测试">
+    <LongestSubstringOfficialCaseLab />
+    两种实现共同覆盖全同、全异、错位重复、单字符与空串。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 最长不含重复字符的子字符串必须连续，不能跳选字符。
+2. 作者先用蛮力法枚举起点和终点，并对每个候选从头查重。
+3. 线性法的curLength是以当前位置结尾的最长无重复后缀长度。
+4. 字符上次出现位置只有落在当前后缀内时才迫使状态重置。
+5. 距离大于curLength才可增长；距离等于时旧字符仍在窗口内。
+6. 动态规划或滑动窗口是同一状态的长度表示与左边界表示。
+7. 作者的26槽数组依赖仅含a到z，不能直接处理任意字节或Unicode。
+8. 10组测试全部由main执行，abcdaef专门覆盖等号边界。
+
+<Exercises>
+
+**问题 1：扫描abcacfrar到下标4的第二个c时，curLength为什么从3变成2？**
+
+<Answer>此前最长无重复后缀是bca，旧c位于下标2，当前下标4与它距离2，小于此前长度3，说明旧c仍在后缀内。新后缀必须从旧c之后开始，即索引3到4的ac，长度2。</Answer>
+
+**问题 2：为什么条件是距离大于curLength，而不是大于等于？**
+
+<Answer>距离等于curLength时，旧字符恰在当前后缀最左端，加入新字符仍会形成重复。必须移除旧字符，重置后长度等于该距离；abcdaef中的第二个a就是此边界。</Answer>
+
+**问题 3：为什么只记录最近一次位置，不需要保存字符全部出现位置？**
+
+<Answer>最近一次若在窗口外，更早位置必然也在外；最近一次若在窗口内，左端越过它也会同时越过所有更早位置。因此最近位置足以决定最早合法左端。</Answer>
+
+**问题 4：如何让算法返回最长子字符串本身？**
+
+<Answer>维护窗口左端；每当当前长度严格超过历史最大值时，同时保存left和长度。扫描结束后按该区间截取。若并列时需要最后一个或全部区间，还要定义相等分支的更新规则。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="当前无重复后缀">以当前字符结尾且没有重复字符的最长连续后缀。</GlossaryItem>
+  <GlossaryItem term="最近出现位置">某字符在当前下标前最后一次出现的索引。</GlossaryItem>
+  <GlossaryItem term="窗口左端">当前合法连续区间的最小下标，只会向右移动。</GlossaryItem>
+  <GlossaryItem term="距离判定">用当前位置减最近位置与当前长度比较，以判断旧字符是否仍在窗口内。</GlossaryItem>
+  <GlossaryItem term="字符集契约">输入允许哪些字符以及如何把字符映射到状态表下标的约定。</GlossaryItem>
+</Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题48"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/48_LongestSubstringWithoutDup/LongestSubstringWithoutDup.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

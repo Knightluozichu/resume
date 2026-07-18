@@ -1,0 +1,206 @@
+---
+title: "Chapter 4：.NET 基础（.NET Fundamentals）"
+type: A
+section: Pro .NET 内存管理（第2版）· CLR 执行与表示
+order: 4
+description: 对齐原书第 4 章：从程序集、CIL、CLR/JIT 到对象布局，解释值类型、引用类型、托管 ref、字符串驻留和 async 状态机如何改变复制、分配与对象存活。
+demo: false
+math: false
+sourceUrl: "https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_4"
+draft: false
+---
+
+import {
+  DnmExecutionPipelineMap,
+  DnmHiddenStateLab,
+  DnmRepresentationLab,
+} from "@/components/mdx/dotnet-memory/diagrams/dotnet-fundamentals";
+
+<Objectives>
+
+- 能描述 C# 源码、.NET 程序集、CIL/元数据、CLR 加载、JIT 和机器码的责任边界，并从 IL 指令提出分配假设
+- 能比较值复制、对象引用复制、装箱和托管 ref 别名的存储与修改语义，分析对象头、字段内联、对齐和静态根
+- 能分析字符串字面量/动态字符串以及同步完成/真实挂起 async 路径，判断驻留、状态机字段与跨 await 引用如何影响分配和生命周期
+
+</Objectives>
+
+## 为什么必须从语言语法走到运行时表示
+
+同一行 C# 可以在不同泛型实例、JIT tier、CPU 架构和运行路径下生成不同机器码与分配行为。仅凭 `new`、`async`、`string` 或 `struct` 关键字下结论，会把语言语义、编译器 lowering、CLR 表示和 JIT 优化混成一层。
+
+<Term def="包含 CIL、类型与成员元数据、程序集清单和资源的部署/版本单元；它不是 CPU 直接执行的机器汇编代码。">.NET 程序集</Term>
+
+可靠分析要沿生产者到消费者推进：C# 编译器生成程序集；CLR 加载类型和依赖；JIT 根据当前进程与架构生成机器码和 GC 信息；执行时，引用分布在线程栈、寄存器、静态区、句柄和托管堆。内存成本可能在任一阶段被引入或消除。
+
+<DnmExecutionPipelineMap />
+
+## 程序集里的 assembly 不是机器汇编
+
+<Term def="Common Intermediate Language，.NET 程序集中的栈式中间指令；CLR 在执行前或执行中把它转换为目标平台机器码。">CIL</Term>
+
+`.dll` 或 `.exe` 中通常保存 CIL 与元数据，而不是固定 x64 指令。元数据描述类型、字段、方法签名、泛型和引用程序集；CIL 描述加载、调用、分支、创建对象、装箱等操作。`ildasm`、ILSpy 或其他反编译工具能帮助确认编译器生成了什么，但最终内联、去虚拟化、寄存器分配与对象活性仍要看 JIT 输出。
+
+```il
+IL_0000: newobj   instance void Customer::.ctor()
+IL_0005: stloc.0
+IL_0006: ldloc.0
+IL_0007: ldstr    "Ada"
+IL_000c: callvirt instance void Customer::set_Name(string)
+IL_0011: ret
+```
+
+`newobj` 提出创建对象并运行构造函数的语义，`ldstr` 加载字符串字面量引用，`callvirt` 提供实例调用和空检查语义。不能只看到 `callvirt` 就断言一定发生慢速虚分派：目标方法可能并非 virtual，或 JIT 能根据类型信息去虚拟化并内联。CIL 是重要证据，但不是最终成本报告。
+
+<Term def="Just-In-Time 编译器，依据当前运行时、目标架构和类型信息把 CIL 转为机器码，并生成 GC 所需的引用活性描述。">JIT</Term>
+
+分层编译还会让同一方法先使用快速生成的代码，热点后再优化。基准必须预热并记录运行时配置；调试器、ReadyToRun、动态 PGO 和 tiering 都可能改变观察结果。
+
+<Callout type="trap" title="陷阱：从反编译 C# 推断所有分配">
+  反编译后的高层代码可能隐藏装箱、闭包、状态机和 helper 调用，也可能无法展示 JIT 消除。先读 CIL 确认 lowering，再用机器码、分配事件和基准验证实际热路径。
+</Callout>
+
+## 对象由头部、类型身份、字段和填充组成
+
+<Term def="CLR 为托管对象维护的运行时元数据区域，通常参与同步、哈希、类型方法表和 GC；精确布局随架构与实现变化。">对象头</Term>
+
+一个类实例不是字段字节的简单拼接。概念上，它还需要运行时识别类型、同步状态和 GC 扫描信息；字段会按类型大小与对齐要求排列，末尾或字段之间可能有填充。对象引用指向运行时约定的位置，头部细节、字段重排和对齐都不应被业务代码当成稳定 ABI。
+
+```text
+managed reference ──> [ runtime header | method-table/type pointer | fields | padding ]
+                                      GC descriptor says which fields are references
+```
+
+引用字段让 GC 知道下一条对象边，值类型字段则内联在宿主中。一个包含两个 `int` 的结构体作为类字段时，其字节随类对象一起存在；同一结构体装箱后，会复制到一个带对象头的独立堆对象。对齐可能使“字段大小之和”小于实际对象跨度，必须用目标运行时的布局工具或测量确认。
+
+静态字段不在普通实例字段中，却会成为长寿命入口。静态字典、单例和事件发布者引用的对象可能一直从类型/加载上下文相关根可达。诊断保留时，不能只审查实例之间的引用，还要读取到根路径中的 static、handle 与 thread local。
+
+## 值、对象引用和 ref 是三种不同传递语义
+
+<Term def="赋值和按值传参时复制自身数据的类型；它可以作为局部值、内联字段、数组元素或装箱对象中的负载。">值类型</Term>
+
+<Term def="变量保存托管对象引用，赋值和按值传参复制引用而不复制对象；多个引用可以指向同一实例。">引用类型</Term>
+
+值类型强调值复制，引用类型变量强调对象身份共享，但两者都可以按值传参。把一个类变量传给普通参数，会复制引用，所以方法仍能修改同一对象的字段，却不能仅通过给形参重新赋值来替换调用者变量。`ref`/`out`/`in` 则改变参数位置的别名语义。
+
+<Term def="由 CLR 跟踪、指向托管存储内部位置的引用；C# 的 ref local、ref return、in/out 等在受限生命周期内使用它。">托管指针</Term>
+
+```csharp
+public struct Counter { public int Value; }
+public sealed class Box { public int Value; }
+
+static void Mutate(Counter value, ref Counter alias, Box box)
+{
+    value.Value++; // 修改副本
+    alias.Value++; // 修改调用者的 Counter 存储
+    box.Value++;   // 复制了引用，但修改的是同一个 Box 对象
+}
+```
+
+<DnmRepresentationLab />
+
+图中五种场景揭示“值类型在栈、引用类型在堆”的简化为什么危险：值类型字段可以内联在堆对象，类引用本身可以在栈槽或寄存器，装箱复制值到新堆对象，托管 ref 则别名一个可移动对象内部的位置。GC 必须知道托管 ref 指向哪里，JIT 与语言会限制它逃逸到不安全生命周期。
+
+## 字符串不可变不等于每次都新建
+
+<Term def="运行时维护一个共享表，使特定内容相同的字符串引用同一实例；字面量通常经 ldstr 使用该机制，动态字符串默认不因内容相等自动驻留。">字符串驻留</Term>
+
+字符串不可变，使共享实例在语义上安全。编译器把字面量写入元数据，`ldstr` 让运行时获取对应驻留字符串；重复执行同一字面量通常不为每次调用重新构造内容。动态插值、拼接或输入解析产生的字符串即使内容相等，也通常是独立对象，除非显式调用 `String.Intern` 或相关实现采用其他缓存。
+
+显式驻留不是通用去重按钮。驻留表会形成额外生命周期，低复用、高基数内容可能让字符串长时间保留；查表也有成本。只有内容集合有界、重复率高且经过测量，才考虑驻留。系统库不会因为潜在好处就默认驻留所有 XML、HTTP 或用户输入字符串。
+
+```csharp
+string literalA = "orders";
+string literalB = "orders";
+string dynamicValue = string.Concat("ord", "ers".AsSpan());
+
+Console.WriteLine(ReferenceEquals(literalA, literalB));
+Console.WriteLine(ReferenceEquals(literalA, dynamicValue));
+Console.WriteLine(ReferenceEquals(dynamicValue, String.IsInterned(dynamicValue)));
+```
+
+具体优化可能常量折叠或选择不同 API 路径，因此示例用于提出验证点，不保证所有编译器版本产生同一对象数。要证明分配，应检查 CIL 并采集分配事件；要证明驻留保留，应检查根路径。
+
+## async 把跨 await 状态搬进编译器生成结构
+
+<Term def="编译器为 async 方法生成的类型，保存执行状态、awaiter、builder 和必须跨 await 存活的局部值，使方法可在未来继续。">异步状态机</Term>
+
+async 方法不是“自动在线程池运行”。编译器把方法拆成可暂停、可恢复的状态机。若 awaiter 已完成，路径可以同步继续，现代运行时常能避免部分堆提升；若真正挂起，调用方法已经返回，状态编号、awaiter 和跨 await 局部必须由能继续存活的状态机承载。
+
+```csharp
+static async Task<int> ReadCountAsync(Stream stream, byte[] buffer)
+{
+    int bytesRead = await stream.ReadAsync(buffer);
+    return bytesRead;
+}
+```
+
+这里 `stream`、`buffer` 和状态可能跨 await 成为状态机字段。只要异步操作未完成，状态机就可能让整个 `buffer` 保持可达；若局部引用一个大对象但 await 之后不再需要，缩小作用域、只保留必要数据或重构阶段边界，可能降低保留时间。是否实际分配 Task、状态机盒或 continuation 取决于返回类型、awaiter 完成状态、缓存与运行时版本，必须测量具体路径。
+
+<DnmHiddenStateLab />
+
+先预测同步完成与真实挂起的差异，再切换图示。不要把“方法带 async”直接等同于固定一次分配，也不要把 `ValueTask` 当作免费替代：它有单次消费、组合和大小等契约，只有热点路径数据证明 Task 分配显著且同步完成常见时才值得评估。
+
+<Callout type="trap" title="陷阱：为减少分配盲目改用 ValueTask">
+  ValueTask 会把复杂度转移到调用契约和更大的返回值表示，错误的多次 await 或组合会产生新问题。先测同步完成比例和 Task 分配，再决定 API；公共接口还要权衡长期兼容与使用成本。
+</Callout>
+
+## 三步验证一个高层语法的内存成本
+
+<Stepper>
+  <Step title="第一步：确认编译器产物">
+    从源码定位程序集中的类型、CIL 指令和编译器生成类型，区分 newobj、box、ldstr、闭包与状态机；不要把反编译 C# 当最终机器行为。
+
+    <DnmExecutionPipelineMap />
+  </Step>
+  <Step title="第二步：写出复制与别名语义">
+    标明值是内联、复制、装箱还是由托管 ref 别名，写出宿主与生命周期，再预测哪一步会产生对象或延长根路径。
+
+    <DnmRepresentationLab />
+  </Step>
+  <Step title="第三步：按真实运行路径测量">
+    对字面量/动态字符串、同步完成/挂起 await 分别采集分配与根路径，预热 JIT 并固定运行时；用数据决定是否需要去驻留、缩小状态或改变 API。
+
+    <DnmHiddenStateLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- .NET 程序集保存 CIL、元数据和清单，JIT 才针对当前运行时与 CPU 生成机器码和 GC 活性信息
+- CIL 能暴露 newobj、box、ldstr 和状态机等 lowering，但实际分配仍可能被 JIT、缓存与运行路径改变
+- 对象包含运行时头部、类型身份、字段与对齐填充；值字段可内联在堆对象，装箱则复制到独立对象
+- 值复制、对象引用复制和托管 ref 别名是三种不同语义，不能用“栈/堆”二分替代
+- 字符串驻留和 async 状态机会改变对象共享与生命周期；优化前应证明内容基数、同步完成率、分配栈和保留路径
+
+<Exercises>
+  1. **问题 1：解释 CIL 与最终成本。** 看到 `callvirt` 和 `newobj` 后，哪些结论可以直接得出，哪些仍需 JIT/运行时证据？
+
+  <Answer question="CIL 指令能证明什么，不能证明什么？">newobj 证明语言语义要求创建并初始化对象，callvirt 证明实例调用与空检查语义；但对象分配可能在内联和逃逸优化下变化，callvirt 也可能被去虚拟化或调用非 virtual 方法。应继续看目标 tier 的机器码、分配事件和运行时类型信息。</Answer>
+
+  2. **问题 2：比较值、引用与 ref。** 一个结构体普通参数、`ref` 参数和一个类普通参数在方法内修改字段，调用者分别能看到什么？
+
+  <Answer question="三种参数如何复制或别名存储？">结构体普通参数复制整个值，字段修改只作用于副本；ref 结构体参数别名调用者存储，修改可见；类普通参数复制对象引用，两个引用仍指向同一对象，因此字段修改可见，但给形参重新赋新对象不会替换调用者变量。</Answer>
+
+  3. **问题 3：分析 async 保留。** 大型 `byte[]` 在 await 前创建、await 后不再使用，但异步操作仍持续数秒。怎样判断它是否被状态机保留并修复？
+
+  <Answer question="跨 await 生命周期如何验证和缩短？">检查编译器生成状态机字段与 CIL，采挂起窗口堆转储并读取 byte[] 到根路径，确认是否由状态机字段保留；再把大数组使用限制在 await 前独立方法/作用域，或只跨 await 保存必要小值，按相同挂起场景复测分配和保留。不能只凭源码最后一次使用猜测。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term=".NET 程序集">包含 CIL、元数据、清单和资源的 .NET 部署与版本单元。</GlossaryItem>
+  <GlossaryItem term="CIL">由 CLR 转为目标机器码的公共中间语言。</GlossaryItem>
+  <GlossaryItem term="JIT">在运行时把 CIL 编译为机器码并生成 GC 信息的编译器。</GlossaryItem>
+  <GlossaryItem term="对象头">CLR 用于类型、同步和 GC 等运行时机制的对象元数据区域。</GlossaryItem>
+  <GlossaryItem term="值类型">赋值与按值传参时复制自身数据的类型。</GlossaryItem>
+  <GlossaryItem term="引用类型">变量保存对象引用、复制变量不复制对象的类型。</GlossaryItem>
+  <GlossaryItem term="托管指针">受 CLR 跟踪并别名托管存储位置的 ref 引用。</GlossaryItem>
+  <GlossaryItem term="字符串驻留">让特定内容相同字符串共享运行时实例的机制。</GlossaryItem>
+  <GlossaryItem term="异步状态机">保存 async 方法暂停状态和跨 await 局部值的编译器生成类型。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Pro .NET Memory Management, Second Edition, Chapter 4 .NET Fundamentals"
+  adaptedUrl="https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_4"
+/>

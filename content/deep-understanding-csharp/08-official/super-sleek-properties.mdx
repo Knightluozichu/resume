@@ -1,0 +1,155 @@
+---
+title: "Chapter 8. Super-sleek properties and expression-bodied members"
+type: C
+section: "C# in Depth 4e · C# 6"
+order: 8
+description: "覆盖property历史、C# 6 auto-property upgrades与expression-bodied members，区分storage、initialization、mutability、cost和API evolution。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-8"
+draft: false
+---
+
+import { DcsPropertyHistoryLab, DcsExpressionBodyLab, DcsPropertyDesignLab } from "@/components/mdx/deep-understanding-csharp/diagrams/super-sleek-properties";
+
+<Objectives>
+
+- 能比较manual、C# 3 auto、C# 6 getter-only与initializer property的storage、assignment和mutability规则
+- 能分析method/property/indexer/operator的expression body，判断evaluation、side effect和failure是否适合单表达式
+- 能设计public data、immutable reference、computed value与validated mutation的property contract并验证evolution
+
+</Objectives>
+
+## 为什么Property语法越短，Contract反而要写得越清楚
+
+C# 6让getter-only auto property与initializer消除大量backing-field ceremony，也让method/property可用expression body。一行code可更突出意图，但也更容易让reader误判“值已缓存”“对象深度不可变”或“getter一定cheap”。语法只决定生成形式，不替API定义cost与mutation。
+
+先预测：getter-only auto property引用的List是否immutable；property initializer是否在base constructor后执行；expression-bodied property是否只计算一次；所有one-line methods是否适合`=>`。答案都是否。
+
+<Term def="property对external caller暴露get/set/init能力、value cost与mutation semantics，而backing storage保持implementation detail。">property surface contract</Term>
+
+## A brief history of properties
+
+C# 1 manual property以explicit field和accessor bodies封装storage；能validation、lazy compute、notify或virtual override，但trivial case重复。C# 3 auto property让compiler生成field/accessors，保留property API与未来从source增加body的能力。
+
+Public field与property在binary metadata/call semantics不同，后续把field换property可能破坏consumer；因此对外从property开始。Private field仍适合内部storage，不能把“property优先”机械扩展到每个local implementation detail。
+
+```csharp
+private string _name;
+public string Name
+{
+    get => _name;
+    private set => _name = Validate(value);
+}
+```
+
+<Stepper>
+  <Step title="切换manual、auto、getter-only与initializer"><DcsPropertyHistoryLab /></Step>
+  <Step title="写出backing storage和assignment sites">标记initializer、constructor、setter及reflection/serializer可能路径，确认invariant owner。</Step>
+  <Step title="测试construction与mutation matrix">所有constructors、invalid input、serialization和external assignment分别验收。</Step>
+</Stepper>
+
+<Callout type="trap" title="Auto property只是field的更短写法，随时可互换">
+它生成accessor methods并形成property metadata/API；public field与property的binary、reflection、interface和binding contract不同。对外一开始就选property。
+</Callout>
+
+## Upgrades to automatically implemented properties
+
+C# 6支持auto-property initializer，让common default在每条constructor path前建立；execution order与field initializers一起按declaration规则发生，base construction与derived initialization顺序仍需理解。Initializer若调用virtual/外部I/O或依赖尚未建立的state，会隐藏partial-construction风险。
+
+Getter-only auto property可在declaration initializer或constructor中赋值，之后不能普通reassign，接近readonly field的reference assignment contract。它不冻结referenced object：`IList<T>`仍可mutation。Deep immutability需immutable type、copy或只读projection，并明确ownership。
+
+Constructor-only assignment有助于object valid-before-publish，但deserializer/ORM需求可能要求private setter/init或factory。选择由framework boundary与domain invariant决定，不为tool convenience公开无约束set。
+
+```csharp
+public sealed class Report
+{
+    public string Name { get; }
+    public IReadOnlyList<Line> Lines { get; } = Array.Empty<Line>();
+
+    public Report(string name) => Name = Validate(name);
+}
+```
+
+<Term def="reference在construction完成后不可重新赋值，但referenced object内部state是否可变仍由其type与ownership决定。">shallow immutability boundary</Term>
+
+## Expression-bodied members
+
+Expression-bodied method把单一return/void expression写在signature旁；property/indexer getter每次访问都evaluate expression；operator/conversion可清楚表达pure transformation。C# 6最初支持范围有限，后续版本扩展constructors、accessors等，应标明language version。
+
+`=>`不保证pure、fast、nonthrowing或cached。一个property若发network request、allocate大collection或改变state，即使能写成一行也违反caller对property的常见cost直觉。把expensive/async/fallible operation做named method，让call site看见action。
+
+Expression body适合一个abstraction level、一个obvious expression；需要guard、multiple steps、structured logging、try/finally或debug breakpoints时block更清晰。Conciseness是结果，不是目标函数。
+
+<Stepper>
+  <Step title="切换method、property、indexer与operator"><DcsExpressionBodyLab /></Step>
+  <Step title="标注每次调用的evaluation和cost">写出allocation、I/O、exception、mutation与是否缓存，不从arrow syntax推断。</Step>
+  <Step title="用重复访问与fault验收">多次读property、注入invalid state并profile，若行为像command则重构为method。</Step>
+</Stepper>
+
+<Callout type="trap" title="Expression-bodied property等同于初始化一次的值">
+它是getter body，每次访问重新evaluate。若需要snapshot/cache要显式storage、invalidation与thread-safety contract，不能靠syntax想象。
+</Callout>
+
+## 选择Property Form的Decision Matrix
+
+Public data默认property以保留evolution；simple mutable state用auto get/set但先确认setter真的是合法public command；construction-only reference用getter-only；computed cheap value用getter expression；validation、notification或lazy cache用full property或domain method。
+
+Property setter应保持快速、local和predictable。重大business transition、remote I/O或可能多种failure的operation用method，返回result/task并支持cancellation。Indexer同样应像collection access，不隐藏O(n) remote scan而无文档。
+
+### Modern version boundary
+
+Modern `init`/required members能表达object-initializer construction contract，是C# 9/11 update，不属于原章C# 6。它们减少mutation window，但required只保证caller初始化语法，不自动validate non-null/domain validity；constructor/factory仍可更强。
+
+```csharp
+public decimal Net => Gross - Tax;          // cheap derived property
+public Task RepriceAsync(CancellationToken token); // visible operation
+```
+
+<Term def="property getter每次访问重新执行derivation，并要求cost、side effect和failure符合property直觉。">computed-access contract</Term>
+
+<Term def="所有construction paths在对象可发布前建立required state且不依赖virtual dispatch的规则。">construction completeness</Term>
+
+<Term def="source从field/auto property演进到validated/computed accessor时，consumer-facing member kind与semantics保持稳定的能力。">member evolution budget</Term>
+
+<Stepper>
+  <Step title="切换public、immutable、computed与validated场景"><DcsPropertyDesignLab /></Step>
+  <Step title="为member写mutability/cost/failure/evolution">四项中任何一项不符合普通property预期，就改用full accessor或method。</Step>
+  <Step title="编译consumer并运行behavior tests">验证assignment permissions、all constructors、repeat access、invalid input和binary/source compatibility。</Step>
+</Stepper>
+
+## 本章回顾：Sleek Syntax必须服务Stable Surface
+
+1. Property封装access contract；field、auto与manual是不同member/API形状。
+2. Getter-only限制reference reassignment，不保证referenced object深度immutable。
+3. Initializer建立common default，但仍受construction order与failure影响。
+4. Expression body每次evaluate，不承诺pure、cheap、cached或nonthrowing。
+5. Public member选择同时考虑mutability、cost、failure与future evolution，不以最短source决定。
+
+<Exercises>
+
+**问题 1：getter-only `List<T>` property是否足够immutable？**
+
+<Answer>不够。Caller不能把property换成另一List，但仍可Add/Remove，且owner也可mutation。若contract要snapshot，用ImmutableArray/immutable collection或copy；只需live read-only view则暴露IReadOnlyList但仍说明更新/线程语义。测试external mutation与source ownership。</Answer>
+
+**问题 2：何时expression-bodied property应改成method？**
+
+<Answer>当operation有I/O、显著allocation/O(n) cost、mutation、cancellation、复杂failure或caller应明确触发action时改method。用repeat-access profile、fault和call-site review验证；cheap deterministic derivation仍适合property expression。</Answer>
+
+**问题 3：如何让多个constructors共享property default而不破坏invariant？**
+
+<Answer>真正所有paths相同且local safe的default放property initializer；required parameter与validation收敛到canonical constructor。避免initializer访问virtual/外部I/O或依赖later state。对每个constructor/factory执行valid/invalid suite，确认publish前construction completeness。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="property surface contract" definition="property向caller暴露的access、cost和mutation semantics。" />
+  <GlossaryItem term="shallow immutability boundary" definition="reference不可reassign但referenced object可能mutable的边界。" />
+  <GlossaryItem term="computed-access contract" definition="getter每次执行derivation时对cost/side effect/failure的承诺。" />
+  <GlossaryItem term="construction completeness" definition="对象发布前所有paths建立required valid state的规则。" />
+  <GlossaryItem term="member evolution budget" definition="保持member kind/semantics稳定时可加入implementation的空间。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# in Depth, Fourth Edition, Chapter 8: Super-sleek properties and expression-bodied members" adaptedUrl="https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-8" />

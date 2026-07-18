@@ -1,0 +1,187 @@
+---
+title: "Chapter 4. Strings"
+type: C
+section: "Programming in Lua 4e · The Basics"
+order: 4
+description: "掌握Lua不可变binary-safe byte string、quoted/long literals、显式数值转换、string库、缓冲构造以及UTF-8 code point与grapheme边界。"
+demo: true
+math: false
+sourceUrl: "https://www.lua.org/pil/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PilStringRepresentationLab, PilStringLibraryLab, PilUnicodeBoundaryLab } from "@/components/mdx/lua-programming/diagrams/strings";
+
+<Objectives>
+
+- 能解释Lua string的不可变、binary-safe byte sequence语义，比较quoted与levelled long bracket literal
+- 能分析string library的byte index、negative index、format与buffer成本，并复现UTF-8被错误切片的故障
+- 能设计text/binary/Unicode边界，验证encoding、invalid input、code point、grapheme和display width不被混用
+
+</Objectives>
+
+## 从Byte Sequence开始，而不是从Character开始
+
+Lua string是不可变byte sequence，可以包含任意bytes，包括zero byte；语言不自动附加UTF-8、locale或normalization。<Term def="String内部只承诺不可变bytes及其长度，text encoding、validation和character unit由boundary另外定义。">byte-string contract</Term>让同一type既能保存user text，也能保存network frame、compressed data或digest，但调用方必须知道当前value是哪一种。
+
+先预测：`#"你好"`是2还是6；`string.sub`能否按汉字切；embedded zero是否截断；循环`result = result .. piece`是否原地扩容；内容相同的strings能否安全作table key。答案分别涉及byte length、byte index、binary safety、immutability与value equality。
+
+String不可原地修改；concatenation、substitution和case conversion产生new value。Implementation可共享storage，但程序不能依赖identity。Equality按bytes，ordering也不是语言学collation。
+
+## Literal Strings与Escape Contract
+
+Single/double quoted literals处理newline、tab、quote、backslash、numeric byte等escape；Lua 5.3也可从Unicode code point产生UTF-8 bytes。Source encoding决定直接写入的non-ASCII bytes。Protocol fixture若要求exact bytes，应hex-assert而不是依赖editor normalization。
+
+```lua
+local quoted = "line one\nline two"
+local unicode = "你好"
+local binary = string.char(0x41, 0x00, 0x42)
+
+assert(#quoted == 17)
+assert(#unicode == 6) -- 两个code points，各3个UTF-8 bytes
+assert(#binary == 3 and string.byte(binary, 2) == 0)
+```
+
+Embedded zero不会终止Lua string；传给NUL-terminated C API时却可能截断，必须用pointer+length contract。Quoted literal中的unknown escape应在load阶段失败，不能把syntax error变成运行时fallback。
+
+## Long Strings与Levelled Delimiter
+
+Long string使用`[[...]]`，内容不按普通escape处理；opening delimiter后的第一个newline可被忽略。若内容包含`]]`，增加等号level，例如`[=[...]=]`。<Term def="Opening与closing long bracket使用相同数量等号，从而允许内容包含较低level结束符的分隔协议。">long-bracket delimiter</Term>也用于long comments。
+
+不要用固定`[[`包裹任意user input生成source；输入可提前关闭literal并注入code。首选把data作为argument、environment value或serialized payload传给chunk。Long literal减少escaping，不等于sandbox。
+
+<PilStringRepresentationLab />
+
+<Stepper>
+  <Step title="切换Quoted、Long、Binary与Immutable"><PilStringRepresentationLab /></Step>
+  <Step title="构造Delimiter Matrix">内容分别包含quote、newline、NUL、`]]`和`]=]`，预测literal所需encoding与level。</Step>
+  <Step title="验证Exact Bytes">用`string.byte`或hex dump比较source、loaded value和external write，确认newline/normalization不漂移。</Step>
+</Stepper>
+
+<Callout type="trap" title="Long String不处理Escape，所以可以安全拼接任何用户输入">
+Delimiter仍可能被输入闭合，后续内容成为Lua code。数据与source必须分离；动态source仍要限制environment、CPU、memory和native capabilities。
+</Callout>
+
+## Coercions与Explicit Conversion Gate
+
+Lua 5.3在部分arithmetic context可把numeric string转number，也可在concatenation中把number转string；隐式coercion易受版本、format和invalid input影响。`tonumber`、`tostring`、`string.format`更明确。<Term def="Text只有在完整parse、range、encoding与domain规则通过后才成为number，number也按指定格式成为text的转换边界。">explicit coercion gate</Term>避免large integer、NaN、locale decimal与trailing junk静默漂移。
+
+`tostring`主要用于human-readable表示，不保证float round-trip或stable wire schema；`string.format`能控制base、precision与padding，但specifier必须匹配value representation。ID优先decimal integer text，money使用minor units或decimal policy。不要用`value .. ""`替代serialization。
+
+## String Length与Byte Indexing Boundary
+
+`#s`返回bytes；`string.sub(s,i,j)`使用inclusive byte positions，negative index从end计。<Term def="Core string APIs的位置和长度以bytes计，切片边界若落在UTF-8 sequence中间会产生invalid text。">byte-indexing boundary</Term>要求API明确叫`byteOffset`、`codePointIndex`或`graphemeIndex`，不能统称character position。
+
+Lua index从1开始。`string.byte`返回byte values，`string.char`从bytes构造string。对binary protocol这是正确工具；对Unicode text则使用`utf8`library或完整segmentation library。`string.sub("你好",1,1)`只取得第一个UTF-8 byte，不是“你”。
+
+## The String Library
+
+常用functions包括`len`、`rep`、`reverse`、`lower`、`upper`、`sub`、`byte`、`char`、`format`以及pattern functions。第10章再系统学习pattern。Method syntax `s:sub(2,4)`只是在调用时传入receiver，不会使string可变。
+
+`lower`/`upper`不等于完整Unicode case folding；`reverse`按bytes会破坏multibyte text；`rep`要限制count；`string.dump`生成precompiled function bytes，不是portable data format。Format string若由untrusted input控制，也需要长度与specifier限制。
+
+<PilStringLibraryLab />
+
+<Stepper>
+  <Step title="切换Sub、Byte/Char、Format和Concat Buffer"><PilStringLibraryLab /></Step>
+  <Step title="标注Units与Allocation">为每个call记录input/output unit、是否new string、最大size和invalid behavior。</Step>
+  <Step title="做UTF-8破坏实验">逐byte切三byte code point，调用`utf8.len`验证invalid，再按合法offset截取。</Step>
+</Stepper>
+
+## Efficient Construction：Fragments再Concat
+
+String immutable，循环append可能反复复制旧累计内容，形成quadratic bytes copied。把fragments放proper sequence，最后`table.concat`；large output则直接stream。Buffer owner要限制fragment count、total bytes和escaping，不能把untrusted input无限积在memory。
+
+```lua
+local function csv_line(fields)
+  local out = {}
+  for index, value in ipairs(fields) do
+    local text = tostring(value)
+    assert(not text:find('[",\r\n]'), "escaping omitted in fixture")
+    out[index] = text
+  end
+  return table.concat(out, ",")
+end
+
+assert(csv_line({ "alpha", 42, true }) == "alpha,42,true")
+```
+
+真实CSV必须escape quotes/newlines；示例用assert暴露未实现边界。Sequence中的nil还会破坏length/concat assumptions。需要borrowed buffer或incremental writer时，lifetime与failure必须由caller/owner共同定义。
+
+## Unicode：UTF-8 Library处理Code Points
+
+Lua 5.3标准`utf8`library按UTF-8 code points工作：`utf8.len`计points并报告invalid byte，`utf8.codes`迭代position/value，`utf8.codepoint`解码，`utf8.char`编码，`utf8.offset`定位边界。<Term def="先验证UTF-8，再沿合法byte offsets枚举Unicode scalar values而不把byte或grapheme混成character。">Unicode scalar iteration</Term>不解决grapheme、normalization、case folding或display width。
+
+Emoji modifier、combining mark与ZWJ sequence可能多个code points形成一个grapheme。UI cursor/delete与长度限制需要segmentation；database equality可能需要normalization/collation；terminal alignment需要display width。标准`utf8`library只是code-point层。
+
+<PilUnicodeBoundaryLab />
+
+<Stepper>
+  <Step title="切换Byte、Code Point、Grapheme和Display Width"><PilUnicodeBoundaryLab /></Step>
+  <Step title="建立Four-Length Record">同一input记录bytes、points、graphemes和columns，禁止一个length字段承担四种语义。</Step>
+  <Step title="注入Invalid UTF-8">覆盖truncated sequence、bad continuation与unsupported scalar；boundary reject或明确replacement。</Step>
+</Stepper>
+
+```lua
+local function inspect_utf8(text)
+  local count, invalid = utf8.len(text)
+  if not count then return nil, { kind = "invalid-utf8", byte = invalid } end
+
+  local points = {}
+  for byte_offset, code_point in utf8.codes(text) do
+    points[#points + 1] = { byte_offset, code_point }
+  end
+  return { bytes = #text, code_points = count, points = points }
+end
+
+local info = assert(inspect_utf8("A你好"))
+assert(info.bytes == 7 and info.code_points == 3)
+```
+
+<Callout type="trap" title="utf8.len给出Character Count，所以可直接用于UI光标和截断">
+它计code points，不计grapheme或display columns。Combining marks与emoji sequence会被计为多个points；UI需要segmentation/rendering-aware library。
+</Callout>
+
+## External Boundary与Security
+
+File/network/DB boundary固定encoding、BOM、invalid sequence、newline、size和normalization policy。Binary payload不做text normalization；text入口验证后才进入domain。Visually identical strings的bytes可能不同，identifier/confusable不能只lowercase。
+
+C boundary始终携带pointer+length，避免NUL截断path、credential或payload。Pattern input、format string、repeat count和concat size都需要budget。String可保存任何bytes，不代表每个consumer都安全接受。
+
+## 本章回顾：String是Bytes，Text是Contract
+
+1. Lua string不可变且binary-safe，`#`与core indexes默认都是bytes。
+2. Quoted literal处理escape；long bracket按matching level分隔，但不提供trust。
+3. Numeric/text coercion要显式parse、range与format，display不是wire schema。
+4. String library的sub/reverse/case不自动提供Unicode character semantics。
+5. Fragments加`table.concat`减少重复复制；large output仍需stream和limit。
+6. UTF-8 library处理code points；grapheme、normalization、case folding和display width另有责任层。
+
+<Exercises>
+
+**问题 1：为什么`string.sub("你好",1,1)`不能得到第一个汉字？**
+
+<Answer>`string.sub`按byte index，UTF-8中的“你”占3 bytes，取1 byte得到invalid sequence。用`utf8.offset`确定code-point byte range；若需求是user-perceived grapheme，还需segmentation library。</Answer>
+
+**问题 2：怎样安全把任意Multiline Data提供给Lua Chunk？**
+
+<Answer>首选source与data分离，将data作为argument、environment capability或validated serialized value传入。若必须生成source，选择不冲突的levelled bracket并验证，但仍要受控environment与resource limits；delimiter escaping不等于sandbox。</Answer>
+
+**问题 3：日志Builder为何不应循环`text = text .. fragment`？**
+
+<Answer>String不可变，每次concat可能复制旧累计内容，整体趋于quadratic。收集bounded fragments后table.concat，或直接写stream；覆盖nil fragment、escaping、maximum bytes和writer failure。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="byte-string contract" definition="String只承诺不可变bytes，encoding与character unit另行定义。" />
+  <GlossaryItem term="long-bracket delimiter" definition="Opening与closing以相同等号level匹配的multiline分隔协议。" />
+  <GlossaryItem term="explicit coercion gate" definition="Text/number按parse、range和format规则显式转换的边界。" />
+  <GlossaryItem term="byte-indexing boundary" definition="Core string位置按bytes计算且可能切断UTF-8 sequence的边界。" />
+  <GlossaryItem term="Unicode scalar iteration" definition="验证UTF-8并沿合法offset枚举code points的过程。" />
+</Glossary>
+
+<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 4: Strings" adaptedUrl="https://www.lua.org/pil/" />

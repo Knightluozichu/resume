@@ -1,0 +1,185 @@
+---
+title: "Chapter 15. Streams and I/O"
+type: C
+section: "C# 10 Nutshell · Runtime Services"
+order: 15
+description: "覆盖Stream能力与后端存储、buffer/text/binary/compression适配器、文件目录、OS安全及内存映射，建立partial I/O和原子发布契约。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch15.html"
+draft: false
+---
+
+import { CtcFileBoundaryLab, CtcStreamAdapterLab, CtcStreamCapabilityLab } from "@/components/mdx/csharp-10-core/diagrams/streams-and-io";
+
+<Objectives>
+
+- 能分析Stream的read/write/seek、position、partial transfer与同步异步能力，判断正确循环
+- 能设计buffer、text、binary与compression adapter的层次、leaveOpen和flush/dispose顺序
+- 能实现原子文件发布、安全目录遍历与memory-mapped view，并复现权限和并发竞态
+
+</Objectives>
+
+## 为什么I/O的核心是Boundary而不是API名称
+
+Stream只抽象字节序列，不承诺一次Read填满buffer、支持Seek、拥有底层资源或线程安全。文件系统是会并发变化且受权限约束的namespace，压缩和文本层又引入buffered state。可靠I/O先写capability、owner、size limit、completion与publish boundary。
+
+先预测：Read返回0一定表示暂时没有数据吗；Flush会保证数据已持久化到物理介质吗；Dispose外层Stream一定应关闭内层Stream吗；File.Exists后Open一定成功吗；memory map修改会立即对所有进程一致可见吗。答案都是否。
+
+<Term def="明确I/O对象支持哪些操作、partial transfer、position、并发与owner行为的可测试协议。">stream capability contract</Term>
+
+## Stream Architecture
+
+Stream基类提供CanRead/CanWrite/CanSeek、Length/Position、Read/Write/Seek/SetLength/Flush及异步版本。Caller必须依据capability而非concrete type猜测。Read返回0在有长度的同步字节流通常表示EOF；非零返回可能小于请求量。ReadExactly用于必须填满协议字段，CopyTo负责循环但仍需总量限制。
+
+```csharp
+static async Task<int> ReadFrameAsync(
+    Stream source, Memory<byte> destination, CancellationToken ct)
+{
+    int offset = 0;
+    while (offset < destination.Length)
+    {
+        int read = await source.ReadAsync(destination[offset..], ct);
+        if (read == 0) break;
+        offset += read;
+    }
+    return offset;
+}
+```
+
+WriteAsync完成表示数据被接受到该stream层，不一定落盘或送达peer。Position共享使并发Read/Seek产生竞态；除API明确保证，单个Stream不假设thread-safe。Cancellation可能在部分传输后发生，协议要知道已提交多少。
+
+## Backing Store Streams
+
+FileStream连接文件handle，mode/access/share/options决定创建、截断、共享和async行为；NetworkStream连接socket且通常不可seek；MemoryStream连接内存buffer，可能可扩展或固定。UnmanagedMemoryStream、pipe等又有自己的lifetime和bounds。
+
+FileMode.Create会立即截断，不能用于“最后才发布”。FileShare控制其他handle可执行的操作，不是业务分布式锁。MemoryStream.GetBuffer/TryGetBuffer暴露capacity而非仅有效Length，输出时必须限定范围。
+
+<Stepper>
+  <Step title="切换File、Memory、Network与Pipe-like流"><CtcStreamCapabilityLab /></Step>
+  <Step title="填写capability table">记录CanRead/Write/Seek、EOF、partial transfer、position、owner、timeout和cancel行为。</Step>
+  <Step title="注入short read/write">把每次传输限制成1到7字节，验证parser和copy loop不依赖一次读满。</Step>
+</Stepper>
+
+<Callout type="trap" title="一次Read就会返回请求的全部字节">
+文件、网络、压缩和包装流都可能short read。协议读取固定长度必须循环或使用ReadExactly，并区分干净EOF与截断frame。
+</Callout>
+
+## Stream Adapters
+
+BufferedStream批量小操作；StreamReader/Writer用Encoding在bytes和chars间转换；BinaryReader/Writer读写primitive。层次必须单向且owner明确：外层通常在Dispose时flush并关闭内层，`leaveOpen: true`用于caller继续拥有底层流。
+
+Text encoding决定BOM、invalid byte fallback与字符边界；StreamReader的buffer意味着BaseStream.Position不等于逻辑char位置。Binary format要固定endianness、length prefix、version和limits，不能直接把内存布局当稳定协议。
+
+```csharp
+await using var file = new FileStream(path, FileMode.CreateNew, FileAccess.Write,
+    FileShare.None, 64 * 1024, FileOptions.Asynchronous);
+await using var buffered = new BufferedStream(file, 64 * 1024);
+await using var writer = new StreamWriter(
+    buffered, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+    bufferSize: 16 * 1024, leaveOpen: false);
+
+await writer.WriteLineAsync(header);
+await writer.WriteAsync(body);
+```
+
+Dispose顺序是outer-to-inner，确保char encoder、adapter buffer和backing store依次完成。双重buffer不一定更快，应benchmark。
+
+<Term def="外层encoder/transform/buffer必须先完成，再由内层backing store flush/close的依赖顺序。">adapter disposal order</Term>
+
+## Compression Streams
+
+GZipStream/DeflateStream/BrotliStream把压缩或解压包装在另一个Stream上。CompressionMode、level与leaveOpen决定方向和ownership。压缩footer通常在Dispose/Close时完成，因此在外层compression stream释放前读取MemoryStream结果或发布文件会得到截断artifact。
+
+解压不可信数据要限制compressed bytes、expanded bytes、ratio和time，防止compression bomb。格式可能包含多个members/trailing bytes，协议应明确是否允许。压缩后的数据通常不适合任意Seek。
+
+<Stepper>
+  <Step title="切换Buffered、Text、Binary与Compression"><CtcStreamAdapterLab /></Step>
+  <Step title="画adapter ownership stack">从最外层到backing store标注buffer、encoding、footer、leaveOpen和Dispose责任。</Step>
+  <Step title="测试截断与炸弹输入">覆盖missing footer、invalid encoding、oversized length、极端压缩比和中途取消。</Step>
+</Stepper>
+
+## File and Directory Operations
+
+File/Directory提供便利操作，FileInfo/DirectoryInfo保存path信息但不会冻结文件系统状态。`Exists`后再Open有TOCTOU竞态；直接执行目标操作并处理FileNotFound、UnauthorizedAccess、sharing violation等结果。Enumeration是lazy且目录可变化，逐项错误、symlink/reparse point、循环、深度和取消都需策略。
+
+原子写入通常在目标同一volume创建唯一temp，完整写入并flush/close，再用rename/replace发布；失败时清理temp。跨volume move可能退化为copy/delete。Crash durability还涉及文件和目录metadata flush，必须按平台/业务要求验证，不能把Flush等同绝对持久。
+
+```csharp
+string temp = Path.Combine(directory, $".{Path.GetFileName(target)}.{Guid.NewGuid():N}.tmp");
+try
+{
+    await File.WriteAllBytesAsync(temp, payload, ct);
+    File.Move(temp, target, overwrite: true);
+}
+finally
+{
+    if (File.Exists(temp)) File.Delete(temp);
+}
+```
+
+Path.Combine不证明结果位于trusted root。接受用户relative path时先定义允许语法，GetFullPath后按平台case规则检查root boundary，并在open阶段防范symlink swap；高安全场景使用基于directory handle的OS API。
+
+<Term def="先在隔离临时artifact完成全部写入，成功后以单一replace/rename使新版本可见的边界。">atomic publication boundary</Term>
+
+## OS Security
+
+实际访问由进程identity、ACL或Unix mode、目录execute权限、sandbox/container mount、share flags和文件owner共同决定。应用以least privilege运行，部署预创建目录和权限，不在请求路径随意放宽ACL。Windows ACL与Unix permissions模型不同，跨平台代码明确支持范围。
+
+路径输入、temporary directory和log/output files都属于security boundary。避免predictable temp names；敏感文件限制owner access，并注意backup、crash dump和error message泄露。检查权限后再使用同样存在竞态，最终以open result为准。
+
+## Memory-Mapped Files
+
+MemoryMappedFile把文件或共享内存区域映射到virtual address space，view accessor/stream限制offset和length。适合大文件随机访问、进程间共享或避免重复copy，但page fault、working set和address-space仍有成本。View与mapping都有owner，访问不得越界或超出文件当前长度。
+
+共享修改的可见性、flush、原子性与进程同步是不同问题；MemoryMappedViewAccessor写入不自动建立跨进程事务。使用named mutex/semaphore或协议序列号协调，持久化要求按OS验证。文件被truncate/replace时已有mapping行为平台相关，应禁止并发结构变更或版本化mapping。
+
+<Stepper>
+  <Step title="切换atomic write、directory、security与memory map"><CtcFileBoundaryLab /></Step>
+  <Step title="建立failure matrix">覆盖权限拒绝、目标存在、磁盘满、取消、进程崩溃、symlink swap和跨volume。</Step>
+  <Step title="验证可见性与恢复">并发reader只看到旧版或完整新版；重启后无半文件，temp可识别清理，mapping版本一致。</Step>
+</Stepper>
+
+<Callout type="trap" title="先File.Exists再Open就能避免异常">
+检查与打开之间文件可被删除、替换或改权限。Exists还吞掉部分错误。直接Open并按异常/结果处理，安全场景进一步绑定directory handle和identity。
+</Callout>
+
+<Term def="检查path仍落在可信根目录并防止symlink或并发替换绕过的文件命名空间约束。">filesystem namespace boundary</Term>
+
+## 本章回顾：每一层都有Buffer与Owner
+
+1. Stream按capability和partial transfer编程，不能假设seek、一次读满或线程安全。
+2. Adapter改变encoding、buffering、format或compression语义，按outer-to-inner完成。
+3. 文件发布用temp + close + atomic replace，Exist-check不能消除竞态。
+4. OS identity与namespace决定最终安全边界，路径字符串验证不是全部。
+5. Memory map减少显式copy但引入page、view lifetime、coherence和同步责任。
+
+<Exercises>
+
+**问题 1：如何读取4字节长度和对应payload？**
+
+<Answer>用ReadExactly读取固定4字节，按协议endianness解析；先验证长度非负且不超过上限，再租用/分配buffer并循环ReadExactly payload。干净EOF只允许发生在frame开始，header/payload中途EOF是截断错误，取消后按已消费状态关闭或重同步连接。</Answer>
+
+**问题 2：为什么压缩输出要先Dispose GZipStream？**
+
+<Answer>压缩器在buffer中保留数据并在完成时写footer/checksum；直接读取底层MemoryStream可能缺尾部。使用leaveOpen让底层保持可读，但必须先Dispose/完成外层压缩器，再取得底层有效Length范围。</Answer>
+
+**问题 3：原子配置更新如何验收？**
+
+<Answer>在目标同volume写唯一temp，验证内容、flush并close，再replace；并发reader只能解析旧版或完整新版。注入磁盘满、权限、cancel和各写入阶段崩溃，重启后目标仍有效且孤立temp可安全识别清理。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="stream capability contract" definition="Read/write/seek、partial transfer与owner协议。" />
+  <GlossaryItem term="adapter disposal order" definition="Outer encoder/transform先于inner backing store完成。" />
+  <GlossaryItem term="atomic publication boundary" definition="完整temp经replace一次性变为可见版本。" />
+  <GlossaryItem term="filesystem namespace boundary" definition="可信根、path identity与symlink竞态约束。" />
+  <GlossaryItem term="mapped-view lifetime" definition="Mapping与offset/length view的有效访问期。" />
+</Glossary>
+
+<Term def="Memory-mapped mapping、view、offset与file version共同限定的合法内存访问期。">mapped-view lifetime</Term>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 15: Streams and I/O" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch15.html" />

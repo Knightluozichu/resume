@@ -1,127 +1,370 @@
 ---
-title: 图形与 SFML
+title: 第 3 章：字符串、输入与 HUD 时间条
 type: A
-section: 游戏编程入门
-order: 6
-description: SFML 图形模块——窗口、事件、纹理、精灵与每帧渲染流水线，让 C++ 逻辑变成可见画面。
+section: Timber!!! 项目
+order: 3
+description: 对齐官方第 3 版第 3 章：用 std::string、SFML Time、事件与实时输入、Font/Text、分数消息和时间条实现暂停、开始与 HUD。
 demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
 draft: false
 ---
 
-import { BcgSfmlGraphicsDiagram } from "@/components/mdx/beginning-cpp-game/diagrams/bcg-sfml-graphics";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  BcgpHudTextMap,
+  BcgpPauseInputMap,
+  BcgpTimeBarMap,
+} from "@/components/mdx/beginning-cpp-game-programming/diagrams/graphics-sfml";
 
 <Objectives>
-- 能用 SFML 创建窗口并写出每帧的 clear/draw/display 三件套
-- 能说明 Texture 与 Sprite 的关系及为何不直接画 Texture
-- 能区分事件与实时输入，并分别用于菜单与移动
+
+- 能实现等待、游玩、暂停、超时与重启状态转换，区分窗口事件边沿和连续玩家输入
+- 能设计从分数状态到 `std::string`、`sf::Font`、`sf::Text` 和 HUD 布局的安全文本链
+- 能计算剩余时间和归一化比例，绘制不会出现负宽度且暂停期间不扣时的 SFML 时间条
+
 </Objectives>
 
-## 从控制台到画面
+## 从“游戏现在处于哪个阶段”开始
 
-前面几章的程序输出是控制台文字。游戏需要画图——窗口、精灵、画面刷新。SFML 的图形模块把这些封装成面向对象的类，让你用 C++ 直接驱动画面。
+第 2 章让云和蜜蜂持续移动，但玩家还不能开始、暂停或读到分数。第 3 章加入
 
-<BcgSfmlGraphicsDiagram />
+<Term def="玩家通过键盘、鼠标或其他设备表达意图，游戏将离散事件和连续状态映射为阶段转换或持续动作的过程。">
+  玩家输入
+</Term>
+与 HUD。关键不是多写几个
+`if`，而是先定义游戏阶段：等待开始、正在游玩、暂停、时间耗尽。每个阶段明确哪些输入有效、是否推进时间、显示什么消息。
 
-## 每帧三件套
+<Term def="只用 true 或 false 表示两个互斥阶段的简化状态；阶段超过两个时应升级为枚举以避免多个布尔组合矛盾。">
+  paused 状态
+</Term>
+适合原书早期示例，但“暂停”和“游戏结束”都设为 `paused == true`
+后，重启语义会变含糊。现代 C++ 可先用 `enum class GamePhase`
+明确完整状态，再让输入执行转换。
 
-SFML 每帧渲染的固定骨架：
+<BcgpPauseInputMap />
+
+## 事件输入与实时输入各负责什么
+
+<Term def="从 SFML 窗口事件队列取得的按下、释放、文本、尺寸改变和关闭等离散消息，适合一次性状态转换。">
+  事件输入
+</Term>
+适合 Enter 开始、Escape
+暂停和关闭窗口。按键事件表达边沿，一次按下只转换一次；开启系统按键重复时仍可能收到重复事件，所以状态转换还要检查当前阶段，或关闭按键重复。
+
+<Term def="每帧查询设备当前是否保持某个状态的输入方式，适合玩家持续移动、瞄准和按住动作。">
+  实时输入
+</Term>
+适合后续砍树或移动。若只处理 `KeyPressed`
+来持续移动，速度会依赖操作系统按键重复延迟与频率；若每帧查询 Enter
+来重启，按住一秒会把游戏反复重置。
 
 ```cpp
-window.clear();              // 1. 清屏
-window.draw(sprite);         // 2. 画精灵
-window.display();            // 3. 显示
-```
+enum class GamePhase {
+    Waiting,
+    Playing,
+    Paused,
+    Expired
+};
 
-为什么必须成对？SFML 默认双缓冲：`draw` 画到后台缓冲，`display` 才把它交换到前台显示。漏 `display` 窗口保持黑屏；漏 `clear` 上一帧残留产生拖影。顺序也得对——clear 在 draw 之后等于把刚画的擦了。
+GamePhase phase{GamePhase::Waiting};
+window.setKeyRepeatEnabled(false);
 
-<Callout type="tip">
-把这三步当成游戏循环里 render() 阶段的固定仪式。clear → draw（所有要画的东西）→ display，缺一不可、顺序不能乱。
-</Callout>
-
-## 窗口与事件
-
-创建窗口并处理事件：
-
-```cpp
-RenderWindow window(VideoMode(800, 600), "My Game");
-Event event;
 while (window.pollEvent(event)) {
-  if (event.type == Event::Closed) window.close();
+    if (event.type == sf::Event::Closed)
+        window.close();
+
+    if (event.type == sf::Event::KeyPressed) {
+        if (event.key.code == sf::Keyboard::Enter &&
+            (phase == GamePhase::Waiting || phase == GamePhase::Expired)) {
+            phase = GamePhase::Playing;
+        } else if (event.key.code == sf::Keyboard::Escape &&
+                   phase == GamePhase::Playing) {
+            phase = GamePhase::Paused;
+        } else if (event.key.code == sf::Keyboard::Escape &&
+                   phase == GamePhase::Paused) {
+            phase = GamePhase::Playing;
+        }
+    }
 }
 ```
 
-事件是**离散瞬时**的——按一次键产生一个事件。适合「单次触发」动作：按 ESC 暂停、按空格开火、点关闭按钮。
+开始或重启不能只改 `phase`：分数、剩余时间、树枝、玩家位置和随机实体都要恢复初始不变量。当前章先列出重置清单，第 4 章再用函数集中实现，避免复制多段赋值。
 
-## 事件 vs 实时输入
+<Callout type="trap">
+  **现象**：按住 Enter
+  时计时器始终回到满值。**原因**：代码用每帧实时查询执行一次性重启，按住期间重复重置。**修法**：用
+  `KeyPressed` 边沿触发，并要求当前阶段是 Waiting 或
+  Expired；重置操作只在合法转换上执行一次。
+</Callout>
 
-实时输入查键盘**当前**状态：
+## C++ 字符串：HUD 文本是状态的投影
+
+<Term def="标准库管理长度和动态存储的文本值类型，可安全拼接、复制和传给接受字符串视图或 C 字符串的接口。">
+  std::string
+</Term>
+用于开始消息、暂停提示和格式化分数。游戏状态仍保留 `int score`、`float
+remainingSeconds` 等数值，HUD
+只把它们转成可读字符串；不要把分数字符串反过来作为业务事实来源。
 
 ```cpp
-if (Keyboard::isKeyPressed(Keyboard::Right)) {
-  player.move(dt);
+#include <sstream>
+#include <string>
+
+int score{0};
+std::ostringstream scoreBuilder;
+scoreBuilder << "Score: " << score;
+const std::string scoreLine{scoreBuilder.str()};
+```
+
+`std::to_string` 适合简单拼接，`ostringstream` 可组合多个字段和格式控制。C++20 的 `std::format` 很清楚，但标准库实现支持度要由项目工具链验证。无论用哪种方式，都避免手写固定字符数组和未经容量检查的格式化。
+
+高频 HUD 不一定每帧重新分配字符串。分数或阶段变化时更新文本即可；时间显示若每帧变化，可以复用构建器或接受小规模开销后再测量。先保证状态一致，再凭性能数据优化。
+
+## Font 与 Text：字形资源也有借用生命周期
+
+<Term def="SFML 加载并拥有字体字形数据的资源对象；所有引用它的 Text 在绘制期间都要求字体继续存活。">
+  sf::Font
+</Term>
+与第 1 章纹理类似，是资源所有者。
+<Term def="SFML 保存字符串、字体引用、字号、颜色和二维变换的可绘制对象；它不拥有所关联字体。">
+  sf::Text
+</Term>
+是视图对象。函数内局部加载字体再返回 Text 会留下失效字体引用。
+
+```cpp
+sf::Font hudFont;
+if (!hudFont.loadFromFile("assets/fonts/KOMIKAP_.ttf")) {
+    std::cerr << "failed to load assets/fonts/KOMIKAP_.ttf\n";
+    return EXIT_FAILURE;
+}
+
+sf::Text scoreText;
+scoreText.setFont(hudFont);
+scoreText.setCharacterSize(42);
+scoreText.setFillColor(sf::Color::White);
+scoreText.setPosition(24.0F, 18.0F);
+scoreText.setString("Score: 0");
+```
+
+字体文件是必需 HUD 资源，加载失败时不能继续绘制 Text。不同字体的字形边界和基线不同，位置应通过 `getLocalBounds`、原点和安全边距布局；不要把某字体的视觉宽度写成所有语言都适用。中文还要确认字体实际包含字形。
+
+<BcgpHudTextMap />
+
+## 分数与消息：状态变化时同步 HUD
+
+<Term def="显示分数、时间、状态与提示但通常不属于可滚动世界的屏幕层界面。">
+  HUD
+</Term>
+应在世界对象之后绘制，并使用不随世界相机移动的视图。Timber
+当前没有移动相机，仍应把 HUD 坐标理解为屏幕布局，以便后续 Zombie Arena
+的双视图章节自然扩展。
+
+```cpp
+std::ostringstream builder;
+builder << "Score: " << score;
+scoreText.setString(builder.str());
+
+if (phase == GamePhase::Waiting)
+    messageText.setString("Press Enter to start");
+else if (phase == GamePhase::Paused)
+    messageText.setString("Paused - press Escape to resume");
+else if (phase == GamePhase::Expired)
+    messageText.setString("Out of time - press Enter to restart");
+else
+    messageText.setString("");
+```
+
+消息来自状态，不要同时维护 `bool showMessage` 与可能矛盾的 `phase`。空字符串隐藏消息比把对象移到魔法坐标更直接。若文本居中，应在每次字符串变化后重新取得局部边界，因为不同消息宽度不同。
+
+绘制顺序可为背景、云与蜜蜂、玩法对象、时间条、分数、中央消息。透明 HUD 仍受顺序影响；把它放在背景前会被完全覆盖。
+
+## SFML Time：墙上时间与游戏时间分开
+
+<Term def="SFML 表示一段时间的值类型，可从 Clock 得到并以秒、毫秒或微秒读取。">
+  sf::Time
+</Term>
+表示时长，`sf::Clock` 产生经过时间。每帧重启一次时钟得到墙上 dt，但只有
+`Playing` 阶段把它扣入游戏预算；暂停阶段仍抽事件和绘制，却不推进玩法时间。
+
+```cpp
+sf::Clock frameClock;
+float remainingSeconds{6.0F};
+
+while (window.isOpen()) {
+    const sf::Time frameTime{frameClock.restart()};
+    const float dt{std::min(frameTime.asSeconds(), 0.05F)};
+
+    // poll events before updating phase
+    if (phase == GamePhase::Playing) {
+        remainingSeconds = std::max(0.0F, remainingSeconds - dt);
+        if (remainingSeconds == 0.0F)
+            phase = GamePhase::Expired;
+    }
 }
 ```
 
-按住期间每帧都返回 true。适合「持续按住」动作：按住方向键移动、按住加速键加速。
+这里在减法后钳制到精确 0，再用相等判断离散状态边界，因此不同于等待累积位置“恰好等于窗口宽度”。若按键事件在本帧把状态改成 Paused，更新应读取新状态，不再扣这一帧后续时间；阶段顺序要写入测试预期。
 
-<Callout type="trap">
-别用事件做移动：按键事件只在按下/松开那一刻触发一次，按住不会持续产生，角色会「顿一下走一步」。移动这类持续动作要用 `Keyboard::isKeyPressed` 每帧查状态。窗口关闭、菜单确认这类点按才用事件。
-</Callout>
+## 时间条：从业务时间映射到矩形宽度
 
-## Texture 与 Sprite
-
-Texture 是图片数据本身（加载到显存的像素阵列），Sprite 是「引用某张纹理 + 位置/旋转/缩放」的可绘制实例。
+<Term def="把剩余游戏时间映射成 0 到 1 比例，再乘最大宽度得到的 HUD 矩形视觉。">
+  时间条
+</Term>
+不能直接把秒数当像素，因为总时长修改会改变视觉尺度。业务值先形成比例，渲染层再映射到几何。
 
 ```cpp
-Texture tex; tex.loadFromFile("player.png");
-Sprite spr; spr.setTexture(tex); spr.setPosition(100, 200);
-window.draw(spr);
+#include <algorithm>
+
+constexpr float totalSeconds{6.0F};
+constexpr float fullBarWidth{400.0F};
+constexpr float barHeight{28.0F};
+
+const float ratio{
+    totalSeconds > 0.0F
+        ? std::clamp(remainingSeconds / totalSeconds, 0.0F, 1.0F)
+        : 0.0F};
+
+timeBar.setSize({fullBarWidth * ratio, barHeight});
+timeBar.setFillColor(ratio < 0.25F ? sf::Color::Red : sf::Color::Green);
 ```
 
-为什么不直接画 Texture？因为复用：一张纹理可被多个 Sprite 共享。100 个相同敌人共用 1 张贴图省显存；每个 Sprite 各自有独立位置，移动敌人只改对应 Sprite，不动纹理。
+<Term def="将任意范围内的剩余值转换为 0 到 1 区间比例的过程，便于映射到宽度、颜色或音量。">
+  归一化比例
+</Term>
+先处理总时长为零，再把结果钳制到
+`[0,1]`，避免负宽度或超过最大宽度。颜色阈值是视觉策略，不应反过来控制游戏是否结束。
+
+<BcgpTimeBarMap />
+
+## 暂停与重启：时钟不能偷走时间
+
+暂停期间 `frameClock` 仍每帧重启，但 dt 被忽略，因此恢复时不会一次扣掉整个暂停时长。如果选择在暂停时不重启时钟，恢复第一帧会得到巨大间隔；除非恢复时显式重置，否则会直接超时。
+
+<Term def="把分数、剩余时间、实体位置、阶段和其他一局状态同时恢复到规定初值的事务。">
+  游戏重启
+</Term>
+必须原子维护不变量。可先在事件分支列出所有赋值，下一章学习函数后提取为
+`resetGame()`；在此之前也要有清单和测试，防止只恢复 HUD 文本却保留旧分数。
+
+```cpp
+if (startNewGame) {
+    score = 0;
+    remainingSeconds = totalSeconds;
+    playerSide = Side::Left;
+    branchIndex = 0;
+    phase = GamePhase::Playing;
+    scoreText.setString("Score: 0");
+}
+```
+
+示例中的 `Side` 和树枝数组将在第 4 章完整建立。状态转换最后设置 `Playing`，保证其他字段先准备完；若未来重置可能失败，应构造完整新状态后再提交，不能让半初始化游戏进入更新。
 
 <Callout type="trap">
-Texture 必须在 Sprite 使用期间保持存活——Sprite 不拥有纹理，只引用它。纹理先于 Sprite 销毁会画出错乱。游戏里应让资源管理器统一持有纹理，Sprite 只引用不拥有。
+  **现象**：暂停十秒后恢复，时间条立即归零。**原因**：时钟在暂停期间没有持续重启，恢复帧把整段墙上时间当作游戏
+  dt。**修法**：每帧采样并只在 Playing
+  状态消费，或恢复时显式重启时钟丢弃暂停间隔；用自动化测试验证暂停前后剩余时间。
 </Callout>
 
-## 资源绑定流程
+## 验证 HUD 状态机
 
-纹理 → 精灵 → 窗口：纹理加载图片到显存，精灵绑定纹理并设位置，窗口 draw 提交绘制。这条链是 SFML 图形的核心。
+用转换表测试：Waiting + Enter 进入 Playing 并重置；Playing + Escape 进入 Paused；Paused + Escape 恢复 Playing；Playing 时间到零进入 Expired；Expired + Enter 创建新局；任何状态 + Close 关闭窗口。按住按键不应重复转换。
+
+时间测试使用可注入 dt，而不是实际等待六秒。依次输入 1.0、2.0、暂停期 4.0、恢复期 3.0，剩余时间应从 6 变 5、3、仍为 3、最后为 0；时间条宽度按同样比例变化。字体路径故障测试应在进入循环前失败并报告路径。
+
+视觉验收同时检查 1280x720 与不同窗口比例：分数不越界，中央消息按文本边界重新居中，时间条不会为负或超出全宽，HUD 最后绘制。截图验证只能检查显示结果，状态转换仍需逻辑断言。
+
+> 先预测：若暂停时停止调用 `frameClock.restart()`，恢复后第一帧的 dt 包含什么？它包含整个暂停时长，可能立刻耗尽时间；暂停可以停止消费游戏时间，但墙上帧时钟仍应持续采样或在恢复点重置。
 
 ## 小结
 
-- 每帧 clear/draw/display 三件套必须成对、顺序正确
-- 事件管瞬时点按（菜单、关窗），实时输入管持续按住（移动）
-- Texture 是数据，Sprite 是引用数据的可绘制实例，一张纹理多 Sprite 共享
-- 资源绑定链：纹理 → 精灵 → 窗口
-
-<Attribution
-  adaptedFrom="Beginning C++ Game Programming (Michael Dawson)"
-  adaptedUrl="https://www.packtpub.com/"
-/>
-
-<Glossary>
-<GlossaryItem term="RenderWindow">
-SFML 中代表图形窗口的类，负责创建窗口、处理事件、接收 draw 调用并显示画面。
-</GlossaryItem>
-<GlossaryItem term="双缓冲">
-SFML 默认的渲染机制，draw 画到后台缓冲，display 时交换到前台，避免玩家看到半成品画面。
-</GlossaryItem>
-<GlossaryItem term="Texture">
-SFML 中加载到显存的图片数据类，是像素阵列本身，可被多个 Sprite 共享以节省显存。
-</GlossaryItem>
-<GlossaryItem term="Sprite">
-引用某张 Texture 并附带位置/旋转/缩放变换的可绘制实例，不拥有纹理只引用它。
-</GlossaryItem>
-<GlossaryItem term="Event">
-SFML 中表示离散输入事件（按键、关窗等）的类型，通过 pollEvent 从队列取出，适合单次触发动作。
-</GlossaryItem>
-</Glossary>
+- 一次性开始、暂停和重启使用事件边沿，持续动作使用实时输入；阶段检查阻止按键重复造成反复转换
+- `std::string` 和格式化只负责 HUD 视图，数值分数与剩余时间仍是业务事实来源
+- `sf::Font` 拥有字形资源，`sf::Text` 借用字体；字体生命周期必须覆盖全部绘制
+- HUD 在世界之后以屏幕坐标绘制，文本变化后重新计算边界和居中
+- 每帧测量墙上 dt，只有 Playing 阶段消费游戏时间；暂停期间不能积累恢复瞬移
+- 时间条由剩余时间归一化后映射宽度，并把比例钳制到 0 到 1
 
 <Exercises>
-  <Answer question="SFML 每帧渲染的三件套是什么？为什么必须成对出现？">三件套：window.clear() 清屏 → window.draw(sprite) 绘制 → window.display() 显示。必须成对因为 SFML 默认双缓冲：draw 画到后台缓冲，display 才交换到前台。漏 display 窗口黑屏，漏 clear 会残留上一帧产生拖影，顺序错了（clear 在 draw 后）等于擦掉刚画的。这三步是 render 阶段的固定骨架。</Answer>
-  <Answer question="Texture 和 Sprite 是什么关系？为什么不直接画 Texture？">Texture 是图片数据本身（显存里的像素阵列），Sprite 是引用某张纹理并带位置/旋转/缩放的可绘制实例。不直接画 Texture 因为复用：一张纹理可被多个 Sprite 共享，100 个相同敌人共用 1 张贴图省显存，每个 Sprite 各有独立位置，移动只改 Sprite 不动纹理。注意 Texture 必须在 Sprite 使用期间存活，Sprite 只引用不拥有。</Answer>
+
+**问题 1** 为 Waiting、Playing、Paused、Expired 写输入转换表，并说明 Enter 与 Escape 为什么用事件而不是实时查询。
+
+<Answer>
+
+Waiting + Enter 进入 Playing 并重置；Playing + Escape 进入 Paused；Paused + Escape 回到 Playing；Playing 在时间归零时进入 Expired；Expired + Enter 重启为 Playing；所有状态都处理关闭。Enter 和 Escape 在这里表达一次状态边沿，实时查询会在按住期间每帧执行，导致反复重置或暂停来回跳；事件仍配合禁用重复和当前阶段守卫。
+
+</Answer>
+
+**问题 2** 分数从 9 变 10 后，怎样更新并重新居中 `sf::Text`？解释 Font、Text 与 string 的所有权。
+
+<Answer>
+
+数值 `score` 先更新，再格式化为 `std::string` 并调用 `setString`；随后重新读取 `getLocalBounds`，按左/上偏移设置原点，再放到目标 HUD 中心。string 可由 Text 保存自己的文本表示，Font 则拥有字形资源，Text 只关联 Font，因此 Font 必须比 Text 和全部绘制更长寿。不要从显示字符串反解析分数。
+
+</Answer>
+
+**问题 3** 总时间 8 秒、全宽 320 px，剩余 6、2、-0.1 秒时条宽各是多少？暂停 5 秒后为何不应改变？
+
+<Answer>
+
+比例先钳制：6/8 为 0.75，宽 240 px；2/8 为 0.25，宽 80 px；负值钳到 0，宽 0。暂停期间墙上时间仍经过，但阶段不是 Playing，所以不从 remaining 扣除；帧时钟持续重启或在恢复点清零，恢复后只消费新的游戏帧时间。
+
+</Answer>
+
 </Exercises>
+
+<Glossary>
+
+<GlossaryItem term="玩家输入">
+  把设备意图映射成一次状态转换或持续动作的过程，需要区分事件边沿与实时状态。
+</GlossaryItem>
+
+<GlossaryItem term="paused 状态">
+  以布尔值表示游玩和暂停两个阶段的简化状态，阶段增多时应改用枚举避免矛盾组合。
+</GlossaryItem>
+
+<GlossaryItem term="事件输入">
+  来自窗口队列的离散按下、释放、关闭等消息，适合一次性开始、暂停和重启转换。
+</GlossaryItem>
+
+<GlossaryItem term="实时输入">
+  每帧查询设备当前状态的方式，适合按住移动或持续动作，不适合反复执行重启。
+</GlossaryItem>
+
+<GlossaryItem term="std::string">
+  标准库管理长度和动态存储的文本值类型，用于消息与 HUD 格式化而非替代数值状态。
+</GlossaryItem>
+
+<GlossaryItem term="sf::Font">
+  加载并拥有字体字形资源的 SFML 对象，必须覆盖所有关联 Text 的绘制生命周期。
+</GlossaryItem>
+
+<GlossaryItem term="sf::Text">
+  保存字符串、字体引用、字号、颜色和变换的可绘制对象，不拥有字体资源。
+</GlossaryItem>
+
+<GlossaryItem term="HUD">
+  显示分数、时间、阶段和提示的屏幕层界面，通常在世界对象之后绘制。
+</GlossaryItem>
+
+<GlossaryItem term="sf::Time">
+  SFML 表示时长的值类型，可从 Clock 得到并按秒、毫秒或微秒读取。
+</GlossaryItem>
+
+<GlossaryItem term="时间条">
+  将剩余游戏时间映射为 0 到 1 比例并更新矩形宽度的 HUD 视觉。
+</GlossaryItem>
+
+<GlossaryItem term="归一化比例">
+  把剩余值转换到 0 到 1 区间，便于映射宽度、颜色和其他视觉属性。
+</GlossaryItem>
+
+<GlossaryItem term="游戏重启">
+  同时恢复分数、时间、实体、随机状态和阶段的一局状态事务，而不是只修改提示文本。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 3"
+  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+/>

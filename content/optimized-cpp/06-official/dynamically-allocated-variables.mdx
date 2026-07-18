@@ -1,0 +1,308 @@
+---
+title: "第6章：优化动态分配变量"
+type: C
+section: Optimized C++ · Chapter 6
+order: 6
+description: "对齐第一版第6章 Optimize Dynamically Allocated Variables：存储期与所有权、value/entity、智能指针、静态与预分配、复制/移动/COW/slice，以及扁平化数据结构。"
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+draft: false
+---
+
+import {
+  OpcAllocationCopyReductionMap,
+  OpcFlattenDataStructureMap,
+  OpcStorageOwnershipDecisionMap,
+} from "@/components/mdx/optimized-cpp/diagrams/dynamically-allocated-variables";
+
+<Objectives>
+
+- 能区分 storage duration、ownership 与 value/entity semantics，并选择 automatic/static/unique/shared/pool storage
+- 能修改 allocation/copy hot path，应用 static/preallocate/reserve/borrow/move/swap 而不破坏 lifetime
+- 能设计 pointer graph 到 flat data/handle layout 的迁移实验，验证 locality、identity、reference stability 与 memory
+
+</Objectives>
+
+## 从 Storage、Ownership 与 Identity 三个问题开始
+
+**storage duration** 回答 object storage 何时开始/结束（automatic、static、thread、dynamic）；**ownership of variables** 回答谁负责结束 lifetime；两者不是同义词。dynamic object 可以由一个 `unique_ptr`、多个 `shared_ptr`、container/arena 或外部 subsystem 管理。
+
+<Term def="对象 storage 存在的时间类别，包括 automatic、static、thread 与 dynamic；它不自动说明业务 owner。">
+  storage duration
+</Term>
+
+<Term def="谁负责保持对象存活并最终销毁/释放其资源的责任契约；observer 访问不等于拥有。">
+  ownership of variables
+</Term>
+
+**value objects** 由状态定义，copy 后是独立值，例如 coordinate/config；优先直接 member/local/container value。**entity objects** 有稳定 identity 和共享引用关系，例如 connection/session；是否动态分配取决于 lifetime、地址稳定、polymorphism 与 storage policy，不是“class 就放 heap”。
+
+<Term def="由内容定义、适合复制/移动并由 enclosing scope/container 直接拥有的对象。">
+  value objects
+</Term>
+
+<Term def="具有稳定业务 identity、生命周期和引用关系的对象；复制通常不等于创建同一实体。">
+  entity objects
+</Term>
+
+<OpcStorageOwnershipDecisionMap />
+
+## Dynamic Variable API 与 Smart Pointers
+
+**dynamic variable API** 应把 allocation 与 ownership transfer 写进类型：factory 返回 `std::unique_ptr<T>` 表示唯一 owner，借用用 reference/pointer/span 并声明 lifetime；raw `new/delete` 分散在 caller 会使 exception path、early return 和 double delete 难以审计。
+
+<Term def="创建、借用、转移和销毁动态对象的接口契约，应在类型与 factory/resource 边界中表达 ownership。">
+  dynamic variable API
+</Term>
+
+**smart pointers** 用 RAII **automate ownership**，首要价值是 correctness。`unique_ptr` 通常只保存 pointer（deleter 可能影响 layout）；`shared_ptr` 有 control block、reference count，copy/destruction 产生 bookkeeping，跨线程更新还可能有 synchronization **runtime cost**。成本应测，不能把它们都当“零成本”或都禁用。
+
+<Term def="以 RAII 在类型中表达 unique/shared ownership 并自动释放资源的 pointer-like 对象。">
+  smart pointers
+</Term>
+
+“**don't share ownership unnecessarily**”：如果一个 subsystem 明确控制 lifetime，用一个 **master pointer**（通常 `unique_ptr` 或 owning container entry）加有界 observer；不要为了让 lifetime 问题“消失”把每个 reference 都变 `shared_ptr`。真正独立 owners 才使用 shared ownership，并用 `weak_ptr` 打破 cycles。
+
+<Term def="唯一负责 entity lifetime 的 owning handle；其余访问者只能在 owner 保证的范围内借用或使用可校验 handle。">
+  master pointer
+</Term>
+
+```cpp
+class SessionRegistry {
+public:
+    Session& create(SessionId id) {
+        auto session = std::make_unique<Session>(id);
+        Session& result = *session;
+        sessions_.emplace(id, std::move(session));
+        return result; // 借用期由 registry contract 限定
+    }
+
+private:
+    std::unordered_map<SessionId, std::unique_ptr<Session>> sessions_;
+};
+```
+
+若确实共享，**make_shared** 通常能把 object 与 control block 合并为一次 allocation；但 weak owners 会让 combined block 延迟释放 storage，large object 或 custom lifetime 可能更适合 separate allocation。先证明 shared ownership 语义，再比较 allocation/retention。
+
+<Callout type="trap" title="陷阱：shared_ptr 解决所有 lifetime 问题">
+  shared_ptr 只延长销毁，不定义业务关闭顺序、线程安全或 graph cycle；aliasing
+  constructor 和从 raw pointer 创建多个 control blocks 还会制造严重错误。先画
+  ownership graph，能唯一拥有就 unique， observers 用 reference/handle/weak_ptr
+  并明确失效协议。
+</Callout>
+
+## Create Statically、Preallocate 与 Loop Boundary
+
+**create class instances statically** 在这里指能用 scope/member/value storage 时不动态创建；若 upper bound 已知，可用 **static data structures**（固定数组、bounded pool、inline buffer）避免 allocator，并让 capacity failure 成为显式 contract。不要误解为把所有对象放成 global static。
+
+<Term def="在 scope、member、container 或 bounded fixed storage 中直接创建对象，省去独立 dynamic allocation，同时保持 lifetime 清晰。">
+  create class instances statically
+</Term>
+
+**reduce reallocation** 要统计 vector/string/container 的 capacity transitions；**preallocate dynamic variables** 可用 `reserve`、pool/arena 或 free list，在 **outside of loops** 建 storage 并在每轮 reset/reuse。preallocate 不是 leak：必须有 peak bound、reset、exception 与 ownership policy。
+
+<Term def="按测得 upper bound 预建 capacity、slots 或 arena，并在循环外复用，以摊薄 allocation/reallocation。">
+  preallocate dynamic variables
+</Term>
+
+```cpp
+std::vector<Result> processFrames(std::span<const Frame> frames) {
+    std::vector<Result> results;
+    results.reserve(frames.size());
+
+    ScratchBuffer scratch;
+    scratch.reserve(estimatedPeakScratch());
+    for (const Frame& frame : frames) {
+        scratch.clear();
+        results.push_back(processOne(frame, scratch));
+    }
+    return results;
+}
+```
+
+`scratch` 在 loop 外创建并复用；`clear` 是否保留 storage 由类型 contract 决定。实验要看 peak/RSS、capacity retention、每 frame allocations 和 tail；若偶发巨大 frame 让 buffer 长期膨胀，需要 shrink/replace policy，而不是每轮 `shrink_to_fit`。
+
+## Eliminate Unneeded Copying
+
+**eliminate unneeded copying** 先区分 value copy 是否真需要独立 ownership。large entity/resource type 可 **disable unwanted copying**（delete copy constructor/assignment），防止 accidental expensive/incorrect copy；value type 不应仅因“可能慢”就禁 copy，move/RVO/container usability 也属于设计。
+
+<Term def="删除不产生独立业务价值的深复制，同时保留需要独立值的正确 copy semantics。">
+  eliminate unneeded copying
+</Term>
+
+**copying on function call**：只读 borrowed input 用 `const T&`/`span`，需要 sink ownership 可按值接收再 move；tiny trivially copyable value 按值更简单。**copying on function return**：直接 return value，让 mandatory copy elision/NRVO/move 工作，不返回 local reference，也不随意 `std::move(local)` 阻碍 NRVO。
+
+```cpp
+class ImageBuffer {
+public:
+    ImageBuffer(std::size_t bytes) : pixels_(bytes) {}
+
+    ImageBuffer(const ImageBuffer&) = delete;
+    ImageBuffer& operator=(const ImageBuffer&) = delete;
+    ImageBuffer(ImageBuffer&&) noexcept = default;
+    ImageBuffer& operator=(ImageBuffer&&) noexcept = default;
+
+    void swap(ImageBuffer& other) noexcept { pixels_.swap(other.pixels_); }
+
+private:
+    std::vector<std::byte> pixels_;
+};
+```
+
+这里 move transfer ownership，`std::swap` 可利用 move（或调用专门 swap）；moved-from object 仍 valid 但 state 通常 unspecified，只能执行 contract 允许的操作。
+
+## Copy-Free Libraries、COW、Slices 与 Move
+
+**copy free libraries** 通过 iterator/span/view/range/handle 让 algorithms 消费借用范围，而不是强制构造 container。**slice data structures**（如 `std::span`、`std::string_view`）只保存 pointer/length；它们不拥有 storage，source destruction/reallocation 会使 slice 失效。
+
+<Term def="通过 iterator、span、view、range 或 handle 处理已有 storage，避免 API 强制构造和复制 owning container。">
+  copy-free libraries
+</Term>
+
+**copy on write**（COW）在多个 readers 间共享 storage，首次 write 再 clone。它可让 copy cheap，却带 reference counting、branch、thread synchronization、iterator/reference 语义和 surprise write latency；现代 `std::string` 不应假设 COW。immutable snapshot/data structure 才更容易安全共享。
+
+<Term def="复制时共享 backing storage，写入前检测并克隆；以写路径、引用计数和并发复杂度换读多复制便宜。">
+  copy on write
+</Term>
+
+**move semantics** transfer resources，不保证所有类型都常数成本：small inline buffer 仍可能逐元素 move，allocator 不兼容时 container move assignment 可能迁移 elements，`const T` 不能真正 move-from。**subtleties of move semantics** 包括 exception specification、self-move policy、moved-from state 与 reference invalidation。
+
+<Term def="从可修改 source 转移资源/状态到 destination 的语义；成本和 source 后状态由具体类型契约决定。">
+  move semantics
+</Term>
+
+<OpcAllocationCopyReductionMap />
+
+<Callout type="trap" title="陷阱：看到 std::move 就认为复制已消失">
+  std::move 只是 cast；最终调用哪个 constructor/assignment、是否因
+  const/allocator/inline storage 发生 element move，必须看类型和 optimized
+  trace。不要 move borrowed object、不要在仍需 source 原值时转移， 也不要为局部
+  return 强行 std::move 阻碍 copy elision。
+</Callout>
+
+## Flatten Data Structures（扁平化数据结构）
+
+**flatten data structures（扁平化数据结构）** 把 per-node allocation/pointer graph 改为 contiguous records、structure-of-arrays 或 pool+handle。收益来自更少 allocations、compact metadata、sequential access 和更高 cache-line utilization；代价是 insertion/move、index maintenance、stable-reference contract 改变。
+
+<Term def="把分散 node/pointer graph 重排为连续 records、字段数组或 pool+handle，减少 allocation 与 pointer chasing。">
+  flatten data structures
+</Term>
+
+<OpcFlattenDataStructureMap />
+
+迁移不能只改 container type。先列出 external references、identity、erase/insertion、iteration、polymorphism 与 serialization。可用 generation handle 防止 index reuse 指向新 entity；若 consumer 依赖 stable address，则需要 indirection table、pool 或明确禁止长期 raw pointer。
+
+## 三步优化动态变量
+
+<Stepper>
+  <Step title="第一步：画 storage 与 ownership">
+    先预测哪些对象是 value、哪些有 entity identity；标注 storage duration、master owner、borrowers、shared owners、destroy order 和 cycles，再选择直接 storage、unique/shared 或 pool。
+
+    <OpcStorageOwnershipDecisionMap />
+
+  </Step>
+  <Step title="第二步：减少分配和复制事件">
+    从 create-by-value、reserve/preallocate outside loops、borrowed call、RVO/move/swap 开始，逐项测 allocations、bytes moved、latency、RSS 与 moved-from/lifetime correctness。
+
+    <OpcAllocationCopyReductionMap />
+
+  </Step>
+  <Step title="第三步：按访问模式改布局">
+    对 pointer graph、flat records、SoA、pool+handles 比较 traversal/update/identity/reference stability；只有端到端 profile 和 handle tests 都通过才迁移。
+
+    <OpcFlattenDataStructureMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- storage duration、ownership 与 value/entity semantics 是三个独立问题，不能由 raw pointer 形状猜测
+- smart pointer 自动化 ownership；unique 是默认，shared 只用于真实独立 owners，master owner 要明确
+- create-by-value/static/bounded storage 和 loop 外 preallocation 能先删除/摊还 allocator work
+- function call 可借用，function return 应依靠 copy elision/move；不要返回 local borrow
+- copy-free slice/view 不拥有 storage，COW 要承担 write、refcount 与 concurrency complexity
+- move/swap 的成本依类型、allocator 与 inline storage，`std::move` 本身不执行移动
+- flatten data structures 可减少 allocation/pointer chasing，但必须重建 identity 与 reference contract
+
+<Attribution
+  adaptedFrom="Optimized C++, First Edition, Chapter 6: Optimize Dynamically Allocated Variables"
+  adaptedUrl="https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+/>
+
+<Glossary>
+  <GlossaryItem term="storage duration">
+    对象 storage 的 automatic/static/thread/dynamic 存在时间类别。
+  </GlossaryItem>
+  <GlossaryItem term="ownership of variables">
+    保持对象存活并最终销毁资源的责任契约。
+  </GlossaryItem>
+  <GlossaryItem term="value objects">
+    由内容定义、适合独立复制/移动的对象。
+  </GlossaryItem>
+  <GlossaryItem term="entity objects">
+    具有稳定业务 identity 与生命周期的对象。
+  </GlossaryItem>
+  <GlossaryItem term="dynamic variable API">
+    创建、借用、转移和销毁动态对象的 ownership 接口。
+  </GlossaryItem>
+  <GlossaryItem term="smart pointers">
+    以 RAII 表达 unique/shared ownership 的 pointer-like 类型。
+  </GlossaryItem>
+  <GlossaryItem term="master pointer">
+    唯一负责 entity lifetime 的 owning handle。
+  </GlossaryItem>
+  <GlossaryItem term="create class instances statically">
+    在 scope/member/container/fixed storage 中直接创建对象。
+  </GlossaryItem>
+  <GlossaryItem term="preallocate dynamic variables">
+    预建 capacity/slots/arena 并跨循环复用。
+  </GlossaryItem>
+  <GlossaryItem term="eliminate unneeded copying">
+    删除没有独立业务价值的深复制。
+  </GlossaryItem>
+  <GlossaryItem term="copy-free libraries">
+    通过 iterator/span/view/range 消费已有 storage 的 API。
+  </GlossaryItem>
+  <GlossaryItem term="copy on write">
+    copy 共享 storage、首次 write 前 clone 的策略。
+  </GlossaryItem>
+  <GlossaryItem term="move semantics">
+    从可修改 source 向 destination 转移资源/状态的语义。
+  </GlossaryItem>
+  <GlossaryItem term="flatten data structures">
+    把 pointer graph 改为连续 records、SoA 或 pool+handle。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：重构每帧创建 50k 粒子的系统。** 当前每粒子 `new`、shared_ptr 存入 linked list；说明 owner、preallocation 与 flat layout 方案。
+
+<Answer question="怎样逐层删除 dynamic allocation 而不破坏 identity？">
+  若粒子是 value、由系统独占，先改成 contiguous vector/pool，系统是 master
+  owner，外部用 index+ generation handle；按 measured peak reserve
+  slots，在帧外建 free list/arrays并复用。删除 per-particle shared control
+  block/node allocation。测试 spawn/despawn/reuse stale handle、iteration/update
+  correctness， 记录 allocations/frame、cache misses、frame
+  p99、peak/RSS；若必须 stable address，选择 chunked pool。
+</Answer>
+
+2. **问题 2：选择 factory 返回类型。** 三种对象分别是调用方独占 decoder、多个任务真正共享 immutable table、registry 拥有 session 且 handlers 只观察。给出 API。
+
+  <Answer question="unique、shared 与 borrow 如何匹配责任？">
+    decoder factory 返回 `unique_ptr<Decoder>`；immutable table 若任务可独立延长 lifetime，可返回/传递
+    `shared_ptr<const Table>`，可用 make_shared 并检查 retention；session 由 registry 的 unique/container
+    master owner 持有，handler 用有界 reference/ID/weak handle，不能无意延长 shutdown。每个 API 写 destroy
+    order、thread policy 和 observer 失效行为。
+  </Answer>
+
+3. **问题 3：审计“全部 std::move 后快了”的改动。** 改动包含 `return std::move(local)`、从 `const` 参数 move、allocator 不同 vector move assignment。列出核查。
+
+  <Answer question="哪些 move 可能仍复制或更差？">
+    local return 强制 move 可能阻碍 NRVO；`const T&&` 通常不能调用需要修改 source 的 move constructor，
+    可能 copy；allocator propagation/相等性不满足时 vector move assignment 可能逐元素搬运。检查 overload/
+    assembly/allocation counters 和 moved-from use，去掉不必要 `std::move`，给真正资源类型 noexcept move；
+    用结果与 ownership tests 证明行为，不能按语法计数。
+  </Answer>
+</Exercises>

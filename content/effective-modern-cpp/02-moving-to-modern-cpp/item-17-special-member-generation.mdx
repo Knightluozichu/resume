@@ -1,0 +1,385 @@
+---
+title: "Item 17：理解特殊成员函数的生成规则"
+type: A
+section: Chapter 3 · Moving to Modern C++
+order: 17
+description: 对齐 Effective Modern C++ Item 17：掌握 default/copy/move/destructor 的隐式生成与抑制关系，识别 user-declared destructor 让 move 静默退回 copy，并用 Rule of Zero 和显式 default 固定资源类型语义。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch03.html"
+draft: false
+---
+
+import {
+  EmcppDestructorSuppressesMoveFlow,
+  EmcppRuleOfZeroOwnershipMap,
+  EmcppSpecialMemberGenerationMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-17-special-member-generation";
+
+<Objectives>
+
+- 能描述 special member function generation（特殊成员函数生成）的条件，判断 default/copy/move/destructor 是否隐式声明、删除或抑制
+- 能分析 copy operations（复制操作）与 move operations（移动操作）的相互影响，并复现 destructor suppresses move（析构抑制移动）的性能回退
+- 能设计 Rule of Zero（零法则）资源类型，或用显式 `= default`/`= delete` 固定五类特殊成员契约
+
+</Objectives>
+
+## 从“没写函数不等于一定会生成”开始
+
+Item 17 的原则是 Understand special member function generation（理解特殊成员函数的生成规则）。compiler 只在一组前提满足时隐式声明 default constructor、destructor、copy constructor/assignment、move constructor/assignment；添加一个看似无关的 declaration 会改变整组能力。
+
+<Term def="compiler 根据 class declarations 与 base/member 能力，隐式声明或删除 default/copy/move/destructor 的规则集合。">
+  special member function generation
+</Term>
+
+<Term def="compiler 可隐式处理的 default constructor、destructor、copy/move constructor 与 assignment operators。">
+  special member functions
+</Term>
+
+```cpp
+class Record {
+private:
+    std::string name;
+    std::vector<int> values;
+};
+```
+
+先预测 Record：没有 user-declared constructors/destructor/copy/move，members 具备相应能力，因此 compiler 可生成完整 value semantics。
+
+<EmcppSpecialMemberGenerationMap />
+
+## default constructor 只在没有 user-declared constructor 时生成
+
+```cpp
+class Widget {
+public:
+    explicit Widget(int id);
+};
+
+// Widget widget; // error: no default constructor generated
+```
+
+<Term def="在 class 没有任何 user-declared constructor 时由 compiler 隐式声明的无参构造函数。">
+  implicit default constructor
+</Term>
+
+“user-declared”包含 `= default`、`= delete` 的 constructor declaration。若 API 同时需要 default construction，应明确写 `Widget() = default;`，而不是期待 compiler 补齐。
+
+## copy operations 逐成员复制
+
+隐式 copy constructor 与 copy assignment 对 bases/members 执行 copy。只要某一 member 不可复制，外层对应操作会被定义为 deleted。
+
+<Term def="copy constructor 与 copy assignment 的统称，默认按 base/member 逐层复制。">
+  copy operations
+</Term>
+
+```cpp
+class Owner {
+private:
+    std::unique_ptr<Resource> resource;
+};
+
+static_assert(!std::is_copy_constructible_v<Owner>);
+```
+
+unique_ptr 不可复制，因此 Owner 的隐式 copy 也不可用。这正是 ownership capability composition，而不是 compiler 缺陷。
+
+## move operations 的生成条件更严格
+
+compiler 仅在 class 没有 user-declared copy constructor、copy assignment、move constructor、move assignment 和 destructor 时，才隐式生成 move operations（并且 base/members 支持）。
+
+<Term def="move constructor 与 move assignment 的统称，默认对 base/member 执行移动。">
+  move operations
+</Term>
+
+<Term def="没有 user-declared copy/move/destructor 时，compiler 才考虑生成 move 的条件集合。">
+  implicit move eligibility
+</Term>
+
+这比 copy generation 保守：任何自定义资源生命周期信号都让 compiler 不再猜测 move 是否安全。
+
+## user-declared destructor 会抑制 move
+
+```cpp
+class StringTable {
+public:
+    ~StringTable() {
+        logDestruction();
+    }
+
+private:
+    std::map<int, std::string> values;
+};
+```
+
+<Term def="class 只要 user-declare destructor，即使 body 只记录日志或写 = default，也不再隐式生成 move operations。">
+  destructor suppresses move
+</Term>
+
+StringTable 仍可能拥有 copy constructor/assignment。将 rvalue 传给按值/容器迁移时，copy function 接受 const lvalue reference，也能绑定 rvalue，于是代码继续编译并执行昂贵 copy。
+
+<Term def="rvalue 因缺少 move overload 而绑定到 const-reference copy operation，功能正确但性能下降。">
+  silent copy fallback
+</Term>
+
+<EmcppDestructorSuppressesMoveFlow />
+
+<Callout
+  type="trap"
+  title="陷阱：destructor 只增加日志，不会影响 constructor overload set"
+>
+  special member generation 关注 declaration 是否存在，不分析 destructor body
+  是否“无害”。哪怕 `~T() = default` 也是 user-declared destructor，会抑制
+  implicit move。
+</Callout>
+
+## 为什么规则如此保守
+
+C++ 的 Rule of Three 经验是：若 class 需要自定义 destructor，通常直接管理资源，也可能需要自定义 copy constructor/assignment。自动 move 若只是复制 raw handle 后让 source 仍析构，可能 double free。
+
+<Term def="自定义 destructor 往往意味着 copy constructor 与 copy assignment 也需共同审查的资源管理经验。">
+  Rule of Three signal
+</Term>
+
+C++11 延续保守判断：看到 destructor/copy customization，就不自动添加 move semantics。即使现代 class 只是为了 logging 定义 destructor，也必须主动声明 intent。
+
+## 显式 default 恢复正确 move contract
+
+```cpp
+class StringTable {
+public:
+    StringTable() = default;
+    ~StringTable();
+
+    StringTable(const StringTable&) = default;
+    StringTable& operator=(const StringTable&) = default;
+    StringTable(StringTable&&) noexcept = default;
+    StringTable& operator=(StringTable&&) noexcept = default;
+};
+```
+
+<Term def="用 = default 要求 compiler 生成某个 special member，同时把 API intent 写入 class declaration。">
+  explicit defaulting
+</Term>
+
+`noexcept` 应与 members 的真实 move ability 一致；默认 move 的 exception specification 通常可自动推导，手写时不要过度承诺。
+
+## user-declared move 会影响 copy
+
+一旦声明 move constructor 或 move assignment，未显式声明的 copy operations 通常被定义为 deleted。这避免“看似 movable owner”又被 compiler 隐式浅 copy。
+
+<Term def="class 声明 move operation 后，隐式 copy operations 不再作为普通可用复制路径。">
+  move-deletes-copy interaction
+</Term>
+
+```cpp
+class MoveOnly {
+public:
+    MoveOnly(MoveOnly&&) = default;
+    MoveOnly& operator=(MoveOnly&&) = default;
+};
+
+static_assert(!std::is_copy_constructible_v<MoveOnly>);
+```
+
+若确实要 copyable + movable，四个 operations 都应明确设计或由 Rule of Zero 自动生成。
+
+## move constructor 和 move assignment 也相互抑制
+
+只声明其中一个，compiler 不会替你生成另一个。两者的 resource transfer/reset 语义可能相关，自动猜测存在风险。
+
+<Term def="user-declare 一个 move operation 后，另一个 move operation 不再自动生成的规则。">
+  move pair suppression
+</Term>
+
+用 traits 分别检查 constructible 与 assignable，不能只测试一种 move syntax 就声称类型 movable。
+
+## member function templates 不取代 special members
+
+```cpp
+class Widget {
+public:
+    template<typename T>
+    explicit Widget(T&& value);
+};
+```
+
+<Term def="看似能接受 Widget argument 的 constructor template，不被语言视为 copy/move constructor declaration。">
+  templated constructor non-suppression
+</Term>
+
+compiler 仍可能生成真实 copy/move constructors；overload resolution 时 forwarding constructor 又可能抢占某些 non-const lvalue calls。Item 26 将进一步处理 universal-reference overload。此处重点是 generation 只识别精确 special-member 形式。
+
+## polymorphic base 应显式声明五类语义
+
+polymorphic base 通常需要 virtual destructor：
+
+```cpp
+class Base {
+public:
+    virtual ~Base() = default;
+
+    Base() = default;
+    Base(const Base&) = default;
+    Base& operator=(const Base&) = default;
+    Base(Base&&) = default;
+    Base& operator=(Base&&) = default;
+};
+```
+
+<Term def="因 virtual destructor 已抑制 move，显式 default copy/move 来固定 polymorphic base value capability 的做法。">
+  polymorphic base defaulting
+</Term>
+
+是否应该复制 polymorphic base 还取决于 slicing 设计；很多 base 会 delete copy/move 或将其 protected。关键是不要让 virtual destructor 的副作用默默决定 API。
+
+## Rule of Zero 是首选
+
+让 RAII members 管理资源，class 本身不声明任何 special member：
+
+```cpp
+class Session {
+private:
+    std::unique_ptr<Socket> socket;
+    std::string peerName;
+    std::vector<Message> pending;
+};
+```
+
+<Term def="通过 RAII member types 表达 ownership，使外层 class 无需自定义 destructor/copy/move。">
+  Rule of Zero
+</Term>
+
+Session 自动不可 copy、可在 members 支持时 move、自动释放资源；成员能力直接组合成 class 能力。
+
+<EmcppRuleOfZeroOwnershipMap />
+
+<Term def="外层 special member availability 由所有 base/member 对应能力共同决定。">
+  memberwise capability composition
+</Term>
+
+Rule of Zero 减少 double free、自赋值、异常安全和 move suppression 风险，也让 noexcept traits 更准确。
+
+<Callout type="trap" title="陷阱：Rule of Zero 表示 class 不能拥有资源">
+  它表示 class 不直接手写资源生命周期。资源仍可由
+  unique_ptr、vector、string、file wrapper 等 RAII members 拥有；ownership
+  更明确，special members 由成员能力安全组合。
+</Callout>
+
+## generation 与 triviality 不是同一问题
+
+一个 operation 被生成，不代表 trivial、constexpr 或 noexcept；这些属性取决于 bases/members 和声明形式。
+
+<Term def="special member 是否存在之外，其 trivial、constexpr、noexcept 等独立性质的集合。">
+  generated-operation properties
+</Term>
+
+serialization/ABI code 应分别检查 `is_trivially_copyable`、nothrow move 等 traits，不从“= default”推断 layout guarantees。
+
+## special-member 验收矩阵
+
+<Term def="分别检查 default/copy/move/destructible、nothrow 与容器实际迁移行为的测试集合。">
+  special-member contract matrix
+</Term>
+
+1. static traits 覆盖 default/copy/move constructible/assignable/destructible。
+2. 加/删 destructor 的变更必须重新检查 move traits。
+3. copy/move counters 证明 rvalue 实际选择 move，而非 silent copy fallback。
+4. vector reallocation 验证 noexcept move path。
+5. RAII owner 无 leak/double-free，moved-from state 可析构。
+6. polymorphic base 的 copy/move/slicing policy 明确。
+
+先列出所有 user-declared special members，再按 matrix 推导；“代码能接收 rvalue”不能证明 move constructor 存在。
+
+## 小结
+
+- special member function generation 由 class declarations 与 member/base 能力共同决定
+- user-declared constructor 会阻止 implicit default constructor；不可 copy member 会删除外层 copy
+- implicit move 仅在没有 user-declared copy/move/destructor 时生成
+- destructor suppresses move，即使 destructor 只是日志或 `= default`
+- 缺少 move 时 rvalue 可绑定 copy const-reference，形成静默性能回退
+- user-declared move 会使隐式 copy deleted，move constructor/assignment 也不会互相补齐
+- constructor template 不算 copy/move declaration，不能用来推断 generation 被抑制
+- Rule of Zero 通过 RAII members 自动组合 ownership 与 special-member abilities
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 17"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch03.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="special member function generation">
+    特殊成员的隐式生成规则。
+  </GlossaryItem>
+  <GlossaryItem term="special member functions">
+    默认、析构、复制与移动操作集合。
+  </GlossaryItem>
+  <GlossaryItem term="implicit default constructor">
+    无用户构造时生成的默认构造。
+  </GlossaryItem>
+  <GlossaryItem term="copy operations">复制构造与复制赋值。</GlossaryItem>
+  <GlossaryItem term="move operations">移动构造与移动赋值。</GlossaryItem>
+  <GlossaryItem term="implicit move eligibility">
+    允许隐式生成移动的条件。
+  </GlossaryItem>
+  <GlossaryItem term="destructor suppresses move">
+    用户析构阻止隐式移动。
+  </GlossaryItem>
+  <GlossaryItem term="silent copy fallback">
+    rvalue 静默绑定复制操作。
+  </GlossaryItem>
+  <GlossaryItem term="Rule of Three signal">
+    析构定制触发复制语义审查。
+  </GlossaryItem>
+  <GlossaryItem term="explicit defaulting">
+    用 default 明确请求生成操作。
+  </GlossaryItem>
+  <GlossaryItem term="move-deletes-copy interaction">
+    声明移动导致隐式复制删除。
+  </GlossaryItem>
+  <GlossaryItem term="move pair suppression">
+    单个移动声明不生成另一操作。
+  </GlossaryItem>
+  <GlossaryItem term="templated constructor non-suppression">
+    构造模板不抑制特殊成员生成。
+  </GlossaryItem>
+  <GlossaryItem term="polymorphic base defaulting">
+    显式固定多态基类五类语义。
+  </GlossaryItem>
+  <GlossaryItem term="Rule of Zero">
+    由 RAII 成员自动管理生命周期。
+  </GlossaryItem>
+  <GlossaryItem term="memberwise capability composition">
+    成员能力组合成外层能力。
+  </GlossaryItem>
+  <GlossaryItem term="generated-operation properties">
+    生成操作的 trivial/noexcept 等性质。
+  </GlossaryItem>
+  <GlossaryItem term="special-member contract matrix">
+    特殊成员能力与行为测试表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：StringTable 添加日志 destructor 后 vector 搬迁变慢。** 解释完整链路。
+
+<Answer question="为什么代码仍编译却从 move 变 copy？">
+  user-declared destructor 抑制 implicit move constructor；copy constructor
+  仍接收 const reference，可绑定 rvalue，因此调用不报错而执行 map 深复制。显式
+  default truthful noexcept move operations，或把日志移入 不影响 value type
+  的层；用 traits 和 copy/move counters 证明修复。
+</Answer>
+
+2. **问题 2：class 只声明 move constructor。** 推导 copy 与 move assignment 能力。
+
+<Answer question="compiler 会自动补哪些操作？">
+  user-declared move constructor 使隐式 copy operations deleted，并抑制另一个
+  move assignment；不能假设 “写一个 move 就得到完整 movable type”。按目标显式
+  default/delete copy constructor、copy assignment 和 move assignment，再用四项
+  traits 分别验证。
+</Answer>
+
+3. **问题 3：重构 raw Socket owner 为 Rule of Zero。** 需要独占、可移动、不可复制。
+
+  <Answer question="成员和验收怎样设计？">用 unique pointer 或专用 Socket RAII wrapper 保存 handle，string/vector 保存普通状态，外层不声明 destructor/copy/move。成员组合会删除 copy、生成可用 move 并自动释放。static traits 固定 move-only contract，异常/提前返回测试验证无 leak，moved-from object 可安全析构。</Answer>
+</Exercises>

@@ -1,0 +1,347 @@
+---
+title: "Item 20：用 weak_ptr 表达可过期观察"
+type: A
+section: Chapter 4 · Smart Pointers
+order: 20
+description: 对齐 Effective Modern C++ Item 20：用 weak_ptr 观察 shared ownership 而不延长生命周期，通过 lock 原子升级并正确处理 expired，构建缓存/observer，并用 weak edge 打破引用环。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch04.html"
+draft: false
+---
+
+import {
+  EmcppOwnershipCycleBreakMap,
+  EmcppWeakLifecycleMap,
+  EmcppWeakLockAtomicUpgradeMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-20-weak-ptr";
+
+<Objectives>
+
+- 能解释 weak_ptr（弱智能指针）如何共享 control-block identity 却不增加 strong ownership count，并判断 observer 何时过期
+- 能比较 `expired()`、throwing shared_ptr construction 与 `lock()`，实现 pointers that can dangle（可能悬空的指针）的原子升级
+- 能设计 cache/observer/parent-child ownership graph，用 weak edge 实现 cycle prevention（打破引用环）并测试销毁时机
+
+</Objectives>
+
+## 从“观察地址不应自动延长生命周期”开始
+
+Item 20 的原则是 Use std::weak_ptr for shared_ptr-like pointers that can dangle（用 weak_ptr 表达可能悬空的 shared_ptr-like pointer）。observer 需要知道 object 是否还活着，却不应因为自己存在而让 object 永不销毁。
+
+<Term def="引用 shared control block 但不增加 strong count、不能直接解引用的可过期智能指针。">
+  weak_ptr
+</Term>
+
+<Term def="不拥有资源生命周期，只在使用时尝试取得临时 owning handle 的关系。">
+  non-owning shared observation
+</Term>
+
+```cpp
+auto owner = std::make_shared<Widget>();
+std::weak_ptr<Widget> observer = owner;
+
+owner.reset(); // Widget destroyed; observer remains but is expired
+```
+
+先预测：object 已销毁，control block 仍需留存，让 observer 能安全回答“已过期”。
+
+<EmcppWeakLifecycleMap />
+
+## weak_ptr 不提供 operator dereference
+
+weak_ptr 可能在任何时刻过期，直接返回 reference/pointer 会立即产生 lifetime race，因此 API 不提供 `operator*` 或 `operator->`。
+
+<Term def="observer 指向的 shared object 已被最后一个 strong owner 销毁。">
+  expired weak observation
+</Term>
+
+要访问 object，必须先取得 shared_ptr，在使用期间把 strong count 保持为正。
+
+```cpp
+if (auto locked = observer.lock()) {
+    locked->render();
+}
+```
+
+<Term def="原子检查 weak target 是否存活；若存活则增加 strong count 并返回 shared_ptr，否则返回空。">
+  weak lock upgrade
+</Term>
+
+locked 的 scope 就是临时 ownership window。
+
+## expired 只是一瞬间快照
+
+```cpp
+if (!observer.expired()) {
+    // object may expire here on another thread
+}
+```
+
+<Term def="查询 weak target 在调用瞬间是否已无 strong owners，不取得 ownership。">
+  expired snapshot
+</Term>
+
+另一个线程可在 check 后释放最后 owner，所以“先 expired、后操作”是 time-of-check/time-of-use race。即使紧邻两行也不安全。
+
+<Callout
+  type="trap"
+  title="陷阱：expired 返回 false 后，本语句块内 object 一定存活"
+>
+  expired 不增加 strong count，只报告瞬时状态。最后 owner
+  可在下一条指令前消失；需要使用 object 时必须 调用 lock 并持有返回的
+  shared_ptr。
+</Callout>
+
+## lock 把检查与取得 owner 合并为原子动作
+
+`lock()` 有两种结果：成功返回 non-empty shared_ptr，strong count 已增加；失败返回 empty shared_ptr，不抛异常。
+
+<Term def="把存活检查与 strong-count 增加作为不可分割的 control-block 操作。">
+  atomic lifetime acquisition
+</Term>
+
+<EmcppWeakLockAtomicUpgradeMap />
+
+这解决的是 ownership race，不自动保护 Widget fields。取得 shared_ptr 后，object 内部并发仍按自身 synchronization contract。
+
+## shared_ptr 从 weak_ptr 构造提供 throwing 版本
+
+```cpp
+try {
+    std::shared_ptr<Widget> owner(observer);
+    owner->render();
+} catch (const std::bad_weak_ptr&) {
+    // observer already expired
+}
+```
+
+<Term def="从 expired weak_ptr 构造 shared_ptr 时抛出的异常。">
+  bad_weak_ptr
+</Term>
+
+构造同样原子取得 lifetime，只是失败模型不同。普通“cache miss/observer gone”是预期分支，优先 lock；过期代表违反前置条件时可使用 throwing constructor。
+
+## weak_ptr 仍引用 control block
+
+strong count 降为零时，managed object/deleter 执行；只要 weak_ptr 存在，control block 仍保存 weak metadata。
+
+<Term def="object 已销毁但 weak observers 仍需查询状态，因此 control block 延后释放的阶段。">
+  residual control-block lifetime
+</Term>
+
+大量长期 weak entries 会保留许多 control blocks，即使 objects 已消失。cache/registry 需要清理 expired entries，而不是认为 weak_ptr 完全零成本。
+
+## cache 用 weak_ptr 避免缓存决定 lifetime
+
+原书的 load cache：
+
+```cpp
+std::unordered_map<WidgetId, std::weak_ptr<const Widget>> cache;
+
+std::shared_ptr<const Widget> fastLoadWidget(WidgetId id) {
+    auto cached = cache[id].lock();
+    if (!cached) {
+        cached = loadWidget(id);
+        cache[id] = cached;
+    }
+    return cached;
+}
+```
+
+<Term def="cache 只保存 weak observation，有外部 owner 时复用，无 owner 时允许 object 回收。">
+  weak ownership cache
+</Term>
+
+若 cache 保存 shared_ptr，它会永久延长 object lifetime，退化成 owning repository。weak cache 让 caller ownership 决定保留期。
+
+## cache container 自身仍需同步
+
+weak_ptr control-block operations 的线程安全不等于 unordered_map 可并发写。多个 threads 查找/插入同一 cache 需要 mutex 或并发 map。
+
+<Term def="保护 weak cache map 的 lookup、insert、cleanup 和 duplicate-load 协议。">
+  cache synchronization boundary
+</Term>
+
+还需决定 cache stampede：多个 miss 是否允许并行 load；若不允许，要在 per-key future/single-flight 层协调，而不是长期持 global lock 执行 I/O。
+
+## observer list 不应拥有订阅者
+
+publisher 保存 subscribers 的 shared_ptr 会让 subscription 隐式延长 subscriber lifetime。weak_ptr 更贴合“仍活着就通知”。
+
+```cpp
+for (auto iterator = observers.begin(); iterator != observers.end();) {
+    if (auto observer = iterator->lock()) {
+        observer->onEvent(event);
+        ++iterator;
+    } else {
+        iterator = observers.erase(iterator);
+    }
+}
+```
+
+<Term def="发布者保存 weak subscribers，通知时升级并顺便清理过期项。">
+  weak observer registry
+</Term>
+
+callback 期间 local shared_ptr 保证 subscriber 存活；callback 之后 registry 不继续拥有。
+
+## weak edge 打破强引用环
+
+```cpp
+class Child;
+
+class Parent {
+public:
+    std::shared_ptr<Child> child;
+};
+
+class Child {
+public:
+    std::weak_ptr<Parent> parent;
+};
+```
+
+<Term def="ownership graph 中不增加 strong count 的反向边，使根 owner 消失后计数可归零。">
+  weak back edge
+</Term>
+
+Parent owns Child，Child observes Parent。若两边都是 shared_ptr，外部 root 消失后 counts 仍互相支撑。
+
+<EmcppOwnershipCycleBreakMap />
+
+<Term def="把至少一条非 owning graph edge 改成 weak_ptr，使强引用子图无环并可回收。">
+  cycle prevention
+</Term>
+
+选择哪条 edge weak 取决于领域 ownership，不是固定“parent 一定 weak child”。先画谁决定谁的 lifetime。
+
+<Callout type="trap" title="陷阱：发现 cycle 后随便把一边改 weak 就行">
+  weak edge 会改变可达对象的存活保证。必须依据 ownership direction 选择
+  observer/back-reference；否则业务仍在使用 的对象可能提前过期，或真正 cycle
+  留在其他 edges。
+</Callout>
+
+## weak_ptr 不替代普通 borrow
+
+函数内部短期参数若 caller 明确保证 lifetime，reference/raw pointer 更轻且不需要 shared control block。weak_ptr 适合对象本来就在 shared ownership 中，observer 可能跨时间保存并允许过期。
+
+<Term def="根据是否已有 shared ownership、是否跨时间保存和是否允许过期选择 reference/raw 或 weak_ptr。">
+  observation mechanism boundary
+</Term>
+
+为了使用 weak_ptr 而把 unique ownership 全部升级 shared_ptr，可能比问题本身更昂贵。
+
+## use_count 不适合作为业务同步
+
+weak_ptr/use_count 返回瞬时 owner 数量，其他线程可立即 copy/reset。不能写“若 count == 1 就安全修改”。
+
+<Term def="reference count 查询只反映瞬时 ownership metadata，不能作为 object mutation lock。">
+  use-count synchronization fallacy
+</Term>
+
+object state 的独占修改需要 mutex、actor/thread confinement 或真正 unique ownership。
+
+## weak observation 验收矩阵
+
+<Term def="覆盖存活/过期 lock、throwing construction、cache cleanup、observer callback 和 cycle destruction 的测试集合。">
+  weak observation contract matrix
+</Term>
+
+1. owner 存活时 lock 成功并延长使用窗口。
+2. 最后 owner 消失后 expired 为 true、lock 返回 empty。
+3. throwing constructor 对 expired weak 抛 bad_weak_ptr。
+4. weak cache 不阻止 object destructor，且清理 residual entries。
+5. observer notification 期间 subscriber 不被销毁。
+6. parent-child graph root reset 后所有 destructors 执行。
+7. TSan 验证 cache container/graph mutation protocol。
+
+先预测 ownership graph 与过期是否是正常分支，再决定 lock、exception 或更简单 borrow。
+
+## 小结
+
+- weak_ptr 共享 control-block identity 但不增加 strong count，适合可过期 non-owning observation
+- weak_ptr 不能直接解引用；lock 成功时原子取得 temporary shared ownership
+- expired 只是瞬时 snapshot，先检查再使用存在 TOCTOU race
+- object 在 strong count 为零时销毁，control block 可因 weak observers 继续存在
+- weak cache 允许无外部 owner 的 object 回收，但 cache map 与 duplicate load 仍需同步
+- weak observer registry 在 callback 时升级，过期时清理，不隐式拥有 subscriber
+- cycle prevention 要根据 ownership direction 选择 weak back edge
+- use_count/expired 都不能替代 object state synchronization
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 20"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch04.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="weak_ptr">
+    不增加 strong count 的可过期观察者。
+  </GlossaryItem>
+  <GlossaryItem term="non-owning shared observation">
+    基于共享控制块的非拥有关系。
+  </GlossaryItem>
+  <GlossaryItem term="expired weak observation">
+    目标对象已被 strong owners 销毁。
+  </GlossaryItem>
+  <GlossaryItem term="weak lock upgrade">
+    尝试升级成临时 shared owner。
+  </GlossaryItem>
+  <GlossaryItem term="expired snapshot">瞬时过期状态查询。</GlossaryItem>
+  <GlossaryItem term="atomic lifetime acquisition">
+    原子检查并增加 strong count。
+  </GlossaryItem>
+  <GlossaryItem term="bad_weak_ptr">
+    从过期 weak 构造 owner 的异常。
+  </GlossaryItem>
+  <GlossaryItem term="residual control-block lifetime">
+    对象销毁后的控制块存续期。
+  </GlossaryItem>
+  <GlossaryItem term="weak ownership cache">
+    不决定对象存活的弱缓存。
+  </GlossaryItem>
+  <GlossaryItem term="cache synchronization boundary">
+    保护弱缓存容器与加载协议。
+  </GlossaryItem>
+  <GlossaryItem term="weak observer registry">
+    保存可过期订阅者的注册表。
+  </GlossaryItem>
+  <GlossaryItem term="weak back edge">
+    ownership graph 的非拥有反向边。
+  </GlossaryItem>
+  <GlossaryItem term="cycle prevention">
+    以 weak edge 打破强引用环。
+  </GlossaryItem>
+  <GlossaryItem term="observation mechanism boundary">
+    borrow 与 weak observation 的选择边界。
+  </GlossaryItem>
+  <GlossaryItem term="use-count synchronization fallacy">
+    误把瞬时计数当同步保证。
+  </GlossaryItem>
+  <GlossaryItem term="weak observation contract matrix">
+    过期、升级、缓存和环测试表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：先调用 expired，再在另一行访问 object。** 为什么仍有 lifetime race？
+
+<Answer question="正确的原子操作是什么？">
+  expired 不取得 ownership，返回 false 后最后 shared owner 可立即消失。直接调用
+  observer lock，把存活检查 和 strong-count increase 合并；只在返回 shared
+  pointer 非空时访问，并让 local owner 覆盖整个使用窗口。 用 barrier 控制 owner
+  reset 与 lock 竞争，测试成功/失败两条路径都安全。
+</Answer>
+
+2. **问题 2：设计 Widget cache，不让 cache 永久拥有对象。** 多线程可同时 miss。
+
+<Answer question="weak ownership 与同步如何组合？">
+  map value 使用 weak pointer；lookup 后 lock，失败则 load 并把新 shared owner
+  写回。mutex 保护 map 与 per-key publication，I/O 不长期占 global
+  lock；需要避免 stampede 时使用 per-key future/single-flight。 测试外部 owners
+  消失后 Widget 析构、expired entry 清理和并发同 key 行为。
+</Answer>
+
+3. **问题 3：Parent 与 Child 互相保存 shared_ptr。** 外部 root reset 后不析构。
+
+  <Answer question="哪条边应 weak，怎样证明？">先定义 Parent owns Child、Child 只导航/观察 Parent，因此保留 parent-to-child shared edge，把 child-to-parent 改 weak。Child 使用 parent 时 lock 并处理过期。destructor counters 验证 root reset 后两者销毁；若领域 ownership 相反则反向选择，不能机械套用。</Answer>
+</Exercises>

@@ -1,0 +1,279 @@
+---
+title: "Chapter 15：智能指针（Smart Pointers）"
+type: A
+section: Rust 程序设计语言 · 间接层、共享所有权与内部可变性
+order: 15
+description: 对齐官方第 15 章：Box 与递归类型、Deref/coercion、Drop、Rc 引用计数、RefCell 运行时借用、引用环和 Weak 所有权建模。
+demo: false
+math: false
+sourceUrl: "https://doc.rust-lang.org/book/ch15-00-smart-pointers.html"
+draft: false
+---
+
+import {
+  RplBoxIndirectionLab,
+  RplRcRefCellLab,
+  RplWeakCycleLab,
+} from "@/components/mdx/rust-programming-language/diagrams/smart-pointers";
+
+<Objectives>
+
+- 能比较 reference、`Box`、`Rc`、`RefCell` 与 `Weak` 的所有权、布局、借用检查时机和线程边界，并选择最小能力组合
+- 能实现 `Deref` 与 `Drop` 的关键契约，解释 deref coercion、自动清理和提前 `drop` 为什么不会移出或双重释放内部值
+- 能分析 `Rc<RefCell<_>>` 的 strong/weak 与 runtime borrow 两套账本，识别引用环并用 `Weak::upgrade` 建立可失效反向关系
+
+</Objectives>
+
+## 为什么“像指针”不足以描述智能指针
+
+普通 reference 只借用数据，没有额外所有权能力。smart pointer 通常是拥有所指数据的 struct，并附带 metadata 或策略：Box 提供 heap allocation 与固定大小间接层，Rc 维护 owner 计数，RefCell 维护运行时借用状态，Weak 表示不参与存活判定的观察关系。
+
+<Term def="行为类似 pointer、同时携带所有权或 metadata，并通常实现 Deref 与 Drop 的数据结构。">智能指针</Term>
+
+选择类型前要先回答：值是否需要 heap indirection；有一个还是多个 owner；是否需要通过共享外表修改内部；检查借用可否留在编译期；关系是拥有还是观察；是否跨线程。本章的 Rc/RefCell 都是单线程工具，跨线程同步在下一章讨论。
+
+## Box 把拥有的值放到 heap，并留下固定大小指针
+
+<Term def="在 heap 上拥有 T、在当前值中保存固定大小 pointer，并在离开作用域时清理两者的 smart pointer。">Box</Term>
+
+```rust
+let boxed = Box::new(5);
+assert_eq!(*boxed, 5);
+```
+
+单独把 i32 放到 heap 通常没有价值。Box 的典型用途是：为编译期未知大小的结构提供已知间接层；移动大 stack value 时只移动小 pointer；以 trait object 拥有某个实现特定 trait 的值。heap allocation 不是免费，但 Box 自身不再添加引用计数等策略成本。
+
+<Term def="用固定大小 pointer 指向另一位置的值，打断直接嵌套的布局递归。">间接层</Term>
+
+## 递归类型必须在某处拥有已知大小
+
+<Term def="某个 variant 或字段再次包含自身类型的定义；直接嵌套会让编译器无法求出有限布局。">递归类型</Term>
+
+```rust
+enum List {
+    Cons(i32, Box<List>),
+    Nil,
+}
+```
+
+若 Cons 直接包含 List，计算大小会变成 `i32 + (i32 + ...)`，产生 E0072 infinite size。Box 大小与所指数据无关，Cons 只需容纳 tag、i32 和 pointer；下一节点在 heap 上。逻辑递归仍存在，物理布局已有限。
+
+这不表示 cons list 是 Rust 常用列表，通常 Vec 更合适；这个例子用于证明“indirection 改变类型布局”，而不是推荐每个序列都逐节点分配。
+
+## Deref 借出目标，不转移内部所有权
+
+<Term def="定义 dereference operator 如何从 wrapper 得到 Target reference 的 trait。">Deref trait</Term>
+
+```rust
+use std::ops::Deref;
+
+struct MyBox<T>(T);
+
+impl<T> Deref for MyBox<T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+```
+
+写 `*value` 时，编译器概念上执行 `*(value.deref())`。deref 必须返回 reference；若直接返回 T，普通解引用就会把 inner value 从借用的 wrapper 中 move 出。Target 是关联类型，一个 Deref 实现只定义一条主要目标关系。
+
+<Term def="在函数或方法参数不匹配时，自动沿 Deref 把 wrapper reference 转成目标 reference 的便利规则。">deref coercion</Term>
+
+若函数需要 `&str`，传 `&String` 会由 String 的 Deref 自动转换；传 `&MyBox<String>` 可连续沿 MyBox -> String -> str 转换。coercion 发生在明确的 reference 目标上下文，不是任意表达式都自动替你解引用。
+
+## Drop 把资源清理绑定到所有权结束
+
+<Term def="在值离开作用域前由编译器自动调用、用于释放 heap、handle、lock 等资源的 trait。">Drop trait</Term>
+
+```rust
+impl Drop for Connection {
+    fn drop(&mut self) {
+        self.close_handle();
+    }
+}
+```
+
+RAII 的关键不是“记得清理”，而是把清理写进类型所有权。所有返回路径和 panic unwind 都沿已初始化值的规则执行 Drop；Box 也借此释放 heap 数据。调用者不应直接调用 `value.drop()`，因为编译器仍会在作用域结束自动清理，语言禁止这种可能双重析构的写法。
+
+<Term def="用 std::mem::drop 消费一个值，使其在词法作用域结束前立即运行清理。">提前 drop</Term>
+
+提前释放 lock guard 时调用 `drop(guard)`，函数取得 guard 所有权，值随后不可再用。它与 Drop trait method 同名但角色不同：一个是普通消费函数，一个由编译器调度的析构 hook。
+
+<RplBoxIndirectionLab />
+
+先预测去掉 Box 后 compiler 是否还能求出 List 大小，再调整 coercion 层与提前清理。观察 Box、Deref、Drop 分别解决布局、使用接口和资源生命周期，不能互相替代。
+
+<Callout type="trap" title="陷阱：为了共享而到处使用 Box::clone">
+  Box 仍是单 owner；clone 往往复制内部 T，而不是建立共享 owner。若领域确实需要单线程多 owner，应显式选择 Rc；若只需借用，普通 reference 更轻、更清楚。
+</Callout>
+
+## Rc 用 strong_count 表达单线程共享所有权
+
+<Term def="通过引用计数让同一 heap value 有多个单线程 owner，strong_count 归零时清理。">Rc</Term>
+
+Box tail 只能被一个 list 拥有；两个 list 共享同一 tail 时需要 Rc。`Rc::clone(&a)` 增加 strong count，不深拷贝整个 List；所有 clone 离开作用域后逐次减一。
+
+```rust
+use std::rc::Rc;
+
+let a = Rc::new(String::from("shared")); // count 1
+let b = Rc::clone(&a);                   // count 2
+assert_eq!(Rc::strong_count(&a), 2);
+drop(b);                                 // count 1
+```
+
+<Term def="Rc 控制块中参与 value 存活判定的 owner 数；归零时 T 被 Drop。">strong count</Term>
+
+<Term def="只增加 Rc strong_count、共享同一 allocation 的浅层所有权复制操作。">Rc clone</Term>
+
+显式写 `Rc::clone` 是可读性约定，让 review 者一眼区分“增计数”和潜在昂贵的深 clone。Rc 不是线程安全引用计数；它没有跨线程原子计数保证，跨线程多 owner 需要下一章的 Arc。
+
+## RefCell 把借用规则检查推迟到运行时
+
+<Term def="在外部只拿到 shared reference 时仍允许通过安全 API 修改内部值的设计模式。">内部可变性</Term>
+
+<Term def="单 owner、在运行时维护 borrow 状态并以 Ref/RefMut guard 暴露内部值的容器。">RefCell</Term>
+
+普通 `&T` 和 Box 在编译期执行“一份 mutable 或多份 shared”规则。RefCell 的 `borrow()`/`borrow_mut()` 让某些静态分析无法证明但实际安全的设计通过编译，代价是运行时 bookkeeping 与冲突时 panic。它不是关闭借用规则，而是把检查时机从 compile time 移到 runtime。
+
+<Term def="borrow 和 borrow_mut 返回、实现 Deref 并在离开作用域时归还运行时借用的 guard。">Ref 与 RefMut guard</Term>
+
+<Term def="RefCell 在执行期间验证 many shared 或 one mutable，冲突时 panic 的借用检查。">运行时借用检查</Term>
+
+```rust
+use std::cell::RefCell;
+
+let messages = RefCell::new(Vec::new());
+messages.borrow_mut().push(String::from("warning"));
+assert_eq!(messages.borrow().len(), 1);
+```
+
+mock Messenger 的 trait method 只接收 `&self`，却需要记录 send 调用，这就是 interior mutability 的合理场景。若同时保留一个 Ref 再 borrow_mut，或创建两个活动 RefMut，代码能编译但会 `BorrowMutError` panic。缩短 guard 作用域比捕获 panic 更能修正所有权设计。
+
+## Rc 与 RefCell 组合出多 owner 可变值
+
+<Term def="以 Rc 共享 owner、以 RefCell 在每个 owner 间提供受运行时规则保护的内部修改能力的组合。">Rc RefCell 组合</Term>
+
+`Rc<RefCell<T>>` 有两本独立账：Rc 决定 allocation 何时存活，RefCell 决定此刻谁能借用 T。增加 owner 不等于获得 mutable access；borrow_mut 成功也不改变 strong count。组合能力强，也更容易构造复杂图和引用环，应限制在单线程、明确拓扑的边界。
+
+<RplRcRefCellLab />
+
+改变 strong owners、Ref 与 RefMut 数量。先预测哪种组合会 panic，再观察所有权账本与借用账本为何必须同时满足。
+
+<Callout type="trap" title="陷阱：把 RefCell 当成借用检查逃生门">
+  RefCell 仍执行同样规则，只是错误从编译期变成运行时 panic，并有少量 bookkeeping 成本。优先使用普通借用；只有外部 API 必须共享、且能证明运行时访问互斥时才引入。
+</Callout>
+
+## Strong reference cycle 是内存安全的泄漏
+
+<Term def="一组 Rc value 通过 strong edges 彼此拥有，使外部 owner 消失后每个 strong_count 仍大于零。">强引用环</Term>
+
+Rust 保证不会通过 dangling pointer 访问已释放内存，却不承诺所有 allocation 都必然释放。若 a strong-own b，b 又 strong-own a，drop 外部变量只把各自计数从 2 降到 1；两者互相维持，Drop 永不执行。循环 Debug 遍历还可能无限递归并 stack overflow。
+
+这类泄漏是逻辑 bug，compiler 无法仅从 Rc/RefCell 类型判断拓扑是否会成环。review 数据结构时应把每条 edge 标成 ownership 或 observation，并测试外部 owner 离开后的 counts/upgrade 行为。
+
+## Weak 表示不延长生命周期的观察关系
+
+<Term def="由 Rc::downgrade 创建、不增加 strong_count、不会阻止目标 value 被清理的 smart pointer。">Weak</Term>
+
+<Term def="尝试把 Weak 转成临时 Rc，并以 Option 表达目标仍存在或已经 Drop。">Weak upgrade</Term>
+
+```rust
+use std::cell::RefCell;
+use std::rc::{Rc, Weak};
+
+struct Node {
+    parent: RefCell<Weak<Node>>,
+    children: RefCell<Vec<Rc<Node>>>,
+}
+```
+
+树中 parent owns children，child 不应 owns parent：删 child 不应删 parent，删 parent 后 child 的反向观察可以失效。因此 children 用 Rc，parent 用 Weak。`Rc::downgrade` 增加 weak_count，不参与 value 存活；访问时 `upgrade()` 返回 Some(Rc) 或 None，类型迫使调用者处理失效。
+
+<Term def="从数据结构语义判断一条 pointer edge 是否应延长目标存活，还是只允许可失效访问。">所有权边建模</Term>
+
+Weak 不自动修复任意图。你必须选择至少一条反向 edge 为非 owning，确保 strong subgraph 没有自持环；同时不能在业务上假定 upgrade 永远 Some。
+
+<RplWeakCycleLab />
+
+把 child -> parent 切换为 Rc 或 Weak，再丢弃外部 parent owner。观察 strong count 是否归零、Weak upgrade 是否返回 None，以及“无悬空引用”和“无泄漏”为何是不同性质。
+
+<Callout type="trap" title="陷阱：认为 Rust 内存安全等于绝不泄漏">
+  Rc strong cycle、主动 forget 或永久增长容器都能安全地保留内存。对 Rc/RefCell 图审查 strong edges，用 Weak 表示非 owner，并以 Drop/count/upgrade 测试验证生命周期。
+</Callout>
+
+## 三步选择和验证 smart pointer
+
+<Stepper>
+  <Step title="第一步：先解决布局与单 owner 生命周期">
+    递归/unsized/大值所有权才引入 Box；Deref 只借出 Target，Drop 绑定资源清理。需要提前释放 lock 等资源时消费 guard，而不是显式调用 destructor method。
+
+    <RplBoxIndirectionLab />
+  </Step>
+  <Step title="第二步：分开 owner 数与借用状态">
+    单线程多 owner 用 Rc；共享外表下确需修改才加 RefCell。逐段缩短 Ref/RefMut guard，并测试冲突路径不会在生产输入中 panic。
+
+    <RplRcRefCellLab />
+  </Step>
+  <Step title="第三步：把图中每条边标成 Strong 或 Weak">
+    strong edge 表示生命周期拥有，weak edge 表示可失效观察。确认外部 owner drop 后 strong_count 能归零，并在每个 upgrade 处处理 None。
+
+    <RplWeakCycleLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- smart pointer 在 pointer 行为之外增加 ownership/metadata；应按布局、owner 数、mutability、检查时机和线程边界选择最小能力
+- Box 以固定大小 indirection 使递归类型可布局；Deref 返回 Target reference，coercion 让 reference API 接收 wrapper
+- Drop 在所有权结束时自动清理，提前清理用 std::mem::drop 消费值，不能直接调用 Drop::drop
+- Rc 为单线程多 owner 维护 strong_count；Rc::clone 只增计数，不深拷贝 T
+- RefCell 单 owner、运行时执行借用规则；`Rc<RefCell<T>>` 同时维护 owner 与 borrow 两本独立账
+- strong cycle 可造成内存安全泄漏；Weak 不延长目标存活，upgrade 用 Option 安全表达可失效观察
+
+<Exercises>
+  1. **问题 1：选择 pointer。** 一个递归 AST 每个节点单 owner，另一个只读 graph node 有多个单线程 owner，测试 mock 在 `&self` 方法内记录调用；分别选什么，为什么不能全用 Box？
+
+  <Answer question="Box、Rc、RefCell 分别解决哪一维？">单 owner 递归 AST 用 Box 打断布局；共享只读 graph node 用 Rc 记录多个 owner；mock 可把记录 Vec 放进 RefCell，在 &self 下 borrow_mut。Box 不提供多 owner，clone 往往复制 T；RefCell 不增加 owner；Rc 本身只给 shared access，三个能力不能混为一谈。</Answer>
+
+  2. **问题 2：解释 panic。** `let read = cell.borrow(); let write = cell.borrow_mut();` 为什么能编译却 panic，怎样修复比 catch panic 更正确？
+
+  <Answer question="RefCell 把什么从编译期移到了运行时？">RefCell 的安全 API 运行时维护 guard：read 活动时 shared count 大于零，borrow_mut 要求没有任何 Ref/RefMut，因此 panic。应让 read guard 在 borrow_mut 前离开作用域或显式 drop(read)，或重组逻辑先复制必要数据再修改。catch panic 只隐藏违反借用协议，不能建立正确访问顺序。</Answer>
+
+  3. **问题 3：修复树环。** parent.children 与 child.parent 都是 Rc，外部 parent/child 变量 drop 后为何仍泄漏？改 Weak 后访问 parent 需要怎样变化？
+
+  <Answer question="Strong 与 Weak 如何决定 Drop？">双向 Rc 都增加 strong_count，外部 owner 消失后两个节点仍通过环各保留至少一个 strong owner，计数不归零。parent 应 strong-own children，child.parent 改为 Weak；Weak 不参与存活，parent 可正常 Drop。child 访问 parent 时调用 upgrade 并匹配 Some/None，因为 parent 可能已经不存在。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="智能指针">具有 pointer 行为并附带 ownership 或 metadata 的数据结构。</GlossaryItem>
+  <GlossaryItem term="Box">在 heap 拥有 T、以固定大小 pointer 间接访问的 smart pointer。</GlossaryItem>
+  <GlossaryItem term="间接层">用固定大小 pointer 打断直接递归布局的层。</GlossaryItem>
+  <GlossaryItem term="递归类型">字段或 variant 直接或间接再次包含自身的类型。</GlossaryItem>
+  <GlossaryItem term="Deref trait">把 wrapper dereference 为 Target reference 的 trait。</GlossaryItem>
+  <GlossaryItem term="deref coercion">按目标 reference 类型自动沿 Deref 转换的规则。</GlossaryItem>
+  <GlossaryItem term="Drop trait">值离开作用域前自动执行资源清理的 trait。</GlossaryItem>
+  <GlossaryItem term="提前 drop">用 std::mem::drop 消费值并提前清理。</GlossaryItem>
+  <GlossaryItem term="Rc">以 strong_count 支持单线程多 owner 的 smart pointer。</GlossaryItem>
+  <GlossaryItem term="strong count">参与 Rc value 存活判定的 owner 数量。</GlossaryItem>
+  <GlossaryItem term="Rc clone">增加 strong_count 且不深拷贝内部值的操作。</GlossaryItem>
+  <GlossaryItem term="内部可变性">通过 shared 外表安全修改内部值的模式。</GlossaryItem>
+  <GlossaryItem term="RefCell">在运行时维护借用状态的单 owner 容器。</GlossaryItem>
+  <GlossaryItem term="Ref 与 RefMut guard">代表活动共享或可变借用并在 Drop 时归还的对象。</GlossaryItem>
+  <GlossaryItem term="运行时借用检查">RefCell 对 many shared/one mutable 规则的动态验证。</GlossaryItem>
+  <GlossaryItem term="Rc RefCell 组合">同时支持单线程多 owner 与内部可变性的组合。</GlossaryItem>
+  <GlossaryItem term="强引用环">strong edges 形成自持闭环、使计数无法归零的结构。</GlossaryItem>
+  <GlossaryItem term="Weak">不增加 strong_count、不阻止目标清理的观察指针。</GlossaryItem>
+  <GlossaryItem term="Weak upgrade">把 Weak 安全转换为 Option Rc 的有效性检查。</GlossaryItem>
+  <GlossaryItem term="所有权边建模">按生命周期语义区分 owning 和 observing pointer edge。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Rust Programming Language, Chapter 15 Smart Pointers"
+  adaptedUrl="https://doc.rust-lang.org/book/ch15-00-smart-pointers.html"
+/>

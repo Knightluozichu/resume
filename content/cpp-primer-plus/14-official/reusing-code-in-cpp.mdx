@@ -1,0 +1,286 @@
+---
+title: "Chapter 14：Reusing Code in C++"
+type: A
+section: C++ Primer Plus 6e · 包含、类模板与多重继承
+order: 14
+description: 对齐第6版 Chapter 14：比较 containment、private/protected inheritance，掌握 class template 实例化、multiple inheritance、virtual base 与歧义消解。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+draft: false
+---
+
+import {
+  EppClassTemplateLab,
+  EppDiamondResolutionFlow,
+  EppReuseMechanismMap,
+} from "@/components/mdx/cpp-primer-plus/diagrams/reusing-code-in-cpp";
+
+<Objectives>
+
+- 能比较 containment、private inheritance、protected inheritance 与 public inheritance 的关系、接口暴露和耦合成本
+- 能实现固定容量 class template，并复现不同类型实例化对默认构造、复制和移动操作的要求
+- 能分析 multiple inheritance 的名字歧义、重复祖先和 virtual base 初始化责任，设计显式消歧方案
+
+</Objectives>
+
+## 为什么“复用代码”必须先回答对象关系
+
+C++ 提供包含、不同访问方式的继承、模板和多重继承，但语法都不是设计理由。先问领域关系：Owner has-a Component、Derived is-a Base，还是某个类型仅在实现上借用一个策略？关系决定调用者应该看到什么，也决定未来改动耦合到谁。
+
+## containment 默认把复用留在实现边界
+
+包含（containment）把一个类对象作为另一个类的成员，表达 has-a。Owner 决定是否以及如何转发成员能力，Component 的 public API 不会自动变成 Owner 的接口。
+
+<Term def="把另一个类型的对象作为成员，表达 has-a 关系并由外层类选择暴露能力的复用方式。">
+  包含
+</Term>
+
+```cpp
+#include <string>
+
+class Report {
+public:
+    explicit Report(std::string title) : title_{std::move(title)} {}
+    std::size_t titleLength() const { return title_.size(); }
+
+private:
+    std::string title_;
+};
+```
+
+Report has-a string，但不是 string：接受 `std::string&` 的函数不应接收 Report。成员按声明顺序构造并逆序析构，外层复制控制默认组合成员的复制语义；这使 RAII 成员能够自然形成 Rule of Zero。
+
+<EppReuseMechanismMap />
+
+## private inheritance 复用基类实现但不承诺 is-a
+
+私有继承（private inheritance）把 Base 的 public/protected member 变为 Derived 的 private 实现；外部不能把 Derived 隐式转成 Base。它表达 implemented-in-terms-of，适用于确实需要覆盖 virtual hook、访问 protected 或利用空基类优化的少数情况。
+
+<Term def="把基类公有和保护能力收进派生类私有实现、阻止外部 is-a 转换的继承方式。">
+  私有继承
+</Term>
+
+```cpp
+class Timer {
+protected:
+    virtual void onTick() = 0;
+public:
+    void tick() { onTick(); }
+};
+
+class Session : private Timer {
+public:
+    void advance() { tick(); }
+private:
+    void onTick() override { ++elapsed_; }
+    int elapsed_{0};
+};
+```
+
+Session 调用者只看到 advance，不看到 Timer 接口。若不需要 virtual hook，直接包含 Timer 更清晰、耦合更窄。
+
+## protected inheritance 把实现关系继续传给后代
+
+保护继承（protected inheritance）把 Base public/protected member 变成 Derived protected，因此 Derived 的后续派生类仍可访问，但普通外部调用者不可访问。它常扩大未来派生层的依赖，实际使用应少且有明确 framework extension contract。
+
+<Term def="把基类公有和保护成员转为派生保护成员，使后续派生实现可用但外部不可用的继承方式。">
+  保护继承
+</Term>
+
+<Callout type="trap" title="陷阱：private/protected inheritance 只是更严格的 public is-a">
+  两者会阻止普通调用者把 Derived 当作 Base，语义是实现复用而非公开替换。若领域上确实 is-a，隐藏基类接口会破坏契约；若不是 is-a，优先 containment。
+</Callout>
+
+## class template 把一族类型写成一个模式
+
+类模板（class template）以类型或非类型参数描述类族。`Stack<int, 8>` 与 `Stack<std::string, 8>` 是不同具体类型；模板定义通常必须在实例化点可见，因此常放头文件。
+
+<Term def="以类型或常量参数描述一族类定义，由具体模板实参生成具体类类型的代码模式。">
+  类模板
+</Term>
+
+<Term def="把模板参数替换为具体实参，并对实际使用成员生成和检查具体代码的过程。">
+  模板实例化
+</Term>
+
+```cpp
+#include <array>
+#include <cstddef>
+
+template <typename T, std::size_t Capacity>
+class Stack {
+public:
+    bool push(const T& value) {
+        if (size_ == Capacity) return false;
+        items_[size_++] = value;
+        return true;
+    }
+
+    bool pop(T& out) {
+        if (size_ == 0) return false;
+        out = items_[--size_];
+        return true;
+    }
+
+private:
+    std::array<T, Capacity> items_{};
+    std::size_t size_{0};
+};
+```
+
+表示 `std::array<T,...> items_{}` 隐含 T 可默认构造，push/pop 隐含可复制赋值。模板参数不是“任意类型”；真正要求来自所有被实例化的表达式和表示。可通过不同表示、移动 overload 或现代 constraint 收紧诊断。
+
+先预测四种 T 是否能实例化并指出失败表达式，再切换实验面板核对。只说“模板不支持该类型”不够，必须定位是默认构造、复制、比较还是其他操作要求。
+
+<EppClassTemplateLab />
+
+## 模板成员也需要明确可见性与生成时机
+
+编译器只为实际需要的模板成员生成代码；某个类型可以实例化类，却在调用特定成员时失败。模板声明与定义分离若让定义在实例化点不可见，会产生编译或链接问题，可使用显式实例化管理有限类型集合。
+
+```cpp
+Stack<int, 4> ints;
+ints.push(7);
+
+Stack<std::string, 4> words;
+words.push("reuse");
+```
+
+两个实例化各有独立静态成员和具体函数代码语义。模板复用减少源码重复，不代表运行时只有一个万能类。
+
+## multiple inheritance 同时组合多个基类子对象
+
+多重继承（multiple inheritance, MI）让一个派生类拥有多个直接基类子对象。它可组合彼此正交的公开协议，但会带来同名成员、转换歧义、构造顺序和重复祖先问题。
+
+<Term def="一个派生类直接继承两个或更多基类，从而组合多个基类子对象与接口的机制。">
+  多重继承
+</Term>
+
+```cpp
+class Printable {
+public:
+    virtual ~Printable() = default;
+    virtual void print(std::ostream&) const = 0;
+};
+
+class Persistable {
+public:
+    virtual ~Persistable() = default;
+    virtual void save(std::ostream&) const = 0;
+};
+
+class Document : public Printable, public Persistable {
+public:
+    void print(std::ostream&) const override;
+    void save(std::ostream&) const override;
+};
+```
+
+当基类协议正交、无共享状态时，接口型 MI 较容易推理。构造直接基类仍按声明顺序，析构逆序；不要靠初始化列表书写顺序猜测。
+
+## 同名成员与最终覆盖需要显式消歧
+
+若两个基类都有 `open()`，`doc.open()` 可能歧义；可在派生类提供统一 open，或用 `doc.Reader::open()` 限定。若两个分支都 override 同一 virtual base function，most-derived class 还需提供唯一 final overrider。
+
+```cpp
+class Scanner { public: void reset(); };
+class Printer { public: void reset(); };
+
+class Device : public Scanner, public Printer {
+public:
+    void reset() {
+        Scanner::reset();
+        Printer::reset();
+    }
+};
+```
+
+消歧不是任选一个编译通过的名字，而是定义 Device 对外 reset 的领域语义。若两个基类职责冲突，结构本身可能需要拆分。
+
+<Callout type="trap" title="陷阱：遇到 MI 歧义，加 using 或随便限定一个基类即可">
+  语法限定只选择候选，不证明组合语义。先决定派生类应暴露哪个契约、是否需要同时调用两个分支，以及失败/顺序如何处理，再写统一 override 或命名操作。
+</Callout>
+
+## virtual base 让菱形共享一个祖先子对象
+
+菱形继承中 Left 和 Right 都来自 Root，普通 MI 会让 Bottom 含两个 Root subobject，向 Root 转换和成员查找歧义。把 Root 声明为 virtual base 后，完整 Bottom 只含一个共享 Root；most-derived class 负责初始化它。
+
+<Term def="在多重继承菱形中由完整派生对象共享、并由最派生类负责初始化的基类子对象。">
+  虚基类
+</Term>
+
+```cpp
+class Worker { public: explicit Worker(std::string name); };
+class Singer : virtual public Worker { /* ... */ };
+class Waiter : virtual public Worker { /* ... */ };
+
+class SingingWaiter : public Singer, public Waiter {
+public:
+    explicit SingingWaiter(std::string name)
+        : Worker{std::move(name)}, Singer{}, Waiter{} {}
+};
+```
+
+virtual base 改变对象布局、构造责任和转换路径，不会自动消除 Singer/Waiter 自己的同名函数。必须分别审计共享身份与接口冲突。
+
+<EppDiamondResolutionFlow />
+
+## 三步选择并验证复用机制
+
+<Stepper>
+  <Step title="第一步：写关系和对外表面">
+    对每个候选记录 is-a、has-a 或 implemented-in-terms-of，以及调用者/后续派生类真正应看到的操作。
+
+    <EppReuseMechanismMap />
+  </Step>
+  <Step title="第二步：实例化模板边界类型">
+    用可复制、只移动、不可默认构造和资源型 T 编译实际成员，定位表示与表达式施加的操作要求。
+
+    <EppClassTemplateLab />
+  </Step>
+  <Step title="第三步：展开 MI 子对象图">
+    标出每个基类子对象、共享 virtual base、构造者、同名成员和 final overrider，再为每个歧义写语义决策。
+
+    <EppDiamondResolutionFlow />
+  </Step>
+</Stepper>
+
+## 小结
+
+- containment 表达 has-a 并默认收窄接口，是实现复用的首选起点
+- private/protected inheritance 是实现关系，不等价于 public is-a
+- class templates 生成具体类型，实例化要求来自表示和实际使用的表达式
+- multiple inheritance 可组合正交协议，也引入同名、转换与生命周期歧义
+- virtual base 共享菱形祖先并把初始化责任交给 most-derived class，但不会自动解决接口冲突
+
+<Exercises>
+  1. **问题 1：选择复用机制。** `Window` 需要日志能力但不应被当作 Logger，且无需覆盖 Logger virtual hook，应选什么？
+
+  <Answer question="关系、暴露面和机制如何对应？">Window has-a Logger，使用 containment；只转发 Window 契约需要的日志操作。public inheritance 错误承诺 is-a，private inheritance虽隐藏转换但增加基类耦合且无 hook 需求。测试 Window 接口不暴露完整 Logger 能力。</Answer>
+
+  2. **问题 2：定位模板失败。** `Stack<unique_ptr<int>>` 在 `push(const T&)` 失败，为什么类模板并非完全不可用？
+
+  <Answer question="实例化失败应定位到哪条表达式？">失败来自 push 中 copy assignment，不代表 T 不能存储或移动。可增加 `push(T value)` 后 move 到数组，或提供 rvalue overload；表示若默认构造 T 仍是另一独立要求。应逐个成员和表达式列 constraint，而非笼统拒绝整个类型。</Answer>
+
+  3. **问题 3：审计菱形。** virtual Worker 只有一份后，为什么 SingingWaiter 仍可能需要 override `show()`？
+
+  <Answer question="共享祖先与最终覆盖为何是两个问题？">virtual base 只合并 Worker subobject 和初始化责任；若 Singer 与 Waiter 都 override Worker::show，完整类仍有两个 final overrider 候选。SingingWaiter 必须提供统一 override，按领域语义选择/组合分支，并显式初始化共享 Worker。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="包含">以成员表达 has-a 并由外层类选择暴露能力的复用方式。</GlossaryItem>
+  <GlossaryItem term="私有继承">隐藏基类公开替换、用于实现复用的继承方式。</GlossaryItem>
+  <GlossaryItem term="保护继承">把基类能力留给后续派生实现使用的继承方式。</GlossaryItem>
+  <GlossaryItem term="类模板">由类型或常量参数描述一族类的代码模式。</GlossaryItem>
+  <GlossaryItem term="模板实例化">用具体实参生成并检查具体类/成员代码的过程。</GlossaryItem>
+  <GlossaryItem term="多重继承">一个派生类同时含多个直接基类子对象的机制。</GlossaryItem>
+  <GlossaryItem term="虚基类">菱形中共享并由最派生类初始化的基类子对象。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++ Primer Plus, Sixth Edition, Chapter 14 Reusing Code in C++"
+  adaptedUrl="https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+/>

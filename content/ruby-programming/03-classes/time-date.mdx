@@ -1,0 +1,228 @@
+---
+title: "第20章 Time类与Date类"
+type: C
+section: "たのしいRuby 第5版 · Ruby的类"
+order: 20
+description: "区分wall/monotonic time、UTC/local zone、format/parse、epoch unit与Date calendar arithmetic，建立Time/Date转换政策。"
+demo: true
+math: false
+sourceUrl: "https://tanoshiiruby.github.io/5/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RubyClockSemanticsLab, RubyTimeFormatLab, RubyCalendarArithmeticLab } from "@/components/mdx/ruby-programming/diagrams/time-date";
+
+<Objectives>
+
+- 能区分wall-clock instant、monotonic elapsed clock、UTC storage与local display
+- 能实现显式pattern/ISO/epoch的format与strict parse，并验证zone、unit、precision和trailing text
+- 能分析duration、calendar day/month与Time/Date转换，处理DST和month-end边界
+
+</Objectives>
+
+## 从“时间就是一个Time对象”开始拆分
+
+时间需求至少分instant、elapsed duration、calendar date、local civil time与timezone rules。<Term def="时间值声明它表示instant、duration、calendar date还是local civil fields，以及采用哪个clock/zone。">temporal type contract</Term>避免一个Time同时承担所有语义。
+
+先预测：测代码耗时用`Time.now`是否可靠？系统clock可NTP调整或人工回拨，差值可能跳变；elapsed measurement使用monotonic clock。Wall time保留给timestamp与用户日历。
+
+## Time类与Date类
+
+Time表示带offset/zone解释的instant与civil fields；Date标准库表示calendar date而无time-of-day。DateTime也存在，但现代实践常用Time+Date及timezone library；本书语义按Ruby 2.3 API验证。
+
+<Term def="Date只有年月日，Time包含instant/time-of-day/offset；互转时必须补充或丢弃信息。">Time Date information boundary</Term>说明转换不可能完全中性。
+
+```ruby
+require "date"
+
+instant = Time.now
+date = Date.today
+
+p instant: instant, date: date
+p utc: instant.utc
+```
+
+System default timezone依部署环境变化，测试不要依赖机器local zone。业务若需IANA zone/DST历史，使用成熟timezone library并固定tzdata version；numeric offset不等于完整zone rules。
+
+## 获取时间
+
+`Time.now`获取wall clock，`Time.utc`/`Time.local`从civil fields构造，`Time.at`从epoch seconds构造。<Term def="Clock source可注入，生产选择wall或monotonic，测试使用fixed/fake clock。">clock injection boundary</Term>让expiration和scheduler可测。
+
+```ruby
+class Expiry
+  def initialize(clock)
+    @clock = clock
+  end
+
+  def expired?(deadline)
+    @clock.call >= deadline
+  end
+end
+
+fixed = -> { Time.utc(2026, 7, 14, 12, 0, 0) }
+p Expiry.new(fixed).expired?(Time.utc(2026, 7, 14, 11, 0, 0))
+```
+
+Deadline若用于进程内timeout，使用monotonic numeric deadline；业务token expiry跨进程则用UTC instant并接受wall clock skew policy。
+
+## 计算时间
+
+Time-Time得到seconds数值，Time+seconds得到新Time。Elapsed duration使用`Process.clock_gettime(Process::CLOCK_MONOTONIC)`，不可转calendar。<Term def="Duration arithmetic使用明确seconds unit与monotonic source，不混入calendar day/month。">elapsed time contract</Term>。
+
+```ruby
+started = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+perform_work
+elapsed = Process.clock_gettime(Process::CLOCK_MONOTONIC) - started
+puts format("%.3fs", elapsed)
+```
+
+Timeout budget递减同一monotonic deadline，nested calls传remaining time，避免每层重新给完整timeout。Wall timestamps相减可用于历史approximate interval，但DST/clock adjustment语义需说明。
+
+<RubyClockSemanticsLab />
+
+<Stepper>
+  <Step title="切换Wall、Monotonic、UTC和Local"><RubyClockSemanticsLab /></Step>
+  <Step title="建立Clock表">记录用途、可否跳变、单位、可否serialize、zone与test injection。</Step>
+  <Step title="模拟Wall clock回拨"><RubyClockSemanticsLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="Time.now差值总能准确测耗时">
+Wall clock可能跳变。Elapsed/deadline使用monotonic clock；Time.now用于审计/用户时间，并为跨系统clock skew建立容忍政策。
+</Callout>
+
+## 时间的格式与本地时间
+
+`strftime`按pattern格式化；pattern必须包含业务所需zone offset与precision。<Term def="时间文本声明pattern、locale、timezone/offset、fraction precision与缺失字段默认。">time format contract</Term>不使用locale-dependent默认to_s作为machine protocol。
+
+```ruby
+instant = Time.utc(2026, 7, 14, 12, 34, 56)
+p instant.strftime("%Y-%m-%dT%H:%M:%SZ")
+p instant.getlocal("+08:00").strftime("%Y-%m-%d %H:%M:%S %:z")
+```
+
+Ruby 2.3对`%:z`等directive支持需验证。UTC用Z/offset；local display需要user timezone而非server timezone。Offset `+08:00`不包含DST/history，长期schedule使用IANA zone。
+
+## 从字符串中获取时间
+
+`Time.parse`灵活但会推断缺失fields，machine input优先`Time.strptime(text, pattern)`或ISO parser。<Term def="Parse只接受完整声明的grammar，拒绝ambiguous、trailing text与非法calendar fields。">strict temporal parsing</Term>。
+
+```ruby
+require "time"
+
+text = "2026-07-14T12:34:56+08:00"
+parsed = Time.iso8601(text)
+p parsed.utc
+```
+
+Input若无offset，是local civil time而非唯一instant；API必须要求zone或由明确user context解释。DST overlap同一local time可能对应两个instants，gap可能不存在；timezone library提供disambiguation policy。
+
+<RubyTimeFormatLab />
+
+<Stepper>
+  <Step title="切换Format、Parse、ISO和Epoch"><RubyTimeFormatLab /></Step>
+  <Step title="生成Round-trip表">覆盖UTC/offset、fraction、epoch seconds/millis、invalid date、missing zone和trailing text。</Step>
+  <Step title="把Millis当Seconds"><RubyTimeFormatLab /></Step>
+</Stepper>
+
+## 获取日期
+
+`Date.today`依local zone，`Date.new(year, month, day)`显式构造，`Date.parse/strptime/iso8601`解析。<Term def="Business date使用哪一timezone决定today，并以Gregorian calendar/有效年月日验证。">calendar date contract</Term>不能让server zone决定用户“今天”。
+
+```ruby
+require "date"
+
+date = Date.new(2026, 7, 14)
+p date
+p date.leap?
+p date.wday
+```
+
+账单/航班日期通常是local calendar date，存Date/ISO date，不先转midnight UTC造成偏移。
+
+## 计算日期
+
+Date+Integer按calendar days移动，Date-Date得Rational days；`>>`/`<<`移动months。<Term def="Calendar arithmetic按日/月/年规则并明确month-end、leap day与business-day policy。">calendar arithmetic contract</Term>不同于加86400 seconds。
+
+```ruby
+date = Date.new(2024, 1, 31)
+p next_day: date + 1
+p next_month: date >> 1
+p previous_month: date << 1
+```
+
+Month shift的end-of-month clamping按API验证；“每月最后一天”与“同日号，不存在则某政策”需独立domain object。Business days还要holiday calendar/version，不能只跳周末。
+
+## 日期的格式与从字符串中获取日期
+
+Date#strftime格式化，Date.strptime按pattern严格解析，Date.iso8601适合`YYYY-MM-DD`。<Term def="Date text只包含calendar fields，不暗示time-of-day或timezone。">date serialization boundary</Term>让API避免混淆。
+
+Flexible Date.parse可能接受不完整/多格式；import先按schema尝试有限formats并记录选择，不随locale。Round-trip测试leap day、month-end、invalid 2023-02-29与leading zeros。
+
+## Time与Date的互相转换
+
+Time#to_date丢time-of-day/offset context（先在哪个zone取date很重要）；Date#to_time或构造Time必须选择time与zone。<Term def="Time到Date先选zone后截取，Date到Time必须补time-of-day和zone。">temporal conversion contract</Term>禁止隐式server defaults。
+
+```ruby
+require "date"
+
+instant = Time.utc(2026, 7, 14, 23, 30)
+shanghai_like = instant.getlocal("+08:00")
+p utc_date: instant.to_date
+p local_date: shanghai_like.to_date
+```
+
+同一instant在不同zone可能不同date。Date转instant用于“当天开始”时，DST使day length非86400秒；timezone library按zone rules计算start/end。
+
+<RubyCalendarArithmeticLab />
+
+<Stepper>
+  <Step title="切换Duration、Day、Month和Conversion"><RubyCalendarArithmeticLab /></Step>
+  <Step title="画Information loss">Time→Date标丢失time/offset，Date→Time标补充time/zone与DST disambiguation。</Step>
+  <Step title="测试Leap/Month-end/DST"><RubyCalendarArithmeticLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="一天永远等于86400秒">
+Local civil day在DST切换可为23/25小时；calendar next day用Date/zone rules，elapsed 24小时才加86400秒。先明确需求是calendar还是duration。
+</Callout>
+
+## 本章回顾：Instant、Duration与Calendar不可混用
+
+1. Time/Date承载不同信息，clock/zone必须显式；测试注入fixed/monotonic source。
+2. Elapsed measurement用monotonic，UTC instant用于storage，user zone用于display/calendar。
+3. Format/parse固定pattern、offset、precision与strictness，epoch明确seconds/millis。
+4. Date arithmetic按calendar day/month并处理leap/month-end/business calendar，不用固定秒数替代。
+5. Time↔Date转换会丢失或补充time/zone，必须由业务policy决定。
+
+<Exercises>
+
+**问题 1：怎样测试“30分钟后过期”而不sleep？**
+
+<Answer>把clock注入对象，业务expiry用fixed wall/UTC instants；进程timeout用fake monotonic numeric clock。推进fake值断言边界前/等于/后，另测clock skew policy。</Answer>
+
+**问题 2：为什么无offset时间文本不能直接转唯一Time？**
+
+<Answer>它只给local civil fields，缺timezone；不同zone对应不同instant，DST overlap甚至同zone有两个候选。要求offset/zone，或由明确user context与gap/overlap policy解释。</Answer>
+
+**问题 3：如何表达“下个月最后一天”？**
+
+<Answer>使用Date calendar operations构造下月并求其末日，明确month-end policy；不要加30天或固定seconds。测试1月31日、2月闰/平年、12月跨年和business calendar调整。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="temporal type contract" definition="Instant、duration、Date或civil fields及clock/zone约定。" />
+  <GlossaryItem term="Time Date information boundary" definition="Time与Date互转时补充或丢失信息的边界。" />
+  <GlossaryItem term="clock injection boundary" definition="Wall/monotonic clock可注入以固定测试。" />
+  <GlossaryItem term="elapsed time contract" definition="Duration使用seconds和monotonic source的约定。" />
+  <GlossaryItem term="time format contract" definition="Pattern、locale、zone与fraction precision协议。" />
+  <GlossaryItem term="strict temporal parsing" definition="拒绝ambiguous/trailing/invalid字段的严格解析。" />
+  <GlossaryItem term="calendar date contract" definition="Today timezone与有效Gregorian date规则。" />
+  <GlossaryItem term="calendar arithmetic contract" definition="日/月/年、month-end、leap和business-day政策。" />
+  <GlossaryItem term="date serialization boundary" definition="Date文本不隐含time或timezone的边界。" />
+  <GlossaryItem term="temporal conversion contract" definition="Time→Date选zone，Date→Time补time/zone。" />
+</Glossary>
+
+<Attribution adaptedFrom="たのしいRuby 第5版 / Ruby基础教程（第5版），第20章 Time类与Date类" adaptedUrl="https://tanoshiiruby.github.io/5/" />

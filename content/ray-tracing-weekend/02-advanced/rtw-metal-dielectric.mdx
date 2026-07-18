@@ -11,6 +11,7 @@ draft: false
 ---
 
 import { RtwMetalDielectricDiagram } from "@/components/mdx/ray-tracing-weekend/diagrams/rtw-metal-dielectric";
+import { RtwStepFlowDiagram } from "@/components/mdx/ray-tracing-weekend/diagrams/rtw-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
@@ -46,6 +47,20 @@ $$
 
 <Term def="用余弦近似反射率的经验公式">Schlick 近似</Term>给出反射概率 $R\approx R_0+(1-R_0)(1-\cos\theta)^5$，其中 $R_0=((\eta_i-\eta_t)/(\eta_i+\eta_t))^2$。每次命中按 R 与随机数比较决定走反射还是折射。
 
+<Term def="相对折射率：入射介质折射率与透射介质折射率的比值 eta_i/eta_t。它决定折射向量横向分量的缩放，并由 front_face 区分空气进入玻璃与玻璃离开空气。">相对折射率</Term>必须随入射侧改变。由于 `rec.normal` 已始终迎向入射光，`cos_theta = min(dot(-unit_direction, rec.normal), 1)` 为非负；若 `front_face=true`，光从空气进入玻璃，比例是 `1.0/ir`；否则从玻璃离开空气，比例是 `ir`。
+
+$$
+\eta=\frac{\eta_i}{\eta_t},\qquad
+\sin\theta_t=\eta\sin\theta_i,qquad
+\eta\sin\theta_i>1\Rightarrow\text{全内反射}
+$$
+
+<Term def="Fresnel 反射率：界面在给定入射角把能量反射而非透射的比例。Schlick 近似用 cos(theta) 与相对折射率估计它，掠射角时反射率趋近 1。">Fresnel 反射率</Term>解释了为什么“能折射”并不等于“一定折射”：即使没有全内反射，掠射角的玻璃也应更像镜子。单路径实现以概率 `R` 选其中一个方向；当随机数小于 R 时反射，否则折射。跨许多样本平均后，这个随机选择才近似两条路径的能量比例。
+
+### 金属 fuzz 的有效范围
+
+fuzz 只是给已经正确的镜面方向增加随机扰动，不是把光线任意打向球内。它应限制在 [0,1]：0 保持清晰反射，接近 1 时反射波瓣变宽；扰动后若新方向与法线点积不为正，说明方向钻入表面，应由 `scatter` 返回 `false` 终止该条路径。负 fuzz 没有合理的材质含义，构造器应在边界处钳制，而不是让它反向放大随机向量。
+
 ### 全内反射
 当 $\sin\theta_t>1$（无实数解）时光无法折射，全部反射——这就是<Term def="光从密介质到疏介质且超过临界角时无法折射而全部反射">全内反射</Term>，发生在从水/玻璃射向空气且角度足够大时。
 
@@ -57,13 +72,19 @@ $$
 
 <Stepper>
 <Step title="第一步：金属反射">
+<RtwStepFlowDiagram caption="金属与玻璃第 1 步：先区分镜面反射路径和折射路径。" stage={1} stages={["镜面反射叠加 fuzz", "检查折射是否可行", "按 Schlick 概率选择路径"]} />
+
 算 reflect(d, N)=d−2(d·N)N，加 fuzz 倍随机扰动得散射方向，attenuation 为金属色。
 </Step>
 <Step title="第二步：电介质判别">
+<RtwStepFlowDiagram caption="金属与玻璃第 2 步：折射无解时必须回退为全内反射。" stage={2} stages={["镜面反射叠加 fuzz", "检查折射是否可行", "按 Schlick 概率选择路径"]} />
+
 用 Snell 算折射方向；若根号内为负（sinθ_t>1）则全内反射，走反射方向。
 </Step>
 <Step title="第三步：Schlick 抽样">
-否则用 Schlick 算反射概率 R，与随机数比较：小则反射、大则折射，二者选一继续递归。
+<RtwStepFlowDiagram caption="金属与玻璃第 3 步：可折射时仍按角度相关概率在两条路径间取样。" stage={3} stages={["镜面反射叠加 fuzz", "检查折射是否可行", "按 Schlick 概率选择路径"]} />
+
+否则用 Schlick 算反射概率 R：随机数小于 R 时反射，否则折射，二者选一继续递归。
 </Step>
 </Stepper>
 
@@ -79,7 +100,7 @@ vec3 reflect(const vec3& v, const vec3& n) {
 
 class metal : public material {
   public:
-    metal(const color& a, double f) : albedo(a), fuzz(f<1?f:1) {}
+    metal(const color& a, double f) : albedo(a), fuzz(std::clamp(f, 0.0, 1.0)) {}
     bool scatter(const ray& r_in, const hit_record& rec,
                  color& attenuation, ray& scattered) const override {
       vec3 reflected = reflect(unit_vector(r_in.direction()), rec.normal);
@@ -124,6 +145,19 @@ class dielectric : public material {
 
 `cannot_refract` 即全内反射判定；`schlick` 返回反射概率与随机数比较实现蒙特卡洛选择。
 
+```cpp
+double schlick(double cosine, double refraction_ratio) {
+  auto r0 = (1.0 - refraction_ratio) / (1.0 + refraction_ratio);
+  r0 = r0 * r0;
+  return r0 + (1.0 - r0) * std::pow(1.0 - cosine, 5.0);
+}
+
+// 若概率路径采用“只选一条”的估计器，必须用同一概率解释样本统计；
+// 本书的基础实现选择方向以展示行为，后续可进一步做 PDF 权重处理。
+```
+
+反射率函数的参数可用相对折射率，也可用材料折射率；因为 $R_0$ 对比值取倒数后不变，前提是调用和推导使用同一约定。不要把 `front_face` 的判断挪到 Schlick 外面重复翻转，否则会把“来自哪一侧”的信息应用两次。
+
 ## 常见误区
 
 <Callout type="trap">
@@ -141,24 +175,40 @@ class dielectric : public material {
 ## 练习
 
 <Exercises>
-**问题**：写出镜面反射向量公式并简述推导思路。金属 fuzz 起什么作用？
+**问题 1**：写出镜面反射向量公式并简述推导思路。金属 fuzz 起什么作用？
 
 <Answer>
 r = d − 2(d·N)N。d 可分解为垂直 N 的分量 d⊥ 和平行 N 的分量 d∥=(d·N)N；反射时垂直分量不变、平行分量反向，故 r=d⊥−d∥=d−2(d·N)N。fuzz 给反射方向加随机扰动，fuzz=0 是完美镜面，越大越像磨砂金属（漫散反射）。
 </Answer>
 
-**问题**：全内反射在什么条件下发生？Schlick 近似在电介质里解决什么问题？
+**问题 2**：全内反射在什么条件下发生？Schlick 近似在电介质里解决什么问题？
 
 <Answer>
 全内反射发生在光从密介质射向疏介质（ηi>ηt）且入射角超过临界角时，此时 Snell 算出的 sinθt>1 无实数解，光无法折射而全部反射。Schlick 近似用余弦经验公式算反射概率 R，让每次命中按概率随机选择反射或折射，模拟玻璃在不同角度的反射/透射比，避免精确解 Fresnel 方程的复杂计算。
 </Answer>
+
+**问题 3**：已知玻璃折射率 `ir=1.5`，光线从空气入射且没有全内反射。为什么随机数 `0.02` 与 Schlick 反射率 `R=0.04` 应选择反射，而随机数 `0.8` 应选择折射？
+
+<Answer>
+R 是反射路径在这次蒙特卡洛选择中应占的概率。0.02 小于 0.04，落进反射事件的 4% 区间，因此选反射；0.8 大于 0.04，落进其余 96% 区间，因此选折射。多次独立采样后，大约 4% 的路径反射、96% 折射，平均行为才接近 Fresnel 分配。
+</Answer>
 </Exercises>
+
+## 小结
+
+- 金属先镜面反射，再用 [0,1] 的 fuzz 扰动；进入表面的方向应终止而非继续递归。
+- `front_face` 决定相对折射率的方向，`ratio * sin_theta > 1` 是全内反射的硬条件。
+- Schlick 近似处理“可折射但仍会反射”的角度相关概率；随机数小于 R 才选择反射。
+- 一条路径只选择反射或折射之一，多样本平均才重建两者的统计比例。
 
 <Glossary>
 <GlossaryItem term="镜面反射">入射方向关于法线的对称向量 r=d−2(d·N)N，金属材质的散射基础。</GlossaryItem>
 <GlossaryItem term="fuzz">金属反射方向的随机扰动幅度，0 为完美镜面，越大越磨砂。</GlossaryItem>
 <GlossaryItem term="Snell 定律">ηi·sinθi=ηt·sinθt，描述光在不同折射率介质间弯折的角度关系。</GlossaryItem>
 <GlossaryItem term="全内反射">光从密介质到疏介质且超过临界角时无法折射而全部反射的现象。</GlossaryItem>
+<GlossaryItem term="Schlick 近似">用余弦近似界面 Fresnel 反射率的经验公式，掠射角反射率趋近 1，用于按概率选择反射或折射路径。</GlossaryItem>
+<GlossaryItem term="相对折射率">入射介质折射率与透射介质折射率的比值 eta_i/eta_t；front_face 决定空气到玻璃或玻璃到空气的方向。</GlossaryItem>
+<GlossaryItem term="Fresnel 反射率">界面在给定入射角把能量反射而非透射的比例。Schlick 近似用 cos(theta) 与折射率估计它。</GlossaryItem>
 </Glossary>
 
 <Attribution adaptedFrom="Ray Tracing in One Weekend (Peter Shirley)" adaptedUrl="https://raytracing.github.io/books/RayTracingInOneWeekend.html" />

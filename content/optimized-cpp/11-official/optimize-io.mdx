@@ -1,0 +1,268 @@
+---
+title: "第11章：优化 I/O"
+type: C
+section: Optimized C++ · Chapter 11
+order: 11
+description: "对齐第一版第11章 Optimize I/O：文件读取方案、克制签名与缩短调用链、减少扩容、增大读取粒度/缓冲和逐行读取、无效尝试、文件写入及 cin/cout 流式 I/O。"
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+draft: false
+---
+
+import {
+  OpcFileReadRecipeMap,
+  OpcInputBiteBufferMap,
+  OpcStreamingIoDecisionMap,
+} from "@/components/mdx/optimized-cpp/diagrams/optimize-io";
+
+<Objectives>
+
+- 能设计 file-reading recipe，明确 ownership/size/error/encoding，并缩短 open/read/copy 调用链
+- 能比较 whole/buffered/line reading 与 buffer size，减少 reallocation/call 又控制 peak memory/latency
+- 能修改 file/cin/cout writing/reading path，减少 format/flush，并记录 things that did not help
+
+</Objectives>
+
+## 从 Consumer 需要什么开始
+
+I/O optimization 不是先换 API，而是先确认 consumer 需要 whole file、line、token 还是 streaming event。读取可能受 storage latency、system boundary、copy/allocation、format/parse 或 downstream work 限制，只有 profile/counters 能区分。
+
+<Term def="按 consumer contract 一次完成 open、storage planning、read、partial/error/EOF handling 与 output ownership 的文件读取流程。">
+  recipe for reading files
+</Term>
+
+<Callout type="trap" title="陷阱：磁盘慢，所以程序端不值得优化">
+  warm page cache、fast SSD 或 repeated input 时，allocation/copy/parse/call
+  chain 可能主导；真正设备受限时， 微调 string 又无意义。分别测
+  wall、CPU、bytes/read、read calls、allocations、page-cache/cold-warm 场景，
+  再选择层级。
+</Callout>
+
+## Parsimonious Signature 与 Short Calling Chains
+
+**parsimonious function signature** 只暴露必要 inputs/outputs：例如 path + owning result，或 stream/source + caller buffer/callback；不重复传 filename/file/size/temp buffers，也不让多个 wrappers 各复制同一内容。
+
+<Term def="只表达 I/O 必需 source、destination/owner、policy 和 error 的克制函数接口，使 allocation 与 copy 可见。">
+  parsimonious function signature
+</Term>
+
+**shorten calling chains** 删除 `readFile -> readAll -> readChunks -> copyToString` 这类只转发/重复验证的 hot chain；ownership、security、encoding、observability layer 有真实语义则保留。可提供一个 direct batch/whole-file path，而不是做 god function。
+
+<Term def="删除 I/O hotspot 中无语义价值的转发、重复 open/validation/copy 层，同时保留必要边界。">
+  shorten calling chains
+</Term>
+
+```cpp
+std::expected<std::string, ReadError> readTextFile(
+    const std::filesystem::path& path,
+    std::size_t maxBytes) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input) return std::unexpected(ReadError::openFailed());
+
+    std::string text;
+    text.reserve(std::min(sizeHint(input).value_or(0), maxBytes));
+    readBounded(input, text, maxBytes);
+    if (input.bad()) return std::unexpected(ReadError::readFailed());
+    return text;
+}
+```
+
+示例把 owner/error/max size 放在签名；`sizeHint` 只作 hint，file 可能变化、stream 可能不可 seek。`readBounded` 必须正确处理 partial reads、EOF 与上限，不能按 hint 盲目 resize 后把未读 bytes 当有效 data。
+
+<OpcFileReadRecipeMap />
+
+## Reduce Reallocation，Take Bigger Bites
+
+**reduce reallocation**：已知可信 bounded size 时 reserve/resize-on-read；未知时复用 chunk/output capacity，并记录 growth。不要每 chunk `result = result + chunk` 形成 temporary，也不要为攻击者声明的巨大 length 直接 allocation。
+
+<Term def="用 size hint、reserve/reuse 或 bounded chunk 避免 output 在读取中反复增长并复制旧内容。">
+  reduce I/O reallocation
+</Term>
+
+**take bigger bites** 把逐 byte/small read 合并成 larger read，摊薄 function/stream/system boundary 与 state checks。**bigger input buffer** 也有 diminishing returns：超过 device/OS/cache 合理粒度后，只增加 memory 和 first-result latency。
+
+<Term def="每次读取更大连续 chunk，以更少调用和检查处理相同 bytes，同时受 memory 与 latency 约束。">
+  take bigger bites
+</Term>
+
+<Term def="在 source 与 parser 之间复用较大 storage，减少 refill/call 次数；大小必须通过 workload sweep 选择。">
+  bigger input buffer
+</Term>
+
+```cpp
+std::expected<void, ReadError> forEachLine(
+    std::istream& input,
+    const std::function<bool(std::string_view)>& consume,
+    std::size_t maxLineBytes) {
+    std::string line;
+    line.reserve(std::min<std::size_t>(4096, maxLineBytes));
+    while (std::getline(input, line)) {
+        if (line.size() > maxLineBytes) return std::unexpected(ReadError::lineTooLong());
+        if (!consume(line)) break;
+    }
+    if (input.bad()) return std::unexpected(ReadError::readFailed());
+    return {};
+}
+```
+
+**read a line at a time** 能 bounded incremental processing，不需 whole-file peak memory；但 single pathological line 仍可增长，需 max policy。`std::function` 可能带 type-erasure/indirect call；若 callback 位于热点可改 template，但先测 parse/I/O 是否主导。
+
+<Term def="以 delimiter-defined line 为增量单位读取与消费，降低 whole-file ownership，需定义长行、换行和 encoding contract。">
+  read a line at a time
+</Term>
+
+<OpcInputBiteBufferMap />
+
+<Callout type="trap" title="陷阱：buffer 越大越快，整文件读取最快">
+  huge buffer 提高 peak/RSS、延迟首条结果，并可能让并发 readers 放大
+  memory；whole-file 对 giant/pipe/ changing input 不成立。先预测 4 KiB、64
+  KiB、1 MiB 等 sweep，测 calls、throughput、p99、first-result、 peak
+  memory，在平台期选择最小足够值。
+</Callout>
+
+## Things That Didn't Help
+
+原书保留 **things that didn't help** 很关键：optimization 是实验，不是只展示成功。常见无效尝试包括在 device-bound path 微调 character loop、buffer 已足够大后继续增大、增加一层 copying stream adapter、手写不如成熟 stream buffer 的代码，或 mmap/whole-file 在当前 workload 反而增加 page faults/memory。
+
+<Term def="经同环境 A/B 证明无稳定端到端收益、或 correctness/resource trade-off 不合格的优化假设。">
+  things that did not help
+</Term>
+
+失败实验应保存在 lab notebook：hypothesis、change、samples、why rejected；代码则回滚，不留下“也许有用”的复杂分支。bottleneck shift 也不是失败：它说明下一步要重新 profile。
+
+## Writing Files
+
+**writing files** 需区分 buffered visibility 与 durability。合并 format、复用 buffer、一次写 larger chunk、少 flush 能提高 throughput；但 `close/flush/fsync` 的 failure/durability contract 不可丢。只测 write call 返回前时间可能把成本推到 close 或 OS cache。
+
+```cpp
+std::expected<void, WriteError> writeRecords(
+    std::ostream& output,
+    std::span<const Record> records) {
+    std::string buffer;
+    buffer.reserve(64 * 1024);
+    for (const Record& record : records) {
+        appendRecord(buffer, record);
+        if (buffer.size() >= 64 * 1024) {
+            output.write(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+            buffer.clear();
+            if (!output) return std::unexpected(WriteError::failed());
+        }
+    }
+    output.write(buffer.data(), static_cast<std::streamsize>(buffer.size()));
+    return output ? std::expected<void, WriteError>{}
+                  : std::unexpected(WriteError::failed());
+}
+```
+
+buffer size 需 sweep；`clear` 复用 capacity。若 record 必须一条即刻可见，batching 改变 latency/atomicity，需 flush deadline 或不同 API。binary/text encoding 与 newline policy也要固定。
+
+## Reading from std::cin，Writing to std::cout
+
+**streaming I/O** 逐步生产/消费，适合 unknown/unbounded input。**reading from std::cin** 可在程序启动且不再混用 C stdio 时 `std::ios::sync_with_stdio(false)`，并按 interactive contract决定 `std::cin.tie(nullptr)`；untie 后 prompt 可能需要显式 flush。
+
+<Term def="数据到达时增量读取或生成时增量写出，不要求一次拥有全部内容的 I/O 模式。">
+  streaming I/O
+</Term>
+
+**writing to std::cout**：`std::endl` 写 newline 并强制 flush，batch output 通常用 `\n`；interactive prompt、protocol boundary 或 crash visibility 需要 flush 时仍应显式做。formatting cost 可能高于 write，应批量 format/使用合适 formatter并校验 locale/precision。
+
+<OpcStreamingIoDecisionMap />
+
+## 三步优化 I/O
+
+<Stepper>
+  <Step title="第一步：重建文件读取边界">
+    先预测 bottleneck 在 device、boundary、allocation/copy、format/parse 哪层；以 parsimonious signature 一次 open，明确 owner/error/max/encoding 并缩短无价值调用链。
+
+    <OpcFileReadRecipeMap />
+
+  </Step>
+  <Step title="第二步：扫读取粒度与 storage">
+    比较 byte/chunk/line/whole，在真实 size/line 分布下测 calls、allocations、throughput、first-result、p99 与 peak memory；选平台期最小 buffer。
+
+    <OpcInputBiteBufferMap />
+
+  </Step>
+  <Step title="第三步：审计 write/stream/失败实验">
+    对 file/cin/cout 记录 format/write/flush 次数与 durability/interactive contract；无稳定收益的尝试写入 notebook 后回滚。
+
+    <OpcStreamingIoDecisionMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- file read recipe 从 consumer 的 whole/line/token/stream contract 开始，不从 API 名称开始
+- parsimonious signature 让 owner/size/error/encoding 可见，short call chain 删除重复 open/copy/validation
+- reserve/reuse 减少 reallocation，take bigger bites/bigger buffer 摊薄调用但受 memory/latency 约束
+- line-at-a-time 降低 whole-file peak，需要长行、newline、encoding 与 callback lifetime policy
+- things that did not help 也要记录并回滚，避免无证据复杂度留在代码
+- file writing 要同时测 format/write/flush/close 与 durability，不能把成本推迟后忽略
+- cin/cout sync/tie/endl 优化必须保留 C stdio mixing 与 interactive flush 语义
+
+<Attribution
+  adaptedFrom="Optimized C++, First Edition, Chapter 11: Optimize I/O"
+  adaptedUrl="https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+/>
+
+<Glossary>
+  <GlossaryItem term="recipe for reading files">
+    从消费契约到 open/storage/read/error/output 的完整读取流程。
+  </GlossaryItem>
+  <GlossaryItem term="parsimonious function signature">
+    只暴露必要 source、owner/policy 与 error 的 I/O 接口。
+  </GlossaryItem>
+  <GlossaryItem term="shorten calling chains">
+    删除 I/O hotspot 中无语义价值的转发和重复工作。
+  </GlossaryItem>
+  <GlossaryItem term="reduce I/O reallocation">
+    用 size hint、reserve/reuse 或 chunk 避免 output 反复增长。
+  </GlossaryItem>
+  <GlossaryItem term="take bigger bites">
+    每次读取更大 chunk 以摊薄调用与检查。
+  </GlossaryItem>
+  <GlossaryItem term="bigger input buffer">
+    复用更大输入 storage 减少 refill/call。
+  </GlossaryItem>
+  <GlossaryItem term="read a line at a time">
+    按 line 增量读取消费并限制 whole-file ownership。
+  </GlossaryItem>
+  <GlossaryItem term="things that did not help">
+    A/B 无稳定收益或 trade-off 不合格的优化假设。
+  </GlossaryItem>
+  <GlossaryItem term="streaming I/O">
+    数据到达/生成时增量读写的模式。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：优化 2 GiB 行日志分析。** 当前 whole-file string + split copies，p99 memory 爆炸；要求首批结果 100 ms 内。给出 recipe。
+
+<Answer question="为什么 line/chunk streaming 比 whole-file 更匹配 contract？">
+  一次 open，复用 bounded input/line buffer，逐行 parse 并立即 aggregate/emit
+  batch，不保存全部 string；定义 max line、newline/UTF、partial final
+  line、read/parse errors。对 4 KiB/64 KiB/1 MiB buffer sweep，记录
+  bytes/read、calls、allocations、first-result、throughput、p99/RSS 与结果
+  checksum。whole-file 无法满足 first- result/peak
+  memory，即使暖缓存局部更快也拒绝。
+</Answer>
+
+2. **问题 2：解释 `sync_with_stdio(false)` 后交互提示不显示。** 程序 `cout << prompt; cin >> x;` 且混用 printf。给出安全策略。
+
+  <Answer question="stream tuning 改变了哪些可见语义？">
+    关闭 sync 后不可依赖 C/C++ stream 混合顺序；untie 后 cin 不再自动 flush cout。选择单一 I/O family，启动时
+    配置且不混用；interactive prompt 用 `cout << prompt << std::flush`，批量行用 `\n`。测试真实 terminal/
+    pipe、parse failure/order，测 throughput 时另用 noninteractive workload，不能以正确性换 benchmark。
+  </Answer>
+
+3. **问题 3：评审“大 buffer 让写入快 8%”提案。** buffer 从 64 KiB 增到 64 MiB，32 并发 writers，durability 每秒一次。写出验收。
+
+  <Answer question="为何局部吞吐不能覆盖 memory 与 durability？">
+    32×64 MiB 至少 2 GiB buffer，增大 RSS/cache pressure 和 crash loss/first-flush latency；8% 可能只是把成本推到
+    final flush/close。扫 64 KiB 到数 MiB，测 records/s、CPU、writes、p99 publish、RSS、flush/fsync/close、
+    crash/disk-full errors；实现 size 或 1s deadline flush。若 64 KiB 已接近平台期，保留小 buffer并记录大 buffer
+    为 rejected experiment。
+  </Answer>
+</Exercises>

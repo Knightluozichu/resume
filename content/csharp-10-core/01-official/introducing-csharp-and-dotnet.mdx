@@ -1,0 +1,169 @@
+---
+title: "Chapter 1. Introducing C# and .NET"
+type: C
+section: "C# 10 Nutshell · Language"
+order: 1
+description: "覆盖C#设计保证、CLR/BCL/runtime分层、版本历史与C# 10/.NET 6能力矩阵，建立语言、API、运行时和部署证据。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch01.html"
+draft: false
+---
+
+import { CtcLanguageGuaranteesLab, CtcPlatformLayersLab, CtcVersionMatrixLab } from "@/components/mdx/csharp-10-core/diagrams/introducing-csharp-and-dotnet";
+
+<Objectives>
+
+- 能比较Object Orientation、Type Safety、Memory Management与Platform Support各自保证和不保证的内容
+- 能绘制C#、compiler、CLR、BCL、runtime、TFM与application model分层，定位feature failure属于哪层
+- 能设计C# 10/.NET 6兼容矩阵，用compile、publish和target-machine运行证据验证升级
+
+</Objectives>
+
+## 为什么第一章先拆开Language与Platform
+
+C#不是“.NET的另一个名字”。C#定义source syntax、type rules和semantics；compiler把source生成IL/metadata或其他target artifact；CLR负责load、verify、JIT与GC；BCL提供string、collections、I/O等APIs；ASP.NET Core、desktop与MAUI等application models再建立更高层约定。排错若把这些混在一起，就会把“编译器不认识syntax”“reference assembly无API”“目标机缺runtime”都叫成C#版本问题。
+
+先预测：项目设置LangVersion 10就能调用所有.NET 6 API吗；GC会及时关闭socket吗；type-safe表示绝不发生InvalidCastException吗；IL相同就能在所有OS运行吗；self-contained publish不再依赖native platform吗。答案都是否。
+
+<Term def="把source language、compiler、runtime、base libraries与application model分开定位责任和版本的结构。">language-platform boundary</Term>
+
+## Object Orientation
+
+C#以class/struct、encapsulation、inheritance、interface和runtime polymorphism支持对象建模。Virtual/interface call根据runtime type dispatch；static type决定可见members与overload resolution。Object orientation帮助把state与invariants收拢到owner，但可变alias、deep inheritance和hidden side effects仍需设计约束，不会因用了class自动消失。
+
+```csharp
+IFormatter formatter = new JsonFormatter();
+string payload = formatter.Format(order); // runtime dispatch
+
+// Overload selection仍以compile-time types为基础。
+Print((object)order);
+```
+
+Composition通常比继承更容易限定lifetime与替换。Interface contract要说明thread safety、nullability、exception和resource ownership；否则“面向对象”只提供syntax。测试同时覆盖compile-time overload与runtime dispatch，防止把二者混成同一机制。
+
+## Type Safety
+
+Type Safety让compiler和CLR限制不兼容operation：每个expression有type，conversion、generic constraint和member access在明确规则下发生。它减少memory corruption与shape guessing，但并不表示运行时永不失败。Explicit cast、array covariance、dynamic、reflection和interop都可能把检查推迟，nullable warning也依赖项目开启与annotation质量。
+
+<Term def="Compiler与CLR按static/runtime type规则约束operations，并把绕过检查的boundary显式暴露。">type-safety envelope</Term>
+
+```csharp
+object value = "42";
+string text = (string)value;       // checked at runtime
+int number = int.Parse(text);      // type-safe, but input may be invalid
+
+// dynamic/reflection/interop把部分检查推迟到运行时。
+```
+
+“编译通过”只证明static rules成立，不证明input valid、API available或invariant正确。Boundary tests应覆盖invalid cast、null、dynamic binder、serialization与native marshaling；domain constructors再把合法业务状态收窄。
+
+## Memory Management
+
+Managed object由GC根据reachability回收，程序通常不手工free。GC roots包括static、stack/reference、handle等；reachable不等于仍有业务价值，event subscription、timer和cache可造成managed leak。GC也不管理文件句柄、socket、transaction等稀缺resource的及时释放，它们依赖IDisposable/await using与owner lifetime。
+
+<Term def="GC按reachability管理managed memory，而IDisposable按lexical/owner scope及时释放external resource的双重生命周期。">managed-resource split</Term>
+
+<Callout type="trap" title="有GC就不需要Dispose">
+GC只最终处理managed object reachability；finalizer时间不确定且成本高。Stream、connection、lock lease等必须由using/await using关闭，并测试exception/cancellation路径仍释放。
+</Callout>
+
+## Platform Support
+
+C#/.NET支持多OS与architectures，因为managed IL由目标runtime执行，BCL提供跨平台contract。但platform-neutral不是platform-identical：filesystem casing/path、timezone、globalization、native library、COM、Windows Event Log和UI stack都可能不同。Target Framework Moniker决定compile-time API surface，Runtime Identifier影响publish assets，OS guards表达运行时条件。
+
+```xml
+<PropertyGroup>
+  <TargetFrameworks>net6.0;net6.0-windows</TargetFrameworks>
+  <LangVersion>10.0</LangVersion>
+  <Nullable>enable</Nullable>
+</PropertyGroup>
+```
+
+Cross-platform验收在target OS/RID真正运行，不只在开发机编译。Path、encoding、culture、line endings、TLS和native dependency进入matrix；platform-specific capability放在adapter后，并用`OperatingSystem.IsWindows()`等guard和analyzer attribute约束调用。
+
+<Stepper>
+  <Step title="切换object、type-safe、managed与portable"><CtcLanguageGuaranteesLab /></Step>
+  <Step title="为每个保证写反例">列runtime cast、managed leak、undisposed handle与platform-specific API，明确保证边界。</Step>
+  <Step title="建立compile/runtime tests">Static positive/negative cases验证types，resource counter验证dispose，target containers/hosts验证platform。</Step>
+</Stepper>
+
+## CLRs, BCLs, and Runtimes
+
+CLR是Common Language Runtime：load assemblies、validate metadata、JIT methods、manage exceptions/threads/GC。BCL是Base Class Library contracts和implementations。Runtime distribution把CLR、BCL和host组合成可部署产品；reference assemblies则供compiler决定可调用API，不是运行时implementation。
+
+同一C# compiler可用新syntax target旧TFM，只要lowering不需要缺失runtime/API；反之旧syntax也可调用新BCL。Feature analysis必须写四列：syntax first version、compiler lowering、BCL dependency、runtime/JIT behavior。比如file-scoped namespace主要是source transformation，而某个新API需要net6 reference和target runtime。
+
+<Term def="由CLR执行引擎、BCL API surface和host/deployment组成的可运行.NET产品版本。">runtime distribution</Term>
+
+<Stepper>
+  <Step title="切换language、runtime、library与app model"><CtcPlatformLayersLab /></Step>
+  <Step title="追踪一个feature">从source syntax到generated IL/metadata、reference assembly、runtime load和OS capability逐层写证据。</Step>
+  <Step title="注入version mismatch">分别降低LangVersion、TFM、installed runtime和RID asset，记录每层failure time与message。</Step>
+</Stepper>
+
+<Callout type="trap" title="装了.NET 6 SDK就表示生产机具备.NET 6 Runtime">
+SDK用于build并可能包含local runtime；framework-dependent deployment仍要求目标机安装匹配runtime。发布产物、runtimeconfig、roll-forward与host inventory要独立验证。
+</Callout>
+
+## A Brief History of C#
+
+C#从早期object-oriented/type-safe managed language，逐步加入generics、nullable values、iterators、LINQ/lambdas、dynamic、async/await、pattern matching、nullable references、records与top-level/global namespace conveniences。历史意义不在背年份，而在理解feature如何叠加：LINQ依赖generics/delegates/lambdas/extensions，async依赖Task/awaiter protocol，records依赖已有type/equality机制。
+
+版本历史还提醒兼容性：compiler、language和runtime发布节奏可分离；某feature只有syntax变化，某feature需要runtime recognition或BCL types。Legacy project升级时先锁定当前 TFM/LangVersion/SDK，再逐项迁移，不让IDE默认升级掩盖生产约束。
+
+## What's New in C# 10
+
+C# 10的代表能力包括global using、file-scoped namespace、record structs、struct parameterless constructors与field initializers、extended property patterns、lambda improvements、CallerArgumentExpression、constant interpolated strings等。它们分属ceremony reduction、data modeling、pattern/API diagnostics，不能用“现代语法”一概而论。
+
+迁移要按observable semantics检查。Global using会改变name lookup/ambiguity；record struct值语义与copy成本不同于record class；lambda inference可能影响overload；CallerArgumentExpression是diagnostic text，不是可信identity。每项都用compile fixtures和API contract tests确认。
+
+<Term def="把LangVersion、TFM/reference assemblies、runtime host与RID/OS放在同一表中验证feature可用性的门禁。">feature compatibility matrix</Term>
+
+<Stepper>
+  <Step title="切换C# 10、.NET 6、older target与deployment"><CtcVersionMatrixLab /></Step>
+  <Step title="填写四列版本证据">Syntax/compiler、API/TFM、runtime behavior、OS/native asset逐项标minimum requirement。</Step>
+  <Step title="在CI跑matrix">明确SDK pin，分别build target TFMs并在目标RID运行smoke/contract tests，保存artifact metadata。</Step>
+</Stepper>
+
+## Upgrade and deployment gate
+
+Repository应通过global.json或CI image锁定SDK，项目显式设置TargetFramework/LangVersion/Nullable。Package restore lock与runtimeconfig纳入artifact；部署选择framework-dependent或self-contained，并记录size、patching和roll-forward tradeoff。多target library需要为每个TFM编译，不能只测最高版本。
+
+升级验收包括source/ABI/API compatibility、serialization schema、reflection behavior、culture/platform和performance。若只在IDE“能运行”，没有目标机runtime/RID evidence，就未完成平台迁移。
+
+## 本章回顾：每个Feature都有四个版本坐标
+
+1. C#提供object orientation与type rules，但不自动保证domain invariant或无runtime failure。
+2. GC管理managed memory reachability，IDisposable管理external resource lifetime。
+3. CLR、BCL、runtime distribution和application model有不同职责。
+4. Cross-platform需要验证OS/RID/native差异，不等于相同artifact无条件运行。
+5. C# 10 feature通过LangVersion、TFM、runtime和deployment matrix验收。
+
+<Exercises>
+
+**问题 1：为什么`LangVersion=10`仍可能无法编译某段示例？**
+
+<Answer>Syntax可能被compiler识别，但示例调用的BCL API不在target framework reference assemblies中；也可能SDK/compiler版本不支持该LangVersion。分别检查SDK、LangVersion、TFM与package/API，而不是只改一个设置。</Answer>
+
+**问题 2：怎样证明一个library真正cross-platform？**
+
+<Answer>对支持的TFM/RID/OS建立matrix，build并在target host运行contract tests；覆盖path/culture/encoding/TLS/native assets与platform guards。文档声明unsupported capabilities，platform adapter不泄露到portable core。</Answer>
+
+**问题 3：GC与Dispose的测试证据有什么不同？**
+
+<Answer>Dispose测试在normal/fault/cancel scope退出后resource counter/handle立即释放且恰好一次；GC行为用reachability/heap diagnostics观察，不依赖确定时刻。Managed leak从roots查，external leak从owner/dispose path查。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="language-platform boundary" definition="Language、compiler、CLR/BCL与app model的责任分层。" />
+  <GlossaryItem term="type-safety envelope" definition="Static/runtime type checks及其延迟检查边界。" />
+  <GlossaryItem term="managed-resource split" definition="GC memory与IDisposable resource的双生命周期。" />
+  <GlossaryItem term="runtime distribution" definition="CLR、BCL和host组成的可部署runtime产品。" />
+  <GlossaryItem term="feature compatibility matrix" definition="LangVersion、TFM、runtime与RID共同验证feature。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 1: Introducing C# and .NET" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch01.html" />

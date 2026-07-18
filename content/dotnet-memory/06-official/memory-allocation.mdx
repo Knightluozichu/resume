@@ -1,0 +1,196 @@
+---
+title: "Chapter 6：内存分配（Memory Allocation）"
+type: A
+section: Pro .NET 内存管理（第2版）· 对象创建与分配成本
+order: 6
+description: 对齐原书第 6 章：沿对象大小计算、SOH 分配上下文、LOH/POH 路由与慢路径，分析对象/数组、装箱、闭包、委托、async/iterator 和字符串产生的显式与隐式分配。
+demo: false
+math: false
+sourceUrl: "https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_6"
+draft: false
+---
+
+import {
+  DnmAllocationBudgetLab,
+  DnmAllocationFastPathMap,
+  DnmAllocationSourceLab,
+} from "@/components/mdx/dotnet-memory/diagrams/memory-allocation";
+
+<Objectives>
+
+- 能描述普通小对象从大小计算、区域路由、分配上下文检查、指针推进、清零到构造函数的快/慢路径
+- 能分析对象、数组、装箱、闭包、委托、async/iterator 与字符串语法的候选分配，并用 CIL 和分配调用栈验证
+- 能根据分配频率、单次字节和存活率设计优化，比较消除、复用、池化、Span/stackalloc 与 API 改造的收益和所有权风险
+
+</Objectives>
+
+## 为什么“分配很快”不等于“分配免费”
+
+.NET 的普通小对象分配常比通用本机分配器简单：线程在自己的可用范围检查剩余空间，推进一个指针，初始化对象并返回引用。但这条快路径仍会写对象头与字段、占用缓存和内存带宽，并把未来扫描、复制、晋升或清扫工作交给 GC。每次很便宜的操作乘以每秒百万次，仍会成为系统预算。
+
+<Term def="在线性可用区域中把分配指针向前移动对象大小，从而保留连续存储的快速分配方式。">指针碰撞分配</Term>
+
+分配成本要分成两部分：当前线程创建对象的即时成本，以及对象在后续生命周期中给 GC 带来的延迟成本。短命对象主要增加分配流量和年轻代频率；高存活对象还增加晋升、老年代扫描与完整回收规模。
+
+<DnmAllocationFastPathMap />
+
+## newobj 先取得存储，再执行构造函数
+
+<Term def="线程从逻辑 GC heap 获得的一小段可分配地址范围，常见小对象可在其中无全局锁推进 alloc_ptr。">分配上下文</Term>
+
+JIT 已知类型的方法表和实例大小后，可以选择专用 helper 或内联快路径。若对象适合 SOH 且当前 context 有空间，运行时保留字节、推进指针、确保字段初始为零并写入类型身份；随后才调用实例构造函数。构造函数负责业务初始化，不负责决定对象存储来自哪个 heap。
+
+```il
+IL_0000: ldc.i4.7
+IL_0001: newobj instance void Order::.ctor(int32)
+IL_0006: stloc.0
+```
+
+对象太大、要求创建时固定、context 空间不足或分配预算到达时，会进入较慢路径：路由 LOH/POH、补充 context、扩展/提交 segment，必要时触发 GC 协调，再重试。快慢路径和 helper 名称属于运行时实现细节，应用应依靠分配事件而不是硬编码反汇编偏移。
+
+<Term def="分配上下文耗尽、特殊对象路由或 GC 预算触发后，由运行时补充空间、提交 segment 或协调回收的路径。">分配慢路径</Term>
+
+<Callout type="trap" title="陷阱：构造函数空就认为 new 没有成本">
+  即使构造函数为空，对象仍需大小计算、存储保留、清零、对象头初始化与未来 GC 处理。反过来，构造函数还可能创建数组、字符串或订阅事件，必须把调用栈中的子分配一起统计。
+</Callout>
+
+## 数组分配同时计算长度、负载和区域
+
+<Term def="包含对象头、数组长度、元素连续负载与对齐填充的托管对象；总大小决定 SOH/LOH 路由。">托管数组</Term>
+
+数组大小不是常量类型大小：运行时要校验长度和乘法溢出，计算 `header + length × elementSize + alignment`，再根据总大小路由。引用数组还需要让每个元素初始为 null；数值数组通常也保证零初始化。大数组直接进入 LOH，创建时 pinned 的数组可进入 POH。
+
+```csharp
+Order[] references = new Order[10_000]; // 先得到 10,000 个 null 槽，不创建 Order
+int[] values = new int[10_000];         // 元素零初始化
+byte[] large = new byte[100_000];       // 总大小通常路由 LOH
+byte[] pinned = GC.AllocateArray<byte>(4096, pinned: true); // POH
+```
+
+`new Order[10000]` 只创建一个引用数组，不会自动构造 10,000 个 `Order`。分析分配时必须区分数组对象、元素是否内联以及后续填充产生的实例。大数组被释放也不表示进程工作集立刻下降；segment 与空洞可能留给未来托管分配复用。
+
+## 隐式分配来自 lowering，不只来自 new
+
+<Term def="把值类型数据复制进带对象头的托管对象，并通过 object 或接口引用访问的转换。">装箱</Term>
+
+值传给 `object`、非泛型 API 或某些接口调用时可能装箱。泛型受约束调用可以让 JIT 直接调用值类型实现，避免复制到对象。仅凭源码接口类型不能确定每条路径，检查 `box`/`constrained.` CIL 与实际分配栈更可靠。
+
+<Term def="编译器生成环境对象保存被 lambda/局部函数捕获的变量，使委托在原作用域结束后仍能访问它们。">闭包捕获</Term>
+
+捕获 lambda 常生成 display class 和委托；在循环里每次建立捕获可能导致高频分配。非捕获 lambda 或方法组可能被编译器缓存，但缓存策略随编译器版本和上下文变化。`static` lambda 能从语言层禁止意外捕获，是比“希望编译器缓存”更强的契约。
+
+```csharp
+int limit = 10;
+Predicate<int> captures = value => value > limit; // 捕获环境 + 委托候选
+Predicate<int> staticRule = static value => value > 10; // 禁止捕获
+
+object boxed = 42; // box Int32
+int unboxed = (int)boxed;
+```
+
+async 与 iterator 也通过状态机 lowering。同步完成的 await 可能避开部分堆承载，真实挂起要让状态机、awaiter 和跨 await 局部继续存活；迭代器通常创建可枚举/枚举状态。优化必须按同步/挂起、枚举次数和具体返回 API 分开测。
+
+<DnmAllocationSourceLab />
+
+先预测每个语法可能生成哪些对象，再切换图示。结论应写成“候选 + 证据”：例如捕获闭包通常产生环境对象，但若委托只建立一次并复用，热点未必来自它；普通 `new` 若每小时一次，也不值得复杂池化。
+
+## 字符串成本来自不可变结果与构造过程
+
+<Term def="按内容创建新的不可变 String 实例；拼接、格式化和插值的临时成本取决于 API、编译器 lowering 和运行路径。">字符串分配</Term>
+
+字符串不可变，修改语义通常需要新结果。循环中反复 `result += part` 可能多次复制已有内容，成本接近累计长度的重复搬运；`StringBuilder` 适合未知次数的渐进构造，`string.Create` 适合能预先计算最终长度并直接填充，Span 适合在已有缓冲区切片/解析。
+
+插值并不总产生相同临时对象。现代 C# 可使用 interpolated string handler，让日志 API 在级别关闭时避免构造消息，或直接写入目标缓冲。是否生效取决于被调用 API 的签名，不能看到 `$"..."` 就统一宣布一次或多次分配。
+
+```csharp
+static string JoinIds(ReadOnlySpan<int> ids)
+{
+    var builder = new StringBuilder(capacity: ids.Length * 8);
+    for (int i = 0; i < ids.Length; i++)
+    {
+        if (i > 0) builder.Append(',');
+        builder.Append(ids[i]);
+    }
+    return builder.ToString(); // 最终 String 仍是必要结果分配
+}
+```
+
+这里 `StringBuilder` 减少中间 String，却不消除 builder 缓冲和最终结果。若调用者只需要写网络流，可以直接格式化到可复用缓冲；若必须返回 `string`，最终对象就是 API 契约的一部分，目标应是减少中间浪费而非追求虚假的零分配。
+
+## 用“频率 × 字节 × 生命周期”排优化顺序
+
+单次对象大小不能决定优先级。每秒 10 万个 48B 对象约等于 4.6 MB/s，而每分钟一个 10 MB 对象可能几乎不影响年轻代；但后者若长期保留，会扩大完整回收和工作集。优化前应同时按累计字节、对象数、分配调用栈与存活路径排序。
+
+<DnmAllocationBudgetLab />
+
+图中提高请求速率或单请求字节会直接放大 churn，提高存活率则把同样分配流量转成晋升与长期扫描成本。先预测哪个变量是主导项，再调整；不要只根据 `new` 数量决定改哪里。
+
+<Term def="把数组或对象归还给共享池后供后续租用，以减少重复分配；池会延长缓冲存储寿命并引入清理、上限与所有权风险。">对象池化</Term>
+
+池化不是免费回收：池本身会保留对象，提高工作集；租用方若忘记归还、重复归还、泄漏旧数据或跨异步边界错误共享，会引入正确性和安全问题。`ArrayPool<T>` 适合高频临时缓冲，但敏感内容可能需要清理，返回数组长度也可能大于请求。对轻量短命普通对象，GC 往往比复杂池更合适。
+
+`stackalloc` 与 Span 能让小型、短寿命缓冲不进入托管堆，但栈空间有限，大小必须受控，且 ref-like 值不能任意跨 async/yield 或逃逸。把用户控制长度直接 stackalloc 会造成栈溢出风险。优化工具必须服从生命周期契约。
+
+<Callout type="trap" title="陷阱：把所有热点对象放进池">
+  池化减少创建次数，却可能抬高长期保留、隐藏陈旧状态并增加并发争用。先证明对象创建/清零确实占预算，定义最大池容量、归还责任和清理策略，再以吞吐、p99、工作集共同验收。
+</Callout>
+
+## 三步完成分配优化闭环
+
+<Stepper>
+  <Step title="第一步：画出真实分配路径">
+    从 newobj/newarr/box、编译器生成闭包与状态机到字符串 API，列出候选对象；再用分配事件按累计字节和调用栈确认热点。
+
+    <DnmAllocationFastPathMap />
+  </Step>
+  <Step title="第二步：按来源选择最小改法">
+    区分显式对象、数组、装箱、闭包、委托、async 和字符串，先预测消除哪一个对象，再用 static lambda、泛型、预分配或 API 边界做单一改变。
+
+    <DnmAllocationSourceLab />
+  </Step>
+  <Step title="第三步：同时验证 churn 与存活">
+    在同负载下比较 MB/s、对象数、各代回收、晋升、p99 和工作集；池化或复用若只降低分配却抬高保留，也不能算完整成功。
+
+    <DnmAllocationBudgetLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 小对象快路径通常依靠分配上下文和指针碰撞，但仍有清零、初始化、内存带宽与未来 GC 成本
+- newobj 先取得并初始化对象存储，再执行构造函数；context 耗尽、特殊路由或预算触发会进入慢路径
+- 数组总大小包含头部、元素和对齐；引用数组只创建 null 槽，不自动创建元素对象
+- 装箱、闭包、委托、async/iterator 与字符串都可能隐式分配，结论必须由 CIL 和分配调用栈验证
+- 优化优先级来自频率、字节与生命周期；池化、Span 和 stackalloc 都会引入新的所有权或容量约束
+
+<Exercises>
+  1. **问题 1：解释空构造函数。** `new Empty()` 的构造函数没有任何语句，为什么仍不能说它零成本？
+
+  <Answer question="对象创建在构造函数之前还做了什么？">运行时仍要计算/取得实例大小与方法表，选择 SOH/LOH/POH 路径，检查分配上下文，推进指针，保证字段零初始化并写对象类型信息；对象还会增加分配流量和未来 GC 工作。构造函数只负责取得存储后的实例初始化。</Answer>
+
+  2. **问题 2：查闭包与装箱。** 热循环同时包含捕获 lambda 和把 int 传给 object API，怎样确认各自产生多少分配并改造？
+
+  <Answer question="如何从候选语法得到可验证优化？">先检查 CIL 的生成 display class/delegate、box 指令，再采分配事件按调用栈与累计字节分开统计。闭包可尝试 static lambda、显式状态或移出循环；装箱可改泛型/受约束 API。每次只改一类并以同负载 MB/s、p99 和结果正确性复测。</Answer>
+
+  3. **问题 3：评估池化。** `ArrayPool<byte>` 使分配速率下降，但工作集和数据泄露风险上升，应怎样验收？
+
+  <Answer question="池化成功需要哪些边界与指标？">定义租用/归还唯一所有者、异常路径、最大保留容量和敏感数据清理；验证没有重复归还与跨并发误用。性能上同时比较 allocation rate、GC、吞吐、p99 和稳定工作集；若池保留远大于峰值需求或清理成本抵消收益，应缩小池或撤回。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="指针碰撞分配">在线性区域推进指针以快速保留对象存储。</GlossaryItem>
+  <GlossaryItem term="分配上下文">线程可局部推进分配指针的一段地址范围。</GlossaryItem>
+  <GlossaryItem term="分配慢路径">补充上下文、处理特殊区域或协调 GC 的较慢分配路径。</GlossaryItem>
+  <GlossaryItem term="托管数组">包含对象头、长度、连续元素与对齐的托管对象。</GlossaryItem>
+  <GlossaryItem term="装箱">把值类型副本放入托管对象并通过对象引用访问。</GlossaryItem>
+  <GlossaryItem term="闭包捕获">用编译器生成环境对象保存 lambda 所需外部变量。</GlossaryItem>
+  <GlossaryItem term="字符串分配">构造新的不可变 String 结果及其可能中间状态。</GlossaryItem>
+  <GlossaryItem term="对象池化">复用已分配对象或缓冲以减少重复创建的策略。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Pro .NET Memory Management, Second Edition, Chapter 6 Memory Allocation"
+  adaptedUrl="https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_6"
+/>

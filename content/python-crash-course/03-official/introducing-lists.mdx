@@ -1,0 +1,200 @@
+---
+title: "第3章：Introducing Lists"
+type: C
+section: "Part I · Basics"
+order: 3
+description: "建立列表索引、增删改、返回值、排序副作用和越界错误的可观察模型。"
+demo: true
+math: false
+sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
+draft: false
+---
+
+import {
+  PccListIndexLab,
+  PccListMutationLab,
+  PccListOrderingLab,
+} from "@/components/mdx/python-crash-course/diagrams/introducing-lists";
+
+<Objectives>
+
+- 能解释list的有序、可变语义，计算zero-based index与negative index对应的元素
+- 能实现append、insert、pop、remove等list mutation，并区分副作用和return value
+- 能比较sort、sorted、reverse与len的契约，分析并复现IndexError边界
+
+</Objectives>
+
+## 为什么列表不是“很多变量放在一起”
+
+list是一个有顺序、可变、可容纳任意对象引用的container。名字`guests`绑定到list对象，list内部每个槽位再引用具体元素；因此修改某个索引是改变容器中的引用，而重新绑定`guests`是让名字指向另一个list。这个双层结构会在下一章解释copy和slice。
+
+What Is a List的核心不只是方括号语法，而是三个契约：顺序决定索引，长度决定有效边界，可变性允许原地改变。先预测`["Ada", "Linus", "Grace", "Guido"]`的索引`0`、`-1`、`4`分别发生什么，再操作图示。
+
+<Term def="按插入顺序保存对象引用、支持索引读取并允许原地增删改的可变容器。">ordered mutable list</Term>
+
+## Accessing Elements：正负索引映射到同一边界
+
+<Stepper>
+  <Step title="选择正索引或负索引">
+    <PccListIndexLab />
+  </Step>
+  <Step title="把负索引换算成实际位置">
+    对长度n，负索引i先换算为`n + i`；结果仍必须落在0到n-1之间。
+  </Step>
+  <Step title="让越界失败保持可见">
+    不要用宽泛try/except吞掉IndexError；先判断输入是否应允许越界，再决定验证或异常处理。
+  </Step>
+</Stepper>
+
+<Term def="第一个元素位置为0的索引规则；长度为n时最后一个有效正索引是n-1。">zero-based index</Term>
+
+```python
+languages = ["Python", "Rust", "Go", "C++"]
+print(languages[0])   # Python
+print(languages[-1])  # C++
+print(languages[-2].upper())
+
+last_index = len(languages) - 1
+print(languages[last_index])
+```
+
+negative index从尾部读取：`-1`是最后一个，`-len(items)`是第一个。它适合表达“最后一次记录”，但空列表没有任何有效正负索引。若数据可能为空，先通过领域规则处理empty case，而不是默认`items[-1]`一定安全。
+
+### IndexError 是边界证据，不是随机故障
+
+访问`items[len(items)]`必然越界，因为有效位置到`len(items)-1`结束。IndexError指出调用方对长度的假设失效：可能数据为空、循环上界多走一步、删除后仍使用旧索引，或外部输入没有验证。修复应更新错误假设，而不是简单把索引减一。
+
+<Term def="索引解析后不在0到len(list)-1范围内时抛出的异常，表示调用方的长度或位置假设错误。">index boundary</Term>
+
+## Modifying, Adding, and Removing Elements
+
+list mutation直接改变原list，因此所有指向同一list的名字都会观察到结果。`append`在尾部添加，`insert`在指定位置前插入，索引赋值替换一个槽位；`del`按位置删除但不返回元素，`pop`删除并返回元素，`remove`按值删除第一个匹配项。
+
+<Stepper>
+  <Step title="切换四种列表变更操作">
+    <PccListMutationLab />
+  </Step>
+  <Step title="同时记录副作用和返回值">
+    append、insert、remove返回None；pop返回被移除对象。调用者必须根据契约选择，而不是凭名称猜测。
+  </Step>
+  <Step title="验证重复值与空列表边界">
+    remove只删除第一个匹配且找不到值会ValueError；空列表pop会IndexError。
+  </Step>
+</Stepper>
+
+<Term def="在保持同一list对象身份的情况下修改其元素、长度或顺序的操作，所有alias都会看到变化。">list mutation</Term>
+
+```python
+tasks = ["design", "test"]
+tasks.append("deploy")
+tasks.insert(1, "implement")
+
+done = tasks.pop(0)
+tasks.remove("test")
+print(done)   # design
+print(tasks)  # ['implement', 'deploy']
+```
+
+### 按位置删除还是按值删除
+
+如果协议说“完成队尾任务”，使用`pop()`并消费return value；如果说“删除第一个名为test的任务”，使用`remove("test")`；如果只知道位置且不需要对象，`del tasks[index]`最明确。先写出业务意图再选method，能避免重复值下删除错对象。
+
+不要在迭代同一list时随意删除元素。删除会让后续元素左移，循环可能跳过候选；下一章将学习通过slice复制、comprehension或构建新列表表达筛选。当前章节先把一次mutation的before、after与returned value都验证清楚。
+
+### 用列表身份解释多个名字看到的变化
+
+执行`primary = ["A", "B"]`后，名字primary指向一个list；再执行`alias = primary`不会复制元素，只让alias指向同一list。于是`alias.append("C")`后，`primary`也打印三个元素。变化发生在共同对象上，不是Python把一条append命令神秘地广播给所有变量。可以用`primary is alias`验证身份相同，但业务代码更应通过明确ownership避免依赖隐式alias。
+
+重新绑定与原地修改必须分开推理。`alias = ["X"]`只让alias改指向新list，primary仍保留旧list；`alias[:] = ["X"]`则修改alias当前指向的list内容，若它仍与primary共享对象，primary会观察到替换。两行外观相近，却一个改变name binding，一个改变container state，因此调试时要记录对象身份和before/after，而不是只读变量名。
+
+函数接收list时也会获得对同一对象的引用。若函数调用append，调用者可观察副作用；这有时是契约，例如把完成任务加入共享队列，但若函数名只是`normalize_names`，隐式修改输入会令人意外。第8章会正式设计函数边界，现在先养成命名：原地操作使用明确动词并在文档中说明，纯转换返回new list。
+
+当list包含可变元素时，外层与内层还有两层身份。即使下一章用slice复制外层list，内部dictionary或nested list仍可能共享。当前章节至少要能画出“name → outer list → element object”三段引用，并指出一次mutation作用在哪一层。这个模型让排序、删除和嵌套数据错误都能回到具体owner，而不是归因于语言不可预测。
+
+测试mutation时，before snapshot不能写成`before = items`，否则before与after共享对象，断言失去意义。对本章的一层简单值可用`before = items.copy()`；遇到嵌套可变结构时再评估是否需要deepcopy或重新设计数据边界。证据的前提是快照本身不随被测操作一起变化。
+
+## Organizing a List：区分新视图与原地改变
+
+`sorted(items)`返回新的有序list，原list保持不变；`items.sort()`原地排序并返回None。`reverse()`只颠倒当前顺序，不等于降序排序；若要降序结果，可使用`sorted(items, reverse=True)`或`items.sort(reverse=True)`。`len(items)`只读取元素数量，不改变容器。
+
+<Stepper>
+  <Step title="选择排序或反转操作">
+    <PccListOrderingLab />
+  </Step>
+  <Step title="识别 destructive method">
+    `sort`和`reverse`改变原list；需要保留输入顺序时使用sorted或显式copy。
+  </Step>
+  <Step title="比较原列表、结果与return value">
+    任何排序练习都同时打印三者，能直接暴露`items = items.sort()`把变量绑定到None的错误。
+  </Step>
+</Stepper>
+
+<Term def="原地改变接收对象并通常返回None的方法；调用者应检查副作用，不能假设返回新容器。">destructive method</Term>
+
+```python
+destinations = ["Tokyo", "Reykjavik", "Lima", "Oslo"]
+
+ordered = sorted(destinations)
+print(destinations)  # original order
+print(ordered)       # alphabetical view
+
+destinations.sort(reverse=True)
+print(destinations)  # original list mutated
+print(len(destinations))
+```
+
+### 排序需要显式比较规则
+
+字符串默认按Unicode码点比较，大小写和重音符号会影响结果。若产品要求大小写不敏感，可使用`key=str.casefold`；若对象是字典或instance，就用`key`提取稳定字段。排序前要决定重复键是否保留输入顺序、缺失字段如何处理，以及是否允许原地改变共享list。
+
+Python排序是stable sort：key相同的元素保持原相对顺序。这允许先按次要字段排序，再按主要字段排序，或直接提供tuple key。但初学阶段优先写一个清晰key函数，打印输入和输出验证规则，不要把复杂lambda与mutation混在同一行。
+
+## 从单个元素到完整状态变更记录
+
+列表操作最容易出现“结果看起来对，但原输入已被破坏”。一个可复查的练习应保存before snapshot、执行操作、记录return value、检查after state，并覆盖空列表、重复值、首尾索引。这样下一章进入loop和slice时，能清楚知道每一步读的是哪份状态。
+
+在项目代码里还要区分用户可见顺序与内部处理顺序。若UI中的收藏列表必须保持添加顺序，临时展示时用sorted view；若列表本身就是优先队列的简化实现，原地sort也许符合契约。技术API没有替你决定领域含义，函数名和测试必须补上这一层。
+
+<Callout type="trap" title="把 sort 的返回值重新赋给列表">
+`items.sort()`原地修改并返回None，所以`items = items.sort()`会让名字绑定到None。需要新列表用`ordered = sorted(items)`；需要原地排序就单独调用`items.sort()`后读取items。
+</Callout>
+
+<Callout type="trap" title="remove 会删除所有相同值">
+`remove(value)`只删除第一个匹配，找不到则ValueError。删除所有匹配应在下一章通过过滤构造新list，或在明确循环条件下重复处理，不能误读一次副作用。
+</Callout>
+
+## 本章回顾：每次操作都回答四个问题
+
+1. list是ordered mutable list，index由顺序与长度定义。
+2. zero-based index和negative index最终都映射到`0..len-1`，越界产生IndexError。
+3. append/insert/pop/remove的副作用和return value不同，按业务意图选择。
+4. sorted返回新list，sort/reverse是destructive methods，len只读长度。
+5. 变更前后都记录state、return value和错误边界，才能解释alias观察到的结果。
+
+<Exercises>
+
+**问题 1：给定四个元素，哪些索引有效：`0`、`3`、`4`、`-1`、`-4`、`-5`？**
+
+<Answer>有效的是0、3、-1、-4，分别映射到首、尾、尾、首。4等于len(list)，超出最大正索引3；-5换算为4+(-5)=-1，也超出有效解析范围。两者都会IndexError。</Answer>
+
+**问题 2：实现任务状态迁移：尾部加入deploy，取出第一个任务作为done，再删除第一个test。**
+
+<Answer>`tasks.append("deploy")`尾部添加且返回None；`done = tasks.pop(0)`删除并返回第一个；`tasks.remove("test")`按值删除首个匹配并返回None。测试空列表pop、没有test时的ValueError和存在重复test时只删一个的契约。</Answer>
+
+**问题 3：如何得到大小写不敏感的有序展示，同时保留原始输入顺序？**
+
+<Answer>使用`ordered = sorted(items, key=str.casefold)`。sorted创建新list，原items不变；casefold提供大小写不敏感key。测试重复key时stable sort保持原相对顺序，并同时断言items仍等于before snapshot。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="ordered mutable list" definition="按顺序保存对象引用、支持索引并允许原地增删改的容器。" />
+  <GlossaryItem term="zero-based index" definition="从0开始计算位置，长度n的最后一个正索引为n-1。" />
+  <GlossaryItem term="index boundary" definition="索引解析后必须位于0到len(list)-1的有效范围。" />
+  <GlossaryItem term="list mutation" definition="保持list身份并改变元素、长度或顺序的操作。" />
+  <GlossaryItem term="destructive method" definition="原地修改接收对象且通常返回None的方法。" />
+</Glossary>
+
+<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 3: Introducing Lists" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />

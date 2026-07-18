@@ -1,0 +1,182 @@
+---
+title: "Chapter 7. Collections"
+type: C
+section: "C# 10 Nutshell · .NET and Data"
+order: 7
+description: "覆盖enumeration、collection/list接口、array、线性/集合/字典、proxy、immutable collections与equality/order注入。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch07.html"
+draft: false
+---
+
+import { CtcCollectionCapabilityLab, CtcDataStructureChoiceLab, CtcImmutableCollectionLab } from "@/components/mdx/csharp-10-core/diagrams/collections";
+
+<Objectives>
+
+- 能比较IEnumerable、ICollection、IList与readonly interfaces的能力和未保证事项，识别deferred/live view
+- 能分析lookup/order/update/cache与memory workload，判断array、list、queue、stack、set和dictionary的适用边界
+- 能设计immutable collection、builder/proxy与comparer contract，验证旧版本稳定和key可检索
+
+</Objectives>
+
+## 为什么Collection Type就是Performance与Invariant声明
+
+把所有数据都放List会隐藏lookup/order/duplicate语义；返回IEnumerable又可能隐藏一次性I/O或昂贵重复查询。Collection abstraction要同时说明capability、complexity、ordering、mutation ownership、snapshot/live与equality。Big-O只是第一层，allocation、cache locality和key stability同样决定生产行为。
+
+先预测：IReadOnlyList保证底层永不变化吗；IEnumerable.Count总是O(1)吗；HashSet iteration order稳定可持久化吗；Dictionary key修改后仍可查到吗；immutable builder可以安全跨线程共享吗。答案都是否。
+
+<Term def="接口承诺的iteration/count/index/mutation能力，以及order、snapshot与complexity是否属于contract的声明。">collection capability contract</Term>
+
+## Enumeration
+
+IEnumerable/IEnumerator定义pull iteration：GetEnumerator、MoveNext、Current与Dispose。Generic版本保留T避免cast/boxing。Sequence可能deferred、single-use、live或remote；每次enumeration可重复effect。Enumerator通常不是thread-safe，collection mutation可能使其version check失败。
+
+```csharp
+static int SumOnce(IEnumerable<int> source)
+{
+    ArgumentNullException.ThrowIfNull(source);
+    var total = 0;
+    foreach (var value in source)
+        total = checked(total + value);
+    return total;
+}
+```
+
+API若需要多次访问/count/index，就接受IReadOnlyCollection/List或先materialize，而不是偷偷枚举多次。Tests用counting enumerable、throw-on-second enumeration和dispose counter证明消费方式。
+
+## The ICollection and IList Interfaces
+
+ICollection增加Count与mutation shape，IList增加index/order；generic与non-generic版本在type safety/boxing上不同。IReadOnlyCollection/List仅阻止consumer通过该view修改，不保证owner不变；若需要snapshot，复制或immutable collection。
+
+Interface不保证复杂度：custom IList index可能remote/O(n)。Document operation costs和ownership；公共API暴露最小需要capability，避免给caller不必要mutation power。
+
+<Stepper>
+  <Step title="切换enumerable、collection、list与readonly"><CtcCollectionCapabilityLab /></Step>
+  <Step title="写capability table">Count/index/add/remove/order/repeat/snapshot/thread safety逐项标yes/no/conditional。</Step>
+  <Step title="用hostile sequence验收">Single-use、slow Count、mutation during iteration和owner-after-return mutation全部注入。</Step>
+</Stepper>
+
+<Callout type="trap" title="返回IReadOnlyCollection就实现了Immutability">
+它只是readonly interface。Owner持有原List仍可修改，elements也可能mutable；需要immutable snapshot与deep element contract才能保证观察稳定。
+</Callout>
+
+## The Array Class
+
+Array长度固定、连续indexed storage，支持Rank/Length、search/sort/copy/resize helpers。`Array.Resize`实际分配new array并重定向variable，不改变其他aliases。Rectangular与jagged arrays布局/访问不同；covariant reference array写入可能运行时失败。
+
+Array适合fixed-size、hot indexed data与interop。暴露raw array会泄露mutation；return clone/ReadOnlyMemory/immutable按lifetime选择。Sorting修改in-place，comparer与stability需明确。
+
+<Term def="按operation频率、数据规模、ordering、duplicates、cache locality、allocation与concurrency选择数据结构的证据表。">collection workload matrix</Term>
+
+## Lists, Queues, Stacks, and Sets
+
+List提供dynamic array，append amortized O(1)、index O(1)、middle insert/remove O(n)。LinkedList在已有node附近修改O(1)，查找仍O(n)且pointer/cache成本高。Queue/Stack分别表达FIFO/LIFO，语义比“List首尾操作”清晰。BitArray压缩bool flags。
+
+HashSet表达unique membership，SortedSet同时提供order/range。选择set时写equality/order comparer、duplicate policy与iteration stability；不要依赖未承诺hash order。生产测allocation、resize和real distribution。
+
+## Dictionaries
+
+Dictionary以hash/equality定位key，SortedDictionary按comparer tree排序，SortedList以sorted arrays权衡lookup/insert，OrderedDictionary等保留其他语义。`TryGetValue`一次lookup表达absence；indexer读missing会throw，写会insert/replace。ConcurrentDictionary的compound methods有自己的atomicity contract。
+
+```csharp
+var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+foreach (var word in words)
+{
+    counts.TryGetValue(word, out var count);
+    counts[word] = checked(count + 1);
+}
+```
+
+Key必须在collection lifetime保持hash/equality fields稳定。Comparer是dictionary identity一部分，serialization/rehydration必须恢复；untrusted keys需考虑hash collision/size limits。
+
+<Stepper>
+  <Step title="切换array/list、queue/stack、hash与sorted"><CtcDataStructureChoiceLab /></Step>
+  <Step title="填workload矩阵">N、lookup/insert/remove/range/order比例、duplicates、memory/cache与threads量化。</Step>
+  <Step title="用真实distribution benchmark">Warmup后测latency/allocation/resize，加入skew/collision与hot key，保留correctness asserts。</Step>
+</Stepper>
+
+## Customizable Collections and Proxies
+
+Collection/KeyedCollection/ReadOnlyCollection等wrapper允许控制insert/set/remove hooks或暴露restricted view。Proxy必须定义是live view还是snapshot、是否转发equality/order、thread safety与exception。继承List通常无法拦截所有nonvirtual mutation，composition wrapper更可靠。
+
+KeyedCollection结合list order与key lookup，threshold/duplicate key behavior需测试。Validation collection在mutation boundary执行invariant，但若elements themselves mutable仍可能绕过。
+
+<Term def="Wrapper向consumer暴露受控collection surface，同时明确是否live、是否拥有source及如何转发mutation/comparer。">collection proxy boundary</Term>
+
+## Immutable Collections
+
+ImmutableList/Dictionary/HashSet等每次update返回new version并structurally share unchanged nodes；旧version继续有效。它们优化versioned snapshots和concurrent readers，但单次operation常比mutable array/list有更多indirection/allocation。Atomic publication仍需Interlocked/CAS/lock。
+
+Builder允许局部batch mutation再ToImmutable，适合bulk construction；builder不能逃逸或跨线程无保护共享。Comparer必须在创建/ToBuilder/serialization中保留，否则同一keys语义变化。
+
+```csharp
+var builder = ImmutableDictionary.CreateBuilder<string, User>(StringComparer.OrdinalIgnoreCase);
+foreach (var user in users)
+    builder.Add(user.Name, user);
+
+ImmutableDictionary<string, User> snapshot = builder.ToImmutable();
+var next = snapshot.SetItem("alice", updatedAlice);
+```
+
+<Term def="Update产生new version并复用unchanged structure，且old snapshot永不被新写入改变的保证。">versioned snapshot contract</Term>
+
+<Stepper>
+  <Step title="切换snapshot、sharing、builder与comparer"><CtcImmutableCollectionLab /></Step>
+  <Step title="保留old/new references">每次update后同时读取旧/新版本，验证旧值、count、comparer和element contract。</Step>
+  <Step title="注入publication race">两个writers基于同snapshot更新，验证CAS/conflict而非把immutability误当lost-update protection。</Step>
+</Stepper>
+
+<Callout type="trap" title="Immutable Collection自动让Elements不可变">
+Collection topology不可改，但其中class instance仍可mutation，所有版本会观察同一element变化。使用immutable elements、copy或明确shallow contract。
+</Callout>
+
+## Plugging in Equality and Order
+
+IEqualityComparer控制hash collections，IComparer控制sorted collections；StringComparer提供ordinal/culture options。Equality zero与ordering zero会决定duplicate/key identity，必须与domain一致。Comparer不能依赖会变化的culture/config/time，也不能在collection存活时改变。
+
+<Term def="Collection构造时注入且在其生命周期保持稳定的equality/hash或ordering语义。">comparer identity contract</Term>
+
+Property tests验证equal=>same hash、order anti-symmetry/transitivity、compare zero与expected duplicate一致。Persistent payload保存comparer version或重建migration，不能仅serialize entries。
+
+## Concurrency and publication gate
+
+普通collections不保证concurrent read/write；即使只有一个writer，resize与reader也可能race。选择immutable atomic snapshot、lock ownership或concurrent collection，并明确compound operation atomicity。ConcurrentDictionary GetOrAdd factory可能多次执行，effect factory需幂等或外移。
+
+Metrics记录size、growth、eviction、collision/queue depth和allocation。Capacity limit与backpressure属于collection owner，不允许unbounded cache/queue默默增长。
+
+## 本章回顾：接口、结构与Comparer共同定义Collection
+
+1. IEnumerable只承诺iteration，不承诺repeat、count、order或无I/O。
+2. Readonly view不等于immutable snapshot，elements也需自己的immutability contract。
+3. Array/List/Queue/Stack/Set/Dictionary按workload与invariant选择。
+4. Immutable collections保留versions，但concurrent publication仍需CAS/owner。
+5. Equality/order comparer是collection identity的一部分，必须稳定并可迁移。
+
+<Exercises>
+
+**问题 1：API何时应接受IEnumerable而非IReadOnlyList？**
+
+<Answer>只需单次顺序消费且可接受deferred/single-use时用IEnumerable；需要Count、多次遍历、index或snapshot语义时要求更强capability或materialize。Tests用throw-on-second enumerable证明没有隐含多次消费。</Answer>
+
+**问题 2：Dictionary key变更后为何无法找到？**
+
+<Answer>插入bucket由原hash决定，若参与Equals/GetHashCode的field改变，新hash搜索另一个bucket。Key应immutable；测试mutation后lookup并禁止此设计，或remove/reinsert canonical new key。</Answer>
+
+**问题 3：ImmutableDictionary怎样避免lost update？**
+
+<Answer>Immutability只让snapshot稳定。Shared reference更新用Interlocked.CompareExchange/ImmutableInterlocked或single owner；writer基于observed snapshot生成next，CAS失败重算。Two-writer test断言两个update都保留。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="collection capability contract" definition="Iteration/count/index/mutation及未保证语义。" />
+  <GlossaryItem term="collection workload matrix" definition="Operations、规模、cache/memory和concurrency选择证据。" />
+  <GlossaryItem term="collection proxy boundary" definition="Wrapper的live/snapshot、ownership和mutation约定。" />
+  <GlossaryItem term="versioned snapshot contract" definition="Structural sharing且旧collection版本稳定。" />
+  <GlossaryItem term="comparer identity contract" definition="Collection lifetime固定的equality/order语义。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 7: Collections" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch07.html" />

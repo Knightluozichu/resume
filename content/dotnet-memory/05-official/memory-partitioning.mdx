@@ -1,0 +1,197 @@
+---
+title: "Chapter 5：内存分区（Memory Partitioning）"
+type: A
+section: Pro .NET 内存管理（第2版）· 托管堆结构
+order: 5
+description: 对齐原书第 5 章：从 GC heap 与 segment 的物理管理出发，解释 SOH、LOH、POH、Gen 0/1/2、分配上下文和对象大小/固定策略如何共同决定对象路由与回收成本。
+demo: false
+math: false
+sourceUrl: "https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_5"
+draft: false
+---
+
+import {
+  DnmGenerationLifecycleLab,
+  DnmHeapPartitionMap,
+  DnmObjectRoutingLab,
+} from "@/components/mdx/dotnet-memory/diagrams/memory-partitioning";
+
+<Objectives>
+
+- 能区分逻辑 GC heap、操作系统 segment 与 SOH/LOH/POH 分区，描述 workstation/server GC 下这些结构的数量关系
+- 能根据普通对象总大小与“创建时固定”条件判断 SOH、LOH 或 POH 路由，并解释事后 pin 为什么不会迁移对象
+- 能分析 Gen 0/1/2 的收集覆盖、存活晋升和分配上下文，判断对象代别、大小、存活时间与移动策略之间的关系
+
+</Objectives>
+
+## 为什么“托管堆”不是一整块简单数组
+
+诊断工具常把所有托管对象汇总成 managed heap，让人误以为 CLR 只维护一段从低地址到高地址的连续内存。实际实现需要面对不同对象大小、移动成本、固定约束、并发核心和操作系统提交策略，因此会把逻辑堆组织为多个 segment，并按回收与移动策略划分 SOH、LOH、POH 等区域。
+
+<Term def="由一个 GC 实例协调的托管对象集合与分配/回收状态；workstation GC 通常有一个，server GC 可维护多个并行 heap。">逻辑 GC heap</Term>
+
+“一个进程有几个堆”必须带上 GC 模式与术语。server GC 常为多个逻辑处理资源建立多个 GC heap，每个 heap 再拥有自己的 segment；SOH/LOH/POH 是每个 heap 中按策略管理的分区。统计工具把它们聚合展示时，数量层次很容易被压平。
+
+<DnmHeapPartitionMap />
+
+## segment 连接虚拟内存与 GC 区域
+
+<Term def="CLR 从操作系统保留并按需提交的大块虚拟地址区域，承载某类托管堆分区；一个分区可以随增长拥有多个 segment。">托管堆段</Term>
+
+segment 是第 2 章虚拟内存机制与 GC 的连接点：运行时保留较大的地址范围，再按分配需求提交页面。segment 有起始、已分配边界、已提交边界和保留边界；普通对象在线性区域中推进分配指针，不需要每次调用通用操作系统分配器。
+
+```text
+segment: [ used objects | allocated free area | committed unused | reserved address space ]
+          ^ start        ^ allocated             ^ committed       ^ reserved end
+```
+
+不同运行时版本会改变默认段大小、增长算法和辅助结构，因此不应把某个版本的十六进制边界写成应用契约。稳定模型是：segment 提供大块地址/提交管理，generation 和 SOH/LOH/POH 决定哪些对象在一次回收中被考虑、是否移动以及如何复用空闲空间。
+
+<Term def="Small Object Heap，承载普通小对象；其逻辑范围包含 Gen 0、Gen 1 与 Gen 2，对象通常从年轻代开始并可在压缩中移动。">SOH</Term>
+
+SOH 不是 Gen 0 的同义词。Gen 0 和 Gen 1 通常位于当前 ephemeral segment 的年轻区域，长期存活对象属于 Gen 2，Gen 2 还可以跨更多 segment。年轻代边界会随分配和回收变化；一代是收集策略和地址范围，不是一个永久独立容器。
+
+## 对象大小和固定方式决定初始路由
+
+<Term def="Large Object Heap，承载总分配大小达到大对象阈值的对象，常见阈值为 85,000 字节；它逻辑上随 Gen 2 收集。">LOH</Term>
+
+普通对象的总分配大小达到大对象阈值时会直接进入 LOH。常见 .NET 阈值为 85,000 字节，但判断对象总大小而非纯 payload：数组头、长度字段和对齐都会占空间，所以“byte[85000] 才是第一个大对象”不是精确规则。其他元素类型还要乘元素宽度。
+
+LOH 对象移动成本高，历史上默认不在每次回收中压缩，而是清扫并复用空洞；应用可以请求一次 LOH 压缩，但这不是持续修复无界大对象 churn 的按钮。LOH 与 Gen 2 一起被收集，不表示大对象真的先经历 Gen 0/1 晋升。
+
+<Term def="Pinned Object Heap，.NET 5 起用于创建时即声明固定的数组；其对象不会移动，逻辑上由完整回收处理。">POH</Term>
+
+POH 解决的是**预先知道要长期固定**的数组。把这些对象从普通可压缩区域隔离，能减少固定“路障”对其他对象移动的影响。但用 `GCHandle`、`fixed` 或互操作临时固定一个现有 SOH/LOH 对象，不会把它复制到 POH；运行时若在每次 pin/unpin 时搬运，成本和引用更新反而更复杂。
+
+<DnmObjectRoutingLab />
+
+图中数组头使用近似值，仅用于说明路由看总对象大小。真实边界应在目标架构与 .NET 版本上用 `GC.GetGeneration`、事件或堆工具验证；POH 路由则由创建 API 的 pinned 选项优先决定。
+
+```csharp
+byte[] small = new byte[64_000];
+byte[] large = new byte[100_000];
+byte[] pinnedAtBirth = GC.AllocateArray<byte>(64_000, pinned: true);
+
+Console.WriteLine(GC.GetGeneration(small));
+Console.WriteLine(GC.GetGeneration(large));
+Console.WriteLine(GC.GetGeneration(pinnedAtBirth));
+```
+
+常见结果是普通小数组初始为 Gen 0，LOH 与 POH 对象在公开代 API 中表现为 Gen 2。不要由此推导三者物理相邻：公开 generation 反映收集关系，heap kind/segment 才反映分区。运行示例本身也可能触发 GC，应配合事件或转储确认。
+
+<Callout type="trap" title="陷阱：看到 GC.GetGeneration == 2 就断言对象从 Gen 0 晋升两次">
+  LOH/POH 对象可在创建时直接按完整回收策略管理，返回 2 不代表经历过两次年轻代收集。要解释历史，应结合对象分区、分配事件和收集时间线。
+</Callout>
+
+## generation 表示收集历史，不是墙上年龄
+
+<Term def="按预期寿命组织回收工作的逻辑代：Gen 0 面向新对象，Gen 1 作缓冲，Gen 2 承载多次存活对象与完整回收范围。">GC 分代</Term>
+
+普通 SOH 对象通常从 Gen 0 开始。发生覆盖 Gen 0 的回收时，不可达对象被清除，仍可达对象通常提升到 Gen 1；再次经历覆盖其所在代的回收并存活，才可能进入 Gen 2。对象等待十分钟但期间没有相应回收，不会仅因时间流逝自动变老。
+
+<DnmGenerationLifecycleLab />
+
+Gen 0 回收的目标是只处理最新分配区域，以较小扫描/移动范围换取高频低成本。Gen 1 既能回收中短命对象，也防止它们直接污染长期代；Gen 2 回收覆盖更大存活集合，往往更昂贵。具体晋升和降级细节受 pin、背景 GC 与运行时策略影响，但“被收集且存活”是理解代变化的关键。
+
+代际 GC 还必须追踪老对象指向年轻对象的引用，否则只扫描 Gen 0 根会漏标记。写屏障、卡表或 write watch 等机制记录这些跨代写入；第 8 章会在标记阶段展开。分区不是彼此隔绝的对象世界，引用图仍可跨越所有区域。
+
+## 分配上下文让线程在局部区域快速推进
+
+<Term def="GC 交给线程或分配路径的一小段可用地址范围，线程可通过移动指针完成多数小对象分配，耗尽后再向 heap 获取新范围。">分配上下文</Term>
+
+多个线程若每个小对象都竞争一把全局锁，托管分配会非常昂贵。运行时把较小地址范围交给线程作为 allocation context；常见快路径只检查剩余空间、推进指针并初始化对象。上下文耗尽、对象过大或触发预算时，才进入较慢路径与 GC 协调。
+
+```text
+thread allocation context
+[ object A | object B | free ............. ]
+                       ^ alloc_ptr         ^ alloc_limit
+
+fast path: if alloc_ptr + size <= alloc_limit, reserve and advance
+slow path: refill context / route LOH-POH / possibly trigger GC
+```
+
+分配上下文不改变对象归属：对象仍属于对应逻辑 GC heap 和 generation。它只是把并发分配的常见路径局部化。server GC 还会把线程与 heap 选择、负载均衡和 segment 状态结合；第 6 章会深入对象和数组的实际分配路径。
+
+## 用运行时指标核对分区假设
+
+`GC.GetGCMemoryInfo()` 能暴露最近一次回收后的 heap/fragmentation 与分代信息，事件和转储则能提供 heap index、segment 和对象地址。公开 API 的数据是某个收集时刻的摘要，不应与实时分配中的瞬时边界混为一谈。
+
+```csharp
+GCMemoryInfo info = GC.GetGCMemoryInfo();
+
+Console.WriteLine($"heap: {info.HeapSizeBytes:N0}");
+Console.WriteLine($"fragmented: {info.FragmentedBytes:N0}");
+
+for (int i = 0; i < info.GenerationInfo.Length; i++)
+{
+    GCGenerationInfo generation = info.GenerationInfo[i];
+    Console.WriteLine(
+        $"region {i}: size={generation.SizeAfterBytes:N0}, " +
+        $"fragmentation={generation.FragmentationAfterBytes:N0}");
+}
+```
+
+`GenerationInfo` 的索引集合可包含传统代与 LOH/POH 相关条目，具体长度和含义应按目标 .NET 文档/版本解释，不要把数组索引永久硬编码成业务格式。若要证明对象路由，堆转储中的 heap kind 与地址区间通常比单个聚合计数更直接。
+
+<Callout type="trap" title="陷阱：为减少碎片强制每次压缩 LOH">
+  压缩会移动并复制大对象，可能造成显著暂停与内存带宽成本。先证明空洞导致分配失败或工作集问题，再处理对象尺寸、池化、生命周期和保留；一次性压缩只应在明确窗口与证据下使用。
+</Callout>
+
+## 三步判断对象所在区域与代
+
+<Stepper>
+  <Step title="第一步：分清 heap、segment 与 partition">
+    记录 GC 模式和 heap index，列出各 heap 的 SOH/LOH/POH segment；不要把工具聚合后的 managed heap 当作单一连续地址区。
+
+    <DnmHeapPartitionMap />
+  </Step>
+  <Step title="第二步：按创建条件推导初始路由">
+    计算对象总分配大小并标明是否使用创建时 pinned API，先预测 SOH/LOH/POH，再用目标运行时的 generation、heap kind 或事件验证。
+
+    <DnmObjectRoutingLab />
+  </Step>
+  <Step title="第三步：用收集历史解释代别">
+    对 SOH 对象记录每次覆盖其所在代的回收与存活结果，区分等待时间和实际晋升；对 LOH/POH 则从直接完整回收策略解释公开代值。
+
+    <DnmGenerationLifecycleLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 逻辑 GC heap 由多个 segment 承载，server GC 可维护多个 heap；SOH/LOH/POH 是回收和移动策略分区
+- SOH 同时包含 Gen 0/1/2，普通小对象从年轻区域开始；LOH/POH 逻辑上随完整回收处理
+- 大对象阈值判断总分配大小，常见为 85,000 字节；数组头、元素宽度和对齐都会影响实际路由
+- POH 只接收创建时即固定的数组，事后 pin 不会迁移对象；POH 隔离移动约束，但不让固定变得免费
+- generation 随“被收集并存活”变化，不随墙上时间自动增长；分配上下文只是并发快路径，不改变对象归属
+
+<Exercises>
+  1. **问题 1：判断三种路由。** 普通 60 KB `byte[]`、普通 100 KB `byte[]`、`GC.AllocateArray<byte>(60000, pinned: true)` 通常分别进入哪里？
+
+  <Answer question="大小和创建时固定如何共同决定路由？">普通 60 KB 数组总大小通常低于大对象阈值，进入 SOH/Gen 0；普通 100 KB 数组达到阈值，进入 LOH；创建时 pinned 的 60 KB 数组进入 POH。实际边界含对象头和对齐，应在目标运行时验证，POH 还要求支持该 API 的现代 .NET。</Answer>
+
+  2. **问题 2：解释代别。** 一个普通小对象创建后等待很久但没有发生 GC，它是否会自动从 Gen 0 升到 Gen 2？LOH 对象初始显示 Gen 2 又意味着什么？
+
+  <Answer question="代别与时间、收集历史有什么关系？">普通对象不会按墙上时间晋升，必须经历覆盖其代的回收并保持可达；LOH 对象公开显示 Gen 2 是因为它从创建起就按完整回收策略管理，不代表先存活了两次年轻代回收。代值必须结合 heap kind 解释。</Answer>
+
+  3. **问题 3：评估 POH。** 一个已存在的 SOH 数组偶尔在 P/Invoke 期间 `fixed`，是否应期待它自动进入 POH？怎样减少固定影响？
+
+  <Answer question="事后 pin 与创建时 POH 有何区别？">不会。临时 pin 只阻止现有对象在该期间移动，不会搬入 POH。应缩短 fixed 范围、避免跨 GC 长期固定；若数组从创建起就需要长期稳定地址且平台/API 适用，可显式分配 pinned array 到 POH，并测量其长期不可移动与完整回收成本。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="逻辑 GC heap">由一个 GC 实例协调分配和回收的托管对象集合。</GlossaryItem>
+  <GlossaryItem term="托管堆段">运行时保留并按需提交、承载某类 GC 分区的大块虚拟地址区域。</GlossaryItem>
+  <GlossaryItem term="SOH">包含普通小对象与 Gen 0/1/2 的 Small Object Heap。</GlossaryItem>
+  <GlossaryItem term="LOH">承载达到大对象阈值对象、按完整回收处理的 Large Object Heap。</GlossaryItem>
+  <GlossaryItem term="POH">承载创建时即固定数组、对象不移动的 Pinned Object Heap。</GlossaryItem>
+  <GlossaryItem term="GC 分代">按对象收集历史组织 Gen 0、Gen 1、Gen 2 回收工作的策略。</GlossaryItem>
+  <GlossaryItem term="分配上下文">线程可通过局部指针推进快速分配的一小段地址范围。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Pro .NET Memory Management, Second Edition, Chapter 5 Memory Partitioning"
+  adaptedUrl="https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_5"
+/>

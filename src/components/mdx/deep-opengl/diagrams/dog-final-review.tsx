@@ -1,71 +1,108 @@
-/**
- * <DogFinalReviewDiagram>：全书数据流与诊断速查
- * 纯静态 SVG，无交互。Server Component。
- */
+const FRAME_CONTRACT = [
+  ["上下文与能力", "版本、限制、扩展、绘图缓冲和资源代"],
+  ["程序接口", "shader 编译/链接、attribute、uniform、sampler"],
+  ["顶点获取", "VAO 属性槽、VBO 关联、EBO、实例 divisor"],
+  ["光栅与片元", "viewport、剔除、深度、模板、混合、写掩码"],
+  ["输出目标", "默认/FBO、附件、draw buffers、反馈与 resolve"],
+  ["提交与证据", "draw、错误、帧抓取、CPU/GPU 时间和回归"],
+] as const;
+
+const SUPPORT_LAYERS = [
+  ["OpenGL ES", "EGL Surface/Context 生命周期、tile 带宽与热稳态"],
+  ["WebGL", "canvas 像素、浏览器安全、context lost/restored"],
+  ["后处理", "FBO 完整性、ping-pong、多采样 resolve"],
+  ["跨平台", "能力契约、格式探针、shader 后端与降级理由"],
+  ["优化调试", "瓶颈归因、非阻塞计时、帧证据与单变量实验"],
+] as const;
+
 export function DogFinalReviewDiagram() {
-  const flow = [
-    { x: 40, t: "取上下文", c: "第4章" },
-    { x: 160, t: "建 VAO/VBO", c: "第2章" },
-    { x: 290, t: "编译着色器", c: "第3章" },
-    { x: 420, t: "设状态", c: "状态机" },
-    { x: 540, t: "drawElements", c: "第1章管线" },
-    { x: 40, y2: true, t: "FBO 后处理", c: "第7章" },
-    { x: 200, y2: true, t: "优化", c: "第6章" },
-    { x: 330, y2: true, t: "移动适配", c: "第5章" },
-    { x: 470, y2: true, t: "跨平台", c: "第8章" },
-    { x: 600, y2: true, t: "调试", c: "第9章" },
-  ];
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox="0 0 720 400" role="img" aria-label="全书数据流与诊断速查" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x="360" y="28" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">全书数据流：设状态 → 喂数据 → 发绘制 → 后处理</text>
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
+        <div
+          role="img"
+          aria-label="OpenGL WebGL OpenGL ES 全书六段帧契约和五个支撑专题"
+          className="grid gap-4"
+        >
+          <section>
+            <h3 className="text-sm font-bold text-primary">一次可验证绘制的六段契约</h3>
+            <div className="mt-3 grid gap-2 md:grid-cols-3">
+              {FRAME_CONTRACT.map(([title, detail], index) => (
+                <div
+                  key={title}
+                  className="grid min-h-28 content-start rounded-control border border-accent/50 bg-accent/10 p-3"
+                >
+                  <span className="font-mono text-xs text-secondary">{index + 1}</span>
+                  <strong className="mt-2 text-sm text-accent">{title}</strong>
+                  <span className="mt-2 text-xs leading-5 text-secondary">{detail}</span>
+                </div>
+              ))}
+            </div>
+          </section>
 
-          {/* 上排主流程 */}
-          {flow.filter(n => !n.y2).map((n, i) => (
-            <g key={n.t}>
-              <rect x={n.x} y="56" width="116" height="46" rx="8" fill="var(--bg)" stroke="var(--accent)" strokeWidth="1.3" />
-              <text x={n.x + 58} y="78" textAnchor="middle" fontSize="10" fontWeight="700" fill="var(--accent)">{n.t}</text>
-              <text x={n.x + 58} y="94" textAnchor="middle" fontSize="8.5" fill="var(--text-secondary)">{n.c}</text>
-              {i < 4 && <line x1={n.x + 116} y1="79" x2={n.x + 128} y2="79" stroke="var(--accent)" strokeWidth="1.2" markerEnd="url(#dfrArrow)" />}
-            </g>
-          ))}
-
-          {/* 下排支撑 */}
-          {flow.filter(n => n.y2).map((n, i) => (
-            <g key={n.t}>
-              <rect x={n.x} y="130" width="116" height="40" rx="8" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-              <text x={n.x + 58} y="150" textAnchor="middle" fontSize="9.5" fill="var(--text-primary)">{n.t}</text>
-              <text x={n.x + 58} y="164" textAnchor="middle" fontSize="8" fill="var(--text-secondary)">{n.c}</text>
-              {i < 4 && <line x1={n.x + 116} y1="150" x2={n.x + 128} y2="150" stroke="var(--border)" strokeWidth="1" strokeOpacity="0.6" />}
-            </g>
-          ))}
-
-          {/* 症状速查 */}
-          <rect x="40" y="190" width="640" height="170" rx="8" fill="var(--accent)" fillOpacity="0.05" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" />
-          <text x="360" y="212" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--text-primary)">症状 → 环节 → 根因 速查</text>
-          {[
-            { y: 236, s: "黑屏", e: "着色器/缓冲/状态", r: "着色器编译链接失败 · VAO 绑定顺序错 · uniform 没设" },
-            { y: 262, s: "性能差", e: "优化/瓶颈", r: "draw call 多 · 状态频繁切换 · 过度绘制 · 纹理采样多" },
-            { y: 288, s: "兼容崩溃", e: "跨平台", r: "未检测扩展 · 只写高端路径 · GLSL 版本不符" },
-            { y: 314, s: "移动发热", e: "移动适配", r: "过度绘制高 · mediump 算位置致条纹" },
-            { y: 340, s: "切标签黑屏", e: "上下文", r: "上下文丢失未 preventDefault/未重建资源" },
-          ].map((row) => (
-            <g key={row.s}>
-              <text x="60" y={row.y} fontSize="10" fontWeight="700" fill="var(--accent)">{row.s}</text>
-              <text x="180" y={row.y} fontSize="10" fill="var(--text-primary)">{row.e}</text>
-              <text x="340" y={row.y} fontSize="10" fill="var(--text-secondary)">{row.r}</text>
-            </g>
-          ))}
-
-          <defs>
-            <marker id="dfrArrow" markerWidth="9" markerHeight="9" refX="6" refY="4.5" orient="auto">
-              <path d="M0,0 L7,4.5 L0,9 z" fill="var(--accent)" />
-            </marker>
-          </defs>
-        </svg>
+          <section>
+            <h3 className="text-sm font-bold text-primary">贯穿契约的五个支撑专题</h3>
+            <div className="mt-3 grid gap-2 md:grid-cols-5">
+              {SUPPORT_LAYERS.map(([title, detail]) => (
+                <div
+                  key={title}
+                  className="min-h-28 rounded-control border border-border bg-bg/40 p-3"
+                >
+                  <strong className="text-sm text-primary">{title}</strong>
+                  <p className="mt-2 text-xs leading-5 text-secondary">{detail}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
       </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">主流程串成数据流，症状速查直接定位环节与根因</figcaption>
+      <figcaption className="mt-2 text-center text-sm text-secondary">
+        每次绘制都要满足六段契约；移动、浏览器、后处理、兼容和优化问题都能映射回其中一段
+      </figcaption>
+    </figure>
+  );
+}
+
+const EVIDENCE_LOOP = [
+  ["症状", "黑屏、错误颜色、尖峰、热降频、设备降级"],
+  ["假设", "只提出一个可被证伪的断点或瓶颈"],
+  ["隔离", "固定三角形、常量 shader、格式探针或单变量实验"],
+  ["证据", "日志、帧抓取、像素、限制值、CPU/GPU 查询"],
+  ["回归", "保存场景、阈值、设备范围与修复前后结果"],
+] as const;
+
+export function DogEvidenceLoopDiagram() {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
+        <div
+          role="img"
+          aria-label="从症状、假设、隔离、证据到回归的五步图形诊断闭环"
+          className="grid gap-2 md:grid-cols-5"
+        >
+          {EVIDENCE_LOOP.map(([title, detail], index) => (
+            <div
+              key={title}
+              className="relative min-h-32 rounded-control border border-border bg-bg/40 p-3"
+            >
+              <span className="font-mono text-xs text-secondary">{index + 1}</span>
+              <strong className="mt-2 block text-sm text-accent">{title}</strong>
+              <p className="mt-2 text-xs leading-5 text-secondary">{detail}</p>
+              {index < EVIDENCE_LOOP.length - 1 && (
+                <span
+                  aria-hidden="true"
+                  className="absolute -right-2 top-1/2 z-10 hidden -translate-y-1/2 text-accent md:block"
+                >
+                  →
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">
+        修复只有进入可重复回归，才从一次偶然排错升级为工程能力
+      </figcaption>
     </figure>
   );
 }

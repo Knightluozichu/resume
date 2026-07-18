@@ -1,0 +1,202 @@
+---
+title: "Chapter 9：垃圾回收计划阶段（Garbage Collection – Plan Phase）"
+type: A
+section: Pro .NET 内存管理（第2版）· 存活块与重定位计划
+order: 9
+description: 对齐原书第 9 章：读取 mark/pin 结果，把连续存活对象组织成 plugs 与 gaps，权衡 sweep/compact，计算重定位目标，并分析固定对象与代边界怎样改变碎片成本。
+demo: false
+math: false
+sourceUrl: "https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_9"
+draft: false
+---
+
+import {
+  DnmCompactionDecisionLab,
+  DnmPinnedRelocationLab,
+  DnmPlugGapPlanMap,
+} from "@/components/mdx/dotnet-memory/diagrams/garbage-collection-plan-phase";
+
+<Objectives>
+
+- 能描述计划阶段如何把 mark bit 与 pin bit 转成连续存活 plugs、前置 gaps 和候选目标地址，并明确此时尚未搬动对象
+- 能分析 sweep 与 compact 在搬运成本、连续空间、free list、固定对象、LOH/POH 和内存负载上的权衡
+- 能设计基于 FragmentedBytes、Compacted、PinnedObjectsCount、存活/晋升与暂停的对照实验，验证碎片优化是否真的改善业务
+
+</Objectives>
+
+## 为什么标记完成后还不能立刻移动对象
+
+第 8 章只回答“谁活着、谁被固定”。进入本章时，每个相关对象已有 <Term def="标记阶段为强可达对象设置的内部状态，用于区分存活对象与不可达候选。">标记位</Term>，部分对象还带 <Term def="表示对象在本轮不能改变地址的内部状态，通常来自 pinned root、固定句柄或相应运行时约束。">固定位</Term>。GC 仍需先决定保持地址并清扫，还是计算一套压缩布局；直接边扫描边搬会破坏尚未读取的对象边界与引用更新顺序。
+
+Plan Phase 因而是“把事实转成执行方案”的阶段。它扫描堆布局，统计存活、空洞、固定锚点和代边界，形成后续引用重定位与对象搬运需要的映射。第 10 章才执行 sweep 或 compact；本章中的 `old → new` 都是计划，不是已发生的地址变化。
+
+<DnmPlugGapPlanMap />
+
+<Callout type="trap" title="陷阱：看到 mark bit 就认为对象已经被复制">
+  Mark 只确认可达，Plan 只计算策略与目标。必须从 GC 事件的 compacted 状态、回收后布局或地址变化验证是否真的压缩；不能把“标记存活”直接等同于“已经移动”。
+</Callout>
+
+## plugs 与 gaps 怎样压缩逐对象规划成本
+
+<Term def="堆中一段地址连续、对象都已标记存活的区域；计划阶段可把整段作为同一重定位单元，而不必为每个对象保存独立目标。">存活块</Term>
+
+CoreCLR 文献常称存活块为 plug。两个 plugs 之间的死对象区间是 <Term def="位于连续存活块之前或之间的不可达/空闲地址区间；清扫时可进入 free list，压缩时可承载后续 plug 的计划信息并被闭合。">空洞</Term>，即 gap。计划阶段顺序扫描 mark bits，把相邻存活对象合并成 plug；只要知道 plug 旧起点、长度和新起点，plug 内对象的新地址都能由同一个位移量推导。
+
+```text
+old: [gap0][ A ][ A ][ A ][gap1][gap1][ B ][ B ][gap2][ C ][ C ]
+plan: plug A old 1 -> new 0
+      plug B old 6 -> new 3
+      plug C old 9 -> new 5
+new: [ A ][ A ][ A ][ B ][ B ][ C ][ C ][ contiguous free tail ]
+```
+
+书中强调每个实际 plug 都可视为有前置 gap。代的开头存在一个哨兵式空对象，因此首个真实 plug 也有可用前置区域；实现还可能为统计目的记录“逻辑 gap”，即便物理上没有明显死区。这样计划元数据可就地关联到下一个 plug，减少额外旁表和缓存跳转。具体字段大小与编码属于运行时版本细节。
+
+## Sweep 还是 Compact 取决于什么
+
+<Term def="计划阶段在保留存活对象地址、把死区加入 free list，与为存活对象计算连续目标并准备搬运之间做出的策略选择。">清扫或压缩决策</Term>
+
+Sweep 的优势是少搬存活字节、引用无需因移动而整体更新，适合存活率高或移动收益低的范围；代价是保留分散空洞，未来分配要查 free list，且大请求可能找不到足够连续块。Compact 把 plugs 向目标端聚拢，形成连续 free tail，恢复指针碰撞和局部性；代价是计算/更新引用、复制存活对象，并受 pins 切断。
+
+决策不是一个公开的固定百分比。运行时会考虑回收代、heap kind、存活/晋升、碎片分布、可提交空间、内存负载、GC flavor、历史预算、显式压缩请求以及固定对象。年轻代天然偏向通过移动 survivor 完成晋升；LOH 通常 sweep，除非满足/请求压缩；POH 对象按设计不移动。不同版本可调整启发式，应用不应硬编码“碎片超过 20% 必压缩”。
+
+<DnmCompactionDecisionLab />
+
+先预测提高存活率、pin 比例或内存负载会怎样改变收益，再调节实验。图中分数只是教学模型：它展示因素方向，不复刻 CLR 私有阈值，也不能替代真实事件。
+
+<Callout type="trap" title="陷阱：空洞比例高就强制每次压缩">
+  高碎片可能来自少量长期 pinned anchors，强制压缩也无法跨越它们；若存活字节巨大，复制成本还会放大暂停。应先区分 heap kind、空洞尺寸分布、pin 来源与业务分配尺寸，再决定缩短 pin、调整对象生命周期还是请求一次压缩。
+</Callout>
+
+## 重定位计划怎样从地址位移得到
+
+<Term def="为每个可移动 plug 记录旧起点、目标起点或等价位移，并据此在后续阶段更新根、对象字段和实际对象位置的方案。">重定位计划</Term>
+
+压缩方案从低地址目标指针开始。遇到可移动 plug 时，把它计划到当前目标，随后目标指针推进 plug 长度；遇到 gap 时只累计可回收空间；遇到 pinned plug 时必须把目标调整到不跨越该锚点。对 plug 内任意对象，`newAddress = oldAddress + plugDelta`，无需为每个对象单独存完整地址。
+
+```text
+destination = generation_start
+
+for each gap + following plug in address order:
+    if plug is movable:
+        record(plan, plug.old_start, destination, plug.length)
+        destination += plug.length
+    else: // pinned anchor
+        record(plan, plug.old_start, plug.old_start, plug.length)
+        destination = max(destination, plug.old_end)
+```
+
+真实实现还要处理多个 segments、代边界、对齐、brick/card 元数据与并行 heap 协调。上面的伪代码只保留核心不变量：计划不能让对象重叠，不能移动 pinned plug，且每个待更新引用都能从旧地址找到唯一新地址。
+
+## 固定对象怎样切断连续压缩
+
+<Term def="在本轮计划中地址不可改变的 pinned object/plug；它把可移动区域分成前后两段，并可能使周围 gap 无法合并。">固定锚点</Term>
+
+一个 pinned object 不一定让整个 segment 都无法压缩。GC 可以把它之前的 plugs 向前移动，把之后的 plugs 压到锚点之后；但不能让任何 plug 穿过该地址。若锚点前后留下的空洞小于常见分配，统计上空闲却难以复用，碎片成本会上升。
+
+<DnmPinnedRelocationLab />
+
+在短命区频繁 pin 通常更破坏性：它把本可整体移动/晋升的年轻代切成多个区间。把长期固定缓冲在创建时放入 POH，可避免它反复阻挡 SOH 压缩，但 POH 本身不压缩，仍需容量上限和生命周期控制。PinnedObjectsCount 只记录本轮 GC 观察到的数量，不能单独描述 pin 时长、尺寸或位置。
+
+```csharp
+// 生命周期内固定：对象进入 POH，地址稳定，但仍受可达性管理。
+byte[] transportBuffer = GC.AllocateArray<byte>(64 * 1024, pinned: true);
+
+// 临时 fixed：离开作用域后不再要求地址稳定。
+fixed (byte* pointer = temporaryBuffer)
+{
+    NativeApi.Send(pointer, temporaryBuffer.Length);
+}
+```
+
+不要为了“减少 pin 次数”把所有缓冲永久放 POH。长期保留会抬高工作集，且不可压缩区域的内部碎片只能靠释放和 free-list 复用处理。
+
+## 代边界怎样参与规划与晋升
+
+一次 Gen 0/1 回收只计划覆盖范围内的对象，但 survivor 可能晋升，新的代边界必须落在有效对象边界上。计划阶段据存活布局更新各代起点、allocation pointer 与 segment 状态；不能把一半对象划到 Gen 1、另一半仍当 Gen 0，也不能让目标区越过不参与本次回收的稳定老代范围。
+
+Pinned survivor 可能迫使运行时保留特殊边界或出现 demotion 等内部处理，以维持“对象地址不变”和“分代范围可枚举”两个不变量。应用层不应依赖一次 pin 后 `GC.GetGeneration` 必然怎样变化；应关心 pin 是否扩大碎片、晋升和暂停。
+
+LOH 在逻辑上随 Gen 2 回收，默认主要依靠 sweep/free list；显式 `CompactOnce`、硬内存限制或运行时策略可能让某次完整阻塞回收包含 LOH 压缩。POH 则是不可移动 heap。把三者混成“Gen 2 都会压缩”会得出错误容量结论。
+
+## 碎片成本不能只看一个百分比
+
+<Term def="空洞对未来分配、工作集、扫描和压缩造成的综合代价；它取决于总量、尺寸分布、位置、heap kind 与请求尺寸，而非单一比例。">碎片成本</Term>
+
+10 MB 空洞若集中成一个连续块，可能很有用；同样 10 MB 分成数万个小洞，对 1 MB 数组请求几乎无帮助。反过来，小洞仍可服务相近尺寸对象。诊断必须把 `FragmentedBytes` 与对象/空洞尺寸、segment committed、LOH/POH、分配失败重试和工作集放在同一窗口。
+
+`GCMemoryInfo` 可提供上一轮回收的 compacted、concurrent、pinned count 和各代前后 size/fragmentation。它适合确认“这次是否压缩、哪一代碎片改变”，但不直接给出每个 pin 的来源；第 15 章会用诊断 API/ClrMD 深挖句柄和对象布局。
+
+```csharp
+GCMemoryInfo info = GC.GetGCMemoryInfo();
+Console.WriteLine($"Generation: {info.Generation}");
+Console.WriteLine($"Compacted: {info.Compacted}, Concurrent: {info.Concurrent}");
+Console.WriteLine($"Pinned objects observed: {info.PinnedObjectsCount}");
+Console.WriteLine($"Total fragmentation: {info.FragmentedBytes:n0} B");
+
+for (int generation = 0; generation < info.GenerationInfo.Length; generation++)
+{
+    GCGenerationInfo item = info.GenerationInfo[generation];
+    Console.WriteLine($"G{generation}: frag {item.FragmentationBeforeBytes:n0} -> {item.FragmentationAfterBytes:n0}");
+}
+```
+
+## 三步验证计划阶段假设
+
+<Stepper>
+  <Step title="第一步：把标记布局归并成 plugs 与 gaps">
+    在对象地址序列上标出 live/pinned，先预测哪些相邻对象会形成一个 plug，再写出每个前置 gap 和候选目标地址；此步不允许假设对象已移动。
+
+    <DnmPlugGapPlanMap />
+  </Step>
+  <Step title="第二步：比较 Sweep 与 Compact 的总成本">
+    同时输入存活字节、碎片分布、pin、heap kind 和内存负载，解释搬运成本与连续空间收益；再用 Compacted 与回收后 fragmentation 验证真实选择。
+
+    <DnmCompactionDecisionLab />
+  </Step>
+  <Step title="第三步：定位固定锚点造成的不可合并空洞">
+    切换 pin 位置观察前后 plugs 的目标变化，结合 pinned count、句柄/栈根和对象地址识别来源；缩短 pin 后以同负载复测暂停、晋升和碎片。
+
+    <DnmPinnedRelocationLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Plan Phase 以 mark/pin 结果为输入，选择 sweep 或 compact 并计算布局，此时尚未搬动对象
+- 连续存活对象组成 plug，前置 dead/free 区间是 gap；一个 plug 位移即可推导内部所有对象的新地址
+- 压缩换取连续 free tail 与快分配，却要复制存活字节并更新引用；清扫少搬运但保留碎片和 free-list 成本
+- Pinned object 是固定锚点，不必阻止整段规划，却会切断移动区间并留下难以合并的小洞
+- 碎片成本由数量、尺寸、位置、heap kind 与未来请求共同决定；Compacted/FragmentedBytes 需要与事件、布局和业务延迟联合解释
+
+<Exercises>
+  1. **问题 1：为对象序列写重定位计划。** 布局为 `gap(16) + plug A(40) + gap(24) + plug B(32)`，没有 pin；压缩目标从地址 0 开始，A/B 的目标和位移分别是什么？
+
+  <Answer question="如何按 plug 而不是逐对象计算地址？">A 的旧起点 16、目标 0，delta=-16；A 结束后 destination=40。B 的旧起点 16+40+24=80、目标 40，delta=-40。Plug 内对象都应用所属 delta；Plan 只记录映射，第 10 章才更新引用和复制对象。</Answer>
+
+  2. **问题 2：比较高存活与高碎片。** 某 Gen 2 有 30% 碎片但 90% 对象存活且 15% 被固定，为什么不能仅凭 30% 强制压缩？
+
+  <Answer question="决策需要哪些收益与成本？">高存活意味着要复制和更新大量字节，较多 pins 又会切断压缩并保留小洞；30% 还未说明空洞尺寸是否匹配未来请求。应比较 heap kind、空洞分布、内存负载、暂停预算和真实 Compacted/fragmentation 结果，优先缩短或迁移 pin，再用一次受控对照评估压缩收益。</Answer>
+
+  3. **问题 3：解释 pin 周围仍有碎片。** 缩短大量临时 fixed 后 PinnedObjectsCount 下降，但 FragmentedBytes 没立刻归零，可能有哪些原因，怎样验证？
+
+  <Answer question="pin 数量下降为何不等于碎片立即消失？">现有空洞只有后续覆盖该范围且选择 compact 才可能闭合；LOH/POH 默认不按 SOH 方式压缩，剩余长期 pins 或高存活也会保留布局。按代查看 GenerationInfo 前后碎片与 Compacted，结合 heap kind、完整回收事件和 pin 来源；比较多个稳定窗口而非单次计数。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="标记位">表示对象已由强根可达并属于本轮 live set 的内部状态。</GlossaryItem>
+  <GlossaryItem term="固定位">表示对象在本轮回收中不得改变地址的内部状态。</GlossaryItem>
+  <GlossaryItem term="存活块">由地址连续的 marked objects 组成、可统一计算位移的 plug。</GlossaryItem>
+  <GlossaryItem term="空洞">位于 plugs 之前/之间的不可达或空闲地址区间，即 gap。</GlossaryItem>
+  <GlossaryItem term="清扫或压缩决策">在少搬运保留空洞与搬存活形成连续空间之间选择策略。</GlossaryItem>
+  <GlossaryItem term="重定位计划">把旧 plug 地址映射到候选新地址，供后续引用更新和复制使用的方案。</GlossaryItem>
+  <GlossaryItem term="固定锚点">地址不可改变、会切断连续移动区间的 pinned object/plug。</GlossaryItem>
+  <GlossaryItem term="碎片成本">空洞总量、尺寸、位置与未来请求共同造成的分配和内存代价。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Pro .NET Memory Management, Second Edition, Chapter 9 Garbage Collection – Plan Phase"
+  adaptedUrl="https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_9"
+/>

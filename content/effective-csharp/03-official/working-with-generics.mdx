@@ -1,0 +1,172 @@
+---
+title: "Chapter 3: Working with Generics (Items 18-28)"
+type: C
+section: "Effective C# · 泛型设计"
+order: 3
+description: "完整覆盖第3版Item 18-28：最小约束、runtime specialization、ordering、disposable type parameter、variance、delegate method constraint、generic API shape与extension。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-sharp-covers-c-sharp-6.0-50-specific-ways-9780134579443"
+draft: false
+---
+
+import { EcsGenericAlgorithmLab, EcsGenericCapabilityLab, EcsGenericApiShapeLab } from "@/components/mdx/effective-csharp/diagrams/working-with-generics";
+
+<Objectives>
+
+- 能设计minimal and sufficient generic constraints，并比较general path、runtime specialization与modern static abstract interface contract
+- 能推导T在input/output/storage/disposal位置对应的variance与ownership，写出可替代的generic interface
+- 能判断generic method、generic type、classic interface bridge与extension method的API边界并复现compatibility行为
+
+</Objectives>
+
+## 为什么Generic Design必须同时约束能力和承诺
+
+Generic的价值不是把`object`换成`T`，而是保留caller与implementation之间的type relation。Constraint太弱，method body只能猜测；constraint太强，可用类型被无故排除；runtime specialization若改变semantics，则同一个generic API对不同T说了两套话。
+
+先预测：为方便实现而顺手加`class, new()`是否无害；`List<Dog>`能否当作`List<Animal>`；为`string`继承一个generic base specialization是否自然？答案分别是否、不能、通常不应。
+
+<Term def="只声明algorithm实际调用的能力，同时足以让compiler证明method body合法的constraint集合。">minimal sufficient constraint</Term>
+
+## Constraint、Specialization与Ordering（Items 18-20）
+
+### Item 18: Always Define Constraints That Are Minimal and Sufficient
+
+从method body反推能力：只比较就约束`IComparable<T>`，只需要non-null reference才考虑`class`/`notnull`，只有确实构造T才用`new()`。每多一个constraint都是public compatibility restriction，应有call-site需求和compile-time test。
+
+### Item 19: Specialize Generic Algorithms Using Runtime Type Checking
+
+当profile证明某个closed type有显著fast path，可在generic algorithm内部做`typeof(T)`检查，但结果、exception、ordering和side effects必须与general path一致。Specialization是performance implementation detail，不应要求caller知道另一个subclass或API。
+
+### Item 20: Implement Ordering Relations with `IComparable<T>` and `IComparer<T>`
+
+{/* Item 20: Implement Ordering Relations with IComparable<T> and IComparer<T> */}
+
+`IComparable<T>`表达type唯一、稳定的natural order；价格升序、名称culture-aware等contextual order用`IComparer<T>`。验证`sign(Compare(a,b))=-sign(Compare(b,a))`、transitivity，并明确compare-zero是否必须与equality一致，尤其是sorted collection key。
+
+```csharp
+public static T Min<T>(T left, T right) where T : IComparable<T> =>
+    left.CompareTo(right) <= 0 ? left : right;
+```
+
+<Stepper>
+  <Step title="切换constraint、fast path、ordering与generic math"><EcsGenericAlgorithmLab /></Step>
+  <Step title="写出共同semantic contract">先定义所有T共享的result、fault与side-effect，再决定是否添加constraint或special path。</Step>
+  <Step title="做differential和law tests">随机输入同时跑general/special path；对comparer验证反对称、传递及与equality的关系。</Step>
+</Stepper>
+
+<Callout type="trap" title="runtime type check让generic退化，所以永远禁止">
+无证据分支会增加复杂度，但量测到的closed-type fast path可以保留generic contract。关键是同语义、集中实现、differential tests和benchmark。
+</Callout>
+
+## Disposable T、Variance与Callable Capability（Items 21-23）
+
+### Item 21: Always Create Generic Classes That Support Disposable Type Parameters
+
+若generic container创建或接收T的ownership，且T可释放，container必须提供清晰的cascade disposal；仅borrow T则不能擅自释放。可用`where T : IDisposable`建立专门owner type，或显式owner policy，避免runtime猜测后把borrowed value一起Dispose。
+
+### Item 22: Support Generic Covariance and Contravariance
+
+Producer只返回T，可声明`out T`并允许`IProducer<Dog>`转为`IProducer<Animal>`；consumer只接收T，可声明`in T`并反向转换。`List<T>`同时读写所以invariant；variance只适用于reference conversions和interface/delegate type parameters。
+
+### Item 23: Use Delegates to Define Method Constraints on Type Parameters
+
+C# 6无法约束“必须存在某个static method/operator”，原书建议把所需operation作为`Func`/named delegate传入。这仍适合runtime strategy与test substitution。现代C#在target framework允许时也可用static abstract interface members做compile-time generic math；二者分别表达runtime supplied behavior和type supplied static capability。
+
+```csharp
+public static TResult Fold<T, TResult>(
+    IEnumerable<T> source,
+    TResult seed,
+    Func<TResult, T, TResult> combine) => source.Aggregate(seed, combine);
+```
+
+<Term def="type parameter只出现在返回位置时允许更derived constructed type转换到base constructed type的规则。">covariant producer</Term>
+
+<Term def="type parameter只出现在输入位置时允许base consumer用于derived input的规则。">contravariant consumer</Term>
+
+<Stepper>
+  <Step title="切换owned T、producer、consumer与method capability"><EcsGenericCapabilityLab /></Step>
+  <Step title="标记T出现的每个位置">Return是output，parameter是input，mutable property/collection同时输入输出；另标记container是否取得ownership。</Step>
+  <Step title="编译conversion并演练释放">写positive/negative compile cases；owner container在normal/fault/double-dispose下只释放自己拥有的T。</Step>
+</Stepper>
+
+<Callout type="trap" title="只要Dog继承Animal，所有Generic&lt;Dog&gt;都能转成Generic&lt;Animal&gt;">
+Constructed generic默认invariant。只有interface/delegate明确`out`或`in`且T位置安全时才有variance conversion；mutable `List<T>`绝不能协变。
+</Callout>
+
+## Generic API Shape与Compatibility（Items 24-28）
+
+### Item 24: Do Not Create Generic Specialization on Base Classes or Interfaces
+
+不要以`StringRepository : Repository<string>`伪装template specialization并改变base semantics。优先generic implementation内受测fast path、composition strategy或清晰overload；inheritance必须满足substitutability，而非仅复用代码。
+
+### Item 25: Prefer Generic Methods Unless Type Parameters Are Instance Fields
+
+若T只参与一个operation，不存入instance state，把T放method上让caller inference并减少constructed type数量。只有instance fields、lifetime或多methods共同依赖同一个T时，generic type才表达真实type identity。
+
+### Item 26: Implement Classic Interfaces in Addition to Generic Interfaces
+
+面向仍消费non-generic interface的framework，generic collection可同时实现`IEnumerable<T>`与`IEnumerable`，后者桥接到同一enumerator semantics。不要复制两套逻辑；bridge必须保持order、fault和mutation behavior一致。
+
+### Item 27: Augment Minimal Interface Contracts with Extension Methods
+
+Interface只保留implementer必须提供的primitive operations，convenience behavior由extension组合，避免每次加helper都破坏所有implementers。Extension不能访问private state，也不能替代需要override、多态或ownership的member。
+
+### Item 28: Consider Enhancing Constructed Types with Extension Methods
+
+可以为`IDictionary<string,T>`等closed shape提供domain-focused extension，但要控制namespace与overload，避免与instance member或其他extensions产生解析惊喜。名称应揭示cost和enumeration，例如不要把remote I/O藏在看似cheap的`Get`里。
+
+```csharp
+public static TValue GetRequired<TValue>(
+    this IReadOnlyDictionary<string, TValue> source,
+    string key) => source.TryGetValue(key, out var value)
+        ? value
+        : throw new KeyNotFoundException(key);
+```
+
+<Term def="同时实现generic与legacy non-generic interface，并让旧入口委托给同一typed implementation的兼容层。">classic interface bridge</Term>
+
+<Term def="由minimal primitives组合出的convenience operation，不增加implementer required surface。">extension contract</Term>
+
+<Stepper>
+  <Step title="切换specialization、generic method、bridge和extension"><EcsGenericApiShapeLab /></Step>
+  <Step title="按state与substitution选择shape">T进入instance state才提升为generic type；旧consumer才保留classic bridge；helper只依赖public primitives才做extension。</Step>
+  <Step title="验证inference、resolution和双入口一致性">编译call sites，制造同名extension/instance member，并对generic/non-generic entry运行同一contract suite。</Step>
+</Stepper>
+
+## 本章回顾：Generic API只承诺一种Semantics
+
+1. Constraint必须最小且充分；每个额外constraint都是public compatibility cost。
+2. Runtime specialization只优化，不改变generic result、fault、ordering和side effects。
+3. Natural ordering在type上，contextual ordering由comparer提供并通过ordering laws。
+4. T的input/output/storage位置决定variance，ownership决定是否cascade Dispose。
+5. C# 6的delegate method constraint与现代static abstract members解决不同binding时机。
+6. Generic method、classic bridge与extension保持API surface最小，inheritance不得冒充specialization。
+
+<Exercises>
+
+**问题 1：一个排序API同时支持默认顺序、按名称排序和byte fast path，应怎样设计？**
+
+<Answer>Default path约束`IComparable<T>`或接收default comparer，contextual名称顺序显式接收`IComparer<T>`；byte fast path放在同一generic implementation内并与general path做differential tests。验证ordering laws、stable/unstable contract和benchmark，caller不接触specialized subclass。</Answer>
+
+**问题 2：`Buffer<T>`既返回又接收T，还可能拥有T，能否声明out？**
+
+<Answer>不能。T同时出现在input/output位置使type invariant；若Buffer取得T ownership还必须定义transfer与cascade disposal。可拆成只读`IProducer<out T>`和写入`IConsumer<in T>` views，但concrete mutable buffer仍invariant，dispose只处理明确owned elements。</Answer>
+
+**问题 3：何时使用generic method、extension和classic interface bridge？**
+
+<Answer>T只在单个operation中出现时用generic method；convenience behavior可完全由minimal public primitives组合时用extension；legacy framework确实要求non-generic interface时实现classic bridge并委托给typed core。分别测试type inference、extension resolution及generic/non-generic行为一致。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="minimal sufficient constraint" definition="只声明algorithm实际需要且足以编译method body的constraint集合。" />
+  <GlossaryItem term="covariant producer" definition="T只输出时允许derived constructed interface转换为base constructed interface。" />
+  <GlossaryItem term="contravariant consumer" definition="T只输入时允许base consumer服务derived input。" />
+  <GlossaryItem term="classic interface bridge" definition="generic implementation向legacy non-generic consumer提供的同语义入口。" />
+  <GlossaryItem term="extension contract" definition="由minimal interface primitives组合且不增加implementer surface的helper。" />
+</Glossary>
+
+<Attribution adaptedFrom="Effective C#, Third Edition, Chapter 3: Working with Generics, Items 18-28" adaptedUrl="https://www.informit.com/store/effective-c-sharp-covers-c-sharp-6.0-50-specific-ways-9780134579443" />

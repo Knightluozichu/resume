@@ -1,133 +1,295 @@
 ---
-title: 两数相加
+title: "面试题65：不用加减乘除做加法"
 type: C
-section: 链表
-order: 9
-description: 按位相加链表，处理进位与链表长度不等问题。
+section: "第6章 面试中的各项能力"
+order: 77
+description: "用异或生成不带进位的和、与运算左移生成进位，在固定宽度无符号位模式上迭代到进位为零。"
 demo: true
-math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+math: true
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/65_AddTwoNumbers/AddTwoNumbers.cpp"
 draft: false
 ---
 
-{/* 知识点清单：链表遍历、按位进位、尾插构建、空指针保护；原书章节：两数相加。 */}
+import { AddTwoNumbersBitDiagram, AddTwoNumbersRoundLab, AddTwoNumbersCarryMap, AddTwoNumbersSignedDiagram, AddTwoNumbersOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/add-two-numbers";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用一趟遍历完成两个非负整数的链式加法。
-- 能处理不同长度链表和末尾进位。
-- 能给出稳定的 C++ 与 TypeScript 表达式实现。
+- 能解释单个位的异或结果与进位条件
+- 能计算多轮暂存和、进位掩码和最终位模式
+- 能实现作者有符号版本与无符号固定宽度版本
+- 能分析负数补码、有符号左移、溢出和终止轮数
+- 能设计正负、零、连续进位和边界位模式测试
 
 </Objectives>
 
-## 直觉引入
+## 从“1 加 1 为什么要拆成两个结果”开始
 
-把最低位看作头节点，两个链表从头开始逐位加，正好对应人算加法“从右向左进位”。  
-链表正是把“位序”自然保留下来的数据结构。
+十进制加法把“当前位写什么”和“向高位带多少”分开处理，二进制也一样。单个位0加1的本位是1、没有进位；1加1的本位是0、向左一位进1。只要能分别得到这两个部分，就能把多位加法改写成重复的位运算。
 
-## 概念讲解
+本题是“**不用加减乘除做加法**”，输入是两个普通整数，不是链表表示的十进制数字。旧页讲链表逐位加法、长度不等和尾节点进位，属于另一道题，与作者面试题65及其七组正负整数测试无关。
 
-核心是维护 `carry`，每步：
+对单个位a与b，异或给出不考虑进位的本位结果，与运算标记两位同时为1的位置：
 
 $$
-sum = v_1 + v_2 + carry,\quad digit = sum \bmod 10,\quad carry = \lfloor sum/10 \rfloor
+s=a\oplus b,
+\qquad
+c=a\land b
 $$
 
-最后若 `carry>0` 再补一位节点。
+<AddTwoNumbersBitDiagram />
 
-## 思考引导
+先预测5和7的第一轮：0101异或0111得到0010，按位与得到0101，左移一位后进位是1010。0010还不是答案，因为它与1010仍可能在相同位上再次产生进位。
 
-### 1) 先问问题，不先算长度
-链表加法本质是“异步流逐位对齐”。长度不同或 null 对齐时，关键是让每一位都有确定来源。
+## 异或得到不带进位的和
 
-### 2) 识别不变式
-进位只依赖当前位和上一位进位，处理完每一位后进位传到下一位。状态是常数维。
+异或只在两个输入位不同的时候输出1，正好对应0加1或1加0的本位结果；两个位都是1时输出0，把需要进位的部分暂时留给另一个变量。因此可以把它称为<Term def="两个位向量逐位异或得到的暂存结果，不包含任何向高位传递。">异或和</Term>。
 
-### 3) 为什么它一定成立
-十进制按位加法的数学性质决定了位间独立，除了 carry 不会影响更高位前的决定。
+原章概念“**异或得到不带进位的和**”不是类比，而是四行真值表的逐项等价。它一次同时处理机器字的全部位。
 
-### 4) 常见误区
-漏掉尾部进位或把 null 节点当 0 处理不一致，会导致丢数。还有一种是用 while(l||r) 但没处理进位尾。
+## 与运算后左移得到进位
 
-### 5) 你能找到一个反例吗
-9->9 与 1->0 相加会产生新节点，若未统一处理尾进位，结果会错。这类最小反例是最有效的边界测试。
+按位与只在两个输入位都为1时输出1，这些位置各自产生一个二进制进位。进位属于左边更高一位，所以整体左移一位，得到<Term def="两个输入同时为1的位置左移一位后形成、等待下一轮加入的位向量。">进位掩码</Term>。
 
-### 6) 迁移到下一题
-所有流式对齐累加场景（计费分钟、时间片加总）都可借鉴“逐位递推 + 显式 carry”。
-## 交互 Demo
+$$
+x+y
+= (x\oplus y)
+  + \bigl((x\land y)\ll1\bigr)
+$$
 
-可视化演示每一位如何加和写入，特别是最后可能出现的额外进位位。
+这个等式用于证明，受限函数体里并不写加号。它说明原来两个加数可以替换成“异或和”与“左移进位”，两者总和保持不变。
 
-<RecursionDiagram />
+<AddTwoNumbersCarryMap />
+
+这就是“**与运算后左移得到进位**”。左移不能省略；不左移的与结果仍停在产生冲突的原位，相当于把1加1误记为当前位1。
+
+## 为什么必须重复到进位归零
+
+新进位可能与异或和中的1再次重叠。例如5加7第一轮得到0010与1010，两者在第二位仍同时为1，还会产生新的0100进位。每轮都把当前两个位向量重新拆成异或和与进位，直到第二个向量为0。
+
+<AddTwoNumbersRoundLab />
+
+作者用do-while，因此即使第二个输入一开始为0，也会执行一次异或与按位与，再发现进位为0。改用普通while从进位非0时进入也能得到相同答案，只是零输入路径少执行一轮。
+
+原章的“**直到进位为0**”给出终止条件。此时第二个加数为0，第一位向量就是最终和。
+
+$$
+x_{t+1}=x_t\oplus y_t,
+\qquad
+y_{t+1}=(x_t\land y_t)\ll1,
+\qquad
+x_t+y_t\equiv x_0+y_0\pmod{2^W}
+$$
+
+这里W是机器字位宽。每轮进位的最低有效1至少向左移动一位；到达最高位后再左移就被固定宽度丢弃，所以最多W轮后进位为0。
+
+## 忠实还原作者循环
+
+作者把两个int分别作为暂存和与进位，循环体不含四则运算符：
 
 ```cpp
-#include <vector>
+int Add(int num1, int num2) {
+    int sum;
+    int carry;
 
-struct ListNode {
-    int val;
-    ListNode* next;
-    ListNode(int v) : val(v), next(nullptr) {}
-};
+    do {
+        sum = num1 ^ num2;
+        carry = (num1 & num2) << 1;
 
-class Solution {
-public:
-    ListNode* addTwoNumbers(ListNode* l1, ListNode* l2) {
-        ListNode dummy(0);
-        ListNode* tail = &dummy;
-        int carry = 0;
+        num1 = sum;
+        num2 = carry;
+    } while (num2 != 0);
 
-        while (l1 || l2 || carry) {
-            int s = carry;
-            if (l1) { s += l1->val; l1 = l1->next; }
-            if (l2) { s += l2->val; l2 = l2->next; }
-
-            tail->next = new ListNode(s % 10);
-            tail = tail->next;
-            carry = s / 10;
-        }
-
-        return dummy.next;
-    }
-};
-```
-
-```typescript
-class ListNode {
-  val: number;
-  next: ListNode | null = null;
-  constructor(val: number) {
-    this.val = val;
-  }
-}
-
-function addTwoNumbers(l1: ListNode | null, l2: ListNode | null): ListNode | null {
-  const dummy = new ListNode(0);
-  let p1: ListNode | null = l1;
-  let p2: ListNode | null = l2;
-  let carry = 0;
-  let tail: ListNode = dummy;
-
-  while (p1 || p2 || carry) {
-    let sum = carry;
-    if (p1) { sum += p1.val; p1 = p1.next; }
-    if (p2) { sum += p2.val; p2 = p2.next; }
-
-    tail.next = new ListNode(sum % 10);
-    tail = tail.next;
-    carry = Math.floor(sum / 10);
-  }
-
-  return dummy.next;
+    return num1;
 }
 ```
 
-<Callout type="trap">
-  <strong>现象 →</strong> 最后一位忘记补 `carry`。  
-  <strong>原因 →</strong> 条件只判断了链表是否为空。  
-  <strong>修复 →</strong> 循环条件加入 `|| carry`。
+时间可写为O(W)，额外空间O(1)；对固定32位int，W是常数，渐进上也常称O(1)。实际轮数取决于进位链长度，1加2只需一轮，而低位连续为1会让进位逐位传播。
+
+这段源码在常见编译器与二进制补码机器上能通过作者负数测试，但标准C++层面存在风险：num1与num2是有符号int，按位与结果也为有符号int；对负值左移，或把正值左移到不可表示的符号位，行为未定义。
+
+<Callout type="trap" title="直接对 signed int 左移进位">
+官方包含负数，进位还可能传播到最高位。标准可移植实现应先把位模式放入无符号固定宽度类型再左移；不能因为本机测试通过就认定有符号移位有定义。
 </Callout>
 
+## 负数为何仍能用同一位循环
+
+在固定宽度<Term def="以最高位表示符号、负数由按位取反加一形成，且加法按二的W次方回绕的表示。">二进制补码</Term>中，正负数都只是W位模式。XOR、AND和左移不需要识别符号，只实现模2的W次方加法；若真实数学和位于有符号范围内，最终位模式解释回有符号数就是正确结果。
+
+<AddTwoNumbersSignedDiagram />
+
+例如32位的-1是全1，与2相加时进位会沿高位传播，最终得到00000001。-2与-8得到FFFFFFF6，按补码解释为-10。作者七组测试都没有让数学和超出int范围。
+
+若真实和超过有符号最大值或小于最小值，普通C++有符号加法本来就没有定义；无符号位循环则会给出模2的W次方回绕结果。接口必须明确要拒绝溢出、返回更宽结果，还是接受模加法，不能混为一谈。
+
+## 现代固定32位实现
+
+把核心函数定义为uint32_t上的<Term def="所有中间值和结果都按2的32次方回绕的固定宽度加法。">模加法</Term>，所有位移都有定义。需要有符号输入输出时，再用bit_cast保留同一32位对象表示；这要求平台提供int32_t并采用预期的补码表示。
+
+```cpp
+#include <bit>
+#include <cstdint>
+#include <limits>
+
+std::uint32_t addModulo32(
+    std::uint32_t left,
+    std::uint32_t right) {
+    while (right != 0U) {
+        const std::uint32_t sum =
+            left ^ right;
+        const std::uint32_t carry =
+            (left & right) << 1U;
+        left = sum;
+        right = carry;
+    }
+    return left;
+}
+
+std::int32_t addInt32(
+    std::int32_t left,
+    std::int32_t right) {
+    const auto leftBits =
+        std::bit_cast<std::uint32_t>(left);
+    const auto rightBits =
+        std::bit_cast<std::uint32_t>(right);
+    const auto resultBits =
+        addModulo32(leftBits, rightBits);
+    return std::bit_cast<std::int32_t>(
+        resultBits);
+}
+```
+
+若业务只接受数学和仍处于int32范围的输入，应在外层用更宽类型检测溢出；检测代码可以使用普通算术，因为题目限制的是核心Add函数体。若连验证也禁止加减，可用符号位规则检测：两个同号输入得到异号结果时发生有符号溢出。
+
+固定宽度是<Term def="明确规定机器字包含多少位，使移位、回绕轮数和位模式解释都有可复查边界。">固定宽度</Term>契约的一部分。把代码从32位int直接复制到64位类型，最大循环轮数和溢出边界都会改变。
+
+## 循环不变式与终止证明
+
+每轮开始时，left与right的模和等于原输入模和。XOR和左移AND只是把同一列的本位与进位重新分组，所以更新后不变量仍成立。循环结束时right为0，不变量化为left等于原和的位模式。
+
+设right最低1位的位置为p。left与right的按位与只可能保留right已有的1，再左移使最低可能位置至少成为p加1；若没有公共1则carry直接为0。因此非零carry的最低1位严格向高位移动，有限W位内必然终止。
+
+$$
+y_t\ne0
+\quad\Longrightarrow\quad
+\operatorname{lsb}(y_{t+1})
+  \gt \operatorname{lsb}(y_t)
+\quad\text{or}\quad y_{t+1}=0
+$$
+
+这个证明比“看起来进位会消失”更强，也解释了最坏W轮上界。最高位进位被无符号左移按模丢弃，正是模加法的一部分。
+
+## 最坏进位链怎样形成
+
+当一个数的低位连续为1、另一个数只在最低位为1时，进位会一轮只向左推进一位。例如32位无符号的0x7FFFFFFF与1相加，第一轮把最低位冲突变成进位，之后它依次穿过其余30个连续1，最终得到0x80000000。循环轮数接近机器字宽度，而不是由十进制数值大小决定。
+
+0xFFFFFFFF与1更能展示模语义：进位一路穿过全部32位，最高位再左移后被截掉，结果为0。对uint32_t这是定义明确的回绕；若把同一位模式解释成有符号-1再与1相加，数学结果0仍可表示，所以也应得到0。
+
+相反，0x7FFFFFFF与1的位结果0x80000000在int32_t中解释为最小负数，但真实有符号数学和超过最大值。核心位循环没有失败，它正确完成了模加法；错误在于调用方若把回绕结果宣称为未溢出的有符号和。测试必须按接口分别断言“模结果”或“溢出错误”，不能只比较同一串比特。
+
+## 七组官方测试覆盖什么
+
+作者依次测试1与2、111与899、-1与2、1与-2、3与0、0与-4、-2与-8。它们覆盖无长进位、多位连续进位、两个跨符号方向、零操作数和两个负数。
+
+<AddTwoNumbersOfficialCaseLab />
+
+111加899得到1010能检查多轮进位；3加0验证do-while至少执行一次仍保持原值；负数用例则暴露有符号左移的可移植性问题。
+
+还应增加最高位附近测试：无符号0xFFFFFFFF与1应模回0；有符号最大值与0保持不变；若接口拒绝有符号溢出，则最大值加1必须走错误通道，而不是把最小值当作正常数学和。
+
+```cpp
+#include <cassert>
+#include <cstdint>
+#include <limits>
+
+void testBitAddition() {
+    assert(addInt32(1, 2) == 3);
+    assert(addInt32(111, 899) == 1010);
+    assert(addInt32(-1, 2) == 1);
+    assert(addInt32(1, -2) == -1);
+    assert(addInt32(3, 0) == 3);
+    assert(addInt32(0, -4) == -4);
+    assert(addInt32(-2, -8) == -10);
+
+    assert(addModulo32(
+        UINT32_C(0xFFFFFFFF), 1U) == 0U);
+    assert(addModulo32(0U, 0U) == 0U);
+}
+```
+
+随机对拍应在uint32_t上与标准无符号加法比较，因为两者都定义为模2的32次方；有符号对拍只选择数学和不溢出的输入，或先明确采用回绕契约。
+
+<Callout type="trap" title="用 signed 加法做所有随机预言机">
+随机有符号输入可能让参考表达式本身溢出并触发未定义行为。用uint32_t验证模加法，或先在int64_t中确认结果处于int32范围再比较有符号结果。
+</Callout>
+
+<Stepper>
+  <Step title="核对单个位真值表">
+    <AddTwoNumbersBitDiagram />
+    XOR保存本位，AND标记1加1产生进位的位置。
+  </Step>
+  <Step title="逐轮传播进位">
+    <AddTwoNumbersRoundLab />
+    5加7经过三轮，carry归零时异或和成为答案。
+  </Step>
+  <Step title="建立循环不变式">
+    <AddTwoNumbersCarryMap />
+    每轮把同一模和拆成无进位和与左移进位。
+  </Step>
+  <Step title="解释负数位模式">
+    <AddTwoNumbersSignedDiagram />
+    固定宽度补码让正负数共享同一位运算流程。
+  </Step>
+  <Step title="复现七组官方测试">
+    <AddTwoNumbersOfficialCaseLab />
+    同时覆盖跨符号、零、负负和连续进位。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 不用加减乘除做加法的输入是两个整数，不是十进制链表。
+2. 异或得到不带进位的和，与运算后左移得到进位。
+3. 新的暂存和与进位继续执行同样拆分，直到进位为0。
+4. 循环保持两个位向量的模和不变，最多经过机器字位宽轮。
+5. 作者signed int版本能通过常见补码机器测试，但负数或符号位左移不具标准可移植性。
+6. 现代核心应在uint32_t等无符号固定宽度上运行，再明确有符号解释。
+7. 数学和溢出与模回绕是两种不同接口契约。
+8. 作者七组测试覆盖正负和零，但还需补最高位、回绕及溢出错误通道。
+
+<Exercises>
+
+**问题 1：为什么1异或1等于0却没有丢掉数值2？**
+
+<Answer>异或只保存本位0；按位与在该位得到1，左移后把进位放到高一位，二进制10就是数值2。两个部分共同保持原和。</Answer>
+
+**问题 2：5加7为什么一轮不能结束？**
+
+<Answer>第一轮得到异或和0010和进位1010，两者仍在第二位同时为1，会继续产生0100进位；第三轮carry才归零，结果1100。</Answer>
+
+**问题 3：作者代码对负数的主要标准C++风险是什么？**
+
+<Answer>num1与num2是signed int，按位与结果可能为负，左移负值或移到不可表示的符号位是未定义行为。应在无符号位模式上移位。</Answer>
+
+**问题 4：如何安全地做随机对拍？**
+
+<Answer>核心模加法用uint32_t与标准无符号加法比较；有符号测试先在int64_t中确认数学和处于int32范围，避免参考表达式自身溢出。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="异或和">逐位异或得到的不带进位暂存结果。</GlossaryItem>
+  <GlossaryItem term="进位掩码">共同1位经按位与并左移后形成的待加位向量。</GlossaryItem>
+  <GlossaryItem term="二进制补码">常见有符号整数位表示，使正负数共享固定位宽模加法。</GlossaryItem>
+  <GlossaryItem term="模加法">结果按2的W次方回绕的固定宽度加法。</GlossaryItem>
+  <GlossaryItem term="固定宽度">明确机器字位数、移位边界与最大传播轮数的类型契约。</GlossaryItem>
+</Glossary>
+
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题65"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/65_AddTwoNumbers/AddTwoNumbers.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

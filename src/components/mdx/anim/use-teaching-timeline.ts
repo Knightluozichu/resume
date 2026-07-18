@@ -99,7 +99,9 @@ export function useTeachingTimeline(
   // 把 steps/build 收进 ref，使 effect 只依赖「结构指纹」而非每渲染新建的对象/函数，
   // 避免父组件每次渲染都重建时间线（重建 = 闪帧 + 时钟泄漏）。
   const buildRef = useRef(build);
-  buildRef.current = build;
+  useEffect(() => {
+    buildRef.current = build;
+  }, [build]);
   const labelsKey = steps.map((s) => s.label).join("|");
 
   useEffect(() => {

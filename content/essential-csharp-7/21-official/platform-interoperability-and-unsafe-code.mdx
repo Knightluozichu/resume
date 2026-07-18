@@ -1,0 +1,303 @@
+---
+title: "第21章：Platform Interoperability and Unsafe Code"
+type: C
+section: "Essential C# 7.0 · Runtime Boundaries"
+order: 21
+description: "掌握P/Invoke ABI契约、DllImport与marshalling、native resource ownership，以及unsafe pointer、fixed与delegate callback生命周期。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-c-sharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7InteropBoundaryLab, Ec7MarshallingOwnershipLab, Ec7UnsafeLifetimeLab } from "@/components/mdx/essential-csharp-7/diagrams/platform-interoperability-and-unsafe-code";
+
+<Objectives>
+
+- 能从native header推导DllImport声明，并逐项验证entry point、calling convention、类型宽度、charset和错误协议
+- 能比较string、array、struct与native handle的marshalling策略，明确copy/pin、capacity、ownership和release责任
+- 能分析pointer、fixed、stackalloc与unsafe delegate callback的有效范围，并建立边界测试与资源生命周期
+
+</Objectives>
+
+## 为什么Interop不是“能调用”，而是两端共享同一ABI
+
+CLR理解managed metadata，却不会自动理解C header背后的application binary interface。P/Invoke声明是你写给runtime的边界契约：库名和symbol如何解析，参数放在哪，整数有多宽，string怎样编码，struct怎样布局，谁分配与释放，以及失败从return value、last error还是out parameter返回。
+
+声明若错，问题不一定在调用点立即爆炸。错误的calling convention可能在return后破坏stack；把native-sized length写成32-bit可能只在大输入或64-bit平台失败；bool与packing不一致会让后续field全部错位。interop审查必须以native declaration为source of truth，逐项建立对应关系。先预测：matched signature、wrong width、wrong charset、wrong calling convention和wrong bool分别会在哪一层失真，再用第一张图核对。
+
+<Term def="managed声明与native binary之间关于symbol、calling convention、type representation、layout、ownership和error channel的完整约定。">ABI contract</Term>
+
+## Platform Invoke与DllImport声明
+
+Platform Invoke让managed code调用unmanaged exported function。`DllImport`指定library、entry point、calling convention、charset、last-error捕获等；method必须是static extern。不要从“C#里看起来相近”的type猜声明，要从目标平台实际header、编译选项和文档推导。
+
+```csharp
+using System;
+using System.Runtime.InteropServices;
+
+internal static class NativeMethods
+{
+    [DllImport("kernel32.dll", ExactSpelling = true)]
+    internal static extern void GetSystemTime(out SystemTime value);
+}
+
+[StructLayout(LayoutKind.Sequential)]
+internal struct SystemTime
+{
+    public ushort Year;
+    public ushort Month;
+    public ushort DayOfWeek;
+    public ushort Day;
+    public ushort Hour;
+    public ushort Minute;
+    public ushort Second;
+    public ushort Milliseconds;
+}
+```
+
+library search会受OS、architecture、deployment directory与loader policy影响；x86 process不能装x64 binary。`EntryPoint`处理managed name与export name不同，`ExactSpelling`避免隐式A/W后缀猜测。calling convention必须匹配native编译结果；参数方向与const也要映射清楚。
+
+<Stepper>
+  <Step title="切换matched与四种ABI mismatch">
+    <Ec7InteropBoundaryLab />
+  </Step>
+  <Step title="从native declaration逐项对照">
+    先核对symbol与architecture，再核对calling convention、每个type的width/signedness、charset和return channel。
+  </Step>
+  <Step title="在边界加入可验证断言">
+    对Struct size、field offset、buffer capacity和native version做启动测试，而不是等随机内存破坏暴露。
+  </Step>
+</Stepper>
+
+## Type Width、Calling Convention与错误通道
+
+C的`long`、`size_t`、pointer和bool在不同ABI不等于固定C# type。固定宽度integer优先按native定义映射；pointer-sized值使用`IntPtr`或`UIntPtr`；Windows BOOL常是4 bytes，而C++ bool常是1 byte。enum的underlying width、struct packing和return-by-value规则也要确认。
+
+```csharp
+internal static class NativeMethods
+{
+    [DllImport("sample", CallingConvention = CallingConvention.Cdecl,
+        SetLastError = true)]
+    internal static extern int ReadChunk(
+        IntPtr handle,
+        byte[] destination,
+        UIntPtr capacity,
+        out UIntPtr bytesRead);
+}
+```
+
+`SetLastError = true`要求interop stub在native return后及时保存thread-local error；随后立即读取`Marshal.GetLastWin32Error()`，不要先调用会覆盖错误的其他native API。若库用errno、HRESULT或自定义status，按它自己的protocol翻译。只在真实managed abstraction boundary转换成exception，并保留status、operation和input context。
+
+<Callout type="trap" title="只要测试机调用成功，DllImport签名就正确">
+小值、ASCII、单一architecture和偶然对齐会掩盖width、charset与packing错误。至少用boundary values、non-ASCII、empty/null、x64布局和失败通道验证，并与native sizeof/offset结果对照。
+</Callout>
+
+## Marshalling：Copy、Conversion与Direction
+
+marshaller在managed representation与native representation之间转换。blittable primitive/fixed-layout numeric struct可直接复制或固定；string通常要编码到临时terminated buffer；array需要长度与direction；nested pointers、union和variable-length tail通常需要手工封送。`In`、`Out`不是装饰，它们描述数据流与copy-back。
+
+<Term def="managed与native两端具有兼容in-memory representation，跨边界时不需要逐字段encoding或representation转换的类型。">blittable type</Term>
+
+```csharp
+[DllImport("sample", CallingConvention = CallingConvention.Cdecl,
+    CharSet = CharSet.Unicode)]
+internal static extern int NormalizePath(
+    string input,
+    [Out] char[] output,
+    int outputCapacity);
+```
+
+输入string默认immutable；native不得保留marshaller temporary pointer。output buffer必须显式传capacity，native返回written/required length，managed端验证范围后再解码。不要依赖terminator猜长度，更不能让native写超capacity。null、empty与embedded null是否有不同语义，也必须写进wrapper contract。
+
+<Term def="在managed与native representation间执行copy、encoding、layout转换、pinning与copy-back的边界过程。">marshalling plan</Term>
+
+## Struct Layout与Native Resource Ownership
+
+Sequential layout按声明顺序并结合packing放置fields；Explicit layout用FieldOffset表达union或固定offset。reference fields、strings和arrays并不是内嵌payload，必须声明相应marshalling。用`Marshal.SizeOf`和`Marshal.OffsetOf`与native `sizeof`/`offsetof`测试配对，尤其是architecture变化时。
+
+```csharp
+[StructLayout(LayoutKind.Explicit, Size = 8)]
+internal struct SampleValue
+{
+    [FieldOffset(0)] public int Kind;
+    [FieldOffset(4)] public int Integer;
+    [FieldOffset(4)] public float Real;
+}
+```
+
+raw `IntPtr`不表达所有权：它可能是borrowed pointer、owned allocation、opaque handle或sentinel。拥有native resource时优先用SafeHandle派生类型封装一次release，避免exception path、finalization和double-free。borrowed pointer必须记录owner与有效时段，不能偷偷缓存到owner lifetime之外。
+
+```csharp
+internal sealed class SampleHandle : SafeHandle
+{
+    private SampleHandle() : base(IntPtr.Zero, ownsHandle: true) { }
+
+    public override bool IsInvalid => handle == IntPtr.Zero;
+
+    protected override bool ReleaseHandle()
+    {
+        NativeMethods.CloseSample(handle);
+        return true;
+    }
+}
+```
+
+<Stepper>
+  <Step title="切换五类marshalling shape">
+    <Ec7MarshallingOwnershipLab />
+  </Step>
+  <Step title="写出copy、pin与conversion方向">
+    每个parameter都标记managed owner、native view、长度单位、能否retained以及谁copy back。
+  </Step>
+  <Step title="让release与error path配对">
+    allocation、handle、callback registration各有唯一owner；失败中途也必须释放已经取得的资源。
+  </Step>
+</Stepper>
+
+## Pointers and Addresses：Unsafe只关闭部分编译检查
+
+`unsafe`允许pointer declaration、address-of、dereference、pointer arithmetic和`sizeof`等操作。它不让code更快，也不关闭GC；它只允许compiler接受无法由type system证明安全的操作。越界、use-after-free、错误alignment和悬空pointer仍由程序员负责，后果可能是静默数据破坏。
+
+```csharp
+public static unsafe int Sum(int* values, int count)
+{
+    if (values == null && count != 0)
+        throw new ArgumentNullException(nameof(values));
+
+    int total = 0;
+    for (int i = 0; i < count; i++)
+        total += values[i];
+    return total;
+}
+```
+
+pointer arithmetic按pointed element size推进，`values + 1`不是加一个byte。pointer本身不知道allocation length，所以count、stride与alignment是额外contract。把unsafe压缩在小internal method中，对外提供validated managed wrapper，能把proof surface限制在少数边界。
+
+<Term def="某个address在底层storage存在、未移动、未释放且访问仍满足长度与alignment约束的时间范围。">pointer validity window</Term>
+
+## fixed、Pinning与stackalloc
+
+managed object可被compacting GC移动；取得interior address前要在`fixed`范围内pin，保证该段时间地址稳定。pointer离开fixed后即使数值暂时没变也不能继续用。pinning会限制GC整理，长时间或大量pin会碎片化heap，因此只覆盖同步native call所需的最短窗口。
+
+```csharp
+public static unsafe int Checksum(byte[] data)
+{
+    if (data == null) throw new ArgumentNullException(nameof(data));
+
+    fixed (byte* start = data)
+    {
+        return NativeChecksum(start, data.Length);
+    }
+}
+```
+
+`stackalloc`在当前stack frame分配短生命周期storage，不经GC且return后立即无效。size必须受控，不能由不可信大输入直接决定；现代代码可先把它包成bounds-checked span，再只在最终边界取pointer。native若异步保留地址，stackalloc和短fixed都不适用，应使用明确lifetime的unmanaged allocation或长期pinning owner。
+
+```csharp
+public static unsafe void FormatSmallRecord(int id)
+{
+    byte* buffer = stackalloc byte[32];
+    for (int i = 0; i < 32; i++) buffer[i] = 0;
+    NativeWriteRecord(id, buffer, 32);
+}
+```
+
+<Callout type="trap" title="fixed结束后，只要没有显式触发GC，pointer就还能用">
+任何allocation、call或runtime safepoint都可能伴随GC，且正确性不能依赖“这次没移动”。pointer validity由fixed/owner contract决定，不由观察到的address是否碰巧相同决定。
+</Callout>
+
+## Executing Unsafe Code via a Delegate
+
+unsafe是compile-time lexical context，不是runtime sandbox。一个内部包含pointer操作的方法可以赋给safe-shaped delegate，普通caller调用delegate时会执行那段unsafe implementation；因此delegate API仍要保证输入validation和lifetime。若delegate signature本身含pointer，delegate声明和使用pointer的区域也需要unsafe context。
+
+```csharp
+public delegate int BufferChecksum(byte[] data);
+
+public static unsafe int FastChecksum(byte[] data)
+{
+    fixed (byte* start = data)
+        return NativeChecksum(start, data.Length);
+}
+
+BufferChecksum checksum = FastChecksum;
+int value = checksum(payload); // Caller invokes a safe-shaped delegate.
+```
+
+反向P/Invoke让native保存function pointer并回调managed delegate。signature、calling convention与exception policy必须精确匹配；更关键的是GC看不到native保存的pointer，必须在registration至unregister并确认in-flight callbacks结束期间root delegate。callback exception不可穿越native boundary，应在managed callback内catch并转换为status/logging policy。
+
+```csharp
+[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+internal delegate void NativeProgress(int completed, IntPtr context);
+
+private NativeProgress progressRoot;
+
+public void Register()
+{
+    progressRoot = OnProgress;
+    NativeMethods.SetProgressCallback(progressRoot, IntPtr.Zero);
+}
+
+public void Unregister()
+{
+    NativeMethods.SetProgressCallback(null, IntPtr.Zero);
+    NativeMethods.DrainCallbacks();
+    progressRoot = null;
+}
+```
+
+<Term def="从registration开始到unregister并排空in-flight calls为止，delegate必须被managed strong reference保持且target resources仍有效的区间。">callback rooting window</Term>
+
+<Stepper>
+  <Step title="切换movable、fixed、pointer、stack与callback cases">
+    <Ec7UnsafeLifetimeLab />
+  </Step>
+  <Step title="为每个address画出有效区间">
+    标出storage owner、是否可移动、length、native能否retained，以及最后一个可能使用者。
+  </Step>
+  <Step title="在区间结束前停止所有消费者">
+    先unregister、drain callback或等待native operation，再释放delegate root、pin、stack frame或unmanaged storage。
+  </Step>
+</Stepper>
+
+## 边界测试、可诊断性与安全性
+
+interop test应同时有managed unit test、native test fixture和architecture integration test。覆盖zero/maximum length、null/empty、Unicode、invalid enum、partial write、native failure、callback-after-unregister竞争与重复Dispose。ABI snapshot可记录native size/offset/version，启动时快速拒绝不兼容binary。
+
+把raw imports集中在`NativeMethods`，在上层wrapper完成validation、error translation与ownership。对untrusted length做上限与overflow检查，对native output验证范围和terminator。unsafe method要有清楚preconditions；fuzz边界和AddressSanitizer等native工具能发现managed test难以定位的越界。
+
+## 本章回顾：Interop的核心是Representation与Lifetime
+
+1. DllImport声明必须逐项匹配native ABI，而不是只匹配“看起来类似”的type name。
+2. marshalling要说明encoding、layout、direction、capacity、copy/pin和ownership。
+3. SafeHandle把native release纳入可靠lifetime；raw pointer值本身不说明owner。
+4. unsafe移除部分compiler checks，但bounds、alignment、GC movement和storage lifetime仍需证明。
+5. delegate可隐藏unsafe implementation；native callback还要求calling convention、rooting、unregister和in-flight coordination。
+
+<Exercises>
+
+**问题 1：如何把native的UTF-16路径规范化函数封装成可靠P/Invoke？**
+
+<Answer>从header确认calling convention、code-unit type、input const性、output capacity单位和返回长度/错误约定；DllImport显式Unicode与entry point。wrapper先处理null/empty，按capacity分配output，调用后验证returned length不超界再构造string；native不得retained temporary pointers，并用ASCII、中文、surrogate、embedded null与buffer-too-small测试。</Answer>
+
+**问题 2：一个struct在x86正常、x64错位，应怎样定位？**
+
+<Answer>逐项比较native sizeof/offsetof与managed Marshal.SizeOf/OffsetOf，检查pointer-sized fields、C long宽度、bool representation、Pack、union和nested array。不要靠随意改Pack碰运气；先还原native compiler ABI，再用Sequential或Explicit layout表达，并在两种architecture运行布局断言。</Answer>
+
+**问题 3：native library异步保存buffer pointer和callback，应怎样管理生命周期？**
+
+<Answer>短fixed或stackalloc都不够，因为call return后native仍使用地址。使用有明确owner的unmanaged allocation或受控长期pin，保存delegate strong root；Dispose时先禁止新work、unregister callback、等待native operation与in-flight callbacks drain，再释放buffer、delegate root和handle。callback内捕获exception并转换，不能跨native stack传播。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="ABI contract" definition="managed declaration与native binary关于symbol、representation、layout、ownership和error的约定。" />
+  <GlossaryItem term="marshalling plan" definition="每个boundary value的copy、conversion、pinning、direction与release方案。" />
+  <GlossaryItem term="pointer validity window" definition="address所指storage存在、稳定、未释放且满足访问约束的区间。" />
+  <GlossaryItem term="blittable type" definition="managed与native具有兼容in-memory representation、无需逐字段转换的类型。" />
+  <GlossaryItem term="callback rooting window" definition="native仍可能调用function pointer期间必须保持delegate与target存活的区间。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 21: Platform Interoperability and Unsafe Code" adaptedUrl="https://www.informit.com/store/essential-c-sharp-7.0-9781509303618" />

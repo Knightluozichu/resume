@@ -1,0 +1,186 @@
+---
+title: "Chapter 5. Tables"
+type: C
+section: "Programming in Lua 4e · The Basics"
+order: 5
+description: "掌握Lua table身份与索引、constructor、proper sequence、遍历顺序、safe navigation及table library的范围、成本与不变量。"
+demo: true
+math: false
+sourceUrl: "https://www.lua.org/pil/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PilTableIdentityLab, PilSequenceTraversalLab, PilTableLibraryLab } from "@/components/mdx/lua-programming/diagrams/tables";
+
+<Objectives>
+
+- 能解释table的reference identity、合法key、nil删除entry与constructor求值，复现alias和presence故障
+- 能区分proper sequence、sparse integer table、map与mixed table，分析length、ipairs、pairs和mutation规则
+- 能设计safe navigation与table library边界，验证range、comparator、nil element、order和copy ownership
+
+</Objectives>
+
+## 从Table Identity开始，而不是把它拆成数组与字典
+
+Lua table是统一的associative data structure：key可为除nil/NaN外的大多数values，value可为除“存储nil”外的任意value。数组、record、set、object、graph都只是约定。<Term def="Table assignment复制reference而不复制entries；equality比较identity，所有aliases观察同一mutable state。">table identity contract</Term>决定API必须说明borrow、share、copy或transfer。
+
+先预测：两个内容相同的table是否相等；`b=a`后修改b会不会影响a；false能否作value；给existing key赋nil后`pairs`是否仍能看见；float key 1.0与integer key 1是否同一entry。不要凭其它语言的array/map规则回答。
+
+```lua
+local a = { enabled = false, count = 1 }
+local b = a
+local c = { enabled = false, count = 1 }
+
+b.count = 2
+assert(a.count == 2 and a == b)
+assert(a ~= c)
+
+a.enabled = nil
+assert(a.enabled == nil) -- key被删除，不是存储了nil
+```
+
+## Table Indices与Nil Deletes Entry
+
+Key的type是contract的一部分：`"1"`与`1`不同，exact integral float通常归一到对应integer key，table/function/userdata key按identity。Nil不能作key，NaN也不稳定且被拒绝。Mutable table作key时identity稳定，但内容变化不改变hash identity；序列化后通常无法保持同一key语义。
+
+<Term def="给table key赋nil意味着移除mapping，因此present-with-nil无法直接表达，presence必须用sentinel或额外状态。">nil-deletes-entry</Term>解释了`if t[k] then`的双重错误：stored false会被误判missing，stored nil根本不可能表示present。Presence check使用`t[k] ~= nil`；若domain需要显式null，存唯一sentinel。
+
+<PilTableIdentityLab />
+
+<Stepper>
+  <Step title="切换Assign、Equal Content、Nil Key和Nil Value"><PilTableIdentityLab /></Step>
+  <Step title="建立Key Policy">列出允许type、canonicalization、equality、serialization与untrusted size；拒绝implicit string/number混用。</Step>
+  <Step title="做Alias Test">API返回table后由caller修改，验证owner是否预期共享；需要snapshot就复制并测试原表变化不影响结果。</Step>
+</Stepper>
+
+<Callout type="trap" title="读取结果为nil就能证明Key从未存在">
+Nil可能表示missing，也可能是删除后的状态；table不保存present-nil。需要三态时用sentinel、tagged record或separate presence map，不能靠一次lookup恢复历史。
+</Callout>
+
+## Table Constructors
+
+Constructor `{}`创建新identity。List fields按1开始依次放置；record sugar `name=value`等价`["name"]=value`；general field `[expression]=value`支持任意key。Mixed constructor可用，但要清楚list index计数与explicit keys独立。
+
+Field expressions按语言规定顺序/多-result规则求值，最后一个list expression可能贡献multiple results。不要在constructor中混入依赖顺序的side effects；先算locals再构造。Duplicate key最终只剩一个mapping，但不应依赖复杂重复写入表达业务merge。
+
+```lua
+local host = "db.internal"
+local config = {
+  host = host,
+  port = 5432,
+  ["read-only"] = true,
+  "primary",
+  "analytics",
+}
+
+assert(config[1] == "primary")
+assert(config.host == "db.internal")
+assert(config["read-only"] == true)
+```
+
+Constructor是data expression，不是class constructor；metatable另行设置。若接受external key/value生成table，先validate count/key/value，防止prototype-like capability泄漏、memory exhaustion或错误canonicalization。
+
+## Arrays, Lists, and Sequences：Proper Sequence边界
+
+Lua convention用integer keys 1..n且无holes表示sequence。<Term def="Table存在某个n，使keys 1到n均非nil且n+1为nil，并按该连续range使用的序列不变量。">proper sequence invariant</Term>让`#`、`ipairs`和table library有清晰意义。Empty sequence的n为0。
+
+有hole时`#t`只返回某个border，不是元素count；`ipairs`在首个nil停止；后方elements可能存在却被sequence API忽略。Map/mixed table不能用`#`计entries，应在mutation时维护count或遍历计算。Zero-based key 0也不属于标准sequence范围。
+
+<PilSequenceTraversalLab />
+
+<Stepper>
+  <Step title="切换Sequence、Hole、Map和Mixed"><PilSequenceTraversalLab /></Step>
+  <Step title="预测Length与Traversal">对keys `{1,2,4}`、`{0,1,2}`、string map分别写`#`、ipairs、pairs期望，并标出哪些无稳定保证。</Step>
+  <Step title="修复Sparse Domain">若holes有意义，用explicit length+sentinel或map API；若无意义，在boundary compact/reject并建立proper sequence。</Step>
+</Stepper>
+
+## Table Traversal与Order Boundary
+
+`pairs`基于`next`遍历所有entries，顺序unspecified；`ipairs`按1递增到首个nil。<Term def="除明确sequence traversal外，table iteration顺序不是业务或wire contract，稳定输出必须显式收集并排序keys。">traversal-order boundary</Term>防止hash layout、版本或mutation改变snapshot/test结果。
+
+遍历时删除当前existing key通常是常见用法，但添加新keys、rehash或复杂mutation的可见性不应依赖。稳妥做法是先collect keys/snapshot，再mutation。Comparator sorting keys要处理mixed key types；最好在schema中禁止不可比较的混合keys。
+
+Deterministic serialization先validate key domain，收集keys，按explicit comparator排序，再emit。`pairs`输出“这次看起来稳定”不构成兼容保证。
+
+## Safe Navigation不等于False Navigation
+
+访问深层field时可写`zip and zip.company and zip.company.director`，短路避免index nil。<Term def="沿table path逐层只在当前值非nil/false时继续，并明确false是否有效中间值的短路读取协议。">safe navigation chain</Term>的风险是Lua `and`把false也当停止；若false是合法leaf，可接受，但中间node schema必须是table或nil。
+
+重复path expression可能读取metamethod多次并产生side effects；保存local或写pure helper逐段读取。不要用`a and a.b or default`在false leaf上fallback；只对nil做default。第20章学习`__index`后还要考虑lookup可能执行code。
+
+<Callout type="trap" title="and/or链就是Lua的通用Optional Chaining">
+它按truthiness而非只按nil短路，false会被当missing；metamethod lookup也可能有side effect。Schema-aware helper应区分nil、false、non-table和missing key。
+</Callout>
+
+## The Table Library
+
+`table.insert/remove`在proper sequence中移动elements，middle操作O(n)；`table.move`复制contiguous integer range并处理overlap；`table.concat`连接sequence；`table.sort`in-place reorder；`table.pack`用`n`保存含nil的argument count，`table.unpack`按range展开。
+
+<PilTableLibraryLab />
+
+<Stepper>
+  <Step title="切换Insert/Remove、Move、Sort和Pack/Unpack"><PilTableLibraryLab /></Step>
+  <Step title="写Range与Owner">记录source/destination、first/last/target、overlap、logical length和failure后state。</Step>
+  <Step title="验证Comparator Laws">对sort comparator测试irreflexive、asymmetric、transitive；相等items若需稳定顺序，加入tie-break key。</Step>
+</Stepper>
+
+```lua
+local packed = table.pack("a", nil, "c")
+assert(packed.n == 3 and packed[2] == nil)
+
+local values = { 5, 1, 5, 2 }
+table.sort(values, function(left, right)
+  return left < right
+end)
+assert(table.concat(values, ",") == "1,2,5,5")
+
+local copy = {}
+table.move(values, 1, #values, 1, copy)
+assert(copy ~= values and copy[1] == values[1])
+```
+
+Sort不保证stable；comparator若读mutable external state或返回`<=`可能违反strict ordering。Unpack大量elements可能超过argument/result limits；boundary限定range。Table library不会自动修复holes或mixed keys。
+
+## Copy、Snapshot与Memory Model
+
+Shallow copy遍历keys并复制values；nested tables仍share identity。Deep copy必须定义cycles、shared subgraphs、metatables、table keys和userdata/functions policy，不存在通用安全答案。Serialization同样需要这些contract，第15章详解。
+
+Lua实现常把integer sequence与hash entries优化为不同内部parts，但不是language-visible layout。Performance需profile，不按“array part一定O(1)”写correctness。Memory pressure还取决于key/value lifetimes、weak tables和GC，后续第23章处理。
+
+## 本章回顾：先声明Shape，再选择API
+
+1. Table有identity，assignment共享mutable state；content相同不代表table相等。
+2. Nil key非法，nil value删除entry；present-nil需要sentinel。
+3. Constructor支持list、record和general fields，但mixed shape需要明确schema。
+4. Proper sequence是1..n无holes；sparse/map不能依赖length或ipairs。
+5. Pairs顺序unspecified；deterministic output要collect/sort。
+6. Safe navigation按truthiness且可能触发metamethod；table library需要range、owner与comparator law。
+
+<Exercises>
+
+**问题 1：为什么`#t`不能用于统计任意Map的Entry数量？**
+
+<Answer>Length operator面向sequence border，不是hash entry count；有holes或string keys时结果不代表总数。Map若频繁需要count，在唯一mutation API中维护字段并测试一致性；否则pairs遍历计数但不依赖order。</Answer>
+
+**问题 2：怎样保存“Key存在且业务值为Null”？**
+
+<Answer>Lua赋nil会删除key。创建private sentinel table作为explicit null，或存tagged record `{present=true,value=...}`；lookup分别处理missing、sentinel和real value。序列化时映射到wire null并做round-trip。</Answer>
+
+**问题 3：为什么`table.sort(items, function(a,b) return a.score <= b.score end)`错误？**
+
+<Answer>Comparator必须strict，`a<a`应false；使用`<=`让equal values双向为true，破坏asymmetry/transitivity，sort行为无保证。改用`<`，若要deterministic equal order则加入original index或stable key tie-break。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="table identity contract" definition="Assignment共享同一table，equality比较identity的可变状态协议。" />
+  <GlossaryItem term="nil-deletes-entry" definition="给key赋nil会移除mapping而不能保存present-nil。" />
+  <GlossaryItem term="proper sequence invariant" definition="Integer keys 1到n连续非nil并按range使用的table shape。" />
+  <GlossaryItem term="traversal-order boundary" definition="Map iteration无顺序保证，稳定输出必须显式排序的边界。" />
+  <GlossaryItem term="safe navigation chain" definition="沿path按truthiness逐层短路且区分false语义的读取协议。" />
+</Glossary>
+
+<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 5: Tables" adaptedUrl="https://www.lua.org/pil/" />

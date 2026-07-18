@@ -1,24 +1,20 @@
 ---
 title: 物理加速
 type: A
-section: 图形优化
+section: "Unity Game Optimization · 渲染与运行时"
 order: 3
 description: 理解 PhysX 在 Unity 中的开销来源，用碰撞层、睡眠与 Fixed Timestep 控制物理成本。
 demo: true
 math: false
 draft: false
-sourceUrl: ""
+sourceUrl: "https://www.packtpub.com/en-us/product/unity-game-optimization-9781838556518"
 ---
 
-{/* A 概念型（Unity Game Optimization Ch5 改编）：PhysX 物理性能。
-   重心是 FixedUpdate/物理步(§3)、Layer Matrix(§4)、Sleep(§5)、CCD 取舍(§6)、优化 Stepper(§7)。 */}
-
-{/* 知识点清单：
-   1) FixedUpdate vs Update 物理步 — PhysicsTimestepDiagram + Stepper
-   2) 碰撞矩阵 Layer Collision Matrix — LayerCollisionDiagram
-   3) Rigidbody Sleep — RigidbodySleepDiagram
-   4) 连续碰撞检测 vs 离散 — Callout + CollisionDetectionDiagram
-   5) 物理性能优化清单 — Stepper */}
+import {
+  FasterPhysicsMapLab,
+  FasterPhysicsExperimentLab,
+  FasterPhysicsEvidenceLab,
+} from "@/components/mdx/unity-game-optimization/diagrams/faster-physics";
 
 <Objectives>
 
@@ -27,6 +23,58 @@ sourceUrl: ""
 - 能回答：Profiler 显示 Physics.FixedUpdate 顶满帧预算时，你会先查 Fixed Timestep、碰撞矩阵、还是 Rigidbody/CCD 设置？各解决哪类问题？
 
 </Objectives>
+
+## 原书边界：Chapter 5
+
+Packt 第三版把本章命名为 **Faster Physics**。官方目录列出的核心范围如下；这些条目共同构成本章的一对一边界：
+
+- **Understanding the physics engine**：纳入本章实验与验收，不拆到别章重复计数。
+- **Physics performance optimizations**：纳入本章实验与验收，不拆到别章重复计数。
+
+物理成本由固定步数、Broad Phase 候选对、Narrow Phase 接触、求解迭代、查询与同步共同决定。PhysX 版本和作业化实现会变化，但 timestep、Layer Matrix、Collider 复杂度、sleep 与 CCD 的成本模型仍成立。 因此，本章既保留 2019/2020 语境，也明确标出迁移到现代 Unity 时哪些是稳定原理、哪些只是版本相关接口。
+
+<FasterPhysicsMapLab />
+
+## 三步证据实验
+
+先预测：如果候选优化真的命中瓶颈，哪个指标应先变化，哪个正确性条件必须保持？下面三步只改变一个变量，并把正常、边界和失败样本一起保存。
+
+<Stepper>
+  <Step title="固定范围与基线">
+    <FasterPhysicsMapLab />
+    在固定对象数量下分别改变 fixedDeltaTime、碰撞矩阵、Collider 类型和 CCD，观察 Physics.Simulate 的斜率。 先写明目标设备、构建类型、场景、画质、预热和采样窗口，不把 Editor 数据与真机数据混在一起。
+
+```csharp
+Time.fixedDeltaTime = 1f / 50f;
+```
+
+  </Step>
+  <Step title="运行单变量候选">
+    <FasterPhysicsExperimentLab />
+    只启用一个候选改动，保存同一输入下的结果。需要记录的不只是平均 FPS，还包括 Physics Profiler、固定步计数、接触对数量、查询次数、穿透/漏撞回放和主线程时间。
+
+```csharp
+Physics.IgnoreLayerCollision(projectileLayer, decorationLayer, true);
+```
+
+  </Step>
+  <Step title="复测并签发证据">
+    <FasterPhysicsEvidenceLab />
+    对比 P50、P95、峰值与正确性；若收益只出现在 Editor、单次运行或错误画质下，就回退候选并保留失败原因。
+
+```csharp
+body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+```
+
+  </Step>
+</Stepper>
+
+<Callout type="trap">
+  **版本迁移陷阱**：降低求解频率或改 Discrete
+  可能提升速度却破坏稳定性；性能验收必须同时保存玩法正确性。
+  第三版内容应作为原理和历史载体来复现，现代 API
+  必须另行标注并在当前目标设备上重新测量。
+</Callout>
 
 ## 场景里刚体一多，CPU 物理先爆
 
@@ -38,13 +86,25 @@ sourceUrl: ""
 
 想象一条工厂：**包装线（Update）** 按顾客下单节奏运转——帧率高就转得快，只负责把画面送到屏幕。**冲压车间（PhysX）** 则按固定节拍冲压——不管包装线多快，车间仍按 **0.02 秒一拍** 推进刚体。你在包装线上推箱子，车间下一拍才认；在车间节拍里施力，箱子才按物理规则动。
 
-<Term def="Unity 内置的 NVIDIA PhysX 物理引擎集成，负责刚体、碰撞体、关节与射线等 3D 模拟。">PhysX</Term> 就是冲压车间。Profiler 里看到的 **Physics** 模块，基本就是这间车间的电表读数。
+<Term def="Unity 内置的 NVIDIA PhysX 物理引擎集成，负责刚体、碰撞体、关节与射线等 3D 模拟。">
+  PhysX
+</Term>
+就是冲压车间。Profiler 里看到的 **Physics** 模块，基本就是这间车间的电表读数。
 
 ## FixedUpdate 与 Fixed Timestep
 
-<Term def="与渲染帧率无关的固定物理时间步，默认 0.02s（50Hz）；Project Settings → Time 中配置。">Fixed Timestep（固定时间步）</Term> 决定 **每秒跑多少次物理**。默认 50 次/秒；改成 0.01 就变 100 次——刚体更稳，但 **Physics CPU 往往近似翻倍**。
+<Term def="与渲染帧率无关的固定物理时间步，默认 0.02s（50Hz）；Project Settings → Time 中配置。">
+  Fixed Timestep（固定时间步）
+</Term>
+决定 **每秒跑多少次物理**。默认 50 次/秒；改成 0.01 就变 100 次——刚体更稳，但
+**Physics CPU 往往近似翻倍**。
 
-<Term def="每个物理步调用一次，用于对 Rigidbody 施力、读物理状态；与 Update 不同步。">FixedUpdate</Term> 是你在车间节拍里伸手的窗口。**Update** 每渲染帧一次，适合读输入、插值相机；**FixedUpdate** 每物理步一次，适合 `AddForce`、`MovePosition`（Kinematic）等。
+<Term def="每个物理步调用一次，用于对 Rigidbody 施力、读物理状态；与 Update 不同步。">
+  FixedUpdate
+</Term>
+是你在车间节拍里伸手的窗口。**Update**
+每渲染帧一次，适合读输入、插值相机；**FixedUpdate** 每物理步一次，适合
+`AddForce`、`MovePosition`（Kinematic）等。
 
 <PhysicsTimestepDiagram />
 
@@ -53,12 +113,19 @@ sourceUrl: ""
 <PhysicsTimestepDiagram highlight="fixed" />
 
 <Callout type="tip">
-  Edit → Project Settings → Time：**Fixed Timestep** 默认 `0.02`。若 Physics ms 过高，先尝试 **0.02～0.033** 之间权衡稳定性；不要盲目降到 0.01 除非竞技类游戏必须。
+  Edit → Project Settings → Time：**Fixed Timestep** 默认 `0.02`。若 Physics ms
+  过高，先尝试 **0.02～0.033** 之间权衡稳定性；不要盲目降到 0.01
+  除非竞技类游戏必须。
 </Callout>
 
 ## Layer Collision Matrix：关掉不该撞的层
 
-<Term def="Project Settings → Physics 中的层×层勾选表；未勾选的层组合永不产生碰撞检测。">Layer Collision Matrix（层碰撞矩阵）</Term> 是 broadphase 的第一道筛子。场景里有 Default、Player、Enemy、Projectile、Trigger 等层时，**敌人与敌人、装饰物与装饰物** 往往不需要两两检测——矩阵里关掉，PhysX 连 broadphase 对都不会建。
+<Term def="Project Settings → Physics 中的层×层勾选表；未勾选的层组合永不产生碰撞检测。">
+  Layer Collision Matrix（层碰撞矩阵）
+</Term>
+是 broadphase 的第一道筛子。场景里有 Default、Player、Enemy、Projectile、Trigger
+等层时，**敌人与敌人、装饰物与装饰物** 往往不需要两两检测——矩阵里关掉，PhysX 连
+broadphase 对都不会建。
 
 <LayerCollisionDiagram />
 
@@ -69,12 +136,17 @@ sourceUrl: ""
 <LayerCollisionDiagram highlight="pair" />
 
 <Callout type="tip">
-  新建项目先规划 Layer 名单（Edit → Project Settings → Tags and Layers），再填矩阵。比「全 Default 层、全靠脚本 ignore」更省 CPU，因为矩阵在引擎层就剔除了检测对。
+  新建项目先规划 Layer 名单（Edit → Project Settings → Tags and
+  Layers），再填矩阵。比「全 Default 层、全靠脚本 ignore」更省
+  CPU，因为矩阵在引擎层就剔除了检测对。
 </Callout>
 
 ## Rigidbody Sleep：静止的箱子别每拍都算
 
-<Term def="刚体速度/角速度低于阈值且稳定时进入休眠，PhysX 跳过积分与碰撞直到被唤醒。">Rigidbody Sleep（刚体睡眠）</Term> 像关电的冲压机——堆在角落不再动的箱子，不应每 0.02 秒仍参与求解。
+<Term def="刚体速度/角速度低于阈值且稳定时进入休眠，PhysX 跳过积分与碰撞直到被唤醒。">
+  Rigidbody Sleep（刚体睡眠）
+</Term>
+像关电的冲压机——堆在角落不再动的箱子，不应每 0.02 秒仍参与求解。
 
 <RigidbodySleepDiagram state="awake" />
 
@@ -88,7 +160,10 @@ Project Settings → Physics 可调 **Sleep Threshold**、**Default Contact Offs
 
 ## 离散 vs 连续碰撞检测
 
-<Term def="Rigidbody 上 Collision Detection 模式：Discrete 每步检测一次；Continuous 对高速小物体做扫掠，防 tunneling。">Collision Detection（碰撞检测模式）</Term> 是精度与成本的开关。
+<Term def="Rigidbody 上 Collision Detection 模式：Discrete 每步检测一次；Continuous 对高速小物体做扫掠，防 tunneling。">
+  Collision Detection（碰撞检测模式）
+</Term>
+是精度与成本的开关。
 
 <CollisionDetectionDiagram mode="discrete" />
 
@@ -97,7 +172,10 @@ Project Settings → Physics 可调 **Sleep Threshold**、**Default Contact Offs
 <CollisionDetectionDiagram mode="continuous" />
 
 <Callout type="trap">
-  **现象**：为整场景所有 Rigidbody 开 Continuous Dynamic，Physics ms 暴涨。**原因**：CCD 对每步额外做 sweep，成本远高于 Discrete。**修法**：默认 Discrete；仅子弹、抛物、高速载具子物体开 Continuous；静态/运动学碰撞体用 Discrete 即可。
+  **现象**：为整场景所有 Rigidbody 开 Continuous Dynamic，Physics ms
+  暴涨。**原因**：CCD 对每步额外做 sweep，成本远高于 Discrete。**修法**：默认
+  Discrete；仅子弹、抛物、高速载具子物体开 Continuous；静态/运动学碰撞体用
+  Discrete 即可。
 </Callout>
 
 ## 动手：物理性能排查清单
@@ -109,23 +187,33 @@ Project Settings → Physics 可调 **Sleep Threshold**、**Default Contact Offs
 <Stepper>
   <Step title="① 基线：Profiler 记下 Physics / FixedUpdate ms">
     <PhysicsTimestepDiagram highlight="physics" />
-    Play 混战场景 30 秒，Profiler → CPU Usage 展开 **Physics** 与 **FixedUpdate**。记下 Physics 占帧预算比例；若 &gt;30% 帧时间，物理已是主要 CPU 热点。
+    Play 混战场景 30 秒，Profiler → CPU Usage 展开 **Physics** 与
+    **FixedUpdate**。记下 Physics 占帧预算比例；若 &gt;30% 帧时间，物理已是主要
+    CPU 热点。
   </Step>
   <Step title="② Fixed Timestep：步频是否过高">
     <PhysicsTimestepDiagram highlight="fixed" />
-    Project Settings → Time 查看 **Fixed Timestep**。若 &lt;0.02 且无稳定性问题，尝试回到 0.02 或 0.025 复测 Physics ms。脚本侧确认施力在 **FixedUpdate**，避免 Update 里改 Dynamic 刚体。
+    Project Settings → Time 查看 **Fixed Timestep**。若 &lt;0.02
+    且无稳定性问题，尝试回到 0.02 或 0.025 复测 Physics ms。脚本侧确认施力在
+    **FixedUpdate**，避免 Update 里改 Dynamic 刚体。
   </Step>
   <Step title="③ Layer Matrix：关掉无业务需求的层对">
     <LayerCollisionDiagram highlight="matrix" />
-    Edit → Project Settings → Physics → **Layer Collision Matrix**。取消敌人×敌人、装饰×装饰、UI 层×一切等勾选。用 Stats / Profiler 对比 **Active Contacts** 或 Physics ms 是否下降。
+    Edit → Project Settings → Physics → **Layer Collision
+    Matrix**。取消敌人×敌人、装饰×装饰、UI 层×一切等勾选。用 Stats / Profiler
+    对比 **Active Contacts** 或 Physics ms 是否下降。
   </Step>
   <Step title="④ Sleep & 刚体数量：能静态就静态，能 Kinematic 就 Kinematic">
     <RigidbodySleepDiagram state="sleep" />
-    永不移动的碰撞用 **Static Collider**（无 Rigidbody）或 **Kinematic Rigidbody**；可交互但很少动的物体避免每帧 `WakeUp`。减少 **MeshCollider（非 convex）** 与过高 **Default Contact Offset** 造成的抖动唤醒。
+    永不移动的碰撞用 **Static Collider**（无 Rigidbody）或 **Kinematic
+    Rigidbody**；可交互但很少动的物体避免每帧 `WakeUp`。减少 **MeshCollider（非
+    convex）** 与过高 **Default Contact Offset** 造成的抖动唤醒。
   </Step>
   <Step title="⑤ CCD 与碰撞体形状：只给高速体开 Continuous">
     <CollisionDetectionDiagram mode="continuous" />
-    默认 **Discrete**；子弹/高速球单独 **Continuous Dynamic**。碰撞体优先 **Box/Sphere/Capsule**；复杂 Mesh 用 **Convex** 或简化 proxy。Profiler 复测 Physics ms 与 **Contacts** 计数。
+    默认 **Discrete**；子弹/高速球单独 **Continuous Dynamic**。碰撞体优先
+    **Box/Sphere/Capsule**；复杂 Mesh 用 **Convex** 或简化 proxy。Profiler 复测
+    Physics ms 与 **Contacts** 计数。
   </Step>
 </Stepper>
 
@@ -149,15 +237,23 @@ bulletRb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
 ## 容易踩的坑
 
 <Callout type="trap">
-  **现象**：在 Update 里 `transform.position += ...` 驱动带 Dynamic Rigidbody 的角色，画面抖动、穿透。**原因**：渲染帧与物理步不同步，物理步会纠正 transform。**修法**：用 `Rigidbody.MovePosition`（Kinematic）或在 FixedUpdate 里 `AddForce`/`velocity`。
+  **现象**：在 Update 里 `transform.position += ...` 驱动带 Dynamic Rigidbody
+  的角色，画面抖动、穿透。**原因**：渲染帧与物理步不同步，物理步会纠正
+  transform。**修法**：用 `Rigidbody.MovePosition`（Kinematic）或在 FixedUpdate
+  里 `AddForce`/`velocity`。
 </Callout>
 
 <Callout type="trap">
-  **现象**：大量敌人挤在一起，Physics ms 高，Sleep 从不触发。**原因**：持续接触 + 微分离力保持全体 Awake。**修法**：矩阵关 Enemy×Enemy；减少同时活跃的 Dynamic 敌人数；远距敌人改 Kinematic 或简化 AI 碰撞体。
+  **现象**：大量敌人挤在一起，Physics ms 高，Sleep 从不触发。**原因**：持续接触
+  + 微分离力保持全体 Awake。**修法**：矩阵关 Enemy×Enemy；减少同时活跃的 Dynamic
+  敌人数；远距敌人改 Kinematic 或简化 AI 碰撞体。
 </Callout>
 
 <Callout type="trap">
-  **现象**：Fixed Timestep 0.01 仍感觉物理「飘」，于是继续加步频。**原因**：瓶颈可能在碰撞对数量或 CCD，而非步长 alone。**修法**：先查 Layer Matrix 与 Sleep，再查 Continuous 滥用；步频与稳定性用 **Maximum Allowed Timestep** 防止螺旋死亡（Time 设置）。
+  **现象**：Fixed Timestep 0.01
+  仍感觉物理「飘」，于是继续加步频。**原因**：瓶颈可能在碰撞对数量或
+  CCD，而非步长 alone。**修法**：先查 Layer Matrix 与 Sleep，再查 Continuous
+  滥用；步频与稳定性用 **Maximum Allowed Timestep** 防止螺旋死亡（Time 设置）。
 </Callout>
 
 ## 小结
@@ -170,7 +266,7 @@ bulletRb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
 
 <Exercises>
 
-**练习 1（改 Demo 型）** 在 Physics ms 最高的场景打开 Profiler，记下 Physics 与 FixedUpdate 占比。任选 **Layer Matrix 关一对层** 或 **把一种物体从 Dynamic 改 Kinematic/Static** 只做一处改动，复测并填表——Physics ms 降了多少？Active Contacts 有无变化？
+**问题 1（改 Demo 型）** 在 Physics ms 最高的场景打开 Profiler，记下 Physics 与 FixedUpdate 占比。任选 **Layer Matrix 关一对层** 或 **把一种物体从 Dynamic 改 Kinematic/Static** 只做一处改动，复测并填表——Physics ms 降了多少？Active Contacts 有无变化？
 
 <Answer>
 
@@ -178,7 +274,7 @@ bulletRb.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
 
 </Answer>
 
-**练习 2（问答型）** Update 与 FixedUpdate 分别适合做什么？为什么改 Dynamic Rigidbody 不应放在 Update？
+**问题 2（问答型）** Update 与 FixedUpdate 分别适合做什么？为什么改 Dynamic Rigidbody 不应放在 Update？
 
 <Answer>
 
@@ -186,7 +282,7 @@ Update：读输入、相机插值、UI，与渲染帧同步。FixedUpdate：AddF
 
 </Answer>
 
-**练习 3（问答型）** Layer Collision Matrix 与 Physics.Raycast 的 layerMask 各解决什么问题？
+**问题 3（问答型）** Layer Collision Matrix 与 Physics.Raycast 的 layerMask 各解决什么问题？
 
 <Answer>
 
@@ -199,7 +295,8 @@ Update：读输入、相机插值、UI，与渲染帧同步。FixedUpdate：AddF
 <Glossary>
 
 <GlossaryItem term="PhysX">
-  Unity 集成的 3D 物理引擎，负责 FixedUpdate 中的刚体模拟。详见「工厂流水线」一节。
+  Unity 集成的 3D 物理引擎，负责 FixedUpdate
+  中的刚体模拟。详见「工厂流水线」一节。
 </GlossaryItem>
 
 <GlossaryItem term="Fixed Timestep（固定时间步）">
@@ -219,11 +316,13 @@ Update：读输入、相机插值、UI，与渲染帧同步。FixedUpdate：AddF
 </GlossaryItem>
 
 <GlossaryItem term="Collision Detection（碰撞检测模式）">
-  Discrete 与 Continuous 等模式，权衡 tunneling 与 CPU。详见 CollisionDetectionDiagram。
+  Discrete 与 Continuous 等模式，权衡 tunneling 与 CPU。详见
+  CollisionDetectionDiagram。
 </GlossaryItem>
 
 <GlossaryItem term="Continuous Dynamic">
-  对高速 Dynamic 刚体的扫掠检测，防穿墙。详见 CollisionDetectionDiagram mode continuous。
+  对高速 Dynamic 刚体的扫掠检测，防穿墙。详见 CollisionDetectionDiagram mode
+  continuous。
 </GlossaryItem>
 
 <GlossaryItem term="broadphase">
@@ -234,5 +333,5 @@ Update：读输入、相机插值、UI，与渲染帧同步。FixedUpdate：AddF
 
 <Attribution
   adaptedFrom="Packt《Unity Game Optimization》第3版"
-  adaptedUrl="https://www.packtpub.com/product/unity-game-optimization-third-edition/9781839215721"
+  adaptedUrl="https://www.packtpub.com/en-us/product/unity-game-optimization-9781838556518"
 />

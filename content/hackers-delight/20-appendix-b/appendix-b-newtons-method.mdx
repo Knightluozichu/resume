@@ -1,0 +1,354 @@
+---
+title: "Appendix B · Newton's Method"
+type: C
+section: "HD2 · 数值专题与附录"
+order: 20
+description: "按Hacker's Delight第二版附录B重建Newton切线迭代、局部二次收敛、平方根与倒数专化、整数版本、初值、失败模式和停止契约。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/hackers-delight-9780321842688"
+draft: false
+---
+
+import { HDAppendixBTangentLab, HDAppendixBSqrtIterationLab, HDAppendixBQuadraticErrorLab, HDAppendixBReciprocalLab, HDAppendixBDivisionLab, HDAppendixBInitialGuessLab, HDAppendixBFailureModesLab, HDAppendixBDampingLab, HDAppendixBStoppingLab, HDAppendixBIntegerSqrtLab, HDAppendixBPrecisionLab, HDAppendixBCertificateLab } from "@/components/mdx/hackers-delight/diagrams/appendix-b-newtons-method";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释Newton’s Method由current point的tangent x-intercept得到next estimate
+- 能推导Newton iteration并计算square root、reciprocal和division specializations
+- 能分析simple root附近quadratic convergence以及repeated-root降速原因
+- 能实现初值、derivative guard、step/residual stop和integer square-root invariants
+- 能设计覆盖domain、failure modes、precision wall与iteration cap的Newton certificate
+
+</Objectives>
+
+## 从“切线落点为什么会更接近根”开始
+
+先预测：给定curve$f(x)$和current estimate$x_n$，在该点用tangent替代curve。Tangent与x-axis的intersection容易求；若curve locally nearly linear，intersection就比$x_n$更接近true root。Newton’s Method（牛顿法）的力量和风险都来自这个local approximation。
+
+<HDAppendixBTangentLab />
+
+<Term def="从current estimate处的function value与derivative构造tangent，并取tangent root作为next estimate的iterative root-finding method。">牛顿法</Term> solves$f(x)=0$。Tangent at$x_n$ is
+
+$$
+L_n(x)=f(x_n)+f'(x_n)(x-x_n).
+$$
+
+Set$L_n(x_{n+1})=0$ andsolve：
+
+$$
+x_{n+1}=x_n-\frac{f(x_n)}{f'(x_n)}.
+$$
+
+This<Term def="Update x next equals x minus f of x divided by derivative of f at x；requires a defined nonzero derivative and a domain-preserving step。">牛顿迭代</Term> isnotglobal magic。The tangent canpoint away fromdesired root，derivative mayvanish，anddifferent starts mayconverge todifferent roots orcycles。
+
+## B.1 Derivation as a linear local model
+
+The formula canbe read ascorrection
+
+$$
+\Delta_n=-\frac{f(x_n)}{f'(x_n)},
+\qquad
+x_{n+1}=x_n+\Delta_n.
+$$
+
+Large residual suggestslarge correction，butlarge derivative scalesit down。Units areconsistent：$f/f'$ hasunits of$x$。This is a usefulsanity check when deriving specialized iterations。
+
+### A guarded reference implementation
+
+```cpp
+#include <cmath>
+#include <optional>
+
+template<class Function, class Derivative>
+std::optional<double> newton(Function f, Derivative derivative,
+                             double x, int max_iterations,
+                             double step_tolerance,
+                             double residual_tolerance) {
+    for (int iteration = 0; iteration < max_iterations; ++iteration) {
+        const double value = f(x);
+        const double slope = derivative(x);
+        if (!std::isfinite(value) || !std::isfinite(slope) ||
+            slope == 0.0) return std::nullopt;
+
+        const double next = x - value / slope;
+        if (!std::isfinite(next)) return std::nullopt;
+        const double step = std::abs(next - x);
+        x = next;
+        if (std::abs(f(x)) <= residual_tolerance &&
+            step <= step_tolerance * std::max(1.0, std::abs(x))) {
+            return x;
+        }
+    }
+    return std::nullopt;
+}
+```
+
+Real code usually treats“slope too small” rather thanexactzero，checksdomain afterproposed step，and mayusebracketing/damping fallback。The two tolerances have differentjobs：smallstep canmeanconvergence orstagnation；smallresidual confirms equation satisfaction butmaynot implysmall root error ifslope is tiny。
+
+## B.2 Quadratic Convergence（二次收敛）
+
+Let$\alpha$ bea simple root：$f(\alpha)=0$ and$f'(\alpha)\ne0$。Write error$e_n=x_n-\alpha$。Taylor expansion around$x_n$ givesfor some$\xi_n$ between$x_n$ and$\alpha$：
+
+$$
+0=f(x_n)-f'(x_n)e_n+\frac{f''(\xi_n)}{2}e_n^2.
+$$
+
+Substitute Newton update：
+
+$$
+e_{n+1}
+=x_n-\frac{f(x_n)}{f'(x_n)}-\alpha
+=\frac{f''(\xi_n)}{2f'(x_n)}e_n^2.
+$$
+
+If start isclose enough and$f'$ staysaway fromzero while$f''$ remainsbounded，there isconstant$C$ such that
+
+$$
+|e_{n+1}|\le C|e_n|^2.
+$$
+
+This is<Term def="Near a simple root，next error is bounded byconstant timescurrent error squared，so correct digits roughly double before rounding dominates。">二次收敛</Term>。It islocal andasymptotic；it doesnot sayeveryinitial value converges，nor thatfirststep squareserror。
+
+<HDAppendixBQuadraticErrorLab />
+
+<Callout type="trap" title="常见误区：Newton迭代总是二次收敛">
+
+Quadratic rate requiresa simple root andsufficiently nearstart underregularity conditions。Atmultiple root，$f'(\alpha)=0$ andstandard iteration often becomeslinear；farfromroot it maydiverge orcycle。
+
+</Callout>
+
+## B.3 Square root specialization（平方根专化）
+
+To compute$\sqrt a$ for$a>0$，choose$f(x)=x^2-a$。Then
+
+$$
+x_{n+1}=x_n-\frac{x_n^2-a}{2x_n}
+=\frac12\left(x_n+\frac{a}{x_n}\right).
+$$
+
+The update averagescurrent estimate andits complementary estimate$a/x_n$。If$x_n$ istoo high，$a/x_n$ istoo low，andtheir average movesinward。
+
+<Stepper>
+  <Step title="Step 1 · Choose a positive seed">
+    Estimate$\log_2 a$ fromexponent andusea nearbypower oftwo; this keepsdivision defined andrelative error bounded。
+    <HDAppendixBInitialGuessLab />
+  </Step>
+  <Step title="Step 2 · Apply arithmetic mean update">
+    Observe sequence values andabsolute error overfive iterations。
+    <HDAppendixBSqrtIterationLab />
+  </Step>
+  <Step title="Step 3 · Verify error recurrence">
+    Normalize$x_n=\sqrt a(1+e_n)$，thenmeasurewhetherstored errors followthe predicted square law。
+    <HDAppendixBQuadraticErrorLab />
+  </Step>
+</Stepper>
+
+Forrelative error$e_n$，square-root update hasexact recurrence
+
+$$
+e_{n+1}=\frac{e_n^2}{2(1+e_n)}.
+$$
+
+The denominator explainsdomain condition$e_n>-1$，equivalenttoapositive estimate。When$e_n$ is small，next error isapproximately$e_n^2/2$。
+
+```cpp
+double sqrt_newton(double a) {
+    if (!(a >= 0.0) || !std::isfinite(a)) return std::nan("");
+    if (a == 0.0) return 0.0;
+
+    int exponent = 0;
+    std::frexp(a, &exponent);
+    double x = std::ldexp(1.0, exponent / 2);
+    for (int iteration = 0; iteration < 8; ++iteration) {
+        const double next = 0.5 * (x + a / x);
+        if (next == x) break;
+        x = next;
+    }
+    return x;
+}
+```
+
+Production implementation must defineNaN、infinity、subnormal androunding behavior；standard library usually hasstronger correctly-rounded/platform contracts。This specialization is primarilya derivation/reference。
+
+## B.4 Reciprocal and division specialization（倒数与除法）
+
+Forreciprocal$r=1/a$，using$f(y)=1/y-a$ yields
+
+$$
+y_{n+1}=y_n(2-ay_n).
+$$
+
+Define multiplicative residual<Term def="For reciprocal iteration，delta equals one minus a times current estimate；it obeys exact recurrence delta next equals delta squared。">倒数残差</Term> $\delta_n=1-ay_n$。Then
+
+$$
+\delta_{n+1}=1-ay_n(2-ay_n)=(1-ay_n)^2=\delta_n^2.
+$$
+
+This exact squaring identity isparticularly useful inhardware arithmetic：lookup/bit seed suppliesfew correct bits，each Newton step approximately doublesthem。
+
+<HDAppendixBReciprocalLab />
+
+Once reciprocal isrefined，many quotients withsame denominator useone multiplication each：$q=b y$。Error in$q$ followsrelative error of$y$，subjectto finalmultiply rounding。
+
+<HDAppendixBDivisionLab />
+
+```cpp
+double reciprocal_newton(double a, double seed, int steps) {
+    double y = seed;
+    for (int iteration = 0; iteration < steps; ++iteration) {
+        y = y * (2.0 - a * y);
+    }
+    return y;
+}
+```
+
+Convergence requires$|1-a y_0|<1$ inexact arithmetic。Fused multiply-add canchange rounding quality；benchmark anderror sweep mustmatchtarget expression order。
+
+## B.5 Integer Newton iteration（整数牛顿迭代）
+
+Forfloor square root ofnonnegative integer$n$，integer division turnsupdate into
+
+$$
+r_{k+1}=\left\lfloor
+\frac{r_k+\lfloor n/r_k\rfloor}{2}
+\right\rfloor.
+$$
+
+Choose$r_0$ as apower oftwo notbelow$\sqrt n$。Then sequence decreases untilnext value nolonger smaller。Return$r$ onlyafterchecking<Term def="Floor square-root postcondition r squared is at most n and r plus one squared is greater than n。">整数平方根夹逼</Term>
+
+$$
+r^2\le n<(r+1)^2.
+$$
+
+<HDAppendixBIntegerSqrtLab />
+
+```cpp
+#include <bit>
+#include <cstdint>
+
+std::uint32_t isqrt(std::uint32_t n) {
+    if (n == 0) return 0;
+    const unsigned bits = std::bit_width(n);
+    std::uint32_t r = std::uint32_t{1} << ((bits + 1) / 2);
+    for (;;) {
+        const std::uint32_t next = (r + n / r) / 2;
+        if (next >= r) return r;
+        r = next;
+    }
+}
+```
+
+The expression`r + n/r` fits here for32-bit$n$ becausechosen/decreasing$r$ isbounded，butwider variants shouldproveintermediate range oruseoverflow-safe average。
+
+## B.6 Initial guesses, failure modes, and damping
+
+Newton’s tangent isonlylocal geometry。Three representative failures：
+
+- Repeated root：for$f(x)=(x-1)^2$，update is$(x+1)/2$，soerror halveslinearly rather thansquares。
+- Derivative zero/small：division producesundefined orhuge step。
+- Cycle：for$f(x)=x^3-2x+2$，startingatzero giveszero toone tozero。
+
+<HDAppendixBFailureModesLab />
+
+<Callout type="trap" title="常见误区：small step一定表示root已找到">
+
+Finite precision canround$x_{n+1}$ backto$x_n$ while residual remainslarge。A flat derivative、domain clamp oroverflow canalso stopmovement。Checkboth scaled step andresidual，plusfinite values anditeration cap。
+
+</Callout>
+
+<Term def="Replace full Newton correction bylambda times correction，where lambda lies betweenzero andone，to reduce aggressive steps。">阻尼Newton</Term> uses
+
+$$
+x_{n+1}=x_n-\lambda\frac{f(x_n)}{f'(x_n)},
+\qquad0<\lambda\le1.
+$$
+
+<HDAppendixBDampingLab />
+
+Damping orline search mayimproveglobal behavior，butdoesnot guarantee convergence forarbitrary functions。Forbracketed scalar roots，hybrid Newton-bisection keepsa valid interval andacceptsNewton step onlywhenit stayssafe。
+
+## B.7 Stopping and finite precision
+
+An engineering stop contract includes：
+
+- Scaled step：$|x_{n+1}-x_n|\le\tau_x\max(1,|x_{n+1}|)$。
+- Residual：$|f(x_{n+1})|\le\tau_f$，possiblyscaled byproblem units。
+- Domain andfinite checks before/afterstep。
+- Hard iteration cap anddiagnostic failure result。
+- Forinteger/discrete outputs，a postcondition suchasfloor-root夹逼。
+
+<HDAppendixBStoppingLab />
+
+Quadratic convergence cannot outrunrepresentation。Once error reachesrounding scale，new iterate mayequalold one oroscillate betweenadjacent values。
+
+<HDAppendixBPrecisionLab />
+
+<Stepper>
+  <Step title="Step 1 · Separate mathematical and stored iterations">
+    Derive update inexact arithmetic，thenidentifyeach rounding/division point inimplementation。
+    <HDAppendixBPrecisionLab />
+  </Step>
+  <Step title="Step 2 · Monitor two convergence signals">
+    Recordscaled step andresidual independently；neither alone proves success ineveryproblem。
+    <HDAppendixBStoppingLab />
+  </Step>
+  <Step title="Step 3 · Certify failure behavior">
+    Specifywhat happens forinvaliddomain、small derivative、cycle、NaN/infinity anditeration exhaustion。
+    <HDAppendixBCertificateLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+Newton’s Method replacescurve bycurrent tangent andusesitsx-intercept，giving$x_{n+1}=x_n-f/f'$。Near asimple root underregularity conditions，error isproportional toprevious error squared，soiteration haslocal quadratic convergence。Square root becomesarithmetic-mean update；reciprocal residual squares exactly；integer square root addsfloors andamonotone stopping invariant。Initial guess、derivative/domain guards、damping orbracketing、step plusresidual tests、precision analysis anditeration cap turnaformula intoa reliable routine。
+
+<Exercises>
+
+1. Startingfrom$x_0=3$，applythree Newton steps tosolve$x^2-10=0$；reporteach estimate andfinal residual。
+2. Prove reciprocal iteration$y_{n+1}=y_n(2-ay_n)$ satisfies$\delta_{n+1}=\delta_n^2$ for$\delta_n=1-ay_n$，andstateaseed condition。
+3. ExplainwhyNewton on$f(x)=(x-1)^2$ convergeslinearly；deriveexact error recurrence。
+4. Design aproduction stop/failure contract forpositive square root coveringzero、negative、NaN、infinity、subnormal、rounding stagnation anditeration exhaustion。
+
+<Answer>
+
+$x_1=(3+10/3)/2=19/6\approx3.1666667$；$x_2\approx3.1622807$；$x_3\approx3.1622776602$。Final residual$x_3^2-10$ isnear machine rounding scale。The exact root is$\sqrt{10}$。
+
+</Answer>
+
+<Answer>
+
+$1-a y_{n+1}=1-a y_n(2-a y_n)=1-2ay_n+a^2y_n^2=(1-ay_n)^2=\delta_n^2$。Exact-arithmetic convergence requires$|\delta_0|<1$；implementation also requiresfinite operations andtarget rounding analysis。
+
+</Answer>
+
+<Answer>
+
+For$f=(x-1)^2$ and$f'=2(x-1)$，$x_{n+1}=x_n-(x_n-1)/2=(x_n+1)/2$。Thus$e_{n+1}=x_{n+1}-1=(x_n-1)/2=e_n/2$，soerror shrinksbyconstant factor，which islinear convergence。
+
+</Answer>
+
+<Answer>
+
+Returnzero forpositive zero；rejectnegative finite inputs；propagateorclassifyNaN；returnpositive infinity forpositive infinity accordingAPI policy。Normalize/subscale subnormal ordelegate toreference library。Usepositive exponent-derived seed，guardfinite intermediate andnonzero denominator，checkscaled step plusresidual，stoponstagnation onlyifpostcondition holds，andreturnexplicit failure afterfixedcap。Compareagainststandard sqrt overboundary/ULP sweeps。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="牛顿法">Tangent-based iterative method forsolving$f(x)=0$。</GlossaryItem>
+  <GlossaryItem term="牛顿迭代">$x_{n+1}=x_n-f(x_n)/f'(x_n)$ underdefined nonzero derivative。</GlossaryItem>
+  <GlossaryItem term="二次收敛">Nearsimple root，next error scales asthe square ofcurrent error。</GlossaryItem>
+  <GlossaryItem term="倒数残差">$\delta=1-ay$，which squares underreciprocal Newton update。</GlossaryItem>
+  <GlossaryItem term="整数平方根夹逼">Postcondition$r^2\le n<(r+1)^2$ identifyingfloor square root。</GlossaryItem>
+  <GlossaryItem term="阻尼Newton">ScaleNewton correction by$0<\lambda\le1$ tolimitstep size。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  source="Hacker's Delight, Second Edition"
+  author="Henry S. Warren, Jr."
+  license="本附录为基于原书Appendix B官方主题的独立教学重构；推导、代码、交互和练习均为重新编写。"
+  url="https://www.informit.com/store/hackers-delight-9780321842688"
+/>

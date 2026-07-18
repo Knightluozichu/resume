@@ -3,140 +3,306 @@ title: "WebGL 基础与上下文"
 type: C
 section: "计算机图形学与渲染"
 order: 3
-description: "Canvas 上下文获取、WebGL1/2 差异与上下文丢失处理"
+description: "从明确版本选择、canvas 像素尺寸和能力探测，到可测试的上下文丢失恢复"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://registry.khronos.org/webgl/specs/latest/2.0/"
 draft: false
 ---
 
-import { DogWebglBasicsDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-webgl-basics";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  DogWebglBasicsDiagram,
+  DogCanvasSizeDiagram,
+} from "@/components/mdx/deep-opengl/diagrams/dog-webgl-basics";
+import { DogStepFlowDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能写出获取 WebGL 上下文并初始化的标准流程
-- 能区分 WebGL1 与 WebGL2 的主要能力差异
-- 能解释上下文丢失事件及恢复策略
-- 能回答：为什么 uniform/attribute 位置要在链接后查询？
+
+- 能实现明确选择 WebGL2 或独立 WebGL1 回退路径的上下文初始化
+- 能计算 CSS 尺寸、devicePixelRatio、绘图缓冲和 viewport 的正确对应关系
+- 能比较 WebGL1/2 核心能力，并用限制值与扩展证据选择渲染路径
+- 能复现上下文丢失，暂停渲染并从 CPU 资源描述完整重建 GPU 状态
+
 </Objectives>
 
 ## 直觉引入
 
-WebGL 把 OpenGL ES 装进浏览器：你拿一块 `<canvas>` 画布，向它要一个「WebGL 上下文」——这就是你和 GPU 通话的电话线。拿到上下文后，所有 `gl.xxx` 调用都通过这条线指挥 GPU 画图。
+canvas 同时活在两个坐标系统里：CSS 决定它在页面上显示多大，width/height 属性决定 WebGL 实际拥有多少像素。如果只把 CSS 设成 800×450，而绘图缓冲仍是默认 300×150，浏览器会把低分辨率图像拉伸到大区域；画面能出现，却会模糊并改变宽高比。
 
-但浏览器环境比桌面复杂：标签页可能被切到后台导致 GPU 资源被回收（上下文丢失），用户显卡可能不支持 WebGL2。所以写 WebGL 不仅要会画，还要会「查能力、防丢失、能恢复」。
+WebGL 上下文也不只是“浏览器里的 OpenGL”。它是浏览器为某个 canvas 建立的受安全约束执行环境。版本选择、上下文属性、初始化、跨域资源、能力限制和丢失恢复都属于契约。页面切到后台可能暂停 requestAnimationFrame，但不等于一定丢失上下文；真正丢失必须由 webglcontextlost 事件确认。
 
-## 概念讲解
+## 明确选择版本路径
 
-### 上下文获取
+<Term def="从 canvas 获取、封装 WebGL 状态和命令并受浏览器安全规则约束的执行对象">WebGL 上下文</Term>由 canvas.getContext 创建。应用应先定义能力需求，再选择版本：
+
+- 只支持 WebGL2：请求 webgl2，失败时显示明确的不支持信息；
+- 同时支持 WebGL1：为 GLSL ES 1.00、VAO/实例化扩展、纹理格式和功能降级维护独立适配层；
+- 不要把 getContext("webgl2") || getContext("webgl") 当作完整回退，因为返回类型变了，后续同一套 WebGL2 命令仍会失败。
+
+WebGL2 以 OpenGL ES 3.0 为基线，核心包含 VAO、实例化、3D/数组纹理、uniform buffer、transform feedback、多 draw buffer 与整数能力。WebGL1 以 ES 2.0 为基线，VAO、实例化、MRT、浮点纹理可渲染性等能力往往需要不同扩展，而且扩展名称与调用入口也可能不同。
+
 ```js
-const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
+function createRendererContext(canvas, mode = "webgl2") {
+  const requested = {
+    alpha: false,
+    depth: true,
+    stencil: false,
+    antialias: true,
+    premultipliedAlpha: false,
+    preserveDrawingBuffer: false,
+    powerPreference: "high-performance",
+  };
+
+  const gl = canvas.getContext(mode, requested);
+  if (!gl) throw new Error(`${mode} context creation failed`);
+
+  const actual = gl.getContextAttributes();
+  if (!actual) throw new Error("context is already lost");
+
+  return {
+    gl,
+    actual,
+    version: gl.getParameter(gl.VERSION),
+    shadingLanguage: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
+    extensions: gl.getSupportedExtensions() ?? [],
+  };
+}
+
+const canvas = document.querySelector("#viewport");
+if (!(canvas instanceof HTMLCanvasElement)) throw new Error("missing canvas");
+const context = createRendererContext(canvas, "webgl2");
+console.log(context);
 ```
-优先 WebGL2（≈ES3），不支持则退回 WebGL1（≈ES2）。
 
-### WebGL1 vs WebGL2
-<Term def="基于 OpenGL ES 3.0 的浏览器渲染 API">WebGL2</Term>新增：3D 纹理、变换反馈、实例化（默认）、统一缓冲对象 UBO、GLSL 3.00、多重渲染目标 MRT、顶点数组对象 VAO 原生支持。WebGL1 需扩展才有 VAO/实例化。
+<Term def="创建上下文时请求的 alpha、depth、stencil、antialias 等缓冲和合成偏好">上下文属性</Term>是请求而非全部强制保证。应用应读取 getContextAttributes 的实际结果。preserveDrawingBuffer=false 通常更利于浏览器复用交换资源，也意味着合成后不能依赖默认帧缓冲旧内容长期保留；需要截图或跨帧积累时，应渲染到自己的 FBO 或在正确时机读取。
 
-### 上下文丢失
-浏览器在显存压力下可能触发<Term def="GPU 资源被回收导致 WebGL 上下文失效的事件">上下文丢失</Term>（webglcontextlost）。此时所有 GL 资源失效，需阻止默认行为、重新创建上下文与资源。
+## CSS 像素、设备像素与 viewport
 
-### 资源位置查询
-着色器链接后，用 `getAttribLocation`/`getUniformLocation` 查询属性与 uniform 的位置（槽号）。位置在链接时确定，链接后查询才有效；改了着色器需重新链接重查。
+<Term def="WebGL 真正渲染的像素存储，其尺寸由 drawingBufferWidth 和 drawingBufferHeight 报告">绘图缓冲</Term>尺寸不等于 CSS 尺寸。高 DPI 屏幕上，一个 CSS 像素可能对应多个设备像素。稳定流程是：
 
-## 交互Demo
+1. 读取 canvas.clientWidth/clientHeight；
+2. 乘以受控的 devicePixelRatio，并按性能预算限制最大倍率；
+3. 只有尺寸变化时更新 canvas.width/height；
+4. 使用 gl.drawingBufferWidth/Height 设置 viewport；
+5. 把实际宽高比传给投影矩阵和后处理。
 
-> 猜一猜：上下文丢失后，原来的 VBO 和纹理还能用吗？
-
-<DogWebglBasicsDiagram />
-
-<Stepper>
-<Step title="第一步：取上下文">
-从 canvas 获取 webgl2（或回退 webgl）上下文，查询支持的扩展，设定清屏色与视口。
-</Step>
-<Step title="第二步：建资源">
-编译链接着色器，查询 attribute/uniform 位置，创建 VAO/VBO/纹理并上传数据。
-</Step>
-<Step title="第三步：防丢失恢复">
-监听 webglcontextlost 阻止默认、标记需重建；webglcontextrestored 触发时重新创建全部资源与状态。
-</Step>
-</Stepper>
-
-## 代码对照
-
-WebGL2 初始化与上下文丢失处理（JS）：
+<DogCanvasSizeDiagram />
 
 ```js
-const canvas = document.querySelector("canvas");
-const gl = canvas.getContext("webgl2", { antialias: true, alpha: false });
-if (!gl) { alert("不支持 WebGL2"); }
+function resizeDrawingBuffer(gl, canvas, maxPixelRatio = 2) {
+  const ratio = Math.min(window.devicePixelRatio || 1, maxPixelRatio);
+  const width = Math.max(1, Math.round(canvas.clientWidth * ratio));
+  const height = Math.max(1, Math.round(canvas.clientHeight * ratio));
 
-// 查能力
-const ext = gl.getExtension("EXT_color_buffer_float"); // 浮点渲染目标
+  if (canvas.width !== width || canvas.height !== height) {
+    canvas.width = width;
+    canvas.height = height;
+  }
 
-// 链接程序后查位置
-const program = linkProgram(gl, vsSrc, fsSrc);
-const a_pos = gl.getAttribLocation(program, "a_pos");
-const u_mvp = gl.getUniformLocation(program, "u_mvp");
+  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+  return gl.drawingBufferWidth / gl.drawingBufferHeight;
+}
 
-// 上下文丢失处理
-canvas.addEventListener("webglcontextlost", (e) => {
-  e.preventDefault();        // 阻止默认，允许恢复
-  resourcesValid = false;    // 标记资源失效
-});
-canvas.addEventListener("webglcontextrestored", () => {
-  rebuildAllResources(gl);   // 重新创建着色器、缓冲、纹理、状态
-  resourcesValid = true;
-});
-
-// 渲染循环
-function render() {
-  if (!resourcesValid) { requestAnimationFrame(render); return; }
-  resizeCanvasToDisplaySize(canvas);
-  gl.viewport(0, 0, canvas.width, canvas.height);
-  gl.clearColor(0, 0, 0, 1);
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-  gl.drawElements(gl.TRIANGLES, count, gl.UNSIGNED_SHORT, 0);
-  requestAnimationFrame(render);
+function renderFrame() {
+  const aspect = resizeDrawingBuffer(gl, canvas);
+  updateProjection(aspect);
+  drawScene();
+  requestAnimationFrame(renderFrame);
 }
 ```
 
-`e.preventDefault()` 是恢复的关键：不阻止则上下文永久丢失。
+盲目使用完整 devicePixelRatio 可能把 4K 手机上的像素数量放大四倍以上，填充率和后处理带宽随面积增长。限制倍率、动态分辨率或离屏低分辨率路径都应建立在实际 drawing buffer 尺寸上。
+
+## 能力探测而非版本猜测
+
+<Term def="读取版本、限制值、格式和扩展，以运行时证据决定可用渲染路径">能力探测</Term>至少回答：
+
+- 最大纹理尺寸、数组层数、顶点属性数和 uniform block 限制是多少；
+- 有多少颜色附件和 draw buffer；
+- 所需浮点/半浮点格式能否采样、过滤并作为颜色附件；
+- timer query、压缩纹理、各向异性过滤等扩展是否存在；
+- shader 精度、program 链接和 framebuffer 完整性是否通过真实测试。
+
+getSupportedExtensions 只说明可请求的扩展名称；必须再调用 getExtension 获得对象并检查返回值。核心 API 中“有某个格式枚举”也不自动证明该格式可渲染，应创建最小纹理/FBO 并检查 FRAMEBUFFER_COMPLETE。
+
+| 能力 | WebGL1 | WebGL2 |
+| --- | --- | --- |
+| VAO | OES_vertex_array_object | 核心 |
+| 实例化 | ANGLE_instanced_arrays | 核心 |
+| MRT | WEBGL_draw_buffers | 核心 drawBuffers |
+| UBO | 无核心能力 | 核心 |
+| GLSL ES | 1.00 | 3.00 |
+| 3D/数组纹理 | 无核心能力 | 核心 |
+
+这张表只说明规范入口，不能替代限制值、扩展和格式可用性的实际检查。
+
+## 上下文丢失不是页面隐藏
+
+<Term def="浏览器通知应用当前 WebGL 执行环境与其 GPU 对象已失效的生命周期事件">上下文丢失</Term>可能由 GPU 重置、驱动问题、浏览器资源策略或测试扩展触发。document.visibilityState 变化只表示页面可见性变化；它适合暂停动画和节能，但不能作为资源失效证据。
+
+发生 webglcontextlost 后：
+
+- 立即停止提交 GL 命令和 requestAnimationFrame 循环；
+- 在事件中 preventDefault，表示应用希望浏览器在可能时恢复；这不是恢复时间或成功的保证；
+- 丢弃 program、shader、buffer、texture、VAO、FBO、query 及所有 location 缓存；
+- 保留 CPU 侧 shader 源码、网格、图片来源、材质和资源描述；
+- 等 webglcontextrestored 到来后，按依赖顺序重建全部资源与非默认状态。
+
+<DogWebglBasicsDiagram />
+
+## 分步设计可恢复渲染器
+
+先预测：上下文恢复后重新链接了同一份 shader，旧的 WebGLUniformLocation 是否还能继续传给 uniformMatrix4fv？
+
+<Stepper>
+<Step title="第一步：保存 CPU 资源描述">
+<DogStepFlowDiagram
+  caption="第 1 步：可恢复性来自 CPU 描述，而不是长期保存 GPU 句柄。"
+  stage={1}
+  stages={["保存可重建的 CPU 资源描述", "从描述创建完整 GPU 资源图", "丢失时停机并在恢复后原子替换"]}
+/>
+
+网格保存 TypedArray 或可重新下载的 URL，纹理保存 ImageBitmap/URL 与采样参数，材质保存 shader 源码和 uniform 默认值。GPU 句柄只属于当前资源代。
+</Step>
+<Step title="第二步：集中创建资源图">
+<DogStepFlowDiagram
+  caption="第 2 步：程序先链接，位置再查询，VAO/FBO 最后引用已建立资源。"
+  stage={2}
+  stages={["保存可重建的 CPU 资源描述", "从描述创建完整 GPU 资源图", "丢失时停机并在恢复后原子替换"]}
+/>
+
+用 createResources(gl, descriptors) 统一编译 program、查询位置、上传 buffer/texture、配置 VAO/FBO。初始化与恢复走同一条函数，避免两套逻辑漂移。
+</Step>
+<Step title="第三步：停机、重建与恢复提交">
+<DogStepFlowDiagram
+  caption="第 3 步：lost 期间不绘制，restored 后用新资源图一次性替换旧引用。"
+  stage={3}
+  stages={["保存可重建的 CPU 资源描述", "从描述创建完整 GPU 资源图", "丢失时停机并在恢复后原子替换"]}
+/>
+
+lost 事件取消帧循环并清空 GPU 引用；restored 事件重新读取上下文能力、重建资源，成功后再恢复 rAF。任一步失败都保持停机并显示诊断。
+</Step>
+</Stepper>
+
+## 可测试的丢失恢复实现
+
+```js
+let frameId = 0;
+let generation = 0;
+let resources = createResources(gl, descriptors);
+
+function schedule() {
+  frameId = requestAnimationFrame(frame);
+}
+
+function frame() {
+  draw(gl, resources);
+  schedule();
+}
+
+canvas.addEventListener("webglcontextlost", (event) => {
+  event.preventDefault();
+  cancelAnimationFrame(frameId);
+  resources = null;
+});
+
+canvas.addEventListener("webglcontextrestored", () => {
+  try {
+    generation += 1;
+    const next = createResources(gl, descriptors);
+    next.generation = generation;
+    resources = next;
+    schedule();
+  } catch (error) {
+    showFatalError("WebGL 资源恢复失败", error);
+  }
+});
+
+// 仅用于自动化测试，不作为生产恢复机制。
+const lose = gl.getExtension("WEBGL_lose_context");
+lose?.loseContext();
+setTimeout(() => lose?.restoreContext(), 1000);
+```
+
+program 重新链接后，attribute/uniform 位置和 WebGLUniformLocation 都属于新 program，旧缓存必须丢弃并重查。恢复测试应验证三件事：lost 期间绘制计数停止；restored 后资源 generation 增加；固定基准场景重新出现且无错误。
+
+## 浏览器安全边界
+
+WebGL 规范要求实现避免把其他进程或旧资源数据泄露给页面，因此未初始化资源、越界访问和着色器行为受到比原生 API 更严格的约束。上传跨域图片到纹理还需要服务器允许 CORS；仅仅能在 img 标签显示，并不表示能安全读取到 WebGL 纹理。
+
+开发服务器与生产 CDN 应共同验证 Access-Control-Allow-Origin、图片解码失败、纹理尺寸和颜色空间。安全约束导致的 INVALID_VALUE 或纹理上传异常，不能靠禁用浏览器策略解决。
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** 切到别的标签页再切回来，画面全黑或报错。
-**原因 →** 浏览器回收了 GPU 资源触发上下文丢失，原 VBO/纹理/程序全部失效，未处理恢复。
-**修法 →** 监听 webglcontextlost 调 preventDefault、webglcontextrestored 里重建所有资源与状态，渲染循环检测 resourcesValid 跳过失效帧。
+**现象 →** WebGL2 创建失败后自动得到 WebGL1，但仍使用 #version 300 es、createVertexArray 和 drawBuffers。
+**原因 →** getContext 回退只改变了上下文对象，没有生成 WebGL1 的 shader、扩展适配和格式降级。
+**修法 →** 要么明确要求 WebGL2，要么维护独立 WebGL1 后端并以能力表选择，不能用逻辑或运算符代替适配层。
 </Callout>
 
 <Callout type="trap">
-**现象 →** getAttribLocation 返回 -1，属性数据上传了却没生效。
-**原因 →** 着色器里该属性被优化掉（未使用），或程序未链接就查询。
-**修法 →** 确保属性在着色器中真正被使用，链接成功后再查询；返回 -1 表示无需设定，跳过即可，不算错误。
+**现象 →** 高 DPI 屏幕画面模糊，或修复模糊后 GPU 时间和显存突然翻倍。
+**原因 →** CSS 尺寸、drawing buffer 和 viewport 不一致，或无上限使用 devicePixelRatio 导致像素面积暴涨。
+**修法 →** 按受控倍率同步 canvas 像素尺寸和 viewport，记录实际面积，并为移动端设置分辨率预算。
+</Callout>
+
+<Callout type="trap">
+**现象 →** context restored 后重新绘制仍报错，旧 uniform location 看起来名字也没变。
+**原因 →** 所有 GPU 对象及其位置对象都属于旧上下文资源代，字符串名字相同不代表句柄仍有效。
+**修法 →** 从 CPU 描述重建 program 后重新查询全部位置，再配置 VAO、纹理和 FBO，最后原子替换资源图。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：WebGL1 和 WebGL2 主要能力差异有哪些？为什么要优先用 WebGL2？
+**问题 1**：为什么 getContext("webgl2") || getContext("webgl") 不是完整兼容方案？至少列出三项必须分叉的内容。
 
 <Answer>
-WebGL2（≈ES3）新增：3D 纹理、变换反馈、默认实例化、统一缓冲 UBO、GLSL 3.00、多重渲染目标 MRT、原生 VAO。WebGL1 需扩展才有 VAO/实例化，能力弱。优先 WebGL2 能用更现代 API、减少扩展依赖、着色器更强，写复杂效果更方便；不支持时再回退 WebGL1。
+回退只返回 WebGL1 上下文，后续 WebGL2 代码不会自动降级。必须分叉 GLSL ES 3.00 与 1.00 源码；VAO、实例化和 MRT 等核心调用与扩展入口；纹理/帧缓冲格式和可渲染性；UBO、3D 纹理等不存在的功能；以及对应限制值与测试。没有这些适配时，应明确拒绝不支持 WebGL2 的环境。
 </Answer>
 
-**问题**：上下文丢失后原来的资源还能用吗？恢复流程是什么？
+**问题 2**：canvas CSS 尺寸为 600×400，devicePixelRatio 为 3，但项目规定最大倍率 2。绘图缓冲和 viewport 应设成什么？投影宽高比是多少？
 
 <Answer>
-不能。上下文丢失时所有 GL 资源（程序、缓冲、纹理、VAO、状态）全部失效。恢复流程：webglcontextlost 事件调 preventDefault 阻止默认销毁；webglcontextrestored 触发时重新创建着色器、缓冲、纹理并重设状态，渲染循环在失效期间跳过绘制。关键是 preventDefault，否则上下文永久丢失。
+受控倍率为 min(3,2)=2，因此 canvas.width=1200、canvas.height=800。随后用 gl.drawingBufferWidth/Height 设置 viewport，通常为 1200×800；投影宽高比为 1200/800=1.5，与 CSS 的 600/400 一致。若实现因上限返回不同实际尺寸，应以 drawingBufferWidth/Height 为准。
+</Answer>
+
+**问题 3**：如何证明上下文恢复实现真的有效，而不是只重新启动了 requestAnimationFrame？
+
+<Answer>
+使用 WEBGL_lose_context 在测试环境触发丢失，断言 lost 事件调用 preventDefault 且绘制计数停止；恢复后确认重新读取能力、资源 generation 增加、program 与位置重新创建、VAO/纹理/FBO 重建；最后比较固定基准场景像素或截图并确认 getError 无异常。只看到 rAF 回调恢复不足以证明 GPU 资源正确。
 </Answer>
 </Exercises>
 
+## 小结
+
+- WebGL1 回退是独立后端适配，不是 getContext 调用后的自动兼容。
+- 上下文属性是请求，实际缓冲配置要通过 getContextAttributes 和能力查询确认。
+- CSS 尺寸、受控像素倍率、绘图缓冲、viewport 与投影宽高比必须同步。
+- 页面隐藏不等于上下文丢失；只有 lost/restored 事件决定 GPU 资源代生命周期。
+- CPU 资源描述与集中创建函数使初始化和恢复复用同一链路，自动化丢失测试才能证明它有效。
+
 <Glossary>
-<GlossaryItem term="WebGL 上下文">从 canvas 获取的、与 GPU 通话的接口，所有 gl 调用通过它指挥渲染。</GlossaryItem>
-<GlossaryItem term="WebGL2">基于 OpenGL ES 3.0 的浏览器渲染 API，新增 3D 纹理、UBO、MRT 等能力。</GlossaryItem>
-<GlossaryItem term="上下文丢失">浏览器在显存压力下回收 GPU 资源使 WebGL 上下文失效的事件，需 preventDefault 后恢复。</GlossaryItem>
-<GlossaryItem term="位置查询">链接后用 getAttribLocation/getUniformLocation 查属性与 uniform 槽号，改着色器需重链重查。</GlossaryItem>
+<GlossaryItem term="WebGL 上下文">从 canvas 获取、封装 WebGL 状态与命令并受浏览器安全规则约束的执行对象。</GlossaryItem>
+<GlossaryItem term="上下文属性">创建上下文时请求的颜色、深度、模板、抗锯齿和合成偏好，实际结果需再次读取。</GlossaryItem>
+<GlossaryItem term="绘图缓冲">WebGL 实际渲染的像素存储，尺寸由 drawingBufferWidth 和 drawingBufferHeight 报告。</GlossaryItem>
+<GlossaryItem term="能力探测">读取版本、限制值、格式和扩展，并通过最小资源测试决定渲染路径。</GlossaryItem>
+<GlossaryItem term="上下文丢失">浏览器通知应用当前 WebGL 执行环境及 GPU 对象已失效的生命周期事件。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="深入理解 OpenGL WebGL OpenGL ES" adaptedUrl="" />
+<Attribution
+  adaptedFrom="Khronos WebGL 2.0 Specification"
+  adaptedUrl="https://registry.khronos.org/webgl/specs/latest/2.0/"
+/>

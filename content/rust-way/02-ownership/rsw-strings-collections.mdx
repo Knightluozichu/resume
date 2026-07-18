@@ -1,0 +1,121 @@
+---
+title: "第8章 字符串与集合"
+type: C
+section: "Rust之道 · 所有权与抽象"
+order: 8
+description: "从bytes、UTF-8、char和字符串边界进入处理、修改、查找、转换，再比较Vec、HashMap、HashSet与BTree集合的容量和不变量。"
+demo: true
+math: false
+sourceUrl: "https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53297"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RswEncodingLab, RswStringOperationLab, RswCollectionChoiceLab } from "@/components/mdx/rust-way/diagrams/rsw-strings-collections";
+
+<Objectives>
+- 能区分bytes、UTF-8字符串slice、Unicode scalar和用户可见字符，并判断合法切片边界
+- 能实现字符串遍历、修改、查找与转换，同时保留byte offset、编码和解析错误
+- 能比较Vec、HashMap、HashSet、BTreeMap与BTreeSet，并验证容量、扩容和key不变量
+</Objectives>
+
+## 从“第几个字符”究竟是什么开始
+
+字符串问题至少有四层：原始bytes、编码后的Unicode scalar、组合后的grapheme cluster和用户界面的字形。Rust `String`与`str`保证UTF-8，`char`表示Unicode scalar value，不等于用户看到的完整字符。<Term def="在byte、UTF-8 code point、grapheme和展示字形之间明确索引单位的约定。">text indexing contract</Term>解释了Rust为何不允许直接`text[0]`。
+
+先预测：`"中".len()`返回3，因为len以UTF-8 bytes计；`chars().count()`返回1，但某些emoji的grapheme数量仍需专门Unicode分段库。
+
+<RswEncodingLab />
+
+## 字符编码、char与String分类
+
+`Vec<u8>`可保存任意bytes，`String`保存owned UTF-8，`&str`借用UTF-8片段，`char`是四字节Rust值。<Term def="原始bytes经过指定编码验证后才能进入字符串类型的边界。">UTF-8 validation boundary</Term>通常由`String::from_utf8`返回Result；`from_utf8_lossy`会替换非法序列，应由业务明确是否允许信息损失。
+
+```rust
+let bytes = vec![0xE4, 0xB8, 0xAD];
+let text = String::from_utf8(bytes).expect("valid UTF-8");
+assert_eq!(text, "中");
+assert_eq!(text.len(), 3);
+assert_eq!(text.chars().count(), 1);
+```
+
+## 字符串处理与遍历
+
+按bytes遍历适合协议和ASCII边界，按chars遍历适合Unicode scalar逻辑，按lines或split处理分隔结构。<Term def="根据协议选择bytes、chars、graphemes、lines或tokens作为迭代单位的策略。">text iteration unit</Term>必须在算法入口固定，否则offset和长度会混用。
+
+## 修改、拼接与容量
+
+`push`追加char，`push_str`追加str，`insert`和`replace_range`要求byte index位于UTF-8边界。String像Vec一样有length和capacity，扩容可能移动buffer。<Term def="动态缓冲中已初始化byte数量与无需重分配可容纳byte数量之间的关系。">string capacity invariant</Term>要求持有slice时不能再修改可能扩容的owner。
+
+```rust
+let mut message = String::with_capacity(16);
+message.push_str("rust");
+message.push('道');
+assert_eq!(message, "rust道");
+assert!(message.capacity() >= message.len());
+```
+
+## 查找、切片与转换
+
+`find`返回匹配起始byte offset，`contains`只回答存在，`strip_prefix`表达协议前缀；切片区间必须落在字符边界。数字解析用`parse`返回Result，格式化产生新String。<Term def="在查找结果中明确offset单位、pattern语义和未匹配通道的协议。">string search coordinate</Term>禁止把byte offset直接显示为“第几个字符”。
+
+<RswStringOperationLab />
+
+## Vec：连续存储、长度与扩容
+
+Vec保存连续同型元素，提供O(1)索引和摊销push。`reserve`至少预留额外容量，`shrink_to_fit`只是请求缩容；remove中间元素需要移动后续值，swap_remove不保序但更快。<Term def="集合扩容、元素移动和引用失效之间必须保持的规则。">collection relocation invariant</Term>是unsafe指针和缓存设计的关键。
+
+```rust
+let mut values = Vec::with_capacity(2);
+values.extend([3, 1, 2]);
+values.sort_unstable();
+assert_eq!(values, [1, 2, 3]);
+```
+
+## 映射与集合：Hash还是有序树
+
+HashMap与HashSet要求Hash和Eq一致，适合平均常数查找；BTreeMap与BTreeSet要求Ord，提供排序遍历和范围查询。Key进入集合后不得改变影响Hash、Eq或Ord的状态，否则查找结构与逻辑值不一致。需要稳定输出时显式排序或用BTree，不应依赖Hash迭代顺序。
+
+<RswCollectionChoiceLab />
+
+<Stepper>
+  <Step title="选择文本单位"><RswEncodingLab /></Step>
+  <Step title="标注Offset">对每个length与index注明bytes、chars还是graphemes，并用中文、组合符和emoji测试。</Step>
+  <Step title="选择集合"><RswCollectionChoiceLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="char就是一个用户可见字符">
+char是Unicode scalar value；组合音标和多code point emoji可能由多个char形成一个grapheme。UI光标和截断应使用Unicode分段算法。
+</Callout>
+
+<Callout type="trap" title="HashMap遍历顺序在同一输入下稳定">
+实现和随机哈希种子都可能改变顺序。测试、序列化或用户输出需要稳定顺序时，排序keys或使用BTreeMap。
+</Callout>
+
+## 本章回顾
+
+本章覆盖字符串与集合、字符编码、字符与字符串分类，字符串处理、修改、查找与转换，Vec，映射与集合以及容量管理。先固定文本索引单位，再选择owner和buffer；集合则由顺序、复杂度、key不变量与容量行为决定。
+
+<Exercises>
+**问题 1：为什么`&text[0..1]`可能panic？**
+<Answer>区间是byte offset，若byte 1落在多字节UTF-8序列中间，就不是合法字符边界。应按chars或专门grapheme库遍历，或先验证`is_char_boundary`。</Answer>
+
+**问题 2：什么时候选择BTreeMap？**
+<Answer>需要按key稳定排序、范围查询或可预测最坏O(log n)时选择BTreeMap；只需平均快速精确查找且不关心顺序时HashMap通常合适。</Answer>
+
+**问题 3：Vec扩容为何会让引用失效？**
+<Answer>容量不足时allocator可能在新地址分配更大buffer并移动元素，旧地址不再有效。借用检查器会阻止持有元素引用时进行可能改变Vec的操作。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="text indexing contract" definition="明确bytes、code points、graphemes和字形索引单位。" />
+  <GlossaryItem term="UTF-8 validation boundary" definition="bytes进入字符串前执行编码验证的边界。" />
+  <GlossaryItem term="text iteration unit" definition="选择bytes、chars、graphemes、lines或tokens作为遍历单位。" />
+  <GlossaryItem term="string capacity invariant" definition="UTF-8 buffer的len、capacity与引用有效性关系。" />
+  <GlossaryItem term="string search coordinate" definition="查找offset单位、pattern和未匹配通道的协议。" />
+  <GlossaryItem term="collection relocation invariant" definition="扩容、元素移动和引用失效之间的规则。" />
+</Glossary>
+
+<Attribution adaptedFrom="《Rust编程之道》第8章 字符串与集合" adaptedUrl="https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53297" />

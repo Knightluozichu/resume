@@ -1,0 +1,212 @@
+---
+title: "Chapter 8. Methods"
+type: C
+section: "CLR via C# 4e · Designing Types"
+order: 8
+description: "贯通类/结构/type constructor、operator与conversion、extension/ExtensionAttribute、partial method和可版本化方法契约。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcConstructorLifecycleLab, CvcExtensionPartialLab, CvcOperatorConversionLab } from "@/components/mdx/clr-via-csharp/diagrams/methods";
+
+<Objectives>
+
+- 能分析class、struct和type constructor的初始化顺序、失败状态与资源清理
+- 能设计operator和conversion method，使对称性、损失、异常和跨语言调用保持明确
+- 能比较instance/extension/partial method的解析与版本行为，并复现新增成员造成的source rebinding
+
+</Objectives>
+
+## 为什么Method是Invariant的执行边界
+
+Method把输入转换成输出或状态迁移；constructor建立初始invariant，operator表达类型代数，conversion跨表示，extension在不修改原type的前提下提供静态helper，partial method连接generated与handwritten代码。它们最终都以metadata methods存在，却有不同命名、调用、选择和版本规则。设计时应先写前置条件、后置条件、side effects、failure、concurrency和cancellation，再选语法。
+
+先预测：class constructor抛异常后对象是否可能被caller拿到；struct `default(T)`是否总会调用parameterless constructor；type constructor失败后下一次访问能否自动重试；operator是否virtual；extension method能否访问private field；给library type新增instance member是否可能改变旧source重新编译结果。后文把这些问题放进construction、binding和version三条链。
+
+<Term def="方法对输入、状态变化、返回、异常、并发与资源释放共同作出的可观察承诺。">method behavior contract</Term>
+
+## Instance Constructors and Classes (Reference Types)
+
+Class instance创建先分配并zero initialize对象，再执行base instance initialization，最后执行当前type的field initializers与constructor body（具体源顺序由C#规则编排）。Constructor必须在返回前建立所有可公开观察的invariant，不应把`this`发布到static/event/异步任务，让其它代码看到half-initialized object。
+
+```csharp
+public sealed class Journal : IDisposable
+{
+    private readonly FileStream _stream;
+    private bool _disposed;
+
+    public Journal(string path)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(path);
+        _stream = new FileStream(path, FileMode.Append, FileAccess.Write, FileShare.Read);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _stream.Dispose();
+        _disposed = true;
+    }
+}
+```
+
+若constructor中获取多个resources，后续步骤失败必须释放已获取部分；可先在locals中完成，全部成功再赋readonly fields，或使用factory/try-finally。需要async I/O的创建不应阻塞constructor，使用`CreateAsync` factory返回完全初始化对象。Virtual call、event或callback也不应出现在constructor，因为derived state可能尚未建立。
+
+<Term def="Constructor完成后对象必须始终满足、所有public method都可依赖的状态条件。">construction invariant</Term>
+
+## Instance Constructors and Structures (Value Types)
+
+Struct constructor初始化一份value storage，必须保证fields definite assignment。`default(T)`和zeroed array在原书时代不会调用用户parameterless struct constructor；现代C#允许显式parameterless constructor，但CLR仍存在产生zeroed default value的路径，所以valid value type必须能容忍全零状态，或所有operation显式检测invalid default。
+
+Struct assignment复制整个value。Readonly struct与readonly members减少defensive copy；大型mutable struct经property返回、foreach或interface调用时容易改副本。Constructor不应让“默认值不可表示”成为隐形炸弹，必要时用class或带TryCreate的validated value object。
+
+## Type Constructors
+
+Type constructor `.cctor`初始化static fields，每个runtime type/load context执行一次。若type标记`beforefieldinit`，runtime可在首次static field access前的任意允许时机执行；显式static constructor通常提供更严格触发语义。不要依赖非常具体的时刻，只依赖“使用static state前已完成”。
+
+Type initializer由CLR同步，但body内再等待其它type initialization、lock或async result可deadlock。抛异常会包装为`TypeInitializationException`，该type在当前context后续访问通常继续失败，不是可靠重试器。把I/O、config validation和可恢复连接移到显式host startup/service lifecycle。
+
+<Stepper>
+  <Step title="切换class、struct、type constructor与factory"><CvcConstructorLifecycleLab /></Step>
+  <Step title="画初始化时序">标出zeroing、base/current initializers、resource acquisition、publication和失败cleanup。</Step>
+  <Step title="注入失败与并发">在每个构造步骤抛错，并行首次访问static type，验证没有泄漏、半初始化或死锁。</Step>
+</Stepper>
+
+<Callout type="trap" title="Static constructor失败后，下次调用会重新执行以便恢复">
+CLR通常缓存type initialization failure，后续访问继续抛异常。可恢复工作应放在显式、可重试且有状态机的服务初始化，而不是`.cctor`。
+</Callout>
+
+## Operator Overload Methods
+
+C# operator overload编译成`op_Addition`、`op_Equality`等static special-name methods，选择发生在compile time，不支持virtual dispatch。Operator应符合用户熟悉的代数直觉：`+`最好不修改operand，`==`与`!=`成对，比较与Equals/hash保持一致，checked operator明确溢出。缺乏自然含义时使用命名method更清楚。
+
+```csharp
+public readonly record struct Money(decimal Amount, string Currency)
+{
+    public static Money operator +(Money left, Money right)
+    {
+        if (!StringComparer.Ordinal.Equals(left.Currency, right.Currency))
+            throw new InvalidOperationException("Currency mismatch");
+        return new Money(checked(left.Amount + right.Amount), left.Currency);
+    }
+}
+```
+
+Null behavior、overflow、unit conversion和exception应一致。Commutative operator若两种operand类型都有candidate，避免在两个assemblies各定义模糊conversion/operator。Performance-sensitive numeric type还应实现现代generic math interfaces，但这是本书之后的能力，仍遵循static capability与代数contract。
+
+## Operators and Programming Language Interoperability
+
+不同CLR语言对operator overload的语法支持不同；metadata consumer始终可看到`op_*` method，但未必能用运算符语法。Public library应提供等价命名method，特别是conversion、checked behavior或业务含义复杂时。CLS也限制某些operator/type组合的跨语言surface。
+
+不要只写C#调用测试。用目标consumer语言引用assembly，验证member可发现、签名可表达、异常可处理。Operator是便利surface，不应是唯一可达的核心功能。
+
+## Conversion Operator Methods
+
+User-defined conversion是source/target type声明的static `op_Implicit`或`op_Explicit`。Implicit conversion应永不丢信息、通常不抛异常且成本可预期；可能失败、丢精度或昂贵的转换用explicit或命名Try/Create。多跳user-defined conversion不会无限搜索，过多互转会造成overload ambiguity。
+
+<Term def="对不会丢信息的隐式转换和可能失败/损失的显式转换作出一致选择的规则。">conversion loss policy</Term>
+
+Serialization DTO到domain entity往往需要validation、service lookup和多个errors，不适合cast operator；使用factory/result。Strongly typed id到primitive可考虑explicit，避免意外混合。Conversion contract还要定义null、culture、rounding、overflow和unit。
+
+<Stepper>
+  <Step title="切换operator、conversion、virtual与static abstract"><CvcOperatorConversionLab /></Step>
+  <Step title="建立代数测试">验证identity、associativity适用范围、symmetry、overflow、null和unit mismatch。</Step>
+  <Step title="做跨语言调用">从非C# consumer使用命名method与operator metadata，确认能力不是语法锁定。</Step>
+</Stepper>
+
+<Callout type="trap" title="Implicit conversion更方便，所以任何常用转换都应Implicit">
+若转换会失败、丢精度、分配昂贵对象或触发I/O，隐藏在assignment/overload resolution中会制造意外。使用explicit或命名Try方法暴露成本与失败。
+</Callout>
+
+## Extension Methods
+
+Extension method是static method，第一个参数带`this`修饰；调用`receiver.Extension()`只是C#语法糖，不修改extended type，也不获得private access。Compiler先查适用instance members，再在imported namespaces中找extension candidates。因此library后来新增同名instance member时，新编译source可能绑定到不同实现，旧binary仍调用原static method。
+
+```csharp
+public static class SequenceExtensions
+{
+    public static bool HasAtLeast<T>(this IEnumerable<T> source, int count)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        if (count <= 0) return true;
+
+        using IEnumerator<T> iterator = source.GetEnumerator();
+        while (count-- > 0)
+            if (!iterator.MoveNext()) return false;
+        return true;
+    }
+}
+```
+
+Extension适合为stable abstraction添加derived operation，不适合绕过owner塞入核心invariant。Namespace就是discovery scope，通用命名容易冲突。Receiver为null时static method仍可进入body，与instance call自动null check不同；除非语义明确支持null，入口应检查。
+
+<Term def="Compiler在找不到适用instance member后，依据imported namespace与overload resolution选择静态扩展方法的过程。">extension binding</Term>
+
+## Rules and Guidelines
+
+Method命名表达动作；参数少且owner明确；返回主要结果，异常表达无法完成contract而非普通分支；长操作接受CancellationToken；async方法返回Task/ValueTask并避免sync-over-async；公共方法验证caller inputs，内部方法依赖已建立invariant。Overload family应共享相同语义，不让default、null或culture在不同overload悄悄变化。
+
+方法短不等于好，关键是一个cohesive transition与清楚evidence。记录side effects顺序和partial failure；外部I/O需idempotency/compensation；线程安全要说明是否可并发调用。性能优化前测allocation、dispatch与I/O，不把所有方法inline或static化。
+
+## Extending Various Types with Extension Methods
+
+可扩展interface、generic sequence、enum、nullable和constrained type。对broad type如`object`或`string`添加常见名字会污染所有调用点；对domain-specific interface放在专用namespace更稳。Value type receiver按值会复制，`this ref`可修改caller storage但扩大alias/lifetime要求，public API要谨慎。
+
+Extension还能作为适配层把旧API投影到新命名，但应有deprecation计划。不要用它假装实现interface；runtime type并不会因此拥有新member，reflection、dynamic和其他语言也不会按instance方式发现。
+
+## The Extension Attribute
+
+Compiler在extension container和methods上发出`ExtensionAttribute`，工具可据metadata识别；C#源码通常不应手写该attribute，而用`this` parameter。Attribute不改变CLR dispatch，仍是static call。Trimming/AOT场景若工具通过reflection发现extensions，需要明确metadata preservation或source generation。
+
+## Partial Methods
+
+Partial method连接同一个partial type的declaration与implementation，常用于generated code预留hook。原书时代partial method隐式private、void且若无实现则declaration与calls被compiler消除；现代C#允许有accessibility、return/out等更丰富形式时，通常要求implementation。阅读项目必须根据language version判断规则。
+
+<Term def="Generated part与handwritten part在同一次编译中通过partial method建立的受控扩展契约。">partial generation hook</Term>
+
+Generator拥有signature与调用时机，用户实现不应修改generated file。Hook应说明是否可重入、能否抛异常、是否必须快速完成。复杂可插拔行为更适合interface/delegate；partial hook是compile-time collaboration，不是runtime plugin。
+
+<Stepper>
+  <Step title="切换instance、extension、partial与reflection视图"><CvcExtensionPartialLab /></Step>
+  <Step title="复现source rebinding">先编译调用extension的consumer，再给type添加同名instance member；比较旧binary与重新编译source。</Step>
+  <Step title="审计generated contract">固定generator/language version，验证缺实现、异常、regeneration和trimming后的实际method集合。</Step>
+</Stepper>
+
+## 本章回顾：Method选择等于Failure与Version选择
+
+1. Class/struct constructor建立instance value，type constructor建立static invariant；可恢复I/O应放显式factory/service。
+2. Operator/conversion是static compile-time binding，应遵循自然代数、损失、异常和跨语言规则。
+3. Extension是static syntax sugar，instance member优先，新版本可能导致source rebinding。
+4. ExtensionAttribute帮助compiler/tool发现，不改变runtime type；partial method只连接同一次编译的parts。
+5. 每个method必须明确inputs、state、outputs、failure、cancellation、concurrency和版本consumer。
+
+<Exercises>
+
+**问题 1：Constructor第三步失败，但前两步已打开文件和注册event，如何修复？**
+
+<Answer>不要在对象发布前留下外部副作用。先在locals中获取资源，用try/catch/finally在失败时反向释放/退订，全部成功后再赋fields；复杂或async创建改为factory。增加每一步fault injection，断言无handle、subscription或half object泄漏。</Answer>
+
+**问题 2：新增instance method后为什么重新编译consumer行为变了？**
+
+<Answer>C# lookup先选applicable instance member，再考虑extension。旧binary已静态引用extension method，替换library后仍调用它；重新编译source会选新增instance member。用API diff与source-compat fixture发现这种rebind，必要时换名或保留一致语义。</Answer>
+
+**问题 3：一个Money转换成decimal应Implicit、Explicit还是Method？**
+
+<Answer>Money还包含currency，直接decimal会丢单位，不能implicit。若只允许已知base currency且失败可能发生，用显式conversion也容易隐藏rate/context；更清楚是`ConvertTo(currency, rateProvider)`或`TryGetAmount(expectedCurrency)`，显式表达unit、依赖、rounding和failure。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="method behavior contract" definition="输入、状态、输出、失败、并发与资源释放的可观察承诺。" />
+  <GlossaryItem term="construction invariant" definition="构造完成后所有public操作可依赖的对象状态。" />
+  <GlossaryItem term="conversion loss policy" definition="按信息损失与失败决定implicit、explicit或命名转换。" />
+  <GlossaryItem term="extension binding" definition="Compiler在instance lookup后选择static extension的过程。" />
+  <GlossaryItem term="partial generation hook" definition="Generated与handwritten parts在编译期连接的扩展协议。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 8: Methods" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

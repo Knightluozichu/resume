@@ -1,0 +1,196 @@
+---
+title: "Chapter 23. Span<T> and Memory<T>"
+type: C
+section: "C# 10 Nutshell · Concurrency and Low-level"
+order: 23
+description: "覆盖Span切片与复制、零分配文本、Memory跨异步生命周期、前向枚举以及stackalloc/unmanaged内存，建立view与owner契约。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch23.html"
+draft: false
+---
+
+import { CtcLowLevelMemoryLab, CtcSpanLifetimeLab, CtcSpanSliceCopyLab } from "@/components/mdx/csharp-10-core/diagrams/span-and-memory";
+
+<Objectives>
+
+- 能解释Span、ReadOnlySpan、Memory与IMemoryOwner的storage/lifetime，判断view是否可逃逸或跨await
+- 能实现slice、overlap copy和span-based text parser，比较allocation与边界失败语义
+- 能设计stackalloc、pinning和unmanaged memory路径，并复现越界、use-after-owner与double-free风险
+
+</Objectives>
+
+## 为什么View不拥有Memory
+
+Span/Memory描述一段连续存储的起点与长度，本身不复制也通常不拥有数据。正确性取决于底层array/string/stack/native/pool仍有效，且mutation规则一致。性能收益来自避免substring、临时array和重复copy，不来自绕过bounds或GC。
+
+先预测：Span切片会复制元素吗；ReadOnlySpan保证底层永远不变化吗；Memory可跨await所以无需保留owner吗；stackalloc越大越能减少GC吗；把array pin住能让native长期保存pointer吗。答案都是否。
+
+<Term def="每个view必须说明底层storage owner、有效期、可变性与派生slice何时全部失效。">memory-view ownership contract</Term>
+
+## Spans and Slicing
+
+Span&lt;T&gt;是ref struct，包含reference/pointer-like位置与length，可指向array、stackalloc、unmanaged memory；ReadOnlySpan&lt;T&gt;只禁止通过该view写，不保证其他alias不修改底层。Ref struct不能box、作为class field、跨await/yield或被普通lambda capture，编译器用escape analysis限制悬空引用。
+
+Slice(start,length)创建O(1) subview，indexer和range做bounds检查。`span[a..b]`仍是view。Empty span有Length 0，不能据其reference identity推断来源。API入参若只读优先ReadOnlySpan，返回Span前确保owner lifetime不短于caller使用。
+
+```csharp
+static bool TryParseHeader(ReadOnlySpan<char> line, out Header header)
+{
+    header = default;
+    int separator = line.IndexOf(':');
+    if (separator <= 0) return false;
+
+    ReadOnlySpan<char> name = line[..separator].Trim();
+    ReadOnlySpan<char> value = line[(separator + 1)..].Trim();
+    if (!int.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out int number))
+        return false;
+
+    header = new Header(name.ToString(), number);
+    return true;
+}
+```
+
+只有最终需要长期保存的name才ToString；临时parse过程不分配substring。先benchmark，短字符串优化不应破坏可读性。
+
+<Stepper>
+  <Step title="切换Span、ReadOnlySpan、Memory与owner"><CtcSpanLifetimeLab /></Step>
+  <Step title="画view graph">标出array/stack/pool/native owner、每个slice offset/length、mutability和结束点。</Step>
+  <Step title="尝试非法escape">把Span放field、跨await、capture并让owner Dispose，区分编译期阻止与运行期责任。</Step>
+</Stepper>
+
+<Callout type="trap" title="ReadOnlySpan表示底层数据不可变">
+它只限制通过当前view写。若另一个Span、array引用或native代码修改相同storage，读取结果仍会变化；并发immutability需owner协议。
+</Callout>
+
+<Term def="编译器证明ref-like值不会活得比其引用storage更久，也不会逃逸到heap或异步状态机的规则。">ref-escape boundary</Term>
+
+## CopyTo and TryCopyTo
+
+`source.CopyTo(destination)`要求destination足够长，否则抛ArgumentException；`TryCopyTo`不足时返回false且不做partial copy。两者处理同一storage内overlap，语义类似memmove；普通手写前向loop在右移时会覆盖尚未读取数据。
+
+`ToArray`明确分配copy，使结果脱离owner。区分slice（alias）与copy（独立storage）是API contract的一部分。Copy前验证有效逻辑长度，不把pooled array capacity或Memory剩余区域当数据。
+
+## Working with Text
+
+String.AsSpan、ReadOnlySpan&lt;char&gt;与MemoryExtensions提供IndexOf、StartsWith、Equals、Trim、Split-like enumeration和Parse/TryParse overload。Comparison仍要显式StringComparison：protocol/key用Ordinal/OrdinalIgnoreCase，面向用户排序/匹配按CultureInfo；零分配不会自动修复文化语义。
+
+UTF-8 pipeline可直接用ReadOnlySpan&lt;byte&gt;、Utf8Parser/Formatter或Rune/Encoding API，注意multi-byte code point可能跨buffer。Char不是Unicode scalar，切片可拆开surrogate pair。需要grapheme/user-visible字符时使用对应text-element API。
+
+<Stepper>
+  <Step title="切换Slice、CopyTo、TryCopyTo与Text span"><CtcSpanSliceCopyLab /></Step>
+  <Step title="建立alias table">对每个result标注view还是copy、是否overlap、destination length和长期保存方式。</Step>
+  <Step title="执行边界测试">覆盖empty、start=end、destination短、左右overlap、surrogate和culture-sensitive comparison。</Step>
+</Stepper>
+
+<Term def="多个Span/Memory指向同一storage时，写入、overlap、并发和独立copy的明确关系。">aliasing contract</Term>
+
+## Memory&lt;T&gt;
+
+`Memory<T>`与`ReadOnlyMemory<T>`是可放heap、作为field并跨await的descriptor；在同步使用点通过`.Span`取得短期view。它们仍不拥有storage：array必须存活，pool owner不得提前Dispose，custom MemoryManager必须维护pin/unpin和Dispose。
+
+异步API接收Memory而非Span，因为state machine需保存参数。Operation完成前caller不得修改/回收buffer，除非API明确复制。返回pooled Memory最好同时返回IMemoryOwner&lt;T&gt;，consumer Dispose结束lease。
+
+```csharp
+static async Task<int> ReadPacketAsync(
+    Stream stream, Memory<byte> destination, CancellationToken ct)
+{
+    int read = 0;
+    while (read < destination.Length)
+    {
+        int chunk = await stream.ReadAsync(destination[read..], ct);
+        if (chunk == 0) break;
+        read += chunk;
+    }
+    return read;
+}
+```
+
+方法返回后destination仍由caller拥有；若把Memory交给后台任务，必须在contract中转移/借用到Task完成。ReadOnlyMemory可安全跨await，但底层仍可能被其他alias修改。
+
+<Callout type="trap" title="Memory可跨Await就自动解决Buffer Lifetime">
+它只可被状态机保存；底层pool lease或custom owner仍必须覆盖整个异步operation。提前Return/Dispose会造成数据竞争或读取他人数据。
+</Callout>
+
+## Forward-Only Enumerators
+
+Span&lt;T&gt;.Enumerator是ref struct，MoveNext/Current顺序遍历且无allocation，可被foreach使用；它不能box成IEnumerator&lt;T&gt;或跨await。Span可随机索引，但forward-only cursor适合逐token扫描并保持最小状态。
+
+MemoryExtensions.EnumerateLines/自定义ref struct tokenizer可返回span slices，consumer必须在source lifetime内处理。若输入由segmented ReadOnlySequence提供，SequenceReader&lt;T&gt;维护跨segment前向position，不能假设每个token连续；需要时copy少量跨段token。
+
+Enumerator期间修改底层array不会像List版本号那样自动抛异常，结果由aliasing contract决定。Parser通常让source immutable for operation。
+
+## Working with Stack-Allocated and Unmanaged Memory
+
+`stackalloc T[n]`在当前stack frame分配，离开即失效，不由GC管理。Size必须有严格上限且避免用户输入直接决定；循环内stackalloc可能持续消耗当前frame直到返回，造成StackOverflow。小固定temporary适合stack，大/可变buffer用ArrayPool并finally归还。
+
+Unsafe/native interop可从pointer构造Span，caller保证address、length、alignment和lifetime。Fixed/pinning阻止GC移动managed object，pin越久越影响heap；仅覆盖native调用。NativeMemory.Alloc/Free或Marshal分配必须检查size multiplication overflow、初始化需求并恰好free一次。
+
+```csharp
+static unsafe uint Checksum(ReadOnlySpan<byte> input)
+{
+    Span<uint> buckets = stackalloc uint[16];
+    buckets.Clear();
+    foreach (byte value in input) buckets[value & 0x0F]++;
+
+    nuint bytes = checked((nuint)input.Length * sizeof(byte));
+    byte* copy = (byte*)NativeMemory.Alloc(bytes);
+    if (copy is null) throw new OutOfMemoryException();
+    try
+    {
+        input.CopyTo(new Span<byte>(copy, input.Length));
+        uint sum = 0;
+        foreach (uint count in buckets) sum = unchecked(sum * 31 + count);
+        return sum;
+    }
+    finally { NativeMemory.Free(copy); }
+}
+```
+
+Zero-length allocation/pointer规则平台相关，不解引用。MemoryMarshal.Cast/Read需要size、alignment/endianness和blittable layout意识，binary protocol优先BinaryPrimitives显式读写。
+
+<Stepper>
+  <Step title="切换enumerator、stackalloc、pinned与unmanaged"><CtcLowLevelMemoryLab /></Step>
+  <Step title="填写lifetime ledger">记录address owner、byte/element length、alignment、pin/lease scope、free和所有derived views。</Step>
+  <Step title="执行低层负测">覆盖size overflow、stack过大、owner提前结束、double free、跨segment token和endianness差异。</Step>
+</Stepper>
+
+<Term def="对stack/pinned/native buffer记录分配、长度、alignment、派生views和唯一释放点的清单。">low-level lifetime ledger</Term>
+
+## 本章回顾：View快，是因为它不接管Owner责任
+
+1. Span是stack-only连续view，Memory可跨await但两者都不自动拥有storage。
+2. Slice建立alias，ToArray建立copy；CopyTo/TryCopyTo明确destination与失败语义。
+3. Text span减少substring allocation，comparison/Unicode语义仍需显式。
+4. Forward-only ref enumerator适合零分配扫描，不能box或跨async。
+5. Stackalloc、pinning和unmanaged memory必须有小上限、短lifetime和唯一cleanup。
+
+<Exercises>
+
+**问题 1：什么时候API参数用Span，什么时候用Memory？**
+
+<Answer>同步且调用期间立即消费用Span/ReadOnlySpan；需要await、保存field或异步I/O期间保留descriptor用Memory/ReadOnlyMemory。两者都需说明borrow期限，pooled/custom storage还返回owner并保证Dispose晚于所有操作。</Answer>
+
+**问题 2：如何安全右移同一Span内的数据？**
+
+<Answer>选择source slice与重叠destination slice，调用CopyTo/TryCopyTo，它们按overlap-safe语义复制；不要写简单前向loop。先验证destination长度和最终逻辑length，并测试左移、右移、完全重叠和空slice。</Answer>
+
+**问题 3：Stackalloc优化需要什么门禁？**
+
+<Answer>Size有小且固定/硬上限，不由未验证输入直接决定，不在长循环持续stackalloc；Span不逃逸、不跨await。与ArrayPool/heap版本benchmark allocation和latency，并在最大递归/调用深度测试stack余量。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="memory-view ownership contract" definition="View的storage owner、有效期和mutability。" />
+  <GlossaryItem term="ref-escape boundary" definition="Ref-like值不得超过底层storage或逃逸到heap。" />
+  <GlossaryItem term="aliasing contract" definition="多个views共享storage时的写入与copy规则。" />
+  <GlossaryItem term="low-level lifetime ledger" definition="Stack/pin/native buffer及派生views的生命周期。" />
+  <GlossaryItem term="pool-backed async lease" definition="Pooled Memory从rent到异步完成后return的完整借用期。" />
+</Glossary>
+
+<Term def="底层pool buffer从Rent开始，覆盖所有await和并发consumer，直到operation完成后Return的借用期。">pool-backed async lease</Term>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 23: Span<T> and Memory<T>" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch23.html" />

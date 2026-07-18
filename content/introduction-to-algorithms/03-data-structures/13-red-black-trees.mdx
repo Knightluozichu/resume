@@ -1,0 +1,250 @@
+---
+title: "Chapter 13 · Red-Black Trees"
+type: C
+section: "CLRS4 · 数据结构"
+order: 13
+description: "按CLRS第四版第13章重建五条红黑性质、黑高与高度上界、旋转、插入三类修复和删除额外黑色四类修复。"
+demo: true
+math: true
+sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+draft: false
+---
+
+import { CLRS4RBPropertiesLab, CLRS4BlackHeightLab, CLRS4RBHeightBoundLab, CLRS4LeftRotationLab, CLRS4RotationInvariantLab, CLRS4RBInsertTraceLab, CLRS4RBInsertCasesLab, CLRS4RBDeleteTraceLab, CLRS4RBDeleteCasesLab, CLRS4RBCertificateLab } from "@/components/mdx/introduction-to-algorithms/diagrams/13-red-black-trees";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释五条红黑性质怎样共同限制根叶路径长度并保持BST有序语义
+- 能计算黑高、最少子树节点数和红黑树高度上界
+- 能实现左右旋转、RB-INSERT-FIXUP和RB-DELETE-FIXUP的镜像情况
+- 能分析插入红红冲突与删除黑高亏空各自保持的循环不变式
+- 能设计同时验证BST范围、颜色规则、NIL哨兵与父子指针的红黑树证书
+
+</Objectives>
+
+## 从“允许不完美平衡，为什么仍是对数高度”开始
+
+先预测：红黑树没有要求左右子树高度完全相同，为什么查询仍为$O(\lg n)$？它控制的是每条路径上的黑节点数，并禁止两个红节点相邻。因此最长路径最多在黑节点之间插入一个红节点，不会超过最短全黑路径的两倍。
+
+<Term def="在二叉搜索树节点上增加红/黑颜色并维持五条路径性质，从而保证高度O(lg n)的平衡搜索树。">红黑树</Term>保留普通BST的key、left、right、parent和搜索性质，颜色只负责限制形状。
+
+<CLRS4RBPropertiesLab />
+
+## 13.1 Properties of red-black trees
+
+### Five properties
+
+CLRS红黑树满足：
+
+1. 每个节点是red或black。
+2. root为black。
+3. 每个NIL leaf为black。
+4. red节点的两个孩子为black。
+5. 从任一节点到其后代NIL leaves的所有简单路径包含相同数量black节点。
+
+NIL不是“什么都没有”的随意空指针，而是参与颜色与黑高定义的black sentinel。实现可共享一个NIL对象，所有缺失孩子指向它；fixup代码因而可以安全读取NIL.color。
+
+<Term def="从节点x出发但不计x自身，到任一后代NIL叶路径上的黑节点数量；红黑性质保证该数量与路径无关。">黑高</Term>$bh(x)$由性质5定义。以NIL为基例，黑高$b$的子树至少有$2^b-1$个内部节点：
+
+$$
+N(b)\ge1+2N(b-1)=2^b-1.
+$$
+
+<CLRS4BlackHeightLab />
+
+### Height bound
+
+从根到叶的任一路径至少一半节点为black，因为red节点不能有red孩子。根的黑高至少$h/2$。拥有$n$个内部节点的root子树又满足$n\ge2^{bh(root)}-1$，所以：
+
+$$
+h\le2\,bh(root)\le2\lg(n+1).
+$$
+
+<CLRS4RBHeightBoundLab />
+
+由此search、minimum、successor等普通BST操作仍为$O(h)=O(\lg n)$；插入删除先走一条搜索路径，再做有限次旋转与沿祖先链修复，也保持$O(\lg n)$。
+
+验证红黑树应同时检查BST范围和颜色。只验证五条颜色性质可能接受键顺序错误的树；只做中序有序检查又可能漏掉黑高失衡。
+
+## 13.2 Rotations
+
+<Term def="围绕相邻父子节点做常数次指针改写，保持中序键序列不变但改变局部高度与父子关系的树操作。">旋转</Term>是平衡修复的结构原语。LEFT-ROTATE以$x$及其非NIL右孩子$y$为轴：
+
+1. 把$y.left$子树$\beta$移为$x.right$。
+2. 让$y$接到$x$原parent位置，必要时更新root。
+3. 让$x$成为$y.left$并更新双方parent。
+
+<CLRS4LeftRotationLab />
+
+旋转前后中序序列均为$\alpha,x,\beta,y,\gamma$，所以搜索树性质保持。它不自动改变颜色；插入/删除fixup在调用旋转前后显式recolor。
+
+```cpp
+void left_rotate(Tree& t, Node* x) {
+    Node* y = x->right;
+    x->right = y->left;
+    if (y->left != t.nil) y->left->parent = x;
+    y->parent = x->parent;
+    if (x->parent == t.nil) t.root = y;
+    else if (x == x->parent->left) x->parent->left = y;
+    else x->parent->right = y;
+    y->left = x;
+    x->parent = y;
+}
+```
+
+<CLRS4RotationInvariantLab />
+
+RIGHT-ROTATE完全镜像。旋转为$\Theta(1)$，但若节点带subtree size、区间max等增强字段，必须按依赖顺序重算$x$和$y$，否则颜色正确而增强查询错误。
+
+<Callout type="trap" title="旋转只改两个孩子指针">
+中间子树、祖父指向、root和所有parent都必须修复。漏一条边会丢子树、制造环或留下旧root。修法是按固定顺序更新并在旋转后检查父子互逆。
+</Callout>
+
+## 13.3 Insertion
+
+### Why insert a red leaf
+
+普通BST插入新叶$z$后把它染red。若染black，所有经过$z$的路径黑高立刻增加，可能破坏性质5；染red保持黑高，只可能违反“root black”或“red parent不能有red child”。
+
+<CLRS4RBInsertTraceLab />
+
+<Term def="新红叶与红parent冲突时，按uncle颜色及三角/直线形状执行recolor和rotation，直到所有红黑性质恢复的过程。">插入修复</Term>的循环条件是`z.parent`为red。因为root必须black，grandparent必存在且为black。假设parent是grandparent.left，另一侧为镜像：
+
+1. **Uncle red**：parent和uncle染black，grandparent染red，令$z$上移到grandparent。
+2. **Uncle black, triangle**：若$z$是parent.right，对parent左旋，把结构转成line。
+3. **Uncle black, line**：parent染black，grandparent染red，对grandparent右旋。
+
+<CLRS4RBInsertCasesLab />
+
+case 1把可能违例上移两层但保持各路径黑数；case 2只改形状；case 3通过recolor和rotation消除局部red-red且不改变外部黑高。循环结束将root染black，覆盖新节点成为root或违例升到root的情况。
+
+```text
+RB-INSERT(T, z)
+1  TREE-INSERT(T, z)
+2  z.left = z.right = T.nil
+3  z.color = RED
+4  RB-INSERT-FIXUP(T, z)
+```
+
+插入fixup沿祖先方向前进，case 1最多重复$O(\lg n)$次；旋转只在case 2/3执行，最终至多两次。总时间由搜索与recolor路径主导，为$O(\lg n)$。
+
+$$
+\#\operatorname{rotations}_{insert}\le2,
+\qquad
+T_{insert}(n)=O(\lg n).
+$$
+
+镜像代码容易复制错方向。更稳妥的实现可抽象“parent是否左孩子”并统一near/far child，但抽象必须保持逐步可审计，不能隐藏root与NIL边界。
+
+## 13.4 Deletion
+
+### Which color was physically removed
+
+红黑删除先执行BST结构删除，并记录实际从原位置移走节点$y$的original color。删除red节点不改变任何路径黑数；删除black节点让经过替换位置$x$的路径少一个black，需要fixup。
+
+<CLRS4RBDeleteTraceLab />
+
+把亏空概念化为<Term def="删除黑节点后附着在替换节点x上的一个黑色亏空单位；fixup通过旋转和重着色移动、吸收或消除它。">额外黑色</Term>。它不是节点color枚举的新值，而是证明工具：含$x$的路径按“节点颜色加额外单位”计算时仍保持原黑高。
+
+### Four fixup cases
+
+假设$x$是parent.left，sibling为$w=x.parent.right$；右侧情况镜像：
+
+1. **w red**：parent必black。交换二者颜色并对parent左旋，把问题转换为black sibling。
+2. **w black, both children black**：w染red，extra black从$x$上移到parent。
+3. **w black, near child red, far child black**：交换near child与w的颜色，对w右旋，转换为case 4。
+4. **w black, far child red**：w取得parent颜色，parent与far child染black，对parent左旋，令$x=root$结束。
+
+<CLRS4RBDeleteCasesLab />
+
+每个case保持所有不经过$x$的路径黑数，并让经过$x$的亏空得到等价转移。case 2可能向上重复$O(\lg n)$次；case 1、3转换后进入后续case，case 4结束，所以旋转总数为常数。
+
+$$
+\#\operatorname{rotations}_{delete}\le3,
+\qquad
+T_{delete}(n)=O(\lg n).
+$$
+
+```text
+RB-DELETE(T, z)
+1  perform BST deletion while saving y-original-color and replacement x
+2  if y-original-color == BLACK
+3      RB-DELETE-FIXUP(T, x)
+```
+
+NIL sentinel让$x$即使没有业务节点也有parent和color可读。TRANSPLANT NIL时仍需设置`x.parent`，否则fixup无法找到sibling。这是普通BST中“nil无需parent”与红黑删除实现之间的重要差异。
+
+<Callout type="trap" title="删除目标z是红色就不需要fixup">
+应检查物理移出原位置的$y$颜色；双孩子删除中$y$通常是successor，可能与$z$颜色不同。修法是保存`y-original-color`，并让$x$指向接替$y$原位置的节点。
+</Callout>
+
+### Validation and failure localization
+
+验证器递归返回每个子树black-height。左右返回值不同立即报告性质5错误；red节点有red孩子报告性质4；同时检查BST上下界、root black、NIL black与parent反向边。
+
+<CLRS4RBCertificateLab />
+
+修复测试不应只比较中序输出。要构造插入的uncle-red、triangle、line及镜像情况，删除的四类及镜像情况，并在每次操作后运行完整证书。随机操作序列再与标准有序map对照，能覆盖跨多次更新才暴露的parent或NIL问题。
+
+<Stepper>
+<Step title="先证明高度">
+用黑高最少节点归纳与red-red禁令推出$h\le2\lg(n+1)$，把普通BST路径操作降为对数界。
+
+<CLRS4BlackHeightLab />
+</Step>
+<Step title="再审计局部修复">
+每个insert/delete case分别记录违反哪条性质、recolor/rotation保持什么、下一状态为何更接近终止。
+
+<CLRS4RBInsertCasesLab />
+</Step>
+<Step title="最后全树验证">
+同时检查BST范围、五条颜色性质、NIL、root和parent链接，并覆盖左右镜像测试。
+
+<CLRS4RBCertificateLab />
+</Step>
+</Stepper>
+
+## 小结
+
+Chapter 13 Red-Black Trees用五条颜色与黑高性质把普通BST高度限制为$2\lg(n+1)$。Rotation保持中序序列，以常数指针改写调整局部形状。插入新叶染red，只修复red-red冲突；uncle red负责上移，triangle转line，line旋转结束。
+
+删除记录物理移出节点的颜色，black删除由$x$携带extra black。四类sibling情况把亏空上移、转换或消除，保持路径黑高。实现正确性依赖NIL sentinel、parent更新、镜像方向和完整验证器；仅中序有序不足以证明平衡性质。
+
+<Exercises>
+
+**问题 1**：为什么红黑树最长根叶路径最多是最短路径两倍？
+
+<Answer>
+所有根到NIL路径黑节点数相同。最短路径可以全black；最长路径中每两个black节点之间至多一个red，因为red不能有red孩子。因此最长内部节点数至多为black节点数的两倍。
+</Answer>
+
+**问题 2**：LEFT-ROTATE为何保持BST中序顺序？
+
+<Answer>
+旋转前局部中序为$\alpha,x,\beta,y,\gamma$；旋转后$x$的右子树变为$\beta$，$x$成为$y$左孩子，中序仍是同一序列。所有子树键范围相对$x,y$不变。
+</Answer>
+
+**问题 3**：RB插入为何把新节点初始染red而非black？
+
+<Answer>
+red叶不增加任何到NIL路径的black计数，因此性质5保持；最多产生与red parent相邻的局部冲突。black叶会只给经过它的路径增加一个black，立即制造跨路径黑高不等。
+</Answer>
+
+**问题 4**：删除fixup case 2为何可以把extra black上移到parent？
+
+<Answer>
+sibling及其两孩子均black时，把sibling染red会让不经过$x$的兄弟路径少一个black，与$x$路径的亏空对齐；随后把原亏空视为附着到parent。若parent为red可吸收并结束，若black则继续向上。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="红黑树">在二叉搜索树节点上增加红/黑颜色并维持五条路径性质，从而保证高度O(lg n)的平衡搜索树。</GlossaryItem>
+<GlossaryItem term="黑高">从节点x出发但不计x自身，到任一后代NIL叶路径上的黑节点数量；红黑性质保证该数量与路径无关。</GlossaryItem>
+<GlossaryItem term="旋转">围绕相邻父子节点做常数次指针改写，保持中序键序列不变但改变局部高度与父子关系的树操作。</GlossaryItem>
+<GlossaryItem term="插入修复">新红叶与红parent冲突时，按uncle颜色及三角/直线形状执行recolor和rotation，直到所有红黑性质恢复的过程。</GlossaryItem>
+<GlossaryItem term="额外黑色">删除黑节点后附着在替换节点x上的一个黑色亏空单位；fixup通过旋转和重着色移动、吸收或消除它。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Chapter 13 · Red-Black Trees" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

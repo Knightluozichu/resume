@@ -1,148 +1,273 @@
 ---
-title: 树
-type: A
-section: 树与图
-order: 8
-description: BST——每次比较缩小一半范围，平衡时 O(log n)。
+title: "第7章 树"
+type: C
+section: "算法图解（第2版）"
+order: 7
+description: "从文件目录建立有根树术语，用递归与显式栈实现DFS，再用二叉霍夫曼树理解无损变长编码。"
 demo: true
 math: false
-sourceUrl: https://www.manning.com/books/grokking-algorithms-second-edition
+sourceUrl: "https://livebook.manning.com/book/grokking-algorithms-second-edition/chapter-7"
 draft: false
 ---
 
-{/* 知识点清单：树/二叉搜索树/根节点/叶子节点/中序遍历/BST插入/BST查找；原书章节：Trees。 */}
+import { TreeAnatomyDiagram, DepthFirstTraversalLab, TreePropertyLab, HuffmanCodingDiagram } from "@/components/mdx/grokking-algorithms-2e/diagrams/trees";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释二叉搜索树如何把线性查找变成层级比较。
-- 能拖动动画说出 BST 插入和查找的每一步如何缩小候选范围。
-- 能回答：为什么 BST 退化时查找变 O(n)，以及问题的根在哪里。
+- 能解释根、父节点、子节点与叶节点，并把文件目录建模成有根树
+- 能区分树与一般图，说明连通、无环和任意两节点唯一路径之间的关系
+- 能实现递归与显式栈DFS，绘制深入、返回和回溯的执行轨迹
+- 能比较DFS与BFS的探索顺序、状态容器和空间边界
+- 能实现霍夫曼二叉树构造，并完成编码、前缀检查和无损解码
 
 </Objectives>
 
-## 先玩一遍
+## 从文件目录开始
 
-从二叉搜索树看「每次比较缩小一半候选范围」。树的本质是把线性列表折叠成层级结构——你在根节点做一次决定，就把整棵子树排除在外。少背术语，先观察动画里每次比较后哪些分支被丢弃了。
+先预测：从 `/home` 查找 `notes.txt`，进入 `docs` 后发现它不在第一个子目录中。程序如何记住“稍后还要回来检查其他目录”，又如何保证不会从一个文件走出两条不同的父路径？
 
-<AlgorithmPlayground
-  mode="trees"
-  title="树 · 交互动画"
-  focus="BST 每次比较让候选集减半——前提是树没有退化成一串。"
-/>
+第7章先建立树的术语，再运行深度优先搜索，最后用霍夫曼编码展示二叉树怎样承载真实算法。BST、AVL、伸展树和B树属于下一章；本章的“二叉树”只限制孩子数量，不包含键值排序规则。
 
-<Callout type="tip">
-  <strong>猜一猜：</strong>把步骤滑块推到下一格，排除了一半候选还是只在叶子里加了新节点？
-  注意看每一步的「排除区域」在动画里变灰的范围。
-</Callout>
+<Term def="指定一个根节点，并从根解释父子层级关系的树。">有根树</Term>由节点和边组成。<Term def="有根树中没有父节点、作为所有层级起点的节点。">根节点</Term>引出其余节点；<Term def="某节点上一层的直接前驱。">父节点</Term>与<Term def="某节点下一层的直接后继。">子节点</Term>描述相对关系；<Term def="没有子节点的树节点。">叶节点</Term>位于分支末端。
 
-## 分步动画
+有根树由根节点引出所有其他节点。根节点没有父节点，叶节点没有孩子；一个内部节点既可以是父节点，也可以是更高层节点的孩子。
 
-<TreeDiagram />
+<TreeAnatomyDiagram />
+
+## 文件目录形成树，但真实文件系统可能超出树
+
+<Term def="用目录包含子目录与文件来组织路径的层级结构。">文件目录</Term>形成树：目录对应内部节点，文件常对应叶节点，从根目录到目标文件是一条层级路径。树模型让递归遍历自然成立，因为每个子目录仍是一个更小目录树。
+
+教学模型通常忽略符号链接、硬链接、挂载点和循环链接。加入这些特性后，一个对象可能有多个入口，甚至形成环，结构就更接近一般图；此时遍历需要已访问集合、设备边界或链接策略。好模型必须明确抽掉了哪些真实特性。
+
+```python
+from dataclasses import dataclass, field
+from collections.abc import Iterator
+
+@dataclass
+class TreeNode:
+    name: str
+    children: list["TreeNode"] = field(default_factory=list)
+
+def dfs_recursive(node: TreeNode) -> Iterator[str]:
+    yield node.name
+    for child in node.children:
+        yield from dfs_recursive(child)
+
+tree = TreeNode(
+    "/home",
+    [
+        TreeNode("docs", [TreeNode("notes.txt"), TreeNode("book.pdf")]),
+        TreeNode("photos", [TreeNode("trip.jpg")]),
+    ],
+)
+
+assert list(dfs_recursive(tree)) == [
+    "/home", "docs", "notes.txt", "book.pdf", "photos", "trip.jpg"
+]
+```
+
+严格树没有回边，也没有共享孩子，所以从父到子遍历时无需 `visited`。一旦输入可能是一般图，必须恢复第6章的已访问集合，否则递归可能沿环无限重复。
 
 <Stepper>
-  <Step title="看输入结构——有序数列和根节点">
-    BST 的输入是一组可以比较大小的键。动画从第一个键作为根开始，
-    后续每个键都从根出发逐层比较：比当前节点小向左、大则向右，
-    遇到空位就安家。这四步展示了数据如何自动组织成查找树。
-    <AlgorithmPlayground mode="trees" title="树 · 插入过程" currentStep={1} />
-  </Step>
-  <Step title="执行关键动作——逐层排除一半">
-    查找时，每一步都把当前节点的键和目标比较。目标小就扔掉右子树整块，
-    目标大就扔掉左子树整块。每比较一次，候选集确切地缩小一半——
-    条件是左右子树大小差不多（即树高接近 log n）。
-    <AlgorithmPlayground mode="trees" title="树 · 查找过程" currentStep={2} />
-  </Step>
-  <Step title="收缩问题规模——树高决定性能上限">
-    如果数列已经排好序且直接插入（比如 1,2,3,4,5,6），树会退化成一条链——
-    每次只能扔一个节点，查找退化为 O(n)。这就是 BST 的「阿喀琉斯之踵」：
-    它的高效需要均匀的插入顺序保证形状不偏。
-    <AlgorithmPlayground mode="trees" title="树 · 退化过程" currentStep={3} />
-  </Step>
-  <Step title="读出结论——树=层级索引">
-    平衡的 BST 把 O(n) 线性扫描变成了 O(log n) 层级索引。
-    中序遍历按序输出（左→根→右），前序输出可用于重建结构，
-    后序常用于先处理子节点再处理父节点。树的威力来自层级，脆弱也来自层级。
-    <AlgorithmPlayground mode="trees" title="树 · 遍历观察" currentStep={4} />
-  </Step>
+  <Step title="标出根节点"><TreeAnatomyDiagram />选择唯一层级起点，确认其余节点都能从根沿孩子关系到达。</Step>
+  <Step title="标出父子关系">每个非根节点恰有一个父节点；内部节点可同时拥有父节点和若干孩子。</Step>
+  <Step title="识别叶节点">没有孩子的文件或末端目录是递归的自然基线，处理后直接返回。</Step>
+  <Step title="检查模型边界">若存在链接、共享子树或环，把结构按一般图处理并加入去重策略。</Step>
 </Stepper>
 
-## 核心概念
-
-<Term def="一种分层的非线性数据结构，由节点和边组成，每个节点至多有一个父节点。">树</Term>
-是对线性世界的折叠。数组靠下标跳转，链表靠指针穿行，而树靠「层级」把 n 个元素的可视范围压缩到 O(log n) 次决策。它的结构天然适合「分而治之」——每次只看一个分支。
-
-<Term def="每个节点至多两个子节点，且左子树所有键小于根，右子树所有键大于根。">二叉搜索树（BST）</Term>
-是本章的主角。不是所有的树都是 BST，BST 多了一条铁律：对任意节点，左子树全比它小，右子树全比它大。这条铁律就是每次能丢掉一半候选的原因——比较不是问「等于吗」，而是问「大还是小」，然后扔掉不行的那个方向。
-
-<Term def="从根到最远叶子经过的边数，决定查找/插入的最坏时间复杂度。">树高</Term>
-是 BST 的命门。树高 h 直接决定查找次数上限。最好的情况——树长得像金字塔，h 约等于 log₂(n)。最坏的情况——树长成一列纵队，h = n，BST 退化回链表。平衡树会处理这个问题，见下一章。
-
-<Term def="依次按左子树→根→右子树的顺序访问所有节点，在 BST 上产出升序序列。">中序遍历</Term>
-回答了「怎么把 BST 转回有序列表」——这是树能替代排序的底气。前序根→左→右和后序左→右→根也有各自用途：前序用于序列化存储结构，后序用于自底向上汇总。
-
-## 常见误区
-
-- **现象 →** 每次插入都从根重新走到叶子，以为是 O(n)。**原因 →** 混淆「每次插入的总路程」和「每步只比较一次」。**修法 →** 数动画里每插入一个节点时被访问的节点数——平衡时不超过 log n 个。
-
-- **现象 →** 把 BST 查找和二分查找划等号，忽略它们数据结构前提不同。**原因 →** 二分查找依赖随机访问数组下标 O(1)，BST 依赖节点间指针跳转。**修法 →** BST 的真正威力在动态插入和删除——数组二分查找插入是 O(n)，而 BST 插入只需 O(log n)。
-
-- **现象 →** 插入一批均匀分布的随机数后看到树是平衡的，就以为 BST 永远 O(log n)。**原因 →** 忽略插入顺序决定形状这个事实。**修法 →** 故意按升序插入同一组数看动画里树如何退化成链——你在亲眼看见「数据结构的前提被破坏」。
-
-<Callout type="trap">
-  <strong>现象 →</strong> 面试时把 BST 的 O(log n) 当万金油，从不提「平衡」前提。<strong>原因 →</strong>{" "}
-  教科书用平衡树讨论复杂度，但命名的都是 BST，导致误以为 BST 自带平衡。<strong>修法 →</strong>{" "}
-  回答 BST 复杂度时务必加一句「前提是树保持大致平衡，否则退化至 O(n)」。
+<Callout type="trap" title="目录长得像树，所以任何文件系统遍历都不需要visited">
+符号链接可能指回祖先，硬链接或挂载也可能破坏单一父关系。只有确认输入满足严格树契约时，才能省略已访问集合。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 用 BST 做优先队列，每次取最值还要遍历找，远不如用堆。<strong>原因 →</strong>{" "}
-  没分清数据结构的主责：BST 主攻有序查找，堆主攻动态最值。<strong>修法 →</strong>{" "}
-  选工具前先问「我要的是任意查找还是只取最值」——后者永远选堆。
+## 深度优先搜索：沿一条分支走到底
+
+<Term def="优先沿当前分支不断深入，无法继续时再回到最近未完成分叉点的遍历算法。">深度优先搜索</Term>简称DFS。DFS沿一条分支深入后回溯：先访问 `/home`，进入 `docs`，再到 `notes.txt`；叶子没有孩子，于是返回 `docs` 检查 `book.pdf`，完成后再返回 `/home` 进入 `photos`。
+
+<Term def="从当前分支返回最近仍有未探索孩子的祖先，并继续其他分支的动作。">回溯</Term>不是“重新从根搜索”。递归实现中，尚未执行的循环位置保存在调用栈帧里；叶子返回后，上一帧从下一个孩子继续。
+
+<DepthFirstTraversalLab />
+
+DFS使用调用栈或显式栈。递归版依靠<Term def="保存活动函数调用和返回位置的后进先出结构。">调用栈</Term>；迭代版使用<Term def="由程序自行维护、保存待访问节点的后进先出容器。">显式栈</Term>：
+
+```python
+from collections.abc import Iterator
+
+def dfs_iterative(root: TreeNode) -> Iterator[str]:
+    stack = [root]
+
+    while stack:
+        node = stack.pop()
+        yield node.name
+        stack.extend(reversed(node.children))
+
+assert list(dfs_iterative(tree)) == list(dfs_recursive(tree))
+```
+
+这里反转孩子列表，是因为栈后进先出：若希望左边孩子先访问，就要让右边孩子先压栈。去掉 `reversed` 不会让DFS失效，却会改变同层兄弟的访问顺序；测试若依赖顺序，应把孩子顺序写进契约。
+
+<Stepper>
+  <Step title="访问并压住返回点"><DepthFirstTraversalLab />处理当前节点；递归版创建帧，迭代版把待访问节点保存在显式栈。</Step>
+  <Step title="选择第一个孩子">继续沿当前分支深入，不先处理同层其他节点。</Step>
+  <Step title="叶节点触发返回">没有孩子时弹出当前状态，恢复最近仍有未访问孩子的父节点。</Step>
+  <Step title="回溯直到栈空">每个孩子都完成后继续向上弹栈；根帧完成意味着整棵树遍历结束。</Step>
+</Stepper>
+
+## DFS与BFS的探索顺序
+
+DFS与BFS的探索顺序不同。DFS用后进先出状态，优先增加深度；BFS用先进先出队列，优先处理同一深度。两者在树上都会访问每个节点一次，时间都是 `O(V)`，因为树有 `V-1` 条边。
+
+DFS递归空间取决于树高 `h`，最深时保存 `O(h)` 个活动帧；显式栈的峰值取决于尚未处理的分支。BFS队列峰值通常取决于最宽一层。链状深树可能让递归DFS栈溢出，极宽浅树可能让BFS队列很大。
+
+若目标是无权一般图的最少边数路径，使用BFS；若要遍历目录、求树的后序结果、检查一条路径后回退，DFS往往更贴合结构。在严格树中任意两点路径唯一，因此从根找到某节点后路径本身没有“另一条更短候选”，但发现顺序和内存峰值仍不同。
+
+<Callout type="trap" title="DFS和BFS都会访问全部节点，所以可以随意互换">
+完整遍历的渐近时间可能相同，但输出顺序、首次命中路径、前沿内存和可提前终止性质不同。先明确目标是最短层级、深层搜索还是完整处理，再选容器。
 </Callout>
 
-## 小结与练习
+## 更严格地定义树
 
-- BST 把 n 个键组织成层级，每次比较丢掉一半候选，平衡时查找 O(log n)。
-- BST 没有自带平衡——插入顺序决定了树长成什么样子。
-- 中序遍历按序输出整棵树，证明树结构天然内建了排序性。
-- 树退化成链 = O(n) 查找：你只是把链表竖着画了而已。
+<Term def="任意两个节点之间都存在路径的图性质。">连通</Term>表示没有孤立分量；<Term def="从某节点出发沿不同边最终回到该节点的闭合路径。">环</Term>若不存在，图就是无环。对无向图，树是连通无环图。
+
+这个定义带来等价性质：树中任意两节点只有一条简单路径。<Term def="除端点约定外不重复经过节点的路径。">简单路径</Term>若有两条，就能沿一条去、另一条回形成环；若没有路径，图又不连通。具有 `n` 个节点的树恰有 `n-1` 条边，新增一条边会形成环，删去一条边会断开。
+
+<TreePropertyLab />
+
+<Term def="每个节点至多拥有左、右两个孩子的树。">二叉树</Term>每个节点至多两个孩子。它不自动有序，也不自动平衡；“左孩子键更小、右孩子键更大”属于下一章的二叉搜索树约束。第7章用二叉树来表达每次读取0或1的霍夫曼编码。
+
+## 霍夫曼编码：用路径长度分配比特
+
+<Term def="根据符号频率构造二叉前缀码的无损压缩方法。">霍夫曼编码</Term>是无损压缩：编码后可恢复完全相同的符号序列。它不为所有字符分配固定长度，而是让<Term def="某符号在待编码数据或训练分布中出现的次数或概率。">字符频率</Term>决定编码长度，高频字符使用更短编码，低频字符使用更长编码。
+
+构树时，先把每个字符作为带频率的叶节点放入最小优先队列；反复合并频率最小的两个节点，新父节点频率为二者之和，再放回队列。只剩一个根时，左边记0、右边记1，从根走到每个叶子就得到该字符编码。
+
+<HuffmanCodingDiagram />
+
+图中A频率5，获得1比特编码 `0`；B频率2，获得 `10`；C与D各频率1，获得3比特编码。固定长度表示4个字符需要每个2比特，共18比特；霍夫曼主体为15比特。真实文件还要让解码端获得码表或树，并考虑头部开销，小数据不一定因此变小。
+
+<Term def="不同符号可使用不同位数的编码方案。">变长编码</Term>若任意字符码都不是另一个字符码的前缀，就构成<Term def="没有任何码字是其他码字前缀、可从左到右唯一解析的编码集合。">前缀码</Term>。前缀码保证无歧义解码：从根逐位走，抵达叶子就输出字符并回到根，不需要分隔符。
+
+```python
+from dataclasses import dataclass
+from heapq import heapify, heappop, heappush
+from itertools import count
+
+@dataclass
+class HuffmanNode:
+    frequency: int
+    symbol: str | None = None
+    left: "HuffmanNode | None" = None
+    right: "HuffmanNode | None" = None
+
+def build_huffman(frequencies: dict[str, int]) -> HuffmanNode:
+    if not frequencies or any(value <= 0 for value in frequencies.values()):
+        raise ValueError("frequencies must be positive")
+
+    serial = count()
+    heap = [
+        (frequency, next(serial), HuffmanNode(frequency, symbol))
+        for symbol, frequency in frequencies.items()
+    ]
+    heapify(heap)
+
+    while len(heap) > 1:
+        left_frequency, _, left = heappop(heap)
+        right_frequency, _, right = heappop(heap)
+        parent = HuffmanNode(
+            left_frequency + right_frequency,
+            left=left,
+            right=right,
+        )
+        heappush(heap, (parent.frequency, next(serial), parent))
+
+    return heap[0][2]
+```
+
+构树代码用序号打破相同频率的堆比较平局，所以同一频率表可能得到不同但同样最优的码字。完整实现还要遍历树生成码表，并处理只有一种字符的特殊输入，通常给它编码 `0`，不能让空路径吞掉全部符号。
+
+霍夫曼算法在已知频率下得到最小加权长度的二进制前缀码，但“最优”限定在这类码和这份频率分布中。若后续数据分布明显改变，原码表可能不再高效；静态方案需重建码表，自适应方案则要让编码端与解码端同步更新状态。
+
+<Stepper>
+  <Step title="统计每个字符频率"><HuffmanCodingDiagram />把字符和正频率作为叶节点放入最小堆，确认总频率等于输入长度。</Step>
+  <Step title="合并两个最小节点">每轮取出最低频的两棵树，建立频率为二者之和的新父节点并放回。</Step>
+  <Step title="从根生成码字">约定左边0、右边1，只有叶节点代表字符；沿路径累积比特。</Step>
+  <Step title="编码后再解码验证">逐位走树，抵达叶子输出字符并回根；最终必须回到根且原文完全一致。</Step>
+</Stepper>
+
+<Callout type="trap" title="霍夫曼总能让任何文件变小">
+压缩收益取决于频率偏斜，还要支付码表或树的元数据。字符近似等频或输入很短时，头部开销可能抵消主体节省；无损只保证可恢复，不保证每个输入都缩小。
+</Callout>
+
+## 原章概念回查
+
+有根树由根节点引出所有其他节点，根节点没有父节点，叶节点没有孩子。文件目录形成树，是理解父子层级和递归遍历的第一个例子。
+
+深度优先搜索沿一条分支深入后回溯；DFS使用调用栈或显式栈。DFS与BFS的探索顺序不同，分别优先深度与层级。
+
+树是连通无环图，因此树中任意两节点只有一条简单路径。二叉树每个节点至多两个孩子，但二叉树不等于二叉搜索树。
+
+霍夫曼编码是无损压缩。字符频率决定编码长度，高频字符使用更短编码；构树时反复合并频率最小的两个节点，叶节点字符沿左右分支得到比特编码，前缀码保证无歧义解码。
+
+## 本章回顾
+
+1. 有根树用唯一根节点解释父子层级。
+2. 根没有父节点，叶没有孩子，内部节点兼具父子角色。
+3. 文件目录是树模型，链接可能让真实结构成为一般图。
+4. DFS沿一支深入，在叶子处返回并回溯。
+5. 递归DFS使用调用栈，迭代DFS使用显式栈。
+6. DFS和BFS的顺序、路径保证与内存前沿不同。
+7. 无向树等价于连通且无环的图。
+8. 树中任意两节点只有一条简单路径。
+9. 二叉树只限制每个节点至多两个孩子。
+10. 霍夫曼算法反复合并最低频节点构造二叉树。
+11. 高频字符路径短，低频字符路径长。
+12. 叶子码构成前缀码，可逐位无歧义恢复原文。
 
 <Exercises>
-  <Answer question="把步骤滑块推到 3，观察退化的树——为什么插入 1,2,3,4,5,6 变成一条链？">
-    因为每个新节点都比当前所有节点大，一路向右走到底，永远找不到左分支来分走一半候选。树高 = 节点数 n，查找不再是 O(log n)。
-  </Answer>
-  <Answer question="BST 为什么比有序数组更适合「频繁插入」的场景？">
-    数组插入需要把插入点后面的所有元素向后移动一位——O(n)。BST 插入只走一条从根到叶的路径再加一个指针赋值——平衡时 O(log n)。动态插入是 BST 相对于排序数组真正的优点。
-  </Answer>
-  <Answer question="一棵完全平衡的 BST，100 万个节点最多需要多少次比较找到目标？">
-    log₂(1,000,000) ≈ 20 次。线性扫描在最坏情况需要 100 万次比较。这就是层级结构的威力。
-  </Answer>
+
+**问题 1：为什么严格树的父到子DFS不需要visited，而带符号链接的目录遍历可能需要？**
+
+<Answer>严格树无环且每个非根节点只有一个父节点，同一节点不会由另一条路径再次到达。符号链接可能指向祖先或共享目标，产生环或多条路径；必须记录已访问对象并定义是否跟随链接。</Answer>
+
+**问题 2：递归DFS和显式栈DFS怎样保证左孩子先访问？**
+
+<Answer>递归版按孩子列表顺序调用即可。显式栈后进先出，所以要把孩子按相反顺序压栈，右孩子先压、左孩子后压，弹出时才会左孩子先处理。</Answer>
+
+**问题 3：给一个连通无向图新增一条边后出现环，它为什么不再是树？**
+
+<Answer>新增边与原本两端之间的唯一路径合起来形成环，也使这两个节点之间出现两条简单路径，违反树的无环和唯一路径性质。</Answer>
+
+**问题 4：码表A=0、B=10、C=110、D=111为何不需要分隔符？**
+
+<Answer>它是前缀码，没有任何完整码字是另一码字的前缀。解码从根逐位走，一到叶子就能唯一确定字符并重回根；例如0110只能拆成0和110，即A、C。</Answer>
+
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="树">
-    一种非线性数据结构，用节点和边表达层级关系。每个节点至多一个父节点，可以有零到多个子节点。家谱是最直观的类比。
-  </GlossaryItem>
-  <GlossaryItem term="二叉搜索树（BST）">
-    带排序铁律的二叉树：左子树全小于根、右子树全大于根。这条性质让每次比较能排除一半候选——但不是自动的，要看树形。
-  </GlossaryItem>
-  <GlossaryItem term="树高">
-    从根到最深叶子的边数。树高直接决定 BST 操作的最坏代价——高约 log n 则快，高约 n 则退化。
-  </GlossaryItem>
-  <GlossaryItem term="根节点">
-    树的最顶层节点，没有父节点，是所有探索的起点。
-  </GlossaryItem>
-  <GlossaryItem term="叶子节点">
-    没有子节点的末端节点。插入新节点就是在某个叶子下面挂新叶子。
-  </GlossaryItem>
-  <GlossaryItem term="中序遍历">
-    左→根→右的访问顺序。在 BST 上执行会按键的升序依次输出——相当于「展开树为有序列表」。
-  </GlossaryItem>
+  <GlossaryItem term="有根树">指定唯一根节点并从根解释层级的树。</GlossaryItem>
+  <GlossaryItem term="根节点">没有父节点、引出全部层级的节点。</GlossaryItem>
+  <GlossaryItem term="父节点">某节点上一层的直接前驱。</GlossaryItem>
+  <GlossaryItem term="子节点">某节点下一层的直接后继。</GlossaryItem>
+  <GlossaryItem term="叶节点">没有子节点的分支末端节点。</GlossaryItem>
+  <GlossaryItem term="文件目录">以目录包含关系组织文件的层级结构。</GlossaryItem>
+  <GlossaryItem term="深度优先搜索">优先沿当前分支深入、再回溯的遍历算法。</GlossaryItem>
+  <GlossaryItem term="回溯">返回最近未完成分叉点并继续其他分支。</GlossaryItem>
+  <GlossaryItem term="调用栈">保存活动函数调用与返回位置的后进先出结构。</GlossaryItem>
+  <GlossaryItem term="显式栈">程序自行维护、保存待访问节点的后进先出容器。</GlossaryItem>
+  <GlossaryItem term="连通">任意两节点之间都存在路径的图性质。</GlossaryItem>
+  <GlossaryItem term="环">沿不同边出发并回到起点的闭合路径。</GlossaryItem>
+  <GlossaryItem term="简单路径">不重复经过节点的路径。</GlossaryItem>
+  <GlossaryItem term="二叉树">每个节点至多拥有两个孩子的树。</GlossaryItem>
+  <GlossaryItem term="霍夫曼编码">按符号频率构造二叉前缀码的无损压缩方法。</GlossaryItem>
+  <GlossaryItem term="字符频率">字符在输入或训练分布中出现的次数或概率。</GlossaryItem>
+  <GlossaryItem term="变长编码">不同符号使用不同位数的编码方案。</GlossaryItem>
+  <GlossaryItem term="前缀码">没有码字是其他码字前缀、可唯一解析的编码集合。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Grokking Algorithms, Second Edition"
-  adaptedUrl="https://www.manning.com/books/grokking-algorithms-second-edition"
+  adaptedFrom="Grokking Algorithms, Second Edition, Chapter 7: Trees"
+  adaptedUrl="https://livebook.manning.com/book/grokking-algorithms-second-edition/chapter-7"
 />

@@ -1,0 +1,229 @@
+---
+title: "第 11 章 FSM 有限状态机：基类、实体、技能与游戏案例"
+type: A
+section: "Unity 3D 实战核心技术详解 · 架构与热更新"
+order: 11
+description: "按原书第11章实现 FSM 基类、状态子类、实体、技能子类与可回放游戏案例。"
+demo: true
+math: false
+sourceUrl: "https://m.bookschina.com/7380713.htm"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Uct11FsmInGamesMapLab,
+  Uct11FsmInGamesExperimentLab,
+  Uct11FsmInGamesEvidenceLab,
+} from "@/components/mdx/unity-core-tech/diagrams/uct-11-fsm-in-games";
+
+<Objectives>
+
+- 能解释状态、事件、守卫、转移和动作之间的确定语义
+
+- 能实现实体与技能共用但不互相污染的状态机基类
+
+- 能分析重复进入、非法转移和跨帧事件造成的案例故障
+
+</Objectives>
+
+## 问题：为什么用一个 currentState 枚举加巨大 switch 能运行，却难以证明每次转移合法吗？
+
+先预测：状态数量少时，大 switch 是否足够？可以起步，但当实体状态、技能阶段、动画和网络事件交织时，进入退出副作用和非法跳转会藏在分支里。原书第十一章从基类、子类、实体、技能到案例，主线是把转移规则和生命周期变成可审计模型。
+
+<Uct11FsmInGamesMapLab />
+
+## 原书边界与目录小节
+
+本页严格对应完整目录中的以下单元；这些单元只在本页计算原章覆盖，现代扩展不替代原书位置：
+
+- **FSM基类设计**
+- **状态子类设计**
+- **实体设计**
+- **技能子类**
+- **游戏案例**
+
+书籍身份由图书馆题录核对，章节边界由完整目录核对。本站重新组织解释、代码、实验和证据，不逐字复制原文；导读与总复习不重复计入十四个正文章。
+
+## 让每次状态转移都有事件、守卫和证据
+
+FSM 由有限状态集合、输入事件、转移函数和动作组成。状态对象实现 Enter、Tick、Exit，状态机唯一负责验证转移并按 Exit、切换、Enter 顺序执行；状态本身不能绕过状态机直接改 currentState。
+
+状态子类只保存该状态的局部运行数据，实体保存跨状态领域数据。移动、受击、死亡等实体状态与准备、施放、后摇、冷却等技能状态可以嵌套或并行，但必须明确谁拥有输入和动画参数。
+
+守卫根据当前快照判断转移是否合法，例如生命值为零才能进入死亡，冷却结束才能进入施放。事件在固定队列中消费，定义同帧多事件的优先级；进入状态产生的事件延迟到下一轮，避免不可控重入。
+
+游戏案例记录 previous、event、next、guardResult、timestamp 和实体关键值。用固定输入脚本回放 Idle、Run、Attack、Hit、Dead 路径，再注入重复 Attack、死亡后移动和动画通知丢失，验证恢复策略。
+
+<Uct11FsmInGamesExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="在一段时间内拥有特定行为与允许转移集合的离散模式。">状态</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="由事件触发并在守卫通过后从当前状态切换到目标状态。">转移</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="决定某个事件在当前数据条件下是否允许转移的纯判断。">守卫</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="状态切换边界用于建立和清理动画、计时器或订阅的操作。">
+  进入退出动作
+</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="按确定顺序缓存并消费状态机输入，隔离跨帧和重入。">事件队列</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+这些术语组成一份最小领域模型。读者需要为每个对象写出所有者、生命周期、正常值、边界值和故意失败后的第一条可观察信号，才能把概念转成工程判断。
+
+## 关键对象与数据流
+
+输入系统、AI 或网络产生事件并写入实体队列，FSM 读取当前状态的转移表，执行守卫，按 Exit、赋值、Enter 顺序切换；状态 Tick 发出领域命令而非直接越权切换。输出是实体行为、技能阶段与完整转移日志。
+
+每次实验只改变一个输入，先保存版本、参数与预期，再比较输出、日志、内存或帧时间。最终结果偶然正确但中间契约不符合预测，仍不能签发，因为隐藏缓存、默认值或执行顺序可能掩盖根因。
+
+## 三步可重复实验
+
+动手前先预测：改变当前步骤的一项输入后，哪个对象、数值、像素、状态或版本标记应最先变化？固定 Unity 版本、目标平台、资产提交和测试场景。
+
+<Stepper>
+  <Step title="实现状态机基类">
+    <Uct11FsmInGamesMapLab />
+
+让 ChangeState 成为唯一切换入口，拒绝没有定义的边；记录每次尝试，包括守卫失败。
+
+```csharp
+public interface IState<T>
+{
+    void Enter(T owner);
+    void Tick(T owner, float dt);
+    void Exit(T owner);
+}
+```
+
+  </Step>
+  <Step title="组合实体与技能状态">
+    <Uct11FsmInGamesExperimentLab />
+
+实体 FSM 管理 Idle、Run、Hit、Dead，技能 FSM 管理 Ready、Cast、Recovery、Cooldown；用明确仲裁规则处理受击打断技能。
+
+```text
+Entity: Idle -> Run -> Hit -> Dead
+Skill: Ready -> Cast -> Recovery -> Cooldown
+Hit event aborts Skill Cast before Entity enters Hit
+```
+
+  </Step>
+  <Step title="回放非法与边界事件">
+    <Uct11FsmInGamesEvidenceLab />
+
+脚本化同帧 Attack 和 Hit、死亡后 Move、动画通知丢失；验证事件优先级、超时兜底与最终状态。
+
+```csharp
+while (events.TryDequeue(out var evt))
+{
+    if (transitionTable.TryResolve(Current, evt, snapshot, out var next))
+        ChangeState(next, evt);
+}
+```
+
+  </Step>
+</Stepper>
+
+## 正常、边界与故障注入
+
+正常样本证明主路径，边界样本说明适用范围，故障样本证明诊断检查确实会在最早契约处拒绝。三类样本必须使用同一观测方式，避免只为成功路径保留证据。
+
+<Callout type="trap">
+  **因果陷阱**：状态子类直接给 currentState 赋值会绕过
+  Exit、守卫和日志，留下未清理副作用。
+</Callout>
+
+<Callout type="trap">
+  **边界陷阱**：动画事件作为唯一离开条件时，资源或帧率异常会把状态机永久卡在施放或受击。
+</Callout>
+
+## 从原书版本迁移到当前 Unity
+
+Animator StateMachine、Playable、DOTS 状态组件和网络预测改变载体，但事件、守卫、转移顺序与日志是不变量。
+
+现代项目可用数据驱动转移表或生成代码，仍需防止任意脚本越权切换，并为动画通知提供超时和取消路径。
+
+迁移账本使用五列：原书载体、稳定不变量、当前实现、不可等价处、重放证据。允许 API、插件和渲染管线变化，不允许用新名词删除原章问题或把编辑器成功当成目标平台成功。
+
+## 验收证据
+
+验收包含状态图、转移表、守卫单元测试、实体与技能仲裁案例、固定输入回放、非法边拒绝日志、动画通知丢失兜底和同帧多事件顺序证明。
+
+证据包还要记录文件路径、构建版本、设备、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不是看过。
+
+<Uct11FsmInGamesEvidenceLab />
+
+## 小结
+
+- FSM 的核心是受约束转移而非枚举值
+- 状态局部数据与实体领域数据要分开
+- 所有切换都经过守卫和 Exit/Enter
+- 固定事件回放能证明边界路径
+
+<Exercises>
+
+**问题 1** 第 11 章 FSM 有限状态机在游戏中的运用的关键输入和输出分别是什么？
+
+<Answer>
+  输入系统、AI 或网络产生事件并写入实体队列，FSM
+  读取当前状态的转移表，执行守卫，按 Exit、赋值、Enter 顺序切换；状态 Tick
+  发出领域命令而非直接越权切换。输出是实体行为、技能阶段与完整转移日志。
+</Answer>
+
+**问题 2** 本章最有诊断价值的故障注入是什么？
+
+<Answer>
+  状态子类直接给 currentState 赋值会绕过
+  Exit、守卫和日志，留下未清理副作用。需要保存失败输入和第一条偏离信号，再修复后重放。
+</Answer>
+
+**问题 3** 迁移到当前 Unity 时必须保留什么？
+
+<Answer>
+  Animator StateMachine、Playable、DOTS
+  状态组件和网络预测改变载体，但事件、守卫、转移顺序与日志是不变量。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="状态">
+    在一段时间内拥有特定行为与允许转移集合的离散模式。
+  </GlossaryItem>
+  <GlossaryItem term="转移">
+    由事件触发并在守卫通过后从当前状态切换到目标状态。
+  </GlossaryItem>
+  <GlossaryItem term="守卫">
+    决定某个事件在当前数据条件下是否允许转移的纯判断。
+  </GlossaryItem>
+  <GlossaryItem term="进入退出动作">
+    状态切换边界用于建立和清理动画、计时器或订阅的操作。
+  </GlossaryItem>
+  <GlossaryItem term="事件队列">
+    按确定顺序缓存并消费状态机输入，隔离跨帧和重入。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="姜雪伟《Unity 3D实战核心技术详解》目录与书籍身份资料"
+  adaptedUrl="https://m.bookschina.com/7380713.htm"
+/>

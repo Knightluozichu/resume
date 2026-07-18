@@ -1,0 +1,158 @@
+---
+title: "Chapter 5: Exception Practices (Items 45-50)"
+type: C
+section: "Effective C# · 异常契约"
+order: 5
+description: "完整覆盖第3版Item 45-50：method contract failure、using/finally、完整自定义异常、strong guarantee、exception filter与filter side effects。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-sharp-covers-c-sharp-6.0-50-specific-ways-9780134579443"
+draft: false
+---
+
+import { EcsExceptionContractLab, EcsExceptionGuaranteeLab, EcsExceptionFilterLab } from "@/components/mdx/effective-csharp/diagrams/exception-practices";
+
+<Objectives>
+
+- 能区分routine branch、argument/state contract failure与dependency fault，设计让caller可采取动作的exception surface
+- 能实现using/finally cleanup、complete custom exception与strong exception guarantee，并复现每个fault point后的state
+- 能推导exception filter的search-before-unwind顺序，判断filter condition与有限side effect是否保留原始诊断语义
+
+</Objectives>
+
+## 为什么Exception是Method Contract的一部分
+
+Exception不是“发生错误时打印的字符串”，而是method无法完成承诺时交给caller的typed control transfer。Type、properties、cause chain、cleanup与post-failure state共同决定caller能否retry、translate、return response或terminate。
+
+先预测：任何invalid input都该抛exception；catch后`throw ex`与`throw`相同；filter中写business state只要返回false就无影响。三个判断都错误。
+
+<Term def="method无法满足已公开的precondition、state requirement或postcondition时，以specific exception表达的失败承诺。">contract failure</Term>
+
+## Failure Taxonomy（Item 45）
+
+### Item 45: Use Exceptions to Report Method Contract Failures
+
+Public method因invalid argument、invalid object state或dependency fault无法完成定义功能时，抛最specific、稳定且已文档化的exception。Routine lookup miss、parse attempt等预期分支可设计Try/Result，避免用exception当常规loop control。不要主动抛`System.Exception`、`NullReferenceException`等无法表达caller action的类型。
+
+```csharp
+public Money Withdraw(Money amount)
+{
+    if (amount <= Money.Zero) throw new ArgumentOutOfRangeException(nameof(amount));
+    if (amount > Balance) throw new InvalidOperationException("Insufficient balance.");
+    return ApplyWithdrawal(amount);
+}
+```
+
+<Stepper>
+  <Step title="切换argument、state、routine miss与dependency fault"><EcsExceptionContractLab /></Step>
+  <Step title="写出caller下一步动作">每种signal必须对应fix input、change state、normal branch、retry/response或terminate之一，否则taxonomy仍不清楚。</Step>
+  <Step title="验证type、properties与sensitive data">断言specific type和structured fields，Message可诊断但不泄露secret，public documentation与derived implementation一致。</Step>
+</Stepper>
+
+<Callout type="trap" title="所有失败统一包装成ApplicationException最方便">
+统一wrapper会抹掉argument、state、transient dependency等不同caller actions。只有跨abstraction且能提供稳定新语义时才translate，并保留InnerException。
+</Callout>
+
+## Cleanup、Custom Type与State Guarantee（Items 46-48）
+
+### Item 46: Utilize using and try/finally for Resource Cleanup
+
+`using`/`await using`把Dispose绑定到lexical scope，`try/finally`适合归还pool lease、恢复临时状态等非IDisposable cleanup。Finally必须短、幂等且避免抛出新exception遮蔽primary fault；business commit不能伪装成cleanup。
+
+### Item 47: Create Complete Application-Specific Exception Classes
+
+只有caller确实需要按domain type捕获或读取structured data时才创建custom exception。提供message、inner exception及有用readonly properties；现代.NET应用通常不需要旧式formatter serialization constructor，但跨process contract应使用独立error DTO，不序列化任意exception object。
+
+### Item 48: Prefer the Strong Exception Guarantee
+
+Strong guarantee要求operation失败后observable state与调用前完全相同。常用做法是先validate/prepare到temporary state，全部成功后单点commit；若external side effect无法rollback，则明确basic guarantee、idempotency key与compensation，不虚构transaction。
+
+```csharp
+public void ReplaceLines(IEnumerable<Line> candidate)
+{
+    var prepared = candidate.Select(Validate).ToList();
+    _lines = prepared; // publish only after every validation succeeds
+}
+```
+
+<Term def="operation失败后对象对外可见state与调用前完全相同，未发布partial mutation。">strong exception guarantee</Term>
+
+<Term def="exception type在abstraction boundary提供稳定语义、structured properties与完整InnerException cause。">complete custom exception</Term>
+
+<Stepper>
+  <Step title="切换cleanup、custom type与strong/basic guarantee"><EcsExceptionGuaranteeLab /></Step>
+  <Step title="列出每个fault point和observable state">在acquire、validate、prepare、commit、Dispose各点注入fault，写出资源和domain state应保持的结果。</Step>
+  <Step title="运行state snapshot与cause-chain tests">失败前后比较public snapshot；确认cleanup执行、primary exception未被覆盖，translation保留InnerException。</Step>
+</Stepper>
+
+<Callout type="trap" title="finally一定会运行，所以可以把关键保存放进finally">
+Finally用于cleanup，不保证process crash或fail-fast时完成，也可能因自身fault遮蔽原异常。Durable commit需要transaction/protocol与明确ack，不依赖finally碰运气。
+</Callout>
+
+## Filter Search、Unwind与Observation（Items 49-50）
+
+### Item 49: Prefer Exception Filters to catch and re-throw
+
+`catch (HttpRequestException ex) when (ex.StatusCode == ...)`只在condition匹配时选择handler；不匹配会继续寻找outer handler，而不是先catch再rethrow。Filter在stack unwind前参与search，debugger保留原始throw context，也避免`throw ex`重置stack。
+
+### Item 50: Leverage Side Effects in Exception Filters
+
+原书指出filter可在返回false前执行有限观察，例如记录尚未unwind时可见的diagnostic context，然后让原exception继续传播。Side effect必须best-effort、non-throwing、bounded且不能改变business state；filter抛出的exception会被丢弃并按false处理，因此审计/支付等关键写入绝不能放这里。
+
+```csharp
+try { RunOperation(); }
+catch (Exception ex) when (Observe(ex)) { }
+
+static bool Observe(Exception ex)
+{
+    Diagnostics.TryRecord(ex);
+    return false;
+}
+```
+
+<Term def="runtime先评估candidate catch的when表达式，再执行inner finally和stack unwind，最后进入选中的handler。">search-before-unwind</Term>
+
+<Term def="filter中只用于best-effort diagnosis且即使失败也不影响business correctness的有界观察动作。">observational side effect</Term>
+
+<Stepper>
+  <Step title="切换filter false、true、observe-and-pass与filter fault"><EcsExceptionFilterLab /></Step>
+  <Step title="按search、finally、catch写出顺序">记录filter evaluation、各层finally和selected catch的实际次序，禁止凭source indentation猜测。</Step>
+  <Step title="注入filter failure与duplicate logging">让observer自身失败，确认original exception继续；全链只在最终policy boundary记录一次正式日志。</Step>
+</Stepper>
+
+## 本章回顾：失败也必须保持可替代、可清理、可诊断
+
+1. Exception type表达caller action；routine branch用Try/Result，真正contract failure用specific exception。
+2. using/finally保证scope cleanup，不承担durable business commit。
+3. Custom exception只在abstraction需要稳定typed failure时创建，并保留cause chain。
+4. Strong guarantee用prepare-then-commit避免partial state；做不到时诚实声明basic guarantee与compensation。
+5. Exception filter在unwind前筛选handler，优于catch再rethrow。
+6. Filter side effect只做有界best-effort observation，不能改变业务正确性。
+
+<Exercises>
+
+**问题 1：库存查询无结果、负数量和数据库超时应分别怎样表达？**
+
+<Answer>“无结果”若是正常业务状态用nullable/Try/Result；负数量违反argument precondition，用ArgumentOutOfRangeException；数据库超时保留provider exception或在repository boundary包装成稳定、可识别的dependency exception并保留InnerException。最终policy boundary决定retry或response。</Answer>
+
+**问题 2：批量替换先修改前半集合再验证后半，如何达到strong guarantee？**
+
+<Answer>先把输入完整materialize到temporary collection，逐项validate和计算，不触碰published state；全部成功后单点交换reference或在transaction中commit。对每个validation/allocate fault注入异常，比较调用前后public snapshot完全一致，并确认temporary resource释放。</Answer>
+
+**问题 3：何时可在exception filter里执行side effect，怎样验收？**
+
+<Answer>仅用于best-effort、bounded、nonessential diagnosis，例如TryRecord当前context后返回false；不能做payment、state mutation或唯一audit write。测试observer抛异常时original exception仍传播、filter false后outer handler接管、finally/catch顺序正确且正式日志只在policy boundary一次。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="contract failure" definition="method无法满足公开承诺时以specific exception表达的失败。" />
+  <GlossaryItem term="strong exception guarantee" definition="失败后observable state与调用前完全相同的保证。" />
+  <GlossaryItem term="complete custom exception" definition="提供稳定type、structured context和cause chain的abstraction failure。" />
+  <GlossaryItem term="search-before-unwind" definition="先评估filters并选择handler，再运行finally和unwind。" />
+  <GlossaryItem term="observational side effect" definition="不影响business correctness的best-effort filter诊断动作。" />
+</Glossary>
+
+<Attribution adaptedFrom="Effective C#, Third Edition, Chapter 5: Exception Practices, Items 45-50" adaptedUrl="https://www.informit.com/store/effective-c-sharp-covers-c-sharp-6.0-50-specific-ways-9780134579443" />

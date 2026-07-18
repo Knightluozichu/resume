@@ -1,0 +1,430 @@
+---
+title: "Chapter 12 · Unusual Bases for Number Systems"
+type: C
+section: "HD2 · 函数与编码"
+order: 12
+description: "按Hacker's Delight第二版第12章重建负二进制、负一加i复基数、其他负基数与基数经济模型，并用除余链和round-trip证明表示正确。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/hackers-delight-9780321842688"
+draft: false
+---
+
+import { HD12NegabinaryWeightsLab, HD12NegabinaryDivisionLab, HD12NegabinaryRangeLab, HD12NegabinaryArithmeticLab, HD12ComplexPowersLab, HD12ComplexEncodeLab, HD12ComplexPathLab, HD12NegativeBaseFamilyLab, HD12BalancedTernaryLab, HD12RadixEconomyLab, HD12EfficiencyAssumptionsLab, HD12RepresentationCertificateLab } from "@/components/mdx/hackers-delight/diagrams/12-unusual-bases-for-number-systems";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释unusual bases for number systems为何必须同时声明radix、digit set与value rule
+- 能计算base -2的place weights、normalized remainder conversion与fixed-width range
+- 能实现base -1 + i对Gaussian integers的parity digit selection和Horner decoding
+- 能分析other bases中negative radix与balanced digit set的异同
+- 能设计most efficient base的radix-economy model并指出其engineering assumptions
+
+</Objectives>
+
+## 从“负号一定要放在数字前面吗”开始
+
+先预测：只允许digits zero和one，不写sign，能否同时表示positive 13与negative 13？Standard binary做不到，但改变place weights就可以。Chapter 12 Unusual Bases for Number Systems（非常规数制基数）提醒我们：number representation不只由“有多少digits”决定，还由每个position的weight、允许的digit set和canonical conversion rule共同决定。
+
+Positional string $d_k\ldots d_1d_0$在radix $\beta$下表示
+
+$$
+V(d_k\ldots d_0)
+=
+\sum_{j=0}^{k}d_j\beta^j.
+$$
+
+Positive integer radix只是最熟悉的special case。Radix可以negative，甚至complex；digits也可signed。要成为可用的system，至少要回答：
+
+- Domain中的每个target是否有finite representation。
+- Representation是否unique，或者如何选择canonical form。
+- Conversion每步如何选digit并得到exact next quotient。
+- Addition、shift和overflow的semantics如何变化。
+- Decode再encode与encode再decode是否round-trip。
+
+<Term def="Radix、digit set或place weights不同于ordinary positive-integer positional notation的数值表示体系。">非常规数制</Term>不是把ordinary binary symbols换皮；它改变了arithmetic invariants。
+
+## 12.1 Base -2
+
+### Alternating place weights remove the sign symbol
+
+<Term def="以negative two为radix、digits仅为zero和one，place weights正负交替的canonical integer representation。">负二进制</Term>（base -2或negabinary）定义
+
+$$
+(d_k\ldots d_0)_{-2}
+=
+\sum_{j=0}^{k}d_j(-2)^j,
+\qquad d_j\in\{0,1\}.
+$$
+
+Weights依次为$1,-2,4,-8,16,-32,\ldots$。Even positions贡献positive value，odd positions贡献negative value，因此同一套unsigned-looking digits可以表示所有positive和negative integers，不需要sign bit或two's-complement special interpretation。
+
+<HD12NegabinaryWeightsLab />
+
+Example：
+
+$$
+(110111)_{-2}
+=
+(-2)^5+(-2)^4+(-2)^2+(-2)^1+1
+=
+-13.
+$$
+
+Leading zeros可以任意添加；排除leading zero后，每个integer有唯一finite representation。
+
+### Conversion is division by negative two with a nonnegative remainder
+
+Ordinary language remainder对negative operands的sign convention并不统一到数学modulo。Base -2 conversion必须选择<Term def="把remainder规范到zero至modulus减one，使dividend减remainder能被radix exact division的余数规则。">规范余数</Term> $r\in\{0,1\}$：
+
+$$
+r=n\bmod 2\text{ normalized to }\{0,1\},
+\qquad
+q=\frac{n-r}{-2}.
+$$
+
+Digit $r$是least significant digit，继续对$q$执行同样步骤，直到quotient为zero；最后reverse digits。
+
+<HD12NegabinaryDivisionLab />
+
+```c
+static size_t encode_negabinary(int64_t n, uint8_t *least_first) {
+    size_t count = 0;
+    if (n == 0) {
+        least_first[count++] = 0;
+        return count;
+    }
+    while (n != 0) {
+        int64_t digit = ((n % 2) + 2) % 2;
+        least_first[count++] = (uint8_t)digit;
+        n = (n - digit) / -2;
+    }
+    return count;
+}
+```
+
+Each step satisfies$n=(-2)q+r$。Parity forces $r$ uniquely，then quotient也unique；recursive uniqueness由此建立。Except small boundary states，quotient magnitude约减半，剩余states可直接检查进入zero，因此conversion terminates。
+
+Decode可用Horner rule，避免显式计算large powers：
+
+```c
+static bool decode_negabinary(const uint8_t *most_first,
+                              size_t count, int64_t *out) {
+    int64_t value = 0;
+    for (size_t i = 0; i < count; ++i) {
+        uint8_t digit = most_first[i];
+        if (digit > 1) return false;
+        value = value * -2 + digit; // Production code checks overflow first.
+    }
+    *out = value;
+    return true;
+}
+```
+
+Round-trip test应覆盖negative one、zero、positive one、powers of negative two及每个representable boundary的neighbors。
+
+### Fixed-width range is asymmetric
+
+对$w$ digits，maximum把所有even-position bits设one，minimum把所有odd-position bits设one。令positive positions数为$\lceil w/2\rceil$，negative positions数为$\lfloor w/2\rfloor$：
+
+$$
+\operatorname{max}_w
+=
+\frac{4^{\lceil w/2\rceil}-1}{3},
+\qquad
+\operatorname{min}_w
+=
+-2\frac{4^{\lfloor w/2\rfloor}-1}{3}.
+$$
+
+Range包含恰好$2^w$个contiguous integers，但围绕zero不对称。即使digit pattern看起来像unsigned word，也不能把其numeric limits套成ordinary unsigned range。
+
+<HD12NegabinaryRangeLab />
+
+### Arithmetic and shifts change meaning
+
+Appending a zero digit multipliesvalue bynegative two，不是positive two。Dropping least significant digit执行division bynegative two，并保留zero-or-one remainder。Machine logical shift因此不再自动对应numeric scaling。
+
+Addition仍是ordinary integer addition，但carry relation改变。At position $j$，令total为two input digits plus carry，选择digit $d$与total同parity且在zero/one范围，然后
+
+$$
+\operatorname{nextCarry}
+=
+\frac{\operatorname{total}-d}{-2}.
+$$
+
+Carry可能positive也可能negative。直接复用binary full-adder truth table会错。
+
+<HD12NegabinaryArithmeticLab />
+
+```c
+static int negabinary_carry(int total, int *digit) {
+    *digit = ((total % 2) + 2) % 2;
+    return (total - *digit) / -2;
+}
+```
+
+Subtraction可用same recurrence处理signed carry，或先decode、在sufficient wider integer中运算、再encode。哪种更好取决于representation是否是storage format还是arithmetic-native format。
+
+## 12.2 Base -1 + i
+
+### A binary digit string can cover the Gaussian integer plane
+
+令$\beta=-1+i$。<Term def="以negative one plus i为complex radix、digits为zero和one，可canonical表示Gaussian integers的system。">负一加i进制</Term>（base -1 + i）表示
+
+$$
+z
+=
+\sum_{j=0}^{k}d_j(-1+i)^j,
+\qquad
+d_j\in\{0,1\}.
+$$
+
+Domain是<Term def="Real part和imaginary part都为integers的complex number a加bi。">高斯整数</Term> $\mathbb Z[i]$。Radix magnitude为$\sqrt2$，argument为135 degrees；每左移one position会scale by $\sqrt2$并旋转135 degrees。
+
+Powers揭示spiral structure：
+
+$$
+\beta^2=-2i,
+\qquad
+\beta^4=-4,
+\qquad
+\beta^8=16.
+$$
+
+<HD12ComplexPowersLab />
+
+普通real integer会沿complex intermediate states编码；这不是error，而是complex radix的本质。
+
+### The parity digit makes division exact in the Gaussian lattice
+
+设current $z=a+bi$。要选择$r\in\{0,1\}$，使$z-r$能被$\beta$整除且quotient仍是Gaussian integer。计算
+
+$$
+\frac{a-r+bi}{-1+i}
+=
+\frac{-a+r+b}{2}
++
+\frac{-a+r-b}{2}i.
+$$
+
+Two coordinates为integers，当且仅当$a-r$与$b$同parity。因此digit由
+
+$$
+r\equiv a+b\pmod2
+$$
+
+唯一决定。Then next state是上述two coordinates。Repeated exact division eventually reacheszero，emitted digits reverse后得到canonical representation。
+
+<HD12ComplexEncodeLab />
+
+```c
+typedef struct { int64_t re, im; } gaussian_i64;
+
+static int gaussian_binary_step(gaussian_i64 z, gaussian_i64 *next) {
+    int digit = (int)(((z.re + z.im) % 2 + 2) % 2);
+    next->re = (-z.re + digit + z.im) / 2;
+    next->im = (-z.re + digit - z.im) / 2;
+    return digit;
+}
+```
+
+Real plus imaginary addition may overflow beforemodulo; robust code computes parity fromlow bits separately。Coordinate numerators也要使用wider arithmetic或checked operations。
+
+### Horner decoding is rotation, scaling, then adding a digit
+
+Most-significant-first decoding maintainsGaussian accumulator $z$：
+
+$$
+z_{\mathrm{next}}
+=
+(-1+i)z+d.
+$$
+
+若$z=a+bi$，multiply by radix变成$(-a-b)+(a-b)i$，只需adds/subtracts。每读one digit就沿Gaussian lattice完成一次rotation-scale step。
+
+<HD12ComplexPathLab />
+
+```c
+static gaussian_i64 gaussian_binary_horner(const uint8_t *digits,
+                                           size_t count) {
+    gaussian_i64 z = {0, 0};
+    for (size_t index = 0; index < count; ++index) {
+        int64_t old_re = z.re;
+        int64_t old_im = z.im;
+        z.re = -old_re - old_im + digits[index];
+        z.im = old_re - old_im;
+    }
+    return z;
+}
+```
+
+Uniqueness来自每步parity digit被forced；existence需要conversion terminates。Testing可在bounded square lattice穷举all pairs $(a,b)$，确认encode后Horner decode回original coordinate，并检查没有illegal digits或unexpected cycles。
+
+## 12.3 Other bases
+
+### Negative integer radices form a family
+
+Other Bases（其他基数）首先可把base -2推广为base $-b$，其中integer $b\ge2$，canonical digits为$0$至$b-1$。每步选择
+
+$$
+r=n\bmod b\text{ normalized to }[0,b-1],
+\qquad
+q=\frac{n-r}{-b}.
+$$
+
+所有integers都能在不写sign的情况下表示。Base -10使用ordinary decimal digits，却让place signs alternate；它并不等于在decimal magnitude前省略negative sign，因为positive values的digit strings也会改变。
+
+<HD12NegativeBaseFamilyLab />
+
+<Term def="Radix加上允许digits及canonical selection rule的完整组合；只给radix不足以确定表示系统。">基数与数位集</Term>必须一起设计。Complex radix也不一定使用binary digits；different digit sets会改变coverage、uniqueness、carry和fraction behavior。
+
+### Signed digits solve a different problem
+
+Balanced ternary使用positive radix three与digits negative one、zero、positive one。它也无需separate sign，but mechanism不同：weights不交替，digit自身可negative。
+
+<HD12BalancedTernaryLab />
+
+Conversion取modulo three remainder；remainder two被改写成negative one并向next position carry one。用`T`表示negative one时，digits集合对zero symmetric。它常使negation只需逐digit换sign，也可产生sparse representations。
+
+```c
+static int balanced_ternary_step(int64_t n, int64_t *next) {
+    int digit = (int)(((n % 3) + 3) % 3);
+    if (digit == 2) digit = -1;
+    *next = (n - digit) / 3;
+    return digit;
+}
+```
+
+Other unusual systems还包括mixed radix、factorial weights、redundant signed digits和other complex bases。它们不能只按“外观新奇”归为一类；评估标准仍是domain coverage、canonical rule、operation cost与error detection properties。
+
+## 12.4 What Is the Most Efficient Base?
+
+### First state the cost model
+
+“What Is the Most Efficient Base?”（最高效基数）没有脱离model的universal answer。Classic radix economy假设要表示固定range $N$，radix为real $r$，digit positions约为
+
+$$
+L(r)
+\approx
+\log_rN
+=
+\frac{\ln N}{\ln r}.
+$$
+
+再假设one position cost与可区分symbol count $r$成正比，总成本
+
+$$
+C(r)
+\propto
+rL(r)
+=
+\ln N\frac{r}{\ln r}.
+$$
+
+对continuous $r$求derivative：
+
+$$
+\frac{d}{dr}\frac{r}{\ln r}
+=
+\frac{\ln r-1}{(\ln r)^2}.
+$$
+
+Minimum在$\ln r=1$，即$r=e$。Radix必须integer时，nearest candidates是2与3；比较后base 3更小，所以在这个idealized model下ternary是most efficient integer base。
+
+<HD12RadixEconomyLab />
+
+Binary score约为$2/\ln2=2.885$，ternary约为$3/\ln3=2.731$，decimal约为$10/\ln10=4.343$。这只比较“symbol capacity times digit count”，不是complete computer architecture benchmark。
+
+### Engineering optimum includes physical and software costs
+
+<Term def="以radix乘表示固定range所需digit count衡量成本，从而得到continuous optimum e与integer optimum three的idealized metric。">基数经济</Term>忽略了许多real costs：
+
+- Binary two-state circuits有large noise margin和mature transistor implementation。
+- Ternary storage cell、logic gate与interconnect未必只比binary贵50 percent。
+- Addition、multiplication、normalization和error correction costs不按radix线性变化。
+- External protocols、memory packing与existing toolchains引入conversion cost。
+- Redundant digits可加速carry，却增加states与canonicalization。
+
+<HD12EfficiencyAssumptionsLab />
+
+因此“base 3 mathematically optimal”必须附上linear symbol-cost assumption。现代binary hardware占主导并不反驳calculus result；它说明hardware objective function不是$r/\ln r$ alone。
+
+<Callout type="trap" title="Negative radix只要使用语言自带除法余数即可">
+许多languages对negative operand remainder采用toward-zero convention，可能产生negative digit。修法是把remainder规范到canonical digit interval，再用dividend减digit后除negative radix。
+</Callout>
+
+<Callout type="trap" title="e最优所以ternary computer必然优于binary">
+e与integer three只在radix乘digit count的idealized model中最优。Noise margin、device cost、logic depth、wiring、conversion与ecosystem改变objective function后，engineering optimum可以不同。
+</Callout>
+
+## 一条unusual-radix的验收链
+
+<Stepper>
+<Step title="声明radix、digits与domain">
+区分negative radix、complex radix和signed digit set；说明leading zeros、zero representation与canonical form。
+
+<HD12NegabinaryWeightsLab />
+</Step>
+<Step title="证明digit choice与exact quotient">
+每步选择legal remainder，使current减digit可被radixexactly divide；证明quotient仍在domain且过程terminates。
+
+<HD12ComplexEncodeLab />
+</Step>
+<Step title="回环验证representation与cost claim">
+Horner decode复核all generated strings，bounded domain穷举uniqueness；efficiency conclusion必须连同cost assumptions一起报告。
+
+<HD12RepresentationCertificateLab />
+</Step>
+</Stepper>
+
+<HD12RepresentationCertificateLab />
+
+## 小结
+
+Chapter 12 Unusual Bases for Number Systems展示representation design的自由度。Base -2让place weights正负交替，用zero/one digits覆盖all integers；conversion依赖canonical nonnegative remainder，fixed-width range与shift semantics都不同于ordinary binary。
+
+Base -1 + i用binary digits覆盖Gaussian integer plane。Digit由real plus imaginary parity唯一决定，exact complex quotient继续留在integer lattice，Horner decoding则是rotation、scaling与digit addition。
+
+Other bases说明radix与digit set必须成对讨论：negative radix family和balanced ternary都能免去sign symbol，但arithmetical mechanism不同。Most efficient base在radix economy model中给出continuous $e$和integer three；真实engineering choice必须重新计入physical reliability、operation与conversion costs。
+
+<Exercises>
+
+**问题 1**：把negative 13转换为base -2时，为什么每步remainder必须是zero或one？结果如何验证？
+
+<Answer>
+Digit set只允许zero和one，且digit必须与current integer同parity，使current减digit能被negative two exact division。Repeated steps得到most-significant-first digits 110111；按weights negative 32、positive 16、positive 4、negative 2、positive 1相加，结果为negative 13。
+</Answer>
+
+**问题 2**：six-digit negabinary word的minimum与maximum分别是多少？为什么range仍有64个values？
+
+<Answer>
+Three even positions给maximum one plus four plus sixteen等于21；three odd positions给minimum negative two减eight减32等于negative 42。Inclusive range从negative 42到21，恰有64个integers，对应six binary digits的64种patterns。
+</Answer>
+
+**问题 3**：在base -1 + i conversion中，如何为$z=a+bi$选择next digit？
+
+<Answer>
+Digit取zero或one，并满足digit与a加b同parity。这样a减digit与b同parity，除以negative one plus i后的real和imaginary coordinates都是integers。Digit被parity唯一决定，quotient继续递归处理。
+</Answer>
+
+**问题 4**：为什么idealized radix economy选择base three，却不能直接推出ternary hardware一定更好？
+
+<Answer>
+Model只把cost设为radix乘digit count，continuous minimum在e，integer comparison选择three。Real hardware还受symbol reliability、transistor and wiring cost、operation latency、error correction、packing and conversion ecosystem影响；这些cost不一定与radix线性，因此结论只在stated model内成立。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="非常规数制">Radix、digit set或place weights不同于ordinary positive-integer positional notation的数值表示体系。</GlossaryItem>
+<GlossaryItem term="负二进制">以negative two为radix、digits仅为zero和one，place weights正负交替的canonical integer representation。</GlossaryItem>
+<GlossaryItem term="规范余数">把remainder规范到zero至modulus减one，使dividend减remainder能被radix exact division的余数规则。</GlossaryItem>
+<GlossaryItem term="负一加i进制">以negative one plus i为complex radix、digits为zero和one，可canonical表示Gaussian integers的system。</GlossaryItem>
+<GlossaryItem term="高斯整数">Real part和imaginary part都为integers的complex number a加bi。</GlossaryItem>
+<GlossaryItem term="基数与数位集">Radix加上允许digits及canonical selection rule的完整组合；只给radix不足以确定表示系统。</GlossaryItem>
+<GlossaryItem term="基数经济">以radix乘表示固定range所需digit count衡量成本，从而得到continuous optimum e与integer optimum three的idealized metric。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Hacker's Delight, Second Edition, Chapter 12 · Unusual Bases for Number Systems" adaptedUrl="https://www.informit.com/store/hackers-delight-9780321842688" />

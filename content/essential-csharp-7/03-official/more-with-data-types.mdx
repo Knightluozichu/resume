@@ -1,0 +1,271 @@
+---
+title: "第3章：More with Data Types"
+type: C
+section: "Essential C# 7.0 · Language Foundations"
+order: 3
+description: "掌握value/reference type分类、nullable value types、C# 7 tuples与一维/矩形/交错数组。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-c-sharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7ArrayShapeLab, Ec7NullableTupleLab, Ec7ValueReferenceCopyLab } from "@/components/mdx/essential-csharp-7/diagrams/more-with-data-types";
+
+<Objectives>
+
+- 能解释value type和reference type在assignment、parameter passing与mutation中的差异，而不依赖stack/heap口诀
+- 能区分nullable value type、null operators与C# 7 tuple各自表达的缺失状态和复合结果边界
+- 能比较一维、rectangular与jagged array的shape、rank、row length并写出正确遍历
+
+</Objectives>
+
+## 为什么“变量里装着什么”比“放在哪里”更重要
+
+第2章回答一个type能表示哪些value，本章继续追问：variable持有value本身，还是能定位object的reference？赋值后两边是否共享identity？`null`是一个有效状态吗？多个结果应该临时组合还是定义新type？数据是线性sequence、固定rectangle，还是每行长度不同？这些问题共同决定copy、aliasing、validation和iteration。
+
+先预测：把一个struct赋给第二个variable后修改第二个，原值是否变化；把class reference赋给第二个variable后修改object，两个名字看到什么；`int? score = 0`与`score = null`是否等价；`int[2,3]`与`int[2][]`是否有相同shape。写下预测，再让interactive lab和code evidence纠正直觉。
+
+<Term def="一个type规定variable直接持有value，还是持有指向object的reference，以及assignment如何复制该内容。">type category</Term>
+
+## Categories of Types
+
+C#把type分为value type和reference type。内置numeric、`bool`、`char`、`enum`和`struct`属于value type；`class`、`interface`、`delegate`、`string`与array属于reference type。value variable包含其value，赋值会复制value；reference variable包含reference，赋值复制reference，因此两个variable可能指向同一object。
+
+这条规则不等于“value type永远在stack、reference type永远在heap”。class field中的struct是object内容的一部分，captured local可能进入compiler-generated object，boxing会产生object，JIT也可消除或重排storage。语言层可依赖的是copy与identity语义，而不是某次runtime implementation的物理位置。
+
+<Term def="assignment或argument passing时复制variable内容；value type复制完整value，reference type复制object reference。">copy semantics</Term>
+
+<Stepper>
+  <Step title="切换struct value与class reference">
+    <Ec7ValueReferenceCopyLab />
+  </Step>
+  <Step title="执行赋值并观察两个variable">
+    value assignment产生独立副本；reference assignment产生两个指向同一object的aliases。
+  </Step>
+  <Step title="修改目标并判断identity">
+    区分“把variable改指向新object”和“经reference修改共享object”，两者对别名的影响不同。
+  </Step>
+</Stepper>
+
+```csharp
+struct CounterValue { public int Count; }
+sealed class CounterObject { public int Count; }
+
+var valueA = new CounterValue { Count = 10 };
+var valueB = valueA;
+valueB.Count = 99;              // valueA.Count remains 10
+
+var objectA = new CounterObject { Count = 10 };
+var objectB = objectA;
+objectB.Count = 99;             // objectA.Count is now 99
+objectB = new CounterObject();  // only objectB is redirected
+```
+
+method parameter默认也是按值传递：value parameter复制value，reference-type parameter复制reference。callee可经复制出的reference修改object，但把parameter重新赋成另一个object不会改变caller variable。`ref`/`out`改变的是parameter passing mode，不是type category。
+
+```csharp
+static void Mutate(CounterObject item)
+{
+    item.Count++;
+    item = new CounterObject { Count = -1 };
+}
+
+var counter = new CounterObject { Count = 5 };
+Mutate(counter);
+Console.WriteLine(counter.Count); // 6, not -1
+```
+
+`string`是很好的反例：它是reference type，却因immutability表现得像独立value。分类决定reference copy；immutability决定object不能原地改变。这两个维度不可混用。
+
+<Callout type="trap" title="值类型在栈上，引用类型在堆上">
+这是不可靠的storage口诀。field、boxing、closure和JIT optimization都会改变位置；正确分析从type category、assignment copy、object identity与mutation开始。
+</Callout>
+
+## Identity, Equality, Boxing, and Defaults
+
+<Term def="多个references是否定位同一个object；它与两个objects拥有相同field values不是同一问题。">object identity</Term>
+
+reference equality询问是否为同一object，value equality询问内容是否等价。class若未重写equality，默认通常接近identity；struct的默认`ValueType.Equals`比较fields但可能有performance成本。well-formed type应明确自己的equality contract，后续第10章会系统处理。
+
+每个value type都有default value，例如`default(int)`为0，struct fields递归取default。每个reference type的default是null。array创建后也会把elements初始化为element type的default，因此“已分配array”不代表每个reference element都指向object。
+
+value type需要作为`object`或interface使用时会boxing：runtime创建object并复制value；unboxing要求compatible boxed type。修改原value不会修改boxed copy，反之亦然。boxing不是简单cast的免费别名，应在non-generic collections或频繁interface calls中留意allocation与copy。
+
+```csharp
+int count = 7;
+object boxed = count;       // boxing copies 7 into an object
+count = 8;
+int restored = (int)boxed; // unboxing; restored is still 7
+```
+
+## Nullable Modifier for Value Types
+
+普通value type总有一个value，`int`不能是null。`T?`在这里是`Nullable<T>`的syntax sugar，使value type获得“有值/无值”两个状态。`HasValue`说明状态，`Value`在无值时抛`InvalidOperationException`，`GetValueOrDefault`在无值时返回T的default。因而0与null、false与null都是不同业务状态。
+
+<Term def="nullable modifier把value type扩展为HasValue=true的值或HasValue=false的missing state。">nullable state</Term>
+
+```csharp
+int? score = null;
+Console.WriteLine(score.HasValue);          // False
+Console.WriteLine(score.GetValueOrDefault());// 0, but score is still null
+
+score = 0;
+Console.WriteLine(score.HasValue);          // True
+Console.WriteLine(score.Value);             // 0
+```
+
+多数operators会被lift到nullable operands：若必要operand为null，arithmetic结果通常为null；comparison和`bool?`逻辑有各自定义，不能用“一律传播null”替代language rules。先决定missing在domain中是unknown、not applicable还是error，再选择传播、默认或拒绝。
+
+`??`在左侧非null时取左值，否则取fallback；`?.`在receiver为null时短路并产生null。fallback必须有domain含义，不能为了消除null随手使用0。C# 7.0尚无nullable reference type static analysis；本节的`T?`限定non-nullable value types，reference null仍需runtime guard。
+
+<Stepper>
+  <Step title="比较nullable与tuple状态">
+    <Ec7NullableTupleLab />
+  </Step>
+  <Step title="区分missing与default value">
+    `null`表示没有score，`0`是存在且恰为零；不要让GetValueOrDefault抹掉这种差异。
+  </Step>
+  <Step title="决定边界policy">
+    input处validate，domain内部保留nullable，或使用`??`提供有依据的fallback，并测试null branch。
+  </Step>
+</Stepper>
+
+```csharp
+static decimal? Average(decimal? total, int? count)
+{
+    if (total == null || count == null || count == 0) return null;
+    return total.Value / count.Value;
+}
+
+decimal displayValue = Average(42M, 2) ?? 0M;
+```
+
+上例的UI或report可把null显示为“暂无数据”，而不是直接显示0。`displayValue`的fallback只是最后presentation choice，不能反向篡改domain state。
+
+## Tuples: Small Composite Results
+
+C# 7 tuple syntax以position组合多个values，并可给elements命名。它通常由`System.ValueTuple` family支持，是value type；与旧`System.Tuple` reference types不同。tuple适合private/local flow、method一次返回多个紧密相关结果，以及deconstruction；若数据有长期invariant、behavior、validation或public evolution需求，应定义class/struct。
+
+<Term def="tuple以固定position组合一小组values；element names改善source可读性，但shape与position才是核心contract。">tuple contract</Term>
+
+```csharp
+static (int Min, int Max, double Average) Summarize(int[] values)
+{
+    if (values == null || values.Length == 0)
+        throw new ArgumentException("values must not be empty", nameof(values));
+
+    int min = values[0], max = values[0], sum = 0;
+    foreach (int value in values)
+    {
+        if (value < min) min = value;
+        if (value > max) max = value;
+        sum += value;
+    }
+    return (min, max, (double)sum / values.Length);
+}
+
+var summary = Summarize(new[] { 3, 8, 4 });
+(int low, int high, _) = summary;
+Console.WriteLine($"{low}..{high}; mean={summary.Average}");
+```
+
+deconstruction按position把elements分配给locals；`_` discard明确忽略某一position。tuple element names不是独立runtime identity，也不应被当作可随意重排的schema。跨assembly/public API还要考虑compiler、metadata与ValueTuple package/runtime compatibility；本书版本的目标是掌握C# 7 contract，而不是假设所有后续tuple features都存在。
+
+tuple是value type，所以assignment会复制tuple本身；但若element是reference type，复制的是该element reference，两个tuple仍可能共享内部object。所谓“value type copy”并不递归deep clone整个object graph。
+
+<Callout type="trap" title="tuple是值类型，所以里面的对象也会深拷贝">
+tuple只按字段复制。reference-typed element复制reference，两个tuple仍指向同一object；需要独立object graph时必须定义并实现明确的copy策略。
+</Callout>
+
+## Arrays and Their Shape
+
+所有array都是reference type，即使element是value type。创建array object后，variable保存其reference；把array variable赋给另一个variable不会复制elements。array有固定Length、zero-based indexes和runtime bounds checks；要得到独立elements必须显式copy，并判断是shallow还是deep copy。
+
+一维array `T[]`表示线性sequence。rectangular multidimensional array `T[,]`是一个rank-2 array，每个dimension长度固定，用`[row, column]`访问。jagged array `T[][]`是“array of array references”，每row可有不同length，用`[row][column]`访问，row甚至可以是null。
+
+<Term def="array的dimensions数量、各dimension length与每行是否规则共同定义其index space。">array shape</Term>
+
+<Stepper>
+  <Step title="切换一维、rectangular与jagged shape">
+    <Ec7ArrayShapeLab />
+  </Step>
+  <Step title="读取rank、Length与row length">
+    rectangular用Rank/GetLength；jagged先检查outer row，再读取每个row.Length。
+  </Step>
+  <Step title="让iteration匹配shape">
+    `foreach`适合顺序读取；需要coordinates时使用按dimension bounds构造的nested loops。
+  </Step>
+</Stepper>
+
+```csharp
+int[] line = new int[4];
+int[,] grid = new int[2, 3];
+int[][] rows =
+{
+    new[] { 1, 2 },
+    new[] { 3, 4, 5, 6 }
+};
+
+for (int row = 0; row < grid.GetLength(0); row++)
+{
+    for (int column = 0; column < grid.GetLength(1); column++)
+        grid[row, column] = row * 10 + column;
+}
+
+for (int row = 0; row < rows.Length; row++)
+{
+    if (rows[row] == null) continue;
+    for (int column = 0; column < rows[row].Length; column++)
+        Console.WriteLine(rows[row][column]);
+}
+```
+
+对rectangular array，`Length`是所有dimensions element count之积，`Rank`是dimensions数量，`GetLength(d)`返回指定dimension长度。对jagged array，outer `Length`只表示rows数量，每个row独立。选择shape要从domain invariant出发：像素rectangle天然规则，按月天数或邻接表可能jagged，普通records通常使用一维collection。
+
+array covariance允许某些reference-type arrays赋给base array variable，例如`string[]`到`object[]`，但写入不兼容object会在runtime抛`ArrayTypeMismatchException`。这是一项历史兼容行为，不是type-safe mutation策略；generic collections通常更清晰。
+
+## 组合判断：从Domain到Type Shape
+
+面对数据需求，依次问五个问题：是否需要object identity与shared mutation；assignment应独立copy还是共享；missing是否是合法状态；多个values只是短期结果还是长期domain entity；元素index space是line、rectangle还是variable rows。答案自然导向struct/class、nullable、tuple/custom type和array shape。
+
+例如解析一行温度数据，可返回`(int Line, double? Reading)`：tuple表达短期双结果，nullable表达缺测。但若reading还需要unit、quality flag、validation与conversion behavior，应升级为named type。若每天采样数不同，jagged array可表达shape；若必须每小时24格，则rectangular grid更能保护invariant。
+
+测试不要只验证happy path。value/reference tests应包含assignment后mutation；nullable tests包含null、zero与nonzero；tuple tests验证position和discard；array tests包含empty、single element、last valid index、out-of-range、different row lengths与null row。每个失败都应能说明是哪条type contract被违反。
+
+## 本章回顾：Copy、Absence与Shape
+
+1. value/reference category定义variable持有内容与assignment copy，不是stack/heap位置承诺。
+2. reference copy可能形成aliases；重新绑定variable与修改shared object是两件事。
+3. `T?`为value type增加missing state，0与null必须保持可区分。
+4. C# 7 tuple适合小型临时composite result，不能替代有invariant的named domain type。
+5. array是reference type；一维、rectangular与jagged shape需要不同bounds和iteration策略。
+
+<Exercises>
+
+**问题 1：为什么把class parameter称为“按引用传递”通常是错的？请给出验证方法。**
+
+<Answer>默认parameter仍按值传递，只是被复制的value恰好是object reference。callee经该reference修改object时caller可观察到；callee把parameter重新赋给new object时caller variable不变。用一个同时执行field mutation和parameter reassignment的method即可验证。只有显式ref/in/out才改变parameter passing mode。</Answer>
+
+**问题 2：设计一个返回“是否找到、位置、可能为空的测量值”的API时，tuple和nullable如何分工？**
+
+<Answer>若只是内部短期flow，可返回`(bool Found, int Index, double? Reading)`，但要定义Found=false时其余fields是否有效，以及Reading=null表示缺测还是不适用。若contract公开、需要validation或未来扩展，应定义named result type。不能用0同时表示有效测量和missing。</Answer>
+
+**问题 3：如何在rectangular与jagged array间选择，并写出边界测试？**
+
+<Answer>每row同长度且rectangle是domain invariant时用`T[,]`，用Rank/GetLength遍历；row长度天然不同或可能缺失时用`T[][]`，逐row检查null和Length。两者都测试empty dimensions、first/last index和越界；jagged再测空row、null row与不同长度，rectangular再验证总Length与各dimension长度。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="type category" definition="variable直接持有value或持有object reference及其assignment规则。" />
+  <GlossaryItem term="copy semantics" definition="value assignment复制完整value，reference assignment复制object reference。" />
+  <GlossaryItem term="object identity" definition="多个references是否定位同一个object，而非仅有相同内容。" />
+  <GlossaryItem term="nullable state" definition="Nullable<T>区分有T值与missing，default T不等于missing。" />
+  <GlossaryItem term="tuple contract" definition="以position组织少量values的临时composite result约定。" />
+  <GlossaryItem term="array shape" definition="rank、dimension lengths与row规则共同形成的index space。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 3: More with Data Types" adaptedUrl="https://www.informit.com/store/essential-c-sharp-7.0-9781509303618" />

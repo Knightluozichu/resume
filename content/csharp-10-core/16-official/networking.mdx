@@ -1,0 +1,185 @@
+---
+title: "Chapter 16. Networking"
+type: C
+section: "C# 10 Nutshell · Runtime Services"
+order: 16
+description: "覆盖网络分层、地址端口与URI、HttpClient和HTTP服务端、DNS、SMTP及TCP，建立连接生命周期、限流、framing和安全边界。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch16.html"
+draft: false
+---
+
+import { CtcEndpointIdentityLab, CtcHttpLifecycleLab, CtcNetworkProtocolLab } from "@/components/mdx/csharp-10-core/diagrams/networking";
+
+<Objectives>
+
+- 能区分DNS name、IP、port与URI component，分析解析、规范化和endpoint identity
+- 能设计HttpClient/handler生命周期与HTTP server限流，复现timeout、partial body和retry风险
+- 能实现DNS、SMTP与TCP的有界调用和framing，并判断重试、半关闭与优雅停机语义
+
+</Objectives>
+
+## 为什么Networking不是“发送一个字符串”
+
+应用数据经过URI和应用协议、TLS、TCP/UDP、IP与链路层。每层只保证自己的契约：DNS返回候选地址，TCP提供有序字节而不保留message boundary，HTTP定义request/response但重试可能重复副作用。正确设计必须给connect、headers、body、idle和overall deadline分别定界，并记录endpoint、attempt和结果。
+
+先预测：同一host永远解析到同一IP吗；TCP一次Read对应对端一次Write吗；每次请求new HttpClient更安全释放连接吗；HTTP timeout后服务端一定停止处理吗；SMTP成功返回代表收件人已读。答案都是否。
+
+<Term def="Scheme、host、resolved address、port、protocol和连接实例各自身份与变化范围的明确区分。">endpoint identity chain</Term>
+
+## Network Architecture
+
+Sockets是传输层endpoint，TCP提供可靠有序byte stream，UDP提供datagram；TLS在传输之上认证peer并加密，HTTP/SMTP等定义应用消息。NAT、proxy、load balancer和service mesh会改变实际连接路径，应用看到的remote endpoint不一定是原始client。
+
+可靠性策略按阶段区分：name resolution、connect、TLS handshake、request headers、request body、response headers、response body。Telemetry记录protocol/version、attempt、latency阶段和cancellation reason，但redact credentials/query/body。
+
+## Addresses and Ports
+
+IPAddress表示IPv4/IPv6地址，IPEndPoint组合address与transport port。IPv6 link-local还需要scope id；IPv4-mapped IPv6和dual-stack behavior受socket配置影响。`localhost`是name，不等于固定只返回127.0.0.1。
+
+Port只在protocol/address tuple内有意义，0可请求OS分配临时listen port。Client source port来自ephemeral range；大量短连接会消耗port和TIME_WAIT。不要用“能连某port”代替application health或TLS identity验证。
+
+## URIs
+
+Uri结构化解析scheme、host、port、path、query、fragment和userinfo。Escaping必须按component执行，不能对完整URI盲目EscapeDataString；`+`在form encoding与普通URI query语义不同。Relative URI需要可信base，path normalization和redirect可改变目标。
+
+```csharp
+var baseUri = new Uri("https://api.example.test/v1/");
+var builder = new UriBuilder(new Uri(baseUri, "orders"));
+builder.Query = $"cursor={Uri.EscapeDataString(cursor)}&limit=100";
+
+if (builder.Uri.Scheme != Uri.UriSchemeHttps ||
+    !string.Equals(builder.Uri.Host, baseUri.Host, StringComparison.OrdinalIgnoreCase))
+    throw new InvalidOperationException("unexpected endpoint");
+```
+
+SSRF防护不能只检查输入字符串：redirect、DNS rebinding、IPv6、numeric address和userinfo都可能绕过。建立scheme/host/port allowlist，在实际连接解析阶段验证address policy，并限制redirect。
+
+<Stepper>
+  <Step title="切换DNS name、IP、port与URI"><CtcEndpointIdentityLab /></Step>
+  <Step title="展开resolution timeline">记录原URI、normalized URI、DNS answers、selected address、TLS name和最终remote endpoint。</Step>
+  <Step title="注入identity绕过">测试redirect、mixed case、IDN、IPv6、userinfo、encoded path和DNS answer变化。</Step>
+</Stepper>
+
+<Callout type="trap" title="校验URI Host字符串就能完全阻止SSRF">
+Host可经DNS解析到私有/loopback地址，redirect又可切换目标。需要限制scheme/host/port、实际resolved address、redirect和连接路径。
+</Callout>
+
+## HttpClient
+
+HttpClient应复用；真正拥有connection pool的是SocketsHttpHandler。频繁创建/Dispose client会失去复用并造成socket/port压力。长期handler又要考虑DNS变化，使用IHttpClientFactory或配置PooledConnectionLifetime。CookieContainer、default headers和认证状态可能跨请求，隔离不同trust tenant。
+
+`ResponseHeadersRead`让headers到达后返回，适合流式body；caller必须Dispose response并限制读取大小。HttpClient.Timeout是总体策略之一，CancellationToken还应表达caller/shutdown。只有幂等或有idempotency key的操作才可在明确failure阶段重试，且要bounded backoff/jitter。
+
+```csharp
+using HttpRequestMessage request = new(HttpMethod.Get, uri);
+request.Headers.Accept.ParseAdd("application/json");
+
+using HttpResponseMessage response = await client.SendAsync(
+    request, HttpCompletionOption.ResponseHeadersRead, ct);
+response.EnsureSuccessStatusCode();
+
+await using Stream body = await response.Content.ReadAsStreamAsync(ct);
+OrderPage page = await ReadBoundedJsonAsync<OrderPage>(body, maxBytes: 2_000_000, ct);
+```
+
+Status code、Retry-After、content type/length和protocol version都进入处理契约。Error body也需size limit，日志不得无界buffer。
+
+<Term def="Connection pool、DNS refresh、cookie/auth state、request/response与stream分别由谁创建和释放的规则。">HTTP connection ownership</Term>
+
+## Writing an HTTP Server
+
+生产HTTP服务优先ASP.NET Core host/Kestrel，而非手写HttpListener。Server处理request line/headers/body limits、TLS、authentication、routing、response和disconnect cancellation。每个请求都不可信：限制header count/size、body bytes、form/multipart、JSON depth和execution time。
+
+Streaming response在headers发送后无法改status；fault会产生partial body，协议需用framing/checksum或客户端容忍。Graceful shutdown先停止接收新请求，给in-flight设deadline，再取消并释放。Load shedding应在昂贵解析/下游调用前发生。
+
+<Stepper>
+  <Step title="切换client factory、headers、stream body与server request"><CtcHttpLifecycleLab /></Step>
+  <Step title="画HTTP ownership">标记handler pool、request、response、body stream、deadline、retry owner和connection reuse条件。</Step>
+  <Step title="执行fault matrix">覆盖DNS/connect/TLS失败、headers timeout、oversized/slow body、disconnect、429/503和partial response。</Step>
+</Stepper>
+
+<Callout type="trap" title="HTTP调用失败就安全重试">
+Client没收到response不代表server未提交副作用。重试需幂等方法/业务key、attempt上限和阶段证据，否则会制造重复订单或雪崩。
+</Callout>
+
+## Using DNS
+
+Dns.GetHostAddressesAsync返回当前候选addresses，顺序和数量可变，失败可能暂时或永久。缓存与TTL通常由OS/handler管理；应用自行永久缓存会错过failover。Happy Eyeballs类策略在IPv6/IPv4候选间竞速，不能简单只取第一个地址。
+
+Reverse lookup不是安全身份。TLS certificate验证使用预期hostname，不用reverse DNS。DNS cancellation与timeout在runtime/platform版本上能力不同，overall connect deadline仍要兜底。
+
+<Term def="DNS答案是有TTL、多个地址和失败状态的时间相关集合，而不是hostname到IP的永久字典。">resolution freshness contract</Term>
+
+## Sending Mail with SmtpClient
+
+SmtpClient把消息提交给SMTP relay，交付成功只代表relay接受，不代表最终投递或阅读。配置host/port、TLS、credentials、from policy和timeout；MailMessage及attachments拥有streams，需要Dispose。Header/body来自不可信输入时防止header injection并限制attachment size/type。
+
+SmtpClient不适合现代高并发与完整protocol需求，新系统通常使用维护中的SMTP库或provider API；若保留它，封装为bounded queue worker，明确retry和duplicate policy。只有在未被relay接受的明确阶段才无条件重试；使用message id/idempotency记录。
+
+## Using TCP
+
+TcpClient/Socket连接后得到有序byte stream，无message boundaries。协议必须定义固定header、length prefix、delimiter with escaping或self-framing format，并限制frame size。Read可能short，Write可能分段；EOF表示peer发送FIN，不表示本地不能继续写，half-close需要明确支持。
+
+```csharp
+using var client = new TcpClient(AddressFamily.InterNetworkV6);
+client.Client.DualMode = true;
+await client.ConnectAsync(host, port, ct);
+
+await using NetworkStream stream = client.GetStream();
+byte[] header = new byte[4];
+await stream.ReadExactlyAsync(header, ct);
+int length = BinaryPrimitives.ReadInt32BigEndian(header);
+if (length is < 0 or > 1_048_576) throw new InvalidDataException("frame size");
+byte[] payload = GC.AllocateUninitializedArray<byte>(length);
+await stream.ReadExactlyAsync(payload, ct);
+```
+
+Server accept loop为每个connection创建独立owner，并用Semaphore/channel限制并发、buffer和in-flight frames。Idle timeout、heartbeat、shutdown和protocol error策略要固定；不要依赖Socket.Connected预测下一次I/O。
+
+<Stepper>
+  <Step title="切换DNS、SMTP、TCP client与TCP server"><CtcNetworkProtocolLab /></Step>
+  <Step title="填写protocol ledger">记录identity、deadline、frame/message上限、retry safety、owner、half-close与telemetry。</Step>
+  <Step title="注入网络现实">模拟fragmentation、delay、reset、half-close、DNS变化、relay 4xx/5xx和graceful shutdown。</Step>
+</Stepper>
+
+<Term def="在TCP字节流上定义长度、顺序、上限、版本与截断处理，使消息可被唯一重建的协议。">framing contract</Term>
+
+## 本章回顾：每层只承担自己的保证
+
+1. Name、address、port、URI和TLS identity必须分层验证。
+2. HttpClient复用handler/connection pool，response body和retry各有独立owner。
+3. HTTP server先限流和验证，再进入昂贵业务；partial response和shutdown需协议。
+4. DNS答案随时间变化，SMTP接受不等于最终投递。
+5. TCP只是有序bytes，framing、limits、timeout、half-close与并发上限由应用定义。
+
+<Exercises>
+
+**问题 1：一个HttpClient下载接口如何避免socket耗尽和内存爆炸？**
+
+<Answer>复用IHttpClientFactory/handler，配置connection lifetime和并发上限；SendAsync用ResponseHeadersRead，检查status/type/length后流式读取并设硬字节上限。每次Dispose request/response/body，传播token并区分connect、headers和body timeout。</Answer>
+
+**问题 2：TCP length-prefix协议必须验证什么？**
+
+<Answer>循环读满固定header，按指定endianness解析；验证version、非负长度和最大frame，再循环读满payload。中途EOF视为truncated frame，timeout/cancel后关闭或按协议重同步；server限制每连接和全局in-flight bytes。</Answer>
+
+**问题 3：POST重试怎样避免重复副作用？**
+
+<Answer>优先使用业务idempotency key并由server原子记录结果；client只在bounded policy内重试可分类的暂时错误，记录attempt和Retry-After。若无法证明server未提交且没有幂等保护，就把结果标记unknown并查询状态，而非盲重试。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="endpoint identity chain" definition="URI、name、address、port、TLS与连接身份链。" />
+  <GlossaryItem term="HTTP connection ownership" definition="Handler pool到response stream的生命周期规则。" />
+  <GlossaryItem term="resolution freshness contract" definition="DNS多答案、TTL与失败随时间变化。" />
+  <GlossaryItem term="framing contract" definition="TCP bytes重建有界消息的格式协议。" />
+  <GlossaryItem term="retry safety boundary" definition="根据幂等性、提交状态和attempt限制决定重试。" />
+</Glossary>
+
+<Term def="只有在副作用幂等或提交状态可证明时，才允许按有限attempt重试的决策边界。">retry safety boundary</Term>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 16: Networking" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch16.html" />

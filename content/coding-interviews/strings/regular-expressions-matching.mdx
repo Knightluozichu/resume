@@ -1,236 +1,307 @@
 ---
-title: 正则表达式匹配
+title: "面试题19：正则表达式匹配"
 type: C
-section: 字符串
-order: 2
-description: 理解动态规划与递归回溯法处理 '.' 和 '*' 通配符匹配的底层逻辑。
+section: "第3章 高质量的代码"
+order: 21
+description: "围绕点号和星号的完整串匹配，推导作者三分支递归、备忘录与二维动态规划，并用30组官方测试锁定边界。"
 demo: true
 math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviews
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/19_RegularExpressionsMatching/RegularExpressions.cpp"
 draft: false
 ---
 
-{/* 知识点清单：动态规划 / 递归回溯 / 通配符匹配 / 星号匹配决策 / 状态转移方程 / 边界条件校验；原书章节：面试题19：正则表达式匹配。 */}
+import { RegexTokenSemanticsDiagram, StarBranchDecisionMap, RegexStateProgressDiagram, RegexOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/regular-expressions-matching";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能理解并描述正则表达式中 `.` 和 `*` 通配符的匹配语义及其对状态决策分支的影响。
-- 能准确写出正则表达式匹配的动态规划状态定义及完整的状态转移方程，尤其是处理 `*` 时的“匹配 0 次”与“匹配 1 次及以上”的分支条件。
-- 能阐明空字符串与包含 `*` 模式串的特殊边界匹配规律，并在代码中安全地实现初始化。
-- 能独立分析该算法的时间与空间复杂度，并给出空间优化（如一维滚动数组）的基本思路。
+- 能解释普通字符、点号和星号在完整串匹配中的精确定义
+- 能计算星号取零次、一次和多次时字符串与模式位置的变化
+- 能实现作者三递归分支以及带备忘录的等价优化版本
+- 能分析二维动态规划的状态、转移顺序、复杂度和非法模式边界
+- 能设计覆盖作者30组输入及指数回溯压力的自动测试
 
 </Objectives>
 
-## 直觉引入
+## 从“匹配一部分还是匹配全部”开始
 
-在开始严谨的算法递推之前，我们先通过一把“钥匙与锁”的比喻来建立感性认识：
+先预测：字符串 aaa 与模式 a.a 匹配，但字符串 aaa 与模式 .a 不匹配。点号明明能代表任意字符，第二个模式为什么仍失败？
 
-*   **字符串与模式的配对**：将源字符串 `s` 视作一扇**门**，而模式串 `p` 是我们需要拼接出的一把**钥匙**。钥匙的齿槽需要跟门上的弹子一一吻合，门才能打开。
-*   **普通字符与点号通配符 `.`**：普通字符是一块形状固定的“金属齿瓣”，必须碰到相同的弹子才能吻合；而点号 `.` 是一块**“橡胶万能齿瓣”**，只要弹子存在（即当前字符不为空），它就能挤压变形契合任意字符。
-*   **星号通配符 `*`**：星号不能独立存在，它必须依附于前一个字符（如 `a*` 或 `.*`）。它是一枚**“伸缩弹簧扣”**，它可以收缩到极致从而彻底消失（代表匹配 0 次，相当于删除前驱字符），也可以无限拉伸复制出多个相同的金属齿瓣（代表匹配 1 次、2 次甚至多次）。
-    
-    正是因为这枚弹簧扣可以“变长”或“缩短”，我们在拼接这部分钥匙时就面临了**多重决策**：到底是用它匹配当前的门弹子，还是索性把它缩回 0 尺寸直接跳过去？这种多决策、有重叠子问题的选择，便是**动态规划（DP）**或**深度优先回溯**登场的绝佳舞台。
+本题的“正则表达式匹配”不是在字符串里寻找一个可匹配子串，而是要求模式覆盖字符串的**全部字符**。模式 .a 只能消费两个字符，字符串还剩一个 a，因此失败。只有字符串和模式同时到达末尾才成功，这种契约称为<Term def="模式必须消费输入的全部字符，不能只命中某个前缀或内部子串。">完整匹配</Term>。
 
-## 概念讲解
+题目只支持三种模式元素：普通字符必须与自身相同；<Term def="在本题模式语法中恰好消费任意一个非空输入字符的点号。">点号通配符</Term>消费任意一个字符；<Term def="修饰紧邻前一模式项，使该项可以出现零次或任意多次的星号。">星号量词</Term>修饰它前面的普通字符或点号，使该项可以出现零次或多次。换句话说，**点号匹配任意字符**，但不能匹配空；**星号表示前一字符出现零次或多次**，自身不能独立消费字符。
 
-### 1. 状态定义
+<RegexTokenSemanticsDiagram />
 
-我们使用动态规划来求解此问题。设源字符串为 `s`（长度为 $M$），模式串为 `p`（长度为 $N$）。
+例如 ab* 可以匹配 a、ab、abb，却不能匹配 b；因为 b* 可以取零次，而开头的 a 仍必须出现。模式 .* 可以匹配任意长度字符串，包括空串；点号负责每次消费一个字符，星号决定重复次数。
 
-定义二维布尔数组 `dp[i][j]`：
-*   **物理意义**：**源串 `s` 的前 `i` 个字符（`s[0..i-1]`）与模式串 `p` 的前 `j` 个字符（`p[0..j-1]`）是否能够完全匹配**。
-*   **矩阵大小**：维度为 `(M + 1) * (N + 1)`，因为我们要额外分配一行一列来表示空串（长度为 0）的初始状态。
+这种受限语法没有括号、选择、字符类和锚点，不能把成熟正则引擎的全部规则搬进来。题目考查的是两个位置如何推进，以及星号怎样制造选择；先把输入语言边界缩清楚，才能让状态定义、证明和测试保持一致。
 
-### 2. 状态转移方程
+## 星号把一个状态拆成三种选择
 
-在递推计算 `dp[i][j]` 时，我们主要关注模式串的当前字符 `p[j-1]`：
+用 i 表示当前输入后缀起点，j 表示当前模式后缀起点。当前模式不是星号组合时，只有当前字符相同或模式为点号，才能把两个位置都前进一步。定义当前字符是否兼容：
 
-#### 情况 A：`p[j-1] != '*'`（当前模式字符是普通字符或 `.`）
-此时必须进行单字符的硬性匹配。只有在当前字符匹配成功，且各自前缀也匹配成功时，当前状态才为真：
-$$dp[i][j] = dp[i-1][j-1] \quad \text{if } matches(s[i-1], p[j-1])$$
+$$
+same(i,j) = [s_i = p_j] \vee [p_j = \text{dot}]
+$$
 
-其中，字符匹配辅助函数 $matches(c_s, c_p)$ 定义为：
-$$matches(c_s, c_p) = (c_s == c_p) \lor (c_p == '.')$$
+当模式下一字符是星号时，作者源码在当前字符兼容的前提下显式枚举三种**递归分支**：
 
-#### 情况 B：`p[j-1] == '*'`（当前模式字符是星号）
-星号通配符表示其前驱字符 `p[j-2]` 可以出现 0 次或多次。这促使我们拆分成以下两种互斥的决策逻辑：
+1. 消费当前输入字符并越过整个星号组合，表示前导项这一次就是最后一次。
+2. 消费当前输入字符但模式位置不动，表示前导项还可能继续重复。
+3. 输入位置不动、模式越过两格，表示前导项出现零次。
 
-1.  **匹配 0 次**（直接将该星号及其前驱字符丢弃不用）：
-    我们把 `p` 的最后两个字符 `p[j-2]` 和 `*` 直接忽略，去看 `s` 的前 `i` 个字符是否能与 `p` 的前 `j-2` 个字符匹配：
-    $$dp[i][j] = dp[i][j-2]$$
+<StarBranchDecisionMap />
 
-2.  **匹配 1 次或多次**（保留星号组合，并消去源串当前字符）：
-    只有当**当前源字符 `s[i-1]` 与星号前驱 `p[j-2]` 匹配**时，该决策才有效。此时，我们可以消去源串的当前字符，且保持模式串不变（因为星号可以继续代表更多次匹配）：
-    $$dp[i][j] = dp[i-1][j] \quad \text{if } matches(s[i-1], p[j-2])$$
+若 R(i,j) 表示两个后缀能否完整匹配，当前字符兼容且模式下一位是星号时，作者三分支可写成：
 
-将这两种决策合并，当 `p[j-1] == '*'` 时的完整转移方程为：
-$$dp[i][j] = dp[i][j-2] \lor \Big(matches(s[i-1], p[j-2]) \land dp[i-1][j]\Big)$$
+$$
+R(i,j)=R(i+1,j+2) \vee R(i+1,j) \vee R(i,j+2)
+$$
 
----
+第一分支在逻辑上是冗余的：第二分支消费一个字符并保留星号，下一层仍可选择第三分支越过星号，所以“两分支”实现也能覆盖恰好一次。不过忠实阅读作者源码时应认识三条路径各自语义，再说明为什么工程实现可以合并，而不是漏抄一条后宣称完全相同。
 
-### 3. 边界与初始化
+若当前字符不兼容，星号组合只能取零次，转到 R(i,j+2)。若没有星号，兼容时转到 R(i+1,j+1)，不兼容立即失败。每个递归分支至少推进输入位置或模式位置，因此合法有限输入最终会到达边界。
 
-1.  **双空匹配**：`dp[0][0] = true`，表示空源串与空模式串天然匹配。
-2.  **源串为空，模式串非空**：即 `dp[0][j]`（$j \ge 1$）。如果模式串中包含 `*`（例如 `a*b*c*`），它们都可以匹配 0 次而完全隐去。初始化转移方程为：
-    $$dp[0][j] = dp[0][j-2] \quad \text{if } p[j-1] == '*'$$
-    其余 `dp[0][j]` 均为 `false`。
-3.  **源串非空，模式串为空**：即 `dp[i][0]`（$i \ge 1$）。空模式串无法匹配任何非空源串，因此 `dp[i][0]` 一律为 `false`。
+<Callout type="trap" title="看到星号就让它匹配当前字符">
+星号允许零次。空串与c*应匹配，a与ab*也应匹配；若代码只写消费字符分支，这两类输入都会失败。跳过整个前导项加星号的分支始终不可缺少。
+</Callout>
 
-## 交互 Demo
+## 两个终止条件决定完整匹配
 
-点击切换单步，观察源串 $s = \text{"aab"}$ 与模式串 $p = \text{"c*a*b"}$ 匹配时，动态规划矩阵的各个格点是如何进行转移与值传播的：
+字符串和模式同时结束时返回 true。模式先结束而字符串未结束时返回 false。字符串先结束但模式未结束时不能立即失败，因为剩余模式可能全部由 x* 组合构成，例如空串与 c*a*b* 匹配。
 
-<RegexDpDiagram />
+作者代码没有单独写“字符串先结束”的分支。它继续检查模式下一位是否为星号；若是，就不断取零次越过组合，最终到达双空成功。点号分支还额外要求输入当前字符不是结束符，避免点号错误消费空字符。
 
-## 代码对照
+模式以星号开头或含连续星号不在作者测试契约中。源码读取 pattern 后一位是安全的，因为 C 字符串末尾还有结束符；但看到星号时默认它有合法前导项。生产接口应先验证模式：首位不能是星号，任一星号前一位不能也是星号。非法模式是返回 false 还是抛参数错误必须由 API 约定。
 
-### 核心实现：指针回溯与 DP 矩阵
+## 忠实递归与备忘录实现
 
-在 C++ 实现中，我们保留了《剑指Offer》原书经典的**字符指针递归回溯**写法，它逻辑直观，占用常数辅助空间（不计递归栈）；而在 TypeScript 中，我们使用**二维 DP 矩阵**的迭代写法，这能有效避免大量重复子问题带来的指数级时间消耗。
+下面使用字符串视图和下标复刻作者分支，并加入二维<Term def="按输入位置与模式位置缓存递归结果，使同一状态只求一次的表。">备忘录</Term>。缓存值 0 表示未知，1 表示失败，2 表示成功。为突出作者结构，星号兼容时仍保留三分支。
 
-<CodeTabs>
-  <Tab label="C++ (递归回溯指针法)">
 ```cpp
-class Solution {
-public:
-    bool isMatch(const char* str, const char* pattern) {
-        if (str == nullptr || pattern == nullptr)
-            return false;
+#include <cstdint>
+#include <string_view>
+#include <vector>
 
-        return matchCore(str, pattern);
-    }
+bool matchCore(std::string_view text,
+               std::string_view pattern,
+               std::size_t i,
+               std::size_t j,
+               std::vector<std::vector<std::uint8_t>>& memo) {
+    auto& cached = memo[i][j];
+    if (cached != 0) return cached == 2;
 
-private:
-    bool matchCore(const char* str, const char* pattern) {
-        // 1. 同时到达末尾，匹配成功
-        if (*str == '\0' && *pattern == '\0')
-            return true;
+    bool result = false;
+    if (j == pattern.size()) {
+        result = i == text.size();
+    } else {
+        const bool currentMatches =
+            i < text.size() &&
+            (pattern[j] == '.' || pattern[j] == text[i]);
+        const bool followedByStar =
+            j + 1 < pattern.size() && pattern[j + 1] == '*';
 
-        // 2. 模式串已结束但源串未结束，匹配失败
-        if (*str != '\0' && *pattern == '\0')
-            return false;
-
-        // 3. 当模式串的下一个字符是 '*' 时
-        if (*(pattern + 1) == '*') {
-            // 当前字符匹配成功（相同或模式为 '.' 且源字符不为空）
-            if (*pattern == *str || (*pattern == '.' && *str != '\0')) {
-                return matchCore(str + 1, pattern)      // 匹配 1 次或多次：源串后移，模式串不变
-                    || matchCore(str, pattern + 2);     // 匹配 0 次：忽略此星号组合，模式串后移 2 位
+        if (followedByStar) {
+            if (currentMatches) {
+                result =
+                    matchCore(text, pattern, i + 1, j + 2, memo) ||
+                    matchCore(text, pattern, i + 1, j, memo) ||
+                    matchCore(text, pattern, i, j + 2, memo);
             } else {
-                // 当前字符不匹配，只能选择匹配 0 次
-                return matchCore(str, pattern + 2);
+                result = matchCore(text, pattern, i, j + 2, memo);
             }
+        } else {
+            result = currentMatches &&
+                matchCore(text, pattern, i + 1, j + 1, memo);
         }
-
-        // 4. 普通单字符匹配
-        if (*str == *pattern || (*pattern == '.' && *str != '\0'))
-            return matchCore(str + 1, pattern + 1);
-
-        return false;
     }
-};
+
+    cached = result ? 2 : 1;
+    return result;
+}
+
+bool fullMatch(std::string_view text, std::string_view pattern) {
+    std::vector memo(
+        text.size() + 1,
+        std::vector<std::uint8_t>(pattern.size() + 1, 0));
+    return matchCore(text, pattern, 0, 0, memo);
+}
 ```
-  </Tab>
-  <Tab label="TypeScript (二维动态规划)">
-```typescript
-function isMatch(s: string, p: string): boolean {
-    const m = s.length;
-    const n = p.length;
 
-    // dp[i][j] 表示 s[0..i-1] 与 p[0..j-1] 是否匹配
-    const dp: boolean[][] = Array.from({ length: m + 1 }, () =>
-        Array(n + 1).fill(false)
-    );
+递归状态只由 i、j 决定，一共有 (M+1)(N+1) 种。备忘录让每种状态最多展开一次，时间和空间都是 O(MN)，递归栈最深 O(M+N)。不加缓存时，不同星号选择会反复抵达相同后缀，最坏搜索树指数增长。
 
-    // 1. Base cases
-    dp[0][0] = true; // 空串与空模式匹配
+<RegexStateProgressDiagram />
 
-    // 2. 初始化 dp[0][j]：处理源串为空但模式串有 * 的匹配情况
-    for (let j = 2; j <= n; j++) {
-        if (p[j - 1] === '*') {
+以 aab 与 c*a*b 为例，先让 c* 取零次；a* 连续消费两个 a；再让 a* 结束；最后普通 b 与 b 同时消费。每一步都只依赖当前两个后缀，所以同一状态无论由哪条路径到达，其真假结果都相同，正适合缓存。
+
+## 从后缀递归翻转为前缀动态规划
+
+也可以定义<Term def="由输入前缀长度与模式前缀长度共同确定、表示二者能否完整匹配的布尔子问题。">匹配状态</Term> D[i][j]：输入前 i 个字符能否与模式前 j 个字符完整匹配。双空状态为真，非空输入与空模式为假：
+
+$$
+D[0][0]=1, \qquad D[i][0]=0 \quad (i>0)
+$$
+
+普通字符或点号要求当前字符兼容，并继承左上角状态：
+
+$$
+D[i][j]=same(i-1,j-1) \wedge D[i-1][j-1]
+$$
+
+若模式第 j 个字符是星号，它修饰第 j-1 个字符。取零次时删除模式末尾两项，查看 D[i][j-2]；取一次或多次时，当前输入字符必须兼容前导项，并让星号继续匹配更短输入：
+
+$$
+D[i][j]=D[i][j-2] \vee (same(i-1,j-2) \wedge D[i-1][j])
+$$
+
+初始化空输入这一行时，a*、a*b* 等模式可以逐段取零次：模式当前位置为星号时令 D[0][j]=D[0][j-2]。其他空输入状态保持假。计算顺序按 i 从 0 到 M、j 从 1 到 N，使当前格依赖的左侧和上一行都已完成。
+
+```cpp
+#include <string_view>
+#include <vector>
+
+bool fullMatchDp(std::string_view text, std::string_view pattern) {
+    const std::size_t m = text.size();
+    const std::size_t n = pattern.size();
+    std::vector dp(m + 1, std::vector<bool>(n + 1, false));
+    dp[0][0] = true;
+
+    for (std::size_t j = 2; j <= n; ++j) {
+        if (pattern[j - 1] == '*') {
             dp[0][j] = dp[0][j - 2];
         }
     }
 
-    // 3. 状态转移
-    for (let i = 1; i <= m; i++) {
-        for (let j = 1; j <= n; j++) {
-            if (p[j - 1] === '*') {
-                // 决策 1：星号匹配 0 次
-                const matchZero = dp[i][j - 2];
-                // 决策 2：星号匹配 1 次及以上（前驱相同，且缩短后的源串亦匹配当前模式）
-                const matchChar = p[j - 2] === '.' || s[i - 1] === p[j - 2];
-                const matchMore = matchChar && dp[i - 1][j];
-
-                dp[i][j] = matchZero || matchMore;
-            } else {
-                // 普通单字符匹配（相同或模式为 '.'）
-                const matchChar = p[j - 1] === '.' || s[i - 1] === p[j - 1];
-                dp[i][j] = matchChar && dp[i - 1][j - 1];
+    for (std::size_t i = 1; i <= m; ++i) {
+        for (std::size_t j = 1; j <= n; ++j) {
+            if (pattern[j - 1] != '*') {
+                const bool same =
+                    pattern[j - 1] == '.' ||
+                    pattern[j - 1] == text[i - 1];
+                dp[i][j] = same && dp[i - 1][j - 1];
+            } else if (j >= 2) {
+                const bool same =
+                    pattern[j - 2] == '.' ||
+                    pattern[j - 2] == text[i - 1];
+                dp[i][j] =
+                    dp[i][j - 2] ||
+                    (same && dp[i - 1][j]);
             }
         }
     }
-
     return dp[m][n];
 }
 ```
-  </Tab>
-</CodeTabs>
 
-## 常见误区
+二维 DP 同样需要 O(MN) 时间和空间。每格只依赖上一行与当前行左侧，可以滚动成两行 O(N) 空间；但星号的 D[i][j-2]来自正在构造的当前行，更新顺序必须从左到右。若强行单数组原地更新，还要保存被覆盖的左上角旧值，代码更易错。
 
-<Callout type="trap">
-  <strong>现象 →</strong> 动态规划状态转移时，数组下标越界（Index Out Of Bounds）。
-  <strong>原因 →</strong> DP 矩阵的大小是 `(M+1)*(N+1)`，采用的是以 1 为基准的长度索引。而在访问原始字符串 `s[i-1]` 和 `p[j-1]` 时，使用的是以 0 为基准的字符索引。直接在字符访问中使用 `s[i]` 或 `p[j]` 会引起错位，导致检测到错误的字符，并且在末尾时发生越界崩溃。
-  <strong>修复 →</strong> 始终牢记：状态 `dp[i][j]` 中的 `i` 和 `j` 代表长度，它们对应的源串和模式串字符分别位于索引 `i-1` 和 `j-1`。
+## 作者30组测试锁定哪些边界
+
+官方源码从空串开始，逐渐增加普通字符、点号、星号和多个星号段，共有30组断言。空串与空模式、空串与 .*、空串与 .、空串与 c* 四组首先锁定终止规则和星号零次。单字符 a 再分别与 .*、a.、空模式、点号和 ab* 比较，锁定完整匹配。
+
+中段测试 aa、ab、aaa，覆盖星号消费一次、多次、点号消费恰好一次以及普通字符不匹配。后段的 c*a*b、ab*a*c*a、.*a*a 迫使算法在多个零次与多次选择间回溯，可发现只走贪心路径或漏写分支的错误。
+
+<RegexOfficialCaseLab />
+
+值得注意的是作者 Test15 和 Test16 都是 ab 与 .*，属于重复测试。忠实清单应保留它们确实存在这一事实，但工程套件可以补充更有区分度的用例，例如换行字符契约、非法模式、长重复前缀和备忘录性能。
+
+```cpp
+#include <cassert>
+#include <utility>
+#include <vector>
+
+void testRegularExpressions() {
+    const std::vector<std::pair<std::pair<const char*, const char*>, bool>> cases{
+        {{{"", ""}}, true},
+        {{{"", ".*"}}, true},
+        {{{"", "."}}, false},
+        {{{"", "c*"}}, true},
+        {{{"a", "ab*"}}, true},
+        {{{"aa", "a*"}}, true},
+        {{{"aaa", "a.a"}}, true},
+        {{{"aaa", "ab*a"}}, false},
+        {{{"aab", "c*a*b"}}, true},
+        {{{"aaca", "ab*a*c*a"}}, true},
+        {{{"aaba", "ab*a*c*a"}}, false},
+        {{{"bbbba", ".*a*a"}}, true},
+        {{{"bcbbabab", ".*a*a"}}, false},
+    };
+
+    for (const auto& [input, expected] : cases) {
+        assert(fullMatch(input.first, input.second) == expected);
+        assert(fullMatchDp(input.first, input.second) == expected);
+    }
+}
+```
+
+实际提交应把作者30组全部逐项移植，并让递归备忘录版与 DP 版交叉校验。还要构造长输入 aaaaa...b 与模式 a*a*a*...c：朴素递归会产生巨大搜索树，优化版应在状态数上界内稳定结束。性能测试必须限制输入规模，避免把无缓存版本拖垮整个测试进程。
+
+<Callout type="trap" title="把星号当作独立的任意串通配符">
+本题星号永远修饰前一项，a*只能重复a；真正能匹配任意字符串的是点号加星号的组合。若代码把单独星号当作任意串，ab*会错误匹配accc，非法首星号模式也会被误接受。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 输入不合法的模式串（如以星号开头 `*a` 或连续星号 `a**`）时，程序崩溃或抛出 NullPointer 异常。
-  <strong>原因 →</strong> 算法在遇到 `p[j-1] == '*'` 时，会无条件查询其前驱字符 `p[j-2]`。如果模式串首位就是 `*`，`j-2` 的值将为 `-1`，引发数组越界。
-  <strong>修复 →</strong> 在算法入口或初始化前执行模式串合法性校验。对于首字符是星号（`p[0] == '*'`）的情形，应当直接抛出参数异常或返回不匹配。
-</Callout>
+## 正确性与复杂度证明
 
-<Callout type="trap">
-  <strong>现象 →</strong> 在递归回溯写法中，当输入包含大量星号通配符的长字符串时，运行时间暴增，甚至引发调用栈溢出（Stack Overflow）。
-  <strong>原因 →</strong> 纯递归方法在处理诸如 `s = "aaaaaaaaaaaaab"`, `p = "a*a*a*a*a*a*a*b"` 等情况时，会产生极大量的重叠子问题。每次遇到 `*` 就会裂变出两条搜索路径，使最坏时间复杂度退化至指数级别 $O(2^{M+N})$，并由于调用栈过深引起栈溢出。
-  <strong>修复 →</strong> 在实际生产或严苛测试中，优先采用二维动态规划迭代写法；如果必须使用递归，则应引入哈希表或二维备忘录数组（Memoization）进行剪枝优化。
+递归正确性可按剩余模式长度归纳。普通项只有一种合法消费方式；星号项的合法匹配按重复次数分为零次和至少一次，两类互斥且覆盖全部可能。作者把至少一次再分为“本次结束”和“还会继续”，仍然覆盖同一集合。每个分支推进位置，最终边界准确判断完整消费。
 
-</Callout>
+DP 是同一分类的反向计算。D[i][j-2]覆盖星号前导项零次，same 与 D[i-1][j]覆盖至少一次；普通项取左上角。状态按依赖顺序填表，所以由更短前缀正确性可推出当前前缀正确，最终 D[M][N]就是整串答案。
 
-## 小结与练习
+备忘录与 DP 的状态数量均为 (M+1)(N+1)，每状态只做常数次判断，因此时间 O(MN)。二维表空间 O(MN)；递归另有 O(M+N) 调用栈，滚动 DP 可把表空间降到 O(N)。模式验证本身线性，不改变总复杂度。
 
-- **动态规划的核心**：在于用二维矩阵记录所有的历史匹配状态。在面临星号 `*` 的伸缩性选择时，通过“丢弃它（0 次）”或“推进行（1 次以上）”的多路分支合并决策进行递推。
-- **边界初始化的重要性**：由于空串可以被星号表达式过滤消除，所以 `dp[0][j]` 的初始化（必须偶数项全是 `*`）是保证大跨度匹配正常的前提。
-- **复杂度表现**：动态规划法具有稳定的 $O(M \times N)$ 时间和空间复杂度。由于 `dp[i][j]` 的计算只依赖上一行（`i-1`）与当前行，可以通过滚动数组将空间优化到 $O(N)$。
+工程上还要明确字符单位。按字节遍历 UTF-8 时，点号匹配的是一个字节而非一个 Unicode 字符；若接口承诺按字符匹配，应先解码为码点或使用成熟正则引擎。本题作者使用 char，讨论的是窄字符序列，不能直接推广到所有文本语义。
+
+<Stepper>
+  <Step title="先固定三种模式语义"><RegexTokenSemanticsDiagram />普通字符匹配自身，点号消费一个字符，星号只修饰前一项并允许零次。</Step>
+  <Step title="展开作者星号三分支"><StarBranchDecisionMap />分别观察消费并越过、消费并保留、完全跳过时两个位置怎样变化。</Step>
+  <Step title="把后缀位置作为状态"><RegexStateProgressDiagram />同一输入位置与模式位置的结果可缓存，消除递归树中的重复搜索。</Step>
+  <Step title="用30组官方用例封口"><RegexOfficialCaseLab />空串、普通项、多星号组合和回溯压力共同验证完整匹配契约。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 正则表达式匹配要求模式消费整个输入，不是搜索任意子串。
+2. 点号匹配任意一个非空字符，星号表示前一字符出现零次或多次。
+3. 作者在星号兼容时显式写了消费后越过、消费后保留、零次跳过三条递归分支。
+4. 两分支写法可把“恰好一次”并入消费后保留再跳过，但必须证明等价。
+5. 双空成功；模式先结束失败；字符串先结束仍可能被剩余星号段匹配。
+6. 备忘录和二维 DP 都把指数回溯降为 O(MN) 状态计算。
+7. 非法首星号、连续星号、UTF-8字符单位和长输入是工程接口额外边界。
+8. 作者30组测试锁定空串、点号、星号零次/多次和多段回溯语义。
 
 <Exercises>
-  <Answer question="模式串中连续出现 '.*'（例如 '.*.*'）时，状态转移会不会发生无限死循环？">
-    不会。在动态规划的迭代写法中，我们是通过外层 `i` 从 1 到 `M`、内层 `j` 从 1 到 `N` 的严格单向双重循环进行计算的。在求 `dp[i][j]` 时，它所依赖的状态如 `dp[i][j-2]` 和 `dp[i-1][j]` 在此之前已经完成了计算（它们属于当前行的左侧或上一行），不存在循环依赖关系，因此绝对不会死循环。而在递归写法中，每次匹配 0 次都会使模式串向后移 2 位（`pattern + 2`），匹配多字则会让源串向后移 1 位（`str + 1`），字符串长度都是严格递减趋向终止条件的，故也不会发生死循环。
-  </Answer>
-  <Answer question="如何将动态规划空间复杂度从 $O(M \times N)$ 优化到 $O(N)$？请简述思路。">
-    因为 `dp[i][j]` 的更新只依赖于当前行的左侧状态（如 `dp[i][j-2]`）以及上一行对应的状态（如 `dp[i-1][j]`、`dp[i-1][j-1]`）。这意味着，我们在进行状态转移时，并不需要保留所有历史行的矩阵。我们可以使用一维数组 `dp[j]`（大小为 $N+1$）作为滚动数组。在计算新的一行时，为了避免当前行计算出的新值覆盖掉上一行的旧值，我们可以采用临时变量保存或者在特定顺序下更新，从而让空间开销压缩至仅与模式串长度相关的 $O(N)$。
-  </Answer>
+
+**问题 1：为什么 aaa 与 .a 不匹配？**
+
+<Answer>点号只消费一个字符，后面的a再消费一个，总共只能覆盖两个字符。题目要求完整匹配，第三个a没有模式项可消费，所以即使前两位兼容也必须返回false。</Answer>
+
+**问题 2：作者星号的第一递归分支为什么可以从优化实现中省略？**
+
+<Answer>消费一个字符并保留星号后，下一层可以立刻选择零次跳过星号，得到与“消费一次并直接越过”相同状态。因此两分支已覆盖恰好一次；保留三分支则更直观对应作者源码。</Answer>
+
+**问题 3：空字符串为什么能匹配 c*a*b*，却不能匹配 c*a*b？**
+
+<Answer>前三个星号组合都能各取零次，使模式完全消失；末尾普通b没有星号修饰，必须消费一个真实输入字符。空输入无法满足它，所以第二个模式失败。</Answer>
+
+**问题 4：备忘录为何能把指数递归降到 O(MN)？**
+
+<Answer>递归结果只由输入位置i和模式位置j决定，共至多(M+1)(N+1)个状态。首次计算后缓存，后续路径到达同一状态直接复用，每状态只展开常数个分支。</Answer>
+
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="点号通配符 .">
-    正则表达式中的元字符，在未开启特殊单行模式时，它可以匹配源字符串中除换行符之外的任意单个字符。详见「直觉引入」节。
-  </GlossaryItem>
-  <GlossaryItem term="星号通配符 *">
-    正则表达式中的量词元字符，它不能单独存在，必须跟在某个前导字符或通配符后面，表示该前导项可以出现 0 次或任意多次。详见「概念讲解 2」节。
-  </GlossaryItem>
-  <GlossaryItem term="状态转移方程">
-    动态规划算法中，用于描述当前未知状态与一个或多个已知前驱状态之间确定性推导关系的数学公式。详见「概念讲解 2」节。
-  </GlossaryItem>
-  <GlossaryItem term="滚动数组 (Space Optimization)">
-    动态规划中常用的一种空间压缩技巧。当发现下一阶段的状态仅依赖上一阶段的状态时，可以用大小与阶段相同的常数个一维数组代替多维矩阵循环更新，从而成倍缩减内存开销。详见「小结与练习」节。
-  </GlossaryItem>
+  <GlossaryItem term="完整匹配">模式必须消费输入全部字符，不能只命中前缀或内部子串。</GlossaryItem>
+  <GlossaryItem term="点号通配符">在本题中恰好消费任意一个非空输入字符的模式项。</GlossaryItem>
+  <GlossaryItem term="星号量词">修饰前一模式项，使其允许出现零次或多次。</GlossaryItem>
+  <GlossaryItem term="匹配状态">由输入位置与模式位置共同确定的布尔子问题。</GlossaryItem>
+  <GlossaryItem term="备忘录">缓存递归状态结果、避免同一后缀组合重复展开的表。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题19"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/19_RegularExpressionsMatching/RegularExpressions.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

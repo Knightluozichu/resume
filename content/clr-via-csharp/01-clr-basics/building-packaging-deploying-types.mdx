@@ -1,0 +1,205 @@
+---
+title: "Chapter 2. Building, Packaging, Deploying, and Administering Applications and Types"
+type: C
+section: "CLR via C# 4e · CLR Basics"
+order: 2
+description: "拆解模块、metadata、manifest、资源、版本与区域性，并用可复现产物账本完成私有部署、配置和回滚。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcArtifactAnatomyLab, CvcPrivateDeploymentLab, CvcVersionIdentityLab } from "@/components/mdx/clr-via-csharp/diagrams/building-packaging-deploying-types";
+
+<Objectives>
+
+- 能解释module、metadata、assembly manifest、resource与最终部署目录之间的生产关系
+- 能区分assembly、file、informational和culture版本，并分析改变它们的兼容影响
+- 能设计可复制、可配置、可观测且可回滚的私有程序集部署流程
+
+</Objectives>
+
+## 为什么部署问题要从Artifact Graph开始
+
+“在我的机器能运行”只说明某次执行碰巧找到了一组文件、配置与本机能力。可靠部署必须能回答：源码由哪个编译器和options变成哪些modules；哪个manifest声明了哪些files、references和resources；loader按什么identity解析；配置在何时生效；失败后如何回到上一组不可变产物。只盯着一个DLL会漏掉PDB、native library、satellite resource、runtime config与数据文件。
+
+先预测：把依赖DLL复制到输出目录是否足以让CLR加载它；`AssemblyFileVersion`改变是否会改变metadata reference；一个多模块assembly缺少非manifest module时是否能加载入口；应用本地部署是否意味着没有版本治理；修改配置是否应该与二进制一起回滚。后文用产物、身份和激活三本账回答。
+
+<Term def="从编译输入到module、manifest、resource、配置与运行时依赖的可追溯产物关系。">artifact graph</Term>
+
+## .NET Framework Deployment Goals
+
+原书强调零影响安装、私有组件隔离、简单复制、卸载与管理控制。核心目标今天仍有效：应用A升级私有依赖，不应悄悄改变应用B；部署应尽量是复制不可变目录和原子切换，而不是向系统目录散落共享文件；配置应由应用owner控制并可审计。不同之处是现代.NET更多依赖NuGet解析、`.deps.json`、framework-dependent/self-contained发布与容器镜像，而非把普通库放进GAC。
+
+部署模型先确定边界：目标runtime是否预装；native architecture是什么；是否允许动态下载；是否需要single-file、trimming或AOT；资源与配置是否独立更新。每种选择都要产生可验证的输出清单，而不是只在项目文件里表达意图。
+
+## Building Types into a Module
+
+编译器把类型和成员写入metadata tables，把方法体写成IL，把外部类型写成references。一个module有自己的MVID；manifest module还包含assembly table。现代C#通常一个项目产出一个assembly/module，但理解`/target:module`有助于区分“代码物理容器”和“版本部署身份”。
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Resources/Messages.resx" />
+  </ItemGroup>
+</Project>
+```
+
+可复现构建至少固定SDK、restore lock、编译选项、环境输入与源版本。Deterministic让同样输入趋向同样binary identity，但时间戳、source path映射、source generator、native tool和post-build步骤仍需审计。输出hash只能证明两个文件相同，不能证明输入可信或行为兼容。
+
+## Response Files
+
+Response file把大量编译器参数放进文本，例如references、defines、nullable、warning和输出设置。它解决命令行长度与重复配置，却也可能成为隐藏输入：机器级`csc.rsp`、项目导入或CI额外参数会使IDE与构建机行为不同。诊断“同源码不同结果”时，要获取编译器真正执行的完整参数，而不是只读`.csproj`。
+
+在现代SDK项目中，MSBuild binary log和compiler command line是更直接的证据。把response file纳入source control，避免包含secret或机器绝对路径，并在CI记录hash。参数优先级也要测试，特别是后出现的override、conditional property group和Directory.Build.props/targets。
+
+## A Brief Look at Metadata
+
+Metadata不是注释，而是loader、JIT、reflection和工具共同消费的结构化契约。`Assembly`/`AssemblyRef`描述程序集，`TypeDef`/`TypeRef`/`TypeSpec`描述类型定义与引用，`MethodDef`/`MemberRef`/`MethodSpec`描述成员，`CustomAttribute`关联声明式信息。Token只在当前module内有意义；移动或重新编译可改变行号，所以持久化业务数据不能依赖token。
+
+<Term def="由metadata表、签名、引用和自定义特性形成，供loader、JIT与工具共同解释的静态契约。">metadata contract</Term>
+
+```csharp
+using System.Reflection;
+
+Assembly assembly = Assembly.LoadFrom(args[0]);
+Console.WriteLine(assembly.GetName().FullName);
+foreach (Module module in assembly.Modules)
+    Console.WriteLine($"{module.Name} MVID={module.ModuleVersionId}");
+foreach (AssemblyName reference in assembly.GetReferencedAssemblies())
+    Console.WriteLine($"ref {reference.FullName}");
+```
+
+这段运行时反射会加载程序集，可能触发dependency resolution；若只想静态审计不执行代码，应使用`System.Reflection.Metadata`或隔离工具进程。工具选择本身就是安全边界。
+
+<Stepper>
+  <Step title="切换module、manifest、resource与deployment"><CvcArtifactAnatomyLab /></Step>
+  <Step title="建立metadata inventory">记录MVID、assembly identity、references、files、resources、entry point和custom attributes。</Step>
+  <Step title="对照输出目录">逐项确认manifest内声明、build产物、package清单和实际部署文件，没有孤儿或缺失依赖。</Step>
+</Stepper>
+
+## Combining Modules to Form an Assembly
+
+Manifest module定义assembly identity，并可通过File table列出其它netmodule；跨module类型可通过ExportedType等记录暴露。加载某类型时才可能需要对应module，因此入口启动成功不能证明多模块assembly完整。删除一个尚未触及的module，会把失败延迟到特定代码路径。
+
+<Term def="manifest声明的modules、resources与外部references在部署中全部存在且身份一致的闭包。">manifest closure</Term>
+
+多模块assembly今天很少是首选：工具链、single-file、trimming和包管理通常围绕单文件assembly工作。但原理仍用于分析metadata：哪个module拥有定义，哪个manifest拥有身份，哪个文件必须随版本一起发布。若没有清晰收益，保持一个项目一个assembly更易维护。
+
+## Adding Assemblies to a Project by Using the Visual Studio IDE
+
+IDE中的ProjectReference、PackageReference和直接文件Reference表达不同依赖。ProjectReference允许构建系统知道生产顺序与目标框架；PackageReference交给restore选择版本与资产；直接HintPath容易把本机文件路径带进构建。最终都要落到compiler references和publish output，所以审计不能停在Solution Explorer图标。
+
+设置`Copy Local`也不是运行时加载保证：duplicate simple name、架构不匹配、transitive asset选择、load context或host policy都可能改变结果。验收应在干净环境restore/build/publish，并从发布目录启动，禁止依赖开发机GAC、全局包缓存的偶然状态或未声明环境变量。
+
+## Using the Assembly Linker
+
+`AL.exe`可把modules和resources组合成assembly、生成manifest并设置identity。本章学习重点不是背命令，而是看清link阶段负责“把已有模块包装成一个部署身份”。SDK风格构建通常由compiler/MSBuild完成同类工作；若使用source generator、IL rewriter、obfuscator或signing，它们也属于产物流水线，必须在hash与签名之前按确定顺序执行。
+
+Link后修改binary会使签名或symbol/source映射失效。每个post-process步骤要声明输入输出、tool version和失败原子性，不能在共享输出目录原地半修改。
+
+## Adding Resource Files to an Assembly
+
+Resource可以embedded在manifest module，也可以linked为外部file；`.resources`通常存放键值与序列化值，satellite assembly承载特定culture。Embedded便于原子部署，linked便于独立替换但扩大closure。秘密、私钥和连接串不应因为“嵌入DLL”就被视为安全，它们仍可被工具提取。
+
+Resource命名由default namespace、相对路径、logical name和base name共同影响。测试必须调用`GetManifestResourceNames()`并验证ResourceManager lookup，而不是只看文件存在。参数化本地化字符串还要检查占位符数量和含义在所有culture一致。
+
+## Assembly Version Resource Information and Version Numbers
+
+Windows file version resource可包含FileVersion、ProductVersion、Company等诊断信息；CLR assembly identity则由manifest中的name/version/culture/public key构成。`AssemblyVersion`影响Framework强命名绑定，`AssemblyFileVersion`用于文件属性/运维清单，`AssemblyInformationalVersion`适合SemVer与commit。三者可相关，但消费者不同。
+
+<Term def="assembly identity、file diagnostics、product/SemVer与source commit等版本坐标组成的发布证据。">version vector</Term>
+
+```csharp
+[assembly: AssemblyVersion("4.0.0.0")]
+[assembly: AssemblyFileVersion("4.2.17.0")]
+[assembly: AssemblyInformationalVersion("4.2.17+git.8f32c1a")]
+```
+
+稳定`AssemblyVersion`可降低Framework生态中的binding churn，但不自动保证兼容；每次改动File/Informational版本利于定位现场。现代NuGet package version和assembly version也可不同，发布清单应同时记录，避免只凭文件名猜版本。
+
+<Stepper>
+  <Step title="切换assembly、file、informational与culture版本"><CvcVersionIdentityLab /></Step>
+  <Step title="填写版本矩阵">为每个版本字段记录consumer、改变频率、兼容规则、诊断入口和回滚键。</Step>
+  <Step title="执行升级实验">让旧consumer分别加载兼容与破坏性新版本，观察compile、restore、bind和behavior各在哪一层失败。</Step>
+</Stepper>
+
+<Callout type="trap" title="文件属性显示的新版本就是CLR绑定的新版本">
+FileVersion主要供文件诊断；CLR读取manifest AssemblyVersion与强名称身份。只更新文件版本不会改写已有AssemblyRef，也不会解决API不兼容。
+</Callout>
+
+## Culture
+
+Assembly culture通常用于satellite resource身份；主代码assembly一般是neutral culture。ResourceManager从请求culture向parent culture再到neutral resources回退，例如`fr-CA`可回退到`fr`。UI culture决定资源选择，format culture决定数字日期格式，两者不要混为一个全局开关。
+
+<Term def="从具体区域性、父区域性到中性资源的确定性查找与缺失处理规则。">culture fallback</Term>
+
+部署检查需要枚举每个satellite目录、identity和resource key；缺少一个可选翻译应有neutral fallback，缺少关键合规文本则可能必须阻止发布。Culture是版本化内容，不应脱离主应用兼容矩阵随意替换。
+
+## Simple Application Deployment (Privately Deployed Assemblies)
+
+私有部署把assembly放在应用目录或其受控探测范围，避免全局共享状态。最安全流程是生成不可变release目录，校验清单和签名，注入经过schema验证的环境配置，在新目录启动health/smoke test，然后原子切换入口。卸载是停止进程并删除不再引用的release，而不是逐个覆盖正在使用的DLL。
+
+<Term def="由单个应用拥有、随应用版本一起发布并在受控目录解析的依赖部署方式。">private deployment</Term>
+
+私有不等于孤立：framework/shared runtime、OS native library、环境变量和外部服务仍是共享依赖。Release manifest要记录这些外部前提以及最低/最高兼容版本。对self-contained发布，还要承担runtime补丁与镜像体积；对framework-dependent发布，则要验证目标runtime roll-forward策略。
+
+## Simple Administrative Control (Configuration)
+
+原书的application configuration可影响runtime版本与assembly binding。现代应用还包括runtimeconfig、JSON、环境变量、secret provider和command line。配置层应有明确优先级、schema、敏感字段处理和生效时机；把配置文件改掉却不重启，或重启后忘记记录effective config，都会让现场不可复现。
+
+配置与binary可以分开发布，但必须通过兼容contract连接。数据库schema、feature flag和endpoint改变应支持先部署兼容代码、再切配置、最后清理旧路径。Rollback也要按相反顺序验证，不能假设恢复旧DLL能理解新配置或新数据。
+
+<Stepper>
+  <Step title="切换build、package、configure与activate"><CvcPrivateDeploymentLab /></Step>
+  <Step title="生成release manifest">列出每个managed/native/resource/config文件的hash、来源、版本、架构和owner。</Step>
+  <Step title="演练失败与回滚">注入缺DLL、错架构、坏resource、无效配置和启动超时，证明切换前失败不会污染当前版本。</Step>
+</Stepper>
+
+<Callout type="trap" title="私有部署就是复制bin目录，因此不需要发布协议">
+复制只解决文件传输。依赖closure、配置兼容、并发覆盖、健康检查、原子激活、日志关联和回滚仍需显式设计。
+</Callout>
+
+## 本章回顾：部署的是一个可证明的闭包
+
+1. Module承载metadata与IL，manifest把modules/resources/references组织为assembly identity。
+2. IDE、response file、linker和post-process都是构建输入，必须进入可复现账本。
+3. Assembly、file、informational、package和culture版本服务不同consumer，不能互相代替。
+4. 私有部署降低全局冲突，却仍要证明依赖closure、配置兼容、原子激活和回滚。
+5. 生产验收看发布目录与运行证据，不看开发机项目树是否“似乎完整”。
+
+<Exercises>
+
+**问题 1：同一提交在开发机与CI产出的DLL hash不同，怎样缩小范围？**
+
+<Answer>比较SDK/compiler版本、restore lock、完整compiler command/response files、Directory.Build导入、环境变量、source path映射、generator与post-build工具。再读取MVID、metadata、IL和embedded resource差异；不要先把差异归因时间戳。固定每项输入后在干净环境重建，确认hash是否收敛。</Answer>
+
+**问题 2：一个应用启动正常，访问特定功能才报找不到module，为什么？**
+
+<Answer>多模块assembly或延迟依赖可能只在类型首次解析时读取对应file。入口启动只触及manifest module，不能证明manifest closure。枚举manifest File/ExportedType，和部署清单逐项对照，再执行覆盖所有模块的smoke path。</Answer>
+
+**问题 3：怎样设计可以一分钟回滚的私有部署？**
+
+<Answer>每次发布到独立不可变目录，提前校验hash、架构、config schema和依赖；用新进程完成health/smoke后原子切换流量。保留上一目录与兼容配置，回滚只切入口并停止新版本。数据库和外部contract必须先采用向后兼容迁移，否则文件回滚仍会失败。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="artifact graph" definition="从构建输入到所有部署产物的可追溯关系。" />
+  <GlossaryItem term="metadata contract" definition="供loader、JIT、reflection和工具解释的静态结构契约。" />
+  <GlossaryItem term="manifest closure" definition="manifest声明的文件、资源与引用全部可用且身份一致。" />
+  <GlossaryItem term="version vector" definition="面向绑定、诊断、产品与源码的多维版本证据。" />
+  <GlossaryItem term="culture fallback" definition="具体culture逐级回退到中性资源的规则。" />
+  <GlossaryItem term="private deployment" definition="由应用独占并随应用版本发布的依赖部署方式。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 2: Building, Packaging, Deploying, and Administering Applications and Types" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

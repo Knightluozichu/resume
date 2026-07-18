@@ -1,0 +1,156 @@
+---
+title: "源码单元7 深度、法线、阴影、Meta与运动Pass"
+type: C
+section: "Unity 6 URP源码 · Lit主链"
+order: 7
+description: "沿Unity 6 URP固定提交掌握DepthOnly、DepthNormals、ShadowCaster、Meta Pass、MotionVectors。"
+demo: true
+math: true
+sourceUrl: "https://github.com/Unity-Technologies/Graphics/tree/275a7f9ad9330e3cf7f3ea57a0b242a551fde291/Packages/com.unity.render-pipelines.universal/Shaders"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { Uus07SharedUtilityPassesPipelineLab, Uus07SharedUtilityPassesCompareLab, Uus07SharedUtilityPassesEvidenceLab } from "@/components/mdx/unity-urp-shaders/diagrams/uus-07-shared-utility-passes";
+
+<Objectives>
+- 能从固定提交和真实文件解释DepthOnly、DepthNormals与ShadowCaster
+- 能绘制ShaderLab、HLSL include、数据结构、函数与Renderer Pass的生产者到消费者链
+- 能判断MotionVectors是否达标，同时保存源码定位、Frame Debugger、GPU事件和失败变体
+</Objectives>
+
+## 先预测，再读源码
+
+先预测这个文件或符号会影响哪个Pass、缓冲、关键字和GPU阶段，再打开源码与帧调试观察。把Lit主材质的Alpha裁剪、顶点变形和双面法线同步到五类辅助Pass。每类Pass都构造故障案例：深度轮廓不一致、阴影错位、烘焙颜色错误或运动拖影。 本单元用<Term def="为深度预Pass或相机深度纹理写入深度。">DepthOnly</Term>、<Term def="同时输出深度和世界法线供SSAO等屏幕效果使用。">DepthNormals</Term>、<Term def="从光源视角写入阴影图并处理偏差与Alpha裁剪。">ShadowCaster</Term>、<Term def="为光照烘焙提取Albedo和Emission。">Meta Pass</Term>、<Term def="用当前与前一帧裁剪位置生成速度向量。">MotionVectors</Term>建立静态源码与运行时证据之间的对应关系。
+
+<Uus07SharedUtilityPassesPipelineLab />
+
+## 官方源码基线
+
+本页一一对应 Unity Technologies 官方 Graphics 仓库 6000.0/staging 提交 275a7f9a 中的源码单元。课程核对日期为 2026-07-15；所有路径均固定到该提交，不把 master 开发代码与发布分支混用。
+
+### 必读文件
+
+1. `Packages/com.unity.render-pipelines.universal/Shaders/DepthOnlyPass.hlsl`
+2. `Packages/com.unity.render-pipelines.universal/Shaders/DepthNormalsPass.hlsl`
+3. `Packages/com.unity.render-pipelines.universal/Shaders/ShadowCasterPass.hlsl`
+4. `Packages/com.unity.render-pipelines.universal/Shaders/LitMetaPass.hlsl`
+5. `Packages/com.unity.render-pipelines.universal/ShaderLibrary/ObjectMotionVectors.hlsl`
+
+### 五个核心符号
+
+1. **DepthOnly**：为深度预Pass或相机深度纹理写入深度。
+2. **DepthNormals**：同时输出深度和世界法线供SSAO等屏幕效果使用。
+3. **ShadowCaster**：从光源视角写入阴影图并处理偏差与Alpha裁剪。
+4. **Meta Pass**：为光照烘焙提取Albedo和Emission。
+5. **MotionVectors**：用当前与前一帧裁剪位置生成速度向量。
+
+## 生产者到消费者链
+
+把Lit主材质的Alpha裁剪、顶点变形和双面法线同步到五类辅助Pass。每类Pass都构造故障案例：深度轮廓不一致、阴影错位、烘焙颜色错误或运动拖影。 阅读顺序固定为资源入口、ShaderLab Properties与Pass、HLSL输入结构、核心函数、共享库、运行时Renderer选择。每个箭头都写明文件、符号、参数、关键字和目标缓冲。
+
+$$
+depth=clipPosition.z/clipPosition.w
+$$
+
+$$
+normalBuffer=encode(normalWS)
+$$
+
+$$
+velocity=currentNDC-previousNDC
+$$
+
+$$
+meta=albedo+emission
+$$
+
+公式中的位置、方向、深度、颜色和索引必须标注空间、范围与来源。源码中能找到函数不证明它在当前变体执行，必须继续核对pragma、关键字、LightMode和Renderer配置。
+
+## 最小源码探针
+
+```hlsl
+Name "ShadowCaster" Tags { "LightMode"="ShadowCaster" }
+```
+
+探针顺序是常量输出、输入结构可视化、核心函数分项、固定状态和目标缓冲。先确认实际Shader变体和Pass，再解释颜色或性能差异。
+
+<Uus07SharedUtilityPassesCompareLab />
+
+## 运行时互证
+
+```text
+source: commit + package path + symbol
+material: shader + keywords + UnityPerMaterial layout
+renderer: renderer asset + rendering path + pass event
+frame: draw + LightMode + target + attachments
+evidence: Frame Debugger + GPU capture + variant log
+```
+
+用Frame Debugger确认实际Pass和关键字，用GPU捕获确认RenderState、资源绑定、MRT与时序，用构建日志确认变体是否保留。修改包源码时还要记录嵌入包与上游提交的差异。
+
+## 边界、兼容与性能
+
+测试Forward与Deferred、主光与附加光、Lightmap与Probe、透明与Alpha Clip、XR单通道实例、动态分辨率、DOTS实例、不同图形API和移动Tile GPU。固定Unity版本、平台、分辨率、VSync和场景后再比较CPU/GPU时间。
+
+```text
+baseline: official commit 275a7f9ad933
+candidate: exact local diff
+correctness: image and buffer diff
+compatibility: renderer modes, APIs, XR and platforms
+performance: variants, SetPass, samples, bandwidth, CPU/GPU ms
+failure: smallest replayable configuration
+```
+
+<Uus07SharedUtilityPassesEvidenceLab />
+
+## 分步源码实验
+
+<Stepper>
+  <Step title="固定提交与入口"><Uus07SharedUtilityPassesPipelineLab /></Step>
+  <Step title="追踪数据与Pass"><Uus07SharedUtilityPassesCompareLab /></Step>
+  <Step title="捕获运行时证据"><Uus07SharedUtilityPassesEvidenceLab /></Step>
+</Stepper>
+
+1. 在固定提交打开必读文件，定位入口、include、结构和核心函数。
+2. 画出生产者到消费者链，并标注关键字与LightMode。
+3. 用最小材质和场景触发目标变体，保存中间缓冲。
+4. 构造失败配置，用源码差异和GPU事件解释原因。
+
+## 验收证书
+
+证书包含提交、文件、符号、调用和include链、材质与关键字、Renderer配置、Pass事件、目标缓冲、GPU计时与失败反例。只修改Forward顶点动画，辅助Pass仍用原始顶点，产生漂浮阴影、错误深度和TAA鬼影。 修复后必须重放同一配置，并指出静态源码和运行时事件各发生了什么变化。
+
+## 常见误区
+
+<Callout type="trap" title="源码版本没有固定">只修改Forward顶点动画，辅助Pass仍用原始顶点，产生漂浮阴影、错误深度和TAA鬼影。</Callout>
+
+<Callout type="trap" title="静态代码等于运行时">函数被include不代表当前关键字和LightMode会执行它。必须用变体日志、Frame Debugger和GPU捕获互证。</Callout>
+
+## 本章回顾
+
+本页覆盖DepthOnly、DepthNormals、ShadowCaster、Meta Pass、MotionVectors。掌握标准是能给出固定路径和符号，画出数据链，触发对应Pass，再用正确性、兼容性和性能证据复现结论。
+
+<Exercises>
+**问题1：DepthOnly与DepthNormals如何连接？**
+<Answer>为深度预Pass或相机深度纹理写入深度。 同时输出深度和世界法线供SSAO等屏幕效果使用。 回答时必须给出文件、符号和运行Pass。</Answer>
+
+**问题2：怎样调试ShadowCaster？**
+<Answer>先定位生产者，再追踪结构参数和消费者；随后核对pragma、关键字、LightMode、Frame Debugger和GPU事件。</Answer>
+
+**问题3：如何验收MotionVectors？**
+<Answer>用当前与前一帧裁剪位置生成速度向量。 同时保存正常变体、边界变体、失败配置和CPU/GPU计时。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="DepthOnly" definition="为深度预Pass或相机深度纹理写入深度。" />
+  <GlossaryItem term="DepthNormals" definition="同时输出深度和世界法线供SSAO等屏幕效果使用。" />
+  <GlossaryItem term="ShadowCaster" definition="从光源视角写入阴影图并处理偏差与Alpha裁剪。" />
+  <GlossaryItem term="Meta Pass" definition="为光照烘焙提取Albedo和Emission。" />
+  <GlossaryItem term="MotionVectors" definition="用当前与前一帧裁剪位置生成速度向量。" />
+  <GlossaryItem term="源码证书" definition="固定提交、路径、符号、变体和运行事件后可再次验证同一结论的记录。" />
+</Glossary>
+
+<Attribution adaptedFrom="Unity Technologies · Universal Render Pipeline source · 源码单元7 深度、法线、阴影、Meta与运动Pass" adaptedUrl="https://github.com/Unity-Technologies/Graphics/tree/275a7f9ad9330e3cf7f3ea57a0b242a551fde291/Packages/com.unity.render-pipelines.universal/Shaders" />

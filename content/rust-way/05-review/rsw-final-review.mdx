@@ -1,0 +1,130 @@
+---
+title: "《Rust编程之道》总复习"
+type: C
+section: "Rust之道 · 总复习"
+order: 14
+description: "用值与表示、访问与抽象、工程与边界三层统一13章，并通过故障逆向诊断和可取消并发数据管线完成全书验收。"
+demo: true
+math: false
+sourceUrl: "https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53297"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RswWholeBookMapLab, RswDiagnosisLab, RswCapstoneLab } from "@/components/mdx/rust-way/diagrams/rsw-final-review";
+
+<Objectives>
+- 能从值与表示、访问与抽象、工程与安全边界三层复述官方13章的完整知识链
+- 能根据编译、运行或跨语言失败逆向定位类型、owner、同步、错误或协议中的首个失效不变量
+- 能设计并验收一个模块化、可取消、并发安全的数据处理程序，覆盖错误与unsafe边界
+</Objectives>
+
+## 从一个故障应该回到哪一章开始
+
+总复习不是重复语法，而是建立跨章索引。编译器报告move后使用，应回第5章；Vec引用失效先回第8章，再追第4章布局与第5章借用；异步死锁回第11章同步谓词；过程宏生成错误回第12章展开管线；FFI崩溃回第13章ABI与owner协议。<Term def="从现象逆向定位到最早相关官方章节和不变量的导航方法。">chapter-to-failure index</Term>让13章成为诊断坐标。
+
+先预测：一个“偶发错误结果”不一定是线程竞争，也可能是HashMap不稳定顺序、第9章错误被String吞掉，或第13章外部buffer寿命错误。
+
+<RswWholeBookMapLab />
+
+## 第一层：值、类型与内存表示
+
+第1章给出安全、零成本与实用主义，第2章建立表达式和类型地图，第3章用泛型Trait约束能力，第4章解释栈、堆、layout、RAII与泄漏。<Term def="对每个值记录静态类型、物理表示、size、alignment、存储位置和最终释放者的模型。">value representation ledger</Term>是阅读性能、FFI和unsafe代码的共同起点。
+
+```rust
+use std::mem::{align_of, size_of};
+
+fn describe<T>(_: &T) -> (usize, usize) {
+    (size_of::<T>(), align_of::<T>())
+}
+
+assert_eq!(describe(&7_u32).0, 4);
+```
+
+## 第二层：所有权、调用与数据抽象
+
+第5章决定释放责任与借用，第6章决定闭包环境和Iterator的Item owner，第7章用结构与模式封装状态，第8章处理UTF-8和集合重定位。<Term def="把move、borrow、闭包捕获、迭代、状态迁移和集合失效连接起来的访问模型。">access abstraction graph</Term>要求高层API仍能回答谁拥有、谁可改、引用何时结束。
+
+```rust
+fn normalize(values: &mut [String]) {
+    values.iter_mut().for_each(|value| value.make_ascii_lowercase());
+}
+
+let mut values = vec![String::from("RUST")];
+normalize(&mut values);
+assert_eq!(values[0], "rust");
+```
+
+## 第三层：失败、模块、并发与安全边界
+
+第9章让失败进入Option、Result或panic边界，第10章固定crate和可见性，第11章证明线程、原子、channel和Future，第12章审计生成代码，第13章承担编译器无法证明的内存与互操作条件。<Term def="跨错误、模块、线程、宏与外部语言仍保持owner和不变量可追踪的工程边界。">system proof boundary</Term>是生产系统是否可维护的核心。
+
+## 故障逆向诊断
+
+先分阶段：parse/展开、类型借用、链接、运行、并发活性、外部协议。再还原最小输入和toolchain，画值与线程关系，追错误source，最后找到首个失效约束。<Term def="从可观察结果沿编译阶段、owner、状态和因果链回溯首个错误条件的过程。">backward invariant trace</Term>禁止一开始就clone、加锁或包unsafe掩盖诊断。
+
+<RswDiagnosisLab />
+
+<Stepper>
+  <Step title="定位三层主线"><RswWholeBookMapLab /></Step>
+  <Step title="做逆向诊断"><RswDiagnosisLab /></Step>
+  <Step title="验收综合项目">用同步领域核心、并发外壳和外部适配器三层实现，再执行失败注入与取消测试。</Step>
+</Stepper>
+
+## 综合项目：可取消CSV处理服务
+
+同步核心定义私有有效Record和领域Error；CSV adapter读取、验证并保留row坐标；worker层用bounded channel提供背压；取消flag或channel关闭停止接收；结果先写临时文件，flush成功后替换；若有C库加速解析，只在很薄的binding层用unsafe。<Term def="同步领域核心、受控并发外壳和外部适配器分层组合的最终练习。">capstone evidence architecture</Term>让每层可以独立测试。
+
+```rust
+use std::sync::mpsc::sync_channel;
+
+let (jobs_tx, jobs_rx) = sync_channel::<String>(8);
+jobs_tx.send("row-1".into())?;
+drop(jobs_tx);
+let collected: Vec<_> = jobs_rx.into_iter().collect();
+assert_eq!(collected, ["row-1"]);
+# Ok::<(), Box<dyn std::error::Error>>(())
+```
+
+<RswCapstoneLab />
+
+## 全书验收矩阵
+
+正确性验证正常、空值、极端值与错误值；内存验证owner、Drop、泄漏和峰值；类型验证公开bound与非法状态；并发验证锁顺序、背压、关闭、取消和panic；模块验证clean build、lockfile和最小pub；宏验证展开与compile-fail；unsafe验证SAFETY注释、Miri或sanitizer、FFI对端布局与失败注入。<Term def="按功能、内存、类型、并发、模块、生成代码和unsafe七个维度验收系统的表格。">multidimensional Rust gate</Term>防止“编译通过”成为唯一标准。
+
+<Callout type="trap" title="学完所有权就等于学完Rust">
+所有权解释资源访问，却不替代Unicode、Cargo、错误API、原子顺序、宏诊断和FFI协议。官方13章分别提供这些独立坐标。
+</Callout>
+
+<Callout type="trap" title="最终项目运行成功一次就通过">
+必须注入坏CSV、依赖失败、队列满、consumer退出、worker panic、取消、临时文件写失败和FFI非法返回；同时证明旧状态不污染、资源可回收、诊断可追踪。
+</Callout>
+
+## 本章回顾
+
+13章形成三层：语言、类型和内存定义值；所有权、闭包、结构和集合定义安全抽象；错误、模块、并发、宏和unsafe定义系统边界。真正掌握表现为能从故障逆向找到首个不变量，并用综合项目的多维证据证明修复没有转移风险。
+
+<Exercises>
+**问题 1：出现move错误时为何不应立即clone？**
+<Answer>先确认真正owner和借用时长。Clone可能复制大数据、分叉状态并掩盖API责任；只有业务确实需要独立副本时才是正确修复。</Answer>
+
+**问题 2：怎样验收异步或线程服务的关闭路径？**
+<Answer>停止新任务，关闭sender或发取消信号，给在途任务明确完成或丢弃策略，join worker，flush持久化并返回错误。测试队列满、worker panic、重复关闭和超时。</Answer>
+
+**问题 3：unsafe边界通过的最低证据是什么？**
+<Answer>每个unsafe操作有具体前置条件与来源，safe API组合无法制造UB，布局和owner协议有测试，失败与panic路径维持初始化和Drop不变量，并使用适合的Miri、sanitizer或对端集成验证。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="chapter-to-failure index" definition="从故障定位官方章节和不变量的导航。" />
+  <GlossaryItem term="value representation ledger" definition="记录类型、布局、存储和释放者的值模型。" />
+  <GlossaryItem term="access abstraction graph" definition="连接move、borrow、捕获、迭代和状态迁移的访问图。" />
+  <GlossaryItem term="system proof boundary" definition="跨错误、模块、线程、宏和外部语言的证明边界。" />
+  <GlossaryItem term="backward invariant trace" definition="沿阶段、owner、状态和因果链逆向找首个失效条件。" />
+  <GlossaryItem term="capstone evidence architecture" definition="同步核心、并发外壳和外部适配器组成的综合架构。" />
+  <GlossaryItem term="multidimensional Rust gate" definition="按功能、内存、类型、并发、模块、宏和unsafe验收。" />
+</Glossary>
+
+<Attribution adaptedFrom="《Rust编程之道》官方13章综合复习" adaptedUrl="https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53297" />

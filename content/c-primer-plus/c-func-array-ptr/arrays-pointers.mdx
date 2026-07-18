@@ -3,28 +3,20 @@ title: 数组和指针
 type: C
 section: C函数数组指针
 order: 10
-description: 掌握一维/二维数组、指针基础、数组与指针关系、指针算术，能正确遍历数组并通过指针访问元素
+description: 掌握一维与多维数组、指定初始化、数组形参、const、VLA、复合字面量和有边界的指针运算
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/c-primer-plus-9780321928429"
 draft: false
 ---
 
-{/* C 实战型第 10 章（C Primer Plus §10 改编）：一维/二维数组、指针、数组名退化、指针算术、下标与 *(arr+i) 等价。
-   重心是概念讲解(§3) + 代码对照(§6) + 常见误区(§7)，数学省略(math:false)。
-   draft:true 待总监 review。 */}
-
-{/* 知识点清单（先摊开，逐条标 viz 形态，每条至少配一种 viz）：
-   1) 一维数组连续内存布局 — ArrayMemoryLayoutDiagram
-   2) 指针算术 p+1 移动 sizeof(type) — PointerArithmeticDiagram（step 1-3）
-   3) arr[i] 与 *(arr+i) 等价 — ArrayPointerEquivalenceDiagram
-   4) 二维数组行优先存储 — TwoDimArrayDiagram */}
+import { CPrimerArrayPointerContractDiagram } from "@/components/mdx/c-primer-plus/diagrams/arrays-pointers";
 
 <Objectives>
 
-- 能声明并初始化一维、二维数组，解释元素在内存中如何连续排布，以及合法下标范围
-- 能说明指针存地址、`*` 解引用、`&` 取地址，并用指针算术 `p+n` 遍历数组
-- 能写出 `arr[i]` 与 `*(arr+i)` 的等价关系，并正确访问 `m[r][c]` 这样的二维元素
+- 能用普通与指定初始化器创建一维、二维数组，并解释合法下标和尾后指针边界
+- 能说明数组表达式何时转换为首元素指针，并写出带长度、const 元素约束的数组函数接口
+- 能比较固定数组、C11 条件支持的 VLA 与复合字面量的生存期，并正确访问二维数组
 
 </Objectives>
 
@@ -36,17 +28,36 @@ draft: false
 
 这一章把数组的排布、指针的含义、以及两者如何配合讲清楚。搞懂这些，后面字符串、动态内存、函数传数组都会顺很多。
 
+<CPrimerArrayPointerContractDiagram />
+
 ## 一维数组：连续内存里的一排元素
 
 <Term def="由相同类型元素组成、在内存中连续存放、用单个名字和下标访问的数据结构。下标从 0 开始。">数组（array）</Term> 声明写法：
 
 ```c
-int scores[5];                    /* 5 个 int，未初始化 */
+int scores[5] = {0};              /* 5 个 int，全部初始化为 0 */
 double temps[7] = {20.1, 21.0};   /* 前 2 个有初值，其余为 0 */
 int primes[] = {2, 3, 5, 7};      /* 长度由初值个数推断为 4 */
 ```
 
 `scores[5]` 表示 5 个 `int` 占一段**连续**内存。合法下标是 `0` 到 `4`——访问 `scores[5]` 已越界，行为未定义（可能崩溃、可能看似正常）。
+
+C99/C11 的 <Term def="在初始化列表中用方括号下标或点号成员名明确指定要初始化位置的语法；未指定元素仍按规则初始化为零。">指定初始化器（designated initializer）</Term> 允许跳到某个元素，适合稀疏表和枚举索引：
+
+```c
+enum day { MON, TUE, WED, THU, FRI, DAYS };
+int hours[DAYS] = {
+    [MON] = 8,
+    [WED] = 6,
+    [FRI] = 4
+};
+
+int matrix[2][3] = {
+    [1][2] = 9
+};
+```
+
+未显式指定的元素初始化为 0。后续未带指定符的初始化项从上一个指定位置之后继续，因此混用时要逐项核对位置；同一元素被多次初始化时以后出现的初始化覆盖先前值，但诊断和副作用细节不适合作为程序逻辑。
 
 <ArrayMemoryLayoutDiagram />
 
@@ -72,9 +83,9 @@ printf("%d\n", *ptr);  /* * 解引用：取该地址上的 int 值 → 42 */
 - **`&x`**：<Term def="一元运算符，得到变量 x 在内存中的地址。">取地址</Term>
 - **`*p`**：<Term def="一元运算符，访问指针 p 所指向地址上的值。">解引用（dereference）</Term>
 
-指针也有类型：`int *p` 只能指向 `int`；`double *q` 指向 `double`。类型告诉编译器解引用时读几个字节、指针加 1 时跳过几个字节。
+指针也有类型：`int *p` 是“指向 int 的指针”，可保存有效 int 对象地址、同一数组的尾后地址或空指针值；只有指向有效对象时才能解引用。`double *q` 的目标类型是 double。类型决定解引用访问的对象类型，也决定合法指针算术的元素步长。
 
-## 数组与指针：名字、下标、等价式
+## 指针与数组：名字、下标、等价式
 
 在大多数表达式里，<Term def="数组名在表达式中常转换为首元素地址的指针，类型为 T*。sizeof 数组名和 &数组名 是例外。">数组名会「退化」为指向首元素的指针</Term>：
 
@@ -99,7 +110,7 @@ for (p = ar; p < ar + 5; p++)
     printf("%d ", *p);
 ```
 
-`p < ar + 5` 表示指针尚未越过尾后位置（指向 `ar[5]` 的地址可比较，但不可解引用）。
+`p < ar + 5` 表示指针尚未到达尾后位置。`ar + 5` 可以形成并参与同一数组内的比较，却不可解引用；形成超出尾后位置的指针本身就不在 C 指针算术保证内。
 
 ## 指针算术：p+1 不是加 1 字节
 
@@ -130,9 +141,9 @@ printf("%d\n", p[2]);     /* 30 — 指针也可下标 */
   </Step>
 </Stepper>
 
-指针相减（同数组内）：`p - q` 得到两指针之间相隔的**元素个数**（不是字节数）。
+同一数组对象内（含尾后位置）的两个指针可以相减，结果类型为 `ptrdiff_t`，表示相隔的**元素个数**。对无关对象的指针做有序比较或相减没有可移植含义；只有相等/不等比较可用于任意兼容对象指针值。
 
-## 二维数组：逻辑表格，物理一行接一行
+## 多维数组：二维表格在物理内存中一行接一行
 
 <Term def="元素本身也是数组的一维数组。如 int m[3][4] 可看作 3 行，每行 4 个 int。">二维数组</Term> 声明：
 
@@ -152,6 +163,80 @@ int grid[2][3] = {{1, 2, 3}, {4, 5, 6}};   /* 按行初始化 */
 例如 `m[1][2]` 在 `int m[3][4]` 中是第 1×4+2 = 6 个元素（即第 7 个 int）。
 
 表达式 `m[1]` 是「第 1 行」——类型为「4 个 int 的数组」，在表达式中又退化为指向 `m[1][0]` 的指针，所以 `m[1] + 2` 指向 `m[1][2]`。
+
+## 函数数组指针：长度必须进入接口
+
+函数参数列表中的 `int values[]` 会被调整为 `int *values`；方括号不会把数组对象复制进函数，也不会携带长度。所以下面两个声明表示同一种函数类型：
+
+```c
+long sum_values(size_t count, const int values[]);
+long sum_values(size_t count, const int *values);
+```
+
+完整定义把元素个数显式传入，并用 <Term def="在指针目标类型上使用 const，使函数不能通过该指针修改所指元素；指针值本身仍是按值传入的局部副本。">const 元素形参</Term> 表达只读契约。这类 **const 形参** 约束的是经参数进行的元素访问：
+
+```c
+#include <stddef.h>
+
+long sum_values(size_t count, const int values[count]) {
+    long sum = 0;
+    size_t i;
+    for (i = 0; i < count; ++i)
+        sum += values[i];
+    return sum;
+}
+```
+
+参数声明里的 `values[count]` 仍会调整为指针；`count` 是给读者、诊断器和优化器的边界信息，不会让 `sizeof values` 变回整个数组。函数体内 `sizeof values` 得到的是指针大小。`const int *values` 禁止经 values 改元素，但调用方传入的非 const 数组本身并没有因此永久变成 const。
+
+二维数组形参必须让编译器知道每行有多少列，才能计算行步长。固定列数可写：
+
+```c
+void print_rows(size_t rows, const int matrix[][3]);
+```
+
+支持变长数组类型时，也可以把列数放在形参之前：
+
+```c
+void print_matrix(size_t rows, size_t cols,
+                  const int matrix[rows][cols]) {
+    size_t r, c;
+    for (r = 0; r < rows; ++r) {
+        for (c = 0; c < cols; ++c)
+            printf("%d%c", matrix[r][c], c + 1 == cols ? '\n' : ' ');
+    }
+}
+```
+
+这里 matrix 调整为“指向含 cols 个 int 的数组的指针”，不是 `int **`。rows 和 cols 必须与实参数组布局一致；类型系统不会自动发现调用方实际分配了几行。
+
+## 变长数组与复合字面量
+
+<Term def="长度在进入块时由运行期表达式确定的自动数组类型；C11 允许实现不支持该可选特性。">变长数组（VLA）</Term> 的长度不是整数常量表达式：
+
+```c
+void clear_square(size_t side) {
+#if defined(__STDC_NO_VLA__)
+    /* 改用动态分配或固定上限。 */
+#else
+    if (side == 0)
+        return;
+    int grid[side][side];
+    /* grid 只在本次块执行期间存在，且不能用初始化列表初始化。 */
+    (void)grid;
+#endif
+}
+```
+
+C11 允许实现定义 `__STDC_NO_VLA__` 表示不支持 VLA。块作用域 VLA 的长度必须为正，存储期随块执行结束；不能返回指向它的指针。尺寸可能很大或来自不可信输入时，应先验证乘法与容量，再考虑受控动态分配。
+
+<Term def="用带类型名的花括号初始化列表在表达式中创建一个未命名对象或数组；块作用域对象存活到包含块结束。">复合字面量（compound literal）</Term> 可以临时提供一个有真实对象身份的数组：
+
+```c
+long total = sum_values(4, (const int[]){2, 3, 5, 7});
+```
+
+块作用域复合字面量具有自动存储期，生存到包含它的块结束，而不只是当前完整表达式；文件作用域复合字面量具有静态存储期。可以在有效生存期内取其地址，但不能保存指针并在对象生存期结束后继续使用。
 
 ## 代码详解：数组 + 指针实战
 
@@ -182,7 +267,7 @@ int main(void) {
 
 int main(void) {
     int ar[] = {3, 1, 4, 1, 5};
-    int n = sizeof ar / sizeof ar[0];  /* 元素个数 */
+    size_t n = sizeof ar / sizeof ar[0];  /* 元素个数 */
     int *p;
 
     for (p = ar; p < ar + n; p++)
@@ -259,12 +344,14 @@ void swap_int(int *a, int *b) {
 - 一维数组：同类型元素、连续内存、下标从 0 到 n-1
 - 指针存地址；`*p` 解引用，`&x` 取地址；类型决定步长
 - 表达式里数组名常退化为首元素指针；**`ar[i]` ≡ `*(ar+i)` ≡ `p[i]`**（p 指向 ar）
-- 指针算术：`p+n` 跳 n 个元素；可用 `for (p=ar; p<ar+n; p++)` 遍历
+- 指针算术只在同一数组到尾后位置内有定义；尾后指针能比较但不能解引用
 - 二维数组逻辑是表格，物理行优先一行接一行；`m[r][c]` 线性下标 = r×列数+c
+- 数组形参会调整为指针，长度必须另传；const 元素形参表达只读访问契约
+- C11 实现可不支持 VLA；复合字面量则创建有明确存储期的未命名对象
 
 <Exercises>
 
-**练习 1（改代码型）** 下面循环想打印 4 个元素，但有 off-by-one 错误。改正后应输出 `10 20 30 40`。
+**问题 1（改代码型）** 下面循环想打印 4 个元素，但有 off-by-one 错误。改正后应输出 `10 20 30 40`。
 
 ```c
 int vals[4] = {10, 20, 30, 40};
@@ -286,7 +373,7 @@ for (i = 0; i < 4; i++)
 
 </Answer>
 
-**练习 2（问答型）** 说明 `int ar[5]; int *p = ar;` 之后，`* (p + 3)` 访问的是哪个元素？与 `ar[3]` 什么关系？
+**问题 2（问答型）** 说明 `int ar[5]; int *p = ar;` 之后，`* (p + 3)` 访问的是哪个元素？与 `ar[3]` 什么关系？
 
 <Answer>
 
@@ -294,7 +381,7 @@ for (i = 0; i < 4; i++)
 
 </Answer>
 
-**练习 3（综合实现型）** 写程序：读入 5 个整数到数组，用两个指针（一个从头、一个从尾）原地反转数组，再打印。不得用额外数组存副本。
+**问题 3（综合实现型）** 写程序：读入 5 个整数到数组，用两个指针（一个从头、一个从尾）原地反转数组，再打印。不得用额外数组存副本。
 
 <Answer>
 
@@ -307,8 +394,10 @@ int main(void) {
     int *left, *right, tmp, i;
 
     printf("输入 %d 个整数：\n", N);
-    for (i = 0; i < N; i++)
-        scanf("%d", ar + i);
+    for (i = 0; i < N; i++) {
+        if (scanf("%d", ar + i) != 1)
+            return 1;
+    }
 
     left = ar;
     right = ar + N - 1;
@@ -371,6 +460,22 @@ int main(void) {
   二维数组在内存中先存第 0 行全部列，再存第 1 行……C 语言采用此布局。线性下标 = 行号×列数+列号。
 </GlossaryItem>
 
+<GlossaryItem term="指定初始化器（designated initializer）">
+  用 `[下标] = 值` 指定数组元素，或用 `.成员 = 值` 指定结构成员的初始化语法。未指定的数组元素按规则初始化为零。
+</GlossaryItem>
+
+<GlossaryItem term="const 元素形参">
+  数组形参调整为指针后，以指向 const 元素的指针类型阻止函数经该参数修改元素；调用方仍须另传长度。
+</GlossaryItem>
+
+<GlossaryItem term="变长数组（VLA）">
+  长度在进入块时由运行期表达式确定的自动数组。C11 把 VLA 支持设为实现可选，代码应识别 `__STDC_NO_VLA__` 并准备替代方案。
+</GlossaryItem>
+
+<GlossaryItem term="复合字面量（compound literal）">
+  以 `(类型){初始化项}` 在表达式中创建未命名对象。块作用域对象存活到包含块结束，文件作用域对象具有静态存储期。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution />
+<Attribution title="C Primer Plus, Sixth Edition, Chapter 10: Arrays and Pointers" url="https://www.informit.com/store/c-primer-plus-9780321928429" />

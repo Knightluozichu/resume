@@ -1,0 +1,313 @@
+---
+title: "Chapter 12：对象生命周期（Object Lifetime）"
+type: A
+section: Pro .NET 内存管理（第2版）· 终结、资源所有权与弱关系
+order: 12
+description: 对齐原书第 12 章：区分托管可达性与外部资源生命周期，追踪 finalization/f-reachable/复活，建立 IDisposable/SafeHandle 所有权，并比较弱、长弱、依赖与固定句柄。
+demo: false
+math: false
+sourceUrl: "https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_12"
+draft: false
+---
+
+import {
+  DnmHandleSemanticsLab,
+  DnmLifetimeStateMap,
+  DnmResourceOwnershipLab,
+} from "@/components/mdx/dotnet-memory/diagrams/object-lifetime";
+
+<Objectives>
+
+- 能描述普通对象、可终结对象与复活对象从强可达到真正回收的状态机，并解释为何终结通常至少跨两次 GC
+- 能分析 IDisposable、IAsyncDisposable、finalizer 与 SafeHandle 的职责边界，设计幂等、异常安全且所有权唯一的释放路径
+- 能设计弱/长弱/依赖/固定句柄实验，以 gcroot、finalization queue 和回收事件验证“观察、条件保活、固定”语义
+
+</Objectives>
+
+## 为什么对象存储与外部资源有两条生命周期
+
+GC 只管理托管对象存储的可达性。文件描述符、socket、窗口、数据库事务、GPU buffer 等外部资源不因包装对象还占多少字节而自动关闭；Linux 上它们甚至常只是普通整数。一个包装器仍强可达时也可以已经 `Dispose`，一个包装器不可达时底层资源却可能等终结器才释放。
+
+<Term def="对象从创建、强可达、不可达到托管存储最终被 GC 回收的状态变化；它与所包装外部资源何时释放是两条相关但独立的时间线。">托管对象生命周期</Term>
+
+<Term def="代码中唯一负责取得、使用并最终释放外部资源的契约；所有权可转移，但同一时刻应能指出谁必须释放且只能释放一次。">资源所有权</Term>
+
+<DnmLifetimeStateMap />
+
+Dispose 是所有者主动结束资源生命周期，不会让对象立即从托管堆消失；GC 仍按可达性回收包装器。Finalizer 是遗漏确定性释放时的兜底，也不会承诺在业务截止时间前运行。把两者混成“Dispose 会删除对象”或“GC 会关闭资源”都会产生错误设计。
+
+<Callout type="trap" title="陷阱：让 GC 决定何时释放稀缺资源">
+  GC 触发依据主要是托管分配预算，不知道文件句柄或连接池即将耗尽。轻量包装器可能长时间不触发回收，导致外部资源先用尽。对有时限/容量的资源必须使用 using/await using 确定性释放，finalizer 只兜底。
+</Callout>
+
+## 可终结对象为何通常需要两轮回收
+
+<Term def="类型声明终结器后，实例在创建时进入运行时登记结构；首次失去普通强路径时，GC 不直接释放它，而是安排终结线程稍后执行。">终结</Term>
+
+普通对象在覆盖其所在代的 GC 中被判定不可达即可回收。可终结对象首次不可达时，运行时把它从登记组转入 <Term def="保存已无普通强根、但为执行终结器而被 GC 特殊保活的对象队列；终结线程从中依次取得对象。">F-reachable 队列</Term>，重新标记它及必要引用闭包。对象因而至少存活到终结器运行，并可能晋升；终结完成且未复活后，还要等待下一轮覆盖回收释放存储。
+
+```text
+ordinary:    reachable -> unreachable -> GC reclaims
+finalizable: registered -> unreachable -> f-reachable -> finalizer runs
+             -> unreachable again -> later GC reclaims
+disposed:    resource released deterministically -> SuppressFinalize
+             -> wrapper follows ordinary reachability
+```
+
+Finalizer 由专用终结线程执行，顺序、时间和进程退出时机都不应成为业务契约。一个阻塞 I/O、锁等待或无限循环的终结器会堵住后续对象；终结器也不应访问其他可能已终结的对象。运行时内部登记分组与 free-list 布局会演进，应用不得依赖队列内存结构。
+
+## SuppressFinalize 与 ReRegisterForFinalize 改变什么
+
+`GC.SuppressFinalize(this)` 表示资源已经由确定性路径释放，不再需要终结回调。它不会清除普通强引用，也不会回收对象；其运行时操作很轻，重复调用不值得为了微小开销规避。Dispose pattern 应在成功接管释放后调用它。
+
+`GC.ReRegisterForFinalize(obj)` 可让已经终结/被抑制的对象再次进入终结登记。与对象复活结合时，同一终结器可能被调用多次，重复关闭同一 native handle 会造成 use-after-close 或关闭已复用的新句柄值。除运行时/框架级特殊机制外，应避免使用。
+
+```csharp
+public sealed class RawOwner : IDisposable
+{
+    private IntPtr _handle;
+
+    ~RawOwner() => Release(disposing: false);
+
+    public void Dispose()
+    {
+        Release(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+
+    private void Release(bool disposing)
+    {
+        IntPtr handle = Interlocked.Exchange(ref _handle, IntPtr.Zero);
+        if (handle != IntPtr.Zero)
+        {
+            NativeApi.Close(handle); // 幂等防线：所有路径最多取到一次真实值
+        }
+    }
+}
+```
+
+这段代码展示裸句柄的最低防线，不是首选。Finalizer 路径不能依赖其他普通 managed objects，且 native close 必须可安全调用；有合适 `SafeHandle` 时，应让它承载可靠兜底。
+
+## 对象复活为何让状态机更危险
+
+<Term def="终结器执行时把 this 或通向自身的对象写入静态字段、强句柄或其他根，使已进入 f-reachable 的对象重新获得普通强路径。">对象复活</Term>
+
+复活后对象重新可达，但它可能处于“部分资源已释放、字段不再满足构造后不变量”的状态。终结器默认只安排一次；对象第二次失去强根后通常直接可回收，除非显式 `ReRegisterForFinalize`。其他对象的终结顺序未知，复活图中的依赖可能已失效。
+
+```csharp
+sealed class Resurrecting
+{
+    public static Resurrecting? LastChance;
+
+    ~Resurrecting()
+    {
+        LastChance = this;              // 重新建立静态强根
+        GC.ReRegisterForFinalize(this); // 可能导致未来再次终结，风险很高
+    }
+}
+```
+
+不要把复活用作对象池或缓存。池需要显式租用/归还和状态重置，复活受 GC/终结线程时机控制，既慢又不可预测。诊断中若同一类型反复出现在 finalization pending/Gen 2，可检查静态根、重注册和终结器计数。
+
+## IDisposable 如何表达确定性释放
+
+<Term def="由资源所有者显式调用的同步释放契约，通常通过 using 保证正常、异常和提前返回路径都执行 Dispose。">IDisposable</Term>
+
+Dispose 应幂等：重复调用安全；应使对象进入明确 disposed 状态，后续业务操作抛 `ObjectDisposedException` 或遵循类型契约。若类型只拥有其他 managed `IDisposable`，通常无需 finalizer；若基类/派生类共同持有资源，使用 `Dispose(bool)` 链并确保基类路径总会执行。
+
+```csharp
+public class ResourceOwner : IDisposable
+{
+    private bool _disposed;
+    private readonly Stream _stream;
+
+    protected virtual void Dispose(bool disposing)
+    {
+        if (_disposed) return;
+        if (disposing) _stream.Dispose();
+        _disposed = true;
+    }
+
+    public void Dispose()
+    {
+        Dispose(disposing: true);
+        GC.SuppressFinalize(this);
+    }
+}
+```
+
+该类型没有裸 native resource，因此不声明 finalizer；`SuppressFinalize` 对没有终结器的类型不是必需，但统一 pattern 中成本很低。线程安全是否需要 lock/Interlocked 取决于类型是否承诺并发 Dispose/Use，不能用 `_disposed` bool 自动假定无竞态。
+
+## IAsyncDisposable 何时必要
+
+<Term def="资源释放本身需要异步等待时使用的确定性契约，调用方通过 await using 确保 DisposeAsync 在异常路径也被等待完成。">IAsyncDisposable</Term>
+
+远程 flush、异步 stream shutdown 或协议 close handshake 可能不能安全阻塞线程，此时实现 `DisposeAsync`。若类型同时提供同步/异步释放，两个入口必须共享一次所有权转移，避免同步 Dispose 与 DisposeAsync 并发双重关闭。Finalizer 不能 `await`，底层本机兜底仍应保持短小、同步、可靠。
+
+```csharp
+await using (var session = await Session.OpenAsync(cancellationToken))
+{
+    await session.SendAsync(payload, cancellationToken);
+} // DisposeAsync 被等待；取消策略由 session 契约决定
+```
+
+Dispose/DisposeAsync 是否抛错、是否允许取消要在 API 契约中说明。释放异常不能悄悄失去资源所有权，也不能让终结器承担复杂补偿逻辑。
+
+## SafeHandle 为什么优于手写裸终结器
+
+<Term def="封装 OS/native handle、记录 ownsHandle/invalid value，并通过可靠终结和一次性 ReleaseHandle 协调确定性释放与兜底的托管基类。">SafeHandle</Term>
+
+SafeHandle 把“哪个数值无效、谁拥有、如何释放一次”集中在小类型中，终结可靠性和 P/Invoke 生命周期处理优于每个业务包装器各写一份 finalizer。业务对象只需 Dispose SafeHandle；SafeHandle 自己在遗漏 Dispose 时兜底。`ownsHandle:false` 表示只借用，不应关闭，必须由真正 owner 活得更久。
+
+```csharp
+sealed class NativeBufferHandle : SafeHandleZeroOrMinusOneIsInvalid
+{
+    private NativeBufferHandle() : base(ownsHandle: true) { }
+
+    protected override bool ReleaseHandle()
+    {
+        NativeApi.FreeBuffer(handle);
+        return true;
+    }
+}
+
+sealed class NativeBuffer : IDisposable
+{
+    private readonly NativeBufferHandle _handle;
+    public void Dispose() => _handle.Dispose();
+}
+```
+
+传给 P/Invoke 的 SafeHandle 参数可由 marshaller 协调危险引用计数，避免本机调用期间被并发 Dispose 提前关闭。手工取 `DangerousGetHandle` 后若跨越 GC/Dispose，需要严格配对 `DangerousAddRef/Release` 或更高层 API；“Dangerous”不是装饰词。
+
+<DnmResourceOwnershipLab />
+
+## JIT early root collection 怎样影响资源包装器
+
+第 8 章说明 Tier 1 JIT 可在最后一次托管语义使用后停止报告局部根。一个实例方法只把内部裸 handle 传给本机调用、之后不再读 `this` 时，包装对象可能在调用尚未返回前进入终结路径。Debug/Tier 0 可能延长根生命周期，令问题难以复现。
+
+SafeHandle P/Invoke 参数是首选契约。若必须让普通 owner 活到某点，`GC.KeepAlive(owner)` 应放在最后一个本机使用之后；放在之前无效。它只延长可达性，不解决并发 Dispose 的所有权竞态。
+
+```csharp
+NativeApi.Use(rawOwner.Handle);
+GC.KeepAlive(rawOwner); // owner 至少活到本机调用返回
+```
+
+## 弱句柄怎样观察而不拥有
+
+<Term def="允许查询目标但不构成强 GC 根的句柄；目标没有其他强路径时可被回收，访问方必须接受 TryGetTarget 失败。">弱句柄</Term>
+
+普通 `WeakReference<T>`（`trackResurrection:false`）在目标首次判定不可达时清空，通常不会让调用者观察已排队终结对象。长弱引用（track resurrection）可把观察窗口延长到终结之后、真正回收之前，但目标资源可能已经释放、状态已损坏；它适合极少数诊断/运行时场景，不是安全继续使用对象的保证。
+
+```csharp
+var weak = new WeakReference<LargePreview>(preview);
+preview = null;
+
+if (weak.TryGetTarget(out LargePreview? cached))
+{
+    Render(cached); // 取得局部强引用后，本次调用期间保持可达
+}
+else
+{
+    RebuildPreview();
+}
+```
+
+WeakReference cache 可能在任何覆盖回收后 miss，也可能因内存充足长期命中；不能承诺容量、TTL 或命中率。真正缓存应有显式上限和淘汰策略，弱引用最多作为可丢失层。
+
+## 依赖句柄如何避免 Value 把 Key 反向保活
+
+<Term def="表达条件边的 GC handle：只有 Key 通过其他强路径存活时才保活 Value；常用于 ConditionalWeakTable 的 Key→Value 附加数据。">依赖句柄</Term>
+
+普通字典 `Dictionary<Key,Value>` 会强保活 key/value；若 value 又引用 key，删除外部 key 后字典仍使整组存活。`ConditionalWeakTable<TKey,TValue>` 用 dependent handle/ephemeron 语义：key 活则 value 活，value 反向指 key 不应凭自身把 key 变成强根。GC 标记可能需要迭代处理这些条件边直到稳定。
+
+```csharp
+private static readonly ConditionalWeakTable<object, Metadata> MetadataByOwner = new();
+
+Metadata GetMetadata(object owner) =>
+    MetadataByOwner.GetValue(owner, static key => new Metadata(key));
+```
+
+ConditionalWeakTable 不是通用高性能字典，也不提供基于时间/数量的精确淘汰。它适合给外部 owner 附加不应改变 owner 生命周期的数据。不要依赖某次 Gen 0 后回调/清理必然发生，pinned/demotion 和实现细节会影响观察时机。
+
+<DnmHandleSemanticsLab />
+
+<Callout type="trap" title="陷阱：把 WeakReference 当成所有权">
+  弱目标可在两次读取之间消失。必须用 TryGetTarget 一次取得局部强引用，再在该作用域使用；不能先检查 IsAlive、稍后再取 Target。长弱引用还可能返回已经终结、资源已关闭的对象。
+</Callout>
+
+## 怎样诊断终结队列与句柄保留
+
+`GCMemoryInfo.FinalizationPendingCount` 给出某次 GC 观察到的待终结数量，事件可显示 finalizer activity；dump 中 `finalizequeue`/`gcroot`/`gchandles` 帮助区分登记、f-reachable、强/弱/固定句柄。工具字段和命令因 SOS/ClrMD 版本不同，应保存运行时与工具版本。
+
+```text
+dotnet-dump analyze process.dmp
+> finalizequeue
+> gchandles
+> dumpheap -type Namespace.NativeOwner
+> gcroot 000001F234567890
+```
+
+高 pending count 可能来自创建太多可终结对象、终结器阻塞、资源释放缓慢或复活/重注册。先按类型和年龄排序，再检查 finalizer thread stack 与每秒进入/完成速率；不要用 `GC.WaitForPendingFinalizers` 周期性掩盖生产积压，它会让调用线程等待整个队列。
+
+## 三步建立对象生命周期闭环
+
+<Stepper>
+  <Step title="第一步：画出托管与资源两条时间线">
+    对每个 owner 标出强可达、Dispose、f-reachable、finalizer 和真正回收，先预测正常/遗漏/复活路径，再确认资源是否只有一个释放点。
+
+    <DnmLifetimeStateMap />
+  </Step>
+  <Step title="第二步：选择最小而可靠的所有权模型">
+    优先 using/await using；裸 native handle 交给 SafeHandle，业务 wrapper 不重复写 finalizer。验证重复 Dispose、异常、并发和借用 ownsHandle=false 路径。
+
+    <DnmResourceOwnershipLab />
+  </Step>
+  <Step title="第三步：验证句柄没有改变预期生命周期">
+    区分 strong/weak/track-resurrection/dependent/pinned，构造 key/value 反向引用与临时 pin 实验；用 gcroot/gchandles/finalizequeue 验证实际根。
+
+    <DnmHandleSemanticsLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 托管对象回收与外部资源释放是两条生命周期；Dispose 可在对象仍可达时释放资源，GC 不提供资源时限
+- 可终结对象首次不可达会进入 f-reachable 并多存活一轮，阻塞终结器、复活和重注册会放大晋升与风险
+- IDisposable/IAsyncDisposable 是确定性所有权契约，SafeHandle 负责 native handle 的一次释放与可靠兜底
+- JIT early root collection 可能让资源 owner 比源码作用域更早不可达；优先 SafeHandle 契约，必要时在最后使用后 KeepAlive
+- Weak 不拥有目标，dependent handle 只在 key 由其他路径存活时保活 value；Pinned 同时强保活并阻止移动
+
+<Exercises>
+  1. **问题 1：手推可终结对象。** 一个 NativeOwner 无强根后为何本轮没有释放托管存储，Dispose 又能怎样缩短路径？
+
+  <Answer question="Finalization 为何通常至少跨两轮 GC？">首次不可达时它从终结登记转入 f-reachable，GC 为终结线程重新标活对象及必要闭包；终结器运行后且未复活，后续覆盖回收才释放存储。Dispose 应确定性释放资源并 SuppressFinalize，使包装器以后按普通可达性回收，避免排队和额外晋升。</Answer>
+
+  2. **问题 2：设计 SafeHandle 所有权。** 本机库返回句柄，业务对象可能被并发 Dispose 且 P/Invoke 正在使用，为什么裸 IntPtr + finalizer 不够？
+
+  <Answer question="SafeHandle 怎样统一一次释放与调用窗口？">裸 IntPtr 没有 GC 可见的调用期引用计数，finalizer/Dispose 可能和本机调用竞态并重复关闭。SafeHandle 明确 invalid value/ownsHandle/ReleaseHandle，marshaller 可在 P/Invoke 期间保持危险引用；业务 owner 只 Dispose SafeHandle，并测试幂等、并发和借用路径。</Answer>
+
+  3. **问题 3：比较弱与依赖句柄。** Value 引用 Key 时，为什么 `Dictionary<Key,Value>` 会保活 Key，而 ConditionalWeakTable 不应？
+
+  <Answer question="Dependent handle 的条件边是什么？">普通字典自身是强根，强持有 key 和 value，value→key 环因此一直可达。ConditionalWeakTable 用 dependent handle：只有 key 通过表外强路径存活时才标活 value；value 反向引用 key 不独立构成强根。用 WeakReference 观察 key 并在多轮覆盖 GC 后以 gcroot 验证。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="托管对象生命周期">对象由创建、强可达到不可达并最终回收托管存储的状态序列。</GlossaryItem>
+  <GlossaryItem term="资源所有权">明确谁必须且只能释放一次外部资源的契约。</GlossaryItem>
+  <GlossaryItem term="终结">对象不可达后由运行时安排终结线程执行兜底回调的机制。</GlossaryItem>
+  <GlossaryItem term="F-reachable 队列">为执行终结器而特殊保活首次不可达对象的待处理队列。</GlossaryItem>
+  <GlossaryItem term="对象复活">终结器重新建立强根，让已排队对象恢复普通可达。</GlossaryItem>
+  <GlossaryItem term="IDisposable">由所有者同步、确定性结束资源生命周期的契约。</GlossaryItem>
+  <GlossaryItem term="IAsyncDisposable">释放过程需要等待时使用的异步确定性契约。</GlossaryItem>
+  <GlossaryItem term="SafeHandle">封装 native handle 所有权、无效值与可靠一次释放的基类。</GlossaryItem>
+  <GlossaryItem term="弱句柄">可观察但不强保活目标的 GC handle。</GlossaryItem>
+  <GlossaryItem term="依赖句柄">只有 key 由其他强路径存活时才保活 value 的条件句柄。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Pro .NET Memory Management, Second Edition, Chapter 12 Object Lifetime"
+  adaptedUrl="https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_12"
+/>

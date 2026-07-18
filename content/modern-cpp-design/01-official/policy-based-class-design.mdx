@@ -1,0 +1,233 @@
+---
+title: "第1章：基于 Policy 的类设计"
+type: A
+section: Modern C++ Design · Part I Techniques
+order: 1
+description: 对齐第一版第1章 Policy-Based Class Design：从万能接口与继承矩阵的失败出发，建立 Policy/Host、富策略、析构、不完整实例化、策略组合、结构定制、兼容性与类分解方法。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+draft: false
+---
+
+import {
+  McdPolicyCompositionMap,
+  McdPolicyDecompositionMap,
+  McdPolicyFailureMap,
+} from "@/components/mdx/modern-cpp-design/diagrams/policy-based-class-design";
+
+<Objectives>
+
+- 能解释 multiplicity of software design 中相互独立的变化轴，并说明 do-it-all interface 与继承矩阵为何失控
+- 能实现 Policy/Host 组合，处理 enriched policy、策略析构、可选功能与结构定制
+- 能判断策略是否兼容，并用“变化时机、协议、依赖”三项证据把一个类分解成 Policies
+
+</Objectives>
+
+## 从一个“什么都能做”的 Manager 开始
+
+**The Multiplicity of Software Design** 指同一组件常同时面对多种合理选择：对象可以用 `new`、`malloc` 或 prototype 创建；生命周期可以普通销毁、允许 dead reference 后重生，或按 longevity 排序；同步可以无锁、对象级锁或类级锁。每一项都不是唯一正确答案，正确组合由部署环境和调用契约决定。
+
+<Term def="一个组件同时拥有多个可独立选择的设计维度，每个维度又有多个合理策略，从而形成组合空间。">
+  design multiplicity
+</Term>
+
+**The Failure of the Do-It-All Interface** 是把所有选择压进一个类：构造函数接收枚举和 flags，成员函数不断检查状态，接口还暴露某些模式才可用的方法。结果是任何调用者都必须理解完整状态空间，非法组合只能运行时发现，测试数量随 flags 的笛卡尔积增长。
+
+```cpp
+class WidgetManager {
+public:
+    WidgetManager(CreationKind creation, bool threadSafe, bool resurrect);
+    Widget* create();
+    void setPrototype(const Widget*); // 仅 prototype 模式有效
+private:
+    CreationKind creation_;
+    bool threadSafe_;
+    bool resurrect_;
+};
+```
+
+这段接口不仅“大”，还把模式不变量变成运行时分支。`setPrototype` 对普通 `new` 模式没有意义；`resurrect` 与销毁时序的关系没有类型表达；每次 `create` 都携带本可在编译期消失的判断。
+
+<McdPolicyFailureMap />
+
+<Callout type="trap" title="陷阱：一个 enum 就等于可扩展设计">
+  enum 只把分支命名，并没有打开扩展边界。新增策略仍要修改中央 `switch`、状态验证、测试矩阵和所有知道该枚举的代码；这正是 do-it-all interface 的维护压力。
+</Callout>
+
+## Multiple Inheritance to the Rescue?
+
+一种自然修补是为每个选择建派生类，再通过 **multiple inheritance to the rescue** 组合它们。但若继承树同时承担“对象是什么”和“行为如何变化”，每个交叉组合仍可能需要一个命名派生类，constructor forwarding、diamond、virtual base 与 ownership 使结构迅速复杂。
+
+模板的收益不是“语法更短”，而是 **The Benefit of Templates**：组合本身成为类型生成规则。实现者只写每个轴的有限候选和一个 Host，编译器按使用点实例化所需组合；没有被使用的组合无需命名，也不产生代码。
+
+<Term def="接收一组策略类型或策略模板、规定公共协议并把策略能力编排成最终组件的主类。">
+  Host
+</Term>
+
+## Policies and Policy Classes
+
+**Policies and Policy Classes** 把一个变化轴封装为小类。Policy 不代表业务实体，而代表一种设计决定；Host 通过私有继承、公开继承或成员持有它。策略协议通常由用法隐式表达，现代 C++ 可以再用 concept 或 `static_assert` 给出可读诊断。
+
+<Term def="封装单一设计决定、由 Host 在编译期选择并调用的类或类模板。">
+  Policy
+</Term>
+
+```cpp
+template<class T>
+struct OpNewCreator {
+    static T* create() { return new T; }
+};
+
+template<class T>
+class PrototypeCreator {
+public:
+    explicit PrototypeCreator(T* prototype = nullptr) : prototype_(prototype) {}
+    T* create() const { return prototype_ ? prototype_->clone() : nullptr; }
+    void setPrototype(T* value) { prototype_ = value; }
+private:
+    T* prototype_;
+};
+
+template<class Product, template<class> class CreationPolicy>
+class WidgetManager : public CreationPolicy<Product> {
+public:
+    Product* make() { return this->create(); }
+};
+```
+
+`OpNewCreator` 没有状态，`PrototypeCreator` 有状态；二者只要满足 Host 使用的创建协议，就能替换。这里的 static binding 让调用可内联，但“零开销”仍需看生成代码：stateful policy、异常、锁和 heap allocation 的真实成本不会因模板自动消失。
+
+<McdPolicyCompositionMap />
+
+## Enriched Policies：策略也可以有状态和类型
+
+**Enriched Policies** 不局限于一个静态函数。策略可以提供 constructor、member data、nested type、constant 和多个操作。例如 prototype 创建策略需要保存样板对象，threading policy 可以定义 `Lock` guard，ownership policy 可以返回 `PointerType`。富策略让一个设计维度内部保持内聚。
+
+<Term def="除单一静态操作外，还携带状态、嵌套类型、常量或完整生命周期协议的策略。">
+  enriched Policy
+</Term>
+
+富不等于把所有功能重新塞回一个策略。边界仍是“一个变化轴”：创建策略可以管理 prototype，但不应顺便决定日志、锁和错误上报。否则策略之间会相互调用，所谓组合只剩隐藏耦合。
+
+### Destructors of Policy Classes
+
+**Destructors of Policy Classes** 需要特别设计。若 Policy 只应该作为 base 被 Host 继承，却不应被多态删除，通常不需要 virtual destructor；protected nonvirtual destructor 可阻止用户直接删除 Policy，同时避免 vptr。若允许通过 Policy base pointer 删除派生对象，则必须提供 virtual destructor，但这已经改变对象模型与成本。
+
+```cpp
+class NoCopyPolicy {
+protected:
+    NoCopyPolicy() = default;
+    ~NoCopyPolicy() = default;
+    NoCopyPolicy(const NoCopyPolicy&) = delete;
+    NoCopyPolicy& operator=(const NoCopyPolicy&) = delete;
+};
+```
+
+“Policy 都应无 virtual”同样是错误规则。先写清 ownership 与 deletion contract，再选择 destructor visibility/virtuality；不要仅凭它被继承就加虚析构，也不要在存在 polymorphic deletion 时省略它。
+
+## Optional Functionality Through Incomplete Instantiation
+
+模板成员通常在被使用时才实例化。**Optional Functionality Through Incomplete Instantiation** 利用这一点：某个 Policy 可以只支持 Host 的一部分成员；只要程序不调用依赖缺失能力的成员，其余 Host 仍可使用。这样功能存在性由选择的 Policy 决定，而不是运行时 flag。
+
+<Term def="模板成员按使用点实例化，使只满足部分协议的策略仍可支持 Host 的其余功能；调用缺失功能时才产生编译错误。">
+  incomplete instantiation
+</Term>
+
+这种技巧能形成精确接口，但早期编译器诊断往往很深。现代实现应为可选成员添加 `requires`，让可用性出现在 overload set，并用明确 concept 名称解释缺失能力。它不是逃避接口设计的漏洞，而是把“是否支持”提升为类型属性。
+
+## Combining Policy Classes
+
+**Combining Policy Classes** 的价值来自笛卡尔积：3 种 creation、3 种 lifetime、3 种 threading 理论上有 27 种组件，代码却只需 9 个策略实现与一个 Host。每个实例的类型完整记录选择，编译器可以拒绝错误参数并删除未用路径。
+
+组合也引入 type proliferation：两个行为相同但策略类型不同的 Host 仍是不同 C++ 类型，ABI、编译时间、code size 和 public header dependency 都可能增长。公共边界若需要稳定类型，可在内部用 Policy 生成实现，再在外部使用 type erasure、Pimpl 或窄接口。
+
+## Customizing Structure with Policy Classes
+
+行为不是唯一可变项。**Customizing Structure with Policy Classes** 允许 Policy 决定 storage type、base hierarchy、返回类型和同步 guard。例如 threading policy 可定义 `Mutex` 与 `Lock`，storage policy 可决定是否内嵌对象或保存指针。Host 因而不只调用策略，也从策略取得构造自身结构的 building blocks。
+
+这比传一个 callback 更强，也更危险：结构选择会影响 layout、copy/move、exception guarantee 和 ABI。结构 Policy 应保持 private implementation；若泄漏到公共签名，替换 Policy 就不再是局部变化。
+
+## Compatible and Incompatible Policies
+
+**Compatible and Incompatible Policies** 不能靠“模板能实例化”草率判断。creation policy 返回的 handle 必须被 ownership policy 接受；locking policy 的 guard 生命周期必须覆盖 Host 访问；lifetime policy 若允许 Phoenix resurrection，creation policy 就要支持重新构造。每对策略之间若都存在特别规则，维度并不正交。
+
+<Term def="若若干策略共同满足 Host 协议且互不破坏对方不变量，它们兼容；否则应在编译期拒绝或重新划分责任。">
+  Policy compatibility
+</Term>
+
+现代代码可以写 `concept CompatiblePolicies = ...`，旧式代码则用 compile-time assertion 和 traits。关键不是把每个组合都列白名单，而是用少数语义约束表达原因：handle 是否可销毁、clone 是否存在、lock 是否可构造、copy semantics 是否一致。
+
+<Callout type="trap" title="陷阱：四个模板参数就代表四个正交维度">
+  参数数量不能证明正交性。若 CheckingPolicy 必须知道某个 StoragePolicy 的私有表示，或 LifetimePolicy 直接调用 CreationPolicy 的特定成员，替换一个就会连锁破坏；应把共享协议上提到 Host，或把本来同一责任的轴合并。
+</Callout>
+
+## Decomposing a Class into Policies
+
+**Decomposing a Class into Policies** 从变化原因开始，而不是从成员函数数量开始：列出会因平台、性能、安全或产品规则而变化的决定；判断它们在编译期还是运行时切换；为每个轴定义最小完整协议；最后验证组合不变量与失败诊断。
+
+<McdPolicyDecompositionMap />
+
+先预测：如果租户能在程序运行中切换压缩算法，把压缩方式做模板 Policy 会迫使整个请求处理器类型变化；此时 runtime strategy 更合理。若嵌入式固件在编译时固定 allocator 且每次调用都在 hot path，Policy 更合适。Policy-based design 不是策略模式的全面替代，而是“选择时机明确在编译期”时的工具。
+
+<Stepper>
+  <Step title="第一步：暴露组合压力">
+    记录 enum、flag、中央 switch、条件有效方法与派生类矩阵，标出每个分支为何变化。先区分业务实体差异与配置轴。
+
+    <McdPolicyFailureMap />
+
+  </Step>
+  <Step title="第二步：建立 Host 与协议">
+    为每个独立轴写一个候选 Policy，对 Host 只暴露所需操作、类型和状态；用 concept/static assertion 编码契约，并决定编译期选择是否符合需求。
+
+    <McdPolicyCompositionMap />
+
+  </Step>
+  <Step title="第三步：审计组合与边界">
+    枚举兼容性、析构/复制/异常/线程不变量，检查模板类型是否泄漏到 ABI；不能自由替换的轴要合并、上提协议或改用运行时多态。
+
+    <McdPolicyDecompositionMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- design multiplicity 产生多个合理选择，do-it-all interface 把组合压力推给每次运行时调用
+- multiple inheritance 能复用实现，但无法自动消除正交维度的派生类矩阵；templates 把组合变成类型生成规则
+- Policy 封装一个设计决定，Host 规定协议并编排；enriched Policy 可以有状态、类型和生命周期
+- Policy destructor 的 virtuality/visibility 由 deletion contract 决定，不由“被继承”决定
+- incomplete instantiation 让可选能力随 Policy 存在，现代代码应用 constraints 改善诊断
+- combining Policies 扩展组合空间，也会增加类型、编译时间和 ABI 压力
+- structure customization 能改变 layout 与 nested types，应谨慎限制在实现边界
+- compatibility 必须以共同协议和不变量证明；不能独立替换的参数并非真正正交
+
+<Exercises>
+  1. **问题 1：分解图像加载器。** 文件来源、解码器、缓存与错误处理有多种选择，判断哪些轴适合编译期 Policy，哪些应保留运行时替换。
+
+  <Answer question="一个图像加载器有文件来源、解码器、缓存与错误处理四类选项。哪些条件满足时适合拆成 Policy？">四类选择都在构建类型时确定、各自只通过稳定协议与 Host 交互、替换一类不要求修改其他类，并且 hot path 或嵌入场景受益于静态绑定时适合。若用户运行时切换解码器或缓存，相关轴应改用 type erasure/运行时策略，而不是强迫整个 loader 换类型。</Answer>
+
+  2. **问题 2：选择析构契约。** Policy 仅作为 Host 的实现基类且不允许经基类指针删除，说明 destructor 的可见性与 virtuality。
+
+  <Answer question="为什么 protected nonvirtual Policy destructor 往往比 public virtual destructor 更准确？">若 Policy 只作为实现 base，被 Host 静态继承且不允许通过 Policy pointer 删除，protected 阻止错误删除，nonvirtual 避免无意义 vptr。只有契约明确允许 polymorphic deletion 时才需要 public virtual destructor；选择必须来自 ownership/deletion 语义。</Answer>
+
+  3. **问题 3：审计不兼容组合。** CreationPolicy 返回特殊 handle，而 OwnershipPolicy 只接受裸指针；给出诊断与重构顺序。
+
+  <Answer question="如何诊断两个 Policy 实际不兼容？">先写出 Host 对返回类型、所有权、锁范围、复制与销毁的语义要求，再检查两个策略是否能同时满足。若需要互相读取私有表示或为某个具体策略写分支，说明不正交；应上提共同协议、合并责任，或用 concept/static assertion 在组合点明确拒绝。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="design multiplicity">一个组件同时存在多个独立设计维度和多种合理选择形成的组合空间。</GlossaryItem>
+  <GlossaryItem term="Host">接收并编排若干 Policy、向调用者提供最终组件接口的模板类。</GlossaryItem>
+  <GlossaryItem term="Policy">封装单一设计决定并在编译期注入 Host 的类或类模板。</GlossaryItem>
+  <GlossaryItem term="enriched Policy">携带状态、嵌套类型、常量或完整协议，而不只是单个静态函数的策略。</GlossaryItem>
+  <GlossaryItem term="incomplete instantiation">模板成员按使用点实例化，使部分能力可随所选策略存在或缺失的机制。</GlossaryItem>
+  <GlossaryItem term="Policy compatibility">多个策略同时满足 Host 协议并保持彼此不变量的组合条件。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Modern C++ Design, First Edition, Chapter 1: Policy-Based Class Design"
+  adaptedUrl="https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+/>

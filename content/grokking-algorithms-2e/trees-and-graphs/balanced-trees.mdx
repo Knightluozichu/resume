@@ -1,164 +1,303 @@
 ---
-title: 平衡树
-type: B
-section: 树与图
-order: 9
-description: AVL/Red-Black trees——旋转把高度锁在 O(log n)。
+title: "第8章 平衡树"
+type: C
+section: "算法图解（第2版）"
+order: 8
+description: "从普通BST的形状风险出发，掌握AVL旋转、伸展树摊还性能与B树降低外存访问的设计。"
 demo: true
-math: true
-sourceUrl: https://www.manning.com/books/grokking-algorithms-second-edition
+math: false
+sourceUrl: "https://livebook.manning.com/book/grokking-algorithms-second-edition/chapter-8"
 draft: false
 ---
 
-{/* 知识点清单：平衡树/AVL树/红黑树/旋转/平衡因子；原书章节：Balanced trees。 */}
+import { BstShapeDiagram, AvlRotationLab, SplayAccessLab, BTreePageDiagram } from "@/components/mdx/grokking-algorithms-2e/diagrams/balanced-trees";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能用自己的话解释旋转如何在不破坏 BST 性质的前提下调整树高。
-- 能推导 AVL 四种旋转场景（LL/RR/LR/RL）并说出每种触发的平衡因子值。
-- 能回答：为什么平衡树的「额外维护成本」在频繁查询的场景中是划算的。
+- 能实现普通BST查找与插入，并解释插入顺序怎样决定树高
+- 能计算AVL平衡因子，绘制LL、RR、LR、RL四种失衡与旋转
+- 能解释旋转为何保持二叉搜索树中序顺序，并正确更新局部高度
+- 能分析伸展树单次最坏与摊还性能，说明访问局部性的价值
+- 能比较AVL、伸展树与B树的节点布局、性能保证和使用场景
 
 </Objectives>
 
-## 先玩一遍
+## 从查找与插入的矛盾开始
 
-旋转不是魔术——它是有明确几何含义的「换根」操作。想象一串挂在天花板的饰品，一旦某侧太重，只需把绳子换一个悬挂点，结构就重新平衡。从动画里观察：一个旋转完成后，三个参与节点的父子关系重排，但 BST 的「左小右大」性质纹丝不动。
+先预测：有序数组二分查找是 `O(log n)`，但中间插入要移动后缀；链表在已知位置时改链接很快，但按键查找是 `O(n)`。能否让查找和插入都只沿一条较短路径完成？
 
-<AlgorithmPlayground
-  mode="balanced-trees"
-  title="平衡树 · 交互动画"
-  focus="旋转换根不换序——BST 性质在旋转前后完全等价。"
-/>
+<Term def="对每个节点维持左子树键更小、右子树键更大的二叉树。">二叉搜索树</Term>简称BST。查找从根开始：目标小就走左边，大就走右边；插入沿同一比较路径走到空位。重复键必须由实现明确规定拒绝、计数或固定放一侧，本页示例选择忽略重复键。
 
-<Callout type="tip">
-  <strong>猜一猜：</strong>把一个右倾的子树做左旋——谁会变成新的根？注意看 b 上移至根时，
-  b 原来的左子被「过继」给了 a 当右子。这就是旋转唯一需要小心的地方：过继子树。
-</Callout>
+```python
+from dataclasses import dataclass
 
-## 分步动画
+@dataclass
+class BstNode:
+    key: int
+    left: "BstNode | None" = None
+    right: "BstNode | None" = None
 
-<BalancedTreeDiagram />
+def bst_insert(node: BstNode | None, key: int) -> BstNode:
+    if node is None:
+        return BstNode(key)
+    if key < node.key:
+        node.left = bst_insert(node.left, key)
+    elif key > node.key:
+        node.right = bst_insert(node.right, key)
+    return node
+
+def bst_contains(node: BstNode | None, key: int) -> bool:
+    current = node
+    while current is not None:
+        if key == current.key:
+            return True
+        current = current.left if key < current.key else current.right
+    return False
+```
+
+每次操作访问一条根到空位或目标的路径，所以普通BST时间是 `O(h)`，其中<Term def="从根到最深叶路径所含边数或层数的尺度，决定根到叶操作上界。">树高</Term>为 `h`。若高度是对数级，查找和插入是 `O(log n)`；若高度接近节点数，操作退化为 `O(n)`。
+
+<BstShapeDiagram />
+
+## 插入顺序决定普通BST形状
+
+同一组键1到7，按 `4,2,6,1,3,5,7` 插入能形成较矮树；按 `1,2,3,4,5,6,7` 插入时，每个新键都成为最右孩子，树变成链。插入顺序决定普通BST形状，键集合相同不代表性能相同。
+
+较矮的树查找更快，因为每次比较只能推进一层。随机插入有时得到尚可形状，却不提供确定高度上界；“数据看起来随机”也不是结构不变量。若服务必须抵抗有序输入或敌意顺序，需要会主动维护高度的树。
+
+这里要区分“平均输入下常见的形状”和“数据结构承诺的不变量”。前者依赖输入分布，后者由每次修改主动恢复。平衡搜索树的价值正是把性能保证写进更新算法：即使键按已排序顺序到达，也不能允许根到叶路径无限拉长。
 
 <Stepper>
-  <Step title="看输入结构——失衡的 BST">
-    上一章的 BST 有一个致命弱点：插入 1,2,3,4,5,6 后树高 = 6，查找退化为 O(n)。
-    平衡树做的事情就是在每次插入/删除后检查每个节点的「平衡因子」——
-    如果左右子树高度差超过 1，就触发旋转修复。
-    <AlgorithmPlayground mode="balanced-trees" title="平衡树 · 失衡检测" currentStep={1} />
-  </Step>
-  <Step title="执行关键动作——右旋（LL 修复）">
-    当插入发生在「左子的左子树」导致失衡时，触发右旋：旧根 a 的左右高度差达到 2，
-    将左子 b 提拔为新根，b 的右子被「过继」给 a 作左子。整个操作 O(1) 完成，
-    BST 查找性质不变——你可以验证旋转前后中序遍历结果完全相同。
-    <AlgorithmPlayground mode="balanced-trees" title="平衡树 · 右旋操作" currentStep={2} />
-  </Step>
-  <Step title="收缩问题规模——四次旋转覆盖全部失衡">
-    AVL 用四种旋转处理所有失衡模式：LL 右旋一次、RR 左旋一次、
-    LR 先左旋左子再右旋、RL 先右旋右子再左旋。每次只会改变 3 个节点的指针，
-    不会连锁修改整棵树——这是旋转效率高的关键。
-    <AlgorithmPlayground mode="balanced-trees" title="平衡树 · LR双旋" currentStep={3} />
-  </Step>
-  <Step title="读出结论——O(log n) 铁律恢复">
-    红黑树用颜色约束替代严格的平衡因子（左右子树高度差 ≤ 2 倍而非严格 1），
-    换来了更少的旋转次数和更稳定的插入性能。无论 AVL 还是红黑树，
-    核心承诺是同一个：树高 = O(log n)，保证查找和插入永远不会退化。
-    <AlgorithmPlayground mode="balanced-trees" title="平衡树 · 高度对比" currentStep={4} />
-  </Step>
+  <Step title="建立BST顺序"><BstShapeDiagram />从根比较，较小键进入左子树，较大键进入右子树，重复键按契约处理。</Step>
+  <Step title="计算两种插入形状">分别插入中位数优先序列和升序序列，画出节点路径并测量最大深度。</Step>
+  <Step title="把成本写成O(h)">不要先写O(log n)；先由访问路径得到O(h)，再说明高度是否有对数保证。</Step>
+  <Step title="决定是否需要平衡">输入顺序不可控且查找延迟有上界要求时，选能自动修复高度的结构。</Step>
 </Stepper>
 
-## 核心概念
-
-<Term def="一种在每次插入/删除后通过旋转自动维持树高 O(log n) 的 BST 变体。">平衡树</Term>
-是 BST 的「自我修复版」。它不改变 BST 的任何性质，只是在每次修改后多做一步检查——「我长歪了没有？」。检查成本是 O(1)（只看子节点高度差），修复成本也是 O(1)（最多两次旋转）。正是这个 O(1) 的维护成本，换来了查找永远 O(log n) 的承诺。
-
-<Term def="一种严格的平衡树，要求任何节点的左右子树高度差不超过 1。">AVL 树</Term>
-是最「自律」的平衡树。它的平衡因子（左高减右高）只允许 -1、0、1 三个值。
-一旦某个插入让某个祖先的平衡因子跳到 ±2，立刻在离插入点最近的失衡祖先处旋转修复。
-AVL 的查找极快（高度最小），但插入/删除时旋转次数可能较多——适合「读多写少」的场景。
-
-<Term def="一种用节点颜色（红/黑）维护宽松平衡的 BST，确保最长路径不超过最短路径的两倍。">红黑树</Term>
-用一个巧妙的颜色规则替代了严格的平衡因子：红节点不能连续出现，每条从根到叶的路径上黑色节点数相等。这条规则数学上保证「最长路径 ≤ 2 × 最短路径」——树高是 O(log n) 但不是最小的。换来的好处是：插入/删除通常只需要 O(1) 次旋转（AVL 可能需要 O(log n) 次）。Java 的 TreeMap、C++ 的 std::map 的默认红黑树实现，原因即在此——工程实践中「写」可能占据不小比例。
-
-## 小公式
-
-平衡树的复杂度核心就一条——树高约束决定了所有操作的代价上限。设 n 为节点数，h 为树高：
-
-$$
-h_{\text{AVL}} \le 1.44 \log_2 n
-$$
-
-这个式子说：AVL 树的高度最多是完美平衡二叉树的 1.44 倍。系数 1.44 来自 AVL 平衡因子允许 ±1 时的最倾斜形态——即便如此，查找次数仍不超过 1.44 log n，相比 BST 可能退化到 n，是天壤之别。
-
-红黑树的高约束更宽松但够用：
-
-$$
-h_{\text{RB}} \le 2\log_2 (n+1)
-$$
-
-2 倍 log n 看起来比 1.44 差，但插入过程中维护这个约束的成本低得多。选择 AVL 还是红黑树，就是在选「查找略快」还是「修改更平顺」——没有哪种在所有场景赢。
-
-关键不是背两个系数，而是理解一个核心原则：只要树高被某个常数倍的 log n 锁住，BST 就不会退化。
-
-## 常见误区
-
-- **现象 →** 以为旋转会破坏 BST 的有序性，不敢用。**原因 →** 把旋转当成了「随便动节点」而没有验证它的不变量。**修法 →** 对任何旋转做一次中序遍历——前后序列完全一致。旋转只在父子关系上做局部重组，不改变键的相对位置。
-
-- **现象 →** AVL 和红黑树分不清，面试时笼统说「平衡树」。**原因 →** 没有从「平衡条件」和「维护成本」两个维度区分它们。**修法 →** AVL = 严格平衡（因子 ±1）+ 查询最快 + 插入旋转稍多；红黑树 = 颜色宽松平衡 + 插入旋转极少 + Java/C++ 标准库首选。背住这一句话就够。
-
-- **现象 →** 以为任何场景都需要平衡树。**原因 →** 看到 O(log n) 就心动，没考虑「不平衡树其实够了」的场景。**修法 →** 如果你的数据一开始就排好序且极少修改，普通 BST 也自动平衡——插入本身就是均匀的。平衡树只在「插入顺序可能很偏」且「查询必须快」时才是必要的。
-
-<Callout type="trap">
-  <strong>现象 →</strong> 在 red-black tree 插入后看到红色节点连续出现就自己动手改色，把树弄得更歪。<strong>原因 →</strong>{" "}
-  红黑树的修复是一个完整的算法流程（变色 + 旋转），不能只改局部一处。<strong>修法 →</strong>{" "}
-  标准库（TreeMap/Set）已经替你维护了平衡，工程代码中不需要自己实现——重要的是懂得它在做什么以及选哪个。
+<Callout type="trap" title="BST查找天然是O(log n)">
+顺序性质只决定往哪边走，不决定两边规模接近。升序插入可形成长度n的链；普通BST查找与插入的正确结论是O(h)。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 以为旋转后子树的根变了，之前的引用就断了。<strong>原因 →</strong>{" "}
-  忘记旋转函数的返回值就是新根，或者递归返回时没有把新根挂回父节点。<strong>修法 →</strong>{" "}
-  每次旋转后，调用方必须接收并更新新根引用——「旋转只改内部指针，不自动告知调用方谁是新的根」。
+## 平衡树把高度维持在对数级
+
+<Term def="通过结构约束和局部重组，把搜索树高度控制在对数级的树。">平衡树</Term>把高度维持在O(log n)。维护不一定只花常数总时间：插入首先沿根到叶路径搜索，随后可能沿祖先路径更新高度或其他元数据；单次旋转是 `O(1)`，完整更新仍通常是 `O(log n)`。
+
+第2版依次介绍三种不同思路：
+
+- AVL树用严格高度差和旋转给出每次操作的对数上界。
+- 伸展树不保存平衡因子，每次访问后调整，提供摊还性能并利用时间局部性。
+- B树让一个节点容纳多个键与孩子，以很高分支因子减少外存层数。
+
+没有一种结构在所有指标上都最好；要看是否需要单次最坏保证、访问是否偏向热点、节点位于内存还是磁盘页。
+
+## AVL平衡因子与失衡阈值
+
+<Term def="每个节点左右子树高度差至多为1的平衡二叉搜索树。">AVL树</Term>是平衡二叉搜索树。定义<Term def="节点左子树高度减右子树高度的值。">平衡因子</Term>：
+
+$$
+\operatorname{balance}(v)=h(v.left)-h(v.right).
+$$
+
+AVL平衡因子是左右子树高度差，合法值为 `-1、0、1`。插入后，沿搜索路径更新高度；首个祖先绝对平衡因子达到2时触发AVL失衡阈值，并根据高侧与新键方向选择旋转。
+
+<AvlRotationLab />
+
+四种插入失衡覆盖所有方向组合：
+
+1. 左左：右旋修复左左失衡。
+2. 右右：左旋修复右右失衡。
+3. 左右：双旋修复左右或右左失衡中的LR，先左旋左孩子，再右旋失衡根。
+4. 右左：先右旋右孩子，再左旋失衡根。
+
+<Term def="在不改变中序键顺序的前提下，局部重排父子关系以降低高度的操作。">旋转</Term>只重连少量指针。下面的左右旋转先更新下降节点高度，再更新新根高度：
+
+```python
+from dataclasses import dataclass
+
+@dataclass
+class AvlNode:
+    key: int
+    left: "AvlNode | None" = None
+    right: "AvlNode | None" = None
+    height: int = 1
+
+def height(node: AvlNode | None) -> int:
+    return node.height if node is not None else 0
+
+def update_height(node: AvlNode) -> None:
+    node.height = 1 + max(height(node.left), height(node.right))
+
+def rotate_right(root: AvlNode) -> AvlNode:
+    new_root = root.left
+    assert new_root is not None
+    middle = new_root.right
+    new_root.right = root
+    root.left = middle
+    update_height(root)
+    update_height(new_root)
+    return new_root
+
+def rotate_left(root: AvlNode) -> AvlNode:
+    new_root = root.right
+    assert new_root is not None
+    middle = new_root.left
+    new_root.left = root
+    root.right = middle
+    update_height(root)
+    update_height(new_root)
+    return new_root
+```
+
+旋转保持二叉搜索树顺序。以右旋为例，设旧根为 `y`、左孩子为 `x`、`x` 的右子树为 `middle`。旋转前有 `x.key < middle.keys < y.key`；把 `middle` 改挂到 `y.left` 后关系仍成立，中序序列完全不变。
+
+<Stepper>
+  <Step title="沿插入路径更新高度"><AvlRotationLab />新叶高度为1，返回时逐层用左右孩子高度重算当前节点。</Step>
+  <Step title="计算平衡因子">左高减右高；绝对值不超过1就保持结构并继续向上返回。</Step>
+  <Step title="识别四种方向">先看失衡节点左重还是右重，再看新键落在高侧孩子的内侧还是外侧。</Step>
+  <Step title="旋转并挂回新根">执行单旋或双旋，更新高度，并把旋转返回的新局部根重新接到父节点。</Step>
+</Stepper>
+
+```python
+def avl_insert(node: AvlNode | None, key: int) -> AvlNode:
+    if node is None:
+        return AvlNode(key)
+    if key < node.key:
+        node.left = avl_insert(node.left, key)
+    elif key > node.key:
+        node.right = avl_insert(node.right, key)
+    else:
+        return node
+
+    update_height(node)
+    balance = height(node.left) - height(node.right)
+
+    if balance > 1:
+        assert node.left is not None
+        if key > node.left.key:
+            node.left = rotate_left(node.left)
+        return rotate_right(node)
+
+    if balance < -1:
+        assert node.right is not None
+        if key < node.right.key:
+            node.right = rotate_right(node.right)
+        return rotate_left(node)
+
+    return node
+
+root: AvlNode | None = None
+for key in [10, 20, 30, 40, 50, 25]:
+    root = avl_insert(root, key)
+assert root is not None and root.height == 3
+```
+
+这个实现覆盖插入，不等于完整生产级AVL：删除后可能有多个祖先继续失衡，重复键、父指针、迭代器和并发也需单独设计。掌握重点是“维护顺序不变量”和“维护高度不变量”两条逻辑不能混在一起。
+
+<Callout type="trap" title="旋转函数改完内部指针就不必返回新根">
+旋转会改变局部子树根。调用者若不把返回值挂回父节点或全树根，旋转后的部分可能不可达；高度也必须按先旧根、后新根的顺序更新。
 </Callout>
 
-## 小结与练习
+## 伸展树：把刚访问的节点旋到根
 
-- 平衡树 = BST + 旋转自修复：每次修改后检查并调整，保证树高 O(log n)。
-- AVL 用严格平衡因子（±1），查询最快；红黑树用颜色约束，插入更快。
-- 旋转的秘诀：只涉及 3 个节点换父子关系，BST 性质不动，O(1) 完成。
-- 标准库已经封装好：Java TreeMap / C++ std::map = 红黑树，直接用即可。
+<Term def="每次查找、插入或删除后把相关节点通过旋转移动到根附近的BST。">伸展树</Term>不存平衡因子。伸展树把访问节点旋到根：根据节点、父节点和祖父节点方向，执行zig、zig-zig或zig-zag旋转。近期访问过的热点自然靠近根，后续重复访问更快。
+
+<SplayAccessLab />
+
+单次操作可能沿长链走 `Theta(n)`，因此伸展树不保证每次 `O(log n)`。<Term def="把一段操作序列总成本分摊到每次操作，而非要求每次成本相同的分析方法。">摊还分析</Term>说明伸展树提供摊还性能：典型字典操作摊还 `O(log n)`。这里不是假设随机输入，也不是把一次慢操作忽略，而是证明一段任意操作序列的总成本受控。
+
+伸展树适合具有时间局部性的访问，例如少量键在一段时间内频繁使用；它实现元数据少，还能方便分裂与合并。但实时系统若要求每次操作都不超过确定对数上界，AVL等结构更直接。
+
+## B树：用高分支因子减少磁盘访问
+
+<Term def="每个节点可保存多个有序键和多个孩子，并保持所有叶子同层的平衡搜索树。">B树</Term>不是binary tree的缩写。B树一个节点保存多个键和孩子；节点中的键把值域分成多个区间，每个孩子负责一个区间。节点满时分裂并向父节点提升中间键，根分裂时树高才增加。
+
+<BTreePageDiagram />
+
+数据库和文件系统常让一个B树节点匹配磁盘页或存储块。一次昂贵I/O把页内多个键与孩子指针一起读入内存，<Term def="一个内部节点可指向的孩子数量。">分支因子</Term>远大于2。B树降低树高与磁盘访问次数；即使页内要做若干CPU比较，减少随机I/O通常更重要。
+
+设每个节点最多有约 `B` 个孩子，树高尺度约为 `log_B n`。AVL以二叉分支控制内存中的比较路径，B树以宽节点控制页访问路径；两者都追求较矮结构，但成本模型不同。
+
+<Stepper>
+  <Step title="先写工作负载"><SplayAccessLab />判断需要单次最坏保证、摊还保证还是热点访问优化。</Step>
+  <Step title="确认存储层级"><BTreePageDiagram />内存指针访问和磁盘页访问代价差异巨大，节点布局应匹配介质。</Step>
+  <Step title="选择维护策略">AVL保存高度并旋转，伸展树每次访问后调整，B树通过多键页和分裂保持平衡。</Step>
+  <Step title="用真实指标验证">同时测查找、修改、内存或页占用、最坏延迟与缓存命中，不只比较大O标签。</Step>
+</Stepper>
+
+<Callout type="trap" title="B树是每个节点有两个孩子的平衡BST">
+B树的B不表示binary。它是多路搜索树，一个节点保存多个键和多个孩子；高分支因子正是降低磁盘层数的关键。
+</Callout>
+
+## AVL、伸展树与B树的使用场景
+
+- AVL：需要内存有序映射，并重视每次查找、插入和删除的对数最坏上界。
+- 伸展树：访问具有明显局部性，接受单次波动而重视操作序列的摊还效率。
+- B树：索引位于磁盘、SSD页或数据库缓冲池，希望一次页读取携带大量分支信息。
+
+标准库具体采用何种树应查实现文档，不能把“有序映射”自动等同于某一种平衡树。实际选择还要比较成熟实现、并发语义、范围扫描、内存布局与持久化需求。
+
+## 原章概念回查
+
+插入顺序决定普通BST形状，较矮的树查找更快。平衡树把高度维持在O(log n)，避免有序输入把搜索路径拉成长链。
+
+AVL树是平衡二叉搜索树，AVL平衡因子是左右子树高度差；达到AVL失衡阈值时，右旋修复左左失衡，左旋修复右右失衡，双旋修复左右或右左失衡。旋转保持二叉搜索树顺序。
+
+伸展树把访问节点旋到根，伸展树提供摊还性能，适合热点访问但不承诺每次操作的对数最坏时间。
+
+B树一个节点保存多个键和孩子，B树降低树高与磁盘访问次数。AVL、伸展树与B树的使用场景分别对应严格内存平衡、访问局部性与外存页优化。
+
+## 本章回顾
+
+1. 普通BST查找和插入成本为 `O(h)`。
+2. 插入顺序能让同一键集形成矮树或链。
+3. 平衡树主动把高度维持在 `O(log n)`。
+4. AVL要求每个节点左右高度差不超过1。
+5. LL与RR用单旋，LR与RL用双旋。
+6. 旋转改变父子形状但保持中序键顺序。
+7. 完整AVL更新还需沿搜索路径维护高度。
+8. 伸展树把访问节点移动到根并利用时间局部性。
+9. 伸展树单次可线性，但操作摊还为对数级。
+10. B树节点保存多个键和多个孩子。
+11. 高分支因子降低树高和昂贵页访问次数。
+12. 选型必须匹配最坏保证、访问分布和存储介质。
 
 <Exercises>
-  <Answer question="推导：为什么 AVL 的四种旋转（LL/RR/LR/RL）覆盖了所有可能的插入失衡？">
-    插入只改变从插入点到根这条路径上的节点高度。最低失衡祖先 a 的高度差跳到 2，说明新节点一定在 a 的较高一侧。分类取决于高度差的方向（左重/右重）和高侧子树里插入的方向——2×2 = 4 种，每种对应一种旋转。证明的关键是「失衡只发生在插入路径上」。
-  </Answer>
-  <Answer question="如果你要设计一个「每秒百万级查找、几乎不插入」的缓存，选 AVL 还是红黑树？为什么？">
-    选 AVL。因为 AVL 的树高更小（≤ 1.44 log n vs ≤ 2 log n），查找路径更短。极少插入意味着 AVL 的旋转开销几乎不出现，而查询受益最大。红黑树在「插入频繁」时用更少的旋转来换，但这里不需要。
-  </Answer>
-  <Answer question="旋转操作本身的 BST 性质不变性如何证明？">
-    对左旋操作：设 a 是旧根、b 是旧右子。左旋后 b 的左子挂给 a 作右子。已知原 BST 中 b 左子树的所有键都在 a 和 b 之间（大于 a 小于 b），左旋后这个关系保持不变（挂给 a 的右子仍然大于 a、仍然小于 b）。中序遍历 a 的左→a→b 的左→b→b 的右 = 左旋后 a 的左→a→(b 的左)→b→b 的右，完全相同。
-  </Answer>
+
+**问题 1：把1到7升序插入普通BST与AVL，查找7的路径长度有什么不同？**
+
+<Answer>普通BST形成全右链，查找7要沿1到7访问7个节点，成本线性。AVL在插入过程中旋转，树高保持对数级，7位于约3层结构中；具体根形状取决于旋转过程，但高度上界不退化。</Answer>
+
+**问题 2：插入30、10、20为什么需要LR双旋？**
+
+<Answer>30左重，但新键20落在左孩子10的右侧。直接右旋30会让10上升却仍不平衡；先左旋10把20提升为左子树根，再右旋30，最终20为局部根、10在左、30在右。</Answer>
+
+**问题 3：伸展树某次查找花O(n)，为什么仍可说摊还O(log n)？**
+
+<Answer>摊还界分析的是一整段操作总成本。昂贵伸展会重组长路径，把刚访问节点和沿途结构带到更有利位置，后续操作变便宜；总成本分摊后每次为对数级，不代表那次慢操作本身变快。</Answer>
+
+**问题 4：为什么数据库索引更常使用B树族而不是AVL？**
+
+<Answer>一次磁盘或SSD页访问远比页内比较昂贵。B树一个页节点保存多个键与大量孩子，分支因子高、层数少，因此显著减少随机页读取；AVL每节点键少，二叉高度会带来更多页跳转。</Answer>
+
 </Exercises>
 
 ## 名词解释
 
 <Glossary>
-  <GlossaryItem term="平衡树">
-    在 BST 基础上加了自我修复机制的数据结构。每次插入或删除后自动调整形状，保证树高永远在 O(log n) 范围内，防止退化。
-  </GlossaryItem>
-  <GlossaryItem term="旋转">
-    平衡树的核心操作。一次旋转只改变 3 个节点的父子关系，不破坏 BST 的左小右大性质。有左旋（右子提拔为根）和右旋（左子提拔为根）两种。
-  </GlossaryItem>
-  <GlossaryItem term="AVL 树">
-    最「自律」的平衡树。每个节点的左右子树高度差必须为 -1、0 或 1，否则触发旋转。查询最快但插入旋转次数可能较多。
-  </GlossaryItem>
-  <GlossaryItem term="红黑树">
-    用节点颜色（红/黑）代替严格高度差的平衡树。规则是红不连红、黑高相等，保证最长路径不超过最短的两倍。插入旋转极少，是标准库的默认选择。
-  </GlossaryItem>
-  <GlossaryItem term="平衡因子">
-    AVL 树中每个节点左右子树的高度差。正常范围 [-1, 0, 1]，超出即失衡，触发旋转修复。
-  </GlossaryItem>
+  <GlossaryItem term="二叉搜索树">左子树键更小、右子树键更大的二叉树。</GlossaryItem>
+  <GlossaryItem term="树高">根到最深叶路径的高度尺度，决定根到叶操作上界。</GlossaryItem>
+  <GlossaryItem term="平衡树">通过约束和重组把搜索树高度控制在对数级的树。</GlossaryItem>
+  <GlossaryItem term="AVL树">每个节点左右子树高度差至多为1的平衡BST。</GlossaryItem>
+  <GlossaryItem term="平衡因子">节点左子树高度减右子树高度。</GlossaryItem>
+  <GlossaryItem term="旋转">保持中序键序、局部改变父子关系以修复高度的操作。</GlossaryItem>
+  <GlossaryItem term="伸展树">每次访问后把相关节点旋到根附近的BST。</GlossaryItem>
+  <GlossaryItem term="摊还分析">把一段操作总成本分摊到每次操作的分析方法。</GlossaryItem>
+  <GlossaryItem term="B树">节点可保存多个键和孩子、所有叶子同层的平衡搜索树。</GlossaryItem>
+  <GlossaryItem term="分支因子">一个内部节点可以指向的孩子数量。</GlossaryItem>
 </Glossary>
 
 <Attribution
-  adaptedFrom="Grokking Algorithms, Second Edition"
-  adaptedUrl="https://www.manning.com/books/grokking-algorithms-second-edition"
+  adaptedFrom="Grokking Algorithms, Second Edition, Chapter 8: Balanced trees"
+  adaptedUrl="https://livebook.manning.com/book/grokking-algorithms-second-edition/chapter-8"
 />

@@ -1,0 +1,240 @@
+---
+title: "Chapter 4. Advanced C#"
+type: C
+section: "C# 10 Nutshell · Language"
+order: 4
+description: "覆盖delegate/event/lambda、异常与iterator、nullable、extension、tuple/record/pattern、metadata/dynamic/operator/unsafe与编译指令。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch04.html"
+draft: false
+---
+
+import { CtcAdvancedBoundaryLab, CtcAdvancedFlowLab, CtcCallableLifetimeLab } from "@/components/mdx/csharp-10-core/diagrams/advanced-csharp";
+
+<Objectives>
+
+- 能分析delegate、event与lambda的target/capture/subscriber lifetime，设计unsubscribe和invocation failure policy
+- 能比较exception、iterator、nullable与extension method的control-flow和binding边界，复现deferred cleanup
+- 能设计record/pattern/attribute/dynamic/operator/unsafe adapter，用compile、runtime与ABI evidence约束高级特性
+
+</Objectives>
+
+## 为什么Advanced Feature要按Boundary而不是语法分类
+
+第4章功能很多，但共同点是改变调用、控制流、数据shape或安全边界。Delegate把method变value，iterator推迟执行，nullable把absence带入type analysis，dynamic推迟binding，unsafe允许pointer。每次便利都移动了检查或lifetime，因此要写清最早失败阶段、owner和可观察证据。
+
+先预测：event publisher会自动清理dead subscriber吗；iterator method调用时就执行body吗；NRT会改变CLR null表示吗；record with是deep copy吗；dynamic可绕过所有access control吗。答案都是否。
+
+<Term def="Callable value是否持有target/closure、由谁保存、何时释放，以及多次调用如何传播结果和异常的契约。">callable lifetime contract</Term>
+
+## Delegates
+
+Delegate是typed callable object，可引用static/instance method并形成multicast invocation list。Instance target被delegate强引用；长生命周期cache/event保存delegate会延长target。Multicast按顺序调用，非void只返回最后handler结果，异常默认中断后续handlers，因此不适合隐式聚合结果。
+
+```csharp
+Func<int, int> square = x => x * x;
+Func<int, int> pipeline = square;
+pipeline += x => x + 1;
+
+foreach (Func<int, int> step in pipeline.GetInvocationList())
+    Console.WriteLine(step(3));
+```
+
+API明确sync/async callable：`Action` handler启动async void会改变exception channel。需要异步组合就使用`Func&lt;CancellationToken,Task&gt;`并定义sequential/parallel、failure与timeout。
+
+## Events
+
+Event限制outside code只能add/remove handler，publisher保留raise权。Standard pattern以sender/EventArgs传数据；现代domain可用immutable event record。Subscriber负责在lifetime结束时unsubscribe，或publisher使用weak pattern；否则publisher root会保留subscriber。
+
+Publisher还要决定handler exception隔离、thread/scheduler和reentrancy。逐个调用可收集fault，但会改变标准event semantics；关键业务流程通常更适合typed mediator/queue而非裸event。
+
+## Lambda Expressions
+
+Lambda依赖target delegate/expression-tree type完成parameter/return inference。Capture variable而非快照，deferred调用看到之后value；capturing lambda通常产生closure allocation。Static lambda禁止capture，适合显式证明无hidden state。
+
+Expression tree保存可解释syntax representation，不等同delegate；provider未必支持所有C# operations。Test区分compile binding、capture timing、invocation count与provider translation。
+
+<Stepper>
+  <Step title="切换delegate、event、lambda与local method"><CtcCallableLifetimeLab /></Step>
+  <Step title="画target与root graph">标publisher/cache、delegate、closure、captured objects与unsubscribe/dispose点。</Step>
+  <Step title="注入capture/fault/reentrancy">延迟invoke并改变变量，handler抛错/重入，断言policy和lifetime。</Step>
+</Stepper>
+
+<Callout type="trap" title="Lambda只是更短的Named Method">
+Lambda可能capture、转换为expression tree或依赖target typing；allocation、translation与overload resolution都可能不同。重构前写target type和evaluation evidence。
+</Callout>
+
+## try Statements and Exceptions
+
+Try/catch按exception type/filter寻找handler，finally在normal/exception/return等退出路径执行。Exception用于无法在当前层正常处理的fault，不应替代hot-path validation。Rethrow用`throw;`保留stack，`throw ex;`重置证据；wrapper exception保留InnerException与operation context且不泄露secret。
+
+Exception filter在stack unwind前评价，适合分类/telemetry但自身应无脆弱effect。Async exception通常存入Task并在await传播，iterator exception在MoveNext发生。测试必须在真实evaluation点断言。
+
+## Enumeration and Iterators
+
+IEnumerable提供GetEnumerator，IEnumerator通过MoveNext/Current推进。Iterator block由compiler lower为deferred state machine；method call通常只创建sequence，body在enumeration开始执行。每次enumeration可能重复source effects，break/consumer fault通过Dispose触发iterator finally。
+
+```csharp
+static IEnumerable<string> ReadValidLines(string path)
+{
+    using var reader = File.OpenText(path);
+    string? line;
+    while ((line = reader.ReadLine()) is not null)
+        if (!string.IsNullOrWhiteSpace(line))
+            yield return line;
+}
+
+using var iterator = ReadValidLines(path).GetEnumerator();
+iterator.MoveNext(); // resource is acquired here, not at method call
+```
+
+Sequence contract说明single/multi-use、snapshot/live、thread safety和resource. 若caller需跨scope持有，materialize immutable values。`Any()`后`ToList()`可重复查询，计数测试能暴露。
+
+<Term def="Iterator body在MoveNext运行，resource在enumerator Dispose/terminal释放，而非按source method调用位置执行的契约。">deferred enumeration boundary</Term>
+
+## Nullable Value Types
+
+`Nullable&lt;T&gt;`为non-nullable value type增加HasValue/Value状态，`T?`是syntax。Lifted operators传播null，bool?的`&`/`|`有three-valued truth table；boxing有值时box T，无值时box null。Null不等于zero/default domain value。
+
+Use case需区分unknown/not supplied/not applicable。若多个absence reasons重要，用discriminated type而非单一nullable。Database/JSON round trip测试missing/null/default。
+
+## Nullable Reference Types
+
+NRT是compile-time annotations与flow warnings，不改变CLR reference representation，也不阻止legacy/reflection/deserializer传null。Public annotations成为consumer contract；`!`只抑制warning。Construction、generic constraints与member initialization需正确标注，不以全局disable逃避。
+
+Boundary runtime guard仍必要，尤其public API与unannotated code。CI将nullable warnings当errors并逐步收窄oblivious surface；tests注入null验证actual behavior。
+
+## Extension Methods
+
+Extension method是static method的call syntax，按namespace/import、receiver static type和normal member precedence在compile time解析，不是virtual dispatch。Instance member优先；多个extensions可能ambiguous；receiver可为null并进入method，因此helper自己决定guard。
+
+把unowned type适配为domain vocabulary很合适，隐藏I/O/昂贵operation则误导。API演进新增instance member可能改变旧call binding，保留compile fixture。
+
+<Stepper>
+  <Step title="切换exception、iterator、nullable与extension"><CtcAdvancedFlowLab /></Step>
+  <Step title="标真正evaluation/binding点">Throw/await/MoveNext、NRT warning与extension lookup分别写compile/runtime阶段。</Step>
+  <Step title="运行partial-consumption matrix">不枚举、枚举一次、break、fault与repeat，验证resource和effect count；nullable/extension做negative compile cases。</Step>
+</Stepper>
+
+## Anonymous Types
+
+Anonymous type由read-only inferred properties组成，适合local projection/key；同assembly中shape相同可能复用compiler-generated type，但这不是public naming contract。不要从public API返回anonymous type或依赖generated name。Equality按properties value实现，property本身仍可能mutable reference。
+
+跨boundary用named record/DTO，保证schema、docs与version。LINQ provider projection支持也需测试。
+
+## Tuples
+
+ValueTuple提供轻量多值return与structural value semantics；element names主要是compile-time metadata/convenience，不构成稳定wire schema。Tuple适合local transient grouping，不替代有invariant/behavior的domain type。Large nested tuples影响readability与copy。
+
+Deconstruction按method/pattern解析，可忽略elements。API参数/return新增或重排element会破坏consumer；公共契约优先named type。
+
+## Records
+
+Record class提供value-oriented equality、printing、primary construction与`with` nondestructive mutation；record struct提供value type版本。With是shallow copy，referenced mutable members仍共享。Equality参与inheritance/runtime type rules，不能未经考虑用于entity identity。
+
+Property validation要在canonical constructor/init paths闭合；computed/lazy values考虑thread safety与equality exclusion。Serializer bypass或alternate constructor也要contract test。
+
+## Patterns
+
+Type/constant/relational/logical/property/positional/list等patterns把test与variable binding组合。Switch expression适合从closed cases映射value；enum/deserialized/open hierarchy仍要default/unknown branch。Extended property pattern减少嵌套但不改变getter evaluation/fault。
+
+Pattern order影响reachability和behavior，compiler能发现部分subsumed cases但不证明business completeness。Table tests覆盖case boundaries、null与unknown future value。
+
+<Term def="Record、tuple与pattern暴露的value shape、equality、copy和unknown-case处理约定。">data-shape contract</Term>
+
+## Attributes
+
+Attribute把metadata附到assembly/module/type/member/parameter/return等target；本身不自动执行。Reflection、compiler、serializer或framework consumer解释它。Constructor arguments受metadata常量限制，AllowMultiple/Inherited由AttributeUsage定义。
+
+Caller info/CallerArgumentExpression提供diagnostics convenience，可被caller覆盖，不能作为security identity。Trim/AOT下reflection-discovered attributes与members需要preservation annotations/tests。
+
+## Dynamic Binding
+
+Dynamic让member/operator/overload binding推迟到runtime binder；static compile仍生成dynamic call site。它适合COM/dynamic-language/shape adapters，但失败变RuntimeBinderException，refactoring/analyzers覆盖降低。`var`仍是static inferred type，与dynamic不同。
+
+Narrow adapter立即把dynamic result验证/转换为typed domain value，记录member/version matrix。不要让dynamic穿过core或作为绕过generic/interface设计的默认方案。
+
+## Operator Overloading
+
+Operator overload让domain value使用熟悉表达式，但应符合直觉、保持equality/comparison consistency和checked variants。Implicit conversion必须无信息丢失/无意外failure；可能失败或昂贵用explicit/factory。Overloaded `true/false`与short-circuit规则复杂，谨慎使用。
+
+```csharp
+public readonly record struct Money(decimal Amount, string Currency)
+{
+    public static Money operator +(Money left, Money right) =>
+        left.Currency == right.Currency
+            ? new(left.Amount + right.Amount, left.Currency)
+            : throw new InvalidOperationException("Currency mismatch");
+}
+```
+
+Property tests验证identity/associativity（若domain成立）、overflow、currency mismatch和Equals/GetHashCode/CompareTo一致。Operator不应偷偷I/O。
+
+## Unsafe Code and Pointers
+
+Unsafe允许pointer arithmetic、fixed、stackalloc、function pointer和native-sized integers，绕过部分managed memory safety。GC可移动object，fixed/pinning时间应短；Span常提供更安全的bounds/lifetime abstraction。Stackalloc大小受stack budget并需初始化策略。
+
+Interop adapter写ABI、calling convention、layout/packing、ownership、encoding、bounds与platform architecture。Fuzz/ASan/native tests、32/64-bit和target OS matrix不可省。
+
+<Term def="Dynamic/reflection/unsafe/interop把部分static或memory checks推迟/绕过后，由narrow adapter恢复验证的边界。">safety escape hatch</Term>
+
+<Stepper>
+  <Step title="切换record/pattern、attribute、dynamic与unsafe"><CtcAdvancedBoundaryLab /></Step>
+  <Step title="写最早失败阶段">Compile warning/error、metadata consumer、runtime binder或native memory fault逐项标明。</Step>
+  <Step title="把escape收窄">Adapter立即验证shape/range/lifetime并转typed value，运行negative/fuzz/platform matrix。</Step>
+</Stepper>
+
+<Callout type="trap" title="Dynamic与Unsafe只是性能/便利开关">
+它们改变检查时点与故障类型，可能把compile error变runtime binder或memory corruption。必须有明确必要性、narrow surface和target-specific evidence。
+</Callout>
+
+## Preprocessor Directives
+
+`#if`基于compile symbols形成不同source program，`#nullable`/`#pragma warning`改变analysis，`#line`影响diagnostics。它不是C/C++ textual macro system。条件分支越多，build matrix越大；每个组合需编译/测试，长期platform差异优先runtime abstraction或multi-target files。
+
+Suppression必须局部、带原因与issue，升级analyzer时复审。不要用symbols隐藏secret或业务configuration。
+
+## XML Documentation
+
+XML comments生成API documentation metadata/file，standard tags描述summary/param/returns/exception/typeparamref与cref。Docs要与nullable、exception、thread/resource contract一致，并由build验证missing/broken cref。User-defined tags取决于doc tool consumer。
+
+Documentation不是测试替代；public examples应编译，breaking behavior由contract tests发现。Sensitive internal notes不进入公开XML doc artifact。
+
+## 本章回顾：高级语法移动了检查与Lifetime
+
+1. Delegate/event/lambda的核心风险是target、capture、subscriber ownership与invocation failure。
+2. Exceptions与iterators把fault/cleanup移动到await/MoveNext等真实执行点。
+3. NRT是compile analysis，record with是shallow copy，pattern不自动覆盖future unknown。
+4. Attributes依赖consumer，dynamic推迟binding，unsafe绕过memory checks。
+5. Preprocessor/XML docs必须进入build matrix与API contract治理。
+
+<Exercises>
+
+**问题 1：怎样证明Event subscription没有泄漏？**
+
+<Answer>建立publisher/subscriber lifetime test，订阅后释放scope并显式unsubscribe/dispose，检查handler count/weak reference/heap root；覆盖publisher长寿命、subscriber exception和重复unsubscribe。若需weak event，验证不会过早collect。</Answer>
+
+**问题 2：Iterator读取文件为何在method返回后仍可能失败？**
+
+<Answer>Iterator body在MoveNext才open/read，method call只返回deferred sequence。File not found/parse fault在enumeration发生；break/fault需Dispose触发finally。测试不枚举、partial/full、repeat和consumer fault。</Answer>
+
+**问题 3：怎样审查一个dynamic COM adapter？**
+
+<Answer>列支持的COM versions/member shapes、binder failure、null/conversion、thread/apartment与release ownership；adapter内立即转typed DTO/outcome。Contract tests在目标COM版本运行，unknown member与错误HRESULT保留cause。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="callable lifetime contract" definition="Delegate/closure target ownership与invocation failure约定。" />
+  <GlossaryItem term="deferred enumeration boundary" definition="Iterator在MoveNext执行并由Dispose清理的边界。" />
+  <GlossaryItem term="data-shape contract" definition="Tuple/record/pattern的copy、equality与unknown语义。" />
+  <GlossaryItem term="safety escape hatch" definition="Dynamic/unsafe等推迟或绕过checks的narrow adapter。" />
+  <GlossaryItem term="metadata consumer contract" definition="Attribute/XML metadata由指定consumer解释的约定。" />
+</Glossary>
+
+<Term def="Attribute或documentation metadata只有在compiler/framework/tool consumer读取时才产生行为的契约。">metadata consumer contract</Term>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 4: Advanced C#" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch04.html" />

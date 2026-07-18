@@ -1,0 +1,323 @@
+---
+title: "第12章：优化并发"
+type: C
+section: Optimized C++ · Chapter 12
+order: 12
+description: "对齐第一版第12章 Optimize Concurrency：并发语义与 primitives，async/future/thread pool/task queue，I/O 线程与无共享设计、启动关闭，以及临界区、线程限制、惊群/锁队列/争用/等待/背压和并发库。"
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+draft: false
+---
+
+import {
+  OpcConcurrencyContentionMap,
+  OpcConcurrencyCorrectnessMap,
+  OpcConcurrencyExecutionModelMap,
+} from "@/components/mdx/optimized-cpp/diagrams/optimize-concurrency";
+
+<Objectives>
+
+- 能分析 interleaving、race、atomicity 与 synchronization，写出 shared state 的 happens-before/invariant
+- 能设计 async/future、thread pool/task queue、I/O thread 或 partitioned-owner 模型，并限制 runnable work
+- 能修改 critical section/queue/wait/shutdown，消除 herd/convoy/busy-wait/forever-wait 与无界背压
+
+</Objectives>
+
+## 从 Concurrency Zoo 的正确性开始
+
+**concurrency zoo** 包括 threads、tasks、futures、locks、atomics、condition variables、queues 和 async I/O。它们是不同 abstraction，不是“并发越多越快”的菜单。第一道门是所有 legal **interleaved execution** 都保持 invariants。
+
+<Term def="threads/tasks/futures/locks/atomics/queues 等并发 abstraction 的集合，各自具有调度、ownership 与同步契约。">
+  concurrency zoo
+</Term>
+
+**sequential consistency** 提供一个所有 atomic operations 看似按某个总序交错且各线程保持 program order 的推理模型；C++ 还有 weaker memory orders，但未证明需要前先用清晰同步。ordinary data 的 conflicting unsynchronized access 构成 **races**，是 undefined behavior，不是“偶尔读旧值”。
+
+<Term def="并发执行中多个线程操作可能形成的不同合法交错次序；不能依赖调度时机保证正确。">
+  interleaved execution
+</Term>
+
+<Term def="两个线程并发访问同一 memory location、至少一个写且缺少同步的冲突，会导致 undefined behavior。">
+  data races
+</Term>
+
+**synchronization** 建立 ordering/visibility；**atomicity** 定义哪些 state transition 必须不可分。把两个 fields 各改 atomic 不会自动保护 `balance + version` compound invariant；可能仍需 mutex 或 immutable snapshot。
+
+<Term def="通过 mutex/condition/atomic/message/join 等建立 happens-before、visibility 与执行协调的机制。">
+  synchronization
+</Term>
+
+<Term def="某个 state transition 对其他线程表现为不可分割整体的性质；多字段 invariant 不能由单字段 atomic 自动获得。">
+  atomicity
+</Term>
+
+<OpcConcurrencyCorrectnessMap />
+
+<Callout type="trap" title="陷阱：数据看起来只错一次，先加 relaxed atomic">
+  relaxed atomic 只保证该 object 的 atomicity/modification
+  order，不发布任意邻接数据，也不建立业务 invariant。 先画 owner、conflicting
+  accesses 与 required happens-before；用 mutex/message 或正确 acquire-release
+  protocol， 通过 TSan/stress/model tests 后才比较 relaxed ordering。
+</Callout>
+
+## Threads、Futures、Tasks 与 Primitives
+
+**threads** 是 OS/runtime scheduling resource；**asynchronous tasks** 是待执行 work。**promises and futures** 把 single result/exception/completion 从 producer 传给 consumer；future `get()` 也可能阻塞并 rethrow exception。
+
+<Term def="可被 runtime/OS 独立调度的执行流，拥有 stack/context 并竞争 CPU 与 shared resources。">
+  threads
+</Term>
+
+<Term def="通过 promise 完成值/异常、future 等待并取得一次结果的异步结果通道。">
+  promises and futures
+</Term>
+
+**mutexes/locks** 保护 invariant，RAII lock 要明确 ownership/order；**condition variables** 让 waiter 在 predicate false 时睡眠，并总在 loop/predicate 中处理 spurious wakeup；**atomic operations** 适合单状态或经证明的 protocol，不是 lock-free 万能替代。
+
+<Term def="等待共享 predicate 改变的同步 primitive；必须与 mutex 和 predicate loop 配合以处理丢失/虚假唤醒。">
+  condition variables
+</Term>
+
+## Prefer std::async 还是 Thread Pool
+
+“**prefer std::async**”的核心是 structured result/lifetime/exception 比裸 thread 容易管理；但默认 policy 可选择 deferred/async，若必须并行要写 `std::launch::async`。大量 fine-grained calls 可能创建过多 resources，thread pool 更合适。
+
+```cpp
+Summary summarizeBoth(const Dataset& left, const Dataset& right) {
+    auto rightTask = std::async(std::launch::async, [&right] {
+        return summarize(right);
+    });
+    Summary leftSummary = summarize(left);
+    Summary rightSummary = rightTask.get();
+    return combine(leftSummary, rightSummary);
+}
+```
+
+captures 在 future 完成前必须存活；exception 由 `get` 传播。先测 task 是否足够大、memory bandwidth 是否饱和、两份结果是否可独立计算。
+
+**runnable threads as cores** 是 CPU-bound 起点：runnable CPU workers 大幅超过 cores 会 context switch/cache thrash。**task queue + thread pool** 用固定 workers 执行许多 tasks，必须限制 queue、定义 priority/fairness/cancellation/exception 和 startup/shutdown。
+
+<Term def="由有限 reusable worker threads 从 task queue 取 work 的执行模型，用 queueing 摊薄 thread creation。">
+  thread pool
+</Term>
+
+<OpcConcurrencyExecutionModelMap />
+
+## I/O Thread、Program without Synchronization、Startup/Shutdown
+
+**I/O in a separate thread** 可隔离 blocking calls，让 compute workers 不被占住；边界是 bounded queue/buffer，不能让 fast producer 无限压积。若 platform async I/O/library 更合适，应比较而非固定 dedicated thread。
+
+**program without synchronization** 不是 data-race：通过 ownership partition、immutable data、thread-confined state、message passing 让 hot path 不共享 writable memory。跨 owner 仍有 queue/publication synchronization，但频率和 scope 变小。
+
+<Term def="以分区所有权、不可变数据和 message passing 避免多个线程直接共享可写状态的设计。">
+  program without synchronization
+</Term>
+
+```cpp
+class ShardWorker {
+public:
+    explicit ShardWorker(ShardId id)
+        : thread_([this, id](std::stop_token stop) { run(id, stop); }) {}
+
+    void submit(Command command) { inbox_.push(std::move(command)); }
+
+private:
+    void run(ShardId id, std::stop_token stop);
+
+    BoundedQueue<Command> inbox_;
+    std::jthread thread_;
+};
+```
+
+这里 mutable shard state 只在 worker 内访问，queue 负责 publication/backpressure。**startup and shutdown** 需规定创建顺序、accepting flag、stop request、wake blocked wait、drain/cancel policy、join 与资源销毁顺序；仅依 destructor 顺序通常不足。
+
+<Term def="并发 subsystem 从创建 workers/resources 到停止接收、唤醒、drain/cancel、join 和销毁的完整生命周期协议。">
+  startup and shutdown
+</Term>
+
+## Scope of Critical Sections 与 Contention
+
+**scope of critical sections** 只覆盖一个 invariant 的 shared-state read/modify/publish；expensive compute/I/O/callback 通常移到 lock 外，但要 snapshot input 并在 commit 时重新验证 version。critical section 越短不代表可拆坏原子事务。
+
+<Term def="mutex/lock 持有期间必须原子观察或修改的最小完整 invariant 范围。">
+  scope of critical sections
+</Term>
+
+**limit concurrent threads** 同时限制 worker 和 in-flight tasks；过量导致 **contention**。**thundering herd** 是许多 waiters 被同一 event 唤醒争少量 work；**lock convoys** 是慢/被抢占 owner 让 waiters 排队并接力阻塞。
+
+<Term def="多个执行流争用 lock、cache line、queue、memory bandwidth 或其他有限资源造成等待与可扩展性下降。">
+  contention
+</Term>
+
+<OpcConcurrencyContentionMap />
+
+<Callout type="trap" title="陷阱：缩小临界区，把每行各锁一次">
+  过细 locking 增加 lock/unlock、允许其他线程看见半完成 invariant，并可能制造
+  lock-order deadlock。临界区应 是“最小完整事务”，不是最少源码行；把 pure
+  compute 放外面，commit 时一次持锁并验证 snapshot/version。
+</Callout>
+
+## Busy-Wait、Wait Forever 与 Own Mutex
+
+**busy-wait** 在 loop 反复检查状态，烧 CPU/coherence；只有极短、专用 core、严格 latency protocol 才可能合理，并需 pause/backoff。普通等待用 condition/semaphore/future。**wait forever** 是缺少 timeout/stop/predicate wakeup 的可用性 bug，shutdown 必须能打断。
+
+<Term def="不阻塞线程而循环轮询共享状态的等待方式，会消耗 CPU 和 coherence bandwidth。">
+  busy-wait
+</Term>
+
+“**own mutex**”要求 mutex ownership 与其保护 invariant 明确：每个 shard/object 可 own mutex 以减少无关 contention，但要定义 lock order/lifetime；给每字段一把锁会破坏 compound invariant。mutex 不应被复制或在 waiters 活跃时销毁。
+
+## Producer Output Queue Length 与 Backpressure
+
+**producer output queue length** 是关键 health metric。producer 快于 consumer 时，无界 queue 让吞吐短期好看、latency/RSS 持续增长。bounded queue 要定义 block、reject、drop/coalesce、priority 与 overload signal。
+
+```cpp
+template <class T>
+class BoundedQueue {
+public:
+    bool push(T value, std::stop_token stop) {
+        std::unique_lock lock(mutex_);
+        notFull_.wait(lock, stop, [&] { return queue_.size() < capacity_; });
+        if (stop.stop_requested()) return false;
+        queue_.push_back(std::move(value));
+        notEmpty_.notify_one();
+        return true;
+    }
+
+private:
+    std::mutex mutex_;
+    std::condition_variable_any notFull_;
+    std::condition_variable_any notEmpty_;
+    std::deque<T> queue_;
+    std::size_t capacity_{1024};
+};
+```
+
+完整实现还需 pop、close/drain、exception/capacity config；notification 可在合适位置减少 awakened contention，但必须证明 predicate/visibility。监控 queue depth/age、blocked producers、drops、consumer service time。
+
+## Concurrency Libraries（并发库）
+
+**concurrency libraries（并发库）** 提供成熟 thread pool、work stealing、bounded channel、parallel algorithm、actor/task graph 等。优先选能表达 cancellation/backpressure/structured lifetime、经过 race testing 的库，而不是自写 lock-free queue。评估 ABI、scheduler、allocation、exception、debug/trace 与 shutdown contract。
+
+<Term def="提供 task scheduling、pool/channel/parallel primitive 与生命周期工具的成熟组件，应按语义和可观测性选型。">
+  concurrency libraries
+</Term>
+
+## 三步优化并发系统
+
+<Stepper>
+  <Step title="第一步：先证明所有交错正确">
+    先预测 shared locations 与 compound invariants；标出 owner、race、atomicity、happens-before 和 wait predicates，用 TSan/stress/model/correctness tests 验证。
+
+    <OpcConcurrencyCorrectnessMap />
+
+  </Step>
+  <Step title="第二步：匹配 execution model 与资源">
+    对 async/future、pool/queue、I/O thread、partitioned owner 比较 task granularity、runnable cores、blocking、queue、cancellation 与 startup/shutdown。
+
+    <OpcConcurrencyExecutionModelMap />
+
+  </Step>
+  <Step title="第三步：测 contention 和 overload">
+    记录 hold/wait、runnable threads、herd/convoy、busy/forever wait、queue depth/age、CPU/RSS/p99；缩小完整 critical invariant并施加 backpressure。
+
+    <OpcConcurrencyContentionMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- concurrency optimization 从 interleaving/race/atomicity/synchronization 正确性开始
+- thread 是 resource、task 是 work；promise/future 管结果，mutex/condition/atomic 各有不同契约
+- prefer async 需明确 launch，many tasks 更适合 bounded queue/thread pool，runnable CPU workers 以 cores 为起点
+- separate I/O thread 隔离 blocking；partitioned ownership/immutable/message 减少 shared writable state
+- startup/shutdown 必须 stop、wake、drain/cancel、join，不能 wait forever
+- critical section 保护最小完整 invariant；线程过多、herd、convoy、global lock 都形成 contention
+- busy-wait、unbounded producer queue 会烧 CPU/堆积 latency/RSS，需 bounded wait/backpressure
+- 成熟 concurrency library 通常优先于自写 scheduler/lock-free primitive
+
+<Attribution
+  adaptedFrom="Optimized C++, First Edition, Chapter 12: Optimize Concurrency"
+  adaptedUrl="https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+/>
+
+<Glossary>
+  <GlossaryItem term="concurrency zoo">
+    threads/tasks/futures/locks/atomics/queues 等并发抽象集合。
+  </GlossaryItem>
+  <GlossaryItem term="interleaved execution">
+    多线程 operations 形成的不同合法交错次序。
+  </GlossaryItem>
+  <GlossaryItem term="data races">缺少同步的同一位置冲突访问。</GlossaryItem>
+  <GlossaryItem term="synchronization">
+    建立 happens-before、visibility 与协调的机制。
+  </GlossaryItem>
+  <GlossaryItem term="atomicity">
+    state transition 对其他线程表现为不可分整体。
+  </GlossaryItem>
+  <GlossaryItem term="threads">
+    可独立调度并竞争 CPU/shared resource 的执行流。
+  </GlossaryItem>
+  <GlossaryItem term="promises and futures">
+    异步 producer 向 consumer 传递一次结果/异常的通道。
+  </GlossaryItem>
+  <GlossaryItem term="condition variables">
+    在 mutex/predicate 上阻塞并被状态变化唤醒的 primitive。
+  </GlossaryItem>
+  <GlossaryItem term="thread pool">
+    有限 reusable workers 从 task queue 取 work 的模型。
+  </GlossaryItem>
+  <GlossaryItem term="program without synchronization">
+    用分区 ownership/immutable/message 避免直接共享可写状态。
+  </GlossaryItem>
+  <GlossaryItem term="startup and shutdown">
+    创建到 stop/wake/drain/join/destroy 的并发生命周期协议。
+  </GlossaryItem>
+  <GlossaryItem term="scope of critical sections">
+    lock 持有期间保护的最小完整 invariant。
+  </GlossaryItem>
+  <GlossaryItem term="contention">
+    执行流争用有限 shared resource 造成等待和扩展下降。
+  </GlossaryItem>
+  <GlossaryItem term="busy-wait">
+    循环轮询状态、不阻塞线程的等待方式。
+  </GlossaryItem>
+  <GlossaryItem term="concurrency libraries">
+    提供 scheduler/pool/channel/parallel primitive 的成熟组件。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：修复 64 threads 处理 CPU-bound tasks 的负扩展。** 机器 8 cores，queue 无界，吞吐不升、p99/RSS 上升。给出实验。
+
+<Answer question="如何同时限制 runnable threads 与 in-flight work？">
+  sweep 1/2/4/8/12 workers，task size固定，bounded queue容量按 latency/memory
+  budget设置；producer block/reject/ coalesce policy显式。记录
+  throughput、p50/p99、runnable/context switches、CPU、cache、queue
+  depth/age、RSS。 先预测约8 CPU workers附近平台，若 tasks memory-bound
+  可能更少；仅 blocking tasks 才考虑更多。加入 shutdown/ overload
+  tests，不以积压换表面吞吐。
+</Answer>
+
+2. **问题 2：审计 condition_variable consumer 偶发 hang。** 代码用 `if (queue.empty()) wait(lock);`，shutdown 只设 flag 不 notify。修复协议。
+
+<Answer question="predicate、spurious wakeup 与 shutdown 如何闭环？">
+  在同一 mutex 下维护 `closed || !queue.empty()` predicate，用 `wait(lock,
+  predicate)` loop；push 后 notify，close 在锁内设 closed 并
+  `notify_all`，consumer 醒后先消费剩余或按 drain/cancel policy退出。处理
+  stop/deadline， 禁止 mutex/queue 在 waiters 前销毁。用 many
+  interleavings、empty close、close with work、TSan/stress 验证， 不靠 sleep
+  timing。
+</Answer>
+
+3. **问题 3：把 global mutex 拆成 shard mutex。** 当前 lock 内还做 JSON encode 和 disk write；说明 snapshot/commit、lock order 与 correctness。
+
+  <Answer question="怎样缩小临界区而不暴露半完成状态？">
+    按 key shard，每 shard own mutex/完整 invariant；锁内 snapshot/version 或 apply state transition，unlock 后做 encode/
+    I/O；若 I/O result 要回写，重新锁并验证 version/operation ID再 commit。跨 shard operation 定义固定 lock order或
+    coordinator。测 hold/wait/convoy、throughput/p99，并做 invariant/failure/retry/TSan tests。不能简单把每字段各锁，
+    也不能让 callback/I/O 在锁内形成 convoy。
+  </Answer>
+</Exercises>

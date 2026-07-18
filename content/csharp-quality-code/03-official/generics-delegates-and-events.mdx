@@ -1,0 +1,346 @@
+---
+title: "第3章：泛型、委托和事件（建议32-45）"
+type: C
+section: "编写高质量代码 · 泛型与消息"
+order: 3
+description: "覆盖泛型优先、静态成员、约束与default，FCL委托、lambda/闭包、delegate与标准事件模型，以及接口和委托的协变、逆变与不变性。"
+demo: true
+math: false
+sourceUrl: "https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html"
+draft: false
+---
+
+import { CqcDelegateEventLab, CqcGenericContractLab, CqcVarianceFlowLab } from "@/components/mdx/csharp-quality-code/diagrams/generics-delegates-and-events";
+
+<Objectives>
+
+- 能分析object、多态与generic API保留type relationship的差异，并设计最小constraint、per-T static和default policy
+- 能解释lambda到delegate的binding，判断closure、multicast invocation与event subscription的state和lifetime风险
+- 能推导invariant、covariant和contravariant conversion是否类型安全，并正确标注producer/consumer type parameter
+
+</Objectives>
+
+## 为什么泛型、委托和变体属于同一个类型契约
+
+泛型把“输入类型与输出类型有什么关系”交给compiler证明；delegate把“以后要调用哪段typed behavior”变成value；event再限制谁能发布这段behavior；variance则回答一个generic/delegate type能否沿继承关系安全转换。它们共同解决的不是语法简写，而是type information在时间和边界上能保留多久。
+
+先预测：`Cache<User>`与`Cache<Order>`是否共享同一个static field；for循环创建的三个lambda稍后会打印三个值还是同一个值；`IList<Dog>`为什么不能赋给`IList<Animal>`，但`IEnumerable<Dog>`可以。答案都来自实际读写能力，而不是关键词记忆。
+
+<Term def="一个generic type definition与具体type arguments组合成closed type后形成的独立runtime type、static state与API contract。">generic type identity</Term>
+
+## Generic Contract与Default（建议32-35）
+
+### 建议32：总是优先考虑泛型
+
+当同一算法适用于多种type且需要保留input/output relationship时，generic优于`object`+cast：caller获得compile-time checking，value type通常避免boxing，implementation也无需type switch。优先不等于所有variation都用type parameter；行为本质不同、只共享少量代码时，interface/polymorphism或composition更清楚。
+
+```csharp
+public static T PickBest<T>(IEnumerable<T> source, IComparer<T> comparer)
+{
+    using IEnumerator<T> iterator = source.GetEnumerator();
+    if (!iterator.MoveNext()) throw new InvalidOperationException("Sequence is empty.");
+
+    T best = iterator.Current;
+    while (iterator.MoveNext())
+        if (comparer.Compare(iterator.Current, best) > 0)
+            best = iterator.Current;
+    return best;
+}
+```
+
+generic不是性能自动开关。code specialization、JIT/AOT size、reflection metadata和复杂constraint都有成本；先看它是否让非法调用无法表达。
+
+### 建议33：避免在泛型类型中声明静态成员
+
+generic type中的static field按closed type分别存在：`Metrics<User>.Count`与`Metrics<Order>.Count`不是同一计数器。这可能正是per-type cache的意图，也可能悄悄把global state分裂并放大memory/initialization。原书的“避免”应改写为“只有明确需要按T分区时才使用”。
+
+```csharp
+public static class SerializerCache<T>
+{
+    public static readonly JsonTypeInfo<T> Metadata = BuildMetadata<T>();
+}
+
+// Correct only because metadata is intentionally different for every T.
+```
+
+若需要process-wide registry，把state放在non-generic owner，并以`Type`或explicit key索引。测试至少创建两个closed types，验证共享/隔离符合设计。
+
+### 建议34：为泛型参数设定约束
+
+constraint声明implementation实际需要的capability，让body可直接调用成员并把错误提前到call site。应选择最小constraint：需要stable key可用`notnull`，需要比较可依赖`IComparable<T>`或传入comparer，构造对象前再考虑`new()`。不为“看起来严谨”限制成某个concrete base class。
+
+```csharp
+public static Dictionary<TKey, TValue> IndexBy<TKey, TValue>(
+    IEnumerable<TValue> values,
+    Func<TValue, TKey> keySelector)
+    where TKey : notnull
+{
+    return values.ToDictionary(keySelector);
+}
+```
+
+constraint不能表达所有domain invariant，例如“金额非负”；这些仍由constructor/validation承担。`class`、`struct`、`unmanaged`、interface与`new()`也会影响nullable分析和可用operation，要为每一项写出理由。
+
+### 建议35：使用default为泛型类型变量指定初始值
+
+`default(T)`/`default`是未知T的zero/null initialization，适合buffer slot、`Try` pattern的失败output或显式empty state。它不保证是合法domain value：reference是null，numeric是0，struct fields全为default，可能绕过constructor invariant。
+
+```csharp
+public static bool TryFind<T>(IEnumerable<T> source, Predicate<T> match, out T value)
+{
+    foreach (T item in source)
+        if (match(item))
+        {
+            value = item;
+            return true;
+        }
+
+    value = default!; // Valid only because false forbids consuming value.
+    return false;
+}
+```
+
+nullable context里的`default!`只抑制analysis，不改变runtime value。API最好用bool/result/discriminated state让caller无法把failure default误当成功数据。
+
+<Stepper>
+  <Step title="切换object、generic、static-per-T、constraint与default">
+    <CqcGenericContractLab />
+  </Step>
+  <Step title="写出compiler必须证明的type relationship">
+    标注T从哪个input流到哪个output、body需要哪些operations，以及state是否有意按closed type隔离。
+  </Step>
+  <Step title="用两个type arguments和invalid default验收">
+    对reference/value type各测试一次，创建两个closed types检查static identity，并让default进入domain validation。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="泛型静态缓存天然是全局单例">
+static属于每个closed generic type。若T来自plugin或大量runtime types，会产生多份cache和initializer；若本应全局共享，必须移到non-generic owner。
+</Callout>
+
+## Delegate、Closure与Event Ownership（建议36-41）
+
+### 建议36：使用FCL中的委托声明
+
+常见callable shape优先复用`Action`、`Func`、`Predicate`、`Comparison`与`EventHandler<TEventArgs>`，降低无意义delegate type数量并获得既有variance。需要domain name、`ref/out`参数、特殊calling convention或清晰public API语义时，再声明named delegate。
+
+```csharp
+public static TResult Retry<TResult>(
+    Func<CancellationToken, TResult> operation,
+    Predicate<Exception> shouldRetry,
+    CancellationToken cancellationToken)
+{
+    // Retry policy omitted; the signatures preserve result and cancellation types.
+    return operation(cancellationToken);
+}
+```
+
+不要因signature相同就认定semantics相同。`Func<string,bool>`可能表示validation、authorization或filter，public boundary若容易混淆，应封装policy interface或named type。
+
+### 建议37：使用Lambda表达式代替方法和匿名方法
+
+短、局部、无副作用的behavior用lambda能让policy贴近调用点；anonymous method通常没有额外价值。逻辑复杂、递归、复用、需要独立测试或stack trace name时，named method更合适。lambda是否分配取决于capture与compiler/runtime优化，不从syntax猜测。
+
+```csharp
+Order[] recent = orders
+    .Where(order => order.IsPaid)
+    .OrderByDescending(order => order.PaidAt)
+    .Take(limit)
+    .ToArray();
+```
+
+### 建议38：小心闭包中的陷阱
+
+closure捕获的是variable storage，不保证复制当前value。for loop中多个lambda引用同一个`index`，稍后执行时可能都看到最终值；捕获`this`也可能让短命callback长期保留整个owner/object graph。
+
+<Term def="captured variable被提升到可共享对象后，从lambda创建、存储、调用直到释放期间的state变化与对象保留关系。">closure lifetime</Term>
+
+```csharp
+var actions = new List<Action>();
+for (int index = 0; index < 3; index++)
+{
+    int snapshot = index;
+    actions.Add(() => Console.WriteLine(snapshot));
+}
+```
+
+现代C# foreach iteration variable按iteration具有独立capture语义，但不要把它泛化到for或外部mutable variable。检查delegate被保存多久、谁修改captured state、是否跨线程以及是否需要unsubscribe。
+
+### 建议39：了解委托的实质
+
+delegate是包含method与可选target的typed callable object；multicast delegate还维护ordered invocation list。delegate value近似immutable，`+=`/`-=`产生新组合并重新赋值。instance method持有target，static method没有instance target；这解释了为什么subscription会延长subscriber lifetime。
+
+<Term def="multicast delegate按组合顺序保存的method-target entries；调用时依次执行，默认由异常中断后续entry。">invocation list</Term>
+
+```csharp
+Action handlers = First;
+handlers += Second;
+
+foreach (Action handler in handlers.GetInvocationList())
+{
+    try { handler(); }
+    catch (Exception exception) { Report(handler, exception); }
+}
+```
+
+是否逐个隔离异常属于publisher policy，不能随意吞掉。delegate equality/removal也依赖method-target pair，使用新lambda退订通常匹配不到原来的instance。
+
+### 建议40：使用event关键字为委托施加保护
+
+public delegate field允许外部覆盖整个invocation list或直接raise；event只允许外部`+=`/`-=`, invocation权保留给declaring type。custom add/remove accessor可转接或同步，但复杂accessor要保持subscription identity和exception semantics。
+
+<Term def="publisher拥有raise时机、payload与failure policy，subscriber拥有订阅和退订责任，双方共同管理引用生命周期的规则。">event ownership</Term>
+
+```csharp
+public event EventHandler<OrderPaidEventArgs>? OrderPaid;
+
+protected virtual void OnOrderPaid(OrderPaidEventArgs args)
+{
+    EventHandler<OrderPaidEventArgs>? handler = OrderPaid;
+    handler?.Invoke(this, args);
+}
+```
+
+local copy给出一次稳定delegate snapshot，但不把整个publisher state变成transactional。强publisher-短subscriber组合可能造成memory leak；可用explicit unsubscribe、subscription token、weak-event pattern或统一lifetime owner。
+
+### 建议41：实现标准的事件模型
+
+.NET标准event通常使用`EventHandler`或`EventHandler<TEventArgs>`，第一个参数是sender，第二个是EventArgs payload；publisher提供protected virtual `OnXxx`让derived type扩展raise behavior。payload应描述已经发生的事实，通常immutable；可取消operation则显式设计cancel contract，避免模糊双向mutation。
+
+```csharp
+public sealed class OrderPaidEventArgs : EventArgs
+{
+    public OrderPaidEventArgs(OrderId orderId, decimal amount)
+        => (OrderId, Amount) = (orderId, amount);
+
+    public OrderId OrderId { get; }
+    public decimal Amount { get; }
+}
+```
+
+同步event handler在publisher thread执行；UI/thread-affinity、slow I/O与handler exception都可能反向影响publisher。需要durability、retries或process boundary时，event不是message broker，应换outbox/queue等明确机制。
+
+<Stepper>
+  <Step title="切换FCL delegate、lambda、closure、multicast与event">
+    <CqcDelegateEventLab />
+  </Step>
+  <Step title="画出method、target、captured state与subscriber引用">
+    对每个callable标注谁持有谁、保存多久、在哪个thread调用，以及异常会不会阻断后续handler。
+  </Step>
+  <Step title="执行订阅生命周期测试">
+    验证subscribe/raise/unsubscribe、重复订阅、handler异常、publisher先释放与subscriber先释放，并观察对象能否被回收。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="用同样写法的lambda即可退订原lambda">
+每次lambda expression通常产生不同delegate instance；`source.Changed -= (_, e) => Handle(e)`不会移除先前匿名订阅。保存delegate/token或使用named handler，并按owner lifetime退订。
+</Callout>
+
+## Invariance、Covariance与Contravariance（建议42-45）
+
+### 建议42：使用泛型参数兼容泛型接口的不可变性
+
+mutable generic interface通常invariant：即使Dog继承Animal，`IList<Dog>`也不能当`IList<Animal>`，否则caller可插入Cat破坏原list。不要用cast绕过；让method自身成为generic并约束元素，或只请求实际需要的read-only producer contract。
+
+```csharp
+public static void PrintNames<TAnimal>(IEnumerable<TAnimal> animals)
+    where TAnimal : Animal
+{
+    foreach (TAnimal animal in animals)
+        Console.WriteLine(animal.Name);
+}
+```
+
+generic method保留具体T，同时允许body按base constraint使用共同能力。若需要写入，parameter应表达正确consumer direction，而不是把producer collection错误扩宽。
+
+### 建议43：让接口中的泛型参数支持协变
+
+type parameter只出现在output position时，可标为`out`：`IProducer<out T>`能让producer-of-Dog作为producer-of-Animal，因为caller只会读出Animal。property getter和return value是output；method input、setter或`ref`会破坏covariance。
+
+```csharp
+public interface IProducer<out T>
+{
+    T Next();
+}
+
+IProducer<Dog> dogs = GetDogProducer();
+IProducer<Animal> animals = dogs;
+```
+
+### 建议44：理解委托中的协变
+
+delegate method binding支持compatible return covariance：需要`Func<Animal>`的地方，可绑定返回Dog的方法，因为每个Dog都是Animal。FCL `Func<out TResult>`也利用generic covariance。参数方向相反，不能用“继承方向一样”作为记忆法，要检查caller提供和接收什么。
+
+```csharp
+static Dog CreateDog() => new Dog("Ada");
+Func<Animal> createAnimal = CreateDog;
+Animal animal = createAnimal();
+```
+
+### 建议45：为泛型类型参数指定逆变
+
+type parameter只被consume时可标为`in`。`IComparer<Animal>`能用于排序Dog，因为它承诺接受任意Animal，自然也能接受Dog；这就是contravariance。parameter不能作为return输出，也不能出现在不安全的invariant position。
+
+<Term def="generic type parameter在API中的producer output、consumer input或双向读写位置；位置决定out/in variance conversion是否安全。">variance position</Term>
+
+```csharp
+public interface IHandler<in T>
+{
+    void Handle(T message);
+}
+
+IHandler<Animal> animalHandler = new AuditAnimalHandler();
+IHandler<Dog> dogHandler = animalHandler;
+dogHandler.Handle(new Dog("Lin"));
+```
+
+variance只适用于reference type conversion，并受language/runtime规则限制。它改善assignment compatibility，不改变对象本身，也不应掩盖API同时produce/consume T的事实；双向接口保持invariant通常正确。
+
+<Stepper>
+  <Step title="切换invariance、interface covariance/contravariance与delegate variance">
+    <CqcVarianceFlowLab />
+  </Step>
+  <Step title="标出每个T的producer和consumer位置">
+    return/getter是output，parameter/setter是input；同一T两边都出现时默认invariant，不能强标out或in。
+  </Step>
+  <Step title="用Cat插入与Dog读取做反证">
+    对每个拟议conversion问：转换后caller能否写入错误subtype，或拿到不满足承诺的result；能则compile-time拒绝是正确的。
+  </Step>
+</Stepper>
+
+## 本章回顾：保留Type Information，也管理Lifetime
+
+1. generic的价值是保留type relationship；constraints只声明body真正需要的capability。
+2. per-T static按closed type隔离，default只是language initialization，不自动是domain value。
+3. delegate保存method/target，closure还保存captured storage；因此callable同时是type contract和lifetime object。
+4. event限制raise ownership，标准模型还必须定义payload、thread、exception和unsubscribe policy。
+5. covariance允许安全producer widening，contravariance允许consumer narrowing，双向mutable contract保持invariant。
+6. 14条建议的共同验收问题是：compiler证明了什么，runtime持有什么，谁能调用或修改什么。
+
+<Exercises>
+
+**问题 1：一个generic cache既要按T保存serializer metadata，又要统计全局hit count，static成员应放在哪里？**
+
+<Answer>serializer metadata有意随closed type变化，可保留在`SerializerCache<T>`的static field；global hit count必须放在non-generic owner，否则每个T各计一份。测试创建至少两个T，验证metadata不同而global count汇总。若T数量不受控，还要审计per-T cache的memory/AOT成本与eviction可行性。</Answer>
+
+**问题 2：事件订阅为何可能泄漏subscriber，怎样验证修复？**
+
+<Answer>publisher的event delegate invocation list持有instance handler target，因此长命publisher会让短命subscriber无法回收。由明确lifetime owner保存subscription并Dispose/unsubscribe，或使用token/weak pattern。测试以WeakReference创建subscriber、订阅、触发、退订、移除强引用并强制GC，确认回收；同时验证重复订阅和handler exception policy。</Answer>
+
+**问题 3：为什么`IEnumerable<Dog>`可转为`IEnumerable<Animal>`，`IComparer<Animal>`可转为`IComparer<Dog>`，而`IList<Dog>`不能转为`IList<Animal>`？**
+
+<Answer>IEnumerable只produce T，Dog输出满足Animal承诺，因此out covariance安全；IComparer只consume T，能处理任意Animal的comparer当然能处理Dog，因此in contravariance安全。IList同时读写T，若扩宽成IList of Animal，caller可插入Cat破坏Dog list，所以必须invariant。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="generic type identity" definition="generic definition与具体arguments形成closed type后具有的独立runtime identity、static state和contract。" />
+  <GlossaryItem term="closure lifetime" definition="captured storage从lambda创建到释放期间的state变化、跨线程访问和object retention关系。" />
+  <GlossaryItem term="invocation list" definition="multicast delegate按顺序保存的method-target entries以及默认异常中断语义。" />
+  <GlossaryItem term="event ownership" definition="publisher控制raise，subscriber管理订阅生命周期，双方明确payload和failure policy的规则。" />
+  <GlossaryItem term="variance position" definition="T出现在producer output、consumer input或双向位置，决定out/in conversion是否安全。" />
+</Glossary>
+
+<Attribution adaptedFrom="编写高质量代码：改善C#程序的157个建议，第3章 泛型、委托和事件，建议32-45" adaptedUrl="https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html" />

@@ -1,0 +1,268 @@
+---
+title: "附录 A ES2018和ES2019"
+type: A
+section: "JavaScript高级程序设计（第4版） · 附录"
+order: 29
+description: "ES2018与ES2019的对象扩展、异步迭代、正则增强和可选catch绑定需要以目标运行时与转译边界验证。"
+demo: true
+math: false
+sourceUrl: "https://uat.store.wiley.com/en-us/professional-javascript-for-web-developers-4th-edition-p-9781119366577"
+draft: false
+---
+
+import {
+  JpgAppendixAEs2018Es2019MapLab,
+  JpgAppendixAEs2018Es2019ExperimentLab,
+  JpgAppendixAEs2018Es2019EvidenceLab,
+} from "@/components/mdx/javascript-pro-guide/diagrams/jpg-appendix-a-es2018-es2019";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释附录 A ES2018和ES2019的核心机制，并把它放回28章与4个附录的主线
+- 能比较正常、边界、失败和恢复样本，指出首个执行或状态偏离点
+- 能实现最小JavaScript实验，记录浏览器版本、输入、任务顺序与资源所有权
+- 能设计证据回答“每项新特性同时验证解析与运行时；polyfill按目标最小化；异步迭代提前退出能清理来源。”是否成立
+
+</Objectives>
+
+## 直觉：先画执行与所有权
+
+ES2018与ES2019的对象扩展、异步迭代、正则增强和可选catch绑定需要以目标运行时与转译边界验证。 真正的难点不是让一次示例得到预期输出，而是让绑定、对象、任务、权限和资源在异常、取消、重复与版本切换后仍可解释。先预测：若只保存最终截图，最可能隐藏哪一种陈旧状态？
+
+<JpgAppendixAEs2018Es2019MapLab />
+
+## 权威目录定位
+
+本页依据 Wiley 第4版官方31页目录样章与中文版公开完整目录锁定范围。目录名称用于一对一追踪，正文为独立教学重构；新浏览器差异、安全与可观察性补充会明确披露：
+
+- A.1 异步迭代
+- A.1.1 创建并使用异步迭代器
+- A.1.2 理解异步迭代器队列
+- A.1.3 处理异步迭代器的reject()
+- A.1.4 使用next()手动异步迭代
+- A.1.5 顶级异步循环
+- A.1.6 实现可观察对象
+- A.2 对象字面量的剩余操作符和扩展操作符
+- A.2.1 剩余操作符
+- A.2.2 扩展操作符
+- A.3 Promise.prototype.finally()
+- A.4 正则表达式相关特性
+- A.4.1 dotAll标志
+- A.4.2 向后查找断言
+- A.4.3 命名捕获组
+- A.4.4 Unicode属性转义
+- A.5 数组打平方法
+- A.5.1 Array.prototype.flatten()
+- A.5.2 Array.prototype.flatMap()
+- A.6 Object.fromEntries()
+- A.7 字符串修理方法
+- A.8 Symbol.prototype.description
+- A.9 可选的catch绑定
+- A.10 其他新增内容
+
+本页逐项覆盖 **24** 个公开目录条目，并纳入正常、边界、失败和恢复验收。
+
+## 核心概念与所有权
+
+<Term def="在对象解构中把未单独提取的自有可枚举属性收集到新对象。">
+  对象剩余属性
+</Term>
+、
+<Term def="next返回Promise并可由for-await-of顺序消费的迭代协议。">
+  异步迭代
+</Term>
+、
+<Term def="无论Promise成功或失败都执行清理、并保持原结果语义的方法。">
+  Promise.finally
+</Term>
+、
+<Term def="根据当前位置之前文本是否匹配模式进行判断而不消费字符的正则能力。">
+  正则后行断言
+</Term>
+、
+<Term def="把键值可迭代序列构造为普通对象的静态方法。">Object.fromEntries</Term>
+。每个概念都要回答：谁创建输入，状态保存在哪里，哪个任务或版本可修改它，结束后由谁清理。
+
+|   # | 概念               | 工程含义                                                         |
+| --: | ------------------ | ---------------------------------------------------------------- |
+|   1 | 对象剩余属性       | 在对象解构中把未单独提取的自有可枚举属性收集到新对象。           |
+|   2 | 异步迭代           | next返回Promise并可由for-await-of顺序消费的迭代协议。            |
+|   3 | Promise.finally    | 无论Promise成功或失败都执行清理、并保持原结果语义的方法。        |
+|   4 | 正则后行断言       | 根据当前位置之前文本是否匹配模式进行判断而不消费字符的正则能力。 |
+|   5 | Object.fromEntries | 把键值可迭代序列构造为普通对象的静态方法。                       |
+
+## 机制拆解
+
+### 1. 语法支持与API支持分开
+
+转译器可以改写对象剩余语法，却不能自动提供Promise.finally等运行时API。目标浏览器矩阵要分别驱动语法转换和按需polyfill，避免全量注入。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+### 2. 异步迭代有顺序背压
+
+for-await-of等待每次next结果再继续，适合流式来源并自然形成背压。提前break应调用异步迭代器return做清理；若任务可独立并发，则不应误用顺序循环。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+### 3. 新正则能力要测试引擎差异
+
+命名捕获、dotAll、Unicode属性和后行断言提高表达力，但旧引擎解析阶段就可能失败。构建工具需按目标转换或拆分，不能靠运行时if包住无法解析的语法。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+## 六阶段证据链
+
+可操作链条是：识别规范年份 → 确认运行时支持 → 选择原生或转译 → 编写边界样本 → 验证包体与语义 → 记录降级基线。正常样本证明能力，边界样本证明预算，失败样本证明拒绝，恢复样本证明任务、状态和资源重新收敛。
+
+<Stepper>
+  <Step title="1. 识别规范年份与确认运行时支持">
+    固定浏览器版本、输入、初始DOM与时钟，运行正常和边界样本。
+    <JpgAppendixAEs2018Es2019MapLab />
+  </Step>
+  <Step title="2. 选择原生或转译与编写边界样本">
+    注入异常、取消、重复事件、权限拒绝或旧缓存，要求在首偏离点停止。
+    <JpgAppendixAEs2018Es2019ExperimentLab />
+  </Step>
+  <Step title="3. 验证包体与语义与记录降级基线">
+    清除故障后重放相同输入，核对输出、任务队列、DOM摘要、监听器与资源数量。
+    <JpgAppendixAEs2018Es2019EvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小可运行实验
+
+以下代码用于独立观察本页机制；生产实现还需加入输入验证、兼容策略、权限、取消与清理。
+
+```js
+async function* pages() {
+  yield await Promise.resolve([1, 2]);
+  yield [3];
+}
+for await (const page of pages()) console.log(...page);
+```
+
+证据记录把目录、运行时与状态摘要放在一起：
+
+```yaml
+book: JavaScript高级程序设计（第4版）
+page: jpg-appendix-a-es2018-es2019
+official_entries: 24
+sample: normal | boundary | failure | recovery
+browser_version: fixed
+input_fixture: fixed
+first_divergence: null
+cleanup_complete: true
+```
+
+故障脚本一次只改变一个变量：
+
+```text
+baseline -> inject(exception | cancel | duplicate | denied | stale-cache)
+observe -> stop_at_first_divergence
+recover -> replay_same_runtime_and_input
+assert -> one_state_owner && stable_output && no_stale_task && no_resource_leak
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：只配置Babel语法转换，忘记运行时内置API缺失。**
+  必须保存输入、任务顺序、状态摘要与首次拒绝原因，而不是只看最终页面。
+</Callout>
+
+<Callout type="trap">
+  **误区二：把无法解析的新正则字面量放在能力检测分支里，旧引擎加载即报错。**
+  必须加入边界、失败与恢复样本，证明错误没有跨入下一阶段。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 输入与环境变化                   | 预期状态       | 通过条件                     |
+| ---- | -------------------------------- | -------------- | ---------------------------- |
+| 正常 | 合法输入、权限、顺序与版本       | 六阶段完成     | 输出和状态摘要一致           |
+| 边界 | 空值、极限容量、重复事件或慢任务 | 达到预算不越界 | 主线程与内存有界             |
+| 失败 | 异常、取消、拒权、断网或旧产物   | 首偏离点停止   | 明确传播、回滚或降级         |
+| 恢复 | 修复后重放同一输入               | 收敛到正常轨迹 | 无陈旧任务、监听器和资源泄漏 |
+
+<JpgAppendixAEs2018Es2019EvidenceLab />
+
+本页签发不变量是：**每项新特性同时验证解析与运行时；polyfill按目标最小化；异步迭代提前退出能清理来源。** 单次成功、平均耗时或最终截图不能替代运行时版本、执行轨迹、首偏离点与清理证据。
+
+## 练习
+
+<Exercises>
+
+**问题 1** 为什么不能只以最终页面结果正确作为验收？
+
+<Answer>
+  最终结果会隐藏重复副作用、旧任务覆盖、错误吞没和资源泄漏。必须比较输入、执行顺序、状态所有者、首偏离点与清理结果。
+</Answer>
+
+**问题 2** 如何把本页公开目录变成可执行学习证据？
+
+<Answer>
+  按公开顺序建立追踪表，为每组条目写出输入、状态、输出、失败与恢复条件。本页重点包括：A.1
+  异步迭代、A.1.1 创建并使用异步迭代器、A.1.2 理解异步迭代器队列、A.1.3
+  处理异步迭代器的reject()、A.1.4 使用next()手动异步迭代、A.1.5
+  顶级异步循环、A.1.6 实现可观察对象、A.2
+  对象字面量的剩余操作符和扩展操作符；其余条目已在上方逐项列出。
+</Answer>
+
+**问题 3** 本页的最小通过条件是什么？
+
+<Answer>
+  每项新特性同时验证解析与运行时；polyfill按目标最小化；异步迭代提前退出能清理来源。
+  并且相同浏览器版本、输入与初始状态可以重放正常、边界、失败和恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **对象剩余属性**：在对象解构中把未单独提取的自有可枚举属性收集到新对象。
+- **异步迭代**：next返回Promise并可由for-await-of顺序消费的迭代协议。
+- **Promise.finally**：无论Promise成功或失败都执行清理、并保持原结果语义的方法。
+- **正则后行断言**：根据当前位置之前文本是否匹配模式进行判断而不消费字符的正则能力。
+- **Object.fromEntries**：把键值可迭代序列构造为普通对象的静态方法。
+- 六阶段机制链已经映射到正常、边界、失败与恢复证据。
+- 官方目录逐项追踪，现代补充不会冒充原书正式分节。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="对象剩余属性">
+    在对象解构中把未单独提取的自有可枚举属性收集到新对象。
+  </GlossaryItem>
+  <GlossaryItem term="异步迭代">
+    next返回Promise并可由for-await-of顺序消费的迭代协议。
+  </GlossaryItem>
+  <GlossaryItem term="Promise.finally">
+    无论Promise成功或失败都执行清理、并保持原结果语义的方法。
+  </GlossaryItem>
+  <GlossaryItem term="正则后行断言">
+    根据当前位置之前文本是否匹配模式进行判断而不消费字符的正则能力。
+  </GlossaryItem>
+  <GlossaryItem term="Object.fromEntries">
+    把键值可迭代序列构造为普通对象的静态方法。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Matt Frisbie 著，李松峰译，人民邮电出版社，2020年9月，866页，ISBN 9787115545381；英文原版 Professional JavaScript for Web Developers, 4th Edition，Wiley，2019年10月，1200页，印刷版 ISBN 9781119366447、电子版 ISBN 9781119366577。Wiley官方31页目录样章与中文版公开目录确认28章、4个附录和757个二三级目录条目。正文为独立教学重构。"
+  adaptedUrl="https://uat.store.wiley.com/en-us/professional-javascript-for-web-developers-4th-edition-p-9781119366577"
+/>

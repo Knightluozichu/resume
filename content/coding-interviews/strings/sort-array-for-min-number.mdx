@@ -1,102 +1,319 @@
 ---
-title: 拼接数组形成最小数字
+title: "面试题45：把数组排成最小的数"
 type: C
-section: 字符串
-order: 2
-description: 根据 xy 与 yx 的比较规则排序字符串以拼出最小值。
+section: "第5章 优化时间和空间效率"
+order: 49
+description: "把正整数转为十进制字符串，以mn和nm的字典序定义比较器，排序后直接拼接，并区分作者算法、输出语义与原始内存实现缺陷。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/45_SortArrayForMinNumber/SortArrayForMinNumber.cpp"
 draft: false
 ---
 
-{/* 知识点清单：自定义排序比较器、字符串拼接、去除前导零；原书章节：面试题45。 */}
+import { MinNumberComparatorLab, MinNumberSortDiagram, MinNumberExchangeProofDiagram, MinNumberMemoryContractDiagram, SortArrayMinNumberOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/sort-array-for-min-number";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能解释为什么不是按数值大小比较，而是按 `a+b` 与 `b+a` 比较。
-- 能证明排序比较关系定义能得到全局最小拼接结果。
-- 能实现 C++ 与 TypeScript 版本并处理 `0` 情况。
+- 能解释单个整数大小为何不能决定拼接后的先后顺序
+- 能计算3、32、321及323、32123的两种拼接比较
+- 能实现满足严格弱序的字符串比较器和安全拼接接口
+- 能分析相邻交换证明、等价元素、前导零与负数边界
+- 能设计覆盖作者六组用例并自动比较完整输出的测试
 
 </Objectives>
 
-## 直觉引入
+## 从“32为什么应排在3前面”开始
 
-如果单看单个数字大小会犯错：比如 `3` 与 `30`。
-要让局部最优满足全局，需要比较拼接字符串：`30+3`（303）和 `3+30`（330），谁小谁该在前。
+先预测：单独看数值，3小于32；但若3在前得到332，32在前得到323，后者更小。目标不是让每个元素自身升序，而是让整个拼接字符串的高位尽可能小。
 
-## 算法思路
+题目“**把数组排成最小的数**”不能先把拼接结果转成普通整数，因为总位数可能远超机器范围。作者选择<Term def="对两个十进制字符串m和n，比较拼接mn与nm，较小拼接对应的元素排在前面。">拼接比较</Term>，也就是“**比较mn与nm**”，再用这个**自定义排序规则**排列全部字符串。
 
-1. 把每个整数转成字符串。
-2. 排序比较器返回 `(a+b) < (b+a)`。
-3. 按排序结果拼接。
-4. 去掉空字符串或全 `0` 的情况。
+<MinNumberComparatorLab />
 
-<StringFunctionTableDiagram />
+## 作者比较器的准确语义
 
-## 思考引导
+`qsort`要求比较器返回负、零、正。作者把两个字符串分别拼进全局缓冲区，调用 `strcmp`：若mn字典序小于nm，m在n前；若相等，二者顺序任意；若更大，n应在前。
 
-### 1) 先问问题，不先默认数值排序
-拼出最小数字要回答的是“比较两个元素拼接后的先后关系”，不是它们原始大小。
-
-### 2) 识别不变式
-排序器必须满足比较规则：x 在 y 前当且仅当 xy < yx。该规则定义了全局的可比关系。
-
-### 3) 为什么它一定成立
-若排序依据改成拼接序列最小化，局部顺序交换原则可延展到全局（可通过排序稳定性与传递性实现）。
-
-### 4) 常见误区
-错误地先转数值排序会引入前导零和大数比较误差。边界（全零）也要单独处理。
-
-### 5) 你能找到一个反例吗
-[3,30,34,5,9] 排序后是 30334...，若按数值排序会错。这个经典组合可反证比较器。
-
-### 6) 迁移到下一题
-版本号、路径码、标签串排序都可复用“比较器定义业务关系”思想，排序规则先于实现。
-## 代码对照
-
-<CodeTabs>
-  <Tab label="C++">
 ```cpp
-#include <string>
-#include <vector>
-#include <algorithm>
+const int g_MaxNumberLength = 10;
 
-class Solution {
-public:
-    std::string minNumber(std::vector<int> nums) {
-        std::vector<std::string> arr;
-        for (int x : nums) arr.push_back(std::to_string(x));
+char* g_StrCombine1 =
+    new char[g_MaxNumberLength * 2 + 1];
+char* g_StrCombine2 =
+    new char[g_MaxNumberLength * 2 + 1];
 
-        std::sort(arr.begin(), arr.end(), [](const std::string& a, const std::string& b) {
-            return a + b < b + a;
-        });
+int compare(
+    const void* strNumber1,
+    const void* strNumber2) {
+    std::strcpy(
+        g_StrCombine1,
+        *(const char**)strNumber1);
+    std::strcat(
+        g_StrCombine1,
+        *(const char**)strNumber2);
 
-        std::string ans;
-        for (auto& s : arr) ans += s;
-        if (!ans.empty() && ans[0] == '0') {
-            return "0";
-        }
-        return ans;
-    }
-};
-```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-function minNumber(nums: number[]): string {
-    const arr = nums.map((x) => String(x));
+    std::strcpy(
+        g_StrCombine2,
+        *(const char**)strNumber2);
+    std::strcat(
+        g_StrCombine2,
+        *(const char**)strNumber1);
 
-    arr.sort((a, b) => (a + b).localeCompare(b + a));
-
-    const ans = arr.join('');
-    return ans[0] === '0' ? '0' : ans;
+    return std::strcmp(
+        g_StrCombine1,
+        g_StrCombine2);
 }
 ```
-  </Tab>
-</CodeTabs>
+
+十进制字符串没有前导负号时，等长拼接mn与nm的字典序和数值序一致，因此**大数用字符串拼接**既避免溢出，又保留“哪个整体更小”的判断。不能比较m与n自身的字典序，3与32就是反例。
+
+<MinNumberSortDiagram />
+
+Test2的321与32比较：32132小于32321，所以321在前；32与3比较：323小于332，所以32在前；最终顺序321、32、3，输出321323。
+
+## 为什么局部比较能得到全局最小
+
+考虑某个排列中相邻的m、n，前面公共前缀为P，后面公共后缀为S。两个排列只在mn与nm这段不同。若mn大于nm，交换相邻两项会使整个字符串从首次差异处变小；P和S都不能改变这个比较结果。
+
+这样的相邻对称为<Term def="当前相邻顺序使mn大于nm，交换为n、m会让整体拼接严格变小。">相邻逆序</Term>。不断交换逆序对，结果严格下降，直到没有逆序；排序算法正是在构造这个状态。
+
+<MinNumberExchangeProofDiagram />
+
+还需保证比较关系可传递。关系mn小于nm等价于比较两个字符串无限重复后的字典序，例如m、m、m不断重复与n、n、n不断重复；普通字典序可传递，所以它形成可排序的全预序。mn等于nm时，m和n属于<Term def="两元素互换后mn与nm完全相同，因此在最终拼接中次序不影响结果的一组元素。">等价类</Term>。
+
+Test4的1、11、111两两拼接都是连续的1，任何排序顺序输出都为111111。排序无需稳定才能保证最终字符串，只需比较器把相等返回0或false。
+
+## 为什么普通字典序足够
+
+mn与nm都由同一对字符串组成，总长度必然相等。对只含0到9的等长十进制串，数值大小由第一个不同字符决定，恰与ASCII字典序一致；前导零也不会破坏这个结论。因此比较器无需把拼接结果解析成大整数。
+
+这个论证依赖“非负十进制数字串”和“两个候选等长”。若字符集包含负号、小数点或地区数字，字典序与数值序可能分离；若比较对象不是mn和nm而是不同总长度文本，也不能直接搬用。作者的正整数输入域正好满足全部前提。
+
+字符串比较在首个差异处即可停止，不必真的完成数值运算。临时拼接版实现简单，无分配版只是在同一等长字符序列上按循环索引读取，二者判断结果必须完全一致。
+
+## 作者PrintMinNumber的内存实现
+
+作者为每个int分配11字节字符串，sprintf十进制文本，qsort指针数组，依次printf，最后释放。算法主线正确，但指针数组的分配写成了：
+
+```cpp
+void PrintMinNumber(
+    const int* numbers, int length) {
+    if (numbers == nullptr || length <= 0) {
+        return;
+    }
+
+    char** strNumbers =
+        (char**)(new int[length]);
+
+    for (int i = 0; i < length; ++i) {
+        strNumbers[i] =
+            new char[g_MaxNumberLength + 1];
+        std::sprintf(
+            strNumbers[i], "%d", numbers[i]);
+    }
+
+    std::qsort(
+        strNumbers,
+        length,
+        sizeof(char*),
+        compare);
+
+    for (int i = 0; i < length; ++i) {
+        std::printf("%s", strNumbers[i]);
+    }
+    std::printf("\n");
+
+    for (int i = 0; i < length; ++i) {
+        delete[] strNumbers[i];
+    }
+    delete[] strNumbers;
+}
+```
+
+`new int[length]`分配的是int槽，却强转为char指针槽。32位平台上两者常同为4字节，仍存在分配类型与删除类型不匹配；64位平台char指针通常8字节，写入length个指针会越过仅4乘length字节的区域。这是未定义行为，不应照抄。
+
+正确的原始指针写法至少应是 `new char*[length]`，但现代C++直接使用`vector<string>`能同时消除手工释放、异常中途泄漏和错误元素大小。
+
+<MinNumberMemoryContractDiagram />
+
+全局拼接缓冲也让比较器不可重入、非线程安全。并发排序会互相覆盖g_StrCombine；即使单线程，比较器依赖共享可变状态也增加审计难度。局部string临时值更安全，性能敏感时可写无分配的循环比较器。
+
+<Callout type="trap" title="把错误指针数组分配当成无关样式问题">
+在64位环境中，int数组通常只有指针数组一半字节，第二批指针写入就可能破坏堆内存。算法结果正确不能抵消内存模型错误。
+</Callout>
+
+## 现代安全实现与输出契约
+
+公开输入限定为非负整数。负数包含减号，“拼接后形成一个整数”的数学语义不明确，而且作者10字符缓冲无法容纳INT_MIN的11个可见字符与终止符。安全接口遇负数返回nullopt。
+
+```cpp
+#include <algorithm>
+#include <optional>
+#include <string>
+#include <vector>
+
+std::optional<std::string> minNumber(
+    const std::vector<int>& numbers) {
+    if (numbers.empty()) {
+        return std::nullopt;
+    }
+
+    std::vector<std::string> parts;
+    parts.reserve(numbers.size());
+    std::size_t totalLength = 0;
+
+    for (int number : numbers) {
+        if (number < 0) {
+            return std::nullopt;
+        }
+        parts.push_back(
+            std::to_string(number));
+        totalLength += parts.back().size();
+    }
+
+    std::sort(
+        parts.begin(),
+        parts.end(),
+        [](const std::string& left,
+           const std::string& right) {
+            return left + right <
+                   right + left;
+        });
+
+    std::string result;
+    result.reserve(totalLength);
+    for (const auto& part : parts) {
+        result += part;
+    }
+    return result;
+}
+```
+
+这个<Term def="输入有效性、是否保留前导零、空输入结果以及返回字符串内容的公开约定。">输出契约</Term>保留作者的所有拼接字符。输入0、1时比较01与10，输出应为01；不能因为首字符0就把整个结果压成0，否则数字1凭空消失。只有业务另行规定“按数值显示并去除前导零”时才能规范化，而且应保留至少一个0。
+
+旧页的 `ans[0] == '0' ? "0" : ans` 来自其他“最大数”题的全零处理，移植到本题会错误处理混合零。作者源码直接printf每个排序字符串，不做规范化。
+
+<Callout type="trap" title="看到首字符0就返回单个0">
+[0,1]的最小拼接是01；返回0会丢元素并改变题意。只有所有部分均为0，压缩成0才与数值显示等价，但仍不是作者原样输出。
+</Callout>
+
+## 复杂度与无分配比较
+
+设n个数字、平均十进制长度d。字符串转换与最终拼接O(nd)；排序进行O(n log n)次比较，每次构造mn与nm需要O(d)时间和临时空间，所以总时间O(nd log n)，持久存储O(nd)。
+
+可在比较器中按索引遍历总长度left.size加right.size，第i个字符从left后转到right，另一边从right后转到left；遇首个不同字符返回。这样仍是O(d)比较，但不创建两个临时string。只有性能分析证明分配是热点时才值得增加这段复杂性。
+
+最终结果长度是所有输入位数之和，返回string本身就是不可避免的O(nd)空间。作者选择<Term def="以十进制文本保存和比较超出内置整数范围的拼接结果。">字符串大数</Term>而非整数，正是因为这个结果可能远大于任何内置数值类型。
+
+若输入数百万项，排序比较会反复访问变长字符串。可缓存十进制文本、使用并行排序前验证比较器无共享状态，并确保排序库的并行策略符合确定性要求；等价类内部顺序虽可变化，最终字符仍相同。
+
+## 作者六组测试的真实覆盖
+
+Test打印expected和actual，没有memcmp、strcmp或Passed判断，因此输出错误不会自动失败：
+
+1. 3、5、1、4、2，期望12345。
+2. 3、32、321，期望321323。
+3. 3、323、32123，期望321233233。
+4. 1、11、111，期望111111。
+5. 单元素321，期望321。
+6. `nullptr, 0`，期望不打印数字。
+
+<SortArrayMinNumberOfficialCaseLab />
+
+Test3覆盖长短前缀交叉：32123应在323和3之前。Test4覆盖比较相等；Test6只观察PrintMinNumber提前return，外层Test仍会打印标签和换行。
+
+源码没有0、重复非等价元素、负数、int最大值、INT_MIN、自动断言或并发比较器测试。现代测试应直接比较返回string，避免捕获stdout时混入测试标签。
+
+```cpp
+#include <cassert>
+#include <string>
+#include <vector>
+
+void testMinNumber() {
+    assert(minNumber({3,5,1,4,2}).value()
+           == "12345");
+    assert(minNumber({3,32,321}).value()
+           == "321323");
+    assert(minNumber({3,323,32123}).value()
+           == "321233233");
+    assert(minNumber({1,11,111}).value()
+           == "111111");
+    assert(minNumber({321}).value()
+           == "321");
+    assert(minNumber({0,1}).value()
+           == "01");
+    assert(minNumber({0,0}).value()
+           == "00");
+    assert(!minNumber({}).has_value());
+    assert(!minNumber({-1,2}).has_value());
+}
+```
+
+短随机数组可枚举所有排列，拼接后取字典序最小值，与排序结果对拍。枚举是独立算法，但阶乘增长，只适合元素数不超过8左右；重复元素可先排序后用next_permutation减少重复排列。
+
+## 比较器扩展的边界
+
+若输入已是带前导零的字符串，字符串00与0满足拼接相等，等价类仍有效；但输出是否保留原始宽度应由契约决定。若字符串含非数字字符，字典序最小不再等于数值最小。
+
+负数不能靠把减号也交给比较器解决：例如-3与2拼成-32或2-3，后者甚至不是合法整数。必须先定义符号、括号与整体数值解析，通常应直接拒绝。
+
+若目标改成最大拼接数，只需反转mn与nm比较方向，但全零规范化才常见；不要把最大数题的显示政策带回最小数题。若目标是固定长度编码，还要考虑前导零是否有效位。
+
+比较器若加入localeCompare、大小写折叠或自然排序，会改变严格弱序和题目语义。十进制ASCII字符直接用普通字典序即可，不需要地区规则。
+
+<Stepper>
+  <Step title="对每一对只比较两种拼接"><MinNumberComparatorLab />mn小于nm时m在前，相等时顺序不影响结果。</Step>
+  <Step title="按自定义规则排序全部字符串"><MinNumberSortDiagram />3、32、321得到321、32、3和321323。</Step>
+  <Step title="用相邻交换证明全局最小"><MinNumberExchangeProofDiagram />任何mn大于nm的逆序交换都会让整体变小。</Step>
+  <Step title="修正内存与输出契约"><MinNumberMemoryContractDiagram />指针槽、全局缓冲、前导零和打印测试都需明确处理。</Step>
+  <Step title="跑完六组作者输入并自动断言"><SortArrayMinNumberOfficialCaseLab />覆盖前缀、等价、单元素和空输入，再补零与负数。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 元素自身大小不能决定拼接顺序，必须比较mn与nm。
+2. 关系mn小于nm时m在前，排序后直接拼接得到最小结果。
+3. 相邻逆序交换让整体严格变小，支撑全局最优证明。
+4. mn等于nm的元素可任意排序，最终子串相同。
+5. 字符串比较避免把超长拼接结果塞进内置整数。
+6. 作者new int数组强转char指针数组在64位下会越界并触发未定义行为。
+7. 作者保留前导零；混合零结果不能擅自压成单个0。
+8. 官方六组只打印，现代测试应返回string并自动断言。
+
+<Exercises>
+
+**问题 1：3与32为什么按32、3排列？**
+
+<Answer>拼接332与323，323字典序和数值都更小，因此32应在3前。比较单个数值3小于32会得到错误顺序。</Answer>
+
+**问题 2：相邻逆序交换为何不受前后其他元素影响？**
+
+<Answer>两个完整结果有相同前缀P和后缀S，首次可能差异只在mn与nm；若nm更小，P加nm加S也必然更小，所以可局部交换。</Answer>
+
+**问题 3：1、11、111为何无需稳定排序？**
+
+<Answer>任意两项前后拼接都是相同数量的连续1，交换不会改变整体字符。它们属于比较等价类，内部顺序任意仍输出111111。</Answer>
+
+**问题 4：为什么new int[length]强转char**在64位危险？**
+
+<Answer>通常每个int只有4字节、每个指针8字节，分配区只能容纳一半数量的指针；写入后续strNumbers元素会越界，delete[]类型也与实际分配不匹配。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="拼接比较">通过mn与nm的字典序决定m和n先后关系。</GlossaryItem>
+  <GlossaryItem term="相邻逆序">交换后能让整体拼接严格变小的一对相邻元素。</GlossaryItem>
+  <GlossaryItem term="等价类">两种拼接相同、互换不改变最终结果的一组字符串。</GlossaryItem>
+  <GlossaryItem term="输出契约">输入范围、空输入、前导零和返回内容的公开语义。</GlossaryItem>
+  <GlossaryItem term="字符串大数">以十进制文本保存和比较超出内置整数范围的拼接结果。</GlossaryItem>
+</Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题45"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/45_SortArrayForMinNumber/SortArrayForMinNumber.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

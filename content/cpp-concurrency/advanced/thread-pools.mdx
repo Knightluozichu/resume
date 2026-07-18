@@ -6,9 +6,11 @@ order: 2
 description: 读完能用一个固定工作线程队 + 线程安全任务队列实现最简线程池，能用 packaged_task 让 submit 返回 future 取回任务结果（或异常），能解释工作窃取（每线程一条本地双端队列、空了去同事队尾偷）如何在减少争用的同时均衡负载，并知道线程为什么要「协作式中断」（置标志 + 中断点自查）而不是强杀。
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://livebook.manning.com/book/c-plus-plus-concurrency-in-action-second-edition/chapter-9"
 draft: false
 ---
+
+import { ThreadPoolLifecycleMap } from "@/components/mdx/cpp-concurrency/diagrams/thread-pools";
 
 {/* C 实战型第十章（HEL-238，《C++ 并发编程实战》第2版 §9 改编重写，高级并发与工程篇第 2 章）：本章把前面所有零件（线程 / future / packaged_task / 线程安全队列）组装成「线程池」这个工程主力组件。重心是代码对照（type C §6 ≥80% 关键码，每块带 #include 实测 clang++ -std=c++17 -fsyntax-only 通过）+ ThreadPool「固定工人循环取任务」动画（§5 主 Demo）。math:false。沿用「餐厅后厨」隐喻：线程池=雇一队固定帮厨待命，活儿进单子筐（任务队列），谁空了抓一张做、做完再抓（线程复用，省去频繁建销）；工作窃取=自己筐空了去隔壁忙不过来的同事筐尾巴偷一张干；协作式中断=给帮厨发「下班」信号，他干到段落点（中断点）抬头看见信号才收工，不是强杀。承接 ch4（future/packaged_task）、ch7（线程安全队列）。draft:true 待总监 review。 */}
 
@@ -18,15 +20,15 @@ draft: false
 
 <Objectives>
 
-- 能**实现一个最简线程池**：固定 N 个工作线程围着一个线程安全任务队列循环「取任务 → 执行 → 再取」，并能用 `packaged_task` 让 `submit` 返回一张 `future` 去取任务结果（或异常）
-- 能**解释工作窃取**：每个工作线程为什么各带一条本地双端队列（减少对单一全局队列的争用），自己空了又为什么去别人**队尾**偷而不是抢本端——并能说出它如何均衡负载
+- 能实现具备接受、排空、拒绝新提交和 join 协议的 C++17 线程池，并让每个已接受任务的 future 以值或异常结束
+- 能分析池内任务依赖导致的耗尽死锁，并比较全局队列、本地队列与工作窃取的争用和局部性
 - 能回答：为什么要给线程做「协作式中断」（置标志 + 线程到中断点自查），而不是直接「强杀」一个正在跑的线程？强杀会出什么问题？
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；类比固定用「餐厅后厨」，与前几章一致。 */}
 
-## 别每来一道菜就雇一个厨师
+## 从“任务被接受后谁负责到底”开始
 
 前几章你学会了喊一个帮厨（起一个线程）、给他派活、等他把菜端回来。可真到了饭点，订单一张接一张涌进来——你总不能每来一道菜就现雇一个厨师，做完一道就把他辞退吧？招人、培训、结算、送走，这套手续本身就比炒一盘菜还慢。
 
@@ -38,7 +40,19 @@ draft: false
 
 ## 为什么要线程池：固定一队工人，循环复用
 
-把「常备帮厨队」翻译成代码，就是 <Term def="预先创建并固定持有一组工作线程（数量通常按 CPU 核数定），它们围着一个共享的任务队列循环：取出任务、执行、再取下一个。任务来了只是入队，由空闲的工作线程取走执行，而不是为每个任务新建一个线程。这样把线程「复用」起来，省去频繁创建/销毁线程的巨大开销。">线程池（thread pool）</Term>。它预先创建并固定持有一组 <Term def="线程池里那些预先创建好、长期存活的线程。每个工作线程跑同一段循环：从任务队列取一个任务、执行它、再回头取下一个；没活时就阻塞等待（不空转占 CPU）。它们被反复复用，不随任务来去而创建销毁。">工作线程（worker thread）</Term>，让它们围着一个 <Term def="线程池里存放待执行任务的共享队列。提交任务就是把任务入队，工作线程从队列取出执行。因为多个线程会并发地入队/出队，它必须是线程安全的（用 ch7 那种带锁或条件变量的队列）。">任务队列（task queue）</Term> 循环转。
+<Term def="长期持有一组工作线程，由调度队列把多个任务映射到这些线程。线程预算由 CPU、阻塞比例、任务粒度和共存负载共同决定；池还必须定义提交、关闭、取消和结果完成协议。">
+  线程池（thread pool）
+</Term>
+复用一组
+<Term def="线程池长期持有并反复执行任务的线程。空闲时应阻塞等待；退出前要完成或取消已接受任务，并由池所有者 join。">
+  工作线程（worker thread）
+</Term>
+。任务进入
+<Term def="保存已接受但尚未开始执行任务的调度结构。它必须线程安全、有明确容量与关闭语义，并保证排空或取消时每个关联结果都能终结。">
+  任务队列（task queue）
+</Term>
+，由空闲 worker 取走；线程数不是直接等于 CPU
+核数，而是从硬件提示和负载测量得到预算。
 
 为什么值得这么做？因为创建和销毁线程都不便宜——要向操作系统申请栈空间、注册内核线程、调度上下文……单看一次不起眼，可在「每个任务一个线程」的高频场景里，这笔开销会盖过任务本身。线程池把固定那几个线程**复用**起来：任务来了只是排进队列，由现成的空闲工人取走，谁也不用新建。下面这张主 Demo 把「提交任务 → 入队 → 空闲工人取走执行 → 做完再取」一拍一拍演给你看：
 
@@ -48,11 +62,21 @@ draft: false
 
 看清楚了：四个任务 T1~T4 进队列排队，三个固定工人 worker0/1/2 谁空了就抓一张做，worker0 做完 T1 后**还是它自己**接着抓 T3——不新建第四个线程。这就是「复用」：无论来多少任务，活跃线程数始终是那固定几个。
 
+<ThreadPoolLifecycleMap />
+
+线程池不能只定义“怎么跑”，还要定义“怎么停”。本章采用 drain 语义：关闭开始后拒绝新 submit，已入队任务继续执行；队列排空后 worker 退出，所有线程 join 后对象才可销毁。另一种 cancel-pending 语义也可以，但必须让未执行任务的 future 得到明确取消异常，不能永久等待。
+
 ## 等待任务结果：submit 返回一张 future
 
 光把任务丢进队列还不够——你常常想知道任务**算出了什么**。这里正好接上第四章学过的 `std::future` 和 `packaged_task`：`submit` 一个任务时，用 `packaged_task` 把它包起来、关联一张 `future`，立刻把这张 `future`「取餐凭证」还给你；任务被某个工人执行完，结果（或抛出的异常）就被填进这张凭证，你 `get()` 一下就拿到。
 
 `packaged_task` 在这里是关键拼图：它**可移动**，所以能被搬进任务队列、由别的工作线程取出来调用——这正是第四章埋的伏笔。代码一节会把 `submit` 的写法完整拆开。
+
+## 池内任务依赖：等待时也要保留进展
+
+**任务依赖**最危险的形态，是池内父任务提交子任务后阻塞 `future.get()`。若所有 worker 都这样等待，子任务虽然已在队列里，却没有空闲线程执行，形成 pool exhaustion deadlock。增加线程数只能推迟耗尽，不能证明安全。
+
+C++17 的标准 future 没有 `.then`。可用三种协议表达依赖：把依赖图调度成子任务完成后再提交 continuation；等待期间由当前 worker 执行 `run_pending_task()` 帮助队列取得进展；或把可能阻塞的任务隔离到另一执行资源。每种方案都要处理异常与取消，确保下游任务不会永远等一个已失败的前置节点。
 
 ## 减少争用 + 工作窃取：每人一条本地队列
 
@@ -149,9 +173,16 @@ class ThreadPool {
     void worker_loop();                      // 实现见上一段
 public:
     explicit ThreadPool(unsigned n = std::thread::hardware_concurrency()) {
-        if (n == 0) n = 1;                   // 防 hardware_concurrency 返回 0
-        for (unsigned i = 0; i < n; ++i)
-            workers.emplace_back([this] { worker_loop(); }); // 起固定 n 个工人
+        if (n == 0) n = 1; // 只是默认提示；生产配置应由负载测量给出
+        try {
+            for (unsigned i = 0; i < n; ++i)
+                workers.emplace_back([this] { worker_loop(); });
+        } catch (...) {
+            { std::lock_guard<std::mutex> lk(m); done = true; }
+            cv.notify_all();
+            for (auto& t : workers) t.join();
+            throw;
+        }
     }
     ~ThreadPool() {
         { std::lock_guard<std::mutex> lk(m); done = true; } // 置收工信号
@@ -161,7 +192,7 @@ public:
 };
 ```
 
-析构三步缺一不可：**置 `done`** → **`notify_all` 叫醒所有睡着的工人**（否则它们永远在 `wait` 里睡死、`join` 永不返回）→ **`join` 每个线程**。
+构造失败也必须执行同一套停机流程，否则已启动 thread 的析构会 terminate。正常析构采用 drain：置 done 后 worker 继续取完队列，再退出。调用者必须保证析构发生在非 worker 所有者线程，且没有并发 submit；否则自 join 或对象生存期竞争都不成立。
 
 <Callout type="trap">
   析构里若**漏掉 `notify_all`**：那些正在 `cv.wait` 里睡觉的工人收不到「醒来看
@@ -181,22 +212,28 @@ public:
 #include <memory>
 #include <mutex>
 #include <queue>
+#include <stdexcept>
+#include <type_traits>
 #include <utility>
 
 class ThreadPool {
     std::queue<std::function<void()>> tasks;
     std::mutex m;
     std::condition_variable cv;
+    bool done = false;
 public:
     // 提交任务，返回一张 future 凭证去取它的结果
     template <typename F>
-    auto submit(F f) -> std::future<decltype(f())> {
-        using R = decltype(f());
-        // packaged_task 包装可调用对象，关联一张 future
-        auto task = std::make_shared<std::packaged_task<R()>>(std::move(f));
+    auto submit(F&& f)
+        -> std::future<std::invoke_result_t<std::decay_t<F>&>> {
+        using Fn = std::decay_t<F>;
+        using R = std::invoke_result_t<Fn&>;
+        auto task = std::make_shared<std::packaged_task<R()>>(
+            std::forward<F>(f));
         std::future<R> fut = task->get_future();
         {
             std::lock_guard<std::mutex> lk(m);
+            if (done) throw std::runtime_error("thread pool is stopping");
             tasks.push([task] { (*task)(); }); // 入队（用 shared_ptr 搬进 function）
         }
         cv.notify_one();                       // 叫醒一个等任务的工人
@@ -205,7 +242,7 @@ public:
 };
 ```
 
-这里有个落地小技巧：`std::packaged_task` 只能移动不能拷贝，而 `std::function` 要求可拷贝，所以用 `std::make_shared` 把 task 放进 `shared_ptr`，再让入队的 lambda **拷贝这个 shared_ptr**（拷指针是廉价的）——绕过「不可拷贝」的限制。调用方拿到 `fut` 后：
+状态检查和入队在同一把锁内，因此 shutdown 与 submit 有确定先后：先入队的任务会被 drain，后到的提交抛异常。`packaged_task` 只能移动，而 C++17 `std::function` 的目标必须可复制，所以 lambda 捕获 shared_ptr；C++23 的 move-only function wrapper 才能直接保存 move-only 任务。
 
 ```cpp
 #include <future>
@@ -237,6 +274,8 @@ int use_pool() {
 ```
 
 任务里若抛了异常，`packaged_task` 会把它存进 `future`，在你 `f.get()` 时**原样重新抛出**——这正是用 future 接结果的另一大好处：异步任务的异常不会被吞，照样能 `try/catch`（对照第七节那个坑）。
+
+这也形成 worker_loop 的边界契约：队列只接收不会把用户异常逃出 `task()` 的包装器。packaged_task 满足该契约；若另开 raw `void` 提交通道，wrapper 必须捕获并交给统一错误处理器，否则异常逃出线程入口会调用 `std::terminate`。
 
 ### 工作窃取：本地双端队列，本端取放、队尾被偷
 
@@ -275,11 +314,12 @@ public:
 };
 ```
 
-注意 `push` / `try_pop` 都动 `front`（本线程自己用，LIFO 还利于缓存局部性），`try_steal` 动 `back`（留给别的线程偷）。两端分开操作，把争用降到最低。工人每一轮的取活逻辑则是「先吃自己的，空了再去别人队尾偷」：
+本地 LIFO 倾向先执行刚产生、仍有缓存局部性的子任务，窃贼从另一端拿较老、通常更粗的任务。这个教学实现整条 deque 仍由一把 mutex 保护，本端和偷取会互斥；收益来自把一把全局锁分散成每 worker 一把锁。真正的 Chase-Lev deque 才会让 owner 操作与 thief CAS 具有更强的端点并发性质。
 
 ```cpp
 #include <functional>
 #include <optional>
+#include <thread>
 #include <vector>
 
 using Task = std::function<void()>;
@@ -305,11 +345,11 @@ void run_pending_task() {
             return;
         }
     }
-    // ③ 谁都没活：让出 CPU（std::this_thread::yield()）再来一轮
+    std::this_thread::yield(); // 完整池应阻塞等待新任务，避免持续轮询
 }
 ```
 
-`thread_local` 让每个工人「认得自己那条队列」；偷取时遍历 `all_queues` 跳过自己。这就是 `WorkStealingDiagram` 演的那套——本端取、空了偷队尾。
+`all_queues` 必须在线程启动前建好并活到所有 worker join 之后，不能在遍历时重分配。空闲 worker 的生产实现应在全局条件变量或计数信号上阻塞，提交任务时唤醒；只靠 yield 轮询仍会浪费 CPU。
 
 ### 协作式中断：interrupt_flag + interruption_point
 
@@ -377,7 +417,7 @@ void worker_body() {
 }
 ```
 
-主线程要停它，只需调那个线程对应 `interrupt_flag` 的 `set()`（发信号、不碰线程本身）。线程跑到下一个 `interruption_point()` 才会抛出 `thread_interrupted`、被 `catch` 接住做清理后退出——停在安全点、干净收尾。这就是 `InterruptibleThreadDiagram` 那套握手。
+主线程置位后，运行中的任务要到下一个 interruption_point 才退出。**原子标志不会自动唤醒 condition_variable**：若目标可能睡在 wait 中，请求停止必须在该 wait 的状态锁下记录 stop，再 `notify_all`，谓词检查 `stop || condition`；否则线程可能永远睡着。C++20 的 `std::jthread` 与 `stop_token` 标准化了停止请求和部分可中断等待，本章 C++17 版本仍需手工维护标志、唤醒对象与其生存期。
 
 {/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字；含池内任务等池内任务死锁、池任务抛异常没接、全局队列争用、池析构没 join/没停。 */}
 
@@ -385,7 +425,10 @@ void worker_body() {
 
 <Callout type="trap">
   **现象**：一个提交进池的任务里，又 `submit`
-  了另一个任务并**阻塞等它的结果**，结果整个池卡死、再不前进。**原因**：**池耗尽死锁**——所有工作线程都卡在「等一个还排在队列里、却没有空闲工人去取的任务」上，没人能继续推进，互相等成死结。**修法**：别在池内任务里同步等另一个池内任务；要么让等待的任务**自己帮忙取下一个任务来跑**（`run_pending_task`），要么用独立的池/线程，要么改成不阻塞的延续（continuation）。
+  了另一个任务并阻塞等结果，整个池卡死。**原因**：所有 worker
+  都在等仍排队的子任务，已无执行者。**修法**：等待者帮助执行 pending
+  task，隔离阻塞资源，或由自定义调度器在前置完成后提交 continuation；C++17 标准
+  future 没有 `.then`，不能把提案接口当标准方案。
 </Callout>
 
 <Callout type="trap">
@@ -399,8 +442,8 @@ void worker_body() {
 
 <Callout type="trap">
   **现象**：线程池在多核机器上多开了工人，吞吐却没怎么涨、甚至更差。**原因**：所有工人抢**同一个全局任务队列**——那把队列锁成了瓶颈，工人们大量时间耗在「排队抢锁」而非干活（争用）。**修法**：改成**每工人一条本地双端队列
-  +
-  工作窃取**：本端取放无争用，空了才去别人队尾偷，把对单一锁的争抢摊开（对照本章工作窃取一节）。
+  + 工作窃取**：把一把全局锁分散到各本地队列，空闲 worker 才访问别人队列。若本地
+  deque 仍用 mutex，本端和 thief 仍会互斥，不能宣称完全无争用。
 </Callout>
 
 <Callout type="trap">
@@ -410,7 +453,8 @@ void worker_body() {
   `std::terminate`；或工人还在跑、却去访问已被销毁的队列、锁、`this`。**修法**：析构里**置收工标志
   → `notify_all` 叫醒所有睡着的工人 → `join`
   每一个**（三步缺一不可，见构造析构一节）；想中途停某个长任务则用协作式中断（置
-  flag，任务到中断点自退）。
+  flag，任务到中断点自退）。析构必须在非 worker 线程发生，且外部 submit
+  调用者已退出对象生存期。
 </Callout>
 
 {/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；练习 3 题含 1 道改/实现题 + C 型分析题，答案折叠。 */}
@@ -418,14 +462,14 @@ void worker_body() {
 ## 小结
 
 - **线程池**预先固定一队**工作线程**围着一个**线程安全任务队列**循环「取任务 → 执行 → 再取」，**复用线程**，省去频繁创建/销毁线程的开销
-- 析构红线三步：**置收工标志 → `notify_all` 叫醒所有睡着的工人 → `join` 每一个**——漏 `notify_all` 睡死、漏 `join` 触发 `std::terminate`
-- `submit` 用 `std::packaged_task` 包装任务、返回一张 `future`，调用方 `get()` 取回结果；任务抛的**异常**经 future 原样重新抛出，不吞不崩
-- **工作窃取**：每个工人一条**本地双端队列**，本端 push/pop 减争用，自己空了去别人**队尾**偷——低争用 + 自动均衡负载
-- **协作式中断**：主线程置 `interrupt_flag`（发信号），目标线程在 `interruption_point()` 自查、置位了就抛 `thread_interrupted` 退出——停在安全点、干净收尾，**不是强杀**
+- shutdown 与 submit 共用状态锁：关闭后拒绝新任务，唤醒 worker 排空队列，再由非 worker 所有者 join 全部线程
+- packaged_task 让 future 承接值或异常；池内任务依赖不能占满 worker 阻塞等待，可帮助执行、隔离资源或调度 continuation
+- **工作窃取**以每 worker 本地 LIFO 队列分散全局锁，thief 从另一端取旧任务；教学 mutex deque 仍有局部互斥
+- **协作式中断**要求任务检查标志；若线程睡在 condition_variable，还必须记录停止状态并 notify，不能只置原子位
 
 <Exercises>
 
-**练习 1（改代码型）** 下面这个线程池**没有析构**，工人 `while(true)` 永不退出。请补上正确的析构，让池销毁时所有工人安全收工（提示：收工标志 + 谓词 + `notify_all` + `join`），并说明漏掉 `notify_all` 或 `join` 各会出什么问题。
+**问题 1（改代码型）** 下面线程池没有析构，worker 永不退出。请补充 drain 关闭协议，并说明关闭开始后 submit 应怎样处理、漏 notify_all 或 join 会怎样。
 
 ```cpp
 #include <condition_variable>
@@ -499,21 +543,21 @@ public:
 };
 ```
 
-改动要点：① 加 `done` 收工标志；② `wait` 的谓词改成 `done || !tasks.empty()`、并在「收工且无活」时 `return` 退出循环；③④⑤ 析构里置位、`notify_all`、`join`。**漏 `notify_all`**：正在 `cv.wait` 里睡的工人收不到通知、永远不复查 `done`，会睡死，`join` 永久阻塞、程序卡死。**漏 `join`**：`std::thread` 析构时仍 joinable 直接 `std::terminate` 掐掉程序；即便侥幸没崩，工人也可能在 pool 已销毁后访问悬空的队列/锁。
+改动要点：wait 谓词改为 `done || !tasks.empty()`；析构在锁下置 done，再 notify_all、join。submit 也必须持同一把 m 检查 `done`，关闭后抛出拒绝提交，否则任务可能落在 worker 已退出的队列里。漏 notify_all 会让睡眠 worker 不再检查 done；漏 join 会使 joinable thread 析构触发 terminate。析构还必须由非 worker 线程调用。
 
 </Answer>
 
-**练习 2（C 型分析题）** 同事的线程池只有一个全局任务队列。他在一个**提交进池的任务**里又 `submit` 了一个子任务，并立刻 `child.get()` 等它的结果。压测时池有 4 个工人，他一次性提交 4 个这样的「父任务」，结果整个池卡死、CPU 占用为 0。请分析为什么会死锁，并给出至少两种修法。
+**问题 2（C 型分析题）** 4 个 worker 各运行一个父任务，父任务各提交子任务并立刻 get，整个池卡死。请画出依赖等待图，并给出至少两种保留进展的修法。
 
 <Answer>
 
 这是典型的**池耗尽死锁（pool exhaustion deadlock）**。4 个工人各自取走一个父任务、各自又 `submit` 一个子任务进队列、然后都卡在 `child.get()` 上**阻塞等子任务的结果**。可此刻**没有任何空闲工人**去队列里取那些子任务来跑——4 个工人全在「等子任务」，4 个子任务全在「等被取」，互相等成死结，谁也推进不了，于是 CPU 归零、永久卡死。根因是「池内任务同步阻塞等另一个池内任务」，当阻塞的任务数 ≥ 工人数时必然耗尽。
 
-修法（任选）：① **让等待的任务自己帮忙取活**：父任务在等子任务期间不要干等，而是循环调 `run_pending_task()`（取下一个待办任务来跑），这样它既在等、也在出力，不占死一个工人——这正是工作窃取式线程池的解法。② **不在池内同步等池内任务**：把「父任务 + 子任务」改成不阻塞的延续（子任务完成后再触发后续），或用 `then` 风格的链式 future。③ **隔离池**：父任务用一个池、子任务用另一个独立的池/线程，避免同一池自等。④ 兜底：**给池足够多工人**只是缓解、不根治（任务嵌套更深仍会耗尽），不算正解。
+修法：等待期间由当前 worker 执行 pending task；把依赖表示为“前置完成后由调度器提交后续”的非阻塞图；或隔离可能阻塞的子任务执行资源。C++17 标准 future 没有 `.then`，需自定义调度器或库。单纯增加 worker 只推迟耗尽，不能证明安全。
 
 </Answer>
 
-**练习 3（独立实现型）** 给一个只能「`void submit(std::function<void()>)`、丢进去不管」的简单池，加一个**能取结果的 `submit`**：接受任意返回 `R` 的可调用对象，返回一张 `std::future<R>`，调用方 `get()` 能取回结果，且任务抛的异常能经 future 重新抛出。要求用 `std::packaged_task`，并处理好「packaged_task 不可拷贝、`std::function` 要可拷贝」这个落地坑。
+**问题 3（独立实现型）** 给简单池增加返回 future 的 submit：用 packaged_task 传值或异常，处理 C++17 move-only task 与 copyable std::function 的冲突，并在池停止后拒绝提交。
 
 <Answer>
 
@@ -524,21 +568,28 @@ public:
 #include <memory>
 #include <mutex>
 #include <queue>
+#include <stdexcept>
+#include <type_traits>
 #include <utility>
 
 class Pool {
     std::queue<std::function<void()>> tasks;
     std::mutex m;
     std::condition_variable cv;
+    bool accepting = true;
 public:
     // 提交一个返回 R 的任务，返回承接结果的 future
     template <typename F>
-    auto submit(F f) -> std::future<decltype(f())> {
-        using R = decltype(f());
-        auto pt = std::make_shared<std::packaged_task<R()>>(std::move(f));
+    auto submit(F&& f)
+        -> std::future<std::invoke_result_t<std::decay_t<F>&>> {
+        using Fn = std::decay_t<F>;
+        using R = std::invoke_result_t<Fn&>;
+        auto pt = std::make_shared<std::packaged_task<R()>>(
+            std::forward<F>(f));
         std::future<R> fut = pt->get_future();
         {
             std::lock_guard<std::mutex> lk(m);
+            if (!accepting) throw std::runtime_error("pool is stopping");
             tasks.push([pt] { (*pt)(); });     // 包成 void() 入队
         }
         cv.notify_one();
@@ -547,7 +598,7 @@ public:
 };
 ```
 
-要点：① 用 `decltype(f())` 推出返回类型 `R`，`submit` 返回 `std::future<R>`。② `std::packaged_task` 关联一张 future，`get_future()` 先取出还给调用方。③ **落地坑**：`packaged_task` 只能移动、不能拷贝，而入队的 `std::function` 要求可拷贝——所以用 `std::make_shared` 把它放进 `shared_ptr`，入队 lambda 拷贝的是廉价的 shared_ptr 而非 task 本身，绕开限制。④ 任务抛的异常会被 `packaged_task` 存进 future，调用方 `get()` 时原样重新抛出，不吞不崩。
+`invoke_result_t` 按可调用对象真实调用形式推出 R，完美转发保留 move-only callable。packaged_task 把值或异常写进 future；shared_ptr 让 C++17 copyable `std::function` 能持有间接的 move-only task。关闭路径必须在同一把 m 下先把 accepting 置 false，再 drain 队列；这样 submit 与关闭有唯一先后。
 
 </Answer>
 
@@ -558,8 +609,9 @@ public:
 <Glossary>
 
 <GlossaryItem term="线程池（thread pool）">
-  预先创建并固定持有一组工作线程（数量通常按 CPU
-  核数定），让它们围着一个共享的任务队列循环：取出任务、执行、再取下一个。任务来了只是**入队**，由空闲的工作线程取走执行，而不是为每个任务新建一个线程——这样把线程**复用**起来，省去频繁创建/销毁线程的巨大开销。像后厨雇一队固定的帮厨待命，谁空了就抓一张单子做。详见本章「为什么要线程池」一节。
+  长期持有一组 worker，把多个任务调度到这些线程执行。池大小由
+  CPU、阻塞比例、任务粒度和共存负载共同决定；完整协议还包括容量、提交关闭、取消、结果完成与
+  join。
 </GlossaryItem>
 
 <GlossaryItem term="工作线程（worker thread）">
@@ -573,10 +625,9 @@ public:
 
 <GlossaryItem term="双端队列（deque）">
   double-ended queue 的简称，一种**两端都能 push/pop**
-  的队列。工作窃取里每个工作线程持有一条本地
-  deque：自己从「本端（front）」push/pop（互不干扰），别的线程来偷时从「另一端（队尾
-  back）」拿——两端分开操作，把争用降到最低。详见本章「减少争用 +
-  工作窃取」一节。
+  的队列。工作窃取里每个工作线程持有一条本地 deque：owner 常从本端 LIFO
+  取放，thief 从另一端取较老任务。若实现仍以一把 mutex 保护整个
+  deque，两端操作依然互斥；主要收益是分散全局队列争用。
 </GlossaryItem>
 
 <GlossaryItem term="工作窃取（work stealing）">
@@ -598,6 +649,9 @@ public:
 
 </Glossary>
 
-{/* 9. 出处声明（spec §九）：本书为《C++ 并发编程实战》第2版改编重写，sourceUrl 为空，Attribution 标签空参自动渲染。缺失 = 必打回。 */}
+{/* 9. 出处声明（spec §九）：本书为《C++ 并发编程实战》第2版改编重写。 */}
 
-<Attribution />
+<Attribution
+  title="C++ Concurrency in Action, Second Edition, Chapter 9: Advanced thread management"
+  url="https://livebook.manning.com/book/c-plus-plus-concurrency-in-action-second-edition/chapter-9"
+/>

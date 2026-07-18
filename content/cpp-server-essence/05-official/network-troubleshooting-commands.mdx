@@ -1,0 +1,231 @@
+---
+title: "第5章：网络通信故障排查常用命令"
+type: C
+section: "C++ 服务器开发精髓 · 从症状到报文证据"
+order: 5
+description: "对齐原书第 5 章：ifconfig、ping、telnet、netstat、lsof、nc、curl 与 tcpdump，建立可证伪的分层排障流程。"
+demo: true
+math: false
+sourceUrl: "https://book.douban.com/subject/35491437/"
+draft: false
+---
+
+import {
+  CseDiagnosisEvidenceLab,
+  CsePacketCapturePlanLab,
+  CseSocketOwnershipLab,
+} from "@/components/mdx/cpp-server-essence/diagrams/network-troubleshooting-commands";
+
+<Objectives>
+
+- 能设计从 interface、route、reachability、listener、process、application 到 packet 的最小排障命令链，并为每步写出可证伪 hypothesis
+- 能比较 ifconfig/ip、ping、telnet/nc、netstat/ss、lsof 与 curl 的观察边界，把 socket tuple、TCP state、PID/fd 和应用响应对齐
+- 能写出受限 tcpdump BPF filter，分析 handshake、RST、retransmission 和时序，同时控制 pcap 敏感数据与权限风险
+
+</Objectives>
+
+## 为什么“把所有命令都跑一遍”不是排障
+
+命令只产生观察，排障需要 hypothesis。`ping` 成功不能证明 TCP port 可用，`nc` 连通不能证明 HTTP 正确，`curl 200` 也不能说明其他客户端路径没有 packet loss。每一步都应回答一个问题，并决定下一步，而不是堆积互不关联的输出。
+
+<Term def="围绕同一时间窗口、方向和连接五元组，把接口、路径、socket、进程、应用与报文观察串起来的可复核证据集合。">network evidence chain</Term>
+
+先预测“connection refused”“connect timeout”“HTTP 503”分别最接近哪一层，再切换下图，看命令顺序是否在最早可证伪处收敛。
+
+<Stepper>
+  <Step title="从症状选择第一条假设">
+    <CseDiagnosisEvidenceLab />
+  </Step>
+  <Step title="为每条输出绑定时间与方向">
+    记录 client/server clock、source/destination IP/port、network namespace、命令版本和原始退出码；脱离五元组的截图不能证明目标连接。
+  </Step>
+  <Step title="发现反证就停止当前分支">
+    若本机没有地址/route，先修复 L3；若目标没有 listener，没必要先分析 HTTP header；若 TCP 正常，再进入应用层。
+  </Step>
+</Stepper>
+
+## 5.1 ifconfig：接口地址、状态与计数器
+
+`ifconfig -a` 可查看 interface、IPv4/IPv6 address、flags、MTU 和 RX/TX counters；现代 Linux 更常用 `ip -br addr`、`ip link -s` 与 `ip route`，信息更完整。排查时确认 interface 是否 UP、地址/prefix 是否正确、route 选中的 source 是否符合预期，并比较 drop/error counter 的时间增量。
+
+<Term def="操作系统根据 destination、prefix、metric、policy rule 与 interface 选择 source address 和 next hop 的转发决策。">route selection</Term>
+
+```bash
+ip -br addr
+ip -s link show dev eth0
+ip route get 10.0.0.9
+# 兼容旧环境
+ifconfig -a
+```
+
+容器/namespace 中的 `lo`、veth 和 route 与 host 不同。必须在故障流量实际所在 namespace 执行命令。
+
+## 5.2 ping：ICMP 往返不是应用健康
+
+`ping` 观察 ICMP echo reply、round-trip time、loss 和 TTL，可快速验证 DNS 解析后的 IP 与基本 L3 reachability。但 firewall 可能禁 ICMP 而允许 TCP，也可能 ICMP 正常而 application port 被拒绝。
+
+```bash
+ping -c 5 -W 1 10.0.0.9
+ping -M do -s 1472 -c 3 10.0.0.9  # Linux IPv4 path-MTU probe
+```
+
+<Term def="ICMP echo request/reply 观测到的网络层往返可达性；它不包含 TCP handshake、TLS 或应用处理。">ICMP reachability</Term>
+
+<Callout type="trap" title="ping 不通就断言网络断了">
+先确认解析 IP、route 与 ICMP policy。目标可能只丢弃 echo；用目标协议的 TCP probe 和两端 capture 区分 policy drop 与真实路径故障。
+</Callout>
+
+## 5.3 telnet：交互式 TCP 明文探测
+
+`telnet host port` 可验证 TCP connect，并手工输入简单明文协议；它不验证 TLS certificate、HTTP redirect 或结构化 payload。连接后出现空白只说明 session 建立，不代表 server 已正确响应。
+
+```text
+telnet 10.0.0.9 8080
+GET /health HTTP/1.1
+Host: service.example
+Connection: close
+
+```
+
+不要把 production credentials 输入 telnet；终端 history、proxy 和 capture 都可能保留明文。
+
+## 5.4 netstat/ss：tuple、state 与 queue
+
+`netstat -lntp` 展示 listener，`netstat -ant` 展示 TCP states；现代 Linux 通常用更快的 `ss -lntp`、`ss -ant` 和 `ss -ti`。关注 local/peer tuple、LISTEN/ESTABLISHED/SYN-SENT/TIME-WAIT、Recv-Q/Send-Q、timer 与 retransmission 信息。
+
+<Term def="source IP/port、destination IP/port 与 transport protocol 共同标识一条网络 flow 的五个字段。">connection five-tuple</Term>
+
+<Stepper>
+  <Step title="选择目标 TCP state 与端口">
+    <CseSocketOwnershipLab />
+  </Step>
+  <Step title="区分 listener、connection 与 close residue">
+    LISTEN 回答谁在接入；ESTABLISHED 要对齐两端 tuple；TIME_WAIT 指向主动关闭历史，不能直接当作进程泄漏。
+  </Step>
+  <Step title="把 queue 变化与应用线程栈关联">
+    Recv-Q 持续增加可能是应用未读；Send-Q 增长可能是对端不读或路径拥塞。结合线程栈、event-loop 指标和 packet ACK 判断。
+  </Step>
+</Stepper>
+
+<Term def="socket receive/send queue 中尚未被应用消费或尚未获确认的数据量；必须结合方向、state 与时间变化解释。">socket queue evidence</Term>
+
+## 5.5 lsof：从端口找到进程与文件描述符
+
+`lsof -nP -iTCP:8080 -sTCP:LISTEN` 把 endpoint 映射到 command、PID、user 和 fd；`-nP` 避免 DNS/service-name lookup 干扰。权限不足时可能看不到其他 user 的 process，空输出不一定证明没有 owner。
+
+```bash
+sudo lsof -nP -iTCP:8080 -sTCP:LISTEN
+sudo lsof -nP -a -p 4242 -iTCP
+readlink /proc/4242/exe
+```
+
+<Term def="把 socket inode/endpoint 关联到具体 process、user 与 file descriptor 的所有权证据。">socket ownership evidence</Term>
+
+PID 可能重用；incident 记录还要保存 process start time、executable path、container/pod identity 与 binary build-id。
+
+## 5.6 nc：可脚本化的 TCP/UDP 探针
+
+`nc -vz -w 3 host port` 做 TCP connect probe，`nc -l` 可建立临时 listener，`nc -u` 可发送 UDP datagram。不同 nc 实现参数有差异，脚本先记录版本。UDP “发送成功”只表示 datagram 交给本机 kernel，不证明对端收到。
+
+```bash
+nc -vz -w 3 10.0.0.9 8080
+printf 'PING\r\n' | nc -w 2 10.0.0.9 6379
+nc -l 127.0.0.1 9090
+```
+
+<Term def="以最小 payload 对目标 host/port 执行连接或协议探测，用退出码、时间与响应验证 transport hypothesis。">active port probe</Term>
+
+<Callout type="trap" title="nc 成功就宣布服务健康">
+TCP handshake 可以成功而 event loop、thread pool、database 或业务 handler 已失效。transport probe 后继续用真实协议健康检查，并验证响应内容与时延。
+</Callout>
+
+## 5.7 curl：拆分 DNS、connect、TLS、TTFB 与 body
+
+`curl -v` 展示解析、connect、TLS 和 headers；`--resolve` 可固定 hostname 到指定 IP，同时保留 Host/SNI；`-w` 输出分阶段 timing。使用 `-k` 跳过证书验证会改变结论，不能把它作为正常健康证明。
+
+```bash
+curl -sS -o /dev/null \
+  --connect-timeout 2 --max-time 5 \
+  --resolve service.example:443:10.0.0.9 \
+  -w 'dns=%{time_namelookup} connect=%{time_connect} tls=%{time_appconnect} ttfb=%{time_starttransfer} total=%{time_total}\n' \
+  https://service.example/health
+```
+
+<Term def="从请求开始到收到第一个响应 byte 的时间；应与 DNS、TCP connect、TLS handshake 分开测量。">time to first byte</Term>
+
+header 可能包含 bearer token、cookie 或内部 topology。分享 `curl -v` 输出前先脱敏，生产探测使用只读 endpoint 和最小权限身份。
+
+## 5.8 tcpdump：用最小抓包证明 wire 上发生了什么
+
+`tcpdump` 能观察 interface 上的 timestamp、direction、五元组、flags、sequence/ack、length 与 payload snapshot。先定义要证明 handshake、RST、retransmission 还是应用时序，再写 BPF filter；同时在 client/server 抓包可区分 packet 在哪一段丢失。
+
+<Term def="在 packet capture 之前由 kernel 执行的 Berkeley Packet Filter 表达式，用 host、port、protocol、direction 或 flags 限制流量。">BPF capture filter</Term>
+
+<Stepper>
+  <Step title="选择抓包目标与最小过滤器">
+    <CsePacketCapturePlanLab />
+  </Step>
+  <Step title="保留 timestamp、interface 与原始 pcap">
+    终端摘要用于快速看，pcap 用于复核 seq/ack/retransmission；两端时钟要校准，并记录 capture drop counter。
+  </Step>
+  <Step title="按安全策略处理 payload">
+    限制 snaplen、持续时间、文件权限和接触者。TLS payload 虽加密，DNS、IP、SNI、长度与 timing metadata 仍可能敏感。
+  </Step>
+</Stepper>
+
+```bash
+sudo timeout 30 tcpdump -i any -nn -s 128 \
+  'host 10.0.0.9 and tcp port 8080' \
+  -w /secure/inc-042.pcap
+tcpdump -nn -tttt -r /secure/inc-042.pcap
+```
+
+<Term def="TCP sequence segment 重复发送、duplicate ACK 或 retransmission timeout 等可在 packet timeline 中复核的可靠传输现象。">retransmission evidence</Term>
+
+<Callout type="trap" title="全接口、全 payload、无限时长抓包">
+这会迅速耗尽磁盘并收集无关敏感数据。使用精确 BPF、timeout/rotation、受控目录和最小 snaplen；先在低风险环境验证 filter。
+</Callout>
+
+## 本章回顾：让每条命令回答一个问题
+
+1. ifconfig/ip 证明 interface/address/route；ping 只证明有限的 ICMP reachability。
+2. telnet/nc 探测 transport；ss/netstat 说明 tuple/state/queue；lsof 说明 PID/fd owner。
+3. curl 把 HTTP 路径拆成 DNS/connect/TLS/TTFB/body，不能用 `-k` 伪造健康。
+4. tcpdump 提供 packet-level evidence，但必须有假设、过滤器、时间窗口和数据安全边界。
+5. 客户端与服务端证据对齐后，才能区分请求未发、途中丢失、内核排队和应用未处理。
+
+<Exercises>
+
+**问题 1：客户端报 connect timeout；ping 通，服务端 `ss -lntp` 也有 listener。下一步如何最小化取证？**
+
+<Answer>先确认客户端实际解析 IP、source route 和目标 port，再用 `nc -vz -w` 复现并记录时间；在客户端和服务端同时用精确 host/port BPF 抓 SYN。若服务端看不到 SYN，查中间路径/policy；看到 SYN 无 SYN-ACK，查 server firewall/backlog；双方握手完整但 nc 仍超时，再核对 capture direction、namespace 与 client local failure。</Answer>
+
+**问题 2：`ss` 显示 Send-Q 持续增长，怎样避免直接断言“网络慢”？**
+
+<Answer>先按五元组确认目标 connection，并观察队列随时间增长；检查对端 Recv-Q 和应用 thread/event loop 是否读取，结合 tcpdump 的 ACK window、zero-window、retransmission 与 RTT。对端不读、receiver window 关闭、packet loss 和本地业务持续超量写入都会造成 Send-Q，证据链应区分这些原因。</Answer>
+
+**问题 3：怎样设计一次可分享给外部团队的 tcpdump 取证，避免泄露？**
+
+<Answer>先限定 incident 时间、interface、host/port/direction 和 flags，选择仅足够的 snaplen 与短 timeout，写入权限受控文件；记录 checksum/capture drop。分享前按 policy 审查 payload、tokens、IP/SNI 等 metadata，必要时只提供脱敏摘要或经批准裁剪的 pcap，并在完成后按 retention policy 删除。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="network evidence chain" definition="按时间、方向和五元组串联接口、路径、socket、进程、应用与报文的证据。" />
+  <GlossaryItem term="route selection" definition="内核按 destination、prefix、metric 和 policy 选择 source/interface/next hop。" />
+  <GlossaryItem term="ICMP reachability" definition="由 echo request/reply 观察的有限网络层可达性。" />
+  <GlossaryItem term="connection five-tuple" definition="source/destination IP/port 与 transport protocol。" />
+  <GlossaryItem term="socket queue evidence" definition="结合方向、state 和时间解释的 Recv-Q/Send-Q 数据。" />
+  <GlossaryItem term="socket ownership evidence" definition="endpoint 到 process、user 和 fd 的关联记录。" />
+  <GlossaryItem term="active port probe" definition="用最小连接或 payload 验证 host/port transport hypothesis。" />
+  <GlossaryItem term="time to first byte" definition="请求开始到首个响应 byte 的时间。" />
+  <GlossaryItem term="BPF capture filter" definition="kernel 在 capture 前执行的 packet 筛选表达式。" />
+  <GlossaryItem term="retransmission evidence" definition="由 seq/ack/timestamp 复核的重复 segment 与可靠传输行为。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++服务器开发精髓，第5章 网络通信故障排查常用命令"
+  adaptedUrl="https://book.douban.com/subject/35491437/"
+/>

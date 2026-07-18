@@ -1,0 +1,303 @@
+---
+title: "面试题58（二）：左旋转字符串"
+type: C
+section: "第6章 面试中的各项能力"
+order: 69
+description: "把字符串切成前n个字符A与剩余字符B，分别翻转A和B，再整体翻转，以常数额外空间把AB变为BA。"
+demo: true
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/58_02_LeftRotateString/LeftRotateString.cpp"
+draft: false
+---
+
+import { LeftRotatePartitionDiagram, LeftRotateTraceLab, LeftRotateContractMap, LeftRotateProofDiagram, LeftRotateOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/left-rotate-string";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释把AB变成BA为何等价于左旋n位
+- 能计算三次翻转中两个分段的逐步字符状态
+- 能实现作者原地接口与明确取模语义的现代接口
+- 能分析空指针、空串、负数、整长、超长位数和UTF8边界
+- 能设计覆盖六组官方用例与代数性质的测试
+
+</Objectives>
+
+## 从“搬走前n个字符”需要多少额外空间开始
+
+字符串的“**左旋转字符串**”操作，是把前若干字符移到尾部，同时保持前后两段内部顺序。输入“abcdefg”，左旋2位得到“cdefgab”。直接复制前两个字符、移动后五个字符再粘回尾部可以完成，但需要额外缓冲区，并可能搬动部分字符多次。
+
+把前n个字符记作A，其余字符记作B，原串就是AB，目标就是BA。问题因此从“旋转每个字符”转化为“交换两个连续分段”，而作者复用了上一小题的Reverse函数，只用三次翻转完成。
+
+<LeftRotatePartitionDiagram />
+
+先预测边界：n等于1时“abcdefg”变成“bcdefga”；n等于6时变成“gabcdef”；n等于0或7时作者保持原串；n等于9也保持原串，不会自动对7取模。
+
+## 把字符串分成两部分
+
+作者先用strlen得到长度。只有字符串非空、长度大于0、n大于0且n小于长度时，才计算四个指针：
+
+- pFirstStart指向首字符。
+- pFirstEnd指向第n个字符，也就是A的末尾。
+- pSecondStart指向第n加1个字符，也就是B的开头。
+- pSecondEnd指向整个字符串最后一个字符。
+
+这个“**把字符串分成两部分**”的动作称为<Term def="按旋转位数n把连续字符串划为前段A和后段B，原串表示为AB。">分段</Term>。四个指针都指向真实字符，终止符不参加交换。
+
+<LeftRotateTraceLab />
+
+左移n位称为<Term def="把字符串前n个字符按原顺序搬到末尾，使原来的AB排列变为BA。">左旋转</Term>。它不是逐字符循环左移n次；后者时间可能达到O(n乘长度)，而分段后每个字符只需参与常数次交换。
+
+## 三次翻转的作者实现
+
+第一步翻转A，得到reverse(A)B；第二步翻转B，得到reverse(A)reverse(B)；第三步翻转整个字符串，得到BA。源码使用闭区间Reverse，所以每段末指针都落在该段最后一个字符。
+
+```cpp
+#include <cstring>
+
+char* LeftRotateString(char* str, int n) {
+    if (str != nullptr) {
+        const int length =
+            static_cast<int>(std::strlen(str));
+        if (length > 0
+            && n > 0
+            && n < length) {
+            char* firstStart = str;
+            char* firstEnd = str + n - 1;
+            char* secondStart = str + n;
+            char* secondEnd =
+                str + length - 1;
+
+            Reverse(firstStart, firstEnd);
+            Reverse(secondStart, secondEnd);
+            Reverse(firstStart, secondEnd);
+        }
+    }
+    return str;
+}
+```
+
+“**分别翻转两部分**”对应前两次Reverse，“**最后翻转整个字符串**”对应第三次。这个固定序列称为<Term def="依次反转前段、后段和整个字符串，以原地完成两个连续段换位。">三次翻转</Term>。
+
+函数原地修改可写char缓冲区并返回同一地址；nullptr原样返回nullptr。strlen只在非空指针分支调用，因此不会解引用nullptr。时间复杂度O(length)：strlen扫描一次，三次Reverse覆盖的交换总量也是线性；额外空间O(1)。
+
+三次翻转的写入次数也可精确理解：前段字符在第一次和第三次翻转中各参与一次，后段字符在第二次和第三次翻转中各参与一次，所以每个字符至多被改写两轮。与先保存A再整体左移B的方案相比，它没有O(n)临时缓冲区；与逐位左移并重复n次相比，它不会让相同字符跨过边界很多次。还存在按最大公约数划分循环的原地算法，但索引推导更复杂，三次翻转更适合面试中快速证明与实现。
+
+## 为什么最后一次翻转会恢复段内顺序
+
+<LeftRotateProofDiagram />
+
+反转一个序列两次会回到原序列，这一性质称为<Term def="对同一字符序列连续应用两次reverse会恢复原顺序。">反转自反性</Term>。整体反转reverse(A)reverse(B)时，段序交换为reverse(reverse(B))与reverse(reverse(A))，每段又各被反转一次，所以得到BA。
+
+证明同时解释了为什么操作顺序不能随意改变。若先翻整个AB，再只翻原位置上的前n个字符，分段边界已经移动，翻到的不会是完整的原A或原B。必须先固定A、B各自范围，分别翻转后再翻整体；或者使用数学等价的“整体、前后两段”顺序，但后一种两段长度要按旋转后的边界重新理解。
+
+对于“abcdefg”和n等于2：
+
+```text
+ab | cdefg
+ba | cdefg
+ba | gfedc
+cdefg | ab
+```
+
+每一行都能直接对应一个Reverse调用。最终A与B内部字符没有变化，只有两段位置互换。
+
+## 作者的旋转位数合同
+
+<LeftRotateContractMap />
+
+源码只在0小于n且n小于长度时执行。这个<Term def="规定哪些n值会触发旋转，以及负数、零、整长和超长位数如何处理。">旋转位数合同</Term>与“所有整数n都先归一化”的通用旋转接口不同：
+
+- n小于等于0：保持输入不变。
+- n等于长度：保持输入不变，数学上也等价于转一整圈。
+- n大于长度：保持输入不变，不计算n对长度的余数。
+- 空字符串：strlen为0，条件失败，保持空串。
+- nullptr：不求长度，直接返回nullptr。
+
+<Callout type="trap" title="默认把 n 对长度取模后声称忠实还原">
+取模版会让长度7、n等于9时旋转2位，而作者源码明确保持不变。两种设计都合理，但属于不同合同；页面和测试必须说明采用哪一种。
+</Callout>
+
+作者使用int保存strlen结果。strlen返回size_t，极端超长字符串缩窄到int可能失真；普通面试输入不触发，但可移植实现应保留size_t，并在接收有符号n时先处理负值。
+
+## 现代严格版与循环归一化版
+
+如果目的是一比一保持作者语义，可用std::string与半开区间实现严格版：只有有效n才旋转。std::reverse的尾迭代器不包含在范围内，边界比闭区间指针更直观。
+
+```cpp
+#include <algorithm>
+#include <cstddef>
+#include <string>
+
+void leftRotateStrict(
+    std::string& text,
+    std::ptrdiff_t n) {
+    const auto length =
+        static_cast<std::ptrdiff_t>(
+            text.size());
+    if (length == 0
+        || n <= 0
+        || n >= length) {
+        return;
+    }
+
+    const auto middle =
+        text.begin() + n;
+    std::reverse(text.begin(), middle);
+    std::reverse(middle, text.end());
+    std::reverse(text.begin(), text.end());
+}
+```
+
+若产品合同要求任意整数都表示循环旋转，应另写归一化版。正数可先对长度取模；负数还要把余数调整到非负区间。标准std::rotate直接把middle之前的区间搬到末尾，语义清楚。
+
+```cpp
+void leftRotateNormalized(
+    std::string& text,
+    long long n) {
+    if (text.empty())
+        return;
+
+    const long long length =
+        static_cast<long long>(text.size());
+    n %= length;
+    if (n < 0)
+        n += length;
+
+    std::rotate(
+        text.begin(),
+        text.begin() + n,
+        text.end());
+}
+```
+
+严格版中n等于9不动，归一化版中会等价于n等于2。把两个函数分开命名，比用隐含规则让调用者猜测更可靠。
+
+两种合同还会改变组合性质。在归一化版中，先左旋a位再左旋b位，等价于一次左旋a加b对长度取模后的位数；逆操作是再左旋长度减n位。作者严格版只在每次参数都处于有效区间时执行，超长参数会直接无操作，因此不能无条件使用这条代数性质。例如长度7先旋6位再传2位会继续旋转，而直接传8位却不动。性质测试必须与接口合同一致，否则测试本身就在要求另一个算法。
+
+标准std::rotate通常也只要求线性复杂度，但具体交换策略由实现选择；作者三次Reverse则把每个阶段和中间状态完全暴露出来，便于白板追踪。生产代码可优先使用标准算法，教学和源码复刻则保留三段翻转，以便把AB到BA的证明与实际指针范围一一对应。
+
+## 可写缓冲区与字符单位
+
+和上一小题相同，作者char*接口会交换输入内容，字符串字面量不可作为可写参数。官方测试都声明char input[]，提供独立可写数组；空指针测试不进入任何写操作。
+
+strlen与指针加法都以char字节为单位，n也是字节数。ASCII示例中一个字符就是一个字节；UTF8中文通常占多个字节，若n落在某个编码中间，旋转结果会把该字符字节拆开，产生无效文本。通用Unicode“旋转n个字符”要先按码点或字素簇建立边界，不能直接复用字节索引。
+
+算法还要求输入以终止符结尾，否则strlen会越过缓冲区。现代std::string把长度与存储绑定，消除了这一风险，但仍要决定旋转单位是字节、码点还是用户看到的字素。
+
+<Callout type="trap" title="把字节偏移当成 Unicode 字符位置">
+对UTF8文本直接用str+n可能切开多字节编码。作者题目是英文char字符串；扩展到自然语言文本时必须先定义字符单位并使用对应的边界算法。
+</Callout>
+
+## 六组官方测试与性质验证
+
+<LeftRotateOfficialCaseLab />
+
+Test1用n等于2验证主路径；Test2与Test3分别使用最小有效位数1和最大有效位数length减1；Test4传nullptr；Test5用0验证不操作；Test6用整长7验证不操作。六组测试恰好对应源码条件的真区间与主要假区间。
+
+作者没有测试负数、空串和大于长度的n，应补上并期望保持原值。还可使用性质测试：对任意非空ASCII字符串和有效n，旋转后的长度与字符多重集不变；严格版再左旋length减n位应回到原串；执行三次翻转的结果应与复制拼接text.substr(n)+text.substr(0,n)一致。
+
+```cpp
+#include <cassert>
+#include <string>
+
+void testLeftRotate() {
+    std::string value = "abcdefg";
+    leftRotateStrict(value, 2);
+    assert(value == "cdefgab");
+
+    std::string one = "abcdefg";
+    leftRotateStrict(one, 1);
+    assert(one == "bcdefga");
+
+    std::string last = "abcdefg";
+    leftRotateStrict(last, 6);
+    assert(last == "gabcdef");
+
+    std::string zero = "abcdefg";
+    leftRotateStrict(zero, 0);
+    assert(zero == "abcdefg");
+
+    std::string whole = "abcdefg";
+    leftRotateStrict(whole, 7);
+    assert(whole == "abcdefg");
+
+    std::string beyond = "abcdefg";
+    leftRotateStrict(beyond, 9);
+    assert(beyond == "abcdefg");
+}
+```
+
+## 从分段到原地换位的执行路径
+
+<Stepper>
+  <Step title="把目标写成 AB 到 BA">
+    <LeftRotatePartitionDiagram />
+    前n个字符为A，其余为B，左旋就是交换两段。
+  </Step>
+  <Step title="定位四个端点">
+    <LeftRotateContractMap />
+    先验证指针、长度与n，再形成两个合法闭区间。
+  </Step>
+  <Step title="依次执行三次翻转">
+    <LeftRotateTraceLab />
+    翻A、翻B、翻整体，在每一步核对abcdefg状态。
+  </Step>
+  <Step title="用自反性证明结果">
+    <LeftRotateProofDiagram />
+    整体反转交换段序，每段第二次反转恢复内部字符。
+  </Step>
+  <Step title="复现六组官方测试">
+    <LeftRotateOfficialCaseLab />
+    覆盖有效端点、空指针、零位和整长无操作。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 左旋n位可把字符串表示为AB，目标是BA。
+2. 作者先翻转A，再翻转B，最后翻转整个字符串。
+3. 整体反转交换段序，反转自反性让A与B内部字符恢复。
+4. 三次翻转时间O(length)，额外空间O(1)，不会逐位反复搬移。
+5. 作者只接受0与长度之间的n，负数、零、整长和超长都保持原串。
+6. 取模归一化是另一种接口合同，不能悄悄替代源码行为。
+7. char*输入必须可写并以终止符结尾，函数返回原地址。
+8. n与strlen都按字节计数，UTF8文本可能在码点内部被切开。
+9. 六组官方测试覆盖主要条件分支，还应补空串、负数和超长n。
+
+<Exercises>
+
+**问题 1：为什么三次翻转会把AB变成BA？**
+
+<Answer>前两次得到reverse(A)reverse(B)。整体翻转会先交换两段位置，再分别反转两段，于是得到reverse(reverse(B))与reverse(reverse(A))，也就是BA。</Answer>
+
+**问题 2：作者对n等于9、长度等于7的输入做什么？**
+
+<Answer>条件要求n严格小于长度，因此不进入翻转分支，字符串保持不变。只有另行定义的归一化接口才会先取模并按2位旋转。</Answer>
+
+**问题 3：为什么最大有效n是length减1？**
+
+<Answer>n等于length时前段包含整个字符串、后段为空，数学结果仍是原串；作者直接将它视为无操作。length减1则两段都非空，三次闭区间翻转有效。</Answer>
+
+**问题 4：UTF8中文为什么不能直接按n个char旋转？**
+
+<Answer>char索引表示字节，不表示Unicode码点或字素。n可能落在多字节编码中间，旋转后字节顺序不再构成合法字符；必须先按所需字符单位确定边界。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="左旋转">把前n个字符移到尾部，使AB变为BA。</GlossaryItem>
+  <GlossaryItem term="分段">按n把连续字符串划分为前段A与后段B。</GlossaryItem>
+  <GlossaryItem term="三次翻转">依次反转A、B和整个AB的原地换位方法。</GlossaryItem>
+  <GlossaryItem term="反转自反性">同一序列反转两次会恢复原顺序的性质。</GlossaryItem>
+  <GlossaryItem term="旋转位数合同">规定不同n值是否旋转以及如何归一化的接口规则。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题58（二）"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/58_02_LeftRotateString/LeftRotateString.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
+/>

@@ -1,0 +1,268 @@
+---
+title: "第7章：内存管理"
+type: A
+section: C++ High Performance · Chapter 7
+order: 7
+description: 对齐第一版第7章 Memory Management：虚拟地址与页面、stack/heap、placement new和对齐、ownership/RAII、small size optimization及arena/custom allocator。
+demo: false
+math: false
+sourceUrl: "https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
+draft: false
+---
+
+import {
+  ChpSmallObjectArenaMap,
+  ChpStorageLifetimeOwnershipMap,
+  ChpVirtualMemoryPressureMap,
+} from "@/components/mdx/cpp-high-performance/diagrams/memory-management";
+
+<Objectives>
+
+- 能解释virtual address space、memory pages、page fault与thrashing如何把working set变成性能问题
+- 能区分stack/heap storage、new/delete、placement new、alignment与object lifetime
+- 能设计RAII ownership、small size optimization和arena/custom allocator，并验证时间与内存取舍
+
+</Objectives>
+
+## 从“地址、存储、对象、所有权不是一回事”开始
+
+内存管理至少包含四层：程序使用virtual address；OS把page映射到physical memory或backing store；allocator把较大区域切成storage block；C++在storage中开始和结束object lifetime。最后还要由ownership contract决定谁负责销毁对象、何时释放storage。把这些层混成“new很慢”会隐藏真正瓶颈。
+
+<Term def="进程看到的连续逻辑地址集合，由操作系统和页表映射到物理页或其他后备存储，使地址布局与物理内存解耦。">
+  virtual address space
+</Term>
+
+先预测热点来自allocation frequency、working-set pressure、object lifetime、fragmentation、zeroing、page fault还是cache locality，再选择实验。替换allocator只能改变其中一部分；若问题是遍历分散对象或数据规模超出memory，换一个更快的free list不会自动修复。
+
+## virtual address space与memory pages
+
+virtual address space按memory pages管理。reserve一段地址不等于所有physical pages立即驻留；首次触碰可能触发minor page fault，由OS建立映射并提供zero-filled page。若所需数据不在RAM，major fault可能需要I/O。TLB缓存最近的address translation，working set跨越大量pages会增加translation miss。
+
+<Term def="虚拟内存映射和保护的固定粒度块；page size决定页表、TLB覆盖、fault与内部浪费的基本单位。">
+  memory page
+</Term>
+
+<ChpVirtualMemoryPressureMap />
+
+resident set是当前驻留physical memory的页面集合，working set是某一时间窗口真正活跃的页面。访问模式若超过可用memory并不断把即将再次访问的page换出，就会发生thrashing：程序大部分时间处理page movement而不是业务计算。顺序扫描大文件、random pointer graph与多进程竞争会产生不同fault和cache行为，必须分别测量。
+
+<Term def="working set超过可用物理内存或访问缺乏局部性，导致页面频繁换入换出并让有效计算显著下降的状态。">
+  thrashing
+</Term>
+
+large/huge pages可扩大TLB覆盖，但会改变allocation granularity、fragmentation、fault成本和部署权限；它们不是默认优化。memory mapping也不保证数据“免费加载”：mmap只建立地址关系，实际I/O仍可能在fault路径发生。测量时记录RSS、faults、I/O、TLB events和访问顺序。
+
+<Callout
+  type="trap"
+  title="陷阱：reserve或mmap成功说明内存已经可用且访问成本固定"
+>
+  地址空间预留、page commitment与实际resident
+  pages是不同状态。benchmark若只测reserve不触碰页面，会漏掉zeroing和fault；若预热全部页面，又会漏掉生产cold-start。应分别定义cold、warm和steady-state场景。
+</Callout>
+
+## stack memory与heap memory
+
+stack memory通常随function call维护frame，automatic-lifetime local objects常由stack pointer附近storage承载；退出scope时按逆序析构。compiler可依据as-if rule把对象放进register、消除它或采用其他storage，所以“局部变量必在栈上”不是语言保证。stack容量有限，深递归或大型local array可能overflow。
+
+heap memory表示由dynamic allocation管理、lifetime不受当前scope结束直接约束的storage。allocator可能从thread cache、size class、free list或OS mapping满足请求；small allocation不必每次system call，成本也不能写死为固定纳秒。contention、fragmentation、metadata、page touch与locality共同决定表现。
+
+<Term def="与调用栈和scope退出紧密关联的自动存储区域，通常具有快速线性回收，但容量和lifetime受限。">
+  stack memory
+</Term>
+
+<Term def="由动态分配器提供并显式或经owner释放的存储区域，支持跨scope lifetime但带来分配策略、碎片和并发成本。">
+  heap memory
+</Term>
+
+选择不是“能上栈绝不上堆”。大对象会占用有限stack，跨scope/shared ownership需要独立lifetime，返回值优化也不等价于“对象必须在stack”。真正策略是减少不必要allocation、让owner明确、批量/复用适合的lifetime，并以目标allocator和workload测量。
+
+## storage allocation与object lifetime
+
+new expression执行两件事：调用allocation function（通常`operator new`）取得适当size/alignment的raw storage，再在其中construct object；delete expression先调用destructor，再把storage交给deallocation function（通常`operator delete`）。new/delete operators可以定制storage策略，但必须匹配size、alignment、异常与对应释放路径。
+
+```cpp
+void* storage = ::operator new(sizeof(Session),
+                               std::align_val_t{alignof(Session)});
+Session* session = nullptr;
+
+try {
+    session = ::new (storage) Session(config); // placement new
+    session->run();
+    session->~Session();
+    ::operator delete(storage, std::align_val_t{alignof(Session)});
+} catch (...) {
+    if (session == nullptr) {
+        ::operator delete(storage, std::align_val_t{alignof(Session)});
+    }
+    throw;
+}
+```
+
+placement new不分配storage，只在caller提供的地址开始object lifetime。成功构造后必须在正确时机显式析构，再由原storage provider回收；constructor抛出时对象lifetime未开始，cleanup路径不同。现实代码应把这些步骤封装进RAII pool/allocator，而不是散落手写。
+
+<Term def="在调用方提供且满足大小和对齐要求的raw storage中构造对象的new形式，本身不负责取得或释放storage。">
+  placement new
+</Term>
+
+## memory alignment与padding
+
+每个type有alignment requirement，object address必须满足它。struct layout会在members之间或末尾插入padding，以保证每个member和array下一元素对齐；member顺序因此影响`sizeof`与每条cache line可容纳元素数。over-aligned type的dynamic storage必须走支持对应alignment的allocation/deallocation形式。
+
+```cpp
+struct alignas(64) WorkerCounter {
+    std::atomic<std::uint64_t> completed{0};
+};
+
+static_assert(alignof(WorkerCounter) >= 64);
+static_assert(sizeof(WorkerCounter) % alignof(WorkerCounter) == 0);
+```
+
+<Term def="为满足成员地址要求或数组stride而插入、但不承载业务值的字节；会影响对象大小、cache密度与序列化布局。">
+  padding
+</Term>
+
+更大alignment不必然更快。`alignas(64)`可隔离频繁写入的per-thread counters，降低false sharing，却让每个counter至少占一line；如果对象只读或数量巨大，footprint可能更差。SIMD instruction是否要求/受益于alignment取决于ISA与generated code。用`alignof`、`sizeof`、layout dump和hardware counters验证，不用固定cache-line假设替代目标机器。
+
+<ChpStorageLifetimeOwnershipMap />
+
+## memory ownership与RAII
+
+memory ownership回答谁负责结束object lifetime并释放storage。RAII把resource acquisition绑定constructor，把release绑定destructor，使normal return与exception unwinding共享cleanup路径。value member和container优先；需要dynamic unique owner时用`std::unique_ptr`，共享lifetime才用`std::shared_ptr`，非拥有观察者必须显式保证owner活着。
+
+<Term def="让对象构造获得resource、析构释放resource，从而把cleanup绑定到scope和ownership的生命周期技术。">
+  RAII
+</Term>
+
+```cpp
+auto session = std::make_unique<Session>(config);
+std::vector<std::unique_ptr<Node>> nodes;
+nodes.emplace_back(std::make_unique<Node>());
+
+std::shared_ptr<const Catalog> shared = loadCatalog();
+std::weak_ptr<const Catalog> observer = shared;
+```
+
+`shared_ptr`包含shared ownership control block，copy会更新reference count；原子更新、control-block access和可能的extra allocation都有成本。`make_shared`通常把object与control block组合分配，但weak references可能延长整块storage占用。cycle不会自动打破，需要用`weak_ptr`表达非拥有edge。性能优化不能以raw pointer替换owner却丢失lifetime contract。
+
+<Callout
+  type="trap"
+  title="陷阱：shared_ptr能自动解决所有生命周期并且只是一个pointer"
+>
+  shared ownership是业务语义，不是默认安全包装。reference
+  counting不能处理cycle，copy可能产生同步与cache流量，control
+  block也有lifetime。先用value或unique
+  ownership；只有多个主体确实共同决定销毁时才共享。
+</Callout>
+
+## small size optimization避免常见小分配
+
+small size optimization在object内部保留小buffer：value较小时直接存于object，超过capacity才转到external allocation。string的small-string optimization与function-like wrapper的small-buffer optimization都属于此类。threshold、layout和eligible type是implementation detail，不能依赖固定字节数或假设所有小值都不分配。
+
+<Term def="在对象自身表示中预留有限storage，使常见小值无需独立heap allocation，较大值再回退到外部存储的策略。">
+  small size optimization
+</Term>
+
+优化交换了每个object更大的固定size、branch/state与move规则，以减少常见allocation。大量empty/small objects可能因inline buffer扩大working set；large values仍会allocate。应测value-size distribution、object count、copy/move和allocation，而不是只测一个短string。
+
+## arena与custom memory allocator
+
+arena从较大block顺序切出storage，单次allocate常近似pointer bump；多个对象共享arena lifetime，reset时批量回收。它适合request、frame、parser AST等“集中创建、一起销毁”的阶段性对象。若对象持有外部resource或non-trivial destructor，arena仍需记录并执行destruction，不能只丢掉bytes。
+
+<ChpSmallObjectArenaMap />
+
+<Term def="从一个或多个大block顺序提供许多小allocation，并在共同生命周期结束时批量回收的区域分配策略。">
+  arena
+</Term>
+
+custom memory allocator还包括fixed-size pool、free list、slab、stack allocator和标准allocator/PMR接口。pool适合同size反复reuse，arena适合同lifetime批量release；general-purpose allocator需要处理多size、多thread与任意free order。选择器必须匹配allocation pattern，不能只比较单线程allocate microbenchmark。
+
+fragmentation分internal与external：size class/block内部浪费是internal，空闲空间被切散无法满足大请求是external。arena几乎没有individual free，却可能因phase过长保留peak memory；thread-local pool减少contention但增加每thread reserve和跨thread free复杂度。报告allocation latency还要同时报告peak/resident bytes、waste、reset/destructor cost与failure behavior。
+
+## 第7章实验协议
+
+1. 分别测reserve-only、first-touch cold pages与warm traversal，记录faults、RSS和time。
+2. 扩大working set并改变访问顺序，观察cache/TLB miss到thrashing的转折。
+3. 分离operator new storage获取、placement construction、destruction与deallocation成本。
+4. 对不同member order输出sizeof/alignof/offset，测array scan与false sharing workload。
+5. 比较value、unique_ptr、shared_ptr/make_shared的allocation、copy与lifetime行为。
+6. 统计string/callable size分布和实际allocation，验证small size optimization交叉点。
+7. 对request-lifetime objects比较general allocator、arena和pool的time、peak RSS与waste。
+8. 为arena加入throwing constructor、non-trivial destructor、reset和跨thread misuse tests。
+
+## 小结
+
+- virtual address space通过memory pages映射physical memory；fault、TLB和working set决定访问成本
+- thrashing是页面频繁换入换出，替换小对象allocator无法解决超大working set
+- stack与heap代表不同storage/lifetime策略，语言不保证每个local对象的物理位置
+- new expression组合allocation与construction；placement new只开始object lifetime
+- alignment与padding影响合法地址、object size、cache密度和false sharing
+- RAII把ownership与cleanup绑定；unique/shared/weak分别表达不同lifetime关系
+- small size optimization用更大inline representation交换常见小值的allocation
+- arena与custom allocator必须匹配size、thread、free order和共同lifetime
+
+<Attribution
+  adaptedFrom="C++ High Performance, First Edition, Chapter 7: Memory Management"
+  adaptedUrl="https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
+/>
+
+<Glossary>
+  <GlossaryItem term="virtual address space">
+    由页表映射到物理或后备存储的进程逻辑地址集合。
+  </GlossaryItem>
+  <GlossaryItem term="memory page">
+    虚拟内存映射、保护与fault处理的固定粒度块。
+  </GlossaryItem>
+  <GlossaryItem term="thrashing">
+    working set失配导致页面频繁换入换出的状态。
+  </GlossaryItem>
+  <GlossaryItem term="stack memory">
+    与调用和scope紧密关联的自动存储区域。
+  </GlossaryItem>
+  <GlossaryItem term="heap memory">
+    由动态分配器管理并通过owner控制lifetime的storage。
+  </GlossaryItem>
+  <GlossaryItem term="placement new">
+    在调用方提供的raw storage中开始object lifetime。
+  </GlossaryItem>
+  <GlossaryItem term="padding">
+    为alignment和array stride插入的非业务字节。
+  </GlossaryItem>
+  <GlossaryItem term="RAII">
+    把resource acquisition/release绑定构造析构的技术。
+  </GlossaryItem>
+  <GlossaryItem term="small size optimization">
+    以object内inline buffer避免常见小值allocation的策略。
+  </GlossaryItem>
+  <GlossaryItem term="arena">
+    按共同lifetime批量分配和回收对象storage的区域。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：程序reserve了8 GiB地址但RSS很小，第一次扫描却很慢，怎样解释并验证？** 区分地址、commit与resident page。
+
+<Answer question="首次扫描的成本可能来自哪里？">
+  reserve成功只取得virtual address range，不证明所有physical
+  pages已resident。first touch可能逐页触发minor faults、zero
+  fill和page-table建立；若数据来自file
+  mapping还可能I/O。分别记录reserve时间、first-touch与second
+  traversal，采集minor/major faults、RSS、I/O和TLB
+  events；再按sequential/random访问与working-set大小分层，不能把cold
+  fault成本归咎于普通load指令。
+</Answer>
+
+2. **问题 2：实现arena中的placement construction时，constructor可能抛异常且对象有destructor。** 设计正确cleanup。
+
+<Answer question="storage与object lifetime怎样分别管理？">
+  arena先提供满足size/alignment的raw
+  storage，再placement-new；只有constructor成功后才登记destructor
+  record。若构造抛出，对象lifetime未开始，不调用destructor，可回滚bump
+  pointer或按arena策略保留洞。reset时按逆序执行所有已登记non-trivial
+  destructors，最后批量释放blocks。arena
+  owner用RAII保证异常路径也reset，并禁止对象逃逸超过arena lifetime。
+</Answer>
+
+3. **问题 3：大量短字符串是否一定应依赖small size optimization而不用arena？** 设计对比实验。
+
+  <Answer question="两种策略交换了什么？">SSO对低于implementation threshold的值避免external allocation，但扩大每个string固定size；长值仍allocate。arena可批量承载长短payload并快速reset，却要求共同lifetime且处理destructor。先统计长度分布、对象数和lifetime，锁定library实现；比较普通string、reserved string和PMR/arena版本的allocations、object/payload bytes、construction、scan、reset/destruction与peak RSS。结果应覆盖短值占主导和长尾两种输入。</Answer>
+</Exercises>

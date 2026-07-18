@@ -1,0 +1,345 @@
+---
+title: "第15章 Service Mesh实践之Kuma"
+description: "依据孔庆雍《Kong网关：入门、实战与进阶》完整目录：从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战"
+type: C
+section: "Kong网关：入门、实战与进阶（Kong 2.0.5 / 2021）"
+order: 15
+draft: false
+math: false
+sourceUrl: "https://www.tenlong.com.tw/products/9787111689478"
+demo: true
+---
+
+import {
+  Kga15KumaRouteLab,
+  Kga15KumaRuntimeLab,
+  Kga15KumaEvidenceLab,
+} from "@/components/mdx/kong-gateway/diagrams/kga-15-kuma";
+
+# 第15章 Service Mesh实践之Kuma
+
+本课程对应孔庆雍著《Kong网关：入门、实战与进阶》，机械工业出版社2021年9月出版，472页，ISBN 9787111689478。权威目录为4篇、16章、附录A至D。作者配套源码与第1章示例固定kong:2.0.5，因此课程以Kong 2.0.5为行为边界。
+
+全书正式分母为16章与4个附录，共20个正式单元、280个唯一章/附录/节节点；另设学习地图和总复习，共22页。后来的Kong Gateway路由表达式、新插件、Konnect、现代控制面或AI Gateway只能作为版本差异，不能替代原书内容。本页逐项覆盖18个目录节点，交付Kuma组件图、策略匹配表、安全流量观测实验、mTLS证据、权限负向测试与回退。
+
+<Objectives>
+
+- 能解释“第15章 Service Mesh实践之Kuma”的18个目录节点，并绘制客户端、Kong、插件、上游与外部依赖的责任边界。
+- 能比较基线、压力、配置变化、节点故障和恢复轨迹，判断路由、插件、缓存、重试与业务完成点。
+- 能设计并复现Kuma组件图、策略匹配表、安全流量观测实验、mTLS证据、权限负向测试与回退，用配置、请求、日志、指标与最终状态支持结论。
+- 能分析“把API网关南北向认证直接等同网格东西向身份，或只验证允许流量而没有默认拒绝和证书轮换证据”为何失败，并写出停止、恢复、回退与独立交接条件。
+
+</Objectives>
+
+## 从一条经过网关的请求开始
+
+先预测：请求携带Host、path、method、headers和协议进入Kong后会命中哪个Route，关联哪个Service，哪些插件按优先级进入rewrite、access、header_filter、body_filter与log阶段，Upstream怎样选择Target，最终响应和日志包含什么。观察前必须写下预测，再用真实轨迹纠正模型。
+
+Kong 2.0.5的正确性不是“端口能通”。控制面接受配置、worker取得配置、路由匹配、插件执行、上游完成、客户端收到响应和业务状态落定是不同检查点。超时与重试还可能让一次客户端请求触发多次上游操作，非幂等操作必须单独验证。
+
+## 核心词汇与版本边界
+
+<Term def="Service Mesh是第15章 Service Mesh实践之Kuma的第1个核心概念，必须同时说明Kong 2.0.5对象、执行阶段、故障边界和观测证据">
+  Service Mesh
+</Term>
+、
+<Term def="Kuma控制面是第15章 Service Mesh实践之Kuma的第2个核心概念，必须同时说明Kong 2.0.5对象、执行阶段、故障边界和观测证据">
+  Kuma控制面
+</Term>
+、
+<Term def="数据面代理是第15章 Service Mesh实践之Kuma的第3个核心概念，必须同时说明Kong 2.0.5对象、执行阶段、故障边界和观测证据">
+  数据面代理
+</Term>
+、
+<Term def="mTLS是第15章 Service Mesh实践之Kuma的第4个核心概念，必须同时说明Kong 2.0.5对象、执行阶段、故障边界和观测证据">
+  mTLS
+</Term>
+、
+<Term def="TrafficPermission是第15章 Service Mesh实践之Kuma的第5个核心概念，必须同时说明Kong 2.0.5对象、执行阶段、故障边界和观测证据">
+  TrafficPermission
+</Term>
+
+这些词构成本页词汇。每个词都要回答：由谁创建，保存在哪里，在哪个请求或配置阶段生效，失败后留下什么，怎样观测，以及Kong 2.0.5之后哪些变化不属于本书。
+
+<Kga15KumaRouteLab />
+
+## 原书目录逐节点重构
+
+### 15.1 Service Mesh简介
+
+**目录节点 1/18。** Service Mesh简介服务于“从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战”。先识别它在Kong 2.0.5中属于客户端、Nginx/OpenResty、Route、Service、Plugin、Upstream、Target、数据库、控制面还是外部平台，再写清输入、状态变化、输出与所有者。结论必须能从配置、命令输出、Admin API响应、代理轨迹、日志和业务结果复核。
+
+机制轨迹从“本章输入与版本契约”进入“Service Mesh简介”，随后到“Kuma简介”。沿请求接入、路由匹配、插件阶段、上游选择、响应过滤和日志阶段记录时间线；配置加载、缓存传播、进程重载、节点故障与重试必须各有分支。任何“已启动”“返回2xx”或“界面可见”都只是中间状态。
+
+实验固定Kong 2.0.5、OpenResty、数据库模式、请求集合、Route和Service，只改变路径或Host、插件、Target权重、失败节点、并发或部署状态之一。保存吞吐、P50/P95/P99、错误率、上游分布、worker和数据库指标，并用“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”验收。
+
+### 15.2 Kuma简介
+
+**目录节点 2/18。** Kuma简介服务于“从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战”。先识别它在Kong 2.0.5中属于客户端、Nginx/OpenResty、Route、Service、Plugin、Upstream、Target、数据库、控制面还是外部平台，再写清输入、状态变化、输出与所有者。结论必须能从配置、命令输出、Admin API响应、代理轨迹、日志和业务结果复核。
+
+机制轨迹从“Service Mesh简介”进入“Kuma简介”，随后到“为什么使用Kuma”。沿请求接入、路由匹配、插件阶段、上游选择、响应过滤和日志阶段记录时间线；配置加载、缓存传播、进程重载、节点故障与重试必须各有分支。任何“已启动”“返回2xx”或“界面可见”都只是中间状态。
+
+实验固定Kong 2.0.5、OpenResty、数据库模式、请求集合、Route和Service，只改变路径或Host、插件、Target权重、失败节点、并发或部署状态之一。保存吞吐、P50/P95/P99、错误率、上游分布、worker和数据库指标，并用“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”验收。
+
+#### 15.2.1 为什么使用Kuma
+
+**目录节点 3/18。** 为什么使用Kuma服务于“从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战”。先识别它在Kong 2.0.5中属于客户端、Nginx/OpenResty、Route、Service、Plugin、Upstream、Target、数据库、控制面还是外部平台，再写清输入、状态变化、输出与所有者。结论必须能从配置、命令输出、Admin API响应、代理轨迹、日志和业务结果复核。
+
+机制轨迹从“Kuma简介”进入“为什么使用Kuma”，随后到“Kuma与其他Service Mesh方案的比较”。沿请求接入、路由匹配、插件阶段、上游选择、响应过滤和日志阶段记录时间线；配置加载、缓存传播、进程重载、节点故障与重试必须各有分支。任何“已启动”“返回2xx”或“界面可见”都只是中间状态。
+
+实验固定Kong 2.0.5、OpenResty、数据库模式、请求集合、Route和Service，只改变路径或Host、插件、Target权重、失败节点、并发或部署状态之一。保存吞吐、P50/P95/P99、错误率、上游分布、worker和数据库指标，并用“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”验收。
+
+#### 15.2.2 Kuma与其他Service Mesh方案的比较
+
+**目录节点 4/18。** Kuma与其他Service Mesh方案的比较服务于“从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战”。先识别它在Kong 2.0.5中属于客户端、Nginx/OpenResty、Route、Service、Plugin、Upstream、Target、数据库、控制面还是外部平台，再写清输入、状态变化、输出与所有者。结论必须能从配置、命令输出、Admin API响应、代理轨迹、日志和业务结果复核。
+
+机制轨迹从“为什么使用Kuma”进入“Kuma与其他Service Mesh方案的比较”，随后到“Kuma系统组件”。沿请求接入、路由匹配、插件阶段、上游选择、响应过滤和日志阶段记录时间线；配置加载、缓存传播、进程重载、节点故障与重试必须各有分支。任何“已启动”“返回2xx”或“界面可见”都只是中间状态。
+
+实验固定Kong 2.0.5、OpenResty、数据库模式、请求集合、Route和Service，只改变路径或Host、插件、Target权重、失败节点、并发或部署状态之一。保存吞吐、P50/P95/P99、错误率、上游分布、worker和数据库指标，并用“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”验收。
+
+#### 15.2.3 Kuma系统组件
+
+**目录节点 5/18。** Kuma系统组件服务于“从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战”。先识别它在Kong 2.0.5中属于客户端、Nginx/OpenResty、Route、Service、Plugin、Upstream、Target、数据库、控制面还是外部平台，再写清输入、状态变化、输出与所有者。结论必须能从配置、命令输出、Admin API响应、代理轨迹、日志和业务结果复核。
+
+机制轨迹从“Kuma与其他Service Mesh方案的比较”进入“Kuma系统组件”，随后到“Kuma部署示例”。沿请求接入、路由匹配、插件阶段、上游选择、响应过滤和日志阶段记录时间线；配置加载、缓存传播、进程重载、节点故障与重试必须各有分支。任何“已启动”“返回2xx”或“界面可见”都只是中间状态。
+
+实验固定Kong 2.0.5、OpenResty、数据库模式、请求集合、Route和Service，只改变路径或Host、插件、Target权重、失败节点、并发或部署状态之一。保存吞吐、P50/P95/P99、错误率、上游分布、worker和数据库指标，并用“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”验收。
+
+#### 15.2.4 Kuma部署示例
+
+**目录节点 6/18。** Kuma部署示例服务于“从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战”。先识别它在Kong 2.0.5中属于客户端、Nginx/OpenResty、Route、Service、Plugin、Upstream、Target、数据库、控制面还是外部平台，再写清输入、状态变化、输出与所有者。结论必须能从配置、命令输出、Admin API响应、代理轨迹、日志和业务结果复核。
+
+机制轨迹从“Kuma系统组件”进入“Kuma部署示例”，随后到“Kuma策略概述”。沿请求接入、路由匹配、插件阶段、上游选择、响应过滤和日志阶段记录时间线；配置加载、缓存传播、进程重载、节点故障与重试必须各有分支。任何“已启动”“返回2xx”或“界面可见”都只是中间状态。
+
+实验固定Kong 2.0.5、OpenResty、数据库模式、请求集合、Route和Service，只改变路径或Host、插件、Target权重、失败节点、并发或部署状态之一。保存吞吐、P50/P95/P99、错误率、上游分布、worker和数据库指标，并用“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”验收。
+
+### 15.3 Kuma策略概述
+
+**目录节点 7/18。** Kuma策略概述服务于“从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战”。先识别它在Kong 2.0.5中属于客户端、Nginx/OpenResty、Route、Service、Plugin、Upstream、Target、数据库、控制面还是外部平台，再写清输入、状态变化、输出与所有者。结论必须能从配置、命令输出、Admin API响应、代理轨迹、日志和业务结果复核。
+
+机制轨迹从“Kuma部署示例”进入“Kuma策略概述”，随后到“策略配置项描述”。沿请求接入、路由匹配、插件阶段、上游选择、响应过滤和日志阶段记录时间线；配置加载、缓存传播、进程重载、节点故障与重试必须各有分支。任何“已启动”“返回2xx”或“界面可见”都只是中间状态。
+
+实验固定Kong 2.0.5、OpenResty、数据库模式、请求集合、Route和Service，只改变路径或Host、插件、Target权重、失败节点、并发或部署状态之一。保存吞吐、P50/P95/P99、错误率、上游分布、worker和数据库指标，并用“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”验收。
+
+#### 15.3.1 策略配置项描述
+
+**目录节点 8/18。** 策略配置项描述服务于“从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战”。先识别它在Kong 2.0.5中属于客户端、Nginx/OpenResty、Route、Service、Plugin、Upstream、Target、数据库、控制面还是外部平台，再写清输入、状态变化、输出与所有者。结论必须能从配置、命令输出、Admin API响应、代理轨迹、日志和业务结果复核。
+
+机制轨迹从“Kuma策略概述”进入“策略配置项描述”，随后到“使用策略”。沿请求接入、路由匹配、插件阶段、上游选择、响应过滤和日志阶段记录时间线；配置加载、缓存传播、进程重载、节点故障与重试必须各有分支。任何“已启动”“返回2xx”或“界面可见”都只是中间状态。
+
+实验固定Kong 2.0.5、OpenResty、数据库模式、请求集合、Route和Service，只改变路径或Host、插件、Target权重、失败节点、并发或部署状态之一。保存吞吐、P50/P95/P99、错误率、上游分布、worker和数据库指标，并用“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”验收。
+
+#### 15.3.2 使用策略
+
+**目录节点 9/18。** 使用策略服务于“从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战”。先识别它在Kong 2.0.5中属于客户端、Nginx/OpenResty、Route、Service、Plugin、Upstream、Target、数据库、控制面还是外部平台，再写清输入、状态变化、输出与所有者。结论必须能从配置、命令输出、Admin API响应、代理轨迹、日志和业务结果复核。
+
+机制轨迹从“策略配置项描述”进入“使用策略”，随后到“策略匹配规则”。沿请求接入、路由匹配、插件阶段、上游选择、响应过滤和日志阶段记录时间线；配置加载、缓存传播、进程重载、节点故障与重试必须各有分支。任何“已启动”“返回2xx”或“界面可见”都只是中间状态。
+
+实验固定Kong 2.0.5、OpenResty、数据库模式、请求集合、Route和Service，只改变路径或Host、插件、Target权重、失败节点、并发或部署状态之一。保存吞吐、P50/P95/P99、错误率、上游分布、worker和数据库指标，并用“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”验收。
+
+#### 15.3.3 策略匹配规则
+
+**目录节点 10/18。** 策略匹配规则服务于“从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战”。先识别它在Kong 2.0.5中属于客户端、Nginx/OpenResty、Route、Service、Plugin、Upstream、Target、数据库、控制面还是外部平台，再写清输入、状态变化、输出与所有者。结论必须能从配置、命令输出、Admin API响应、代理轨迹、日志和业务结果复核。
+
+机制轨迹从“使用策略”进入“策略匹配规则”，随后到“Kuma内置策略详解”。沿请求接入、路由匹配、插件阶段、上游选择、响应过滤和日志阶段记录时间线；配置加载、缓存传播、进程重载、节点故障与重试必须各有分支。任何“已启动”“返回2xx”或“界面可见”都只是中间状态。
+
+实验固定Kong 2.0.5、OpenResty、数据库模式、请求集合、Route和Service，只改变路径或Host、插件、Target权重、失败节点、并发或部署状态之一。保存吞吐、P50/P95/P99、错误率、上游分布、worker和数据库指标，并用“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”验收。
+
+### 15.4 Kuma内置策略详解
+
+**目录节点 11/18。** Kuma内置策略详解服务于“从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战”。先识别它在Kong 2.0.5中属于客户端、Nginx/OpenResty、Route、Service、Plugin、Upstream、Target、数据库、控制面还是外部平台，再写清输入、状态变化、输出与所有者。结论必须能从配置、命令输出、Admin API响应、代理轨迹、日志和业务结果复核。
+
+机制轨迹从“策略匹配规则”进入“Kuma内置策略详解”，随后到“安全类策略”。沿请求接入、路由匹配、插件阶段、上游选择、响应过滤和日志阶段记录时间线；配置加载、缓存传播、进程重载、节点故障与重试必须各有分支。任何“已启动”“返回2xx”或“界面可见”都只是中间状态。
+
+实验固定Kong 2.0.5、OpenResty、数据库模式、请求集合、Route和Service，只改变路径或Host、插件、Target权重、失败节点、并发或部署状态之一。保存吞吐、P50/P95/P99、错误率、上游分布、worker和数据库指标，并用“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”验收。
+
+#### 15.4.1 安全类策略
+
+**目录节点 12/18。** 安全类策略服务于“从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战”。先识别它在Kong 2.0.5中属于客户端、Nginx/OpenResty、Route、Service、Plugin、Upstream、Target、数据库、控制面还是外部平台，再写清输入、状态变化、输出与所有者。结论必须能从配置、命令输出、Admin API响应、代理轨迹、日志和业务结果复核。
+
+机制轨迹从“Kuma内置策略详解”进入“安全类策略”，随后到“流量控制类策略”。沿请求接入、路由匹配、插件阶段、上游选择、响应过滤和日志阶段记录时间线；配置加载、缓存传播、进程重载、节点故障与重试必须各有分支。任何“已启动”“返回2xx”或“界面可见”都只是中间状态。
+
+实验固定Kong 2.0.5、OpenResty、数据库模式、请求集合、Route和Service，只改变路径或Host、插件、Target权重、失败节点、并发或部署状态之一。保存吞吐、P50/P95/P99、错误率、上游分布、worker和数据库指标，并用“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”验收。
+
+#### 15.4.2 流量控制类策略
+
+**目录节点 13/18。** 流量控制类策略服务于“从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战”。先识别它在Kong 2.0.5中属于客户端、Nginx/OpenResty、Route、Service、Plugin、Upstream、Target、数据库、控制面还是外部平台，再写清输入、状态变化、输出与所有者。结论必须能从配置、命令输出、Admin API响应、代理轨迹、日志和业务结果复核。
+
+机制轨迹从“安全类策略”进入“流量控制类策略”，随后到“观测类策略”。沿请求接入、路由匹配、插件阶段、上游选择、响应过滤和日志阶段记录时间线；配置加载、缓存传播、进程重载、节点故障与重试必须各有分支。任何“已启动”“返回2xx”或“界面可见”都只是中间状态。
+
+实验固定Kong 2.0.5、OpenResty、数据库模式、请求集合、Route和Service，只改变路径或Host、插件、Target权重、失败节点、并发或部署状态之一。保存吞吐、P50/P95/P99、错误率、上游分布、worker和数据库指标，并用“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”验收。
+
+#### 15.4.3 观测类策略
+
+**目录节点 14/18。** 观测类策略服务于“从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战”。先识别它在Kong 2.0.5中属于客户端、Nginx/OpenResty、Route、Service、Plugin、Upstream、Target、数据库、控制面还是外部平台，再写清输入、状态变化、输出与所有者。结论必须能从配置、命令输出、Admin API响应、代理轨迹、日志和业务结果复核。
+
+机制轨迹从“流量控制类策略”进入“观测类策略”，随后到“Kuma实战”。沿请求接入、路由匹配、插件阶段、上游选择、响应过滤和日志阶段记录时间线；配置加载、缓存传播、进程重载、节点故障与重试必须各有分支。任何“已启动”“返回2xx”或“界面可见”都只是中间状态。
+
+实验固定Kong 2.0.5、OpenResty、数据库模式、请求集合、Route和Service，只改变路径或Host、插件、Target权重、失败节点、并发或部署状态之一。保存吞吐、P50/P95/P99、错误率、上游分布、worker和数据库指标，并用“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”验收。
+
+### 15.5 Kuma实战
+
+**目录节点 15/18。** Kuma实战服务于“从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战”。先识别它在Kong 2.0.5中属于客户端、Nginx/OpenResty、Route、Service、Plugin、Upstream、Target、数据库、控制面还是外部平台，再写清输入、状态变化、输出与所有者。结论必须能从配置、命令输出、Admin API响应、代理轨迹、日志和业务结果复核。
+
+机制轨迹从“观测类策略”进入“Kuma实战”，随后到“适配Kuma架构”。沿请求接入、路由匹配、插件阶段、上游选择、响应过滤和日志阶段记录时间线；配置加载、缓存传播、进程重载、节点故障与重试必须各有分支。任何“已启动”“返回2xx”或“界面可见”都只是中间状态。
+
+实验固定Kong 2.0.5、OpenResty、数据库模式、请求集合、Route和Service，只改变路径或Host、插件、Target权重、失败节点、并发或部署状态之一。保存吞吐、P50/P95/P99、错误率、上游分布、worker和数据库指标，并用“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”验收。
+
+#### 15.5.1 适配Kuma架构
+
+**目录节点 16/18。** 适配Kuma架构服务于“从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战”。先识别它在Kong 2.0.5中属于客户端、Nginx/OpenResty、Route、Service、Plugin、Upstream、Target、数据库、控制面还是外部平台，再写清输入、状态变化、输出与所有者。结论必须能从配置、命令输出、Admin API响应、代理轨迹、日志和业务结果复核。
+
+机制轨迹从“Kuma实战”进入“适配Kuma架构”，随后到“启动mTSL和TrafficPermission”。沿请求接入、路由匹配、插件阶段、上游选择、响应过滤和日志阶段记录时间线；配置加载、缓存传播、进程重载、节点故障与重试必须各有分支。任何“已启动”“返回2xx”或“界面可见”都只是中间状态。
+
+实验固定Kong 2.0.5、OpenResty、数据库模式、请求集合、Route和Service，只改变路径或Host、插件、Target权重、失败节点、并发或部署状态之一。保存吞吐、P50/P95/P99、错误率、上游分布、worker和数据库指标，并用“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”验收。
+
+#### 15.5.2 启动mTSL和TrafficPermission
+
+**目录节点 17/18。** 启动mTSL和TrafficPermission服务于“从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战”。先识别它在Kong 2.0.5中属于客户端、Nginx/OpenResty、Route、Service、Plugin、Upstream、Target、数据库、控制面还是外部平台，再写清输入、状态变化、输出与所有者。结论必须能从配置、命令输出、Admin API响应、代理轨迹、日志和业务结果复核。
+
+机制轨迹从“适配Kuma架构”进入“启动mTSL和TrafficPermission”，随后到“本章小结”。沿请求接入、路由匹配、插件阶段、上游选择、响应过滤和日志阶段记录时间线；配置加载、缓存传播、进程重载、节点故障与重试必须各有分支。任何“已启动”“返回2xx”或“界面可见”都只是中间状态。
+
+实验固定Kong 2.0.5、OpenResty、数据库模式、请求集合、Route和Service，只改变路径或Host、插件、Target权重、失败节点、并发或部署状态之一。保存吞吐、P50/P95/P99、错误率、上游分布、worker和数据库指标，并用“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”验收。
+
+### 15.6 本章小结
+
+**目录节点 18/18。** 本章小结服务于“从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战”。先识别它在Kong 2.0.5中属于客户端、Nginx/OpenResty、Route、Service、Plugin、Upstream、Target、数据库、控制面还是外部平台，再写清输入、状态变化、输出与所有者。结论必须能从配置、命令输出、Admin API响应、代理轨迹、日志和业务结果复核。
+
+机制轨迹从“启动mTSL和TrafficPermission”进入“本章小结”，随后到“本章证据门与回退”。沿请求接入、路由匹配、插件阶段、上游选择、响应过滤和日志阶段记录时间线；配置加载、缓存传播、进程重载、节点故障与重试必须各有分支。任何“已启动”“返回2xx”或“界面可见”都只是中间状态。
+
+实验固定Kong 2.0.5、OpenResty、数据库模式、请求集合、Route和Service，只改变路径或Host、插件、Target权重、失败节点、并发或部署状态之一。保存吞吐、P50/P95/P99、错误率、上游分布、worker和数据库指标，并用“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”验收。
+
+## 可复现实验与配置切片
+
+```bash
+# Kong 2.0.5：记录版本和配置来源，再创建最小Service与Route。
+kong version
+kong check -c ./kong.conf
+curl -sS -X POST http://127.0.0.1:8001/services --data name=book-upstream --data url=http://127.0.0.1:9000
+curl -sS -X POST http://127.0.0.1:8001/services/book-upstream/routes --data name=book-route --data 'paths[]=/book'
+curl -i http://127.0.0.1:8000/book/health
+```
+
+```lua
+-- 自定义观测点：只记录关联标识与阶段，不在事件循环中执行阻塞I/O。
+local trace = kong.request.get_header("x-trace-id") or kong.request.get_id()
+kong.service.request.set_header("x-trace-id", trace)
+kong.log.info("unit=kga-15-kuma trace=", trace)
+```
+
+```text
+evidence = kong/openresty/database/plugin version and configuration origin
+         + request(route/service/plugin/upstream/target) decision trace
+         + throughput/p50/p95/p99/error/upstream-distribution metrics
+         + reload/node/upstream/database fault injection timeline
+         + final response, business state, recovery and rollback reconciliation
+```
+
+## 三步交互实验
+
+<Stepper>
+  <Step title="1. 选择目录节点并预测请求路径">
+    改变Host、path、method和认证条件，先预测Route、Service、插件阶段与Target，再观察路径。
+    <Kga15KumaRouteLab />
+  </Step>
+  <Step title="2. 改变负载、部署和故障条件">
+    调整worker、Target、请求速率、DB-less、健康检查和节点故障，比较容量、尾延迟与可用性。
+    <Kga15KumaRuntimeLab />
+  </Step>
+  <Step title="3. 通过端到端证据门">
+    目录、版本、配置、请求轨迹、指标、故障、业务对账与回退齐全后才接受结论。
+    <Kga15KumaEvidenceLab />
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="语义陷阱">
+  把API网关南北向认证直接等同网格东西向身份，或只验证允许流量而没有默认拒绝和证书轮换证据。先写清请求匹配、配置传播、插件阶段、上游副作用与最终业务不变量，再选择命令或插件。
+</Callout>
+
+<Callout type="trap" title="版本陷阱">
+  原书及源码以Kong
+  2.0.5为基线，Cassandra支持、传统集群、路由、插件PDK、Kuma和Kubernetes接口均有时代语境；新版结果可作迁移差异，不能证明本书行为。
+</Callout>
+
+<Callout type="warning" title="隔离实验">
+  数据库迁移、配置覆盖、节点停止、网络隔离、Target摘除、证书和权限变更只在隔离环境演练。先保存配置、数据库和请求样本，规定停止条件与恢复上界。
+</Callout>
+
+## 独立证据与生产交接
+
+目录证据保存16章4附录与280个唯一节点映射；环境证据保存Kong 2.0.5、OpenResty、LuaJIT、数据库、插件和外部平台版本；配置证据保存来源优先级、声明文件、Admin API请求响应和生效时间；请求证据保存关联ID、Route、Service、Plugin、Upstream、Target与最终业务结果。
+
+性能判断固定请求集合、并发模型、连接复用、插件链、上游容量、数据库模式和日志策略。关闭认证、日志或健康检查换来的吞吐不是等价优化。平均值会隐藏worker停顿、缓存失效、数据库抖动、上游重试与节点切换，必须保留P95/P99和错误分类。
+
+恢复判断从业务状态结束。进程重启、Pod Ready、HAProxy重新放行、配置重新可见或监控恢复都只是阶段；还要核对非幂等请求、上游副作用、Consumer身份、配置版本和旧节点是否停止提供错误结果。
+
+## 本章回顾
+
+重新完成“从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战”：固定Kong 2.0.5和权威目录，从请求与配置状态机推导边界，通过基线、压力与故障实验测量，最后交付Kuma组件图、策略匹配表、安全流量观测实验、mTLS证据、权限负向测试与回退。只有“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”与反例都能由另一位读者独立重放，本页才算完成。
+
+## 复习与运行验收
+
+<Exercises>
+**问题 1**：为什么“第15章 Service Mesh实践之Kuma”必须覆盖18个目录节点？
+<Answer>这些节点共同组成“从Service Mesh和Kuma组件进入策略匹配，覆盖安全、流量、观测策略并完成mTLS与TrafficPermission实战”的请求、配置、运行与证据链；漏项会使Kuma组件图、策略匹配表、安全流量观测实验、mTLS证据、权限负向测试与回退无法独立复现。</Answer>
+
+**问题 2**：本页最小不变量是什么？
+
+<Answer>
+  控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明。需要版本、配置、请求轨迹、指标、故障与业务对账共同证明。
+</Answer>
+
+**问题 3**：怎样构造最小反例？
+
+<Answer>
+  固定Kong
+  2.0.5、请求集合、Route、Service和上游，只改变一个匹配条件、插件、Target权重、失败节点或数据库状态，再比较决策轨迹与最终业务结果。
+</Answer>
+
+**问题 4**：为什么不能直接用新版Kong替代本页实验？
+
+<Answer>
+  原书与源码以Kong
+  2.0.5为基线；路由、插件、部署、数据库和云原生接口后来均有变化，新版只能作为差异材料。
+</Answer>
+
+**问题 5**：如何验证性能结论？
+
+<Answer>
+  固定请求分布、连接、插件链、上游与可靠语义，重复测吞吐、P50/P95/P99、错误率、worker、数据库和上游分布，并独立对账。
+</Answer>
+
+**问题 6**：独立交接需要什么？
+
+<Answer>需要完整目录映射、版本环境、配置快照、请求轨迹、Kuma组件图、策略匹配表、安全流量观测实验、mTLS证据、权限负向测试与回退、负载、故障、对账、停止、恢复、回退和责任人。</Answer>
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Service Mesh">
+    Service Mesh在本页对应Kong
+    2.0.5中的具体对象、配置或状态；适用范围由“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”和故障反例共同限定。
+  </GlossaryItem>
+  <GlossaryItem term="Kuma控制面">
+    Kuma控制面在本页对应Kong
+    2.0.5中的具体对象、配置或状态；适用范围由“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”和故障反例共同限定。
+  </GlossaryItem>
+  <GlossaryItem term="数据面代理">
+    数据面代理在本页对应Kong
+    2.0.5中的具体对象、配置或状态；适用范围由“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”和故障反例共同限定。
+  </GlossaryItem>
+  <GlossaryItem term="mTLS">
+    mTLS在本页对应Kong
+    2.0.5中的具体对象、配置或状态；适用范围由“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”和故障反例共同限定。
+  </GlossaryItem>
+  <GlossaryItem term="TrafficPermission">
+    TrafficPermission在本页对应Kong
+    2.0.5中的具体对象、配置或状态；适用范围由“控制面下发与数据面代理状态一致，mTLS身份和TrafficPermission默认拒绝边界可由允许与拒绝请求共同证明”和故障反例共同限定。
+  </GlossaryItem>
+</Glossary>
+
+[← 上一页：第14章 Kong网关结合Kubernetes架构方案](/learn/kong-gateway/14-14-kubernetes/kga-14-kubernetes) · [下一页：第16章 Serverless架构 →](/learn/kong-gateway/16-16-serverless/kga-16-serverless)
+
+<Attribution
+  adaptedFrom="孔庆雍《Kong网关：入门、实战与进阶》"
+  adaptedUrl="https://www.tenlong.com.tw/products/9787111689478"
+/>

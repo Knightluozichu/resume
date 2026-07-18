@@ -1,80 +1,38 @@
-/**
- * <LupFinalReviewDiagram>：Lua 全书知识串联图。
- *
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * viewBox 720×420，四周留白 >=32，字号 >=11。
- */
+"use client";
 
-const VIEW_W = 720;
-const VIEW_H = 420;
+import { LuaOfficialLab } from "./official-lab";
 
-const accent = "var(--accent)";
-const success = "var(--success)";
-const warning = "var(--warning)";
-const danger = "var(--danger)";
-const primary = "var(--text-primary)";
-const secondary = "var(--text-secondary)";
-const border = "var(--border)";
-const elevated = "var(--bg-elevated)";
+const reviewCases = [
+  { label: "Basics", fields: [["Recall", "Values, tables, functions, I/O, scope, and control"], ["Derive", "Representation and truth/sequence invariants"], ["Demonstrate", "Eight Queens with 92 solutions for N=8"]] },
+  { label: "Real programs", fields: [["Recall", "Closures, patterns, structures, serialization, modules, iterators"], ["Derive", "State, grammar, graph, and module protocols"], ["Demonstrate", "Frequency and Markov pipelines with deterministic tests"]] },
+  { label: "Lua-isms", fields: [["Recall", "Metamethods, OOP, environments, GC, coroutines, reflection"], ["Derive", "Dispatch, reachability, and scheduling ownership"], ["Demonstrate", "A bounded event scheduler and sandbox capability map"]] },
+  { label: "C API", fields: [["Recall", "Stacks, C functions, userdata, resources, states"], ["Derive", "Top deltas, continuation, and cleanup contracts"], ["Demonstrate", "A module that passes fault-injected lifecycle tests"]], alert: "Review by reconstructing contracts and evidence, not by re-reading summaries. Each part has a concrete proof of mastery." },
+] as const;
 
-export function LupFinalReviewDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="Lua 全书知识串联：类型值→表达式语句→函数闭包协程→元表C API。从数据基础到元编程，层层递进。"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <text x={VIEW_W / 2} y={34} textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>
-            全书知识串联：从值到元编程
-          </text>
-          <text x={VIEW_W / 2} y={54} textAnchor="middle" fontSize="11" fill={secondary}>
-            类型值打底 · 表达式语句强骨 · 函数闭包拓边界 · 元表C API收全貌
-          </text>
+const failureCases = [
+  { label: "Representation", fields: [["Symptom", "Length, alias, encoding, or numeric meaning is wrong"], ["Trace", "Value type, identity, keys, bytes, and conversion"], ["Fix", "State a representation invariant and test boundaries"]] },
+  { label: "Control", fields: [["Symptom", "Wrong return, resume, error, or tail behavior"], ["Trace", "Frames, owner, yielded/results, and protected status"], ["Fix", "Draw the control transfer and result protocol"]] },
+  { label: "Lifetime", fields: [["Symptom", "Leak, stale pointer, premature GC, or double close"], ["Trace", "Reachability roots, resource owner, and terminal paths"], ["Fix", "Use explicit state transitions and idempotent cleanup"]] },
+  { label: "Isolation", fields: [["Symptom", "Unexpected authority, race, or cross-state corruption"], ["Trace", "Environment, registry, state, OS owner, and messages"], ["Fix", "Minimize capabilities and serialize/copy at boundaries"]], alert: "Most hard Lua bugs fit one of four models: representation, control, lifetime, or isolation. Classify before changing code." },
+] as const;
 
-          {/* 四层知识链 */}
-          <rect x={32} y={76} width={656} height={72} rx="8" fill={accent} fillOpacity="0.06" stroke={accent} strokeWidth="1" strokeOpacity="0.3" />
-          <text x={56} y={98} fontSize="12" fontWeight="700" fill={accent}>Layer 1 · 类型与值</text>
-          <text x={56} y={116} fontSize="11" fill={secondary}>8 种基本类型 · table 是唯一数据结构 · nil 表示缺失 · 动态类型（值有类型，变量没有）</text>
-          <text x={56} y={134} fontSize="11" fill={secondary}>→ 一切的基础：Lua 中所有数据都以值的形式存在，table 承载数组/字典/对象/模块</text>
+const capstoneCases = [
+  { label: "Config", fields: [["Lua side", "Tables, environments, modules, validation"], ["C side", "Balanced lookup and checked conversion"], ["Gate", "No partial commit or ambient host capability"]] },
+  { label: "Pipeline", fields: [["Lua side", "Patterns, iterators, closures, serialization"], ["C side", "Optional bounded native acceleration"], ["Gate", "Streaming, backpressure, and deterministic output"]] },
+  { label: "Scheduler", fields: [["Lua side", "Coroutines and typed wait requests"], ["C side", "Non-blocking poller and continuation owner"], ["Gate", "Fairness, timeout, cancellation, and traceback"]] },
+  { label: "Extension", fields: [["Lua side", "Metatable/userdata API and module contract"], ["C side", "Stack, registry, resource, and state isolation"], ["Gate", "ABI matrix plus every-edge failure injection"]], alert: "The final capstone should cross Lua and C only through explicit data, call, ownership, and failure contracts." },
+] as const;
 
-          <line x1={360} y1={148} x2={360} y2={160} stroke={secondary} strokeWidth="1.4" markerEnd="url(#lup-fr-arrow)" />
-
-          <rect x={32} y={160} width={656} height={72} rx="8" fill={success} fillOpacity="0.06" stroke={success} strokeWidth="1" strokeOpacity="0.3" />
-          <text x={56} y={182} fontSize="12" fontWeight="700" fill={success}>Layer 2 · 表达式与语句</text>
-          <text x={56} y={200} fontSize="11" fill={secondary}>运算符（~= 不等于、and/or 短路） · local 声明 · if-elseif-else · while/repeat/for · break/return</text>
-          <text x={56} y={218} fontSize="11" fill={secondary}>→ 让值动起来：运算和流程控制，local 限定作用域，for 有数值和泛型两种形式</text>
-
-          <line x1={360} y1={232} x2={360} y2={244} stroke={secondary} strokeWidth="1.4" markerEnd="url(#lup-fr-arrow)" />
-
-          <rect x={32} y={244} width={656} height={72} rx="8" fill={warning} fillOpacity="0.06" stroke={warning} strokeWidth="1" strokeOpacity="0.3" />
-          <text x={56} y={266} fontSize="12" fontWeight="700" fill={warning}>Layer 3 · 函数、闭包与协程</text>
-          <text x={56} y={284} fontSize="11" fill={secondary}>函数是一等公民 · 多返回值 · 可变参数 · 闭包捕获 upvalue · 协程 resume/yield 协作切换</text>
-          <text x={56} y={302} fontSize="11" fill={secondary}>→ 抽象与控制：函数封装逻辑，闭包保持状态，协程实现协作式多任务（迭代器/生成器）</text>
-
-          <line x1={360} y1={316} x2={360} y2={328} stroke={secondary} strokeWidth="1.4" markerEnd="url(#lup-fr-arrow)" />
-
-          <rect x={32} y={328} width={656} height={72} rx="8" fill={danger} fillOpacity="0.06" stroke={danger} strokeWidth="1" strokeOpacity="0.3" />
-          <text x={56} y={350} fontSize="12" fontWeight="700" fill={danger}>Layer 4 · 元表与 C API</text>
-          <text x={56} y={368} fontSize="11" fill={secondary}>元表 __index 实现继承 · 元方法重载运算符 · C API 虚拟栈交换数据 · 注册 C 函数</text>
-          <text x={56} y={386} fontSize="11" fill={secondary}>→ 元编程与扩展：元表实现 OOP 和 DSL，C API 让 Lua 嵌入 C 程序——这是 Lua 的核心定位</text>
-
-          <text x={VIEW_W / 2} y={414} textAnchor="middle" fontSize="11" fill={secondary}>
-            值是原料 · 表达式语句是加工 · 函数闭包协程是结构 · 元表C API是扩展
-          </text>
-
-          <defs>
-            <marker id="lup-fr-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-              <path d="M0 0 L6 3 L0 6 z" fill="var(--text-secondary)" />
-            </marker>
-          </defs>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        Lua 全书四层知识链：类型值→表达式语句→函数闭包协程→元表C API，从数据基础到元编程扩展。
-      </figcaption>
-    </figure>
-  );
+export function PilFinalPartReviewLab() {
+  return <LuaOfficialLab cases={reviewCases} caption="Each book part is reviewed through recall, derivation, and a concrete demonstration." tone="cyan" />;
 }
+
+export function PilFailureModelLab() {
+  return <LuaOfficialLab cases={failureCases} caption="Representation, control, lifetime, and isolation classify the book's hardest failure modes." tone="rose" />;
+}
+
+export function PilCapstoneGateLab() {
+  return <LuaOfficialLab cases={capstoneCases} caption="Config, pipeline, scheduler, and native extension capstones integrate Lua and C contracts." tone="emerald" />;
+}
+
+export const LupFinalReviewDiagram = PilFinalPartReviewLab;

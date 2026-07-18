@@ -1,0 +1,227 @@
+---
+title: "步骤21 运算符重载（2）"
+type: B
+section: "第2阶段 · 自然代码"
+order: 21
+description: "步骤21 运算符重载（2）覆盖5个权威目录层级，以可执行框架合同、数学推导、交互实验和失败对照重建核心。"
+demo: true
+math: true
+sourceUrl: "https://www.oreilly.co.jp/books/9784873119069/toc.html"
+draft: false
+---
+
+import {
+  Dl2Step21OperatorOverloadTwoMapLab,
+  Dl2Step21OperatorOverloadTwoExperimentLab,
+  Dl2Step21OperatorOverloadTwoEvidenceLab,
+} from "@/components/mdx/deep-learning-from-scratch-2/diagrams/dl2-step-21-operator-overload-two";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释步骤21 运算符重载（2）新增的接口、对象关系、数学规则和适用边界
+- 能计算四个核心方程中的forward值、shape、局部导数或参数更新
+- 能复现三个互动视图，并定位第一条图连接、数值、梯度或模式证据分叉
+- 能判断“多输入多输出梯度按位置配对，同一变量的多路径贡献必须累加；函数按generation逆序，图释放与模式切换不改变数值语义。”是否成立
+
+</Objectives>
+
+## 为什么先冻结框架合同
+
+<Term def="可变长参数是本页第1个核查坐标，用于连接框架接口、数值状态、计算图和失败边界。">
+  可变长参数
+</Term>
+、
+<Term def="梯度累加是本页第2个核查坐标，用于连接框架接口、数值状态、计算图和失败边界。">
+  梯度累加
+</Term>
+、
+<Term def="generation是本页第3个核查坐标，用于连接框架接口、数值状态、计算图和失败边界。">
+  generation
+</Term>
+、
+<Term def="weakref是本页第4个核查坐标，用于连接框架接口、数值状态、计算图和失败边界。">
+  weakref
+</Term>
+、
+<Term def="证据重放是本页第5个核查坐标，用于连接框架接口、数值状态、计算图和失败边界。">
+  证据重放
+</Term>
+共同构成本页坐标。步骤21
+运算符重载（2）沿“输入合同、前向状态、反向规则、独立测试”扩展DeZero，并保持多输入多输出梯度按位置配对，同一变量的多路径贡献必须累加；函数按generation逆序，图释放与模式切换不改变数值语义。
+
+自制框架的难点不是写出一个能返回数字的函数，而是让自然Python表达式、动态图、反向传播、内存和模式在同一合同下工作。实验先冻结Python/NumPy版本、输入与参数数组、对象身份、随机种子和上一版测试，再预测新能力应最先改变的中间量。
+
+每次forward保存输出值、shape、dtype、creator和generation；每次backward保存上游梯度、局部导数、输入梯度和参数梯度。若最终损失下降但对象连接、梯度累加或模式切换错误，训练结果不能采信。修复后清空grad、图、优化器与循环状态，从原始输入完整重放。
+
+## 数学骨架
+
+$$
+y=f(x_1,\ldots,x_m)
+$$
+
+$$
+\bar{x}_i=\sum_{p\in P_i}\bar{x}_i^{(p)}
+$$
+
+$$
+g(f)=1+\max_i g(x_i)
+$$
+
+$$
+x.grad\leftarrow 0
+$$
+
+方程进入代码前先声明输入输出shape、轴和对象所有权。解析梯度与中心差分比较相对误差，参数更新后用新forward独立重算；高阶、GPU或时序模式还要记录是否建图、设备和状态边界。
+
+## 核心机制
+
+1. Python运算符最终委托DeZero函数，使自然表达式仍建立动态图。
+2. 反向运算符处理左操作数为标量或ndarray的分派优先级，并把常数转成同设备数组。
+3. 自然接口允许函数接收和返回元组，同时保留每个输入与输出的身份。forward与backward的参数顺序必须一致，不能靠数组长度猜测语义。
+4. 同一Variable被重复使用时，梯度来自多条路径并应求和。每轮训练前显式cleargrad，避免上一轮梯度继续累积。
+5. 复杂图不能只沿单链递归。generation给节点定义拓扑优先级，反向循环总是先处理更靠近输出的函数，并用集合避免重复入队。
+6. weakref打破Variable与Function之间的循环强引用，Config控制是否建图与是否保留中间梯度；这些工程改动必须由等价数值和内存证据验证。
+
+## DeZero实现合同
+
+1. **对象合同：** Variable只承载数据、梯度与图连接，Function负责数值变换与局部导数；便利API最终委托核心函数，不能绕过creator设置。
+2. **shape合同：** forward与backward逐轴对称。前向广播、求和、转置或reshape后，反向必须恢复每个输入的原shape，并对重复路径累加。
+3. **顺序合同：** 动态图按实际运行创建，反向按generation拓扑逆序；同一函数只处理一次，同一变量可从多条路径接收贡献。
+4. **模式合同：** no_grad、create_graph、train/test与设备上下文使用成对进入和恢复，异常退出也不能污染全局状态。
+5. **资源合同：** 不需要的中间梯度及时释放，weakref打破循环引用；保存加载、CPU/GPU和DataLoader都保留稳定键、dtype与样本身份。
+6. **测试合同：** 每个新函数至少有forward例、解析backward、数值梯度、shape边界和失败样本；上一版本测试必须继续通过。
+
+## 权威目录逐项讲解
+
+### 步骤21 运算符重载（2）
+
+Python运算符最终委托DeZero函数，使自然表达式仍建立动态图。 反向运算符处理左操作数为标量或ndarray的分派优先级，并把常数转成同设备数组。 验收时保存输入、输出、creator或状态、局部梯度和失败边界，并核对“多输入多输出梯度按位置配对，同一变量的多路径贡献必须累加；函数按generation逆序，图释放与模式切换不改变数值语义。”是否成立。
+
+先预测该单元改变后最早变化的是对象连接、forward值、shape、generation、内存、梯度还是模式，再运行固定小样本。若末端结果合理但首个证据没有出现，应停止并从上一个通过测试的DeZero版本重放。
+
+### 21.1 与ndarray一起使用
+
+该步骤把上一阶段的最小接口扩展为可组合框架功能，先固定输入输出和状态所有权，再实现便利API。 验证同时覆盖数值、shape、对象连接、内存和异常边界，任何便利性都不能改变自动微分语义。 验收时保存输入、输出、creator或状态、局部梯度和失败边界，并核对“多输入多输出梯度按位置配对，同一变量的多路径贡献必须累加；函数按generation逆序，图释放与模式切换不改变数值语义。”是否成立。
+
+先预测该单元改变后最早变化的是对象连接、forward值、shape、generation、内存、梯度还是模式，再运行固定小样本。若末端结果合理但首个证据没有出现，应停止并从上一个通过测试的DeZero版本重放。
+
+### 21.2 与float和int一起使用
+
+该步骤把上一阶段的最小接口扩展为可组合框架功能，先固定输入输出和状态所有权，再实现便利API。 验证同时覆盖数值、shape、对象连接、内存和异常边界，任何便利性都不能改变自动微分语义。 验收时保存输入、输出、creator或状态、局部梯度和失败边界，并核对“多输入多输出梯度按位置配对，同一变量的多路径贡献必须累加；函数按generation逆序，图释放与模式切换不改变数值语义。”是否成立。
+
+先预测该单元改变后最早变化的是对象连接、forward值、shape、generation、内存、梯度还是模式，再运行固定小样本。若末端结果合理但首个证据没有出现，应停止并从上一个通过测试的DeZero版本重放。
+
+### 21.3 问题1：左项为float或int的情况
+
+该步骤把上一阶段的最小接口扩展为可组合框架功能，先固定输入输出和状态所有权，再实现便利API。 验证同时覆盖数值、shape、对象连接、内存和异常边界，任何便利性都不能改变自动微分语义。 验收时保存输入、输出、creator或状态、局部梯度和失败边界，并核对“多输入多输出梯度按位置配对，同一变量的多路径贡献必须累加；函数按generation逆序，图释放与模式切换不改变数值语义。”是否成立。
+
+先预测该单元改变后最早变化的是对象连接、forward值、shape、generation、内存、梯度还是模式，再运行固定小样本。若末端结果合理但首个证据没有出现，应停止并从上一个通过测试的DeZero版本重放。
+
+### 21.4 问题2：左项为ndarray实例的情况
+
+该步骤把上一阶段的最小接口扩展为可组合框架功能，先固定输入输出和状态所有权，再实现便利API。 验证同时覆盖数值、shape、对象连接、内存和异常边界，任何便利性都不能改变自动微分语义。 验收时保存输入、输出、creator或状态、局部梯度和失败边界，并核对“多输入多输出梯度按位置配对，同一变量的多路径贡献必须累加；函数按generation逆序，图释放与模式切换不改变数值语义。”是否成立。
+
+先预测该单元改变后最早变化的是对象连接、forward值、shape、generation、内存、梯度还是模式，再运行固定小样本。若末端结果合理但首个证据没有出现，应停止并从上一个通过测试的DeZero版本重放。
+
+## 三步交互实验
+
+先预测单变量变化会最早影响对象图、forward、shape、梯度还是独立测试，再切换基线、边界和失败模式。
+
+<Stepper>
+  <Step title="画出对象与计算图">
+    标出Variable、Function、creator、参数、数据或循环状态的所有权与连接。
+    <Dl2Step21OperatorOverloadTwoMapLab />
+  </Step>
+  <Step title="运行单变量实验">
+    固定输入、参数和上一版代码，只改变一个接口、shape、模式或设备条件。
+    <Dl2Step21OperatorOverloadTwoExperimentLab />
+  </Step>
+  <Step title="核对独立证据">
+    比较forward、解析/数值梯度、对象存活、更新与重放测试，定位第一处分叉。
+    <Dl2Step21OperatorOverloadTwoEvidenceLab />
+  </Step>
+</Stepper>
+
+## 常见失败与边界
+
+<Callout type="trap">
+  **便利接口绕过核心图：**
+  运算结果数值正确，但输出未设置creator，后续backward在中途停止。所有运算符和包装函数必须委托Function调用。
+</Callout>
+
+<Callout type="trap">
+  **只看训练终点：**
+  错误广播、梯度覆盖、旧缓存、错误模式或测试泄漏可能暂时得到较低损失；必须核对最早中间证据。
+</Callout>
+
+<Callout type="tip">
+  **最小重放顺序：**
+  在标量或极小数组上先手算forward与局部导数，再做中心差分、组合图和长训练。首错出现后清空全部派生状态。
+</Callout>
+
+## 本章回顾
+
+步骤21 运算符重载（2）沿“输入合同、前向状态、反向规则、独立测试”扩展DeZero，并保持多输入多输出梯度按位置配对，同一变量的多路径贡献必须累加；函数按generation逆序，图释放与模式切换不改变数值语义。 验收底线是：多输入多输出梯度按位置配对，同一变量的多路径贡献必须累加；函数按generation逆序，图释放与模式切换不改变数值语义。。完成标准是能预测首个中间变化、重放实现、解释失败样本，并证明新能力没有破坏此前测试。
+
+<Glossary>
+
+<GlossaryItem term="可变长参数">
+  “可变长参数”对应“冻结输入与版本”：记录对象身份、shape、前向缓存、局部梯度、模式和数值容差；仅有最终输出不足以证明框架正确。
+</GlossaryItem>
+
+<GlossaryItem term="梯度累加">
+  “梯度累加”对应“执行forward”：记录对象身份、shape、前向缓存、局部梯度、模式和数值容差；仅有最终输出不足以证明框架正确。
+</GlossaryItem>
+
+<GlossaryItem term="generation">
+  “generation”对应“保存图与shape”：记录对象身份、shape、前向缓存、局部梯度、模式和数值容差；仅有最终输出不足以证明框架正确。
+</GlossaryItem>
+
+<GlossaryItem term="weakref">
+  “weakref”对应“执行backward”：记录对象身份、shape、前向缓存、局部梯度、模式和数值容差；仅有最终输出不足以证明框架正确。
+</GlossaryItem>
+
+<GlossaryItem term="证据重放">
+  “证据重放”对应“核对数值梯度”：记录对象身份、shape、前向缓存、局部梯度、模式和数值容差；仅有最终输出不足以证明框架正确。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+1. 如何为步骤21 运算符重载（2）建立最小可手算的forward/backward测试？
+
+<Answer>
+固定一个标量或极小数组、对象身份和上一版实现，按“冻结输入与版本 -> 执行forward -> 保存图与shape -> 执行backward -> 核对数值梯度 -> 独立重放测试”保存中间证据。手算四个方程，并用中心差分比较解析梯度；shape、creator、generation和模式都应符合合同。
+</Answer>
+
+2. 如何证明新便利接口没有绕过DeZero计算图或改变梯度？
+
+<Answer>
+  让核心函数与便利写法共享同一输入，逐项比较输出、creator链、generation、解析梯度和数值梯度。两条路径必须在容差内一致，并继续通过所有旧测试。
+</Answer>
+
+3. 为“多输入多输出梯度按位置配对，同一变量的多路径贡献必须累加；函数按generation逆序，图释放与模式切换不改变数值语义。”构造失败样本并指出停止位置。
+
+<Answer>
+  可以故意断开creator、覆盖梯度、交换shape轴、复用旧图、忘记恢复模式或混用CPU/GPU。运行前预测第一条被破坏的证据，在该处停止，清空grad、缓存、优化器和状态后重放。
+</Answer>
+
+</Exercises>
+
+<Attribution
+  adaptedFrom="斋藤康毅著、郑明智译《深度学习入门2：自制框架》，人民邮电出版社，2023年3月，ISBN 9787115607515；原版《ゼロから作るDeep Learning ❸》，O'Reilly Japan，2020年4月20日，552页，ISBN 9784873119069 · 基于官方5阶段、60步骤、207个编号小节与3个附录完整目录的独立教学重构"
+  adaptedUrl="https://www.oreilly.co.jp/books/9784873119069/toc.html"
+/>

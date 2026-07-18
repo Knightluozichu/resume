@@ -1,0 +1,255 @@
+---
+title: "Chapter 4：Test Construction"
+type: A
+section: 现代 C++ 测试驱动开发 · 测试结构
+order: 4
+description: 对齐原书 Chapter 4：组织快慢测试与过滤套件，选择能保留诊断信息的断言，处理私有实现检查，并判断何时用参数化测试压缩稳定规则、何时保留驱动设计的命名示例。
+demo: false
+math: false
+sourceUrl: "https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/"
+draft: false
+---
+
+import {
+  CtrAssertionDiagnosticFlow,
+  CtrParameterizedTestLab,
+  CtrTestOrganizationMap,
+} from "@/components/mdx/cpp-testing-recipes/diagrams/test-construction";
+
+<Objectives>
+
+- 能按行为边界、速度和资源依赖组织测试，用套件表达领域、用过滤器缩短局部反馈并保留 CI 全套入口
+- 能为标量、浮点、集合、异常和前置条件选择可诊断断言，理解 `EXPECT` 与 `ASSERT` 的继续策略
+- 能优先通过公开行为验证对象，审慎处理私有实现，并在规则稳定后使用参数化测试而不掩盖新设计信号
+
+</Objectives>
+
+## 测试构造决定失败是否可理解
+
+测试通过时几乎没有信息，失败时才暴露构造质量。一个有效测试应让读者快速回答：哪个行为坏了，输入是什么，期望与实际差在哪里，失败属于单元逻辑还是外部资源。组织、断言和数据表达共同决定这条诊断路径。
+
+<Term def="按领域行为、共同 setup、运行速度与资源边界安排测试文件、套件和执行入口的结构。">
+  测试组织
+</Term>
+
+不要按生产类一比一创建巨大测试文件，也不要把所有测试放进 `tests.cpp`。优先按调用者可理解的行为边界命名，例如 `SoundexEncoding`、`InvoiceTax`、`OrderCancellation`；当文件过大，再按同一领域下的子行为拆分。
+
+<CtrTestOrganizationMap />
+
+## 快测试与慢测试承担不同反馈节奏
+
+<Term def="不依赖进程外文件、数据库、网络或真实时钟，能在内存中快速确定执行的测试。">
+  快速测试
+</Term>
+
+<Term def="需要进程外资源、真实 I/O、长时间计算或多组件启动，执行与失败定位成本较高的测试。">
+  慢速测试
+</Term>
+
+快速测试支撑每次红绿循环，慢速测试证明文件格式、数据库映射、进程协议等真实边界。目标不是把慢测试删掉，而是让两组入口明确：开发者频繁运行快速集，提交前和 CI 运行完整集，并监控慢测试时长与不稳定性。
+
+```cmake
+add_test(NAME soundex_unit COMMAND soundex_test)
+set_tests_properties(soundex_unit PROPERTIES LABELS "unit;fast")
+
+add_test(NAME soundex_file_integration COMMAND soundex_file_test)
+set_tests_properties(soundex_file_integration PROPERTIES LABELS "integration;slow")
+```
+
+标签表达执行策略，不应掩盖依赖。如果一个标记为 unit 的测试仍访问真实网络，改标签不能让它变快；需要把网络协议边界提取为可控协作者，再保留少量真实集成验证。
+
+## 过滤器缩短反馈，套件表达领域
+
+<Term def="按测试名、标签或模式选择测试子集的运行条件，用于定位和短反馈，但不能替代最终全套回归。">
+  测试过滤器
+</Term>
+
+<Term def="围绕共同领域行为或夹具组织的一组测试，使名称、setup 和运行入口形成可读边界。">
+  测试套件
+</Term>
+
+```bash
+# GoogleTest 原生过滤：适合正在处理的局部行为
+./build/soundex_test --gtest_filter='SoundexEncoding.*'
+
+# CTest 标签：适合项目级快慢分层
+ctest --test-dir build -L fast --output-on-failure
+ctest --test-dir build --output-on-failure
+```
+
+过滤运行后不能说“全绿”，只能说所选子集通过。提交前恢复无过滤全套，并让 CI 永远从确定配置运行完整集合。过滤表达式也应进入命令或 preset，避免 IDE 记住旧条件导致长期漏跑。
+
+<Callout type="trap" title="陷阱：只跑当前过滤器直到提交">
+  局部测试通过只证明一个子集。过滤器可能排除被重构影响的旧行为；在每次结构调整后运行相关套件，在提交前运行无过滤全套，并核对测试总数没有意外下降。
+</Callout>
+
+## 断言要优化失败诊断，而非追求数量
+
+<Term def="把可观察实际值与行为契约中的期望进行比较，并在不满足时产生结构化诊断的测试语句。">
+  断言
+</Term>
+
+`EXPECT_TRUE(actual == expected)` 只报告布尔值不成立；`EXPECT_EQ(expected, actual)` 通常同时打印两侧值。集合可以使用 matcher 显示缺失或多余元素，浮点使用容差比较，异常同时检查类型和必要消息。选择断言时先想象失败输出。
+
+```cpp
+EXPECT_EQ("R163", soundex.encode("Robert"));
+EXPECT_NEAR(0.1 + 0.2, total, 1e-12);
+EXPECT_THAT(actualIds, ::testing::ElementsAre(4, 7, 9));
+EXPECT_THROW(account.withdraw(101), InsufficientFunds);
+```
+
+一条测试可以有多个断言，但它们应共同证明一个行为。创建订单后同时检查 id、状态和总价可能合理；在同一测试同时验证创建、取消、退款和审计，则失败责任太宽。
+
+## EXPECT 与 ASSERT 控制失败后的信息量
+
+`EXPECT_*` 失败后继续当前测试，可以一次显示多个独立结果；`ASSERT_*` 失败后终止当前测试，适合保护后续操作的必要前置条件。例如先确认可选值存在，再解引用；若仍继续会崩溃或产生无意义诊断。
+
+```cpp
+auto order = repository.find("order-42");
+ASSERT_TRUE(order.has_value());
+EXPECT_EQ(OrderStatus::Paid, order->status());
+EXPECT_EQ(4200, order->totalCents());
+```
+
+把所有断言都写成 `ASSERT` 会丢失后续有价值差值；全部写成 `EXPECT` 又可能在前置失败后访问无效状态。判断依据是后续检查是否仍安全且有诊断价值。
+
+<CtrAssertionDiagnosticFlow />
+
+## 失败消息应补充上下文，不复述表达式
+
+GoogleTest 已打印表达式和值，自定义消息应提供测试数据身份、随机种子或领域上下文，而不是写“expected equals actual”。对于循环生成的多个案例，在断言旁用 `SCOPED_TRACE` 标记输入，否则只看到第几个断言失败而不知道是哪组数据。
+
+```cpp
+for (const auto& [input, expected] : soundexCases) {
+    SCOPED_TRACE("input=" + input);
+    EXPECT_EQ(expected, soundex.encode(input));
+}
+```
+
+当数据表开始很大，参数化测试会提供更好的独立用例名与失败隔离；手写循环适合少量辅助验证，不应让一次崩溃阻止后续所有数据运行。
+
+## 私有成员不是默认测试接口
+
+<Term def="类为维护不变量而隐藏的表示与辅助动作，调用者不应依赖其具体结构。">
+  私有实现
+</Term>
+
+直接断言 private 字段会把测试绑定到表示：把 `vector` 改为 `deque` 即使公开行为完全相同也会造成测试失败。首选从 public 方法观察结果和失败；若一个复杂 private 算法难以通过公开行为覆盖，先问它是否其实承担独立责任，应提取为有窄公开契约的协作者。
+
+处理顺序可以是：
+
+1. 通过公开行为验证不变量和结果
+2. 把独立算法提取为小类型或纯函数，并测试其公共契约
+3. 使用依赖注入观察必要协作，而不是读取内部字段
+4. 只有迁移遗留代码等明确场景，才用 friend 测试或受控 seam，并记录移除计划
+
+`#define private public` 会污染翻译单元语义，也可能使测试编译的类定义与生产不一致，不应作为常规方案。
+
+<Callout type="trap" title="陷阱：为了覆盖率给每个 private helper 写测试">
+  private helper 是当前实现选择，不是用户行为。若它值得独立测试，通常说明应提取成可命名责任；否则让公开行为覆盖它，并允许重构自由改变内部结构。
+</Callout>
+
+## 参数化测试压缩稳定规则
+
+<Term def="用同一测试体运行多组命名输入与期望数据，使同一成熟行为规则得到独立案例报告。">
+  参数化测试
+</Term>
+
+Soundex 的辅音映射已经由独立例子驱动稳定后，B/F/P/V 四个数据只有输入不同，适合参数化。每组应显示可读名称，失败时能直接定位字符；不要把空输入、长度和重复编码也塞进同一个二维表，它们属于不同规则。
+
+```cpp
+class EncodedDigitTest
+    : public ::testing::TestWithParam<std::pair<char, char>> {};
+
+TEST_P(EncodedDigitTest, MapsConsonantToExpectedDigit) {
+    const auto [letter, digit] = GetParam();
+    EXPECT_EQ(digit, Soundex::encodedDigit(letter));
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    OneGroup,
+    EncodedDigitTest,
+    ::testing::Values(
+        std::pair{'B', '1'}, std::pair{'F', '1'},
+        std::pair{'P', '1'}, std::pair{'V', '1'}));
+```
+
+若 `encodedDigit` 仍是 private，不应为了参数化而立即暴露它。可以从 `encode("Ab")` 等公开结果构造数据，或在确认字符映射是独立领域概念后提取类型。
+
+## 测试驱动与测试阶段使用参数化的时机不同
+
+新规则第一次出现时，独立命名测试最能表达设计意图和红灯原因。规则稳定后，参数化消除机械重复并扩充数据覆盖。若一开始就导入几十行表格，开发者可能一次实现所有分支，失去每个例子推动设计的节奏。
+
+<Term def="用失败例逐步塑造新行为，与规则形成后增加代表数据验证范围的两种不同活动。">
+  测试驱动与测试
+</Term>
+
+测试驱动关注“下一条最小行为是什么”；测试关注“既有规则还缺哪些代表、边界和组合”。两者都需要，但顺序不同。参数化尤其适合后者。
+
+<CtrParameterizedTestLab />
+
+## 构造测试的复查清单
+
+每完成一个行为，检查测试名是否描述领域结果，setup 是否只含共同机械准备，断言能否显示实际差值，依赖是否让测试进入慢层，过滤器是否会被清除，参数表是否仍只表达一条规则。任何测试若需要读生产实现才能理解，都应改善名字或公开契约。
+
+测试代码也是生产资产，需要重构、评审和删除重复。不同之处是测试应更直接，宁可保留少量重复来增强例子可读性，也不要引入循环、条件和抽象层让测试本身需要另一套测试。
+
+<Stepper>
+  <Step title="第一步：按行为与速度组织运行入口">
+    用套件和 fixture 表达领域边界，把进程外资源测试标成慢层；局部过滤缩短反馈，提交前恢复无过滤全套并核对数量。
+
+    <CtrTestOrganizationMap />
+  </Step>
+  <Step title="第二步：为失败选择可诊断断言">
+    优先比较期望与实际的专用断言；只在后续不安全时使用 ASSERT，浮点、集合和异常采用符合领域语义的比较。
+
+    <CtrAssertionDiagnosticFlow />
+  </Step>
+  <Step title="第三步：决定是否参数化或提取责任">
+    新边界先保留独立名称，稳定同规则再参数化；private 逻辑先从公开行为验证，确有独立责任才提取公共契约。
+
+    <CtrParameterizedTestLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 测试按行为、共同 setup、速度和资源边界组织，套件与过滤器承担不同责任
+- 快测试支撑红绿循环，慢测试证明真实集成；二者都应有明确入口并进入 CI
+- 专用断言比布尔断言保留更多差值，EXPECT 与 ASSERT 取决于失败后是否可安全继续
+- 私有实现应优先由公开行为覆盖，复杂独立责任可提取，直接暴露 private 是最后选择
+- 参数化测试适合成熟的同一规则，新行为和边界先用独立名称驱动设计
+- 测试驱动塑造行为，后续测试扩展代表数据，两种活动不能被一个大表格混淆
+
+<Exercises>
+  1. **问题 1：重组测试。** 当前所有测试都在一个二十秒套件中，其中十八秒来自真实数据库。怎样恢复短反馈而不删除集成证据？
+
+  <Answer question="怎样分离快慢测试并保留完整入口？">把纯领域逻辑通过仓库接口替身移入不访问进程外资源的 fast/unit 套件，保留少量真实数据库契约在 slow/integration 标签；开发循环运行 fast，提交前和 CI 运行无过滤全套。分别记录数量与时长，防止慢测试悄悄进入快层。</Answer>
+
+  2. **问题 2：选择断言。** 测试先查找订单，再检查状态和金额；订单不存在时后两项不能安全访问。如何组合断言？
+
+  <Answer question="何时使用 ASSERT 与 EXPECT？">对 optional 是否有值使用 ASSERT_TRUE，因为失败后解引用不安全；通过后对状态和金额分别使用 EXPECT_EQ，让一次运行可以同时显示两个独立差值。自定义消息只补订单 id 等上下文，不复述比较表达式。</Answer>
+
+  3. **问题 3：判断参数化。** 首次定义空输入错误，同时已有六组稳定辅音映射。哪些应参数化？
+
+  <Answer question="新边界与稳定数据应怎样组织？">空输入会决定 API 错误契约，先写独立命名测试并观察正确红灯；六组辅音若遵循同一成熟映射规则，可放进参数化测试并生成可读案例名。不要把两者放进同一数据表，它们的失败原因和设计作用不同。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="测试组织">按领域、共同 setup、速度和资源边界安排测试结构与入口。</GlossaryItem>
+  <GlossaryItem term="快速测试">在内存中快速确定运行、不依赖进程外资源的测试。</GlossaryItem>
+  <GlossaryItem term="慢速测试">依赖真实 I/O、多组件或长计算，成本和定位范围较大的测试。</GlossaryItem>
+  <GlossaryItem term="测试过滤器">按名称、标签或模式选择局部测试的运行条件。</GlossaryItem>
+  <GlossaryItem term="测试套件">围绕共同领域行为或夹具组织的一组测试。</GlossaryItem>
+  <GlossaryItem term="断言">比较实际观察与行为期望并产生结构化失败诊断的语句。</GlossaryItem>
+  <GlossaryItem term="私有实现">由类隐藏、调用者不应依赖其具体形状的表示与辅助动作。</GlossaryItem>
+  <GlossaryItem term="参数化测试">让同一测试体以多组命名数据验证同一成熟规则的结构。</GlossaryItem>
+  <GlossaryItem term="测试驱动与测试">分别以失败例塑造新行为和为稳定规则扩充验证范围的活动。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Modern C++ Programming with Test-Driven Development, Chapter 4 Test Construction"
+  adaptedUrl="https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/"
+/>

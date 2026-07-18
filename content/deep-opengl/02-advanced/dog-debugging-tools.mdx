@@ -3,138 +3,336 @@ title: "调试与性能分析"
 type: C
 section: "计算机图形学与渲染"
 order: 8
-description: "GL 错误检查、帧抓取与 GPU 性能剖析"
+description: "分离 WebGL 与原生调试入口，用错误队列、日志、帧抓取和非阻塞计时建立证据链"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://registry.khronos.org/webgl/specs/latest/2.0/"
 draft: false
 ---
 
-import { DogDebuggingToolsDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-debugging-tools";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  DogDebuggingToolsDiagram,
+  DogBlackFrameIsolationDiagram,
+} from "@/components/mdx/deep-opengl/diagrams/dog-debugging-tools";
+import { DogStepFlowDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能用 glGetError 与 KHR_debug 定位 GL 错误
-- 能用 Spector.js / RenderDoc 抓取并分析单帧
-- 能说明着色器编译链接日志的查询方法
-- 能回答：如何找出渲染管线里的性能瓶颈？
+
+- 能区分 WebGL getError 与原生 OpenGL/OpenGL ES KHR_debug 的适用环境和开销
+- 能实现保留源码行号、编译状态、链接状态和接口日志的 program 构建器
+- 能分析 Spector.js 或 RenderDoc 抓取结果，从异常 draw 追到 VAO、纹理、uniform、附件和像素证据
+- 能设计非阻塞 GPU 计时与单变量实验，判断 CPU、顶点、片元、带宽或同步瓶颈
+
 </Objectives>
 
 ## 直觉引入
 
-图形程序出错时往往「黑屏不报错」——CPU 代码没崩，但 GPU 画面是黑的，因为 GL 错误不会抛异常，只悄悄设个错误码。所以调试 GL 第一步永远是「主动问错误」：glGetError 查最近一次错误、着色器日志查编译失败原因。
+图形程序的“黑屏”不是一个错误类型，而是许多不同断点的共同外观：默认帧缓冲没显示、viewport 为零、三角形在裁剪空间外、VAO 读错缓冲、program 未链接、颜色写掩码关闭、深度测试拒绝全部片元，或后处理采样了错误纹理。随机切开关只能偶然命中，不能形成可复现诊断。
 
-更复杂的问题（为什么这个像素是这个颜色、为什么这一帧慢）要靠帧抓取工具：Spector.js 抓 WebGL 单帧的全部调用，RenderDoc 抓桌面 GL 一帧并逐 draw 查看管线状态、纹理、着色器，像给 GPU 做 X 光。
+正确方法是建立证据层级：先确认输出目标能显示已知清屏色，再用固定裁剪空间三角形和常量色 shader 隔离几何与着色，随后逐层恢复真实状态。在第一处从正确变错误的位置抓帧，检查那次 draw 的完整输入。
 
-## 概念讲解
+## WebGL 错误队列的边界
 
-### 错误检查
-`gl.getError()` 返回最近一次错误码（INVALID_ENUM/INVALID_VALUE/INVALID_OPERATION 等），需主动轮询。WebGL2 有 `KHR_debug` 扩展可设<Term def="在 GL 错误发生时回调通知的调试回调">调试回调</Term>，错误发生即触发带详细消息。
+<Term def="WebGL 把 INVALID_ENUM、INVALID_VALUE、INVALID_OPERATION 等错误按状态保存，应用通过 getError 逐个取出的机制">错误队列</Term>不会像 JavaScript 异常一样自动指出调用栈。gl.getError 一次返回一个错误；若之前已有未读取错误，当前调用后的 getError 也不能自动证明错误由当前调用产生。
 
-### 着色器日志
-`getShaderInfoLog` 查编译错误、`getProgramInfoLog` 查链接错误。每个 shader 编译后必查，否则失败只表现为黑屏。
-
-### 帧抓取工具
-<Term def="记录一帧内所有 GL 调用供回放分析的工具">帧抓取器</Term>：Spector.js（浏览器插件/库，抓 WebGL）、RenderDoc（桌面，抓 Vulkan/OpenGL/D3D）。能逐 draw 查看顶点输入、纹理、uniform、管线状态、最终像素。
-
-### 性能剖析
-<Term def="测量 GPU 执行某段命令实际耗时的查询">GPU 计时器查询</Term>（timer query）测 GPU 端耗时；CPU 端用性能标记分段。瓶颈定位：顶点 bound（顶点多/着色器重）vs 片元 bound（过度绘制/片元着色器重）vs 带宽 bound（纹理采样多）。
-
-## 交互Demo
-
-> 猜一猜：画面黑屏但控制台无报错，最可能漏了哪一步检查？
-
-<DogDebuggingToolsDiagram />
-
-<Stepper>
-<Step title="第一步：查错误">
-每个关键操作后 gl.getError 查错误码，开启 KHR_debug 回调让错误主动通知，定位是哪次调用非法。
-</Step>
-<Step title="第二步：查着色器">
-每个 shader 编译后 getShaderInfoLog、链接后 getProgramInfoLog，定位 GLSL 语法或链接错误。
-</Step>
-<Step title="第三步：抓帧剖析">
-用 Spector.js/RenderDoc 抓一帧，逐 draw 查顶点/纹理/uniform/管线状态与像素，用 GPU timer query 定位性能瓶颈。
-</Step>
-</Stepper>
-
-## 代码对照
-
-WebGL2 错误检查与着色器日志：
+开发期可在隔离区间前先排空旧错误，执行一小段命令，再排空并报告新错误。不要给生产热路径每个 GL 调用都包 getError：频繁查询会增加开销，也不能提供比正确性实验更强的上下文。
 
 ```js
-// 封装错误检查
-function checkGLError(gl, tag) {
-  const e = gl.getError();
-  if (e !== gl.NO_ERROR) console.error(`[GL ${tag}]`, e);
-}
+const ERROR_NAMES = new Map([
+  [WebGL2RenderingContext.INVALID_ENUM, "INVALID_ENUM"],
+  [WebGL2RenderingContext.INVALID_VALUE, "INVALID_VALUE"],
+  [WebGL2RenderingContext.INVALID_OPERATION, "INVALID_OPERATION"],
+  [WebGL2RenderingContext.INVALID_FRAMEBUFFER_OPERATION,
+    "INVALID_FRAMEBUFFER_OPERATION"],
+  [WebGL2RenderingContext.OUT_OF_MEMORY, "OUT_OF_MEMORY"],
+  [WebGL2RenderingContext.CONTEXT_LOST_WEBGL, "CONTEXT_LOST_WEBGL"],
+]);
 
-// 编译着色器必查日志
-function compileShader(gl, type, src) {
-  const sh = gl.createShader(type);
-  gl.shaderSource(sh, src); gl.compileShader(sh);
-  if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
-    console.error("着色器编译失败:", gl.getShaderInfoLog(sh));
-    gl.deleteShader(sh); return null;
+function drainErrors(gl) {
+  const errors = [];
+  for (;;) {
+    const error = gl.getError();
+    if (error === gl.NO_ERROR) return errors;
+    errors.push(ERROR_NAMES.get(error) ?? `0x${error.toString(16)}`);
   }
-  return sh;
-}
-// 链接程序必查日志
-function linkProgram(gl, vs, fs) {
-  const p = gl.createProgram();
-  gl.attachShader(p, vs); gl.attachShader(p, fs); gl.linkProgram(p);
-  if (!gl.getProgramParameter(p, gl.LINK_STATUS))
-    console.error("链接失败:", gl.getProgramInfoLog(p));
-  return p;
 }
 
-// KHR_debug 回调（WebGL2）
-const dbg = gl.getExtension("KHR_debug");
-if (dbg) {
-  dbg.enable(gl.DEBUG_OUTPUT);
-  gl.debugMessageCallback((msg, source, type, id, sev) => {
-    console.warn("GL debug:", type === dbg.DEBUG_TYPE_ERROR ? "ERROR" : "INFO", msg);
-  }, null);
+function checked(gl, label, operation) {
+  const stale = drainErrors(gl);
+  if (stale.length) console.warn("stale GL errors", stale);
+  const result = operation();
+  const current = drainErrors(gl);
+  if (current.length) {
+    throw new Error(`${label}: ${current.join(", ")}`);
+  }
+  return result;
 }
 ```
 
-桌面端用 `glQueryCounter`/`glGetQueryObjectui64v` 做 GPU 计时器查询测真实 GPU 耗时。
+getError 只报告规范错误，不保证捕获算法错误。draw 成功但矩阵错误、纹理内容错误或颜色正确却写到错误附件，都可能返回 NO_ERROR。
+
+## KHR_debug 属于原生调试路径
+
+WebGL2 不暴露<Term def="原生 OpenGL/OpenGL ES 提供调试消息回调、过滤和对象标签的扩展或核心能力">KHR_debug</Term>，也没有 gl.debugMessageCallback。原生 OpenGL 与支持该扩展/核心能力的 OpenGL ES 可创建调试上下文，注册 glDebugMessageCallback，并用 glObjectLabel 给 program、buffer、texture、FBO 命名。
+
+```cpp
+void APIENTRY onGlDebug(
+    GLenum source,
+    GLenum type,
+    GLuint id,
+    GLenum severity,
+    GLsizei,
+    const GLchar* message,
+    const void*) {
+  if (severity == GL_DEBUG_SEVERITY_NOTIFICATION) return;
+  logError("GL", source, type, id, severity, message);
+}
+
+void enableNativeDebug() {
+  glEnable(GL_DEBUG_OUTPUT);
+  glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS); // 仅开发期，便于保留调用栈
+  glDebugMessageCallback(onGlDebug, nullptr);
+  glObjectLabel(GL_PROGRAM, lightingProgram, -1, "lighting/program");
+  glObjectLabel(GL_FRAMEBUFFER, gbuffer, -1, "deferred/gbuffer");
+}
+```
+
+同步回调便于在触发调用栈停住，但会改变性能，性能测量时应关闭。WebGL 端要依赖 getError、shader/program 日志、浏览器扩展工具和帧抓取，不要复制原生 KHR_debug JavaScript 伪代码。
+
+## 着色器日志必须保留源码行号
+
+<Term def="shader 编译器与 program 链接器返回的诊断文本，必须与状态位和带行号源码一起保存">着色器日志</Term>分两层：COMPILE_STATUS 对单个 shader，LINK_STATUS 对组合后的 program。info log 可能包含警告，也可能在失败时为空，因此状态位是判断依据，日志是诊断证据。
+
+```js
+function numbered(source) {
+  return source
+    .split("\n")
+    .map((line, index) => `${String(index + 1).padStart(4)} | ${line}`)
+    .join("\n");
+}
+
+function compile(gl, type, source, label) {
+  const shader = gl.createShader(type);
+  if (!shader) throw new Error(`${label}: createShader failed`);
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  const ok = gl.getShaderParameter(shader, gl.COMPILE_STATUS);
+  const log = gl.getShaderInfoLog(shader) ?? "";
+  if (!ok) {
+    gl.deleteShader(shader);
+    throw new Error(`${label} compile failed\n${log}\n${numbered(source)}`);
+  }
+  if (log.trim()) console.warn(`${label} compile log\n${log}`);
+  return shader;
+}
+
+function link(gl, vertex, fragment, label) {
+  const program = gl.createProgram();
+  if (!program) throw new Error(`${label}: createProgram failed`);
+  gl.attachShader(program, vertex);
+  gl.attachShader(program, fragment);
+  gl.linkProgram(program);
+  const ok = gl.getProgramParameter(program, gl.LINK_STATUS);
+  const log = gl.getProgramInfoLog(program) ?? "";
+  if (!ok) {
+    gl.deleteProgram(program);
+    throw new Error(`${label} link failed\n${log}`);
+  }
+  return program;
+}
+```
+
+链接成功后还要检查活跃 attribute、uniform、uniform block 和输出映射。位置为 -1/null 可能是变量被优化掉，也可能是名字或 program 用错；结合活跃接口枚举才能区分。
+
+## 黑屏用已知输出二分
+
+<DogBlackFrameIsolationDiagram />
+
+一个实用顺序是：
+
+1. 默认 framebuffer 清洋红并立即呈现，证明 canvas/surface、viewport 和交换链；
+2. 绑定目标 FBO 后也清不同颜色，检查附件、drawBuffers 和合成链；
+3. 使用 gl_VertexID 生成固定裁剪空间三角形，排除 VBO/VAO/相机；
+4. 片元输出常量白色，排除纹理、光照、颜色空间；
+5. 逐项恢复 VAO、矩阵、纹理、深度/混合和后处理，记录第一处变化。
+
+“洋红都看不到”时不应继续调法线贴图；“常量三角形正确，恢复 VAO 后消失”时也不应继续改 FBO。每一步都把搜索空间切小。
+
+## 帧抓取查看 draw 的完整输入
+
+<Term def="记录一帧命令、状态和资源快照，允许逐 draw 回放检查的调试过程">帧抓取</Term>应按平台选工具：
+
+- Spector.js 面向 WebGL，可在浏览器捕获一帧并查看 command、program、uniform、texture、framebuffer 和状态；
+- RenderDoc 适合原生 OpenGL/OpenGL ES、Vulkan、D3D 等受支持应用，能查看事件、管线、资源、mesh 和像素历史；
+- 浏览器 WebGL 不应默认按原生桌面进程方式交给 RenderDoc，优先使用 Spector.js 和浏览器自己的 GPU 工具。
+
+抓帧先找最后一个仍正确的 pass，再找第一个错误输出的 draw。检查：
+
+- 当前 framebuffer 和颜色/深度附件是否是预期对象；
+- viewport/scissor 与目标尺寸是否一致；
+- program 源码、链接接口、uniform 和 sampler 单元；
+- VAO 属性格式、缓冲内容、索引范围和实例 divisor；
+- 深度、模板、混合、剔除、写掩码；
+- 输入纹理 mip/层级/格式及该 draw 前是否已被正确写入。
+
+帧抓取会增加开销，适合正确性和工作量分析，不应把抓取时的绝对帧时间当最终性能结论。
+
+<DogDebuggingToolsDiagram />
+
+## GPU 计时要保持异步
+
+<Term def="在 GPU 命令流中测量一段工作耗时并在后续帧异步读取结果的查询">GPU 计时查询</Term>在 WebGL2 中由 EXT_disjoint_timer_query_webgl2 提供。结果可用前读取会阻塞或无结果；GPU_DISJOINT_EXT 为真时，频率变化或重置使样本无效，必须丢弃。
+
+```js
+function beginGpuTimer(gl, ext, label) {
+  const query = gl.createQuery();
+  if (!query) return null;
+  gl.beginQuery(ext.TIME_ELAPSED_EXT, query);
+  return { label, query };
+}
+
+function endGpuTimer(gl, ext, pending, sample) {
+  if (!sample) return;
+  gl.endQuery(ext.TIME_ELAPSED_EXT);
+  pending.push(sample);
+}
+
+function pollGpuTimers(gl, ext, pending) {
+  const disjoint = gl.getParameter(ext.GPU_DISJOINT_EXT);
+  const results = [];
+  const waiting = [];
+  for (const sample of pending) {
+    const available = gl.getQueryParameter(
+      sample.query,
+      gl.QUERY_RESULT_AVAILABLE,
+    );
+    if (!available) {
+      waiting.push(sample);
+      continue;
+    }
+    if (!disjoint) {
+      const ns = gl.getQueryParameter(sample.query, gl.QUERY_RESULT);
+      results.push({ label: sample.label, milliseconds: ns / 1e6 });
+    }
+    gl.deleteQuery(sample.query);
+  }
+  return { waiting, results };
+}
+```
+
+CPU 侧用 performance.mark/measure 或引擎 profiler 标记更新、剔除、排序、上传和提交。CPU 与 GPU 时间结合工作量计数，才能区分：
+
+- CPU 提交：CPU 高、GPU 空洞，少 draw/状态缓存有效；
+- 顶点：降低模型细分或实例数显著改善；
+- 片元：降低分辨率或改常量 shader 显著改善；
+- 带宽：降低附件/纹理位宽、采样数或 load/store 改善；
+- 同步：移除 readPixels/finish/立即 query 后 CPU/GPU 空洞消失。
+
+## 分步形成诊断证据链
+
+先预测：帧抓取显示 draw 调用了，VAO 和 program 也正确，但颜色掩码是 false,false,false,false。getError 会报告错误吗？
+
+<Stepper>
+<Step title="第一步：确定正确性断点">
+<DogStepFlowDiagram
+  caption="第 1 步：已知清屏、固定三角形和常量色逐层恢复，找到第一处错误。"
+  stage={1}
+  stages={["用已知输出找到第一处错误边界", "抓帧核对该 draw 的完整状态资源", "用非阻塞计时和单变量实验定位瓶颈"]}
+/>
+
+颜色掩码全关是合法状态，getError 返回 NO_ERROR；只有已知输出和状态检查才能发现。先证明正确性，再讨论性能。
+</Step>
+<Step title="第二步：用帧证据解释结果">
+<DogStepFlowDiagram
+  caption="第 2 步：从输出附件反向追到 draw、program、VAO、纹理和产生它们的上游 pass。"
+  stage={2}
+  stages={["用已知输出找到第一处错误边界", "抓帧核对该 draw 的完整状态资源", "用非阻塞计时和单变量实验定位瓶颈"]}
+/>
+
+在 Spector.js/RenderDoc 中定位第一处坏 draw，保存附件内容、状态差异、shader 日志和资源标签，不用“可能是驱动”代替证据。
+</Step>
+<Step title="第三步：隔离性能变量">
+<DogStepFlowDiagram
+  caption="第 3 步：GPU timer、CPU marker 和工作量计数共同验证单一假设。"
+  stage={3}
+  stages={["用已知输出找到第一处错误边界", "抓帧核对该 draw 的完整状态资源", "用非阻塞计时和单变量实验定位瓶颈"]}
+/>
+
+固定场景后一次只改分辨率、shader、draw 数、附件格式或同步中的一项，比较 P50/P95 和 disjoint 有效样本。
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** 画面黑屏，控制台无任何报错，无从下手。
-**原因 →** GL 错误不抛异常只设错误码，着色器编译失败也不主动报，需主动查。
-**修法 →** 每个关键操作后 getError、每个 shader 编译后 getShaderInfoLog、链接后 getProgramInfoLog；开发期开 KHR_debug 回调让错误主动通知。
+**现象 →** WebGL 代码调用 gl.getExtension("KHR_debug") 并期待 debugMessageCallback，结果为 null 或函数不存在。
+**原因 →** 把原生 OpenGL/OpenGL ES 调试扩展照搬到 WebGL；WebGL2 不暴露该回调 API。
+**修法 →** WebGL 使用 getError、shader/program 日志、Spector.js 和 timer query；原生调试上下文才启用 KHR_debug。
 </Callout>
 
 <Callout type="trap">
-**现象 →** 以为是 GPU 慢，优化着色器却没提速。
-**原因 →** 瓶颈可能在 CPU（draw call 太多、状态切换频繁）或带宽（纹理采样过多），而非 GPU 着色计算。
-**修法 →** 用 GPU timer query 测 GPU 端真实耗时，CPU 端分段计时，先定位是顶点/片元/带宽/CPU 哪类瓶颈，再针对性优化。
+**现象 →** 每个 GL 调用后都 getError、每个 pass 后都 gl.finish，调试版非常慢且性能结论混乱。
+**原因 →** 检查方式改变了异步命令流并增加同步，测到的是调试器开销。
+**修法 →** getError 只包围可疑区间；性能用延迟查询和标记，finish 只用于隔离实验且不进入基准结果。
+</Callout>
+
+<Callout type="trap">
+**现象 →** shader 编译成功就认定程序正确，黑屏后反复修改 VAO。
+**原因 →** 还可能是阶段接口链接失败、uniform 被优化、输出附件错或合法状态阻止写入。
+**修法 →** 分别检查 COMPILE_STATUS、LINK_STATUS、活跃接口与帧抓取状态，再按输出目标到输入资源逐层定位。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：为什么 GL 程序出错常表现为黑屏而无异常？开发期应如何系统检查？
+**问题 1**：为什么 WebGL getError 很难直接定位到某一条命令？怎样缩小归因区间又不污染性能基准？
 
 <Answer>
-GL 错误不抛异常只设错误码，着色器编译/链接失败也不主动报，只表现为画面黑屏。开发期应系统检查：每个关键操作后 gl.getError 查错误码、每个 shader 编译后 getShaderInfoLog、链接后 getProgramInfoLog，并开启 KHR_debug 回调让错误带详细消息主动通知。
+错误保存在上下文队列中，getError 只逐个取出；若先前错误未清，当前读取无法证明由最近命令产生。开发期可在可疑区间前排空旧错误，执行少量命令，再排空并带标签报告。该包装只用于诊断构建，不进入生产热路径或性能基准，基准关闭 getError/finish 等干预。
 </Answer>
 
-**问题**：如何找出渲染管线的性能瓶颈？列举主要瓶颈类型与定位手段。
+**问题 2**：帧抓取显示 draw 正常提交、颜色附件正确，但 colorMask 全 false。为什么没有 GL error，怎样证明它是根因？
 
 <Answer>
-用 GPU timer query 测 GPU 端真实耗时、CPU 端分段计时对比。主要瓶颈类型：顶点 bound（顶点多或顶点着色器重）、片元 bound（过度绘制或片元着色器重）、带宽 bound（纹理采样过多）、CPU bound（draw call 太多/状态切换频繁）。定位后针对性优化：顶点用 LOD/剔除、片元用前向排序/early-z、带宽用压缩纹理/图集、CPU 用批处理/实例化。
+关闭全部颜色通道是合法状态，不违反规范，所以 getError 返回 NO_ERROR。把同一 draw 的 colorMask 改为 true,true,true,true 或在已知常量色基准中恢复写掩码，输出随之出现，就构成因果证据；帧抓取中的状态差异和目标附件像素可共同证明。
+</Answer>
+
+**问题 3**：降低分辨率使 GPU 时间明显下降，改为常量片元 shader 后又进一步下降。你会如何区分片元算力与带宽，并保证 timer 样本有效？
+
+<Answer>
+先固定分辨率比较原 shader 与常量 shader，差值反映片元计算/采样成本；再保持 shader、改变纹理和附件格式/采样次数，观察带宽相关变化。EXT_disjoint_timer_query_webgl2 结果延迟数帧读取，只统计 QUERY_RESULT_AVAILABLE 且 GPU_DISJOINT_EXT 为假的样本，并比较 P50/P95 而非单帧。
 </Answer>
 </Exercises>
 
+## 小结
+
+- WebGL getError 与原生 KHR_debug 是两条不同调试路径，WebGL2 没有 debugMessageCallback。
+- 编译、链接、活跃接口和应用绑定必须分别留证，状态位比 info log 是否为空更权威。
+- 黑屏先用清屏色、固定三角形和常量 shader 找第一处断点，再抓取该 draw 的完整状态。
+- Spector.js 面向 WebGL，RenderDoc 面向受支持原生图形应用；抓帧适合正确性而非绝对性能。
+- GPU query 必须异步、检查 disjoint，并与 CPU marker 和工作量计数共同解释瓶颈。
+
 <Glossary>
-<GlossaryItem term="glGetError">主动查询最近一次 GL 错误码的函数，GL 错误不抛异常需轮询。</GlossaryItem>
-<GlossaryItem term="着色器日志">getShaderInfoLog/getProgramInfoLog 查编译与链接错误，否则失败只表现为黑屏。</GlossaryItem>
-<GlossaryItem term="帧抓取器">记录一帧所有 GL 调用供逐 draw 回放分析的工具，如 Spector.js、RenderDoc。</GlossaryItem>
-<GlossaryItem term="GPU 计时器查询">测量 GPU 执行某段命令实际耗时的查询，用于定位 GPU 端瓶颈。</GlossaryItem>
+<GlossaryItem term="错误队列">WebGL 保存规范错误、由 getError 逐个取出的机制；旧错误会干扰当前命令归因。</GlossaryItem>
+<GlossaryItem term="着色器日志">shader 编译器和 program 链接器的诊断文本，应与状态位和带行号源码一起保存。</GlossaryItem>
+<GlossaryItem term="帧抓取">记录一帧命令、状态和资源快照，并逐 draw 回放检查的调试过程。</GlossaryItem>
+<GlossaryItem term="GPU 计时查询">在 GPU 命令流测量一段工作，并在后续帧异步读取且检查 disjoint 的查询。</GlossaryItem>
+<GlossaryItem term="KHR_debug">原生 OpenGL/OpenGL ES 的调试消息和对象标签能力，不是 WebGL2 JavaScript API。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="深入理解 OpenGL WebGL OpenGL ES" adaptedUrl="" />
+<Attribution
+  adaptedFrom="Khronos WebGL 2.0, KHR_debug and timer query specifications"
+  adaptedUrl="https://registry.khronos.org/webgl/specs/latest/2.0/"
+/>

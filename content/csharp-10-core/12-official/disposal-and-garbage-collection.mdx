@@ -1,0 +1,197 @@
+---
+title: "Chapter 12. Disposal and Garbage Collection"
+type: C
+section: "C# 10 Nutshell · Runtime Services"
+order: 12
+description: "覆盖IDisposable确定性释放、GC可达性与代际、终结器、内存优化、数组池、托管泄漏和弱引用，建立可验证的资源所有权模型。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch12.html"
+draft: false
+---
+
+import { CtcDisposalOwnershipLab, CtcGcReachabilityLab, CtcRetentionAndPoolingLab } from "@/components/mdx/csharp-10-core/diagrams/disposal-and-garbage-collection";
+
+<Objectives>
+
+- 能设计同步与异步资源的owner、Dispose级联、SafeHandle终结后备和幂等测试
+- 能分析roots、generations、finalization、LOH与allocation pressure如何决定GC成本
+- 能分析并定位event、timer、cache和pool造成的retention path，并验证修复后对象可回收
+
+</Objectives>
+
+## 为什么Resource Lifetime不等于Object Lifetime
+
+托管对象由GC按可达性回收，文件句柄、socket、锁、数据库事务和native buffer却常要求及时关闭。变量离开作用域不代表对象立刻不可达，对象不可达也不代表终结器立刻执行。因此设计先回答“谁拥有资源、何时结束、失败时谁清理”，再讨论GC调优。
+
+先预测：调用Dispose会立即释放对象内存吗；有finalizer就不必using吗；GC.Collect可作为泄漏修复吗；WeakReference能保证目标活到下一行吗；ArrayPool.Return后仍可读buffer吗。答案都是否。
+
+<Term def="把每个有限资源绑定到唯一owner、明确release boundary并让所有成功/异常路径汇合的规则。">resource ownership contract</Term>
+
+## IDisposable, Dispose, and Close
+
+IDisposable表达确定性清理协议，Dispose/Close通常是同一语义入口。创建或接收资源时必须区分own与borrow：owner负责一次且仅一次释放，borrower不得延长生命周期。using语句在finally中调用Dispose，await using等待IAsyncDisposable.DisposeAsync，适用于flush、network shutdown等异步清理。
+
+拥有多个资源的类型按依赖逆序释放；Dispose应幂等，并使后续操作抛ObjectDisposedException。仅拥有托管IDisposable成员时不需要finalizer。继承层次若允许派生类增加资源，使用protected virtual Dispose(bool)并让public Dispose调用GC.SuppressFinalize；更简单的sealed owner通常风险更低。
+
+```csharp
+public sealed class BatchWriter : IAsyncDisposable
+{
+    private readonly Stream _stream;
+    private int _disposed;
+
+    public BatchWriter(Stream stream) => _stream = stream;
+
+    public async ValueTask DisposeAsync()
+    {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
+        await _stream.FlushAsync().ConfigureAwait(false);
+        await _stream.DisposeAsync().ConfigureAwait(false);
+    }
+}
+```
+
+Constructor中途失败时，已经取得的资源仍要释放；factory可把acquire放进try/catch。Close不是“更轻”的Dispose，API文档必须声明二者等价与否。调用方不要同时让容器和成员都声称拥有同一个stream。
+
+<Stepper>
+  <Step title="切换using、await using、owner与SafeHandle"><CtcDisposalOwnershipLab /></Step>
+  <Step title="画ownership graph">为每个stream、handle、timer标注create、borrow、transfer、dispose和failure edge。</Step>
+  <Step title="执行fault matrix">在构造、第一个write、flush、第二次Dispose和取消点注入故障，验证资源只释放一次。</Step>
+</Stepper>
+
+<Callout type="trap" title="调用Dispose就会回收托管对象内存">
+Dispose只是普通方法，用来结束有限资源；对象内存仍由GC按可达性回收。Dispose后对象甚至可能继续可达，所以还要阻止非法复用。
+</Callout>
+
+## Automatic Garbage Collection
+
+GC自动管理托管heap：分配通常只是推进allocation pointer；空间压力触发collection，标记从roots可达的对象，回收不可达对象并在适用时compact。开发者控制引用关系和分配模式，不控制每个对象的精确回收时刻。
+
+Generational hypothesis认为多数对象寿命短。新对象进入generation 0，幸存者提升到generation 1/2；越老代collection通常越昂贵。Large Object Heap接收大对象，行为和compact策略不同。判断性能必须观察allocation rate、survival、pause、heap size与promoted bytes，而非只看GC次数。
+
+## Roots
+
+Root包括线程栈和寄存器中的活引用、static fields、GC handles、finalization infrastructure等。对象只要存在从root出发的强引用路径就不会回收；“业务不用了”不是GC概念。JIT可能缩短或延长局部变量的实际liveness，必要时用GC.KeepAlive在最后一次native使用后声明边界。
+
+<Term def="从runtime root到对象的强引用链；它决定对象是否存活，也是托管泄漏调查的主要证据。">retention path</Term>
+
+## Finalizers
+
+Finalizer是native resource的非确定后备，不是常规清理入口。带finalizer对象先进入finalization流程，至少多经历一次collection，并给finalizer thread增加工作；执行时间、顺序和进程退出都无强保证。Finalizer不得依赖其他可终结对象仍可用，也不应阻塞或抛异常。
+
+Native handles优先包装为SafeHandle：runtime提供可靠critical finalization，再由普通owner Dispose SafeHandle。成功显式释放后调用GC.SuppressFinalize，避免无用排队。Object resurrection会让lifetime更难推理，生产设计应避免。
+
+```csharp
+public sealed class NativeSession : IDisposable
+{
+    private readonly SessionHandle _handle;
+    private bool _disposed;
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _handle.Dispose();
+        _disposed = true;
+    }
+}
+```
+
+## How the GC Works
+
+一次collection可抽象为suspend/cooperate、enumerate roots、trace reachable graph、process finalization/weak handles、reclaim/compact、fix references与resume。Server/workstation、background GC和latency mode影响并发与pause取舍，但都不能消除高allocation或高survival的成本。
+
+Pinned object不能移动，长期或大量pin会妨碍compact；跨native调用只在需要时短暂fixed/pin。LOH、POH和finalization queue要在对应runtime版本下实测。GC.GetGCMemoryInfo、dotnet-counters和trace用于观察，GC.Collect仅适合少数有明确idle boundary且测量证明收益的场景。
+
+<Stepper>
+  <Step title="切换reachable、gen0、finalizable与LOH"><CtcGcReachabilityLab /></Step>
+  <Step title="记录allocation timeline">标出bytes/sec、gen0/1/2次数、survival、promoted bytes、pause和heap size。</Step>
+  <Step title="验证因果而非相关">只改变一个allocation/retention因素，比较稳定负载下的trace和tail latency。</Step>
+</Stepper>
+
+<Term def="对象跨越年轻代collection后进入更老generation，使未来回收通常需要更昂贵的collection。">generational promotion</Term>
+
+## Optimization Techniques
+
+先用profile确认热点，再减少不必要分配：复用immutable结果，避免热循环boxing、closure、temporary string和过度LINQ materialization；选择struct前评估copy、boxing和size。预分配collection capacity可减少resize，但过量预留会提高working set。StringBuilder适合多段构造，Span适合短暂view，不应为了“零分配”牺牲正确性。
+
+GCSettings.LatencyMode、NoGCRegion和显式collection都是系统级杠杆，需要容量上界、失败回退和benchmark。优化门禁同时看throughput、P95/P99 pause、peak heap、CPU和代码复杂度，不能只报告allocation bytes下降。
+
+## Array Pooling
+
+ArrayPool&lt;T&gt;.Shared降低高频大数组分配，但租出的长度可能大于请求，内容未初始化且归还后所有权立即终止。敏感数据在Return时clearArray或手工清除；reference数组若不清理会让对象被pool数组继续引用。租借必须用try/finally归还，不得把span/array交给超出lease的异步操作。
+
+```csharp
+byte[] buffer = ArrayPool<byte>.Shared.Rent(64 * 1024);
+try
+{
+    int read = await stream.ReadAsync(buffer.AsMemory(0, 64 * 1024), ct);
+    await ConsumeAsync(buffer.AsMemory(0, read), ct);
+}
+finally
+{
+    CryptographicOperations.ZeroMemory(buffer);
+    ArrayPool<byte>.Shared.Return(buffer);
+}
+```
+
+Pool会用retained capacity换较少GC，不保证buffer马上释放给OS。先benchmark allocation size/frequency和concurrency；小对象池常增加contention、stale state与ownership bug。
+
+<Term def="从pool租出到Return之间的唯一合法访问期；归还后任何引用、Span或异步操作都不得再使用buffer。">pool lease boundary</Term>
+
+## Managed Memory Leaks
+
+托管泄漏是对象仍可达但已无业务价值。常见retainer包括static collection、未退订event、未Dispose timer、无限cache、continuation/cancellation registration、ThreadLocal和闭包捕获。诊断比较稳定负载前后的heap snapshot，按type增长，再查看GC root/retention path，而不是凭对象数量猜测。
+
+修复应改变owner或retention policy：unsubscribe、dispose registration、给cache设置size/expiry/eviction、移除完成entry、缩小capture。完成后重复相同负载，等待合理collection，验证retained size和root path消失，同时检查功能没有因过早释放而回归。
+
+## Weak References
+
+WeakReference/WeakReference&lt;T&gt;不阻止目标回收，适合可丢弃cache或观察，不适合表达必要ownership。TryGetTarget成功只保证取得了一个当前强引用；要把结果保存到local并完成使用。Weak event模式仍需正确身份与清理策略，不能自动解决所有publisher lifetime问题。
+
+<Stepper>
+  <Step title="切换event、timer、cache与ArrayPool"><CtcRetentionAndPoolingLab /></Step>
+  <Step title="读取root path">从泄漏对象逆向找到publisher、timer queue、static cache或rented array的实际owner。</Step>
+  <Step title="做before/after heap gate">在相同warm-up与请求数下比较retained bytes、root path、allocation和功能结果。</Step>
+</Stepper>
+
+<Callout type="trap" title="WeakReference是无需设计淘汰策略的Cache">
+目标可在任意collection后消失，命中率和重建成本不可控；key和容器本身也可能继续增长。必要数据用有界强cache，弱引用只用于可丢弃优化。
+</Callout>
+
+<Term def="以稳定负载前后heap snapshot、type growth和GC root chain证明对象被非预期保留的流程。">heap retention proof</Term>
+
+## 本章回顾：GC管理可达内存，Owner管理有限资源
+
+1. IDisposable/IAsyncDisposable提供确定释放，using只是确保调用协议，不回收对象内存。
+2. GC由roots、reachability、generations、finalization与allocation pressure驱动。
+3. SafeHandle优于手写native-handle finalizer；finalizer只做最后后备。
+4. Pool降低分配却引入lease、清理和敏感数据责任。
+5. 托管泄漏必须用heap增长与retention path证明，再验证修复后的同负载结果。
+
+<Exercises>
+
+**问题 1：一个类型接收外部Stream并创建内部Timer，Dispose契约如何写？**
+
+<Answer>先明确Stream是borrow还是transfer；若borrow则不得Dispose，若transfer则由该类型逆序释放Timer和Stream。Timer必须停止并Dispose，callback与Dispose竞态要同步；Dispose幂等，Dispose后公开方法抛ObjectDisposedException，并测试callback正在执行和第二次Dispose。</Answer>
+
+**问题 2：服务heap持续增长，为什么不能先加GC.Collect？**
+
+<Answer>显式collection只尝试回收不可达对象；若event、cache或timer仍提供root path，对象会继续存活且collection反而增加pause。应固定负载获取snapshot/trace，按增长type查看roots，修复owner/retention policy后复测retained size。</Answer>
+
+**问题 3：ArrayPool优化如何验收？**
+
+<Answer>比较相同并发下allocation rate、GC pause、throughput和peak retained memory；验证所有fault/cancel路径Return一次、归还后无use-after-return、只处理请求长度而非数组Length，并为敏感数据和reference数组执行清理。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="resource ownership contract" definition="有限资源唯一owner与确定release boundary。" />
+  <GlossaryItem term="retention path" definition="从GC root到存活对象的强引用链。" />
+  <GlossaryItem term="generational promotion" definition="幸存对象提升到更老generation。" />
+  <GlossaryItem term="pool lease boundary" definition="Rent到Return之间的合法buffer访问期。" />
+  <GlossaryItem term="heap retention proof" definition="用snapshot增长与root chain证明托管泄漏。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 12: Disposal and Garbage Collection" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch12.html" />

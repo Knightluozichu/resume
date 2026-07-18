@@ -1,0 +1,337 @@
+---
+title: "Chapter 8 · Multiplication"
+type: C
+section: "HD2 · 乘除法"
+order: 8
+description: "按Hacker's Delight第二版第8章重建多字乘法、乘积高半部、有无符号修正与常数乘法。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/hackers-delight-9780321842688"
+draft: false
+---
+
+import { HD8ShiftAddLab, HD8PartialProductLab, HD8MultiwordLab, HD8CarryColumnsLab, HD8HighHalfLab, HD8HighWithoutFullLab, HD8SignedProductLab, HD8SignedCorrectionLab, HD8ConstantBinaryLab, HD8NafLab, HD8ConstantShortcutLab, HD8OverflowLab, HD8WideningLab, HD8MultiplicationCertificateLab } from "@/components/mdx/hackers-delight/diagrams/08-multiplication";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释multiplication如何由multiplier bits选择shifted partial products
+- 能计算multiword multiplication的low、cross、high columns与carry propagation
+- 能实现high-order half of product而不依赖native double-width result
+- 能分析signed and unsigned high-order product之间的sign correction
+- 能设计multiplication by constants的binary、addition-chain和signed-digit方案并验证overflow
+
+</Objectives>
+
+## 从“乘积到底要几个words”开始
+
+先预测：两个8-bit unsigned values 213与197相乘得到41961，需要16 bits。若函数只返回low byte，结果是233；若要判断overflow或做fixed-point scaling，high byte 163同样关键。Multiplication的第一条contract不是algorithm，而是返回low word、high word还是full double word。
+
+<Term def="Multiplier某个1-bit选择的一份shifted multiplicand，是schoolbook binary product的一个row。">部分积</Term>把乘法写成
+
+$$
+x\cdot y
+=
+\sum_{i=0}^{w-1}y_i(x2^i).
+$$
+
+<HD8ShiftAddLab />
+
+<Term def="明确乘法结果保留low w bits、high w bits或完整2w bits的接口约定。">乘积宽度</Term>决定后续每个carry是否被保留。Low-word multiplication在unsigned modulo $2^w$与two's-complement signed bits上相同；high word则依赖unsigned或signed interpretation。
+
+## 8.1 Binary multiplication and partial products
+
+每个multiplier bit gate一个shifted row，所有rows按columns相加。Bit matrix中的carry向higher columns传播，和ordinary decimal long multiplication完全同构。
+
+<HD8PartialProductLab />
+
+Shift-add reference可逐bit处理multiplier，也可一次跳过zero runs。Hardware multiplier使用carry-save trees、Booth recoding或target-specific structures；book-level identity用于解释result，不代表software loop能胜过MUL instruction。
+
+若只保留low $w$ bits，则每个partial product越过position $w-1$的部分都可discard。Unsigned与signed operands的low word一致，因为两种interpretations对modulo $2^w$ product同余：
+
+$$
+S_w(x)S_w(y)
+\equiv
+U_w(x)U_w(y)
+\pmod{2^w}.
+$$
+
+## 8.2 Multiword multiplication
+
+### Split operands into radix limbs
+
+<Term def="以B等于2的b次方为base存储multiword integer的b-bit digit。">基数肢</Term>（limb）使mask和shift替代division。令$B=2^b$，
+
+$$
+X=x_1B+x_0,
+\qquad
+Y=y_1B+y_0.
+$$
+
+则
+
+$$
+XY
+=
+x_0y_0
++(x_0y_1+x_1y_0)B
++x_1y_1B^2.
+$$
+
+<Term def="把operands拆成limbs，计算所有pairwise partial products并按radix columns传播carry。">多字乘法</Term>（multiword multiplication）本质是polynomial convolution加base-$B$ normalization。
+
+<HD8MultiwordLab />
+
+### Carries belong to columns
+
+Low product $x_0y_0$本身可能占2 limbs；两个cross products也各占2 limbs。Middle column必须加入low product high limb、两个cross low limbs，再把自己的carry传给high column。
+
+<HD8CarryColumnsLab />
+
+下面用16-bit halves构造32×32→64 unsigned product：
+
+```c
+typedef struct {
+    uint32_t high;
+    uint32_t low;
+} u64_words;
+
+static u64_words multiply_u32(uint32_t x, uint32_t y) {
+    const uint32_t mask = UINT32_C(0xFFFF);
+    uint32_t x0 = x & mask, x1 = x >> 16;
+    uint32_t y0 = y & mask, y1 = y >> 16;
+    uint32_t p00 = x0 * y0;
+    uint32_t p01 = x0 * y1;
+    uint32_t p10 = x1 * y0;
+    uint32_t p11 = x1 * y1;
+
+    uint32_t middle = (p00 >> 16) + (p01 & mask) + (p10 & mask);
+    u64_words out;
+    out.low = (p00 & mask) | (middle << 16);
+    out.high = p11 + (p01 >> 16) + (p10 >> 16) + (middle >> 16);
+    return out;
+}
+```
+
+Each 16×16 product fits32 bits；middle maximum也fits32 bits。若limb更大而partial product不fit native type，需要更小limbs、special multiply-high primitive或carry-safe decomposition。
+
+General $n$-limb multiplication computes $n^2$ limb products。Karatsuba等algorithm减少asymptotic multiplication count，但本章聚焦small fixed word counts的correct carry accounting。
+
+## 8.3 High-order half of product
+
+### Unsigned high product
+
+<Term def="Full 2w-bit product中positions w到2w减1组成的word，等于unsigned exact product除以2的w次方取floor。">乘积高半部</Term>（high-order half of product）对unsigned operands定义
+
+$$
+\operatorname{mulhu}_w(x,y)
+=
+\left\lfloor\frac{U_w(x)U_w(y)}{2^w}\right\rfloor.
+$$
+
+Low half为product modulo $2^w$。
+
+<HD8HighHalfLab />
+
+High half用于detect unsigned overflow、fixed-point scaling、wide division与hash reduction。若只需要high，仍必须正确汇总cross terms与middle carry；可以不materializefull product，但不能忽略low columns产生的carry。
+
+<HD8HighWithoutFullLab />
+
+在上节half-limb construction中，`out.high`正是mulhu。Native ISA若有multiply-high，应优先让compiler/intrinsic表达；portable fallback可用half limbs并与double-width oracle比较。
+
+Unsigned one-word product fits当且仅当high half为zero。若没有high primitive，也可在$y$nonzero时检查$x$是否不大于word maximum除以$y$，但division可能比wide multiply昂贵。
+
+## 8.4 Signed and unsigned high-order product
+
+### Same low half, different high half
+
+8-bit pattern `11010011`可解释为unsigned 211或signed negative 45。与另一pattern相乘时low byte同余，但full signed product需要sign extension。
+
+<HD8SignedProductLab />
+
+令$x_u=U_w(x)$、$s_x$为sign bit的0/1 value，则
+
+$$
+x_s=x_u-s_x2^w,
+\qquad
+y_s=y_u-s_y2^w.
+$$
+
+展开signed product：
+
+$$
+x_sy_s
+=
+x_uy_u
+-s_xy_u2^w
+-s_yx_u2^w
++s_xs_y2^{2w}.
+$$
+
+最后一项在$2w$-bit product modulo $2^{2w}$中为zero，因此signed high word由unsigned high word减两个conditional corrections：
+
+$$
+\operatorname{mulhs}_w(x,y)
+\equiv
+\operatorname{mulhu}_w(x_u,y_u)
+-s_xy_u
+-s_yx_u
+\pmod{2^w}.
+$$
+
+<Term def="把unsigned high product转换成signed high product时，对每个negative operand减去opposite unsigned operand的调整。">有符号高位修正</Term>。
+
+<HD8SignedCorrectionLab />
+
+```c
+static uint32_t signed_high_from_unsigned(uint32_t x, uint32_t y) {
+    u64_words product = multiply_u32(x, y);
+    uint32_t high = product.high;
+    if ((x >> 31) != 0u) high -= y;
+    if ((y >> 31) != 0u) high -= x;
+    return high;
+}
+```
+
+Return bits interpreted assigned32 high half。The subtraction itself uses unsigned modulo arithmetic，avoiding signed overflow。Exhaustive 8-bit tests can compare all65536 input pairs against a16-bit signed oracle.
+
+### Overflow depends on requested interpretation
+
+Unsigned low-word overflow iff unsigned high word nonzero。Signed product fits one signed word ifffull 2w-bit product high half isexact sign extensionof low word's sign bit.
+
+<HD8OverflowLab />
+
+例如negative times negative可产生positive overflow，即使unsigned high nonzero criterion也为true但meaning不同。API必须说明checked signed、checked unsigned、modulo low word还是full result。
+
+## 8.5 Multiplication by constants
+
+### Binary expansion and addition chains
+
+<Term def="从x开始，通过previous values的addition、subtraction和shifts构造constant times x的dependency graph。">加法链</Term>不只数set bits，还考虑共享intermediates与critical path。
+
+Binary expansion为每个constant one bit生成shifted $x$：
+
+<HD8ConstantBinaryLab />
+
+Constant 45可写成32加8加4加1，也可共享intermediate，例如先构造$3x$、再$15x$、再$45x$。最少operators与最短latency不总一致；target可能把constant multiply直接作为single instruction。
+
+接近power of two的constant常用subtract：
+
+<HD8ConstantShortcutLab />
+
+例如$15x=16x-x$。若signed source overflow undefined，compiler transformation仍需遵守language semantics；用unsigned fixed-width algebra时shift/add/sub按modulo更容易证明。
+
+### Signed digits and NAF
+
+<Term def="Digits取negative one、zero、positive one且nonzero digits不相邻的constant representation，常减少partial products。">非相邻形式</Term>（NAF）允许subtracted partial products。Runs of binary ones可改写为higher power minus lower power，例如
+
+$$
+00111100_2
+=
+01000000_2-00000100_2.
+$$
+
+<HD8NafLab />
+
+NAF在non-adjacent constraint下具有minimal nonzero digit count，但hardware/compiler cost还取决于negate、fused address operations、register reuse与instruction scheduling。Production source通常写ordinary `x * constant`最能让optimizer工作；manual sequence需要generated-code evidence。
+
+### Widen before multiplication
+
+<Term def="Exact product超出requested result type range，导致wrap、trap、undefined behavior或checked failure。">乘法溢出</Term>要在operation之前防止。把already-narrow product cast到wider type不能恢复discarded high bits。
+
+<HD8WideningLab />
+
+```c
+static uint64_t multiply_u32_wide(uint32_t x, uint32_t y) {
+    return (uint64_t)x * (uint64_t)y;
+}
+
+static bool multiply_u32_checked(uint32_t x, uint32_t y, uint32_t *out) {
+    uint64_t product = (uint64_t)x * (uint64_t)y;
+    if (product > UINT32_MAX) return false;
+    *out = (uint32_t)product;
+    return true;
+}
+```
+
+C expression cast必须作用于operand。For signed values，use a wider signed type only when it truly covers full product range，or use checked builtins/library APIs.
+
+<Callout type="trap" title="Signed和unsigned乘法low bits相同，所以high bits也相同">
+Low half只看modulo 2的w次方；signed operands代表xu减sign乘2的w次方，cross terms正好改变high word。修法是使用两个conditional sign corrections或native signed multiply-high。
+</Callout>
+
+<Callout type="trap" title="乘完再cast就得到了wide product">
+Narrow multiplication已先wrap或触发signed undefined behavior，later cast只扩展错误的low result。修法是在operator执行前cast至少一个operand到足以容纳full product的type。
+</Callout>
+
+## 一条result-contract-first的乘法流程
+
+<Stepper>
+<Step title="声明width与interpretation">
+确定operands signedness、返回low/high/full product，以及overflow是wrap、reject还是trap。
+
+<HD8HighHalfLab />
+</Step>
+<Step title="按radix columns传播carry">
+计算low、cross、high partial products，证明每个temporary fits并把middle carry加入high column。
+
+<HD8CarryColumnsLab />
+</Step>
+<Step title="与wide oracle和target比较">
+Small widths exhaustive signed/unsigned pairs，常数序列再检查compiler output与representative latency。
+
+<HD8MultiplicationCertificateLab />
+</Step>
+</Stepper>
+
+<HD8MultiplicationCertificateLab />
+
+## 小结
+
+Chapter 8 Multiplication从partial products出发。Multiword multiplication把operands拆成radix limbs，low product、cross products与high product按columns相加，middle carry决定full result。
+
+High-order half of product是unsigned exact product除以$2^w$的floor。Signed and unsigned high-order product共享low half，却相差由两个sign bits控制的opposite-operand corrections。
+
+Multiplication by constants可用binary shifts、addition chains或NAF signed digits减少partial products，但modern compiler/ISA可能已有更好sequence。所有实现都必须先固定product width、signedness与overflow policy，并在乘法之前widen。
+
+<Exercises>
+
+**问题 1**：为什么16-bit operands拆成8-bit limbs后会有四个pairwise partial products？
+
+<Answer>
+每个operand有low和high两个base-256 digits。Distributive expansion产生x0y0、x0y1、x1y0、x1y1四对；cross pair权重为B，high pair权重为B平方，随后按columns传播carry。
+</Answer>
+
+**问题 2**：Unsigned 8-bit 213乘197的high与low halves分别是多少？
+
+<Answer>
+Exact product为41961。除以256的quotient为163、remainder为233，所以high byte是163即10100011，low byte是233即11101001。
+</Answer>
+
+**问题 3**：把unsigned high product转signed high时，为何negative x要减unsigned y？
+
+<Answer>
+Signed x等于unsigned x减2的w次方。乘y后多出negative y乘2的w次方，正好在high word中减y；negative y同理减x。双negative的2的2w次方项在2w-bit product中消失。
+</Answer>
+
+**问题 4**：Constant 15为何可用一次shift和一次subtract，且这不自动证明比MUL更快？
+
+<Answer>
+15x等于16x减x，所以source sequence可写成x left-shift 4再减x。Target MUL可能是一条高throughput instruction，compiler也可能自己选择该sequence；latency、ports和surrounding dependencies仍需查看generated code和benchmark。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="部分积">Multiplier某个1-bit选择的一份shifted multiplicand，是schoolbook binary product的一个row。</GlossaryItem>
+<GlossaryItem term="乘积宽度">明确乘法结果保留low w bits、high w bits或完整2w bits的接口约定。</GlossaryItem>
+<GlossaryItem term="基数肢">以B等于2的b次方为base存储multiword integer的b-bit digit。</GlossaryItem>
+<GlossaryItem term="多字乘法">把operands拆成limbs，计算所有pairwise partial products并按radix columns传播carry。</GlossaryItem>
+<GlossaryItem term="乘积高半部">Full 2w-bit product中positions w到2w减1组成的word，等于unsigned exact product除以2的w次方取floor。</GlossaryItem>
+<GlossaryItem term="有符号高位修正">把unsigned high product转换成signed high product时，对每个negative operand减去opposite unsigned operand的调整。</GlossaryItem>
+<GlossaryItem term="加法链">从x开始，通过previous values的addition、subtraction和shifts构造constant times x的dependency graph。</GlossaryItem>
+<GlossaryItem term="非相邻形式">Digits取negative one、zero、positive one且nonzero digits不相邻的constant representation，常减少partial products。</GlossaryItem>
+<GlossaryItem term="乘法溢出">Exact product超出requested result type range，导致wrap、trap、undefined behavior或checked failure。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Hacker's Delight, Second Edition, Chapter 8 · Multiplication" adaptedUrl="https://www.informit.com/store/hackers-delight-9780321842688" />

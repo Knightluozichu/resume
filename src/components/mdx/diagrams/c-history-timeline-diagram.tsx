@@ -12,8 +12,18 @@
 export function CHistoryTimelineDiagram() {
   const milestones = [
     { year: "1972", label: "C 诞生", sub: "贝尔实验室\nDennis Ritchie", x: 60 },
-    { year: "1978", label: "K&R C", sub: "《The C Programming\nLanguage》出版", x: 170 },
-    { year: "1989", label: "C89", sub: "ANSI 首个标准\n（也称 ANSI C）", x: 280 },
+    {
+      year: "1978",
+      label: "K&R C",
+      sub: "《The C Programming\nLanguage》出版",
+      x: 170,
+    },
+    {
+      year: "1989",
+      label: "C89",
+      sub: "ANSI 首个标准\n（也称 ANSI C）",
+      x: 280,
+    },
     { year: "1999", label: "C99", sub: "新增 // 注释\n变长数组等", x: 390 },
     { year: "2011", label: "C11", sub: "多线程支持\n泛型宏", x: 500 },
     { year: "2018", label: "C18", sub: "C11 修正/勘误\n无新特性", x: 610 },
@@ -42,18 +52,8 @@ export function CHistoryTimelineDiagram() {
           {milestones.map((m, i) => (
             <g key={m.year}>
               {/* 节点 */}
-              <circle
-                cx={m.x + 40}
-                cy="120"
-                r="8"
-                fill="var(--accent)"
-              />
-              <circle
-                cx={m.x + 40}
-                cy="120"
-                r="4"
-                fill="var(--bg)"
-              />
+              <circle cx={m.x + 40} cy="120" r="8" fill="var(--accent)" />
+              <circle cx={m.x + 40} cy="120" r="4" fill="var(--bg)" />
               {/* 年份（轴上方） */}
               <text
                 x={m.x + 40}
@@ -111,13 +111,8 @@ export function CHistoryTimelineDiagram() {
           >
             C 语言的发展历程
           </text>
-          <text
-            x="40"
-            y="48"
-            fontSize="11"
-            fill="var(--text-secondary)"
-          >
-            从贝尔实验室的"玩具语言"到全球通用标准，50 年演进
+          <text x="40" y="48" fontSize="11" fill="var(--text-secondary)">
+            从贝尔实验室的&quot;玩具语言&quot;到全球通用标准，50 年演进
           </text>
 
           {/* 底部说明 */}
@@ -133,8 +128,8 @@ export function CHistoryTimelineDiagram() {
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        C 语言发展时间线：从 1972 年诞生于贝尔实验室，历经 K&R C、C89、C99、C11 到最新的 C18 标准。
-        每个版本的标准化都提升了 C 的可移植性和表达能力。
+        C 语言发展时间线：从 1972 年诞生于贝尔实验室，历经 K&R C、C89、C99、C11
+        到最新的 C18 标准。 每个版本的标准化都提升了 C 的可移植性和表达能力。
       </figcaption>
     </figure>
   );

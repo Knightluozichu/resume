@@ -1,0 +1,223 @@
+---
+title: "第 4 章 Anchors Away：锚点、拉伸与分辨率策略"
+type: A
+section: "Unity UI 设计 · 控件与响应式"
+order: 4
+description: "深入锚点和拉伸，比较 Constant Pixel、Scale with Screen Size 与 Constant Physical Size，建立响应式布局证据。"
+demo: true
+math: false
+sourceUrl: "https://api.pageplace.de/preview/DT0400.9781783553624_A24173589/preview-9781783553624_A24173589.pdf"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Uid04AnchorsAwayMapLab,
+  Uid04AnchorsAwayExperimentLab,
+  Uid04AnchorsAwayEvidenceLab,
+} from "@/components/mdx/unity-ui-design/diagrams/uid-04-anchors-away";
+
+<Objectives>
+
+- 能推导固定锚、区间锚和拉伸锚在父矩形变化时的尺寸与位置
+- 能比较 Constant Pixel、Scale With Screen Size 与 Constant Physical Size 的选择条件
+- 能设计跨宽高比、方向和设备密度的响应式布局验收矩阵
+
+</Objectives>
+
+## 问题：为什么所谓响应式 UI 不是把 Canvas Scaler 设成一个下拉选项
+
+先预测：参考分辨率 1920x1080、实际屏幕 2436x1125 时，Match 设为 0、0.5、1 会分别优先保持什么？第四章先用 Dropping Anchor、固定锚点与拉伸锚点建立几何直觉，再讨论 Scaling and resolution。Scaler 只能决定全局比例，不能代替局部锚点、内容约束和安全区域设计。
+
+<Uid04AnchorsAwayMapLab />
+
+## 原书边界与小节库存
+
+原章的目录很集中：Dropping Anchor；Put a nail in it, and trim the sails；Stretch it, bend it；Scaling and resolution；Working with the constant default；Scaling to my view；Getting physical；Which to choose。它要求读者先掌握锚点的定位与拉伸语义，再在 Constant Pixel Size、Scale with Screen Size、Constant Physical Size 之间做工程选择。
+
+- **Dropping Anchor：锚点概念与父矩形参考**
+- **Put a nail in it, and trim the sails：固定锚点、轴心与边距**
+- **Stretch it, bend it：分离 anchorMin/anchorMax 后的拉伸与偏移**
+- **Scaling and resolution：屏幕变化与 Canvas Scaler**
+- **Working with the constant default；Scaling to my view；Getting physical**
+- **Which to choose：按项目目标选择策略并验证**
+
+这份库存用于唯一归属，而不是逐字转载。每个条目只在一个原章中计数，页面用重新组织的解释、实验和图示复现其核心问题。读者应能从条目回到页面证据，也能从页面结论指出对应的原始范围。
+
+## 局部锚点与全局缩放的两级系统
+
+锚点先在父矩形中确定参考点或参考区间，偏移再决定子矩形；CanvasScaler 随后把参考 Canvas 单位映射到屏幕。Scale with Screen Size 的 Match Width Or Height 在宽、高缩放因子之间插值，Match 为 0 偏向宽度，为 1 偏向高度。Expand 保证参考区域完整容纳，可能露出更多；Shrink 保证填满目标，可能裁掉参考范围。响应式设计必须同时选择全局映射和每个模块的局部约束。
+
+<Uid04AnchorsAwayExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="anchorMin 与 anchorMax 相等，以父矩形单点作为定位参考。">
+  固定锚点
+</Term>
+不是孤立术语。它要放回本章的数据流中，说明谁产生它、谁修改它、谁消费它，以及配置错误时会出现什么可观察结果。
+
+<Term def="anchorMin 与 anchorMax 分离，以父矩形区间和边距共同决定尺寸。">
+  拉伸锚点
+</Term>
+不是孤立术语。它要放回本章的数据流中，说明谁产生它、谁修改它、谁消费它，以及配置错误时会出现什么可观察结果。
+
+<Term def="Scale with Screen Size 模式中定义设计坐标基准的宽高。">
+  参考分辨率
+</Term>
+不是孤立术语。它要放回本章的数据流中，说明谁产生它、谁修改它、谁消费它，以及配置错误时会出现什么可观察结果。
+
+<Term def="在宽度比例与高度比例之间选择或插值的缩放权重。">Match 参数</Term>
+不是孤立术语。它要放回本章的数据流中，说明谁产生它、谁修改它、谁消费它，以及配置错误时会出现什么可观察结果。
+
+<Term def="依赖 DPI 把毫米、点或英寸映射到屏幕像素的缩放目标。">物理尺寸</Term>
+不是孤立术语。它要放回本章的数据流中，说明谁产生它、谁修改它、谁消费它，以及配置错误时会出现什么可观察结果。
+
+术语必须能落到对象和状态，而不能只背定义。阅读 Inspector、运行日志或源码时，为每个术语写出输入、拥有者、输出和失败信号；若无法指出责任对象，就还没有形成可调试的心智模型。
+
+## 关键对象与数据流
+
+响应式实验不能只截一张 16:9 图。先固定参考 Canvas 与字号，再生成 4:3、16:9、19.5:9、超宽和竖屏矩阵；每种尺寸检查角落边距、可读字号、可点击区域、内容裁剪和视觉层级。对每个失败先判断是全局 scaleFactor、局部锚点、自动布局还是内容策略造成，避免反复微调 anchoredPosition。
+
+同一个视觉现象可能来自不同链路：位置错误通常来自几何写入者，点击错误来自射线与事件，显示顺序来自 Canvas 和相机，版本错误来自历史载体与现代 API 混写。实验必须先选定要证明的链，再控制无关变量。
+
+## 三步复现实验
+
+动手前先预测：当前步骤改变后，哪个可见状态或日志应首先变化？若结果与预测不同，停下来沿生产者到消费者链找断点，不要继续叠加修复。
+
+<Stepper>
+  <Step title="观察固定锚点">
+    <Uid04AnchorsAwayMapLab />
+
+把四个按钮分别固定到父矩形四角，改变父级宽高和 pivot，记录边距是否保持。随后只改 pivot，区分元素自身参考点与父级锚点。
+
+```csharp
+var scaler = canvas.GetComponent<CanvasScaler>();
+scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+scaler.referenceResolution = new Vector2(1920, 1080);
+scaler.matchWidthOrHeight = 0.5f;
+```
+
+  </Step>
+  <Step title="观察拉伸与缩放">
+    <Uid04AnchorsAwayExperimentLab />
+
+制作顶部栏、底部栏和全屏内容，使用拉伸锚点与左右边距；依次切换三种 CanvasScaler 模式和 Match 值，记录有效区域与字号变化。
+
+```csharp
+rect.anchorMin = new Vector2(0f, 0f);
+rect.anchorMax = new Vector2(1f, 0f);
+rect.offsetMin = new Vector2(32f, 24f);
+rect.offsetMax = new Vector2(-32f, 120f);
+```
+
+  </Step>
+  <Step title="构建设备验收矩阵">
+    <Uid04AnchorsAwayEvidenceLab />
+
+用多分辨率 Game View 或自动截图遍历横竖屏和极端比例，加入长文本、动态字体与刘海安全区作为现代补充，保存裁剪、重叠和触控面积失败样本。
+
+```text
+screen -> canvas scale -> parent rect -> anchors -> offsets -> content fit -> visible result
+```
+
+  </Step>
+</Stepper>
+
+## 正常、边界与失败样本
+
+一个完整实验至少包含正常输入、极端输入和故意破坏配置。正常样本证明主路径可用，边界样本说明数值或设备范围，失败样本则暴露隐式依赖。只保留成功截图会让后续读者无法区分偶然成功和稳定契约。
+
+<Callout type="trap">
+  **因果陷阱**：所有元素锚在屏幕中心再靠固定坐标摆放，只在参考分辨率看起来正确，不是响应式布局。
+</Callout>
+
+<Callout type="trap">
+  **版本陷阱**：Constant Physical Size 不能修复错误
+  DPI；没有真机测量时，毫米级承诺只是未经验证的假设。
+</Callout>
+
+## 从 2015 年到现代 Unity
+
+原章发布时尚未面对今天常见的刘海、折叠屏和系统动态字号，但其两级模型仍成立。现代补充应在 CanvasScaler 之后加入 Screen.safeArea、方向与窗口尺寸变化，并区分布局刷新和内容重排。不要把 Safe Area 写成原始章节小节；应明确它是对“选择缩放策略并验证”的当代扩展。UI Toolkit 的 Flex 布局也不能替代对 uGUI 锚点的原章复现。
+
+迁移记录必须把“原书说了什么”和“今天怎样实现”并排放置。允许替换 API、包和资源，不允许删除原问题或把新版能力倒写成 2015 年事实；无法等价时应保留差异和失败证据，而不是强行宣布一一对应。
+
+## 验收证据
+
+验收矩阵至少含五种长宽比、横竖屏、最短与最长本地化文本、DPI 正常和异常样本。每张截图要带实际分辨率、scaleFactor、参考分辨率与 Match。通过标准是无重叠、关键内容可见、边距语义保持、交互面积达标，而不是“整体还能看到”。
+
+证据包还应包含 Unity 版本、目标平台、场景路径、复现步骤和预期结果。交给另一位读者后，他不需要猜测隐藏参数就能得到同样结论，才算从“理解文字”进入“掌握系统”。
+
+## 响应式约束审计
+
+原书用 **Which to choose?** 收束本章，要求选择缩放方案而不是寻找万能预设。固定像素适合像素艺术、录屏叠层或尺寸可控的桌面窗口；随屏幕缩放适合以参考稿为基准的跨分辨率游戏界面；物理尺寸只在设备 DPI 可信且业务确实需要现实单位时采用。选择结论必须写明目标设备、内容优先级、允许留白或裁切的边界，并由设备矩阵验证。
+
+审计一个界面时，先把每个元素标成三类：固定内容尺寸、随父级单轴伸缩、随父级双轴伸缩。再为每类写出不可违反的边界，例如四角 HUD 保持到安全父矩形的边距，底栏只横向伸缩，弹窗主体在可读宽度内居中。这样，anchorMin/Max、offset 与 pivot 就是约束的实现，而不是凭预设图标试出来的数值。父级变化后若结果错误，可直接追到分类或约束，而不是逐个拖动位置。
+
+缩放审计与锚点审计分开执行。先固定 CanvasScaler，验证父子矩形关系；再固定布局，比较三种缩放模式。Scale With Screen Size 还要单独扫过 Match 的 0、0.5、1，记录横向和纵向内容何时先碰边。Constant Physical Size 要在 DPI 正常、缺失和异常三类设备信息下测试 fallback。最后才加入 Safe Area 与本地化长文本，确保现代边界没有掩盖原书的锚点和缩放因果链。
+
+## 小结
+
+- 锚点决定父矩形参考，轴心决定自身参考，偏移表达边距或位置
+- 拉伸锚点让尺寸随父级变化，固定锚点保持自身尺寸
+- CanvasScaler 只解决全局映射，局部布局仍需正确约束
+- 响应式结论必须由设备矩阵和失败样本证明
+
+<Exercises>
+
+**问题 1** 顶部栏为什么应使用水平拉伸锚点？
+
+<Answer>
+  它需要左右边距随父宽保持而宽度自动变化；anchorMin.x=0、anchorMax.x=1，再用
+  offset 表达边距。
+</Answer>
+
+**问题 2** Match 为 0 与 1 的含义是什么？
+
+<Answer>
+  0 完全按参考宽度比例缩放，1
+  完全按参考高度比例缩放，中间值在两者对数尺度上混合。
+</Answer>
+
+**问题 3** Safe Area 应放在原章覆盖率里吗？
+
+<Answer>
+  不应作为原始小节计数；它是现代设备迁移补充，应建立在原章锚点与分辨率策略之上并单独标注。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="固定锚点">
+    anchorMin 与 anchorMax 相等，以父矩形单点作为定位参考。
+  </GlossaryItem>
+  <GlossaryItem term="拉伸锚点">
+    anchorMin 与 anchorMax 分离，以父矩形区间和边距共同决定尺寸。
+  </GlossaryItem>
+  <GlossaryItem term="参考分辨率">
+    Scale with Screen Size 模式中定义设计坐标基准的宽高。
+  </GlossaryItem>
+  <GlossaryItem term="Match 参数">
+    在宽度比例与高度比例之间选择或插值的缩放权重。
+  </GlossaryItem>
+  <GlossaryItem term="物理尺寸">
+    依赖 DPI 把毫米、点或英寸映射到屏幕像素的缩放目标。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Simon Jackson《Unity 3D UI Essentials》出版社预览目录与作者官方章节说明"
+  adaptedUrl="https://api.pageplace.de/preview/DT0400.9781783553624_A24173589/preview-9781783553624_A24173589.pdf"
+/>

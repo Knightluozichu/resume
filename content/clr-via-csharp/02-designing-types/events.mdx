@@ -1,0 +1,195 @@
+---
+title: "Chapter 11. Events"
+type: C
+section: "CLR via C# 4e · Designing Types"
+order: 11
+description: "从EventArgs、event add/remove、raise snapshot、listener lifetime到explicit event，完整定义异常、重入、线程和退订协议。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcEventExposureLab, CvcEventInvocationLab, CvcEventListenerLab } from "@/components/mdx/clr-via-csharp/diagrams/events";
+
+<Objectives>
+
+- 能设计EventArgs、event member、raiser与输入翻译，使通知代表已经提交的状态事实
+- 能分析compiler生成的add/remove与multicast delegate invocation，处理并发、异常和reentrancy
+- 能实现可释放listener和explicit event，证明长生命周期publisher不会泄漏subscriber
+
+</Objectives>
+
+## 为什么Event首先是Lifetime Contract
+
+Event把publisher与未知数量subscribers连接起来。Publisher保存delegate，delegate又强引用target subscriber；因此长生命周期publisher可能让已结束页面、session或plugin永久可达。Raise还同步进入外部代码，handler可以抛异常、阻塞、重入publisher、退订自己或在任意线程修改状态。事件设计的核心不是`+=`语法，而是owner、lifetime、ordering、thread、failure和backpressure。
+
+先预测：subscriber超出作用域后是否自动退订；`handler?.Invoke`能否保证线程安全；第一个handler抛异常后后续是否继续；`-=`能否取消已经snapshot的本次raise；async lambda订阅EventHandler后异常去哪；event与public delegate field有何权限差异。后文用发布、调用、监听三张表回答。
+
+<Term def="Publisher与subscriber对订阅、通知、线程、异常、退订和对象可达性共同承担的协议。">event lifetime contract</Term>
+
+## Designing a Type That Exposes an Event
+
+先定义事件表示的事实：`OrderAccepted`应在transaction commit后raise，而不是“可能会接受”；若是可取消的before-event，要明确subscriber能否修改EventArgs、顺序和冲突。选择sender与args，定义同一状态是否coalesce、duplicate是否允许、是否重放current state。Event适合in-process notification，不天然持久、不可靠、不带backpressure；跨process/domain用message/event log。
+
+```csharp
+public sealed class OrderAcceptedEventArgs : EventArgs
+{
+    public OrderAcceptedEventArgs(Guid orderId, DateTimeOffset acceptedAt)
+        => (OrderId, AcceptedAt) = (orderId, acceptedAt);
+
+    public Guid OrderId { get; }
+    public DateTimeOffset AcceptedAt { get; }
+}
+
+public sealed class OrderBook
+{
+    public event EventHandler<OrderAcceptedEventArgs>? OrderAccepted;
+}
+```
+
+EventArgs优先immutable snapshot，防止第一个handler修改后影响后续。若需取消或协商，专门命名mutable fields并定义合并规则。不要在args放publisher内部mutable collection/live entity；传stable id/value snapshot，subscriber需要更多数据再显式查询。
+
+<Term def="一次通知发生时固定下来的不可变事件数据，使所有handler观察同一事实版本。">event snapshot</Term>
+
+## Defining EventArgs Data and the Event Member
+
+标准pattern使用`EventHandler`/`EventHandler<TEventArgs>`，sender通常是publisher，args承载额外数据。Event member只允许外部add/remove，不能读取invocation list、清空或raise；public delegate field则把这些权限全部暴露。Null表示无subscribers，duplicate subscription通常会被调用多次，remove一次只移除一个匹配项。
+
+Accessibility决定subscriber范围；public event形成长期signature，EventArgs后续加只读property通常source/binary友好，但serializer/consumer assumptions仍需测试。High-frequency事件要测allocation和handler cost，可能用struct args/custom delegate，但不要先牺牲清晰lifetime。
+
+## Raising and Translating Events
+
+提供protected virtual `OnOrderAccepted`或private raiser集中raise policy，状态转移method在commit后翻译成事件。Raiser先复制event delegate到local snapshot，再invoke，避免读取与调用之间被置null；C# null-conditional通常生成同类安全读取。Snapshot只保证这次拥有稳定delegate reference，不阻止handler并发、重入或在raise期间取消后续未来通知。
+
+```csharp
+private void OnOrderAccepted(OrderAcceptedEventArgs args)
+{
+    EventHandler<OrderAcceptedEventArgs>? snapshot = OrderAccepted;
+    snapshot?.Invoke(this, args);
+}
+
+public void Accept(Order order)
+{
+    _repository.CommitAccepted(order);
+    OnOrderAccepted(new(order.Id, _clock.UtcNow));
+}
+```
+
+在lock内raise会把未知handler带入critical section，容易deadlock和延长lock；先完成state transition，capture args，退出lock再raise。若要求state与notification原子可靠，普通event做不到crash recovery，应使用outbox/persistent message。Handler exception默认停止delegate chain并传播；publisher必须明确fail-fast、逐个隔离aggregate，或把work入queue，不能随意catch everything。
+
+<Stepper>
+  <Step title="切换EventArgs、event member、OnEvent与translation"><CvcEventExposureLab /></Step>
+  <Step title="画事实时序">标出validate、state commit、lock release、snapshot、handler invocation与持久消息边界。</Step>
+  <Step title="注入重入和失败">让handler退订、再次调用publisher、阻塞和抛异常，验证状态invariant与后续handler policy。</Step>
+</Stepper>
+
+<Callout type="trap" title="在Lock里Raise可以保证Subscriber看到一致状态">
+它也让未知subscriber代码持有publisher lock，可能重入或deadlock。完成受保护状态更新并生成immutable snapshot后退出lock再通知；跨故障原子性用outbox。
+</Callout>
+
+## How the Compiler Implements an Event
+
+Field-like event通常生成private delegate backing field以及special-name add/remove accessors。Accessors用thread-safe compare/exchange loop组合Delegate.Combine/Remove，具体实现由compiler决定；consumer metadata只依赖add/remove。Raise权限留在declaring type，因为只有它能访问backing field。
+
+<Term def="Compiler为event生成并通过add/remove accessors原子更新的multicast delegate存储。">event backing store</Term>
+
+Multicast delegate包含ordered invocation list。直接Invoke按顺序同步调用；有返回值时最终结果通常来自最后handler，但event handler应以void避免这种含糊。`GetInvocationList()`可逐个调用并收集exceptions，却也定义了新的ordering/error contract，需谨慎并测试unsubscribe race。
+
+```csharp
+private EventHandler<MessageEventArgs>? _message;
+
+public event EventHandler<MessageEventArgs> Message
+{
+    add
+    {
+        EventHandler<MessageEventArgs>? current, updated;
+        do
+        {
+            current = _message;
+            updated = (EventHandler<MessageEventArgs>?)Delegate.Combine(current, value);
+        } while (Interlocked.CompareExchange(ref _message, updated, current) != current);
+    }
+    remove
+    {
+        EventHandler<MessageEventArgs>? current, updated;
+        do
+        {
+            current = _message;
+            updated = (EventHandler<MessageEventArgs>?)Delegate.Remove(current, value);
+        } while (Interlocked.CompareExchange(ref _message, updated, current) != current);
+    }
+}
+```
+
+自定义accessor只有在需要shared event table、weak subscription、native registration或special synchronization时使用；否则field-like event减少错误。Weak event会改变可达性和delivery确定性，subscriber若无其它root可能提前消失，不能当免费泄漏修复。
+
+<Stepper>
+  <Step title="切换subscribe、snapshot、invoke与unsubscribe"><CvcEventInvocationLab /></Step>
+  <Step title="检查IL与metadata">定位add_/remove_ methods、backing field和delegate Combine/CompareExchange，理解而非猜测并发行为。</Step>
+  <Step title="制定exception policy">分别测试fail-fast、per-handler isolation和queue delivery，记录ordering、latency和observability。</Step>
+</Stepper>
+
+## Designing a Type That Listens for an Event
+
+Subscriber保存publisher reference或获得subscription token，并在明确lifecycle结束时unsubscribe。最稳模式是返回`IDisposable` registration，由owner与其它resources一起释放；UI component在Unload/Dispose，plugin在Stop，request-scoped service不应订阅singleton后忘记清理。Finalizer不能可靠退订，因为publisher强引用会阻止subscriber成为不可达。
+
+<Term def="Subscriber owner在确定生命周期结束点调用退订/Dispose，解除publisher到subscriber强引用的责任。">subscription ownership</Term>
+
+Method group退订要求相同target+method delegate；用匿名lambda订阅后若不保存delegate，无法用“看起来相同”的新lambda移除。Thread affinity由publisher raise thread决定，event不会自动marshal到UI context。Subscriber应快速capture args并入自己的scheduler/queue，或publisher明确提供dispatcher policy。
+
+Async event handler若落到`async void`，caller无法await、聚合异常或提供backpressure。真正异步流程用`Func<T, CancellationToken, Task>`组成的显式pipeline、Channel、message bus或observable abstraction，并定义并发度/取消。普通event只做短同步notification。
+
+## Explicitly Implementing an Event
+
+显式interface event只通过interface reference可见，可用于同名不同语义contract或隐藏niche capability。Custom explicit add/remove可以把多个events存入dictionary/list，减少大量稀疏event字段，常见于UI frameworks；代价是key identity、locking、delegate type和tool discoverability更复杂。
+
+同名events若语义相同可由一个public event隐式实现多个interfaces；语义不同应explicit分离，避免一个raise误通知另一contract。Reflection需要区分public event与nonpublic interface accessors。Versioning还要测试interface map和consumer cast。
+
+<Stepper>
+  <Step title="切换short-lived、UI-thread、async与explicit listener"><CvcEventListenerLab /></Step>
+  <Step title="建立subscription ledger">记录publisher lifetime、subscriber owner、delegate实例、thread、dispose点和泄漏检测。</Step>
+  <Step title="验证可回收">创建/销毁subscriber，退订并清除owner后用WeakReference在测试中证明回收；同时确认in-flight snapshot语义。</Step>
+</Stepper>
+
+<Callout type="trap" title="Subscriber离开Scope后GC会自动处理Event订阅">
+Publisher的delegate强引用subscriber target，只要publisher可达，subscriber就可达。必须由lifecycle owner退订/Dispose，或采用经过语义评估的weak subscription。
+</Callout>
+
+## 本章回顾：Raise就是同步调用未知代码
+
+1. EventArgs定义notification snapshot，event member限制外部只能add/remove，raiser决定事实时刻。
+2. Compiler通常生成delegate backing store和thread-safe accessors；snapshot不解决handler异常与reentrancy。
+3. 默认multicast invocation同步、有序，第一个异常会中断后续；policy必须显式。
+4. Publisher通过delegate强引用subscriber，subscription需要owner和确定退订点。
+5. Async/backpressure/reliable delivery不属于普通event能力，应使用Task pipeline、queue或持久消息。
+
+<Exercises>
+
+**问题 1：页面关闭后仍被内存快照显示由singleton service持有，如何定位？**
+
+<Answer>沿GC root查看singleton的event backing delegate与invocation list，找到target页面。检查订阅lambda是否保存、Dispose/Unload是否执行。改为owner持有IDisposable token并确定退订；加入WeakReference lifecycle test。不要依赖finalizer，因为强引用使页面不会进入finalization。</Answer>
+
+**问题 2：多个Handler中一个抛异常，Publisher应继续吗？**
+
+<Answer>没有通用答案。关键invariant notification可fail-fast并传播；独立observer可GetInvocationList逐个try/catch、记录并最后aggregate；耗时任务应入queue。必须文档化ordering、exception visibility、重试和是否允许partial delivery，并用故障注入验证。</Answer>
+
+**问题 3：为什么`publisher.Event -= (s,e) => Handle(e)`无效？**
+
+<Answer>这是新建的delegate/closure instance，与订阅时的lambda不相等，Delegate.Remove找不到。订阅时把handler保存在field/local token，退订使用同一instance；更稳是subscription API返回IDisposable，由owner释放。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="event lifetime contract" definition="订阅、通知、线程、异常、退订和可达性的整体协议。" />
+  <GlossaryItem term="event snapshot" definition="一次raise中供所有handlers观察的不可变事实数据。" />
+  <GlossaryItem term="event backing store" definition="Compiler生成并由add/remove维护的multicast delegate存储。" />
+  <GlossaryItem term="subscription ownership" definition="由明确owner在生命周期结束时解除订阅的责任。" />
+  <GlossaryItem term="reentrancy boundary" definition="Raise同步进入外部handler后，publisher再次被调用时的状态边界。" />
+</Glossary>
+
+<Term def="Raise同步进入外部handler，handler在原调用完成前再次调用publisher时必须维持的状态边界。">reentrancy boundary</Term>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 11: Events" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

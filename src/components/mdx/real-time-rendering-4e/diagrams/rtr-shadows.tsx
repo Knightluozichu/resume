@@ -1,78 +1,84 @@
-/**
- * <RtrShadowsDiagram>：实时阴影技术图解。
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * 全部 DESIGN token 配色，无裸 hex。
- */
+import type { ReactNode } from "react";
 
-const VIEW_W = 720;
-const VIEW_H = 400;
+function Frame({ caption, children }: { caption: string; children: ReactNode }) {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption>
+    </figure>
+  );
+}
+
+const shadowPath = [
+  ["Light projection", "view + projection + caster set"],
+  ["Depth map", "nearest light-space surface"],
+  ["Receiver lookup", "clip → NDC → UVZ + bias"],
+  ["Visibility", "compare + filter + direct light"],
+] as const;
 
 export function RtrShadowsDiagram() {
   return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="实时阴影技术图解"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <text x={VIEW_W / 2} y="32" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">
-            实时阴影技术
-          </text>
-          <text x={VIEW_W / 2} y="54" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
-            阴影映射、PCF滤波与级联阴影
-          </text>
-
-          <rect x="40" y="80" width="640" height="280" rx="12" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.3" />
-
-          {/* Shadow Map pipeline */}
-          <rect x="60" y="105" width="200" height="100" rx="10" fill="var(--success)" fillOpacity="0.06" stroke="var(--success)" strokeWidth="1.2" />
-          <text x="160" y="128" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--success)">1. 深度Pass</text>
-          <text x="160" y="148" textAnchor="middle" fontSize="10" fill="var(--text-primary)">从光源视角渲染</text>
-          <text x="160" y="166" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">只写深度不写颜色</text>
-          <text x="160" y="186" textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">输出 Shadow Map</text>
-
-          <text x="275" y="155" textAnchor="middle" fontSize="14" fill="var(--text-tertiary)">&rarr;</text>
-
-          <rect x="290" y="105" width="200" height="100" rx="10" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.2" />
-          <text x="390" y="128" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">2. 深度比较</text>
-          <text x="390" y="148" textAnchor="middle" fontSize="10" fill="var(--text-primary)">片段到光源距离</text>
-          <text x="390" y="166" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">vs Shadow Map 深度</text>
-          <text x="390" y="186" textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">大于 = 在阴影中</text>
-
-          <text x="505" y="155" textAnchor="middle" fontSize="14" fill="var(--text-tertiary)">&rarr;</text>
-
-          <rect x="520" y="105" width="140" height="100" rx="10" fill="var(--warning)" fillOpacity="0.06" stroke="var(--warning)" strokeWidth="1.2" />
-          <text x="590" y="128" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--warning)">3. 滤波</text>
-          <text x="590" y="148" textAnchor="middle" fontSize="10" fill="var(--text-primary)">PCF 软阴影</text>
-          <text x="590" y="166" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">采样多点平均</text>
-          <text x="590" y="186" textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">边缘平滑</text>
-
-          {/* Techniques */}
-          <rect x="60" y="230" width="180" height="60" rx="8" fill="var(--success)" fillOpacity="0.08" stroke="var(--success)" strokeWidth="1" />
-          <text x="150" y="252" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--success)">CSM 级联阴影</text>
-          <text x="150" y="272" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">近处高精度远处低精度</text>
-
-          <rect x="260" y="230" width="180" height="60" rx="8" fill="var(--accent)" fillOpacity="0.08" stroke="var(--accent)" strokeWidth="1" />
-          <text x="350" y="252" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">VSM 方差阴影</text>
-          <text x="350" y="272" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">存深度+深度²，可双线性滤波</text>
-
-          <rect x="460" y="230" width="200" height="60" rx="8" fill="var(--warning)" fillOpacity="0.08" stroke="var(--warning)" strokeWidth="1" />
-          <text x="560" y="252" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--warning)">面光源软阴影</text>
-          <text x="560" y="272" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">PCSS 尺寸随距离变化</text>
-
-          <text x={VIEW_W / 2} y="320" textAnchor="middle" fontSize="11" fill="var(--text-tertiary)">
-            核心权衡：精度 vs 覆盖范围 vs 性能
-          </text>
-          <text x={VIEW_W / 2} y="338" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">
-            Shadow Acne（自阴影）需偏移，Peter-panning（悬浮）偏移过大
-          </text>
-        </svg>
+    <Frame caption="Shadow map 把光源视野中的最近深度重投影为接收点可见性。">
+      <div role="img" aria-label="阴影映射从光源投影到接收点可见性的完整路径" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {shadowPath.map(([title, detail], index) => (
+          <div key={title} className="relative min-h-28 border border-border bg-bg/45 p-3">
+            <span className="text-xs font-bold text-accent">0{index + 1}</span>
+            <strong className="mt-2 block text-sm text-primary">{title}</strong>
+            <span className="mt-2 block text-xs leading-5 text-secondary">{detail}</span>
+            {index < shadowPath.length - 1 && <span aria-hidden="true" className="absolute -right-2 top-12 z-10 text-accent">→</span>}
+          </div>
+        ))}
       </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        实时阴影技术——阴影映射三步流程与优化方案
-      </figcaption>
-    </figure>
+    </Frame>
+  );
+}
+
+const precisionRows = [
+  ["Too little bias", "receiver depth > stored self depth", "acne"],
+  ["Matched bias", "covers quantization + footprint slope", "stable contact"],
+  ["Too much bias", "receiver shifted toward light", "leak / detachment"],
+] as const;
+
+export function RtrShadowPrecisionDiagram() {
+  return (
+    <Frame caption="Bias 的目标是覆盖离散误差，而不是把接收面任意推离 caster。">
+      <div role="img" aria-label="偏移不足、合适和过量对阴影比较的影响" className="grid gap-3 md:grid-cols-3">
+        {precisionRows.map(([title, cause, result], index) => (
+          <div key={title} className="min-h-36 border border-border bg-bg/45 p-3">
+            <div className={`h-2 ${index === 0 ? "bg-warning" : index === 1 ? "bg-success" : "bg-accent"}`} />
+            <strong className="mt-3 block text-sm text-primary">{title}</strong>
+            <span className="mt-2 block text-xs leading-5 text-secondary">{cause}</span>
+            <span className="mt-3 block border-t border-border pt-2 text-xs font-semibold text-warning">Result: {result}</span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-3 border-l-4 border-accent bg-accent/10 p-3 text-xs text-primary">constant + slope + normal/receiver-plane bias must use explicit units and limits</div>
+    </Frame>
+  );
+}
+
+const methods = [
+  ["PCF", "binary comparisons", "edge filtering", "fixed-kernel softness"],
+  ["PCSS", "blocker search + PCF", "contact hardening", "search noise / cost"],
+  ["VSM / EVSM", "depth moments", "prefilterable", "light bleeding / precision"],
+  ["CSM", "multiple projections", "directional coverage", "split stability"],
+  ["Cube map", "six projections", "point lights", "seams + update cost"],
+  ["Ray traced", "geometry visibility", "area lights / detail", "samples + denoise"],
+] as const;
+
+export function RtrShadowMethodsDiagram() {
+  return (
+    <Frame caption="阴影方法应按光源、覆盖、penumbra、稳定性和成本组合。">
+      <div role="img" aria-label="PCF、PCSS、矩阴影、级联、全向和光追阴影比较" className="grid gap-2 md:grid-cols-2 lg:grid-cols-3">
+        {methods.map(([name, model, strength, risk]) => (
+          <div key={name} className="min-h-32 border border-border bg-bg/45 p-3">
+            <strong className="text-sm text-primary">{name}</strong>
+            <p className="mb-0 mt-2 text-xs text-secondary">Model: {model}</p>
+            <p className="mb-0 mt-2 text-xs text-success">Use: {strength}</p>
+            <p className="mb-0 mt-2 text-xs text-warning">Risk: {risk}</p>
+          </div>
+        ))}
+      </div>
+    </Frame>
   );
 }

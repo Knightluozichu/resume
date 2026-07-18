@@ -1,117 +1,292 @@
 ---
-title: 字符流中第一个不重复的字符
+title: "面试题50（一）：第一个只出现一次的字符"
 type: C
-section: 字符串
-order: 5
-description: 在字符流输入中找到第一个只出现一次的字符。
+section: "第5章 优化时间和空间效率"
+order: 54
+description: "先用256槽直接寻址表统计完整字符串频次，再按原顺序第二次扫描并返回首个频次为1的字符。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/50_01_FirstNotRepeatingChar/FirstNotRepeatingChar.cpp"
 draft: false
 ---
 
-{/* 知识点清单：字符频次、队列淘汰、实时查询；原书章节：面试题50。 */}
+import { FirstUniqueFrequencyDiagram, FirstUniqueTwoPassLab, FirstUniqueOrderMap, FirstUniqueContractDiagram, FirstNotRepeatingOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/first-not-repeating-char";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能把“读入”与“查询”解耦：插入 O(1)、查询 O(1) 摊还。
-- 能判断字符集固定（ASCII）与通用字符（Unicode）实现差异。
-- 能复现 C++ 与 TypeScript 对应版本。
+- 能解释为什么字符频次与原始顺序共同决定第一个唯一字符
+- 能计算google和abaccdeff的完整计数表及第二遍返回位置
+- 能实现作者256槽哈希表与现代可区分失败原因的版本
+- 能分析空指针、空串、无唯一字符、内嵌NUL和有符号char边界
+- 能设计覆盖作者4组调用及题干示例的静态字符串测试
 
 </Objectives>
 
-## 直觉引入
+## 从“唯一”与“第一个”是两个条件开始
 
-第一个不重复字符在不断变化：新字符进来后，原有答案可能被击败。
-用“计数表 + 队列”就能在每次查询时即时判断，避免每次全表扫描。
+先预测：google中l和e都只出现一次，但答案是l，因为l在原串更早。题目问的是**第一个只出现一次的字符**，必须同时满足：
 
-## 算法思路
+1. 该字符的**字符出现次数**恰好为1。
+2. 在所有满足第一条的字符中，它的原始位置最小。
 
-1. `Insert(ch)`：计数 +1；首次出现推入队列。
-2. `firstAppearingOnce()`：把队列头部中 `count > 1` 的字符弹出。
-3. 弹完后队首即为实时答案；若为空返回 `#`。
+作者用长度256的<Term def="以字节值直接作为数组下标、在常数时间内读取或更新计数的固定大小表。">直接寻址表</Term>实现所谓**哈希表**。这里没有哈希函数和冲突处理，字符字节值本身就是槽位。
 
-<StringFunctionTableDiagram />
+<FirstUniqueFrequencyDiagram />
 
-## 思考引导
+第一遍只回答“哪些字符唯一”；第二遍才回答“哪个唯一字符最早”。把两个问题拆开，算法就只需两次线性扫描。
 
-### 1) 先问问题，不先遍历
-你要找的是“当前字符串中最早且只出现一次”的字符，不是出现次数最低的字符。顺序约束必须进入状态。
+## 原书第50题（一）不是字符流题
 
-### 2) 识别不变式
-计数表判断是否唯一，队列/下标结构判断“谁最早”。两者缺一都不能确定正确答案。
+本题输入是一条已经完整存在、以NUL结尾的静态C字符串。作者函数接收const char指针，先统计到终止符，再从开头扫描到终止符。
 
-### 3) 为什么它一定成立
-流量或静态字符串都可看作“频次 + 位置”双约束问题。唯一性不是充分条件，位置是必要条件。
+旧页写成Insert加队列的实时字符流类，那其实对应紧接着的面试题50（二）“字符流中第一个只出现一次的字符”。两题都需要频次和先后关系，但接口、状态寿命、查询时机和源码实现不同，不能合并成一页。
 
-### 4) 常见误区
-只在遍历后排序字符，会打乱原始顺序。应在一遍内或少遍历下保持先后关系。
+静态题可以第二次重读原串，不需要额外队列；流式题不能回头读全部历史，才需要在对象中长期保存位置状态。本章只还原第50题（一）。
 
-### 5) 你能找到一个反例吗
-字符串 "abaccdeff" 时，b 在早期是候选，但后续若变重复需立即剔除。
+## 第一遍：建立完整频次
 
-### 6) 迁移到下一题
-推荐列表去重、指纹去抖都在做“频次与时序”的联合决策。
-## 代码对照
+初始化256个unsigned int为0，从首字符走到NUL，每看到一个字节，就把对应槽加1。扫描结束后，表中每个槽恰好等于该字节在完整输入中的出现次数，这个事实称为<Term def="第一遍处理完任意前缀后，每个槽都精确等于对应字符在该前缀中的出现次数。">频次不变量</Term>。
 
-<CodeTabs>
-  <Tab label="C++">
+对abaccdeff，第一遍最终得到a为2、b为1、c为2、d为1、e为1、f为2。扫描中途b虽然暂时只出现一次，但必须读完整串才能确认它以后不会再次出现。
+
+<FirstUniqueTwoPassLab />
+
+在线读到某一刻时“当前唯一”与完整输入的“最终唯一”不同。若只做一次扫描并在第一次见到字符时立刻返回，输入aa会错误返回a；必须先知道后续是否重复，或保存可延迟决策的队列状态。
+
+## 第二遍：保持原顺序找第一个
+
+计数表完成后，把指针重置到字符串开头。按原始顺序逐个查看字符，遇到第一个计数等于1的槽就返回。这个第二次扫描保持输入先后关系，称为<Term def="筛选候选时仍按它们在原输入中的先后次序决定结果，不对字符键排序。">稳定顺序</Term>。
+
+<FirstUniqueOrderMap />
+
+abac与acab拥有相同计数表：a为2，b、c为1。只遍历哈希表槽位会按字符编码先看到b，两条输入都返回b，但acab的正确答案是c。只有**第二次扫描保持原顺序**，才能在相同频次下得到不同且正确的结果。
+
+## 忠实还原作者函数
+
+作者对nullptr立即返回NUL字符；随后清零表、计数、复位指针、查找首个计数1。若第二遍走到终止符仍未找到，也返回NUL。
+
 ```cpp
-#include <array>
-#include <queue>
+#include <cstdio>
 
-class FirstUnique {
-public:
-    void Insert(char ch) {
-        auto &v = cnt[static_cast<unsigned char>(ch)];
-        ++v;
-        if (v == 1) {
-            q.push(ch);
-        }
+char FirstNotRepeatingChar(
+    const char* pString) {
+    if (pString == nullptr) {
+        return '\0';
     }
 
-    char firstNotRepeating() {
-        while (!q.empty() && cnt[static_cast<unsigned char>(q.front())] > 1) {
-            q.pop();
-        }
-        return q.empty() ? '#': q.front();
+    const int tableSize = 256;
+    unsigned int hashTable[tableSize];
+    for (unsigned int i = 0;
+         i < tableSize;
+         ++i) {
+        hashTable[i] = 0;
     }
 
-private:
-    std::array<int, 256> cnt{};
-    std::queue<char> q;
-};
-```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-class FirstUnique {
-    private cnt = new Array(256).fill(0);
-    private queue: string[] = [];
-
-    insert(ch: string): void {
-        const code = ch.charCodeAt(0) & 0xff;
-        this.cnt[code] += 1;
-        if (this.cnt[code] === 1) {
-            this.queue.push(ch);
-        }
+    const char* pHashKey = pString;
+    while (*pHashKey != '\0') {
+        hashTable[*(pHashKey++)]++;
     }
 
-    firstNotRepeating(): string {
-        while (
-            this.queue.length > 0 &&
-            this.cnt[this.queue[0].charCodeAt(0) & 0xff] > 1
-        ) {
-            this.queue.shift();
+    pHashKey = pString;
+    while (*pHashKey != '\0') {
+        if (hashTable[*pHashKey] == 1) {
+            return *pHashKey;
         }
-        return this.queue.length > 0 ? this.queue[0] : '#';
+        ++pHashKey;
     }
+    return '\0';
 }
 ```
-  </Tab>
-</CodeTabs>
+
+表达式hashTable[*(pHashKey++)]先使用当前字符作为下标，再把指针移到下一字符。把自增拆成读取、计数、移动三行可读性更好，但语义相同。
+
+NUL字符在这里是<Term def="用特殊返回值反映没有普通字符结果；源码用反斜杠0同时表示多种失败或空结果。">NUL哨兵</Term>。nullptr、空字符串、没有唯一字符三种情况都返回同一个值，调用者无法仅凭结果区分原因。
+
+## 正确性证明
+
+第一遍结束时，按频次不变量，hashTable[c]等于c在整个输入中的出现次数。因此第二遍某位置字符满足计数1，当且仅当它在全串唯一。
+
+第二遍严格从下标0向右扫描。假设函数返回位置i，那么i处字符唯一；所有更早位置都已检查且计数不为1，所以不存在更靠前的唯一字符。返回值同时满足“唯一”和“第一个”。
+
+若扫描到NUL仍未返回，说明每个实际字符的计数都不是1，因此不存在答案，返回哨兵正确。三种分支覆盖全部输入。
+
+设字符串长度为n。清零表需要256步，两遍字符串各n步，时间O(n加256)，额外空间O(256)。在固定单字节字符域下可写成O(n)时间、O(1)空间。
+
+## char作为数组下标的隐藏前提
+
+题干样例是普通ASCII字母，因此源码下标非负且小于256。但C++中的char是否有符号由实现决定；当输入字节大于127且char为有符号类型时，*pHashKey可能为负，直接索引数组会越界。
+
+把输入视为<Term def="算法处理的基本元素是0到255的单个字节，而不是语言学意义上的Unicode字符。">字节域</Term>时，应先转换为unsigned char再作下标：
+
+```cpp
+const auto key =
+    static_cast<unsigned char>(*pHashKey);
+++hashTable[key];
+```
+
+这只解决0到255字节下标安全，不等于支持Unicode字符。UTF-8中的一个中文字符包含多个字节；按字节统计可能把不同字符的某些编码字节混在一起，也会让返回值只是一个残缺字节。
+
+<FirstUniqueContractDiagram />
+
+<Callout type="trap" title="数组有256槽就直接用char索引">
+256覆盖所有unsigned char值，却不保证有符号char转换后的下标非负。访问前先转unsigned char；若需求是Unicode字符，再先明确按码点还是字素簇计数。
+</Callout>
+
+## NUL终止与接口歧义
+
+C字符串以第一个NUL作为结束。因此内存中即使后面还有字节，作者函数也看不到；这不是循环少走一次，而是输入表示本身把NUL定义成终止符。
+
+返回char也不能表达“找到的唯一字符本身就是NUL”，因为NUL不属于可见输入区间。nullptr和合法但无答案的输入共用NUL，使错误处理与业务结果混合。
+
+<Callout type="trap" title="看到返回NUL就判断输入为空">
+返回NUL可能表示nullptr、空字符串、全体字符重复，三者在源码接口中不可区分。若调用方需要诊断，应改用optional或带状态的结果类型。
+</Callout>
+
+固定unsigned int计数在同一字符出现超过UINT_MAX次时还会回绕。现实内存通常先成为限制，但严谨接口可使用size_t计数或饱和状态：本题只关心0次、1次、至少2次，计数达到2后无需继续增长。
+
+## 现代静态字节字符串版本
+
+string_view携带明确长度，可包含内嵌NUL；optional区分“没有唯一字节”与一个真实字节值。计数使用0、1、2三个饱和状态，避免无意义增长。
+
+```cpp
+#include <array>
+#include <optional>
+#include <string_view>
+
+std::optional<unsigned char>
+firstUniqueByte(std::string_view input) {
+    std::array<unsigned char, 256> counts{};
+
+    for (const unsigned char byte : input) {
+        if (counts[byte] < 2) {
+            ++counts[byte];
+        }
+    }
+
+    for (const unsigned char byte : input) {
+        if (counts[byte] == 1) {
+            return byte;
+        }
+    }
+    return std::nullopt;
+}
+```
+
+这里范围for中的隐式转换把每个char转为unsigned char，索引安全。返回的是字节值；若调用者要显示文本，应由上层按明确编码解释。
+
+Unicode版本应先把输入解码成码点序列，再用unordered_map记录频次并第二遍扫描码点。若用户认知中的“字符”按字素簇定义，例如字母加组合音标视为一个字符，还需要字素分割库，不能只改哈希容器。
+
+## 为什么两遍扫描通常优于排序
+
+可以把每个字符及其位置放入结构后按频次、位置排序，但这会增加O(n)存储和O(n log n)时间。固定字符域下，两遍扫描更简单且保留原序。
+
+若只遍历256槽并寻找第一个计数1，得到的是编码值最小的唯一字符，不是输入中最早者。若给每个槽再存首次位置，也能在256槽中选位置最小者，但仍要先完整计数；时间为O(n加256)，状态比直接第二遍扫描更复杂。
+
+若输入存储昂贵、第二遍无法重读，就已转化为流式问题。此时可在首次出现时记录位置、第二次出现时标记重复，查询时在位置结构中找最小值；这正是下一题的设计空间。
+
+## 作者4组测试与未覆盖边界
+
+作者main实际执行：
+
+1. google期望l；l与e都唯一，验证返回更早的l。
+2. aabccdbd期望NUL；所有字符最终都重复。
+3. abcdefg期望a；全部唯一时返回首字符。
+4. nullptr期望NUL；验证入口防御。
+
+<FirstNotRepeatingOfficialCaseLab />
+
+题干示例abaccdeff期望b，但作者main没有把它写成测试。源码也未单测空字符串、高位字节、内嵌NUL或超长计数；这些是工程扩展测试，不应伪装成作者原有用例。
+
+```cpp
+#include <cassert>
+
+void testFirstNotRepeatingChar() {
+    assert(FirstNotRepeatingChar(
+        "google") == 'l');
+    assert(FirstNotRepeatingChar(
+        "aabccdbd") == '\0');
+    assert(FirstNotRepeatingChar(
+        "abcdefg") == 'a');
+    assert(FirstNotRepeatingChar(
+        nullptr) == '\0');
+
+    assert(FirstNotRepeatingChar(
+        "abaccdeff") == 'b');
+    assert(FirstNotRepeatingChar(
+        "") == '\0');
+}
+```
+
+对安全字节版可生成随机短字节串，用O(n平方)参考算法逐位置统计全串次数并找第一个唯一值，与两遍表法对拍。参考实现应独立，不要复用同一个counts数组。
+
+<Stepper>
+  <Step title="拆开唯一性与先后性">
+    <FirstUniqueFrequencyDiagram />
+    频次1确定候选，原始位置决定候选中的第一个。
+  </Step>
+  <Step title="第一遍完成全部计数">
+    <FirstUniqueTwoPassLab />
+    不在未来尚未知时提前返回当前唯一字符。
+  </Step>
+  <Step title="第二遍保持原字符串顺序">
+    <FirstUniqueOrderMap />
+    相同频次表也可能因顺序不同产生不同答案。
+  </Step>
+  <Step title="固定字节与返回值契约">
+    <FirstUniqueContractDiagram />
+    处理有符号char、NUL终止、Unicode与哨兵歧义。
+  </Step>
+  <Step title="执行4组作者测试">
+    <FirstNotRepeatingOfficialCaseLab />
+    覆盖存在、缺失、全部唯一与空指针四类行为。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 第一个只出现一次的字符同时受完整频次和原始位置约束。
+2. 作者用256槽哈希表统计字符出现次数，本质是字节直接寻址表。
+3. 第一遍建立频次，第二次扫描保持原顺序并返回首个计数1。
+4. 只扫描计数槽会得到编码最小字符，不能保证输入中最早。
+5. 源码char下标对高位字节有风险，应先转unsigned char。
+6. nullptr、空串、无唯一字符都返回NUL，原接口无法区分原因。
+7. 本题是静态两遍算法，字符流实时查询属于面试题50（二）。
+8. 作者执行4组测试，题干abaccdeff示例并未进入main。
+
+<Exercises>
+
+**问题 1：google为什么返回l而不是e？**
+
+<Answer>第一遍得到g和o各2次，l和e各1次；第二遍按g、o、o、g、l、e的原顺序扫描，l是最先遇到的计数1字符。</Answer>
+
+**问题 2：为什么不能只遍历256槽寻找第一个计数1？**
+
+<Answer>槽位顺序是字符编码顺序，不是输入顺序。abac与acab计数相同，正确答案分别为b和c；遍历槽位无法区分这两条输入。</Answer>
+
+**问题 3：原函数返回NUL时，调用者能判断是哪种情况吗？**
+
+<Answer>不能。nullptr、空字符串和没有唯一字符都返回同一NUL哨兵；需要区分时应使用optional、错误码或带状态结果。</Answer>
+
+**问题 4：为什么把char转成unsigned char后仍不等于支持中文？**
+
+<Answer>转换只保证单个字节落在0到255。UTF-8中文通常由多个字节组成，按字节计数不是按Unicode码点或字素簇计数，必须先解码并定义字符单位。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="直接寻址表">用字节值直接定位数组槽位的固定大小计数表。</GlossaryItem>
+  <GlossaryItem term="频次不变量">已扫描前缀中每个字符的出现次数与表中计数始终一致。</GlossaryItem>
+  <GlossaryItem term="稳定顺序">筛选结果时保留候选在原输入中的先后关系。</GlossaryItem>
+  <GlossaryItem term="NUL哨兵">用NUL字符表示无普通字符结果的返回约定。</GlossaryItem>
+  <GlossaryItem term="字节域">把0到255的单个字节作为算法元素的输入模型。</GlossaryItem>
+</Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题50（一）"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/50_01_FirstNotRepeatingChar/FirstNotRepeatingChar.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

@@ -1,0 +1,398 @@
+---
+title: "Item 21：必须返回对象时，不要试图返回引用"
+type: A
+section: Chapter 4 · Designs and Declarations
+order: 21
+description: 对齐 Effective C++ 第三版 Item 21：分析 operator* 等新值结果为何必须按值返回，排除局部引用、heap 引用和 static 引用，并建立 value、owner、reference 与 view 的生命周期决策。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppOperatorResultOwnershipMap,
+  EcppReturnContractDecisionMap,
+  EcppReturnStorageLifetimeMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-21-return-object-not-reference";
+
+<Objectives>
+
+- 能解释 local object、heap object 和 static object 引用返回分别导致的悬空、泄漏与共享状态
+- 能实现 operator\* 等独立计算结果的安全值返回，并说明 copy elision 的作用
+- 能判断 value、typed owner、reference、optional/result 和 view 各自的 ownership/lifetime 契约
+
+</Objectives>
+
+## 从“省一次复制”的错误目标开始
+
+假设 Rational 乘法产生一个新有理数：
+
+```cpp
+class Rational {
+public:
+    Rational(int numerator = 0, int denominator = 1);
+};
+
+const Rational& operator*(const Rational& lhs, const Rational& rhs);
+```
+
+返回 reference 看似能避免复制，但问题先于性能：这个引用究竟绑定谁？结果既不是 lhs，也不是 rhs，而是一个必须拥有独立生命周期的新值。
+
+<Term def="函数计算产生、不从属于任何既存输入对象的独立结果。">
+  fresh result value
+</Term>
+
+Item 21 的原则是 Do not try to return a reference when you must return an object（必须返回对象时，不要试图返回引用）。
+
+<Term def="返回形式必须与结果真实的 ownership、identity 和 lifetime 保持一致。">
+  return-contract fidelity
+</Term>
+
+若语义要求新对象，就按值返回对象；不要为了猜测优化而虚构 owner。
+
+<EcppReturnStorageLifetimeMap />
+
+## 返回局部对象引用会立即悬空
+
+最直接的错误是返回 local object（局部对象）的引用：
+
+```cpp
+const Rational& operator*(const Rational& lhs, const Rational& rhs) {
+    Rational result(lhs.numerator() * rhs.numerator(),
+                    lhs.denominator() * rhs.denominator());
+    return result;
+}
+```
+
+函数退出时 result destructor 执行，调用者得到 dangling reference（悬空引用）。后续读取已经结束生命周期的 storage 是 undefined behavior。
+
+<Term def="函数自动存储期对象，其生命周期通常在离开所在 block 时结束。">
+  local object
+</Term>
+
+<Term def="仍保存地址或别名，但所指对象生命周期已经结束的引用或指针。">
+  dangling reference
+</Term>
+
+编译器警告不等于运行期保障。stack memory 可能暂时保留旧字节，让测试偶尔“正常”，随后被另一次调用覆盖。
+
+<Term def="程序执行不再受 C++ 标准行为约束，任何表象都不能作为正确性证据。">
+  undefined behavior
+</Term>
+
+<Callout type="trap">
+  **现象**：debug 下读取返回引用暂时正确。**原因**：对象已析构，只是 stack
+  字节尚未覆盖；优化、插桩或下一次调用会改变表象。**修法**：新结果按值返回，并打开
+  return-local-addr 警告与 sanitizer。
+</Callout>
+
+## 返回 heap 引用会隐藏 ownership
+
+有人把对象放到 heap，试图延长生命周期：
+
+```cpp
+const Rational& operator*(const Rational& lhs, const Rational& rhs) {
+    return *(new Rational(lhs.numerator() * rhs.numerator(),
+                          lhs.denominator() * rhs.denominator()));
+}
+```
+
+引用有效了，但调用语法 `Rational product = a * b;` 没有告诉用户需要 delete。更糟的是表达式 `a * b * c` 产生的中间引用没有可靠位置释放。
+
+<Term def="动态分配且必须由某个明确 owner 最终释放的对象。">heap object</Term>
+
+<Term def="API 创建资源却没有在返回类型中明确谁负责释放、如何释放的状态。">
+  hidden ownership obligation
+</Term>
+
+返回 `unique_ptr<Rational>` 虽能表达 ownership，但仍不符合普通乘法的 value semantics，并迫使每个算术表达式处理间接对象。只有结果本质是动态资源时才应返回 owner。
+
+<Term def="函数返回值本身携带唯一释放责任和正确 deleter 的所有权形式。">
+  typed owner return
+</Term>
+
+## static 对象把结果变成共享槽位
+
+第三种绕路是返回 function-local static：
+
+```cpp
+const Rational& operator*(const Rational& lhs, const Rational& rhs) {
+    static Rational result;
+    result = Rational(lhs.numerator() * rhs.numerator(),
+                      lhs.denominator() * rhs.denominator());
+    return result;
+}
+```
+
+对象不会析构过早，也没有每次泄漏，但所有调用共享同一个 result。`const Rational& x = a*b; const Rational& y = c*d;` 后，x 和 y 指向同一对象，第二次调用覆盖第一次结果。
+
+<Term def="多次调用返回同一对象地址，后一次写入会改变先前观察结果的别名关系。">
+  shared result slot
+</Term>
+
+线程安全初始化不等于线程安全修改；并发乘法会 data race。递归、重入和嵌套表达式同样破坏结果。
+
+<Term def="函数尚未完成时因回调、信号或递归再次进入同一函数的执行情形。">
+  reentrant call
+</Term>
+
+<Callout type="trap">
+  **现象**：用 `thread_local` static
+  修复并发。**原因**：同一线程中的连续、嵌套或重入调用仍覆盖共享槽位，结果
+  identity 仍错误。**修法**：独立数学结果按值返回，不用 storage trick 代替
+  ownership 设计。
+</Callout>
+
+## operator\* 产生的是独立值
+
+乘法操作符的自然语义是输入不变、产生新值。正确签名直接返回 Rational：
+
+```cpp
+Rational operator*(const Rational& lhs, const Rational& rhs) {
+    return Rational(lhs.numerator() * rhs.numerator(),
+                    lhs.denominator() * rhs.denominator());
+}
+```
+
+<Term def="乘法操作符根据两个 operand 计算并发布一个独立值的语义契约。">
+  operator result semantics
+</Term>
+
+operator\*（乘法操作符）按值返回，调用者可以自然组合、存储或丢弃结果，不承担 hidden delete，也不会与后续调用共享 identity。
+
+<EcppOperatorResultOwnershipMap />
+
+## 让 copy elision 处理实现成本
+
+现代 C++ 对许多 prvalue 返回保证 copy elision；即使未强制消除，编译器可做 NRVO，或使用 move constructor。
+
+<Term def="直接在最终目标存储中构造返回对象，省略概念上的中间 copy/move。">
+  copy elision
+</Term>
+
+```cpp
+Rational multiply(Rational lhs, Rational rhs) {
+    Rational result = normalize(lhs, rhs);
+    return result; // NRVO candidate
+}
+```
+
+<Term def="对具名局部返回对象实施的 named return value optimization。">
+  NRVO
+</Term>
+
+不要写 `return std::move(result)` 企图帮助优化；它可能阻止 NRVO。先写正确 value semantics，再用 compiler、benchmark 与 profile 验证成本。
+
+<Term def="先选择语义正确的返回类型，再依赖语言优化和测量处理对象传递成本。">
+  semantics-first return design
+</Term>
+
+## 引用返回在借用既存对象时合理
+
+规则不是“永远不返回引用”。assignment operator 返回 `*this`，container `operator[]` 返回既存 element，stream insertion 返回 stream；这些结果都已由其他对象拥有。
+
+<Term def="返回引用只观察或修改一个已经存在、由其他 owner 管理的对象。">
+  borrowed reference return
+</Term>
+
+```cpp
+Widget& Widget::operator=(const Widget& rhs) {
+    // replace state
+    return *this;
+}
+
+const Item& Catalog::at(Index index) const {
+    return items_.at(index);
+}
+```
+
+关键是文档和类型能回答 owner、lifetime、invalidation 和 mutability。
+
+<Term def="容器修改、owner 销毁、重分配等事件导致已返回引用不再有效的规则。">
+  reference invalidation contract
+</Term>
+
+Catalog 引用不能比 Catalog 活得久；vector 扩容可能让 element reference 失效；返回 non-const reference 还允许用户修改 invariant。
+
+## 返回输入引用也要防临时对象
+
+identity、min/max 风格函数可能返回某个输入引用：
+
+```cpp
+const Record& chooseBetter(const Record& lhs, const Record& rhs);
+```
+
+若调用者传临时对象并把结果保存，临时在完整表达式末尾析构，引用悬空。
+
+<Term def="返回引用的生命周期上界由某个输入参数对象决定。">
+  input-bounded lifetime
+</Term>
+
+可通过 API 限制 rvalue overload、返回值、或使用语言 lifetime annotation/static analysis。不能只写一句“不要传临时值”就认为契约安全。
+
+<Term def="在类型或工具可识别的形式中标注返回借用与输入 lifetime 的关系。">
+  lifetime annotation
+</Term>
+
+## view 返回同样是 lifetime 契约
+
+`string_view`、`span`、iterator range 按值返回描述符，但底层数据仍由其他对象拥有。
+
+<Term def="返回一个轻量非 owning 描述符，用于观察 owner 中的一段数据。">
+  borrowed view return
+</Term>
+
+```cpp
+std::string_view User::displayName() const noexcept {
+    return display_name_;
+}
+```
+
+view 对象本身按值返回不会悬空，但 User 销毁或 string 被修改重分配后，底层引用失效。接口文档与测试必须覆盖 owner mutation。
+
+<Term def="返回对象自身存活，但其指向的底层 storage 已失效的悬空状态。">
+  dangling view
+</Term>
+
+## 可空与失败不应伪装成引用
+
+C++ reference 不能合法表示“没有对象”。若查找可能无结果，可返回 pointer、optional value、optional reference wrapper、iterator 或 Result，按 ownership 选择。
+
+<Term def="返回类型明确区分存在、缺失和失败，而不是制造 null reference 或 sentinel object。">
+  absence-aware return
+</Term>
+
+```cpp
+std::optional<User> loadUser(UserId id);          // 独立 value
+const User* findCachedUser(UserId id) noexcept;   // nullable borrow
+Result<Document, LoadError> loadDocument(Path);   // value or error
+```
+
+返回 pointer 作为 borrow 时仍需说明 lifetime；返回 optional value 则由调用者拥有独立结果。
+
+<EcppReturnContractDecisionMap />
+
+## 用地址与生命周期轨迹验证
+
+先预测结果 storage 在每个 sequence point 后是否仍有 owner，再建立测试：
+
+- compiler warnings 与 sanitizer 捕获 return-local-address 和 use-after-scope。
+- allocation ledger 验证 operator 不产生无人负责的 heap object。
+- 连续、嵌套、递归和多线程调用证明结果不共享 static slot。
+- copy/move counters 与 compiler optimization report 验证 value return 成本。
+- reference/view tests 覆盖 owner 销毁、container reallocation 和 mutation invalidation。
+- temporary inputs 检查 input-bounded reference 不被保存。
+- API static checks 确认 nullable/failed result 使用 pointer、optional 或 Result 表达。
+
+<Term def="记录结果对象 storage、owner、地址、构造析构和失效事件的验证序列。">
+  return lifetime trace
+</Term>
+
+正确性门禁先证明没有悬空、泄漏和共享覆盖，再讨论是否值得优化。
+
+## 小结
+
+- 新计算结果需要独立对象时，返回 reference 会制造错误 lifetime 或 ownership
+- local object 引用立即悬空，heap 引用隐藏释放责任，static 引用共享并覆盖结果
+- operator\* 应按值返回 Rational，让 copy elision/NRVO 处理传递成本
+- 返回引用只适用于借用既存对象，并明确 owner、invalidation、mutability 和输入 lifetime
+- view、pointer、optional、Result 与 typed owner 各自表达不同返回契约
+- return lifetime trace 应覆盖临时、嵌套、并发、重分配和失败路径
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 21"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="fresh result value">
+    函数新计算且不从属于输入的独立结果。
+  </GlossaryItem>
+  <GlossaryItem term="return-contract fidelity">
+    返回形式与真实 ownership/lifetime 一致。
+  </GlossaryItem>
+  <GlossaryItem term="local object">
+    离开 block 时通常结束生命周期的自动对象。
+  </GlossaryItem>
+  <GlossaryItem term="dangling reference">
+    所指对象生命周期已结束的引用。
+  </GlossaryItem>
+  <GlossaryItem term="undefined behavior">
+    不再受标准行为约束的执行。
+  </GlossaryItem>
+  <GlossaryItem term="heap object">
+    动态分配且需要明确 owner 释放的对象。
+  </GlossaryItem>
+  <GlossaryItem term="hidden ownership obligation">
+    未由返回类型表达的释放责任。
+  </GlossaryItem>
+  <GlossaryItem term="typed owner return">
+    携带唯一释放责任与 deleter 的返回值。
+  </GlossaryItem>
+  <GlossaryItem term="shared result slot">
+    多次调用返回同一可覆盖对象的设计。
+  </GlossaryItem>
+  <GlossaryItem term="reentrant call">
+    函数完成前再次进入自身的调用。
+  </GlossaryItem>
+  <GlossaryItem term="operator result semantics">
+    operator 产生独立结果值的契约。
+  </GlossaryItem>
+  <GlossaryItem term="copy elision">
+    直接在最终位置构造并省略中间传递。
+  </GlossaryItem>
+  <GlossaryItem term="NRVO">对具名局部返回对象的复制消除优化。</GlossaryItem>
+  <GlossaryItem term="semantics-first return design">
+    先保证语义再测量返回成本。
+  </GlossaryItem>
+  <GlossaryItem term="borrowed reference return">
+    借用由其他 owner 管理的既存对象。
+  </GlossaryItem>
+  <GlossaryItem term="reference invalidation contract">
+    规定引用在哪些事件后失效。
+  </GlossaryItem>
+  <GlossaryItem term="input-bounded lifetime">
+    返回借用的 lifetime 不超过输入对象。
+  </GlossaryItem>
+  <GlossaryItem term="lifetime annotation">
+    机器可识别的借用与输入 lifetime 关系。
+  </GlossaryItem>
+  <GlossaryItem term="borrowed view return">
+    返回非 owning 数据范围描述符。
+  </GlossaryItem>
+  <GlossaryItem term="dangling view">
+    view 存活但底层 storage 已失效。
+  </GlossaryItem>
+  <GlossaryItem term="absence-aware return">
+    显式表达存在、缺失或失败的返回类型。
+  </GlossaryItem>
+  <GlossaryItem term="return lifetime trace">
+    记录结果 storage、owner 与失效事件的轨迹。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：修复 Rational operator。** 比较返回 local reference、heap reference、static reference 与 value 的行为。
+
+<Answer question="四种 operator* 返回方案分别有什么结果？">
+  local reference 在函数退出后悬空；heap reference 隐藏 delete
+  责任，链式表达式泄漏；static reference
+  让连续、嵌套和并发调用共享覆盖同一结果；value return
+  与独立数学结果语义一致，并可由 copy elision/NRVO 优化。应返回 Rational
+  value，并用 sanitizer、allocation ledger 和地址测试验证。
+</Answer>
+
+2. **问题 2：审查 Catalog::at。** 它返回内部 vector element 的 const reference，列出完整 lifetime 契约和安全替代。
+
+<Answer question="内部元素引用何时合理、何时会失效？">
+  只有 Catalog 存活且没有触发 vector reallocation、erase
+  或替换该元素时引用有效；调用者不得跨这些事件保存。若 API 无法稳定约束
+  mutation，可返回 value snapshot、稳定 node owner、id handle 或受作用域
+  callback。测试覆盖 owner 析构、扩容、删除和并发修改。
+</Answer>
+
+3. **问题 3：设计查找结果。** 缓存查找可能无结果，磁盘加载可能失败，分别选择返回类型。
+
+  <Answer question="缺失、失败、借用和独立值怎样区分？">缓存拥有对象且调用期间借用时可返回 nullable `const User*`，并声明 cache mutation/销毁失效条件；需要独立快照返回 `optional<User>`；磁盘加载失败需诊断时返回 `Result<User, LoadError>`。动态资源转移则返回 typed owner。不要用 null reference、static sentinel 或 heap reference 混淆契约。</Answer>
+</Exercises>

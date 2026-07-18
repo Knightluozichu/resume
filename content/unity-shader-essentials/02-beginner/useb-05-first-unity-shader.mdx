@@ -1,0 +1,159 @@
+---
+title: "第5章 开始Unity Shader学习之旅"
+type: C
+section: "Unity Shader精要 · 初级篇"
+order: 5
+description: "完成第一个顶点片元Shader，理解语义、Unity内置变量、跨平台差异、调试方法与代码整洁。"
+demo: true
+math: true
+sourceUrl: "https://www.cnblogs.com/xiaowangba/p/6314640.html"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { UsebFirstUnityShaderPipelineLab, UsebFirstUnityShaderCompareLab, UsebFirstUnityShaderEvidenceLab } from "@/components/mdx/unity-shader-essentials/diagrams/useb-05-first-unity-shader";
+
+<Objectives>
+- 能解释语义、appdata和v2f在Unity渲染链中的位置
+- 能推导本页公式并实现最小Shader，用调试视图比较中间值
+- 能复现颜色调试，用Frame Debugger、边界场景和性能数据验收
+</Objectives>
+
+## 从效果开始
+
+先预测画面、Draw Call和中间缓冲会如何变化，再调整一个参数观察变化。顶点输入语义必须与网格通道匹配，顶点输出的SV_POSITION用于光栅化，其余字段按插值规则到达片元。UnityCG等包含文件提供常见变换函数，但要知道它们的输入空间。跨平台时关注纹理坐标方向、精度类型、语义和编译器限制；调试时先输出常量，再逐级可视化输入。 本页用<Term def="标注结构字段在图形流水线中的输入输出用途与寄存器契约。">语义</Term>、<Term def="从网格顶点流读取位置、法线、切线、颜色和纹理坐标的输入结构。">appdata</Term>、<Term def="从顶点阶段输出并经光栅化插值后送入片元阶段的结构。">v2f</Term>、<Term def="Unity按当前对象、相机、时间和平台提供的矩阵或参数。">内置变量</Term>、<Term def="把中间标量或向量映射为屏幕颜色以定位Shader数据错误。">颜色调试</Term>串联视觉目标、GPU数据流、渲染状态和验收证据。
+
+<UsebFirstUnityShaderPipelineLab />
+
+## 第一版权威目录定位
+
+本页一一对应冯乐乐《Unity Shader入门精要》第一版第5章 开始Unity Shader学习之旅。作者发布的完整目录明确列出5篇20章，人民邮电出版社书目记录确认2016年第一版、ISBN 9787115423054和369页，作者GitHub保存随书源代码与勘误入口。
+
+### 原书小节覆盖
+
+1. 5.1 第一个顶点和片元着色器
+2. 5.2 模型数据从哪里来
+3. 5.3 顶点着色器和片元着色器之间如何通信
+4. 5.4 Unity提供的内置文件和变量
+5. 5.5 Shader调试
+6. 5.6 平台差异
+7. 5.7 Shader整洁之道
+
+### 核心对象
+
+1. **语义**：标注结构字段在图形流水线中的输入输出用途与寄存器契约。
+2. **appdata**：从网格顶点流读取位置、法线、切线、颜色和纹理坐标的输入结构。
+3. **v2f**：从顶点阶段输出并经光栅化插值后送入片元阶段的结构。
+4. **内置变量**：Unity按当前对象、相机、时间和平台提供的矩阵或参数。
+5. **颜色调试**：把中间标量或向量映射为屏幕颜色以定位Shader数据错误。
+
+## 数据流与公式
+
+任何Shader效果都先写清五项契约：输入属性来自哪里，当前值位于哪个坐标或色彩空间，可编程阶段输出什么，ShaderLab状态如何合并结果，以及目标平台和Unity版本是什么。
+
+$$
+v2f=Vertex(appdata)
+$$
+
+$$
+f=Fragment(interpolate(v2f))
+$$
+
+$$
+x_{debug}=0.5x+0.5
+$$
+
+$$
+precision\in\{float,half,fixed\}
+$$
+
+顶点输入语义必须与网格通道匹配，顶点输出的SV_POSITION用于光栅化，其余字段按插值规则到达片元。UnityCG等包含文件提供常见变换函数，但要知道它们的输入空间。跨平台时关注纹理坐标方向、精度类型、语义和编译器限制；调试时先输出常量，再逐级可视化输入。 公式不是孤立记忆项；每个向量都标注空间，每个颜色都标注线性或sRGB，每个深度都标注设备、NDC或观察距离，每个纹理通道都标注数据语义。
+
+## 最小Shader实现
+
+```hlsl
+float4 frag(v2f i) : SV_Target {
+    float3 n = normalize(i.worldNormal);
+    return float4(n * 0.5 + 0.5, 1.0);
+}
+```
+
+实现顺序固定为常量颜色、输入可视化、核心公式、材质参数和优化。每新增一个步骤都保留开关，这样画面异常时可以二分定位。编译成功只证明语法和部分类型成立，不证明空间、状态或色彩处理正确。
+
+<UsebFirstUnityShaderCompareLab />
+
+## Unity侧设置与渲染状态
+
+```csharp
+var material = renderer.sharedMaterial;
+material.SetFloat("_DebugMode", debugMode);
+material.EnableKeyword(debugMode > 0 ? "DEBUG_VIEW" : "BASELINE_VIEW");
+Debug.Assert(material.shader.isSupported);
+```
+
+材质、相机和光源属于实验输入，不能只保存Shader文件。用Frame Debugger检查实际选择的SubShader和Pass、关键字变体、渲染队列、RenderTarget、深度写入和混合；用Profiler或GPU捕获确认成本来自提交、顶点、片元还是带宽。
+
+## 边界与平台差异
+
+测试零向量、负缩放、非统一缩放、UV边界、透明物体交叉、近远裁剪面、HDR亮度、不同纹理导入设置和移动精度。原书以Unity 5时代内置管线为语境；迁移到当前Unity、URP或HDRP时，应把概念映射和API替换单独记录，不能把新管线行为倒写成原书内容。
+
+```text
+scene: fixed reference scene
+unity: exact editor version
+pipeline: built-in or named SRP
+platform: graphics API and GPU
+evidence: image diff + frame events + timings
+```
+
+<UsebFirstUnityShaderEvidenceLab />
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定输入与参考图"><UsebFirstUnityShaderPipelineLab /></Step>
+  <Step title="逐阶段打开效果"><UsebFirstUnityShaderCompareLab /></Step>
+  <Step title="保存状态与性能"><UsebFirstUnityShaderEvidenceLab /></Step>
+</Stepper>
+
+1. 建立只有一个网格、一个相机和一个主光的参考场景，保存Unity版本与平台。
+2. 输出UV、法线、深度或光照项等中间值，确认数据空间和范围。
+3. 启用本章核心效果，用Frame Debugger逐Pass检查输入、状态和目标。
+4. 构造边界与失败场景，比较参考图、像素差异、Draw Call和GPU时间。
+
+## 验收证书
+
+验收包至少包含Shader与脚本、材质参数、测试场景、参考图和候选图、Frame Debugger事件、编译关键字、目标平台、帧时间与反例。一次写完整效果后才调试，无法判断错误来自网格输入、空间变换、插值还是片元计算。 修复后必须重放同一输入，确认画面和性能变化都能由证据解释。
+
+## 常见误区
+
+<Callout type="trap" title="只看最终截图">一次写完整效果后才调试，无法判断错误来自网格输入、空间变换、插值还是片元计算。</Callout>
+
+<Callout type="trap" title="忽略版本与状态">同一段HLSL在不同Unity版本、渲染管线、关键字和纹理导入设置下可能走不同Pass或解释不同数据。修复时把版本、平台、状态和资源设置纳入实验输入。</Callout>
+
+## 本章回顾
+
+本页覆盖语义、appdata、v2f、内置变量、颜色调试。掌握标准是能从视觉目标画出数据流，写出最小实现，逐阶段可视化中间值，再用渲染状态、边界样例和性能数据完成复现。
+
+<Exercises>
+**问题1：语义与appdata如何连接？**
+<Answer>标注结构字段在图形流水线中的输入输出用途与寄存器契约。 从网格顶点流读取位置、法线、切线、颜色和纹理坐标的输入结构。 回答时标注执行阶段和输入空间。</Answer>
+
+**问题2：如何调试v2f？**
+<Answer>先输出常量，再把相关中间值映射为颜色；逐项关闭纹理、光照和状态，最后用Frame Debugger确认实际Pass。</Answer>
+
+**问题3：如何验收颜色调试？**
+<Answer>把中间标量或向量映射为屏幕颜色以定位Shader数据错误。 同时保存正常图、边界图、失败反例、状态记录和性能基线。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="语义" definition="标注结构字段在图形流水线中的输入输出用途与寄存器契约。" />
+  <GlossaryItem term="appdata" definition="从网格顶点流读取位置、法线、切线、颜色和纹理坐标的输入结构。" />
+  <GlossaryItem term="v2f" definition="从顶点阶段输出并经光栅化插值后送入片元阶段的结构。" />
+  <GlossaryItem term="内置变量" definition="Unity按当前对象、相机、时间和平台提供的矩阵或参数。" />
+  <GlossaryItem term="颜色调试" definition="把中间标量或向量映射为屏幕颜色以定位Shader数据错误。" />
+  <GlossaryItem term="Shader实验单" definition="记录Unity版本、目标平台、场景、材质、源码、截图和性能的一页式证据。" />
+</Glossary>
+
+<Attribution adaptedFrom="冯乐乐 · Unity Shader入门精要 · 第5章 开始Unity Shader学习之旅" adaptedUrl="https://www.cnblogs.com/xiaowangba/p/6314640.html" />

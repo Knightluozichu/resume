@@ -1,158 +1,271 @@
 ---
-title: 字符串的排列
+title: "面试题38：字符串的排列"
 type: C
-section: 字符串
-order: 4
-description: 输出字符串的所有排列并去重。
+section: "第4章 解决面试题的思路"
+order: 42
+description: "逐层把后缀字符交换到当前固定位置，递归排列剩余字符并在返回后交换恢复，同时区分作者原版与去重扩展语义。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/38_StringPermutation/StringPermutation.cpp"
 draft: false
 ---
 
-{/* 知识点清单：回溯、排序去重、状态标记；原书章节：字符串的排列。 */}
+import { PermutationSwapTreeDiagram, PermutationSwapBackMap, PermutationDuplicatePolicyDiagram, StringPermutationOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/string-permutation";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能说明题目要解决的核心约束与边界条件。
-- 能描述一种可落地到实现的解题策略并解释其复杂度。
-- 能写出 C++ 与 TypeScript 的参考实现并处理常见错误用例。
+- 能解释固定一位后递归排列剩余后缀的分解关系
+- 能计算abc交换树、源码输出顺序和每次回溯状态
+- 能实现作者可写字符数组版本及同层去重扩展
+- 能分析空串、重复字符、Unicode、输出规模与异常边界
+- 能设计覆盖作者五组空指针、空串与一到三字符测试
 
 </Objectives>
 
-## 直觉引入
+## 从“怎样让每个字符都当一次首位”开始
 
-排列要求“每个字符只用一次”。当字符有重复时，必须把“同一层重复值重复选择”这件事剪掉，不然会大量产生日志上重复的结果。
+先预测：字符串abc要生成所有排列，可以先决定第一个字符。首位选a后只需排列bc；选b时把b交换到首位再排列ac；选c时交换到首位再排列ba。每个分支完成后必须恢复abc，下一分支才能从同一状态开始。
 
-## 算法思路
+这就是“**字符串的排列**”的作者方案。递归指针pBegin把字符串分成已固定前缀和待排列后缀；当前层让pBegin到终止符前的每个位置轮流成为首位。
 
-1. 排序字符，等值字符在原序列中相邻；
-2. 回溯构造路径，`used[i]` 表示位置 `i` 是否已用；
-3. 在同一层跳过 `chars[i] === chars[i - 1] && !used[i - 1]` 这个分支；
-4. 路径长度等于长度时收割一个结果。
+<PermutationSwapTreeDiagram />
 
-<RecursionDiagram />
+## 固定第一个字符
 
-## 思考引导
+在某层，pBegin之前的字符已固定。循环指针pCh从pBegin走到字符串末尾，每次交换pCh与pBegin，于是“**固定第一个字符**”是固定当前子问题的第一位，不一定是整串下标0。
 
-### 1) 先问问题，不先枚举
-本题考的是“状态树去重”，不是把每个字符无脑打散。重复字符会让路径爆炸。
+交换后递归pBegin加1，正是“**递归排列剩余字符**”。当pBegin指向终止符，所有n个位置都已固定，printf整串并换行。
 
-### 2) 识别不变式
-每一层只允许同一字符在同深度第一次使用。若与前一个字符重复且前一个未用，本层跳过可避免等价路径。
+把<Term def="递归层中已经确定、不再由更深调用改变的字符串前段。">固定前缀</Term>与<Term def="从pBegin到终止符前、当前层仍需选择和排列的字符区域。">待排后缀</Term>分开看，每层只扩展前缀一个字符，问题规模减少1。
 
-### 3) 为什么它一定成立
-等值字符交换不改变结果序列，路径剪枝消除了同构分支，仍保留每种结果一次。
+## 交换与回溯为何必须成对
 
-### 4) 常见误区
-先生成后去重能消除重复结果但仍承担巨大计算；时间远高于在树层直接剪枝。
+递归返回后，作者再次交换同一对位置，把字符串恢复到进入当前分支前。由于更深层也完成了各自恢复，父层能安全撤销首位交换。
 
-### 5) 你能找到一个反例吗
-字符串 "aab" 若无同层剪枝会生成重复排列。用此例检验剪枝条件是否生效。
+<PermutationSwapBackMap />
 
-### 6) 迁移到下一题
-调度、测试矩阵构造中经常有等价路径，先在状态层判断“是否重复再进入”，再做深搜。
-## 实现代码
+这种<Term def="进入分支时交换两个位置，退出分支时再交换同一对位置以恢复原状态。">交换回溯</Term>不需要额外path数组，直接在输入缓冲区上构造当前排列。若漏掉恢复，后续pCh分支从被前一分支修改的字符串出发，会产生重复或遗漏。
 
-<CodeTabs>
-  <Tab label="C++">
+<Callout type="trap" title="递归后忘记交换回来">
+首位b分支结束时字符串可能仍是bac；接着首位c分支的索引与字符身份不再对应原abc，搜索树不再覆盖“每个原位置作为首位一次”的不变量。
+</Callout>
+
+## 忠实还原作者可写字符数组实现
+
+外层对nullptr直接返回；非空指针即使指向空串，也调用递归。基例打印pStr，因此空串会printf一个空字符串加换行，表示唯一的空排列。
+
+```cpp
+#include <cstdio>
+
+void Permutation(char* pStr, char* pBegin);
+
+void Permutation(char* pStr) {
+    if (pStr == nullptr) {
+        return;
+    }
+    Permutation(pStr, pStr);
+}
+
+void Permutation(char* pStr, char* pBegin) {
+    if (*pBegin == '\0') {
+        std::printf("%s\n", pStr);
+        return;
+    }
+
+    for (char* pCh = pBegin;
+         *pCh != '\0'; ++pCh) {
+        char temp = *pCh;
+        *pCh = *pBegin;
+        *pBegin = temp;
+
+        Permutation(pStr, pBegin + 1);
+
+        temp = *pCh;
+        *pCh = *pBegin;
+        *pBegin = temp;
+    }
+}
+```
+
+参数必须指向可写、以空字符结尾的连续缓冲区。现代C++字符串字面量不可安全转换为char指针并修改；官方测试使用char数组。缓冲区若缺少终止符，循环越界读取写入，属于调用契约错误。
+
+作者打印abc的实际顺序是abc、acb、bac、bca、cba、cab。题干列举顺序把cab放在cba之前，但排列集合相同；测试只人工打印，不断言顺序。
+
+## 作者原版不做重复字符去重
+
+旧页把排序去重版当成原书行为，这是不准确的。作者循环按位置选择，没有检查字符值是否已在当前层使用；输入aab会走6个位置排列叶子，并把aab、aba、baa各打印两次。
+
+<PermutationDuplicatePolicyDiagram />
+
+是否去重取决于问题契约。若两个相同字符按位置身份区分，6个叶子都是不同<Term def="把相同字符的不同原始下标也视为不同元素身份的排列。">位置排列</Term>；若输出只按最终字符串值区分，应在同层跳过相同字符。作者题干示例字符互异，官方也没有重复输入，不能从源码声称已实现唯一排列。
+
+<Callout type="trap" title="把“输出所有排列”自动解释为重复字符去重">
+作者对每个位置建分支，相同值位置仍分别交换，结果会重复。去重是合理扩展，但必须明确改变输出语义并增加aab等测试。
+</Callout>
+
+## 保持交换框架的去重扩展
+
+每个递归深度维护一个本层已用字符集合。这种<Term def="同一递归深度中，相同字符值只允许一次进入当前固定位置的剪枝。">同层去重</Term>规定：若某个字符值已经被交换到pBegin过，跳过后续相同值位置；不同深度使用独立集合，不影响同一字符在多个位置出现。
+
+```cpp
+#include <string>
+#include <unordered_set>
+#include <utility>
+#include <vector>
+
+void uniquePermutations(
+    std::string& text,
+    std::size_t begin,
+    std::vector<std::string>& output) {
+    if (begin == text.size()) {
+        output.push_back(text);
+        return;
+    }
+
+    std::unordered_set<char> usedAtDepth;
+    for (std::size_t i = begin; i < text.size(); ++i) {
+        if (!usedAtDepth.insert(text[i]).second) {
+            continue;
+        }
+        std::swap(text[begin], text[i]);
+        uniquePermutations(text, begin + 1, output);
+        std::swap(text[begin], text[i]);
+    }
+}
+
+std::vector<std::string> uniquePermutations(
+    std::string text) {
+    std::vector<std::string> output;
+    uniquePermutations(text, 0, output);
+    return output;
+}
+```
+
+空std::string会收集一个空串，与作者空数组的数学语义一致。若产品希望空输入返回空结果而不是包含空串，入口可另定政策，但要与测试一致。
+
+按char存储的字符集合只适合按字节字符去重。UTF-8中文或emoji由多个字节组成，按char交换会破坏编码。Unicode文本应先解码为码点序列；若用户感知字符包含组合标记或旗帜emoji，还需按字素簇分割。
+
+## 复杂度与不可避免的输出量
+
+互异n字符有n!个排列，每个输出写n个字符，总输出长度K=n×n!。即使生成决策本身复用原字符串，打印全部结果时间至少O(K)。递归调用栈O(n)，交换控制空间O(1)每层，总辅助O(n)。
+
+若收集结果而不是流式打印，结果空间O(K)。作者直接printf，不保存所有排列；输出设备慢时I/O成为主要成本。回调应允许停止，例如只取前m个排列，但停止路径仍要执行回溯恢复输入。
+
+有重复计数c1、c2等时，唯一排列数是n!除以各ci!乘积。去重剪枝能减少叶子到该数量；作者原版仍遍历n!个位置排列。先全部生成再放set虽得到唯一结果，却没有减少递归工作。
+
+整数阶乘增长极快，必须限制n。12!已接近4.8亿个结果；“算法不额外分配”不代表可实际输出。接口可提供迭代器、数量上限、取消令牌和顺序说明。
+
+若调用方依赖首个或前m个结果，枚举顺序就是公开契约；更换为排序法、哈希集合或并行搜索都可能改变顺序，升级时必须以测试锁定或明确声明结果无序。
+
+## 作者五组测试的准确语义
+
+Test(nullptr)打印测试标题后Permutation不输出任何排列。Test空char数组进入基例，输出一个空行。Test a输出a；Test ab输出ab、ba；Test abc输出6行，顺序为abc、acb、bac、bca、cba、cab。
+
+<StringPermutationOfficialCaseLab />
+
+源码没有aab、Unicode、超长输入或自动断言。教学验证应捕获输出行而不是靠肉眼，并分别测试作者原版与去重扩展，避免用扩展期望判原版失败。
+
+捕获作者输出时要保留空行：nullptr期望0条排列，空串期望1条长度为0的排列，若测试框架先trim再split，两者都会变成空数组而丢失差异。更可靠的测试让打印目标成为回调，每次到达基例就传递当前字符串；计数器直接记录调用次数，不依赖换行文本解析。
+
+abc的顺序也能验证回溯是否完整。前两项固定a，接着两项固定b，最后两项固定c；每个首位分组结束后输入都应恢复为abc。可在每层循环前保存字符串快照，并在递归返回、撤销交换后断言与快照相同。这个断言会在第一次漏回溯时就失败，而不是等最终排列集合出现重复后才定位。
+
+对去重版，除了结果集合，还应检查数量公式：aab为3，aabb为6，aaaa为1。随机短串可用next_permutation排序枚举作为参考；但参考实现和被测交换法应使用独立逻辑，避免共享同一剪枝错误。
+
 ```cpp
 #include <algorithm>
+#include <cassert>
 #include <string>
 #include <vector>
 
-class Solution {
-public:
-    vector<string> Permutation(string str) {
-        vector<string> ans;
-        if (str.empty()) return ans;
+void testUniquePermutations() {
+    assert(uniquePermutations("") ==
+           std::vector<std::string>{""});
+    assert(uniquePermutations("a") ==
+           std::vector<std::string>{"a"});
 
-        sort(str.begin(), str.end());
-        vector<bool> used(str.size(), false);
-        string path;
+    auto ab = uniquePermutations("ab");
+    std::sort(ab.begin(), ab.end());
+    assert(ab ==
+           (std::vector<std::string>{"ab", "ba"}));
 
-        function<void()> dfs = [&]() {
-            if (path.size() == str.size()) {
-                ans.push_back(path);
-                return;
-            }
-
-            for (int i = 0; i < (int)str.size(); i++) {
-                if (used[i]) {
-                    continue;
-                }
-                if (i > 0 && str[i] == str[i - 1] && !used[i - 1]) {
-                    continue;
-                }
-
-                used[i] = true;
-                path.push_back(str[i]);
-                dfs();
-                path.pop_back();
-                used[i] = false;
-            }
-        };
-
-        dfs();
-        return ans;
-    }
-};
-```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-function stringPermutation(str: string): string[] {
-  if (!str.length) {
-    return [];
-  }
-
-  const chars = [...str].sort();
-  const used = new Array(chars.length).fill(false);
-  const path: string[] = [];
-  const res: string[] = [];
-
-  const dfs = () => {
-    if (path.length === chars.length) {
-      res.push(path.join(""));
-      return;
-    }
-
-    for (let i = 0; i < chars.length; i++) {
-      if (used[i]) continue;
-      if (i > 0 && chars[i] === chars[i - 1] && !used[i - 1]) continue;
-
-      used[i] = true;
-      path.push(chars[i]);
-      dfs();
-      path.pop();
-      used[i] = false;
-    }
-  };
-
-  dfs();
-  return res;
+    auto aab = uniquePermutations("aab");
+    std::sort(aab.begin(), aab.end());
+    assert(aab ==
+           (std::vector<std::string>{
+               "aab", "aba", "baa"}));
 }
 ```
-  </Tab>
-</CodeTabs>
 
-## 易错点
+作者版还应确认调用结束后原char数组恢复为输入。对abc捕获输出要按源码顺序断言；若只关心集合，可排序后比较，但会漏掉不稳定顺序回归。
 
-- 未明确边界时最容易误判。
-- 状态更新顺序与方向一旦错误，通常会产生重复计数或遗漏。
-- 若问题含重复数据或极大规模，时间复杂度和空间复用是验收重点。
+## 正确性证明
 
-## 小结
+递归不变量是：pBegin之前的前缀已固定；待排后缀仍包含尚未放入前缀的所有原位置字符；进入与退出调用时字符串状态相同。
 
-- 先写出状态定义，再写状态转移。
-- 先写正常路径，再补齐边界。
-- 复杂度先估，复用再做。
+当前层让后缀每个位置恰好一次交换到pBegin。对任意最终位置排列，其当前首字符来自唯一一个位置分支，剩余位置排列由归纳假设在子递归中完整产生；因此互异位置排列不漏。
 
-<Callout type="tip">
-  <strong>复习提醒：</strong> 把输入规模和边界条件写成 3~5 个测试例，能提前暴露 80% 的实现风险。
-</Callout>
+每个分支后交换恢复，兄弟分支互不污染；基例在所有位置固定后打印一次。原版对位置排列不重，但相同字符值可使多个位置排列映射到同一字符串；去重版每层按值保留一个代表，恰消除这些等价分支。
+
+## 输入、并发与异常边界
+
+作者原地修改输入，递归期间其他线程或信号处理观察到的是中间排列；必须独占缓冲区。printf本身若失败，代码仍继续生成，且没有错误返回。回调版可传播失败，但要用作用域守卫确保异常时交换回去。
+
+若输出容器push_back抛出，当前实现位于基例且栈上尚有待回溯交换；异常直接展开会跳过普通语句，输入可能停在某个排列。工程版可用swap guard析构恢复，或按值复制每层换取更强异常安全。
+
+字节字符串还可能包含内嵌空字符；作者以第一个空字符为结束，后续字节不会参与排列。std::string版按size可处理内嵌零，但打印和协议展示要另行编码。
+
+<Stepper>
+  <Step title="让后缀每个字符轮流固定当前位"><PermutationSwapTreeDiagram />abc按首位a、b、c分成三个递归子问题。</Step>
+  <Step title="递归排列剩余字符"><PermutationSwapBackMap />更深层固定下一位，返回后交换恢复父层输入状态。</Step>
+  <Step title="明确是否按字符值去重"><PermutationDuplicatePolicyDiagram />作者按位置输出，aab会重复；同层集合是可选扩展。</Step>
+  <Step title="跑完五组官方输入"><StringPermutationOfficialCaseLab />区分nullptr零输出与空串一个空排列，并核对abc源码顺序。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 每层把待排后缀某个字符交换到当前固定位置。
+2. 固定一位后递归排列剩余字符，终止符处打印完整字符串。
+3. 分支返回后交换同一对位置，恢复父层和后续兄弟状态。
+4. 作者原版按位置枚举，不对重复字符去重。
+5. nullptr无输出，空串打印一个空排列；二者语义不同。
+6. abc源码顺序是abc、acb、bac、bca、cba、cab。
+7. 全部互异排列输出成本O(n×n!)，递归辅助空间O(n)。
+8. UTF-8不能按char随意交换，去重和排列单位必须先定义。
+
+<Exercises>
+
+**问题 1：首位固定b后，abc为何变成bac并产生哪两项？**
+
+<Answer>交换下标0和1得到bac，递归排列后缀a、c，先保持得到bac，再交换后缀得到bca；返回顶层后再交换0和1恢复abc。</Answer>
+
+**问题 2：空串与nullptr为何输出不同？**
+
+<Answer>nullptr被外层视为没有输入并直接return；空串是有效的可写字符串，pBegin一开始就在终止符，基例打印pStr，于是输出一个空行代表空排列。</Answer>
+
+**问题 3：作者输入aab会输出什么？**
+
+<Answer>它按三个位置做3!个叶子，不按值去重，得到aab、aab、aba、aba、baa、baa，具体顺序由交换树决定。</Answer>
+
+**问题 4：去重扩展为何要每层单独维护used集合？**
+
+<Answer>只需阻止同一深度把相同字符再次放到当前位；更深层仍要使用剩余相同字符。若用全局集合，会错误禁止字符在不同位置重复出现。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="固定前缀">递归当前层之前已经确定位置的字符串前段。</GlossaryItem>
+  <GlossaryItem term="待排后缀">从当前指针到末尾、仍需选择排列的字符区域。</GlossaryItem>
+  <GlossaryItem term="交换回溯">分支前交换、分支后再次交换以恢复状态的方法。</GlossaryItem>
+  <GlossaryItem term="位置排列">把相同字符的不同原位置也视为可区分元素的排列。</GlossaryItem>
+  <GlossaryItem term="同层去重">某递归深度中相同字符值只进入一次当前固定位置。</GlossaryItem>
+</Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题38"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/38_StringPermutation/StringPermutation.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

@@ -1,0 +1,382 @@
+---
+title: "Item 15：在资源管理类中提供 raw resource access"
+type: A
+section: Chapter 3 · Resource Management
+order: 15
+description: 对齐 Effective C++ 第三版 Item 15：通过 get/native_handle、operator* 与 operator-> 提供短期 raw resource borrow，比较显式和隐式转换，并维护 ownership 与生命周期。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppBorrowLifetimeMap,
+  EcppRawAccessBoundaryMap,
+  EcppResourceAccessFormsMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-15-raw-resource-access";
+
+<Objectives>
+
+- 能解释 resource-managing class 暴露 raw resource 为何不等于转移 ownership，并设计 borrow lifetime 契约
+- 能比较 named getter、operator\*、operator->、explicit/implicit conversion 与 release 的调用便利和误用风险
+- 能实现 const 正确的 native_handle/get 接口，验证 owner move/reset、异步逃逸和 deleter 配对
+
+</Objectives>
+
+## 从“管理资源不等于隐藏资源”开始
+
+许多既有 API 只接受 raw handle：
+
+```cpp
+void configureFont(FontHandle* font, int size);
+
+FontOwner font = loadFont("Inter.ttf");
+configureFont(font.get(), 16);
+```
+
+资源管理类负责取得、转移和释放；业务操作仍可能需要原始 resource。
+
+<Term def="由 RAII 对象拥有、最终传给底层 API 的 pointer、handle 或 descriptor。">
+  raw resource
+</Term>
+
+Item 15 要求 Provide access to raw resources in resource-managing classes（在资源管理类中提供 raw resource access）。
+
+<Term def="从 owner 暂时取得 raw pointer/reference/handle 使用，但不取得释放责任。">
+  raw resource borrow
+</Term>
+
+接口必须让两者区别清晰。
+
+<EcppRawAccessBoundaryMap />
+
+## named getter 最明确
+
+<Term def="以 get、native_handle 等具名函数显式返回底层 raw resource 的接口。">
+  explicit raw accessor
+</Term>
+
+```cpp
+class FontOwner {
+public:
+    FontHandle* get() noexcept { return handle_; }
+    const FontHandle* get() const noexcept { return handle_; }
+private:
+    FontHandle* handle_{};
+};
+```
+
+调用点明确跨入 raw API，便于搜索和审计。
+
+<Term def="const owner 只能导出只读 resource view，普通 owner 可导出可写 view 的传播规则。">
+  const-propagating access
+</Term>
+
+是否传播 const 取决于 owner 语义。标准 unique_ptr 的 const 对象仍可修改 pointee，因为 const 约束 owner 自身；自定义 wrapper 可选择更强 deep const，但需一致。
+
+## operator\* 与 operator-> 提供 pointer 体验
+
+<Term def="把资源管理对象解引用为底层资源引用的重载。">dereference access</Term>
+
+```cpp
+class InvestmentPtr {
+public:
+    Investment& operator*() const noexcept { return *ptr_; }
+    Investment* operator->() const noexcept { return ptr_; }
+};
+```
+
+<Term def="让 wrapper 以 pointer-like 语法访问底层对象成员的箭头操作。">
+  pointer-like access
+</Term>
+
+适合智能指针，但 raw integer handle 没有自然解引用语义，优先 `native_handle()`。
+
+<EcppResourceAccessFormsMap />
+
+## implicit conversion 的便利与风险
+
+<Term def="无需显式函数调用或 cast，管理对象自动转换为 raw resource 类型的操作。">
+  implicit raw conversion
+</Term>
+
+```cpp
+class FontOwner {
+public:
+    operator FontHandle*() const noexcept { return handle_; }
+};
+```
+
+可直接传给 legacy API，却扩大重载选择和误用：
+
+```cpp
+FontOwner font = loadFont("Inter.ttf");
+delete font; // 若转换为 pointer 后编译通过，将绕过正确 deleter
+```
+
+<Term def="管理对象因自动转换进入原本非预期的 overload、比较、算术或 delete 表达式。">
+  accidental conversion path
+</Term>
+
+原书承认 implicit conversion 更方便，但 named access 更安全。现代默认选择 `get()`/`native_handle()`。
+
+<Callout type="trap">
+  **现象**：为了兼容一个 C API 添加隐式 pointer conversion，随后 wrapper
+  被传入任意 pointer
+  overload。**原因**：转换作用于所有调用上下文。**修法**：使用 named
+  getter；必要时 explicit conversion，并限制在边界适配函数。
+</Callout>
+
+## explicit conversion 是折中
+
+<Term def="必须通过 cast 或允许显式转换的上下文才能执行的 raw resource 转换。">
+  explicit raw conversion
+</Term>
+
+```cpp
+explicit operator FontHandle*() const noexcept { return handle_; }
+```
+
+调用仍比 get 隐晦：`static_cast<FontHandle*>(font)`。named getter 能表达“我现在借用 native resource”，通常更可读。
+
+<Term def="把所有 raw resource 交互集中到少数 adapter，业务层只使用安全 wrapper 的结构。">
+  raw boundary adapter
+</Term>
+
+```cpp
+void configure(FontOwner& font, int size)
+{
+    configureFont(font.get(), size);
+}
+```
+
+减少 raw handle 传播范围。
+
+## get 与 release 完全不同
+
+<Term def="返回 raw resource 但 owner 仍保留释放责任的观察操作。">
+  get semantics
+</Term>
+
+<Term def="返回 raw resource 并取消管理对象的 ownership，调用方接手释放责任的操作。">
+  release semantics
+</Term>
+
+```cpp
+auto owner = std::make_unique<Widget>();
+Widget* borrowed = owner.get();
+Widget* transferred = owner.release();
+```
+
+borrowed 不可 delete；transferred 必须由新 owner 立即接管，否则泄漏。
+
+<Term def="release 后立即把 raw resource 交给另一个 owner，避免出现无管理窗口的规则。">
+  immediate re-ownership
+</Term>
+
+```cpp
+std::unique_ptr<Widget, CustomDelete> next{previous.release()};
+```
+
+还需确保 deleter 协议兼容，不能只转 pointer 忘记释放方式。
+
+<Callout type="trap">
+  **现象**：把 get() 返回值交给会长期保存或 delete 的 API。**原因**：把 borrow
+  当 ownership transfer。**修法**：标注 API 是 borrow/take ownership；后者使用
+  release 加立即 re-ownership 或直接传 owner 类型。
+</Callout>
+
+## raw borrow 的生命周期
+
+<Term def="raw pointer/reference/handle 可安全使用的时间窗口，由 owner 存活和资源未替换共同决定。">
+  borrow lifetime
+</Term>
+
+```cpp
+Widget* raw = owner.get();
+owner.reset();
+raw->work(); // use-after-free
+```
+
+owner destroy/reset 直接结束资源；owner move 后资源通常仍在新 owner 中，但从旧 owner 取得的 raw pointer 是否继续可用取决于资源本身是否移动地址。
+
+<Term def="owner 释放或替换资源后仍使用旧 raw borrow 的未定义行为。">
+  stale raw access
+</Term>
+
+<EcppBorrowLifetimeMap />
+
+## 异步 API 不能只借用
+
+<Term def="API 在函数返回后仍保存 pointer 并从线程、事件循环或回调稍后使用。">
+  escaping asynchronous borrow
+</Term>
+
+```cpp
+register_callback(owner.get()); // 若 callback 长期保存 pointer，局部 owner 结束后悬空
+```
+
+需要 shared ownership、weak observation、registration token 或外层 aggregate owner。
+
+<Term def="注册对象持有取消动作，析构先注销 callback，再允许被借用对象销毁的 RAII 协议。">
+  registration lifetime token
+</Term>
+
+同步调用期间 borrow 安全，不代表异步保存安全。
+
+## raw access 不应暴露 deleter 控制
+
+<Term def="由 owner 保存、规定 raw resource 最终使用何种函数释放的策略对象。">
+  deleter state
+</Term>
+
+返回 pointer 不应同时允许调用方改变 deleter、control block 或 ownership count。管理对象的封装目标主要是资源管理责任，而不是禁止所有资源操作。
+
+<Term def="接口暴露资源的必要业务能力，但保留创建、转移和释放控制在 owner 内。">
+  ownership encapsulation
+</Term>
+
+这解释了为何 raw accessor 与封装并不矛盾。
+
+## integer/native handle 的无效值
+
+<Term def="系统 API 使用的整数、指针或结构句柄，以及表示未拥有资源的 sentinel。">
+  native handle
+</Term>
+
+```cpp
+class SocketOwner {
+public:
+    NativeSocket native_handle() const noexcept { return socket_; }
+    explicit operator bool() const noexcept { return socket_ != invalidSocket; }
+private:
+    NativeSocket socket_{invalidSocket};
+};
+```
+
+<Term def="表示 wrapper 当前不拥有有效资源的约定值，例如 null 或 invalid descriptor。">
+  invalid handle sentinel
+</Term>
+
+accessor 可返回 sentinel，调用方先检查 bool；或在无效时抛异常/返回 optional，按 API 风格决定。
+
+## accessor 的异常与 noexcept
+
+<Term def="只读取保存的 handle、不会分配或改变 ownership，因此可承诺不抛的访问函数。">
+  noexcept raw access
+</Term>
+
+get/native_handle/operator-> 通常 noexcept。若访问需要延迟加载或锁，命名应反映可能失败，不能伪装成简单 get。
+
+```cpp
+Resource& get();                 // 简单已存在访问
+expected<Resource&, Error> load(); // 可失败获取
+```
+
+<Term def="查询函数隐藏资源创建、I/O 或状态变化，使调用方误判成本与失败的设计。">
+  accessor side effect
+</Term>
+
+Item 15 讨论访问已管理资源，不是让 get 偷偷取得新资源。
+
+## 防止错误 delete 的类型设计
+
+<Term def="让 borrow 使用专门非拥有类型，而非直接裸 pointer，从而不能误调用释放操作。">
+  typed borrow handle
+</Term>
+
+```cpp
+class FontView {
+public:
+    explicit FontView(FontHandle* handle) : handle_{handle} {}
+    FontHandle* native_handle() const noexcept { return handle_; }
+private:
+    FontHandle* handle_{};
+};
+```
+
+typed view 仍不自动跟踪生命周期，但可限制 API 集合、附带 generation 检查或线程约束。
+
+<Term def="owner 每次替换资源时递增版本，debug borrow 在访问时校验版本未变化的检测。">
+  borrow generation check
+</Term>
+
+适合调试复杂池/arena，不替代正确所有权。
+
+## raw access 审计与测试
+
+<Term def="搜索所有 get/native_handle/implicit conversion 调用，标注同步、保存、释放与失效条件的过程。">
+  raw-access audit
+</Term>
+
+先预测：`get()`、`release()` 与 implicit conversion 分别会让 owner 在调用后处于什么状态，谁最终释放资源。
+
+- get 后 owner 仍有效，borrow 与 owner 指向同一资源。
+- 外部 API 不保存、不 delete borrow；resource ledger 仅 owner 释放一次。
+- const owner 导出权限符合 deep/shallow const 设计。
+- reset/destroy 后 debug generation 检测 stale borrow。
+- 异步注册使用 token/weak/shared，局部 raw 不逃逸。
+- release 后原 owner 为空，raw 立即被兼容 deleter 的新 owner 接管。
+
+## 小结
+
+- resource-managing class 可提供 raw access，因为外部 API 仍需操作底层资源
+- get/native_handle 明确表达 borrow，operator\*/-> 适合 pointer-like wrapper
+- implicit conversion 方便但扩大 accidental conversion，默认优先 named getter
+- get 保留 ownership，release 转移 ownership，语义不可混淆
+- raw borrow 只在 owner 存活且资源未替换期间有效，异步保存需升级生命周期协议
+- raw-access audit 与 resource ledger 证明调用方不释放、不越期使用
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 15"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+<GlossaryItem term="raw resource">由 RAII owner 管理并传给底层 API 的原始句柄。</GlossaryItem>
+<GlossaryItem term="raw resource borrow">临时访问 raw resource 但不取得释放责任。</GlossaryItem>
+<GlossaryItem term="explicit raw accessor">以 get/native_handle 明确返回 raw resource 的函数。</GlossaryItem>
+<GlossaryItem term="const-propagating access">owner const 属性传播到底层访问权限的规则。</GlossaryItem>
+<GlossaryItem term="dereference access">通过 operator* 返回底层资源引用的访问。</GlossaryItem>
+<GlossaryItem term="pointer-like access">通过 operator-> 访问底层对象成员的语法。</GlossaryItem>
+<GlossaryItem term="implicit raw conversion">无需显式调用自动转换为 raw resource。</GlossaryItem>
+<GlossaryItem term="accidental conversion path">自动转换进入非预期重载或 delete 的路径。</GlossaryItem>
+<GlossaryItem term="explicit raw conversion">需要显式 cast/context 的 raw 转换。</GlossaryItem>
+<GlossaryItem term="raw boundary adapter">集中 legacy raw 调用并向业务暴露安全接口的层。</GlossaryItem>
+<GlossaryItem term="get semantics">导出 borrow 且 owner 保留释放责任的语义。</GlossaryItem>
+<GlossaryItem term="release semantics">导出 raw 并把释放责任交给调用方的语义。</GlossaryItem>
+<GlossaryItem term="immediate re-ownership">release 后立即建立新 owner 的规则。</GlossaryItem>
+<GlossaryItem term="borrow lifetime">raw borrow 可安全访问的时间窗口。</GlossaryItem>
+<GlossaryItem term="stale raw access">资源失效后继续使用旧 borrow 的错误。</GlossaryItem>
+<GlossaryItem term="escaping asynchronous borrow">函数返回后仍被异步代码保存使用的借用。</GlossaryItem>
+<GlossaryItem term="registration lifetime token">析构时注销 callback 的 RAII 注册对象。</GlossaryItem>
+<GlossaryItem term="deleter state">owner 保存的资源释放函数及其配置。</GlossaryItem>
+<GlossaryItem term="ownership encapsulation">开放资源操作但保留创建转移释放控制。</GlossaryItem>
+<GlossaryItem term="native handle">系统 API 的原始句柄和无效值约定。</GlossaryItem>
+<GlossaryItem term="invalid handle sentinel">表示当前没有有效资源的 null/descriptor 值。</GlossaryItem>
+<GlossaryItem term="noexcept raw access">只读 handle 且保证不抛的访问函数。</GlossaryItem>
+<GlossaryItem term="accessor side effect">get 隐藏 I/O、创建或状态修改的设计。</GlossaryItem>
+<GlossaryItem term="typed borrow handle">限制能力但不拥有资源的专用 view 类型。</GlossaryItem>
+<GlossaryItem term="borrow generation check">debug borrow 校验 owner 资源版本未改变的机制。</GlossaryItem>
+<GlossaryItem term="raw-access audit">标注所有 raw 调用保存、释放和失效条件的审计。</GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：选择访问形式。** 为 unique_ptr-like 对象、整数 socket 和 legacy implicit API 分别设计 raw access。
+
+  <Answer question="三类 wrapper 应如何提供 raw access？">pointer-like owner 提供 get、operator*、operator->；整数 socket 提供命名 native_handle 与 bool 有效检查，不伪造解引用；legacy API 用小 adapter 内调用 get，避免给整个 wrapper 添加 implicit conversion。只有无法修改的大量接口且风险可控时考虑 explicit/implicit conversion，并加审计测试。</Answer>
+
+2. **问题 2：修复异步逃逸。** callback API 保存 `owner.get()` 到后台线程，设计生命周期协议。
+
+<Answer question="异步 API 为什么不能只保存 raw borrow？">
+  函数返回后局部 owner 可能销毁，后台 raw 悬空。若 callback
+  共同延长资源生命周期，传 shared owner；若只观察，保存 weak 并在调用前
+  lock；或由长寿命 aggregate owner 持有资源，registration token 析构先注销并等待
+  in-flight callback。测试销毁与回调竞争。
+</Answer>
+
+3. **问题 3：区分 get/release。** 设计 resource ledger 测试证明二者 ownership 结果不同。
+
+  <Answer question="如何验证 get 与 release 不被混用？">get 后 owner 仍非空，raw 与 owner 指向同一 id，调用方不释放，owner 析构 ledger release 一次；release 后旧 owner 为空且析构不释放，raw 必须立即进入带兼容 deleter 的新 owner，最终由新 owner release 一次。增加错误 double-delete/leak 对照和静态 API 审计。</Answer>
+</Exercises>

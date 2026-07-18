@@ -1,0 +1,189 @@
+---
+title: "Chapter 22. The Environment"
+type: C
+section: "Programming in Lua 4e · Lua-isms"
+order: 22
+description: "掌握动态全局名、全局声明检查、非全局环境、_ENV词法语义、模块环境与load环境注入，并区分名称控制和安全隔离。"
+demo: true
+math: false
+sourceUrl: "https://www.lua.org/pil/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PilGlobalNameLab, PilLexicalEnvironmentLab, PilLoadEnvironmentLab } from "@/components/mdx/lua-programming/diagrams/environment";
+
+<Objectives>
+
+- 能解释free name、_ENV与_G的解析关系，并实现动态名称访问而不生成source code
+- 能设计全局声明检查和非全局环境，复现existing-key、rawset与lexical capture绕过
+- 能分析module/load environment的capabilities与资源边界，判断何时必须使用隔离state或process
+
+</Objectives>
+
+## 为什么Global Variable其实是Environment Lookup
+
+Lua 5.3把非local名称解释为`_ENV.name`一类environment access。`_ENV`是lexical local/upvalue，普通local解析优先；`_G`只是默认环境中通常指向global table的普通字段。理解这一层后，动态全局名、模块环境和load注入都变成table ownership问题。
+
+先预测：`_G={}`后free name是否切到新table；内层function调用时会用caller的_ENV还是定义处的_ENV；`local _ENV = _ENV` initializer读哪一个；环境metatable的`__newindex`能否观察已有global更新；empty env是否阻止infinite loop；把io函数放env后chunk能否访问其closure中的capability。先画binding与reachable graph。
+
+<Term def="所有非local名称通过定义处可见的lexical _ENV binding查表，调用者环境不会动态替换它。">lexical environment resolution</Term>使环境选择可组合，也意味着随意修改`_G`不等于修改captured `_ENV`。
+
+## Global Variables with Dynamic Names
+
+动态名称用environment table索引：`environment[name]`或默认情况下`_G[name]`。不要构造`load("return "..name)`，那会把数据升级成source、引入syntax/injection和编译成本。<Term def="Runtime string作为validated table key访问指定environment，不通过source generation解释为代码。">dynamic global-name access</Term>要求name allowlist、missing policy和value type明确。
+
+`_G`便于访问默认globals，但不是语言保留的不可变入口；code可重绑定它，而已经编译的free name仍通过其`_ENV` upvalue。需要当前environment时直接引用`_ENV`，需要稳定dependency时保存local。
+
+```lua
+local function read_named(environment, name)
+  assert(type(name) == "string" and string.match(name, "^[%a_][%w_]*$"))
+  local value = rawget(environment, name)
+  if value == nil then return nil, "undeclared" end
+  return value
+end
+
+local environment = { answer = 42, enabled = false }
+assert(read_named(environment, "answer") == 42)
+assert(read_named(environment, "enabled") == false)
+assert(select(2, read_named(environment, "missing")) == "undeclared")
+```
+
+Rawget刻意绕过environment defaults/metamethods；若API需要fallback，普通index并记录side effects。False是合法value，不能用truthiness判断存在。
+
+## Global-Variable Declarations
+
+拼错global默认产生nil或新field。开发期可用declared set和environment metatable：read missing undeclared时报错，write missing undeclared时报错，`declare`先登记再rawset。<Term def="Global checker以独立declared set记录允许names，并统一控制first write、read miss与explicit declaration。">declared-global invariant</Term>不能只靠`__newindex`，因为existing raw key更新绕过hook。
+
+若要检查每次write，使用第20章empty proxy environment和hidden backing；但Lua chunks的`_ENV`可指proxy，standard libraries也需显式注入。Rawset、debug API或backing reference仍可绕过，所以这是typo detector，不是security boundary。
+
+Production可在bootstrap后freeze allowed names，模块代码优先local/explicit exports，减少globals。Declaration order与module load order不应影响合法性，测试fresh state。
+
+<PilGlobalNameLab />
+
+<Stepper>
+  <Step title="切换Free Name、Dynamic Name、_G和Declaration"><PilGlobalNameLab /></Step>
+  <Step title="画Name Resolution">对local、free name、_ENV field、_G field和dynamic key标binding、raw/metamethod path与missing result。</Step>
+  <Step title="验证Bypass Matrix">首次/重复write、赋nil后write、rawset、existing standard global、debug/backing access逐项检查checker覆盖。</Step>
+</Stepper>
+
+<Callout type="trap" title="给_G加__newindex就能检查所有Global写入">
+已有raw globals赋值不会触发`__newindex`。用declared set只检查首次声明，或让`_ENV`指向raw-empty proxy并将values存hidden backing；两者仍可被raw/debug能力绕过。
+</Callout>
+
+## Non-Global Environments
+
+Environment可以是任意table，决定chunk/function free names读写何处。非全局环境适合template、rule或测试dependency injection。<Term def="代码只获得完成任务所需的named values和narrow wrappers，environment不自动fallback到完整_G。">least-capability environment</Term>防止`setmetatable(env,{__index=_G})`把所有I/O、process、debug能力重新暴露。
+
+Environment entry是reference capability：暴露一个table也暴露其fields/metatable/reachable graph；暴露function也暴露closure能做的事情。用narrow wrapper验证arguments、限制结果和rate，而非直接传`os`/`io`。
+
+## Using _ENV
+
+`local _ENV = environment`从声明后到block end改变free-name解析；initializer里的`environment`与`_ENV`按外层scope解析。Nested functions捕获该_ENV upvalue，即使在其他环境中调用仍使用定义处binding。
+
+Ordinary locals不受_ENV替换：先`local print=print`可保留dependency，再切环境。也正因如此，sandbox不能只审计env，还要审计function早已captured的locals/upvalues。`_ENV=nil`可让后续free name access失败，帮助发现隐式globals。
+
+```lua
+local outer_print = print
+local sandbox = { value = 10 }
+
+local function make_reader()
+  local _ENV = sandbox
+  return function()
+    return value -- sandbox.value
+  end
+end
+
+local reader = make_reader()
+sandbox.value = 11
+assert(reader() == 11)
+outer_print("environment reader verified")
+```
+
+Closure捕获environment table identity，后续field mutation可见；需要immutable snapshot就copy validated values。多closures共享env会共享global-like state。
+
+<PilLexicalEnvironmentLab />
+
+<Stepper>
+  <Step title="切换Outer _ENV、Local _ENV、Nested Function和Module Scope"><PilLexicalEnvironmentLab /></Step>
+  <Step title="画Lexical Blocks">标每个_ENV声明起点、free names与nested closures，区分definition environment和caller environment。</Step>
+  <Step title="审计Captured Locals">切env前保存的functions/tables逐个列capability，确认没有通过local upvalue绕过环境政策。</Step>
+</Stepper>
+
+## Environments and Modules
+
+Module可让`local _ENV=M`后直接定义free-name exports，但所有未local names也写进M，standard dependencies要先存locals；错误拼写会成为export。更清晰的主流写法仍是`local M={}; function M.run...; return M`，把environment机制用于受控DSL而非隐藏module exports。
+
+<Term def="Module明确区分export table、private locals和imported dependencies，不借全局fallback隐式获取能力。">module environment boundary</Term>支持审计与tree-shaking。若使用_ENV=M，给M declaration checker并在finalize时验证export allowlist。
+
+## _ENV and load
+
+Lua 5.3 `load(source,name,"t",environment)`把environment用于compiled chunk的free names；load只编译，调用chunk才执行。环境不会自动传播到chunk调用的外部functions：它们继续使用各自定义时captured `_ENV`。
+
+```lua
+local environment = {
+  input = 7,
+  square = function(value) return value * value end,
+}
+
+local chunk = assert(load(
+  "result = square(input); return result",
+  "@rules/square.lua",
+  "t",
+  environment
+))
+assert(chunk() == 49 and environment.result == 49)
+assert(rawget(_G, "result") == nil)
+```
+
+<Term def="Load environment只控制新chunk free-name lookup；它不限制无global计算、captured capabilities、CPU、memory或host callbacks。">load-environment boundary</Term>要求不可信source使用passive parser或separate Lua state/process、instruction/time/memory limits。Binary chunks另有兼容与trust风险。
+
+<PilLoadEnvironmentLab />
+
+<Stepper>
+  <Step title="切换Compile、Execute、Capability和Resource"><PilLoadEnvironmentLab /></Step>
+  <Step title="分离Failure Phases">覆盖syntax、missing name、wrapper validation、infinite loop、huge allocation和host callback error，记录哪个boundary负责。</Step>
+  <Step title="做Reachability Audit">从每个env entry遍历table/metatable/upvalues/C closures可达能力；只保留narrow allowlisted wrappers。</Step>
+</Stepper>
+
+<Callout type="trap" title="load使用Empty Environment就能安全运行任意用户Code">
+Code无需globals也能无限loop、递归和分配tables/strings；已captured functions还可能带宿主能力。真正隔离需要资源受限的separate state/process，配置优先passive parser。
+</Callout>
+
+## 本章回顾：Environment控制Names，不自动控制Resources
+
+1. Free names经lexical `_ENV`解析；`_G`只是默认环境中的普通conventional reference。
+2. Dynamic names直接索引validated environment key，不生成/编译source。
+3. Global declaration checker需独立declared state并理解existing-key/raw bypass。
+4. Local `_ENV`按lexical scope生效，nested closure捕获定义环境，ordinary locals仍可携带能力。
+5. Module显式区分exports/private/imports，不用完整_G fallback掩盖dependency。
+6. Load env控制新chunk名称解析，不限制CPU、memory或reachable host capabilities。
+
+<Exercises>
+
+**问题 1：为什么重绑定`_G`不一定改变Free Name Lookup？**
+
+<Answer>Free name使用lexical `_ENV` binding；`_G`只是该环境中的一个field/reference。给`_G`变量赋新table不会自动重绑_ENV。要改变当前block解析，声明/赋`_ENV`；更稳妥是显式locals。</Answer>
+
+**问题 2：怎样检测Global Typo又不声称Sandbox？**
+
+<Answer>维护declared set，metatable对undeclared read/first-write error，declare用rawset；若需每次write，用empty proxy backing。文档明确rawset/debug/backing可绕过，它只用于开发期correctness。</Answer>
+
+**问题 3：Load环境里只放一个Function为何仍需Capability审计？**
+
+<Answer>Function closure可能捕获filesystem、network、secret table或host userdata，chunk调用它就间接获得能力。提供narrow wrapper、validate args/results并审计upvalues/reachable graph；untrusted execution仍放隔离runtime和budgets。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="lexical environment resolution" definition="Free names通过定义处可见_ENV查表且不随caller变化的规则。" />
+  <GlossaryItem term="dynamic global-name access" definition="Runtime string作为validated environment key而非source访问的边界。" />
+  <GlossaryItem term="declared-global invariant" definition="独立记录允许global names并控制声明、读miss和first write的约束。" />
+  <GlossaryItem term="least-capability environment" definition="Environment只暴露任务所需narrow values/wrappers而不fallback全局。" />
+  <GlossaryItem term="module environment boundary" definition="Module显式分离export table、private locals与import dependencies。" />
+  <GlossaryItem term="load-environment boundary" definition="Load env只控制chunk free names而不限制resources/captured capabilities。" />
+</Glossary>
+
+<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 22: The Environment" adaptedUrl="https://www.lua.org/pil/" />

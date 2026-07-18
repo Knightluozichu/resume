@@ -1,0 +1,230 @@
+---
+title: "第 12 章 移动端热更新：资源、Lua 与版本事务"
+type: A
+section: "Unity 3D 实战核心技术详解 · 架构与热更新"
+order: 12
+description: "按原书第12章重建热更新架构、资源打包工具、C#与Lua交互、模块接口、Lua逻辑与案例。"
+demo: true
+math: false
+sourceUrl: "https://m.bookschina.com/7380713.htm"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Uct12MobileHotUpdateMapLab,
+  Uct12MobileHotUpdateExperimentLab,
+  Uct12MobileHotUpdateEvidenceLab,
+} from "@/components/mdx/unity-core-tech/diagrams/uct-12-mobile-hot-update";
+
+<Objectives>
+
+- 能解释版本清单、差分资源、脚本边界和原子切换的更新事务
+
+- 能设计资源打包工具以及 C# 与 Lua 的窄接口
+
+- 能分析下载中断、版本不兼容和回滚失败的最早证据
+
+</Objectives>
+
+## 问题：为什么补丁文件全部下载成功，仍不能立即把新版本标记为可用？
+
+先预测：下载完成是否等于更新完成？不是。文件还要验证哈希、依赖、平台、脚本 ABI 和启动烟雾测试，并以原子方式切换版本。原书第十二章从架构、打包工具、C# 与 Lua、模块接口和脚本逻辑到案例，描述的是一笔可提交也可回滚的版本事务。
+
+<Uct12MobileHotUpdateMapLab />
+
+## 原书边界与目录小节
+
+本页严格对应完整目录中的以下单元；这些单元只在本页计算原章覆盖，现代扩展不替代原书位置：
+
+- **热更新架构**
+- **资源打包工具**
+- **C#和Lua交互**
+- **模块化接口**
+- **Lua脚本逻辑**
+- **热更新案例**
+
+书籍身份由图书馆题录核对，章节边界由完整目录核对。本站重新组织解释、代码、实验和证据，不逐字复制原文；导读与总复习不重复计入十四个正文章。
+
+## 把补丁更新设计成可验证事务
+
+客户端内置基线版本，远端发布版本清单包含包 ID、平台、依赖、大小、哈希和最低程序版本。更新器比较本地清单生成计划，下载到 staging，不直接覆盖 live；全部验证后写入提交标记并切换当前版本指针。
+
+资源打包工具必须确定输入选择、AssetBundle 名称、依赖和压缩参数，输出包、清单、哈希与构建日志。相同提交和工具版本应能重建同样逻辑内容；共享依赖错误会造成重复包或运行时缺失。
+
+Lua 承担可更新逻辑，C# 提供引擎能力和少量稳定接口。桥接层要规定类型转换、对象生命周期、异常边界和线程；把整个 Unity API 暴露给脚本会扩大兼容与安全面。模块通过版本化接口通信，不直接依赖对方内部表。
+
+Lua 入口按模块加载、初始化、更新和释放，旧协程、计时器和事件订阅必须在切换时停止。案例要覆盖全量安装、增量补丁、断点续传、错误哈希、磁盘不足、脚本异常与回滚，并在目标平台检查应用商店政策。
+
+<Uct12MobileHotUpdateExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="描述发布版本、文件、依赖、大小、哈希和兼容条件的权威记录。">
+  版本清单
+</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="存放尚未验证和提交的新补丁文件的隔离目录。">Staging 区</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="只有全部验证成功后一次性改变当前版本指针的提交操作。">原子切换</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="在 C# 引擎能力与 Lua 可更新逻辑之间转换调用和生命周期的边界。">
+  脚本桥接
+</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="新版本启动或验证失败时恢复最后可用版本的机制。">回滚</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+这些术语组成一份最小领域模型。读者需要为每个对象写出所有者、生命周期、正常值、边界值和故意失败后的第一条可观察信号，才能把概念转成工程判断。
+
+## 关键对象与数据流
+
+构建工具从固定提交生成平台包和版本清单，发布服务提供签名清单，客户端规划差分并下载到 staging，逐文件校验后执行脚本与资源烟雾测试，最后原子切换 current 指针；启动失败则回到 last-known-good。输出是版本状态机和完整更新日志。
+
+每次实验只改变一个输入，先保存版本、参数与预期，再比较输出、日志、内存或帧时间。最终结果偶然正确但中间契约不符合预测，仍不能签发，因为隐藏缓存、默认值或执行顺序可能掩盖根因。
+
+## 三步可重复实验
+
+动手前先预测：改变当前步骤的一项输入后，哪个对象、数值、像素、状态或版本标记应最先变化？固定 Unity 版本、目标平台、资产提交和测试场景。
+
+<Stepper>
+  <Step title="生成可追溯补丁">
+    <Uct12MobileHotUpdateMapLab />
+
+固定 Unity、打包脚本、平台和压缩参数，输出依赖清单与 SHA-256；对同一输入重建并比较逻辑清单。
+
+```csharp
+var manifest = BuildPipeline.BuildAssetBundles(output, options, target);
+WriteReleaseManifest(manifest, gitCommit, unityVersion);
+SignManifest(output);
+```
+
+  </Step>
+  <Step title="收窄 C# 与 Lua 接口">
+    <Uct12MobileHotUpdateExperimentLab />
+
+只暴露日志、资源、网络和时间等版本化门面；让 Lua 模块实现 Init、Update、Dispose，并测试异常和对象释放。
+
+```lua
+local M = {}
+function M.Init(services) M.services = services end
+function M.Update(dt) end
+function M.Dispose() M.services = nil end
+return M
+```
+
+  </Step>
+  <Step title="执行失败矩阵">
+    <Uct12MobileHotUpdateEvidenceLab />
+
+在下载 30%、校验后、启动前和脚本初始化时分别中断；重新启动后只能继续 staging 或回滚，绝不能得到半新半旧 live。
+
+```text
+check manifest -> plan -> stage download -> verify -> smoke test
+all pass: commit current pointer
+any fail: keep last-known-good and record reason
+```
+
+  </Step>
+</Stepper>
+
+## 正常、边界与故障注入
+
+正常样本证明主路径，边界样本说明适用范围，故障样本证明诊断检查确实会在最早契约处拒绝。三类样本必须使用同一观测方式，避免只为成功路径保留证据。
+
+<Callout type="trap">
+  **因果陷阱**：边下载边覆盖 live
+  文件会在中断时留下混合版本，下一次启动无法判断真实状态。
+</Callout>
+
+<Callout type="trap">
+  **边界陷阱**：把所有 Unity 对象和反射接口暴露给 Lua 会放大
+  AOT、生命周期、兼容和安全风险。
+</Callout>
+
+## 从原书版本迁移到当前 Unity
+
+书中的 AssetBundle 与 Lua 方案是历史基线；现代 Addressables 可管理目录和依赖，但脚本热更新、原子提交、签名和回滚仍需单独设计。
+
+IL2CPP 不允许运行时任意加载新的原生 C# 代码，不同平台政策也限制可下载逻辑；迁移必须区分资源更新、解释脚本更新和应用二进制更新。
+
+迁移账本使用五列：原书载体、稳定不变量、当前实现、不可等价处、重放证据。允许 API、插件和渲染管线变化，不允许用新名词删除原章问题或把编辑器成功当成目标平台成功。
+
+## 验收证据
+
+验收包含构建版本与提交、包依赖图、签名清单、差分计划、断点续传、错误哈希、磁盘不足、脚本异常、冷启动烟雾测试、回滚结果、Lua 释放证明和平台政策记录。
+
+证据包还要记录文件路径、构建版本、设备、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不是看过。
+
+<Uct12MobileHotUpdateEvidenceLab />
+
+## 小结
+
+- 热更新是一笔可提交可回滚的版本事务
+- 资源包必须由确定工具链和清单重建
+- C# 与 Lua 之间保持窄而版本化的接口
+- 下载成功之后仍要验证、烟雾测试和原子切换
+
+<Exercises>
+
+**问题 1** 第 12 章 移动端热更新技术实现的关键输入和输出分别是什么？
+
+<Answer>
+  构建工具从固定提交生成平台包和版本清单，发布服务提供签名清单，客户端规划差分并下载到
+  staging，逐文件校验后执行脚本与资源烟雾测试，最后原子切换 current
+  指针；启动失败则回到 last-known-good。输出是版本状态机和完整更新日志。
+</Answer>
+
+**问题 2** 本章最有诊断价值的故障注入是什么？
+
+<Answer>
+  边下载边覆盖 live
+  文件会在中断时留下混合版本，下一次启动无法判断真实状态。需要保存失败输入和第一条偏离信号，再修复后重放。
+</Answer>
+
+**问题 3** 迁移到当前 Unity 时必须保留什么？
+
+<Answer>
+  书中的 AssetBundle 与 Lua 方案是历史基线；现代 Addressables
+  可管理目录和依赖，但脚本热更新、原子提交、签名和回滚仍需单独设计。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="版本清单">
+    描述发布版本、文件、依赖、大小、哈希和兼容条件的权威记录。
+  </GlossaryItem>
+  <GlossaryItem term="Staging 区">
+    存放尚未验证和提交的新补丁文件的隔离目录。
+  </GlossaryItem>
+  <GlossaryItem term="原子切换">
+    只有全部验证成功后一次性改变当前版本指针的提交操作。
+  </GlossaryItem>
+  <GlossaryItem term="脚本桥接">
+    在 C# 引擎能力与 Lua 可更新逻辑之间转换调用和生命周期的边界。
+  </GlossaryItem>
+  <GlossaryItem term="回滚">
+    新版本启动或验证失败时恢复最后可用版本的机制。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="姜雪伟《Unity 3D实战核心技术详解》目录与书籍身份资料"
+  adaptedUrl="https://m.bookschina.com/7380713.htm"
+/>

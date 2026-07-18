@@ -1,0 +1,279 @@
+---
+title: "第2章 · 细腻的“暴力”美学——穷举算法与贪心算法"
+type: C
+section: "穷举、贪心与随机"
+order: 2
+description: "按图解版第2章重建素数判断、关灯游戏、股票收益、物流站选址、回合制顺序、快递包装，以及从穷举基线到可证明贪心的完整方法。"
+demo: true
+math: true
+sourceUrl: "https://www.tenlong.com.tw/products/9787522615059?list_name=rd"
+draft: false
+---
+
+import { CAIPrimeEnumerationLab, CAILightsOutLab, CAIExhaustiveToGreedyMap, CAIStockProfitLab, CAILocationMedianLab, CAITurnOrderLab, CAIPackagePairingLab, CAIGreedyProofLab, CAICounterexampleLab, CAIStrategySelectorLab } from "@/components/mdx/competitive-algorithms/diagrams/02-exhaustive-and-greedy";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释穷举算法与贪心算法的适用条件，以及两者之间由基线、观察和证明构成的关系
+- 能计算素数试除、关灯游戏首行枚举、股票配对和一维选址的候选数量与成本
+- 能实现平方根试除、第一行状态枚举、单次扫描最大收益和双指针包装
+- 能分析物流站中位数、回合制顺序和快递包装中局部选择能否交换进最优解
+- 能设计小规模正确性oracle、反例搜索、贪心证明与边界测试组成的验收流程
+
+</Objectives>
+
+## 从“暴力就是笨办法”这个误解开始
+
+先预测：面对一个新问题，是直接猜一个看起来聪明的规则更可靠，还是先写出一定正确但可能较慢的解法更可靠？第2章的“暴力”并不粗糙。它把所有合法候选系统地覆盖，为正确性、优化方向和对拍测试提供基准。
+
+<Term def="按照不重不漏的生成规则检查全部合法候选，并从中筛选可行解或最优解的算法策略。">穷举算法</Term>的核心不是多写循环，而是回答三个问题：候选空间是什么、怎样保证不重不漏、每个候选怎样验证。只有候选数乘验证成本在预算内，它才是可执行方案。
+
+<CAIExhaustiveToGreedyMap />
+
+## 2.1 穷举算法
+
+穷举的第一价值是正确。第二价值更重要：把重复计算暴露出来后，才能发现哪些状态足以替代完整历史。优化不是凭空出现，而是从完整基线中删除不必要的自由度。
+
+### 2.1.1 素数判断
+
+素数判断的直接定义是：对整数$n\ge2$，枚举$2$到$n-1$，若存在整除因子则$n$为合数。这个算法不漏因子，但做了大量对称工作。若$n=ab$且$a>\sqrt n$、$b>\sqrt n$，则$ab>n$，矛盾；因此合数必有一个不大于$\sqrt n$的因子。
+
+$$
+n\text{ is composite}
+\Longrightarrow
+\exists d,\ 2\le d\le\lfloor\sqrt n\rfloor,\ d\mid n
+$$
+
+<CAIPrimeEnumerationLab />
+
+```cpp
+bool is_prime(long long n) {
+    if (n < 2) return false;
+    for (long long d = 2; d <= n / d; ++d) {
+        if (n % d == 0) return false;
+    }
+    return true;
+}
+```
+
+条件`d <= n / d`避免直接计算`d*d`可能发生的整数溢出。循环提前返回是安全的<Term def="依据必要条件或已知最优界，提前排除不可能产生答案的候选而不破坏完备性。">剪枝</Term>：一旦找到因子，之后候选不可能改变“合数”结论。
+
+### 2.1.2 关灯游戏
+
+关灯游戏看似每个格子都可按或不按，$r\times c$棋盘有$2^{rc}$种按法。但按键的影响只与奇偶有关，同一格按两次等于没按；更关键的是，一旦第一行按法确定，为了熄灭上一行，第2行到最后一行的选择被逐行强制。
+
+<CAILightsOutLab />
+
+于是只需枚举第一行的$2^c$个bitmask。对每个mask向下模拟，最后检查末行是否全灭：
+
+```cpp
+for (int first = 0; first < (1 << cols); ++first) {
+    Board board = initial;
+    apply_first_row(board, first);
+    for (int row = 1; row < rows; ++row) {
+        for (int col = 0; col < cols; ++col) {
+            if (board.on(row - 1, col)) board.press(row, col);
+        }
+    }
+    if (board.last_row_is_off()) record_solution(board);
+}
+```
+
+搜索量从$O(2^{rc})$降为$O(2^c rc)$。这仍是穷举，却通过“其余决策被首行唯一决定”的结构压缩了候选空间。
+
+## 2.2 从穷举算法到贪心算法
+
+从穷举算法到贪心算法，需要找到可丢弃的历史。若两个部分解未来的所有可能性相同，只保留当前更优的代表即可；若某个局部选择能交换进任意最优解而不变差，就可以直接固定它。
+
+### 2.2.1 买卖股票的最佳时机
+
+买卖股票的最佳时机若只允许先买一次、后卖一次，穷举所有$(buy,sell)$对共有：
+
+$$
+\binom n2=\frac{n(n-1)}2
+$$
+
+枚举卖出日$j$时，只需要此前最低买入价，而不需要保存每个买入日。令$m_j=\min_{0\le i<j}p_i$，最佳收益为：
+
+$$
+\max_{1\le j<n}(p_j-m_j)
+$$
+
+<CAIStockProfitLab />
+
+```cpp
+long long max_profit(const std::vector<long long>& price) {
+    if (price.size() < 2) return 0;
+    long long minimum = price[0];
+    long long best = 0;
+    for (std::size_t day = 1; day < price.size(); ++day) {
+        best = std::max(best, price[day] - minimum);
+        minimum = std::min(minimum, price[day]);
+    }
+    return best;
+}
+```
+
+更新顺序表达“必须先买后卖”：先用历史minimum计算今天卖出的收益，再把今天加入未来可买集合。若题目要求必须完成一次亏损交易，`best`不能初始化为0，contract不同会改变边界实现。
+
+### 2.2.2 物流站的选址（一）
+
+物流站的选址（一）先从穷举开始：居民位于一条线上，候选站点为整数坐标$x$，目标最小化总距离：
+
+$$
+F(x)=\sum_{i=1}^{n}|a_i-x|
+$$
+
+若坐标范围很小，可以枚举所有$x$并计算$F(x)$。这个基线揭示了折线函数的变化：站点向右移动一步，左侧居民距离增加，右侧居民距离减少。最优点在左右数量达到平衡的位置附近。
+
+<CAILocationMedianLab />
+
+## 2.3 贪心算法
+
+<Term def="按一个可证明安全的局部规则逐步固定选择，不回退地构造全局可行或最优解的算法策略。">贪心算法</Term>必须同时回答：
+
+- **Greedy choice**是什么？
+- 选择后剩余问题是否仍是同类子问题？
+- 为什么至少存在一个最优解包含这个选择？
+
+“每次选当前看起来最好”只是候选规则；证明完成后，它才是算法。
+
+### 2.3.1 物流站的选址（二）
+
+物流站的选址（二）把前一节观察变成结论。将坐标排序为$a_1\le\cdots\le a_n$。若$x$位于中位数左侧，向右移动不会增加左侧距离的速度超过右侧距离减少的速度；越过中位数后方向反转。因此任一中位数最小化绝对距离和。
+
+对偶数$n$，两个中间坐标之间的任意点都最优；若站点必须取居民坐标，可选任一中间坐标。这个规则不是尝试所有站点，而是一次排序加一次取中位数，或用线性选择算法直接找中位数。
+
+### 2.3.2 回合制游戏
+
+回合制游戏常把“先击败谁”转化为调度。设敌人A需要$t_A$回合击败、每回合造成$d_A$伤害，B类似。只比较相邻两者：
+
+$$
+\operatorname{cost}(A,B)-\operatorname{cost}(B,A)
+=t_A d_B-t_B d_A
+$$
+
+因此A先于B不差，当且仅当$t_A/d_A\le t_B/d_B$。把所有敌人按这个比值排序，任意逆序相邻对都能交换而不增加伤害，最终得到全局最优顺序。
+
+<CAITurnOrderLab />
+
+这里使用了<Term def="从任意最优解出发，把与贪心规则冲突的局部选择交换为贪心选择，并证明可行性与目标值不变差。">交换论证</Term>。注意除法比较应交叉相乘，避免浮点误差；乘积可能溢出时使用更宽整数。
+
+### 2.3.3 快递包装
+
+考虑快递包装的一个标准容量模型：每个包装最多装两件，重量不超过$C$，目标最少包装数。排序后查看最重物品$h$：
+
+- 若最轻物品$l$与$h$能同装，就把二者配对；
+- 否则任何其他物品都不可能与$h$同装，$h$必须单独包装。
+
+<CAIPackagePairingLab />
+
+```cpp
+int minimum_parcels(std::vector<int> weight, int capacity) {
+    std::sort(weight.begin(), weight.end());
+    int parcels = 0;
+    std::size_t left = 0;
+    std::size_t right = weight.size();
+    while (left < right) {
+        --right;
+        if (left < right && weight[left] + weight[right] <= capacity) ++left;
+        ++parcels;
+    }
+    return parcels;
+}
+```
+
+证明分两种：若最轻者也装不下，最重者单独是被迫选择；若能装下，把某个最优解中与最重者同装的物品换成更轻的$l$不会超重，另一件被换出的物品也不会让包装数增加。于是贪心配对可进入某个最优解。
+
+## 2.4 “暴力”的算法与精妙的结论
+
+“暴力”的算法与精妙的结论之间没有高低之分，而是分工：
+
+<Stepper>
+<Step title="先建立完整基线">
+用小规模穷举明确候选、约束和真实最优值；它是后续优化的oracle。
+
+<CAIPrimeEnumerationLab />
+</Step>
+<Step title="寻找可压缩的自由度">
+问哪些选择一旦固定，后续被强制；哪些历史只需一个最小值、中位数或边界代表。
+
+<CAIExhaustiveToGreedyMap />
+</Step>
+<Step title="证明或推翻局部规则">
+用交换论证、领先法或下界证明安全；同时自动搜索最小反例。
+
+<CAIGreedyProofLab />
+</Step>
+</Stepper>
+
+<Callout type="trap" title="样例上成立就当作贪心证明">
+样例只能支持规则，不能排除未见输入。修法是写出局部选择，尝试交换进任意最优解；若交换会破坏可行性或增大目标值，就必须转向动态规划或搜索。
+</Callout>
+
+<Callout type="trap" title="穷举只写多层循环">
+多层循环可能重复候选、漏候选，或把非法状态也算进去。修法是定义候选编码、唯一生成规则、验证谓词和候选总数，再估算“候选数×验证成本”。
+</Callout>
+
+最大面值优先找零说明局部直觉会失败。币值$\{1,3,4\}$、金额6时，贪心得到$4+1+1$三枚，而最优是$3+3$两枚。
+
+<CAICounterexampleLab />
+
+<Term def="能满足问题约束、却使某个猜想、算法规则或证明步骤失败的具体输入实例。">反例</Term>不仅用于否定。最小反例往往指出证明缺少的结构，例如某些币值系统满足最大面值优先，任意币值系统却不满足。
+
+<CAIStrategySelectorLab />
+
+### 把穷举变成贪心的验收oracle
+
+小规模穷举可以持续服务于优化后的算法。先把规模限制在可枚举范围，例如数组长度不超过8、坐标值不超过10；再生成全部结构不同的输入，用穷举返回规范化最优值，用候选贪心返回同一目标值。二者一旦不等，就保存输入并继续做delta debugging：删除元素、缩小数值、减少容量，直到得到不能再缩小的反例。这样的最小反例通常直接暴露错误规则依赖了哪个不存在的性质。
+
+验收不能只比较目标值。还要分别检查：贪心输出是否满足容量、顺序等**可行性**；目标值是否与oracle一致；同一输入重复运行是否稳定；最大规模是否满足预算。若题目允许多个最优解，比较规范化目标值和约束，而不要要求输出序列逐字符相同。
+
+一个完整交换证明有四项义务。第一，局部选择本身可行；第二，任取一个最优解，都能找到第一个与贪心不同的位置；第三，把该位置交换为贪心选择后，约束不被破坏、目标不变差；第四，固定这个选择后，剩余部分仍可按同样论证处理。任何一项说不清，都只能把规则视为待检验猜想。
+
+例如快递包装“最多两件”是交换安全的关键条件。若一个包装可放三件，最轻者与最重者配对可能占用一个本可用于形成三件组合的位置；原证明不再覆盖这种变化。算法结论必须和证明前提一起保存，不能只保留一句贪心口诀。
+
+## 小结
+
+本章从素数判断和关灯游戏理解穷举算法的完备性与候选压缩；从买卖股票的最佳时机和物流站的选址（一）观察重复计算；再在物流站的选址（二）、回合制游戏、快递包装中把局部规则升级为有证明的贪心算法。
+
+可靠路径是：先用暴力解建立真值，再找充分状态和强制选择，最后用交换论证或反例完成验收。精妙结论并不来自跳过暴力，而常来自把暴力基线看得足够清楚。
+
+<Exercises>
+
+**问题 1**：为什么素数试除只需检查到$\lfloor\sqrt n\rfloor$？怎样避免`d*d`溢出？
+
+<Answer>
+若$n=ab$且$a,b$都大于$\sqrt n$，则$ab>n$，矛盾，所以合数至少有一个因子不大于平方根。循环条件写成`d <= n / d`与`d*d <= n`等价，却不需要先计算可能溢出的乘积。
+</Answer>
+
+**问题 2**：解释关灯游戏为什么只枚举第一行，并给出候选数量。
+
+<Answer>
+第一行按法确定后，第2行每一格是否按由“熄灭第1行正上方格子”唯一决定；依次类推，后续每行都被上一行强制。若列数为$c$，第一行有$2^c$种mask，每种模拟$rc$格，总成本$O(2^c rc)$。
+</Answer>
+
+**问题 3**：证明一维绝对距离和由中位数最小化。
+
+<Answer>
+将位置排序。候选点向右移动一个单位时，左侧每个点的距离加1，右侧每个点的距离减1。中位数左侧右边点更多，右移不增大总距离；中位数右侧左边点更多，继续右移不减小总距离。因此最低点位于中位数处，偶数个点时位于两个中位数之间。
+</Answer>
+
+**问题 4**：为“每次取最大硬币”构造最小反例，并说明穷举oracle怎样验证它。
+
+<Answer>
+币值`{1,3,4}`、金额6时，贪心得到`4+1+1`共3枚，最优为`3+3`共2枚。小规模oracle可枚举每种硬币数量或用动态规划计算每个金额的最少枚数，再逐金额比较贪心结果；第一次不等即给出反例。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="穷举算法">按照不重不漏的生成规则检查全部合法候选，并从中筛选可行解或最优解的算法策略。</GlossaryItem>
+<GlossaryItem term="剪枝">依据必要条件或已知最优界，提前排除不可能产生答案的候选而不破坏完备性。</GlossaryItem>
+<GlossaryItem term="贪心算法">按一个可证明安全的局部规则逐步固定选择，不回退地构造全局可行或最优解的算法策略。</GlossaryItem>
+<GlossaryItem term="交换论证">从任意最优解出发，把与贪心规则冲突的局部选择交换为贪心选择，并证明可行性与目标值不变差。</GlossaryItem>
+<GlossaryItem term="反例">能满足问题约束、却使某个猜想、算法规则或证明步骤失败的具体输入实例。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="《深入浅出算法竞赛（图解版）》第2章“细腻的暴力美学——穷举算法与贪心算法”" adaptedUrl="https://www.tenlong.com.tw/products/9787522615059?list_name=rd" />

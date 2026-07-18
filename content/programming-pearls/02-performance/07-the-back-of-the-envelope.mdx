@@ -1,0 +1,468 @@
+---
+title: "Column 7 · The Back of the Envelope：在实现前否证不可行设计"
+type: B
+section: "Part II · Performance"
+order: 6
+description: "按第二版Column 7重建Mississippi与Olympics案例、Basic Skills、Performance Estimates、Safety Factors、Little's Law、Estimation Quiz及everyday quick calculations。"
+demo: true
+math: true
+sourceUrl: "https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+draft: false
+---
+
+import { PP2MississippiFlowLab, PP2DualEstimateLab, PP2DimensionCheckLab, PP2RuleOf72Lab, PP2NodeMemoryLab, PP2PrimitiveCostLab, PP2OlympicsFeasibilityLab, PP2SafetyFactorLab, PP2LittleLawLab, PP2QueueFeasibilityLab, PP2EstimateCertificateLab } from "@/components/mdx/programming-pearls/diagrams/07-the-back-of-the-envelope";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释back-of-the-envelope estimate的用途，以及two independent answers、dimensions、common sense、rules of thumb与safety factors的角色
+- 能计算river flow、node memory、primitive operation budget、Rule of 72、Little's Law与response-time relation
+- 能实现unit-aware estimation ledger、`sizeof`/allocation probe、primitive timing micro-experiment和feasibility gate
+- 能分析false precision、wrong units、bad input data、unstable queues、missing safety margin与shared-assumption cross-check
+- 能设计performance estimates、estimation quiz、uncertainty range、independent decomposition、measurement plan和decision certificate
+
+</Objectives>
+
+## 从“密西西比河每天流出多少水”开始
+
+Bob Martin向Jon Bentley提出一个看似与software engineering无关的问题：Mississippi River每天流出多少水。没有almanac也可以先把flow拆成cross-section area与daily travel distance。
+
+先预测：河口宽约1 mile、平均深20 feet、水速5 miles/hour，答案更接近100 gallons/day、one swimming pool/day，还是half cubic mile/day？
+
+Back-of-the-Envelope Estimate（<Term def="用few defensible quantities、units和order-of-magnitude arithmetic，在详细实现或测量前判断design feasibility的快速工程估算。">Back-of-the-Envelope Estimate</Term>）并不追求最后一位小数。它要在minutes内回答：design大致可行、明显不可行，还是需要测量哪个uncertain input。
+
+深度$20$ feet约为$1/250$ mile，水每天前进$5\times24=120$ miles：
+
+$$
+Q
+\approx
+1\ \text{mile}
+\times
+\frac{1}{250}\ \text{mile}
+\times
+120\ \frac{\text{miles}}{\text{day}}
+\approx
+\frac{1}{2}\ \frac{\text{mile}^3}{\text{day}}.
+$$
+
+<PP2MississippiFlowLab />
+
+这个答案只承诺order of magnitude，却足以筛掉“100 gallons/day”之类违反common sense的结果。
+
+### Olympics communication system：一分钟里需要120秒
+
+Martin随后对Summer Olympics communication proposal做同类计算。他用发送one-character mail的小实验补一个关键参数，其余数量来自proposal。即使采用generous assumptions，design每分钟要求的processing time约120 seconds，因此在one worker上物理不可行。系统在implementation前被送回重新设计，最终版本在Olympics期间正常运行。
+
+<PP2OlympicsFeasibilityLab />
+
+Feasibility ratio：
+
+$$
+\rho
+=
+\frac{\text{demanded service time}}{\text{available wall time}}.
+$$
+
+当$\rho>1$时，不是“再优化一点”就能含糊过去；要减少work、增加parallel capacity或重构system。Quick estimate的最大价值常是尽早否证bad architecture。
+
+## 7.1 Basic Skills
+
+### Two answers are better than one
+
+Peter Weinberger从water balance出发：river长期流出量约等于basin runoff。估计basin为$1000\times1000$ square miles，annual runoff约1 foot，即$1/5000$ mile：
+
+$$
+1000^2\ \text{mile}^2
+\times
+\frac{1}{5000}\ \frac{\text{mile}}{\text{year}}
+\approx
+200\ \frac{\text{mile}^3}{\text{year}}
+\approx
+\frac{1}{2}\ \frac{\text{mile}^3}{\text{day}}.
+$$
+
+它与river geometry estimate来自不同decomposition却得到同一量级，confidence因此上升。
+
+<PP2DualEstimateLab />
+
+Independent不等于换一套numbers重复同一formula。若two estimates共享错误的river depth，它们会一起错；basin rainfall path避开了width、depth与velocity assumptions。
+
+### Dimensional Analysis
+
+Dimensional Analysis（<Term def="在calculation中跟踪quantities的units，并要求加法同维、乘除后的output dimension与目标一致的结构检查。">Dimensional Analysis</Term>）先检查equation form：
+
+- Sum中的terms必须同dimension。
+- Product/quotient的dimension相乘或相消。
+- Output units必须回答原问题。
+- Conversion factor同时包含number与unit。
+
+<PP2DimensionCheckLab />
+
+```text
+quantity             value       unit
+basin width          1000        mile
+basin length         1000        mile
+annual runoff        1/5000      mile/year
+days conversion      1/365       year/day
+result               0.55        mile^3/day
+```
+
+若计算response time却得到`request·second`，不必继续争论input accuracy：formula已结构性错误。
+
+### Quick arithmetic checks
+
+- 将mantissa与power of ten分开估。
+- Check sign、monotonicity与bounds。
+- 用round numbers简化，但记录rounding direction。
+- 加法可检查digit count与mod 9。
+- 结果必须通过common sense。
+- 用inverse calculation回代。
+
+例如四位数相加却只得到three-digit answer，或1 million requests每个20 ms却声称total 2 seconds，都应立即重算。
+
+### Rules of thumb
+
+Rule of 72（<Term def="对moderate percentage growth rate r，用72/r periods估计doubling time的心算近似。">Rule of 72</Term>）：
+
+$$
+y_{\mathrm{double}}
+\approx
+\frac{72}{r},
+$$
+
+其中$r$是每period百分比增长率。6%约12 periods，8%约9 periods。它同样帮助理解exponential program：每增加one unit若runtime增长12%，约six units就翻倍。
+
+<PP2RuleOf72Lab />
+
+常用computing rules还包括$2^{10}\approx10^3$、one second约$10^9$ nanoseconds，以及90/10或80/20 concentration。Rules of thumb是starting model，不是target hardware的测量替代品。
+
+### Estimation Quiz
+
+Estimation Quiz不是背诵trivia，而是校准guessing skill。每道题先写low/nominal/high range与reason，再查reference answer，记录error factor：
+
+$$
+F_{\mathrm{error}}
+=
+\max\left(
+\frac{\text{estimate}}{\text{actual}},
+\frac{\text{actual}}{\text{estimate}}
+\right).
+$$
+
+持续练习会建立population、distance、storage、bandwidth、latency、human rate和cost的background facts。目标通常是factor 2到10内，而不是偶然猜中exact number。
+
+<Callout type="trap" title="估算就是选一个看起来顺眼的整数">
+Useful estimate必须显示decomposition、units、assumptions和range。只写“约100万”无法review，也无法知道哪项measurement最值得做；那是unsupported guess，不是engineering estimate。
+</Callout>
+
+## 7.2 Performance Estimates
+
+### Two million nodes能否装进memory
+
+原书问题：two million nodes，每个含one integer与one pointer，能否装进128 MB machine，typical free memory约85 MB？
+
+```cpp
+struct Node {
+    int value;
+    Node* next;
+};
+
+std::cout << sizeof(Node) << '\n';
+```
+
+32-bit environment中fields可能共8 bytes，raw array约16 MB；64-bit pointer、alignment、per-node allocator metadata与fragmentation可把实际footprint推到32、48 MB甚至更多。若每node单独allocate，还要考虑allocator overhead和cache locality。
+
+$$
+M
+=
+n\left(
+\text{payload}
++\text{padding}
++\text{allocator metadata}
+\right)
++\text{container overhead}.
+$$
+
+<PP2NodeMemoryLab />
+
+最好的next step是小实验：allocate representative nodes，观察resident memory与thrashing threshold。Estimate决定experiment size；measurement校准model。
+
+### Build a local cost model
+
+Cost Model（<Term def="把algorithm operation counts与target system measured primitive costs结合，预测time、space或resource usage的简化模型。">Cost Model</Term>）：
+
+$$
+T
+\approx
+\sum_i N_i C_i,
+$$
+
+其中$N_i$是operation count，$C_i$是target environment的unit cost。
+
+<PP2PrimitiveCostLab />
+
+```cpp
+auto start = steady_clock::now();
+for (std::uint64_t i = 0; i < repetitions; ++i) {
+    result = primitive(result, input[i & mask]);
+}
+consume(result);
+auto elapsed = steady_clock::now() - start;
+report(elapsed / repetitions);
+```
+
+Measure integer arithmetic、memory access、allocation、disk seek、serialization、network round trip或screen operations时，要放大work、保留observable result、报告raw elapsed，并确认benchmark没有只测loop overhead。
+
+### Compare transfer strategies
+
+不要只比较link headline bandwidth。Transfer time近似：
+
+$$
+T_{\mathrm{transfer}}
+\approx
+T_{\mathrm{setup}}
++\frac{\text{bytes}}{\text{effective bandwidth}}
++T_{\mathrm{handling}}.
+$$
+
+因此装满removable media骑车可能对large bulk data超过high-latency link；tiny payload则setup占主导。估算要包含compression、parallel streams、pack/unpack、human handling与failure retry。
+
+### Big-O plus constants
+
+Big-O捕捉growth，cost model补constant。对$n=10^6$：
+
+- $O(n)$ with 5 ns/element约5 ms。
+- $O(n\log_2n)$ with 20 ns/comparison约0.4 s。
+- $O(n^2)$即使1 ns/pair也约1000 s。
+
+这种calculation可在implementation前发现growth wall，也能判断值得写prototype还是必须先改algorithm。
+
+## 7.3 Safety Factors
+
+Estimate output只和input quality一样可靠。Don Knuth曾发现disk sort实际时间是预测的twice；追查后发现系统bug使one-year-old disks一直只跑advertised speed的一半。修好measurement source后，sorting program与all disk-bound programs都恢复预期。
+
+若nominal design比limit好100倍，20% input error不影响decision；若只好20%，unknowns可能翻转结论。Safety Factor（<Term def="为input uncertainty、model omissions、variation与failure consequences预留的capacity-to-nominal ratio。">Safety Factor</Term>）把ignorance显式化：
+
+$$
+\text{design capacity}
+=
+\text{predicted peak}
+\times
+\text{safety factor}.
+$$
+
+<PP2SafetyFactorLab />
+
+原书借Brooklyn Bridge说明：John Roebling知道自己无法精确建模suspension bridge aerodynamic lift，于是对roadway truss采用约six-fold strength并增加diagonal stays。相反，Tacoma Narrows Bridge在1940 windstorm中失稳。
+
+Software analogues：
+
+- Real-time compute budget只用50% capacity，留给jitter与unknown peaks。
+- Storage预留growth、compaction与replication。
+- Reliability commitment与best observed number保持large gap。
+- Project schedule对integration uncertainty留buffer。
+- Queue utilization不能长期贴近100%，否则variance造成tail explosion。
+
+Safety factor不应掩盖known error。若disk实际只有标称一半，应修bug/更新input，不是永久再乘2。Margin用于unknown and variable，measurement用于knowable quantities。
+
+<Callout type="trap" title="加大安全系数可以弥补任何模型错误">
+错误units、遗漏dominant term或unstable arrival rate不会因乘6自动正确。先修model、测critical inputs，再按uncertainty与failure consequence选择margin；过大margin也会浪费cost并隐藏architecture问题。
+</Callout>
+
+## 7.4 Little's Law
+
+Little's Law（<Term def="对stable flow system，average inventory L等于average throughput or arrival rate lambda乘average holding time W。">Little’s Law</Term>）：
+
+$$
+L=\lambda W.
+$$
+
+它依赖long-run stable flow与consistent system boundary，不要求特定arrival/service distribution。三项units自动相消：
+
+$$
+\frac{\text{items}}{\text{time}}
+\times
+\frac{\text{time}}{\text{item}}
+=
+\text{items}.
+$$
+
+### Wine cellar
+
+Cellar平均150 cases，每年consume并purchase 25 cases，average holding time：
+
+$$
+W
+=
+\frac{L}{\lambda}
+=
+\frac{150\ \text{cases}}{25\ \text{cases/year}}
+=
+6\ \text{years}.
+$$
+
+<PP2LittleLawLab />
+
+### Nightclub queue
+
+Club inside约60 people，average stay 3 hours，则entry/exit throughput约20 people/hour。门外20-person queue意味着average wait约1 hour。无需知道individual arrival distribution，就可判断是否值得继续排队。
+
+<PP2QueueFeasibilityLab />
+
+### Interactive computer system
+
+若$n$ users在think time $Z$与system response time $R$之间cycle，throughput为$X$，closed system inventory固定$n$：
+
+$$
+n=X(Z+R)
+\quad\Longrightarrow\quad
+R=\frac{n}{X}-Z.
+$$
+
+这把concurrency、throughput与response time连接起来。若系统有100 users、throughput 10 requests/s、average think time 8 s，则$R=2$ s。
+
+### WIP and delivery
+
+Team平均有60 work items in progress，每周完成20，average cycle time约3 weeks。若throughput暂时不变，将WIP降至20，steady-state average cycle time目标约1 week。Little's Law描述averages，不保证every item，也不说明怎样改变throughput；它是consistency relation，不是完整queueing model。
+
+使用前检查：
+
+- System boundary对$L$与$W$一致。
+- Arrival与departure长期flow-balanced。
+- Measurement window足够长。
+- No unbounded backlog growth。
+- Units一致。
+- 区分queue-only与system-total inventory/time。
+
+## 7.5 Principles
+
+1. Ask a precise feasibility question before calculating。
+2. Decompose intofew quantities with known units。
+3. Two independent answers are better than one。
+4. Use dimension、bounds、inverse和common-sense checks。
+5. Carry ranges and orders of magnitude，avoid false precision。
+6. Maintain local background facts and measure key primitives。
+7. Apply safety factors in proportion to uncertainty and consequence。
+8. Use Little's Law to connect inventory、flow和time in stable systems。
+9. Estimate after architecture design but before implementation；repeat before optimization。
+10. Let calculation identify the next highest-value experiment。
+
+## 7.6 Quick Calculations in Everyday Life
+
+Everyday problems train the same skill：
+
+- 一枚quarter平均寿命30 years是否合理？随机口袋样本的average age应约half lifetime under roughly uniform ages。
+- 每10 weeks发行one state quarter、每次750 million，annual production约4 billion；除以population得到per-person inventory sanity check。
+- 一名salesperson一年开100,000 miles意味着每天约274 miles，检查work schedule是否可能。
+- 房间里people的weight、volume与air volume是否同量级。
+- Americans annual soft-drink spending可由population × servings/day × price估。
+- Reading time由words/book ÷ words/minute。
+- Media transfer由capacity ÷ throughput，再与human transport比较。
+
+这些题不是为了memorize answers，而是扩充estimation vocabulary。Estimation Quiz后要记录哪类quantities误差最大：population、unit conversion、physical dimensions还是system primitive costs。
+
+## 7.7 Estimate certificate
+
+<PP2EstimateCertificateLab />
+
+用于design decision的estimate至少包含：
+
+- **Question**：要判定feasible、capacity、cost还是break-even。
+- **Boundary**：System中包含什么、不包含什么。
+- **Decomposition**：Equation和dominant factors。
+- **Inputs**：Low/nominal/high、source与confidence。
+- **Units**：Every number带dimension并完整cancel。
+- **Cross-check**：Independent method、bound或inverse。
+- **Margin**：Safety factor与failure consequence。
+- **Decision**：Pass、fail或measure-next。
+- **Experiment**：哪一个uncertain factor最值得实际测。
+
+## 7.8 逐步运行路线
+
+<Stepper>
+  <Step title="先按geometry估Mississippi flow" description="把width、depth和daily distance相乘，并让units直接导出volume per day。">
+    <PP2MississippiFlowLab />
+    <PP2DimensionCheckLab />
+  </Step>
+  <Step title="用independent water balance交叉验证" description="改从basin area与annual runoff出发，比较两个答案的error factor。">
+    <PP2DualEstimateLab />
+    <PP2RuleOf72Lab />
+  </Step>
+  <Step title="建立computer performance cost model" description="估node footprint、测primitive cost，并在实现前判断memory与runtime feasibility。">
+    <PP2NodeMemoryLab />
+    <PP2PrimitiveCostLab />
+  </Step>
+  <Step title="让margin覆盖真实unknowns" description="用Olympics capacity gate拒绝不可能design，再按knowledge quality选择safety factor。">
+    <PP2OlympicsFeasibilityLab />
+    <PP2SafetyFactorLab />
+  </Step>
+  <Step title="用Little's Law连接库存、流量和时间" description="从wine inventory与queue length推导holding/wait time，并签发estimate certificate。">
+    <PP2LittleLawLab />
+    <PP2QueueFeasibilityLab />
+    <PP2EstimateCertificateLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Back-of-the-Envelope Estimate在implementation前判断order-of-magnitude feasibility。
+- Mississippi geometry与basin runoff展示two independent answers。
+- Olympics case说明60-second interval不能承载120 seconds of demanded work。
+- Dimensional Analysis检查equation structure与unit cancellation。
+- Rule of 72快速估计moderate exponential growth的doubling time。
+- Estimation Quiz校准background facts与personal error factors。
+- Performance Estimates结合operation counts与measured primitive costs。
+- Node memory必须含pointer width、alignment、allocator metadata与free-memory budget。
+- Safety Factors补偿uncertainty和variation，但不能修复known bad model。
+- Little's Law用$L=\lambda W$连接stable inventory、throughput与holding time。
+- Useful estimate最终要导向明确decision或next measurement。
+
+<Exercises>
+
+1. 用river geometry与basin rainfall两种方法估计你所在地区一条河的daily discharge。保留units、low/high range，并说明two paths是否真正independent。
+2. 一个service每request分配12个objects，每个payload 40 bytes、allocator overhead 16 bytes、alignment后64 bytes；peak有500,000 requests in flight。估memory，加入2.5倍safety factor，并设计measurement。
+3. 一个stable API平均有1,200 requests in system，throughput为400 requests/s。用Little's Law求average response time；若目标为1 second且throughput不变，WIP必须降到多少？说明为什么p99不能由此公式推出。
+4. 为launch-day system做feasibility estimate：arrival 50,000 requests/min，每request 6 ms CPU，8 workers，预测误差factor 2。判断capacity并提出problem/system/measurement三类action。
+
+<Answer>
+
+Geometry path使用river width × average depth × velocity；rainfall path使用drainage basin area × annual runoff ÷ days/year。每个input给low/nominal/high并做unit cancellation到volume/day。两条路径只有在rainfall/runoff inputs不由同一river gauge反推、也不共享depth/velocity assumptions时才独立。若answers在factor 2到3内，可提高confidence；若差one order，优先测dominant uncertain quantity。
+
+</Answer>
+
+<Answer>
+
+题目已给alignment后64 bytes，12 objects/request即768 bytes/request。500,000 in-flight requests约384,000,000 bytes，即366 MiB；2.5 safety factor约916 MiB。还需加request/container、indexes和fragmentation。Measurement在production allocator与representative lifetime下逐级创建objects，记录RSS、allocated bytes、fragmentation与peak，确认release build和target architecture的pointer/alignment。
+
+</Answer>
+
+<Answer>
+
+$W=L/\lambda=1200/400=3$ seconds。若throughput仍为400/s且目标average response 1 s，则consistent average inventory为$L=400\times1=400$。Little's Law只约束long-run averages，不描述distribution、burst、service variance或queue discipline，因此不能从average直接推出p99；需tail measurements或queueing model。
+
+</Answer>
+
+<Answer>
+
+Demanded CPU为`50000*6 ms=300,000 ms=300 s` per minute；8 workers提供480 CPU-seconds/min，nominal utilization 62.5%，表面可行。若关键inputs可能错factor 2，worst demand 600 s，超过capacity，certificate不通过。Problem action减少unneeded requests或coalesce；system actionbatch/cache并增加autoscaling capacity；measurement action在production-like concurrency测CPU/request、arrival burst和tail，并据此重选margin。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Back-of-the-Envelope Estimate">用少量quantities、units和近似快速判断设计量级与可行性。</GlossaryItem>
+  <GlossaryItem term="Dimensional Analysis">跟踪units并检查sum、product与output dimensions是否一致的方法。</GlossaryItem>
+  <GlossaryItem term="Rule of 72">用72除以百分比增长率估计doubling periods的rule of thumb。</GlossaryItem>
+  <GlossaryItem term="Cost Model">用operation counts乘target-system unit costs预测time或space的模型。</GlossaryItem>
+  <GlossaryItem term="Safety Factor">为uncertainty、variation与failure consequence预留的capacity ratio。</GlossaryItem>
+  <GlossaryItem term="Little’s Law">Stable system中average inventory等于flow rate乘average holding time的关系。</GlossaryItem>
+  <GlossaryItem term="Estimation Quiz">用reference answers校准个人quantity guesses与error factors的练习。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Programming Pearls, Second Edition · Column 7 The Back of the Envelope"
+  href="https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+  author="Jon Bentley"
+  license="本章按Pearson官方第二版目录与官方样章的Mississippi、Olympics、Basic Skills、Performance Estimates、Safety Factors、Little's Law及Quick Calculations主线重构；现代capacity、memory、WIP examples与estimate certificate为教学化扩展。"
+/>

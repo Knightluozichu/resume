@@ -64,3 +64,64 @@ export function DogLearningMapDiagram() {
     </figure>
   );
 }
+
+const API_BASELINES = [
+  {
+    api: "OpenGL 4.6",
+    runtime: "桌面驱动与窗口系统",
+    shader: "桌面 GLSL",
+    constraint: "能力受版本、profile 与扩展共同约束",
+  },
+  {
+    api: "OpenGL ES 3.2",
+    runtime: "移动与嵌入式运行时",
+    shader: "GLSL ES",
+    constraint: "面向功耗、带宽与设备差异收紧能力",
+  },
+  {
+    api: "WebGL 2.0",
+    runtime: "浏览器安全上下文",
+    shader: "GLSL ES 3.00",
+    constraint: "以 ES 3.0 为基线，并增加安全与可移植性限制",
+  },
+] as const;
+
+export function DogApiBaselineDiagram() {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4">
+        <div
+          role="img"
+          aria-label="OpenGL、OpenGL ES 与 WebGL 的规范基线和运行环境对照"
+          className="grid gap-3 lg:grid-cols-3"
+        >
+          {API_BASELINES.map((item) => (
+            <section
+              key={item.api}
+              className="grid min-h-48 grid-rows-[auto_1fr] rounded-control border border-border bg-bg/40 p-4"
+            >
+              <h3 className="text-sm font-bold text-accent">{item.api}</h3>
+              <dl className="mt-3 grid content-start gap-2 text-xs leading-5">
+                <div>
+                  <dt className="font-semibold text-primary">运行位置</dt>
+                  <dd className="text-secondary">{item.runtime}</dd>
+                </div>
+                <div>
+                  <dt className="font-semibold text-primary">着色语言</dt>
+                  <dd className="text-secondary">{item.shader}</dd>
+                </div>
+                <div>
+                  <dt className="font-semibold text-primary">能力边界</dt>
+                  <dd className="text-secondary">{item.constraint}</dd>
+                </div>
+              </dl>
+            </section>
+          ))}
+        </div>
+      </div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">
+        三套 API 共享管线模型，但运行环境、着色器版本和能力边界不能互相等同
+      </figcaption>
+    </figure>
+  );
+}

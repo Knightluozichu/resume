@@ -1,105 +1,286 @@
 ---
-title: 从上到下打印二叉树
+title: "面试题32（一）：不分行从上到下打印二叉树"
 type: C
-section: 树
-order: 5
-description: 使用队列进行层序遍历，按从上到下、从左到右的顺序输出二叉树节点。
-demo: false
-math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviews
+section: "第4章 解决面试题的思路"
+order: 34
+description: "用尾入头出的节点队列维持最浅层优先与同层左到右顺序，复原作者不分行输出和五种官方树形边界。"
+demo: true
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/32_01_PrintTreeFromTopToBottom/PrintTreeFromTopToBottom.cpp"
 draft: false
 ---
 
+import { LevelOrderQueueDiagram, FifoLayerInvariantMap, LevelOrderWidthDiagram, PrintTreeLevelOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/print-tree-from-top-to-bottom";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
 <Objectives>
 
-- 理解层序遍历为什么天然需要队列，而不是栈。
-- 掌握“出队访问、左子入队、右子入队”的 BFS 模板。
-- 能处理空树、单节点树、偏斜树等边界。
-- 能说明时间复杂度 $O(N)$、空间复杂度 $O(W)$，其中 `W` 是树的最大宽度。
+- 能解释先进先出队列如何保证先浅后深和同层左到右
+- 能计算完整树、偏斜树遍历时每一步队列内容与输出
+- 能实现作者deque输出式版本及返回序列的现代版本
+- 能分析空树、共享节点、环、队列峰值和流式输出边界
+- 能设计覆盖作者五组完整树、左右链、单点与空树测试
 
 </Objectives>
 
-## 核心思路
+## 从“为什么不能只递归左右子树”开始
 
-从上到下打印二叉树，本质是 BFS（广度优先搜索）。队列的先进先出特性正好对应“先进入当前层的节点先被访问”。
+先预测：根10的左子树以6为根，右子树以14为根。若按普通前序递归根、左、右，输出会先深入4、8，再回到14；结果10、6、4、8、14、12、16并不是题目要求的10、6、14、4、8、12、16。
 
-流程固定为：
+“**从上到下打印二叉树**”要求深度小的节点先输出；同一层还要从左到右。它就是<Term def="按节点到根的边数从小到大访问，同一深度按规定顺序处理的遍历。">层序遍历</Term>。递归调用栈天然偏向深度优先，而<Term def="从一端加入、另一端取出，使先进入的节点先被处理的容器。">队列</Term>能保存当前层尚未访问节点和下一层刚发现的节点。
 
-1. 根节点入队。
-2. 队列非空时，弹出队头节点并输出。
-3. 如果它有左孩子，左孩子入队。
-4. 如果它有右孩子，右孩子入队。
+<LevelOrderQueueDiagram />
 
-这样队列中始终保持“尚未访问的最早节点”，输出顺序自然就是从上到下、从左到右。
+作者使用std::deque作为队列：根从尾部push_back；每次从头部front并pop_front；再把左、右孩子依次push_back。deque是具体容器，队列是这里使用的行为抽象。
 
-## 代码对照
+## 先进先出怎样扩展局部左右顺序
 
-<CodeTabs>
-  <Tab label="C++">
+把<Term def="先进入容器的节点先离开，英文FIFO，是层序遍历保持发现顺序的核心规则。">先入先出</Term>简称FIFO。父节点总在孩子之前入队，所以父层先于子层出队；同一父节点先放左孩子再放右孩子，所以左孩子先出队。
+
+更关键的是不同父节点之间：同层左侧父节点更早出队，它的孩子也更早加入队尾；右侧父节点的孩子随后才加入。由此下一层的所有节点按“父节点从左到右，每个父节点先左后右”排列，恰好得到整层从左到右。
+
+<FifoLayerInvariantMap />
+
+队列中可能同时存在当前层尾部和下一层头部，但不影响不分行输出。题32（二）才需要知道层边界；本问只要每次取全局最早发现的节点，连续打印即可。
+
+## 忠实还原作者deque实现
+
+作者函数接收BinaryTreeNode指针，空根直接返回。非空时只把真实节点入队，不放nullptr占位；输出用printf写在一行，每个值后有空格。
+
+```cpp
+#include <cstdio>
+#include <deque>
+
+struct BinaryTreeNode {
+    int m_nValue;
+    BinaryTreeNode* m_pLeft;
+    BinaryTreeNode* m_pRight;
+};
+
+void PrintFromTopToBottom(BinaryTreeNode* pRoot) {
+    if (pRoot == nullptr) {
+        return;
+    }
+
+    std::deque<BinaryTreeNode*> dequeTreeNode;
+    dequeTreeNode.push_back(pRoot);
+
+    while (!dequeTreeNode.empty()) {
+        BinaryTreeNode* pNode = dequeTreeNode.front();
+        dequeTreeNode.pop_front();
+
+        std::printf("%d ", pNode->m_nValue);
+
+        if (pNode->m_pLeft != nullptr) {
+            dequeTreeNode.push_back(pNode->m_pLeft);
+        }
+        if (pNode->m_pRight != nullptr) {
+            dequeTreeNode.push_back(pNode->m_pRight);
+        }
+    }
+}
+```
+
+先输出再入孩子和先入孩子再输出，在没有回调副作用时值序列相同；但忠实源码是先pop、printf，再按左、右入队。若print回调可能抛异常，前者会让当前节点已从队列移除而孩子尚未发现，恢复策略需要另行设计。
+
+把左右入队顺序颠倒仍是层序，却会让每层从右到左。只用一个孩子的偏斜树无法发现这个错误，必须有同时具备左右孩子的测试。
+
+<Callout type="trap" title="用栈替代队列并以为只需调整左右压入顺序">
+栈是后进先出，会优先深入刚加入的孩子，得到深度优先序列。改变左右顺序只能选择先走左子树还是右子树，不能保证整个第二层都在第三层之前。
+</Callout>
+
+## 返回序列与泛型访问版本
+
+工程代码通常把遍历与输出分离，返回值序列或接收访问回调。下面用std::queue表达行为，让底层默认deque负责存储：
+
 ```cpp
 #include <queue>
 #include <vector>
 
 struct TreeNode {
-    int val;
-    TreeNode* left;
-    TreeNode* right;
+    int value;
+    TreeNode* left = nullptr;
+    TreeNode* right = nullptr;
 };
 
-std::vector<int> printFromTopToBottom(TreeNode* root) {
-    std::vector<int> result;
-    if (root == nullptr) return result;
-
-    std::queue<TreeNode*> q;
-    q.push(root);
-
-    while (!q.empty()) {
-        TreeNode* node = q.front();
-        q.pop();
-        result.push_back(node->val);
-
-        if (node->left != nullptr) q.push(node->left);
-        if (node->right != nullptr) q.push(node->right);
+std::vector<int> levelOrder(const TreeNode* root) {
+    if (root == nullptr) {
+        return {};
     }
 
+    std::vector<int> result;
+    std::queue<const TreeNode*> pending;
+    pending.push(root);
+
+    while (!pending.empty()) {
+        const TreeNode* node = pending.front();
+        pending.pop();
+        result.push_back(node->value);
+
+        if (node->left != nullptr) pending.push(node->left);
+        if (node->right != nullptr) pending.push(node->right);
+    }
     return result;
 }
 ```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-interface TreeNode {
-  val: number;
-  left: TreeNode | null;
-  right: TreeNode | null;
-}
 
-function levelOrder(root: TreeNode | null): number[] {
-  if (!root) return [];
+const指针声明遍历不修改节点。返回vector占O(n)结果空间；若直接流式访问，除输出外只需队列。回调版可在返回false时提前停止，适合查找“第一个满足条件的最浅节点”；但提前停止得到的是层序前缀，调用方要知道遍历未完成。
+
+TypeScript若用数组模拟队列，不应每次shift删除首元素，因为实现可能移动后续元素。使用head索引只前移，尾部push，整次遍历保持线性：
+
+```typescript
+type Node = {
+  value: number;
+  left: Node | null;
+  right: Node | null;
+};
+
+function levelOrder(root: Node | null): number[] {
+  if (root === null) return [];
 
   const result: number[] = [];
-  const queue: TreeNode[] = [root];
+  const queue: Node[] = [root];
   let head = 0;
 
   while (head < queue.length) {
     const node = queue[head++];
-    result.push(node.val);
-
-    if (node.left) queue.push(node.left);
-    if (node.right) queue.push(node.right);
+    result.push(node.value);
+    if (node.left !== null) queue.push(node.left);
+    if (node.right !== null) queue.push(node.right);
   }
-
   return result;
 }
 ```
-  </Tab>
-</CodeTabs>
 
-<Callout type="tip">
-  TypeScript 里不要频繁使用 `Array.shift()` 做队列出队。`shift()` 会移动数组元素，可能退化为 $O(N)$。用 `head` 指针前移更稳定。
+遍历结束后queue数组仍持有全部节点引用，直到函数返回。超大树或长生命周期生成器可使用真正的双端队列或环形缓冲区，及时释放已消费槽位，避免head前方的引用延长节点生命周期。
+
+## 时间与最大宽度空间界
+
+在合法二叉树中，每个节点恰好出队一次；每条父子边最多检查一次，时间O(n)。结果容器另占O(n)，作者打印版本不保存结果。
+
+辅助队列峰值与<Term def="任一深度中节点数量的最大值，也是普通树层序遍历前沿规模的主要上界。">最大宽度</Term>W同阶，空间O(W)。偏斜树每层只有一个节点，W为1；完全二叉树最后一层约占全部节点一半，最坏W为O(n)。
+
+<LevelOrderWidthDiagram />
+
+严格说队列在处理某层中途会同时保存本层剩余节点与下一层已入队孩子。把这些已发现但未访问的节点称为<Term def="位于已访问区域边界、已经发现但仍等待出队的一组节点。">层前沿</Term>。其数量可能超过单个层宽，但对二叉树仍受常数倍W约束，所以渐进空间O(W)。只写O(h)是把它与深度优先递归栈混淆。
+
+设当前层原有a个节点，已经处理k个；队列中还剩a减k个本层节点，外加这k个节点产生的至多2k个孩子，总数至多a加k，也就是不超过2a。下一层宽度本身又不超过2a，因此处理过程中的峰值与相邻两层较大宽度同阶，不会因为“同时跨层”变成O(nh)。这个计数给出了O(W)比直觉更精确的依据。
+
+容器实现也影响实际内存。std::deque弹出头部后可逐步释放内部块，但标准不承诺每次pop都立刻归还操作系统；std::queue只是适配接口。若节点数量巨大且遍历长期运行，可以使用分块队列、容量指标和取消信号。对返回vector的版本，队列释放后结果仍保存n个值，所以报告内存时应分别列出辅助空间O(W)与输出空间O(n)。
+
+若只需要输出前k个节点，提前停止能把时间限制为O(k)，但队列可能已经保存它们的孩子；停止后局部容器析构会释放这些指针槽位，不会销毁树节点。若队列存放拥有所有权的智能指针，复制、移动与树所有权模型必须重新设计，普通层序算法不应意外转移节点所有权。
+
+## 作者五组测试怎样覆盖树形
+
+Test1是三层完整树：根10，第二层6与14，第三层4、8、12、16，输出10、6、14、4、8、12、16。它锁定跨父节点的同层左右顺序。
+
+Test2是全左链5、4、3、2、1；Test3是全右链1、2、3、4、5。两者都每层一个节点，验证缺失孩子不会入队，也不会访问空指针。Test4单节点1，Test5空树无输出。作者总计五组。
+
+<PrintTreeLevelOfficialCaseLab />
+
+原测试先调用公共PrintTree显示结构，再打印“The nodes from top to bottom...”并调用被测函数，没有自动比较预期数组。现代测试应把输出收集为vector后逐项断言：
+
+```cpp
+#include <cassert>
+#include <vector>
+
+void testLevelOrder() {
+    TreeNode n4{4}, n8{8}, n12{12}, n16{16};
+    TreeNode n6{6, &n4, &n8};
+    TreeNode n14{14, &n12, &n16};
+    TreeNode n10{10, &n6, &n14};
+
+    assert(levelOrder(&n10) ==
+           (std::vector<int>{10, 6, 14, 4, 8, 12, 16}));
+
+    TreeNode l1{1}, l2{2, &l1, nullptr};
+    TreeNode l3{3, &l2, nullptr};
+    TreeNode l4{4, &l3, nullptr};
+    TreeNode l5{5, &l4, nullptr};
+    assert(levelOrder(&l5) ==
+           (std::vector<int>{5, 4, 3, 2, 1}));
+
+    TreeNode only{1};
+    assert(levelOrder(&only) == std::vector<int>{1});
+    assert(levelOrder(nullptr).empty());
+}
+```
+
+还应单独构造左右值不同的两孩子节点，以防实现把入队顺序反了；Test1已经具备这一能力。若值可重复，只比较值序列无法确认访问了哪个节点，可收集节点地址或唯一ID。
+
+<Callout type="trap" title="只用单链和单节点测试左右顺序">
+偏斜树每层只有一个非空孩子，无论先检查left还是right，输出都一样。必须使用同一父节点同时有左右孩子、且不同父节点都有孩子的树，才能验证整层从左到右。
 </Callout>
 
+## 树契约、共享节点与环
+
+算法假设输入是有限无环二叉树，每个非根节点只有一个父节点。若两个父节点共享同一个孩子，函数会把该地址入队两次并输出两次；若孩子指回祖先，会无限循环。对一般图执行广度优先搜索必须增加visited集合，时间和空间都包含去重成本。
+
+不应无条件给树版添加visited：它会额外占O(n)空间，并可能掩盖“输入本应是树却发生共享/成环”的数据错误。接口可在调试模式校验树形，在可信树结构上维持最简队列。
+
+并发修改同样破坏遍历契约。另一个线程若删除队列中的节点会产生悬空指针；若新增孩子，输出可能混合两个时刻的结构。使用不可变节点、读锁或拥有生命周期的快照。只把指针声明为const不等于对象在其他线程中不可变。
+
+输出式函数还要处理I/O失败。printf示例忽略错误；文件、网络或UI回调失败时，应停止遍历并传播错误，不能继续消耗队列后只报告最后一次状态。返回vector版把计算和I/O分开，更容易获得全有或全无的结果。
+
+## 正确性证明
+
+循环不变量是：队列从头到尾按深度非递减排列；同一深度内按树的从左到右顺序排列；已出队节点已经按目标顺序输出，未入队节点只能是队列中某节点的后代。
+
+根入队时不变量成立。每次取队头得到当前最浅、同层最左的未访问节点；它的左、右孩子深度都加1，并在所有已发现同层或更浅节点之后加入队尾。父节点按左到右出队，孩子也按左后右加入，因此新队列仍满足不变量。
+
+有限树中每次循环永久移除一个节点，每个孩子只由唯一父节点加入一次，最终队列为空。由不变量，输出恰好包含每个节点一次，并按从上到下、同层从左到右排列。
+
+<Stepper>
+  <Step title="先把根放入队尾"><LevelOrderQueueDiagram />队头是下一访问节点，孩子始终在父节点处理后进入队尾。</Step>
+  <Step title="维持最浅层优先不变量"><FifoLayerInvariantMap />当前层残余在下一层孩子之前，同层内部延续父节点与左右顺序。</Step>
+  <Step title="按树宽评估队列峰值"><LevelOrderWidthDiagram />偏斜树只需一个槽位，宽树前沿可增长到O(n)。</Step>
+  <Step title="跑完五种官方树形"><PrintTreeLevelOfficialCaseLab />完整树校验左右顺序，双偏斜、单点和空树锁定边界。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 不分行从上到下打印二叉树就是层序遍历。
+2. 队列先入先出，保证父层先于子层、同层从左到右。
+3. 作者用deque尾部入队、头部出队，并按左、右孩子顺序加入。
+4. 空树直接返回，nullptr不作为占位元素进入队列。
+5. 每个节点入队出队一次，时间O(n)，辅助空间O(W)。
+6. 返回序列便于测试，流式输出节省结果空间但要处理失败传播。
+7. 五组官方树覆盖完整结构、左右偏斜、单节点与空树。
+8. 一般图或成环结构需要visited，普通树契约下不应重复访问。
+
+<Exercises>
+
+**问题 1：为什么先左后右入队能保证不同父节点的孩子也从左到右？**
+
+<Answer>同层左侧父节点先出队，所以它的两个孩子先进入队尾；右侧父节点随后出队，其孩子排在后面。FIFO保留所有入队先后，下一层自然按父节点从左到右、每个父节点先左后右排列。</Answer>
+
+**问题 2：队列中为什么可以同时出现两层节点？**
+
+<Answer>处理当前层前部节点时，它的孩子已进入队尾，而当前层后部节点仍在队头区域。因为所有当前层节点都早于任何孩子入队，它们仍会先出队，不会破坏深度顺序。</Answer>
+
+**问题 3：完整树与偏斜树的辅助空间分别如何变化？**
+
+<Answer>偏斜树每次出一个节点至多入一个孩子，队列峰值为1。完整树底层宽度可约占节点总数一半，队列峰值与最大宽度W同阶，最坏O(n)。</Answer>
+
+**问题 4：若输入可能成环，最小改动是什么？**
+
+<Answer>维护已访问地址集合；孩子首次出现才入队。这样转为一般图的广度优先遍历，避免重复与无限循环，但会额外使用O(n)去重空间，并改变原题的树契约。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="层序遍历">按深度递增、同层按规定方向访问树节点的遍历。</GlossaryItem>
+  <GlossaryItem term="队列">支持一端加入、另一端取出的FIFO容器抽象。</GlossaryItem>
+  <GlossaryItem term="先入先出">先进入队列的节点先被处理，英文缩写FIFO。</GlossaryItem>
+  <GlossaryItem term="最大宽度">二叉树任一层节点数量的最大值W。</GlossaryItem>
+  <GlossaryItem term="层前沿">已经发现但尚未访问、集中在最浅若干层边界的队列节点。</GlossaryItem>
+</Glossary>
+
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题32（一）"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/32_01_PrintTreeFromTopToBottom/PrintTreeFromTopToBottom.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

@@ -1,0 +1,300 @@
+---
+title: 第 10 章：指针、STL 与纹理管理
+type: A
+section: Zombie Arena 项目
+order: 10
+description: 对齐官方第 3 版第 10 章：掌握指针与生命周期、STL 容器和失效规则，构建可增长僵尸群并建立稳定纹理借用协议。
+demo: false
+math: false
+sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+draft: false
+---
+
+import {
+  BcgpPointerLifetimeMap,
+  BcgpTextureBorrowMap,
+  BcgpZombieVectorMap,
+} from "@/components/mdx/beginning-cpp-game-programming/diagrams/pointers-stl";
+
+<Objectives>
+
+- 能解释指针的地址、空值、解引用、非拥有语义和容器操作导致的失效，判断何时改用值或智能指针
+- 能实现用 `std::vector` 构造、更新和安全删除僵尸群，并验证 reserve、迭代器和引用的失效边界
+- 能设计一份纹理只加载一次、Sprite 借用地址稳定、热重载与销毁顺序明确的纹理管理协议
+
+</Objectives>
+
+## 从“一千只僵尸是否要复制一千张纹理”开始
+
+Zombie Arena 要在运行期生成数量变化的敌人。第 10 章用
+
+<Term def="保存对象或函数地址的值类型，可为空且可改指向；它本身不说明所有权，也不延长目标生命周期。">
+  指针
+</Term>
+连接对象，用
+<Term def="C++ 标准库中容器、算法、迭代器和其他通用组件的集合。">
+  标准模板库
+</Term>
+管理可增长集合，并建立多只精灵共享一份 Texture 的资源协议。
+
+## 地址、空指针与解引用
+
+<Term def="对象在其存储期内占据的内存位置，可用取地址运算符获得并保存到兼容指针。">
+  对象地址
+</Term>
+只有在对象存活且没有因移动、删除或容器重分配改变位置时才可使用。`Zombie* p =
+&zombie` 不复制 Zombie，也不让它活得更久。
+
+```cpp
+Zombie zombie{spawnPosition};
+Zombie* target{&zombie};
+
+if (target != nullptr)
+    target->update(dt, player.position());
+```
+
+<Term def="指针不指向任何对象的显式值，现代 C++ 写作 nullptr；它可检查但不可解引用。">
+  空指针
+</Term>
+适合表达“当前没有目标”。非空仍不足以证明有效：目标可能已销毁，留下数值非零的悬空指针。
+
+<Term def="通过指针访问其目标对象或成员的操作；前置条件是指针指向有效且类型兼容的存活对象。">
+  解引用
+</Term>
+失败不是可靠异常，而通常是未定义行为。函数参数若必定需要对象，引用比可空指针更直接；若允许没有目标，指针配合明确检查合适。
+
+<BcgpPointerLifetimeMap />
+
+<Callout type="trap">
+  **现象**：目标僵尸删除后锁定系统偶尔崩溃，指针值看起来仍非零。**原因**：非零只说明地址位模式没有清空，不说明对象仍在生命周期内。**修法**：由稳定
+  id 每帧重新查询、用受控句柄，或让拥有者在删除事件中清除观察引用；不能只检查
+  nullptr。
+</Callout>
+
+## 所有权：原始指针不等于 delete 责任
+
+<Term def="决定谁负责让对象存活、何时销毁，以及失败和移动时如何转移责任的协议。">
+  所有权
+</Term>
+最好由类型表达。`std::vector<Zombie>` 直接拥有值对象；`std::unique_ptr<Zombie>` 表达独占动态所有权；`std::shared_ptr` 表达共享所有权但带来引用环和开销，不能因“不想思考生命周期”就默认使用。
+
+```cpp
+std::vector<std::unique_ptr<Zombie>> polymorphicHorde;
+polymorphicHorde.push_back(std::make_unique<FastZombie>(spawn));
+```
+
+当前 Zombie 若是同一具体类型，优先 `vector<Zombie>`：连续存储、所有权简单、少一次间接访问。只有需要运行时多态且对象身份必须稳定时，才考虑 `unique_ptr` 容器。不要手写 `new[]/delete[]` 管群体。
+
+<Term def="独占拥有动态对象的 RAII 智能指针，离开作用域自动 delete，所有权只能移动不能复制。">
+  std::unique_ptr
+</Term>
+解决释放责任，不自动解决指向对象的所有观察者失效。
+
+## vector：大小、容量与重分配
+
+<Term def="标准库动态连续序列容器，拥有元素并分别维护当前元素数 size 与已分配槽位 capacity。">
+  std::vector
+</Term>
+适合一批同类型 Zombie。`reserve(n)` 只预留容量，不创建元素；访问 `horde[0]` 前仍需 `size()>0`。
+
+```cpp
+std::vector<Zombie> horde;
+horde.reserve(maximumZombies);
+
+for (std::size_t index{0}; index < initialCount; ++index)
+    horde.emplace_back(randomSpawn(randomEngine));
+
+for (Zombie& zombie : horde)
+    zombie.update(dt, player.position());
+```
+
+<Term def="vector 容量不足时分配更大连续区域并移动或复制元素的过程，会使指向旧元素的指针、引用和迭代器失效。">
+  重分配
+</Term>
+是最常见生命周期陷阱。reserve
+足够容量可推迟重分配，但后续超过容量仍会发生，不能把元素地址当永久 id。
+
+<BcgpZombieVectorMap />
+
+## 迭代器与删除阶段
+
+<Term def="抽象容器位置并支持遍历的对象；其有效性受容器具体修改操作的失效规则约束。">
+  迭代器
+</Term>
+删除 vector
+元素会移动后续元素，使被删位置及之后的迭代器、引用和指针失效。不要在范围 for
+内直接 erase 当前元素。
+
+```cpp
+#include <algorithm>
+
+std::erase_if(horde, [](const Zombie& zombie) {
+    return !zombie.alive();
+});
+```
+
+C++20 `erase_if` 清楚表达过滤。更新阶段可先标记死亡，所有碰撞和事件处理完成后统一删除；删除后不再使用本帧保存的元素地址。若其它系统需要长期身份，给 Zombie 分配稳定 id 并通过索引表查询，而不是暴露 vector 地址。
+
+算法中的 lambda 按引用捕获外部状态时也受生命周期约束。只在同步调用期使用通常安全；存进异步任务前必须明确捕获副本或所有权。
+
+## 指针、引用和迭代器失效表
+
+`push_back` 未重分配时现有元素地址保持，发生重分配时全部失效；`erase` 使删除点及之后失效；`clear` 使所有元素引用失效；vector 销毁后全部失效。`reserve` 若增大 capacity 本身就可能重分配。
+
+这些规则属于容器契约，不应靠一次调试地址“看起来没变”判断。启用标准库调试模式和 AddressSanitizer 可发现部分错误，但设计上应缩短观察指针生命周期：在一次循环内取得、使用，容器修改前丢弃。
+
+<Term def="对象已销毁或地址失效后仍保留的指针或引用，任何解引用都会产生未定义行为。">
+  悬空指针
+</Term>
+即使内存尚未被覆盖也不合法。
+
+## 纹理管理：加载一次，稳定借用
+
+<Term def="集中加载、复用和释放 Texture，使多个 Sprite 共享资源并保持引用地址稳定的生命周期协议。">
+  纹理管理
+</Term>
+先解决原则，第 11 章再封装
+TextureHolder。生成一千只僵尸时，不应一千次从磁盘解码并上传相同纹理；所有 Zombie
+Sprite 可绑定同一个 Texture。
+
+```cpp
+sf::Texture zombieTexture;
+if (!zombieTexture.loadFromFile("assets/graphics/zombie.png"))
+    throw std::runtime_error{"failed to load zombie texture"};
+
+std::vector<Zombie> horde;
+horde.reserve(maximumZombies);
+for (std::size_t index{0}; index < count; ++index)
+    horde.emplace_back(zombieTexture, randomSpawn(randomEngine));
+```
+
+<Term def="多个 Sprite 保存同一个 Texture 关联，各自拥有变换和游戏状态但不复制图像资源。">
+  纹理共享
+</Term>
+要求 Texture 比所有 Sprite 活得更久。声明顺序可让 texture 先构造、horde
+后构造，从而销毁时 horde 先、texture 后；更大项目由资源库显式控制。
+
+<BcgpTextureBorrowMap />
+
+## 资源容器的地址稳定性
+
+不能随便用 `vector<Texture>` 再保存元素引用：扩容会移动 Texture 对象，Sprite 仍指旧地址。节点式 `std::map<std::string, sf::Texture>` 的元素引用在插入其他项时保持稳定，删除对应项仍会失效。`unordered_map` 重哈希使迭代器失效，但标准保证元素引用和指针不因 rehash 失效；擦除目标仍失效。
+
+```cpp
+std::map<std::string, sf::Texture> textures;
+auto [it, inserted] = textures.try_emplace("zombie");
+if (inserted && !it->second.loadFromFile("assets/graphics/zombie.png")) {
+    textures.erase(it);
+    throw std::runtime_error{"zombie texture load failed"};
+}
+const sf::Texture& zombieTexture{it->second};
+```
+
+加载失败必须回滚空条目，否则下一次查询误以为资源已缓存。返回 const 引用只读借用，资源库禁止在精灵仍存活时 erase。第 11 章会把这些不变量封装成 TextureHolder。
+
+<Callout type="trap">
+  **现象**：增加新纹理后旧精灵突然白块。**原因**：纹理存于
+  vector，扩容移动对象，Sprite 保存的旧 Texture
+  地址失效。**修法**：选择地址稳定存储或间接拥有对象，禁止资源使用期删除，并测试加载新资源后旧
+  Sprite 仍绑定有效对象。
+</Callout>
+
+## 热重载与关闭顺序
+
+开发期热重载不能先销毁旧 Texture 再构造新对象。若 SFML 支持在同一 Texture 对象上重新 `loadFromFile`，地址保持但内容更新仍要处理失败：先加载候选，成功后 move-assign 是否保持 Sprite 关联要按库语义验证；更稳妥是资源句柄层通知 Sprite 重新绑定。
+
+关闭顺序从借用者到拥有者：先停止游戏更新，销毁 Zombie/Sprite，再销毁纹理库和窗口上下文。音频、字体也遵循类似图。进程退出看似会回收内存，但明确顺序能避免析构期间访问已销毁资源。
+
+纹理键要规范化路径和颜色空间等变体，同一路径不同相对写法不应重复加载。缓存没有上限也会增长；关卡切换要按资源组释放，但只有确认无借用后才能删。
+
+## 构建僵尸群的完整流程
+
+关卡开始先确定 count 与上限，reserve 后 emplace Zombie；每个对象借用已加载纹理并拥有位置、速度和血量。每帧用引用遍历更新和绘制，碰撞阶段只标记死亡，帧尾统一 erase。任何长期目标使用稳定 id 查询。
+
+生成位置必须在竞技场内、与 Player 保持最小距离并有最大尝试次数，避免随机条件不可满足时无限循环。构造中途抛异常时 vector 自动销毁已完成 Zombie；纹理由更外层资源库继续拥有。
+
+性能测试分别记录加载次数、draw calls、update 时间与内存。共享 Texture 解决重复资源，不自动解决一千次 draw；后续纹理一致的实体可进一步批处理，但不要牺牲正确生命周期换表面 FPS。
+
+> 先预测：保存 `Zombie* target = &horde[0]` 后持续 push_back，reserve 容量被超过会怎样？vector 重分配移动全部元素，target 悬空；应使用稳定 id 重新查询或选择满足身份需求的存储模型。
+
+## 小结
+
+- 指针可空可改指向但不表达所有权，解引用必须证明目标仍存活且地址未失效
+- 同类型 Zombie 优先由 vector 按值拥有，需要多态身份时再用 unique_ptr 等明确所有权
+- vector 重分配使全部元素观察地址失效，erase 使删除点及之后失效，删除集中在安全阶段
+- 纹理只加载一次并由稳定资源层拥有，多个 Sprite 共享借用而不复制图像
+- 资源容器要审计地址稳定和 erase 规则，加载失败回滚，使用期禁止删除
+- 关闭时先销毁 Sprite/实体借用者，再销毁 Texture 所有者；热重载也必须保持或重建绑定
+
+<Exercises>
+
+**问题 1** 指针非空为什么仍可能不能解引用？列出 vector 的三个失效场景。
+
+<Answer>
+
+指针值非零不证明对象仍存活或仍在原地址。vector 容量增长触发重分配会使全部元素指针引用迭代器失效；erase 使删除点及之后失效；clear 或 vector 销毁使全部失效。使用稳定 id 查询或缩短观察期，不能只检查 nullptr。
+
+</Answer>
+
+**问题 2** 一千只同类型僵尸应选择 `vector<Zombie>`、`vector<unique_ptr<Zombie>>` 还是裸指针数组？说明条件。
+
+<Answer>
+
+同一具体类型且不需稳定地址时优先 vector 值对象，连续存储且所有权最简单。若需要运行时多态或对象地址跨容器增长稳定，可用 `vector<unique_ptr<Zombie>>` 独占拥有。裸指针数组不表达释放责任和容量，除非只是受控短期非拥有视图，否则不适合作为所有者。
+
+</Answer>
+
+**问题 3** 纹理缓存为何必须地址稳定？加载失败、热重载和关闭分别怎样处理？
+
+<Answer>
+
+Sprite 保存 Texture 关联，Texture 对象移动或销毁会让关联失效。加载失败应删除未完成缓存项并传播错误；热重载要原位安全更新或通知所有 Sprite 重新绑定，失败保留旧资源；关闭先销毁 Zombie/Sprite，再销毁缓存和图形上下文。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="指针">
+  保存对象或函数地址的值，可为空可改指向，不自动表示所有权。
+</GlossaryItem>
+<GlossaryItem term="标准模板库">
+  C++ 标准库中的通用容器、算法、迭代器和其他组件集合。
+</GlossaryItem>
+<GlossaryItem term="对象地址">对象在有效存储期内占据的位置。</GlossaryItem>
+<GlossaryItem term="空指针">
+  不指向任何对象的 nullptr 值，只能检查不能解引用。
+</GlossaryItem>
+<GlossaryItem term="解引用">经指针访问有效目标对象的操作。</GlossaryItem>
+<GlossaryItem term="所有权">
+  规定谁维持对象生命、何时销毁和怎样转移责任的协议。
+</GlossaryItem>
+<GlossaryItem term="std::unique_ptr">
+  独占拥有动态对象并在作用域结束自动释放的可移动智能指针。
+</GlossaryItem>
+<GlossaryItem term="std::vector">
+  拥有元素的动态连续序列容器，区分 size 与 capacity。
+</GlossaryItem>
+<GlossaryItem term="重分配">
+  vector 更换连续存储并移动元素的过程，会使旧元素地址失效。
+</GlossaryItem>
+<GlossaryItem term="迭代器">
+  抽象容器位置并支持遍历、受容器修改失效规则约束的对象。
+</GlossaryItem>
+<GlossaryItem term="悬空指针">
+  目标已销毁或地址失效后仍保留的不可解引用指针。
+</GlossaryItem>
+<GlossaryItem term="纹理管理">
+  集中加载、复用和释放 Texture 并保证 Sprite 借用期的协议。
+</GlossaryItem>
+<GlossaryItem term="纹理共享">
+  多个 Sprite 关联同一个长生命周期 Texture 并各自保存变换状态。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 10"
+  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+/>

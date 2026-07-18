@@ -1,0 +1,187 @@
+---
+title: "Chapter 8. LINQ Queries"
+type: C
+section: "C# 10 Nutshell · .NET and Data"
+order: 8
+description: "覆盖query/fluent syntax、deferred execution、subquery、composition/projection、IQueryable解释、EF Core与expression tree。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch08.html"
+draft: false
+---
+
+import { CtcDeferredExecutionLab, CtcQueryProviderLab, CtcQuerySyntaxLab } from "@/components/mdx/csharp-10-core/diagrams/linq-queries";
+
+<Objectives>
+
+- 能比较fluent/query/mixed syntax并写出compiler operator translation，判断binding receiver和range-variable scope
+- 能分析deferred execution、captured variable、subquery与reevaluation，复现enumeration count和snapshot差异
+- 能设计IEnumerable/IQueryable/EF Core边界，检查expression translation、generated SQL、tracking与round trips
+
+</Objectives>
+
+## 为什么LINQ Query同时是Data Pipeline与Program
+
+LINQ统一“对序列查询”的表达，但同一source code可能执行普通delegates，也可能变成expression tree交给database provider。Query通常deferred，定义时没读数据，enumeration时才执行；重复enumeration可能读到新source/captured value。理解syntax而不理解binding/evaluation/provider，会产生N+1、client evaluation或disposed context错误。
+
+先预测：query syntax比fluent更接近SQL所以一定远程执行吗；Where调用时就过滤吗；同一query枚举两次必然相同吗；AsEnumerable不访问数据库吗；ToList只是改变返回type不影响时机。答案都是否。
+
+<Term def="从source static type与available operators确定查询绑定到delegate execution还是expression-provider interpretation的边界。">query binding boundary</Term>
+
+## Getting Started
+
+LINQ query由source和operators组成；Where filter、Select projection、OrderBy order、Group/Join组合。Extension methods依赖IEnumerable或IQueryable等receiver。强类型让element shape贯穿pipeline，anonymous type适合local projection，named DTO适合boundary。
+
+```csharp
+IEnumerable<OrderSummary> summaries = orders
+    .Where(order => order.Status == OrderStatus.Paid)
+    .OrderBy(order => order.CreatedAt)
+    .Select(order => new OrderSummary(order.Id, order.Total));
+```
+
+先写expected cardinality/order/duplicates，再选operators。Query不是命令式loop的机械替换；hot path比较allocation与early exit，remote path检查translation。
+
+## Query Expressions
+
+`from/where/select/orderby/join/group/let/into`由compiler翻译到method calls，range variable只在query scope存在。Query syntax没有独立runtime engine，也不保证SQL。某些operators只有fluent形式，因此mixed syntax正常。
+
+Transparent identifiers保存多个range variables；let通常投影intermediate expression，可能避免source重复或影响provider SQL。Join与GroupJoin语义不同于任意navigation loading，必须验证cardinality与null/empty behavior。
+
+<Stepper>
+  <Step title="切换fluent、query、mixed与translated"><CtcQuerySyntaxLab /></Step>
+  <Step title="手工翻译clauses">把from/where/let/orderby/select写成SelectMany/Where/Select/OrderBy链并标element type。</Step>
+  <Step title="验证binding">改变receiver为IEnumerable/IQueryable，检查delegate/expression overload和provider command。</Step>
+</Stepper>
+
+<Callout type="trap" title="Query Syntax天然比Fluent性能好">
+两者通常翻译到相同operators；性能来自source、operator shape、provider translation和enumeration次数。用expression/SQL/benchmark证据判断。
+</Callout>
+
+## Deferred Execution
+
+多数sequence operators返回recipe，GetEnumerator/MoveNext时执行；terminal/materialization operators如ToList、Count、First会触发。Deferred query捕获变量storage，枚举时读当前值。Source mutation/live remote data也会改变结果。Exceptions在enumeration点抛，不一定在定义处。
+
+```csharp
+var threshold = 10;
+var query = values.Where(value => value >= threshold);
+
+threshold = 20;
+var first = query.ToArray();  // uses 20
+values.Add(100);
+var second = query.ToArray(); // reevaluates source
+```
+
+API声明snapshot/live、single/multi-use和resource owner。若query依赖DbContext/Stream，必须在owner scope内enumerate或materialize。Tests用counting source、captured mutation、partial enumeration与fault。
+
+<Term def="Query definition与source/lambda实际执行分离，enumeration次数、captured state和resource scope决定结果的契约。">deferred execution contract</Term>
+
+<Stepper>
+  <Step title="切换define、enumerate、repeat与materialize"><CtcDeferredExecutionLab /></Step>
+  <Step title="记录timeline">Query creation、source mutation、capture change、first MoveNext、terminal和Dispose逐点记录。</Step>
+  <Step title="用counting source验收">断言enumeration/MoveNext/predicate次数，覆盖Any+ToList、break、fault和second enumeration。</Step>
+</Stepper>
+
+## Subqueries
+
+Subquery在outer lambda/query中定义nested query，可表达“每个customer的latest order”或existence。它也可能deferred并捕获outer variable。Local execution容易形成O(n*m)重复扫描；provider可翻译为EXISTS/APPLY/correlated SQL，也可能失败或低效。
+
+先检查cardinality与execution plan。可预建lookup降低local complexity；remote使用navigation/GroupJoin或provider-supported shape。Tests覆盖empty、multiple/ties与generated command count。
+
+## Composition Strategies
+
+Progressive composition根据optional filters逐步重绑定query variable；函数返回`IQueryable&lt;T&gt; -> IQueryable&lt;T&gt;`或expression predicate可复用。不要过早ToList打断remote composition，也不要把untrusted arbitrary expression直接交provider。
+
+Specification/predicate composition要处理parameter rebinding和provider support；普通`Func&lt;T,bool&gt;`会切到local IEnumerable或无法翻译。Composition boundary明确何时materialize、pagination/order和authorization filter必须先应用。
+
+<Term def="在materialization前以可翻译operators逐步组合filters/projections，并明确切换local execution时点的策略。">query composition boundary</Term>
+
+## Projection Strategies
+
+Projection只取需要columns/shape，减少network、tracking与allocation。Anonymous type适合同method local，DTO/record适合API；entity projection可能触发tracking。Nested collections、client methods和constructors需确认provider translation。
+
+Projection必须保留deterministic ordering与keys，pagination前OrderBy并加tie-breaker。不要返回entity后在serializer触发lazy loading/N+1。Golden SQL与result-shape tests证明。
+
+## Interpreted Queries
+
+IQueryable stores Expression tree，provider解释method calls而非执行delegate。只有provider支持的members可翻译；C# method semantics与SQL null/collation/time semantics可能不同。Expression tree也受language feature representation限制，不能假设所有lambda syntax可出现。
+
+`AsEnumerable`把后续binding切到local delegates，但此前IQueryable仍在enumeration时执行remote query；位置决定传输量。明确server/client boundary，large data禁止隐式全量拉取。
+
+<Term def="Provider把expression tree翻译为另一执行语言时，对supported nodes、null/collation和failure behavior的契约。">provider translation contract</Term>
+
+## EF Core
+
+DbSet实现IQueryable，query在enumeration/async terminal执行。DbContext是unit-of-work/change tracker，通常scoped且非thread-safe。Tracking适合更新，AsNoTracking适合read-only；Include、projection、split/single query影响round trips/cartesian growth。
+
+```csharp
+var page = await db.Orders
+    .AsNoTracking()
+    .Where(order => order.Status == status)
+    .OrderBy(order => order.CreatedAt)
+    .ThenBy(order => order.Id)
+    .Select(order => new OrderRow(order.Id, order.Total))
+    .Take(50)
+    .ToListAsync(token);
+```
+
+Inspect `ToQueryString`/logs、parameterization、query count与execution plan。Cancellation传到async terminal；connection/context scope覆盖enumeration。Concurrency/save属于另一contract，query success不保证后续entity snapshot fresh。
+
+<Stepper>
+  <Step title="切换IEnumerable、IQueryable、AsEnumerable与EF Core"><CtcQueryProviderLab /></Step>
+  <Step title="标server/client line">每个operator写expression/delegate、translated/local、data rows before/after。</Step>
+  <Step title="验收command evidence">断言SQL shape/parameters/query count/tracking/order，注入unsupported expression与disposed context。</Step>
+</Stepper>
+
+<Callout type="trap" title="AsEnumerable会立即把结果加载到Memory">
+它只改变后续operator binding；真正执行仍在enumeration，之前remote part仍查询。ToList/ToArray才materialize，且可能拉取大量rows。
+</Callout>
+
+## Building Query Expressions
+
+Expression tree由Parameter/Constant/Member/Call/Binary/Lambda等nodes构造。动态filter应使用parameterized values、allowlisted members/operators，并统一一个ParameterExpression。Compile expression变delegate用于local，不等于provider translation。
+
+Caching expression/compiled query需key包含shape而非每个value，避免cache explosion；constant capture也影响parameterization。Security上不要接受client任意member/method names，防止expensive query/data exposure。
+
+<Term def="通过allowlisted expression nodes和stable parameters构造动态query，并控制cache、translation与security的边界。">expression construction gate</Term>
+
+## Query production gate
+
+每个critical query保存result contract与command evidence：cardinality、order/ties、null/collation、parameters、round trips、rows/bytes、tracking与timeout。Load test使用真实distribution/index，不用in-memory provider替代relational semantics。
+
+Schema/provider upgrade运行golden queries和execution plan review。Telemetry记录query name/duration/rows而不输出secret parameters。N+1由command count gate阻止。
+
+## 本章回顾：先确定Binding，再讨论查询结果
+
+1. Query syntax翻译为operators，不决定local/remote或性能。
+2. Deferred execution让effect、capture、exception和resource发生在enumeration。
+3. Subquery/composition/projection需同时看cardinality、complexity和materialization。
+4. IQueryable provider解释expression tree，语义可能与C# delegate不同。
+5. EF Core query以SQL、parameters、round trips、tracking和order证据验收。
+
+<Exercises>
+
+**问题 1：为什么同一query两次ToList结果不同？**
+
+<Answer>Query deferred，第二次重新enumerate；source可能变、captured variable更新、database数据/transaction visibility不同。若需stable snapshot，在明确scope第一次materialize，并测试enumeration count与resource lifetime。</Answer>
+
+**问题 2：怎样识别AsEnumerable放错位置？**
+
+<Answer>检查切换前后operators与rows。若在filter/projection前切换，会把全表/多columns拉到client。查看generated SQL、rows/bytes与command count；把provider-supported filter/projection移到AsEnumerable前。</Answer>
+
+**问题 3：EF Core分页必须有哪些order证据？**
+
+<Answer>OrderBy业务key并ThenBy唯一稳定key，验证ties、concurrent changes与page boundary；generated SQL含ORDER BY和parameters，execution plan/index合理。没有total deterministic order会重复/漏行。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="query binding boundary" definition="Receiver决定delegate或expression provider operators。" />
+  <GlossaryItem term="deferred execution contract" definition="Query在enumeration执行并可能reevaluate。" />
+  <GlossaryItem term="query composition boundary" definition="Materialize前组合并显式切换local execution。" />
+  <GlossaryItem term="provider translation contract" definition="Expression nodes到remote language的支持与语义。" />
+  <GlossaryItem term="expression construction gate" definition="Allowlist动态expression、parameters与cache的门禁。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 8: LINQ Queries" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch08.html" />

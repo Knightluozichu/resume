@@ -1,0 +1,367 @@
+---
+title: "Chapter 9 · Integer Division"
+type: C
+section: "HD2 · 乘除法"
+order: 9
+description: "按Hacker's Delight第二版第9章重建多字除法、无符号短除法、长除法与双字除法。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/hackers-delight-9780321842688"
+draft: false
+---
+
+import { HD9DivisionIdentityLab, HD9RestoringStepLab, HD9DivisionInvariantLab, HD9UnsignedSignedCasesLab, HD9HalfDividendLab, HD9LongDivisionLab, HD9PartialRemainderWidthLab, HD9NormalizationLab, HD9QuotientEstimateLab, HD9DoublewordDivisionLab, HD9QuotientFitLab, HD9ExceptionalCasesLab, HD9DivisionCertificateLab } from "@/components/mdx/hackers-delight/diagrams/09-integer-division";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释integer division的quotient/remainder uniqueness与restoring invariant
+- 能计算multiword division的normalization shift、quotient-digit estimate和correction
+- 能实现unsigned short division from signed division的three-case reduction
+- 能分析unsigned long division的partial remainder width与overflow-safe step
+- 能设计doubleword division from long division的quotient-fit guard和exception contract
+
+</Objectives>
+
+## 从“商和余数共同构成答案”开始
+
+先预测：173除以13得到quotient 13、remainder 4，因为$173=13\cdot13+4$且4小于13。Division不是只求一个近似ratio；integer result由一对满足range constraint的values唯一确定。
+
+对unsigned dividend $n$与positive divisor $d$，<Term def="满足n等于q乘d加r且r位于0到d减1的唯一integer pair。">商余对</Term>满足
+
+$$
+n=qd+r,
+\qquad
+0\le r\lt d.
+$$
+
+<HD9DivisionIdentityLab />
+
+Integer Division algorithms都在维护这条identity。Bit-at-a-time long division处理dividend prefix，multiword algorithm处理radix limbs，signed-to-unsigned reduction则构造一个近似quotient再用remainder condition修正。
+
+## 9.1 Restoring division and the core invariant
+
+### Bring down one bit, decide one quotient bit
+
+<Term def="每步把一个dividend bit移入partial remainder，试减divisor；若不足则恢复并输出quotient bit 0。">恢复除法</Term>（restoring division）从most significant dividend bit开始。若current remainder为$r$、next bit为$b$，先形成
+
+$$
+t=2r+b.
+$$
+
+若$t\ge d$，new remainder为$t-d$并输出quotient bit 1；否则remainder保持$t$并输出0。
+
+<HD9RestoringStepLab />
+
+Classic hardware会先subtract再依据borrow决定是否restore；software可先compare避免negative temporary。无论形式，step结束都重新保证
+
+$$
+0\le r'\lt d.
+$$
+
+### Prefix invariant
+
+处理前$k$个high bits形成prefix $N_k$，已产生quotient prefix $Q_k$和remainder $R_k$。Invariant为
+
+$$
+N_k=Q_kd+R_k,
+\qquad
+0\le R_k\lt d.
+$$
+
+Bring down bit $b$后$N_{k+1}=2N_k+b$，因此candidate quotient也double并追加0/1；conditional subtraction正好决定新增bit。
+
+<HD9DivisionInvariantLab />
+
+```c
+typedef struct {
+    uint32_t quotient;
+    uint32_t remainder;
+} div_u32_result;
+
+static div_u32_result divide_u32_reference(uint32_t n, uint32_t d) {
+    div_u32_result out = {0u, 0u};
+    if (d == 0u) return out; // Production API returns an explicit error.
+    for (int bit = 31; bit >= 0; --bit) {
+        uint64_t trial = ((uint64_t)out.remainder << 1)
+                       | ((n >> bit) & 1u);
+        if (trial >= d) {
+            trial -= d;
+            out.quotient |= UINT32_C(1) << bit;
+        }
+        out.remainder = (uint32_t)trial;
+    }
+    return out;
+}
+```
+
+Wider `trial`不是多余。虽然step开始$r\lt d$，$2r+b$可能需要$w+1$ bits；若在$w$-bit word中先shift并wrap，comparison会得到错误结论。
+
+<HD9PartialRemainderWidthLab />
+
+## 9.2 Multiword division
+
+### Long division over radix limbs
+
+<Term def="把multi-limb dividend从most significant limb开始处理，逐步产生quotient limbs并保留remainder的division。">多字除法</Term>（multiword division）是base-$B$版本的prefix invariant。处理next dividend limb $u_i$时形成
+
+$$
+T=R\cdot B+u_i,
+\qquad
+q_i=\left\lfloor\frac{T}{D}\right\rfloor,
+\qquad
+R'=T-q_iD.
+$$
+
+若divisor是one limb且double-width $T$可用，这就是short-by-limb loop。若divisor也有multiple limbs，不能直接用native divide，需要estimate quotient digit再multiply-subtract。
+
+### Normalize the leading divisor limb
+
+<Term def="同时left shift divisor与dividend，使divisor highest limb的top bit为1，从而收紧quotient estimate。">除数规格化</Term>通过count-leading-zeros得到shift $s$。Division value不变，因为两者同乘$2^s$；最终remainder再right shift $s$恢复。
+
+<HD9NormalizationLab />
+
+Normalization使highest divisor limb $v_{m-1}$至少为$B/2$，因此top two dividend limbs除以它得到的<Term def="由top dividend limbs与highest normalized divisor limb计算、随后需验证和下调的candidate quotient digit。">商位估计</Term>不会任意偏大。
+
+### Estimate, multiply-subtract, correct
+
+对normalized divisor top limbs和current dividend window，先取
+
+$$
+\widehat q
+=
+\min\left(
+B-1,\quad
+\left\lfloor
+\frac{u_{j+m}B+u_{j+m-1}}{v_{m-1}}
+\right\rfloor
+\right).
+$$
+
+忽略lower divisor limbs会让estimate可能偏高。用next divisor limb检查，必要时decrement；随后计算window minus $\widehat qV$。若产生borrow，说明仍高一，add divisor back并再decrement。
+
+<HD9QuotientEstimateLab />
+
+```text
+DIVIDE-MULTIWORD(U, V, base B)
+1  reject V = 0; remove leading zero limbs
+2  normalize U and V so V's highest limb has its top bit set
+3  for quotient position j from high to low
+4      estimate qhat from the top two U-window limbs and top V limb
+5      lower qhat while the next-limb test proves it too large
+6      subtract qhat times V from the aligned U window
+7      if subtraction borrowed, add V back and decrement qhat
+8  denormalize the final remainder
+```
+
+Correctness依赖每个temporary的width、borrow propagation与array bounds。Reference可用arbitrary-precision integer；optimized fixed-limb code需random differential tests plus adversarial quotient-estimate cases。
+
+## 9.3 Unsigned short division from signed division
+
+假设machine只有signed $w$-bit divide，却要计算unsigned one-word $n/d$。不能把high-bit operands直接reinterpret as signed，因为它们会变negative。
+
+<Term def="把one-word unsigned dividend/divisor分情况转换为signed-safe divisions和至多一次remainder correction的方法。">无符号短除法</Term>（unsigned short division from signed division）分三种cases。
+
+### High-bit divisor
+
+若$d\ge2^{w-1}$，则$d$至少为unsigned range的一半，而$n\lt2^w$，所以quotient只可能0或1：
+
+$$
+q=[n\ge d],
+\qquad
+r=n-qd.
+$$
+
+无需signed divide。
+
+### Signed-nonnegative operands
+
+若$n$和$d$的high bits都为0，它们可直接用signed positive division，quotient/remainder完全相同。
+
+### High-bit dividend, positive divisor
+
+若$n$high bit为1而$d\lt2^{w-1}$，先logical halve：
+
+$$
+a=\left\lfloor\frac n2\right\rfloor,
+\qquad
+q_0=2\left\lfloor\frac a d\right\rfloor.
+$$
+
+令$a=kd+t$，则$n=2kd+(2t+b)$，其中$b$是$n$low bit且$0\le2t+b\lt2d$。因此true quotient只能是$q_0$或$q_0+1$，检查residual一次即可。
+
+<HD9HalfDividendLab />
+
+<HD9UnsignedSignedCasesLab />
+
+```c
+static div_u32_result unsigned_from_signed_shape(uint32_t n, uint32_t d) {
+    div_u32_result out = {0u, 0u};
+    if (d == 0u) return out;
+    if ((d >> 31) != 0u) {
+        out.quotient = n >= d ? 1u : 0u;
+        out.remainder = n - out.quotient * d;
+        return out;
+    }
+    if ((n >> 31) == 0u) {
+        out.quotient = (uint32_t)((int32_t)n / (int32_t)d);
+        out.remainder = (uint32_t)((int32_t)n % (int32_t)d);
+        return out;
+    }
+    uint32_t q = 2u * (uint32_t)((int32_t)(n >> 1) / (int32_t)d);
+    uint32_t r = n - q * d;
+    if (r >= d) { ++q; r -= d; }
+    out.quotient = q;
+    out.remainder = r;
+    return out;
+}
+```
+
+High-dividend path的signed divide operands都不超过signed maximum。Multiply `q*d`按unsigned modulo执行，但mathematical product不超过$n$，因此可表示；small-width exhaustive tests可验证所有nonzero divisors。
+
+## 9.4 Unsigned long division
+
+<Term def="按dividend bits从high到low逐步产生unsigned quotient bits、同时维护partial remainder的算法。">无符号长除法</Term>（unsigned long division）就是9.1的reference loop。
+
+<HD9LongDivisionLab />
+
+实现选择包括：
+
+- Wider partial remainder：最直观，适合有$2w$-bit type。
+- Carry-aware step：保存left shift carry，在same-width compare/subtract中利用它。
+- Align-and-subtract：先把divisor left align到dividend highest bit，再逐步right shift。
+- Non-restoring/SRT variants：把restore动作融入下一步，适合hardware pipeline。
+
+所有variants都应返回quotient与remainder，并验证$n=qd+r$。只核对quotient会漏掉off-by-one corrections；只核对identity而不检查$r\lt d$则可能接受不同的non-normalized pairs。
+
+## 9.5 Doubleword division from long division
+
+### When the quotient fits one word
+
+<Term def="把high和low两个w-bit words组成的2w-bit dividend除以one-word divisor。">双字除法</Term>（doubleword division from long division）令
+
+$$
+N=u_1B+u_0,
+\qquad B=2^w.
+$$
+
+若要quotient fit one word，necessary and sufficient precondition为
+
+$$
+u_1\lt d.
+$$
+
+因为$u_1B+u_0\lt dB$时quotient小于$B$；反之$u_1\ge d$时仅high contribution就使quotient至少$B$。
+
+<HD9QuotientFitLab />
+
+<HD9DoublewordDivisionLab />
+
+在precondition下，可把initial remainder设为$u_1$，然后只对low word的$w$ bits运行unsigned long division。每步的partial remainder仍低于$d$，最终得到one-word quotient与remainder。
+
+```c
+static bool divide_u64_by_u32_one_quotient(uint32_t high, uint32_t low,
+                                           uint32_t d,
+                                           div_u32_result *out) {
+    if (d == 0u || high >= d) return false;
+    uint64_t remainder = high;
+    uint32_t quotient = 0;
+    for (int bit = 31; bit >= 0; --bit) {
+        remainder = (remainder << 1) | ((low >> bit) & 1u);
+        if (remainder >= d) {
+            remainder -= d;
+            quotient |= UINT32_C(1) << bit;
+        }
+    }
+    out->quotient = quotient;
+    out->remainder = (uint32_t)remainder;
+    return true;
+}
+```
+
+若high不低于$d$，full quotient需要more than one word；可先产生high quotient limb，或使用general multiword division。
+
+### Signed exceptions and rounding
+
+Signed division还要定义quotient rounding toward zero、floor或Euclidean convention。Remainder sign随convention变化。Fixed-width two's complement另外有两个exceptional inputs：divisor zero；minimum signed value除negative one，exact positive result超出range。
+
+<HD9ExceptionalCasesLab />
+
+<Callout type="trap" title="Partial remainder低于divisor，所以left shift仍装得进一个word">
+r低于d不代表2r加bit低于word maximum；当d接近maximum时会需要额外carry bit。修法是用wider temporary或carry-aware compare/subtract。
+</Callout>
+
+<Callout type="trap" title="Signed divide可以直接处理unsigned high-bit operands">
+Reinterpret后它们是negative，quotient与remainder不再是unsigned result。修法是按divisor high bit、dividend high bit分case，或使用native unsigned divide。
+</Callout>
+
+## 一条invariant-first的division流程
+
+<Stepper>
+<Step title="声明quotient/remainder contract">
+固定signedness、rounding、divisor-zero behavior、result width与remainder range。
+
+<HD9DivisionIdentityLab />
+</Step>
+<Step title="维护prefix identity与temporary width">
+每步证明processed prefix等于partial q乘d加r，并保证shifted remainder不会silent wrap。
+
+<HD9RestoringStepLab />
+</Step>
+<Step title="验证estimate corrections和exceptions">
+Small widths exhaustive pairs，multiword cases与big-integer oracle比较，专测normalization、add-back和quotient-fit boundary。
+
+<HD9DivisionCertificateLab />
+</Step>
+</Stepper>
+
+<HD9DivisionCertificateLab />
+
+## 小结
+
+Chapter 9 Integer Division以$n=qd+r$且$0\le r\lt d$为统一invariant。Restoring division逐bit bring down、conditional subtract并产生quotient bits。
+
+Multiword division在radix limbs上重复同一结构；normalized highest divisor limb支持tight quotient estimate，multiply-subtract后的borrow通过add-back correction修正。Unsigned short division from signed division用three-case reduction，high-dividend case只需halve、double和一次correction。
+
+Unsigned long division必须为shifted partial remainder保留extra bit。Doubleword division from long division在high word低于divisor时产生one-word quotient。所有variants都要同时验证quotient、remainder、range、temporary width与exception behavior。
+
+<Exercises>
+
+**问题 1**：为什么division结果必须同时检查n等于q乘d加r和r低于d？
+
+<Answer>
+Identity alone允许许多pairs，例如把q减1并把r加d仍能重建n。Remainder range选择唯一normalized pair；再加r nonnegative后quotient就是floor unsigned ratio。
+</Answer>
+
+**问题 2**：8-bit unsigned n为221、d为37，halve/double方法得到什么base quotient，是否需要correction？
+
+<Answer>
+Logical half为110，110除37的floor为2，double得到base quotient 4。Residual为221减148等于73，仍不低于37，因此quotient加一为5、remainder减37为36；exact identity是221等于5乘37加36。
+</Answer>
+
+**问题 3**：Multiword quotient-digit estimate为什么通常偏高而不是任意偏低？
+
+<Answer>
+Estimate只用top dividend digits除highest divisor digit，等于忽略divisor的positive lower digits，使effective divisor偏小，因此candidate倾向偏高。Normalization限制其误差，再用next-limb test和borrow add-back下调。
+</Answer>
+
+**问题 4**：Doubleword high:low除one-word d时，为什么high低于d保证quotient fit one word？
+
+<Answer>
+若high低于d，则dividend high乘B加low严格低于d乘B，除d后的quotient严格低于B，能用one word表示。若high不低于d，仅high乘B部分就使quotient至少B。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="商余对">满足n等于q乘d加r且r位于0到d减1的唯一integer pair。</GlossaryItem>
+<GlossaryItem term="恢复除法">每步把一个dividend bit移入partial remainder，试减divisor；若不足则恢复并输出quotient bit 0。</GlossaryItem>
+<GlossaryItem term="多字除法">把multi-limb dividend从most significant limb开始处理，逐步产生quotient limbs并保留remainder的division。</GlossaryItem>
+<GlossaryItem term="除数规格化">同时left shift divisor与dividend，使divisor highest limb的top bit为1，从而收紧quotient estimate。</GlossaryItem>
+<GlossaryItem term="商位估计">由top dividend limbs与highest normalized divisor limb计算、随后需验证和下调的candidate quotient digit。</GlossaryItem>
+<GlossaryItem term="无符号短除法">把one-word unsigned dividend/divisor分情况转换为signed-safe divisions和至多一次remainder correction的方法。</GlossaryItem>
+<GlossaryItem term="无符号长除法">按dividend bits从high到low逐步产生unsigned quotient bits、同时维护partial remainder的算法。</GlossaryItem>
+<GlossaryItem term="双字除法">把high和low两个w-bit words组成的2w-bit dividend除以one-word divisor。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Hacker's Delight, Second Edition, Chapter 9 · Integer Division" adaptedUrl="https://www.informit.com/store/hackers-delight-9780321842688" />

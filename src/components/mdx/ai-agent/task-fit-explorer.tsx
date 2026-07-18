@@ -148,9 +148,7 @@ export function AaTaskFitExplorer() {
             label="需要调外部工具 / 查实时信息"
           />
           <div className="mt-1 flex flex-col gap-2 border-t border-border pt-3">
-            <span className="text-xs text-secondary">
-              或一键填入示例任务：
-            </span>
+            <span className="text-xs text-secondary">或一键填入示例任务：</span>
             <div className="flex flex-wrap gap-2">
               {EXAMPLES.map((ex) => (
                 <button

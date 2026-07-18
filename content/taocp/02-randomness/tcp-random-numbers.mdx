@@ -1,147 +1,247 @@
 ---
-title: "随机数生成"
+title: "Volume 2 · Chapter 3 · Random Numbers"
 type: B
-section: "随机数"
-order: 4
-description: "线性同余生成器、统计检验与谱检验——TAOCP 中伪随机数的艺术"
+section: "TAOCP · Volume 2"
+order: 3
+description: "重建TAOCP Volume 2 Chapter 3：均匀随机数生成、线性同余周期、统计与谱检验、其他随机量、随机采样与洗牌，以及随机序列的可检验含义。"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/art-of-computer-programming-volume-2-seminumerical-9780133488807"
 draft: false
 ---
 
-import { TcpRandomNumbersDiagram } from "@/components/mdx/taocp/diagrams/tcp-random-numbers";
+import { TcpLcgLab, TcpPeriodLab, TcpLatticeLab, TcpFrequencyTestLab, TcpSerialTestLab, TcpRunsTestLab, TcpDistributionLab, TcpRejectionLab, TcpShuffleLab, TcpReservoirLab, TcpRandomSequenceLab, TcpRandomCertificateLab } from "@/components/mdx/taocp/diagrams/tcp-random-numbers";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能解释线性同余生成器的公式并推导其周期上限
-- 能描述 χ² 检验如何判断随机数序列的均匀性
-- 能分析为什么谱检验比统计检验更能揭示随机数缺陷
-- 能回答：为什么计算机无法生成「真随机数」？
+
+- 能推导线性同余生成器的状态递推、周期与全周期条件
+- 能比较频数、串行、游程和谱检验各自可发现的缺陷
+- 能实现均匀变量到其他随机量的逆变换与拒绝采样
+- 能推导并说明Fisher–Yates洗牌和reservoir sampling的均匀性
+- 能设计固定种子、参数版本与预注册检验组成的随机流证书
+
 </Objectives>
 
-## 直觉引入
+## 从“每个数字出现一样多”为什么仍不随机开始
 
-抛硬币看似随机，但如果你知道了抛出的力度、角度、空气阻力，结果其实是确定的。计算机生成的随机数也一样——它们是「伪随机」的，用确定的公式算出来，但看起来像随机的。
+先预测：序列`010101...`中零和一各占一半，频数完美，却能被下一位必翻转的规则完全预测。Volume 2 Chapter 3 · Random Numbers（随机数）把“边际均匀”“相邻独立”“高维结构”“不可简单预测”分开检验，不把一张直方图当作随机性的证明。
 
-问题在于：怎么让「看起来像随机」这件事可量化？Knuth 的回答是：用统计检验和谱检验来衡量。一个差的随机数生成器可以让模拟仿真给出完全错误的结论。
+<TcpRandomSequenceLab />
 
-## 概念讲解
+<Term def="用有限内部状态和确定转移规则产生可复现数列，并试图满足指定统计模型的算法。">伪随机数生成器</Term>的输出由初始种子完全决定。可复现是实验优势，不是质量缺陷；真正问题是状态转移是否有足够周期、输出映射是否引入偏差、目标应用所观察的维度是否暴露规律。
 
-### 线性同余生成器
+## 3.1 Generating Uniform Random Numbers（生成均匀随机数）
 
-<Term def="线性同余生成器（LCG）是用递推公式 X(n+1) = (a·X(n) + c) mod m 生成伪随机数的算法">线性同余生成器</Term>是最经典的伪随机数算法。其中 $a$ 是乘数，$c$ 是增量，$m$ 是模数，$X_0$ 是种子。
+### 线性同余方法
 
-LCG 的周期最多为 $m$（达到时称为「满周期」），满周期条件是：
-- $c$ 与 $m$ 互素
-- $a - 1$ 是 $m$ 的每个素因子的倍数
-- 若 $m$ 是 4 的倍数，则 $a - 1$ 也是 4 的倍数
+线性同余生成器用
 
-### 统计检验
+$$
+X_{n+1}=(aX_n+c)\bmod m,
+\qquad
+U_n=X_n/m.
+$$
 
-<Term def="卡方检验（χ² 检验）通过比较观测频率与期望频率来判断随机数序列是否服从均匀分布">卡方检验</Term>把 $[0, m)$ 分成 $k$ 个等长区间，统计随机数落入每个区间的次数 $f_i$，计算：
+状态$X_n$位于有限集合$\{0,\ldots,m-1\}$，故序列必然进入循环。$a$是乘数、$c$是增量、$m$是模数，$X_0$是种子。
 
-$$\chi^2 = \sum_{i=1}^{k} \frac{(f_i - N/k)^2}{N/k}$$
+<TcpLcgLab />
 
-如果 $\chi^2$ 太大，说明分布不均匀；太小，说明「太均匀」了（也不随机）。
+<Term def="从某状态再次出现开始，到该状态下一次出现之间的输出长度。">周期</Term>不超过$m$。混合同余生成器达到全周期$m$时，参数需满足Hull–Dobell条件：$c$与$m$互素；$a-1$能被$m$的每个素因子整除；若$m$是4的倍数，$a-1$也是4的倍数。
 
-### 谱检验
+<TcpPeriodLab />
 
-<Term def="谱检验通过分析随机数在多维空间中形成的超平面结构来评估其质量，是比统计检验更严格的检验方法">谱检验</Term>把连续 $t$ 个随机数看作 $t$ 维空间中的点，检查这些点分布的均匀性。好的生成器在高维空间中点分布均匀，差的生成器会聚集在少数超平面上。
+全周期只保证一维状态枚举完整，不保证相邻二元组或更高维元组填满空间。LCG点$(U_n,U_{n+1},\ldots,U_{n+d-1})$落在有限组平行超平面上；参数差时，这种<Term def="线性同余输出在高维空间只落于有限平行格点或超平面上的结构缺陷。">格点结构</Term>非常明显。
 
-## 交互 Demo
+<TcpLatticeLab />
 
-<TcpRandomNumbersDiagram />
-
-<Stepper>
-<Step title="第一步：选模数 m">
-通常选 $m = 2^{31}$ 或 $m = 2^{32}$（利用整数溢出自动取模）。模数越大，周期越长。但大模数不保证质量——还需选好乘数。
-</Step>
-<Step title="第二步：选乘数 a">
-乘数 $a$ 决定了随机数的质量。好的 $a$ 让谱检验通过高维检验。Knuth 推荐 $a \approx m \cdot \phi$（黄金比例）附近，且 $a \mod 8 = 3$ 或 5。
-</Step>
-<Step title="第三步：统计与谱检验">
-先用卡方检验检查均匀性，再用谱检验检查高维结构。只有两项都通过的生成器才能用于严肃的模拟仿真。RANDU（IBM 的著名失败案例）通过了统计检验但谱检验在 3 维就暴露了严重缺陷。
-</Step>
-</Stepper>
-
-## 代码对照
-
-```python
-# 线性同余生成器实现与检验
-class LCG:
-    def __init__(self, seed, a=1664525, c=1013904223, m=2**32):
-        self.x = seed
-        self.a = a
-        self.c = c
-        self.m = m
-
-    def next(self):
-        self.x = (self.a * self.x + self.c) % self.m
-        return self.x
-
-    def uniform(self):
-        return self.next() / self.m  # 归一化到 [0, 1)
-
-# 生成随机数序列
-rng = LCG(seed=42)
-samples = [rng.uniform() for _ in range(10000)]
-
-# 卡方均匀性检验
-import math
-k = 20  # 分 20 个区间
-N = len(samples)
-expected = N / k
-observed = [0] * k
-for s in samples:
-    observed[min(int(s * k), k - 1)] += 1
-
-chi2 = sum((f - expected) ** 2 / expected for f in observed)
-print(f"chi² = {chi2:.2f} (自由度 {k-1}，临界值约 30.1)")
-
-# RANDU 的灾难（a=65539, m=2^31）—— 3 维谱检验失败
-# 连续 3 个 RANDU 数落在 15 个超平面上，远少于理论最大值
+```ts
+function lcg(seed: number, a: number, c: number, m: number) {
+  let state = seed;
+  return () => {
+    state = (a * state + c) % m;
+    return state / m;
+  };
+}
 ```
 
-## 常见误区
+在JavaScript中，大参数乘法可能超出安全整数精度；实现应使用BigInt、受控32位运算或经过验证的分解。代码表达式与数学递推必须处于同一模环。
 
-<Callout type="trap">
-**误区：认为只要通过了卡方检验，随机数生成器就是好的。**
-卡方检验只检查一维均匀性，无法发现高维结构缺陷。IBM 的 RANDU 通过了卡方检验，但在 3 维空间中所有点聚集在 15 个超平面上——这让物理模拟完全失真。谱检验才是更严格的质量标准。
+### Statistical Tests（统计检验）
+
+统计检验从“输出符合某个随机模型”的零假设出发，选择统计量并计算其在零假设下的尾部程度。它能在显著水平下拒绝模型，不能证明生成器“随机”。
+
+频数检验把$N$个样本分入$k$个等概率桶，期望值$E=N/k$，Pearson统计量为
+
+$$
+\chi^2=\sum_{i=1}^{k}\frac{(O_i-E)^2}{E}.
+$$
+
+<TcpFrequencyTestLab />
+
+样本量太小时期望计数不足，近似分布不可靠；样本极大时微小且应用无关偏差也可能显著。因此应同时报告统计量、自由度、样本量和效应大小，不只报告“通过”。
+
+串行检验把$(U_i,U_{i+\ell})$分入二维桶，检查转移而非单点。一个发生器可能每个一维桶完全均匀，却只走固定少数二元转移。
+
+<TcpSerialTestLab />
+
+游程检验先按阈值把样本变为二值，统计连续相同类别的段数。频数固定时，过少游程意味着聚集，过多游程意味着交替。
+
+<TcpRunsTestLab />
+
+<Term def="把连续输出视为高维点并评估其所在平行超平面间距的线性同余结构检验。">谱检验</Term>直接针对格点几何。测试组合应覆盖应用会使用的维数、位段与采样方式；只检验高位不能说明低位可用于洗牌索引。
+
+<Callout type="trap" title="常见误区：p值大就证明生成器正确">
+
+大p值只表示当前统计量没有发现足够反例。坏生成器可能逃过某个检验，优秀生成器也可能按既定显著水平偶然失败。必须在看结果前规定检验族、样本量和失败策略，避免反复换检验直到“通过”。
+
 </Callout>
 
-<Callout type="trap">
-**误区：认为周期越长，随机数质量越高。**
-周期长是必要条件但非充分条件。LCG 的满周期可达 $m = 2^{32}$，但如果乘数选择不当，连续 $t$ 个随机数在高维空间中可能聚集在很少的超平面上。谱检验揭示的正是这种结构性缺陷。
+## 3.2 Other Types of Random Quantities（其他随机量）
+
+### 数值分布与逆变换
+
+若$U$在$[0,1)$均匀，目标累积分布$F$连续单调，则
+
+$$
+X=F^{-1}(U)
+$$
+
+服从目标分布。指数分布率参数$\lambda$对应$X=-\ln(1-U)/\lambda$。
+
+<TcpDistributionLab />
+
+数值实现需声明端点：若发生器可能返回1，对数会发散；若返回0，某些分布得到无穷或边界值。使用`log1p(-u)`能改善$u$接近零时的精度。
+
+### 拒绝采样
+
+当逆函数难算时，可从易采样proposal产生候选，并按接受规则保留。单位正方形中的点若落在四分之一圆内就接受，其接受率趋近$\pi/4$。
+
+<TcpRejectionLab />
+
+期望每个接受样本的proposal数是$1/p$。低接受率不仅慢，还可能放大分支与随机数消耗；proposal必须覆盖目标支持集，接受概率也要有正确上界。
+
+### Random Sampling and Shuffling（随机采样与洗牌）
+
+Fisher–Yates从尾部$i=n-1$开始，在$0$到$i$中均匀选$j$并交换。第一个固定到尾部的元素有$n$种等概率选择，剩余递归为$n-1$项均匀排列，因此每个排列概率
+
+$$
+\frac1n\cdot\frac1{n-1}\cdots\frac11=\frac1{n!}.
+$$
+
+<TcpShuffleLab />
+
+```python
+def shuffle(a, random_index):
+    for i in range(len(a) - 1, 0, -1):
+        j = random_index(i + 1)  # 0 <= j <= i, uniform
+        a[i], a[j] = a[j], a[i]
+```
+
+常见错误是每轮都在完整$0$到$n-1$中交换；不同排列会由不同数量的交换路径产生，结果不均匀。`random_index(bound)`若通过`word % bound`实现，也要处理模偏差。
+
+未知长度流中保留$k$个均匀样本，reservoir sampling先收前$k$项；第$i$项到来时以$k/i$概率接纳，并均匀替换一个槽。归纳可得处理$i$项后，每个历史元素留在reservoir的概率都是$k/i$。
+
+<TcpReservoirLab />
+
+## 3.3 What Is a Random Sequence?（什么是随机序列）
+
+有限序列总能由“逐字打印它”的程序生成，所以随机性不能只看是否存在确定描述。实践中使用统计模型：某类观察者在预定检验与资源范围内不能区分输出与目标分布。密码用途还要求即使知道算法和过去输出，也难以预测未来输出；普通模拟PRNG未必满足。
+
+<Term def="在给定统计模型、检验族和资源范围内，输出未表现出可利用偏差或依赖的经验性质。">统计随机性</Term>依赖用途。Monte Carlo积分关心估计偏差和方差，洗牌关心排列均匀，模拟关心相关结构，安全token关心预测阻力。一个发生器没有脱离用途的单一“随机分数”。
+
+```ts
+type RandomRun = {
+  algorithm: string;
+  version: string;
+  parameters: Record<string, string>;
+  seed: string;
+  sampleCount: number;
+  tests: Array<{ name: string; statistic: number; threshold: number }>;
+};
+```
+
+<Callout type="trap" title="常见误区：同一个种子不能复现才更随机">
+
+科学计算需要精确重放，种子和算法版本应进入结果元数据。不可复现通常意味着隐藏了熵源、并发顺序或库版本，不代表统计质量更好。生产安全系统可以从系统熵播种，但诊断仍应记录允许记录的版本与上下文。
+
 </Callout>
+
+## 检验矩阵与失败复现
+
+检验计划应从下游消费方式反推。若输出按单个浮点数使用，检查边际分布与端点；若两两组成坐标，加入二维串行与格点检查；若连续取数构造矩阵，检验相应维度的线性结构；若只取低若干位作桶索引，必须直接检验那些位，不能拿完整字高位的结果替代。样本选择、跳步、分流和并行拆分都会形成新的输出过程，原发生器证书不能自动继承。
+
+同一批样本跑很多检验时，偶然小p值的机会随检验数增加。工程门禁应预先规定单项阈值、整体错误率处理、哪些失败允许用独立种子复核，以及复核后如何升级。不能在失败后删除“看起来重复”的检验，也不能持续增加样本直到p值跨过阈值。一个可诊断失败记录至少包含算法与版本、全部参数、种子、样本切片规则、检验实现版本、统计量和阈值。
+
+随机算法本身还需与发生器质量分层。若Monte Carlo估计偏离参考值，先用已知良好流替换发生器，再固定流比较算法；若偏差仍在，问题位于采样变换或估计器。反之，用同一算法替换多个发生器可以定位状态转移或输出映射。这样的交叉实验把“结果不对”拆成可复现假设，而不是把一切归因于运气。
+
+## 从递推到随机流证书
+
+<Stepper>
+  <Step title="Step 1 · 审计状态空间与周期">
+    明确状态宽度、转移、输出函数、种子禁区和周期证据；先在小模数上穷举轨道。
+    <TcpPeriodLab />
+  </Step>
+  <Step title="Step 2 · 预注册多维检验">
+    在看结果前规定频数、串行、游程与高维结构检验，记录样本量、阈值和多重检验策略。
+    <TcpSerialTestLab />
+  </Step>
+  <Step title="Step 3 · 验证下游变换">
+    对分布变换、拒绝采样、洗牌和reservoir分别证明目标概率，并以固定种子回归。
+    <TcpRandomCertificateLab />
+  </Step>
+</Stepper>
+
+<TcpRandomCertificateLab />
+
+## 小结
+
+Chapter 3先研究Generating Uniform Random Numbers（生成均匀随机数）：LCG递推、周期、格点结构与Statistical Tests（统计检验）；再处理Other Types of Random Quantities（其他随机量），包括逆变换和拒绝采样；Random Sampling and Shuffling（随机采样与洗牌）要求直接证明选择概率；最后回答What Is a Random Sequence?（什么是随机序列）：随机性是相对于模型、观察维度和资源的可检验声明。完整证书记录状态转移、周期、检验计划、种子与版本。
 
 <Exercises>
-**问题 1**：为什么计算机无法生成「真随机数」？
+
+1. 对$m=16,a=5,c=1,X_0=0$列出完整轨道，验证周期，并逐项检查Hull–Dobell条件。
+2. 构造一个零一各16个但只有2个游程的32位序列，说明频数检验和游程检验分别会看到什么。
+3. 证明Fisher–Yates对长度$n$数组产生每个排列的概率为$1/n!$，并解释全范围交换版本为何不均匀。
+4. 证明reservoir sampling处理完$i$个元素后，每个历史元素被保留的概率为$k/i$。
 
 <Answer>
-计算机是确定性机器——给定相同的输入和状态，总是产生相同的输出。伪随机数生成器用确定的递推公式（如 LCG 的 $X_{n+1} = (aX_n + c) \mod m$）生成数列，只要知道种子就能预测所有后续值。真随机需要物理过程（如放射性衰变、电子噪声），成本高且不可复现。伪随机在多数应用中足够，但密码学需要真随机或密码学安全的伪随机。
-</Answer>
 
-**问题 2**：写出 LCG 满周期的三个条件，并解释为什么它们是必要的。
+轨道为$0,1,6,15,12,13,2,11,8,9,14,7,4,5,10,3$后回到0，周期16。$c=1$与16互素；16唯一素因子是2，而$a-1=4$被2整除；16是4的倍数且$a-1$也被4整除，因此满足全周期条件。
+
+</Answer>
 
 <Answer>
-1) $c$ 与 $m$ 互素：保证增量不会在循环中跳过某些值。2) $a-1$ 是 $m$ 每个素因子的倍数：保证乘法不会在某些剩余类中循环。3) 若 $4|m$ 则 $4|(a-1)$：保证在 2 的幂次模数下周期不缩短。这三个条件合在一起保证了 LCG 遍历 $m$ 个可能值后才开始重复。
+
+序列可取16个零后接16个一。频数检验观察到两个类别都恰为16，统计量为零；游程数只有2，远低于独立公平位通常产生的水平，立即暴露强聚集依赖。两种检验针对不同替代假设。
+
 </Answer>
+
+<Answer>
+
+尾位置从$n$项中均匀选择，概率$1/n$；条件于该选择，前$n-1$位置由同一算法均匀排列，归纳概率$1/(n-1)!$，乘积为$1/n!$。若每轮都从$n$位置选，随机选择序列有$n^n$种，而$n!$通常不整除$n^n$，各排列无法拥有相同路径数。
+
+</Answer>
+
+<Answer>
+
+新元素$i$以$k/i$概率进入。旧元素在$i-1$步后保留概率为$k/(i-1)$；第$i$步只有在新元素进入且恰好替换它时才被移除，该概率为$(k/i)(1/k)=1/i$。故保留概率为$k/(i-1)\cdot(1-1/i)=k/i$。
+
+</Answer>
+
 </Exercises>
 
 <Glossary>
-<GlossaryItem term="线性同余生成器">
-用递推公式 X(n+1) = (a·X(n) + c) mod m 生成伪随机数的算法。是最经典的 PRNG，周期最多为 m。
-</GlossaryItem>
-<GlossaryItem term="卡方检验">
-通过比较观测频率与期望频率来判断随机数是否均匀分布的统计方法。只检查一维均匀性。
-</GlossaryItem>
-<GlossaryItem term="谱检验">
-通过分析随机数在多维空间中形成的超平面结构来评估质量的检验方法。比卡方检验更严格。
-</GlossaryItem>
-<GlossaryItem term="满周期">
-LCG 的周期达到理论上限 m 的状态。满周期需要 c 与 m 互素、a-1 是 m 每个素因子的倍数等条件。
-</GlossaryItem>
+  <GlossaryItem term="伪随机数生成器">以有限状态和确定转移产生可复现、目标统计模型下近似随机数列的算法。</GlossaryItem>
+  <GlossaryItem term="周期">有限状态轨道中同一状态两次出现之间的输出长度。</GlossaryItem>
+  <GlossaryItem term="格点结构">线性同余高维输出落在有限平行超平面上的规律。</GlossaryItem>
+  <GlossaryItem term="谱检验">评估线性同余高维格点超平面间距的结构检验。</GlossaryItem>
+  <GlossaryItem term="统计随机性">相对于给定模型、检验族与资源未暴露可利用偏差的性质。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="计算机程序设计艺术（Donald E. Knuth）" adaptedUrl="https://www-cs-faculty.stanford.edu/~knuth/taocp.html" />
+<Attribution
+  source="The Art of Computer Programming, Volume 2: Seminumerical Algorithms, Third Edition"
+  author="Donald E. Knuth"
+  license="本章依据Addison-Wesley官方目录独立重构Chapter 3核心内容；文字、公式、代码、交互和练习均为重新编写。"
+  url="https://www.informit.com/store/art-of-computer-programming-volume-2-seminumerical-9780133488807"
+/>

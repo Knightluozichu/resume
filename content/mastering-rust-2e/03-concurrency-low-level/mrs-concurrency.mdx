@@ -1,0 +1,128 @@
+---
+title: "第8章 并发"
+type: C
+section: "精通Rust 2e · 并发与底层"
+order: 8
+description: "按 原书第8章 Concurrency 一比一重建核心知识：程序执行模型、线程与消息传递、共享状态、Send 与 Sync、Actor 与并发生态。"
+demo: true
+math: false
+sourceUrl: "https://www.packtpub.com/en-us/product/mastering-rust-9781789346572"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { MrsConcurrencyModelLab, MrsConcurrencyBoundaryLab, MrsConcurrencyEvidenceLab } from "@/components/mdx/mastering-rust-2e/diagrams/mrs-concurrency";
+
+<Objectives>
+- 能解释程序执行模型与线程与消息传递在本章执行链中的责任
+- 能区分共享状态和Send 与 Sync的适用边界与失败语义
+- 能实现并复现一个围绕Actor 与并发生态的最小实验
+</Objectives>
+
+## 先做预测
+
+先回答：示例能够编译并运行，是否已经证明设计正确？不能。编译成功只说明当前程序满足类型与语法约束，还要验证输入边界、失败路径、资源生命周期、并发或外部系统条件。<Term def="进程、线程、事件循环和actor对隔离、调度与通信做出不同取舍；先识别任务是CPU密集还是等待密集，再选择模型。">程序执行模型</Term>是本章的起点，<Term def="线程共享地址空间，channel把所有权随消息转移；消息协议仍要定义关闭、超时、背压和失败确认。">线程与消息传递</Term>则把起点放进可重复的工程过程。
+
+<MrsConcurrencyModelLab />
+
+## 原书章节骨架
+
+Packt 官方目录把本章组织为程序执行模型、线程与消息传递、共享状态、Send 与 Sync、Actor 与并发生态。这里保留原书问题顺序，再把2019年前后的案例放到当前Rust工程语境中理解：概念不因crate版本变化而失效，但命令、依赖和框架API必须以当前项目锁定版本的官方文档为准。
+
+官方核心单元核对：程序执行模型；Rust并发；线程并发模型；Rust线程安全；Actor模型；并发生态。
+
+<Term def="Arc表达跨线程共享所有权，Mutex或RwLock保护可变状态；锁的范围、顺序和中毒处理是运行时协议，类型系统不会替你设计业务不变量。">共享状态</Term>不是孤立语法。它承接程序执行模型给出的目标，并通过线程与消息传递进入真实项目。阅读代码时要沿着输入、所有权或状态、动作、结果和证据五个节点追踪，而不是只记函数名。
+
+```rust
+use std::{sync::mpsc, thread};
+let (tx, rx) = mpsc::channel();
+let worker = thread::spawn(move || tx.send(21 * 2).unwrap());
+assert_eq!(rx.recv().unwrap(), 42);
+worker.join().unwrap();
+```
+
+## 机制一：从类型到行为
+
+进程、线程、事件循环和actor对隔离、调度与通信做出不同取舍；先识别任务是CPU密集还是等待密集，再选择模型。 线程共享地址空间，channel把所有权随消息转移；消息协议仍要定义关闭、超时、背压和失败确认。 两者协作时，先写出谁拥有数据、谁可以修改、失败由谁处理，再决定具体API。这样可以把编译器诊断还原为契约冲突，而不是把错误信息当成需要逐条消除的噪声。
+
+<Term def="Send表示值可跨线程转移，Sync表示共享引用可跨线程访问；它们把大量线程安全约束编码进类型，但unsafe实现必须由作者证明。">Send 与 Sync</Term>进一步约束运行行为。它说明“类型正确”与“协议正确”是两层证据：前者由编译器帮助证明，后者还需要测试、时间线和边界输入。
+
+<MrsConcurrencyBoundaryLab />
+
+```rust
+use std::sync::{Arc, Mutex};
+let count = Arc::new(Mutex::new(0_u64));
+let copy = Arc::clone(&count);
+std::thread::spawn(move || *copy.lock().unwrap() += 1)
+    .join().unwrap();
+```
+
+## 机制二：失败、资源与边界
+
+Arc表达跨线程共享所有权，Mutex或RwLock保护可变状态；锁的范围、顺序和中毒处理是运行时协议，类型系统不会替你设计业务不变量。 Send表示值可跨线程转移，Sync表示共享引用可跨线程访问；它们把大量线程安全约束编码进类型，但unsafe实现必须由作者证明。 失败实验至少覆盖正常、空值或零长度、上限附近、显式错误和资源中断。涉及线程、网络、数据库、GUI或FFI时，还要加入超时、取消、部分完成与关闭路径。
+
+不要把原书示例的依赖版本直接复制到新项目。先固定Rust edition与最小支持版本，再查询维护中的crate文档和迁移说明；保留原书要讲的架构边界，按当前API重写适配层。
+
+```rust
+fn assert_send_sync<T: Send + Sync>() {}
+assert_send_sync::<std::sync::Arc<String>>();
+```
+
+## 机制三：可复现证据
+
+<Term def="actor用邮箱隔离状态并按消息驱动，减少共享内存但引入队列、监督和消息时序问题；选择库前先验证取消、背压与关闭语义。">Actor 与并发生态</Term>负责把本章收束成证据。actor用邮箱隔离状态并按消息驱动，减少共享内存但引入队列、监督和消息时序问题；选择库前先验证取消、背压与关闭语义。 一次可靠验收要保存输入、工具链、依赖锁定、命令、退出状态、关键输出和失败样本。性能结论还要记录release构建、样本数与环境噪声；并发结论则要记录任务边界、超时和关闭结果。
+
+<MrsConcurrencyEvidenceLab />
+
+## 分步实验
+
+<Stepper>
+  <Step title="建立模型"><MrsConcurrencyModelLab /></Step>
+  <Step title="注入边界"><MrsConcurrencyBoundaryLab /></Step>
+  <Step title="保留证据"><MrsConcurrencyEvidenceLab /></Step>
+</Stepper>
+
+## 验收清单
+
+1. 在隔离目录运行三段示例，先预测结果和所有权变化，再记录实际编译诊断。
+2. 为主路径增加一个正常测试和至少三个边界测试，错误断言检查类别与上下文，而不只匹配整段文本。
+3. 清理构建产物后重跑，确认没有依赖本地缓存、环境变量或未声明工具。
+4. 若章节涉及外部系统，使用本地测试服务或临时数据库，设置时间预算并验证资源最终释放。
+
+## 常见误区
+
+<Callout type="trap" title="把编译通过当成章节验收">
+编译器不能证明业务输入完整、超时合理、协议有背压或外部副作用已回滚。必须补充失败测试与可观察证据。
+</Callout>
+
+<Callout type="trap" title="把2019年的crate API当成固定标准">
+本书核心结构值得保留，但框架和工具API会变化。新代码应锁定版本、查阅维护中的官方文档，并把迁移集中在适配边界。
+</Callout>
+
+## 本章回顾
+
+本章按照官方目录逐项覆盖程序执行模型、线程与消息传递、共享状态、Send 与 Sync、Actor 与并发生态。核心方法是先用类型表达资源与能力，再用运行期协议约束超时、顺序和外部失败，最后用测试、日志或调试记录证明结果可重复。
+
+<Exercises>
+**问题 1：如何解释程序执行模型与线程与消息传递的协作？**
+<Answer>进程、线程、事件循环和actor对隔离、调度与通信做出不同取舍；先识别任务是CPU密集还是等待密集，再选择模型。 线程共享地址空间，channel把所有权随消息转移；消息协议仍要定义关闭、超时、背压和失败确认。</Answer>
+
+**问题 2：共享状态和Send 与 Sync的边界是什么？**
+<Answer>Arc表达跨线程共享所有权，Mutex或RwLock保护可变状态；锁的范围、顺序和中毒处理是运行时协议，类型系统不会替你设计业务不变量。 Send表示值可跨线程转移，Sync表示共享引用可跨线程访问；它们把大量线程安全约束编码进类型，但unsafe实现必须由作者证明。</Answer>
+
+**问题 3：怎样验收Actor 与并发生态？**
+<Answer>actor用邮箱隔离状态并按消息驱动，减少共享内存但引入队列、监督和消息时序问题；选择库前先验证取消、背压与关闭语义。 使用正常、边界、错误和资源中断输入，保存工具链、命令、退出状态和可复查输出。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="程序执行模型" definition="进程、线程、事件循环和actor对隔离、调度与通信做出不同取舍" />
+  <GlossaryItem term="线程与消息传递" definition="线程共享地址空间，channel把所有权随消息转移" />
+  <GlossaryItem term="共享状态" definition="Arc表达跨线程共享所有权，Mutex或RwLock保护可变状态" />
+  <GlossaryItem term="Send 与 Sync" definition="Send表示值可跨线程转移，Sync表示共享引用可跨线程访问" />
+  <GlossaryItem term="Actor 与并发生态" definition="actor用邮箱隔离状态并按消息驱动，减少共享内存但引入队列、监督和消息时序问题" />
+  <GlossaryItem term="章节验收边界" definition="用输入、失败、资源、证据和迁移约束验证章节核心。" />
+</Glossary>
+
+<Attribution adaptedFrom="Mastering Rust, Second Edition · 原书第8章 Concurrency" adaptedUrl="https://www.packtpub.com/en-us/product/mastering-rust-9781789346572" />

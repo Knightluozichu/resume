@@ -1,112 +1,314 @@
 ---
-title: 数组中出现次数超过一半的数字
+title: "面试题39：数组中出现次数超过一半的数字"
 type: C
-section: 数组
-order: 4
-description: Moore 投票法在一次遍历里确定候选值并做最终计数验证。
+section: "第5章 优化时间和空间效率"
+order: 43
+description: "用随机Partition定位中位候选，或用次数抵消在线压缩候选，再以完整计数判定是否真的严格超过数组长度的一半。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/39_MoreThanHalfNumber/MoreThanHalfNumber.cpp"
 draft: false
 ---
 
-{/* 知识点清单：摩尔投票、配对抵消、最终校验；原书章节：数组中出现次数超过一半的数字。 */}
+import { MajorityPartitionDiagram, MajorityCancellationMap, MajorityVerificationDiagram, MajorityInputContractDiagram, MoreThanHalfOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/more-than-half-number";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能描述“成对消除”为什么能留下多数元素。
-- 能实现一次遍历选候选，再做二次验证。
-- 能处理不存在多数元素的输入。
+- 能解释严格多数元素为何必然占据排序后的中位位置
+- 能计算作者次数抵消过程中候选值和票数的逐步变化
+- 能实现基于Partition的第k小与抵消投票两种线性期望解法
+- 能分析原地重排、无效标志、返回哨兵与输入检查边界
+- 能设计覆盖作者六组用例及0值多数、畸形长度的测试
 
 </Objectives>
 
-## 直觉引入
+## 从“答案若存在，必然穿过中点”开始
 
-如果某个值出现次数超过一半，它与“其他所有数”都能配对消掉一部分，但仍会留下余数。  
-投票法就是把这个抵消过程写成两变量流程。
+先预测：长度9的数组里，某个数字出现至少5次。把数组完全排序后，无论这些相同数字原来散落在哪里，它们占据的连续区间都必然盖住下标4。于是“**数组中出现次数超过一半的数字**”可以先找中位位置上的候选，再验证它是不是真的出现5次以上。
 
-## 概念讲解
+作者给出两种方案。第一种用随机Partition反复缩小区间，把正确元素放到<Term def="长度为n时下标floor(n/2)的位置；严格多数元素若存在必然覆盖该位置。">中位位置</Term>；第二种不改变数组，只维护候选和票数，把不同数字成对抵消。二者都只能产生候选，不能省略最后的计数。
 
-阶段一：`candidate` 与 `count` 扫描，遇到相同 `++`，不同 `--`。  
-`count` 为 0 时换候选。  
-阶段二：对候选做完整计数验证是否超过 `n/2`。
+<MajorityPartitionDiagram />
 
-## 思考引导
+## 解法一：基于Partition的第k小
 
-### 1) 先问问题，不先计数
-超过一半元素的存在性是判定性问题。先确认是否满足前提，再判断是否要返回该候选。
+作者计算 `middle = length >> 1`，在整个数组上调用工具函数 `Partition`。该函数随机选主元，把小于主元的元素移到左边，并返回主元最终下标。这里不需要把数组完全排序，只需让某次返回下标等于middle。
 
-### 2) 识别不变式
-摩尔投票核心是不变式：不同元素两两抵消不会影响多数元素。抵消后剩余候选如果存在，即潜在多数。
-
-### 3) 为什么它一定成立
-多数元素出现次数 > n/2，任何把它和其他元素配对移除的操作都不会消掉多数元素的“净优势”。
-
-### 4) 常见误区
-第一遍只做抵消不验证最终计数，会在“并无多数”时给出伪结果。必须做二次校验。
-
-### 5) 你能找到一个反例吗
-[1,2,3,4] 不存在多数元素。仅靠抵消会留下一个候选，必须再计数确认是否过半。
-
-### 6) 迁移到下一题
-当你在日志或意见里找“主导项”时，先做候选压缩，再做计数验证，这比直接全量计数更稳。
-## 交互 Demo
-
-每一位“同号支持/异号抵消”都能直接看到计数归零与候选变化。
-
-<HashTableDiagram />
+每次Partition后都成立<Term def="主元落位后，左侧元素都小于主元，目标下标若不等于主元下标就只可能位于其中一侧。">分区不变量</Term>：若index大于middle，只搜索左侧；若index小于middle，只搜索右侧。到index等于middle时，numbers[middle]就是中位候选。
 
 ```cpp
-#include <vector>
+bool g_bInputInvalid = false;
 
-class Solution {
-public:
-    int majorityElement(const std::vector<int>& nums) {
-        int candidate = 0, count = 0;
-        for (int x : nums) {
-            if (count == 0) {
-                candidate = x;
-                count = 1;
-            } else if (x == candidate) {
-                ++count;
-            } else {
-                --count;
-            }
-        }
-
-        int verify = 0;
-        for (int x : nums) if (x == candidate) ++verify;
-        return (verify * 2 > (int)nums.size()) ? candidate : -1;
+bool CheckInvalidArray(int* numbers, int length) {
+    g_bInputInvalid = false;
+    if (numbers == nullptr && length <= 0) {
+        g_bInputInvalid = true;
     }
-};
-```
+    return g_bInputInvalid;
+}
 
-```typescript
-function majorityElement(nums: number[]): number {
-  let candidate = 0;
-  let count = 0;
+bool CheckMoreThanHalf(
+    int* numbers, int length, int number) {
+    int times = 0;
+    for (int i = 0; i < length; ++i) {
+        if (numbers[i] == number) {
+            ++times;
+        }
+    }
+    if (times * 2 <= length) {
+        g_bInputInvalid = true;
+        return false;
+    }
+    return true;
+}
 
-  for (const x of nums) {
-    if (count === 0) {
-      candidate = x;
-      count = 1;
-    } else if (x === candidate) count++;
-    else count--;
-  }
+int MoreThanHalfNum_Solution1(
+    int* numbers, int length) {
+    if (CheckInvalidArray(numbers, length)) {
+        return 0;
+    }
 
-  let verify = 0;
-  for (const x of nums) if (x === candidate) verify++;
-  return verify * 2 > nums.length ? candidate : -1;
+    const int middle = length >> 1;
+    int start = 0;
+    int end = length - 1;
+    int index =
+        Partition(numbers, length, start, end);
+
+    while (index != middle) {
+        if (index > middle) {
+            end = index - 1;
+        } else {
+            start = index + 1;
+        }
+        index =
+            Partition(numbers, length, start, end);
+    }
+
+    int result = numbers[middle];
+    if (!CheckMoreThanHalf(
+            numbers, length, result)) {
+        result = 0;
+    }
+    return result;
 }
 ```
 
-<Callout type="trap">
-  <strong>现象 →</strong> 直接返回 `candidate` 却未验证。  
-  <strong>原因 →</strong> 输入不满足“存在多数元素”时候，会被错误命中。  
-  <strong>修复 →</strong> 做第二次计数校验。
+若严格多数值为m，它在有序数组中覆盖middle；Partition最终把第middle小的元素放到middle，因此候选必为m。反过来，中位元素存在并不表示严格多数存在，例如1、2、3、4、5的中位数是3，却只出现一次。所以作者在得到候选后调用 `CheckMoreThanHalf`。
+
+这条路线会交换数组元素，调用结束后原顺序通常已改变。作者测试在调用解法一之前复制数组，再把副本交给解法二，正是为了隔离这个副作用。随机Partition平均时间O(n)，最坏可退化到O(n²)，辅助空间O(1)；它不是稳定排序，也不承诺中位位置两侧的内部次序。
+
+## 解法二：次数抵消
+
+若多数元素存在，把每个非多数元素与一个多数元素配成异值对并同时删除，最终仍会剩下多数元素。作者用 `result` 保存候选、`times` 保存净票数：相同值加一，不同值减一；票数为零时，当前元素成为新候选。
+
+这里的<Term def="扫描前缀后，尚未与异值元素配对消除的当前候选净数量。">抵消票数</Term>不是候选的真实出现总数。它只表示当前扫描前缀里成对删除后的净余额，所以第一遍结束后仍需从头计数。
+
+<MajorityCancellationMap />
+
+```cpp
+int MoreThanHalfNum_Solution2(
+    int* numbers, int length) {
+    if (CheckInvalidArray(numbers, length)) {
+        return 0;
+    }
+
+    int result = numbers[0];
+    int times = 1;
+    for (int i = 1; i < length; ++i) {
+        if (times == 0) {
+            result = numbers[i];
+            times = 1;
+        } else if (numbers[i] == result) {
+            ++times;
+        } else {
+            --times;
+        }
+    }
+
+    if (!CheckMoreThanHalf(
+            numbers, length, result)) {
+        result = 0;
+    }
+    return result;
+}
+```
+
+对任意前缀，删除一对不同值不会改变“某值是否比其余所有值总数更多”。若真实多数m存在，全部异值配对结束后m不可能被完全抵消，最终候选一定是m。若多数不存在，算法仍可能留下某个数字；作者Test2就是反例，候选阶段不会自动表达“不存在”。
+
+<Callout type="trap" title="把最后候选直接当答案">
+输入1、2、3、2、4、2、5、2、3没有严格多数，但抵消扫描仍会留下候选。次数抵消证明的是“真多数若存在就不会丢”，没有证明多数一定存在。
 </Callout>
 
+## 候选结果必须验证
+
+两种解法共享同一个<Term def="候选产生后重新遍历数组，统计真实出现次数并检查是否严格超过长度一半。">候选复核</Term>。作者统计times，并检查 `times * 2 <= length`；等于一半也失败，因为题目要求“超过一半”，不是“不少于一半”。
+
+<MajorityVerificationDiagram />
+
+验证扫描使两种路线的总时间仍为线性量级：Partition方案是平均O(n)加O(n)，抵消方案是O(n)加O(n)。第二遍不是多余开销，而是把有条件的候选性质变成可观察的正确结果。
+
+工程实现可写成 `times > length / 2`，避免 `times * 2` 在极大长度下整数溢出。长度使用 `std::size_t` 时还应避免有符号与无符号混算。若上游契约保证一定存在多数，理论上可以不复核，但此题源码和官方Test2明确允许“不存在”。
+
+## 作者返回值与无效标志
+
+作者失败时返回0，同时用全局<Term def="作者以g_bInputInvalid记录当前调用是否因输入或候选复核失败而无有效答案。">无效标志</Term> `g_bInputInvalid` 区分“答案就是0”和“没有答案”。因此调用方不能只看整数返回值：多数元素0应是 `0 / false`，不存在多数则是 `0 / true`。
+
+<MajorityInputContractDiagram />
+
+`CheckInvalidArray` 的条件是“指针为空并且长度不正”。它只可靠覆盖官方的 `nullptr, 0` 组合；非空指针加0长度不会被判无效，解法二会读取numbers[0]；空指针加正长度也不会被挡住。工具Partition还以 `throw new std::exception` 抛出堆上异常指针，这不是现代C++应延续的异常风格。
+
+<Callout type="trap" title="把作者输入检查理解为所有畸形组合都安全">
+源码使用逻辑AND，不是OR。官方Test6通过不代表非空零长度或空指针正长度安全；新增契约测试会暴露越界访问或异常路径。
+</Callout>
+
+全局标志也不是可重入接口：两个线程并发调用会互相覆盖状态，调用者还可能忘记同步读取。更清楚的现代接口直接把“有答案/无答案”编码到返回类型，并把空数组统一视为无答案。
+
+```cpp
+#include <optional>
+#include <span>
+
+std::optional<int> moreThanHalf(
+    std::span<const int> numbers) {
+    if (numbers.empty()) {
+        return std::nullopt;
+    }
+
+    int candidate = numbers.front();
+    std::size_t votes = 1;
+    for (std::size_t i = 1;
+         i < numbers.size(); ++i) {
+        if (votes == 0) {
+            candidate = numbers[i];
+            votes = 1;
+        } else if (numbers[i] == candidate) {
+            ++votes;
+        } else {
+            --votes;
+        }
+    }
+
+    std::size_t occurrences = 0;
+    for (int value : numbers) {
+        if (value == candidate) {
+            ++occurrences;
+        }
+    }
+    if (occurrences <= numbers.size() / 2) {
+        return std::nullopt;
+    }
+    return candidate;
+}
+```
+
+这个版本保留作者次数抵消思想，但不修改输入、不用全局状态，也不会把0当错误码。若必须保持旧接口，应至少把输入条件改成指针为空或长度不正，并把结果与状态装进结构体。
+
+## 作者六组测试逐项还原
+
+作者的Test先按length分配并复制数组，让解法一处理原数组、解法二处理副本，然后分别比较整数结果与全局标志。六组输入如下：
+
+1. 2散布在长度9的数组中并出现5次，期望2与false。
+2. 2只出现4次，不超过一半，期望0与true。
+3. 五个2集中在数组前半，期望2与false。
+4. 五个2集中在数组后半，期望2与false。
+5. 单元素1，期望1与false。
+6. `nullptr, 0`，期望0与true。
+
+<MoreThanHalfOfficialCaseLab />
+
+前后半段两组不是多余重复：它们防止实现错误依赖多数元素的局部位置。单元素同时覆盖middle为0、抵消循环零次和一次验证成功。源码没有测试多数值0、偶数长度恰好一半、所有元素相同、负数、非空零长度、空指针正长度或多线程全局标志竞争，这些应作为工程扩展。
+
+```cpp
+#include <cassert>
+#include <optional>
+#include <vector>
+
+void testMoreThanHalf() {
+    assert(moreThanHalf(
+        std::vector<int>{1,2,3,2,2,2,5,4,2})
+        == std::optional<int>{2});
+    assert(!moreThanHalf(
+        std::vector<int>{1,2,3,2,4,2,5,2,3}));
+    assert(moreThanHalf(
+        std::vector<int>{2}) == std::optional<int>{2});
+    assert(moreThanHalf(
+        std::vector<int>{0,0,1}) == std::optional<int>{0});
+    assert(!moreThanHalf(
+        std::vector<int>{1,1,2,2}));
+    assert(!moreThanHalf(std::vector<int>{}));
+}
+```
+
+随机测试可把哈希计数结果作为独立参考：生成短数组，找是否有计数严格大于size除以2的键，再与抵消实现比较。Partition版本还要断言返回答案正确但不能断言数组原顺序不变；若业务不允许修改输入，应传副本或选择解法二。
+
+## 两种证明的边界
+
+Partition证明依赖“严格多数必占中位位置”，但反命题不成立；中位候选还需复核。抵消证明依赖“删掉一对异值仍保留多数的净优势”，同样只在多数确实存在时保证最终候选身份。二者最终都把存在性判断交给完整计数。
+
+这也解释了为什么哈希计数虽直接，却不是作者在本题强调的方案：哈希表时间O(n)，但需要O(k)额外空间；作者两条路线都把辅助空间压到O(1)。若数据是只读流且不能重放，抵消阶段能在线进行，但“允许不存在多数”时仍需要第二遍或外部计数存储；单遍常数空间无法在一般流上同时产生候选并完成精确验证。
+
+当数组位于磁盘或远程流，二次扫描成本可能高。可以在第一遍同时记录总长度和候选净票数，却仍不能从净票数推出候选真实次数；要么允许重放，要么保留候选相关信息，要么改变上游契约为“保证多数存在”。性能设计不能靠省掉证明步骤获得。
+
+## 选择哪条路线
+
+输入可修改且已有可靠Partition工具时，解法一展示了选择算法而非完整排序；它也为下一题“最小的k个数”铺垫。输入只读、希望稳定O(n)并减少常数时，次数抵消通常更合适。两者都要明确无答案表达方式。
+
+Partition使用随机主元时，生产环境还要考虑随机数源、确定性测试和对抗输入；作者工具使用 `rand()`，没有在本文件播种。抵消法无随机性、无数组写入，更容易用于并发只读数据，但共享全局无效标志仍需移除。
+
+若接口返回结果对象，可同时携带候选值、出现次数和总长度，方便审计“为什么过半”。若只返回optional，调用方得到最小且不歧义的契约。不要同时保留0哨兵和可选值语义，否则又会引入两个互相冲突的失败通道。
+
+<Stepper>
+  <Step title="用中位性质压缩搜索"><MajorityPartitionDiagram />严格多数若存在必覆盖中点，Partition只追踪目标下标所在的一侧。</Step>
+  <Step title="用异值配对压缩候选"><MajorityCancellationMap />相同值支持、不同值抵消，票数归零时替换候选。</Step>
+  <Step title="重新计数证明严格过半"><MajorityVerificationDiagram />两条路线都必须完整复核，等于一半也判失败。</Step>
+  <Step title="核对结果与状态契约"><MajorityInputContractDiagram />区分有效数字0、无多数与畸形指针长度组合。</Step>
+  <Step title="跑完六组作者测试"><MoreThanHalfOfficialCaseLab />同时比较返回值和无效标志，并观察解法一会重排输入。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 严格多数元素若存在，必然占据排序后的中位位置。
+2. 随机Partition可平均O(n)定位中位候选，但会原地重排数组。
+3. 次数抵消以异值配对保留真实多数的净优势，稳定O(n)、O(1)。
+4. 两种方法都只能提出候选；候选结果必须验证。
+5. 等于一半不合格，检查必须使用严格大于。
+6. 作者以0加全局无效标志表达失败，读取结果时二者缺一不可。
+7. 作者AND输入检查只覆盖官方 `nullptr, 0`，并非所有畸形组合。
+8. optional与只读span能消除哨兵歧义、全局竞争和输入修改。
+
+<Exercises>
+
+**问题 1：为何多数值一定覆盖中位位置，而中位值不一定是多数？**
+
+<Answer>长度n中严格多数至少占floor(n/2)+1个连续排序位置，这段区间不可能完全落在中点一侧，所以覆盖中位位置；但任何非空数组都有中位值，即使每个值只出现一次，因此还需计数验证。</Answer>
+
+**问题 2：扫描1、2、3、2后，作者抵消法的候选和票数怎样变化？**
+
+<Answer>先以1和票数1初始化；遇2后抵消到0；遇3时因票数为0改选3并置1；遇2后再次抵消到0。此时没有确定答案，只处理完两个异值对。</Answer>
+
+**问题 3：为什么解法一测试前要复制数组？**
+
+<Answer>Partition会交换元素并改变原数组排列。作者让解法一处理原数组、解法二处理预先复制的副本，保证两条路线面对相同初始序列，也避免用已分区数组掩盖顺序相关错误。</Answer>
+
+**问题 4：返回0时，怎样区分“多数值就是0”和“没有多数”？**
+
+<Answer>作者旧接口还必须读取g_bInputInvalid：0加false表示有效多数0，0加true表示无答案。现代接口用optional直接表达有无答案，不再占用某个整数做哨兵。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="中位位置">长度n数组排序后下标floor(n/2)的位置。</GlossaryItem>
+  <GlossaryItem term="分区不变量">Partition主元落位后，小值在左，目标只需继续搜索主元一侧的性质。</GlossaryItem>
+  <GlossaryItem term="抵消票数">扫描前缀中当前候选与异值成对删除后的净余额。</GlossaryItem>
+  <GlossaryItem term="候选复核">重新统计候选真实出现次数并检查严格过半。</GlossaryItem>
+  <GlossaryItem term="无效标志">作者用于区分有效返回0与无有效答案的全局状态。</GlossaryItem>
+</Glossary>
+
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题39"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/39_MoreThanHalfNumber/MoreThanHalfNumber.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

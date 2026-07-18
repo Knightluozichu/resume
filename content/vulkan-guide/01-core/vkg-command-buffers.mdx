@@ -1,196 +1,304 @@
 ---
-title: "命令缓冲与录制"
+title: "命令池、命令缓冲与提交"
 type: C
 section: "计算机图形学与渲染"
 order: 5
-description: "掌握命令池创建、命令缓冲分配与录制、提交及同步原语的使用"
+description: "以生命周期状态机、线程所有权、secondary inheritance 与 submit2 建立录制执行闭环"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://docs.vulkan.org/guide/latest/threading.html"
 draft: false
 ---
 
-import { VkgCommandBuffersDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-command-buffers";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  VkgCommandBuffersDiagram,
+  VkgCommandOwnershipDiagram,
+} from "@/components/mdx/vulkan-guide/diagrams/vkg-command-buffers";
+import { VkgStepFlowDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 理解命令池与命令缓冲的关系及分配策略
-- 掌握命令缓冲的录制流程（begin/beginRenderPass/cmd*/endRenderPass/end）
-- 学会主命令缓冲与次级命令缓冲的区别与使用场景
-- 掌握命令提交与信号量/fence 同步的正确用法
+
+- 能描述 command buffer 从 Initial 到 Recording、Executable、Pending 和重用的状态转换
+- 能实现每 worker、每 frame slot 独占 command pool 的并行录制结构
+- 能比较 primary/secondary command buffer 的提交、继承、复用与性能边界
+- 能解释 submit2 的 wait/signal scope、fence 时机和被引用资源生命周期
+
 </Objectives>
 
-## 直觉引入
+## 录制、提交与执行是三个时间域
 
-想象一个工厂调度员：他不直接操作机器，而是把生产指令写在「工单」上，然后把工单交给车间执行。Vulkan 的 <Term def="VkCommandBuffer 是预录制的 GPU 命令序列，提交后由队列异步执行，是 Vulkan 命令录制与提交的核心机制。">VkCommandBuffer</Term> 就是这样的「工单」。你先在 CPU 端把所有绘制命令录制好，然后一次性提交给 GPU 队列执行。
+<Term def="在 host 上记录 Vulkan 命令、结束后可提交给兼容 queue 执行的状态化对象">VkCommandBuffer</Term>不是“GPU 工单文件”，也不是调用 vkCmd* 时立刻执行的远程过程。录制发生在 host；queue submission 建立执行批次和同步；GPU 在未来某个时间消费命令及其引用资源。
 
-这种设计让 CPU 和 GPU 可以并行工作：CPU 录制下一帧命令时，GPU 正在执行上一帧的命令。
+这三个时间域决定最关键的正确性规则：录制时对象参数必须合法，提交时 command buffer 必须 Executable，执行完成前 command buffer 及被 GPU 引用的资源不能被非法 reset、free、销毁或覆写。
 
-## 概念讲解
+## Command pool 是队列族与线程所有权边界
 
-### 命令池
+<Term def="绑定一个 queue family、为 command buffers 管理实现私有内存并定义 reset 策略的 device 对象">VkCommandPool</Term>创建时指定 queue family。由它分配的 command buffer 只能提交到与该 family 兼容的 queue。
 
-<Term def="VkCommandPool 是命令缓冲的内存分配器，与特定队列族绑定，管理命令缓冲的分配和回收。">VkCommandPool</Term> 是命令缓冲的内存来源，创建时必须指定队列族：
+`VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT`允许单独 reset command buffer；没有该 flag 时通常按整个 pool 重置。`VK_COMMAND_POOL_CREATE_TRANSIENT_BIT`只是命令缓冲生命周期较短的实现提示，不是正确性要求，也不保证性能提升。
 
-```c
-VkCommandPoolCreateInfo poolInfo = {
-    .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
-    .flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
-    .queueFamilyIndex = graphicsFamilyIndex,
+```cpp
+VkCommandPoolCreateInfo poolInfo{
+  .sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
+  .flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT |
+           VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT,
+  .queueFamilyIndex = graphicsFamily,
 };
-vkCreateCommandPool(device, &poolInfo, NULL, &commandPool);
+VK_CHECK(vkCreateCommandPool(device, &poolInfo, nullptr, &frame.pool));
+
+VkCommandBufferAllocateInfo allocate{
+  .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
+  .commandPool = frame.pool,
+  .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+  .commandBufferCount = 1,
+};
+VK_CHECK(vkAllocateCommandBuffers(device, &allocate, &frame.primary));
 ```
 
-标志位 `VK_COMMAND_POOL_CREATE_TRANSIENT_BIT` 表示命令缓冲频繁重新录制（短生命周期），`VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT` 允许单独重置命令缓冲。
+Command pool 的 host access 是**externally synchronized**。两个线程不能无锁地从同一个 pool allocate/reset，也不能一边 reset pool 一边录制其中的 command buffer。常见架构为每个 worker、每个 frame slot 一个 pool；等待该 frame 完成后，由拥有它的 worker 批量 reset。
 
-### 命令缓冲分配与录制
+## 生命周期状态机
 
-```c
-// 分配
-VkCommandBufferAllocateInfo allocInfo = {
-    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO,
-    .commandPool = commandPool,
-    .level = VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-    .commandBufferCount = 1,
-};
-vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
+Command buffer 主要状态为：
 
-// 开始录制
-VkCommandBufferBeginInfo beginInfo = {
-    .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-    .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
-};
-vkBeginCommandBuffer(commandBuffer, &beginInfo);
-
-// 录制渲染命令
-vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipeline);
-vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-vkCmdDraw(commandBuffer, vertexCount, 1, 0, 0);
-vkCmdEndRenderPass(commandBuffer);
-
-// 结束录制
-vkEndCommandBuffer(commandBuffer);
-```
-
-### 主命令缓冲与次级命令缓冲
-
-<Term def="主命令缓冲可直接提交到队列执行，次级命令缓冲不能单独提交，只能被主命令缓冲通过 vkCmdExecuteCommands 调用。">主/次级命令缓冲</Term> 的区别：
-
-- **主命令缓冲**（`VK_COMMAND_BUFFER_LEVEL_PRIMARY`）：可直接提交到队列
-- **次级命令缓冲**（`VK_COMMAND_BUFFER_LEVEL_SECONDARY`）：不能单独提交，由主缓冲通过 `vkCmdExecuteCommands` 执行
-
-次级缓冲适用于可复用的命令片段（如固定 UI 绘制），在多线程录制时也很有用。
-
-### 提交与同步
-
-```c
-VkSubmitInfo submitInfo = {
-    .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-    .waitSemaphoreCount = 1,
-    .pWaitSemaphores = &imageAvailableSemaphore,
-    .pWaitDstStageMask = &waitStages,
-    .commandBufferCount = 1,
-    .pCommandBuffers = &commandBuffer,
-    .signalSemaphoreCount = 1,
-    .pSignalSemaphores = &renderFinishedSemaphore,
-};
-
-vkQueueSubmit(graphicsQueue, 1, &submitInfo, inFlightFence);
-```
-
-## 交互Demo
-
-> 猜一猜：如果你在录制命令缓冲时忘记调用 `vkEndCommandBuffer`，提交时会发生什么？
+1. **Initial**：刚分配或 reset，可调用 begin；
+2. **Recording**：begin 成功后，可追加合法 vkCmd*；
+3. **Executable**：end 成功后，可提交或作为 secondary 被执行；
+4. **Pending**：已提交且执行可能未完成；
+5. **Invalid**：某些错误、one-time 使用完成或依赖失效后不能直接提交，需 reset/re-record。
 
 <VkgCommandBuffersDiagram />
 
-<Stepper>
-  <Step title="分配与开始录制">
-    从命令池分配命令缓冲，调用 `vkBeginCommandBuffer` 开始录制。设置 usage flags（如 `ONE_TIME_SUBMIT` 表示一次性提交，`SIMULTANEOUS_USE` 表示可并发执行）。
-  </Step>
-  <Step title="录制渲染命令">
-    在 render pass 内绑定管线、设置动态状态（viewport/scissor）、绑定顶点/索引缓冲、绑定描述符集，最后调用 `vkCmdDraw` 或 `vkCmdDrawIndexed` 绘制。所有命令都是异步的——录制本身不执行任何 GPU 操作。
-  </Step>
-  <Step title="结束录制并提交">
-    调用 `vkEndCommandBuffer` 结束录制。填充 `VkSubmitInfo`（指定等待的信号量、命令缓冲、触发的信号量），调用 `vkQueueSubmit` 提交。用 fence 通知 CPU 这一帧已完成。
-  </Step>
-</Stepper>
+`VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT`表达一次提交后重录的意图；`SIMULTANEOUS_USE_BIT`允许同一 command buffer 在上一次仍 Pending 时再次提交，但它可能增加实现成本，也不让应用修改 pending buffer。默认情况下，必须等待前次执行完成才能再次提交。
 
-## 代码对照
+```cpp
+VK_CHECK(vkWaitForFences(device, 1, &frame.complete, VK_TRUE, UINT64_MAX));
+VK_CHECK(vkResetCommandPool(device, frame.pool, 0));
 
-多帧并行提交（双缓冲/三缓冲）：
+VkCommandBufferBeginInfo begin{
+  .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+  .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+};
+VK_CHECK(vkBeginCommandBuffer(frame.primary, &begin));
 
-```c
-#define MAX_FRAMES_IN_FLIGHT 2
+recordImageTransitions(frame.primary, imageIndex);
+beginDynamicRendering(frame.primary, imageIndex);
+vkCmdBindPipeline(frame.primary, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+vkCmdSetViewport(frame.primary, 0, 1, &viewport);
+vkCmdSetScissor(frame.primary, 0, 1, &scissor);
+vkCmdDrawIndexed(frame.primary, indexCount, 1, 0, 0, 0);
+vkCmdEndRendering(frame.primary);
+transitionToPresent(frame.primary, imageIndex);
 
-VkCommandBuffer commandBuffers[MAX_FRAMES_IN_FLIGHT];
-VkSemaphore imageAvailable[MAX_FRAMES_IN_FLIGHT];
-VkSemaphore renderFinished[MAX_FRAMES_IN_FLIGHT];
-VkFence inFlightFences[MAX_FRAMES_IN_FLIGHT];
-
-// 每帧渲染循环
-uint32_t frameIndex = currentFrame % MAX_FRAMES_IN_FLIGHT;
-
-// 等待前一帧完成
-vkWaitForFences(device, 1, &inFlightFences[frameIndex],
-    VK_TRUE, UINT64_MAX);
-vkResetFences(device, 1, &inFlightFences[frameIndex]);
-
-// 获取交换链图像
-vkAcquireNextImageKHR(device, swapchain, UINT64_MAX,
-    imageAvailable[frameIndex], VK_NULL_HANDLE, &imageIndex);
-
-// 重新录制命令
-vkResetCommandBuffer(commandBuffers[frameIndex], 0);
-recordCommandBuffer(commandBuffers[frameIndex], imageIndex);
-
-// 提交
-VkSubmitInfo submit = { ... };
-vkQueueSubmit(graphicsQueue, 1, &submit, inFlightFences[frameIndex]);
-
-// 呈现
-VkPresentInfoKHR presentInfo = { ... };
-vkQueuePresentKHR(presentQueue, &presentInfo);
+VK_CHECK(vkEndCommandBuffer(frame.primary));
 ```
+
+等待 fence 只能证明与该 fence 关联的 submission 完成。若 pool 中还包含其他 pending command buffers，仍不能 reset 整个 pool。FrameContext 应明确列出本 pool 的全部提交，并用一个覆盖它们的进度条件回收。
+
+## 被引用对象必须活到执行完成
+
+录制命令时 Vulkan 通常只保存句柄和参数，不复制 buffer/image 内容。pipeline、pipeline layout、descriptor sets、buffer/image/view、query pool 及其绑定内存等对象，必须满足规范定义的录制、提交和执行生命周期。
+
+Host-visible uniform 或 staging memory 即使对象没销毁，也不能在 GPU 读取期间无同步覆写。描述符更新能否在 pending 时发生取决于 descriptor binding flags 和具体使用规则；默认设计应把 descriptor arena 与资源数据一起按 frame/generation 管理。
+
+<VkgCommandOwnershipDiagram />
+
+资源管理器可为每次 submission 保存引用 generation 或 retire value。只有 fence signaled 或 timeline semaphore 达到相应值后，才释放这一批 command buffer 间接引用的对象。这比在各处调用 `vkDeviceWaitIdle`更精确，也更容易审计。
+
+## Primary 与 Secondary 的真实边界
+
+<Term def="可直接提交到 queue 的 command buffer；secondary 不能直接提交，只能由 primary 通过 vkCmdExecuteCommands 执行">Primary/secondary command buffer</Term>是执行层级，不是“主线程/工作线程”同义词。Primary 也可由 worker 录制；secondary 也可由单线程录制。
+
+Secondary 适合把独立 draw ranges 分给多个 worker，或缓存确实稳定的命令片段。但它会增加执行和管理开销，继承状态有限，资源与 descriptor 变化也可能迫使重录。是否更快必须测量 CPU 录制时间、queue submit 规模与 GPU 执行开销。
+
+使用 dynamic rendering 时，primary 的 `vkCmdBeginRendering`需要 `VK_RENDERING_CONTENTS_SECONDARY_COMMAND_BUFFERS_BIT`；secondary begin info 的 inheritance pNext 链中提供 `VkCommandBufferInheritanceRenderingInfo`，其 viewMask、color/depth/stencil formats 和 rasterizationSamples 必须与当前 rendering instance 兼容。
+
+```cpp
+VkCommandBufferInheritanceRenderingInfo renderingInheritance{
+  .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_RENDERING_INFO,
+  .viewMask = viewMask,
+  .colorAttachmentCount = 1,
+  .pColorAttachmentFormats = &colorFormat,
+  .depthAttachmentFormat = depthFormat,
+  .rasterizationSamples = samples,
+};
+VkCommandBufferInheritanceInfo inheritance{
+  .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO,
+  .pNext = &renderingInheritance,
+};
+VkCommandBufferBeginInfo secondaryBegin{
+  .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+  .flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT |
+           VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT,
+  .pInheritanceInfo = &inheritance,
+};
+VK_CHECK(vkBeginCommandBuffer(workerSecondary, &secondaryBegin));
+recordDrawRange(workerSecondary, range);
+VK_CHECK(vkEndCommandBuffer(workerSecondary));
+```
+
+Primary 在 rendering instance 内执行 secondaries；secondary 不负责 begin/end 该 rendering instance。多个 worker 使用不同 command pools，并且 descriptor pool、query 范围和临时 upload arena 也要避免 host 数据竞争。
+
+## Submit2 把同步 scope 放到每个条目
+
+`vkQueueSubmit2`使用 `VkSemaphoreSubmitInfo`和 `VkCommandBufferSubmitInfo`，每个 wait/signal 自带 stageMask 与 timeline value，结构比旧 `VkSubmitInfo`更明确。
+
+```cpp
+VkSemaphoreSubmitInfo acquireWait{
+  .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+  .semaphore = imageAvailable[frameIndex],
+  .value = 0,
+  .stageMask = firstSwapchainUseStage,
+};
+VkCommandBufferSubmitInfo commandInfo{
+  .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO,
+  .commandBuffer = frame.primary,
+};
+VkSemaphoreSubmitInfo renderSignal{
+  .sType = VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
+  .semaphore = renderFinished[imageIndex],
+  .value = 0,
+  .stageMask = VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+};
+VkSubmitInfo2 submit{
+  .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2,
+  .waitSemaphoreInfoCount = 1,
+  .pWaitSemaphoreInfos = &acquireWait,
+  .commandBufferInfoCount = 1,
+  .pCommandBufferInfos = &commandInfo,
+  .signalSemaphoreInfoCount = 1,
+  .pSignalSemaphoreInfos = &renderSignal,
+};
+
+// 只在确定本帧会提交后 reset；acquire OUT_OF_DATE 时不能留下永不 signal 的 fence。
+VK_CHECK(vkResetFences(device, 1, &frame.complete));
+VK_CHECK(vkQueueSubmit2(graphicsQueue, 1, &submit, frame.complete));
+```
+
+firstSwapchainUseStage 来自实际命令：先 transfer clear 就用 TRANSFER，先 color attachment write 才用 COLOR_ATTACHMENT_OUTPUT。Queue 的 host access 同样 externally synchronized；多个线程向同一 queue submit/present 需要提交线程或 mutex。多个 queue handle 是否带来真实并行也由 queue family、硬件与 workload 决定。
+
+Fence reset 的位置很重要：若等待并 reset fence 后，acquire 返回 OUT_OF_DATE，代码跳过 submit，则下一帧会永远等待未被任何 submission signal 的 fence。应在确认即将 submit 后 reset，或在所有早退路径修复状态。
+
+## Frames in flight 是延迟与吞吐权衡
+
+增加 frames-in-flight 可以让 CPU 与 GPU 重叠，但不会自动“大幅提升吞吐”。若 GPU 已饱和，更多帧主要增加排队和输入延迟；若 CPU 录制成为瓶颈，多 worker 和适量帧资源才可能改善。Swapchain image count 也不等于 frames-in-flight；两者由不同约束决定。
+
+测量时同时记录 CPU frame build、queue submit、GPU frame、present pacing 和端到端延迟。常见起点是 2 帧，但应允许平台和低延迟策略调整，而不是把常量写成 Vulkan 规则。
+
+## 三步构建 FrameContext
+
+<Stepper>
+<Step title="第一步：分配独占录制资源">
+
+为每个 frame slot 和 worker 创建绑定正确 queue family 的 command pool，并同时分片 descriptor/query/upload 临时资源。
+
+<VkgStepFlowDiagram
+  caption="并行安全来自所有权分区，不来自 vkCmd* 函数名本身。"
+  stage={1}
+  stages={["Ownership：frame × worker pools、arenas、query ranges"]}
+/>
+
+</Step>
+<Step title="第二步：等待后批量重置录制">
+
+等待该 frame 的 fence/timeline value，回收引用 generation，reset pool；并行录制 secondaries，主缓冲建立 rendering 与执行顺序。
+
+<VkgStepFlowDiagram
+  caption="只有完成证据覆盖 pool 中全部 pending 工作后才能批量 reset。"
+  stage={2}
+  stages={[
+    "Ownership：frame × worker pools、arenas、query ranges",
+    "Record：wait completion、reset、parallel secondary、primary assembly",
+  ]}
+/>
+
+</Step>
+<Step title="第三步：提交并登记生命周期">
+
+构造 submit2 的精确 wait/signal stages，在确定提交后 reset fence；串行访问 queue，并把资源引用关联到 submission completion。
+
+<VkgStepFlowDiagram
+  caption="一次提交同时产出 GPU 依赖和 host 可回收证据。"
+  stage={3}
+  stages={[
+    "Ownership：frame × worker pools、arenas、query ranges",
+    "Record：wait completion、reset、parallel secondary、primary assembly",
+    "Submit2：scoped waits/signals、fence 与 resource retirement",
+  ]}
+/>
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-在命令缓冲正在执行时重置或重新录制它。必须用 fence 确认 GPU 已完成执行后才能 `vkResetCommandBuffer`。不等待直接重置会导致验证层报错甚至 GPU 崩溃。使用多帧并行（MAX_FRAMES_IN_FLIGHT）是标准解法。
+**现象 →** 多线程录制偶发 command pool corruption 或 validation host-sync 报错。
+**原因 →** 多个 worker 从同一 command pool allocate/reset；pool host access 需要外部同步。
+**修法 →** 每 worker、每 frame slot 独占 pool，或对共享 pool 全部 host 操作加锁；优先使用所有权分区。
 </Callout>
 
 <Callout type="trap">
-混淆 `pWaitDstStageMask` 的作用。这个字段指定信号量等待在管线的哪个阶段解除阻塞，不是指定等待哪个阶段完成。通常设为 `VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT`，让 GPU 在顶点处理阶段就开始工作，直到颜色输出阶段才等待图像可用。
+**现象 →** resize 后 acquire 早退，下一帧永久卡在 vkWaitForFences。
+**原因 →** acquire 前 reset 了 fence，OUT_OF_DATE 路径没有 submission 再 signal 它。
+**修法 →** 等 fence 后保持 signaled，确认 acquire 成功且即将 submit 时才 reset；审计所有早退路径。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 使用 secondary 后性能下降或 dynamic rendering validation 报继承不匹配。
+**原因 →** 把 secondary 当自动提速开关，且 inheritance formats/samples/viewMask 与 primary rendering instance 不一致。
+**修法 →** 完整填写 VkCommandBufferInheritanceRenderingInfo，并以 CPU/GPU profile 决定分块粒度和是否复用。
 </Callout>
 
 ## 练习
 
 <Exercises>
-1. 为什么要用 `MAX_FRAMES_IN_FLIGHT`（多帧并行）而不是单缓冲？
-   <Answer>
-   单缓冲下，CPU 必须等 GPU 完成当前帧才能录制下一帧（vkWaitForFences 阻塞），CPU 和 GPU 无法并行工作。多帧并行下，CPU 录制第 N+1 帧时 GPU 正在执行第 N 帧，两者重叠执行，大幅提升吞吐量。通常用 2（双缓冲）即可，3 帧可进一步平滑帧时间波动。
-   </Answer>
 
-2. 次级命令缓冲在什么场景下有优势？
-   <Answer>
-   次级命令缓冲适合可复用的命令片段：1) 固定 UI 绘制——每帧不变的 UI 可预录制为次级缓冲，主缓冲只需 vkCmdExecuteCommands 调用；2) 多线程录制——不同线程录制不同次级缓冲，最后由主线程的主缓冲汇总；3) 复杂场景分块——将场景分为多个模块各自录制，减少主缓冲重录开销。注意次级缓冲不能单独提交且不支持 render pass 的 begin/end。
-   </Answer>
+1. **状态机：** command buffer 已提交且 fence 未 signal。能否 reset 它、reset 所属 pool，或再次 submit？
+
+<Answer>
+不能 reset 该 command buffer，也不能 reset 包含它的 pool，因为它仍 Pending。默认 usage 下不能再次 submit；只有录制时使用 SIMULTANEOUS_USE 才允许 pending 期间再次提交，但依然不能修改或 reset。应先等待覆盖该 submission 的 fence/timeline completion，再进入重用流程。
+</Answer>
+
+2. **线程设计：** 3 个 worker、2 帧并发，每个 worker 并行录制 secondary。最直接需要多少 graphics command pool？
+
+<Answer>
+需要 3×2=6 个 pool，每个 worker 在每个 frame slot 独占一个。等待某 frame 完成后，各 worker 可重置自己的该 frame pool。Primary 可以由主线程使用另一个每 frame pool，或由明确 worker 所有；若也单独分配，则再增加 2 个。关键不是固定数量，而是同一 pool 不被未同步并发访问。
+</Answer>
+
+3. **Submit scope：** acquire 后第一条接触 swapchain image 的命令是 vkCmdClearColorImage，随后才做 color attachment draw。acquire wait stage 应选什么？
+
+<Answer>
+应至少覆盖 VK_PIPELINE_STAGE_2_TRANSFER_BIT，因为 clear 是最早消费者。只用 COLOR_ATTACHMENT_OUTPUT 会让 transfer clear 可能在 acquire 完成前运行。之后还需用正确 stage/access/layout barrier 把 transfer write 转为 color attachment write；semaphore wait 不能替代命令流内的内存依赖。
+</Answer>
+
 </Exercises>
 
+## 本章检查清单
+
+- command pool 按 queue family、worker 和 frame slot 明确所有权，所有 host 外部同步约束已落实；
+- reset/re-record/free 仅在 completion 覆盖全部相关 pending 工作后发生；
+- secondary inheritance 与 dynamic rendering formats/samples/viewMask 一致，性能收益有测量；
+- submit2 的 stage/value、fence reset 时机和资源 retire 条件可从日志追踪。
+
+## 术语表
+
 <Glossary>
-  <GlossaryItem term="VkCommandPool">
-    命令缓冲的内存分配器，与特定队列族绑定。管理命令缓冲的分配和回收，标志位控制重置策略和生命周期提示。
-  </GlossaryItem>
-  <GlossaryItem term="VkCommandBuffer">
-    预录制的 GPU 命令序列。录制在 CPU 端进行，提交后由队列异步执行。主缓冲可单独提交，次级缓冲只能被主缓冲调用。
-  </GlossaryItem>
-  <GlossaryItem term="VkSubmitInfo">
-    命令提交结构体，指定等待的信号量、等待阶段掩码、命令缓冲数组和触发的信号量。是 GPU-GPU 同步的核心配置。
-  </GlossaryItem>
-  <GlossaryItem term="MAX_FRAMES_IN_FLIGHT">
-    同时在 GPU 上执行的最大帧数。通过为每帧分配独立的命令缓冲、信号量和 fence 实现 CPU/GPU 并行工作，通常设为 2。
-  </GlossaryItem>
+<GlossaryItem term="VkCommandBuffer">在 host 录制、结束后可提交给兼容 queue 执行的状态化命令对象。</GlossaryItem>
+<GlossaryItem term="VkCommandPool">绑定 queue family、管理 command buffer 实现内存并定义 reset 策略的对象。</GlossaryItem>
+<GlossaryItem term="Primary/secondary command buffer">Primary 可直接提交；secondary 只能由 primary 执行并需满足继承合同。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Vulkan 学习指南" adaptedUrl="https://vulkan.lunarg.com/" />
+<Attribution adaptedFrom="Khronos Vulkan Guide" adaptedUrl="https://docs.vulkan.org/guide/latest/threading.html" />

@@ -1,0 +1,283 @@
+---
+title: "Chapter 17：Input, Output, and Files"
+type: A
+section: C++ Primer Plus 6e · 流状态、文件模式与随机访问
+order: 17
+description: 对齐第6版 Chapter 17：掌握 formatted output/input、stream state、file I/O、binary random access 与 string streams。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+draft: false
+---
+
+import {
+  EppFormattedIoFlow,
+  EppRandomAccessLab,
+  EppStreamStateMap,
+} from "@/components/mdx/cpp-primer-plus/diagrams/input-output-and-files";
+
+<Objectives>
+
+- 能实现 cout/cin 的格式化输出输入，比较 width、precision、basefield 与 getline 的持久/单次效果
+- 能解释 good/eof/fail/bad stream state，复现格式失败恢复、正常 EOF 和底层 I/O 错误路径
+- 能设计文本/二进制 file input/output、seekg/seekp random access 与 stringstream 解析，并验证记录布局和完整传输
+
+</Objectives>
+
+## 为什么 I/O 的结果不只是“变量有了一个值”
+
+一次流操作同时改变三样东西：目标值或输出字符、输入/输出位置、stream state。只检查变量会漏掉未消费分隔符、部分读取与失败后旧值；只检查 EOF 又会把格式错误误报成正常结束。可靠 I/O 让操作成功本身驱动控制流。
+
+## formatted output 是类型值到字符表示的策略
+
+格式化输出（formatted output）把数值、字符、指针等类型值转换成字符并插入 ostream。`dec/hex/oct`、`fixed/scientific`、`showbase` 等 flags 通常持续生效；`setw` 只影响下一字段；`setfill` 持续；precision 在 defaultfloat 与 fixed 下含义不同。
+
+<Term def="根据流的进制、精度、宽度、填充和浮点策略，把类型值转换为字符序列的输出过程。">
+  格式化输出
+</Term>
+
+```cpp
+#include <iomanip>
+#include <iostream>
+
+std::cout << std::hex << std::showbase
+          << std::setw(8) << std::setfill('0') << 255
+          << '\n';
+
+std::cout << std::dec << std::noshowbase << std::setfill(' ')
+          << std::fixed << std::setprecision(2) << 12.345
+          << '\n';
+```
+
+如果函数临时改变共享流 flags，应保存并恢复，避免影响后续调用者。格式控制是 stream 的可变状态，不是表达式局部注释。
+
+<Term def="插入或提取时修改流格式状态、或触发特定动作的函数/对象，例如 hex、setw、ws。">
+  流操纵符
+</Term>
+
+## formatted input 从字符尝试建立类型值
+
+格式化输入（formatted input）用 `operator>>` 跳过规则允许的前导空白，读取能构成目标类型的字符，并停在第一个不属于该值的字符。成功后才可使用新值；失败时目标不应被当作新数据。
+
+<Term def="按目标类型和流格式规则从字符序列解析值，并根据成功或失败更新流状态的输入过程。">
+  格式化输入
+</Term>
+
+```cpp
+int value{};
+while (std::cin >> value) {
+    process(value);
+}
+
+if (std::cin.eof()) {
+    std::cout << "normal end\n";
+} else {
+    std::cerr << "invalid token\n";
+}
+```
+
+循环条件先尝试提取，只有成功才进入 body。`while (!cin.eof())` 会在失败后多执行一次并可能复用旧 value。
+
+<EppFormattedIoFlow />
+
+<Callout type="trap" title="陷阱：先检查 eof() 再读取可以避免越过文件末尾">
+  eofbit 通常在一次读取尝试到达末尾后设置，预检查无法预测下一次是否成功。让 `getline(stream,line)` 或 `stream >> value` 直接作为循环条件，再区分 eof 与格式/设备失败。
+</Callout>
+
+## getline 与 operator>> 需要统一分隔符协议
+
+`operator>>` 读取整数后通常把换行留在缓冲区，紧接的 `getline` 会读到空行。可在切换为行协议时使用 `std::getline(std::cin >> std::ws, line)`，但 `ws` 也会丢弃所有前导空白；若前导空白有意义，应显式消费恰好一个换行。
+
+```cpp
+int count{};
+std::string description;
+
+if (std::cin >> count) {
+    std::getline(std::cin >> std::ws, description);
+}
+```
+
+正确选择取决于格式：token-based 文件适合 `>>`，行内允许空白的记录适合 getline 后用独立 parser。不要边读边猜协议。
+
+## stream state 是一组可组合状态位
+
+流状态（stream state）包含 goodbit、eofbit、failbit、badbit。`good()` 仅在无错误位时真；`fail()` 覆盖 failbit/badbit；把 stream 用作布尔条件表示尚可继续格式化 I/O。EOF 可以与 failbit 同时出现，例如读取不完整目标。
+
+<Term def="由 goodbit、eofbit、failbit、badbit 组成，记录最近 I/O 成功、末尾、格式失败或底层损坏的状态集合。">
+  流状态
+</Term>
+
+```cpp
+int value{};
+while (true) {
+    if (std::cin >> value) break;
+    if (std::cin.eof() || std::cin.bad()) {
+        throw std::runtime_error{"input unavailable"};
+    }
+    std::cin.clear();
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+    std::cout << "enter an integer: ";
+}
+```
+
+`clear()` 只重置状态位，不移除导致失败的字符；必须按输入协议 discard 或 repair。badbit 通常表示底层故障，不应像用户输错 token 一样盲目重试。
+
+<EppStreamStateMap />
+
+## file input and output 要先验证打开与模式
+
+文件输入输出使用 ifstream/ofstream/fstream。构造后先检查打开状态；缺失文件、权限和路径错误不能伪装成空内容。常见 mode 有 `in`、`out`、`app`、`ate`、`trunc`、`binary`，组合会影响创建、截断和位置。
+
+<Term def="通过文件流把字符或字节序列与持久文件连接，并由打开模式和流状态约束读写的过程。">
+  文件输入输出
+</Term>
+
+```cpp
+#include <fstream>
+
+std::ifstream input{path};
+if (!input) {
+    throw std::runtime_error{"cannot open " + path.string()};
+}
+
+std::string line;
+while (std::getline(input, line)) {
+    parseLine(line);
+}
+if (!input.eof()) {
+    throw std::runtime_error{"read failure"};
+}
+```
+
+输出重要文件可先写同目录临时文件，检查 flush/close 后再原子替换，避免中途失败破坏旧版本。析构会 close，但业务仍需在提交前观察写入错误。
+
+## binary file 保存字节，不保存跨平台对象语义
+
+二进制文件（binary file）以 `read/write` 传输指定字节数，不做换行或数字文本转换。直接写普通 struct 内存会包含 padding，并依赖 endian、类型宽度、浮点表示和版本；含 pointer/string/virtual member 的对象更不能直接持久化。
+
+<Term def="以精确字节序列读写、不进行文本格式转换，并要求显式定义布局、字节序和版本的文件。">
+  二进制文件
+</Term>
+
+```cpp
+struct DiskHeader {
+    std::uint32_t magic;
+    std::uint16_t version;
+    std::uint16_t recordSize;
+};
+
+DiskHeader header{};
+input.read(reinterpret_cast<char*>(&header), sizeof header);
+if (!input || header.magic != expectedMagic) {
+    throw std::runtime_error{"invalid header"};
+}
+```
+
+示例只说明 byte transfer；真正可移植格式应逐字段编码固定宽度和字节序，并校验 magic、version、record length 与 checksum。
+
+<Callout type="trap" title="陷阱：binary mode 能把任意 C++ 对象原样保存并在其他程序恢复">
+  binary 只关闭文本转换，不定义对象序列化。pointer 地址、vptr、padding、endianness 和库内部布局都不可作为稳定格式；写显式 schema，并验证版本与长度。
+</Callout>
+
+## random access 同时管理 get 和 put position
+
+随机访问使用 `seekg/tellg` 管理输入位置，`seekp/tellp` 管理输出位置，可相对 begin/current/end 移动。固定长度记录的第 i 项通常位于 `header + i * recordSize`，必须先验证乘法/范围不溢出且文件足够长。
+
+<Term def="通过显式移动文件 get/put position 直接读写指定偏移，而非从头顺序遍历的访问方式。">
+  随机访问
+</Term>
+
+```cpp
+std::fstream file{path, std::ios::in | std::ios::out | std::ios::binary};
+const std::streamoff offset = headerSize + index * recordSize;
+file.seekg(offset, std::ios::beg);
+
+Record record{};
+file.read(reinterpret_cast<char*>(&record), sizeof record);
+if (!file) throw std::runtime_error{"short record"};
+```
+
+在读写混合的 fstream 中切换方向前应进行 seek/flush 等规定同步；`app` 会强制每次写到尾部，与任意位置更新冲突。
+
+先预测文本顺序、二进制顺序、随机读和随机写各需哪一个 position/mode，再切换实验面板。seek 成功后仍要检查完整 read/write。
+
+<EppRandomAccessLab />
+
+## string streams 让字符串复用同一格式协议
+
+`istringstream` 从 string 提取，`ostringstream` 向 string 格式化，`stringstream` 支持二者。它们适合逐行解析、构造日志和测试格式，不涉及文件打开。
+
+```cpp
+#include <sstream>
+
+std::istringstream row{"17 Ada 98.5"};
+int id{};
+std::string name;
+double score{};
+
+if (!(row >> id >> name >> score) || (row >> std::ws && !row.eof())) {
+    throw std::runtime_error{"invalid row"};
+}
+```
+
+解析成功还应决定是否允许尾随字段；上例消费尾空白后要求 EOF，形成完整记录契约。
+
+## 三步验证 I/O 边界
+
+<Stepper>
+  <Step title="第一步：记录值、字符与位置">
+    为 formatted/unformatted 操作写输入值、格式 flags、产生/消费字符和操作后位置，检查持续性 manipulator。
+
+    <EppFormattedIoFlow />
+  </Step>
+  <Step title="第二步：复现流状态路径">
+    覆盖成功、正常 EOF、格式 mismatch、短记录和 bad I/O，验证 clear 后还需按协议处理失败字符。
+
+    <EppStreamStateMap />
+  </Step>
+  <Step title="第三步：审计文件模式与偏移">
+    分别运行文本/二进制、顺序/随机读写，记录 mode、tellg/tellp、gcount、版本和提交结果。
+
+    <EppRandomAccessLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- formatted output/input 同时受类型、格式策略、字符边界和 stream state 约束
+- eof 是读取尝试后的状态，循环应由读取成功驱动；clear 不会移除坏 token
+- file input and output 先检查打开、mode 与最终状态，重要输出应事务提交
+- binary file 只传字节，稳定格式必须定义 schema、endian、version 与长度
+- random access 分开管理 get/put position，seek 后仍要验证完整 transfer
+- string streams 复用格式协议，适合行级解析并可检查是否完整消费
+
+<Exercises>
+  1. **问题 1：修复读取循环。** `while(!file.eof()){ file>>x; sum+=x; }` 为什么会重复旧值？
+
+  <Answer question="成功驱动循环应怎样写？">EOF 在失败尝试后才设置，最后一次提取失败时 body 仍执行并使用旧 x。改为 `while(file >> x) sum += x;`，退出后以 eof 区分正常结束；若不是 eof，则报告格式或设备错误。</Answer>
+
+  2. **问题 2：设计二进制格式。** 为什么不能直接 write 一个含 string 的 Record 对象？
+
+  <Answer question="稳定字节格式要显式编码什么？">string 对象内含实现指针/容量而非字符内容，布局随库/进程变化；struct 还有 padding/endian/version。应写 magic/version、固定宽度长度和逐字段字节，读取时验证长度、范围、完整传输和版本，再构造内存对象。</Answer>
+
+  3. **问题 3：验证随机更新。** 更新第 i 条固定记录前后要检查哪些位置与状态？
+
+  <Answer question="random access 证据链是什么？">验证 i 范围和 offset 计算不溢出，打开模式含 in/out/binary 且非 app；seekp 后检查流，写完整 record，flush 并检查状态；再 seekg 回同 offset 读回验证，记录 tellp/tellg 与预期偏移。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="格式化输出">按进制、精度等策略把类型值转成字符。</GlossaryItem>
+  <GlossaryItem term="流操纵符">修改格式状态或触发流动作的函数/对象。</GlossaryItem>
+  <GlossaryItem term="格式化输入">按目标类型从字符解析值并更新状态。</GlossaryItem>
+  <GlossaryItem term="流状态">记录成功、末尾、格式失败和底层损坏的状态位集合。</GlossaryItem>
+  <GlossaryItem term="文件输入输出">用文件流按打开模式连接持久字节/字符序列。</GlossaryItem>
+  <GlossaryItem term="二进制文件">按精确字节传输并需显式布局/版本的文件。</GlossaryItem>
+  <GlossaryItem term="随机访问">移动 get/put position 后直接访问指定偏移。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++ Primer Plus, Sixth Edition, Chapter 17 Input, Output, and Files"
+  adaptedUrl="https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+/>

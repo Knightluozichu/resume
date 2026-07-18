@@ -1,0 +1,214 @@
+---
+title: "Chapter 24. Native and COM Interoperability"
+type: C
+section: "C# 10 Nutshell · Concurrency and Low-level"
+order: 24
+description: "覆盖P/Invoke、参数marshaling、native callback、共享内存和COM双向互操作，建立ABI、allocator、apartment与版本化接口契约。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch24.html"
+draft: false
+---
+
+import { CtcComBoundaryLab, CtcMarshalingCallbackLab, CtcNativeAbiLab } from "@/components/mdx/csharp-10-core/diagrams/native-com-interoperability";
+
+<Objectives>
+
+- 能描述native ABI的library/export、calling convention、type width、layout与allocator，判断签名是否一致
+- 能设计pin/copy/marshal/callback/SafeHandle生命周期，并复现encoding、buffer与delegate回收错误
+- 能实现共享内存与COM边界，分析version、synchronization、apartment和RCW/CCW identity
+
+</Objectives>
+
+## 为什么Interop错误常在边界之外爆炸
+
+错误的P/Invoke签名可能破坏stack/register或写坏heap，症状在下一次GC才出现；callback delegate被回收后，native仍持有悬空function pointer；COM对象跨apartment调用又可能隐式marshal和重入。Interop首先是一份逐字节、逐owner、逐thread的外部协议。
+
+先预测：C的long在Windows和Linux始终与C# long同宽吗；`bool`默认总对应C++ bool吗；调用返回后native可继续保存传入array pointer吗；Marshal.ReleaseComObject越早越安全吗；shared memory能自动同步多个进程。答案都是否。
+
+<Term def="Managed signature与native export在architecture、calling convention、宽度、layout、encoding和ownership上的逐项对应。">interop ABI contract</Term>
+
+## Calling into Native DLLs
+
+DllImport声明library、entry point、calling convention、charset、SetLastError与参数。先从native header和目标ABI逐项映射，不凭类型名字猜测。Windows `long`常32-bit，Unix LP64的long常64-bit；`size_t`对应nuint/UIntPtr，pointer用IntPtr/nint或SafeHandle。Calling convention错误会破坏调用状态。
+
+Library search是security boundary：使用受控绝对路径、NativeLibrary resolver或安全loader policy，避免当前目录劫持。进程architecture必须与binary一致，export name可能受C++ name mangling影响，优先暴露稳定`extern "C"` C ABI。
+
+```csharp
+internal static partial class NativeApi
+{
+    [DllImport("imagecodec", EntryPoint = "codec_open",
+        CallingConvention = CallingConvention.Cdecl, SetLastError = true)]
+    internal static extern CodecHandle Open(
+        [MarshalAs(UnmanagedType.LPUTF8Str)] string path, uint flags);
+
+    [DllImport("imagecodec", EntryPoint = "codec_close",
+        CallingConvention = CallingConvention.Cdecl)]
+    internal static extern void Close(nint handle);
+}
+
+sealed class CodecHandle : SafeHandle
+{
+    public CodecHandle() : base(nint.Zero, ownsHandle: true) { }
+    public override bool IsInvalid => handle == nint.Zero || handle == new nint(-1);
+    protected override bool ReleaseHandle() { NativeApi.Close(handle); return true; }
+}
+```
+
+SafeHandle表达唯一owner和可靠finalization，P/Invoke期间runtime保持其存活。GetLastWin32Error只在SetLastError且native约定适用时读取，必须紧接调用。
+
+<Stepper>
+  <Step title="切换library、call ABI、layout与ownership"><CtcNativeAbiLab /></Step>
+  <Step title="生成ABI checklist">记录OS/arch、export、convention、每参数native typedef/size/signedness、return/error和allocator pair。</Step>
+  <Step title="做native parity tests">Native helper导出sizeof/offsetof和echo函数，在每目标RID验证边界值、null、错误码与handle释放。</Step>
+</Stepper>
+
+<Callout type="trap" title="P/Invoke能调用成功就说明签名正确">
+错误宽度、pack或out buffer可能只在大值、特定架构或GC时损坏内存。必须用native sizeof/offsetof和边界输入验证ABI。
+</Callout>
+
+## Type and Parameter Marshaling
+
+Blittable类型可在managed/native间保持兼容表示，marshaller可能pin而非copy；non-blittable string、bool、array、delegate和struct需转换。`[StructLayout(LayoutKind.Sequential, Pack=...)]`、FieldOffset处理layout，但pack必须来自native ABI。C union用Explicit且验证size/alignment。
+
+String明确UTF-8/UTF-16/ANSI与null termination。Out buffer同时传capacity和返回written/required length，禁止native越界；StringBuilder marshaling隐含capacity/copy，现代高性能路径可用byte/char buffer与显式length。Array `[In]/[Out]`和SizeParamIndex只表达marshalling，不授权native保存pointer。
+
+Native分配的memory由匹配allocator释放：CoTaskMemFree、FreeHGlobal或library专用free不能混用。Managed object pin只覆盖native同步使用；长期保存使用unmanaged allocation/GCHandle并定义release callback。
+
+<Term def="明确每个参数是pin、copy、convert还是transfer，并规定direction、capacity、encoding和cleanup。">marshaling transfer ledger</Term>
+
+## Callbacks from Unmanaged Code
+
+Delegate可marshaling成function pointer，必须保持强引用直到native明确unregister且所有in-flight callbacks结束。局部变量在Register返回后可能被GC；把delegate存owner field或GCHandle。Callback线程由native决定，不假设UI/context，进入managed后尽快copy输入并投递到受控queue。
+
+异常绝不能穿越unmanaged boundary；callback catch所有异常，转成error code/log/fault state。CallingConvention和delegate signature必须一致。Shutdown顺序为stop new callbacks、unregister、等待in-flight、释放context/delegate/native handle。
+
+```csharp
+[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+delegate void NativeCallback(nint context, nint data, nuint length);
+
+sealed class CallbackOwner : IDisposable
+{
+    private readonly NativeCallback _callback;
+    private GCHandle _self;
+
+    public CallbackOwner()
+    {
+        _callback = OnNative;
+        _self = GCHandle.Alloc(this);
+        NativeRegister(_callback, GCHandle.ToIntPtr(_self));
+    }
+
+    private static void OnNative(nint context, nint data, nuint length)
+    {
+        try { ((CallbackOwner)GCHandle.FromIntPtr(context).Target!).CopyAndQueue(data, length); }
+        catch (Exception ex) { ReportCallbackFailure(ex); }
+    }
+
+    public void Dispose() { NativeUnregister(); WaitForCallbacks(); _self.Free(); }
+}
+```
+
+GC.KeepAlive适合同步call结束前保持对象，不解决native长期保存pointer/delegate。
+
+<Stepper>
+  <Step title="切换blittable、copied、callback与SafeHandle"><CtcMarshalingCallbackLab /></Step>
+  <Step title="画owner timeline">标出pin/copy、native retain、delegate root、in-flight count、unregister与最终free顺序。</Step>
+  <Step title="执行GC与竞态压力">注册后强制GC，在callback中并发Dispose、抛异常、传坏length，验证无悬空pointer和跨ABI异常。</Step>
+</Stepper>
+
+<Callout type="trap" title="把Delegate传给Native后Marshaller会永久保活">
+Marshaller只保证调用期间。若native保存function pointer，managed owner必须长期root delegate，并在unregister且callbacks排空后才能释放。
+</Callout>
+
+<Term def="Native callback从注册到停止新调用、排空in-flight和释放delegate/context的完整反向调用期。">callback quiescence boundary</Term>
+
+## Shared Memory
+
+MemoryMappedFile或OS shared memory让进程看到同一bytes，不提供对象模型、原子事务或自动cache coherence协议。Layout固定magic/version/size/endianness/alignment，读者先验证header和bounds。不要直接共享含managed references、pointer或平台不稳定padding的struct。
+
+Writer采用sequence/version或双buffer发布：写payload，memory barrier/flush按协议，再原子更新committed sequence；reader读取前后sequence一致才接受。跨进程Mutex/Semaphore/Event或平台原子primitive协调。进程crash可能留下半状态，需要journal/checksum/recovery。
+
+Sensitive shared region设置ACL/mode，name不可预测性不是授权。不同版本无法兼容时拒绝attach或使用IPC schema/process boundary。
+
+## COM Interoperability
+
+COM以IUnknown identity、QueryInterface、AddRef/Release、GUID interface和apartment threading为基础。CLR用Runtime Callable Wrapper（RCW）让managed调用COM，用COM Callable Wrapper（CCW）暴露managed object。RCW通常按COM identity复用，不等于每个变量一个native reference。
+
+STA要求message pump并允许reentrancy，MTA支持并发但component自身仍有threading model。跨apartment调用由COM proxy marshal，可能阻塞。HRESULT通常映射异常；out/ref、BSTR、VARIANT、SAFEARRAY和optional参数由interop layer转换。
+
+不应普遍循环Marshal.ReleaseComObject；它影响共享RCW，其他代码可能仍使用。优先让RCW自然释放，确需deterministic释放的稀有场景由单一owner限定scope并理解component contract。
+
+## Calling a COM Component from C#
+
+引用type library可生成interop types，或使用dynamic简化Office等automation optional arguments。Typed interop提供编译检查，dynamic把错误推迟到runtime。无论哪种都要初始化正确apartment、控制对象图、处理COMException/HRESULT并避免在持锁时调用可能reenter的COM。
+
+COM collection/indexer和property get都可能执行跨进程/跨apartment调用，不在热循环反复访问。把数据批量读入DTO，释放边界后再处理。Server退出、RPC_E_CALL_REJECTED等需要有界retry且仅对安全操作。
+
+## Exposing C# Objects to COM
+
+Assembly/type可用ComVisible，接口/类使用稳定Guid；ClassInterface(ClassInterfaceType.None)避免自动class interface随实现变化。显式定义InterfaceIsIUnknown/IDispatch、DispId、marshaling与HRESULT/error contract。发布后不能重排/删除已有vtable成员，新增interface版本而非破坏旧IID。
+
+```csharp
+[ComVisible(true)]
+[Guid("4F5B9122-46BE-4A91-AF52-84D7D08C9B10")]
+[InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+public interface IImageJobV1
+{
+    [PreserveSig]
+    int Process([MarshalAs(UnmanagedType.BStr)] string path, out int written);
+}
+
+[ComVisible(true)]
+[Guid("1C51660E-66F6-4894-84EE-F8DF34B8CD09")]
+[ClassInterface(ClassInterfaceType.None)]
+public sealed class ImageJob : IImageJobV1 { /* stable adapter */ }
+```
+
+CCW lifetime由COM references影响，managed object可能超出原scope。方法跨boundary不抛任意managed异常；映射稳定HRESULT/IErrorInfo。注册、bitness、type library和apartment在真实consumer上测试。
+
+<Stepper>
+  <Step title="切换shared memory、RCW、CCW与process boundary"><CtcComBoundaryLab /></Step>
+  <Step title="填写interop version matrix">记录layout/IID、32/64位、apartment、marshaller、旧新producer-consumer和registration。</Step>
+  <Step title="执行lifecycle测试">覆盖进程crash、COM server重启、STA reentrancy、shared RCW、旧IID和shared-memory半写入。</Step>
+</Stepper>
+
+<Term def="COM调用必须说明STA/MTA、message pump、跨apartment proxy、reentrancy和对象释放owner。">COM apartment contract</Term>
+
+## 本章回顾：跨边界时所有隐含假设都要显式
+
+1. P/Invoke签名是ABI，必须核对architecture、convention、width、layout和error。
+2. Marshaling可能pin/copy/convert，buffer capacity与allocator pair必须唯一。
+3. Callback反转owner和thread方向，delegate保活到unregister并排空。
+4. Shared memory只是共享bytes，版本、同步、原子发布和恢复由协议定义。
+5. COM以GUID/identity/apartment运行，RCW/CCW lifetime与接口兼容需要单一owner。
+
+<Exercises>
+
+**问题 1：怎样验证一个native struct映射？**
+
+<Answer>Native helper返回sizeof和每field offsetof，managed用Marshal.SizeOf/OffsetOf在每OS/arch比较；核对pack、alignment、signedness、bool/enum和nested union。再用边界pattern round-trip，不能只验证全零数据。</Answer>
+
+**问题 2：Callback owner如何安全Dispose？**
+
+<Answer>先让native停止产生新callback并unregister，设置closing state，等待in-flight计数归零；callback catch异常且不访问已释放资源。最后释放GCHandle/delegate owner与native handle，测试callback和Dispose并发及强制GC。</Answer>
+
+**问题 3：为什么不应随处ReleaseComObject？**
+
+<Answer>多个managed引用可能共享同一RCW，手工Release会让其他代码突然操作已释放COM identity。默认依赖RCW/GC；确有deterministic要求时由明确owner隔离对象图、按逆序释放，并保证没有alias或callback继续使用。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="interop ABI contract" definition="Managed/native签名与二进制调用约定映射。" />
+  <GlossaryItem term="marshaling transfer ledger" definition="Pin/copy/convert/transfer与cleanup记录。" />
+  <GlossaryItem term="callback quiescence boundary" definition="Unregister、排空callback后释放反向调用资源。" />
+  <GlossaryItem term="COM apartment contract" definition="STA/MTA、proxy、reentrancy与lifetime规则。" />
+  <GlossaryItem term="allocator pairing rule" definition="由分配方指定且仅使用匹配free释放。" />
+</Glossary>
+
+<Term def="每块跨边界memory/handle只能由其约定allocator的匹配free释放一次。">allocator pairing rule</Term>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 24: Native and COM Interoperability" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch24.html" />

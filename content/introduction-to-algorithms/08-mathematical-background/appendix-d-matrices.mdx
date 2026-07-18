@@ -1,0 +1,326 @@
+---
+title: "Appendix D · Matrices"
+type: B
+section: "CLRS4 · 数学基础"
+order: 39
+description: "按CLRS第四版附录D重建矩阵表示、运算、乘法、转置、逆、行列式、秩与基本性质。"
+demo: true
+math: true
+sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+draft: false
+---
+
+import { CLRS4MatrixDimensionsLab, CLRS4MatrixEntryLab, CLRS4MatrixAdditionLab, CLRS4ScalarMultiplicationLab, CLRS4MatrixVectorLab, CLRS4MultiplicationShapeLab, CLRS4MatrixProductLab, CLRS4TransposeLab, CLRS4ProductTransposeLab, CLRS4IdentityLab, CLRS4AssociativityLab, CLRS4NoncommutativityLab, CLRS4DeterminantLab, CLRS4InverseLab, CLRS4RankLab, CLRS4MatrixCertificateLab } from "@/components/mdx/introduction-to-algorithms/diagrams/appendix-d-matrices";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释matrices的shape、entry、row、column与linear-transformation语义
+- 能计算matrix operations中的addition、scalar multiplication、products、transpose、determinant与inverse
+- 能实现dimension checker、row-column dot product和matrix-vector verifier
+- 能分析basic matrix properties中的associativity、noncommutativity、rank与invertibility
+- 能设计包含shapes、operation order、algebraic premises、residual和complexity的矩阵证书
+
+</Objectives>
+
+## 从“二维数字表”到“线性变换”开始
+
+先预测：把matrix只看成rectangular table，容易记住entry却忘记operation order；把它看成linear transformation，shape、composition、identity与inverse会自然对齐。<Term def="按rows与columns排列scalars的rectangular array，也表示finite-dimensional linear map。">矩阵</Term>（matrices）同时是一种data representation和algebraic object。
+
+算法中matrix可表示graph adjacency、dynamic-programming transitions、linear constraints、probabilities、geometry transforms与machine-learning parameters。每个结论首先是shape statement：operation是否defined、result shape是什么，然后才是entry arithmetic。
+
+## D.1 Matrices and matrix operations
+
+### Shapes and entries
+
+<Term def="矩阵中horizontal entries组成row，vertical entries组成column；m rows与n columns决定m乘n shape。">行列</Term>决定matrix $A=(a_{ij})$的type：
+
+$$
+A\in\mathbb F^{m\times n},
+\qquad
+a_{ij}\text{ is row }i\text{, column }j.
+$$
+
+<CLRS4MatrixDimensionsLab />
+
+$m\times n$ matrix有$mn$ entries。Two matrices相等，当且仅当shapes相同且每个corresponding entry相等。Storage layout可row-major或column-major，但mathematical index meaning不变；工程实现要把layout与strides写清。
+
+<CLRS4MatrixEntryLab />
+
+Column vector是$n\times1$ matrix，row vector是$1\times n$ matrix。Scalar有时视为$1\times1$ matrix，但不能因此忽略一般shape rules。
+
+### Entrywise operations
+
+<Term def="在compatible shapes上定义addition、scalar multiplication、matrix-vector或matrix-matrix products与transpose等操作。">矩阵运算</Term>（matrix operations）中，addition只允许equal shapes：
+
+$$
+(A+B)_{ij}
+=
+a_{ij}+b_{ij},
+\qquad
+(\alpha A)_{ij}
+=
+\alpha a_{ij}.
+$$
+
+<CLRS4MatrixAdditionLab />
+
+<CLRS4ScalarMultiplicationLab />
+
+Addition commutative且associative，zero matrix是additive identity，$-A$是additive inverse。Scalar multiplication distributes overmatrix addition与scalar addition。这些properties都逐entry成立。
+
+Hadamard product也是entrywise multiplication，写作$A\odot B$，与matrix product $AB$不同。若API只写multiply而不声明语义，图形、numeric和ML代码极易混淆。
+
+### Matrix-vector multiplication
+
+对$A\in\mathbb F^{m\times n}$和$x\in\mathbb F^n$，output $y=Ax\in\mathbb F^m$，第$i$项是row $i$与$x$的dot product：
+
+$$
+y_i
+=
+\sum_{j=1}^{n}a_{ij}x_j.
+$$
+
+<CLRS4MatrixVectorLab />
+
+按columns看，同一operation是$A$ columns的linear combination，coefficients来自$x$。Row view适合compute outputs，column view适合解释range与rank。
+
+Dense matrix-vector multiplication做$\Theta(mn)$ arithmetic operations。Sparse representation若只保存nonzeros，可按nonzero count计算，但indirection与memory layout会影响实际performance。
+
+### Matrix-matrix multiplication
+
+若$A$ shape为$m\times n$，$B$ shape为$n\times p$，product $C=AB$ shape为$m\times p$：
+
+$$
+c_{ij}
+=
+\sum_{k=1}^{n}a_{ik}b_{kj}.
+$$
+
+<CLRS4MultiplicationShapeLab />
+
+Shared inner dimension必须一致；result保留outer dimensions。Formula中$k$是contracted index，$i,j$是output indices。
+
+<CLRS4MatrixProductLab />
+
+Naive dense algorithm做$\Theta(mnp)$ scalar work。Square $n\times n$ case为$\Theta(n^3)$，但Chapter 28已说明faster asymptotic algorithms存在。附录的重点是operation semantics，不把naive loop count误写成matrix multiplication的不可突破下界。
+
+Matrix product表示function composition。若column vectors先经过$B$再经过$A$，combined transform是$AB$；written order与application order相反。
+
+### Transpose
+
+<Term def="交换matrix rows与columns的operation，满足转置两次还原并在product中反转factor order。">转置</Term>定义
+
+$$
+(A^T)_{ij}
+=
+a_{ji}.
+$$
+
+<CLRS4TransposeLab />
+
+它满足$(A^T)^T=A$、$(A+B)^T=A^T+B^T$、$(\alpha A)^T=\alpha A^T$，而product满足
+
+$$
+(AB)^T
+=
+B^TA^T.
+$$
+
+<CLRS4ProductTransposeLab />
+
+Factor order reversal来自entry expansion，也来自composition direction。忘记reverse是matrix derivation中的高频错误。
+
+Complex-valued matrices常用conjugate transpose $A^*$而非plain transpose定义inner-product adjoint；本章若使用real field，两者相同，但field assumption要写明。
+
+## D.2 Basic matrix properties
+
+### Identity, zero, and algebraic laws
+
+<Term def="在矩阵乘法中保持compatible matrix不变的square matrix，diagonal为1且其余entries为0。">单位矩阵</Term> $I_n$满足
+
+$$
+I_mA=A=AI_n
+\quad
+\text{for }A\in\mathbb F^{m\times n}.
+$$
+
+<CLRS4IdentityLab />
+
+Identity size依赖side；rectangular $A$左边用$I_m$，右边用$I_n$。Zero matrices也有shapes，$A+0_{m\times n}=A$。
+
+Matrix multiplication associative与distributive：
+
+$$
+(AB)C=A(BC),
+\qquad
+A(B+C)=AB+AC.
+$$
+
+<CLRS4AssociativityLab />
+
+Associativity允许matrix-chain parenthesization optimization。虽然result相同，不同parenthesization的scalar multiplication count可相差orders of magnitude；Chapter 14 dynamic programming正利用这一点。
+
+### Noncommutativity
+
+Matrix multiplication一般不commutative：
+
+$$
+AB\ne BA.
+$$
+
+<CLRS4NoncommutativityLab />
+
+有时$AB$ defined而$BA$因shape不匹配根本undefined；即使两者都是square且defined，也通常different。少数commuting pairs不能支持general reorder。
+
+<Callout type="trap" title="Scalar algebra可以原样搬到矩阵">
+Matrix multiplication不commutative，所以factoring、cancellation和reordering都需检查order与invertibility。例如AB等于AC不能在不知道A可逆时直接推出B等于C。
+</Callout>
+
+### Determinants and singularity
+
+<Term def="为square matrix分配scalar，刻画signed volume scaling；为0时matrix singular。">行列式</Term>对$2\times2$ matrix
+
+$$
+\det
+\begin{pmatrix}
+a&b\\
+c&d
+\end{pmatrix}
+=
+ad-bc.
+$$
+
+<CLRS4DeterminantLab />
+
+General determinant满足$\det(AB)=\det(A)\det(B)$与$\det(A^T)=\det(A)$。Swapping two rows flips sign，scaling one row scalesdeterminant，adding one row multiple to another leaves determinant unchanged。
+
+Determinant非零等价于full rank与invertible。它适合theoretical criterion；large numerical systems中直接通过cofactor expansion计算既慢又unstable，通常用factorization。
+
+### Inverses
+
+<Term def="square matrix A存在two-sided matrix B使AB与BA都为identity时的B，记作A inverse。">逆矩阵</Term>若存在则unique：
+
+$$
+AA^{-1}
+=
+A^{-1}A
+=
+I.
+$$
+
+<CLRS4InverseLab />
+
+Products的inverse也反转order：
+
+$$
+(AB)^{-1}
+=
+B^{-1}A^{-1}.
+$$
+
+若$Ax=b$且A invertible，形式上$x=A^{-1}b$。Numerical implementation通常solve linear system或用LU/QR factorization，而不是显式形成inverse，因为后者工作更多且可能放大rounding error。
+
+Singular matrix没有two-sided inverse；near-singular matrix虽在exact arithmetic可逆，却可能ill-conditioned。Certificate应报告residual $\|Ax-b\|$与condition information，而不只检查determinant“不等于0”。
+
+### Rank and linear independence
+
+<Term def="matrix row space或column space的dimension；两者相等，并衡量independent directions数量。">秩</Term>（rank）满足
+
+$$
+\operatorname{rank}(A)
+\le
+\min(m,n).
+$$
+
+<CLRS4RankLab />
+
+Square $n\times n$ matrix invertible，当且仅当rank为$n$，当且仅当columns linearly independent，当且仅当null space只含zero vector。
+
+Rank obeys $\operatorname{rank}(AB)\le\min(\operatorname{rank}(A),\operatorname{rank}(B))$。Multiplication不能创造超过任何factor的independent directions。
+
+Row operations保持row-equivalence并可揭示rank。Floating-point rank需要tolerance或singular values；exact zero comparisons不适合noisy data。
+
+### Symmetric and triangular matrices
+
+<Term def="real square matrix满足A等于其transpose；其entries关于main diagonal镜像相等。">对称矩阵</Term>满足$A=A^T$。Products of symmetric matrices不一定symmetric，除非factors commute，因为$(AB)^T=BA$。
+
+Upper triangular matrix在main diagonal下方为0，lower triangular相反。Triangular systems可用back或forward substitution在$\Theta(n^2)$时间solve；determinant是diagonal entries product。
+
+Permutation matrices由identity重新排列rows而来，left multiplication permutes rows，right multiplication permutes columns。Orthogonal matrix满足$Q^TQ=I$并保持Euclidean lengths；这些special structures可带来更快、更稳定的algorithms。
+
+<Callout type="trap" title="Determinant很小就等于rank不足">
+Exact rank deficiency对应determinant严格为0；small nonzero determinant还受scale影响，不能单独判定numerical instability。修法是结合singular values、condition number、scale与residual。
+</Callout>
+
+## 矩阵推导的审计流程
+
+<CLRS4MatrixCertificateLab />
+
+<Stepper>
+<Step title="先做shape type-check">
+为每个factor标出rows与columns，检查addition equal shapes、product inner dimensions和result outer dimensions。
+
+<CLRS4MultiplicationShapeLab />
+</Step>
+<Step title="展开一个代表entry">
+用row-column dot product验证index contraction，并检查transpose、inverse或composition是否需要reverse order。
+
+<CLRS4MatrixProductLab />
+</Step>
+<Step title="验证algebra与numerics">
+记录rank、invertibility、symmetry等premises；numerical tasks再报告residual、tolerance与conditioning。
+
+<CLRS4MatrixCertificateLab />
+</Step>
+</Stepper>
+
+## 小结
+
+Appendix D Matrices从shape和entries定义matrix operations。Addition与scalar multiplication逐entry执行；matrix-vector和matrix-matrix products通过row-column dot products收缩shared dimension；transpose交换indices并反转product order。
+
+Basic matrix properties包括identity、associativity、distributivity与noncommutativity。Determinant、inverse和rank从不同角度刻画singularity与independent directions；symmetric、triangular、permutation和orthogonal structures提供额外algorithmic leverage。
+
+可靠matrix proof先做shape check，再展开entry，最后验证property premises。Numerical code还必须区分exact algebra与floating-point evidence，使用residual、tolerance和conditioning，而不是只依赖symbolic formula。
+
+<Exercises>
+
+**问题 1**：$A$为$3\times5$、$B$为$5\times2$时，$AB$与$BA$分别是什么shape？
+
+<Answer>
+AB的inner dimensions都是5，所以defined且shape为3乘2。BA需要B的columns 2等于A的rows 3，但不相等，因此BA undefined，而不是另一个shape。
+</Answer>
+
+**问题 2**：为什么$(AB)^T$等于$B^TA^T$而不是$A^TB^T$？
+
+<Answer>
+Product entry先取A的一行与B的一列。Transpose交换output indices；展开后terms变成B transpose对应行与A transpose对应列的dot product，因此factor order反转。Composition view也表明adjoint或transpose会反转application order。
+</Answer>
+
+**问题 3**：Associativity为什么对matrix-chain optimization重要？
+
+<Answer>
+不同parenthesization给同一product，但intermediate shapes不同，scalar multiplication count也不同。Associativity允许在不改变result的前提下选择cost最小的parenthesization，dynamic programming据此优化。
+</Answer>
+
+**问题 4**：Square matrix的determinant为0、rank不足与不可逆之间是什么关系？
+
+<Answer>
+在exact finite-dimensional linear algebra中三者等价：determinant为0表示columns linearly dependent，rank小于dimension，存在nonzero null vector，因此不可能有two-sided inverse。Floating-point判断还需tolerance与conditioning。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="矩阵">按rows与columns排列scalars的rectangular array，也表示finite-dimensional linear map。</GlossaryItem>
+<GlossaryItem term="行列">矩阵中horizontal entries组成row，vertical entries组成column；m rows与n columns决定m乘n shape。</GlossaryItem>
+<GlossaryItem term="矩阵运算">在compatible shapes上定义addition、scalar multiplication、matrix-vector或matrix-matrix products与transpose等操作。</GlossaryItem>
+<GlossaryItem term="转置">交换matrix rows与columns的operation，满足转置两次还原并在product中反转factor order。</GlossaryItem>
+<GlossaryItem term="单位矩阵">在矩阵乘法中保持compatible matrix不变的square matrix，diagonal为1且其余entries为0。</GlossaryItem>
+<GlossaryItem term="行列式">为square matrix分配scalar，刻画signed volume scaling；为0时matrix singular。</GlossaryItem>
+<GlossaryItem term="逆矩阵">square matrix A存在two-sided matrix B使AB与BA都为identity时的B，记作A inverse。</GlossaryItem>
+<GlossaryItem term="秩">matrix row space或column space的dimension；两者相等，并衡量independent directions数量。</GlossaryItem>
+<GlossaryItem term="对称矩阵">real square matrix满足A等于其transpose；其entries关于main diagonal镜像相等。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Appendix D · Matrices" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

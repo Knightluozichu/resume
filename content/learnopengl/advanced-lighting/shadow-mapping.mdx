@@ -1,14 +1,16 @@
 ---
-title: 阴影映射
+title: 阴影映射、深度比较与 Bias 边界
 type: C
 section: 高级光照
 order: 3
 description: 能讲清阴影映射的两遍流程——先从光源视角渲一张深度图记下每个方向最近的遮挡距离，再回相机比深度判断每个片元是否被挡；能在 demo 里拖 depth bias 亲手造出又修掉 peter panning 阴影脱离，并能解释 shadow acne 自遮挡条纹的成因和 bias 修法，还能说出阴影锯齿和阴影图分辨率、PCF 软阴影之间的关系。
 demo: true
 math: false
-sourceUrl: https://learnopengl-cn.github.io/05%20Advanced%20Lighting/03%20Shadows/01%20Shadow%20Mapping/
+sourceUrl: https://learnopengl.com/Advanced-Lighting/Shadows/Shadow-Mapping
 draft: false
 ---
+
+import { ShadowMapBoundaryContractDiagram } from "@/components/mdx/learnopengl/diagrams/shadow-mapping";
 
 {/* C 实战型章（HEL-82，高级光照篇第 3 篇）：原书「阴影映射 Shadow Mapping」。重心是代码对照(spec C 列 §6 重，覆盖两遍法关键代码)：①第一遍——光空间矩阵 lightProjection×lightView + 渲深度到深度纹理 FBO；②第二遍片段着色器——FragPos 变光空间 / 透视除法 / 转 [0,1] / 采样 shadow map / 深度比较 + bias + PCF 3×3。承接同篇 blinn-phong / gamma-correction（已学世界空间光照、点乘、片段着色器），沿用「光与材质 / 相机与摄影」类比库（光源也是一台「相机」）。C 型段式：概念讲解(§3 必，是什么压一段篇幅让给 §6) + 数学 math:false 整节省略(§4，光空间矩阵在 §6 代码对照里讲) + 交互 Demo(§5 必，主 R3F 内建 shadow map 调参 + Stepper 两遍法每步带图) + 代码对照(§6 重) + 误区 ≥3(§7) + 小结含改 Demo 题 + C 型独立实现题(§8)。主 viz = ShadowMappingDemo（three.js 内建 shadow map，控件：光源角度/阴影图分辨率/depth bias/PCF 开关 + 重置，亲手拖出 peter panning/锯齿/软硬——acne 因 three 内建偏移太稳盲调演示不出，归图解/误区）；图解 = ShadowMapStepDiagram（Stepper 两遍法四步配图）+ ShadowAcneDiagram（acne 成因 + bias 修法）。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -26,7 +28,7 @@ draft: false
 
 {/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质 / 相机与摄影」库（光源 = 一台相机）。 */}
 
-## 没有影子，东西像飘在空中
+## 为什么没有影子，东西像飘在空中
 
 前两篇你把高光调平滑、把颜色校正对了。可只要场景里没有影子，再精致的光照也透着一股假：一个球放在地面上，没有影子托着，它看起来不像「放」在地上，倒像悬浮在半空，分不清离地多高、到底贴没贴着。影子是我们判断「东西在哪、离得多远」的本能线索，少了它，整个画面就「飘」。
 
@@ -84,6 +86,8 @@ draft: false
 第二件是 <Term def="阴影映射第二遍的核心判定：把当前片元在光空间算出的深度（current depth），和深度图里同方向存的最近遮挡距离（closest depth）做大小比较。current > closest 说明前面有更近的东西先挡住了光、该片元在阴影里；current ≤ closest 说明它自己就是最近的、直接受光。比较结果通常用 0/1 表示「在阴影 / 受光」，乘到光照上即可。">深度比较</Term>：拿片元算出的当前深度，去深度图对应像素取出存着的「最近遮挡距离」，两个一比。当前深度更大 ⇒ 它比最近遮挡还靠后 ⇒ 被挡 ⇒ 在阴影；当前深度不大于 ⇒ 它自己就是最近的 ⇒ 受光。这个判定每个片元做一次，结果（在阴影 0 / 受光 1）乘到光照上，影子就出来了。
 
 听起来天衣无缝，但真写出来，你会立刻撞上两个经典翻车——一个让本该干净的表面爬满条纹，一个让影子飘起来。下面 Demo 里你能亲手把它们调出来再修掉，这正是本章最该上手的部分。
+
+<ShadowMapBoundaryContractDiagram />
 
 {/* 4. 数学推导（spec §四）：math:false，整节省略，不写。光空间矩阵（lightProjection×lightView）+ 透视除法 + [0,1] 映射 已在 §3 概念节点到、§6 代码对照里逐行讲，符合任务卡「math:false 整节省略，光空间矩阵在代码对照里讲」。 */}
 
@@ -333,7 +337,7 @@ shadow /= 9.0;                             // 9 次比较取平均 → 软边
 
 <Exercises>
 
-**练习 1（改 Demo 代码型）** 在上面的 demo 里，**复现 peter panning** 然后**修掉它**：先把影子和物体脚下拖到脱节、缩回去（物体像重新飘起来），再只动一个控件把它修回贴地。说出你怎么调，并解释为什么那样会出 peter panning、又为什么那一步能修掉。
+**问题 1（改 Demo 代码型）** 在上面的 demo 里，**复现 peter panning** 然后**修掉它**：先把影子和物体脚下拖到脱节、缩回去（物体像重新飘起来），再只动一个控件把它修回贴地。说出你怎么调，并解释为什么那样会出 peter panning、又为什么那一步能修掉。
 
 <Answer>
 
@@ -343,7 +347,7 @@ shadow /= 9.0;                             // 9 次比较取平均 → 软边
 
 </Answer>
 
-**练习 2（独立实现题 · C 型）** 不依赖 three 这类封装，自己用裸 WebGL2 实现一个**方向光的硬阴影**（目标效果：一个立方体在地面上投下一块清晰的影子，无 acne、无 peter panning，边缘是硬边即可）。列出你需要的关键步骤（不必写全部代码，但要点要全）。
+**问题 2（独立实现题 · C 型）** 不依赖 three 这类封装，自己用裸 WebGL2 实现一个**方向光的硬阴影**（目标效果：一个立方体在地面上投下一块清晰的影子，无 acne、无 peter panning，边缘是硬边即可）。列出你需要的关键步骤（不必写全部代码，但要点要全）。
 
 <Answer>
 

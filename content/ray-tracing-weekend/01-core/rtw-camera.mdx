@@ -11,6 +11,7 @@ draft: false
 ---
 
 import { RtwCameraDiagram } from "@/components/mdx/ray-tracing-weekend/diagrams/rtw-camera";
+import { RtwStepFlowDiagram } from "@/components/mdx/ray-tracing-weekend/diagrams/rtw-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
@@ -48,6 +49,31 @@ $$
 
 `horizontal` = (viewport_width, 0, 0)，`vertical` = (0, viewport_height, 0)，`lower_left_corner` = $\mathbf{O} - \text{horizontal}/2 - \text{vertical}/2 - (0,0,f)$。
 
+### 实际宽高比与像素中心
+
+`aspect_ratio` 是你希望得到的比例，真正画出来的图像却由整数像素决定。假设设定宽度为 400、目标比例为 16:9，计算出的高度会被截断为 225；这次刚好保持 16:9，但很多尺寸并不会刚好整除。视口若仍使用理想比例，而像素网格使用截断后的高度，画面会发生轻微拉伸。稳妥的做法是：先得到 `image_height`，再用实际的 `double(image_width) / image_height` 计算视口宽度。
+
+<Term def="像素中心：一个离散像素在连续图像平面中对应的采样位置。把采样点放在像素格的中心，或在格内随机抖动，能避免把像素边界误当成像素本身。">像素中心</Term>的确定也有一个容易漏掉的半像素偏移。对于第 `(i,j)` 个像素，令 `xi`、`eta` 是 [0,1) 内的随机数，单次样本应位于像素格内部而不是格点边界：
+
+$$
+u = \frac{i + \xi}{W - 1},\qquad v = \frac{j + \eta}{H - 1}
+$$
+
+当 `xi=eta=0.5` 时，得到确定的像素中心采样；让它们每次随机，多个样本平均后就是抗锯齿。这里的随机性只作用于视口上的落点，不能随机改变相机起点，否则得到的是景深而不是边缘抗锯齿。
+
+### 坐标方向必须成对约定
+
+<Term def="相机坐标约定：图像像素的行列方向、视口的水平和垂直向量、以及渲染循环的遍历顺序必须配套选择。只要其中一个翻转而其他两个不变，输出就会上下颠倒或左右镜像。">相机坐标约定</Term>有两种等价写法。第一种让视口 `vertical` 指向上方，渲染循环从最后一行扫到第零行；第二种让 `viewport_v` 指向下方，从上到下遍历图像。两种都正确，错误只发生在混用它们时。
+
+$$
+\mathbf{P}_{00}=\mathbf{Q}+\tfrac12(\Delta\mathbf{u}+\Delta\mathbf{v}),\qquad
+\mathbf{P}_{ij}=\mathbf{P}_{00}+i\Delta\mathbf{u}+j\Delta\mathbf{v}
+$$
+
+这里的 $\mathbf{Q}$ 是视口左上角，$\Delta\mathbf{u}$、$\Delta\mathbf{v}$ 是相邻像素中心的步进。用这组表达式可以直接检查：`j` 增大时，光线究竟在图像和世界里朝哪个方向移动。
+
+最后，`get_ray` 的方向不必立刻单位化。射线方程中的参数 `t` 会随方向长度缩放，只要求交公式、`ray::at(t)` 和后续法线计算使用同一条射线，几何命中不变；只有背景渐变、余弦或反射等明确要求方向长度为 1 的计算才应调用 `unit_vector`。这能少做一次归一化，也能让你明确每一处“单位方向”的真正需求。
+
 ## 交互Demo
 
 > 猜一猜：把 fov 从 90° 减到 20°，画面会变「广角拉近」还是「长焦压缩」？
@@ -56,12 +82,18 @@ $$
 
 <Stepper>
 <Step title="第一步：定义视口">
+<RtwStepFlowDiagram caption="相机建模第 1 步：先由视场角和宽高比确定图像平面。" stage={1} stages={["由 fov 与宽高比得到视口", "像素映射为视口坐标", "从相机起点生成射线"]} />
+
 由 fov 和宽高比算出视口宽高，确定左下角、水平、垂直三个向量，视口摆在相机前方焦距处。
 </Step>
 <Step title="第二步：像素映射">
+<RtwStepFlowDiagram caption="相机建模第 2 步：像素索引被转换为图像平面上的精确位置。" stage={2} stages={["由 fov 与宽高比得到视口", "像素映射为视口坐标", "从相机起点生成射线"]} />
+
 把像素 (i,j) 归一化为 (u,v)∈[0,1]，在视口上找到对应点 P_view。
 </Step>
 <Step title="第三步：发射光线">
+<RtwStepFlowDiagram caption="相机建模第 3 步：从眼睛连向像素位置的向量成为场景射线。" stage={3} stages={["由 fov 与宽高比得到视口", "像素映射为视口坐标", "从相机起点生成射线"]} />
+
 从相机起点 O 连向 P_view，方向 = P_view − O，即为该像素的发射光线，交给求交着色。
 </Step>
 </Stepper>
@@ -118,16 +150,22 @@ ray r = cam.get_ray(u, v);
 ## 练习
 
 <Exercises>
-**问题**：写出 get_ray(u,v) 的方向向量公式，并解释 lower_left_corner 的作用。
+**问题 1**：写出 get_ray(u,v) 的方向向量公式，并解释 lower_left_corner 的作用。
 
 <Answer>
 方向 = `lower_left_corner + u·horizontal + v·vertical − origin`。lower_left_corner 是视口左下角的位置（已包含视口偏移与焦距前移），加上 u、v 的水平垂直分量就定位到视口上 (u,v) 对应点，再减去 origin 得到从相机指向该点的方向。
 </Answer>
 
-**问题**：fov=90°、宽高比 16:9 时，视口宽高分别是多少（焦距 1）？
+**问题 2**：fov=90°、宽高比 16:9 时，视口宽高分别是多少（焦距 1）？
 
 <Answer>
 θ=90°，h=tan(45°)=1，viewport_height=2h=2，viewport_width=aspect×height=(16/9)×2≈3.556。视口比图像更宽以匹配 16:9。
+</Answer>
+
+**问题 3**：某实现把 `viewport_v` 设为 `(0, -viewport_height, 0)`，并让 `j` 从 0 增加到 `image_height-1`。它又把 `pixel00_loc` 设为视口左上像素中心。这个组合会不会上下颠倒？若把 `viewport_v` 改为正值，最小的配套改动是什么？
+
+<Answer>
+不会颠倒：`j` 增大时，`j * viewport_v` 向下移动，正好符合图像从上到下的行序。若把 `viewport_v` 改为正值，要么把 `pixel00_loc` 改为左下像素中心并从下向上遍历，要么保持左上起点但把 j 的映射改成 `image_height - 1 - j`。关键不是哪个符号“正确”，而是像素行序、起点和垂直步进必须同时一致。
 </Answer>
 </Exercises>
 
@@ -136,6 +174,8 @@ ray r = cam.get_ray(u, v);
 <GlossaryItem term="视场角">fov，相机视野的张角，tan(θ/2) 决定视口高度；fov 越大越广角，越小越长焦。</GlossaryItem>
 <GlossaryItem term="宽高比">aspect = 图像宽/高，视口宽度 = aspect × 视口高度，保证像素为方形不被拉伸。</GlossaryItem>
 <GlossaryItem term="像素抖动">在像素内对 u、v 加随机偏移再发射光线，多次采样平均以消除边缘锯齿。</GlossaryItem>
+<GlossaryItem term="像素中心">一个离散像素在连续图像平面中对应的采样位置。中心或格内随机采样能避免把像素边界当作实际采样位置。</GlossaryItem>
+<GlossaryItem term="相机坐标约定">图像行列方向、视口水平与垂直向量、渲染循环遍历顺序的成套约定。混用相反方向会造成上下颠倒或左右镜像。</GlossaryItem>
 </Glossary>
 
 <Attribution adaptedFrom="Ray Tracing in One Weekend (Peter Shirley)" adaptedUrl="https://raytracing.github.io/books/RayTracingInOneWeekend.html" />

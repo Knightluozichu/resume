@@ -1,0 +1,188 @@
+---
+title: "Chapter 12. Date and Time"
+type: C
+section: "Programming in Lua 4e · Real Programming"
+order: 12
+description: "掌握os.time、os.date与os.difftime，区分instant、local/UTC calendar、duration和calendar arithmetic，并验证DST与平台边界。"
+demo: true
+math: false
+sourceUrl: "https://www.lua.org/pil/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PilTimeRepresentationLab, PilOsDateLab, PilCalendarArithmeticLab } from "@/components/mdx/lua-programming/diagrams/date-time";
+
+<Objectives>
+
+- 能区分timestamp、local/UTC date table、formatted text、CPU time与duration，并解释各自的可移植边界
+- 能实现os.time/os.date转换和格式化，验证normalization、locale、DST、range与round-trip结果
+- 能设计duration与calendar arithmetic，判断何时需要monotonic clock或timezone database
+
+</Objectives>
+
+## 为什么Date和Time不能只用一个Number
+
+程序至少面对四种不同对象：instant表示时间线上的一点；duration表示两点间隔；local calendar表示某时区规则下的年月日墙钟字段；formatted text用于输入输出。Lua标准库用number-like timestamp和table承载这些对象，但representation相似不等于语义相同。
+
+先预测：`os.time()`是否保证Unix seconds；`os.time{year=2024,month=13,day=1}`会失败还是规范化；`os.date("!*t", t)`得到的table能否直接传给os.time保持t；跨DST把timestamp加86400是否仍是次日同一hour；`os.clock()`能否测HTTP timeout。先写host、timezone、locale和Lua build，再执行。
+
+<Term def="时间线instant、local/UTC calendar fields、formatted text与duration必须用不同语义处理，转换时显式携带timezone和format。">instant-calendar boundary</Term>防止把“同一个数字”当作万能时间。Lua reference把time representation留给host C library，range、precision和epoch不应由application凭经验假定。
+
+## The Function os.time
+
+`os.time()`无参数时返回当前time；传table时把local calendar fields转换为time representation。Table至少提供year、month、day，hour默认通常为12而不是0，minute/second默认0；`isdst`可帮助处理daylight-saving interpretation。使用目标Lua manual验证默认和失败行为。
+
+<Term def="os.time按host local timezone解释calendar table，并可把越界month/day/hour等字段规范化为合法日期，同时更新相关fields。">local-time normalization</Term>使`day=day+1`能表达calendar move，也会掩盖invalid user input。Parser应先验证用户字段range，再决定是否允许normalization；不要把2月31日静默变成3月日期。
+
+Timestamp range受platform time type影响，旧系统可能有2038边界，远未来/过去可能返回nil或error。DST transition中某local time可能出现两次或根本不存在，`isdst`缺失时host选择不一定符合业务。金融、调度与跨地区数据需要专门time library与timezone database。
+
+```lua
+local now = os.time()
+assert(now ~= nil)
+
+local local_fields = os.date("*t", now)
+local round_trip = os.time(local_fields)
+assert(round_trip ~= nil)
+
+local normalized = {
+  year = local_fields.year,
+  month = local_fields.month,
+  day = local_fields.day + 1,
+  hour = 12,
+  min = 0,
+  sec = 0,
+  isdst = local_fields.isdst,
+}
+assert(os.time(normalized) ~= nil)
+```
+
+Round-trip不应断言所有fields/text完全相同：leap seconds、DST ambiguity与precision会影响。选择中午进行calendar examples能减少DST午夜边界干扰，但不能替代timezone tests。
+
+<PilTimeRepresentationLab />
+
+<Stepper>
+  <Step title="切换Timestamp、Local Table、UTC Table和CPU Clock"><PilTimeRepresentationLab /></Step>
+  <Step title="记录Runtime Fingerprint">保存Lua version、OS、timezone、locale、timestamp range/resolution和DST rules version，测试不能只写当前日期。</Step>
+  <Step title="做Boundary Matrix">覆盖month/day越界、leap day、2038邻域、DST gap/fold、isdst true/false/nil和nil return，记录normalized table。</Step>
+</Stepper>
+
+<Callout type="trap" title="os.time Table就是UTC Timestamp Constructor">
+Os.time按host local time解释table。即使table来自`os.date("!*t", t)`，再传os.time也会把UTC fields当local fields。可移植UTC构造或named-zone转换需要host/timezone library。
+</Callout>
+
+## The Function os.date
+
+`os.date(format, time)`把time拆为calendar fields并格式化；省略time使用current time，省略format得到locale-dependent representation。Format以`!`开头时使用UTC，否则使用local timezone。`"*t"`返回table，`"!*t"`返回UTC table；其它format使用C `strftime`风格directives。
+
+Date table常含year、month、day、hour、min、sec、wday、yday与isdst。Wday/yday的起点按Lua定义，不要与其它语言zero-based index混用。UTC table的isdst通常为false，但仍应按runtime结果处理。
+
+<Term def="日期文本格式显式固定UTC/local选择、directives、locale、encoding、zero-padding与parse round-trip要求，不使用默认os.date输出作wire schema。">date-format contract</Term>要求人类显示和机器持久化分离。`%c`、month/day names与timezone abbreviations随locale/platform变化；某些directives也非所有C libraries都一致。
+
+```lua
+local instant = assert(os.time())
+local local_table = os.date("*t", instant)
+local utc_table = os.date("!*t", instant)
+local utc_text = os.date("!%Y-%m-%dT%H:%M:%SZ", instant)
+
+assert(type(local_table) == "table")
+assert(type(utc_table) == "table")
+assert(string.match(utc_text, "^%d%d%d%d%-%d%d%-%d%dT%d%d:%d%d:%d%dZ$") ~= nil)
+```
+
+格式化到seconds可能丢失subsecond precision；Lua standard os API通常没有nanosecond instant。若数据源有更高precision，单独保存integer seconds与fraction或使用time library。解析上述text也不是os.date功能，需要严格parser并验证calendar ranges。
+
+<PilOsDateLab />
+
+<Stepper>
+  <Step title="切换Default、Format、Local *t和UTC !*t"><PilOsDateLab /></Step>
+  <Step title="建立Format Golden Tests">固定timestamp和timezone container，验证local/UTC text、wday/yday、zero padding与locale切换；wire只用显式ASCII format。</Step>
+  <Step title="审计Precision Loss">比较source precision、os.time resolution与formatted fields，禁止把丢掉subseconds的text当无损round-trip。</Step>
+</Stepper>
+
+## Date-Time Manipulation
+
+`os.difftime(t2, t1)`返回两time representations之间的difference，优先于直接减法，因为底层time type不保证就是普通number semantics。<Term def="Fixed elapsed seconds与按年月日墙钟规则移动是两种不同运算，DST、month length和leap year会让结果不等价。">duration-calendar distinction</Term>是日期bug的核心。
+
+“24小时后”可表达fixed duration；“明天上午9点”应修改local calendar day再由timezone rules解析。跨spring-forward，两次本地9点可能只差23小时；跨fall-back可能差25小时。按月移动还要定义月底policy：1月31日加一个月是2月末、3月某日还是错误。
+
+```lua
+local function next_local_day_at(hour, from_time)
+  local fields = os.date("*t", from_time)
+  fields.day = fields.day + 1
+  fields.hour, fields.min, fields.sec = hour, 0, 0
+  fields.isdst = nil -- ask the host to resolve the target local date
+  return assert(os.time(fields))
+end
+
+local start = assert(os.time())
+local next_run = next_local_day_at(9, start)
+local elapsed = os.difftime(next_run, start)
+assert(type(elapsed) == "number")
+```
+
+上例适合解释standard library semantics，不是robust scheduler：DST fold/gap的选择、process timezone变更、clock adjustment和restart persistence都未解决。Production schedule保存named timezone、local recurrence rule与last-fired identity，由timezone engine生成next instant。
+
+<Term def="Named timezone的历史与未来offset、DST gap/fold和政治规则来自versioned timezone database，而不是固定UTC offset或timezone abbreviation。">timezone-rule dependency</Term>说明UTC+8不是“Asia/Shanghai”的完整替代，EST等abbreviation也可能歧义。
+
+<PilCalendarArithmeticLab />
+
+<Stepper>
+  <Step title="切换Elapsed Seconds、Fixed Duration、Calendar Day和Named Zone"><PilCalendarArithmeticLab /></Step>
+  <Step title="写Question Type">先标需求是instant comparison、elapsed duration、calendar recurrence还是human display，再选择difftime、seconds或calendar normalization。</Step>
+  <Step title="跑DST/Month Matrix">在有DST的zone测试gap/fold前后同一local hour，覆盖leap day、month end、year boundary与timezone rules upgrade。</Step>
+</Stepper>
+
+## os.clock、Wall Clock与Deadline
+
+`os.clock()`返回program消耗的approximate CPU time，不是当前wall time；sleep期间可能几乎不增长，不能实现网络timeout或用户可见duration。`os.time()`是wall clock representation，可能因NTP、管理员或虚拟机调整而跳变，也不是高精度monotonic clock。
+
+Benchmark CPU work可用os.clock但需warm-up和统计；deadline、retry timeout与latency应由host提供monotonic clock。Persisted event instant则用wall/UTC representation。<Term def="Elapsed deadline依赖只前进的monotonic source，calendar/event timestamp依赖wall clock，CPU profiling依赖process CPU clock的时钟选择规则。">clock-source contract</Term>要求API name带语义，而不是都叫time。
+
+## Parsing、Serialization与Testing
+
+Standard os library主要做construction/formatting，不是完整ISO parser。Machine data应使用明确schema、UTC indicator、range与precision；解析后保留original zone/offset需求。Unix timestamp若作为JSON number经过double会遇到precision和unit误解，必须声明seconds/milliseconds和integer range。
+
+测试不要依赖开发机当前timezone。可在隔离process设置timezone环境并覆盖多个zones，或注入clock/time adapter。Golden timestamp应避开仅在单个平台有效的极端range，同时单独运行capability probes记录不支持项。
+
+<Callout type="trap" title="一天永远等于86400秒，所以Calendar Schedule直接加86400">
+Fixed duration确实可定义为86400 seconds，但local calendar day跨DST可能是23或25小时。先判断需求是elapsed duration还是次日本地墙钟时间，再选seconds或calendar normalization。
+</Callout>
+
+## 本章回顾：先确定Time Type，再做转换
+
+1. Instant、duration、local/UTC calendar与formatted text是不同types，不能因representation相似混用。
+2. Os.time无参取current time，有table时按local timezone解释并可能normalization越界fields。
+3. Os.date用leading `!`选择UTC，`*t`返回table；默认和locale formats不能作稳定wire schema。
+4. Os.difftime表达time difference；fixed seconds与calendar movement跨DST/month边界不等价。
+5. Os.clock是CPU time，deadline需要host monotonic clock；named zones需要timezone database。
+6. 测试需固定timezone/locale并覆盖DST gap/fold、leap day、range和precision loss。
+
+<Exercises>
+
+**问题 1：为什么`os.time(os.date("!*t", t))`通常不能Round-trip？**
+
+<Answer>Os.date的`!`把t拆成UTC fields，但os.time始终按host local timezone解释table；UTC fields被当本地墙钟，产生offset偏移。使用保留原timestamp，或通过timezone-aware library做UTC table construction，并测试range/precision。</Answer>
+
+**问题 2：怎样实现“每天本地09:00”而不是“每24小时”？**
+
+<Answer>保存named timezone与calendar recurrence；用timezone engine从上次date生成下一天09:00并显式处理DST gap/fold，再得到next instant。Standard library示例可修改local table.day/hour后os.time，但production还需rules version、restart与duplicate-fire policy。</Answer>
+
+**问题 3：测量Request Timeout为什么不能用os.clock？**
+
+<Answer>Os.clock近似process CPU consumed，等待socket或sleep时不等同wall elapsed。Timeout使用host monotonic clock，保存start/deadline并比较；事件日志用wall timestamp。测试注入fake clocks分别验证clock jump与deadline。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="instant-calendar boundary" definition="Instant、calendar fields、text与duration分开建模并显式转换的边界。" />
+  <GlossaryItem term="local-time normalization" definition="Os.time按local timezone解释并规范化calendar table fields的语义。" />
+  <GlossaryItem term="date-format contract" definition="固定UTC/local、directives、locale、precision与round-trip的日期文本协议。" />
+  <GlossaryItem term="duration-calendar distinction" definition="Fixed elapsed seconds与按calendar rules移动不等价的运算区分。" />
+  <GlossaryItem term="timezone-rule dependency" definition="Named zone依赖versioned historical offsets与DST gap/fold规则。" />
+  <GlossaryItem term="clock-source contract" definition="Monotonic、wall与CPU clocks按deadline、timestamp和profiling用途选择的规则。" />
+</Glossary>
+
+<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 12: Date and Time" adaptedUrl="https://www.lua.org/pil/" />

@@ -3,132 +3,318 @@ title: "跨平台兼容性"
 type: D
 section: "计算机图形学与渲染"
 order: 7
-description: "特性检测、扩展加载与多平台降级策略"
+description: "用声明式能力契约、格式探针、着色器变体和设备矩阵选择可解释的降级路径"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://registry.khronos.org/webgl/specs/latest/"
 draft: false
 ---
 
-import { DogCrossPlatformDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-cross-platform";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  DogCrossPlatformDiagram,
+  DogCapabilityContractDiagram,
+} from "@/components/mdx/deep-opengl/diagrams/dog-cross-platform";
+import { DogStepFlowDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能区分能力检测与版本检测的取舍
-- 能写出扩展加载与使用流程
-- 能针对不同平台设计降级渲染路径
-- 能回答：为什么不能只靠版本号判断某特性可用？
+
+- 能设计包含必需能力、可选质量和限制值的可审计能力契约
+- 能实现版本选择、扩展加载和 1×1 FBO 格式探针，而不是只解析版本字符串
+- 能设计 WebGL2、WebGL1、OpenGL ES 与桌面 OpenGL 的着色器和 API 适配边界
+- 能分析某设备为何选择降级路径，并用设备矩阵复现、记录和回归该决定
+
 </Objectives>
 
 ## 直觉引入
 
-不同设备、浏览器、驱动的 OpenGL/WebGL 能力参差不齐：桌面可能支持 4.6，手机只到 ES3.0，老浏览器只有 WebGL1，有的扩展这台有那台没有。如果代码假设「大家都有」，跑别的机器就崩。
+跨平台失败通常不是“完全不支持 OpenGL”，而是某个组合不成立：设备能采样浮点纹理，却不能把该格式作为颜色附件；能写浮点附件，却不支持该目标上的混合；支持四个 draw buffer，但项目 G-buffer 需要五个；shader 能编译，却因精度或扩展差异在另一阶段链接失败。
 
-跨平台的核心是「先问能不能，再决定怎么用」：用<Term def="运行时查询某特性是否可用而非假设其存在的做法">特性检测</Term>查扩展与上限，能用高端路径就用、不能用就降级到次优方案，保证处处能跑只是效果有差。
+因此，版本号只能确定核心能力下限，不能直接等价为某条渲染路径。稳定实现要把需求写成数据，收集核心版本、限制、扩展和最小资源实验，再选择一条满足全部必需条件的路径。这套运行时验证也称为**特性检测**；选择结果还要携带“为什么关闭了 HDR/SSAO/实例化”的原因，而不是只返回 high/medium/low。
 
-## 概念讲解
+## 能力契约而不是 if 链
 
-### 检测手段
-- `getContext("webgl2")` 是否为 null：判断 WebGL2。
-- `gl.getSupportedExtensions()`：列出所有可用扩展。
-- `gl.getParameter(MAX_*）`：查纹理大小、UBO 大小等上限。
-- 着色器编译：用 `getShaderInfoLog` 验证 GLSL 是否被接受。
+<Term def="把渲染路径所需版本、限制值、格式、扩展和验证探针写成可比较数据的运行时约束">能力契约</Term>可分三层：
 
-### 扩展加载
-<Term def="在运行时获取扩展函数指针以使用非核心功能">扩展加载</Term>：WebGL 用 `gl.getExtension("NAME")` 返回扩展对象（非 null 即可用）；桌面用 GLAD/GLEW 加载函数指针。用前必查，查到才用。
+1. **必需能力**：缺少就不能运行该路径，例如 WebGL2、至少四个颜色附件、某种深度纹理格式；
+2. **可选质量**：缺少时仍可运行，但关闭浮点混合 bloom、各向异性过滤或 timer query；
+3. **资源预算**：最大纹理尺寸、uniform block、采样数、附件数量和内存预算。
 
-### 降级路径
-按能力分级：WebGL2+float-blend 走 HDR 路径；只有 WebGL2 走 LDR；只有 WebGL1 用扩展或简化效果。每条路径独立写，运行时按检测结果选一条。
+<Term def="由规范版本保证、无需额外扩展即可使用的最低功能集合">核心能力</Term>仍需结合限制值。例如 WebGL2 核心有 drawBuffers，但 MAX_DRAW_BUFFERS 可能低于高质量 G-buffer 的需求；有 3D texture，也要检查 MAX_3D_TEXTURE_SIZE。
 
-### GLSL 兼容
-ES2 用 `#version 100` + attribute/varying；ES3 用 `#version 300 es` + in/out；桌面用 `#version 330 core`。同一效果常需准备多份着色器源。
+<DogCapabilityContractDiagram />
 
-## 交互Demo
+## 后端版本必须一次选定
 
-> 猜一猜：只靠 gl.getParameter(VERSION) 字符串判断「支持实例化」，可靠吗？
+WebGL2 与 WebGL1 不是同一对象的两个模式。初始化应先尝试目标后端，成功后把 API 包装、shader 版本和资源格式绑定成同一 RendererBackend。若项目真的支持 WebGL1，则维护独立适配层；不能创建 WebGL1 后仍调用 WebGL2 核心方法。
+
+```js
+function createBackend(canvas, allowWebGL1) {
+  const webgl2 = canvas.getContext("webgl2", { alpha: false });
+  if (webgl2) {
+    return {
+      kind: "webgl2",
+      gl: webgl2,
+      shaderLanguage: "glsl-es-300",
+      vao: {
+        create: () => webgl2.createVertexArray(),
+        bind: (vao) => webgl2.bindVertexArray(vao),
+      },
+    };
+  }
+
+  if (!allowWebGL1) throw new Error("WebGL2 is required");
+  const webgl1 = canvas.getContext("webgl", { alpha: false });
+  if (!webgl1) throw new Error("WebGL is unavailable");
+  const vao = webgl1.getExtension("OES_vertex_array_object");
+  return {
+    kind: "webgl1",
+    gl: webgl1,
+    shaderLanguage: "glsl-es-100",
+    vao: vao
+      ? {
+          create: () => vao.createVertexArrayOES(),
+          bind: (object) => vao.bindVertexArrayOES(object),
+        }
+      : null,
+  };
+}
+```
+
+同一个 canvas 一旦成功建立一种上下文，之后再请求另一种类型通常不能当作安全切换机制。后端选择应发生一次，页面要切换后端则重新创建 canvas 与完整资源图。
+
+## 扩展是独立能力，不是等级徽章
+
+<Term def="在核心规范之外由实现选择暴露、必须按名称获取并遵守其专属契约的功能">扩展</Term>通过 getExtension 返回扩展对象或启用对应语义。getSupportedExtensions 适合遥测和 UI，不应替代逐项 getExtension。
+
+以 HDR 后处理为例，至少要拆开：
+
+- 浮点/半浮点纹理能否创建和采样；
+- 该 internal format 能否作为颜色附件；
+- 过滤模式是否支持算法需要的线性过滤；
+- 目标上是否需要且支持浮点混合；
+- 多附件数量和位宽是否落在预算；
+- shader 精度是否满足色调映射与亮区提取。
+
+EXT_color_buffer_float 与 EXT_float_blend 解决的不是同一个问题。前者不能被“有 float blend”替代，后者也不应成为所有 HDR 算法的前置条件：若 bloom 用独立 additive 合成到 LDR 目标或不在浮点目标混合，需求会不同。
+
+## 格式探针验证具体组合
+
+<Term def="创建最小纹理、附件或程序并执行规范检查，用来证明一个具体能力组合可用的运行时实验">格式探针</Term>比“枚举存在”更强。下面的函数创建 1×1 纹理并挂到 FBO，验证该 internalFormat/format/type 组合是否可作为颜色目标。
+
+```js
+function probeColorRenderable(gl, internalFormat, format, type) {
+  const texture = gl.createTexture();
+  const framebuffer = gl.createFramebuffer();
+  if (!texture || !framebuffer) return false;
+
+  let complete = false;
+  try {
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texImage2D(
+      gl.TEXTURE_2D,
+      0,
+      internalFormat,
+      1,
+      1,
+      0,
+      format,
+      type,
+      null,
+    );
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+    gl.framebufferTexture2D(
+      gl.FRAMEBUFFER,
+      gl.COLOR_ATTACHMENT0,
+      gl.TEXTURE_2D,
+      texture,
+      0,
+    );
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+    complete =
+      gl.checkFramebufferStatus(gl.FRAMEBUFFER) ===
+      gl.FRAMEBUFFER_COMPLETE;
+  } finally {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.deleteFramebuffer(framebuffer);
+    gl.deleteTexture(texture);
+  }
+  return complete;
+}
+```
+
+更强的探针会绘制已知颜色并 readPixels 比较容差，以捕获“FBO 完整但 shader/混合/读取组合不满足算法”的情况。探针应在初始化阶段运行并缓存结果，不能每帧创建资源。
+
+## 声明式路径选择与解释
+
+<Term def="当首选能力不满足时，改用功能更少但仍有明确正确性和画质保证的实现">降级路径</Term>不是 catch 住异常后随便关闭效果。每条路径要声明必需条件、关闭项和替代算法。
+
+```js
+const paths = [
+  {
+    id: "deferred-hdr",
+    requires: (c) =>
+      c.webgl2 &&
+      c.maxDrawBuffers >= 4 &&
+      c.rgba16fRenderable &&
+      c.maxTextureSize >= 4096,
+    disabled: [],
+  },
+  {
+    id: "forward-hdr",
+    requires: (c) => c.webgl2 && c.rgba16fRenderable,
+    disabled: ["deferred", "ssao"],
+  },
+  {
+    id: "forward-ldr",
+    requires: (c) => c.rgba8Renderable,
+    disabled: ["hdr", "bloom", "ssao"],
+  },
+];
+
+function selectPath(capabilities) {
+  for (const path of paths) {
+    if (path.requires(capabilities)) {
+      return { ...path, reason: "all required capabilities satisfied" };
+    }
+  }
+  throw new Error("no render path satisfies mandatory RGBA8 output");
+}
+```
+
+生产代码最好把 requires 拆成命名断言，返回每项 pass/fail。这样遥测可记录“deferred-hdr 缺 MAX_DRAW_BUFFERS>=4”而非模糊的“low device”。
+
+## Shader 变体与 API 适配
+
+GLSL ES 100、GLSL ES 300、GLSL ES 320 和桌面 GLSL 的版本声明、阶段、限定符、纹理函数、输出方式与扩展语法不同。可靠方案有三种：
+
+- 维护少量人工审查的独立源码；
+- 从统一 shader IR/模板生成后端版本，并保存生成产物做编译测试；
+- 使用成熟跨平台着色器工具链，反射出 attribute、uniform block 和资源绑定。
+
+不要用无边界正则把 attribute 替换为 in，就宣称完成移植。ES100 的 varying/gl_FragColor、ES300 的用户输出、桌面 profile、精度语句和扩展声明都需要语法级转换与目标编译验证。
 
 <DogCrossPlatformDiagram />
 
+## 分步建立兼容矩阵
+
+先预测：设备有 EXT_color_buffer_float，RGBA16F FBO 探针也成功，但没有 EXT_float_blend。是否必须关闭整个 HDR 管线？
+
 <Stepper>
-<Step title="第一步：查能力">
-运行时检测 WebGL2、扩展列表、各 MAX 上限，记录可用特性集，而非假设版本即能力。
+<Step title="第一步：声明算法真实需求">
+<DogStepFlowDiagram
+  caption="第 1 步：先区分可渲染、可过滤、可混合和附件数量等独立需求。"
+  stage={1}
+  stages={["声明每条路径的独立能力需求", "采集限制扩展并运行可执行探针", "选择路径并记录缺失原因与回归结果"]}
+/>
+
+逐 pass 写出输入格式、输出格式、采样、过滤、混合、附件数、shader 版本和精度，不用“HDR 支持”一个布尔值包办。
 </Step>
-<Step title="第二步：选路径">
-按检测结果分级：高端走实例化+UBO+HDR，中端走 WebGL2+LDR，低端走 WebGL1+扩展或简化。
+<Step title="第二步：采集和验证">
+<DogStepFlowDiagram
+  caption="第 2 步：版本与扩展建立候选集，最小 FBO/shader/draw 探针提供最终证据。"
+  stage={2}
+  stages={["声明每条路径的独立能力需求", "采集限制扩展并运行可执行探针", "选择路径并记录缺失原因与回归结果"]}
+/>
+
+查询 MAX 限制和扩展对象，创建真实格式附件、编译目标 shader，并执行已知像素测试。任何失败都写入 capability report。
 </Step>
-<Step title="第三步：备降级">
-每条路径准备对应 GLSL 源与回退实现，缺失特性时自动降到次优效果，保证处处可跑。
+<Step title="第三步：选择可解释路径">
+<DogStepFlowDiagram
+  caption="第 3 步：路径选择返回启用效果、关闭项和逐条失败原因，进入设备矩阵。"
+  stage={3}
+  stages={["声明每条路径的独立能力需求", "采集限制扩展并运行可执行探针", "选择路径并记录缺失原因与回归结果"]}
+/>
+
+若 HDR pass 不需要在浮点目标混合，可保留 HDR、换独立合成策略；只有算法确实依赖浮点混合时才关闭对应 pass，而不是整条管线。
 </Step>
 </Stepper>
 
-## 代码对照
+## 设备矩阵与回归证据
 
-WebGL 特性检测与降级：
+兼容测试至少按后端、GPU 家族、操作系统/浏览器和驱动版本分层。每个样本保存：
 
-```js
-const gl = canvas.getContext("webgl2") || canvas.getContext("webgl");
-const isWebGL2 = !!gl.getParameter && gl.getParameter(gl.VERSION).includes("WebGL 2.0")
-                 || canvas.getContext("webgl2") !== null;
+- VERSION、SHADING_LANGUAGE_VERSION、renderer（注意隐私与浏览器脱敏）；
+- 核心限制值、启用扩展和格式探针结果；
+- 被选路径、禁用效果和逐条原因；
+- 固定场景截图/像素哈希、shader 编译日志和 FBO 状态；
+- CPU/GPU 帧时间、内存与上下文丢失恢复结果。
 
-// 检测扩展
-const extVAO = (!isWebGL2) ? gl.getExtension("OES_vertex_array_object") : null;
-const extInst = (!isWebGL2) ? gl.getExtension("ANGLE_instanced_arrays") : null;
-const floatBlend = gl.getExtension("EXT_float_blend");
-
-// 查上限
-const maxTexSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
-const maxSamples = isWebGL2 ? gl.getParameter(gl.MAX_SAMPLES) : 0;
-
-// 按能力选渲染路径
-let renderPath;
-if (isWebGL2 && floatBlend)      renderPath = "HDR";
-else if (isWebGL2)               renderPath = "LDR";
-else if (extVAO && extInst)      renderPath = "WebGL1+ext";
-else                             renderPath = "WebGL1-min";
-
-// WebGL1 用扩展模拟 VAO
-const vaoExt = extVAO;
-const myVAO = isWebGL2 ? gl.createVertexArray()
-                       : (vaoExt ? vaoExt.createVertexArrayOES() : null);
-```
-
-`getExtension` 返回 null 即不可用，绝不在未检测时调用扩展函数。
+设备数量有限时，可优先覆盖能力边界而非只覆盖品牌：WebGL1 无 VAO、WebGL2 最低 draw buffers、无 float blend、低 MAX_TEXTURE_SIZE、片元精度边界和高 DPI 内存压力。
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** 只看版本号假设某特性可用，到老设备报「函数未定义」。
-**原因 →** 版本号不等于扩展支持，同版本不同驱动/浏览器扩展集合不同。
-**修法 →** 用 getExtension 运行时查每个扩展、getParameter 查上限，查到才用；版本号仅作粗筛。
+**现象 →** 设备有 EXT_float_blend 就启用 HDR FBO，结果 framebuffer 不完整。
+**原因 →** 浮点混合扩展不等于浮点格式可作为颜色附件，缺少 color-buffer 能力或具体格式探针。
+**修法 →** 分别获取相关扩展，创建目标 internal format 的最小 FBO；只有完整且像素验证通过才启用该路径。
 </Callout>
 
 <Callout type="trap">
-**现象 →** 只写了高端路径，低端设备直接黑屏或崩溃。
-**原因 →** 没设计降级，缺特性时着色器编译失败或函数未定义。
-**修法 →** 按能力分级准备多套 GLSL 与回退实现，运行时检测后选一条，缺特性自动降到次优效果。
+**现象 →** WebGL2 创建失败后回退 WebGL1，ES300 shader 和 createVertexArray 立即失败。
+**原因 →** 上下文回退没有同步切换 shader 语言、API 包装和资源格式。
+**修法 →** 把后端、shader 变体和功能适配绑定成一个对象；没有完整 WebGL1 后端就明确拒绝，而非半回退。
+</Callout>
+
+<Callout type="trap">
+**现象 →** “低端路径”在新驱动上仍被固定选择，团队无法解释为什么。
+**原因 →** 路径选择只保存最终枚举，没有保存限制、扩展、探针和失败断言，旧黑名单也未版本化。
+**修法 →** 输出结构化 capability report 和路径理由；黑名单包含设备/驱动范围、问题证据、到期复测条件。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：为什么不能只靠版本号判断某特性可用？正确的检测姿势是什么？
+**问题 1**：EXT_color_buffer_float、EXT_float_blend 和“RGBA16F FBO 完整”分别证明什么，为什么不能合成一个 supportsHDR 布尔值？
 
 <Answer>
-版本号只反映核心 API 等级，不反映扩展支持与上限差异——同版本不同驱动/浏览器的扩展集合、纹理大小上限等都不同，假设「版本够高就一定有」会在老设备翻车。正确姿势是运行时用 getExtension 查每个扩展、getParameter 查 MAX 上限、着色器编译日志验证 GLSL，查到才用，版本号仅作粗筛。
+color-buffer 扩展影响浮点格式作为颜色附件的能力范围；float-blend 扩展影响在相关浮点目标上执行混合；RGBA16F FBO 探针只证明这个具体附件组合可绘制。HDR 算法还可能要求过滤、MRT 数量、精度和特定合成方式。它们是独立契约，应按 pass 需求组合，而不是一个布尔值。
 </Answer>
 
-**问题**：如何为不同平台设计降级渲染路径？以 HDR 后处理为例。
+**问题 2**：设备没有浮点混合，但场景先写 RGBA16F、最后在 RGBA8 默认帧缓冲做一次不透明 tone mapping。必须关闭 HDR 吗？
 
 <Answer>
-按能力分级：WebGL2 + EXT_float_blend 走 HDR 路径（浮点渲染目标 + 线性色调映射）；只有 WebGL2 走 LDR（RGBA8 渲染目标 + 简化调色）；只有 WebGL1 用 OES_vertex_array_object/ANGLE_instanced_arrays 扩展或简化几何。每条路径独立 GLSL 源与回退实现，运行时检测后选一条，缺特性自动降级，保证处处可跑只是效果有差。
+不一定。若中间 RGBA16F 可渲染且各 pass 不在浮点附件上使用 blending，最终 tone mapping 是覆盖写入 RGBA8，那么算法不依赖浮点混合，可保留 HDR。需要 bloom additive 或透明累积时，可改为显式 shader 合成、换目标格式或只关闭对应效果；能力选择必须匹配真实读写和混合需求。
+</Answer>
+
+**问题 3**：一个跨平台回归报告最少应包含哪些信息，才能复现“为何选了 forward-ldr”？
+
+<Answer>
+应包含后端与 shader 版本、核心限制、相关扩展对象结果、每个格式/FBO/shader 探针、路径全部 requires 断言的 pass/fail、最终禁用效果、浏览器/系统/GPU 范围，以及固定场景图像和日志。只记录 VERSION 与最终路径无法区分是附件数、浮点格式、编译还是黑名单导致。
 </Answer>
 </Exercises>
 
+## 小结
+
+- 版本给核心下限，具体路径还取决于限制值、扩展和可执行资源探针。
+- 可渲染、可过滤、可混合是独立能力；HDR 不能用单个扩展布尔值概括。
+- WebGL1 回退必须同步切换 API、GLSL 和资源格式，半回退比明确失败更难诊断。
+- 降级路径应保证正确性并返回关闭项和原因，而不是把设备贴成高/中/低标签。
+- 结构化设备矩阵把能力选择变成可复现、可回归、可删除旧黑名单的工程证据。
+
 <Glossary>
-<GlossaryItem term="特性检测">运行时查询某特性是否可用而非假设其存在，用 getExtension/getParameter/编译日志验证。</GlossaryItem>
-<GlossaryItem term="扩展">非核心的可选功能，需运行时 getExtension 加载，返回 null 即不可用。</GlossaryItem>
-<GlossaryItem term="降级路径">按能力分级的多套渲染实现，高端用不上时自动退到次优方案。</GlossaryItem>
-<GlossaryItem term="GLSL 版本">ES2 用 #version 100+attribute/varying，ES3 用 #version 300 es+in/out，桌面用 #version 330 core。</GlossaryItem>
+<GlossaryItem term="能力契约">把路径所需版本、限制值、格式、扩展和探针写成可比较数据的运行时约束。</GlossaryItem>
+<GlossaryItem term="核心能力">由规范版本保证、无需额外扩展即可使用的最低功能集合，仍受限制值约束。</GlossaryItem>
+<GlossaryItem term="扩展">核心规范外由实现选择暴露的功能，必须按名称获取并遵守专属契约。</GlossaryItem>
+<GlossaryItem term="格式探针">创建最小纹理、FBO、shader 或 draw 并执行检查，证明具体能力组合真的可用。</GlossaryItem>
+<GlossaryItem term="降级路径">首选能力不满足时使用的替代实现，仍有明确正确性、画质边界和选择原因。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="深入理解 OpenGL WebGL OpenGL ES" adaptedUrl="" />
+<Attribution
+  adaptedFrom="Khronos WebGL specifications and extension registry"
+  adaptedUrl="https://registry.khronos.org/webgl/specs/latest/"
+/>

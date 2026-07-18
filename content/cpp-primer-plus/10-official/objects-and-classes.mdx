@@ -1,0 +1,271 @@
+---
+title: "Chapter 10：Objects and Classes"
+type: A
+section: C++ Primer Plus 6e · 抽象、对象生命周期与 ADT
+order: 10
+description: 对齐第6版 Chapter 10：从过程式分解走向类抽象，掌握 public/private、构造与析构、this 指针、类作用域、对象数组和栈 ADT。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+draft: false
+---
+
+import {
+  EppClassBoundaryMap,
+  EppObjectLifecycleFlow,
+  EppStackAdtLab,
+} from "@/components/mdx/cpp-primer-plus/diagrams/objects-and-classes";
+
+<Objectives>
+
+- 能实现从过程式“数据加函数”到公有接口、私有表示和可检验不变量类的重构
+- 能解释构造函数、成员初始化、`this` 指针、对象数组与析构的精确执行次序
+- 能把固定容量栈实现为抽象数据类型，用操作前后条件验证正常、上溢和下溢路径
+
+</Objectives>
+
+## 从过程式步骤开始建立对象边界
+
+过程式编程常把问题分解为函数和数据流，适合无状态计算；面向对象编程把相关状态、允许的操作和始终成立的关系放进同一边界。抽象与类的关系在于：抽象定义稳定能力和不变量，类把它实现为访问控制、状态和方法。两者不是互斥风格：类的方法内部仍由表达式、函数和控制流实现，关键变化是“谁有权改变状态、改变后必须恢复什么”。
+
+<Term def="把领域对象的必要性质提取为稳定接口，同时隐藏不影响使用者的表示细节。">
+  抽象
+</Term>
+
+<Term def="由 class 定义的类型实例，具有独立状态、对象身份和受生命周期约束的行为。">
+  对象
+</Term>
+
+若温度计允许调用者直接写 `reading`，任何值都能进入对象；若公有操作是 `setCelsius()`，类可以集中检查范围并保持单位一致。类不是把字段和 setter 机械包一层，而是把领域约束变成唯一合法入口。
+
+## public 承诺能力，private 保留表示自由
+
+class declaration 同时描述 public and private。公有部分是调用者可依赖的契约；私有成员与 helper 是实现，可以在不破坏契约时替换。默认访问权限也是语言语义：`class` 成员默认 private，`struct` 成员默认 public，但二者都能有方法、构造函数和访问控制。
+
+<Term def="类向调用者公开的操作与观察能力，以及这些操作承诺的前置条件和结果。">
+  公有接口
+</Term>
+
+<Term def="每次成功构造后、每次公有操作返回时都必须成立的对象状态关系。">
+  类不变量
+</Term>
+
+```cpp title="bank-account.hpp"
+#pragma once
+
+#include <string>
+
+class BankAccount {
+public:
+    BankAccount(std::string owner, double openingBalance);
+
+    bool deposit(double amount);
+    bool withdraw(double amount);
+    double balance() const;
+
+private:
+    std::string owner_;
+    double balance_;
+};
+```
+
+这里的不变量至少是余额有限且非负。`withdraw()` 返回 bool 让余额不足成为显式业务失败，并保证失败时状态不变；`balance() const` 承诺不修改当前对象的可观察状态。
+
+<EppClassBoundaryMap />
+
+<Callout type="trap" title="陷阱：字段 private 再生成所有 getter/setter 就完成了封装">
+  机械 setter 仍把表示暴露成修改协议，调用者可以逐步制造无效中间状态。应公开 deposit、withdraw、reserve 等领域操作，让每个操作原子地验证输入并恢复不变量。
+</Callout>
+
+## 成员函数在某个当前对象上执行
+
+在非 static 成员函数中，编译器提供隐式的 `this` pointer，指向当前对象。成员名 `balance_` 可理解为 `this->balance_`。当方法要返回当前对象以支持连续调用时，可返回 `*this` 的引用，但调用者不能让该引用活得比对象更久。
+
+<Term def="非 static 成员函数中指向当前对象的隐式指针，用于访问当前实例成员或返回当前对象。">
+  this 指针
+</Term>
+
+```cpp
+BankAccount& BankAccount::rename(std::string owner) {
+    owner_ = std::move(owner);
+    return *this;
+}
+
+bool BankAccount::withdraw(double amount) {
+    if (amount <= 0.0 || amount > balance_) {
+        return false;
+    }
+    this->balance_ -= amount;
+    return true;
+}
+```
+
+`BankAccount::withdraw` 中的 scope resolution operator 表示该函数属于 BankAccount class scope。类外定义仍可访问该类的 private 成员，因为访问权属于成员函数身份，不取决于函数体写在类内还是类外。
+
+## 构造函数打开有效生命周期
+
+构造函数与类同名、没有返回类型，负责建立首次有效状态；析构函数名为 `~ClassName`，负责结束对象拥有的资源。构造不是先把对象建好再调用普通方法：成员会先按**声明顺序**初始化，然后执行构造函数体。初始化列表书写顺序不会改变成员真实顺序。
+
+<Term def="对象生命周期开始时初始化成员并建立类不变量的特殊成员函数。">
+  构造函数
+</Term>
+
+<Term def="对象生命周期结束时运行清理逻辑，随后成员按声明逆序销毁的特殊成员函数。">
+  析构函数
+</Term>
+
+```cpp
+BankAccount::BankAccount(std::string owner, double openingBalance)
+    : owner_{std::move(owner)},
+      balance_{openingBalance >= 0.0 ? openingBalance : 0.0} {
+}
+
+BankAccount::~BankAccount() = default;
+```
+
+初始化列表直接构造成员；若在函数体赋值，成员必须先默认构造再赋值，const/reference 成员甚至只能在初始化阶段绑定。生产设计还应决定无效开户余额是拒绝、异常还是规范化，不能静默改值却不给调用者信号。
+
+<EppObjectLifecycleFlow />
+
+<Callout type="trap" title="陷阱：初始化列表的书写顺序决定成员初始化顺序">
+  成员永远按 class declaration 中的声明顺序初始化。若后声明成员依赖先声明成员，应让声明顺序体现依赖，并开启 reorder warning；否则阅读顺序与真实执行顺序会分叉。
+</Callout>
+
+## 对象数组会逐个构造和逆序析构
+
+`BankAccount accounts[3]` 需要为每个元素找到可用构造方式。若类没有默认构造函数，就必须提供三个初始化器；构造按下标递增，离开作用域时按下标递减析构。数组保证对象连续，不代表可以越过类的 public interface 直接操作成员表示。
+
+```cpp
+BankAccount accounts[] {
+    {"Ada", 120.0},
+    {"Bjarne", 80.0},
+    {"Barbara", 200.0},
+};
+
+for (const BankAccount& account : accounts) {
+    std::cout << account.balance() << '\n';
+}
+```
+
+对象数组把“元素生命周期”和“容器边界”叠加在一起：索引必须合法，元素本身也必须保持不变量。元素很多或数量运行时决定时，`std::vector<BankAccount>` 通常能同时保存长度和管理生命周期。
+
+## 类作用域把类型级名字限定在类内
+
+成员、成员函数、嵌套类型和类内常量都位于 class scope。类外通过 `BankAccount::` 限定名字；对象通过 `account.balance()` 选择成员。类内 static data member 属于类型而非每个对象，但其声明、定义和版本规则仍需分别处理。
+
+```cpp
+class Stack {
+public:
+    using Item = unsigned long;
+    static constexpr std::size_t capacity{8};
+
+    bool push(Item value);
+    bool pop(Item& out);
+    bool empty() const;
+
+private:
+    Item items_[capacity]{};
+    std::size_t size_{0};
+};
+```
+
+`Stack::Item` 与 `Stack::capacity` 不污染全局名字。类作用域解决名字归属，不自动证明设计合理；真正的契约仍来自操作语义和 `size_ <= capacity` 不变量。
+
+## 栈是“操作集合”，不是一块数组
+
+抽象数据类型（abstract data type, ADT）由允许的值和操作语义定义，与底层表示分离。栈的 LIFO 规则要求 push 把值放到新栈顶，pop 取出旧栈顶；满栈 push 和空栈 pop 必须有明确失败语义，且不能越界访问。
+
+<Term def="通过值域、操作及其前后条件定义，而不要求使用者依赖具体存储表示的类型。">
+  抽象数据类型
+</Term>
+
+```cpp
+bool Stack::push(Item value) {
+    if (size_ == capacity) {
+        return false;
+    }
+    items_[size_] = value;
+    ++size_;
+    return true;
+}
+
+bool Stack::pop(Item& out) {
+    if (size_ == 0) {
+        return false;
+    }
+    --size_;
+    out = items_[size_];
+    return true;
+}
+
+bool Stack::empty() const {
+    return size_ == 0;
+}
+```
+
+pop 先证明非空，再把 size 减到旧栈顶索引，最后读取。失败路径不改 `size_`，也不读写数组。调用者必须检查 bool；若改用异常或 optional，仍要保留同样的前后条件。
+
+先预测四种操作后的 `size_`、返回值和被访问索引，再切换实验面板核对；只要失败路径改变了状态或触碰了非法索引，ADT 契约就尚未成立。
+
+<EppStackAdtLab />
+
+## 三步把数据结构审计为类契约
+
+<Stepper>
+  <Step title="第一步：写公有能力与不变量">
+    列出调用者真正需要的领域操作、每个操作的失败语义，以及构造和每次返回时都成立的关系。
+
+    <EppClassBoundaryMap />
+  </Step>
+  <Step title="第二步：画完整对象生命周期">
+    按成员声明顺序检查初始化依赖，再追踪构造成功、数组元素、方法调用、this 引用和逆序析构。
+
+    <EppObjectLifecycleFlow />
+  </Step>
+  <Step title="第三步：覆盖 ADT 边界路径">
+    分别执行正常 push/pop、满栈 push 和空栈 pop，核对返回值、数组索引和失败后状态。
+
+    <EppStackAdtLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 过程式与面向对象分解可以组合；类的价值是集中状态权限和不变量
+- public interface 承诺领域能力，private representation 保留实现变化空间
+- constructors and destructors 划定有效生命周期，成员按声明顺序构造、逆序销毁
+- this pointer 表示当前对象，class scope 管理成员名字归属
+- 对象数组叠加容器边界与元素生命周期，不能绕过元素契约
+- abstract data types 由操作前后条件定义；栈的上溢和下溢必须保持状态有效
+
+<Exercises>
+  1. **问题 1：重构数据加函数。** 一个订单由公开字段 `total`、`paid` 和多个随意修改它们的函数组成，怎样建立类边界？
+
+  <Answer question="怎样从字段修改迁移到领域操作？">先写不变量：金额有限且非负、paid 不超过 total；构造函数只接受有效初态；把字段设为 private，公开 addItem、pay、remaining 等领域操作；每个失败路径返回明确结果且状态不变，并用正常、超额支付、负数和边界金额测试。</Answer>
+
+  2. **问题 2：预测生命周期。** 类中先声明 `buffer_`、后声明依赖其地址的 `view_`，初始化列表却先写 `view_`，真实顺序是什么？
+
+  <Answer question="成员依赖应怎样匹配初始化顺序？">真实顺序只看声明：先构造 buffer_，再构造 view_，构造函数体最后执行；析构逆序。应让声明顺序表达依赖，并让初始化列表保持同序，避免误读。若 view_ 借用 buffer_，还要禁止 view_ 逃逸到 owner 之外。</Answer>
+
+  3. **问题 3：证明栈边界。** 为容量 2 的 Stack 写最小操作序列，覆盖正常、overflow、LIFO 与 underflow。
+
+  <Answer question="四类路径应验证哪些后置条件？">push(4)、push(9) 都成功且 size 为 2；push(7) 失败且状态不变；两次 pop 依次得到 9、4，证明 LIFO；第三次 pop 失败且不读数组、不改输出策略和 size。每一步都检查 `0 <= size <= capacity`。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="抽象">提取稳定能力并隐藏不相关表示细节的建模过程。</GlossaryItem>
+  <GlossaryItem term="对象">类类型的实例，拥有状态、身份和受约束的生命周期。</GlossaryItem>
+  <GlossaryItem term="公有接口">调用者可使用并依赖其契约的操作集合。</GlossaryItem>
+  <GlossaryItem term="类不变量">构造成功后和公有操作返回时始终成立的状态关系。</GlossaryItem>
+  <GlossaryItem term="构造函数">初始化成员并建立对象首次有效状态的特殊函数。</GlossaryItem>
+  <GlossaryItem term="析构函数">结束对象资源责任并触发成员逆序销毁的特殊函数。</GlossaryItem>
+  <GlossaryItem term="this 指针">非 static 成员函数中指向当前对象的隐式指针。</GlossaryItem>
+  <GlossaryItem term="抽象数据类型">由值域和操作语义定义、与具体表示解耦的类型。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++ Primer Plus, Sixth Edition, Chapter 10 Objects and Classes"
+  adaptedUrl="https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+/>

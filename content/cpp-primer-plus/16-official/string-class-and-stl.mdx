@@ -1,0 +1,257 @@
+---
+title: "Chapter 16：The string Class and the Standard Template Library"
+type: A
+section: C++ Primer Plus 6e · string、容器与泛型算法
+order: 16
+description: 对齐第6版 Chapter 16：掌握 string class、smart pointer templates、STL containers、iterator、generic algorithms、functors 与 valarray。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+draft: false
+---
+
+import {
+  EppAlgorithmPipelineLab,
+  EppSmartPointerOwnershipFlow,
+  EppStlContractMap,
+} from "@/components/mdx/cpp-primer-plus/diagrams/string-class-and-stl";
+
+<Objectives>
+
+- 能实现 `std::string` 的构造、拼接、查找、子串与输入边界，并解释 size/capacity 和 C 字符串桥接
+- 能比较 `unique_ptr`、`shared_ptr`、`weak_ptr` 与裸指针的 owner、复制、释放和借用契约
+- 能设计 STL container/iterator/algorithm/functor 管线，复现迭代器失效、排序前置条件和 `valarray` 逐元素运算
+
+</Objectives>
+
+## 为什么标准库的价值是契约组合而不只是少写代码
+
+标准库把常见资源和算法装进具有复制、生命周期、范围和失败语义的类型。`string` 不只是可增长字符数组；container 不只是数据盒；algorithm 也不只是现成循环。它们通过迭代器和 callable contract 组合，让同一算法作用于多种表示。
+
+## string class 把字符、长度与资源绑成值
+
+string 类（`std::string`）拥有字符序列并保存长度，支持复制、移动和自动释放。它可以包含空字符，因此 `size()` 才是完整长度证据；`c_str()` 提供以空字符结尾的临时观察指针，用于 C API，但修改 string 后指针可能失效。
+
+<Term def="拥有可变长字符序列、长度和资源生命周期，并提供值语义操作的标准库类。">
+  string 类
+</Term>
+
+```cpp
+#include <string>
+
+std::string fullName(std::string first, std::string last) {
+    std::string result = std::move(first);
+    result += ' ';
+    result += last;
+    return result;
+}
+```
+
+`size()` 是当前元素数，`capacity()` 是不重新分配可容纳的数量；capacity 不是可访问元素范围。`reserve()` 可减少已知增长的重分配，`resize()` 才改变 size 并建立/删除字符。
+
+## 查找和子串要把 npos 当作显式分支
+
+`find()` 失败返回 `std::string::npos`，不能把它当普通索引继续加一。`substr(pos,count)` 要求 pos 合法并返回新 string；`compare` 和关系运算按字典序，不等价于数字或本地化排序。
+
+```cpp
+std::string_view value{"scheme://host/path"};
+const std::size_t marker = value.find("://");
+if (marker == std::string_view::npos) {
+    throw std::invalid_argument{"missing scheme"};
+}
+const std::string_view scheme = value.substr(0, marker);
+```
+
+混用 `operator>>` 和 `getline` 时，格式化提取会留下分隔换行；应决定是否 `std::ws` 跳过前导空白，或始终按行读取再解析。输入协议不是 string 自动替你选择的。
+
+<Callout type="trap" title="陷阱：reserve(n) 后可以写入下标 0 到 n-1">
+  reserve 只保证 capacity，不创建元素，合法下标仍由 size 决定。先 resize 或通过 append/push_back 建立元素；越过 size 写入是未定义行为。
+</Callout>
+
+## smart pointer templates 把 owner 写进类型
+
+智能指针模板（smart pointer templates）用析构、复制和移动规则表达资源责任。`unique_ptr<T>` 是唯一 owner，移动转移；`shared_ptr<T>` 的强引用组共同延长生命周期；`weak_ptr<T>` 观察共享对象而不延长生命，使用前通过 `lock()` 获取临时强引用。
+
+<Term def="通过模板类型的析构、复制和移动语义编码动态对象所有权与释放策略的 RAII 指针。">
+  智能指针模板
+</Term>
+
+```cpp
+#include <memory>
+
+auto owner = std::make_unique<Widget>(42);
+Widget* borrowed = owner.get();
+
+auto transferred = std::move(owner);
+// owner is now empty; borrowed is valid only while transferred owns the Widget
+```
+
+旧 `auto_ptr` 的复制会转移所有权，不能满足普通容器和值语义，现代 C++ 已移除；使用 `unique_ptr` 显式 move。`shared_ptr` 不是默认升级：循环引用需要 weak_ptr 打断，共享可变对象还需要同步和领域一致性。
+
+<EppSmartPointerOwnershipFlow />
+
+<Callout type="trap" title="陷阱：shared_ptr 能彻底避免悬空指针和并发问题">
+  shared_ptr 只保证控制块下对象活到最后强 owner；从 `get()` 得到的裸借用仍可逃逸，引用环不会释放，对象内部并发读写也不自动同步。
+</Callout>
+
+## STL containers 选择的是复杂度和稳定性契约
+
+STL 容器（STL containers）管理元素范围。sequence container 如 vector/deque/list 强调位置顺序；associative container 如 set/map 按 key 组织；unordered container 以 hash 分桶；adapter 如 stack/queue 限制底层接口。
+
+<Term def="管理元素存储、生命周期和遍历范围，并声明复杂度与迭代器失效规则的标准模板库类型。">
+  STL 容器
+</Term>
+
+```cpp
+#include <map>
+#include <vector>
+
+std::vector<std::string> names{"Ada", "Bjarne", "Barbara"};
+std::map<std::string, int> scoreByName;
+for (const auto& name : names) {
+    scoreByName.emplace(name, 0);
+}
+```
+
+vector 连续、随机访问快，但增长重分配会使所有 pointer/reference/iterator 失效；list 插入稳定却不支持随机访问；map 的查找和顺序契约不同于 unordered_map。选择依据是访问、插入、顺序、内存局部性和失效规则，不是名字熟悉度。
+
+## iterator 把算法与容器表示解耦
+
+迭代器（iterator）表示范围中的位置。STL 使用半开区间 `[first,last)`：first 可指向首元素，last 是尾后位置不可解引用，空范围满足 first==last。不同算法要求 input、forward、bidirectional 或 random-access 能力。
+
+<Term def="抽象容器位置和遍历能力、用于表示半开范围并连接容器与泛型算法的对象。">
+  迭代器
+</Term>
+
+```cpp
+auto it = names.begin();
+while (it != names.end()) {
+    if (it->empty()) {
+        it = names.erase(it);  // use returned next iterator
+    } else {
+        ++it;
+    }
+}
+```
+
+修改容器后必须按该容器/操作的失效规则更新迭代器。缓存 `end()`、元素地址或索引也各有不同稳定性，不应泛化成“迭代器总会失效”或“list 永不失效”。
+
+<EppStlContractMap />
+
+## generic programming 复用满足操作要求的类型
+
+泛型编程（generic programming）把算法写成类型/操作模式，而不是绑定具体类层次。STL algorithm 接收 iterator range，并通过函数对象（functor）、函数指针或 lambda 注入比较、谓词和变换策略。
+
+<Term def="围绕类型应支持的操作和抽象接口编写可跨具体表示复用的编译期程序设计方式。">
+  泛型编程
+</Term>
+
+<Term def="定义 operator()、可像函数一样调用并可携带配置状态的对象。">
+  函数对象
+</Term>
+
+```cpp
+struct ByLength {
+    bool operator()(const std::string& a, const std::string& b) const {
+        return a.size() < b.size();
+    }
+};
+
+std::sort(names.begin(), names.end(), ByLength{});
+```
+
+sort 需要 random-access iterator，比较器必须形成 strict weak ordering。若比较器对同一元素不稳定、让 `comp(a,a)` 为真或产生环，算法前置条件被破坏，结果不可信。
+
+## algorithms 把遍历、输出和策略分开
+
+算法（algorithm）通常不改变容器 size，只在给定范围读写；`remove_if` 只把保留元素移到前部并返回逻辑新尾，真正删除 vector 尾部还需 `erase`。输出算法要有足够空间或使用 inserter。
+
+```cpp
+auto newEnd = std::remove_if(
+    names.begin(), names.end(),
+    [](const std::string& name) { return name.empty(); }
+);
+names.erase(newEnd, names.end());
+```
+
+`for_each` 适合副作用，`transform` 生成变换结果，`accumulate` 折叠范围；从意图选择算法能把边界循环交给库，但前置条件仍需测试。
+
+## valarray 提供逐元素数值表达式
+
+`std::valarray<T>` 面向同类数值序列，算术运算逐元素执行，并提供 sum、min、max、shift、slice 等能力。它不是 vector 的通用替代：iterator/容器互操作历史上较弱，元素类型和操作集中于数值计算。
+
+<Term def="为数值数组提供逐元素算术、归约和切片操作的标准库模板。">
+  valarray
+</Term>
+
+```cpp
+#include <valarray>
+
+std::valarray<double> samples{1.0, 2.0, 3.0};
+std::valarray<double> calibrated = samples * 2.0 + 1.0;
+double total = calibrated.sum();
+```
+
+先预测 sort/filter/transform/valarray 四条管线需要的 iterator、输出和 callable 条件，再切换实验面板。记录输入、期望输出和失效点，不能只看模板是否编译。
+
+<EppAlgorithmPipelineLab />
+
+## 三步验证标准库管线
+
+<Stepper>
+  <Step title="第一步：画 STL 四方契约">
+    写出 container range/invalidation、iterator category、algorithm precondition 与 functor 语义，再选择组合。
+
+    <EppStlContractMap />
+  </Step>
+  <Step title="第二步：追踪所有权转移">
+    对 unique/shared/weak/raw pointer 记录 owner 数、move/copy、最后释放者和每个 borrower 的有效期。
+
+    <EppSmartPointerOwnershipFlow />
+  </Step>
+  <Step title="第三步：运行算法边界样例">
+    覆盖空范围、单元素、重复 key、失效迭代器、错误比较器和 valarray 长度，并核对输出范围。
+
+    <EppAlgorithmPipelineLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- string class 绑定字符、size 和资源；capacity 不是可访问范围，C 指针观察受修改失效约束
+- smart pointer templates 编码 owner 协议，但不自动解决借用、循环或共享可变状态
+- STL containers 通过复杂度、顺序和 invalidation contract 区分
+- iterator 以半开范围连接表示与 algorithms，算法还要求具体 iterator category
+- generic programming 用操作要求复用类型，functor 注入策略并必须保持比较/谓词语义
+- algorithms and valarray 分别提供范围操作与逐元素数值表达式
+
+<Exercises>
+  1. **问题 1：审计 string 指针。** 保存 `const char* p = text.c_str()` 后 append，为什么 p 不能继续使用？
+
+  <Answer question="C字符串桥接的有效期是什么？">p 是对 string 内部存储的借用，append 可能重分配并使其失效；即使地址偶然未变，也不应依赖。应在调用 C API 的最后时刻获取 c_str，并保证该调用期间 string 不被修改；需要长期保存则复制到独立 owner。</Answer>
+
+  2. **问题 2：选择智能指针。** 树节点唯一拥有孩子，孩子需要观察父节点，应使用什么组合？
+
+  <Answer question="所有权图怎样映射到指针类型？">父到孩子用 unique_ptr 表达唯一 owner；孩子到父可用受生命周期约束的裸 pointer/reference，因为父必然比孩子活得久。若外部共享 owner 才考虑 shared_ptr，并用 weak_ptr 打断回边；不要因“安全”默认全用 shared_ptr。</Answer>
+
+  3. **问题 3：修复算法管线。** 对 list 调用 sort(first,last) 编译失败，应该复制到 vector 吗？
+
+  <Answer question="从 iterator requirement 怎样选择修复？">std::sort 要 random-access iterator，list 只提供 bidirectional；可直接调用 list::sort 保留表示，或在确有连续/随机访问需求时转换容器。先评估后续操作、复杂度和 iterator stability，不为单个编译错误机械复制。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="string 类">拥有字符序列、长度和资源生命周期的标准库值类型。</GlossaryItem>
+  <GlossaryItem term="智能指针模板">通过类型语义表达动态对象 owner 与释放策略的 RAII 指针。</GlossaryItem>
+  <GlossaryItem term="STL 容器">管理元素范围并声明复杂度和失效规则的模板类型。</GlossaryItem>
+  <GlossaryItem term="迭代器">表示范围位置与遍历能力、连接容器和算法的对象。</GlossaryItem>
+  <GlossaryItem term="泛型编程">围绕类型操作要求编写跨表示复用代码的方式。</GlossaryItem>
+  <GlossaryItem term="函数对象">定义调用运算符并可携带状态的对象。</GlossaryItem>
+  <GlossaryItem term="valarray">提供逐元素数值运算和归约的标准库模板。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++ Primer Plus, Sixth Edition, Chapter 16 The string Class and the Standard Template Library"
+  adaptedUrl="https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+/>

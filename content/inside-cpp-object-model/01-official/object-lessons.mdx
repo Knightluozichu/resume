@@ -1,0 +1,289 @@
+---
+title: "第1章：对象模型初识"
+type: A
+section: Inside the C++ Object Model · Chapter 1
+order: 1
+description: 对齐原书第1章 Object Lessons：封装的布局成本、三种对象模型、继承后的表示、struct/class 差异、指针类型与多态语义。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/inside-the-c-plus-plus-object-model-9780201834543"
+draft: false
+---
+
+import {
+  IcoInheritanceStorageMap,
+  IcoObjectRepresentationMap,
+  IcoPointerPolymorphismMap,
+} from "@/components/mdx/inside-cpp-object-model/diagrams/object-lessons";
+
+<Objectives>
+
+- 能比较 C 数据抽象、simple object model、table-driven object model 与主流 C++ object model 的表示成本
+- 能解释 encapsulation 与 inheritance 加入后，哪些内容进入对象、哪些内容只存在于程序代码和 class metadata
+- 能推导 pointer 的 static type、object 的 dynamic type 对数据访问、非虚调用和 virtual dispatch 的不同结果
+
+</Objectives>
+
+## 从“类会不会让对象变大”开始
+
+原书先拆掉一个常见误解：把 C 的 `struct + free functions` 改写为 C++ `class + member functions`，并不意味着每个 object 都保存一份 function code。先预测两种写法的 `sizeof` 是否相同，再观察 compiler 输出；真正影响 object size 的通常是 nonstatic data、alignment、base subobject，以及 implementation 为 virtual function 或 virtual inheritance 引入的元数据。
+
+<Term def="把数据表示与操作它的函数组织成一个抽象接口，并通过访问控制保护表示细节。">
+  data abstraction
+</Term>
+
+下面两种写法都需要保存三个 `float`。第二种写法增加语言层关系和访问控制，却不要求把 `translate` 的机器码复制进每个实例。
+
+```cpp
+struct CPoint3d {
+    float x;
+    float y;
+    float z;
+};
+
+void translate(CPoint3d* point, float delta) {
+    point->x += delta;
+}
+
+class Point3d {
+public:
+    void translate(float delta) { x_ += delta; }
+
+private:
+    float x_;
+    float y_;
+    float z_;
+};
+```
+
+编译器可以把 nonstatic member call 概念性地变换为接收隐藏 `this` 参数的普通函数调用。encapsulation 的主要成本因此不是“成员函数占对象空间”，而是访问规则、可能的 accessor call，以及 ABI 不能随意改变 private layout 的工程约束。inline 后 accessor 甚至可能不留下 call。
+
+<Term def="将数据隐藏到 class 后，由布局、访问路径、二进制兼容约束和必要运行时机制产生的真实代价。">
+  layout costs for adding encapsulation
+</Term>
+
+<Callout type="trap" title="陷阱：private 数据比 public 数据占更多内存">
+  access control 是编译期语义；相同类型、顺序和 alignment 下，private 与 public
+  本身不改变字段所需字节。布局差异来自实现规则、base、virtual mechanism 和
+  padding，不来自“不可见”这个属性。
+</Callout>
+
+## 四种表示方式为何逐步收敛
+
+<IcoObjectRepresentationMap />
+
+<Term def="每个对象为每个数据成员和函数成员保留一个槽，槽再指向成员实体的概念模型。">
+  simple object model
+</Term>
+
+simple object model 很规整：所有 member 都通过 slot 间接访问。但一个有很多 member functions 的 object 会因 function slots 变大，每次 data access 也多一次 indirection。它适合解释“class 是 member 集合”，不适合作为高效实现的常见选择。
+
+<Term def="对象保存数据表与函数表的指针，成员编号通过表查找实际数据或函数的概念模型。">
+  table-driven object model
+</Term>
+
+table-driven model 把 member slots 移到共享表里，object 变小，却让普通数据访问也必须查表。主流 C++ model 选择更偏向 common case 的折中：
+
+1. nonstatic data members 直接放在 object 内，以编译期 offset 访问；
+2. static data members 在对象之外只有一份；
+3. static 与 nonstatic member function code 都在对象之外；
+4. polymorphic class 常由 implementation 在对象中放 vptr，共享 class-specific vtable；
+5. 没使用 virtual mechanism 的类，不应仅因“是 class”就支付 virtual dispatch 成本。
+
+<Term def="由语言语义约束、但具体布局由编译器与 ABI 决定的对象表示：数据通常内联，虚函数通常经类级虚表分派。">
+  C++ object model
+</Term>
+
+标准规定 observable behavior，不规定 vptr 必须位于第一个字节，也不规定 vtable 的精确 shape。书中讲的是当时及后来 ABI 广泛采用的 implementation model。分析内存转储时必须标注 compiler、target、ABI 与 options，不能把某次实验结果误写成语言保证。
+
+## 加入继承后，对象里出现什么
+
+<IcoInheritanceStorageMap />
+
+<Term def="most-derived object 内代表某个基类实例状态的那部分存储，可通过基类指针或引用观察。">
+  base subobject
+</Term>
+
+普通 single inheritance 通常把 base subobject 安置在 derived object 的固定位置，再放 derived data。转换 `Derived*` 到 unambiguous non-virtual `Base*` 时，implementation 可使用固定 offset；如果 base 位于起始位置，offset 甚至为零。
+
+```cpp
+struct Point2d {
+    float x;
+    float y;
+};
+
+struct Point3d : Point2d {
+    float z;
+};
+```
+
+这段代码的语义要求 `Point3d` 含有一个可作为 `Point2d` 使用的 base subobject。它不保证无 padding，也不保证所有 compiler 采用相同 bytes。多重继承会有多个 base views；virtual inheritance 则要求多条路径共享一个 virtual base subobject，访问 offset 可能依赖动态布局信息。第 3、4、5 章会分别展开 data、function 和 construction 代价。
+
+## 对象模型怎样影响程序
+
+object model 直接影响 `sizeof`、pointer adjustment、member access、virtual call、construction order 与 binary interface。它也影响优化器能否把抽象还原为直接操作：若 concrete type 和 call target 可证明，compiler 可能 devirtualize；若 dynamic target 不可知，就必须保留 runtime choice。
+
+```cpp
+void moveX(Point3d& point, float delta) {
+    point.translate(delta);
+}
+```
+
+若 `translate` 非虚且 definition 可见，调用可能 inline 为一次 load/add/store。若接口改成 virtual 且实际 dynamic type 不可证明，常见 lower form 是 load vptr、load slot、indirect call。高层写法相似，机器路径由语义契约而不是关键字数量决定。
+
+<Callout type="trap" title="陷阱：看到 virtual 就断定一定存在间接调用">
+  virtual 规定语义上的动态可覆写能力。若 call site 的 dynamic type 可由
+  whole-program analysis、final class 或直接对象表达式证明，compiler 可能
+  devirtualize。判断成本要看 optimized output 和 profile，不能只看源码标签。
+</Callout>
+
+## class 与 struct 的关键字差异
+
+<Term def="class 与 struct 在对象模型能力上相同，主要语言差别是默认 member access 与默认 inheritance access。">
+  keyword distinction
+</Term>
+
+`class` 默认 private member/private inheritance，`struct` 默认 public member/public inheritance。二者都能有 constructor、virtual function、base class、template 和 access specifier。所谓“struct 是 C layout、class 才有 C++ layout”并不成立。
+
+```cpp
+struct PublicByDefault {
+    int value;
+};
+
+class PrivateByDefault {
+    int value;
+};
+```
+
+工程上可约定 `struct` 表示 passive value、`class` 表示 invariant-bearing abstraction，但这是 style，不是另一套 runtime model。C interoperability 还需要满足 standard-layout、triviality、calling convention 等额外约束，不能仅靠改关键字保证。
+
+## object distinction：对象与观察它的指针不是一回事
+
+<IcoPointerPolymorphismMap />
+
+<Term def="表达式在编译期确定的类型，控制可见成员、overload resolution、非虚调用和许多地址计算。">
+  static type
+</Term>
+
+<Term def="运行时实际 most-derived object 的类型，在 virtual dispatch、RTTI 等机制中参与决议。">
+  dynamic type
+</Term>
+
+`Base*` 与 `Derived*` 都是地址型 handle，但 type 决定 compiler 如何解释该地址、允许哪些 member、需要什么 pointer adjustment。把 derived address 转为 base pointer，不会把 object 改造成 Base；它建立了一个只观察 base subobject 的静态视图。
+
+```cpp
+struct Shape {
+    int color = 0;
+    void inspect() const {}
+    virtual double area() const = 0;
+    virtual ~Shape() = default;
+};
+
+struct Circle final : Shape {
+    double radius = 1.0;
+    double area() const override { return 3.14159 * radius * radius; }
+};
+
+Circle circle;
+Shape* view = &circle;
+view->inspect(); // nonvirtual: Shape::inspect
+view->area();    // virtual: Circle::area
+```
+
+data member access 也不因 dynamic type 自动切换：`view->color` 指向 Shape subobject 的字段。polymorphism 主要通过 pointer/reference 加上 virtual interface 生效；按值把 Circle 复制到 Shape object 会 slicing，丢失 derived state，而且抽象基类通常直接禁止这种复制。
+
+<Term def="把派生对象按基类值复制时只保留 base subobject，派生状态与对应动态身份被截去的现象。">
+  object slicing
+</Term>
+
+## 第1章验证清单
+
+1. 对每个 class 标出 nonstatic data、static data、nonstatic functions 与 virtual metadata 的归属。
+2. 分清 language guarantee、ABI convention 与某次 compiler experiment。
+3. 预测 encapsulation 前后 object size 是否真正改变，并说明原因。
+4. 把 derived object 拆成 base subobjects、derived state 与 virtual-inheritance support。
+5. 对每个 expression 写出 static type 和可能的 dynamic type。
+6. 分别推导 data access、nonvirtual call 与 virtual call 的决议路径。
+7. 检查按值传递/赋值是否造成 object slicing。
+8. 用 `sizeof`、address delta、optimized assembly 和 runtime output 验证，而不是把猜测当标准。
+
+## 小结
+
+- encapsulation 不会把 member function code 复制进每个对象，真实成本来自 representation 与约束
+- simple model 和 table-driven model 揭示了统一性与 indirection 的取舍
+- 主流 C++ object model 以内联 nonstatic data 服务 common case，以 virtual table 支持 runtime choice
+- inheritance 在 most-derived object 内加入 base subobject，多重和虚继承可能需要 pointer adjustment
+- `struct` 与 `class` 共享同一对象模型，默认访问权限才是语言层主要差别
+- static type 决定可见接口、数据和非虚决议，dynamic type 只在特定 runtime mechanism 中参与
+- virtual semantics 不等于每个 call site 都必须保留间接调用，optimizer 可以在有证据时去虚化
+- object slicing 是按值丢失 derived state，不是“多态复制”
+
+<Attribution
+  adaptedFrom="Inside the C++ Object Model, First Edition, Chapter 1: Object Lessons"
+  adaptedUrl="https://www.informit.com/store/inside-the-c-plus-plus-object-model-9780201834543"
+/>
+
+<Glossary>
+  <GlossaryItem term="data abstraction">
+    把数据表示和操作组织成受保护接口。
+  </GlossaryItem>
+  <GlossaryItem term="layout costs for adding encapsulation">
+    封装引入的布局、访问与 ABI 约束成本。
+  </GlossaryItem>
+  <GlossaryItem term="simple object model">
+    对象用逐成员槽指向数据和函数实体的概念模型。
+  </GlossaryItem>
+  <GlossaryItem term="table-driven object model">
+    对象经数据表和函数表间接查找成员的概念模型。
+  </GlossaryItem>
+  <GlossaryItem term="C++ object model">
+    数据内联、动态能力按需付费的常见对象表示。
+  </GlossaryItem>
+  <GlossaryItem term="base subobject">
+    派生对象中代表一个基类实例的存储部分。
+  </GlossaryItem>
+  <GlossaryItem term="keyword distinction">
+    class 与 struct 的默认访问规则差异。
+  </GlossaryItem>
+  <GlossaryItem term="static type">表达式在编译期确定的观察类型。</GlossaryItem>
+  <GlossaryItem term="dynamic type">
+    运行期 most-derived object 的实际类型。
+  </GlossaryItem>
+  <GlossaryItem term="object slicing">
+    按基类值复制时截去派生部分。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：比较四种对象模型。** 对一个含 3 个数据成员、8 个普通函数和 2 个虚函数的类，说明每种模型把什么放进单个 object、什么可共享，以及一次数据访问要经过几层间接。
+
+<Answer question="为什么主流C++模型不把普通函数槽放进每个对象？">
+  function code 与 class 相关而非与每个 instance 独占。simple model
+  的逐函数槽会让每个 object 随接口数量膨胀；table-driven model
+  又让普通数据访问总要查表。主流模型把 nonstatic data 直接放入 object，以 fixed
+  offset 访问；普通函数在对象外直接调用，需要动态选择的 virtual function
+  才通过共享 vtable。这样 common case 直接，runtime flexibility 才付
+  indirection。
+</Answer>
+
+2. **问题 2：推导基类视图。** 给 `Base* p = &derived`，分别推导 `p->data`、`p->nonVirtual()`、`p->virtualFn()`，并说明何处使用 static type、何处使用 dynamic type。
+
+<Answer question="三类表达式为什么不会都按动态类型处理？">
+  static type Base 决定 member lookup、Base data offset 和 nonvirtual
+  target，所以前两者 使用 Base view；virtual call 的 slot contract 也来自
+  Base，但 slot 中 final overrider 由 object 的动态表示选择。若编译器证明
+  dynamic type 唯一，可把该 virtual call
+  devirtualize；这不改变语言结果。数据没有 virtual dispatch，不能自动改道到
+  Derived 同名字段。
+</Answer>
+
+3. **问题 3：设计一次可重复布局实验。** 用 `sizeof`、成员地址差、base pointer conversion 和 virtual call 观察一个普通类、单继承类、多态类；列出哪些结论只能属于当前 ABI。
+
+  <Answer question="布局实验怎样避免把实现现象冒充语言保证？">
+    固定 compiler version、target ABI、optimization 和 class definitions，记录
+    sizeof/alignment、字段 address delta、Derived* 到 Base* 的调整量与 call output。
+    可确认当前 build 的 vptr/offset/padding 现象；不能由此宣称标准规定 vptr
+    位置、vtable shape 或所有平台同尺寸。跨 compiler/target 重跑并把稳定语义与变化表示
+    分栏记录，才形成可审计证据。
+  </Answer>
+</Exercises>

@@ -1,0 +1,413 @@
+---
+title: "Item 41：理解隐式接口与编译期多态"
+type: A
+section: Chapter 7 · Templates and Generic Programming
+order: 41
+description: 对齐 Effective C++ 第三版 Item 41：比较 class 的显式接口和运行期多态与 template 的隐式接口和编译期多态，从完整 valid expressions 推导模板约束，并用 concepts 改善契约与诊断。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppExplicitImplicitInterfaceMap,
+  EcppImplicitContractEvolutionMap,
+  EcppValidExpressionRequirementMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-41-template-implicit-interfaces";
+
+<Objectives>
+
+- 能区分 class client 的 explicit interface/runtime polymorphism 与 template client 的 implicit interface/compile-time polymorphism
+- 能从模板正文逐条推导 T 必须满足的 valid expressions，而不误写成固定成员签名
+- 能设计 concept 与正反 contract tests，把隐式要求变成清晰的编译期边界和诊断
+
+</Objectives>
+
+## 从两种 doProcessing 开始
+
+先看只接受 Widget 的普通函数：
+
+```cpp
+void doProcessing(Widget& value) {
+    if (value.size() > 10 && value != someNastyWidget) {
+        Widget temp(value);
+        temp.normalize();
+        temp.swap(value);
+    }
+}
+```
+
+Widget 的 public declarations 明确告诉客户可调用哪些 names、参数和返回类型。若其中函数是 virtual，运行期会按对象动态类型选择 override。
+
+<Term def="通过函数声明、参数类型、返回类型、常量性和访问级别直接写出的类型契约。">
+  explicit interface
+</Term>
+
+<Term def="通过 virtual dispatch 在运行期按对象动态类型选择行为的机制。">
+  runtime polymorphism
+</Term>
+
+把函数泛化为 template 后，表面只写了 `T`：
+
+```cpp
+template<class T>
+void doProcessing(T& value) {
+    if (value.size() > 10 && value != someNastyValue) {
+        T temp(value);
+        temp.normalize();
+        temp.swap(value);
+    }
+}
+```
+
+<Term def="由泛型代码中必须成立的操作和表达式集合定义、未由单一 base class declaration 写出的契约。">
+  implicit interface
+</Term>
+
+<Term def="编译器在实例化、overload resolution 与 specialization 选择中为具体类型确定行为。">
+  compile-time polymorphism
+</Term>
+
+Item 41 的原则是 Understand implicit interfaces and compile-time polymorphism（理解隐式接口和编译期多态）。
+
+<EcppExplicitImplicitInterfaceMap />
+
+先预测：满足此模板是否一定要求 `T::size()` 返回整数？不要看函数名字猜签名，要检查完整 expression。
+
+## 隐式接口来自 template body
+
+模板参数 T 的约束散布在函数正文：
+
+- `value.size()` 必须可调用
+- `value.size() > 10` 必须形成可转换为条件值的结果
+- `value != someNastyValue` 必须有效
+- `T temp(value)` 必须可构造
+- `temp.normalize()` 必须可调用
+- `temp.swap(value)` 必须可调用
+
+<Term def="编译器能完成名字查找、overload resolution、转换并得到合法类型与值类别的完整表达式。">
+  valid expression
+</Term>
+
+<Term def="从 template definition 中使用到的每个 expression 反向得到的类型要求。">
+  expression-derived requirement
+</Term>
+
+这些要求合起来就是 doProcessing 对 T 的 implicit interface。它不是某个头文件里的 abstract base，也不要求类型之间存在继承关系。
+
+<EcppValidExpressionRequirementMap />
+
+## 不要把 expression 误缩成固定 signature
+
+`value.size() > 10` 并不要求 `size()` 返回 `int`。例如返回一个 proxy，且该 proxy 与 `int` 有合适的 `operator>`，expression 仍然有效。
+
+```cpp
+class CountProxy {
+public:
+    friend bool operator>(CountProxy count, int threshold);
+};
+
+class ImageBatch {
+public:
+    CountProxy size() const;
+};
+```
+
+<Term def="参与后续 overload 和 conversion、代表计算结果而非直接基础值的轻量对象。">
+  expression proxy
+</Term>
+
+同理，`value != someNastyValue` 不要求 T 自己有 member `operator!=`。它可以由 non-member overload、另一个 operand 的 overload 或隐式 conversion 满足。
+
+<Term def="成员函数、非成员函数、ADL 候选与转换共同参与操作选择的编译期过程。">
+  expression overload resolution
+</Term>
+
+隐式接口约束的是“这句话能否成立”，不是“必须有一模一样的函数声明”。
+
+<Callout type="trap" title="陷阱：用熟悉的名字猜返回类型">
+  `size` 常返回整数只是惯例。模板真正依赖的是 `size() > 10` 的结果可用于条件；若代码还执行算术、索引或序列化，才会增加相应表达式要求。
+</Callout>
+
+## compile-time polymorphism 发生在哪里
+
+```cpp
+Widget widget;
+ImageBatch batch;
+
+doProcessing(widget); // instantiate for Widget
+doProcessing(batch);  // instantiate for ImageBatch
+```
+
+<Term def="编译器把 template parameters 替换为具体 arguments，并检查和生成所需实体的过程。">
+  template instantiation
+</Term>
+
+<Term def="同一个泛型算法对不同具体类型生成或选择不同操作序列的静态多态结果。">
+  per-type specialization behavior
+</Term>
+
+每个调用点推导 T，编译器为该 T 解析 `size`、`operator!=`、construction、`normalize` 和 `swap`。不同类型可选择不同 overload，甚至通过 specialization 采用不同实现。这就是 compile-time polymorphism。
+
+它与 runtime virtual dispatch 的关键差异：选择发生在编译时，通常不要求共同 base 或 vtable；但每个实例可能生成代码，错误也会在实例化时暴露。
+
+## 鸭子类型不是“随便能跑”
+
+常用口号是“如果像鸭子一样走和叫就可以”，但工程上必须写出精确的 expression set。只测一个 happy-path 类型，会漏掉 const、value category、exception 和返回结果约束。
+
+<Term def="不依赖名义继承，只依据所需操作是否可用来接受类型的结构化泛型匹配。">
+  structural generic compatibility
+</Term>
+
+```cpp
+template<class T>
+void inspect(const T& value) {
+    auto n = value.size();
+    log(n);
+}
+```
+
+这里的 receiver 是 `const T&`，所以非 const `size()` 不满足；`n` 还必须可传给可见的 `log`。这些细节都是 implicit interface 的一部分。
+
+<Term def="表达式对 const、左值、右值和引用限定的接收者条件。">
+  receiver qualification requirement
+</Term>
+
+<Term def="一个表达式结果继续被另一个调用或运算使用时形成的连锁类型约束。">
+  result-use constraint
+</Term>
+
+## ADL 让非成员定制进入隐式接口
+
+泛型代码常写 unqualified `swap(a, b)`，使 argument-dependent lookup 找到类型命名空间中的定制 overload。
+
+```cpp
+template<class T>
+void exchange(T& left, T& right) {
+    using std::swap;
+    swap(left, right);
+}
+```
+
+<Term def="依据函数实参类型关联的 namespaces 与 classes 扩展非限定函数查找的规则。">
+  argument-dependent lookup
+</Term>
+
+此时 implicit interface 不是“必须有 member swap”，而是 unqualified swap expression 必须有效。Widget 可提供 friend/non-member swap，普通类型可回退到 `std::swap`。
+
+<Term def="泛型算法通过非限定调用允许用户类型提供同名高效操作的扩展位置。">
+  customization point expression
+</Term>
+
+## 失败诊断为什么常常很深
+
+没有显式约束时，不合格类型只有在 compiler 实例化到失败 expression 时才报错。
+
+```cpp
+struct Unprocessable {
+    int size() const;
+    // no normalize, no swap
+};
+
+// doProcessing(value); // failure inside template body
+```
+
+<Term def="从用户调用经过多层 templates 展开到最终无效表达式的编译错误调用链。">
+  instantiation diagnostic stack
+</Term>
+
+错误可能指向 `temp.normalize()`，也可能列出大量 substitution candidates。隐式接口一直存在，只是没有被命名和放在入口处检查。
+
+<Callout type="trap" title="陷阱：模板成功实例化就证明语义正确">
+  编译器只证明 expressions 合法，不知道 normalize 是否真的保持业务不变量、swap
+  是否交换完整状态。语法契约之外仍需 semantic contract 和运行测试。
+</Callout>
+
+## 用 concept 为隐式接口命名
+
+C++20 concepts 可以把同一批 expressions 提前写成可复用 predicate。
+
+```cpp
+template<class T>
+concept Processable =
+    std::copy_constructible<T> &&
+    requires(T value, const T cvalue) {
+        { cvalue.size() > 10 } -> std::convertible_to<bool>;
+        { value.normalize() };
+        { value.swap(value) };
+    };
+
+template<Processable T>
+void doProcessing(T& value) {
+    // same algorithm
+}
+```
+
+<Term def="为一组编译期 requirements 命名，并参与 template candidate 选择的布尔约束。">
+  named concept
+</Term>
+
+<Term def="不执行 expression，只检查其合法性和可选结果约束的 requires 子句内容。">
+  requires expression
+</Term>
+
+concept 没有把结构化约束变成继承接口；它仍检查 valid expressions。收益是接口文档、overload selection 和 diagnostics 更靠近调用边界。
+
+<EcppImplicitContractEvolutionMap />
+
+## concept 也不要过度约束
+
+如果算法只忽略 `normalize()` 的返回值，就不应要求它正好返回 `void`；如果只需交换，不应要求 member swap 而排除合法 ADL swap。约束应与函数正文真实使用保持一致。
+
+<Term def="泛型约束比算法真实需求更严格，排除了本可工作的类型。">
+  accidental overconstraint
+</Term>
+
+<Term def="constraints 与 template body 使用的 operations 保持同一最小集合的设计原则。">
+  requirement-use alignment
+</Term>
+
+```cpp
+template<class T>
+concept SwappableProcessable = requires(T a, T b) {
+    { a.normalize() };
+    swap(a, b); // requires appropriate lookup setup in real code
+};
+```
+
+约束和实现应共享 helper/customization point，避免二者逐渐漂移。
+
+## 正反类型共同测试 contract
+
+只写一个满足 concept 的类型不能证明边界。至少准备：
+
+1. 最小合格类型，只实现算法真正需要的 expressions。
+2. proxy-return 类型，证明没有误要求固定返回类型。
+3. const 不合格类型，验证 receiver qualification。
+4. 缺少 normalize 或 swap 的负例，验证 rejection 位置。
+5. 语法合格但语义错误的 fake，验证 runtime/property tests。
+
+<Term def="故意只满足最少表达式集合，用来发现不必要约束的测试类型。">
+  minimal conforming type
+</Term>
+
+<Term def="故意缺少某项能力，验证 template 或 concept 在边界正确拒绝的类型。">
+  negative contract type
+</Term>
+
+```cpp
+static_assert(Processable<Widget>);
+static_assert(!Processable<Unprocessable>);
+```
+
+先预测每个 static assertion，再查看 compiler diagnostics；这样读者把 template error 转化为“哪条 expression 不成立”的定位流程。
+
+## 小结
+
+- classes 的 explicit interfaces 围绕 declarations，runtime polymorphism 通常来自 virtual functions
+- templates 的 implicit interfaces 围绕必须成立的 complete expressions
+- expression 有效不等于某个 member 必须具有固定 signature，overload 与 conversion 都可能参与
+- template instantiation 和 overload resolution 产生 compile-time polymorphism
+- concepts 为表达式集合命名并改善选择与诊断，但不改变结构化约束本质
+- 编译期合法只证明语法契约，semantic contract 仍需运行测试
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 41"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="explicit interface">
+    由 declarations 直接写出的类型契约。
+  </GlossaryItem>
+  <GlossaryItem term="runtime polymorphism">
+    运行期经 virtual dispatch 选择行为。
+  </GlossaryItem>
+  <GlossaryItem term="implicit interface">
+    由泛型代码有效表达式集合定义的契约。
+  </GlossaryItem>
+  <GlossaryItem term="compile-time polymorphism">
+    实例化和重载阶段确定的静态多态。
+  </GlossaryItem>
+  <GlossaryItem term="valid expression">
+    查找、转换和类型规则都成立的完整表达式。
+  </GlossaryItem>
+  <GlossaryItem term="expression-derived requirement">
+    从模板使用反推的类型要求。
+  </GlossaryItem>
+  <GlossaryItem term="expression proxy">
+    代表结果并参与后续运算的对象。
+  </GlossaryItem>
+  <GlossaryItem term="expression overload resolution">
+    为完整操作选择候选和转换的过程。
+  </GlossaryItem>
+  <GlossaryItem term="template instantiation">
+    以具体参数检查并生成模板实体。
+  </GlossaryItem>
+  <GlossaryItem term="per-type specialization behavior">
+    不同类型得到不同静态操作序列。
+  </GlossaryItem>
+  <GlossaryItem term="structural generic compatibility">
+    依据可用操作而非名义继承的匹配。
+  </GlossaryItem>
+  <GlossaryItem term="receiver qualification requirement">
+    对接收者 const 和值类别的要求。
+  </GlossaryItem>
+  <GlossaryItem term="result-use constraint">
+    结果继续参与表达式形成的连锁约束。
+  </GlossaryItem>
+  <GlossaryItem term="argument-dependent lookup">
+    按实参关联作用域扩展函数查找。
+  </GlossaryItem>
+  <GlossaryItem term="customization point expression">
+    允许用户类型提供定制操作的调用表达式。
+  </GlossaryItem>
+  <GlossaryItem term="instantiation diagnostic stack">
+    模板展开到失败表达式的诊断链。
+  </GlossaryItem>
+  <GlossaryItem term="named concept">
+    参与候选选择的命名编译期约束。
+  </GlossaryItem>
+  <GlossaryItem term="requires expression">
+    只检查表达式及结果约束的语法。
+  </GlossaryItem>
+  <GlossaryItem term="accidental overconstraint">
+    超出算法真实需求的限制。
+  </GlossaryItem>
+  <GlossaryItem term="requirement-use alignment">
+    约束与真实操作保持一致。
+  </GlossaryItem>
+  <GlossaryItem term="minimal conforming type">
+    只满足最小要求的测试类型。
+  </GlossaryItem>
+  <GlossaryItem term="negative contract type">
+    验证拒绝边界的故意不合格类型。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：推导 doProcessing 的隐式接口。** 不允许写“size 必须返回 int”一类猜测。
+
+<Answer question="怎样写出精确要求？">
+  逐个记录完整 expressions：const 或 mutable receiver 上 size 可调用，其结果与
+  10 比较后可作条件；与 sentinel 的不等表达式可作条件；T 可从 value
+  构造；normalize 可调用；swap expression
+  可调用。未消费的返回值不固定类型，操作可由 member、non-member、ADL 和
+  conversions 满足。
+</Answer>
+
+2. **问题 2：把隐式要求写成 concept。** 同时支持 proxy size 和 ADL swap，并避免过度约束。
+
+<Answer question="concept 应如何贴合实现？">
+  requires 中检查完整 size comparison 可转换为 bool、copy
+  construction、normalize expression 与采用同一 customization point 的
+  unqualified swap；不要要求 size 返回整数或 normalize 返回 void。用最小合格
+  proxy 类型和缺失 normalize 的负例 static assertions 验证
+  acceptance/rejection。
+</Answer>
+
+3. **问题 3：区分编译期合法和语义正确。** 某类型的 swap 只交换一半状态，但 concept 通过。
+
+  <Answer question="为什么 compiler 无法发现，怎样补齐？">implicit interface 只检查 swap expression 有效，无法推断完整对象不变量。增加 property tests：交换两次恢复原值、左右对象全部可观察状态互换、self-swap 安全、异常保证满足约定。concept 负责语法边界，运行测试负责 semantic contract。</Answer>
+</Exercises>

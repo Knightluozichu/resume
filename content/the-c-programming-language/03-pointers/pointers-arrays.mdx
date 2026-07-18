@@ -3,74 +3,231 @@ title: 指针与数组
 type: A
 section: 指针与数组
 order: 4
-description: 指针与数组的等价关系、指针作为函数参数、多维数组的行主序布局。
+description: 对照 K&R 第五章区分数组对象与指针对象，掌握数组到首元素指针的转换、半开指针范围、函数数组形参、对象生存期和多维数组的行类型与行主序。
 demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/content/images/9780131103627/samplepages/0131103628.pdf"
 draft: false
 ---
 
-import { KrcPointerRelationshipDiagram } from "@/components/mdx/kr-c-language/diagrams/krc-pointer-relationship";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  KrArrayPointerContractMap,
+  KrMatrixTypeMap,
+  KrPointerRangeMap,
+} from "@/components/mdx/the-c-programming-language/diagrams/pointers-arrays";
 
 <Objectives>
 
-- 能解释数组名退化为指针的机制，以及 `a[i] = *(a+i)` 这条等价关系
-- 能说出数组作为函数参数时退化为什么，以及为什么函数内 sizeof 得不到数组大小
-- 能回答：`int a[3][4]` 中 `a+1` 跳过多少字节？`a[i][j]` 等价于什么指针表达式？
+- 能区分数组对象、首元素指针和指向整个数组的指针，并逐项说明数组转换发生与不发生的语境
+- 能实现带长度的半开指针范围算法，证明每次加减、比较、相减和解引用都在同一存活数组内
+- 能回答：`int matrix[3][4]` 为什么转换为 `int (*)[4]` 而不是 `int **`，`matrix + 1` 的步长怎样由类型推出？
 
 </Objectives>
 
-## 指针：C 语言的灵魂
+## 从“数组不是指针”开始
 
-指针是 C 语言最强大也最容易出错的特性。它让程序能直接操作内存地址——这是系统编程的基础，也是 C 贴近硬件的体现。K&R 用了整整一章（第 5 章）讲指针和数组，因为它们的关系是 C 语言最核心的抽象之一。
+`int a[5]` 定义一个包含五个 `int` 子对象的数组对象，`int *p` 定义一个保存地址值的指针对象。二者大小、可赋值性与类型结构都不同。常见说法“数组名就是指针”只描述了多数表达式中的一次隐式转换，不能拿来替代完整规则。
 
-<KrcPointerRelationshipDiagram />
+<KrArrayPointerContractMap />
 
-## 核心概念
+数组对象不能整体赋值，指针变量可以重新指向别处；`sizeof a` 计算整个数组对象，`sizeof p` 计算指针对象。两者具体字节数都由实现和声明决定，不能硬编码 20 或 8。
 
-<Term def="数组名在表达式中自动转换为指向首元素的指针的现象，例外是 sizeof 和取地址 & 运算符。">数组名退化</Term>是理解指针与数组关系的关键。`int a[10];` 中，`a` 的类型是 `int[10]`（数组类型），但在大多数表达式中它会自动退化为 `int *`（指向首元素的指针）。所以 `int *p = a;` 合法——p 和 a 都指向 `a[0]`。
+## 数组到指针转换
 
-退化的结果是 `a[i]` 和 `*(a+i)` 完全等价。加 i 不是加 i 个字节，而是加 i 个 `sizeof(int)`——C 的指针算术以元素为单位，自动按类型大小缩放。这条等价关系是 C 数组操作的基础：所有数组访问在编译后都变成指针算术。
+<Term def="除 sizeof、单目取地址等规定语境外，数组表达式转换为指向首元素的指针值；转换不复制元素，也不携带数组长度。">
+  数组到指针转换
+</Term>
+让 `int *p = a;` 等价于用 `&a[0]` 初始化 `p`。它发生在表达式求值中，不会把变量
+`a` 的声明类型永久改成 `int *`。
 
-退化有两个例外：`sizeof(a)` 得到整个数组的大小（40 字节），`&a` 的类型是「指向数组的指针」而非「指向元素的指针」。除此之外，数组名就是指向首元素的指针。
+在 K&R 对应的 ANSI C 中，`sizeof a` 和 `&a` 不触发该转换。前者得到整个数组大小；后者类型是 `int (*)[5]`，即指向含五个 `int` 的数组。`a` 与 `&a` 在常见实现中打印出的起始地址数值相同，但类型不同，`a + 1` 跨一个元素，`&a + 1` 跨整个数组。
 
-数组作为函数参数时会退化。形参写成 `int arr[]` 或 `int *arr` 完全等价——编译器都当 `int *` 处理。整个数组不会被复制，只传了首元素地址。副作用是：函数内 `sizeof(arr)` 得到的是指针大小（8 字节），不是数组大小。所以无法在函数内用 sizeof 计算数组长度，必须额外传一个长度参数。
+下标运算定义为 `a[i] == *(a + i)`，甚至 `i[a]` 语法上也成立；这不表示“所有数组访问编译后必定是某条固定指令”，而是抽象语义等价。只有当结果指向数组内合法元素时才能解引用。
 
-多维数组在内存中按<Term def="二维数组在内存中先存完第一行所有元素，再存第二行，以此类推的存储方式。C 采用行主序。">行主序</Term>连续存放。`int a[3][4]` 是 3 行 4 列，内存中先存 a[0][0] 到 a[0][3]，再存 a[1][0] 到 a[1][3]。`a` 退化为 `int (*)[4]`（指向含 4 个 int 的数组的指针），`a+1` 跳过一整行（16 字节）。`a[i][j]` 等价于 `*(*(a+i)+j)`：先跳 i 行，再跳 j 列。
+```c
+#include <stddef.h>
 
-<Callout type="tip">
-<strong>建议 →</strong> 画图是理解指针和数组最有效的工具。每次遇到指针表达式，画一排内存格子，标出每个指针指向哪个格子，指针算术就一目了然。K&R 全书的指针讲解都配合了内存示意图。
-</Callout>
+long sum_ints(const int values[], size_t count)
+{
+    size_t i;
+    long total = 0;
+    for (i = 0; i < count; ++i)
+        total += values[i];
+    return total;
+}
+```
 
-## 常见误区
+形参 `const int values[]` 在函数类型中调整为 `const int *values`，`count` 才给出范围。契约应说明：`count == 0` 时是否允许空指针；`count > 0` 时必须存在至少 `count` 个可读 `int` 对象；求和还要评估 `long` 是否可能溢出。
 
 <Callout type="trap">
-<strong>现象 →</strong> 函数内 `sizeof(arr)` 返回 8 而不是数组实际大小，导致计算长度出错。<strong>原因 →</strong> 数组作为函数参数时退化为指针，sizeof 得到的是指针大小（8 字节 on 64 位），不是数组大小。<strong>修法 →</strong> 永远不要在函数内用 sizeof 计算数组长度。要么额外传一个长度参数 `void func(int arr[], int n)`，要么用哨兵值（如字符串的 '\0'）标记结尾。
+  **现象**：函数内用 `sizeof(values) / sizeof(values[0])`
+  求形参数组长度。**原因**：数组形参已经调整为指针，`sizeof values`
+  只测指针对象。**修法**：长度在调用点由真实数组计算后传入，或用明确哨兵协议；接口不能假装指针自带容量。
 </Callout>
+
+## 半开范围约束指针算术
+
+C 的指针加减不是对任意整数地址做数学。若指针指向数组元素，可形成同一数组内的其他元素地址或 <Term def="由数组首元素指针加上元素个数形成的边界指针。它可用于比较、相减和表示结束，但不指向元素，不能解引用。">尾后一位指针</Term>；越过这两端，即使暂不解引用，也不能作为普通数组指针算法依赖。
+
+<KrPointerRangeMap />
+
+使用 <Term def="包含 first 指向元素而不包含 last 指向位置的范围约定。空范围自然满足 first 等于 last，长度可由同一数组内的 last-first 表示。">半开指针范围</Term> `[first, last)` 可让空范围自然表示为 `first == last`，长度为 `last - first`。指针相减结果类型是 `ptrdiff_t`，只对同一数组对象（含尾后一位）的两个指针有定义；不相关对象指针做关系比较也没有可移植的数组顺序语义。
+
+```c
+void reverse_ints(int *first, int *last)
+{
+    while (first != last) {
+        int temp;
+        --last;
+        if (first == last)
+            break;
+        temp = *first;
+        *first++ = *last;
+        *last = temp;
+    }
+}
+```
+
+`last` 初始指向尾后一位，先递减才解引用。奇数长度时两端在中心相遇后退出；空范围不会递减。调用者仍需保证两个指针来自同一可写数组，且 `first` 不在 `last` 之后。
 
 <Callout type="trap">
-<strong>现象 →</strong> 返回局部数组的指针，调用方使用时得到垃圾数据。<strong>原因 →</strong> 局部数组在栈上分配，函数返回时栈帧被释放，那块内存被后续调用覆盖。<strong>修法 →</strong> 不要返回局部数组的地址。改用：① 传入调用方分配的缓冲区 ② 用 static 局部数组（生命周期延长到程序结束）③ 用 malloc 在堆上分配（调用方负责 free）。
+  **现象**：循环先读取 `*last`，其中 `last = array +
+  count`。**原因**：把可用作边界的尾后指针误当成最后一个元素。**修法**：保持
+  `[first, last)`
+  契约，任何解引用前先证明指针严格小于终点；逆向算法先递减再读取。
 </Callout>
 
-## 小结与练习
+## 对象生存期决定指针能否使用
 
-- 数组名在表达式中退化为指向首元素的指针，`a[i]` 等价于 `*(a+i)`，指针算术以元素为单位
-- 数组作为函数参数时退化为指针，函数内 sizeof 得到指针大小而非数组大小
-- 多维数组按行主序连续存放，`a[i][j] = *(*(a+i)+j)`，`a+1` 跳过一行
-- 指针和数组的区别：sizeof 和 & 是仅有的两个不发生退化的场景
+指针保存地址不会延长对象的 <Term def="对象在 C 抽象机中存在并可通过适当左值访问的时间区间；离开生存期后，旧指针值不能继续用于读取或写入该对象。">生存期</Term>。返回局部自动数组地址的问题不在于标准保证“栈帧被覆盖”，而在于函数返回后数组对象生存期结束；即使字节暂时没变，解引用旧指针也没有合法对象语义。
+
+正确接口可让调用者提供缓冲区和容量，返回写入长度/状态；或动态分配并明确释放责任；使用 `static` 局部缓冲虽延长生存期，却会共享单份状态、不可重入、后续调用覆盖旧结果。选项之间是所有权和并发协议差异，不只是“哪块内存还在”。
+
+空指针不指向任何对象，不能做解引用或普通数组算术。`void *` 可以承载对象指针的通用表示并在 C 中与其他对象指针互转，但解引用前必须转换到正确完整对象类型，并满足对齐、有效类型和生存期要求。
+
+## 多维数组是数组的数组
+
+`int matrix[3][4]` 的外层数组含三个元素，每个元素类型为 `int[4]`。因此 `matrix` 在表达式中转换为 `int (*)[4]`，指向第一行；它不是 `int **`，因为内存中没有三枚指向各行的指针对象。
+
+<KrMatrixTypeMap />
+
+C 多维数组按 <Term def="多维数组先连续存放最右维的一整行，再存放下一行；在 int matrix[3][4] 中，matrix[0] 的四个元素先于 matrix[1]。">行主序</Term> 存放。`matrix + 1` 跨过一个 `int[4]`，步长是 `sizeof matrix[0]`，不是固定“16 字节”；`matrix[i][j]` 等价于 `*(*(matrix + i) + j)`，两次转换与加法分别按行类型和元素类型推进。
+
+ANSI C 函数形参要知道除第一维外的后续维度：
+
+```c
+#include <stddef.h>
+
+long sum_rows(const int matrix[][4], size_t rows)
+{
+    size_t row, column;
+    long total = 0;
+    for (row = 0; row < rows; ++row)
+        for (column = 0; column < 4; ++column)
+            total += matrix[row][column];
+    return total;
+}
+```
+
+形参也可写成 `const int (*matrix)[4]`，含义相同。第一维由 `rows` 提供；第二维 4 属于行指针类型，编译器用它计算跨行步长。C99 的变长数组形参可把列数运行时传入，但那不是 K&R 第二版的 ANSI C90 特性。
+
+## 数组长度宏只适用于数组对象
+
+在调用点可写 `sizeof array / sizeof array[0]`，因为此处 `array` 仍是数组对象。若封装成宏，参数传入指针时会静默得到错误结果，因此宏必须有清楚命名、局限说明，并尽可能由现代编译器静态检查。
+
+```c
+#define ARRAY_COUNT(array) (sizeof(array) / sizeof((array)[0]))
+
+int values[] = { 3, 5, 8 };
+/* sum_ints(values, ARRAY_COUNT(values));  在声明所在作用域使用 */
+```
+
+先预测：把 `values` 传给另一个函数后，再对形参使用 `ARRAY_COUNT` 会得到什么？它会比较指针大小与元素大小，不再表示原数组长度。长度和容量属于接口数据，应显式传递。
+
+## 指针值不是可移植的裸整数地址
+
+整数常量 `0` 是空指针常量，转换到指针类型后得到不指向任何对象的空指针值；`(void *)0` 也构造空 `void *`。标准不要求空指针的对象表示是“所有位都为零”。静态存储期指针的零初始化会得到空指针；对指针对象直接 `memset` 全零却不具有同一语言保证。判断空值用 `pointer == NULL`，不要检查内部字节。
+
+对象指针可转换为 `void *` 再无损转回原对象指针类型，这是通用容器和分配接口的基础；函数指针不自动享有完全相同的对象指针往返规则。把指针转成整数的结果由实现定义，只有实现提供的足够整数类型和文档契约才能用于诊断或底层接口，不能通过截断成 `unsigned long` 建立通用序列化格式。
+
+两个指针用 `==`/`!=` 比较的是标准定义的指向关系，不应通过转整数再比较。关系比较 `<`/`>` 主要用于同一数组内的位置；若要给任意对象指针建立容器排序，必须使用平台协议或库提供的专门比较规则，不能假设虚拟地址数值就是 ISO C 的全序。
+
+任何对象的存储表示都可通过 `unsigned char *` 逐字节查看，这给二进制 I/O 和哈希实现提供底层入口；但填充字节可能取未指定值，整数有字节序，浮点表示也由实现选择。把结构体原始字节直接作为跨进程格式会泄漏填充和平台布局，应该逐字段编码。
+
+指针打印使用 `%p` 并传 `void *`，输出格式由实现定义，只适合诊断。日志里看到两个十六进制数相差某个固定值，只能描述这次运行，不足以证明数组边界、生存期或类型契约；这些仍要从声明和标准规则推导。
+
+## 边界、别名与可修改性审查
+
+两个指针可以指向同一对象或重叠范围，函数若一边读源区一边写目标区，就必须规定是否允许别名。标准库 `memcpy` 要求源目标不重叠，`memmove` 支持重叠；自写算法也要给出同样明确的前置条件。
+
+`const int *` 表示不能通过该指针修改所指 `int`，不是保证底层对象永远不变；另一个非 const 指针仍可能修改它。`int *const` 则限制指针对象本身不能改指向。阅读声明时从名字向外推导，并把“指针可改”“所指对象可改”分成两项。
+
+对每个指针参数至少审查六项：可否为空、对象类型与对齐、最少元素数、生存期、读写权限、与其他参数是否允许重叠。缺任何一项，调用者就无法证明一次解引用安全。
+
+## 小结
+
+- 数组对象与指针对象不同；数组只在规定表达式语境中转换为首元素指针，且不携带长度
+- `sizeof array` 测整个数组，`&array` 得到指向整个数组的指针；二者都不发生普通转换
+- 指针算术、相减和关系比较围绕同一数组及尾后一位推理，尾后指针不可解引用
+- 指针不延长对象生存期；返回局部数组地址错误来自对象已经不存在，不依赖具体栈实现
+- 二维数组是数组的数组，外层转换保留行类型，所以 `matrix + 1` 跨 `sizeof matrix[0]`
 
 <Exercises>
-  <Answer question="`int a[5]; int *p = a;` 中 `a`、`&a[0]`、`p` 三者有什么关系？`sizeof(a)` 和 `sizeof(p)` 分别是多少？">三者值相同（都指向首元素地址），但类型不同：a 是 int[5] 退化为 int*，&a[0] 是 int*，p 是 int*。sizeof(a) = 20（整个数组 5×4 字节，sizeof 不退化），sizeof(p) = 8（指针大小 on 64 位）。</Answer>
-  <Answer question="`int a[3][4];` 中 `a+1` 跳过多少字节？`a[1][2]` 等价于什么指针表达式？">a+1 跳过 16 字节（一整行 4 个 int）。因为 a 退化为 int(*)[4]，指向含 4 个 int 的行，加 1 跳一整行。`a[1][2]` 等价于 `*(*(a+1)+2)`：a+1 跳到第 1 行，*(a+1) 得到第 1 行首元素指针，+2 跳 2 个 int，最后解引用得到元素值。</Answer>
+
+**问题 1** 对 `int a[5]; int *p = a;`，分别写出 `a`、`p`、`&a` 的声明类型，以及 `sizeof a`、`sizeof p`、`a + 1`、`&a + 1` 表达的大小或步长。
+
+<Answer>
+
+`a` 声明类型为 `int[5]`，多数表达式中转为 `int *`；`p` 是 `int *`；`&a` 是 `int (*)[5]`。`sizeof a` 是 `5 * sizeof(int)`，`sizeof p` 是该实现的指针大小；`a + 1` 跨一个 `int`，`&a + 1` 跨整个 `int[5]`。
+
+</Answer>
+
+**问题 2** 为什么 `[first, last)` 中 `last` 可以参与相减和比较却不能解引用？逆序遍历空范围时应如何避免先做 `--last`？
+
+<Answer>
+
+C 允许形成同一数组尾后一位指针，用于边界和距离，但那里没有元素对象可读写。逆序前先检查 `first != last`，只有非空时才递减；之后每次解引用都证明指针已回到数组元素范围内。
+
+</Answer>
+
+**问题 3** 比较 `int matrix[3][4]` 与 `int *rows[3]` 的对象布局和表达式转换，说明为什么前者不能传给接收 `int **` 的函数。
+
+<Answer>
+
+前者是 12 个连续 `int` 组成的三行数组，转换为 `int (*)[4]`；后者是三个独立 `int *` 指针对象组成的数组，转换为 `int **`。二者元素类型、步长和内存内容都不同，强转不会创建行指针，按 `int **` 解引用前者会错误解释整数存储。
+
+</Answer>
+
 </Exercises>
 
-## 名词解释
-
 <Glossary>
-  <GlossaryItem term="数组名退化">数组名在表达式中自动转换为指向首元素的指针的现象。退化后数组名等价于 int*，可做指针算术。例外：sizeof（得到整个数组大小）和 &amp;（得到指向数组的指针）不退化。</GlossaryItem>
-  <GlossaryItem term="行主序">二维数组在内存中先存完第一行所有元素，再存第二行的存储方式。C 语言采用行主序。a[i][j] 的地址 = 基址 + (i * 列数 + j) * sizeof(元素)。</GlossaryItem>
-  <GlossaryItem term="指针算术">对指针做加减运算，步长自动按指向类型的大小缩放。int* 加 1 跳 4 字节，char* 加 1 跳 1 字节。这是 a[i] = *(a+i) 等价关系的物理基础。</GlossaryItem>
+
+<GlossaryItem term="数组到指针转换">
+  数组表达式在多数语境中转换为首元素指针值。转换不复制数组，也不携带长度；`sizeof`
+  和单目 `&` 等规定语境不做该转换。
+</GlossaryItem>
+
+<GlossaryItem term="尾后一位指针">
+  同一数组首元素指针加元素个数形成的合法边界值。它可作结束标记、比较和距离运算，但没有对应元素，不能解引用。
+</GlossaryItem>
+
+<GlossaryItem term="半开指针范围">
+  `[first, last)` 包含起点、不包含终点。空范围为两者相等，长度为同一数组中的
+  `last - first`，遍历时永不解引用 `last`。
+</GlossaryItem>
+
+<GlossaryItem term="生存期">
+  对象在 C
+  抽象机中存在并可被访问的时间区间。指针值不延长生存期，对象结束后旧地址不能继续用于访问。
+</GlossaryItem>
+
+<GlossaryItem term="行主序">
+  多维数组按最右维连续存放，一整行完成后才进入下一行。行指针步长由行数组类型决定。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution adaptedFrom="The C Programming Language (Kernighan & Ritchie)" adaptedUrl="https://www.prenticehall.com/" />
+<Attribution
+  title="The C Programming Language, Second Edition, Chapter 5: Pointers and Arrays"
+  url="https://www.informit.com/content/images/9780131103627/samplepages/0131103628.pdf"
+/>

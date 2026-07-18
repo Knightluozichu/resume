@@ -1,0 +1,221 @@
+---
+title: "第4章：Composite Types"
+type: C
+section: "Go 程序设计语言 · 容器、记录与编码"
+order: 4
+description: "对齐原书第 4 章：Arrays、Slices、Maps、Structs、JSON 与 Text/HTML Templates。"
+demo: true
+math: false
+sourceUrl: "https://www.gopl.io/"
+draft: false
+---
+
+import {
+  GoplArraySliceBackingLab,
+  GoplJsonTemplateLab,
+  GoplMapStructLab,
+} from "@/components/mdx/go-programming-language/diagrams/composite-types";
+
+<Objectives>
+
+- 能解释 array value 与 slice descriptor/backing array 的差异，分析 slicing、append、copy、aliasing、nil 与 in-place algorithm
+- 能设计 map lookup/iteration/update contract 与 struct literal/comparison/embedding boundary，避免 missing-zero 和 selector ambiguity
+- 能实现 encoding/json schema 与 text/template、html/template pipeline，验证 exported fields、tags、streaming、escaping 和 trust boundary
+
+</Objectives>
+
+## 为什么 Composite Types 的核心是 ownership 与 shape
+
+第 3 章规定单个值的边界，第 4 章把值组合成 sequences、dictionaries、records 与 serialized documents。真正困难不在 literal syntax，而在 array copy、slice alias、map membership、struct identity，以及 JSON/template crossing trust boundary 时谁拥有数据、什么 shape 被公开。
+
+<Term def="长度属于 type、存储直接包含全部 elements 的 sequence value；assignment 和 function argument 默认复制整个 array，只有 element types 可比较时 array 才可比较。">array value</Term>
+
+先预测：两个 slices 指向同一 backing array 时 append 是否一定互相可见，`m["x"] == 0` 能否证明 key 存在，unexported struct field 是否会进入 JSON，以及 `text/template` 能否安全输出到 HTML。
+
+## 4.1 Arrays：长度属于 type 的固定值
+
+array declaration `[N]T` 把 length 编进 type，所以 `[3]int` 与 `[4]int` 不同。array literal 可按顺序或 index 指定 elements，`[...]T{...}` 让 compiler 计算 length。未初始化 elements 使用 element zero value。
+
+```go
+var a [3]int
+q := [...]int{1, 2, 3}
+r := [...]int{99: -1}
+
+for i, value := range q {
+    fmt.Printf("%d %d\n", i, value)
+}
+```
+
+array assignment 复制所有 elements；function parameter `[32]byte` 也复制，若要修改 caller array 可传 `*[32]byte`，但多数 sequence API 使用 slice。若 element type comparable，则 arrays 可用 `==`/`!=`，这使 fixed-size hash/digest 可安全作为 map key。
+
+## 4.2 Slices：descriptor、backing array 与 append
+
+slice type `[]T` 没有 fixed length。运行时 value 可理解为 pointer、length、capacity descriptor；`s[i:j]` 共享原 backing array，len 是 `j-i`，cap 通常延伸到原 slice capacity。多个 aliases 修改重叠 elements 时会互相观察。
+
+<Term def="指向 backing array segment 的 pointer/len/cap 三元组；复制 slice 只复制 descriptor，不复制 elements，nil slice 的 descriptor pointer 为 nil。">slice descriptor</Term>
+
+<Stepper>
+  <Step title="调整 len、cap 与 append count">
+    <GoplArraySliceBackingLab />
+  </Step>
+  <Step title="判断 append 复用还是重新分配">
+    新长度不超过 capacity 时通常复用 backing array；超出时分配更大 array 并复制。增长策略不是 API contract。
+  </Step>
+  <Step title="追踪 aliases 和 append 返回值">
+    始终写 `s = append(s, x)`；扩容后旧 aliases 指向旧 array，复用时重叠 aliases 可看到写入。
+  </Step>
+</Stepper>
+
+```go
+months := [...]string{1: "January", 2: "February", 3: "March", 4: "April"}
+spring := months[3:5]
+
+values := make([]int, 0, 8)
+values = append(values, 1, 2, 3)
+copy(values[1:], values[:2])
+```
+
+slice 只能与 nil 比较，不能直接比较 elements；需要按 domain 写 equality loop 或用标准库 helper。nil slice 与 empty non-nil slice 都有 len 0、可 append，但 JSON encoding 等边界可能分别表示 `null` 与 `[]`，API 必须明确。
+
+in-place filter 可复用 storage：`out := s[:0]`，遍历保留项并 append；处理 pointer elements 时还要清除 discarded tail，避免旧 references 延长 lifetime。stack 可直接用 append push、`s[len(s)-1]` top、`s = s[:len(s)-1]` pop，并先检查 empty。
+
+<Callout type="trap" title="返回超大 buffer 的一个小 slice">
+小 slice 仍引用整个 backing array，使大 allocation 不能回收。若生命周期长且保留比例小，复制需要的 bytes 到 right-sized slice，再释放原 reference。
+</Callout>
+
+## 4.3 Maps：hash table、membership 与无序迭代
+
+map type `map[K]V` 要求 key comparable。用 `make` 或 literal 创建；nil map 可 read/delete/range，但 assignment 会 panic。lookup missing key 返回 V zero value，因此需要 comma-ok 区分 missing 与 present-zero。
+
+<Term def="`value, ok := m[key]` 同时返回 V 的值与 membership boolean；它保留 missing 与 present-zero 的区别，是 cache/config/index API 的基本证据。">map lookup contract</Term>
+
+```go
+ages := map[string]int{"alice": 31, "charlie": 34}
+ages["bob"] = 27
+delete(ages, "alice")
+
+age, ok := ages[name]
+if !ok { return fmt.Errorf("unknown user %q", name) }
+```
+
+map iteration order 未指定，并可在不同运行变化；稳定 output/test 必须先收集 keys 并 sort。map 不是 concurrency-safe container，并发 read/write 需要 mutex、ownership goroutine 或其他同步设计。map element 不可取 address，因为 grow 可搬迁 buckets；要原地更新 struct 可取出-modify-assign，或 map values 存 pointers 并定义 pointee ownership。
+
+map 不能整体比较，只有与 nil 比较；equality 需按 keys/values 实现。`map[T]bool` 可作 set，但 `map[T]struct{}` 更明确没有 payload。counter 使用 `m[key]++` 利用 zero value，membership-sensitive domain 仍保留 ok。
+
+## 4.4 Structs：fields、literals、comparison 与 embedding
+
+struct 把 zero or more named fields 组成一个 value。field order 是 type identity/representation 的一部分；field name 以大写开头才 exported。literal 可按 field order positional，也可写 `Name: value`；跨 package 或 schema 演进优先 named fields，避免新增/重排破坏调用点。
+
+<Stepper>
+  <Step title="输入 map key 并观察 value/ok">
+    <GoplMapStructLab />
+  </Step>
+  <Step title="切换 anonymous embedded field">
+    embedding 允许 `c.X` selector promotion，但 nested field 仍真实存在，可用 `c.Point.X` 明确访问。
+  </Step>
+  <Step title="检查 comparison 与 pointer ownership">
+    所有 fields comparable 时 struct comparable；包含 slice/map/function 后不可整体比较。pointer field 还需定义 nil 与 pointee lifetime。
+  </Step>
+</Stepper>
+
+<Term def="把一个 named type 作为 anonymous struct field，使其 fields/methods 可被 selector promotion；它是 composition，不是 class inheritance，冲突时需显式路径。">struct embedding</Term>
+
+```go
+type Point struct { X, Y int }
+type Circle struct {
+    Point
+    Radius int
+}
+
+c := Circle{Point: Point{X: 8, Y: 8}, Radius: 5}
+fmt.Println(c.X, c.Point.Y)
+```
+
+empty struct `struct{}` 占零大小，常作 set value 或 signal，但 channel close 通常比发送多个 empty values 更适合 broadcast completion。recursive struct 不能直接包含自身，却可通过 pointer/slice/map 形成 finite-size representation。
+
+## 4.5 JSON：Go value 与 schema 的显式映射
+
+`encoding/json` 用 reflection 编解码 exported fields。struct tags 控制 field name、omitempty 等 options；tag 是 schema contract，不是装饰。`json.Marshal/Unmarshal` 适合内存 value，`Encoder/Decoder` 适合 streams。decoder 可启用 `DisallowUnknownFields`，但语义 validation 仍由 domain code 完成。
+
+```go
+type Movie struct {
+    Title  string   `json:"title"`
+    Year   int      `json:"released"`
+    Color  bool     `json:"color,omitempty"`
+    Actors []string `json:"actors"`
+}
+
+data, err := json.MarshalIndent(movies, "", "  ")
+if err != nil { return err }
+```
+
+unmarshal 忽略 unmatched fields 默认有利于 forward compatibility，也可能掩盖 typo；根据 boundary 选择 strictness。JSON numbers 进入 `interface{}` 默认是 float64，精确 integer/ID 场景用 typed struct 或 Decoder.UseNumber。time、duration、enum、null/absent distinction 需要显式 representation policy。
+
+## 4.6 Text and HTML Templates：logic、data 与 escaping
+
+`text/template` 解析 trusted template source，用 actions `{{.Field}}`、range、if、pipeline 和 functions 渲染 plain text；`html/template` 具有同类 API，但根据 HTML text/attribute/URL/JavaScript context 自动 escaping data。输出 HTML 时必须使用 html/template。
+
+<Stepper>
+  <Step title="切换 exported JSON field 与 template engine">
+    <GoplJsonTemplateLab />
+  </Step>
+  <Step title="观察 struct-to-JSON schema">
+    encoder 只读取 exported fields；tag 决定 wire name，omitempty 改变 absent/zero presentation，不能替代 validation。
+  </Step>
+  <Step title="把 untrusted data 放入 HTML context">
+    html/template 会 contextual escaping；text/template 原样输出 markup。template source 本身必须 trusted，不能由用户拼接。
+  </Step>
+</Stepper>
+
+<Term def="html/template 根据值所在 HTML、attribute、URL、CSS 或 JavaScript context 选择编码方式，使 untrusted data 保持 data 而不是变成 executable markup。">contextual escaping</Term>
+
+```go
+const templ = `<h1>{{.Title}}</h1>{{range .Items}}<p>{{.}}</p>{{end}}`
+t := template.Must(template.New("page").Parse(templ))
+if err := t.Execute(w, data); err != nil { return err }
+```
+
+`template.Must` 适合 startup-time constant template，parse error 应让程序尽早失败；runtime/user template 要返回 error。Execute 可能在部分 output 后失败，HTTP response 可先 render 到 buffer 再统一提交，或接受 streaming partial-write contract。注册 functions 必须在 Parse 前完成，并限制 side effects/cost。
+
+<Callout type="trap" title="先拼 HTML 字符串再交给 html/template">
+contextual escaping 只保护作为 data 传入的值。若把 untrusted input 拼进 template source，它会被当 actions/markup 解析；固定 trusted template，把输入放进 data model。
+</Callout>
+
+## 本章回顾：shape、alias 与 boundary
+
+1. array 是 fixed-length value；slice 是共享 backing array 的 descriptor，append 可能改变 alias topology。
+2. map lookup 用 value+ok 保留 membership，iteration 无序，concurrency/element address 需要额外 contract。
+3. struct fields 定义 record shape，embedding 提供 selector promotion，不是继承。
+4. JSON tags/exported fields 构成 wire schema，decoder strictness 与 semantic validation 分层。
+5. text/template 面向 plain text，html/template 做 contextual escaping；trusted source 与 untrusted data 必须分开。
+
+<Exercises>
+
+**问题 1：从 100MB input 中保留 20-byte token 并放入长期 cache，怎样避免 slice retention？**
+
+<Answer>解析期间slice可引用input以减少copy，但写入长期cache前应分配right-sized destination并`copy`，或用`append([]byte(nil), token...)`/strings.Clone保留独立storage。仅返回`input[i:j]`会让20-byte descriptor继续引用100MB backing array；还要定义cache eviction和string/[]byte ownership。</Answer>
+
+**问题 2：为什么 `if cache[key] == 0` 不能判断 miss，map value 是 struct 时怎样安全更新？**
+
+<Answer>missing key与present value 0都会得到zero value，必须用`value, ok := cache[key]`。map element不可取address；value struct更新可先取出copy、修改field、再赋回，或让map存`*Entry`并定义pointer ownership和nil policy。并发访问还要由mutex或owner goroutine同步。</Answer>
+
+**问题 3：把 API response 同时输出 JSON 与 HTML 时，如何划分 schema、validation 与 escaping？**
+
+<Answer>先用typed exported struct和json tags定义schema，区分required/optional/null并在decode后做domain validation；外部输入可按兼容策略选择DisallowUnknownFields。HTML使用固定trusted html/template，把同一validated model作为data传入，依赖contextual escaping；不要把JSON/用户文本拼成template source，Execute失败要在buffer提交或明确partial-write contract中处理。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="array value" definition="长度属于 type、assignment 默认复制全部 elements 的固定 sequence。" />
+  <GlossaryItem term="slice descriptor" definition="指向 backing array segment 的 pointer、length 与 capacity。" />
+  <GlossaryItem term="map lookup contract" definition="value 与 ok 同时返回以区分 missing 和 present-zero。" />
+  <GlossaryItem term="struct embedding" definition="anonymous field 带来的 selector promotion composition。" />
+  <GlossaryItem term="contextual escaping" definition="html/template 按输出 context 编码 untrusted data。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Go Programming Language, Chapter 4: Composite Types"
+  adaptedUrl="https://www.gopl.io/"
+/>

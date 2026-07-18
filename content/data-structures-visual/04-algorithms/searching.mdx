@@ -1,0 +1,245 @@
+---
+title: "第8章 查找"
+type: C
+section: "大话数据结构 · 查找与排序"
+order: 8
+description: "从静态顺序/有序查找与三类索引出发，完成BST/AVL、多路B/B+树和散列表，按前置条件、更新与存储成本选择结构。"
+demo: true
+math: false
+sourceUrl: "https://www.tup.tsinghua.edu.cn/bookscenter/bookcatalog?id=08952301"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { DsvSearchMethodLab, DsvSearchTreeLab, DsvHashConflictLab } from "@/components/mdx/data-structures-visual/diagrams/searching";
+
+<Objectives>
+
+- 能比较顺序、折半、插值与斐波那契查找的有序性、分布、随机访问和最坏成本
+- 能实现BST查找/插入/删除并推导AVL旋转，解释2-3/2-3-4/B/B+树如何降低外存层数
+- 能设计散列函数、load factor、冲突与删除/扩容协议，并验证平均、最坏和攻击输入
+
+</Objectives>
+
+## 从“查什么、改不改、存在哪里”开始
+
+查找是在一组记录中确定给定key是否存在，并在存在时返回对应record/位置。算法选择依赖表是否静态、有序、可随机访问，key分布如何，更新是否频繁，以及数据在内存还是块设备。不存在一个脱离前置条件的“最快查找”。
+
+官方第8章覆盖查找概论与顺序表查找，折半查找、插值查找、斐波那契查找，稠密索引、分块索引、倒排索引，二叉排序树，平衡二叉树AVL，2-3树、2-3-4树、B树、B+树，散列表查找与散列函数，开放定址、再散列、链地址与公共溢出区，以及散列表性能分析。
+
+先预测：折半查找在链表上为何不再高效；BST依次插入有序key会怎样；开放定址删除为何不能直接设EMPTY；B+树为何把记录留在叶并串联叶子。
+
+<Term def="在查找表中根据给定key确定记录是否存在，并返回记录、位置或未找到状态的过程。">查找</Term>必须区分not found与输入/存储错误。
+
+## 查找概论与顺序表查找
+
+<Term def="由同一类型记录组成、支持按key查找以及可能的插入删除操作的集合。">查找表</Term>若只查不改称静态查找表；查找同时会插入不存在记录或删除记录时是动态查找表。平均查找长度ASL按输入概率对比较次数加权，概率未知时不能随便假设均匀。
+
+<Term def="从表的一端开始逐记录比较key，直到命中或遍历结束。">顺序查找</Term>不要求有序，最坏`Theta(n)`。哨兵优化把target临时放在边界槽，省去循环内越界判断，但必须有可写额外槽并恢复原值；并发/只读输入下未必适合。
+
+```c
+#include <stdbool.h>
+#include <stddef.h>
+
+typedef struct { int key; int value; } Record;
+
+bool linear_find(const Record *records, size_t n, int key, size_t *index) {
+    for (size_t i = 0; i < n; ++i) {
+        if (records[i].key == key) {
+            if (index != NULL) *index = i;
+            return true;
+        }
+    }
+    return false;
+}
+```
+
+对于小表、一次查询或昂贵比较器，线性扫描的低开销和cache局部性可能优于先建复杂结构。多次查询时总成本要写`build + q * query`。
+
+## 有序表查找
+
+<DsvSearchMethodLab />
+
+<Stepper>
+  <Step title="切换四种静态查找"><DsvSearchMethodLab /></Step>
+  <Step title="声明前置条件">写有序比较器、随机访问、key numeric/domain、分布与重复key返回策略。</Step>
+  <Step title="构造反例">链表折半、极端偏斜插值、全重复key、空表与size_t边界，观察前置条件破坏。</Step>
+</Stepper>
+
+### 折半查找
+
+<Term def="在有序随机访问表上比较中点，每步排除一半候选区间的查找。">折半查找</Term>使用半开区间`[low, high)`可统一空表与边界。若要处理重复key，定义返回任意、首个或lower_bound；本文返回首个不小于key的位置，再判断相等。
+
+```c
+size_t lower_bound_record(const Record *a, size_t n, int key) {
+    size_t low = 0, high = n;
+    while (low < high) {
+        size_t mid = low + (high - low) / 2;
+        if (a[mid].key < key) low = mid + 1;
+        else high = mid;
+    }
+    return low;
+}
+
+bool binary_find(const Record *a, size_t n, int key, size_t *index) {
+    size_t position = lower_bound_record(a, n, key);
+    if (position == n || a[position].key != key) return false;
+    if (index != NULL) *index = position;
+    return true;
+}
+```
+
+不变量：所有`< low`的key小于target，所有`>= high`的key不小于target；区间严格缩小。使用`low + (high-low)/2`避免`low+high`溢出。
+
+### 插值查找与斐波那契查找
+
+<Term def="按target在端点key范围中的比例估计探测位置的有序表查找。">插值查找</Term>在近似均匀数值key上平均可很快，但端点相等要防除零，位置算术要防溢出；指数/聚簇分布最坏线性。它不是折半的无条件升级。
+
+<Term def="按Fibonacci数把有序表分割并逐步缩小区间的查找。">斐波那契查找</Term>历史上以加减替代除法，现代硬件收益需基准。实现可逻辑填充到某个Fibonacci长度，但复制/填充值不能改变首匹配语义。
+
+<Callout type="trap" title="只要数据有序，插值查找一定比折半查找少比较">
+插值还要求numeric key分布接近均匀。大量重复或极端聚簇会持续猜错位置并退化；折半的对数最坏界更稳定。
+</Callout>
+
+## 线性索引查找
+
+数据记录很大或位于外存时，额外维护较小索引，把key映射到记录位置/块。<Term def="为每条数据记录建立一个索引项并按key组织的索引。">稠密索引</Term>定位精确但索引项多，更新需同步。
+
+<Term def="把有序记录分块，块间有序、块内可无序，并为每块保存最大key和位置。">分块索引</Term>先查块索引，再在块内顺序查找；block size平衡索引与块内扫描。边界key和删除后块max必须维护。
+
+<Term def="从词项映射到包含该词项的文档/记录ID列表的索引。">倒排索引</Term>服务全文检索。Posting list可存频次/位置并压缩；查询交集、排名、删除与segment merge都需要版本一致性。它与“记录ID到内容”的正向表方向相反。
+
+索引是派生数据，必须能从source重建并带generation。写主记录成功但索引失败会产生漏查；使用transaction、write-ahead log或异步可审计rebuild策略，不能静默分叉。
+
+## 二叉排序树
+
+<Term def="每结点左子树key小于根、右子树key大于根，并递归满足该条件的二叉树。">二叉排序树</Term>（BST）中序有序。重复key可拒绝、计数或固定放一侧，必须一致。
+
+查找按比较进入左/右；插入在查找失败的NULL位置建叶。删除分三类：叶直接移除；单孩子用孩子替代；双孩子用中序后继/前驱替换key/value，再删除那个至多单孩子结点。若记录identity不能被复制替换，应做结点transplant。
+
+```c
+typedef struct SearchNode {
+    Record record;
+    struct SearchNode *left;
+    struct SearchNode *right;
+    int height;
+} SearchNode;
+
+SearchNode *bst_find(SearchNode *root, int key) {
+    while (root != NULL) {
+        if (key < root->record.key) root = root->left;
+        else if (key > root->record.key) root = root->right;
+        else return root;
+    }
+    return NULL;
+}
+```
+
+复杂度为树高`h`；随机形状常较低，但有序插入会退化为链，最坏`Theta(n)`。
+
+## 平衡二叉树（AVL树）
+
+<Term def="任意结点左右子树高度差绝对值不超过1的二叉排序树。">AVL树</Term>维护`height`与balance factor。插入/删除后沿祖先回溯：LL右旋、RR左旋、LR先左后右、RL先右后左；每次旋转既保持中序key顺序又恢复高度。
+
+旋转更新顺序先保存中间子树，再改child链接，最后从低到高重算height。删除可能让多个祖先继续失衡，不能只修第一个。Validator递归返回真实height，检查BST范围、stored height与balance同时成立。
+
+<DsvSearchTreeLab />
+
+<Stepper>
+  <Step title="切换BST、AVL、B树与B+树"><DsvSearchTreeLab /></Step>
+  <Step title="构造触发序列">3,2,1触发LL；1,2,3触发RR；3,1,2触发LR；1,3,2触发RL。</Step>
+  <Step title="验证更新">每次insert/delete后检查中序有序、元素multiset、height/balance和owner无环。</Step>
+</Stepper>
+
+## 多路查找树：2-3、2-3-4、B树与B+树
+
+<Term def="每个内部结点可保存多个有序key并拥有多个子树的平衡查找树。">多路查找树</Term>通过高fanout降低高度，适合块设备。2-3树结点有1/2个key及2/3个孩子；2-3-4树允许1-3个key及2-4个孩子，所有叶同层。
+
+<Term def="满足最小/最大key与孩子数、所有叶同层的平衡多路搜索树。">B树</Term>插入向下查找并在结点满时split、提升中间key；删除不足时向兄弟borrow或merge，并可能收缩root。阶/最小度定义在资料间不同，代码和验证必须固定一种。
+
+<Term def="内部结点只保存导航separator，全部记录位于同层叶结点且叶按顺序链接的多路树。">B+树</Term>范围查询先定位起始叶，再沿leaf chain顺序扫描；内部fanout更高。Separator通常是右子树最小key等约定，删除后必须更新祖先separator。
+
+外存成本以页I/O为主，结点大小应匹配page，不能照搬内存AVL比较次数。验证结点occupancy、key排序、child范围、所有叶同层、leaf chain和record总数。
+
+## 散列表查找与散列函数
+
+<Term def="通过散列函数把key映射到bucket/slot并用冲突策略保存记录的查找表。">散列表</Term>期望常数操作依赖均匀hash与受控装载因子。<Term def="把key确定性映射到整数hash或表地址的函数。">散列函数</Term>要求相等key同hash，并尽量分散实际输入。
+
+原书列举直接定址、数字分析、平方取中、折叠、除留余数和随机数法。现代实现通常先生成宽hash，再按capacity映射。除留余数`hash % p`的p选择影响分布；power-of-two表依赖hash低位质量。所谓随机数法必须可重复计算同一key，不是每次查找重新随机。
+
+<DsvHashConflictLab />
+
+<Stepper>
+  <Step title="切换四种映射/冲突策略"><DsvHashConflictLab /></Step>
+  <Step title="跟踪Probe/Chain">插入碰撞key，记录每次slot、tombstone或bucket链变化。</Step>
+  <Step title="构造攻击输入">全落同bucket、load factor边界、删除再查、扩容失败和hash/equality不一致。</Step>
+</Stepper>
+
+## 处理散列冲突的方法
+
+<Term def="两个不相等key映射到同一初始地址的现象。">散列冲突</Term>不可完全避免，除非key universe支持直接定址/完美散列。
+
+开放定址在表内探测后续slot：线性探测简单但primary clustering明显；二次探测减少聚集但未必覆盖所有槽；再散列/双散列用第二hash给step，需与capacity互素。删除必须用TOMBSTONE保持probe chain，扩容时重新插入active entries。
+
+链地址法让bucket指向冲突记录链/小容器，装载因子可大于1且删除直接；代价是分配和局部性。公共溢出区把冲突项统一放到额外区域，主表查后再扫描/索引溢出区，适合冲突少且布局固定的场景。
+
+<Term def="记录数n与bucket/slot数m之比alpha=n/m，用于预测冲突与扩容。">装载因子</Term>开放定址必须小于1；链地址可超过1但平均chain增长。Resize需先分配新表、rehash全部记录、验证后原子切换；失败保留旧表。
+
+<Callout type="trap" title="散列表平均O(1)，所以不需要考虑最坏情况">
+坏hash、过高load factor或恶意key可让所有记录碰撞，退化Theta(n)并造成拒绝服务。要限制输入、使用抗攻击hash/随机seed、监控probe/chain分布并及时扩容。
+</Callout>
+
+## 散列表查找的实现与性能分析
+
+正确性检查：所有active key从其初始slot沿probe可达；EMPTY终止查询，TOMBSTONE不能；相等key不重复；size等于active数量。性能不只看平均查找次数，还看成功/失败probe分布、p95/p99、load factor、hash成本、cache与扩容暂停。
+
+Property test用reference map生成insert/find/delete/update序列，故障注入扩容每次allocation；每步比较key-value集合与size。对BST/AVL/B+也使用同一map语义，才能比较结构而不改变重复/更新契约。
+
+## 本章回顾：查找成本来自前置条件与维护
+
+1. 顺序查找无序可用；折半依赖有序随机访问；插值依赖分布；斐波那契是特定分割变体。
+2. 稠密、分块和倒排索引把额外空间/维护换查询能力，并须与source版本一致。
+3. BST最坏会斜；AVL用旋转保证对数高度；B/B+以高fanout优化外存I/O与范围扫描。
+4. 散列表由hash、capacity、load factor和冲突策略共同决定，平均常数不是无条件保证。
+5. 所有结构都应通过同一查找表契约和reference model验证结果，再按工作负载比较成本。
+
+<Exercises>
+
+**问题 1：为什么折半查找放在单链表上通常没有Theta(log n)收益？**
+
+<Answer>折半每轮需要随机访问中点；单链表定位中点要线性走，重复定位总成本可达线性甚至写法更差。折半的对数比较假设有序且随机访问，链表更适合顺序扫描或换索引结构。</Answer>
+
+**问题 2：AVL旋转后要验证哪三类不变量？**
+
+<Answer>BST范围/中序有序；每结点stored height等于子树真实高度；左右高度差绝对值不超过1。还要检查owner无环、元素multiset不变，删除时沿全部祖先继续修复。</Answer>
+
+**问题 3：开放定址删除为何使用tombstone？**
+
+<Answer>直接设EMPTY会让查找在该槽提前终止，漏掉当初因碰撞探测到后面的key。Tombstone表示此槽可插入但查询需继续；rehash时清除墓碑并重建probe chains。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="查找" definition="按key确定记录存在并返回记录位置或未找到状态。" />
+  <GlossaryItem term="查找表" definition="支持按key查找及可能更新的一组同类型记录。" />
+  <GlossaryItem term="顺序查找" definition="从一端逐记录比较直到命中或结束。" />
+  <GlossaryItem term="折半查找" definition="在有序随机访问表中每步排除一半区间。" />
+  <GlossaryItem term="插值查找" definition="按target在端点key范围中的比例估计位置。" />
+  <GlossaryItem term="斐波那契查找" definition="按Fibonacci数分割有序表的查找。" />
+  <GlossaryItem term="稠密索引" definition="为每条记录建立一个索引项的索引。" />
+  <GlossaryItem term="分块索引" definition="块间有序并为每块保存边界和位置的索引。" />
+  <GlossaryItem term="倒排索引" definition="从词项映射到包含它的记录ID列表的索引。" />
+  <GlossaryItem term="二叉排序树" definition="左key小于根、右key大于根的递归二叉树。" />
+  <GlossaryItem term="AVL树" definition="每结点左右高度差不超过1的BST。" />
+  <GlossaryItem term="多路查找树" definition="结点保存多个key并拥有多个子树的平衡查找树。" />
+  <GlossaryItem term="B树" definition="满足occupancy且所有叶同层的平衡多路树。" />
+  <GlossaryItem term="B+树" definition="记录在相连叶结点、内部key仅导航的多路树。" />
+  <GlossaryItem term="散列表" definition="用hash映射bucket并处理冲突的查找表。" />
+  <GlossaryItem term="散列函数" definition="把相等key确定映射到相同整数hash的函数。" />
+  <GlossaryItem term="散列冲突" definition="不相等key映射到同一初始地址。" />
+  <GlossaryItem term="装载因子" definition="记录数与bucket或slot数之比。" />
+</Glossary>
+
+<Attribution adaptedFrom="大话数据结构（溢彩加强版），第8章 查找" adaptedUrl="https://www.tup.tsinghua.edu.cn/bookscenter/bookcatalog?id=08952301" />

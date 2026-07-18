@@ -1,0 +1,380 @@
+---
+title: "Item 22：将数据成员声明为 private"
+type: A
+section: Chapter 4 · Designs and Declarations
+order: 22
+description: 对齐 Effective C++ 第三版 Item 22：通过 private 数据成员获得语法一致性、精细访问控制与表示封装，并解释 protected 数据为何仍会泄漏不变量和实现依赖。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppAccessControlMatrixMap,
+  EcppEncapsulationMigrationMap,
+  EcppProtectedDependencyMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-22-private-data-members";
+
+<Objectives>
+
+- 能解释 private 数据成员如何提供语法一致性、访问控制和 representation freedom
+- 能设计 query/command 接口，把不变量、同步、缓存和错误处理封装在类边界内
+- 能分析 protected 数据对派生类暴露的依赖，并改造成 private storage 与受控 hook
+
+</Objectives>
+
+## 从一个可写库存字段的问题开始
+
+一个库存对象直接公开数量：
+
+```cpp
+struct Inventory {
+    int quantity;
+    int reserved;
+};
+
+inventory.quantity = -3;
+inventory.reserved = 20;
+```
+
+任何调用者都能制造 `quantity < 0` 或 `reserved > quantity`。class 无法知道谁修改、何时修改，也无法在一个原子操作中维护两个字段关系。
+
+<Term def="调用者可绕过类型操作直接读取或写入对象表示的数据成员。">
+  public representation exposure
+</Term>
+
+Item 22 的原则是 Declare data members private（将成员变量声明为 private）。private 不是风格偏好，而是把类型契约与存储方式分开的边界。
+
+<Term def="只有 class 自身及被明确授予权限的 friend 能直接访问的数据存储。">
+  private data member
+</Term>
+
+先预测新增“预留量不能超过库存”的规则需要修改多少调用点；公开字段方案无法给出可靠清单。
+
+## 语法一致性让调用者不猜表示
+
+若公开字段用 `item.quantity`，计算属性用 `item.available()`，调用者必须记住每个名字背后是字段还是函数。全部通过函数访问后形成 syntactic consistency（语法一致性）：
+
+<Term def="所有属性观察和操作采用统一函数形式，调用者无需区分直接存储与计算结果。">
+  syntactic consistency
+</Term>
+
+```cpp
+class Inventory {
+public:
+    int quantity() const noexcept;
+    int reserved() const noexcept;
+    int available() const noexcept;
+};
+```
+
+今天 `quantity()` 读取字段，明天可读取 packed bits、atomic、cache 或远端 snapshot；调用语法不变。
+
+<Term def="public API 描述对象能提供什么，而不暴露结果从哪里存储或怎样计算。">
+  semantic query
+</Term>
+
+一致性不是要求 getter/setter 机械覆盖每个字段。`available()` 比 `getQuantityMinusReserved()` 更接近领域含义，也保留实现演进空间。
+
+## 访问控制可以逐项授予
+
+public field 只有“所有人可读写”。private storage 配合函数可表达无访问、只读、验证写入、能力受限或按角色授权。
+
+<Term def="按成员语义分别决定谁能读、谁能写、何时写以及失败如何报告。">
+  fine-grained access control
+</Term>
+
+```cpp
+class Inventory {
+public:
+    int available() const noexcept;
+    Result<void, StockError> reserve(int amount);
+    Result<void, StockError> release(int amount);
+
+private:
+    int quantity_ = 0;
+    int reserved_ = 0;
+};
+```
+
+reserve 是 command，不是裸 setter：它验证正数、剩余库存，并同时更新状态或返回错误。
+
+<Term def="以领域动作表达状态变化并在一个边界内维护相关不变量的成员函数。">
+  invariant-preserving command
+</Term>
+
+<EcppAccessControlMatrixMap />
+
+<Callout type="trap">
+  **现象**：字段改成 private，却为每个字段生成无条件 getter 和
+  setter。**原因**：调用者仍能组合 setter
+  制造任何旧状态，只有语法变了。**修法**：从 use case 设计
+  query/command，只开放真实需要的权限和原子操作。
+</Callout>
+
+## 封装的是变化概率
+
+encapsulation（封装）的价值不是“别人看不到代码”，而是限制有多少代码依赖某个可能变化的决策。
+
+<Term def="把实现决策隐藏在稳定接口后，使变化影响局限于拥有该决策的模块。">
+  encapsulation
+</Term>
+
+若一百个调用点读取 public vector，它们会依赖容器类型、元素布局、迭代失效和同步方式。字段 private 后，只有 class implementation 依赖这些选择。
+
+<Term def="一个实现决策改变后必须检查、修改、重编译和重新验证的代码范围。">
+  change blast radius
+</Term>
+
+<EcppEncapsulationMigrationMap />
+
+可以把 vector 换为 tree、内存值换为数据库查询、即时计算换为 cache，而不要求用户改语法。真正不变的是 public contract。
+
+<Term def="在保持 public observable behavior 时替换内部数据结构和算法的自由。">
+  representation freedom
+</Term>
+
+## 函数边界容纳未来行为
+
+字段读取看似零成本，但未来可能需要 lock、lazy load、权限检查、统计、单位转换或错误。函数提供了插入这些行为的位置。
+
+<Term def="在不改变调用点语义的情况下，于成员访问前后增加验证、同步或观测逻辑的能力。">
+  behavioral insertion point
+</Term>
+
+```cpp
+int Inventory::available() const noexcept {
+    std::scoped_lock lock(mutex_);
+    return quantity_ - reserved_;
+}
+```
+
+这里函数是否真能保持 noexcept 要按锁和数据源重新审查；接口演进可能需要 Result。private 让迁移可集中完成，但不能免除契约版本设计。
+
+<Term def="类型从旧 public contract 迁移到新错误、同步或异步模型时维持兼容的策略。">
+  contract migration
+</Term>
+
+## 不变量必须只有一个写入口集合
+
+Inventory 的 invariant 涉及多个字段。若 friend、derived 和外部代码都能直接写，无法证明每次 transition 都合法。
+
+<Term def="所有可能改变对象状态的路径都由 class 明确列举并负责验证的性质。">
+  mutation closure
+</Term>
+
+private data 将写入口收束到 constructors、assignment 和少量 commands。审查者可以逐个检查：成功后 invariant 成立；失败时对象保持何种状态；并发是否原子。
+
+<Term def="一次状态操作要么完整提交所有相关字段，要么保持调用前状态。">
+  atomic state transition
+</Term>
+
+这对异常安全、线程安全和持久化一致性使用同一条边界。
+
+## private 也改善可测试性
+
+测试不应把字段布局当作断言目标，而应通过 public behavior 验证 invariant。这样 representation 改变不会让正确行为测试全部重写。
+
+<Term def="只根据 public inputs、outputs 和 observable effects 验证类型契约的测试。">
+  behavior-oriented test
+</Term>
+
+```cpp
+Inventory stock = Inventory::withQuantity(10);
+CHECK(stock.reserve(4));
+CHECK(stock.available() == 6);
+CHECK_FALSE(stock.reserve(7));
+CHECK(stock.available() == 6);
+```
+
+必要的 white-box 测试可放在实现模块，但不应让生产 API 为测试公开字段。
+
+<Term def="测试直接依赖内部字段、布局或辅助状态，表示改变时容易无意义失败。">
+  representation-coupled test
+</Term>
+
+## protected 数据并没有形成封装
+
+把字段从 public 改为 protected 只缩小了客户集合，没有隐藏表示。每个 derived class 仍能直接读写，并依赖字段名、类型和不变量。
+
+<Term def="基类数据对所有派生实现直接可见，派生类因此成为表示层客户。">
+  protected data exposure
+</Term>
+
+原书的结论是 protected 不封装。第三方可以在库外派生，base author 甚至不知道所有依赖者；一旦 vector 改成 tree，未知派生类可能编译失败或暗中改变行为。
+
+<Term def="基类实现细节被派生类直接使用，导致 base representation 无法独立演进的耦合。">
+  derived representation coupling
+</Term>
+
+<EcppProtectedDependencyMap />
+
+<Callout type="trap">
+  **现象**：认为 protected 比 public
+  安全，因为普通调用者看不到。**原因**：派生类仍可绕过 base
+  验证和锁，并把依赖传播给未知下游。**修法**：data private；确需扩展时提供
+  protected function hook，暴露稳定语义而非 storage。
+</Callout>
+
+## 用 protected 函数提供扩展点
+
+派生类可能需要参与流程，但需要的是能力，不是字段。
+
+<Term def="基类向派生实现开放的受控语义操作，不泄漏底层表示。">
+  protected operation hook
+</Term>
+
+```cpp
+class InventoryBase {
+protected:
+    Result<void, StockError> appendValidated(Item item);
+    std::span<const Item> snapshotItems() const;
+
+private:
+    std::vector<Item> items_;
+};
+```
+
+hook 可以验证、锁定和记录；representation 改变时只更新 hook 实现。若 snapshot view 有 lifetime/失效约束，必须明确，甚至改为 callback/value snapshot。
+
+<Term def="派生类只依赖 base 承诺的能力和结果，而不依赖数据结构形状。">
+  semantic extension contract
+</Term>
+
+## friend 是局部例外而非默认通道
+
+friend 也能访问 private data，因此会扩大封装边界。某些 tightly coupled operator、serializer 或 test seam 可以合理使用，但要计算依赖成本。
+
+<Term def="被显式授权访问 class private representation 的外部函数或类型。">
+  friend access grant
+</Term>
+
+优先问能否通过 public API 完成；若 friend 必须存在，让数量少、职责窄、与 class 同一维护单元，并在 representation 变化时一起审查。
+
+<Term def="所有能直接依赖 private representation 的成员与 friend 的总集合。">
+  encapsulation boundary set
+</Term>
+
+## 按变化实验验收封装
+
+先预测把 `quantity_` 从 int 换成 atomic/remote snapshot 会影响哪些文件，再执行验证：
+
+- 静态搜索确认 production client 不直接访问 data member。
+- compile-negative tests 验证普通调用者和 derived 都不能写 private storage。
+- invariant tests 覆盖 reserve/release 边界、失败不变和 overflow。
+- concurrency tests 验证多字段 transition 原子且读取一致。
+- representation swap spike 替换容器/存储，public contract tests 无需改动。
+- derived compatibility tests 只依赖 protected operations，不依赖 field/layout。
+- API review 清点 getter/setter，删除不对应真实 use case 的万能访问。
+
+<Term def="主动替换内部表示并观察 public/derived client 是否保持不变的封装验证。">
+  representation swap test
+</Term>
+
+如果“换一种表示”导致大面积 client 修改，当前设计还没有实现真正封装。
+
+## 小结
+
+- data members private 提供统一函数语法、精细 access control 和 representation freedom
+- getter/setter 不等于封装，应以领域 query/command 控制权限并维护 invariant
+- encapsulation 限制实现决策的 change blast radius，让同步、缓存和存储可局部演进
+- private 收束 mutation paths，使异常安全和并发原子性可以逐项证明
+- protected data 仍向 derived 暴露表示；应改为 private data 与 protected semantic hook
+- representation swap test 能直接验证客户是否依赖实现细节
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 22"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="public representation exposure">
+    调用者可直接读写对象表示。
+  </GlossaryItem>
+  <GlossaryItem term="private data member">
+    只有 class 与明确 friend 可直接访问的数据。
+  </GlossaryItem>
+  <GlossaryItem term="syntactic consistency">
+    所有属性通过统一函数形式访问。
+  </GlossaryItem>
+  <GlossaryItem term="semantic query">
+    描述领域观察而不泄漏存储方式的接口。
+  </GlossaryItem>
+  <GlossaryItem term="fine-grained access control">
+    逐项授予读写和失败处理权限。
+  </GlossaryItem>
+  <GlossaryItem term="invariant-preserving command">
+    原子维护相关不变量的领域操作。
+  </GlossaryItem>
+  <GlossaryItem term="encapsulation">把实现决策隐藏在稳定接口后。</GlossaryItem>
+  <GlossaryItem term="change blast radius">
+    实现变化需要修改和验证的范围。
+  </GlossaryItem>
+  <GlossaryItem term="representation freedom">
+    保持契约时更换内部表示的自由。
+  </GlossaryItem>
+  <GlossaryItem term="behavioral insertion point">
+    可集中加入验证、同步或观测的函数边界。
+  </GlossaryItem>
+  <GlossaryItem term="contract migration">
+    public contract 演进时的兼容策略。
+  </GlossaryItem>
+  <GlossaryItem term="mutation closure">
+    所有写路径都由 class 明确掌控。
+  </GlossaryItem>
+  <GlossaryItem term="atomic state transition">
+    相关字段完整提交或保持原状态。
+  </GlossaryItem>
+  <GlossaryItem term="behavior-oriented test">
+    仅验证 public observable contract 的测试。
+  </GlossaryItem>
+  <GlossaryItem term="representation-coupled test">
+    直接依赖字段和布局的脆弱测试。
+  </GlossaryItem>
+  <GlossaryItem term="protected data exposure">
+    派生类直接访问 base data representation。
+  </GlossaryItem>
+  <GlossaryItem term="derived representation coupling">
+    派生实现对 base 存储细节的依赖。
+  </GlossaryItem>
+  <GlossaryItem term="protected operation hook">
+    向派生类开放的受控语义能力。
+  </GlossaryItem>
+  <GlossaryItem term="semantic extension contract">
+    派生类只依赖稳定能力的扩展契约。
+  </GlossaryItem>
+  <GlossaryItem term="friend access grant">
+    外部函数或类型的 private 访问授权。
+  </GlossaryItem>
+  <GlossaryItem term="encapsulation boundary set">
+    所有能直接依赖 private 表示的代码集合。
+  </GlossaryItem>
+  <GlossaryItem term="representation swap test">
+    替换内部表示以验证封装边界的实验。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：重构库存字段。** public quantity/reserved 已有大量直接读写，请设计新接口和迁移顺序。
+
+<Answer question="怎样从公开字段迁移到保持不变量的接口？">
+  先枚举读取、入库、reserve、release 等真实 use case；建立 private storage、只读
+  query 与原子 command，command 验证非负、容量和多字段关系。旧字段访问迁到
+  deprecated adapter，CI 禁止新增直接使用，按清单替换后删除。behavior tests
+  验证成功状态和失败不变，representation swap 验证客户不依赖字段。
+</Answer>
+
+2. **问题 2：处理 protected vector。** 多个第三方 derived 直接 push/erase，base 想换成 tree 并加锁，请设计兼容扩展点。
+
+<Answer question="为什么 protected data 阻碍演进，怎样修复？">
+  派生类依赖 vector API、迭代失效和无锁写入，protected 没有封装。将 storage 改
+  private，提供 appendValidated、eraseById、snapshot/callback 等 protected
+  semantic operations，在内部统一验证与锁。先让旧 protected 访问经 adapter
+  告警并收集外部依赖，发布迁移版本后再移除；对所有 derived contract tests 重跑。
+</Answer>
+
+3. **问题 3：审查自动生成的 getter/setter。** 用户对象 12 个字段全部可读写，请判断哪些接口应保留。
+
+  <Answer question="怎样从权限和领域语义裁剪访问函数？">逐字段标注无访问、只读、验证写或领域 command；密码摘要、审计 id 等不应公开，display name 可只读加受控 rename，账户状态应用 suspend/activate 而非任意 setter。跨字段更新形成一个 atomic command。测试只依赖 public behavior，并用 compile-negative case 证明普通和 derived client 不能绕过规则。</Answer>
+</Exercises>

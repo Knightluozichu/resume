@@ -1,0 +1,124 @@
+---
+title: "第3章 定制业务质量报表详解"
+type: C
+section: "Python自动化运维 · 基础篇"
+order: 3
+description: "按刘天斯原书第3章重建：定制业务质量报表、XlsxWriter流量周报、rrdtool网卡流量图、动态路由轨迹图、TCP探测与可视化证据。"
+demo: true
+math: false
+sourceUrl: "https://github.com/yorkoliu/pyauto"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PopQualityReportsModelLab, PopQualityReportsBoundaryLab, PopQualityReportsEvidenceLab } from "@/components/mdx/python-ops/diagrams/pop-quality-reports";
+
+<Objectives>
+- 能解释定制业务质量报表的执行链与运维价值
+- 能区分XlsxWriter流量周报和rrdtool网卡流量图的责任与失败语义
+- 能实现并复现动态路由轨迹图到TCP探测与可视化证据的安全实验
+</Objectives>
+
+## 从一次运维变更开始
+
+先预测：脚本在一台测试机成功，是否就能安全用于批量生产？不能。还要说明目标、权限、超时、部分失败、证据和回滚。<Term def="定制业务质量报表把原始监控转换为可审计结论。报表必须标明数据窗口、时区、缺失值和聚合规则，图表只是证据入口，原始数据与生成版本仍需可追溯。">定制业务质量报表</Term>必须落进可观察的执行链。
+
+<PopQualityReportsModelLab />
+
+## 核心模型与责任
+
+定制业务质量报表把原始监控转换为可审计结论。报表必须标明数据窗口、时区、缺失值和聚合规则，图表只是证据入口，原始数据与生成版本仍需可追溯。 <Term def="XlsxWriter流量周报可生成工作表、公式和图表，但公式引用、单位和日期格式要由测试验证。写入时使用常量内存模式处理大数据，关闭workbook前检查异常。">XlsxWriter流量周报</Term>
+
+本章按照原书核心模块建立最小实验，再用现代Python和安全默认重写边界。工具版本可以变化，但目标选择、输入验证、结果聚合和审计证据不能消失。
+
+## 机制一：采集或控制入口
+
+XlsxWriter流量周报可生成工作表、公式和图表，但公式引用、单位和日期格式要由测试验证。写入时使用常量内存模式处理大数据，关闭workbook前检查异常。 <Term def="rrdtool网卡流量图体现固定步长、数据源类型、heartbeat和归档策略。COUNTER适合累计字节，GAUGE适合瞬时值；更新间隔超过heartbeat会产生unknown而不是虚构插值。">rrdtool网卡流量图</Term>
+
+```python
+import xlsxwriter
+book = xlsxwriter.Workbook('traffic.xlsx')
+sheet = book.add_worksheet('weekly')
+sheet.write_row(0, 0, ['day', 'bytes'])
+sheet.write_row(1, 0, ['Mon', 1024])
+chart = book.add_chart({'type': 'line'})
+chart.add_series({'values': '=weekly!$B$2:$B$2'})
+sheet.insert_chart('D2', chart)
+book.close()
+```
+
+运行前固定测试目标与时间窗，运行后保存结构化结果、耗时和异常类型。不要把打印了几行输出当成成功，也不要让示例凭据进入源码。
+
+## 机制二：状态、网络与批量
+
+rrdtool网卡流量图体现固定步长、数据源类型、heartbeat和归档策略。COUNTER适合累计字节，GAUGE适合瞬时值；更新间隔超过heartbeat会产生unknown而不是虚构插值。 <Term def="动态路由轨迹图把每跳地址、自治域或位置映射为路径。ICMP可能被过滤，星号不等于链路中断；图中要保留采样时间、目标和未响应跳，不能用地理连线冒充真实物理线路。">动态路由轨迹图</Term>
+
+<PopQualityReportsBoundaryLab />
+
+```python
+import rrdtool
+rrdtool.create('net.rrd', '--step', '60', 'DS:bytes:COUNTER:120:0:U', 'RRA:AVERAGE:0.5:1:1440')
+rrdtool.update('net.rrd', 'N:1048576')
+```
+
+批量任务要先预览匹配目标，再限制并发并逐目标汇总。成功、失败、超时和未返回是不同状态；只展示总成功率会掩盖关键主机失败。
+
+## 机制三：证据与恢复
+
+动态路由轨迹图把每跳地址、自治域或位置映射为路径。ICMP可能被过滤，星号不等于链路中断；图中要保留采样时间、目标和未响应跳，不能用地理连线冒充真实物理线路。 <Term def="TCP探测与可视化证据应关联连接时延、端口、失败阶段与路由变化。一次traceroute和一次成功连接只能说明当时路径，趋势判断需要重复采样及一致时钟。">TCP探测与可视化证据</Term>
+
+TCP探测与可视化证据应关联连接时延、端口、失败阶段与路由变化。一次traceroute和一次成功连接只能说明当时路径，趋势判断需要重复采样及一致时钟。 <Term def="验证定制业务质量报表详解的授权、结果和失败路径。">定制业务质量报表详解验收边界</Term>
+
+```python
+import socket, time
+started = time.monotonic()
+with socket.create_connection(('example.com', 443), timeout=3):
+    latency = time.monotonic() - started
+print({'target': 'example.com:443', 'seconds': latency})
+```
+
+<PopQualityReportsEvidenceLab />
+
+## 分步验收
+
+<Stepper>
+  <Step title="建立执行链"><PopQualityReportsModelLab /></Step>
+  <Step title="注入边界"><PopQualityReportsBoundaryLab /></Step>
+  <Step title="证明可恢复">用正常、超时、权限拒绝和部分失败四组输入运行；核对状态、日志、临时资源与回滚点，并保留可复查证据。</Step>
+</Stepper>
+
+## 实战验证清单
+
+在隔离环境执行三段代码：先只读采集，再模拟一台目标超时，最后验证失败不会改变未授权对象。记录命令或API参数、开始结束时间、目标清单、返回码、标准错误、制品摘要和回滚结果。涉及网络扫描、远程命令或配置发布时，必须使用经过批准的测试资产。
+
+## 常见误区
+
+<Callout type="trap" title="只要定制业务质量报表能运行就可以批量">
+单机成功没有证明目标选择、并发预算、部分失败和回滚。扩大范围前必须完成预览、限流、逐主机结果与停止条件。
+</Callout>
+
+<Callout type="trap" title="原书工具API可以原样用于今天的生产">
+原书出版于2014年，部分工具和安全默认已经变化。应保留架构思想，依据当前官方文档迁移API、主机密钥、TLS、权限和依赖版本。
+</Callout>
+
+## 本章回顾
+
+官方核心单元核对：定制业务质量报表；XlsxWriter流量周报；rrdtool网卡流量图；动态路由轨迹图；TCP探测与可视化证据。本章把原书模块放进现代运维闭环：先授权与预览，再执行与收集，最后判断、审计和恢复。
+
+<Exercises>
+**问题 1：如何解释“定制业务质量报表”的执行链？**<Answer>定制业务质量报表把原始监控转换为可审计结论。报表必须标明数据窗口、时区、缺失值和聚合规则，图表只是证据入口，原始数据与生成版本仍需可追溯。 XlsxWriter流量周报可生成工作表、公式和图表，但公式引用、单位和日期格式要由测试验证。写入时使用常量内存模式处理大数据，关闭workbook前检查异常。</Answer>
+**问题 2：rrdtool网卡流量图与动态路由轨迹图如何协作？**<Answer>rrdtool网卡流量图体现固定步长、数据源类型、heartbeat和归档策略。COUNTER适合累计字节，GAUGE适合瞬时值；更新间隔超过heartbeat会产生unknown而不是虚构插值。 动态路由轨迹图把每跳地址、自治域或位置映射为路径。ICMP可能被过滤，星号不等于链路中断；图中要保留采样时间、目标和未响应跳，不能用地理连线冒充真实物理线路。</Answer>
+**问题 3：如何验收TCP探测与可视化证据？**<Answer>TCP探测与可视化证据应关联连接时延、端口、失败阶段与路由变化。一次traceroute和一次成功连接只能说明当时路径，趋势判断需要重复采样及一致时钟。 增加正常、超时、权限拒绝和部分失败输入，核对目标、返回码、证据和回滚。</Answer>
+</Exercises>
+
+## 术语表
+<Glossary>
+  <GlossaryItem term="定制业务质量报表" definition="定制业务质量报表把原始监控转换为可审计结论。" />
+  <GlossaryItem term="XlsxWriter流量周报" definition="XlsxWriter流量周报可生成工作表、公式和图表，但公式引用、单位和日期格式要由测试验证。" />
+  <GlossaryItem term="rrdtool网卡流量图" definition="rrdtool网卡流量图体现固定步长、数据源类型、heartbeat和归档策略。" />
+  <GlossaryItem term="动态路由轨迹图" definition="动态路由轨迹图把每跳地址、自治域或位置映射为路径。" />
+  <GlossaryItem term="TCP探测与可视化证据" definition="TCP探测与可视化证据应关联连接时延、端口、失败阶段与路由变化。" />
+  <GlossaryItem term="定制业务质量报表详解验收边界" definition="验证定制业务质量报表详解的授权、结果和失败路径。" />
+</Glossary>
+
+<Attribution adaptedFrom="刘天斯《Python自动化运维：技术与最佳实践》第3章 定制业务质量报表详解" adaptedUrl="https://github.com/yorkoliu/pyauto" />

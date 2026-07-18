@@ -305,7 +305,7 @@ export const BOOK_TITLES: Record<string, string> = {
   learnopengl: "LearnOpenGL",
   "game-engine-architecture-3e": "游戏引擎架构（第三版）",
   "game-engine-practice-vol1": "游戏引擎原理与实践·卷1",
-  "game-engine-practice-vol2": "游戏引擎原理与实践·卷2",
+  "game-engine-practice-vol2": "游戏引擎原理与实践·卷2：高级技术",
   "real-time-collision-detection": "实时碰撞检测算法技术",
   "cpp-primer-5e": "C++ Primer 第5版",
   "c-primer-plus": "C Primer Plus（第6版）",
@@ -314,21 +314,23 @@ export const BOOK_TITLES: Record<string, string> = {
   "android-design-patterns": "Android アプリ设计パターン入门",
   "android-advanced-decryption": "Android进阶解密",
   "unity-game-optimization": "Unity 游戏优化",
-  "profiling-unity-games": "Unity Profiling 指南",
-  "mobile-xr-web-optimization": "Unity Mobile/XR/Web 优化",
-  "auto-why-car-runs": "汽车为什么会跑：图解汽车构造与原理",
+  "profiling-unity-games": "Unity 游戏性能分析终极指南（Unity 6 第 2 版）",
+  "mobile-xr-web-optimization": "移动、XR 与 Web 游戏性能优化（Unity 6 版）",
+  "auto-why-car-runs": "汽车为什么会跑：图解汽车构造与原理（第4版 / 2018）",
   "cpp-concurrency": "C++ 并发编程实战（第2版）",
   unity5: "Unity 5 权威讲解",
-  "ai-agent-dev": "AI Agent 开发实战",
-  "ai-agent": "从零构建 AI Agent",
-  "ai-agent-apps": "AI 智能体应用开发",
-  "design-patterns": "设计模式：GoF 23 模式图解",
+  "ai-agent-dev": "AI Agent 开发实战（工程专题 / 2026）",
+  "ai-agent": "从零构建 AI Agent（基础专题 / 2026）",
+  "ai-agent-apps": "AI 智能体应用开发（应用专题 / 2026）",
+  "design-patterns": "设计模式：GoF 23 模式图解（第1版 / 1994）",
   "game-programming-patterns": "游戏编程模式",
-  "code-quality-refactoring": "代码质量与重构",
-  "architecture-domain-design": "架构与领域设计",
-  "advanced-algorithm-engineering": "高级算法与算法工程",
-  "automotive-systems-specialization": "汽车系统专项",
-  "vehicle-software-intelligence": "车载软件与智能化",
+  "code-quality-refactoring": "代码质量与重构（Clean Code + Refactoring）",
+  "architecture-domain-design": "架构与领域设计（Clean Architecture + DDD）",
+  "advanced-algorithm-engineering":
+    "算法工程珠玑（Pearls of Algorithm Engineering）",
+  "automotive-systems-specialization":
+    "汽车系统专项（Bosch 权威资料版 / 2024）",
+  "vehicle-software-intelligence": "车载软件与智能化（AUTOSAR R25-11 / 2026）",
   "the-c-programming-language": "C 程序设计语言（K&R）",
   "beginning-cpp-game-programming": "C++ 游戏编程入门",
   "effective-cpp": "Effective C++",
@@ -337,12 +339,12 @@ export const BOOK_TITLES: Record<string, string> = {
   "inside-cpp-object-model": "深度探索 C++ 对象模型",
   "optimized-cpp": "C++ 性能优化指南",
   "modern-cpp-design": "Modern C++ Design",
-  "cpu-eye-cpp": "CPU 眼里的 C++",
+  "cpu-eye-cpp": "CPU眼里的C/C++",
   "easy-cpp-5e": "Easy C++（第5版）",
   "cpp-primer-plus": "C++ Primer Plus",
-  "cpp-testing-recipes": "C++ 编程测试秘籍",
+  "cpp-testing-recipes": "现代 C++ 测试驱动开发",
   "cpp-server-essence": "C++ 服务器开发精髓",
-  "head-first-design-patterns": "Head First 设计模式",
+  "head-first-design-patterns": "Head First 设计模式（第2版 / 2020）",
   "essential-csharp-7": "C# 7.0 本质论",
   "csharp-quality-code": "编写高质量代码：改善 C# 程序的 157 个建议",
   "effective-csharp": "Effective C#",
@@ -350,7 +352,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "csharp-functional-programming": "C# 函数式编程",
   "csharp-10-core": "C# 10 核心技术指南",
   "clr-via-csharp": "CLR via C#",
-  "dotnet-memory": ".NET 内存管理宝典",
+  "dotnet-memory": "Pro .NET 内存管理（第2版）",
   "rust-programming-language": "Rust 程序设计语言",
   "go-programming-language": "Go 程序设计语言",
   "python-crash-course": "Python 编程：从入门到实践",
@@ -358,7 +360,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "ruby-programming": "Ruby 基础教程",
   "data-structures-visual": "大话数据结构",
   "math-girl": "图灵数学女孩系列",
-  "dsa-cpp": "数据结构与算法分析（C++描述）",
+  "dsa-cpp": "数据结构与算法分析（C++描述，第3版）",
   "rust-way": "Rust 编程之道",
   "go-in-action": "Go 语言实战",
   "go-web-programming": "Go Web 编程",
@@ -368,8 +370,8 @@ export const BOOK_TITLES: Record<string, string> = {
   "python-advanced": "Python 高级编程",
   "algorithms-4e": "算法（第4版）",
   "programming-pearls": "编程珠玑",
-  "competitive-algorithms": "深入浅出竞赛算法",
-  "introduction-to-algorithms": "算法导论",
+  "competitive-algorithms": "深入浅出算法竞赛（图解版）",
+  "introduction-to-algorithms": "算法导论（第4版）",
   "hackers-delight": "算法心得",
   taocp: "计算机程序设计艺术",
   "programmers-math": "程序员的数学",
@@ -390,32 +392,34 @@ export const BOOK_TITLES: Record<string, string> = {
   "global-illumination": "全局光照技术",
   "unity-shader-essentials": "Unity Shader 入门精要",
   "shader-practice": "Shader 开发实战",
-  "unity-shaderlab": "Unity ShaderLab 开发实战详解",
-  "unity-screen-effects": "Unity 着色器和屏幕特效",
-  "unity-urp-shaders": "Unity URP 内置 Shader 解析",
+  "unity-shaderlab": "Unity 3D ShaderLab 开发实战详解",
+  "unity-screen-effects": "Unity 着色器和屏幕特效开发秘笈",
+  "unity-urp-shaders": "Unity 6 URP 内置 Shader 源码解析",
   "gpu-pro": "GPU Pro 系列",
   shaderx: "ShaderX 系列",
-  "unity-hmi": "Unity HMI 开发",
-  "game-design-fundamentals": "游戏设计基础",
+  "unity-hmi": "Unity for HMI：未来已来，Unity开启3D座舱新篇章",
+  "game-design-fundamentals": "游戏设计基础（原书第3版）",
   "game-mechanics-advanced": "游戏机制：高级游戏设计技术",
-  "game-programmer-path": "游戏程序员之路",
+  "game-programmer-path": "游戏程序员的学习之路（Milo Yip 图谱）",
   "unity-ui-design": "Unity UI 设计",
-  "unity-scripting": "Unity 脚本编程",
-  "unity-animation": "Unity 动画",
-  "blender-3d": "Blender 3D",
-  "unity-core-tech": "Unity 核心技术",
-  "unity-game-cases": "Unity 游戏案例",
+  "unity-scripting": "Unity 脚本设计",
+  "unity-animation": "Unity 游戏动画设计",
+  "blender-3d": "玩转 Blender：3D 动画角色创作（第 3 版）",
+  "unity-core-tech": "Unity 3D实战核心技术详解",
+  "unity-game-cases": "Unity 游戏案例开发大全",
   "unity-vfx": "Unity 3D 游戏特效制作典型实例",
   "unity-scripting-game-dev": "Unity 3D 脚本编程与游戏开发",
   "unity-master": "Unity 神技达人炼成记",
   "unity-advanced-programming": "Unity 3D 高级编程之进阶主程",
   "game-server-programming": "网络游戏服务器端编程",
-  "unity-mmo-game": "Unity 3D 网游游戏实战",
-  "unity-cpp-network-game": "Unity 与 C++ 网络游戏开发实战",
-  "multiplayer-game-architecture": "多人在线游戏架构与开发实战",
+  "unity-mmo-game": "Unity3D网络游戏实战（第2版）",
+  "unity-cpp-network-game": "Unity与C++网络游戏开发实战",
+  "multiplayer-game-architecture":
+    "多人在线游戏架构实战：基于C++的分布式游戏编程",
   "game-network-core-tech": "网络游戏核心技术与实战",
   "game-server-architecture": "游戏服务器架构与优化",
-  "multiplayer-game-programming": "Multiplayer Game Programming",
+  "multiplayer-game-programming":
+    "Multiplayer Game Programming: Architecting Networked Games",
   "javascript-pro-guide": "JavaScript高级程序设计（第4版）",
   "vuejs-practice": "Vue.js从入门到项目实战",
   "vuejs-design-implementation": "Vue.js设计与实现",
@@ -428,9 +432,9 @@ export const BOOK_TITLES: Record<string, string> = {
   "nodejs-debugging-guide": "Node.js调试指南",
   "deep-nodejs": "深入浅出Node.js",
   "frontend-engineering": "前端工程化体系设计与实践",
-  "how-computers-work": "计算机是怎么跑起来的",
-  "how-programs-work": "程序是怎么跑起来的",
-  "csapp": "深入理解计算机系统（CSAPP）",
+  "how-computers-work": "计算机是怎样跑起来的",
+  "how-programs-work": "程序是怎样跑起来的",
+  csapp: "深入理解计算机系统（CSAPP）",
   "modern-os": "现代操作系统（第4版）",
   "os-concepts": "操作系统概念（恐龙书）",
   "windows-journey": "Windows逐梦旅程",
@@ -440,53 +444,57 @@ export const BOOK_TITLES: Record<string, string> = {
   "linux-kernel-essence": "Linux内核精髓",
   "linux-kernel-design": "Linux内核设计与实现",
   "unix-advanced-programming": "UNIX环境高级编程",
-  "head-first-java": "Head First Java",
-  "java-core-tech": "Java核心技术",
-  "effective-java": "Effective Java",
-  "spring-in-action": "Spring in Action",
-  "jvm-troubleshooting": "JVM故障诊断与性能优化",
-  "deep-understanding-jvm": "深入理解Java虚拟机",
-  "jvm-g1-tuning": "JVM G1源码分析和调优",
-  "gc-handbook": "垃圾回收算法手册",
-  "first-line-android": "第一行代码Android",
-  "crazy-android": "疯狂Android讲义",
-  "kotlin-definitive-guide": "Kotlin编程权威指南",
-  "android-art-exploration": "Android开发艺术探索",
-  "kotlin-in-action": "Kotlin实战",
-  "android-component-arch": "Android组件化架构",
-  "android-perf-optimization": "Android应用性能优化",
-  "jetpack-compose": "Jetpack Compose从入门到实战",
-  "android-advanced-light": "Android进阶之光",
-  "deep-android-kernel": "深入理解Android内核设计思想",
-  "deep-android-volumes": "深入理解Android（卷I/II/III）",
-  "mysql-essentials": "MySQL数据库应用从入门到精通",
-  "sql-ten-minutes": "SQL必知必会",
-  "database-system-concepts": "数据库系统概念",
-  "high-performance-mysql": "高性能MySQL",
-  "ddia": "数据密集型应用系统设计",
-  "redis-design-implementation": "Redis设计与实现",
-  "kafka-definitive-guide": "Kafka权威指南",
-  "rabbitmq-practice": "RabbitMQ实战",
-  "kong-gateway": "Kong网关入门实战与进阶",
-  "kubernetes-in-action": "Kubernetes in Action",
+  "head-first-java": "Head First Java（第3版）",
+  "java-core-tech": "Java核心技术（第14版·全两卷）",
+  "effective-java": "Effective Java（第3版）",
+  "spring-in-action": "Spring in Action（第6版）",
+  "jvm-troubleshooting": "Troubleshooting Java（第2版）",
+  "deep-understanding-jvm": "深入理解Java虚拟机（第3版）",
+  "jvm-g1-tuning": "JVM G1源码分析和调优（彭成寒）",
+  "gc-handbook": "垃圾回收算法手册：自动内存管理的艺术（2016中文版）",
+  "first-line-android": "第一行代码 Android（第3版）",
+  "crazy-android": "疯狂Android讲义（第4版）",
+  "kotlin-definitive-guide": "Kotlin编程权威指南（原书第1版）",
+  "android-art-exploration": "Android开发艺术探索（Android 5.0）",
+  "kotlin-in-action": "Kotlin实战（第1版 / Kotlin 1.0）",
+  "android-component-arch": "Android组件化架构（2018 / Gradle 4.1时代）",
+  "android-perf-optimization": "Android应用性能优化（2012 / Android 4.0时代）",
+  "jetpack-compose": "Jetpack Compose从入门到实战（2022 / 第1版）",
+  "android-advanced-light": "Android进阶之光（第1版 / Android 7.0时代）",
+  "deep-android-kernel": "深入理解Android内核设计思想（第1版 / Android 4.3）",
+  "deep-android-volumes":
+    "深入理解Android（Framework卷I-III / Android 2.2-4.2.2）",
+  "mysql-essentials": "MySQL数据库应用从入门到精通（第3版 / 2016）",
+  "sql-ten-minutes": "SQL必知必会（第5版 / 2020）",
+  "database-system-concepts": "数据库系统概念（原书第7版 / 2021）",
+  "high-performance-mysql": "高性能MySQL（第4版 / 2022）",
+  ddia: "数据密集型应用系统设计（第1版 / 2018）",
+  "redis-design-implementation": "Redis设计与实现（第2版 / Redis 3.0 / 2014）",
+  "kafka-definitive-guide": "Kafka权威指南（第2版 / 2022）",
+  "rabbitmq-practice":
+    "RabbitMQ实战：高效部署分布式消息队列（RabbitMQ 2.7 / 2015）",
+  "kong-gateway": "Kong网关：入门、实战与进阶（Kong 2.0.5 / 2021）",
+  "kubernetes-in-action":
+    "Kubernetes in Action中文版（第1版 / Kubernetes 1.8 / 2018）",
   "phoenix-architecture": "凤凰架构",
   "microservices-patterns": "微服务架构设计模式",
-  "illustrated-http": "图解HTTP",
-  "illustrated-server-network": "图解服务端网络架构",
-  "computer-networks-top-down": "计算机网络：自顶向下方法",
-  "http-definitive-guide": "HTTP权威指南",
-  "wireshark-packet-analysis": "Wireshark数据包分析实战",
-  "tcp-ip-illustrated-vol1": "TCP/IP详解 卷1：协议",
-  "unix-network-programming-vol1": "UNIX网络编程 卷1：套接字联网API",
-  "two-week-scripting-language": "两周自制脚本语言",
-  "crafting-compiler": "自制编译器",
-  "engineering-a-compiler": "编译器设计",
-  "dragon-book-compilers": "龙书（编译原理）",
-  "tiger-book-compiler": "虎书（现代编译器实现）",
-  "illustrated-ai": "图解人工智能",
-  "illustrated-ml": "图解机器学习",
-  "illustrated-dl": "图解深度学习",
-  "machine-learning-watermelon": "机器学习（西瓜书）",
+  "illustrated-http": "图解HTTP（2014年首版 / HTTP/1.1时代）",
+  "illustrated-server-network": "图解服务器端网络架构（2015年首版）",
+  "computer-networks-top-down": "计算机网络：自顶向下方法（原书第8版 / 2022）",
+  "http-definitive-guide": "HTTP权威指南（2002年英文首版 / 2012年中译本）",
+  "wireshark-packet-analysis": "Wireshark数据包分析实战（第3版 / 2018）",
+  "tcp-ip-illustrated-vol1": "TCP/IP详解 卷1：协议（原书第2版 / 2016）",
+  "unix-network-programming-vol1":
+    "UNIX网络编程 卷1：套接字联网API（第3版 / 2010）",
+  "two-week-scripting-language": "两周自制脚本语言（第1版 / 2014）",
+  "crafting-compiler": "自制编译器（第1版 / 2016）",
+  "engineering-a-compiler": "编译器设计（第2版 / 2013）",
+  "dragon-book-compilers": "龙书：编译原理（第2版 / 2009）",
+  "tiger-book-compiler": "虎书：现代编译原理 C语言描述（修订版 / 2018）",
+  "illustrated-ai": "图解人工智能（第1版 / 2021）",
+  "illustrated-ml": "图解机器学习（第1版 / 2015）",
+  "illustrated-dl": "图解深度学习（第1版 / 2018）",
+  "machine-learning-watermelon": "机器学习（西瓜书，第1版 / 2016）",
   "statistical-learning-methods": "统计学习方法",
   "deep-learning-from-scratch": "深度学习入门：基于Python的理论与实现",
   "deep-learning-from-scratch-2": "深度学习入门2：自制框架",
@@ -512,7 +520,7 @@ export const BOOK_TITLES: Record<string, string> = {
   "illustrated-nev": "图解新能源汽车原理与构造",
   "car-structure-illustrated": "汽车构造与知识全图解",
   "autosar-vehicle-controller": "AUTOSAR 规范与车用控制器软件开发",
-  "soa-vehicle-architecture": "SOA 车载软件架构与开发",
+  "soa-vehicle-architecture": "汽车电子与软件架构",
   "mythical-man-month": "人月神话",
   "code-complete-2e": "代码大全（第2版）",
   "pragmatic-programmer": "程序员修炼之道",
@@ -587,7 +595,8 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
   {
     slug: "cpp",
     title: "编程语言基础",
-    description: "从 C/C++、C# 到 Rust、Go、Python、Lua、Ruby，建立语言与运行时基础。",
+    description:
+      "从 C/C++、C# 到 Rust、Go、Python、Lua、Ruby，建立语言与运行时基础。",
     stages: [
       {
         level: "beginner",
@@ -631,7 +640,8 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       },
       {
         level: "advanced",
-        summary: "深入对象模型、并发、泛型设计、运行时、内存管理与高级语言机制。",
+        summary:
+          "深入对象模型、并发、泛型设计、运行时、内存管理与高级语言机制。",
         items: learningBooks([
           "inside-cpp-object-model",
           "cpp-concurrency",
@@ -685,7 +695,8 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
   {
     slug: "mathematics",
     title: "数学基础",
-    description: "补齐程序设计、统计、线性代数、离散数学和计算几何所需的数学地基。",
+    description:
+      "补齐程序设计、统计、线性代数、离散数学和计算几何所需的数学地基。",
     stages: [
       {
         level: "beginner",
@@ -700,7 +711,10 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       {
         level: "advanced",
         summary: "进入离散数学、组合方法和几何数据结构。",
-        items: learningBooks(["concrete-mathematics", "geometric-data-structures"]),
+        items: learningBooks([
+          "concrete-mathematics",
+          "geometric-data-structures",
+        ]),
       },
     ],
   },
@@ -744,7 +758,8 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
   {
     slug: "shader-gpu",
     title: "Shader 与 GPU 编程",
-    description: "从 Shader 基础和 Unity 渲染实践，进入 URP、GPU Pro 与 ShaderX 专题。",
+    description:
+      "从 Shader 基础和 Unity 渲染实践，进入 URP、GPU Pro 与 ShaderX 专题。",
     stages: [
       {
         level: "beginner",
@@ -766,7 +781,8 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
   {
     slug: "unity",
     title: "游戏开发（Unity 为主）",
-    description: "从编辑器和游戏制作基础，推进到完整项目、性能分析与平台专项优化。",
+    description:
+      "从编辑器和游戏制作基础，推进到完整项目、性能分析与平台专项优化。",
     stages: [
       {
         level: "beginner",
@@ -837,7 +853,8 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
   {
     slug: "multiplayer-servers",
     title: "网络游戏与服务器",
-    description: "从服务器端基础，推进到多人同步、房间系统、网络架构和大规模优化。",
+    description:
+      "从服务器端基础，推进到多人同步、房间系统、网络架构和大规模优化。",
     stages: [
       {
         level: "beginner",
@@ -867,7 +884,8 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
   {
     slug: "frontend-web",
     title: "前端与 Web",
-    description: "从 JavaScript 与 Vue 入门，进入 CSS、Node.js、全栈和前端工程化。",
+    description:
+      "从 JavaScript 与 Vue 入门，进入 CSS、Node.js、全栈和前端工程化。",
     stages: [
       {
         level: "beginner",
@@ -904,7 +922,8 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
   {
     slug: "systems",
     title: "系统与操作系统",
-    description: "从计算机和程序运行原理，进入操作系统、内核、Windows、Linux 与 UNIX。",
+    description:
+      "从计算机和程序运行原理，进入操作系统、内核、Windows、Linux 与 UNIX。",
     stages: [
       {
         level: "beginner",
@@ -938,7 +957,8 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
   {
     slug: "java-jvm",
     title: "JVM / Java 生态",
-    description: "从 Java 编程基础，进入核心库、Spring、JVM 诊断、GC 与运行时实现。",
+    description:
+      "从 Java 编程基础，进入核心库、Spring、JVM 诊断、GC 与运行时实现。",
     stages: [
       {
         level: "beginner",
@@ -969,7 +989,8 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
   {
     slug: "android",
     title: "Android 开发",
-    description: "从应用开发和 Kotlin，进入架构、性能、Compose，再深入系统源码与内核。",
+    description:
+      "从应用开发和 Kotlin，进入架构、性能、Compose，再深入系统源码与内核。",
     stages: [
       {
         level: "beginner",
@@ -1008,7 +1029,8 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
   {
     slug: "databases",
     title: "数据库",
-    description: "从 SQL 与 MySQL 使用，进入数据库系统原理、性能、分布式数据和 Redis。",
+    description:
+      "从 SQL 与 MySQL 使用，进入数据库系统原理、性能、分布式数据和 Redis。",
     stages: [
       {
         level: "beginner",
@@ -1059,12 +1081,16 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
   {
     slug: "networking",
     title: "计算机网络",
-    description: "从 HTTP 与服务端网络图解，进入协议栈、抓包分析、TCP/IP 与 UNIX 网络编程。",
+    description:
+      "从 HTTP 与服务端网络图解，进入协议栈、抓包分析、TCP/IP 与 UNIX 网络编程。",
     stages: [
       {
         level: "beginner",
         summary: "建立 HTTP、客户端到服务端和网络分层的直觉。",
-        items: learningBooks(["illustrated-http", "illustrated-server-network"]),
+        items: learningBooks([
+          "illustrated-http",
+          "illustrated-server-network",
+        ]),
       },
       {
         level: "intermediate",
@@ -1110,12 +1136,17 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
   {
     slug: "ai-ml",
     title: "人工智能与机器学习",
-    description: "从图解 AI/ML/DL，进入经典机器学习、深度学习、生成模型和强化学习。",
+    description:
+      "从图解 AI/ML/DL，进入经典机器学习、深度学习、生成模型和强化学习。",
     stages: [
       {
         level: "beginner",
         summary: "建立人工智能、机器学习和深度学习的全景认知。",
-        items: learningBooks(["illustrated-ai", "illustrated-ml", "illustrated-dl"]),
+        items: learningBooks([
+          "illustrated-ai",
+          "illustrated-ml",
+          "illustrated-dl",
+        ]),
       },
       {
         level: "intermediate",
@@ -1145,7 +1176,8 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
   {
     slug: "ai-agent",
     title: "AI Agent 与大模型应用",
-    description: "从 LLM 与 Agent 心智模型，进入应用开发、编排、生产化和多智能体系统。",
+    description:
+      "从 LLM 与 Agent 心智模型，进入应用开发、编排、生产化和多智能体系统。",
     stages: [
       {
         level: "beginner",
@@ -1200,7 +1232,8 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
   {
     slug: "automotive",
     title: "汽车与车机",
-    description: "从整车构造和新能源，进入底盘、三电、AUTOSAR、SOA 与智能车软件。",
+    description:
+      "从整车构造和新能源，进入底盘、三电、AUTOSAR、SOA 与智能车软件。",
     stages: [
       {
         level: "beginner",
@@ -1219,7 +1252,10 @@ const LEARNING_PATH_CONFIGS: LearningPathConfig[] = [
       {
         level: "advanced",
         summary: "进入智能座舱、感知规控、整车软件工程与 SOA 架构。",
-        items: learningBooks(["vehicle-software-intelligence", "soa-vehicle-architecture"]),
+        items: learningBooks([
+          "vehicle-software-intelligence",
+          "soa-vehicle-architecture",
+        ]),
       },
     ],
   },
@@ -1303,10 +1339,196 @@ export const SECTION_ORDER = [
   "树与图",
   "策略与规划",
   "继续前进",
+  // Pearls of Algorithm Engineering
+  "基础与模型",
+  "随机化与并行",
+  "排序、集合与搜索",
+  "压缩与编码",
+  "压缩数据结构",
+  "结语",
+  // Data Structures and Algorithm Analysis in C++, Third Edition
+  "导论与分析",
+  "线性结构与树",
+  "散列与优先队列",
+  "排序、并查集与图",
+  "算法设计与均摊",
+  "高级数据结构与附录",
+  // Algorithms, Fourth Edition
+  "基础",
+  "排序",
+  "查找",
+  "图",
+  "字符串",
+  "背景",
+  // 深入浅出算法竞赛（图解版）
+  "算法竞赛基础",
+  "穷举、贪心与随机",
+  "搜索与动态规划",
+  "分治方法",
+  // Introduction to Algorithms, Fourth Edition
+  "CLRS4 · 基础",
+  "CLRS4 · 排序与顺序统计",
+  "CLRS4 · 数据结构",
+  "CLRS4 · 高级设计与分析",
+  "CLRS4 · 高级数据结构",
+  "CLRS4 · 图算法",
+  "CLRS4 · 专题",
+  "CLRS4 · 数学基础",
+  // Hacker's Delight, Second Edition
+  "HD2 · 基础与边界",
+  "HD2 · 位统计与重排",
+  "HD2 · 乘除法",
+  "HD2 · 函数与编码",
+  "HD2 · 校验与曲线",
+  "HD2 · 数值专题与附录",
+  // The Art of Computer Programming, published Volumes 1-4B
+  "TAOCP · 全书导览",
+  "TAOCP · Volume 1",
+  "TAOCP · Volume 2",
+  "TAOCP · Volume 3",
+  "TAOCP · Volume 4",
+  "TAOCP · 总复习",
+  // Rust 编程之道（张汉东，2019）
+  "Rust之道 · 全书导览",
+  "Rust之道 · 基础与类型",
+  "Rust之道 · 所有权与抽象",
+  "Rust之道 · 工程与并发",
+  "Rust之道 · 元编程与安全边界",
+  "Rust之道 · 总复习",
+  // Go in Action, First Edition
+  "Go实战 · 全书导览",
+  "Go实战 · 语言与工具",
+  "Go实战 · 数据与类型",
+  "Go实战 · 并发",
+  "Go实战 · 工程",
+  "Go实战 · 总复习",
+  // Go Web Programming (Sau Sheong Chang, Manning, 2016)
+  "Go Web编程 · 全书导览",
+  "Go Web编程 · 基础与全景",
+  "Go Web编程 · 请求与响应",
+  "Go Web编程 · 展示与数据",
+  "Go Web编程 · 服务与验证",
+  "Go Web编程 · 并发与部署",
+  "Go Web编程 · 总复习",
+  // Fluent Python, Second Edition
+  "流畅Python 2e · 全书导览",
+  "流畅Python 2e · Part I 数据结构",
+  "流畅Python 2e · Part II 函数作为对象",
+  "流畅Python 2e · Part III 类与协议",
+  "流畅Python 2e · Part IV 控制流",
+  "流畅Python 2e · Part V 元编程",
+  "流畅Python 2e · 总复习",
+  // Python自动化运维：技术与最佳实践
+  "Python自动化运维 · 全书导览",
+  "Python自动化运维 · 基础篇",
+  "Python自动化运维 · 高级篇",
+  "Python自动化运维 · 案例篇",
+  "Python自动化运维 · 总复习",
+  // Mastering Rust, Second Edition
+  "精通Rust 2e · 全书导览",
+  "精通Rust 2e · 工程基础",
+  "精通Rust 2e · 类型与安全",
+  "精通Rust 2e · 并发与底层",
+  "精通Rust 2e · 服务端工程",
+  "精通Rust 2e · 跨平台与调试",
+  "精通Rust 2e · 总复习",
+  // Tarek Ziadé · Expert Python Programming / Python高级编程
+  "Python高级编程 · 全书导览",
+  "Python高级编程 · 语言与API",
+  "Python高级编程 · 包与应用",
+  "Python高级编程 · 项目生命周期",
+  "Python高级编程 · 性能与设计",
+  "Python高级编程 · 总复习",
+  // 程序员的数学三册系列
+  "程序员的数学系列 · 全书导览",
+  "程序员的数学1 · 数学思维",
+  "程序员的数学2 · 概率统计",
+  "程序员的数学3 · 线性代数",
+  "程序员的数学系列 · 总复习",
+  // Head First Statistics
+  "深入浅出统计学 · 全书导览",
+  "深入浅出统计学 · 描述统计",
+  "深入浅出统计学 · 概率与分布",
+  "深入浅出统计学 · 抽样与推断",
+  "深入浅出统计学 · 相关与回归",
+  "深入浅出统计学 · 总复习",
+  "线性代数应该这样学4e · 全书导览",
+  "线性代数应该这样学4e · 向量空间",
+  "线性代数应该这样学4e · 映射与多项式",
+  "线性代数应该这样学4e · 谱与内积",
+  "线性代数应该这样学4e · 算子结构",
+  "线性代数应该这样学4e · 多线性与行列式",
+  "线性代数应该这样学4e · 总复习",
+  "具体数学2e · 全书导览",
+  "具体数学2e · 递归与求和",
+  "具体数学2e · 整数与数论",
+  "具体数学2e · 组合数与特殊数",
+  "具体数学2e · 生成函数与概率",
+  "具体数学2e · 渐近分析",
+  "具体数学2e · 总复习",
+  "几何数据结构 · 全书导览",
+  "几何数据结构 · 空间层次",
+  "几何数据结构 · 包围与距离",
+  "几何数据结构 · 邻近关系",
+  "几何数据结构 · 动态与鲁棒",
+  "几何数据结构 · 总复习",
+  "Unity Shader精要 · 全书导览",
+  "Unity Shader精要 · 基础篇",
+  "Unity Shader精要 · 初级篇",
+  "Unity Shader精要 · 中级篇",
+  "Unity Shader精要 · 高级篇",
+  "Unity Shader精要 · 扩展篇",
+  "Unity Shader精要 · 总复习",
+  "Shader开发实战 · 全书导览",
+  "Shader开发实战 · 基础效果",
+  "Shader开发实战 · 三维光照",
+  "Shader开发实战 · 性能与精度",
+  "Shader开发实战 · 引擎落地",
+  "Shader开发实战 · 总复习",
+  "Unity 3D ShaderLab · 全书导览",
+  "Unity 3D ShaderLab · 基础与空间",
+  "Unity 3D ShaderLab · 照明路径",
+  "Unity 3D ShaderLab · 阴影",
+  "Unity 3D ShaderLab · 状态与管线",
+  "Unity 3D ShaderLab · 材质与光效",
+  "Unity 3D ShaderLab · 场景与屏幕效果",
+  "Unity 3D ShaderLab · 组织与优化",
+  "Unity 3D ShaderLab · 总复习",
+  "Unity屏幕特效秘笈 · 全书导览",
+  "Unity屏幕特效秘笈 · 表面与反射",
+  "Unity屏幕特效秘笈 · 模型与顶点",
+  "Unity屏幕特效秘笈 · 移动与复用",
+  "Unity屏幕特效秘笈 · 屏幕效果",
+  "Unity屏幕特效秘笈 · 总复习",
+  "Unity 6 URP源码 · 全图",
+  "Unity 6 URP源码 · 包与契约",
+  "Unity 6 URP源码 · Lit主链",
+  "Unity 6 URP源码 · 内置材质",
+  "Unity 6 URP源码 · 专用Shader",
+  "Unity 6 URP源码 · ShaderLibrary",
+  "Unity 6 URP源码 · 工程验收",
+  "Unity 6 URP源码 · 总复习",
+  "GPU Pro 1-7 · 全系列地图",
+  "GPU Pro 1-7 · 几何与管线",
+  "GPU Pro 1-7 · 光照与材质",
+  "GPU Pro 1-7 · 屏幕与稀疏表示",
+  "GPU Pro 1-7 · 计算与工程",
+  "GPU Pro 1-7 · 综合验收",
+  "ShaderX 1-7 · 导读",
+  "ShaderX 1-7 · 基础与几何",
+  "ShaderX 1-7 · 表面与光照",
+  "ShaderX 1-7 · 图像与环境",
+  "ShaderX 1-7 · 工程与设备",
+  "ShaderX 1-7 · 总验收",
   "入门",
-  "数学基础",
-  "空间与变换",
-  "图形与运动",
+  "3D数学基础 · 全书导览",
+  "3D数学基础 · 坐标与向量",
+  "3D数学基础 · 矩阵与变换",
+  "3D数学基础 · 方位与几何",
+  "3D数学基础 · 图形与力学",
+  "3D数学基础 · 曲线与下一步",
+  "3D数学基础 · 几何测试附录",
+  "3D数学基础 · 总复习",
   "Foundations",
   "Low-Level Engine Systems",
   "Graphics, Motion, and Sound",
@@ -1347,31 +1569,181 @@ export const SECTION_ORDER = [
   "高级技术",
   "性能优化",
   // Unity Game Optimization
-  "基础脚本优化",
-  "图形优化",
-  "高级优化",
-  // Profiling Unity Games
-  "Profiling 工作流",
-  "CPU 性能分析",
-  "GPU 性能分析",
-  "内存与功耗",
-  "平台专项",
-  // Mobile XR Web Optimization
-  "URP 专项优化",
-  "XR 专项优化",
-  "Web 专项优化",
+  "Unity Game Optimization · 导读",
+  "Unity Game Optimization · 诊断与脚本",
+  "Unity Game Optimization · 渲染与运行时",
+  "Unity Game Optimization · XR、内存与 DOTS",
+  "Unity Game Optimization · 工程交付",
+  "Unity Game Optimization · 总复习",
+  // Unity 3D UI Essentials / Unity UI 设计
+  "Unity UI 设计 · 全书导览",
+  "Unity UI 设计 · 基础与布局",
+  "Unity UI 设计 · 控件与响应式",
+  "Unity UI 设计 · 空间与源码",
+  "Unity UI 设计 · 总复习",
+  // Mastering Unity Scripting / Unity 脚本设计
+  "Unity 脚本设计 · 全书导览",
+  "Unity 脚本设计 · 语言与调试",
+  "Unity 脚本设计 · 世界与事件",
+  "Unity 脚本设计 · 渲染与数据",
+  "Unity 脚本设计 · AI 与编辑器",
+  "Unity 脚本设计 · 资源与交付",
+  "Unity 脚本设计 · 总复习",
+  // Unity Animation Essentials / Unity 游戏动画设计
+  "Unity 游戏动画设计 · 全书导览",
+  "Unity 游戏动画设计 · 基础与 2D",
+  "Unity 游戏动画设计 · 原生动画与 Mecanim",
+  "Unity 游戏动画设计 · 角色动画",
+  "Unity 游戏动画设计 · 变形、IK 与视频",
+  "Unity 游戏动画设计 · 总复习",
+  // Learning Blender, Third Edition / 玩转 Blender：3D 动画角色创作（第 3 版）
+  "玩转 Blender 第 3 版 · 全书导览",
+  "玩转 Blender 第 3 版 · Blender 基础",
+  "玩转 Blender 第 3 版 · 项目与角色设计",
+  "玩转 Blender 第 3 版 · 建模",
+  "玩转 Blender 第 3 版 · UV、纹理与材质",
+  "玩转 Blender 第 3 版 · 绑定与动画",
+  "玩转 Blender 第 3 版 · 追踪、合成与渲染",
+  "玩转 Blender 第 3 版 · 延伸与总复习",
+  // Unity 3D实战核心技术详解
+  "Unity 3D 实战核心技术详解 · 全书导览",
+  "Unity 3D 实战核心技术详解 · 3D 数学基础",
+  "Unity 3D 实战核心技术详解 · 角色、消息与数据",
+  "Unity 3D 实战核心技术详解 · AI 与移动端效果",
+  "Unity 3D 实战核心技术详解 · MVC 与 FSM 架构",
+  "Unity 3D 实战核心技术详解 · 热更新、Shader 与工程发布",
+  "Unity 3D 实战核心技术详解 · 总复习",
+  // Unity游戏案例开发大全
+  "Unity 游戏案例开发大全 · 全书导览",
+  "Unity 游戏案例开发大全 · 基础与环境",
+  "Unity 游戏案例开发大全 · 桌球与迷宫物理",
+  "Unity 游戏案例开发大全 · 触摸、射击与休闲玩法",
+  "Unity 游戏案例开发大全 · 酷跑与停车",
+  "Unity 游戏案例开发大全 · 飞行与赛车",
+  "Unity 游戏案例开发大全 · 总复习",
+  // Unity 3D游戏特效制作典型实例
+  "Unity 3D 游戏特效制作典型实例 · 全书导览",
+  "Unity 3D 游戏特效制作典型实例 · 引擎与规范",
+  "Unity 3D 游戏特效制作典型实例 · Unity 工作流",
+  "Unity 3D 游戏特效制作典型实例 · 场景与 Max 案例",
+  "Unity 3D 游戏特效制作典型实例 · 粒子案例",
+  "Unity 3D 游戏特效制作典型实例 · 物理攻击",
+  "Unity 3D 游戏特效制作典型实例 · 法术攻击",
+  "Unity 3D 游戏特效制作典型实例 · 通用技能",
+  "Unity 3D 游戏特效制作典型实例 · 总复习",
+  // Unity 3D脚本编程与游戏开发
+  "Unity 3D 脚本编程与游戏开发 · 全书导览",
+  "Unity 3D 脚本编程与游戏开发 · 脚本与物理",
+  "Unity 3D 脚本编程与游戏开发 · 数学与界面",
+  "Unity 3D 脚本编程与游戏开发 · 动画、特效与音频",
+  "Unity 3D 脚本编程与游戏开发 · 资源与数据",
+  "Unity 3D 脚本编程与游戏开发 · AI 与完整项目",
+  "Unity 3D 脚本编程与游戏开发 · 进阶编程",
+  "Unity 3D 脚本编程与游戏开发 · 总复习",
+  // Ultimate Guide to Profiling Unity Games, Unity 6 second edition
+  "Profiling Unity 6 · 全书导览",
+  "Profiling Unity 6 · 基础与方法",
+  "Profiling Unity 6 · 瓶颈与移动端",
+  "Profiling Unity 6 · 内存",
+  "Profiling Unity 6 · Unity 工具",
+  "Profiling Unity 6 · 调试与自动化",
+  "Profiling Unity 6 · 平台工具",
+  "Profiling Unity 6 · 总复习",
+  // Optimize mobile, XR, and web performance, Unity 6 edition
+  // Unity 6 mobile, XR, and web optimization guide
+  "Unity 6 跨平台优化 · 全书导览",
+  "渲染基础、测量与热适应",
+  "资产、代码与项目配置",
+  "GPU、光照与 Shader",
+  "UI、音频与动画",
+  "物理、协作与内容治理",
+  "Unity Web 构建、发布与 Profiling",
+  "XR 专项与舒适度",
+  "Unity 6 跨平台优化 · 综合验收",
   // C++ 并发编程实战（第2版）
   "并发基础",
   "共享数据",
   "内存模型与原子操作",
   "并发数据结构",
   "高级并发与工程",
-  // Unity 5 权威讲解
-  "Unity入门",
-  "Unity脚本",
-  "Unity物理",
-  "Unity动画与UI",
-  "Unity渲染与发布",
+  // Unity 5 权威讲解，李在贤，2016
+  "Unity 5 权威讲解 · 全书导览",
+  "Unity 5 权威讲解 · 入门与场景",
+  "Unity 5 权威讲解 · 角色与战斗",
+  "Unity 5 权威讲解 · UI 与架构",
+  "Unity 5 权威讲解 · 射线、导航与光照",
+  "Unity 5 权威讲解 · 内置网络",
+  "Unity 5 权威讲解 · Photon 实战",
+  "Unity 5 权威讲解 · 真实感与数据",
+  "Unity 5 权威讲解 · 总复习",
+  // Game Mechanics: Advanced Game Design, Adams and Dormans, 2012
+  "游戏机制高级设计 · 全书导览",
+  "游戏机制高级设计 · 基础与复杂系统",
+  "游戏机制高级设计 · 经济与 Machinations",
+  "游戏机制高级设计 · 模式、模拟与经济",
+  "游戏机制高级设计 · 关卡、进程与意义",
+  "游戏机制高级设计 · 附录与总复习",
+  // Unityで神になる本。, Hiro Tetsuo, 2015 / Chinese edition 2019
+  "Unity 神技达人炼成记 · 全书导览",
+  "Unity 神技达人炼成记 · 起步与世界",
+  "Unity 神技达人炼成记 · 资产与脚本",
+  "Unity 神技达人炼成记 · 动画、界面与输出",
+  "Unity 神技达人炼成记 · 扩展、可视化与优化",
+  "Unity 神技达人炼成记 · 附录与总复习",
+  // Unity3D高级编程之进阶主程, Jesse Lu online series
+  "Unity3D 高级编程之进阶主程 · 连载导览",
+  "Unity3D 高级编程之进阶主程 · 第1章",
+  "Unity3D 高级编程之进阶主程 · 第2章",
+  "Unity3D 高级编程之进阶主程 · 第3章",
+  "Unity3D 高级编程之进阶主程 · 第4章",
+  "Unity3D 高级编程之进阶主程 · 第5章",
+  "Unity3D 高级编程之进阶主程 · 第6章",
+  "Unity3D 高级编程之进阶主程 · 第7章",
+  "Unity3D 高级编程之进阶主程 · 第8章",
+  "Unity3D 高级编程之进阶主程 · 第10章",
+  "Unity3D 高级编程之进阶主程 · 连载验收",
+  // 网络游戏服务器端编程, PHEI 2007
+  "网络游戏服务器端编程 · 官方导览",
+  "网络游戏服务器端编程 · 网络与并发",
+  "网络游戏服务器端编程 · 高效通信与安全",
+  "网络游戏服务器端编程 · 数据与配套系统",
+  "网络游戏服务器端编程 · 全链验收",
+  // Unity3D网络游戏实战（第2版）, 罗培羽, 2019
+  "Unity3D 网络游戏实战 · 官方导览",
+  "Unity3D 网络游戏实战 · 扎基础",
+  "Unity3D 网络游戏实战 · 搭框架",
+  "Unity3D 网络游戏实战 · 做游戏",
+  "Unity3D 网络游戏实战 · 全书验收",
+  // Unity与C++网络游戏开发实战, 王静逸/刘岵, 2019
+  "Unity 与 C++ 网络游戏 · 官方导览",
+  "Unity 与 C++ 网络游戏 · Unity 基础",
+  "Unity 与 C++ 网络游戏 · Unity 实战",
+  "Unity 与 C++ 网络游戏 · C++ 网络基础",
+  "Unity 与 C++ 网络游戏 · C++ 服务器实战",
+  "Unity 与 C++ 网络游戏 · 全书验收",
+  // 多人在线游戏架构实战：基于C++的分布式游戏编程, 彭放, 2020
+  "多人在线游戏架构 · 官方导览",
+  "多人在线游戏架构 · 网络基础",
+  "多人在线游戏架构 · 框架核心",
+  "多人在线游戏架构 · 数据与组件",
+  "多人在线游戏架构 · 分布式运行时",
+  "多人在线游戏架构 · 全书验收",
+  // 网络游戏核心技术与实战, 中嶋谦互, 2014
+  "网络游戏核心技术与实战 · 权威学习地图",
+  "网络游戏核心技术与实战 · 网络与游戏基础",
+  "网络游戏核心技术与实战 · 架构与同步",
+  "网络游戏核心技术与实战 · 两类开发实战",
+  "网络游戏核心技术与实战 · 辅助系统与运营",
+  "网络游戏核心技术与实战 · 开发体制",
+  "网络游戏核心技术与实战 · 总复习",
+  // 游戏服务器架构与优化, 蔡能, 2018
+  "游戏服务器架构与优化 · 权威导览",
+  "游戏服务器架构与优化 · 网络和服务器",
+  "游戏服务器架构与优化 · 存储与数据库",
+  "游戏服务器架构与优化 · 架构演进",
+  "游戏服务器架构与优化 · 大厅与实时服务",
+  "游戏服务器架构与优化 · 容量、分布式与选型",
+  "游戏服务器架构与优化 · 全书验收",
   // 汽车为什么会跑：图解汽车构造与原理
   "全书地图",
   "整车系统",
@@ -1497,10 +1869,10 @@ export const SECTION_ORDER = [
   "C++基础语法",
   "类与继承",
   "模板与STL",
-  // C++ 编程测试秘籍
-  "基础测试",
-  "进阶测试",
-  "面试实战",
+  // 现代 C++ 测试驱动开发
+  "TDD 基础",
+  "测试设计",
+  "工程演进",
   // C++ 服务器开发精髓
   "服务器基础",
   "网络与IO",
@@ -1513,46 +1885,150 @@ export const SECTION_ORDER = [
   "状态变化",
   "模式总结",
   // C# 7.0 本质论
-  "C#基础",
-  "面向对象",
-  "泛型与委托",
-  "高级特性",
+  "Essential C# 7.0 · Guide",
+  "Essential C# 7.0 · Language Foundations",
+  "Essential C# 7.0 · Object-Oriented Foundations",
+  "Essential C# 7.0 · Type Design",
+  "Essential C# 7.0 · Reliability",
+  "Essential C# 7.0 · Abstraction and Reuse",
+  "Essential C# 7.0 · Functional Building Blocks",
+  "Essential C# 7.0 · Collections and Querying",
+  "Essential C# 7.0 · Runtime Metadata",
+  "Essential C# 7.0 · Concurrency",
+  "Essential C# 7.0 · Runtime Boundaries",
+  "Essential C# 7.0 · Runtime Architecture",
+  "Essential C# 7.0 · Review",
   // 编写高质量代码
-  "语法质量",
-  "设计质量",
-  "性能质量",
-  "工程质量",
+  "编写高质量代码 · 导学",
+  "编写高质量代码 · 语言篇",
+  "编写高质量代码 · 集合与查询",
+  "编写高质量代码 · 泛型与消息",
+  "编写高质量代码 · 资源与持久化",
+  "编写高质量代码 · 失败语义",
+  "编写高质量代码 · 并发与并行",
+  "编写高质量代码 · API成员",
+  "编写高质量代码 · 类型边界",
+  "编写高质量代码 · 安全边界",
+  "编写高质量代码 · 命名系统",
+  "编写高质量代码 · 可维护性",
+  "编写高质量代码 · 演进与交付",
+  "编写高质量代码 · 总复习",
   // Effective C#
-  "语言习惯",
-  "资源管理",
-  "泛型LINQ",
-  "并发设计",
+  "Effective C# · 导学",
+  "Effective C# · 语言习惯",
+  "Effective C# · 资源与构造",
+  "Effective C# · 泛型设计",
+  "Effective C# · LINQ与执行边界",
+  "Effective C# · 异常契约",
+  "Effective C# · 总复习",
   // 深入理解 C#
-  "C#演进",
-  "语言核心",
-  "动态并发",
-  "现代特性",
+  "C# in Depth 4e · 导学",
+  "C# in Depth 4e · Context",
+  "C# in Depth 4e · C# 2-5",
+  "C# in Depth 4e · C# 6",
+  "C# in Depth 4e · C# 7+",
+  "C# in Depth 4e · 总复习",
   // C# 函数式编程
-  "函数式基础",
-  "高阶函数",
-  "不可变性",
-  "函数式实践",
+  "Functional C# 1e · 导学",
+  "Functional C# 1e · Core concepts",
+  "Functional C# 1e · Becoming functional",
+  "Functional C# 1e · Advanced techniques",
+  "Functional C# 1e · 总复习",
   // C# 10 核心技术指南
-  "语言核心C10",
-  "类型系统C10",
-  "异步并发C10",
-  "现代C#",
+  "C# 10 Nutshell · 导学",
+  "C# 10 Nutshell · Language",
+  "C# 10 Nutshell · .NET and Data",
+  "C# 10 Nutshell · Runtime Services",
+  "C# 10 Nutshell · Metadata and Dynamic",
+  "C# 10 Nutshell · Concurrency and Low-level",
+  "C# 10 Nutshell · Text",
+  "C# 10 Nutshell · 总复习",
   // CLR via C#
-  "CLR基础",
-  "类型设计",
-  "内存GC",
-  "高级CLR",
+  "CLR via C# 4e · 导学",
+  "CLR via C# 4e · CLR Basics",
+  "CLR via C# 4e · Designing Types",
+  "CLR via C# 4e · Essential Types",
+  "CLR via C# 4e · Core Facilities",
+  "CLR via C# 4e · Threading",
+  "CLR via C# 4e · 总复习",
+  // Programming in Lua 第4版
+  "Programming in Lua 4e · 导学",
+  "Programming in Lua 4e · The Basics",
+  "Programming in Lua 4e · Real Programming",
+  "Programming in Lua 4e · Lua-isms",
+  "Programming in Lua 4e · The C API",
+  "Programming in Lua 4e · 总复习",
+  // たのしいRuby 第5版
+  "たのしいRuby 第5版 · 导学",
+  "たのしいRuby 第5版 · Ruby初体验",
+  "たのしいRuby 第5版 · Ruby的基础",
+  "たのしいRuby 第5版 · Ruby的类",
+  "たのしいRuby 第5版 · 动手制作工具",
+  "たのしいRuby 第5版 · 总复习",
+  // 大话数据结构（溢彩加强版）
+  "大话数据结构 · 导学",
+  "大话数据结构 · 基础",
+  "大话数据结构 · 线性结构",
+  "大话数据结构 · 树与图",
+  "大话数据结构 · 查找与排序",
+  "大话数据结构 · 总复习",
   // §6 游戏开发
   "游戏开发",
   // 游戏引擎原理与实践·卷1
   "游戏引擎架构",
   "网络游戏与服务器",
   // JavaScript高级程序设计（第4版）
+  "JavaScript高级程序设计（第4版） · 学习地图",
+  "JavaScript高级程序设计（第4版） · 语言基础",
+  "JavaScript高级程序设计（第4版） · 类型与对象",
+  "JavaScript高级程序设计（第4版） · 异步与浏览器",
+  "JavaScript高级程序设计（第4版） · DOM与事件",
+  "JavaScript高级程序设计（第4版） · 图形、表单与API",
+  "JavaScript高级程序设计（第4版） · 数据、网络与存储",
+  "JavaScript高级程序设计（第4版） · 模块、Worker与工程",
+  "JavaScript高级程序设计（第4版） · 附录",
+  "JavaScript高级程序设计（第4版） · 总复习",
+  // Vue.js从入门到项目实战
+  "Vue.js从入门到项目实战 · 权威导览",
+  "Vue.js从入门到项目实战 · 概念与语法",
+  "Vue.js从入门到项目实战 · 选项、组件与项目化",
+  "Vue.js从入门到项目实战 · 商城实战",
+  "Vue.js从入门到项目实战 · 官网、新闻与SVG",
+  "Vue.js从入门到项目实战 · 扩展附录",
+  "Vue.js从入门到项目实战 · 全书验收",
+  // Vue.js设计与实现
+  "Vue.js设计与实现 · 权威导览",
+  "Vue.js设计与实现 · 框架设计概览",
+  "Vue.js设计与实现 · 响应系统",
+  "Vue.js设计与实现 · 渲染器",
+  "Vue.js设计与实现 · 组件化",
+  "Vue.js设计与实现 · 编译器",
+  "Vue.js设计与实现 · 服务端渲染",
+  "Vue.js设计与实现 · 全书验收",
+  // 你不知道的 JavaScript（一版三卷六册）
+  "你不知道的 JavaScript · 三卷六册总览",
+  "上卷 · 第一部分 作用域和闭包",
+  "上卷 · 第二部分 this 和对象原型",
+  "中卷 · 第一部分 类型和语法",
+  "中卷 · 第二部分 异步和性能",
+  "下卷 · 第一部分 入门与进阶",
+  "下卷 · 第二部分 ES6 及未来",
+  "你不知道的 JavaScript · 全系列复习",
+  // JavaScript 权威指南（原书第 7 版）
+  "JavaScript 权威指南 · 权威导览",
+  "JavaScript 权威指南 · 语言与控制流",
+  "JavaScript 权威指南 · 数据与代码组织",
+  "JavaScript 权威指南 · 标准库与高级机制",
+  "JavaScript 权威指南 · 浏览器平台",
+  "JavaScript 权威指南 · Node 与工程工具",
+  "JavaScript 权威指南 · 全书验收",
+  // JavaScript 全栈开发（凌杰，2021）
+  "JavaScript 全栈开发 · 导学",
+  "JavaScript 全栈开发 · 起点",
+  "JavaScript 全栈开发 · 语言核心",
+  "JavaScript 全栈开发 · 浏览器端",
+  "JavaScript 全栈开发 · 服务器端",
+  "JavaScript 全栈开发 · 总复习",
   "前端与Web",
   "系统与操作系统",
   "JVM与Java生态",
@@ -1741,6 +2217,34 @@ export interface NavBook {
   sections: NavSection[];
 }
 
+/** 侧边栏首屏只需要书籍身份；章节详情由静态 API 按书加载。 */
+export type NavBookSummary = Pick<NavBook, "bookSlug" | "bookTitle">;
+
+export type LibraryPathBookItem = {
+  kind: "book";
+  book: NavBookSummary;
+  optional: boolean;
+};
+
+export type LibraryPathMissingItem = {
+  kind: "missing";
+  title: string;
+};
+
+export interface LibraryPathStage {
+  level: LearningStageLevel;
+  label: string;
+  items: Array<LibraryPathBookItem | LibraryPathMissingItem>;
+}
+
+export interface LibraryPath {
+  slug: string;
+  title: string;
+  stages: LibraryPathStage[];
+}
+
+export type LibraryNavigationTree = LibraryPath[];
+
 export type LearningPathBookItem = {
   kind: "book";
   book: NavBook;
@@ -1887,6 +2391,33 @@ export function getLearningPathTree(): LearningPathTree {
           };
         })
         .filter((item): item is LearningPathItem => item !== null),
+    })),
+  }));
+}
+
+/**
+ * 客户端侧栏使用的轻量路径树。完整章节树不再序列化进每个章节页，
+ * 而是在用户展开某本书时从 /api/library/<bookSlug> 按需获取。
+ */
+export function getLibraryNavigationTree(): LibraryNavigationTree {
+  return getLearningPathTree().map((path) => ({
+    slug: path.slug,
+    title: path.title,
+    stages: path.stages.map((stage) => ({
+      level: stage.level,
+      label: stage.label,
+      items: stage.items.map((item) =>
+        item.kind === "missing"
+          ? { kind: "missing" as const, title: item.title }
+          : {
+              kind: "book" as const,
+              book: {
+                bookSlug: item.book.bookSlug,
+                bookTitle: item.book.bookTitle,
+              },
+              optional: item.optional,
+            },
+      ),
     })),
   }));
 }

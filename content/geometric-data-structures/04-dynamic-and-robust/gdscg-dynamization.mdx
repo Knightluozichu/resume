@@ -1,0 +1,185 @@
+---
+title: "第10章 几何数据结构动态化"
+type: C
+section: "几何数据结构 · 动态与鲁棒"
+order: 3
+description: "用二进制分解、半大小删除与摊还分析把静态kd树等查询结构系统地转为动态结构。"
+demo: true
+math: true
+sourceUrl: "https://www.routledge.com/Geometric-Data-Structures-for-Computer-Graphics/Langetepe-Zachmann/p/book/9780367453862"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GdscgDynamizationObjectLab, GdscgDynamizationQueryLab, GdscgDynamizationEvidenceLab } from "@/components/mdx/geometric-data-structures/diagrams/gdscg-dynamization";
+
+<Objectives>
+- 能解释动态化、二进制分解与摊还分析的对象和不变量
+- 能推导本页复杂度或几何谓词，并用交互图追踪构建、查询与更新
+- 能实现最小实验，以精确基线、边界输入和反例验收全局重建
+</Objectives>
+
+## 先做预测
+
+先预测结果，再观察结构变化并解释偏差。连续插入2的幂附近数量的点，预测哪些静态块会像二进制进位一样合并。再交替删除与查询，判断墓碑何时让查询成本偏离有效元素数量。 本页用<Term def="把支持静态构建与查询的结构扩展为可增删元素且保留复杂度界。">动态化</Term>、<Term def="按集合大小的二进制位维护若干互不相交的静态块。">二进制分解</Term>、<Term def="把偶发昂贵重建分摊到导致它的一系列更新上。">摊还分析</Term>、<Term def="删除累计到块规模的一定比例时清理墓碑并重建有效元素。">半大小规则</Term>、<Term def="通过分阶段复制或替换恢复结构质量与最坏情况保证。">全局重建</Term>建立从对象、表示、查询到证书的完整链路。
+
+<GdscgDynamizationObjectLab />
+
+## 第一版权威目录定位
+
+本页一一对应Elmar Langetepe与Gabriel Zachmann在A K Peters出版的2006年第一版《Geometric Data Structures for Computer Graphics》第10章 几何数据结构动态化。出版社页面确认第一版、两位作者、362页和正式10章目录；作者所在研究组同时给出原书信息、ISBN 9781568812359、目录以及第7章材料。
+
+### 原书小节覆盖
+
+1. 10.1 Example of Dynamization
+2. 10.1.1 Amortizing kd-tree Inserts
+3. 10.1.2 Binary Decomposition of Static kd-trees
+4. 10.1.3 Query Operations
+5. 10.1.4 Generic Delete by the Half-size Rule
+6. 10.1.5 Half-size Rule and Binary Decomposition
+7. 10.2 Model of Dynamization
+8. 10.3 Amortized Insert and Delete
+9. 10.4 Worst-case Performance
+10. 10.5 Application to Search Query Structures
+
+### 核心对象
+
+1. **动态化**：把支持静态构建与查询的结构扩展为可增删元素且保留复杂度界。
+2. **二进制分解**：按集合大小的二进制位维护若干互不相交的静态块。
+3. **摊还分析**：把偶发昂贵重建分摊到导致它的一系列更新上。
+4. **半大小规则**：删除累计到块规模的一定比例时清理墓碑并重建有效元素。
+5. **全局重建**：通过分阶段复制或替换恢复结构质量与最坏情况保证。
+
+## 查询与表示契约
+
+先固定数据域、维数、闭开边界、查询输出和数值语义。树高或节点数不是独立目标；只有候选完备、结果无重复、复杂度含输出规模且数值分支一致时，结构才算正确。
+
+$$
+n=\sum_{i=0}^{\lfloor\log n\rfloor}b_i2^i
+$$
+
+$$
+T_q(n)=\sum_{i:b_i=1}Q(2^i)
+$$
+
+$$
+\sum_{j=0}^{\lfloor\log n\rfloor}\frac{n}{2^j}P(2^j)
+$$
+
+$$
+D\ge\frac{|B|}{2}\Longrightarrow rebuild(B\setminus D)
+$$
+
+若静态结构可在P(n)时间构建，二进制分解维护至多对数个大小为2的幂的块；插入单元素后合并同规模块。每个元素只在规模翻倍时参与重建，因此总重建工作可摊还。删除先标记，失效比例达到半大小阈值时重建；查询对所有块执行并合并结果。 每个剪枝判断都应能回答两个问题：被排除的集合是什么，以及哪个不变量证明它不含答案。
+
+## 可核查构建与查询
+
+块表按层级保存不可变kd树和有效位图。插入循环执行进位合并，删除通过ID定位并标记，查询过滤墓碑并去重。后台重建必须保存快照版本，切换时原子替换；最坏情况版本把重建工作切成每次更新固定预算。
+
+
+```python
+def query_with_trace(root, request):
+    stack, hits, trace = [root], [], []
+    while stack:
+        node = stack.pop()
+        trace.append(node.id)
+        if node.disjoint(request):
+            continue
+        if node.is_leaf:
+            hits.extend(node.exact_matches(request))
+        else:
+            stack.extend(node.children)
+    return sorted(set(hits)), trace
+```
+
+通用骨架必须由本章的具体不变量实例化：区域不相交、包围体不重叠、空邻域、证书未失效或静态块版本有效。不能把候选生成误写成最终答案，叶节点仍需执行本章定义的精确测试。
+
+<GdscgDynamizationQueryLab />
+
+## 复杂度与工程取舍
+
+复杂度报告分离构建、查询、更新、内存和输出规模。平均值之外记录P95与最坏样例；同时保存访问节点、候选对象和精确谓词次数，这样才能判断瓶颈来自树质量、数据分布还是数值回退。
+
+```python
+metrics = {
+    "build_ms": 0.0,
+    "visited_nodes": 0,
+    "candidates": 0,
+    "exact_tests": 0,
+    "update_ms": 0.0,
+}
+assert set(metrics) == {"build_ms", "visited_nodes", "candidates", "exact_tests", "update_ms"}
+```
+
+只在结果集合与基线一致后比较性能。构建更慢可能换来大量查询收益，更新更便宜也可能逐渐恶化结构；因此工作负载中的查询次数、更新比例和生命周期必须写入报告。
+
+## 边界、退化与反例
+
+重复键、删除不存在元素、全删空块和更新期间查询会暴露版本语义。若查询只看新块而遗漏尚未迁移的旧块会产生假阴性；若两边都返回又不去重会重复报告。
+
+```python
+audit = {
+    "normal": "representative geometry",
+    "boundary": "closed-open convention",
+    "degenerate": "duplicate or co-located input",
+    "baseline": "brute-force exact result",
+}
+assert all(audit.values())
+```
+
+<GdscgDynamizationEvidenceLab />
+
+## 图形学应用
+
+把静态kd树包装为在线点集：运行突发插入、均匀查询和批量删除三种负载，记录块数、每点重建次数、墓碑比率和尾延迟，并与每次全重建比较。 应用层还要记录从世界坐标到结构坐标的变换，避免把坐标系错误误判为数据结构错误。
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定对象与边界"><GdscgDynamizationObjectLab /></Step>
+  <Step title="执行构建与查询"><GdscgDynamizationQueryLab /></Step>
+  <Step title="保存反例与证书"><GdscgDynamizationEvidenceLab /></Step>
+</Stepper>
+
+1. 用五到十个对象手算结构，标出节点覆盖、邻接或证书。
+2. 执行一个正常查询和一个恰落在边界的查询，逐节点记录剪枝理由。
+3. 删除一个一般位置或静态假设，构造首个失败样例。
+4. 与穷举答案逐项比较，再扩大规模测构建、查询、更新和内存。
+
+## 验收证书
+
+验收包包含原始输入、结构参数、节点或图邻接、查询日志、候选集合、精确结果、复杂度计数和失败反例。按半大小规则清理墓碑，并把重建成本记入触发它的更新序列。 任何无法重放的截图或孤立耗时都不能替代证书。
+
+## 常见误区
+
+<Callout type="trap" title="正确性前提被省略">只做懒删除从不重建，逻辑集合很小但查询仍扫描历史上所有元素。</Callout>
+
+<Callout type="trap" title="只看平均耗时">按半大小规则清理墓碑，并把重建成本记入触发它的更新序列。 同时保留最坏输入、内存和更新尾延迟。</Callout>
+
+## 本章回顾
+
+本页覆盖动态化、二进制分解、摊还分析、半大小规则、全局重建。掌握标准是能从查询契约选择表示，推导剪枝或邻近条件，实现构建与更新，并用精确基线、退化输入和复杂度计数形成可重放证书。
+
+<Exercises>
+**问题1：动态化与二进制分解如何协作？**
+<Answer>把支持静态构建与查询的结构扩展为可增删元素且保留复杂度界。 按集合大小的二进制位维护若干互不相交的静态块。 回答时必须写出对象域和边界约定。</Answer>
+
+**问题2：怎样核查摊还分析的查询结果？**
+<Answer>保存访问轨迹与候选集合，再与穷举或精确谓词给出的结果逐项比较；复杂度必须包含输出规模。</Answer>
+
+**问题3：如何验收全局重建？**
+<Answer>通过分阶段复制或替换恢复结构质量与最坏情况保证。 同时保存正常例、边界例、退化例和最坏工作负载。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="动态化" definition="把支持静态构建与查询的结构扩展为可增删元素且保留复杂度界。" />
+  <GlossaryItem term="二进制分解" definition="按集合大小的二进制位维护若干互不相交的静态块。" />
+  <GlossaryItem term="摊还分析" definition="把偶发昂贵重建分摊到导致它的一系列更新上。" />
+  <GlossaryItem term="半大小规则" definition="删除累计到块规模的一定比例时清理墓碑并重建有效元素。" />
+  <GlossaryItem term="全局重建" definition="通过分阶段复制或替换恢复结构质量与最坏情况保证。" />
+  <GlossaryItem term="几何证书" definition="足以重放构建、查询、更新和数值判断的一组输入、轨迹与不变量。" />
+</Glossary>
+
+<Attribution adaptedFrom="Elmar Langetepe, Gabriel Zachmann · Geometric Data Structures for Computer Graphics, First Edition · 第10章 几何数据结构动态化" adaptedUrl="https://www.routledge.com/Geometric-Data-Structures-for-Computer-Graphics/Langetepe-Zachmann/p/book/9780367453862" />

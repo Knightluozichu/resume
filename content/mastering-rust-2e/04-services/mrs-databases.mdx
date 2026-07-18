@@ -1,0 +1,132 @@
+---
+title: "第14章 Rust 数据库交互"
+type: C
+section: "精通Rust 2e · 服务端工程"
+order: 14
+description: "按 原书第14章 Interacting with Databases in Rust 一比一重建核心知识：数据持久化、SQLite、PostgreSQL、r2d2 连接池、Diesel ORM。"
+demo: true
+math: false
+sourceUrl: "https://www.packtpub.com/en-us/product/mastering-rust-9781789346572"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { MrsDatabasesModelLab, MrsDatabasesBoundaryLab, MrsDatabasesEvidenceLab } from "@/components/mdx/mastering-rust-2e/diagrams/mrs-databases";
+
+<Objectives>
+- 能解释数据持久化与SQLite在本章执行链中的责任
+- 能区分PostgreSQL和r2d2 连接池的适用边界与失败语义
+- 能实现并复现一个围绕Diesel ORM的最小实验
+</Objectives>
+
+## 先做预测
+
+先回答：示例能够编译并运行，是否已经证明设计正确？不能。编译成功只说明当前程序满足类型与语法约束，还要验证输入边界、失败路径、资源生命周期、并发或外部系统条件。<Term def="持久化把进程内状态转成可恢复事实，需要schema、约束、事务和迁移；数据库成功写入不等于业务流程的所有外部副作用都成功。">数据持久化</Term>是本章的起点，<Term def="SQLite适合嵌入式和单文件场景，事务与锁仍需明确；连接、临时文件和备份必须按进程模型验证，不能把开发便利直接外推到多实例服务。">SQLite</Term>则把起点放进可重复的工程过程。
+
+<MrsDatabasesModelLab />
+
+## 原书章节骨架
+
+Packt 官方目录把本章组织为数据持久化、SQLite、PostgreSQL、r2d2 连接池、Diesel ORM。这里保留原书问题顺序，再把2019年前后的案例放到当前Rust工程语境中理解：概念不因crate版本变化而失效，但命令、依赖和框架API必须以当前项目锁定版本的官方文档为准。
+
+官方核心单元核对：数据持久化；SQLite；PostgreSQL；r2d2连接池；Diesel ORM。
+
+<Term def="PostgreSQL提供并发事务、约束和丰富类型，查询参数必须绑定而非拼接；应用还要处理隔离级别、死锁重试和迁移兼容窗口。">PostgreSQL</Term>不是孤立语法。它承接数据持久化给出的目标，并通过SQLite进入真实项目。阅读代码时要沿着输入、所有权或状态、动作、结果和证据五个节点追踪，而不是只记函数名。
+
+```sql
+CREATE TABLE bookmarks (
+  id BIGINT PRIMARY KEY,
+  url TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+```
+
+## 机制一：从类型到行为
+
+持久化把进程内状态转成可恢复事实，需要schema、约束、事务和迁移；数据库成功写入不等于业务流程的所有外部副作用都成功。 SQLite适合嵌入式和单文件场景，事务与锁仍需明确；连接、临时文件和备份必须按进程模型验证，不能把开发便利直接外推到多实例服务。 两者协作时，先写出谁拥有数据、谁可以修改、失败由谁处理，再决定具体API。这样可以把编译器诊断还原为契约冲突，而不是把错误信息当成需要逐条消除的噪声。
+
+<Term def="连接池复用昂贵连接并限制并发，容量应由数据库预算反推；获取超时、失效连接检测和优雅关闭比简单clone池句柄更重要。">r2d2 连接池</Term>进一步约束运行行为。它说明“类型正确”与“协议正确”是两层证据：前者由编译器帮助证明，后者还需要测试、时间线和边界输入。
+
+<MrsDatabasesBoundaryLab />
+
+```rust
+fn insert(conn: &rusqlite::Connection, url: &str, title: &str) -> rusqlite::Result<usize> {
+    conn.execute(
+        "INSERT INTO bookmarks(url, title) VALUES (?1, ?2)",
+        (url, title),
+    )
+}
+```
+
+## 机制二：失败、资源与边界
+
+PostgreSQL提供并发事务、约束和丰富类型，查询参数必须绑定而非拼接；应用还要处理隔离级别、死锁重试和迁移兼容窗口。 连接池复用昂贵连接并限制并发，容量应由数据库预算反推；获取超时、失效连接检测和优雅关闭比简单clone池句柄更重要。 失败实验至少覆盖正常、空值或零长度、上限附近、显式错误和资源中断。涉及线程、网络、数据库、GUI或FFI时，还要加入超时、取消、部分完成与关闭路径。
+
+不要把原书示例的依赖版本直接复制到新项目。先固定Rust edition与最小支持版本，再查询维护中的crate文档和迁移说明；保留原书要讲的架构边界，按当前API重写适配层。
+
+```rust
+let tx = conn.transaction()?;
+tx.execute("UPDATE accounts SET balance = balance - ?1 WHERE id = ?2", (amount, from))?;
+tx.execute("UPDATE accounts SET balance = balance + ?1 WHERE id = ?2", (amount, to))?;
+tx.commit()?;
+```
+
+## 机制三：可复现证据
+
+<Term def="原书以Diesel展示编译期查询约束和schema映射；ORM减少样板但不消除索引、执行计划、N加1查询和事务边界设计。">Diesel ORM</Term>负责把本章收束成证据。原书以Diesel展示编译期查询约束和schema映射；ORM减少样板但不消除索引、执行计划、N加1查询和事务边界设计。 一次可靠验收要保存输入、工具链、依赖锁定、命令、退出状态、关键输出和失败样本。性能结论还要记录release构建、样本数与环境噪声；并发结论则要记录任务边界、超时和关闭结果。
+
+<MrsDatabasesEvidenceLab />
+
+## 分步实验
+
+<Stepper>
+  <Step title="建立模型"><MrsDatabasesModelLab /></Step>
+  <Step title="注入边界"><MrsDatabasesBoundaryLab /></Step>
+  <Step title="保留证据"><MrsDatabasesEvidenceLab /></Step>
+</Stepper>
+
+## 验收清单
+
+1. 在隔离目录运行三段示例，先预测结果和所有权变化，再记录实际编译诊断。
+2. 为主路径增加一个正常测试和至少三个边界测试，错误断言检查类别与上下文，而不只匹配整段文本。
+3. 清理构建产物后重跑，确认没有依赖本地缓存、环境变量或未声明工具。
+4. 若章节涉及外部系统，使用本地测试服务或临时数据库，设置时间预算并验证资源最终释放。
+
+## 常见误区
+
+<Callout type="trap" title="把编译通过当成章节验收">
+编译器不能证明业务输入完整、超时合理、协议有背压或外部副作用已回滚。必须补充失败测试与可观察证据。
+</Callout>
+
+<Callout type="trap" title="把2019年的crate API当成固定标准">
+本书核心结构值得保留，但框架和工具API会变化。新代码应锁定版本、查阅维护中的官方文档，并把迁移集中在适配边界。
+</Callout>
+
+## 本章回顾
+
+本章按照官方目录逐项覆盖数据持久化、SQLite、PostgreSQL、r2d2 连接池、Diesel ORM。核心方法是先用类型表达资源与能力，再用运行期协议约束超时、顺序和外部失败，最后用测试、日志或调试记录证明结果可重复。
+
+<Exercises>
+**问题 1：如何解释数据持久化与SQLite的协作？**
+<Answer>持久化把进程内状态转成可恢复事实，需要schema、约束、事务和迁移；数据库成功写入不等于业务流程的所有外部副作用都成功。 SQLite适合嵌入式和单文件场景，事务与锁仍需明确；连接、临时文件和备份必须按进程模型验证，不能把开发便利直接外推到多实例服务。</Answer>
+
+**问题 2：PostgreSQL和r2d2 连接池的边界是什么？**
+<Answer>PostgreSQL提供并发事务、约束和丰富类型，查询参数必须绑定而非拼接；应用还要处理隔离级别、死锁重试和迁移兼容窗口。 连接池复用昂贵连接并限制并发，容量应由数据库预算反推；获取超时、失效连接检测和优雅关闭比简单clone池句柄更重要。</Answer>
+
+**问题 3：怎样验收Diesel ORM？**
+<Answer>原书以Diesel展示编译期查询约束和schema映射；ORM减少样板但不消除索引、执行计划、N加1查询和事务边界设计。 使用正常、边界、错误和资源中断输入，保存工具链、命令、退出状态和可复查输出。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="数据持久化" definition="持久化把进程内状态转成可恢复事实，需要schema、约束、事务和迁移" />
+  <GlossaryItem term="SQLite" definition="SQLite适合嵌入式和单文件场景，事务与锁仍需明确" />
+  <GlossaryItem term="PostgreSQL" definition="PostgreSQL提供并发事务、约束和丰富类型，查询参数必须绑定而非拼接" />
+  <GlossaryItem term="r2d2 连接池" definition="连接池复用昂贵连接并限制并发，容量应由数据库预算反推" />
+  <GlossaryItem term="Diesel ORM" definition="原书以Diesel展示编译期查询约束和schema映射" />
+  <GlossaryItem term="章节验收边界" definition="用输入、失败、资源、证据和迁移约束验证章节核心。" />
+</Glossary>
+
+<Attribution adaptedFrom="Mastering Rust, Second Edition · 原书第14章 Interacting with Databases in Rust" adaptedUrl="https://www.packtpub.com/en-us/product/mastering-rust-9781789346572" />

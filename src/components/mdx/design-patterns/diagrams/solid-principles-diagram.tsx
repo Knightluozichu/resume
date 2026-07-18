@@ -3,7 +3,7 @@
  *
  * 五个圆角卡片横向排列，每个卡片：大号字母（带彩色圆形徽章）+ 原则英文全名 + 一句话中文解释。
  * 五个字母 S-O-L-I-D 拼成 SOLID，每张卡片用不同强调色边框区分：
- *   S=success（单一职责，做一件事）/ O=accent（开闭，扩展）/ L=warning（里氏替换，替换）/ 
+ *   S=success（单一职责，做一件事）/ O=accent（开闭，扩展）/ L=warning（里氏替换，替换）/
  *   I=danger（接口隔离，小而专）/ D=accent（依赖倒置，依赖抽象）。
  *
  * 纯静态展示，无交互。Server Component。全部 DESIGN token 配色，无裸 hex、无阴影。

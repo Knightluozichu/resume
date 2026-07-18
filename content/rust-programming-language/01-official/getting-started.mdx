@@ -1,0 +1,245 @@
+---
+title: "Chapter 1：入门（Getting Started）"
+type: A
+section: Rust 程序设计语言 · 基础工具链
+order: 1
+description: 对齐官方第 1 章：安装和核验 Rust 工具链，区分 rustc 与 Cargo，完成 Hello World，并理解 package、crate、manifest、lockfile 与 Edition 的职责。
+demo: false
+math: false
+sourceUrl: "https://doc.rust-lang.org/book/ch01-00-getting-started.html"
+draft: false
+---
+
+import {
+  RplCargoCycleLab,
+  RplManifestLab,
+  RplToolchainLab,
+} from "@/components/mdx/rust-programming-language/diagrams/getting-started";
+
+<Objectives>
+
+- 能区分“命令存在”和“工具链可工作”两层证据，并据此安装、更新和核验稳定 Rust 工具链
+- 能解释 `.rs` 源码、`rustc`、本机可执行文件、package、crate 与 Cargo 各自承担的职责
+- 能判断 Rust 2024 Edition 项目的反馈成本，并选择 `cargo check`、`cargo build`、`cargo run` 或 release 构建
+
+</Objectives>
+
+## 从一个可重复的工具链闭环开始
+
+学习 Rust 的第一步不是记住 `println!`，而是建立一个可重复验证的闭环：**源码由谁读取，错误在哪一层被拒绝，产物写到哪里，运行的究竟是哪一个文件**。后续所有权、泛型和异步错误最终都会通过这套工具链反馈；如果分不清编译器、构建系统与运行产物，排错时就会把依赖解析失败、类型错误和程序运行错误混为一谈。
+
+<Term def="由 rustup 管理的一组 Rust 开发工具与标准库，通常包括 rustc、Cargo、rustdoc 以及当前目标平台的组件。">Rust 工具链</Term>
+
+官方推荐使用 `rustup` 安装和切换工具链。`rustup` 不是编译器本身，而是工具链管理器；`rustc` 才负责把 Rust crate 编译为目标平台产物；Cargo 则读取项目清单、解析依赖并编排 `rustc`。三者在一次普通开发中协作，但失败边界不同。
+
+<RplToolchainLab />
+
+先预测再点选三个阶段：删除二进制但保留 `main.rs` 时，源码仍在，操作系统却没有可执行产物；修改源码但不重新编译时，旧二进制也不会自动变化。这一区分能避免“文件保存了，为什么输出没变”一类误判。
+
+## 安装、更新与版本核验
+
+macOS、Linux 和 Windows 的具体安装入口不同，但验收口径相同：当前 shell 能找到 `rustup`、`rustc` 和 `cargo`，三者版本属于预期工具链，并且能完成一次最小编译。只看到安装器成功退出不够，因为 shell 的 `PATH` 可能尚未刷新，系统也可能仍指向另一套旧工具。
+
+```bash
+rustup show active-toolchain
+rustc --version
+cargo --version
+rustup update stable
+```
+
+<Term def="Rust 工具链管理器，用于安装、更新和切换 stable、beta、nightly 以及不同目标平台组件；它不替代 rustc 或 Cargo。">rustup</Term>
+
+`rustup show active-toolchain` 回答“当前目录和 shell 实际选择了哪套工具链”；`rustc --version` 与 `cargo --version` 分别证明两个命令可执行。项目根目录中的 `rust-toolchain.toml` 还可能覆盖全局默认，因此排查版本差异时要同时看目录级覆盖，而不是只看 `rustup default`。
+
+```text
+stable-aarch64-apple-darwin (overridden by rust-toolchain.toml)
+rustc 1.xx.x (...)
+cargo 1.xx.x (...)
+```
+
+若团队需要可复现环境，应明确 toolchain channel、额外组件和编译目标。Edition 与工具链版本也不是同一个概念：工具链决定可用编译器版本，Edition 决定项目采用哪组语言兼容规则；新编译器仍能编译较旧 Edition 的 crate。
+
+<Callout type="trap" title="陷阱：把 Edition 当成编译器发布版本">
+  `edition = "2024"` 不等于“必须安装名为 2024 的编译器”，也不会锁定具体 `rustc` 版本。Edition 是 crate 的语言兼容选择；工具链版本由 rustup、CI 镜像或 `rust-toolchain.toml` 管理。需要可复现时两者都应明确。
+</Callout>
+
+## 用 rustc 看清最小编译链
+
+先绕开 Cargo 编译一个文件，可以直接观察“Rust 源码 → 编译器 → 本机二进制”的最小关系。文件名不决定入口；`fn main()` 才是二进制 crate 的入口函数。宏调用以 `!` 结尾，`println!` 在编译期展开为代码，不是普通函数调用语法。
+
+<Term def="Rust 编译器驱动程序：解析 crate、完成名称解析和类型检查，并为指定目标生成库或可执行文件。">rustc</Term>
+
+```rust
+fn main() {
+    println!("Hello, world!");
+}
+```
+
+```bash
+mkdir hello-rustc
+cd hello-rustc
+printf 'fn main() { println!("Hello, world!"); }\n' > main.rs
+rustc main.rs
+./main
+```
+
+Windows 默认产物名通常是 `main.exe`；Unix 类系统是 `main`。`rustc main.rs` 会为当前主机目标生成机器码，因此二进制不是“任意系统都能运行”的通用文件。跨平台发布要安装目标组件，并准备对应 linker 或交叉编译环境。
+
+编译错误是这条链的重要输出。例如把宏名写成 `println`，编译器会在生成二进制前报告找不到函数或提示宏调用语法。要读错误中的首个根因、文件位置和帮助信息，不要只盯最后的 “aborting due to previous error”。
+
+```rust
+fn main() {
+    println("Hello"); // 错误：println! 是宏，不是 println 函数
+}
+```
+
+<Callout type="trap" title="陷阱：在真实项目里手写长串 rustc 参数">
+  `rustc` 单文件实验能解释编译边界，但依赖图、feature、构建脚本、测试目标和增量缓存会迅速让命令失控。真实 package 应让 Cargo 生成并调用正确的 `rustc` 命令；排错时再用 verbose 输出观察它。
+</Callout>
+
+## package、crate 与 Cargo 不是同义词
+
+<Term def="由 `Cargo.toml` 描述并由 Cargo 管理的发布与构建单元；一个 package 可包含至多一个 library crate 和多个 binary crate。">package</Term>
+
+<Term def="Rust 编译器一次处理的最小源码单元；crate root 决定模块树起点，产物可以是库或可执行文件。">crate</Term>
+
+`cargo new hello_cargo` 创建一个 package。默认生成 `Cargo.toml` 与 `src/main.rs`：前者是 package manifest，后者是默认 binary crate 的 crate root。若存在 `src/lib.rs`，它是同一 package 的默认 library crate root；`src/bin/*.rs` 可再声明额外二进制目标。
+
+```bash
+cargo new hello_cargo
+cd hello_cargo
+find . -maxdepth 2 -type f -print
+```
+
+```text
+./Cargo.toml
+./src/main.rs
+```
+
+<Term def="Rust 的包管理器与构建系统；它读取 Cargo.toml，解析依赖图，调用 rustc，并管理测试、文档、发布配置和构建缓存。">Cargo</Term>
+
+Cargo 解决的不是“少打一条命令”这么简单。它把项目元数据、依赖约束、目标列表、feature 和构建配置变成一张可重复执行的构建图，并通过 `target/` 缓存未失效产物。后续章节中的测试、workspace 和 crate 发布都建立在这套模型上。
+
+## 按反馈成本选择 Cargo 命令
+
+开发循环里最常见的四个命令回答不同问题：
+
+1. `cargo check`：这份项目能否通过解析、名称解析、类型检查和借用检查？它通常不生成最终本机代码，因此反馈最快。
+2. `cargo build`：能否生成开发配置二进制或库？结果通常在 `target/debug/`。
+3. `cargo run`：必要时先 build，再执行默认或指定 binary target。
+4. `cargo build --release`：使用 release profile，启用更强优化，结果通常在 `target/release/`；编译更慢但更接近发布性能。
+
+<RplCargoCycleLab />
+
+先预测不同组合：源码未变化时再次 `cargo build`，Cargo 会依据输入指纹复用仍然新鲜的依赖与目标；选择 `check` 时即使源码变化，也不会生成最终可执行文件；选择 `run` 才会把“构建成功”和“程序行为正确”连成一次操作，但它仍不能替代测试。
+
+```bash
+cargo check
+cargo build
+cargo run
+cargo build --release
+cargo clean # 删除 target 缓存；只在确有缓存诊断需要时使用
+```
+
+不要把 `cargo clean` 当作常规修复。它只会强制重建，可能暂时掩盖输入追踪或构建脚本问题，并显著拖慢后续编译。先读实际错误、用 `cargo build -vv` 查看命令与失效原因，再决定是否需要清理。
+
+## 读懂 Cargo.toml 与 Cargo.lock
+
+<Term def="package 的声明式清单，描述名称、版本、Edition、目标、依赖、feature 和 profile 等允许输入；它不记录每次解析得到的所有精确版本。">Cargo.toml</Term>
+
+默认清单至少有 `[package]` 和 `[dependencies]` 两个区域。Rust 2024 Edition 项目会写出 `edition = "2024"`；依赖项既可使用简洁版本约束，也可指定 path、git、feature 和可选依赖等来源。
+
+```toml
+[package]
+name = "hello_cargo"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rand = "0.9.2"
+```
+
+<Term def="Cargo 依赖解析结果的锁文件，记录实际选中的 package 版本、来源与校验信息，使后续构建能重用同一依赖图。">Cargo.lock</Term>
+
+`Cargo.toml` 表达允许范围，`Cargo.lock` 记录一次求解后的具体结果。二进制应用通常应提交 lockfile，以便 CI 和协作者获得同一依赖图；库 package 也会生成 lockfile 供本地构建，但下游使用库时会把它纳入下游自己的整体求解。精确规则应以当前 Cargo 文档和团队发布策略为准。
+
+<RplManifestLab />
+
+切换 Edition 不会自动重写源码或更新依赖；切换依赖约束会改变下一次解析允许的版本集合。先预测 `rand = "=0.9.2"` 和 `rand = "0.9.2"` 的更新空间，再观察 lockfile 说明：前者固定单一版本，后者按 Cargo 的兼容性规则允许解析兼容更新。
+
+## 从创建项目到验收的最小工作流
+
+完整验收要同时覆盖环境、类型、产物和行为。以下命令形成一个最小顺序；每一步失败都保留自己的证据，不要直接跳到删缓存或重装工具链。
+
+```bash
+rustup show active-toolchain
+cargo new hello_cargo
+cd hello_cargo
+cargo check
+cargo run
+cargo build --release
+```
+
+检查点包括：项目清单明确使用 Rust 2024 Edition；`cargo check` 无错误；`cargo run` 输出预期文本；release 产物位于预期目录；重新执行未修改的构建时 Cargo 能报告快速完成。这样建立的反馈链会在后续每章继续扩展为测试、文档和性能证据。
+
+## 三步建立工具链判断框架
+
+<Stepper>
+  <Step title="第一步：证明工具链选择">
+    同时读取 rustup 的 active toolchain、rustc 版本与 Cargo 版本，检查目录级覆盖。区分“安装器执行过”和“当前项目真的使用这套工具链”。
+
+    <RplToolchainLab />
+  </Step>
+  <Step title="第二步：选择最低成本反馈">
+    只需要发现类型和借用错误时先用 `cargo check`；需要二进制时 build；需要立刻观察行为时 run；发布性能验证使用 release profile。
+
+    <RplCargoCycleLab />
+  </Step>
+  <Step title="第三步：固定项目输入">
+    在 `Cargo.toml` 明确 package、Edition 与依赖约束，用 `Cargo.lock` 记录具体解析结果；CI 同时固定预期工具链，避免把 Edition、编译器和依赖版本混成一个变量。
+
+    <RplManifestLab />
+  </Step>
+</Stepper>
+
+因此，Cargo 同时承担 **Cargo 包管理器** 与 **Cargo 构建系统** 两类责任：前者解析 package/dependency，后者编排 check、build、run、test 与 artifact。
+
+## 小结
+
+- rustup 管理工具链，rustc 编译单个 crate，Cargo 读取项目与依赖图并编排 rustc；三者职责和错误边界不同
+- Rust 源文件不是可执行文件，`rustc` 产物针对目标平台；最小 Hello World 能验证源码、编译和运行三层
+- package 是 Cargo 管理的发布与构建单元，crate 是 rustc 一次处理的源码单元；一个 package 可含库和多个二进制 crate
+- `cargo check`、`build`、`run`、`build --release` 的反馈成本与产物不同，应按当前问题选择而不是一律完整重建
+- `Cargo.toml` 描述允许的项目输入，`Cargo.lock` 记录具体依赖解析；Edition、工具链版本和依赖版本需要分别管理
+
+<Exercises>
+  1. **问题 1：定位工具链差异。** 全局默认是 stable，但进入仓库后 `rustc --version` 与同事不同。你应先检查什么，为什么只重装 rustup 不足以定位？
+
+  <Answer question="目录级工具链为什么可能覆盖全局默认？">先运行 `rustup show active-toolchain` 并检查当前目录及父目录的 `rust-toolchain.toml` 或 `rust-toolchain`。目录覆盖可以让同一台机器在不同项目使用不同 channel；CI 镜像也可能固定版本。重装 rustup 不会消除仓库声明，更不能说明 shell 最终选择了哪套工具链。</Answer>
+
+  2. **问题 2：选择反馈命令。** 你只修改了泛型约束，当前目标是尽快发现类型和借用错误，不需要运行程序。应优先执行哪个命令？何时再升级到 build 或 run？
+
+  <Answer question="为什么 cargo check 通常是最低成本的正确答案？">优先 `cargo check`，因为它完成 Rust 语义检查但通常跳过最终本机代码生成。类型检查通过后，需要确认链接和二进制产物时运行 `cargo build`；还要观察运行行为时使用 `cargo run`。发布性能或优化差异则需 release 构建和对应测试。</Answer>
+
+  3. **问题 3：区分清单与锁文件。** `Cargo.toml` 写 `rand = "0.9.2"`，仓库同时提交了 `Cargo.lock`。两者分别约束什么？为什么不能只保留其中一个来表达完整构建输入？
+
+  <Answer question="允许范围和具体解析结果为何要分开？">`Cargo.toml` 声明 package 允许 Cargo 选择的依赖范围和 feature；`Cargo.lock` 记录本次求解实际选中的版本、来源与校验信息。只有 lockfile 没有声明就无法表达项目意图和重新求解规则；只有 manifest 则不同时间可能得到不同的兼容版本，应用构建的可复现性更弱。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Rust 工具链">rustc、Cargo、标准库和相关组件组成的一套可选择开发环境。</GlossaryItem>
+  <GlossaryItem term="rustup">安装、更新和切换 Rust 工具链及目标组件的管理器。</GlossaryItem>
+  <GlossaryItem term="rustc">把一个 Rust crate 检查并编译为目标平台产物的编译器驱动。</GlossaryItem>
+  <GlossaryItem term="Cargo">读取清单、解析依赖并编排构建、测试、文档与发布的工具。</GlossaryItem>
+  <GlossaryItem term="package">由一个 Cargo.toml 描述的构建与发布单元，可包含多个 crate。</GlossaryItem>
+  <GlossaryItem term="crate">rustc 一次编译的最小源码单元，具有一个 crate root。</GlossaryItem>
+  <GlossaryItem term="Cargo.toml">声明 package 元数据、Edition、依赖与构建配置的清单。</GlossaryItem>
+  <GlossaryItem term="Cargo.lock">记录 Cargo 具体依赖解析结果的锁文件。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Rust Programming Language, Chapter 1 Getting Started"
+  adaptedUrl="https://doc.rust-lang.org/book/ch01-00-getting-started.html"
+/>

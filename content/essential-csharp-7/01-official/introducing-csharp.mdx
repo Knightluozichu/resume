@@ -1,0 +1,217 @@
+---
+title: "第1章：Introducing C#"
+type: C
+section: "Essential C# 7.0 · Language Foundations"
+order: 1
+description: "从Hello World、语法和变量到Console I/O、CIL managed execution与多种.NET实现。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-c-sharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7CompilationPipelineLab, Ec7RuntimeFrameworkLab, Ec7SyntaxVariableLab } from "@/components/mdx/essential-csharp-7/diagrams/introducing-csharp";
+
+<Objectives>
+
+- 能实现并编译Hello World，区分source、project、assembly、CIL、JIT和process runtime evidence
+- 能分析C# statements、keywords、identifiers、type definition、Main、variables与Console input/output syntax
+- 能比较C# language version、target framework、.NET Framework/.NET Core/.NET Standard与runtime availability
+
+</Objectives>
+
+## 为什么第一个程序要追到managed execution
+
+`Console.WriteLine`能输出并不代表理解C#程序。source必须属于project，compiler生成assembly中的CIL与metadata，CLR加载并验证types，JIT把将执行的方法编译成当前CPU的machine code，最后process调用entry point。任何一层失败都可能表现为“程序跑不起来”，但修法完全不同。
+
+先预测：syntax error时是否已经生成assembly；target runtime缺失时Main是否执行；`.NET Standard`本身能否像runtime一样启动program。把预测写成pipeline，再运行命令核对artifact和exit code。
+
+<Term def="由CLR加载、验证并管理memory、types、exceptions与execution的代码运行模型。">managed execution</Term>
+
+## Hello, World：source、project与command
+
+书中从完整entry point理解C# 7.0，不把后来的top-level statements混入版本边界。一个console project含`.csproj`和source files；build读取target framework与compile items，run先build再启动output。
+
+```csharp
+using System;
+
+public static class Program
+{
+    public static int Main(string[] args)
+    {
+        Console.WriteLine("Hello. My name is Inigo Montoya.");
+        return 0;
+    }
+}
+```
+
+```bash
+dotnet new console --name HelloWorld
+cd HelloWorld
+dotnet build
+dotnet run
+echo $?
+```
+
+build成功证据包括output assembly、0 exit code与明确target；run成功还需预期stdout。若只在IDE点击Run，不知道实际project、configuration和runtime，CI failure就难以复现。
+
+<Term def="描述source files、target framework、references与build properties的编译输入集合。">project contract</Term>
+
+## Compilation and Execution Pipeline
+
+C# compiler先做lexing/parsing、name binding与type checking，再生成CIL和metadata。CIL是stack-based intermediate instructions，不是CPU直接执行的native binary；metadata描述types、members和references。CLR loader解析assembly，JIT按需把methods编译为machine code。
+
+<Stepper>
+  <Step title="逐阶段检查source到process">
+    <Ec7CompilationPipelineLab />
+  </Step>
+  <Step title="保存每层最小artifact">
+    source/project、compiler diagnostics、assembly/metadata、runtime identity、stdout/exit code分别留证。
+  </Step>
+  <Step title="从最早失败层停止">
+    compile error不查JIT；runtime missing不改source；behavior错误才进入Main与业务逻辑。
+  </Step>
+</Stepper>
+
+```text
+Program.cs + .csproj
+  -> C# compiler
+  -> HelloWorld.dll: CIL + metadata + manifest
+  -> CLR loader/type verification
+  -> JIT native code
+  -> process stdout + exit code
+```
+
+<Term def="compiler生成、由CLI定义并在runtime中进一步编译执行的公共中间指令。">Common Intermediate Language</Term>
+
+## C# Syntax Fundamentals
+
+statement通常以semicolon结束，block用braces形成scope。keywords有语言定义含义，不能直接作identifier；identifier区分大小写并受命名规则约束。whitespace多数用于分隔token和提高可读性，不改变block结构。
+
+class是type definition，method是class member。`Main`是传统console entry point；其return type和parameters必须符合允许形式。C#在compile time检查name与type，因此`string count = 42;`不会等到runtime才报错。
+
+<Term def="type、name、parameter list、return type与body共同形成的可编译method入口约定。">entry-point signature</Term>
+
+<Stepper>
+  <Step title="切换statement、variable、Main与invalid identifier">
+    <Ec7SyntaxVariableLab />
+  </Step>
+  <Step title="区分compile diagnostic与runtime result">
+    invalid token/name/type在process启动前失败；Console input为空或format错误才是runtime boundary。
+  </Step>
+  <Step title="用最小修改验证规则">
+    每次只改identifier、type或delimiter之一，保存diagnostic code和source location。
+  </Step>
+</Stepper>
+
+```csharp
+public sealed class Greeter
+{
+    public static string CreateMessage(string name)
+    {
+        return $"Hello, {name}!";
+    }
+}
+```
+
+compiler diagnostics是结构证据，不要只看“红线”。记录error code、file、line和message；修复第一个root error后再build，后续可能是parser cascade。
+
+## Working with Variables
+
+variable declaration把static type与identifier引入scope；assignment把兼容value存入variable。未赋值local不能读取，compiler执行definite-assignment analysis。field有default value，但依赖隐式default会降低intent清晰度。
+
+```csharp
+string name;
+name = "Ada";
+int visitCount = 1;
+Console.WriteLine($"{name}: {visitCount}");
+```
+
+变量不是无约束container。第2–3章会展开numeric/string/value/reference categories；本章先建立“declaration决定可接受operations”的static typing直觉。rename还必须考虑scope和case-sensitive references。
+
+## Console Input and Output
+
+`Console.Write`不自动newline，`Console.WriteLine`追加newline，`Console.ReadLine`读取一行。input是external boundary：可能为空、EOF/null或不满足目标format；不能直接假设用户输入合法integer。
+
+```csharp
+Console.Write("Your name: ");
+string? rawName = Console.ReadLine();
+string name = string.IsNullOrWhiteSpace(rawName) ? "anonymous" : rawName.Trim();
+Console.WriteLine($"Hello, {name}!");
+```
+
+第6版时代是否启用nullable reference analysis取决于compiler/project设置；这里的`?`用于明确现代重跑时的null boundary，复刻C# 7.0代码时也应以显式null check表达同一runtime事实。comments解释why与constraints，不重复代码表面动作。
+
+<Term def="程序与terminal之间通过stdin、stdout和stderr交换text与exit status的I/O边界。">console boundary</Term>
+
+## Debugging the Smallest Program
+
+compile failure先读diagnostic；launch failure确认output和runtime；wrong output在Main设置breakpoint并检查variables；input hang确认程序在等待stdin。debugger能暂停、step和inspect，但不能替代可重复command和asserted output。
+
+最小diagnostic表：source path是否属于project；configuration/target是什么；build产物在哪；运行的assembly是否最新；runtime版本是什么；stdin是什么；stdout/stderr和exit code是什么。证据齐全后才改code。
+
+## Managed Execution and CLI
+
+Common Language Infrastructure定义CIL、metadata、Common Type System、assemblies与runtime services。C#只是产生CLI-compatible artifacts的语言之一。managed不等于“没有native code”，而是execution由runtime协调，JIT/AOT仍会产生machine code。
+
+assembly manifest记录identity、version、files和references；metadata让reflection、type safety与cross-language tooling成为可能。garbage collection管理managed objects的memory lifetime，但file handle等external resource仍需后续章节的deterministic cleanup。
+
+## Multiple .NET Frameworks
+
+C# language version、API target和runtime implementation不是同一个number。C# 7.0可面向.NET Framework 4.7或当时的.NET Core；.NET Standard描述library API surface，不是独立runtime。能compile只证明target reference assemblies可用，能run还要求compatible runtime implementation。
+
+<Stepper>
+  <Step title="切换Framework、Core、Standard与missing runtime">
+    <Ec7RuntimeFrameworkLab />
+  </Step>
+  <Step title="分别记录language、target与runtime">
+    compiler language option决定syntax；TargetFramework决定API；host runtime决定实际execution。
+  </Step>
+  <Step title="验证cross-platform claim的边界">
+    CIL可移植不代表所有API可移植；OS-specific library或P/Invoke仍限制platform。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="生成了DLL就说明程序已经成功运行">
+DLL只证明compile artifact存在。还需compatible runtime、entry point、stdout/exit code和behavior evidence；stale output甚至可能不是当前source。
+</Callout>
+
+<Callout type="trap" title="C# 7.0、.NET 7和.NET Standard是同一版本体系">
+language、runtime/API product与portable API contract分别版本化。.NET 7远晚于C# 7.0；判断兼容性要同时记录compiler language、target framework与runtime。
+</Callout>
+
+## 本章回顾：从一行输出建立完整运行模型
+
+1. project contract决定source、target与references。
+2. compiler将C#生成assembly中的CIL、metadata和manifest。
+3. CLR加载managed code，JIT为当前platform生成native method code。
+4. syntax、variables和Console I/O分别有compile与runtime failure boundary。
+5. C# language、target framework、.NET implementation与runtime availability必须分开记录。
+
+<Exercises>
+
+**问题 1：`dotnet build`成功但`dotnet run`失败，应按什么顺序检查？**
+
+<Answer>先确认run使用同一project/configuration和最新assembly，再检查target runtime是否安装、entry-point signature与host arguments；保存stderr/exit code。build成功只证明source可编译并产出artifact，不证明runtime可加载或Main behavior正确。</Answer>
+
+**问题 2：syntax error、runtime missing与wrong output分别属于pipeline哪一层？**
+
+<Answer>syntax error在compiler前端，通常不生成新assembly；runtime missing发生在host/CLR加载阶段，Main尚未执行；wrong output说明process已进入程序行为层，应检查stdin、variables和control flow。三者不能用同一“重装SDK”动作处理。</Answer>
+
+**问题 3：为什么.NET Standard不是另一个可直接启动的runtime？**
+
+<Answer>.NET Standard定义一组library API contract，供兼容的.NET implementations实现；它不提供process host或CLR。library可target Standard提高可消费范围，但最终application仍需.NET Framework、.NET Core等compatible runtime，并且OS-specific APIs会进一步限制可移植性。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="managed execution" definition="由CLR加载、验证并管理memory、types、exceptions与execution的运行模型。" />
+  <GlossaryItem term="project contract" definition="描述source、target framework、references与build properties的输入集合。" />
+  <GlossaryItem term="Common Intermediate Language" definition="compiler生成、由CLI定义并由runtime进一步编译的中间指令。" />
+  <GlossaryItem term="entry-point signature" definition="type、name、parameters、return type与body组成的Main入口约定。" />
+  <GlossaryItem term="console boundary" definition="通过stdin、stdout、stderr和exit status交换text的I/O边界。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 1: Introducing C#" adaptedUrl="https://www.informit.com/store/essential-c-sharp-7.0-9781509303618" />

@@ -1,0 +1,175 @@
+---
+title: "第7章 极坐标系"
+type: C
+section: "3D数学基础 · 方位与几何"
+order: 7
+description: "在二维极坐标、柱坐标与球坐标之间转换，并识别角度别名和奇点。"
+demo: true
+math: true
+sourceUrl: "https://gamemath.com/book/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { Gm3dPolarCoordinateSystemsConceptLab, Gm3dPolarCoordinateSystemsTransformLab, Gm3dPolarCoordinateSystemsEvidenceLab } from "@/components/mdx/game-math-3d/diagrams/gm3d-polar-coordinate-systems";
+
+<Objectives>
+- 能解释二维极坐标与坐标别名在三维程序中的职责和约定
+- 能推导柱坐标到球坐标的关键关系并检查前提
+- 能实现坐标转换的最小实验，用反例和残差完成验收
+</Objectives>
+
+## 先做预测
+
+先预测：改变坐标手性、组合顺序、时间步或退化输入时，数值和画面最先在哪里分叉。在二维极坐标、柱坐标与球坐标之间转换，并识别角度别名和奇点。 本页用<Term def="用半径和方位角描述平面点，适合绕中心的运动。">二维极坐标</Term>、<Term def="不同角度甚至负半径可表示同一点，必须规定规范范围。">坐标别名</Term>、<Term def="在二维极坐标上增加高度，适合圆柱对称场景。">柱坐标</Term>、<Term def="用半径、方位角和俯仰角描述三维方向与位置。">球坐标</Term>和<Term def="借助正弦、余弦和atan2在笛卡尔与极坐标之间转换。">坐标转换</Term>把原书直觉变成可运行证据。
+
+<Gm3dPolarCoordinateSystemsConceptLab />
+
+## 原书章节定位
+
+本页一一对应第二版“第7章 极坐标系”。作者官网给出完整在线目录和正文；站内不重新编排原书章节，而是在同一章内补充公式推导、交互图、工程实现、失败模式与复现实验。
+
+### 原书小节覆盖
+
+1. 2D Polar Space
+2. Aliasing
+3. Cartesian-Polar Conversion
+4. Why Use Polar Coordinates
+5. Cylindrical Coordinates
+6. Spherical Coordinates
+7. Spherical Conventions
+8. Spherical-Cartesian Conversion
+9. Vectors in Polar Coordinates
+
+### 五个核心抓手
+
+1. **二维极坐标**：用半径和方位角描述平面点，适合绕中心的运动。
+2. **坐标别名**：不同角度甚至负半径可表示同一点，必须规定规范范围。
+3. **柱坐标**：在二维极坐标上增加高度，适合圆柱对称场景。
+4. **球坐标**：用半径、方位角和俯仰角描述三维方向与位置。
+5. **坐标转换**：借助正弦、余弦和atan2在笛卡尔与极坐标之间转换。
+
+## 从空间与约定开始
+
+任何三维公式都先写对象类型、来源空间、目标空间、单位和约定。用半径和方位角描述平面点，适合绕中心的运动。 不同角度甚至负半径可表示同一点，必须规定规范范围。 若只保存三个或四个浮点数而丢失语义，错误通常会延迟到渲染、碰撞或插值阶段才显现。
+
+$$
+\mathcal C=(\text{object type},\text{source space},\text{target space},\text{units},\text{convention})
+$$
+
+工程接口应让非法组合尽早失败：点与方向不能随意相加，局部法线不能直接与世界光向量点积，度数不能静默传入弧度API。先画出原点和基向量，再检查结果，比只盯最终像素更可解释。
+
+## 可核查推导
+
+$$
+x=r\cos\theta,\quad y=r\sin\theta,\quad r=\sqrt{x^2+y^2},\quad \theta=\operatorname{atan2}(y,x)
+$$
+
+点与原点构成直角三角形，半径是斜边，x和y分别是余弦与正弦投影。反向转换必须用atan2保留象限，而不是只用y除以x的反正切。 推导时每一步标明使用了定义、正交性、单位化、线性、连续性还是近似；若条件被非均匀缩放、退化图元或有限时间步破坏，就必须切换算法或返回显式状态。
+
+```python
+from math import atan2, hypot
+
+def to_polar(x,y):
+    return hypot(x,y), atan2(y,x)
+
+r,theta=to_polar(-1,0)
+assert round(r,6)==1 and theta>3
+```
+
+手算、代码和交互图应在一个非对称样例上得到一致结果。单位矩阵、零角度和原点只能做冒烟测试，因为它们经常让转置、符号和顺序错误互相抵消。
+
+## 几何机制与数据流
+
+**二维极坐标**：用半径和方位角描述平面点，适合绕中心的运动。
+
+**坐标别名**：不同角度甚至负半径可表示同一点，必须规定规范范围。
+
+**柱坐标**：在二维极坐标上增加高度，适合圆柱对称场景。
+
+数据流必须能逐段记录：输入对象先按约定进入数学表示，经变换或求解得到中间状态，再由渲染、物理或工具消费。每个中间状态保留空间标签和残差，才能区分源数据错误、公式错误与下游显示错误。
+
+<Gm3dPolarCoordinateSystemsTransformLab />
+
+## 数值误差与边界
+
+**球坐标**：用半径、方位角和俯仰角描述三维方向与位置。
+
+**坐标转换**：借助正弦、余弦和atan2在笛卡尔与极坐标之间转换。
+
+边界集至少覆盖零长度、平行、共面、极小尺度、负尺度、角度跨界、时间步变化和浮点接近阈值。相对误差与绝对误差要按量纲选用，不能让一个全局epsilon同时承担位置、角度和点积判断。
+
+$$
+e_{abs}=\|\hat{\mathbf y}-\mathbf y\|,\qquad e_{rel}=\frac{e_{abs}}{\max(\|\mathbf y\|,s_{min})}
+$$
+
+```python
+experiment={"normal":"non-symmetric input","boundary":"degenerate or near threshold","counterexample":"用atan(y/x)计算角度，丢失象限并在x为零时除零。","replay":"fixed inputs and conventions"}
+assert set(experiment)=={"normal","boundary","counterexample","replay"}
+```
+
+## 工程案例
+
+环形UI、炮塔瞄准和球形相机适合在极坐标中编辑，但输出给渲染器前要固定角度范围、零半径行为和俯仰极点策略。 报告同时保存输入、空间约定、参数、关键中间值、残差与调试图层。若重放后结论改变，先比较约定和数据版本，再比较算法实现。
+
+<Gm3dPolarCoordinateSystemsEvidenceLab />
+
+```python
+evidence=[("二维极坐标","definition"),("柱坐标","derivation"),("坐标转换","replay")]
+assert len({name for name,_ in evidence})==3
+```
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定约定"><Gm3dPolarCoordinateSystemsConceptLab /></Step>
+  <Step title="改变参数"><Gm3dPolarCoordinateSystemsTransformLab /></Step>
+  <Step title="保存证据"><Gm3dPolarCoordinateSystemsEvidenceLab /></Step>
+</Stepper>
+
+1. 选一个非对称、可手算的正常样例，记录所有空间、单位和正方向。
+2. 一次只改变一个参数，比较公式、代码与交互图的中间状态。
+3. 加入退化或近阈值输入，确认返回状态与容差策略一致。
+4. 固定输入与时间步重放，保存残差、失败原因和未覆盖范围。
+
+## 验收证书
+
+$$
+\operatorname{accept}=\text{conventions fixed}\land\text{invariants hold}\land\text{error within budget}\land\text{replay succeeds}
+$$
+
+验收证书拒绝“看起来差不多”。它必须回答用了哪套手性和向量约定、哪个不变量被检查、误差预算是多少、退化输入如何返回，以及另一台机器怎样从输入重建结果。
+
+## 常见误区
+
+<Callout type="trap" title="约定或边界被隐藏">用atan(y/x)计算角度，丢失象限并在x为零时除零。 修复时先让空间、单位、参数范围与退化状态显式化。</Callout>
+
+<Callout type="trap" title="只验收最终画面">跨越负pi与正pi边界时直接线性插值角度，产生一整圈绕行。 应同时检查中间数值、不变量、调试图和可重放反例。</Callout>
+
+## 本章回顾
+
+本章覆盖二维极坐标、坐标别名、柱坐标、球坐标、坐标转换。真正掌握的标准是：能从定义推到公式，能把公式落到代码，能通过可交互图解释参数变化，并能在反例下给出稳定且可复现的失败结果。
+
+<Exercises>
+**问题1：二维极坐标与坐标别名怎样协作？**
+<Answer>用半径和方位角描述平面点，适合绕中心的运动。 不同角度甚至负半径可表示同一点，必须规定规范范围。 回答时必须补充对象、空间和约定。</Answer>
+
+**问题2：如何推导并检查柱坐标？**
+<Answer>点与原点构成直角三角形，半径是斜边，x和y分别是余弦与正弦投影。反向转换必须用atan2保留象限，而不是只用y除以x的反正切。 再用一个非对称小样例对照手算与代码。</Answer>
+
+**问题3：怎样验收坐标转换？**
+<Answer>借助正弦、余弦和atan2在笛卡尔与极坐标之间转换。 使用正常、边界和反例输入，保存残差与重放证据。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="二维极坐标" definition="用半径和方位角描述平面点，适合绕中心的运动。" />
+  <GlossaryItem term="坐标别名" definition="不同角度甚至负半径可表示同一点，必须规定规范范围。" />
+  <GlossaryItem term="柱坐标" definition="在二维极坐标上增加高度，适合圆柱对称场景。" />
+  <GlossaryItem term="球坐标" definition="用半径、方位角和俯仰角描述三维方向与位置。" />
+  <GlossaryItem term="坐标转换" definition="借助正弦、余弦和atan2在笛卡尔与极坐标之间转换。" />
+  <GlossaryItem term="可重放证据" definition="绑定输入、约定、参数、中间状态、残差和失败原因的验收记录。" />
+</Glossary>
+
+<Attribution adaptedFrom="Fletcher Dunn and Ian Parberry · 3D Math Primer for Graphics and Game Development, 2nd Edition · 第7章 极坐标系" adaptedUrl="https://gamemath.com/book/" />

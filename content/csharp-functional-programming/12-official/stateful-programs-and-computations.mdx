@@ -1,0 +1,173 @@
+---
+title: "Chapter 12. Stateful programs and stateful computations"
+type: C
+section: "Functional C# 1e · Advanced techniques"
+order: 12
+description: "覆盖explicit state transition、deterministic random generator与State computation，把hidden mutation重写为可组合、可复现的state threading。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-12"
+draft: false
+---
+
+import { CfpExplicitStateLab, CfpRandomStateLab, CfpStateComputationLab } from "@/components/mdx/csharp-functional-programming/diagrams/stateful-programs-and-computations";
+
+<Objectives>
+
+- 能分析hidden mutable state暴露的alias、ordering和concurrency问题，写出explicit transition signature
+- 能实现seeded random generator与组合器，复现同seed同sequence并保留失败样本
+- 能设计State computation的Map、Bind、Get、Put与Run，判断何时应改用普通fold或外部transaction
+
+</Objectives>
+
+## 为什么Stateful不等于必须依赖Mutable Object
+
+业务程序总会有state：账户余额、解析位置、随机数种子、购物车或workflow阶段。函数式方法不是否认state，而是让每次transition的输入、输出和ownership可见。隐藏field让signature看似`Command -> Result`，真实行为却依赖之前调用、thread interleaving和global configuration；显式形式`(State, Command) -> (State, Result)`可独立复现每一步。
+
+先预测：readonly field会让整个object immutable吗；同seed的PRNG两次一定生成同sequence吗；Random作为global singleton便于测试吗；State monad会自动保证database transaction吗；把任何loop改成Bind都会更清楚吗。答案都是否。
+
+<Term def="把previous state作为显式输入并返回new state，使transition不依赖隐藏调用历史的函数契约。">explicit state transition</Term>
+
+## Programs that manage state
+
+先盘点state ownership。Local state只在stack frame内，可用普通loop/builder；aggregate state由单一domain transition管理；shared state需要serialization/version；external state由database/message protocol管理。不要把所有state都包装成同一种抽象。目标是把decision core保持deterministic，再由shell负责load、compare-and-swap和publish。
+
+```csharp
+Either<Error, AccountState> Apply(
+    AccountState state,
+    Withdraw command) =>
+    command.Amount <= 0
+        ? Left(Error.InvalidAmount)
+        : state.Balance < command.Amount
+            ? Left(Error.InsufficientFunds)
+            : Right(state with
+            {
+                Balance = state.Balance - command.Amount,
+                Version = state.Version + 1
+            });
+```
+
+Pure transition使table test可列`old state + command -> new state/error`，但并不自动解决并发。Shell仍要以expected version原子replace，失败后reload并重新decide。若state包含mutable list、clock或service reference，record copy仍只是shallow；需要immutable members、defensive copies和effect parameters，才能保证old snapshot不被后续路径修改。
+
+<Term def="唯一负责某组invariants与version演进，并控制state publish方式的owner边界。">state ownership boundary</Term>
+
+<Stepper>
+  <Step title="切换hidden、explicit、command与shell"><CfpExplicitStateLab /></Step>
+  <Step title="画出ownership与version">标local、aggregate、shared和external state，说明谁能写、何时publish、冲突如何返回。</Step>
+  <Step title="用transition matrix验收">覆盖initial、valid、invalid、duplicate、stale version与two-writer race，保留old snapshot验证不变。</Step>
+</Stepper>
+
+<Callout type="trap" title="Pure Function已经解决Lost Update">
+两个writers可从同一snapshot独立得到两个合法new states，若store无expected-version contract仍会覆盖。Pure decision提高可测性，并发正确性还需atomic publication或single owner。
+</Callout>
+
+## State machines and invariant evidence
+
+复杂workflow应把phase建成discriminated states或受控constructors，使illegal transitions无法随意构造。Transition table记录from、command/event、guard、to与output；property tests验证余额不负、sequence单调、terminal state不再接受command等invariants。对于长链路，保存event/command trace和每步state digest，失败时能重放，不只看到最终assert。
+
+Observability也应使用state版本和transition名称，而非dump完整对象。Metrics记录accepted/rejected/conflict；structured log记录entity id、from/to version、command id和reason code，敏感字段redact。这样运维可以区分业务拒绝、stale writer和code invariant fault，不会把所有失败归为“更新失败”。
+
+## A language for generating random data
+
+Pseudo-random generator本质是deterministic state machine：`Seed -> (Value, NextSeed)`。把RNG state显式传递，就能构造`ChooseInt`、`OneOf`、`ListOf`、`Frequency`等小语言；组合器消费前一个next seed，不共享global Random。Production可从secure entropy取得initial seed，但测试必须记录seed，失败后用同seed重放。
+
+```csharp
+public readonly record struct Gen<A>(
+    Func<Rng, (A Value, Rng Next)> Run);
+
+Gen<(A, B)> Pair<A, B>(Gen<A> first, Gen<B> second) =>
+    new(rng =>
+    {
+        var (a, r1) = first.Run(rng);
+        var (b, r2) = second.Run(r1);
+        return ((a, b), r2);
+    });
+```
+
+Generator distribution是contract。`next % n`可能有modulo bias；weighted choices总权重、range inclusivity和empty candidate都要定义。Property-based testing还需要shrinker把失败输入缩小，同时保留seed与generation path。若test只打印最后value而不打印seed，随机测试会变成不可复现噪声。
+
+<Term def="以显式RNG state生成value和next state，使sequence由seed完全决定的纯计算。">seeded generator</Term>
+
+<Stepper>
+  <Step title="切换seed、next、compose与shrink"><CfpRandomStateLab /></Step>
+  <Step title="建立distribution contract">写range边界、权重、empty policy、duplicate候选和seed serialization format。</Step>
+  <Step title="验证复现与统计证据">同seed重复运行完全一致；不同seed覆盖边界；失败报告包含seed、path和最小反例。</Step>
+</Stepper>
+
+<Callout type="trap" title="测试随机就是每次使用Current Time Seed">
+Time seed增加表面变化，却让CI失败难重现。Default suite应使用固定seed set；探索运行可随机选seed，但必须输出并进入failure artifact，随后加入regression corpus。
+</Callout>
+
+## A general pattern for stateful computations
+
+当多个步骤都具有`S -> (A, S)`形状时，手工传r1、r2会产生样板。State computation把它包装为值：Map只改A并传递S；Bind运行first，再用A选择second，并把first产生的state交给second；Get读取S，Put替换S，Modify应用transition。Run只在program边界提供initial state并观察final pair。
+
+```csharp
+State<Cart, Receipt> checkout =
+    from cart in State.Get<Cart>()
+    from priced in Price(cart)
+    from _ in State.Put(cart.MarkCheckedOut())
+    select new Receipt(cart.Id, priced.Total);
+
+var (receipt, finalCart) = checkout.Run(initialCart);
+```
+
+Composition order是语义：交换两个Bind可能改变state和result，不能像independent applicative validation随意并行。State laws要求Pure不改state、Map保持identity、Bind满足identity/associativity的observable equivalence。测试要比较result与final state，并用recording state捕捉Get/Put sequence；只比较result会漏掉duplicate transition。
+
+<Term def="封装S到value和next S的计算，并以Map/Bind组合result dependency与state threading的抽象。">State computation</Term>
+
+<Stepper>
+  <Step title="切换Map、Bind、Get/Put与Run"><CfpStateComputationLab /></Step>
+  <Step title="手写一次state threading">先展开每步`S -> (A,S)`，再写query syntax，逐项对应intermediate value和state version。</Step>
+  <Step title="验证laws与ordering">生成initial states/functions，比较left/right identity、associativity、final state及transition trace。</Step>
+</Stepper>
+
+## Choosing between State, fold, and an effectful store
+
+State abstraction适合parser position、generator seed、simulation和pure workflow，即整个program可在memory里一次Run。若只是把collection归约成accumulator，普通`Aggregate`更直接；若state需要跨request持久化、并发访问或外部transaction，State value不能替代repository/version protocol。可以在transaction内运行pure State program，但commit、retry和authorization仍由shell负责。
+
+还要警惕超大computation graph和难读的nested generic types。Domain wrapper、named operations与局部query expression能保留意图；基础设施层再解释State。团队验收标准应包括stack behavior、allocation、traceability和debug step，不因抽象满足law就忽略运维成本。
+
+## Production gate: replay every transition
+
+发布前为关键workflow生成golden traces：initial state、ordered commands、每步outcome/version、final digest。新版本对旧trace运行，预期semantic migration必须显式批准。并发integration test在store层注入conflict，证明失败者reload/redecide而非盲写；generator tests保存seed corpus，并检测distribution drift。
+
+若state evolution需要schema migration，先读旧version到canonical state，再运行new transitions；不要让每个business function理解所有legacy shapes。Metrics对transition reason和conflict rate聚合，日志只保留可定位标识。这样pure core、state storage和migration各有清楚owner。
+
+## 本章回顾：把History依赖写进Type和Test
+
+1. Stateful program可由explicit previous state驱动，不必依赖hidden mutable field。
+2. Pure transition与atomic publication解决不同问题，二者缺一都会留下错误。
+3. Random generator是seed state transition；可复现性依赖记录seed和generation path。
+4. State Map/Bind消除手工threading，并保留严格的transition order。
+5. State abstraction不能替代database transaction、versioning、migration和observability。
+
+<Exercises>
+
+**问题 1：怎样把一个依赖mutable field的购物车Service改成pure core？**
+
+<Answer>先定义immutable CartState和`Apply(state, command)`，返回new state或typed rejection；repository shell负责load、authorization、expected-version replace。测试table覆盖每个phase和old snapshot不变，再用two-writer integration test验证冲突重算。</Answer>
+
+**问题 2：Generator失败报告至少包含什么？**
+
+<Answer>包含generator/version、initial seed、generation path、原始input、shrunk minimal input和property name。固定seed可直接重放；distribution test另记录sample count/range，避免只凭少量样本判断均匀。</Answer>
+
+**问题 3：什么时候State computation比Aggregate更差？**
+
+<Answer>若所有步骤只是同一accumulator的线性归约且不产生供后续选择的intermediate values，Aggregate更短、更熟悉。若state需外部并发持久化，State也不能替代store protocol；仅在多步pure state threading确实降低复杂度时使用。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="explicit state transition" definition="Previous state显式进入并产生new state的函数。" />
+  <GlossaryItem term="state ownership boundary" definition="维护一组invariants和publish规则的唯一owner。" />
+  <GlossaryItem term="seeded generator" definition="由seed决定value与next RNG state的纯生成器。" />
+  <GlossaryItem term="State computation" definition="封装state threading并可Map/Bind的计算。" />
+  <GlossaryItem term="transition trace" definition="记录每步state version、input和outcome的可重放证据。" />
+</Glossary>
+
+<Term def="按顺序保存每次input、before/after version与outcome，使失败和版本迁移可重放。">transition trace</Term>
+
+<Attribution adaptedFrom="Functional Programming in C#, First Edition, Chapter 12: Stateful programs and stateful computations" adaptedUrl="https://livebook.manning.com/book/functional-programming-in-c-sharp/chapter-12" />

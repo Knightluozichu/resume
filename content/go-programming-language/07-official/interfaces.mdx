@@ -1,0 +1,297 @@
+---
+title: "第7章：Interfaces"
+type: C
+section: "Go 程序设计语言 · 行为契约与动态分派"
+order: 7
+description: "对齐原书第 7 章：contracts、satisfaction、interface values、flag/sort/http/error、assertions、type switches、expression 与 XML examples。"
+demo: true
+math: false
+sourceUrl: "https://www.gopl.io/"
+draft: false
+---
+
+import {
+  GoplBehaviorContractLab,
+  GoplDynamicDispatchLab,
+  GoplInterfaceValueLab,
+} from "@/components/mdx/go-programming-language/diagrams/interfaces";
+
+<Objectives>
+
+- 能解释 interface type/contract 与 implicit satisfaction，按 concrete method set 判断 assignment、dynamic dispatch 和 typed nil behavior
+- 能实现 flag.Value、sort.Interface、http.Handler 与 error adapters，使用 type assertion 查询 value/type/optional behavior
+- 能设计 expression evaluator 和 token-based XML decoder，比较 interface dispatch、type switch、error classification 与最小接口原则
+
+</Objectives>
+
+## 为什么 Interfaces 从 consumer 的行为需求出发
+
+interface 不描述 representation，只列出 consumer 需要的 methods。concrete type 无需声明 implements；只要 method set 满足 contract 即可赋值。这样 package 可在不知道未来 implementations 的情况下依赖稳定 behavior，也要求开发者准确理解 dynamic type/value 与 nil。
+
+<Term def="由一组 method signatures 定义的行为集合；consumer 可接收任何满足这些 methods 的 concrete type，而不依赖其 representation 或声明关系。">interface contract</Term>
+
+先预测：`var w io.Writer = (*bytes.Buffer)(nil)` 是否等于 nil，Point 的 addressable call sugar 是否参与 interface satisfaction，type assertion 失败时会 panic 还是返回 false，以及 type switch 的 default 如何处理第三方 implementation。
+
+## 7.1 Interfaces as Contracts：实现与消费解耦
+
+`io.Writer` 只要求 `Write(p []byte) (n int, err error)`，因此 file、buffer、network connection、hash 都可作为 destination。function 接受 interface 时承诺只依赖这些 methods；若又用 assertion 强行要求某个 concrete type，就缩小了真实 contract。
+
+小 interface 更容易实现、组合与测试，通常由 consumer package 定义。命名常以核心 method 加 `-er`，如 Reader/Writer/Stringer；多个行为可 embedding 现有 interfaces。
+
+## 7.2 Interface Types：method set 的静态形状
+
+interface type 可直接列 methods，也可 embedding 其他 interface types。两个 interface 只要 type sets/方法集合相容即可赋值，不依赖名字。empty interface `interface{}`（现代别名 `any`）接受任意 non-interface value，但放弃 compile-time operations，边界应尽快 type switch/parse 回 domain type。
+
+```go
+type Reader interface { Read([]byte) (int, error) }
+type Closer interface { Close() error }
+type ReadWriter interface {
+    Reader
+    Writer
+}
+type ReadWriteCloser interface {
+    Reader
+    Writer
+    Closer
+}
+```
+
+interface 本身是 value type，可作为 field/parameter/result。不要为了 mock 每个 concrete type 提前造巨大 interface；先从实际 consumer operations 提取最小 contract。
+
+## 7.3 Interface Satisfaction：隐式但由 method set 严格决定
+
+type T 拥有 interface 所需全部 methods 时隐式满足。T 的 method set 只有 value-receiver methods，*T 还含 pointer-receiver methods；addressable direct call 的自动取址不参与 interface assignment。
+
+<Term def="concrete type 不写 implements，只凭 method set 包含 interface 的全部 methods 即满足；compile-time assignment/assertion 是最直接的 contract proof。">implicit satisfaction</Term>
+
+<Stepper>
+  <Step title="切换 concrete value 与 required interface">
+    <GoplInterfaceValueLab />
+  </Step>
+  <Step title="比较 Counter 与 *Counter method sets">
+    pointer-receiver Increment 只让 *Counter 满足 Mutator；Counter value 即使 addressable call 可自动取址，也不能赋给 Mutator。
+  </Step>
+  <Step title="装入 nil *Counter 观察 interface nil">
+    assignment 成功并记录 dynamic type *Counter；interface 不等于 nil，调用是否安全取决于 method 的 nil-receiver contract。
+  </Step>
+</Stepper>
+
+```go
+var _ fmt.Stringer = Celsius(0)
+var _ io.Writer = (*bytes.Buffer)(nil)
+// var _ io.Writer = bytes.Buffer{} // pointer receiver methods missing
+```
+
+compile-time assertion 不分配对象，能固定 intended implementation。一个 concrete type 可满足多个 unrelated interfaces，interface embedding 也不会改变 concrete representation。
+
+## 7.4 Parsing Flags with flag.Value：双向 text contract
+
+`flag.Value` 要求 `String() string` 与 `Set(string) error`。String 给 usage/current value，Set 解析 command-line text 并更新 receiver；mutating Set 通常使用 pointer receiver，因此传给 `flag.Var` 的是 pointer。
+
+```go
+type CelsiusFlag struct { value Celsius }
+
+func (f *CelsiusFlag) String() string { return f.value.String() }
+func (f *CelsiusFlag) Set(text string) error {
+    value, err := strconv.ParseFloat(strings.TrimSuffix(text, "°C"), 64)
+    if err != nil { return err }
+    f.value = Celsius(value)
+    return nil
+}
+```
+
+Set 失败不应留下 partial mutation：先 parse/validate 到 local，成功后 commit。String/Set 是否 round-trip、accepted units/ranges 与 error message 都是 interface contract 的一部分。
+
+## 7.5 Interface Values：dynamic type 与 dynamic value
+
+interface runtime value 可理解为 `(dynamic type, dynamic value)` pair。zero interface 两者都是 nil。把 concrete value 赋给 interface 后，dynamic type 固定可用 methods，dynamic value 保存该 value 的 copy；pointer/slice/map copy 仍可能 alias state。
+
+<Term def="interface 运行时携带的 concrete dynamic type 与对应 dynamic value；method call 按 dynamic type dispatch，并把 dynamic value 作为 receiver。">interface dynamic pair</Term>
+
+interfaces 可比较，但若 dynamic type 不 comparable（如 slice/map/function），比较会 panic；不要把任意 interface values 直接当 map keys。格式化 `%T` 可观察 dynamic type，`%v/%#v` 观察 value 仅作诊断，不应成为 protocol。
+
+### Caveat: An Interface Containing a Nil Pointer Is Non-Nil
+
+<Term def="interface 的 dynamic type 为 *T、dynamic value 为 nil pointer 的状态；pair 不是 (nil,nil)，所以 interface != nil，但 method 内解引用 receiver 仍可能 panic。">nil-containing interface</Term>
+
+```go
+var buffer *bytes.Buffer
+var out io.Writer = buffer
+fmt.Println(out == nil) // false
+```
+
+return error 时常见 bug 是返回 typed nil pointer：`var err *MyError; return err` 会产生 non-nil error interface。没有错误时直接 `return nil`；若 nil receiver 是合法设计，method 必须显式处理。
+
+<Callout type="trap" title="只写 if err != nil 就认为内部 pointer 非 nil">
+interface non-nil 只说明 dynamic pair 不是全 nil。custom error constructor/return path 应避免把 typed nil 装进 error；测试同时覆盖 concrete pointer nil 与 interface nil。
+</Callout>
+
+## 7.6 Sorting with sort.Interface：数据与算法的行为适配
+
+`sort.Interface` 要求 Len、Less、Swap，sort algorithm 不知道 element representation。slice wrapper 可实现三 methods；不同 Less 可提供按 title/year 等 ordering。Less 必须形成一致 strict ordering，否则结果不可靠。
+
+<Stepper>
+  <Step title="切换 sort/http/error contract">
+    <GoplBehaviorContractLab />
+  </Step>
+  <Step title="观察 adapter 与 dynamic dispatch">
+    sort wrapper 适配 data，HandlerFunc 适配普通 function，custom type 通过 Error 适配 error。
+  </Step>
+  <Step title="查询 optional behavior">
+    type assertion 到小 interface（如 Flush）只在 concrete value 支持时调用，不把所有 implementations 强迫进大 contract。
+  </Step>
+</Stepper>
+
+sort.Interface 把 mutable reordering 权限交给 algorithm，caller 必须保证 exclusive access。stable/unstable、ascending/descending、NaN/equal tie-breakers 都要在 Less contract 中明确。
+
+## 7.7 The http.Handler Interface：request boundary 与 adapter
+
+`http.Handler` 只有 `ServeHTTP(http.ResponseWriter, *http.Request)`。`http.HandlerFunc` 是 declared function type并实现 ServeHTTP，使普通 handler function 可适配 interface。middleware 接收/返回 Handler，通过 composition 包装 auth/logging/recovery。
+
+```go
+type Handler interface {
+    ServeHTTP(ResponseWriter, *Request)
+}
+
+func (f HandlerFunc) ServeHTTP(w ResponseWriter, r *Request) { f(w, r) }
+```
+
+ResponseWriter 生命周期限于 call，Request.Context 传递 cancellation。Handler 是否并发安全取决于 captured/shared state，不由 interface 自动保证。status/header/body write order 和 panic recovery 属于 server boundary policy。
+
+## 7.8 The error Interface：最小 universal failure contract
+
+`error` 只要求 `Error() string`。simple errors 可由 `errors.New`/`fmt.Errorf` 创建；structured error type 可带 operation/path/code/cause，并通过 pointer/value receiver 决定 method set。Error string 面向人，machine classification 用 type assertion、errors.Is/As 或 explicit code。
+
+不要让 Error method panic，即使 receiver partially initialized。error value 可 wrap cause；避免同时 log 和 return 导致重复。package boundary 决定是否 expose concrete error type 或只承诺 sentinel/behavior。
+
+## 7.9 Example: Expression Evaluator：开放 Eval contract
+
+原书 evaluator 让 `Expr` interface 定义 `Eval(env Env) float64`，literal、variable、unary、binary、call 各自实现。parser 构建不同 concrete nodes，caller 通过 interface method 动态分派，不需集中 switch 执行。
+
+```go
+type Expr interface { Eval(env Env) float64 }
+type Var string
+type literal float64
+type binary struct { op rune; x, y Expr }
+
+func (v Var) Eval(env Env) float64 { return env[v] }
+func (l literal) Eval(Env) float64 { return float64(l) }
+```
+
+production evaluator 还需 Check/Validate、unknown variable/function、division by zero、NaN/Inf、depth/work budgets。若 interface 对第三方开放，新增 implementation 不要求修改 evaluator core；若算法需要遍历每种 node，可用 visitor/额外 method或受控 type switch。
+
+## 7.10 Type Assertions：取出 value 或缩窄 contract
+
+`x.(T)` 检查 interface x 的 dynamic type 是否满足 T。T 为 concrete type 时要求动态类型相同；T 为 interface 时要求 dynamic type 满足该 interface。单结果 assertion 失败 panic，comma-ok `value, ok := x.(T)` 失败返回 T zero value/false。
+
+<Term def="`x.(T)` 或 `value, ok := x.(T)` 对 interface dynamic type 进行运行时检查；可提取 concrete value，也可缩窄为包含额外 methods 的 interface。">type assertion</Term>
+
+assertion 会复制 dynamic value 到结果；若是 pointer 仍 alias。不要在可预期 mismatch 上用 single-result panic form，优先 comma-ok 或 type switch。
+
+## 7.11 Discriminating Errors with Type Assertions
+
+caller 可 assertion custom error type读取 fields，决定 retry/status/message。但 wrapping 会让直接 `err.(*PathError)` 失效，现代 code 应用 `errors.As` 遍历 cause chain、`errors.Is` 匹配 sentinel/semantic equality。classification 必须是 documented API。
+
+不同层可 translate error，例如 repository not-found 到 service/domain not-found，再到 HTTP 404；保留 internal cause用于 logs，但不要向客户端泄露 path/secret。
+
+## 7.12 Querying Behaviors with Interface Type Assertions
+
+相比查询具体 type，assertion 到小 behavior interface 更解耦：Writer 若也实现 `WriteString(string)` 可走快路径；ResponseWriter 若支持 Flusher/Hijacker 则启用可选能力。base path 必须始终正确，optional path 只是 optimization/feature。
+
+```go
+type stringWriter interface { WriteString(string) (int, error) }
+if writer, ok := out.(stringWriter); ok {
+    _, err = writer.WriteString(text)
+} else {
+    _, err = out.Write([]byte(text))
+}
+```
+
+## 7.13 Type Switches：对 dynamic type 做互斥分支
+
+`switch value := x.(type)` 只能用于 type switch；每个 case 可列 concrete/interface types，value 在单一 type case 中获得对应 static type。nil case 匹配 nil interface，default 处理其他 dynamic types。
+
+<Stepper>
+  <Step title="切换 expression 与 XML dispatch">
+    <GoplDynamicDispatchLab />
+  </Step>
+  <Step title="选择 expression node dynamic type">
+    interface Eval 适合开放执行；type switch 可做 closed-family formatting/checking，但 default 必须对 unknown implementation 有策略。
+  </Step>
+  <Step title="选择 xml.Token concrete type">
+    StartElement push path，CharData emit text，EndElement pop path；decoder 按 stream 顺序维护 nesting state。
+  </Step>
+</Stepper>
+
+type switch 适合明确 finite variants。若每新增 implementation 都要修改多个 switches，说明 interface 可能缺少真正 polymorphic operation；反之 serialization/diagnostics 有时确实需枚举 concrete forms。
+
+## 7.14 Example: Token-Based XML Decoding：streaming dynamic values
+
+`xml.Decoder.Token()` 返回 `xml.Token` interface，其 dynamic types 包括 StartElement、EndElement、CharData、Comment 等。type switch 可维护 element path，只在匹配 path 上处理 text，不必构建整棵 tree。
+
+```go
+for {
+    token, err := decoder.Token()
+    if err == io.EOF { break }
+    if err != nil { return err }
+    switch token := token.(type) {
+    case xml.StartElement:
+        stack = append(stack, token.Name.Local)
+    case xml.EndElement:
+        stack = stack[:len(stack)-1]
+    case xml.CharData:
+        visit(stack, string(token))
+    }
+}
+```
+
+stream parser 必须限制 depth、total bytes、token size 与 accepted schema；处理 malformed nesting/namespace/encoding errors。CharData 可能被拆成多段，consumer 不能假设一次 token 等于完整 element text。
+
+## 7.15 A Few Words of Advice：具体优先，接口在边界出现
+
+不要在只有一个 implementation、没有 consumer abstraction 的地方预先制造 interface。返回 concrete type，让 caller 获得完整 behavior；参数在确有多实现/测试替身/adapter boundary 时接收最小 interface。interface 越大，implementation burden 与 accidental coupling 越高。
+
+accept interfaces, return concrete types 是常见经验而非绝对规则。稳定 public plugin boundary 可能需要返回 interface；关键是由 ownership/versioning/consumer needs 推导，而不是为了“解耦”机械抽象。
+
+<Callout type="trap" title="用 any + type switch 代替 domain model">
+若 variants 已知且拥有共同 behavior，定义 interface 或 tagged struct；若输入来自外部，先解析验证到 typed model。到处传 any 会把 compile-time errors 推迟为 runtime panic/default omission。
+</Callout>
+
+## 本章回顾：动态分派必须保留静态 contract
+
+1. interface 由 consumer behavior methods 定义，concrete types 隐式满足，但 method set 规则严格。
+2. interface value 是 dynamic type/value pair；typed nil pointer 装入后 interface 不为 nil。
+3. flag.Value、sort.Interface、http.Handler、error 展示 adapters 与小 contract 的复用。
+4. type assertion 可提取 concrete value或查询 behavior，type switch 对 finite dynamic variants 分支。
+5. expression interface 提供开放 dispatch，XML token switch 提供 streaming closed dispatch；最小接口避免过度抽象。
+
+<Exercises>
+
+**问题 1：一个 constructor 返回 `error` 时，怎样避免 typed nil pointer 变成 non-nil error？**
+
+<Answer>不要声明`var e *MyError`后无条件`return e`；成功路径直接`return nil`，失败时才构造`&MyError{...}`。测试同时检查`err == nil`、`%T`和errors.As。若method允许nilreceiver也不能改变interfacepair规则；error API应避免这种状态，Error方法还应对partialvalue稳健。</Answer>
+
+**问题 2：HTTP middleware 为什么应依赖 Handler 而不是具体 mux，并怎样安全使用 Flusher？**
+
+<Answer>middleware只需ServeHTTP contract，接收/返回http.Handler即可包装任何mux/function/customhandler。ResponseWriter的optional能力用`flusher, ok := w.(http.Flusher)`查询；false时走正确base path或返回feature unavailable，不能强制assert。wrapper若要保留Flusher等能力需显式forward，且所有state要满足concurrent requests。</Answer>
+
+**问题 3：expression evaluator 与 XML decoder 应分别何时用 interface method、type switch？**
+
+<Answer>Eval是每个Exprimplementation自身行为，interface method让新增node无需改central evaluator；需要枚举closed syntax family做format/check时可受控type switch并处理unknown。xml.Token由decoder返回有限dynamictypes，streamingtype switch自然维护push/text/pop状态。二者都需depth/work/bytes limits、error context与default/unknown policy。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="interface contract" definition="consumer 通过 method signatures 声明的最小行为集合。" />
+  <GlossaryItem term="implicit satisfaction" definition="concrete method set 自动满足 interface，无需 implements 声明。" />
+  <GlossaryItem term="interface dynamic pair" definition="interface 运行时携带的 dynamic type 与 dynamic value。" />
+  <GlossaryItem term="nil-containing interface" definition="dynamic type 非 nil、dynamic value 为 typed nil pointer 的非 nil interface。" />
+  <GlossaryItem term="type assertion" definition="运行时检查 interface dynamic type 并提取 value 或缩窄 behavior。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Go Programming Language, Chapter 7: Interfaces"
+  adaptedUrl="https://www.gopl.io/"
+/>

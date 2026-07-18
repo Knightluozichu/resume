@@ -1,0 +1,261 @@
+---
+title: "第8章：使用更好的库"
+type: C
+section: Optimized C++ · Chapter 8
+order: 8
+description: "对齐第一版第8章 Use Better Libraries：标准库使用、最小改动优化已有库、克制且外置分配的高性能库设计、函数优于框架、扁平层次/调用/设计、避免动态查找和 god function。"
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+draft: false
+---
+
+import {
+  OpcExistingLibraryChangeMap,
+  OpcOptimizedLibraryDesignMap,
+  OpcStandardLibraryUseMap,
+} from "@/components/mdx/optimized-cpp/diagrams/use-better-libraries";
+
+<Objectives>
+
+- 能分析 C++ standard library 的 semantic/complexity/representation contract，并按 operation mix 优化使用
+- 能设计 existing-library 的最小改动方案，优先 usage/additive API/adapter 并保留 compatibility 与 rollback
+- 能修改 library architecture，把 allocation 与 policy 显式化、压平已测 forwarding/dispatch，同时避免 god function
+
+</Objectives>
+
+## 从“Better Library 先是 Better Contract”开始
+
+**use better libraries** 不等于不断替换 dependency。一个 better library 让 correctness、complexity、ownership、allocation、error 与 concurrency contract 可见，并在 representative workload 下减少 work。成熟实现还能复用 tuned algorithm、platform specialization 和长期 edge-case 修复。
+
+<Term def="以明确语义和性能契约复用成熟实现，减少重复 work 与自写维护风险，并以真实 workload 验证。">
+  use better libraries
+</Term>
+
+<Callout type="trap" title="陷阱：benchmark 某个函数快，就全项目换库">
+  replacement 还会改变 ABI、allocator、exception/error、thread
+  safety、encoding、build size、license 与长期维护。 先预测端到端上限并建立
+  adapter/dual-run；只有 conformance、representative performance、rollout 和
+  rollback 都通过才扩大范围。
+</Callout>
+
+## Optimize Standard Library Use
+
+**philosophy of the C++ standard library** 可概括为通用、可组合、zero-overhead-oriented abstractions 与 complexity requirements；它给 primitives，不替应用决定 workload。**optimize standard library use** 应先选对 algorithm/container/value category，再 reserve/batch/range，而不是先重写 implementation。
+
+<Term def="按语义、复杂度、iterator/value category、allocation 与访问模式选择并组合标准库 primitive。">
+  optimize standard library use
+</Term>
+
+**issues in use** 常来自 contract mismatch：用 `list` 只为中间 insert 却实际 99% scan；用 `map` 只做 small exact lookup；在 loop 反复构造 temporary container；忽略 iterator invalidation；把 `unordered_map` 的 average lookup 当 worst-case guarantee。
+
+<OpcStandardLibraryUseMap />
+
+```cpp
+std::vector<Record> selectActive(std::span<const Record> records) {
+    std::vector<Record> result;
+    result.reserve(records.size());
+    std::ranges::copy_if(records, std::back_inserter(result), [](const Record& r) {
+        return r.active();
+    });
+    return result;
+}
+```
+
+这里 library algorithm 表达 intent，reserve 避免 growth；但若多数 record 很大且 caller 只读，返回 indices/views 或 caller-provided output 可能更合适。container/algorithm 选择必须包含 result ownership 与 actual selectivity。
+
+## Optimize Existing Libraries with Minimal Change
+
+**optimize existing libraries** 的风险不仅是 code bug，还包括所有 callers 已依赖的 undocumented order、errors、timing、allocator 与 ABI。原则是 **change as little as possible**：先改变 caller usage，再 wrapper/adapter，再 additive API，最后才内部替换。
+
+<Term def="在 preserving public semantics/compatibility 前提下，用 usage、additive API、adapter 或受控内部替换改善已存在的 library。">
+  optimize existing libraries
+</Term>
+
+**add functions rather than change functionality**：例如保留 `processOne`，新增 `processBatch(span, output)`；旧 caller 无回归，新 hot caller 显式 opt-in。新函数应复用共同 correctness core，不能复制两套会漂移的业务规则。
+
+```cpp
+class Decoder {
+public:
+    Result decodeOne(std::span<const std::byte> packet) const;
+
+    void decodeBatch(
+        std::span<const PacketView> packets,
+        std::vector<Result>& output) const {
+        output.reserve(output.size() + packets.size());
+        for (PacketView packet : packets) {
+            output.push_back(decodeOne(packet.bytes));
+        }
+    }
+};
+```
+
+这是 additive baseline，后续可在 `decodeBatch` 内共享 validation/table 或 vectorize；要定义 partial failure 和 append-vs-replace semantics。`output` 由 caller 拥有，使 capacity/reuse decision 不藏在 library。
+
+<OpcExistingLibraryChangeMap />
+
+## Design Optimized Libraries with Parsimony
+
+**design optimized libraries** 的第一原则是 **parsimony**：提供完成 core task 的最小正交 primitives，避免 speculative policy、global state 和 framework lifecycle。API 越窄，compiler、test 和 caller 越容易理解真实 work。
+
+<Term def="只保留必要、正交且可组合的 API/状态，把可选策略与生命周期留给明确 owner。">
+  parsimony
+</Term>
+
+**memory allocation decisions outside the library** 不表示库永不分配，而是 allocation policy 可由 caller/contract 决定：caller-provided buffer/output iterator/resource、size query + fill、或明确 owning return。隐藏每 call allocation 会让 reuse、budget 与 failure policy无法控制。
+
+<Term def="让 caller 通过 buffer/container/resource 或明确 owning result 控制 allocation、capacity、lifetime 与 failure policy。">
+  external allocation decision
+</Term>
+
+```cpp
+struct EncodeResult {
+    std::size_t bytesWritten;
+    bool complete;
+};
+
+EncodeResult encodeInto(
+    const Message& message,
+    std::span<std::byte> output);
+
+std::size_t encodedSize(const Message& message);
+```
+
+caller 可先查询 size、复用 buffer 或按 budget 分片；library 必须保证 insufficient output 时的 partial-write contract。另一条合理 API 是直接 return owning vector，交给 RVO/move；关键是 cost visible，而非强制所有 caller 手工管理 memory。
+
+## Code Libraries for Speed: Functions over Frameworks
+
+“**functions are easier to optimize than frameworks**”因为 pure-ish function 的 inputs/outputs/work boundary 更明确，易 benchmark、inline、specialize、batch。framework 常把 control flow、allocation 和 callbacks 隐藏在 lifecycle；它并非必然慢，但需要更大 tracing 才归因。
+
+<Term def="以输入输出明确的 focused function 组成 library，使 work、allocation、测试与 compiler visibility 更清晰。">
+  functions over frameworks
+</Term>
+
+**code libraries for speed** 还要提供 batch/range API、避免 global lock、隔离 cold error path、暴露 resource/policy，且先优化 algorithm。不要用宏/unsafe pointer trick 换掉可读 contract。
+
+## Flatten Hierarchies、Calling Chains 与 Layers
+
+**flatten inheritance hierarchies** 针对深层 virtual forwarding、unused base state 与 per-object layout；可改 composition、variant/template 或浅 runtime interface。**flatten calling chains** 针对 `A -> B -> C -> D` 只转发一个 item；可新增 batch direct path。**flatten layered designs** 只跨过没有 semantic/ownership/validation 价值的层。
+
+<Term def="删除测得的无价值继承、转发调用或包装层，同时保留真正的 policy、ownership、validation 与 ABI boundary。">
+  flatten library layers
+</Term>
+
+**avoid dynamic lookup**：若 hot path 每次按 string/type registry 查 operation，而 implementation set 闭合，可在 setup 时 resolve 成 function pointer/index/variant，执行时 direct/table dispatch。plugin/open set 仍可能需要 dynamic lookup，但应 amortize 到 registration/setup。
+
+<Term def="把按名称/type 的 runtime resolution 从 hot operation 移到 setup，缓存已验证的 direct/indexed dispatch。">
+  avoid dynamic lookup
+</Term>
+
+<OpcOptimizedLibraryDesignMap />
+
+扁平化的反面风险是 **god functions**：把 validation、I/O、allocation、algorithm、policy、logging 和 errors 全揉进一个巨函数，无法复用、测试、inline 或替换。正确方向是 focused functions + explicit dataflow；只压平 runtime forwarding，不压平职责边界。
+
+<Term def="承担过多无关职责、共享大量状态和分支的巨型函数；常由错误的层次扁平化产生。">
+  god functions
+</Term>
+
+<Callout type="trap" title="陷阱：层越少就一定越快">
+  validation/security boundary、ownership/resource、transaction、ABI 和
+  observability layer 可能有真实语义。 先用 call graph/profile
+  证明该层只转发且在 hotspot，再提供 direct batch path；保留 conformance tests，
+  不把系统压成 god function。
+</Callout>
+
+## 三步评估与改造库
+
+<Stepper>
+  <Step title="第一步：先核对 library contract">
+    先预测问题来自 semantic/complexity/representation/visibility 哪一层；检查 operation mix、ownership、invalidation、error 与 optimized profile，再决定是否只需改变标准库用法。
+
+    <OpcStandardLibraryUseMap />
+
+  </Step>
+  <Step title="第二步：用最小兼容改动验证">
+    按 use-differently、add function、adapter、internal change 逐级推进；每级保留旧行为、A/B、conformance、rollout 与 rollback。
+
+    <OpcExistingLibraryChangeMap />
+
+  </Step>
+  <Step title="第三步：把新库做成可组合函数">
+    外置 allocation/policy，提供 range/batch；只 flatten 已测 inheritance/call/layer 和 dynamic lookup，同时检查职责没有坍缩成 god function。
+
+    <OpcOptimizedLibraryDesignMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- better library 的核心是正确且可见的 semantic/complexity/ownership/allocation contract
+- 标准库应按 operation mix 与 representation 使用，成熟 primitive 通常先于自写实现
+- existing library 优化遵循最小改动：usage、additive function、adapter、最后才 internal replacement
+- parsimony 保持 API/状态小而正交；allocation decision 要让 caller 或 owning contract 可见
+- focused functions/range/batch 比 framework hidden lifecycle 更易测量和优化
+- flatten 只删除无价值 inheritance/forwarding/layer，dynamic lookup 可移到 setup
+- god function 不是扁平设计；职责、ownership、validation 和 ABI 边界仍应保留
+
+<Attribution
+  adaptedFrom="Optimized C++, First Edition, Chapter 8: Use Better Libraries"
+  adaptedUrl="https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+/>
+
+<Glossary>
+  <GlossaryItem term="use better libraries">
+    复用语义和性能契约明确的成熟实现。
+  </GlossaryItem>
+  <GlossaryItem term="optimize standard library use">
+    按 contract 与 workload 选择组合标准库 primitive。
+  </GlossaryItem>
+  <GlossaryItem term="optimize existing libraries">
+    保持兼容并以最小风险改善现有 library。
+  </GlossaryItem>
+  <GlossaryItem term="parsimony">
+    只保留必要、正交、可组合的 API 与状态。
+  </GlossaryItem>
+  <GlossaryItem term="external allocation decision">
+    让 caller/resource/owning result 明确控制 allocation。
+  </GlossaryItem>
+  <GlossaryItem term="functions over frameworks">
+    用 focused function 使 work、allocation 与测试边界可见。
+  </GlossaryItem>
+  <GlossaryItem term="flatten library layers">
+    删除测得无价值的继承、调用转发或包装层。
+  </GlossaryItem>
+  <GlossaryItem term="avoid dynamic lookup">
+    把 runtime resolution 移到 setup 并缓存 direct dispatch。
+  </GlossaryItem>
+  <GlossaryItem term="god functions">
+    承担过多无关职责和共享状态的巨型函数。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：优化一个逐条 JSON decoder library。** 旧 API 每次返回 owning object，服务每批 10k 条；不能破坏已有 callers。设计 additive API 与证据。
+
+  <Answer question="怎样做到 change as little as possible？">
+    保留 `decodeOne`，新增 `decodeBatch(span<input>, output&, resource/policy)`，明确 append/replace、partial
+    failure、ordering 与 ownership；复用同一 decode core。caller reserve/reuse output，library 可共享 table/
+    validation。用旧新逐条结果 equivalence、malformed corpus、allocation/record、throughput、p99、RSS 测量；
+    先让一个 caller opt-in，可回滚，不改变旧 ABI/semantics。
+  </Answer>
+
+2. **问题 2：审计一个 7 层 wrapper 调用链。** 每层只转发，但其中两层负责 authorization 与 allocator lifetime。说明如何 flatten。
+
+<Answer question="哪些层能跳过，哪些必须保留？">
+  call graph/profile 标出 pure forwarding 三层，可新增内部 direct batch
+  path；authorization 与 resource lifetime 是 semantic boundary，不能删除，可在
+  batch boundary 执行一次并传 validated token/resource。其余层若提供
+  ABI/metrics/error mapping 也需保留或等价迁移。用 authorization/error/resource
+  tests、calls/item、code size、 latency 验证，避免把职责揉进一个 god function。
+</Answer>
+
+3. **问题 3：把动态 string lookup 移出 hot path。** plugin 在 setup 注册 name→handler，执行阶段每 item 查 map。给出 closed/open set 两种方案。
+
+  <Answer question="如何 avoid dynamic lookup 又保留 plugin contract？">
+    setup 阶段验证 name 并 resolve 为 stable handler ID/function object，batch 保存 resolved handle；hot loop 按 index/
+    direct callable 执行。closed built-ins 可 variant/template/static table；open plugins 保留 registration map 但不每
+    item lookup。定义 unload/generation 使 stale handle 可检测，测 setup、dispatch/item、i-cache 与 plugin errors；
+    若 handler 本身很重，保持简单 map 可能已足够。
+  </Answer>
+</Exercises>

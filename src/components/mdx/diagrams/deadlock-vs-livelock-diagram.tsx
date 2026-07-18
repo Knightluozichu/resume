@@ -110,12 +110,12 @@ const STEPS: readonly TeachingStep[] = [
   {
     label: "contrast",
     caption:
-      "⑤ 对照：死锁=两人都不动（CPU 通常挂起、闲）；活锁=两人一直在动（CPU 忙等、跑满）——可两边进度都=0",
+      "⑤ 本例对照：死锁参与者阻塞等待；活锁参与者忙重试——可两边完成数都为 0",
   },
   {
     label: "verdict",
     caption:
-      "⑥ 谁的 CPU 占用率高？答案：活锁——它在忙等空转；死锁线程多半被挂起、占用低。但本质相同：都没真正前进",
+      "⑥ 本例活锁 CPU 更高；真实系统必须结合线程栈、等待图和进展计数，不能只看进程 CPU",
   },
 ];
 
@@ -407,7 +407,7 @@ export function DeadlockVsLivelockDiagram() {
         <svg
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           role="img"
-          aria-label="死锁与活锁并排对比动画。左栏是死锁：线程 A 攥住 lock1、线程 B 攥住 lock2，随后 A 等 lock2、B 等 lock1，环闭合，两个线程都冻结不动，CPU 通常被挂起、占用低。右栏是活锁：两个线程都想进同一条窄过道，检测到冲突后同时退避礼让，一起往左跳，又一起往右跳回，来回弹个不停，谁也过不去，CPU 一直忙等、占用高。两栏的进度条始终停在 0%。结论：活锁的 CPU 占用率更高，因为它在忙等空转；死锁线程多半被挂起、占用低；但两者本质相同，都没真正前进。播放时按六步依次点亮，可播放、暂停、单步、拖动进度。"
+          aria-label="死锁与活锁最小示例对比动画。左栏中线程 A 持 lock1 等 lock2，线程 B 持 lock2 等 lock1，形成等待环并阻塞。右栏中两个线程同步退避又重试，持续执行却没有完成操作。本示例的忙重试活锁 CPU 高于阻塞死锁，但真实系统必须结合全线程栈、等待图、重试计数和完成计数判断。"
           className="mx-auto block h-auto w-full max-w-[700px]"
         >
           {/* 标题 */}
@@ -434,7 +434,7 @@ export function DeadlockVsLivelockDiagram() {
             "线程 A",
             "线程 B",
             "结论：两人都冻结·不动",
-            "CPU 通常挂起 → 占用低",
+            "本例：阻塞等待 → CPU 低",
           )}
           {/* 死锁栏：持有标注（②出现） */}
           <g ref={deadHoldRef} style={{ opacity: 0 }}>
@@ -483,7 +483,7 @@ export function DeadlockVsLivelockDiagram() {
             "线程 一",
             "线程 二",
             "结论：两人一直在动·零进展",
-            "CPU 忙等空转 → 占用高",
+            "本例：忙重试 → CPU 高",
             [liveT1Ref, liveT2Ref],
           )}
           {/* 活锁栏：忙等·零进展标注（④出现，保持） */}
@@ -552,7 +552,7 @@ export function DeadlockVsLivelockDiagram() {
               fontWeight="700"
               fill="var(--success)"
             >
-              猜一猜的答案：活锁 CPU 占用率更高（忙等空转）
+              本例答案：忙重试的活锁 CPU 更高
             </text>
             <text
               x={CPU_X + 14}
@@ -560,7 +560,7 @@ export function DeadlockVsLivelockDiagram() {
               fontSize="10"
               fill="var(--text-secondary)"
             >
-              死锁线程多半被挂起、占用低——所以「CPU 闲着却卡住」常是死锁的信号
+              仅是线索：真实现场还要看线程栈、等待图与进展计数
             </text>
           </g>
         </svg>
@@ -572,9 +572,8 @@ export function DeadlockVsLivelockDiagram() {
         />
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
-        死锁是「互等对方放手」——两个线程都冻结不动，CPU 常被挂起、占用低；
-        活锁是「反复礼让重试」——两个线程一直在动，却因同步动作总是同时发生而谁也没前进，CPU
-        忙等、占用高。二者都让程序卡死、进度归零，区别在「不动」还是「白动」。
+        本例中死锁参与者停在等待环，活锁参与者持续重试却没有完成操作。CPU
+        差异来自本例的阻塞与忙等实现，不是定义；真实现场还要检查线程栈、等待图和进展指标。
       </figcaption>
     </figure>
   );

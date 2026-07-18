@@ -1,0 +1,238 @@
+---
+title: "第18章：Reflection, Attributes, and Dynamic Programming"
+type: C
+section: "Essential C# 7.0 · Runtime Metadata"
+order: 18
+description: "掌握Type/MemberInfo/Activator reflection、nameof、Attribute targets/usage与dynamic runtime binding。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-csharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7AttributeNameofLab, Ec7DynamicBindingLab, Ec7ReflectionPipelineLab } from "@/components/mdx/essential-csharp-7/diagrams/reflection-attributes-and-dynamic-programming";
+
+<Objectives>
+
+- 能解释Type、MemberInfo、BindingFlags、Activator与Invoke组成的reflection lookup/invocation pipeline
+- 能设计nameof与custom Attribute的targets、constructor/named arguments、multiplicity和inheritance policy
+- 能比较static与dynamic binding的overload/member lookup时机，并判断interop adapter和runtime failure边界
+
+</Objectives>
+
+## 为什么Late Binding必须集中在边界
+
+普通C#调用由compiler验证member、arguments和return；reflection按metadata name查找，dynamic把lookup推迟到runtime。它们能支持serializer、DI container、plugin、COM/脚本互操作，却同时削弱rename safety、IDE navigation和compile-time proof。正确做法是把late binding放在小型adapter，尽快转换为typed contract。
+
+先预测：`typeof(T)`与`obj.GetType()`分别得到什么；GetProperty找不到返回null还是throw；Activator缺少constructor怎样；MethodInfo.Invoke内层method抛异常如何呈现；nameof是否读取object；attribute是否主动执行；dynamic调用不存在member何时失败。随后逐层验证。
+
+<Term def="从runtime type identity查找metadata member、验证目标/参数并执行create/read/write/invoke的晚绑定流程。">reflection pipeline</Term>
+
+## Reflection: Obtaining Type Metadata
+
+`typeof(KnownType)`在compile time引用type，`instance.GetType()`返回object exact runtime type，`Type.GetType(string)`按name解析且受assembly qualification/load context影响。generic/open/closed types仍保留第12章所述metadata identity。
+
+```csharp
+Type declared = typeof(Dictionary<,>);
+object value = new Dictionary<string, int>();
+Type runtime = value.GetType();
+
+Console.WriteLine(runtime.GetGenericTypeDefinition() == declared); // True
+```
+
+string-based type name脆弱且可能加载不可信code；plugin系统应有assembly allowlist、signature/version和interface validation，不直接接受外部任意type name。
+
+## MemberInfo and BindingFlags
+
+Type可枚举/查找constructors、methods、properties、fields、events等MemberInfo。默认lookup的public/instance/static范围并不总符合需求；`BindingFlags`明确Public/NonPublic、Instance/Static、DeclaredOnly、IgnoreCase等。name、overloads和parameter types需一起消除ambiguity。
+
+<Term def="按name、member kind、visibility、static/instance、inheritance与signature选择唯一metadata member的规则。">metadata lookup contract</Term>
+
+```csharp
+PropertyInfo property = typeof(Report).GetProperty(
+    "Title",
+    BindingFlags.Public | BindingFlags.Instance);
+
+if (property == null || !property.CanRead)
+    throw new InvalidOperationException("Report.Title is required");
+
+object title = property.GetValue(report, null);
+```
+
+reflection APIs常返回null、empty array或抛AmbiguousMatchException；调用前验证member存在、read/write权限、target type和index parameters。频繁serialization/mapping应缓存已验证metadata或compiled accessors，而不是每item重复GetProperty。
+
+<Stepper>
+  <Step title="切换Type、member lookup、Activator、Invoke与cache">
+    <Ec7ReflectionPipelineLab />
+  </Step>
+  <Step title="记录lookup输入和唯一member">
+    type identity、BindingFlags、name/signature共同决定结果；null/ambiguity必须显式处理。
+  </Step>
+  <Step title="验证invoke/create failure与缓存">
+    constructor/member本身exception与reflection argument failure分开记录；只缓存经过验证的access path。
+  </Step>
+</Stepper>
+
+## Activator and Reflective Invocation
+
+`Activator.CreateInstance`按runtime Type创建object，常要求accessible matching constructor；generic overload可保留type。`MethodInfo.Invoke`接收target与object arguments，value types可能boxing，ref/out更新反映到arguments array。target method exception通常包在`TargetInvocationException.InnerException`中。
+
+```csharp
+Type type = ResolvePluginType();
+if (!typeof(IPlugin).IsAssignableFrom(type) || type.IsAbstract)
+    throw new InvalidOperationException("plugin must implement IPlugin");
+
+var plugin = (IPlugin)Activator.CreateInstance(type);
+plugin.Run(); // typed calls after one reflective boundary
+```
+
+不要让每个业务call都Invoke。一次discovery/create后cast到interface，恢复compile-time contract。private member reflection会耦合implementation并可能受platform/trimming限制，除诊断/tooling外应避免。
+
+<Callout type="trap" title="reflection只是写法更长，语义和普通调用一样安全">
+member可能不存在/歧义，arguments在runtime才验证，target exception被包装，name-based code也不随rename自动更新。必须建立显式validation与failure contract。
+</Callout>
+
+## nameof Is a Compile-Time Symbol Name
+
+`nameof(expression-or-symbol)`产生compile-time string，适合argument exception、property notification、logging field name。它不执行expression、不会dereference null，并随symbol rename更新；结果通常是最后一个简单name而非完整qualified path。
+
+<Term def="由compiler从symbol解析生成、无需执行表达式且可随rename更新的名称字符串。">symbol-name contract</Term>
+
+```csharp
+public void Load(string path)
+{
+    if (path == null)
+        throw new ArgumentNullException(nameof(path));
+}
+
+string member = nameof(Report.Title); // "Title"
+```
+
+nameof不是runtime reflection，不能读取display name或attribute；对外protocol/database field name若需要稳定跨rename，不应直接依赖nameof，需显式schema constant。
+
+## Attributes Annotate Metadata
+
+custom attribute继承`Attribute`。positional arguments映射constructor parameters，named arguments设置public writable properties/fields；可用types受metadata constant表示限制。`AttributeUsage`声明有效targets、AllowMultiple和Inherited，compiler据此验证annotation。
+
+<Term def="附着到assembly/type/member/parameter等target的声明式metadata，以及允许位置、重复和继承规则。">attribute metadata contract</Term>
+
+```csharp
+[AttributeUsage(AttributeTargets.Class, AllowMultiple = false, Inherited = true)]
+public sealed class TableAttribute : Attribute
+{
+    public TableAttribute(string name) { Name = name; }
+    public string Name { get; }
+    public string Schema { get; set; }
+}
+
+[Table("orders", Schema = "sales")]
+public sealed class Order { }
+```
+
+attribute不会自动创建table或执行validation；ORM/tool必须reflection读取并采取行为。读取attributes可能实例化attribute objects并执行constructor，纯metadata inspection可用相应metadata API降低side effects。不要把secret或高频mutable data放入attributes。
+
+<Stepper>
+  <Step title="切换nameof、class/method attribute、multiple与inherited">
+    <Ec7AttributeNameofLab />
+  </Step>
+  <Step title="区分constant string和metadata instance">
+    nameof编译为symbol name string；attribute记录type、constructor/named arguments与target。
+  </Step>
+  <Step title="确认consumer与usage policy">
+    compiler/tool/reflection consumer决定行为；AttributeUsage控制targets、multiple和inherited lookup。
+  </Step>
+</Stepper>
+
+## Attribute Discovery and Versioning
+
+attribute consumer应按known attribute type查询，验证required properties并定义missing/duplicate policy。改attribute constructor、remove property或rename type会影响compiled consumers/metadata；用于public tooling contract时需要versioning。
+
+```csharp
+TableAttribute table = typeof(Order)
+    .GetCustomAttributes(typeof(TableAttribute), inherit: true)
+    .Cast<TableAttribute>()
+    .SingleOrDefault();
+
+if (table == null) throw new InvalidOperationException("Table metadata required");
+```
+
+multiple attributes的order不应无文档依赖；inherit=true只按AttributeUsage和member/type rules工作，不表示metadata物理复制到derived declaration。
+
+## dynamic Defers Binding
+
+`dynamic` variable在metadata/CLR storage层常以object表示，但compiler把其operations标为runtime-bound。member access、operator、index、conversion和overload resolution在execution时根据runtime values由binder完成；成功result通常继续是dynamic，错误可向后传播多步。
+
+<Term def="compiler接受operation并生成runtime binder site，由actual value types选择member/overload或抛binder exception的边界。">dynamic binding boundary</Term>
+
+```csharp
+dynamic value = GetValue();
+
+try
+{
+    Console.WriteLine(value.ToUpper());
+}
+catch (Microsoft.CSharp.RuntimeBinder.RuntimeBinderException ex)
+{
+    Console.Error.WriteLine(ex.Message);
+}
+```
+
+若value是string成功，int则runtime失败。dynamic不是reflection syntax sugar的完全同义词：binder应用C#-like overload/conversion规则并可与DynamicObject/COM交互，但两者都失去普通static proof。
+
+<Stepper>
+  <Step title="切换static、dynamic success/failure、overload与interop">
+    <Ec7DynamicBindingLab />
+  </Step>
+  <Step title="标出binding发生时间">
+    static在compile检查；dynamic直到该operation实际执行才按runtime types解析。
+  </Step>
+  <Step title="收窄adapter boundary">
+    COM/JSON/script edge可dynamic，读取后立即validate并转换为typed DTO/interface供内部使用。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="dynamic能自动适应任何对象，所以不会有类型错误">
+它只是推迟member/overload检查。不存在member、ambiguous call或invalid conversion会在执行路径抛RuntimeBinderException，且重构工具难以覆盖。
+</Callout>
+
+## Choosing Static, Reflection, Attributes, or Dynamic
+
+已知compile-time contract优先interface/generic/static calls；需要发现metadata或runtime-selected type用reflection；需要声明式annotation用attribute；与COM、dynamic language、shape-unstable payload边界可dynamic。四者不是风格互换，而是不同信息可用时机。
+
+测试reflection要覆盖missing/ambiguous/nonpublic/constructor throw/target exception；attribute覆盖targets/multiple/inheritance/missing metadata；dynamic覆盖每个runtime shape、overload和binder failure。benchmark discovery cache与hot-path invocation，防止late binding进入inner loop。
+
+## 本章回顾：发现、注解与绑定要有边界
+
+1. reflection从Type到MemberInfo再create/invoke，lookup和target/argument failure必须显式验证。
+2. BindingFlags与signature决定唯一member，hot path应缓存validated metadata/accessor。
+3. nameof是compile-time rename-safe symbol string，不是reflection或stable external schema。
+4. attribute只存declarative metadata，AttributeUsage控制target/multiple/inheritance，consumer执行行为。
+5. dynamic把binding推迟到runtime，应集中在interop adapter并尽快恢复typed contract。
+
+<Exercises>
+
+**问题 1：如何安全加载配置指定的plugin type？**
+
+<Answer>在允许assembly/load context中解析qualified type，验证非abstract且实现IPlugin、constructor可用，再Activator创建；捕获并区分resolution/constructor failure。创建后立即cast IPlugin，业务调用走typed interface。限制allowlist/signature并缓存validated descriptor，不接受任意外部type name。</Answer>
+
+**问题 2：怎样设计可多次用于class的Tag attribute？**
+
+<Answer>继承Attribute，以AttributeUsage(AttributeTargets.Class, AllowMultiple=true, Inherited按需求)声明policy；constructor参数保存required constant data，named writable properties保存optional metadata。consumer用GetCustomAttributes读取全部instances，不依赖返回顺序，并测试derived/missing/duplicate行为。</Answer>
+
+**问题 3：何时可以使用dynamic，怎样防止错误扩散？**
+
+<Answer>COM、dynamic language或shape不稳定外部payload边界可减少反射样板；每种runtime shape执行真实tests并处理RuntimeBinderException。adapter立即检查required members/conversions，转成typed DTO/interface后返回，内部不继续传播dynamic。已知contract仍用static/generic。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="reflection pipeline" definition="从runtime type查member并create/read/write/invoke的晚绑定流程。" />
+  <GlossaryItem term="metadata lookup contract" definition="按name、kind、flags与signature选择唯一MemberInfo的规则。" />
+  <GlossaryItem term="symbol-name contract" definition="compiler从symbol生成且不执行表达式的rename-safe string。" />
+  <GlossaryItem term="attribute metadata contract" definition="annotation target、arguments、multiplicity与inheritance的声明约定。" />
+  <GlossaryItem term="dynamic binding boundary" definition="operation按runtime value type解析member/overload或失败的位置。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 18: Reflection, Attributes, and Dynamic Programming" adaptedUrl="https://www.informit.com/store/essential-csharp-7.0-9781509303618" />

@@ -1,0 +1,478 @@
+---
+title: "Item 37：绝不重新定义继承而来的缺省参数值"
+type: A
+section: Chapter 6 · Inheritance and Object-Oriented Design
+order: 37
+description: 对齐 Effective C++ 第三版 Item 37：解释 virtual function body 动态绑定而 default parameter value 静态绑定，复现 Shape/Rectangle 默认颜色分裂，并用 NVI 或显式参数统一默认政策与发布版本。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppDefaultCallsiteVersionMap,
+  EcppMixedBindingDefaultMap,
+  EcppNviDefaultParameterMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-37-never-redefine-default-parameters";
+
+<Objectives>
+
+- 能解释 default argument 在 call site 按静态类型补入、virtual body 按动态类型分派的两阶段过程
+- 能复现同一 Rectangle override 经 Shape pointer 与 Rectangle pointer 收到不同默认颜色
+- 能实现 NVI 或显式参数 API，统一默认政策并验证 header/library 版本和旧客户行为
+
+</Objectives>
+
+## 从同一个 override 收到两种颜色开始
+
+```cpp
+class Shape {
+public:
+    enum class Color { Red, Green, Blue };
+
+    virtual ~Shape() = default;
+    virtual void draw(Color color = Color::Red) const = 0;
+};
+
+class Rectangle : public Shape {
+public:
+    void draw(Color color = Color::Green) const override;
+};
+```
+
+Rectangle 重新声明 default 为 Green，看似表示自己的默认颜色。实际调用会混合两种绑定规则。
+
+<Term def="调用省略某个尾部参数时，由可见函数声明在编译期提供的表达式。">
+  default parameter value
+</Term>
+
+Item 37 的原则是 Never redefine an inherited default parameter value（绝不重定义继承缺省参数）。
+
+<Term def="derived override 对同一参数声明不同 default expression 的行为。">
+  inherited default redefinition
+</Term>
+
+## virtual body 动态绑定，默认参数静态绑定
+
+```cpp
+Rectangle rectangle;
+
+Shape* shapeView = &rectangle;
+Rectangle* rectangleView = &rectangle;
+
+shapeView->draw();     // Rectangle::draw(Color::Red)
+rectangleView->draw(); // Rectangle::draw(Color::Green)
+```
+
+<Term def="virtual call 在运行期依据对象动态类型选择最派生 override body。">
+  dynamic function binding
+</Term>
+
+<Term def="compiler 依据 call expression 静态类型可见声明决定省略参数的值。">
+  statically bound default
+</Term>
+
+两个 calls 最终都执行 Rectangle::draw，但第一个参数来自 Shape declaration，第二个来自 Rectangle declaration。
+
+<EcppMixedBindingDefaultMap />
+
+这比 Item 36 更隐蔽：body 一致，只有隐藏传入值不同。
+
+## compiler 在 call site 补写默认值
+
+概念上，编译器把省略参数的调用改写：
+
+```cpp
+shapeView->draw(Shape::Color::Red);
+rectangleView->draw(Shape::Color::Green);
+```
+
+之后才生成 virtual dispatch。
+
+<Term def="编译器根据当前 declaration 把省略实参替换为完整 argument expression 的步骤。">
+  call-site default substitution
+</Term>
+
+<Term def="default argument 属于函数声明的调用语法，不属于运行期 vtable entry 或函数 body。">
+  declaration-side default policy
+</Term>
+
+C++ 选择静态绑定避免在每次 virtual call 额外查找动态 default metadata；语言没有为 vtable 携带默认值。
+
+## static type 改变就会改变默认值
+
+reference、pointer、smart pointer dereference、template parameter 的 static type 都会影响可见 declaration。
+
+<Term def="表达式在编译期声明的类型，用于查名、overload resolution 与 default substitution。">
+  call expression static type
+</Term>
+
+```cpp
+void paintShape(const Shape& shape) {
+    shape.draw(); // always inserts Shape::Red
+}
+```
+
+即使实际传 Rectangle/Circle，paintShape body 已按 Shape declaration 编译。
+
+<Term def="generic/base client 只看到 base declaration，因此总使用 base default 的调用边界。">
+  base-client default boundary
+</Term>
+
+这正是多态 API 的常态，因此 derived default 往往只影响少数 concrete calls，制造不一致。
+
+<Callout type="trap">
+  **现象**：Rectangle unit test 直接调用对象得到
+  Green，于是认为默认设置成功。**原因**：测试 static type 是
+  Rectangle；production 经 Shape& 调用会插入 Red。**修法**：同一对象必须经
+  base/derived views 测试，且 override 不声明新 default。
+</Callout>
+
+## override 不检查默认值一致性
+
+`override` 检查函数 signature 是否覆盖，但 default argument 不属于 function type/signature，因此 Green 与 Red 不会触发 compile error。
+
+<Term def="参数类型、cv/ref、noexcept 等参与 override 匹配，而 default expression 不参与的规则。">
+  default-not-in-signature rule
+</Term>
+
+```cpp
+void draw(Color color = Color::Green) const override; // 合法但危险
+```
+
+<Term def="编译器确认 virtual body 关系，却无法保证 base/derived default policy 一致。">
+  override default blind spot
+</Term>
+
+需要 lint/code review 规则禁止 override 重复 default。
+
+## 即使默认值相同，也不要复制声明
+
+Derived 写相同 Red 暂时行为一致，但复制了 policy；Base 改为 Blue 后 Derived 可能未同步。
+
+<Term def="多个 declarations 重复同一默认表达式，形成需要人工同步的政策副本。">
+  duplicated default policy
+</Term>
+
+```cpp
+class Rectangle : public Shape {
+public:
+    void draw(Color color) const override; // no default here
+};
+```
+
+<Term def="默认值只在一个稳定 public declaration 出现，其他 declarations 接收显式参数。">
+  single-source default
+</Term>
+
+override 调用仍可从 Shape interface 省略参数，concrete Rectangle caller 若直接调用则必须显式给 color；这反而暴露了接口层次差异。
+
+## NVI 把默认政策放进唯一入口
+
+更完整修复是 public non-virtual wrapper 携带 default，private virtual hook 不带 default：
+
+```cpp
+class Shape {
+public:
+    void draw(Color color = Color::Red) const {
+        validate(color);
+        doDraw(color);
+    }
+
+private:
+    virtual void doDraw(Color color) const = 0;
+};
+
+class Rectangle : public Shape {
+private:
+    void doDraw(Color color) const override;
+};
+```
+
+<Term def="public non-virtual function 定义默认参数和统一流程，virtual hook 只接收显式值。">
+  NVI default policy
+</Term>
+
+<Term def="所有静态 views 都调用同一个 public wrapper，因此默认 substitution 只有一个来源。">
+  uniform default entry
+</Term>
+
+<EcppNviDefaultParameterMap />
+
+NVI 也可集中 validation、lock、metrics 和 error mapping。
+
+## 不需要默认时要求显式参数
+
+颜色是重要业务选择时，最安全 API 是不提供 default：
+
+```cpp
+virtual void draw(Color color) const = 0;
+```
+
+<Term def="要求每个调用点明确提供参数，消除隐藏 policy 与版本歧义。">
+  explicit argument contract
+</Term>
+
+可在上层提供 named convenience：
+
+```cpp
+void drawWithTheme(const Shape& shape, const Theme& theme) {
+    shape.draw(theme.defaultShapeColor());
+}
+```
+
+<Term def="由调用上下文显式计算 policy value，再传给 polymorphic operation 的 helper。">
+  context-owned default
+</Term>
+
+这适合 default 依 theme/user/config 变化的系统。
+
+## 若 subtype 默认真的应该动态变化
+
+有时“无参 draw”本身就是 polymorphic behavior。不要依赖 default argument；建两个 operations：
+
+```cpp
+class Shape {
+public:
+    void draw() const {
+        doDraw(defaultColor());
+    }
+
+    void draw(Color color) const {
+        doDraw(color);
+    }
+
+private:
+    virtual Color defaultColor() const = 0;
+    virtual void doDraw(Color color) const = 0;
+};
+```
+
+<Term def="通过 virtual function 显式计算 subtype-specific default，而非声明期 default argument。">
+  dynamic default operation
+</Term>
+
+<Term def="无参 overload 与显式参数 overload 分离，让调用意图和 dynamic policy 可见。">
+  overload-based default API
+</Term>
+
+这增加 virtual calls，但语义真实；要验证 defaultColor 的 invariant 与成本。
+
+## default argument 不属于 function pointer type
+
+通过 function pointer/callback 调用时，default 不随函数地址携带：
+
+```cpp
+using DrawFunction = void (*)(Shape::Color);
+```
+
+<Term def="函数类型只包含参数和返回类型，不编码 declaration 上的 default argument。">
+  default-free function type
+</Term>
+
+调用 pointer 必须提供参数，除非当前调用语法有另一个可见 declaration 可用；callback registry 不能依赖原函数 default 自动传播。
+
+<Term def="把函数包装为 callback 后必须显式决定缺省值、不能从函数类型推导的边界。">
+  callback default boundary
+</Term>
+
+adapter/lambda 应明确传入 policy。
+
+## 修改 default 是 call-site 版本变更
+
+header v1 为 Red，客户 binary 编译后 call site 已包含 Red。库 header 改 Blue 并只替换 shared library，旧客户仍传 Red。
+
+<Term def="default expression 编译进 caller machine code，library binary 无法在运行期替换。">
+  caller-baked default
+</Term>
+
+<EcppDefaultCallsiteVersionMap />
+
+<Term def="同一部署中旧/新客户分别传不同 default，产生混合版本行为的风险。">
+  default-version skew
+</Term>
+
+安全/协议关键 default 改动需客户 rebuild、API version 或 runtime config，不应假设动态库热更足够。
+
+<Callout type="trap">
+  **现象**：修改 public header default 并发布新 shared
+  library，认为所有客户立即采用。**原因**：default 已编进 caller；旧 binary
+  不重新编译。**修法**：显式版本化或把 default 计算移到 out-of-line
+  wrapper/runtime policy，并验证旧新客户组合。
+</Callout>
+
+## 默认表达式也可能有副作用
+
+default argument 可以是函数调用：
+
+```cpp
+void send(Message message, TraceId trace = nextTraceId());
+```
+
+<Term def="每次调用省略参数时在 caller context 求值、可能读取状态或产生副作用的默认表达式。">
+  evaluated default expression
+</Term>
+
+求值发生在 call site，exception、thread context、source location 和 binary version 都属于 caller。
+
+<Term def="默认表达式的执行、异常和 side effects 归属于调用方求值阶段的性质。">
+  caller-side default evaluation
+</Term>
+
+多态 override 重声明不同 side-effecting defaults 会让问题更严重，应禁止。
+
+## 多声明默认值容易产生可见性差异
+
+C++ 允许在规则约束下从同一 scope 的 declarations 累积不同参数 defaults，但同一参数不能在同一可见 scope 重定义。跨 header/namespace 的可见声明差异会让调用可用性不同。
+
+<Term def="同一函数的多个 declarations 分散提供尾部参数 defaults 的语言机制。">
+  default argument accumulation
+</Term>
+
+<Term def="不同 translation units 因 include/declaration 可见集合不同而看到不同 default call 语法。">
+  declaration visibility skew
+</Term>
+
+公共 API 应在单一 canonical declaration 定义 defaults，其他声明不重复。
+
+## 用静态视图和版本矩阵验收
+
+先预测 call expression 静态类型、插入值与最终 virtual body，再验证：
+
+- 同一 Rectangle object 经 Shape*/Shape&/Rectangle*/Rectangle& 调无参 draw。
+- override declarations 不包含 default argument，lint 作为 error。
+- explicit color calls 在所有 views 得到相同 body/value。
+- NVI wrapper tests 验证 default 只插入一次，hook 永远接收显式值。
+- dynamic default overload tests 覆盖 subtype defaultColor 与显式 color。
+- function pointer/std::function callback 必须显式传参数。
+- header v1/v2 + old/new client + shared library 组合验证 caller-baked value。
+- side-effecting default 记录求值线程、异常和调用次数。
+
+<Term def="记录 static view、default declaration、插入值、dynamic body 与 binary 版本的测试表。">
+  default-binding matrix
+</Term>
+
+只有默认来源唯一且版本行为明确，polymorphic API 才可维护。
+
+## 小结
+
+- virtual function body 动态绑定，default parameter value 静态绑定
+- compiler 先按 call expression static type 补入 default，再执行 virtual dispatch
+- derived 重声明不同 default 会让同一 override 经 Base/Derived views 收到不同值
+- override 不检查 default，因为 default 不属于 function signature
+- NVI 把 default 放在唯一 non-virtual wrapper，virtual hook 只接收显式参数
+- default 被编进 caller，修改 header 需要重编译或版本化，不能只替换 library
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 37"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="default parameter value">
+    调用省略参数时编译期提供的表达式。
+  </GlossaryItem>
+  <GlossaryItem term="inherited default redefinition">
+    override 对同一参数声明不同 default。
+  </GlossaryItem>
+  <GlossaryItem term="dynamic function binding">
+    运行期按动态类型选择 virtual body。
+  </GlossaryItem>
+  <GlossaryItem term="statically bound default">
+    编译期按静态声明决定 default。
+  </GlossaryItem>
+  <GlossaryItem term="call-site default substitution">
+    compiler 在 caller 补写省略实参。
+  </GlossaryItem>
+  <GlossaryItem term="declaration-side default policy">
+    default 属于声明调用语法而非 vtable。
+  </GlossaryItem>
+  <GlossaryItem term="call expression static type">
+    决定 default lookup 的编译期类型。
+  </GlossaryItem>
+  <GlossaryItem term="base-client default boundary">
+    base client 总采用 base declaration default。
+  </GlossaryItem>
+  <GlossaryItem term="default-not-in-signature rule">
+    default 不参与 override signature。
+  </GlossaryItem>
+  <GlossaryItem term="override default blind spot">
+    override 无法检查 default 一致性。
+  </GlossaryItem>
+  <GlossaryItem term="duplicated default policy">
+    多个 declarations 复制同一 default。
+  </GlossaryItem>
+  <GlossaryItem term="single-source default">
+    默认只出现在一个 canonical 声明。
+  </GlossaryItem>
+  <GlossaryItem term="NVI default policy">
+    nonvirtual wrapper 定义 default 和流程。
+  </GlossaryItem>
+  <GlossaryItem term="uniform default entry">
+    全部静态 views 使用同一默认入口。
+  </GlossaryItem>
+  <GlossaryItem term="explicit argument contract">
+    所有 callers 明确提供参数。
+  </GlossaryItem>
+  <GlossaryItem term="context-owned default">
+    由调用上下文计算并传入 policy。
+  </GlossaryItem>
+  <GlossaryItem term="dynamic default operation">
+    virtual operation 计算 subtype default。
+  </GlossaryItem>
+  <GlossaryItem term="overload-based default API">
+    无参和显式参数 overload 分离。
+  </GlossaryItem>
+  <GlossaryItem term="default-free function type">
+    function type 不编码 default argument。
+  </GlossaryItem>
+  <GlossaryItem term="callback default boundary">
+    callback adapter 必须显式处理缺省值。
+  </GlossaryItem>
+  <GlossaryItem term="caller-baked default">
+    编译进 caller machine code 的默认值。
+  </GlossaryItem>
+  <GlossaryItem term="default-version skew">
+    旧新 callers 混用不同默认值。
+  </GlossaryItem>
+  <GlossaryItem term="evaluated default expression">
+    省略参数时在 caller 求值的表达式。
+  </GlossaryItem>
+  <GlossaryItem term="caller-side default evaluation">
+    默认副作用和异常发生在调用方。
+  </GlossaryItem>
+  <GlossaryItem term="default argument accumulation">
+    多 declarations 分散提供 defaults。
+  </GlossaryItem>
+  <GlossaryItem term="declaration visibility skew">
+    不同 TU 看到不同 default declarations。
+  </GlossaryItem>
+  <GlossaryItem term="default-binding matrix">
+    静态视图、插值、body 与版本测试表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：复现 Shape/Rectangle。** Base default Red、override default Green，同一对象经两种 pointers 调 draw，写出两阶段绑定。
+
+<Answer question="为什么两个 calls 执行同一 body 却收到不同 color？">
+  Shape* call 在编译期依据 Shape declaration 补成 draw(Red)，Rectangle* call
+  依据 Rectangle declaration 补成 draw(Green)；两者运行期都按动态类型 dispatch
+  到 Rectangle::draw。default 不在 signature，override 不报错。删除 derived
+  default，并用 NVI 或显式参数统一来源。
+</Answer>
+
+2. **问题 2：设计 subtype-specific 默认颜色。** 每种 Shape 确实需要不同无参默认，但显式 draw(color) 仍共用接口。
+
+<Answer question="怎样表达动态默认而不重定义 default argument？">
+  提供 public nonvirtual `draw()` 调 virtual `defaultColor()` 后再调
+  `doDraw(color)`；另提供 nonvirtual `draw(Color)` 直接调 hook。virtual hooks
+  都不含 default arguments。无参语义真正动态分派，显式参数保持一致。base
+  contract tests 覆盖每个 subtype default 与显式 override。
+</Answer>
+
+3. **问题 3：发布默认值变更。** header 从 Red 改 Blue，只替换 shared library，线上同时有旧新客户，分析并制定方案。
+
+  <Answer question="为什么旧客户仍传 Red，怎样安全演进？">default expression 已编进旧 call sites，library 只接收显式 Red；新编译客户传 Blue，形成 version skew。要求客户 rebuild/redeploy，或新增版本化 API；更稳定的是把 default 移到 out-of-line nonvirtual wrapper/runtime config，让 library 统一计算。测试 header/library/client 四种版本组合。</Answer>
+</Exercises>

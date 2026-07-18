@@ -1,63 +1,23 @@
-/**
- * <Cgp2dGraphicsDiagram>：2D图形与变换图解。
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * 全部 DESIGN token 配色，无裸 hex。
- */
+import type { ReactNode } from "react";
 
-const VIEW_W = 720;
-const VIEW_H = 400;
+function Frame({ caption, children }: { caption: string; children: ReactNode }) {
+  return <figure className="mdx-figure not-prose mx-auto my-6"><div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div><figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption></figure>;
+}
+
+const scenePath = [["Input / binding", "events + data"], ["Retained scene", "objects + properties"], ["Layout", "measure + arrange"], ["Render", "transform + clip + raster"], ["Display", "DPI + pixels + light"]] as const;
 
 export function Cgp2dGraphicsDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="2D图形与变换图解"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <text x={VIEW_W / 2} y="32" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">
-            2D图形与变换
-          </text>
-          <text x={VIEW_W / 2} y="54" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
-            平移、旋转、缩放与齐次坐标
-          </text>
+  return <Frame caption="二维平台把输入和声明状态，经 layout 与 render 转成设备输出。"><div role="img" aria-label="WPF保留模式二维场景从输入到显示的数据流" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">{scenePath.map(([title, detail], index) => <div key={title} className="relative min-h-28 border border-border bg-bg/45 p-3"><span className="text-xs font-bold text-accent">0{index + 1}</span><strong className="mt-2 block text-sm text-primary">{title}</strong><span className="mt-2 block text-xs text-secondary">{detail}</span>{index < scenePath.length - 1 && <span aria-hidden="true" className="absolute -right-2 top-11 z-10 text-accent">→</span>}</div>)}</div></Frame>;
+}
 
-          <rect x="40" y="80" width="640" height="280" rx="12" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.3" />
+const transforms = [["Translate", "T(tx, ty)", "point only"], ["Rotate", "R(θ)", "orientation + area"], ["Scale / shear", "S / H", "shape + determinant"], ["Change frame", "B←W · W←A", "source → target"], ["Inverse", "M⁻¹", "screen → local / undo"]] as const;
 
-          {/* Three transforms */}
-          <rect x="60" y="110" width="180" height="130" rx="10" fill="var(--success)" fillOpacity="0.06" stroke="var(--success)" strokeWidth="1.2" />
-          <text x="150" y="132" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--success)">平移 Translation</text>
-          <text x="150" y="158" textAnchor="middle" fontSize="10" fill="var(--text-primary)">x' = x + tx</text>
-          <text x="150" y="176" textAnchor="middle" fontSize="10" fill="var(--text-primary)">y' = y + ty</text>
-          <text x="150" y="200" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">齐次坐标矩阵：</text>
-          <text x="150" y="218" textAnchor="middle" fontSize="9" fill="var(--text-tertiary)">[1 0 tx | 0 1 ty | 0 0 1]</text>
+export function Cgp2dTransformDiagram() {
+  return <Frame caption="组合顺序必须和 source/target frame 一起阅读；内存布局不是代数顺序。"><div role="img" aria-label="二维平移旋转缩放换基和逆变换关系" className="grid gap-2 md:grid-cols-5">{transforms.map(([title, symbol, role], index) => <div key={title} className="min-h-28 border border-border bg-bg/45 p-3"><span className="grid size-7 place-items-center rounded-full bg-accent/15 text-xs font-bold text-accent">{index + 1}</span><strong className="mt-3 block text-sm text-primary">{title}</strong><span className="mt-2 block font-mono text-xs text-warning">{symbol}</span><span className="mt-2 block text-xs text-secondary">{role}</span></div>)}</div></Frame>;
+}
 
-          <rect x="260" y="110" width="180" height="130" rx="10" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.2" />
-          <text x="350" y="132" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--accent)">旋转 Rotation</text>
-          <text x="350" y="158" textAnchor="middle" fontSize="10" fill="var(--text-primary)">x' = x*cos - y*sin</text>
-          <text x="350" y="176" textAnchor="middle" fontSize="10" fill="var(--text-primary)">y' = x*sin + y*cos</text>
-          <text x="350" y="200" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">绕原点旋转角度 theta</text>
-          <text x="350" y="218" textAnchor="middle" fontSize="9" fill="var(--text-tertiary)">[cos -sin 0 | sin cos 0 | 0 0 1]</text>
+const contracts = [["Semantic types", "Point / Vector / Frame / Bounds"], ["Convention", "source-target + vector side + units"], ["Operations", "construct + compose + inverse + apply"], ["Failure", "singular + NaN + range policy"], ["Evidence", "properties + CPU/GPU + serialization"]] as const;
 
-          <rect x="460" y="110" width="200" height="130" rx="10" fill="var(--warning)" fillOpacity="0.06" stroke="var(--warning)" strokeWidth="1.2" />
-          <text x="560" y="132" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--warning)">缩放 Scaling</text>
-          <text x="560" y="158" textAnchor="middle" fontSize="10" fill="var(--text-primary)">x' = sx * x</text>
-          <text x="560" y="176" textAnchor="middle" fontSize="10" fill="var(--text-primary)">y' = sy * y</text>
-          <text x="560" y="200" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">均匀缩放 sx=sy</text>
-          <text x="560" y="218" textAnchor="middle" fontSize="9" fill="var(--text-tertiary)">[sx 0 0 | 0 sy 0 | 0 0 1]</text>
-
-          {/* Homogeneous coords */}
-          <rect x="60" y="270" width="600" height="70" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" />
-          <text x={VIEW_W / 2} y="294" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--accent)">齐次坐标：用3维向量表示2D点 [x, y, 1]</text>
-          <text x={VIEW_W / 2} y="316" textAnchor="middle" fontSize="11" fill="var(--text-primary)">使所有仿射变换统一为矩阵乘法，可组合：M = M_n x ... x M_2 x M_1</text>
-          <text x={VIEW_W / 2} y="332" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">变换顺序：先变换的矩阵在右边（右乘），点左乘矩阵链</text>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        2D图形与变换——平移、旋转、缩放与齐次坐标矩阵
-      </figcaption>
-    </figure>
-  );
+export function CgpTransformLibraryDiagram() {
+  return <Frame caption="可靠变换库的核心是语义合同和性质证据，不是一个 float[9]。"><div role="img" aria-label="二维三维变换库的类型约定操作失败和测试合同" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">{contracts.map(([title, detail], index) => <div key={title} className="relative min-h-28 border border-border bg-bg/45 p-3"><strong className="text-sm text-primary">{title}</strong><span className="mt-2 block text-xs leading-5 text-secondary">{detail}</span>{index < contracts.length - 1 && <span aria-hidden="true" className="absolute -right-2 top-10 z-10 text-accent">→</span>}</div>)}</div></Frame>;
 }

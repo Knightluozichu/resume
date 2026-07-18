@@ -1,105 +1,224 @@
 ---
-title: "3D图形与投影"
+title: "三维几何、层次场景与相机"
 type: B
 section: "计算机图形学与渲染"
 order: 4
-description: "透视投影与正交投影的数学原理对比"
+description: "承载第三版 Ch3、Ch6、Ch7、Ch11、Ch13、Ch16：Dürer renderer、三维数学、层次模型、变换、相机与平台"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
 draft: false
 ---
 
-import { Cgp3dGraphicsDiagram } from "@/components/mdx/cg-principles-practice/diagrams/cgp-3d-graphics";
+import { Cgp3dGraphicsDiagram, CgpHierarchyDiagram, CgpCameraPlatformDiagram } from "@/components/mdx/cg-principles-practice/diagrams/cgp-3d-graphics";
+import { CgpStepFlowDiagram } from "@/components/mdx/cg-principles-practice/diagrams/cgp-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能写出透视投影和正交投影的矩阵形式
-- 能解释透视除法的作用和w分量的含义
-- 能区分透视投影和正交投影的适用场景
-- 能回答：为什么透视投影会产生近大远小？
+
+- 能从 Dürer window 推导 pinhole projection，并指出 clipping、visibility 与 shading 缺失时的限制
+- 能使用 point/vector/plane、dot/cross、barycentric 与 frame 解决三维几何问题
+- 能计算层次模型的 world transform、normal transform 与 camera/view transform
+- 能比较 fixed-function、programmable API、scene framework 与 game engine 的控制和责任边界
+
 </Objectives>
 
-## 直觉引入
+## 直觉：相机不是把 z 删除掉
 
-想象你在铁轨上拍照。两条平行的铁轨在照片中汇聚到远处的一个点——这就是透视投影。如果你换成俯视图（正交投影），铁轨看起来仍然平行——没有汇聚。
+先预测：两条平行于成像平面的线在照片上一定汇聚吗？父节点缩放后，子节点绕“自己的轴”旋转还是绕被缩放的轴旋转？答案取决于几何关系和 frame composition，不是“3D 乘一个投影矩阵”就结束。
 
-透视投影模拟人眼的视觉：近处物体大，远处物体小。正交投影保持物体大小不随距离变化，适合工程图纸和2D游戏。两者的数学差异就在投影矩阵——透视投影的w分量携带深度信息，正交投影的w恒为1。
-
-## 概念讲解
-
-### 3D投影变换
+Ch3 An Ancient Renderer Made Modern 从 Dürer 的观察窗建立第一台 renderer；Ch6 用 fixed-function 3D 与 hierarchical modeling 组织场景；Ch7 给出 2-space/3-space 数学；Ch11/13 完成三维变换和 camera；Ch16 比较承载这些责任的平台。
 
 <Cgp3dGraphicsDiagram />
 
-<Term def="透视投影模拟人眼视角，近处物体大远处物体小的投影方式">透视投影</Term>：x' = x*n/(n-z)，w' = -z。w分量携带深度信息。
+## Ch3 An Ancient Renderer Made Modern
 
-<Term def="正交投影保持平行线平行，物体大小不随距离变化的投影方式">正交投影</Term>：x' = (x-l)/(r-l)*2-1，w' = 1。无透视形变。
+Dürer 装置把 eye $e$、画面平面与三维点 $p$ 连成一条 ray，交点是图像位置。若 eye 在原点、image plane 为 $z=-n$，相机空间点 $(x,y,z)$ 的平面坐标为：
 
-<Term def="透视除法是将裁剪空间坐标除以w分量得到归一化设备坐标的操作">透视除法</Term>：NDC = clip.xyz / clip.w。这是近大远小效果产生的关键步骤。
+$$
+x_p=-n\frac{x}{z},\qquad y_p=-n\frac{y}{z}.
+$$
 
-<Term def="FOV是视场角，控制相机能看到的范围大小">FOV</Term>（Field of View）和宽高比定义透视投影的视锥。
+这是相似三角形，不是“模拟人眼”这一句话。平行于 view direction 的线会趋向 vanishing point；平行于 image plane 的线仍可保持平行。
 
-## 交互Demo
+<Term def="从相机中心穿过图像样本形成射线，并取射线与场景几何的最近有效交点来确定覆盖的成像方法">光线投射</Term>可直接解决 visibility；若只投影 mesh vertices 再连 wireframe，会遇到：视点后方点、跨 near plane 边、隐藏面、透视插值与遮挡顺序。
 
-<Stepper>
-<Step title="第一步：投影原理">透视投影的w分量 = -z，透视除法后x/w和y/w随z变化产生近大远小。正交投影w恒为1，不做除法，无形变。</Step>
-<Step title="第二步：视锥与FOV">
-透视投影由FOV、宽高比、近平面、远平面定义视锥。正交投影由left/right/bottom/top/near/far定义立方体。观察视锥的形状。
-<Cgp3dGraphicsDiagram />
-</Step>
-<Step title="第三步：投影应用">透视投影用于3D游戏和模拟（模拟人眼）。正交投影用于CAD/建筑图纸（保持尺寸比例）和2D游戏（无透视干扰）。</Step>
-</Stepper>
+完整最小 renderer 需要 model/camera transform、clip、coverage/ray intersection、nearest visibility 和 shading。中间量应显示 camera-space geometry、clip decision、projected coordinates 与 selected hit。
 
-## 代码对照
+## Ch7 Essential Mathematics and the Geometry of 2-Space and 3-Space
+
+point 属于 affine space，vector 表示点之差。dot product 给长度/投影/夹角；cross product 给与两个向量垂直的有向面积向量：
+
+$$
+a\cdot b=\|a\|\|b\|\cos\theta,
+\qquad \|a\times b\|=\|a\|\|b\|\sin\theta.
+$$
+
+<Term def="由一个原点和一组有序基向量定义的坐标参照；几何对象本身不变，坐标随参照系改变">坐标标架</Term>把抽象 point/vector 变成数值。basis 非正交时不能用转置代替 inverse；handedness 决定 cross、winding 和 rotation 正方向。
+
+平面可写为 $n\cdot x+d=0$。三角形中的 point 用 barycentric coordinates：
+
+$$
+p=\lambda_0p_0+\lambda_1p_1+\lambda_2p_2,
+\quad \lambda_0+\lambda_1+\lambda_2=1.
+$$
+
+全部 $\lambda_i\ge0$ 表示在闭三角形内，但 edge inclusion 要统一，否则相邻 triangle 会产生 double hit 或 crack。退化 triangle 的面积接近零时必须有明确 policy。
+
+<Term def="用仿射组合表达点相对 simplex 顶点的位置，常用于三角形包含测试和属性插值的坐标">重心坐标</Term>在投影后插值 texture/depth 时还要区分 screen-linear 与 perspective-correct。
+
+## Ch6 Fixed-Function 3D Graphics and Hierarchical Modeling
+
+<CgpHierarchyDiagram />
+
+fixed-function pipeline 通过 transform、lighting、texture、blend 等预定义状态完成常见渲染。它的历史价值是暴露 stage/state；现代 programmable pipeline 把部分 stage 交给 shader，但 depth/raster/blend 等固定功能仍存在，不能把“fixed-function”误解成整个 GPU 不可编程。
+
+<Term def="以父子节点组织局部变换和对象，使父状态变化递归影响后代 world transform 的建模方式">层次建模</Term>中：
+
+$$
+M_{world(child)}=M_{world(parent)}M_{local(child)}.
+$$
+
+robot arm 的 shoulder、elbow、hand 各在局部 frame 建模。matrix stack 的 push/multiply/draw/pop 是 legacy API 的一种遍历实现；现代 ECS/scene graph 仍需同样的 parent-before-child update、dirty propagation、cycle prevention 与 bounds refresh。
 
 ```cpp
-// 透视投影矩阵生成
-mat4 perspective(float fovy, float aspect, float near, float far) {
-    float f = 1.0f / tan(fovy / 2.0f);
-    mat4 m = mat4(0.0f); // 初始化为0
-    m[0][0] = f / aspect;        // x缩放
-    m[1][1] = f;                  // y缩放
-    m[2][2] = (far + near) / (near - far);  // z映射
-    m[2][3] = -1.0f;              // w = -z (关键！)
-    m[3][2] = (2 * far * near) / (near - far); // z平移
-    return m;
+void updateWorld(Node& node, const Mat4& parentFromLocal) {
+    node.worldFromLocal = parentFromLocal * node.parentFromLocal;
+    node.worldBounds = transformBounds(node.worldFromLocal, node.localBounds);
+    for (Node* child : node.children) updateWorld(*child, node.worldFromLocal);
 }
-// 顶点变换: clipPos = P * V * M * vec4(pos, 1.0)
-// 透视除法: ndcPos = clipPos.xyz / clipPos.w
 ```
+
+非均匀 parent scale 会改变 child basis，旋转后可能产生 shear；如果设计要求 rigid joint，应分离 scale 或对 transform components 设约束。
+
+## Ch11 Transformations in Three Dimensions
+
+三维 affine transform 用 $4\times4$ 齐次矩阵。translation、scale、shear 与 reflection 直接推广；rotation 更复杂：可用 axis-angle、matrix 或 unit quaternion。
+
+Rodrigues 公式围绕单位轴 $u$ 旋转 vector $v$：
+
+$$
+R_u(\theta)v=v\cos\theta+(u\times v)\sin\theta+u(u\cdot v)(1-\cos\theta).
+$$
+
+<Term def="以单位四元数表示三维旋转，便于稳定组合和球面插值，但仍需固定乘法与标架约定">旋转四元数</Term>避免欧拉角参数化的 gimbal lock，不表示“任何插值都自动正确”。两个姿态需处理 antipodal equivalence、shortest path、normalization 和 coordinate convention。
+
+normal 不是普通 direction。若 model 线性部分为 $A$，切平面向量变为 $At$，保持垂直要求：
+
+$$
+n'=(A^{-1})^Tn.
+$$
+
+纯 rotation 时等于 $An$；nonuniform scale/shear 时直接乘 $A$ 会错。singular transform 没有 normal inverse，资产和 runtime 必须拒绝或降级。
+
+## Ch13 Camera Specifications and Transformations
+
+<Term def="由相机位置、朝向、视场或成像范围、aspect、near/far 与投影类型组成的观察规格">相机规格</Term>先定义 camera world pose，再取 inverse 得到 view-from-world。`lookAt(eye,target,upHint)` 必须处理 eye≈target、up 与 forward 平行，以及 handedness。
+
+**Perspective camera（透视相机）**以 eye/center of projection 和 frustum 表达近大远小；**orthographic camera（正交相机）**以平行投射方向和 box 表达与深度无关的图像尺度。二者都需要 view transform、clipping 和 depth，只是 projection 几何不同。
+
+透视投影将 view frustum 映到 clip volume。projection 输出 homogeneous clip coordinates，先按 clip inequalities 裁剪，再除以 $w$ 得 NDC，最后 viewport 映射到 pixels/depth。正交投影通常 $w$ 保持常数，但仍执行通用 homogeneous divide；不是“完全不做除法”。
+
+矩阵具体符号依 handedness、forward axis、NDC z range、reversed-Z 和 storage。不能把 `w=-z` 当所有 API 的定义。应以已知 near/far/corner points 做端到端测试。
+
+perspective depth 对 view distance 非线性，传统映射近处精度高；near plane 过小会浪费精度。reversed-Z 配合 floating depth 和合适 projection 可改善远距离精度，但 compare/clear/linearization 全链要一致。
+
+## Ch16 Survey of Real-Time 3D Graphics Platforms
+
+<CgpCameraPlatformDiagram />
+
+<Term def="平台向应用暴露的数据模型、生命周期和绘制能力；抽象厚度决定应用与平台各自承担的场景、资源和调度责任">图形平台抽象</Term>可分层比较：
+
+- thin graphics API：显式 resource/pipeline/command/sync，控制强，应用责任大；
+- programmable rendering framework：封装 shader/material/pass/asset，保留较多渲染控制；
+- scene graph/CAD/visualization toolkit：提供 hierarchy、camera、selection、data model；
+- game engine：再加入 editor、animation、physics、streaming、platform build；
+- browser/mobile/UI platform：受 sandbox、power、form factor 与 integration 约束。
+
+平台不是按“越厚越高级”排序。选择要根据 performance predictability、content scale、tooling、portability、debuggability、team 与 product lifecycle，用代表性 vertical slice 测试。
+
+## 三步三维验收
+
+<Stepper>
+<Step title="第一步：固定 frame、handedness 与 clip 约定">
+
+显示 model/world/view basis、camera frustum、near/far、NDC range、winding 与 depth policy。
+
+<CgpStepFlowDiagram caption="空间约定必须先于投影矩阵抄写。" stage={1} stages={["Specify：frames + handedness + vector side + clip/depth + camera"]} />
+
+</Step>
+<Step title="第二步：逐级观察层次与投影">
+
+显示 local/world bounds、parent composition、camera-space vertices、clip result、NDC、viewport 与 selected ray hit。
+
+<CgpStepFlowDiagram caption="Dürer 几何、scene hierarchy 和 GPU pipeline 用同一批中间量连接。" stage={2} stages={["Specify：frames + handedness + vector side + clip/depth + camera", "Inspect：hierarchy → world → view → clip → NDC → visibility"]} />
+
+</Step>
+<Step title="第三步：运行解析、退化与平台测试">
+
+验证 known points、inverse round-trip、normal perpendicularity、near clipping、degenerate basis，并跨两种平台比较 output 与时间。
+
+<CgpStepFlowDiagram caption="数学正确、边界稳健和平台可迁移同时验收。" stage={3} stages={["Specify：frames + handedness + vector side + clip/depth + camera", "Inspect：hierarchy → world → view → clip → NDC → visibility", "Validate：analytic geometry + degenerates + image reference + platform cost"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**误区：认为投影矩阵直接产生屏幕坐标。**
-投影矩阵产生的是裁剪空间坐标，还不是屏幕坐标。还需要透视除法（除以w）得到NDC，再视口变换映射到屏幕像素坐标。三步缺一不可。
+**现象 →** 只投影 vertices 后连线，认为 renderer 已完成。**原因 →** 忽略 clipping、coverage、nearest visibility 与 perspective interpolation。**修法 →** 用跨 near-plane triangle、互相遮挡面和可视 hit 中间量验收。
 </Callout>
 
 <Callout type="trap">
-**误区：正交投影没有深度信息。**
-正交投影的w恒为1（不做透视除法），但z分量仍然映射到[-1,1]范围用于深度测试。正交投影有深度信息，只是没有透视形变（近大远小）。
+**现象 →** 把 `w=-z`、NDC `[-1,1]` 和矩阵下标复制到所有 API。**原因 →** 把某个 convention 当投影原理。**修法 →** 先声明 handedness/depth/vector/storage，用 near/far/corners 单元测试矩阵。
 </Callout>
 
+<Callout type="trap">
+**现象 →** 父节点 nonuniform scale 后子节点法线、高光和关节旋转异常。**原因 →** direction/normal/rigid pose 都直接乘同一矩阵。**修法 →** normal 用 inverse transpose，关节限制 rigid transform，检查 determinant/shear。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题 1**：透视投影为什么会产生近大远小？
+
+**问题 1：Dürer renderer 到完整 renderer 还缺什么？**
 
 <Answer>
-透视投影矩阵将z分量的信息编码到w分量中（w = -z）。透视除法将x/y/z都除以w：x' = x/w = x/(-z)。当z较小（近处）时，x/w较大（物体显得大）；当z较大（远处）时，x/w较小（物体显得小）。这就是近大远小的数学原理——w分量随深度变化，除以w后坐标被深度缩放。
+点投影只给图像交点；还需处理相机后/near plane clipping、primitive coverage 或 ray intersection、最近可见 surface、属性插值、shading 和 framebuffer/display。每步都要可视中间结果。
 </Answer>
 
-**问题 2**：透视投影和正交投影各适合什么场景？为什么？
+**问题 2：为什么 view matrix 是 camera world transform 的 inverse？**
 
 <Answer>
-透视投影适合3D游戏、模拟器、虚拟现实——模拟人眼视觉，近大远小让玩家有沉浸感。正交投影适合CAD/建筑设计（保持尺寸比例不变形，方便测量）、2D游戏（无透视干扰，远近物体一样大）、UI渲染（2D元素不应有3D形变）。选择依据：如果需要模拟真实视觉感受用透视；如果需要保持精确尺寸或避免深度形变用正交。
+camera pose 把 camera-local 坐标放到 world；渲染需要把 world 点表达在 camera frame，因此应用逆映射。若 camera worldFromView 为刚体，inverse 可由 rotation transpose 和相反平移构造。
 </Answer>
+
+**问题 3：怎样验证 normal matrix？**
+
+<Answer>
+选择与 tangent 垂直的 normal，对 nonuniform scale/shear 变换 tangent，并用 inverse-transpose 变换 normal；检查 dot 仍接近零。再覆盖 pure rotation、reflection 和 near-singular case。
+</Answer>
+
+**问题 4：如何比较 thin API 与 engine？**
+
+<Answer>
+实现相同 vertical slice，比较资源/场景控制、工具与开发时间、CPU/GPU/内存、调试证据、平台覆盖和 fallback。不能只用 feature list 或“更底层更快”下结论。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+Ch3、6、7、11、13、16 把针孔几何推进为完整三维系统：数学定义 frame 与 query，hierarchy 组合对象，camera 组织观察，clip/visibility 生成图像，平台分配应用与框架责任。通过标准是空间约定、中间量、退化输入和平台证据完整。
+
 <Glossary>
-<GlossaryItem term="透视投影">模拟人眼视角的投影方式，近处物体大远处物体小，w分量携带深度信息。</GlossaryItem>
-<GlossaryItem term="正交投影">保持平行线平行的投影方式，物体大小不随距离变化，w恒为1。</GlossaryItem>
-<GlossaryItem term="透视除法">将裁剪空间坐标除以w分量得到归一化设备坐标(NDC)的操作，是近大远小效果产生的原因。</GlossaryItem>
-<GlossaryItem term="FOV">视场角(Field of View)，控制相机能看到的角度范围，影响透视投影的视锥形状。</GlossaryItem>
+<GlossaryItem term="光线投射">从相机经图像样本查询最近场景交点的成像方法。</GlossaryItem>
+<GlossaryItem term="坐标标架">由原点和有序基定义的坐标参照。</GlossaryItem>
+<GlossaryItem term="重心坐标">以 simplex 顶点 affine combination 表示位置的坐标。</GlossaryItem>
+<GlossaryItem term="层次建模">以父子局部变换递归构造 world pose 的建模方式。</GlossaryItem>
+<GlossaryItem term="旋转四元数">用于组合和插值三维旋转的单位四元数。</GlossaryItem>
+<GlossaryItem term="相机规格">位置、朝向、投影范围和 depth 参数组成的观察定义。</GlossaryItem>
+<GlossaryItem term="图形平台抽象">平台与应用之间关于场景、资源、绘制和生命周期的责任合同。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="计算机图形学：原理及实践" adaptedUrl="https://www.cgpp.net/" />
+<Attribution adaptedFrom="Computer Graphics: Principles and Practice, Third Edition, Chapters 3, 6, 7, 11, 13 and 16" adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707" />

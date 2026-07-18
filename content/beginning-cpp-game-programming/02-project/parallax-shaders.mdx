@@ -1,0 +1,393 @@
+---
+title: 第 21 章：视差背景、OpenGL 与 Shaders
+type: A
+section: Run! 项目
+order: 21
+description: 对齐官方第 3 版第 21 章：用 CameraGraphics 类实现视差背景，通过 SFML 的 OpenGL 上下文运行 GLSL shaders，并以流程、资源、性能和回归门禁完成游戏。
+demo: false
+math: false
+sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+draft: false
+---
+
+import {
+  BcgpCompletedGameGateMap,
+  BcgpParallaxLayersMap,
+  BcgpShaderPipelineMap,
+} from "@/components/mdx/beginning-cpp-game-programming/diagrams/parallax-shaders";
+
+<Objectives>
+
+- 能推导相机位移、深度因子和周期环绕组成的视差背景算法，并验证负坐标与窗口缩放没有接缝
+- 能实现 CameraGraphics 类与 GLSL shader 的加载、uniform、RenderStates 和降级协议，解释 SFML 与 OpenGL 的边界
+- 能设计 completed game 的流程、规则、资源、性能与干净构建门禁，复现并修复一次完整回归
+
+</Objectives>
+
+## 从“远山为什么移动得更慢”开始
+
+<Term def="多个背景层按不同相机位移比例移动，从二维画面产生深度感的技术。">
+  视差背景
+</Term>
+
+远层变化小，近层变化大。关键不是每帧给背景加一个速度，而是从相机的绝对位移派生偏移；否则暂停、瞬移和浮点累计都会让背景漂移。
+
+<Term def="把相机世界位移转换成某一背景层纹理偏移的比例，通常远层接近零、近层接近一。">
+  视差因子
+</Term>
+
+先预测：相机向右移动 100 世界单位，factor 为 0.2 与 0.8 的两层各应移动多少？若两层同速，深度感为何消失？
+
+<BcgpParallaxLayersMap />
+
+## 从绝对相机位置计算层偏移
+
+<Term def="某一帧由相机中心、初始中心和视差因子计算出的背景纹理位移。">
+  层偏移
+</Term>
+
+用 `cameraCenter - origin` 得到相机位移，再乘 factor。背景 Sprite 在世界中可以跟随 View 覆盖区域，但纹理采样偏移由公式决定。
+
+```cpp
+float parallaxOffset(float cameraX, float originX,
+                     float factor, float textureWidth)
+{
+    const float raw{(cameraX - originX) * factor};
+    const float wrapped{std::fmod(raw, textureWidth)};
+    return wrapped < 0.0F ? wrapped + textureWidth : wrapped;
+}
+```
+
+<Term def="把任意正负偏移映射到一个纹理周期内且结果非负的环绕计算。">
+  正模环绕
+</Term>
+
+C++ `fmod` 对负数可返回负值，要显式修正。纹理需可平铺；不连续边缘会周期性暴露接缝。
+
+## 覆盖整个 View 而不露空
+
+<Term def="为覆盖当前 View 宽度而绘制的相邻背景纹理副本集合。">平铺覆盖</Term>
+
+至少从可见左边界前一个周期画到右边界后一个周期。resize 或 zoom 后重新计算所需副本数，而不是假设永远两张。
+
+```cpp
+void ParallaxLayer::submit(const CameraSnapshot& camera, DrawQueue& queue) const
+{
+    const float offset{parallaxOffset(camera.center.x, originX_,
+                                      factor_, textureSize_.x)};
+    const int copies{static_cast<int>(
+        std::ceil(camera.size.x / textureSize_.x)) + 2};
+    for (int index = -1; index < copies; ++index) {
+        queue.push(makeDrawItem(
+            camera.left + index * textureSize_.x - offset,
+            renderLayer_));
+    }
+}
+```
+
+<Term def="背景层在远景、天空、地形后景和前景之间的固定绘制顺序。">
+  背景层级
+</Term>
+
+透明前景要在实体之后，远景要在世界之前。radar view 通常跳过复杂背景，保持导航可读。
+
+<Callout type="trap">
+  **现象**：向左移动时背景突然跳变，宽屏右侧偶尔露出空白。**原因**：直接使用负
+  `fmod`，并把覆盖副本数写死。**修法**：使用正模环绕，按当前 Camera size
+  计算副本数，并在两侧多画一个周期。
+</Callout>
+
+## CameraGraphics 类集中管理背景表现
+
+<Term def="拥有视差层配置、背景几何和 shader 资源，并根据 CameraSnapshot 提交背景绘制的表现组件。">
+  CameraGraphics 类
+</Term>
+
+不移动 Camera，不读取 Player，也不推进游戏时间。它接收已提交的 CameraSnapshot 和 presentation time。
+
+```cpp
+class CameraGraphics {
+public:
+    explicit CameraGraphics(const BackgroundCatalog& catalog);
+    void submit(const CameraSnapshot& camera,
+                float presentationTime,
+                DrawQueue& queue) const;
+
+private:
+    std::vector<ParallaxLayer> layers_;
+    std::optional<sf::Shader> weatherShader_;
+};
+```
+
+<Term def="只包含主相机中心、尺寸和世界可见矩形的只读值，用于稳定生成背景。">
+  CameraSnapshot
+</Term>
+
+Shader 不可用时仍提交普通 Sprite。资源所有权长于所有 DrawItem，避免队列保存悬空指针。
+
+## SFML、OpenGL 与 GLSL 的边界
+
+<Term def="SFML 图形模块底层用于执行 GPU 绘制和 shader 程序的状态式图形 API。">
+  OpenGL
+</Term>
+
+本章不绕过 SFML 重写渲染器，而是理解 `sf::Shader` 在有效 OpenGL context 中编译和绑定程序。
+
+<Term def="运行在 GPU 上、由顶点或片段阶段处理几何与像素的 GLSL 程序。">
+  shader
+</Term>
+
+可用于雨幕色调、背景波动或颜色渐变，但不能改变平台碰撞等玩法事实。
+
+<Term def="OpenGL Shading Language，用于编写 SFML shader 源码的着色语言。">
+  GLSL
+</Term>
+
+版本与驱动能力必须匹配，编译失败日志要保留文件名和阶段。
+
+<BcgpShaderPipelineMap />
+
+## 能力检测、加载与降级
+
+<Term def="启动时检查当前图形环境是否支持 shader，并据此选择 GPU 效果或普通绘制。">
+  shader capability
+</Term>
+
+不能把开发机支持当成所有设备支持。
+
+```cpp
+std::optional<sf::Shader> loadWeatherShader(const AssetPath& path)
+{
+    if (!sf::Shader::isAvailable())
+        return std::nullopt;
+
+    sf::Shader shader;
+    if (!shader.loadFromFile(path.fragment, sf::Shader::Fragment))
+        return std::nullopt;
+    return shader;
+}
+```
+
+<Term def="shader 不支持、编译失败或资源缺失时，仍使用普通 Sprite 保持游戏可玩可读的路径。">
+  图形降级
+</Term>
+
+降级应在日志和诊断 HUD 中可见，但不弹出阻塞每帧的错误框。
+
+## Uniform 是 CPU 与 shader 的契约
+
+<Term def="由 CPU 在 draw 前设置、对一次 shader 调用保持一致的时间、分辨率、纹理或相机参数。">
+  uniform
+</Term>
+
+命名与单位要固定。时间可用 presentation time；若希望暂停时效果冻结，就只在 Playing 累加。
+
+```glsl
+uniform sampler2D texture;
+uniform float u_time;
+uniform vec2 u_resolution;
+uniform float u_strength;
+
+void main()
+{
+    vec2 uv = gl_TexCoord[0].xy;
+    float wave = sin(uv.y * 24.0 + u_time * 1.5) * u_strength;
+    vec4 color = texture2D(texture, vec2(uv.x + wave, uv.y));
+    gl_FragColor = gl_Color * color;
+}
+```
+
+<Term def="传给 shader 的值在名称、类型、坐标单位、更新时间和默认值方面的约定。">
+  uniform 契约
+</Term>
+
+分辨率为像素还是逻辑 View 尺寸必须写清。缺失 uniform 时效果应使用安全默认值。
+
+## RenderStates 必须完整且局部
+
+<Term def="一次 SFML draw 使用的 transform、texture、shader 和 blend mode 状态集合。">
+  RenderStates
+</Term>
+
+每个 DrawItem 显式携带所需状态，不能依赖上一次绘制残留。
+
+```cpp
+sf::RenderStates states;
+states.texture = &layer.texture();
+states.shader = shader_ ? &*shader_ : nullptr;
+states.blendMode = sf::BlendAlpha;
+if (states.shader) {
+    shader_->setUniform("u_time", presentationTime);
+    shader_->setUniform("u_resolution", camera.pixelSize);
+    shader_->setUniform("u_strength", layer.strength());
+}
+target.draw(layer.vertices(), states);
+```
+
+<Term def="在不同绘制项之间错误继承 shader、纹理或混合配置，导致后续画面异常的状态问题。">
+  GPU 状态泄漏
+</Term>
+
+SFML 帮助管理很多 OpenGL 状态，但自定义 OpenGL 调用仍需 `pushGLStates/popGLStates` 或完整恢复，并注意成本。
+
+<Callout type="trap">
+  **现象**：画完 shader 背景后 HUD 颜色异常，或无 shader
+  设备整个背景消失。**原因**：RenderStates 依赖残留 shader，且没有 capability
+  fallback。**修法**：每次 draw 完整设置
+  texture、shader、blend；启动时检测支持，失败走普通 Sprite 路径。
+</Callout>
+
+## 视差与 shader 的帧协议
+
+<Term def="相机提交、层偏移计算、uniform 更新、背景绘制和普通世界绘制的固定顺序。">
+  背景帧协议
+</Term>
+
+逻辑提交后生成 CameraSnapshot；CameraGraphics 从绝对中心计算各层偏移；更新本帧 uniform；按背景层级提交 DrawItem；Renderer 在 main view 下绘制背景、世界、天气，再绘制 radar 与 HUD。resize 先更新 CameraSnapshot 和像素分辨率，下一帧统一生效。
+
+若暂停，CameraSnapshot 和逻辑世界冻结。是否让纯视觉 shader 继续变化由设计决定，但必须使用独立 presentation time 明确表达，不能偶然读取墙钟。
+同一固定回放在启用和关闭 shader 时必须产生完全相同的平台、火球、得分与终局事件序列；任何差异都说明表现层越过了只读边界。
+
+## completed game 不是“能跑起来”
+
+<Term def="从 Home 到一局结束的功能闭环，并通过规则、资源、性能、失败恢复和构建验证的完成状态。">
+  completed game
+</Term>
+
+本章的完成游戏门禁覆盖：菜单 Start/Pause/Restart/Quit；可达平台与 Player 控制；Animator；雨与火球；空间音频；main/radar/HUD；视差与 shader 降级；完整 GameOver。
+
+<BcgpCompletedGameGateMap />
+
+<Term def="在无旧缓存和本地隐式资源的环境中重新配置、编译、复制资产并启动游戏的验证。">
+  干净构建
+</Term>
+
+能暴露大小写路径、漏打包 shader、工作目录依赖和未声明资源。完成游戏必须从发布目录运行，而不只从 IDE 工程根目录运行。
+
+## 性能、失败与视觉验收
+
+<Term def="为 update、碰撞、粒子、draw calls、shader 和音频 voice 设定并测量的每帧成本上限。">
+  帧预算
+</Term>
+
+固定场景记录对象数、活跃雨滴、火球数、DrawItem、calls、纹理切换、voice 和 CPU 时间。视差层数或 shader 增加后比较基线，不用平均 FPS 掩盖卡顿尖峰。
+
+<Term def="逐项关闭 shader、声音、雨效或资源，验证降级后核心游戏仍可完成的测试。">
+  失败注入
+</Term>
+
+视觉验收检查负坐标环绕、超宽屏覆盖、resize、暂停、相机瞬移、shader 开关前后构图，以及 radar/HUD 不受背景状态污染。
+
+## 全章回归清单
+
+- 相机左右移动与瞬移时，各层偏移由绝对位置派生，负坐标无跳变。
+- 普通、窄屏、超宽屏和 zoom 下背景副本覆盖 View，纹理接缝不可见。
+- shader capability 不可用、GLSL 编译失败和 uniform 缺失均走明确降级。
+- shader 绘制后普通实体、radar、HUD 的纹理、颜色和 blend 不受污染。
+- 固定回放下启用或关闭视觉 shader，平台、伤害、得分和 GameOver 完全一致。
+- 从干净发布目录走 Start、Pause、Resume、Fireball、GameOver、Restart、Quit 全路径。
+
+## 小结
+
+- 视差背景从绝对相机位移乘视差因子得到偏移，并用正模与动态平铺覆盖 View
+- CameraGraphics 类集中提交背景表现，不控制相机或玩法
+- SFML 在 OpenGL 上执行 GLSL shader，uniform 和 RenderStates 是明确契约
+- capability 检测与普通 Sprite 降级保证不同图形环境仍可玩
+- completed game 需要流程、规则、资源、性能、失败注入和干净构建共同证明
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 21"
+  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+/>
+
+<Glossary>
+  <GlossaryItem term="视差背景">
+    背景层按不同相机位移比例移动产生深度感的技术。
+  </GlossaryItem>
+  <GlossaryItem term="视差因子">
+    把相机位移转换为背景层偏移的深度比例。
+  </GlossaryItem>
+  <GlossaryItem term="层偏移">
+    由相机绝对位移和因子计算的纹理位置。
+  </GlossaryItem>
+  <GlossaryItem term="正模环绕">
+    把正负偏移稳定映射到一个纹理周期的计算。
+  </GlossaryItem>
+  <GlossaryItem term="平铺覆盖">
+    覆盖当前 View 所需的相邻背景副本集合。
+  </GlossaryItem>
+  <GlossaryItem term="背景层级">
+    远景、后景、世界和前景之间的绘制顺序。
+  </GlossaryItem>
+  <GlossaryItem term="CameraGraphics 类">
+    根据 CameraSnapshot 提交视差层和 shader 背景的组件。
+  </GlossaryItem>
+  <GlossaryItem term="CameraSnapshot">
+    提交后的相机中心、尺寸与可见范围。
+  </GlossaryItem>
+  <GlossaryItem term="OpenGL">
+    SFML 图形底层用于 GPU 绘制和 shader 的图形 API。
+  </GlossaryItem>
+  <GlossaryItem term="shader">在 GPU 顶点或片段阶段运行的程序。</GlossaryItem>
+  <GlossaryItem term="GLSL">
+    OpenGL Shading Language，编写 shader 的语言。
+  </GlossaryItem>
+  <GlossaryItem term="shader capability">
+    启动时检测当前环境是否支持 shader 的结果。
+  </GlossaryItem>
+  <GlossaryItem term="图形降级">
+    shader 不可用时保持普通绘制的替代路径。
+  </GlossaryItem>
+  <GlossaryItem term="uniform">
+    CPU 在 draw 前传给 shader 的稳定参数。
+  </GlossaryItem>
+  <GlossaryItem term="uniform 契约">
+    uniform 名称、类型、单位、更新时机和默认值约定。
+  </GlossaryItem>
+  <GlossaryItem term="RenderStates">
+    一次 SFML 绘制使用的纹理、shader、变换和混合状态。
+  </GlossaryItem>
+  <GlossaryItem term="GPU 状态泄漏">
+    错误继承前一绘制项状态导致的画面异常。
+  </GlossaryItem>
+  <GlossaryItem term="背景帧协议">
+    相机提交、层计算、uniform 与背景绘制的顺序。
+  </GlossaryItem>
+  <GlossaryItem term="completed game">
+    通过功能、规则、资源、性能和构建验证的完整游戏。
+  </GlossaryItem>
+  <GlossaryItem term="干净构建">
+    无旧缓存与隐式资源时重新构建并运行的验证。
+  </GlossaryItem>
+  <GlossaryItem term="帧预算">
+    各更新和绘制阶段允许且实际测得的每帧成本。
+  </GlossaryItem>
+  <GlossaryItem term="失败注入">
+    主动关闭能力或资源以验证降级与恢复的测试。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：实现无接缝视差。** 给定相机可正负移动和可 resize 的条件，写出偏移与平铺副本算法。
+
+<Answer question="如何让视差背景在负坐标和超宽 View 中都没有跳变或露空？">
+  偏移从相机相对初始中心的绝对位移乘 factor
+  得到，再用修正后的正模映射到纹理周期；副本数按当前 View
+  宽度除纹理宽度向上取整并在两侧各多画一个。resize 或 zoom
+  后重新计算数量，不能逐帧累加偏移或写死两张纹理。
+</Answer>
+
+2. **问题 2：设计 shader 降级。** 模拟不支持 shader、编译失败和 uniform 配置错误，说明画面如何保持可用。
+
+<Answer question="可靠的 SFML shader 路径应如何处理能力和资源失败？">
+  启动时先调用 capability 检测；不支持或 GLSL
+  编译失败时记录文件、阶段与原因，并让 CameraGraphics 使用普通 Sprite。每次 draw
+  完整设置 RenderStates，uniform
+  有类型单位和默认值契约。降级不能影响玩法更新，后续世界与 HUD 绘制也不能继承
+  shader 状态。
+</Answer>
+
+3. **问题 3：证明游戏完成。** 设计一条从干净构建到退出的验收路径，并列出需要记录的规则与性能证据。
+
+  <Answer question="为什么 completed game 不能只以窗口能打开为证据？">必须从干净发布目录启动，走 Home、Start、Player 控制、平台、火球、Pause/Resume、GameOver、Restart、Quit；固定回放证明规则确定，资源缺失与 shader 不支持有降级；记录对象、粒子、draw calls、voice 和帧阶段成本；视觉检查 resize、视差接缝、radar 与 HUD。只有功能、规则、表现、失败和性能同时通过才算完成。</Answer>
+</Exercises>

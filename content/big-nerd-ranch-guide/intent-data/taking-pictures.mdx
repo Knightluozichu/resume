@@ -6,9 +6,11 @@ order: 16
 description: 学会通过隐式intent调用系统相机拍照、用FileProvider共享文件、处理拍照结果、以及应对Android 10+分区存储的挑战。
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.oreilly.com/library/view/android-programming-the/9780135257555/"
 draft: false
 ---
+
+import { BnrLifecycleLab, BnrFailureLab, BnrEvidenceLab } from "@/components/mdx/big-nerd-ranch-guide/diagrams/taking-pictures";
 
 {/* 知识点清单：
    1) MediaStore.ACTION_IMAGE_CAPTURE = 代码 walkthrough
@@ -24,9 +26,10 @@ draft: false
 
 <Objectives>
 
-- 能写出调用系统相机拍照并获取全分辨率照片的完整 Kotlin/Java 代码，包括 FileProvider 配置和 ActivityResult 回调
-- 能改出"只显示缩略图"为"显示全分辨率照片"的效果，并解释 `EXTRA_OUTPUT` 的作用
-- 能回答：为什么 Android 7.0 起禁止用 `file://` URI 跨 App 传文件？FileProvider 解决了什么问题？
+- 能解释“第16章 Taking Pictures with Intents”全部正式节点的组件所有者、生命周期、线程、状态来源与Android版本边界。
+- 能实现“通过FileProvider授予最小URI权限，控制照片位置、相机Intent、位图缩放与设备能力”的最小垂直切片，并保存构建、设备操作、原始日志和断言。
+- 能比较正常创建、旋转、后台、进程重建、权限拒绝与外部故障下的行为差异。
+- 能设计推翻当前实现的反例，并凭照片文件合同、相机降级、缩略图内存测试和配置声明完成独立交接。
 
 </Objectives>
 
@@ -416,55 +419,23 @@ startActivityForResult(captureIntent, REQUEST_CODE);  // 旧 API，已废弃
 
 <Exercises>
 
-**练习 1（改代码型）** 当前代码用 `setImageURI(photoUri)` 显示照片，但在 4000 万像素手机上加载很慢且可能 OOM。请改为：用 `BitmapFactory.decodeFile` + `inSampleSize` 采样，把图片缩放到 ImageView 宽度后再显示。
+**问题 1**：“第16章 Taking Pictures with Intents”覆盖哪些正式节点和项目主线？
+<Answer>覆盖8个节点，从“16. Taking Pictures with Intents”到“Challenge: Efficient Thumbnail Load”。主线是通过FileProvider授予最小URI权限，控制照片位置、相机Intent、位图缩放与设备能力，交付物是照片文件合同、相机降级、缩略图内存测试和配置声明。</Answer>
 
-<Answer>
+**问题 2**：怎样建立本页最小可执行实验？
+<Answer>固定JDK、SDK、Gradle、设备API、语言、权限和输入，完成一个从用户动作到可观察结果的垂直切片；保存干净构建、设备操作、原始日志、状态快照与断言。</Answer>
 
-```kotlin
-private fun loadSampledBitmap(path: String, targetWidth: Int): Bitmap {
-    val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-    BitmapFactory.decodeFile(path, options)
-    options.inSampleSize = (options.outWidth / targetWidth).coerceAtLeast(1)
-    options.inJustDecodeBounds = false
-    return BitmapFactory.decodeFile(path, options)!!
-}
+**问题 3**：为什么只在正常点击路径运行不能证明完成？
+<Answer>它没有覆盖组件重建、进程死亡、异步取消、权限拒绝、外部输入失败、资源释放和版本变化。应逐项注入故障，并用照片文件合同、相机降级、缩略图内存测试和配置声明核对。</Answer>
 
-// 在拍照成功回调里：
-if (success) {
-    val bitmap = loadSampledBitmap(photoFile.absolutePath, binding.imageView.width)
-    binding.imageView.setImageBitmap(bitmap)
-}
-```
+**问题 4**：怎样设计能推翻当前实现的反例？
+<Answer>保持其他变量不变，分别注入旋转、后台回收、进程死亡、拒权、断网、无效输入与重复操作；任何状态丢失、越权、崩溃、泄漏或重复副作用都推翻完成结论。</Answer>
 
-</Answer>
+**问题 5**：从第4版语境迁移到现代目标SDK时如何控制变量？
+<Answer>先按原书还原机制并锁定基线，再查询目标SDK合同；一次只迁移组件导出、存储、权限、后台、通知或依赖之一，保存构建、行为、测试和回滚差异。</Answer>
 
-**练习 2（实现型）** 为你的 App 新增"更换头像"功能：点击头像区域调起系统相机，拍完后把照片显示在圆形 ImageView 里。要求完整配置 FileProvider，并处理用户取消拍照的情况。
-
-<Answer>
-
-完整实现需三步：
-1. Manifest 加 FileProvider provider 标签 + `res/xml/file_paths.xml`
-2. Activity 里注册 `ActivityResultContracts.TakePicture()` launcher
-3. 点击头像 → `createTempFile` → `getUriForFile` → `launcher.launch(uri)`；回调里 `success` 为 false 时 Toast "已取消"
-
-Kotlin 核心：
-
-```kotlin
-binding.avatarImage.setOnClickListener {
-    val file = File.createTempFile("AVATAR_", ".jpg", cacheDir)
-    photoUri = FileProvider.getUriForFile(this, "${packageName}.fileprovider", file)
-    takePictureLauncher.launch(photoUri)
-}
-```
-
-</Answer>
-
-**练习 3（问答型）** 你的同事说："Android 10 加了 Scoped Storage，所以 FileProvider 不能用了，必须改用 MediaStore。" 这个说法对吗？为什么？
-
-<Answer>
-
-不对。Scoped Storage 限制的是 App 访问**公共外部存储**（如 `/sdcard/Download/`）的任意路径，并不限制 App 访问**自己的私有目录**（`cacheDir`、`getExternalFilesDir`）。FileProvider 共享的正是这些私有目录里的文件——完全不受 Scoped Storage 影响。只有当你要把照片写入**公共相册**（让用户在系统图库里也能看到）时，才需要用 MediaStore API。App 内拍照→展示的场景，FileProvider + 私有目录依然是标准做法。
-</Answer>
+**问题 6**：本页达到独立交接标准需要什么？
+<Answer>需要版本与设备指纹、源码提交、输入、构建命令、生命周期轨迹、原始日志、失败测试、安全边界与发布产物，让他人凭照片文件合同、相机降级、缩略图内存测试和配置声明重放。</Answer>
 
 </Exercises>
 
@@ -485,3 +456,171 @@ binding.avatarImage.setOnClickListener {
 </Glossary>
 
 <Attribution />
+
+
+{/* BNR4_AUTHORITY_SUPPLEMENT */}
+
+## 从生命周期、状态与证据开始
+
+第4版不是API词典，而是六个逐步扩展的应用实验。每一章都要回答：用户从哪里进入，哪个Android组件拥有工作，回调在哪个线程发生，哪些事实必须跨旋转或进程死亡恢复，外部系统怎样失败，资源在何时释放。<Term def="负责创建、取消并最终释放组件、任务或资源的明确作用域">生命周期所有者</Term>把Activity、Fragment视图、ViewModel、Worker、线程与资源的寿命连接起来；没有所有者的异步任务就是潜在泄漏。
+
+界面字段不是天然事实。<Term def="在配置变化或进程重建后，可从保存事实重新构造的最小用户状态">可恢复状态</Term>应根据数据大小与寿命放入saved instance state、ViewModel、数据库、文件或调度器，而不是全部塞进单例。Intent、文件、数据库、网络、系统服务和其他应用形成<Term def="跨边界交换数据时必须验证的action、类型、权限、大小、时序和失败约束">外部合同</Term>；正常响应只是合同中的一个样本。
+
+本书以2019年第四版、Android 5.0至8.1及其后续兼容实践为语境。<Term def="Android版本、targetSdk、设备形态、权限与依赖共同限定的行为适用范围">版本边界</Term>要求先还原书中机制，再查询现代目标SDK的权限、后台、存储、通知和组件导出合同。<Term def="由环境指纹、输入、操作、日志、状态快照和断言组成的可重放结论">证据链</Term>则保证“在我的模拟器能跑”不会冒充可交付结论。
+
+## 第4版正式目录逐节点映射
+
+### 16. Taking Pictures with Intents
+
+**正式节点 1/8。** 先说明“16. Taking Pictures with Intents”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“通过FileProvider授予最小URI权限，控制照片位置、相机Intent、位图缩放与设备能力”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### A Place for Your Photo
+
+**正式节点 2/8。** 先说明“A Place for Your Photo”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“通过FileProvider授予最小URI权限，控制照片位置、相机Intent、位图缩放与设备能力”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### File Storage
+
+**正式节点 3/8。** 先说明“File Storage”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“通过FileProvider授予最小URI权限，控制照片位置、相机Intent、位图缩放与设备能力”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### Using a Camera Intent
+
+**正式节点 4/8。** 先说明“Using a Camera Intent”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“通过FileProvider授予最小URI权限，控制照片位置、相机Intent、位图缩放与设备能力”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### Scaling and Displaying Bitmaps
+
+**正式节点 5/8。** 先说明“Scaling and Displaying Bitmaps”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“通过FileProvider授予最小URI权限，控制照片位置、相机Intent、位图缩放与设备能力”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### Declaring Features
+
+**正式节点 6/8。** 先说明“Declaring Features”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“通过FileProvider授予最小URI权限，控制照片位置、相机Intent、位图缩放与设备能力”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### Challenge: Detail Display
+
+**正式节点 7/8。** 先说明“Challenge: Detail Display”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“通过FileProvider授予最小URI权限，控制照片位置、相机Intent、位图缩放与设备能力”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### Challenge: Efficient Thumbnail Load
+
+**正式节点 8/8。** 先说明“Challenge: Efficient Thumbnail Load”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“通过FileProvider授予最小URI权限，控制照片位置、相机Intent、位图缩放与设备能力”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+## 最小可执行切片
+
+先把状态转换与Android副作用分开。下面的Kotlin骨架不替代本章代码，而是让旋转、进程恢复与失败输入可单测：
+
+```kotlin
+sealed interface ScreenState {
+    data object Loading : ScreenState
+    data class Ready(val key: String) : ScreenState
+    data class Failed(val reason: String, val retryable: Boolean) : ScreenState
+}
+
+fun reduce(current: ScreenState, event: UiEvent): ScreenState = nextState(current, event)
+```
+
+固定JDK、SDK、Gradle、设备API、语言和输入，清理缓存后从命令行保存制品与日志：
+
+```bash
+./gradlew --no-daemon clean test assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb shell am force-stop com.example.app
+adb shell monkey -p com.example.app 1
+adb logcat -d -v threadtime > run.log
+```
+
+先写行为断言，再执行用户操作和故障注入：
+
+```gherkin
+Given a pinned build, device API, locale, permission state, and input
+When the owner is recreated after state saving or process death
+Then durable facts reconstruct the same user-visible state
+And cancelled work cannot update a destroyed owner
+And denied permission, offline input, and malformed data remain recoverable
+```
+
+三段代码分别约束状态模型、环境重放和行为结果。真实项目还要加入静态检查、单元测试、仪器测试、无障碍检查和发布构建；日志只能支持断言，不能代替断言。
+
+## 线程、状态与外部资源
+
+主线程负责输入、生命周期分发和大部分UI工作，磁盘、网络、图片解码与长计算不能阻塞帧。后台结果返回前必须确认所有者仍有效；Fragment的生命周期与其View生命周期不是一回事。每个实现都应列出入口、线程、事实源、取消点、关闭责任和用户可见失败六项。
+
+跨应用Intent、ContentProvider、WebView、网络响应、文件URI和深链都视为不可信输入。校验action、scheme、MIME、大小、授权与响应者；导出组件使用最小权限；日志、截图和测试数据库不得泄露令牌或个人数据。相机、音频、数据库、线程和回调注册必须在成功、异常与取消路径都释放。
+
+性能以用户任务衡量：启动看可交互时刻，列表看掉帧与绑定分配，网络看超时和取消，后台工作看约束、电量与重复调度。每次比较固定设备温度、构建类型、数据规模和网络条件，先采基线再改变一个变量。
+
+迁移现代目标SDK时，先在第4版语境中证明机制，再逐项处理组件导出、存储、通知、后台启动、权限、废弃API和依赖版本。每一步保存编译差异、行为差异、测试结果和回滚点；新API并不自动正确，旧API能编译也不代表仍符合平台政策。
+
+## 三步验证实验
+
+<Steps>
+  <Step title="1. 建立目录节点与生命周期图">
+    从“通过FileProvider授予最小URI权限，控制照片位置、相机Intent、位图缩放与设备能力”选一个用户任务，标出入口、组件、所有者、回调线程、可恢复状态和销毁点。先预测旋转、后台和进程恢复后哪些对象消失、哪些事实必须重建。
+    <BnrLifecycleLab />
+  </Step>
+  <Step title="2. 注入生命周期与外部故障">
+    依次改变生命周期阶段、网络和权限，每次只改变一个条件；记录原始日志、界面状态、持久事实与资源计数，区分预期失败和未知状态。
+    <BnrFailureLab />
+  </Step>
+  <Step title="3. 通过交付证据门">
+    用照片文件合同、相机降级、缩略图内存测试和配置声明核对版本设备、生命周期、持久状态、失败安全、测试和发布。缺少任何一项时，不得把正常点击路径视为完成。
+    <BnrEvidenceLab />
+  </Step>
+</Steps>
+
+<Callout type="trap">**核心陷阱。** 只复述类名与回调，未说明所有者、状态来源、线程、取消和失败后果。修复时回到用户任务和状态机，注入旋转、进程死亡、拒权、断网与无效输入。</Callout>
+
+<Callout type="trap">**历史示例不等于当前平台政策。** 第4版准确反映出版时工具链；现代targetSdk可能改变组件导出、后台、存储、通知和权限。保留原书机制，再建立有证据的迁移层。</Callout>
+
+<Callout type="warning">**真机与数据安全。** 使用测试账号、样本媒体和最小权限；清理日志、数据库与截图。签名密钥、API密钥、联系人和真实位置不得写入仓库或公开证据。</Callout>
+
+## 本章回顾
+
+本页从“16. Taking Pictures with Intents”覆盖到“Challenge: Efficient Thumbnail Load”，共8个正式目录节点。掌握标准不是记住API，而是能沿“通过FileProvider授予最小URI权限，控制照片位置、相机Intent、位图缩放与设备能力”解释组件与数据边界，运行正常、重建和失败实验，并让另一位开发者仅凭照片文件合同、相机降级、缩略图内存测试和配置声明重放结论。
+
+<Exercises>
+
+**问题 1**：“第16章 Taking Pictures with Intents”覆盖哪些正式节点和项目主线？
+<Answer>覆盖8个节点，从“16. Taking Pictures with Intents”到“Challenge: Efficient Thumbnail Load”。主线是通过FileProvider授予最小URI权限，控制照片位置、相机Intent、位图缩放与设备能力，交付物是照片文件合同、相机降级、缩略图内存测试和配置声明。</Answer>
+
+**问题 2**：怎样建立本页最小可执行实验？
+<Answer>固定JDK、SDK、Gradle、设备API、语言、权限和输入，完成一个从用户动作到可观察结果的垂直切片；保存干净构建、设备操作、原始日志、状态快照与断言。</Answer>
+
+**问题 3**：为什么只在正常点击路径运行不能证明完成？
+<Answer>它没有覆盖组件重建、进程死亡、异步取消、权限拒绝、外部输入失败、资源释放和版本变化。应逐项注入故障，并用照片文件合同、相机降级、缩略图内存测试和配置声明核对。</Answer>
+
+**问题 4**：怎样设计能推翻当前实现的反例？
+<Answer>保持其他变量不变，分别注入旋转、后台回收、进程死亡、拒权、断网、无效输入与重复操作；任何状态丢失、越权、崩溃、泄漏或重复副作用都推翻完成结论。</Answer>
+
+**问题 5**：从第4版语境迁移到现代目标SDK时如何控制变量？
+<Answer>先按原书还原机制并锁定基线，再查询目标SDK合同；一次只迁移组件导出、存储、权限、后台、通知或依赖之一，保存构建、行为、测试和回滚差异。</Answer>
+
+**问题 6**：本页达到独立交接标准需要什么？
+<Answer>需要版本与设备指纹、源码提交、输入、构建命令、生命周期轨迹、原始日志、失败测试、安全边界与发布产物，让他人凭照片文件合同、相机降级、缩略图内存测试和配置声明重放。</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="生命周期所有者">负责创建、取消并最终释放组件、任务或资源的明确作用域。</GlossaryItem>
+  <GlossaryItem term="可恢复状态">在配置变化或进程重建后，可从保存事实重新构造的最小用户状态。</GlossaryItem>
+  <GlossaryItem term="外部合同">Intent、文件、数据库、网络、系统服务或其他应用与本组件交换数据时的可验证约束。</GlossaryItem>
+  <GlossaryItem term="版本边界">Android版本、targetSdk、设备形态、权限与依赖共同限定的行为适用范围。</GlossaryItem>
+  <GlossaryItem term="证据链">由环境指纹、输入、操作、日志、状态快照和断言组成的可重放结论。</GlossaryItem>
+</Glossary>
+
+[← 上一页：第15章 Implicit Intents](/learn/big-nerd-ranch-guide/intent-data/implicit-intents) · [下一页：第17章 Localization →](/learn/big-nerd-ranch-guide/intent-data/localization)
+
+<Attribution adaptedFrom="Android Programming: The Big Nerd Ranch Guide, 4th Edition" adaptedUrl="https://www.oreilly.com/library/view/android-programming-the/9780135257555/" />

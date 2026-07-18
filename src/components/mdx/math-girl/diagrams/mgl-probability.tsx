@@ -1,3 +1,7 @@
+"use client";
+
+import { MathGirlOfficialLab } from "./official-lab";
+
 /**
  * <MglProbabilityDiagram>：概率论核心概念图解（mgl-probability 章）。
  *
@@ -17,6 +21,129 @@ const danger = "var(--danger)";
 const primary = "var(--text-primary)";
 const secondary = "var(--text-secondary)";
 const border = "var(--border)";
+
+const foundationCases = [
+  {
+    label: "概率空间",
+    fields: [
+      ["样本空间Ω", "全部可能结果"],
+      ["事件", "Ω的子集"],
+      ["概率P", "事件到[0,1]的函数"],
+      ["公理", "非负、规范、可列可加"],
+    ],
+  },
+  {
+    label: "互斥",
+    fields: [
+      ["条件", "A∩B为空"],
+      ["加法", "P(A∪B)=P(A)+P(B)"],
+      ["含义", "不能同时发生"],
+      ["不等于", "独立"],
+    ],
+  },
+  {
+    label: "独立",
+    fields: [
+      ["条件", "P(A∩B)=P(A)P(B)"],
+      ["含义", "知道一个不改变另一个概率"],
+      ["可能", "独立事件可同时发生"],
+      ["陷阱", "互斥且正概率则不独立"],
+    ],
+  },
+  {
+    label: "条件概率",
+    fields: [
+      ["前提", "P(B)>0"],
+      ["定义", "P(A|B)=P(A∩B)/P(B)"],
+      ["作用", "把样本空间缩到B"],
+      ["贝叶斯", "交换条件方向"],
+    ],
+    alert:
+      "互斥描述能否同时发生，独立描述信息是否改变概率；两者是不同关系。",
+  },
+] as const;
+
+const expectationCases = [
+  {
+    label: "随机变量",
+    fields: [
+      ["定义", "从样本空间到数值的函数"],
+      ["离散分布", "列出取值与概率"],
+      ["期望", "ΣxP(X=x)"],
+      ["注意", "期望不必是可取值"],
+    ],
+  },
+  {
+    label: "线性法则",
+    fields: [
+      ["公式", "E[aX+bY]=aE[X]+bE[Y]"],
+      ["条件", "不要求X,Y独立"],
+      ["用途", "把总计数拆成局部期望"],
+      ["第4卷", "优惠券与随机快排"],
+    ],
+  },
+  {
+    label: "指示器",
+    fields: [
+      ["取值", "事件发生为1，否则0"],
+      ["期望", "E[I]=P(I=1)"],
+      ["总数", "X=ΣIi"],
+      ["价值", "计数问题转成概率求和"],
+    ],
+  },
+  {
+    label: "方差",
+    fields: [
+      ["定义", "E[(X-E[X])²]"],
+      ["恒等式", "E[X²]-E[X]²"],
+      ["独立和", "方差可相加"],
+      ["相关", "还需协方差项"],
+    ],
+    alert:
+      "期望线性不要求独立；方差相加通常需要独立或零协方差，不能把两条规则混用。",
+  },
+] as const;
+
+const processCases = [
+  {
+    label: "随机漫步",
+    fields: [
+      ["状态", "当前位置或分配"],
+      ["一步", "按转移概率改变状态"],
+      ["路径", "状态序列"],
+      ["分析", "路径计数乘转移概率"],
+    ],
+  },
+  {
+    label: "马尔可夫链",
+    fields: [
+      ["性质", "给定当前状态后未来与更早历史无关"],
+      ["矩阵", "P记录一步转移概率"],
+      ["分布", "pn+1=Ppn"],
+      ["长期", "由特征值与平稳分布分析"],
+    ],
+  },
+  {
+    label: "Monte Carlo",
+    fields: [
+      ["估计量", "样本平均或命中比例"],
+      ["误差", "有限样本随机波动"],
+      ["复现", "记录生成器、种子与样本数"],
+      ["置信", "用界或区间量化"],
+    ],
+  },
+  {
+    label: "随机算法",
+    fields: [
+      ["输入平均", "先假设输入分布"],
+      ["算法随机", "固定输入，随机性来自内部"],
+      ["Las Vegas", "结果正确、时间随机"],
+      ["Monte Carlo", "时间受控、结果可小概率错"],
+    ],
+    alert:
+      "“多跑几次更准确”需要独立或受控相关的重复，以及明确聚合规则；复用同一伪随机序列不自动放大置信度。",
+  },
+] as const;
 
 export function MglProbabilityDiagram() {
   return (
@@ -46,8 +173,8 @@ export function MglProbabilityDiagram() {
           <rect x="48" y="264" width="272" height="108" rx="8" fill={danger} fillOpacity="0.06" stroke={danger} strokeWidth="1" strokeOpacity="0.4" />
           <text x="64" y="284" fontSize="12" fontWeight="700" fill={danger}>医学检测（基础率谬误）</text>
           <text x="64" y="304" fontSize="11" fill={primary}>发病率：1%（先验）</text>
-          <text x="64" y="322" fontSize="11" fill={primary}>检测准确率：99%</text>
-          <text x="64" y="342" fontSize="11" fontWeight="600" fill={warning}>直觉：阳性→99%患病</text>
+          <text x="64" y="322" fontSize="11" fill={primary}>灵敏度99%，假阳性率1%</text>
+          <text x="64" y="342" fontSize="11" fontWeight="600" fill={warning}>错误直觉：阳性→99%患病</text>
           <text x="64" y="360" fontSize="11" fontWeight="600" fill={danger}>实际：P(病|阳性)=50%</text>
 
           {/* ===== 右侧：期望 + 蒙特卡洛 ===== */}
@@ -72,8 +199,38 @@ export function MglProbabilityDiagram() {
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-sm text-secondary">
-        贝叶斯定理根据证据更新概率（基础率谬误是常见陷阱）。期望是加权平均，方差度量波动。蒙特卡洛用随机采样估计确定值，大数定律保证收敛。
+        贝叶斯定理根据先验、灵敏度与假阳性率更新后验。期望是加权平均，方差度量波动；蒙特卡洛用随机采样构造估计量。
       </figcaption>
     </figure>
+  );
+}
+
+export function MglProbabilityFoundationLab() {
+  return (
+    <MathGirlOfficialLab
+      cases={foundationCases}
+      caption="概率空间先定义结果和事件；互斥决定概率能否直接相加，独立决定联合概率能否相乘。"
+      tone="cyan"
+    />
+  );
+}
+
+export function MglExpectationIndicatorLab() {
+  return (
+    <MathGirlOfficialLab
+      cases={expectationCases}
+      caption="期望线性不要求独立，指示器把计数转成概率；方差相加则必须处理协方差。"
+      tone="amber"
+    />
+  );
+}
+
+export function MglRandomProcessLab() {
+  return (
+    <MathGirlOfficialLab
+      cases={processCases}
+      caption="随机漫步、马尔可夫链、蒙特卡洛估计与随机算法共享概率语言，但随机源和保证对象不同。"
+      tone="violet"
+    />
   );
 }

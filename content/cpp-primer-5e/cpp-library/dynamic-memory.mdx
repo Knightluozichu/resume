@@ -6,9 +6,11 @@ order: 5
 description: 掌握C++动态内存管理——shared_ptr/unique_ptr/weak_ptr三种智能指针、new/delete、动态数组，告别裸指针和内存泄漏
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/c-plus-plus-primer-9780321714114"
 draft: false
 ---
+
+import { CppDynamicMemoryOwnershipDiagram } from "@/components/mdx/cpp-primer-5e/diagrams/dynamic-memory";
 
 {/* C 实战型（C++ Primer §12 改编）：三智能指针 + new/delete + 动态数组。
    重心在 Stepper §5 + 代码对照 §6，概念讲解 §3 配图，数学省略(math:false)。
@@ -25,14 +27,15 @@ draft: false
 
 <Objectives>
 
-- 能正确使用 shared_ptr 管理共享所有权的堆对象——用 make_shared 创建、理解引用计数的增减，知道何时对象会被销毁
-- 能选择合适的所有权模型——共享用 shared_ptr、独占用 unique_ptr、观察用 weak_ptr，并能写出不带 delete 的安全代码
+- 能实现用 shared_ptr 管理共享所有权的动态对象——用 make_shared 创建、解释强引用计数的增减，并判断何时调用删除器
+- 能比较并选择所有权模型——共享用 shared_ptr、独占用 unique_ptr、观察用 weak_ptr，并写出不带手动 delete 的异常安全代码
 - 能回答：下面这段代码结束时，A 和 B 两个对象是否都会被释放？如果不会，怎么修？
   ```cpp
   struct B;
-  struct A { shared_ptr<B> b; };
-  struct B { shared_ptr<A> a; };
-  auto a = make_shared<A>(), b = make_shared<B>();
+  struct A { std::shared_ptr<B> b; };
+  struct B { std::shared_ptr<A> a; };
+  auto a = std::make_shared<A>();
+  auto b = std::make_shared<B>();
   a->b = b; b->a = a;
   ```
 
@@ -40,11 +43,11 @@ draft: false
 
 {/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用②工厂流水线——内存是物料仓库。回答两个问题。 */}
 
-## 为什么你需要操心"谁负责清理"
+## 直觉：为什么你需要操心“谁负责清理”
 
 在之前的章节里，你写的所有变量——int、string、vector——在离开大括号时都会自动消失。这就是"栈"上的变量：创建和销毁都由编译器管，你不用操心。
 
-但栈上空间有限，而且生命周期固定在一对大括号里。有些对象需要"比创建它的函数活得久"——比如一个函数要造一个对象并交给调用方继续用。这时你必须把对象建在"堆"上，编译器不会再替你清理。**谁最后用完、谁负责打扫**，以前全靠程序员自己记 `delete`，一忘就漏。
+自动对象的生命周期通常受作用域控制，而有些数据大小到运行时才知道，或需要被多个对象按独立于当前调用栈的生命周期共享。返回值、移动和容器已经能解决很多场景；确实需要动态分配时，关键不是“堆比栈活得久”，而是明确**谁拥有、谁观察、何时释放**。
 
 **这一章解决什么问题？** 给你三样"自动保洁"工具——一个专门共享的、一个坚决独享的、一个只看着不干的——让你用规则代替记忆，从此不必手写 `delete`。没有它们？漏一次 `delete` 就漏一块内存，程序跑久了就吃光你的内存。
 
@@ -52,19 +55,25 @@ draft: false
 
 ## 智能指针：自动帮你打扫的三个兄弟
 
-C++11 引入了三种 <Term def="封装了原始指针的类模板，利用 RAII（析构函数自动释放）保证堆对象一定被释放。三种：shared_ptr（共享所有权）、unique_ptr（独占所有权）、weak_ptr（弱引用）。">智能指针（smart pointer）</Term>——它们本质上是包装了原始指针的类，在自身析构时自动释放所指向的堆对象。你只管"用它"，不用管"删它"。
+C++11 引入了三种 <Term def="封装指针与所有权规则的类模板。unique_ptr 表达独占，shared_ptr 通过控制块表达共享，weak_ptr 只观察；拥有者结束时按删除器释放资源，但循环所有权仍需设计者处理。">智能指针（smart pointer）</Term>——它们把清理动作绑定到所有者对象的生命周期，减少手写释放路径，但不会自动替你判断所有权图是否正确。
 
 <SmartPointerOverviewDiagram />
 
 三兄弟各有各的本事：
 
-- **shared_ptr**：允许多个指针共享同一个堆对象。内部维护一个<Term def="shared_ptr 管理结构中的计数器，记录当前有多少个 shared_ptr 指向同一个堆对象。use_count 降到 0 时自动 delete 堆对象。">引用计数</Term>——多一个 shared_ptr 指向它，计数就加一；少一个就减一；计数降到零，自动 `delete`。就像一个共享单车群——大家共用一辆车，最后归还的人负责锁车。
+- **shared_ptr**：允许多个指针共享同一个对象。控制块维护<Term def="shared_ptr 控制块中的强所有者计数。最后一个强引用消失时调用所保存的删除器；weak_ptr 使用另一个弱计数，不延长对象生命周期。">引用计数（reference count / use_count）</Term>——强计数降到零时调用删除器；若所有权成环，计数不会自然归零。
 
 - **unique_ptr**：独占一个堆对象。不能拷贝（拷贝构造函数和赋值运算符被显式删除了），只能把所有权<Term def="C++11 引入的语义——不拷贝资源本身，只转移所有权。用于 unique_ptr 的转移（std::move）。转移后源指针变空（nullptr）。">移动（std::move）</Term>给另一个 unique_ptr。就像一件传家宝——同一时刻只能一个人戴着，可以传给下一个，但不可能凭空变出一份。
 
 - **weak_ptr**：不拥有堆对象，只是一个"旁观者"。它不增加引用计数，所以不阻止对象被销毁。主要用于打破两个 shared_ptr 之间的<Term def="对象 A 持有对象 B 的 shared_ptr，同时对象 B 也持有对象 A 的 shared_ptr。两者互相持有导致引用计数永远不会降到 0，两个对象都无法释放。用 weak_ptr 拆掉一边即可解决。">循环引用（circular reference）</Term>。就像你远远看着一座房子——你能知道它还在不在，但它没了也不影响你。
 
 一句话选型口诀：**共享用 shared，独占用 unique，旁观用 weak。**
+
+## 官方 Chapter 12 的完整所有权地图
+
+原书从智能指针继续向下追到直接管理内存、动态数组、`allocator`，最后用文本查询程序证明共享所有权的价值。关键问题始终相同：谁拥有资源、谁只观察、何时对象被构造、何时删除器可安全运行。
+
+<CppDynamicMemoryOwnershipDiagram />
 
 ## shared_ptr：最常用的共享管家
 
@@ -74,17 +83,17 @@ shared_ptr 是日常用得最多的智能指针。它背后有三个部分在协
 
 ### 如何创建 shared_ptr
 
-推荐用 `make_shared<T>()`——它把"管理块"和"堆对象"在一次分配中安排好，比"先 new 再给 shared_ptr 构造"更快（少一次堆分配）且更安全（不会因异常导致中间态泄漏）：
+推荐用 `make_shared<T>()`——实现通常把控制块和对象放进一次分配，减少分配开销，并避免在复杂表达式中让裸指针处于尚未被接管的中间态：
 
 ```cpp
 auto sp = std::make_shared<std::string>("hello");
 // sp 现在持有堆上的 string("hello")，引用计数 = 1
 ```
 
-`make_shared` 接收的参数和 `T` 的构造函数参数一致，会完美转交给构造函数。如果你确实需要先拿到一个裸指针（比如某个 C API 返回的），也可以用构造方式传进去：
+`make_shared` 接收构造参数并转发给 `T`。若资源由 C API 或其他分配器创建，不能默认套用 `delete`，必须按 API 契约提供匹配删除器：
 
 ```cpp
-std::shared_ptr<int> sp(new int(42));  // 可行，但不如 make_shared 好
+std::shared_ptr<int> sp(new int(42));  // new 创建的 int，可由默认 delete 管理
 ```
 
 ### 引用计数怎么变
@@ -107,6 +116,8 @@ auto sp1 = std::make_shared<int>(10);   // use_count = 1
 ### 拷贝 vs 重置 vs 析构
 
 把 shared_ptr 比一块共享内存上的多个"钥匙"。每种操作对引用计数和堆对象的影响见下——你用 Stepper 一步步看：
+
+> 先预测：`sp1` 与 `sp2` 共享对象时先 `sp1.reset()`，对象会不会立刻析构？再让 `sp2` 离开作用域，强计数、对象和控制块分别发生什么？写下答案后再逐步验证。
 
 <Stepper>
   <Step title="创建">
@@ -139,9 +150,9 @@ auto sp1 = std::make_shared<int>(10);   // use_count = 1
 **不要从同一裸指针构造多个 shared_ptr**——它们会各自拥有独立的控制块，不知道对方的存在。一个把引用计数判 0 时 delete，另一个还会继续用那块已被释放的内存——使用后释放（use-after-free）。
 </Callout>
 
-## unique_ptr：独享且零开销
+## unique_ptr：独享且无共享计数
 
-unique_ptr 最"轻"——没有引用计数的开销，大小和一个裸指针完全相同（通常 8 字节）。代价是不能拷贝，只能移动。
+unique_ptr 没有共享引用计数，空删除器常可借助空基类优化做到接近裸指针大小；但状态化删除器会增加对象大小，标准不保证固定为一个指针。代价是不能拷贝，只能移动。
 
 <Callout type="warn">
 unique_ptr 的拷贝构造函数和拷贝赋值运算符被标记为 `= delete`——任何拷贝尝试都会在编译期直接报错，不会默默出 bug。
@@ -152,15 +163,14 @@ unique_ptr 的拷贝构造函数和拷贝赋值运算符被标记为 `= delete`�
 ```cpp
 #include <memory>
 
-auto up = std::make_unique<int>(42);     // C++14 起推荐
-// C++11 中需要写：std::unique_ptr<int> up(new int(42));
+std::unique_ptr<int> up(new int(42));   // 本书 C++11 写法
 
 std::cout << *up << '\n';                // 用 * 解引用，和裸指针一样
 up.reset();                              // 显式释放，等价于 up = nullptr
-up = std::make_unique<int>(100);         // 移动赋值，旧的被释放
+up.reset(new int(100));                  // 释放旧对象并接管新对象
 ```
 
-`make_unique` 自 C++14 起加入标准库，在此之前你只能用构造方式。如果目标环境是 C++11，要么自己写一个 `make_unique` 模板，要么坚持用 `new` + 构造——但不推荐后者。
+`make_unique` 到 C++14 才进入标准库。C++11 项目可把裸 `new` 直接放进 unique_ptr 构造表达式，或提供经过评审的 `make_unique` 辅助函数；不要先把裸指针存进临时变量再跨多条可能抛异常的语句传递。
 
 ### release 和 reset 的区别
 
@@ -168,13 +178,13 @@ up = std::make_unique<int>(100);         // 移动赋值，旧的被释放
 - **`release()`**：放弃当前对象的所有权，返回裸指针——但**不 delete**。调用方从此负责手动 delete
 
 ```cpp
-std::unique_ptr<int> up = std::make_unique<int>(42);
+std::unique_ptr<int> up(new int(42));
 int* raw = up.release();    // up 现在是空，raw 指着那块内存
 // 你现在必须手动 delete raw，否则内存泄漏
 delete raw;
 ```
 
-**几乎永远优先用 `reset`**——它自动 delete 旧对象。`release` 只在你要把所有权交给某个 C API（接受裸指针且承诺负责 delete）时才用。
+**几乎永远优先用 `reset`**——它按删除器释放旧对象。`release` 只在所有权确实转交给另一接口时使用，并必须确认接收方采用匹配的释放机制；C API 未必使用 C++ `delete`。
 
 ## weak_ptr：破掉循环引用这个死结
 
@@ -238,11 +248,84 @@ int *arr = new int[100];  // 堆上分配 100 个 int
 delete[] arr;             // 必须 delete[]！写成 delete arr 是未定义行为
 ```
 
-**"忘记 `delete[]`"是多容易翻车？** 函数里一提前 return、一抛异常——`delete[]` 就被跳过去了。这就是为什么 <Term def="Resource Acquisition Is Initialization，把资源的生命周期绑定到一个对象的作用域上。构造时获取资源、析构时释放资源——vector 构造时分配堆数组、析构时自动 delete[]。">RAII</Term> 是现代 C++ 的核心思想：
+**"忘记 `delete[]`"是多容易翻车？** 函数里一提前 return、一抛异常——`delete[]` 就被跳过去了。这就是为什么 <Term def="Resource Acquisition Is Initialization，把资源的有效期绑定到对象生命周期。构造成功后对象负责清理，析构通过匹配的资源释放操作完成收尾。">RAII（Resource Acquisition Is Initialization）</Term> 是现代 C++ 的核心思想：
 
 <DynamicArrayDiagram />
 
-一句话总结：**能用 `vector` 就别用 `new[]`。** vector 是堆数组 + 自动 delete[] + `push_back` 扩容 + 范围 for 遍历 + 异常安全。new[] 只有它一个优点——少数嵌入式或实时场景中多出来的那几个字节控制信息也嫌多——但 99% 的场景你不需要省这几个字节。
+一句话总结：**需要可变长度对象序列时优先 `vector`。** 它用分配器管理连续存储，自动处理元素构造、销毁与异常回滚，并提供容量和迭代器接口。`new[]` 仍可能出现在 ABI、底层库、定制布局或遗留接口边界，但它不是简单的“更省几个字节”，也不会自动提供长度与所有权信息。
+
+## allocator：把分配原始存储与构造对象分开
+
+`new T[n]` 会同时分配存储并默认构造 n 个对象；有时程序只想先取得空间，随后按实际读入数量逐个构造。<Term def="C++11 中用于分配未构造原始存储并显式构造、销毁对象的标准工具。allocate 与 deallocate 管存储，construct 与 destroy 管对象生命周期。">allocator（allocator）</Term> 把这两个阶段分开：
+
+```cpp
+std::allocator<std::string> alloc;
+const std::size_t n = 100;
+std::string *const begin = alloc.allocate(n);
+std::string *current = begin;
+
+try {
+    std::string value;
+    while (current != begin + n && std::cin >> value)
+        alloc.construct(current++, value);
+} catch (...) {
+    while (current != begin) alloc.destroy(--current);
+    alloc.deallocate(begin, n);
+    throw;
+}
+
+while (current != begin) alloc.destroy(--current);
+alloc.deallocate(begin, n);
+```
+
+只有 `[begin,current)` 中的对象已构造，才能解引用或调用 `destroy`；未构造存储不是 T 对象数组。`deallocate` 前必须先销毁全部已构造对象，并传回与 `allocate` 相同的元素数量。实际业务优先使用 `vector`，这里只用 allocator 看清存储与对象生命周期是两件事。
+
+## TextQuery：共享文本而不复制结果
+
+<Term def="C++ Primer 第十二章的文本查询设计。TextQuery 拥有输入行与单词到行号集合的索引，QueryResult 用 shared_ptr 共享这些数据，使查询结果离开查询函数后仍然有效。">文本查询共享模型（TextQuery/QueryResult）</Term> 是本章的综合案例。`TextQuery` 读取文件并拥有文本；每个 `QueryResult` 只保存查询词、匹配行号集合和原文本的 shared_ptr，不复制整份文件：
+
+```cpp
+class QueryResult;
+class TextQuery {
+public:
+    typedef std::vector<std::string>::size_type line_no;
+    explicit TextQuery(std::ifstream &);
+    QueryResult query(const std::string &) const;
+private:
+    std::shared_ptr<std::vector<std::string> > file;
+    std::map<std::string, std::shared_ptr<std::set<line_no> > > wm;
+};
+
+class QueryResult {
+public:
+    QueryResult(std::string s,
+                std::shared_ptr<std::set<TextQuery::line_no> > p,
+                std::shared_ptr<std::vector<std::string> > f)
+        : sought(s), lines(p), file(f) {}
+    friend std::ostream &print(std::ostream &, const QueryResult &);
+private:
+    std::string sought;
+    std::shared_ptr<std::set<TextQuery::line_no> > lines;
+    std::shared_ptr<std::vector<std::string> > file;
+};
+```
+
+构造时，`file` 由 `make_shared<vector<string>>()` 创建；读取每行后，索引通过 `wm[word]` 取得对应的 `shared_ptr<set<line_no>>`，首次遇到单词时再创建集合。query 用 `find` 做纯查询，命中则把索引中的 shared_ptr 连同 file 传给结果：
+
+```cpp
+QueryResult TextQuery::query(const std::string &word) const {
+    static std::shared_ptr<std::set<line_no> > noData(
+        new std::set<line_no>);
+    std::map<std::string,
+             std::shared_ptr<std::set<line_no> > >::const_iterator found =
+        wm.find(word);
+    if (found == wm.end())
+        return QueryResult(word, noData, file);
+    return QueryResult(word, found->second, file);
+}
+```
+
+即使原 `TextQuery` 对象先离开作用域，只要 `QueryResult` 仍持有 file 与 lines，底层数据就继续存活。这个设计把“结果借用查询器内部引用”的悬空风险，转换成明确的共享所有权成本。
 
 {/* 5. 交互 Demo（spec §五）：C 型主 Demo 为 Stepper——shared_ptr 生命周期，上面已放在了 §3 的 shared_ptr 小节里。Stepper 每步配一张 SharedPtrInternalsDiagram。 */}
 
@@ -270,6 +353,8 @@ struct TreeNode {
 
 父子关系是天然的"所有权"：父亲创建孩子（make_shared）、父亲被销毁后孩子应该跟着消失。所以 `left` / `right` 用 `shared_ptr` 没问题——父亲持有孩子的所有权。
 
+这里选择 shared_ptr 是为了允许树外代码长期共享某个子节点。若模型保证严格树形且父节点独占孩子，`unique_ptr` 子节点通常表达得更准确，parent 可使用生命周期受树约束的非拥有原始指针；不要为了“看起来安全”默认把所有边都改成 shared_ptr。
+
 但孩子回看父亲如果用 `shared_ptr`，就会形成循环：父亲持有孩子 → 孩子持有父亲 → 谁都不释放。**孩子对父亲用 `weak_ptr`——只观察、不拥有。**
 
 ```cpp
@@ -295,9 +380,9 @@ void print_path(const std::shared_ptr<TreeNode>& node) {
 }
 ```
 
-整个 `print_path` 里没有一行 `new`、没有一行 `delete`，也没有泄露——所有堆内存都由 shared_ptr 的引用计数自动管理。`root` 离开作用域时，父亲析构、孩子跟着析构（递归地），你可以在输出里看到三个 `"释放 ..."` 依次打印。
+这个所有权图没有强引用环，因此 `root` 以及所有外部强引用离开后，节点能按引用计数释放。没有手写 `delete` 不等于任意 shared_ptr 图都不会泄漏；正确性来自明确的强边与弱边，而不是指针类型名字本身。
 
-## deallocator：让 shared_ptr 不只是 delete
+## 删除器：让 shared_ptr 不只是 delete
 
 shared_ptr 默认用 `delete` 释放堆对象。但如果你要管理一个不是 `new` 出来的资源（比如 `fopen` 打开的文件），可以指定一个<Term def="shared_ptr/unique_ptr 析构时调用的自定义释放函数，替代默认的 delete。可以是函数指针、lambda、函数对象。用于管理非 new 分配的资源（如 fopen 的文件、malloc 的内存）。">删除器（deleter）</Term>：
 
@@ -305,7 +390,7 @@ shared_ptr 默认用 `delete` 释放堆对象。但如果你要管理一个不�
 // 管理一个 FILE*，析构时自动 fclose
 auto closer = [](FILE* f) { if (f) fclose(f); };
 std::shared_ptr<FILE> fp(fopen("data.txt", "r"), closer);
-// 离开作用域时自动 fclose —— 跟 delete 一样可靠
+// 离开作用域时调用 closer；打开与关闭错误仍需业务代码检查
 ```
 
 `unique_ptr` 也支持删除器，但需要把它写在模板参数里（`std::unique_ptr<T, Deleter>`），语法稍重；shared_ptr 的删除器是运行时存下来的，语法更轻。
@@ -320,15 +405,15 @@ std::shared_ptr<FILE> fp(fopen("data.txt", "r"), closer);
 
 **原因** → 从同一个裸指针构造了两个 shared_ptr。各自管各自的控制块，一个 `use_count→0` 时 delete 了对象，另一个还不知道——再访问或再析构都是 undefined behavior。**同一个裸指针最多只传给一个 shared_ptr。**
 
-**修法** → 只用 `make_shared` 创建，永远不让裸指针碰到 shared_ptr 的构造函数。如果必须从已有裸指针给 shared_ptr，确保那是"第一次也是唯一一次"。
+**修法** → 普通对象优先 `make_shared`。若必须接管 API 返回的裸资源，只建立一个控制块并提供匹配删除器；之后通过拷贝这个 shared_ptr 分享所有权，不再从 `.get()` 重建 shared_ptr。
 
 </Callout>
 
 <Callout type="trap">
 
-**现象** → 程序里 new[] 分配的数组，退出时无限循环或只析构了第一个元素，其余泄漏。
+**现象** → `new[]` 分配的数组用普通 `delete` 释放后，出现堆损坏、析构异常、崩溃，或暂时看似正常。
 
-**原因** → 把 `new[]` 分配的数组交给了一个**不带 `[]` 的 `delete`**——写成 `delete arr` 而不是 `delete[] arr`。`delete` 只调用第一个元素的析构函数，后面 N-1 个全漏。
+**原因** → 把 `new[]` 分配的数组交给了不匹配的 `delete`。这是未定义行为，不能假定它只析构第一个元素或以某种固定方式泄漏。
 
 **修法** → 用 `vector<T>` 代替 `new T[]`。如果必须用 new[]，确保 `delete[]` 和 `new[]` 一一对应。`shared_ptr<T[]>`（C++17 起）或 `unique_ptr<T[]>`（C++11 起）有数组特化版本——但 vector 仍然更直观。
 
@@ -340,7 +425,7 @@ std::shared_ptr<FILE> fp(fopen("data.txt", "r"), closer);
 
 **原因** → `.get()` 返回的裸指针不被引用计数保护——`lock()` 返回的 shared_ptr 只活在自己的大括号里。它一析构，引用计数可能就归零了（尤其是在多线程中其他线程可能也在同时释放）。之后拿着裸指针用就是 use-after-free。
 
-**修法** → **永远不要从 `.get()` 获得的裸指针传给任何可能让它"多活一步"的地方**。要么把 `lock()` 返回的 shared_ptr 按住（存在一个变量里），要么把 shared_ptr 本身传过去（拷贝一份增加引用计数），不要传它的 `.get()`。
+**修法** → `.get()` 只适合明确不接管、且调用期间所有者持续存活的同步借用。跨线程、异步保存或延迟回调应传 shared_ptr 副本，或让接收方保存 weak_ptr 并在使用时 lock。
 
 </Callout>
 
@@ -349,14 +434,14 @@ std::shared_ptr<FILE> fp(fopen("data.txt", "r"), closer);
 ## 小结
 
 - **三兄弟各司其职**：shared_ptr 共享陪伴、unique_ptr 独占传承、weak_ptr 旁观破环——选对就是安全
-- **make_shared 最佳实践**：一次分配控制块+对象，比 new + 构造快且安全；永远不要从一个裸指针造两个 shared_ptr
-- **unique_ptr 不能拷贝、只能 move**：这是编译期硬约束——写错直接报错，零运行时开销
+- **make_shared 优先**：实现通常合并控制块与对象分配，并避免裸指针中间态；永远不要从同一裸指针建立两个独立控制块
+- **unique_ptr 不能拷贝、只能 move**：这是编译期硬约束；它没有共享计数，但状态化删除器可能增加对象大小
 - **循环引用用 weak_ptr 破**：A 持有 B 用 shared，B 回看 A 用 weak——单向 shared + 反向 weak = 安全公式
-- **能用 vector 就别用 new[]**：vector 自动 delete[]、支持 push_back 扩容、范围 for 遍历、异常安全——new[] 唯一的理由你遇不到
+- **对象与存储分开看**：vector 是动态序列默认选择；allocator 用于显式控制构造区间，new[]/delete[] 必须严格配对
 
 <Exercises>
 
-1. **（代码填空）** 下面的 `Widget` 类有一个子 Widget 列表和一个父 Widget。子用 shared_ptr、父用 weak_ptr——把 `???` 替换成正确的类型，并写一行创建父子关联的代码。
+**问题 1（代码填空）** 下面的 `Widget` 类有一个子 Widget 列表和一个父 Widget。子用 shared_ptr、父用 weak_ptr——把 `???` 替换成正确的类型，并写一行创建父子关联的代码。
 
    ```cpp
    struct Widget {
@@ -394,7 +479,7 @@ std::shared_ptr<FILE> fp(fopen("data.txt", "r"), closer);
 
    </Answer>
 
-2. **（改代码）** 改写下面这段代码，让它不再手动 `new/delete`，而使用合适的智能指针。然后回答：改写后 `get_widget()` 返回的是什么所有权？
+**问题 2（改代码）** 改写下面这段代码，让它不再手动 `new/delete`，而使用合适的智能指针。然后回答：改写后 `get_widget()` 返回的是什么所有权？
 
    ```cpp
    Widget* get_widget() {
@@ -413,7 +498,7 @@ std::shared_ptr<FILE> fp(fopen("data.txt", "r"), closer);
    ```cpp
    // 工厂函数返回 unique_ptr——独占所有权，调用方接管
    std::unique_ptr<Widget> get_widget() {
-       return std::make_unique<Widget>("factory made");
+       return std::unique_ptr<Widget>(new Widget("factory made"));
    }
 
    void use_widget() {
@@ -427,7 +512,7 @@ std::shared_ptr<FILE> fp(fopen("data.txt", "r"), closer);
 
    </Answer>
 
-3. **（误判断）** 下面每一段代码，判定它是否会内存泄漏。如果会，说明原因并给修复：
+**问题 3（判断与修复）** 下面每一段代码，判断它是否安全释放资源；若不安全或不能编译，说明原因并给修复：
 
    a)
    ```cpp
@@ -444,7 +529,7 @@ std::shared_ptr<FILE> fp(fopen("data.txt", "r"), closer);
 
    c)
    ```cpp
-   std::unique_ptr<int> up1 = std::make_unique<int>(10);
+   std::unique_ptr<int> up1(new int(10));
    auto up2 = up1;  // 编译错误！
    ```
 
@@ -452,7 +537,7 @@ std::shared_ptr<FILE> fp(fopen("data.txt", "r"), closer);
 
    **a) 不会泄漏**：`reset()` 使引用计数从 1 变为 0，自动 `delete`。
 
-   **b) 会泄漏 / 崩溃**：两个 shared_ptr 各自有独立的控制块，都不知道对方存在。`sp2` 析构时 `use_count→0` 并 `delete raw`；之后 `sp1` 析构时又要 `delete` 一次——**double free**。修复：永远不要从同一个裸指针构造两个 shared_ptr。改成 `auto sp1 = make_shared<int>(10); auto sp2 = sp1;`。
+   **b) 行为未定义**：两个 shared_ptr 各自有独立控制块，最终会对同一地址执行两次删除。不能依赖它表现为某种固定崩溃或泄漏。修复：`auto sp1 = std::make_shared<int>(10); auto sp2 = sp1;`，让两者共享同一控制块。
 
    **c) 不会泄漏，且连编译都过不了**：unique_ptr 的拷贝构造被 `= delete`，编译器直接拒绝这行代码。如果想转移所有权，写成 `auto up2 = std::move(up1);`——之后 `up1` 变成 `nullptr`，所有权在 `up2` 手里，它析构时自动 `delete`。
 
@@ -462,7 +547,7 @@ std::shared_ptr<FILE> fp(fopen("data.txt", "r"), closer);
 
 {/* 9. 出处声明（spec §九）：空标签，sourceUrl 自动注入 */}
 
-<Attribution />
+<Attribution source="C++ Primer, Fifth Edition, Chapter 12: Dynamic Memory" />
 
 {/* 10. 名词解释（spec §十）：与正文 Term 一一对应，零基础大白话。 */}
 
@@ -470,16 +555,20 @@ std::shared_ptr<FILE> fp(fopen("data.txt", "r"), closer);
 
 <Glossary>
 
-<GlossaryItem term="智能指针（smart pointer）">一种包裹了裸指针的 C++ 类模板，利用 RAII（析构时自动释放资源）保证堆对象一定被释放。标准库提供 shared_ptr（共享所有权）、unique_ptr（独占所有权）、weak_ptr（弱引用）三种。类比：给你配了三个自动关门的管家，再也不用自己记着关门了。</GlossaryItem>
+<GlossaryItem term="智能指针（smart pointer）">封装指针与所有权规则的类模板。unique_ptr 表达独占，shared_ptr 通过控制块表达共享，weak_ptr 只观察。拥有者结束时按删除器清理，但强引用环仍需设计者用弱边打破。</GlossaryItem>
 
-<GlossaryItem term="引用计数（reference count / use_count）" id="term-引用计数">shared_ptr 内部控制块里的一个计数器——每多一个 shared_ptr 指向同一个对象，数字就加 1；每少一个就减 1；降到 0 的时候自动 delete 堆对象。你可以用 `use_count()` 查看，但别用它做业务判断。</GlossaryItem>
+<GlossaryItem term="引用计数（reference count / use_count）" id="term-引用计数">shared_ptr 控制块中的强所有者计数。最后一个强引用消失时调用保存的删除器并销毁对象；weak_ptr 不增加强计数，控制块可能继续存在到最后一个弱引用消失。</GlossaryItem>
 
 <GlossaryItem term="移动（std::move）">C++11 引入的语义——不拷贝资源本身，只把所有权从一个对象转给另一个。unique_ptr 只能移动不能拷贝。移动后源指针变空（nullptr）。类比：把一件传家宝交给下一个人——你不能凭空复制一件，但可以传出去。</GlossaryItem>
 
 <GlossaryItem term="循环引用（circular reference）">两个对象各自持有对方的 shared_ptr：A 有 B 的 shared_ptr、B 也有 A 的 shared_ptr。各自的引用计数永远大于等于 1，谁都不会被 delete——两块内存在堆上永远挂着。解法：把回看的那一边从 shared_ptr 改成 weak_ptr（不增加引用计数）。</GlossaryItem>
 
-<GlossaryItem term="RAII（Resource Acquisition Is Initialization）" id="term-raii">资源获取即初始化——把资源的生命周期绑定到一个栈对象的作用域上。构造时获取资源、析构时释放。vector 构造时在堆上分配数组、析构时自动 delete[]——你永远不会忘记释放。智能指针的整个理论基础就是 RAII。</GlossaryItem>
+<GlossaryItem term="RAII（Resource Acquisition Is Initialization）" id="term-raii">把资源有效期绑定到对象生命周期。构造成功后对象负责收尾，析构调用与资源匹配的释放操作；异常展开时局部拥有者也会析构。它减少遗漏路径，但不能修复错误的所有权图。</GlossaryItem>
 
 <GlossaryItem term="删除器（deleter）">shared_ptr 或 unique_ptr 析构时调用的自定义释放函数。默认是 `delete`，但你可以改成 `fclose`、`free` 或任何你需要的清理逻辑，让智能指针管理任何资源（文件、socket、GPU 纹理等）。</GlossaryItem>
+
+<GlossaryItem term="allocator（allocator）">C++11 中用于分开管理原始存储和对象生命周期的工具。allocate/deallocate 管存储，construct/destroy 管已构造对象；释放前必须只销毁实际构造过的区间。</GlossaryItem>
+
+<GlossaryItem term="文本查询共享模型（TextQuery/QueryResult）">本章综合案例。TextQuery 拥有原文与单词索引，QueryResult 通过 shared_ptr 共享文本和匹配行集合，使结果离开查询函数后仍有效且无需深拷贝整份文件。</GlossaryItem>
 
 </Glossary>

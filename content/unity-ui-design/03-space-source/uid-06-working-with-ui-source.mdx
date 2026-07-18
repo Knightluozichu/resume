@@ -1,0 +1,218 @@
+---
+title: "第 6 章：与 UI 源码协同工作"
+type: A
+section: "Unity UI 设计 · 空间与源码"
+order: 6
+description: "拆解 EventSystem 循环、射线汇总、事件接口与 ExecuteEvents，并以可维护方式阅读、扩展和验证 UI 源码。"
+demo: true
+math: false
+sourceUrl: "https://api.pageplace.de/preview/DT0400.9781783553624_A24173589/preview-9781783553624_A24173589.pdf"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Uid06WorkingWithUiSourceMapLab,
+  Uid06WorkingWithUiSourceExperimentLab,
+  Uid06WorkingWithUiSourceEvidenceLab,
+} from "@/components/mdx/unity-ui-design/diagrams/uid-06-working-with-ui-source";
+
+<Objectives>
+
+- 能绘制 EventSystem 从输入模块更新、状态控制、射线汇总到事件执行的完整调用链
+- 能实现带参数的内置事件处理器和一套可验证的自定义事件数据、接口与静态执行器
+- 能比较直接扩展、包源码嵌入与上游贡献的维护边界
+
+</Objectives>
+
+## 问题：为什么会写 onClick 还不足以调试一次丢失或重复的 UI 事件
+
+先预测：两个 Raycaster 都命中同一点时，谁决定最终目标？不是 Button 自己，而是 EventSystem 收集并排序 RaycastResult 后，由当前 Input Module 驱动 ExecuteEvents。第 6 章从 EventSystem loop、state、Raycast Marshalling 进入事件接口和自定义事件，再转向开源 UI 仓库、fork、更新、解决方案结构与把自定义版本接入项目。
+
+<Uid06WorkingWithUiSourceMapLab />
+
+## 原书边界：Chapter 6 · Working with the UI Source
+
+原书 Chapter 6 包含 Unravelling the Event System、Event System loop、Controlling state、Raycast Marshalling、Working with events、Using a parameter、Built-in event interfaces、Executing events、custom handler/event 的 Data Structure、Interface、static container 与 processing；Roll a Ball Derby 示例；随后是源码仓库、fork、下载、更新、solution、加入自定义 UI 和回馈上游。
+
+- **Unravelling the Event System；The Event System loop；Controlling state；Raycast Marshalling**
+- **Working with events；Using a parameter；Built-in event interfaces；Executing events**
+- **Building your own handlers or custom events；custom event Data Structure、Interface、static container、processing**
+- **The Roll a Ball Derby；Droid script；Alarm plates；Who watches the watchers?**
+- **Getting access to the source；repository；fork；download；keeping up to date**
+- **What is in the solution?；Adding your own version of UI；push it back to Unity**
+
+为避免缩写丢失目录身份，四个自定义事件小节保留完整名称：**A custom event Data Structure**、**A custom event Interface**、**A custom event static container**、**Processing a custom event**。源码工作流同样保留 **Adding your own version of UI to your project** 与 **Extra credit, push it back to Unity**。这些名称只固定原书边界，正文实现仍用现代包管理说明迁移差异。
+
+这些小节按出版社目录保持唯一归属；本站的实验、现代迁移与复习只是教学增强，不改变原章身份，也不拿一个现代主题重复补多个原始单元。
+
+## 核心模型：从对象到可观察结果
+
+EventSystem 每帧选择并更新当前 BaseInputModule，维护 currentSelectedGameObject、firstSelectedGameObject 与导航状态。Input Module 构造 BaseEventData 或 PointerEventData，调用 RaycastAll 汇总场景中各 BaseRaycaster 的结果并按模块、排序层、深度和距离排序，再用 ExecuteEvents 在目标层级执行对应接口。UnityEvent 是控件输出的一种监听容器，不等于底层事件派发本身。
+
+<Term def="协调输入模块、当前选中对象、射线检测和事件执行的场景级 UI 中枢。">
+  EventSystem
+</Term>
+用于本章的可观察模型；判断它是否成立时，要回到输入、状态、几何或事件日志，而不是只凭最终截图。
+
+<Term def="携带指针位置、按键、点击、拖拽与 raycast 状态的事件数据。">
+  PointerEventData
+</Term>
+用于本章的可观察模型；判断它是否成立时，要回到输入、状态、几何或事件日志，而不是只凭最终截图。
+
+<Term def="汇总多个 Raycaster 结果并按规则排序成统一命中列表的过程。">
+  Raycast Marshalling
+</Term>
+用于本章的可观察模型；判断它是否成立时，要回到输入、状态、几何或事件日志，而不是只凭最终截图。
+
+<Term def="按事件接口在目标对象或层级上执行类型安全处理器的静态工具。">
+  ExecuteEvents
+</Term>
+用于本章的可观察模型；判断它是否成立时，要回到输入、状态、几何或事件日志，而不是只凭最终截图。
+
+<Term def="由项目定义并由 ExecuteEvents 调用的事件消费者契约。">
+  自定义事件接口
+</Term>
+用于本章的可观察模型；判断它是否成立时，要回到输入、状态、几何或事件日志，而不是只凭最终截图。
+
+## 关键对象与生产者到消费者链
+
+自定义事件需要四个边界：EventData 保存本次语义数据；handler interface 规定消费者契约；ExecuteEvents.EventFunction 静态委托负责类型安全调用；producer 决定何时、向哪个层级 Execute 或 ExecuteHierarchy。Roll a Ball 示例用传感板、Droid 与观察者展示多个生产者和消费者。调试重复事件时要记录模块更新、pointerId、press/drag target、raycast 排序和执行目标。
+
+为了避免“改完好像对了”，先写下生产者、变换规则、消费者与可观测量。每个对象都必须能在层级、Inspector、事件日志、坐标记录或渲染结果中找到证据；没有观测点的解释不能进入结论。
+
+## 三步可重复实验
+
+先预测：只改变当前步骤的一个参数后，哪一项几何、状态或事件指标应首先变化？如果最终画面变化但中间证据不符合预测，应把它当作未归因结果，而不是成功。
+
+<Stepper>
+<Step title="固定范围与基线">
+    <Uid06WorkingWithUiSourceMapLab />
+    从 EventSystem.Update 到当前 Input Module 画出一帧事件循环，并记录 selected 状态。
+
+```csharp
+public interface IAlarmHandler : IEventSystemHandler {
+    void OnAlarm(AlarmEventData data);
+}
+public sealed class AlarmEventData : BaseEventData {
+    public int Level { get; }
+    public AlarmEventData(EventSystem system, int level) : base(system) => Level = level;
+}
+```
+
+  </Step>
+<Step title="运行单变量实验">
+    <Uid06WorkingWithUiSourceExperimentLab />
+    构造 PointerEventData 汇总两个 Raycaster，改变排序字段并观察最终目标。
+
+```csharp
+static readonly ExecuteEvents.EventFunction<IAlarmHandler> Alarm =
+    (handler, data) => handler.OnAlarm((AlarmEventData)data);
+ExecuteEvents.ExecuteHierarchy(target, data, Alarm);
+```
+
+  </Step>
+<Step title="复测并签发证据">
+    <Uid06WorkingWithUiSourceEvidenceLab />
+    实现 AlarmEventData、接口与 ExecuteEvents 委托，再比较组合扩展和嵌入包源码的升级成本。
+
+```csharp
+var pointer = new PointerEventData(EventSystem.current) { position = screenPoint };
+var results = new List<RaycastResult>();
+EventSystem.current.RaycastAll(pointer, results);
+foreach (var hit in results) Debug.Log($"{hit.gameObject.name} {hit.sortingOrder} {hit.distance}");
+```
+
+  </Step>
+</Stepper>
+
+## 失败边界与常见误判
+
+<Callout type="trap">
+  **边界一**：场景里同时激活两个 EventSystem
+  或两个竞争输入模块，会产生重复、抢焦点或不可预测状态；先检查生产者数量。
+</Callout>
+
+<Callout type="trap">
+  **边界二**：直接复制整个 uGUI
+  源码后长期不跟上游，会把一次小修改变成永久分叉。必须固定版本、最小补丁并维护升级回归。
+</Callout>
+
+失败样本要保留输入、层级、关键参数和日志。只保存一张错误截图，会丢掉父矩形、相机、输入模块、射线排序或版本差异这些真正决定行为的条件。
+
+## 从 Unity 4.6/5 到现代 Unity
+
+2015 年原书使用当时开源 UI 仓库和工程接入方式。现代 Unity 的 uGUI 通常以 com.unity.ugui 包及可见包源码存在，直接 fork 引擎 UI 的维护成本和流程已变化。优先通过组合、继承、事件接口或自定义 Graphic 扩展；只有需要修改内部实现时才嵌入包，并固定版本、保留差异补丁与升级测试。旧 Bitbucket 操作只作为历史载体。
+
+迁移报告采用四列：原书对象、稳定不变量、现代载体、已知差异。若现代载体改变事件模型、坐标空间或序列化方式，就应判为“功能近似，需要重新验收”，不能写成无差别替换。
+
+## 验收证据包
+
+建立两个 Raycaster、一个可拖控件和一个自定义 AlarmEvent。日志按帧输出当前 Input Module、pointerId、RaycastResult 排序字段、press/drag/selected 目标与最终 handler。再禁用一个模块、改变 Canvas sorting、让父子都实现接口，验证 Execute 与 ExecuteHierarchy 的边界。源码扩展还要提供上游版本、补丁和回归场景。
+
+验收还要包含正常、边界和失败三类样本。正常样本证明主路径，边界样本证明约束，失败样本证明诊断方法确实能抓到错误。三者使用同一场景与记录格式，下一版本才能直接回归。
+
+## 小结
+
+- EventSystem 选择输入模块并维护全局选择与导航状态
+- Raycast Marshalling 先汇总排序，ExecuteEvents 再调用消费者
+- 自定义事件由数据、接口、执行器和生产者四部分组成
+- 源码扩展必须把历史仓库操作映射到现代包管理与升级证据
+
+<Exercises>
+
+**问题 1** Execute 与 ExecuteHierarchy 有什么不同？
+
+<Answer>
+  Execute 只在指定 GameObject 查找处理器；ExecuteHierarchy
+  会沿父层级寻找第一个能处理该接口的对象，适合事件冒泡式消费但要警惕父子边界。
+</Answer>
+
+**问题 2** RaycastAll 后为什么还不能只取第一个就结束分析？
+
+<Answer>
+  需要先确认参与的 Raycaster、排序字段、阻挡对象和 Canvas/camera
+  配置；第一个结果是排序产物，错误可能来自更上游。
+</Answer>
+
+**问题 3** 什么时候值得嵌入 uGUI 包源码？
+
+<Answer>
+  只有组合、公开扩展点和自定义控件无法实现且内部修复价值高于升级成本时；还需版本固定、最小补丁、自动回归和回馈上游策略。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="EventSystem">
+    协调输入模块、当前选中对象、射线检测和事件执行的场景级 UI 中枢。
+  </GlossaryItem>
+  <GlossaryItem term="PointerEventData">
+    携带指针位置、按键、点击、拖拽与 raycast 状态的事件数据。
+  </GlossaryItem>
+  <GlossaryItem term="Raycast Marshalling">
+    汇总多个 Raycaster 结果并按规则排序成统一命中列表的过程。
+  </GlossaryItem>
+  <GlossaryItem term="ExecuteEvents">
+    按事件接口在目标对象或层级上执行类型安全处理器的静态工具。
+  </GlossaryItem>
+  <GlossaryItem term="自定义事件接口">
+    由项目定义并由 ExecuteEvents 调用的事件消费者契约。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Simon Jackson《Unity 3D UI Essentials》官方目录与中文版身份资料"
+  adaptedUrl="https://darkgenesis.zenithmoon.com/announcing-unity-3d-ui-essentials.html"
+/>

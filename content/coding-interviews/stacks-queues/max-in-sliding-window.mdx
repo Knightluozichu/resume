@@ -1,111 +1,367 @@
 ---
-title: 滑动窗口的最大值
+title: "面试题59（一）：滑动窗口的最大值"
 type: C
-section: 栈和队列
-order: 4
-description: 固定窗口大小 k 内高效查询每个窗口最大值。
+section: "第6章 面试中的各项能力"
+order: 70
+description: "用保存候选下标的单调双端队列，在队尾淘汰被支配值、在队首移除过期值。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/59_01_MaxInSlidingWindow/MaxInSlidingWindow.cpp"
 draft: false
 ---
 
-{/* 知识点清单：单调队列、窗口滑动、过期索引剔除；原书章节：面试题59-II。 */}
+import { MaxSlidingWindowCandidateDiagram, MaxSlidingWindowDequeLab, MaxSlidingWindowExpiryMap, MaxSlidingWindowContractDiagram, MaxSlidingWindowOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/max-in-sliding-window";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能把“每个窗口内最大值”转化为“单调递减队列尾部维护”。
-- 能处理窗口中元素过期的边界。
-- 能给出可执行的 C++ 与 TypeScript 版本。
+- 能解释较小且更早的元素为何可从候选集合永久删除
+- 能计算作者示例中每一步队列下标、过期边界和输出
+- 能实现作者首窗特化版与统一单循环版
+- 能分析相等值、窗口边界、索引类型和真实队列操作成本
+- 能设计覆盖作者9组用例并与朴素窗口扫描对拍的测试
 
 </Objectives>
 
-## 直觉引入
+## 从“每个窗口都重新扫描吗”开始
 
-普通方法每次重算窗口最大值是 O(k)，窗口有 n 次就会变成 O(nk)。
-实际上我们只要保留“有可能成为最大值”的候选索引：
-小于新元素的旧候选可以直接淘汰。
+先预测：数组2、3、4、2、6、2、5、1，窗口大小3，共有6个窗口。若每次扫描3个值取最大，时间O(nk)；当窗口接近数组长度时会接近O(n平方)。
 
-## 算法思路
+窗口右移时，大部分元素仍然保留。真正需要跟踪的不是全部窗口成员，而是仍有机会成为当前或未来最大值的<Term def="保存在双端队列中、仍可能成为某个窗口最大值的数组位置。">候选下标</Term>。
 
-1. 维护双端队列 `deque`（存下标），要求对应值单调递减。
-2. 新索引 `r` 入队前，弹出队尾所有 `nums[idx] <= nums[r]`。
-3. 移除过期索引 `deque.front <= r-k`。
-4. 队首始终是当前窗口最大值位置。
+<MaxSlidingWindowCandidateDiagram />
 
-<AlgorithmExecutionDiagram />
+作者用**双端队列**保存这些下标。下标从队首到队尾递增，对应数组值则<Term def="双端队列从队首到队尾对应的数组值严格下降，队首值最大。">值单调递减</Term>，所以队首下标对应当前**滑动窗口的最大值**。
 
-## 思考引导
+## 为什么较小的旧值永远失去资格
 
-### 1) 先问问题，不先全量扫
-这题是实时窗口最大值。若每次都扫窗口，复杂度不可控。先问每个新元素如何影响现有候选。
+新值num[i]到来时，若它大于或等于队尾候选值，旧队尾同时满足“值不更大”和“出现更早”：
 
-### 2) 识别不变式
-双端队列中只保留可能成为将来最大值的递减候选，过小且更早到达的值可被淘汰。
+1. 在两个下标共同存在的窗口中，新值至少一样大。
+2. 窗口继续右移时，旧值会先过期，新值活得更久。
 
-### 3) 为什么它一定成立
-若一个值前面有更大值且更早出现，那么在其过期前它永远不可能成为最大值。递减队列是可证明的可达集。
+旧队尾此后不可能优先成为最大值，可以永久弹出。持续删除直到队尾值严格大于新值，再把i压入。这称为<Term def="新值大于等于队尾候选时，持续从队尾删除被支配下标。">队尾淘汰</Term>。
 
-### 4) 常见误区
-队列只存值不存下标会导致过期元素误判；另一类是 pop_front 条件与窗口左边界没对齐。
+过期是另一回事。新窗口左边界为i减size加1，任何下标不大于i减size都已离窗。若这样的下标位于队首，必须从前端删除，称为<Term def="队首候选下标已经小于新窗口左边界时，从前端移除。">队首过期</Term>。
 
-### 5) 你能找到一个反例吗
-序列 [1,3,-1,-3,5,3,6,7], k=3，过期边界变化快，能检验是否按下标清除。
+<MaxSlidingWindowExpiryMap />
 
-### 6) 迁移到下一题
-监控、限流、实时排行都用同模式：维护候选单调性，配合窗口过期规则。
-## 代码对照
+队尾按值删除，队首按时间删除。只实现其中一种都不够。
 
-<CodeTabs>
-  <Tab label="C++">
+## 忠实还原作者两阶段循环
+
+作者先单独处理前size个元素，建立第一个窗口的候选队列；随后每读一个新下标，先输出上一窗口最大值，再更新队列；循环结束后补最后一个窗口。
+
 ```cpp
 #include <deque>
 #include <vector>
 
-class Solution {
-public:
-    std::vector<int> maxInWindows(const std::vector<int>& nums, int k) {
-        std::deque<int> q;
-        std::vector<int> ans;
+std::vector<int> maxInWindows(
+    const std::vector<int>& num,
+    unsigned int size) {
+    std::vector<int> result;
+    if (num.size() >= size &&
+        size >= 1) {
+        std::deque<int> index;
 
-        for (int r = 0; r < (int)nums.size(); ++r) {
-            while (!q.empty() && nums[q.back()] <= nums[r]) q.pop_back();
-            q.push_back(r);
-
-            if (q.front() <= r - k) q.pop_front();
-
-            if (r >= k - 1) {
-                ans.push_back(nums[q.front()]);
+        for (unsigned int i = 0;
+             i < size;
+             ++i) {
+            while (!index.empty() &&
+                   num[i] >=
+                       num[index.back()]) {
+                index.pop_back();
             }
+            index.push_back(i);
         }
-        return ans;
-    }
-};
-```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-function maxSlidingWindow(nums: number[], k: number): number[] {
-    const q: number[] = [];
-    const ans: number[] = [];
 
-    for (let r = 0; r < nums.length; r++) {
-        while (q.length > 0 && nums[q[q.length - 1]] <= nums[r]) q.pop();
-        q.push(r);
+        for (unsigned int i = size;
+             i < num.size();
+             ++i) {
+            result.push_back(
+                num[index.front()]);
 
-        if (q[0] <= r - k) q.shift();
-
-        if (r >= k - 1) {
-            ans.push(nums[q[0]]);
+            while (!index.empty() &&
+                   num[i] >=
+                       num[index.back()]) {
+                index.pop_back();
+            }
+            if (!index.empty() &&
+                index.front() <=
+                    static_cast<int>(
+                        i - size)) {
+                index.pop_front();
+            }
+            index.push_back(i);
         }
+        result.push_back(
+            num[index.front()]);
     }
-    return ans;
+    return result;
 }
 ```
-  </Tab>
-</CodeTabs>
+
+合法条件是size至少1且不超过数组长度。窗口数为n减size加1，因此最后一次补输出不可遗漏。
+
+## 作者示例的完整队列轨迹
+
+对2、3、4、2、6、2、5、1和size为3：
+
+- 2入队；3淘汰2；4淘汰3，首窗队列只剩下标2，对应最大值4。
+- 新2不能淘汰4，队列为2、3，下一个窗口仍输出4。
+- 新6从队尾依次淘汰2和4，只剩下标4，窗口最大值6。
+- 新2保留在6之后；新5淘汰2但保留6。
+- 新1到来时，下标4的6已经过期，从队首移除，5成为最后窗口最大值。
+
+<MaxSlidingWindowDequeLab />
+
+输出依次4、4、6、6、6、5，与作者Test1一致。
+
+## 相等值为何淘汰旧下标
+
+源码条件使用大于等于，因此新值与队尾相等时也删除旧下标，只保留更晚出现的同值。新下标值相同但过期更晚，完全支配旧下标。
+
+若只使用大于而保留相等值，算法仍可正确，但队列可能保存多个相同候选，需要依靠队首逐个过期。作者策略让队列更紧凑并保持值严格递减。
+
+不能把大于等于误改为从队首删除。被新值支配的是队尾较小候选；队首可能仍比新值大，是当前最大值。
+
+## 为什么必须保存下标
+
+<Callout type="trap" title="队列只保存值">
+仅凭值可以维护递减顺序，却不知道队首对应元素何时离开窗口。重复值出现时更无法区分新旧副本。保存下标后既能查num[index]比较值，也能用index判断过期。
+</Callout>
+
+下标还让输出无需复制窗口成员。队列最多保存size个候选，空间O(size)，不随值域大小变化。
+
+作者使用保存int下标的deque，却以unsigned int遍历vector。普通规模下转换正常；若元素数超过INT_MAX，把大下标压入int会失真。现代版应统一使用size_t。
+
+## 统一单循环模板
+
+可以把首窗和后续窗口合成一个循环：每次先淘汰队尾、压入新下标，再移除过期队首；当i加1至少为size时输出队首。
+
+```cpp
+#include <cstddef>
+#include <deque>
+#include <span>
+#include <vector>
+
+std::vector<int> maxInWindowsUnified(
+    std::span<const int> values,
+    std::size_t size) {
+    std::vector<int> result;
+    if (size == 0 ||
+        size > values.size()) {
+        return result;
+    }
+
+    std::deque<std::size_t> candidates;
+    result.reserve(
+        values.size() - size + 1);
+
+    for (std::size_t i = 0;
+         i < values.size();
+         ++i) {
+        while (!candidates.empty() &&
+               values[i] >=
+                   values[candidates.back()]) {
+            candidates.pop_back();
+        }
+        candidates.push_back(i);
+
+        const std::size_t windowStart =
+            i + 1 >= size
+                ? i + 1 - size
+                : 0;
+        while (!candidates.empty() &&
+               candidates.front()
+                   < windowStart) {
+            candidates.pop_front();
+        }
+
+        if (i + 1 >= size) {
+            result.push_back(
+                values[candidates.front()]);
+        }
+    }
+    return result;
+}
+```
+
+这个版本更新当前窗口后再输出，与作者“先输出上一窗再加入新值”的时序不同，但结果等价。实现时必须选定一种时序，不能把过期公式和输出位置从两个模板拼在一起。
+
+<Callout type="trap" title="在作者循环中先加入新值再输出上一窗口">
+新值属于下一个窗口，若提前参与候选会污染上一窗口结果。作者先输出旧窗；统一模板则先更新新窗并只在新窗完成后输出，两种顺序各自闭合。
+</Callout>
+
+## 正确性不变式
+
+处理到下标i后，队列满足三条不变式：
+
+1. 所有下标严格递增，并位于当前窗口范围内。
+2. 对应值从队首到队尾严格递减。
+3. 窗口内任何未在队列中的元素，都被一个更晚且不小的候选支配。
+
+因此队首既未过期，又不小于所有保留候选；被删元素也不可能更优，队首就是最大值。
+
+新元素入队时从队尾删除被支配项，保持第二、三条；按左边界移除队首，保持第一条；其余候选相对顺序不变。由归纳，每次输出正确。
+
+## O(n)来自摊还而非每轮常数
+
+某个特别大的新值可能一次弹出许多队尾，单轮看似O(size)。但每个下标只入队一次，被队尾淘汰或队首过期后就永不回来，整个运行中弹出总次数不超过n。
+
+这种把偶尔昂贵操作分摊到所有元素上的证明称为<Term def="统计每个下标全程至多入队一次、出队一次，从总操作数推出线性复杂度。">摊还分析</Term>。总时间O(n)，队列空间O(size)。
+
+与优先队列相比，堆可在O(log size)插入并延迟删除过期值，适用于更一般优先级场景；本题利用窗口按时间滑动和只查最大值，单调队列更直接。
+
+“队首过期与队尾淘汰”必须按各自条件独立理解。一个候选可能因为时间最早而从队首离开，也可能在尚未过期时被更晚大值从队尾支配；无论走哪条路径，它只会出队一次。正是这两个互斥出口让总删除次数可计数，而不是假设每轮while只执行一次。
+
+该结构也适合在线数据流。每到一个新样本即可更新候选并在首个完整窗口后立刻输出，不必等待全部数组。若历史数组不可随机访问，队列节点应同时保存下标和值，过期仍看下标、单调比较直接看值；内存仍不超过窗口候选数量。流被分片时则要谨慎，窗口可能跨分片边界，不能独立计算后只拼接最大值，必须把边界候选状态一并传递或保留重叠数据。
+
+固定窗口大小让左边界每步只前进一格。若窗口大小随时间变化但左边界仍单调右移，同一队列仍可按实际windowStart清理；若窗口突然向左扩张，之前已淘汰或过期的元素无法恢复，必须保存更多历史或重建。单调队列支持的是单向时间窗口，不是任意区间查询。
+
+把队尾比较方向反转即可维护窗口最小值；若同时需要最大与最小，可维护两个deque，各自O(n)摊还和O(size)空间。若还要中位数或任意分位数，单调队列不再携带足够顺序统计信息，需要双堆、平衡树或计数结构。
+
+## 边界输入与输出数量
+
+<MaxSlidingWindowContractDiagram />
+
+size为1时每个单元素窗口最大值就是自身，输出原数组。size等于n时只有一个窗口，输出全局最大值。
+
+对任意合法size，输出数量必须精确等于n减size加1。这个性质与具体最大值无关，能单独抓出漏补最后窗口、过早输出首窗或多输出未满窗口等时序错误。返回空vector时则要结合输入判断：可能是数组空、size为0或size过大，而不是“存在合法窗口但最大值为空”。
+
+size为0、size大于n或数组为空时作者返回空vector，不区分三种无效原因。若API需要诊断，可返回expected或错误枚举。
+
+不存在数值溢出，因为算法只比较和复制int，不做加法。但索引差i减size必须在确认i不小于size的阶段执行；作者只在第二个循环i从size开始，避免unsigned下溢。
+
+## 作者9组测试逐项还原
+
+1. 书中综合示例，size3，输出4、4、6、6、6、5。
+2. 1、3、-1、-3、5、3、6、7，size3，输出3、3、5、5、6、7。
+3. 单调递增数组，size4，最大值始终是新右端。
+4. 单调递减数组，size5，最大值依次由旧队首过期交接。
+5. size为1，输出与输入完全相同。
+6. size等于数组长度，输出单个全局最大值14。
+7. size为0，输出空。
+8. size大于数组长度，输出空。
+9. 空数组配size5，输出空。
+
+<MaxSlidingWindowOfficialCaseLab />
+
+作者Test逐元素比较result与expected，并要求两个迭代器同时到达末尾，因此既检查值，也检查输出长度。
+
+```cpp
+#include <algorithm>
+#include <cassert>
+#include <vector>
+
+std::vector<int> bruteWindowMax(
+    const std::vector<int>& values,
+    std::size_t size) {
+    std::vector<int> result;
+    if (size == 0 ||
+        size > values.size()) {
+        return result;
+    }
+    for (std::size_t start = 0;
+         start + size <= values.size();
+         ++start) {
+        result.push_back(
+            *std::max_element(
+                values.begin() + start,
+                values.begin()
+                    + start + size));
+    }
+    return result;
+}
+
+void testWindowMax() {
+    const std::vector<int> values{
+        2, 3, 4, 2, 6, 2, 5, 1};
+    assert(maxInWindows(values, 3)
+           == std::vector<int>{
+               4, 4, 6, 6, 6, 5});
+    assert(maxInWindows(values, 1)
+           == values);
+    assert(maxInWindows(values, 0)
+           .empty());
+    assert(maxInWindows(values, 9)
+           .empty());
+    assert(maxInWindows(values, 3)
+           == bruteWindowMax(values, 3));
+}
+```
+
+随机对拍可生成含重复、负数、递增、递减和锯齿数据，对每个合法size与朴素扫描比较。还应断言输出数量恰为n减size加1。
+
+若实现TypeScript版本，普通数组shift会搬移后续元素，单次O(size)，破坏线性保证。应使用真正双端队列库、环形缓冲区，或用头指针避免前端搬移并定期压缩存储。
+
+<Stepper>
+  <Step title="只保留可能接任最大值的下标">
+    <MaxSlidingWindowCandidateDiagram />
+    队首是当前最大值，后续候选按值递减。
+  </Step>
+  <Step title="区分队尾淘汰与队首过期">
+    <MaxSlidingWindowExpiryMap />
+    一个处理值支配，一个处理窗口时间边界。
+  </Step>
+  <Step title="复盘书中8个输入的队列">
+    <MaxSlidingWindowDequeLab />
+    每个新下标都可能淘汰队尾或促使队首过期。
+  </Step>
+  <Step title="核对窗口与复杂度契约">
+    <MaxSlidingWindowContractDiagram />
+    合法size、下标类型和摊还证明共同保证结果。
+  </Step>
+  <Step title="执行作者9组测试">
+    <MaxSlidingWindowOfficialCaseLab />
+    综合、单双调、边界窗口与无效输入全部覆盖。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 滑动窗口的最大值由保存候选元素下标的双端队列维护。
+2. 队列下标递增，对应值单调递减，队首就是最大值。
+3. 新值从队尾淘汰更小或相等旧值，保留更晚候选。
+4. 队首过期按新窗口左边界删除，必须保存下标。
+5. 作者先构造首窗，再先输出旧窗、处理新值、最后补一次。
+6. 统一单循环可先更新新窗再输出，但时序公式不能混用。
+7. 每个下标至多入队、出队一次，摊还时间O(n)、空间O(size)。
+8. 作者9组测试覆盖综合序列、单调数据和所有窗口边界。
+
+<Exercises>
+
+**问题 1：新值等于队尾值时为何作者删除旧下标？**
+
+<Answer>两者值相同，新下标出现更晚、过期也更晚，在共同窗口中不比旧值差；旧下标永远不会优先成为最大值，因此可安全淘汰。</Answer>
+
+**问题 2：为什么队列只保存值会出错？**
+
+<Answer>值无法说明对应元素是否已离开窗口，重复值也无法区分新旧副本。下标同时支持按值比较与按位置过期。</Answer>
+
+**问题 3：一次新值可能弹出很多元素，为何总时间仍是O(n)？**
+
+<Answer>每个下标只入队一次，弹出后不再返回。全程所有队尾淘汰和队首过期总数至多n，偶尔昂贵的一轮被分摊到所有下标。</Answer>
+
+**问题 4：作者为何在主循环前先输出队首？**
+
+<Answer>循环下标i代表即将进入下一个窗口的新元素，当前队列仍对应上一个完整窗口，必须先输出。若先加入i，上一窗口会被不属于它的新值污染。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="候选下标">仍可能成为当前或未来窗口最大值的数组位置。</GlossaryItem>
+  <GlossaryItem term="值单调递减">队首到队尾对应数组值严格下降的不变式。</GlossaryItem>
+  <GlossaryItem term="队尾淘汰">新值支配旧候选时从后端持续删除。</GlossaryItem>
+  <GlossaryItem term="队首过期">最早候选离开窗口时从前端删除。</GlossaryItem>
+  <GlossaryItem term="摊还分析">按每个下标全生命周期统计总队列操作次数。</GlossaryItem>
+</Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题59（一）"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/59_01_MaxInSlidingWindow/MaxInSlidingWindow.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

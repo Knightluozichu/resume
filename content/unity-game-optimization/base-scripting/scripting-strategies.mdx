@@ -1,27 +1,20 @@
 ---
 title: 脚本优化策略
 type: C
-section: 基础脚本优化
+section: "Unity Game Optimization · 诊断与脚本"
 order: 2
 description: 掌握 Unity C# 脚本层常见性能陷阱与写法——缓存组件、选对 Update 机制、避开 Find 与 GC。
 demo: true
 math: false
 draft: false
-sourceUrl: ""
+sourceUrl: "https://www.packtpub.com/en-us/product/unity-game-optimization-9781838556518"
 ---
 
-{/* C 实战型（Unity Game Optimization Ch2 改编）：脚本层 CPU 热点与写法取舍。
-   重心在代码对照(§6)慢 vs 快 CodeTabs，交互 Demo 用 Stepper + UpdateMechanismDiagram(§5)。 */}
-
-{/* 知识点清单：
-   1) GetComponent 缓存 — GetComponentCacheDiagram
-   2) 空 MonoBehaviour 回调 — EmptyCallbackDiagram
-   3) Update vs Coroutine vs InvokeRepeating — UpdateMechanismDiagram + Stepper
-   4) GameObject 空引用检查 — 代码对照 + Callout
-   5) 避免 Find / SendMessage — FindSendMessageDiagram
-   6) 数据结构 / sqrMagnitude — 代码对照
-   7) Additive/Async 场景加载 — 代码对照
-   8) 自定义 Update 层 — 代码对照 */}
+import {
+  ScriptingStrategiesMapLab,
+  ScriptingStrategiesExperimentLab,
+  ScriptingStrategiesEvidenceLab,
+} from "@/components/mdx/unity-game-optimization/diagrams/scripting-strategies";
 
 <Objectives>
 
@@ -30,6 +23,75 @@ sourceUrl: ""
 - 能回答：100 个挂着空 `Update()` 的脚本和 1 个管理器里循环 100 次自定义 `Tick()`，Profiler 上 CPU 分布会有什么差别？为什么？
 
 </Objectives>
+
+## 原书边界：Chapter 2
+
+Packt 第三版把本章命名为 **Scripting Strategies**。官方目录列出的核心范围如下；这些条目共同构成本章的一对一边界：
+
+- **Obtaining components using the fastest method**：纳入本章实验与验收，不拆到别章重复计数。
+- **Removing empty callback definitions**：纳入本章实验与验收，不拆到别章重复计数。
+- **Caching component references**：纳入本章实验与验收，不拆到别章重复计数。
+- **Sharing calculation output**：纳入本章实验与验收，不拆到别章重复计数。
+- **Update, coroutines, and InvokeRepeating**：纳入本章实验与验收，不拆到别章重复计数。
+- **Faster GameObject null reference checks**：纳入本章实验与验收，不拆到别章重复计数。
+- **Avoid retrieving string properties from GameObjects**：纳入本章实验与验收，不拆到别章重复计数。
+- **Using appropriate data structures**：纳入本章实验与验收，不拆到别章重复计数。
+- **Avoiding re-parenting transforms at runtime**：纳入本章实验与验收，不拆到别章重复计数。
+- **Considering caching transform changes**：纳入本章实验与验收，不拆到别章重复计数。
+- **Avoiding Find() and SendMessage() at runtime**：纳入本章实验与验收，不拆到别章重复计数。
+- **Disabling unused scripts and objects**：纳入本章实验与验收，不拆到别章重复计数。
+- **Using distance-squared over distance**：纳入本章实验与验收，不拆到别章重复计数。
+- **Minimizing deserialization behavior**：纳入本章实验与验收，不拆到别章重复计数。
+- **Loading scenes additively and asynchronously**：纳入本章实验与验收，不拆到别章重复计数。
+- **Creating a custom Update() layer**：纳入本章实验与验收，不拆到别章重复计数。
+
+把高频回调中的查找、分配、字符串桥接与重复计算移到初始化、事件或集中调度层。新版 Unity 的增量 GC、Awaitable 与 Entities 不会自动修复低效 MonoBehaviour 热路径；先以 Profiler 证据选择改法。 因此，本章既保留 2019/2020 语境，也明确标出迁移到现代 Unity 时哪些是稳定原理、哪些只是版本相关接口。
+
+<ScriptingStrategiesMapLab />
+
+## 三步证据实验
+
+先预测：如果候选优化真的命中瓶颈，哪个指标应先变化，哪个正确性条件必须保持？下面三步只改变一个变量，并把正常、边界和失败样本一起保存。
+
+<Stepper>
+  <Step title="固定范围与基线">
+    <ScriptingStrategiesMapLab />
+    构造 1、100、1000 个对象三个规模，比较分散 Update、集中 Tick 与事件驱动的主线程成本和分配。 先写明目标设备、构建类型、场景、画质、预热和采样窗口，不把 Editor 数据与真机数据混在一起。
+
+```csharp
+private Rigidbody cachedBody;
+void Awake() => cachedBody = GetComponent<Rigidbody>();
+```
+
+  </Step>
+  <Step title="运行单变量候选">
+    <ScriptingStrategiesExperimentLab />
+    只启用一个候选改动，保存同一输入下的结果。需要记录的不只是平均 FPS，还包括 CPU Timeline、GC Alloc、调用次数、对象规模曲线以及行为一致性测试。
+
+```csharp
+void Update() {
+  for (var i = 0; i < active.Count; i++) active[i].Tick();
+}
+```
+
+  </Step>
+  <Step title="复测并签发证据">
+    <ScriptingStrategiesEvidenceLab />
+    对比 P50、P95、峰值与正确性；若收益只出现在 Editor、单次运行或错误画质下，就回退候选并保留失败原因。
+
+```csharp
+if ((target.position - transform.position).sqrMagnitude < radius * radius)
+  Activate();
+```
+
+  </Step>
+</Stepper>
+
+<Callout type="trap">
+  **版本迁移陷阱**：缓存会延长引用生命周期，集中调度会增加管理复杂度；低频路径不应为微优化牺牲可读性。
+  第三版内容应作为原理和历史载体来复现，现代 API
+  必须另行标注并在当前目标设备上重新测量。
+</Callout>
 
 ## 脚本写得不对，Profiler 也会红
 
@@ -77,7 +139,8 @@ public class Mover : MonoBehaviour {
 </CodeTabs>
 
 <Callout type="tip">
-  同 GameObject 上的组件：Awake 缓存即可。跨对象引用：优先在 prefab 上拖序列化字段；动态生成的对象用构造/工厂注入引用，而不是运行时 Find。
+  同 GameObject 上的组件：Awake 缓存即可。跨对象引用：优先在 prefab
+  上拖序列化字段；动态生成的对象用构造/工厂注入引用，而不是运行时 Find。
 </Callout>
 
 ## 空回调：体量为零，成本不为零
@@ -86,7 +149,11 @@ public class Mover : MonoBehaviour {
 
 <EmptyCallbackDiagram />
 
-<Term def="MonoBehaviour 上定义了但函数体为空的 Update/LateUpdate/FixedUpdate；引擎仍按帧调度，造成无意义的 CPU 开销。">空 MonoBehaviour 回调</Term> 在合并场景、挂了大量 prefab 时特别常见——某个模板里留了空函数，复制几十份就放大成热点。
+<Term def="MonoBehaviour 上定义了但函数体为空的 Update/LateUpdate/FixedUpdate；引擎仍按帧调度，造成无意义的 CPU 开销。">
+  空 MonoBehaviour 回调
+</Term>
+在合并场景、挂了大量 prefab
+时特别常见——某个模板里留了空函数，复制几十份就放大成热点。
 
 修法：删掉不用的回调；需要「偶尔更新」的改用事件或集中调度（见后文自定义 Update 层）。
 
@@ -94,13 +161,28 @@ public class Mover : MonoBehaviour {
 
 不是每件事都值得放进 `Update`。三种内置机制各管一类节奏：
 
-<Term def="MonoBehaviour 每帧在主线程调用的回调，与帧率同步，适合输入与逐帧动画。">Update</Term> 跟帧率走；<Term def="用 yield return 把执行挂起、下一帧或延迟后再继续的协程，适合分步流程与等待。">Coroutine（协程）</Term> 可以「等 0.5 秒再继续」；<Term def="按固定秒数重复调用某方法的引擎 API，底层用字符串反射查找方法。">InvokeRepeating</Term> 适合低频轮询，但不如显式事件干净。
+<Term def="MonoBehaviour 每帧在主线程调用的回调，与帧率同步，适合输入与逐帧动画。">
+  Update
+</Term>
+跟帧率走；
+<Term def="用 yield return 把执行挂起、下一帧或延迟后再继续的协程，适合分步流程与等待。">
+  Coroutine（协程）
+</Term>
+可以「等 0.5 秒再继续」；
+<Term def="按固定秒数重复调用某方法的引擎 API，底层用字符串反射查找方法。">
+  InvokeRepeating
+</Term>
+适合低频轮询，但不如显式事件干净。
 
 <UpdateMechanismDiagram />
 
 ## 已销毁对象：Unity 的「假 null」
 
-<Term def="Unity 重载 UnityEngine.Object 的 == 运算符，原生对象销毁后 C# 包装可能仍非 C# null，用 == null 才能判活。">Unity 空引用检查</Term> 和纯 C# 不一样：对象被 `Destroy` 后，引用有时在 C# 里还不是 `null`，但 Unity 的 `== null` 会返回 true。
+<Term def="Unity 重载 UnityEngine.Object 的 == 运算符，原生对象销毁后 C# 包装可能仍非 C# null，用 == null 才能判活。">
+  Unity 空引用检查
+</Term>
+和纯 C# 不一样：对象被 `Destroy` 后，引用有时在 C# 里还不是 `null`，但 Unity 的
+`== null` 会返回 true。
 
 <CodeTabs>
   <Tab label="❌ 慢 / 易错">
@@ -131,12 +213,20 @@ void Awake() => _player = GameObject.Find("Player").transform;
 </CodeTabs>
 
 <Callout type="warn">
-  热路径里仍应避免 `Find`——上面 Awake 缓存只是比每帧 Find 好；最佳是序列化引用或启动时由管理器注册。
+  热路径里仍应避免 `Find`——上面 Awake 缓存只是比每帧 Find
+  好；最佳是序列化引用或启动时由管理器注册。
 </Callout>
 
 ## 别在运行时搜场景：Find 与 SendMessage
 
-<Term def="按名称或标签从场景根遍历层级树查找 GameObject 的 API，节点越多开销越大。">GameObject.Find / FindWithTag</Term> 和 <Term def="按方法名字符串向对象发消息，依赖反射，慢且难维护。">SendMessage</Term> 都会触发场景遍历。
+<Term def="按名称或标签从场景根遍历层级树查找 GameObject 的 API，节点越多开销越大。">
+  GameObject.Find / FindWithTag
+</Term>
+和
+<Term def="按方法名字符串向对象发消息，依赖反射，慢且难维护。">
+  SendMessage
+</Term>
+都会触发场景遍历。
 
 <FindSendMessageDiagram />
 
@@ -151,15 +241,22 @@ void Awake() => _player = GameObject.Find("Player").transform;
 <Stepper>
   <Step title="① Update：每帧同步">
     <UpdateMechanismDiagram step={0} />
-    角色移动、读输入、跟摄像机——**必须与帧率同步**的逻辑放 Update。检查项目里是否有空 Update 可删；Profiler 里 `ScriptRunBehaviourUpdate` 过高时数一下启用脚本数量。
+    角色移动、读输入、跟摄像机——**必须与帧率同步**的逻辑放
+    Update。检查项目里是否有空 Update 可删；Profiler 里
+    `ScriptRunBehaviourUpdate` 过高时数一下启用脚本数量。
   </Step>
   <Step title="② Coroutine：等时间/等帧">
     <UpdateMechanismDiagram step={1} />
-    开场倒计时、`yield return new WaitForSeconds(0.5f)`、分步加载提示——用协程把流程拆开。注意 `new WaitForSeconds` 会分配，可缓存 yield 指令或改用 `WaitForSecondsRealtime` 池化。
+    开场倒计时、`yield return new
+    WaitForSeconds(0.5f)`、分步加载提示——用协程把流程拆开。注意 `new
+    WaitForSeconds` 会分配，可缓存 yield 指令或改用 `WaitForSecondsRealtime`
+    池化。
   </Step>
   <Step title="③ InvokeRepeating：定间隔">
     <UpdateMechanismDiagram step={2} />
-    AI 每 3 秒巡逻、低频拉取配置——可用 InvokeRepeating，但更推荐**计时器字段 + 单管理器 Update**，避免字符串方法名和分散调度。能事件驱动（玩家进门才刷新）就不要轮询。
+    AI 每 3 秒巡逻、低频拉取配置——可用 InvokeRepeating，但更推荐**计时器字段 +
+    单管理器
+    Update**，避免字符串方法名和分散调度。能事件驱动（玩家进门才刷新）就不要轮询。
   </Step>
 </Stepper>
 
@@ -197,7 +294,11 @@ public class EnemyRegistry : MonoBehaviour {
 
 ### 距离比较与容器
 
-<Term def="Vector3 长度的平方，比较远近时避免 magnitude 内部的开方运算。">sqrMagnitude</Term> 在判断「进入范围」时比 `magnitude` 省一次 `sqrt`。热循环里优先数组或预分配容量的 `List`，减少 GC。
+<Term def="Vector3 长度的平方，比较远近时避免 magnitude 内部的开方运算。">
+  sqrMagnitude
+</Term>
+在判断「进入范围」时比 `magnitude` 省一次 `sqrt`。热循环里优先数组或预分配容量的
+`List`，减少 GC。
 
 <CodeTabs>
   <Tab label="❌ 慢">
@@ -225,7 +326,12 @@ for (int i = 0; i < _targets.Length; i++) {
 
 ### 场景加载：Additive 与 Async
 
-<Term def="在保留当前场景的同时叠加加载另一场景，适合分区大地图或 UI 层。">Additive 加载</Term> 不卸当前关；<Term def="异步加载场景，主线程可分帧推进进度，避免切换卡顿。">Async 加载</Term> 用 `LoadSceneAsync` 配合进度条。
+<Term def="在保留当前场景的同时叠加加载另一场景，适合分区大地图或 UI 层。">
+  Additive 加载
+</Term>
+不卸当前关；
+<Term def="异步加载场景，主线程可分帧推进进度，避免切换卡顿。">Async 加载</Term>
+用 `LoadSceneAsync` 配合进度条。
 
 <CodeTabs>
   <Tab label="❌ 慢">
@@ -252,7 +358,10 @@ IEnumerator LoadAdditiveAsync() {
 
 ### 集中自定义 Update 层
 
-<Term def="由单一管理器在一条 Update 里遍历对象并调用自定义 Tick，替代大量 MonoBehaviour.Update 以减少引擎调度开销。">自定义 Update 层</Term> 适合大量 NPC、子弹、计时器——**一次引擎回调，内部循环 N 次逻辑**。
+<Term def="由单一管理器在一条 Update 里遍历对象并调用自定义 Tick，替代大量 MonoBehaviour.Update 以减少引擎调度开销。">
+  自定义 Update 层
+</Term>
+适合大量 NPC、子弹、计时器——**一次引擎回调，内部循环 N 次逻辑**。
 
 <CodeTabs>
   <Tab label="❌ 慢">
@@ -283,25 +392,37 @@ public class TickManager : MonoBehaviour {
 </CodeTabs>
 
 <Callout type="tip">
-  自定义层可加分帧（每帧只 Tick 一部分）、优先级桶、降频（远处 NPC 每 3 帧 Tick 一次）。代价是自己维护注册/注销，对象销毁时记得 `Unregister`。
+  自定义层可加分帧（每帧只 Tick 一部分）、优先级桶、降频（远处 NPC 每 3 帧 Tick
+  一次）。代价是自己维护注册/注销，对象销毁时记得 `Unregister`。
 </Callout>
 
 ## 容易踩的坑
 
 <Callout type="trap">
-  **现象**：Profiler 里某个脚本 `GetComponent` Self 时间很高，改成缓存后 Total 几乎不变。**原因**：瓶颈其实在子函数或物理，GetComponent 只是表象；或仍在别的脚本里每帧查找。**修法**：展开调用栈看 Total；全项目搜 `GetComponent` 与 `Find`，一次性清干净。
+  **现象**：Profiler 里某个脚本 `GetComponent` Self 时间很高，改成缓存后 Total
+  几乎不变。**原因**：瓶颈其实在子函数或物理，GetComponent
+  只是表象；或仍在别的脚本里每帧查找。**修法**：展开调用栈看 Total；全项目搜
+  `GetComponent` 与 `Find`，一次性清干净。
 </Callout>
 
 <Callout type="trap">
-  **现象**：协程里每帧 `yield return new WaitForEndOfFrame()`，GC Alloc 每帧上涨。**原因**：部分 yield 指令会分配托管对象。**修法**：缓存 `WaitForEndOfFrame` 实例到字段复用，或改用非分配计时（`Time.time` 比较）。
+  **现象**：协程里每帧 `yield return new WaitForEndOfFrame()`，GC Alloc
+  每帧上涨。**原因**：部分 yield 指令会分配托管对象。**修法**：缓存
+  `WaitForEndOfFrame` 实例到字段复用，或改用非分配计时（`Time.time` 比较）。
 </Callout>
 
 <Callout type="trap">
-  **现象**：场景里 200 个敌人 prefab 都带空 `Update`，合并后帧率骤降。**原因**：空回调仍被 PlayerLoop 调度，见 EmptyCallbackDiagram。**修法**：删掉空函数；大量同类逻辑合并到 TickManager；用 `[DefaultExecutionOrder]` 控制顺序而非多挂脚本。
+  **现象**：场景里 200 个敌人 prefab 都带空
+  `Update`，合并后帧率骤降。**原因**：空回调仍被 PlayerLoop 调度，见
+  EmptyCallbackDiagram。**修法**：删掉空函数；大量同类逻辑合并到 TickManager；用
+  `[DefaultExecutionOrder]` 控制顺序而非多挂脚本。
 </Callout>
 
 <Callout type="trap">
-  **现象**：`if (go != null)` 通过后仍报 MissingReferenceException。**原因**：用了 C# 引用判空而非 Unity 的 `== null`。**修法**：对 `UnityEngine.Object` 统一用 `== null` / `ReferenceEquals` 配合 Unity 语义，或 TryGet 模式。
+  **现象**：`if (go != null)` 通过后仍报
+  MissingReferenceException。**原因**：用了 C# 引用判空而非 Unity 的 `==
+  null`。**修法**：对 `UnityEngine.Object` 统一用 `== null` / `ReferenceEquals`
+  配合 Unity 语义，或 TryGet 模式。
 </Callout>
 
 ## 小结
@@ -314,7 +435,7 @@ public class TickManager : MonoBehaviour {
 
 <Exercises>
 
-**练习 1（改代码型）** 找一个在 `Update` 里调用 `GetComponent` 的脚本，改成 Awake 缓存或序列化字段。用 Profiler 对比改动前后该脚本的 Self/Total 时间，并记录 GC Alloc 是否变化。
+**问题 1（改代码型）** 找一个在 `Update` 里调用 `GetComponent` 的脚本，改成 Awake 缓存或序列化字段。用 Profiler 对比改动前后该脚本的 Self/Total 时间，并记录 GC Alloc 是否变化。
 
 <Answer>
 
@@ -322,7 +443,7 @@ public class TickManager : MonoBehaviour {
 
 </Answer>
 
-**练习 2（问答型）** 为什么 100 个空 `Update` 通常比 1 个 `TickManager` 循环 100 次更慢？
+**问题 2（问答型）** 为什么 100 个空 `Update` 通常比 1 个 `TickManager` 循环 100 次更慢？
 
 <Answer>
 
@@ -330,7 +451,7 @@ public class TickManager : MonoBehaviour {
 
 </Answer>
 
-**练习 3（问答型）** 比较 `magnitude` 与 `sqrMagnitude` 判断进入 5 米范围时的差异；若范围改为 `float range` 变量，快写法应如何写？
+**问题 3（问答型）** 比较 `magnitude` 与 `sqrMagnitude` 判断进入 5 米范围时的差异；若范围改为 `float range` 变量，快写法应如何写？
 
 <Answer>
 
@@ -343,7 +464,8 @@ magnitude 内部计算 sqrt，sqrMagnitude 只比平方。快写法：`offset.sq
 <Glossary>
 
 <GlossaryItem term="GetComponent 缓存">
-  在 Awake/Start 或 Inspector 字段保存组件引用，避免 Update 里重复 GetComponent。详见「组件引用」一节。
+  在 Awake/Start 或 Inspector 字段保存组件引用，避免 Update 里重复
+  GetComponent。详见「组件引用」一节。
 </GlossaryItem>
 
 <GlossaryItem term="空 MonoBehaviour 回调">
@@ -367,7 +489,8 @@ magnitude 内部计算 sqrt，sqrMagnitude 只比平方。快写法：`offset.sq
 </GlossaryItem>
 
 <GlossaryItem term="GameObject.Find / FindWithTag">
-  运行时遍历场景层级按名/标签查找。应用缓存引用替代。详见 FindSendMessageDiagram。
+  运行时遍历场景层级按名/标签查找。应用缓存引用替代。详见
+  FindSendMessageDiagram。
 </GlossaryItem>
 
 <GlossaryItem term="SendMessage">
@@ -394,5 +517,5 @@ magnitude 内部计算 sqrt，sqrMagnitude 只比平方。快写法：`offset.sq
 
 <Attribution
   adaptedFrom="Packt《Unity Game Optimization》第3版"
-  adaptedUrl="https://www.packtpub.com/product/unity-game-optimization-third-edition/9781839215721"
+  adaptedUrl="https://www.packtpub.com/en-us/product/unity-game-optimization-9781838556518"
 />

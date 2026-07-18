@@ -1,0 +1,233 @@
+---
+title: "第 9 章 简单Diff算法"
+type: A
+section: "Vue.js设计与实现 · 渲染器"
+order: 9
+description: "简单Diff用key建立身份，记录已遇到的最大旧索引判断移动，并通过锚点完成复用、新增和删除。 本页按权威目录独立教学重构。"
+demo: true
+math: false
+sourceUrl: "https://time.geekbang.org/column/article/740758"
+draft: false
+---
+
+import {
+  Vdi09SimpleDiffMapLab,
+  Vdi09SimpleDiffExperimentLab,
+  Vdi09SimpleDiffEvidenceLab,
+} from "@/components/mdx/vuejs-design-implementation/diagrams/vdi-09-simple-diff";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释第 9 章 简单Diff算法的核心机制，并把它放回6篇18章的实现主线
+- 能实现本页最小算法，比较正常、边界、失败和恢复轨迹
+- 能指出依赖、VNode、组件实例、AST或请求状态的唯一所有者
+- 能设计证据回答“key唯一稳定，复用只发生在类型兼容节点，移动锚点正确，新增按新顺序落位，旧节点完整卸载。”是否成立
+
+</Objectives>
+
+## 直觉：从输入、状态到提交
+
+简单Diff用key建立身份，记录已遇到的最大旧索引判断移动，并通过锚点完成复用、新增和删除。 本书不是对最终源码逐行翻译，而是从规范与最小模型逐步构造框架。只看最终DOM会隐藏错误依赖、重复移动、陈旧任务和激活错位；先画输入、状态所有者、调度点、输出和清理责任。
+
+<Vdi09SimpleDiffMapLab />
+
+## 权威目录定位
+
+作者授权数字版前言明确全书分为6篇18章，作者GitHub仓库提供配套代码。本页依照公开完整目录逐项覆盖 **7** 个条目；目录名称仅用于追踪，正文为独立教学重构。
+
+- 9.1 减少DOM操作的性能开销
+- 9.2 DOM复用与key的作用
+- 9.3 找到需要移动的元素
+- 9.4 如何移动元素
+- 9.5 添加新元素
+- 9.6 移除不存在的元素
+- 9.7 总结
+
+## 核心概念与所有权
+
+<Term def="标识同层虚拟节点业务身份、辅助复用与移动判断的稳定值。">key</Term>、
+<Term def="在节点身份与类型兼容时保留宿主节点并更新其内容的策略。">
+  DOM复用
+</Term>
+、<Term def="在保留宿主节点身份的前提下改变其在容器中的位置。">节点移动</Term>、
+<Term def="新虚拟节点无法匹配旧节点时执行的挂载操作。">新增节点</Term>、
+<Term def="旧虚拟节点不再存在于新子序列时执行的卸载操作。">删除节点</Term>
+。每个概念都要回答：谁创建输入，哪个结构保存状态，何种操作可以修改，错误如何传播，生命周期结束后谁清理。
+
+|   # | 概念     | 精确定义                                               |
+| --: | -------- | ------------------------------------------------------ |
+|   1 | key      | 标识同层虚拟节点业务身份、辅助复用与移动判断的稳定值。 |
+|   2 | DOM复用  | 在节点身份与类型兼容时保留宿主节点并更新其内容的策略。 |
+|   3 | 节点移动 | 在保留宿主节点身份的前提下改变其在容器中的位置。       |
+|   4 | 新增节点 | 新虚拟节点无法匹配旧节点时执行的挂载操作。             |
+|   5 | 删除节点 | 旧虚拟节点不再存在于新子序列时执行的卸载操作。         |
+
+## 机制拆解
+
+### 1. 建立机制边界
+
+key只在同层兄弟之间表达身份。找到相同key且类型兼容的旧VNode后先patch复用DOM；没有key或重复key会退化查找并让组件状态绑定错误实体。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+### 2. 处理关键算法
+
+按新顺序遍历时维护lastIndex。如果匹配旧节点索引小于lastIndex，它需要移动；否则更新lastIndex。移动时以新序列前一个节点的下一个兄弟作为锚点插入。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+### 3. 签发失败与恢复
+
+新节点无匹配时按同样锚点挂载。完成新序列后再遍历旧序列，key在新序列不存在的节点需要卸载。这个算法清楚但O(n²)，为后续Diff优化提供基线。
+
+先预测：如果省略这一层，依赖、节点身份、任务顺序或请求状态会在哪里首次偏离？
+
+## 三阶段可视化推演
+
+<Stepper>
+  <Step title="1. 建立最小模型">
+    固定运行时、输入和初始状态，先预测数据结构与执行顺序。
+    <Vdi09SimpleDiffMapLab />
+  </Step>
+  <Step title="2. 注入算法边界">
+    只改变一个变量，观察分支切换、重复key、请求乱序、非法模板或激活不匹配的首偏离点。
+    <Vdi09SimpleDiffExperimentLab />
+  </Step>
+  <Step title="3. 清除故障并重放">
+    用相同输入恢复，核对依赖集合、任务队列、宿主节点、组件实例和请求状态是否收敛。
+    <Vdi09SimpleDiffEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小可运行实验
+
+```js
+let lastIndex = 0;
+for (const newVNode of newChildren) {
+  const oldIndex = oldChildren.findIndex((v) => v.key === newVNode.key);
+  if (oldIndex >= 0) lastIndex = Math.max(lastIndex, oldIndex);
+}
+```
+
+保存结构化证据，不以一次console输出或最终截图替代过程：
+
+```yaml
+book: Vue.js设计与实现
+page: vdi-09-simple-diff
+sample: normal | boundary | failure | recovery
+runtime: pinned
+input_fixture: fixed
+first_divergence: null
+cleanup_complete: true
+```
+
+故障注入一次只改变一个变量：
+
+```text
+baseline -> inject(one_fault) -> stop_at_first_divergence
+recover -> replay_same_input
+assert -> precise_dependency && stable_identity && ordered_tasks && no_retained_resource
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：把数组索引当key，插入首项后所有业务实体沿用错误组件实例。**
+  必须保存输入、执行轨迹和首偏离点，而不是只比较最终结果。
+</Callout>
+
+<Callout type="trap">
+  **误区二：只patch匹配节点而不真正insert移动，DOM顺序仍停留在旧序列。**
+  必须加入失败与恢复样本，并检查依赖、节点、任务和状态是否清理。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 变化                 | 预期         | 证据           |
+| ---- | -------------------- | ------------ | -------------- |
+| 正常 | 合法输入与稳定身份   | 主链完成     | 输出与轨迹一致 |
+| 边界 | 空值、重复或极限序列 | 有界退化     | 不越界、不重复 |
+| 失败 | 异常、乱序、非法结构 | 首偏离点停止 | 错误显式传播   |
+| 恢复 | 清除故障后同输入重放 | 收敛到正常   | 无旧依赖和资源 |
+
+<Vdi09SimpleDiffEvidenceLab />
+
+本页签发不变量：**key唯一稳定，复用只发生在类型兼容节点，移动锚点正确，新增按新顺序落位，旧节点完整卸载。**
+
+## 练习
+
+<Exercises>
+
+**问题 1** 第 9 章 简单Diff算法的核心主张是什么？
+
+<Answer>
+  简单Diff用key建立身份，记录已遇到的最大旧索引判断移动，并通过锚点完成复用、新增和删除。
+</Answer>
+
+**问题 2** 如何把本页目录变成可执行证据？
+
+<Answer>
+  按公开顺序建立追踪表，至少覆盖9.1 减少DOM操作的性能开销、9.2
+  DOM复用与key的作用、9.3 找到需要移动的元素、9.4 如何移动元素、9.5
+  添加新元素、9.6 移除不存在的元素、9.7
+  总结，并为每组条目记录输入、状态、输出、失败与恢复条件。
+</Answer>
+
+**问题 3** 本页怎样签发？
+
+<Answer>
+  key唯一稳定，复用只发生在类型兼容节点，移动锚点正确，新增按新顺序落位，旧节点完整卸载。
+  同一运行时与输入必须能重放正常、边界、失败和恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **key**：标识同层虚拟节点业务身份、辅助复用与移动判断的稳定值。
+- **DOM复用**：在节点身份与类型兼容时保留宿主节点并更新其内容的策略。
+- **节点移动**：在保留宿主节点身份的前提下改变其在容器中的位置。
+- **新增节点**：新虚拟节点无法匹配旧节点时执行的挂载操作。
+- **删除节点**：旧虚拟节点不再存在于新子序列时执行的卸载操作。
+- 官方目录、最小实现、故障注入与恢复证据已经放进同一验收链。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="key">
+    标识同层虚拟节点业务身份、辅助复用与移动判断的稳定值。
+  </GlossaryItem>
+  <GlossaryItem term="DOM复用">
+    在节点身份与类型兼容时保留宿主节点并更新其内容的策略。
+  </GlossaryItem>
+  <GlossaryItem term="节点移动">
+    在保留宿主节点身份的前提下改变其在容器中的位置。
+  </GlossaryItem>
+  <GlossaryItem term="新增节点">
+    新虚拟节点无法匹配旧节点时执行的挂载操作。
+  </GlossaryItem>
+  <GlossaryItem term="删除节点">
+    旧虚拟节点不再存在于新子序列时执行的卸载操作。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="霍春阳著，人民邮电出版社，2022年1月，501页，ISBN 9787115583864。作者授权数字版前言确认6篇18章的结构与逐章范围，作者GitHub仓库提供配套代码，公开完整目录用于二三级条目追踪；正文为独立教学重构。"
+  adaptedUrl="https://time.geekbang.org/column/article/740758"
+/>
+
+配套代码：https://github.com/HcySunYang/code-for-vue-3-book

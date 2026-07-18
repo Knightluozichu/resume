@@ -1,114 +1,235 @@
 ---
-title: "渲染算法与可见性"
+title: "光传输求解、可见性与空间结构"
 type: B
 section: "计算机图形学与渲染"
 order: 5
-description: "Z-buffer、Painter算法与光线投射对比"
+description: "承载第三版 Ch29-32、Ch36-37：渲染方程、Monte Carlo、理论与实践求解、可见性和空间加速"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707"
 draft: false
 ---
 
-import { CgpRenderingAlgorithmsDiagram } from "@/components/mdx/cg-principles-practice/diagrams/cgp-rendering-algorithms";
+import { CgpRenderingAlgorithmsDiagram, CgpTransportMethodsDiagram, CgpVisibilityStructureDiagram } from "@/components/mdx/cg-principles-practice/diagrams/cgp-rendering-algorithms";
+import { CgpStepFlowDiagram } from "@/components/mdx/cg-principles-practice/diagrams/cgp-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能解释Z-buffer算法的工作原理
-- 能说出Painter算法的局限和适用场景
-- 能描述光线投射如何天然解决可见性问题
-- 能回答：为什么GPU选择Z-buffer而不是其他算法？
+
+- 能从 rendering equation 和 path classification 说明 direct、indirect、specular/diffuse transport
+- 能构造 Monte Carlo estimator，区分 bias、variance、consistency、PDF 与 importance sampling
+- 能比较 radiosity、path tracing、Metropolis、photon mapping 的表示与误差
+- 能为 depth/ray/occlusion visibility 选择 BVH/kd/grid 等结构并验证保守性和成本
+
 </Objectives>
 
-## 直觉引入
+## 直觉：可见性是传输积分里的开关，不是独立排行榜
 
-想象你在画一幅油画。方案A（Painter算法）：先画远处的山，再画近处的树——树覆盖山，自然正确。方案B（Z-buffer）：每个位置记录最近的画笔距离，新的笔触如果更近就覆盖，更远就丢弃。
+先预测：一束极小 bright light 用均匀半球采样多久才命中？一百万 triangles 的 ray 是否必须逐个求交？透明对象是否绝对不能使用 depth buffer？答案取决于 sampling distribution、spatial structure 与 composition algorithm。
 
-方案C（光线投射）：从你的眼睛发射光线，穿过画布的每个像素，碰到的第一个物体就是你应该画的——天然解决「谁在前」的问题。三种思路各有优劣，GPU选择了Z-buffer因为它最简单、最并行。
-
-## 概念讲解
-
-### 可见性算法
+Ch29 Light Transport 给出问题；Ch30 Probability and Monte Carlo Integration 给出随机数值工具；Ch31 比较理论解法；Ch32 Rendering in Practice 实现 path tracer/photon mapper；Ch36/37 提供 visibility 与 spatial query 基础。
 
 <CgpRenderingAlgorithmsDiagram />
 
-<Term def="Z-buffer是用深度缓冲区逐像素比较深度来解决可见性的算法">Z-buffer</Term>：每个像素存最近深度，新片段深度更近则覆盖。简单、无需排序、天然并行。
+## Ch29 Light Transport
 
-<Term def="Painter算法是按深度从远到近排序绘制图元，近的覆盖远的">Painter算法</Term>：需要全局排序，无法处理循环遮挡（A挡B、B挡A）。
+<Term def="描述场景中 emission 经 geometry visibility 和 material scattering 在位置与方向间传播的过程">光传输</Term>由 rendering equation 表达：
 
-<Term def="光线投射是从每个像素发射光线，求交最近物体来确定可见性">光线投射</Term>：天然解决可见性，支持反射折射，但计算量大。
+$$
+L_o(x,\omega_o)=L_e(x,\omega_o)+
+\int_{\Omega}f_s(x,\omega_i,\omega_o)L_i(x,\omega_i)
+V(x,\omega_i)|n\cdot\omega_i|d\omega_i.
+$$
 
-<Term def="BSP树是预计算空间分割的可见性算法，适合静态场景">BSP树</Term>：预排序，运行时只需遍历，适合早期3D游戏（Doom/Quake）。
+$V$ 是 visibility，$L_i$ 又来自其他 surface 的 $L_o$，形成递归 integral equation。direct/indirect 是路径长度/光源连接的分类，diffuse/specular 是 scattering event 分类，不能混为同一个维度。
 
-## 交互Demo
+<Term def="按 camera、light 与 diffuse/specular/volume 等散射事件序列描述一条光路贡献的符号和结构">光路分类</Term>可用 eye/light endpoints 与 event sequence 分析算法覆盖：普通 path tracing 难采某些 specular-diffuse-specular path，photon/BDPT/MLT 各改善不同路径族。
 
-<Stepper>
-<Step title="第一步：Z-buffer核心">Z-buffer为每个像素维护一个深度值。渲染时比较新片段深度与当前深度，更近则覆盖。不需要排序，天然并行——GPU的标准方案。</Step>
-<Step title="第二步：其他算法">
-Painter算法适合半透明排序（Z-buffer无法处理半透明）。BSP树适合静态场景预计算。光线投射适合需要反射折射的场景。
-<CgpRenderingAlgorithmsDiagram />
-</Step>
-<Step title="第三步：算法选择">GPU用Z-buffer做不透明物体的可见性。半透明物体用Painter算法（按距离排序）。光线追踪用于反射/阴影/GI。根据场景特点选择。</Step>
-</Stepper>
+## Ch30 Probability and Monte Carlo Integration
 
-## 代码对照
+随机变量 $X\sim p$ 的期望可重写积分：
+
+$$
+I=\int_D f(x)dx=\mathbb E\left[\frac{f(X)}{p(X)}\right],
+\qquad
+\hat I_N=\frac1N\sum_{i=1}^{N}\frac{f(X_i)}{p(X_i)}.
+$$
+
+<Term def="用随机样本的加权平均估计积分，并以概率密度修正非均匀采样的数值方法">Monte Carlo 积分</Term>要求在 $f\ne0$ 处 $p>0$，PDF 的 measure/normalization 与 sample 一致。标准差约按 $1/\sqrt N$ 下降，所以只把 samples 加倍不会把噪声减半。
+
+<Term def="让采样概率密度接近被积函数贡献分布，以降低 estimator 方差而保持正确权重的方法">重要性采样</Term>不是“多采亮处”口号，必须除以实际 PDF。stratification、low-discrepancy、multiple importance sampling 和 control variate 从不同角度减方差。
+
+bias 是期望与真值差，variance 是随机波动；consistent 表示样本增加时收敛。biased denoiser/photon density estimator 仍可有用，但必须报告 bias 随参数是否消失，不能用“看起来平滑”替代。
+
+## Ch31 Computing Solutions to the Rendering Equation: Theoretical Approaches
+
+把 transport 写为 $L=L_e+KL$，Neumann series：
+
+$$
+L=\sum_{k=0}^{\infty}K^kL_e
+$$
+
+对应 0、1、2… 次 scattering contributions。不同算法对 function space、basis、paths 和 estimator 做不同近似。
+
+<CgpTransportMethodsDiagram />
+
+- radiosity：通常假设 diffuse，按 patches/basis 做 finite-element energy exchange；form factor visibility 与 matrix solve 是核心；
+- path tracing：从 camera 随机 walk，估计方向积分，渐进无偏但高方差路径困难；
+- bidirectional/Metropolis：连接 eye/light subpaths 或在 path space 变异，提高特定复杂路径效率；
+- photon mapping：从 light 存 photon，再做 density estimation；有限 radius 有 bias，radius/sample schedule 决定 consistency；
+- direct-light-plus-ambient/raster approximation：限制路径族换取实时成本，ambient 不等于真实 indirect。
+
+算法没有“绝对最真实”排序。scene light/material/path distribution 决定 variance，representation 和 budget 决定 bias/memory。
+
+## Ch32 Rendering in Practice
+
+生产 renderer 要统一 camera、geometry/intersection、light sampling、BSDF evaluate/sample/pdf、spectrum/color、random sampler、film/filter 和 acceleration structure。
 
 ```cpp
-// Z-buffer 算法核心
-float zbuffer[WIDTH][HEIGHT];
-// 初始化为最大深度
-for(int y=0; y<HEIGHT; y++)
-    for(int x=0; x<WIDTH; x++)
-        zbuffer[x][y] = INFINITY;
+Spectrum tracePath(Ray ray, Sampler& rng) {
+    Spectrum L = 0, beta = 1;
+    for (int bounce = 0; bounce < maxDepth; ++bounce) {
+        Hit hit = scene.intersect(ray);
+        if (!hit) { L += beta * environment(ray); break; }
+        L += beta * emitted(hit, -ray.direction);
+        L += beta * estimateDirectMIS(hit, rng);
 
-// 渲染三角形
-void renderTriangle(Triangle tri) {
-    for(int y = minY(tri); y < maxY(tri); y++) {
-        for(int x = minX(tri); x < maxX(tri); x++) {
-            if(pointInTriangle(x, y, tri)) {
-                float z = interpolateDepth(x, y, tri);
-                // 关键：深度比较
-                if(z < zbuffer[x][y]) {
-                    zbuffer[x][y] = z;           // 更新深度
-                    framebuffer[x][y] = shade(x, y, tri); // 写入颜色
-                }
-            }
-        }
+        BsdfSample s = hit.bsdf.sample(-ray.direction, rng.next2D());
+        if (!s.valid || s.pdf == 0) break;
+        beta *= s.f * absDot(hit.normal, s.wi) / s.pdf;
+        ray = spawnRobustRay(hit, s.wi);
+
+        if (bounce > rrStart && russianRoulette(beta, rng)) break;
     }
+    return L;
 }
 ```
+
+Russian roulette 的 survive probability 需除权，才能不因随机终止引入额外 bias。ray offset 要避免 self-hit 又不穿薄面；delta BSDF、environment PDF、light selection PDF 和 MIS measure 必须匹配。
+
+<Term def="把来自光源的 photon hit 存入空间结构，再以局部邻域密度估计 radiance 的双阶段有偏渲染方法">光子映射</Term>实现需 separate photon tracing、storage/kd query、kernel/radius 和 final gather。caustic/global maps 可分离；debug 要显示 photons、power、search radius 与 neighbor count。
+
+renderer debugging 不应只看 beauty：显示 normal/albedo/emission、path length、PDF、throughput、direct/indirect、hit IDs、BVH visits、variance 和 NaN/firefly source。
+
+## Ch36 Visibility Determination
+
+<Term def="保守或精确地判断哪些 surface samples、primitives 或 scene regions 能影响相机/光源/查询结果的过程">可见性判定</Term>包含：
+
+- ray casting：对每 ray 取最近 valid intersection；
+- depth buffer：对 rasterized fragments/samples 做 depth compare，成本按 generated fragments，不是笼统“每像素 O(1)”；
+- list-priority/Painter：建立绘制先后，循环遮挡需 split 或其他方法；
+- frustum clipping/culling、backface culling：便宜 conservative reduction；
+- hierarchical occlusion/sector/portal：以 bounds/depth/region 降低不可见工作；
+- partial coverage：处理 sample/filter footprint，不只二值 visible。
+
+depth buffer 可参与透明渲染：opaque depth rejection、sorted blend、depth peeling、weighted/OIT、stochastic 等都有不同近似。“Z-buffer 不能处理透明”过于绝对；真正问题是多层 order-dependent composition，单 nearest depth 不足。
+
+visibility culling 必须保守：false positive 增成本，false negative 丢图。上一帧 HZB/occlusion query 有 latency，camera jump 和 dynamic bounds 需 fallback。
+
+## Ch37 Spatial Data Structures
+
+<CgpVisibilityStructureDiagram />
+
+<Term def="组织嵌入度量空间的对象和包围体，以加速 intersection、range、nearest 与 set query 的数据结构">空间数据结构</Term>应从 interface 开始：build/update、insert/remove、ray/overlap/nearest query、iterator、memory 和 concurrency。
+
+- list：无 build、query 线性，适合极小或高度动态集合；
+- BVH：对象分层，可重叠，适合 rays/collision；build quality/refit degradation 重要；
+- kd/BSP tree：空间平面分割，traversal 有序，动态更新和 duplication 代价可能高；
+- uniform/hierarchical grid：regular access 并行友好，密度/尺度差异大时效率下降；
+- octree：层次空间 subdivision，适合多尺度 region query，但 pointer/layout 与 loose bounds 需设计。
+
+结构评价要记录 build/refit/update、memory、node visits、primitive tests、cache/locality、query distribution 和 worst cases。ray tracing 不是对 N objects 必然 O(N)；好的 structure 平均减少候选，但也不能保证所有 scene/ray 都严格 O(log N)。
+
+SAH 用 surface area 近似 traversal/intersection expected cost：
+
+$$
+C=C_T+\frac{A_L}{A_P}N_LC_I+\frac{A_R}{A_P}N_RC_I.
+$$
+
+它是针对 ray distribution 的 heuristic；动态、packet/coherent rays 或 collision query 可能需要不同 cost model。
+
+## 三步传输与可见性验收
+
+<Stepper>
+<Step title="第一步：声明 path、estimator 与 query">
+
+标出支持的 event/path class、sample/PDF/measure、visibility query、structure build/update 和 expected output。
+
+<CgpStepFlowDiagram caption="先知道算法估计哪些路径、可能漏掉哪些贡献。" stage={1} stages={["Specify：path classes + estimator/PDF + visibility + structure/query"]} />
+
+</Step>
+<Step title="第二步：显示样本、路径和候选漏斗">
+
+显示 rays/paths、throughput/PDF、direct/indirect、depth/occlusion、BVH/grid nodes、candidate/primitive tests。
+
+<CgpStepFlowDiagram caption="噪声、漏光和性能必须能追到具体样本与 query。" stage={2} stages={["Specify：path classes + estimator/PDF + visibility + structure/query", "Inspect：samples → paths → visibility → nodes → hits → contributions"]} />
+
+</Step>
+<Step title="第三步：reference、收敛与工作量缩放">
+
+对 Cornell/caustic/occlusion/transparent/dynamic scenes 比较高样本 reference，画 bias/variance 曲线和 build/query cost。
+
+<CgpStepFlowDiagram caption="正确期望、收敛行为、保守可见性和总成本共同通过。" stage={3} stages={["Specify：path classes + estimator/PDF + visibility + structure/query", "Inspect：samples → paths → visibility → nodes → hits → contributions", "Validate：reference + convergence + adversarial visibility + build/query cost"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**误区：Z-buffer能处理半透明物体。**
-Z-buffer只保留最近的不透明片段，丢弃更远的片段。但半透明需要看到后面的物体，所以不能用Z-buffer直接渲染——需要先渲染不透明物体，再按从远到近的顺序渲染半透明物体（Painter算法）。
+**现象 →** 采样 bright light 更多却没除 PDF，结果越采越亮。**原因 →** 把 importance sampling 当 heuristic weight。**修法 →** 统一 sample/evaluate/pdf measure，用 constant-function 与 normalization test 验证 estimator。
 </Callout>
 
 <Callout type="trap">
-**误区：认为光线追踪一定比Z-buffer好。**
-Z-buffer做不透明场景的可见性判断非常高效（O(1)每像素），且天然并行。光线追踪的可见性判断需要O(logN)~O(N)求交运算（N=物体数），远慢于Z-buffer。光线追踪的优势在于反射/折射/阴影等全局效果，不是可见性判断本身。
+**现象 →** 用“Z-buffer 每像素 O(1)，ray O(N)”宣布算法优劣。**原因 →** 忽略 fragments/overdraw、acceleration build/traversal、scene/query distribution。**修法 →** 报告实际 generated fragments、node/primitive tests、memory 与时间。
 </Callout>
 
+<Callout type="trap">
+**现象 →** denoise 后无噪就声称 path tracer 正确。**原因 →** filter 隐藏了 PDF、visibility、BSDF 或 energy bias。**修法 →** 保留 raw samples，运行 expectation/convergence、white furnace 与高样本 reference。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题 1**：Z-buffer算法的工作原理是什么？
+
+**问题 1：importance sampling 为什么不改变积分真值？**
 
 <Answer>
-Z-buffer维护一个与帧缓冲同大小的深度缓冲区，初始值为无穷远。渲染每个图元时，对覆盖的每个像素计算片段深度z。如果z小于zbuffer中当前值（更近），则更新zbuffer并写入颜色；如果z大于等于当前值（更远），则丢弃该片段。这样最终帧缓冲中每个像素只保留最近的片段。算法无需全局排序，每个像素独立判断，天然适合GPU并行。
+从 p 采样后每项除以 p，期望为积分：E[f(X)/p(X)]=∫f(x)dx。p 只改变样本分布与 variance；若遗漏 PDF、support 不覆盖贡献或 measure 不一致就会 bias。
 </Answer>
 
-**问题 2**：为什么GPU选择Z-buffer而不是Painter算法或光线追踪？
+**问题 2：path tracing 与 photon mapping 的误差有何差异？**
 
 <Answer>
-Z-buffer的优势：1) 无需排序——Painter算法需要按深度全局排序所有图元，排序复杂度O(NlogN)且无法处理循环遮挡；2) 天然并行——每个像素独立做深度比较，完美匹配GPU的并行架构；3) 简单高效——每像素O(1)操作，不需要光线追踪的求交计算。劣势是不能处理半透明（需要额外Pass），且不能直接产生反射折射效果。但对不透明场景，Z-buffer是最优选择。
+标准 path tracing 样本均值通常无偏且方差随 N 降低；photon density estimate 用有限 radius/kernel 产生 smoothing bias，但若 photons 增加同时 radius 合理缩小可 consistent。具体实现的截断/denoise 会再引入 bias。
 </Answer>
+
+**问题 3：透明为什么不是简单关闭 depth write？**
+
+<Answer>
+多层透明需要按顺序或近似累积 transmittance/color；只关闭 write 仍需 opaque depth rejection、layer order、self-overlap 和 intersection handling。sorted blend、peeling、OIT 各有不同成本和误差。
+</Answer>
+
+**问题 4：何时 BVH refit 应改为 rebuild？**
+
+<Answer>
+大形变使固定 topology 的 sibling bounds 重叠，node visits/primitive tests 上升。跟踪 SAH proxy、query cost 与 update/build time，当累计 traversal 损失超过 rebuild 摊销成本时重建。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+Ch29-32、36-37 从光传输问题走到概率 estimator、理论/实践算法，再落到 visibility query 和 spatial structure。算法完成不是“能出图”，而是路径覆盖、PDF、bias/variance、保守可见性、收敛和 build/query 成本都有证据。
+
 <Glossary>
-<GlossaryItem term="Z-buffer">用深度缓冲区逐像素比较深度来解决可见性的算法，GPU标准方案。</GlossaryItem>
-<GlossaryItem term="Painter算法">按深度从远到近排序绘制图元，近的覆盖远的，适合半透明排序但无法处理循环遮挡。</GlossaryItem>
-<GlossaryItem term="光线投射">从每个像素发射光线求交最近物体来确定可见性的方法，天然解决可见性但计算量大。</GlossaryItem>
-<GlossaryItem term="BSP树">预计算空间分割的可见性算法，运行时遍历确定绘制顺序，适合静态场景。</GlossaryItem>
+<GlossaryItem term="光传输">emission 经 visibility 和 material scattering 在场景中传播的过程。</GlossaryItem>
+<GlossaryItem term="光路分类">按端点和散射事件序列描述路径贡献的结构。</GlossaryItem>
+<GlossaryItem term="Monte Carlo 积分">以带 PDF 权重的随机样本均值估计积分的方法。</GlossaryItem>
+<GlossaryItem term="重要性采样">让 PDF 接近贡献分布以降低方差的采样方法。</GlossaryItem>
+<GlossaryItem term="光子映射">存储 photon hits 并以密度估计 radiance 的双阶段方法。</GlossaryItem>
+<GlossaryItem term="可见性判定">判断影响相机、光源或 query 的 surface/region 的过程。</GlossaryItem>
+<GlossaryItem term="空间数据结构">组织空间对象以减少 intersection/range/nearest 候选的结构。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="计算机图形学：原理及实践" adaptedUrl="https://www.cgpp.net/" />
+<Attribution adaptedFrom="Computer Graphics: Principles and Practice, Third Edition, Chapters 29-32, 36 and 37" adaptedUrl="https://www.informit.com/store/computer-graphics-principles-and-practice-9780133373707" />

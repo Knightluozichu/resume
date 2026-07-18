@@ -1,0 +1,218 @@
+---
+title: "Chapter 20. Exceptions and State Management"
+type: C
+section: "CLR via C# 4e · Core Facilities"
+order: 20
+description: "覆盖异常定义与try/catch/finally机制、Exception/FCL/自定义类型、可靠状态恢复、未处理/调试/性能、CER与Code Contracts。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcExceptionFlowLab, CvcExceptionTaxonomyLab, CvcStateRecoveryLab } from "@/components/mdx/clr-via-csharp/diagrams/exceptions-state-management";
+
+<Objectives>
+
+- 能描述CLR exception search/unwind与try/catch/filter/finally的执行顺序和stack preservation
+- 能设计argument/state/external/cancellation异常taxonomy与自定义边界翻译，避免catch-all吞错
+- 能实现validate/commit-swap/compensation状态保证，并判断CER/Code Contracts的历史与现代适用边界
+
+</Objectives>
+
+## 为什么Exception首先是State Transition失败
+
+异常表示当前操作无法按contract完成。Thrown object携带failure type、message、stack、inner context；CLR搜索handler并unwind frames，finally释放资源。真正难点不是抛与接，而是失败前哪些state已改变、caller还能依赖什么。Catch后继续必须证明invariant恢复，否则“稳定运行”只是隐藏腐败。
+
+先预测：`throw ex`与`throw`是否保留同一stack；finally是否绝对执行；catch(Exception)记录后继续是否安全；OperationCanceledException是否error；constructor失败获得的resources谁释放；未处理异常后进程是否应该继续；CER能否保证任意代码可靠。后文从mechanics、taxonomy和state guarantee回答。
+
+<Term def="操作成功、失败或取消后，对内存状态、外部副作用与资源仍成立的明确保证。">exception state guarantee</Term>
+
+## Defining Exception
+
+Exception是程序无法在当前调用contract内正常返回结果的异常完成。普通可预期分支如“未找到”可Try/Option，contract violation或无法完成I/O用exception。不要用exceptions做hot-loop控制流，也不要用error code丢失stack/context。Cancellation是协作结果，通常传播匹配token的OperationCanceledException。
+
+Failure taxonomy要绑定owner：argument由caller修；invalid state由调用顺序/对象owner修；external transient可能按idempotent policy retry；bug/corruption fail fast。只有知道owner和恢复动作，catch才有理由存在。
+
+## Exception-Handling Mechanics
+
+CLR遇到throw后从当前frame向上搜索匹配catch/filter；filter在unwind前评估，选中handler后执行离开各protected region的finally，再进入catch（精确细节按IL exception clauses）。Stack unwinding使locals离开scope，但managed objects由GC，native resources需finally/Dispose。Filter抛异常通常视为false，仍不应在filter产生side effects。
+
+```csharp
+try
+{
+    await repository.CommitAsync(command, cancellationToken);
+}
+catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+{
+    throw; // 预期取消，保留原stack
+}
+catch (StorageException error) when (error.IsTransient)
+{
+    throw new OrderPersistenceException(command.OrderId, error);
+}
+```
+
+`throw;`保留当前exception原始stack；`throw error;`重置当前throw point并损伤诊断。跨boundary翻译用new domain exception(innerException)，保留cause。ExceptionDispatchInfo可捕获并在另一位置重新抛同时保留stack语义。
+
+## The try Block, The catch Block, and The finally Block
+
+Try只包围你准备在同一抽象层处理/清理的最小范围，过大会把无关异常误归类。Catch按最具体到一般，只有能恢复、translate或add evidence then rethrow时使用。Finally无论正常/异常离开都用于清理/恢复，但进程fail-fast、断电、stack overflow等不能保证执行，关键durability不能仅靠finally。
+
+<Term def="CLR从throw site查找handler并在离开frames时执行finally的搜索与展开过程。">stack unwinding path</Term>
+
+Finally自身抛异常会遮蔽原异常，cleanup应幂等且尽量不失败；若Dispose可能失败，记录/aggregate并保留主failure。`using`编译为try/finally，await using处理异步释放。Lock statement同样finally Exit，不能在持锁时调用未知代码。
+
+<Stepper>
+  <Step title="切换try、catch、finally与filter"><CvcExceptionFlowLab /></Step>
+  <Step title="画控制流">标出throw、filter、selected catch、每个finally、resource ownership和最终caller看到的exception。</Step>
+  <Step title="故障注入">在acquire、work、commit、cleanup各点抛错，验证原failure、资源释放与state guarantee。</Step>
+</Stepper>
+
+<Callout type="trap" title="Finally在任何情况下都一定执行">
+正常return和一般exception unwind会执行，但fail-fast、进程终止、断电、某些致命runtime故障不会。关键外部一致性需要事务、journal/outbox和重启恢复。
+</Callout>
+
+## The System.Exception Class
+
+Exception核心信息有Message、StackTrace、InnerException、Source、TargetSite、Data、HResult。Message供人诊断不做machine parsing；定义typed properties/error code。InnerException保留lower-level cause，Data只用于临时附加且key冲突/serialization不稳定。不要把secret/PII写message或Data。
+
+StackTrace受优化、async/iterator state machine、inlining和symbol影响；仍应保留完整exception并关联trace/correlation id。日志一次在ownership boundary记录，层层catch-log-rethrow会重复噪声。Exception object不应跨process直接序列化，转稳定error DTO。
+
+## FCL-Defined Exception Classes
+
+使用最具体标准type：ArgumentNull/OutOfRange/ArgumentException、InvalidOperation、ObjectDisposed、NotSupported、IOException等，让caller/tool识别。不要为每个message创建type，也不要用Exception/ApplicationException泛化。Argument exceptions在public boundary同步验证，async方法可能在await Task时才观察，API要一致。
+
+<Stepper>
+  <Step title="切换argument、state、external与cancellation taxonomy"><CvcExceptionTaxonomyLab /></Step>
+  <Step title="建立Exception表">记录type、owner、retryable、state guarantee、telemetry level、external mapping与secret policy。</Step>
+  <Step title="验证Caller行为">分别测试fix input、change sequence、retry/fallback、propagate cancellation和fatal stop。</Step>
+</Stepper>
+
+## Throwing an Exception
+
+Validate early在mutation前抛，message说明contract而不泄密。Use helper如ArgumentNullException.ThrowIfNull可让JIT/stack更好。不要`return null`表示所有失败，也不要catch后抛全新exception丢inner。Throw site是failure origin，exception type应属于当前抽象层。
+
+```csharp
+public void Transfer(Account source, Account destination, decimal amount)
+{
+    ArgumentNullException.ThrowIfNull(source);
+    ArgumentNullException.ThrowIfNull(destination);
+    if (amount <= 0) throw new ArgumentOutOfRangeException(nameof(amount));
+    if (source.Currency != destination.Currency)
+        throw new InvalidOperationException("Currency mismatch");
+
+    _ledger.CommitTransfer(source.Id, destination.Id, amount);
+}
+```
+
+## Defining Your Own Exception Class
+
+Custom type用于caller确实需要单独catch或读取typed context的domain/boundary failure。继承Exception，命名`Exception`后缀，提供message/inner和typed immutable properties。原书要求Serializable与serialization constructor以支持Framework remoting；现代.NET不应依赖BinaryFormatter exception serialization，跨process映射stable error contract。
+
+<Term def="在system boundary把底层异常保留为inner并转换成当前层稳定failure语义的规则。">exception translation boundary</Term>
+
+不要让custom exception constructor做I/O或格式化敏感对象。Versioning新增property应有default，caller不解析message。大量validation errors更适合result collection，不抛第一项。
+
+## Trading Reliability for Productivity
+
+Catch-all继续执行看似提高availability，却可能在unknown state上服务错误数据。Reliability优先隔离unit of work、使用transaction/immutable state、让process supervisor restart。对request边界可catch top-level记录并返回500，同时丢弃request scope；不能假装整个process state一定健康，native corruption/OutOfMemory等通常不恢复。
+
+## Guidelines and Best Practices, Use finally Blocks Liberally, and Don't Catch Everything
+
+用using/finally释放你拥有的resources；只catch可处理types；避免empty catch；重抛保stack；不因日志重复catch；异步observe all Tasks；后台线程exception交host policy。Finally“liberally”指可靠cleanup，不是把业务逻辑塞finally。Catch(Exception)只适合top-level isolation boundary并默认不继续同一unit state。
+
+<Callout type="trap" title="Catch Exception并记录即可提高系统可用性">
+若无法证明state恢复，继续只把显式failure变成隐式corruption。Top-level boundary应终止当前unit、释放scope、返回稳定error；必要时重启process。
+</Callout>
+
+## Recovering Gracefully from an Exception
+
+Graceful recovery需要明确precondition：operation幂等或有dedup key，failure分类transient，retry有backoff/deadline，state仍可重试。Fallback必须语义可接受并可观测，不能把过期/空数据伪装成功。Circuit breaker保护dependency但不修复业务。
+
+## Backing Out of a Partially Completed Operation
+
+Strong guarantee做法：先验证和准备new state，全部成功后单点swap/commit；数据库transaction；filesystem写temp+fsync+atomic rename；distributed side effects用saga/compensation/outbox。Compensation本身会失败，必须持久记录steps和重试owner。
+
+```csharp
+ImmutableDictionary<string, Balance> next = current;
+next = next.SetItem(sourceId, sourceAfter);
+next = next.SetItem(destinationId, destinationAfter);
+
+// 所有验证/计算成功后才发布新snapshot。
+Interlocked.Exchange(ref _balances, next);
+```
+
+<Term def="在可能失败的多步操作中，对未改变、原子提交或可补偿partial effects作出的保证。">failure atomicity</Term>
+
+## When an Unrecoverable Exception Occurs: Maintaining State
+
+无法恢复时停止接受新工作，尽可能flush crash-safe telemetry，交supervisor重启，从durable journal/transaction恢复。不要在可能corrupted process执行复杂shutdown。In-memory cache可丢，ledger必须事务持久。Fatal criteria要窄且由host决定。
+
+## Hiding an Implementation Detail to Maintain a Contract
+
+Repository不应泄漏provider-specific SqlException给domain caller；在boundary translate为稳定PersistenceException并保inner/error code。不要把所有low-level errors合成一个无信息type，caller仍需区分conflict/not found/transient。External API返回规范status/error DTO，server logs保cause。
+
+## Unhandled Exceptions
+
+Unhandled exception在线程/task/host的行为不同。Foreground thread unhandled通常终止process；async Task exception在await时传播，fire-and-forget需owner observe；event async void回到SynchronizationContext/host。AppDomain.UnhandledException是最后通知，不是安全恢复点。配置global handlers做telemetry，不在那里继续。
+
+## Debugging Exceptions
+
+Debugger可在thrown/user-unhandled/break settings停下；first-chance event观测所有throws但量大。收集full exception、inner chain、stack、symbols、runtime/version、correlation与输入摘要。避免只打印Message。Dump结合threads/heap能分析deadlock/corruption，但要保护敏感数据。
+
+## Exception-Handling Performance Considerations
+
+建立try通常便宜，实际throw/search/stack capture昂贵；不要用exception处理普通parse miss/hot loop。也不要为避免throw返回模糊error code。先profile throw rate和top types，修复重复失败根因。Exception filters可避免catch/rethrow修改stack，并选择性处理。
+
+## Constrained Execution Regions (CERs)
+
+CER是.NET Framework reliability mechanism，试图提前prepare code并在受限区域提高finally执行可靠性，配合ReliabilityContract/SafeHandle。它不能抵抗process kill/hardware failure，也不让任意managed code可靠。现代.NET不支持/不强调同等CER模型，应用SafeHandle、small no-fail cleanup、transactions和process isolation替代。
+
+## Code Contracts
+
+原书介绍System.Diagnostics.Contracts的preconditions/postconditions/invariants与rewriter/static checker。该工具链已非现代.NET主流，但design-by-contract思想仍有效：public validation、nullable annotations、Debug.Assert、tests、types/constructors和analyzers表达。不要部署依赖过时rewriter才能正确的contract；把关键invariant放runtime code/type system。
+
+<Stepper>
+  <Step title="切换validate-first、commit-swap、compensate与terminate"><CvcStateRecoveryLab /></Step>
+  <Step title="声明State guarantee">对每个public operation写成功/失败/取消后内存、数据库、消息和资源状态。</Step>
+  <Step title="执行Crash/Fault测试">在每个side effect间kill/throw，重启后按journal/outbox恢复并验证没有双扣/丢事件。</Step>
+</Stepper>
+
+## 本章回顾：Catch之前先证明State
+
+1. CLR搜索handler并unwind finally；catch只在能恢复、translate或add evidence时存在。
+2. Exception taxonomy按owner与恢复策略设计，cancellation不是普通error。
+3. Validate-first、commit-swap、transaction/outbox提供failure atomicity；compensation需要durable owner。
+4. Unhandled/fatal failure交host/process边界，global handler只记录不恢复unknown state。
+5. CER/Code Contracts保留历史思想，现代实现用SafeHandle、types、transactions、tests与process restart。
+
+<Exercises>
+
+**问题 1：为何`catch(Exception ex){ log; throw ex; }`有问题？**
+
+<Answer>它重复日志且`throw ex`重置stack origin，损伤诊断；若不处理只让top-level owner记录，或catch后用`throw;`保留stack。若跨抽象层必须translate，new DomainException(context, ex)保留inner并让caller按稳定type处理。</Answer>
+
+**问题 2：转账第二步失败，如何保证不会只扣不加？**
+
+<Answer>单数据库用transaction原子更新ledger；内存用validate/calculate next snapshot后一次swap；跨系统用durable saga/outbox记录steps、idempotency key和compensation。对每个side effect后注入failure/process kill，重启验证最终一致且不重复。</Answer>
+
+**问题 3：何时Top-level catch Exception是合理的？**
+
+<Answer>Request/job/process worker边界可捕获以记录完整cause、终止当前scope、返回稳定failure并释放resources；它不能在未知状态继续同一operation。对corrupted-state/fatal runtime failure应让process终止，由supervisor restart和durable state恢复。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="exception state guarantee" definition="成功、失败、取消后仍成立的内外部状态保证。" />
+  <GlossaryItem term="stack unwinding path" definition="Throw后handler搜索与finally展开的控制流。" />
+  <GlossaryItem term="exception translation boundary" definition="保留inner cause并转换为当前抽象层failure。" />
+  <GlossaryItem term="failure atomicity" definition="失败时未改变、原子提交或可补偿的状态保证。" />
+  <GlossaryItem term="recovery ownership" definition="负责重试、补偿、重启或终止的明确system owner。" />
+</Glossary>
+
+<Term def="负责对特定failure执行重试、补偿、隔离、重启或终止的明确组件。">recovery ownership</Term>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 20: Exceptions and State Management" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

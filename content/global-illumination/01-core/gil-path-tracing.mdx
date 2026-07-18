@@ -1,110 +1,213 @@
 ---
-title: "路径追踪"
+title: "随机路径追踪算法与类库"
 type: B
 section: "计算机图形学与渲染"
 order: 3
-description: "从相机出发的随机游走——现代GI的标准方法"
+description: "复刻第 5 章与附录 A：ray setup、随机路径追踪、直接/环境/间接照明、light tracing 与全局光照类库"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://books.google.com/books?id=KodRAAAAMAAJ"
 draft: false
 ---
 
-import { GilPathTracingDiagram } from "@/components/mdx/global-illumination/diagrams/gil-path-tracing";
+import { GilPathTracingDiagram, GilPathThroughputDiagram, GilClassLibraryDiagram } from "@/components/mdx/global-illumination/diagrams/gil-path-tracing";
+import { GilStepFlowDiagram } from "@/components/mdx/global-illumination/diagrams/gil-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能描述路径追踪的基本算法流程
-- 能解释为什么路径追踪是无偏的
-- 能说出路径追踪与双向路径追踪的区别
-- 能回答路径追踪的主要瓶颈是什么？如何缓解？
+
+- 能描述 stochastic path tracing 从 ray setup 到随机终止的完整状态机
+- 能区分 direct、environment-map 与 indirect illumination 的估计器和 PDF
+- 能推导 path throughput 更新、Russian roulette 补权与像素累积公式
+- 能设计 PathNode、LightSampler、Scene 与 Estimator 分层的全局光照 API
+
 </Objectives>
 
-## 直觉引入
+## 直觉：路径是状态链，不是递归函数截图
 
-想象你闭着眼睛站在房间中央，手里拿一支画笔。你随机选一个方向走，碰到墙壁就在那点一个点。如果碰巧走到了窗户（光源），你就在起点画一个亮点。走很多次后，起点处点的密度就是那一点的亮度。
+先预测：若相机路径在第二个顶点通过 BSDF sampling 命中面光源，同时该顶点又做了 explicit light sampling，这条路径该加一次还是两次？若没有记录每种策略的 PDF 和 event type，代码看似“直接光 + 间接光”完整，实际会 double counting。
 
-路径追踪就是这种「随机游走」——从相机出发，每次交点随机选一个方向继续，直到命中光源。大量路径平均后得到图像。它简单、通用、无偏，是现代GI的标准方法。
-
-## 概念讲解
-
-### 路径追踪算法
+第 5 章 Stochastic Path-Tracing Algorithms 把前四章的物理、概率和策略落成可执行 random walk。每个顶点保存当前 throughput、出入方向、surface/medium event、forward/reverse PDF 和可见 emission；算法在该状态上分别估计 direct illumination、environment map illumination 与 indirect illumination，再决定继续或终止。
 
 <GilPathTracingDiagram />
 
-<Term def="路径追踪从相机出发随机游走，每次交点按BRDF采样方向继续，直到命中光源">路径追踪</Term>是最通用的GI方法。
+这里的“stochastic”不是随意抖动 ray。每个随机决策都对应一个积分变量和 PDF；每个贡献都除以生成它的联合 density。双向路径追踪属于第 7 章 Hybrid Algorithms，本页只在结尾说明接口如何为它保留 reverse PDF，不把它冒充第 5 章主体。
 
-<Term def="无偏性指采样数趋于无穷时估计值收敛到真实值的性质">无偏性</Term>是路径追踪的核心优势——没有系统性误差。
+## Ray setup 与相机测量
 
-<Term def="双向路径追踪(BDPT)同时从光源和相机生成子路径再连接">BDPT</Term>对焦散等困难光路效率更高。
+Primary ray 不是简单从 camera position 穿过 pixel center。Ray setup 通常采样 film position、lens position、time，光谱渲染还会采 wavelength。令 camera sample 为 $u$，相机返回 ray $r$、measurement weight $W_e$ 和 PDF $p_c$，初始 throughput 为：
 
-<Term def="Next Event Estimation在每次交点显式采样光源，避免依赖随机方向命中光源">NEE</Term>大幅提升直接光照效率。
+$$
+\beta_0=\frac{W_e(r)}{p_c(r)}.
+$$
 
-## 交互Demo
+Pinhole camera 中一些因子可约掉，但 API 仍应保留 weight/PDF 契约，否则 finite aperture、depth of field 与 motion blur 会被迫塞进特殊分支。Ray 还要携带最小/最大距离、time 和 medium state，以避免 self-intersection 并保持传播连续。
 
-<Stepper>
-<Step title="第一步：基本路径追踪">从相机发射光线，每次交点按BRDF随机采样一个方向继续，直到命中光源或被俄罗斯轮盘赌终止。每条路径贡献一个颜色样本。</Step>
-<Step title="第二步：NEE与MIS">
-纯随机游走很难命中小光源。Next Event Estimation在每次交点显式采样光源方向。MIS组合BRDF采样和光源采样取最优。
-<GilPathTracingDiagram />
-</Step>
-<Step title="第三步：双向路径追踪">BDPT同时从光源和相机生成子路径，连接两段上的点。对焦散(光经镜面到漫反射面)等困难光路效率大幅提升。</Step>
-</Stepper>
+<Term def="从相机测量样本生成主光线、初始权重与概率密度，并初始化时间、波长和介质状态的过程">主光线设置</Term>（ray setup）决定每像素估计器最外层的 measure。固定 pixel center 会产生 aliasing；只抖 film 不抖 lens/time 则无法积分其他测量维度。
 
-## 代码对照
+## 随机路径追踪状态机
+
+<Term def="从相机端逐顶点采样散射方向、累计路径权重并估计发射与连接贡献的 Monte Carlo random walk">随机路径追踪</Term>（stochastic path tracing）在第 $i$ 个顶点采样 $omega_{i+1}\sim p_i$，更新：
+
+$$
+\beta_{i+1}=\beta_i\,
+\frac{f_s(x_i,\omega_{i-1},\omega_{i+1})|n_i\cdot\omega_{i+1}|}{p_i(\omega_{i+1})}.
+$$
+
+<GilPathThroughputDiagram />
+
+$\beta$ 是从 camera 到当前顶点的 importance/throughput product，不是该顶点自己的 radiance。Contribution 在当前状态形成闭合路径时加入：命中 emitter、连接 sampled emitter、或 escaped ray 查询 environment。将 throughput 与 accumulated radiance 混在一个变量里，会导致下一 bounce 重复乘旧贡献。
+
+基本循环是：intersect → add eligible emission → sample direct connection → sample scattering → update throughput/PDF → Russian roulette → spawn next ray。迭代写法比递归更容易保存 path node、统计长度和输出 debug AOV。
+
+## Direct illumination：显式连接光源
+
+纯 BSDF random walk 命中小 emitter 的概率极低。<Term def="在当前非 delta 顶点显式选择光源并采样其位置或方向，通过可见性测试估计直接照明">直接光采样</Term>为每个顶点构造 next-event connection。若选择光源的 PMF 为 $p_ell(j)$，光源方向 PDF 为 $p_ell(\omega|j)$，其联合 density 必须相乘。
+
+单个直接光样本贡献为：
+
+$$
+C_{\text{light}}=\beta_i\,
+\frac{L_e(y\to x_i)f_s(x_i,\omega_i,\omega_y)|n_i\cdot\omega_y|V(x_i,y)}{p_\ell(j)p_\ell(\omega_y|j)}.
+$$
+
+若 BSDF continuation 也能生成同一 non-delta emitter path，就用 MIS；若前一 event 是 perfect specular delta，则通常只允许 hit-emission strategy。MIS 规则必须与策略 support 对齐，而不是机械给所有贡献乘 power heuristic。
+
+## Environment map illumination
+
+第二版第 5 章特别加入 environment map illumination。环境贴图既是 escaped ray 的 emitter evaluation，也是 direct-light proposal。只在 miss 时查纹理是正确但可能高方差；对高动态太阳 texel，需要按 luminance 与球面 Jacobian 建 importance distribution。
+
+<Term def="把无限远方向上的辐亮度函数作为光源，并同时支持方向评估、采样和 solid-angle PDF 查询">环境贴图照明</Term>不能按经纬纹理像素均匀采样。Lat-long 参数中 $d\omega=\sin\theta d\theta d\phi$，离散 texel 权重应近似 $w_{uv}=Y_{uv}\sin\theta_v$。采样 row/column 后还要把 texel PMF 转回 solid-angle density；极点处要避免除零和重复经线。
+
+常量 environment 是重要单元测试：旋转 map 不应改变 Lambertian 平面的平均 irradiance；有单个高亮 texel 时，importance sampler 应显著降低 variance，但 uniform proposal 仍可作为全支持分量。
+
+## Indirect illumination 与随机终止
+
+<Term def="由当前顶点继续采样非发光散射路径，从后续表面或介质返回的多次传输贡献">间接照明</Term>（indirect illumination）使用 BSDF/phase-function proposal 延长 path。对于 diffuse lobe，cosine sampling 可约去 $f_s\cos/p$ 的大部分变化；glossy lobe 需要匹配 roughness；mixed BSDF 先采 component PMF，再采该 component direction，并用 mixture PDF 评估。
+
+固定 max depth 会截掉长路径并引入 bias。Russian roulette 在若干 bounce 后以 continuation probability $q_i$ 继续，若继续则：
+
+$$
+\beta_i\leftarrow\frac{\beta_i}{q_i},qquad
+P(\text{terminate})=1-q_i.
+$$
+
+这保持期望不变，但 $q$ 太小会产生大权重 outlier，太大则浪费工作。可从 luminance/maximum component of throughput 估计，并限制在稳定区间。终止概率本身也属于 path generation density，做 bidirectional/MIS 时要计入。
+
+## Light tracing：从发射端随机游走
+
+<Term def="从光源采样发射位置和方向，沿 radiance 方向传播，并把中间顶点显式连接到传感器的算法">光线追踪</Term>（light tracing，此处指从 light 出发）先按 power 选择 emitter，再采 `sampleLe` 得到 position、direction、emitted radiance 与 PDFs。路径每次散射后尝试 `connectSensor`，因为随机 ray 几乎不可能直接命中 pinhole camera。
+
+Light tracing 对从小光源发出的 diffuse/specular transport 有优势，但对 camera 直接可见的细节会有 splatting 与 importance connection 问题。它与 camera path tracing 使用同样 PathNode 和 scattering interface，只是 endpoint、throughput initialization 与 connection target 对调。这也是附录 A 类库应支持而不复制算法代码的原因。
+
+## 附录 A：全局光照类库契约
+
+<GilClassLibraryDiagram />
+
+<Term def="保存一个路径顶点的几何、局部坐标、散射事件、吞吐量及正反概率，并链接前后顶点的状态对象">路径节点类</Term>（path node classes）是算法证据载体。Light source sampling classes 至少提供 `selectLight`、`sampleLi/evaluateLi/pdfLi` 与 `sampleLe/evaluateLe/pdfLe`；同一个方向的 sample/evaluate/PDF 必须一致。
+
+一个可扩展 global illumination API 要隔离：Scene 负责 intersection/visibility，Material/Medium 负责 sample/evaluate/PDF，LightSampler 负责 endpoint distribution，Camera 负责 measurement，Integrator 只编排 random walk 与 estimator。Sampler 负责维度化随机数，Film 负责带 filter 的线程安全聚合。这样才能分别验证几何、概率与能量，而不是只用最终图片猜错在哪里。
 
 ```cpp
-// 路径追踪核心
-Spectrum PathTrace(Ray ray, int depth) {
-    SurfaceInteraction si;
-    if (!scene.Intersect(ray, &si)) return scene.Le(ray);
-    
-    Spectrum L = si.Le;  // 自发光
-    
-    // NEE: 显式采样光源
-    for (auto &light : scene.lights)
-        L += EstimateDirect(si, light);  // MIS
-    
-    // 间接光: BRDF采样继续
-    if (depth < maxDepth) {
-        auto [wi, f, pdf] = si.bsdf->Sample_f(ray.d);
-        L += f * PathTrace(Ray(si.p, wi), depth+1) * cos / pdf;
-    }
-    return L;
-}
+struct PathNode {
+    Interaction it;
+    Spectrum beta;
+    float pdfFwdArea = 0;
+    float pdfRevArea = 0;
+    EventFlags event;
+    int parent = -1;
+};
+
+struct LightSampler {
+    SelectedLight select(float u) const;
+    LiSample sampleLi(const Interaction&, Vec2 u) const;
+    LeSample sampleLe(Vec2 uPos, Vec2 uDir) const;
+    float pdfLi(const Interaction&, Direction) const;
+};
 ```
+
+## 三步实现一条路径
+
+<Stepper>
+<Step title="第一步：固定状态与接口契约">
+
+定义 camera/light endpoint、PathNode 字段、sample/evaluate/PDF measure 和随机维度，先通过 normalization 测试。
+
+<GilStepFlowDiagram caption="路径正确性从接口中可见，而不是藏在递归局部变量里。" stage={1} stages={["Contract：endpoint → PathNode → sample / evaluate / PDF"]} />
+
+</Step>
+<Step title="第二步：逐顶点累计并分类贡献">
+
+实现 intersect、eligible emission、direct connection、environment miss、BSDF continuation 与 roulette；记录每项贡献来源。
+
+<GilStepFlowDiagram caption="将 direct、environment 与 indirect contribution 分开观察。" stage={2} stages={["Contract：endpoint → PathNode → sample / evaluate / PDF", "Walk：intersect → emit / connect → scatter → terminate"]} />
+
+</Step>
+<Step title="第三步：用小场景验收">
+
+依次测试空场景 environment、单面光 direct、Lambertian box indirect、mirror delta 与长 diffuse corridor，并比较高样本 reference。
+
+<GilStepFlowDiagram caption="每个场景只激活少量路径族，便于定位 double count 与漏项。" stage={3} stages={["Contract：endpoint → PathNode → sample / evaluate / PDF", "Walk：intersect → emit / connect → scatter → terminate", "Validate：environment → direct → indirect → delta / roulette"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**误区：认为路径追踪每条光线只弹射一次。**
-路径追踪是递归的——每次交点继续发射新光线，直到命中光源或被俄罗斯轮盘赌终止。一条路径可能弹射数十次。限制弹射深度会导致间接光丢失（如深角落变暗）。
+**现象 →** 所有命中 emitter 的路径都加 emission，同时每个顶点又做 NEE，亮度偏高。**原因 →** 相同 path 由 BSDF 与 light strategy 重复计数。**修法 →** 按 event/strategy eligibility 分支或用同测度 MIS 权重。
 </Callout>
 
 <Callout type="trap">
-**误区：认为增加SPP(samples per pixel)是唯一的降噪方法。**
-SPP翻倍只减半噪声(O(1/sqrt(N))收敛)。更有效的方法：重要性采样降低单采样方差、NEE让直接光几乎无噪声、自适应采样在噪声大区域增加SPP、降噪滤波器事后处理。现代渲染器组合使用这些技术。
+**现象 →** environment importance samples 聚集在极点，旋转贴图后亮度变化。**原因 →** 经度纬度 texel PMF 没有包含 $\sin\theta$ 或没转 solid-angle PDF。**修法 →** 用常量 map、极点和单亮点 map 验证归一化与旋转不变性。
 </Callout>
 
+<Callout type="trap">
+**现象 →** 把“无偏”解释为样本增多才趋于正确。**原因 →** 混淆 unbiased 与 consistent。**修法 →** 分别检查有限 $N$ 的 expectation、variance 和预算增长时的 convergence；固定深度截断不是无偏路径追踪。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题 1**：路径追踪的基本流程是什么？为什么它是无偏的？
+
+**问题 1：为什么 throughput 更新要除以方向 PDF？**
 
 <Answer>
-流程：从相机发射光线→求交→NEE采样光源计算直接光→按BRDF采样方向→递归追踪间接光→俄罗斯轮盘赌终止。无偏性来自蒙特卡洛理论：每次采样的期望等于真实积分值，N次平均的期望仍等于真实值，采样数趋于无穷时收敛到正确结果。无系统性误差。
+散射积分被改写为对该 PDF 下随机变量的期望，单样本必须用 integrand/PDF 才保持原积分。若只乘 BRDF 与 cosine，采样更密的方向会被错误当成更多能量。
 </Answer>
 
-**问题 2**：BDPT相比单向路径追踪有什么优势？它解决了什么问题？
+**问题 2：environment map 为什么既要支持 miss evaluation 又要支持 direct sampling？**
 
 <Answer>
-BDPT同时从光源（光子路径）和相机（相机路径）生成子路径，连接两段上的每对点。优势是解决「困难光路」问题——如焦散(光经镜面反射到漫反射面再到相机)。单向PT从漫反射面按BRDF随机采样几乎不可能命中镜面再到光源，BDPT从光源出发经镜面到漫反射面（光子路径容易采样），再从相机到漫反射面（相机路径容易采样），连接即可。把难以采样的长路径变成两条短路径的连接。
+Miss evaluation 保证 BSDF random walk 逃出场景时能得到环境贡献；direct sampling 在每个可连接顶点主动选择高亮环境方向，降低小太阳等高频照明的方差。两种策略可生成同一路径时需 MIS。
 </Answer>
+
+**问题 3：Russian roulette 如何保持无偏？**
+
+<Answer>
+以概率 $q$ 继续，并把继续样本贡献除以 $q$；其期望为 $q(C/q)+(1-q)0=C$。直接按 throughput 阈值截断没有补权，会系统性丢失长路径能量。
+</Answer>
+
+**问题 4：附录 A 的类库怎样帮助发现 PDF 错误？**
+
+<Answer>
+将 sample、evaluate 和 PDF 放在同一 Light/BSDF contract 中，可做 reciprocity、normalization、histogram 与 round-trip 测试；PathNode 保存 forward/reverse density，可逐路径检查 Jacobian、MIS 和 delta compatibility，而无需只看最终噪声图猜测。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+第 5 章把 transport equation 变成 stochastic path state machine：ray setup 初始化测量权重，direct/environment/indirect estimator 分担不同路径，throughput 与 PDF 保持期望，roulette 控制无限长度成本，light tracing 从发射端复用相同散射契约。附录 A 再用 PathNode、light-source sampler、Scene 和 Estimator 边界让每个概率与能量因子可独立验证。
+
 <Glossary>
-<GlossaryItem term="路径追踪">从相机出发随机游走求解渲染方程的GI方法，通用无偏，是现代GI标准。</GlossaryItem>
-<GlossaryItem term="无偏性">采样数趋于无穷时估计值收敛到真实值，无系统性误差。</GlossaryItem>
-<GlossaryItem term="Next Event Estimation(NEE)">每次交点显式采样光源计算直接光，避免依赖随机方向命中光源。</GlossaryItem>
-<GlossaryItem term="双向路径追踪(BDPT)">从光源和相机双向生成子路径再连接，对焦散等困难光路效率高。</GlossaryItem>
+<GlossaryItem term="主光线设置">从相机样本生成主光线、权重、PDF 和传播状态的过程。</GlossaryItem>
+<GlossaryItem term="随机路径追踪">从相机逐顶点随机采样散射并累计路径贡献的方法。</GlossaryItem>
+<GlossaryItem term="直接光采样">在当前顶点显式选择并连接发光体的估计策略。</GlossaryItem>
+<GlossaryItem term="环境贴图照明">以无限远方向辐亮度函数提供评估和重要性采样的光源。</GlossaryItem>
+<GlossaryItem term="间接照明">经后续非发光散射顶点返回的多次传输贡献。</GlossaryItem>
+<GlossaryItem term="光线追踪">从发光端生成随机路径并连接传感器的 light-tracing 算法。</GlossaryItem>
+<GlossaryItem term="路径节点类">保存路径顶点几何、事件、吞吐量和正反 PDF 的状态对象。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Advanced Global Illumination" adaptedUrl="https://www.amazon.com/dp/1568813074" />
+<Attribution adaptedFrom="Advanced Global Illumination, Second Edition, Chapter 5 and Appendix A" adaptedUrl="https://books.google.com/books?id=KodRAAAAMAAJ" />

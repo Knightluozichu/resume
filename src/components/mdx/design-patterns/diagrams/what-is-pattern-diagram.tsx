@@ -413,7 +413,8 @@ export function WhatIsPatternDiagram() {
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        没有模式时代码是纠缠的 if-else；套用设计模式这座「桥梁」，把问题映射到清晰的抽象分层——这就是模式的价值。
+        没有模式时代码是纠缠的
+        if-else；套用设计模式这座「桥梁」，把问题映射到清晰的抽象分层——这就是模式的价值。
       </figcaption>
     </figure>
   );

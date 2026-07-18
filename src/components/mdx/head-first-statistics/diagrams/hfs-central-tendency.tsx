@@ -1,50 +1,11 @@
-/**
- * <HfsCentralTendencyDiagram>：集中趋势度量概念图（hfs-central-tendency 章）。Server Component。
- */
-
-const VIEW_W = 720;
-const VIEW_H = 400;
-
-export function HfsCentralTendencyDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} role="img" aria-label="三种集中趋势度量" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x={VIEW_W / 2} y="36" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">{`三种集中趋势度量`}</text>
-          <text x={VIEW_W / 2} y="58" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">{`均值（所有数据）· 中位数（中间位置）· 众数（最常见值）`}</text>
-          <g>
-            <rect x="40" y="100" width="300" height="80" rx="10" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.4" />
-            <circle cx="56" cy="120" r="4" fill="var(--accent)" />
-            <text x="68" y="125" fontSize="13" fontWeight="700" fill="var(--text-primary)">{`均值`}</text>
-            <text x="56" y="148" fontSize="11" fill="var(--text-secondary)">{`Σx/n`}</text>
-            <text x="56" y="166" fontSize="12" fontWeight="600" fill="var(--accent)">{`异常值敏感`}</text>
-          </g>
-          <g>
-            <rect x="380" y="100" width="300" height="80" rx="10" fill="var(--success)" fillOpacity="0.06" stroke="var(--success)" strokeWidth="1.4" />
-            <circle cx="396" cy="120" r="4" fill="var(--success)" />
-            <text x="408" y="125" fontSize="13" fontWeight="700" fill="var(--text-primary)">{`中位数`}</text>
-            <text x="396" y="148" fontSize="11" fill="var(--text-secondary)">{`排序中间值`}</text>
-            <text x="396" y="166" fontSize="12" fontWeight="600" fill="var(--success)">{`鲁棒抗异常`}</text>
-          </g>
-          <g>
-            <rect x="40" y="210" width="300" height="80" rx="10" fill="var(--warning)" fillOpacity="0.06" stroke="var(--warning)" strokeWidth="1.4" />
-            <circle cx="56" cy="230" r="4" fill="var(--warning)" />
-            <text x="68" y="235" fontSize="13" fontWeight="700" fill="var(--text-primary)">{`众数`}</text>
-            <text x="56" y="258" fontSize="11" fill="var(--text-secondary)">{`最高频值`}</text>
-            <text x="56" y="276" fontSize="12" fontWeight="600" fill="var(--warning)">{`适用名目型`}</text>
-          </g>
-          <g>
-            <rect x="380" y="210" width="300" height="80" rx="10" fill="var(--danger)" fillOpacity="0.06" stroke="var(--danger)" strokeWidth="1.4" />
-            <circle cx="396" cy="230" r="4" fill="var(--danger)" />
-            <text x="408" y="235" fontSize="13" fontWeight="700" fill="var(--text-primary)">{`偏态判断`}</text>
-            <text x="396" y="258" fontSize="11" fill="var(--text-secondary)">{`均值vs中位数`}</text>
-            <text x="396" y="276" fontSize="12" fontWeight="600" fill="var(--danger)">{`右偏:均值>中位`}</text>
-          </g>
-          <rect x="40" y="340" width={VIEW_W - 80} height="40" rx="8" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.4" />
-          <text x={VIEW_W / 2} y="365" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">{`均值（所有数据）· 中位数（中间位置）· 众数（最常见值）`}</text>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">均值（所有数据）· 中位数（中间位置）· 众数（最常见值）</figcaption>
-    </figure>
-  );
-}
+import { HeadFirstStatsLab, type HeadFirstStatsCase } from "./official-lab";
+const cases:HeadFirstStatsCase[]=[
+  {label:"算术均值",data:"均值、中位数和众数回答不同的“典型值”问题。均值使用全部数值但受离群点影响，中位数只依赖顺序而稳健，众数适用于分类数据。选择中心指标必须结合分布形状和决策损失。",model:"所有观测总和除以数量，也是平方误差损失下的最佳常数预测。",evidence:"用计数、图形和反例验证算术均值",warning:"把“平均”默认写成算术均值，没有说明离群点、偏态和业务损失。"},
+  {label:"加权均值",data:"算术均值",model:"频数或重要度作为权重时，用加权总和除以权重总和。",evidence:"用计数、图形和反例验证加权均值",warning:"分类编码为数字后计算均值；编码大小没有数量语义，结果不可解释。"},
+  {label:"中位数",data:"加权均值",model:"排序后位于中间的值，最小化绝对误差并对极端值更稳健。",evidence:"用计数、图形和反例验证中位数",warning:"把“平均”默认写成算术均值，没有说明离群点、偏态和业务损失。"},
+  {label:"众数",data:"中位数",model:"出现频数最高的取值，可有多个或不存在，适合分类变量。",evidence:"用计数、图形和反例验证众数",warning:"分类编码为数字后计算均值；编码大小没有数量语义，结果不可解释。"},
+  {label:"离群点影响",data:"众数",model:"极端值能显著拉动均值，却通常不改变大多数样本的次序位置。",evidence:"薪资报告若只给均值，少量高薪会掩盖典型员工处境。应并列中位数、分位数和样本构成；若决策关心总成本，均值仍有意义。指标不是互相替代，而是回答不同问题。",warning:"把“平均”默认写成算术均值，没有说明离群点、偏态和业务损失。"},
+];
+export function HfsCentralTendencyDataLab(){return <HeadFirstStatsLab title="第2章 集中趋势：中间道路：数据" caption="切换统计对象，观察数据、模型与证据。" cases={cases} tone="cyan"/>}
+export function HfsCentralTendencyModelLab(){return <HeadFirstStatsLab title="第2章 集中趋势：中间道路：模型" caption="改变假设，比较模型边界。" cases={cases} tone="amber" initial={1}/> }
+export function HfsCentralTendencyEvidenceLab(){return <HeadFirstStatsLab title="第2章 集中趋势：中间道路：证据" caption="用误差、反例和重放完成验收。" cases={cases} tone="emerald" initial={2}/> }

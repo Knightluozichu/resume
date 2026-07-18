@@ -18,9 +18,20 @@ export function ContainerOperationTable() {
   const w = 800;
   const h = 460;
 
-  const colHeaders = ["操作", "vector", "deque", "list", "forward_list", "array", "string"];
+  const colHeaders = [
+    "操作",
+    "vector",
+    "deque",
+    "list",
+    "forward_list",
+    "array",
+    "string",
+  ];
 
-  const rows: { name: string; cells: (string | { text: string; color: string })[] }[] = [
+  const rows: {
+    name: string;
+    cells: (string | { text: string; color: string })[];
+  }[] = [
     {
       name: "push_back",
       cells: [
@@ -171,9 +182,32 @@ export function ContainerOperationTable() {
           className="mx-auto block h-auto w-full max-w-[800px]"
         >
           {/* 表头背景 */}
-          <rect x={leftPad} y={topPad} width={colW * 6} height={headerH} rx="6" fill={accent} opacity="0.08" />
-          <rect x="0" y={topPad} width={leftPad} height={headerH} rx="6" fill={accent} opacity="0.08" />
-          <text x={leftPad / 2} y={topPad + headerH / 2 + 4} fontSize="12" fontWeight="700" fill={primary} textAnchor="middle">
+          <rect
+            x={leftPad}
+            y={topPad}
+            width={colW * 6}
+            height={headerH}
+            rx="6"
+            fill={accent}
+            opacity="0.08"
+          />
+          <rect
+            x="0"
+            y={topPad}
+            width={leftPad}
+            height={headerH}
+            rx="6"
+            fill={accent}
+            opacity="0.08"
+          />
+          <text
+            x={leftPad / 2}
+            y={topPad + headerH / 2 + 4}
+            fontSize="12"
+            fontWeight="700"
+            fill={primary}
+            textAnchor="middle"
+          >
             {colHeaders[0]}
           </text>
           {colHeaders.slice(1).map((h, i) => (
@@ -194,14 +228,28 @@ export function ContainerOperationTable() {
           {/* 数据行 */}
           {rows.map((row, ri) => {
             const y = topPad + headerH + ri * rowH;
-            const bgFill = ri % 2 === 0 ? "transparent" : (accent + "0A");
+            const bgFill = ri % 2 === 0 ? "transparent" : accent + "0A";
 
             return (
               <g key={row.name}>
                 {/* 行背景 */}
-                <rect x="0" y={y} width={w} height={rowH} rx="4" fill={bgFill} />
+                <rect
+                  x="0"
+                  y={y}
+                  width={w}
+                  height={rowH}
+                  rx="4"
+                  fill={bgFill}
+                />
                 {/* 行分隔线 */}
-                <line x1={leftPad} y1={y + rowH} x2={leftPad + colW * 6} y2={y + rowH} stroke={border} opacity="0.4" />
+                <line
+                  x1={leftPad}
+                  y1={y + rowH}
+                  x2={leftPad + colW * 6}
+                  y2={y + rowH}
+                  stroke={border}
+                  opacity="0.4"
+                />
 
                 {/* 操作名 */}
                 <text
@@ -218,7 +266,8 @@ export function ContainerOperationTable() {
                 {/* 各列值 */}
                 {row.cells.map((cell, ci) => {
                   const text = typeof cell === "string" ? cell : cell.text;
-                  const color = typeof cell === "string" ? secondary : cell.color;
+                  const color =
+                    typeof cell === "string" ? secondary : cell.color;
                   return (
                     <text
                       key={ci}
@@ -227,7 +276,11 @@ export function ContainerOperationTable() {
                       fontSize={text.length > 8 ? "10" : "11"}
                       fill={color}
                       textAnchor="middle"
-                      fontFamily={text.startsWith("✗") || text.startsWith("✓") ? undefined : "monospace"}
+                      fontFamily={
+                        text.startsWith("✗") || text.startsWith("✓")
+                          ? undefined
+                          : "monospace"
+                      }
                     >
                       {text}
                     </text>
@@ -238,13 +291,23 @@ export function ContainerOperationTable() {
           })}
 
           {/* 底部注释 */}
-          <text x={leftPad} y={topPad + headerH + rows.length * rowH + 20} fontSize="10" fill={secondary}>
-            ✓ 原生高效支持  |  ✗ 不支持  |  ✓ O(n) 支持但慢  |  ∗ 均摊 O(1)（扩容重分配）  |  ∗∗ forward_list insert/erase 只能在给定位置"之后"操作
+          <text
+            x={leftPad}
+            y={topPad + headerH + rows.length * rowH + 20}
+            fontSize="10"
+            fill={secondary}
+          >
+            ✓ 原生高效支持 | ✗ 不支持 | ✓ O(n) 支持但慢 | ∗ 均摊
+            O(1)（扩容重分配） | ∗∗ forward_list insert/erase
+            只能在给定位置&quot;之后&quot;操作
           </text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        各容器对常用操作的支持情况与时间复杂度速查。注意 forward_list 只有单向遍历，其 insert/erase 操作只能在给定迭代器<strong>之后</strong>执行。push_back 对 vector/string 为均摊 O(1)——偶尔的扩容重分配使单个操作可能 O(n)，但均摊到 N 次插入仍是 O(1)。
+        各容器对常用操作的支持情况与时间复杂度速查。注意 forward_list
+        只有单向遍历，其 insert/erase 操作只能在给定迭代器<strong>之后</strong>
+        执行。push_back 对 vector/string 为均摊
+        O(1)——偶尔的扩容重分配使单个操作可能 O(n)，但均摊到 N 次插入仍是 O(1)。
       </figcaption>
     </figure>
   );

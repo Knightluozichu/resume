@@ -1,0 +1,296 @@
+---
+title: "第5章：构造、析构与复制语义"
+type: A
+section: Inside the C++ Object Model · Chapter 5
+order: 5
+description: 对齐原书第5章 Semantics of Construction, Destruction, and Copy：纯虚析构与 virtual/const 契约、继承构造、vptr、复制、效率和逆序析构。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/inside-the-c-plus-plus-object-model-9780201834543"
+draft: false
+---
+
+import {
+  IcoClassDeclarationContractMap,
+  IcoConstructionStateMap,
+  IcoCopyDestructionStateMap,
+} from "@/components/mdx/inside-cpp-object-model/diagrams/construction-destruction-copy";
+
+<Objectives>
+
+- 能解释 pure virtual destructor、virtual specification 与 const within a virtual specification 对 class interface 和销毁安全的约束
+- 能推导 object construction without/under inheritance、virtual inheritance 与 vptr initialization 的完整阶段顺序
+- 能分析 object copy semantics、object efficiency 和 semantics of destruction，并定位 raw copy、构造期虚调度与非虚析构错误
+
+</Objectives>
+
+## 从“接口声明决定对象能否安全活完一生”开始
+
+constructor/destructor 不是独立函数；它们维护 object 从“不存在”到“各 subobject 有效”再回到“不存在”的状态机。先预测一个带 pure virtual destructor 的 abstract base 是否可以不给 destructor body：derived teardown 最终仍要调用 base destructor，所以“纯虚”禁止直接实例化，却不取消 base cleanup definition 的责任。
+
+<Term def="把 destructor 声明为 pure virtual，使 class 保持 abstract，同时仍必须提供可被 derived teardown 调用的定义。">
+  pure virtual destructor
+</Term>
+
+<IcoClassDeclarationContractMap />
+
+## 重新审视 Class Declaration
+
+### Presence of a Pure Virtual Destructor
+
+polymorphic base 若允许通过 base pointer 销毁 dynamic derived object，destructor 必须 virtual。它也可以 pure virtual 以表达 interface 不应直接实例化，但仍要定义，因为 destruction chain 总会进入 base subobject teardown。
+
+```cpp
+struct Shape {
+    virtual double area() const = 0;
+    virtual ~Shape() = 0;
+};
+
+Shape::~Shape() = default;
+
+struct Circle final : Shape {
+    double area() const override { return 1.0; }
+};
+```
+
+<Term def="在成员函数声明上承诺运行时覆写与动态分派能力，从而改变 class interface、object representation 与调用路径。">
+  presence of a virtual specification
+</Term>
+
+### Presence of a Virtual Specification
+
+不是所有 operation 都应 virtual。virtual 适合 base contract 允许 dynamic replacement 的点；nonvirtual operation 可封装 invariant 并调用 protected virtual hook。无差别 virtual 会扩大 override surface、引入 polymorphic representation，并让 construction/destruction 期间的行为更难推导。
+
+<Term def="const qualifier 是 virtual member signature 与 object contract 的一部分，non-const 同名函数不会覆写 const virtual。">
+  const within a virtual specification
+</Term>
+
+### Presence of const within a Virtual Specification
+
+`double area() const` 与 `double area()` 是不同 member-function types。derived 必须写匹配的 `const` 才 override；`override` 关键字把错误变成 compile-time diagnostic。const member 接收 const object view，但不自动保证 thread safety，也不代表 physical bytes 永远不变。
+
+“reconsidered class declaration” 的目标是让 destructor policy、override points、const contract 与 data ownership 一起可审计，而不是先写 hierarchy，再让 compiler-generated lifetime work 猜测设计意图。
+
+<Callout type="trap" title="陷阱：pure virtual destructor不需要定义">
+  pure virtual 只让 class abstract；derived object 的 destruction 仍按链调用
+  base destructor。缺少 definition 会在 odr-use/link 阶段失败。若 base
+  还持有资源，该 definition 更是不可省略的 teardown 入口。
+</Callout>
+
+## 5.1 Object Construction without Inheritance
+
+<Term def="单一 class object 按成员声明顺序建立 subobjects、必要 polymorphic representation，最后运行 constructor body 的过程。">
+  object construction without inheritance
+</Term>
+
+### Abstract Data Type
+
+对于没有 inheritance 的 abstract data type，construction 仍分为 member initialization 与 body。initializer list 直接选择 member constructors；body 运行时 members 已经有效。若 class 有 virtual functions，常见 ABI 还要在适当位置建立 vptr，使 body 中的 virtual call 表现为当前 class。
+
+```cpp
+class Buffer {
+public:
+    explicit Buffer(std::size_t size)
+        : data_(size), checksum_(compute(data_)) {}
+
+private:
+    std::vector<std::byte> data_;
+    std::uint64_t checksum_;
+};
+```
+
+declaration order 是 `data_` 后 `checksum_`，所以后者可以读取已构造 member。若反过来声明，调整 initializer list 文本顺序也不能修复。constructor body 适合执行依赖所有 members 已有效的工作，不适合用 assignment 代替必须的 direct initialization。
+
+<Term def="在把 value-like abstract data type 演化为 base class 前，重新定义 destructor、copy policy、protected state 与 virtual extension points。">
+  preparing for inheritance
+</Term>
+
+### Preparing for Inheritance
+
+准备继承时要问：是否会经 base pointer 删除？哪些 operation 真正需要 dynamic replacement？copy 是保留 dynamic type、clone，还是禁止 slicing？base constructor 是否调用可覆写行为？data 应 private 还是通过 protected invariant-preserving hooks 暴露？这些决定会直接改变 generated construction/destruction code。
+
+## 5.2 Object Construction under Inheritance
+
+<IcoConstructionStateMap />
+
+<Term def="most-derived object 按 virtual bases、direct bases、当前 class representation、members 与 body 的语义顺序逐层建立。">
+  object construction under inheritance
+</Term>
+
+derived constructor 不是只执行花括号内语句。概念展开包含：most-derived constructor 负责所有 virtual bases；direct bases 按 base-list order；implementation 建立当前 class 的 virtual state；members 按 declaration order；最后进入 body。每个 base constructor 又在自己的 subobject phase 执行同类规则。
+
+### Virtual Inheritance
+
+<Term def="在 diamond hierarchy 中由 most-derived constructor 构造一次 shared virtual base，并让中间 bases 复用该 subobject。">
+  construction under virtual inheritance
+</Term>
+
+中间 base 单独作为 complete object 时要负责其 virtual base；作为更大 derived 的 subobject 时，most-derived constructor 接管。旧实现可能通过 hidden flag/parameters 区分，现代 ABI 也有 construction vtables 等机制。需要掌握的是语义 ownership，不把某个 ABI 参数形式当标准。
+
+### The Semantics of the vptr Initialization
+
+<Term def="construction/destruction 期间让每个 active class subobject 使用与当前阶段一致的 virtual table 状态。">
+  semantics of the vptr initialization
+</Term>
+
+base constructor 运行时，derived invariant 尚未建立，因此 virtual call 只表现为当前 base phase；进入 derived phase 后，vptr representation 再对应 derived overrides。complete construction 后，dynamic dispatch 才稳定指向 most-derived final overrider。destruction 则反向退回各 base phase。
+
+qualified call 是静态选择，constructor 内的普通 virtual call 受 construction dispatch rules 限制。不要依赖从 base constructor 调到 derived override 完成初始化；那会读取尚未构造 members，语言机制正是为了阻止这种错误。
+
+<Callout type="trap" title="陷阱：derived对象一分配内存就拥有最终动态行为">
+  storage acquisition 不等于 lifetime 全部开始。virtual bases、direct
+  bases、members 与 constructor body 要逐层建立 invariant；vptr state 也随
+  active subobject phase 改变。只有 most-derived construction
+  完成后，外部观察才可依赖完整 derived behavior。
+</Callout>
+
+## 5.3 Object Copy Semantics
+
+<Term def="copy construction 与 copy assignment 对 bases、members、virtual bases 和 dynamic identity 应分别执行的对象级复制规则。">
+  object copy semantics
+</Term>
+
+<IcoCopyDestructionStateMap />
+
+copy construction 建立新 lifetime：virtual/direct bases 与 members 按目标对象 construction 顺序复制，target vptr 由 target construction phase 建立。copy assignment 修改已有 object：调用 base/member assignment，target dynamic identity 不因 source bytes 改变。
+
+```cpp
+struct Base {
+    virtual ~Base() = default;
+    int id = 0;
+};
+
+struct Derived : Base {
+    std::string name;
+};
+
+Derived first;
+Derived second = first; // 构造新对象
+second = first;         // 赋值给已有对象
+```
+
+对 polymorphic object 执行 `memcpy` 会绕过 string/resource copy，并可能把 source vptr、self-pointer 或 padding 状态覆盖到 target。按 Base value copy Derived 还会 slicing。需要保留动态类型时设计 virtual `clone` 或 value wrapper；不允许复制时显式 delete copy operations。
+
+## 5.4 Object Efficiency
+
+<Term def="比较 object-based 与 object-oriented 表示在 construction、copy、dispatch、virtual inheritance 和 destruction 上的可测成本。">
+  object efficiency
+</Term>
+
+object-based value class 可拥有 direct calls、contiguous data 与 trivial operations；object-oriented hierarchy 提供 runtime substitution，常付 vptr、indirect branch、adjustment 和 nontrivial lifetime work。成本不是“class vs struct”，而是具体 semantics 的选择。
+
+测试应分开：对象 size/alignment；批量 construction/destruction；copy/move count；direct/virtual call；single/multiple/virtual inheritance；cache locality。若 optimizer 去虚化或消除对象，说明该 workload 没保留想测的动态语义，需要通过 external target set、separate translation unit 或 profile-aware setup修正，而不是关闭所有优化制造不真实结果。
+
+## 5.5 Semantics of Destruction
+
+<Term def="先运行当前 destructor body，再逆声明顺序销毁 members、逆序销毁 direct bases，最后由 most-derived 路径销毁 virtual bases。">
+  semantics of destruction
+</Term>
+
+destruction 是 construction 的逆向状态退场，但 destructor body 运行时当前 class members 尚存在；body 结束后 members 逆序销毁，再到 direct bases，shared virtual bases 最后。每退到一个 base phase，virtual dispatch 也受当前 active class 限制。
+
+通过 base pointer `delete` derived object 要求 base destructor virtual，否则 behavior undefined。destructor 默认应 `noexcept`；若 stack unwinding 中再次抛出未处理 exception，会终止程序。资源释放交给 member RAII owner，可让 compiler-generated destructor 正确组合顺序。
+
+<Term def="construction 成功建立多少 subobjects，exception 路径就只逆序销毁已成功建立的那一部分，未开始 lifetime 的部分不析构。">
+  partial construction unwinding
+</Term>
+
+若某个 member constructor 抛出，complete object 从未构造成功，因此其 destructor body 不运行；但此前已成功的 bases/members 会逆序销毁。raw acquire 放在 body 早期却未进入 owner，可能在后续 throw 时泄漏。initializer + RAII 是正确的 failure path 表达。
+
+## 第5章验证清单
+
+1. polymorphic base 明确 virtual destructor；pure virtual destructor 仍提供 definition。
+2. 每个 virtual operation 检查 const/ref qualifier 与 `override` 是否精确匹配。
+3. 按 virtual bases、direct bases、vptr phase、members、body 推导 construction。
+4. 构造期 virtual call 只使用 active class，不读取未建立 derived invariant。
+5. copy construction 与 assignment 分开，vptr 不当业务 bytes 复制。
+6. 需要动态复制时定义 clone/value wrapper，避免 slicing。
+7. object efficiency 分别测 lifetime、dispatch、adjustment、size 和 locality。
+8. destructor body、members、bases、virtual bases 逆序撤场；failure 只 unwind 已构造部分。
+
+## 小结
+
+- pure virtual destructor 让 base abstract，但仍必须提供 teardown definition
+- virtual specification 与 const qualifier 定义 override contract 和对象表示需求
+- 无继承 construction 也要先建立 members/virtual state，再运行 body
+- 有继承 construction 由 most-derived virtual bases 开始，逐层建立 direct bases、vptr、members
+- vptr initialization 随 active construction/destruction phase 变化，阻止调用未就绪 derived state
+- copy construction 建新 lifetime，assignment 修改现有 state，二者都不能 raw-copy polymorphic identity
+- object efficiency 来自所选语义，不来自 class/struct 标签
+- destruction 逆序撤销已建立 subobjects，partial construction 只 unwind 成功部分
+
+<Attribution
+  adaptedFrom="Inside the C++ Object Model, First Edition, Chapter 5: Semantics of Construction, Destruction, and Copy"
+  adaptedUrl="https://www.informit.com/store/inside-the-c-plus-plus-object-model-9780201834543"
+/>
+
+<Glossary>
+  <GlossaryItem term="pure virtual destructor">
+    使 base abstract 但仍有定义的虚析构函数。
+  </GlossaryItem>
+  <GlossaryItem term="presence of a virtual specification">
+    以 virtual 声明动态覆写契约。
+  </GlossaryItem>
+  <GlossaryItem term="const within a virtual specification">
+    作为 override signature 一部分的 const。
+  </GlossaryItem>
+  <GlossaryItem term="object construction without inheritance">
+    建立单一 class 的 members 与 representation。
+  </GlossaryItem>
+  <GlossaryItem term="preparing for inheritance">
+    为 base role 重审 lifetime、copy 与 extension contract。
+  </GlossaryItem>
+  <GlossaryItem term="object construction under inheritance">
+    从 virtual/direct bases 到 derived body 的构造序列。
+  </GlossaryItem>
+  <GlossaryItem term="construction under virtual inheritance">
+    most-derived 路径构造一次 shared virtual base。
+  </GlossaryItem>
+  <GlossaryItem term="semantics of the vptr initialization">
+    按 active subobject phase 建立 virtual state。
+  </GlossaryItem>
+  <GlossaryItem term="object copy semantics">
+    构造/赋值时复制 subobjects 而保留 target identity。
+  </GlossaryItem>
+  <GlossaryItem term="object efficiency">
+    可测的对象表示、lifetime 与 dispatch 成本。
+  </GlossaryItem>
+  <GlossaryItem term="semantics of destruction">
+    body 后按逆序撤销 members 与 bases。
+  </GlossaryItem>
+  <GlossaryItem term="partial construction unwinding">
+    只销毁异常前成功构造的 subobjects。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：修正 abstract base 声明。** 给一个缺少 virtual destructor、`const` override 不匹配、constructor 调用 virtual hook 的 hierarchy，逐项说明错误与修复。
+
+<Answer question="接口契约如何决定lifetime和dispatch安全？">
+  经 base pointer 删除就把 base destructor 声明 virtual；若 pure virtual 仍在
+  class 外给 definition。base 的 `query() const` 要求 derived 写完全匹配
+  signature 并加 override，非 const 版本只是 overload。constructor 不调用依赖
+  derived state 的 hook；改为 complete construction 后显式启动、factory
+  两阶段提交，或让 base constructor 只执行 base invariant 工作。
+</Answer>
+
+2. **问题 2：展开 diamond object 的构造与析构。** 两个中间 bases 虚继承 Root，Leaf 同时继承它们；列出 virtual base、direct bases、members、vptr phases、bodies 与 reverse teardown。
+
+<Answer question="共享虚基为何只构造析构一次？">
+  Leaf 是 most-derived owner，先构造唯一 Root virtual base；再按 Leaf base-list
+  顺序构造两个 direct base，每个只建立自己的 nonvirtual parts/phase；随后 Leaf
+  virtual state、members 和 body。析构从 Leaf body 开始，Leaf members
+  逆序，再两个 direct bases 逆序，最后唯一 Root virtual base。vptr behavior
+  随当前 phase 前进/后退，中间 base initializer 不能重复拥有 Root。
+</Answer>
+
+3. **问题 3：审计 polymorphic copy 与性能。** 找出 `memcpy`、Base 按值参数、非虚析构和频繁 virtual-base access 四类问题，并给 correctness 与 measurement 方案。
+
+  <Answer question="怎样同时修复语义和验证成本？">
+    用 generated/memberwise copy 或显式 clone 取代 raw bytes，按 reference/value wrapper
+    避免 slicing，base destructor 设 virtual。virtual-base state 通过正常 member
+    access 保持正确，再在相同 dataset 上比较 composition/nonvirtual base 等替代设计；记录
+    size、construction/copy/destruction counts、metadata loads、branch 与 cache。只有 profile
+    显示该 path 热且语义允许，才改 hierarchy，不用错误 memcpy 换取表面速度。
+  </Answer>
+</Exercises>

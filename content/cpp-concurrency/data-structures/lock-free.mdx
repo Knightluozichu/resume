@@ -6,9 +6,11 @@ order: 2
 description: 读完能用自己的话解释「无锁」是什么、它和有锁/无等待有何区别，能看懂无锁栈 push 的 CAS 重试循环，并说清 ABA 问题和「弹出的节点不能马上 delete」的内存回收难题，以及风险指针、引用计数、标签指针各自怎么解。
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://livebook.manning.com/book/c-plus-plus-concurrency-in-action-second-edition/chapter-7"
 draft: false
 ---
+
+import { LockFreeProofMap } from "@/components/mdx/cpp-concurrency/diagrams/lock-free";
 
 {/* C 实战型第八章（《C++ 并发编程实战》第2版 §7 改编重写）：原书讲不上锁、只靠原子操作（CAS）实现的并发数据结构——无锁栈/队列、进展保证（无锁 vs 无等待）、以及无锁编程两大硬骨头 ABA 问题与内存回收（风险指针/引用计数）。重心是代码对照(§6 ≥80% 关键码，每块带齐 #include)与 CAS 重试循环动画(§5 主 Demo)，math:false。全程沿用「餐厅后厨」隐喻（无锁=不上锁，靠「看一眼账是不是原样、是才改、不是重来」；ABA=离开一会账被换走又换回原样、你没察觉；风险指针=动单子前先在「正在用」公告板挂牌，收单子的人见牌不扔）。承接 ch5（已建立 CAS / compare_exchange_weak·strong / 伪失败 概念）、ch6（acquire-release 内存序）、ch7（有锁并发数据结构），本章把无锁这条路走完。draft:true 待总监 review。 */}
 
@@ -18,15 +20,15 @@ draft: false
 
 <Objectives>
 
-- 能**解释**「无锁（lock-free）」到底指什么——它不只是「不用互斥量」，更是一种**进展保证**；并能说出它和 ch7「有锁」、以及更强的「无等待（wait-free）」各自的区别
-- 能**看懂并改对**无锁栈 push 的 CAS 重试循环（读 head → 接好新节点 → CAS，失败回填真实值重试），知道为什么循环体常常空着、为什么用 `compare_exchange_weak`
+- 能区分 blocking、lock-free 与 wait-free 的进展保证，并检查底层 atomic 特化是否真的无锁
+- 能实现并审查无锁栈 push 与无锁队列 enqueue 的 CAS 循环，指出线性化点、帮助机制和内存顺序
 - 能回答：无锁栈 `pop()` 把节点从链上摘下来后，为什么**不能马上 `delete` 这个节点**？这会引出什么 bug，用什么办法解决？
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；类比固定用「餐厅后厨」，与前几章一致。 */}
 
-## 不上锁，靠「看一眼账还是不是原样」干活
+## 从一次成功 CAS 的生效点开始
 
 上一章你给数据结构配了锁：谁要动它就先拿钥匙，别人在门口等。锁很好用，但有个隐患：万一拿着钥匙的厨师突然被叫走（线程被操作系统挂起），手里攥着钥匙不放，其他人就全卡在门口——干等。
 
@@ -38,9 +40,11 @@ draft: false
 
 ## 什么叫「无锁」：关键不在没锁，在进展保证
 
-我们说一个数据结构是 <Term def="多个线程并发访问时不使用任何锁来协调，而是靠 std::atomic 上的原子操作（尤其 CAS）保证正确性，并且保证整体一定有线程在推进——任一线程被挂起都不会卡住其他线程。「不用互斥量」只是表象，关键是无论怎么调度总有线程能完成操作这个进展保证。">无锁（lock-free）</Term> 的，意思是：多个线程并发访问它时**不使用任何锁**，而是靠 `std::atomic` 上的原子操作（核心是上一章学的 CAS）保证正确性，并且**无论调度怎么安排，总有某个线程能完成它的操作**——绝不会出现 ch7 那种「持锁者被换出、其他人全等」的局面。
+<Term def="一种系统级进展保证：在参与线程持续获得执行步骤时，有限数量步骤内总有某个操作完成。具体线程仍可能因 CAS 反复失败而饥饿；算法还要求其依赖的原子操作本身不由隐藏锁实现。">无锁（lock-free）</Term> 的重点是系统级进展。在参与线程持续执行的前提下，竞争失败意味着别的操作取得了进展；某个暂停线程不会因持有 mutex 阻止所有其他操作。但如果关键 `std::atomic<TaggedPtr>` 在目标平台内部用锁实现，整个算法不能据此宣称 lock-free。
 
-注意：「无锁」不等于「不用互斥量」这么简单。真正的定义在那个**进展保证**上——某个线程哪怕被挂起，也不会让整个结构停摆。与之对比，更强的一档叫 <Term def="一种比无锁更强的进展保证：保证每个线程都能在有限步内完成自己的操作，谁都不会被无限期饿死。无锁只保证「总有某个线程在推进」，但具体某个线程可能因 CAS 反复失败而一直重试；无等待连这种饥饿都不允许。最难实现、约束最强。">无等待（wait-free）</Term>：它要求**每个**线程都能在**有限步**内完成，谁都不会被饿死。本章的无锁栈是无锁但**非**无等待——CAS 失败要重试，运气差的线程可能多转好几圈。
+更强的 <Term def="一种逐操作进展保证：每个参与线程的操作都能在有界数量的自身步骤内完成，不依赖其他线程取得进展。它排除单线程因无限 CAS 失败而饥饿。">无等待（wait-free）</Term> 要求每个操作都在有界自身步骤内完成。CAS 重试循环通常只能证明 lock-free，不能证明某个线程不会一直失败。
+
+<LockFreeProofMap />
 
 ## 无锁栈的 push：CAS 重试循环
 
@@ -103,11 +107,11 @@ class LockFreeStack {
         Node* next;
         explicit Node(T const& v) : data(std::make_shared<T>(v)) {}
     };
-    std::atomic<Node*> head;
+    std::atomic<Node*> head{nullptr};
 public:
     void push(T const& value) {
         Node* const new_node = new Node(value);
-        new_node->next = head.load();              // 读一眼当前栈顶当 expected
+        new_node->next = head.load(std::memory_order_relaxed);
         while (!head.compare_exchange_weak(         // CAS：head 还是我以为的吗？
                    new_node->next, new_node,        // 是→换成 new_node；不是→真实 head 回填进 new_node->next
                    std::memory_order_release,       // 成功：发布新节点的数据
@@ -143,13 +147,16 @@ class LockFreeStack {
         std::shared_ptr<T> data;
         Node* next;
     };
-    std::atomic<Node*> head;
+    std::atomic<Node*> head{nullptr};
 public:
     std::shared_ptr<T> pop() {
-        Node* old_head = head.load();
+        Node* old_head = head.load(std::memory_order_acquire);
         // 把栈顶摘下：head 还是 old_head 吗？是→换成 old_head->next
         while (old_head &&
-               !head.compare_exchange_weak(old_head, old_head->next)) {
+               !head.compare_exchange_weak(
+                   old_head, old_head->next,
+                   std::memory_order_acquire,
+                   std::memory_order_relaxed)) {
             // 失败时 old_head 已被回填成真实 head，重试
         }
         std::shared_ptr<T> res;
@@ -161,7 +168,7 @@ public:
 };
 ```
 
-注意末尾那两行注释：CAS 成功只说明「我把 old_head 摘下了链」，但别的线程可能正握着指向它的裸指针。这就是内存回收难题——必须等「确认没人在用了」才能释放。
+这段故意不 delete，因此会泄漏节点，只用于展示 CAS 摘链；它不是完整容器。成功 CAS 的 acquire 读取 push 的 release 发布，使节点数据可见。真正实现必须在解引用 `old_head->next` **之前**先完成风险保护或引用计数，否则一旦其他实现开始回收，CAS 前就可能 use-after-free。
 
 <Callout type="trap">
   **千万别在 pop 里写 `delete old_head;`。** 别的线程的 pop 可能正持有指向
@@ -176,12 +183,11 @@ public:
 
 ```cpp
 #include <atomic>
-#include <thread>
 
-// 全局风险指针表：每个槽登记「哪个线程正用着哪个指针」（简化：固定槽数）
+// 固定槽表：atomic_flag 负责认领，pointer 公布正在访问的节点
 struct HazardPointer {
-    std::atomic<std::thread::id> id;
-    std::atomic<void*> pointer;
+    std::atomic_flag claimed = ATOMIC_FLAG_INIT;
+    std::atomic<void*> pointer{nullptr};
 };
 constexpr unsigned MAX_HAZARD_POINTERS = 100;
 HazardPointer hazard_pointers[MAX_HAZARD_POINTERS];
@@ -189,13 +195,29 @@ HazardPointer hazard_pointers[MAX_HAZARD_POINTERS];
 // 扫公告板：是否还有任何线程的风险指针指向 p（指向→不能删）
 bool outstanding_hazard_pointers_for(void* p) {
     for (unsigned i = 0; i < MAX_HAZARD_POINTERS; ++i) {
-        if (hazard_pointers[i].pointer.load() == p) return true;  // 见牌→在用
+        if (hazard_pointers[i].pointer.load(std::memory_order_acquire) == p)
+            return true;
     }
     return false;                                                  // 无牌→可删
 }
 ```
 
-有了这块板，pop 的流程就变成：访问 `old_head` 前，先把它写进自己的风险指针槽（挂牌）；摘下后想删时，先 `outstanding_hazard_pointers_for(old_head)` 扫板——有牌就挂进待回收列表推迟，无牌才 `delete`。对照那张风险指针动画的四拍，一一对得上。
+挂牌后不能立刻解引用：在“第一次读 head”和“风险指针发布”之间，节点可能已经被摘下。必须发布后重新读取 head，确认入口仍指向同一节点；若变了就更新风险指针并重试：
+
+```cpp
+template <typename Node>
+Node* protect_head(std::atomic<Node*>& head,
+                   std::atomic<void*>& hazard) {
+    Node* candidate = nullptr;
+    do {
+        candidate = head.load(std::memory_order_acquire);
+        hazard.store(candidate); // 先公开“我将解引用它”
+    } while (candidate != head.load(std::memory_order_acquire));
+    return candidate;            // 此后才能读取 candidate->next
+}
+```
+
+摘下后，回收方扫描所有 hazard 槽；有牌就放入 retired list，无牌才 delete。实际方案还要定义槽位数量、retired list 批量扫描阈值、线程退出清理和内存序，并用成熟实现验证，不应只复制这段骨架。
 
 ### 解法二：引用计数（split reference count）
 
@@ -217,7 +239,7 @@ class RefCountedStack {
         std::atomic<int> internal_count;   // 内部计数
         CountedNodePtr next;
     };
-    std::atomic<CountedNodePtr> head;
+    std::atomic<CountedNodePtr> head{CountedNodePtr{0, nullptr}};
     // 读 head 时把外部计数 +1：宣告「我握住它了，别删」
     void increase_head_count(CountedNodePtr& old_counter) {
         CountedNodePtr new_counter;
@@ -256,7 +278,7 @@ class TaggedStack {
         unsigned version;            // 地址变回原样、version 也变了 → CAS 能识别
     };
     struct Node { T data; TaggedPtr next; };
-    std::atomic<TaggedPtr> head;     // 比较的是「指针 + 版本号」整体，破 ABA
+    std::atomic<TaggedPtr> head{TaggedPtr{nullptr, 0}};
 public:
     void push(Node* n) {
         TaggedPtr old_head = head.load();
@@ -270,7 +292,40 @@ public:
 };
 ```
 
-关键在 `version`：即便 `ptr` 被改走又改回同一地址，`version` 也已经不同——CAS 比较的是「指针 + 版本号」整体，于是「同地址但变过」也能被识别，ABA 被堵住。（实现上 `std::atomic<TaggedPtr>` 是否无锁取决于平台是否支持双倍宽度的原子 CAS，请查 `is_lock_free`。）
+关键在 `version`：地址复用时版本不同，CAS 能识别变化。但有限宽度标签最终会回绕，必须证明在任何旧观察仍存活期间不可能绕回同一组合，或改用不会过早复用地址的回收方案。TaggedPtr 还应具有稳定、可比较的对象表示，避免未控制的填充位参与 C++17 CAS。`std::atomic<TaggedPtr>` 是否无锁取决于双宽 CAS 支持，必须查询；内部用锁时算法不再具有 lock-free 进展保证。
+
+## 无锁队列：哨兵节点、帮助推进与两个线性化点
+
+无锁队列不能只把栈的 head 改名。Michael-Scott 队列保留一个哨兵节点，head 指向待移除的哨兵，tail 是可能暂时落后的提示。enqueue 先 CAS 链接 `tail->next`，再尝试推进 tail；若发现 tail 落后，当前线程会**帮助**把它向前推，而不是等待原线程恢复。
+
+```cpp
+void enqueue(T value) {
+    Node* node = new Node(std::move(value));
+    for (;;) {
+        Node* last = protect_tail(); // 由 hazard/epoch 保护后才能解引用
+        Node* next = last->next.load(std::memory_order_acquire);
+        if (last != tail.load(std::memory_order_acquire)) continue;
+        if (next == nullptr) {
+            if (last->next.compare_exchange_weak(
+                    next, node, std::memory_order_release,
+                    std::memory_order_relaxed)) {
+                tail.compare_exchange_strong(last, node);
+                return;
+            }
+        } else {
+            tail.compare_exchange_weak(last, next); // 帮助落后的 tail
+        }
+    }
+}
+```
+
+成功链接 `last->next` 是 enqueue 的 <Term def="并发操作在抽象顺序中被视为瞬间生效的那个原子步骤。找出每个成功和失败路径的线性化点，是证明并发对象等价于某个合法顺序历史的核心。">线性化点（linearization point）</Term>；推进 tail 只是优化，即使当前线程暂停，别的线程也能帮助完成。dequeue 的线性化点通常是把 head CAS 到下一哨兵。两端在解引用节点前都必须进入风险指针、epoch 等回收协议；上述片段只展示入队核心，不能脱离 `protect_tail()` 和完整析构协议单独使用。
+
+## 无锁编程准则：先证明，再优化
+
+原书的**无锁编程准则**可以整理成五项验收：为每个返回路径指出线性化点；证明竞争失败意味着其他操作前进；先写 seq_cst 正确版，再逐个降级并记录同步证据；在第一次解引用前完成回收保护；最后检查目标 atomic 的 `is_lock_free()`、标签回绕和高争用退避。
+
+测试只能发现反例，不能证明无锁正确性。ThreadSanitizer 可找普通数据竞争，却不理解所有自定义回收协议；压力测试也无法穷尽内存模型。生产项目应优先使用经过长期验证的容器或回收库，并把平台、编译器与最大线程数写进支持矩阵。
 
 {/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字；含 ABA、pop 后立刻 delete、以为无锁更快、weak 伪失败必须放重试循环。 */}
 
@@ -318,40 +373,40 @@ public:
 ## 小结
 
 - **无锁（lock-free）** 关键不在「没有锁」，而在**进展保证**：任一线程被挂起都不卡死全场；更强的**无等待（wait-free）** 要求每个线程都在有限步内完成（最难，本章栈做不到）
-- **无锁栈 push** = **CAS 重试循环**：读 head 当 expected、接好新节点、CAS，失败回填真实值重试；循环体常空着、用 `compare_exchange_weak`（伪失败只是多转一圈）、成功用 `release` 与 pop 端 `acquire` 配对
+- **CAS 结构**：栈 push 在线性化成功替换 head；无锁队列 enqueue 在线性化链接 tail->next，其他线程可帮助推进落后的 tail
 - **内存回收难题**：pop 摘下的节点**不能马上 delete**——别的线程可能正持有它的裸指针（use-after-free）；必须延迟回收
 - **风险指针**（访问前挂牌、回收前扫板、见牌不删）与**引用计数**（计数归零才释放）是两条延迟回收解法
 - **ABA 问题**：CAS 只比值相等、看不出「改走又改回」；用**标签指针**（带版本号）或延迟回收（地址短期不复用）解决
 
 <Exercises>
 
-**练习 1（分析型）** 同事说：「我把共享栈从 mutex 版改成了无锁版，没有锁了，所以它一定又快又不会卡。」请逐句评估这句话：无锁是不是「没有锁」？是不是「一定更快」？是不是「不会卡（某线程不会被饿死）」？
+**问题 1（分析型）** 同事说：「我把共享栈从 mutex 版改成了无锁版，没有锁了，所以它一定又快又不会卡。」请逐句评估，并说明底层 atomic 若内部用锁会怎样。
 
 <Answer>
 
-三处都需要修正。① **「没有锁」**：表面是不用互斥量，但无锁的真正定义是**进展保证**——任一线程被挂起不会卡死全场；重点不在「没锁」而在「总有线程能推进」。② **「一定更快」**：错。低争用时无锁常更快，但**高争用**下 CAS 反复失败、反复自旋重试会白烧 CPU，加上原子操作/缓存行/回收开销，可能比一把好锁还慢——快不快要实测。③ **「不会卡」**：无锁只保证**总有某个**线程在推进，但**具体某个**线程可能因 CAS 一直失败而长期重试、被饿死；要「每个线程都不饿死」得是更强的**无等待（wait-free）**，本章的无锁栈做不到。
+三处都需要修正。无锁是系统级进展保证，不只是源码没写 mutex；若关键 atomic 特化的 `is_lock_free()` 为 false，隐藏锁会破坏该保证。性能取决于争用、缓存乒乓与回收成本，必须实测。lock-free 只保证持续执行时总有操作完成，具体线程仍可能 CAS 饥饿；每个操作有界完成才是 wait-free。
 
 </Answer>
 
-**练习 2（问答型）** 无锁栈的 `pop()` 用 CAS 成功摘下栈顶节点后，能不能紧接着 `delete` 它？说明会出什么 bug，并列出至少两种正确的回收办法及其思路。
+**问题 2（问答型）** 无锁栈的 `pop()` 用 CAS 成功摘下栈顶节点后，能不能紧接着 `delete` 它？说明 bug，并列出至少两种回收办法；风险指针方案还要说明“挂牌后为什么必须重读 head”。
 
 <Answer>
 
-**不能。** 紧接着 delete 会触发 **use-after-free**：别的线程的 pop 可能正持有指向这个节点的裸指针（它读了同一个 head、还没解引用或 CAS），你一释放，它接下来访问的就是已释放内存——读到垃圾、崩溃，还可能和地址复用一起引发 ABA。正确的回收办法（延迟回收）：① **风险指针**——线程访问节点前先在公开公告板登记指向它的指针，回收线程删之前先扫板，只要有人挂牌就推迟，无牌才删；② **引用计数**（如 split reference count 或 `shared_ptr` 的原子操作）——给节点配计数，有人开始用 +1、用完 -1，归零才释放。两者都做到「确认没人在用了才删」。
+**不能。** 紧接着 delete 会触发 use-after-free：别的线程可能已经读取同一个 head、尚未完成解引用。风险指针方案要先发布 candidate，再重新读取 head；若入口已变化，说明节点可能在挂牌窗口中被摘下，必须更新挂牌并重试，只有二次读取仍相同才可解引用。回收方扫描到挂牌就推迟。另一类方案是拆分引用计数或经过验证的 epoch 回收，核心都是在确认旧观察者退出后才释放。
 
 </Answer>
 
-**练习 3（独立实现型）** 补全风险指针机制里「每个线程认领自己专属的一个风险指针槽」的类 `HpOwner`：构造时在全局 `hazard_pointers` 表里找一个空闲槽（其 `id` 为默认 `thread::id()`）用 CAS 认领，提供 `get_pointer()` 返回该槽的 `pointer` 供登记/摘牌，析构时清空指针并归还槽。
+**问题 3（独立实现型）** 用标准保证无锁的 `atomic_flag` 实现风险指针槽所有者 `HpOwner`：构造时认领空槽，槽耗尽必须失败；禁止复制；析构时先清指针再归还槽。
 
 <Answer>
 
 ```cpp
 #include <atomic>
-#include <thread>
+#include <stdexcept>
 
 struct HazardPointer {
-    std::atomic<std::thread::id> id;
-    std::atomic<void*> pointer;
+    std::atomic_flag claimed = ATOMIC_FLAG_INIT;
+    std::atomic<void*> pointer{nullptr};
 };
 constexpr unsigned MAX_HAZARD_POINTERS = 100;
 HazardPointer hazard_pointers[MAX_HAZARD_POINTERS];
@@ -362,23 +417,25 @@ class HpOwner {
 public:
     HpOwner() : hp(nullptr) {
         for (unsigned i = 0; i < MAX_HAZARD_POINTERS; ++i) {
-            std::thread::id old_id;       // 期望该槽空闲
-            if (hazard_pointers[i].id.compare_exchange_strong(
-                    old_id, std::this_thread::get_id())) {
-                hp = &hazard_pointers[i];  // 认领成功
+            if (!hazard_pointers[i].claimed.test_and_set(
+                    std::memory_order_acq_rel)) {
+                hp = &hazard_pointers[i];
                 break;
             }
         }
+        if (!hp) throw std::runtime_error("no hazard pointer slots");
     }
     std::atomic<void*>& get_pointer() { return hp->pointer; }
+    HpOwner(const HpOwner&) = delete;
+    HpOwner& operator=(const HpOwner&) = delete;
     ~HpOwner() {
-        hp->pointer.store(nullptr);                  // 摘牌
-        hp->id.store(std::thread::id());             // 归还槽
+        hp->pointer.store(nullptr, std::memory_order_release);
+        hp->claimed.clear(std::memory_order_release);
     }
 };
 ```
 
-要点：① 用 `compare_exchange_strong(old_id, this_id)` 认领空闲槽——`old_id` 期望是默认 `thread::id()`，认领是单次判断、外面没有 while 循环，所以用 **strong**（不能容忍伪失败）；② `get_pointer()` 返回槽里 `pointer` 的引用，线程访问节点前 `store(节点)` 挂牌、用完 `store(nullptr)` 摘牌；③ 析构时清空指针并把 `id` 归还成默认值，让槽能被别的线程再认领。实际工程里通常给 `HpOwner` 用 `thread_local`，一个线程一个实例。
+`atomic_flag` 是标准保证无锁的认领位。槽位耗尽时抛异常，避免后续空指针解引用；禁复制避免两个 owner 重复归还。析构先清 pointer，再 release-clear claimed，下一任 owner 才不会继承旧挂牌。通常以 `thread_local` 保存 owner，但线程退出、retired list 和扫描阈值仍需完整协议。
 
 </Answer>
 
@@ -431,12 +488,18 @@ public:
   问题」一节。
 </GlossaryItem>
 
-<GlossaryItem term="标签指针（tagged pointer，带版本号的指针）" id="标签指针（tagged pointer，又叫带版本号的指针）">
+<GlossaryItem term="标签指针（tagged pointer，又叫带版本号的指针）">
   把一个指针和一个**版本号 / 标签计数**捆成一个能被 CAS
   原子比较的整体（比如打包进双倍宽度的字），每次修改都让版本号
   +1。这样即便指针地址被改走又改回同一地址，版本号也已经不同——CAS 比较的是「指针
   + 版本号」**整体**，于是「同地址但变过」也能被识别出来。它专门用来治 **ABA
   问题**。详见本章「ABA 问题」一节。
+</GlossaryItem>
+
+<GlossaryItem term="线性化点（linearization point）">
+  并发操作在抽象顺序中被视为瞬间生效的原子步骤。无锁队列 enqueue
+  通常在线性化成功链接 next 的 CAS，而推进 tail
+  只是可由其他线程帮助完成的维护动作。
 </GlossaryItem>
 
 <GlossaryItem term="split reference count（拆分引用计数）">
@@ -445,6 +508,9 @@ public:
 
 </Glossary>
 
-{/* 9. 出处声明（spec §九）：本书为《C++ 并发编程实战》第2版改编重写，sourceUrl 为空，Attribution 标签空参自动渲染。缺失 = 必打回。 */}
+{/* 9. 出处声明（spec §九）：本书为《C++ 并发编程实战》第2版改编重写。 */}
 
-<Attribution />
+<Attribution
+  title="C++ Concurrency in Action, Second Edition, Chapter 7: Designing lock-free concurrent data structures"
+  url="https://livebook.manning.com/book/c-plus-plus-concurrency-in-action-second-edition/chapter-7"
+/>

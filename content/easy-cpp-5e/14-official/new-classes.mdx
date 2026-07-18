@@ -1,0 +1,243 @@
+---
+title: "Lesson 14：新的类"
+type: A
+section: Easy C++（第5版）· 继承基础
+order: 14
+description: 对齐原书 Lesson 14「新しいクラス」：从 is-a 替换关系建立基类与派生类，掌握构造/析构顺序、访问、virtual/override、基类接口调用与对象切片。
+demo: false
+math: false
+sourceUrl: "https://www.sbcr.jp/product/4797392593/"
+draft: false
+---
+
+import {
+  EcpNewClassesConstructionFlow,
+  EcpNewClassesDispatchLab,
+  EcpNewClassesRelationMap,
+} from "@/components/mdx/easy-cpp-5e/diagrams/new-classes";
+
+<Objectives>
+
+- 能解释 public 继承的 is-a 替换契约，并比较继承与组合的适用边界
+- 能实现基类与派生类的构造、virtual 函数和 override，预测调用与析构顺序
+- 能分析基类指针/引用、按值传递和对象切片，发现非虚重定义与资源释放风险
+
+</Objectives>
+
+## 为什么“想复用代码”不是继承的充分理由
+
+继承让新类在已有类基础上扩展，但 public 继承首先声明语义：任何需要基类对象的地方，都可以接收派生对象而不破坏基类契约。若只是想复用一个工具对象，却不能满足这种替换关系，组合通常更准确。
+
+<Term def="从已有类建立新类，使派生类获得基类接口并可扩展或改写行为的机制。">继承</Term>
+
+<Term def="提供通用接口与状态、被其他类继承的已有类。">基类</Term>
+
+<Term def="从基类继承并增加状态或行为的新类。">派生类</Term>
+
+例如 Dog 是 Animal 的一种，public 继承有自然 is-a 关系；Engine 不是 Car 的一种，Car 应拥有 Engine 成员。语法允许的继承不一定是正确模型，替换测试比“能少写几行”更重要。
+
+<EcpNewClassesRelationMap />
+
+## public 继承保留公开接口
+
+```cpp
+class Animal {
+public:
+    void eat() const {
+        std::cout << "eat\n";
+    }
+};
+
+class Dog : public Animal {
+public:
+    void bark() const {
+        std::cout << "woof\n";
+    }
+};
+```
+
+Dog 对象可以调用继承来的 public `eat` 和自己的 `bark`。基类 private 成员仍存在于派生对象的基类部分，但派生类不能直接访问；应通过基类 protected/public 操作维护基类不变量。
+
+把基类数据改成 protected 虽能直接访问，却会让每个派生类依赖表示。优先把状态保持 private，并提供受保护或公开的语义操作，而不是裸字段。
+
+## 构造从基类部分开始
+
+创建派生对象时，先构造基类部分，再按声明顺序构造派生成员，最后执行派生构造函数体；析构顺序完全相反。
+
+```cpp
+class Dog : public Animal {
+public:
+    explicit Dog(std::string name)
+        : Animal(), name_(std::move(name)) {}
+
+private:
+    std::string name_;
+};
+```
+
+派生构造函数通过初始化列表选择基类构造函数。若未显式写且基类没有默认构造，派生构造会失败。基类必须先建立自己的不变量，派生类再建立新增部分。
+
+<EcpNewClassesConstructionFlow />
+
+<Callout type="trap" title="陷阱：派生构造函数体先执行，再补基类状态">
+  进入派生构造函数体前，基类和所有成员已经完成构造。依赖必须在初始化列表中传递，不能在函数体里“重新构造”基类部分。
+</Callout>
+
+## virtual 让基类接口按动态对象选择实现
+
+普通成员调用由表达式的静态类型决定。基类把函数声明为 virtual 后，通过基类指针或引用调用时，会根据实际对象动态类型选择最终覆盖实现。
+
+<Term def="在基类接口中允许派生类覆盖，并通过基类指针或引用按动态类型分派的成员函数。">虚函数</Term>
+
+```cpp
+class Animal {
+public:
+    virtual std::string speak() const {
+        return "...";
+    }
+    virtual ~Animal() = default;
+};
+
+class Dog : public Animal {
+public:
+    std::string speak() const override {
+        return "woof";
+    }
+};
+```
+
+`override` 要求此函数确实覆盖基类 virtual；若参数、const 或引用限定不匹配，编译器立即拒绝，而不是悄悄创建一个同名新函数。
+
+<Term def="在派生类声明中要求函数必须正确覆盖某个基类虚函数的说明符。">override</Term>
+
+## 基类引用保留动态对象身份
+
+```cpp
+void announce(const Animal& animal) {
+    std::cout << animal.speak() << '\n';
+}
+
+Dog dog;
+announce(dog); // woof
+```
+
+引用不复制对象，基类接口看到的动态对象仍是 Dog，因此 virtual 调用进入 Dog::speak。指针同理，但还要处理 nullptr 与生命周期。
+
+virtual 分派只作用于声明为 virtual 的函数。派生类写一个同名普通函数不会让基类调用自动变化；需要多态行为时，应在基类接口明确 virtual，并在派生实现写 override。
+
+## 基类析构必须匹配多态删除
+
+若对象可能经基类指针 `delete`，基类析构必须是 virtual，才能先执行派生析构再执行基类析构。否则行为未定义，派生资源可能不释放。
+
+```cpp
+Animal* animal = new Dog;
+delete animal; // Animal 析构为 virtual，顺序正确
+```
+
+更现代的代码使用 `std::unique_ptr<Animal>` 表达所有权，但它最终仍通过基类析构释放；virtual 析构契约没有消失。
+
+<Callout type="trap" title="陷阱：只要类里有一个 virtual，delete 基类指针就自动安全">
+  安全取决于基类析构函数本身是否 virtual。其他虚函数不会把非虚析构自动变虚；设计多态基类时应显式声明 virtual destructor。
+</Callout>
+
+## 按值转换会产生对象切片
+
+把 Dog 按值赋给 Animal 对象，只复制基类部分，派生新增状态被切掉，结果对象的动态类型就是 Animal。
+
+<Term def="派生对象按值转换或复制到基类对象时只保留基类子对象、丢失派生部分的现象。">对象切片</Term>
+
+```cpp
+Dog dog;
+Animal copy = dog;
+std::cout << copy.speak(); // Animal 的实现
+```
+
+需要多态时通过基类引用、指针或拥有智能指针传递；需要值语义时则设计共同值类型或显式 clone。容器 `std::vector<Animal>` 同样会切片，应使用适合所有权的指针容器或不依赖继承的变体。
+
+## 重定义非虚函数不构成运行时多态
+
+派生类可以声明与基类同名的非虚函数，但通过基类引用调用仍选基类版本。这不是 override，而是隐藏或静态选择。
+
+```cpp
+class Base {
+public:
+    void label() const { std::cout << "base\n"; }
+};
+
+class Derived : public Base {
+public:
+    void label() const { std::cout << "derived\n"; }
+};
+```
+
+若函数语义应随动态类型变化，把基类函数设计为 virtual；若不应变化，派生类就不该用同名接口制造不同含义。
+
+## 替换原则要求不加强前置条件
+
+派生类若拒绝基类允许的输入、改变返回语义或破坏异常保证，即使语法可继承，也不能安全替换。例如基类 `setVolume(0..100)`，派生类只接受 50..100，会让原本正确的基类调用在派生对象上失败。
+
+public 继承评审应检查每个公开方法的前置条件、后置条件和不变量，而不只画类树。无法保持契约时，使用组合或独立接口更诚实。
+
+## 先预测静态类型与动态类型
+
+<EcpNewClassesDispatchLab />
+
+对直接 Dog 对象、Animal&、Animal*、Animal 按值副本分别写出静态类型、动态类型和 `speak` 结果。只有引用/指针保留动态身份，且目标函数 virtual 时，才发生动态分派。
+
+## 三步审计继承设计
+
+<Stepper>
+  <Step title="第一步：证明 is-a 替换">
+    写出基类契约，逐项检查派生对象能否在所有基类调用场景保持前置条件、结果与不变量；否则改用组合。
+
+    <EcpNewClassesRelationMap />
+  </Step>
+  <Step title="第二步：验证生命周期顺序">
+    追踪基类、派生成员、派生体的构造顺序和反向析构；若支持基类删除，确认 virtual destructor。
+
+    <EcpNewClassesConstructionFlow />
+  </Step>
+  <Step title="第三步：运行分派与切片实验">
+    先预测直接对象、引用、指针和按值参数的调用结果，再用 override 诊断签名，验证非虚函数与切片边界。
+
+    <EcpNewClassesDispatchLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- public 继承表达派生类可替换基类的 is-a 契约，单纯代码复用更适合组合
+- 派生对象先构造基类再构造新增部分，析构反向进行；派生体执行前基类已完成
+- virtual 在基类接口打开动态分派，override 让编译器验证覆盖签名
+- 经基类删除派生对象需要 virtual destructor；智能指针不取消这项底层契约
+- 基类按值接收派生对象会切片，保留多态身份应使用引用、指针或显式所有权抽象
+
+<Exercises>
+  1. **问题 1：选择关系。** Dog/Animal 与 Car/Engine 为什么分别适合继承和组合？
+
+  <Answer question="is-a 与 has-a 如何决定继承或组合？">Dog 能在 Animal 契约需要处替换 Animal，是 is-a；Car 拥有并使用 Engine，但不是 Engine 的一种，是 has-a。public 继承要求行为替换，单纯复用实现不足以证明它。</Answer>
+
+  2. **问题 2：预测调用。** Dog 经 `const Animal&` 调 virtual speak 与按值复制成 Animal 后分别调用什么？
+
+  <Answer question="基类引用与基类值为何产生不同分派？">引用保留 Dog 动态身份，virtual 调用进入 Dog::speak；按值复制只保留 Animal 子对象，发生切片，结果对象动态类型是 Animal，因此调用 Animal::speak。</Answer>
+
+  3. **问题 3：审计删除。** 为什么其他函数 virtual 仍不足以保证 `delete Animal*` 安全？
+
+  <Answer question="多态删除为何要求析构函数自身 virtual？">delete 通过基类指针选择析构链，只有基类析构声明 virtual 才动态进入派生析构再回基类。其他虚函数不改变析构函数属性；缺失会产生未定义行为和资源泄漏。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="继承">从已有类建立新类并获得其接口的机制。</GlossaryItem>
+  <GlossaryItem term="基类">提供通用接口、被其他类继承的类。</GlossaryItem>
+  <GlossaryItem term="派生类">继承基类并扩展或覆盖行为的新类。</GlossaryItem>
+  <GlossaryItem term="虚函数">通过基类引用或指针按动态类型选择覆盖实现的成员函数。</GlossaryItem>
+  <GlossaryItem term="override">要求派生函数正确覆盖基类虚函数的说明符。</GlossaryItem>
+  <GlossaryItem term="对象切片">派生对象按值转为基类对象时丢失派生部分的现象。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="やさしいC++ 第5版, Lesson 14 新しいクラス"
+  adaptedUrl="https://www.sbcr.jp/product/4797392593/"
+/>

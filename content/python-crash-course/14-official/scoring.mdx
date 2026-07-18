@@ -1,0 +1,258 @@
+---
+title: "第14章：Scoring"
+type: C
+section: "Part II · Projects · Alien Invasion"
+order: 14
+description: "为Alien Invasion加入Play restart、动态难度、score/high score、level和ship lives显示。"
+demo: true
+math: false
+sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
+draft: false
+---
+
+import {
+  PccDifficultyScalingLab,
+  PccRestartTransactionLab,
+  PccScoreboardLayoutLab,
+} from "@/components/mdx/python-crash-course/diagrams/scoring";
+
+<Objectives>
+
+- 能实现Play Button的hit testing与restart transaction，区分window event、inactive state和完整reset
+- 能计算speedup scale与score scale，实现每清空一支fleet后提升difficulty、level和alien points
+- 能设计Scoreboard的score、high score、level与ship lives刷新协议，并验证数值与画面始终一致
+
+</Objectives>
+
+## 为什么 Scoring 是状态一致性问题
+
+score只是一个integer，但可见计分系统横跨collision、difficulty、restart、font rendering和screen layout。若只在`stats.score`上加点而忘记`prep_score()`，内部值正确、画面过期；若新game只清零score而不重置alien speed，玩家从高难度开始；若high score跟着restart清零，它就失去跨局比较意义。
+
+先预测：最后一个Alien被击中时应先加分还是先重建fleet；新一局开始时哪些值归零、哪些保留；score从9995变为10005时右对齐锚点是否移动。接下来把每个答案写成state transition和render invalidation规则。
+
+<Term def="一次Play操作中原子地重置统计、动态参数、Groups、HUD和active状态的过程。">restart transaction</Term>
+
+第12–13章已形成world loop，第14章增加一层presentation state。原则是data先变化，再显式重建其rendered representation；draw阶段只组合当前surfaces，不偷偷修改score或level。
+
+## Play Button：inactive world中的输入入口
+
+`Button`持有screen、rect、message image与message rect。它不启动game，只负责可见geometry和draw；mouse click由`AlienInvasion._check_play_button()`解释。使用`button.rect.collidepoint(mouse_pos)`完成hit testing，并同时要求`not stats.game_active`，避免active游戏中点击同一区域意外清空进度。
+
+```python
+class Button:
+    def __init__(self, game, msg: str) -> None:
+        self.screen = game.screen
+        self.screen_rect = self.screen.get_rect()
+        self.width, self.height = 200, 50
+        self.button_color = (0, 135, 50)
+        self.text_color = (255, 255, 255)
+        self.font = pygame.font.SysFont(None, 48)
+        self.rect = pygame.Rect(0, 0, self.width, self.height)
+        self.rect.center = self.screen_rect.center
+        self._prep_msg(msg)
+
+    def _prep_msg(self, msg: str) -> None:
+        self.msg_image = self.font.render(msg, True, self.text_color,
+                                          self.button_color)
+        self.msg_image_rect = self.msg_image.get_rect(center=self.rect.center)
+
+    def draw_button(self) -> None:
+        self.screen.fill(self.button_color, self.rect)
+        self.screen.blit(self.msg_image, self.msg_image_rect)
+```
+
+button只在inactive时draw，但event loop始终运行。`MOUSEBUTTONDOWN`取得`pygame.mouse.get_pos()`；更准确也可使用event.pos，避免读取到稍后的cursor位置。点击button外部不产生任何transition，这是重要negative case。
+
+<Term def="判断mouse point是否位于Button rect内，从而决定点击command是否命中。">hit testing</Term>
+
+## Starting a New Game：重启必须是完整事务
+
+restart不是把`game_active=True`放在click handler末尾就结束。它要重置GameStats、动态Settings、aliens/bullets、ship position与所有HUD caches；任何一步遗漏都会混入上一局状态。更新顺序应保证world尚未active时完成全部初始化。
+
+```python
+def _check_play_button(self, mouse_pos) -> None:
+    clicked = self.play_button.rect.collidepoint(mouse_pos)
+    if clicked and not self.stats.game_active:
+        self.settings.initialize_dynamic_settings()
+        self.stats.reset_stats()
+        self.sb.prep_score()
+        self.sb.prep_level()
+        self.sb.prep_ships()
+        self.aliens.empty()
+        self.bullets.empty()
+        self._create_fleet()
+        self.ship.center_ship()
+        self.stats.game_active = True
+        pygame.mouse.set_visible(False)
+```
+
+`high_score`通常不在`reset_stats()`内，因它需要跨本次process中的games保留；score、level与ships_left必须归初始值。若要求跨程序持久化high score，再用第10章JSON file明确load/save boundary，而不是把磁盘I/O塞进每帧draw。
+
+<Stepper>
+  <Step title="逐项检查restart transaction">
+    <PccRestartTransactionLab />
+  </Step>
+  <Step title="验证inactive与button geometry">
+    active时点击button center不重启；inactive时点击边界内重启；边界外保持inactive。
+  </Step>
+  <Step title="验证第二局没有上一局残留">
+    先把level、speed、score和Groups推到非初值，再restart，比较所有动态字段和HUD image。
+  </Step>
+</Stepper>
+
+## Leveling Up：清空一支fleet才提升难度
+
+level transition发生在collision resolution后：最后一个Alien被删掉，先清空剩余bullets，再调用`increase_speed()`、增加`stats.level`、`prep_level()`并创建新fleet。若每击中一只就增加速度，难度变化与level语义不一致；若先重建再判断empty，永远看不到empty state。
+
+<Term def="每完成一个level后按比例增加movement speeds的乘法因子。">speedup scale</Term>
+
+```python
+class Settings:
+    def __init__(self) -> None:
+        self.speedup_scale = 1.1
+        self.score_scale = 1.5
+        self.initialize_dynamic_settings()
+
+    def initialize_dynamic_settings(self) -> None:
+        self.ship_speed = 1.5
+        self.bullet_speed = 2.5
+        self.alien_speed = 1.0
+        self.fleet_direction = 1
+        self.alien_points = 50
+
+    def increase_speed(self) -> None:
+        self.ship_speed *= self.speedup_scale
+        self.bullet_speed *= self.speedup_scale
+        self.alien_speed *= self.speedup_scale
+        self.alien_points = int(self.alien_points * self.score_scale)
+```
+
+速度和points分别使用1.1与1.5，因为挑战和奖励不必按同一比例增长。乘法scale产生exponential progression：level越高，每一级absolute increase越大。用`int`会向下截断；若显示策略要round到最近整数，应全项目统一，避免内部与HUD不同。
+
+<Term def="随level按比例提高Alien points、独立于movement speed的奖励倍率。">score scale</Term>
+
+<Stepper>
+  <Step title="比较difficulty与reward曲线">
+    <PccDifficultyScalingLab />
+  </Step>
+  <Step title="区分initial与dynamic settings">
+    width、color、limit通常稳定；speed、direction、alien_points在新局重置并在level间增长。
+  </Step>
+  <Step title="验证level boundary只触发一次">
+    最后一次collision后level加1、increase_speed调用1次、fleet重建1次；下一帧不应再次升级。
+  </Step>
+</Stepper>
+
+## Scoring：collision返回值就是计分证据
+
+`groupcollide`返回dictionary，key是发生collision的bullet，value是被它命中的Aliens。不能只检查dictionary truthy就固定加一次points，因为宽bullet可能同帧击中多个Aliens。总分应按每个collision list的长度累加。
+
+```python
+collisions = pygame.sprite.groupcollide(
+    self.bullets, self.aliens, True, True
+)
+if collisions:
+    for aliens_hit in collisions.values():
+        self.stats.score += self.settings.alien_points * len(aliens_hit)
+    self.sb.prep_score()
+    self.sb.check_high_score()
+```
+
+把bullet宽度临时调大是本书用来暴露计分假设的实验。若一发击中两只，删除两只却只加一份points，world state与score diverge。计分使用实际deleted Aliens数量，rule才能与collision一致。
+
+显示score时可四舍五入到最近10并加千位分隔，例如`round(score, -1)`和`f"{rounded_score:,}"`。格式化只改变presentation，不应覆盖raw score；否则连续小分数会因反复round丢失。
+
+## High Scores：比较、刷新与持久化边界
+
+每次score变化后调用`check_high_score()`：若`stats.score > stats.high_score`，更新high score并`prep_high_score()`。相等是否算新纪录是product rule；通常只有严格大于才更新。high score置于screen top center，score在top right，让两者视觉角色不同。
+
+```python
+def check_high_score(self) -> None:
+    if self.stats.score > self.stats.high_score:
+        self.stats.high_score = self.stats.score
+        self.prep_high_score()
+```
+
+当前章节的high score只在process lifetime保留。若加入JSON persistence，load时验证type与nonnegative，save采用temporary file再replace可降低corruption风险；I/O失败不应让主loop每帧重复写日志。这个扩展复用第10章的schema和exception策略。
+
+## Displaying Score, Level, and Ships
+
+`Scoreboard`拥有font、text color、screen rect，以及score/high score/level的rendered images。`prep_*`把model值变成surface并计算rect；`show_score()`只blit。这个cache protocol避免每帧调用font render，但要求每次model变化后显式invalidate/rebuild。
+
+<Term def="model值改变后重建对应rendered surface，使下一次draw显示新状态的协议。">HUD refresh</Term>
+
+ship lives使用多个小Ship sprites，而非文字数字。让`Ship`继承Sprite后，`prep_ships()`创建`Group`，按index从screen左上排列；`show_score()`调用`ships.draw(screen)`。这里的icons表示remaining lives，不是world中可控制ship，二者虽然共用image class但属于不同Groups。
+
+```python
+def prep_ships(self) -> None:
+    self.ships = pygame.sprite.Group()
+    for ship_number in range(self.stats.ships_left):
+        ship = Ship(self.game)
+        ship.rect.x = 10 + ship_number * ship.rect.width
+        ship.rect.y = 10
+        self.ships.add(ship)
+```
+
+布局应依赖anchors：score的`rect.right = screen_rect.right - 20`，high score的`rect.centerx = screen_rect.centerx`，level靠右位于score下方，ships靠左。这样数字位数增加时向预期方向扩展，不互相挤压。
+
+<Stepper>
+  <Step title="操作scoreboard四类状态">
+    <PccScoreboardLayoutLab />
+  </Step>
+  <Step title="追踪model change到surface rebuild">
+    collision改变score后prep_score；新纪录再prep_high_score；清fleet后prep_level；ship hit与restart后prep_ships。
+  </Step>
+  <Step title="验证draw阶段无业务副作用">
+    连续调用show_score不改变stats，也不重复加分；同一model应得到稳定位置与内容。
+  </Step>
+</Stepper>
+
+## End-to-End Transition Table
+
+Alien collision：删除Sprites、按实际命中数加score、刷新score并检查high score。fleet empty：清bullets、加速、level加1、刷新level、重建fleet。ship hit且有life：life减1、刷新ships、清Groups并重建round。最后一条life：game_active false并显示mouse。Play：执行完整restart且保留process high score。
+
+为每条transition记录before/after snapshot，比只看screen更可靠。典型snapshot含`score, high_score, level, ships_left, game_active, alien_count, bullet_count, alien_speed`。一次输入只允许产生表中一条主transition，防止同帧重复升级或重复扣life。
+
+<Callout type="trap" title="修改stats.score后HUD会自动读取新值">
+Scoreboard缓存的是rendered surface，不会自动观察model。每次score变化后调用prep_score，新纪录还需prep_high_score；draw只blit当前缓存。
+</Callout>
+
+<Callout type="trap" title="新游戏只需把game_active设回true">
+这样会保留上一局speed、direction、score、level、lives、Groups和HUD。Play必须执行完整restart transaction，并在所有状态一致后才activate。
+</Callout>
+
+## 本章回顾：数据变化与画面刷新必须成对
+
+1. Play button的rect只提供hit testing，restart由game统一协调。
+2. restart重置stats、dynamic settings、Groups、ship与HUD，但保留process high score。
+3. level完成后按speedup scale提高movement difficulty，按score scale提高reward。
+4. collision dictionary给出实际命中数量，score必须与删除对象数量一致。
+5. Scoreboard在model change时prep surfaces，draw阶段只显示score、high score、level和ships。
+
+<Exercises>
+
+**问题 1：如何证明Play restart没有残留上一局状态？**
+
+<Answer>先构造高level、非初始speed/direction、非零score、少量lives和非空Groups，再在inactive状态点击button。验证stats与dynamic settings归初值、Groups清理并只创建一支fleet、ship居中、HUD全部刷新、mouse隐藏且game_active最后才变true；high score按policy保留。</Answer>
+
+**问题 2：一发宽bullet同时命中三只Aliens，应如何计分和升级？**
+
+<Answer>读取groupcollide返回dictionary中每个value list长度，按删除的三只Alien累计三份当前alien_points，再prep_score并check_high_score。只有碰撞后整个fleet为空才increase_speed、level加1并重建，不能按collision dictionary的key数量只加一份。</Answer>
+
+**问题 3：为什么Scoreboard需要prep方法而不能每帧直接font.render？**
+
+<Answer>font rendering相对昂贵，model多数帧不变化。prep_*在score、high score、level或lives改变时重建surface与rect，show_score每帧只blit。测试model变化后对应prep被调用，连续draw不改变stats，且位数变化仍保持锚点。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="restart transaction" definition="一次Play中完整重置stats、动态参数、Groups、HUD和active状态。" />
+  <GlossaryItem term="hit testing" definition="判断mouse point是否落在Button rect中的几何检查。" />
+  <GlossaryItem term="speedup scale" definition="每完成一个level后按比例增加movement speeds的因子。" />
+  <GlossaryItem term="HUD refresh" definition="model变化后重建rendered surface以供下一帧显示的协议。" />
+  <GlossaryItem term="score scale" definition="随level提高Alien points、独立于movement speed的奖励倍率。" />
+</Glossary>
+
+<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 14: Scoring" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />

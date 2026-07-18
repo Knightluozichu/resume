@@ -1,0 +1,338 @@
+---
+title: "Item 36：必须异步时指定 std::launch::async"
+type: A
+section: Chapter 7 · The Concurrency API
+order: 36
+description: 对齐 Effective Modern C++ Item 36：拆解 std::async 默认 async|deferred 策略，修复 wait_for 轮询陷阱，分析 thread-local 与执行线程差异，并封装真正异步的提交入口。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch07.html"
+draft: false
+---
+
+import {
+  EmcppAsyncDeferredExecutionContextMap,
+  EmcppAsyncLaunchPolicyMap,
+  EmcppFutureWaitStatusFlowMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-36-specify-launch-async";
+
+<Objectives>
+
+- 能解释默认 std::async 为何允许 launch async（std::launch::async）与 deferred policy（deferred 策略）二选一
+- 能判断 asynchronicity essential（必须异步）的业务条件，并实现显式 launch policy/`reallyAsync` 封装
+- 能实现识别 deferred 的 wait loop（等待循环），并分析执行线程变化对 thread-local（线程局部）状态的影响
+
+</Objectives>
+
+## 从“函数名 async 不等于一定异步”开始
+
+不指定 policy 的调用：
+
+```cpp
+auto future = std::async(doWork);
+```
+
+等价于允许两种 policy 的 bitmask：
+
+```cpp
+auto future = std::async(
+    std::launch::async | std::launch::deferred,
+    doWork
+);
+```
+
+<Term def="std::async 未显式传 policy 时允许 implementation 在 async 与 deferred 两种启动策略中选择的行为。">
+  default launch policy
+</Term>
+
+名字只说明 API 可产生 future，不保证 `doWork` 已在另一线程启动。先预测每条 policy 的开始时机、执行线程和 future 被丢弃时是否仍会运行。
+
+<EmcppAsyncLaunchPolicyMap />
+
+## launch::async 建立独立执行
+
+显式 `std::launch::async` 要求 callable 在不同 execution thread 上运行：
+
+```cpp
+auto future = std::async(
+    std::launch::async,
+    doWork
+);
+```
+
+<Term def="要求 std::async 在独立线程上执行 task，并使其不依赖 future::get/wait 才开始的 launch policy。">
+  launch async
+</Term>
+
+调用可能因无法创建执行资源而抛 `std::system_error`，所以“保证异步”不是免费资源承诺。但一旦成功返回，task 已具有独立 progress path，不会因为 caller 暂未 get 而保持未启动。
+
+## deferred 直到等待者出现才执行
+
+`std::launch::deferred` 不在 async 调用时运行 task。第一次对 future 调用 `get` 或非 timed `wait` 的线程会同步执行 callable：
+
+```cpp
+auto future = std::async(
+    std::launch::deferred,
+    doWork
+);
+
+// doWork has not run yet
+future.get(); // doWork runs here, on this thread
+```
+
+<Term def="把 callable execution 延迟到 future 被 get/wait，并在等待线程中同步运行的 policy。">
+  deferred policy
+</Term>
+
+若 future 从未 get/wait 就被销毁，deferred task 可能完全不执行。它更接近 lazy computation，而不是后台工作。
+
+<Callout type="trap" title="陷阱：deferred 只是系统晚一点启动后台线程">
+  deferred 不承诺后台线程。task 在调用 get/wait
+  的线程中同步执行；如果没人等待，它可以永远不运行。
+</Callout>
+
+## 默认策略引入五类不确定性
+
+<Term def="默认 policy 使 task 是否并发、在哪条线程、何时开始、是否执行以及如何观察进度都无法由调用点确定。">
+  launch-policy uncertainty
+</Term>
+
+1. task 可能与 caller 并发，也可能直到 get 时串行执行。
+2. task 可能在 worker thread，也可能在调用 wait/get 的 thread。
+3. thread-local state、thread ID、priority/affinity context 可能不同。
+4. future 未消费时，deferred task 可能永远不运行。
+5. timed wait 可能返回 deferred，而不是 ready/timeout。
+
+只有调用方能容忍全部五项时，默认 policy 才是正确契约。
+
+## 必须异步不是“希望更快”
+
+<Term def="正确性或 responsiveness 要求 task 与 caller 独立取得进展，不能合法退化为调用 get 时的同步执行。">
+  essential asynchronicity
+</Term>
+
+典型条件包括：UI/event loop 不能在 future.get 时执行重计算；caller 持锁时等待会让 deferred task 在同线程尝试重入；pipeline 要求 producer 与 consumer overlap；task 必须即使 future 暂不消费也开始执行。
+
+这种需求应直接写进调用：
+
+```cpp
+auto future = std::async(
+    std::launch::async,
+    [] { return loadRemoteIndex(); }
+);
+```
+
+policy 是 correctness boundary，不应留给 implementation 猜测。
+
+## naive wait_for 循环会卡住 deferred task
+
+常见 polling loop：
+
+```cpp
+using namespace std::chrono_literals;
+
+while (future.wait_for(100ms) != std::future_status::ready) {
+    showProgress();
+}
+```
+
+<Term def="周期性调用 future::wait_for，在 task 未完成时执行进度、事件处理或取消检查的循环。">
+  future wait loop
+</Term>
+
+`wait_for` 有三种 status：ready、timeout、deferred。若 future 是 deferred，每次 timed wait 都立即返回 deferred；task 不会开始，condition 永远为 true，loop 无限运行。
+
+<EmcppFutureWaitStatusFlowMap />
+
+## 正确轮询必须先处理 deferred
+
+```cpp
+using namespace std::chrono_literals;
+
+if (future.wait_for(0s) == std::future_status::deferred) {
+    // Choose intentionally: run synchronously or reject this policy.
+    future.get();
+} else {
+    while (future.wait_for(100ms) != std::future_status::ready) {
+        showProgress();
+    }
+    future.get();
+}
+```
+
+<Term def="在 timed polling 前以零时长 wait_for 识别 lazy future，并为其选择同步执行或错误处理路径。">
+  deferred status probe
+</Term>
+
+若业务本来必须异步，更好的修复不是在每个 loop 加分支，而是创建 future 时指定 `launch::async`，让 deferred 状态不可能出现；probe 适合必须接收未知来源 future 的通用代码。
+
+## thread-local 语义会随 policy 改变
+
+```cpp
+thread_local RequestContext context;
+
+auto future = std::async([] {
+    return context.requestId;
+});
+```
+
+<Term def="每条线程拥有独立 instance，变量名相同但 storage 与 initialization lifetime 随执行线程变化的状态。">
+  thread-local execution state
+</Term>
+
+async path 在 worker thread 读取该线程自己的 context；deferred path 在 get/wait caller thread 读取 caller instance。默认 policy 因而可能改变业务数据，不只是速度。依赖 logging trace、locale cache、request context 或 thread-bound runtime 时，必须明确 execution context。
+
+<EmcppAsyncDeferredExecutionContextMap />
+
+## caller locks 与 deferred 重入
+
+<Term def="caller 在持有资源或不变量未恢复时调用 get/wait，使 deferred callable 在同一 call stack 中同步执行的情况。">
+  deferred reentrancy
+</Term>
+
+```cpp
+std::unique_lock lock(mutex);
+auto value = future.get();
+```
+
+若 deferred task 也需 mutex，它会在当前线程、当前持锁 stack 中运行并等待同一锁，形成 self-deadlock。async task 同样可能等待锁，但 caller 可在 get 前 unlock；关键是默认 policy 让执行点隐藏在 get 内。
+
+<Callout type="trap" title="陷阱：future.get 只等待，不会执行用户代码">
+  对 deferred future，get 正是触发 callable
+  的位置。调用前必须像调用普通函数一样审查当前 locks、thread-local、stack 和
+  reentrancy invariants。
+</Callout>
+
+## future destructor 行为也受策略影响
+
+async task 关联的最后一个 future 在某些条件下销毁时可能等待 task；deferred future 销毁则不会触发 callable。忽略返回值：
+
+```cpp
+std::async(std::launch::async, firstTask);
+std::async(std::launch::async, secondTask);
+```
+
+temporary future 的 destructor 可能令两行串行等待。必须持有 handles，并明确同步点。
+
+<Term def="future 销毁时对关联 shared state 的等待或放弃行为，会影响 task 是否执行及 caller 是否阻塞。">
+  policy-sensitive future lifetime
+</Term>
+
+显式 async 解决“是否 deferred”，不自动解决 handle lifetime、取消和 bounded concurrency。
+
+## 封装 truly asynchronous 提交入口
+
+C++14 可把 policy 固化在 helper 中：
+
+```cpp
+template<typename Function, typename... Args>
+auto reallyAsync(Function&& function, Args&&... args) {
+    return std::async(
+        std::launch::async,
+        std::forward<Function>(function),
+        std::forward<Args>(args)...
+    );
+}
+```
+
+<Term def="统一指定 launch::async 并 perfect-forward callable/arguments，使调用点复用强异步契约的 wrapper。">
+  really-async wrapper
+</Term>
+
+helper 名称应表达 resource/error policy；生产系统还可能需要 bounded executor，而不是每项工作都请求新 thread。Item 36 的核心是禁止隐藏 deferred，不是宣称 `std::async` 是完整 scheduler。
+
+## 何时默认 policy 可以接受
+
+<Term def="task 不必并发、可在任意等待线程运行、允许不执行、且 caller 正确处理 deferred status 时采用组合 policy 的条件集合。">
+  default-policy safety conditions
+</Term>
+
+只有同时满足以下条件才保留默认：
+
+1. task 不需要与 caller 并发。
+2. 运行 task 的 thread identity 不影响结果。
+3. future 不被 get/wait 时，task 可以合法不运行。
+4. 所有 timed wait loops 识别 deferred。
+5. get/wait 点允许同步执行整个 callable，当前没有冲突 locks/invariants。
+
+只要一项不成立，就显式 policy 或改用合适 executor。
+
+## 小结
+
+- 默认 std::async policy 是 `launch::async | launch::deferred`，函数名不保证立即异步
+- launch::async 在独立 execution thread 运行；deferred 到 get/wait 才在等待线程同步执行
+- asynchronicity essential 时必须显式指定 std::launch::async，把独立进度写进契约
+- deferred future 若无人等待可完全不执行，thread-local 与 thread identity 也会改变业务语义
+- wait_for 返回 ready、timeout、deferred；naive `!= ready` loop 对 deferred 永不退出
+- 通用 wait loop 先 probe deferred；业务禁止 deferred 时应从创建端消除它
+- get 可能触发 deferred callable，需审查 locks、reentrancy 和当前 thread context
+- reallyAsync 可固化 policy，但 handle lifetime、resource bounds 与 scheduler 仍需单独设计
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 36"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch07.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="default launch policy">
+    允许 async/deferred 二选一的默认策略。
+  </GlossaryItem>
+  <GlossaryItem term="launch async">
+    要求 task 在独立线程执行的策略。
+  </GlossaryItem>
+  <GlossaryItem term="deferred policy">
+    到 get/wait 才在等待线程执行的策略。
+  </GlossaryItem>
+  <GlossaryItem term="launch-policy uncertainty">
+    默认策略引入的执行时机和线程不确定性。
+  </GlossaryItem>
+  <GlossaryItem term="essential asynchronicity">
+    正确性要求 caller 与 task 独立进展。
+  </GlossaryItem>
+  <GlossaryItem term="future wait loop">
+    周期检查 future 状态的等待循环。
+  </GlossaryItem>
+  <GlossaryItem term="deferred status probe">
+    在轮询前识别 deferred future。
+  </GlossaryItem>
+  <GlossaryItem term="thread-local execution state">
+    随执行线程变化的独立局部状态。
+  </GlossaryItem>
+  <GlossaryItem term="deferred reentrancy">
+    get/wait 在当前 stack 同步运行 task。
+  </GlossaryItem>
+  <GlossaryItem term="policy-sensitive future lifetime">
+    future 销毁行为受 launch policy 影响。
+  </GlossaryItem>
+  <GlossaryItem term="really-async wrapper">
+    固化 launch::async 的提交 helper。
+  </GlossaryItem>
+  <GlossaryItem term="default-policy safety conditions">
+    默认组合策略可安全使用的全部条件。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：默认 std::async 返回的 future 从未 get/wait。** 比较 async 与 deferred 两条可能路径。
+
+<Answer question="task 是否一定执行？">
+  implementation 若选择 async，task 在独立 execution thread 启动，即使 caller
+  暂未 get 也有独立进度；若选择 deferred，async 调用只创建 lazy shared
+  state，future 未 get/wait 就销毁时 callable
+  可完全不运行。若执行本身是业务要求，默认 policy 不成立，应指定 launch::async
+  或使用有明确提交保证的 executor。
+</Answer>
+
+2. **问题 2：`while (wait_for(100ms) != ready)` 遇到 deferred future。** 解释无限循环并修复。
+
+<Answer question="deferred 为什么不随轮询推进？">
+  timed wait 返回 deferred 表示 callable 尚未启动且只会由 get/non-timed wait
+  触发；继续 wait_for 仍返回 deferred，所以条件永真。先用 `wait_for(0s)`
+  probe：deferred 时明确调用 get 同步执行或拒绝该 future；非 deferred 才循环处理
+  timeout 直到 ready。若本业务必须异步，在创建端直接指定 launch::async。
+</Answer>
+
+3. **问题 3：task 读取 thread_local request context，并可能获取 caller 当前持有的 mutex。** 分析默认 policy 的两种结果。
+
+  <Answer question="执行线程为何影响正确性？">async path 在 worker thread 使用另一份 thread-local context，可能缺少 caller request ID；deferred path 在 get caller thread 使用 caller instance，但若 caller 持有 task 也要获取的 mutex，get 同步重入会 self-deadlock。必须明确 context 传值而非隐式依赖 thread-local，调整 lock boundary，并按独立进度需求指定 launch::async；policy 不能只作为性能开关。</Answer>
+</Exercises>

@@ -1,0 +1,226 @@
+---
+title: "Chapter 9：Memory Models and Namespaces"
+type: A
+section: C++ Primer Plus 6e · 多文件、生命周期与名字
+order: 9
+description: 对齐第6版 Chapter 9：掌握分离编译、翻译单元、自动/静态/动态存储期、作用域、链接性、ODR 与 namespace 名字管理。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+draft: false
+---
+
+import {
+  EppStorageScopeLinkageFlow,
+  EppSymbolBoundaryLab,
+  EppTranslationUnitBuildMap,
+} from "@/components/mdx/cpp-primer-plus/diagrams/memory-models-and-namespaces";
+
+<Objectives>
+
+- 能实现头文件、实现源文件和调用源文件的分离编译，解释每个翻译单元与目标文件的依赖
+- 能比较自动、静态与动态存储期，并区分 scope、linkage 和对象 lifetime 三个正交概念
+- 能复现 undefined reference、multiple definition、内部链接独立状态和 namespace 歧义，使用符号与链接命令取证
+
+</Objectives>
+
+## 为什么“变量在哪里”至少包含三个问题
+
+问一个名字“在哪里”可能是在问：源代码哪个区域能查到它（作用域）；另一个翻译单元能否引用同一实体（链接性）；对象从何时构造到何时销毁（存储期/生命周期）。三者相关但不等价。局部 static 名字只在块内可见，对象却活到程序结束；动态对象可能没有全局名字，却一直活到 owner 释放。
+
+<Term def="一个名字可被无资格查找并用于表达式的源代码区域，例如块、函数、类或命名空间。">
+  作用域
+</Term>
+
+<Term def="一个名字在不同作用域或翻译单元的声明是否表示同一实体的属性。">
+  链接性
+</Term>
+
+## 分离编译让接口与实现独立变化
+
+分离编译把程序拆为多个源文件，每个源文件经预处理形成翻译单元并独立编译成目标文件，最后链接。头文件共享声明和必要类型定义，不是独立运行单元。
+
+<Term def="多个翻译单元分别编译为目标文件，再由链接器组合成程序的构建方式。">
+  分离编译
+</Term>
+
+```cpp title="counter.hpp"
+#ifndef COUNTER_HPP
+#define COUNTER_HPP
+
+int next_count();
+
+#endif
+```
+
+include guard 防止同一翻译单元重复展开，但不能防止普通外部定义在多个翻译单元各自产生实体。头文件应尽量稳定、最小，只暴露调用者真正需要的契约。
+
+```cpp title="counter.cpp"
+#include "counter.hpp"
+
+int next_count() {
+    static int count{0};
+    return ++count;
+}
+```
+
+```cpp title="main.cpp"
+#include "counter.hpp"
+#include <iostream>
+
+int main() {
+    std::cout << next_count() << '\n';
+}
+```
+
+`counter.cpp` 与 `main.cpp` 是两个翻译单元。main 只根据声明编译调用；counter.o 提供定义；链接命令必须同时包含两个目标文件。
+
+<Term def="一个源文件经预处理展开 include 和宏后，交给编译器独立处理的完整输入。">
+  翻译单元
+</Term>
+
+<EppTranslationUnitBuildMap />
+
+## 声明与定义控制符号数量
+
+声明介绍名字和类型，定义创建函数体或对象实体。`extern int count;` 通常只是声明，某个源文件需提供唯一 `int count{0};` 定义。把外部对象定义放在头文件会让每个翻译单元都生成一份，触发重复定义。
+
+<Term def="要求一个程序中的实体定义满足允许数量和跨翻译单元一致性的规则集合。">
+  单一定义规则
+</Term>
+
+inline 函数、类定义和模板可在多个翻译单元出现一致定义；普通非 inline 函数/外部对象通常只能有一个程序级定义。ODR 违反有时由链接器报告，有时不要求诊断，因此不能只依赖构建成功。
+
+<Callout type="trap" title="陷阱：include guard 能阻止头文件定义产生多个符号">
+  guard 只阻止同一翻译单元重复展开。两个 .cpp 各 include 一次仍各产生定义；共享对象用 extern 声明加一个源文件定义，或使用符合版本要求的 inline 变量。
+</Callout>
+
+## 存储期描述对象存在多久
+
+自动存储期对象在进入块时构造、离开块时销毁；静态存储期对象在程序期间存在；动态对象由 new 创建并由 delete/owner 结束。局部 static 只初始化一次，后续调用复用同一状态。
+
+<Term def="对象存储开始可用到结束释放的持续类别，例如自动、静态或动态存储期。">
+  存储期
+</Term>
+
+```cpp
+int calls() {
+    int perCall{0};          // automatic storage duration
+    static int total{0};     // static storage duration
+    ++perCall;
+    return ++total;
+}
+```
+
+`perCall` 每次都是新对象，`total` 跨调用共享。共享状态会引入测试隔离与并发问题；局部 static 的生命周期长不等于任意线程访问自动安全。
+
+## scope、storage duration 与 linkage 正交
+
+块局部变量通常无链接性；命名空间对象可能有 external linkage，让多个翻译单元引用同一实体，也可能通过 `static` 或 unnamed namespace 获得 internal linkage，让每个翻译单元拥有独立实体。
+
+<EppStorageScopeLinkageFlow />
+
+关键字 `static` 在局部对象上改变存储期，在 namespace 级名字上可改变链接性，在 class 成员上又表达全类共享。看到 static 先问位置和具体属性，不能套用一句“全局变量”。
+
+## 内部链接适合文件私有实现
+
+不需要跨翻译单元共享的 helper 和状态可放 unnamed namespace，减少外部符号污染。若两个源文件各有同名内部对象，它们是两个不同实体；地址和状态不共享。
+
+```cpp
+namespace {
+int local_counter{0};
+
+void trace_local() {
+    ++local_counter;
+}
+}  // unnamed namespace
+```
+
+若需求是全程序唯一计数器，internal linkage 就是错误边界；应由一个模块拥有外部或封装实体，并让调用者通过接口访问。
+
+## namespace 管理名字而不是对象生命
+
+命名空间组织相关声明并避免冲突。限定名 `audio::open` 明确来源；namespace alias 缩短长路径；using declaration 只引入特定名字；using directive 让整个命名空间参与查找，扩大歧义面。
+
+<Term def="在全局层级组织相关名字、支持限定查找并减少库间冲突的声明区域。">
+  命名空间
+</Term>
+
+```cpp
+namespace metrics {
+double average(const double* values, int count);
+}
+
+double result = metrics::average(data, size);
+```
+
+namespace 可以跨文件扩展，声明仍需遵守定义与链接规则。名字位于 namespace 不会自动隐藏实现，也不会改变对象存储期。
+
+<Callout type="trap" title="陷阱：在头文件写 using namespace std 只影响当前文件">
+  头文件文本会进入每个包含者，directive 扩大所有后续名字查找并可能制造歧义。头文件使用限定名；源文件也优先窄 using declaration。
+</Callout>
+
+## 四类符号故障要看不同证据
+
+<EppSymbolBoundaryLab />
+
+先预测故障属于编译、链接还是查找：缺定义与重复定义通常到链接阶段；两个 internal 对象不会报错但状态不共享；using directive 歧义在名字解析/编译阶段出现。保存每个编译命令、目标文件和最终链接命令。
+
+## 三步审计多文件状态
+
+<Stepper>
+  <Step title="第一步：画翻译单元和目标文件">
+    标出头文件声明、源文件定义、每个 .o 的来源与最终链接输入；修改头文件后确认所有包含者重编。
+
+    <EppTranslationUnitBuildMap />
+  </Step>
+  <Step title="第二步：逐个名字写三种属性">
+    为局部、static、namespace 与 dynamic 对象分别记录 scope、storage duration、linkage 和 owner。
+
+    <EppStorageScopeLinkageFlow />
+  </Step>
+  <Step title="第三步：制造符号边界故障">
+    复现缺定义、头文件重复定义、两个内部计数器和 namespace 歧义，再从符号/命令证据修复。
+
+    <EppSymbolBoundaryLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 分离编译让翻译单元独立生成目标文件，头文件共享声明而非运行实体
+- 声明介绍名字，定义创建实体；ODR 约束普通定义数量与多处定义一致性
+- scope 决定名字哪里可见，linkage 决定声明是否指同一实体，storage duration 决定对象活多久
+- static 的含义依上下文变化，internal linkage 会让不同翻译单元拥有独立状态
+- namespace 组织名字和查找，不管理对象生命周期；头文件不应扩散 using directive
+
+<Exercises>
+  1. **问题 1：诊断链接。** 头文件声明 `int next_count()`，main.o 已生成但链接失败，检查顺序是什么？
+
+  <Answer question="undefined reference 如何沿目标文件定位？">确认定义签名/namespace 与声明完全一致，counter.cpp 是否编译成功生成 counter.o，counter.o 是否进入最终链接命令，库顺序/可见性是否正确。不要 include counter.cpp；修复 producer 和 link inputs。</Answer>
+
+  2. **问题 2：比较三个属性。** 函数内 static int、namespace 普通 int、new int 各有什么 scope/storage/linkage？
+
+  <Answer question="三类对象如何分开描述？">局部 static 名字是块 scope、无 linkage、对象 static duration；namespace 普通对象是 namespace scope、static duration，通常 external linkage；new int 是 dynamic duration，指针名字有自己的 scope/linkage，而动态对象本身由 owner 决定销毁。</Answer>
+
+  3. **问题 3：修复头文件定义。** 两个 .cpp include 含 `int count=0;` 的头文件为何重复，怎样设计共享/私有两种需求？
+
+  <Answer question="外部共享与文件私有状态怎样分别实现？">guard 不跨翻译单元。共享状态：头文件 extern 声明，一个 .cpp 提供定义，最好通过函数封装；文件私有：把定义放各自 .cpp unnamed namespace。两者语义不同，先决定是否应是同一实体。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="作用域">名字可被无资格查找和使用的源代码区域。</GlossaryItem>
+  <GlossaryItem term="链接性">不同声明是否表示同一实体的名字属性。</GlossaryItem>
+  <GlossaryItem term="分离编译">翻译单元独立编译、目标文件最终链接的构建方式。</GlossaryItem>
+  <GlossaryItem term="翻译单元">源文件经预处理后交给编译器的完整输入。</GlossaryItem>
+  <GlossaryItem term="单一定义规则">约束实体定义数量及多处定义一致性的规则。</GlossaryItem>
+  <GlossaryItem term="存储期">对象存储从开始到释放的持续类别。</GlossaryItem>
+  <GlossaryItem term="命名空间">在全局层级组织名字并支持限定查找的声明区域。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++ Primer Plus, Sixth Edition, Chapter 9 Memory Models and Namespaces"
+  adaptedUrl="https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+/>

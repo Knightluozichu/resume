@@ -1,3 +1,5 @@
+import { OfficialCourseLab } from "../../official-course-lab";
+
 /**
  * <HfdLearningMapDiagram>：《Head First 设计模式》全书学习地图。
  *
@@ -75,19 +77,53 @@ export function HfdLearningMapDiagram() {
           className="mx-auto block h-auto w-full max-w-[720px]"
         >
           {/* ===== 标题 ===== */}
-          <text x={VIEW_W / 2} y="36" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">
+          <text
+            x={VIEW_W / 2}
+            y="36"
+            textAnchor="middle"
+            fontSize="16"
+            fontWeight="700"
+            fill="var(--text-primary)"
+          >
             Head First 设计模式 · 全书学习地图
           </text>
-          <text x={VIEW_W / 2} y="58" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
+          <text
+            x={VIEW_W / 2}
+            y="58"
+            textAnchor="middle"
+            fontSize="12"
+            fill="var(--text-secondary)"
+          >
             从模式入门 → 封装变化 → 对象组合 → 状态变化 → 模式总结，五段递进
           </text>
 
           {/* ===== 顶部心法条 ===== */}
-          <rect x={COL_MARGIN} y="74" width={VIEW_W - COL_MARGIN * 2} height="32" rx="10" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.4" />
-          <text x={VIEW_W / 2} y="95" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
-            <tspan fontWeight="700" fill="var(--accent)" fontSize="13">核心心法</tspan>
+          <rect
+            x={COL_MARGIN}
+            y="74"
+            width={VIEW_W - COL_MARGIN * 2}
+            height="32"
+            rx="10"
+            fill="var(--accent)"
+            fillOpacity="0.06"
+            stroke="var(--accent)"
+            strokeWidth="1.2"
+            strokeOpacity="0.4"
+          />
+          <text
+            x={VIEW_W / 2}
+            y="95"
+            textAnchor="middle"
+            fontSize="12"
+            fill="var(--text-secondary)"
+          >
+            <tspan fontWeight="700" fill="var(--accent)" fontSize="13">
+              核心心法
+            </tspan>
             <tspan>{"　"}</tspan>
-            <tspan fill="var(--text-primary)">把变化的部分抽出来，封装成独立对象</tspan>
+            <tspan fill="var(--text-primary)">
+              把变化的部分抽出来，封装成独立对象
+            </tspan>
           </text>
 
           {/* ===== 五列 ===== */}
@@ -96,19 +132,68 @@ export function HfdLearningMapDiagram() {
             return (
               <g key={col.id}>
                 {/* 列头彩色 pill */}
-                <rect x={x} y="116" width={COL_W} height="30" rx="8" fill={col.color} fillOpacity="0.12" stroke={col.color} strokeWidth="1.2" />
-                <text x={x + COL_W / 2} y="136" textAnchor="middle" fontSize="12" fontWeight="700" fill={col.color}>{col.name}</text>
+                <rect
+                  x={x}
+                  y="116"
+                  width={COL_W}
+                  height="30"
+                  rx="8"
+                  fill={col.color}
+                  fillOpacity="0.12"
+                  stroke={col.color}
+                  strokeWidth="1.2"
+                />
+                <text
+                  x={x + COL_W / 2}
+                  y="136"
+                  textAnchor="middle"
+                  fontSize="12"
+                  fontWeight="700"
+                  fill={col.color}
+                >
+                  {col.name}
+                </text>
 
                 {/* 章节卡片 */}
                 {col.chapters.map((name, pi) => {
                   const cy = CARDS_TOP_Y + pi * CARD_ROW;
                   return (
                     <g key={name}>
-                      <rect x={x} y={cy} width={COL_W} height={CARD_H} rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-                      <circle cx={x + 12} cy={cy + CARD_H / 2} r="3" fill={col.color} />
-                      <text x={x + COL_W / 2} y={cy + CARD_H / 2 + 4} textAnchor="middle" fontSize="11" fill="var(--text-primary)">{name}</text>
+                      <rect
+                        x={x}
+                        y={cy}
+                        width={COL_W}
+                        height={CARD_H}
+                        rx="6"
+                        fill="var(--bg)"
+                        stroke="var(--border)"
+                        strokeWidth="1"
+                      />
+                      <circle
+                        cx={x + 12}
+                        cy={cy + CARD_H / 2}
+                        r="3"
+                        fill={col.color}
+                      />
+                      <text
+                        x={x + COL_W / 2}
+                        y={cy + CARD_H / 2 + 4}
+                        textAnchor="middle"
+                        fontSize="11"
+                        fill="var(--text-primary)"
+                      >
+                        {name}
+                      </text>
                       {pi < col.chapters.length - 1 && (
-                        <line x1={x + COL_W / 2} y1={cy + CARD_H} x2={x + COL_W / 2} y2={cy + CARD_ROW - 2} stroke="var(--accent)" strokeWidth="1.4" strokeOpacity="0.6" />
+                        <line
+                          x1={x + COL_W / 2}
+                          y1={cy + CARD_H}
+                          x2={x + COL_W / 2}
+                          y2={cy + CARD_ROW - 2}
+                          stroke="var(--accent)"
+                          strokeWidth="1.4"
+                          strokeOpacity="0.6"
+                        />
                       )}
                     </g>
                   );
@@ -118,11 +203,35 @@ export function HfdLearningMapDiagram() {
           })}
 
           {/* ===== 底部总结栏 ===== */}
-          <rect x="60" y="340" width={VIEW_W - 120} height="52" rx="12" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.4" strokeOpacity="0.4" />
-          <text x={VIEW_W / 2} y="363" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--text-primary)">
+          <rect
+            x="60"
+            y="340"
+            width={VIEW_W - 120}
+            height="52"
+            rx="12"
+            fill="var(--accent)"
+            fillOpacity="0.06"
+            stroke="var(--accent)"
+            strokeWidth="1.4"
+            strokeOpacity="0.4"
+          />
+          <text
+            x={VIEW_W / 2}
+            y="363"
+            textAnchor="middle"
+            fontSize="13"
+            fontWeight="700"
+            fill="var(--text-primary)"
+          >
             全书 10 章 · 五段递进 · 三大原则
           </text>
-          <text x={VIEW_W / 2} y="382" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">
+          <text
+            x={VIEW_W / 2}
+            y="382"
+            textAnchor="middle"
+            fontSize="11"
+            fill="var(--text-secondary)"
+          >
             多用组合少用继承 · 针对接口编程 · 对变化封装
           </text>
         </svg>
@@ -132,4 +241,29 @@ export function HfdLearningMapDiagram() {
       </figcaption>
     </figure>
   );
+}
+
+// OFFICIAL_QUALITY_WRAPPER_HeadFirstDesignPatterns_HfdLearningMap
+const officialQualityProps = {
+  title: "学习地图",
+  stages: [
+    "学习地图",
+    "为什么需要一张地图",
+    "五大板块一览",
+    "三大设计原则",
+    "交互Demo",
+  ],
+  sourceLabel: "O'Reilly Head First Design Patterns 2e",
+} as const;
+
+export function OfficialHeadFirstDesignPatternsHfdLearningMapMapLab() {
+  return <OfficialCourseLab {...officialQualityProps} mode="map" />;
+}
+
+export function OfficialHeadFirstDesignPatternsHfdLearningMapExperimentLab() {
+  return <OfficialCourseLab {...officialQualityProps} mode="experiment" />;
+}
+
+export function OfficialHeadFirstDesignPatternsHfdLearningMapEvidenceLab() {
+  return <OfficialCourseLab {...officialQualityProps} mode="evidence" />;
 }

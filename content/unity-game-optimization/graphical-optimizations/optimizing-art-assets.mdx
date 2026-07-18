@@ -1,25 +1,20 @@
 ---
 title: 美术资源优化
 type: C
-section: 图形优化
+section: "Unity Game Optimization · 渲染与运行时"
 order: 2
 description: 从网格、动画、纹理到 AssetBundle，降低美术资源对内存与加载的影响。
 demo: true
 math: false
 draft: false
-sourceUrl: ""
+sourceUrl: "https://www.packtpub.com/en-us/product/unity-game-optimization-9781838556518"
 ---
 
-{/* C 实战型（Unity Game Optimization Ch4 改编）：美术资源导入与加载。
-   重心在代码对照(§6)慢 vs 快 CodeTabs + Stepper + 4 个 diagram(§5)。 */}
-
-{/* 知识点清单：
-   1) 网格压缩 / Read/Write — MeshImportDiagram
-   2) 动画压缩 — 代码/设置对照 CodeTabs
-   3) 纹理格式 / Max Size / mipmap — TextureImportDiagram + MipmapPyramidDiagram
-   4) Audio 压缩 — Callout
-   5) Resources vs AssetBundle — ResourcesAssetBundleDiagram
-   6) 异步加载 — AsyncLoadDiagram + CodeTabs */}
+import {
+  OptimizingArtAssetsMapLab,
+  OptimizingArtAssetsExperimentLab,
+  OptimizingArtAssetsEvidenceLab,
+} from "@/components/mdx/unity-game-optimization/diagrams/optimizing-art-assets";
 
 <Objectives>
 
@@ -28,6 +23,61 @@ sourceUrl: ""
 - 能回答：一张 4096×4096 的 UI 图标以 RGBA32 导入、未限制 Max Size，在 1024 屏幕上实际占多少内存？你会改哪三项设置？
 
 </Objectives>
+
+## 原书边界：Chapter 4
+
+Packt 第三版把本章命名为 **Optimizing Your Art Assets**。官方目录列出的核心范围如下；这些条目共同构成本章的一对一边界：
+
+- **Audio**：纳入本章实验与验收，不拆到别章重复计数。
+- **Texture files**：纳入本章实验与验收，不拆到别章重复计数。
+- **Mesh and animation files**：纳入本章实验与验收，不拆到别章重复计数。
+- **Asset bundles and resources**：纳入本章实验与验收，不拆到别章重复计数。
+
+从源资源、导入设置、平台压缩、运行时驻留到卸载建立完整资产生命周期，而不是只看包体。Addressables 可替代部分旧式 AssetBundle/Resources 工作流，但压缩格式、Read/Write、副本与依赖生命周期仍需逐项验证。 因此，本章既保留 2019/2020 语境，也明确标出迁移到现代 Unity 时哪些是稳定原理、哪些只是版本相关接口。
+
+<OptimizingArtAssetsMapLab />
+
+## 三步证据实验
+
+先预测：如果候选优化真的命中瓶颈，哪个指标应先变化，哪个正确性条件必须保持？下面三步只改变一个变量，并把正常、边界和失败样本一起保存。
+
+<Stepper>
+  <Step title="固定范围与基线">
+    <OptimizingArtAssetsMapLab />
+    选择纹理、网格、动画与音频各一项，做导入设置矩阵，测包体、峰值内存、加载时间和视觉/听觉误差。 先写明目标设备、构建类型、场景、画质、预热和采样窗口，不把 Editor 数据与真机数据混在一起。
+
+```csharp
+textureImporter.textureCompression = TextureImporterCompression.Compressed;
+```
+
+  </Step>
+  <Step title="运行单变量候选">
+    <OptimizingArtAssetsExperimentLab />
+    只启用一个候选改动，保存同一输入下的结果。需要记录的不只是平均 FPS，还包括 Import Settings、Build Report、Memory Profiler 快照、加载时间线和设备端质量对照。
+
+```csharp
+var handle = Addressables.LoadAssetAsync<GameObject>(key);
+await handle.Task;
+```
+
+  </Step>
+  <Step title="复测并签发证据">
+    <OptimizingArtAssetsEvidenceLab />
+    对比 P50、P95、峰值与正确性；若收益只出现在 Editor、单次运行或错误画质下，就回退候选并保留失败原因。
+
+```csharp
+Addressables.Release(handle);
+Resources.UnloadUnusedAssets();
+```
+
+  </Step>
+</Stepper>
+
+<Callout type="trap">
+  **版本迁移陷阱**：磁盘压缩率、下载体积、解码成本和运行时显存不是同一指标；错误格式会把节省转成启动卡顿。
+  第三版内容应作为原理和历史载体来复现，现代 API
+  必须另行标注并在当前目标设备上重新测量。
+</Callout>
 
 ## 包体不大，内存却爆了
 
@@ -45,9 +95,18 @@ sourceUrl: ""
 
 ## 网格：压缩精度，关掉可写副本
 
-<Term def="在 Model Import Settings 中降低顶点数据精度以节省 GPU 内存，运行时由 GPU 解压，略增 CPU。">Mesh Compression（网格压缩）</Term> 把顶点位置、法线等精度从 32 位降到 16 位或更低——肉眼难辨的差异，换显著的显存节省。移动平台常用 Medium 或 High；主角高精度模型可 Off 或 Low。
+<Term def="在 Model Import Settings 中降低顶点数据精度以节省 GPU 内存，运行时由 GPU 解压，略增 CPU。">
+  Mesh Compression（网格压缩）
+</Term>
+把顶点位置、法线等精度从 32 位降到 16
+位或更低——肉眼难辨的差异，换显著的显存节省。移动平台常用 Medium 或
+High；主角高精度模型可 Off 或 Low。
 
-<Term def="导入时是否在内存保留一份 CPU 可写的网格副本；开启后内存约翻倍，仅运行时修改 mesh 时需要。">Read/Write Enabled</Term> 是更隐蔽的内存杀手：默认应**关闭**。只有你要在代码里改 `mesh.vertices`、做运行时变形、或 `MeshCollider` 烘焙前需要可读网格时才开。
+<Term def="导入时是否在内存保留一份 CPU 可写的网格副本；开启后内存约翻倍，仅运行时修改 mesh 时需要。">
+  Read/Write Enabled
+</Term>
+是更隐蔽的内存杀手：默认应**关闭**。只有你要在代码里改
+`mesh.vertices`、做运行时变形、或 `MeshCollider` 烘焙前需要可读网格时才开。
 
 <MeshImportDiagram />
 
@@ -80,12 +139,17 @@ sourceUrl: ""
 </CodeTabs>
 
 <Callout type="tip">
-  批量审查：Project 窗口搜 `t:Model`，按内存排序，优先改引用次数最多的 FBX。改完在 Memory Profiler 里看 `Mesh` 条目是否下降。
+  批量审查：Project 窗口搜 `t:Model`，按内存排序，优先改引用次数最多的
+  FBX。改完在 Memory Profiler 里看 `Mesh` 条目是否下降。
 </Callout>
 
 ## 动画：关键帧精度与压缩
 
-<Term def="Animation Import Settings 中降低关键帧浮点精度、启用 Optimal 键减少冗余关键帧，以缩小 .anim 与运行时曲线内存。">Animation Compression（动画压缩）</Term> 对角色海尤其重要。`Keyframe Reduction` 去掉肉眼不可见的冗余关键帧；`Rotation Error / Position Error / Scale Error` 控制允许误差（通常 0.5° / 0.5cm 级即可）。
+<Term def="Animation Import Settings 中降低关键帧浮点精度、启用 Optimal 键减少冗余关键帧，以缩小 .anim 与运行时曲线内存。">
+  Animation Compression（动画压缩）
+</Term>
+对角色海尤其重要。`Keyframe Reduction` 去掉肉眼不可见的冗余关键帧；`Rotation
+Error / Position Error / Scale Error` 控制允许误差（通常 0.5° / 0.5cm 级即可）。
 
 <CodeTabs>
   <Tab label="❌ 浪费">
@@ -116,11 +180,21 @@ Humanoid 角色还可勾选 **Optimize Game Objects**，去掉运行时不需要
 
 ## 纹理：格式、尺寸与 mipmap
 
-<Term def="按目标平台选择 GPU 原生压缩格式（如 ASTC、ETC2、BC7），显著降低显存占用。">Texture Format（纹理格式）</Term> 决定每像素占多少字节。RGBA32 未压缩约 4 B/px；ASTC 6×6 约 0.36 B/px——同分辨率可差一个数量级。
+<Term def="按目标平台选择 GPU 原生压缩格式（如 ASTC、ETC2、BC7），显著降低显存占用。">
+  Texture Format（纹理格式）
+</Term>
+决定每像素占多少字节。RGBA32 未压缩约 4 B/px；ASTC 6×6 约 0.36
+B/px——同分辨率可差一个数量级。
 
-<Term def="导入时限制纹理最大边长，超过则下采样；按用途设 512/1024/2048 而非一律 4096。">Max Size（最大尺寸）</Term> 是 UI 图标最常见的浪费：源图 4096×4096，屏幕上只显示 128×128，却仍按 4K 占显存。
+<Term def="导入时限制纹理最大边长，超过则下采样；按用途设 512/1024/2048 而非一律 4096。">
+  Max Size（最大尺寸）
+</Term>
+是 UI 图标最常见的浪费：源图 4096×4096，屏幕上只显示 128×128，却仍按 4K 占显存。
 
-<Term def="预生成逐级减半的纹理副本，远处物体采样低级，减少闪烁并降低带宽；约增加 33% 内存。">Generate Mip Maps（生成多级渐远纹理）</Term> 对 3D 场景纹理应开启；UI、Sprite Atlas、法线贴图（部分管线）常关闭。
+<Term def="预生成逐级减半的纹理副本，远处物体采样低级，减少闪烁并降低带宽；约增加 33% 内存。">
+  Generate Mip Maps（生成多级渐远纹理）
+</Term>
+对 3D 场景纹理应开启；UI、Sprite Atlas、法线贴图（部分管线）常关闭。
 
 <TextureImportDiagram />
 
@@ -130,32 +204,47 @@ Humanoid 角色还可勾选 **Optimize Game Objects**，去掉运行时不需要
 
 ### 按用途分档
 
-| 用途 | Max Size | Mipmap | 格式建议 |
-|---|---|---|---|
-| 3D 场景漫反射 | 1024–2048 | ✓ | ASTC/BC7 |
-| UI 图标 | 256–512 | ✗ | ASTC 或 RGBA Crunched |
-| 字体图集 | 512–1024 | ✗ | Alpha8 / ASTC |
-| 远景天空盒 | 2048 | ✓ | 压缩格式 |
+| 用途          | Max Size  | Mipmap | 格式建议              |
+| ------------- | --------- | ------ | --------------------- |
+| 3D 场景漫反射 | 1024–2048 | ✓      | ASTC/BC7              |
+| UI 图标       | 256–512   | ✗      | ASTC 或 RGBA Crunched |
+| 字体图集      | 512–1024  | ✗      | Alpha8 / ASTC         |
+| 远景天空盒    | 2048      | ✓      | 压缩格式              |
 
 <Callout type="warn">
-  **Sprite Atlas** 要把同类 UI 打一张图再压——十张 1024 散图不如一张 2048 图集省 draw 也省内存。改 Max Size 后记得看是否糊；在目标设备上肉眼看比算字节更重要。
+  **Sprite Atlas** 要把同类 UI 打一张图再压——十张 1024 散图不如一张 2048 图集省
+  draw 也省内存。改 Max Size 后记得看是否糊；在目标设备上肉眼看比算字节更重要。
 </Callout>
 
 ## 音频：压缩格式简介
 
-<Term def="按播放类型选择压缩格式与加载方式：背景音乐流式加载，短音效解压进内存。">Audio Compression</Term> 影响包体与运行时内存，但比纹理简单：
+<Term def="按播放类型选择压缩格式与加载方式：背景音乐流式加载，短音效解压进内存。">
+  Audio Compression
+</Term>
+影响包体与运行时内存，但比纹理简单：
 
 <Callout type="tip">
-  **背景音乐 / 环境音**：`Load Type = Streaming`，`Compression Format = Vorbis`（或平台等价），长度不限、内存占用低，略有 CPU 解码。**短音效（&lt;1s）**：`Load Type = Decompress On Load` 或 `Compressed In Memory`，`Compression Format = ADPCM`（移动）或 PCM（极短且需零延迟）。**禁止**把 5 分钟 BGM 设成 Decompress On Load——会一次性解压进内存数十 MB。
+  **背景音乐 / 环境音**：`Load Type = Streaming`，`Compression Format =
+  Vorbis`（或平台等价），长度不限、内存占用低，略有 CPU
+  解码。**短音效（&lt;1s）**：`Load Type = Decompress On Load` 或 `Compressed In
+  Memory`，`Compression Format = ADPCM`（移动）或
+  PCM（极短且需零延迟）。**禁止**把 5 分钟 BGM 设成 Decompress On
+  Load——会一次性解压进内存数十 MB。
 </Callout>
 
 在 Memory Profiler 里搜 `AudioClip`，核对是否有意外解压的大文件。
 
 ## Resources 陷阱 vs AssetBundle
 
-<Term def="Assets/Resources 下资源构建时全部打进包内，启动时建立索引，Resources.Load 无法卸载。">Resources 文件夹</Term> 曾是快速原型手段，现代项目应极力避免膨胀使用。
+<Term def="Assets/Resources 下资源构建时全部打进包内，启动时建立索引，Resources.Load 无法卸载。">
+  Resources 文件夹
+</Term>
+曾是快速原型手段，现代项目应极力避免膨胀使用。
 
-<Term def="按包输出资源文件，运行时异步加载，可用 Unload 释放内存，支持热更与分包。">AssetBundle</Term>（或 Unity **Addressables** 封装层）才是可控的按需加载方案。
+<Term def="按包输出资源文件，运行时异步加载，可用 Unload 释放内存，支持热更与分包。">
+  AssetBundle
+</Term>
+（或 Unity **Addressables** 封装层）才是可控的按需加载方案。
 
 <ResourcesAssetBundleDiagram />
 
@@ -187,12 +276,18 @@ var prefab = assetReq.asset as GameObject;
 </CodeTabs>
 
 <Callout type="trap">
-  **Resources 三大陷阱**：① 全量进包、无法按需剔除 ② 启动时索引全部 Resources 资源 ③ `Resources.UnloadUnusedAssets` 卸不掉 Resources 本体。新功能默认走 Addressables；仅保留启动 Logo 等极少数 Resources 资源。
+  **Resources 三大陷阱**：① 全量进包、无法按需剔除 ② 启动时索引全部 Resources
+  资源 ③ `Resources.UnloadUnusedAssets` 卸不掉 Resources 本体。新功能默认走
+  Addressables；仅保留启动 Logo 等极少数 Resources 资源。
 </Callout>
 
 ## 异步加载：把尖峰摊开
 
-<Term def="用 LoadSceneAsync / LoadFromFileAsync 等 API 把 IO 与反序列化分摊到多帧，避免单帧主线程阻塞。">异步加载（Async Loading）</Term> 解决切场景、拉大 AssetBundle 时的卡顿——同步 `LoadScene` 或 `Resources.Load` 大资源会在一帧内完成反序列化，Profiler 出现 CPU 尖峰。
+<Term def="用 LoadSceneAsync / LoadFromFileAsync 等 API 把 IO 与反序列化分摊到多帧，避免单帧主线程阻塞。">
+  异步加载（Async Loading）
+</Term>
+解决切场景、拉大 AssetBundle 时的卡顿——同步 `LoadScene` 或 `Resources.Load`
+大资源会在一帧内完成反序列化，Profiler 出现 CPU 尖峰。
 
 <AsyncLoadDiagram />
 
@@ -235,38 +330,55 @@ IEnumerator LoadLevelAsync() {
 <Stepper>
   <Step title="① Memory Profiler：谁占大头？">
     <TextureImportDiagram highlight="format" />
-    打开 Memory Profiler（或 Profiler Memory 模块），按 **Texture2D / Mesh / AnimationClip / AudioClip** 排序。记下前三名类型与单个最大资源——通常是未压纹理或未关 Read/Write 的网格。
+    打开 Memory Profiler（或 Profiler Memory 模块），按 **Texture2D / Mesh /
+    AnimationClip / AudioClip**
+    排序。记下前三名类型与单个最大资源——通常是未压纹理或未关 Read/Write 的网格。
   </Step>
   <Step title="② 网格与动画：收紧导入">
     <MeshImportDiagram highlight="all" />
-    选中引用最多的 FBX：`Mesh Compression` 至少 Medium，`Read/Write` 关掉（除非代码改顶点）。动画：`Anim Compression = Optimal`，误差 0.5 级。Apply 后 Reimport，再看 Mesh/AnimationClip 字节。
+    选中引用最多的 FBX：`Mesh Compression` 至少 Medium，`Read/Write`
+    关掉（除非代码改顶点）。动画：`Anim Compression = Optimal`，误差 0.5
+    级。Apply 后 Reimport，再看 Mesh/AnimationClip 字节。
   </Step>
   <Step title="③ 纹理：格式 + Max Size + mipmap">
     <TextureImportDiagram />
-    按用途表分档；Android/iOS 用 **Override for Android/iOS** 设 ASTC。UI 关 mipmap、限 512。Sprite 打 Atlas。复测 Texture2D 总占用。
+    按用途表分档；Android/iOS 用 **Override for Android/iOS** 设 ASTC。UI 关
+    mipmap、限 512。Sprite 打 Atlas。复测 Texture2D 总占用。
   </Step>
   <Step title="④ 加载路径：迁出 Resources + 异步">
-    <ResourcesAssetBundleDiagram mode="compare" />
-    搜 `Resources.Load` 与 `Assets/Resources` 目录，列清单迁到 Addressables/AB。切关改为 `LoadSceneAsync` + 进度条。对比切关时 Profiler CPU 尖峰是否消失。
+    <ResourcesAssetBundleDiagram mode="compare" />搜 `Resources.Load` 与
+    `Assets/Resources` 目录，列清单迁到 Addressables/AB。切关改为
+    `LoadSceneAsync` + 进度条。对比切关时 Profiler CPU 尖峰是否消失。
   </Step>
 </Stepper>
 
 ## 容易踩的坑
 
 <Callout type="trap">
-  **现象**：改了 Max Size 为 512，Memory 仍显示 4096 纹理。**原因**：运行时 `new Texture2D(4096,4096)` 或代码 `LoadImage` 绕过了导入设置；或忘了 Apply/Reimport。**修法**：区分「导入资源」与「运行时创建」；改设置后 Reimport All；Profiler 点开看资源路径定位来源。
+  **现象**：改了 Max Size 为 512，Memory 仍显示 4096 纹理。**原因**：运行时 `new
+  Texture2D(4096,4096)` 或代码 `LoadImage` 绕过了导入设置；或忘了
+  Apply/Reimport。**修法**：区分「导入资源」与「运行时创建」；改设置后 Reimport
+  All；Profiler 点开看资源路径定位来源。
 </Callout>
 
 <Callout type="trap">
-  **现象**：MeshCollider 烘焙后网格内存翻倍。**原因**：烘焙需要 Read/Write，烘焙完未关。**修法**：烘焙后取消 Read/Write 并 Reimport；或烘焙完删除 MeshCollider 换简单碰撞体。
+  **现象**：MeshCollider 烘焙后网格内存翻倍。**原因**：烘焙需要
+  Read/Write，烘焙完未关。**修法**：烘焙后取消 Read/Write 并
+  Reimport；或烘焙完删除 MeshCollider 换简单碰撞体。
 </Callout>
 
 <Callout type="trap">
-  **现象**：AssetBundle `Unload(true)` 后材质变粉。**原因**：`Unload(true)` 卸掉了仍被场景引用的资源。**修法**：确认无引用后用 `Unload(false)` 只卸 bundle 容器；或 `Resources.UnloadUnusedAssets` 配合引用计数；Addressables 用 `Release` API。
+  **现象**：AssetBundle `Unload(true)` 后材质变粉。**原因**：`Unload(true)`
+  卸掉了仍被场景引用的资源。**修法**：确认无引用后用 `Unload(false)` 只卸 bundle
+  容器；或 `Resources.UnloadUnusedAssets` 配合引用计数；Addressables 用
+  `Release` API。
 </Callout>
 
 <Callout type="trap">
-  **现象**：异步加载进度条到 90% 停很久。**原因**：`allowSceneActivation = false` 时 progress 上限约 0.9，需手动置 true；或激活阶段仍在同步实例化大量 prefab。**修法**：进度条文案区分「加载中」与「激活中」；大场景分 additive 加载或分帧实例化。
+  **现象**：异步加载进度条到 90% 停很久。**原因**：`allowSceneActivation =
+  false` 时 progress 上限约 0.9，需手动置 true；或激活阶段仍在同步实例化大量
+  prefab。**修法**：进度条文案区分「加载中」与「激活中」；大场景分 additive
+  加载或分帧实例化。
 </Callout>
 
 ## 小结
@@ -279,7 +391,7 @@ IEnumerator LoadLevelAsync() {
 
 <Exercises>
 
-**练习 1（改设置型）** 在项目中找一张大于 2048 的纹理和一个大 FBX，记录改前 Memory Profiler 中对应条目大小。将纹理 Max Size 改为用途合理值、格式改为平台压缩；网格关 Read/Write 并开 Medium Compression。Reimport 后复测并填表。
+**问题 1（改设置型）** 在项目中找一张大于 2048 的纹理和一个大 FBX，记录改前 Memory Profiler 中对应条目大小。将纹理 Max Size 改为用途合理值、格式改为平台压缩；网格关 Read/Write 并开 Medium Compression。Reimport 后复测并填表。
 
 <Answer>
 
@@ -287,7 +399,7 @@ Texture2D 字节应随 Max Size 平方级下降（4096→1024 约降 16×），�
 
 </Answer>
 
-**练习 2（问答型）** Resources 与 AssetBundle 在「能否卸载」「启动影响」「包体控制」上各差在哪？
+**问题 2（问答型）** Resources 与 AssetBundle 在「能否卸载」「启动影响」「包体控制」上各差在哪？
 
 <Answer>
 
@@ -295,7 +407,7 @@ Resources：构建期全进 Player，启动建索引拖慢启动，Load 后无�
 
 </Answer>
 
-**练习 3（计算型）** 1024×1024 RGBA32 含 mipmap 约多少 MB？若改为 ASTC 6×6 同尺寸含 mipmap 大约多少？UI 图标只需 256 显示，Max Size 设 256 对 RGBA32 约多少 MB？
+**问题 3（计算型）** 1024×1024 RGBA32 含 mipmap 约多少 MB？若改为 ASTC 6×6 同尺寸含 mipmap 大约多少？UI 图标只需 256 显示，Max Size 设 256 对 RGBA32 约多少 MB？
 
 <Answer>
 
@@ -312,7 +424,8 @@ RGBA32 1024²×4×1.33 ≈ 5.3 MB。ASTC 6×6 约 0.36 B/px，1024²×0.36×1.33
 </GlossaryItem>
 
 <GlossaryItem term="Read/Write Enabled">
-  保留 CPU 可写网格副本，内存约翻倍；仅运行时改 mesh 时开启。详见 MeshImportDiagram highlight readwrite。
+  保留 CPU 可写网格副本，内存约翻倍；仅运行时改 mesh 时开启。详见
+  MeshImportDiagram highlight readwrite。
 </GlossaryItem>
 
 <GlossaryItem term="Animation Compression（动画压缩）">
@@ -336,7 +449,8 @@ RGBA32 1024²×4×1.33 ≈ 5.3 MB。ASTC 6×6 约 0.36 B/px，1024²×0.36×1.33
 </GlossaryItem>
 
 <GlossaryItem term="Resources 文件夹">
-  全量进包、启动索引、不可卸载。详见 ResourcesAssetBundleDiagram mode resources。
+  全量进包、启动索引、不可卸载。详见 ResourcesAssetBundleDiagram mode
+  resources。
 </GlossaryItem>
 
 <GlossaryItem term="AssetBundle">
@@ -351,5 +465,5 @@ RGBA32 1024²×4×1.33 ≈ 5.3 MB。ASTC 6×6 约 0.36 B/px，1024²×0.36×1.33
 
 <Attribution
   adaptedFrom="Packt《Unity Game Optimization》第3版"
-  adaptedUrl="https://www.packtpub.com/product/unity-game-optimization-third-edition/9781839215721"
+  adaptedUrl="https://www.packtpub.com/en-us/product/unity-game-optimization-9781838556518"
 />

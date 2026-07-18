@@ -1,0 +1,150 @@
+---
+title: "Chapter 4. C# 4: Improving interoperability"
+type: C
+section: "C# in Depth 4e · C# 2-5"
+order: 4
+description: "覆盖Dynamic typing、Optional/named arguments、COM interoperability improvements与Generic variance，以binding time和compatibility解释C# 4。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-4"
+draft: false
+---
+
+import { DcsBindingTimeLab, DcsArgumentInteropLab, DcsVariancePositionLab } from "@/components/mdx/deep-understanding-csharp/diagrams/csharp-4-interoperability";
+
+<Objectives>
+
+- 能比较static、dynamic、object与reflection的binding input、time、cache和exception surface
+- 能分析optional/named arguments及COM improvements对caller baking、parameter naming和binary/source compatibility的影响
+- 能推导generic interface/delegate中T的input/output位置，判断covariance、contravariance或invariance
+
+</Objectives>
+
+## 为什么Interoperability首先是Binding责任的转移
+
+C# 4面对COM、dynamic language和灵活API时，没有放弃static type system，而是允许特定expression把member/overload binding延迟到runtime；同时用optional/named arguments减少冗长signature，用variance允许安全constructed-type conversions。每项都在“更易调用”和“何时发现错误”之间交换责任。
+
+先预测：`dynamic` variable是否没有runtime type；optional default是否由callee每次读取；named argument是否只影响可读性；`List<string>`是否因covariance可转`List<object>`。答案都是否。
+
+<Term def="member lookup、overload resolution和conversion由runtime receiver/argument types而非compile-time types决定的调用模式。">runtime binding contract</Term>
+
+## Dynamic typing
+
+`dynamic`是compile-time signal：相关operation不由normal static binder最终解析，而是生成DLR call site，由C# runtime binder根据actual runtime types选择member、overload和conversion。Value仍有普通CLR runtime type；把dynamic赋给object后，下一次operation又按object static surface编译。
+
+### Call site rules and caching
+
+Call site保存binder与基于已观察type/shape的rules。相同shape重复调用可命中cache，但megamorphic input、跨language object或频繁shape变化会增加binding cost。Performance不能简化为“第一次慢以后免费”，应以代表性type distribution benchmark。
+
+### Failure surface
+
+Static typo在compile time失败；dynamic typo到operation执行才抛`RuntimeBinderException`。因此dynamic应集中在interop adapter，尽快convert/validate到typed domain model。不要让dynamic从boundary扩散到core，使refactor与completion证据消失。
+
+```csharp
+dynamic source = GetInteropObject();
+string name = source.Name;       // bound at runtime
+Customer customer = Parse(name); // typed core resumes here
+```
+
+<Term def="保存runtime binder与已观察type shape rules，使后续compatible dynamic operations复用binding结果的站点。">dynamic call site</Term>
+
+<Stepper>
+  <Step title="切换static、dynamic、object与reflection"><DcsBindingTimeLab /></Step>
+  <Step title="写出binder input和failure time">对每条call标注compile-time type、runtime type、selected member与异常层。</Step>
+  <Step title="改变runtime shape并观察cache/failure">交替传入多种types，benchmark call site；拼错member确认fault在adapter被捕获/翻译。</Step>
+</Stepper>
+
+<Callout type="trap" title="dynamic等同于object加反射语法糖">
+Object仍由static compiler限制members；reflection由application显式查metadata；dynamic使用language runtime binder执行C# overload/conversion规则并缓存call-site rules。三者failure与semantics不同。
+</Callout>
+
+## Optional parameters and named arguments
+
+Optional parameter的default必须是compile-time可表示值（或特定default form），caller省略时compiler把argument写入call site。Library把default从1改2，未recompile旧consumer仍传1；所以public optional default是versioned caller contract，而非callee live configuration。
+
+Named arguments按parameter name绑定，可改善多个同型arguments的可读性并与optional组合。Parameter name因此影响source compatibility：library rename虽可能binary compatible，却会让重新编译的named callers失败。Public API evolution需把names纳入review。
+
+Evaluation order仍按arguments在source出现的顺序，不按parameter declaration重新排序；有side effects的named arguments会暴露这一点。Modern code应避免依赖argument evaluation side effect，测试时仍需准确推导。
+
+## COM interoperability improvements
+
+C# 4减少COM调用ceremony：optional/named arguments适配大量optional parameters，某些`ref`可省略，indexed properties更自然，embedded interop types降低部署Primary Interop Assembly压力。Language只改善mapping，COM apartment、HRESULT、lifetime和versioning仍由interop boundary负责。
+
+```csharp
+worksheet.Range["A1", "B4"].Copy(
+    Destination: worksheet.Range["D1"]);
+```
+
+<Term def="optional argument省略时由caller compiler发出的literal/default，旧binary不会自动读取library的新default。">caller-baked default</Term>
+
+<Stepper>
+  <Step title="切换optional、named、COM与version场景"><DcsArgumentInteropLab /></Step>
+  <Step title="展开实际argument list与evaluation order">写出省略后emitted values、named mapping和每个expression执行次序。</Step>
+  <Step title="旧consumer与重新编译consumer对比">修改library default/parameter name，分别运行旧binary和new build，记录behavior/source break。</Step>
+</Stepper>
+
+<Callout type="trap" title="Optional default改在library里，所有consumer立即生效">
+省略argument通常被caller编译成具体值。需要runtime可变policy时用options/config或callee读取的shared source，不要把optional default当动态配置。
+</Callout>
+
+## Generic variance
+
+Generic variance允许type arguments存在reference conversion时，constructed interface/delegate也有方向安全的conversion。`out T`表示T只出现在output-safe positions，`IEnumerable<string>`可当`IEnumerable<object>`；`in T`表示input-safe，`IComparer<object>`可比较strings。
+
+Concrete classes本身不因interface variance变variant，value types也不参与这些reference conversions。`List&lt;T&gt;`同时add与read，若协变会允许向实际List&lt;string&gt;加入object，因此必须invariant。可以暴露variant read-only interface，而不改变mutable owner。
+
+Delegate binding已有return covariance/parameter contravariance；generic delegate variance进一步允许constructed delegate conversions。二者相关但发生在不同关系层，需写出source method signature、delegate type和constructed conversion三步。
+
+```csharp
+IEnumerable<string> strings = new[] { "a", "b" };
+IEnumerable<object> objects = strings;
+
+IComparer<object> objectComparer = Comparer<object>.Default;
+IComparer<string> stringComparer = objectComparer;
+```
+
+<Term def="T只在output-safe positions时，允许more-derived constructed interface/delegate转换到less-derived版本。">covariant output position</Term>
+
+<Term def="T只在input-safe positions时，允许base consumer constructed type服务derived inputs。">contravariant input position</Term>
+
+<Stepper>
+  <Step title="切换covariant、contravariant、invariant与delegate"><DcsVariancePositionLab /></Step>
+  <Step title="标记每个T occurrence">Return/property get是output，method parameter是input，mutable property与generic invariant wrapper会限制variance。</Step>
+  <Step title="编译positive/negative conversion matrix">测试reference/value types、interface/class和input/output misuse，确认compiler拒绝unsafe design。</Step>
+</Stepper>
+
+## 本章回顾：方便调用不等于取消Contract
+
+1. Dynamic把binding延迟到runtime call site，value仍有CLR type，failure也相应后移。
+2. Dynamic adapter应快速返回typed core；cache与performance按实际shape distribution量测。
+3. Optional default由caller baked，named argument让parameter names成为source compatibility surface。
+4. COM syntax减少ceremony，不消除COM lifetime、threading与failure contract。
+5. Variance只在interface/delegate的safe input/output positions和reference conversions成立；mutable List保持invariant。
+
+<Exercises>
+
+**问题 1：如何把dynamic第三方对象安全接入typed core？**
+
+<Answer>在小型adapter读取dynamic members，捕获并翻译RuntimeBinder/interop failure，立即validate成named DTO/domain type；记录runtime shape、version与fault context。Core不接收dynamic。用多shape、missing member、conversion failure与call-site benchmark验收。</Answer>
+
+**问题 2：public optional参数从5改10后，为何线上同时出现两个行为？**
+
+<Answer>旧consumer call site已bake 5，重新编译consumer会bake 10，因此同一library可收到两种values。恢复兼容需显式传参、增加新API/overload或让callee读取versioned options；测试旧binary与new build，不只测试library project。</Answer>
+
+**问题 3：怎样让`List<Dog>`安全提供给只读Animal consumer？**
+
+<Answer>不要转换mutable List；暴露`IEnumerable<Dog>`或`IReadOnlyList<Dog>`，利用out T的reference covariance赋给Animal view。Consumer只能读取，不可加入Cat。编译negative mutation case，并确认underlying owner仍控制lifetime与并发。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="runtime binding contract" definition="按runtime types执行member/overload/conversion selection的调用contract。" />
+  <GlossaryItem term="dynamic call site" definition="保存runtime binder与shape rules的dynamic operation site。" />
+  <GlossaryItem term="caller-baked default" definition="optional argument省略后由caller compiler写入的具体default。" />
+  <GlossaryItem term="covariant output position" definition="T只安全输出时允许derived-to-base constructed conversion。" />
+  <GlossaryItem term="contravariant input position" definition="T只安全输入时允许base consumer服务derived input。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# in Depth, Fourth Edition, Chapter 4: C# 4: Improving interoperability" adaptedUrl="https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-4" />

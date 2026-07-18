@@ -1,0 +1,161 @@
+---
+title: "第13章 剖析着色器性能"
+type: C
+section: "Shader开发实战 · 性能与精度"
+order: 13
+description: "沿Practical Shader Development正式目录掌握帧时间、CPU瓶颈、GPU瓶颈、VSync、GPU捕获。"
+demo: true
+math: true
+sourceUrl: "https://link.springer.com/book/10.1007/978-1-4842-4457-9"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PsdProfilingShadersPipelineLab, PsdProfilingShadersCompareLab, PsdProfilingShadersEvidenceLab } from "@/components/mdx/shader-practice/diagrams/psd-13-profiling-shaders";
+
+<Objectives>
+- 能解释帧时间、CPU瓶颈和GPU瓶颈在渲染数据流中的作用
+- 能推导本页公式并用GLSL、应用状态或引擎材质实现最小实验
+- 能复现GPU捕获，以参考图、GPU捕获、边界输入和反例验收
+</Objectives>
+
+## 从画面开始
+
+先预测顶点、片元、深度和帧时间会如何变化，再只调整一个参数观察变化。先稳定硬件、分辨率、场景、热状态和VSync，再用帧时间比较。CPU与GPU异步，单纯围绕Draw调用的CPU计时不等于GPU成本。Nsight捕获用于定位具体Draw和Shader阶段，二分关闭效果确认因果。 本页用<Term def="生成一帧所需毫秒数，比FPS更适合比较成本变化。">帧时间</Term>、<Term def="提交、逻辑或驱动工作限制帧率而GPU有空闲的状态。">CPU瓶颈</Term>、<Term def="顶点、片元、带宽或同步限制帧率的状态。">GPU瓶颈</Term>、<Term def="把呈现同步到显示刷新并可能掩盖真实性能变化的机制。">VSync</Term>、<Term def="记录一帧命令、资源、状态和计时供逐事件分析的证据。">GPU捕获</Term>建立对象、阶段、状态和证据之间的联系。
+
+<PsdProfilingShadersPipelineLab />
+
+## 第一版权威目录定位
+
+本页一一对应Kyle Halladay《Practical Shader Development: Vertex and Fragment Shaders for Game Developers》第一版第13章 剖析着色器性能。Springer/Apress正式目录确认2019年第一版、18章、附录代码、ISBN 978-1-4842-4456-2和XXI+381页；清华大学出版社官方样章确认2021中文第一版《Shader开发实战》、ISBN 9787302583349及对应中文目录。
+
+### 原书小节覆盖
+
+1. 13.1 如何衡量性能
+2. 13.2 CPU与GPU时间
+3. 13.3 VSync
+4. 13.4 设置评测机器
+5. 13.5 剖析实践
+6. 13.6 Nsight Graphics
+7. 13.7 CPU还是GPU限制
+8. 13.9 跟踪问题着色器
+
+### 核心对象
+
+1. **帧时间**：生成一帧所需毫秒数，比FPS更适合比较成本变化。
+2. **CPU瓶颈**：提交、逻辑或驱动工作限制帧率而GPU有空闲的状态。
+3. **GPU瓶颈**：顶点、片元、带宽或同步限制帧率的状态。
+4. **VSync**：把呈现同步到显示刷新并可能掩盖真实性能变化的机制。
+5. **GPU捕获**：记录一帧命令、资源、状态和计时供逐事件分析的证据。
+
+## 数据流与公式
+
+先稳定硬件、分辨率、场景、热状态和VSync，再用帧时间比较。CPU与GPU异步，单纯围绕Draw调用的CPU计时不等于GPU成本。Nsight捕获用于定位具体Draw和Shader阶段，二分关闭效果确认因果。 前15章以OpenGL 4.1、GLSL和openFrameworks为实验环境；第16至18章再映射到Unity、UE4与Godot。所有代码都要把可编程Shader与应用侧资源绑定、Draw状态、深度和混合分开记录。
+
+$$
+T_{frame}=\max(T_{cpu},T_{gpu})
+$$
+
+$$
+FPS=1000/T_{ms}
+$$
+
+$$
+speedup=T_b/T_o
+$$
+
+$$
+variance=E[(T-\bar T)^2]
+$$
+
+公式中的位置、方向、颜色、深度和时间必须标注空间、范围与单位。片元输出只是候选颜色，最终结果还经过裁剪、深度、模板、混合与颜色编码。
+
+## 最小实现
+
+```glsl
+glFinish(); // only for controlled timing experiments
+auto start=clock::now();
+drawScene();
+glFinish();
+```
+
+实现顺序固定为常量输出、输入可视化、核心公式、应用状态和优化。先验证Shader编译与链接，再检查属性位置、uniform、纹理单元和Framebuffer；只有画面与状态都正确后才比较性能。
+
+<PsdProfilingShadersCompareLab />
+
+## 应用与引擎侧契约
+
+```cpp
+shader.begin();
+shader.setUniform1f("time", elapsedSeconds);
+shader.setUniformTexture("mainTex", texture, 0);
+mesh.draw();
+shader.end();
+```
+
+应用侧保存网格布局、索引、纹理格式、采样器、矩阵顺序、混合与深度状态。引擎章节则把同一概念映射到Material、节点图或ShaderMaterial；语法可以变化，输入空间与合成语义不能靠猜。
+
+## 边界、精度与性能
+
+测试零向量、退化UV、负缩放、近远裁剪面、透明交叉、纹理边缘、大世界坐标、长时间运行和高过度绘制。性能实验固定硬件、分辨率、VSync与场景，先判断CPU还是GPU受限，再用捕获定位具体Draw和Shader阶段。
+
+```text
+renderer: OpenGL 4.1 / named engine and version
+scene: fixed mesh, camera, lights, textures
+state: depth, cull, blend, target
+evidence: image diff, frame capture, CPU/GPU ms
+counterexample: smallest reproducible failure
+```
+
+<PsdProfilingShadersEvidenceLab />
+
+## 分步实验
+
+<Stepper>
+  <Step title="固定输入和状态"><PsdProfilingShadersPipelineLab /></Step>
+  <Step title="逐阶段实现与比较"><PsdProfilingShadersCompareLab /></Step>
+  <Step title="捕获画面和性能"><PsdProfilingShadersEvidenceLab /></Step>
+</Stepper>
+
+1. 用最小网格与常量颜色验证Shader编译、链接和Draw状态。
+2. 可视化位置、UV、法线、深度或光照项，确认范围和空间。
+3. 打开本章核心效果并保存基线与候选画面。
+4. 构造边界与失败输入，用GPU捕获和计时解释差异。
+
+## 验收证书
+
+证书包含源码与编译版本、应用绑定、资源哈希、状态、参考图、GPU事件、CPU与GPU帧时间和失败反例。VSync锁在60fps时优化前后读数相同，便断言优化无效。 修复后必须重放同一输入并说明差异来自哪个阶段。
+
+## 常见误区
+
+<Callout type="trap" title="把语法当原理">VSync锁在60fps时优化前后读数相同，便断言优化无效。</Callout>
+
+<Callout type="trap" title="只看最终画面">画面相似不证明空间、深度、混合和性能等价。必须保存中间调试视图、固定状态和GPU捕获。</Callout>
+
+## 本章回顾
+
+本页覆盖帧时间、CPU瓶颈、GPU瓶颈、VSync、GPU捕获。掌握标准是能画出数据流，写出最小实现，说明应用或引擎状态，再用边界、精度与性能证据复现结论。
+
+<Exercises>
+**问题1：帧时间与CPU瓶颈如何连接？**
+<Answer>生成一帧所需毫秒数，比FPS更适合比较成本变化。 提交、逻辑或驱动工作限制帧率而GPU有空闲的状态。 回答时标注阶段和输入来源。</Answer>
+
+**问题2：怎样调试GPU瓶颈？**
+<Answer>先输出常量，再把相关中间值映射为颜色；随后核对应用绑定、固定状态和GPU事件。</Answer>
+
+**问题3：如何验收GPU捕获？**
+<Answer>记录一帧命令、资源、状态和计时供逐事件分析的证据。 同时保存正常例、边界例、失败反例和CPU/GPU计时。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="帧时间" definition="生成一帧所需毫秒数，比FPS更适合比较成本变化。" />
+  <GlossaryItem term="CPU瓶颈" definition="提交、逻辑或驱动工作限制帧率而GPU有空闲的状态。" />
+  <GlossaryItem term="GPU瓶颈" definition="顶点、片元、带宽或同步限制帧率的状态。" />
+  <GlossaryItem term="VSync" definition="把呈现同步到显示刷新并可能掩盖真实性能变化的机制。" />
+  <GlossaryItem term="GPU捕获" definition="记录一帧命令、资源、状态和计时供逐事件分析的证据。" />
+  <GlossaryItem term="可复现实验" definition="固定源码、应用状态、资源、硬件和捕获后可再次得到同一结论的实验。" />
+</Glossary>
+
+<Attribution adaptedFrom="Kyle Halladay · Practical Shader Development · 第13章 剖析着色器性能" adaptedUrl="https://link.springer.com/book/10.1007/978-1-4842-4457-9" />

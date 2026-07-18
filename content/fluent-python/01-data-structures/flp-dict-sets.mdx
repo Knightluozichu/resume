@@ -1,196 +1,119 @@
 ---
-title: "字典与集合"
-type: B
-section: "数据结构"
+title: "第3章 字典与集合"
+type: C
+section: "流畅Python 2e · Part I 数据结构"
 order: 3
-description: "理解字典与集合的哈希表机制：可哈希性、setdefault/defaultdict、插入顺序保证与变体映射。"
+description: "按《Fluent Python, 2nd Edition》第3章重建：字典与集合、字典推导、解包、合并与模式匹配、可哈希对象与缺失键、映射变体与字典视图、集合操作与字典视图操作。"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.oreilly.com/library/view/fluent-python-2nd/9781492056348/"
 draft: false
 ---
 
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { FlpDictSetsDiagram } from "@/components/mdx/fluent-python/diagrams/flp-dict-sets";
+import { FlpDictSetsModelLab, FlpDictSetsBoundaryLab, FlpDictSetsEvidenceLab } from "@/components/mdx/fluent-python/diagrams/flp-dict-sets";
 
 <Objectives>
-
-- 能解释字典的哈希定位过程及键必须可哈希的原因
-- 能用 `defaultdict` / `setdefault` 写出 Pythonic 的分组计数代码
-- 能回答：为什么 list 不能做字典键、tuple 能？
-
+- 能解释字典与集合的核心协议与适用边界
+- 能区分字典推导、解包、合并与模式匹配和可哈希对象与缺失键的责任与失败方式
+- 能实现并复现映射变体与字典视图到集合操作与字典视图操作的最小实验
 </Objectives>
 
-## 直觉引入
+## 从一个错误直觉开始
 
-字典就像一栋带编号的储物柜，但你不必挨个翻找。你把钥匙（key）交给前台，前台用一个数学函数（hash）算出"该去几号柜"，直接带你过去。这就是字典和集合快得离谱的原因——查找不用逐个比较，而是"算"出位置。
+先预测：只记住字典与集合的语法，是否足以写出可靠实现？不够。真正需要掌握的是对象、协议、状态和失败路径怎样协作。<Term def="字典与集合都建立在哈希表上。可哈希对象必须在生命周期内保持哈希值不变，并让相等对象拥有相同哈希；通常由不可变成分构成，元组也只有在全部元素可哈希时才可作键。">字典与集合</Term>不是孤立技巧，而是把调用方意图映射到可测试行为的模型。
 
-集合则是同一栋柜子，只是每个柜里只放钥匙本身、不存别的值。所以"这东西在不在集合里"和"查字典某键"一样快。
+<FlpDictSetsModelLab />
 
-没有哈希表，你要在十万条记录里查一个名字，只能线性翻找（O(n)）；有了它，一次哈希计算就能定位（O(1) 均摊）。但前提是钥匙"可哈希"——它的哈希值不能变，否则存进去就再也找不到。
+## 核心模型与责任
 
-## 概念讲解
+字典与集合都建立在哈希表上。可哈希对象必须在生命周期内保持哈希值不变，并让相等对象拥有相同哈希；通常由不可变成分构成，元组也只有在全部元素可哈希时才可作键。 <Term def="字典推导、双星号解包与合并运算符把转换、复制和覆盖规则写成表达式；映射模式匹配只要求目标含有指定键，多余键不会阻止匹配，并可用双星号捕获其余字段。">字典推导、解包、合并与模式匹配</Term>
 
-### 哈希表机制
+这一章的阅读方法是先写出输入和不变量，再观察解释器或标准库采取哪条路径，最后用反例确认边界。这样学习得到的是可迁移的判断，而不是只能复述示例。
 
-<Term def="通过 hash(key) 对桶数取模直接定位存储位置的结构，让查找/插入/删除均为 O(1) 均摊。">
+## 机制一：第一条执行链
 
-字典和集合底层都是**哈希表**。访问 `d[k]` 时，Python 先算 `hash(k)`，对桶数取模定位到目标桶，再用 `==` 处理冲突。只要哈希函数质量好、装填因子低，定位只需常数步，故均摊 O(1)。集合相当于"只有键、值为占位"的字典，所以成员查找、去重也是 O(1)。
-
-</Term>
-
-### 键必须可哈希
-
-哈希表的不变量：键存进去后哈希值不能变，且 `a == b` 蕴含 `hash(a) == hash(b)`。否则键的哈希变了，就再也定位不到它。所以键必须**可哈希**——对象不可变，且其元素也可哈希（递归要求）。`list` 可变故 `__hash__` 为 `None`，不能做键；`tuple` 不可变可做键，但若内含 list 则 `hash` 抛 `TypeError`。
-
-### setdefault 与 defaultdict
-
-普通字典访问缺失键会抛 `KeyError`。两种 Pythonic 解决：`d.setdefault(k, default)` 在缺失时存入 default 并返回；`collections.defaultdict(factory)` 在缺失时自动调用工厂（如 `list`、`int`）生成默认值。后者语义更清晰，适合分组、计数。
-
-### 插入顺序保证
-
-Python 3.7 起 dict 保证按插入顺序遍历。实现上采用"紧凑哈希表"：稀疏索引数组负责 O(1) 定位，紧凑 entries 数组按插入顺序存键值对，遍历沿 entries 数组进行。这不矛盾，还顺带省了约 20% 内存。
-
-## 交互Demo
-
-<FlpDictSetsDiagram />
-
-<Stepper>
-
-<Step title="第一步：理解哈希定位">
-
-`d['name'] = 'Bob'`：算 `hash('name')` → 对桶数取模 → 定位到桶 0 → 存入键值对。查找 `d['name']` 走同样的定位路径，所以 O(1)。哈希冲突时向后探测空位（开放寻址法）。
-
-</Step>
-
-<Step title="第二步：判断键是否可哈希">
-
-键必须不可变。`list`、`dict`、`set` 可变，不能做键；`tuple` 不可变可做键，但内含可变元素时仍不可哈希。要存"复合键"就用全不可变的 tuple。
-
-</Step>
-
-<Step title="第三步：用 defaultdict 写分组计数">
-
-`defaultdict(list)` 访问缺失键自动建空列表，分组一行搞定；`defaultdict(int)` 访问缺失键自动得 0，计数直接 `+=1`。比手写 `setdefault` 更清晰高效。
-
-</Step>
-
-</Stepper>
-
-## 代码对照
+字典推导、双星号解包与合并运算符把转换、复制和覆盖规则写成表达式；映射模式匹配只要求目标含有指定键，多余键不会阻止匹配，并可用双星号捕获其余字段。 <Term def="缺失键应按语义选择get、setdefault、defaultdict或自定义missing。读取与创建不能混为一谈；defaultdict只在getitem路径触发工厂，get不会自动插入。">可哈希对象与缺失键</Term>
 
 ```python
-from collections import defaultdict, Counter
-
-# 哈希定位：键可哈希才能用
-d = {'name': 'Bob', 'age': 30}
-print(d['name'])            # Bob —— hash('name') 定位
-
-# list 不可哈希，不能做键
-# d[[1, 2]] = 'x'           # TypeError: unhashable type: 'list'
-d[(1, 2)] = 'point'         # tuple 可哈希，OK
-# d[([1],)] = 'x'           # TypeError：tuple 内含 list 也不行
-
-# defaultdict 分组
-pairs = [('a', 1), ('b', 2), ('a', 3)]
-grouped = defaultdict(list)
-for k, v in pairs:
-    grouped[k].append(v)
-print(dict(grouped))        # {'a': [1, 3], 'b': [2]}
-
-# defaultdict 计数
-counts = defaultdict(int)
-for word in "the cat the dog the".split():
-    counts[word] += 1       # 缺失键自动得 0
-print(dict(counts))         # {'the': 3, 'cat': 1, 'dog': 1}
-
-# Counter 是计数专用工具
-print(Counter("the cat the dog the"))   # Counter({'the': 3, 'cat': 1, 'dog': 1})
-
-# 集合：去重与成员判断 O(1)
-ids = [1, 2, 2, 3, 3, 3]
-unique = list(set(ids))     # [1, 2, 3]
-print(2 in set(ids))        # True，O(1) 均摊
-
-# 插入顺序保证（3.7+）
-od = {}
-for k in 'cab':
-    od[k] = 1
-print(list(od))             # ['c', 'a', 'b'] —— 按插入顺序
+dial_codes = [(880, 'Bangladesh'), (55, 'Brazil'), (86, 'China')]
+country_dial = {country: code for code, country in dial_codes}
+merged = country_dial | {'China': 999}
 ```
 
-`defaultdict` 和 `Counter` 把"分组、计数"这种高频模式一行化，背后都是哈希表的 O(1) 定位。
+运行后记录对象身份、返回类型和异常位置；再改变一个输入，确认变化来自协议本身，而不是偶然的实现细节。
 
-## 常见误区
+## 机制二：状态、类型与协作
 
-<Callout type="trap">
+缺失键应按语义选择get、setdefault、defaultdict或自定义missing。读取与创建不能混为一谈；defaultdict只在getitem路径触发工厂，get不会自动插入。 <Term def="映射变体包括ChainMap、Counter、UserDict和只读MappingProxyType。字典视图是动态窗口而非快照，keys与items支持集合式操作，values视图则不定义集合语义。">映射变体与字典视图</Term>
 
-**误区：边遍历字典边修改它**
-
-`for k in d: del d[k]` 会在迭代中改变字典结构，触发 `RuntimeError: dictionary changed size during iteration`。要边遍历边删，应先收集要删的键再统一删，或遍历副本 `for k in list(d):`。集合同理。
-
-</Callout>
-
-<Callout type="trap">
-
-**误区：把 list 当字典键，或用含 list 的 tuple 当键**
-
-list 可变，`__hash__` 为 `None`，做键会抛 `TypeError`。即使外层是 tuple，只要内含 list（如 `([1], 2)`）也不可哈希。需要复合键时，把内层也改成 tuple，确保整条路径全不可变。
-
-</Callout>
-
-<Exercises>
-
-**问题 1**：为什么 list 不能做字典键，而 tuple 能？tuple 一定可哈希吗？
-
-<Answer>
-
-字典键必须可哈希——哈希值生命周期内不变且 `a==b` 蕴含 `hash(a)==hash(b)`。list 是可变对象，内容可变会导致哈希值变化，故 Python 把 `list.__hash__` 设为 `None`，禁止做键。tuple 本身不可变、哈希值稳定，原则上可做键。但 tuple 不一定可哈希：若内含可变元素（如 `([1], 2)`），`hash()` 会递归求元素哈希时抛 `TypeError`。所以「可哈希」是递归要求——对象及其所有元素都不可变。要存复合键，确保整条路径都是不可变类型。
-
-</Answer>
-
-**问题 2**：用 `defaultdict` 写一段代码统计句子中每个单词出现次数，并说明它比 `setdefault` 优势在哪。
-
-<Answer>
+<FlpDictSetsBoundaryLab />
 
 ```python
 from collections import defaultdict
-counts = defaultdict(int)
-for w in "the cat the dog".split():
-    counts[w] += 1   # 缺失键自动得 0，无需判断
+index = defaultdict(list)
+for word, line in [('python', 1), ('python', 8), ('data', 3)]:
+    index[word].append(line)
 ```
-优势：`defaultdict(int)` 在缺失键时自动调用 `int()` 得 0，代码只需 `+= 1`，语义清晰。用 `setdefault` 则要写 `d.setdefault(w, 0); d[w] += 1`，且 `setdefault` 每次都构造默认值（即使键已存在），默认值构造昂贵时浪费。`defaultdict` 的工厂只在缺失时触发，更高效也更易读。
 
-</Answer>
+评审这段代码时，先问调用端依赖什么能力，再问实现是否扩大了共享状态或静默吞掉错误。接口越小，替换和测试通常越直接。
 
+## 机制三：边界条件与成本
+
+映射变体包括ChainMap、Counter、UserDict和只读MappingProxyType。字典视图是动态窗口而非快照，keys与items支持集合式操作，values视图则不定义集合语义。 <Term def="集合操作与字典视图操作适合表达去重、成员判断、交并差和键集合比较。哈希表用空间换近似常数时间，但不要依赖内部槽位或把顺序保证误解成排序。">集合操作与字典视图操作</Term>
+
+集合操作与字典视图操作适合表达去重、成员判断、交并差和键集合比较。哈希表用空间换近似常数时间，但不要依赖内部槽位或把顺序保证误解成排序。 <Term def="用可复现实验判断字典与集合实现是否保持协议、不变量与失败语义。">字典与集合验证边界</Term>
+
+```python
+required = {'id', 'name'}
+payload = {'id': 7, 'name': 'Ada', 'role': 'admin'}
+missing = required - payload.keys()
+match payload:
+    case {'id': int(uid), 'name': str(name), **rest}: print(uid, rest)
+```
+
+<FlpDictSetsEvidenceLab />
+
+## 分步验证
+
+<Stepper>
+  <Step title="建立模型"><FlpDictSetsModelLab /></Step>
+  <Step title="施加边界"><FlpDictSetsBoundaryLab /></Step>
+  <Step title="收集证据">分别运行正常输入、边界输入和失败输入，记录返回值、对象身份、异常类型与资源状态；只有证据支持不变量时才接受实现。</Step>
+</Stepper>
+
+## 代码实验与诊断
+
+把三段代码保存为同一最小实验，先运行原始版本，再只改变一个维度。至少检查：公开结果是否稳定、失败是否在正确边界暴露、是否产生意外别名或资源泄漏、类型提示与运行时行为是否一致。观察变化后写出因果解释，而不是只记录输出。
+
+## 常见误区
+
+<Callout type="trap" title="只会字典与集合的写法就等于掌握本章">
+语法只能让示例运行；若没有写出输入、所有权、不变量和失败路径，换成真实数据后仍会出现隐蔽错误。应以协议和可复现实验验收。
+</Callout>
+
+<Callout type="trap" title="映射变体与字典视图在所有场景都更优">
+任何抽象都有适用成本。要比较数据规模、可变性、并发、可观察性与团队维护需求，再根据证据选择；本章给的是判断工具，不是无条件规则。
+</Callout>
+
+## 本章回顾
+
+官方核心单元核对：字典与集合；字典推导、解包、合并与模式匹配；可哈希对象与缺失键；映射变体与字典视图；集合操作与字典视图操作。这些单元共同回答字典与集合如何从语言机制落到工程边界；下一步应能在没有范例答案时画出执行链、实现最小版本并解释反例。
+
+<Exercises>
+**问题 1：如何解释“字典与集合”？**<Answer>字典与集合都建立在哈希表上。可哈希对象必须在生命周期内保持哈希值不变，并让相等对象拥有相同哈希；通常由不可变成分构成，元组也只有在全部元素可哈希时才可作键。</Answer>
+**问题 2：字典推导、解包、合并与模式匹配与可哈希对象与缺失键应怎样协作？**<Answer>字典推导、双星号解包与合并运算符把转换、复制和覆盖规则写成表达式；映射模式匹配只要求目标含有指定键，多余键不会阻止匹配，并可用双星号捕获其余字段。 缺失键应按语义选择get、setdefault、defaultdict或自定义missing。读取与创建不能混为一谈；defaultdict只在getitem路径触发工厂，get不会自动插入。</Answer>
+**问题 3：如何验收集合操作与字典视图操作？**<Answer>集合操作与字典视图操作适合表达去重、成员判断、交并差和键集合比较。哈希表用空间换近似常数时间，但不要依赖内部槽位或把顺序保证误解成排序。 编写正常、边界和失败三组输入，比较返回类型、对象状态和异常位置，并确认没有依赖未声明的全局状态。</Answer>
 </Exercises>
 
+## 术语表
 <Glossary>
-
-<GlossaryItem term="哈希表">
-
-通过 `hash(key)` 对桶数取模直接定位存储位置的结构，字典和集合的底层。查找/插入/删除均摊 O(1)，冲突用开放寻址法探测。
-
-</GlossaryItem>
-
-<GlossaryItem term="可哈希">
-
-对象的哈希值生命周期内不变，且 `a == b` 蕴含 `hash(a) == hash(b)`。可哈希是做字典键/集合元素的必要条件，要求对象不可变且元素也可哈希（递归）。
-
-</GlossaryItem>
-
-<GlossaryItem term="defaultdict">
-
-`collections.defaultdict(factory)` 在访问缺失键时自动调用工厂函数生成默认值并存入。适合分组（`list`）、计数（`int`）等模式，比 `setdefault` 更清晰高效。
-
-</GlossaryItem>
-
-<GlossaryItem term="紧凑哈希表">
-
-Python 3.6+ dict 的实现：稀疏索引数组负责 O(1) 定位，紧凑 entries 数组按插入顺序存键值对。保证遍历顺序的同时省约 20% 内存。
-
-</GlossaryItem>
-
+  <GlossaryItem term="字典与集合" definition="字典与集合都建立在哈希表上。" />
+  <GlossaryItem term="字典推导、解包、合并与模式匹配" definition="字典推导、双星号解包与合并运算符把转换、复制和覆盖规则写成表达式；映射模式匹配只要求目标含有指定键，多余键不会阻止匹配，并可用双星号捕获其余字段。" />
+  <GlossaryItem term="可哈希对象与缺失键" definition="缺失键应按语义选择get、setdefault、defaultdict或自定义missing。" />
+  <GlossaryItem term="映射变体与字典视图" definition="映射变体包括ChainMap、Counter、UserDict和只读MappingProxyType。" />
+  <GlossaryItem term="集合操作与字典视图操作" definition="集合操作与字典视图操作适合表达去重、成员判断、交并差和键集合比较。" />
+  <GlossaryItem term="字典与集合验证边界" definition="验证字典与集合协议、不变量和失败路径的边界。" />
 </Glossary>
 
-<Attribution sourceUrl="" />
+<Attribution adaptedFrom="Fluent Python, 2nd Edition, Chapter 3: 字典与集合" adaptedUrl="https://www.oreilly.com/library/view/fluent-python-2nd/9781492056348/" />

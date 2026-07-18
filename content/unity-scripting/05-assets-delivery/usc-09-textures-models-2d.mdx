@@ -1,0 +1,222 @@
+---
+title: "第 9 章 Working with Textures, Models, and 2D"
+type: A
+section: "Unity 脚本设计 · 资源与交付"
+order: 9
+description: "覆盖天空盒、程序网格、UV 滚动与纹理绘制，追踪顶点、三角形、坐标与像素更新。"
+demo: true
+math: false
+sourceUrl: "https://www.packtpub.com/en-us/product/mastering-unity-scripting-9781784390655"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Usc09TexturesModels2dMapLab,
+  Usc09TexturesModels2dExperimentLab,
+  Usc09TexturesModels2dEvidenceLab,
+} from "@/components/mdx/unity-scripting/diagrams/usc-09-textures-models-2d";
+
+<Objectives>
+
+- 能解释天空盒、程序网格、UV 动画与纹理绘制的完整渲染链
+
+- 能实现顶点、三角形、法线和 UV 正确的最小 Mesh 并验证绕序
+
+- 能复现并验证材质实例、MaterialPropertyBlock、CPU 写纹理和 GPU 方案的边界
+
+</Objectives>
+
+## 问题：为什么程序生成的四边形有顶点却可能完全不可见
+
+先预测：四个顶点和六个索引已经赋给 Mesh，但三角形 winding 反向、bounds 未更新或相机在背面时会发生什么？第九章用 Skybox、Procedural meshes、scrolling textures 和 Texture painting 展示脚本如何直接生产图形资源。每个结果都依赖坐标、拓扑、UV、材质和资源可写性。
+
+<Usc09TexturesModels2dMapLab />
+
+## 原书边界与官方小节
+
+官方目录只包含 Skybox、Procedural meshes、Animating UVs - scrolling textures、Texture painting。原章不等于完整 2D 游戏或模型导入教程；它关注脚本怎样控制这些纹理、模型和 2D 元素。
+
+- **Skybox**
+- **Procedural meshes**
+- **Animating UVs - scrolling textures**
+- **Texture painting**
+
+这些小节按官方目录唯一归属。本站重新组织解释、代码和实验，不逐字复制原文；现代补充必须放在迁移段，不能替换或重复计算原始单元。
+
+## 几何与纹理的生产者到 GPU 链
+
+程序网格脚本产生 vertices、triangles、normals、uv 和 bounds，MeshFilter 持有几何，Renderer 与 Material 决定着色；Skybox 由相机或渲染设置消费环境材质。UV 滚动改变采样坐标而非纹理像素，纹理绘制则修改像素并 Apply 上传。sharedMaterial 修改共享资产，renderer.material 可能克隆实例，MaterialPropertyBlock 适合每 Renderer 参数。
+
+<Usc09TexturesModels2dExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="顶点与索引如何组成三角形及其邻接关系。">网格拓扑</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="三角形索引顺序决定正面方向和背面剔除结果。">绕序</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="把网格表面位置映射到纹理采样空间的二维坐标。">UV 坐标</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="为单个 Renderer 创建、可独立修改的 Material 副本。">材质实例</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="CPU 像素修改通过 Apply 等操作同步到 GPU 资源的过程。">纹理上传</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+术语若不能落到具体对象、状态和观测点，就仍停留在记忆层。读者应能为每个术语写出生产者、变换规则、消费者、正常值、边界值和失败信号。
+
+## 关键对象与数据流
+
+实验先生成一个四边形，逐项验证顶点、索引、法线、UV 和 bounds；再为两个 Renderer 滚动纹理，比较 sharedMaterial、material 与 property block 的影响范围。纹理绘制固定画布尺寸和笔刷轨迹，记录 CPU 修改、Apply 次数和 GPU 上传；最后比较读写权限关闭的失败。
+
+排查时从最早可控输入开始，逐段检查中间状态和最终消费者。最终结果正确但中间链不符合预测，也不能立即签发，因为它可能依赖未记录的缓存、时序或 Editor 状态。
+
+## 三步可重复实验
+
+动手前先预测：只改变当前步骤的一项输入后，哪个日志、状态或像素应最先变化？实验期间固定 Unity 版本、场景、对象数量、时间步与目标平台，避免多个变量一起漂移。
+
+<Stepper>
+  <Step title="生成最小网格">
+    <Usc09TexturesModels2dMapLab />
+
+创建四边形并可视化法线，依次破坏 winding、UV 和 bounds，保存背面、拉伸和剔除错误。
+
+```csharp
+mesh.vertices = new[] { new Vector3(-1,0,-1), new Vector3(1,0,-1), new Vector3(-1,0,1), new Vector3(1,0,1) };
+mesh.triangles = new[] { 0,2,1, 1,2,3 };
+mesh.RecalculateNormals(); mesh.RecalculateBounds();
+```
+
+  </Step>
+  <Step title="滚动采样坐标">
+    <Usc09TexturesModels2dExperimentLab />
+
+保持纹理不变，仅改变 UV offset；比较共享材质、实例材质和 MaterialPropertyBlock 对多个对象的影响。
+
+```csharp
+block.SetVector("_BaseMap_ST", new Vector4(1, 1, offset.x, offset.y));
+renderer.SetPropertyBlock(block);
+```
+
+  </Step>
+  <Step title="绘制并上传纹理">
+    <Usc09TexturesModels2dEvidenceLab />
+
+按确定笔刷轨迹修改像素，控制 Apply 频率，测试不可读纹理、边界裁剪、分辨率和保存需求。
+
+```csharp
+texture.SetPixels32(pixels);
+texture.Apply(updateMipmaps: false, makeNoLongerReadable: false);
+```
+
+  </Step>
+</Stepper>
+
+## 程序资源必须同时验证几何与渲染解释
+
+程序网格至少包含顶点、索引和拓扑；正常光照通常还需要法线，纹理采样需要 UV，正确剔除依赖三角形绕序，视锥裁剪依赖 bounds。只在 Scene 视图看到一个面不能证明数据完整，因为双面调试 shader 可能掩盖反向绕序，自动重算法线可能掩盖断裂，错误 bounds 可能只在移动相机后才暴露。实验应分别显示顶点编号、法线方向、UV 棋盘格和包围盒。
+
+UV 滚动改变采样坐标，不应每帧复制纹理像素。直接访问 renderer.material 会实例化材质，数量多时增加内存和批次；共享材质会让所有对象一起变化；MaterialPropertyBlock 可为 Renderer 提供每对象参数而不复制完整材质。三种方法应在相同对象数量下比较材质实例数、批次和内存，同时确认属性是否被 shader 实际读取。
+
+## 纹理绘制的坐标证据链
+
+- 从屏幕输入生成射线，保存命中的 Collider、三角形和世界位置。
+- 将命中信息转换为 UV，验证模型导入后的 UV 通道和坐标方向。
+- 把 UV 映射为像素索引，检查边界夹取、笔刷半径和纹理分辨率。
+- 修改可读纹理并 Apply，记录 CPU 时间、上传成本和是否产生新实例。
+- 保存或重建绘制结果，验证重新加载场景后数据归属是否明确。
+
+天空盒同样不是“设置一张图片”：材质 shader、六面或立方体贴图布局、颜色空间和相机 clear mode 都影响结果。现代项目可把高频绘制迁移到 RenderTexture 或 compute shader，但迁移必须保持命中、UV、颜色混合和持久化规则。签发时使用正反绕序、UV 越界、不可读纹理和多个对象共享材质作为失败样本。
+
+程序资源还需要明确创建和销毁责任。在编辑模式反复生成 Mesh 或运行时频繁访问 material，都可能留下隐藏实例；共享资源被一个对象销毁又会让其他对象失效。实验给每个动态 Mesh、Texture 和 Material 记录创建者、共享策略、资源实例 ID 与释放时刻，连续进入退出场景后比较对象数量和内存。若资源需要跨场景复用，应由缓存声明引用计数或统一释放边界；若只属于单个组件，则在对应生命周期结束时销毁。视觉正确与资源寿命正确必须同时签发。
+
+纹理写入还应比较单像素循环、批量像素缓冲和 GPU 目标三种路径，在相同笔刷轨迹下核对颜色结果、CPU 时间与上传次数。优化不能改变边缘混合和坐标映射，性能证据也不能只取一次空场景峰值。
+
+## 正常、边界与失败样本
+
+每章至少保存一个正常样本、一个极端边界和一个故意破坏配置。正常样本证明主路径，边界样本说明适用范围，失败样本证明诊断方法真的能抓到错误。
+
+<Callout type="trap">
+  **因果陷阱**：在 Update 中访问 renderer.material
+  可能不断创建材质实例并破坏合批，应缓存或用 PropertyBlock。
+</Callout>
+
+<Callout type="trap">
+  **版本陷阱**：高分辨率纹理每次笔刷都 Apply
+  会产生大带宽与主线程成本，必须批量更新并测量。
+</Callout>
+
+## 从 2015 年到现代 Unity
+
+现代 SRP 的天空盒、Shader 属性名和后处理不同，GPU 绘制或 Compute Shader 可替代高频 CPU Texture2D 修改。迁移应保留网格拓扑、UV 采样、材质所有权和上传成本这些不变量。Sprite、Tilemap 或 Shader Graph 可作为现代扩展，不能替代四个原始小节。
+
+迁移记录采用五列：原书载体、稳定不变量、现代实现、不可等价处、目标平台证据。允许替换工具和 API，不允许抹去原始问题或倒写历史。
+
+## 验收证据
+
+验收包含正确与反向 winding、法线与 UV 可视化、两个对象材质隔离、确定性滚动、纹理边界绘制、不可读失败和上传 Profiler。每个生成资源都记录创建者、生命周期与销毁点，避免 Editor 或运行时泄漏。
+
+证据包同时记录场景路径、代码版本、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜测隐藏状态即可重放，才算掌握而不只是读完。
+
+## 小结
+
+- 程序网格必须同时正确提供拓扑、法线、UV 与 bounds
+- UV 滚动改变采样，纹理绘制改变像素，两者成本不同
+- 材质共享、实例与 PropertyBlock 决定参数影响范围
+- 现代 GPU 方案替换载体时仍要验证坐标、所有权与上传成本
+
+<Exercises>
+
+**问题 1** 网格为何有顶点却不可见？
+
+<Answer>
+  可能没有索引、winding 反向、bounds 错误、材质/Layer 不可见或位于相机背后。
+</Answer>
+
+**问题 2** UV 滚动为什么不需要改纹理像素？
+
+<Answer>只需改变材质采样坐标偏移，GPU 会从同一纹理的不同位置采样。</Answer>
+
+**问题 3** 何时使用 MaterialPropertyBlock？
+
+<Answer>多个 Renderer 共享材质但需要每对象参数，且希望避免克隆材质时。</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="网格拓扑">
+    顶点与索引如何组成三角形及其邻接关系。
+  </GlossaryItem>
+  <GlossaryItem term="绕序">
+    三角形索引顺序决定正面方向和背面剔除结果。
+  </GlossaryItem>
+  <GlossaryItem term="UV 坐标">
+    把网格表面位置映射到纹理采样空间的二维坐标。
+  </GlossaryItem>
+  <GlossaryItem term="材质实例">
+    为单个 Renderer 创建、可独立修改的 Material 副本。
+  </GlossaryItem>
+  <GlossaryItem term="纹理上传">
+    CPU 像素修改通过 Apply 等操作同步到 GPU 资源的过程。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Alan Thorn《Mastering Unity Scripting》第一版官方目录与中文版身份资料"
+  adaptedUrl="https://www.packtpub.com/en-us/product/mastering-unity-scripting-9781784390655"
+/>

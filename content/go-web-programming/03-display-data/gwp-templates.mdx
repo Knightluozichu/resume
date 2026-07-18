@@ -1,0 +1,101 @@
+---
+title: "第5章 展示内容"
+type: C
+section: "Go Web编程 · 展示与数据"
+order: 5
+description: "掌握text/template与html/template的解析执行、action、pipeline、function、上下文转义和布局组合。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/go-web-programming/chapter-5"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GwpTemplatePipelineLab, GwpContextEscapeLab, GwpLayoutLab } from "@/components/mdx/go-web-programming/diagrams/gwp-templates";
+
+<Objectives>
+- 能实现模板启动期解析与请求期执行，并区分text/template和html/template
+- 能解释action、参数、变量、pipeline与function的数据流和错误边界
+- 能设计上下文安全的嵌套模板、layout与block覆盖结构
+</Objectives>
+
+## 从模板为什么分解析和执行开始
+
+先预测：每次请求都从磁盘读取并Parse模板是否正确？能运行但放大I/O、语法失败和并发复杂度。<Term def="模板源码先编译为语法树，再以具体数据执行生成输出的两阶段协议。">template parse execute contract</Term>应在启动期发现语法错误。
+
+<GwpTemplatePipelineLab />
+
+## Template与Template Engine
+
+Template是含占位动作的展示程序，engine负责解析、绑定函数和执行。<Term def="模板名称、语法树、函数映射和输入数据形状组成的展示程序。">template program identity</Term>要求模板命名稳定，执行时不访问隐藏全局状态。
+
+```go
+templates := template.Must(template.New("base").Funcs(funcs).ParseFS(files, "*.html"))
+```
+
+## text/template与html/template
+
+两者共享语法，但html/template按HTML、属性、URL、CSS和JavaScript位置做上下文转义。<Term def="根据输出位置选择编码规则，防止数据改变页面语法结构。">context aware escaping</Term>是默认安全边界；不要把不可信字符串转成template.HTML绕过。
+
+<GwpContextEscapeLab />
+
+## Action、参数与变量
+
+Action位于双花括号中，可访问dot、字段、方法和变量。<Term def="当前dot、局部变量和参数沿模板控制结构传播的作用域规则。">template data scope</Term>要求空值和缺失字段有明确策略，复杂业务判断留在handler。
+
+```html
+{{range .Threads}}
+  <a href="/thread/{{.ID}}">{{.Title}}</a>
+{{else}}
+  <p>No threads</p>
+{{end}}
+```
+
+## Pipeline与Function
+
+Pipeline把前一步结果作为后一步参数，函数可返回值或`(value, error)`。<Term def="值通过命令链转换，任一错误终止模板执行的计算路径。">template pipeline contract</Term>适合格式化，不适合数据库、网络和不可控副作用。
+
+## 嵌套模板与Layout
+
+define声明命名模板，template调用子模板，block提供可覆盖默认内容。<Term def="基础布局、局部模板和页面block按名称组合的结构协议。">template layout composition</Term>避免复制header与footer，并要求数据契约一致。
+
+```html
+{{define "base"}}<main>{{block "content" .}}{{end}}</main>{{end}}
+{{define "content"}}<h1>{{.Title}}</h1>{{end}}
+```
+
+<GwpLayoutLab />
+
+<Stepper>
+  <Step title="解析模板"><GwpTemplatePipelineLab /></Step>
+  <Step title="测试上下文"><GwpContextEscapeLab /></Step>
+  <Step title="组合布局">定义base、navigation、content和footer，覆盖content并核对模板名。</Step>
+</Stepper>
+
+## 验收实验：同一输入四种上下文
+
+把包含引号、尖括号、URL分隔符和脚本片段的输入分别放到文本、属性、URL和JavaScript位置，保存html/template输出；再与text/template比较。故意使用未知模板、失败函数和错误数据形状，确认错误在响应提交前可诊断。
+
+<Callout type="trap" title="template.HTML适合修复转义后的显示问题">它绕过安全边界，只能用于经过可信构造和审计的静态片段。</Callout>
+<Callout type="trap" title="模板函数可以直接查数据库">这会隐藏I/O、错误和延迟；handler应先准备视图数据。</Callout>
+
+## 本章回顾
+
+本章覆盖模板与模板引擎、text/template、html/template、Action、参数、变量与Pipeline、模板函数、上下文感知，以及嵌套模板、布局与block action。安全来自解析时点、数据边界和上下文转义共同作用。
+
+<Exercises>
+**问题 1：为何启动期Parse？**<Answer>尽早发现语法和命名错误，并复用并发安全的已解析模板。</Answer>
+**问题 2：html/template比text/template多什么？**<Answer>按HTML输出上下文进行安全转义。</Answer>
+**问题 3：Pipeline函数返回error会怎样？**<Answer>非nil错误终止执行并返回给调用方。</Answer>
+</Exercises>
+
+## 术语表
+<Glossary>
+  <GlossaryItem term="template parse execute contract" definition="先解析后执行的模板协议。" />
+  <GlossaryItem term="template program identity" definition="名称、语法树、函数和数据组成的模板身份。" />
+  <GlossaryItem term="context aware escaping" definition="按输出位置选择编码规则。" />
+  <GlossaryItem term="template data scope" definition="dot、变量与参数作用域。" />
+  <GlossaryItem term="template pipeline contract" definition="命令链值与错误传播协议。" />
+  <GlossaryItem term="template layout composition" definition="布局、局部与block的组合协议。" />
+</Glossary>
+<Attribution adaptedFrom="Go Web Programming Chapter 5 Displaying content" adaptedUrl="https://livebook.manning.com/book/go-web-programming/chapter-5" />

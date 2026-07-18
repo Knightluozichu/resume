@@ -1,0 +1,273 @@
+---
+title: "Unity Game Optimization 第三版：综合验收"
+type: B
+section: "Unity Game Optimization · 总复习"
+order: 1
+description: "用一个可重放场景串联第三版 10 章，验收 CPU、GPU、资产、物理、XR、内存、DOTS 与工程回归。"
+demo: true
+math: true
+sourceUrl: "https://www.packtpub.com/en-us/product/unity-game-optimization-9781838556518"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  UgoOfficialFinalReviewMapLab,
+  UgoOfficialFinalReviewExperimentLab,
+  UgoOfficialFinalReviewEvidenceLab,
+} from "@/components/mdx/unity-game-optimization/diagrams/ugo-official-final-review";
+
+<Objectives>
+  - 能绘制第三版十章从症状、根因、候选改动到交付门禁的完整链路 - 能设计覆盖
+  CPU、GPU、内存、I/O 与目标平台的综合单变量实验 -
+  能判断一份优化报告是否同时满足正确性、长尾性能、兼容与可重放
+</Objectives>
+
+## 问题：优化结束的证据是什么
+
+先预测：平均 FPS 从 55 提升到 70，但 P95 仍有 60 ms、内存峰值上升 400 MB，这次优化能否签收？不能。全书最终交付不是一组“技巧已应用”勾选框，而是<Term def="跨十章保存输入、版本、捕获、指标、正确性和失败样本的交付物。">综合证据包</Term>。它必须证明瓶颈真的被移除，没有把成本转嫁给另一子系统，也没有破坏画面、物理、交互或平台稳定性。
+
+<UgoOfficialFinalReviewMapLab />
+
+## 十章逐章验收矩阵
+
+### Chapter 1 · 评估性能问题
+
+- **原书边界**：Evaluating Performance Problems；Gathering profiling data using the Unity Profiler、Best approaches to performance analysis、Final thoughts on profiling and analysis。
+- **核心判断**：固定目标设备、场景、画质和采样窗口，再把帧时间归因到 CPU、GPU、内存或等待。
+- **现代迁移**：在 Unity 6 中可结合 Profiler、Profile Analyzer、Memory Profiler 与目标平台工具，但原书的测量、归因、复测闭环不变。
+- **验收证据**：Profiler capture、测试构建参数、设备信息、CPU/GPU 帧时间和可重放场景。
+- **失败边界**：Editor、Deep Profile、VSync 与 Development Build 都会改变观测值，不能混作同一基线。
+
+### Chapter 2 · 脚本优化策略
+
+- **原书边界**：Scripting Strategies；Obtaining components using the fastest method、Removing empty callback definitions、Caching component references、Sharing calculation output、Update, coroutines, and InvokeRepeating、Faster GameObject null reference checks、Avoid retrieving string properties from GameObjects、Using appropriate data structures、Avoiding re-parenting transforms at runtime、Considering caching transform changes、Avoiding Find() and SendMessage() at runtime、Disabling unused scripts and objects、Using distance-squared over distance、Minimizing deserialization behavior、Loading scenes additively and asynchronously、Creating a custom Update() layer。
+- **核心判断**：把高频回调中的查找、分配、字符串桥接与重复计算移到初始化、事件或集中调度层。
+- **现代迁移**：新版 Unity 的增量 GC、Awaitable 与 Entities 不会自动修复低效 MonoBehaviour 热路径；先以 Profiler 证据选择改法。
+- **验收证据**：CPU Timeline、GC Alloc、调用次数、对象规模曲线以及行为一致性测试。
+- **失败边界**：缓存会延长引用生命周期，集中调度会增加管理复杂度；低频路径不应为微优化牺牲可读性。
+
+### Chapter 3 · 合批的收益
+
+- **原书边界**：The Benefits of Batching；Draw calls、Materials and shaders、The Frame Debugger、Dynamic batching、Static batching。
+- **核心判断**：把渲染提交成本拆成材质状态切换、批次、顶点处理、内存占用与可见像素，不能只追一个 Draw Call 数字。
+- **现代迁移**：SRP Batcher、GPU Instancing 与 BatchRendererGroup 是现代补充；它们优化的契约不同，不能与静态合批互换。
+- **验收证据**：Frame Debugger 事件序列、Batches/SetPass、渲染线程耗时和静态合批后的网格内存。
+- **失败边界**：合批可能增加顶点数据、破坏独立剔除或被材质关键字拆开；批次更少不等于 GPU 更快。
+
+### Chapter 4 · 美术资源优化
+
+- **原书边界**：Optimizing Your Art Assets；Audio、Texture files、Mesh and animation files、Asset bundles and resources。
+- **核心判断**：从源资源、导入设置、平台压缩、运行时驻留到卸载建立完整资产生命周期，而不是只看包体。
+- **现代迁移**：Addressables 可替代部分旧式 AssetBundle/Resources 工作流，但压缩格式、Read/Write、副本与依赖生命周期仍需逐项验证。
+- **验收证据**：Import Settings、Build Report、Memory Profiler 快照、加载时间线和设备端质量对照。
+- **失败边界**：磁盘压缩率、下载体积、解码成本和运行时显存不是同一指标；错误格式会把节省转成启动卡顿。
+
+### Chapter 5 · 物理加速
+
+- **原书边界**：Faster Physics；Understanding the physics engine、Physics performance optimizations。
+- **核心判断**：物理成本由固定步数、Broad Phase 候选对、Narrow Phase 接触、求解迭代、查询与同步共同决定。
+- **现代迁移**：PhysX 版本和作业化实现会变化，但 timestep、Layer Matrix、Collider 复杂度、sleep 与 CCD 的成本模型仍成立。
+- **验收证据**：Physics Profiler、固定步计数、接触对数量、查询次数、穿透/漏撞回放和主线程时间。
+- **失败边界**：降低求解频率或改 Discrete 可能提升速度却破坏稳定性；性能验收必须同时保存玩法正确性。
+
+### Chapter 6 · 动态图形
+
+- **原书边界**：Dynamic Graphics；Exploring the Rendering Pipeline、Detecting performance issues、Rendering performance enhancements。
+- **核心判断**：沿 CPU 提交、顶点、光栅、片元、带宽与后处理逐段定位瓶颈，再选择剔除、LOD、光照、阴影或 Shader 改动。
+- **现代迁移**：Built-in、URP 与 HDRP 的工具入口不同，但先判 CPU/GPU bound、再缩小阶段的诊断顺序不变。
+- **验收证据**：GPU Recorder、Frame Debugger、RenderDoc/平台捕获、分辨率缩放曲线和画面差异图。
+- **失败边界**：Editor 的 GPU 时间可能不可用；只看 FPS 会隐藏 VSync、热降频、异步提交和 CPU/GPU 并行。
+
+### Chapter 7 · XR 优化
+
+- **原书边界**：Optimizations for Virtual and Augmented Reality；Overview of XR technology、Developing XR products、Performance enhancements in XR。
+- **核心判断**：XR 把双眼渲染、显示刷新、姿态预测、合成与 motion-to-photon 约束叠到普通帧预算之上。
+- **现代迁移**：OpenXR 与 XR Plug-in Management 取代旧 SDK 接入，但单/多 Pass、分辨率、注视点、重投影和设备热预算仍是核心。
+- **验收证据**：设备端 CPU/GPU 帧时间、App/Compositor dropped frames、左右眼截图、热状态和输入延迟。
+- **失败边界**：桌面 Game View 不能替代头显；单眼正确、平均 FPS 达标也不能证明姿态延迟与尾部帧稳定。
+
+### Chapter 8 · 内存管理
+
+- **原书边界**：Masterful Memory Management；The Mono platform、Code compilation、Profiling memory、Memory management performance enhancements。
+- **核心判断**：区分托管堆、原生对象、显存、临时分配与资产引用链，分别测驻留量、分配率、峰值和回收停顿。
+- **现代迁移**：IL2CPP、增量 GC 与新版 Memory Profiler 改变工具和停顿形态，但装箱、闭包、字符串、对象池和引用生命周期仍需证据。
+- **验收证据**：Memory Profiler diff、GC.Alloc 调用栈、Managed/Native 分类、峰值时间线和释放后的稳定平台。
+- **失败边界**：对象池减少分配却增加常驻内存；UnloadUnusedAssets 也可能制造长停顿，必须看生命周期而非单点数字。
+
+### Chapter 9 · DOTS 数据导向技术栈
+
+- **原书边界**：The Data-Oriented Technology Stack；The problem of multithreading、The Unity Job System、The new ECS、The burst compiler。
+- **核心判断**：通过连续数据、显式读写依赖、可并行 Job 与 Burst 向量化，把大量同构工作从对象图改为数据流。
+- **现代迁移**：第三版描述的是 2019/2020 早期 DOTS；现代 Entities API 已变化，必须保留原理并用当前包版本重写接口。
+- **验收证据**：Jobs Timeline、Burst Inspector、主线程/工作线程时间、缓存友好数据布局和逐元素结果对照。
+- **失败边界**：小任务的调度成本可能高于收益；结构性变更也会增加迁移风险，不能因 DOTS 标签推断必然更快。
+
+### Chapter 10 · 战术技巧
+
+- **原书边界**：Tactical Tips and Tricks；Editor hotkey tips、Editor UI tips、Scripting tips、Custom Editor scripts and menu tips、External tips、Other tips。
+- **核心判断**：把编辑器、脚本模板、自定义菜单、外部工具和团队约定变成可重复流程，减少等待、误操作与性能回退。
+- **现代迁移**：部分快捷键和菜单已变化，但自动化、模板、验证器、版本控制和测量型工作流仍能直接迁移。
+- **验收证据**：操作时间、点击/步骤数、失败次数、Undo 支持、批处理日志和版本控制 diff。
+- **失败边界**：自动化脚本如果绕过 Undo、序列化或导入管线，会把省下的时间转成隐蔽数据损坏。
+
+矩阵保留 10 个原章的边界，同时把它们接到同一场景。第 1 章生产基线，第 2–9 章分别消费热点并产生候选证据，第 10 章把已验证规则固化为工具和回归门禁。这是生产者到消费者关系，不是十次互不相干的调参。
+
+## 四类核心判据
+
+<Term def="同一场景中 CPU 主线程、渲染线程、GPU、I/O 和同步等待组成的最长执行链。">
+  关键路径
+</Term>
+决定帧时间：
+
+$$
+criticalPath = max(mainThread, renderThread, gpu, io) + synchronization
+$$
+
+<Term def="P50、P95、P99 等分位数描述的慢帧分布，避免平均值掩盖卡顿。">
+  长尾帧时间
+</Term>
+用于验收稳定性：
+
+$$
+tailGain = P95_baseline - P95_candidate
+$$
+
+<Term def="画面、物理、交互、资源生命周期和双眼输出在优化前后保持目标行为。">
+  正确性护栏
+</Term>
+约束候选不能靠删功能获胜：
+
+$$
+correct = imagePass * simulationPass * interactionPass * lifecyclePass
+$$
+
+<Term def="把有效场景、指标和阈值纳入持续验证，阻止后续版本重新引入性能问题。">
+  性能回归门禁
+</Term>
+最终决定是否交付：
+
+$$
+ship = budgetPass * tailPass * correct * repeatable * compatible
+$$
+
+## 综合场景：一座可交互 XR 城市
+
+测试场景包含 1000 个可见网格、动态角色、粒子、物理投射物、流式资源与 XR 双眼输出。先在目标设备预热，再保存 60 秒基线。不要同时打开合批、LOD、对象池和 Jobs；那样即使变快，也无法知道谁产生收益、谁制造回归。
+
+```csharp
+var marker = new ProfilerMarker("CityScenario.Frame");
+using (marker.Auto()) RunDeterministicScenario(seed: 20260715);
+```
+
+```text
+baseline: device + build + scene + quality + captures + P50/P95 + memory peak
+candidate: exactly one change + same inputs + correctness diff
+```
+
+```csharp
+Assert.Less(candidate.P95FrameMs, budgetMs);
+Assert.LessOrEqual(candidate.PeakMemoryMb, memoryBudgetMb);
+Assert.IsTrue(candidate.VisualAndSimulationChecksPassed);
+```
+
+## 三阶段总验收
+
+<Stepper>
+  <Step title="阶段一：复现与归因">
+    <UgoOfficialFinalReviewMapLab />
+    固定随机种子、输入回放、设备、构建与画质，确认问题可稳定复现。分别读取 CPU
+    Timeline、GPU capture、Memory snapshot 和 I/O 时间线，写出关键路径假设。
+  </Step>
+  <Step title="阶段二：候选与反证">
+    <UgoOfficialFinalReviewExperimentLab />
+    一次只启用一个候选。除预期收益外，还主动构造低端机、热降频、资源峰值、物理高速碰撞、双眼后处理和小任务调度等反例。
+  </Step>
+  <Step title="阶段三：门禁与交付">
+    <UgoOfficialFinalReviewEvidenceLab />
+    三轮以上复测 P50/P95，保存失败捕获；把通过的阈值、导入规则、场景验证器和
+    Profiler marker 接入日常构建，不通过则回退并记录原因。
+  </Step>
+</Stepper>
+
+## 报告最小字段
+
+报告必须包含：原书章号与官方小节、Unity 与包版本、提交号、设备与热状态、构建类型、场景与输入种子、预热/采样窗口、基线、候选、P50/P95、峰值内存、画面/物理/交互差异、失败样本、迁移说明和结论。缺少任一关键输入，其他人就无法重放。
+
+<Callout type="trap">
+  **转移瓶颈**：合批降低渲染线程耗时，却增加静态网格内存和加载峰值。若报告只展示
+  Batches，就会把一次成本转移误判为整体优化。
+</Callout>
+
+<Callout type="trap">
+  **历史 API**：第三版 Jobs/ECS/XR
+  示例用于还原问题与原理。现代项目必须记录当前包版本与接口差异，不能把编译失败简单归因于原书错误。
+</Callout>
+
+## 小结
+
+- 十章分别贡献范围、候选和证据，最终必须在同一目标场景闭环
+- 关键路径与长尾共同决定体验，平均 FPS 不能单独签收
+- 正确性护栏覆盖画面、物理、交互、内存生命周期与 XR 双眼
+- 有效候选必须进入性能回归门禁，失败样本也要保留
+
+<Exercises>
+
+**问题 1** 合批后 Render Thread P95 降 3 ms，但峰值内存升 600 MB 并触发移动端退出，结论是什么？
+
+<Answer>
+  候选不通过整体验收。它命中 CPU
+  提交，却违反内存预算和平台稳定性；应缩小静态合批范围、比较 SRP
+  Batcher/Instancing，并重新测剔除、加载与内存。
+</Answer>
+
+**问题 2** 设计一条 XR 后处理优化的正确性护栏。
+
+<Answer>
+  在同一姿态与输入下捕获左右眼，检查纹理数组层、视差、边缘、UI
+  和运动序列；同时记录 App/Compositor dropped frames。单眼截图或桌面 Game View
+  通过都不够。
+</Answer>
+
+**问题 3** 为什么必须保留失败候选？
+
+<Answer>
+  失败候选记录了适用边界和反证，可防止团队在下一版本重复尝试；它还解释了收益为何不稳定，例如任务规模过小、受
+  VSync 限制或成本转移到内存。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="综合证据包">
+    覆盖十章输入、版本、捕获、指标、正确性、失败与结论的可重放交付物。
+  </GlossaryItem>
+  <GlossaryItem term="关键路径">
+    决定一帧完成时间的最长 CPU、GPU、I/O 与同步链。
+  </GlossaryItem>
+  <GlossaryItem term="长尾帧时间">
+    用高分位数描述慢帧，揭示平均值隐藏的卡顿。
+  </GlossaryItem>
+  <GlossaryItem term="正确性护栏">
+    防止候选通过删功能、降错误画质或破坏模拟来换取速度的检查。
+  </GlossaryItem>
+  <GlossaryItem term="性能回归门禁">
+    持续运行场景与阈值，阻止后续提交重新引入已修复问题。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Packt《Unity Game Optimization》第三版十章与官方代码仓库"
+  adaptedUrl="https://www.packtpub.com/en-us/product/unity-game-optimization-9781838556518"
+/>

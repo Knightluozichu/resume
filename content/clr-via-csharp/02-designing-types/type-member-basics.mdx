@@ -1,0 +1,196 @@
+---
+title: "Chapter 6. Type and Member Basics"
+type: C
+section: "CLR via C# 4e · Designing Types"
+order: 6
+description: "系统梳理成员种类、类型与成员可见性、friend assembly、static/partial类型、多态分派和可演进API设计。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcAccessibilityLab, CvcMemberKindsLab, CvcVirtualDispatchLab } from "@/components/mdx/clr-via-csharp/diagrams/type-member-basics";
+
+<Objectives>
+
+- 能区分constant、field、method、property、event、operator、constructor和nested type的运行时表示
+- 能设计public/internal/protected/private与friend assembly的最小可见性并评估兼容成本
+- 能分析static/nonvirtual/virtual/interface调用路径，设计可版本化的base type与component contract
+
+</Objectives>
+
+## 为什么每个Member都会变成长期契约
+
+公开一个member不只是让调用者今天能编译，它还决定metadata signature、binary reference、source overload resolution、继承者可覆写点、reflection/serializer可见性和未来版本能否改动。Property看起来像field却是方法协议，event看起来像delegate字段却是受控订阅协议，const看起来像只读值却会被编译进consumer。设计类型前先列出成员种类与consumer，能避免把实现细节永久冻结。
+
+先预测：public const改值后旧consumer是否自动看到；internal member是否可被测试assembly访问；protected是否比public承诺更少；static class是否能作为generic type argument；partial class能否跨assembly；给base class新增virtual method是否绝对兼容。每个答案都要同时看metadata、compiler和runtime dispatch。
+
+<Term def="成员在metadata、调用、继承、反射与版本升级中对所有消费者形成的长期承诺。">member contract surface</Term>
+
+## The Different Kinds of Type Members
+
+CLR支持fields、methods、properties、events、nested types等；C# constructors、operators、conversion和accessors最终以特殊命名/标记的方法或metadata关联表达。Field是真实存储；property由get/set methods定义访问协议；event由add/remove methods控制delegate订阅；indexer是带参数的property。调用成本和副作用不能靠语法图标判断。
+
+```csharp
+public sealed class Account
+{
+    private decimal _balance;                 // field: storage
+    public decimal Balance => _balance;       // property: get method
+    public event EventHandler? Changed;       // event: add/remove protocol
+
+    public void Deposit(decimal amount)       // method: transition
+    {
+        if (amount <= 0) throw new ArgumentOutOfRangeException(nameof(amount));
+        _balance += amount;
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+}
+```
+
+Nested type拥有自己的runtime identity与visibility，只是名称和访问关系嵌套，并不自动绑定外部instance。Generic nested type的完整arity还包含外层generic parameters。选择成员形式依据语义：constant是永不改变的compile-time value；readonly field是每实例/每类型初始化后不再赋值；property适合快速、可重复、看似状态读取；method适合操作、昂贵计算或明显失败；event适合多订阅notification。
+
+<Stepper>
+  <Step title="切换constant/field、method、property/event与nested type"><CvcMemberKindsLab /></Step>
+  <Step title="检查metadata形态">对每个源成员写出对应FieldDef、MethodDef、Property/Event association与special name。</Step>
+  <Step title="标注版本风险">判断旧binary是否嵌入值、是否记录member token、是否允许override以及reflection consumer会看到什么。</Step>
+</Stepper>
+
+## Type Visibility
+
+Top-level type在C#中通常是public或internal。Public进入所有reference consumers的API surface；internal限制在defining assembly。Nested type可有更丰富可访问性，但有效可见性不可能超过containing type。Public method返回internal type会被compiler拒绝，因为consumer无法命名签名的一部分。
+
+<Term def="一个类型在assembly边界之外是否可被metadata consumer命名、引用和实例化的范围。">type visibility boundary</Term>
+
+默认internal是一种风险控制：实现类型可自由重构，只通过小型public interface/DTO暴露稳定contract。可见性不是security boundary；reflection、unsafe或同进程代码可能观察内部，真正机密和权限需要进程/OS控制。它是compile/API evolution边界，不应被宣传成防攻击机制。
+
+## Friend Assemblies
+
+`InternalsVisibleTo`让指定assembly像friend一样访问internal成员，常用于测试、source-generated companion或紧耦合分层。若被授权assembly强命名，声明通常必须包含完整public key而非token，以防同名伪造。Friend access会扩大重构影响，虽然API工具可能仍把member标作internal。
+
+```csharp
+using System.Runtime.CompilerServices;
+
+[assembly: InternalsVisibleTo(
+    "Contoso.Runtime.Tests, PublicKey=002400000480000094...")]
+```
+
+测试需要访问内部并不总该加friend：优先测试public behavior；只有复杂算法、generator contract或assembly协作确需直接访问时开放。建立friend inventory，说明owner、用途、key、移除条件，并让architecture test防止业务层滥用内部实现。
+
+<Term def="通过InternalsVisibleTo授予特定assembly内部访问权，同时承担额外耦合与身份校验责任。">friend assembly coupling</Term>
+
+## Member Accessibility
+
+Public、internal、protected、private及其组合决定member consumer。Private仅当前type，internal是assembly协作者，protected是派生类型，protected internal是“同assembly或derived”，private protected是“同assembly且derived”。选择时从private开始，仅为真实consumer扩大。
+
+Protected不是较小的public：外部derived class可在你无法控制的override中依赖调用顺序、可重入、异常和半初始化状态。一个public nonvirtual method只承诺调用结果；protected virtual同时承诺subclass protocol，往往更难演进。需要扩展时优先composition、strategy interface或少量template method hooks。
+
+<Stepper>
+  <Step title="切换public、internal、protected与friend"><CvcAccessibilityLab /></Step>
+  <Step title="列出真实consumer">为每个member记录外部caller、同assembly collaborator、derived implementer与reflection/tooling。</Step>
+  <Step title="收窄并验证">把无证据的public/protected降级，在独立consumer project与derived fixture中验证必要surface仍可用。</Step>
+</Stepper>
+
+<Callout type="trap" title="Protected成员只给子类用，所以兼容风险低于Public">
+外部派生类会把调用顺序、可覆写时机、base call要求和对象状态当成协议。你无法重新编译它们，protected virtual常是最昂贵的长期surface。
+</Callout>
+
+## Static Classes
+
+Static class在metadata中是abstract sealed，不能实例化或继承，只能包含static members。它适合无状态算法、extension method容器和进程级服务入口，但static mutable state会隐藏lifetime、并发与测试隔离。Type initializer失败后，当前load context中的类型后续访问可能持续抛`TypeInitializationException`，因此static initialization应短、确定且不做远程I/O。
+
+```csharp
+public static class CurrencyMath
+{
+    public static decimal RoundForSettlement(decimal amount, int decimals) =>
+        decimal.Round(amount, decimals, MidpointRounding.ToEven);
+}
+
+public sealed class ExchangeService(IExchangeRateSource source)
+{
+    public Task<decimal> ConvertAsync(Money value, string target, CancellationToken ct) =>
+        source.ConvertAsync(value, target, ct);
+}
+```
+
+纯函数放static class清楚；需要clock、filesystem、network、cache或tenant context的行为应由instance dependency显式持有。不要用静态类充当无边界service locator。Static type本身不能作为普通type argument/parameter value，因为不存在instance，但其nested nonstatic type仍是独立type。
+
+## Partial Classes, Structures, and Interfaces
+
+Partial让同一type declaration分散在多个源文件，compiler在一次compilation中合并。所有parts必须属于同一assembly/module构建，不能跨assembly拼接一个type。它适合generated code与handwritten extension分离、超大UI designer文件等；普通业务类型若依赖partial掩盖职责过多，应拆成components。
+
+Partial method为generator/human code提供compile-time hook；现代C#扩展了可访问性和返回值规则，但本书时代规则更窄。无论版本，必须明确哪一侧拥有signature，缺implementation时调用是否被消除或报错。Generated part不可直接被人工修改，扩展点应稳定且有regeneration test。
+
+## Components, Polymorphism, and Versioning
+
+Component通过contract隐藏实现，可用interface、base class、delegate或message表达。Polymorphism让caller按contract调用不同实现，但扩展方向决定版本策略：新增implementation对稳定interface通常安全；给旧interface新增abstract member会破坏implementers；给base class新增virtual可能让旧derived在未预期状态收到调用；新增overload可能改变新编译consumer的overload resolution。
+
+<Term def="旧consumer与旧implementer在新component版本下仍保持二进制、源码和行为正确的能力。">component versionability</Term>
+
+版本测试至少四格：old consumer+old library、old consumer+new library、new consumer+new library、old third-party implementer+new base/interface。只运行最新单元测试无法覆盖binary compatibility。保留已编译fixture，升级library不重编consumer，才能看到MissingMethod、TypeLoad、dispatch和serialization问题。
+
+## How the CLR Calls Virtual Methods, Properties, and Events
+
+Properties/events accessor本质是methods，因此可virtual并参与相同slot dispatch。Static/nonvirtual call目标由metadata member reference决定；virtual call通常按对象runtime type的slot选择override；interface call按interface map选择implementation。`callvirt` IL也可用于nonvirtual instance call以获得null check，不能看到opcode名字就断言发生多态。
+
+<Term def="base virtual declaration建立的稳定方法槽以及derived override在运行时填入该槽的契约。">virtual slot contract</Term>
+
+Constructor中调用virtual member尤其危险：derived fields尚未初始化，却已dispatch到override。Event raiser也可能调用外部handler造成reentrancy；property getter若virtual且有副作用，会让base invariant难推理。Virtual boundary需要文档化前置/后置条件、thread safety、exception和base-call要求。
+
+<Stepper>
+  <Step title="切换static、nonvirtual、virtual与interface dispatch"><CvcVirtualDispatchLab /></Step>
+  <Step title="反汇编调用点">记录IL是call/callvirt/constrained还是interface call，并对照receiver runtime type和method slot。</Step>
+  <Step title="执行旧派生类测试">用已编译旧derived class加载新base library，覆盖constructor、new virtual call、exception与reentrancy。</Step>
+</Stepper>
+
+<Callout type="trap" title="给Base新增Virtual方法不会破坏旧二进制，所以完全兼容">
+它可能二进制可加载，却改变新base代码对旧derived对象的调用路径；若旧derived恰有同名方法，还可能产生override/hiding差异。行为兼容必须用旧implementer验证。
+</Callout>
+
+## Using Type Visibility and Member Accessibility Intelligently
+
+先定义最小public contract：不可变DTO、capability interface、明确错误与lifetime；其余保持internal/private。避免返回具体mutable collections、public fields、settable global state和过度protected hooks。Reflection/serializer需要public parameterless constructor或setters时，优先使用明确attribute/source-generated metadata，而不是为工具扩大所有surface。
+
+API review逐项询问：consumer是谁；需要source还是binary compatibility；是否会被继承、序列化、反射或跨语言；能否用interface/composition替代base exposure；删除或改名成本是什么。没有consumer evidence的public member就是未来债务。
+
+## Dealing with Virtual Methods When Versioning Types
+
+Virtual设计应遵守少而稳定：base type最好abstract或明确为可继承；可override members有清楚invariant；nonvirtual public method维护流程，只调用受控protected hooks；避免在constructor/finalizer持锁状态调用virtual；新增virtual前评估旧derived。若需要频繁扩展行为，strategy/service interface通常比不断扩展base class稳健。
+
+Version N+1发布前，用API diff检查新增/删除/signature变化，再跑二进制fixture与derived adversarial tests：override不调用base、抛异常、reenter、并发、慢调用。Base owner必须决定哪些失败隔离、哪些传播。可版本化不是“不改”，而是每次改动都有明确consumer evidence。
+
+## 本章回顾：Accessibility就是Compatibility预算
+
+1. Fields存状态，properties/events是accessor协议，operators/constructors也落到metadata methods。
+2. Type/member visibility选择consumer；friend与protected会扩大真实耦合，不能当免费便利。
+3. Static适合无状态算法，static mutable service会隐藏lifetime和并发owner。
+4. Partial只在一次compilation内合并，适合generated/human边界，不跨assembly扩展类型。
+5. Virtual/interface dispatch按runtime mapping执行；每个扩展点都需旧consumer/implementer版本测试。
+
+<Exercises>
+
+**问题 1：为什么public const改值后，未重编译consumer仍看到旧值？**
+
+<Answer>Compiler会把const literal嵌入consumer IL，运行时不读取library字段。若值可能随版本变化，应改用static readonly field或property，并评估这次形态变化的binary compatibility；更新后重编所有已嵌入旧值的consumer。</Answer>
+
+**问题 2：应否为了单元测试给所有internal成员加InternalsVisibleTo？**
+
+<Answer>不应默认这样做。优先通过public behavior测试；只有复杂纯算法、generator contract或assembly协作确需直接验证时，按确切测试assembly identity开放。建立friend清单并避免测试锁死实现。强命名目标需要完整public key，不能只靠容易伪造的名称。</Answer>
+
+**问题 3：给已发布base class新增virtual method前要做哪些验证？**
+
+<Answer>API diff后，用不重编的旧derived fixtures加载新base；检查同名hiding/override、constructor期间调用、base流程新增调用点、reentrancy、异常和线程语义。若无法定义稳定hook contract，改用新interface/strategy或新base版本，而非把实现方法直接virtual化。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="member contract surface" definition="成员对metadata、调用、继承、反射与版本形成的承诺。" />
+  <GlossaryItem term="type visibility boundary" definition="类型能否被assembly外consumer命名与引用的范围。" />
+  <GlossaryItem term="friend assembly coupling" definition="InternalsVisibleTo带来的特权访问和额外耦合。" />
+  <GlossaryItem term="component versionability" definition="旧consumer和implementer在新组件下保持正确的能力。" />
+  <GlossaryItem term="virtual slot contract" definition="Base virtual declaration与derived override共享的运行时槽协议。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 6: Type and Member Basics" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

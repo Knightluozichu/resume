@@ -1,0 +1,235 @@
+---
+title: "第9章：抽象工厂"
+type: A
+section: Modern C++ Design · Part II Components
+order: 9
+description: 对齐第一版第9章 Abstract Factory：产品族的架构角色、Typelist 生成的通用接口、ConcreteFactory 类层次实现、Prototype-based 实现与完整族一致性契约。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+draft: false
+---
+
+import {
+  McdAbstractFactoryGenerationMap,
+  McdProductFamilyMap,
+  McdPrototypeFactoryMap,
+} from "@/components/mdx/modern-cpp-design/diagrams/abstract-factory";
+
+<Objectives>
+
+- 能解释 Abstract Factory 的 architectural role，并区分单产品 Object Factory 与整族产品一致性选择
+- 能实现 ProductList 驱动的 generic Abstract Factory interface 与 ConcreteFactory class generation，推导每个 Unit 的职责
+- 能设计 prototype-based Abstract Factory，处理 prototype ownership、缺失产品、clone semantics 与原子替换
+
+</Objectives>
+
+## 为什么选择单位是“一族产品”
+
+**The Architectural Role of Abstract Factory** 是隔离一整组相互兼容 products 的创建。UI toolkit 需要同一平台的 Button/Menu/Dialog；数据库 adapter 需要同一 driver 的 Connection/Command/Transaction。client 只依赖 abstract interfaces，并一次选择完整 family。
+
+<Term def="提供一组相关或相容抽象产品的创建接口，使 client 不依赖 concrete classes 且保持产品族一致。">
+  Abstract Factory
+</Term>
+
+若 client 分别从三个 Object Factories 选择产品，可能得到 DesktopButton + TouchMenu + FakeDialog；每个对象单独合法，组合 invariant 却破坏。Abstract Factory 把 family selection 提升为一个 object/type，从 architecture 上关闭混搭路径。
+
+<McdProductFamilyMap />
+
+<Callout type="trap" title="陷阱：Abstract Factory 只是返回多个类型的 Object Factory">
+  关键不是方法数量，而是 family invariant：同一个 factory instance/type 创建的所有产品必须共同满足平台、协议、版本或测试语义。若产品彼此无关联，拆成独立 creators 更简单。
+</Callout>
+
+## A Generic Abstract Factory Interface
+
+传统 interface 手写 `MakeButton/MakeMenu/MakeDialog` virtual methods；product 集合变化时，abstract 与每个 concrete factory 都要同步修改。**A Generic Abstract Factory Interface** 把 abstract products 放入 Typelist，让 class generation 为每个 `T` 生成一个 `AbstractFactoryUnit<T>`。
+
+<Term def="由抽象产品类型序列生成、为每种产品提供统一创建协议的可扩展 factory interface。">
+  generic Abstract Factory interface
+</Term>
+
+```cpp
+template<class T>
+struct AbstractFactoryUnit {
+    virtual std::unique_ptr<T> create(Type2Type<T>) = 0;
+    virtual ~AbstractFactoryUnit() = default;
+};
+
+template<class ProductList>
+class AbstractFactory
+    : public GenScatterHierarchy<ProductList, AbstractFactoryUnit> {
+public:
+    template<class T>
+    std::unique_ptr<T> create() {
+        auto& unit = static_cast<AbstractFactoryUnit<T>&>(*this);
+        return unit.create(Type2Type<T>{});
+    }
+};
+```
+
+scatter hierarchy 让 factory 同时拥有每个 product 的 virtual creator unit。`Type2Type<T>` 解决函数不能仅按 return type overload；client 调 `factory.create<Button>()`，template front-end 下钻到对应 virtual unit。
+
+<Term def="为某一个抽象产品 T 定义 virtual creation slot、并作为散射层次一个 base 的接口单元。">
+  AbstractFactoryUnit
+</Term>
+
+product list 是 schema：duplicate 会生成 ambiguous base，缺失会让 client 无 slot，顺序可能影响 paired concrete list 映射。应在 compile time 检查 unique、length 与 pairwise inheritance。
+
+## Implementing AbstractFactory
+
+**Implementing AbstractFactory** 需要把 abstract product list 与 concrete product list 对齐。`ConcreteFactory<AbstractFactory, CreatorUnit, ConcreteList>` 通过 linear hierarchy 逐层实现一个 creation slot，并沿 Tail 继续。
+
+<Term def="把 concrete product list 按位置映射到 abstract product slots，并生成每个 virtual creator 实现的类层次。">
+  ConcreteFactory
+</Term>
+
+```cpp
+template<class ConcreteProduct, class Base>
+class OpNewFactoryUnit : public Base {
+    using AbstractProduct = typename Base::Product;
+public:
+    std::unique_ptr<AbstractProduct>
+    create(Type2Type<AbstractProduct>) override {
+        static_assert(std::is_base_of_v<AbstractProduct, ConcreteProduct>);
+        return std::make_unique<ConcreteProduct>();
+    }
+};
+
+using TouchFactory = ConcreteFactory<
+    UiAbstractFactory,
+    OpNewFactoryUnit,
+    TypeList<TouchButton, TouchMenu, TouchDialog>>;
+```
+
+真正实现需要在 hierarchy recursion 中让每一层知道对应 abstract head；上面片段只突出 pairwise contract。length 相同不够，每个 `Concrete_i` 都必须公开派生自 `Abstract_i`，constructor signature 与 owner/deleter 也要兼容。
+
+<McdAbstractFactoryGenerationMap />
+
+### 为什么一边 scatter、一边 linear
+
+abstract interface 需要并列的 virtual slots，scatter hierarchy 合适；concrete implementation 需要逐项消费 concrete list 并层层 override，linear hierarchy 合适。Typelist 在这里不是“炫技容器”，而是同一 family schema 同时驱动接口和实现。
+
+<Term def="让同一 ProductList 同时生成并列 abstract slots 与顺序 concrete overrides，避免平行声明漂移的结构。">
+  family class generation
+</Term>
+
+error diagnostics 是成本：列表第 17 项错配会产生深层 base error。modern concepts 可在最外层验证 list sizes/pairs，并用 index/type 名报告；对于只有三种产品的固定系统，手写 virtual interface 可能更可维护。
+
+## A Prototype-Based Abstract Factory Implementation
+
+**A Prototype-Based Abstract Factory Implementation** 不把 concrete product types 固定在 factory type 中，而为每种 abstract product 保存一个 prototype。`Create<T>` 找到对应 slot 并调用 virtual clone，运行时替换 prototypes 就能改变 family realization。
+
+<Term def="为每种抽象产品保存一个 concrete prototype，并通过 clone 创建新产品的 Abstract Factory 实现。">
+  Prototype Abstract Factory
+</Term>
+
+```cpp
+class PrototypeUiFactory : public UiAbstractFactory {
+public:
+    void setButton(std::unique_ptr<Button> value) {
+        button_ = std::move(value);
+    }
+    std::unique_ptr<Button> create(Type2Type<Button>) override {
+        if (!button_) throw MissingPrototype{"Button"};
+        return button_->clone();
+    }
+private:
+    std::unique_ptr<Button> button_;
+};
+```
+
+这个接口对每类产品仍是手写，generic implementation 可用 product list 生成 prototype slots。关键差异是 concrete state 来自 objects，不是 template types；因此同一 factory class 能在 runtime 切换 theme/config。
+
+<McdPrototypeFactoryMap />
+
+prototype ownership 可 unique/shared/non-owning，但 clone 期间必须 live。替换单个 prototype 可能暂时混合两族；如果 family invariant 必须强一致，应构造完整 immutable prototype set，再 atomic swap factory snapshot，而不是逐 slot 更新。
+
+<Term def="将完整 prototype family 视为不可变快照并一次发布，避免并发 client 观察到半更新产品族。">
+  family snapshot
+</Term>
+
+<Callout type="trap" title="陷阱：每个 prototype clone 正确，所以整族一定一致">
+  单个 clone 只保证 dynamic type/状态复制。若三个 slots 来自不同版本或更新中间态，跨产品协议仍可能不兼容；family version 与原子发布必须单独约束。
+</Callout>
+
+## AbstractFactory and ConcreteFactory Quick Facts
+
+**AbstractFactory and ConcreteFactory Quick Facts** 可以整理为：
+
+- abstract product list 定义 family schema；Factory interface 为每个 product 提供 creation slot。
+- concrete list 必须等长且逐项满足 base relation；CreatorUnit 决定 new、prototype 或 custom construction。
+- client 选择 factory，不选择 concrete products；family consistency 是 pattern 的主要收益。
+- template-generated hierarchy 适合产品多、family 多且结构稳定；产品少时手写接口通常更清楚。
+
+<Term def="产品列表、具体列表、CreatorUnit、返回 owner 与 family invariant 共同构成的 Abstract Factory 完整契约。">
+  Abstract Factory contract
+</Term>
+
+### 与 Object Factory 的组合
+
+Object Factory 可以按 runtime `familyId` 返回一个 `unique_ptr<AbstractFactory>`，之后 client 用它创建整族产品。第一层解决“选哪个 family”，第二层解决“在这个 family 中创建哪些 products”。不要把所有 product ID 和 family ID 压成一个二维 string registry，否则一致性又回到 caller 手中。
+
+先预测：若新加一个 abstract product，所有 concrete families 都必须提供实现。这是 Abstract Factory 的强项也是成本：它确保 family completeness，却让 product dimension 扩展昂贵。若系统频繁加 product kinds、很少加 families，Visitor/registry 等其他结构可能更合适。
+
+<Stepper>
+  <Step title="第一步：证明 family invariant">
+    列出 products 之间共享的平台、协议、version 或 test contract；若允许自由混搭，就不需要 Abstract Factory。
+
+    <McdProductFamilyMap />
+
+  </Step>
+  <Step title="第二步：生成并验证接口/实现">
+    用 unique ProductList 生成 abstract slots，ConcreteList 逐项映射；检查 length、base relation、owner、constructor 与 diagnostics。
+
+    <McdAbstractFactoryGenerationMap />
+
+  </Step>
+  <Step title="第三步：决定类型式还是 prototype 式">
+    concrete family 编译期固定时用 ConcreteFactory；运行时配置 state/theme 时用 prototype snapshot，并定义 clone、缺失与原子替换。
+
+    <McdPrototypeFactoryMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- Abstract Factory 的 architecture role 是一次选择相容 product family，而不是独立选择多个 concrete objects
+- generic interface 由 ProductList + scatter hierarchy 为每种 abstract product 生成 virtual slot
+- ConcreteFactory 用 concrete list 与 CreatorUnit 生成 overrides，必须逐项验证对应与 inheritance
+- prototype-based implementation 把 concrete choice/state 放到 runtime objects，适合动态配置 family
+- prototype slots 单独正确不保证 family 一致；完整 snapshot 与原子发布可避免半更新
+- product dimension 新增会影响所有 families，family dimension 新增较便宜；pattern 选择要匹配扩展方向
+- Object Factory 可选择 AbstractFactory，后者再创建 family products，两层职责不应混成平面 registry
+
+<Exercises>
+  1. **问题 1：判断是否需要 Abstract Factory。** Renderer 有 Vulkan/OpenGL families，各自创建 Buffer/Texture/Pipeline，资源不能跨 backend 混用；说明 family schema 与 client contract。
+
+  <Answer question="为什么三个独立 factories 不够？">每个独立 factory 都可能合法返回不同 backend product，caller 能意外把 VulkanBuffer 交给 OpenGLPipeline。AbstractFactory 把 backend 选择封装成一个 instance，ProductList 定义 Buffer/Texture/Pipeline slots，同一 factory 产物共享 backend/device invariant。</Answer>
+
+  2. **问题 2：验证 concrete list。** Abstract list 为 Button/Menu/Dialog，Concrete list 为 TouchButton/DesktopMenu/TouchDialog；编译上都各自派生正确，为什么仍应拒绝？
+
+  <Answer question="pairwise inheritance 为什么不足？">三项分别满足 base relation，但 family version/theme invariant 不一致。ConcreteFactory type 应代表一个声明的 family tag/version，所有 concrete products traits 都匹配该 tag；或只允许由 family module 提供预定义 alias，不能让任意列表自由拼装。</Answer>
+
+  3. **问题 3：原子切换 prototype theme。** 多线程 client 创建 UI products，同时更新三个 prototypes；设计一致 snapshot。
+
+  <Answer question="怎样避免半更新 family？">先离线构造包含三个 owned prototypes 与同一 version 的 immutable PrototypeSet，验证 completeness/compatibility 后，用 atomic shared snapshot 或锁下一次 swap 发布。每次 Create 先取得一个 snapshot owner，再从其中 clone；不要逐 slot mutate live factory。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="Abstract Factory">创建一组相容抽象产品并隐藏具体 classes 的组件。</GlossaryItem>
+  <GlossaryItem term="generic Abstract Factory interface">由产品类型列表生成的每产品创建协议。</GlossaryItem>
+  <GlossaryItem term="AbstractFactoryUnit">为单个 abstract product 定义 virtual creation slot 的生成单元。</GlossaryItem>
+  <GlossaryItem term="ConcreteFactory">把 concrete product list 映射到 abstract slots 的生成实现。</GlossaryItem>
+  <GlossaryItem term="family class generation">同一 schema 驱动 abstract scatter 与 concrete linear hierarchy 的结构。</GlossaryItem>
+  <GlossaryItem term="Prototype Abstract Factory">保存每产品 prototype 并 clone 新对象的 runtime-configurable 实现。</GlossaryItem>
+  <GlossaryItem term="family snapshot">一次拥有、验证并原子发布完整 prototype family 的不可变状态。</GlossaryItem>
+  <GlossaryItem term="Abstract Factory contract">schema、concrete mapping、creator、owner 与 family invariant 的整体约束。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Modern C++ Design, First Edition, Chapter 9: Abstract Factory"
+  adaptedUrl="https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+/>

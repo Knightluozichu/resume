@@ -1,0 +1,293 @@
+---
+title: "3.5 Searching Applications：集合、字典、索引与稀疏计算"
+type: B
+section: "查找"
+order: 14
+description: "按官方3.5重建SET clients、CSV dictionary、bidirectional/inverted indexing、sparse vector/matrix及Java system symbol-table选型。"
+demo: true
+math: true
+sourceUrl: "https://algs4.cs.princeton.edu/35applications/"
+draft: false
+---
+
+import { Algs4SetFilterLab, Algs4SetAlgebraLab, Algs4DictionaryLookupLab, Algs4BidirectionalIndexLab, Algs4FileIndexLab, Algs4SparseVectorLab, Algs4SparseDotProductLab, Algs4SystemSymbolTableMap } from "@/components/mdx/algorithms-4e/diagrams/searching-applications";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释SET、dictionary、inverted index、sparse vector与system collection的client contracts
+- 能计算set intersection、index build/query、sparse dot product与memory的input-sensitive成本
+- 能实现dedup/filter、LookupCSV、bidirectional index、file index与SparseVector operations
+- 能分析duplicate-key overwrite、one-way index、dense fallback、zero storage与container mismatch
+- 能设计ingestion/query separation、reference result、round-trip index与sparsity-preserving验收
+
+</Objectives>
+
+## 从“同一张表，不同的key/value含义”开始
+
+查找应用（<Term def="把symbol-table或set API与domain-specific key/value建模组合，形成filter、dictionary、index与sparse-computation clients。">查找应用</Term>，searching applications）不是在3.1到3.4之外再发明一种表。它要求先回答：client究竟需要membership、one value、a set of values、ordered range，还是只存nonzero coordinates；再选择满足contract的API与implementation。
+
+先预测“电影到演员”索引能否直接回答“某演员演过哪些电影”。若只建立 `movie -> SET<person>`，reverse query必须扫描所有movies。要让两个方向都按key查询，构建阶段必须同步维护 `movie -> people` 与 `person -> movies` 两张ST；额外space换来query cost从全量扫描降为一次lookup。
+
+官方3.5依次展示set APIs、dictionary clients、indexing clients、sparse vectors and matrices与system symbol table。每个案例都可用同一四步读法：
+
+1. 定义key equality与value meaning。
+2. Build phase把external data转成associations。
+3. Query phase只通过API观察结果。
+4. 让implementation choice匹配所需ordering与cost guarantee。
+
+## 3.5.1 Set APIs：只保留keys，不伪造dummy values
+
+集合API（<Term def="只表示distinct keys与membership，提供add、contains、delete、iteration及可选ordered/set-algebra operations。">集合API</Term>，set APIs）适用于client不关心associated value的场景。Duplicate add不改变set；contains只返回membership。
+
+典型stream clients只差一个predicate：
+
+- `DeDup`：第一次看到key时输出并add，以后contains为true就跳过。
+- Allowlist：policy SET contains才输出。
+- Blocklist：policy SET不contains才输出。
+
+<Algs4SetFilterLab />
+
+```java
+SET<String> seen = new SET<String>();
+while (!StdIn.isEmpty()) {
+    String key = StdIn.readString();
+    if (!seen.contains(key)) {
+        seen.add(key);
+        StdOut.println(key);
+    }
+}
+```
+
+Set union遍历两边并add到result；intersection只需遍历一边并对另一边contains。若两set规模为A与B，应遍历较小者，成本约：
+
+$$
+T_{\cap}=\Theta(\min(A,B)\cdot C_{\mathrm{contains}})
+$$
+
+<Algs4SetAlgebraLab />
+
+Ordered SET还可提供min/max/floor/ceiling；unordered HashSet不能承诺iteration顺序。API命名相似不代表capabilities相同，client若需要range就必须把ordering写入contract。
+
+<Callout type="trap" title="用ST<Key, Boolean>代替SET却让false与absent混在一起">
+Dummy value会把membership语义泄漏到client：get返回false究竟表示key存在但被禁用，还是不存在？SET把唯一状态定义为present/absent，避免null/false ambiguity，也让union/intersection表达更直接。
+</Callout>
+
+## 3.5.2 Dictionary clients：build once，lookup many
+
+字典客户端（<Term def="通过连续put建立key-to-value table，再以get回答大量exact-key queries的两阶段client。">字典客户端</Term>，dictionary clients）是最直接的ST应用。`LookupCSV`从command line取得file、key field与value field，逐row提取association，再读取queries：
+
+```java
+int keyField = Integer.parseInt(args[1]);
+int valField = Integer.parseInt(args[2]);
+ST<String, String> st = new ST<String, String>();
+
+while (in.hasNextLine()) {
+    String[] tokens = in.readLine().split(",");
+    st.put(tokens[keyField], tokens[valField]);
+}
+
+while (!StdIn.isEmpty()) {
+    String query = StdIn.readString();
+    if (st.contains(query)) StdOut.println(st.get(query));
+    else                    StdOut.println("Not found");
+}
+```
+
+<Algs4DictionaryLookupLab />
+
+Key field不是无害configuration：若file里key重复，standard ST语义让later row覆盖earlier value。若domain需要保留全部records，value应改为list/SET，或duplicate直接报错。CSV example用简单split展示algorithm，但production CSV含quoted commas、escaping与newlines，应使用真正parser。
+
+Build cost是R次put，R为records；query cost是Q次contains/get。Official client先contains再get可能做两次lookup；若API能以nullable或optional result区分absent，可一次get，但必须先确认null-value contract。
+
+Dictionary correctness不只测happy hit。要覆盖missing key、duplicate policy、empty field、malformed row、field index越界、encoding与normalization。若key需要case-insensitive，必须在build与query两侧使用同一canonicalization。
+
+## 3.5.3 Indexing clients：value本身可以是SET
+
+索引客户端（<Term def="把term或entity映射到包含其occurrences或related entities的SET/list，以支持one-to-many retrieval。">索引客户端</Term>，indexing clients）表面上是“一个key对应多个values”，实际仍遵守one value per key：value是一个集合。
+
+`FileIndex`对每个file读取words，并维护 `ST<String, SET<File>>`。Term第一次出现时创建empty SET，随后add file；同一term在同一file重复出现不会产生duplicate posting。
+
+<Algs4FileIndexLab />
+
+```java
+if (!index.contains(word)) index.put(word, new SET<File>());
+index.get(word).add(file);
+```
+
+Term query是一张posting SET；AND query是sets intersection；OR是union。Multi-word AND应先按posting size排序，从smallest set开始过滤。若要支持phrase query，仅保存file membership不够，value需升级为per-file positions；若要rank，需保存term frequency等metadata。
+
+MovieIndex或LookupIndex展示bidirectional relation。输入一行movie与多个performers时同步更新：
+
+$$
+movie\mapsto\{people\},
+\qquad
+person\mapsto\{movies\}
+$$
+
+<Algs4BidirectionalIndexLab />
+
+两张表必须在同一record处理内一致更新。Round-trip certificate可检查：若person出现在movieToPeople[movie]，movie必须也出现在personToMovies[person]。只更新一侧不会立刻crash，却会让reverse results静默缺失。
+
+Index build还要定义tokenization、case folding、stopwords、Unicode normalization与document identity。Client logic正确但normalization不一致，仍会把视觉相同的term拆成不同keys。
+
+## 3.5.4 Sparse vectors and matrices：absence就是zero
+
+稀疏向量与矩阵（<Term def="只显式保存nonzero coordinates，并让未出现index按zero解释的高维numeric representation。">稀疏向量与矩阵</Term>，sparse vectors and matrices）把dimension d与nonzero count nnz分开。Dense vector保存d个numbers；SparseVector保存 `ST<Integer, Double>` 中的nonzeros，memory proportional to nnz。
+
+<Algs4SparseVectorLab />
+
+`put(i, 0.0)`必须delete association，否则zero entries会逐渐填满ST并让“sparse”退化。Get missing index返回0：
+
+```java
+public void put(int i, double value) {
+    if (i < 0 || i >= d) throw new IllegalArgumentException();
+    if (value == 0.0) st.delete(i);
+    else              st.put(i, value);
+}
+
+public double get(int i) {
+    if (st.contains(i)) return st.get(i);
+    return 0.0;
+}
+```
+
+Dot product定义：
+
+$$
+\mathbf a\cdot\mathbf b=\sum_{i=0}^{d-1}a_i b_i
+$$
+
+Dense loop需要d次multiplication，即使绝大多数项为zero。Sparse-sparse实现遍历nnz较少的一侧，对另一ST做contains/get：
+
+$$
+T_{\mathrm{dot}}=
+O\!\left(\min(nnz(a),nnz(b))\cdot C_{\mathrm{lookup}}\right)
+$$
+
+<Algs4SparseDotProductLab />
+
+若另一operand是dense array，只遍历当前sparse ST keys并直接访问 `that[i]`，成本proportional to nnz。Vector addition先copy this nonzeros，再遍历that并put sum；sum变0时put contract自动删除。
+
+Sparse matrix可表示为rows array，每row是一条SparseVector。Matrix-vector multiply对每row做sparse dot；matrix addition逐row plus。是否按row、column或双索引存储取决于operation mix，不能看到“sparse”就默认一种layout。
+
+<Callout type="trap" title="计算后把0.0仍保存在sparse ST">
+Cancellation会让nonzero加和变0。若put不删除zero，nnz统计、memory与后续iteration cost都会错误增长。若floating-point应用需要近零threshold，必须把容差作为明确domain policy，而不是暗中把小值截断。
+</Callout>
+
+## 3.5.5 System symbol table：从client contract选择容器
+
+系统符号表（<Term def="Programming-language standard library提供的Map/Set implementations；各自定义ordering、null、iteration与complexity contracts。">系统符号表</Term>，system symbol table）让production code通常不必重写BST或hash table，但实现选择仍决定语义：
+
+- Java `TreeMap`基于red-black tree，exact/ordered operations worst-case logarithmic，并提供navigation/range views。
+- `HashMap`提供expected constant exact lookup，不保证sorted iteration。
+- `TreeSet`与`HashSet`分别对应ordered与hashed membership。
+- Concurrent variants还改变atomicity、iteration consistency与null policy。
+
+<Algs4SystemSymbolTableMap />
+
+Textbook `ST`约定null value等价delete，而Java collections可能允许null key/value；不能把一种API的absence convention直接搬到另一种。`Map.get()`返回null时，若null values合法，必须用containsKey区分absent。
+
+Implementation choice应从required operations倒推：
+
+| Client requirement | Suitable API property | Typical implementation |
+| --- | --- | --- |
+| exact get/put only | unordered map | HashMap |
+| floor/ceiling/range | ordered navigable map | TreeMap |
+| membership only | set | HashSet or TreeSet |
+| one-to-many relation | map to set/list | HashMap plus HashSet |
+| sparse coordinate iteration | map index to nonzero | TreeMap or hash map by traversal need |
+
+Never依赖unspecified iteration order。Test在small dataset看起来保持insert order，换runtime、resize或hash seed后可能改变。若output必须deterministic，应显式sort或选择ordered collection。
+
+## 3.5.6 Composition patterns：一张表常是更大结构的index
+
+Searching applications经常把ST与另一结构组合，而不是把全部行为塞进ST：
+
+- LRU cache：ST从item映射到doubly linked-list node；list维护recency order。
+- Bidirectional lookup：两张ST维护正反关系。
+- Unique queue：SET记录ever seen，queue维护FIFO。
+- Indirect priority queue：ST定位item，heap维护priority order。
+- Concordance：ST把word映射到positions SET/list。
+
+关键是明确每个结构拥有哪个invariant。LRU中ST负责O(1) locate，list负责oldest/newest；任何access必须同时更新两者。组合结构应有cross-certificate，而不是只测各容器内部合法。
+
+Space也应按logical relation计算。Inverted index至少保存unique term-file pairs；bidirectional index保存每条edge两次；sparse matrix保存nonzero coordinates与per-row overhead。为了query latency复制index是有意识的tradeoff，必须在ingestion mutation中同步维护。
+
+## 统一验收：从domain relation回到API observable behavior
+
+<Stepper>
+  <Step title="先写清key/value与duplicate policy">
+    <Algs4DictionaryLookupLab />
+    定义normalization、equality、one-to-one或one-to-many，以及duplicate overwrite、collect或reject。
+  </Step>
+  <Step title="用SET验收membership与algebra">
+    <Algs4SetFilterLab />
+    <Algs4SetAlgebraLab />
+    覆盖duplicate stream、empty policy、allow/block complement、union/intersection与ordered needs。
+  </Step>
+  <Step title="双向核查index relations">
+    <Algs4BidirectionalIndexLab />
+    <Algs4FileIndexLab />
+    对每条relation检查forward/reverse round trip，并用brute-force scan核对posting results。
+  </Step>
+  <Step title="保持sparsity invariant">
+    <Algs4SparseVectorLab />
+    <Algs4SparseDotProductLab />
+    检查zero deletion、nnz、dimension bounds，并与dense arithmetic逐coordinate比较。
+  </Step>
+  <Step title="按required operations选择system collection">
+    <Algs4SystemSymbolTableMap />
+    验证ordering、null、iteration与complexity contract，不依赖implementation偶然行为。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. Searching application先定义domain key/value relation，再选择ST或SET implementation。
+2. SET适合membership、dedup与filter，set algebra通过iteration加contains组合。
+3. Dictionary client分build与query两阶段，duplicate key policy必须显式。
+4. Index把key映射到SET/list；reverse query需要reverse index，不能凭空从forward ST得到。
+5. File inverted index的multiword query是posting sets的intersection，先处理smallest posting更高效。
+6. Sparse vector以absence表达zero，memory和arithmetic work随nnz而非dimension增长。
+7. TreeMap/HashMap等system symbol tables的ordering、null与cost contracts不同。
+8. 组合结构需同步维护cross-invariants，并用round-trip或reference implementation验收。
+
+<Exercises>
+
+**问题 1：Allowlist与blocklist使用同一个policy SET，它们唯一的client差异是什么？**
+
+<Answer>Contains predicate的极性。Allowlist在contains为true时输出，blocklist在contains为false时输出；SET构建与membership semantics完全相同。</Answer>
+
+**问题 2：只有movie到people的ST，回答person到movies query的成本是什么，如何改进？**
+
+<Answer>必须扫描所有movie entries并检查每个people SET，成本与整个relation规模相关。Build时同步维护person到movies的reverse ST，可把query变为一次lookup加输出规模。</Answer>
+
+**问题 3：Dimension为一百万、两个vectors各只有100个nonzeros，为什么dot不应循环一百万次？**
+
+<Answer>只遍历nnz较小vector的100个indices，并在另一ST lookup对应coordinate；missing按zero处理。工作量约100次lookups，而不是dimension次multiplications。</Answer>
+
+**问题 4：什么时候应选TreeMap而非HashMap？**
+
+<Answer>Client需要sorted iteration、min/max、floor/ceiling或range queries，或要求worst-case logarithmic comparison guarantee时选TreeMap。只需exact lookup且接受expected guarantee时HashMap通常更合适。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="查找应用">把ST/SET APIs与domain key-value modeling组合成usable clients。</GlossaryItem>
+  <GlossaryItem term="集合API">只保存distinct keys并提供membership及set operations的interface。</GlossaryItem>
+  <GlossaryItem term="字典客户端">Build key-value associations后回答exact-key requests的client。</GlossaryItem>
+  <GlossaryItem term="索引客户端">Key映射到occurrences或related-entity collection的client。</GlossaryItem>
+  <GlossaryItem term="倒排索引">Term到documents/positions postings的mapping。</GlossaryItem>
+  <GlossaryItem term="稀疏向量与矩阵">只保存nonzero coordinates的high-dimensional numeric representation。</GlossaryItem>
+  <GlossaryItem term="系统符号表">Standard library提供并定义具体ordering/null/cost contract的Map/Set。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Algorithms, 4th Edition · Section 3.5 Searching Applications"
+  href="https://algs4.cs.princeton.edu/35applications/"
+  author="Robert Sedgewick and Kevin Wayne"
+  license="原书、官方页面与Java示例版权归Robert Sedgewick、Kevin Wayne及Addison-Wesley所有；本页依据作者官方3.5 synopsis、SET.java、LookupCSV/LookupIndex与SparseVector.java当前实现独立重构教学内容"
+/>

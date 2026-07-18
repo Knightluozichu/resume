@@ -402,8 +402,8 @@ export function AdapterPatternDiagram() {
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        适配器实现了 Target 接口，同时内部持有一个 Adaptee 引用。当 Client
-        调用 adapter.request() 时，适配器把请求转发给 adaptee.specificRequest()，
+        适配器实现了 Target 接口，同时内部持有一个 Adaptee 引用。当 Client 调用
+        adapter.request() 时，适配器把请求转发给 adaptee.specificRequest()，
         从而让原本接口不兼容的类能够协同工作——无需修改任何一方的代码。
       </figcaption>
     </figure>

@@ -1,88 +1,34 @@
-/**
- * <GilPathTracingDiagram>: 路径追踪算法
- *
- * 相机随机游走 -> NEE显式采样 -> BDPT双向连接
- * Server Component, viewBox 720x400, CSS variables.
- */
+import type { ReactNode } from "react";
 
-const primary = "var(--text-primary)";
-const secondary = "var(--text-secondary)";
-const border = "var(--border)";
-const elevated = "var(--bg-elevated)";
-const accent = "var(--accent)";
-const success = "var(--success)";
-const warning = "var(--warning)";
-const danger = "var(--danger)";
+function Frame({ caption, children }: { caption: string; children: ReactNode }) {
+  return <figure className="mdx-figure not-prose mx-auto my-6"><div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div><figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption></figure>;
+}
+
+const passes = [
+  ["Ray setup", "sensor sample → primary ray"],
+  ["Direct", "explicit emitter connection"],
+  ["Environment", "escaped ray → map radiance"],
+  ["Indirect", "BSDF sample → next vertex"],
+  ["Terminate", "Russian roulette / max policy"],
+] as const;
 
 export function GilPathTracingDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox="0 0 720 400" role="img" aria-label="路径追踪：从相机出发随机游走，NEE显式采样光源，BDPT双向连接解决焦散。" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x={360} y={30} textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>{`
-            路径追踪算法
-          `}</text>
-          <text x={360} y={50} textAnchor="middle" fontSize="11" fill={secondary}>{`
-            相机随机游走 -> NEE显式采样 -> BDPT双向连接
-          `}</text>
-          <g>
-            <rect x={36} y={70} width={648} height={69} rx="8" fill={accent} fillOpacity="0.06" stroke={accent} strokeWidth="1.2" strokeOpacity="0.4" />
-            <text x={52} y={92} fontSize="13" fontWeight="700" fill={accent}>{`基本路径追踪`}</text>
-            <rect x={158} y={92} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={228} y={112} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`相机出发`}</text>
-            <rect x={310} y={92} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={380} y={112} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`BRDF采样`}</text>
-            <line x1={298} y1={108} x2={310} y2={108} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-            <rect x={462} y={92} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={532} y={112} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`随机游走`}</text>
-            <line x1={450} y1={108} x2={462} y2={108} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          </g>
-          <g>
-            <rect x={36} y={147} width={648} height={69} rx="8" fill={success} fillOpacity="0.06" stroke={success} strokeWidth="1.2" strokeOpacity="0.4" />
-            <text x={52} y={169} fontSize="13" fontWeight="700" fill={success}>{`NEE+MIS`}</text>
-            <rect x={158} y={169} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={228} y={190} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`显式采样光源`}</text>
-            <rect x={310} y={169} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={380} y={190} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`直接光无噪声`}</text>
-            <line x1={298} y1={186} x2={310} y2={186} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-            <rect x={462} y={169} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={532} y={190} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`MIS组合`}</text>
-            <line x1={450} y1={186} x2={462} y2={186} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          </g>
-          <g>
-            <rect x={36} y={224} width={648} height={69} rx="8" fill={warning} fillOpacity="0.06" stroke={warning} strokeWidth="1.2" strokeOpacity="0.4" />
-            <text x={52} y={246} fontSize="13" fontWeight="700" fill={warning}>{`双向BDPT`}</text>
-            <rect x={158} y={246} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={228} y={266} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`光源子路径`}</text>
-            <rect x={310} y={246} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={380} y={266} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`相机子路径`}</text>
-            <line x1={298} y1={262} x2={310} y2={262} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-            <rect x={462} y={246} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={532} y={266} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`连接解决焦散`}</text>
-            <line x1={450} y1={262} x2={462} y2={262} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          </g>
-          <g>
-            <rect x={36} y={301} width={648} height={69} rx="8" fill={danger} fillOpacity="0.06" stroke={danger} strokeWidth="1.2" strokeOpacity="0.4" />
-            <text x={52} y={323} fontSize="13" fontWeight="700" fill={danger}>{`收敛特性`}</text>
-            <rect x={158} y={323} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={228} y={344} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`无偏`}</text>
-            <rect x={310} y={323} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={380} y={344} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`O(1/sqrt(N))`}</text>
-            <line x1={298} y1={340} x2={310} y2={340} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-            <rect x={462} y={323} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={532} y={344} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>{`自适应采样`}</text>
-            <line x1={450} y1={340} x2={462} y2={340} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          </g>
-          <defs>
-            <marker id="gilPathTracing-arrow" markerWidth="8" markerHeight="8" refX="4" refY="3" orient="auto">
-              <path d="M0 0 L6 3 L0 6 z" fill="var(--text-secondary)" />
-            </marker>
-          </defs>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        路径追踪：随机游走保证无偏，NEE+MIS提升效率，BDPT解决困难光路。
-      </figcaption>
-    </figure>
-  );
+  return <Frame caption="第 5 章把一次 camera random walk 拆成 ray setup、direct/environment/indirect illumination 和随机终止。"><div role="img" aria-label="随机路径追踪的主光线直接光环境贴图间接光和终止流程" className="grid gap-2">{passes.map(([title,body],i)=><div key={title} className="grid min-h-12 grid-cols-[2rem_1fr_1.6fr] items-center gap-3 border border-border bg-bg/40 px-3 py-2"><span className="grid size-8 place-items-center rounded-full bg-accent/15 text-xs font-bold text-accent">{i+1}</span><strong className="text-sm text-primary">{title}</strong><code className="text-xs text-secondary">{body}</code></div>)}</div></Frame>;
+}
+
+export function GilPathThroughputDiagram() {
+  const vertices = ["camera", "x₁ diffuse", "x₂ glossy", "x₃ emitter"];
+  return <Frame caption="Path throughput 只累计散射、余弦与 PDF 比；emission/NEE 贡献在当前 throughput 下加入像素。"><div role="img" aria-label="相机到发光体路径顶点和吞吐量更新" className="overflow-x-auto"><div className="flex min-w-[680px] items-center gap-2">{vertices.map((v,i)=><div key={v} className="contents"><section className="grid min-h-24 min-w-32 flex-1 place-items-center border border-border bg-bg/40 p-3 text-center"><span className="text-xs font-bold text-accent">v{i}</span><strong className="text-sm text-primary">{v}</strong>{i>0&&i<3?<code className="text-xs text-success">β *= f cos / p</code>:<code className="text-xs text-secondary">endpoint</code>}</section>{i<vertices.length-1?<span className="text-secondary">→</span>:null}</div>)}</div></div></Frame>;
+}
+
+const classes = [
+  ["PathNode", "position · frame · event · PDFs", "链式顶点状态"],
+  ["SurfaceSampler", "BSDF sample / evaluate", "局部散射"],
+  ["LightSampler", "select · sampleLi · sampleLe", "直接/发射采样"],
+  ["Scene / RayCaster", "intersect · visibility", "几何传播"],
+  ["Estimator", "walk · connect · accumulate", "算法编排"],
+] as const;
+
+export function GilClassLibraryDiagram() {
+  return <Frame caption="附录 A 的价值是把路径状态、光源采样、散射、求交和估计器分开，使 sample/evaluate/PDF 可以独立验收。"><div role="img" aria-label="全局光照类库的路径节点光源采样场景和估计器依赖"><div className="overflow-x-auto"><div className="min-w-[680px] border border-border"><div className="grid grid-cols-[1fr_1.5fr_1.2fr] bg-bg px-3 py-2 text-xs font-bold text-primary"><span>Class family</span><span>Contract</span><span>Owner</span></div>{classes.map(([name,contract,owner],i)=><div key={name} className={`grid min-h-12 grid-cols-[1fr_1.5fr_1.2fr] items-center gap-3 px-3 py-2 text-xs ${i%2?"bg-bg/40":"bg-elevated"}`}><strong className="text-accent">{name}</strong><code className="text-primary">{contract}</code><span className="text-secondary">{owner}</span></div>)}</div></div></div></Frame>;
 }

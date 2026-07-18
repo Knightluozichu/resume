@@ -1,0 +1,398 @@
+---
+title: "Item 4：确定对象使用前已经初始化"
+type: A
+section: Chapter 1 · Accustoming Yourself to C++
+order: 4
+description: 对齐 Effective C++ 第三版 Item 4：区分初始化与赋值，使用 member initialization list，遵守基类与成员声明顺序，并以 local static 避免跨翻译单元初始化次序问题。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppInitializationLifecycleMap,
+  EcppMemberInitializationOrderMap,
+  EcppStaticInitializationMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-04-initialize-objects";
+
+<Objectives>
+
+- 能区分 initialization 与 assignment，使用成员初始化列表一次构造对象并量化多余默认构造和赋值
+- 能推导虚基类、直接基类与数据成员的真实初始化顺序，识别依赖声明顺序造成的未定义读取
+- 能实现 function-local static accessor 替换跨翻译单元 non-local static 依赖，并验证首次调用和退出阶段
+
+</Objectives>
+
+## 从“有存储不等于有有效对象”开始
+
+<Term def="为对象提供初始值、开始其生命周期并建立类不变量的过程。">
+  initialization
+</Term>
+
+与
+
+<Term def="在对象生命周期已经开始后，用新值替换现有值的操作。">assignment</Term>
+
+不是同一阶段。构造函数体执行前，基类与所有成员已经初始化；在函数体中写 `member = value` 是再次赋值。
+
+<Term def="对象构造完成后所有公开操作都可依赖的状态约束。">类不变量</Term>
+
+应在初始化结束时成立，而不是等待调用方再执行 setup。
+
+<EcppInitializationLifecycleMap />
+
+## 内置类型也要显式初始化
+
+原书指出 C++ 不同语境下内置类型初始化规则复杂，最可靠习惯是对象使用前明确给值。
+
+```cpp
+int retryCount{};
+double timeoutSeconds{2.5};
+Widget* selected{};
+std::array<int, 4> histogram{};
+```
+
+<Term def="使用空花括号或明确初值初始化对象，并阻止部分窄化转换的统一语法。">
+  value initialization
+</Term>
+
+`int count;` 在自动存储期可能保持不确定值；读取它会导致未定义行为或错误分支。成员可给
+
+<Term def="直接写在成员声明处、供未在构造函数列表覆盖的构造路径使用的默认初值。">
+  default member initializer
+</Term>
+
+，降低多个构造函数遗漏风险。
+
+```cpp
+class ConnectionOptions {
+public:
+    explicit ConnectionOptions(std::string endpoint)
+        : endpoint_{std::move(endpoint)} {}
+private:
+    std::string endpoint_;
+    int retries_{3};
+    bool encrypted_{true};
+};
+```
+
+仍需审查每个字段是否有合理默认；`{}` 不是业务正确性的万能值。
+
+<Callout type="trap">
+  **现象**：把所有标量写成 `{}`
+  后宣称初始化问题已解决。**原因**：零值虽然确定，却可能违反端口、尺寸或超时等业务不变量。**修法**：区分语言层确定值与领域有效值，构造时验证并拒绝非法配置。
+</Callout>
+
+## 成员初始化列表直接构造
+
+<Term def="构造函数冒号后为基类和成员选择构造实参的列表，在函数体前执行。">
+  member initialization list
+</Term>
+
+错误方式先默认构造 string，再赋值：
+
+```cpp
+class AddressEntry {
+public:
+    AddressEntry(const std::string& name, const std::string& address)
+    {
+        name_ = name;
+        address_ = address;
+    }
+private:
+    std::string name_;
+    std::string address_;
+};
+```
+
+正确方式一次复制构造：
+
+```cpp
+AddressEntry::AddressEntry(const std::string& name,
+                           const std::string& address)
+    : name_{name}, address_{address}
+{}
+```
+
+<Term def="未提供构造实参时先执行默认构造，随后又由赋值覆盖值的冗余路径。">
+  default-then-assign
+</Term>
+
+对 class 成员可能多做一次构造和赋值；对 const/reference 成员甚至无法在函数体赋值，必须列表初始化。
+
+<Term def="构造时必须立即绑定且之后不可重新绑定的引用数据成员。">
+  reference member
+</Term>
+
+和 const member 都迫使接口尽早确定依赖，通常是好事。
+
+## 初始化顺序由声明决定
+
+<Term def="类定义中数据成员出现的先后顺序，它决定实际初始化次序。">
+  member declaration order
+</Term>
+
+initializer list 书写顺序不会改变真实顺序。
+
+```cpp
+class Session {
+public:
+    Session(std::string endpoint)
+        : connection_{endpoint_}, endpoint_{std::move(endpoint)} {}
+private:
+    Connection connection_; // 先初始化，却依赖尚未初始化的 endpoint_
+    std::string endpoint_;
+};
+```
+
+这里即使 list 先写 endpoint，connection* 仍按声明顺序先构造并读取未开始生命周期的 endpoint*。
+
+<Term def="某成员构造表达式读取另一个成员，因此要求后者更早完成初始化的关系。">
+  member initialization dependency
+</Term>
+
+应让被依赖成员先声明，并让 list 顺序与声明一致，编译器警告更清楚。
+
+<EcppMemberInitializationOrderMap />
+
+## 基类先于派生成员
+
+<Term def="当前类直接继承的基类，按 base-specifier list 顺序初始化。">
+  direct base initialization
+</Term>
+
+虚基类由最派生对象负责并最先初始化，然后直接基类，再到成员，最后构造函数体。析构顺序完全反向。
+
+```text
+virtual bases
+  -> direct bases
+  -> data members in declaration order
+  -> constructor body
+```
+
+<Term def="在多重继承中由最派生构造函数负责初始化、确保共享一份子对象的基类。">
+  virtual base
+</Term>
+
+初始化列表最好按此顺序书写，减少审查时的认知偏差。
+
+## 多构造函数共享默认值
+
+<Term def="一个构造函数调用同类另一个构造函数完成共同初始化的语言机制。">
+  delegating constructor
+</Term>
+
+现代 C++ 可让一个主构造函数维护不变量，其余构造函数委托：
+
+```cpp
+class Timer {
+public:
+    Timer(std::chrono::milliseconds period, bool repeating)
+        : period_{validate(period)}, repeating_{repeating} {}
+
+    explicit Timer(std::chrono::milliseconds period)
+        : Timer{period, false} {}
+private:
+    std::chrono::milliseconds period_;
+    bool repeating_;
+};
+```
+
+<Term def="负责验证全部必要参数并建立完整不变量的主要构造函数。">
+  canonical constructor
+</Term>
+
+避免多个构造函数复制验证逻辑。委托完成后，委托构造体可做附加工作，但不应重新建立另一套不变量。
+
+## non-local static 的跨单元顺序
+
+<Term def="定义在函数外、namespace、class static 或文件作用域且具有静态存储期的对象。">
+  non-local static object
+</Term>
+
+同一翻译单元内可按定义顺序推断动态初始化；不同翻译单元之间，如果一个 non-local static 构造依赖另一个，次序通常不可靠。
+
+```cpp
+// filesystem.cpp
+FileSystem globalFileSystem;
+
+// directory.cpp
+Directory tempDirectory(globalFileSystem.root()); // 跨翻译单元依赖
+```
+
+<Term def="不同翻译单元的动态初始化对象之间没有可依赖固定先后关系的问题。">
+  static initialization order problem
+</Term>
+
+链接顺序或构建变化即可触发“有时工作”。
+
+<Callout type="trap">
+  **现象**：通过调整链接库顺序让全局对象偶然先构造，就把问题关闭。**原因**：依赖未进入语言可保证的顺序，构建变化会复发。**修法**：用
+  accessor 返回 function-local static，让调用建立首次初始化顺序。
+</Callout>
+
+## construct-on-first-use
+
+<Term def="把静态对象放入 accessor 函数，首次执行声明时才初始化并返回引用的模式。">
+  construct-on-first-use
+</Term>
+
+```cpp
+FileSystem& fileSystem()
+{
+    static FileSystem instance;
+    return instance;
+}
+
+Directory& tempDirectory()
+{
+    static Directory instance{fileSystem().root()};
+    return instance;
+}
+```
+
+调用 `tempDirectory()` 时会先调用 `fileSystem()`，依赖顺序变得显式。C++11 起函数局部 static 的首次初始化具有线程安全保证。
+
+<Term def="定义在函数内部、具有静态存储期并在控制首次经过声明时初始化的对象。">
+  function-local static
+</Term>
+
+<EcppStaticInitializationMap />
+
+如果两个 accessor 构成循环依赖，模式不能自动解决；需要重构依赖图或显式启动阶段。
+
+## 退出阶段仍需审计
+
+<Term def="程序终止时静态对象按规则析构，某个析构函数可能访问已销毁依赖的风险。">
+  static destruction order
+</Term>
+
+局部 static 在成功构造后会登记析构。若 A 先构造、B 后构造，通常 B 先析构；但跨 accessor 的退出调用仍可能形成悬空依赖。
+
+<Term def="在 main 开始后按明确顺序创建服务，并在 main 结束前按逆序显式销毁的生命周期管理。">
+  explicit application lifetime
+</Term>
+
+复杂系统常由 Application 对象拥有各服务，比大量全局 static 更容易测试。对进程寿命单例，有时刻意不析构可避免退出次序，但必须明确资源与工具影响，不能随意泄漏。
+
+## 初始化审计与测试
+
+<Term def="检查每个对象初值、初始化列表、声明顺序、静态依赖和退出访问的系统过程。">
+  initialization audit
+</Term>
+
+Make sure that objects are initialized before they are used（确定对象使用前已经初始化）应作为所有存储期的统一门禁：自动对象有明确领域初值，成员在构造体前直接完成，non-local static objects 不依赖跨单元偶然顺序。这里的 initialization order（初始化顺序）同时包含虚基类、直接基类、成员声明和静态动态初始化，不能只检查 initializer list 的视觉排列。
+
+先预测：把 initializer list 顺序交换是否改变真实顺序？把两个 global 放在不同 `.cpp` 后能否依赖链接顺序？写下语言保证，再运行测试。
+
+- 开启 `-Wreorder`/对应编译器警告并视为错误。
+- 用计数类型断言成员只复制构造一次，没有 default-then-assign。
+- MemorySanitizer/UBSan 捕获未初始化读取与生命周期错误。
+- 两个翻译单元分别定义 static，反转链接顺序重复测试。
+- 多线程同时首次调用 accessor，构造计数恰好为一。
+- 测试退出路径，析构日志不访问已销毁服务。
+
+## 小结
+
+- initialization 开始生命周期并建立不变量，assignment 只替换已存在对象的值
+- 内置类型也要明确初值，但语言层零值不等于领域有效值
+- member initialization list 一次构造成员，避免 default-then-assign
+- 基类和成员真实顺序由继承列表与声明顺序决定，不由初始化列表书写顺序决定
+- 跨翻译单元 non-local static 顺序不可依赖，优先 function-local static accessor
+- 首次构造线程安全不等于退出依赖安全，复杂服务应考虑显式 Application 生命周期
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 4"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="initialization">
+    提供初值、开始生命周期并建立不变量的过程。
+  </GlossaryItem>
+  <GlossaryItem term="assignment">
+    在对象已存在后用新值替换现有值的操作。
+  </GlossaryItem>
+  <GlossaryItem term="类不变量">
+    构造完成后由所有公开操作保持的状态约束。
+  </GlossaryItem>
+  <GlossaryItem term="value initialization">
+    使用空花括号或明确初值初始化对象的语法。
+  </GlossaryItem>
+  <GlossaryItem term="default member initializer">
+    成员声明处供构造路径使用的默认初值。
+  </GlossaryItem>
+  <GlossaryItem term="member initialization list">
+    构造体前为基类和成员选择构造实参的列表。
+  </GlossaryItem>
+  <GlossaryItem term="default-then-assign">
+    先默认构造成员再由赋值覆盖的冗余路径。
+  </GlossaryItem>
+  <GlossaryItem term="reference member">
+    构造时必须绑定且之后不能重新绑定的引用成员。
+  </GlossaryItem>
+  <GlossaryItem term="member declaration order">
+    数据成员在类定义中的顺序，决定真实初始化次序。
+  </GlossaryItem>
+  <GlossaryItem term="member initialization dependency">
+    一个成员构造读取另一个成员的顺序依赖。
+  </GlossaryItem>
+  <GlossaryItem term="direct base initialization">
+    直接基类按基类列表顺序完成的初始化。
+  </GlossaryItem>
+  <GlossaryItem term="virtual base">
+    由最派生构造函数负责初始化的共享基类子对象。
+  </GlossaryItem>
+  <GlossaryItem term="delegating constructor">
+    构造函数调用同类另一构造函数的机制。
+  </GlossaryItem>
+  <GlossaryItem term="canonical constructor">
+    验证参数并建立完整不变量的主要构造函数。
+  </GlossaryItem>
+  <GlossaryItem term="non-local static object">
+    函数外定义且具有静态存储期的对象。
+  </GlossaryItem>
+  <GlossaryItem term="static initialization order problem">
+    跨翻译单元 static 动态初始化次序不可依赖的问题。
+  </GlossaryItem>
+  <GlossaryItem term="construct-on-first-use">
+    通过 accessor 首次调用时构造 static 的模式。
+  </GlossaryItem>
+  <GlossaryItem term="function-local static">
+    函数内定义并在首次经过声明时初始化的 static。
+  </GlossaryItem>
+  <GlossaryItem term="static destruction order">
+    退出阶段 static 析构与依赖访问的顺序风险。
+  </GlossaryItem>
+  <GlossaryItem term="explicit application lifetime">
+    由 Application 显式拥有并排序服务的生命周期。
+  </GlossaryItem>
+  <GlossaryItem term="initialization audit">
+    检查初值、顺序、静态依赖和退出访问的过程。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：修复构造成本。** 一个类在构造函数体给三个 string 和一个 const id 赋值，改写并说明哪些成员必须列表初始化。
+
+<Answer question="为什么成员应使用 initialization list 而不是构造体赋值？">
+  string
+  在进入构造体前已默认构造，体内赋值产生第二次操作；列表可直接以参数复制或移动构造。const
+  id 和 reference member
+  无法在体内重新赋值，必须初始化。初始化列表按成员声明顺序执行，因此还要让声明与依赖一致，并用计数类型证明没有多余默认构造和赋值。
+</Answer>
+
+2. **问题 2：推导真实顺序。** 给出虚基类、两个直接基类和三个成员，初始化列表故意乱序，写出构造与析构顺序。
+
+<Answer question="构造和析构的真实顺序由什么决定？">
+  最派生对象先负责虚基类；直接基类按 base-specifier
+  list；数据成员按类中声明顺序；最后执行构造体。initializer list
+  书写次序不改变这些规则。析构严格反向：析构体、成员逆序、直接基类逆序、虚基类最后。应让列表书写与真实顺序一致并启用
+  reorder 警告。
+</Answer>
+
+3. **问题 3：消除 static 次序依赖。** 两个 cpp 中的 logger 和 registry 在构造/析构时互相调用，设计初始化与退出方案。
+
+  <Answer question="跨翻译单元 static 依赖应如何重构？">简单无环依赖可各自放进 accessor 的 function-local static，让 registry() 构造时先调用 logger()，首次使用建立顺序；并发首次调用由 C++11 保证。若析构互相访问或存在循环，改由 main 中的 Application 按明确顺序拥有 logger、registry，并在 main 结束前逆序销毁；测试反转链接顺序和退出日志。</Answer>
+</Exercises>

@@ -1,0 +1,231 @@
+---
+title: "Lesson 15：类的高级主题"
+type: A
+section: Easy C++（第5版）· 多态与接口
+order: 15
+description: 对齐原书 Lesson 15「クラスに関する高度なトピック」：用抽象类、纯虚函数与对象指针实现运行时多态，审计向下转换、多重继承、接口组合与所有权。
+demo: false
+math: false
+sourceUrl: "https://www.sbcr.jp/product/4797392593/"
+draft: false
+---
+
+import {
+  EcpAdvancedClassesAbstractFlow,
+  EcpAdvancedClassesMultipleInheritanceLab,
+  EcpAdvancedClassesPolymorphismMap,
+} from "@/components/mdx/easy-cpp-5e/diagrams/advanced-class-topics";
+
+<Objectives>
+
+- 能解释抽象类、纯虚函数和动态多态如何让调用者只依赖稳定接口
+- 能实现拥有多种派生对象的指针容器，明确对象所有权、虚析构与生命周期
+- 能分析 dynamic_cast、多重继承与菱形结构，发现接口歧义、下转依赖和重复基类状态
+
+</Objectives>
+
+## 为什么多态的核心是调用者不再列举类型
+
+若每新增一种图形都要修改中央 `switch(type)`，调用者其实依赖所有具体类型。多态把变化点移入派生实现：调用者只认识 Shape 接口，新增 Circle、Rectangle 时，渲染循环无需增加类型分支。
+
+<Term def="同一基类接口在运行时根据对象动态类型表现不同实现的能力。">多态</Term>
+
+```cpp
+class Shape {
+public:
+    virtual double area() const = 0;
+    virtual std::string name() const = 0;
+    virtual ~Shape() = default;
+};
+```
+
+Shape 不提供通用面积算法，只规定每个具体图形必须回答什么。接口的价值不是“所有函数都 virtual”，而是让调用者围绕共同契约编程。
+
+<EcpAdvancedClassesPolymorphismMap />
+
+## 纯虚函数形成必须实现的槽位
+
+声明尾部 `= 0` 的 virtual 函数是纯虚函数。含至少一个未实现纯虚函数的类是抽象类，不能直接创建对象；派生类只有实现所有纯虚接口后才能实例化。
+
+<Term def="以 = 0 声明、要求具体派生类提供最终实现的虚函数。">纯虚函数</Term>
+
+<Term def="含未实现纯虚函数、只能作为接口或部分实现基类而不能直接实例化的类。">抽象类</Term>
+
+```cpp
+class Circle final : public Shape {
+public:
+    explicit Circle(double radius) : radius_(radius) {}
+
+    double area() const override {
+        return 3.141592653589793 * radius_ * radius_;
+    }
+
+    std::string name() const override {
+        return "circle";
+    }
+
+private:
+    double radius_;
+};
+```
+
+`final` 可禁止继续派生，适合不准备作为扩展点的具体类。纯虚接口也可以有受保护辅助实现，但调用者依赖的仍是公开契约。
+
+## 基类指针容器保留异构动态类型
+
+类与指针共同承载运行时多态：不同派生类大小不同，不能按值放进 `vector<Shape>`；可以存储拥有语义明确的智能指针。
+
+<Term def="通过基类指针或引用保存并调用不同派生对象，同时保留其动态类型的对象集合。">多态对象集合</Term>
+
+```cpp
+#include <memory>
+#include <vector>
+
+std::vector<std::unique_ptr<Shape>> shapes;
+shapes.push_back(std::make_unique<Circle>(2.0));
+shapes.push_back(std::make_unique<Rectangle>(3.0, 4.0));
+
+for (const auto& shape : shapes) {
+    std::cout << shape->name() << ": " << shape->area() << '\n';
+}
+```
+
+`unique_ptr` 说明容器独占对象，离开作用域自动通过 virtual destructor 清理。循环中的引用只借用智能指针，不复制所有权。若使用裸指针，接口必须另行说明谁拥有对象以及借用期多长。
+
+<EcpAdvancedClassesAbstractFlow />
+
+<Callout type="trap" title="陷阱：vector<Shape> 会自动保存所有派生部分">
+  按值容器元素类型固定为 Shape，会切片或因抽象类不可实例化而直接失败。多态集合应使用明确所有权的基类智能指针，或在封闭类型集合中使用 variant。
+</Callout>
+
+## 调用链由接口、动态类型和虚表共同选择
+
+`shape->area()` 的静态类型是 Shape*，编译器先验证 Shape 声明了 area；运行时根据对象动态类型进入 Circle::area 或 Rectangle::area。调用者不需要知道实现字段，但每个实现都必须保持 Shape 对面积的语义约定，例如非负、单位一致、无隐藏状态修改。
+
+动态分派有一次间接调用成本，但真正选择依据应是扩展与契约需求。为了避免一个 virtual 调用而恢复中央类型 switch，通常会牺牲开放性和可维护性；是否优化要以测量为证据。
+
+## 向下转换暴露派生专属依赖
+
+有时调用者拿到 Shape* 却想调用 Circle 专属方法。`dynamic_cast<Circle*>` 会在运行时检查动态类型，失败返回 nullptr；引用形式失败会抛 `std::bad_cast`。
+
+<Term def="在多态层次中运行时检查对象能否安全转换为某个派生指针或引用的操作。">dynamic_cast</Term>
+
+```cpp
+if (auto* circle = dynamic_cast<Circle*>(shape.get())) {
+    circle->setRadius(4.0);
+}
+```
+
+偶尔用于边界适配可以接受，但大量 dynamic_cast 链说明基类接口缺少共同操作、访问者/变体更合适，或调用者本就不该处理所有类型。下转成功也不改变所有权，circle 仍只是借用指针。
+
+<Callout type="trap" title="陷阱：static_cast 向下转更快，所以可以替代检查">
+  static_cast 不验证动态类型，若对象并非目标派生类，后续访问违反前提。只有程序结构已能严格证明类型时才考虑；开放边界应使用 dynamic_cast 或重新设计接口。
+</Callout>
+
+## 多重继承组合多个基类契约
+
+一个类可以继承多个基类。最容易理解的用途是组合多个几乎无状态的接口，例如 Printable 与 Serializable；具体类分别实现两套契约。
+
+<Term def="一个派生类直接继承两个或更多基类，从而组合多个接口或基类子对象的机制。">多重继承</Term>
+
+```cpp
+class Printable {
+public:
+    virtual void print(std::ostream&) const = 0;
+    virtual ~Printable() = default;
+};
+
+class Serializable {
+public:
+    virtual std::string serialize() const = 0;
+    virtual ~Serializable() = default;
+};
+
+class Report : public Printable, public Serializable {
+    // 分别实现两套接口
+};
+```
+
+两个基类若有同名成员，调用可能歧义，需要限定来源或在派生类提供统一 override。若基类都保存状态，构造、复制、布局和不变量组合会更复杂。
+
+## 菱形继承可能产生两份共同基类
+
+若 Scanner 与 Printer 都继承 Device，而 Copier 同时继承 Scanner、Printer，普通多重继承会让 Copier 含两份 Device 子对象。访问 Device 成员时产生歧义，状态也可能不一致。
+
+虚继承可让共同基类只有一份，但把最派生类变成负责构造虚基类的一方，并增加布局与理解成本。遇到有状态菱形时应先问组合是否更简单，而不是立即加 virtual inheritance。
+
+<EcpAdvancedClassesMultipleInheritanceLab />
+
+## 接口隔离比一个万能抽象类更稳
+
+若 Shape 同时要求绘制、序列化、数据库保存和网络同步，每个派生类会被迫实现无关功能。把能力拆为小接口，调用者只依赖真正需要的一个；某个类可用多重继承组合接口，但不继承大块共享状态。
+
+接口拆分也要避免碎片化。边界应对应稳定调用角色，例如 Drawable、Serializable，而不是每个函数一个基类。判断标准是调用者是否能仅凭该接口完成一项完整职责。
+
+## 构造与析构期间不要依赖最终覆盖
+
+基类构造期间派生部分尚未构造，基类析构期间派生部分已开始销毁。此时调用 virtual 不会像完整对象阶段那样分派到最终派生实现；依赖该行为会访问未建立或已销毁状态。
+
+构造应直接建立本层不变量，需要派生信息时由派生构造参数传给基类；析构只释放本层直接责任。不要用 virtual hook 让未完成对象参与业务流程。
+
+## 先预测四种类型关系
+
+对 `Shape*` 指向 Circle、`Shape&` 绑定 Rectangle、`Shape` 按值副本、`dynamic_cast<Circle*>` 四种情况，分别写静态类型、动态类型、所有权和可调用接口。多态只决定实现选择，不自动决定谁释放、是否可空或能否下转。
+
+## 三步建立开放多态边界
+
+<Stepper>
+  <Step title="第一步：提取最小完整接口">
+    找出调用者真正共同需要的操作，以纯虚函数定义语义、const 和失败契约；基类提供 virtual destructor。
+
+    <EcpAdvancedClassesPolymorphismMap />
+  </Step>
+  <Step title="第二步：绑定动态类型与所有权">
+    用 unique_ptr 容器拥有异构对象，以基类引用/指针调用；先预测销毁顺序和空状态，再验证新增派生类无需修改循环。
+
+    <EcpAdvancedClassesAbstractFlow />
+  </Step>
+  <Step title="第三步：审计下转与多继承">
+    统计 dynamic_cast 使用点，检查接口是否缺失；为多重继承画完整基类子对象图，验证同名成员、共同基类和状态所有权。
+
+    <EcpAdvancedClassesMultipleInheritanceLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 动态多态让调用者依赖基类契约而非列举具体类型，新增派生实现不修改核心调用循环
+- 纯虚函数定义必须实现的槽位，抽象类不能直接实例化；基类应有 virtual destructor
+- 多态集合要保留动态身份并表达所有权，通常使用 `unique_ptr<Interface>`
+- dynamic_cast 提供受检查下转，但频繁下转常说明接口或类型建模需要重构
+- 多重继承适合组合小型接口；有状态菱形会产生重复基类、歧义和构造责任，应优先评估组合
+
+<Exercises>
+  1. **问题 1：设计调用者。** 为什么面积循环不应 switch 每种图形类型，抽象 Shape 提供什么？
+
+  <Answer question="抽象 Shape 如何消除中央类型分支？">Shape 用纯虚 area/name 规定共同契约，循环只调用接口；每种派生类在自身实现算法，新增类型不修改循环。virtual destructor 还保证经接口所有权正确释放。</Answer>
+
+  2. **问题 2：审计集合。** 为什么 `vector<unique_ptr<Shape>>` 比 `vector<Shape>` 或裸指针更适合拥有对象？
+
+  <Answer question="多态拥有集合为何使用 unique_ptr 基类指针？">按值 Shape 会切片且抽象类不能实例化；裸指针不表达谁释放。unique_ptr 保留派生动态身份、表达独占所有权，并在容器销毁时经 virtual destructor 自动清理。</Answer>
+
+  3. **问题 3：判断多继承。** 无状态 Printable/Serializable 接口组合与有状态菱形有什么差异？
+
+  <Answer question="接口多继承与有状态菱形的风险为何不同？">小接口主要组合独立契约，状态和构造负担少；有状态菱形可能含两份共同基类，引发歧义、不一致和复杂构造。虚继承能合并基类但增加责任，通常应先考虑组合。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="多态">通过共同接口按对象动态类型选择不同实现的能力。</GlossaryItem>
+  <GlossaryItem term="纯虚函数">以 =0 声明并要求具体派生类实现的虚函数。</GlossaryItem>
+  <GlossaryItem term="抽象类">含未实现纯虚函数、不能直接实例化的类。</GlossaryItem>
+  <GlossaryItem term="多态对象集合">通过基类指针或引用保存不同派生动态类型的集合。</GlossaryItem>
+  <GlossaryItem term="dynamic_cast">运行时检查多态对象能否安全下转的操作。</GlossaryItem>
+  <GlossaryItem term="多重继承">一个派生类直接继承多个基类的机制。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="やさしいC++ 第5版, Lesson 15 クラスに関する高度なトピック"
+  adaptedUrl="https://www.sbcr.jp/product/4797392593/"
+/>

@@ -1,0 +1,308 @@
+---
+title: "第17章：Working with APIs"
+type: C
+section: "Part II · Projects · Data Visualization"
+order: 17
+description: "通过GitHub与Hacker News API掌握request、status、rate limit、response normalization、可视化和离线测试。"
+demo: true
+math: false
+sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
+draft: false
+---
+
+import {
+  PccApiRequestLab,
+  PccHackerNewsRankingLab,
+  PccRepositoryPipelineLab,
+} from "@/components/mdx/python-crash-course/diagrams/working-with-apis";
+
+<Objectives>
+
+- 能区分transport、HTTP status、JSON decode与schema validation，实现带timeout和rate-limit证据的API call
+- 能设计GitHub repository response normalization和Plotly chart，验证排序、labels、links与missing fields
+- 能实现Hacker News多request聚合并编写API tests，用fake response覆盖success、error和shape drift
+
+</Objectives>
+
+## 为什么 API call 不是“拿到 JSON”就成功
+
+一次request至少跨五个boundary：URL/parameters构造、network transport、HTTP status、body decode、domain schema。200 response可能body不是JSON，JSON也可能缺`items`；403可能是rate limit或permission，500可能是temporary server failure。只有把每层证据分开，程序才能决定fail、skip、retry还是提示用户。
+
+先预测：status 200但缺`items`能否继续画图；rate remaining为0时立即重复request会怎样；Hacker News top IDs中的deleted item缺title时排序是否应崩溃。把预测写成error policy，再执行交互图核对。
+
+<Term def="API endpoint的method、parameters、headers、status与response shape组成的调用约定。">endpoint contract</Term>
+
+第三版用GitHub repository search与Hacker News item API展示公开data。远程API会演化，学习时记录请求URL、日期、status、selected headers与schema assumptions，并以当前official API documentation核对版本；不要把一次成功response当成永久contract。
+
+## Using an API with Requests
+
+安装`requests`后，使用query parameters而不是手工拼接未escape字符串；设置timeout，避免network故障让程序无限等待。User-Agent或API version headers按endpoint要求提供。token从environment读取，绝不写入source、notebook或导出的HTML。
+
+```bash
+python3 -m pip install requests
+python3 -c "import requests; print(requests.__version__)"
+```
+
+```python
+import os
+import requests
+
+url = "https://api.github.com/search/repositories"
+params = {"q": "language:python", "sort": "stars", "order": "desc"}
+headers = {"Accept": "application/vnd.github+json"}
+if token := os.getenv("GITHUB_TOKEN"):
+    headers["Authorization"] = f"Bearer {token}"
+
+response = requests.get(url, params=params, headers=headers, timeout=10)
+print(response.status_code)
+```
+
+timeout不是总事务deadline，通常约束connect/read阶段；大规模调用还需要retry budget与overall cancellation。教学脚本至少捕获`requests.RequestException`并输出endpoint与error class，不把network error误报成empty dataset。
+
+## Processing an API Response
+
+先检查status，再decode JSON，再验证shape。`raise_for_status()`把4xx/5xx变为HTTPError，但错误body可能含有API message；记录status、request ID与safe body summary后再抛出。不要记录Authorization header。
+
+<Term def="在decode与业务处理前按HTTP status决定成功、权限、限流或server error策略的检查点。">status gate</Term>
+
+```python
+def fetch_json(session, url: str, *, params: dict | None = None) -> dict:
+    try:
+        response = session.get(url, params=params, timeout=10)
+        response.raise_for_status()
+    except requests.RequestException as error:
+        raise RuntimeError(f"API request failed: {url}") from error
+
+    try:
+        data = response.json()
+    except requests.JSONDecodeError as error:
+        raise ValueError("API returned non-JSON body") from error
+    if not isinstance(data, dict):
+        raise TypeError("expected a JSON object")
+    return data
+```
+
+`response.json()`成功不代表fields正确。GitHub search response预期`total_count`、`incomplete_results`和`items` list；每个repository还需name、stars、description、HTML URL等。先验证top-level，再逐item normalize，错误包含`items[index]` path。
+
+<Stepper>
+  <Step title="切换status、body与schema场景">
+    <PccApiRequestLab />
+  </Step>
+  <Step title="给每层选择不同动作">
+    transport error按网络policy处理；4xx通常不盲重试；5xx可bounded retry；decode/schema error保留body与path证据。
+  </Step>
+  <Step title="证明失败不会进入visualization">
+    任何status、decode或required schema失败都不产生“空图”；empty valid dataset与invalid response必须区分。
+  </Step>
+</Stepper>
+
+## API Rate Limits
+
+公开API用rate limit保护服务。响应headers可能提供limit、remaining、reset time或Retry-After；字段名称以endpoint文档为准。remaining降低是budget consumption，不是error；降到0后继续请求会得到limit response。
+
+<Term def="在一个时间窗口内允许的request budget及其remaining、reset或Retry-After规则。">rate limit</Term>
+
+```python
+remaining = response.headers.get("X-RateLimit-Remaining")
+reset_at = response.headers.get("X-RateLimit-Reset")
+print({"remaining": remaining, "reset": reset_at})
+```
+
+不要在403/429上无限立即retry，这会加剧限流。优先减少requests、cache同一response、使用conditional requests或认证提高合法quota；需要retry时尊重Retry-After，设置max attempts并加入jitter。教学脚本应显示何时可再试，而不是悄悄sleep数小时。
+
+## Normalizing Repository Data
+
+remote item shape不应直接流入Plotly。normalize function选择fields、转换types、处理nullable description并构造内部record；chart只消费这个稳定model。这样API字段变化只影响adapter，presentation不需要到处写`.get()`。
+
+<Term def="把remote response fields转换为稳定、typed、可供排序与绘图的内部records。">response normalization</Term>
+
+```python
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class RepositoryRecord:
+    name: str
+    stars: int
+    description: str
+    url: str
+
+def normalize_repository(item: dict, index: int) -> RepositoryRecord:
+    try:
+        return RepositoryRecord(
+            name=str(item["name"]),
+            stars=int(item["stargazers_count"]),
+            description=str(item.get("description") or "No description"),
+            url=str(item["html_url"]),
+        )
+    except (KeyError, TypeError, ValueError) as error:
+        raise ValueError(f"invalid items[{index}]") from error
+```
+
+是否skip malformed item取决于product policy。教学分析可fail fast发现contract drift；面向用户的dashboard可隔离坏item但必须报告数量。无论选择哪种，`accepted + skipped == received`是守恒条件。
+
+## Visualizing Repositories with Plotly Express
+
+按stars降序后取Top N，x/y、hover与link都来自normalized records。bar length编码stars；repository name可使用HTML anchor，但必须安全escape remote text与URL scheme。title说明query与snapshot time，不能暗示“所有Python项目”的永久排名。
+
+```python
+import plotly.express as px
+
+records = sorted(records, key=lambda repo: repo.stars, reverse=True)[:20]
+names = [repo.name for repo in records]
+stars = [repo.stars for repo in records]
+hover_texts = [repo.description for repo in records]
+
+fig = px.bar(
+    x=stars,
+    y=names,
+    orientation="h",
+    title="Most-Starred Python Projects in This API Snapshot",
+    labels={"x": "Stars", "y": "Repository"},
+    hover_name=hover_texts,
+)
+fig.update_layout(yaxis={"categoryorder": "total ascending"})
+fig.write_html("python_repositories.html")
+```
+
+<Stepper>
+  <Step title="切换metric与Top N管线">
+    <PccRepositoryPipelineLab />
+  </Step>
+  <Step title="验证排序发生在normalize之后">
+    stars/forks先转为integer，再按数值降序；若保留string，`"900"`可能排在`"10000"`前。
+  </Step>
+  <Step title="检查chart labels与links">
+    bar值、hover description与repository URL来自同一record；missing description不应破坏其他fields。
+  </Step>
+</Stepper>
+
+## The Hacker News API：从ID列表聚合items
+
+top stories endpoint返回IDs list，不含完整title与comments。程序对前N个IDs分别请求item，检查status/shape，再提取`title`、`url`与`descendants`。这是N+1 request pattern：简单清楚，但受rate limit与partial failure影响。
+
+```python
+top_ids = fetch_json_or_list(session, top_stories_url)
+submission_dicts = []
+
+for story_id in top_ids[:30]:
+    item = fetch_json(session, item_url.format(story_id=story_id))
+    if item.get("deleted") or item.get("dead"):
+        continue
+    if "title" not in item:
+        continue
+    submission_dicts.append({
+        "title": str(item["title"]),
+        "hn_link": f"https://news.ycombinator.com/item?id={story_id}",
+        "comments": int(item.get("descendants", 0)),
+    })
+
+submission_dicts.sort(key=lambda item: item["comments"], reverse=True)
+```
+
+`descendants`表示discussion descendants，不一定等同页面直观的直接comments。missing field可按0处理，但deleted/dead item应显式skip。单个item失败时可记录并继续，最终报告requested、accepted、skipped与failed counts。
+
+<Stepper>
+  <Step title="切换deleted policy与comment排序">
+    <PccHackerNewsRankingLab />
+  </Step>
+  <Step title="追踪每个ID的独立结果">
+    top list成功不保证每个item仍存在；每次item request都经过status与schema gate。
+  </Step>
+  <Step title="验证聚合守恒">
+    requested IDs = accepted + deleted/skipped + failed，排序后record数不变，comments保持nonnegative integer。
+  </Step>
+</Stepper>
+
+## Testing API Processing without the Network
+
+测试不应实时调用public API：network不稳定、data会变化、quota有限。把session作为parameter注入，fake response实现`status_code`、`headers`、`raise_for_status()`和`json()`最小contract；fixture分别返回success、HTTP error、bad JSON与missing fields。
+
+<Term def="在测试中实现最小HTTP response/session contract、返回固定status与payload的可控替身。">API test double</Term>
+
+```python
+class FakeResponse:
+    def __init__(self, payload, status_code=200) -> None:
+        self.payload = payload
+        self.status_code = status_code
+        self.headers = {"X-RateLimit-Remaining": "9"}
+
+    def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"status {self.status_code}")
+
+    def json(self):
+        return self.payload
+
+class FakeSession:
+    def __init__(self, response) -> None:
+        self.response = response
+        self.calls = []
+
+    def get(self, url, **kwargs):
+        self.calls.append((url, kwargs))
+        return self.response
+```
+
+tests断言return records，也断言request contract：URL、params和timeout是否传入，token不会出现在log。schema test用status 200但缺items，证明代码不会把HTTP success等同domain success。排序测试直接喂normalized records，无需HTTP double，保持failure定位清楚。
+
+```python
+def test_repository_response_requires_items() -> None:
+    session = FakeSession(FakeResponse({"total_count": 1}))
+    with pytest.raises(ValueError, match="items"):
+        load_repositories(session)
+
+def test_request_uses_timeout() -> None:
+    session = FakeSession(FakeResponse({"items": []}))
+    load_repositories(session)
+    assert session.calls[0][1]["timeout"] == 10
+```
+
+## Observability and Safe Failure
+
+一次run记录endpoint name、status、duration、received/accepted/skipped counts、rate remaining与snapshot time。不要log token、完整private response或user data。request ID有助服务端追踪；failure artifact可保存sanitized schema summary而不是任意body。
+
+retry必须保持幂等假设。GET通常可重试，但服务端也可能按request计quota；POST等写操作不能未经idempotency设计自动重放。本章都是read APIs，却应建立这个边界意识。
+
+<Callout type="trap" title="status 200且response.json成功就可直接绘图">
+JSON只证明语法，仍需验证top-level type、required fields、item types与domain ranges。invalid shape必须阻止图表生成，不能伪装成empty dataset。
+</Callout>
+
+<Callout type="trap" title="API测试直接请求真实服务最可信">
+真实服务会变化、失败并消耗quota，无法稳定覆盖403、429和malformed body。用test double固定response contract，另保留少量显式integration check验证真实endpoint。
+</Callout>
+
+## 本章回顾：把远程不确定性关在adapter内
+
+1. API call依次经过request、transport、status、JSON decode和schema validation。
+2. rate limit是有reset规则的budget，403/429不能无限立即retry。
+3. response normalization把remote fields转为stable records，再排序和绘图。
+4. GitHub与Hacker News聚合都要报告received、accepted、skipped和failed。
+5. API test double覆盖success与failure，chart逻辑可独立测试。
+
+<Exercises>
+
+**问题 1：API返回200但items字段缺失时，程序应如何处理？**
+
+<Answer>status gate通过后JSON decode成功，但schema validation失败；抛出包含field path的domain error并阻止visualization。记录status、request ID和sanitized keys，不把它当empty valid dataset，也不通过无限retry掩盖contract drift。</Answer>
+
+**问题 2：GitHub repository chart如何证明排序与数据守恒正确？**
+
+<Answer>先把每个item normalize为typed record并报告malformed policy，保证received等于accepted加skipped；再按integer stars/forks降序取Top N，断言相邻值单调。bar、hover和URL来自同一record，missing description只用明确default。</Answer>
+
+**问题 3：Hacker News聚合应怎样进行离线测试？**
+
+<Answer>注入FakeSession/FakeResponse，为top IDs与item requests返回固定payload，覆盖valid、deleted、missing title、HTTP error和bad shape。断言request timeout、accepted/skipped/failed守恒、comments nonnegative及排序；不在unit test访问真实network。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="endpoint contract" definition="method、parameters、headers、status与response shape组成的调用约定。" />
+  <GlossaryItem term="status gate" definition="在decode前按HTTP status选择成功、权限、限流或server-error策略的检查点。" />
+  <GlossaryItem term="rate limit" definition="时间窗口内允许的request budget及remaining/reset规则。" />
+  <GlossaryItem term="response normalization" definition="把remote fields转为稳定typed records的过程。" />
+  <GlossaryItem term="API test double" definition="测试中返回固定status与payload、实现最小HTTP contract的替身。" />
+</Glossary>
+
+<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 17: Working with APIs" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />

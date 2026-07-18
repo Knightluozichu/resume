@@ -1,118 +1,74 @@
-/**
- * <PccLearningMapDiagram>：Python编程：从入门到实践 全书学习地图。
- *
- * 四大板块（Python基础 · 控制流与函数 · 类与文件 · 项目实战）及10章依赖关系。
- *
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * 全部 DESIGN token 配色，无裸 hex、无阴影。
- * viewBox 720×420，四周留白 >=32，字号 >=11。
- */
+"use client";
 
-const VIEW_W = 720;
-const VIEW_H = 420;
+import { useState } from "react";
 
-const accent = "var(--accent)";
-const success = "var(--success)";
-const warning = "var(--warning)";
-const danger = "var(--danger)";
-const primary = "var(--text-primary)";
-const secondary = "var(--text-secondary)";
-const border = "var(--border)";
-const elevated = "var(--bg-elevated)";
-
-interface SectionCard {
-  title: string;
-  color: string;
-  chapters: string[];
-  y: number;
-}
-
-const SECTIONS: readonly SectionCard[] = [
-  { title: "Python 基础", color: accent, chapters: ["学习地图", "变量与列表"], y: 92 },
-  { title: "控制流与函数", color: success, chapters: ["条件与循环", "函数"], y: 175 },
-  { title: "类与文件", color: warning, chapters: ["类与对象", "文件与异常", "测试代码"], y: 258 },
-  { title: "项目实战", color: danger, chapters: ["游戏开发", "数据可视化", "总复习"], y: 341 },
+const stages = [
+  { name: "Python foundations", chapters: ["1 Getting Started", "2 Variables and Simple Data Types", "3 Introducing Lists", "4 Working with Lists"], evidence: "interpreter evidence、value binding、collection mutation与iteration" },
+  { name: "Program structure", chapters: ["5 if Statements", "6 Dictionaries", "7 User Input and while Loops", "8 Functions", "9 Classes", "10 Files and Exceptions", "11 Testing Your Code"], evidence: "decision、state loop、function/class contracts、I/O failure与pytest regression" },
+  { name: "Alien Invasion", chapters: ["12 A Ship That Fires Bullets", "13 Aliens!", "14 Scoring"], evidence: "Pygame loop、Sprite lifecycle、collision、game state与HUD" },
+  { name: "Data visualization", chapters: ["15 Generating Data", "16 Downloading Data", "17 Working with APIs"], evidence: "generated/file/API data经过validate、normalize、encode与export" },
+  { name: "Web application", chapters: ["18 Getting Started with Django", "19 User Accounts", "20 Styling and Deploying an App"], evidence: "model-request-template、auth/owner isolation与production release gates" },
 ];
 
-const COL_X = [60, 190, 320, 450, 580];
-const CH_W = 110;
-const CH_H = 52;
-
-export function PccLearningMapDiagram() {
+export function PccOfficialChapterMapLab() {
+  const [stage, setStage] = useState(0);
+  const item = stages[stage];
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="Python编程从入门到实践全书学习地图。四个板块：Python基础（学习地图、变量与列表）、控制流与函数（条件与循环、函数）、类与文件（类与对象、文件与异常、测试代码）、项目实战（游戏开发、数据可视化、总复习）。"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          {/* 主标题 */}
-          <text x={VIEW_W / 2} y={34} textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>
-            Python 编程：从入门到实践 全书学习地图
-          </text>
-          <text x={VIEW_W / 2} y={54} textAnchor="middle" fontSize="11" fill={secondary}>
-            基础语法打底 · 控制流与函数强骨 · 类与文件拓边界 · 项目实战收全貌
-          </text>
-
-          {/* 四大板块 */}
-          {SECTIONS.map((sec, secIdx) => (
-            <g key={sec.title}>
-              {/* 板块标签 */}
-              <rect x={36} y={sec.y - 16} width={100} height={CH_H} rx="8" fill={sec.color} fillOpacity="0.12" stroke={sec.color} strokeWidth="1.4" strokeOpacity="0.5" />
-              <text x={86} y={sec.y + 4} textAnchor="middle" fontSize="12" fontWeight="700" fill={sec.color}>
-                {sec.title}
-              </text>
-              <text x={86} y={sec.y + 22} textAnchor="middle" fontSize="10" fill={secondary}>
-                {`${sec.chapters.length} 章`}
-              </text>
-
-              {/* 章节卡片 */}
-              {sec.chapters.map((ch, i) => {
-                const x = COL_X[i];
-                const prevCount = SECTIONS.slice(0, secIdx).reduce((acc, s) => acc + s.chapters.length, 0);
-                const chIdx = prevCount + i + 1;
-                return (
-                  <g key={ch}>
-                    <rect x={x} y={sec.y - 16} width={CH_W} height={CH_H} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-                    <text x={x + CH_W / 2} y={sec.y + 6} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>
-                      {ch}
-                    </text>
-                    <text x={x + CH_W / 2} y={sec.y + 24} textAnchor="middle" fontSize="10" fill={secondary}>
-                      {`第 ${chIdx} 章`}
-                    </text>
-                    {/* 连接线 */}
-                    {i > 0 && (
-                      <line x1={COL_X[i - 1] + CH_W} y1={sec.y + 10} x2={x} y2={sec.y + 10} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-                    )}
-                  </g>
-                );
-              })}
-
-              {/* 板块间箭头 */}
-              {secIdx < SECTIONS.length - 1 && (
-                <line x1={86} y1={sec.y + CH_H - 16} x2={86} y2={sec.y + CH_H - 2} stroke={secondary} strokeWidth="1.4" markerEnd="url(#pcc-lm-arrow)" />
-              )}
-            </g>
-          ))}
-
-          <defs>
-            <marker id="pcc-lm-arrow" markerWidth="8" markerHeight="8" refX="4" refY="3" orient="auto">
-              <path d="M0 0 L6 3 L0 6 z" fill="var(--text-secondary)" />
-            </marker>
-          </defs>
-
-          {/* 底部总结 */}
-          <line x1={32} y1={396} x2={VIEW_W - 32} y2={396} stroke={border} strokeWidth="1" strokeDasharray="4 3" />
-          <text x={VIEW_W / 2} y={412} textAnchor="middle" fontSize="11" fill={secondary}>
-            变量列表是地基 · 控制流函数是骨架 · 类文件异常是进阶 · 项目实战串联全书
-          </text>
-        </svg>
+      <div className="border border-border bg-elevated p-4 sm:p-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">{stages.map((entry, index) => <button key={entry.name} type="button" onClick={() => setStage(index)} className={`min-h-14 border px-2 text-xs ${stage === index ? "border-cyan-500 bg-cyan-500/15 text-primary" : "border-border bg-bg text-secondary"}`}>{index + 1}. {entry.name}</button>)}</div>
+        <div className="mt-4 grid gap-3 lg:grid-cols-[0.75fr_1.25fr]"><div className="border border-violet-500/40 bg-violet-500/10 p-4"><strong className="text-lg text-primary">{item.name}</strong><p className="mt-3 text-sm leading-6 text-primary">evidence: {item.evidence}</p></div><div className="grid gap-2 sm:grid-cols-2">{item.chapters.map((chapter) => <div key={chapter} className="min-h-16 border border-border bg-bg p-3 text-sm text-primary">{chapter}</div>)}</div></div>
       </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        Python 编程：从入门到实践 全书四大板块与十章依赖关系。
-      </figcaption>
+      <figcaption className="mt-2 text-center text-sm text-secondary">第三版官方20章按foundation、program、game、data和web五阶段展开；每章保留独立入口。</figcaption>
+    </figure>
+  );
+}
+
+const dependencyCases = [
+  { current: "1–4 Foundations", requires: "interpreter + basic syntax", unlocks: "typed collections and predictable iteration", fallback: "环境、binding、index/slice与copy/alias" },
+  { current: "5–11 Program structure", requires: "values + collections", unlocks: "testable modules and persistent state", fallback: "branch order、loop termination、argument binding、object invariant" },
+  { current: "12–14 Alien Invasion", requires: "classes + tests + state loops", unlocks: "realtime project architecture", fallback: "event state、Group lifecycle、collision transition、HUD invalidation" },
+  { current: "15–17 Data projects", requires: "files + exceptions + collections", unlocks: "validated data products", fallback: "schema、parse、normalization、encoding与artifact" },
+  { current: "18–20 Web project", requires: "classes + I/O + tests", unlocks: "multi-user deployed application", fallback: "migration、request dispatch、owner scope、release gate" },
+];
+
+export function PccChapterDependencyLab() {
+  const [selected, setSelected] = useState(2);
+  const item = dependencyCases[selected];
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="border border-border bg-elevated p-4 sm:p-5">
+        <label className="block text-sm text-primary">dependency checkpoint<select value={selected} onChange={(event) => setSelected(Number(event.target.value))} className="mt-2 min-h-11 w-full border border-border bg-bg px-3">{dependencyCases.map((entry, index) => <option key={entry.current} value={index}>{entry.current}</option>)}</select></label>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3"><div className="border border-cyan-500/40 bg-cyan-500/10 p-3"><span className="text-xs text-secondary">requires</span><p className="mt-2 text-sm text-primary">{item.requires}</p></div><div className="border border-violet-500/40 bg-violet-500/10 p-3"><span className="text-xs text-secondary">current</span><strong className="mt-2 block text-sm text-primary">{item.current}</strong></div><div className="border border-emerald-500/40 bg-emerald-500/10 p-3"><span className="text-xs text-secondary">unlocks</span><p className="mt-2 text-sm text-primary">{item.unlocks}</p></div></div>
+        <p className="mt-3 border border-amber-500/40 bg-amber-500/10 p-3 text-sm leading-6 text-primary">失败回退：{item.fallback}</p>
+      </div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">选择阶段，查看前置能力、产出和遇到问题时应回退的最小章节contract。</figcaption>
+    </figure>
+  );
+}
+
+export function PccLearningEvidenceGateLab() {
+  const [outline, setOutline] = useState(true);
+  const [explanation, setExplanation] = useState(true);
+  const [practice, setPractice] = useState(false);
+  const [review, setReview] = useState(false);
+  const [evidence, setEvidence] = useState(false);
+  const gates = [outline, explanation, practice, review, evidence];
+  const passed = gates.filter(Boolean).length;
+  const rows: Array<[boolean, (value: boolean) => void, string]> = [
+    [outline, setOutline, "official outline covered"],
+    [explanation, setExplanation, "can explain state and failure"],
+    [practice, setPractice, "exercise implemented"],
+    [review, setReview, "review questions passed"],
+    [evidence, setEvidence, "test/build/artifact evidence"],
+  ];
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="grid gap-4 border border-border bg-elevated p-4 sm:p-5 lg:grid-cols-[0.85fr_1.15fr]">
+        <div className="space-y-2">{rows.map(([value, setter, label]) => <label key={label} className="flex min-h-11 items-center gap-3 border border-border bg-bg px-3 text-sm text-primary"><input type="checkbox" checked={value} onChange={(event) => setter(event.target.checked)} />{label}</label>)}</div>
+        <div className={`border p-4 ${passed === gates.length ? "border-emerald-500/40 bg-emerald-500/10" : "border-amber-500/40 bg-amber-500/10"}`}><strong className="text-lg text-primary">chapter gate {passed}/{gates.length}</strong><p className="mt-3 text-sm leading-6 text-primary">{passed === gates.length ? "可进入下一章；理解、实现与验证证据完整。" : "尚未完成；页面阅读进度不能代替练习、review和运行证据。"}</p><div className="mt-4 grid grid-cols-5 gap-2">{gates.map((value, index) => <span key={index} className={`border p-2 text-center text-xs ${value ? "border-emerald-500/40 bg-bg text-primary" : "border-border bg-bg text-secondary"}`}>{index + 1}<br />{value ? "pass" : "open"}</span>)}</div></div>
+      </div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">逐项打开章节门禁：目录、解释、实现、复习和可重复证据同时完成才推进。</figcaption>
     </figure>
   );
 }

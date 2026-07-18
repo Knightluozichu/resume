@@ -1,158 +1,293 @@
 ---
-title: 二叉搜索树与双向链表
+title: "面试题36：二叉搜索树与双向链表"
 type: C
-section: 树
-order: 10
-description: 将 BST 原地转换为有序双向链表，不新建节点。
+section: "第4章 解决面试题的思路"
+order: 40
+description: "按中序遍历把当前节点与已转换前缀尾互连，原地复用left和right形成升序线性双向链表，再由尾回溯到头。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/36_ConvertBinarySearchTree/ConvertBinarySearchTree.cpp"
 draft: false
 ---
 
-{/* 知识点清单：BST 中序有序性、就地重连、首尾闭环；原书章节：面试题27。 */}
+import { BstInorderLinkDiagram, BstNodeLinkInvariantMap, BstLinearBoundaryDiagram, ConvertBstOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/convert-binary-search-tree";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能解释为何 BST 的中序遍历天然给出升序序列。
-- 能写出一次遍历完成链表连接的思路。
-- 能处理空树与单节点边界。
+- 能解释中序访问次序为何等于二叉搜索树升序链次序
+- 能计算当前节点与已转换前缀尾的双向链接变化
+- 能实现作者尾指针递归及显式栈迭代转换版本
+- 能分析线性边界、原地破坏、重复值、深树与并发风险
+- 能设计覆盖作者五组完整树、左右链、单点与空树测试
 
 </Objectives>
 
-## 直觉引入
+## 从“链表首尾需要闭环吗”开始
 
-BST 的中序遍历会产生递增序列。把“递归输出序列”改为“边遍历边连指针”，
-就能在一次遍历中把树改成双向链表，不额外申请新节点。
+先预测：转换后最小节点4的left应该指向最大节点16吗？作者答案是不。题目要求排序双向链表，源码打印时从头沿right走到nullptr，再从尾沿left走回nullptr；结果是线性链，不是循环链。
 
-## 算法思路
+“**二叉搜索树与双向链表**”转换不创建新节点，只调整原节点指针。left从左孩子改为前驱，right从右孩子改为后继。结果是<Term def="头节点前驱为空、尾节点后继为空，可沿right正向并沿left反向遍历的非循环链。">线性双向链</Term>；完成后树结构不再存在。
 
-1. 维护 `prev`（当前已处理的前驱）和 `head`（链表头）。
-2. 递归中序：先左、再中、再右。
-3. 到达节点 `cur` 时，把 `prev->right = cur`，`cur->left = prev`。
-4. 更新 `prev = cur`。
-5. 完成后把链表首尾再相连，形成循环链表。
+<BstInorderLinkDiagram />
 
-<TreeDiagram />
+旧页把head.left连到tail、tail.right连到head，改变了作者契约，也会让按nullptr终止的PrintDoubleLinkedList无限循环。本章严格保留线性边界。
 
-## 思考引导
+## 中序遍历给出升序邻接
 
-### 1) 先问问题，不先改树
-将 BST 转双向链表是结构重表达。问的是顺序关系如何保留，不能丢中序语义。
+二叉搜索树满足左子树值小于当前、右子树值大于当前，因此<Term def="按左子树、当前节点、右子树顺序访问，BST上产生升序节点序列。">中序遍历</Term>按非递减或严格递增顺序访问节点，具体取决于重复键政策。
 
-### 2) 识别不变式
-中序遍历得到递增序列。当前节点在遍历时只需链接前驱与后继两端，即可维持全局顺序。
+若已按中序处理到当前节点，刚刚访问的节点就是当前<Term def="中序序列中紧邻当前节点之前的节点，转换后由current.left指向。">中序前驱</Term>。只需令current.left指向前驱，并令前驱.right指向current，就完成一对双向链接。
 
-### 3) 为什么它一定成立
-BST 的中序是严格排序，递归先处理左，再当前，再右，天然给出前后关系。只要连接顺序不越界，线性关系成立。
+“**当前节点与前一节点互连**”不需要提前知道后继：当前节点先成为尾；以后访问下一个节点时，它会反过来把当前作为前驱，顺便补上当前.right。
 
-### 4) 常见误区
-新建节点或仅处理局部链接会导致链表不完整。错误通常出现在返回值和前置指针更新之间。
+## 已转换前缀与尾指针不变量
 
-### 5) 你能找到一个反例吗
-小树只有两个节点时，很容易验证双向指针是否都配置完整。
+作者把pLastNodeInList通过二级指针传入递归。每次调用完成后，调用者都能看到更新后的链尾，而不是只修改局部指针副本。
 
-### 6) 迁移到下一题
-任何树到线性结构的变换都可沿此思路：先定遍历顺序，再定义跨节点副作用。
-## 代码对照
+<BstNodeLinkInvariantMap />
 
-<CodeTabs>
-  <Tab label="C++">
+进入当前节点前先“**递归转换左右子树**”中的左子树部分；左递归完成后，last是左侧已转换链最大节点。连接当前、更新last，再递归右子树。右递归会继续把其最小节点接到当前后面。
+
+把从最小值到last的链称为<Term def="已经按中序完成双向链接、头部边界正确且尾由last指向的连续节点序列。">已转换前缀</Term>。每访问一个节点，前缀只在尾部追加，不会重新搜索链表。
+
+## 忠实还原作者尾指针递归
+
+ConvertNode空节点直接返回。Convert创建last为空，递归结束后last指向最大节点，也就是链尾；作者再沿left一直走到最小节点，得到链头。
+
 ```cpp
-struct TreeNode {
-    int val;
-    TreeNode* left;
-    TreeNode* right;
-    TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
+struct BinaryTreeNode {
+    int m_nValue;
+    BinaryTreeNode* m_pLeft;
+    BinaryTreeNode* m_pRight;
 };
 
-class Solution {
-public:
-    TreeNode* convert(TreeNode* root) {
-        TreeNode* head = nullptr;
-        TreeNode* prev = nullptr;
-
-        dfs(root, prev, head);
-
-        if (head == nullptr || prev == nullptr) {
-            return head;
-        }
-        head->left = prev;
-        prev->right = head;
-        return head;
+void ConvertNode(BinaryTreeNode* pNode,
+                 BinaryTreeNode** pLastNodeInList) {
+    if (pNode == nullptr) {
+        return;
     }
 
-private:
-    void dfs(TreeNode* node, TreeNode*& prev, TreeNode*& head) {
-        if (!node) return;
-
-        dfs(node->left, prev, head);
-
-        if (!head) head = node;
-        if (prev) {
-            prev->right = node;
-            node->left = prev;
-        }
-        prev = node;
-
-        dfs(node->right, prev, head);
+    BinaryTreeNode* pCurrent = pNode;
+    if (pCurrent->m_pLeft != nullptr) {
+        ConvertNode(
+            pCurrent->m_pLeft, pLastNodeInList);
     }
-};
-```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-class TreeNode {
-    val: number;
-    left: TreeNode | null;
-    right: TreeNode | null;
-    constructor(val: number) {
-        this.val = val;
-        this.left = null;
-        this.right = null;
+
+    pCurrent->m_pLeft = *pLastNodeInList;
+    if (*pLastNodeInList != nullptr) {
+        (*pLastNodeInList)->m_pRight = pCurrent;
+    }
+    *pLastNodeInList = pCurrent;
+
+    if (pCurrent->m_pRight != nullptr) {
+        ConvertNode(
+            pCurrent->m_pRight, pLastNodeInList);
     }
 }
 
-function convertBSTToDoublyLinkedList(root: TreeNode | null): TreeNode | null {
-    let head: TreeNode | null = null;
-    let prev: TreeNode | null = null;
+BinaryTreeNode* Convert(BinaryTreeNode* pRootOfTree) {
+    BinaryTreeNode* pLastNodeInList = nullptr;
+    ConvertNode(pRootOfTree, &pLastNodeInList);
 
-    const dfs = (node: TreeNode | null): void => {
-        if (!node) return;
-
-        dfs(node.left);
-
-        if (!head) head = node;
-        if (prev) {
-            prev.right = node;
-            node.left = prev;
-        }
-        prev = node;
-
-        dfs(node.right);
-    };
-
-    dfs(root);
-
-    if (head && prev) {
-        head.left = prev;
-        prev.right = head;
+    BinaryTreeNode* pHeadOfList = pLastNodeInList;
+    while (pHeadOfList != nullptr &&
+           pHeadOfList->m_pLeft != nullptr) {
+        pHeadOfList = pHeadOfList->m_pLeft;
     }
-    return head;
+    return pHeadOfList;
 }
 ```
-  </Tab>
-</CodeTabs>
 
-## 常见误区
+第一次访问最小节点时last为空，因此其left被设为空，形成头边界。最大节点原本没有右子树；它成为最终last后right仍为空，形成尾边界。作者没有额外写边界，就是利用BST极值节点的空孩子。
 
-<Callout type="trap">
-  <strong>现象 →</strong> 转换后链表顺序乱。
-  <strong>原因 →</strong> 中序顺序没保持，或在递归后才连边。
-  <strong>修复 →</strong> 严格“左-中-右”处理，并在访问中间节点时立即连上 `prev`。
+<BstLinearBoundaryDiagram />
+
+<Callout type="trap" title="转换结束后把head与tail首尾相连">
+这会把线性链改成循环链，偏离作者实现。其测试打印以right/left为nullptr作为终止，闭环后会无限遍历，也无法再用边界空指针识别头尾。
 </Callout>
 
+## 修改right前为何不会丢失右子树
+
+连接当前节点时只写current.left和last.right。last是中序前驱，已经完成其原右子树的递归；把last.right改为current正是把前驱后继相连。
+
+current.right在递归右子树之前仍保留原右孩子。直到右子树最小节点被处理时，算法才通过“前驱.right=当前”把current.right更新为链表后继。因此访问所需树边在使用前没有被破坏。
+
+若先把current.right改成后继占位再递归，会丢失原右子树入口；若当前节点在左递归前就改left，也会丢失原左子树。修改时机必须位于左右递归之间，也就是中序“访问当前”位置。
+
+## 原地转换与所有权语义
+
+<Term def="复用原节点及其指针字段完成结构变化，不为输出创建新节点。">原地转换</Term>节省节点分配，但具有破坏性。调用后原root可能位于链中间，不再是树根；对它递归DestroyTree会沿前驱后继形成反向边，可能重复释放或无限递归。作者改用DestroyList从head沿right逐个删除。
+
+函数不能安全地对同一结构调用两次。第二次输入已是双向链，left/right形成相邻双向关系，递归会沿left回走并成环。类型系统若仍把结果标成BinaryTreeNode，调用方更要靠文档区分当前状态。
+
+更稳健的API可返回拥有head的DoublyLinkedList类型，并把输入所有权显式移动进去；若业务还需要原树，应先深拷贝或创建新链节点，不能选择原地题解后期待树仍可读。
+
+<Callout type="trap" title="转换后继续把root当二叉树遍历或销毁">
+left/right已经分别是前驱和后继，不再是孩子。原树算法可能在双向边之间反复递归。转换是一次所有权和结构状态迁移，后续只能按链表契约使用。
+</Callout>
+
+## 显式栈迭代版
+
+极深偏斜树可能导致递归栈溢出。迭代中序用显式stack保存尚未访问的祖先，访问节点时执行同一前驱链接。它可直接记录首个节点为head，省去从tail沿left再走一遍。
+
+```cpp
+#include <stack>
+#include <utility>
+
+struct TreeNode {
+    int value;
+    TreeNode* left = nullptr;
+    TreeNode* right = nullptr;
+};
+
+std::pair<TreeNode*, TreeNode*> convertIterative(
+    TreeNode* root) {
+    std::stack<TreeNode*> pending;
+    TreeNode* current = root;
+    TreeNode* head = nullptr;
+    TreeNode* last = nullptr;
+
+    while (current != nullptr || !pending.empty()) {
+        while (current != nullptr) {
+            pending.push(current);
+            current = current->left;
+        }
+
+        current = pending.top();
+        pending.pop();
+        TreeNode* originalRight = current->right;
+
+        current->left = last;
+        if (last != nullptr) {
+            last->right = current;
+        } else {
+            head = current;
+        }
+        last = current;
+        current = originalRight;
+    }
+
+    if (last != nullptr) last->right = nullptr;
+    return {head, last};
+}
+```
+
+保存originalRight非常关键：链接前驱时可能不会改current.right，但明确保存使后续重构不易误删原右入口。返回head和tail便于正反向验证；作者接口只返回head。
+
+迭代辅助空间O(h)，与递归调用栈同阶，并没有变成O(1)。若要求真正常数辅助空间，可研究Morris中序线索化，但与原地双向改写叠加后证明和恢复更复杂，不属于作者方案。
+
+## 作者五组测试怎样验双向性
+
+Test1完整BST转换后正向4、6、8、10、12、14、16，反向16、14、12、10、8、6、4。打印函数先沿right找到尾，再从同一尾沿left返回，能同时检查两种方向。
+
+Test2全左链5到1，链头是原最深节点1，正向1到5；Test3全右链1到5，原根就是head。两者锁定只有前驱或只有后继时的边界。Test4单节点1，left/right都为空；Test5空树返回nullptr。源码总计五组。
+
+<ConvertBstOfficialCaseLab />
+
+```cpp
+#include <cassert>
+#include <vector>
+
+void assertLinearList(TreeNode* head,
+                      const std::vector<int>& expected) {
+    std::vector<int> forward;
+    TreeNode* tail = nullptr;
+    for (TreeNode* p = head; p != nullptr; p = p->right) {
+        if (p->right != nullptr) {
+            assert(p->right->left == p);
+        }
+        forward.push_back(p->value);
+        tail = p;
+    }
+    assert(forward == expected);
+    assert(head == nullptr || head->left == nullptr);
+    assert(tail == nullptr || tail->right == nullptr);
+
+    std::vector<int> backward;
+    for (TreeNode* p = tail; p != nullptr; p = p->left) {
+        backward.push_back(p->value);
+    }
+    assert(backward ==
+           std::vector<int>(expected.rbegin(), expected.rend()));
+}
+```
+
+测试还要保存转换前节点地址集合，转换后正向遍历得到的地址集合必须完全相同，证明没有新建、丢失或重复节点。只比较值在重复键存在时无法发现节点遗漏。
+
+## 复杂度与重复键
+
+ConvertNode每个节点访问一次O(n)，最后从tail沿left找head再走至多n步，总时间仍O(n)。递归辅助空间O(h)，不创建输出节点；链表本身复用原n个节点。
+
+若BST允许重复键，中序结果按树的重复策略非递减，转换仍保持该次序。题目“有序”不一定意味着严格递增；测试应按节点身份和非递减值检查。比较器不是Convert需要的输入，因为它信任原树已经满足BST约束。
+
+非BST输入仍会按中序转成双向链，但值未必有序。函数不验证BST；若输入不可信，应在转换前只读校验，转换后已失去树结构，无法方便地追溯违反位置。
+
+## 正确性证明
+
+递归不变量是：处理当前中序位置前，last指向已转换前缀尾，该前缀从最小已访问节点到last双向连接正确；未访问子树仍保留必要树边。
+
+左递归完成后last是左子树最大节点，即当前中序前驱。设置current.left=last与last.right=current，把当前追加到前缀；更新last后再递归右子树，右侧节点依次追加。空左子树和空右子树自然跳过。
+
+首次追加时last为空，使head边界left为空；最终last是全树最大节点且right为空。所有节点由中序恰访问一次，故链包含全部原节点、顺序有序、相邻双向指针互逆。
+
+## 并发与失败边界
+
+转换期间树处于部分节点已是链、部分仍是树的混合状态，任何并发读者都无法按单一结构解释。必须独占写锁或转移唯一所有权。原地指针赋值本身不分配，正常实现不会因内存不足中途抛出，但访问非法树指针仍是未定义行为。
+
+若需要取消操作，作者方案没有事务回滚；停止在中途会留下混合结构。应在开始前完成权限与取消检查，或使用新建节点的非破坏式转换后原子发布结果。
+
+<Stepper>
+  <Step title="按中序进入当前节点"><BstInorderLinkDiagram />BST左中右访问次序就是链表从小到大次序。</Step>
+  <Step title="连接当前与已转换前缀尾"><BstNodeLinkInvariantMap />current.left指向last，last.right指向current，再更新last。</Step>
+  <Step title="保留线性头尾边界"><BstLinearBoundaryDiagram />head.left与tail.right都为空，不能擅自首尾闭环。</Step>
+  <Step title="跑完五组官方树形"><ConvertBstOfficialCaseLab />正反向遍历完整树、双单链、单点和空树验证所有边界。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. BST中序遍历给出有序节点次序。
+2. 当前节点与中序前一节点互连即可逐步构造双向链。
+3. 作者通过二级指针让递归层共享并更新链尾last。
+4. 左递归后连接当前，再递归右子树，不能提前覆盖孩子入口。
+5. 最终last是尾，作者沿left回到头；结果是线性而非循环链表。
+6. 转换原地复用left/right，完成后原树已被破坏。
+7. 时间O(n)、递归或显式栈空间O(h)，不创建新节点。
+8. 五组官方测试正反向验证完整树、左右链、单点与空树。
+
+<Exercises>
+
+**问题 1：处理节点10时，last应该是谁？**
+
+<Answer>左子树6及其节点4、8已按中序转换，last是左子树最大节点8。令10.left=8、8.right=10，再把last更新为10。</Answer>
+
+**问题 2：作者为什么从tail沿left寻找head？**
+
+<Answer>递归状态只维护最后访问节点，结束时它是最大值tail。双向链的left是前驱，沿left一直到nullptr可到最小值head；这不改变O(n)总复杂度。</Answer>
+
+**问题 3：为什么不能把head与tail相连？**
+
+<Answer>原书输出是线性链，头left和尾right为空。闭环会改变契约，并使作者以nullptr为终止条件的正反向打印无限循环。</Answer>
+
+**问题 4：转换后应怎样销毁节点？**
+
+<Answer>从head沿right保存next后逐个delete，像普通线性链表。不能再调用递归DestroyTree，因为left/right已是前驱后继，会沿双向边重复访问。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="中序遍历">按左、当前、右顺序访问BST并产生有序序列。</GlossaryItem>
+  <GlossaryItem term="中序前驱">中序序列中当前节点之前紧邻的节点。</GlossaryItem>
+  <GlossaryItem term="已转换前缀">已完成双向链接且由last指向尾部的有序链前段。</GlossaryItem>
+  <GlossaryItem term="原地转换">不创建新节点、复用原指针字段改变结构表示。</GlossaryItem>
+  <GlossaryItem term="线性双向链">头前驱与尾后继为空、可正反向遍历的非循环链表。</GlossaryItem>
+</Glossary>
+
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题36"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/36_ConvertBinarySearchTree/ConvertBinarySearchTree.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

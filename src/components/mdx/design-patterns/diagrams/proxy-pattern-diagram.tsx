@@ -411,14 +411,16 @@ export function ProxyPatternDiagram() {
             fill={secondary}
             fontStyle="italic"
           >
-            Client 面向 Subject 编程，实际操作的是 Proxy，由 Proxy 决定何时、如何委托给 RealSubject
+            Client 面向 Subject 编程，实际操作的是 Proxy，由 Proxy
+            决定何时、如何委托给 RealSubject
           </text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        Proxy 和 RealSubject 实现同一个 Subject 接口，Client 无需感知代理的存在。
-        Proxy 在 request() 中插入前置 / 后置逻辑——如权限校验、缓存、延迟加载、
-        远程调用——再委托给 RealSubject，从而在不修改真实对象的前提下控制访问。
+        Proxy 和 RealSubject 实现同一个 Subject 接口，Client
+        无需感知代理的存在。 Proxy 在 request() 中插入前置 /
+        后置逻辑——如权限校验、缓存、延迟加载、 远程调用——再委托给
+        RealSubject，从而在不修改真实对象的前提下控制访问。
       </figcaption>
     </figure>
   );

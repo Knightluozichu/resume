@@ -1,0 +1,237 @@
+---
+title: "第10章：命名规范（建议122-139）"
+type: C
+section: "编写高质量代码 · 命名系统"
+order: 10
+description: "覆盖namespace/assembly/type/interface/generic/enum命名，公开与私有成员、property/boolean/version命名，以及delegate、event、EventArgs和handler组合。"
+demo: true
+math: false
+sourceUrl: "https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html"
+draft: false
+---
+
+import { CqcEventNamingLab, CqcMemberNamingLab, CqcTypeNamingLab } from "@/components/mdx/csharp-quality-code/diagrams/naming-conventions";
+
+<Objectives>
+
+- 能设计namespace、assembly、type、interface、generic parameter和enum naming hierarchy，避免platform collision并表达domain ownership
+- 能比较PascalCase、camelCase、prefix、property/boolean/version suffix在不同visibility和call site中的语义
+- 能设计delegate/EventArgs/event/handler整条命名链，判断before/after tense、unsubscribe与UI composition约定
+
+</Objectives>
+
+## 为什么命名规范是一套Search和Compatibility系统
+
+好名字让reader不打开implementation也能预测type角色、boolean真值、event时机和module owner；一致casing让IDE、analyzer与API docs形成统一索引。命名并非追求最长描述，而是在作用域内消除歧义，并给未来新增type/version留下空间。
+
+先预测：所有enum type都应该用复数吗；assembly是否必须与root namespace一一对应；`NotDisabled`是否比`IsEnabled`更精确。答案都是否。规则必须结合semantic scope、artifact boundary和call-site readability。
+
+<Term def="由稳定company/product/domain/feature vocabulary组成、用于表达type ownership和发现路径而非磁盘目录复制的namespace层级。">semantic namespace</Term>
+
+## Namespace、Type与Generic Names（建议122-130）
+
+### 建议122：以.为命名空间命名
+
+dot分隔稳定层级，例如`Company.Product.Domain.Feature`；每段使用PascalCase并代表真实ownership/概念，不机械映射每个folder。层级太深增加using与移动成本，`Common.Helpers.Utils`则几乎没有semantic signal。
+
+```csharp
+namespace Contoso.Billing.Invoicing;
+
+public sealed class Invoice { }
+```
+
+### 建议123：程序集不必与命名空间同名
+
+assembly是build/deployment/version boundary，namespace是source/API organization；一个cohesive assembly可承载多个相关namespaces，一个namespace也可能跨contracts与implementation assemblies。名字应各自表达artifact responsibility，并由dependency rule防止cycle。
+
+### 建议124：考虑在命名空间中使用复数
+
+namespace segment按自然domain vocabulary选择，例如`.Collections`、`.Diagnostics`常为复数，`.Security`、`.Billing`则不是。不要强制所有segments复数；关键是整个codebase一致、读起来像分类，并避免namespace与type同名造成qualification confusion。
+
+### 建议125：避免用FCL的类型名称命名自己的类型
+
+自定义`Task`、`File`、`String`、`Timer`或`Exception`会与System/FCL概念冲突，使using、docs和code review误判semantics。用domain noun说明区别，如`ImportJob`、`StoredDocument`、`BillingClock`。
+
+<Term def="一个scope内允许相似short names共存而不需要频繁qualification、误认platform type或依赖上下文猜测的歧义额度。">collision budget</Term>
+
+### 建议126：用名词和名词组给类型命名
+
+class/struct/record表示entity、value、service或concept，使用noun/noun phrase，如`Invoice`, `Money`, `RetryPolicy`。避免`DoPayment`这类method-shaped type，也避免`Manager`、`Processor`没有宾语/职责的宽泛尾缀。
+
+### 建议127：用形容词组给接口命名
+
+原题适用于capability interface，如`IComparable`、`IFormattable`；role/service接口也可用noun phrase，如`IInvoiceReader`。统一使用I前缀，名字描述caller依赖的role/capability，不暴露Default/Sql等implementation。
+
+<Term def="从caller角度描述type/interface承担的domain responsibility或capability，而不是实现技术、存储或笼统Manager后缀的名称。">role name</Term>
+
+### 建议128：考虑让派生类的名字以基类名字作为后缀
+
+当hierarchy是public vocabulary且suffix能说明substitution时可用，如`ArgumentException`、`FileStream`；不应机械产生`SqlInvoiceRepositoryBaseRepository`。名字先表达derived的semantic distinction，再决定是否保留base role suffix。
+
+### 建议129：泛型类型参数要以T作为前缀
+
+单一明显参数用`T`，多个参数用`TKey`、`TValue`、`TResult`等T+role，明确每个type argument位置。不要用`T1/T2`或与具体class同名；constraint仍需承担capability说明。
+
+```csharp
+public interface IMapper<in TSource, out TResult>
+{
+    TResult Map(TSource source);
+}
+```
+
+### 建议130：以复数命名枚举类型，以单数命名枚举元素
+
+现代.NET规则要加条件：普通enum一次表示一个value，type用单数`OrderStatus`；只有`[Flags]`可组合bit set时type通常用复数`FilePermissions`。members保持单数PascalCase，并提供0值`None`/`Unknown`语义。
+
+```csharp
+public enum OrderStatus { Unknown = 0, Pending, Paid }
+
+[Flags]
+public enum FilePermissions { None = 0, Read = 1, Write = 2 }
+```
+
+<Stepper>
+  <Step title="切换namespace、assembly、FCL collision、interface与enum">
+    <CqcTypeNamingLab />
+  </Step>
+  <Step title="写出owner、role和closed/flags semantics">
+    namespace表达domain owner，assembly表达artifact boundary，type/interface表达role，enum先判断single value还是composable set。
+  </Step>
+  <Step title="用IDE search与qualification测试验收">
+    搜索关键noun，添加常见System using，观察是否需频繁fully qualify；新增一个generic parameter和enum member验证规则可持续。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="namespace必须与文件夹和程序集完全一致">
+三者分别服务source organization、API vocabulary和deployment/version boundary。可保持大体对应以便导航，但不要为了形式一致拆碎assembly或制造无意义层级。
+</Callout>
+
+## Member、Boolean与Version Names（建议131-136）
+
+### 建议131：用PascalCasing命名公开元素
+
+public/protected types、methods、properties、events使用PascalCase，与.NET ecosystem一致；acronym按项目/FCL style处理，例如`HttpClient`而非`HTTPClient`。用formatter/analyzer自动执行，不靠review争论大小写。
+
+### 建议132：考虑用类名作为属性名
+
+当property自然表示某type的主要value时，同名可读，如`public Color Color { get; }`；若call site含糊，使用semantic role如`BackgroundColor`、`CurrentState`。不要为避免重名制造`ColorValue`等无意义suffix。
+
+### 建议133：用camelCasing命名私有字段和局部变量
+
+locals/parameters用camelCase；private fields现代C#项目常用`_camelCase`以区分成员，具体以`.editorconfig`为source of truth。名字表达meaning/lifetime，不用`strName`、`iCount`等Hungarian type prefix。
+
+```csharp
+private readonly IInvoiceStore _invoiceStore;
+
+public Task<Invoice?> FindAsync(InvoiceId invoiceId, CancellationToken cancellationToken)
+    => _invoiceStore.FindAsync(invoiceId, cancellationToken);
+```
+
+### 建议134：有条件地使用前缀
+
+保留生态有强signal的前缀：interface的I、generic parameter的T；避免成员scope/mutability/type编码前缀，如`m_`, `s_`, `str`, `obj`，除非legacy interop/generated convention要求。analyzer一致性优先于个人风格。
+
+### 建议135：考虑使用肯定性的短语命名布尔属性
+
+boolean以true时的positive predicate命名：`IsEnabled`, `CanRetry`, `HasItems`, `ShouldFlush`。避免`NotDisabled`、`NoErrors`与double-negative condition；若值是三态unknown/yes/no，就不要用bool强行表达。
+
+<Term def="boolean名字让true分支直接陈述合法state/capability，避免否定词与调用处not运算叠加的方向。">boolean polarity</Term>
+
+```csharp
+if (job.IsEnabled && job.CanRetry)
+    await RetryAsync(job, cancellationToken);
+```
+
+### 建议136：优先使用后缀表示已有类型的新版本
+
+需要短期并存wire/API versions时可用`ProtocolV2`、`ParserV2`后缀，比`NewParser`稳定；但implementation差异能语义命名时优先`StreamingParser`、`Utf8Parser`。version suffix必须绑定migration/deprecation plan，不能永久累积V2/V3/VNext。
+
+<Stepper>
+  <Step title="切换public/private、property、boolean与version names">
+    <CqcMemberNamingLab />
+  </Step>
+  <Step title="在call site读出一句业务语句">
+    名字应让receiver.member、if condition和method call无需展开implementation即可理解，不重复type也不依赖否定推理。
+  </Step>
+  <Step title="用analyzer、rename与迁移测试验收">
+    formatter执行casing，IDE rename检查collision；版本名同时有obsolete/migration issue，boolean覆盖true/false/unknown domain。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="名字越长越有意义">
+意义取决于scope和distinctive words。局部短scope可用`index`，public API需稳定role；重复namespace/type context的长名字只增加噪声。
+</Callout>
+
+## Delegate、Event与Handler Names（建议137-139）
+
+### 建议137：委托和事件类型应添加上级后缀
+
+自定义event payload用`EventArgs`后缀，delegate type在确有独立public contract时用`Handler`、`Callback`等能说明role的后缀；常见shape优先`EventHandler<TEventArgs>`、Action/Func，不为每个event重复声明delegate type。
+
+### 建议138：事件和委托变量使用动词或形容词短语命名
+
+event描述发生/将发生的动作：完成事实用past tense如`OrderPaid`，可取消前置事件用present participle如`OrderPaying`；避免`OnOrderPaid`作为event名，On前缀通常留给publisher raise method。delegate variable按action命名`validate`, `convert`, `onCompleted`。
+
+<Term def="event名称用present participle表示before/cancelable阶段、past tense表示completed fact，并与payload和raise method保持一致的时间语义。">event tense</Term>
+
+### 建议139：事件处理器命名采用组合方式
+
+业务handler可用`HandleOrderPaid`，publisher protected raiser用`OnOrderPaid`；WinForms/WPF designer常用`SaveButton_Click`的source+event组合，适合UI glue。需要unsubscribe时保存named handler或delegate instance，不以匿名lambda导致无法移除。
+
+```csharp
+public event EventHandler<OrderPaidEventArgs>? OrderPaid;
+
+protected virtual void OnOrderPaid(OrderPaidEventArgs args)
+    => OrderPaid?.Invoke(this, args);
+
+private void HandleOrderPaid(object? sender, OrderPaidEventArgs args) { }
+```
+
+<Stepper>
+  <Step title="切换EventArgs、cancelable event、delegate role、handler与UI legacy">
+    <CqcEventNamingLab />
+  </Step>
+  <Step title="标出事件发生前后和谁raise">
+    before/cancelable与after/fact使用不同tense，EventArgs说明payload，OnXxx只属于publisher，HandleXxx属于subscriber。
+  </Step>
+  <Step title="执行subscribe/raise/unsubscribe可读性测试">
+    从声明到handler追一遍命名链，确认IDE search能聚合相关符号且named handler可准确unsubscribe。
+  </Step>
+</Stepper>
+
+## 本章回顾：名字要在Scope内稳定地区分责任
+
+1. namespace用dot组织semantic ownership，assembly独立表达deployment/version boundary。
+2. 避免FCL collision；type用noun，interface用role/capability，generic parameter用T+role。
+3. 普通enum type单数，Flags enum type复数，members单数且0值有意义。
+4. public PascalCase，local/parameter camelCase，private field遵循项目editorconfig；prefix只保留I/T等强signal。
+5. boolean用positive predicate，version优先semantic suffix，数字版本带migration plan。
+6. event tense表达before/after，EventArgs、OnXxx和HandleXxx组成可搜索链。
+
+<Exercises>
+
+**问题 1：如何重命名`Utils.TaskManager.ProcessDATA(bool notDisabled)`？**
+
+<Answer>先按domain定位namespace，如`Billing.Imports`；避免FCL Task collision，把type按role命名`ImportJobRunner`；method用PascalCase和业务动作`ProcessBatchAsync`；boolean改为positive `isEnabled`或更具体capability，若是三态用enum。用IDE rename、public compatibility和analyzer验证。</Answer>
+
+**问题 2：普通enum、Flags enum和rich type的名字有什么不同？**
+
+<Answer>普通single-value enum用单数`OrderStatus`，members单数`Paid`；Flags可组合set用复数`FilePermissions`，members仍是`Read/Write`并有None=0。若value携带behavior/metadata/open extension，改rich type并用noun role命名，不靠复数暗示集合。</Answer>
+
+**问题 3：一条可取消事件如何命名event、args、raiser和handler？**
+
+<Answer>before阶段event用present participle如`OrderPaying`，payload `OrderPayingEventArgs`包含Cancel contract，publisher raiser `OnOrderPaying`，subscriber handler `HandleOrderPaying`；完成后另发past tense `OrderPaid`。named handler便于unsubscribe，UI designer可保留source_event组合。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="semantic namespace" definition="以稳定domain/feature vocabulary表达type ownership和发现路径的dot层级。" />
+  <GlossaryItem term="collision budget" definition="scope内相似短名可共存而无需频繁qualification或误认platform type的歧义额度。" />
+  <GlossaryItem term="role name" definition="从caller角度描述type/interface责任或capability，而非implementation technology的名称。" />
+  <GlossaryItem term="boolean polarity" definition="true分支直接陈述positive state/capability并避免double negative的命名方向。" />
+  <GlossaryItem term="event tense" definition="用present participle表示before/cancelable、past tense表示completed fact的事件时间语义。" />
+</Glossary>
+
+<Attribution adaptedFrom="编写高质量代码：改善C#程序的157个建议，第10章 命名规范，建议122-139" adaptedUrl="https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html" />

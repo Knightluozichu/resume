@@ -1,0 +1,171 @@
+---
+title: "Chapter 5. Writing asynchronous code"
+type: C
+section: "C# in Depth 4e · C# 2-5"
+order: 5
+description: "覆盖Introducing async functions、Asynchrony thinking、Declarations、Await、Return wrapping、Flow、Async lambdas、Custom task types、Async Main与Usage tips。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-5"
+draft: false
+---
+
+import { DcsAsyncSurfaceLab, DcsAsyncShapeLab, DcsAsyncUsageLab } from "@/components/mdx/deep-understanding-csharp/diagrams/writing-asynchronous-code";
+
+<Objectives>
+
+- 能绘制async invocation、await fast/slow path、return wrapping与task completion的完整timeline
+- 能比较async lambda、async void、custom task-like与async Main的caller-visible completion和fault contract
+- 能设计dependent/concurrent I/O、cancellation、sync boundary与ValueTask usage，并复现race和all-fault行为
+
+</Objectives>
+
+## 为什么Asynchrony不是“把方法放到后台线程”
+
+Asynchrony允许operation在等待外部completion时不占用当前call stack/thread，并在完成后继续logical flow。`async`/`await`把continuation写成顺序source，但没有自动创建thread，也没有自动parallelize independent work。真正资源来自awaitable producer：I/O completion、timer、queue或已经运行的task。
+
+先预测：调用async method是否立即返回；每个await是否thread switch；连续两次await是否并发；async void fault是否存进可观察Task。答案都是否。
+
+<Term def="从async method进入、同步前缀、可能suspend、continuation到最终task completion的可观察时间线。">asynchronous flow contract</Term>
+
+## Introducing asynchronous functions
+
+Async function让method/lambda包含await并返回task-like completion。Caller获得Task后可以await、compose、cancel source或observe fault。它比callback参数更清楚地把completion作为value，却仍要求ownership：谁必须await，谁可fire-and-forget，process shutdown是否等待。
+
+## Thinking about asynchrony
+
+先区分I/O-bound与CPU-bound。I/O async依赖nonblocking underlying API，等待期间通常无需worker thread；CPU work要并行则需要scheduler/thread resources，不能仅加`async`。Latency、throughput与responsiveness目标不同，UI不阻塞不等于server吞吐变高。
+
+Structured flow要求child operations不逃逸parent lifetime。Independent tasks可并发，但有fan-out bound、cancellation与all-fault observation；dependent tasks按顺序await。把所有work塞进`Task.Run`会隐藏resource budget与真正blocking API。
+
+## Async method declarations
+
+常见return是`Task`、`Task<T>`、event-only `void`以及C# 7 custom task-like。Async modifier不属于signature identity，caller只看到return type。Argument validation在进入async state machine的时机需要谨慎；希望同步fail-fast可用non-async wrapper验证后调用private async core。
+
+## Await expressions
+
+Await pattern寻找`GetAwaiter`、`IsCompleted`、`OnCompleted/UnsafeOnCompleted`与`GetResult`。Already-completed awaiter走fast path继续inline；pending时保存state、注册continuation并返回caller。`GetResult`既取result也传播fault/cancellation。
+
+```csharp
+public async Task<string> DownloadAsync(Uri uri, CancellationToken token)
+{
+    using var response = await client.GetAsync(uri, token);
+    response.EnsureSuccessStatusCode();
+    return await response.Content.ReadAsStringAsync(token);
+}
+```
+
+<Stepper>
+  <Step title="切换declaration、completed/pending await与return wrapping"><DcsAsyncSurfaceLab /></Step>
+  <Step title="标记同步前缀与第一个incomplete await">写出caller何时拿到Task、哪些code inline、continuation由谁触发。</Step>
+  <Step title="注入sync/async completion与fault">Fake awaitable分别立刻/稍后完成并抛错，确认timeline与task status。</Step>
+</Stepper>
+
+<Callout type="trap" title="await一定把continuation切到另一个线程">
+Awaiter已完成时可能完全inline；pending completion也由awaitable/context/scheduler决定。Contract应描述context requirement，而不是假定thread ID变化。
+</Callout>
+
+## Wrapping of return values
+
+在`async Task<T>`中写`return value`，builder把T用于完成外层Task；`return Task<T>`不合法，因为compiler负责wrapping。Throw不会从大多数call site同步逃出，而是fault返回task（同步wrapper验证除外）。Caller await时以原exception语义重新抛出。
+
+## Asynchronous method flow
+
+Control flow跨await被拆成states。Loops、try/catch/finally、using都需跨suspension保持locals与cleanup。Finally可包含await（受language规则约束），但cleanup仍要有cancellation policy，避免primary fault被secondary cleanup fault覆盖。
+
+Multiple awaits sequential by source unless tasks先启动。`await A(); await B();`在A完成后才调用B；`var a=A(); var b=B(); await Task.WhenAll(a,b);`才允许overlap。WhenAll fault handling应观察所有task outcomes，而不是只记录await抛出的一个exception。
+
+## Asynchronous anonymous functions
+
+Async lambda按target变为`Func<..., Task>`/`Func<..., Task<T>>`或`Action`。传给接受Action的overload可能成为async void，caller无法await且fault走environment。API应提供Task-returning delegate overload，call site必要时显式target type。
+
+```csharp
+Func<CancellationToken, Task> refresh = async token =>
+{
+    var snapshot = await LoadAsync(token);
+    await PublishAsync(snapshot, token);
+};
+```
+
+<Term def="async method在return/throw/cancel时通过builder把value或failure转成caller可观察task state的规则。">return-value wrapping</Term>
+
+<Stepper>
+  <Step title="切换async lambda、void、custom task与Main"><DcsAsyncShapeLab /></Step>
+  <Step title="写出target return与observer">每种shape标注谁持有completion、谁await、fault进入task还是environment。</Step>
+  <Step title="制造overload误选与shutdown">让lambda在await后fault，确认Task delegate可观察；process entry等待所有owned work。</Step>
+</Stepper>
+
+<Callout type="trap" title="Async lambda总会返回Task">
+Target delegate决定shape；若转换为Action就是async void。显式使用Func&lt;Task&gt; API并让owner await，只有framework event handler接受void例外。
+</Callout>
+
+## Custom task types in C# 7
+
+C# 7允许带`AsyncMethodBuilder`的task-like return type。它可针对特殊synchronous completion或domain scheduler优化，但builder、awaiter、single/multiple consumption和exception semantics都需正确实现。大多数application不应自造；使用`Task`，只有profile与library-level expertise支持时才选择ValueTask/custom type。
+
+## Async main methods in C# 7.1
+
+`Main`可返回`Task`/`Task<int>`，让entry point自然await startup pipeline并把int映射exit code。它不自动等待detached background tasks；host仍需拥有service lifetime、shutdown token与drain timeout。
+
+## Usage tips
+
+Cancellation是cooperative contract：token一路传入真正operation，`OperationCanceledException`需与对应token关联，cleanup通常不应被同一已取消token立即打断。Timeout可由linked token/policy实现，但必须区分caller cancel与deadline。
+
+Avoid sync-over-async，尤其单线程context上`.Result`等待captured continuation会形成cycle。Library是否用`ConfigureAwait(false)`取决于context contract与现代runtime；核心是不要依赖未知ambient context，并在UI boundary显式marshal state mutation。
+
+ValueTask适合频繁同步完成且allocation已被量测的hot API；consumer通常只await一次，不随意多次await、缓存或并发组合，除非先`AsTask`。复杂semantic cost经常大于省下一次allocation。
+
+```csharp
+var profileTask = LoadProfileAsync(userId, token);
+var policyTask = LoadPolicyAsync(userId, token);
+await Task.WhenAll(profileTask, policyTask);
+return Build(profileTask.Result, policyTask.Result);
+```
+
+<Term def="同一parent scope启动的async work必须在parent完成前被await、cancel或明确transfer ownership。">async completion ownership</Term>
+
+<Term def="对independent async operations设定最大并发、queue/backpressure与resource usage的显式上限。">concurrency budget</Term>
+
+<Term def="caller、deadline或shutdown通过token请求停止，operation在安全点观察并以一致canceled state结束。">cooperative cancellation</Term>
+
+<Stepper>
+  <Step title="切换sequential、concurrent、cancel、sync boundary与ValueTask"><DcsAsyncUsageLab /></Step>
+  <Step title="写出dependency graph和budget">只有无依赖nodes可overlap；为fan-out、connection和memory设bound。</Step>
+  <Step title="执行fault/cancel/race matrix">在开始前、中途、完成同时cancel，注入多task faults并确认全部被观察和cleanup完成。</Step>
+</Stepper>
+
+## 本章回顾：Async把Completion变成可组合Value
+
+1. Async method先同步执行，只有incomplete await才suspend；await不承诺new thread。
+2. Awaiter pattern、builder与Task分别连接producer completion、state machine和caller observation。
+3. Return/throw/cancel被wrapping为task state；async void失去可awaitcompletion，只限event boundary。
+4. Independent tasks需先启动才overlap，并受concurrency budget和all-fault observation约束。
+5. Cancellation、sync boundary、custom task/ValueTask都需要明确ownership与race tests。
+
+<Exercises>
+
+**问题 1：为何两个连续await没有并发，如何安全并发？**
+
+<Answer>第二个operation在第一个await完成后才被调用。先创建两个independent tasks，再await WhenAll；设置fan-out/connection budget，传同一parent token并观察所有task faults。若B依赖A result则保持顺序，不为并发破坏dependency。</Answer>
+
+**问题 2：async lambda传给Action overload有什么风险？**
+
+<Answer>它转换为async void，caller在第一个await处认为delegate已返回，无法await完成或统一捕获fault；exception交给SynchronizationContext/environment。改用Func&lt;Task&gt; overload并由owner await，或在framework event handler内catch/report并管理lifetime。</Answer>
+
+**问题 3：何时考虑ValueTask或custom task-like？**
+
+<Answer>只有library hot path频繁同步完成、Task allocation已profile为显著成本且consumer contract可限制single await时考虑ValueTask；custom builder要求更强证据与实现能力。以allocation/latency benchmark、sync/async/fault/cancel tests证明收益，否则保持Task的简单可组合语义。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="asynchronous flow contract" definition="从同步前缀到suspend/continuation/task completion的timeline。" />
+  <GlossaryItem term="return-value wrapping" definition="builder把async return/throw/cancel转成task outcome的规则。" />
+  <GlossaryItem term="async completion ownership" definition="parent必须await/cancel/transfer child async work的lifetime责任。" />
+  <GlossaryItem term="concurrency budget" definition="independent operations对并发、queue与resource的显式上限。" />
+  <GlossaryItem term="cooperative cancellation" definition="token request在安全点被观察并一致结束为canceled的contract。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# in Depth, Fourth Edition, Chapter 5: Writing asynchronous code" adaptedUrl="https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-5" />

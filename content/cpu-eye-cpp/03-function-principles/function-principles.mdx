@@ -1,0 +1,289 @@
+---
+title: "第3章：函数原理"
+type: A
+section: CPU眼里的C/C++ · 官方第3章
+order: 3
+description: 对齐原书第3章 3.1-3.7：沿参数分类、函数作用域、call/return、函数指针、返回值、堆栈存储与 backtrace 还原一次函数调用。
+demo: false
+math: false
+sourceUrl: "https://www.tup.com.cn/booksCenter/bookcatalog?id=09954301"
+draft: false
+---
+
+import {
+  CpuEyeArgumentPassingAbiMap,
+  CpuEyeCallReturnStackMap,
+  CpuEyeFunctionPointerBacktraceMap,
+} from "@/components/mdx/cpu-eye-cpp/diagrams/function-principles";
+
+<Objectives>
+
+- 能解释参数传递、函数括号、调用和返回如何共同建立一次 invocation 的语言与 ABI 边界
+- 能分析函数指针和函数返回值的直接或间接控制流，并区分寄存器返回、隐藏返回地址与 copy elision
+- 能绘制堆和栈的 ownership/lifetime 路径，使用 backtrace 回溯函数调用关系并判断优化造成的缺帧
+
+</Objectives>
+
+## 从“一次调用跨过哪些契约”开始
+
+源码中的 `result = transform(input)` 看似一步，真实系统却要同时满足三套契约：C/C++ 规定 parameter、scope、lifetime 与 return semantics；ABI 规定 machine-level argument classification、register preservation 和 stack alignment；ISA 提供 direct/indirect branch、memory access 与 return mechanism。把三层混成一句“函数就是压栈”会漏掉寄存器参数、inline、tail call 和省略栈帧等关键事实。
+
+<Term def="函数从进入到返回的一次动态执行实例；递归时同一函数可同时存在多个实例。">
+  函数调用实例
+</Term>
+
+先预测一个两参数函数在 `-O0/-O2` 下是否需要独立 frame，再用 debugger 和 disassembly 对照：哪些是语言必须保留的结果，哪些只是当前 ABI 的传递方式，哪些已被优化器消除。
+
+## 3.1 CPU眼里的参数传递
+
+<Term def="调用者与被调者共同遵守的参数分类、寄存器用途、栈对齐、返回值与寄存器保存规则。">
+  调用约定
+</Term>
+
+C++ 的 pass-by-value 会初始化一个 parameter object；reference parameter 绑定已有 object；pointer parameter 按值复制 pointer value。CPU 不直接执行“按值”或“按引用”关键字，compiler 根据目标 ABI 对每个 type 分类，再分配 argument registers、stack slots 或 memory reference。
+
+```cpp
+struct Pair {
+    int left;
+    int right;
+};
+
+int combine(Pair pair, const int& bias) {
+    return pair.left + pair.right + bias;
+}
+```
+
+在某个 ABI 上，小 aggregate 可能拆到多个 registers，另一个 ABI 或不同 layout 可能改走 memory；reference 通常用 address-like machine value 传入，但语言层仍是 alias semantics。callee 若需要长期保存 reference/pointer，还必须保证 pointee lifetime，不是“已经进了寄存器就安全”。
+
+<CpuEyeArgumentPassingAbiMap />
+
+register arguments 也可能在 prologue 被 spill 到 stack，特别是 `-O0`、可变参数、取参数地址或 register pressure 较高时。反过来，inline 后 caller/callee 边界消失，parameter 可能只是优化器 SSA value。实验结论必须记录 compiler、target triple、ABI 和 flags。
+
+<Callout type="trap" title="陷阱：值传递一定复制到栈，引用传递一定更快">
+  小值常直接走 registers，copy 还可能被消除；引用需要携带 address 并可能引入
+  indirect load 与 alias constraints。成本由 type、ABI、inline
+  和实际访问决定，不能只看 `T` 与 `T&` 的源码形状。
+</Callout>
+
+## 3.2 CPU眼里的函数括号{}
+
+函数的 `{}` 在语言层定义 compound statement 和 scope：local object 在控制流到达 declaration 时开始 lifetime，离开 scope 时按规则析构。CPU 没有“左花括号指令”或“右花括号指令”；compiler 把 scope 影响变成 initialization、cleanup、branch targets 和 debug ranges。
+
+<Term def="名字可见范围与自动对象生命周期边界；离开路径包括正常返回、分支和异常展开。">
+  函数作用域
+</Term>
+
+```cpp
+int readValue() {
+    Buffer buffer;
+    if (!buffer.ready()) {
+        return -1;
+    }
+    return buffer.value();
+}
+```
+
+两个 return paths 都要满足 `buffer` destructor semantics。compiler 可共享一个 cleanup block，也可把 destructor inline 到各路径；若 destructor 无 observable effect，甚至可消除相关 code。花括号决定的是必须满足的 lifetime 规则，不保证固定 prologue/epilogue shape。
+
+异常离开 scope 时，runtime 可能依据 unwind metadata 执行 destructors；`goto` 也不能随意跳过需要建立的 object lifetime。看到多个 assembly labels 不等于源码有多个 scopes，看到一个 label 也不说明 cleanup 缺失。
+
+## 3.3 CPU眼里的调用和返回
+
+<Term def="被调函数进入时为保存返回地址、寄存器和局部状态建立的逻辑区域；优化后可缩小或不存在。">
+  栈帧
+</Term>
+
+典型 direct call 先准备 arguments，再由 `call` 类 instruction 记录 continuation address 并改变 instruction pointer。callee 可执行 prologue：调整 stack pointer、保存 callee-saved registers、建立 frame pointer、分配 spill/local slots。返回前 epilogue 恢复状态，`ret` 类 instruction 取回 continuation，caller 继续执行。
+
+```cpp
+int square(int value) {
+    return value * value;
+}
+
+int evaluate(int input) {
+    return square(input) + 1;
+}
+```
+
+<CpuEyeCallReturnStackMap />
+
+`-O0` 常保留清晰的 frame 便于 debug；`-O2` 可能 inline `square`，让 call/ret 全部消失。leaf function 可能不调整 stack pointer，frame-pointer omission 让 `rbp` 成为普通 register；tail call 可用 jump 复用当前 frame。C++ 只要求 observable behavior 等价，不要求每次 source call 都对应物理 call instruction。
+
+caller-saved registers 允许 callee 覆盖，caller 若仍需要旧值须自行保存；callee-saved registers 由 callee 在返回前恢复。这个责任划分支撑 separately compiled functions 互操作，也构成跨 ABI 误链接的风险边界。
+
+## 3.4 CPU眼里的函数指针
+
+<Term def="保存兼容函数入口地址表示的值，可在运行时选择 indirect call target。">
+  函数指针
+</Term>
+
+普通 direct call 的 target 常能在链接或装载阶段确定；函数指针调用先从 variable/table 取得 target address，再执行 indirect branch。callback table、C API hook、state dispatch 和部分虚调用都依赖这种运行时目标选择。
+
+```cpp
+using Operation = int (*)(int, int);
+
+int add(int a, int b) { return a + b; }
+int multiply(int a, int b) { return a * b; }
+
+int apply(Operation operation, int a, int b) {
+    return operation(a, b);
+}
+```
+
+函数指针 type 必须与调用接口兼容；把不兼容 signature 强制转换后调用可能破坏 parameter/return conventions。地址本身也不等于 object pointer 的可移植表示。indirect call 会限制普通 inline，但 whole-program optimization、constant propagation 或 profile-guided devirtualization 仍可能证明 target 并改回 direct call。
+
+security hardening 可能为 indirect targets 增加 control-flow integrity、pointer authentication 或 trampoline；这些是平台实现层，不改变函数指针的语言语义，却会改变机器路径和性能观测。
+
+## 3.5 CPU眼里的函数返回值
+
+<Term def="调用方提供目标存储地址、被调方直接在其中构造大返回对象的 ABI 机制，常称 sret。">
+  隐藏返回地址
+</Term>
+
+小 scalar return 常放 ABI 指定 result register；floating/vector 和 small aggregate 有各自分类。较大 aggregate 可能由 caller 先提供 destination storage，把地址作为 hidden argument 传给 callee，callee 写入后返回。具体 size threshold 和 register 分配是 ABI 规则，不能写成跨平台固定的“超过 16 bytes”。
+
+```cpp
+struct Report {
+    long values[8];
+};
+
+Report buildReport(long seed) {
+    Report report{};
+    report.values[0] = seed;
+    return report;
+}
+```
+
+<Term def="允许或要求直接在最终目标位置构造返回对象，省略中间 copy/move 的语言与优化机制。">
+  copy elision
+</Term>
+
+RVO/NRVO 可让 local `report` 直接占用 caller 的 destination，因此“按值返回大对象必有一次复制”并不成立。C++17 对部分 prvalue 场景保证省略，NRVO 仍取决于条件。若返回 reference/pointer，则 machine result 可能只是 address，但 pointee 必须继续存活；返回 local reference 是典型 dangling bug。
+
+错误码、optional/expected、exception 的控制流也不同。评估 return cost 应查看实际 ABI lowering、copy/move counters 与 optimized output，而不是从源码 return type 单独猜测。
+
+## 3.6 CPU眼里的堆和栈
+
+<Term def="线程执行上下文中的调用存储区域，常由 stack pointer 管理，承载返回状态、spill 与部分自动对象。">
+  调用栈
+</Term>
+
+stack 通常按线程提供，call chain 在其中保存 return/control state，automatic local 可能位于 frame，也可能只在 register。heap 是由 allocator 管理的 dynamic storage，allocation 返回可跨 scope 存活的 block，直到显式释放或 owner 自动释放。二者首先是 lifetime/ownership 模型差异，不只是“一个快、一个慢”。
+
+```cpp
+std::unique_ptr<Report> makeOwned(long seed) {
+    auto report = std::make_unique<Report>();
+    report->values[0] = seed;
+    return report;
+}
+```
+
+stack allocation 常可化为调整 pointer，且 locality 好；但 guard pages、stack probing、大对象、dynamic alignment 都可能增加工作。heap allocation 需要 allocator metadata、synchronization 或 refill，却不保证每次都触发 system call；thread cache/pool 可让常见路径很短。不能声称“堆固定慢几十到几百倍”。
+
+<Callout type="trap" title="陷阱：局部变量都在栈，new 每次都向内核申请内存">
+  local 可驻留 register、被 inline 或完全消除；allocator 通常从已获得的
+  arena/block 切分，只有扩容等路径才可能请求 OS。应分别观测 object
+  lifetime、virtual mapping、allocator event 和最终 storage。
+</Callout>
+
+stack direction、red zone、guard size 和默认 stack limit 都是 platform configuration；递归深度也取决于每帧大小与优化。尾递归消除在 C++ 中不保证，安全方案应控制 depth 或改为显式 data structure，而不是期待 optimizer 必然复用 frame。
+
+## 3.7 函数实验回溯函数调用关系
+
+<Term def="从当前程序计数器出发，逐帧恢复 caller 状态并把代码地址解析为函数和源码位置的过程。">
+  backtrace
+</Term>
+
+debugger 的 backtrace 不是读取一条“调用历史链表”。unwinder 从 current PC/registers 开始，依据 frame pointer chain 或 unwind information 恢复上一帧 stack pointer、saved registers 和 return address；symbolizer 再结合 executable/shared-library load addresses 与 debug symbols，把 address 转成 function/file/line。
+
+<CpuEyeFunctionPointerBacktraceMap />
+
+```text
+#0  parseRecord()      at parser.cpp:84
+#1  loadConfig()       at config.cpp:42
+#2  runApplication()   at app.cpp:19
+#3  main()             at main.cpp:8
+```
+
+优化会改变可见调用关系：inline function 可能只作为 debug inline frame 出现，tail call 不保留普通 return frame，frame pointer omission 要依赖 unwind metadata，optimized local 可能无可恢复 location。stack corruption、错误 unwind metadata 或 stripped symbols 还会造成截断和未知地址。
+
+最小实验同时保留 debug symbols，并比较 `-O0 -fno-omit-frame-pointer` 与 production flags。发生 crash 时记录 executable build ID、module load addresses、register dump 和原始 addresses；只有匹配同一 binary 的 symbols 才能可靠 symbolicate。函数指针 target 还应在 call 前记录 index/address，辅助确认 indirect edge。
+
+## 调用链验证协议
+
+1. 固定 compiler、target ABI、flags 与 binary build ID。
+2. 在 source 层标出 value/reference/pointer parameters 和各自 lifetime。
+3. 在 call site 记录 argument classification、stack alignment 与 caller-saved values。
+4. 在 callee 标出 scope cleanup、frame changes 与 return channel。
+5. 对大对象 return 验证 hidden destination、RVO/NRVO 和 copy/move count。
+6. 对 indirect call 记录 function pointer value 与实际 target symbol。
+7. 对 heap/stack 分别追踪 owner、allocator event、mapping 与 release time。
+8. 用 raw backtrace addresses 加匹配 symbols 复原 chain，并注明 inline/tail-call caveats。
+
+## 小结
+
+- 参数传递先服从 C++ value/reference semantics，再由 ABI 分类到 registers 或 memory
+- 函数括号定义 scope 和 lifetime cleanup，不对应固定 CPU brace instruction
+- 调用和返回维护 continuation 与双方状态，但 inline、leaf 和 tail call 可消除传统栈帧
+- 函数指针形成 indirect call，signature compatibility 与 target lifetime/validity 都必须成立
+- 函数返回值可走 result register、隐藏返回地址或 copy elision，阈值由 ABI 决定
+- 堆和栈首先区别 ownership、lifetime 与管理方式，不能用固定方向或固定倍数概括
+- backtrace 依靠 unwind 与 symbolization，优化、符号缺失和栈破坏会改变可见调用关系
+- 每次实验都要分开记录 language semantics、ABI convention、ISA evidence 和 optimizer result
+
+<Attribution
+  adaptedFrom="CPU眼里的C/C++，第3章 函数原理"
+  adaptedUrl="https://www.tup.com.cn/booksCenter/bookcatalog?id=09954301"
+/>
+
+<Glossary>
+  <GlossaryItem term="函数调用实例">
+    函数一次动态进入到返回的执行实例。
+  </GlossaryItem>
+  <GlossaryItem term="调用约定">
+    参数返回与寄存器责任的二进制接口规则。
+  </GlossaryItem>
+  <GlossaryItem term="函数作用域">
+    名字可见性和自动对象生命周期边界。
+  </GlossaryItem>
+  <GlossaryItem term="栈帧">
+    一次调用保存控制和局部状态的逻辑区域。
+  </GlossaryItem>
+  <GlossaryItem term="函数指针">保存兼容函数入口地址表示的值。</GlossaryItem>
+  <GlossaryItem term="隐藏返回地址">
+    由调用者提供的大对象最终构造位置。
+  </GlossaryItem>
+  <GlossaryItem term="copy elision">
+    省略中间返回对象复制或移动的机制。
+  </GlossaryItem>
+  <GlossaryItem term="调用栈">
+    线程调用状态和部分自动存储所在区域。
+  </GlossaryItem>
+  <GlossaryItem term="backtrace">
+    展开 caller 状态并符号化地址的调用回溯。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：四类参数怎样穿过调用边界？** 对 int、double、小 aggregate 与 const reference 记录 source semantics、ABI channel 和 optimized storage。
+
+<Answer question="参数实验应证明哪些层次？">
+  先写明 value parameter 会初始化独立 parameter、reference 绑定原对象；再按目标
+  ABI 查看 integer/FP registers、aggregate classification 和 stack overflow
+  area。最后比较 O0/O2：spill 或 inline 属于 code-generation evidence，不改变
+  lifetime 与 alias semantics。
+</Answer>
+
+2. **问题 2：返回一个大 Report 必然复制吗？** 标记 caller destination、callee local、return path 和实际 copy/move 次数。
+
+<Answer question="如何识别隐藏返回地址与省略复制？">
+  查看 caller 是否先准备 destination address 并作为 hidden argument 传入；若
+  callee 直接在该位置构造，RVO/NRVO 已消除中间 object。阈值和 registers 是
+  ABI-specific；用 constructor counters 和 optimized assembly 交叉验证，不用固定
+  16-byte 规则泛化。
+</Answer>
+
+3. **问题 3：函数指针调用崩溃后怎样回溯？** 保存 target、registers、原始帧地址、build ID 与 symbols，并比较 debug/production backtrace。
+
+  <Answer question="为什么 production backtrace 可能少帧？">unwinder 用 frame pointer 或 unwind metadata 恢复 caller，symbolizer 用匹配 binary 的 symbols 解析地址。inline 可能没有独立物理 frame，tail call 复用 frame，omit-frame-pointer 依赖 metadata；栈破坏或 symbols 不匹配会截断。先保留 raw addresses 和 module load ranges，再做 symbolization，不能只相信显示出的函数名。</Answer>
+</Exercises>

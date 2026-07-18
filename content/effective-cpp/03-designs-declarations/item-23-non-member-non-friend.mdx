@@ -1,0 +1,386 @@
+---
+title: "Item 23：优先以非成员非友元函数替换成员函数"
+type: A
+section: Chapter 4 · Designs and Declarations
+order: 23
+description: 对齐 Effective C++ 第三版 Item 23：以 private 访问集合衡量封装，把只组合 public API 的便利功能设计为同命名空间的非成员非友元函数，并识别必须使用成员或友元的边界。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppConvenienceNamespaceMap,
+  EcppMemberDecisionMap,
+  EcppPrivilegeSurfaceMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-23-non-member-non-friend";
+
+<Objectives>
+
+- 能解释为什么只组合 public API 的 non-member non-friend function 比额外 member 更有利于封装
+- 能设计与 class 同 namespace、按主题 header 拆分的 convenience functions
+- 能判断 private invariant、virtual dispatch、语言规则和对称参数何时要求 member、friend 或 non-member
+
+</Objectives>
+
+## 从 clearEverything 应该放在哪里开始
+
+假设浏览器类型已经提供三个核心操作：
+
+```cpp
+class WebBrowser {
+public:
+    void clearCache();
+    void clearHistory();
+    void removeCookies();
+};
+```
+
+产品还需要“一键清理全部数据”。最直接的写法是再加 member：
+
+```cpp
+class WebBrowser {
+public:
+    void clearEverything();
+};
+```
+
+但 `clearEverything` 只需依次调用三个 public functions，不需要 private data。把它放进 class，会无条件获得访问全部 private representation 的能力。
+
+<Term def="不是 class member、也未获 friend 权限，只能使用 public/protected-visible contract 的函数。">
+  non-member non-friend function
+</Term>
+
+Item 23 的原则是 Prefer non-member non-friend functions to member functions（优先以非成员非友元函数替换成员函数）。这里的“优先”针对不需要特殊权限的功能，不是取消所有成员函数。
+
+<Term def="为常见用例组合多个核心 public operations、但不建立新底层能力的函数。">
+  convenience function
+</Term>
+
+## 封装取决于谁能看见 private 表示
+
+encapsulation（封装）可以用一个具体问题衡量：当 private representation 改变时，有多少函数可能需要检查和修改？member 与 friend 都能访问全部 private data，因此都属于 privileged set。
+
+<Term def="所有能够直接读取或修改某个 class private representation 的函数和类型集合。">
+  privileged access set
+</Term>
+
+```cpp
+void clearEverything(WebBrowser& browser) {
+    browser.clearCache();
+    browser.clearHistory();
+    browser.removeCookies();
+}
+```
+
+这个 free function 只能依赖 public contract。即使 WebBrowser 把 cache 从 map 换成 database，它也无需变化。
+
+<Term def="通过减少依赖内部表示的代码数量，降低实现变化的传播范围。">
+  encapsulation by access minimization
+</Term>
+
+<EcppPrivilegeSurfaceMap />
+
+<Callout type="trap">
+  **现象**：把 member 改成 friend free function，认为封装变好。**原因**：friend
+  仍可访问全部 private representation，权限面没有缩小。**修法**：若 public API
+  足以实现，就使用 non-member non-friend；friend 只给真正无法表达的不变量协作。
+</Callout>
+
+## member 数量也是长期承诺
+
+public member 会进入 class interface、文档、自动补全、ABI 和用户认知。每增加一个 member，都暗示它是类型的核心能力，并可能与 inheritance、mock 和版本兼容绑定。
+
+<Term def="class definition 对用户承诺的核心操作、virtual surface 和二进制可见成员集合。">
+  class interface surface
+</Term>
+
+便利组合通常可以独立增加、弃用和分包，不应强迫核心 class definition 一起变化。
+
+<Term def="不修改 class definition，仅通过现有 public contract 添加领域组合操作的能力。">
+  open namespace extension
+</Term>
+
+这不是为了追求最少 member，而是让核心能力与组合能力拥有不同演进节奏。
+
+## 同一 namespace 保持逻辑归属
+
+non-member 不等于“随便放一个全局函数”。应与 class 放在同一 namespace：
+
+```cpp
+namespace browser {
+
+class WebBrowser {
+public:
+    void clearCache();
+    void clearHistory();
+    void removeCookies();
+};
+
+void clearEverything(WebBrowser& value);
+
+} // namespace browser
+```
+
+<Term def="class 与相关 free functions 共享命名空间，从而形成可查找、可组织的逻辑模块。">
+  namespace association
+</Term>
+
+调用形式 `browser::clearEverything(web)` 清楚表达领域归属。argument-dependent lookup 也能在适当泛型调用中发现同 namespace 函数。
+
+<Term def="编译器根据函数参数类型所属 namespace 补充查找候选 free functions 的规则。">
+  argument-dependent lookup
+</Term>
+
+不要把用户扩展放进 `std`；除标准明确允许的 specialization 外，向 `std` 添加声明是错误边界。
+
+## 便利函数可以按主题拆分 header
+
+class members 必须在 class definition 中声明，通常迫使所有用户看见全部功能。namespace convenience functions 可以按使用场景拆分。
+
+<Term def="把同一类型的可选组合功能分布到多个主题 header，用户只包含所需部分。">
+  convenience header partitioning
+</Term>
+
+```text
+browser/web_browser.hpp
+browser/privacy.hpp
+browser/bookmarks.hpp
+browser/diagnostics.hpp
+```
+
+privacy 用户无需依赖 bookmarks parser；核心 class 用户无需为 diagnostics 引入日志后端。
+
+<Term def="一个头文件修改后因 include 关系而必须重新解析和编译的下游范围。">
+  compile dependency surface
+</Term>
+
+<EcppConvenienceNamespaceMap />
+
+这种组织也允许不同团队维护功能包，只共享稳定 public contract。
+
+## 可扩展性不应要求改 class
+
+第三方无法给已有 class 添加 member，却能在自己的 namespace/module 中基于 public API 提供新算法。
+
+<Term def="用户在不取得内部权限、不修改原类型源码时增加组合行为的能力。">
+  client-side extension
+</Term>
+
+```cpp
+namespace analytics {
+
+Report summarizePrivacyState(const browser::WebBrowser& value);
+
+} // namespace analytics
+```
+
+若功能应成为 browser 官方生态，可在 browser namespace 的扩展 header 发布；若是应用特定策略，可留在应用 namespace。关键是都不扩大 private access。
+
+<Term def="扩展只消费稳定 public contract，因此 core representation 改变时仍可独立维护。">
+  contract-only extension
+</Term>
+
+## 何时必须是 member
+
+有些操作确实需要 member。constructor、destructor、assignment operator 受语言规则约束；virtual function 必须参与 class dispatch；需要原子维护 private invariant 的操作应由 class 掌控。
+
+<Term def="由 C++ 语法规定只能或自然必须声明在 class 内部的操作。">
+  language-required member
+</Term>
+
+```cpp
+class Account {
+public:
+    Result<void, Error> withdraw(Money amount);
+    virtual void audit(AuditSink&) const = 0;
+    Account& operator=(const Account& rhs);
+};
+```
+
+withdraw 同时检查余额、冻结状态和审计序号，若 public primitives 无法安全组合，它就是核心 member。
+
+<Term def="必须在单一受权操作中读取并提交多个 private 状态，才能维持对象不变量。">
+  invariant-critical operation
+</Term>
+
+virtual audit 需要 dynamic dispatch，也必须是 member。不要为了减少 member 而把不变量拆成危险 public setters。
+
+## 何时 friend 合理
+
+friend 是精确授权工具，不是默认便利机制。某些 tight coupling、stream operator、serializer 或测试支撑在无法用 public API 高效正确实现时可能需要 friend。
+
+<Term def="为一个窄职责函数或类型授予 private access，并把它纳入同一封装维护边界。">
+  narrow friend grant
+</Term>
+
+使用 friend 前应回答：是否缺少一个合理 public semantic operation；授权者是否与 class 同一维护单元；representation 变化是否会共同审查。
+
+<Term def="class 与其必要 friend 作为一个整体维护和演进 private representation 的边界。">
+  joint encapsulation unit
+</Term>
+
+若 friend 只是为了少写三个 public calls，它没有成立理由。
+
+## 对称运算通常适合 non-member
+
+二元运算的两个 operands 地位相同，而且可能需要两侧都参与 implicit conversion。此类 operator 常应是 non-member；Item 24 会进一步讨论转换规则。
+
+<Term def="二元操作的左右参数在领域语义中地位相同，不存在天然 receiver。">
+  symmetric operation
+</Term>
+
+```cpp
+class Rational {
+public:
+    Rational(int numerator = 0, int denominator = 1);
+};
+
+Rational operator*(const Rational& lhs, const Rational& rhs);
+```
+
+这里是否 friend 取决于 public API 是否足以高效读取表示。优先 non-member non-friend；只有确需 private access 才最小授权。
+
+<Term def="函数参数列表完整显示所有参与者，不把一个 operand 隐藏为 this 的接口形式。">
+  explicit operand symmetry
+</Term>
+
+## 不要把调用语法当作归属证明
+
+`object.doThing()` 看起来“面向对象”，不代表 doThing 应该是 member。真正问题是它需要什么权限、是否维护 invariant、是否 virtual、是否属于核心 type contract。
+
+<Term def="根据权限、契约与 dispatch 决定函数位置，而不是根据点号调用偏好。">
+  privilege-driven placement
+</Term>
+
+现代 IDE 同样能发现 namespace functions；可以通过命名、文档分组和 module exports 提高可发现性，而不是牺牲封装。
+
+<Callout type="trap">
+  **现象**：凡是第一个参数是某类型，就把函数塞进该 class。**原因**：receiver
+  语法被误当成权限需求，class interface 不断膨胀。**修法**：先问 public API
+  是否足够；若足够，放同 namespace 的 non-member non-friend，并按主题组织。
+</Callout>
+
+<EcppMemberDecisionMap />
+
+## 用表示替换实验验证函数位置
+
+先预测 WebBrowser private cache/history/cookies 全部更换表示时，哪些函数需要修改，再建立门禁：
+
+- 静态清单统计 member、friend 与 non-member 的 private access 权限。
+- representation swap 后 convenience function 源码和测试保持不变。
+- include graph 验证 privacy/bookmarks/diagnostics 用户只引入所需依赖。
+- compile-negative tests 证明 convenience functions 不能访问 private data。
+- core invariant tests 验证必须为 member 的操作仍原子维护状态。
+- ADL/namespace tests 验证泛型调用发现正确扩展且没有全局污染。
+- API review 为每个新增 member 写出“语言要求、virtual 或 invariant-critical”理由。
+
+<Term def="记录每个函数所需权限、核心契约地位、dispatch 与部署 header 的审查表。">
+  function placement matrix
+</Term>
+
+如果一个候选 member 只调用 public API，它默认应移出 privileged set。
+
+## 小结
+
+- non-member non-friend function 只能依赖 public contract，因此通常比额外 member 更加强封装
+- friend 与 member 都能访问 private representation，都会扩大 privileged access set
+- convenience functions 应与 class 放在同 namespace，并按主题 header 拆分
+- client-side extension 可以不修改 class definition、不增加核心编译依赖
+- constructor、assignment、virtual 与 invariant-critical operation 仍应是 member
+- 用 privilege-driven placement 和 representation swap 验证函数位置，而不是依赖点号偏好
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 23"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="non-member non-friend function">
+    只使用公开契约、没有成员或友元权限的函数。
+  </GlossaryItem>
+  <GlossaryItem term="convenience function">
+    组合核心 public operations 的常用辅助功能。
+  </GlossaryItem>
+  <GlossaryItem term="privileged access set">
+    可直接访问 private 表示的代码集合。
+  </GlossaryItem>
+  <GlossaryItem term="encapsulation by access minimization">
+    通过减少表示依赖者增强封装。
+  </GlossaryItem>
+  <GlossaryItem term="class interface surface">
+    class definition 承诺的核心成员集合。
+  </GlossaryItem>
+  <GlossaryItem term="open namespace extension">
+    不改 class 即可增加 namespace 功能。
+  </GlossaryItem>
+  <GlossaryItem term="namespace association">
+    class 与相关 free functions 的逻辑命名空间归属。
+  </GlossaryItem>
+  <GlossaryItem term="argument-dependent lookup">
+    按参数类型 namespace 补充函数查找。
+  </GlossaryItem>
+  <GlossaryItem term="convenience header partitioning">
+    按主题 header 拆分可选组合功能。
+  </GlossaryItem>
+  <GlossaryItem term="compile dependency surface">
+    头文件变化影响的下游编译范围。
+  </GlossaryItem>
+  <GlossaryItem term="client-side extension">
+    用户仅基于 public API 增加行为。
+  </GlossaryItem>
+  <GlossaryItem term="contract-only extension">
+    只依赖稳定公开契约的扩展。
+  </GlossaryItem>
+  <GlossaryItem term="language-required member">
+    语言规则要求位于 class 内的操作。
+  </GlossaryItem>
+  <GlossaryItem term="invariant-critical operation">
+    必须原子维护 private 状态的操作。
+  </GlossaryItem>
+  <GlossaryItem term="narrow friend grant">
+    向窄职责协作者授予 private access。
+  </GlossaryItem>
+  <GlossaryItem term="joint encapsulation unit">
+    class 与必要 friend 的共同维护边界。
+  </GlossaryItem>
+  <GlossaryItem term="symmetric operation">
+    左右 operands 领域地位相同的操作。
+  </GlossaryItem>
+  <GlossaryItem term="explicit operand symmetry">
+    参数列表显式展示所有对称参与者。
+  </GlossaryItem>
+  <GlossaryItem term="privilege-driven placement">
+    按权限和契约决定函数位置。
+  </GlossaryItem>
+  <GlossaryItem term="function placement matrix">
+    函数权限、dispatch 与组织方式审查表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：重构 WebBrowser。** `clearEverything` 与 `exportPrivacyReport` 都是 member，但只调用 public API，请重新组织。
+
+<Answer question="便利功能怎样移出 class 又保持可发现性？">
+  将两者改为 browser namespace 的 non-member non-friend
+  functions；clearEverything 放 privacy header，report 放 diagnostics/report
+  header，只包含各自依赖。文档按 WebBrowser related functions 分组，必要时利用
+  ADL。compile-negative test 证明它们不能访问 private data，representation swap
+  后源码与行为测试保持不变。
+</Answer>
+
+2. **问题 2：判断三个候选函数。** withdraw 修改余额/冻结/审计；format 只调用 getters；audit 需要 derived override，分别放在哪里？
+
+<Answer question="三个函数的权限和分派怎样决定位置？">
+  withdraw 是 invariant-critical member，在一个受权边界原子提交多字段；format
+  仅消费 public getters，应是同 namespace non-member non-friend，并可独立
+  header；audit 需要 virtual dispatch，必须是 member
+  virtual。不是依据第一个参数或点号风格，而是依据 private 权限、核心契约和
+  dispatch。
+</Answer>
+
+3. **问题 3：审查 friend serializer。** serializer 被授予 friend 只为读取四个已有 public queries，如何处理？
+
+  <Answer question="何时应移除 friend，何时可保留窄授权？">现有 public queries 足以正确且可接受成本地序列化时，移除 friend，改为 non-member non-friend，使表示变化不传播。若稳定 wire format 必须读取无法公开的原子 snapshot，可考虑 class 提供 semantic snapshot，仍优于宽 friend；只有该方案不可行时保留窄 friend，并把 serializer 与 class 作为 joint encapsulation unit 共同审查。</Answer>
+</Exercises>

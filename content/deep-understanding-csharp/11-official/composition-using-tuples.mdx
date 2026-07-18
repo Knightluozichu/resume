@@ -1,0 +1,155 @@
+---
+title: "Chapter 11. Composition using tuples"
+type: C
+section: "C# in Depth 4e · C# 7+"
+order: 11
+description: "覆盖C# 7 tuple literals、tuple types、conversions、ValueTuple CLR表示、替代方案与使用边界，按arity、position、names和ownership判断设计。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-11"
+draft: false
+---
+
+import { DcsTupleConversionLab, DcsTupleOwnershipLab, DcsTupleShapeLab } from "@/components/mdx/deep-understanding-csharp/diagrams/composition-using-tuples";
+
+<Objectives>
+
+- 能从tuple literal推导arity、element types与names，解释compile-time tuple type和runtime ValueTuple表示的差异
+- 能逐position判断tuple conversions、assignment、equality与name warnings，不把element names误当runtime identity
+- 能设计tuple、anonymous type或nominal type的选择规则，并按ownership、invariant、versioning和consumer radius验证public API演进风险
+
+</Objectives>
+
+## 为什么Tuple适合临时组合而不是自动替代领域模型
+
+方法经常需要返回两个相关结果，LINQ pipeline也会临时携带value与index。C# 7 tuples让这种composition有静态types和可读element names，不必为每个局部shape声明class。它的力量来自低ceremony，也因此缺少nominal type可以承载的constructor validation、methods、documentation与独立version identity。
+
+先预测：`(int x, int y)`与`(int width, int height)`是否是不同runtime types；element names是否参与equality；八元素tuple是否只有八个flat CLR fields；public method只改返回tuple element name是否毫无兼容性影响。答案依次是“不是、否、否、不能这样保证”。
+
+<Term def="由声明名定义独立identity并可承载invariants、behavior与versioning的类型身份。">nominal identity</Term>
+
+## Introduction to tuples
+
+Tuple表示固定长度、按position排列的heterogeneous values。与`System.Tuple` reference types相比，C# 7语法通常映射到`System.ValueTuple` value types，并允许source层的element names。它适合private helper return、短生命周期pipeline state与清楚稳定的dictionary key。
+
+Tuple不是collection：arity与每个position type都是compile-time shape的一部分，不能在runtime append element。也不要把“有两个string”当作足够语义；若first/last、source/destination容易交换，nominal wrapper可能更安全。
+
+## Tuple literals and tuple types
+
+Literal `(id: 42, total: 9.5m)`可target为显式`(int id, decimal total)`，也可由`var`推断。Simple variable/member expressions可产生inferred names；其他expression退回`Item1`等访问。Names提高source readability，却不是value携带的独立runtime fields。
+
+```csharp
+(int id, decimal total) summary = (order.Id, order.Total);
+var inferred = (order.Id, order.Total); // inferred names: Id, Total
+Console.WriteLine($"{summary.id}: {summary.total}");
+```
+
+<Term def="由固定arity、每个position的type及可选source-level names构成的tuple编译期形状。">structural tuple shape</Term>
+
+<Stepper>
+  <Step title="切换literal、inferred names、unnamed与八元素"><DcsTupleShapeLab /></Step>
+  <Step title="分别记录source type与runtime representation">写出arity、position types、available names、Item fields和超过七项时的Rest nesting。</Step>
+  <Step title="用compiler与reflection双重验收">让IDE/compiler检查访问名，再用typeof/reflection观察ValueTuple representation，避免混为一层。</Step>
+</Stepper>
+
+## Tuple types and conversions
+
+Tuple conversion要求相同arity，并对每个position存在相应implicit或explicit conversion。Names不决定conversion identity：`(int x, string y)`可赋给`(long id, object value)`，因为int到long、string到object逐项成立。Literal name与target name不一致可能得到warning，但值按position移动。
+
+```csharp
+(int count, float ratio) source = (3, 0.5f);
+(long count, double ratio) target = source;
+
+(int left, int right) pair = (right: 1, left: 2); // names warn; positions still win
+```
+
+Assignment与deconstruction都要关注evaluation order和position。Names相同也不会修正顺序错误。Tuple equality在支持它的后续C#版本中也是element-wise，names不参与；第四版的C# 7语境应先掌握conversion与representation，再把后续语法标成versioned update。
+
+<Term def="tuple element name通过编译器与metadata辅助source consumers，但不成为ValueTuple value的runtime identity。">tuple element name metadata</Term>
+
+<Stepper>
+  <Step title="切换same types、numeric、name与arity cases"><DcsTupleConversionLab /></Step>
+  <Step title="逐position写conversion proof">对第i项标source type、target type、conversion kind与可能loss；names另列warning，不替代type proof。</Step>
+  <Step title="制造swap与API metadata测试">交换两个同type positions，确认compiler无法凭name阻止semantic bug；跨assembly检查consumer显示名。</Step>
+</Stepper>
+
+<Callout type="trap" title="Element names让tuple拥有像record一样的runtime schema">
+Names主要属于compile-time view与metadata；underlying fields仍是Item1、Item2等，conversion和equality按position/type工作。Schema、serialization与reflection contract必须显式验证，不能由source spelling推断。
+</Callout>
+
+## Tuples in the CLR
+
+Tuple语法由compiler映射到generic `ValueTuple` structs。Arity二到七有对应generic forms，更长tuples通过第八个`Rest`继续nesting。Element names可由attributes在某些metadata positions保存供tools/consumers还原，但runtime generic type arguments不因`id`改成`orderId`而成为新type。
+
+ValueTuple是value type，assignment会copy fields；fields本身是public且可变。若tuple含reference，copy只复制reference，不deep clone object。Boxing、interface dispatch、大tuple copy和nested Rest都可能影响hot path，先measure再优化。
+
+<Term def="从C# tuple syntax穿过assembly、reflection、serializer或language boundary后仍需明确的runtime形状规则。">representation boundary</Term>
+
+## Alternatives to tuples
+
+Anonymous type有named read-only properties和compiler-generated nominal-ish local type，但不能方便地作为public return type。`KeyValuePair`表达key/value，不能泛化为任意二元领域关系。Dedicated class/struct表达稳定business concept，可加入validation、methods、docs和serialization attributes；代价是额外声明。
+
+C# 9 records是本书第四版之后的语言特性，不属于本章原始知识结构。它们可作为现代nominal data type候选，但不能反向把第四版Chapter 11改写成“records and tuples”。学习时先完整掌握本章的tuple composition与CLR model，再在版本边界外比较现代选择。
+
+## Uses and recommendations
+
+判断标准是change ownership。Private method和caller一起修改时，tuple低成本且清晰；public API、stored schema、message contract或跨团队boundary需要稳定identity时，dedicated type更可靠。即使private tuple，超过三四项、同type positions很多或需要invariant时，也应升级为nominal type。
+
+```csharp
+private static (decimal subtotal, decimal tax) Calculate(Order order) =>
+    (order.Lines.Sum(line => line.Total), order.Tax);
+
+public sealed class InvoiceTotals
+{
+    public decimal Subtotal { get; init; }
+    public decimal Tax { get; init; }
+}
+```
+
+<Term def="返回shape变化会影响多少source、binary、serialized或跨团队consumers的演进半径。">return-shape volatility</Term>
+
+<Stepper>
+  <Step title="切换private、public、key与domain value"><DcsTupleOwnershipLab /></Step>
+  <Step title="列出invariant与consumer radius">记录是否需validation、behavior、docs、serialization、binary compatibility和跨language consumption。</Step>
+  <Step title="执行shape evolution演练">新增、重排、改名一个element，观察compile errors、silent same-type swap、metadata与old consumer结果。</Step>
+</Stepper>
+
+<Callout type="trap" title="Tuple只用于return value，所以public API也天然安全">
+Public tuple仍暴露arity、position types和element-name metadata。新增或重排元素会破坏source；同type swap甚至可能静默编译。稳定contract应使用nominal type和明确version policy。
+</Callout>
+
+## 本章回顾：把Position、Name、Representation和Ownership分开
+
+1. Tuple是fixed-arity heterogeneous composition，适合局部短生命周期shape。
+2. Literal与tuple type提供element names，但conversion与runtime identity仍以arity、position和types为核心。
+3. CLR层由ValueTuple structs与可能的Rest nesting表示，names通过额外metadata辅助tools。
+4. Tuple alternatives不是语法偏好，而是invariant、behavior与consumer ownership决策。
+5. 第四版本章讨论tuples；records属于后续版本补充，不能替换原目录。
+
+<Exercises>
+
+**问题 1：为什么`(string source, string destination)`仍可能发生静默swap？**
+
+<Answer>两个position type相同，names不参与runtime identity或逐项conversion，调用者写反仍可编译。对高风险route使用nominal EndpointPair或带validation/factory的type；至少加入directional examples、property-based round-trip和明确命名的arguments。</Answer>
+
+**问题 2：一个private parser返回`(bool success, int value, string error)`，何时应该升级类型？**
+
+<Answer>当states存在约束，例如success时error必须null、failure时value无意义，或consumer数量增长、需要methods/docs时，tuple允许invalid combinations，应改为result union/nominal type。先统计callers和invalid-state tests，再迁移并让compiler迫使每个case被处理。</Answer>
+
+**问题 3：如何验收跨assembly public tuple改名？**
+
+<Answer>分别编译旧consumer与新consumer，检查binary loading、source recompilation、IntelliSense names、TupleElementNamesAttribute/reflection和serializer输出。即使runtime call仍成功，source name change也可能破坏使用旧element name的代码，所以必须按API compatibility管理。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="nominal identity" definition="由声明名承载invariant、behavior和version的独立type identity。" />
+  <GlossaryItem term="structural tuple shape" definition="Tuple的arity、position types与可选source names。" />
+  <GlossaryItem term="tuple element name metadata" definition="供compiler/tools还原element names的source与metadata信息。" />
+  <GlossaryItem term="representation boundary" definition="Tuple跨CLR、reflection、serializer或language时的实际形状边界。" />
+  <GlossaryItem term="return-shape volatility" definition="返回shape改变对各类consumers造成的演进范围。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# in Depth, Fourth Edition, Chapter 11: Composition using tuples" adaptedUrl="https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-11" />

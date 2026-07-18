@@ -1,147 +1,308 @@
 ---
-title: 把数字翻译成字符串
+title: "面试题46：把数字翻译成字符串"
 type: C
-section: 字符串
-order: 6
-description: 计算数字字符串可翻译成字符串的种类数。
+section: "第5章 优化时间和空间效率"
+order: 50
+description: "按0到25映射a到z，从右向左统计每个数字后缀的翻译数；单个0合法，只有10到25的两位组合可作为一个字母。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/46_TranslateNumbersToStrings/TranslateNumbersToStrings.cpp"
 draft: false
 ---
 
-{/* 知识点清单：字符串分段、递推状态、区间 10~25 检查；原书章节：把数字翻译成字符串。 */}
+import { TranslationMappingDiagram, TranslationCountLab, TranslationPathsDiagram, TranslationContractDiagram, TranslateNumbersOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/translate-numbers-to-strings";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能把问题转成“当前位置可选翻译数”DP。
-- 能处理前导 `0` 和两位数边界。
-- 能写出 C++ 与 TypeScript 的线性时空实现。
+- 能解释本题0到25映射与常见1到26解码的差异
+- 能计算12258从右向左每个后缀的翻译方法数
+- 能实现作者数组动态规划和常数空间等价版本
+- 能分析0、01、10、25、26、负数与空字符串边界
+- 能设计覆盖作者九组用例和枚举路径参考的测试
 
 </Objectives>
 
-## 直觉引入
+## 从“0也有字母”开始
 
-把数字串当作从左到右的序列。到每个位置时可选两类切分：
+先预测：数字10可以切成1、0，翻译为b、a，也可以把10整体翻译成k，共两种。这里0对应a，1对应b，一直到25对应z；它不是“1到26对应a到z”的另一道经典解码题。
 
-- 取 1 位，前提是当前位非 `0`；
-- 取 2 位，前提是 `10 <= num <= 25`。
+题目“**把数字翻译成字符串**”规定“**0到25对应字母**”。每个单独数字字符0到9都能做<Term def="消费当前位置一个数字字符，并按0到9映射为a到j。">单字符翻译</Term>；相邻两个字符只有组成10到25时，才能做<Term def="同时消费相邻两个字符，且其数值必须位于10到25闭区间。">双字符翻译</Term>。
 
-因此 `dp[i]` 只依赖于 `dp[i+1]` 与 `dp[i+2]`。
+<TranslationMappingDiagram />
 
-<DynamicProgrammingDiagram />
+## 旧页为何把0讲反了
 
-## 算法思路
+旧页写“当前位非0才能取一位”，这属于1到26解码规则。作者源码无论当前字符是否0，都先继承下一后缀的方法数；只有尝试两位组合时才检查10到25。
 
-1. 定义 `dp[i]`：从 `nums[i...]` 开始可翻译的种数。
-2. 初始化：`dp[n] = 1`（空串有一种不消费方式）。
-3. 自右向左填表：
-   - 默认 `dp[i] = dp[i+1]`；
-   - 若 `nums[i..i+1]` 在 10..25 间，则再加 `dp[i+2]`。
+因此数字0有一种翻译a；100有1、0、0与10、0两种；101有1、0、1与10、1两种。01不能作为双字符编码，但0和1仍能分别翻译。
 
-## 思考引导
+<TranslationContractDiagram />
 
-### 1) 先问问题，不先递归
-这是一个分段计数问题。你先把“每个位置可选切分”抽象出来，再决定递归还是 DP。
+<Callout type="trap" title="看到字符0就把当前状态清零">
+本题0本身对应a，单字符路径始终合法。清零会让0、100和101全部少算；需要拒绝的是00、01等小于10的双字符组合。
+</Callout>
 
-### 2) 识别不变式
-`dp[i]` 表示从第 `i` 位到末尾的翻译方法数。转移来自 `dp[i+1]`（单字）和 `dp[i+2]`（双字）两种合法状态。
+旧页还建议 `506` 有两种。实际50大于25、06小于10，只有5、0、6逐位翻译这一条。换题目映射后不能沿用其他解码题的样例答案。
 
-### 3) 为什么它一定成立
-当前选择只影响到当前位以及下一位范围。重叠子问题自然出现，DP 通过共享状态避免重复树。
+## 状态定义：从当前位置到末尾
 
-### 4) 常见误区
-把 `0` 当单独字符直接计入，或把两位数条件写成 `>=10` 且 `<=26` 混乱，会把非法映射引入。
+令counts[i]表示从下标i开始的后缀有多少种翻译。先取一位时，后续选择数就是counts[i+1]；若两位数合法，再加counts[i+2]。这就是<Term def="从某个下标开始直到末尾的全部合法翻译路径数量。">后缀方法数</Term>。
 
-### 5) 你能找到一个反例吗
-"101" 能检验你是否处理了 10 与 01 的合法性边界。
+作者从右向左计算，因为当前位置依赖右侧一个或两个状态。最后一个字符只能单独翻译，所以counts[last]为1。倒数第二位若两字符有效，在单字符路径之外再加一条直接消费完全部字符的路径。
 
-### 6) 迁移到下一题
-文本分词、编码路径统计都可复用“局部转移 + 合法性判断 + 重叠合并”的框架。
-## 实现代码
+概念上可在字符串末尾放一个值为1的<Term def="所有输入字符都已消费时的一种完成方式，用作两位转移越过末尾的基例。">虚拟空后缀</Term>，统一写成：
 
-<CodeTabs>
-  <Tab label="C++">
+```text
+ways[i] = ways[i + 1]
+if 10 <= value(i, i + 1) <= 25:
+    ways[i] += ways[i + 2]
+
+ways[length] = 1
+```
+
+这里空后缀的1不是说公开空字符串输入一定有一种翻译，而是表示一条切分路径成功消费到末尾。作者公开入口接收int，to_string后永远至少一个字符。
+
+## 忠实还原作者数组DP
+
+作者先拒绝负数，再转十进制string。内部函数分配length个int，从末位向前填counts；在倒数第二位遇合法组合时源码直接加1，等价于读取虚拟counts[length]。
+
 ```cpp
 #include <string>
-#include <vector>
 
-class Solution {
-public:
-    int translateNum(string nums) {
-        int n = (int)nums.size();
-        if (n == 0) return 0;
+int GetTranslationCount(
+    const std::string& number) {
+    const int length =
+        static_cast<int>(number.length());
+    int* counts = new int[length];
+    int count = 0;
 
-        std::vector<int> dp(n + 1, 0);
-        dp[n] = 1;
+    for (int i = length - 1; i >= 0; --i) {
+        if (i < length - 1) {
+            count = counts[i + 1];
+        } else {
+            count = 1;
+        }
 
-        for (int i = n - 1; i >= 0; --i) {
-            if (nums[i] == '0') {
-                dp[i] = dp[i + 1];
-                continue;
-            }
+        if (i < length - 1) {
+            const int digit1 =
+                number[i] - '0';
+            const int digit2 =
+                number[i + 1] - '0';
+            const int converted =
+                digit1 * 10 + digit2;
 
-            dp[i] = dp[i + 1];
-
-            if (i + 1 < n) {
-                int two = (nums[i] - '0') * 10 + (nums[i + 1] - '0');
-                if (two >= 10 && two <= 25) {
-                    dp[i] += dp[i + 2];
+            if (converted >= 10 &&
+                converted <= 25) {
+                if (i < length - 2) {
+                    count += counts[i + 2];
+                } else {
+                    count += 1;
                 }
             }
         }
-
-        return dp[0];
-    }
-};
-```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-function translateNumbersToStrings(nums: string): number {
-  const n = nums.length;
-  if (n === 0) return 0;
-
-  const dp = new Array(n + 1).fill(0);
-  dp[n] = 1;
-
-  for (let i = n - 1; i >= 0; i--) {
-    if (nums[i] === "0") {
-      dp[i] = dp[i + 1];
-      continue;
+        counts[i] = count;
     }
 
-    let ways = dp[i + 1];
-    if (i + 1 < n) {
-      const two = Number(nums.slice(i, i + 2));
-      if (two >= 10 && two <= 25) {
-        ways += dp[i + 2];
-      }
-    }
-    dp[i] = ways;
-  }
+    count = counts[0];
+    delete[] counts;
+    return count;
+}
 
-  return dp[0];
+int GetTranslationCount(int number) {
+    if (number < 0) {
+        return 0;
+    }
+    return GetTranslationCount(
+        std::to_string(number));
 }
 ```
-  </Tab>
-</CodeTabs>
 
-## 易错点
+作者string辅助函数假设非空且全是数字。若直接传空string，分配零长度数组后仍读取counts[0]，属于越界；公开int入口不会产生空串。把辅助函数公开时必须补输入验证。
 
-- `0` 在题目语义里不能独立翻译，不可直接 `dp[i+1]`。 
-- 两位数边界是 `10` 到 `25`，不是 `00` 到 `99`。
-- 大多数语言都可能出现较大结果，若题目要求可加模数；当前实现按原题返回完整整数。
+## 12258逐步填表
 
-## 小结
+从末尾8开始只有1种。后缀58的组合58无效，仍是1。后缀258可以先取2再翻译58，也可以取25再翻译8，共2种。后缀2258可取2后接2种，也可取22后接后缀58的1种，共3。整个12258可取1后接3种，或取12后接后缀258的2种，共5。
 
-这类“编码”问题常见公式：每一步都在“取单字符”与“取两字符”之间选择并叠加。
+<TranslationCountLab />
 
-<Callout type="tip">
-  <strong>复习提醒：</strong> 先测 `"12258"`（可得 5）、`"506"`（2）和包含连串 0 的 `"10203"`。
+这五个计数对应五条真实的<Term def="把整个数字串切分为若干1位或合法2位编码，并逐段映射为字母的完整方案。">翻译路径</Term>，不是抽象数字：
+
+<TranslationPathsDiagram />
+
+递推不重不漏。任意完整翻译的第一段要么消费一个字符，要么消费两个字符；两类互斥。单字符之后剩余方案由i加1状态完整覆盖，合法双字符之后由i加2状态覆盖，因此相加正好得到全部路径。
+
+## 为什么分支计数相加而不是相乘
+
+当前位置的“取一位”和“取两位”是互斥首选：一条完整路径只能选择其中一个，所以两个分支的方法数相加。进入某个分支后，首段翻译已经唯一确定，剩余自由度全部来自对应后缀，不需要再乘一个首段数量。
+
+只有当一个步骤同时组合两个彼此独立的子结构时才使用乘法。例如左半有p种、右半有q种且每个左选项都能与每个右选项配对，才得到p乘q。本题切分保持线性顺序，消费首段后只剩一个后缀子问题，不存在左右两个独立选择集。
+
+这也说明counts状态只需记录下标，不需记录此前翻译出的字母：未来合法切分完全由未消费数字决定，与已经选择b还是m无关。若规则增加“相邻字母不能相同”等上下文约束，状态就必须加入上一个字母，原一维DP将不再充分。
+
+从递归树看，多个不同前缀可能到达同一个后缀下标；这些节点的后续子树完全相同。动态规划只计算一次后缀方法数，再由所有入边复用，正是线性时间来源。
+
+## 两位边界为何是10到25
+
+单字符可表达0到9；若允许01作为双字符，它与单字符1编码相同，还引入前导零歧义。作者用数值条件“**两位数字在10到25之间**”，同时排除00到09并限制字母表上界z。
+
+10合法且映射k，25合法且映射z，26无效。125有1、2、5；1、25；12、5三种。126只有1、2、6与12、6两种，因为26超界。426的42和26都无效，只剩逐位一条。
+
+<Callout type="trap" title="把上界写成26">
+作者从0开始编号字母，z对应25，不是26。把26纳入会让126和426各多一条，直接违反Test4与Test5。
 </Callout>
 
+## 常数空间等价实现
+
+每个状态只依赖右侧两个计数，不必保留整个数组。next表示ways[i+1]，nextNext表示ways[i+2]；计算当前ways后，把窗口向左移动。
+
+```cpp
+#include <cstdint>
+#include <string>
+
+std::uint64_t translationCount(int number) {
+    if (number < 0) {
+        return 0;
+    }
+
+    const std::string text =
+        std::to_string(number);
+    std::uint64_t next = 1;
+    std::uint64_t nextNext = 0;
+
+    for (std::size_t i = text.size();
+         i-- > 0;) {
+        std::uint64_t ways = next;
+
+        if (i + 1 < text.size()) {
+            const int pair =
+                (text[i] - '0') * 10 +
+                (text[i + 1] - '0');
+            if (pair >= 10 && pair <= 25) {
+                ways += nextNext;
+            }
+        }
+
+        nextNext = next;
+        next = ways;
+    }
+    return next;
+}
+```
+
+初始化next为1表示最后字符右侧的虚拟空后缀；nextNext初始值在处理最后字符时不会读取。处理完最后字符后，窗口更新为两个值都等于1，倒数第二位合法组合即可正确加上ways[length]。
+
+作者int输入最多10位，计数很小；若函数扩展到任意长数字字符串，方法数按类似斐波那契增长，uint64也会溢出。工程版要检查加法、使用大整数或按协议取模，不能静默回绕。
+
+## 时间、空间与递归选择
+
+设十进制长度为d。作者填一次counts数组，时间O(d)、额外空间O(d)；滚动版时间O(d)、额外空间O(1)。把所有切分直接递归枚举会生成指数级调用树，除非目标是实际列出每条翻译。
+
+记忆化递归与数组DP状态相同，时间和空间均O(d)。右向左迭代避免调用栈，且作者转移只看固定后缀，更适合本题。
+
+如果业务既要数量又要列出前k条翻译，可以先DP计数，再按分支回溯并用计数跳过整棵子树；不要先生成所有路径再截断。输出本身可能指数增长，算法无法用线性时间完整列举。
+
+## 作者九组测试的准确语义
+
+每组直接比较GetTranslationCount与expected：
+
+1. 0期望1，证明0可单独翻译。
+2. 10期望2，覆盖双字符下边界。
+3. 125期望3，覆盖12与25两个重叠组合。
+4. 126期望2，证明26无效。
+5. 426期望1，两个相邻组合都无效。
+6. 100期望2，路径为1|0|0与10|0。
+7. 101期望2，路径为1|0|1与10|1，01无效。
+8. 12258期望5，覆盖多层重叠子问题。
+9. -100期望0，负数入口直接拒绝。
+
+<TranslateNumbersOfficialCaseLab />
+
+源码没有单个1、25、26、506、int最大值、空string辅助调用、非数字字符或计数溢出测试。新增506期望1能直接防止旧页错误语义回归。
+
+```cpp
+#include <cassert>
+
+void testTranslationCount() {
+    assert(translationCount(0) == 1);
+    assert(translationCount(10) == 2);
+    assert(translationCount(125) == 3);
+    assert(translationCount(126) == 2);
+    assert(translationCount(426) == 1);
+    assert(translationCount(100) == 2);
+    assert(translationCount(101) == 2);
+    assert(translationCount(12258) == 5);
+    assert(translationCount(506) == 1);
+    assert(translationCount(-100) == 0);
+}
+```
+
+随机短数字可用回溯枚举所有合法切分并计数，与DP对拍。参考回溯必须按0到25规则，若复用了1到26解码器，只会让两个实现共享错误预期。
+
+## 输入表示与扩展契约
+
+int入口会丢失书写时的前导零：源代码文字001编译为整数1，to_string只得到1。若业务输入是编码字符串并需要保留前导零，应公开string接口，验证每个字符是数字，并定义空串结果。
+
+字符串01按作者切分规则只有0|1一条，因为01不是双字符；这与整数1的一条数量相同，但实际翻译文本分别是ab与b。只返回数量会隐藏输入表示差异，列举翻译时必须保留原字符串。
+
+负号不在0到25编码表中，作者返回0。若允许负数，应先定义负号是否独立字符，不能简单对绝对值计数后声称还原原题。
+
+若映射表改成0到99，允许的片段长度不再最多2，状态要依赖更多后缀；若编码集合稀疏，可用trie从每个位置枚举合法前缀。核心仍是“当前位置所有合法首段分支加总后缀方法数”。
+
+并发场景下纯函数实现没有共享状态，可安全并行处理多个输入。作者new数组也局部独立，但频繁小分配可由滚动状态消除。
+
+<Stepper>
+  <Step title="先固定0到25映射"><TranslationMappingDiagram />单个0合法，两位编码只允许10到25。</Step>
+  <Step title="定义每个后缀的方法数"><TranslationCountLab />从右向左把取一位和合法取两位的计数相加。</Step>
+  <Step title="把计数对应到真实路径"><TranslationPathsDiagram />12258恰有bccfi、bwfi、bczi、mcfi、mzi五种。</Step>
+  <Step title="逐项检查零与两位边界"><TranslationContractDiagram />区分0、01、10、25、26、负数和空辅助输入。</Step>
+  <Step title="跑完九组作者测试"><TranslateNumbersOfficialCaseLab />覆盖重叠组合、连续零、复杂样例与无效负数。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 本题0到25对应a到z，单个0是合法翻译a。
+2. 单字符分支始终存在，双字符分支仅在10到25时存在。
+3. counts[i]表示从i开始的后缀方法数，由右侧一格和两格转移。
+4. 虚拟空后缀值1表示恰好消费完所有字符的一条完成路径。
+5. 12258从右向左得到1、1、2、3、5，并对应五条翻译。
+6. 00、01无效为双字符，但其中每个0仍可单独翻译。
+7. 作者时间O(d)、空间O(d)，滚动状态可压到O(1)空间。
+8. 旧页对0和506的判断属于另一套映射，已纠正为作者契约。
+
+<Exercises>
+
+**问题 1：数字0为什么有一种而不是零种翻译？**
+
+<Answer>作者映射从0开始，0对应a；整数0转成字符串"0"，最后一个字符的单字符路径计数为1。</Answer>
+
+**问题 2：100为何有两种翻译？**
+
+<Answer>可以切成1|0|0，每位单独翻译；也可切成10|0。00不在10到25之间，不能作为第三条双字符路径。</Answer>
+
+**问题 3：12258在下标1的后缀2258为何有3种？**
+
+<Answer>先取单个2后接258的2种；或取合法22后接58的1种，两类首段互斥，合计3。</Answer>
+
+**问题 4：为什么506只有一种？**
+
+<Answer>50超过25，06小于10，两个相邻组合都不能整体翻译；只能按5|0|6逐位翻译，且0本身合法。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="单字符翻译">消费一个数字字符并按0到9映射字母的路径。</GlossaryItem>
+  <GlossaryItem term="双字符翻译">消费两个字符且组合值在10到25的路径。</GlossaryItem>
+  <GlossaryItem term="后缀方法数">从某下标开始到末尾的合法翻译总数。</GlossaryItem>
+  <GlossaryItem term="虚拟空后缀">字符全部消费完后的一种完成方式，用作递推基例。</GlossaryItem>
+  <GlossaryItem term="翻译路径">覆盖整个数字串的一组合法一位或两位切分及其字母结果。</GlossaryItem>
+</Glossary>
+
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题46"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/46_TranslateNumbersToStrings/TranslateNumbersToStrings.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

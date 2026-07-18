@@ -1,0 +1,168 @@
+---
+title: "Chapter 12. Deconstruction and pattern matching"
+type: C
+section: "C# in Depth 4e · C# 7+"
+order: 12
+description: "覆盖tuple与nontuple deconstruction、C# 7.0 constant/type/var patterns、is与switch语义、scope、case order和使用边界。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-12"
+draft: false
+---
+
+import { DcsDeconstructionProtocolLab, DcsPatternSemanticsLab, DcsSwitchDecisionLab } from "@/components/mdx/deep-understanding-csharp/diagrams/deconstruction-and-pattern-matching";
+
+<Objectives>
+
+- 能解释tuple和custom Deconstruct如何按arity、out types与position绑定，并区分producer member names与consumer local names
+- 能分析C# 7 constant、type和var patterns的match、binding、null与scope规则，在is表达式中避免未赋值或混淆
+- 能设计pattern switch的ordered decision table，用case order、when guards、null/default policy和tests证明分类完整性
+
+</Objectives>
+
+## 从Shape验证开始理解Deconstruction与Pattern
+
+Deconstruction让consumer一次把一个compound value拆到多个locals；pattern matching把runtime test与成功后的typed binding放在同一语法中。二者都减少重复access/cast，却也把protocol selection、scope与control flow压进短表达式。掌握它们不能只记syntax，必须追踪“哪个producer提供shape、何时match、哪些变量在何处definitely assigned”。
+
+先预测：deconstruction local names是否必须等于tuple element names；任意有两个properties的type是否自动可拆；type pattern是否匹配null；`var` pattern是否可能失败；switch pattern cases是否按最具体type自动排序。答案依次是“否、否、否、通常不失败、否”。
+
+<Term def="Compiler寻找tuple shape或可访问Deconstruct方法，并按arity与out positions把producer value绑定给consumer locals的规则。">deconstruction protocol</Term>
+
+## Deconstruction of tuples
+
+Tuple deconstruction按position展开：`var (id, total) = summary;`中的local names由consumer选择，不必等于tuple element names。显式types、`var`混合形式受版本语法限制；discard `_`表示有意识地忽略某一position，但仍参与shape/arity匹配。
+
+Assignment deconstruction可写入已有variables，右侧expressions先按规定求值，再分配到左侧locations。不要依赖names修正position；两个同type元素交换仍是semantic bug。Nested tuples产生nested deconstruction shape，评审时最好画出position tree。
+
+```csharp
+(int orderId, decimal total) summary = LoadSummary();
+var (id, amount) = summary;
+(amount, id) = (amount + 10m, id + 1);
+var (_, tax) = CalculateTotals();
+```
+
+## Deconstruction of nontuple types
+
+Class或struct可提供accessible instance `Deconstruct(out T1, out T2, ...)`；extension method也可给不能修改的type增加consumer view。Compiler按name、arity与applicable overload选择方法，不是看到properties就自动拆。多个相近overloads可能造成ambiguity或随新增overload改变binding，应保持shape数量和语义稳定。
+
+Deconstruct表达“从一个value观察出多个components”，不等于constructor inverse。Rounded、normalized或derived outputs可能无法重建原对象；若需要round-trip，必须单独声明并测试law。Public Deconstruct也是API surface，新增同arity overload要做source compatibility review。
+
+```csharp
+public sealed class Money
+{
+    public decimal Amount { get; }
+    public string Currency { get; }
+
+    public void Deconstruct(out decimal amount, out string currency) =>
+        (amount, currency) = (Amount, Currency);
+}
+```
+
+<Stepper>
+  <Step title="切换tuple、instance、extension与discard"><DcsDeconstructionProtocolLab /></Step>
+  <Step title="写出candidate与position map">标明receiver static type、可见Deconstruct overloads、每个out type、consumer local与discard。</Step>
+  <Step title="验证ambiguity、swap与round-trip">新增overload、交换同type positions、做construct-deconstruct property test，确认真正contract。</Step>
+</Stepper>
+
+<Callout type="trap" title="Deconstruct天然就是constructor的反函数">
+Compiler只要求可匹配的out shape，不保证信息完整或可逆。Derived、normalized和lossy outputs都合法；需要round-trip时必须由domain contract与tests证明。
+</Callout>
+
+## Introduction to pattern matching
+
+Pattern把两件事合并：检查input是否符合某个shape，并在成功路径绑定information。C# 7.0的核心是constant、type和var patterns；它还没有Chapter 15所预览的recursive property/positional patterns。版本边界很重要，否则会误以为所有现代pattern syntax都属于本章。
+
+Pattern variable受definite assignment与control-flow analysis控制。`if (value is Order order)`的true branch中order可用；在`&&`右侧也可用，因为只有match成功才evaluation。与`||`组合时要逐path检查，不能靠视觉猜scope和assignment。
+
+<Term def="Pattern成功时引入、由control-flow和definite-assignment规则限制可用范围的local variable。">pattern variable scope</Term>
+
+## Patterns available in C# 7.0
+
+Constant pattern比较constant，包括`null`；type pattern先检查runtime type兼容并在成功时绑定typed variable，null不会匹配任何type pattern；var pattern绑定input为新variable，通常总是成功，input为null也会被捕获。`_`在这些历史语境中要根据具体syntax判断discard或identifier，不能把所有underscore一概当现代discard pattern。
+
+```csharp
+if (input is Order order && order.Total > 0m)
+{
+    Process(order);
+}
+else if (input is null)
+{
+    Reject("missing");
+}
+```
+
+<Term def="对runtime value执行兼容性测试并在成功path提供narrowed static type的pattern操作。">runtime type refinement</Term>
+
+<Stepper>
+  <Step title="切换constant、type、var与guard"><DcsPatternSemanticsLab /></Step>
+  <Step title="记录match、binding与null行为">每种pattern写出可能false的条件、bound variable type、null结果和guard evaluation。</Step>
+  <Step title="做control-flow编译实验">将variable用于&&、||、negation和branch外，观察compiler definite-assignment结论并补path tests。</Step>
+</Stepper>
+
+## Using patterns with the is operator
+
+传统代码常先`is`再cast，或用`as`后检查null。Type pattern一次完成test与binding，减少重复lookup和race-like inconsistency。它仍只表达runtime type兼容；business validity要在后续guard或domain method中判断。
+
+Negation在C# 7时代通常写成`!(value is Order order)`，变量scope与definite assignment容易让代码难读。Later `is not`属于后续版本。教学和维护时应按项目LangVersion选择真实可用syntax，而不是把现代写法倒灌到第四版chapter。
+
+## Using patterns with switch statements
+
+C# 7扩展switch，使case可用type patterns和`when` guards，不再只限constant labels。Cases是按source order评估的decision rules；broad base case放在derived case前可能让后者unreachable。Guard只在前面的pattern成功后运行，适合表达positive total、specific state等额外condition。
+
+Null不会匹配type pattern，因此需要`case null`或明确default policy。Default不一定表示错误：可以记录unknown subtype、返回fallback或抛带context的异常，但必须有可验收的ownership。分类规则不断增长时，优先把case matrix写成table和tests。
+
+<Term def="Pattern switch按source order依次检查pattern与when guard的优先级规则。">guard ordering</Term>
+
+<Term def="对null、已知variants和未来unknown values都给出显式outcome的分类性质。">total classification</Term>
+
+<Stepper>
+  <Step title="切换specific、broad、null与default"><DcsSwitchDecisionLab /></Step>
+  <Step title="把switch改写为ordered decision table">每行列pattern、guard、bound variables、outcome与是否被前行subsumed。</Step>
+  <Step title="用边界与future subtype验收">测试null、derived/base、guard boundary、unknown implementation和default telemetry。</Step>
+</Stepper>
+
+<Callout type="trap" title="Pattern switch会自动选择最具体runtime type">
+Case order属于program semantics。先写broad case可能遮住specific rule，compiler只会捕获部分明显unreachable cases；业务guard overlap仍需decision-table tests证明。
+</Callout>
+
+## Thoughts on usage
+
+Pattern matching适合type-driven behavior、parser result分类和明确closed-ish hierarchy。若switch散落在很多modules，每加subtype都要多处修改，说明behavior可能更适合virtual dispatch、visitor或domain-owned method。反过来，单一consumer对外部types做分类时，central switch比污染每个type更合理。
+
+Deconstruction适合consumer只需要少量components且position meaning稳定。若出现五六个outputs、多个同type values或必须先validate invariant，return nominal result更清楚。短syntax应让decision model更集中，不应让domain rules藏在case order与positions里。
+
+## 本章回顾：Shape、Binding与Control Flow必须一起验证
+
+1. Tuple deconstruction按position；custom types通过明确的Deconstruct protocol提供shape。
+2. Consumer local names不改变producer shape，discard也不取消arity要求。
+3. C# 7.0 patterns包括constant、type和var，各自的null与failure行为不同。
+4. Is pattern variable可用性由control flow和definite assignment决定。
+5. Switch pattern是ordered classifier；case order、guards、null与default共同形成contract。
+
+<Exercises>
+
+**问题 1：为Point新增两个同arity Deconstruct overload有什么风险？**
+
+<Answer>Call-site的explicit/implicit local types可能让overload resolution ambiguous，或在后续改动中绑定到不同shape。先列现有consumer target types，保持每个arity只有一个清晰语义；需要另一视图时用named method。编译所有consumers并做position/round-trip tests。</Answer>
+
+**问题 2：如何证明`if (x is Order o && o.Total > 0)`中的o安全，而换成`||`后不一定安全？**
+
+<Answer>&&右侧只有左侧match成功才执行，所以o已绑定；||右侧恰在左侧false时执行，此时o未绑定。用control-flow truth table和compiler experiment验证每条path，不通过扩大scope或null-forgiving掩盖definite-assignment错误。</Answer>
+
+**问题 3：支付分类switch怎样防止新subtype静默落入错误分支？**
+
+<Answer>Specific cases在broad cases前，null单列，default记录runtime type并按policy reject，而非当普通payment处理。建立decision-table parameterized tests，包含每个known subtype、guard boundaries、null和synthetic unknown subtype；新增实现时CI应迫使更新table。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="deconstruction protocol" definition="按arity与out positions选择producer shape并绑定locals的规则。" />
+  <GlossaryItem term="pattern variable scope" definition="由match和control flow决定的bound local可用范围。" />
+  <GlossaryItem term="runtime type refinement" definition="成功type pattern提供更窄static type的操作。" />
+  <GlossaryItem term="guard ordering" definition="Pattern与when guard按source order构成的优先级。" />
+  <GlossaryItem term="total classification" definition="对null、known和unknown inputs都有明确outcome。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# in Depth, Fourth Edition, Chapter 12: Deconstruction and pattern matching" adaptedUrl="https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-12" />

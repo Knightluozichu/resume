@@ -1,0 +1,367 @@
+---
+title: "第19章：User Accounts"
+type: C
+section: "Part II · Projects · Web Applications"
+order: 19
+description: "为Learning Log加入ModelForm、POST/CSRF、login/logout/register、owner关系和逐对象authorization。"
+demo: true
+math: false
+sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
+draft: false
+---
+
+import {
+  PccAuthSessionLab,
+  PccFormLifecycleLab,
+  PccOwnershipAuthorizationLab,
+} from "@/components/mdx/python-crash-course/diagrams/user-accounts";
+
+<Objectives>
+
+- 能实现Topic/Entry ModelForm的GET、invalid POST、valid POST与redirect流程，并分析CSRF和validation errors
+- 能设计accounts app的login、logout和register session状态，实现login_required与safe next-page navigation
+- 能区分authentication与authorization，把Topic连接到owner并验证用户不能查看或编辑他人Entry
+
+</Objectives>
+
+## 为什么“用户已登录”仍不等于数据安全
+
+authentication回答“request是谁”，authorization回答“这个identity能否对这个object执行这个action”。若view只加`@login_required`，Alice仍可能把URL中的entry_id改成Bob的id并编辑；这属于object-level authorization缺失。安全设计必须同时限制list query、detail lookup、create ownership和edit lookup。
+
+先预测：invalid form应redirect还是保留用户输入；browser刷新valid POST页面为何可能重复创建；Alice访问Bob的topic id应看到403、404还是内容。接下来把这些选择写进request-state matrix并用tests验证。
+
+<Term def="把request.POST绑定到Form instance、保留submitted values并产生cleaned_data或field errors的过程。">form binding</Term>
+
+本章从read-only页面增加writes与identity，风险明显上升。每个write view都遵循method gate、CSRF、binding、validation、ownership、save与redirect顺序，不把安全检查散落在template。
+
+## ModelForm: Let the Model Define Data Shape
+
+`ModelForm`根据Model fields生成form fields并复用validation。TopicForm只暴露`text`，EntryForm只暴露`text`；`topic`与`owner`不能由browser自由提交，否则攻击者可把record连接到他人对象。
+
+```python
+from django import forms
+from .models import Entry, Topic
+
+class TopicForm(forms.ModelForm):
+    class Meta:
+        model = Topic
+        fields = ["text"]
+        labels = {"text": ""}
+
+class EntryForm(forms.ModelForm):
+    class Meta:
+        model = Entry
+        fields = ["text"]
+        labels = {"text": ""}
+        widgets = {"text": forms.Textarea(attrs={"cols": 80})}
+```
+
+`fields`是write allowlist。使用`"__all__"`会让未来新增owner/internal fields意外暴露。ModelForm提供required、max_length等基础checks，domain规则可在`clean_text()`或`clean()`中实现；validation失败必须显示具体errors。
+
+## GET and POST Form Lifecycle
+
+GET创建unbound form并返回200。POST用`request.POST`创建bound form；`is_valid()`执行field parse与validation。valid后save并redirect，invalid则用同一个bound form重新render，让用户看到原input和errors。
+
+```python
+from django.contrib.auth.decorators import login_required
+from django.shortcuts import redirect, render
+
+@login_required
+def new_topic(request):
+    if request.method != "POST":
+        form = TopicForm()
+    else:
+        form = TopicForm(data=request.POST)
+        if form.is_valid():
+            new_topic = form.save(commit=False)
+            new_topic.owner = request.user
+            new_topic.save()
+            return redirect("learning_logs:topics")
+
+    return render(request, "learning_logs/new_topic.html", {"form": form})
+```
+
+只允许GET/POST可用`@require_http_methods`; 不支持method应返回405而不是当GET显示空form。`commit=False`先创建unsaved instance，server设置owner后再save，避免trust client-controlled owner id。
+
+<Term def="在成功write后返回redirect，让browser以GET读取结果页面并避免refresh重复提交。">POST-redirect-GET</Term>
+
+<Stepper>
+  <Step title="切换GET、invalid/valid POST与CSRF failure">
+    <PccFormLifecycleLab />
+  </Step>
+  <Step title="验证invalid POST不丢input">
+    response 200包含bound form、field errors和用户原值；database record count不变。
+  </Step>
+  <Step title="验证valid POST只创建一次">
+    save后302到named URL，follow-up GET显示record；refresh GET不会再次执行POST。
+  </Step>
+</Stepper>
+
+## CSRF Protection
+
+浏览器会自动附带site cookies，恶意site可诱导用户向Learning Log发送POST。Django CSRF middleware要求form中存在与cookie/session上下文匹配的token，证明request来自站点生成的form，而非第三方页面。
+
+<Term def="用不可预测token把state-changing request绑定到合法site context、抵御跨站伪造的机制。">CSRF token</Term>
+
+```django
+<form action="{% url 'learning_logs:new_topic' %}" method="post">
+  {% csrf_token %}
+  {{ form.as_div }}
+  <button name="submit">Add topic</button>
+</form>
+```
+
+CSRF不是authentication，也不判断owner；它只防跨站伪造。不要用`@csrf_exempt`修复missing token。API若用不同authentication model，应采用对应防护并明确same-site、CORS与token policy。
+
+## Adding and Editing Entries
+
+new entry URL包含topic id，但view必须从database取得且限定owner。form只提交text，server把new entry关联到已授权topic。edit view先取得Entry，再检查`entry.topic.owner == request.user`，然后用`instance=entry`绑定。
+
+```python
+from django.shortcuts import get_object_or_404
+
+@login_required
+def new_entry(request, topic_id):
+    topic = get_object_or_404(Topic, id=topic_id, owner=request.user)
+    if request.method != "POST":
+        form = EntryForm()
+    else:
+        form = EntryForm(data=request.POST)
+        if form.is_valid():
+            entry = form.save(commit=False)
+            entry.topic = topic
+            entry.save()
+            return redirect("learning_logs:topic", topic_id=topic.id)
+    return render(request, "learning_logs/new_entry.html", {"topic": topic, "form": form})
+```
+
+```python
+@login_required
+def edit_entry(request, entry_id):
+    entry = get_object_or_404(
+        Entry.objects.select_related("topic"),
+        id=entry_id,
+        topic__owner=request.user,
+    )
+    topic = entry.topic
+    form = EntryForm(instance=entry) if request.method != "POST" else EntryForm(
+        instance=entry, data=request.POST
+    )
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        return redirect("learning_logs:topic", topic_id=topic.id)
+    return render(request, "learning_logs/edit_entry.html", {"entry": entry, "form": form})
+```
+
+把owner condition放进lookup比先`Entry.objects.get()`再if更不易忘记，也统一返回404。`instance`在GET显示existing text，在POST确保update同一record而非insert duplicate。
+
+## Setting Up an Accounts App
+
+authentication是独立capability，创建`accounts` app并include其URLs。Django内置auth views可处理login/logout，减少password/session实现风险。project root router把`accounts/` include到app routes。
+
+```bash
+python manage.py startapp accounts
+```
+
+```python
+# accounts/urls.py
+from django.contrib.auth import views as auth_views
+from django.urls import path
+from . import views
+
+app_name = "accounts"
+urlpatterns = [
+    path("login/", auth_views.LoginView.as_view(template_name="registration/login.html"), name="login"),
+    path("logout/", auth_views.LogoutView.as_view(), name="logout"),
+    path("register/", views.register, name="register"),
+]
+```
+
+`LOGIN_URL`或默认route决定`login_required`的redirect destination；successful login的`next` parameter应只允许safe local URLs，防open redirect。新版Django logout通常使用POST，更符合state-changing action的method semantics；以项目所用version文档为准。
+
+## Authentication and Session State
+
+login form验证username/password，`login()`把authenticated user id与backend写入session；后续request由middleware设置`request.user`。password以hash存储，不可恢复明文。logout清除auth session，navigation应使用POST form而非可被crawler触发的GET link。
+
+<Term def="验证credentials并把request关联到某个User identity的过程。">authentication</Term>
+
+<Stepper>
+  <Step title="执行register、login、logout与protected visit">
+    <PccAuthSessionLab />
+  </Step>
+  <Step title="区分anonymous与authenticated navigation">
+    base template对`user.is_authenticated`显示用户名/logout，否则显示login/register；display不替代server checks。
+  </Step>
+  <Step title="验证session rotation与logout">
+    login成功后旧anonymous session fixation不可继续；logout后访问protected URL重定向到login。
+  </Step>
+</Stepper>
+
+```django
+{% if user.is_authenticated %}
+  Hello, {{ user.username }}.
+  <form action="{% url 'accounts:logout' %}" method="post">
+    {% csrf_token %}<button name="submit">Log out</button>
+  </form>
+{% else %}
+  <a href="{% url 'accounts:login' %}">Log in</a>
+  <a href="{% url 'accounts:register' %}">Register</a>
+{% endif %}
+```
+
+template conditional只改善UX。攻击者可直接请求URL，所以view decorators、query scopes和object checks才是security boundary。
+
+## Registering Users Safely
+
+Django `UserCreationForm`验证username uniqueness、password confirmation与password policy，并正确hash password。valid registration保存User后调用`login(request, new_user)`，再redirect home；invalid保留errors。
+
+```python
+from django.contrib.auth import login
+from django.contrib.auth.forms import UserCreationForm
+
+def register(request):
+    if request.method != "POST":
+        form = UserCreationForm()
+    else:
+        form = UserCreationForm(data=request.POST)
+        if form.is_valid():
+            new_user = form.save()
+            login(request, new_user)
+            return redirect("learning_logs:index")
+    return render(request, "registration/register.html", {"form": form})
+```
+
+不要自行保存raw password。错误信息需帮助合法用户，但login不要暴露“username存在而password错误”等过多账户枚举信息。production还需rate limit、email verification或MFA等策略，本章先建立正确Django auth primitives。
+
+## Restricting Access with login_required
+
+在topics、topic、new_topic、new_entry、edit_entry上使用`@login_required`。class-based views则用`LoginRequiredMixin`并把它放在inheritance list左侧，让dispatch先执行auth check。
+
+```python
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.views.generic import ListView
+
+class TopicListView(LoginRequiredMixin, ListView):
+    model = Topic
+
+    def get_queryset(self):
+        return Topic.objects.filter(owner=self.request.user).order_by("date_added")
+```
+
+`login_required`只做authentication gate，不自动filter QuerySet。每个list/detail/update仍需owner scope。测试anonymous request重定向login，authenticated wrong owner得到404，owner得到200。
+
+## Connecting Data to Users
+
+给Topic添加`owner = models.ForeignKey(User, on_delete=models.CASCADE)`。数据库已有Topics时，migration必须为现有rows指定临时owner；书中可在prompt选择已有superuser id，之后model field本身不应保留default，避免未来Topic错误归给该用户。
+
+```python
+from django.contrib.auth.models import User
+
+class Topic(models.Model):
+    text = models.CharField(max_length=200)
+    date_added = models.DateTimeField(auto_now_add=True)
+    owner = models.ForeignKey(User, on_delete=models.CASCADE)
+```
+
+```bash
+python manage.py makemigrations learning_logs
+python manage.py migrate
+```
+
+delete User时CASCADE删除Topics，进而删除Entries，是强lifecycle policy；若product需要保留匿名化data，应选择不同on_delete与migration方案。owner关系是data-level foundation，view authorization建立在它上面。
+
+## Protecting User Data with Object-Level Authorization
+
+topics list只查询`owner=request.user`。topic detail把id与owner一起交给`get_object_or_404`。Entry通过Topic间接拥有owner，edit lookup使用`topic__owner=request.user`。返回404可避免向非owner确认object存在；403也可用，但全站policy要一致。
+
+<Term def="在identity已确认后，根据object owner与requested action决定allow、deny或not-found。">authorization</Term>
+
+<Stepper>
+  <Step title="组合user、owner与action">
+    <PccOwnershipAuthorizationLab />
+  </Step>
+  <Step title="检查四个数据入口">
+    list filter、detail lookup、create parent lookup与edit target lookup都必须scope owner，少一个就可能泄漏或篡改。
+  </Step>
+  <Step title="执行两用户隔离测试">
+    Alice和Bob各有Topic/Entry；双方list看不到对方，直接猜id得到404，且POST后database不改变他人record。
+  </Step>
+</Stepper>
+
+```python
+@login_required
+def topics(request):
+    topics = Topic.objects.filter(owner=request.user).order_by("date_added")
+    return render(request, "learning_logs/topics.html", {"topics": topics})
+
+@login_required
+def topic(request, topic_id):
+    topic = get_object_or_404(Topic, id=topic_id, owner=request.user)
+    entries = topic.entry_set.order_by("-date_added")
+    return render(request, "learning_logs/topic.html", {
+        "topic": topic, "entries": entries,
+    })
+```
+
+## Security Tests as a Matrix
+
+对每个protected view测试anonymous、owner和other user；对write再测试GET、invalid POST、valid POST与CSRF enforcement。断言status不够，还要检查database before/after：unauthorized POST必须不改变record，invalid POST不创建object，valid POST owner来自request而非submitted field。
+
+```python
+def test_other_user_cannot_edit_entry(client, alice, bob_entry):
+    client.force_login(alice)
+    before = bob_entry.text
+    response = client.post(
+        reverse("learning_logs:edit_entry", args=[bob_entry.id]),
+        {"text": "stolen"},
+    )
+    assert response.status_code == 404
+    bob_entry.refresh_from_db()
+    assert bob_entry.text == before
+```
+
+CSRF在Django test client默认不强制，可用`Client(enforce_csrf_checks=True)`做专门test。unit tests不应只依赖template隐藏edit link，因为URL仍可直接请求。
+
+<Callout type="trap" title="加上login_required后用户数据就隔离了">
+decorator只证明request有identity，不检查object owner。所有list、detail、create parent和edit target queries都要scope到request.user，并测试第二个用户直接猜id。
+</Callout>
+
+<Callout type="trap" title="owner字段放在form中让用户提交最方便">
+client-controlled owner允许篡改归属。ModelForm排除owner，valid后用commit=False由server设置request.user；Entry parent也必须从已授权Topic lookup得到。
+</Callout>
+
+## 本章回顾：write、identity与ownership形成三层边界
+
+1. ModelForm以fields allowlist控制可写属性，invalid POST保留bound data与errors。
+2. CSRF保护cookie-authenticated writes，POST-redirect-GET避免refresh重复提交。
+3. Django auth views与UserCreationForm负责credentials、session和password hashing。
+4. login_required检查authentication，owner-scoped queries执行authorization。
+5. 两用户security matrix验证list、detail、create与edit都不泄漏或篡改他人data。
+
+<Exercises>
+
+**问题 1：new_topic的valid与invalid POST应分别发生什么？**
+
+<Answer>两者先经CSRF与TopicForm binding。invalid返回200并重绘同一bound form、显示errors，database不变；valid用commit=False由server设置owner=request.user，save后302 redirect到topics，随后GET显示结果，refresh不重复创建。</Answer>
+
+**问题 2：为什么login_required不能替代owner check？**
+
+<Answer>它只确认request.user不是anonymous，不知道object属于谁。攻击者可修改topic_id/entry_id访问他人record。list filter、detail lookup、create parent与edit target都要限定owner；wrong owner返回404/deny且database before/after不变。</Answer>
+
+**问题 3：给已有Topic增加owner ForeignKey时如何安全迁移？**
+
+<Answer>先决定existing rows归属并在migration中提供一次性值或data migration，再应用schema migration；model field不保留通用default，未来create必须由server设置request.user。检查CASCADE lifecycle是否符合保留策略，并用两用户fixtures验证隔离。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="form binding" definition="把POST绑定到Form并产生cleaned_data或field errors的过程。" />
+  <GlossaryItem term="POST-redirect-GET" definition="成功write后redirect并以GET显示结果、避免refresh重复提交的模式。" />
+  <GlossaryItem term="CSRF token" definition="把state-changing request绑定到合法site context的防伪token。" />
+  <GlossaryItem term="authentication" definition="验证credentials并把request关联到User identity的过程。" />
+  <GlossaryItem term="authorization" definition="按identity、object owner与action决定allow或deny的检查。" />
+</Glossary>
+
+<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 19: User Accounts" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />

@@ -1,0 +1,283 @@
+---
+title: "第17章：Building Custom Collections"
+type: C
+section: "Essential C# 7.0 · Collections and Querying"
+order: 17
+description: "掌握ICollection/IList/IDictionary、List/Dictionary选择、indexer、empty collection contract与yield iterator state machine。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-csharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7CollectionCapabilityLab, Ec7IndexerEmptyContractLab, Ec7IteratorStateMachineLab } from "@/components/mdx/essential-csharp-7/diagrams/building-custom-collections";
+
+<Objectives>
+
+- 能比较IEnumerable、ICollection、IList与IDictionary的能力和mutation contract并选择最小接口
+- 能设计List/Dictionary-backed custom collection、indexer及missing/bounds behavior而不泄漏内部representation
+- 能解释yield return生成的iterator state machine、deferred exceptions、early Dispose和empty collection API
+
+</Objectives>
+
+## 为什么自定义集合的难点不是“把List包起来”
+
+collection interface会向caller承诺ordering、index、uniqueness、mutation、count、lookup和enumeration behavior。若只是内部用List，却实现IList，就必须长期维护Insert、RemoveAt、index replacement等全部position semantics；若返回null代表“没有结果”，每个consumer都要分支。好的custom collection从domain invariant和最小capability开始。
+
+先预测：ICollection是否承诺index；Dictionary indexer missing时返回default还是throw；TryGetValue为何只查一次；FindAll无结果应null还是empty；调用包含yield的方法时body是否执行；foreach提前break后iterator finally会不会运行。随后沿capability、lookup和state machine验证。
+
+<Term def="collection对enumeration、size、mutation、position或key lookup所公开的最小稳定能力集合。">collection capability contract</Term>
+
+## More Collection Interfaces
+
+`IEnumerable<T>`只承诺枚举；`ICollection<T>`增加Count、Add/Remove/Contains/CopyTo与IsReadOnly；`IList<T>`增加integer indexer、IndexOf、Insert、RemoveAt，表示ordered positional collection；`IDictionary<TKey,TValue>`增加key/value pairs、Keys/Values、key indexer与TryGetValue。
+
+interface越强，implementer义务越多。只读consumer优先接受`IEnumerable<T>`、`IReadOnlyCollection<T>`或`IReadOnlyList<T>`；需要mutation时才扩大。参数用最小need可接收更多implementations，return可给更具体stable capability。
+
+<Stepper>
+  <Step title="切换sequence、collection、list、dictionary与read-only view">
+    <Ec7CollectionCapabilityLab />
+  </Step>
+  <Step title="读取members和semantic promise">
+    Count/Add不等于position；integer index不等于key lookup；read-only view不代表underlying永不变化。
+  </Step>
+  <Step title="按consumer need选择最小interface">
+    只foreach不要要求IList；按key查找不要伪装integer positions。
+  </Step>
+</Stepper>
+
+```csharp
+public static decimal Total(IEnumerable<Order> orders)
+{
+    if (orders == null) throw new ArgumentNullException(nameof(orders));
+    return orders.Sum(order => order.Total);
+}
+```
+
+上述algorithm只需enumeration，不应要求List。若需要Count且不想枚举，再要求IReadOnlyCollection或ICollection，并记录是否允许live mutable source。
+
+## Primary Collection Classes: List and Dictionary
+
+`List<T>`适合dense ordered sequence和integer position，append摊销常数、middle insert/remove需要移动elements、Contains线性。`Dictionary<TKey,TValue>`适合unique key lookup，平均hash-based lookup快但依赖stable GetHashCode/Equals；它不应被当作按位置排序的list。
+
+<Term def="根据ordering、key uniqueness、lookup/insert模式与equality要求选择List、Dictionary或其他storage的决策。">storage selection</Term>
+
+```csharp
+public sealed class Catalog
+{
+    private readonly List<Product> ordered = new List<Product>();
+    private readonly Dictionary<string, Product> byId =
+        new Dictionary<string, Product>(StringComparer.Ordinal);
+
+    public void Add(Product product)
+    {
+        if (product == null) throw new ArgumentNullException(nameof(product));
+        if (byId.ContainsKey(product.Id))
+            throw new ArgumentException("duplicate product id", nameof(product));
+
+        ordered.Add(product);
+        byId.Add(product.Id, product);
+    }
+}
+```
+
+同时维护两个indexes必须原子保持一致；Add任何一步失败需rollback或先完成所有validation。对并发mutation还需synchronization，第20章处理。不要直接返回mutable backing List/Dictionary，否则caller绕过domain checks。
+
+<Callout type="trap" title="内部使用List，所以custom collection就应该实现完整IList">
+IList承诺任意position insert/remove/set。若domain只允许append或按id删除，实现IList会迫使你支持或大量NotSupportedException；应暴露更小的IEnumerable/IReadOnlyList加domain methods。
+</Callout>
+
+## Implementing the Right Surface
+
+composition通常优于从List继承：List不是为所有domain invariants设计的virtual extension surface，继承也会暴露不受控methods。custom type持有private backing collection，只转发符合contract的operations，并为enumeration选择snapshot或live/versioned behavior。
+
+```csharp
+public sealed class OrderBatch : IReadOnlyList<Order>
+{
+    private readonly List<Order> items = new List<Order>();
+
+    public int Count => items.Count;
+    public Order this[int index] => items[index];
+
+    public void Append(Order order)
+    {
+        if (order == null) throw new ArgumentNullException(nameof(order));
+        if (items.Any(existing => existing.Id == order.Id))
+            throw new ArgumentException("duplicate order", nameof(order));
+        items.Add(order);
+    }
+
+    public IEnumerator<Order> GetEnumerator() => items.GetEnumerator();
+    System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() => GetEnumerator();
+}
+```
+
+read-only interface限制consumer通过该view mutation，不冻结Order objects或阻止owner以后Append。若需要immutable snapshot，复制elements并定义deep/shallow semantics。
+
+## Providing an Indexer
+
+indexer声明`this[parameter]`，让object按position/key-like syntax访问。它可有get/set、多个parameters和overloads。indexer是API behavior，不证明O(1)或array storage；documentation应说明cost、bounds/missing与setter invariant。
+
+<Term def="通过this参数访问logical element时对key/position、cost、missing、bounds与mutation作出的约定。">indexer contract</Term>
+
+```csharp
+public Product this[string id]
+{
+    get
+    {
+        if (id == null) throw new ArgumentNullException(nameof(id));
+        return byId[id]; // missing key throws KeyNotFoundException
+    }
+}
+
+public bool TryGet(string id, out Product product)
+{
+    return byId.TryGetValue(id, out product);
+}
+```
+
+Dictionary indexer适合“key必须存在”，TryGetValue适合expected miss，避免ContainsKey后再次lookup与race window。list integer index out-of-range应抛`ArgumentOutOfRangeException`。不要用null/default同时表达missing和合法stored value。
+
+<Stepper>
+  <Step title="切换list index、dictionary index与TryGetValue">
+    <Ec7IndexerEmptyContractLab />
+  </Step>
+  <Step title="比较lookup path和failure channel">
+    position做bounds，key做hash/equality；expected missing用Try-pattern，required key indexer throw。
+  </Step>
+  <Step title="切换empty与null multi-result return">
+    empty sequence仍是valid enumerable；null迫使所有consumer在foreach/LINQ前额外guard。
+  </Step>
+</Stepper>
+
+## Return Empty Collections, Not Null
+
+返回多个results的API在“没有匹配”时通常返回empty collection/sequence，而非null。empty有Count=0、可直接foreach/LINQ并满足同一contract；null常让“无结果”“未初始化”“失败”语义混杂。真正failure用exception/result，optional single value才考虑null/nullable。
+
+<Term def="multi-result API以可安全枚举的zero-element value表达no matches，而不是用null破坏sequence contract。">empty-result contract</Term>
+
+```csharp
+public IReadOnlyList<Product> FindByPrefix(string prefix)
+{
+    if (prefix == null) throw new ArgumentNullException(nameof(prefix));
+
+    Product[] matches = ordered
+        .Where(product => product.Id.StartsWith(prefix, StringComparison.Ordinal))
+        .ToArray();
+
+    return matches; // zero-length array is valid
+}
+```
+
+可复用`Array.Empty<T>()`避免重复empty array allocation。不要返回共享mutable empty List，因为caller可能修改；return type与ownership应防止误用。
+
+<Callout type="trap" title="返回null能避免创建空集合，因此更高效">
+空array可复用，deferred iterator也可自然枚举零项。null把成本转嫁给每个caller并制造NullReferenceException；API contract与正确性优先。
+</Callout>
+
+## Iterators and yield return
+
+含`yield return`/`yield break`的方法由compiler转换为iterator state machine。调用方法通常只创建enumerable/enumerator object，不执行body；第一次MoveNext才进入，yield return设置Current并暂停，下一次MoveNext从暂停点恢复。到末尾或yield break返回false。
+
+<Term def="compiler保存instruction position、locals、Current和cleanup state，使iterator可在MoveNext间暂停/恢复的对象。">iterator state machine</Term>
+
+```csharp
+public static IEnumerable<int> Even(IEnumerable<int> source)
+{
+    if (source == null) throw new ArgumentNullException(nameof(source));
+
+    foreach (int value in source)
+    {
+        if (value % 2 == 0)
+            yield return value;
+    }
+}
+```
+
+注意上述null check也可能延迟到first MoveNext，因为它在iterator body中。若要call time立即validate，可用outer non-iterator method返回local/private iterator function（C# 7 local function）来分离validation与yield。
+
+```csharp
+public static IEnumerable<int> EvenChecked(IEnumerable<int> source)
+{
+    if (source == null) throw new ArgumentNullException(nameof(source));
+    return Iterator();
+
+    IEnumerable<int> Iterator()
+    {
+        foreach (int value in source)
+            if (value % 2 == 0) yield return value;
+    }
+}
+```
+
+## Iterator Cleanup, Exceptions, and Restrictions
+
+yield state machine把try/finally映射到Dispose，consumer提前break时finally仍执行，适合释放enumerator/resource。不能在含catch的try block中yield return，也不能在catch/finally中yield return；iterator methods不能有ref/out parameters。具体language restrictions应由compiler验证。
+
+<Stepper>
+  <Step title="推进call、first/second MoveNext和complete">
+    <Ec7IteratorStateMachineLab />
+  </Step>
+  <Step title="观察暂停位置与locals">
+    每次yield保存state/Current，下一MoveNext从其后恢复，而非重新开始method。
+  </Step>
+  <Step title="提前break并Dispose">
+    foreach finally调用Dispose，state machine执行iterator finally；异常在实际MoveNext位置传播。
+  </Step>
+</Stepper>
+
+```csharp
+public static IEnumerable<string> ReadLines(string path)
+{
+    using (var reader = File.OpenText(path))
+    {
+        string line;
+        while ((line = reader.ReadLine()) != null)
+            yield return line;
+    }
+}
+```
+
+file保持open直到enumeration完成/Dispose；只创建sequence不打开file，部分枚举时及时Dispose至关重要。多次enumeration会多次重新打开并读取，必须写进API contract。
+
+## Testing a Custom Collection
+
+按contract而非implementation测试：empty、single、多项；duplicate/invalid Add；index first/last/out-of-range；required/missing key；TryGet；enumeration order与multiple enumerators；mutation invalidation；yield deferred exception；early break cleanup；return不泄漏backing mutable storage。
+
+performance测试对应storage choice：List middle remove、Dictionary collisions/comparer、Count是否O(1)、indexer cost、iterator allocations。没有measure不要声称custom wrapper更快。
+
+## 本章回顾：最小能力、明确Lookup、可清理Iterator
+
+1. collection interfaces从enumeration到size/mutation/position/key逐步增强，应暴露最小真实能力。
+2. List服务ordered positions，Dictionary服务unique keys；custom collection用composition保护invariant。
+3. indexer必须声明bounds/missing/cost，expected key miss优先TryGetValue。
+4. multi-result无匹配返回empty sequence，不用null破坏caller pipeline。
+5. yield生成deferred state machine，MoveNext暂停/恢复，Dispose保证finally cleanup。
+
+<Exercises>
+
+**问题 1：一个只允许append、按index读取的OrderBatch应实现哪些接口？**
+
+<Answer>对consumer可实现IReadOnlyList以提供Count、read-only integer index和enumeration，自定义Append维护domain invariant；不要实现完整IList，否则承诺Insert/RemoveAt/index setter等不允许operations。内部可composition List，但不返回mutable backing reference。</Answer>
+
+**问题 2：dictionary-style indexer、TryGet和empty collection分别怎样表达missing？**
+
+<Answer>required key通过indexer，missing抛KeyNotFoundException；expected key miss用TryGet一次lookup返回false/out default；multi-result search无matches返回zero-element collection/Array.Empty，不返回null。三者分别表达contract violation、expected optional single与valid empty many。</Answer>
+
+**问题 3：如何验证yield iterator的deferred execution和cleanup？**
+
+<Answer>调用method后断言body side-effect尚未发生；逐次MoveNext验证Current和恢复位置；测试complete/yield break；在first item后break并确认finally/resource Dispose；让source/validation失败并确认exception发生在call还是MoveNext。再测试second enumeration是否重执行。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="collection capability contract" definition="enumeration、size、mutation、position或key lookup的最小公开能力。" />
+  <GlossaryItem term="storage selection" definition="按ordering、keys、lookup/mutation模式选择List、Dictionary等storage。" />
+  <GlossaryItem term="indexer contract" definition="this访问对position/key、cost、missing、bounds与mutation的约定。" />
+  <GlossaryItem term="empty-result contract" definition="multi-result无匹配时返回可枚举zero-element value。" />
+  <GlossaryItem term="iterator state machine" definition="保存position、locals、Current和cleanup以支持MoveNext暂停恢复的对象。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 17: Building Custom Collections" adaptedUrl="https://www.informit.com/store/essential-csharp-7.0-9781509303618" />

@@ -1,0 +1,294 @@
+---
+title: "第10章：优化数据结构"
+type: C
+section: Optimized C++ · Chapter 10
+order: 10
+description: "对齐第一版第10章 Optimize Data Structures：标准库 sequence/associative 容器实验，vector/string/deque/list/forward_list 的插入迭代排序，以及 map/set multi/unordered 家族与其他结构。"
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+draft: false
+---
+
+import {
+  OpcAssociativeStructureDecisionMap,
+  OpcContainerExperimentContractMap,
+  OpcSequenceContainerOperationMap,
+} from "@/components/mdx/optimized-cpp/diagrams/optimize-data-structures";
+
+<Objectives>
+
+- 能设计同语义 container experiment，覆盖 access/mutation/stability/representation 与完整生命周期
+- 能比较 vector/string、deque、list/forward_list 的 reallocation、insertion/deletion、iteration、sort 与 lookup
+- 能分析 ordered/multi/unordered associative contract，并判断标准容器或其他领域数据结构的 break-even
+
+</Objectives>
+
+## 从“容器就是一组性能契约”开始
+
+**standard library containers** 提供 value/lifetime、iterator、complexity 与 invalidation contract；它们不承诺每个 workload 上同样快。第 10 章的核心是 **experimenting**：保持 semantics/input/operation mix 一致，逐个比较 candidate，而不是只读复杂度表。
+
+<Term def="标准规定语义、iterator/invalidation 和复杂度要求的 sequence/associative/container adaptor 家族。">
+  standard library containers
+</Term>
+
+<Term def="在相同语义、输入与操作混合下替换一个 container/representation，采集时间、allocation、memory 与 correctness 的受控比较。">
+  container experimenting
+</Term>
+
+**sequence containers** 按 sequence 组织 elements；**associative containers** 按 key/order/hash contract 组织。选择前写出 random index、front/back/middle mutation、exact/range lookup、duplicates、stable references、ordered iteration 与 peak memory。
+
+<Term def="按元素顺序保存值的 vector/deque/list/forward_list 等容器，访问与修改成本由表示和位置决定。">
+  sequence containers
+</Term>
+
+<Term def="按 key 的 ordering 或 hashing 组织 value/key，支持 exact/range/duplicate 等关联操作的容器。">
+  associative containers
+</Term>
+
+<OpcContainerExperimentContractMap />
+
+```cpp
+struct WorkloadResult {
+    std::chrono::nanoseconds build;
+    std::chrono::nanoseconds mutate;
+    std::chrono::nanoseconds iterate;
+    std::uint64_t checksum;
+};
+
+template <class Container, class Build, class Mutate, class Visit>
+WorkloadResult runContainerScenario(Build build, Mutate mutate, Visit visit) {
+    Container values;
+    const auto buildTime = measure([&] { build(values); });
+    const auto mutateTime = measure([&] { mutate(values); });
+    std::uint64_t checksum = 0;
+    const auto iterateTime = measure([&] { checksum = visit(values); });
+    return {buildTime, mutateTime, iterateTime, checksum};
+}
+```
+
+harness 还应记录 allocations/bytes/RSS、key comparisons/hash、cache misses，并验证 checksum/order/reference contract。不要让不同 candidate 执行不同业务 work。
+
+## std::vector 与 std::string
+
+`std::vector` contiguous、random access、适合 iteration/sorting；`std::string` 也是 contiguous character sequence（另有 terminator/value contract）。append 在 capacity 足够时便宜，超出则 **reallocation**：取得新 storage、move/copy elements、释放旧 storage并使 references/iterators 失效。
+
+<Term def="container 超出 capacity 后取得更大 storage 并搬移现有 elements 的增长事件，会产生峰值 memory 与引用失效。">
+  reallocation
+</Term>
+
+**inserting and deleting** 在 middle 会移动 suffix；`erase` many one-by-one 可能 quadratic，应使用 erase-remove、partition/compaction 或 batch rebuild。append/read-heavy 常先 `reserve`；不能为极端 max 无界预留。
+
+```cpp
+void removeExpired(std::vector<Job>& jobs, Clock::time_point now) {
+    std::erase_if(jobs, [now](const Job& job) {
+        return job.expiresAt <= now;
+    });
+}
+```
+
+一次 compaction 保留 survivors，通常比循环 find+erase 少搬移。若 order 不重要，可 swap-with-back 降移动；这改变 order，必须显式 contract。
+
+**iterating** contiguous values 通常 locality 好；**sorting** 可用 random-access standard algorithm；**lookup** 若 unsorted 用 linear，sorted 用 binary/range，read-mostly 可 amortize sort。vector 并不因 middle insert `O(n)` 就不适合插入偶尔、遍历频繁的 workload。
+
+<OpcSequenceContainerOperationMap />
+
+## std::deque
+
+`std::deque` 是 segmented random-access sequence；front/back growth 通常无需搬移全部 elements。**deque insertion** 在 middle 仍可能移动一侧 elements，并影响 iterators/references（按标准规则核对）；不是“任意插入 O(1)”。
+
+<Term def="以多个 blocks 和索引结构组成、支持 random access 与两端高效增长的分段序列容器。">
+  std::deque
+</Term>
+
+**deque iteration** 跨 blocks，通常比 vector 有更多 indirection；**deque sorting** 支持 random-access iterator，可用 `std::sort`，但 segmented layout 与 element move 影响 constants。适合 queue-like 双端增长且需要 random access 的场景；简单 FIFO 还应比较 `deque` adaptor 使用与 ring buffer。
+
+## std::list 与 std::forward_list
+
+`std::list` doubly linked，`std::forward_list` singly linked。**list insertion** 只有在 insertion position iterator 已知时才 constant relink；search position 仍需 traversal。每 node allocation/metadata 和 pointer chasing 可能让它在 iteration-heavy workload 输给 vector。
+
+<Term def="双向 node-based sequence，已知位置插入/删除只重连节点并保持其他节点引用，但每节点有分配与链接。">
+  std::list
+</Term>
+
+<Term def="单向 node-based sequence，以更少 link 换只有 forward traversal、需要 predecessor 才能插删。">
+  std::forward_list
+</Term>
+
+**list iteration**/forward-list iteration 都是 pointer traversal；**list sorting** 必须用 member `list::sort`/`forward_list::sort`，它通过 relink nodes，不满足 random-access `std::sort` 要求。large nonmovable elements、frequent splice with known iterators 可能是 list 的真实优势。
+
+<Callout type="trap" title="陷阱：list 插入 O(1)，所以插入多就选 list">
+  如果每次先线性查位置，总操作仍 O(n)，且 node allocation/cache misses
+  可能占主导。用真实 position source、 element size、iteration/update mix
+  测；vector batch insert/rebuild 常因连续访问更快。复杂度前提必须进入实验。
+</Callout>
+
+## Ordered Associative: map/multimap/set/multiset
+
+`std::map` unique key/value，`std::set` unique key；`std::multimap` 与 `std::multiset` 允许 equivalent keys。它们提供 ordered iteration、lower/equal range 与 logarithmic search/update（典型 tree representation，但标准不强制具体节点布局）。
+
+<Term def="按 strict weak ordering 保存 key/value，支持唯一 key、ordered iteration 与 logarithmic search/update 的关联容器。">
+  std::map
+</Term>
+
+multi container 适合一 key 多记录且需 ordered group；若只需要 exact key→vector values，`map<Key, vector<Value>>` 可能更 compact，但改变 insertion/reference/erase semantics。transparent comparator 可避免临时 key。测 comparator/key copy、node allocations、range length 与 iteration。
+
+## Unordered map/multimap 与 Lookup
+
+`std::unordered_map` unique key/value，`std::unordered_multimap` equivalent duplicate keys；**unordered lookup** 依 hash、bucket/probe 和 exact equality，average constant 不保证 ordered range 或 worst-case。rehash 会重建 buckets 并使 iterators 失效（reference rules另核对）。
+
+<Term def="以 hash/bucket 和 equality 组织 unique keys 的关联容器，提供 average constant exact lookup 而无 ordered iteration。">
+  std::unordered_map
+</Term>
+
+<Term def="允许 equivalent duplicate keys 的 hashed associative 容器，可用 equal_range 取得同 key group。">
+  std::unordered_multimap
+</Term>
+
+```cpp
+std::unordered_multimap<Tag, ItemId> buildTagIndex(
+    std::span<const Item> items) {
+    std::size_t associations = 0;
+    for (const Item& item : items) associations += item.tags.size();
+
+    std::unordered_multimap<Tag, ItemId> index;
+    index.reserve(associations);
+    for (const Item& item : items) {
+        for (Tag tag : item.tags) index.emplace(tag, item.id);
+    }
+    return index;
+}
+```
+
+reserve 预估 associations，减少 rehash；仍要比较 alternative `unordered_map<Tag, vector<ItemId>>` 的 group locality/build/erase。duplicate semantics 与 order不可静默改变。
+
+<OpcAssociativeStructureDecisionMap />
+
+<Callout
+  type="trap"
+  title="陷阱：unordered lookup 是 O(1)，所以无需测 key 和 load"
+>
+  hash 可能扫描长 key，bad/adversarial collision 拉长 bucket，低 load factor
+  提高 memory，rehash 造成 tail。 记录 hash/equality
+  bytes、bucket/load、hit/miss、build/update、RSS 与 worst-case corpus；average
+  complexity 不是 latency SLO。
+</Callout>
+
+## Other Data Structures（其他数据结构）
+
+**other data structures** 包括 flat/sorted map、heap/priority queue、bitset、trie、ring buffer、pool/intrusive list、spatial index。它们不是“标准容器更快版”，而是表达不同 contract：bounded FIFO、prefix lookup、dense boolean set、priority top、spatial neighborhood 等。
+
+<Term def="在标准 sequence/associative contract 无法表达领域操作时采用的 flat、heap、bitset、trie、ring、pool 或 spatial 等结构。">
+  other data structures
+</Term>
+
+选择 custom/domain structure 要写 invariant、capacity/growth、ownership、iterator/reference、error/worst-case，并与组合标准 primitives baseline 同语义比较。若只有小常数收益却承担大量维护，保留标准方案更优。
+
+## 三步完成容器实验
+
+<Stepper>
+  <Step title="第一步：冻结容器契约">
+    先预测 access/mutation/stability/representation 中哪个主导；记录 n、operation distribution、ordering/duplicates、reference、memory 与 correctness oracle。
+
+    <OpcContainerExperimentContractMap />
+
+  </Step>
+  <Step title="第二步：比较 sequence 全生命周期">
+    对 vector/string、deque、list/forward_list 同时测 build/reallocation、insert/delete、iterate、sort、lookup 和 allocation/RSS，不挑单项复杂度。
+
+    <OpcSequenceContainerOperationMap />
+
+  </Step>
+  <Step title="第三步：选择关联或领域结构">
+    先确定 ordered/duplicate/exact/range，再比较 map/set multi、unordered multi、flat/domain structure；纳入 key/hash、rehash、worst case 和维护成本。
+
+    <OpcAssociativeStructureDecisionMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- 标准容器优化依靠同语义 experimenting，完整比较 access/mutation/stability/representation
+- vector/string 连续且易 iterate/sort，reallocation 与 middle movement 要用 reserve/batch 管理
+- deque 支持两端增长和 random access，但 segmented iteration/sort 有额外 constants
+- list/forward_list 的 O(1) insertion 需要已知位置，node allocation 与 pointer traversal 必须计价
+- map/set 提供 ordered unique，multi 允许 duplicates；unordered 家族提供 average exact lookup但无顺序
+- unordered lookup 要审计 hash/equality/load/rehash/worst-case，而非只引用 O(1)
+- other structures 只有在领域 contract 明确且同语义收益覆盖维护成本时才采用
+
+<Attribution
+  adaptedFrom="Optimized C++, First Edition, Chapter 10: Optimize Data Structures"
+  adaptedUrl="https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+/>
+
+<Glossary>
+  <GlossaryItem term="standard library containers">
+    具有标准语义、iterator/invalidation 和复杂度要求的容器。
+  </GlossaryItem>
+  <GlossaryItem term="container experimenting">
+    同语义替换一个 container 并比较完整性能和正确性。
+  </GlossaryItem>
+  <GlossaryItem term="sequence containers">
+    按 sequence 保存 elements 的容器家族。
+  </GlossaryItem>
+  <GlossaryItem term="associative containers">
+    按 ordering/hash key contract 组织值的容器家族。
+  </GlossaryItem>
+  <GlossaryItem term="reallocation">
+    capacity 超限后取得新 storage 并搬移 elements 的事件。
+  </GlossaryItem>
+  <GlossaryItem term="std::deque">
+    支持 random access 与两端增长的分段序列。
+  </GlossaryItem>
+  <GlossaryItem term="std::list">双向 node-based sequence。</GlossaryItem>
+  <GlossaryItem term="std::forward_list">
+    单向 node-based sequence。
+  </GlossaryItem>
+  <GlossaryItem term="std::map">
+    ordered unique key/value associative container。
+  </GlossaryItem>
+  <GlossaryItem term="std::unordered_map">
+    hashed unique key/value associative container。
+  </GlossaryItem>
+  <GlossaryItem term="std::unordered_multimap">
+    hashed duplicate-key associative container。
+  </GlossaryItem>
+  <GlossaryItem term="other data structures">
+    为领域操作定制的 flat/heap/bitset/trie/ring/pool/spatial 结构。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：为编辑器撤销历史选择 sequence。** 操作 90% append/back-pop，9% full iterate，1% middle erase；最多 200k 大型 movable commands，需要 occasional sort by timestamp。比较 vector/deque/list。
+
+<Answer question="为什么 operation distribution 比单个复杂度更重要？">
+  vector reserve 后 append/back-pop 快、iterate/sort contiguous，1% middle erase
+  移动可能可接受；deque 两端好且 避免整体 reallocation，但 segmented
+  iterate/sort；list middle erase 需已有 iterator，否则查找，且 node memory/
+  traversal/sort constants 高。用真实 command move cost、n、position
+  distribution 测 build/append/pop/erase/
+  iterate/sort、allocations/RSS/reference。若 stable pointers
+  required，结论会改变，必须写进 contract。
+</Answer>
+
+2. **问题 2：设计 tag→多 item 索引。** 需要 exact tag lookup、duplicates，无 ordered export；每天重建、每秒百万读。比较 `unordered_multimap<Tag, Item>` 与 `unordered_map<Tag, vector<Item>>`。
+
+<Answer question="duplicate representation 如何影响 locality 与 mutation？">
+  multimap 每 association 独立 node/bucket entry，equal_range 直接但
+  memory/allocation 多；map→vector 每 tag 一个 bucket，IDs contiguous，重建批量
+  reserve/append 更适合 read-many，但单 item erase 需查 vector。按 tag skew、
+  group size、hit/miss 测
+  build、lookup+consume、allocations/RSS/cache/rehash；验证 duplicate/order
+  semantics。 每天重建可优先预测 grouped vector 胜出，但以 workload 决定。
+</Answer>
+
+3. **问题 3：何时用其他数据结构。** 实时系统需要固定容量 4096 的 FIFO，禁止运行期 allocation，需 O(1) push/pop；比较 deque 与 ring buffer。
+
+  <Answer question="domain contract 如何正当化专用结构？">
+    bounded ring 直接表达 fixed capacity/no allocation，预分配 array 和 head/tail；定义 full 时 reject/overwrite、
+    wrap、concurrency 与 element lifetime。deque 可预热但标准不保证永不分配/固定 blocks，无法满足硬契约。
+    用 model/reference queue property tests、wrap/full/empty、exception/concurrency tests，测 p99/worst push/pop 与
+    memory。这里 specialized structure 是语义需要，不只是微基准更快。
+  </Answer>
+</Exercises>

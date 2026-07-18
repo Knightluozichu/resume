@@ -6,9 +6,11 @@ order: 2
 description: 读完能用 condition_variable + 谓词写一个不丢唤醒、不忙等的生产者-消费者，用 std::async / std::future 起异步任务并取回结果，用 std::promise 跨线程传值或传异常，并知道 packaged_task、wait_for 超时、shared_future 各在什么场景用。
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://livebook.manning.com/book/c-plus-plus-concurrency-in-action-second-edition/chapter-4"
 draft: false
 ---
+
+import { SynchronizationChoiceMap } from "@/components/mdx/cpp-concurrency/diagrams/synchronizing-operations";
 
 {/* C 实战型第四章（《C++ 并发编程实战》第2版 §4 改编重写）：原书讲条件变量与生产者-消费者、future/async 等待一次性事件、packaged_task、promise、带超时等待、shared_future、CSP/函数式并发。重心是代码对照(§6 ≥80% 关键码)与条件变量「等待-通知」握手动画(§5 主 Demo)，math:false。全程沿用「餐厅后厨」隐喻（condition_variable=服务员等「上菜」铃、厨师做好按铃叫醒；future=点单换的「取餐凭证」，凭证到厨房取菜=get；promise=厨师手动把做好的菜摆上取餐台=set_value）。draft:true 待总监 review。 */}
 
@@ -18,15 +20,15 @@ draft: false
 
 <Objectives>
 
-- 能用 `std::condition_variable` + **谓词**写一个生产者-消费者：消费者 `wait` 时**释放锁并睡眠**（不忙等占 CPU），生产者 `notify` 把它叫醒——**写出一个不丢唤醒、不忙等的等待循环**
-- 能用 `std::async` 起一个异步任务、用 `std::future::get()` 取回它的结果（或异常），并能用 `std::promise` 在一个线程里 `set_value` 把值/异常传给另一个线程
+- 能写出 `std::condition_variable` + **谓词**的生产者-消费者，让等待线程释放锁并阻塞，不忙等也不依赖通知历史
+- 能区分 `async`、`packaged_task`、`promise` 的结果生产者，并实现异常可返回、线程可收尾的 future 流程
 - 能回答：`cv.wait(lk)` 不带谓词、只靠「被唤醒就往下走」，会出哪两种 bug？为什么必须带一个谓词、并在被唤醒后**再查一次**？
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；类比固定用「餐厅后厨」，与前三章一致。 */}
 
-## 不许干等，也不许漏单
+## 从等待一份结果开始
 
 前三章你学会了喊帮厨、管帮厨、给共享的砧板配一把刀。可后厨里还有一类活儿：服务员要等厨师把菜做好才能端走。最笨的办法是服务员守在出菜口，每秒探头看一眼「好了没？好了没？」——既累人，又白占着地方。
 
@@ -42,7 +44,7 @@ draft: false
 
 但光「被叫醒就往下走」是不够的，这里藏着两个必须知道的坑。其一是 <Term def="condition_variable 可能在没有任何线程 notify 的情况下，自己「莫名其妙」地把 wait 中的线程唤醒一次。这是操作系统底层实现允许的现象，不是 bug。所以醒来后必须重新检查「我等的条件真的成立了吗」，不能假定一被唤醒条件就一定满足。">虚假唤醒（spurious wakeup）</Term>：操作系统允许 `wait` 在没人按铃时也自己醒一下。其二是丢失唤醒：如果 `notify` 发生在你 `wait` 之前那一瞬，铃响时你还没开始睡，等你睡下就再也等不到那一声了。
 
-根治这两个坑的办法，是给 `wait` 配一个 <Term def="一个返回 bool 的可调用对象（通常是 lambda），表示「我等的条件是否已成立」。带谓词的 wait(lk, pred) 等价于「while(!pred()) wait(lk);」——睡前先查一次（条件已成立就根本不睡，挡住丢失唤醒），每次醒来也再查一次（条件没成立就接着睡，挡住虚假唤醒）。">谓词（predicate）</Term>——一个返回「条件成不成立」的小函数。`cv.wait(lk, pred)` 的真正含义是「**只要 `pred()` 为假就接着睡**」：睡前查一次（已经有料就根本不睡），每次醒来再查一次（虚假醒了、或料又被别人抢走了，就接着睡）。下面这张动画把消费者「释放锁睡眠 → 被 notify 叫醒 → 重新抢锁 → 再查谓词」的完整握手演给你看：
+根治这两个坑的办法，是给 `wait` 配一个 <Term def="一个返回 bool 的可调用对象，表示受 mutex 保护的共享状态是否满足继续条件。带谓词的 wait 等价于 while 条件为假就继续等待。">谓词（predicate）</Term>。谓词和受 mutex 保护的共享状态才是“记忆”，`notify` 本身不保存历史。生产者必须在同一把锁的协议下修改状态；消费者睡前查一次、醒后重新拿锁再查一次。下面这张动画把完整握手演给你看：
 
 > 猜一猜：消费者 `cv.wait(lk, pred)` 时，如果队列是空的（谓词为假），它是「守在那儿每秒查一次」还是「直接睡过去」？睡着时手里那把锁还攥着吗？先想一下，再单步看第一拍。
 
@@ -52,21 +54,21 @@ draft: false
 
 ## future 与 async：取餐凭证，菜没好就阻塞等
 
-条件变量适合「反复发生」的等待（一个接一个的数据）。但很多时候你只是想「派个活儿出去，过会儿来拿它的**结果**」——这种「一次性事件 + 一个返回值」用 <Term def="std::future<T> 代表「一个将来才会有的结果」。像点单换回的取餐凭证：拿着它调 get() 去取结果，结果就绪就立刻拿到、还没就绪就阻塞等待。一个 future 的 get() 只能调一次（结果被取走）。">std::future</Term> 更顺手。把它想成点单时换回的「取餐凭证」：你先拿到凭证，等会儿凭凭证去 `get()` 取菜——菜好了就立刻拿到，没好就在那儿阻塞等着。
+条件变量适合「反复发生」的等待（一个接一个的数据）。但很多时候你只是想「派个活儿出去，过会儿来拿它的**结果**」——这种「一次性事件 + 一个返回值」用 <Term def="std::future 代表一个将来才会有的结果或异常。get 会等待共享状态就绪并取出结果；普通 future 的 get 只能成功调用一次。">std::future</Term> 更顺手。把它想成点单时换回的「取餐凭证」：你先拿到凭证，等会儿凭凭证去 `get()` 取菜——菜好了就立刻拿到，没好就在那儿阻塞等着。
 
-最省事的搭配是 <Term def="std::async(f, args...) 启动一个异步任务运行 f，立刻返回一个 std::future，将来用它 get() 取 f 的返回值（或它抛出的异常）。像服务员替你下了单、换回一张取餐凭证，菜在后厨做、你拿凭证来取。启动策略由 launch 参数控制。">std::async</Term>：`auto f = std::async(task);` 一句话就把 `task` 派到后台跑、并换回一张 `future` 凭证。等你真需要结果时，`f.get()` 去取——任务算完了立刻拿到，没算完就阻塞主线程直到它就绪。下面这张动画把「下单换凭证 → 后台跑 → get() 阻塞等 → 结果摆上台 → 取到继续」演一遍：
+最省事的搭配是 <Term def="std::async 把可调用对象与参数关联到一个 future；任务是另在线程执行还是延迟到等待者线程执行，由 launch 策略决定。返回值或异常进入共享状态。">std::async</Term>。只有显式选择 `std::launch::async`，才能要求任务在单独线程执行；无策略版本可能被实现选为 deferred。等你需要结果时，`f.get()` 会等待就绪，并取得值或重新抛出任务异常。
 
 <FuturePromiseDiagram />
 
-这里有个**启动策略**必须知道。`std::async` 的第一个参数可以是 <Term def="传给 std::async 的启动策略枚举。std::launch::async 强制「立刻另起一个线程」异步执行；std::launch::deferred 则「推迟到 future.get()/wait() 被调用时，才在调用者线程里同步执行」——deferred 下若从不 get，任务永远不会跑。缺省（两者都给）由实现自行选择，行为不确定。">launch 策略</Term>：`std::launch::async` 强制立刻另起线程跑；`std::launch::deferred` 则**推迟**——任务一直不动，直到你 `get()` 时才在**当前线程**同步跑一遍。两者差别很大（尤其 deferred 下不 `get` 就永不执行），代码一节会用 Callout 专门标出来。
+这里有个**启动策略**必须知道。`std::async` 的第一个参数可以是 <Term def="传给 std::async 的启动策略枚举。launch::async 要求在单独线程执行；launch::deferred 推迟到首次非定时等待或 get，并在该调用线程执行。默认允许实现选择。">launch 策略</Term>：`std::launch::async` 要求单独线程执行；`std::launch::deferred` 则推迟到首次 `get()` 或非定时 `wait()`，并在调用者线程同步执行。deferred shared state 的定时等待只会报告 `future_status::deferred`，不会启动任务。
 
 ## promise 与 packaged_task：手动摆上台，或打包成可搬运的任务
 
 `std::async` 是「自动雇厨师」，但有时你想**自己掌控**「谁、何时、怎样」把结果填进那张凭证。标准库另给了两件工具。
 
-一是 <Term def="std::promise<T> 是 future 的「写端」：你手动持有它，在任意线程调 set_value(v) 把值、或 set_exception(e) 把异常摆进配对的 future（取餐台）；另一个线程用 promise.get_future() 拿到的 future 去 get() 取。一个 promise 配一个 future，set 只能调一次。像厨师手动把做好的菜摆上取餐台。">std::promise</Term>：它是 future 的「写端」，你拿着它在**任意线程**手动 `set_value` 把值（或 `set_exception` 把异常）摆上取餐台，配对的那张 `future` 凭证就能 `get()` 取到。这适合「值不是某个函数的返回值，而是在某段逻辑中途算出来」的跨线程传递。
+一是 <Term def="std::promise 是 future 共享状态的写端。生产者可 set_value 或 set_exception 一次；若 promise 在未提交结果时销毁，共享状态会以 broken_promise 异常就绪。">std::promise</Term>：它是 future 的「写端」，你拿着它在任意线程手动 `set_value` 或 `set_exception`。`get_future()` 只能取得一次，结果也只能提交一次；promise 未提交就被销毁时，读端不会永久挂起，而会在 `get()` 收到 `broken_promise`。
 
-二是 <Term def="std::packaged_task<R(Args...)> 把一个可调用对象「包装」起来并关联一个 future：调用这个 task（像调用普通函数）时，它执行被包装的函数、把返回值/异常存进关联的 future。task 本身可移动、可存进容器、可丢给别的线程——所以你能「先打包、延后/异地执行」。线程池常用它做任务队列的元素。">packaged_task</Term>：它把一个可调用对象**包**起来，并关联一张 `future`。这个 task 本身可以**搬运**（移动、存进容器、丢给别的线程），等被调用时才执行、把结果填进凭证——所以你能「先打包任务、之后再决定在哪个线程、什么时候跑」。线程池的任务队列就常用它。
+二是 <Term def="std::packaged_task 持有一个可调用对象并关联 future。调用 task 时，返回值或异常写入共享状态；task 可移动，适合放入任务队列后由指定执行器调用。">packaged_task</Term>：它把一个可调用对象包起来，并关联一张 `future`。task 可以移动、进入容器或交给工作线程，等被调用时才执行并提交结果。线程池的任务队列常用它把“任务是什么”和“由谁执行”分开。
 
 `async` / `packaged_task` / `promise` 这三条路，最后都换回同一种 `future`、都用 `future.get()` 取结果，区别只在「**谁来填**这张凭证」。下面这张图把三者并排对比：
 
@@ -74,9 +76,22 @@ draft: false
 
 ## 带超时的等待与 shared_future
 
-最后两件趁手的小工具。一是**带超时的等待**：`wait`、`future.wait()` 都有 `wait_for`（等一段时长）和 `wait_until`（等到某个时间点）的变体，配 `std::chrono` 用——「等最多 100 毫秒，到点还没好就别傻等了，去干别的」。二是 <Term def="std::shared_future<T> 是可被多次拷贝、多个线程各持一份、都能对同一个结果 get() 的 future。普通 std::future 的 get() 只能调一次（一取走结果就空了），当「多方都要等同一个结果」时就改用 shared_future。像同一张取餐凭证复印多份，每人凭副本都能取到那同一道菜。">shared_future</Term>：普通 `future` 的 `get()` 只能调一次，可有时**多个线程都要等同一个结果**（比如一个「配置加载完成」事件要通知一群工作线程）——这时改用 `shared_future`，它能被拷贝多份、每个持有者都能 `get()` 到那同一个结果。
+最后两件趁手的小工具。一是**带超时的等待**：`wait_for` 接收 duration，`wait_until` 接收 clock 的 time point。二是 <Term def="std::shared_future 可复制，多份对象共享同一个结果或异常，并允许各自多次 get。跨线程使用时每个线程持有自己的 shared_future 副本。">shared_future</Term>：普通 `future` 的 `get()` 只能调一次；多个线程需要同一个只读结果时，先用 `share()` 转换，再把副本分给各线程。对值类型调用 `shared_future::get()` 返回 `const T&`，引用的生存期受共享状态约束。
 
-> 题外一句：除了「共享数据 + 加锁」，还有一类设计干脆**不共享**——线程之间只靠传递消息沟通，每个线程守着自己的数据、收到消息才动。这就是 CSP（通信顺序进程）/ 函数式并发的思路，能从根上回避数据竞争。本书后面会深入，这里只留个印象。
+## 函数式任务链、消息传递与阶段协作
+
+**functional programming with futures** 的核心是让阶段接收值并产生新值，尽量不共享可变状态；**message passing（消息传递）** 则让每个线程拥有自己的状态，通过线程安全队列交换命令和结果。两者都把同步边界从“任意共享变量”收拢为“值何时就绪”或“消息何时到达”，但队列关闭、背压、取消和错误传播仍需显式协议。
+
+<Term def="一个异步阶段在前一个 future 就绪后自动启动，并接收其结果。C++ Concurrency TS 曾为 future 提议 then continuation，但 C++17 和 C++20 的标准 std::future 都没有 then 成员。">
+  continuation（延续任务）
+</Term>
+可以表达任务链，但要注意版本边界：书中讨论的 `future.then(...)` 来自 Concurrency
+TS，并不是 C++17 标准接口。C++17
+只能用库、显式调度器或另一个等待任务组合；不能把 TS 示例原样当成可移植标准代码。
+
+阶段型协作后来在 C++20 标准化为 <Term def="C++20 的一次性倒计数同步点。参与者调用 count_down，等待者在计数归零前阻塞；归零后不能重置复用。C++17 标准库没有 std::latch。">latch（门闩）</Term> 和 <Term def="C++20 的可复用阶段同步点。预定参与者到达后执行完成步骤并推进到下一阶段；参与者可在协议允许时永久退出。C++17 标准库没有 std::barrier。">barrier（栅栏）</Term>。`std::latch` 适合“一组初始化全部完成后放行”，`std::barrier` 适合迭代算法每一轮末尾会合。第二版原书讨论的是当时的演进方向；本章主体仍按 C++17，不能在代码中假设这两个标准类型已经可用。
+
+<SynchronizationChoiceMap />
 
 {/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
 
@@ -153,14 +168,14 @@ int heavy_compute() {
 }
 
 void caller() {
-    std::future<int> f = std::async(heavy_compute); // 派到后台跑，换回凭证
-    do_other_work();                                // 主线程同时还能干别的
-    int result = f.get();                           // 取餐：没好就阻塞，直到就绪
+    auto f = std::async(std::launch::async, heavy_compute);
+    do_other_work();      // 策略明确，主线程可与任务重叠
+    int result = f.get(); // 未就绪就等待；异常在这里重抛
     // 此后 result == 42；f 已被取空，不能再 get
 }
 ```
 
-`std::async` 立刻返回 `future`、任务在后台跑；`f.get()` 在结果就绪前会**阻塞**调用线程。任务里如果抛了异常，异常会被存进 future，在你 `get()` 时**原样重新抛出**——异步任务的异常不会丢，照样能 `try/catch`。
+显式 `launch::async` 后，任务在单独线程执行；无策略版本则不能承诺与调用者重叠。`f.get()` 在结果就绪前会阻塞，任务异常会存入共享状态并在这里重新抛出。
 
 `std::async` 的启动策略默认由实现选，但你常常想明确指定：
 
@@ -194,8 +209,8 @@ void run_packaged() {
     std::packaged_task<int(int)> task(task_fn); // 打包成「带凭证的任务」
     std::future<int> f = task.get_future();     // 先拿到关联的凭证
     std::thread t(std::move(task), 7);          // 把 task 搬到另一个线程去跑
-    int result = f.get();                       // 取结果（49）；没好就阻塞
-    t.join();
+    t.join();                                    // 先完成线程所有权收尾
+    int result = f.get();                        // 再取值或重抛任务异常
 }
 ```
 
@@ -222,12 +237,12 @@ void caller() {
     std::promise<int> p;
     std::future<int> f = p.get_future();   // 先从 promise 取出配对的凭证
     std::thread t(worker, std::move(p));   // promise 搬进工作线程
-    int result = f.get();                  // 取到 worker 摆上的值；若摆的是异常则在此重新抛出
     t.join();
+    int result = f.get();                  // 在线程已收尾后取值或重抛异常
 }
 ```
 
-`promise` 和它的 `future` 是一对：`set_value` / `set_exception` 在写端摆，`get()` 在读端取。注意 `promise` 也只能 `set` 一次。`set_exception` 让你能把工作线程里发生的异常**安全地传回**调用线程，在 `get()` 处统一处理。
+`promise` 和它的 `future` 是一对：`set_value` / `set_exception` 在写端提交，`get()` 在读端取。示例先 `join` 再 `get`，避免 `get()` 重抛时跳过线程收尾。若生产者路径既未提交值也未提交异常，promise 析构会让 future 以 `broken_promise` 就绪。
 
 ### 带超时等待 + shared_future
 
@@ -260,7 +275,9 @@ std::shared_future<Config> sf = p.get_future().share(); // 转成可共享的凭
 // 把 sf 拷给多个工作线程，每个都能 get() 到同一份 Config
 auto t1 = std::thread([sf] { auto c = sf.get(); use(c); });
 auto t2 = std::thread([sf] { auto c = sf.get(); use(c); });
-// ……主线程某处 p.set_value(loaded_config); 一摆，t1/t2 都会就绪
+p.set_value(loaded_config);
+t1.join();
+t2.join();
 ```
 
 `future::share()` 把一张普通凭证转成可复印的 `shared_future`，每个线程各持一份副本、都能 `get()` 到那同一个结果——像同一张取餐凭证复印多份发给一桌人，每人凭副本都能取到那道菜。
@@ -295,8 +312,8 @@ auto t2 = std::thread([sf] { auto c = sf.get(); use(c); });
   是**临时对象**，语句结束即析构，而它的析构函数会**阻塞等任务结束**（async
   策略下）。没人接住 future，临时对象当场析构 → 当场阻塞。**修法**：用变量接住
   future（`auto f =
-  std::async(...);`），让它活到你真正想等的时刻；真要后台独立跑、不等结果，用
-  `std::thread` + `detach`，别用 async。
+  std::async(...);`），让它活到你真正想等待的时刻。持续后台工作应交给有关闭协议和所有者的线程池或服务线程；不要把
+  `detach` 当成默认替代品。
 </Callout>
 
 <Callout type="trap">
@@ -316,11 +333,11 @@ auto t2 = std::thread([sf] { auto c = sf.get(); use(c); });
 - `cv.wait(lk, pred)` 必须带**谓词**：睡前查一次挡**丢失唤醒**、醒来再查一次挡**虚假唤醒**，等价于 `while(!pred()) wait(lk);`
 - **`std::async` + `future`**：一句话派异步任务、换回「取餐凭证」，`get()` 阻塞取回结果（任务的异常也照样重新抛出）；策略 `launch::async`（必并发）和 `launch::deferred`（推迟到 get 才在本线程跑）差别很大
 - **`packaged_task`** 把任务打包成可搬运/延后执行的对象（线程池常用），**`promise`** 让你在任意线程手动 `set_value`/`set_exception` 跨线程传值或传异常
-- 带超时用 `wait_for`/`wait_until`（配 `std::chrono`）避免无限傻等；多方等同一结果用 **`shared_future`**（可复印、多份 `get`）
+- 带超时用 `wait_for`/`wait_until`，多方等同一结果用 **`shared_future`**；C++17 的 future 没有标准 `.then`，`latch` / `barrier` 是 C++20 才标准化的阶段工具
 
 <Exercises>
 
-**练习 1（改代码型）** 下面这个消费者用了**不带谓词**的 `wait`，存在丢失/虚假唤醒隐患。请改成带谓词的写法，并说明谓词挡住了哪两个坑。
+**问题 1（改代码型）** 下面这个消费者用了**不带谓词**的 `wait`，存在丢失/虚假唤醒隐患。请改成带谓词的写法，并说明谓词挡住了哪两个坑。
 
 ```cpp
 int consume() {
@@ -348,17 +365,17 @@ int consume() {
 
 </Answer>
 
-**练习 2（问答型）** 同事写了 `std::async(std::launch::async, do_log);`（不接收返回值），想让 `do_log` 在后台异步跑、主线程不等它。他说「我写了 `launch::async`，肯定是异步的」。这句会如他所愿「fire-and-forget」吗？为什么？给一条正确做法。
+**问题 2（问答型）** 同事写了 `std::async(std::launch::async, do_log);`（不接收返回值），想让 `do_log` 在后台异步跑、主线程不等它。他说「我写了 `launch::async`，肯定是异步的」。这句会如他所愿「fire-and-forget」吗？为什么？给一条正确做法。
 
 <Answer>
 
 不会。问题不在策略，而在**没人接住返回的 future**。`std::async` 返回一个临时 `std::future`，这句话一结束、分号一打，临时 future 立刻析构——而 async 策略下 future 的析构函数会**阻塞等任务跑完**。于是这行表面上「异步」，实际却**同步**卡在这里直到 `do_log` 结束，主线程并没能往下走。
 
-正确做法二选一：① 真想要「派出去就不管」的后台任务，用 `std::thread t(do_log); t.detach();`（或交给线程池），别用 async；② 若想要 future 的好处（能拿结果/异常），就用变量接住它（`auto f = std::async(std::launch::async, do_log);`），让它活到你真正打算 `get()`/等待的那一刻再析构。
+正确做法是让生命周期有明确所有者：短任务可保存 future 并在确定位置 `get()`；大量任务交给会在关闭阶段停止并 join 工作线程的线程池。只有另有进程级生存期、停止和错误协议时才考虑 detach，不能因“不想保存 future”就放弃所有权。
 
 </Answer>
 
-**练习 3（独立实现型）** 用 `std::condition_variable` + 谓词实现一个**线程安全的有界缓冲区** `BoundedBuffer`（容量固定为 `cap`）：`put(x)` 在缓冲区满时阻塞等待、`take()` 在缓冲区空时阻塞等待。要求两个方向都用谓词正确处理唤醒，并在改完数据后 `notify`。
+**问题 3（独立实现型）** 用 `std::condition_variable` + 谓词实现一个**线程安全的有界缓冲区** `BoundedBuffer`（容量固定为 `cap`）：`put(x)` 在缓冲区满时阻塞等待、`take()` 在缓冲区空时阻塞等待。要求拒绝零容量，两个方向都用谓词，并在改完数据后 `notify`。
 
 <Answer>
 
@@ -366,6 +383,8 @@ int consume() {
 #include <condition_variable>
 #include <mutex>
 #include <queue>
+#include <stdexcept>
+#include <utility>
 
 template <typename T>
 class BoundedBuffer {
@@ -375,7 +394,9 @@ class BoundedBuffer {
     std::condition_variable not_full;   // 等「不满」的铃（生产者等）
     std::condition_variable not_empty;  // 等「非空」的铃（消费者等）
 public:
-    explicit BoundedBuffer(size_t c) : cap(c) {}
+    explicit BoundedBuffer(size_t c) : cap(c) {
+        if (cap == 0) throw std::invalid_argument("capacity must be positive");
+    }
 
     void put(T x) {
         std::unique_lock<std::mutex> lk(m);
@@ -397,7 +418,7 @@ public:
 };
 ```
 
-要点：① 用**两个**条件变量分别表示「不满」和「非空」两个条件，比单个 cv + `notify_all` 更精准（避免叫醒一堆然后大多数又查谓词接着睡）。② 两处 `wait` 都带谓词（`q.size() < cap` / `!q.empty()`），挡住虚假/丢失唤醒。③ 改完数据**先解锁再 notify**，避免被叫醒的线程醒来又卡在锁上。④ 取值用 `std::move` 减少拷贝。
+要点：两个条件变量分别代表“不满”和“非空”；谓词与队列都在同一把 mutex 下访问。改完状态后先解锁再 notify 常能减少被唤醒线程重新争锁，但在持锁状态通知也正确。零容量永远无法满足“不满”，所以构造时拒绝。生产系统还应定义关闭谓词，否则销毁前仍在等待的线程无法有序退出。
 
 </Answer>
 
@@ -474,8 +495,29 @@ public:
   shared_future」一节。
 </GlossaryItem>
 
+<GlossaryItem term="continuation（延续任务）">
+  前一个异步结果就绪后自动启动的后续阶段。Concurrency TS 曾为 future 提议
+  `.then`，但 C++17 与 C++20 的标准 `std::future`
+  都没有该成员，需使用库或显式调度器组合。
+</GlossaryItem>
+
+<GlossaryItem term="latch（门闩）">
+  C++20
+  的一次性倒计数同步点。参与者递减计数，等待者在归零后继续；归零后不能重置。C++17
+  标准库没有 `std::latch`。
+</GlossaryItem>
+
+<GlossaryItem term="barrier（栅栏）">
+  C++20
+  的可复用阶段同步点。参与者到齐后执行完成步骤并推进到下一轮，适合迭代算法的逐阶段会合。C++17
+  标准库没有 `std::barrier`。
+</GlossaryItem>
+
 </Glossary>
 
-{/* 9. 出处声明（spec §九）：本书为《C++ 并发编程实战》第2版改编重写，sourceUrl 为空，Attribution 标签空参自动渲染。缺失 = 必打回。 */}
+{/* 9. 出处声明（spec §九）：本书为《C++ 并发编程实战》第2版改编重写。 */}
 
-<Attribution />
+<Attribution
+  title="C++ Concurrency in Action, Second Edition, Chapter 4: Synchronizing concurrent operations"
+  url="https://livebook.manning.com/book/c-plus-plus-concurrency-in-action-second-edition/chapter-4"
+/>

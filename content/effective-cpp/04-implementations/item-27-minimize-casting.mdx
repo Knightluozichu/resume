@@ -1,0 +1,443 @@
+---
+title: "Item 27：尽量少做转型"
+type: A
+section: Chapter 5 · Implementations
+order: 27
+description: 对齐 Effective C++ 第三版 Item 27：区分四种命名 cast，解释 base subobject 地址调整与错误临时副本调用，并用 virtual dispatch、variant、typed container 和边界 adapter 消除重复转型。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppBaseSubobjectAdjustmentMap,
+  EcppCastFreeDispatchDecisionMap,
+  EcppCastTaxonomyRiskMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-27-minimize-casting";
+
+<Objectives>
+
+- 能区分 static_cast、dynamic_cast、const_cast、reinterpret_cast 的意图、检查和失败边界
+- 能分析 multiple inheritance 对象布局中的 pointer adjustment，并复现 cast 临时副本调用错误
+- 能设计 virtual function、variant、typed container 或 boundary adapter，减少 RTTI downcast 链
+
+</Objectives>
+
+## 从“这只是告诉编译器类型”开始纠偏
+
+转型常被描述为“换个类型看同一对象”，但实际可能执行数值转换、调整 pointer 地址、运行 RTTI 检查、移除 const，甚至直接重新解释 bit pattern。
+
+<Term def="显式要求编译器把表达式按另一类型的转换规则处理。">
+  explicit cast operation
+</Term>
+
+Item 27 的原则是 Minimize casting（尽量少做转型）。cast 会压缩或绕过类型系统掌握的信息，因此每处都应有可审查理由和最小作用域。
+
+<Term def="源类型、目标类型、对象动态类型与生命周期共同允许的合法转换范围。">
+  cast validity boundary
+</Term>
+
+命名 cast 比旧式语法更明确，但“写成 static_cast”不等于设计正确。
+
+<EcppCastTaxonomyRiskMap />
+
+## 避免旧式转型隐藏多种意图
+
+C 风格 `(T)expression` 与 function-style `T(expression)` 可能尝试多类转换，读者无法从语法判断是数值转换、去 const 还是 representation reinterpretation。
+
+<Term def="使用括号语法、可能组合多种 C++ 转换能力且难以按意图搜索的 cast。">
+  old-style cast
+</Term>
+
+```cpp
+double ratio = (double)count / total;
+Widget* widget = (Widget*)raw;
+```
+
+改成命名 cast 至少暴露意图：
+
+```cpp
+double ratio = static_cast<double>(count) / total;
+Widget* widget = static_cast<Widget*>(rawBase);
+```
+
+<Term def="cast 名称直接标识允许的转换家族，便于代码搜索、审查和静态规则限制。">
+  named cast visibility
+</Term>
+
+如果第二行需要 reinterpret_cast，危险会在代码审查中显眼，而不会藏在相同括号里。
+
+## static_cast 处理定义明确的转换
+
+`static_cast` 可做算术转换、显式 constructor、void pointer 恢复以及继承层次中编译期可表达的转换。
+
+<Term def="执行语言定义的非多态转换，不提供运行期动态类型检查的 cast。">
+  static_cast
+</Term>
+
+```cpp
+double average = static_cast<double>(sum) / count;
+auto code = static_cast<std::uint8_t>(wideCode);
+```
+
+第二行可能 narrowing；static_cast 只让意图明确，不验证数值范围。
+
+<Term def="目标类型无法表示全部源值，转换可能丢失范围、精度或符号的信息变化。">
+  narrowing conversion
+</Term>
+
+应用前先做 range check，或使用 checked conversion API。
+
+## base/derived 指针不一定数值相同
+
+在 multiple inheritance 或 virtual inheritance 中，完整 Derived 包含多个 base subobjects。把 `Derived*` 转成某个 `Base*` 可能需要调整地址到该 subobject。
+
+<Term def="编译器根据对象布局把完整对象地址偏移到目标 base subobject 的过程。">
+  base pointer adjustment
+</Term>
+
+```cpp
+class Input { /* ... */ };
+class Renderable { /* ... */ };
+class Button : public Input, public Renderable { /* ... */ };
+
+Button* button = acquireButton();
+Renderable* renderable = static_cast<Renderable*>(button);
+```
+
+button 与 renderable 的 pointer bit pattern 可能不同，但都正确指向同一完整对象中的不同位置。
+
+<Term def="base fields、vptr、padding 与派生成员在完整对象 storage 中的 ABI 排列。">
+  object layout
+</Term>
+
+<EcppBaseSubobjectAdjustmentMap />
+
+`reinterpret_cast<Renderable*>(button)` 不保证执行合法 adjustment，可能让 Renderable member access 读到 Input 区域。
+
+<Callout type="trap">
+  **现象**：认为 pointer cast 只改静态类型，地址位一定不变。**原因**：base
+  subobject 可能位于非零 offset，合法继承转换会调整
+  pointer。**修法**：使用语言定义的 static/dynamic cast，不以 reinterpret
+  代替对象模型转换，并测试目标 ABI。
+</Callout>
+
+## 错误 cast 可能创建临时副本
+
+派生类希望在 override 中先调用 base implementation，有人写：
+
+```cpp
+class SpecialWindow : public Window {
+public:
+    void onResize() override {
+        static_cast<Window>(*this).onResize();
+        updateSpecialState();
+    }
+};
+```
+
+`static_cast<Window>(*this)` 构造一个 Window 临时副本，onResize 修改的是副本，不是当前对象的 base subobject。
+
+<Term def="把 derived object 按 base value 转换时新建的独立 base object，派生状态被切除。">
+  cast-created base temporary
+</Term>
+
+正确调用是 qualified base call：
+
+```cpp
+void SpecialWindow::onResize() {
+    Window::onResize();
+    updateSpecialState();
+}
+```
+
+<Term def="在当前对象上直接选择指定 base class implementation，而不构造副本。">
+  qualified base invocation
+</Term>
+
+<Callout type="trap">
+  **现象**：cast 到 base 后调用函数，期待复用当前对象的 base
+  部分。**原因**：value cast 产生临时 base copy。**修法**：使用
+  `Base::function()` qualified call；通过状态地址和 copy counter
+  测试没有临时对象。
+</Callout>
+
+## dynamic_cast 提供运行期检查
+
+`dynamic_cast` 用于 polymorphic hierarchy 中安全 downcast/cross-cast。pointer 失败返回 null，reference 失败抛 `std::bad_cast`。
+
+<Term def="借助 RTTI 检查对象动态类型后执行 polymorphic pointer/reference 转换。">
+  dynamic_cast
+</Term>
+
+```cpp
+if (auto* button = dynamic_cast<Button*>(widget)) {
+    button->flash();
+}
+```
+
+<Term def="支持 virtual functions 的对象在运行期携带、供类型识别与安全 downcast 使用的信息。">
+  runtime type information
+</Term>
+
+成本依 hierarchy 和 ABI，不应笼统描述为固定常数；更重要的是反复 downcast 往往说明 base abstraction 缺少业务 operation。
+
+## dynamic_cast 链是设计信号
+
+```cpp
+if (auto* button = dynamic_cast<Button*>(widget)) {
+    drawButton(*button);
+} else if (auto* slider = dynamic_cast<Slider*>(widget)) {
+    drawSlider(*slider);
+} else if (auto* menu = dynamic_cast<Menu*>(widget)) {
+    drawMenu(*menu);
+}
+```
+
+每新增 derived 都要修改该链，违反 open/closed extension，并把 concrete knowledge 集中到调用者。
+
+<Term def="连续尝试多个 concrete downcast，并按成功类型执行不同分支的结构。">
+  downcast dispatch chain
+</Term>
+
+若操作属于所有 Widgets，给 base 增加 virtual `draw`；若类型集合封闭且数据导向，使用 variant/visitor；若容器本来只允许 Button，直接保存 typed pointer。
+
+<Term def="通过 virtual function 让对象动态类型自身选择实现，调用者只依赖 base contract。">
+  polymorphic virtual dispatch
+</Term>
+
+<EcppCastFreeDispatchDecisionMap />
+
+## const_cast 只改变 cv 限定
+
+`const_cast` 是唯一专门添加或移除 const/volatile qualifier 的命名 cast。
+
+<Term def="显式添加或移除 const/volatile 限定，不改变对象动态类型或 representation。">
+  const_cast
+</Term>
+
+```cpp
+char& Buffer::operator[](std::size_t index) {
+    return const_cast<char&>(std::as_const(*this)[index]);
+}
+```
+
+这种复用只有在原对象真实 non-const 时安全；若对象本来是 const，移除限定后写入是 undefined behavior。
+
+<Term def="对象在创建时就具有 const-qualified storage，不能通过 cast 合法获得写权限。">
+  originally const object
+</Term>
+
+更常见场景应修正 API 的 const-correctness，而不是在调用点批量去 const。
+
+## reinterpret_cast 属于低层边界
+
+`reinterpret_cast` 用于 pointer/integer、无关 pointer representation 等低层转换，结果高度依赖平台与协议。
+
+<Term def="按语言允许的低层规则重新解释 pointer/integer representation，不建立领域类型关系。">
+  reinterpret_cast
+</Term>
+
+```cpp
+std::uintptr_t address = reinterpret_cast<std::uintptr_t>(pointer);
+```
+
+它不等于 type punning 任意对象；访问不兼容类型还受 lifetime、alignment、strict aliasing 限制。
+
+<Term def="通过不兼容 glvalue 类型访问对象 storage，可能违反优化器依赖的别名规则。">
+  strict aliasing violation
+</Term>
+
+协议解析优先 `memcpy`、`bit_cast`、byte span 和结构化 decoder，把 reinterpret 隔离在硬件/ABI adapter。
+
+## cast 应封装在窄边界
+
+无法控制的 C API、plugin ABI、serialization 或 GUI framework 可能迫使一次 cast。不要让它扩散到业务层。
+
+<Term def="集中验证外部 raw representation，并向内部返回 typed value/owner 的适配层。">
+  cast boundary adapter
+</Term>
+
+```cpp
+Result<DeviceHandle, ApiError> wrapNativeHandle(void* raw) {
+    if (!raw) return unexpected(ApiError::NullHandle);
+    return DeviceHandle::fromNative(raw);
+}
+```
+
+adapter 记录来源、alignment、lifetime 和 failure；内部代码只见强类型。
+
+<Term def="一次危险转换所依赖的来源、目标、alignment、动态类型和生命周期前提集合。">
+  cast precondition ledger
+</Term>
+
+代码审查只需重点审计少量 adapter，而不是全库 scattered casts。
+
+## 用接口替代向下转型
+
+如果调用者只需要某项 capability，可在 base 提供 virtual query/command，或拆成独立 interface，而不是知道完整 concrete class。
+
+<Term def="抽象只暴露调用者需要的行为，使其无需识别 concrete implementation。">
+  capability interface
+</Term>
+
+例如 `Scrollable` interface 比 `dynamic_cast<SpecialWindow*>` 更准确表达需求。组合对象可以实现多个小 interface，调用者通过依赖注入获得正确 capability。
+
+<Term def="调用点从类型识别分支改为依赖抽象操作，从源头删除 cast 的重构。">
+  cast-eliminating redesign
+</Term>
+
+若 RTTI 判断仅为日志/诊断，保持在观察层，不能反过来驱动核心状态机。
+
+## 性能测试不能替代正确性证明
+
+dynamic_cast 可能有运行期开销，reinterpret 看似零成本，但选择首先由语义合法性决定。
+
+<Term def="在证明转换合法且设计必要后，对其实际频率和运行成本进行的测量。">
+  cast cost profiling
+</Term>
+
+profile 显示 downcast hotspot 时，通常应改数据结构或 dispatch，而不是缓存不安全 pointer。
+
+<Term def="优化转换时仍必须保持 dynamic type、subobject address、lifetime 和 aliasing 的全部条件。">
+  cast correctness invariant
+</Term>
+
+没有 benchmark 能让 undefined behavior 变正确。
+
+## 用转换清单和负例验收
+
+先预测 cast 是否改变值、地址、cv、动态检查或对象 identity，再建立门禁：
+
+- 静态清单按四种 named cast 分类，并禁止新增 C-style cast。
+- multiple inheritance 测试记录 Derived/Base pointers，验证合法 adjustment。
+- copy counter 证明 base qualified call 不创建临时副本。
+- dynamic_cast pointer/reference 分别覆盖成功、null 与 bad_cast。
+- dispatch tests 将 downcast chain 重构为 virtual/variant 后验证 exhaustive behavior。
+- const_cast tests 只从真实 non-const object 恢复写访问，compile/runtime 禁止 const storage 写入。
+- boundary adapter 验证 null、alignment、tag、lifetime 和 ABI version。
+- sanitizer、warnings 与 static analysis 检查 vptr、alignment、aliasing 和 use-after-lifetime。
+
+<Term def="记录每处 cast 的意图、合法前提、替代设计、测试证据和 owner 的审查表。">
+  cast audit matrix
+</Term>
+
+每个 cast 都应能回答“为什么类型系统无法直接表达”，否则继续重构。
+
+## 小结
+
+- named casts 比旧式 cast 更明确可搜索，但 Item 27 的目标是减少转换而非只换语法
+- static_cast 不做运行期动态检查，数值 narrowing 仍需单独验证
+- base/derived pointer conversion 可能因 object layout 调整地址，reinterpret 不能替代合法转换
+- cast derived value 到 base 会产生临时副本；复用 base 实现应使用 qualified call
+- 反复 dynamic_cast 通常应改为 virtual dispatch、variant、typed container 或 capability interface
+- const_cast/reinterpret_cast 只应在前提明确的窄边界使用，并以 cast audit matrix 验证
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 27"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="explicit cast operation">
+    显式要求按目标类型规则转换表达式。
+  </GlossaryItem>
+  <GlossaryItem term="cast validity boundary">
+    转换合法所需的类型与 lifetime 范围。
+  </GlossaryItem>
+  <GlossaryItem term="old-style cast">
+    意图不明且可组合多类转换的括号 cast。
+  </GlossaryItem>
+  <GlossaryItem term="named cast visibility">
+    命名语法暴露转换家族并便于审查。
+  </GlossaryItem>
+  <GlossaryItem term="static_cast">
+    无运行期动态类型检查的定义明确转换。
+  </GlossaryItem>
+  <GlossaryItem term="narrowing conversion">
+    可能丢失范围、精度或符号的转换。
+  </GlossaryItem>
+  <GlossaryItem term="base pointer adjustment">
+    按对象布局偏移到 base subobject。
+  </GlossaryItem>
+  <GlossaryItem term="object layout">
+    对象内 base、成员、padding 和 vptr 的排列。
+  </GlossaryItem>
+  <GlossaryItem term="cast-created base temporary">
+    derived value cast 创建的独立 base 副本。
+  </GlossaryItem>
+  <GlossaryItem term="qualified base invocation">
+    在当前对象直接选择 base implementation。
+  </GlossaryItem>
+  <GlossaryItem term="dynamic_cast">
+    基于 RTTI 的 checked polymorphic cast。
+  </GlossaryItem>
+  <GlossaryItem term="runtime type information">
+    多态对象的运行期类型识别信息。
+  </GlossaryItem>
+  <GlossaryItem term="downcast dispatch chain">
+    连续识别 concrete derived 类型的分支。
+  </GlossaryItem>
+  <GlossaryItem term="polymorphic virtual dispatch">
+    由动态对象选择 virtual override。
+  </GlossaryItem>
+  <GlossaryItem term="const_cast">
+    添加或移除 cv qualification 的 cast。
+  </GlossaryItem>
+  <GlossaryItem term="originally const object">
+    创建时即为 const、不可合法写入的对象。
+  </GlossaryItem>
+  <GlossaryItem term="reinterpret_cast">
+    低层重新解释 pointer/integer representation。
+  </GlossaryItem>
+  <GlossaryItem term="strict aliasing violation">
+    以不兼容类型访问 storage 的别名违规。
+  </GlossaryItem>
+  <GlossaryItem term="cast boundary adapter">
+    集中转换外部 raw representation 的适配层。
+  </GlossaryItem>
+  <GlossaryItem term="cast precondition ledger">
+    危险转换的来源、布局和 lifetime 前提。
+  </GlossaryItem>
+  <GlossaryItem term="capability interface">
+    只暴露调用者所需行为的抽象。
+  </GlossaryItem>
+  <GlossaryItem term="cast-eliminating redesign">
+    以抽象操作删除类型识别 cast。
+  </GlossaryItem>
+  <GlossaryItem term="cast cost profiling">
+    合法性证明后测量转换实际成本。
+  </GlossaryItem>
+  <GlossaryItem term="cast correctness invariant">
+    优化仍需保持的类型布局 lifetime 条件。
+  </GlossaryItem>
+  <GlossaryItem term="cast audit matrix">
+    cast 意图、前提和测试证据的清单。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：修复 resize override。** `static_cast<Window>(*this).onResize()` 运行后 base 状态未更新，请解释并改写。
+
+<Answer question="为什么 cast 调用没有修改当前对象？">
+  value static_cast 从当前 derived 构造独立 Window temporary，onResize
+  修改副本，随后副本析构；它不是当前对象的 base subobject。改为
+  `Window::onResize()` qualified invocation，再更新 derived state。用 base copy
+  counter、this 地址和状态断言证明没有临时对象且同一完整对象被修改。
+</Answer>
+
+2. **问题 2：消除 Widget downcast 链。** 容器保存 base pointers，draw 中依次识别 Button、Slider、Menu，请选择重构。
+
+<Answer question="怎样替代重复 dynamic_cast 分派？">
+  draw 是所有 Widget 的核心行为时，在 base 声明 virtual draw 并由 derived
+  override；若类型集合封闭且数据导向，用 variant 加 exhaustive
+  visit；若该容器本应只含 Button，改成 typed container。只有外部 framework
+  边界不可改时保留一次 checked cast，并立即返回 typed adapter，业务层不继续识别
+  concrete type。
+</Answer>
+
+3. **问题 3：审计 native pointer 转换。** 代码用 reinterpret_cast 把 Derived pointer 当第二个 Base pointer，并偶发崩溃，请建立修复和验证。
+
+  <Answer question="对象布局为什么会让 reinterpret 转换失败？">multiple inheritance 中第二个 Base subobject 可能位于非零 offset；reinterpret 保留 raw address，不执行 base pointer adjustment，member/virtual access 读取错误位置。改用 static_cast（动态类型已知）或 dynamic_cast（需运行期检查）。记录两个地址差、ABI 配置和 virtual call；sanitizer 覆盖 alignment/vptr，禁止此类 reinterpret 回归。</Answer>
+</Exercises>

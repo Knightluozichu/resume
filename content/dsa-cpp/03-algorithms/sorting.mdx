@@ -1,0 +1,289 @@
+---
+title: "第7章 Sorting：从逆序对到外部多路归并"
+type: C
+section: "排序、并查集与图"
+order: 6
+description: "按第3版十一节完整重构插入、Shell、堆、归并、快速、间接、桶与外部排序，并推导简单交换和一般比较排序下界。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+draft: false
+---
+
+import { DsaSortingContractLab, DsaInsertionSortLab, DsaShellsortGapLab, DsaNLogNSortComparisonLab, DsaIndirectSortLab, DsaSortingLowerBoundLab, DsaBucketSortLab, DsaExternalSortingLab, DsaSortingChoiceMatrix } from "@/components/mdx/dsa-cpp/diagrams/sorting";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释 sorted order之外的stability、space、adaptivity与move-cost契约
+- 能计算 insertion、heap、merge、quick、bucket和external sorting的成本
+- 能实现gap insertion、heapify、stable merge、median-of-three partition与permutation cycles
+- 能分析逆序对下界、comparison decision tree与输入分布风险
+- 能设计匹配大对象、有限key domain或数据超过RAM场景的排序流程
+
+</Objectives>
+
+## 从“排序输出相同，工程约束不同”开始
+
+排序预备知识（<Term def="在选择算法前明确key order、stability、input distribution、space、move cost与storage层级。">排序预备知识</Term>）先定义“正确”。对 records 按 age 排序时，相同 age 是否保持原输入顺序？对象是8-byte integer 还是4-KB record？数据近乎有序、全相等、逆序，还是大到放不进 RAM？这些条件会改变实际最佳算法。
+
+先预测 `{A:2, B:1, C:2}` 按数字 key 升序后的结果。稳定排序必须得到 B、A、C；不稳定排序允许 B、C、A。两者 key sequence 都是1、2、2，但 observable record order 不同。
+
+官方十一节依次为 **Preliminaries、Insertion Sort、A Lower Bound for Simple Sorting Algorithms、Shellsort、Heapsort、Mergesort、Quicksort、Indirect Sorting、A General Lower Bound for Sorting、Bucket Sort、External Sorting**。这条路线先从局部移动建立下界，再到 O(N log N) 比较排序，最后说明何时绕过比较模型或 RAM 模型。
+
+<DsaSortingContractLab />
+
+## 7.1 Preliminaries
+
+默认问题是把 N 个 Comparable items 按 nondecreasing order 重排。Comparator 必须满足 strict weak ordering；若 `a<b` 与 `b<a` 都为 false，它们属于同一 equivalence class。Comparator 依赖会变化的外部状态，会让一次 sort 内判断自相矛盾。
+
+算法报告至少包括 comparisons、moves/swaps、auxiliary space、worst/average case、stability 和 locality。Asymptotic comparisons 相同，large-object moves 或 cache misses 仍可能差一个数量级。
+
+## 7.2 Insertion Sort
+
+插入排序（<Term def="逐步扩大sorted prefix，把当前item向左插入并移动更大前驱的稳定排序。">插入排序</Term>）在 pass p 前保持 `a[0..p-1]` 已排序。保存 `a[p]`，把所有更大前驱右移，最后填入 hole。
+
+```cpp
+for (std::size_t p = 1; p < a.size(); ++p) {
+    T value = std::move(a[p]);
+    std::size_t hole = p;
+    while (hole > 0 && value < a[hole - 1]) {
+        a[hole] = std::move(a[hole - 1]);
+        --hole;
+    }
+    a[hole] = std::move(value);
+}
+```
+
+<DsaInsertionSortLab />
+
+逆序对是 indices i 小于 j 但 `a[i]` 大于 `a[j]` 的 pair。Insertion sort 每向左跨一步恰消去一个 inversion，因此时间是 O(N+I)，I 为 inversions 数；已排序输入 I=0 近线性，逆序输入达到：
+
+$$
+I_{\max}=\frac{N(N-1)}{2}
+$$
+
+只在严格更小时移动可保持 equal records 原顺序，因此实现是 stable。小数组或 quicksort cutoff 后的片段常用它收尾。
+
+## 7.3 A Lower Bound for Simple Sorting Algorithms
+
+简单排序算法下界（<Term def="基于每次相邻交换最多消去一个inversion，证明某些局部交换排序需要quadratic工作。">简单排序算法下界</Term>）不针对全部 comparison sorts，而针对只用 adjacent exchanges 消除 inversions 的 simple algorithms。
+
+逆序 permutation 有 N(N-1)/2 个 inversions；一次 adjacent swap 最多改变一个。因此任何只通过相邻交换排序的算法，在该输入上至少执行：
+
+$$
+\Omega(N^2)
+$$
+
+Shellsort 能让 item 一次跨越多个 positions，heapsort/mergesort/quicksort 也不是只做 adjacent exchange，所以这个下界不能错误外推到它们。第7.9才给一般 comparison model 下界。
+
+## 7.4 Shellsort
+
+希尔排序（<Term def="按递减gap序列执行gapped insertion sorts，先移动远距items并以gap 1完成排序。">希尔排序</Term>）把 array 分成若干 interleaved subsequences。若 array 已经 h-sorted，再执行更小 gap 的 insertion passes；最后 gap=1 保证完全 sorted。
+
+<DsaShellsortGapLab />
+
+第3版作者 `Sort.h` 使用 Shell 原始 increments `N/2, N/4, ..., 1`，并在注释中明确称其为 poor increments。算法骨架正确，但 increment sequence 决定理论和实际性能，不能把某一序列的 bound 当成所有 Shellsort 的共同 bound。
+
+```cpp
+for (std::size_t gap = a.size() / 2; gap > 0; gap /= 2)
+    for (std::size_t i = gap; i < a.size(); ++i)
+        gappedInsertion(a, i, gap);
+```
+
+Shellsort in-place、实现短，对中等规模可能有效；通常不 stable，因为 equal items 可能在不同 gap groups 中跨越。
+
+## 7.5 Heapsort
+
+堆排序（<Term def="先在线性时间建立max-heap，再反复把root交换到sorted suffix并恢复heap。">堆排序</Term>）在 0-based array 上用 max-heap。Build phase 调 `percDown`；每轮把最大值 root 与末尾交换，缩小 logical heap，再从 root 下滤。
+
+$$
+T_{\mathrm{heap}}(N)=O(N)+\sum_{k=2}^{N}O(\log k)=O(N\log N)
+$$
+
+<DsaNLogNSortComparisonLab />
+
+它 worst-case O(N log N)、auxiliary space O(1)，但通常不 stable。Heap 的跳跃访问 locality 不如顺序 merge 或常见 quicksort partition。作者实现的 `leftChild(i)=2i+1` 与第6章 1-based heap 公式不同，混用 indexing convention 会越界。
+
+## 7.6 Mergesort
+
+归并排序（<Term def="递归排序两半，再用辅助buffer线性合并两个sorted runs的稳定divide-and-conquer排序。">归并排序</Term>）满足 recurrence：
+
+$$
+T(N)=2T(N/2)+\Theta(N)=\Theta(N\log N)
+$$
+
+Merge 用两个 cursors 选择较小 front。相等时先取 left run 才保持 stability：
+
+```cpp
+while (left <= leftEnd && right <= rightEnd)
+    if (!(a[right] < a[left]))
+        tmp[out++] = a[left++];
+    else
+        tmp[out++] = a[right++];
+```
+
+第3版实现只分配一次 `tmpArray` 并在递归中复用，避免每层 allocation。Array mergesort 需要 O(N) auxiliary storage；linked lists 可用 relinking，但 locality 和 ownership 模型不同。Stable records 和 sequential I/O 是其强项。
+
+## 7.7 Quicksort
+
+快速排序（<Term def="选择pivot并partition为较小与较大区域，再递归子区间的原地divide-and-conquer排序。">快速排序</Term>）平均 recurrence 接近：
+
+$$
+T(N)=2T(N/2)+\Theta(N)=\Theta(N\log N)
+$$
+
+若每次 pivot 都是 extreme，则变成 `T(N)=T(N-1)+Theta(N)=Theta(N^2)`。第3版 `Sort.h` 用 median-of-three 排序 left、center、right，把 pivot 藏到 `right-1`，并对 size 不超过10的 subarray 改用 insertion sort。
+
+```cpp
+const T& pivot = median3(a, left, right);
+int i = left;
+int j = right - 1;
+for (;;) {
+    while (a[++i] < pivot) {}
+    while (pivot < a[--j]) {}
+    if (i >= j) break;
+    std::swap(a[i], a[j]);
+}
+std::swap(a[i], a[right - 1]);
+```
+
+Median-of-three sentinels 让 scans 安全停下，但 duplicate-heavy input 仍需仔细 partition policy。Modern production sort 常加入 depth limit，退化时切 heapsort，形成 introspective guard。
+
+<Callout type="trap" title="只测随机unique input">
+Naive quicksort在sorted、reverse、all-equal或adversarial input上可能深递归与quadratic。验收必须覆盖这些shape，并检查stack depth、partition balance和duplicate policy。
+</Callout>
+
+## 7.8 Indirect Sorting
+
+间接排序（<Term def="先排序指向大型objects的轻量handles，再按permutation cycles重排objects以减少昂贵moves。">间接排序</Term>）分两阶段：构造 pointer/index array，以 pointee key 排序；再把 permutation 分解成 cycles，每个 cycle 用一个 temporary 完成。
+
+<DsaIndirectSortLab />
+
+第3版 `largeObjectSort` 的目标是平均只做约 `N + ln N` 次大型 Comparable moves，而 comparisons 主要移动 pointers。Handle comparator 必须比较 pointee；cycle 修复时还要同步更新 pointer positions，避免再次移动已归位对象。
+
+Indirect sort 也可不物理重排原 records，而把 sorted indices 作为 view 返回。选择 materialize 还是 view 取决于后续 traversal locality、lifetime 与 mutation contract。
+
+## 7.9 A General Lower Bound for Sorting
+
+排序的一般下界（<Term def="用binary comparison decision tree至少区分N! permutations，推出worst-case Omega(N log N)。">排序的一般下界</Term>）把 deterministic comparison sort 表示为 decision tree。Distinct keys 有 N! 种 input permutations，每个 leaf 必须代表一个结果；binary comparison tree 高度至少：
+
+$$
+\left\lceil\log_2(N!)\right\rceil=\Omega(N\log N)
+$$
+
+<DsaSortingLowerBoundLab />
+
+这个下界只约束通过 pairwise comparisons 获得 order information 的通用排序。Bucket/radix sort 使用 key representation 或有限 domain，不受同一模型约束；它们付出的代价是 domain assumptions 与额外 storage。
+
+## 7.10 Bucket Sort
+
+桶排序（<Term def="利用有限或可分区key domain把items分配到ordered buckets，再在桶内整理并串接输出。">桶排序</Term>）若 N 个 integer keys 位于已知范围，可由 value 直接选 bucket。均匀且 bucket 数 B 合理时：
+
+$$
+T(N,B)=O(N+B)
+$$
+
+<DsaBucketSortLab />
+
+若所有 items 落入一个 bucket，桶内 comparison sort 仍可能成为 O(N log N) 或更差。正确性还要定义 domain boundary、negative keys、floating-point NaN 和 stable bucket append。所谓 linear sorting 依赖明确前提，不是免费突破下界。
+
+## 7.11 External Sorting
+
+外部排序（<Term def="当数据超过RAM时，先生成内存sorted runs，再以多路merge减少sequential I/O passes。">外部排序</Term>）把主成本从 comparisons 转为 block reads/writes。第一阶段读入能放进 RAM 的 chunks，各自内部排序并写成 runs；第二阶段用 input buffers、output buffer 与 priority queue 做 k-way merge。
+
+<DsaExternalSortingLab />
+
+若初始有 R 个 runs、一次 merge fan-in 为 k，merge passes 约为：
+
+$$
+\left\lceil\log_k R\right\rceil
+$$
+
+增大 k 可减少 passes，却要为更多 runs 分配 buffers 并增加 heap fan-in。Replacement selection 可生成平均长于 RAM capacity 的 initial runs；double buffering 可重叠 I/O 和 computation。验收应报告总 bytes、sequential passes、temporary disk space 和 crash cleanup。
+
+<Callout type="trap" title="把内存sort基准外推到磁盘">
+数据超过RAM后，page faults和随机I/O会淹没CPU比较差异。External sort必须以run generation和multiway merge设计，不能让操作系统替一个随机访问算法承担无限swap。
+</Callout>
+
+## 统一选择：按数据与契约决定排序
+
+<DsaSortingChoiceMatrix />
+
+<Stepper>
+  <Step title="先固定order与stability">
+    <DsaSortingContractLab />
+    用equal keys携带original sequence number，验证输出是否满足预期tie contract。
+  </Step>
+  <Step title="测输入shape与inversions">
+    <DsaInsertionSortLab />
+    覆盖sorted、nearly sorted、reverse、all-equal、random与adversarial patterns。
+  </Step>
+  <Step title="比较同阶算法的工程属性">
+    <DsaNLogNSortComparisonLab />
+    分开统计comparisons、moves、extra bytes、stack depth、cache misses与stability。
+  </Step>
+  <Step title="large records先评估indirection">
+    <DsaIndirectSortLab />
+    比较直接move完整records与排序indices再按cycles重排的总bytes。
+  </Step>
+  <Step title="超过RAM改用I/O模型">
+    <DsaExternalSortingLab />
+    设计run size、fan-in、buffers、temporary storage与restart boundary。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 排序验收不止key order，还包括stability、space、adaptivity、move cost和storage层级。
+2. Insertion sort工作与inversions相关，适合小或近乎有序输入。
+3. Adjacent-exchange简单排序有quadratic worst-case下界，不能外推到全部sorts。
+4. Shellsort用gap让元素远移，increment sequence决定表现。
+5. Heapsort worst-case O(N log N)且in-place；mergesort stable但需buffer；quicksort平均快但要防退化。
+6. Indirect sorting用handles和permutation cycles减少large-object moves。
+7. Comparison decision tree给出一般 Omega(N log N)下界。
+8. Bucket sort利用key domain，性能依赖分布和范围。
+9. External sorting优化runs、fan-in和sequential I/O，而不是只数CPU comparisons。
+
+<Exercises>
+
+**问题 1：reverse array长度8有多少inversions，insertion sort至少要做多少次向右移动？**
+
+<Answer>最大inversions为8乘7除2等于28。标准insertion sort每次跨越消去一个inversion，因此要做28次由inversion导致的元素右移，另有每pass最终写入。</Answer>
+
+**问题 2：mergesort中equal时为何必须先取left run才能stable？**
+
+<Answer>Left run中的equal item在原输入中位于right run equal item之前。先输出left保持原相对顺序；若先取right，就跨过并颠倒这对equal records。</Answer>
+
+**问题 3：N=6时comparison decision tree至少要有多少leaves和多高？**
+
+<Answer>Distinct keys有6!等于720种permutations，所以至少720个leaves；binary tree高度至少ceil(log2 720)=10，故某条路径至少10次comparisons。</Answer>
+
+**问题 4：64个initial runs做4-way merge需要多少passes？**
+
+<Answer>每pass把run数量约除以4：64到16、16到4、4到1，共3passes，也等于log4 64。每pass通常完整读写数据一次。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="排序预备知识">order、stability、space、distribution与storage前提。</GlossaryItem>
+  <GlossaryItem term="插入排序">维护sorted prefix并按inversions移动的stable sort。</GlossaryItem>
+  <GlossaryItem term="简单排序算法下界">相邻交换每次最多消去一个inversion的quadratic证明。</GlossaryItem>
+  <GlossaryItem term="希尔排序">按递减gap做gapped insertion的in-place sort。</GlossaryItem>
+  <GlossaryItem term="堆排序">max-heap加sorted suffix的worst-case N log N sort。</GlossaryItem>
+  <GlossaryItem term="归并排序">递归排序两半并stable merge的divide-and-conquer sort。</GlossaryItem>
+  <GlossaryItem term="快速排序">围绕pivot partition并递归子区间的average N log N sort。</GlossaryItem>
+  <GlossaryItem term="间接排序">排序handles并按cycles减少large-object moves。</GlossaryItem>
+  <GlossaryItem term="排序的一般下界">comparison decision tree区分N! permutations的下界。</GlossaryItem>
+  <GlossaryItem term="桶排序">借助有限key domain分桶并串接的非纯comparison sort。</GlossaryItem>
+  <GlossaryItem term="外部排序">生成runs并多路归并的out-of-core排序。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Data Structures and Algorithm Analysis in C++, 3rd Edition · Chapter 7 Sorting"
+  href="https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+  author="Mark Allen Weiss"
+  license="原书与官方示例代码版权归作者及 Pearson/Addison-Wesley 所有；本章依据官方完整目录及作者公开的第3版 Sort.h 示例独立重构教学内容"
+/>

@@ -408,8 +408,8 @@ export function CommandPatternDiagram() {
       <figcaption className="mt-2 text-center text-xs text-secondary">
         Invoker 只依赖 Command
         接口：把「发出请求」与「谁来执行、如何执行」彻底解耦。ConcreteCommand
-        绑定一个 Receiver 并在 execute() 中转发调用——新增命令只需新增一个 ConcreteCommand
-        类，Invoker 与 Receiver 都无需改动。
+        绑定一个 Receiver 并在 execute() 中转发调用——新增命令只需新增一个
+        ConcreteCommand 类，Invoker 与 Receiver 都无需改动。
       </figcaption>
     </figure>
   );

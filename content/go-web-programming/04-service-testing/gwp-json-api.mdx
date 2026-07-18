@@ -1,0 +1,109 @@
+---
+title: "第7章 Go Web服务"
+type: C
+section: "Go Web编程 · 服务与验证"
+order: 7
+description: "比较SOAP与REST，使用encoding/xml和encoding/json创建、解析并验证Go Web服务。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/go-web-programming/chapter-7"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GwpServiceStyleLab, GwpCodecLab, GwpRestLab } from "@/components/mdx/go-web-programming/diagrams/gwp-json-api";
+
+<Objectives>
+- 能比较SOAP与REST服务的契约、表示和错误模型
+- 能实现XML与JSON的类型化编解码，并处理未知字段、尾随数据和流边界
+- 能设计资源URI、HTTP方法、状态码和表示一致的Go Web服务
+</Objectives>
+
+## 从服务的用户是程序开始
+
+先预测：把HTML页面改成JSON就自动成为REST服务吗？不是。Web服务面向软件调用方，契约必须稳定且可机器解释。<Term def="资源、操作、表示、状态与错误共同组成的软件调用协议。">web service contract</Term>比响应格式更广。
+
+<GwpServiceStyleLab />
+
+## SOAP Web服务
+
+SOAP通常以XML envelope、操作和正式描述表达服务。<Term def="消息封装、命名空间、操作和Fault共同定义的服务协议。">SOAP message boundary</Term>适合严格契约与工具链，但复杂度和互操作要求也更高；协议Fault与业务失败要区分。
+
+```xml
+<Envelope>
+  <Body><CreateThread><title>Go</title></CreateThread></Body>
+</Envelope>
+```
+
+## REST Web服务
+
+REST以资源、统一接口和表示驱动交互。<Term def="URI标识资源，HTTP方法表达操作，状态码表达结果的映射规则。">REST resource semantics</Term>要求GET安全、PUT与DELETE幂等语义明确，创建通常返回201与Location。
+
+<GwpRestLab />
+
+## XML解析与创建
+
+encoding/xml通过导出字段和标签映射元素与属性。<Term def="XML元素、属性、层次和Go字段之间的类型化映射。">XML codec contract</Term>要限制输入规模与深度，处理命名空间、未知元素和格式错误，输出前确定编码与Content-Type。
+
+```go
+type ThreadXML struct {
+    XMLName xml.Name `xml:"thread"`
+    ID int `xml:"id,attr"`
+    Title string `xml:"title"`
+}
+```
+
+## JSON解析与创建
+
+encoding/json按字段和标签编码，Decoder适合stream。<Term def="JSON键、零值、未知字段、数字和尾随输入的解析策略。">JSON codec policy</Term>要求区分缺失与显式零值，必要时DisallowUnknownFields，并确认首个值后没有意外尾随对象。
+
+```go
+dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20))
+dec.DisallowUnknownFields()
+if err := dec.Decode(&input); err != nil { http.Error(w, "bad json", 400); return }
+```
+
+<GwpCodecLab />
+
+## 创建Go Web服务
+
+Handler先验证method与Content-Type，再解码DTO、调用用例、映射领域错误，最后编码响应。<Term def="协议DTO与领域模型之间的显式转换和错误映射层。">service adapter boundary</Term>阻止数据库结构直接成为公开API。
+
+## 状态码与错误表示
+
+错误响应应稳定包含机器码、消息和可关联ID。<Term def="领域结果到HTTP状态、header和错误body的确定转换。">HTTP error mapping contract</Term>要求验证失败、未找到、冲突和内部错误不混成200或500。
+
+<Stepper>
+  <Step title="选择服务风格"><GwpServiceStyleLab /></Step>
+  <Step title="验证编码器"><GwpCodecLab /></Step>
+  <Step title="检查REST映射">为列表、创建、读取、更新和删除逐项写出method、URI和状态。</Step>
+</Stepper>
+
+## 验收实验：同一资源两种表示
+
+为Thread资源实现JSON与XML读取和创建，发送正常、未知字段、超限body、坏XML、尾随JSON、缺失资源和重复创建。保存method、URI、Content-Type、状态、Location和错误body，确保表示变化不改变领域结果。
+
+<Callout type="trap" title="所有错误都返回200加错误字段">这破坏HTTP语义和客户端重试、缓存与监控判断，应使用匹配状态码。</Callout>
+<Callout type="trap" title="Decode一次就能忽略剩余输入">攻击者可追加第二个JSON值；单对象端点应验证后续只有EOF。</Callout>
+
+## 本章回顾
+
+本章覆盖Web服务、SOAP、REST、XML、JSON和Go服务创建。可靠契约由资源语义、类型化codec、输入预算、稳定错误映射和协议测试共同形成。
+
+<Exercises>
+**问题 1：JSON是否等于REST？**<Answer>不等；JSON是表示格式，REST还包含资源与统一HTTP语义。</Answer>
+**问题 2：创建成功常用什么状态？**<Answer>201 Created，并可用Location指向新资源。</Answer>
+**问题 3：为何DTO不直接复用数据库行？**<Answer>避免持久化结构泄漏为公共协议，允许独立演化和验证。</Answer>
+</Exercises>
+
+## 术语表
+<Glossary>
+  <GlossaryItem term="web service contract" definition="程序调用的资源、表示与错误协议。" />
+  <GlossaryItem term="SOAP message boundary" definition="SOAP封装、操作与Fault边界。" />
+  <GlossaryItem term="REST resource semantics" definition="资源与HTTP方法状态映射。" />
+  <GlossaryItem term="XML codec contract" definition="XML结构到Go字段的映射协议。" />
+  <GlossaryItem term="JSON codec policy" definition="JSON字段、零值与输入边界策略。" />
+  <GlossaryItem term="service adapter boundary" definition="协议DTO与领域模型转换边界。" />
+  <GlossaryItem term="HTTP error mapping contract" definition="领域失败到HTTP错误的映射。" />
+</Glossary>
+<Attribution adaptedFrom="Go Web Programming Chapter 7 Go web services" adaptedUrl="https://livebook.manning.com/book/go-web-programming/chapter-7" />

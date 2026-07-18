@@ -1,0 +1,198 @@
+---
+title: "Lesson 5：按情况处理"
+type: A
+section: Easy C++（第5版）· 控制流程
+order: 5
+description: 对齐原书 Lesson 5「場合に応じた処理」：从布尔条件、关系与逻辑运算建立 if/else、else-if 和 switch 的完整决策模型，并用边界表验证分支。
+demo: false
+math: false
+sourceUrl: "https://www.sbcr.jp/product/4797392593/"
+draft: false
+---
+
+import {
+  EcpConditionalBoundaryLab,
+  EcpConditionalBranchFlow,
+  EcpConditionalTruthMap,
+} from "@/components/mdx/easy-cpp-5e/diagrams/conditional-processing";
+
+<Objectives>
+
+- 能解释关系与逻辑表达式如何产生布尔条件，并画出短路判断路径
+- 能实现互斥的 if/else-if/else 与 switch 分支，说明每个输入只落入哪个出口
+- 能设计边界测试表，发现条件重叠、空洞、悬空 else 和意外贯穿
+
+</Objectives>
+
+## 为什么分支设计先从输入集合开始
+
+条件语句让程序根据当前状态选择不同路径。初学者常直接写 `if`，再一边测试一边补 `else if`；这种写法容易让区间重叠或漏掉边界。更稳妥的方法是先列输入集合及预期分类，再把每一类翻译为布尔条件。
+
+<Term def="求值结果可解释为 true 或 false、用于决定控制流方向的表达式。">条件</Term>
+
+以考试成绩为例，输入域可以先划分为 `[90,100]`、`[60,89]`、`[0,59]` 和非法区间。只有分类明确，才知道 90、60、0、100、-1 与 101 分别应走哪条路径。
+
+<EcpConditionalTruthMap />
+
+## 关系运算产生真假结果
+
+`< <= > >= == !=` 比较两个值，结果类型是 `bool`。`=` 是赋值，`==` 才是相等比较；二者字符相近但责任完全不同。
+
+<Term def="比较两个值的大小或相等关系并产生 bool 结果的运算符。">关系运算符</Term>
+
+```cpp
+bool adult = age >= 18;
+bool validScore = score >= 0 && score <= 100;
+bool different = current != previous;
+```
+
+浮点相等比较还受表示误差影响，不能把所有计算结果都机械地用 `==` 判断。当前阶段先掌握整型边界，再在涉及浮点算法时定义容差与误差模型。
+
+<Callout type="trap" title="陷阱：if (score = 100) 是相等判断">
+  `=` 会修改 score，赋值表达式的结果又可转成真假，代码可能编译并总走真分支。写比较应使用 `==`；同时开启编译器警告，并把复杂条件命名为 bool 变量。
+</Callout>
+
+## 逻辑运算组合多个条件
+
+逻辑与 `&&` 要求两侧都为真，逻辑或 `||` 只需一侧为真，逻辑非 `!` 反转真假。`&&` 和 `||` 会短路：结果一旦由左侧确定，右侧不再求值。
+
+<Term def="用 &&、|| 或 ! 组合及反转布尔条件的运算符；&& 与 || 具有短路行为。">逻辑运算符</Term>
+
+```cpp
+if (index >= 0 && index < size) {
+    std::cout << values[index] << '\n';
+}
+```
+
+先检查 `index >= 0`，再检查上界。若右侧包含数组访问或函数调用，短路可保护前置条件，但不要把关键业务副作用藏在右侧；条件应负责判断，状态变化应清楚地写在分支体中。
+
+## if/else 把路径组织成二叉选择
+
+`if` 语句在条件为真时执行块；配套 `else` 处理假路径。总是写花括号，即使块里只有一条语句，也能避免后来增加语句时产生视觉缩进与真实作用域不一致。
+
+<Term def="根据一个条件在真分支与可选假分支之间选择控制流的语句。">if/else</Term>
+
+```cpp
+if (temperature >= 30) {
+    std::cout << "hot\n";
+} else {
+    std::cout << "not hot\n";
+}
+```
+
+没有花括号时，`else` 与最近一个尚未配对的 `if` 结合，形成悬空 else 风险。明确块结构既服务编译器，也服务维护者。
+
+## else-if 链按顺序选择第一个命中项
+
+分数分类可以写成从最严格上界开始的互斥链。前一条件失败后，后续分支已经隐含部分事实；因此第二项只需判断 `score >= 60`，不必再次写 `score < 90`。
+
+```cpp
+if (score < 0 || score > 100) {
+    std::cout << "invalid\n";
+} else if (score >= 90) {
+    std::cout << "A\n";
+} else if (score >= 60) {
+    std::cout << "pass\n";
+} else {
+    std::cout << "retry\n";
+}
+```
+
+顺序本身就是规则：若先写 `score >= 60`，95 会提前命中“pass”，永远到不了 A。每个输入只执行第一个为真的分支，因而要用边界表证明顺序覆盖完整且无意外遮蔽。
+
+<EcpConditionalBranchFlow />
+
+## switch 适合一个离散值的精确匹配
+
+当选择依据是同一个整型或枚举值与多个常量匹配时，`switch` 语句比长串 `if (command == ...)` 更直接。每个 `case` 是入口；通常用 `break` 离开 switch，`default` 处理未知值。
+
+<Term def="按同一离散表达式与多个常量 case 精确匹配来选择入口的控制语句。">switch</Term>
+
+```cpp
+switch (command) {
+case 1:
+    std::cout << "start\n";
+    break;
+case 2:
+    std::cout << "stop\n";
+    break;
+default:
+    std::cout << "unknown\n";
+    break;
+}
+```
+
+省略 `break` 会继续执行后续 case，称为贯穿。它有少量刻意用途，例如多个 case 共享处理，但必须结构明显并加 `[[fallthrough]]` 表达意图。对范围判断、复合条件或不同变量组合，仍应使用 if 系列。
+
+<Callout type="trap" title="陷阱：switch 会在执行一个 case 后自动停止">
+  case 只是入口标签，不是隐式块。没有 break、return 或其他跳转就会继续进入后续 case；应把每个出口写明，并为未知值保留 default 策略。
+</Callout>
+
+## 边界表比随机测试更有证明力
+
+对区间 `[0,59]`、`[60,89]`、`[90,100]`，至少测试每个边界两侧：-1、0、59、60、89、90、100、101。随机输入可能多次落在区间内部，却一直错过真正容易出错的等号位置。
+
+运行前先预测每个值应命中的分支，并做四列记录：输入、预期分支、实际分支、若不一致首先被破坏的条件。例如 90 若落入 pass，不要只把输出改成 A；应回到分支顺序，检查更宽的 `>= 60` 是否提前出现。预测把测试从“看看会发生什么”变成对规则的反证尝试，实际结果只负责验证或推翻预测。
+
+<EcpConditionalBoundaryLab />
+
+边界测试还要记录预期分支名，而不只看输出“似乎合理”。当规则变成等级、折扣或权限时，分支标签和输入集合就是可审查契约。
+
+还要检查每个分支是否可达：若一项更宽的条件排在前面，后续窄条件可能永远不会执行。可达性检查与边界检查共同回答两件事：合法输入有没有出口，以及每个已写出口是否真的有输入能够到达。
+
+## 三步构造完整决策
+
+<Stepper>
+  <Step title="第一步：划分输入集合">
+    先写合法域、非法域和互斥分类，列出每个边界值，不急着写 if。用真值组合确认关系与逻辑条件表达同一集合。
+
+    <EcpConditionalTruthMap />
+  </Step>
+  <Step title="第二步：选择控制结构">
+    范围与复合条件用 if/else-if；单个离散值精确匹配用 switch。写清花括号、break、default 与每个出口。
+
+    <EcpConditionalBranchFlow />
+  </Step>
+  <Step title="第三步：跑边界而非碰运气">
+    对每个阈值测试前一值、阈值和后一值，记录实际命中分支；再加入非法输入证明默认或拒绝路径可达。
+
+    <EcpConditionalBoundaryLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 条件是可解释为 true/false 的表达式，分支设计应先划分输入集合再编码
+- 关系运算产生 bool，逻辑运算组合条件；`&&` 与 `||` 短路但不应隐藏关键副作用
+- if/else 处理真假路径，else-if 链按顺序选择第一个命中项，花括号消除结构歧义
+- switch 适合同一离散值的常量匹配，case 不会自动停止，break 与 default 必须有明确策略
+- 边界值比大量随机内部值更容易发现 `<`/`<=`、分支顺序和非法域错误
+
+<Exercises>
+  1. **问题 1：修正赋值条件。** `if (count = 0)` 实际做什么，正确的相等判断是什么？
+
+  <Answer question="if (count = 0) 为什么不是比较？">它把 0 赋给 count，赋值结果 0 再转换为 false，所以既修改状态又不进入真分支。相等比较应写 `if (count == 0)`；开启警告并把条件命名也能减少此类错误。</Answer>
+
+  2. **问题 2：证明分数分类。** 为什么 else-if 链必须先判断 `score >= 90` 再判断 `score >= 60`？
+
+  <Answer question="分数阈值为什么要从高到低排列？">链只执行第一个为真的分支。若先判断 >=60，所有 90 以上分数也会提前命中 pass，A 分支不可达。高阈值先判断后，失败事实自然缩小后续输入域，使分支互斥。</Answer>
+
+  3. **问题 3：设计边界表。** 针对合法分数 0 到 100 和 60、90 两个阈值，列出最小高价值样例。
+
+  <Answer question="分数规则的高价值边界样例有哪些？">至少包含 -1、0、59、60、89、90、100、101，分别覆盖下界外、下界、阈值两侧、上界和上界外；每个样例应记录预期分支，而不是只观察一段文本。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="条件">产生真假结果并决定控制流方向的表达式。</GlossaryItem>
+  <GlossaryItem term="关系运算符">比较大小或相等关系并产生 bool 的运算符。</GlossaryItem>
+  <GlossaryItem term="逻辑运算符">组合或反转条件的 &&、|| 与 !。</GlossaryItem>
+  <GlossaryItem term="if/else">按一个条件在真、假路径间选择的语句。</GlossaryItem>
+  <GlossaryItem term="switch">按一个离散值与多个常量 case 匹配入口的语句。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="やさしいC++ 第5版, Lesson 5 場合に応じた処理"
+  adaptedUrl="https://www.sbcr.jp/product/4797392593/"
+/>

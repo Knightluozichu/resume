@@ -1,0 +1,293 @@
+---
+title: "Chapter 5：使用结构体组织相关数据（Using Structs to Structure Related Data）"
+type: A
+section: Rust 程序设计语言 · 领域数据建模
+order: 5
+description: 对齐官方第 5 章：定义和实例化命名、元组与类单元结构体，掌握字段简写、更新语法和所有权，并通过 Rectangle 学习 Debug、方法和关联函数。
+demo: false
+math: false
+sourceUrl: "https://doc.rust-lang.org/book/ch05-00-structs.html"
+draft: false
+---
+
+import {
+  RplRectangleMethodsLab,
+  RplStructShapeLab,
+  RplStructUpdateLab,
+} from "@/components/mdx/rust-programming-language/diagrams/using-structs-to-structure-related-data";
+
+<Objectives>
+
+- 能设计命名字段、tuple struct 或 unit-like struct，并解释类型名和字段名如何把领域约束带入静态类型
+- 能分析 field init shorthand 与 struct update syntax 的所有权效果，判断旧实例发生了哪些字段 move
+- 能实现 `impl` 中的 `&self` 方法、带参数方法和关联函数，并正确使用 `Debug`、`dbg!` 与实例点号调用
+
+</Objectives>
+
+## 为什么相关值需要一个领域类型
+
+宽和高可以作为两个 `u32` 参数传入面积函数，也可以放进 `(u32, u32)`。这两种写法能计算，却没有在类型中表达“这两个值共同组成一个矩形”以及哪个位置是 width。struct 为整体和组成部分命名，使签名本身承担文档和检查职责。
+
+<Term def="由 struct 关键字定义的自定义类型，把多个相关字段组合为一个具有独立类型身份的值。">结构体</Term>
+
+结构体和 tuple 都能容纳不同类型且形状固定；区别在于命名字段不依赖位置记忆。`Rectangle { width, height }` 比 `(30, 50)` 更能防止调用方交换语义，也让后续方法围绕同一个领域类型组织。
+
+## 定义、实例化和修改命名字段
+
+```rust
+struct User {
+    active: bool,
+    username: String,
+    email: String,
+    sign_in_count: u64,
+}
+
+let mut user = User {
+    active: true,
+    username: String::from("ada"),
+    email: String::from("ada@example.com"),
+    sign_in_count: 1,
+};
+
+user.email = String::from("new@example.com");
+```
+
+<Term def="结构体定义中具有名称和静态类型的组成部分；实例通过点号读取字段，整个实例为 mut 时才能给字段重新赋值。">字段</Term>
+
+实例化必须为每个字段提供值，但顺序无需与定义一致。Rust 的可变性作用于整个绑定，不能在普通 struct 实例上只把某个字段声明为 mut；如果需要在共享引用下改变某字段，要等 Chapter 15 的 interior mutability 模式。
+
+结构体通常使用拥有类型 `String` 而不是裸 `&str`，让实例独立拥有数据并覆盖整个实例寿命。字段存引用是合法的，但必须通过生命周期参数证明引用不会比来源活得更久，Chapter 10 再完成这一模型。
+
+## 字段初始化简写减少重复，不改变语义
+
+<Term def="当局部变量或参数名与字段名相同时，在结构体字面量中只写一次名称，等价于 field: field。">字段初始化简写</Term>
+
+```rust
+fn build_user(email: String, username: String) -> User {
+    User {
+        active: true,
+        username,
+        email,
+        sign_in_count: 1,
+    }
+}
+```
+
+`username` 简写等价于 `username: username`，仍按值把参数 move 进字段。简写只是消除名称重复，不会 clone，也不会让函数保留参数所有权。
+
+## Struct update 会按字段执行 move 或 Copy
+
+<Term def="在结构体字面量末尾使用 `..base`，从同类型旧实例填充未显式提供的字段；非 Copy 字段会 move。">结构体更新语法</Term>
+
+```rust
+let user2 = User {
+    email: String::from("other@example.com"),
+    ..user1
+};
+```
+
+`..user1` 必须位于末尾。此例中 `username: String` 从 user1 move 到 user2，而 `active` 和 `sign_in_count` 是 Copy；因此 user1 发生 partial move，不能再整体使用，但未移动字段可按规则继续访问。若同时为 user2 提供新 username 和 email，剩余字段全是 Copy，user1 整体仍有效。
+
+<RplStructUpdateLab />
+
+切换是否显式替换两个 String 字段，先预测 user1 的有效性。该实验揭示 update 语法不是“复制模板”：每个未覆盖字段遵循普通赋值的 move/Copy 规则。
+
+<Callout type="trap" title="陷阱：把 `..base` 当成对象展开或深拷贝">
+  Rust 不会自动 clone 非 Copy 字段。需要保留两个独立 owner 时应显式 clone 所需字段并承担成本；只想消费旧实例构造新实例时，move 正是更高效且准确的语义。
+</Callout>
+
+## Tuple struct 与 unit-like struct 提供独立类型身份
+
+<Term def="具有类型名但字段只按位置编号的结构体，适合整体含义明确而逐字段命名冗余的固定数据。">tuple struct</Term>
+
+```rust
+struct Color(i32, i32, i32);
+struct Point(i32, i32, i32);
+
+let black = Color(0, 0, 0);
+let origin = Point(0, 0, 0);
+```
+
+Color 和 Point 的内部形状相同，仍是两个不兼容类型。tuple struct 常用于 newtype：给原始表示增加单位、权限或领域身份，防止把同形状的值混传。
+
+<Term def="没有字段、大小为零但仍拥有独立类型身份的结构体，可用于标记状态或承载 trait 实现。">unit-like struct</Term>
+
+```rust
+struct AlwaysEqual;
+let marker = AlwaysEqual;
+```
+
+unit-like struct 不需要花括号或圆括号。它没有运行时数据也能作为静态类型参与 trait、泛型和状态建模。
+
+<RplStructShapeLab />
+
+切换三种形状，比较实例化和访问方式。选择标准不是“哪个语法短”，而是使用者是否需要通过字段名理解数据、是否只需要位置语义、或是否只需要类型身份而不需要存储。
+
+## 用 Rectangle 把分散参数重构为一个值
+
+先看三个版本的签名：
+
+```rust
+fn area_separate(width: u32, height: u32) -> u32 {
+    width * height
+}
+
+fn area_tuple(dimensions: (u32, u32)) -> u32 {
+    dimensions.0 * dimensions.1
+}
+
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+fn area_struct(rectangle: &Rectangle) -> u32 {
+    rectangle.width * rectangle.height
+}
+```
+
+分散参数没有表达关联，tuple 表达整体却隐藏位置含义，Rectangle 同时命名整体和字段。`&Rectangle` 只读借用，让调用方在面积计算后仍拥有实例。
+
+## Derived Debug 让开发者观察结构体
+
+普通 `{}` 使用 `Display`，结构体没有唯一面向用户的默认格式，因此编译器不会猜。开发调试可显式派生 `Debug` 并用 `{:?}` 或 `{:#?}`。
+
+<Term def="编译器根据字段自动生成指定 trait 实现的属性语法；本章用 `#[derive(Debug)]` 生成开发者调试格式。">derived trait</Term>
+
+```rust
+#[derive(Debug)]
+struct Rectangle {
+    width: u32,
+    height: u32,
+}
+
+let rect = Rectangle { width: 30, height: 50 };
+println!("{rect:#?}");
+
+let scale = 2;
+let rect = Rectangle {
+    width: dbg!(30 * scale),
+    height: 50,
+};
+```
+
+`dbg!` 会把文件、行号、表达式和值写到 stderr，并把表达式值原样返回；它取得表达式所有权再返回，因此可嵌入初始化，但生产路径不应长期遗留无计划输出。
+
+<Callout type="trap" title="陷阱：用 Debug 格式当稳定协议">
+  `Debug` 面向开发者，不承诺适合作为用户界面、日志协议或序列化格式。外部契约应实现明确 Display 或使用版本化序列化；`derive(Debug)` 也可能暴露敏感字段，记录前要审查数据分类。
+</Callout>
+
+## 方法把行为放进类型的 impl 块
+
+<Term def="定义在 `impl Type` 中、以 self、&self 或 &mut self 为第一个参数，并通过实例点号调用的函数。">方法</Term>
+
+```rust
+impl Rectangle {
+    fn area(&self) -> u32 {
+        self.width * self.height
+    }
+
+    fn can_hold(&self, other: &Self) -> bool {
+        self.width > other.width && self.height > other.height
+    }
+}
+
+let outer = Rectangle { width: 30, height: 50 };
+let inner = Rectangle { width: 10, height: 40 };
+assert_eq!(outer.area(), 1500);
+assert!(outer.can_hold(&inner));
+```
+
+`&self` 是 `self: &Self` 的简写，只读借用实例；需要修改时用 `&mut self`，需要消费实例时用 `self`。Rust 会在方法调用处自动完成必要的引用或解引用，使 `outer.area()` 比 `Rectangle::area(&outer)` 更自然。
+
+方法可以与字段同名：`fn width(&self) -> bool` 通过圆括号调用，`rect.width` 仍读取字段。这常用于只读 getter 或把字段包进验证逻辑。Rust 也允许把同一类型的方法拆进多个 `impl Rectangle` 块，语义与集中在一个块中相同；泛型和 trait implementation 会让多块组织更常见。点号调用时，编译器会在 receiver 上尝试自动引用与自动解引用，寻找匹配的 `self`、`&self` 或 `&mut self` 签名，但不会绕过所有权和借用规则。
+
+## 关联函数没有 self，通过类型调用
+
+<Term def="定义在 impl 块中但没有 self 参数的函数，常用作构造器或类型命名空间下的操作，通过 `Type::function` 调用。">关联函数</Term>
+
+```rust
+impl Rectangle {
+    fn square(size: u32) -> Self {
+        Self {
+            width: size,
+            height: size,
+        }
+    }
+}
+
+let square = Rectangle::square(24);
+```
+
+`Self` 是当前 impl 类型的别名。`String::from`、`String::new` 也是关联函数；没有 `self` 就不能从某个实例点号调用。
+
+<RplRectangleMethodsLab />
+
+切换 `area`、`can_hold` 和 `square`，观察签名、调用形式和 receiver。前两者借用实例，square 只接收尺寸并构造新值，所以属于关联函数。
+
+<Callout type="trap" title="陷阱：所有函数都写成消费 self">
+  `fn area(self)` 会在一次计算后 move 整个 Rectangle，调用方不能继续使用。先按行为选择 receiver：只读用 `&self`，修改用 `&mut self`，确实要转移或销毁实例才用 `self`。
+</Callout>
+
+## 三步形成结构体设计框架
+
+<Stepper>
+  <Step title="第一步：选择数据形状">
+    需要字段语义时用命名 struct，只需要类型名和位置时用 tuple struct，只需要零大小类型身份时用 unit-like struct。让类型表达领域差异。
+
+    <RplStructShapeLab />
+  </Step>
+  <Step title="第二步：逐字段追踪所有权">
+    对字面量简写和 `..base` 展开每个字段：Copy 还是 move，旧实例是否 partial move，是否确实需要 clone。不要把简写误解为不同语义。
+
+    <RplStructUpdateLab />
+  </Step>
+  <Step title="第三步：匹配 receiver 与行为">
+    只读查询用 `&self`，修改用 `&mut self`，消费用 `self`；不依赖实例的构造或辅助操作写成关联函数。用方法签名明确所有权契约。
+
+    <RplRectangleMethodsLab />
+  </Step>
+</Stepper>
+
+从 **定义与实例化结构体** 开始，本章同时比较 named-field、**元组结构体** 与 **类单元结构体**，再逐步收紧 field ownership、update move、method receiver 与 associated constructor，最终把数据和 invariant 放回同一 type boundary。
+
+## 小结
+
+- struct 为相关值建立独立类型身份；命名字段避免位置含义丢失，tuple/unit-like struct 分别适合位置数据和零字段标记
+- 字段初始化简写只是 `field: field` 的省略，仍执行普通 move；struct update 对每个未覆盖字段执行 move 或 Copy
+- Rectangle 重构把 width/height 关系写进类型，函数借用 `&Rectangle` 可以保留调用方所有权
+- `#[derive(Debug)]` 和 `dbg!` 服务开发观察，不应被当作稳定外部格式
+- 方法以 self receiver 绑定实例行为，关联函数没有 self 并通过类型调用；receiver 应准确表达借用、修改或消费
+
+<Exercises>
+  1. **问题 1：追踪 update。** User 有两个 String 字段和两个 Copy 字段；user2 只显式提供新 email，再写 `..user1`。哪些字段 move，之后能否整体使用 user1？
+
+  <Answer question="struct update 为什么可能造成 partial move？">username 没被覆盖，因此 String 从 user1 move 到 user2；active 与 sign_in_count Copy；email 使用新值，旧 user1.email 未移动。user1 发生 partial move，不能再整体使用，但未移动字段仍可在规则允许时访问。若还显式提供新 username，剩余字段全 Copy，user1 整体可保持有效。</Answer>
+
+  2. **问题 2：选择 struct 形状。** RGB 颜色、世界坐标虽然都是三个 i32，为什么用两个 tuple struct 比都写 `(i32, i32, i32)` 更安全？何时应进一步改为命名字段？
+
+  <Answer question="类型名和字段名分别提供什么约束？">Color 与 Point 是不同静态类型，函数不能把坐标误当颜色，即使内部表示相同。若三个位置含义还容易混淆，或调用方经常按名称读取，就改为命名字段如 red/green/blue、x/y/z；类型名保护整体，字段名保护组成部分语义。</Answer>
+
+  3. **问题 3：选择 receiver。** `area`、`resize` 和 `into_square` 分别更适合 `&self`、`&mut self` 还是 `self`？
+
+  <Answer question="方法 receiver 如何表达所有权契约？">area 只读取字段，用 &self；resize 修改现有尺寸，用 &mut self；into_square 若语义是消费当前矩形并返回新值，可用 self。若 square 完全不依赖实例，只需 size 构造，则应是没有 self 的关联函数。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="结构体">把相关字段组合为一个独立自定义类型的数据结构。</GlossaryItem>
+  <GlossaryItem term="字段">结构体中具有名称或位置和静态类型的组成部分。</GlossaryItem>
+  <GlossaryItem term="字段初始化简写">字段名与变量名相同时省略重复 `field: field` 的语法。</GlossaryItem>
+  <GlossaryItem term="结构体更新语法">用 `..base` 补齐未指定字段，并逐字段执行 move 或 Copy 的语法。</GlossaryItem>
+  <GlossaryItem term="tuple struct">有类型名、按位置访问字段的结构体。</GlossaryItem>
+  <GlossaryItem term="unit-like struct">没有字段但具有独立类型身份的零大小结构体。</GlossaryItem>
+  <GlossaryItem term="derived trait">由编译器按字段自动生成指定 trait 实现的属性机制。</GlossaryItem>
+  <GlossaryItem term="方法">impl 中带 self receiver、通过实例点号调用的函数。</GlossaryItem>
+  <GlossaryItem term="关联函数">impl 中不带 self、通过类型命名空间调用的函数。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Rust Programming Language, Chapter 5 Using Structs to Structure Related Data"
+  adaptedUrl="https://doc.rust-lang.org/book/ch05-00-structs.html"
+/>

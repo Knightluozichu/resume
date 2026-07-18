@@ -1,0 +1,332 @@
+---
+title: "第6章：异步、多线程、任务和并行（建议71-89）"
+type: C
+section: "编写高质量代码 · 并发与并行"
+order: 6
+description: "覆盖异步与线程场景、Semaphore/lock、线程生命周期/优先级/停止和数量、ThreadPool/Task，以及Parallel、PLINQ、异常、桌面UI线程、加速边界与锁竞争。"
+demo: true
+math: false
+sourceUrl: "https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html"
+draft: false
+---
+
+import { CqcCoordinationLab, CqcExecutionModelLab, CqcParallelContractLab } from "@/components/mdx/csharp-quality-code/diagrams/asynchrony-multithreading-tasks-and-parallelism";
+
+<Objectives>
+
+- 能区分I/O asynchrony、CPU parallelism、concurrency和thread affinity，设计Task、Thread、Parallel或UI dispatcher执行模型
+- 能比较SemaphoreSlim、private lock、background/priority flags与CancellationToken，判断同步identity、并发预算和停止协议
+- 能分析Parallel、PLINQ与Task.WhenAll的partition、ordering、exception和shared-state成本，并计算是否值得并行
+
+</Objectives>
+
+## 为什么“更并发”不等于“更快”或“更异步”
+
+async让等待不占用调用thread，multithreading允许多个execution flows，parallelism让多个CPU cores同时计算；三者可以组合，也可以完全独立。一个async file call可能只有一个thread在执行，一个CPU loop可以用Parallel但没有async，UI app还必须把最终mutation送回single UI thread。
+
+先预测：启动Thread后下一行能否假设它已执行；把Thread设为background能否保证程序退出前finally运行；Parallel loop里每次都锁同一个gate是否仍会加速。三个答案都是否。设计从workload、ownership和budget开始，不从API名字开始。
+
+<Term def="系统允许同时in-flight的operations、threads、tasks、connections和CPU workers上限，以及达到上限后的等待/拒绝策略。">concurrency budget</Term>
+
+## Execution Model与Thread Lifecycle（建议71、74-80）
+
+### 建议71：区分异步和多线程应用场景
+
+I/O-bound operation使用真正的async API，让OS completion在结果就绪时恢复continuation；不要用`Task.Run`包同步database/network调用假装scalable。CPU-bound work若需要保持UI/request thread responsive，可在明确application boundary调度到ThreadPool；若要加速，需数据可分、work足够大且core有余量。
+
+```csharp
+public async Task<OrderDto> LoadAsync(OrderId id, CancellationToken cancellationToken)
+{
+    Order order = await _repository.LoadAsync(id, cancellationToken).ConfigureAwait(false);
+    return Map(order);
+}
+```
+
+异步不承诺换thread，也不承诺并行；await前后在哪个context恢复取决于environment与awaitable。用latency、throughput、worker count和downstream saturation验收。
+
+### 建议74：警惕线程的IsBackground
+
+foreground thread会阻止process正常退出，background thread不会；process只剩background threads时runtime可以结束它们，不保证finally、flush或transaction完成。因此IsBackground不是lifecycle management，critical work必须由host拥有、发出cancellation并await/join到明确deadline。
+
+```csharp
+using var shutdown = new CancellationTokenSource();
+Task worker = RunWorkerAsync(shutdown.Token);
+
+shutdown.Cancel();
+await worker.WaitAsync(TimeSpan.FromSeconds(10));
+```
+
+### 建议75：警惕线程不会立即启动
+
+`Thread.Start`只让thread进入可调度状态，实际运行时刻由OS scheduler决定；创建Task也不代表continuation立刻执行。不能用Sleep“等它启动”，应使用Task completion、event/signal或barrier表达ready handoff。
+
+```csharp
+var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+Thread thread = new(() =>
+{
+    InitializeThreadOwnedState();
+    ready.SetResult();
+    RunLoop();
+});
+thread.Start();
+await ready.Task;
+```
+
+### 建议76：警惕线程的优先级
+
+ThreadPriority是scheduler hint，不是correctness、deadline或ordering guarantee，且平台行为不同。提高priority可能starve其他work，降低priority也可能让shutdown迟迟不完成。real-time需求要用相应OS/runtime机制与完整资源预算，普通app先修复blocking、contention和work granularity。
+
+### 建议77：正确停止线程
+
+使用cooperative cancellation：owner请求停止，worker在safe points观察token，退出loop、释放资源并由owner await/join。不要使用Thread.Abort之类的异步强杀来打断任意instruction，它会破坏invariant；blocking API也必须支持token、timeout或可关闭handle。
+
+<Term def="owner发出CancellationToken信号，worker在可保持invariant的safe point观察、unwind并由owner等待完成的停止协议。">cooperative cancellation</Term>
+
+```csharp
+while (!cancellationToken.IsCancellationRequested)
+{
+    WorkItem item = await channel.Reader.ReadAsync(cancellationToken);
+    await ProcessAsync(item, cancellationToken);
+}
+```
+
+把cancellation与failure分开：host-requested OperationCanceledException不是error；partial side effects、stop latency和cleanup仍需测试。
+
+### 建议78：应避免线程数量过多
+
+每个OS thread消耗stack、scheduler bookkeeping与context switching；CPU-bound runnable threads远多于cores通常降低throughput，blocking threads过多则耗尽ThreadPool并推高latency。使用bounded Channel/Semaphore、connection pool和rate limit建立end-to-end concurrency budget，不要为每个item创建Thread。
+
+### 建议79：使用ThreadPool或BackgroundWorker代替Thread
+
+对短期、无thread affinity的work复用ThreadPool，避免手工thread成本；BackgroundWorker是旧WinForms/WPF event-based compatibility API，新代码更适合Task、CancellationToken和`IProgress<T>`。只有COM apartment、长期blocking pump、native callback affinity等明确需求才创建dedicated Thread。
+
+### 建议80：用Task代替ThreadPool
+
+Task是可组合的async result/fault/cancellation abstraction，支持await、WhenAll、continuations和structured ownership，比直接QueueUserWorkItem更容易观察完成与异常。Task不等于Thread：async Task可在等待期间不占worker，同一thread也会执行多个tasks。
+
+```csharp
+Task<Report> reportTask = BuildReportAsync(input, cancellationToken);
+Task<Summary> summaryTask = BuildSummaryAsync(input, cancellationToken);
+
+await Task.WhenAll(reportTask, summaryTask);
+return new Package(await reportTask, await summaryTask);
+```
+
+避免fire-and-forget；每个Task要被caller await或交给明确supervisor。
+
+<Stepper>
+  <Step title="切换I/O、CPU、dedicated thread、UI与legacy worker">
+    <CqcExecutionModelLab />
+  </Step>
+  <Step title="标出等待资源、执行资源和owner">
+    说明是OS I/O completion还是CPU worker，谁持有Task/thread，in-flight上限和shutdown await在哪里。
+  </Step>
+  <Step title="用负载和shutdown场景验收">
+    测latency/throughput/worker count、dependency pool saturation，并在work进行中停止host确认无丢失Task与资源泄漏。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="把同步I/O放进Task.Run就变成可扩展异步">
+它只是让ThreadPool worker阻塞，负载上升仍会耗尽threads。优先使用dependency提供的native async API，并对并发连接设置bounded budget。
+</Callout>
+
+## Synchronization Identity与Coordination（建议72-73）
+
+### 建议72：在线程同步中使用信号量
+
+Semaphore/SemaphoreSlim最适合限制同时进入某resource的数量，例如最多8个remote calls；初始count为1时也可互斥，但不自动表达复杂object invariant。process内async flow优先`SemaphoreSlim.WaitAsync`，cross-process命名semaphore才用OS primitive。
+
+```csharp
+private readonly SemaphoreSlim _slots = new(initialCount: 8, maxCount: 8);
+
+public async Task<Result> CallAsync(Request request, CancellationToken cancellationToken)
+{
+    await _slots.WaitAsync(cancellationToken);
+    try { return await _client.SendAsync(request, cancellationToken); }
+    finally { _slots.Release(); }
+}
+```
+
+只有成功wait后才release，防止count漂移；dispose lifecycle也要与所有waiters协调。
+
+### 建议73：避免锁定不恰当的同步对象
+
+lock identity必须private、stable且只由同一invariant owner持有。不要lock `this`、public object、`typeof(T)`、interned string或可替换field，外部代码可能拿同一identity造成deadlock/priority inversion。lock scope内不做I/O、长计算或await。
+
+<Term def="所有保护同一invariant的参与者共享、外部无法意外持有且lifetime稳定的private gate对象。">synchronization identity</Term>
+
+```csharp
+private readonly object _gate = new();
+
+public void Add(Balance delta)
+{
+    lock (_gate)
+        _balance = _balance.Add(delta);
+}
+```
+
+lock保护invariant而非“某个变量”。先列出被共同更新的fields和合法state，再选single owner、immutable snapshot、Interlocked或lock。
+
+<Stepper>
+  <Step title="切换Semaphore、lock、background、priority与cancellation">
+    <CqcCoordinationLab />
+  </Step>
+  <Step title="区分limit、mutual exclusion与lifecycle signal">
+    Semaphore限制并发数，lock保护短同步invariant，token请求协作停止；background和priority flags都不提供同步。
+  </Step>
+  <Step title="注入contention、cancel与process exit">
+    断言peak active count、gate hold time、stop latency和resource cleanup；correctness不得依赖thread priority或立即调度。
+  </Step>
+</Stepper>
+
+## Parallel、PLINQ、Fault与UI Boundary（建议81-89）
+
+### 建议81：使用Parallel简化同步状态下Task的使用
+
+`Parallel.For/ForEach`适合finite、synchronous、CPU-bound且iterations相对独立的loop，runtime负责partition和worker scheduling，比手工创建一组Tasks更简洁。它通常同步阻塞caller直到完成，不适合body里await I/O；async fan-out用Task/WhenAll并设置并发上限。
+
+```csharp
+Parallel.ForEach(
+    partitions,
+    new ParallelOptions { MaxDegreeOfParallelism = Environment.ProcessorCount },
+    partition => Compute(partition));
+```
+
+### 建议82：Parallel简化但不等同于Task默认行为
+
+Parallel API可能使用calling thread参与工作，采用dynamic partitioning并在调用返回前汇合；Task代表单个可await completion，不天然要求parallel execution。scheduler、blocking、cancellation和exception shape都不同，不能把Parallel.For理解成`Task.WhenAll`语法糖。
+
+<Term def="Task/Parallel/PLINQ运行时携带的scheduler、SynchronizationContext、ExecutionContext、cancellation与ownership信息。">execution context</Term>
+
+### 建议83：小心Parallel中的陷阱
+
+iteration order默认不保证；shared counter、Random实例、non-thread-safe collection和external side effects会race；tiny body的partition/scheduling overhead可能超过work。使用thread-local state与final reducer，或让每个partition产生独立result再合并。
+
+```csharp
+long total = 0;
+Parallel.ForEach(
+    ranges,
+    () => 0L,
+    (range, _, local) => local + Sum(range),
+    local => Interlocked.Add(ref total, local));
+```
+
+### 建议84：使用PLINQ
+
+PLINQ适合large、pure、in-memory query，`AsParallel`后provider负责partition/merge。ordering默认可放弃以提速，需要稳定顺序时`AsOrdered`会增加成本。不要对IQueryable remote provider混淆PLINQ，也不要在query中做I/O或mutable side effects。
+
+```csharp
+Result[] results = values
+    .AsParallel()
+    .WithDegreeOfParallelism(Environment.ProcessorCount)
+    .Select(ComputePureResult)
+    .ToArray();
+```
+
+### 建议85：Task中的异常处理
+
+Task fault被保存在Task中，await会在await point重新抛出；必须await/observe每个owned Task。`WhenAll`用于等待全部完成，但需要完整fault inventory时还应检查combined task/individual tasks，不要只处理第一条表象。OperationCanceledException按matching token与policy分类。
+
+```csharp
+Task all = Task.WhenAll(tasks);
+try
+{
+    await all;
+}
+catch
+{
+    IReadOnlyList<Exception> faults = tasks
+        .Where(task => task.IsFaulted)
+        .SelectMany(task => task.Exception!.Flatten().InnerExceptions)
+        .ToArray();
+    throw new BatchFailedException(faults);
+}
+```
+
+### 建议86：Parallel中的异常处理
+
+多个iterations可能同时失败，Parallel/PLINQ通常以AggregateException呈现；catch应在parallel operation boundary，flatten/classify已启动工作的faults，并决定是否整个operation失败。不要在每个iteration吞异常继续污染shared state；需要per-item result时让body返回显式outcome。
+
+### 建议87：区分WPF和WinForm的线程模型
+
+两者都要求UI object主要由创建它的UI thread访问，但marshalling API不同：WPF使用Dispatcher/DispatcherObject，WinForms使用Control.Invoke/BeginInvoke及其modern async variants；SynchronizationContext可提供共同抽象。后台work只计算data，最终最小UI mutation回到UI context。
+
+```csharp
+DataModel model = await LoadAndComputeAsync(cancellationToken);
+await dispatcher.InvokeAsync(() => ViewModel.Apply(model));
+```
+
+不要在UI thread `.Result`/`.Wait()`阻塞等待可能capture context的Task，会freeze甚至deadlock。library code不应依赖UI context，application layer负责marshal。
+
+### 建议88：并行并不总是速度更快
+
+speedup受sequential fraction、partition、merge、cache/memory bandwidth、allocation与contention限制；small input和cheap body常被overhead吞没。必须与optimized sequential baseline比较，并在representative hardware/data上测wall time、CPU、GC和tail latency。
+
+<Term def="每个parallel work item包含的有效计算量相对调度、partition、synchronization和merge overhead的比例。">parallel grain</Term>
+
+### 建议89：在并行方法体中谨慎使用锁
+
+所有iterations竞争同一lock会把parallel loop串行化并增加context switching。优先thread-local accumulator、partitioned data、immutable input、Interlocked或concurrent collection；若必须lock，缩小protected state与hold time，并用contention trace证明收益仍为正。
+
+```csharp
+var locals = new ConcurrentBag<PartialResult>();
+Parallel.ForEach(partitions, partition =>
+{
+    PartialResult local = Compute(partition);
+    locals.Add(local);
+});
+Result result = Merge(locals);
+```
+
+<Stepper>
+  <Step title="切换Parallel、WhenAll、PLINQ、UI marshal与parallel lock">
+    <CqcParallelContractLab />
+  </Step>
+  <Step title="标出partition、ordering、fault和shared state">
+    写明输入如何切分、结果顺序是否必要、全部fault如何observe，以及body是否pure或通过local reduction合并。
+  </Step>
+  <Step title="与sequential baseline做break-even测试">
+    对多组input size测wall/CPU/GC/contention，验证cancellation、exceptions和UI responsiveness，不只展示最佳平均值。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="Parallel.For里加lock即可兼得安全和加速">
+安全可能成立，但所有iterations在同一gate排队会失去parallelism。先消除shared writes或使用local reduction，再以contention与wall-time证据决定。
+</Callout>
+
+## 本章回顾：先定Work Shape，再定Execution Primitive
+
+1. async处理wait，Parallel处理可分CPU work，Thread只为明确affinity/lifecycle需求；Task是completion/fault abstraction而非thread别名。
+2. IsBackground、Start和Priority都不是correctness guarantee；owner通过token请求停止并await/join完成。
+3. Semaphore限制并发数，private lock保护短invariant；两者都服从end-to-end concurrency budget。
+4. Parallel同步汇合且partition loop，Task.WhenAll组合async operations，PLINQ处理large pure in-memory query。
+5. Task/Parallel faults必须完整observe，UI mutation回到对应dispatcher，未知fault由owner boundary决策。
+6. parallel speedup必须超过partition/merge/contention成本，shared lock往往是最直接的反证。
+
+<Exercises>
+
+**问题 1：一个Web API要并发调用1000个远程服务请求，应使用Parallel.For还是Task.WhenAll，怎样限流？**
+
+<Answer>这是I/O wait，使用remote async API和Tasks，不用阻塞式Parallel body。用SemaphoreSlim、bounded Channel或批次把in-flight限制在dependency允许的连接/配额内，再WhenAll当前owned tasks；传递CancellationToken并观察全部fault。负载测试吞吐、tail latency、worker count、connection pool和429/timeout。</Answer>
+
+**问题 2：dedicated worker thread如何证明可以正确启动和停止？**
+
+<Answer>Start后由TaskCompletionSource/signal报告初始化完成，不能Sleep猜测；owner持有CancellationTokenSource，worker在safe point观察并从blocking wait可取消地退出，finally释放thread-owned resources；owner cancel后Join/await到deadline。IsBackground和Priority不参与correctness，测试立即取消、处理中取消和process shutdown。</Answer>
+
+**问题 3：怎样判断一个Parallel或PLINQ改写真的更快且仍正确？**
+
+<Answer>先建立optimized sequential baseline，保证iteration纯或使用thread-local reduction，明确ordering和all-fault policy；在代表性硬件与多组input size测wall time、CPU、GC、partition和lock contention，找到break-even grain。若shared lock、merge或memory bandwidth使加速不稳定，保留sequential或限制degree。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="concurrency budget" definition="允许同时in-flight的tasks、threads、connections和workers上限及超限策略。" />
+  <GlossaryItem term="cooperative cancellation" definition="owner发出token，worker在safe point观察、清理并由owner等待完成的停止协议。" />
+  <GlossaryItem term="synchronization identity" definition="只由同一invariant owner持有、private且stable的共同gate对象。" />
+  <GlossaryItem term="execution context" definition="执行携带的scheduler、SynchronizationContext、ExecutionContext、cancellation与ownership信息。" />
+  <GlossaryItem term="parallel grain" definition="单个work item有效计算量相对调度、同步、partition和merge overhead的比例。" />
+</Glossary>
+
+<Attribution adaptedFrom="编写高质量代码：改善C#程序的157个建议，第6章 异步、多线程、任务和并行，建议71-89" adaptedUrl="https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html" />

@@ -1,0 +1,121 @@
+---
+title: "第1章 新时代的语言"
+type: C
+section: "Rust之道 · 基础与类型"
+order: 1
+description: "从Rust缘起、内存安全、零成本抽象和实用主义出发，追踪源码到产物的执行链，并建立采用Rust的工程判断。"
+demo: true
+math: false
+sourceUrl: "https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53297"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RswEraTradeoffLab, RswCompilationLab, RswAdoptionLab } from "@/components/mdx/rust-way/diagrams/rsw-new-era-language";
+
+<Objectives>
+- 能解释Rust缘起以及内存安全、零成本抽象、实用主义三项设计约束
+- 能描述Rust源码经过宏展开、类型检查、借用检查、优化、代码生成与链接的执行链
+- 能比较手工管理、GC与所有权方案，并判断CLI、服务和系统组件是否适合采用Rust
+</Objectives>
+
+## 从系统语言的两难开始
+
+传统系统语言给程序员直接内存控制，却把悬垂指针、重复释放和数据竞争留到运行期；托管语言用运行时回收降低内存管理负担，却引入停顿、对象布局和资源释放时序方面的约束。Rust缘起于一个更具体的问题：能否让编译器验证资源访问规则，同时保留原生代码的布局和性能控制？<Term def="程序不会解引用悬垂、越界、未初始化或违反别名规则的内存，并以受控方式释放资源。">memory safety</Term>是可检查条件，不是“程序不会崩溃”的泛称。
+
+<RswEraTradeoffLab />
+
+## 设计哲学一：内存安全前移到编译期
+
+所有权把释放责任绑定到值，借用把临时访问变成受约束的引用，生命周期描述引用不能越过被引用值。编译器拒绝无法证明安全的路径，开发者再通过重新设计owner、缩短借用、复制小值或在明确契约下使用unsafe解决。<Term def="把原本可能在运行期发生的内存与并发误用转化为编译诊断的策略。">compile-time safety shift</Term>提高的是失败确定性：同一源码在部署前就暴露问题。
+
+```rust
+fn first_word(text: &str) -> &str {
+    text.split_whitespace().next().unwrap_or("")
+}
+
+let owned = String::from("safe systems");
+let word = first_word(&owned);
+assert_eq!(word, "safe");
+```
+
+返回引用与输入关联，局部`owned`活着时才可使用`word`。这不证明分词符合所有语言规则，却证明引用不会指向已释放的String缓冲区。
+
+## 设计哲学二：零成本抽象
+
+<Term def="不用某项抽象就不承担成本，使用后编译结果不应系统性劣于手写等价底层实现。">zero-cost abstraction</Term>通过泛型单态化、内联、枚举布局优化和迭代器融合落地。它不是“所有抽象都零指令”：分配、动态分派、引用计数和边界检查仍有成本；关键是成本可见，并且高层表达不会被迫引入不需要的运行时。
+
+```rust
+let total: i64 = (0..1_000)
+    .map(|n| n * 2)
+    .filter(|n| n % 3 == 0)
+    .sum();
+
+assert_eq!(total, 333_666);
+```
+
+验证零成本不能只看源码，应在release profile比较基准和汇编，并确认没有把I/O、allocator噪声或debug优化级别混入结论。
+
+## 设计哲学三：实用主义
+
+Rust没有追求纯粹的单一范式。它同时提供表达式、可变绑定、结构体、枚举、Trait、闭包、迭代器、线程、async和unsafe。<Term def="在安全、性能、互操作、开发成本和生态约束之间选择可交付方案的工程立场。">pragmatic systems design</Term>意味着可以在安全外壳中保留很小的unsafe核心，也可以在并行计算中用Rayon而非手写调度器。
+
+## Rust的编译和执行
+
+`cargo run`看似一步，实际包含依赖解析、crate graph构建、宏展开、名称解析、类型检查、借用检查、MIR优化、LLVM代码生成、链接与进程启动。<Term def="从源码、依赖和target配置到可执行产物及其运行环境的完整阶段链。">compilation execution pipeline</Term>帮助判断错误归属：过程宏panic发生在编译期，undefined reference发生在链接期，文件不存在发生在运行期。
+
+```rust
+fn main() {
+    println!("target={} profile=release? {}", std::env::consts::ARCH, !cfg!(debug_assertions));
+}
+```
+
+<RswCompilationLab />
+
+<Stepper>
+  <Step title="比较设计取舍"><RswEraTradeoffLab /></Step>
+  <Step title="记录构建阶段">清空target后运行带详细输出的构建，记录依赖解析、rustc调用、linker和最终二进制路径。</Step>
+  <Step title="选择采用场景"><RswAdoptionLab /></Step>
+</Stepper>
+
+## 语言现状、未来与采用判断
+
+语言现状与未来应从edition、稳定发布、目标平台、核心库、包生态和团队能力判断，而不是从热度推断。<Term def="用于约束编译器、标准库、依赖、target和构建工具版本的可复现环境描述。">toolchain provenance</Term>至少记录`rustc -Vv`、`cargo -V`、target、profile、lockfile和feature。采用Rust的收益通常在长寿命系统组件、并发服务、CLI和安全边界上明显；原型、生态强依赖或团队没有维护能力时，也可能不是当前最优解。
+
+<RswAdoptionLab />
+
+<Callout type="trap" title="Rust安全，所以业务逻辑也不会错">
+借用检查器不会证明税率、权限、协议字段或排序规则正确。内存安全只是正确性的一个维度，仍需类型建模、测试、错误处理、并发活性和外部协议验证。
+</Callout>
+
+<Callout type="trap" title="零成本抽象意味着所有高级API都没有成本">
+`Arc`有原子计数，`Box`可能分配，`dyn Trait`有间接调用，async状态机也占空间。应比较等价语义的实现并测量，不应把设计原则解读为“无需成本模型”。
+</Callout>
+
+## 本章回顾
+
+Rust以编译期证明换取更早失败，以零成本抽象保留系统性能，以实用主义连接生态与外部代码。判断Rust程序必须区分编译、链接和运行阶段，并保存toolchain provenance。语言选择最终服务于明确的资源、并发、互操作和维护约束。
+
+<Exercises>
+**问题 1：Rust与GC语言的安全保证有什么不同？**
+<Answer>GC主要自动回收可达对象图中的内存；Rust所有权在编译期约束释放、借用和跨线程共享。两者都不自动证明业务正确、无死锁或外部资源及时关闭。</Answer>
+
+**问题 2：怎样验证一个迭代器抽象是否接近零成本？**
+<Answer>固定toolchain和release profile，建立语义等价的手写循环，使用基准隔离输入和分配，再检查生成汇编或性能计数器。不能拿debug构建或不同语义实现比较。</Answer>
+
+**问题 3：链接错误属于执行链哪个位置？**
+<Answer>类型和借用检查已经通过，目标代码生成后由linker组合对象与库时失败。应检查native库、symbol、ABI、link search path和target，而不是修改借用关系。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="memory safety" definition="对有效、对齐、初始化、别名与释放规则的内存访问保证。" />
+  <GlossaryItem term="compile-time safety shift" definition="把内存和并发误用前移为编译诊断。" />
+  <GlossaryItem term="zero-cost abstraction" definition="高层抽象不强制引入不需要的运行时成本。" />
+  <GlossaryItem term="pragmatic systems design" definition="在安全、性能、互操作和交付约束间做工程选择。" />
+  <GlossaryItem term="compilation execution pipeline" definition="源码到产物及运行环境的完整阶段链。" />
+  <GlossaryItem term="toolchain provenance" definition="编译器、依赖、target、profile与feature的可复现记录。" />
+</Glossary>
+
+<Attribution adaptedFrom="《Rust编程之道》第1章 新时代的语言" adaptedUrl="https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53297" />

@@ -1,0 +1,208 @@
+---
+title: "足够大的网络什么都能做吗"
+type: C
+section: "足够大的网络什么都能做吗"
+order: 9
+description: "足够大的网络什么都能做吗逐项覆盖正式目录，以概率、向量、交互采样和工具证据重建原书论证。"
+demo: true
+math: true
+sourceUrl: "https://www.wolfram-media.com/products/what-is-chatgpt-doing-and-why-does-it-work/"
+draft: false
+---
+
+import { TcgMain08UniversalNetworkMapLab, TcgMain08UniversalNetworkProbabilityLab, TcgMain08UniversalNetworkEvidenceLab } from "@/components/mdx/this-is-chatgpt/diagrams/tcg-main-08-universal-network";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step, Attribution } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释表达能力、通用逼近、可训练性在本节中的输入、输出与历史语境
+- 能推导并计算四个核心表达式，把概率、向量或工具结果映射到实现状态
+- 能实现并运行三种交互视图，定位温度、上下文、版本或工具证据的首个分叉
+- 能设计正常与单一故障样本，证明“能分别给出表达、优化、数据和计算四层证据，不用通用逼近定理跳过模型如何学到语言结构的问题。”
+
+</Objectives>
+
+## 为什么先冻结语料、模型版本与生成轨迹
+
+<Term def="表达能力是足够大的网络什么都能做吗的第1个可执行证据坐标。">表达能力</Term>、<Term def="通用逼近是足够大的网络什么都能做吗的第2个可执行证据坐标。">通用逼近</Term>、<Term def="可训练性是足够大的网络什么都能做吗的第3个可执行证据坐标。">可训练性</Term>、<Term def="样本效率是足够大的网络什么都能做吗的第4个可执行证据坐标。">样本效率</Term>、<Term def="泛化是足够大的网络什么都能做吗的第5个可执行证据坐标。">泛化</Term>、<Term def="计算资源是足够大的网络什么都能做吗的第6个可执行证据坐标。">计算资源</Term>共同构成本页坐标。区分存在某组权重能够表示函数，与训练过程能用有限数据和计算找到这组权重；容量不是成功的充分解释。
+
+本书写于2023年初，主文用较小的GPT-2与Wolfram Language示例帮助读者观察机制，并以当时公开信息高层解释ChatGPT。阅读时必须分开作者亲自运行的示例、对已知神经网络结构的说明、对ChatGPT工程的合理概括，以及关于语言和意义空间的研究假设。模型产品后来更新，不会反向改变书中的论证分母。
+
+每次实验保存原始文本、token序列、词表版本、模型标识、logit、归一化概率、温度、随机种子与采样token。涉及Wolfram|Alpha时，再保存形式查询、工具原始结果、单位、假设和最终回答。只有这些中间对象可重放，才能区分“模型生成了流畅句子”和“句子中的主张已由计算或来源验证”。
+
+<Callout type="info">**验收命题：** 能分别给出表达、优化、数据和计算四层证据，不用通用逼近定理跳过模型如何学到语言结构的问题。</Callout>
+
+## 数学与计算骨架
+
+$$
+\exists\theta:\|f-f_\theta\|\lt\epsilon
+$$
+
+$$
+\theta^*\in\arg\min L(\theta)
+$$
+
+$$
+\text{capacity}\not\Rightarrow\text{learnability}
+$$
+
+$$
+\text{generalization gap}=R_{test}-R_{train}
+$$
+
+公式中的条件分布不代表主观信念，而是模型在固定参数和上下文下给出的数值输出。温度改变分布形状，随机种子决定一次采样路径；两者都不改变训练所得权重。向量投影、注意力热图与工具结果也必须带版本和坐标，不能只凭一张图或最终回答推断内部机制。
+
+## 三段可运行骨架
+
+```python
+def next_token_distribution(model, tokenizer, text, temperature):
+    token_ids = tokenizer.encode(text)
+    logits = model(token_ids)[-1]
+    probabilities = softmax(logits / temperature)
+    return token_ids, logits, probabilities
+```
+
+```python
+def generate_one_step(model, tokenizer, text, temperature, rng):
+    token_ids, logits, probabilities = next_token_distribution(
+        model, tokenizer, text, temperature
+    )
+    next_id = rng.categorical(probabilities)
+    return tokenizer.decode(token_ids + [next_id]), next_id, probabilities
+```
+
+```python
+def answer_with_tool(question, translate, tool, compose):
+    formal_query = translate(question)
+    raw_result = tool(formal_query)
+    assert raw_result.status == "ok"
+    answer = compose(question, raw_result)
+    return {"query": formal_query, "raw": raw_result, "answer": answer}
+```
+
+第一段暴露模型概率，第二段暴露自回归外层循环，第三段暴露语言模型与计算工具的责任边界。真实库接口可以不同，但不得把tokenization、概率归一化、采样或工具原始结果藏在无法审计的黑箱中。
+
+## 固定样例与手算
+
+设五个候选token的logit为2.4、1.8、1.15、0.45和负0.2。温度为1时，先减去最大logit避免指数溢出，再计算指数并除以总和；所有概率必须非负且相加为1。把温度降低到0.5，最高logit对应概率会集中；提高到1.5，尾部token获得更多质量。这个变化说明温度控制采样多样性，而不是让模型学到新知识。
+
+用小语料“a b a c”建立bigram计数：a后面b与c各出现一次，因此经验概率各为二分之一；b后面只见过a。若查询从未出现的上下文，直接计数无法可靠续写。神经模型的任务正是从共享表示和参数中泛化，而不是无限扩大n-gram查表。对照实验应使用同一词表，防止未知token处理悄悄改变分母。
+
+再取两个二维嵌入向量u=(1,0)、v=(0.8,0.6)，余弦相似度是0.8。投影到一维后可能改变邻居次序，因此二维或一维图只能提出假设。工具增强实验同样需要对照：问题先转换成形式查询，工具返回带单位结果，最终文本必须逐项蕴含原始结果；若模型擅自改数值，审计应在整合阶段失败。
+
+最后在全新进程重放同一文本、模型摘要、温度和随机种子。首步token序列、logit摘要、概率和采样结果必须一致；如果远程服务不能位级复现，至少固定服务版本并声明允许差异。任何不可重放部分都应作为限制，而不是用新的顺畅回答替代原证据。
+
+## 独立对照实验
+
+先建立不可变基线：固定提示文本、tokenizer、模型摘要、解码算法、温度、随机种子和工具版本，完整保存首步token、logit、概率、采样项及最终文本。基线不是“看起来合理”的答案，而是一组可重新计算的中间对象。第二次运行若只保存最终文本，即使逐字相同也不能证明概率链、工具链和版本合同相同。
+
+然后每轮只改变一个因素。把温度从1改为0.5时，token编号与原始logit应保持不变，温度缩放后的分布和采样结果可以变化；更换tokenizer时，最早分叉应出现在token序列，后续logit不再适合逐项比较；更换模型版本时，必须从参数标识开始建立新证据链。若一次实验同时改提示、模型和温度，就无法把输出差异归因给任何单一机制。
+
+工具增强路径还要做断路测试。保留同一自然语言问题，分别运行正常工具、返回单位错误的工具和明确失败的工具。系统应在读取原始结果后、组织最终措辞前报告单位冲突或失败，不得让语言模型凭常识补写一个数字。对历史模型的描述也使用同样纪律：作者2023年使用的公开实例是解释材料，不是对后来产品规格的承诺。
+
+最后由独立进程读取证据账本重算softmax、校验概率总和、核对采样项和工具单位，并输出首个不一致坐标。验收记录至少包含输入摘要、环境版本、预期分叉、实际分叉与回退动作。这样既能观察生成文字，也能回答差异从哪里开始、哪条结论仍受证据支持，以及修复后应该重放哪一段。
+
+## 正式目录逐项讲解
+
+### "Surely a Network That's Big Enough Can Do Anything!" / “足够大的网络当然什么都能做！”
+
+网络容量只说明某些权重可能表示目标函数，不保证有限数据和优化能找到它，也不自动保证泛化。 将它放回本页主线“区分存在某组权重能够表示函数，与训练过程能用有限数据和计算找到这组权重；容量不是成功的充分解释。”中，先给一个可手算或可运行的最小实验，再增加只改变一个输入、温度、权重、投影或工具结果的对照，记录第一处输出分叉。
+
+针对“"Surely a Network That's Big Enough Can Do Anything!" / “足够大的网络当然什么都能做！””，把输入token、语料样本、参数版本、温度、随机种子、工具查询和原始结果写入证据账本。先预测改变一个变量后哪条概率、向量、损失或工具结果最先变化，再运行正常与故障路径；最终文字流畅不能覆盖中间证据不一致。
+
+## 六类独立证据
+
+### token与上下文合同
+
+保存原始字符串、规范化方式、tokenizer版本、token编号和上下文截断位置。同一可见文字在不同tokenizer下可能形成不同序列，因而概率不能脱离词表直接比较。
+
+### 概率与采样合同
+
+保存logit、温度变换、归一化总和、候选排序、随机种子和实际采样项。贪心、top-k或其他采样规则必须明确；一次生成结果不能代表整个条件分布。
+
+### 网络与训练合同
+
+区分前向推理、基础下一token训练和后续行为塑造。训练证据包括数据切分、损失、梯度和参数版本；推理证据只读冻结参数，不能把对话中的新文本误称为在线训练。
+
+### 表示与可视化合同
+
+嵌入、隐藏状态和注意力矩阵写清层、位置和维度。降维方法、随机种子与保真指标必须保存；图上看似平滑的轨迹需要回到高维邻域验证。
+
+### 语言与假设合同
+
+把可观察事实、工程解释和关于语义规律的猜想分栏。文本连贯是观察，逐token网络是机制，存在简洁语义运动定律仍是研究问题，三者证据等级不同。
+
+### 工具与事实合同
+
+工具调用保存查询、权限、版本、原始结果、单位和来源。最终回答不得覆盖工具失败；语言模型负责表达，不应悄悄替换可计算结果或制造不存在的引用。
+
+## 三步交互实验
+
+<Stepper>
+  <Step title="追踪生成证据链">推动阶段滑块，检查语料、权重、分布、采样与验证的先后关系。<TcgMain08UniversalNetworkMapLab /></Step>
+  <Step title="改变token概率">调节温度，先预测分布集中或变平，再观察五个候选token概率。<TcgMain08UniversalNetworkProbabilityLab /></Step>
+  <Step title="注入证据故障">改变上下文并注入版本或工具故障，要求审计在最终文本之前报告分叉。<TcgMain08UniversalNetworkEvidenceLab /></Step>
+</Stepper>
+
+## 常见失败与回退
+
+<Callout type="trap">**本节高风险失败：** 把‘可以表示’误写成‘一定能训练出来’，或用模型规模单变量解释所有涌现行为。</Callout>
+
+<Callout type="trap">**拟人化不是机制：** “记得”“理解”“思考”等词可以是交流简写，但不能替代token、概率、权重、工具查询和验证结果。</Callout>
+
+<Callout type="tip">**回退顺序：** 原始文本 → token序列 → 模型版本 → logit → 概率 → 采样 → 工具查询 → 原始结果 → 最终表述。第一处不一致未解释前，不看整篇文字是否顺畅。</Callout>
+
+## 本章回顾
+
+区分存在某组权重能够表示函数，与训练过程能用有限数据和计算找到这组权重；容量不是成功的充分解释。 掌握标准是能重建输入、计算、证据和边界，而不是复述“预测下一个词”这句口号。通过标准为：能分别给出表达、优化、数据和计算四层证据，不用通用逼近定理跳过模型如何学到语言结构的问题。
+
+<Glossary>
+
+<GlossaryItem term="表达能力">
+  “表达能力”是本页第1个证据坐标。记录定义、输入、版本、最小计算、失败边界和独立重放结果，避免用拟人化叙述替代可检查机制。
+</GlossaryItem>
+
+<GlossaryItem term="通用逼近">
+  “通用逼近”是本页第2个证据坐标。记录定义、输入、版本、最小计算、失败边界和独立重放结果，避免用拟人化叙述替代可检查机制。
+</GlossaryItem>
+
+<GlossaryItem term="可训练性">
+  “可训练性”是本页第3个证据坐标。记录定义、输入、版本、最小计算、失败边界和独立重放结果，避免用拟人化叙述替代可检查机制。
+</GlossaryItem>
+
+<GlossaryItem term="样本效率">
+  “样本效率”是本页第4个证据坐标。记录定义、输入、版本、最小计算、失败边界和独立重放结果，避免用拟人化叙述替代可检查机制。
+</GlossaryItem>
+
+<GlossaryItem term="泛化">
+  “泛化”是本页第5个证据坐标。记录定义、输入、版本、最小计算、失败边界和独立重放结果，避免用拟人化叙述替代可检查机制。
+</GlossaryItem>
+
+<GlossaryItem term="计算资源">
+  “计算资源”是本页第6个证据坐标。记录定义、输入、版本、最小计算、失败边界和独立重放结果，避免用拟人化叙述替代可检查机制。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+1. 如何为足够大的网络什么都能做吗建立最小可手算实验？
+
+<Answer>固定五个logit、一个tokenizer和一段上下文，手算温度变换、softmax和一次采样；涉及工具时再固定形式查询与原始结果。</Answer>
+
+2. 如何证明“能分别给出表达、优化、数据和计算四层证据，不用通用逼近定理跳过模型如何学到语言结构的问题。”不是一次流畅输出偶然满足？
+
+<Answer>用相同输入并排运行正常路径与只破坏一个温度、上下文、模型版本、投影或工具结果的路径，要求检测器在预期中间对象区分两者。</Answer>
+
+3. 修复足够大的网络什么都能做吗后怎样回归？
+
+<Answer>先重放token与概率，再检查网络或表示，最后检查工具和文字整合；全部中间证据一致后才评价长文本。</Answer>
+
+</Exercises>
+
+## 前后导航
+
+- [神经网络训练的实践与经验](/learn/this-is-chatgpt/02-neural-models/tcg-main-07-training-practice)
+- [嵌入的概念](/learn/this-is-chatgpt/03-chatgpt-inside/tcg-main-09-embeddings)
+
+<Attribution adaptedFrom="斯蒂芬·沃尔弗拉姆著、WOLFRAM传媒汉化小组译《这就是ChatGPT》，人民邮电出版社，2023年7月，134页，ISBN 9787115618085；英文原版Wolfram Media，2023年3月9日，112页，ISBN 9781579550813 · 基于官方25个正式目录层级的独立教学重构" adaptedUrl="https://www.wolfram-media.com/products/what-is-chatgpt-doing-and-why-does-it-work/" />

@@ -1,0 +1,486 @@
+---
+title: "Item 28：避免返回指向对象内部的句柄"
+type: A
+section: Chapter 5 · Implementations
+order: 28
+description: 对齐 Effective C++ 第三版 Item 28：识别 reference、pointer、iterator 和 view 返回如何泄漏内部表示、绕过 const 与制造悬空句柄，并以值快照、受控命令、稳定 ID 和作用域借用替代。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppDanglingHandleTimelineMap,
+  EcppInternalHandleEscapeMap,
+  EcppSafeReturnContractMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-28-avoid-internal-handles";
+
+<Objectives>
+
+- 能解释 const member 返回 mutable reference 如何绕过 owner 的 encapsulation 与 invariant
+- 能复现 reference、pointer、iterator 在临时对象销毁、容器重分配和并发修改后的 dangling handle
+- 能设计 value snapshot、owner command、stable ID、scoped callback 与 ref-qualified accessor 的安全契约
+
+</Objectives>
+
+## 从 const Rectangle 被外部修改开始
+
+Rectangle 把两个角点放在内部数据对象：
+
+```cpp
+class Point {
+public:
+    void setX(int value);
+    void setY(int value);
+};
+
+struct RectData {
+    Point upperLeft;
+    Point lowerRight;
+};
+
+class Rectangle {
+public:
+    Point& upperLeft() const { return data_->upperLeft; }
+
+private:
+    std::shared_ptr<RectData> data_;
+};
+```
+
+成员函数标记 const，但返回 `Point&`。调用者可通过 const Rectangle 修改内部 Point：
+
+```cpp
+const Rectangle box = makeRectangle();
+box.upperLeft().setX(1000);
+```
+
+<Term def="reference、pointer 或 iterator 等能够间接访问另一个对象的值。">
+  object handle
+</Term>
+
+Item 28 的原则是 Avoid returning handles to object internals（避免返回指向对象内部的句柄）。
+
+<Term def="public API 把 private subobject 的地址、别名或迭代位置交给调用者。">
+  internal handle exposure
+</Term>
+
+## const member 只约束 this 访问路径
+
+`upperLeft() const` 表示函数不能通过 this 修改 Rectangle 的非-mutable members；它不自动改变返回类型。
+
+<Term def="const member function 中 this 所提供的只读访问限制，不会传播到任意显式返回别名。">
+  const this access path
+</Term>
+
+返回 `Point&` 是重新授予写权限。调用者可绕过 Rectangle 对角点顺序、边界和同步的规则。
+
+<Term def="通过 owner public operation 之外的别名修改内部状态，跳过验证与原子更新。">
+  invariant bypass alias
+</Term>
+
+<EcppInternalHandleEscapeMap />
+
+这同时破坏 logical constness：用户观察到 const Rectangle 仍能改变几何值。
+
+<Term def="const object 在用户可观察语义上保持值不变，而非只要求字段 bitwise 不写。">
+  logical constness boundary
+</Term>
+
+<Callout type="trap">
+  **现象**：accessor 本身是 const，就认为返回 reference 也安全。**原因**：const
+  不会自动传递到显式返回类型。**修法**：只读借用至少返回 `const
+  T&`，更稳妥时返回 value；修改必须经过 owner command。
+</Callout>
+
+## handle 不只指针和引用
+
+原书将 reference、pointer、iterator 都视为 handles。现代代码还包括 span、string_view、range view、proxy reference 和 raw native handle。
+
+<Term def="保存容器内部位置、可解引用访问 element 的遍历句柄。">
+  iterator handle
+</Term>
+
+```cpp
+class Catalog {
+public:
+    std::vector<Item>::iterator begin();
+    Item* findMutable(ItemId id);
+    std::span<Item> items();
+};
+```
+
+这些 API 让调用者直接修改 Items、保留地址并依赖 vector representation。private vector 已事实上成为 public contract。
+
+<Term def="public handle 迫使调用者和实现共同依赖内部容器、布局与失效规则。">
+  representation leakage
+</Term>
+
+即使返回 const_iterator/`span<const Item>`，写权限下降，但 lifetime、invalidation 与表示耦合仍存在。
+
+## 改成 const reference 只解决写权限
+
+```cpp
+const Point& Rectangle::upperLeft() const & {
+    return data_->upperLeft;
+}
+```
+
+调用者不能通过该引用调用 Point mutator，encapsulation 更强；但引用仍依赖 Rectangle/RectData 的生命周期。
+
+<Term def="不能修改 pointee、但仍借用 owner 内部 storage 的返回别名。">
+  read-only internal borrow
+</Term>
+
+若 owner 销毁、替换 data\_ 或 copy-on-write detach，引用可能失效。
+
+<Term def="使先前返回的 handle 不再指向原合法对象的 owner 操作或生命周期事件。">
+  handle invalidation event
+</Term>
+
+因此 const reference 不是普适终点，只适合 lifetime 明确、性能证据充分的局部借用。
+
+## 临时 owner 会立刻制造悬空引用
+
+```cpp
+const Point* corner = &makeRectangle().upperLeft();
+// full-expression 结束，temporary Rectangle 销毁
+use(corner->x()); // dangling
+```
+
+<Term def="所借用 subobject 已结束生命周期，但 reference/pointer/iterator 仍保存其地址的句柄。">
+  dangling handle
+</Term>
+
+返回 borrow 不延长完整对象生命周期。shared pimpl 也不能自动救场：若 handle 只是 Point reference，没有携带 shared owner，RectData 仍可随临时 Rectangle 释放。
+
+<Term def="完整表达式结束时销毁未被合法 lifetime extension 保留的临时对象。">
+  temporary owner destruction
+</Term>
+
+<EcppDanglingHandleTimelineMap />
+
+## 用 ref qualifier 限制临时对象调用
+
+可以只允许 lvalue owner 返回 borrow，并让 rvalue 返回 value：
+
+```cpp
+class Rectangle {
+public:
+    const Point& upperLeft() const & noexcept;
+    Point upperLeft() &&;
+};
+```
+
+<Term def="根据调用对象是 lvalue 还是 rvalue 选择或禁止成员函数的限定。">
+  reference-qualified accessor
+</Term>
+
+`const &` 版本借用稳定 lvalue owner；`&&` 版本复制/move snapshot，临时销毁后结果仍独立。也可 delete rvalue overload 强制调用者先保存 owner。
+
+<Term def="从 owner 内部值复制或移动出的独立对象，不受 owner 后续生命周期和失效影响。">
+  detached value snapshot
+</Term>
+
+ref qualifier 仍不能阻止调用者保存 lvalue borrow 超过 owner lifetime，文档和 static analysis 仍需要。
+
+## 容器重分配会让 iterator/reference 失效
+
+```cpp
+const Item& selected = catalog.itemAt(0);
+catalog.add(Item{/*...*/}); // vector 可能 reallocate
+use(selected);              // 可能 dangling
+```
+
+<Term def="容器更换 backing storage 后，原 element 地址、reference 与 iterator 不再有效。">
+  reallocation invalidation
+</Term>
+
+reserve 能降低概率但不是永久 contract；insert/erase/sort 也有各自失效或 identity 变化规则。
+
+<Term def="某类 handle 在哪些修改后仍有效、哪些操作后必须废弃的接口约定。">
+  invalidation contract
+</Term>
+
+如果调用者需要长期 identity，返回 ItemId 并在每次操作时解析，或使用 stable node owner，而不是泄漏 vector address。
+
+## mutable handle 破坏同步边界
+
+线程安全 owner 在 accessor 内加锁再返回 reference，锁离开函数时释放；调用者随后使用引用时没有保护。
+
+<Term def="返回 handle 时保护锁已释放，后续解引用与 owner mutation 并发发生的漏洞。">
+  escaped-lock handle
+</Term>
+
+```cpp
+const Item& Catalog::first() const {
+    std::scoped_lock lock(mutex_);
+    return items_.front();
+} // lock released, reference escapes
+```
+
+<Term def="数据访问必须与保护锁或版本验证处于同一不可分割作用域的要求。">
+  synchronized access scope
+</Term>
+
+返回 value snapshot，或提供在锁内执行 callback 的 `withFirst`，才能让保护覆盖实际读取。
+
+<Callout type="trap">
+  **现象**：accessor 内部加锁后返回 reference，认为线程安全。**原因**：锁在
+  caller 解引用前已释放，handle 与并发 mutation 一起逃逸。**修法**：返回
+  snapshot，或让 owner 在持锁期间调用受限 callback。
+</Callout>
+
+## 值返回通常是最清楚的查询契约
+
+Point 很小，直接返回 value：
+
+```cpp
+Point Rectangle::upperLeft() const {
+    return data_->upperLeft;
+}
+```
+
+<Term def="查询产生调用者拥有的独立结果，不暴露内部地址或 storage identity。">
+  value query
+</Term>
+
+copy elision/move 与小型 value type 使成本通常可接受；更重要的是 lifetime、thread safety 和 representation freedom 清楚。
+
+<Term def="实现可更换内部布局、容器和共享策略，而调用者只依赖返回值语义。">
+  representation-independent result
+</Term>
+
+性能热点应测量，不要先用 reference 交换掉安全性。
+
+## 修改应表达为 owner command
+
+调用者若要移动角点，应请求 Rectangle 执行动作：
+
+```cpp
+Result<void, GeometryError> Rectangle::moveUpperLeft(Point target) {
+    if (target.x() > data_->lowerRight.x()) {
+        return unexpected(GeometryError::InvertedBounds);
+    }
+    data_->upperLeft = target;
+    return {};
+}
+```
+
+<Term def="由 owner 验证并原子更新 internal state 的领域操作，而不是发布 mutable alias。">
+  owner-mediated command
+</Term>
+
+owner 可以加锁、维护 cache、记录事件并拒绝非法状态。
+
+<Term def="所有 internal mutations 都经过 owner 明确 operation，从而可枚举和验证。">
+  mutation-path closure
+</Term>
+
+## 大对象借用可限制在 callback scope
+
+若复制很贵且调用只需短时读取，可让 owner 控制 borrow lifetime：
+
+```cpp
+template<class Function>
+decltype(auto) Catalog::withItems(Function&& function) const {
+    std::scoped_lock lock(mutex_);
+    return std::forward<Function>(function)(
+        std::span<const Item>{items_});
+}
+```
+
+<Term def="owner 在受控函数调用期间提供临时 view，并在 callback 返回后结束访问。">
+  scoped borrow callback
+</Term>
+
+callback 不应把 span/reference 保存到外部；可通过 API convention、borrow checker-like static tools 或返回类型限制降低风险。
+
+<Term def="借用只能在 owner 控制的词法/动态作用域内使用，不得逃逸。">
+  non-escaping borrow contract
+</Term>
+
+## stable ID 代替长期内部地址
+
+编辑器、entity system 或数据库界面常需要跨帧引用。返回 address 不稳定，返回 generation-tagged ID 更适合。
+
+<Term def="不直接包含内部地址、每次使用由 owner 验证并解析的逻辑标识。">
+  stable logical handle
+</Term>
+
+```cpp
+struct ItemId {
+    std::uint32_t index;
+    std::uint32_t generation;
+};
+
+Result<ItemSnapshot, LookupError> Catalog::get(ItemId id) const;
+```
+
+<Term def="ID 中用于识别 slot 已被删除并复用、阻止旧 handle 命中新对象的版本值。">
+  generation counter
+</Term>
+
+owner 可重排 storage，同时保持 ID contract；删除后旧 generation 明确失败，而不是悬空解引用。
+
+## shared ownership 只在真实共享生命周期时使用
+
+若调用者确实需要独立延长某对象生命周期，可返回 `shared_ptr<const Item>`，但这改变 ownership 和分配模型。
+
+<Term def="返回值持有 control block，使 pointee 在 owner 容器变化或销毁后仍可存活。">
+  lifetime-extending owner return
+</Term>
+
+不要仅为避免 copy 把所有内部对象改成 shared ownership；它增加 reference count、cycle 和 identity complexity。
+
+<Term def="多个独立组件确实共同决定对象何时销毁的生命周期语义。">
+  genuine shared lifetime
+</Term>
+
+如果只需 snapshot，value 更简单；如果只需短借用，callback/view 更准确。
+
+<EcppSafeReturnContractMap />
+
+## 用失效矩阵验收所有出口
+
+先预测每个返回值在 owner 销毁、move、mutation、reallocation 和并发时是否仍有效，再建立门禁：
+
+- 搜索所有 public reference/pointer/iterator/span/string_view 返回。
+- compile-negative tests 证明 const owner 不发布 mutable internal handle。
+- temporary owner tests 验证 rvalue accessor 返回 value 或被删除。
+- container tests 覆盖 reserve、reallocation、insert、erase、sort 后 handle 状态。
+- concurrency tests 验证没有 escaped-lock handle，snapshot/callback 受同步保护。
+- ID tests 覆盖 delete/reuse/generation mismatch。
+- lifetime sanitizer 捕获 owner destruction 后的 reference/view 使用。
+- representation swap 将 vector 换为其他 storage，value/ID clients 不修改。
+
+<Term def="按 handle 类型列出 owner 事件、有效性、写权限、同步与替代契约的表。">
+  handle invalidation matrix
+</Term>
+
+任何长期 borrow 都必须有比“调用者小心”更强的证据。
+
+## 小结
+
+- reference、pointer、iterator、span/view 都是 handles，可能把 private representation 变成 public dependency
+- const member 不会自动让返回 handle 只读；mutable reference 可绕过 owner invariant
+- 改成 const reference 只修复写权限，owner 销毁或 storage 变化仍会产生 dangling handle
+- rvalue accessor 应返回 detached value 或禁止调用，避免临时 owner 发布 borrow
+- value snapshot、owner command、scoped callback、stable ID 分别解决观察、修改、短借用与长期 identity
+- 用 handle invalidation matrix 覆盖生命周期、重分配、同步和 generation reuse
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 28"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="object handle">
+    可间接访问另一个对象的 reference/pointer/iterator。
+  </GlossaryItem>
+  <GlossaryItem term="internal handle exposure">
+    public API 发布 private subobject 别名。
+  </GlossaryItem>
+  <GlossaryItem term="const this access path">
+    const member 对 this 的只读限制。
+  </GlossaryItem>
+  <GlossaryItem term="invariant bypass alias">
+    绕过 owner operation 修改内部状态的别名。
+  </GlossaryItem>
+  <GlossaryItem term="logical constness boundary">
+    用户可观察语义保持不变的 const 边界。
+  </GlossaryItem>
+  <GlossaryItem term="iterator handle">
+    保存容器内部位置的遍历句柄。
+  </GlossaryItem>
+  <GlossaryItem term="representation leakage">
+    handle 让调用者依赖内部容器与布局。
+  </GlossaryItem>
+  <GlossaryItem term="read-only internal borrow">
+    只读但依赖 owner storage 的返回别名。
+  </GlossaryItem>
+  <GlossaryItem term="handle invalidation event">
+    使既有 handle 不再有效的 owner 事件。
+  </GlossaryItem>
+  <GlossaryItem term="dangling handle">
+    所借对象生命周期结束后的残留句柄。
+  </GlossaryItem>
+  <GlossaryItem term="temporary owner destruction">
+    完整表达式结束时临时 owner 销毁。
+  </GlossaryItem>
+  <GlossaryItem term="reference-qualified accessor">
+    按调用对象 value category 限制 accessor。
+  </GlossaryItem>
+  <GlossaryItem term="detached value snapshot">
+    与 owner lifetime 无关的独立结果值。
+  </GlossaryItem>
+  <GlossaryItem term="reallocation invalidation">
+    backing storage 更换导致地址失效。
+  </GlossaryItem>
+  <GlossaryItem term="invalidation contract">
+    规定哪些 owner 操作使 handle 失效。
+  </GlossaryItem>
+  <GlossaryItem term="escaped-lock handle">
+    保护锁释放后仍逃逸使用的内部别名。
+  </GlossaryItem>
+  <GlossaryItem term="synchronized access scope">
+    实际访问与锁处于同一作用域。
+  </GlossaryItem>
+  <GlossaryItem term="value query">返回调用者拥有的独立查询结果。</GlossaryItem>
+  <GlossaryItem term="representation-independent result">
+    不依赖内部地址布局的结果。
+  </GlossaryItem>
+  <GlossaryItem term="owner-mediated command">
+    由 owner 验证并提交内部修改的操作。
+  </GlossaryItem>
+  <GlossaryItem term="mutation-path closure">
+    所有内部写路径均由 owner 掌控。
+  </GlossaryItem>
+  <GlossaryItem term="scoped borrow callback">
+    在 owner 控制调用期间提供短借用。
+  </GlossaryItem>
+  <GlossaryItem term="non-escaping borrow contract">
+    借用不得离开受控访问作用域。
+  </GlossaryItem>
+  <GlossaryItem term="stable logical handle">
+    每次由 owner 验证解析的非地址 ID。
+  </GlossaryItem>
+  <GlossaryItem term="generation counter">
+    识别 slot 删除复用的 ID 版本。
+  </GlossaryItem>
+  <GlossaryItem term="lifetime-extending owner return">
+    通过 owner 延长 pointee 生命周期的返回。
+  </GlossaryItem>
+  <GlossaryItem term="genuine shared lifetime">
+    多个组件共同决定销毁时机的语义。
+  </GlossaryItem>
+  <GlossaryItem term="handle invalidation matrix">
+    handle 权限、失效与同步验证表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：修复 Rectangle accessor。** const member 返回 Point mutable reference，请分别设计观察和修改接口。
+
+<Answer question="怎样同时恢复 const 与几何不变量？">
+  观察默认返回 Point value snapshot；若经测量必须借用，仅为 lvalue owner 提供
+  `const Point&` 的 `const &` overload，并让 rvalue overload 返回
+  value。修改改为 `moveUpperLeft(Point)` owner command，联合验证
+  lower-right、加锁并原子提交。compile-negative test 证明 const owner 不能获得
+  mutable handle。
+</Answer>
+
+2. **问题 2：解决 Catalog 并发引用。** accessor 持锁返回 `const Item&`，另一线程 add 触发 reallocation，请重构。
+
+<Answer question="为什么持锁 accessor 仍不安全，哪些替代契约可用？">
+  函数返回时锁已释放，reference 成为 escaped-lock handle；add 可 reallocate
+  并使其 dangling。小对象返回 value snapshot；大范围读取用 owner 持锁执行 scoped
+  callback/span，禁止借用逃逸；跨操作 identity 用 generation-tagged
+  ItemId，每次访问重新加锁解析。并发与 sanitizer 测试覆盖 add/erase/reuse。
+</Answer>
+
+3. **问题 3：审查长期编辑句柄。** UI 跨帧保存 vector iterator 指向选中实体，删除和排序后偶发编辑错对象，请设计稳定方案。
+
+  <Answer question="为什么 iterator 不适合长期 identity，stable ID 怎样修复？">iterator 依赖 container storage 与顺序，erase/reallocation 可能悬空，sort 后还可能指向不同逻辑位置。返回包含 index/key 与 generation 的 EntityId；每帧由 owner 验证 generation 并解析，删除复用时递增 generation，失效明确返回错误。测试删除、slot reuse、排序、扩容和 stale UI command，禁止直接解引用旧 iterator。</Answer>
+</Exercises>

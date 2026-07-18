@@ -1,0 +1,108 @@
+---
+title: "第10章 部署Go应用"
+type: C
+section: "Go Web编程 · 并发与部署"
+order: 10
+description: "比较独立服务器、Heroku、Google App Engine与Docker，追踪二进制、资产、配置和发布证据。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/go-web-programming/chapter-10"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GwpArtifactLab, GwpPlatformLab, GwpDockerLab } from "@/components/mdx/go-web-programming/diagrams/gwp-deployment";
+
+<Objectives>
+- 能写出Go Web发布所需二进制、模板、静态资源、配置和迁移清单，并生成版本摘要
+- 能比较独立服务器、Heroku、App Engine与Docker的控制权和运行约束
+- 能设计构建、健康检查、流量切换和回滚的部署验收链
+</Objectives>
+
+## 从单二进制为何仍不够开始
+
+先预测：`go build`成功后，复制一个文件到服务器就一定能运行完整Web应用吗？不一定，模板、静态文件、证书、配置和数据库schema都可能缺失。<Term def="二进制、资产、配置、迁移和版本元数据组成的可运行发布集合。">deployment artifact set</Term>必须完整。
+
+<GwpArtifactLab />
+
+## 部署到独立服务器
+
+独立主机提供最大控制权，也要求自行管理用户、目录、进程、日志、TLS、端口、防火墙和升级。<Term def="进程管理器启动、监控、停止并重启指定版本服务的运行协议。">standalone process contract</Term>要求非root运行、固定工作目录和可观察退出状态。
+
+```sh
+GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -o web ./cmd/web
+sha256sum web templates/* public/*
+```
+
+## 部署到Heroku
+
+原书展示Heroku的构建和dyno模型。<Term def="平台负责路由和进程调度，应用遵守端口、无状态与配置注入约束的部署。">PaaS runtime contract</Term>应用监听平台提供的PORT，持久状态放外部服务，本地文件系统不可作为长期数据库。
+
+## 部署到Google App Engine
+
+App Engine提供托管实例、路由和伸缩，但有运行时与服务约束。<Term def="应用能力受托管平台API、实例生命周期和配置模型限制的边界。">managed platform boundary</Term>需要在设计期验证超时、文件、网络和后台任务限制。
+
+<GwpPlatformLab />
+
+## 部署到Docker
+
+Docker镜像封装文件系统与启动命令，不自动解决配置、数据和安全。<Term def="基础层、应用层、入口和不可变摘要共同定义的容器发布身份。">container image identity</Term>要求多阶段构建、固定基础镜像、非root用户和外部秘密。
+
+```dockerfile
+FROM golang:1.24 AS build
+WORKDIR /src
+COPY . .
+RUN CGO_ENABLED=0 go build -trimpath -o /out/web ./cmd/web
+FROM gcr.io/distroless/static-debian12:nonroot
+COPY --from=build /out/web /web
+ENTRYPOINT ["/web"]
+```
+
+<GwpDockerLab />
+
+## 部署方式比较
+
+部署方法比较的维度包括控制权、运维负担、伸缩、启动时间、持久存储、网络、成本与供应商约束。<Term def="以同一应用需求和证据门禁比较不同发布目标的决策矩阵。">deployment method matrix</Term>不能只按命令多少选择。
+
+## 健康、切换与回滚
+
+发布先验证进程、依赖和关键请求，再切换流量；失败按版本回滚。<Term def="构建摘要、启动探针、功能探针、流量切换和回滚结果组成的发布证据。">release verification protocol</Term>要求测试产物与上线产物摘要一致。
+
+```text
+commit -> test report -> artifact digest -> deployment id -> probe result -> rollback digest
+```
+
+<Stepper>
+  <Step title="枚举发布物"><GwpArtifactLab /></Step>
+  <Step title="比较平台"><GwpPlatformLab /></Step>
+  <Step title="验证镜像">构建镜像，检查用户、端口、配置和摘要，再执行健康与功能探针。</Step>
+</Stepper>
+
+## 验收实验：同一版本两种目标
+
+用同一提交构建独立二进制和Docker镜像，记录Go版本、依赖、资产与摘要。在临时环境运行健康、静态文件、模板和数据库迁移检查；故意缺失模板、错误PORT和失败迁移，确认切流前阻断并能回滚上一摘要。
+
+<Callout type="trap" title="容器等于完整生产部署">镜像只封装进程文件系统，还需要配置、网络、数据、调度、监控和回滚。</Callout>
+<Callout type="trap" title="最新Tag可以代表确定版本">可变tag无法证明内容，发布和回滚应记录不可变digest。</Callout>
+
+## 本章回顾
+
+本章覆盖部署到服务器、Heroku、Google App Engine、Docker和方法比较。部署的核心不是复制命令，而是完整发布物、平台约束、不可变身份和切流回滚证据。
+
+<Exercises>
+**问题 1：单二进制还缺什么？**<Answer>可能还缺模板、静态资源、配置、证书和数据库迁移。</Answer>
+**问题 2：PaaS应用为何要无状态？**<Answer>实例可被替换或扩缩，本地状态不能作为持久事实来源。</Answer>
+**问题 3：回滚依据什么？**<Answer>上一份已验证的不可变产物摘要和兼容schema策略。</Answer>
+</Exercises>
+
+## 术语表
+<Glossary>
+  <GlossaryItem term="deployment artifact set" definition="二进制、资产、配置和迁移集合。" />
+  <GlossaryItem term="standalone process contract" definition="独立服务器进程生命周期协议。" />
+  <GlossaryItem term="PaaS runtime contract" definition="应用与平台进程模型的部署约束。" />
+  <GlossaryItem term="managed platform boundary" definition="托管运行时能力和限制边界。" />
+  <GlossaryItem term="container image identity" definition="镜像层、入口与摘要定义的身份。" />
+  <GlossaryItem term="deployment method matrix" definition="部署目标的多维比较矩阵。" />
+  <GlossaryItem term="release verification protocol" definition="构建到回滚的发布证据协议。" />
+</Glossary>
+<Attribution adaptedFrom="Go Web Programming Chapter 10 Deploying Go" adaptedUrl="https://livebook.manning.com/book/go-web-programming/chapter-10" />

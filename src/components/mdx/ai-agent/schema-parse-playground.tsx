@@ -21,7 +21,8 @@ import { DemoStage } from "../controls";
  */
 
 // 固定 schema（与 §6 代码、AaJsonSchemaDiagram 同形）：字段名 → 类型 + 必填。
-const SCHEMA_TEXT = '{ "city": str(必填), "temp": int(必填), "rain": bool(必填) }';
+const SCHEMA_TEXT =
+  '{ "city": str(必填), "temp": int(必填), "rain": bool(必填) }';
 
 type SampleId = "ok" | "fenced" | "chatty" | "missing" | "wrongtype";
 
@@ -68,7 +69,7 @@ const SAMPLES: readonly Sample[] = [
     label: "类型错",
     raw: '{"city": "上海", "temp": "二十六度", "rain": true}',
     extracted: '{"city": "上海", "temp": "二十六度", "rain": true}',
-    validateError: "字段 temp 类型错：要 int，却是 str（\"二十六度\"）",
+    validateError: '字段 temp 类型错：要 int，却是 str（"二十六度"）',
   },
 ];
 
@@ -158,7 +159,9 @@ export function AaSchemaParsePlayground() {
             </span>
           </p>
           {!ok && (
-            <p className="mt-1 text-xs text-danger">原因：{sample.validateError}</p>
+            <p className="mt-1 text-xs text-danger">
+              原因：{sample.validateError}
+            </p>
           )}
           <p className="mt-2 text-xs text-secondary">
             <span className="font-semibold">④ 会不会触发重试：</span>
@@ -169,7 +172,8 @@ export function AaSchemaParsePlayground() {
         </div>
 
         <p className="mt-3 text-xs text-secondary">
-          猜一猜：「带围栏」和「夹废话」两种样本，剥壳后的 JSON 一样吗？校验都能过吗？
+          猜一猜：「带围栏」和「夹废话」两种样本，剥壳后的 JSON
+          一样吗？校验都能过吗？
         </p>
       </div>
     </DemoStage>

@@ -1,0 +1,218 @@
+---
+title: "第 2 章 Building Layouts：Canvas、Rect Transform 与自动布局"
+type: A
+section: "Unity UI 设计 · 基础与布局"
+order: 2
+description: "一对一覆盖 Rect Transform、Canvas、CanvasRenderer、布局组、尺寸适配、Scroll Rect、缩放和 UnityEvent 输入链。"
+demo: true
+math: false
+sourceUrl: "https://api.pageplace.de/preview/DT0400.9781783553624_A24173589/preview-9781783553624_A24173589.pdf"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Uid02BuildingLayoutsMapLab,
+  Uid02BuildingLayoutsExperimentLab,
+  Uid02BuildingLayoutsEvidenceLab,
+} from "@/components/mdx/unity-ui-design/diagrams/uid-02-building-layouts";
+
+<Objectives>
+
+- 能推导 Rect Transform 的锚点、轴心、偏移与父矩形如何共同决定最终几何
+- 能比较三种 Canvas Scaler 模式，并为目标设备选择可验证的缩放策略
+- 能复现自动布局、Mask、Raycaster、Input Module 与 Event Trigger 的协作链
+
+</Objectives>
+
+## 问题：为什么拖拽出正确位置的界面在另一分辨率会立刻失效
+
+先预测：一个固定在父面板右上角的按钮，如果只记录本地坐标而不记录锚点，父面板宽度翻倍后它会去哪？第二章把“看起来在这里”改写成可计算约束。Rect Transform 的结果来自父矩形、anchorMin、anchorMax、pivot、sizeDelta 与 anchoredPosition；自动布局又会接管其中一部分属性。只靠 Scene 视图拖拽无法说明最终是谁拥有尺寸。
+
+<Uid02BuildingLayoutsMapLab />
+
+## 原书边界与小节库存
+
+原章依次覆盖 The Rect Transforms、Rect Tool、Rect Transform component、Scaling the Rect Transform、Canvas、Canvas Renderer、Canvas Groups；随后进入 Horizontal Layout Group、Vertical Layout Group、Grid Layout Group、Layout options、Layout Element、Content Size Fitter、Aspect Ratio Fitter、Scroll Rect 与 Masks；最后比较 Constant Pixel Size、Scale with Screen Size、Constant Physical Size，并连接 UnityEvent system、Raycasting、Input modules、Input events 与 Event Triggers。
+
+- **The Rect Transforms；Rect Tool；Rect Transform component；Scaling the Rect Transform**
+- **Canvas；Canvas Renderer；Canvas Groups**
+- **Horizontal Layout Group；Vertical Layout Group；Grid Layout Group；Layout options**
+- **Layout Element；Content Size Fitter；Aspect Ratio Fitter；Scroll Rect；Masks**
+- **Resolution and scaling；Constant Pixel Size；Scale with Screen Size；Constant Physical Size**
+- **UnityEvent system；Raycasting；Input modules；Input events；Event Triggers**
+
+这份库存用于唯一归属，而不是逐字转载。每个条目只在一个原章中计数，页面用重新组织的解释、实验和图示复现其核心问题。读者应能从条目回到页面证据，也能从页面结论指出对应的原始范围。
+
+## 从父矩形到最终像素的约束求解
+
+当 anchorMin 与 anchorMax 相等时，锚点定义父矩形中的参考点，anchoredPosition 再给出轴心到参考点的偏移；当两者不等时，元素进入拉伸模式，左右或上下偏移代替固定尺寸。Layout Group 会读取子元素的 min、preferred、flexible 值并写入位置尺寸，Content Size Fitter 又根据布局输入调整自身。若同一轴的尺寸既由父布局写入又由自身 fitter 反向决定，就可能形成重建循环或抖动。
+
+<Uid02BuildingLayoutsExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="Rect Transform 在父矩形归一化空间中的参考区间，决定定位或拉伸基准。">
+  锚点
+</Term>
+不是孤立术语。它要放回本章的数据流中，说明谁产生它、谁修改它、谁消费它，以及配置错误时会出现什么可观察结果。
+
+<Term def="元素自身矩形中的归一化旋转、缩放与定位参考点。">轴心</Term>
+不是孤立术语。它要放回本章的数据流中，说明谁产生它、谁修改它、谁消费它，以及配置错误时会出现什么可观察结果。
+
+<Term def="Layout Element 或内容计算提供的 min、preferred 与 flexible 尺寸。">
+  布局输入
+</Term>
+不是孤立术语。它要放回本章的数据流中，说明谁产生它、谁修改它、谁消费它，以及配置错误时会出现什么可观察结果。
+
+<Term def="根据缩放策略把参考界面尺寸映射到当前屏幕的组件。">
+  Canvas Scaler
+</Term>
+不是孤立术语。它要放回本章的数据流中，说明谁产生它、谁修改它、谁消费它，以及配置错误时会出现什么可观察结果。
+
+<Term def="从指针位置收集可交互 Graphic 并排序出事件目标的过程。">
+  射线检测
+</Term>
+不是孤立术语。它要放回本章的数据流中，说明谁产生它、谁修改它、谁消费它，以及配置错误时会出现什么可观察结果。
+
+术语必须能落到对象和状态，而不能只背定义。阅读 Inspector、运行日志或源码时，为每个术语写出输入、拥有者、输出和失败信号；若无法指出责任对象，就还没有形成可调试的心智模型。
+
+## 关键对象与数据流
+
+布局与事件是两条相交但不能混淆的链。布局链从父 RectTransform 和 CanvasScaler 开始，经 LayoutGroup、LayoutElement、Fitter 写出最终矩形；事件链从 InputModule 生成 PointerEventData，经 GraphicRaycaster 检查最终矩形和 Raycast Target，再由 EventSystem 派发。元素位置错误先查布局写入者，点击错误先查射线列表，不能用同一套猜测排查。
+
+同一个视觉现象可能来自不同链路：位置错误通常来自几何写入者，点击错误来自射线与事件，显示顺序来自 Canvas 和相机，版本错误来自历史载体与现代 API 混写。实验必须先选定要证明的链，再控制无关变量。
+
+## 三步复现实验
+
+动手前先预测：当前步骤改变后，哪个可见状态或日志应首先变化？若结果与预测不同，停下来沿生产者到消费者链找断点，不要继续叠加修复。
+
+<Stepper>
+  <Step title="建立锚点基线">
+    <Uid02BuildingLayoutsMapLab />
+
+在 1920x1080 参考分辨率放置四角标记与拉伸面板，分别记录 anchorMin、anchorMax、pivot、sizeDelta 和 anchoredPosition，再切换长宽比观察哪项保持。
+
+```csharp
+var rect = panel.rectTransform;
+rect.anchorMin = new Vector2(1f, 1f);
+rect.anchorMax = new Vector2(1f, 1f);
+rect.pivot = new Vector2(1f, 1f);
+```
+
+  </Step>
+  <Step title="加入自动布局">
+    <Uid02BuildingLayoutsExperimentLab />
+
+用 Horizontal、Vertical、Grid 三类 Layout Group 驱动相同元素，逐个加入 Layout Element、Content Size Fitter 与 Aspect Ratio Fitter，标记每个轴的尺寸写入者。
+
+```csharp
+public void OnPointerClick(PointerEventData eventData) {
+    Debug.Log($"hit={name}, position={eventData.position}");
+}
+```
+
+  </Step>
+  <Step title="连接事件证据">
+    <Uid02BuildingLayoutsEvidenceLab />
+
+为滚动区域加入 Mask、ScrollRect 与 Event Trigger，记录 GraphicRaycaster 命中顺序。分别测试透明遮挡、禁用 CanvasGroup.interactable 和移除 InputModule。
+
+```text
+parent rect -> anchors -> offsets -> layout controller -> canvas scale -> raycast rect
+```
+
+  </Step>
+</Stepper>
+
+## 正常、边界与失败样本
+
+一个完整实验至少包含正常输入、极端输入和故意破坏配置。正常样本证明主路径可用，边界样本说明数值或设备范围，失败样本则暴露隐式依赖。只保留成功截图会让后续读者无法区分偶然成功和稳定契约。
+
+<Callout type="trap">
+  **因果陷阱**：在同一轴同时让 Content Size Fitter 和父 Layout Group
+  控制尺寸，容易产生循环重建或不稳定结果。
+</Callout>
+
+<Callout type="trap">
+  **版本陷阱**：Constant Physical Size 依赖设备
+  DPI；平台报告值不可信时，物理尺寸不会自动变得准确。
+</Callout>
+
+## 从 2015 年到现代 Unity
+
+现代 Unity 的 uGUI 布局核心仍与原章一致，但 Safe Area、设备旋转、动态字体与 TextMeshPro 的首选尺寸会增加新的输入。新 Input System 的 InputSystemUIInputModule 替代旧模块时，事件数据链保持不变，动作绑定和设备来源发生变化。迁移时不应把 ForceRebuildLayoutImmediate 当常规修复；它适合诊断或明确的同步读取点，长期方案仍是消除约束循环并减少无效重建。
+
+迁移记录必须把“原书说了什么”和“今天怎样实现”并排放置。允许替换 API、包和资源，不允许删除原问题或把新版能力倒写成 2015 年事实；无法等价时应保留差异和失败证据，而不是强行宣布一一对应。
+
+## 验收证据
+
+验收至少覆盖三种分辨率、两种长宽比和一次内容数量变化。每个元素都能回答“水平尺寸谁写、垂直尺寸谁写、射线是否参与、缩放由谁决定”。Profiler 或布局调试记录应证明没有持续重建，失败样本要保留 DPI 异常、透明遮挡和嵌套 fitter 抖动。
+
+证据包还应包含 Unity 版本、目标平台、场景路径、复现步骤和预期结果。交给另一位读者后，他不需要猜测隐藏参数就能得到同样结论，才算从“理解文字”进入“掌握系统”。
+
+## 小结
+
+- Rect Transform 是父矩形、锚点、轴心和偏移共同决定的约束结果
+- 自动布局必须明确每个轴唯一的尺寸拥有者
+- CanvasScaler 决定参考尺寸到屏幕的映射，三种模式适用条件不同
+- 事件命中依赖最终几何、Raycast Target、Raycaster 和 Input Module
+
+<Exercises>
+
+**问题 1** 右上角固定按钮应怎样设置锚点和轴心？
+
+<Answer>
+  anchorMin 与 anchorMax 都设为 (1,1)，pivot 设为 (1,1)，再用负的
+  anchoredPosition 表示向左下的边距。
+</Answer>
+
+**问题 2** 为什么嵌套 Content Size Fitter 会抖动？
+
+<Answer>
+  父级尺寸依赖子级首选尺寸，子级可用宽度又依赖父级结果时会形成反馈环；应拆开控制轴或指定稳定的
+  Layout Element。
+</Answer>
+
+**问题 3** 如何区分布局错误和射线错误？
+
+<Answer>
+  先在运行时读取最终 RectTransform 矩形；几何正确再检查 GraphicRaycaster
+  结果、Raycast Target、CanvasGroup 和 InputModule，按两条链分别定位。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="锚点">
+    Rect Transform 在父矩形归一化空间中的参考区间，决定定位或拉伸基准。
+  </GlossaryItem>
+  <GlossaryItem term="轴心">
+    元素自身矩形中的归一化旋转、缩放与定位参考点。
+  </GlossaryItem>
+  <GlossaryItem term="布局输入">
+    Layout Element 或内容计算提供的 min、preferred 与 flexible 尺寸。
+  </GlossaryItem>
+  <GlossaryItem term="Canvas Scaler">
+    根据缩放策略把参考界面尺寸映射到当前屏幕的组件。
+  </GlossaryItem>
+  <GlossaryItem term="射线检测">
+    从指针位置收集可交互 Graphic 并排序出事件目标的过程。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Simon Jackson《Unity 3D UI Essentials》出版社预览目录与作者官方章节说明"
+  adaptedUrl="https://api.pageplace.de/preview/DT0400.9781783553624_A24173589/preview-9781783553624_A24173589.pdf"
+/>

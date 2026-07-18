@@ -3,7 +3,7 @@
 // 复制 katex/dist/fonts 字体），无 CDN 依赖、SSG 离线可用。24KB，可接受。
 import "katex/dist/katex.min.css";
 
-import { getLearningPathTree } from "@/lib/content";
+import { getLibraryNavigationTree } from "@/lib/content";
 
 import { ChapterDrawer } from "./_components/chapter-drawer";
 import { LibraryNav } from "./_components/library-nav";
@@ -24,24 +24,11 @@ export default function LearnLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const paths = getLearningPathTree();
+  const paths = getLibraryNavigationTree();
 
   return (
     <div className="flex flex-1 flex-col lg:flex-row">
-      {/* lg+：静态左栏（w-72 = 288px）。data-pagefind-ignore：目录为重复导航 chrome，
-          排除出搜索索引，避免每页都把整棵目录当正文（HEL-42）。 */}
-      <aside
-        data-pagefind-ignore
-        className="hidden w-72 shrink-0 border-r border-border bg-elevated lg:block"
-      >
-        {/* top-12 与顶部导航高度 h-12 对齐；max-h 留出这 48px，内容超视口时
-            侧栏内部纵向滚动（出现滚动条、可滚到最底篇章） */}
-        <div className="sticky top-12 max-h-[calc(100vh-3rem)] overflow-y-auto px-4 py-8">
-          <LibraryNav paths={paths} />
-        </div>
-      </aside>
-
-      {/* lg 以下：汉堡按钮 + 抽屉（client 壳，章节树为 client 高亮组件） */}
+      {/* 单份目录同时承担桌面侧栏与移动抽屉，避免重复序列化导航数据。 */}
       <ChapterDrawer>
         <LibraryNav paths={paths} />
       </ChapterDrawer>

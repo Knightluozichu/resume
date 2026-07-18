@@ -1,0 +1,205 @@
+---
+title: "Chapter 10：垃圾回收清扫与压缩（Garbage Collection – Sweep and Compact）"
+type: A
+section: Pro .NET 内存管理（第2版）· 空间回收与地址更新
+order: 10
+description: 对齐原书第 10 章：执行 Plan Phase 的 sweep/compact 决策，合并死区并重建 free lists，更新根与对象引用、搬运 plugs，刷新代边界、allocation pointers 与 segment 提交状态。
+demo: false
+math: false
+sourceUrl: "https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_10"
+draft: false
+---
+
+import {
+  DnmFreeListRebuildLab,
+  DnmReferenceRelocationLab,
+  DnmSweepCompactExecutionMap,
+} from "@/components/mdx/dotnet-memory/diagrams/garbage-collection-sweep-and-compact";
+
+<Objectives>
+
+- 能描述 sweep 如何保持存活对象地址、合并相邻死区、重建 free list，并区分内部碎片、连续尾部与空 segment
+- 能分析 compact 的引用重定位、重叠安全搬运和元数据重建顺序，解释为什么所有受管引用都必须与新地址一致
+- 能设计 SOH/LOH 对照实验，利用 Compacted、GenerationInfo、FragmentedBytes、暂停和工作集验证压缩是否兑现收益
+
+</Objectives>
+
+## 为什么最后阶段反而最短
+
+官方章节指出，Sweep/Compact 虽然是关键动作，但复杂判断已经由 Mark 与 Plan 完成：live set、pin 状态、plugs/gaps、目标地址和策略都已确定。执行阶段不再重新猜谁存活，而是严格消费计划，恢复“堆可遍历、引用有效、分配器可继续”的一致状态。
+
+<DnmSweepCompactExecutionMap />
+
+Sweep 与 Compact 都会清理临时 mark/pin 状态、刷新 heap metadata 并为下次分配准备空间，但地址语义完全不同。Sweep 后对象仍在旧址；Compact 后可移动对象位于目标址，所有由 GC 管理的引用必须同步更新。诊断时先看 `GCMemoryInfo.Compacted`，不能仅凭“GC 结束后堆变小”猜路径。
+
+## Sweep 怎样把死对象变成可复用空间
+
+<Term def="按照计划保留所有 live objects 的地址，把不可达区间转成可分配 free objects，并维护 segment/代元数据的回收路径。">清扫阶段</Term>
+
+Sweep 顺序处理标记布局：遇到存活对象就保留并清除本轮状态，遇到连续死对象就计算一个 gap，写入运行时可安全遍历的 free-object 表示，并把合适区间加入分配结构。相邻死对象应合并，否则许多小表项既增加搜索成本，也无法满足较大请求。
+
+```text
+before: [live A][dead 24][dead 40][live B][dead 96][tail]
+sweep:  [live A][free 64.........][live B][free 96][tail]
+
+addresses(A/B) unchanged
+internal free 64/96 -> reusable free-list entries
+space after last live object -> allocation tail, not the same fragmentation bucket
+```
+
+<Term def="清扫时把连续死区合并、按运行时策略组织为可查找/可拆分的 free entries，供后续非指针碰撞分配复用的过程。">空闲链表重建</Term>
+
+free list 不是“所有空闲字节相加”的计数器。一次 128 KB 请求需要一个足够大的连续 entry；四个分散 40 KB 空洞总计 160 KB 也不能直接拼成对象。选择哪一条 list、是否拆分余量和最小 free object 大小是运行时实现细节，应用只需依靠尺寸分布和分配结果诊断。
+
+<DnmFreeListRebuildLab />
+
+先预测相邻死区合并后哪个请求能命中，再调节请求大小。LOH 的常见路径正是 sweep：大对象搬运贵，死对象会被合并成 free object，未来大分配尝试复用；若无单块匹配，运行时可能扩展 segment 或触发 Gen 2 GC。
+
+<Callout type="trap" title="陷阱：Free 统计大于请求就认为一定能分配">
+  对象需要连续地址。必须看最大/匹配空洞、heap kind、segment tail 与提交状态；`FragmentedBytes` 很高可能仍找不到一个足够大的 LOH 块，也可能包含正好可复用的合适尺寸，不能只看总量。
+</Callout>
+
+## Compact 为什么要先处理引用再搬对象
+
+<Term def="依据 Plan Phase 的 old-to-new mapping，把栈、寄存器、静态字段、句柄和 live object 字段中的托管引用改为目标地址的过程。">引用重定位</Term>
+
+CoreCLR 可先遍历根和 live objects，利用 plug relocation plan 把每个受管引用从旧目标换成新目标。更新发生时对象字节可能仍在旧址；随后复制 plug 时，已更新的字段随对象内容一起到达新址。这样线程恢复时，根和字段都指向已经搬完的对象。
+
+<DnmReferenceRelocationLab />
+
+```text
+plan: A 0x120 -> 0x100, B 0x180 -> 0x140
+
+relocate roots: root(A) 0x120 -> 0x100
+relocate fields: A.Next(B) 0x180 -> 0x140
+compact plugs: bytes(A) -> 0x100, bytes(B) -> 0x140
+rebuild metadata: generations/cards/bricks/allocation pointer
+```
+
+固定对象的 mapping 是 identity：旧地址等于新地址；指向它的引用无需改值，但仍要参与扫描。Interior byref 则要把所属对象基址改到目标，再保持内部偏移。原生 `IntPtr` 不在受管重定位集合中，GC 不会猜它是否指向对象；本机代码跨 GC 持有地址必须 pin 或使用正式 interop contract。
+
+## Compact 怎样安全搬运重叠 plugs
+
+<Term def="按照重定位计划把可移动 live plugs 复制到目标地址、闭合 gaps 并形成连续 free tail 的执行阶段。">压缩阶段</Term>
+
+目标地址通常低于旧地址，源区与目标区可能重叠。搬运必须采用等价于 `memmove` 的重叠安全顺序，且不能覆盖尚未复制的 live bytes。以 plug 为单元能顺序读取旧布局、顺序写入新布局，减少随机访问；pinned anchors 将布局分成独立区间，不能被跨越。
+
+```text
+unsafe copy rule:
+  memcpy(destination, source, length) when ranges overlap
+
+required invariant:
+  copy direction/order preserves unread live bytes
+  pinned plug stays at identity mapping
+  every destination range is unique and non-overlapping
+```
+
+这里的第一行是反例，不是实现建议。对象移动后，旧地址区域可成为后续目标或 free tail；任何未更新根、漏掉字段或错误 native pointer 都会成为内存破坏，而不是普通业务异常。因此 compact 必须在运行时完全掌握引用的位置执行。
+
+<Callout type="trap" title="陷阱：对象内容没变就缓存其地址">
+  托管对象身份不依赖固定地址。一次 compacting GC 可改变其地址，即使字段值完全相同；把地址转成整数长期缓存无法得到 GC 更新。仅在明确 fixed/pinned 生命周期内把地址交给本机代码，并保证本机使用不超过该生命周期。
+</Callout>
+
+## 代边界与分配指针怎样重建
+
+<Term def="每个逻辑 generation 在 segment 中的起点/终点与相关 allocation state；回收后必须落在合法对象边界并反映 survivor 晋升。">分代边界</Term>
+
+Gen 0 survivor 可成为 Gen 1，Gen 1 survivor 可成为 Gen 2；压缩后的边界要按计划落在完整对象之间。GC 同时刷新 allocation pointer/context、segment allocated 指针、card/brick 等查找元数据和下一轮预算依据。若只搬对象却不更新这些结构，后续分配或 heap walk 会把 live bytes 当空闲。
+
+<Term def="最后一个存活/计划对象之后、到 segment 已提交或保留边界之间的连续可分配范围；它与对象之间的 internal fragmentation 分开统计。">尾部空闲空间</Term>
+
+`GCMemoryInfo.FragmentedBytes` 主要描述存活对象之间的 free gaps；最后 live object 后的 tail 同样可分配，却不计入同一碎片口径。Compact 的典型收益就是把许多内部 gaps 聚成 tail。回收结束后，运行时可保留一部分已提交 tail 供即将到来的 Gen 0 分配，也可 decommit 不需要的尾部页面。
+
+## 空 segment、decommit 与工作集为什么不同步
+
+一个 segment 若没有 live objects，运行时可释放/回收整个 segment；最后 live object 之后的部分可 decommit。内部 free gaps 往往仍保持 committed，便于未来分配直接复用。因而“对象已回收”只说明托管空间可复用，不保证 RSS/working set 在同一毫秒下降。
+
+操作系统还独立决定驻留页回收，容器 hard limit、内存压力和 GC flavor 会影响 segment 策略。验收内存优化应同时看 managed heap、committed、working set 与时间，而不是在 `GC.Collect` 后立刻读取一次任务管理器。
+
+```csharp
+GCMemoryInfo info = GC.GetGCMemoryInfo();
+Console.WriteLine($"Compacted={info.Compacted}, Generation={info.Generation}");
+Console.WriteLine($"Heap={info.HeapSizeBytes:n0}, Fragmented={info.FragmentedBytes:n0}");
+Console.WriteLine($"Committed={info.TotalCommittedBytes:n0}");
+Console.WriteLine($"MemoryLoad={info.MemoryLoadBytes:n0}");
+```
+
+## LOH 一次性压缩怎样工作
+
+LOH 通常 sweep，因为复制大对象成本显著；相邻 dead objects 合并为 free object，空 segment 可返还，尾部可 decommit。但 LOH 不是永不移动：`GCSettings.LargeObjectHeapCompactionMode = CompactOnce` 请求在下一次 full blocking GC 压缩 LOH，完成后模式会被消费/重置。设置属性本身不等于回收已经发生。
+
+```csharp
+using System.Runtime;
+
+GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+GC.Collect(GC.MaxGeneration, GCCollectionMode.Forced, blocking: true, compacting: true);
+
+GCMemoryInfo result = GC.GetGCMemoryInfo(GCKind.FullBlocking);
+Console.WriteLine($"Compacted={result.Compacted}, Fragmented={result.FragmentedBytes:n0}");
+```
+
+这段代码只适合已证明 LOH fragmentation 导致真实问题的受控维护窗口。完整阻塞回收会暂停业务，且高存活 LOH 复制可能很贵；长期方案通常是减少临时大对象、复用有上限的缓冲、修复保留路径，而不是周期性强制 compact。
+
+## 怎样证明 Sweep 或 Compact 真的改善系统
+
+先固定版本、GC 配置、预热和负载，记录 GC reason/depth/type、`Compacted`、各代 size/fragmentation before/after、pinned count、pause p95/p99、allocation rate 与 working set。对照组只改一个变量，例如缩短 pin 或减少临时 LOH 数组，不要同时改池化和 GC 配置。
+
+Sweep 成功不要求碎片归零，而要求 free list 能高效满足真实尺寸、完整回收和 segment 扩张不过度；Compact 成功也不只看碎片下降，还要证明复制暂停没有抵消吞吐/尾延迟收益。一次事件可解释机制，多个稳定窗口才判断收益。
+
+## 三步验证执行阶段
+
+<Stepper>
+  <Step title="第一步：确认实际执行的是哪条路径">
+    从同一次 GC 的 reason、depth、type 与 Compacted 开始，先预测 sweep/compact 结果，再比较回收前后对象地址、free gaps 和 tail；不要从堆大小变化倒推。
+
+    <DnmSweepCompactExecutionMap />
+  </Step>
+  <Step title="第二步：核对每类引用与对象目标一致">
+    手推 root、handle、object field、interior byref 和 pinned mapping，逐步执行 relocate 与 move；任何 raw pointer 都必须单独证明固定生命周期。
+
+    <DnmReferenceRelocationLab />
+  </Step>
+  <Step title="第三步：用真实请求验证回收空间">
+    按对象尺寸查看 free entries、相邻 gap 合并、最大连续块与 segment tail；在同负载比较后续分配、Gen 2 次数、暂停和工作集。
+
+    <DnmFreeListRebuildLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Sweep 保持 live addresses，合并 dead ranges 并重建 free lists；总 free bytes 不保证存在满足请求的连续块
+- Compact 依据计划先重定位受管根与对象字段，再安全搬运 plugs，任何漏更新引用都会破坏内存一致性
+- 回收后必须刷新代边界、allocation pointer 和 card/brick/segment 元数据，才能恢复分配与 heap walking
+- Internal gaps、continuous tail、decommitted pages 和 working set 是不同口径；对象回收不等于 RSS 立刻下降
+- LOH 默认偏向 sweep，但 `CompactOnce` 可请求下一次 full blocking GC 压缩；必须以暂停和长期分配结果验收
+
+<Exercises>
+  1. **问题 1：重建 free list。** A/B 两个 live objects 之间连续有 24 KB 与 40 KB 死对象，随后还有 96 KB gap；一次 60 KB 和一次 80 KB 请求分别可怎样复用？
+
+  <Answer question="相邻死区与单块尺寸如何决定分配？">Sweep 应先把相邻 24+40 合成 64 KB free entry，因此 60 KB 请求可由它满足，若余量达到运行时最小可表示大小才继续入链；80 KB 不能由分散总量拼接，但可使用独立 96 KB entry。具体选择/拆分策略由运行时决定，核心约束是单块连续。</Answer>
+
+  2. **问题 2：手推引用重定位。** 根指向 A@0x120，A.Next 指向 B@0x180，计划目标是 A@0x100、B@0x140；恢复线程前必须完成什么？
+
+  <Answer question="引用与对象移动如何保持一致？">根位置应更新为 0x100，A.Next 应更新为 0x140，然后按重叠安全顺序把 A/B 内容搬到目标，并刷新代边界、allocation pointer 与 card/brick 等元数据。Pinned mapping 保持旧址；裸 IntPtr 不会自动更新，若存在必须由 pin/interop 契约保证。</Answer>
+
+  3. **问题 3：评估 LOH CompactOnce。** 一次完整阻塞压缩后 FragmentedBytes 下降 70%，但 p99 暂停增加 200 ms；是否应周期执行？
+
+  <Answer question="压缩成功不能只看碎片下降吗？">不能。应证明碎片此前确实导致分配失败重试、segment 扩张或工作集问题，并比较压缩后多个窗口的 LOH 分配、Gen 2 次数、吞吐和工作集收益是否超过 200 ms 尾延迟。若临时大数组仍持续制造空洞，应优先减少/复用分配，而非周期强制 full blocking compact。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="清扫阶段">保留存活对象地址并把死区转成可复用 free entries 的执行路径。</GlossaryItem>
+  <GlossaryItem term="空闲链表重建">合并并组织死区，为后续适配尺寸的分配提供 free entries。</GlossaryItem>
+  <GlossaryItem term="引用重定位">依据计划把 GC 管理的根和字段改到对象目标地址。</GlossaryItem>
+  <GlossaryItem term="压缩阶段">把可移动 live plugs 搬到计划目标并闭合内部 gaps 的执行过程。</GlossaryItem>
+  <GlossaryItem term="分代边界">回收后描述各代合法对象范围与 survivor 晋升结果的边界。</GlossaryItem>
+  <GlossaryItem term="尾部空闲空间">最后存活对象之后可连续分配、但不等同内部碎片的 segment tail。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Pro .NET Memory Management, Second Edition, Chapter 10 Garbage Collection – Sweep and Compact"
+  adaptedUrl="https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_10"
+/>

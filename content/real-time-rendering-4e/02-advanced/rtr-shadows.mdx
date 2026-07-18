@@ -1,121 +1,200 @@
 ---
-title: "实时阴影技术"
+title: "阴影视野、精度与过滤"
 type: B
 section: "计算机图形学与渲染"
 order: 6
-description: "阴影映射三步流程与PCF/CSM/VSM优化方案"
+description: "承载官方 Ch7 Shadows：shadow map 投影、偏移、过滤、级联、点光源、矩与混合阴影"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://www.realtimerendering.com/"
 draft: false
 ---
 
-import { RtrShadowsDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-shadows";
+import { RtrShadowsDiagram, RtrShadowPrecisionDiagram, RtrShadowMethodsDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-shadows";
+import { RtrStepFlowDiagram } from "@/components/mdx/real-time-rendering-4e/diagrams/rtr-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能解释阴影映射的两步Pass流程
-- 能分析Shadow Acne和Peter-panning两个经典问题及解法
-- 能解释PCF软阴影的原理
-- 能回答：CSM为什么能同时兼顾近处精度和远处覆盖？
+
+- 能追踪 shadow caster 到 light-space depth，再到 receiver visibility 的完整数据流
+- 能分析 projection、texel footprint、depth precision 与 bias 如何共同产生 acne 或 detached shadow
+- 能比较 PCF、PCSS、VSM/EVSM、CSM、cube shadow 和 ray-traced shadow 的边界
+- 能设计覆盖移动相机、薄片、alpha test、级联接缝和动态光源的阴影回归
+
 </Objectives>
 
-## 直觉引入
+## 直觉：阴影是一个可见性查询
 
-想象你用手电筒照墙。手在墙上投下影子——因为手挡住了光。计算机做阴影的思路也一样：从光源角度看场景，被挡住的地方就是阴影。这就是阴影映射（Shadow Map）的核心思想。
+先预测：把 shadow map 分辨率翻倍，acne 会自动消失吗？把 bias 加大，所有自阴影错误都会被修复吗？都不一定。阴影错误来自有限分辨率、投影参数、深度量化、receiver slope、过滤核、caster 几何和坐标约定的组合。
 
-但实现起来有两个难题：一是「从光源看」的深度精度不够（Shadow Acne），二是阴影边缘太硬（需要PCF软化）。RTR4 花了大篇幅讲这些问题的解法。
-
-## 概念讲解
-
-### 阴影映射技术
+Ch7 Shadows 的核心问题是：从着色点沿光源方向，是否能看见发光体。shadow map 把三维 visibility 离散成光源视图中的 depth lookup；ray tracing 直接查询几何；其他方法则在精度、覆盖、软化和成本之间选择近似。
 
 <RtrShadowsDiagram />
 
-<Term def="阴影映射是从光源视角渲染深度图，再比较片段深度判断是否被遮挡的阴影技术">阴影映射</Term>分两步：1) 从光源渲染深度到Shadow Map；2) 在主Pass比较片段到光源的距离与Shadow Map的深度。
+## Shadow map：深度是光源看到的第一层
 
-两个经典问题：
-- <Term def="Shadow Acne是阴影映射中因深度精度不足导致表面出现条纹状自阴影的现象">Shadow Acne</Term>：用偏移（Bias）解决
-- <Term def="Peter-panning是偏移过大导致阴影与物体分离悬浮的现象">Peter-panning</Term>：减小偏移或使用正面剔除
+<Term def="从光源投影场景的最近深度，并在接收点重新投影比较深度以近似光源可见性的技术">阴影映射</Term>通常包含：
 
-<Term def="PCF是百分比渐进滤波，在阴影边缘采样多个点平均，产生软阴影效果">PCF</Term>是软阴影的基础技术。
+1. 选择 light view/projection 与 caster set；
+2. 渲染最接近光的 depth，包含 alpha-tested caster 的一致裁剪；
+3. 把 receiver 变换到 light clip/NDC/texture coordinates；
+4. 比较 receiver depth 与过滤后的 stored depth，得到 visibility；
+5. 将 visibility 只作用于对应直接光，不能把环境光和 emissive 一并乘黑。
 
-## 交互Demo
-
-<Stepper>
-<Step title="第一步：深度Pass">从光源视角渲染场景，只写深度不写颜色，生成Shadow Map。理解正交投影（方向光）和透视投影（点光源）的区别。</Step>
-<Step title="第二步：深度比较与偏移">
-在主Pass中，把片段变换到光源空间，比较深度。大于Shadow Map值则被遮挡。偏移解决Acne，但太大会导致Peter-panning。
-<RtrShadowsDiagram />
-</Step>
-<Step title="第三步：软阴影与级联">PCF采样多点平均产生软阴影边缘。CSM将视锥分成多段，近处用高精度Shadow Map，远处用低精度，兼顾精度和覆盖。</Step>
-</Stepper>
-
-## 代码对照
+方向光使用正交投影，spot light 常用透视投影，point light 可用 cube 的六个面或其他全向参数化。不同 API 的 clip-depth range、reversed-Z、comparison sampler、border mode 与 Y orientation 必须端到端一致。
 
 ```glsl
-// 阴影映射核心代码
-uniform sampler2D shadowMap;
-uniform mat4 lightSpaceMatrix;
-uniform vec3 lightDir;
+float sampleShadow(vec4 lightClip, vec3 normalWS, vec3 lightDirWS) {
+    vec3 ndc = lightClip.xyz / lightClip.w;
+    vec3 uvz = ndcToShadowTexture(ndc); // API-specific depth range and Y
+    if (any(lessThan(uvz.xy, vec2(0.0))) || any(greaterThan(uvz.xy, vec2(1.0))))
+        return shadowOutsidePolicy;
 
-float calculateShadow(vec4 fragPosLightSpace, vec3 normal) {
-    // 透视除法
-    vec3 projCoords = fragPosLightSpace.xyz / fragPosLightSpace.w;
-    projCoords = projCoords * 0.5 + 0.5; // [-1,1] -> [0,1]
-    
-    // 当前片段到光源的距离
-    float currentDepth = projCoords.z;
-    
-    // 偏移（解决 Shadow Acne）
-    float bias = max(0.05 * (1.0 - dot(normal, lightDir)), 0.005);
-    
-    // PCF 3x3 软阴影
-    float shadow = 0.0;
-    vec2 texelSize = 1.0 / textureSize(shadowMap, 0);
-    for(int x = -1; x <= 1; ++x) {
-        for(int y = -1; y <= 1; ++y) {
-            float pcfDepth = texture(shadowMap, projCoords.xy + vec2(x, y) * texelSize).r;
-            shadow += currentDepth - bias > pcfDepth ? 0.0 : 1.0;
-        }
-    }
-    shadow /= 9.0;
-    
-    return shadow;
+    float bias = computeWorldAndSlopeBias(normalWS, lightDirWS, uvz.z);
+    return texture(shadowCompareSampler, vec3(uvz.xy, uvz.z - bias));
 }
 ```
+
+## 精度与 bias：不是一个魔法常数
+
+<RtrShadowPrecisionDiagram />
+
+<Term def="接收面在有限 shadow texel 与量化深度上和自身存储深度发生错误比较，形成条纹或点状自遮挡">Shadow acne</Term>的来源包括：同一 texel 代表一片 receiver、rasterization sampling 差异、深度格式/投影精度，以及表面对光的斜率。
+
+constant depth bias、slope-scaled bias、normal offset 和 receiver-plane depth bias 处理不同误差。近似 slope bias 可随 $\tan\theta$ 增长：
+
+$$
+b=b_{constant}+b_{slope}\tan\theta,
+\qquad \cos\theta=\mathbf n\cdot\mathbf l.
+$$
+
+但 grazing angle 时必须 clamp；单位还可能是 shadow depth、depth ULP、texel 或 world distance，不能把示例常数跨场景复制。
+
+<Term def="bias 或 normal offset 过大使接触处 visibility 被错误判为可见，导致阴影与 caster 分离的现象">Peter-panning</Term>是漏影的一种表现。front-face culling 有时隐藏闭合厚物体的 acne，但薄片、open mesh、foliage 和 double-sided caster 会丢失，不是通用修法。
+
+shadow texel 对应的 world-space footprint 随 projection 和位置变化。增大分辨率可缩小 footprint，却不能修复错误 near/far、坐标变换、bias 单位或 caster 缺失。首先可视化 cascade、light frustum、uvz、bias 和 raw comparison。
+
+## 过滤与软阴影
+
+<Term def="在接收点周围执行多个深度比较，再对二值 visibility 结果加权平均的阴影过滤方法">PCF</Term>必须“先比较、后平均”；直接线性过滤 depth 再比较并不等价。固定 PCF 核提供抗锯齿/模糊边界，但不会自然产生随 blocker-receiver-light 几何变化的 penumbra。
+
+对宽度 $w_L$ 的面光源，简化平行平面下的 penumbra 尺度近似：
+
+$$
+w_P \propto w_L\frac{z_R-z_B}{z_B},
+$$
+
+其中 $z_B$ 是 blocker 距离，$z_R$ 是 receiver 距离。PCSS 先搜索 blocker，估计平均 blocker depth，再按 penumbra 调整 PCF 核；它仍有 blocker 搜索、采样噪声和复杂遮挡近似误差。
+
+<Term def="存储深度矩并用概率不等式估计可见性，使阴影图可预过滤的 moment shadow 方法">VSM</Term>存储 $E[z]$ 与 $E[z^2]$，用 Chebyshev 上界估计遮挡。它支持普通过滤，却会 light bleeding；variance clamp、bleed reduction、EVSM/MSM 改善但会带来指数溢出、精度或额外矩成本。
+
+<RtrShadowMethodsDiagram />
+
+## CSM：覆盖、稳定和接缝是一个系统
+
+<Term def="沿相机视锥深度划分多个区间，每区间使用独立方向光 shadow projection 的级联阴影映射">级联阴影映射</Term>让近处小覆盖获得高 texel density，远处大覆盖保留阴影。split 可混合 uniform 与 logarithmic：
+
+$$
+d_i=\lambda n(f/n)^{i/N}+(1-\lambda)\left[n+(f-n)i/N\right].
+$$
+
+每 cascade 需要选择 caster volume、fit light projection，并处理：
+
+- texel snapping/stable projection，防止相机微动导致阴影游泳；
+- cascade overlap 与 cross-fade，隐藏分界跳变；
+- receiver 选层与 caster 扩张，避免跨层漏影；
+- 每层独立 bias/filter footprint，避免世界尺度不一致；
+- 合理 far distance 与 fallback，而不是无限扩大最后一层。
+
+## 全向、透明与混合方案
+
+point-light cube shadow 要保持六面 orientation、seam、radial depth 与 near/far 一致；一次 geometry amplification 不一定比六次 pass 更快，应测量。大量局部光可用 atlas、cache、update scheduling 与 importance 管理成本。
+
+alpha-tested foliage 在 shadow pass 必须使用与可见 pass 一致的 cutout 规则与 mip/LOD，否则叶片形状不一致。普通 shadow map 表示单层二值 visibility，不能直接表达彩色半透明或多层 transmittance；需 deep/opacity map、stochastic transparency、ray tracing 或领域近似。
+
+ray-traced shadow 能直接采样面光源和几何 visibility，但仍需 samples、denoising、temporal reuse 与 fallback。常见混合是 CSM 提供主要方向光覆盖，screen/ray query 补 contact shadow，distance field/probe 处理特殊范围。屏幕空间 contact shadow 缺少屏外 caster，必须有置信度与降级路径。
+
+## 三步阴影验收
+
+<Stepper>
+<Step title="第一步：观察原始空间与比较值">
+
+显示 light frustum、cascade index、shadow UV/depth、stored depth、bias、raw visibility 和 caster draw list。
+
+<RtrStepFlowDiagram caption="先区分覆盖缺失、坐标错误、精度误差与过滤问题。" stage={1} stages={["Inspect：frustum、cascade、uvz、stored depth、bias、casters"]} />
+
+</Step>
+<Step title="第二步：扫描几何与参数边界">
+
+测试接触盒、斜平面、薄片、负尺度、alpha foliage、cube seam；扫描 near/far、resolution、bias、kernel 与 split。
+
+<RtrStepFlowDiagram caption="单一场景调出的 bias 不能代表系统正确。" stage={2} stages={["Inspect：frustum、cascade、uvz、stored depth、bias、casters", "Stress：slopes、thin/alpha geometry、seams、camera and light motion"]} />
+
+</Step>
+<Step title="第三步：对比 reference 与时间稳定性">
+
+以高分辨率或 ray-traced visibility 为参考，记录 false shadow、leak、penumbra、cascade transition、flicker、draws 与 GPU 时间。
+
+<RtrStepFlowDiagram caption="阴影门槛同时包含接触、覆盖、稳定、软化和成本。" stage={3} stages={["Inspect：frustum、cascade、uvz、stored depth、bias、casters", "Stress：slopes、thin/alpha geometry、seams、camera and light motion", "Validate：reference visibility、temporal stability、coverage、cost"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**误区：Shadow Acne和Peter-panning是一个问题的两个方向。**
-偏移太小→Acne（自阴影条纹）；偏移太大→Peter-panning（阴影悬浮）。解法不是固定偏移值，而是用基于法线和光源角度的自适应偏移：bias = max(0.05*(1-N·L), 0.005)。
+**现象 →** 到处套 `max(0.05*(1-N·L),0.005)`。**原因 →** 忽略 bias 的单位、projection、texel footprint 和 depth precision。**修法 →** 在目标 cascade/灯光空间标定 constant、slope、normal/receiver-plane offset，并用多尺度场景回归。
 </Callout>
 
 <Callout type="trap">
-**误区：认为PCF就是真软阴影。**
-PCF只是对硬阴影边缘做模糊，不是真正的面光源软阴影。真实的软阴影需要PCSS（根据遮挡距离自适应采样范围）或光线追踪。PCF是性能与效果的折中。
+**现象 →** PCF 核越大就认为面光源越大。**原因 →** 固定图空间模糊没有 blocker/receiver 几何。**修法 →** 需要接触硬化时用 PCSS、采样面光源或光追 reference，并验证 penumbra 随距离变化。
 </Callout>
 
+<Callout type="trap">
+**现象 →** CSM 相机移动时闪动，分界处阴影跳变。**原因 →** projection 未对齐 texel，层间 footprint/bias 不一致。**修法 →** stable fit/texel snapping、overlap blend，并显示 cascade index 做运动回归。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题 1**：阴影映射的两个Pass分别做什么？
+
+**问题 1：提高 shadow map 分辨率为何不保证消除 acne？**
 
 <Answer>
-第一个Pass（深度Pass）：从光源视角渲染场景，只写深度不写颜色，生成Shadow Map（阴影贴图）。第二个Pass（主Pass）：将每个片段变换到光源空间，比较其深度与Shadow Map中的深度，若片段深度大于Shadow Map深度则被遮挡（在阴影中），最终在着色时乘以阴影系数。
+它只缩小 texel footprint；错误的 light projection/depth range、量化、receiver slope、坐标变换和 bias 单位仍存在。应分别观察 stored/receiver depth 与 bias，再用斜面和多距离验证。
 </Answer>
 
-**问题 2**：CSM（级联阴影映射）如何同时兼顾近处精度和远处覆盖？
+**问题 2：PCF 与 PCSS 的核心差别是什么？**
 
 <Answer>
-CSM将相机视锥沿深度方向分成多段（通常3-5级），每段使用独立的Shadow Map。近处段覆盖范围小但分辨率高（精度高），远处段覆盖范围大但分辨率低。渲染时根据片段深度选择对应级别的Shadow Map。这样近处物体有高精度阴影，远处物体也有覆盖，避免了单张Shadow Map精度和覆盖范围不可兼得的问题。
+PCF 用固定或预设核平均多个二值比较，主要过滤离散边缘；PCSS 先估计 blocker depth，再根据 light/blocker/receiver 几何调整过滤半径，近似接触硬化，但增加搜索和估计误差。
 </Answer>
+
+**问题 3：怎样验收 CSM 的稳定性？**
+
+<Answer>
+沿固定相机轨迹记录 cascade index、投影矩阵、texel origin 和阴影图像；检查微小平移/旋转时是否游泳，跨 split 是否平滑，动态 caster 是否进入正确层，并记录每层 draw、分辨率和 GPU 时间。
+</Answer>
+
+**问题 4：为什么 alpha foliage 与半透明玻璃不能用同一套普通 shadow map 处理？**
+
+<Answer>
+foliage cutout 可在 depth pass 以 alpha test 产生二值覆盖；玻璃需要部分且可能带颜色的 transmittance，单层最近 depth 不能表达多层透射。后者需 opacity/deep、stochastic 或 ray-based 方案及明确近似。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+Ch7 Shadows 把光源可见性转化为有限资源下的查询问题。shadow map 的质量由投影、caster、depth、bias、filter 和时空稳定共同决定；PCF、PCSS、moment、CSM 与 ray tracing 各解决不同边界，必须以可视化、压力场景、reference 和成本闭环。
+
 <Glossary>
-<GlossaryItem term="阴影映射">从光源视角渲染深度图，再比较片段深度判断是否被遮挡的两步Pass阴影技术。</GlossaryItem>
-<GlossaryItem term="Shadow Acne">因深度精度不足导致表面出现条纹状自阴影的现象，用偏移（Bias）解决。</GlossaryItem>
-<GlossaryItem term="PCF">百分比渐进滤波，在阴影边缘采样多个点平均，产生软阴影效果。</GlossaryItem>
-<GlossaryItem term="CSM">级联阴影映射，将视锥分成多段分别使用不同精度的Shadow Map，兼顾近处精度和远处覆盖。</GlossaryItem>
+<GlossaryItem term="阴影映射">从光源记录最近深度并在接收点比较以近似可见性的技术。</GlossaryItem>
+<GlossaryItem term="Shadow acne">有限深度与接收面误差造成的错误自遮挡。</GlossaryItem>
+<GlossaryItem term="Peter-panning">过大偏移导致接触阴影与 caster 分离的现象。</GlossaryItem>
+<GlossaryItem term="PCF">对多个二值深度比较结果加权平均的阴影过滤。</GlossaryItem>
+<GlossaryItem term="VSM">存储深度矩并估计可见性的可预过滤阴影方法。</GlossaryItem>
+<GlossaryItem term="级联阴影映射">按相机深度区间分配多个方向光 shadow projection 的方法。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="实时渲染第4版" adaptedUrl="https://www.realtimerendering.com/" />
+<Attribution adaptedFrom="Real-Time Rendering 4e, Chapter 7: Shadows" adaptedUrl="https://www.realtimerendering.com/" />

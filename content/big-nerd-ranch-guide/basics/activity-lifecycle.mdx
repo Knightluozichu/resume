@@ -6,9 +6,11 @@ order: 3
 description: 理解 Activity 从创建到销毁的完整生命周期——六个回调函数的调用时机和常见使用场景。
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.oreilly.com/library/view/android-programming-the/9780135257555/"
 draft: false
 ---
+
+import { BnrLifecycleLab, BnrFailureLab, BnrEvidenceLab } from "@/components/mdx/big-nerd-ranch-guide/diagrams/activity-lifecycle";
 
 {/* 知识点清单：
    1) 六大生命周期回调 = Stepper 状态转换图
@@ -21,9 +23,10 @@ draft: false
 
 <Objectives>
 
-- 能画出 Activity 生命周期的状态转换图：onCreate → onStart → onResume → onPause → onStop → onDestroy
-- 能说出每个生命周期回调的典型用途——什么操作适合放在哪个回调里
-- 能回答：用户在 Activity A 上打开了 Activity B，A 会经历哪些生命周期回调？
+- 能解释“第3章 The Activity Lifecycle”全部正式节点的组件所有者、生命周期、线程、状态来源与Android版本边界。
+- 能实现“用回调日志解释离开、结束、旋转、多窗口与配置变化，而不是把Activity视为常驻对象”的最小垂直切片，并保存构建、设备操作、原始日志和断言。
+- 能比较正常创建、旋转、后台、进程重建、权限拒绝与外部故障下的行为差异。
+- 能设计推翻当前实现的反例，并凭生命周期轨迹、横竖屏差异、重复回答与计分恢复测试完成独立交接。
 
 </Objectives>
 
@@ -104,17 +107,23 @@ draft: false
 
 <Exercises>
 
-**练习 1（画图）** 画出从启动到按 Home 再切回、最后按 Back 退出的完整回调链。
+**问题 1**：“第3章 The Activity Lifecycle”覆盖哪些正式节点和项目主线？
+<Answer>覆盖10个节点，从“3. The Activity Lifecycle”到“Challenge: Graded Quiz”。主线是用回调日志解释离开、结束、旋转、多窗口与配置变化，而不是把Activity视为常驻对象，交付物是生命周期轨迹、横竖屏差异、重复回答与计分恢复测试。</Answer>
 
-<Answer>
-启动：onCreate→onStart→onResume。按 Home：onPause→onStop。切回：onRestart→onStart→onResume。按 Back：onPause→onStop→onDestroy。
-</Answer>
+**问题 2**：怎样建立本页最小可执行实验？
+<Answer>固定JDK、SDK、Gradle、设备API、语言、权限和输入，完成一个从用户动作到可观察结果的垂直切片；保存干净构建、设备操作、原始日志、状态快照与断言。</Answer>
 
-**练习 2（场景）** 来电时你的全屏 Activity 会走到哪个状态？用户挂断后呢？
+**问题 3**：为什么只在正常点击路径运行不能证明完成？
+<Answer>它没有覆盖组件重建、进程死亡、异步取消、权限拒绝、外部输入失败、资源释放和版本变化。应逐项注入故障，并用生命周期轨迹、横竖屏差异、重复回答与计分恢复测试核对。</Answer>
 
-<Answer>
-来电弹出系统界面：onPause（可能仍 Stopped 若被完全盖住）。挂断返回：onRestart/onStart/onResume。若进程被杀则需重新 onCreate。
-</Answer>
+**问题 4**：怎样设计能推翻当前实现的反例？
+<Answer>保持其他变量不变，分别注入旋转、后台回收、进程死亡、拒权、断网、无效输入与重复操作；任何状态丢失、越权、崩溃、泄漏或重复副作用都推翻完成结论。</Answer>
+
+**问题 5**：从第4版语境迁移到现代目标SDK时如何控制变量？
+<Answer>先按原书还原机制并锁定基线，再查询目标SDK合同；一次只迁移组件导出、存储、权限、后台、通知或依赖之一，保存构建、行为、测试和回滚差异。</Answer>
+
+**问题 6**：本页达到独立交接标准需要什么？
+<Answer>需要版本与设备指纹、源码提交、输入、构建命令、生命周期轨迹、原始日志、失败测试、安全边界与发布产物，让他人凭生命周期轨迹、横竖屏差异、重复回答与计分恢复测试重放。</Answer>
 
 </Exercises>
 
@@ -131,3 +140,183 @@ draft: false
 </Glossary>
 
 <Attribution />
+
+
+{/* BNR4_AUTHORITY_SUPPLEMENT */}
+
+## 从生命周期、状态与证据开始
+
+第4版不是API词典，而是六个逐步扩展的应用实验。每一章都要回答：用户从哪里进入，哪个Android组件拥有工作，回调在哪个线程发生，哪些事实必须跨旋转或进程死亡恢复，外部系统怎样失败，资源在何时释放。<Term def="负责创建、取消并最终释放组件、任务或资源的明确作用域">生命周期所有者</Term>把Activity、Fragment视图、ViewModel、Worker、线程与资源的寿命连接起来；没有所有者的异步任务就是潜在泄漏。
+
+界面字段不是天然事实。<Term def="在配置变化或进程重建后，可从保存事实重新构造的最小用户状态">可恢复状态</Term>应根据数据大小与寿命放入saved instance state、ViewModel、数据库、文件或调度器，而不是全部塞进单例。Intent、文件、数据库、网络、系统服务和其他应用形成<Term def="跨边界交换数据时必须验证的action、类型、权限、大小、时序和失败约束">外部合同</Term>；正常响应只是合同中的一个样本。
+
+本书以2019年第四版、Android 5.0至8.1及其后续兼容实践为语境。<Term def="Android版本、targetSdk、设备形态、权限与依赖共同限定的行为适用范围">版本边界</Term>要求先还原书中机制，再查询现代目标SDK的权限、后台、存储、通知和组件导出合同。<Term def="由环境指纹、输入、操作、日志、状态快照和断言组成的可重放结论">证据链</Term>则保证“在我的模拟器能跑”不会冒充可交付结论。
+
+## 第4版正式目录逐节点映射
+
+### 3. The Activity Lifecycle
+
+**正式节点 1/10。** 先说明“3. The Activity Lifecycle”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“用回调日志解释离开、结束、旋转、多窗口与配置变化，而不是把Activity视为常驻对象”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### Rotating GeoQuiz
+
+**正式节点 2/10。** 先说明“Rotating GeoQuiz”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“用回调日志解释离开、结束、旋转、多窗口与配置变化，而不是把Activity视为常驻对象”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### Activity States and Lifecycle Callbacks
+
+**正式节点 3/10。** 先说明“Activity States and Lifecycle Callbacks”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“用回调日志解释离开、结束、旋转、多窗口与配置变化，而不是把Activity视为常驻对象”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### Logging the Activity Lifecycle
+
+**正式节点 4/10。** 先说明“Logging the Activity Lifecycle”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“用回调日志解释离开、结束、旋转、多窗口与配置变化，而不是把Activity视为常驻对象”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### Exploring How the Activity Lifecycle Responds to User Actions
+
+**正式节点 5/10。** 先说明“Exploring How the Activity Lifecycle Responds to User Actions”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“用回调日志解释离开、结束、旋转、多窗口与配置变化，而不是把Activity视为常驻对象”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### Device Configuration Changes and the Activity Lifecycle
+
+**正式节点 6/10。** 先说明“Device Configuration Changes and the Activity Lifecycle”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“用回调日志解释离开、结束、旋转、多窗口与配置变化，而不是把Activity视为常驻对象”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### For the More Curious: UI Updates and Multi-Window Mode
+
+**正式节点 7/10。** 先说明“For the More Curious: UI Updates and Multi-Window Mode”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“用回调日志解释离开、结束、旋转、多窗口与配置变化，而不是把Activity视为常驻对象”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### For the More Curious: Log Levels
+
+**正式节点 8/10。** 先说明“For the More Curious: Log Levels”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“用回调日志解释离开、结束、旋转、多窗口与配置变化，而不是把Activity视为常驻对象”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### Challenge: Preventing Repeat Answers
+
+**正式节点 9/10。** 先说明“Challenge: Preventing Repeat Answers”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“用回调日志解释离开、结束、旋转、多窗口与配置变化，而不是把Activity视为常驻对象”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### Challenge: Graded Quiz
+
+**正式节点 10/10。** 先说明“Challenge: Graded Quiz”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“用回调日志解释离开、结束、旋转、多窗口与配置变化，而不是把Activity视为常驻对象”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+## 最小可执行切片
+
+先把状态转换与Android副作用分开。下面的Kotlin骨架不替代本章代码，而是让旋转、进程恢复与失败输入可单测：
+
+```kotlin
+sealed interface ScreenState {
+    data object Loading : ScreenState
+    data class Ready(val key: String) : ScreenState
+    data class Failed(val reason: String, val retryable: Boolean) : ScreenState
+}
+
+fun reduce(current: ScreenState, event: UiEvent): ScreenState = nextState(current, event)
+```
+
+固定JDK、SDK、Gradle、设备API、语言和输入，清理缓存后从命令行保存制品与日志：
+
+```bash
+./gradlew --no-daemon clean test assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb shell am force-stop com.example.app
+adb shell monkey -p com.example.app 1
+adb logcat -d -v threadtime > run.log
+```
+
+先写行为断言，再执行用户操作和故障注入：
+
+```gherkin
+Given a pinned build, device API, locale, permission state, and input
+When the owner is recreated after state saving or process death
+Then durable facts reconstruct the same user-visible state
+And cancelled work cannot update a destroyed owner
+And denied permission, offline input, and malformed data remain recoverable
+```
+
+三段代码分别约束状态模型、环境重放和行为结果。真实项目还要加入静态检查、单元测试、仪器测试、无障碍检查和发布构建；日志只能支持断言，不能代替断言。
+
+## 线程、状态与外部资源
+
+主线程负责输入、生命周期分发和大部分UI工作，磁盘、网络、图片解码与长计算不能阻塞帧。后台结果返回前必须确认所有者仍有效；Fragment的生命周期与其View生命周期不是一回事。每个实现都应列出入口、线程、事实源、取消点、关闭责任和用户可见失败六项。
+
+跨应用Intent、ContentProvider、WebView、网络响应、文件URI和深链都视为不可信输入。校验action、scheme、MIME、大小、授权与响应者；导出组件使用最小权限；日志、截图和测试数据库不得泄露令牌或个人数据。相机、音频、数据库、线程和回调注册必须在成功、异常与取消路径都释放。
+
+性能以用户任务衡量：启动看可交互时刻，列表看掉帧与绑定分配，网络看超时和取消，后台工作看约束、电量与重复调度。每次比较固定设备温度、构建类型、数据规模和网络条件，先采基线再改变一个变量。
+
+迁移现代目标SDK时，先在第4版语境中证明机制，再逐项处理组件导出、存储、通知、后台启动、权限、废弃API和依赖版本。每一步保存编译差异、行为差异、测试结果和回滚点；新API并不自动正确，旧API能编译也不代表仍符合平台政策。
+
+## 三步验证实验
+
+<Steps>
+  <Step title="1. 建立目录节点与生命周期图">
+    从“用回调日志解释离开、结束、旋转、多窗口与配置变化，而不是把Activity视为常驻对象”选一个用户任务，标出入口、组件、所有者、回调线程、可恢复状态和销毁点。先预测旋转、后台和进程恢复后哪些对象消失、哪些事实必须重建。
+    <BnrLifecycleLab />
+  </Step>
+  <Step title="2. 注入生命周期与外部故障">
+    依次改变生命周期阶段、网络和权限，每次只改变一个条件；记录原始日志、界面状态、持久事实与资源计数，区分预期失败和未知状态。
+    <BnrFailureLab />
+  </Step>
+  <Step title="3. 通过交付证据门">
+    用生命周期轨迹、横竖屏差异、重复回答与计分恢复测试核对版本设备、生命周期、持久状态、失败安全、测试和发布。缺少任何一项时，不得把正常点击路径视为完成。
+    <BnrEvidenceLab />
+  </Step>
+</Steps>
+
+<Callout type="trap">**核心陷阱。** 只复述类名与回调，未说明所有者、状态来源、线程、取消和失败后果。修复时回到用户任务和状态机，注入旋转、进程死亡、拒权、断网与无效输入。</Callout>
+
+<Callout type="trap">**历史示例不等于当前平台政策。** 第4版准确反映出版时工具链；现代targetSdk可能改变组件导出、后台、存储、通知和权限。保留原书机制，再建立有证据的迁移层。</Callout>
+
+<Callout type="warning">**真机与数据安全。** 使用测试账号、样本媒体和最小权限；清理日志、数据库与截图。签名密钥、API密钥、联系人和真实位置不得写入仓库或公开证据。</Callout>
+
+## 本章回顾
+
+本页从“3. The Activity Lifecycle”覆盖到“Challenge: Graded Quiz”，共10个正式目录节点。掌握标准不是记住API，而是能沿“用回调日志解释离开、结束、旋转、多窗口与配置变化，而不是把Activity视为常驻对象”解释组件与数据边界，运行正常、重建和失败实验，并让另一位开发者仅凭生命周期轨迹、横竖屏差异、重复回答与计分恢复测试重放结论。
+
+<Exercises>
+
+**问题 1**：“第3章 The Activity Lifecycle”覆盖哪些正式节点和项目主线？
+<Answer>覆盖10个节点，从“3. The Activity Lifecycle”到“Challenge: Graded Quiz”。主线是用回调日志解释离开、结束、旋转、多窗口与配置变化，而不是把Activity视为常驻对象，交付物是生命周期轨迹、横竖屏差异、重复回答与计分恢复测试。</Answer>
+
+**问题 2**：怎样建立本页最小可执行实验？
+<Answer>固定JDK、SDK、Gradle、设备API、语言、权限和输入，完成一个从用户动作到可观察结果的垂直切片；保存干净构建、设备操作、原始日志、状态快照与断言。</Answer>
+
+**问题 3**：为什么只在正常点击路径运行不能证明完成？
+<Answer>它没有覆盖组件重建、进程死亡、异步取消、权限拒绝、外部输入失败、资源释放和版本变化。应逐项注入故障，并用生命周期轨迹、横竖屏差异、重复回答与计分恢复测试核对。</Answer>
+
+**问题 4**：怎样设计能推翻当前实现的反例？
+<Answer>保持其他变量不变，分别注入旋转、后台回收、进程死亡、拒权、断网、无效输入与重复操作；任何状态丢失、越权、崩溃、泄漏或重复副作用都推翻完成结论。</Answer>
+
+**问题 5**：从第4版语境迁移到现代目标SDK时如何控制变量？
+<Answer>先按原书还原机制并锁定基线，再查询目标SDK合同；一次只迁移组件导出、存储、权限、后台、通知或依赖之一，保存构建、行为、测试和回滚差异。</Answer>
+
+**问题 6**：本页达到独立交接标准需要什么？
+<Answer>需要版本与设备指纹、源码提交、输入、构建命令、生命周期轨迹、原始日志、失败测试、安全边界与发布产物，让他人凭生命周期轨迹、横竖屏差异、重复回答与计分恢复测试重放。</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="生命周期所有者">负责创建、取消并最终释放组件、任务或资源的明确作用域。</GlossaryItem>
+  <GlossaryItem term="可恢复状态">在配置变化或进程重建后，可从保存事实重新构造的最小用户状态。</GlossaryItem>
+  <GlossaryItem term="外部合同">Intent、文件、数据库、网络、系统服务或其他应用与本组件交换数据时的可验证约束。</GlossaryItem>
+  <GlossaryItem term="版本边界">Android版本、targetSdk、设备形态、权限与依赖共同限定的行为适用范围。</GlossaryItem>
+  <GlossaryItem term="证据链">由环境指纹、输入、操作、日志、状态快照和断言组成的可重放结论。</GlossaryItem>
+</Glossary>
+
+[← 上一页：第2章 Android and Model-View-Controller](/learn/big-nerd-ranch-guide/basics/android-mvc) · [下一页：第4章 Persisting UI State →](/learn/big-nerd-ranch-guide/basics/ui-state-persistence)
+
+<Attribution adaptedFrom="Android Programming: The Big Nerd Ranch Guide, 4th Edition" adaptedUrl="https://www.oreilly.com/library/view/android-programming-the/9780135257555/" />

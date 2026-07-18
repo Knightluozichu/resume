@@ -1,69 +1,23 @@
-/**
- * <CgpIntroductionDiagram>：图形学导论与历史图解。
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * 全部 DESIGN token 配色，无裸 hex。
- */
+import type { ReactNode } from "react";
 
-const VIEW_W = 720;
-const VIEW_H = 400;
+function Frame({ caption, children }: { caption: string; children: ReactNode }) {
+  return <figure className="mdx-figure not-prose mx-auto my-6"><div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div><figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption></figure>;
+}
+
+const loop = [["World / model", "shape, light, material, motion"], ["Graphics system", "represent, simulate, render"], ["Display", "encoded signal → emitted light"], ["Observer", "perceive, decide, act"], ["Input", "device samples → intent"]] as const;
 
 export function CgpIntroductionDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="图形学导论与历史发展图解"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <text x={VIEW_W / 2} y="32" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">
-            图形学导论与历史
-          </text>
-          <text x={VIEW_W / 2} y="54" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
-            从线框图到光线追踪——图形学60年发展脉络
-          </text>
+  return <Frame caption="图形系统从模型产生显示信号，观察者感知后再通过输入改变系统。"><div role="img" aria-label="模型、图形系统、显示、观察者与输入闭环" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">{loop.map(([title, detail], index) => <div key={title} className="relative min-h-28 border border-border bg-bg/45 p-3"><span className="text-xs font-bold text-accent">0{index + 1}</span><strong className="mt-2 block text-sm text-primary">{title}</strong><span className="mt-2 block text-xs leading-5 text-secondary">{detail}</span>{index < loop.length - 1 && <span aria-hidden="true" className="absolute -right-2 top-11 z-10 text-accent">→</span>}</div>)}</div></Frame>;
+}
 
-          <rect x="40" y="80" width="640" height="280" rx="12" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.3" />
+const perception = [["Light at eye", "spectrum + spatial/temporal pattern"], ["Optics / retina", "focus + rods + cones"], ["Neural coding", "contrast + edge + motion"], ["Percept", "color + shape + depth + salience"]] as const;
 
-          {/* Timeline */}
-          <line x1="80" y1="200" x2="640" y2="200" stroke="var(--accent)" strokeWidth="2" opacity="0.5" />
+export function CgpPerceptionDiagram() {
+  return <Frame caption="观察者接收的是受设备、环境和视觉处理影响的信号，不是 framebuffer 数值副本。"><div role="img" aria-label="光信号经眼球视网膜和神经编码形成感知" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{perception.map(([title, detail], index) => <div key={title} className="relative min-h-28 border border-border bg-bg/45 p-3"><span className="grid size-8 place-items-center rounded-full bg-warning/15 text-sm font-bold text-warning">{index + 1}</span><strong className="mt-3 block text-sm text-primary">{title}</strong><span className="mt-2 block text-xs text-secondary">{detail}</span>{index < perception.length - 1 && <span aria-hidden="true" className="absolute -right-2 top-11 z-10 text-accent">→</span>}</div>)}</div><div className="mt-3 grid gap-2 text-xs sm:grid-cols-4"><span className="border-l-4 border-success bg-success/10 p-2 text-primary">contrast</span><span className="border-l-4 border-warning bg-warning/10 p-2 text-primary">adaptation</span><span className="border-l-4 border-accent bg-accent/10 p-2 text-primary">visual angle</span><span className="border-l-4 border-border bg-bg/50 p-2 text-primary">task / attention</span></div></Frame>;
+}
 
-          <rect x="80" y="110" width="120" height="60" rx="8" fill="var(--success)" fillOpacity="0.1" stroke="var(--success)" strokeWidth="1.2" />
-          <text x="140" y="134" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--success)">1960s</text>
-          <text x="140" y="154" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">线框图/矢量</text>
+const interactions = [["Multitouch", "2D translate / rotate / scale", "centroid + two-point similarity"], ["Arcball", "3D object rotation", "screen → virtual sphere → quaternion"], ["Trackball", "rolling-style rotation", "implementation-specific mapping"], ["Unicam", "camera navigation", "mode + focus + one-device control"]] as const;
 
-          <rect x="220" y="110" width="120" height="60" rx="8" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" strokeWidth="1.2" />
-          <text x="280" y="134" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">1970s</text>
-          <text x="280" y="154" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">光栅扫描/Z-buffer</text>
-
-          <rect x="360" y="110" width="120" height="60" rx="8" fill="var(--warning)" fillOpacity="0.1" stroke="var(--warning)" strokeWidth="1.2" />
-          <text x="420" y="134" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--warning)">1980-90s</text>
-          <text x="420" y="154" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">光照模型/PBR</text>
-
-          <rect x="500" y="110" width="120" height="60" rx="8" fill="var(--text-tertiary)" fillOpacity="0.12" stroke="var(--text-tertiary)" strokeWidth="1.2" />
-          <text x="560" y="134" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">2000s+</text>
-          <text x="560" y="154" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">GPU/RTX/AI</text>
-
-          {/* Key concepts */}
-          <rect x="60" y="230" width="290" height="110" rx="8" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="1" />
-          <text x="205" y="252" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--accent)">图形学的核心任务</text>
-          <text x="205" y="274" textAnchor="middle" fontSize="10" fill="var(--text-primary)">1. 建模：用数学描述3D世界</text>
-          <text x="205" y="292" textAnchor="middle" fontSize="10" fill="var(--text-primary)">2. 变换：改变视角和位置</text>
-          <text x="205" y="310" textAnchor="middle" fontSize="10" fill="var(--text-primary)">3. 渲染：把3D变成2D图像</text>
-          <text x="205" y="328" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">4. 交互：响应用户输入</text>
-
-          <rect x="370" y="230" width="280" height="110" rx="8" fill="var(--warning)" fillOpacity="0.04" stroke="var(--warning)" strokeWidth="1" />
-          <text x="510" y="252" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--warning)">与其他领域的关系</text>
-          <text x="510" y="274" textAnchor="middle" fontSize="10" fill="var(--text-primary)">数学：线性代数/微积分</text>
-          <text x="510" y="292" textAnchor="middle" fontSize="10" fill="var(--text-primary)">物理：光学/运动学</text>
-          <text x="510" y="310" textAnchor="middle" fontSize="10" fill="var(--text-primary)">计算机：算法/体系结构</text>
-          <text x="510" y="328" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">艺术：感知/美学</text>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        图形学导论与历史——从1960年代线框图到现代GPU/AI渲染的发展脉络
-      </figcaption>
-    </figure>
-  );
+export function CgpInteractionDiagram() {
+  return <Frame caption="交互技术的差别在输入空间、受控自由度、参照系和反馈，而不只在设备名称。"><div role="img" aria-label="多点触控、Arcball、Trackball和Unicam交互比较" className="grid gap-3 md:grid-cols-2">{interactions.map(([name, task, mapping]) => <div key={name} className="min-h-28 border border-border bg-bg/45 p-3"><strong className="text-sm text-primary">{name}</strong><p className="mb-0 mt-2 text-xs text-success">Task: {task}</p><p className="mb-0 mt-2 border-t border-border pt-2 text-xs text-secondary">Map: {mapping}</p></div>)}</div></Frame>;
 }

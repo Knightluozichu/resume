@@ -1,0 +1,277 @@
+---
+title: "Chapter 7：Quality Tests"
+type: A
+section: 现代 C++ 测试驱动开发 · 测试质量
+order: 7
+description: 对齐原书 Chapter 7：用 FIRST 审查速度、独立、可重复、自验证与及时性，正确理解“每个测试一个断言”的行为焦点，并通过对象母亲、自定义断言和适度 fixture 构建可读测试抽象。
+demo: false
+math: false
+sourceUrl: "https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/"
+draft: false
+---
+
+import {
+  CtrAssertionScopeFlow,
+  CtrFirstPropertiesMap,
+  CtrTestAbstractionLab,
+} from "@/components/mdx/cpp-testing-recipes/diagrams/quality-tests";
+
+<Objectives>
+
+- 能为 FIRST 每项属性给出可测证据，定位慢、顺序依赖、时间/随机漂移、人工判定和事后补测试问题
+- 能把“one assert per test”落实为一个行为焦点，判断多个字段断言何时应保留、多个动作与失败原因何时必须拆分
+- 能设计对象母亲、builder、自定义断言和 fixture 等测试抽象，隐藏机械噪声而不隐藏关键输入、动作和期望
+
+</Objectives>
+
+## 测试代码也会腐化反馈
+
+生产代码变化后，测试会被每天阅读和执行。慢、随机、难懂或过度绑定实现的测试会使团队减少运行频率，最终把安全网变成负担。**可读测试**让行为、输入和差值一眼可见；**可维护测试**对内部重构稳定，并能随领域契约一起演化。测试质量不在于覆盖数字，而在于它能否快速、可信地解释行为。
+
+<Term def="测试在反馈速度、隔离、确定性、自动判定、出现时机和可读维护性上的综合能力。">
+  测试质量
+</Term>
+
+每次坏测试都应像生产缺陷一样处理：确定责任、修复根因、保留复现。简单重跑直到绿会隐藏不确定性，并让后续真正回归无法被信任。
+
+## FIRST 把质量要求变成五个检查面
+
+<Term def="Fast、Independent、Repeatable、Self-validating、Timely 五项测试属性的缩写。">
+  FIRST
+</Term>
+
+Fast 让开发者愿意频繁运行；Independent 让顺序和并行不影响结论；Repeatable 让相同输入稳定产生相同结果；Self-validating 让程序自动判定；Timely 让测试在设计仍可变化时提供反馈。五项互相支撑，缺一项都会拉长因果距离。
+
+<CtrFirstPropertiesMap />
+
+## Fast：时长要按分布而非感觉管理
+
+<Term def="测试及其常用集合在足够短的时间内完成，使开发者能在每个小改动后运行。">
+  快速
+</Term>
+
+记录单例和全套的中位数、p95 与最慢列表，避免“我机器上挺快”。单元层应尽量在内存完成；真实数据库、进程和网络进入独立慢层。固定 `sleep` 等待异步结果既慢又不稳定，应改用可观察事件、条件变量或可控调度器。
+
+```bash
+ctest --test-dir build -L fast --output-on-failure
+ctest --test-dir build --show-only=json-v1
+ctest --test-dir build --output-on-failure --repeat until-fail:50
+```
+
+重复运行可帮助暴露不稳定测试，但不能作为日常“多跑几次总会过”的策略。找到共享状态、时间、随机或竞态根因后修复。
+
+## Independent：每个测试拥有自己的世界
+
+<Term def="测试不依赖其他测试先后、残留数据或共享可变全局，任意顺序和并行执行结论一致。">
+  独立
+</Term>
+
+fixture 为每个测试创建新对象，临时目录带唯一名称，数据库场景用事务回滚或独立 schema。一个测试创建记录、另一个测试假设记录存在，看似减少 setup，实际把两项行为绑成隐式剧本。
+
+```cpp
+class OrderTest : public ::testing::Test {
+protected:
+    InMemoryOrderRepository repository;
+};
+
+TEST_F(OrderTest, SavesAndFindsAnOrder) {
+    repository.save(anOrder("42"));
+    EXPECT_TRUE(repository.find("42").has_value());
+}
+```
+
+独立不等于禁止共同 helper，而是 helper 不能持有跨测试变化状态。随机顺序和并行运行是检验手段，不是修复手段。
+
+## Repeatable：控制所有输入源
+
+<Term def="在已声明环境和相同输入下重复执行能得到同一结论，不受时间、随机、网络和机器残留影响。">
+  可重复
+</Term>
+
+把 Clock、随机数生成器、文件系统边界和远程服务显式化。随机测试固定并打印 seed，失败时可重放；时间使用明确时区的固定 time point；测试数据随仓库版本管理。浮点或并发允许的结果集合也要写成契约，而不是扩大容差直到通过。
+
+<Callout type="trap" title="陷阱：失败后立即重跑，第二次通过就关闭问题">
+  重跑只证明测试不确定。保留第一次日志、seed、顺序和环境，使用重复执行缩小触发条件，再消除共享状态、真实时间或竞态；不稳定测试会掩盖真实回归。
+</Callout>
+
+## Self-validating：自动结论必须进入退出码
+
+<Term def="测试用断言自动给出通过或失败，并让运行器通过结构化报告和退出状态传播结论。">
+  自验证
+</Term>
+
+“运行后打开文件看看”“日志里应该有一行”不是自验证。测试应解析产物并断言结构，或为日志 sink 注入 recording spy。截图和人工体验可存在于更外层验收，但不能替代每次提交的自动反馈。
+
+```cpp
+const auto result = parser.parse(sampleInvoiceJson());
+ASSERT_TRUE(result.has_value()) << result.error().message();
+EXPECT_EQ("invoice-42", result->id());
+EXPECT_EQ(4200, result->totalCents());
+```
+
+CI 脚本不能用 `|| true` 吞掉测试状态。测试报告用于诊断，退出码用于门禁，两者都要保存。
+
+## Timely：测试在结构冻结前参与设计
+
+<Term def="测试在目标行为实现之前或同时形成，使接口、依赖和责任仍能根据反馈调整。">
+  及时
+</Term>
+
+事后测试能补回归，但常受已有 API 限制。及时测试先以调用者语言表达行为，促使隐藏输入显式化并缩小接口。紧急修复也应先写能复现缺陷的测试：它证明问题存在，保护修复，并防止未来复发。
+
+“来不及写测试”若成为常态，通常说明测试构造太重、反馈太慢或代码难以隔离，这些正是设计和工程系统需要处理的信号。
+
+## 先预测：哪个测试违反了哪项 FIRST
+
+阅读下面情形前先分类：依赖昨天数据库数据、每次使用系统当前秒、需要人工看生成 PDF、只在功能上线后补、单例全局缓存在测试间保留。为每项选择首要 FIRST 违例和一条最小修复；一个情形可能影响多项，但先找根因。
+
+## “一个断言”真正指一个行为焦点
+
+<Term def="一个测试只证明一个可命名行为结果，而不是机械限制源码中只能出现一条 EXPECT 或 ASSERT。">
+  每个测试一个断言
+</Term>
+
+订单创建后同时断言 id、状态和总价，三项共同描述“创建了正确订单”，可以保留；同一测试先创建、取消、退款再检查日志，包含多个动作和失败原因，应拆分。判断焦点而非数宏数量。
+
+```cpp
+TEST(OrderCreationTest, CreatesPendingOrderWithCalculatedTotal) {
+    const auto order = createOrder(twoLines());
+
+    EXPECT_FALSE(order.id().empty());
+    EXPECT_EQ(OrderStatus::Pending, order.status());
+    EXPECT_EQ(4200, order.totalCents());
+}
+```
+
+多个结果字段也可封装成领域 matcher，在失败时同时显示差异。但不要把所有断言塞进 helper 后宣称“只有一条断言”；质量取决于行为范围和诊断。
+
+<CtrAssertionScopeFlow />
+
+<Callout type="trap" title="陷阱：强制每个测试源码只能有一个 EXPECT">
+  机械拆分会复制昂贵 setup，并把一个领域结果撕成多个难以理解的用例。先问断言是否共享输入、动作和行为名称；不同失败原因拆开，同一结果的多个必要字段可以共同保留。
+</Callout>
+
+## Arrange、Act、Assert 保持因果顺序
+
+测试体按准备、单一触发、观察结果分段。若出现多个 Act，通常意味着行为范围太大；若 Assert 前还执行复杂业务逻辑，测试可能在复制生产算法。
+
+```cpp
+// Arrange
+Account account{Money::fromCents(1000)};
+
+// Act
+const auto result = account.withdraw(Money::fromCents(400));
+
+// Assert
+EXPECT_TRUE(result.success());
+EXPECT_EQ(600, account.balance().cents());
+```
+
+注释不是强制；空行和清晰 helper 足以表达三段。关键是读者能从上到下看到因果，不需要在 fixture、基类和 DSL 间跳转。
+
+## 测试抽象隐藏噪声，不能隐藏意图
+
+<Term def="在测试代码中封装机械 setup、对象创建或领域比较，同时保留关键输入、动作和期望可见的结构。">
+  测试抽象
+</Term>
+
+对象母亲或 builder 为含大量字段的实体提供有效默认值，并让本测试只覆盖相关差异；自定义断言集中领域比较与高质量消息；fixture 去除稳定基础准备；测试 DSL 只适合确有复杂协议的场景。
+
+```cpp
+Order anExpiredOrder() {
+    return OrderBuilder{}
+        .withOwner("owner@example.test")
+        .expiringAt(at("2026-07-12T23:59:59Z"))
+        .build();
+}
+```
+
+builder 默认值必须明确且有效。若测试结果依赖默认金额，却在调用点看不到，抽象隐藏了关键输入。可以让关键字段成为必填构造参数，或在测试中显式覆盖。
+
+<CtrTestAbstractionLab />
+
+## 自定义断言应保留结构化差值
+
+返回 bool 的 `isCorrectOrder()` 会把所有失败压成 false。更好的 matcher 或 helper 分别报告 id、状态、金额差异，并把实际对象打印出来。抽象价值在于提升领域语言和诊断，不只是减少行数。
+
+```cpp
+void expectPaidOrder(const Order& order, Money expectedTotal) {
+    EXPECT_EQ(OrderStatus::Paid, order.status());
+    EXPECT_EQ(expectedTotal, order.total());
+    EXPECT_FALSE(order.receiptId().empty());
+}
+```
+
+此 helper 仍包含多个断言，但它们共同描述 PaidOrder 结果。若不同测试只需要其中一项，不要强行复用这个宽断言，应创建更窄 matcher。
+
+## 测试中的重复需要按知识判断
+
+复制一行 `Soundex soundex` 不一定值得 fixture；复制一套复杂有效订单构造可能遮蔽规则，适合 builder。和生产代码一样，先判断重复是否代表同一知识。测试优先可读，少量文本重复可接受。
+
+抽象层数过多的信号：测试名无法说明行为，输入在基类中，动作藏在 DSL，断言在 helper，失败消息只剩 bool。此时内联关键步骤通常比再加一层更好。
+
+## 测试应对重构稳定、对行为变化敏感
+
+只断言公开结果和必要协作，使改名 helper、换容器或加入缓存不破坏测试；当输出、错误或业务交互变化时，测试应明确失败。过度 mock 内部调用会对重构敏感，宽容的 snapshot 又可能对行为变化不敏感。
+
+审查每个失败：它是在提醒用户可见行为改变，还是在抱怨实现步骤不同？后者通常需要把断言上移到更稳定的契约。
+
+<Stepper>
+  <Step title="第一步：为 FIRST 五项收集证据">
+    记录运行时长，随机顺序和并行执行，固定时间与 seed，确认自动退出状态，并检查测试是否在行为形成前提供反馈。
+
+    <CtrFirstPropertiesMap />
+  </Step>
+  <Step title="第二步：收窄到一个行为焦点">
+    让测试只有一个主要 Act；共享输入和结果的多个字段可共同断言，不同动作、错误和恢复路径拆成独立名称。
+
+    <CtrAssertionScopeFlow />
+  </Step>
+  <Step title="第三步：审查测试抽象的可见性">
+    用 builder、matcher 和 fixture 去除机械噪声，同时让关键输入、触发和期望留在调用点；失败应直接显示领域差值。
+
+    <CtrTestAbstractionLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- FIRST 要求测试快速、独立、可重复、自验证且及时，每项都应有可测证据
+- 不稳定测试必须修根因，重跑到绿会损害整个安全网可信度
+- “每个测试一个断言”指一个行为焦点，不是源码只能出现一个断言宏
+- Arrange、Act、Assert 让输入、单一触发和结果形成清晰因果
+- 测试抽象应隐藏机械噪声并放大领域意图，不能把关键输入和失败差值藏起来
+- 高质量测试对内部重构稳定、对可观察行为变化敏感
+
+<Exercises>
+  1. **问题 1：FIRST 诊断。** 测试依赖系统时间、偶尔需要重跑，并由人工检查日志决定结果。至少违反哪些属性？
+
+  <Answer question="怎样从根因修复 FIRST 违例？">真实时间使结果不可重复，也可能破坏独立；偶尔重跑说明结论不可信；人工看日志违反自验证。注入 FixedClock，移除共享状态，为日志 sink 注入 recording spy 并断言结构，让测试进程自动返回状态，再重复运行证明稳定。</Answer>
+
+  2. **问题 2：断言范围。** 创建订单后检查 id、Pending 状态和金额；同一测试又取消订单并检查退款。怎样拆？
+
+  <Answer question="一个行为焦点怎样决定拆分？">前三个字段共享同一创建动作和“正确创建订单”结果，可留在一个测试；取消与退款有新动作、前置和失败原因，应分别建立命名测试，并各自准备有效订单。不是按 EXPECT 数量拆，而是按可解释行为和 Act 拆。</Answer>
+
+  3. **问题 3：评审测试抽象。** `validOrder()` 默认金额决定断言，但调用点看不到；`isCorrect()` 失败只显示 false。如何改善？
+
+  <Answer question="怎样让抽象隐藏噪声而保留意图？">让金额成为 builder 的显式覆盖或必填参数，使关键输入出现在测试体；把 `isCorrect` 改成领域 matcher/断言，分别显示状态、金额等期望与实际。保留无关字段的有效默认值，但不要隐藏影响目标行为的数据。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="测试质量">测试在速度、隔离、确定性、自动判定、及时和可维护性上的能力。</GlossaryItem>
+  <GlossaryItem term="FIRST">Fast、Independent、Repeatable、Self-validating、Timely 五项属性。</GlossaryItem>
+  <GlossaryItem term="快速">能支撑每个小改动后运行的短反馈属性。</GlossaryItem>
+  <GlossaryItem term="独立">不依赖测试顺序、残留状态或共享可变全局的属性。</GlossaryItem>
+  <GlossaryItem term="可重复">相同已声明输入与环境稳定得到同一结论的属性。</GlossaryItem>
+  <GlossaryItem term="自验证">由断言和退出状态自动给出通过失败的属性。</GlossaryItem>
+  <GlossaryItem term="及时">在行为形成前或同时提供设计反馈的属性。</GlossaryItem>
+  <GlossaryItem term="每个测试一个断言">一个测试只证明一个可命名行为焦点的原则。</GlossaryItem>
+  <GlossaryItem term="测试抽象">封装机械准备或比较、同时保留行为意图可见的结构。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Modern C++ Programming with Test-Driven Development, Chapter 7 Quality Tests"
+  adaptedUrl="https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/"
+/>

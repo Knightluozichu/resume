@@ -1,0 +1,282 @@
+---
+title: "第4章：Operators and Control Flow"
+type: C
+section: "Essential C# 7.0 · Language Foundations"
+order: 4
+description: "掌握operator求值、if/switch、scope、short-circuit、bitwise、loops、jumps与preprocessor directives。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-c-sharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7BranchShortCircuitLab, Ec7LoopJumpDirectiveLab, Ec7OperatorEvaluationLab } from "@/components/mdx/essential-csharp-7/diagrams/operators-and-control-flow";
+
+<Objectives>
+
+- 能推导含arithmetic、assignment、comparison与bitwise operators的求值顺序和结果
+- 能比较if、switch、for、while与foreach的适用条件，并解释scope和short-circuit副作用
+- 能设计break、continue、return与preprocessor directive的边界并写出覆盖失败路径的测试
+
+</Objectives>
+
+## 为什么控制流必须先画出执行轨迹
+
+程序不是把source从上到下机械读完。operator precedence先形成expression tree；`&&`可能跳过右侧；`if`和`switch`只选择部分blocks；loop重复某段；`break`、`continue`和`return`改变下一条statement；preprocessor甚至在compile前移除source。只看最终value，往往看不到真正执行了哪些operations。
+
+先预测：`2 + 3 * 4`、`7 / 2`和`x += 3`分别经历什么；`ready && TryLoad()`在ready为false时是否调用method；`continue`会去loop的哪里；`#if DEBUG`是否是runtime branch。然后逐条记录evaluation trace、selected branch、iteration和exit target。
+
+<Term def="expression中operators按precedence、associativity和operand evaluation规则形成的实际求值路径。">evaluation order</Term>
+
+## Operators: From Expression to Result
+
+arithmetic operators `+ - * / %`处理numeric operands；`+`也可拼接string。integral division会舍弃fraction，remainder由`%`单独得到。unary `+ - ! ~`作用于一个operand，increment/decrement既有prefix也有postfix：两者都会更新variable，但整个expression返回更新前还是更新后的value不同。
+
+precedence决定未加parentheses时怎样group，associativity处理同层operators。它们不等于“任意重排”：operand evaluation仍有language rules，side effects会让紧凑expression难以审计。关键业务公式应使用parentheses和中间variables表达意图，而不是让读者背表。
+
+assignment `=`把右侧转换后存到左侧variable/property/indexer。compound assignment如`x += y`大体表示read、operate、convert、write，但只对左侧求值一次，并包含规定的implicit conversion行为，不能总用文本替换成`x = x + y`解释复杂left operand。
+
+<Stepper>
+  <Step title="切换precedence与integer arithmetic">
+    <Ec7OperatorEvaluationLab />
+  </Step>
+  <Step title="把expression展开为中间结果">
+    标出operand types、operator grouping、conversion、overflow context和最终assignment target。
+  </Step>
+  <Step title="翻转bits并验证shift">
+    用固定width二进制显示输入和输出，避免只凭decimal结果猜mask是否正确。
+  </Step>
+</Stepper>
+
+```csharp
+int a = 2 + 3 * 4;       // 14
+int b = (2 + 3) * 4;     // 20
+int quotient = 7 / 2;    // 3
+int remainder = 7 % 2;   // 1
+
+int index = 5;
+int before = index++;    // before=5, index=6
+int after = ++index;     // index=7, after=7
+```
+
+integral overflow在checked context抛`OverflowException`，在unchecked context按type规则截断/wrap；constant expressions可能在compile time检查。operator不是孤立符号，它总与operand type、conversion和overflow policy共同决定结果。
+
+## Introducing Flow Control with if and switch
+
+`if`根据一个`bool` expression选择then或else branch；C#不把0、empty string或reference自动当truthy。多个互斥conditions可用`else if`，但顺序本身就是policy：第一个true branch获胜。先处理guard clauses通常可减少nesting并让invalid state尽早退出。
+
+`switch`围绕一个input按case labels选择branch，适合对同一discriminant做离散分类。C# 7支持type patterns和`when` guards；case顺序在patterns重叠时可能影响结果。C#禁止从有statements的case隐式fall through到下一case，通常用`break`、`return`、`throw`或显式`goto case`结束。
+
+<Term def="if或switch从多个候选paths中选出的唯一执行block及其选择条件。">branch contract</Term>
+
+```csharp
+static string Classify(object value)
+{
+    if (value == null) return "missing";
+
+    switch (value)
+    {
+        case int number when number < 0:
+            return "negative integer";
+        case int number:
+            return $"integer {number}";
+        case string text when text.Length == 0:
+            return "empty text";
+        case string text:
+            return $"text length {text.Length}";
+        default:
+            return "other";
+    }
+}
+```
+
+测试branch不能只覆盖一个case。要列出condition partition：true/false、boundary前后、null、default和overlapping pattern。每个partition应有明确expected branch，避免两个conditions都能匹配却依赖偶然顺序。
+
+## Code Blocks, Scope, and Declaration Spaces
+
+curly-braced block不仅组织layout，也建立scope。local variable从declaration point到其enclosing scope结束可见；inner block可读取outer variable，但不能随意声明一个会造成非法name hiding的同名local。不同branches中的locals只在各自blocks内有效。
+
+<Term def="一个name可被引用的source region，以及同一declaration space中禁止冲突声明的规则。">scope boundary</Term>
+
+```csharp
+int total = 0;
+if (items != null)
+{
+    int accepted = 0;
+    foreach (int item in items)
+    {
+        if (item < 0) continue;
+        total += item;
+        accepted++;
+    }
+    Console.WriteLine($"accepted={accepted}");
+}
+// accepted is not in scope here; total is.
+```
+
+scope限制accidental coupling，也决定resource lifetime表达。把temporary declaration放进最小可理解block，能让后续代码不依赖已经失去意义的state；但过度nesting会隐藏主路径，应结合guard clause重构。
+
+## Boolean Expressions and Short-Circuit
+
+`&&`先计算左侧；左侧false已足以确定结果，于是不计算右侧。`||`在左侧true时跳过右侧。`&`和`|`用于bool operands时会计算两侧，因此不能把它们与short-circuit versions混用。`!`取反，`==`/`!=`以及relational operators产生bool。
+
+<Term def="当左operand已决定布尔结果时跳过右operand，从而改变method calls、exceptions与side effects。">short-circuit trace</Term>
+
+<Stepper>
+  <Step title="切换guard conditions与role">
+    <Ec7BranchShortCircuitLab />
+  </Step>
+  <Step title="读取实际evaluation trace">
+    左侧false时确认右侧未执行；不要把未发生的call写进expected side effects。
+  </Step>
+  <Step title="确认唯一selected branch">
+    guard通过后才进入role分类，并为unknown/default role定义结果。
+  </Step>
+</Stepper>
+
+```csharp
+User user = FindUser(id);
+if (user != null && user.IsActive && user.HasPermission("edit"))
+{
+    OpenEditor(user);
+}
+```
+
+这个condition既做决策也保护dereference：user为null时不会读取`IsActive`。但把有关键side effect的operation埋在右侧会降低可读性，例如`ready && Save()`；若Save结果和执行本身都重要，拆成guard与statement更容易记录failure。
+
+<Callout type="trap" title="&和&&在bool表达式中只是写法不同">
+两者都能产生bool，但`&`总计算左右两侧，`&&`可能跳过右侧。右侧若会抛异常、修改状态或执行昂贵call，observable behavior完全不同。
+</Callout>
+
+## Bitwise and Shift Operators
+
+integral operands上的`& | ^ ~`逐bit运算；`<<`和`>>`移动bit positions。flags通常用powers of two表示，每个bit是独立permission/state；检查flag用AND，设置用OR，切换用XOR，清除用AND与complement mask。要明确signedness与width，因为right shift和overflow结果与type有关。
+
+```csharp
+const int Read = 1 << 0;   // 0001
+const int Write = 1 << 1;  // 0010
+const int Execute = 1 << 2;// 0100
+
+int permissions = Read | Write;
+bool canWrite = (permissions & Write) != 0;
+permissions |= Execute;
+permissions &= ~Write;
+```
+
+bit mask适合compact independent flags，不适合把多个相互排斥states塞入没有document的magic bits。优先使用带`[Flags]`的enum表达names，并测试每个set/clear operation的binary evidence。
+
+## Control Flow Continued: for, while, and foreach
+
+`for`把initializer、condition和iterator放在header，适合已知index progression；`while`先检查condition，适合迭代次数由state决定，可能一次都不执行；`do...while`至少执行一次。`foreach`请求enumerator逐项读取，最能表达“遍历所有elements”，但不自动提供index，且collection mutation受enumerator contract限制。
+
+<Term def="每次loop从condition、body、iterator到下一次condition所形成的重复路径和终止条件。">iteration invariant</Term>
+
+```csharp
+for (int i = 0; i < values.Length; i++)
+    values[i] *= 2;
+
+int attempts = 0;
+while (attempts < 3 && !TryConnect())
+    attempts++;
+
+foreach (string name in names)
+    Console.WriteLine(name);
+```
+
+设计loop时写出三件事：进入每次iteration前什么invariant成立；本轮怎样推进state；什么条件保证termination。off-by-one通常来自把“element count”和“last valid index”混淆，或在body和iterator都修改index。
+
+## Jump Statements: break, continue, goto, return
+
+`break`终止nearest loop或switch；`continue`跳过当前iteration剩余body并进入下一轮的iterator/condition；`return`终止整个method并可返回value；`goto`跳到label，另有`goto case/default`用于switch。它们的差别是target scope，不只是“提前结束”。
+
+<Stepper>
+  <Step title="选择loop与jump/directive case">
+    <Ec7LoopJumpDirectiveLab />
+  </Step>
+  <Step title="逐行读取执行trace">
+    标出continue回到何处、break离开哪一层、return结束哪个method。
+  </Step>
+  <Step title="把compile-time与runtime分开">
+    `#if`决定哪些tokens参与compile；if statement才根据runtime value选择branch。
+  </Step>
+</Stepper>
+
+```csharp
+static int FindFirstPositive(int[] values)
+{
+    if (values == null) return -1;
+
+    for (int i = 0; i < values.Length; i++)
+    {
+        if (values[i] == 0) continue;
+        if (values[i] > 0) return i;
+    }
+    return -1;
+}
+```
+
+nested loops中的`break`只离开最近一层。若要离开多层，通常提取method并return、设置清晰flag或重构search；`goto`可处理少数低层cleanup/state machine场景，但一般会让invariants和scope更难追踪。
+
+## C# Preprocessor Directives
+
+C# preprocessor directives以`#`开头，由compiler在normal compilation前解释；它们不是C/C++ textual macro system。`#define`/`#undef`定义conditional symbols，必须位于file中普通tokens之前；`#if`、`#elif`、`#else`、`#endif`按symbols决定哪些source参与compile。project build properties通常比每个file手写`#define`更适合环境配置。
+
+```csharp
+#define TRACE_PAYLOAD
+
+using System;
+
+class Program
+{
+    static void Main()
+    {
+#if DEBUG && TRACE_PAYLOAD
+        Console.WriteLine("diagnostic payload enabled");
+#else
+        Console.WriteLine("normal mode");
+#endif
+    }
+}
+```
+
+`#warning`与`#error`可让特定configuration产生诊断，`#line`影响reported source location，`#region`只组织editor display。不要用conditional compilation制造两套长期漂移的business logic；每个symbol组合都应在CI中compile，否则inactive branch会悄悄腐烂。
+
+<Callout type="trap" title="#if DEBUG会在程序运行时检查debug mode">
+`#if`是compile-time selection，未选中的tokens不进入assembly。需要运行时切换时使用普通if与configuration value，并分别测试compiled configurations。
+</Callout>
+
+## 本章回顾：下一条语句由谁决定
+
+1. operator precedence、operand types、conversion与overflow共同决定expression结果。
+2. if/switch建立branch contract，scope限制names和temporary state的可见范围。
+3. `&&`/`||`会短路，必须记录右侧是否真正执行。
+4. bitwise operators操纵fixed-width patterns；loops需要invariant、progress与termination。
+5. break、continue、return的target不同；preprocessor directives在compile前选择source。
+
+<Exercises>
+
+**问题 1：如何证明一个复合condition使用`&&`而不是`&`是正确且必要的？**
+
+<Answer>把condition拆成left和right，记录每侧value、exception与side effect。测试left=false时，`&&`必须不调用right；left=true时才调用并采用right结果。若right dereference依赖left的null guard，使用`&`会抛异常；即使无异常，昂贵或有side effect的right也会产生不同observable behavior。</Answer>
+
+**问题 2：同一组数据何时选for、while或foreach，如何验证termination？**
+
+<Answer>需要index、固定bounds或原位更新时选for；由state/event决定迭代次数时选while；只需逐element读取时选foreach。每个loop写明entry invariant、每轮progress和exit condition，并测试empty、one element、last boundary以及continue/break path；while还要证明state一定朝termination推进。</Answer>
+
+**问题 3：`#if FEATURE`与`if (featureEnabled)`有何不同，发布前应怎样检查？**
+
+<Answer>`#if`按compile symbol移除或保留source，未选branch不进入assembly；普通if的两侧都已compile，只在runtime按value选择。CI应分别compile每个受支持symbol组合并运行相应tests；runtime feature应优先configuration加普通if，避免conditional branches长期无法编译。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="evaluation order" definition="operators、operand types与grouping形成的实际求值路径。" />
+  <GlossaryItem term="branch contract" definition="if/switch选择唯一执行block的conditions与default policy。" />
+  <GlossaryItem term="scope boundary" definition="name可见的source region及declaration冲突规则。" />
+  <GlossaryItem term="short-circuit trace" definition="布尔左operand决定结果后右operand是否被跳过的轨迹。" />
+  <GlossaryItem term="iteration invariant" definition="每轮开始时成立并由body维持、最终支持termination的条件。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 4: Operators and Control Flow" adaptedUrl="https://www.informit.com/store/essential-c-sharp-7.0-9781509303618" />

@@ -3,142 +3,316 @@ title: "FBO 与后处理技术"
 type: C
 section: "计算机图形学与渲染"
 order: 6
-description: "帧缓冲对象、渲染到纹理与后处理链"
+description: "从附件完整性、离屏 pass 契约和多采样 resolve，到无反馈环的多遍后处理"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://registry.khronos.org/webgl/specs/latest/2.0/"
 draft: false
 ---
 
-import { DogFboTechniquesDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-fbo-techniques";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  DogFboTechniquesDiagram,
+  DogFboCompletenessDiagram,
+} from "@/components/mdx/deep-opengl/diagrams/dog-fbo-techniques";
+import { DogStepFlowDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能写出创建 FBO 并渲染到纹理的流程
-- 能解释颜色附件、深度附件与完整性检查
-- 能用 ping-pong 实现多遍后处理（如高斯模糊）
-- 能回答：为什么后处理要用 FBO 而不是直接画到屏幕？
+
+- 能实现带颜色纹理、深度 renderbuffer、drawBuffers 和完整错误清理的 WebGL2 FBO
+- 能分析附件格式、尺寸、采样数和输出映射为什么导致不同完整性状态
+- 能实现不读写同一纹理的 ping-pong 后处理，并正确切换 viewport 与 pass 状态
+- 能判断何时需要深度附件、多采样 resolve、纹理附件或 renderbuffer，并设计 resize 重建
+
 </Objectives>
 
 ## 直觉引入
 
-默认情况下 OpenGL 把画面画到屏幕（默认帧缓冲）。但很多效果需要「先把场景画到一张图里，再对这张图加工」——比如先把场景渲染成一张纹理，再用一个着色器把它模糊、调色、加光晕。这就需要一个可写的「画布」：帧缓冲对象（FBO）。
+帧缓冲对象不是一张图片，而是一张“输出接线表”。它把片元着色器的颜色输出接到纹理或 renderbuffer，把深度/模板测试接到对应附件。真正保存像素的是附件；FBO 只描述本次绘制要写到哪里。
 
-FBO 就是一块不直接显示的离屏画布，你可以给它挂一张颜色纹理（当画纸）和一张深度缓冲（记深度）。场景先画进 FBO 的纹理，再把这张纹理当输入，用后处理着色器加工后画到屏幕。
+后处理之所以需要 FBO，不是因为默认帧缓冲绝对不能被读取，而是应用需要可控格式、尺寸、生命周期和采样方式的中间图像。场景先写入离屏颜色纹理，后续 pass 把它作为输入，再写到另一张纹理或默认帧缓冲。这个“读 A、写 B”的方向必须明确，不能一边采样 A 一边又把 A 作为当前输出。
 
-## 概念讲解
+## FBO 与附件所有权
 
-<Term def="可挂载纹理/缓冲作为渲染目标的离屏画布">帧缓冲对象</Term>（FBO）本身不含图像数据，只是「容器」，需挂载<Term def="挂到 FBO 上接收渲染输出的纹理或缓冲">附件</Term>：颜色附件（COLOR_ATTACHMENT0，挂 2D 纹理）、深度附件（DEPTH_ATTACHMENT）、模板附件。
+<Term def="把颜色、深度和模板图像附件组织成当前渲染目标的状态对象">帧缓冲对象</Term>本身不拥有附件存储。删除 FBO 不会自动删除独立创建并挂接的 texture/renderbuffer；资源管理器应分别跟踪并销毁。
 
-### 创建流程
-1. `genFramebuffers` → `bindFramebuffer`。
-2. 创建颜色纹理，`framebufferTexture2D` 挂为颜色附件。
-3. 创建深度缓冲（renderbuffer 或深度纹理），挂为深度附件。
-4. `checkFramebufferStatus` 检查完整性，必须 `FRAMEBUFFER_COMPLETE`。
+<Term def="挂接到 framebuffer attachment point、实际保存颜色深度或模板数据的纹理层级或 renderbuffer">附件</Term>有两类常见载体：
 
-### Ping-Pong 多遍处理
-<Term def="用两个 FBO/纹理交替读写以实现多遍后处理的技术">乒乓</Term>：A 画到 B、B 画到 A，交替若干遍完成可分离高斯模糊等需多次采样的效果。
+- texture 可在后续 shader 中采样，适合颜色、深度采样、后处理和 shadow map；
+- renderbuffer 面向渲染目标存储，不能直接被 shader 采样，适合只在 pass 内用于深度/模板或多采样附件。
 
-### 常见后处理
-色调映射（HDR→LDR）、泛光（bloom，亮区提取+模糊+叠加）、屏幕空间反射、景深、辉光。
+深度附件不是 FBO 完整的必需条件。纯颜色后处理 FBO 可以只有颜色附件；若 3D pass 需要近处遮挡远处，才要提供深度存储。没有深度附件时，即使代码启用 DEPTH_TEST，也没有可保留的深度缓冲来产生预期遮挡结果，但这不等同于 framebuffer 不完整。
 
-## 交互Demo
+## 完整性只验证目标组合
 
-> 猜一猜：FBO 没挂深度附件，还能正常渲染 3D 场景吗？
+<Term def="当前 framebuffer 的附件组合满足规范，可被绘制命令作为目标使用的状态">完整性</Term>由 checkFramebufferStatus 检查。FRAMEBUFFER_COMPLETE 证明附件组合可用，不证明：
+
+- viewport 与目标尺寸一致；
+- shader 输出 location 与 drawBuffers 映射正确；
+- pass 已清除或加载了期望内容；
+- 采样器没有读取正在写入的附件；
+- 颜色空间、混合、深度和写掩码符合算法。
+
+<DogFboCompletenessDiagram />
+
+常见不完整来源包括附件对象或层级无效、尺寸为零、格式不可渲染、相关附件 sample 数不一致，以及 drawBuffers 指向未挂接颜色位置。浮点纹理“可以采样”不代表“可以作为颜色附件”，WebGL2 中仍需按格式与 EXT_color_buffer_float 等能力验证。
+
+## 创建可采样颜色目标
+
+使用 texStorage2D 建立不可变 RGBA8 颜色存储，配一个 DEPTH_COMPONENT24 renderbuffer。不可变纹理不能原地改尺寸，resize 时应创建一套新资源，成功后再替换旧套件。
+
+```js
+function createSceneTarget(gl, width, height) {
+  const framebuffer = gl.createFramebuffer();
+  const color = gl.createTexture();
+  const depth = gl.createRenderbuffer();
+  if (!framebuffer || !color || !depth) {
+    throw new Error("create framebuffer resources failed");
+  }
+
+  gl.bindTexture(gl.TEXTURE_2D, color);
+  gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA8, width, height);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  gl.bindRenderbuffer(gl.RENDERBUFFER, depth);
+  gl.renderbufferStorage(
+    gl.RENDERBUFFER,
+    gl.DEPTH_COMPONENT24,
+    width,
+    height,
+  );
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
+  gl.framebufferTexture2D(
+    gl.FRAMEBUFFER,
+    gl.COLOR_ATTACHMENT0,
+    gl.TEXTURE_2D,
+    color,
+    0,
+  );
+  gl.framebufferRenderbuffer(
+    gl.FRAMEBUFFER,
+    gl.DEPTH_ATTACHMENT,
+    gl.RENDERBUFFER,
+    depth,
+  );
+  gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+
+  const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  if (status !== gl.FRAMEBUFFER_COMPLETE) {
+    gl.deleteFramebuffer(framebuffer);
+    gl.deleteTexture(color);
+    gl.deleteRenderbuffer(depth);
+    throw new Error(`incomplete framebuffer: 0x${status.toString(16)}`);
+  }
+  return { framebuffer, color, depth, width, height };
+}
+```
+
+如果有多个颜色输出，依次挂 COLOR_ATTACHMENT0+n，并调用 drawBuffers 指定映射。片元 shader 的 layout(location=n) 输出最终写入 drawBuffers 列表中对应的附件；只挂纹理但不配置输出映射，不能构成完整 MRT pass。
+
+## 每个 pass 都有状态契约
+
+FBO 切换不仅是 bindFramebuffer。每个 pass 至少声明 framebuffer、viewport/scissor、drawBuffers、clear/load 语义、深度/模板/混合、颜色掩码、program、VAO 和输入纹理。
 
 <DogFboTechniquesDiagram />
 
+场景 pass 写离屏目标，合成 pass 再把颜色纹理画到默认帧缓冲。全屏三角形只需三个顶点，可由 gl_VertexID 在顶点 shader 中生成，避免四边形中间对角线和额外顶点。
+
+```js
+function renderScenePass(gl, target) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, target.framebuffer);
+  gl.viewport(0, 0, target.width, target.height);
+  gl.enable(gl.DEPTH_TEST);
+  gl.depthMask(true);
+  gl.disable(gl.BLEND);
+  gl.clearColor(0, 0, 0, 1);
+  gl.clearDepth(1);
+  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  drawScene(gl);
+}
+
+function renderCompositePass(gl, sourceTexture, canvas) {
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+  gl.disable(gl.DEPTH_TEST);
+  gl.depthMask(false);
+  gl.disable(gl.BLEND);
+  gl.useProgram(compositeProgram);
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, sourceTexture);
+  gl.uniform1i(sourceLocation, 0);
+  gl.bindVertexArray(fullscreenVao);
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+}
+```
+
+默认帧缓冲尺寸应取 drawingBufferWidth/Height，而不是只读 CSS clientWidth。离屏目标可按渲染比例使用不同尺寸，但投影、采样 texel size 和 viewport 必须使用各自实际尺寸。
+
+## 反馈环路与 ping-pong
+
+<Term def="一次 draw 中 shader 采样的纹理图像同时挂在当前绘制 framebuffer 上作为写目标">反馈环路</Term>在 WebGL/OpenGL 渲染中不可作为普通后处理手段。读取与写入同一图像会产生禁止或未定义的反馈，不能假设 GPU 按像素顺序“原地更新”。
+
+<Term def="用两组 FBO/纹理轮流充当读取源与写入目标，从而安全执行多遍处理">Ping-pong</Term>让第 n 遍读 source、写 destination，完成后交换引用。可分离高斯模糊常用一遍水平、一遍垂直；每遍只采一维邻域。
+
+```js
+function blurPingPong(gl, input, targets, passCount) {
+  let source = input;
+  for (let pass = 0; pass < passCount; pass += 1) {
+    const destination = targets[pass % 2];
+    if (destination.color === source) {
+      throw new Error("read/write framebuffer feedback loop");
+    }
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, destination.framebuffer);
+    gl.viewport(0, 0, destination.width, destination.height);
+    gl.disable(gl.DEPTH_TEST);
+    gl.disable(gl.BLEND);
+    gl.useProgram(blurProgram);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, source);
+    gl.uniform1i(blurSourceLocation, 0);
+    gl.uniform2f(
+      texelSizeLocation,
+      1 / destination.width,
+      1 / destination.height,
+    );
+    gl.uniform1i(horizontalLocation, pass % 2 === 0 ? 1 : 0);
+    gl.bindVertexArray(fullscreenVao);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+    source = destination.color;
+  }
+  return source;
+}
+```
+
+两个目标必须尺寸和格式符合算法，且 input 不应与第一遍 destination 相同。更复杂的 render graph 可以根据资源生存期自动分配临时纹理，但底层仍遵守“同一 pass 读写资源不冲突”。
+
+## 多采样与 resolve
+
+WebGL2 的多采样 renderbuffer 可用 renderbufferStorageMultisample 创建，但普通 sampler2D 不能直接采样它。常见链路是：
+
+1. 场景写入多采样颜色/深度 renderbuffer FBO；
+2. 把它绑定为 READ_FRAMEBUFFER，把单采样纹理 FBO 绑定为 DRAW_FRAMEBUFFER；
+3. 用 blitFramebuffer resolve 颜色；
+4. 后处理采样单采样颜色纹理。
+
+resolve 的源/目标尺寸、格式、过滤和 mask 受规范约束。若只为后处理而不需要 MSAA，应先测量其额外存储与 resolve 成本；移动设备上也可评估更便宜的抗锯齿路径。
+
+## 分步构建后处理链
+
+先预测：场景 FBO 的颜色纹理尺寸是 960×540，切回 1920×1080 默认帧缓冲后忘记更新 viewport，最终会发生什么？
+
 <Stepper>
-<Step title="第一步：建 FBO">
-创建 FBO，挂一张颜色纹理当画纸、一张深度 renderbuffer 记深度，检查完整性通过。
+<Step title="第一步：创建并验证附件集合">
+<DogStepFlowDiagram
+  caption="第 1 步：先证明格式、尺寸、采样和输出映射组成完整目标。"
+  stage={1}
+  stages={["创建附件并检查完整性", "为每个 pass 建立目标和状态契约", "用独立读写资源串联后处理"]}
+/>
+
+按能力表选择颜色/深度格式，创建附件并设置 drawBuffers。检查状态失败就记录十六进制枚举并销毁半成品，不让不完整 FBO 进入渲染循环。
 </Step>
-<Step title="第二步：渲染到纹理">
-绑 FBO，开深度测试，把 3D 场景画进 FBO 的颜色纹理（离屏，不直接显示）。
+<Step title="第二步：执行场景与 resolve">
+<DogStepFlowDiagram
+  caption="第 2 步：绑定目标后同步 viewport、clear 和测试状态，多采样时先 resolve。"
+  stage={2}
+  stages={["创建附件并检查完整性", "为每个 pass 建立目标和状态契约", "用独立读写资源串联后处理"]}
+/>
+
+场景 pass 写颜色/深度；若使用 MSAA，resolve 到可采样单采样纹理。每次目标切换都更新 viewport 和目标专属状态。
 </Step>
-<Step title="第三步：后处理到屏">
-解绑 FBO（回到默认帧缓冲），把颜色纹理作为输入，用后处理着色器（模糊/调色）画一个全屏四边形到屏幕。
+<Step title="第三步：安全执行多遍与合成">
+<DogStepFlowDiagram
+  caption="第 3 步：每遍读源纹理、写另一目标，最后合成到默认帧缓冲。"
+  stage={3}
+  stages={["创建附件并检查完整性", "为每个 pass 建立目标和状态契约", "用独立读写资源串联后处理"]}
+/>
+
+ping-pong 轮换读写资源，禁止反馈环路；最终 pass 使用默认 framebuffer 实际尺寸，并通过像素基准验证色彩、方向和边缘。
 </Step>
 </Stepper>
 
-## 代码对照
+## Resize 与资源重建
 
-WebGL2 FBO 创建与渲染到纹理：
+窗口尺寸或渲染比例变化时，所有依赖尺寸的纹理、renderbuffer、MSAA resolve 目标和 texel-size uniform 都要更新。使用 texStorage2D 的不可变纹理应重建，而不是对旧对象再次分配。
 
-```js
-// 创建 FBO
-const fbo = gl.createFramebuffer();
-gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-
-// 颜色附件：一张可采样的纹理
-const colorTex = gl.createTexture();
-gl.bindTexture(gl.TEXTURE_2D, colorTex);
-gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA8, W, H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, colorTex, 0);
-
-// 深度附件：renderbuffer
-const rbo = gl.createRenderbuffer();
-gl.bindRenderbuffer(gl.RENDERBUFFER, rbo);
-gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, W, H);
-gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, rbo);
-
-// 完整性检查
-if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE)
-  console.error("FBO 不完整");
-
-// 渲染到纹理
-gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
-gl.viewport(0, 0, W, H);
-gl.enable(gl.DEPTH_TEST);
-gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-drawScene();                       // 画进 colorTex
-
-// 后处理到屏幕：解绑回默认帧缓冲
-gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-gl.viewport(0, 0, canvas.width, canvas.height);
-gl.disable(gl.DEPTH_TEST);
-postProcessShader.bind();
-gl.bindTexture(gl.TEXTURE_2D, colorTex);   // 把场景纹理当输入
-drawFullScreenQuad();                       // 全屏四边形加工后输出
-```
-
-`checkFramebufferStatus` 是排错第一步；颜色纹理尺寸与视口必须一致。
+稳妥做法是先创建 nextTarget，检查完整后原子替换 currentTarget，再删除旧资源。若新尺寸超过设备限制或分配失败，保留旧目标并降低渲染比例，避免半套附件导致后续 pass 崩溃。
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** checkFramebufferStatus 报 FRAMEBUFFER_INCOMPLETE，FBO 无法用。
-**原因 →** 附件尺寸不一致、格式不支持、或漏挂附件（如只有颜色没深度但开了深度测试）。
-**修法 →** 确保所有附件同尺寸、格式被支持；若开深度测试必须挂深度附件；用 checkFramebufferStatus 排查并在文档查完整性规则。
+**现象 →** 只有颜色附件的 FBO 被判定为“缺深度所以不完整”，开发者盲目增加 D24S8。
+**原因 →** 把算法是否需要深度与 framebuffer 完整性混为一谈；纯后处理只需颜色目标。
+**修法 →** 先读取 checkFramebufferStatus；按 pass 语义决定深度。需要遮挡才创建深度附件，不需要就减少存储和带宽。
 </Callout>
 
 <Callout type="trap">
-**现象 →** 渲染到 FBO 后切回屏幕，画面尺寸错乱或只画了一小块。
-**原因 →** 绑/解绑 FBO 时忘了同步 gl.viewport——FBO 纹理尺寸与 canvas 尺寸通常不同。
-**修法 →** 每次切换渲染目标都重设 viewport：画 FBO 用纹理尺寸，画屏幕用 canvas 尺寸。
+**现象 →** 模糊 pass 输出闪烁、不同 GPU 结果不同，代码只用一张纹理“边读边写”。
+**原因 →** 输入纹理同时是当前 framebuffer 附件，形成反馈环路，不能依赖执行顺序。
+**修法 →** 使用两张纹理/FBO ping-pong，render graph 在调度前验证同一 pass 的读写集合不冲突。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 离屏图正确，合成到屏幕后只占左下角或被拉伸。
+**原因 →** 切换 FBO 后沿用了上一目标的 viewport，或用 CSS 尺寸代替默认绘图缓冲尺寸。
+**修法 →** 每个 pass 绑定目标后立即设置其实际 viewport，投影与 texel size 也使用同一尺寸来源。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：FBO 本身存图像数据吗？它需要挂哪些附件？为什么后处理要用 FBO？
+**问题 1**：一个 FBO 只有 RGBA8 颜色纹理，没有深度附件。它能否完整？开启 DEPTH_TEST 后为什么仍不能得到可靠遮挡？
 
 <Answer>
-FBO 本身不存图像数据，只是容器，需挂载附件：颜色附件（2D 纹理接收颜色）、深度附件（renderbuffer 或深度纹理记深度）。后处理要用 FBO 是因为需要先把场景渲染成一张可采样的纹理，再以后处理着色器加工；直接画到屏幕无法把结果当输入再加工，FBO 的离屏纹理提供了这个「中间画布」。
+只要颜色附件有效、格式/尺寸/输出映射满足规则，FBO 可以是 FRAMEBUFFER_COMPLETE，深度不是完整性的必选附件。但没有深度存储时无法保存和比较片元深度，开启 DEPTH_TEST 也不能产生正常的近物遮挡远物结果。是否需要深度由 pass 算法决定，而不是完整性本身决定。
 </Answer>
 
-**问题**：ping-pong 技术解决什么问题？以高斯模糊为例说明流程。
+**问题 2**：为什么多采样场景颜色通常要 resolve 到另一张单采样纹理后才能做普通后处理？
 
 <Answer>
-ping-pong 解决多遍后处理需要反复读写同一张图的问题：用两个 FBO/纹理 A、B 交替，第一遍从 A 读写到 B，第二遍从 B 读写到 A，交替 N 遍。高斯模糊常拆成水平、垂直两遍（可分离滤波），用 ping-pong 先水平模糊一遍、再垂直模糊一遍，每遍只在一维上采样，比二维卷积省大量纹理采样。
+多采样 renderbuffer 为每像素保存多个样本，普通 sampler2D 期待单采样纹理，不能直接把该 renderbuffer 当纹理采样。WebGL2 通常将多采样 FBO 作为 READ_FRAMEBUFFER，把单采样纹理 FBO 作为 DRAW_FRAMEBUFFER，用 blitFramebuffer 解析颜色，然后后处理采样解析后的纹理。
+</Answer>
+
+**问题 3**：设计一个两遍高斯模糊的读写表，并说明如何检测反馈环路。
+
+<Answer>
+第一遍读取 sceneColor，写 blurA，方向为水平；第二遍读取 blurA，写 blurB，方向为垂直；最终合成读取 blurB，写默认 framebuffer。每个 pass 执行前比较所有输入 texture 与当前输出 FBO 的附件对象/层级，若同一图像同时出现在读集合和写集合就拒绝调度。更多遍可在 blurA/blurB 间交替。
 </Answer>
 </Exercises>
 
+## 小结
+
+- FBO 是附件接线状态，不保存像素；texture/renderbuffer 生命周期必须独立管理。
+- 缺深度附件不等于不完整，是否需要深度由 pass 的遮挡、采样和后续使用决定。
+- FRAMEBUFFER_COMPLETE 只证明目标组合可绘制，viewport、drawBuffers、反馈和状态仍需检查。
+- 多采样目标通常先 resolve 到单采样纹理，再进入普通后处理。
+- ping-pong、pass 状态契约和原子 resize 重建共同保证多遍链路可移植、可诊断。
+
 <Glossary>
-<GlossaryItem term="FBO">帧缓冲对象，可挂载纹理/缓冲作为渲染目标的离屏画布。</GlossaryItem>
-<GlossaryItem term="附件">挂到 FBO 上接收渲染输出的纹理或缓冲，分颜色、深度、模板附件。</GlossaryItem>
-<GlossaryItem term="渲染到纹理">把场景画进 FBO 挂载的纹理，再作为后续绘制的输入。</GlossaryItem>
-<GlossaryItem term="乒乓">用两个 FBO/纹理交替读写以实现多遍后处理的技术。</GlossaryItem>
+<GlossaryItem term="帧缓冲对象">把颜色、深度和模板图像附件组织成当前渲染目标的状态对象，本身不保存像素。</GlossaryItem>
+<GlossaryItem term="附件">挂接到 attachment point、实际保存颜色深度或模板数据的纹理层级或 renderbuffer。</GlossaryItem>
+<GlossaryItem term="完整性">framebuffer 附件组合满足规范、可作为绘制目标的状态，不代表整个 pass 逻辑正确。</GlossaryItem>
+<GlossaryItem term="反馈环路">一次 draw 中采样的纹理图像同时作为当前 framebuffer 的写附件，必须避免。</GlossaryItem>
+<GlossaryItem term="Ping-pong">用两组 FBO/纹理轮流充当读取源和写目标，安全执行多遍后处理。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="深入理解 OpenGL WebGL OpenGL ES" adaptedUrl="" />
+<Attribution
+  adaptedFrom="Khronos WebGL 2.0 framebuffer and rendering buffer specifications"
+  adaptedUrl="https://registry.khronos.org/webgl/specs/latest/2.0/"
+/>

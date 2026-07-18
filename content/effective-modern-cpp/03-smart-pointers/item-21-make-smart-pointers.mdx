@@ -1,0 +1,385 @@
+---
+title: "Item 21：优先使用 make_unique 和 make_shared"
+type: A
+section: Chapter 4 · Smart Pointers
+order: 21
+description: 对齐 Effective Modern C++ Item 21：用 make_unique/make_shared 消除类型重复和 raw-new 异常窗口，理解 make_shared 单次分配，并识别 custom deleter、花括号、private constructor 与长寿命 weak_ptr 的例外。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch04.html"
+draft: false
+---
+
+import {
+  EmcppMakeAllocationTopologyMap,
+  EmcppMakeFunctionDecisionMap,
+  EmcppNewExceptionInterleavingMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-21-make-smart-pointers";
+
+<Objectives>
+
+- 能比较 make_unique/make_shared 与 direct use of new（直接使用 new）的类型重复、ownership handoff 和异常安全
+- 能分析 pre-C++17 argument evaluation interleaving，解释 make function 如何关闭 allocation-to-owner 的 leak window
+- 能绘制 make_shared single allocation（单次分配）与双分配 lifetime，并判断 custom deleter limitation（自定义删除器限制）等例外
+
+</Objectives>
+
+## 从“resource 一创建就应进入 owner”开始
+
+Item 21 的原则是 Prefer std::make_unique and std::make_shared to direct use of new（优先 make_unique/make_shared，而非直接 new）。make function 把 allocation、construction 和 smart-owner 建立封装成一个完整调用。
+
+<Term def="C++14 factory，在一个表达式中构造 T 并返回 unique_ptr to T。">
+  make_unique
+</Term>
+
+<Term def="C++11 factory，构造 T 及 shared control block 并返回 shared_ptr to T。">
+  make_shared
+</Term>
+
+```cpp
+auto unique = std::make_unique<Widget>(arguments);
+auto shared = std::make_shared<Widget>(arguments);
+```
+
+先预测：若 Widget constructor 抛异常，allocation 会由 factory 路径自动回收，不会暴露 raw pointer ownership gap。
+
+## make 消除类型重复
+
+```cpp
+std::unique_ptr<Widget> first(new Widget(arguments));
+auto second = std::make_unique<Widget>(arguments);
+```
+
+<Term def="smart pointer element type 同时出现在声明与 new expression 中，增加重构不一致风险。">
+  smart-pointer type duplication
+</Term>
+
+auto + make 只写一次 Widget。若 type 改名或 factory return 变化，维护点更少，也避免左侧/right-side template type 暂时不一致。
+
+## raw new 与 owner construction 是两个动作
+
+```cpp
+processWidget(
+    std::shared_ptr<Widget>(new Widget),
+    computePriority()
+);
+```
+
+<Term def="new 已返回 raw pointer，但 shared_ptr constructor 尚未接管时的短暂无 owner 区间。">
+  allocation ownership gap
+</Term>
+
+在 C++11/14，function arguments 的求值顺序未指定，compiler 可执行：`new Widget` → `computePriority()` → shared_ptr constructor。若 priority 抛异常，raw Widget 没有 owner，发生 leak。
+
+<Term def="多个 argument 子表达式按允许顺序交错，使 resource acquisition 与 owner 建立被可抛操作分开的风险。">
+  argument-evaluation interleaving
+</Term>
+
+<EmcppNewExceptionInterleavingMap />
+
+<Callout
+  type="trap"
+  title="陷阱：shared_ptr 临时对象写在同一行，所以 new 后一定立即接管"
+>
+  source text 的括号不保证 pre-C++17 argument evaluation 顺序。new 与 shared_ptr
+  constructor 是不同 operations，另一 argument
+  可插入并抛异常；同一行不等于同一原子 ownership action。
+</Callout>
+
+## make function 关闭异常窗口
+
+```cpp
+processWidget(
+    std::make_shared<Widget>(),
+    computePriority()
+);
+```
+
+<Term def="resource acquisition 在 factory call 返回前已绑定 smart owner，外部可抛 argument 无法插入中间。">
+  atomic ownership construction
+</Term>
+
+compiler 可先求 computePriority 或先完成 make_shared，但不能把另一 argument 插进 make_shared function body 的 allocation 与 owner 建立之间。exception safety（异常安全）来自封装边界。
+
+## unique_ptr 同样减少 handoff 风险
+
+```cpp
+auto widget = std::make_unique<Widget>(arguments);
+```
+
+<Term def="从 allocation 成功到 unique owner 建立之间不向 caller 暴露 raw pointer 的交付方式。">
+  leak-free unique construction
+</Term>
+
+C++11 没有标准 make_unique，可实现小型兼容 helper，或把 direct new 立即放入独立 owner declaration，绝不与其他可抛 arguments 混在同一 full expression。
+
+## make_shared 通常只做一次 allocation
+
+直接构造 shared_ptr 通常先为 Widget 分配，再为 control block 分配：
+
+```cpp
+std::shared_ptr<Widget> direct(new Widget(arguments));
+```
+
+make_shared 可为 object + control block 申请一块连续 memory：
+
+```cpp
+auto combined = std::make_shared<Widget>(arguments);
+```
+
+<Term def="object 与 control block 位于同一动态 allocation，减少 allocator calls 与 metadata overhead。">
+  single allocation
+</Term>
+
+<Term def="object 和 control block 分别分配，拥有独立释放时机的 shared_ptr 构造拓扑。">
+  split allocation
+</Term>
+
+<EmcppMakeAllocationTopologyMap />
+
+单次分配通常改善 allocation latency、memory overhead 与 locality，但标准不承诺具体 layout。
+
+## 合并 allocation 改变 memory release 时机
+
+make_shared 中 object 与 block 共用 memory。strong count 为零会调用 Widget destructor，但只要 weak_ptr 存在，control block 不能释放，整块 allocation 也保留。
+
+<Term def="object 已析构但长寿命 weak observers 让合并 allocation 的 object storage 仍被占用。">
+  retained combined allocation
+</Term>
+
+对巨大 object 和长期 weak cache，这可能比双分配占用更多 memory。direct shared_ptr 可在 strong zero 时释放 object allocation，control block 单独留到 weak zero。
+
+<Callout
+  type="trap"
+  title="陷阱：make_shared 的 object 在最后一个 shared_ptr 消失后仍然活着"
+>
+  object lifetime 已结束，destructor 已执行；保留的是合并 allocation 的
+  bytes，因为 control block 仍被 weak observers 使用。必须区分 object lifetime
+  与 storage release。
+</Callout>
+
+## make functions 不接受 custom deleter
+
+标准 make_unique/make_shared 使用标准删除/allocator construction 路径，调用接口没有 custom deleter 参数。
+
+<Term def="make function 不能直接把调用方提供的 deleter 安装到 smart pointer 中的约束。">
+  custom deleter limitation
+</Term>
+
+```cpp
+auto deleter = [](Widget* pointer) noexcept {
+    pool.release(pointer);
+};
+
+std::unique_ptr<Widget, decltype(deleter)> owner(
+    pool.acquire(),
+    deleter
+);
+```
+
+资源不是 ordinary new/delete 时，direct smart-pointer construction 是正确例外。关键是 raw acquisition 后立即进入 owner，不跨可抛操作。
+
+## custom allocator 可用 allocate_shared
+
+shared object 需要 allocator 但仍希望合并 allocation，可用 `std::allocate_shared`。
+
+<Term def="使用调用方 allocator 创建 shared object/control block 的 make_shared 变体。">
+  allocate_shared
+</Term>
+
+它仍不等同 custom deleter；allocation/deallocation 由 allocator protocol 管理。
+
+## braced initializer 无法直接 perfect-forward
+
+花括号列表本身没有普通独立类型，template argument deduction 可能失败：
+
+```cpp
+// auto values = std::make_unique<std::vector<int>>({1, 2, 3});
+
+auto values = std::make_unique<std::vector<int>>(
+    std::initializer_list<int>{1, 2, 3}
+);
+```
+
+<Term def="裸 braced list 不能作为普通 forwarding argument 被 make function template 推导。">
+  braced-list make boundary
+</Term>
+
+也可先创建 initializer_list variable，或明确调用 vector value construction。不要为少写类型退回裸 new 而重新打开异常窗口。
+
+## private constructor 可能拒绝 make_shared
+
+即使 class static factory 能访问 private constructor，真正执行 construction 的 `std::make_shared` internals 并不是 friend，access check 可能失败。
+
+```cpp
+class Widget {
+public:
+    static std::shared_ptr<Widget> create();
+
+private:
+    Widget(Token);
+};
+```
+
+<Term def="construction 实际发生在标准 library template context，无法访问 caller class private constructor 的限制。">
+  private-constructor make boundary
+</Term>
+
+方案包括 public/protected enabler derived type、passkey pattern，或在 factory 内 direct new + immediate shared_ptr ownership。选择应保持 constructor invariant，而不是盲目公开 constructor。
+
+## class-specific operator new 也可能是例外
+
+make_shared 的 combined allocation 不一定调用 T 的 class-specific `operator new`，因为它分配的是包含 control block 的更大块。
+
+<Term def="class 自定义 allocation hook 与 make_shared 合并 allocation 路径可能不一致的边界。">
+  class-specific allocation boundary
+</Term>
+
+若 tracing/pool/placement contract 依赖该 operator new，需验证 allocate_shared 或 direct path，不可仅凭“make 更快”切换。
+
+## make function 决策规则
+
+<EmcppMakeFunctionDecisionMap />
+
+<Term def="默认 make，遇到 deleter、access、braced list、allocation/lifetime 例外时选择明确替代路径。">
+  smart construction decision
+</Term>
+
+1. ordinary unique/shared object：make_unique/make_shared。
+2. custom deleter/resource protocol：direct owner construction。
+3. custom allocator：优先 allocate_shared。
+4. braced list：显式 initializer_list/value type。
+5. private ctor：enabler/passkey 或 immediate direct owner。
+6. huge object + long weak lifetime：评估 split allocation。
+7. class-specific operator new：验证 allocation contract。
+
+## exception-safe direct 例外写法
+
+当必须 direct new，先建立 local owner，再进入其他可抛调用：
+
+```cpp
+std::shared_ptr<Widget> owner(
+    new Widget(arguments),
+    customDeleter
+);
+
+processWidget(std::move(owner), computePriority());
+```
+
+<Term def="先在独立 full expression 中完成 raw acquisition 与 owner 建立，再执行后续可抛逻辑。">
+  immediate owner handoff
+</Term>
+
+即使 argument evaluation interleaves，owner local 已存在，异常会触发正常 stack cleanup。
+
+## make-smart 验收矩阵
+
+<Term def="覆盖 constructor throw、argument throw、allocation count、weak retention 与例外路径的测试集合。">
+  make-smart contract matrix
+</Term>
+
+1. constructor/priority 抛异常时无 leak。
+2. allocator counters 比较 make_shared 与 split allocation。
+3. weak observer 留存时区分 destructor timing 与 storage release。
+4. custom deleter direct path 精确执行一次。
+5. braced-list/private ctor 方案保持 invariant。
+6. class-specific allocation hook 按设计被调用或明确绕过。
+
+先预测 ownership handoff 与 allocation topology，再选 make 或 direct；“优先”意味着有证据的默认，不是无例外规则。
+
+## 小结
+
+- make_unique/make_shared 消除 element type 重复，并把 acquisition 与 owner 建立封装成一个 call
+- pre-C++17 direct new 嵌入多参数调用可能被其他可抛 argument 插入，形成 leak window
+- make function 提供更强 exception safety，因为返回前 resource 已进入 owner
+- make_shared 通常将 object/control block 合并为 single allocation，减少分配与改善 locality
+- 长寿命 weak_ptr 会保留 combined allocation storage，即使 object 已析构
+- make functions 不能安装 custom deleter；custom allocator 可考虑 allocate_shared
+- braced list、private constructor、class-specific allocation 需要替代路径
+- 必须 direct construction 时，在独立 full expression 立即完成 owner handoff
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 21"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch04.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="make_unique">
+    构造独占 owner 的标准 factory。
+  </GlossaryItem>
+  <GlossaryItem term="make_shared">
+    构造共享 object/control block 的 factory。
+  </GlossaryItem>
+  <GlossaryItem term="smart-pointer type duplication">
+    类型在 owner 和 new 两处重复。
+  </GlossaryItem>
+  <GlossaryItem term="allocation ownership gap">
+    allocation 与 owner 建立间的裸资源窗口。
+  </GlossaryItem>
+  <GlossaryItem term="argument-evaluation interleaving">
+    参数子表达式的允许交错执行。
+  </GlossaryItem>
+  <GlossaryItem term="atomic ownership construction">
+    factory 返回前完成 ownership 建立。
+  </GlossaryItem>
+  <GlossaryItem term="leak-free unique construction">
+    不暴露 raw handoff 的独占构造。
+  </GlossaryItem>
+  <GlossaryItem term="single allocation">
+    object/control block 合并分配。
+  </GlossaryItem>
+  <GlossaryItem term="split allocation">
+    object/control block 分别分配。
+  </GlossaryItem>
+  <GlossaryItem term="retained combined allocation">
+    weak observer 保留合并 storage。
+  </GlossaryItem>
+  <GlossaryItem term="custom deleter limitation">
+    make 无法安装自定义删除器。
+  </GlossaryItem>
+  <GlossaryItem term="allocate_shared">
+    使用自定义 allocator 的共享 factory。
+  </GlossaryItem>
+  <GlossaryItem term="braced-list make boundary">
+    裸花括号无法模板转发的边界。
+  </GlossaryItem>
+  <GlossaryItem term="private-constructor make boundary">
+    标准 template 无 private access。
+  </GlossaryItem>
+  <GlossaryItem term="class-specific allocation boundary">
+    合并分配与 class operator new 的差异。
+  </GlossaryItem>
+  <GlossaryItem term="smart construction decision">
+    make 与 direct path 的选择规则。
+  </GlossaryItem>
+  <GlossaryItem term="immediate owner handoff">
+    独立表达式中立即建立 owner。
+  </GlossaryItem>
+  <GlossaryItem term="make-smart contract matrix">
+    异常、分配和例外路径测试表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：process(shared_ptr(new Widget), priority())。** priority 可能抛异常。
+
+<Answer question="pre-C++17 的 leak path 和修复是什么？">
+  compiler 可先执行 new Widget，再执行 priority，最后才构造 shared
+  pointer；priority throw 时 raw object 无 owner。改用 make shared，使
+  allocation/construction/control block 建立在 factory 返回前完成；用 throwing
+  priority 和 destructor/allocation counters 验证无 leak。
+</Answer>
+
+2. **问题 2：巨大 Widget 有长期 weak cache。** 比较 make_shared 与 split allocation。
+
+<Answer question="object 析构和 storage release 何时发生？">
+  两种路径都在 strong count 为零时析构 Widget；make shared 的 object/control
+  共用 allocation，weak entries 存在时整块 storage 不能释放。split path
+  可立即释放大 object allocation，只保留小 control block。 用 allocator counters
+  分别验证 destructor 与 deallocation timing，再按 memory profile 选择。
+</Answer>
+
+3. **问题 3：pool Widget 需要 custom deleter 且 constructor private。** 设计安全 factory。
+
+  <Answer question="为何不能机械使用 make？">标准 make functions 不接受 custom deleter，内部 construction 也可能无 private access。class factory 从 pool acquire 后在同一 full expression 立即构造带 noexcept PoolReturn deleter 的 smart owner，再执行其他可抛步骤；或用 passkey/enabler 保持 invariant。异常注入与 pool counter 证明无 ownership gap、只归还一次。</Answer>
+</Exercises>

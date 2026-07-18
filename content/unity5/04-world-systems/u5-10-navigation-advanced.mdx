@@ -1,0 +1,208 @@
+---
+title: "第10章 导航仪高级技巧"
+type: B
+section: "Unity 5 权威讲解 · 射线、导航与光照"
+order: 10
+description: "按李在贤《Unity 5权威讲解》正式目录第 329-336 页复现第10章 导航仪高级技巧，围绕 TPS 项目建立可运行、可反证、可回归的证据。"
+demo: true
+math: false
+draft: false
+sourceUrl: "https://www.tenlong.com.tw/products/9787115436368"
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { U510NavigationAdvancedMapLab, U510NavigationAdvancedExperimentLab, U510NavigationAdvancedEvidenceLab } from "@/components/mdx/unity5/diagrams/u5-10-navigation-advanced";
+
+<Objectives>
+
+- 能解释第10章 导航仪高级技巧在原书 TPS 项目主线中的责任边界
+
+- 能复现“烘焙NavMesh → 动态障碍 → 链接端点 → 代理进入 → 特殊移动 → 重新落网”并保存每个中间状态与事件证据
+
+- 能设计正常、边界与失败实验，判断“导航链接必须保持入口出口、方向、代价、动画和失败恢复一致，动态障碍不能让代理永久卡死。”是否成立
+
+</Objectives>
+
+## 问题：怎样证明掌握的是原书项目，而不是背过一组 Unity API？
+
+先预测：如果只保存最后一张运行截图，不知道对象如何生成、状态怎样变化、事件由谁发送、失败时如何清理，能否证明系统正确？不能。项目能力来自连续因果链，API 名称只是其中一个实现节点。
+
+用动态障碍、Off-Mesh Link 和自定义链接补足烘焙 NavMesh 无法表达的运行时通行关系。 本页同时保留 Unity 5 的历史语境和当前工程警示：已废弃的内置网络等 API 用于忠实理解原书，不作为新项目的生产推荐。
+
+<U510NavigationAdvancedMapLab />
+
+## 原书目录边界
+
+本页严格对应《Unity 5权威讲解》第 329-336 页。以下目录项必须在实现、实验或证据中出现：
+
+- **动态障碍物**
+- **Off-Mesh Link**
+- **用户自定义生成 Off-Mesh Link**
+
+本站以中文重新组织解释、代码与实验，不逐字复制原文。示例锁定原书 Unity 5 语境；迁移到现代 Unity 时，需要把输入、渲染、导航和网络替代方案写进版本清单。
+
+## 核心模型与不可变条件
+
+用动态障碍、Off-Mesh Link 和自定义链接补足烘焙 NavMesh 无法表达的运行时通行关系。 主链为：**烘焙NavMesh → 动态障碍 → 链接端点 → 代理进入 → 特殊移动 → 重新落网**。每一节点只消费前一节点已经验证的对象、状态或事件，不能从最终表现反推中间过程一定正确。
+
+本页不可变条件是：**导航链接必须保持入口出口、方向、代价、动画和失败恢复一致，动态障碍不能让代理永久卡死。** 任何“看起来能跑”的结果都必须经过重复加载、异常输入和边界时序检验。
+
+## 五个必须落到证据的术语
+
+<Term def="运行时改变导航可通行区域的障碍对象">动态障碍</Term>
+
+“动态障碍”必须落到“烘焙NavMesh → 动态障碍 → 链接端点 → 代理进入 → 特殊移动 → 重新落网”中的明确节点，并能由场景状态、日志或目标构建捕获验证。
+
+<Term def="连接两个不连续 NavMesh 区域的特殊路径">分离网格链接</Term>
+
+“分离网格链接”必须落到“烘焙NavMesh → 动态障碍 → 链接端点 → 代理进入 → 特殊移动 → 重新落网”中的明确节点，并能由场景状态、日志或目标构建捕获验证。
+
+<Term def="导航系统比较候选路线时使用的权重">路径代价</Term>
+
+“路径代价”必须落到“烘焙NavMesh → 动态障碍 → 链接端点 → 代理进入 → 特殊移动 → 重新落网”中的明确节点，并能由场景状态、日志或目标构建捕获验证。
+
+<Term def="特殊路径的进入与退出空间位置">链接端点</Term>
+
+“链接端点”必须落到“烘焙NavMesh → 动态障碍 → 链接端点 → 代理进入 → 特殊移动 → 重新落网”中的明确节点，并能由场景状态、日志或目标构建捕获验证。
+
+<Term def="特殊移动结束后把代理恢复到有效 NavMesh 的过程">重新落网</Term>
+
+“重新落网”必须落到“烘焙NavMesh → 动态障碍 → 链接端点 → 代理进入 → 特殊移动 → 重新落网”中的明确节点，并能由场景状态、日志或目标构建捕获验证。
+
+## 原书概念逐项复现
+
+### 1. 动态障碍物
+
+把“动态障碍物”放回“烘焙NavMesh → 动态障碍 → 链接端点 → 代理进入 → 特殊移动 → 重新落网”主链，记录输入、对象状态、事件、结果和失败恢复，不能只保存最终截图。 复现时保存正常、边界和主动失败三类样本，在首个偏离节点停止扩散修改。
+
+### 2. Off-Mesh Link
+
+把“Off-Mesh Link”放回“烘焙NavMesh → 动态障碍 → 链接端点 → 代理进入 → 特殊移动 → 重新落网”主链，记录输入、对象状态、事件、结果和失败恢复，不能只保存最终截图。 复现时保存正常、边界和主动失败三类样本，在首个偏离节点停止扩散修改。
+
+### 3. 用户自定义生成 Off-Mesh Link
+
+把“用户自定义生成 Off-Mesh Link”放回“烘焙NavMesh → 动态障碍 → 链接端点 → 代理进入 → 特殊移动 → 重新落网”主链，记录输入、对象状态、事件、结果和失败恢复，不能只保存最终截图。 复现时保存正常、边界和主动失败三类样本，在首个偏离节点停止扩散修改。
+
+<U510NavigationAdvancedExperimentLab />
+
+## 三步复现与分步观察
+
+<Stepper>
+  <Step title="1. 冻结版本、场景与对象合同">
+    记录 Unity 版本、场景、预制体、脚本、输入和预期结果，写出唯一假设与反证条件。
+    <U510NavigationAdvancedMapLab />
+  </Step>
+  <Step title="2. 沿项目主链执行并注入失败">
+    沿“烘焙NavMesh → 动态障碍 → 链接端点 → 代理进入 → 特殊移动 → 重新落网”保存状态和事件；一次只改变一个主要因素，在首个偏离节点停下。
+    <U510NavigationAdvancedExperimentLab />
+  </Step>
+  <Step title="3. 重载、重连或重放后签发">
+    从干净场景重新执行相同输入，核对对象数量、事件次数、玩法结果、画面和清理责任。
+    <U510NavigationAdvancedEvidenceLab />
+  </Step>
+</Stepper>
+
+## 可执行实现骨架
+
+脚本边界显式保存状态，避免展示层直接决定玩法结果：
+
+```csharp
+using UnityEngine;
+
+public sealed class ChapterController : MonoBehaviour
+{
+    [SerializeField] GameObject target;
+    bool completed;
+
+    public void ExecuteOnce()
+    {
+        if (completed || target == null) return;
+        completed = true;
+        ApplyChapterResult(target);
+    }
+}
+```
+
+测试记录必须能回到具体对象与事件：
+
+```json
+{
+  "chapter": "u5-10-navigation-advanced",
+  "bookPages": "329-336",
+  "chain": ["烘焙NavMesh","动态障碍","链接端点","代理进入","特殊移动","重新落网"],
+  "unity": "5.x-pinned",
+  "scene": "fixed-tps-checkpoint",
+  "normal": true,
+  "boundary": true,
+  "failureReplay": true
+}
+```
+
+签发输出同时保留通过值与拒绝原因：
+
+```text
+PASS context=version+scene+prefab+input
+PASS chain=烘焙NavMesh -> 动态障碍 -> 链接端点 -> 代理进入 -> 特殊移动 -> 重新落网
+PASS invariant=导航链接必须保持入口出口、方向、代价、动画和失败恢复一致，动态障碍不能让代理永久卡死。
+REJECT duplicate-event | stale-object | changed-scene | missing-cleanup
+```
+
+## 两个必须主动制造的失败样本
+
+<Callout type="trap" title="项目主链在中间节点断裂">
+  链接端点悬空或双向设置错误，代理进入跳跃状态后路径重算，无法完成动画也无法回到 NavMesh。 保存错误状态、事件顺序和首个偏离对象，再恢复相同场景与输入复验。
+</Callout>
+
+<Callout type="trap" title="历史 API 被误当成现代生产方案">
+  原书内置网络、旧输入或旧动画接口可以用于理解目录，但迁移时必须标注已废弃边界、替代方案和行为差异；不能把示例能运行当成现代上线依据。
+</Callout>
+
+## 证据矩阵
+
+| 维度 | 正常样本 | 边界样本 | 失败样本 | 签发条件 |
+| --- | --- | --- | --- | --- |
+| 环境 | 固定版本与场景 | 重复加载或低帧率 | 改变一个依赖 | 差异可解释 |
+| 主链 | 所有节点有记录 | 临界输入与时序 | 首节点注入偏差 | 能定位首因 |
+| 结果 | 玩法与表现一致 | 生命周期完整 | 重复或丢失事件 | 同输入可复验 |
+| 清理 | 对象数量稳定 | 重连或重载 | 遗留引用和订阅 | 无状态泄漏 |
+
+<U510NavigationAdvancedEvidenceLab />
+
+## 练习
+
+<Exercises>
+
+**问题 1** 写出“烘焙NavMesh”到“重新落网”每一步的对象所有者、输入、状态、事件和输出。
+
+<Answer>每一步引用同一场景与版本，输出包含对象 ID、事件次数、状态快照和下一步理由，不能只写 API 名称。</Answer>
+
+**问题 2** 主动制造“链接端点悬空或双向设置错误，代理进入跳跃状态后路径重算，无法完成动画也无法回到 NavMesh。”，保存首个偏离节点，再证明修复在重载后仍成立。
+
+<Answer>合格答案包含失败样本、事件时序、对象生命周期、修复前后对照和清理结果。</Answer>
+
+**问题 3** 为不可变条件“导航链接必须保持入口出口、方向、代价、动画和失败恢复一致，动态障碍不能让代理永久卡死。”设计正常、边界和失败三组测试。
+
+<Answer>三组测试统一记录版本、场景、预制体、输入、对象数量、事件次数、结果和复验状态。</Answer>
+
+</Exercises>
+
+## 小结
+
+- 是否逐项覆盖了本页原书目录，而没有换成通用 Unity 知识？
+- 是否沿“烘焙NavMesh → 动态障碍 → 链接端点 → 代理进入 → 特殊移动 → 重新落网”保存对象、状态和事件证据？
+- 是否主动制造失败并验证重载、重连或重复执行后的清理？
+- 是否明确区分 Unity 5 历史复现与现代生产建议？
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="动态障碍">运行时改变导航可通行区域的障碍对象。</GlossaryItem>
+  <GlossaryItem term="分离网格链接">连接两个不连续 NavMesh 区域的特殊路径。</GlossaryItem>
+  <GlossaryItem term="路径代价">导航系统比较候选路线时使用的权重。</GlossaryItem>
+  <GlossaryItem term="链接端点">特殊路径的进入与退出空间位置。</GlossaryItem>
+  <GlossaryItem term="重新落网">特殊移动结束后把代理恢复到有效 NavMesh 的过程。</GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution adaptedFrom="李在贤著、孔雪玲译《Unity 5权威讲解》，人民邮电出版社，2016，580页，ISBN 9787115436368" adaptedUrl="https://www.tenlong.com.tw/products/9787115436368" />

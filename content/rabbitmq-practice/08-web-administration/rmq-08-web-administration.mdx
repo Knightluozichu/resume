@@ -1,0 +1,365 @@
+---
+title: "第8章 从Web端管理RabbitMQ"
+description: "依据Manning原版与电子工业出版社中文版完整目录：启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin"
+type: C
+section: "RabbitMQ实战：高效部署分布式消息队列（RabbitMQ 2.7 / 2015）"
+draft: false
+math: false
+sourceUrl: "https://livebook.manning.com/book/rabbitmq-in-action/table-of-contents"
+demo: true
+order: 0
+---
+
+import {
+  Rmq08WebAdministrationTopologyLab,
+  Rmq08WebAdministrationDeliveryLab,
+  Rmq08WebAdministrationEvidenceLab,
+} from "@/components/mdx/rabbitmq-practice/diagrams/rmq-08-web-administration";
+
+# 第8章 从Web端管理RabbitMQ
+
+本课程对应Alvaro Videla、Jason J. W. Williams著《RabbitMQ实战：高效部署分布式消息队列》，汪佳南译，电子工业出版社2015年10月出版，332页，ISBN 9787121271649；原版RabbitMQ in Action由Manning于2012年4月出版。官方第8章样章明确以RabbitMQ 2.7.0为当时最新版本，本课程据此固定版本边界。
+
+全书正式分母为12章和附录A、B、C，不把后来出现的quorum queue、stream queue、现代federation、Kubernetes operator或新CLI倒灌进原书。本页逐项覆盖19个目录节点，最终交付插件依赖清单、VM指标快照、配置导入导出、用户权限测试与rabbitmqadmin运行手册。
+
+<Objectives>
+
+- 能解释“第8章 从Web端管理RabbitMQ”的19个目录节点，并绘制connection、channel、exchange、binding、queue与consumer边界。
+- 能比较正常、压力、断线、节点故障和客户端重启轨迹，判断confirm、ack、持久化与业务完成点。
+- 能设计并复现插件依赖清单、VM指标快照、配置导入导出、用户权限测试与rabbitmqadmin运行手册，用吞吐、分位延迟、ready/unacked、日志和消息ID对账支持结论。
+- 能分析“在Web页面点击成功就认为变更完成，未验证目标vhost、权限、队列消息、连接影响和CLI可重放性”为何失败，并写出停止、恢复、回退与责任交接条件。
+
+</Objectives>
+
+## 从一条AMQP消息的旅程开始
+
+先预测：生产者打开connection和channel后声明哪些交换器、队列与绑定，basic.publish如何按exchange type和routing key选择队列，broker何时发送publisher confirm，消费者何时收到delivery并basic.ack。随后预测连接中断、队列主节点故障或消费者处理一半崩溃时，消息处于ready、unacked、已重投还是未知状态。观察前必须留下预测。
+
+RabbitMQ 2.7的可靠性不是单开关。durable控制交换器与队列定义是否跨broker重启，delivery_mode控制消息是否请求持久化，publisher confirm描述发布到broker的确认，consumer ack描述处理后的确认，经典镜像队列描述队列副本。五者边界必须分别验证。
+
+## 核心词汇与版本边界
+
+<Term def="Management插件是“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”中的第1个RabbitMQ 2.7概念，定义必须同时给出AMQP状态、故障边界和可观测证据">
+  Management插件
+</Term>
+、
+<Term def="Erlang VM是“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”中的第2个RabbitMQ 2.7概念，定义必须同时给出AMQP状态、故障边界和可观测证据">
+  Erlang VM
+</Term>
+、
+<Term def="配置导入是“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”中的第3个RabbitMQ 2.7概念，定义必须同时给出AMQP状态、故障边界和可观测证据">
+  配置导入
+</Term>
+、
+<Term def="Web控制台是“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”中的第4个RabbitMQ 2.7概念，定义必须同时给出AMQP状态、故障边界和可观测证据">
+  Web控制台
+</Term>
+、
+<Term def="rabbitmqadmin是“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”中的第5个RabbitMQ 2.7概念，定义必须同时给出AMQP状态、故障边界和可观测证据">
+  rabbitmqadmin
+</Term>
+构成本页词汇。每个词都要回答：由谁声明，属于哪个vhost，在哪个channel发生，改变什么broker或客户端状态，断线与重试后会留下什么，以及RabbitMQ
+2.7之后哪些变化不属于本书。
+
+<Rmq08WebAdministrationTopologyLab />
+
+## 原书目录逐节点重构
+
+### 超越rabbitmqctl：RabbitMQ Management插件
+
+**目录节点 1/19。** “超越rabbitmqctl：RabbitMQ Management插件”服务于“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“本章输入与版本契约”进入“超越rabbitmqctl：RabbitMQ Management插件”，再到“为何需要Management插件”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”验收。
+
+#### 为何需要Management插件
+
+**目录节点 2/19。** “为何需要Management插件”服务于“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“超越rabbitmqctl：RabbitMQ Management插件”进入“为何需要Management插件”，再到“Management插件功能”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”验收。
+
+#### Management插件功能
+
+**目录节点 3/19。** “Management插件功能”服务于“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“为何需要Management插件”进入“Management插件功能”，再到“启用Management插件”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”验收。
+
+#### 启用Management插件
+
+**目录节点 4/19。** “启用Management插件”服务于“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“Management插件功能”进入“启用Management插件”，再到“从Web控制台来管理RabbitMQ”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”验收。
+
+### 从Web控制台来管理RabbitMQ
+
+**目录节点 5/19。** “从Web控制台来管理RabbitMQ”服务于“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“启用Management插件”进入“从Web控制台来管理RabbitMQ”，再到“监控Erlang VM”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”验收。
+
+#### 监控Erlang VM
+
+**目录节点 6/19。** “监控Erlang VM”服务于“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“从Web控制台来管理RabbitMQ”进入“监控Erlang VM”，再到“从JSON文件导入配置”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”验收。
+
+#### 从JSON文件导入配置
+
+**目录节点 7/19。** “从JSON文件导入配置”服务于“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“监控Erlang VM”进入“从JSON文件导入配置”，再到“从Web控制台管理用户”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”验收。
+
+### 从Web控制台管理用户
+
+**目录节点 8/19。** “从Web控制台管理用户”服务于“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“从JSON文件导入配置”进入“从Web控制台管理用户”，再到“创建用户”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”验收。
+
+#### 创建用户
+
+**目录节点 9/19。** “创建用户”服务于“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“从Web控制台管理用户”进入“创建用户”，再到“管理用户的权限”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”验收。
+
+#### 管理用户的权限
+
+**目录节点 10/19。** “管理用户的权限”服务于“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“创建用户”进入“管理用户的权限”，再到“从Web控制台管理交换器和队列”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”验收。
+
+### 从Web控制台管理交换器和队列
+
+**目录节点 11/19。** “从Web控制台管理交换器和队列”服务于“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“管理用户的权限”进入“从Web控制台管理交换器和队列”，再到“列出队列信息”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”验收。
+
+#### 列出队列信息
+
+**目录节点 12/19。** “列出队列信息”服务于“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“从Web控制台管理交换器和队列”进入“列出队列信息”，再到“创建队列”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”验收。
+
+#### 创建队列
+
+**目录节点 13/19。** “创建队列”服务于“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“列出队列信息”进入“创建队列”，再到“回到命令行”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”验收。
+
+### 回到命令行
+
+**目录节点 14/19。** “回到命令行”服务于“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“创建队列”进入“回到命令行”，再到“为什么需要另一个CLI”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”验收。
+
+#### 为什么需要另一个CLI
+
+**目录节点 15/19。** “为什么需要另一个CLI”服务于“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“回到命令行”进入“为什么需要另一个CLI”，再到“CLI管理：一种更简单的方式”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”验收。
+
+#### CLI管理：一种更简单的方式
+
+**目录节点 16/19。** “CLI管理：一种更简单的方式”服务于“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“为什么需要另一个CLI”进入“CLI管理：一种更简单的方式”，再到“安装rabbitmqadmin脚本”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”验收。
+
+#### 安装rabbitmqadmin脚本
+
+**目录节点 17/19。** “安装rabbitmqadmin脚本”服务于“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“CLI管理：一种更简单的方式”进入“安装rabbitmqadmin脚本”，再到“清空队列、创建交换器等”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”验收。
+
+#### 清空队列、创建交换器等
+
+**目录节点 18/19。** “清空队列、创建交换器等”服务于“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“安装rabbitmqadmin脚本”进入“清空队列、创建交换器等”，再到“总结”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”验收。
+
+### 总结
+
+**目录节点 19/19。** “总结”服务于“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”。先确定它作用于connection、channel、exchange、binding、queue、consumer、cluster node还是插件，再标出声明、路由、确认、持久化与释放边界。结论必须能从配置、rabbitmqctl或Management状态、日志、消息ID和客户端事件中复核。
+
+机制轨迹从“清空队列、创建交换器等”进入“总结”，再到“本章输出与消息对账”。逐步记录AMQP方法、broker状态和客户端回调，区分“方法已发送”“broker已接收或确认”“消费者已处理”“业务结果已对账”。连接关闭、节点故障、重试和应用重启必须有独立分支，不能只画正常箭头。
+
+实验固定RabbitMQ 2.7环境、vhost、交换器、队列、路由键和消息ID，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一。比较吞吐、P95/P99、ready/unacked、内存、Erlang进程与最终消息集合，用“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”验收。
+
+## 机制模型：拓扑、路由与确认
+
+connection承担TCP与认证，channel在一条连接上复用AMQP会话；channel级协议错误可能关闭channel而不是整个节点。交换器不存储消息，它依据direct、fanout、topic或headers规则把发布路由到绑定队列；无匹配路由的消息是否可感知取决于mandatory等机制，不能默认为已入队。
+
+队列保存ready消息并跟踪已投递未确认消息。消费者确认意味着客户端声明处理完成，断线前未确认消息通常会重新排队，因此业务处理必须能识别重复。prefetch约束未确认在途量，过大可能造成单消费者囤积，过小可能限制吞吐；实验要同时看吞吐、尾延迟与公平性。
+
+持久化与复制需要分别证明。消息写入持久队列并标记persistent，仍不等于每次确认都完成磁盘同步；publisher confirm提供broker侧可观察边界。RabbitMQ 2.7经典镜像队列与当代quorum queue不同，本页只讨论原书策略和当时故障语义。
+
+## 最小可重放实验
+
+```text
+book=RabbitMQ实战：高效部署分布式消息队列（RabbitMQ 2.7 / 2015）
+unit=rmq-08-web-administration
+baseline=RabbitMQ 2.7.0 / AMQP 0-9-1
+focus=启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin
+artifact=插件依赖清单、VM指标快照、配置导入导出、用户权限测试与rabbitmqadmin运行手册
+```
+
+```python
+# 伪代码：发布确认、消费处理和业务对账是三个独立边界。
+channel.confirm_delivery()
+channel.basic_publish(exchange, routing_key, body, properties)
+for delivery in consume(queue, prefetch=16):
+    apply_idempotently(delivery.message_id, delivery.body)
+    reconcile_business_result(delivery.message_id)
+    channel.basic_ack(delivery.delivery_tag)
+```
+
+```text
+evidence = rabbitmq/erlang/client version and vhost configuration
+         + exchange/binding/queue/consumer topology snapshot
+         + message-id/routing-key/confirm/delivery-tag/ack trace
+         + throughput/p50/p95/p99/ready/unacked/memory/process metrics
+         + disconnect/node/restart fault injection and final reconciliation
+```
+
+## 三步交互实验
+
+<Stepper>
+  <Step title="1. 建立交换器、绑定与队列拓扑">
+    选择正式目录节点和交换器类型，改变路由键，观察消息命中哪些队列与消费者。
+    <Rmq08WebAdministrationTopologyLab />
+  </Step>
+  <Step title="2. 改变持久化、确认与故障条件">
+    切换durable、persistent、publisher confirm、manual
+    ack和经典镜像，比较吞吐、重复与故障存活边界。
+    <Rmq08WebAdministrationDeliveryLab />
+  </Step>
+  <Step title="3. 通过端到端证据门">
+    目录、版本、拓扑、轨迹、故障和消息对账六类材料齐全后才接受结论。
+    <Rmq08WebAdministrationEvidenceLab />
+  </Step>
+</Stepper>
+
+<Callout type="trap">
+  **语义陷阱。**
+  在Web页面点击成功就认为变更完成，未验证目标vhost、权限、队列消息、连接影响和CLI可重放性。先写清发布确认点、消费处理点、ack点和最终业务不变量，再选择配置。
+</Callout>
+
+<Callout type="trap">
+  **版本陷阱。** 原书以RabbitMQ
+  2.7.0为基线，经典镜像队列、旧插件目录和rabbitmqadmin均有时代语境；当代RabbitMQ结果可作迁移差异，不能证明本书行为。
+</Callout>
+
+<Callout type="warning">
+  节点停止、网络隔离、磁盘故障、队列清空、权限变更、证书轮换和插件卸载只在隔离RabbitMQ
+  2.7环境演练。先备份配置与消息样本并规定停止上界。
+</Callout>
+
+## 独立证据与生产交接
+
+目录证据保存Manning 12章3附录与中文版节点映射；环境证据保存Erlang、RabbitMQ 2.7、客户端、节点名、cookie、vhost和插件；拓扑证据保存交换器、绑定、队列属性、消费者与经典镜像策略；运行证据保存消息生成规则、吞吐、分位延迟、ready/unacked、内存和Erlang进程。
+
+性能判断固定消息大小、路由键分布、交换器类型、绑定数量、持久化、confirm、ack与副本语义。关闭可靠性换来的吞吐不是等价优化。平均值会隐藏磁盘刷写、垃圾回收、消费者停顿和节点切换，必须保留P95/P99与队列积压。
+
+恢复判断从消息集合结束。节点重启、连接恢复、队列重新可见、Shovel继续运行或插件重新加载都只是阶段；还要核对每个message_id的出现次数、业务结果和未确认状态，并确认旧节点、旧消费者或旧脚本不再错误操作。
+
+## 本章回顾
+
+重新完成“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”：固定RabbitMQ 2.7和原书目录，从AMQP拓扑推导状态与确认边界，通过基线、压力与故障实验测量，最后交付插件依赖清单、VM指标快照、配置导入导出、用户权限测试与rabbitmqadmin运行手册。只有“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”与反例都可独立重放，本页才算完成。
+
+## 复习与运行验收
+
+<Exercises>
+**问题 1**：为什么“第8章 从Web端管理RabbitMQ”必须覆盖19个目录节点？
+<Answer>这些节点共同组成“启用RabbitMQ 2.7 Management插件，从Web观察Erlang VM、导入配置、管理用户交换器队列，并使用rabbitmqadmin”的拓扑、状态与证据链；漏项会使插件依赖清单、VM指标快照、配置导入导出、用户权限测试与rabbitmqadmin运行手册无法独立复现。</Answer>
+
+**问题 2**：本页最小不变量是什么？
+
+<Answer>
+  Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退。需要版本、拓扑、confirm/ack轨迹、指标、故障与消息对账共同证明。
+</Answer>
+
+**问题 3**：怎样构造最小反例？
+
+<Answer>
+  固定消息、vhost、交换器、队列与路由键，只改变持久化、confirm、ack、消费者速度、节点或网络故障之一，再比较broker状态与最终消息集合。
+</Answer>
+
+**问题 4**：为什么不能直接用当代RabbitMQ替代本章实验？
+
+<Answer>
+  原书以RabbitMQ
+  2.7.0为基线；队列类型、插件布局、CLI、安全和集群行为后来均有变化，新版本只能作为差异材料。
+</Answer>
+
+**问题 5**：如何验证性能结论？
+
+<Answer>
+  固定消息大小、路由分布、拓扑与可靠语义，重复测吞吐、P50/P95/P99、ready/unacked、内存、进程、网络和磁盘，并独立对账。
+</Answer>
+
+**问题 6**：独立交接需要什么？
+
+<Answer>需要完整目录映射、版本环境、AMQP拓扑、插件依赖清单、VM指标快照、配置导入导出、用户权限测试与rabbitmqadmin运行手册、负载、故障、对账、停止、恢复、回退和责任人。</Answer>
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Management插件">
+    Management插件在本页对应RabbitMQ 2.7与AMQP
+    0-9-1中的具体对象、方法或状态；适用范围由“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”和故障反例共同限定。
+  </GlossaryItem>
+  <GlossaryItem term="Erlang VM">
+    Erlang VM在本页对应RabbitMQ 2.7与AMQP
+    0-9-1中的具体对象、方法或状态；适用范围由“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”和故障反例共同限定。
+  </GlossaryItem>
+  <GlossaryItem term="配置导入">
+    配置导入在本页对应RabbitMQ 2.7与AMQP
+    0-9-1中的具体对象、方法或状态；适用范围由“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”和故障反例共同限定。
+  </GlossaryItem>
+  <GlossaryItem term="Web控制台">
+    Web控制台在本页对应RabbitMQ 2.7与AMQP
+    0-9-1中的具体对象、方法或状态；适用范围由“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”和故障反例共同限定。
+  </GlossaryItem>
+  <GlossaryItem term="rabbitmqadmin">
+    rabbitmqadmin在本页对应RabbitMQ 2.7与AMQP
+    0-9-1中的具体对象、方法或状态；适用范围由“Web与CLI操作都落到同一broker状态，导入和声明具有前后快照，用户权限最小化，危险操作具有目标、验证和回退”和故障反例共同限定。
+  </GlossaryItem>
+</Glossary>
+
+[← 上一页：第7章 warren和Shovel：故障转移和复制](/learn/rabbitmq-practice/07-warrens-shovels/rmq-07-warrens-shovels) · [下一页：第9章 使用REST API控制Rabbit →](/learn/rabbitmq-practice/09-rest-api/rmq-09-rest-api)
+
+<Attribution
+  adaptedFrom="Alvaro Videla、Jason J. W. Williams《RabbitMQ实战》"
+  adaptedUrl="https://livebook.manning.com/book/rabbitmq-in-action/table-of-contents"
+/>

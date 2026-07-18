@@ -1,0 +1,236 @@
+---
+title: "第2章：Program Structure"
+type: C
+section: "Go 程序设计语言 · 名字、绑定与作用域"
+order: 2
+description: "对齐原书第 2 章：Names、Declarations、Variables、Assignments、Type Declarations、Packages and Files 与 Scope。"
+demo: true
+math: false
+sourceUrl: "https://www.gopl.io/"
+draft: false
+---
+
+import {
+  GoplAssignmentTypeLab,
+  GoplBindingDeclarationLab,
+  GoplPackageScopeLab,
+} from "@/components/mdx/go-programming-language/diagrams/program-structure";
+
+<Objectives>
+
+- 能区分 name、declaration、scope 与 lifetime，写出 var/short declaration/pointer/new 的初始化和 ownership 推理
+- 能实现 assignment、tuple assignment 与 multiple-result assignment，判断 assignability、evaluation order 和 named type conversion
+- 能解释 package/file/import/export/initialization 顺序，并沿 lexical block 定位 shadowing 与短声明错误
+
+</Objectives>
+
+## 为什么 Program Structure 先建立“名字到实体”的地图
+
+程序不是一串孤立语句。compiler 必须回答：这个 identifier 指向哪个 entity、它的 type 是什么、何时初始化、在哪些 source region 可见、storage 活多久。原书第 2 章把 Names、Declarations、Variables、Assignments、Type Declarations、Packages and Files、Scope 连成一套 binding model。
+
+<Term def="identifier 经 declaration 关联到 variable、constant、type、function、label 或 package 的编译期关系；同名 identifier 在不同 scope 可绑定不同实体。">name binding</Term>
+
+先预测：`x, y := y, x` 在什么条件下是 compile error，`type Celsius float64` 能否直接接收 float64 variable，以及内层 `if err := f(); err != nil` 的 err 在 if 之后是否存在。三组实验会把答案落到 symbol table、type boundary 与 lexical block。
+
+## 2.1 Names：identifier、keyword 与 exported name
+
+Go name 由 Unicode letters、digits 与 underscore 组成，首字符不能是 digit；keyword 不能作为 identifier。`int`、`len`、`true` 等 predeclared names 位于 universe block，却不是 keyword，因此技术上可 shadow，但这样会破坏读者的语言直觉。
+
+package-level name 若以 Unicode upper-case letter 开头，就从 defining package exported；可见性由 declaration name 决定，不由 file name 决定。acronym 应保持一致，例如 `ServeHTTP`、`ID`，短局部名只在上下文足够紧凑时使用。
+
+<Stepper>
+  <Step title="修改 identifier 与 export capitalization">
+    <GoplBindingDeclarationLab />
+  </Step>
+  <Step title="区分 keyword 与 predeclared name">
+    keyword 不能声明；predeclared name 可以被 shadow，但 `var len = 3` 会让当前 scope 失去 builtin `len`，应视为设计缺陷。
+  </Step>
+  <Step title="检查短声明是否引入新名字">
+    `x, y := f()` 只要求同一 lexical block 中至少一个名字是新的；已有名字接收 assignment，新名字得到 declaration。
+  </Step>
+</Stepper>
+
+## 2.2 Declarations：把名字绑定到实体
+
+四类主要 declaration 是 `var`、`const`、`type`、`func`。package declaration 决定 file 所属 package，import declaration 把 imported package name 引入 file block。每个 declaration 指定 name、entity kind，并通常给出 type、initial value 或 function body。
+
+```go
+package tempconv
+
+const AbsoluteZeroC Celsius = -273.15
+type Celsius float64
+var boilingC = Celsius(100)
+
+func CToF(c Celsius) Fahrenheit { return Fahrenheit(c*9/5 + 32) }
+```
+
+package-level declaration 在 package scope 可被同包其他 files 使用；function parameter/result/local variable 只在相应 lexical region 可见。declaration 与 assignment 的关键差异是前者创建 binding，后者改变已有 variable 的 value。
+
+## 2.3 Variables：zero value、short declaration、pointer 与 lifetime
+
+`var name type = expression` 可省略 type 或 initializer，但不能同时省略 name 之后的必要信息。无 initializer 时得到 type 的 zero value：number 为 0，bool 为 false，string 为 empty，interface/pointer/slice/map/channel/function 为 nil，aggregate 递归归零。zero value 应尽量是可直接使用的有效状态。
+
+```go
+var i, j, k int                 // 0, 0, 0
+var b, f, s = true, 2.3, "four" // inferred types
+freq := rand.Float64() * 3.0     // local short declaration
+```
+
+<Term def="在 function 内用 name := expression 同时声明并初始化 local variables；同一声明中至少一个非 blank name 必须在当前 block 是新的。">short variable declaration</Term>
+
+`:=` 是 declaration，不是 assignment 的替代拼写。`f, err := os.Open(name)` 后可以写 `info, err := f.Stat()`，因为 info 是新变量、err 是当前 block 已有变量；如果两者都已有，必须改用 `=`。outer scope 中已有同名 name 不算当前 block 已声明，因此内层 `:=` 可能创建 shadow。
+
+### Pointer、new 与 variable lifetime
+
+`&x` 取得 address，结果 type 为 `*T`；`*p` 读取或更新 pointed variable。pointer zero value 是 nil，同 type pointer 可比较；返回 local variable 的 address 是安全的，因为 Go 根据可达性安排 storage。
+
+```go
+func newInt() *int {
+    value := 42
+    return &value
+}
+
+p := new(int) // points to a fresh zero-valued int
+*p = 7
+```
+
+<Term def="variable 的 storage 保持可达并可被程序访问的运行时区间；它与 identifier 的 lexical scope 不同，compiler 可通过 escape analysis 选择 storage。">variable lifetime</Term>
+
+scope 是 source text 中 name 可见的区域，lifetime 是执行期间 variable 存在的时段。local 被 closure 或 returned pointer 引用时可在 function return 后继续存在；package variable 通常贯穿 program。不要把“写在 stack frame 里”当语言 contract，也不要用 `new(T)` 猜测 heap allocation。
+
+<Callout type="trap" title="把 := 当成逐变量重新声明">
+`x, err := f()` 可能更新已有 err，同时新建 x；若 err 实际位于 outer block，则会新建一个 inner err。review 必须标出当前 lexical block，而不是只搜索同名变量。
+</Callout>
+
+## 2.4 Assignments：evaluation order、tuple 与 assignability
+
+simple assignment `x = 1` 改变 variable；compound assignment `x *= 2` 只求值左侧一次。`x++`、`x--` 是 statements，不是 expressions，不能嵌入另一个 expression。tuple assignment 先求值所有右侧 operands，再把结果逐项写入左侧。
+
+<Stepper>
+  <Step title="交换两个变量并观察 evaluation order">
+    <GoplAssignmentTypeLab />
+  </Step>
+  <Step title="把 multiple-result call 分配到多个目标">
+    `f, err = os.Open(name)`、`value, ok = m[key]`、`value, ok = x.(T)` 都要求左值数量和结果数量匹配。
+  </Step>
+  <Step title="穿过 named type 边界">
+    同一 named type 可直接 assignment；不同 named types 即使 underlying type 相同，通常也需 explicit conversion。
+  </Step>
+</Stepper>
+
+```go
+x, y = y, x
+a[i], a[j] = a[j], a[i]
+q, r = q/2, q%2
+value, ok := cache[key]
+```
+
+map index、channel receive 与 type assertion 在 assignment context 可产生额外 boolean；function call 可返回多个 results。blank identifier `_` 丢弃不需要的 result，但仍会计算对应 expression。assignment 还要求右值 assignable to 左值 type；untyped constant 只有在 value 可表示时才能赋给目标 numeric type。
+
+## 2.5 Type Declarations：named type 建立语义边界
+
+`type Name underlying-type` 创建新的 named type。它与 underlying type 具有相同 representation 和部分 operators，但不是同一个 type；conversion `T(x)` 必须显式表达边界跨越。named type 让 compiler 区分 Celsius、Fahrenheit 与 plain float64，并可在其上定义 methods。
+
+```go
+type Celsius float64
+type Fahrenheit float64
+
+func CToF(c Celsius) Fahrenheit {
+    return Fahrenheit(c*9/5 + 32)
+}
+```
+
+<Term def="由 type declaration 创建、拥有独立 identity 的类型；即使 underlying type 相同，不同 named types 也不能被默认为同一语义单位。">named type</Term>
+
+comparison operands 通常必须有 compatible types；`Celsius(0) == Fahrenheit(32)` 不能直接比较，需先转换到共同单位。conversion 不自动改变数值意义，`Celsius(f)` 只改变 static type，真正华氏转摄氏仍需公式。type alias `type A = B` 是后来的语言特性，不创建新 identity，不应与本书的 named type declaration 混淆。
+
+## 2.6 Packages and Files：共享 package scope 与初始化顺序
+
+一个 package 可由多个 `.go` files 组成，每个 file 声明相同 package name。package-level declarations 在同一 package 内共享；imports 只在声明它的 file block 可见，所以每个 file 必须导入自己直接使用的 packages。import path 标识 package，默认 local name 通常来自 imported package declaration。
+
+初始化按 dependency graph 进行：先初始化 imported packages；当前 package 的 variables 按 declaration dependency 求值；随后运行所有 `init()` functions；最后 `package main` 的 `main()` 执行。每个 package 只初始化一次。
+
+<Term def="import dependencies、package variable initializers 与 init functions 在 main 前形成的依赖有序执行；代码不应依赖无语义保证的跨文件排列。">package initialization</Term>
+
+```go
+var pc [256]byte
+
+func init() {
+    for i := range pc {
+        pc[i] = pc[i/2] + byte(i&1)
+    }
+}
+```
+
+initializer 可引用后面声明的 package variables，只要 dependency acyclic；cycle 是 compile error。多个 files 的表示顺序由 build system 提供，不应把 file name 顺序当业务 contract。需要显式顺序时，让一个 initializer 或 init function 调用具名 helpers，并用 test 验证结果而不是依赖偶然文件排列。
+
+## 2.7 Scope：lexical block、shadowing 与 name resolution
+
+scope 是 declaration name 可见的 source region。universe block 包含 predeclared names；package block 覆盖 package files；每个 file 有 import scope；function body、if/for/switch/select clauses 和显式 braces 形成 local lexical blocks。name resolution 从最内层 block 向外查找第一个匹配 declaration。
+
+<Stepper>
+  <Step title="切换 universe、package、file 与 local scope">
+    <GoplPackageScopeLab />
+  </Step>
+  <Step title="沿 dependency graph 读取 package initialization">
+    import dependencies 完成后，package variables 按依赖初始化，再执行 init，最终进入 main；这不是 scope 顺序。
+  </Step>
+  <Step title="打开 inner shadow 并追踪 name resolution">
+    inner declaration 暂时遮蔽 outer binding；离开 block 后 outer name 重新可见，但两个 variables 的 lifetime 可能重叠。
+  </Step>
+</Stepper>
+
+```go
+var cwd string
+
+func init() {
+    cwd, err := os.Getwd() // BUG: declares a local cwd
+    if err != nil { log.Fatal(err) }
+    log.Printf("working directory = %s", cwd)
+}
+```
+
+这里 package `cwd` 没被赋值，因为 `err` 是新变量，`:=` 在 function block 同时新建 local `cwd` 并 shadow package variable。修复方式是先声明 `var err error`，再写 `cwd, err = os.Getwd()`，或让 helper 返回 value 并在 package initializer 中明确赋值。
+
+<Callout type="trap" title="把 scope 与 lifetime 画成同一条线">
+name 离开 scope 后不可再通过该 identifier 引用，但 variable 若被 pointer/closure 捕获仍可存活；反过来 package name 始终可见，也不代表其 value 在并发访问下自动安全。
+</Callout>
+
+## 本章回顾：从 declaration 到初始化和可见性
+
+1. name 遵守 identifier/keyword/export 规则，declaration 创建 binding，assignment 只改变 value。
+2. var 提供 zero value，short declaration 在当前 block 至少引入一个新 name；pointer/new 不决定语言层面的 storage location。
+3. tuple assignment 先求全部右值；assignability 和 explicit conversion 守住 type boundary。
+4. named type 建立独立 identity，package/files 共享 package scope 但各自管理 imports。
+5. package initialization 按依赖发生，scope 按 lexical nesting 解析，lifetime 按运行时可达性延伸。
+
+<Exercises>
+
+**问题 1：为什么 `f, err := os.Open(name)` 后写 `f, err := os.Open(other)` 会报错，而 `info, err := f.Stat()` 可以？**
+
+<Answer>短声明要求当前 lexical block 至少一个非blank名字是新的。第二次f和err都已在同一block声明，因此没有新变量，必须用`=`；info尚未声明，所以`info, err :=`会声明info并给已有err赋值。若代码进入内层block，规则重新按该block判断，可能产生shadow。</Answer>
+
+**问题 2：设计 Celsius/Fahrenheit API 时，为什么不能只写两个 type aliases？conversion 与数值转换函数分别承担什么责任？**
+
+<Answer>alias不创建独立type identity，无法阻止把摄氏值当华氏值传递。`type Celsius float64`和`type Fahrenheit float64`建立静态边界；显式type conversion只改变static type/representation解释，不会自动套用单位公式，因此CToF/FToC函数负责数值变换并返回正确named type。</Answer>
+
+**问题 3：一个 package 由三个 files 组成，怎样避免 init 顺序与 shadowing 造成隐式配置错误？**
+
+<Answer>先把依赖关系写成package variable initializer或由单一init调用的具名helpers，不依赖跨文件偶然排列；把外部I/O失败显式返回给main更易测试。对package variable赋值时避免在function中因新err使用`:=`创建同名local，先声明err后用`=`。测试应验证最终配置和依赖顺序，并让初始化保持幂等、无隐藏并发。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="name binding" definition="identifier 由 declaration 关联到 variable、type、function 等实体的编译期关系。" />
+  <GlossaryItem term="short variable declaration" definition="function 内用 := 声明并初始化 locals，要求当前 block 至少一个新名字。" />
+  <GlossaryItem term="variable lifetime" definition="variable storage 在运行期间保持可达的区间，与 lexical scope 不等价。" />
+  <GlossaryItem term="named type" definition="type declaration 创建并拥有独立 identity 的类型。" />
+  <GlossaryItem term="package initialization" definition="dependencies、package variables、init 到 main 的依赖有序执行。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Go Programming Language, Chapter 2: Program Structure"
+  adaptedUrl="https://www.gopl.io/"
+/>

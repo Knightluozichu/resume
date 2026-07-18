@@ -1,0 +1,304 @@
+---
+title: "面试题14：剪绳子"
+type: C
+section: "第2章 面试需要的基础知识"
+order: 15
+description: "先用动态规划穷举第一刀，再证明最优整数段只需2和3，得到尽量切3且避免余1的贪心方案。"
+demo: true
+math: true
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/14_CuttingRope/CuttingRope.cpp"
+draft: false
+---
+
+import { RopePartitionDiagram, RopeDpStateMap, GreedyRemainderDiagram, CuttingRopeMethodLab } from "@/components/mdx/coding-interviews/diagrams/cutting-rope";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释整根绳子必须剪与子问题片段可以不再剪的状态差异
+- 能计算长度4到10的最优切分与最大乘积
+- 能实现二次时间动态规划和常数空间贪心两种作者方案
+- 能分析最优解为什么只需长度2和3以及余数1为何要改成2加2
+- 能设计小长度、三种除3余数、大输入和整数溢出测试
+
+</Objectives>
+
+## 从长度 8 为什么剪成 2、3、3 开始
+
+先预测：长度8若剪成`4+4`，乘积是16；剪成`2+2+2+2`也是16；剪成`2+3+3`却得到18。怎样系统找出“乘积最大”的切法，又怎样证明对任意长度都应优先使用3？
+
+“剪绳子”要求把长度`n`的整数绳子切成至少两段正整数长度，使各段乘积最大。把`n`写成正整数和并最大化乘积，本质是<Term def="把一个正整数写成若干正整数之和，并研究这些部分的组合性质。">整数拆分</Term>：
+
+$$
+\max \prod_{i=1}^{m} k_i
+\quad\text{subject to}\quad
+\sum_{i=1}^{m} k_i=n,qquad
+k_i\ge1,quad m\ge2.
+$$
+
+官方结果把“必须至少剪一次”锁得很清楚：长度2只能切成`1+1`，答案1；长度3最优`1+2`，答案2。若允许整根不剪，答案会变成2和3，后续动态规划基线就会被混淆。
+
+<RopePartitionDiagram />
+
+## 动态规划先定义“子段可以不切”
+
+作者的第一种方法是<Term def="把问题分解为重叠子问题，保存每个规模的最优结果并按依赖顺序计算。">动态规划</Term>。关键<Term def="明确表中每个下标保存什么语义，使初值、转移和最终返回保持一致。">状态定义</Term>不是“长度`i`整根必须剪后的答案”，而是“长度`i`作为更大切分中的一段时，可选择继续剪或保持完整的最大乘积贡献”。
+
+因此内部表设置`products[1]=1`、`products[2]=2`、`products[3]=3`。这里2和3不是整题对长度2、3的答案，而是更大绳子切出长度2或3后，保留它们比继续切更好。入口仍单独返回`n=2→1`、`n=3→2`。
+
+对于`i≥4`，枚举第一处分成`j`与`i-j`，两侧各自取表中最佳贡献：
+
+$$
+P(i)=\max_{1\le j\le\lfloor i/2\rfloor}
+\bigl(P(j)\cdot P(i-j)\bigr),
+\qquad
+P(1)=1, P(2)=2, P(3)=3.
+$$
+
+只枚举到一半，因为`j`与`i-j`交换后乘积相同。该转移依赖<Term def="整体最优解切开后，各独立部分也可以取各自最优解，否则替换后能得到更优整体。">最优子结构</Term>：若某侧不是对应长度的最大贡献，用更优切法替换该侧会让总乘积更大，与整体最优矛盾。
+
+<RopeDpStateMap />
+
+```cpp
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include <stdexcept>
+#include <vector>
+
+std::uint64_t checkedMultiply(std::uint64_t a,
+                              std::uint64_t b) {
+    if (a != 0 &&
+        b > std::numeric_limits<std::uint64_t>::max() / a) {
+        throw std::overflow_error("rope product overflow");
+    }
+    return a * b;
+}
+
+std::uint64_t maxProductDp(unsigned int length) {
+    if (length < 2) return 0;
+    if (length == 2) return 1;
+    if (length == 3) return 2;
+
+    std::vector<std::uint64_t> products(length + 1);
+    products[1] = 1;
+    products[2] = 2;
+    products[3] = 3;
+
+    for (unsigned int i = 4; i <= length; ++i) {
+        for (unsigned int j = 1; j <= i / 2; ++j) {
+            products[i] = std::max(
+                products[i],
+                checkedMultiply(products[j], products[i - j]));
+        }
+    }
+    return products[length];
+}
+```
+
+外层处理`4..n`，内层最多检查`i/2`个切点，总时间`O(n²)`，表空间`O(n)`。它不需要事先猜最优段长，适合先建立可靠基线，也容易推广到“允许段长集合、切割成本、段数限制”等变体。
+
+## DP 正确性与最优切法恢复
+
+可以按长度归纳证明转移。长度1、2、3的表值已经代表“作为子段时可保持完整”的最佳贡献。假设所有小于`i`的表项正确，长度`i`的任何合法最终切法都有一条第一刀，把它分成长度`j`和`i-j`；按归纳假设，两侧贡献不可能超过`P(j)`与`P(i-j)`的乘积。算法枚举了这条第一刀，因此不会低于真实最优。
+
+另一方面，算法选中的每个乘积都来自两个实际可实现的子段方案，把两侧方案连接起来就是长度`i`的合法切法，所以表值不会虚高。上界和可实现性同时成立，`P(i)`恰好等于最优贡献。最终`n≥4`一定需要切分，直接返回`P(n)`即可。
+
+若不仅要最大乘积，还要返回段长列表，可在更新`products[i]`时同步保存最佳第一刀`choice[i]=j`。恢复时从`n`开始：若当前长度小于4，就把它作为一段输出；否则沿`choice`拆成左右两侧，继续递归或用显式栈展开。这样值表与决策表共同构成可核查证据。
+
+重复最优切法可能不唯一，例如某些长度的2、3顺序可以互换。若接口要求固定输出，应约定按段长排序、优先较小第一刀或字典序最小；只比较乘积无法决定展示顺序。题目本身只问最大值，所以作者没有保存`choice`。
+
+DP 还提供调试不变量：完成外层下标`i`后，`products[1..i]`都已最终确定，后续计算只读这些值，不会回头修改。若内层在左右表项尚未完成前使用它们，计算顺序就不再满足自底向上依赖。
+
+<Callout type="trap" title="把products[2]设为整题答案1">
+长度2作为最终输入必须剪，所以答案1；但它作为长度5的一侧时可以保留完整并贡献2。若表中写1，`2+3`会被算成`1×2`而不是6，状态语义从根上错误。
+</Callout>
+
+## 贪心证明先排除 1 和大于等于 5 的段
+
+第二种方案是<Term def="每一步选择经证明可存在于某个全局最优解中的局部结构，不再枚举所有切点。">贪心算法</Term>。证明不是“试几个例子发现3不错”，而是逐步限制最优解可能包含的段长。
+
+最优解不会包含1。若还有另一段`x≥2`，把`1+x`合并成`x+1`后，贡献从`1·x=x`变为`x+1`，乘积更大。任何长度`x≥5`的段也不应保持完整，把它拆成3与`x-3`会提高乘积：
+
+$$
+3(x-3)>x
+\iff
+2x>9,
+\qquad x\ge5.
+$$
+
+于是最优分段只需考虑2、3和4，而4等价于`2+2`。再比较三个2与两个3：`2^3=8<9=3^2`，所以2的个数不应达到3个；能用3时应尽量用3。这就是“**贪心尽量剪长度3**”的数学依据。
+
+唯一修正是余数1。若直接留下`3+1`，贡献3；改成`2+2`，贡献4。因此总长度除以3余1时，应少取一个3，把剩余4切成两个2；余2时直接保留一个2。
+
+$$
+G(n)=
+\begin{cases}
+3^{n/3}, & n\bmod 3=0,\\
+3^{(n-4)/3}\cdot 4, & n\bmod 3=1,\\
+3^{(n-2)/3}\cdot 2, & n\bmod 3=2,
+\end{cases}
+\qquad n\ge4.
+$$
+
+<GreedyRemainderDiagram />
+
+这份交换论证说明：任何包含大段、1或三个以上2的候选，都能局部替换成乘积更大的切法；不断替换后必然得到“尽可能多的3，余1改成两个2”的标准形式。标准形式因此不劣于任意候选，是全局最优。
+
+## 为什么连续直觉也指向 3 附近
+
+如果暂时允许每段取相同实数长度`x`，总长度`n`大约分成`n/x`段，乘积可写成`x^(n/x)`。取对数后最大化`(n/x) ln x`，其连续最优在自然常数`e≈2.718`附近。整数长度中最接近且组合表现最好的就是3，2用来修正不能被3整除的余数。
+
+这个连续观点只提供直觉，不能替代整数证明。它没有处理“必须至少剪一次”、段数必须为整数、余数1和小长度边界；真正保证正确性的仍是前面的局部替换：排除1、拆开大段、比较三个2与两个3。面试回答若只说“因为e最优”，还没有完成本题证明。
+
+也能从合并角度检查标准形：两个2保留为乘积4，若把它们合并成4乘积不变；一个2与一个3贡献6，继续拆没有更好；两个3贡献9，换成三个2只有8。最终结构由若干3和至多两个2组成，不再存在能提高乘积的局部替换。
+
+小长度必须先于通式。`n=2`和`n=3`若直接套“尽量取3”，会保留整根而违反必须剪；`n=4`是第一个通式安全输入，余数1规则将它处理成`2+2`。因此贪心函数入口的三个分支属于算法定义，不是可删的性能特判。
+
+## 用整数乘法实现，避免浮点 pow
+
+作者用`pow(3,timesOf3)`和`pow(2,timesOf2)`，再转换回`int`。数学结果是整数，但`pow`返回浮点数，大指数可能舍入，转换还可能越界。整数算法应逐次受检乘法，或使用整数快速幂。
+
+```cpp
+std::uint64_t checkedPower(std::uint64_t base,
+                           unsigned int exponent) {
+    std::uint64_t result = 1;
+    while (exponent > 0) {
+        if (exponent & 1U) {
+            result = checkedMultiply(result, base);
+        }
+        exponent >>= 1U;
+        if (exponent > 0) {
+            base = checkedMultiply(base, base);
+        }
+    }
+    return result;
+}
+
+std::uint64_t maxProductGreedy(unsigned int length) {
+    if (length < 2) return 0;
+    if (length == 2) return 1;
+    if (length == 3) return 2;
+
+    unsigned int count3 = length / 3;
+    if (length - count3 * 3 == 1) --count3;
+    const unsigned int count2 =
+        (length - count3 * 3) / 2;
+
+    return checkedMultiply(
+        checkedPower(3, count3),
+        checkedPower(2, count2));
+}
+```
+
+确定2和3的数量是`O(1)`；整数快速幂需要`O(log n)`次受检乘法、`O(1)`空间。若逐个因子相乘则是`O(n)`时间，但代码更直接。无论哪种，数值位数随`n`线性增长，固定64位只覆盖有限输入。
+
+<Callout type="trap" title="总是切一个3，最后允许剩1">
+`3×1=3`小于`2×2=4`。长度4、7、10等余1情况必须少用一个3，把最后4变成2和2；否则贪心规则在最常见边界上失效。
+</Callout>
+
+## 动态规划与贪心各自适用什么条件
+
+动态规划只依赖状态转移和最优子结构，较容易适配新约束。若要求恰好切成`m`段，状态需增加段数维度；若每刀有成本，转移减去成本；若某些段长不可用，枚举时跳过非法状态。原来的贪心证明通常不再成立。
+
+贪心更快、更省空间，但依赖本题“正整数长度、乘积目标、段数自由”的交换性质。把目标改成段长平方和、允许实数长度、限制最大段数，局部替换不等式都会变化。只有证明每次局部选择能扩展成全局最优，才能称为贪心算法。
+
+动态规划也可作为贪心的测试预言机：在固定宽度不溢出的长度范围内，对每个`n`比较两种实现。若余数处理、初值或幂计算有一处错误，交叉校验会定位第一个分歧长度。
+
+“恰好`m`段”可定义二维状态`best[length][parts]`，表示用指定段数拆完该长度的最大乘积。转移枚举第一段长度`x`，与`best[length-x][parts-1]`相乘；边界`best[0][0]=1`，其他不可达状态为空。它能精确拒绝长度不足以分成正整数段的组合。
+
+若只要求“至多`m`段”，最终再取不同段数状态的最大值，不能把“少一段”当作长度0因子直接乘入。若每次切割有固定成本，目标可能不再纯乘积，甚至需要比较收益减成本；这时原有状态值类型和贪心交换式都要重新设计。
+
+这些变体说明状态定义是动态规划的核心。把原题一维数组机械扩成二维但不写`parts`的语义、不可达值和最终取值范围，仍可能得到能运行却回答错误问题的程序。
+
+<CuttingRopeMethodLab />
+
+## 官方 11 组测试锁定初值、余数和大数
+
+作者依次检查长度1到10，预期为`0,1,2,4,6,9,12,18,27,36`。长度1确认无法合法切分，2和3确认必须剪，4到10覆盖除3余0、1、2三类分支。
+
+长度50预期`86093442`，最优分解是16个3和1个2：
+
+$$
+3^{16}\cdot2=86093442.
+$$
+
+这个测试能发现使用普通递归枚举导致的性能问题，也能检查贪心大指数计算，但仍未触及32位溢出。工程测试应计算当前返回类型的首个溢出长度，确认函数明确报错，而不是依赖有符号整数回绕。
+
+```cpp
+#include <array>
+#include <cassert>
+
+void testCuttingRope() {
+    constexpr std::array<std::uint64_t, 11> expected{
+        0, 0, 1, 2, 4, 6, 9, 12, 18, 27, 36
+    };
+    for (unsigned int n = 1; n <= 10; ++n) {
+        assert(maxProductDp(n) == expected[n]);
+        assert(maxProductGreedy(n) == expected[n]);
+    }
+    assert(maxProductDp(50) == 86093442ULL);
+    assert(maxProductGreedy(50) == 86093442ULL);
+}
+
+void crossCheckMethods(unsigned int limit) {
+    for (unsigned int n = 2; n <= limit; ++n) {
+        assert(maxProductDp(n) == maxProductGreedy(n));
+    }
+}
+```
+
+若使用大整数版本，DP 与贪心可继续交叉到更大长度。若使用取模版本，只能在确定最优整数分解后对最终幂取模，不能把 DP 中间乘积先取模再比较大小；模后的大小关系不保留真实乘积顺序。
+
+<Stepper>
+  <Step title="先锁定必须剪一次的边界"><RopePartitionDiagram />长度2和3的最终答案与它们作为子段的贡献不同，先分清语义。</Step>
+  <Step title="枚举第一刀建立DP基线"><RopeDpStateMap />组合左右最优贡献，长度从4递增计算，避免递归重复子问题。</Step>
+  <Step title="证明最优段只剩2和3"><GreedyRemainderDiagram />排除1和大于等于5的段，尽量用3，余1时替换成2加2。</Step>
+  <Step title="用两种方法交叉验证"><CuttingRopeMethodLab />小长度、三类余数与长度50共同检查状态初值和贪心边界。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 剪绳子是正整数拆分乘积最大化问题，整根输入必须至少切一次。
+2. DP 表中长度2和3保存可不再切的贡献2和3，入口答案仍是1和2。
+3. 动态规划枚举第一刀，时间`O(n²)`、空间`O(n)`。
+4. 最优子结构保证左右部分可分别使用各自最大乘积。
+5. 最优分解不含1，任何大于等于5的段继续拆3都会提高乘积。
+6. 两个3优于三个2，所以贪心尽量剪长度3，但余1要改成2加2。
+7. 整数快速幂与受检乘法避免浮点`pow`舍入和静默溢出。
+8. 官方长度1到10及50测试同时锁定初值、三种余数和大输入。
+
+<Exercises>
+
+**问题 1：为什么DP表中的products[3]是3，而函数对输入3返回2？**
+
+<Answer>最终输入必须至少剪一次，所以3只能切成1和2，答案2；但长度3作为更大绳子的一段时可以不再切，保留3比切后贡献2更大。DP表保存后一种子问题语义。</Answer>
+
+**问题 2：为什么最优解不会保留长度5或更大的单段？**
+
+<Answer>把长度x拆成3和x减3后，乘积为3(x减3)。当x至少为5时它大于x，所以任何保留大段的候选都能被局部改进，不可能是最优。</Answer>
+
+**问题 3：长度10的贪心分解为何是3+3+2+2？**
+
+<Answer>10除以3余1，若直接用三个3会留下1，乘积27；少用一个3后剩4，把4拆成2和2，得到3×3×2×2=36。</Answer>
+
+**问题 4：为什么取模版不能在DP中比较取模后的乘积？**
+
+<Answer>模运算不保持大小次序，真实更大的乘积取模后可能更小。必须先根据真实数学结构确定最大分解，再对结果计算模；或使用能比较真实大小的表示。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="整数拆分">把正整数写成多个正整数之和并研究这些部分组合的过程。</GlossaryItem>
+  <GlossaryItem term="动态规划">保存重叠子问题最优值并按依赖顺序构造更大状态的方法。</GlossaryItem>
+  <GlossaryItem term="状态定义">说明DP表每个下标或维度代表的确切问题语义。</GlossaryItem>
+  <GlossaryItem term="最优子结构">整体最优解能由其独立子问题的最优解组合而成的性质。</GlossaryItem>
+  <GlossaryItem term="贪心算法">依据交换或支配证明，每步选择可属于全局最优解的局部结构。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="《剑指Offer（第2版）》面试题14及何海涛官方源码 CuttingRope.cpp"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/14_CuttingRope/CuttingRope.cpp"
+/>

@@ -1,0 +1,340 @@
+---
+title: "Chapter 13 · Gray Code"
+type: C
+section: "HD2 · 函数与编码"
+order: 13
+description: "按Hacker's Delight第二版第13章重建reflected binary Gray code、direct increment、negabinary Gray code及历史应用，并用Hamming distance和cyclic coverage验收。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/hackers-delight-9780321842688"
+draft: false
+---
+
+import { HD13ReflectedSequenceLab, HD13EncodeLab, HD13DecodeLab, HD13HammingTransitionLab, HD13ReflectionLab, HD13DirectIncrementLab, HD13IncrementBoundaryLab, HD13NegabinaryGrayLab, HD13NegabinaryCycleLab, HD13EncoderAmbiguityLab, HD13KarnaughAdjacencyLab, HD13ApplicationContractLab, HD13GrayCertificateLab } from "@/components/mdx/hackers-delight/diagrams/13-gray-code";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释Gray code的one-bit adjacency、cyclic coverage与reflected construction
+- 能计算binary-to-Gray的shift-XOR和Gray-to-binary的prefix XOR
+- 能实现incrementing a Gray-coded integer的parity/rightmost-one rule及fixed-width wrap
+- 能分析negabinary Gray code如何组合base -2 ordering与same shift-XOR transform
+- 能设计position encoder、Karnaugh map与clock-domain crossing中的应用边界和验收证书
+
+</Objectives>
+
+## 从“为什么7到8会同时翻四个bits”开始
+
+先预测：ordinary 4-bit binary从0111递增到1000，四个tracks不会在physical world绝对同时切换。若sensor或receiver在transition中间采样，可能暂时看到0000、1111或other mixed pattern。能否重新排列all 16 patterns，使相邻numeric states每次只改变one bit？
+
+<Term def="把ordered states编码为bit words，使相邻states的codewords只有one bit不同的编码族。">格雷码</Term>（Gray code）回答yes。Chapter 13只聚焦binary reflected Gray code及其negabinary variant。对fixed width $w$，目标是：
+
+- 覆盖all $2^w$ bit patterns exactly once。
+- Consecutive codewords的<Term def="Two equal-width bit words在对应positions上不同的bit count。">汉明距离</Term>为one。
+- 若声称cyclic，last与first的distance也为one。
+
+<HD13HammingTransitionLab />
+
+Gray code改变的是representation order，不是ordinary arithmetic value。Gray word作为unsigned integer解释通常不等于其encoded index；要加、比较numeric magnitude或计算arbitrary jump，必须使用matching Gray semantics或先decode。
+
+## 13.1 Gray Code
+
+### Reflected construction visits the hypercube one edge at a time
+
+<Term def="从one-bit list开始，把previous list前缀zero，再把其reverse前缀one，递归构造的canonical binary Gray code。">反射二进制码</Term>（reflected binary Gray code）递归构造：
+
+1. One-bit list是zero、one。
+2. 保留previous list顺序并prefix zero。
+3. Reverse previous list并prefix one。
+4. Concatenate both halves。
+
+<HD13ReflectionLab />
+
+Within each half，adjacency由previous code继承。Middle pair的suffix相同，只prefix从zero变one；first和last也只在new top bit不同，所以construction保持cyclic。
+
+<HD13ReflectedSequenceLab />
+
+Graphically，$w$-bit words是w-dimensional hypercube vertices；Gray sequence是一条访问each vertex once的Hamiltonian cycle。One-bit change就是沿one edge移动。
+
+### Binary to reflected Gray is one shift and XOR
+
+设ordinary binary index为$b$，reflected Gray word为$g$：
+
+$$
+g
+=
+b\oplus(b\mathbin{\mathrm{shr}}1).
+$$
+
+Bit relation是
+
+$$
+g_i=b_{i+1}\oplus b_i,
+$$
+
+其中top之外的$b$视为zero。Gray bit记录adjacent binary bits之间是否发生boundary，而不是independent place value。
+
+<HD13EncodeLab />
+
+```c
+static uint32_t binary_to_gray(uint32_t value) {
+    return value ^ (value >> 1);
+}
+```
+
+为什么successors只差one bit？令$t$是$n+1$的rightmost set bit：
+
+$$
+t=(n+1)\mathbin{\&}(-(n+1)).
+$$
+
+Binary increment把$t$下方的trailing ones清zero，并把$t$设one。Shift-XOR把这段many-bit carry changes相互cancel，只在boundary留下one bit：
+
+$$
+G(n)\oplus G(n+1)=t.
+$$
+
+因此difference恰为power of two，Hamming distance为one。
+
+### Gray to binary is a prefix XOR scan
+
+从$g_i=b_{i+1}\oplus b_i$反解：
+
+$$
+b_i
+=
+g_i\oplus g_{i+1}\oplus\cdots\oplus g_{w-1}.
+$$
+
+每个binary bit是从most significant side到该position的Gray prefix parity。Serial decoder从top向low逐bit XOR；word-parallel decoder可用doubling shifts：
+
+```c
+static uint32_t gray_to_binary(uint32_t gray) {
+    uint32_t value = gray;
+    value ^= value >> 1;
+    value ^= value >> 2;
+    value ^= value >> 4;
+    value ^= value >> 8;
+    value ^= value >> 16;
+    return value;
+}
+```
+
+Each stage把known prefix length double，32-bit word需要five stages。Generic implementation按word width生成shifts，不能把32-bit sequence直接用于larger type。
+
+<HD13DecodeLab />
+
+Gray encode和decode必须满足two-way round-trip。Full-width exhaustive test可遍历all indices，确认uniqueness、adjacency、wrap与inverse；wide words则用algebraic identities加boundary/random testing。
+
+## 13.2 Incrementing a Gray-Coded Integer
+
+### Direct increment does not require full decoding
+
+最直观方案是Gray decode、ordinary increment、re-encode。若只持有Gray word，还可利用<Term def="Bit word中set bits数量modulo two；在reflected Gray word中等于original binary index的least significant bit。">Gray奇偶性</Term>直接找next flip。
+
+Gray bits整体XOR会telescopically cancel：
+
+$$
+\operatorname{parity}(g)
+=
+b_0.
+$$
+
+所以：
+
+- 若Gray popcount为even，original index是even，flip bit zero。
+- 若Gray popcount为odd，找Gray word的rightmost one，flip其左侧bit。
+
+<HD13DirectIncrementLab />
+
+令$y=g\mathbin{\&}(-g)$提取rightmost one mask。Non-wrapping direct increment为
+
+$$
+g'
+=
+\begin{cases}
+g\oplus1, & \operatorname{parity}(g)=0,\\
+g\oplus(2y), & \operatorname{parity}(g)=1.
+\end{cases}
+$$
+
+```c
+static uint32_t gray_increment_unbounded(uint32_t gray) {
+    if ((stdc_count_ones(gray) & 1u) == 0u) {
+        return gray ^ 1u;
+    }
+    uint32_t rightmost_one = gray & (0u - gray);
+    return gray ^ (rightmost_one << 1);
+}
+```
+
+Function需要one spare high bit。若current是fixed-width sequence最后word，rightmost-one left shift落到width之外。
+
+### Fixed-width cyclic increment has a boundary contract
+
+在$w$ bits中，final reflected Gray word是only top bit set；cyclic next应回zero并flip该top bit，而不是丢弃out-of-range mask后保持unchanged。
+
+<HD13IncrementBoundaryLab />
+
+```c
+static uint32_t gray_increment_cyclic(uint32_t gray, unsigned width) {
+    uint32_t top = UINT32_C(1) << (width - 1u);
+    uint32_t mask = (top << 1u) - 1u;
+    gray &= mask;
+    if (gray == top) return 0u;
+    if ((stdc_count_ones(gray) & 1u) == 0u) return gray ^ 1u;
+    uint32_t rightmost_one = gray & (0u - gray);
+    return gray ^ (rightmost_one << 1u);
+}
+```
+
+Production code要单独处理width equal word size，避免shift by full width。也必须说明increment是modulo $2^w$还是允许grow width。
+
+Direct rule只对successor by one成立。Pointer一次jump several positions时，two Gray words可能diff many bits；不能因为两端都叫Gray就假设one-bit transition。
+
+## 13.3 Negabinary Gray Code
+
+Chapter 12给出base -2 canonical representation。<Term def="把fixed-width base -2 numbers按ordinary integer value排序，再对每个negabinary bit word应用shift-XOR得到的cyclic one-bit code。">负二进制格雷码</Term>（negabinary Gray code）把two ideas组合：
+
+1. 按ordinary integer value遍历fixed-width negabinary range。
+2. 把每个integer编码为w-bit base -2 word $b_{-2}$。
+3. 应用same transform $g=b_{-2}\oplus(b_{-2}\mathbin{\mathrm{shr}}1)$。
+
+<HD13NegabinaryGrayLab />
+
+Three-bit base -2 range是negative 2到positive 5；four-bit range是negative 10到positive 5。Sequence index therefore包含negative and positive integers，但output仍是all w-bit patterns。
+
+对adjacent ordinary integer values $n$与$n+1$，their negabinary words可能改变many bits；same shift-XOR again cancels carry region，使result只flip one bit。Fixed-width range的last-to-first也distance one，因此sequence cyclic。
+
+<HD13NegabinaryCycleLab />
+
+它不是standard reflected order。可以从zero/one开始，alternately在list top和bottom附近reflection扩展；numeric range每增加one position会向negative或positive side扩张，取决于new place weight sign。
+
+Decode分两层：
+
+```c
+static int64_t negabinary_gray_to_integer(uint32_t gray,
+                                          unsigned width) {
+    uint32_t word = gray_to_binary(gray);
+    int64_t value = 0;
+    for (unsigned bit = width; bit-- > 0u;) {
+        value = value * -2 + ((word >> bit) & 1u);
+    }
+    return value;
+}
+```
+
+First inverse Gray transform得到base -2 digit word，then Horner evaluation bynegative two得到signed integer。反向encode必须固定width并检查value落在对应asymmetric range内。
+
+不要把negabinary Gray与“把two's-complement negative integer直接做ordinary Gray transform”混为一谈。前者的source digits是canonical base -2 word；后者依赖fixed two's-complement bit pattern，numeric ordering和range semantics不同。
+
+## 13.4 Brief History and Applications
+
+### Reflected code predates its modern name
+
+Brief History and Applications（历史与应用）先区分idea与name。One-change order在Frank Gray之前已有相关forms；Frank Gray在1947 filed、1953 granted的pulse-code communication patent中系统使用reflected binary code来降低adjacent quantization transitions的ambiguity，之后Gray code成为通用名称。
+
+<Term def="Mechanical或optical position sensor把不同tracks编码为bit word，以相邻位置只变one track减少transition ambiguity。">绝对位置编码器</Term>是最直观应用。Ordinary binary在carry boundary同时切换many tracks；manufacturing offset或sampling time使receiver可能读到far-away mixed code。Gray track transition只有one bit changing，sample至多在two adjacent codewords之间ambiguous。
+
+<HD13EncoderAmbiguityLab />
+
+这不是error-correcting code。One track fault仍可能把word变成another valid codeword；而Gray word的one-bit corruption经prefix XOR decode甚至会改变多个low binary bits。Application要根据fault model另加parity、redundancy或range checks。
+
+### Clock-domain pointers need more than XOR
+
+Asynchronous FIFO常把monotone binary pointer转换为Gray后跨clock domain，因为one-step increment只改变one source bit。但complete<Term def="Signal从一个clock domain传到另一个asynchronous clock domain时，对metastability、sampling与timing进行约束的protocol。">跨时钟域契约</Term>还需要：
+
+- Pointer每次source update只前进one logical step，或证明sampled transitions仍安全。
+- Each bit经过synchronizer，Gray coding本身不消除metastability。
+- Inter-bit skew受constraint，使destination aperture不会看到不同source updates拼接。
+- Full/empty comparison在synchronized Gray domain使用proved transform。
+
+<HD13ApplicationContractLab />
+
+Combinationally从ripple-changing binary counter生成Gray可能产生glitches；registered source Gray word更容易满足physical one-bit assumption。
+
+### Maps, state enumeration, and puzzles
+
+Karnaugh map使用Gray labels排列rows/columns，使geometrically adjacent cells只改变one Boolean variable，edge wrap也adjacent。这让implicant grouping直接对应one-variable elimination。
+
+<HD13KarnaughAdjacencyLab />
+
+Gray order还用于enumerating subsets、rotary controls、test patterns与Tower-of-Hanoi-like state walks。共同点不是“XOR很快”，而是consumer关心local transition distance。若consumer主要做numeric arithmetic，ordinary binary通常更自然。
+
+<Callout type="trap" title="Gray word相邻就能替代CDC synchronizer">
+One-bit adjacency只减少同一次unit increment中多bit mixing。Metastability仍存在，inter-bit skew与source glitches也会破坏assumption。修法是registered Gray source、per-bit synchronizers、skew constraints和matching pointer protocol。
+</Callout>
+
+<Callout type="trap" title="Gray code的one-bit error只造成numeric plus or minus one">
+One-bit adjacency描述valid successor relation，不是channel error magnitude。Corrupted Gray bit经prefix XOR decode会影响该bit及all lower binary bits。修法是按fault model增加detection，并在decoded domain做range和sequence checks。
+</Callout>
+
+## 一条Gray implementation的验收链
+
+<Stepper>
+<Step title="固定width、ordering与wrap">
+声明ordinary reflected sequence还是negabinary sequence，index range、leading bits和last-to-first是否属于contract。
+
+<HD13ReflectedSequenceLab />
+</Step>
+<Step title="证明transform与increment rule">
+验证shift-XOR、prefix-XOR inverse、parity/rightmost-one direct increment以及fixed-width final state。
+
+<HD13DirectIncrementLab />
+</Step>
+<Step title="穷举coverage与transition distance">
+对small width检查all patterns exactly once、every adjacent XOR is power of two、cyclic wrap和two-way round-trip；application再验证timing assumptions。
+
+<HD13GrayCertificateLab />
+</Step>
+</Stepper>
+
+<HD13GrayCertificateLab />
+
+## 小结
+
+Chapter 13 Gray Code用reflected construction遍历all fixed-width patterns，每个successor只改变one bit。Ordinary binary index通过$b\oplus(b\mathbin{\mathrm{shr}}1)$编码，inverse是most-significant-side prefix XOR；successor difference等于$n+1$的rightmost set bit。
+
+Incrementing a Gray-coded integer可直接利用Gray parity：even翻bit zero，odd翻rightmost one左侧bit；fixed-width cyclic final state需要special wrap。Negabinary Gray code把按integer value排序的base -2 words送入same shift-XOR，得到range跨negative和positive的cyclic one-bit sequence。
+
+History and applications说明Gray code的价值来自local transition，不来自arithmetic convenience。Position encoders、Karnaugh maps与asynchronous pointers都受益，但physical timing、synchronization与fault detection仍需独立contract。
+
+<Exercises>
+
+**问题 1**：把ordinary binary 11编码成reflected Gray code，并说明如何decode。
+
+<Answer>
+Binary 11是1011，right shift是0101，XOR得到1110。Decode从top开始做prefix XOR，或对word依次XOR右移one、two、four等doubling distances，最终恢复1011。
+</Answer>
+
+**问题 2**：为什么Gray word 0111的direct successor要flip bit one，而不是bit zero？
+
+<Answer>
+0111有three个set bits，parity为odd。Its rightmost one在bit zero，odd rule翻其left neighbor bit one，得到0101；这正是reflected sequence中binary index 5的Gray word之后的index 6 Gray word。
+</Answer>
+
+**问题 3**：four-bit negabinary Gray sequence的integer index range是什么？如何从Gray word恢复integer？
+
+<Answer>
+Four-bit base -2 range从negative 10到positive 5。先对Gray word做prefix-XOR inverse，得到four-bit negabinary digit word；再按Horner rule从top到low反复把accumulator乘negative two并加current digit。
+</Answer>
+
+**问题 4**：为什么asynchronous FIFO使用Gray pointer后仍需要synchronizers和skew constraints？
+
+<Answer>
+Gray只保证unit-step logical transition改变one source bit，不会消除该bit的metastability。若bits arrival skew过大或source Gray由glitchy combinational logic产生，destination也可能观察到invalid mixture。因此仍需registered source、per-bit synchronization、inter-bit timing constraint和proved full/empty comparison。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="格雷码">把ordered states编码为bit words，使相邻states的codewords只有one bit不同的编码族。</GlossaryItem>
+<GlossaryItem term="汉明距离">Two equal-width bit words在对应positions上不同的bit count。</GlossaryItem>
+<GlossaryItem term="反射二进制码">从one-bit list开始，把previous list前缀zero，再把其reverse前缀one，递归构造的canonical binary Gray code。</GlossaryItem>
+<GlossaryItem term="Gray奇偶性">Bit word中set bits数量modulo two；在reflected Gray word中等于original binary index的least significant bit。</GlossaryItem>
+<GlossaryItem term="负二进制格雷码">把fixed-width base -2 numbers按ordinary integer value排序，再对每个negabinary bit word应用shift-XOR得到的cyclic one-bit code。</GlossaryItem>
+<GlossaryItem term="绝对位置编码器">Mechanical或optical position sensor把不同tracks编码为bit word，以相邻位置只变one track减少transition ambiguity。</GlossaryItem>
+<GlossaryItem term="跨时钟域契约">Signal从一个clock domain传到另一个asynchronous clock domain时，对metastability、sampling与timing进行约束的protocol。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Hacker's Delight, Second Edition, Chapter 13 · Gray Code" adaptedUrl="https://www.informit.com/store/hackers-delight-9780321842688" />

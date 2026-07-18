@@ -1,68 +1,23 @@
-/**
- * <CgpAdvancedTopicsDiagram>：高级主题与动画图解。
- * 纯静态展示，无交互。Server Component（不加 "use client"）。
- * 全部 DESIGN token 配色，无裸 hex。
- */
+import type { ReactNode } from "react";
 
-const VIEW_W = 720;
-const VIEW_H = 400;
+function Frame({ caption, children }: { caption: string; children: ReactNode }) {
+  return <figure className="mdx-figure not-prose mx-auto my-6"><div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div><figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption></figure>;
+}
+
+const timeImage = [["Intent", "message / motion goal"], ["Representation", "features / strokes / state"], ["Evolution", "abstraction / interpolation / dynamics"], ["Sampling", "pixels + frames + shutter"], ["Perception", "meaning + style + motion"]] as const;
 
 export function CgpAdvancedTopicsDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg
-          viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          role="img"
-          aria-label="高级主题与动画图解"
-          className="mx-auto block h-auto w-full max-w-[720px]"
-        >
-          <text x={VIEW_W / 2} y="32" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">
-            高级主题与动画
-          </text>
-          <text x={VIEW_W / 2} y="54" textAnchor="middle" fontSize="12" fill="var(--text-secondary)">
-            关键帧、骨骼动画与物理模拟
-          </text>
+  return <Frame caption="表现与运动都从意图出发，经表示和演化后被空间/时间采样并由观察者解释。"><div role="img" aria-label="意图表示演化采样与感知的时空图形链" className="grid gap-2 md:grid-cols-5">{timeImage.map(([title, detail], index) => <div key={title} className="relative min-h-28 border border-border bg-bg/45 p-3"><span className="text-xs font-bold text-accent">0{index + 1}</span><strong className="mt-2 block text-sm text-primary">{title}</strong><span className="mt-2 block text-xs text-secondary">{detail}</span>{index < timeImage.length - 1 && <span aria-hidden="true" className="absolute -right-2 top-11 z-10 text-accent">→</span>}</div>)}</div></Frame>;
+}
 
-          <rect x="40" y="80" width="640" height="280" rx="12" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="1.2" strokeOpacity="0.3" />
+const expressive = [["Message", "task + hierarchy"], ["Features", "silhouette + crease + salience"], ["Abstract", "simplify + exaggerate + suppress"], ["Marks", "stroke + tone + contour"], ["Compose", "layers + style + temporal rules"], ["Evaluate", "recognition + misread + coherence"]] as const;
 
-          {/* Keyframe */}
-          <rect x="60" y="110" width="180" height="130" rx="10" fill="var(--success)" fillOpacity="0.06" stroke="var(--success)" strokeWidth="1.2" />
-          <text x="150" y="134" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--success)">关键帧动画</text>
-          <text x="150" y="156" textAnchor="middle" fontSize="10" fill="var(--text-primary)">指定关键姿态</text>
-          <text x="150" y="174" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">中间帧插值</text>
-          <text x="150" y="194" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">线性/贝塞尔/Ease</text>
-          <text x="150" y="214" textAnchor="middle" fontSize="10" fill="var(--text-primary)">简单直观</text>
-          <text x="150" y="232" textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">适合UI/简单物体</text>
+export function CgpExpressivePipelineDiagram() {
+  return <Frame caption="Expressive rendering 先定义信息，再选择 feature、abstraction、mark 和评价。"><div role="img" aria-label="表现性渲染从信息到评价的流程" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">{expressive.map(([title, detail], index) => <div key={title} className="relative min-h-28 border border-border bg-bg/45 p-3"><strong className="text-sm text-primary">{title}</strong><span className="mt-2 block text-xs text-secondary">{detail}</span>{index < expressive.length - 1 && <span aria-hidden="true" className="absolute -right-2 top-10 z-10 text-accent">→</span>}</div>)}</div></Frame>;
+}
 
-          {/* Skeletal */}
-          <rect x="260" y="110" width="180" height="130" rx="10" fill="var(--accent)" fillOpacity="0.06" stroke="var(--accent)" strokeWidth="1.2" />
-          <text x="350" y="134" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--accent)">骨骼动画</text>
-          <text x="350" y="156" textAnchor="middle" fontSize="10" fill="var(--text-primary)">骨骼层级结构</text>
-          <text x="350" y="174" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">蒙皮权重绑定</text>
-          <text x="350" y="194" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">FK / IK</text>
-          <text x="350" y="214" textAnchor="middle" fontSize="10" fill="var(--text-primary)">角色动画标准方案</text>
-          <text x="350" y="232" textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">蒙皮矩阵 = bone × bind</text>
+const motion = [["Author/control", "key pose / target / forces"], ["Continuous model", "spline / hierarchy / ODE"], ["Discrete solve", "integrator + constraints + dt"], ["Render sample", "interpolate + shutter + motion"], ["Display", "present time + persistence"], ["Evidence", "trajectory + energy + flicker + latency"]] as const;
 
-          {/* Physics */}
-          <rect x="460" y="110" width="200" height="130" rx="10" fill="var(--warning)" fillOpacity="0.06" stroke="var(--warning)" strokeWidth="1.2" />
-          <text x="560" y="134" textAnchor="middle" fontSize="12" fontWeight="700" fill="var(--warning)">物理模拟</text>
-          <text x="560" y="156" textAnchor="middle" fontSize="10" fill="var(--text-primary)">刚体动力学</text>
-          <text x="560" y="174" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">碰撞检测/响应</text>
-          <text x="560" y="194" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">粒子系统</text>
-          <text x="560" y="214" textAnchor="middle" fontSize="10" fill="var(--text-primary)">布料/流体(高级)</text>
-          <text x="560" y="232" textAnchor="middle" fontSize="10" fill="var(--text-tertiary)">数值积分(Euler/Verlet)</text>
-
-          {/* Advanced */}
-          <rect x="60" y="270" width="600" height="70" rx="8" fill="var(--accent)" fillOpacity="0.04" stroke="var(--accent)" strokeWidth="1" strokeOpacity="0.3" />
-          <text x={VIEW_W / 2} y="294" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--accent)">其他高级主题</text>
-          <text x={VIEW_W / 2} y="316" textAnchor="middle" fontSize="11" fill="var(--text-primary)">纹理映射 | 过程化生成 | 非真实感渲染(NPR) | GPU并行计算</text>
-          <text x={VIEW_W / 2} y="332" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">动画核心：插值（关键帧）+ 变换（骨骼）+ 仿真（物理）</text>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        高级主题与动画——关键帧、骨骼动画与物理模拟
-      </figcaption>
-    </figure>
-  );
+export function CgpMotionStabilityDiagram() {
+  return <Frame caption="运动质量由连续模型、离散求解、渲染采样和显示时间共同决定。"><div role="img" aria-label="运动控制连续模型数值积分渲染显示和验证链" className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">{motion.map(([title, detail], index) => <div key={title} className="relative min-h-28 border border-border bg-bg/45 p-3"><strong className="text-sm text-primary">{title}</strong><span className="mt-2 block text-xs text-secondary">{detail}</span>{index < motion.length - 1 && <span aria-hidden="true" className="absolute -right-2 top-10 z-10 text-accent">→</span>}</div>)}</div></Frame>;
 }

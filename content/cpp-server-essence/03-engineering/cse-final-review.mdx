@@ -1,156 +1,189 @@
 ---
-title: 总复习
+title: "终局复习：从一条请求到生产故障闭环"
 type: A
-section: 工程实践
-order: 3
-description: 全书知识体系总览——IO 模型是地基，事件架构是骨架，并发数据是血肉，工程实践是体检，四者构成高性能 C++ 服务器完整图景。
+section: "C++ 服务器开发精髓 · 九章综合验收"
+order: 99
+description: "以 owner、状态和证据串联官方九章：从 artifact、accept、read/decode/execute/reply 到 close/reconnect/observability，并用生产故障和 readiness gates 验收。"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://book.douban.com/subject/35491437/"
 draft: false
 ---
 
-import { CseFinalReviewDiagram } from "@/components/mdx/cpp-server-essence/diagrams/cse-final-review";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer, Term, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  CseEndToEndRequestReviewLab,
+  CseFailureLocalizationReviewLab,
+  CseProductionReadinessReviewLab,
+} from "@/components/mdx/cpp-server-essence/diagrams/cse-final-review";
 
 <Objectives>
-- 能用自己的话串联全书四大板块的知识脉络
-- 能画出高性能 C++ 服务器的整体架构图，标注各组件的位置
-- 能回答：如果要从零搭建一个高性能 C++ 服务器，你会怎么分步实现？
+
+- 能解释一条请求经过 process/acceptor/EventLoop/worker/connection 时的 owner、状态转换和证据，并映射到官方九章
+- 能分析 core、event-loop stall、bad frame、slow client 与 retry storm，从最早可证伪边界组合 GDB、socket、packet、parser、queue 和日志证据
+- 能设计发布前九项 production evidence gates，覆盖 lifetime、调试、并发、网络、协议、服务、Redis 源码和可观测恢复
+
 </Objectives>
 
-## 为什么要总复习
+## 为什么终局复习不能再列一遍组件名
 
-前面九章你学了很多组件：epoll、Reactor、线程池、Connection、Buffer、协议帧、时间轮、性能调优。但组件学完了不等于会造服务器——你需要把它们串起来，看清它们在一个完整系统里各自的位置和协作关系。
+会说 RAII、GDB、mutex、epoll、tcpdump、TLV、Reactor、Redis ae 和 heartbeat，不等于能解释一次故障。综合能力要求你在同一时间线上回答：谁拥有状态、输入是什么、调用后状态怎样变化、失败会留下什么证据、下一层如何恢复。
 
-<CseFinalReviewDiagram />
+<Term def="把九章概念投射到同一请求/故障时间线，以 owner、state transition 和 evidence 验证系统行为的综合模型。">owner-state-evidence review</Term>
 
-这张图就是全书的知识骨架。中心是「C++ 服务器」，四大分支对应四大板块，每个分支列出核心知识点。接下来我们沿着「数据怎么进来 → 怎么处理 → 怎么管理 → 怎么调优」这条线把它们串起来。
-
-## 一条数据从进来到处理完
-
-### 第 1 步：数据到达网卡（IO 模型层）
-
-网卡收到数据，通过中断通知内核，内核把数据放到 socket 的接收队列。你的程序通过 epoll 感知到「有数据可读」。这一步用到第 2 章的 IO 模型知识——epoll 让一个线程管多个 fd。
-
-### 第 2 步：事件分发（事件架构层）
-
-epoll_wait 返回就绪 fd，Reactor 根据 fd 找到对应的 Connection 对象，调用 `handle_read`。这一步用到第 3 章的 Reactor 模式——事件源到处理器的分发。
-
-### 第 3 步：读取数据到缓冲区（并发管理层）
-
-`handle_read` 调用 `read` 把数据读到 Connection 的 Buffer 里。Buffer 自动扩容、compact，管理读写指针。这一步用到第 6 章的缓冲区设计。
-
-### 第 4 步：协议解码（并发管理层）
-
-Buffer 里可能有半条消息或多条消息。用 TLV 协议的 decode 循环切割出完整帧，不够就等下次。这一步用到第 7 章的协议设计。
-
-### 第 5 步：业务处理（事件架构层）
-
-完整消息根据 Type 分发到业务处理器。如果是耗时操作（DB 查询），丢给第 4 章的线程池异步执行，结果通过 eventfd 回调到 Reactor。
-
-### 第 6 步：超时管理（工程实践层）
-
-每个连接都有超时定时器。如果 60 秒没活跃，第 8 章的时间轮定时器到期，踢除连接。防止空闲连接堆积。
-
-### 第 7 步：性能监控（工程实践层）
-
-全程用 perf 采样、火焰图分析、P99 延迟监控。发现瓶颈就按第 9 章的循环流程优化。
-
-## 从零搭建一个高性能服务器
+先预测：一次 HTTP/TLV request 在 decoder 之后进入 worker，connection 却在 result 返回前关闭；哪些 chapter contracts 能阻止 result 写到复用 fd？沿下图逐段检查 owner/evidence。
 
 <Stepper>
-  <Step title="第一步：搭 IO 骨架">
-    ```cpp
-    // 创建 listenfd + epoll
-    int listenfd = socket(...);
-    bind(listenfd, ...);
-    listen(listenfd, backlog);
-    int epfd = epoll_create1(0);
-    // 加入 epoll，写事件循环
-    ```
-    这一步用第 2 章的知识：epoll 基本用法、非阻塞 fd、事件循环。
+  <Step title="沿请求选择当前状态与证据">
+    <CseEndToEndRequestReviewLab />
   </Step>
-  <Step title="第二步：封装 Reactor">
-    ```cpp
-    // 把 epoll 循环封装成 Reactor
-    Reactor reactor;
-    reactor.add_handler(listenfd, new AcceptHandler, EPOLLIN);
-    reactor.run();  // 事件循环
-    ```
-    用第 3 章的知识：事件源、多路分离器、分发器、处理器的四角色架构。
+  <Step title="每次跨线程/跨层都转换 ownership">
+    bytes 属于 input buffer，frame 属于 decoder output，task move 到 bounded worker，result command 以 connection id/generation 回 owner loop；任何 raw pointer/fd 跨越都要证明 lifetime。
   </Step>
-  <Step title="第三步：连接管理 + 缓冲区">
-    ```cpp
-    // 每个连接封装成 Connection，带读写 Buffer
-    class ConnHandler : public Handler {
-      Buffer read_buf_;
-      Buffer write_buf_;
-      void handle_read() { read_buf_.append(...); }
-    };
-    ```
-    用第 5 章和第 6 章的知识：Connection 生命周期、fd 映射、对象池、Buffer 的 append/retrieve/compact。
-  </Step>
-  <Step title="第四步：协议编解码">
-    ```cpp
-    // 在 Buffer 之上加协议层
-    void ConnHandler::on_message(Buffer& buf) {
-      while (decode(buf, msg)) {  // 循环切帧
-        dispatch(msg);
-      }
-    }
-    ```
-    用第 7 章的知识：TLV 帧格式、粘包处理、字节序、Magic 对齐。
-  </Step>
-  <Step title="第五步：线程池 + 定时器">
-    ```cpp
-    // 耗时任务丢线程池，超时用时间轮
-    ThreadPool pool(4);
-    TimerWheel timer(1024, 10);
-    // 业务处理
-    void on_login(Msg& m) {
-      pool.submit([m]{ db_query(m); });  // 异步
-    }
-    timer.add(conn->timer, 60000);  // 60 秒超时
-    ```
-    用第 4 章和第 8 章的知识：线程池 submit/acquire、时间轮 add/tick。
-  </Step>
-  <Step title="第六步：性能调优">
-    ```bash
-    # 压测 + 火焰图 + 优化
-    wrk -t4 -c10000 http://localhost:8080/
-    perf record -g -p $(pgrep server)
-    # 发现锁竞争 → 分段锁；发现 read 太多 → readv
-    ```
-    用第 9 章的知识：测量驱动循环、四层瓶颈定位、火焰图。
+  <Step title="将 close、retry 与 observability 放进同一链">
+    close 取消 timer/worker result，reconnect 按 reason/backoff 恢复，logs/error/metrics 使用同一 connection/request/trace identity 解释前后事件。
   </Step>
 </Stepper>
 
-## 小结
+## 第一关：C++ 对象与调试证据
 
-- 全书四大板块串成一条线：IO 模型（怎么等数据）→ 事件架构（怎么处理）→ 并发数据（怎么管理）→ 工程实践（怎么调优）
-- 一条数据从进来到处理完经过七步：epoll 感知 → Reactor 分发 → Buffer 读取 → 协议解码 → 业务处理 → 超时管理 → 性能监控
-- 从零搭建服务器分六步：IO 骨架 → Reactor → 连接+缓冲 → 协议 → 线程池+定时器 → 调优
-- 每个组件都不是孤立的，它们协作构成一个完整的高性能服务器
+第 1 章要求 RAII object 的 destructor 闭合 fd/thread/buffer ownership，shared_ptr/weak_ptr 边界不形成 cycle；第 2 章要求 core、binary、symbols、source revision 与 build-id 完全匹配。没有 object lifetime，就无法判断 use-after-free；没有 artifact identity，stack line 也不可信。
 
-<Attribution />
+```text
+Object owner graph: Service → EventLoops → Connections → Buffers/Timers
+Artifact chain: commit → flags → binary/build-id → symbols → core/stack
+```
 
-<Glossary>
-<GlossaryItem term="高性能服务器">
-能同时处理数万到数十万并发连接，且延迟低、吞吐量高的服务器程序。核心要素：事件驱动 IO、连接管理、缓冲区设计、协议解析、定时器、性能调优。
-</GlossaryItem>
-<GlossaryItem term="事件循环">
-服务器的主循环：epoll_wait 等待事件 → 分发到 handler → handler 处理 → 回到 epoll_wait。所有连接的事件都在这一个循环里处理。
-</GlossaryItem>
-<GlossaryItem term="Reactor 模式">
-事件驱动架构的标准模式：多路分离器（epoll）监听事件，分发器路由到处理器。单线程 Reactor 可管理数万连接，多线程 Reactor（主从 Reactor）可利用多核。
-</GlossaryItem>
-<GlossaryItem term="TLV 协议">
-Type-Length-Value 帧格式，固定头加变长负载。Length 字段解决粘包，Magic 防误判，Checksum 保完整。是自定义二进制协议的标准设计。
-</GlossaryItem>
-</Glossary>
+<Term def="在解释 crash/竞态前同时验证对象 owner graph 与 binary-symbol-source identity 的第一道综合门槛。">lifetime and artifact gate</Term>
+
+<Callout type="trap" title="先根据崩溃行修改代码">
+优化构建、错误符号或内存早已被其他线程破坏时，当前行只是受害者。先匹配 build-id，取 all-thread stack/registers，再回溯 owner/happens-before 和最早 corruption evidence。
+</Callout>
+
+## 第二关：thread happens-before 与 socket state
+
+第 3 章把 thread start/ready/stop/join、mutex/condition/atomic 与 bounded pool 写成 happens-before；第 4 章把 connect pending、partial I/O、would-block、FIN、EINTR 与 SIGPIPE 写成 socket state。两章共同保证“并发执行”不会丢失 bytes 或 lifetime。
+
+```cpp
+worker.submit([request, weak = connection.weak_handle()] {
+  Result result = execute(request);
+  owner_loop.post([weak, result = std::move(result)]() mutable {
+    if (auto connection = weak.lock_current_generation()) {
+      connection->send(std::move(result));
+    }
+  });
+});
+```
+
+如果 worker 直接 send，mutex 也无法解决 fd reuse、partial offset 和 interest mask。single-loop owner 是 concurrency 与 network 两章的交汇点。
+
+## 第三关：故障证据与协议边界
+
+第 5 章从 interface/route/ICMP/port/socket/PID/app 到 packet 逐层证伪；第 6 章从 arbitrary recv chunks 增量解析 length/TLV/HTTP/WebSocket，并限制 length/version/compression。故障取证必须同时问“wire 上到达哪些 bytes”和“parser 当前消费到哪”。
+
+<Term def="将 packet sequence/timestamp 与 application input buffer、parser offset、declared length/version 对齐的协议故障证据。">wire-to-parser evidence</Term>
+
+```text
+tcpdump: seq=1000 len=6  → input buffer [header + 2 body bytes]
+tcpdump: seq=1006 len=8  → input buffer completes frame + next header
+decoder: qb/read offset  → dispatch exactly one frame, retain suffix
+```
+
+<Callout type="trap" title="抓到完整 packet 就断言 parser 应收到完整消息">
+TCP segmentation/coalescing、TLS、kernel/app buffers 和 read budget 都会改变边界。pcap 证明 wire bytes，应用 buffer/parser metrics 证明消费状态；两类证据必须按 sequence/time 关联。
+</Callout>
+
+## 第四关：单服务结构与 Redis 源码证据
+
+第 7 章把 Poller/EventLoop/Connection/Buffer/Codec/Session/Timer/worker queue 组成 single-owner service；第 8 章用 Redis 6.0 验证真实调用链：`initServer → acceptTcpHandler → createClient → readQueryFromClient → processInputBuffer → addReply/writeToClient → freeClient`。
+
+<Term def="用已构建的服务分层概念解释真实 Redis ae/client/RESP/reply/free 调用链，并能在固定 tag 断点复现。">architecture-to-source proof</Term>
+
+Redis threaded I/O 提醒我们不要用线程名推断 ownership：socket reads/writes 可由 I/O workers 批处理，parser/command/keyspace owner 仍需按 6.0 具体函数阶段证明。
+
+## 第五关：恢复、心跳与可观测性
+
+第 9 章让 disconnect reason 进入 reconnect classification/backoff，让 heartbeat seq/miss 进入 liveness state，让 logs/error/metrics/monitoring port 使用相同 correlation identity。恢复不是 reconnect 成功就结束，还要重新认证/协商/恢复 session，并处理 uncertain writes。
+
+```text
+disconnect(reason=timeout, connection_id=42)
+  → heartbeat misses + packet/socket evidence
+  → reconnect attempt/jitter/deadline
+  → auth/version/session restore
+  → ready=true + correlated metrics/logs
+```
+
+<Term def="从失活检测、断开分类、backoff 重连、会话恢复到 ready/observability 的生产恢复状态机。">operational recovery loop</Term>
+
+## 五类事故的跨章定位
+
+<Stepper>
+  <Step title="选择事故并查看第一证据边界">
+    <CseFailureLocalizationReviewLab />
+  </Step>
+  <Step title="围绕问题之前的时间窗口取证">
+    记录 last-good state、first anomaly、failure amplification 和 recovery；只看 crash/timeout 后输出容易把结果当原因。
+  </Step>
+  <Step title="每个结论写一项反证条件">
+    例如“网络丢包”必须说明两端 capture 缺失位置；“event loop blocked”必须有 thread stack + loop lag；“协议错”必须有 wire/parser reproduction。
+  </Step>
+</Stepper>
+
+## 发布前九项综合验收
+
+<Stepper>
+  <Step title="逐项勾选已有自动化证据的 gate">
+    <CseProductionReadinessReviewLab />
+  </Step>
+  <Step title="对未通过项做定向故障注入">
+    注入 thread startup failure、EINTR/partial write、random chunks/oversize frame、slow reader、worker late result、dependency disconnect 和 logging sink saturation。
+  </Step>
+  <Step title="最后执行 load、fault、security 与 graceful drain">
+    验证 P99/event-loop lag/queue/memory 上限，monitoring port 隔离，日志无 secrets，SIGTERM 停 admission、drain/cancel、join 后无悬空资源。
+  </Step>
+</Stepper>
+
+<Term def="发布前以自动化测试、故障注入和可观测结果证明九章关键 contract 的验收集合。">production evidence gates</Term>
+
+<Callout type="trap" title="功能测试通过就视为服务可发布">
+happy path 不覆盖 partial I/O、慢端、竞态、parser limits、dependency failure、重试风暴和日志 sink 过载。生产 gate 必须验证异常路径仍有界、可停止、可解释。
+</Callout>
+
+## 本章回顾：九章最终汇成三条线
+
+1. Owner 线：RAII/thread/EventLoop/Connection/client/reconnect timer 确定谁修改和释放状态。
+2. State 线：socket/parser/service/recovery 的每个返回值都进入明确下一状态。
+3. Evidence 线：build-id/GDB/socket/packet/parser/queue/log/metrics 在同一时间和 identity 下互相印证。
+4. Redis 源码是机制验证，不是孤立阅读；第 9 章是生产闭环，不是附加工具。
+5. 九项 production gates 全部有自动化证据，才完成本书验收。
 
 <Exercises>
-  <Answer question="如果要从零搭建一个高性能 C++ 服务器，你会怎么分步实现？">分六步递进实现：第一步搭 IO 骨架，创建 listenfd 和 epoll，写基本事件循环；第二步封装 Reactor，把 epoll 循环抽象成事件源-多路分离器-分发器-处理器的四角色架构；第三步实现 Connection 类和 Buffer，管理连接生命周期和读写缓冲，用 fd 映射表和对象池；第四步加协议层，实现 TLV 帧的编解码和粘包处理；第五步加线程池处理耗时任务、时间轮管理超时连接；第六步压测调优，用火焰图定位瓶颈，按测量驱动的循环优化。每一步都建立在前一步的基础上，缺一环就跑不起来。</Answer>
-  <Answer question="全书四大板块是什么关系？能跳着学吗？">四大板块是递进依赖关系：IO 模型是地基（不学就不知道 epoll 为什么需要非阻塞 fd），事件架构是骨架（不学就无法组织多连接处理），并发数据是血肉（不学就无法管理连接和数据的细节），工程实践是体检（不学就无法应对生产环境）。不能跳着学，因为后一板块依赖前一板块的概念和代码。比如协议设计需要缓冲区知识，性能调优需要理解前面所有组件才能定位瓶颈。唯一可以并行学的是线程池和连接管理（都属于管理层面），但都必须在 IO 模型和事件驱动之后。</Answer>
+
+**问题 1：worker result 回来时 fd 已被复用，怎样从设计和证据两方面阻止事故？**
+
+<Answer>设计上不把裸 fd/raw this 交给 worker；task 捕获 immutable request与 weak connection handle，result作为 command回 owner loop，按 stable connection id/generation 验证仍 alive，再写 output buffer。close 在 owner loop注销poller/timer/map并deferred destroy。证据上日志记录 connection id/generation/owner thread，TSAN与延迟-result故障测试证明旧结果被丢弃。</Answer>
+
+**问题 2：服务 P99 突升且 Send-Q/output queue 增长，如何跨章定位？**
+
+<Answer>第 4 章核对 partial write/would-block与socket state；第 5 章用ss两端queue、tcpdump ACK/window/retransmission；第 7 章看per-connection/global output pending、high-water与event-loop lag；第 3 章看worker/lock queue；第 9 章用trace/error/metrics关联同一时间。对端不读、网络丢包、本地loop阻塞或业务超量产出需分别证伪。</Answer>
+
+**问题 3：怎样证明一次 Redis 6.0 GET 的源码分析结论可复现？**
+
+<Answer>固定6.0 tag/commit、debug flags/config/build-id；在 initServer/acceptTcpHandler/createClient/readQueryFromClient/processInputBuffer/processMultibulkBuffer/processCommand/writeToClient/freeClient 设置断点，打印同一 client id/fd/querybuf/argv/reply/flags/thread id；用固定 redis-cli RESP请求和pipeline/partial输入复现。记录 I/O threads配置，区分worker socket I/O与主线程 command execution。</Answer>
+
 </Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="owner-state-evidence review" definition="在同一请求/故障时间线上联合检查 owner、状态转换与证据。" />
+  <GlossaryItem term="lifetime and artifact gate" definition="同时验证对象 owner graph 与 binary-symbol-source identity。" />
+  <GlossaryItem term="wire-to-parser evidence" definition="对齐 packet bytes 与应用 buffer/parser progress 的协议证据。" />
+  <GlossaryItem term="architecture-to-source proof" definition="以服务分层解释并断点复现 Redis 真实调用链。" />
+  <GlossaryItem term="operational recovery loop" definition="检测、分类、重连、会话恢复和 ready/observe 的生产状态机。" />
+  <GlossaryItem term="production evidence gates" definition="以自动化与故障注入证明九章关键 contract 的发布门槛。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++服务器开发精髓，官方九章知识链与终局综合"
+  adaptedUrl="https://book.douban.com/subject/35491437/"
+/>

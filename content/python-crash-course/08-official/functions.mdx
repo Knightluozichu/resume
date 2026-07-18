@@ -1,0 +1,234 @@
+---
+title: "第8章：Functions"
+type: C
+section: "Part I · Basics"
+order: 8
+description: "用signature、argument binding、return与ownership建立可组合函数，并以module形成命名边界。"
+demo: true
+math: false
+sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
+draft: false
+---
+
+import {
+  PccArgumentBindingLab,
+  PccReturnOwnershipLab,
+  PccVariadicImportLab,
+} from "@/components/mdx/python-crash-course/diagrams/functions";
+
+<Objectives>
+
+- 能解释function definition、parameter与argument binding，判断positional、keyword和default调用结果
+- 能设计return value与list ownership，比较原地mutation、slice copy和返回新list的契约
+- 能实现`*args`、`**kwargs`与module import，分析variadic shape和namespace来源
+
+</Objectives>
+
+## 为什么函数是行为边界，而不只是减少重复
+
+function把一段行为命名，并通过signature声明输入，通过return和side effects交付输出。减少重复只是结果之一；更重要的是调用者不必知道内部步骤，但必须知道parameter如何绑定、输入是否会mutation、失败如何表达、返回值是什么。
+
+先预测：同一个parameter同时收到positional和keyword argument会怎样；把list传入函数后append是否影响调用方；没有显式return的函数返回什么。若这些问题没有contract，调用点越多，隐式假设越难修。
+
+<Term def="由函数名、parameters、default values以及调用约束构成的输入接口。">function signature</Term>
+
+## Defining a Function
+
+`def`创建function object并把名字绑定到它；缩进body只在调用时执行。docstring紧随definition，用来说明purpose、parameters、return、side effects和raises，而不是逐行复述实现。
+
+```python
+def greet_user(username: str) -> str:
+    """Return a greeting without printing it."""
+    normalized = username.strip()
+    if not normalized:
+        raise ValueError("username must not be empty")
+    return f"Hello, {normalized.title()}!"
+
+print(greet_user("  ada  "))
+```
+
+parameter是definition中的输入名字，argument是call时提供的实际对象。type hint帮助editor、reader和static checker，不会自动在runtime拒绝错误type；边界仍需按业务做validation。
+
+<Term def="调用时把每个argument按位置、keyword和default规则映射到signature parameter的过程。">argument binding</Term>
+
+## Passing Arguments
+
+<Stepper>
+  <Step title="切换positional、keyword、default与重复绑定">
+    <PccArgumentBindingLab />
+  </Step>
+  <Step title="在body执行前完成parameter map">
+    缺少required argument、未知keyword或重复绑定都会TypeError，function body不会得到部分输入。
+  </Step>
+  <Step title="用清晰调用减少顺序风险">
+    少量显然参数可positional；bool、同类型多参数或含义易混时优先keyword。
+  </Step>
+</Stepper>
+
+```python
+def describe_pet(pet_name: str, animal_type: str = "dog") -> str:
+    return f"{pet_name.title()} is a {animal_type}."
+
+print(describe_pet("willie"))
+print(describe_pet("harry", "hamster"))
+print(describe_pet(animal_type="cat", pet_name="milo"))
+```
+
+default value在definition时求值一次。immutable default如string、number、None通常安全；mutable default list/dict会在多次调用间共享。需要每次新list时使用`None`sentinel并在body创建。
+
+### equivalent calls不等于同样可读
+
+`describe_pet("harry", "hamster")`与keyword call结果相同，但后者直接显示角色。API设计不只追求能绑定，还要让错误调用难写。参数过多时考虑把相关配置组合为dictionary、class或dataclass，而不是增长十几个positionals。
+
+## Return Values与optional result
+
+return立即结束当前function并把object交给caller；没有显式return则返回None。一个function可在不同branch返回不同值，但稳定API应尽量保持同一shape。not found若用None表示，caller必须显式处理；错误若应携带原因，后续第10章用exception表达。
+
+<Term def="function完成后交给caller的对象；它与print到stdout不同，caller可继续组合、验证或保存。">return value</Term>
+
+```python
+def build_person(first: str, last: str, age: int | None = None) -> dict:
+    person = {"first": first.title(), "last": last.title()}
+    if age is not None:
+        person["age"] = age
+    return person
+
+musician = build_person("jimi", "hendrix", age=27)
+print(musician)
+```
+
+不要用truthiness判断optional numeric：`if age:`会把合法0与None混在一起；使用`is not None`表达presence。返回dictionary时说明required keys，避免不同branch产生无法预测的shape。
+
+### print不是return
+
+教学示例常在function里print，但print只产生side effect，call expression得到None。可组合逻辑通常return domain value，由CLI/UI层决定如何展示；这样pytest能直接断言结果，web handler也能把同一value序列化。
+
+## Passing a List：先声明ownership
+
+Python传递object reference。function收到list后若append/pop，caller看到同一对象变化；传`items[:]`只复制外层，nested objects仍共享。防止mutation不应靠调用点偶然加slice，最好由function contract明确“consume input”或“return new result”。
+
+<Stepper>
+  <Step title="选择四种list与return策略">
+    <PccReturnOwnershipLab />
+  </Step>
+  <Step title="标出caller state与function effect">
+    原地消费要在name/docstring中说明；pure transformation返回new list并保持input snapshot。
+  </Step>
+  <Step title="验证outer与nested ownership">
+    slice copy只隔离append/pop，不隔离内部dictionary mutation；测试要覆盖两层identity。
+  </Step>
+</Stepper>
+
+<Term def="约定function是否可mutation caller提供的对象、是否消费其内容，以及谁拥有returned object。">function ownership contract</Term>
+
+```python
+def render_models(unprinted_designs: list[str]) -> list[str]:
+    completed = []
+    for design in unprinted_designs:
+        completed.append(f"rendered:{design}")
+    return completed
+
+unprinted = ["phone case", "robot pendant"]
+completed = render_models(unprinted)
+print(unprinted)
+print(completed)
+```
+
+### 防止function修改list的代价
+
+copy外层list有O(n)时间与memory成本；对小练习可接受，对大数据或nested graph要评估。更好的设计可能是接收任意iterable并逐项yield，或由caller明确转移ownership。不要为了“纯函数”盲目deepcopy整个对象图。
+
+若function本来就是队列consumer，mutation可能最直接：名字用`drain_queue`，docstring写明source会清空，并在异常时定义item outcome。关键不是禁止side effect，而是让它可见、局部且可测试。
+
+## Arbitrary Number of Arguments
+
+`*args`把额外positional arguments收集为tuple，`**kwargs`把额外keyword arguments收集为dictionary。它们适合确实可变的同质输入或扩展metadata，不是隐藏不稳定API的工具。required parameters通常放在前面，`**kwargs`放最后。
+
+<Stepper>
+  <Step title="切换args、kwargs与module alias">
+    <PccVariadicImportLab />
+  </Step>
+  <Step title="观察收集后的tuple/dictionary shape">
+    args保留位置顺序，kwargs保留keyword到value映射；callee仍要验证允许key与value type。
+  </Step>
+  <Step title="把function放进明确module namespace">
+    import module让origin可见，alias只在名称冗长或冲突时使用。
+  </Step>
+</Stepper>
+
+<Term def="用*args收集额外positional tuple、用**kwargs收集额外keyword dictionary的调用接口。">variadic arguments</Term>
+
+```python
+def build_profile(first: str, last: str, **user_info: object) -> dict:
+    profile = {"first_name": first, "last_name": last}
+    allowed = {"location", "field"}
+    unknown = set(user_info) - allowed
+    if unknown:
+        raise TypeError(f"unknown profile fields: {sorted(unknown)}")
+    profile.update(user_info)
+    return profile
+```
+
+无限接受kwargs会把拼写错误变成新field。即使选择开放metadata，也要记录reserved keys和serialization规则；固定业务参数则优先显式signature，让IDE和TypeError尽早发现错误。
+
+## Storing Functions in Modules
+
+module是`.py`文件和namespace。`import pizza`后通过`pizza.make_pizza`调用，来源最清楚；`from pizza import make_pizza`更短但当前namespace可能冲突；`import pizza as p`适合约定俗成或长名称。避免`from module import *`，它隐藏来源并可能覆盖名字。
+
+import时module顶层代码会执行一次并缓存。可复用module不应在import时启动交互、访问网络或写文件；把可执行入口放进function，并使用`if __name__ == "__main__":`保护CLI调用。
+
+### module边界与依赖方向
+
+调用方依赖被import module的public names。下划线前缀表达internal helper，但不是安全边界。将I/O与pure transformation拆到不同functions，测试就能import core而不触发用户prompt。
+
+如果两个modules互相import，通常表示职责或共享type位置不清。把共同contract移到更低层module，让依赖单向；不要靠移动import到function内部长期掩盖循环设计。
+
+## Styling Functions
+
+function使用lowercase_with_underscores，名字以动词表达行为；parameter同样清晰。definition前后blank lines、默认值附近不加多余spaces、call中的keyword等号也按PEP 8。docstring说明contract而非实现步骤。
+
+function过长时按不同抽象层拆分，但不要把每两行机械提取。一个好边界能单独命名、测试和复用，并减少caller需要知道的state。复查时从signature、return、side effects、raises、module dependency五项入手。
+
+<Callout type="trap" title="mutable default每次调用都会创建新list">
+default在def执行时求值一次，后续calls共享同一list。使用`items=None`并在body中创建，测试连续两次调用证明状态不泄漏。
+</Callout>
+
+<Callout type="trap" title="传入items[:]就能完全防止function修改原数据">
+slice只做shallow copy，nested dictionary/list仍共享。先定义ownership contract，再按数据shape决定外层copy、元素重建或不允许mutation。
+</Callout>
+
+## 本章回顾：signature、ownership与namespace
+
+1. function signature定义parameter入口，argument binding在body执行前完成。
+2. positional、keyword、default各有可读性与错误边界；mutable default会跨调用共享。
+3. return value可组合，print只是side effect；optional result要显式处理None。
+4. function ownership contract说明input mutation和returned object归属。
+5. variadic arguments收集为tuple/dict，module import建立名字来源与依赖方向。
+
+<Exercises>
+
+**问题 1：为什么`def add_item(item, items=[])`会跨调用泄漏状态，如何修复？**
+
+<Answer>default list在def执行时创建一次，所有未传items的calls共享。改为`items=None`，body中`if items is None: items = []`，再append并return。连续调用两次且不传items，断言第二次结果不包含第一次元素。</Answer>
+
+**问题 2：设计一个不会修改输入list的render function，应如何证明？**
+
+<Answer>接收iterable并构造new completed list返回，不对input append/pop；测试保存before copy，调用后断言input等于before且returned为不同对象。若元素可变，还要明确是否读取还是修改nested objects，并增加identity测试。</Answer>
+
+**问题 3：何时使用*args/**kwargs，何时使用显式parameters？**
+
+<Answer>同质可变位置项如toppings适合*args，开放但受控metadata适合**kwargs；固定业务字段、重要bool或有默认规则的输入用显式parameters，让IDE和binding errors尽早发现问题。kwargs仍需验证allowed keys与types，不能把拼写错误静默保存。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="function signature" definition="函数名、parameters、defaults和调用约束组成的输入接口。" />
+  <GlossaryItem term="argument binding" definition="把call arguments按位置、keyword和default映射到parameters的过程。" />
+  <GlossaryItem term="return value" definition="function交给caller、可继续组合和验证的对象。" />
+  <GlossaryItem term="function ownership contract" definition="声明function能否mutation输入及returned object归属的约定。" />
+  <GlossaryItem term="variadic arguments" definition="由*args与**kwargs收集额外位置和关键字输入的接口。" />
+</Glossary>
+
+<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 8: Functions" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />

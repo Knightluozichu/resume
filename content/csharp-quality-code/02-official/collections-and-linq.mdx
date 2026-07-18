@@ -1,0 +1,380 @@
+---
+title: "第2章：集合和LINQ（建议16-31）"
+type: C
+section: "编写高质量代码 · 集合与查询"
+order: 2
+description: "覆盖数组与集合、foreach/for、初始化、泛型集合、集合选择与线程安全、自定义集合和属性，以及LINQ投影、执行模型、IEnumerable/IQueryable与枚举成本。"
+demo: true
+math: false
+sourceUrl: "https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html"
+draft: false
+---
+
+import { CqcCollectionDecisionLab, CqcEnumerationContractLab, CqcLinqExecutionLab } from "@/components/mdx/csharp-quality-code/diagrams/collections-and-linq";
+
+<Objectives>
+
+- 能分析cardinality、dominant operation、ordering、ownership和concurrency，并设计数组或具体泛型集合方案，而不是只背复杂度表
+- 能判断foreach/for、iterator、自定义集合与collection property各自暴露的mutation、index和lifetime contract
+- 能分析IEnumerable或IQueryable查询的plan、execution location、materialization与enumeration count，避免隐藏的重复工作
+
+</Objectives>
+
+## 为什么集合不是容器名，而是一组可观察契约
+
+原书第2章把16条建议放在一起，因为collection choice与LINQ query并非两个独立话题。集合决定数据的shape、ownership和mutation；查询决定何时、在哪里、以多少次遍历观察这些数据。只说“Dictionary是O(1)”或“LINQ更优雅”都不足以评审生产代码。
+
+先预测三个case：订单既要保持到达顺序又要按ID查找，是否只选一个集合；getter-only的`IReadOnlyList<T>`是否已经immutable；同一`IQueryable<T>`连续调用三个terminal operators会访问remote source几次。带着答案再写下五个问题：元素数量是否固定；调用者最常做lookup、scan、insert还是queue；顺序和重复是否有业务意义；谁能修改数据；查询在本地执行还是交给remote provider。然后再选type与operator。
+
+<Term def="集合对cardinality、ordering、uniqueness、mutation、threading和lifetime向调用方承诺的可观察行为。">collection contract</Term>
+
+## 数量、遍历、初始化与集合选择（建议16-21）
+
+### 建议16：元素数量可变的情况下不应使用数组
+
+数组长度在construction时固定，适合fixed-size buffer、interop layout、已完成计算的compact snapshot，以及需要span/index locality的hot path。元素持续增加时手工扩容array会重复copy并分散capacity policy；通常让`List<T>`管理capacity更清晰。建议的核心不是禁止数组，而是不要让fixed-size representation承担unbounded growth。
+
+```csharp
+public static Order[] LoadSnapshot(IEnumerable<Order> source)
+{
+    var buffer = new List<Order>();
+    foreach (Order order in source)
+        buffer.Add(order);
+
+    return buffer.ToArray(); // Ownership boundary: exact immutable-by-convention snapshot.
+}
+```
+
+若已知count，可用`new T[count]`并一次填充；若只是减少扩容，可给List初始capacity。数组本身并不immutable，返回array仍允许caller改元素，所以API若承诺不可变，还需`ImmutableArray<T>`、copy或只读抽象。
+
+### 建议17：多数情况下使用foreach进行循环遍历
+
+foreach直接表达“按enumeration contract消费每个元素”，避免把index引入不需要position的算法。对array、List和自定义enumerator，compiler生成的机制可能不同；性能结论要看concrete type和target runtime，不能把foreach一概描述为会分配。
+
+```csharp
+decimal total = 0;
+foreach (Order order in orders)
+{
+    if (order.Status == OrderStatus.Confirmed)
+        total += order.Amount;
+}
+```
+
+遍历期间修改同一List通常使enumerator失效，但这不是“foreach只读”的完整证明：iteration variable不能重新赋值，不代表引用对象不能被修改，也不代表source不会由别处改变。消费代码要知道它拿到的是snapshot、live view还是single-use stream。
+
+### 建议18：foreach不能代替for
+
+算法需要index、反向删除、步长、相邻元素或原位更新时，for更准确。删除List元素应倒序，避免前移后跳过元素；若collection count可能变化，loop invariant必须显式。
+
+```csharp
+for (int index = orders.Count - 1; index >= 0; index--)
+{
+    if (orders[index].IsExpired)
+        orders.RemoveAt(index);
+}
+```
+
+反过来，不要为了拿index就对任何`IEnumerable<T>`调用`ElementAt(index)`，这可能把一次linear traversal变成quadratic work。确实需要random access时，contract应接收`IReadOnlyList<T>`或先materialize，并说明memory tradeoff。
+
+### 建议19：使用更有效的对象和集合初始化
+
+object/collection initializer减少重复receiver，并让construction intent集中；现代C#的constructor、`required` member与`init` setter还能在创建阶段约束必填数据。但initializer不是validation替代品：每个setter依次执行，外部可写setter可能留下不完整或可变对象。
+
+```csharp
+var request = new SearchRequest
+{
+    TenantId = tenantId,
+    Limit = 50,
+    Tags = { "paid", "recent" },
+};
+```
+
+若invariant跨多个fields，优先validated constructor/factory；initializer适合independent options。集合initializer本质上调用匹配的`Add`，所以异常、重复key和side effect仍由collection实现决定。
+
+### 建议20：使用泛型集合代替非泛型集合
+
+`List<T>`、`Dictionary<TKey,TValue>`在compile time限制element type，减少cast与value type boxing；`ArrayList`、`Hashtable`等legacy non-generic集合只在旧接口边界仍可能出现。迁移时不要只机械换类型，还要确定null、equality comparer和duplicate-key行为。
+
+```csharp
+var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+counts[category] = counts.GetValueOrDefault(category) + 1;
+```
+
+这里显式comparer比泛型本身更重要：它定义key identity。generic避免一类runtime error，但不会自动给出正确domain equality。
+
+### 建议21：选择正确的集合
+
+先按dominant operation和semantic shape选候选，再以真实数据分布验证：
+
+| 需求 | 常见候选 | 必须再问 |
+| --- | --- | --- |
+| positional sequence | `List<T>` / array | count是否固定，是否需要snapshot |
+| key lookup | `Dictionary<TKey,TValue>` | equality、key mutation、ordering |
+| unique membership | `HashSet<T>` | comparer、set operations、iteration order |
+| FIFO/LIFO | `Queue<T>` / `Stack<T>` | boundedness、backpressure、async waiting |
+| sorted lookup | `SortedDictionary` / `SortedSet` | comparer consistency、range query |
+| producer-consumer | `Channel<T>` / concurrent collection | blocking、completion、ownership transfer |
+
+LinkedList只有在已经持有node且频繁插入/删除时才有O(1)更新；寻找node仍是O(n)，每node allocation和cache locality也可能让它输给List。复杂度是上界模型，不是benchmark结果。
+
+<Stepper>
+  <Step title="切换variable count、lookup、membership、queue与shared writes">
+    <CqcCollectionDecisionLab />
+  </Step>
+  <Step title="写出shape与dominant operation">
+    标注fixed/growing、ordered/unique、lookup/scan/update，以及single owner还是multiple writers。
+  </Step>
+  <Step title="验证cost与contract而非只看type name">
+    用representative size、comparer、allocation、mutation和contention测试候选，并检查failure与ordering是否可接受。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="LinkedList在中间增删永远比List快">
+只有已经持有LinkedListNode时，link更新才是O(1)；先按value或position查node仍需scan。List虽然移动元素，却有contiguous memory与更小常数。用实际access pattern测量。
+</Callout>
+
+## Concurrency、Iterator与Ownership（建议22-25）
+
+### 建议22：确保集合的线程安全
+
+“线程安全集合”不是给业务workflow盖章。普通Dictionary在没有并发写、且发布后只读时可由多个reader使用；存在并发mutation时，需要锁、concurrent collection、immutable snapshot或single-owner message loop。选哪种取决于复合操作是否必须atomic。
+
+```csharp
+private readonly ConcurrentDictionary<string, int> _counts = new();
+
+public void Record(string category)
+{
+    _counts.AddOrUpdate(category, 1, static (_, current) => checked(current + 1));
+}
+```
+
+`ConcurrentDictionary`单个API提供相应同步，但value factory可能在竞争下调用多次，不能在其中执行不可重复side effect；跨多个keys的check-then-update也不会自动atomic。需要跨状态invariant时，把操作包进同一lock或转交single owner。enumeration拿到的也未必是transactional snapshot，必须查具体API contract。
+
+<Term def="多个读写步骤作为一个不可分割状态转换发生，任何observer都看不到中间状态的要求。">compound atomicity</Term>
+
+### 建议23：避免将List作为自定义集合类的基类
+
+继承`List<T>`会公开`Add`、`Insert`、index setter等全部mutation path，derived type无法可靠拦截non-virtual members，domain invariant很容易被绕过。composition让type只暴露允许的operation，并可选择实现`IReadOnlyList<T>`等最小contract。
+
+```csharp
+public sealed class OrderLines : IReadOnlyList<OrderLine>
+{
+    private readonly List<OrderLine> _items = new();
+
+    public int Count => _items.Count;
+    public OrderLine this[int index] => _items[index];
+
+    public void Add(OrderLine line)
+    {
+        ArgumentNullException.ThrowIfNull(line);
+        if (_items.Any(existing => existing.ProductId == line.ProductId))
+            throw new InvalidOperationException("Duplicate product.");
+        _items.Add(line);
+    }
+
+    public IEnumerator<OrderLine> GetEnumerator() => _items.GetEnumerator();
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+}
+```
+
+这不是要求每个List都包装一层。只有type有domain name、validation、event或ownership policy时才值得创建custom collection。
+
+### 建议24：迭代器应该是只读的
+
+iterator应把enumeration当作observation channel，不通过`Current`赋值改变sequence结构。C# `yield return`自然提供只读的current slot，但返回reference type仍可修改对象；iterator也可能关闭file、database context或mutable source，从而具备lifetime与repeatability约束。
+
+```csharp
+public IEnumerable<OrderId> EnumerateConfirmedIds()
+{
+    foreach (Order order in _orders)
+        if (order.Status == OrderStatus.Confirmed)
+            yield return order.Id;
+}
+```
+
+若调用方需要稳定只读结果，返回value projection或immutable snapshot；若是single-pass stream，API/name/documentation应明确。不要在iterator里混入hidden writes，使`Count()`与foreach产生不同业务副作用。
+
+### 建议25：谨慎集合属性的可写操作
+
+public setter让caller替换整个集合，public mutable getter又允许caller改变内部内容；两者都可能破坏owner invariant。getter-only `List<T>`并不等于只读，因为caller仍可`Add`。根据语义返回`IReadOnlyList<T>`view、immutable value或defensive copy，并通过methods控制修改。
+
+<Term def="通过只读capability观察owner当前集合、但内容仍可能随底层mutation而变化的窗口。">live view</Term>
+
+```csharp
+public sealed class Invoice
+{
+    private readonly List<InvoiceLine> _lines = new();
+    public IReadOnlyList<InvoiceLine> Lines => _lines;
+
+    public void AddLine(InvoiceLine line)
+    {
+        Validate(line);
+        _lines.Add(line);
+    }
+}
+```
+
+`IReadOnlyList<T>`只限制通过该reference调用mutation；若底层List还被其他代码持有，view仍会变化。需要temporal stability就返回immutable snapshot，而不是把interface narrowing误认为deep immutability。
+
+<Stepper>
+  <Step title="切换foreach、for、initializer、iterator、自定义集合与property">
+    <CqcEnumerationContractLab />
+  </Step>
+  <Step title="列出调用方能做的每一种mutation">
+    检查index setter、Add/Remove、element内部mutation、source alias与多线程writer，而不只看property有没有setter。
+  </Step>
+  <Step title="选择live view、snapshot或controlled commands">
+    live view适合owner内观察；snapshot提供稳定时间点；domain commands集中validation与compound atomicity。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="返回IReadOnlyList就已经不可变且线程安全">
+read-only interface只是capability restriction。底层集合、元素对象或其他alias仍可变化；并发reader也可能看到跨时刻state。真正的snapshot与deep immutability需要额外设计。
+</Callout>
+
+## Projection、Execution与Query Boundary（建议26-31）
+
+### 建议26：使用匿名类型存储LINQ查询结果
+
+anonymous type适合method-local projection：只保留下游需要的fields，具有编译期property类型与value equality，避免为一次性shape创建public DTO。它的边界是不能作为清晰的public return contract跨方法/assembly传播；跨层时使用named record/DTO。
+
+```csharp
+var summaries = orders
+    .Where(order => order.IsPaid)
+    .Select(order => new
+    {
+        order.CustomerId,
+        Month = order.PaidAt.Year * 100 + order.PaidAt.Month,
+        order.Amount,
+    });
+```
+
+projection还能降低remote query传输字段，但能否translate取决于provider。不要在anonymous projection中调用任意local method并假设database能执行。
+
+### 建议27：在查询中使用Lambda表达式
+
+lambda让predicate、selector与key policy贴近operator，适合短且纯的query rule。复杂分支、重复逻辑或需要单独测试/命名时提取method；在`IQueryable`中，lambda通常形成expression tree，允许的syntax不等于provider支持的translation。
+
+```csharp
+static bool IsReviewable(Order order) =>
+    order.IsPaid && order.Amount >= 100m && !order.IsRefunded;
+
+IEnumerable<Order> candidates = orders.Where(IsReviewable);
+```
+
+避免query lambda中的mutation、logging或counter increment。deferred/repeated execution会让side effect次数依赖consumer，parallel provider更可能改变顺序。
+
+### 建议28：理解延迟求值和主动求值之间的区别
+
+`Where`、`Select`等通常返回deferred sequence：构建query不读取source，每次enumeration才执行；`ToList`、`ToArray`、`Count`、`First`等terminal operation主动求值。主动求值既有cost，也建立ownership/time boundary：materialized result固定在那个时刻，不再重跑上游。
+
+```csharp
+IEnumerable<Order> query = repository.Stream().Where(order => order.IsPaid);
+
+Order[] snapshot = query.ToArray(); // One deliberate read and a stable local snapshot.
+int count = snapshot.Length;
+Order first = snapshot[0];
+```
+
+不要无条件ToList：对large/unbounded stream会消耗无限或过多memory；只消费首项可用First/Take短路。反之，source昂贵、会变、只能遍历一次或结果将被多次使用时，应在明确boundary物化。
+
+<Term def="执行一次deferred sequence并把结果拥有为array、list或immutable value，从而固定枚举时刻和后续读取成本。">materialization boundary</Term>
+
+### 建议29：区别LINQ查询中的IEnumerable和IQueryable
+
+`IEnumerable<T>`operator接收delegates，在当前process逐项执行；`IQueryable<T>`operator构造expression tree，由provider翻译并在remote system执行。两者拥有相似method names，却不是可随意互换的performance hint。
+
+<Term def="expression从本地C# query shape交给database或其他remote provider翻译、优化和执行的位置。">query provider boundary</Term>
+
+```csharp
+IQueryable<Order> query = db.Orders
+    .Where(order => order.TenantId == tenantId && order.IsPaid)
+    .OrderByDescending(order => order.PaidAt)
+    .Take(50);
+
+OrderSummary[] rows = await query
+    .Select(order => new OrderSummary(order.Id, order.Amount))
+    .ToArrayAsync(cancellationToken);
+```
+
+在`AsEnumerable()`之后，后续operator转为local execution；位置过早会把大量rows拉到memory。provider query要检查generated command、indexes、round trips、cancellation与N+1。可编译的.NET method可能无法翻译，或翻译语义与local comparer/culture不同。
+
+### 建议30：使用LINQ取代集合中的比较器和迭代器
+
+一次性filter/projection/order pipeline通常比手写stateful iterator与ad-hoc comparer更清晰：`OrderBy(x => x.LastName).ThenBy(x => x.Id)`把policy放在use site。复用的domain ordering仍应命名为`IComparer<T>`或key policy；custom streaming state machine、zero-allocation hot path也可能需要显式iterator。
+
+```csharp
+Order[] ordered = orders
+    .OrderBy(order => order.CustomerName, StringComparer.Ordinal)
+    .ThenBy(order => order.CreatedAt)
+    .ThenBy(order => order.Id)
+    .ToArray();
+```
+
+必须提供deterministic tie-breaker，尤其分页与remote query。LINQ替代的是重复plumbing，不是取消equality/ordering contract。
+
+### 建议31：在LINQ查询中避免不必要的迭代
+
+常见浪费包括`Count() > 0`后再foreach、`Where(...).FirstOrDefault()`可直接传predicate、loop内反复linear lookup、同一deferred query调用多个terminal operators，以及过早`ToList`后又创建中间collections。先算需要的结果，再决定一次pass、short circuit、index或materialization。
+
+```csharp
+// Repeated linear lookup: O(ids * users).
+// var selected = ids.Select(id => users.FirstOrDefault(user => user.Id == id));
+
+var byId = users.ToDictionary(user => user.Id);
+var selected = ids
+    .Select(id => byId.GetValueOrDefault(id))
+    .Where(static user => user is not null)
+    .ToArray();
+```
+
+`Any()`可在首个match短路，`Count` property可O(1)读取known collection size，但不要为了追求“一次遍历”写出不可维护的mega-loop。先用trace/query log和benchmark确认source被枚举几次、remote执行几次、分配多少，再针对hot path合并。
+
+<Stepper>
+  <Step title="切换projection、lambda、materialize、queryable、ordering与re-enumeration">
+    <CqcLinqExecutionLab />
+  </Step>
+  <Step title="沿query标出真正execution location">
+    区分local delegate与provider expression，标记AsEnumerable、terminal operator、remote round trip和materialization point。
+  </Step>
+  <Step title="用枚举计数与生成命令验收">
+    instrument source MoveNext/reads，检查SQL或provider command、result size、ordering和side effects，证明没有隐藏重复执行。
+  </Step>
+</Stepper>
+
+## 本章回顾：从Collection Shape追到Execution Count
+
+1. array与List的边界是fixed snapshot还是managed growth，不是“数组落后”。
+2. foreach表达full traversal，for表达index control；两者都必须服从source mutation和lifetime contract。
+3. generic collection提供type safety，具体type还要由ordering、equality、operation和ownership决定。
+4. thread-safe member不等于compound workflow atomic；read-only interface也不等于immutable snapshot。
+5. LINQ要区分local/remote、deferred/eager和single/repeated enumeration，再讨论可读性与performance。
+6. 原书16条建议最终汇聚为三个可验证问题：数据是什么shape，谁拥有mutation，查询到底执行了几次。
+
+<Exercises>
+
+**问题 1：订单数量持续增长、需要按ID查找并按到达顺序导出，应选一个还是多个集合？**
+
+<Answer>先承认存在两个dominant operations：按ID lookup和稳定arrival order。可由owner维护List作为顺序source，加Dictionary建立ID index；所有Add/Remove通过同一command更新两者并保持compound invariant。若concurrent producers存在，使用single-owner Channel或同一lock保护复合更新，不能只把两者换成Concurrent类型。导出时在锁内复制snapshot或由owner发布immutable snapshot，并测试duplicate ID、remove、ordering与并发可见性。</Answer>
+
+**问题 2：为什么getter-only的IReadOnlyList属性仍不足以证明不可变和线程安全？**
+
+<Answer>getter-only只阻止替换property reference，IReadOnlyList只阻止通过该view调用Add/Remove；底层List可能被owner或alias修改，元素若是mutable reference也能改内部state。需要稳定结果时返回ImmutableArray或defensive snapshot；需要live view时明确lifetime并同步writer/reader。测试应覆盖source mutation后旧view、element mutation和并发enumeration。</Answer>
+
+**问题 3：一个IQueryable查询被CountAsync、FirstAsync和ToListAsync依次调用，有何风险，怎样重构？**
+
+<Answer>三个terminal operators通常生成三次remote execution，期间数据可能变化，结果不一定来自同一snapshot；还增加round trips。若业务确实需要完整rows，执行一次ToListAsync后用Count/property与First处理；若只需existence或single row，则只发对应Any/First query，不要拉全量。检查generated SQL、projection、ordering/index与transaction isolation，不能仅以本地IEnumerable经验判断。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="collection contract" definition="集合对数量、顺序、唯一性、修改、线程和生命周期承诺的可观察行为。" />
+  <GlossaryItem term="compound atomicity" definition="多个读写步骤构成一个不可分割状态转换，observer看不到中间状态的要求。" />
+  <GlossaryItem term="live view" definition="读取时反映owner当前集合状态、可能随底层mutation变化的只读观察窗口。" />
+  <GlossaryItem term="materialization boundary" definition="执行deferred sequence并拥有array/list/immutable result，从而固定枚举时刻的边界。" />
+  <GlossaryItem term="query provider boundary" definition="expression从本地C#语义交给remote provider翻译和执行的位置。" />
+</Glossary>
+
+<Attribution adaptedFrom="编写高质量代码：改善C#程序的157个建议，第2章 集合和LINQ，建议16-31" adaptedUrl="https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html" />

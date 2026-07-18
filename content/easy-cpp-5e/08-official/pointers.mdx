@@ -1,0 +1,217 @@
+---
+title: "Lesson 8：指针"
+type: A
+section: Easy C++（第5版）· 内存与间接访问
+order: 8
+description: 对齐原书 Lesson 8「ポインタ」：从对象地址、指针类型和解引用建立间接访问模型，区分空指针、引用、数组关系与动态生命周期。
+demo: false
+math: false
+sourceUrl: "https://www.sbcr.jp/product/4797392593/"
+draft: false
+---
+
+import {
+  EcpPointersAddressMap,
+  EcpPointersAliasFlow,
+  EcpPointersLifetimeLab,
+} from "@/components/mdx/easy-cpp-5e/diagrams/pointers";
+
+<Objectives>
+
+- 能解释对象、地址、指针值、指针类型和解引用之间的关系
+- 能实现空指针检查、通过指针修改对象，并比较指针与引用的接口语义
+- 能分析动态对象的分配、使用、释放与失效路径，发现泄漏、悬空和重复释放
+
+</Objectives>
+
+## 为什么“地址”不是对象本身
+
+变量是具有类型和生命周期的对象，存储位于某个内存位置；地址用于标识该位置，指针对象则保存地址值。把三者混在一起会产生典型误解：修改指针值是在改变它指向哪里，解引用后赋值才是在修改目标对象。
+
+<Term def="对象在内存中的位置标识，可由取地址运算符 & 获得并存入兼容指针。">地址</Term>
+
+<Term def="保存某种对象或函数地址的对象；其类型规定解引用时如何解释目标。">指针</Term>
+
+```cpp
+int score = 80;
+int* pointer = &score;
+
+std::cout << score << '\n';     // 80
+std::cout << pointer << '\n';   // 一个地址值
+std::cout << *pointer << '\n';  // 80
+```
+
+`int*` 表示“指向 int 的指针”，不是“任何地址”。指针自身也有地址和生命周期，但初学时先固定两层：`pointer` 保存 score 的地址，`*pointer` 访问 score。
+
+<EcpPointersAddressMap />
+
+## 取地址与解引用构成往返
+
+一元 `&object` 取得对象地址，一元 `*pointer` 根据指针类型访问所指对象。星号在声明 `int* p` 中表示类型，在表达式 `*p` 中表示解引用；上下文不同，责任不同。
+
+<Term def="通过有效指针访问其所指对象的操作，读取得到目标值，赋值则修改目标对象。">解引用</Term>
+
+```cpp
+int value = 10;
+int* p = &value;
+*p = 25;
+
+// value 现在也是 25，因为 p 指向同一个对象。
+```
+
+这里没有复制第二个 int；`value` 与 `*p` 是同一对象的两条访问路径。先预测并打印修改前后的 `value`、`p` 与 `*p`，可以建立“地址不变、目标值改变”的证据。
+
+## 指针类型保护解释规则
+
+`double*` 解引用时按 `double` 规则访问目标，`int*` 按 `int` 规则。编译器通常拒绝把 `double*` 隐式赋给 `int*`，因为地址即使位数相同，目标大小、对齐和表示都不兼容。
+
+`const int*` 表示不能通过该指针修改目标；`int* const` 表示指针自身不能改指向。它们分别限制“目标写入”和“地址值重新赋值”，不能只看 const 离星号近不近死记。
+
+```cpp
+int first = 1;
+int second = 2;
+const int* readOnly = &first;
+int* const fixedTarget = &first;
+
+readOnly = &second;   // 可以改指向
+*fixedTarget = 3;     // 可以改目标
+```
+
+## 空指针表示当前没有目标
+
+`nullptr` 是现代 C++ 的空指针字面量，表示指针不指向有效对象。空是一种可检查状态，不是可以解引用的特殊对象。
+
+<Term def="不指向任何有效对象的指针状态，现代 C++ 使用 nullptr 表示。">空指针</Term>
+
+```cpp
+int* selected = nullptr;
+if (selected != nullptr) {
+    std::cout << *selected << '\n';
+}
+```
+
+解引用空指针会产生未定义行为。更棘手的是非空也不保证有效：对象生命周期结束后，旧地址仍可能保留在指针里，形成悬空指针。因此检查 `p != nullptr` 只能证明“不是空”，不能证明目标仍存活。
+
+<Callout type="trap" title="陷阱：指针里有非零地址就一定可解引用">
+  非空地址可能来自已释放对象、越界计算或未初始化值。有效性还需要目标对象仍在生命周期内、地址正确对齐且指针类型兼容；空检查只是最低门槛。
+</Callout>
+
+## 指针与引用表达不同接口契约
+
+引用在初始化时绑定对象，日常使用像对象别名，通常不表达“没有目标”；指针可以为 nullptr、可以重新指向，并需要显式解引用。两者都能提供间接访问，但可选性和重绑定语义不同。
+
+<Term def="在初始化时绑定已有对象并作为其别名使用的间接访问形式，通常不表达空状态。">引用</Term>
+
+```cpp
+void increment(int& value) {
+    ++value;
+}
+
+bool tryIncrement(int* value) {
+    if (value == nullptr) return false;
+    ++*value;
+    return true;
+}
+```
+
+第一个接口要求调用者必须提供对象，第二个接口把“可能没有对象”写进类型与返回契约。若空没有业务意义，引用通常更清楚；若需要遍历、可选目标、重绑定或与 C API 交互，指针更合适。
+
+<EcpPointersAliasFlow />
+
+## 动态对象的生命周期由程序控制
+
+`new T` 创建动态存储期对象并返回指针，`delete p` 结束对应单对象生命周期并释放存储。每次成功分配必须有明确唯一的释放责任；释放后所有指向该对象的指针都失效。
+
+<Term def="对象由显式或库管理的分配建立，生命周期不随当前块自动结束，而由所有权策略决定。">动态生命周期</Term>
+
+```cpp
+int* number = new int{42};
+std::cout << *number << '\n';
+delete number;
+number = nullptr;
+```
+
+忘记 delete 会泄漏；delete 后继续解引用会悬空；同一对象 delete 两次会破坏分配器状态。把本地指针设为 nullptr 可阻止这一条路径再次使用，但不能自动清除其他别名。
+
+现代 C++ 更常用自动对象、容器和智能指针管理动态资源，本课仍要理解原始 `new/delete`，因为只有看清所有权与生命周期，才能明白这些库设施替你保证了什么。
+
+<Callout type="trap" title="陷阱：delete 后设 nullptr 就解决所有悬空指针">
+  这只修改当前指针变量；复制过地址的其他指针仍保留旧值。真正的修复是建立单一所有权并限制别名，不让目标释放后仍有访问路径。
+</Callout>
+
+## 动态数组需要匹配释放形式
+
+`new T[n]` 与 `delete[]` 配对，单对象 `new T` 与 `delete` 配对。混用释放形式是未定义行为。若长度在运行时确定，优先使用 `std::vector<T>`；它记录长度并在离开作用域时自动释放。
+
+```cpp
+int* samples = new int[3]{10, 20, 30};
+std::cout << samples[1] << '\n';
+delete[] samples;
+samples = nullptr;
+```
+
+指针本身不记录数组长度。拿到 `int*` 的函数无法仅从地址知道有多少元素，因此接口还要传长度，或直接接收能携带大小的容器/视图。
+
+## 生命周期实验要覆盖所有别名
+
+<EcpPointersLifetimeLab />
+
+先预测四种路径：正常分配—使用—释放；分配后提前 return；两个指针指向同一对象后释放其中一个；数组使用错误 delete。记录对象何时开始和结束、谁拥有释放责任、哪些指针在结束后失效。
+
+## 三步审计一次间接访问
+
+<Stepper>
+  <Step title="第一步：画对象与地址">
+    区分指针对象、它保存的地址和目标对象，标出每个类型、生命周期与允许的读写操作。
+
+    <EcpPointersAddressMap />
+  </Step>
+  <Step title="第二步：选择引用或指针">
+    必须有目标且不重绑定用引用；可选、重绑定或数组遍历用指针。先预测修改是否传播，再验证别名访问同一对象。
+
+    <EcpPointersAliasFlow />
+  </Step>
+  <Step title="第三步：列出所有退出路径">
+    为动态对象逐条检查正常、错误和提前返回路径，确认唯一释放者、匹配 delete 形式及释放后所有别名失效。
+
+    <EcpPointersLifetimeLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 地址标识对象位置，指针对象保存地址，解引用才按指针类型访问目标
+- 取地址与解引用形成间接访问，同一对象可有多个别名，修改会通过所有有效路径可见
+- nullptr 表示没有目标，但非空不等于有效；有效性还依赖目标生命周期、边界和类型
+- 引用通常表达必有目标且不重绑定，指针表达可空、可重绑定及显式间接访问
+- 动态对象需要唯一释放责任，new/delete 与 new[]/delete[] 必须配对；现代代码优先使用自动资源管理
+
+<Exercises>
+  1. **问题 1：画出身份。** `int x=3; int* p=&x; *p=5;` 后 x、p、*p 分别是什么？
+
+  <Answer question="通过 p 修改后 x、p 和 *p 的关系是什么？">x 是值为 5 的 int 对象；p 是保存 x 地址的 int 指针对象，地址值未因目标赋值而改变；*p 是通过该地址访问同一个 x，因此读取也得到 5。</Answer>
+
+  2. **问题 2：选择接口。** 必须提供的可写计数器与可选目标，分别用引用还是指针？
+
+  <Answer question="必有目标与可选目标应如何表达？">必须有对象且调用中不重绑定时用 int&，接口直接表达非空别名；目标可以不存在时用 int* 并以 nullptr 表示缺失，同时检查后再解引用。选择来自业务可选性，不只来自语法偏好。</Answer>
+
+  3. **问题 3：审计释放。** 两个指针保存同一动态对象地址，delete 其中一个后另一个为何危险？
+
+  <Answer question="一个别名释放对象后另一个指针发生什么？">delete 结束目标生命周期并释放存储，所有指向该对象的指针同时失效；另一个指针即使非空也已悬空。只把释放者设为 nullptr 不会更新别名，应通过单一所有权和受控借用防止释放后访问。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="地址">标识对象内存位置的值。</GlossaryItem>
+  <GlossaryItem term="指针">保存兼容对象或函数地址的对象。</GlossaryItem>
+  <GlossaryItem term="解引用">通过有效指针访问其所指对象的操作。</GlossaryItem>
+  <GlossaryItem term="空指针">不指向有效对象的指针状态，以 nullptr 表示。</GlossaryItem>
+  <GlossaryItem term="引用">初始化时绑定已有对象并作为别名使用的间接访问形式。</GlossaryItem>
+  <GlossaryItem term="动态生命周期">由分配与所有权策略决定结束时机，而非自动随当前块结束的对象生命周期。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="やさしいC++ 第5版, Lesson 8 ポインタ"
+  adaptedUrl="https://www.sbcr.jp/product/4797392593/"
+/>

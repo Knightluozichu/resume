@@ -117,7 +117,7 @@ export function FileStreamLifecycleDiagram({
               fill={active(0) ? primary : secondary}
               fontFamily="monospace"
             >
-              file("data.txt");
+              file(&quot;data.txt&quot;);
             </text>
             <text
               x={stages[0].x + 20}
@@ -417,7 +417,14 @@ export function FileStreamLifecycleDiagram({
           </text>
 
           <defs>
-            <marker id="arrowHeadA" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto">
+            <marker
+              id="arrowHeadA"
+              markerWidth="8"
+              markerHeight="8"
+              refX="6"
+              refY="4"
+              orient="auto"
+            >
               <polygon points="0,1 6,4 0,7" fill={accent} />
             </marker>
           </defs>

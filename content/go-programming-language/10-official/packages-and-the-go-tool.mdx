@@ -1,0 +1,252 @@
+---
+title: "第10章：Packages and the Go Tool"
+type: C
+section: "Go 程序设计语言 · 包边界、依赖图与工具链"
+order: 10
+description: "对齐原书第 10 章：import paths、package/import declarations、blank imports、naming 与 Go tool 的 build/doc/internal/query workflow。"
+demo: true
+math: false
+sourceUrl: "https://www.gopl.io/"
+draft: false
+---
+
+import {
+  GoplGoToolWorkflowLab,
+  GoplInitializationImportLab,
+  GoplPackageIdentityLab,
+} from "@/components/mdx/go-programming-language/diagrams/packages-and-the-go-tool";
+
+<Objectives>
+
+- 能解释 import path、package declaration/name 与 file-local import binding，设计 acyclic dependency 和 stable public API
+- 能实现 renamed/blank imports 与 package initialization registration，验证 side effects、cycles、naming 和 internal visibility
+- 能分析 go list/get/build/test/doc/env/mod 工具链查询并执行 package graph 的结果，区分原书 GOPATH workspace 与现代 modules/workspaces
+
+</Objectives>
+
+## 为什么 Packages and the Go Tool 要共用一张依赖图
+
+source 中的 imports、module metadata、build constraints 与 tool environment 必须解析为同一 package graph；否则“代码里写的依赖”“下载到的版本”“真正参与编译的 files”会彼此分离。先建立 identity/binding/graph，再逐项理解 build、test、doc 与 query。
+
+## 10.1 Introduction：package 是编译、复用与封装单元
+
+package 将一组 `.go` files 编译为一个单元，共享 package-level declarations，并通过 exported identifiers 暴露 API。package 让 compiler 单独 type-check dependencies、让 build cache复用产物，也让作者隐藏 representation。command 是名为 main 的 package并定义 main function。
+
+<Term def="在 import declaration 中标识 dependency package 的字符串；现代 module 中通常由 module path 加 package subdirectory 组成，不等于本地目录任意路径或 package clause name。">import path identity</Term>
+
+先预测：import path 最后一段是否必须等于 package name，两个同名 packages 如何同文件使用，blank import 是否能调用 exported identifiers，internal package 的可见边界由什么决定，以及 `go mod tidy` 是否等价于 build。
+
+## 10.2 Import Paths：dependency identity 与 source location
+
+Go 的 import path 例如 `net/http`、`golang.org/x/net/html`、`example.com/acme/shop/report`。standard library paths 没有 domain prefix；third-party path 由 module/package layout决定。caller source 只依赖 path，不应依赖 module cache/GOPATH 中物理目录。
+
+<Stepper>
+  <Step title="修改 module path 与 package subdirectory">
+    <GoplPackageIdentityLab />
+  </Step>
+  <Step title="区分 import path 与 package clause">
+    path 标识 dependency；被导入 files 的 `package report` 给默认 selector name，它可与 path 最后一段不同，但应保持清晰。
+  </Step>
+  <Step title="添加 file-local alias">
+    alias 只改变当前 file 中 selector binding，用于同名冲突或更清楚语义，不改变 dependency identity。
+  </Step>
+</Stepper>
+
+现代 modules 由 `go.mod` 的 module directive 声明 root path；subdirectory 追加成 package path。major version v2+ module 常把 `/v2` 放进 module path。不要用 relative imports，使用 module-aware paths和 replace/workspace做本地协作。
+
+## 10.3 Package Declaration：默认名字与 package scope
+
+每个 non-test source file 以 `package name` 开始。同一 directory 的正常 files 必须属于同一 package（external test 可用 `name_test`）。package name 是短 identifier，调用者默认用它作为 selector prefix；它不必等于 import path last segment，但差异增加认知成本。
+
+<Term def="source file 开头 `package name` 声明的短名字；同包 files 共享 package scope，exported identifiers 由其他 packages 通过 import binding 选择。">package clause name</Term>
+
+package main 的 import path仍可存在，但它编译为 executable而非普通 library。package comments 应位于 package clause 前并以 package name 开头，说明整体职责，而不是逐文件重复。
+
+## 10.4 Import Declarations：每个 file 声明直接依赖
+
+single/grouped imports 都在 file block 建立 binding。compiler 要求 import 被使用，避免隐藏依赖。`gofmt` 格式化，`goimports` 等工具可组织 imports，但 semantic source of truth 仍是每个 file 的 import declarations。
+
+```go
+import (
+    "encoding/json"
+    "fmt"
+
+    "example.com/acme/shop/report"
+)
+```
+
+package files 共享 declarations，不共享 imports；file A import fmt 不让 file B 使用 fmt。这样的 explicit dependencies 让单 file 阅读和 compiler graph 清楚。
+
+### 10.4.1 Renaming an Import
+
+`import alias "path"` 改当前 file binding，常用于两个 packages 默认同名、默认名不清楚或 generated code。避免随意缩写；selector 应帮助读者理解 origin。
+
+<Term def="import declaration 在当前 file block 建立的 local package identifier；默认来自 imported package name，也可 alias，`_` 表示不建立可用 selector。">import binding</Term>
+
+```go
+import (
+    cryptoRand "crypto/rand"
+    mathRand "math/rand"
+)
+```
+
+`.` import 把 exported names直接放入 file block，容易冲突并隐藏 provenance，除极特殊 test/DSL 不应使用。
+
+## 10.5 Blank Imports：只请求 initialization side effect
+
+`import _ "path"` 声明 dependency并执行 package initialization，却不建立 selector。典型用途是 image/database driver/plugin registration：imported package 的 init 把 implementation 注册到 central registry。
+
+<Term def="使用 `_` binding 导入 package，仅保留其 initialization side effects；它不允许 selector access，应只用于 documented registration contract。">blank import side effect</Term>
+
+<Stepper>
+  <Step title="打开 PNG decoder blank import">
+    <GoplInitializationImportLab />
+  </Step>
+  <Step title="沿 dependency initialization 到 main">
+    dependencies 先完成 package variables/init，再初始化 importer；blank import 的 registration 在 main 前发生且每 package一次。
+  </Step>
+  <Step title="引入 import cycle 观察 compile-time rejection">
+    Go package import graph 必须 acyclic；把 shared contract下沉到第三包或反转依赖，不能用 init 互相回调掩盖 cycle。
+  </Step>
+</Stepper>
+
+blank import 隐藏行为，必须在附近注释“注册什么”，并用 integration test验证 capability。init 中避免 network、unbounded work 或 environment-dependent failure；不能返回 error 的 initialization 很难可靠运维。
+
+<Callout type="trap" title="为消除 unused import 改成 blank import">
+这会保留不必要 dependency 与 side effects。若不需要 registration 就删除 import；只有 package 文档明确要求 side-effect import 时才使用 `_`。
+</Callout>
+
+## 10.6 Packages and Naming：名字表达职责而非杂物箱
+
+package name 短、lowercase、singular，避免 `util/common/base` 这类无 domain boundary 名。exported identifier 与 package selector组合阅读，例如 `bytes.Buffer`、`http.Server`，所以不重复 package name：用 `http.Server` 而非 `http.HTTPServer`。
+
+API 命名保持缩写一致（URL、ID、HTTP），getter 通常 `Owner()` 而非 `GetOwner()`。package 划分围绕 cohesion、ownership、change boundary，不能只按技术层堆巨型 package，也不能每个 type 一个 package。
+
+Go 的 import cycle 常说明双向 ownership；提取低层 model/interface、让高层组装，或使用 callback/interface inversion。不要为了打破 cycle 把所有东西搬到 global common。
+
+## 10.7 The Go Tool：从 package pattern 到 build graph
+
+`go` command 读取 source/imports、module metadata、build constraints、GOOS/GOARCH 等环境，解析 package dependency graph，然后执行 list/build/test/doc 等 action。`./...` 是 package pattern，不等于 shell glob。
+
+<Term def="Go command 根据 package patterns、imports、module versions、build tags 与 environment 解析的 acyclic packages graph；编译、测试、文档与缓存都以该 graph 为基础。">module build graph</Term>
+
+<Stepper>
+  <Step title="切换 go list/build/test/doc/mod">
+    <GoplGoToolWorkflowLab />
+  </Step>
+  <Step title="观察 command input、cache 与 output">
+    build/test cache 只有在 source、dependencies、flags、environment 等 key 相容时复用；cache hit 不改变语义。
+  </Step>
+  <Step title="用 list -deps -json 查询真实 graph">
+    不猜某 file 是否参与构建；go list 输出 ImportPath、GoFiles、Deps、Module、Error 等机器可读证据。
+  </Step>
+</Stepper>
+
+### 10.7.1 Workspace Organization：从 GOPATH 到 modules
+
+原书初版使用 `$GOPATH/src/import/path` 组织 workspace，这是当时的权威模型。现代 Go 以 module 为 dependency/version unit：`go.mod` 可位于任意目录，声明 module path、go language version 与 requirements；`go.sum` 记录 dependency content checksums。
+
+```bash
+go mod init example.com/acme/shop
+go work init ./service ./shared
+go env GOMOD GOWORK GOPATH GOCACHE
+```
+
+multi-module local development 可用 `go.work` workspace，不把临时 replace 强行提交。GOPATH 仍用于 module/cache/bin 等默认位置，但不再要求 source 全在 `$GOPATH/src`。以 [Go Modules Reference](https://go.dev/ref/mod) 为现代 source of truth。
+
+### 10.7.2 Downloading Packages：版本属于 module graph
+
+原书 `go get import/path` 同时下载/安装的行为已演化。现代 `go get module/package@version` 调整当前 module dependencies，下载由 module cache/proxy/checksum机制完成；安装 executable tool 用 `go install path@version`，避免污染当前 go.mod。
+
+```bash
+go get golang.org/x/text@v0.28.0
+go list -m -u all
+go mod download
+go mod verify
+```
+
+版本升级要运行 tests/security review；不要无条件追 latest。private modules 配置 GOPRIVATE 等 policy，credentials不写进 source。官方 [Managing dependencies](https://go.dev/doc/modules/managing-dependencies) 说明 go get、tidy、replace 与版本工作流。
+
+### 10.7.3 Building Packages
+
+`go build` 编译 packages/commands，library results进入 cache，command 目标可生成 executable；`go install` 安装 command。build tags、filename suffix、cgo、GOOS/GOARCH决定 files，交叉构建必须验证 target dependencies。
+
+```bash
+go build ./...
+go test ./...
+GOOS=linux GOARCH=amd64 go build -trimpath ./cmd/server
+```
+
+reproducibility 记录 toolchain/module graph/flags；`go version -m binary` 可查看嵌入 build info。不要把本机 cache hit 当 production artifact proof，最终 gate 要在干净环境执行。
+
+### 10.7.4 Documenting Packages
+
+exported declarations 应有以 name 开头的 doc comments；package comment 描述 package整体 contract。`go doc` 在终端查询，pkg.go.dev 从 source/docs/examples呈现 API。Examples 还能由 `go test` 执行并验证 output。
+
+```bash
+go doc net/http.Server
+go doc -all example.com/acme/shop/report
+```
+
+文档应说明 ownership、concurrency、errors、zero value、units 与 versioning，不复述 signature。unexported implementation comment 解释 why/invariant。
+
+### 10.7.5 Internal Packages
+
+路径包含 `internal` 的 package 只能被其 parent tree 内代码导入。例如 `example.com/acme/shop/internal/auth` 可被 `example.com/acme/shop/...` 使用，外部 module path不可导入。restriction 由 go command强制，是 repository-scale encapsulation。
+
+internal 不等于 security boundary，source 仍可见；它防止 accidental API dependence。public facade 可稳定，internal representation 可演化。
+
+### 10.7.6 Querying Packages
+
+`go list` 是 package graph查询接口：`go list ./...` 列 packages，`-deps`含 dependencies，`-json`输出结构，`-m`查询 modules，`-test`包含 test variants。scripts 应解析 JSON/template fields，不解析人类文本。
+
+```bash
+go list -deps -json ./cmd/server
+go list -m -u all
+go env -json GOOS GOARCH GOMOD GOWORK GOPROXY
+```
+
+`go mod tidy` 根据 module 内 packages/tests/imports 同步 go.mod/go.sum，会修改 metadata，不只是“下载”；运行后 review diff 并测试。list/build/test 使用不同 graph variants，诊断 missing dependency 时记录 command、working directory、GOFLAGS/build tags/environment。
+
+<Callout type="trap" title="把 go build ./... 通过当作 tests/docs/module 都正确">
+build 只证明当前环境/build tags下 packages可编译。还需go test、race/vet按风险执行，go mod tidy diff保持干净，go list核对目标graph，文档/examples另验收。
+</Callout>
+
+## 本章回顾：package graph 是工具链共同 source of truth
+
+1. import path 标识 dependency，package clause 给默认 name，alias 只建立 file-local binding。
+2. blank import 仅触发 initialization registration；import graph 必须无环，init side effect 保持有限可测。
+3. package naming 与 exported API 要按 selector整体阅读，internal package提供 repository boundary。
+4. 原书 GOPATH workspace 核心已被 modern modules/go.work扩展，go.mod/go.sum管理版本与校验。
+5. go list/build/test/doc/env/mod 都围绕真实 package/module build graph，各自证明不同 gate。
+
+<Exercises>
+
+**问题 1：两个 packages 默认都叫 `rand`，怎样导入并保持 dependency identity 清晰？**
+
+<Answer>import paths仍分别是`crypto/rand`与`math/rand`，在当前file用`cryptoRand`、`mathRand`aliases建立不同bindings，调用写`cryptoRand.Read`与`mathRand.Intn`。alias不改变被导入package声明或modulegraph；避免dotimport。每个file只导入直接使用的dependencies。</Answer>
+
+**问题 2：plugin 依靠 blank import 注册，怎样防止隐藏 init 变成不可控启动逻辑？**
+
+<Answer>blankimport附近写明注册的capability，被导入package的init只做deterministic bounded in-memory registration，不做network/unboundedwork。registry拒绝duplicate或定义override policy；integration test导入plugin后查询/执行。若初始化可能失败或依赖config，改为main显式Register并返回error，而不是init。</Answer>
+
+**问题 3：CI 中怎样证明 module graph、编译、测试与文档边界都一致？**
+
+<Answer>在干净环境记录toolchain和goenv，运行go mod tidy并要求无diff、go mod verify，使用go list -deps -json核对targetgraph/buildtags，再go build/go test（按风险加-race/vet）覆盖./...。执行examples/doc checks，检查internal不能被外部fixture导入；artifact用go version -m核对module/buildinfo。cache hit不能替代这些独立证据。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="import path identity" definition="在 dependency graph 中标识 package 的路径字符串。" />
+  <GlossaryItem term="package clause name" definition="source files 声明并作为默认 selector 的短 package 名。" />
+  <GlossaryItem term="import binding" definition="import 在当前 file 建立的默认、alias 或 blank identifier。" />
+  <GlossaryItem term="blank import side effect" definition="用 `_` 仅触发 imported package initialization。" />
+  <GlossaryItem term="module build graph" definition="Go tool 依据 imports、versions、tags 与 environment 解析的 package graph。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Go Programming Language, Chapter 10: Packages and the Go Tool"
+  adaptedUrl="https://www.gopl.io/"
+/>

@@ -1,0 +1,241 @@
+---
+title: "第9章：安全性设计（建议113-121）"
+type: C
+section: "编写高质量代码 · 安全边界"
+order: 9
+description: "覆盖数值边界、MD5与文件完整性、混合加密、TLS、现代secret handling、标准密码库、强名称的身份边界及应用最小权限。"
+demo: true
+math: false
+sourceUrl: "https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html"
+draft: false
+---
+
+import { CqcSecurityPrimitiveLab, CqcTransportSecretLab, CqcTrustPermissionLab } from "@/components/mdx/csharp-quality-code/diagrams/security-design";
+
+<Objectives>
+
+- 能分析numeric overflow、collision、tampering与file disclosure threat，设计checked value、digest、HMAC/signature或hybrid encryption control
+- 能比较TLS/certificate validation、legacy SecureString、secret manager与reviewed cryptographic API，判断secret lifetime和fail-closed边界
+- 能区分strong-name identity、publisher/package trust与runtime authorization，并设计service/filesystem/network least privilege
+
+</Objectives>
+
+## 为什么算法名称不能替代Threat Model
+
+“用了hash”“启用了SSL”“程序集已签名”都没有说明保护什么、对手有什么能力、key由谁持有、失败时是否fail closed。security control必须对应property：confidentiality、integrity、authenticity、authorization和availability彼此不同；unkeyed digest不证明发送者，strong name不授予trust，encryption也不自动防篡改。
+
+先预测：攻击者能同时替换file和SHA-256文本时，hash校验是否有效；SecureString是否仍是现代.NET保存service secret的默认；strong-named assembly是否代表可信publisher。三个答案都是否。
+
+<Term def="明确asset、attacker capability和所需confidentiality、integrity、authenticity、authorization或availability，再选择control的安全需求。">security property</Term>
+
+## Numeric Bound、Hash与File Protection（建议113-116）
+
+### 建议113：声明变量前考虑最大值
+
+type宽度是security boundary：length、price、offset、permission bit和allocation size若overflow，可能绕过validation或导致undersized buffer。按domain范围选type，在外部输入处检查min/max，跨type转换和算术使用checked context；不要用更大integer替代业务上限。
+
+```csharp
+public static int ComputeBufferSize(int itemCount, int bytesPerItem)
+{
+    if (itemCount is < 0 or > 1_000_000)
+        throw new ArgumentOutOfRangeException(nameof(itemCount));
+    if (bytesPerItem is < 1 or > 4096)
+        throw new ArgumentOutOfRangeException(nameof(bytesPerItem));
+
+    return checked(itemCount * bytesPerItem);
+}
+```
+
+测试0、max、max+1、negative、conversion和multiplication boundary。allocation前还要有application quota，避免合法integer造成resource exhaustion。
+
+### 建议114：MD5不再安全
+
+MD5存在实用collision攻击，不得用于signature、certificate、artifact authenticity或任何attacker-controlled security decision；[.NET安全规则也将MD5列为broken cryptographic algorithm](https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/quality-rules/ca5351)。legacy content-address或非对抗checksum即使暂时保留，也应标注不提供security并规划迁移。
+
+```csharp
+byte[] digest = SHA256.HashData(content);
+```
+
+换成SHA-256只解决collision-resistant digest primitive，不自动解决expected digest来源是否可信、password hashing、key derivation或message authenticity。
+
+### 建议115：通过HASH来验证文件是否被篡改
+
+unkeyed hash只能在expected digest来自独立可信channel时验证bytes一致；若攻击者可同时替换file和hash，两者会一起通过。共享secret双方可用HMAC；由publisher向任意verifiers发布artifact时用digital signature，并验证certificate/key provenance、algorithm、metadata和rollback policy。
+
+<Term def="verifier不仅确认bytes未变，还能把内容绑定到受信key holder或publisher，并验证key来源与rotation/revocation的证据链。">authenticity proof</Term>
+
+```csharp
+byte[] expectedMac = Convert.FromHexString(manifest.Mac);
+byte[] actualMac = HMACSHA256.HashData(key, fileBytes);
+
+if (!CryptographicOperations.FixedTimeEquals(expectedMac, actualMac))
+    throw new SecurityException("Artifact authentication failed.");
+```
+
+HMAC key不能与file一起公开；signature verification则保护private signing key并分发可信public key/certificate。hash comparison用fixed-time API，且限制file size与path。
+
+### 建议116：避免用非对称算法加密文件
+
+RSA/ECC不用于直接加密大文件：size受限、性能差且padding/protocol容易误用。采用hybrid encryption：随机生成symmetric data key，以AEAD（如AES-GCM）加密content，再由KMS/public-key mechanism包装data key；保存algorithm/version/nonce/tag/wrapped key等metadata。
+
+<Term def="用随机symmetric data key执行bulk authenticated encryption，再用KMS或recipient public key保护该data key的envelope结构。">hybrid encryption</Term>
+
+```csharp
+byte[] key = RandomNumberGenerator.GetBytes(32);
+byte[] nonce = RandomNumberGenerator.GetBytes(12);
+byte[] ciphertext = new byte[plaintext.Length];
+byte[] tag = new byte[16];
+
+using var aes = new AesGcm(key, tagSizeInBytes: 16);
+aes.Encrypt(nonce, plaintext, ciphertext, tag, associatedData);
+CryptographicOperations.ZeroMemory(key);
+```
+
+同一key下nonce必须唯一，decrypt先验证tag再release plaintext；key wrapping/rotation交给成熟KMS/library，不手写envelope protocol。
+
+<Stepper>
+  <Step title="切换numeric、MD5、SHA-256、HMAC与hybrid AEAD">
+    <CqcSecurityPrimitiveLab />
+  </Step>
+  <Step title="写出asset、attacker capability与required property">
+    区分accidental corruption、active tampering、publisher authenticity与confidentiality，标出key/expected digest的trusted origin。
+  </Step>
+  <Step title="做boundary、tamper和key-compromise测试">
+    覆盖overflow、file+digest同时替换、wrong HMAC/signature、nonce/tag修改、oversized input和rotation后的旧artifact。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="文件旁边放一个SHA-256就能证明没有被攻击者修改">
+若攻击者能写同一目录，就能重算并替换digest。需要independently trusted digest、HMAC secret或publisher signature及其key trust chain。
+</Callout>
+
+## Transport、Secret Lifetime与Crypto API（建议117-119）
+
+### 建议117：使用SSL确保通信中的数据安全
+
+原题中的SSL应更新为TLS。现代.NET使用HttpClient/SslStream并保持certificate hostname、chain、expiry/revocation policy；[Microsoft建议优先让OS选择当前支持的TLS版本](https://learn.microsoft.com/en-us/dotnet/core/extensions/sslstream-best-practices)，避免硬编码过时protocol。绝不能在production用“接受任何证书”的callback修复连接失败。
+
+```csharp
+using var client = new HttpClient
+{
+    BaseAddress = new Uri("https://api.example.com"),
+};
+
+using HttpResponseMessage response = await client.GetAsync("orders", cancellationToken);
+response.EnsureSuccessStatusCode();
+```
+
+TLS保护in-transit channel，不验证application authorization、endpoint业务合法性或data-at-rest。需要mTLS/pinning时必须有rotation与backup policy，避免一次certificate更新导致全量outage。
+
+### 建议118：使用SecureString保存密钥等机密字符串
+
+这是另一条必须现代化的旧建议：[Microsoft明确不建议在新.NET开发中使用SecureString](https://learn.microsoft.com/zh-cn/dotnet/fundamentals/runtime-libraries/system-security-securestring)。多数现代API最终仍需plain string/bytes，跨平台保护不一致，SecureString无法修复process compromise。仅在legacy Windows API能直接消费它时保留。
+
+<Term def="secret从secret manager获取、进入memory、传给最少API、rotation/revocation直到buffer清除期间的时间、copies和可见范围。">secret lifetime</Term>
+
+新设计使用OS keychain/cloud secret manager/KMS与workload identity，尽量晚取、短暂缓存、禁止log/dump，API允许时用可清除byte/char buffer并`CryptographicOperations.ZeroMemory`。string无法可靠zero，因此最重要的是避免不必要copies与长期field。
+
+### 建议119：不要使用自己的加密算法
+
+不仅不要自创cipher，也不要自行拼接“encrypt then hash”、nonce、padding、key derivation和serialization protocol。使用平台reviewed APIs、标准AEAD/signature/KDF和managed KMS，启用analyzers/dependency updates，并由security review验证mode/parameters/key lifecycle。
+
+```csharp
+byte[] salt = RandomNumberGenerator.GetBytes(16);
+byte[] derived = Rfc2898DeriveBytes.Pbkdf2(
+    passwordBytes,
+    salt,
+    iterations,
+    HashAlgorithmName.SHA256,
+    outputLength);
+```
+
+password storage应使用专门password hashing policy和可升级cost参数，不把示例常数当永久标准。算法agility要有version field和migration，不允许silent downgrade。
+
+<Stepper>
+  <Step title="切换TLS、pinning、SecureString、secret store与custom crypto">
+    <CqcTransportSecretLab />
+  </Step>
+  <Step title="标出certificate/key的trust与rotation owner">
+    记录谁签发、如何验证hostname/chain、secret从哪里获取、多久缓存、谁能读取，以及rotate后如何不中断服务。
+  </Step>
+  <Step title="执行fail-closed和泄露面测试">
+    使用expired/wrong-host certificate、untrusted key、rotation、日志扫描与memory lifetime检查，确认validation失败不会降级跳过。
+  </Step>
+</Stepper>
+
+<Callout type="trap" title="关闭证书校验后TLS仍然加密，所以可以临时上线">
+没有endpoint authentication时会暴露给中间人，encrypted channel连到了错误对象也无意义。修复trust store、hostname、clock或certificate chain，不写accept-all callback。
+</Callout>
+
+## Artifact Identity与Least Privilege（建议120-121）
+
+### 建议120：为程序集指定强名称
+
+strong name在.NET Framework/GAC/legacy library compatibility中提供assembly unique identity和binding能力，但[Microsoft明确说明不能依赖strong name提供安全信任](https://learn.microsoft.com/en-us/dotnet/standard/assembly/strong-named)，现代.NET 5+通常无实质安全收益。是否strong-name由consumer/target framework compatibility决定，不作为tamper/publisher authorization gate。
+
+需要publisher provenance时使用Authenticode、NuGet/package signing、trusted feed、hash/signature verification、SBOM和build provenance；签名key放在受控CI/KMS并定义rotation/revocation。即使artifact签名有效，runtime仍需least privilege。
+
+### 建议121：为应用程序设定运行权限
+
+让process/container/service identity只拥有完成use cases所需的filesystem、network、database、cloud roles和OS capabilities，默认deny并按环境拆分identity。不要以admin/root运行来规避permission错误；.NET Framework Code Access Security不是现代security boundary。
+
+<Term def="workload identity只获得完成当前职责所需的最小resource/action/scope，并由deny tests证明多余能力不可用的边界。">least privilege boundary</Term>
+
+```csharp
+// Application code depends on a narrow storage capability.
+public interface IInvoiceReader
+{
+    Task<Invoice?> FindAsync(InvoiceId id, CancellationToken cancellationToken);
+}
+```
+
+部署层把reader identity限制为指定database/table的read action，filesystem只开放data volume，network egress只到approved endpoints。记录authorization denied metrics但不自动升级权限；break-glass流程独立审计。
+
+<Stepper>
+  <Step title="切换strong name、package signing、service identity、filesystem与network">
+    <CqcTrustPermissionLab />
+  </Step>
+  <Step title="分开identity、trust与permission三张表">
+    说明artifact是谁、为何信任publisher、runtime principal是谁、允许哪些resource/actions；不让一种signature替代另一层control。
+  </Step>
+  <Step title="运行allow/deny与供应链验证">
+    验证合法operation成功，forbidden path/role/egress失败；同时验证package signature/provenance与dependency inventory。
+  </Step>
+</Stepper>
+
+## 本章回顾：每个Control只证明一件事
+
+1. 数值type与checked arithmetic保护domain bounds，但仍需quota防resource exhaustion。
+2. MD5不能用于security；unkeyed digest只有trusted expected value时验证bytes，authenticity使用HMAC/signature。
+3. 大文件用AEAD symmetric data key与KMS/public-key wrapping的hybrid scheme，不直接RSA加密content。
+4. SSL更新为TLS并保持certificate validation；modern .NET secret handling不以SecureString为默认。
+5. 使用reviewed crypto/API和managed key lifecycle，不自创algorithm或protocol composition。
+6. strong name是identity/compatibility，不是trust；runtime用独立workload identity和least privilege。
+
+<Exercises>
+
+**问题 1：下载更新包时，SHA-256、HMAC和digital signature分别能证明什么？**
+
+<Answer>SHA-256在expected digest独立可信时证明bytes匹配，否则攻击者可替换两者；HMAC证明持有shared secret的一方生成且未改，但key distribution和多方verification受限；digital signature让publisher保管private key、clients持可信public key/certificate，适合公开分发。还要验证version/rollback、size、key rotation和metadata。</Answer>
+
+**问题 2：现代.NET service应怎样处理TLS与database secret？**
+
+<Answer>HttpClient/SslStream保留OS TLS policy和完整hostname/chain validation，不accept-all；service以workload identity从secret manager/KMS晚取credential，限制role、短缓存、rotation、禁止log，能用byte buffer时及时zero。SecureString仅用于legacy API直接消费场景，不作为process compromise防线。</Answer>
+
+**问题 3：strong-named assembly为何仍需要package signing和runtime least privilege？**
+
+<Answer>strong name主要提供assembly identity/legacy binding，不建立publisher trust且现代runtime不把它当security gate。package/Authenticode signing和provenance验证artifact来源；runtime principal仍可能执行恶意或有缺陷代码，所以只授予最小filesystem/network/database/cloud actions，并用deny tests证明隔离。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="security property" definition="针对asset和attacker明确所需confidentiality、integrity、authenticity、authorization或availability。" />
+  <GlossaryItem term="authenticity proof" definition="把内容绑定到受信key holder/publisher并验证key来源、rotation与revocation的证据链。" />
+  <GlossaryItem term="hybrid encryption" definition="用symmetric AEAD加密bulk data，再由KMS/public key保护随机data key的envelope结构。" />
+  <GlossaryItem term="secret lifetime" definition="secret获取、驻留、复制、使用、rotation到buffer清除的时间和可见范围。" />
+  <GlossaryItem term="least privilege boundary" definition="workload只获职责所需最小actions/resources，并以deny tests验证的授权边界。" />
+</Glossary>
+
+<Attribution adaptedFrom="编写高质量代码：改善C#程序的157个建议，第9章 安全性设计，建议113-121" adaptedUrl="https://www.cnblogs.com/luminji/archive/2011/09/20/2182265.html" />

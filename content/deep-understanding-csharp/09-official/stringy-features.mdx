@@ -1,0 +1,147 @@
+---
+title: "Chapter 9. Stringy features"
+type: C
+section: "C# in Depth 4e · C# 6"
+order: 9
+description: "覆盖.NET string formatting回顾、interpolated literals、FormattableString localization、使用限制与nameof，区分display、machine和external schema contract。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-9"
+draft: false
+---
+
+import { DcsFormattingEvolutionLab, DcsFormattableBoundaryLab, DcsNameofContractLab } from "@/components/mdx/deep-understanding-csharp/diagrams/stringy-features";
+
+<Objectives>
+
+- 能比较concatenation、composite formatting、interpolation与structured logging保留的template、type和culture信息
+- 能设计string、FormattableString、IFormattable及modern handler边界，复现locale与evaluation差异
+- 能判断nameof适合source diagnostics还是不适合external schema，验证rename与version compatibility
+
+</Objectives>
+
+## 为什么Text生成必须先决定最终Consumer
+
+同一个amount可能显示给用户、写入machine protocol、作为signature input或进入structured log。若过早变成plain string，typed value、format intent与culture owner都丢失。C# 6 interpolation改善source readability，FormattableString保留晚格式化选择，nameof把symbol name从脆弱literal变成compiler-checked expression。
+
+先预测：interpolated string是否永远使用InvariantCulture；FormattableString是否保留原C# expressions；nameof是否返回qualified path；预先插值后交给logger是否仍是structured field。答案都是否。
+
+<Term def="在value转text前明确display、machine、logging或protocol consumer，由该边界选择format与culture。">text consumer boundary</Term>
+
+## A recap on string formatting in .NET
+
+Concatenation逐个调用string conversion，template与values混在operations中；composite formatting用`{0:N2}`加object arguments，支持format provider但numeric indexes易错且value types可能boxing。`IFormattable.ToString(format, provider)`是value参与formatting的核心contract。
+
+UI display使用用户culture；machine persistence、cache key和cryptographic canonicalization需要stable invariant/explicit encoding。Round-trip numeric/date通常用标准round-trip format或typed serializer，不能依赖current machine culture。
+
+```csharp
+var display = amount.ToString("C", userCulture);
+var protocol = amount.ToString("G29", CultureInfo.InvariantCulture);
+```
+
+<Stepper>
+  <Step title="切换concatenation、composite、interpolation与logging"><DcsFormattingEvolutionLab /></Step>
+  <Step title="标记template、typed values和culture丢失点">一旦成为plain string，后续sink不能可靠恢复fields或原始types。</Step>
+  <Step title="用多locale和structured sink验收">执行en-US、fr-FR、invariant，检查logging fields而非只比最终message。</Step>
+</Stepper>
+
+<Callout type="trap" title="所有内部日志都应先用插值生成漂亮字符串">
+预插值会把typed properties压成message，破坏查询、redaction和cardinality控制。Structured logging把template与values交给sink；只在最终display boundary生成text。
+</Callout>
+
+## Introducing interpolated string literals
+
+C# 6 `$"Order {id}: {total:C2}"`把expressions、alignment与format specifier靠近label，compiler lowering在该版本通常等价于`string.Format`/formatting calls。它仍按target string生成final text，并不自动localize surrounding words；translation system仍需resource template。
+
+Interpolation expression只evaluate一次但遵循source order，可能有side effects或抛异常。不要把business actions放在format expression；先计算named values让fault与debug更清楚。
+
+Modern C# 10 interpolated string handler允许target API控制evaluation与allocation，例如disabled logging可跳过formatted expressions。这是后续版本，不应倒写成C# 6 guarantee；target-typed behavior必须按实际overload测试。
+
+## Localization using FormattableString
+
+当interpolation target是`FormattableString`，compiler构造format string与object arguments，sink稍后用`ToString(provider)`选择culture。它保留的是composite format和evaluated argument values，不是expression tree；side effects在construction时已发生。
+
+```csharp
+FormattableString message = $"Total: {amount:N2} at {timestamp:O}";
+string localized = message.ToString(userCulture);
+string invariant = FormattableString.Invariant(message);
+```
+
+API可接收FormattableString用于SQL-like builder，但绝不能把它当自动parameterization/security：必须由trusted implementation把arguments作为parameters，format text本身也需严格解析。Ordinary string overload与FormattableString overload并存时，target resolution可能选不同path，call-site要显式。
+
+<Term def="interpolation转换为composite format与已求值arguments，使最终sink稍后选择IFormatProvider。">deferred culture formatting</Term>
+
+<Stepper>
+  <Step title="切换string、FormattableString、IFormattable与handler"><DcsFormattableBoundaryLab /></Step>
+  <Step title="写出expression evaluation与formatting时机">Argument value在construction何时计算，text在sink何时按provider生成，二者分开记录。</Step>
+  <Step title="测试overload、locale与disabled handler">显式target type，比较多culture；modern handler确认disabled path是否跳过side-effect expression。</Step>
+</Stepper>
+
+<Callout type="trap" title="FormattableString等同于expression tree，可延迟执行表达式">
+它保存format和已求值object arguments，构造时expression已运行。它也不自动防SQL injection；安全取决于sink是否parameterize。
+</Callout>
+
+## Uses, guidelines, and limitations
+
+选择string representation前问：是否需要localize words、是否需要round-trip、是否需structured fields、是否跨trust boundary。Display string可随culture变化；protocol string必须versioned/canonical；exception message用于human diagnosis但不能包含secret；user-visible text通常来自resource system。
+
+Large/hot formatting需profile。StringBuilder适合多次append，Span/handlers适合measured low-allocation path；不要牺牲culture correctness和readability换未经证明的micro-optimization。Interpolated syntax本身不是performance guarantee。
+
+## Accessing identifiers with nameof
+
+`nameof(symbol)`在compile time产生unqualified simple name string，同时compiler验证symbol。它适合argument exception paramName、property notification和diagnostic labels，rename refactor会更新binding。它不执行expression，也不返回runtime value或full path。
+
+External JSON field、database column、metric name和wire command必须由external contract显式命名/version，不能用nameof跟着internal refactor静默改变。Likewise overloads共享same nameof result，若需要method identity还要signature/event id。
+
+```csharp
+ArgumentNullException.ThrowIfNull(customer, nameof(customer));
+OnPropertyChanged(nameof(Customer.Name));
+```
+
+<Term def="nameof在compile time验证symbol并生成simple name，用于source-coupled diagnostics而非runtime lookup。">symbol-name contract</Term>
+
+<Term def="跨process/storage/telemetry consumer稳定存在并独立于internal symbol rename的versioned name。">external name contract</Term>
+
+<Term def="把value编码成可重复bytes/text用于comparison、signature或protocol，并固定culture、format与encoding的规则。">canonical representation</Term>
+
+<Stepper>
+  <Step title="切换argument、property、member与external schema"><DcsNameofContractLab /></Step>
+  <Step title="分类source-coupled与external names">Diagnostic可nameof；wire/schema/metric使用explicit constants/schema并定义migration。</Step>
+  <Step title="执行rename与old-consumer matrix">重命名internal symbol，确认diagnostic更新；external payload/name保持或按version migration，不静默变化。</Step>
+</Stepper>
+
+## 本章回顾：在最后负责的Boundary才生成Text
+
+1. Concatenation、composite、interpolation和structured logging保留的信息层级不同。
+2. Culture由consumer boundary拥有；UI、machine与canonical representation不能共用implicit default。
+3. FormattableString延迟formatting，不延迟argument expression，也不自动提供security。
+4. Modern handlers改变target/evaluation optimization，必须与原书C# 6语义分开。
+5. nameof保护source-coupled names；external schema/name独立version，不能跟随internal rename。
+
+<Exercises>
+
+**问题 1：金额同时用于UI、日志和签名，应怎样表示？**
+
+<Answer>Core保持decimal/Money typed value；UI在render boundary按user culture/resource format；structured log传named typed amount/currency，不预插值；signature使用documented invariant canonical bytes/text与encoding。分别做locale、field type和round-trip/signature golden tests。</Answer>
+
+**问题 2：FormattableString API如何避免被误当安全SQL？**
+
+<Answer>Implementation只接受受控format holes，把每个argument创建DbParameter，禁止把argument拼进SQL text，并严格限制/解析format literal；ordinary string overload应避免或明确unsafe。测试quotes、culture、null与malicious input，并检查generated command parameters。</Answer>
+
+**问题 3：哪些name适合nameof，哪些不适合？**
+
+<Answer>Argument/property/member diagnostics与source symbol同生命周期，适合nameof；JSON/DB/wire/metric/event schema面向external consumers，需要explicit stable versioned names。通过internal rename和old-consumer compatibility test确认两类边界没有混淆。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="text consumer boundary" definition="最终consumer负责选择format、culture和representation的边界。" />
+  <GlossaryItem term="deferred culture formatting" definition="保留format/arguments直到sink选择provider的机制。" />
+  <GlossaryItem term="symbol-name contract" definition="nameof提供的compile-checked source-coupled simple name。" />
+  <GlossaryItem term="external name contract" definition="独立于internal rename的versioned schema/protocol name。" />
+  <GlossaryItem term="canonical representation" definition="固定culture/format/encoding以产生可重复machine representation。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# in Depth, Fourth Edition, Chapter 9: Stringy features" adaptedUrl="https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-9" />

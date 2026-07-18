@@ -1,0 +1,303 @@
+---
+title: "第6章：网络通信协议设计"
+type: A
+section: "C++ 服务器开发精髓 · 从 TCP 字节流到可演化应用协议"
+order: 6
+description: "对齐原书第 6 章：粘包与解包、struct/TLV、整数压缩、版本与分片、XML/JSON、自定义协议、HTTP、邮件协议和 WebSocket。"
+demo: true
+math: false
+sourceUrl: "https://book.douban.com/subject/35491437/"
+draft: false
+---
+
+import {
+  CseApplicationProtocolLab,
+  CseProtocolEvolutionLab,
+  CseStreamFramingLab,
+} from "@/components/mdx/cpp-server-essence/diagrams/network-protocol-design";
+
+<Objectives>
+
+- 能解释 TCP byte stream 上拆包、合包与增量解码，设计 length-prefix、delimiter 或 self-describing frame 并限制长度、分片和资源
+- 能比较 raw struct、fixed fields、TLV、varint、XML 与 JSON，设计固定字段宽度、network byte order、version negotiation 和 unknown-field policy
+- 能分析 HTTP、SMTP、POP3 与 WebSocket 的 framing/state machine，写出 chunk、长连接、handshake、mask、compression 和 close 的安全边界
+
+</Objectives>
+
+## 为什么协议边界不能来自 recv 次数
+
+TCP 保证有序 byte stream，不保存 sender 的 `send` 调用边界。一个 frame 可被多次 recv 拆开，多个 frame 也可合并到一次 recv；所谓“粘包”不是 TCP 故障，而是应用没有定义或正确实现 framing。
+
+<Term def="在连续 TCP byte stream 中识别一个完整应用消息边界的规则，例如固定长度、delimiter、length prefix 或 self-describing format。">message framing</Term>
+
+协议设计必须同时回答：怎样找边界、字段怎样编码、版本怎样演化、恶意长度怎样拒绝、失败后是否可重新同步、日志如何脱敏，以及 client/server 如何证明互操作。
+
+## 6.1 理解 TCP：可靠的是 bytes，不是消息
+
+TCP sequence number、retransmission 与 receive buffer 让 bytes 按序到达；它不理解你的 C++ object、JSON document 或 business packet。Nagle、MSS、congestion control、sender buffering 和 receiver read size 都会改变交付形态。
+
+先预测 4-byte length header 被拆成两次 recv 时 decoder 能否读取 length，以及一次 recv 合并两帧时应 dispatch 几次；再操作下图观察 accumulator。
+
+<Stepper>
+  <Step title="切换拆分与合并交付">
+    <CseStreamFramingLab />
+  </Step>
+  <Step title="增量读取固定 header 与 declared body">
+    buffer 不足就等待；先验证 length 上限、整数溢出和最小值，再分配或提取 body。
+  </Step>
+  <Step title="循环提取并保留尾部 bytes">
+    一次 recv 可能包含多帧；dispatch 完一帧后继续解析，最后保留 incomplete suffix，而不是清空整个 buffer。
+  </Step>
+</Stepper>
+
+## 6.2 如何解决粘包：选择 framing contract
+
+常见方案：fixed-size 适合严格定长记录；delimiter 适合文本但需 escaping/maximum line；length-prefix 高效通用但必须验证 length；TLV/self-describing 可跳过未知字段但解析更复杂。协议可以外层 length-prefix、内层 TLV。
+
+<Term def="frame header 显式携带 payload byte count，decoder 先读固定 header，再等待指定长度 body 的 framing 方法。">length-prefixed frame</Term>
+
+```cpp
+enum class DecodeResult { NeedMore, FrameReady, ProtocolError };
+
+DecodeResult Decoder::next(Buffer& input, Frame& output) {
+  if (input.size() < 4) return DecodeResult::NeedMore;
+  const auto length = input.peek_u32_be();
+  if (length == 0 || length > kMaxFrameBytes) return DecodeResult::ProtocolError;
+  if (input.size() < 4u + length) return DecodeResult::NeedMore;
+  input.consume(4);
+  output = input.take(length);
+  return DecodeResult::FrameReady;
+}
+```
+
+<Callout type="trap" title="先按 length 分配，再检查上限">
+攻击者只需发送巨大 header 就能触发内存耗尽或整数回绕。先在固定宽无符号类型中验证 `length <= max` 与 `header + length` 不溢出，再分配。
+</Callout>
+
+## 6.3 解包与处理：parser 和 business handler 分层
+
+decoder 只验证 wire syntax 并产生 typed message；dispatcher 校验 message type/version/auth state；business handler 执行业务。把业务调用放进 recv parsing loop 会让慢 handler 阻塞所有连接，并让 parser state 难以 fuzz。
+
+<Term def="可接收任意长度 byte chunks、保留未完成状态，并在数据足够时产出零到多个完整消息的 parser。">incremental decoder</Term>
+
+```cpp
+void Connection::on_bytes(std::span<const std::byte> bytes) {
+  input_.append(bytes);
+  for (;;) {
+    Frame frame;
+    switch (decoder_.next(input_, frame)) {
+      case DecodeResult::NeedMore: return;
+      case DecodeResult::ProtocolError: return close_bad_frame();
+      case DecodeResult::FrameReady: dispatch(std::move(frame)); break;
+    }
+  }
+}
+```
+
+decoder 测试要随机切分同一 wire input、随机合并多帧、截断每个 byte boundary、注入超长/unknown type；所有 chunking 方式必须产出相同 messages 或明确 error。
+
+## 6.4 从 struct 到 TLV：wire format 不是 ABI dump
+
+直接 `send(&object, sizeof object)` 泄漏 compiler padding、alignment、native endian、pointer、enum width 与 ABI。显式 fixed fields 可解决 width/endian，但 positional layout 的插入/删除仍易破坏旧 reader。TLV 用 tag/type/length/value 让 reader 识别字段并跳过 unknown optional fields。
+
+<Term def="以 tag、type、length 和 value 编码字段，使 parser 能验证长度并按 tag 分派或跳过未知字段的格式。">TLV encoding</Term>
+
+<Stepper>
+  <Step title="比较 raw struct、fixed fields 与 TLV">
+    <CseProtocolEvolutionLab />
+  </Step>
+  <Step title="定义 required、optional 与 unknown semantics">
+    旧 reader 应跳过未知 optional field；缺失 required field、重复 singleton field 或 wire type 不匹配应产生明确 protocol error。
+  </Step>
+  <Step title="建立 golden vectors 与双向兼容测试">
+    固定 byte fixtures，验证 v1 reader/v2 writer、v2 reader/v1 writer、跨 endian host 与恶意 length，不只测试同版本 round trip。
+  </Step>
+</Stepper>
+
+## 6.5 整型压缩：varint 的收益与边界
+
+varint 用每 byte 的 continuation bit 表示更多 group，小正整数占更少 bytes；signed value 可先 ZigZag，使绝对值小的负数也紧凑。代价是 branch、变长读取和恶意超长序列。
+
+```cpp
+void write_varuint(std::uint64_t value, Buffer& out) {
+  while (value >= 0x80) {
+    out.push(static_cast<std::uint8_t>(value) | 0x80);
+    value >>= 7;
+  }
+  out.push(static_cast<std::uint8_t>(value));
+}
+```
+
+<Term def="每个 byte 使用 continuation bit 编码 7 位 payload 的变长无符号整数格式。">varint encoding</Term>
+
+decoder 最多读取与目标 width 对应的 bytes，并检查最后一组溢出；不要无限循环等待 terminating byte。随机 ID 接近 64-bit full range 时，fixed 8 bytes 可能更简单且更快。
+
+## 6.6 协议设计注意事项：宽度、精度、端序、升级
+
+wire schema 显式写 `uint16/uint32/int64`，不要写“int”；network byte order 或规定 endian 必须一致。浮点跨语言还要规定 IEEE-754、NaN/Infinity、rounding 与业务精度，货币通常用 fixed-point integer。
+
+对应原书的四条检查项是：不要依赖 C++ struct 的**字节对齐**，要**显式指定整型字段长度**，统一处理**大小端**，并用兼容矩阵验证**协议自动升级**而不是猜测部署先后。
+
+<Term def="发送方与接收方在连接或消息中声明支持版本/feature，并选择双方交集或明确拒绝的升级机制。">version negotiation</Term>
+
+```text
+magic:u32 | protocol_version:u16 | flags:u16 | frame_length:u32 | message_type:u16
+```
+
+version 不应只靠部署顺序猜测。握手或 header 声明 version/capabilities；rolling upgrade 同时验证 old↔new。新增 optional field 通常兼容，改变既有 tag 含义、默认值或单位通常不兼容。
+
+<Callout type="trap" title="用 C/C++ bit-field 或 packed struct 规定 wire layout">
+packed 只改变本编译器布局，不能解决 endian、bit-field order、unaligned access 和跨语言 ABI。使用显式 encoder/decoder。
+</Callout>
+
+## 6.7 包分片：重组必须有资源预算
+
+应用 message 超过单 frame、transport 或业务限制时可分片，header 至少含 message id、fragment index/count 或 offset、total length 和 integrity check。receiver 需要 per-peer/global memory limit、fragment count limit、timeout、duplicate/overlap policy。
+
+<Term def="把一个逻辑消息拆成多个有身份与顺序信息的 frames，并在限额与超时内重组的应用层机制。">application fragmentation</Term>
+
+```text
+message_id:u64 | fragment_index:u16 | fragment_count:u16 | total_length:u32 | payload
+```
+
+若底层协议已可靠传输，不要无原因重复实现 packet-level reliability；应用分片主要服务于 message size、streaming、并行处理或中间层限制。
+
+## 6.8 XML 与 JSON：文本可读性不等于 schema
+
+XML 提供 element/attribute/namespace，JSON 提供 object/array/string/number/bool/null。两者都需要 schema-level constraints：required fields、type/range、unknown policy、duplicate keys、encoding、depth 与 total size。JSON number 跨语言可能丢失 64-bit integer precision。
+
+```json
+{
+  "version": 2,
+  "requestId": "18446744073709551615",
+  "items": [{ "id": 7, "quantity": 2 }]
+}
+```
+
+XML parser 禁用不必要的 external entity/network resolution，限制 entity expansion；JSON 限制 nesting/string/array size。human-readable payload 也不能把 token、password 或个人数据直接写日志。
+
+## 6.9 一个自定义协议：先写状态和失败模型
+
+自定义 frame 可采用 magic/version/flags/length/type/request-id/header checksum/payload。magic 帮助检测错流，不等于 parser 可无限扫描 resync；length 与 compression 都需解压后上限。request-id 用于关联 response，不应承担 authorization。
+
+```cpp
+struct DecodedHeader {
+  std::uint16_t version;
+  std::uint16_t flags;
+  std::uint32_t payload_length;
+  std::uint16_t message_type;
+  std::uint64_t request_id;
+};
+```
+
+protocol specification 要列出 byte layout、state machine、timeouts、error codes、close behavior、limits、security、examples 和 compatibility matrix。只有 encoder 代码而没有独立规范，很难跨语言互操作。
+
+## 6.10 HTTP：行、header 与 body framing
+
+HTTP/1.1 message 由 start-line、headers、空行与可选 body 构成。GET 通常检索资源，POST 提交 representation，但安全性、幂等性与缓存由 method semantics/endpoint contract 定义，不能只看是否有 body。
+
+<Term def="HTTP/1.1 通过十六进制 chunk size、chunk data 与终止 0 chunk 逐块传输未知总长度 body 的编码。">HTTP chunked coding</Term>
+
+```text
+HTTP/1.1 200 OK\r\n
+Transfer-Encoding: chunked\r\n
+\r\n
+5\r\nHELLO\r\n
+0\r\n\r\n
+```
+
+parser 必须按协议规则处理 `Content-Length`、chunked 与 close-delimited body，拒绝冲突/歧义，避免 request smuggling。long-lived connection 上每个 request/response 都有独立 framing；keep-alive 不是“永不关闭”，要有 idle timeout、request count 与 drain policy。
+
+HTTP client 应使用成熟库如 libcurl，配置 DNS/connect/overall timeout、TLS verification、redirect、proxy、body limit 和 cancellation；server 也应使用经过验证的 parser。RESTful interface 是资源/representation/HTTP semantics 的设计约束，不是“返回 JSON”同义词。
+
+```cpp
+curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 2000L);
+curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 5000L);
+curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
+```
+
+## 6.11 SMTP、POP3 与邮件客户端
+
+SMTP 是 command/reply state machine：server greeting、EHLO capabilities、MAIL FROM、RCPT TO、DATA、message terminator、QUIT；多行 reply 与 status class 要完整解析。DATA 阶段用 dot-stuffing，不能简单搜索第一个点号。
+
+POP3 通常经历 authorization、transaction、update：USER/PASS（或更安全认证）、STAT/LIST/RETR/DELE、QUIT。邮件客户端还要解析 message headers/body/MIME，并通过 TLS、certificate validation 与 credential protection 建立安全边界。
+
+<Term def="SMTP/POP3 中由 server reply code 和当前会话阶段共同决定下一条合法 command 的文本协议执行模型。">mail protocol state machine</Term>
+
+## 6.12 WebSocket：HTTP Upgrade 后切换 frame parser
+
+client 发送 HTTP Upgrade 与随机 `Sec-WebSocket-Key`；server 返回 101、Upgrade/Connection headers，并按 key + GUID 计算 accept。验证通过后连接不再解析 HTTP messages，而解析 WebSocket frames。
+
+按原书目录，这条链依次包含 **WebSocket 握手**、**WebSocket 协议格式**、**WebSocket 压缩**以及 frame 的**装包与解包**；四者共享连接状态，却必须分开验证。
+
+<Stepper>
+  <Step title="切换 HTTP、WebSocket 与邮件协议阶段">
+    <CseApplicationProtocolLab />
+  </Step>
+  <Step title="按状态选择 parser，而非猜测 payload">
+    Upgrade 完成前只接受 HTTP handshake；之后解析 frame header、extended length、mask key、payload 与 control frames。
+  </Step>
+  <Step title="限制 compression、fragment 与 close 资源">
+    client frames 必须 masked；control frame 不分片且 payload 有上限；permessage-deflate 要协商并限制解压大小/context takeover。
+  </Step>
+</Stepper>
+
+<Term def="WebSocket 在 FIN/RSV/opcode、mask、payload length、masking key 与 payload 上定义的二进制 frame 边界。">WebSocket frame</Term>
+
+```text
+byte 0: FIN RSV1 RSV2 RSV3 opcode
+byte 1: MASK payload_len(7 bits)
+optional: extended length | masking key
+payload: masked client data or server data
+```
+
+text/binary message 可跨 continuation frames；ping/pong/close 是 control frames。close handshake 要解析 code/reason 并停止新业务发送，不能直接把 TCP EOF 当作所有 WebSocket 正常关闭。
+
+<Callout type="trap" title="解压后才检查消息长度">
+小 compressed frame 可展开成巨大 payload。compression decoder 要有 output budget、ratio/CPU limit 和 cancellation，超过上限立即结束协议。
+</Callout>
+
+## 本章回顾：协议是边界、状态与兼容性的集合
+
+1. TCP recv chunk 不是消息；incremental decoder 按 framing 累积、验证、循环提取。
+2. raw struct 不是 wire schema；字段宽度、endian、length、required/optional 和 unknown policy 必须显式。
+3. version negotiation、golden vectors、old/new 双向测试比“先升级服务端”可靠。
+4. HTTP、SMTP、POP3 和 WebSocket 都是状态机，各自用 length/chunk/terminator/frame 定义边界。
+5. 任意 length、fragment、nesting、compression 和 parser recovery 都必须有资源预算与失败策略。
+
+<Exercises>
+
+**问题 1：length-prefix decoder 一次收到半个 header，下一次收到剩余 header、完整 body 和下一帧。正确循环是什么？**
+
+<Answer>第一次只累积并返回 NeedMore；第二次先在不移动 buffer 的情况下读取完整固定 header，验证 length/overflow/max，再确认 body 足够，提取并 dispatch 第一帧。随后继续从剩余 bytes 解析下一帧；若第二帧不完整则保留 suffix 等后续 recv，不能把 recv boundary 当 frame boundary。</Answer>
+
+**问题 2：v2 在 raw struct 中间插入字段，v1 reader 为什么会错？怎样用 TLV 与 compatibility policy 修复？**
+
+<Answer>插入字段改变后续 offset，且 padding/endian/ABI 可能不同，v1 会把新 bytes 解释成旧字段。TLV 为字段分配稳定 tag/type/length，v1 可跳过未知 optional tag；规范还要定义 required/default/repeated/duplicate semantics。通过 v1-reader/v2-writer 与反向 golden vectors 验证，不能复用 tag 改语义。</Answer>
+
+**问题 3：WebSocket client frame 未 mask、声明 20 MiB compressed payload，且 opcode 为 continuation 但没有已开始 message，server 应怎样处理？**
+
+<Answer>这是多项 protocol violation：client frame 必须 mask；continuation 需要已有 fragmented message；长度/解压资源超过 limit。parser 在分配/解压前验证 header 与 session state，发送合适 close code（若连接仍可安全响应）并终止，不把异常 payload 交给业务 handler。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="message framing" definition="在 TCP byte stream 中识别完整应用消息边界的规则。" />
+  <GlossaryItem term="length-prefixed frame" definition="header 携带 payload byte length 的 framing。" />
+  <GlossaryItem term="incremental decoder" definition="跨任意 chunk 保留状态并输出零到多个完整消息的 parser。" />
+  <GlossaryItem term="TLV encoding" definition="使用 tag/type/length/value 描述和跳过字段的编码。" />
+  <GlossaryItem term="varint encoding" definition="以 continuation bit 和 7-bit groups 表示整数的变长编码。" />
+  <GlossaryItem term="version negotiation" definition="双方声明版本/feature 并选择交集或拒绝的机制。" />
+  <GlossaryItem term="application fragmentation" definition="把逻辑消息拆为带身份、顺序和总长的多个 frames 并受限重组。" />
+  <GlossaryItem term="HTTP chunked coding" definition="用 chunk size/data 与终止 0 chunk 传输 body 的 HTTP/1.1 framing。" />
+  <GlossaryItem term="mail protocol state machine" definition="由 reply code 与会话阶段驱动 SMTP/POP3 command 的模型。" />
+  <GlossaryItem term="WebSocket frame" definition="由 FIN/opcode/mask/length/payload 定义的 WebSocket wire unit。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++服务器开发精髓，第6章 网络通信协议设计"
+  adaptedUrl="https://book.douban.com/subject/35491437/"
+/>

@@ -1,0 +1,470 @@
+---
+title: "Item 14：审慎考虑资源管理类的复制行为"
+type: A
+section: Chapter 3 · Resource Management
+order: 14
+description: 对齐 Effective C++ 第三版 Item 14：为 resource-managing classes 选择禁止复制、引用计数、深拷贝或转移所有权，并实现异常安全赋值与 shared cycle 防护。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppResourceAssignmentMap,
+  EcppResourceCopyStrategiesMap,
+  EcppSharedOwnershipCycleMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-14-resource-copying";
+
+<Objectives>
+
+- 能比较禁止复制、reference counting、deep copy 与 ownership transfer 四种资源管理类复制策略
+- 能实现异常安全的资源 copy constructor/assignment，处理 self-alias、旧资源释放和独立/共享身份
+- 能设计 shared ownership cycle、move 后源状态与 clone 失败测试，证明资源只释放一次
+
+</Objectives>
+
+## 从“复制一个锁意味着什么”开始
+
+Item 13 建立 RAII owner 后，编译器可能继续为管理类生成 copy。假设：
+
+```cpp
+class Lock {
+public:
+    explicit Lock(Mutex* mutex) : mutex_{mutex}
+    {
+        lock(mutex_);
+    }
+    ~Lock() { unlock(mutex_); }
+private:
+    Mutex* mutex_;
+};
+```
+
+默认 copy 只复制 mutex pointer，两个 Lock destructor 都 unlock 同一 mutex；更根本的问题是“复制一次持锁责任”没有自然语义。
+
+<Term def="直接拥有并释放资源的类，其 copy 行为必须与资源的业务所有权语义一致。">
+  resource-managing class
+</Term>
+
+<Term def="规定复制后资源是禁止、共享、独立克隆还是转移给目标的业务含义。">
+  resource copy policy
+</Term>
+
+必须在实现特殊成员前确定。
+Think carefully about copying behavior in resource-managing classes（审慎考虑资源管理类的复制行为）要求 copy 与 move 分开决策：资源没有独立副本语义，不代表它一定不能安全转移；反之，可复制 owner 也必须说明复制是共享还是深拷贝。
+
+<EcppResourceCopyStrategiesMap />
+
+## 策略一：禁止复制
+
+<Term def="类型明确删除 copy constructor 与 copy assignment，使复制表达式编译失败。">
+  prohibit copying
+</Term>
+
+```cpp
+class Lock {
+public:
+    explicit Lock(Mutex& mutex) : mutex_{mutex} { mutex_.lock(); }
+    ~Lock() noexcept { mutex_.unlock(); }
+
+    Lock(const Lock&) = delete;
+    Lock& operator=(const Lock&) = delete;
+private:
+    Mutex& mutex_;
+};
+```
+
+锁、线程、事务、唯一注册 token 通常属于身份责任，复制无法产生两个独立等价 owner。
+
+<Term def="资源责任与某个对象实例、地址或执行上下文绑定，不能表示成独立值的语义。">
+  identity-bound resource
+</Term>
+
+Item 6 的 deleted function 是直接工具。
+
+## 禁止 copy 不等于禁止 move
+
+<Term def="把唯一资源责任从源对象显式交给目标，源不再负责释放的行为。">
+  ownership transfer
+</Term>
+
+文件句柄等 unique owner 可 move：
+
+```cpp
+class FileOwner {
+public:
+    FileOwner(const FileOwner&) = delete;
+    FileOwner& operator=(const FileOwner&) = delete;
+
+    FileOwner(FileOwner&& other) noexcept
+        : handle_{std::exchange(other.handle_, invalidHandle)} {}
+
+    FileOwner& operator=(FileOwner&& other) noexcept
+    {
+        if (this != &other) {
+            close_noexcept();
+            handle_ = std::exchange(other.handle_, invalidHandle);
+        }
+        return *this;
+    }
+private:
+    NativeHandle handle_{invalidHandle};
+};
+```
+
+<Term def="资源被转移后仍可析构和重新赋值、通常不再拥有资源的源状态。">
+  moved-from owner state
+</Term>
+
+锁 guard 是否可 move 取决于 mutex API 与作用域责任，不能套用文件 owner。
+
+<Callout type="trap">
+  **现象**：看到资源类不可复制，就机械 default move。**原因**：move 也会改变
+  owner 身份与析构责任，mutex guard 或注册对象未必允许。**修法**：copy 与 move
+  分别按资源协议决定，并测试源目标状态。
+</Callout>
+
+## 策略二：reference counting
+
+<Term def="复制管理对象时增加共享计数，所有副本共同拥有同一资源，最后一个析构释放。">
+  reference counting
+</Term>
+
+```cpp
+class SharedImage {
+public:
+    explicit SharedImage(std::shared_ptr<const PixelBuffer> pixels)
+        : pixels_{std::move(pixels)} {}
+private:
+    std::shared_ptr<const PixelBuffer> pixels_;
+};
+```
+
+<Term def="复制 shared owner 后源目标观察同一底层资源身份的语义。">
+  shared-resource identity
+</Term>
+
+适合不可变纹理、共享配置等真正共同生命周期。若资源可变，多个 owner 的同步和修改可见性必须另行设计。
+
+<Term def="当多个 shared owner 最终形成闭环，引用计数无法归零导致的资源泄漏。">
+  ownership cycle
+</Term>
+
+reference counting 不等于垃圾回收。
+
+<EcppSharedOwnershipCycleMap />
+
+## weak observation 打破反向拥有
+
+<Term def="不增加 strong reference count、通过 lock 临时获得 shared owner 的观察关系。">
+  weak observation
+</Term>
+
+```cpp
+struct Child {
+    std::weak_ptr<Parent> parent;
+};
+
+if (auto parent = child.parent.lock())
+    parent->notify();
+```
+
+<Term def="weak lock 失败表示资源已销毁，调用方必须正常处理的状态。">
+  expired observation
+</Term>
+
+如果每条边都“可能 owner”，图会难以证明；优先定义明确主 owner 和观察方向。
+
+## 策略三：deep copy
+
+<Term def="复制时为目标创建独立资源表示，源目标之后可独立修改和销毁。">
+  deep copy
+</Term>
+
+```cpp
+class Image {
+public:
+    Image(const Image& rhs)
+        : pixels_{rhs.pixels_->clone()} {}
+
+    Image& operator=(const Image& rhs)
+    {
+        auto candidate = rhs.pixels_->clone();
+        pixels_.swap(candidate);
+        return *this;
+    }
+private:
+    std::unique_ptr<PixelBuffer> pixels_;
+};
+```
+
+<Term def="由资源对象创建同动态类型独立副本并返回 owner 的操作。">
+  clone operation
+</Term>
+
+clone 可能分配并抛异常，assignment 先准备 candidate 再 no-throw commit。
+
+## deep copy 的多态资源
+
+<Term def="复制实际派生资源并保留 dynamic type 的 virtual clone 接口。">
+  polymorphic deep copy
+</Term>
+
+```cpp
+class PixelBuffer {
+public:
+    virtual ~PixelBuffer() = default;
+    virtual std::unique_ptr<PixelBuffer> clone() const = 0;
+};
+```
+
+每个派生实现 clone。测试不能只比较基类可见字段，还要验证动态类型和派生资源独立。
+
+<Term def="复制后目标资源与源内容等价，但具有不同资源身份。">
+  independent resource identity
+</Term>
+
+是 deep copy 的关键 oracle。
+
+## 策略四：转移所有权的历史与现代形式
+
+原书讨论 auto_ptr：复制语法实际转移 ownership。现代已删除，改用 explicit move。
+
+<Term def="旧 auto_ptr 以 copy constructor/assignment 语法清空源并转移资源的非常规语义。">
+  copy-as-transfer
+</Term>
+
+违反普通 copy 预期，难以用于容器和泛型代码。
+
+```cpp
+auto source = std::make_unique<Resource>();
+auto target = std::move(source);
+assert(!source);
+```
+
+<Term def="通过右值和 move operation 明确表达资源转移的现代独占所有权语义。">
+  explicit move ownership
+</Term>
+
+调用点清楚标示源可能改变。
+
+## copy assignment 的 prepare-then-commit
+
+<Term def="在目标不变时先取得新资源 owner，成功后才替换目标旧资源的赋值结构。">
+  resource assignment transaction
+</Term>
+
+错误实现先释放旧资源再 clone，失败后目标损坏。正确顺序：
+
+```cpp
+Image& Image::operator=(const Image& rhs)
+{
+    auto candidate = rhs.pixels_->clone();
+    pixels_.swap(candidate);
+    return *this;
+}
+```
+
+<Term def="资源候选在局部 owner 中完整建立，尚未改变目标对象的阶段。">
+  owned candidate
+</Term>
+
+self-assignment 时 clone 从仍有效源读取；异常时 this 不变；提交后旧 owner 在 candidate 析构释放。
+
+<EcppResourceAssignmentMap />
+
+## 共享赋值也要注意顺序
+
+shared_ptr assignment 自身正确处理引用计数与 self-assignment。手写 intrusive count 时必须先增加新资源计数，再减少旧资源，否则同一资源可能计数归零被销毁。
+
+<Term def="先保住新 shared resource 的计数，再释放旧 owner，防止 alias 时资源提前销毁。">
+  increment-before-decrement
+</Term>
+
+```cpp
+void assignShared(Control* next)
+{
+    addRef(next);
+    release(current_);
+    current_ = next;
+}
+```
+
+<Term def="引用计数直接存入资源对象，并由自定义 addRef/release 管理的所有权模型。">
+  intrusive reference counting
+</Term>
+
+优先标准 shared_ptr，除非 ABI、分配或外部协议要求 intrusive。
+
+<Callout type="trap">
+  **现象**：intrusive assignment 先 release(current) 再
+  addRef(next)，认为地址相同会自然工作。**原因**：self-alias 时 release
+  可销毁资源，随后 addRef 访问已释放对象。**修法**：increment-before-decrement
+  或 identity guard，并做计数边界测试。
+</Callout>
+
+## copy-on-write 的隐含复杂度
+
+<Term def="副本先共享资源，首次写入时若有多个 owner 再克隆独立资源的策略。">
+  copy-on-write
+</Term>
+
+```cpp
+void Image::ensureUnique()
+{
+    if (!pixels_.unique())
+        pixels_ = std::make_shared<PixelBuffer>(*pixels_);
+}
+```
+
+<Term def="写操作前确保当前对象是资源唯一 owner，否则复制后再修改的步骤。">
+  detach-before-write
+</Term>
+
+COW 结合 shared/deep copy，增加线程安全、iterator/reference 失效和写路径异常。只有性能证据支持时使用。
+
+## rule of zero 组合资源策略
+
+<Term def="选择具有正确复制语义的成员类型，让外层管理类使用编译器生成特殊成员。">
+  policy-by-member-type
+</Term>
+
+unique_ptr 自动禁止 copy、允许 move；shared_ptr 自动 reference count；自定义 CloneValue 可封装 deep copy。外层不再手写重复资源逻辑。
+
+```cpp
+class TextureHandle {
+private:
+    std::shared_ptr<const Texture> texture_;
+};
+```
+
+<Term def="外层类型不声明 copy/move/destructor，由成员语义自动组合的设计。">
+  rule of zero
+</Term>
+
+成员类型就是资源 copy policy 的可执行文档。
+
+## 复制策略测试矩阵
+
+<Term def="记录源目标资源地址、owner count、内容和 release 次数，用于验证复制语义的测试。">
+  resource-copy ledger
+</Term>
+
+先预测：禁止、shared、deep、move 四种策略复制后 source/target 的资源地址、内容、计数和源状态分别如何。
+
+- prohibit：copy expression compile-fail，move 按协议单独验证。
+- reference count：地址相同、strong count 增加，最后 owner 释放一次。
+- deep copy：内容相等、地址不同，修改目标不改变源。
+- move：目标取得原地址，源进入有效空状态。
+- clone 第 N 步失败，assignment 目标保持原资源。
+- shared cycle 使用 weak/aggregate owner 后外部释放可使 ledger 归零。
+
+## 小结
+
+- resource-managing class 的 copy 必须先选择业务资源语义
+- 无合理副本时删除 copy；独占 owner 可按协议支持 move
+- reference counting 表达共享生命周期，但需防 ownership cycle
+- deep copy 通过 clone 建立独立资源，assignment 用 prepare-then-commit
+- auto_ptr 的 copy-as-transfer 已被 explicit unique_ptr move 取代
+- 优先用成员类型编码策略，让外层回到 rule of zero
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 14"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="resource-managing class">
+    直接拥有并释放资源的类。
+  </GlossaryItem>
+  <GlossaryItem term="resource copy policy">
+    复制后资源禁止、共享、克隆或转移的语义。
+  </GlossaryItem>
+  <GlossaryItem term="prohibit copying">
+    删除 copy constructor/assignment 的策略。
+  </GlossaryItem>
+  <GlossaryItem term="identity-bound resource">
+    责任与实例身份绑定、不能复制的资源。
+  </GlossaryItem>
+  <GlossaryItem term="ownership transfer">
+    把唯一资源责任从源交给目标的行为。
+  </GlossaryItem>
+  <GlossaryItem term="moved-from owner state">
+    转移后仍可析构赋值的源 owner 状态。
+  </GlossaryItem>
+  <GlossaryItem term="reference counting">
+    复制增加共享计数、最后 owner 释放的策略。
+  </GlossaryItem>
+  <GlossaryItem term="shared-resource identity">
+    复制后源目标观察同一资源身份。
+  </GlossaryItem>
+  <GlossaryItem term="ownership cycle">
+    shared owners 形成计数不归零的闭环。
+  </GlossaryItem>
+  <GlossaryItem term="weak observation">
+    不增加 strong count 的 shared resource 观察。
+  </GlossaryItem>
+  <GlossaryItem term="expired observation">
+    weak lock 失败表示资源已经销毁。
+  </GlossaryItem>
+  <GlossaryItem term="deep copy">
+    为目标创建独立资源表示的复制策略。
+  </GlossaryItem>
+  <GlossaryItem term="clone operation">
+    创建同动态类型独立资源副本的操作。
+  </GlossaryItem>
+  <GlossaryItem term="polymorphic deep copy">
+    通过 virtual clone 保留动态类型的复制。
+  </GlossaryItem>
+  <GlossaryItem term="independent resource identity">
+    复制后内容等价但资源地址不同。
+  </GlossaryItem>
+  <GlossaryItem term="copy-as-transfer">
+    旧 auto_ptr 用复制语法转移所有权的语义。
+  </GlossaryItem>
+  <GlossaryItem term="explicit move ownership">
+    以 move 明确转移 unique owner 的语义。
+  </GlossaryItem>
+  <GlossaryItem term="resource assignment transaction">
+    候选资源成功后才替换目标的赋值。
+  </GlossaryItem>
+  <GlossaryItem term="owned candidate">
+    尚未提交、由局部 owner 管理的新资源候选。
+  </GlossaryItem>
+  <GlossaryItem term="increment-before-decrement">
+    共享赋值先增新计数再减旧计数的顺序。
+  </GlossaryItem>
+  <GlossaryItem term="intrusive reference counting">
+    计数存于资源对象内的共享模型。
+  </GlossaryItem>
+  <GlossaryItem term="copy-on-write">
+    副本共享至首次写入再克隆的策略。
+  </GlossaryItem>
+  <GlossaryItem term="detach-before-write">
+    写前确认唯一 owner 或复制资源的步骤。
+  </GlossaryItem>
+  <GlossaryItem term="policy-by-member-type">
+    用成员类型直接编码资源复制策略。
+  </GlossaryItem>
+  <GlossaryItem term="rule of zero">
+    由成员组合且不声明特殊成员的设计。
+  </GlossaryItem>
+  <GlossaryItem term="resource-copy ledger">
+    记录复制资源身份、计数与释放的测试。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：选择四种策略。** 为 mutex lock、immutable texture、editable image、file handle 分别选择复制行为。
+
+  <Answer question="四种资源分别适合什么复制策略？">mutex lock 与作用域身份绑定，禁止 copy，move 也需按锁协议审慎决定；immutable texture 多 owner 共同生命周期可 reference-counted `shared_ptr<const Texture>`；editable image 作为值使用 deep clone；file handle 是 unique owner，删除 copy、支持 noexcept move。选择先于智能指针实现。</Answer>
+
+2. **问题 2：实现 deep-copy assignment。** 多态 PixelBuffer::clone 可抛异常，设计 self-safe 强保证。
+
+  <Answer question="clone 型资源 assignment 如何实现强保证？">先调用 rhs.pixels_->clone() 得到局部 unique_ptr candidate；self-assignment 时源尚未改变，clone 安全读取；失败 this 不变；成功后 pixels_.swap(candidate)，旧资源随 candidate 析构。测试动态派生类型、内容等价、地址不同、修改独立和每个 clone 失败点。</Answer>
+
+3. **问题 3：修复共享环。** Parent/Child 互持 shared_ptr 导致泄漏，设计 owner 方向与测试。
+
+  <Answer question="怎样消除 Parent/Child shared ownership cycle？">定义 Parent 强拥有 children，Child 只以 weak_ptr 观察 parent；访问时 lock 并处理 expired。或由 Tree aggregate owner 集中拥有所有节点，边保存 id/raw non-owner。测试释放外部 root 后所有节点 destructor 执行、ledger 归零，并覆盖 child 在 parent 销毁后的观察失败。</Answer>
+</Exercises>

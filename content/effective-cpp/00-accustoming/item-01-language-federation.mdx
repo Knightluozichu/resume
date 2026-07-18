@@ -1,0 +1,363 @@
+---
+title: "Item 1：视 C++ 为语言联邦"
+type: A
+section: Chapter 1 · Accustoming Yourself to C++
+order: 1
+description: 对齐 Effective C++ 第三版 Item 1：把 C++ 视为 C、Object-Oriented C++、Template C++ 与 STL 组成的语言联邦，并在边界处切换正确性与效率规则。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppAbstractionDecisionMap,
+  EcppFederationBoundaryMap,
+  EcppLanguageFederationMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-01-language-federation";
+
+<Objectives>
+
+- 能解释 C、Object-Oriented C++、Template C++ 与 STL 四个次语言各自的抽象、接口和成本模型
+- 能比较同一任务使用裸指针、RAII class、virtual interface、template 与 STL algorithm 时规则为何不同
+- 能设计跨 C API、对象所有权、模板策略和 STL 容器的边界适配，并验证资源恰好释放一次
+
+</Objectives>
+
+## 从“为什么一条 C++ 规则不可能处处适用”开始
+
+C++ 不是一套完全均质的语法。Scott Meyers 在 Item 1 建议把它看成
+
+<Term def="由多种具有不同抽象、接口与成本模型的次语言共同组成，并通过明确边界协作的整体。">
+  语言联邦
+</Term>
+
+。写 C 风格缓冲区时，指针算术和布局是核心；写对象体系时，不变量与动态绑定主导；写模板时，接口由表达式隐式形成；写 STL 时，容器、迭代器、算法和函数对象构成另一套约定。
+
+<Term def="在某段代码中决定主要正确性规则、扩展方式与成本模型的编程范式。">
+  主导次语言
+</Term>
+
+不是按文件决定。同一函数可能接收 C 句柄，用 RAII 包装，再交给 STL 容器。
+
+<EcppLanguageFederationMap />
+
+## C 次语言：布局、地址与显式协议
+
+<Term def="C++ 中保留的 C 风格子集，以基本类型、数组、指针、函数和预处理器为主要工具。">
+  C 次语言
+</Term>
+
+处理系统调用、ABI 或连续字节时仍然重要。它的接口经常由指针加长度、返回码和配对释放函数组成。
+
+```cpp
+extern "C" BufferHandle* buffer_create(std::size_t bytes);
+extern "C" std::byte* buffer_data(BufferHandle* handle);
+extern "C" void buffer_destroy(BufferHandle* handle);
+```
+
+<Term def="二进制接口对名称、调用约定、对象布局和数据表示的稳定约束。">
+  ABI 边界
+</Term>
+
+要求类型与生命周期协议可见。不能把 `std::vector` 的内部布局当跨编译器 ABI，也不能因 C API 接受裸指针就推断它取得所有权。
+
+<Term def="由文档规定创建、使用和释放顺序，但语言类型本身没有自动执行的约定。">
+  显式资源协议
+</Term>
+
+最容易在异常或提前返回时被破坏，因此跨出边界后应尽快包装。
+
+## Object-Oriented C++：不变量与运行期替换
+
+<Term def="以 class、封装、继承、virtual 和运行期多态组织对象及其协作的次语言。">
+  Object-Oriented C++
+</Term>
+
+类不只是把函数放进 struct，而是建立有效状态集合。构造函数提交不变量，public 接口保持不变量，析构释放所有权。
+
+```cpp
+class Buffer {
+public:
+    explicit Buffer(std::size_t bytes)
+        : handle_{buffer_create(bytes), &buffer_destroy}
+    {
+        if (!handle_)
+            throw std::bad_alloc{};
+    }
+
+    std::span<std::byte> bytes() noexcept;
+
+private:
+    std::unique_ptr<BufferHandle, decltype(&buffer_destroy)> handle_;
+};
+```
+
+<Term def="对象在构造完成后必须始终成立，并由所有公开操作维持的状态约束。">
+  类不变量
+</Term>
+
+与
+
+<Term def="通过基类指针或引用在运行时选择派生实现，同时要求派生满足基类语义。">
+  运行期多态
+</Term>
+
+是这一模型的核心。按值复制多态基类会切割，通常传 `const&`；小型值对象则常按值传递。规则取决于对象语义，不是“引用永远更快”。
+
+<Callout type="trap">
+  **现象**：把所有 C 结构都改成深继承层次，认为“用了 class 就更
+  C++”。**原因**：没有先判断是否存在稳定不变量或运行期替换需求。**修法**：值数据优先简单值类型；只有确有运行期家族与替换契约时才使用
+  virtual。
+</Callout>
+
+## Template C++：表达式形成隐式接口
+
+<Term def="以 function/class templates、实例化和编译期多态表达泛化算法与类型策略的次语言。">
+  Template C++
+</Term>
+
+模板参数不必继承某个基类；它只需支持模板实际使用的表达式。
+
+```cpp
+template<class Range, class Sink>
+void copy_non_empty(const Range& source, Sink& sink)
+{
+    for (const auto& value : source) {
+        if (!value.empty())
+            sink.push(value);
+    }
+}
+```
+
+<Term def="由模板体中对类型参数执行的全部有效表达式共同定义、实例化时检查的接口。">
+  隐式接口
+</Term>
+
+错误通常在实例化点出现，成本可能表现为编译时间和代码膨胀，而不是虚调用。适合类型在编译期已知、行为可内联和策略组合的场景。
+
+<Term def="编译器为具体模板实参生成代码并检查隐式接口的过程。">模板实例化</Term>
+
+若把参数无关的大段代码留在模板中，不同类型可能生成重复机器码；后续 Item 44 专门处理这一问题。
+
+## STL：容器、迭代器、算法与函数对象
+
+<Term def="以 containers、iterators、algorithms 和 function objects 协作的数据处理次语言。">
+  STL 次语言
+</Term>
+
+其核心不是某个容器，而是迭代器范围把数据结构与算法解耦。
+
+```cpp
+std::vector<Record> records{load_records()};
+std::erase_if(records, [](const Record& record) {
+    return !record.valid();
+});
+std::ranges::sort(records, {}, &Record::key);
+```
+
+<Term def="由起始与终止迭代器或 range 表达的一段元素序列，是算法操作边界。">
+  迭代器范围
+</Term>
+
+值语义和拷贝成本变得重要；容器重分配会使部分迭代器失效；算法通常比手写循环更直接表达意图。这些不是 C 指针代码或虚函数体系的同一套问题。
+
+<Term def="对象在复制、移动、比较和销毁时表现得像独立值，并由操作维护等价关系的语义。">
+  值语义
+</Term>
+
+使元素安全进入容器。拥有资源的类型通过 RAII 与移动语义也可以成为可靠值。
+
+## 选择主导抽象，而不是混用术语
+
+<EcppAbstractionDecisionMap />
+
+<Term def="为当前问题选择最能直接表达约束的指针、类、多态、模板或算法模型。">
+  抽象选择
+</Term>
+
+可按问题提问：处理的是原始布局还是拥有对象？实现集合在运行时还是编译期变化？任务本质是否是对范围做查找、变换或排序？
+
+```text
+raw layout / ABI       -> C subset + explicit boundary
+owned invariant        -> class + RAII
+runtime substitutability -> virtual interface
+compile-time family    -> template + implicit interface
+range operation        -> STL container/iterator/algorithm
+```
+
+“现代 C++”没有消除联邦，只是提供了 `span`、智能指针、ranges 等更清晰的边界表达。原书的判断方式仍然有效：规则随次语言变化。
+
+## 跨边界时显式翻译责任
+
+<Term def="把一种次语言的所有权、错误、范围和类型约定转换成另一种模型的适配层。">
+  联邦边界适配
+</Term>
+
+C API 的 handle 进入对象层后绑定 deleter；RAII 所有者进入 vector 时依赖移动；模板算法只看 owner 暴露的值接口。
+
+<EcppFederationBoundaryMap />
+
+```cpp
+template<class Deleter>
+class BasicHandle {
+public:
+    BasicHandle(BufferHandle* raw, Deleter deleter) noexcept
+        : raw_{raw}, deleter_{std::move(deleter)} {}
+    ~BasicHandle() { if (raw_) deleter_(raw_); }
+
+    BasicHandle(const BasicHandle&) = delete;
+    BasicHandle& operator=(const BasicHandle&) = delete;
+    BasicHandle(BasicHandle&& other) noexcept
+        : raw_{std::exchange(other.raw_, nullptr)},
+          deleter_{std::move(other.deleter_)} {}
+
+private:
+    BufferHandle* raw_{};
+    [[no_unique_address]] Deleter deleter_;
+};
+```
+
+<Term def="任意成功、失败、移动和销毁路径中，一个资源都由唯一责任方执行一次释放。">
+  单次释放不变量
+</Term>
+
+是跨边界测试的核心。不能因 vector 重分配复制所有者，也不能让模板策略和 C 调用方都释放同一句柄。
+
+<Callout type="trap">
+  **现象**：函数同时暴露裸句柄、shared_ptr
+  和迭代器，却未说明谁拥有、多久有效。**原因**：跨次语言时只转换语法，没有转换生命周期语义。**修法**：边界
+  API 写明 owner、borrow、range 与失效条件；测试异常、移动和容器重分配。
+</Callout>
+
+## 成本模型也随次语言切换
+
+<Term def="某种抽象主要消耗的运行时间、空间、编译时间、代码体积和维护复杂度组合。">
+  成本模型
+</Term>
+
+C 风格可直接但容易泄漏协议；virtual 增加间接调用和对象布局约束；template 可能增加实例化时间与代码体积；STL 选择影响分配、迭代器失效和缓存局部性。不要只问“哪种最快”，要问瓶颈在哪、哪个抽象最清楚表达正确性。
+
+先预测：同一批 Record 需要按 key 排序。手写 C 指针循环、运行期多态比较器、函数模板和 `std::ranges::sort` 各自把接口放在哪里？运行前写下所有权、比较契约、可能内联和错误发现阶段，再查看编译器诊断与性能数据。
+
+## 验收：同一资源穿越四个次语言
+
+<Term def="固定输入与失败点，验证 C 句柄、RAII 对象、模板策略和 STL 容器协作结果的测试。">
+  联邦边界测试
+</Term>
+
+至少覆盖：C 创建返回空；RAII 构造成功后中途抛异常；owner 移入 vector 并触发重分配；模板算法遍历所有 owner；容器销毁。记录每个 handle 的 create/destroy 次数，断言成功资源恰好各一次。
+
+- 编译期断言 owner 不可复制但可移动。
+- 运行期注入第 N 次创建失败，之前资源全部释放。
+- vector 扩容后旧 owner 不再持有句柄，新 owner 保持有效。
+- 算法只使用公开范围和值接口，不访问 C handle 私有表示。
+- 替换 deleter 策略后无须修改算法与容器代码。
+
+## 联邦边界代码审查
+
+审查混合 C++ 代码时，先在每个函数旁标出主导次语言，而不是先争论语法风格。C 边界检查指针长度是否成对、返回码是否完整处理、谁调用释放函数；对象边界检查构造是否建立不变量、析构是否虚、复制移动是否符合所有权；模板边界列出隐式接口表达式和实例化失败位置；STL 边界检查迭代器范围、失效条件与元素值语义。
+
+随后检查每次跨界翻译。裸 handle 进入 owner 后，原调用者必须放弃释放责任；owner 暴露 span 时，文档必须说明借用期限；owner 移入 vector 后，移动操作必须保持 deleter 与句柄配对；算法接收 range 时，不能把迭代器保存到可能重分配的阶段之后。任何一处没有明确 owner 或失效条件，都不是“实现细节”，而是尚未完成的接口契约。
+
+最后分别测量正确性成本和性能成本。先用静态断言、失败注入和释放计数证明没有泄漏、重复释放与悬空借用，再用基准比较 virtual 间接调用、模板实例化体积、容器分配与缓存行为。若性能数据没有指向边界，优先保留更清楚的抽象；为假设中的速度提前打破所有权，通常会制造更昂贵的调试成本。
+
+可把审查结果写成四列：代码区域、主导次语言、必须成立的契约、验证证据。这样“语言联邦”从比喻变成可重复的工程检查方法。
+
+## 小结
+
+- C++ 是 C、Object-Oriented C++、Template C++ 与 STL 组成的语言联邦
+- 每个次语言拥有不同接口、扩展方式、错误时机和成本模型
+- 先识别主导抽象，再应用对应规则，不能把一条经验机械推广到所有代码
+- 跨边界时显式翻译所有权、范围、错误和失效条件
+- 单次释放不变量与失败注入证明四个次语言可以安全协作
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 1"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="语言联邦">
+    多种不同抽象、接口和成本模型组成的 C++ 整体。
+  </GlossaryItem>
+  <GlossaryItem term="主导次语言">
+    决定某段代码主要规则与成本的编程范式。
+  </GlossaryItem>
+  <GlossaryItem term="C 次语言">
+    以基本类型、数组、指针、函数和预处理器为主的子集。
+  </GlossaryItem>
+  <GlossaryItem term="ABI 边界">
+    对名称、调用约定、布局与数据表示的二进制约束。
+  </GlossaryItem>
+  <GlossaryItem term="显式资源协议">
+    由文档规定但类型不会自动执行的资源使用顺序。
+  </GlossaryItem>
+  <GlossaryItem term="Object-Oriented C++">
+    以类、封装、继承和运行期多态组织对象的次语言。
+  </GlossaryItem>
+  <GlossaryItem term="类不变量">
+    对象构造后始终成立并由公开操作维持的约束。
+  </GlossaryItem>
+  <GlossaryItem term="运行期多态">
+    运行时通过基类接口选择派生实现的机制。
+  </GlossaryItem>
+  <GlossaryItem term="Template C++">
+    以模板实例化和编译期多态表达泛化的次语言。
+  </GlossaryItem>
+  <GlossaryItem term="隐式接口">
+    模板体使用的有效表达式共同定义的接口。
+  </GlossaryItem>
+  <GlossaryItem term="模板实例化">
+    为具体模板实参生成并检查代码的过程。
+  </GlossaryItem>
+  <GlossaryItem term="STL 次语言">
+    容器、迭代器、算法和函数对象构成的数据处理模型。
+  </GlossaryItem>
+  <GlossaryItem term="迭代器范围">
+    由起止迭代器或 range 表达的元素序列。
+  </GlossaryItem>
+  <GlossaryItem term="值语义">
+    对象复制、移动、比较和销毁都保持独立值含义。
+  </GlossaryItem>
+  <GlossaryItem term="抽象选择">
+    按问题约束选择指针、类、多态、模板或算法。
+  </GlossaryItem>
+  <GlossaryItem term="联邦边界适配">
+    转换不同次语言所有权、错误和范围约定的层。
+  </GlossaryItem>
+  <GlossaryItem term="单次释放不变量">
+    每个资源在所有路径中恰好由一个责任方释放一次。
+  </GlossaryItem>
+  <GlossaryItem term="成本模型">
+    运行、空间、编译、代码体积与维护成本的组合。
+  </GlossaryItem>
+  <GlossaryItem term="联邦边界测试">
+    验证句柄、RAII、模板与容器协作的失败注入测试。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：识别主导次语言。** 分析内存映射文件、可替换压缩器、固定类型序列化器和记录排序分别由哪个模型主导。
+
+<Answer question="四类任务应如何选择主导次语言？">
+  内存映射文件先受 ABI、字节布局和系统句柄约束，以 C 边界加 RAII wrapper
+  为主；运行时可替换压缩器用 virtual interface
+  表达替换契约；编译期已知的序列化策略用 template
+  隐式接口；记录排序属于范围变换，优先 STL/ranges
+  algorithm。任务可以混合模型，但边界必须翻译所有权和错误语义。
+</Answer>
+
+2. **问题 2：设计安全边界。** C API 返回 BufferHandle，要求放入 vector 并用泛型算法处理，写出所有权和失效协议。
+
+<Answer question="C 句柄进入 STL 容器前需要哪些边界设计？">
+  用不可复制、可移动的 RAII owner 绑定
+  buffer_destroy；构造失败不发布对象，移动后源句柄置空；vector 保存 owner
+  值并允许重分配；算法只访问 owner 暴露的 span，不取得释放权。文档说明 span 在
+  owner 移动、销毁或底层重分配后失效，测试每个 handle 的 destroy 次数恰好为一。
+</Answer>
+
+3. **问题 3：比较成本与错误时机。** 对运行期多态和模板策略实现同一过滤器，列出接口、扩展、诊断和成本差异。
+
+  <Answer question="virtual filter 与 template filter 的关键差异是什么？">virtual filter 的接口集中在基类，运行期可替换，错误在编译基类契约或运行测试时暴露，并有间接调用与对象布局成本；template filter 的接口由使用表达式隐式形成，类型在编译期确定，可内联但诊断在实例化点、可能增加编译时间和代码体积。选择取决于实现集合何时确定与是否需要运行期异构，而不是笼统判断谁更现代。</Answer>
+</Exercises>

@@ -1,0 +1,181 @@
+---
+title: "Chapter 7. Constants and Fields"
+type: C
+section: "CLR via C# 4e · Designing Types"
+order: 7
+description: "从const内嵌、readonly初始化、实例/静态字段owner到布局、volatile和版本化，建立状态存储的明确契约。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcConstantReadonlyLab, CvcFieldLayoutLab, CvcFieldOwnerLab } from "@/components/mdx/clr-via-csharp/diagrams/constants-and-fields";
+
+<Objectives>
+
+- 能区分const、static readonly、instance readonly与property的存储、初始化和版本行为
+- 能分析instance/static/thread-static/async-local状态的owner、lifetime与并发风险
+- 能设计字段布局、可见性和同步策略，并复现public const与mutable key的版本陷阱
+
+</Objectives>
+
+## 为什么一个Field会决定整个对象的语义
+
+字段承载状态，状态又决定identity、equality、thread safety、serialization、GC retention和版本兼容。把字段公开后，调用者可绕过invariant；把reference标readonly后，对象仍可能变化；把状态放static后，owner从instance扩大到runtime type/load context；把值写成public const后，甚至不再由新library读取，而是冻结进旧consumer。字段设计不是语法选择，而是ownership设计。
+
+先预测：修改public const后是否只部署DLL即可；readonly `List<T>`字段能否Add；static generic字段在`Cache<int>`和`Cache<string>`之间是否共享；ThreadStatic能否跨await保持用户上下文；volatile能否让`count++`原子。把答案分别放进compile-time substitution、reference mutability、closed type identity、execution flow和memory model。
+
+<Term def="某个状态由instance、runtime type、physical thread或logical execution flow持有并负责清理的关系。">state ownership</Term>
+
+## Constants
+
+Const必须在compile time求值，支持primitive、enum、string、null等constant expressions，隐含static。Consumer编译器通常把值直接嵌入自己的IL，所以它不在运行时读取provider assembly中的field。Public const只适合数学/协议上永不改变且旧consumer永久保留旧值也正确的内容；可运营默认值、超时、版本号和feature开关都不适合。
+
+```csharp
+public static class Protocol
+{
+    public const int HeaderSize = 16;                    // 协议固定事实
+    public static readonly TimeSpan DefaultTimeout =
+        TimeSpan.FromSeconds(5);                         // 部署版本可改变
+    public static string CurrentVersion => BuildInfo.Version;
+}
+```
+
+`const`的binary version trap可以用已编译consumer证明：先引用v1常量，保持consumer不重编，只替换v2 provider，输出仍是旧literal。Enum members同样是constants；调整公开enum数值会影响serialization和switch。若consumer必须看到部署组件当前值，改用static readonly或property/method，并定义失败与初始化策略。
+
+<Term def="编译器把公开常量值复制进consumer IL，导致旧binary不读取provider新值的行为。">constant embedding</Term>
+
+<Stepper>
+  <Step title="切换const、static readonly、readonly与property"><CvcConstantReadonlyLab /></Step>
+  <Step title="建立值来源账本">记录值在compile、type initialization、instance construction还是每次access产生。</Step>
+  <Step title="执行旧consumer实验">不重编consumer只替换library，比较const、static readonly和property观察到的版本。</Step>
+</Stepper>
+
+<Callout type="trap" title="Public const只是更快的static readonly">
+Const常被嵌入consumer并参与source compile；static readonly保留运行时field read。它们首先是版本与初始化语义不同，性能不是主要选择依据。
+</Callout>
+
+## Fields
+
+Instance field内联在class object或struct value中，每个owner一份；static field归属于runtime type，在不同closed generic type或load context通常各有一份。Field initializer按编译器规定合并进constructor/type constructor，执行顺序与base/derived构造必须明确。不要在initializer做网络、filesystem或依赖尚未建立的虚调用。
+
+```csharp
+public sealed class Session
+{
+    private readonly Guid _id;
+    private readonly List<string> _events = [];
+    private static long _created;
+
+    public Session(Guid id)
+    {
+        _id = id;
+        Interlocked.Increment(ref _created);
+    }
+
+    public IReadOnlyList<string> Events => _events;
+}
+```
+
+`readonly`限制字段只能在declaration/constructor赋值。对reference field，它固定reference而非referenced object；上例内部仍可Add。暴露`IReadOnlyList`也只是API view，若底层继续变化，consumer会观察到。真正immutability需不可变数据结构、defensive copy或明确snapshot/lifetime contract。
+
+<Term def="字段引用不能重新赋值与其指向对象不能变化之间的关键区别。">readonly depth</Term>
+
+## Instance and Static Lifetime
+
+Instance state跟随对象可达性，由GC回收；static reference通常是load context root，会让整张对象图长期存活。Cache、event、timer、delegate和Type metadata放入static collection时必须有eviction/unsubscribe/weak strategy。Web应用中的static mutable dictionary还跨request/tenant共享，若key遗漏tenant就会数据串扰。
+
+Generic static按closed type区分：`Holder<int>.Value`与`Holder<string>.Value`不是同一field storage。多个AssemblyLoadContext加载相同type definition也可产生独立static universe。这有利于隔离，也会让“进程唯一singleton”假设失效。需要全进程唯一协调时使用明确host service，而不是依赖类型静态偶然唯一。
+
+<Stepper>
+  <Step title="切换instance、static、ThreadStatic与AsyncLocal"><CvcFieldOwnerLab /></Step>
+  <Step title="绘制root与lifetime">标出谁持有字段、何时创建、跨哪些请求/线程/context、何时清理以及是否阻止卸载。</Step>
+  <Step title="注入并发与重载">并行访问、切换await线程、卸载load context，验证状态是否泄露、丢失或重复。</Step>
+</Stepper>
+
+## Thread-Local and Logical-Flow State
+
+`[ThreadStatic]`让每个physical thread拥有独立field，initializer只初始化执行type constructor的那条线程，其它线程仍是default，因此常见陷阱是以为declaration initializer会给所有线程赋值。Thread pool复用线程，async continuation可能迁移线程，所以它不适合request/user context。
+
+`ThreadLocal<T>`提供per-thread factory与dispose；`AsyncLocal<T>`随ExecutionContext跨await逻辑流传播，更适合correlation/ambient context，但子任务capture与值变化也可能造成保留和隐式依赖。优先显式parameter/dependency；只有横切诊断上下文确需ambient flow时使用，并在scope finally恢复旧值。
+
+## Field Visibility and Encapsulation
+
+Public mutable field把validation、notification、lazy calculation和未来表示改变全部暴露。Public readonly field虽不可重赋值，仍难插入访问逻辑，且若类型本身mutable同样可变化。通常保持private field，用property/method表达读写协议；serialization/interoperability需要layout时，通过attribute和专用DTO明确边界。
+
+Protected field让derived class直接依赖布局与状态时序，base owner几乎无法重构。提供protected method/property hook可维持invariant并记录访问。Internal field也应避免被整个assembly随意写，使用小owner type集中状态转移。
+
+## Field Layout and Managed Representation
+
+默认`LayoutKind.Auto`让runtime安排managed type字段，不能当native ABI。Sequential/Explicit用于interop时必须明确Pack、CharSet、FieldOffset、platform width和union限制。Value type作为field内联，含reference的struct仍由GC递归扫描；错误重叠managed references会破坏GC安全并被runtime拒绝。
+
+```csharp
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
+public struct PacketHeader
+{
+    public ushort Kind;
+    public ushort Flags;
+    public uint PayloadLength;
+    public long CorrelationId;
+}
+
+Debug.Assert(Marshal.SizeOf<PacketHeader>() == 16);
+```
+
+Interop测试不能只断言总size，还要断言每个offset、endianness、signedness，并与native fixture双向round-trip。Managed业务类型不要为省几字节随意explicit layout；JIT alignment、false sharing与cache效果应由benchmark/counter证明。
+
+<Term def="字段offset、alignment、packing、managed reference位置与native ABI共同构成的表示契约。">field layout contract</Term>
+
+<Stepper>
+  <Step title="切换reference、value、explicit layout与volatile field"><CvcFieldLayoutLab /></Step>
+  <Step title="验证表示">读取Marshal.OffsetOf/SizeOf并与native sizeof/offsetof fixture对照，覆盖x64和Arm64目标。</Step>
+  <Step title="分离并发问题">用内存模型测试volatile/interlocked/lock，不把layout相邻或字段可见性误当同步保证。</Step>
+</Stepper>
+
+## Volatile and Synchronization Boundaries
+
+Volatile read/write提供特定visibility与ordering约束，但不让复合操作原子：`count++`仍是read-modify-write，多个线程会丢更新。引用写通常原子也不代表对象初始化/发布协议正确。Counters用Interlocked，多个字段invariant用lock/immutable snapshot，生产者消费者用Channel/Concurrent collections等更高层工具。
+
+<Term def="以volatile、Interlocked、lock或消息传递明确规定字段何时可被其它执行者观察的协议。">publication protocol</Term>
+
+线程安全声明应绑定整个type invariant，不只给字段贴volatile。记录读者/写者、允许stale多久、操作是否线性化、失败/取消如何处理。若读写组合依赖多个fields，单独volatile每个字段仍可能观察到不存在的组合状态。
+
+<Callout type="trap" title="Volatile field让围绕它的所有代码线程安全">
+Volatile只约束该次read/write的可见性与排序，不把复合更新或多字段invariant变成原子事务。选择同步原语要依据整个状态转换。
+</Callout>
+
+## 本章回顾：Field必须有Owner和Publication
+
+1. Const是compile-time value，public const会嵌入consumer；会变化的值用runtime field/property。
+2. Readonly固定赋值路径或reference，不递归冻结referenced object。
+3. Instance/static/thread/logical-flow state有不同owner与lifetime，static还可能阻止context卸载。
+4. Field layout用于表示与ABI，volatile用于memory ordering，两者不可互相替代。
+5. 每个mutable field都要有encapsulation、synchronization、version和cleanup协议。
+
+<Exercises>
+
+**问题 1：怎样证明public const导致了线上新旧值不一致？**
+
+<Answer>保留旧consumer binary，读取其IL查看literal，不重编只替换provider DLL后运行；再编译新consumer对照。若旧binary仍输出旧值，就是constant embedding。迁移到static readonly/property并重新发布所有旧consumer，同时把可变化默认值从public const移除。</Answer>
+
+**问题 2：为什么readonly List字段仍不是不可变状态？**
+
+<Answer>Readonly只禁止字段指向另一List，现有List对象仍可Add/Remove，外部若拿到alias也能改。使用ImmutableArray/ImmutableList，或constructor defensive copy并只返回snapshot/read-only wrapper；同时说明元素自身是否immutable。</Answer>
+
+**问题 3：一个request id放在ThreadStatic后偶尔串请求，如何修复？**
+
+<Answer>Thread pool会复用physical thread，async continuation也会迁移，ThreadStatic既可能残留旧值也可能突然为空。优先把request context显式传递；横切日志可用有scope恢复的AsyncLocal，并在finally清除。增加并发与await切换测试，验证child task传播边界。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="state ownership" definition="实例、类型、线程或逻辑流对状态生命周期的所有权。" />
+  <GlossaryItem term="constant embedding" definition="编译器把const值复制进consumer IL的版本行为。" />
+  <GlossaryItem term="readonly depth" definition="引用不可重赋值不等于所指对象不可变。" />
+  <GlossaryItem term="field layout contract" definition="Offset、alignment、packing与GC/ABI组成的表示协议。" />
+  <GlossaryItem term="publication protocol" definition="规定状态更新何时对其它执行者可见的同步协议。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 7: Constants and Fields" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

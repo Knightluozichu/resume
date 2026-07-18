@@ -1,0 +1,222 @@
+---
+title: "第 5 章 Cameras, Rendering, and Scenes：相机与可见性"
+type: A
+section: "Unity 脚本设计 · 渲染与数据"
+order: 5
+description: "覆盖相机 Gizmo、可见性、正交投影、后处理、抖动、动画与曲线，建立世界到像素的证据链。"
+demo: true
+math: false
+sourceUrl: "https://www.packtpub.com/en-us/product/mastering-unity-scripting-9781784390655"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Usc05CamerasRenderingScenesMapLab,
+  Usc05CamerasRenderingScenesExperimentLab,
+  Usc05CamerasRenderingScenesEvidenceLab,
+} from "@/components/mdx/unity-scripting/diagrams/usc-05-cameras-rendering-scenes";
+
+<Objectives>
+
+- 能解释视锥、投影、Culling Mask、深度与场景对象怎样决定可见性
+
+- 能实现正交与透视相机、后处理、抖动和曲线动画的对照实验
+
+- 能复现并验证内置渲染路径与现代 SRP 相机方案之间的迁移边界
+
+</Objectives>
+
+## 问题：为什么物体在场景中存在却可能永远不会进入相机输出
+
+先预测：Renderer.enabled 为 true 的对象如果位于视锥外、被 Layer 排除或在错误深度相机后，它是否可见？相机章从 Camera gizmos 与 Being seen 出发，把几何可见性、投影、渲染目标、后处理和运动脚本统一到一条世界到像素链。Camera shake 和 curves 不是装饰，而是验证相机状态怎样随时间改变。
+
+<Usc05CamerasRenderingScenesMapLab />
+
+## 原书边界与官方小节
+
+官方小节是 Camera gizmos、Being seen、Orthographic cameras、Camera rendering and postprocessing、Camera shake、Cameras and animation、Cameras and curves。原章使用当时内置渲染与脚本回调；现代 SRP 做法可替换载体，但不能删除视锥、投影、层、渲染目标和时间曲线这些问题。
+
+- **Camera gizmos；Being seen**
+- **Orthographic cameras**
+- **Camera rendering and postprocessing**
+- **Camera shake**
+- **Cameras and animation；Cameras and curves**
+
+这些小节按官方目录唯一归属。本站重新组织解释、代码和实验，不逐字复制原文；现代补充必须放在迁移段，不能替换或重复计算原始单元。
+
+## 世界点到最终像素的相机链
+
+对象的 Renderer、Layer 和 bounds 进入相机的 view/projection 变换，视锥和 Culling Mask 决定候选，深度与渲染顺序决定合成，目标纹理或屏幕接收输出，后处理再读取并写回图像。透视投影随深度缩小，正交投影保持尺寸。抖动和曲线改变相机 Transform 或投影参数，必须以基线姿态为中心，避免累计漂移。
+
+<Usc05CamerasRenderingScenesExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="由投影、FOV、宽高比和裁剪面定义的可见空间。">相机视锥</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="平行投影、不随深度改变物体屏幕尺寸的相机模式。">正交投影</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="按 Layer 决定相机是否渲染对象的 Culling Mask。">剔除遮罩</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="接收相机输出、可供材质或后处理再次采样的 RenderTexture。">
+  渲染纹理
+</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="把归一化时间映射为位置、旋转、FOV 或强度值的函数。">动画曲线</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+术语若不能落到具体对象、状态和观测点，就仍停留在记忆层。读者应能为每个术语写出生产者、变换规则、消费者、正常值、边界值和失败信号。
+
+## 关键对象与数据流
+
+可见性实验固定对象 bounds 和相机基线，逐项改变位置、near/far、FOV、orthographic、Layer 与 depth。后处理先把相机输出写入 RenderTexture，再用最小效果验证读取和写回。抖动保存初始 pose，每帧从基线加曲线偏移，结束时恢复；若直接在上一帧结果上累加，误差会漂移。
+
+排查时从最早可控输入开始，逐段检查中间状态和最终消费者。最终结果正确但中间链不符合预测，也不能立即签发，因为它可能依赖未记录的缓存、时序或 Editor 状态。
+
+## 三步可重复实验
+
+动手前先预测：只改变当前步骤的一项输入后，哪个日志、状态或像素应最先变化？实验期间固定 Unity 版本、场景、对象数量、时间步与目标平台，避免多个变量一起漂移。
+
+<Stepper>
+  <Step title="验证可见性条件">
+    <Usc05CamerasRenderingScenesMapLab />
+
+显示相机 Gizmo 与 bounds，移动对象穿过六个视锥面，切换 Layer、near/far 和 cullingMask，记录每项首个变化信号。
+
+```csharp
+var planes = GeometryUtility.CalculateFrustumPlanes(camera);
+bool visible = GeometryUtility.TestPlanesAABB(planes, renderer.bounds);
+```
+
+  </Step>
+  <Step title="比较投影与输出">
+    <Usc05CamerasRenderingScenesExperimentLab />
+
+用相同场景切换透视和正交，记录屏幕尺寸；再输出到 RenderTexture，验证目标尺寸、色彩和后处理前后结果。
+
+```csharp
+camera.orthographic = true;
+camera.orthographicSize = worldHeight * 0.5f;
+```
+
+  </Step>
+  <Step title="重放相机运动">
+    <Usc05CamerasRenderingScenesEvidenceLab />
+
+用 AnimationCurve 驱动 FOV 和 shake，固定随机种子，检查开始、峰值、结束和中断后都能恢复基线 pose。
+
+```csharp
+var offset = shakeCurve.Evaluate(elapsed / duration) * amplitude;
+cameraTransform.localPosition = baseline + UnityEngine.Random.insideUnitSphere * offset;
+```
+
+  </Step>
+</Stepper>
+
+## 从对象存在到像素出现要经过多道门
+
+对象在 Hierarchy 中激活只是第一道门。Renderer 必须启用，Layer 要被相机 Culling Mask 接纳，包围盒要进入视锥，材质和 shader pass 要能在当前渲染路径执行，深度测试与渲染队列不能被其他表面遮挡，目标 RenderTexture 还要被正确显示。排查“看不见”时按这条顺序逐门检查，比反复移动相机更容易保留因果关系。
+
+透视相机用视场角形成近大远小，正交相机用 orthographic size 决定可见高度。对照实验应固定相机姿态和目标尺寸，在改变投影方式后分别记录屏幕占比、近平面裁剪和深度关系。Gizmo 画出视锥只能证明几何范围，最终 RenderTexture 或截图才证明渲染结果；二者不一致时继续检查 layer、shader、队列和输出目标。
+
+## 相机效果的状态分层
+
+- 基础跟随负责长期姿态，相机抖动只产生短时偏移，动画曲线提供可重复包络。
+- 多个脚本不能同时直接覆盖同一 Transform；应使用父子 rig 或统一混合器组合结果。
+- 抖动测试固定随机种子，结束后恢复基准姿态，避免误差逐帧累积。
+- 后处理必须验证输入纹理、输出纹理、禁用路径和分辨率变化，而不只看默认 Game 视图。
+- 多相机叠加要记录 depth、clear flags、viewport 和目标纹理，避免依赖偶然排序。
+
+现代 URP 或 HDRP 会改变后处理接入点、相机叠加和 Renderer Feature 机制，但不会改变“世界对象经过可见性、投影、材质、深度与输出成为像素”的主线。迁移验收应让旧实现与新实现读取同一场景和曲线，比较关键帧截图、对象可见集合和输出尺寸，而不是要求 API 名称相同。
+
+场景切换还会暴露相机引用和输出资源的寿命问题。若主相机随旧场景销毁，而持久化控制器仍缓存它，下一帧抖动或后处理就会访问失效对象；若 RenderTexture 尺寸不随窗口或设备旋转重建，画面会被拉伸或继续占用旧显存。验收应在加载、卸载、分辨率变化和禁用效果后核对活动相机、目标纹理、临时缓冲释放与基准姿态。这样才能证明相机系统在状态变化中保持正确，而不是只在固定编辑器窗口中得到一张正确截图。
+
+## 正常、边界与失败样本
+
+每章至少保存一个正常样本、一个极端边界和一个故意破坏配置。正常样本证明主路径，边界样本说明适用范围，失败样本证明诊断方法真的能抓到错误。
+
+<Callout type="trap">
+  **因果陷阱**：Renderer.isVisible 可能受任意相机和编辑器 Scene
+  视图影响，不能直接等同于目标游戏相机可见。
+</Callout>
+
+<Callout type="trap">
+  **版本陷阱**：每帧在当前相机位置上累加抖动会产生随机游走，结束后无法准确回到原位。
+</Callout>
+
+## 从 2015 年到现代 Unity
+
+Built-in 管线的 OnRenderImage 与现代 URP/HDRP Renderer Feature 或 Volume 不一一等价。迁移时保留输入纹理、效果参数、执行时机和输出正确性，再按管线实现。Cinemachine 可以替代部分相机曲线与 shake 载体，但视锥、投影、Layer 和基线恢复仍要独立验证。
+
+迁移记录采用五列：原书载体、稳定不变量、现代实现、不可等价处、目标平台证据。允许替换工具和 API，不允许抹去原始问题或倒写历史。
+
+## 验收证据
+
+验收包含视锥六面边界、Layer 排除、near/far、透视/正交尺寸、RenderTexture 输出、后处理开关与确定性抖动。截图同时保存相机矩阵、投影模式、对象 bounds 和管线版本，防止只凭最终画面猜因果。
+
+证据包同时记录场景路径、代码版本、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜测隐藏状态即可重放，才算掌握而不只是读完。
+
+## 小结
+
+- 对象存在、Renderer 启用与目标相机可见是不同条件
+- 投影、视锥、层、深度和输出目标共同决定相机结果
+- 相机动画必须以基线姿态和确定时间曲线为约束
+- SRP 替换后处理载体时仍要保持输入、时机和输出证据
+
+<Exercises>
+
+**问题 1** 正交相机为何适合 2D 或等距表现？
+
+<Answer>物体屏幕尺寸不随深度变化，构图和像素比例更容易保持。</Answer>
+
+**问题 2** 如何证明对象是被 Layer 排除而不是在视锥外？
+
+<Answer>
+  保持 Transform 不变，记录 bounds 与视锥测试为 true，再只切换 cullingMask
+  并比较输出。
+</Answer>
+
+**问题 3** 相机抖动结束后为何要恢复基线？
+
+<Answer>抖动是临时偏移，若基线被污染，后续跟随和动画会持续漂移。</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="相机视锥">
+    由投影、FOV、宽高比和裁剪面定义的可见空间。
+  </GlossaryItem>
+  <GlossaryItem term="正交投影">
+    平行投影、不随深度改变物体屏幕尺寸的相机模式。
+  </GlossaryItem>
+  <GlossaryItem term="剔除遮罩">
+    按 Layer 决定相机是否渲染对象的 Culling Mask。
+  </GlossaryItem>
+  <GlossaryItem term="渲染纹理">
+    接收相机输出、可供材质或后处理再次采样的 RenderTexture。
+  </GlossaryItem>
+  <GlossaryItem term="动画曲线">
+    把归一化时间映射为位置、旋转、FOV 或强度值的函数。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Alan Thorn《Mastering Unity Scripting》第一版官方目录与中文版身份资料"
+  adaptedUrl="https://www.packtpub.com/en-us/product/mastering-unity-scripting-9781784390655"
+/>

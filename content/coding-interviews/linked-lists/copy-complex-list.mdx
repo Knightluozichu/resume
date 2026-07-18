@@ -1,131 +1,311 @@
 ---
-title: 复杂链表的复制
+title: "面试题35：复杂链表的复制"
 type: C
-section: 链表
-order: 7
-description: 使用“原地插入 + 拆分”或哈希映射实现 O(1) 或 O(n) 空间拷贝。
+section: "第4章 解决面试题的思路"
+order: 39
+description: "把克隆节点交织到原节点后，用紧邻关系常数时间定位随机指针目标，最后同步恢复原链并拆出独立深拷贝。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/35_CopyComplexList/CopyComplexList.cpp"
 draft: false
 ---
 
-{/* 知识点清单：next 与 random 指针、映射关系、两遍扫描；原书章节：复杂链表的复制。 */}
+import { ComplexListInterleaveDiagram, ComplexSiblingMappingMap, ComplexListSplitDiagram, CopyComplexListOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/copy-complex-list";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能恢复旧节点与新节点的一一映射关系。
-- 能分别解决 `random` 与 `next` 指针的复制。
-- 能解释为什么先插入再拆分能实现 O(1) 额外空间。
+- 能解释交织结构怎样以next替代原到克隆的哈希映射
+- 能计算跨节点、自指和成环sibling的克隆目标地址
+- 能实现作者CloneNodes、ConnectSiblingNodes与ReconnectNodes
+- 能分析临时修改、异常失败、链外引用、并发与深拷贝边界
+- 能设计覆盖作者五组普通、自指、环、单点与空链测试
 
 </Objectives>
 
-## 直觉引入
+## 从“复制值以后，sibling该指向谁”开始
 
-复杂链表不仅有 `next`，还有 `random`。  
-复制时不能只复制 `next`，因为 `random` 可能指向任意已访问或未访问节点。  
-把“旧节点 -> 新节点”关系先建立好，后续才能正确恢复 `random`。
+先预测：原节点A的sibling指向原节点C。新建A′后，若直接令A′.sibling等于A.sibling，它会指回原C，克隆链仍依赖原链，并不是真正复制。目标必须是与原C对应的新节点C′。
 
-## 概念讲解
+“**复杂链表的复制**”中每个节点有m_pNext和m_pSibling，后者也常叫random。值和next只能确定主链，随机指针可能向前、向后、指自己、为空或形成环。核心任务是建立<Term def="每个原节点到其唯一新节点的对应关系，供next与sibling重建使用。">身份映射</Term>。
 
-方法一（哈希）：第一遍复制值与 next；第二遍根据 map 设置 random。  
-方法二（O(1) 空间）：在原链表每个节点后插入复制节点，再修正 random 后拆解。
+哈希表可以显式保存原地址到克隆地址；作者则把映射编码进临时链表结构，让<Term def="每个原节点后紧跟自身克隆节点的临时next序列。">交织链</Term>满足原节点.next就是它的克隆。
 
-## 思考引导
+<ComplexListInterleaveDiagram />
 
-### 1) 先问问题，不先遍历复制
-复杂链表不只是复制值，而是复制身份关系。你要解决的核心是 random 指针的映射可重建性。
+## 阶段一：复制节点插入原节点后面
 
-### 2) 识别不变式
-将复制节点紧邻原节点后插入，能够让原节点与其复制节点通过 next 联系，从而在 O(1) 本地定位 random 目标。
+遍历原next链。对每个pNode新建pCloned，复制value；令pCloned.next等于原pNode.next，再令pNode.next等于pCloned。随后从pCloned.next跳到下一个原节点，避免把刚插入的克隆再次复制。
 
-### 3) 为什么它一定成立
-每条原链边在结构上有对应复制边；插入操作保持顺序一致，使“原节点到复制节点”的关系在一次遍历中可恢复。
+原A→原B→原C变为原A→克隆A′→原B→克隆B′→原C→克隆C′。原节点的相对顺序没变，克隆节点也按相同顺序出现，只是两条链暂时交错。
 
-### 4) 常见误区
-只复制 next 忘了 random，不只是内容丢失，更会破坏后续逻辑。另一个坑是拆分阶段提前恢复会破坏映射。
+“**复制节点插入原节点后面**”带来<Term def="无需外部容器、通过原节点next在常数时间得到对应克隆节点的关系。">局部映射</Term>：clone(x)等于x.next。阶段二和阶段三都依赖它，不能提前恢复next。
 
-### 5) 你能找到一个反例吗
-随机指针形成环或跨层引用的链表上，可用于检验你是否真的按身份重建，而非值匹配。
+## 阶段二：复制随机指针
 
-### 6) 迁移到下一题
-对象图复制、缓存节点迁移都面临引用关系复原。关键从“值复制”迁移到“身份映射”。
-## 交互 Demo
+遍历每个原节点pNode，克隆就是pNode.next。若原sibling为空，克隆保持空；否则原目标s的克隆是s.next，因此赋值pCloned.sibling等于pNode.sibling.next。
 
-图上可观察“插入复制节点”让 random 的目标映射在局部范围内就绪，从而减少额外存储。
+<ComplexSiblingMappingMap />
 
-<RecursionDiagram />
+这一步“**复制随机指针**”不沿sibling遍历，只读取一次目标的next，因此sibling形成环也不会无限循环。Test3中原2与原4互指，克隆2′和4′会自然互指；Test2与Test4的自指也自然变为克隆自指。
+
+算法隐含约束：每个非空sibling必须指向同一条next主链中的某个原节点，因为只有这些节点后面插入了克隆。若指向链外对象，目标.next不是其克隆，公式失效。一般对象图复制应使用哈希映射。
+
+## 阶段三：拆分两个链表
+
+完成sibling后，交织结构不再需要。拆分必须同时做两件事：把每个原节点next恢复到下一个原节点；把每个克隆节点next连接到下一个克隆节点。
+
+<ComplexListSplitDiagram />
+
+作者先单独处理首对，保存pClonedHead并恢复原头next。循环中令当前克隆next等于下一个原节点next，也就是下一个克隆；随后恢复该原节点next。最终原链与调用前相同，返回克隆头。
+
+<Term def="把交织序列中的原节点与克隆节点分别重新连接成两条独立主链的过程。">拆链</Term>不是只移动返回指针。如果忘记恢复原next，调用方原链仍夹着克隆；如果忘记连接克隆next，返回链只有头或仍穿过原节点。
+
+## 忠实还原作者三函数实现
+
+作者Clone无条件依次调用三个阶段；空头时前两阶段循环不执行，ReconnectNodes返回nullptr。
 
 ```cpp
-#include <unordered_map>
-
-struct Node {
-    int val;
-    Node* next;
-    Node* random;
-    Node(int v) : val(v), next(nullptr), random(nullptr) {}
+struct ComplexListNode {
+    int m_nValue;
+    ComplexListNode* m_pNext;
+    ComplexListNode* m_pSibling;
 };
 
-class Solution {
-public:
-    Node* copyRandomList(Node* head) {
-        if (!head) return nullptr;
-        std::unordered_map<Node*, Node*> mp;
-
-        Node* cur = head;
-        while (cur) {
-            mp[cur] = new Node(cur->val);
-            cur = cur->next;
-        }
-
-        cur = head;
-        while (cur) {
-            mp[cur]->next = mp[cur->next];
-            mp[cur]->random = mp[cur->random];
-            cur = cur->next;
-        }
-
-        return mp[head];
+void CloneNodes(ComplexListNode* pHead) {
+    ComplexListNode* pNode = pHead;
+    while (pNode != nullptr) {
+        auto* pCloned = new ComplexListNode();
+        pCloned->m_nValue = pNode->m_nValue;
+        pCloned->m_pNext = pNode->m_pNext;
+        pCloned->m_pSibling = nullptr;
+        pNode->m_pNext = pCloned;
+        pNode = pCloned->m_pNext;
     }
-};
-```
-
-```typescript
-class ComplexNode {
-  val: number;
-  next: ComplexNode | null = null;
-  random: ComplexNode | null = null;
-  constructor(val: number) {
-    this.val = val;
-  }
 }
 
-function copyRandomList(head: ComplexNode | null): ComplexNode | null {
-  if (!head) return null;
-  const map = new Map<ComplexNode, ComplexNode>();
-  let cur: ComplexNode | null = head;
-  while (cur) {
-    map.set(cur, new ComplexNode(cur.val));
-    cur = cur.next;
-  }
-  cur = head;
-  while (cur) {
-    const cloned = map.get(cur)!;
-    cloned.next = cur.next ? map.get(cur.next) || null : null;
-    cloned.random = cur.random ? map.get(cur.random) || null : null;
-    cur = cur.next;
-  }
-  return map.get(head) || null;
+void ConnectSiblingNodes(ComplexListNode* pHead) {
+    ComplexListNode* pNode = pHead;
+    while (pNode != nullptr) {
+        ComplexListNode* pCloned = pNode->m_pNext;
+        if (pNode->m_pSibling != nullptr) {
+            pCloned->m_pSibling =
+                pNode->m_pSibling->m_pNext;
+        }
+        pNode = pCloned->m_pNext;
+    }
+}
+
+ComplexListNode* ReconnectNodes(ComplexListNode* pHead) {
+    ComplexListNode* pNode = pHead;
+    ComplexListNode* pClonedHead = nullptr;
+    ComplexListNode* pClonedNode = nullptr;
+
+    if (pNode != nullptr) {
+        pClonedHead = pClonedNode = pNode->m_pNext;
+        pNode->m_pNext = pClonedNode->m_pNext;
+        pNode = pNode->m_pNext;
+    }
+
+    while (pNode != nullptr) {
+        pClonedNode->m_pNext = pNode->m_pNext;
+        pClonedNode = pClonedNode->m_pNext;
+        pNode->m_pNext = pClonedNode->m_pNext;
+        pNode = pNode->m_pNext;
+    }
+    return pClonedHead;
+}
+
+ComplexListNode* Clone(ComplexListNode* pHead) {
+    CloneNodes(pHead);
+    ConnectSiblingNodes(pHead);
+    return ReconnectNodes(pHead);
 }
 ```
 
-<Callout type="trap">
-  <strong>现象 →</strong> 遍历完后 `random` 全是 `null`。  
-  <strong>原因 →</strong> 只复制了 `next` 关系。  
-  <strong>修复 →</strong> 在映射建立后单独补充 `random` 映射。
+三个遍历都沿原节点推进：交织后每次跨过克隆到下一个原节点；拆链后原与克隆指针同步前进。任何阶段若把pNode简单设为pNode.next，就会落到克隆节点并破坏奇偶角色。
+
+<Callout type="trap" title="设置克隆sibling时直接复制原地址">
+A′.sibling=A.sibling会让克隆链指向原节点，原链销毁后出现悬空引用。正确目标是A.sibling对应的克隆，即交织状态下A.sibling.next。
 </Callout>
 
+## 深拷贝应验证什么
+
+<Term def="新结构拥有独立节点地址，但值、next拓扑和sibling拓扑与原结构同构的复制。">深拷贝</Term>不只是打印值相同。对第i个原节点和克隆节点，应满足：地址不同、值相同；next为空状态相同且克隆next对应原next；sibling为空状态相同且克隆sibling对应原sibling。
+
+还要验证原链被完全恢复。克隆后再次遍历原next应得到相同地址序列；原节点next和sibling都应与调用前快照一致。修改克隆节点值或sibling不应影响原节点，反之亦然。
+
+若节点值重复，不能按value匹配对应关系；必须按next位置或测试前建立的地址索引。Test输出两条链供人工观察，但没有自动证明地址独立，也没有释放原链和克隆链，生产测试应补上。
+
+## 哈希映射是更稳妥的替代
+
+交织法O(1)辅助空间，但会临时修改输入，不适合只读、并发共享或链外sibling。哈希法第一遍为每个原节点创建克隆并建立map，第二遍按map连接next与sibling，原链始终不变。
+
+```cpp
+#include <memory>
+#include <unordered_map>
+#include <vector>
+
+struct Node {
+    int value;
+    Node* next = nullptr;
+    Node* sibling = nullptr;
+};
+
+Node* cloneWithMap(const Node* head) {
+    if (head == nullptr) return nullptr;
+
+    std::unordered_map<const Node*, Node*> cloneOf;
+    std::vector<std::unique_ptr<Node>> owned;
+
+    for (const Node* node = head;
+         node != nullptr; node = node->next) {
+        owned.push_back(std::make_unique<Node>());
+        owned.back()->value = node->value;
+        cloneOf.emplace(node, owned.back().get());
+    }
+
+    for (const Node* node = head;
+         node != nullptr; node = node->next) {
+        Node* copy = cloneOf.at(node);
+        copy->next =
+            node->next == nullptr ? nullptr : cloneOf.at(node->next);
+        copy->sibling =
+            node->sibling == nullptr
+                ? nullptr
+                : cloneOf.at(node->sibling);
+    }
+
+    for (auto& node : owned) node.release();
+    return cloneOf.at(head);
+}
+```
+
+unique_ptr暂时拥有新节点；分配或map操作抛异常时已创建节点自动释放。全部关系连接成功后才release所有权。真实库更适合返回拥有整条链的RAII类型，而不是裸头指针；这里保持与题目接口接近。
+
+哈希法时间O(n)、映射辅助空间O(n)。交织法也是O(n)时间，辅助指针O(1)，但新建的n个克隆节点是必要输出，不计入“额外工作空间”并不代表总分配O(1)。
+
+## 临时修改与异常安全
+
+作者CloneNodes每创建一个克隆就修改原next。若第k次new抛出，前k减1个节点已交织，原链处于半转换状态，克隆也无人释放；函数没有回滚，异常安全不足。
+
+可预先分配全部节点再交织，或用哈希RAII方案。若坚持O(1)辅助空间与裸指针，可捕获异常并从头识别已交织前缀、恢复原next、删除克隆，但边界复杂，且异常处理本身必须不再抛。
+
+遍历期间其他线程会看到A→A′→B的临时结构，可能把克隆当业务节点；必须独占访问或使用不可变哈希法。即使单线程，回调、日志钩子或析构器也不应在交织窗口遍历原链。
+
+<Callout type="trap" title="宣称交织法始终不修改输入">
+最终拆分会恢复原next，但三个阶段之间输入确实被改变。观察时序、并发安全和异常失败都能看见这段临时变异；“最终恢复”不等于“从未修改”。
+</Callout>
+
+## 作者五组测试覆盖什么
+
+Test1主链1到5，sibling为1→3、2→5、4→2，其余空，覆盖向前与向后跨节点。Test2为2→5、3→自身、4→2，覆盖自指。Test3让2→4且4→2，形成sibling环。
+
+Test4只有节点1，next为空、sibling指向自己；克隆后1′必须指向自身而非原1。Test5传nullptr，返回nullptr。源码总计五组。
+
+<CopyComplexListOfficialCaseLab />
+
+```cpp
+#include <cassert>
+#include <unordered_map>
+#include <vector>
+
+void assertDeepClone(const Node* original, const Node* copy) {
+    std::vector<const Node*> oldNodes;
+    std::vector<const Node*> newNodes;
+    for (auto* p = original; p != nullptr; p = p->next)
+        oldNodes.push_back(p);
+    for (auto* p = copy; p != nullptr; p = p->next)
+        newNodes.push_back(p);
+
+    assert(oldNodes.size() == newNodes.size());
+    std::unordered_map<const Node*, std::size_t> oldIndex;
+    for (std::size_t i = 0; i < oldNodes.size(); ++i) {
+        oldIndex[oldNodes[i]] = i;
+        assert(oldNodes[i] != newNodes[i]);
+        assert(oldNodes[i]->value == newNodes[i]->value);
+    }
+    for (std::size_t i = 0; i < oldNodes.size(); ++i) {
+        const Node* sibling = oldNodes[i]->sibling;
+        if (sibling == nullptr) {
+            assert(newNodes[i]->sibling == nullptr);
+        } else {
+            assert(newNodes[i]->sibling ==
+                   newNodes[oldIndex.at(sibling)]);
+        }
+    }
+}
+```
+
+测试前还应保存原节点next地址序列，调用后确认完全恢复；分别销毁两条链并使用内存检测工具验证无泄漏、无双重释放。对作者Test1到Test4，克隆后修改任一新节点值，原值必须保持不变。
+
+## 正确性证明
+
+阶段一结束后，对每个原节点x，x.next是唯一克隆x′，而x′.next是原来的下一个原节点；此为交织不变量。阶段二读取原x.sibling=s，按不变量s.next=s′，因此赋给x′.sibling得到正确克隆关系，空指针也保持空。
+
+阶段三沿交织序列恢复x.next为x′.next，并令x′.next指向下一原节点的next，也就是下一克隆。归纳每轮后，已处理前缀的原链与克隆链都正确独立，未处理后缀仍交织可定位。
+
+结束时所有原next恢复，所有克隆next按原顺序连接；值在创建时复制，sibling在阶段二同构连接，所以返回结构是独立深拷贝。
+
+## 输入契约与复杂度
+
+next必须形成有限无环单链。next成环会让三个while无限循环；共享next前驱则不再是链。sibling可成环，但必须为空或指向同一主链节点。
+
+每阶段扫描O(n)，总时间O(n)。交织法除克隆输出外只用常数个指针，辅助空间O(1)；递归未使用，调用栈O(1)。哈希法辅助空间O(n)，但不修改原链且更易获得异常安全。
+
+若克隆由垃圾回收语言实现，交织期间原与克隆互相可达，不会被回收；拆分后仍需确保返回头持有全部新节点。弱引用sibling、所有权sibling或外部引用会改变复制语义，不能只照搬裸指针模型。
+
+<Stepper>
+  <Step title="把克隆插到原节点后"><ComplexListInterleaveDiagram />原到克隆的身份映射变成一次next读取，不需要哈希表。</Step>
+  <Step title="按目标next复制sibling"><ComplexSiblingMappingMap />前后引用、自指与sibling环都通过同一局部公式重建。</Step>
+  <Step title="恢复原链并拆出克隆链"><ComplexListSplitDiagram />每轮同时修复两个next，不能提前破坏未处理映射。</Step>
+  <Step title="跑完五组官方结构"><CopyComplexListOfficialCaseLab />跨节点、自指、环、单点和空链覆盖随机关系边界。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 复杂链表复制要保持值、next和sibling拓扑同构且地址独立。
+2. 阶段一把每个克隆节点插在对应原节点后，建立局部映射。
+3. 克隆sibling等于原sibling.next，前提是目标属于同一主链。
+4. sibling自指或成环不会导致额外遍历，仍可常数时间映射。
+5. 拆链同时恢复原next并连接克隆next，最终得到两条独立链。
+6. 交织法O(n)时间、O(1)辅助空间，但会临时修改输入。
+7. 作者版本在new中途失败时缺少回滚；哈希加RAII更稳健。
+8. 五组官方测试覆盖跨引用、自指、sibling环、单点与空链。
+
+<Exercises>
+
+**问题 1：原A.sibling指向原C时，克隆A′应怎样定位C′？**
+
+<Answer>交织后原C.next就是克隆C′，所以令A′.sibling等于A.sibling.next。不能直接复制A.sibling，否则会指回原C。</Answer>
+
+**问题 2：为什么sibling形成2与4互指不会让算法死循环？**
+
+<Answer>阶段二只沿next主链遍历，每个sibling仅被读取一次并通过目标next映射；不会沿sibling继续走，因此其环不影响终止。</Answer>
+
+**问题 3：拆分时必须恢复哪些指针？**
+
+<Answer>原节点next要跳过克隆恢复到下一原节点；克隆节点next要跳过下一原节点连接到下一克隆。两条更新同步进行，才能同时恢复输入和形成独立输出。</Answer>
+
+**问题 4：O(1)辅助空间为何不表示只分配常数内存？**
+
+<Answer>结果本身必须新建n个克隆节点，这属于必要输出。O(1)只指除输出外不再使用随n增长的哈希表或数组；总新节点分配仍是O(n)。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="身份映射">从每个原节点到其唯一克隆节点的对应关系。</GlossaryItem>
+  <GlossaryItem term="交织链">原节点与对应克隆节点交替连接的临时主链。</GlossaryItem>
+  <GlossaryItem term="局部映射">通过原节点next直接取得其克隆的常数时间关系。</GlossaryItem>
+  <GlossaryItem term="拆链">恢复原next并将克隆next连接为独立链的过程。</GlossaryItem>
+  <GlossaryItem term="深拷贝">节点地址独立而值与引用拓扑同构的复制结果。</GlossaryItem>
+</Glossary>
+
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题35"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/35_CopyComplexList/CopyComplexList.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

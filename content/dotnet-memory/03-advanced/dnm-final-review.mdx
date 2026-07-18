@@ -1,144 +1,260 @@
 ---
-title: "总复习"
-type: B
-section: "高级主题"
-order: 9
-description: "全书知识串联：从内存模型到优化策略。"
-demo: true
+title: "总复习：从内存现象到可验证修复"
+type: A
+section: "Pro .NET 内存管理（第2版）· 综合验收"
+order: 16
+description: "串联原书 15 章：按故障分流、重建 GC 阶段、证明资源与 buffer 所有权，并为每种优化写出进入证据、新成本和回滚线。"
+demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://link.springer.com/book/10.1007/979-8-8688-0453-3"
 draft: false
 ---
 
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
-import { DnmFinalReviewDiagram } from "@/components/mdx/dotnet-memory/diagrams/dnm-final-review";
+import {
+  DnmGcReconstructionLab,
+  DnmIncidentTriageLab,
+  DnmInterventionTradeoffLab,
+} from "@/components/mdx/dotnet-memory/diagrams/dnm-final-review";
 
 <Objectives>
-- 串联全书四大板块的核心知识点
-- 掌握从内存模型到优化策略的完整闭环
-- 能够系统性排查内存增长问题
-- 综合设计内存优化策略清单
+
+- 能分析高分配、长暂停、回收后保留与 native/RSS 增长，选择从低成本指标到 root/release path 的完整证据链
+- 能描述一次 GC 每个阶段的输入、不变量、失败形态和可观测证据，并用存活率、pins、碎片和配置解释成本
+- 能设计最小内存优化实验，明确所有权、正确性、预期收益、新成本与回滚阈值，避免 use-after-return 和无依据调参
+
 </Objectives>
 
-## 直觉引入
+## 为什么总复习不是优化技巧清单
 
-回顾整本书的旅程：我们从理解仓库（托管堆）和管理员（GC）开始，学会用 X 光机（SOS）观察堆状态，研究了三种内存模式（LOH/Pinning/Finalization）的性能影响，最后掌握了优化策略。现在把这些知识串联成完整的闭环——从诊断到优化的全景图。
+“用 struct、Span、ArrayPool、Server GC、NoGCRegion”不是结论，而是五种可能引入新风险的干预。全书真正可迁移的能力是：把现象缩成一个有范围的指标，画出对象/资源/缓冲区所有权，预测 GC 或地址变化，用事件与 heap 证明，再做一个可回滚改动。
 
-## 概念讲解
+<Term def="从低成本异常信号开始，经时间线关联、对象或资源路径证明，最后实施最小干预并在同口径负载下复验的流程。">内存诊断闭环</Term>
 
-### 核心知识串联
+<Term def="可以被新数据推翻的机制解释，必须同时写出支持证据、反证条件和下一次观测。">可证伪假设</Term>
 
-<Term def="托管堆模型→GC 分代回收→SOS 调试探查→内存模式定位→优化策略闭环。">
-全书知识链：
+先预测四种现象各自最容易走错的第一步：高 allocation 直接池化、长 pause 直接切 Server GC、heap 增长直接 Collect、RSS 增长直接查 LOH。再切换下图，检查正确路径是否都先从口径和时间窗开始。
 
-1. **托管堆模型**（第 0-1 章）：栈 vs 堆、分代回收（Gen0/1/2+LOH）、标记-清除-压缩三阶段
-2. **SOS 调试**（第 2-3 章）：dump 生成、!dumpheap/-gen/-stat、!gcroot、!eeheap、泄漏诊断工作流
-3. **内存模式**（第 4-6 章）：LOH（85000 阈值不压缩碎片化）、Pinning（固定阻碍压缩）、Finalization（freachable 两次 GC）
-4. **高级优化**（第 7-9 章）：AddMemoryPressure（非托管协调）、碎片优化（struct/Span/ArrayPool/池化）
+<DnmIncidentTriageLab />
 
-因果链：不理解堆模型就无法用 SOS 正确解读输出；不掌握 SOS 就无法定位是哪种内存模式的问题；不理解模式就无法选择正确的优化策略。
-</Term>
+## 15 章怎样压缩成五个问题
 
-### 优化策略清单
+面对任何 .NET 内存问题，先依次回答：数据在哪里；谁拥有并保活；为何此时触发；GC/资源状态怎样变化；哪层证据能证明。15 章分别为这五个问题提供不同分辨率。
 
-<Term def="分配优化（struct/Span/stackalloc）+ 池化复用（ArrayPool/StringBuilder）+ 生命周期控制 + GC 调度 + 非托管协调 + 监控诊断。">
-综合优化策略：
+```text
+where:  Ch1-5   object graph -> virtual pages -> CLR layout -> SOH/LOH/POH
+who:    Ch6,12-14 allocation site -> roots/handles -> resource/buffer owner
+when:   Ch3,7,11,15 budgets -> workload window -> flavor/config/API state
+how:    Ch8-10 mark -> plan -> sweep/relocate/compact
+prove:  Ch3,15 counters -> EventPipe -> dump -> ClrMD/root path
+```
 
-1. **分配优化**：struct 替代 class、Span/Memory 零拷贝、stackalloc 小数组
-2. **池化复用**：ArrayPool 大数组、StringBuilder 字符串、ObjectPool 复杂对象
-3. **生命周期控制**：缩短对象生命避免 Gen2 晋升、using Dispose、SuppressFinalize
-4. **固定优化**：缩短 fixed 作用域、长期固定用非托管内存
-5. **GC 调度**：服务器 GC 模式、LatencyMode 控制停顿、TryStartNoGCRegion
-6. **非托管协调**：SafeHandle 封装句柄、AddMemoryPressure 告知大块非托管内存
-7. **监控诊断**：dotnet-counters 实时监控、定期 dotnet-dump 快照、CI 内存回归测试
-</Term>
+<Term def="对象从 GC roots 可达的引用边、外部资源的 owner/release 边，以及 buffer 的 owner-consumer-lease 边组成的统一生命周期图。">统一所有权图</Term>
 
-## 交互Demo
+这张压缩图防止局部结论越界：`ArrayPool.Return` 结束 buffer lease，却不让旧 Span 自动失效；`Dispose` 释放资源，却不让 wrapper 立即从托管堆消失；对象不可达则可能回收托管存储，却不保证 native handle 已按时关闭。
 
-<DnmFinalReviewDiagram />
+## 怎样重建一次 GC 而不是背阶段名
 
-<Stepper>
-<Step title="诊断定位">
-监控确认泄漏→!eeheap 定代→!dumpheap -stat 定类型→!gcroot 定根因。形成从宏观到微观的诊断链。
-</Step>
-<Step title="模式识别">
-根据诊断结果识别内存模式：LOH 碎片化？Pinning 阻碍压缩？Finalizer 两次 GC？非托管内存未协调？
-</Step>
-<Step title="优化闭环">
-针对模式选择优化：ArrayPool 池化/struct 栈分配/SafeHandle 封装/缩短 fixed。修复后重新监控验证形成闭环。
-</Step>
-</Stepper>
+完整回答必须从触发和 generation selection 开始：allocation context/budget、induced request、memory pressure 或 low memory 促使 GC；运行时挂起需要的 mutators；mark 扫 roots/handles/cards/finalization；plan 依据 live layout、gaps、pins、heap kind 决定 sweep/compact；reclaim 后重建 boundaries/budget/cards 并恢复。
 
-## 代码对照
+<Term def="在每个 GC 阶段都必须保持的正确性条件，例如所有可达对象被标记、重定位映射不重叠、根与字段在搬移后指向新地址。">GC 阶段不变量</Term>
+
+<DnmGcReconstructionLab />
+
+```text
+evidence alignment:
+  GCStart reason/type/index
+  SuspendEE duration
+  survival + promoted bytes + pinned count
+  fragmentation before/after + Compacted
+  GCStop + pause + request p99 + post-GC low-water
+```
+
+不能只截取“GC 发生了”作为原因。高存活可能让 compact 搬运昂贵，pins 可能切断 plugs，background Gen 2 期间仍可发生 foreground ephemeral pause，容器 CPU quota 又会改变 Server GC 的并行收益。
+
+## 怎样区分高分配、逻辑保留和碎片
+
+高分配是时间窗内累计 bytes/objects 快；逻辑保留是覆盖回收后对象仍有 root path；碎片是已提交 heap 内的不可用/分散 free space。三者可同时出现，但修复不同。
+
+```text
+allocation high + survival low  -> find creation/materialization stack
+post-GC live baseline rising    -> compare dumps and prove roots
+live stable + committed high    -> inspect fragmentation, pool and heap kind
+RSS rising + GC metrics stable  -> inspect native/stack/JIT/mapping
+```
+
+<Term def="在可比低峰、覆盖目标代回收后仍保持可达的对象集合及其总大小；它与累计分配量和 committed heap 不同。">回收后存活基线</Term>
+
+两个 dump 必须来自可比版本、负载阶段和回收口径；top types 只是候选，代表对象的 root path 才能证明 owner。碎片则要看单块可用尺寸、heap kind、pins 和未来请求分布，不能把 `FragmentedBytes` 当成一块连续空间。
+
+## 怎样区分托管存储与外部资源
+
+GC 根据托管可达性回收对象，不知道 socket、file descriptor、GPU buffer 或 native allocation 的业务截止时间。Dispose/IAsyncDisposable 是确定性释放，SafeHandle 封装 native handle 的可靠兜底，finalizer 只处理遗漏路径。MemoryPressure 只是调度提示，不能替代 owner。
+
+<Term def="资源只有一个当前 owner，正常、异常、取消、重复 Dispose 与兜底路径最终最多执行一次真实释放。">一次释放不变量</Term>
 
 ```csharp
-// 综合优化示例：高性能请求处理器
-public class OptimizedRequestHandler : IDisposable {
-  // 1. 池化大缓冲区避免 LOH
-  private readonly ArrayPool<byte> _pool = ArrayPool<byte>.Shared;
-  
-  // 2. struct 避免堆分配
-  public struct RequestStats { public int Count; public long Ticks; }
-  
-  public ReadOnlySpan<byte> Process(ReadOnlySpan<byte> input) {
-    // 3. Span 零拷贝切片
-    var header = input[..4];
-    var body = input[4..];
-    
-    // 4. ArrayPool 租用替代 new
-    byte[] buffer = _pool.Rent(body.Length);
-    try {
-      // 5. stackalloc 小缓冲区
-      Span<byte> temp = stackalloc byte[64];
-      // ... 处理 ...
-      return buffer.AsSpan(0, body.Length);
+sealed class NativeBuffer : IDisposable
+{
+    private SafeBufferHandle? _handle;
+
+    public void Use()
+    {
+        SafeBufferHandle handle = _handle
+            ?? throw new ObjectDisposedException(nameof(NativeBuffer));
+        NativeApi.Consume(handle); // marshaller coordinates SafeHandle lifetime
     }
-    finally { _pool.Return(buffer); }
-  }
-  
-  // 6. Dispose 模式 + SuppressFinalize
-  public void Dispose() { /* 释放 */ GC.SuppressFinalize(this); }
+
+    public void Dispose()
+    {
+        Interlocked.Exchange(ref _handle, null)?.Dispose();
+    }
 }
 ```
 
-## 常见误区
+若 wrapper 同时申报 AddMemoryPressure，还要把相同 bytes 与成功 native allocation/release 精确配对。构造失败不能 Add，重复 Dispose 不能 Remove 两次；工作集增长但 GC heap 稳定时，应先检查这类 native owner，而不是强制 Collect。
 
-<Callout type="trap">
-**误区：优化应该一步到位全部应用**
-优化应该基于测量（dotnet-counters/dump）有针对性应用。盲目应用所有优化策略可能过度设计——比如对低频操作用 ArrayPool 反而增加复杂度。先用工具定位瓶颈（是 Gen0 分配过多？LOH 碎片？Full GC 频繁？），再针对性优化。
+## 怎样设计不会 use-after-return 的缓冲管线
+
+Span/Memory 是 view，不是 owner。同步调用优先 Span，异步 lease 使用 Memory；ArrayPool 的 Rent 到 Return、IMemoryOwner 的取得到 Dispose 是有效窗口。任何 Task、callback、native pointer 或切片都必须在窗口结束前停止使用。
+
+<Term def="buffer 被 Return 或 owner 被 Dispose 后，旧 Span、Memory、pointer 或异步 consumer 仍读取/写入同一后备存储的生命周期错误。">归还后使用</Term>
+
+```csharp
+static async Task<int> ProcessAsync(
+    Stream source,
+    CancellationToken cancellationToken)
+{
+    byte[] rented = ArrayPool<byte>.Shared.Rent(16 * 1024);
+    try
+    {
+        Memory<byte> buffer = rented.AsMemory(0, 16 * 1024);
+        int read = await source.ReadAsync(buffer, cancellationToken);
+        return Parse(buffer.Span[..read]); // result owns no buffer view
+    }
+    finally
+    {
+        ArrayPool<byte>.Shared.Return(rented, clearArray: true);
+    }
+}
+```
+
+这里返回独立的 `int`，而不是归还后仍指向数组的 Span/Memory。若 parser 产出需要长期持有 payload 的对象，应在 Return 前复制必要字节，或把 `IMemoryOwner<byte>` ownership 显式转移给结果并由结果 Dispose。
+
+<Callout type="trap" title="陷阱：从 finally 会 Return 的方法返回 Span">
+  返回表达式先得到 view，finally 随后把数组归还池，调用方拿到的 view 已无 lease，下一租用者可以覆盖内容。编译器无法理解 ArrayPool 生命周期；API 必须返回独立值/副本，或转移 owner 而不是返回裸 view。
 </Callout>
 
-<Callout type="trap">
-**误区：内存优化只影响内存使用量**
-内存优化直接影响性能——减少 GC 压力意味着更少的 Stop-The-World 停顿、更高的吞吐、更低的延迟。一个每秒 100 万请求的服务，每次减少一个 Gen0 分配就能减少每秒 100 万次 GC 标记开销。内存优化就是性能优化。
+## 怎样评估低分配优化是否值得
+
+减少 substring/array materialization、stackalloc、ArrayPool/MemoryPool、ReadOnlySequence 都能改变 allocation/copy，但也引入 ref escape、stack 上限、池高水位、stale data、分段 parser 与 ownership 复杂度。优化目标是总成本而非“alloc=0”。
+
+```text
+correctness: malformed/boundary/cancel/concurrent/use-after-return tests
+runtime:     alloc B/op, copies, CPU, throughput, p50/p99
+memory:      live heap, committed, fragmentation, RSS, pool high-water
+operations:  trace/dump access, complexity, rollback time
+```
+
+小值按 `in` 传递可能更慢；`Pack=1` 可能牺牲对齐；长期 pin 可能避免 copy 却制造碎片；池可能降低 Gen 0 却抬高 RSS。只保留目标架构、Release、稳定 Tier 1 和真实消息分布下成立的改动。
+
+## 怎样评估 GC 配置和 API 干预
+
+Workstation/Server 改变 heap/线程拓扑，Background/Blocking 改变并发方式，LatencyMode/ConserveMemory/HardLimit 改变不同成本。`GC.Collect`、NoGCRegion、RefreshMemoryLimit、full-GC notifications 又各有暂停和状态机副作用。
+
+<Term def="只有在目标现象、前置状态、预期收益和验收指标全部满足时才允许启用某项内存优化或 GC 干预的条件。">干预进入门禁</Term>
+
+<DnmInterventionTradeoffLab />
+
+<Callout type="trap" title="陷阱：配置改变后只看平均暂停">
+  平均值会掩盖 full blocking tail；Server GC 还可能增加 CPU/RSS，LowLatency 可能积累 heap，ConserveMemory 可能提高回收频率。至少比较 p50/p95/p99/max pause、throughput、CPU、heap/RSS、Gen 2 和 OOM 余量，并验证运行实例实际加载了配置。
 </Callout>
+
+## 四个综合案例怎样闭环
+
+**案例 A：每秒临时字符串暴增。** Counter 定位 allocation 与 Gen 0，EventPipe stack 指向 Split/Substring；改为 ReadOnlySpan parse，返回独立领域值。验收 allocation、CPU、p99，反例覆盖 malformed 输入和需要长期文本的字段。
+
+**案例 B：Full GC p99 突增。** 对齐 GC index 与请求，观察 high survival、pins 与 fragmentation；先缩短 pin/降低长寿命对象，再 A/B flavor/config。没有 `Compacted`/pause/throughput/RSS 证据，不直接 CompactOnce。
+
+**案例 C：低峰 heap 持续抬升。** 两个可比 post-GC dump 做 type delta，ClrMD 对代表对象找 static/event/cache root；修复 owner/unsubscribe/eviction 后低峰基线下降。`GC.Collect` 不作为修复。
+
+**案例 D：GC heap 稳定但容器 OOM。** 并列 RSS、committed GC、native、stack/mapping，检查 SafeHandle/Dispose 与 native buffer/pool high-water；修复 release/limit 后同时验证 RSS 和 managed metrics，避免误用 MemoryPressure 当限额。
+
+## 怎样写最终验收报告
+
+<Term def="包含环境、基线、可证伪假设、证据、最小改动、正确性与性能结果、残余风险和回滚阈值的可重复记录。">内存改造验收报告</Term>
+
+```text
+environment: runtime, architecture, GC flavor, container limits, commit
+baseline: workload, warmup, duration, alloc/GC/pause/heap/RSS
+hypothesis: mechanism + supporting evidence + falsifier
+change: smallest ownership/allocation/config intervention
+verification: correctness + same-load deltas + trace/dump proof
+rollback: numeric threshold and operational procedure
+```
+
+报告必须注明数据来源和采集开销，dump/诊断端口的敏感性与权限，EventPipe provider/keyword/dropped events，以及工具/runtime 版本。没有这些信息的“优化成功”无法复现。
+
+## 三步完成全书总验收
+
+<Stepper>
+  <Step title="第一步：从现象建立可证伪假设">
+    选择分配、暂停、保留或 native 现象，定义时间窗与口径，按 detect-correlate-prove 找到对象、阶段或 release path；先写反证条件。
+
+    <DnmIncidentTriageLab />
+  </Step>
+  <Step title="第二步：重建运行时与所有权状态">
+    对 GC 写出每阶段输入、不变量和事件；对资源/buffer 写 owner、consumer、lease、异常/取消/归还，证明不存在重复释放或归还后使用。
+
+    <DnmGcReconstructionLab />
+  </Step>
+  <Step title="第三步：实施最小干预并设置回滚">
+    比较预期收益与新成本，在同版本同负载下验收正确性、CPU、throughput、p99、heap/RSS 和运维边界；超过阈值立即回滚。
+
+    <DnmInterventionTradeoffLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 全书可压缩为在哪里、谁拥有、何时触发、状态怎样变化、哪层证据能证明五个问题
+- 高分配、逻辑保留、碎片和 native/RSS 增长口径不同，必须先分流再选择章节与工具
+- 一次 GC 要从触发/挂起重建到恢复，并把存活、pins、fragmentation、flavor 与事件对齐
+- Dispose/SafeHandle 管资源，Span/Memory 只是 view，ArrayPool/IMemoryOwner 的 Return/Dispose 决定 lease 终点
+- 任何优化都要有进入证据、新成本、正确性测试和数值回滚线；零分配或更低平均暂停不是单独验收标准
 
 <Exercises>
-**问题 1**：如何系统性排查 .NET 应用内存增长问题？
+  1. **问题 1：综合诊断。** 服务同时出现 allocation 高、Gen 2 heap 低峰上涨和 p99 full GC，怎样避免一次改三个变量？
 
-<Answer>
-1.dotnet-counters 监控 GC Heap Size 确认泄漏。2.高峰时 dotnet-dump collect 生成 dump。3.!eeheap -gc 看哪代泄漏。4.!dumpheap -stat 排序找热点类型。5.!dumpheap -type+!gcroot 追根。6.排查常见根因：静态集合增长、事件未取消、GCHandle 未 Free、缓存无过期。7.非托管检查 P/Invoke malloc/free 和 AddMemoryPressure。8.修复后重新监控。
-</Answer>
+  <Answer question="多症状问题怎样分阶段证伪？">先冻结版本/负载，指标与 EventPipe 对齐 allocation stack、survival、GC index/pause；两个可比 post-GC dump 证明 top delta/root。优先修复能解释 retained graph 的 owner，复测后再看 allocation 与 pause 是否仍异常；随后一次只改 materialization 或 GC config。每步保存同口径结果与回滚线，避免因果混杂。</Answer>
 
-**问题 2**：综合全书设计 .NET 应用内存优化策略清单。
+  2. **问题 2：GC 推演。** 高存活、许多短期 pins、LOH 空洞时，一次 full blocking GC 的 plan/compact 成本如何预测和验证？
 
-<Answer>
-1.分配优化：struct/Span/stackalloc。2.池化：ArrayPool/StringBuilder/ObjectPool。3.生命周期：缩短生命避免 Gen2、using Dispose、SuppressFinalize。4.固定优化：缩短 fixed、长期用非托管内存。5.GC 调度：服务器 GC、LatencyMode、TryStartNoGCRegion。6.非托管协调：SafeHandle、AddMemoryPressure。7.监控：dotnet-counters+定期 dump+CI 内存回归测试。
-</Answer>
+  <Answer question="存活、pin 与碎片怎样共同影响 compact？">高存活增加搬运与引用更新，pins 把可移动 plugs 切断并保留局部 gaps，LOH 空洞是否可用还取决于连续尺寸。用 PinnedObjectsCount/固定窗口、GenerationInfo fragmentation before/after、Compacted、promoted/survived、pause 与请求 p99 验证；先缩短 pin，再比较 sweep/compact，而非只看碎片百分比。</Answer>
 
+  3. **问题 3：缓冲区所有权。** API 从同步 Span parser 改成异步持有 payload，应该怎样改变签名和释放契约？
+
+  <Answer question="从同步借用到异步 lease 需要哪些变化？">Span 不能跨危险 await，改收 ReadOnlyMemory/Memory 并规定 lease 持续到 Task terminal；若 receiver 负责长期保存，显式接收 IMemoryOwner 表示 ownership transfer，sender 此后不使用/Dispose。Pool Return 或 owner.Dispose 必须晚于所有 Task/callback/native pointer，长期结果需要独立复制或持有 owner。</Answer>
+
+  4. **问题 4：最终验收。** 一个 microbenchmark 显示 ArrayPool 版本 alloc=0 且快 8%，为什么仍不能上线？
+
+  <Answer question="池化优化还缺哪些门禁？">还需验证有效长度、敏感数据清理、异常/取消 Return、重复归还、Return 后无 view/Task/pointer、并发与最大尺寸；在生产分布下比较 CPU、throughput、p99、live heap、RSS 与 pool high-water。若池保留抬高容器 OOM 风险或复杂度造成正确性问题，应回滚或只在有界热点启用。</Answer>
 </Exercises>
 
+## 名词解释
+
 <Glossary>
-<GlossaryItem term="知识闭环">
-从托管堆模型→GC 回收→SOS 调试→内存模式定位→优化策略的完整诊断优化链。
-</GlossaryItem>
-<GlossaryItem term="GC 压力">
-频繁的堆分配导致 GC 频繁回收，引起 Stop-The-World 停顿降低吞吐增加延迟。
-</GlossaryItem>
-<GlossaryItem term="零成本抽象">
-struct/Span 等在编译期完成优化，运行时零开销（无 GC、无虚函数表）的抽象机制。
-</GlossaryItem>
-<GlossaryItem term="内存回归测试">
-CI 中对比基准的内存使用量测试，防止代码变更引入内存退化。
-</GlossaryItem>
+  <GlossaryItem term="内存诊断闭环">从异常信号到机制证明、最小干预和同口径复验的流程。</GlossaryItem>
+  <GlossaryItem term="可证伪假设">写明证据和反证条件、可被新观测推翻的机制解释。</GlossaryItem>
+  <GlossaryItem term="统一所有权图">同时表示 GC root、资源 release 与 buffer lease 的生命周期图。</GlossaryItem>
+  <GlossaryItem term="GC 阶段不变量">每个回收阶段为保持 heap 与引用正确必须满足的条件。</GlossaryItem>
+  <GlossaryItem term="回收后存活基线">可比覆盖回收后仍可达对象的数量与大小低峰。</GlossaryItem>
+  <GlossaryItem term="一次释放不变量">所有正常和失败路径最终最多执行一次真实资源释放。</GlossaryItem>
+  <GlossaryItem term="归还后使用">pool Return/owner Dispose 后旧 view 或异步消费者仍访问 backing 的错误。</GlossaryItem>
+  <GlossaryItem term="干预进入门禁">允许启用优化或 GC 干预前必须满足的机制证据与状态条件。</GlossaryItem>
+  <GlossaryItem term="内存改造验收报告">记录环境、基线、假设、证据、改动、结果、风险和回滚的可重复产物。</GlossaryItem>
 </Glossary>
+
+<Attribution
+  adaptedFrom="Pro .NET Memory Management, Second Edition, integrated review of Chapters 1-15"
+  adaptedUrl="https://link.springer.com/book/10.1007/979-8-8688-0453-3"
+/>

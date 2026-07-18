@@ -1,88 +1,31 @@
-/**
- * <GilBiasUnbiasedDiagram>: 有偏与无偏估计
- *
- * 无偏(路径追踪) vs 有偏一致(光子映射) vs 有偏不一致(缓存)
- * Server Component, viewBox 720x400, CSS variables.
- */
+import type { ReactNode } from "react";
 
-const primary = "var(--text-primary)";
-const secondary = "var(--text-secondary)";
-const border = "var(--border)";
-const elevated = "var(--bg-elevated)";
-const accent = "var(--accent)";
-const success = "var(--success)";
-const warning = "var(--warning)";
-const danger = "var(--danger)";
+function Frame({ caption, children }: { caption: string; children: ReactNode }) {
+  return <figure className="mdx-figure not-prose mx-auto my-6"><div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div><figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption></figure>;
+}
 
 export function GilBiasUnbiasedDiagram() {
-  return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox="0 0 720 400" role="img" aria-label="三种估计方法对比：无偏期望正确、有偏一致偏差减小、有偏不一致偏差不消失。" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x={360} y={30} textAnchor="middle" fontSize="16" fontWeight="700" fill={primary}>
-            有偏与无偏估计
-          </text>
-          <text x={360} y={50} textAnchor="middle" fontSize="11" fill={secondary}>
-            无偏(路径追踪) vs 有偏一致(光子映射) vs 有偏不一致(缓存)
-          </text>
-          <g>
-            <rect x={36} y={70} width={648} height={69} rx="8" fill={accent} fillOpacity="0.06" stroke={accent} strokeWidth="1.2" strokeOpacity="0.4" />
-            <text x={52} y={92} fontSize="13" fontWeight="700" fill={accent}>无偏估计</text>
-            <rect x={158} y={92} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={228} y={112} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>E[F]=I</text>
-            <rect x={310} y={92} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={380} y={112} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>路径追踪</text>
-            <line x1={298} y1={108} x2={310} y2={108} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-            <rect x={462} y={92} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={532} y={112} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>期望正确</text>
-            <line x1={450} y1={108} x2={462} y2={108} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          </g>
-          <g>
-            <rect x={36} y={147} width={648} height={69} rx="8" fill={success} fillOpacity="0.06" stroke={success} strokeWidth="1.2" strokeOpacity="0.4" />
-            <text x={52} y={169} fontSize="13" fontWeight="700" fill={success}>有偏一致</text>
-            <rect x={158} y={169} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={228} y={190} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>偏差随N减小</text>
-            <rect x={310} y={169} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={380} y={190} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>光子映射</text>
-            <line x1={298} y1={186} x2={310} y2={186} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-            <rect x={462} y={169} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={532} y={190} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>收敛到正确</text>
-            <line x1={450} y1={186} x2={462} y2={186} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          </g>
-          <g>
-            <rect x={36} y={224} width={648} height={69} rx="8" fill={warning} fillOpacity="0.06" stroke={warning} strokeWidth="1.2" strokeOpacity="0.4" />
-            <text x={52} y={246} fontSize="13" fontWeight="700" fill={warning}>有偏不一致</text>
-            <rect x={158} y={246} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={228} y={266} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>偏差不消失</text>
-            <rect x={310} y={246} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={380} y={266} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>辐照度缓存</text>
-            <line x1={298} y1={262} x2={310} y2={262} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-            <rect x={462} y={246} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={532} y={266} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>插值误差</text>
-            <line x1={450} y1={262} x2={462} y2={262} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          </g>
-          <g>
-            <rect x={36} y={301} width={648} height={69} rx="8" fill={danger} fillOpacity="0.06" stroke={danger} strokeWidth="1.2" strokeOpacity="0.4" />
-            <text x={52} y={323} fontSize="13" fontWeight="700" fill={danger}>权衡选择</text>
-            <rect x={158} y={323} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={228} y={344} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>低采样有偏差好</text>
-            <rect x={310} y={323} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={380} y={344} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>高采样无偏差好</text>
-            <line x1={298} y1={340} x2={310} y2={340} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-            <rect x={462} y={323} width={140} height={33} rx="6" fill={elevated} stroke={border} strokeWidth="1" />
-            <text x={532} y={344} textAnchor="middle" fontSize="11" fontWeight="600" fill={primary}>按需选择</text>
-            <line x1={450} y1={340} x2={462} y2={340} stroke={border} strokeWidth="1" strokeDasharray="3 2" />
-          </g>
-          <defs>
-            <marker id="gilBiasUnbiased-arrow" markerWidth="8" markerHeight="8" refX="4" refY="3" orient="auto">
-              <path d="M0 0 L6 3 L0 6 z" fill="var(--text-secondary)" />
-            </marker>
-          </defs>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">
-        有偏与无偏：无偏保证期望正确，有偏一致收敛到正确值，实际按场景权衡选择。
-      </figcaption>
-    </figure>
-  );
+  return <Frame caption="Radiance 从光源正向传播，importance 从传感器反向传播；最终测量只来自两者在可连接路径上的配对。"><div role="img" aria-label="辐亮度正向方程和重要度伴随方程在路径空间汇合" className="grid gap-4 md:grid-cols-[1fr_auto_1fr]"><section className="border border-border bg-bg/40 p-4"><span className="text-xs font-bold text-warning">FORWARD</span><strong className="mt-2 block text-sm text-primary">Radiance equation</strong><code className="mt-3 block text-warning">L = Le + KL</code><p className="mb-0 mt-3 text-xs leading-5 text-secondary">emitter → scatter → scene</p></section><div className="grid place-items-center text-2xl text-accent">⇄</div><section className="border border-border bg-bg/40 p-4"><span className="text-xs font-bold text-success">ADJOINT</span><strong className="mt-2 block text-sm text-primary">Importance equation</strong><code className="mt-3 block text-success">W = We + K*W</code><p className="mb-0 mt-3 text-xs leading-5 text-secondary">sensor → sensitivity → scene</p></section><div className="md:col-span-3 border border-accent/40 bg-accent/5 p-3 text-center text-sm text-primary">Measurement = ⟨We, L⟩ = ⟨W, Le⟩ = path contributions</div></div></Frame>;
+}
+
+const strategies = [
+  ["Camera tracing", "sensor", "BSDF continuation", "indirect diffuse / glossy"],
+  ["Light tracing", "emitter", "importance connection", "caustic / light transport"],
+  ["Bidirectional", "both ends", "connect subpaths", "mixed difficult paths"],
+  ["Finite element", "surface basis", "matrix / relaxation", "diffuse exchange"],
+] as const;
+
+export function GilPathStrategyDiagram() {
+  return <Frame caption="光传输策略的差异不是“公式不同”，而是从哪一端生成顶点、怎样连接、在哪里存储与重建贡献。"><div role="img" aria-label="相机追踪光线追踪双向追踪和有限元策略矩阵" className="overflow-x-auto"><div className="min-w-[700px] border border-border"><div className="grid grid-cols-[1.1fr_.8fr_1.2fr_1.5fr] bg-bg px-3 py-2 text-xs font-bold text-primary"><span>Strategy</span><span>Start</span><span>Operation</span><span>Strong case</span></div>{strategies.map(([name,start,op,strong],i)=><div key={name} className={`grid min-h-12 grid-cols-[1.1fr_.8fr_1.2fr_1.5fr] items-center gap-3 px-3 py-2 text-xs ${i%2?"bg-bg/40":"bg-elevated"}`}><strong className="text-accent">{name}</strong><code className="text-primary">{start}</code><span className="text-secondary">{op}</span><span className="text-success">{strong}</span></div>)}</div></div></Frame>;
+}
+
+const errors = [
+  ["Bias", "E[Î]-I", "kernel radius · cache · truncation"],
+  ["Variance", "E[(Î-EÎ)²]", "rare paths · PDF mismatch"],
+  ["Consistency", "Î→I", "parameter schedule with N"],
+  ["Work", "time + memory", "trace · store · connect · rebuild"],
+] as const;
+
+export function GilEstimatorTradeoffDiagram() {
+  return <Frame caption="策略验收必须同时报告偏差、方差、一致性和工作量；“无偏”从来不是单独的胜负判据。"><div role="img" aria-label="光传输估计器的偏差方差一致性工作量四维比较" className="grid gap-3 sm:grid-cols-2">{errors.map(([name,formula,cause])=><section key={name} className="border border-border bg-bg/40 p-4"><div className="flex items-center justify-between gap-3"><strong className="text-sm text-primary">{name}</strong><code className="text-xs text-accent">{formula}</code></div><p className="mb-0 mt-3 text-xs text-secondary">{cause}</p></section>)}</div></Frame>;
 }

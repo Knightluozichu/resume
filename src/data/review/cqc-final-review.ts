@@ -1,41 +1,20 @@
 import type { ReviewQuestion } from "./types";
 
-/** 编写高质量代码 · 总复习复习题 */
 export const cqcFinalReviewQuestions: ReviewQuestion[] = [
   {
     id: "cqc-final-review-1",
     chapter: "cqc-final-review",
     level: 1,
-    question: `全书四大质量维度的核心知识点各是什么？请用一句话概括每个维度。`,
-    answer:
-      `四大质量维度核心：\n\n1. 语法质量：开启 Nullable 让编译器追踪 null 流向，用泛型消除装箱。核心是「让编译器帮你找问题」。\n\n2. 设计质量：异常四层处理（预防→捕获→恢复→记录），async/await 一路到顶不阻塞。核心是「让失败可恢复、IO 不阻塞」。\n\n3. 性能质量：按操作选集合（查找 Dictionary、顺序 List），LINQ 先物化避免多次遍历，用泛型和 Span 消除装箱与拷贝。核心是「选对数据结构和减少分配」。\n\n4. 工程质量：竞态条件用并发集合或 Interlocked 修复，API 设计命名清晰、只加不删。核心是「多线程正确和 API 可演进」。`,
-    tags: ["四象限", "核心知识点", "全书回顾"],
+    question: "整书终审的五重gate分别验证什么？",
+    answer: "Outline验证版本、12章157条100%映射；chapter验证导学+12章+终审共14页质量；source验证旧content/diagram/review/registration为0且导航唯一；compile验证TypeScript/MDX/lint/diff；publish必须等225本全局完成后再build/push/deploy并提供线上证据。",
+    tags: ["终审", "quality-gate", "publish"],
   },
   {
     id: "cqc-final-review-2",
     chapter: "cqc-final-review",
     level: 2,
-    question: `全书各章节之间有什么依赖关系？为什么不能跳层学习？`,
-    answer:
-      `依赖链：语法质量 → 设计质量 → 性能质量 → 工程质量。\n\n1. 语法 → 设计：不学可空引用就写异步代码，async 方法返回 null 时调用方 await 直接崩溃。编译器能帮你拦住的空引用问题，留到运行时排查成本极高。\n\n2. 设计 → 性能：不会异常处理就优化性能，性能代码出错时无从排查。异常被吞掉后，性能优化的效果无法测量验证。\n\n3. 性能 → 工程：不选对集合就管多线程，Dictionary 在多线程下会损坏。集合的线程安全是性能与工程的交叉点。\n\n4. 跳层的后果：语法层的问题（空引用）在异步代码中更难排查；设计层的问题（吞异常）让性能优化无法测量；性能层的问题（选错集合）在多线程下直接崩溃。\n\n因此必须按序学习：先正确，再健壮，再高效，最后可演进。`,
-    tags: ["依赖关系", "跳层", "学习顺序"],
-  },
-  {
-    id: "cqc-final-review-3",
-    chapter: "cqc-final-review",
-    level: 3,
-    question: `在真实项目中如何按优先级应用全书建议？请列出四个优先级层次及具体措施。`,
-    answer:
-      `四级优先级：\n\n1. 立即修复（安全与正确性）：\n- 开启 Nullable，消除空引用异常\n- 修复竞态条件（Dictionary 多线程写 → ConcurrentDictionary）\n- 移除吞异常的空 catch 块\n\n2. 短期改进（健壮性）：\n- 规范异常处理层次（抛具体类型、catch 特定类型）\n- async 一路到顶消除 .Result 阻塞\n- 库代码加 ConfigureAwait(false)\n\n3. 中期优化（性能）：\n- 按操作选对集合（查找用 Dictionary）\n- LINQ 多次遍历改 ToList 物化\n- 用泛型集合消除装箱\n- 热路径手写循环替代 LINQ\n\n4. 长期演进（可维护性）：\n- API 设计审查（布尔参数改枚举、参数多用选项对象）\n- 标记 Obsolete 过渡废弃 API\n- 补充单元测试保行为\n\n热路径（每帧/每请求）是例外，性能优化优先级提升到第一层。`,
-    tags: ["优先级", "真实项目", "应用策略"],
-  },
-  {
-    id: "cqc-final-review-4",
-    chapter: "cqc-final-review",
-    level: 4,
-    question: `综合分析：为什么说「可维护性优先于性能」？这和「性能很重要」矛盾吗？在实际项目中如何平衡两者？`,
-    answer:
-      `不矛盾。「可维护性优先于性能」的含义：当两者冲突时优先选可维护性，除非有测量数据证明该代码是瓶颈。\n\n原因：\n1. 修复成本：正确性问题修复成本随时间指数增长（线上越久越难修），性能问题可测量后针对性优化。\n2. 过早优化：过早优化引入复杂性（手写循环替代 LINQ），降低可读性，优化的可能不是瓶颈。80% 性能问题出在 20% 代码上。\n3. 先正确再优化：先写清晰正确代码 + 测试覆盖，再测量瓶颈，最后针对性优化。\n\n平衡方法：\n1. 非热路径用 LINQ、可读性优先\n2. 热路径（每帧/每请求）手写循环、零分配优先\n3. 用 BenchmarkDotNet 测量确认瓶颈后再优化\n4. 优化后保持测试通过，确保行为不变\n5. 优化的代码加注释说明为什么不用更可读的写法\n\n「可维护性优先」不等于「不优化」——热路径必须优化，只是用数据驱动而非凭直觉。区分热路径和非热路径是平衡的关键。`,
-    tags: ["综合", "可维护性", "性能", "平衡", "热路径", "测量驱动"],
+    question: "怎样用producer-to-consumer chain审查一个parallel encrypted export？",
+    answer: "从input bounds和query snapshot到stream/resource ownership，继续追cancellation/all-task faults、parallel degree/local reduction，再到AEAD/signature、version selector、artifact provenance和deployed smoke。每个箭头用boundary/fault tests、handle baseline、benchmark、signature verification和release evidence替换。",
+    tags: ["contract-chain", "scenario-audit", "evidence"],
   },
 ];

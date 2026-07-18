@@ -1,0 +1,259 @@
+---
+title: "第11章：Parallel STL"
+type: A
+section: C++ High Performance · Chapter 11
+order: 11
+description: 对齐第一版第11章 Parallel STL：divide-and-conquer并行算法、count/copy_if写位置、execution policies、reduce家族，以及OpenCL/Boost.Compute GPU算法。
+demo: false
+math: false
+sourceUrl: "https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
+draft: false
+---
+
+import {
+  ChpDivideConquerGrainMap,
+  ChpExecutionPolicyGpuMap,
+  ChpParallelCopyIfPipelineMap,
+} from "@/components/mdx/cpp-high-performance/diagrams/parallel-stl";
+
+<Objectives>
+
+- 能解释parallel algorithms如何用divide and conquer、grain size与合并成本决定可扩展性
+- 能实现parallel count_if与稳定parallel copy_if，比较atomic synchronized write position和prefix-sum方案
+- 能区分execution policies、accumulate/reduce/transform_reduce语义，并判断GPU/OpenCL offload是否值得
+
+</Objectives>
+
+## 从“可拆分、可独立、可合并”开始
+
+parallel algorithm只有在work能拆成足够大的independent chunks、每个chunk执行不互相冲突、partial results能低成本合并时才可能加速。并行化同时引入task creation、scheduling、synchronization、cache coherence和load imbalance；小输入或cheap operation常被这些fixed overhead吞没。
+
+<Term def="把输入递归或分块成较小独立问题，并行求解后再组合partial results的算法设计。">
+  divide and conquer
+</Term>
+
+先预测serial fraction、per-element cost、memory bandwidth和output coordination，再测threads scaling。不要只比较单线程与“最大线程数”；应画1、2、4...workers曲线，并记录CPU time、wall time、bandwidth与task count。plateau可能来自grain太小、bandwidth饱和或共享write contention。
+
+## parallel transform与grain size
+
+parallel transform可把input range切成chunks，每个task在相同offset的output区间写独占元素，因此通常无需per-element lock。正确性要求input/output overlap符合algorithm contract，callable能并发调用且不修改共享state。若transform抛异常，runtime如何传播/终止也由具体parallel framework或execution-policy规则决定。
+
+```cpp
+template <class Input, class Output, class Function>
+void parallel_transform(Input first, Input last, Output output,
+                        Function function, Executor& executor) {
+    const auto count = std::distance(first, last);
+    const auto grain = choose_grain(count, executor.worker_count());
+
+    executor.for_chunks(count, grain, [&](auto begin, auto end) {
+        for (auto index = begin; index != end; ++index) {
+            output[index] = function(first[index]);
+        }
+    });
+}
+```
+
+这个骨架隐含random access iterators；generic implementation需按category处理。grain size过小产生大量tasks与queue contention，过大则parallelism不足、tail chunk拖慢completion。dynamic work stealing改善不均匀任务，static partition在均匀contiguous data上更低overhead且locality更稳定。
+
+<Term def="每个parallel task处理的最小工作块大小，用来平衡调度开销、负载均衡和cache locality。">
+  grain size
+</Term>
+
+<ChpDivideConquerGrainMap />
+
+memory-bound transform很快饱和DRAM bandwidth，多core不再线性加速。若function只是一次简单加法，SIMD可能比threads更重要；若每元素进行昂贵独立计算，task overhead更容易摊薄。parallel与vectorization是不同axes，`par_unseq`才允许两者组合但约束更强。
+
+## parallel count_if是reduction
+
+count_if没有独立output positions，只需每个chunk计算local count，最后reduce partial counts。让所有threads每匹配一次就increment同一atomic会产生contention；local accumulator避免hot cache line，合并只与chunk数相关。
+
+```cpp
+std::vector<std::size_t> partial(chunk_count);
+
+parallel_for_chunks(input, [&](std::size_t chunk, auto first, auto last) {
+    partial[chunk] = static_cast<std::size_t>(
+        std::count_if(first, last, predicate));
+});
+
+const auto count =
+    std::accumulate(partial.begin(), partial.end(), std::size_t{0});
+```
+
+<Term def="把多个元素或分块的partial values按组合operation归并成一个结果的计算模式。">
+  reduction
+</Term>
+
+partial counters本身若紧邻并被不同threads同时写，仍可能false sharing；可让每个task返回value给executor，或对per-worker slots做适当layout。predicate必须线程安全，且count type要容纳range size。
+
+## parallel copy_if的写位置难题
+
+copy_if的每个input是否产生output取决于predicate，事先不知道目标offset。最直接方案用atomic fetch_add取得synchronized write position：每个matched item得到唯一slot，但所有matches竞争同一atomic，output order由runtime interleaving决定，通常不稳定。
+
+<Term def="多个并行worker通过mutex或atomic协调唯一输出索引，避免写入同一slot的共享位置。">
+  synchronized write position
+</Term>
+
+稳定parallel copy_if可使用三阶段：第一遍并行计算match flag与per-chunk count；对counts做prefix sum得到每chunk exclusive output base；第二遍并行scatter，各chunk按input order写自己的exclusive output interval。它多一次pass和flags/count storage，却消除per-item global atomic并保留order。
+
+```cpp
+// phase 1: local selection
+parallel_for_chunks(input, [&](auto chunk) {
+    for (auto index : chunk.indices()) flags[index] = predicate(input[index]);
+    counts[chunk.id()] = count_flags(flags, chunk);
+});
+
+// phase 2: exclusive prefix sum of chunk counts
+std::exclusive_scan(counts.begin(), counts.end(), offsets.begin(), 0uz);
+
+// phase 3: stable scatter into disjoint output intervals
+parallel_for_chunks(input, [&](auto chunk) {
+    auto write = offsets[chunk.id()];
+    for (auto index : chunk.indices())
+        if (flags[index]) output[write++] = input[index];
+});
+```
+
+`0uz`是较新标准的size_t literal，为了第一版C++17代码应改用`std::size_t{0}`；这里刻意暴露版本差异，项目代码不能直接复制而不检查language mode。完整实现还需分配恰当output size、处理move/copy exceptions和non-default-constructible value。
+
+<ChpParallelCopyIfPipelineMap />
+
+<Callout
+  type="trap"
+  title="陷阱：atomic write index让parallel copy_if既正确又等价"
+>
+  atomic能保证slot唯一，却可能形成高争用cache line，并改变stable copy_if的input
+  order。先写清是否要求稳定顺序；稳定结果用count/prefix/scatter，顺序无关且match稀少时才比较atomic方案。
+</Callout>
+
+## execution policies表达允许的执行方式
+
+C++17 execution policies包括sequenced `std::execution::seq`、parallel `par`与parallel unsequenced `par_unseq`。`seq`在calling thread按顺序执行；`par`允许多个threads并行；`par_unseq`还允许同一thread内unsequenced/vectorized execution，因此callable不能使用vectorization-unsafe synchronization或依赖调用顺序。
+
+<Term def="传给标准算法的策略对象，用来声明实现可采用sequenced、parallel或parallel-unsequenced执行。">
+  execution policy
+</Term>
+
+```cpp
+std::transform(std::execution::par,
+               input.begin(), input.end(), output.begin(), expensive_pure_fn);
+
+const auto sum = std::transform_reduce(
+    std::execution::par,
+    input.begin(), input.end(), 0.0,
+    std::plus<>{}, [](double x) { return x * x; });
+```
+
+implementation可以选择不创建threads，policy是permission而非performance guarantee。标准execution-policy overload对user function异常有特殊规则，常见标准policy下未捕获异常会导致`std::terminate`，不能假定像普通algorithm一样传播；应核对所用standard/library版本。
+
+`par_unseq` callable不能拿普通mutex、allocate via unsafe paths或使用依赖forward progress的blocking primitive；vector lane阻塞可能deadlock。shared counters、logging和random engine都需重新审计。pure transform最适合，带side effects的for_each风险最高。
+
+<Callout type="trap" title="陷阱：给原算法加par就保持行为且必然更快">
+  policy允许重排、并行和不同异常行为；callable side effects、floating-point
+  order、iterator能力与output
+  overlap都可能改变结果。小输入还可能更慢。先建立serial
+  oracle，再验证correctness和scaling。
+</Callout>
+
+## accumulate、reduce与transform_reduce
+
+`std::accumulate`按iterator顺序把accumulator与每个element组合，适合order-sensitive fold。`std::reduce`允许重排与分组以支持parallel reduction，所以operation需满足足够的associativity/commutativity与type closure。floating-point addition不严格associative，并行结果可能与serial bit pattern不同。
+
+<Term def="允许重新分组并可并行合并elements与partial results的归约算法，operation必须支持这些组合。">
+  reduce
+</Term>
+
+`transform_reduce`把map与reduce融合，避免显式intermediate container，也可表达dot product。binary/unary operations必须能接受标准允许的argument combinations；不能只让`T op T`偶然工作。数值稳定性可通过wider accumulator、pairwise/Kahan-like策略或允许误差contract处理，但要测parallelism与accuracy取舍。
+
+`for_each`没有返回reduction结果，parallel side effects只能写disjoint elements或使用明确同步。若真正意图是sum/count/collect，应选reduce或两阶段algorithm，不在for_each里锁住一个global accumulator。
+
+## GPU algorithms与数据移动
+
+GPU拥有大量throughput-oriented execution lanes，适合规则、data-parallel、arithmetic-intensive work。host到device transfer、kernel launch、device allocation和result copy是fixed overhead；数据已驻留device且pipeline连续执行多个kernels时更容易获益，小range单次offload常得不偿失。
+
+Boost Compute提供类似STL的GPU algorithms，并通过OpenCL管理context、queue、device buffers和kernels。API形似`transform`不代表host iterator可直接零成本使用；数据位置和queue synchronization决定实际路径。OpenCL kernel还需考虑work-group、coalesced access、branch divergence与device capability。
+
+<Term def="跨CPU、GPU等设备执行kernel的开放并行计算接口，显式管理context、command queue和device memory。">
+  OpenCL
+</Term>
+
+<ChpExecutionPolicyGpuMap />
+
+CPU parallel STL与GPU algorithms的比较应包括end-to-end transfer，而不只kernel time。若input由GPU前一步产生、output被GPU下一步消费，可把整个pipeline留在device；若每次从CPU复制少量数据再取回，CPU SIMD/threads往往更合理。数值结果还可能因device math、reduction order和precision不同，需定义tolerance。
+
+## 第11章实验协议
+
+1. 对parallel transform改变n、function cost与grain，绘制threads/scaling和bandwidth。
+2. 比较global atomic count与per-chunk count+reduce，采集retries/cache traffic。
+3. 对copy_if比较atomic write index与flag/count/prefix/scatter，验证stable order。
+4. 用serial result作oracle，检查seq/par/par_unseq的side effects与异常路径。
+5. 比较accumulate与reduce在integer/floating-point上的结果、速度和误差。
+6. 用transform_reduce替代transform+temporary+reduce，记录allocation和passes。
+7. 比较CPU serial、CPU parallel、GPU kernel-only与GPU end-to-end transfer。
+8. 保持数据驻留GPU执行多stage pipeline，再与每stage往返host对比。
+
+## 小结
+
+- parallel algorithms需要可拆分work、独立chunks和低成本merge，grain决定overhead与balance
+- parallel count_if应使用local counts后reduce，避免每match争用global atomic
+- stable parallel copy_if可用flags、counts、prefix sum和disjoint scatter
+- seq、par、par_unseq允许不同程度重排/并行/vectorization，不保证一定使用threads或更快
+- accumulate保持顺序，reduce允许重组；floating-point结果可能改变
+- transform_reduce融合映射与归约，for_each不适合隐藏global reduction
+- GPU/Boost Compute/OpenCL收益取决于data residence、transfer、launch与kernel规则性
+- 并行性能必须报告correctness、scaling、CPU/GPU资源、bandwidth和end-to-end时间
+
+<Attribution
+  adaptedFrom="C++ High Performance, First Edition, Chapter 11: Parallel STL"
+  adaptedUrl="https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
+/>
+
+<Glossary>
+  <GlossaryItem term="divide and conquer">
+    分块独立求解并合并partial results的算法结构。
+  </GlossaryItem>
+  <GlossaryItem term="grain size">
+    单个parallel task处理的最小工作块大小。
+  </GlossaryItem>
+  <GlossaryItem term="reduction">
+    把多个values或partials组合成一个结果的模式。
+  </GlossaryItem>
+  <GlossaryItem term="synchronized write position">
+    协调并行writers唯一output slot的共享位置。
+  </GlossaryItem>
+  <GlossaryItem term="execution policy">
+    声明标准算法允许使用哪种执行方式的策略。
+  </GlossaryItem>
+  <GlossaryItem term="reduce">
+    允许重新分组并行合并partial values的算法。
+  </GlossaryItem>
+  <GlossaryItem term="OpenCL">
+    显式管理设备与kernel的开放异构并行接口。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：parallel count_if为何不应让每个match都fetch_add同一atomic？** 设计local reduction。
+
+<Answer question="local counts怎样降低contention？">
+  每个chunk只写自己的counter，在local
+  cache中完成全部predicate和increment，最后由tree/serial
+  reduce合并chunk_count个值；共享协调从matches次降为chunks量级。避免partial
+  counters false sharing，可由task直接返回value或分隔slots。比较不同match
+  rate、grain和threads下的atomic retries、cache traffic、wall time及结果一致性。
+</Answer>
+
+2. **问题 2：实现stable parallel copy_if时为什么需要prefix sum？** 说明三阶段offset证明。
+
+<Answer question="怎样保证唯一且保持输入顺序的output位置？">
+  每chunk先按input order生成flags和match count；exclusive prefix sum让chunk
+  i的base等于所有前置chunks
+  matches总数，因此chunks获得互不重叠且按input先后排列的output
+  intervals；每chunk再按本地input order递增写入。这样无需per-item global
+  atomic且保持stable。测试empty/all-match、uneven chunks、non-default
+  T与exception cleanup。
+</Answer>
+
+3. **问题 3：一个GPU transform的kernel快10倍但端到端更慢，怎样决定是否保留？** 分解transfer与pipeline。
+
+  <Answer question="GPU决策应统计哪些边界？">分解host preparation、H2D、allocation、queue wait、kernel、D2H和CPU baseline；改变n与arithmetic intensity找交叉点。如果数据本来由前一GPU stage产生且下一stage继续消费，应测resident multi-kernel pipeline，可能摊薄transfer；若每次少量往返则保留CPU SIMD/par。同步验证precision/tolerance、device availability、fallback和deployment成本，不能只报告kernel time。</Answer>
+</Exercises>

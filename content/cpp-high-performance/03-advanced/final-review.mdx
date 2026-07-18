@@ -1,115 +1,232 @@
 ---
-title: 总复习
+title: "总复习：从性能事故到证据闭环"
 type: A
-section: 模板与元编程性能
-order: 9
-description: 用一张思维导图串联全书——从测量优先的方法论到内存、并发、模板的逐层提速，建立可持续的性能工程体系。
+section: C++ High Performance · Final Review
+order: 12
+description: 用一个端到端性能事故串联第一版官方11章：接口、测量、数据/算法、内存/编译期/惰性求值，以及并发与GPU证据。
 demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
 draft: false
 ---
 
-import { ChpFinalMindMap } from "@/components/mdx/cpp-high-performance/diagrams/chp-final-mindmap";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer, Term } from "@/components/mdx/mdx-components";
+import {
+  ChpCapstoneEvidenceMap,
+  ChpFinalKnowledgeMatrixMap,
+  ChpOptimizationFailureTraceMap,
+} from "@/components/mdx/cpp-high-performance/diagrams/final-review";
 
 <Objectives>
-- 能用一句话串联全书四大板块的知识递进关系
-- 能论述「大 O 选方向，缓存定胜负」并用 vector/list、AoS/SoA 佐证
-- 能描述一个可持续、防回归的 C++ 性能工程体系
+
+- 能分析一个真实性能回归并把证据映射到官方11章的contract与工具
+- 能设计从serial baseline到布局、生命周期、并发和GPU的分层优化实验
+- 能判断性能收益是否同时通过correctness、fidelity、measurement和regression门禁
+
 </Objectives>
 
-## 一张图串起全书
+## 从一次真实性能事故开始
 
-学完九章，是时候把散落的知识点收拢成一张网。全书围绕一个主线展开：先建立「测量优先」的性能观，再从内存布局、数据结构、并发与缓存、模板与剖析逐层榨取速度。
+假设一个C++事件评分服务升级后出现四个症状：吞吐下降20%，p99从目标范围外移，RSS峰值增长，8 threads只比1 thread快1.6倍。团队提出“换allocator”“改lock-free”“把transform扔GPU”三个方案，但目前没有证据说明任何一个是cause。
 
-<ChpFinalMindMap />
+<Term def="用户可观察指标偏离既定基线，并能追溯到代码、配置或环境变化的性能退化事件。">
+  性能回归
+</Term>
 
-四大板块的递进关系可以这样一句话概括：**性能基础**提供「测量→分析→优化→验证」的方法论（先量化再动手），**内存与数据结构**从连续布局与访问模式要速度（让数据利于缓存），**并发与缓存**用线程池/无锁与缓存行/局部性榨取多核与硬件红利（让硬件不闲置），**模板与剖析**把优化固化到编译期与工程流程（让提升可持续、不回归）。
+先预测问题属于哪层，然后冻结revision、compiler、flags、hardware和representative input。全书11章提供的不是11个互斥答案，而是从contract到execution的审计顺序。
 
-每一段都是下一段的地基——不测量就优化是瞎猜，单线程没吃满就上多核事倍功半，优化不固化进 CI 就随重构流失。
+<ChpFinalKnowledgeMatrixMap />
 
-## 主线一：测量优先是纪律
+## 第1-2章：先恢复接口和value契约
 
-全书反复强调的第一原则：优化必须基于剖析数据，而非直觉。现代 CPU 极度复杂（多级缓存、分支预测、乱序执行、SIMD），让「纸面复杂度」与「真实耗时」经常背离。凭感觉改的多是非热点，白费功夫甚至让代码更难读。
+事件进入pipeline时，先画value、borrow、owner与failure边界。一次“减少copy”的改动若把owned string改成string_view，却让异步task晚于source lifetime，就不是优化而是correctness bug。lambda capture、std::function、optional/any和move也要按representation审计。
 
-测量优先落地为闭环：测量（建基线）→ 分析（剖析定位热点）→ 优化（改算法/布局/并发）→ 验证（回到 benchmark 确认提升且无回归）。验证不能省——优化可能没真提速、可能引入回归、可能改了非热点。没有验证的「优化」只是改代码。
+```text
+input owner -> parse value -> score task -> result owner
+             borrow only inside synchronous parse
+             async capture owns required state
+failure: parse error | absent score | task exception
+```
 
-## 主线二：缓存是第一性原理
+<Term def="把value、borrow、ownership、capture与error路径写成可验证状态关系的接口审计表。">
+  契约台账
+</Term>
 
-<Term def="让数据连续、让访问有序、把访存尽量留在 L1/L2 的硬件规律，是高性能的第一性原理">缓存第一性原理</Term> 贯穿全书。主存比 L1 慢约 100 倍，一次 cache miss 等于白做上百次 L1 访问。所以决定快慢的往往不是「算多少」而是「访存怎么访」。
+检查copy/move counters和allocation后，若std::function持有large closure而超出small buffer，可能产生allocation；但不能假设每次都如此。若plain auto从reference result复制大型value，也要从type deduction证明。第1-2章负责排除“程序已经不等价”与“语法隐藏cost”。
 
-「大 O 选方向，缓存定胜负」：
+## 第3章：把症状变成实验
 
-- `vector` 中间插入 O(n) 跑赢 `list` 插入 O(1)，因连续缓存命中压倒指针跳转的 cache miss。
-- AoS 遍历单字段缓存行有效载荷 25%，SoA 拆成连续数组后接近 100%，同大 O 吞吐几倍差异。
-- `std::map` 与排序 `vector` 二分都是 O(log n)，但 vector 连续缓存友好常快几倍。
+p99、throughput与RSS是不同performance properties。建立三个benchmarks：micro隔离score kernel，component包含queue与allocation，end-to-end覆盖parse到response。对A/B交错执行，报告distribution和uncertainty，并用sampling profile取得inclusive stacks。
 
-选数据结构/布局时，先看大 O 排除明显差的，再按缓存友好性（连续、紧凑、按访问模式组织）定最终方案。
+<Term def="明确metric、workload、控制变量、样本与决策规则的可重复性能实验描述。">
+  测量协议
+</Term>
 
-## 主线三：分层优化与可持续固化
+```text
+baseline: throughput + median/p95/p99 + allocations + peak RSS
+profile : CPU stacks + lock wait + cache/TLB + faults
+compare : effect size + uncertainty + correctness oracle
+```
 
-优化按 ROI 分层递进：
+若allocator占25% inclusive samples，应沿call stack回到producer：是container rehash、string temporary、shared_ptr control block还是arena缺失。profile指向“哪里”，不自动给出“为什么”。
 
-1. **方法论层**：先建基线定位热点，确立改哪里、改完是否真快。
-2. **数据层**：换数据结构、改善缓存局部性，拿数量级提升且风险低。
-3. **硬件层**：单线程吃满后再上多核与缓存红利，线程池处理海量任务、无锁仅限热点。
-4. **工程化层**：模板把计算挪编译期，benchmark 与剖析纳入 CI 防回归。
-
-跳层是常见错误。可持续固化靠工程体系：用 google-benchmark 建基线、用 perf/VTune 剖析、把关键 benchmark 接入 CI 做回归门禁、历史趋势图发现渐进退化。剖析给方向、benchmark 给度量、CI 给保障，三者闭环让性能提升不随重构流失。
-
-<Callout type="tip">
-把性能当代码质量同等对待，纳入 review。任何「我觉得快了」都要 benchmark 佐证，任何「这里慢」都要剖析证据。这是把本书「测量优先」原则内化为工程习惯的标志。
+<Callout type="trap" title="陷阱：平均值改善就宣布回归已修复">
+  平均值可能掩盖queue tail、page fault或rehash
+  spike。必须同时检查目标SLO分位数、throughput、memory和错误率；优化不能用另一项回归交换一项绿色数字而不说明。
 </Callout>
 
-## 哪些是基石，哪些需升级
+## 第4-6章：先修数据形状和算法工作量
 
-本书给的是「性能工程的骨架」，跨硬件跨语言长期有效：
+profile显示大量node traversal与full sort。第4章要求按access pattern比较vector/list、ordered/hash container与parallel arrays；第5章检查custom iterator category是否真实；第6章判断只需top-100是否应partial_sort而非全sort。
 
-- **测量优先**的方法论——任何优化基于剖析数据。
-- **缓存第一性原理**——数据连续、访问有序、工作集受控。这是硬件不变的规律。
-- **大 O 选方向 + 缓存定胜负**的决策框架。
-- **测量→分析→优化→验证**的闭环纪律。
+<Term def="算法为得到目标结果实际执行的比较、移动、分配、遍历与同步总量。">
+  有效工作量
+</Term>
 
-需结合实际升级的方向：硬件演进（NUMA、持久内存、CXL、异构 GPU/NPU）需新知识，但局部性原理不变；C++20/23 的 ranges、coroutines、modules 改变写法，但代码膨胀权衡仍在；剖析器持续进化（eBPF、Continuous Profiling），但「采样定位热点」本质不变；云原生与容器化带来邻噪与 cgroup 限制，需新的隔离测量手段。
+若records按node分散、hot loop只读score和id，可比较compact vector/SoA；若hash table在关键窗口rehash，reserve或不同policy可能移出spike；若iterator谎报random access，generic algorithm可能隐藏二次成本。每项修改都保留logical workload一致。
 
-把骨架内化为习惯，再随技术演进填充新工具，就是可持续的高性能 C++ 工程实践。
+```text
+full sort large records
+  -> compact {score,index}
+  -> partial_sort top-k
+  -> gather selected records
 
-<Callout type="trap">
-不要把本书当成「技巧清单」记。技巧（哪个容器快、哪个指令预取）会随硬件与语言演进过时，但方法论（测量优先、缓存为王、分层优化、闭环固化）跨硬件跨语言不变。学骨架，而非背技巧。
+measure: comparisons | moved bytes | cache misses | allocations
+```
+
+复杂度选择与locality必须共同成立。n很小时full sort常数可能更好；large payload下index sort减少bytes；top-k接近n时partial方案优势消失。结论绑定n/k与record distribution。
+
+## 第7-9章：追踪storage和推迟的工作
+
+第7章将allocation拆为virtual pages、allocator storage、construction、ownership和release。若request objects共享lifetime，可实验arena；若短string占主导，先核实SSO；若shared ownership非必要，unique/value减少control block和atomic traffic。
+
+第8章检查type traits与if constexpr是否选择预期fast path，同时监控template instantiation和binary。第9章检查string proxy是否安全借用、DistProxy是否真的减少sqrt，以及lazy conversion是否重复执行。
+
+<Term def="工作从一个阶段移动到另一个阶段后，新阶段承担的时间、内存、异常、同步或维护成本。">
+  代价迁移
+</Term>
+
+arena让allocate变成bump，却把memory保留到reset；lazy proxy减少temporary，却可能延长operand lifetime或重算；compile-time specialization消除runtime branch，却增加build与icache压力。只记录被消除的cost会产生虚假胜利。
+
+<ChpOptimizationFailureTraceMap />
+
+<Callout type="trap" title="陷阱：看到malloc或sqrt热点就直接替换实现">
+  allocator可能只是上游对象churn的结果，sqrt可能在consumer总要真实distance时无法跳过。先证明调用次数为何产生，再实验减少work、改变lifetime或推迟materialization，最后才替换机制。
 </Callout>
+
+## 第10章：证明共享状态与扩展上限
+
+1到8 threads仅1.6倍可能来自serial fraction、mutex queue、atomic retry、false sharing、memory bandwidth或load imbalance。先画scaling curve，再分解wait、run queue、cache-to-cache和bandwidth。每个shared state都需mutex或atomic happens-before证明。
+
+<Term def="随着workers增加，吞吐、延迟或完成时间相对单worker的变化关系，以及停止增长的资源原因。">
+  扩展曲线
+</Term>
+
+condition variable必须等待predicate并支持shutdown；thread pool要有backpressure；SPSC queue不能误用为MPMC。release/acquire publication只有在acquire读取对应release value时才发布ordinary payload。用TSan与stress发现执行问题，但语言级证明仍不可省。
+
+降低contention通常先分区、local accumulate再reduce、batch updates或缩短critical section。lock-free是progress property，不是“没有mutex”标签；CAS风暴可能比blocking lock更差。
+
+## 第11章：并行算法和GPU是最后的执行选择
+
+score transform若elements独立、function足够重且output disjoint，可比较seq/par/par_unseq。count_if使用local reductions；stable copy_if使用flags、count、prefix sum和scatter；reduce允许重排，floating result需tolerance。
+
+GPU方案必须测H2D、launch、kernel、D2H与queue wait。只有data能驻留device并连续执行多个kernels，或arithmetic intensity足够高时，kernel throughput更可能覆盖fixed overhead。
+
+<Term def="从host准备、数据传输、执行、同步到结果消费的完整用户可见时间，而非只取其中最快的kernel段。">
+  端到端成本
+</Term>
+
+parallel policy是permission，不是保证；implementation可能串行。callable side effects、exception规则、grain和bandwidth都需核查。保留serial oracle，确保parallel/GPU结果在定义的ordering与numeric tolerance内等价。
+
+## 一条可审计的修复路径
+
+对该事故，证据最终可能显示：full sort large records与temporary strings制造40%工作，global result counter产生false sharing，GPU transfer大于kernel节省。合理修复是compact key+partial_sort、reserve/append或安全string proxy、per-worker counter后reduce；GPU方案被实验否决并记录。
+
+<ChpCapstoneEvidenceMap />
+
+<Term def="由原始测量、profile、correctness tests、代码差异与复测结果组成，可让他人重现决策的材料集合。">
+  证据包
+</Term>
+
+最终报告不是“用了高级技术”，而是：p99/throughput/RSS effect与uncertainty；hotspot如何变化；正确性和sanitizer结果；适用input/hardware边界；失败方案及原因；regression benchmark。这样下一次回归可以从证据继续，而非重开猜测。
+
+## 全书11章知识压缩
+
+1. 第1章：zero-cost abstraction必须与value、ownership、error contract一起看。
+2. 第2章：auto/lambda/move/optional/any改变type、capture和representation。
+3. 第3章：复杂度给增长方向，实验与profile给目标场景证据。
+4. 第4章：container和parallel arrays由memory properties与access pattern选择。
+5. 第5章：iterator category是语义与复杂度承诺。
+6. 第6章：algorithm、predicate、partial order与views表达最少有效工作。
+7. 第7章：virtual page、storage、object lifetime、RAII与allocator分层。
+8. 第8章：traits/constexpr/reflection把可证明事实前移，同时支付build成本。
+9. 第9章：proxy/lazy只在能跳过、融合或减少materialization时获益。
+10. 第10章：共享状态需要happens-before，scaling受contention和hardware限制。
+11. 第11章：parallel STL/GPU要求可拆work、独立output和端到端收益。
 
 ## 小结
 
-- 全书主线：测量优先 → 内存与数据布局 → 并发与缓存红利 → 模板与工程固化
-- 缓存第一性原理：大 O 选方向，缓存定胜负，让数据连续、访问有序
-- 分层优化按 ROI：方法论 → 数据 → 硬件 → 工程化，跳层事倍功半
-- 基石是方法论与缓存原理（跨硬件不变），工具与语言设施会升级但长在骨架上
+- 性能事故先恢复contract与correctness，再建立可归因measurement
+- 数据结构、iterator和algorithm共同决定有效工作量与地址序列
+- memory、compile-time和lazy optimization都在迁移代价，而非消灭所有代价
+- concurrency需要happens-before和scaling evidence，lock-free不是默认终点
+- Parallel STL与GPU只有在grain、data residence和merge成立时才加速
+- 完成标准是四类门禁和可重现证据包，不是某个单点benchmark绿色
 
 <Attribution
-  adaptedFrom="C++ High Performance (Björn Andrist, Viktor Sehr)"
-  adaptedUrl="https://www.packtpub.com/"
+  adaptedFrom="C++ High Performance, First Edition, Chapters 1-11"
+  adaptedUrl="https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
 />
 
 <Glossary>
-<GlossaryItem term="测量优先">
-性能优化的首要纪律：先用 benchmark 建基线、用剖析器定位热点，再针对性优化，最后回到测量验证。禁止凭直觉改代码。是全书第一原则。
-</GlossaryItem>
-<GlossaryItem term="缓存第一性原理">
-让数据连续、让访问有序、把访存尽量留在 L1/L2 的硬件规律。主存比 L1 慢约 100 倍，访存模式决定快慢。跨硬件不变。
-</GlossaryItem>
-<GlossaryItem term="分层优化">
-按 ROI 把优化分四层递进：方法论（测量定位）→ 数据（布局与算法拿数量级）→ 硬件（并发与缓存榨硬件红利）→ 工程化（模板与 CI 固化）。跳层事倍功半。
-</GlossaryItem>
-<GlossaryItem term="回归门禁">
-CI 中自动跑关键 benchmark 与基线对比，回归超阈值阻断合入，配合历史趋势图发现渐进退化。是性能提升可持续、不随重构流失的工程保障。
-</GlossaryItem>
-<GlossaryItem term="零成本抽象">
-C++ 设计目标：高层抽象（模板、`std::vector`）运行期不比手写低层代码慢，前提是编译期完成分发与特化。代价是编译时间与代码膨胀。
-</GlossaryItem>
+  <GlossaryItem term="性能回归">
+    用户指标相对已知基线发生可定位的退化。
+  </GlossaryItem>
+  <GlossaryItem term="契约台账">
+    记录value、ownership、capture和error边界的审计表。
+  </GlossaryItem>
+  <GlossaryItem term="测量协议">
+    定义metric、workload、控制变量和决策规则的实验描述。
+  </GlossaryItem>
+  <GlossaryItem term="有效工作量">
+    为目标结果实际执行的计算、移动、分配和同步。
+  </GlossaryItem>
+  <GlossaryItem term="代价迁移">
+    优化把成本移动到另一阶段或resource的现象。
+  </GlossaryItem>
+  <GlossaryItem term="扩展曲线">
+    workers数量与性能结果之间的变化关系。
+  </GlossaryItem>
+  <GlossaryItem term="端到端成本">
+    从输入准备到结果消费的完整可见成本。
+  </GlossaryItem>
+  <GlossaryItem term="证据包">
+    支持重现性能决策的测量、profile、tests和diff集合。
+  </GlossaryItem>
 </Glossary>
 
 <Exercises>
-  <Answer question="用一句话串联全书四大板块的知识递进关系。">性能基础提供「测量→分析→优化→验证」的方法论（先量化再动手），内存与数据结构从连续布局与访问模式要速度（让数据利于缓存），并发与缓存用线程池/无锁与缓存行/局部性榨取多核与硬件红利（让硬件不闲置），模板与剖析把优化固化到编译期与工程流程（让提升可持续不回归）。四段递进：方法论→数据→硬件→工程化，每段是下一段地基——不测量就优化是瞎猜，单线程没吃满就上多核事倍功半，优化不固化进 CI 就随重构流失。</Answer>
-  <Answer question="结合本书内容，论述如何把一个真实 C++ 项目的性能提升一档，建立怎样的性能工程体系？">三步建体系：一是测量基础设施——google-benchmark 为关键路径建基线（均值+分布+尾部）入库，perf 采样定位热点、VTune 深挖硬件瓶颈，接入 CI 跑 benchmark+剖析快照做回归门禁阻断合入，历史趋势图发现渐进退化。二是优化方法论按 ROI 排序——先确认算法层级正确（大 O），再改数据布局（连续、SoA、tiling），再上并发（线程池、无锁仅限热点），最后常量优化（对齐、预取、SIMD），每层剖析定位 benchmark 验证，阿姆达尔定上限把最热串行段并行化收益最大。三是固化防回归——优化写进模板/constexpr/零成本抽象让正确性随复用传播，benchmark 与剖析纳入 review，性能当代码质量对待。本书基石是测量优先方法论、缓存第一性原理、大 O+缓存决策框架、闭环纪律，跨硬件不变；具体工具与语言设施（C++20/23、eBPF、异构）会升级但长在这套骨架上。</Answer>
+  1. **问题 1：allocator占25% CPU且RSS上升，设计跨第3、4、7、9章的排查。** 不允许直接换allocator。
+
+<Answer question="怎样从表现追到对象产生原因？">
+  第3章锁定representative workload与inclusive allocation
+  stacks；第4章查container growth/rehash和node
+  layout；第7章按size/lifetime统计并比较reserve、reuse、arena或pool；第9章查eager
+  string
+  temporary与重复materialization。每项单独实验，报告p99、throughput、alloc
+  count/bytes、RSS和destructor/reset，再重新profile确认热点是否转移。
+</Answer>
+
+2. **问题 2：8线程只快1.6倍，怎样判断是contention、bandwidth还是grain？** 给出最小证据集。
+
+<Answer question="三个原因的证据有何不同？">
+  画1/2/4/8 workers scaling；contention表现为lock wait、CAS
+  retry或cache-to-cache
+  traffic上升，修复用partition/batch；bandwidth表现为memory
+  throughput接近平台上限且cores等待memory，修复用layout/减少bytes；grain过小表现为task
+  count/queue overhead占比高，增大chunk后改善。保持算法和input不变逐项验证。
+</Answer>
+
+3. **问题 3：为该服务编写上线前性能门禁。** 同时覆盖correctness与可重复性。
+
+  <Answer question="门禁应包含哪些硬证据？">固定source/build/environment并保存raw benchmark；serial oracle与unit/property tests验证结果，ASan/TSan覆盖lifetime和race；报告median/p95/p99、throughput、RSS和uncertainty；profile证明目标hotspot下降且无新热点；多input size与生产分布通过；CI保存基线和趋势。GPU/parallel版本还要覆盖fallback、numeric tolerance、shutdown和end-to-end transfer。</Answer>
 </Exercises>

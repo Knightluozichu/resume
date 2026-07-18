@@ -1,0 +1,345 @@
+---
+title: "Item 26：避免对 forwarding reference 重载"
+type: A
+section: Chapter 5 · Rvalue References, Move Semantics, and Perfect Forwarding
+order: 26
+description: 对齐 Effective Modern C++ Item 26：分析 forwarding/universal-reference overload 的贪婪匹配，复现 short/int 分派失败、copy constructor hijack 与 derived-to-base 劫持，并建立 overload-set 审查矩阵。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch05.html"
+draft: false
+---
+
+import {
+  EmcppCopyConstructorHijackMap,
+  EmcppForwardingGreedyOverloadMap,
+  EmcppShortIndexOverloadTrapMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-26-avoid-forwarding-overloads";
+
+<Objectives>
+
+- 能分析 overloading on universal references（通用引用重载）为何形成 greedy overload（贪婪重载）并改变最佳候选
+- 能复现 short argument 绕过 int overload 后在 forwarding body 内失败的两阶段诊断
+- 能解释 copy constructor hijack（劫持复制构造）与 perfect forwarding constructor（完美转发构造函数）对 base/derived construction 的影响
+
+</Objectives>
+
+## 从“接受范围最广的模板也最容易抢错调用”开始
+
+Item 26 的原则是 Avoid overloading on universal references（避免对通用引用重载）。forwarding reference 可精确绑定几乎任意 argument type/cv/value category；进入普通 overload set 后，它常比人类认为“更专用”的 overload 匹配更好。
+
+<Term def="包含 forwarding/universal-reference function template 与其他具体 signatures 的同名候选集合。">
+  forwarding-reference overload set
+</Term>
+
+<Term def="通过 template deduction 获得 exact match，意外击败需要 cv/conversion 的普通 overload。">
+  greedy overload
+</Term>
+
+```cpp
+void logAndAdd(const std::string& name);
+
+template<typename T>
+void logAndAdd(T&& name);
+```
+
+先预测 mutable string lvalue：template 可推导 T 为 string lvalue reference，parameter 精确为 non-const string reference；普通 overload 需要加 const qualification，template 获胜。
+
+<EmcppForwardingGreedyOverloadMap />
+
+## non-const lvalue 优先选择 forwarding template
+
+```cpp
+std::string petName = "Darla";
+logAndAdd(petName); // template wins
+```
+
+<Term def="template 以 non-const lvalue reference 精确绑定，而普通 const-reference 需要 qualification conversion。">
+  nonconst-lvalue template preference
+</Term>
+
+如果 forwarding body 最终构造 string，此例可能仍工作，导致风险被掩盖；后续新增 instrumentation/constraints 或 argument types 时才爆炸。
+
+## const lvalue 可能反而选择 non-template
+
+```cpp
+const std::string petName = "Darla";
+logAndAdd(petName); // both exact; non-template wins tie
+```
+
+<Term def="template 与 ordinary function conversion rank 相同，overload tie-break 优先 non-template。">
+  non-template tie break
+</Term>
+
+只加一个 const 就改变 selected function，使 logging/metrics 行为可能不同。API 不应让 cv detail 决定业务路径。
+
+<Callout
+  type="trap"
+  title="陷阱：有完全匹配的 const-reference overload，template 只会处理其他类型"
+>
+  mutable lvalue 到 const reference 仍有 qualification conversion；forwarding
+  template 可生成 exact non-const reference，因此它不是 fallback，而是更优候选。
+</Callout>
+
+## 字符串字面量展示 forwarding 的便利与代价
+
+```cpp
+logAndAdd("Patty Dog");
+```
+
+template 可保留 array type/reference，最终直接构造 string，可能比先创建 temporary string 高效。这正是 forwarding overload 有吸引力的原因；问题是它也接收所有不该接收的类型。
+
+<Term def="forwarding 保留 string literal array type，延迟到真正 string construction 的优化。">
+  literal-forwarding benefit
+</Term>
+
+不能只因为常见 happy path 快，就忽略 overload set 的全输入域。
+
+## integral overload 也会被 exact template 抢走
+
+假设另一个 overload 通过 index 查姓名：
+
+```cpp
+void logAndAdd(int nameIndex);
+
+template<typename T>
+void logAndAdd(T&& name) {
+    names.emplace(std::forward<T>(name));
+}
+```
+
+short argument：
+
+```cpp
+short nameIndex = 7;
+logAndAdd(nameIndex); // forwarding template wins
+```
+
+<Term def="short 到 int 需要 integral promotion，而 template 可精确推导 short lvalue reference。">
+  integral promotion capture
+</Term>
+
+compiler 先选择 template，然后实例化 body；直到 `std::string` 无法从 short 构造才报错。它不会回头尝试 int overload。
+
+<EmcppShortIndexOverloadTrapMap />
+
+## overload resolution 不检查 function body 可行性
+
+<Term def="候选 viability/ranking 主要依据 declaration signature；选中 template 后才实例化相关 body。">
+  body-late failure
+</Term>
+
+SFINAE 只对 immediate substitution context 生效。body 中 construction failure 不是“候选无效后重选”，而是 hard compilation error。
+
+<Callout
+  type="trap"
+  title="陷阱：template body 编译失败后 compiler 会回退到 int overload"
+>
+  overload winner 已在 body instantiation 前确定。body error 不触发第二轮
+  ranking；若要移除错误候选，约束必须 出现在 signature/immediate context。
+</Callout>
+
+## perfect-forwarding constructor 更危险
+
+```cpp
+class Person {
+public:
+    template<typename T>
+    explicit Person(T&& name)
+        : name(std::forward<T>(name)) {}
+
+private:
+    std::string name;
+};
+```
+
+<Term def="接收 forwarding reference 并把 argument 转发到 member/base construction 的 constructor template。">
+  perfect forwarding constructor
+</Term>
+
+compiler 仍生成 copy/move constructors，因为 constructor template 不算 special member。问题不是生成消失，而是 overload ranking 可能让 template 抢走调用。
+
+## non-const Person copy 被 template 劫持
+
+```cpp
+Person person("Nancy");
+Person copy(person);
+```
+
+<Term def="forwarding constructor 以 Person lvalue reference exact match 击败 copy constructor 的 const Person reference。">
+  copy constructor hijack
+</Term>
+
+template T 推导为 Person lvalue reference，胜过需要 const qualification 的 generated copy constructor；body 尝试用 Person 构造 string，产生深层错误。
+
+<EmcppCopyConstructorHijackMap />
+
+const Person copy 可能由 non-template tie break 选择正常 copy，这再次制造 cv-dependent behavior。
+
+## move constructor 通常能赢，但不能消除风险
+
+对 non-const rvalue Person，generated move constructor 与 forwarding template 都可 exact match；non-template move 通常获胜。
+
+<Term def="同等级匹配下 generated non-template move constructor 优先于 forwarding constructor。">
+  move-constructor tie survival
+</Term>
+
+但只要 copy/move deleted、cv 不同、derived input 或其他 overload 变化，template 仍可能劫持。不能把一条正常 rvalue test 当安全证明。
+
+## Derived-to-Base construction 也会被劫持
+
+```cpp
+class SpecialPerson : public Person {
+public:
+    SpecialPerson(const SpecialPerson& other)
+        : Person(other) {}
+};
+```
+
+<Term def="base subobject construction 时 forwarding constructor 精确绑定 Derived reference，击败需要 derived-to-base conversion 的 copy constructor。">
+  derived-to-base constructor hijack
+</Term>
+
+`Person(other)` 的 ordinary Person copy constructor 需要 SpecialPerson-to-Person derived-to-base conversion；template 直接绑定 SpecialPerson const reference，更优，然后尝试用 SpecialPerson 构造 string 而失败。
+
+## 继承层次放大 forwarding constructor 风险
+
+每个 derived copy/move constructor 都可能把 derived object 传给 base constructor；一个 unconstrained base forwarding constructor 会参与所有这些 calls。
+
+<Term def="base forwarding constructor 扩散到全部 derived special-member paths 的影响范围。">
+  hierarchy-wide forwarding capture
+</Term>
+
+错误 diagnostics 常落在 string/member construction 深处，远离真正的 overload design problem。
+
+## overloading 与 forwarding 的目标冲突
+
+overloading 假设 candidates 有可区分 input domains；unconstrained forwarding reference 的 domain 近似“所有类型”。
+
+<Term def="forwarding template 输入域覆盖普通 overload 输入域，导致 overload partition 不再互斥。">
+  overload-domain overlap
+</Term>
+
+因此默认规则是避免将它与具体 overload 混合。Item 27 将给出 distinct names、const-reference/by-value、tag dispatch、enable_if 等替代方案。
+
+## concepts/constraints 需要约束在候选边界
+
+现代 C++ 可要求 argument constructible as string 且不是 Person-derived；C++11/14 可用 enable_if/type traits。重点是错误类型在 ranking 前被移除。
+
+<Term def="在 template signature/immediate context 限定参与 overload resolution 的 argument set。">
+  candidate-boundary constraint
+</Term>
+
+```cpp
+template<
+    typename T,
+    typename = std::enable_if_t<
+        std::is_constructible_v<std::string, T&&>
+    >
+>
+explicit Person(T&& name);
+```
+
+这仍需排除 Person/derived，具体完整方案属于 Item 27。
+
+## overload 审查不能只测期望输入
+
+<Term def="覆盖 mutable/const lvalue、rvalue、integral variants、self/derived types 与 literals 的候选选择测试表。">
+  forwarding overload matrix
+</Term>
+
+1. mutable/const string lvalues 选择一致业务路径。
+2. string literal、string_view/convertible types 行为明确。
+3. int/short/long index variants 不被 template 捕获。
+4. Person mutable/const copy 和 move 正常。
+5. Derived copy/move 正确构造 base subobject。
+6. 不支持类型在 candidate boundary 给出短诊断。
+
+先列出 overload domain，再对每类输入记录 conversion rank；只运行“string literal + int”两个 happy paths 会遗漏最危险的 exact template matches。
+
+## 小结
+
+- forwarding-reference template 可从几乎任意 input 推导 exact reference，是 greedy overload
+- mutable string lvalue 使 template 击败 const-reference overload；const lvalue 又可能由 non-template 赢
+- short 到 int 需要 promotion，template exact-match 后在 body 内失败，compiler 不回退 int overload
+- perfect forwarding constructor 不抑制 copy/move generation，却可能在 ranking 中劫持 copy
+- non-const Person copy、derived-to-base base construction 是典型 hijack 路径
+- forwarding template 的输入域与具体 overload 高度重叠，默认应避免混合
+- 若必须共存，constraint 要放 candidate boundary，并用完整 forwarding overload matrix 验证
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 26"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch05.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="forwarding-reference overload set">
+    forwarding template 与普通 overload 集合。
+  </GlossaryItem>
+  <GlossaryItem term="greedy overload">
+    以 exact deduction 抢占调用的模板。
+  </GlossaryItem>
+  <GlossaryItem term="nonconst-lvalue template preference">
+    非 const lvalue 偏向模板。
+  </GlossaryItem>
+  <GlossaryItem term="non-template tie break">
+    同等级时普通函数优先。
+  </GlossaryItem>
+  <GlossaryItem term="literal-forwarding benefit">
+    保留 literal array 类型的收益。
+  </GlossaryItem>
+  <GlossaryItem term="integral promotion capture">
+    模板抢占需要整数提升的调用。
+  </GlossaryItem>
+  <GlossaryItem term="body-late failure">
+    选中模板后才在 body 报错。
+  </GlossaryItem>
+  <GlossaryItem term="perfect forwarding constructor">
+    转发到成员的构造模板。
+  </GlossaryItem>
+  <GlossaryItem term="copy constructor hijack">
+    forwarding constructor 抢走复制调用。
+  </GlossaryItem>
+  <GlossaryItem term="move-constructor tie survival">
+    普通 move 在平局中获胜。
+  </GlossaryItem>
+  <GlossaryItem term="derived-to-base constructor hijack">
+    derived reference 抢走 base copy。
+  </GlossaryItem>
+  <GlossaryItem term="hierarchy-wide forwarding capture">
+    base 模板影响整个继承层次。
+  </GlossaryItem>
+  <GlossaryItem term="overload-domain overlap">
+    模板输入域覆盖具体 overload。
+  </GlossaryItem>
+  <GlossaryItem term="candidate-boundary constraint">
+    在候选阶段移除错误类型。
+  </GlossaryItem>
+  <GlossaryItem term="forwarding overload matrix">
+    转发重载候选选择测试表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：mutable string 调 logAndAdd。** 为什么 template 击败 const-reference overload？
+
+<Answer question="conversion rank 如何比较？">
+  forwarding template 推导 T 为 string lvalue reference，parameter collapse 为
+  exact non-const lvalue reference； ordinary overload 需要加 const
+  qualification。exact match 更优，因此 template 被选中。再用 const string 测试
+  tie 时 non-template 获胜，证明 cv 变化会改变路径。
+</Answer>
+
+2. **问题 2：short index 调用存在 int 与 forwarding overload。** 为什么 body error 不回退？
+
+<Answer question="两阶段发生了什么？">
+  short 到 int 需要 promotion；template exact 推导 short reference，先赢得
+  overload resolution。随后实例化 body 才发现 string 不能由 short 构造，这是
+  hard error，不重跑 ranking。修复要在 signature constraint 中排除
+  integral，或采用 Item 27 的分派方案。
+</Answer>
+
+3. **问题 3：Person forwarding constructor 抢走 copy/Derived base construction。** 建立复现矩阵。
+
+  <Answer question="哪些 cases 必须测试？">mutable Person lvalue 会让 template exact-match 并击败 copy const-reference；const Person 可能正常 copy；rvalue 通常由 move non-template赢；SpecialPerson copy 传给 Person base 时 template 精确绑定 derived reference并劫持。为四类输入做 compile/selected-overload probes，并在下一步用 self/derived exclusion constraint 修复。</Answer>
+</Exercises>

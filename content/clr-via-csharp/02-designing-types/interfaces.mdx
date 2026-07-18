@@ -1,0 +1,205 @@
+---
+title: "Chapter 13. Interfaces"
+type: C
+section: "CLR via C# 4e · Designing Types"
+order: 13
+description: "比较class/interface inheritance，解释隐式/显式映射、generic variance与constraints、同签名冲突、类型安全和base-vs-interface设计。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcClassInterfaceChoiceLab, CvcGenericInterfaceLab, CvcInterfaceImplementationLab } from "@/components/mdx/clr-via-csharp/diagrams/interfaces";
+
+<Objectives>
+
+- 能比较base class、interface、composition与adapter在状态、能力、分派和版本上的差异
+- 能分析implicit/explicit interface implementation与runtime interface map，解决同签名不同语义
+- 能设计generic interface、variance和constraints，并判断何时选择base class或interface
+
+</Objectives>
+
+## 为什么Interface是Implementer也要消费的Contract
+
+Caller消费interface members，implementation author也消费这份契约：每新增abstract member都会要求所有implementers改变。Interface擅长表达capability、多实现与多继承contract，不承载传统instance fields或constructor invariant；base class擅长共享state/lifecycle implementation，却限制单继承并暴露protected/versioning协议。选择不是“松耦合”口号，而是预测谁会变化。
+
+先预测：class已经有同签名public method后声明interface是否自动映射；explicit implementation能否通过class变量调用；struct转interface是否boxing；两个interfaces同签名是否一定语义相同；generic constraint调用value type interface是否一定boxing；给interface新增member是否总破坏旧binary。后文用关系、映射和generic capability三层验证。
+
+<Term def="一组不依赖具体state representation、由多个types实现并由caller按能力消费的成员与语义协议。">capability contract</Term>
+
+## Class and Interface Inheritance
+
+Class inheritance表达is-a加共享implementation/state，一次只能有一个base class；interface inheritance组合多个capabilities，一个class/struct可实现多个interfaces。Derived class自动继承base的interface implementations，但可见/分派行为取决interface map。Interface reference只暴露contract，不代表对象没有其它members或state。
+
+```csharp
+public interface IClock
+{
+    DateTimeOffset UtcNow { get; }
+}
+
+public sealed class SystemClock : IClock
+{
+    public DateTimeOffset UtcNow => DateTimeOffset.UtcNow;
+}
+
+public sealed class ExpirationPolicy(IClock clock)
+{
+    public bool IsExpired(DateTimeOffset deadline) => clock.UtcNow >= deadline;
+}
+```
+
+Composition通过field/dependency持有collaborator，owner可在不成为其subtype的情况下复用行为。若关系只是“使用日志/clock/parser”，composition比inheritance准确。Base class用于共享不可分割lifecycle/invariant，例如framework template method；interface用于可替换能力与测试边界。
+
+<Stepper>
+  <Step title="切换base class、interface、composition与adapter"><CvcClassInterfaceChoiceLab /></Step>
+  <Step title="填写变化矩阵">记录state owner、constructor/lifetime、可替换实现、第三方implementer、需要共享代码和未来扩展方向。</Step>
+  <Step title="运行旧实现Fixture">新contract/library加载旧implementer，验证binary load、dispatch和behavior，而不只重编最新代码。</Step>
+</Stepper>
+
+## Defining an Interface
+
+传统interface声明instance methods/properties/events/indexers，不含instance state；members形成public contract。现代C#加入default implementations、static abstract members和private helpers，但目标runtime/language必须支持，且不改变“implementer也是consumer”的版本责任。接口应小而cohesive，按capability命名，避免`IEverythingService`。
+
+每个member写语义：pre/postconditions、exception、thread safety、ownership、cancellation、idempotency。相同signature不保证相同contract。Marker interface若仅提供metadata可考虑attribute；若确实用于generic constraint/runtime dispatch，仍可有价值。
+
+<Term def="实现类型到某个interface每个member的具体target method映射，决定interface call的运行时分派。">interface map</Term>
+
+## Inheriting an Interface
+
+Interface可继承多个base interfaces，derived contract包含所有members。Diamond中相同base identity通常合并，但两个unrelated interfaces同signature仍可能语义冲突。新增base interface也会扩大implementer义务与consumer cast行为；contract graph应保持可理解。
+
+不要用深interface inheritance模拟class hierarchy。Capability组合可由类型同时声明多个interfaces；只有derived capability逻辑上保证base capability时才继承。版本发布要API diff所有transitive members。
+
+## More About Calling Interface Methods
+
+Interface call以receiver runtime type的interface map找到target。Reference type receiver无需改变对象；value type转成interface variable通常boxing，受generic constraint的constrained call则可能直接调用value storage避免box。Null interface reference调用抛NullReferenceException。Interface dispatch成本通常可被JIT devirtualize，但先保证语义再profile。
+
+```csharp
+public readonly struct OrderId : IEquatable<OrderId>
+{
+    public OrderId(Guid value) => Value = value;
+    public Guid Value { get; }
+    public bool Equals(OrderId other) => Value == other.Value;
+}
+
+static bool Same<T>(T left, T right) where T : IEquatable<T> =>
+    left.Equals(right); // constrained call可避免把OrderId装箱为interface
+```
+
+通过class static type调用public member与通过interface static type调用可能进入同一method，也可能因explicit mapping进入不同method。诊断时记录call-site static type、receiver runtime type和interface map，不只看source method name。
+
+## Implicit and Explicit Interface Method Implementations (What's Happening Behind the Scenes)
+
+Implicit implementation通常由public instance member匹配interface signature，该member也在class API可见。Explicit implementation写成`Return IContract.Member(...)`，没有普通public name，只通过interface reference调用，可为两个contracts提供不同语义、隐藏niche operation或避免命名污染。
+
+<Term def="只有把对象视为指定interface时才能调用、并在interface map中单独绑定的成员实现。">explicit interface surface</Term>
+
+```csharp
+public interface ITextSerializer { string Serialize(); }
+public interface IDiagnosticView { string Serialize(); }
+
+public sealed class Record : ITextSerializer, IDiagnosticView
+{
+    string ITextSerializer.Serialize() => JsonSerializer.Serialize(this);
+    string IDiagnosticView.Serialize() => $"Record(Id={Id})";
+    public int Id { get; init; }
+}
+
+string payload = ((ITextSerializer)record).Serialize();
+string debug = ((IDiagnosticView)record).Serialize();
+```
+
+Explicit method仍可被reflection/interface dispatch发现，不能作为security hiding。Value type通过interface reference调用explicit member仍可能boxing。API docs要帮助consumer发现cast；若operation是类型核心能力，public implicit实现通常更易用。
+
+<Stepper>
+  <Step title="切换implicit、explicit、default与reimplementation"><CvcInterfaceImplementationLab /></Step>
+  <Step title="读取InterfaceMap">用`GetInterfaceMap`打印InterfaceMethods与TargetMethods，验证compiler实际绑定。</Step>
+  <Step title="比较Static Views">分别以class、base interface、derived interface调用，记录target、boxing、异常和可见surface。</Step>
+</Stepper>
+
+<Callout type="trap" title="Explicit Interface Implementation是Private，所以外部不能调用">
+它不在class普通public surface出现，但任何持有对应interface reference的caller都能调用。它是API分组/冲突解决，不是访问安全机制。
+</Callout>
+
+## Generic Interfaces
+
+Generic interface把capability与元素类型绑定，如`IComparer<T>`、`IEquatable<T>`、`IEnumerable<T>`。它消除Object cast，并允许value type的constrained dispatch。一个type可实现同一generic definition的多个closed constructions，例如`IHandler<Order>`与`IHandler<Invoice>`，interface map分别绑定。
+
+Variance可在interface parameter声明`out`/`in`，前提是所有member positions安全。Mutable producer+consumer interface保持invariant；拆成read-only producer和writer consumer可分别获得covariance/contravariance，也让capability更小。
+
+## Generics and Interface Constraints
+
+`where T:IContract`让generic body静态调用members，runtime验证type argument，JIT可用constrained prefix优化value types。Constraint是capability proof，不等于instance一定非null，也不表达behavior laws。需要多个capabilities可列多个interfaces；若组合频繁且语义固定，可定义derived composite interface。
+
+<Term def="Generic body通过interface constraint获得可验证成员调用能力，并允许JIT选择constrained dispatch。">constrained interface dispatch</Term>
+
+Constraint比在body中`as`/cast更早失败且不需要fallback branch。若某些T不具能力，考虑strategy parameter，而不是把reflection/dynamic藏进generic。Public constraint变化会影响source compatibility，需API diff。
+
+## Implementing Multiple Interfaces That Have the Same Method Name and Signature
+
+若两个interfaces同signature且语义一致，一个public implicit method可同时实现。若语义、exception、unit或lifetime不同，应explicit分别实现，再让内部共享明确helper。仅凭shape合并会让一个contract的修改破坏另一个。
+
+例如`ICollection<T>.Remove`与领域`IRemovalPolicy.Remove`即使签名偶然相同，返回含义可能不同。命名interface无法避免所有collision，explicit mapping就是保留semantic identity的工具。
+
+## Improving Compile-Time Type Safety with Explicit Interface Method Implementations
+
+Explicit implementation可防止caller通过具体type误用只在某contract下有意义的方法，迫使先声明interface intent。它也可让同一个class为不同closed generic interfaces返回不同typed behavior，避免Object switch。Compile-time surface更精确，但discoverability下降，docs与factory return type要配合。
+
+## Be Careful with Explicit Interface Method Implementations
+
+过度explicit会迫使频繁casts、隐藏核心能力，并让derived/version behavior复杂。Class不能直接override base explicit implementation的普通name；重新实现interface可能改变某些static view调用目标。Boxing、reflection、default interface method与AOT也需测试。选择依据是语义冲突/表面控制，不是“隐藏得越多越好”。
+
+<Callout type="trap" title="同Signature接口方法可以永远共用一个实现">
+Shape相同不代表precondition、unit、exception和side effects相同。先比较语义；不同就explicit分开，即使内部暂时调用同一helper。
+</Callout>
+
+## Design: Base Class or Interface?
+
+选择base class当：subtypes共享不可分割state/lifecycle implementation；owner控制或严格定义派生；protected hooks少且稳定；is-a invariant真实。选择interface当：只需capability；需要多个unrelated implementations/structs；consumer只依赖小surface；可能组合多个capabilities。两者可结合：abstract base实现interface并提供默认代码，但consumer仍面向interface。
+
+<Term def="依据state/lifecycle共享、实现者开放程度、多继承能力和版本方向选择base或interface的决策。">inheritance choice</Term>
+
+Composition/adapter常是第三个更稳答案：复用行为不必成为subtype，版本翻译集中在边界。不要为单元测试盲目给每个class生成interface；只有多个实现、外部boundary或稳定capability才值得。接口数量不是解耦指标，变化能否局部化才是。
+
+<Stepper>
+  <Step title="切换constraint、covariance、contravariance与same-signature映射"><CvcGenericInterfaceLab /></Step>
+  <Step title="推导Capability方向">对每个T/member标consume/produce，拆分read/write interfaces并验证variance conversions。</Step>
+  <Step title="完成设计评审">用state、lifecycle、implementer ownership、version matrix、boxing和consumer usability决定base/interface/composition。</Step>
+</Stepper>
+
+## 本章回顾：Interface隔离的是Capability与Representation
+
+1. Base class共享state/implementation和单继承lifecycle；interface表达多实现capability；composition复用协作者。
+2. Runtime用interface map分派，value type interface variable可能boxing，generic constraint可避免。
+3. Implicit member同时属于class surface，explicit member只经interface view调用，适合语义冲突。
+4. Generic interface、variance与constraints提供type-safe producer/consumer能力，不替代behavior laws。
+5. Base-vs-interface由变化owner与invariant决定，不由“都加接口更解耦”的数量决定。
+
+<Exercises>
+
+**问题 1：两个Interfaces都有`string Serialize()`，何时共用，何时Explicit分开？**
+
+<Answer>若format、audience、failure和security语义完全相同，一个public method可共用；若一个是wire payload、一个是diagnostic text，必须explicit分别实现，避免日志泄密或协议变化互相影响。内部可调用不同明确helpers。</Answer>
+
+**问题 2：Generic算法通过Interface调用Struct，怎样确认是否Boxing？**
+
+<Answer>使用`where T:IContract`并直接对T调用，检查IL constrained prefix/JIT allocation；不要先赋给interface变量。用allocation benchmark验证。若保存为interface collection仍会boxing，改用generic storage或接受明确成本。</Answer>
+
+**问题 3：一个Service只有一个实现，是否仍应定义Interface？**
+
+<Answer>只有当它是外部boundary、稳定capability、预计多实现/adapter或consumer需要隔离实现变化时值得。若只是内部class且测试可通过public behavior/真实collaborators，机械接口增加同步版本成本。先写变化矩阵，再选class、interface或composition。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="capability contract" definition="独立于state representation的可实现成员与语义协议。" />
+  <GlossaryItem term="interface map" definition="Runtime把interface members映射到具体target methods的表。" />
+  <GlossaryItem term="explicit interface surface" definition="只经指定interface view可调用的成员实现。" />
+  <GlossaryItem term="constrained interface dispatch" definition="Generic constraint支持的可验证且可避免boxing的interface调用。" />
+  <GlossaryItem term="inheritance choice" definition="按state、lifecycle、implementer与版本方向选择继承形式。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 13: Interfaces" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

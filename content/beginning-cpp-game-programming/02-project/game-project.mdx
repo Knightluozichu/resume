@@ -1,109 +1,404 @@
 ---
-title: 综合游戏项目
+title: 第 15 章：Run!、Factory 与组件式对象
 type: A
-section: 游戏开发实战
-order: 8
-description: 游戏项目分层架构——Game 主类统管实体管理、状态机、资源管理、输入渲染四大模块，把全书知识组装成可扩展游戏。
+section: Run! 项目
+order: 15
+description: 对齐官方第 3 版第 15 章：启动无尽跑酷 Run!，用继承多态定义 Update/Graphics 行为，以 Factory 组合 GameObject，并辨析组件模式与 ECS。
 demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
 draft: false
 ---
 
-import { BcgGameArchitectureDiagram } from "@/components/mdx/beginning-cpp-game/diagrams/bcg-game-architecture";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  BcgpEcsComparisonMap,
+  BcgpFactoryBuildMap,
+  BcgpRunObjectMap,
+} from "@/components/mdx/beginning-cpp-game-programming/diagrams/game-project";
 
 <Objectives>
-- 能画出游戏项目的分层架构，说明 Game 主类与四大模块的职责
-- 能用状态机管理游戏阶段，说明它优于布尔标志的理由
-- 能用资源管理器按 id 缓存复用资源，避免重复加载
+
+- 能设计 Run! 的 GameObject 身份、Transform、Update 和 Graphics 组合边界，让新增实体不修改主循环
+- 能实现异常安全的 Factory 类，验证资源与生成参数后组装组件并以 unique_ptr 提交完整对象
+- 能比较继承多态、组件式对象和实体组件系统的身份、存储与更新差异，判断何时需要 ECS
+
 </Objectives>
 
-## 把知识组装成游戏
+## 从“增加一种平台为何不该改主循环”开始
 
-前面学了 C++ 基础、游戏循环、SFML 图形、碰撞检测。单独看都会，但组装成一个完整游戏时容易乱：实体怎么管、阶段怎么切、资源怎么加载。答案是用分层架构把它们组织起来。
+第四个项目
 
-<BcgGameArchitectureDiagram />
+<Term def="本书的无尽跑酷项目，玩家必须持续前进并避开不断消失或生成的平台。">
+  Run! 项目
+</Term>
+包含玩家、平台、雨滴、火球、相机、菜单和动画。若每种对象都让 main 增加一组特殊
+if，项目会快速失控。本章先建立“对象组合行为，循环只调接口”的骨架。
 
-## Game 主类与四大模块
+<Term def="把创建、更新、渲染和销毁的共同流程固定下来，而把具体行为交给可替换对象的架构。">
+  组件式对象
+</Term>
+允许同一循环处理不同实体，但书中的设计仍以 GameObject 为中心，不等同于完整 ECS。
 
-Game 主类是「骨架」，持有并调度四大模块，自己不写具体游戏逻辑：
+<BcgpRunObjectMap />
 
-- **实体管理**：管所有游戏对象（玩家、敌人、子弹）的集合与生命周期，通常用 `vector<Entity*>` 多态管理。
-- **状态机**：管游戏阶段切换（菜单/游玩/暂停/结束），每个状态有独立的 update/draw/handleInput。
-- **资源管理**：加载、缓存、复用纹理/字体/音效，避免重复加载。
-- **输入与渲染**：读玩家输入、把画面画到窗口。
+## GameObject 的最小共同状态
 
-每帧 Game 主循环依次让输入模块读输入、状态机决定当前阶段、实体管理更新所有对象、渲染模块画出结果。分工后新增关卡/敌人只动对应模块，不动主循环。
-
-## 状态机管理阶段
-
-为什么不用一堆布尔标志（`isMenu`/`isPlaying`/`isGameOver`）？因为状态机能保证互斥、转移明确、扩展容易。
-
-```cpp
-class State { virtual void update()=0; virtual void draw()=0; };
-class MenuState : public State { ... };
-class PlayState : public State { ... };
-```
-
-任一时刻只有一个状态，不会出现「同时是菜单又是游戏」的矛盾。加新阶段（如设置界面）只需新增一个 State 子类。状态转移时还能执行进入/退出动作（如退出 PlayState 时清空实体）。
-
-<Callout type="tip">
-状态机的核心收益是「互斥 + 隔离」：每个阶段逻辑分开写，菜单代码不与战斗代码搅在一起，可读性和可维护性远超布尔标志。
-</Callout>
-
-## 资源管理器缓存复用
+<Term def="Run 世界中的一个实体实例，拥有稳定 id、共享 Transform 和可选 Update/Graphics 行为。">
+  GameObject
+</Term>
+不应成为塞满所有功能的基类。共同状态只放身份、位置、活动标志等真正跨行为共享的数据。
 
 ```cpp
-class TextureHolder {
-  map<string, Texture> m_Textures;
+using GameObjectId = std::uint64_t;
+
+struct Transform {
+    sf::Vector2f position{};
+    sf::Vector2f scale{1.0F, 1.0F};
+};
+
+class GameObject {
 public:
-  void load(string id, string path);  // 加载并存入
-  Texture& get(string id);            // 取已加载的
+    GameObject(GameObjectId id,
+               std::unique_ptr<UpdateBehavior> update,
+               std::unique_ptr<GraphicsBehavior> graphics);
+
+    void update(float dt, const UpdateContext& context);
+    void draw(sf::RenderTarget& target) const;
+
+private:
+    GameObjectId id_;
+    Transform transform_;
+    std::unique_ptr<UpdateBehavior> update_;
+    std::unique_ptr<GraphicsBehavior> graphics_;
 };
 ```
 
-首次请求时加载并存入 map，后续同 id 直接返回已加载的，全程只加载一次。如果每次用纹理都 `loadFromFile`，会慢（磁盘 IO + 解码）、浪费内存（同图多份）、句柄失控（纹理先销毁精灵画错乱）。缓存复用解决全部。
+<Term def="对象在世界中的位置和缩放等共享空间状态，由更新行为修改、图形行为只读。">
+  Transform
+</Term>
+由 GameObject 拥有，避免 Update 和 Graphics
+各存一份位置。组件指针独占拥有，销毁对象自动清理。
+
+## 继承与多态只用于行为接口
+
+<Term def="派生类型复用或扩展基类型接口与实现的语言机制；应保持替换契约而非只为共享成员。">
+  继承
+</Term>
+与
+<Term def="通过基类引用或指针调用虚函数时，根据实际对象类型执行覆盖实现的机制。">
+  多态
+</Term>
+让循环只依赖 UpdateBehavior/GraphicsBehavior。
+
+```cpp
+class UpdateBehavior {
+public:
+    virtual ~UpdateBehavior() = default;
+    virtual void update(Transform& transform, float dt,
+                        const UpdateContext& context) = 0;
+};
+
+class GraphicsBehavior {
+public:
+    virtual ~GraphicsBehavior() = default;
+    virtual void draw(sf::RenderTarget& target,
+                      const Transform& transform) const = 0;
+};
+```
+
+<Term def="带有至少一个纯虚函数、用于规定派生实现必须满足调用契约的基类。">
+  抽象接口
+</Term>
+需要虚析构，因为通过基类 unique_ptr 销毁实际派生对象。接口不暴露 Game
+全局对象，使用小型 Context 传入只读依赖和命令出口。
 
 <Callout type="trap">
-资源管理器必须持有资源的所有权，生命周期与游戏一致；Sprite/使用者只引用不拥有。若让使用者各自加载资源，纹理先于 Sprite 销毁会画出错乱——这正是资源管理器存在的核心理由。
+  **现象**：通过 `unique_ptr<UpdateBehavior>` 销毁派生行为时资源泄漏。**原因**：基类析构非 virtual，通过基类所有者删除不调用完整派生析构。**修法**：多态基类声明 virtual 析构，并用 unique_ptr 表达独占所有权。
 </Callout>
 
-## 整合时的常见坑
+## 组合优于深继承树
 
-- **指针与生命周期**：`new` 了忘 `delete` 泄漏。用智能指针或统一在实体管理器集中管理。
-- **循环依赖**：Entity 引用 Game，Game 引用 Entity，编译不过。用前向声明 + 指针成员解耦。
-- **上帝对象**：Game 类塞满逻辑变臃肿。Game 只做调度，逻辑下沉到模块/实体。
-- **状态转移遗漏清理**：切到菜单时残留子弹。状态机设退出钩子清空实体。
+不要建立 `Entity -> MovingEntity -> LivingEntity -> Player` 深链再让平台继承其中一半。Run 玩家可以组合 PlayerUpdate 与 AnimatedGraphics，平台组合 PlatformUpdate 与 TileGraphics，静态装饰只有 Graphics。
+
+<Term def="对象通过拥有多个协作成员获得功能，而不是把所有变化压入单一继承层次的设计。">
+  组合
+</Term>
+让更新和显示独立替换。代价是共享 Transform
+和事件通信必须显式设计，不能让组件互相保存悬空裸指针。
+
+```cpp
+void GameObject::update(float dt, const UpdateContext& context)
+{
+    if (update_)
+        update_->update(transform_, dt, context);
+}
+
+void GameObject::draw(sf::RenderTarget& target) const
+{
+    if (graphics_)
+        graphics_->draw(target, transform_);
+}
+```
+
+draw 为 const，图形行为不能推进动画时间；动画帧状态应在 update 中修改，draw 只选择已提交帧。
+
+## Factory 隐藏完整构造顺序
+
+<Term def="根据 archetype 请求验证参数、取得资源、组装行为并返回完整 GameObject 的创建组件。">
+  Factory 类
+</Term>
+把构造复杂度从 main 移出，但不应成为能访问所有全局状态的万能对象。
+
+```cpp
+enum class Archetype { Player, Platform, Decoration };
+
+class GameObjectFactory {
+public:
+    explicit GameObjectFactory(TextureProvider& textures);
+    std::unique_ptr<GameObject> create(Archetype type,
+                                       GameObjectId id,
+                                       sf::Vector2f spawn) const;
+
+private:
+    TextureProvider& textures_;
+};
+```
+
+<Term def="用于选择一组组件、资源和默认参数的实体模板标识。">archetype</Term>
+不是 C++ 类型反射。资源 key、碰撞尺寸和速度可来自数据配置，Factory 验证后组装。
+
+<BcgpFactoryBuildMap />
+
+## 构造失败不发布半对象
+
+Factory 先加载/查询必需纹理，验证 spawn 与尺寸，再在局部创建 Update 和 Graphics，最后构造 GameObject。任一步抛异常时 unique_ptr 自动清理，不向世界容器插入对象。
+
+```cpp
+std::unique_ptr<GameObject> GameObjectFactory::create(
+    Archetype type, GameObjectId id, sf::Vector2f spawn) const
+{
+    switch (type) {
+    case Archetype::Player:
+        return std::make_unique<GameObject>(
+            id,
+            std::make_unique<PlayerUpdate>(),
+            std::make_unique<SpriteGraphics>(textures_.get("player")));
+    case Archetype::Platform:
+        return std::make_unique<GameObject>(
+            id,
+            std::make_unique<PlatformUpdate>(),
+            std::make_unique<SpriteGraphics>(textures_.get("platform")));
+    case Archetype::Decoration:
+        return std::make_unique<GameObject>(
+            id, nullptr,
+            std::make_unique<SpriteGraphics>(textures_.get("decoration")));
+    }
+    throw std::invalid_argument{"unknown archetype"};
+}
+```
+
+<Term def="Factory 在局部完成全部组件与资源组装，成功后才把 unique_ptr 交给世界的过程。">
+  工厂提交
+</Term>
+要求 id 唯一。世界容器接受前检查重复 id，避免事件寻址冲突。
+
+## 主循环对实体类型保持关闭
+
+<Term def="游戏每帧遍历对象接口执行输入、更新、事件提交和绘制，而不按具体实体类型分支的循环。">
+  通用主循环
+</Term>
+只调用 update/draw：
+
+```cpp
+for (auto& object : objects)
+    object->update(dt, updateContext);
+
+commitCommands(objects, pendingCommands);
+
+for (const auto& object : objects)
+    object->draw(window);
+```
+
+新增 Fireball 或 Rain 只新增行为与 Factory 组装，不修改循环。删除仍在命令提交阶段，遍历中不 erase。对象 id 用于事件，unique_ptr 地址不作为存档身份。
+
+<Term def="软件实体对扩展开放、对修改关闭的设计目标；新增行为通过新实现和组合进入，不改稳定调度代码。">
+  开闭原则
+</Term>
+不是绝对禁改，若接口契约本身不足，应正确演进而不是堆类型判断。
+
+## 设计模式是约束语言
+
+<Term def="在特定上下文中反复出现的设计问题与权衡的命名方案，不是必须照抄的代码模板。">
+  设计模式
+</Term>
+本章使用 Factory 封装构造、Strategy/Component 表达可替换行为、Command
+延迟世界修改。Observer 可用于声音/UI
+消费事件，但项目规模小时简单事件列表更清楚。
+
+模式组合也有成本：虚调用、堆分配、间接依赖和调试跳转。先用职责和测试证明需要，不因书上列出模式就给每个类加工厂和接口。
+
+<Callout type="trap">
+  **现象**：Factory
+  逐渐包含输入、更新、全局查询和关卡逻辑，成为新上帝对象。**原因**：把“创建需要的依赖”和“运行期所有规则”混在一起。**修法**：Factory
+  只构造并验证对象，世界规则由系统/协调层处理。
+</Callout>
+
+## 组件式对象与 ECS 不同
+
+<Term def="实体只是 id，组件按数据类型独立存储，系统批量处理具有所需组件集合的架构。">
+  实体组件系统
+</Term>
+通常简称
+<Term def="Entity Component System 的缩写，由无行为实体 id、数据组件存储和批处理系统组成。">
+  ECS
+</Term>
+。本书的 GameObject
+持有多态组件，状态和调度仍以对象为中心，是“组件模式”，不是严格 ECS。
+
+<BcgpEcsComparisonMap />
+
+典型 ECS 中 Position/Velocity 是连续数组，MovementSystem 批量迭代两者，不为每个实体调用虚 update。它可改善大量同构实体的数据局部性，但带来查询、生命周期、调试、序列化和编辑器工具复杂度。
+
+Run 规模下，多态组件对象更直观。只有性能剖析显示虚分派/分散分配或对象数量成为瓶颈，并且团队能维护 ECS 工具链时，迁移才合理。
+
+## 对象间通信与 Context
+
+UpdateBehavior 不应直接抓全局 Game 指针。`UpdateContext` 可提供只读输入、世界查询和命令写入器：
+
+```cpp
+struct UpdateContext {
+    const InputSnapshot& input;
+    const WorldQuery& world;
+    CommandBuffer& commands;
+};
+```
+
+<Term def="在一次更新调用期显式提供只读依赖与命令出口的短生命周期参数对象。">
+  UpdateContext
+</Term>
+不保存越过帧的引用。组件通过 commands
+请求生成/销毁/声音，世界在安全点提交，避免组件遍历中直接改容器。
+
+循环依赖通过接口方向解决，而非只靠前向声明：Game owns objects，behaviors receive context，commands return to Game。所有权箭头单向，通信可双向通过值事件。
+
+## Run 项目的首个垂直切片
+
+<Term def="从输入、更新到绘制完整贯通的一小段可运行功能，用于证明架构而非一次搭完全部系统。">
+  垂直切片
+</Term>
+只创建 Player、一个 Platform 和背景。PlayerUpdate
+读取左右/跳跃输入，PlatformUpdate 暂为空或移动，Graphics
+绘制。窗口关闭和资源失败仍正确处理。
+
+不要在第 15 章提前完成声音、相机、动画、菜单和着色器；这些是第 16-21 章。当前验收是新增 Decoration 不改主循环、Factory 失败不插入半对象、对象销毁无泄漏、draw 不改变状态。
+
+文件可按 `GameObject`, `UpdateBehavior`, `GraphicsBehavior`, `GameObjectFactory`, `main` 划分。过多一类一文件不是目标，边界清楚且构建依赖可控才是。
+
+## 验证架构而不只看画面
+
+Factory 对每个 archetype 测试组件组合、资源 key、初始 Transform 和失败回滚；重复 id 被世界拒绝。用 fake TextureProvider 模拟缺资源，不读真实磁盘。
+
+多态测试通过基类 unique_ptr 调 update/draw，确认派生析构执行；空 update 的 Decoration 仍可绘制。CommandBuffer 在帧尾提交，生成和删除不会使正在遍历容器失效。
+
+运行测试新增一种 StaticDecoration，只改一个 Graphics 实现和 Factory 配置，主循环 diff 应为零。性能记录对象数、堆分配、虚调用和缓存未命中，防止在无证据时迁移 ECS。
+
+> 先预测：GameObject 只保存 UpdateBehavior 裸指针，而 Factory 返回后局部 unique_ptr 被销毁，会怎样？GameObject 留下悬空指针；组件所有权必须移动进对象，或由更长寿且明确的外部容器拥有。
 
 ## 小结
 
-- Game 主类是骨架，四大模块（实体/状态/资源/IO）是肌肉
-- 状态机管阶段，互斥 + 隔离，优于布尔标志
-- 资源管理器按 id 缓存复用，加载一次、共享一份
-- 整合时警惕指针生命周期、循环依赖、上帝对象
-
-<Attribution
-  adaptedFrom="Beginning C++ Game Programming (Michael Dawson)"
-  adaptedUrl="https://www.packtpub.com/"
-/>
-
-<Glossary>
-<GlossaryItem term="分层架构">
-把游戏分成 Game 主类统管 + 实体管理/状态机/资源管理/输入渲染四大模块的结构，分工后新增内容只动对应模块不动主循环。
-</GlossaryItem>
-<GlossaryItem term="状态机">
-用单一状态变量 + 每状态独立逻辑管理游戏阶段切换的机制，保证互斥、转移明确、扩展容易，优于布尔标志组合。
-</GlossaryItem>
-<GlossaryItem term="资源管理器">
-按 id 缓存复用资源（纹理/字体/音效）的模块，首次加载后存入 map，后续同 id 直接返回，避免重复加载的慢与内存浪费。
-</GlossaryItem>
-<GlossaryItem term="上帝对象">
-一个类塞满几乎所有逻辑的坏味道设计，Game 类易堕落成上帝对象，应只做调度、把逻辑下沉到模块/实体。
-</GlossaryItem>
-</Glossary>
+- Run! 是无尽跑酷项目，第 15 章先建立不依赖具体实体类型的对象和循环骨架
+- GameObject 拥有稳定 id、Transform 和独占 Update/Graphics 行为，图形只读已提交状态
+- 多态接口有虚析构，组合替代深继承；Context 显式提供依赖和命令出口
+- Factory 验证资源和参数，在局部完整组装后以 unique_ptr 提交，失败不发布半对象
+- 设计模式用于表达 Factory、Strategy/Component、Command 等权衡，不应制造上帝对象
+- 组件式 GameObject 不是严格 ECS；是否迁移由对象规模、数据局部性和工具成本决定
 
 <Exercises>
-  <Answer question="游戏项目的四大模块是什么？Game 主类在其中扮演什么角色？">四大模块：实体管理（管游戏对象集合与生命周期）、状态机（管阶段切换）、资源管理（加载缓存复用资源）、输入与渲染（读输入画画面）。Game 主类是骨架，持有四模块实例并在主循环里调度它们，自己不写具体游戏逻辑，只负责串起来。这样分工后新增关卡/敌人只动对应模块，不动主循环。</Answer>
-  <Answer question="用状态机管理游戏阶段相比布尔标志（isMenu/isPlaying）有什么好处？">三点：一互斥保证，任一时刻只有一个状态，不会出现「同时是菜单又是游戏」的矛盾组合；二转移明确，状态间转移写清楚且可执行进入/退出动作（如退出游玩时清空实体）；三扩展容易，加新阶段只需新增一个 State 子类，不动其他状态逻辑，布尔标志法要在每个 if 分支塞新条件越加越乱。状态多、转移复杂时状态机远胜。</Answer>
+
+**问题 1** GameObject、UpdateBehavior、GraphicsBehavior 分别拥有或修改什么？为什么 Transform 只能有一个事实来源？
+
+<Answer>
+
+GameObject 拥有 id、Transform 和两个 unique_ptr；UpdateBehavior 经可写 Transform 和 Context 推进逻辑；GraphicsBehavior 只读 Transform 并绘制。若两个行为各存位置，更新与画面会分叉；共享 Transform 由对象拥有，update 修改、draw 读取。
+
+</Answer>
+
+**问题 2** Factory 创建 Player 的异常安全顺序是什么？怎样证明失败没有半对象进入世界？
+
+<Answer>
+
+先验证 id/spawn 和必需资源，再在局部 unique_ptr 创建 Update/Graphics，最后构造 GameObject 并返回 unique_ptr；世界检查 id 后才插入。任一步抛出时局部智能指针自动清理，容器大小和旧对象不变。用缺纹理替身断言失败回滚。
+
+</Answer>
+
+**问题 3** 本书组件式对象与 ECS 有何三点区别？何时值得迁移？
+
+<Answer>
+
+组件式对象仍由 GameObject 拥有多态行为、状态围绕对象、每对象虚调用；ECS 实体只是 id，组件按类型集中存储，系统批量查询处理。只有大量同构对象的剖析显示间接调用和分散存储是瓶颈，且团队能承担查询、序列化和工具成本时才迁移。
+
+</Answer>
+
 </Exercises>
+
+<Glossary>
+
+<GlossaryItem term="Run! 项目">
+  玩家持续前进并避开动态平台的无尽跑酷项目。
+</GlossaryItem>
+<GlossaryItem term="组件式对象">
+  对象组合可替换行为而主循环只依赖统一接口的架构。
+</GlossaryItem>
+<GlossaryItem term="GameObject">
+  拥有稳定 id、Transform 与 Update/Graphics 行为的世界实体。
+</GlossaryItem>
+<GlossaryItem term="Transform">
+  对象唯一的世界位置和缩放等共享空间状态。
+</GlossaryItem>
+<GlossaryItem term="继承">
+  派生类型复用或扩展基类型接口和实现的机制。
+</GlossaryItem>
+<GlossaryItem term="多态">
+  经基类指针或引用调用实际派生虚函数的机制。
+</GlossaryItem>
+<GlossaryItem term="抽象接口">
+  含纯虚操作并规定派生实现调用契约的基类。
+</GlossaryItem>
+<GlossaryItem term="组合">
+  通过拥有多个协作成员获得功能而非依赖深继承树。
+</GlossaryItem>
+<GlossaryItem term="Factory 类">
+  验证并组装组件、返回完整 GameObject 的创建组件。
+</GlossaryItem>
+<GlossaryItem term="archetype">
+  选择组件、资源与默认参数的一类实体模板标识。
+</GlossaryItem>
+<GlossaryItem term="工厂提交">
+  局部完整构建后把 unique_ptr 所有权交给世界的过程。
+</GlossaryItem>
+<GlossaryItem term="通用主循环">
+  只调用对象接口、不按具体实体类型分支的帧循环。
+</GlossaryItem>
+<GlossaryItem term="开闭原则">
+  新增行为尽量通过扩展进入而不修改稳定调度代码的目标。
+</GlossaryItem>
+<GlossaryItem term="设计模式">
+  反复设计问题、上下文与权衡的命名方案。
+</GlossaryItem>
+<GlossaryItem term="实体组件系统">
+  实体为 id、组件按类型存储、系统批处理匹配组件的架构。
+</GlossaryItem>
+<GlossaryItem term="ECS">Entity Component System 的缩写。</GlossaryItem>
+<GlossaryItem term="UpdateContext">
+  一次更新期显式提供只读依赖和命令出口的参数对象。
+</GlossaryItem>
+<GlossaryItem term="垂直切片">
+  从输入到绘制完整贯通的一小段可运行功能。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 15"
+  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+/>

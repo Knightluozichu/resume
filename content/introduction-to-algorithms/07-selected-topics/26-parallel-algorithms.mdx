@@ -1,0 +1,250 @@
+---
+title: "Chapter 26 · Parallel Algorithms"
+type: C
+section: "CLRS4 · 专题"
+order: 26
+description: "按CLRS第四版第26章重建fork-join并行基础、并行矩阵乘法与并行归并排序。"
+demo: true
+math: true
+sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+draft: false
+---
+
+import { CLRS4ComputationDAGLab, CLRS4WorkSpanLab, CLRS4SchedulerBoundLab, CLRS4RaceConditionLab, CLRS4ParallelForLab, CLRS4MatrixCellLab, CLRS4ReductionTreeLab, CLRS4MergePartitionLab, CLRS4ParallelMergeLab, CLRS4ParallelMergeSortLab, CLRS4ParallelCertificateLab } from "@/components/mdx/introduction-to-algorithms/diagrams/26-parallel-algorithms";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释computation DAG、work、span、parallelism与greedy scheduler bound的关系
+- 能计算给定fork-join DAG、matrix cell reduction和parallel merge sort的work-span bounds
+- 能实现spawn/sync divide-and-conquer、race-free matrix cells与partitioned parallel merge
+- 能分析critical path、data race、task grain和processor count为何限制实际speedup
+- 能设计包含dependency、race freedom、work/span recurrence、scheduler与grain的并行证书
+
+</Objectives>
+
+## 从“八个core为什么不一定快八倍”开始
+
+先预测：总work 80、critical path 12，即使有无限processors也至少耗时12，最大parallelism约$80/12$；给16 cores不会获得16倍speedup。并行性能同时受work law与span law限制。
+
+<Term def="把可独立strands并发执行并显式表达dependencies，以降低critical-path时间同时控制总work的算法。">并行算法</Term>不能只数threads。正确模型先描述computation DAG，再把算法成本与scheduler和processor count组合。
+
+<CLRS4ComputationDAGLab />
+
+## 26.1 The basics of fork-join parallelism
+
+### Strands, spawn, and sync
+
+<Term def="任务可spawn出并行children，并在sync处等待本procedure的spawned descendants完成的结构化并行模型。">fork-join并行</Term>把连续instruction序列压成strands，spawn/continue edges表示fork，sync dependencies表示join。
+
+```text
+PARALLEL-SUM(A, lo, hi)
+1  if hi - lo is below grain, return sequential sum
+2  mid = floor((lo + hi) / 2)
+3  spawn left = PARALLEL-SUM(A, lo, mid)
+4  right = PARALLEL-SUM(A, mid, hi)
+5  sync
+6  return left + right
+```
+
+漏掉sync会在`left`尚未ready时combine；把两个recursive calls都写成普通calls则保持正确却丢失parallelism。
+
+### Work and span
+
+<Term def="在单processor上执行computation DAG全部strands的总时间，记为T1。">工作量</Term> $T_1$是所有vertex cost之和，也是最优sequential simulation上界。
+
+<Term def="在无限processors下仍必须串行经过的最长dependency path时间，记为T∞。">跨度</Term> $T_\infty$是critical path。
+
+$$
+T_P\ge\frac{T_1}{P},
+\qquad
+T_P\ge T_\infty.
+$$
+
+<CLRS4WorkSpanLab />
+
+Parallelism：
+
+$$
+\frac{T_1}{T_\infty}
+$$
+
+是可利用processor数量的平均上限。Work-efficient要求$T_1$不比best sequential algorithm渐近更差；低span但work爆炸的算法可能实际更慢。
+
+Greedy scheduler只要有ready strands就分配给idle processors，可保证：
+
+$$
+T_P\le\frac{T_1}{P}+T_\infty.
+$$
+
+<CLRS4SchedulerBoundLab />
+
+这不包含spawn、cache、communication、NUMA和contention常数，实际测量仍需grain control。
+
+### Parallel loops and races
+
+Parallel for适用于iterations独立。若两iterations无同步读写同一location且至少一个write，存在data race，结果不由DAG value dependencies完全定义。
+
+<CLRS4RaceConditionLab />
+
+Reduction不能让所有tasks执行`sum += value`；应使用private partials再以tree combine，或使用有明确成本的atomic operation。
+
+<CLRS4ParallelForLab />
+
+<Callout type="trap" title="任务越细parallelism越高">
+过细tasks让spawn/scheduling overhead超过useful work，并恶化locality。修法是设sequential cutoff或grain size，使leaf task有足够工作，同时保留明显多于processors的ready tasks。
+</Callout>
+
+## 26.2 Parallel matrix multiplication
+
+### Independent output cells
+
+<Term def="把matrix product的不同output cells并发计算，并可进一步用tree reduction并行每个dot product的算法。">并行矩阵乘法</Term>对$C=AB$：
+
+$$
+c_{ij}=\sum_{k=1}^{n}a_{ik}b_{kj}.
+$$
+
+不同$(i,j)$ cells只读$A,B$并写独立$C[i,j]$，天然race-free。
+
+<CLRS4MatrixCellLab />
+
+```cpp
+parallel_for (int i = 0; i < n; ++i)
+    parallel_for (int j = 0; j < n; ++j) {
+        Value sum = 0;
+        for (int k = 0; k < n; ++k)
+            sum += A[i][k] * B[k][j];
+        C[i][j] = sum;
+    }
+```
+
+该版本work $\Theta(n^3)$，每cell inner loop sequential，span包含$\Theta(n)$ dot product，加parallel-loop scheduling depth。Parallelism约$\Theta(n^2)$，通常已足够。
+
+若每个dot product也用balanced reduction，multiplications work仍$\Theta(n)$、span降至$\Theta(\log n)$：
+
+<CLRS4ReductionTreeLab />
+
+$$
+T_1(n)=\Theta(n^3),
+\qquad
+T_\infty(n)=\Theta(\log n)
+$$
+
+在理想nested parallel loops与tree reduction模型下成立，但需要temporary partials并可能增加memory traffic。Blocked matrix multiply往往因cache locality胜过理论上更细的tasks。
+
+Recursive block multiplication必须避免8个subproducts同时累加到4个same output blocks造成races。可分两waves并sync，或给products private temporaries后parallel reduce；两者work相近，span与memory不同。
+
+<Callout type="trap" title="八个block products全部spawn后直接加到C">
+每个output quadrant是两个products之和，两个tasks同时写同一C block会race。修法是分waves、为每个product分配temporary block，或使用明确同步的reduction。
+</Callout>
+
+## 26.3 Parallel merge sort
+
+### Parallel merge
+
+<Term def="并行排序两半后，用median加binary search把merge切成disjoint output ranges并递归并发合并的排序算法。">并行归并排序</Term>的关键不是spawn两次sort，而是merge也必须有低span，否则每层linear merge沿critical path累积。
+
+Parallel merge对两个sorted runs，选较长run median $x$，在另一run binary search lower bound；$x$的output rank由两个prefix lengths相加得到。左右subproblems读取disjoint input ranges并写disjoint output ranges。
+
+<CLRS4MergePartitionLab />
+
+```text
+P-MERGE(A[p:r], B[q:s], T[o:])
+1  choose median x from the longer input range
+2  binary-search x's split point in the other range
+3  place x at its exact output rank
+4  spawn merge of the two lower ranges into lower output
+5  merge the two upper ranges into upper output
+6  sync
+```
+
+<CLRS4ParallelMergeLab />
+
+每次split让largest child至多为constant fraction，binary search花$\Theta(\log n)$ span。Standard construction有merge work $\Theta(n)$、span $\Theta(\log^2 n)$。
+
+### Sorting recurrence
+
+两half sorts并发，所以span只取一个half critical path，再加parallel merge：
+
+$$
+T_1(n)=2T_1(n/2)+\Theta(n)=\Theta(n\log n),
+$$
+
+$$
+T_\infty(n)
+=
+T_\infty(n/2)+\Theta(\log^2 n)
+=\Theta(\log^3 n).
+$$
+
+<CLRS4ParallelMergeSortLab />
+
+Parallelism为$\Theta(n/\log^2 n)$。Base cutoff应在small arrays切换sequential sort；实际实现还要复用temporary buffer，避免每recursive call allocation。
+
+Stability要求binary-search tie policy一致：例如左run pivot在right run使用lower bound，并让equal left elements先输出。若只验证sorted multiset，可能漏掉stability regression。
+
+<CLRS4ParallelCertificateLab />
+
+<Stepper>
+<Step title="先画computation DAG">
+列出spawn、continuation与sync dependencies，确认results在使用前ready，并识别critical path。
+
+<CLRS4ComputationDAGLab />
+</Step>
+<Step title="分别求work与span">
+Work相加所有branches，span只取longest dependent branch；再代入processor与scheduler bound。
+
+<CLRS4WorkSpanLab />
+</Step>
+<Step title="检查race与grain">
+证明parallel tasks写disjoint outputs或使用reduction，设置sequential cutoff并核算memory traffic。
+
+<CLRS4ParallelCertificateLab />
+</Step>
+</Stepper>
+
+## 小结
+
+Chapter 26 Parallel Algorithms先建立the basics of fork-join parallelism：computation DAG、work、span、parallelism与greedy scheduling。Parallel matrix multiplication把output cells独立化，并可用tree reduction降低dot-product span。Parallel merge sort通过median partition生成disjoint submerges，保持$\Theta(n\log n)$ work与polylog span。
+
+并行正确性要求dependency完整与race-free，性能要求work-efficient、span足够低且grain合理。只报告cores或task数没有意义；应交付$T_1,T_\infty,T_P$ bounds、scheduler assumptions、output ownership和practical cutoff。
+
+<Exercises>
+
+**问题 1**：为何$T_P$至少为$T_1/P$且至少为$T_\infty$？
+
+<Answer>
+$P$ processors单位时间最多完成$P$份work，所以总work需要至少$T_1/P$；critical path上的strands有dependencies，任何processor数量都不能重叠它们，所以至少需要$T_\infty$。
+</Answer>
+
+**问题 2**：Matrix cells并行为何通常race-free？
+
+<Answer>
+每个task只读immutable $A,B$并独占一个$C[i,j]$ output。若进一步并行dot product，应让partials写private slots再reduce；直接多个tasks累加同一cell会产生race。
+</Answer>
+
+**问题 3**：Parallel merge为何用median和binary search分割？
+
+<Answer>
+Median保证largest recursive range按constant factor缩小，binary search确定pivot在另一run的rank，两prefix lengths给出exact output位置。由此左右submerges写disjoint ranges，可安全spawn且递归depth为logarithmic。
+</Answer>
+
+**问题 4**：Parallel merge sort的span为何不是$\Theta(\log n)$？
+
+<Answer>
+每个sort level虽并发处理两个halves，但沿critical path仍需完成一次parallel merge；standard merge本身span为$\Theta(\log^2 n)$。跨$\Theta(\log n)$ sort levels累加得到$\Theta(\log^3 n)$。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="并行算法">把可独立strands并发执行并显式表达dependencies，以降低critical-path时间同时控制总work的算法。</GlossaryItem>
+<GlossaryItem term="fork-join并行">任务可spawn出并行children，并在sync处等待本procedure的spawned descendants完成的结构化并行模型。</GlossaryItem>
+<GlossaryItem term="工作量">在单processor上执行computation DAG全部strands的总时间，记为T1。</GlossaryItem>
+<GlossaryItem term="跨度">在无限processors下仍必须串行经过的最长dependency path时间，记为T∞。</GlossaryItem>
+<GlossaryItem term="并行矩阵乘法">把matrix product的不同output cells并发计算，并可进一步用tree reduction并行每个dot product的算法。</GlossaryItem>
+<GlossaryItem term="并行归并排序">并行排序两半后，用median加binary search把merge切成disjoint output ranges并递归并发合并的排序算法。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Chapter 26 · Parallel Algorithms" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

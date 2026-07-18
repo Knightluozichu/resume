@@ -1,0 +1,358 @@
+---
+title: "第20章：Styling and Deploying an App"
+type: C
+section: "Part II · Projects · Web Applications"
+order: 20
+description: "用django-bootstrap5完成responsive Learning Log，并以环境配置、YAML、Gunicorn、migrate和logs建立部署闭环。"
+demo: true
+math: false
+sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
+draft: false
+---
+
+import {
+  PccDeploymentPipelineLab,
+  PccProductionConfigLab,
+  PccResponsiveShellLab,
+} from "@/components/mdx/python-crash-course/diagrams/styling-and-deploying-an-app";
+
+<Objectives>
+
+- 能实现django-bootstrap5的responsive base template、navigation、forms与Entry cards，并比较mobile/desktop和auth states
+- 能设计production dependencies与settings，区分DEBUG、SECRET_KEY、ALLOWED_HOSTS、database和static files配置
+- 能分析Platform.sh deployment的Git、YAML、build、migrate、collectstatic、Gunicorn、logs与error-page链路
+
+</Objectives>
+
+## 为什么 styling 与 deployment 必须一起验证真实工作流
+
+漂亮home page不代表应用可用：mobile navigation可能遮挡logout，invalid form errors可能不可见，production static files可能404，migration也可能未应用。最终验收必须从anonymous register/login，到owner创建Topic/Entry、edit、logout，再到另一用户无法访问，并在production-like settings下执行。
+
+先预测：`DEBUG=False`但未配置ALLOWED_HOSTS会出现什么；HTML正常但Bootstrap CSS 404时应查template还是collectstatic；release先启动新code后才migrate会怎样。把预测转成release gates，不让“push成功”替代部署证据。
+
+<Term def="在同一base template中根据viewport和session state组织navigation、content与commands的页面骨架。">responsive shell</Term>
+
+本章仍以第三版的django-bootstrap5与Platform.sh为项目背景。云平台schema、runtime version和commands会更新，实际部署时须用当前官方文档核对YAML；核心contract保持不变：reproducible build、externalized config、schema migration、static assets、WSGI process与observable health。
+
+## Installing django-bootstrap5
+
+在项目virtual environment安装package并加入`INSTALLED_APPS`，再运行system check。package name、Python interpreter和settings registration是三个独立条件。
+
+```bash
+python -m pip install django-bootstrap5
+python -m django --version
+python manage.py check
+```
+
+```python
+INSTALLED_APPS = [
+    # Django built-ins...
+    "django_bootstrap5",
+    "learning_logs",
+    "accounts",
+]
+```
+
+把dependency写入production manifest，否则local template tag可用、remote build却`TemplateSyntaxError`。安装命令成功后还要render一页，确认CSS/JS实际加载。
+
+## Base Template and Responsive Navigation
+
+base template加载Bootstrap CSS/JavaScript，定义navbar、container和content block。brand回到home，Topics是主要workspace，右侧根据`user.is_authenticated`显示username/logout或login/register。mobile使用navbar toggler折叠菜单，但所有commands仍可键盘访问。
+
+```django
+{% load django_bootstrap5 %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Learning Log</title>
+  {% bootstrap_css %}
+  {% bootstrap_javascript %}
+</head>
+<body>
+  <nav class="navbar navbar-expand-md navbar-light bg-light mb-4 border">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="{% url 'learning_logs:index' %}">Learning Log</a>
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse"
+              data-bs-target="#navbarCollapse" aria-controls="navbarCollapse"
+              aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarCollapse">
+        <!-- named navigation and auth state -->
+      </div>
+    </div>
+  </nav>
+  <main class="container">{% block content %}{% endblock content %}</main>
+</body>
+</html>
+```
+
+`meta viewport`使mobile CSS按device width布局。toggler的target id必须与collapse id一致，JavaScript bundle必须加载；若button可见但不展开，先检查这两个contract与console，而不是调整随机CSS。
+
+<Stepper>
+  <Step title="切换viewport与session state">
+    <PccResponsiveShellLab />
+  </Step>
+  <Step title="验证navigation命令完整">
+    mobile/desktop都能到home、topics、login/register或logout；active用户不会看到重复冲突command。
+  </Step>
+  <Step title="执行keyboard与overflow检查">
+    tab order清楚、toggler有accessible name、长username不覆盖内容，320px宽度无水平滚动。
+  </Step>
+</Stepper>
+
+## Styling the Home Page and Topic Pages
+
+home page用jumbotron-like section突出实际任务，不是营销页：anonymous用户理解Learning Log并能register，authenticated用户直接进入Topics。headings保持语义层级，button/link只用于真实command。
+
+Topic detail把每条Entry显示为card：header含date与edit link，body显示text。不要把整页每个section都做nested card；card只框定重复Entry item。empty state告诉用户如何添加第一条record。
+
+```django
+{% for entry in entries %}
+  <div class="card mb-3">
+    <div class="card-header d-flex justify-content-between">
+      <span>{{ entry.date_added|date:'M d, Y H:i' }}</span>
+      <a href="{% url 'learning_logs:edit_entry' entry.id %}">Edit entry</a>
+    </div>
+    <div class="card-body">{{ entry.text|linebreaks }}</div>
+  </div>
+{% empty %}
+  <p>There are no entries for this topic yet.</p>
+{% endfor %}
+```
+
+user content保持autoescape；`linebreaks`转换paragraph但仍escape，不需要`safe`。date format与timezone来自project policy，部署前确认`TIME_ZONE`和`USE_TZ`。
+
+## Styling Forms and Validation Errors
+
+django-bootstrap5 template tags统一field labels、widgets、help text与errors。form仍是Django Form object，server validation不变；styling不能隐藏non-field errors或CSRF failure。
+
+<Term def="把Django bound form、field errors与submit command映射到一致Bootstrap markup的模板边界。">form rendering boundary</Term>
+
+```django
+{% load django_bootstrap5 %}
+{% block content %}
+  <h2>Add a new topic</h2>
+  <form action="{% url 'learning_logs:new_topic' %}" method="post">
+    {% csrf_token %}
+    {% bootstrap_form form %}
+    {% bootstrap_button button_type="submit" content="Add topic" %}
+  </form>
+{% endblock content %}
+```
+
+invalid POST后检查：用户input保留，error紧邻field，summary或focus让screen-reader用户发现问题，颜色不是唯一提示。button text描述command；login/new/edit forms不要共享错误action URL。
+
+## Production Dependency Manifest
+
+production build必须从repository里的manifest安装相同direct dependencies。`requirements.txt`至少包含Django、django-bootstrap5、Gunicorn与database driver，并固定可验证version。开发工具可分组，不让debug toolbar进入production。
+
+<Term def="记录production所需packages与versions、供clean environment重复安装的依赖清单。">production dependency manifest</Term>
+
+```text
+Django==5.x.y
+django-bootstrap5==x.y.z
+gunicorn==x.y.z
+psycopg[binary]==x.y.z
+```
+
+以上`x.y.z`在真实项目中必须替换为已测试的精确版本，不能原样部署。`pip freeze`可捕获transitive packages，却也会混入本机无关工具；更成熟项目用lockfile从direct dependencies解析。验收是在clean environment安装、migrate、test、collectstatic并boot，不是只看manifest存在。
+
+## Gunicorn and the WSGI Boundary
+
+Django `runserver`不用于production。Gunicorn导入`learning_log.wsgi:application`，管理worker processes并监听平台提供的host/port或Unix socket。process command、module path和bind target必须与平台routing一致。
+
+```bash
+gunicorn learning_log.wsgi:application --bind 0.0.0.0:${PORT:-8000} --workers 3
+```
+
+worker数量不是越多越好，受memory、CPU和request workload约束。boot时不要执行long migration；schema change放release/deploy hook，web process只负责serve requests。health check应快速且不泄露secrets。
+
+<Term def="在platform router与Django application之间管理production worker processes的WSGI服务边界。">WSGI process</Term>
+
+## Production Settings from Environment
+
+SECRET_KEY、database credentials与hostnames不写入Git。production `DEBUG=False`，SECRET_KEY缺失应fail fast，ALLOWED_HOSTS只包含实际domains。database来自platform relationship或URL；local可继续SQLite，但tests要覆盖production engine的关键差异。
+
+<Term def="由environment注入secrets、hosts、database和runtime模式，并与source code分离的配置集合。">production configuration</Term>
+
+```python
+import os
+
+DEBUG = os.getenv("DJANGO_DEBUG", "False").lower() == "true"
+SECRET_KEY = os.environ["DJANGO_SECRET_KEY"]
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get("DJANGO_ALLOWED_HOSTS", "").split(",")
+    if host.strip()
+]
+
+STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+```
+
+development不要复用production secret，production也不要通过fallback获得公开default。若ALLOWED_HOSTS为空，启动check可fail，避免部署后每个request都DisallowedHost。secure cookies、HTTPS redirect、trusted origins等根据platform TLS topology设置，并运行`python manage.py check --deploy`审查。
+
+<Stepper>
+  <Step title="切换development与production config">
+    <PccProductionConfigLab />
+  </Step>
+  <Step title="让missing secret尽早失败">
+    build或boot明确报环境变量名，日志不输出值；不要fallback到repository中的假secret。
+  </Step>
+  <Step title="验证request host和database engine">
+    smoke test使用真实deployed hostname；migration与关键queries在production database上执行。
+  </Step>
+</Stepper>
+
+## Static Files and collectstatic
+
+Bootstrap package、本地CSS与admin assets通过Django static finders发现；`collectstatic`把它们汇总到STATIC_ROOT，平台或middleware再提供。template render成功不意味着static URL可访问。
+
+```bash
+python manage.py collectstatic --noinput
+python manage.py findstatic admin/css/base.css
+```
+
+<Term def="把各apps和packages的static resources收集到versioned deploy目录并由production server提供的流程。">static asset pipeline</Term>
+
+release验证至少请求一条CSS并检查200、content type与cache headers。若HTML无样式，查看browser network中的static URL、collectstatic output和platform route；不要先改template classes。
+
+## Platform.sh Configuration and YAML Ownership
+
+第三版使用Platform.sh。配置通常描述Python runtime、build/deploy hooks、web start command、static route、database service与public route。YAML indentation就是结构，错误会导致build前validation失败。
+
+```yaml
+# Conceptual .platform.app.yaml; verify exact keys against the active platform schema.
+name: learning-log
+type: python:3.x
+
+hooks:
+  build: |
+    pip install -r requirements.txt
+    python manage.py collectstatic --noinput
+  deploy: |
+    python manage.py migrate --noinput
+
+web:
+  commands:
+    start: gunicorn learning_log.wsgi:application --bind 0.0.0.0:$PORT
+```
+
+```yaml
+# Conceptual service and route ownership.
+services:
+  database:
+    type: postgresql
+routes:
+  "https://{default}/":
+    type: upstream
+    upstream: "learning-log:http"
+```
+
+这些片段表达第三版章节的部署职责，不保证未来平台字段原样有效。把平台CLI validation作为preflight；repository里只保存non-secret infrastructure config，credentials由platform relationship/environment注入。
+
+## Git as the Release Input
+
+平台从pushed commit构建，因此untracked local file、未提交migration或只存在shell的package都不会部署。release前确认diff、tests、migration files、manifest和YAML属于同一commit。不要把generated secret或local database加入Git。
+
+```bash
+git status --short
+python manage.py makemigrations --check
+python manage.py check --deploy
+python manage.py test
+```
+
+push只是触发build，不是成功证据。记录commit SHA、platform deployment id、build result、migration result与smoke-test URL；出现failure能定位具体release。
+
+## Deployment Order and Release Gates
+
+build安装dependencies并产出static artifacts；deploy hook对target database应用migrations；web process启动Gunicorn；router/health check确认可服务。对于向后不兼容schema change，应采用expand/migrate/contract，让旧新code过渡期间都能工作，避免rolling deployment窗口出错。
+
+<Stepper>
+  <Step title="逐项通过release pipeline">
+    <PccDeploymentPipelineLab />
+  </Step>
+  <Step title="保存每个gate的artifact">
+    commit、dependency install log、collected static count、applied migrations、process boot和HTTP smoke result都要可追溯。
+  </Step>
+  <Step title="失败时停在最早boundary">
+    build失败不启动；migration失败不宣告healthy；static失败即使home 200也不算完成。
+  </Step>
+</Stepper>
+
+<Term def="release必须通过且有证据的build、schema、static、process与health检查点。">release gate</Term>
+
+## Troubleshooting Deployments with Logs
+
+先按时间线区分build logs、deploy/migration logs、web boot logs与request logs。ImportError查dependency/build；no such column查migration；DisallowedHost查hostname config；CSS 404查static pipeline；502/503查Gunicorn boot/bind与health。
+
+日志包含timestamp、severity、request ID和safe context，不打印SECRET_KEY、database URL、password或full user input。一次failure保存first root exception，后续cascade往往只是结果。修复后重新部署新commit，不在remote container手改造成不可复现状态。
+
+## Custom Error Pages and DEBUG=False Verification
+
+`404.html`与`500.html`在production settings下提供友好但不泄密的response。500 page不能显示stack trace、settings或query；真正diagnostics留在restricted logs。custom handler本身应简单，避免database故障时再次查询导致二次failure。
+
+```django
+{% extends "learning_logs/base.html" %}
+{% block content %}
+  <h1>We could not complete that request.</h1>
+  <p>Please return to the home page and try again.</p>
+{% endblock content %}
+```
+
+本地用`DEBUG=False`与合法ALLOWED_HOSTS测试404/500/static，不要等production第一次发现template missing。故意请求不存在URL验证404，构造受控test view验证500并确认logs有trace、browser无敏感信息。
+
+## Production Smoke Matrix
+
+anonymous：首页200、register/login forms有样式、CSRF有效。authenticated owner：Topics list、create/edit和logout工作。second user：直接猜ids仍404。operations：admin/static可用，migration current，health endpoint稳定，logs无持续errors。mobile：navbar、forms/cards和long text不overflow。
+
+smoke test使用专门test account和可清理data，不在production执行破坏性security test。自动browser checks与server-side tests互补：前者看assets/layout，后者验证ownership和database invariants。
+
+<Callout type="trap" title="平台显示deployment succeeded就代表应用可用">
+build成功不证明migration、static、Gunicorn、route和核心workflow。必须通过release gates并保存HTTP、asset、schema与log证据。
+</Callout>
+
+<Callout type="trap" title="把SECRET_KEY和database URL写进YAML最省事">
+repository会永久暴露secrets并难以按environment轮换。YAML只声明relationship与变量名称，secret values由platform管理；missing时fail fast且日志不打印内容。
+</Callout>
+
+## 本章回顾：从可读界面到可运营release
+
+1. django-bootstrap5提供responsive shell、navigation、forms和cards，但必须验证auth与mobile states。
+2. production manifest让clean build安装Django、Bootstrap、Gunicorn与database driver。
+3. production configuration从environment读取secret、hosts与database，DEBUG必须关闭。
+4. collectstatic、migrate与Gunicorn各有独立artifact和failure boundary。
+5. Platform YAML、Git commit、logs、custom error pages和smoke matrix构成部署闭环。
+
+<Exercises>
+
+**问题 1：production页面HTML正常但完全没有样式，如何定位？**
+
+<Answer>用browser network确认CSS URL/status/content type；检查template已加载Bootstrap tags、dependency已在production manifest安装、collectstatic输出含目标files、STATIC_ROOT/route正确。HTML 200不代表static gate通过，修复后直接请求CSS并检查cache headers。</Answer>
+
+**问题 2：一份安全production settings至少要如何处理DEBUG、SECRET_KEY与ALLOWED_HOSTS？**
+
+<Answer>DEBUG默认false；SECRET_KEY只从environment读取且缺失立即boot failure，不记录value；ALLOWED_HOSTS来自明确deployed domains并由真实Host smoke test验证。database credentials同样externalize，再运行check --deploy并测试404/500不泄露stack。</Answer>
+
+**问题 3：从Git push到宣布release成功需要哪些证据？**
+
+<Answer>记录commit SHA；clean build安装locked dependencies并collectstatic；deploy hook成功migrate target database；Gunicorn按平台socket/port启动；health、home、login、static和owner workflow smoke通过；logs无持续root errors。任一gate失败都不能只凭平台绿色状态宣布完成。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="responsive shell" definition="按viewport和session state组织navigation、content与commands的base页面骨架。" />
+  <GlossaryItem term="form rendering boundary" definition="把bound form、errors与submit command映射到一致Bootstrap markup的位置。" />
+  <GlossaryItem term="production dependency manifest" definition="记录production packages与versions、支持clean install的依赖清单。" />
+  <GlossaryItem term="WSGI process" definition="在platform router与Django application间管理workers的服务边界。" />
+  <GlossaryItem term="production configuration" definition="由environment注入secrets、hosts、database与runtime mode的配置集合。" />
+  <GlossaryItem term="static asset pipeline" definition="收集apps与packages静态资源并由production server提供的流程。" />
+  <GlossaryItem term="release gate" definition="release必须通过且有证据的build、schema、static、process与health检查点。" />
+</Glossary>
+
+<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 20: Styling and Deploying an App" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />

@@ -1,0 +1,295 @@
+---
+title: "第2章：影响优化的计算机行为"
+type: A
+section: Optimized C++ · Chapter 2
+order: 2
+description: 对齐第一版第2章 Computer Behavior Affecting Optimization：内存层级与访问粒度、容量与大小端、指令/分支/乱序执行、多执行流、系统调用和语句成本差异。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+draft: false
+---
+
+import {
+  OpcExecutionBoundaryCostMap,
+  OpcInstructionPipelineMap,
+  OpcMemoryHierarchyAccessMap,
+} from "@/components/mdx/optimized-cpp/diagrams/computer-behavior";
+
+<Objectives>
+
+- 能解释 C++ 抽象机器与真实 memory hierarchy、cache-line transfer、finite capacity 之间的性能差异
+- 能分析 branch prediction、dependency 与 out-of-order execution 如何改变同样语句的实际成本
+- 能设计 locality、batching 和 execution-stream 实验，区分计算、memory access 与 operating-system boundary 瓶颈
+
+</Objectives>
+
+## 从 C++ 对计算机的“善意谎言”开始
+
+C++ source 提供一个稳定 abstract machine：对象像是独立存在，memory 看起来按 byte 编址，statements 似乎按书写顺序发生，ordinary operation 的成本也没有写进类型系统。这些 **lies C++ believes about computers** 对 correctness 很重要，却不能直接作为 performance model。
+
+<Term def="语言抽象中对象独立、内存按字节、语句顺序执行且基本操作成本近似的可移植模型；它保障语义，却隐藏实际硬件代价。">
+  lies C++ believes about computers
+</Term>
+
+**truth about computers** 是：CPU 在层级化存储上成批搬运数据，用 prediction/speculation/out-of-order scheduling 保持执行单元忙碌；多个 execution streams 争用 cache 与 bandwidth；OS/device boundary 的成本远高于一条普通 instruction。优化就是把 source behavior 与这些机制对齐，同时不破坏语言规则。
+
+<Term def="由 memory hierarchy、transfer granularity、finite capacity、pipeline、prediction、parallel streams 与 OS/device latency 共同决定的实际执行模型。">
+  truth about computers
+</Term>
+
+<Callout type="trap" title="陷阱：把硬件模型当作新的语言语义">
+  CPU 可能乱序执行，但 C++ observable behavior 与 memory model 仍约束结果；cache
+  line 常见却不是 `sizeof` 的一部分；平台可能
+  little-endian，却不能据此用越界、未对齐或 strict-aliasing violation
+  读取对象。性能推理必须建立在 defined behavior 之上。
+</Callout>
+
+## Memory Is Slow，而且不按 byte 单独搬运
+
+相对 CPU arithmetic，**memory is slow**。一次 DRAM miss 可能让依赖链等待很久；cache 的作用是让近期或相邻 data 更接近 core。因此“这个 loop 只有一次 add”并不说明它便宜，关键是 load 命中哪一级、是否有 independent work 可覆盖等待。
+
+<Term def="处理器计算速度与远端数据到达速度之间的差距；cache miss 与 dependency 会把该延迟暴露给关键路径。">
+  memory is slow
+</Term>
+
+“**memory is not accessed in bytes**”描述的是硬件 transfer granularity：程序可以 load 一个 byte，但 cache/memory subsystem 通常带回包含它的一整条 line，并以 page 管理 virtual memory。于是 sequential scan 能消费已带回的邻近 bytes，pointer chasing 却可能每次只用 line 中很少数据。
+
+<Term def="CPU cache、memory controller 与 virtual memory 以 cache line、burst 和 page 等较大粒度传输/管理数据，而非每次只移动源代码请求的一个 byte。">
+  memory access granularity
+</Term>
+
+<OpcMemoryHierarchyAccessMap />
+
+```cpp
+struct Particle {
+    float x, y, z;
+    float velocityX, velocityY, velocityZ;
+    std::array<std::byte, 96> coldMetadata;
+};
+
+float sumX(const std::vector<Particle>& particles) {
+    float result = 0.0F;
+    for (const Particle& particle : particles) {
+        result += particle.x; // 每条 cache line 中大量 cold bytes 没被使用
+    }
+    return result;
+}
+```
+
+若 hot query 只读 `x`，separate dense `std::vector<float>` 可能用更少 lines；若 update 总是同时读写全部字段，AoS 又可能更合适。不要把 SoA 当普遍答案，要按 operation mix、SIMD、alignment、mutation 与 ownership 测量。
+
+## Some Memory Accesses Are Slower
+
+**some memory accesses are slower**，原因不仅是 L1/L2/DRAM 层级。TLB miss、page fault、跨 NUMA node、unaligned/split access、cache coherence、false sharing 和 storage-backed mapping 都可能改变 tail。地址相邻也不保证同样快：working set 超出 cache 后，复用距离会使旧 line 被逐出。
+
+<Term def="由 cache/TLB/NUMA/alignment/coherence/page 状态不同造成的同一条 load/store 延迟差异。">
+  nonuniform memory access cost
+</Term>
+
+**finite capacity** 是所有 hierarchy 的核心约束：register、cache、TLB、RAM 都有限。一个 microbenchmark 的 dataset 完全驻留 L1 时，结论可能无法外推到 production size；因此 benchmark 至少要跨越小、典型、峰值 working set。
+
+<Term def="每级高速存储能容纳的数据与映射条目有限，working set 或复用距离超过容量后命中率会突变。">
+  finite capacity
+</Term>
+
+### Big End 与 Little End 是表示契约
+
+**big end**（big-endian）把 most-significant byte 放在最低地址；**little end**（little-endian）相反。endianness 通常不改变同一平台 native arithmetic 的速度，却决定 file/network protocol 的 byte layout、parse correctness 和 conversion work。跨边界数据应显式编码，不应把 native object representation 直接写盘。
+
+<Term def="多字节值中最高有效字节位于最低地址的字节序。">big-endian</Term>
+
+<Term def="多字节值中最低有效字节位于最低地址的字节序。">little-endian</Term>
+
+```cpp
+std::uint32_t decodeLittleEndian32(std::span<const std::byte, 4> bytes) {
+    return std::to_integer<std::uint32_t>(bytes[0]) |
+           (std::to_integer<std::uint32_t>(bytes[1]) << 8U) |
+           (std::to_integer<std::uint32_t>(bytes[2]) << 16U) |
+           (std::to_integer<std::uint32_t>(bytes[3]) << 24U);
+}
+```
+
+这个版本把 protocol contract 写进代码，不依赖 host endianness、alignment 或 aliasing。真实 parser 还应先验证 buffer length，并比较 standard/library byteswap path 是否由 compiler 优化为合适 instruction。
+
+## Instruction Execution Is Slow，Making Decisions Is Hard
+
+“**instruction execution is slow**”不是说所有 instruction 一样慢，而是 fetch/decode/schedule/execute 都占有限资源；load、divide、dependency chain、front-end stall 会限制 throughput。现代 CPU 通过并行 execution units 和 speculation 隐藏延迟，因此 source statement 数量只是很粗的代理。
+
+<Term def="指令需要经过取指、解码、调度、执行和提交，并竞争有限端口、带宽与依赖窗口；关键路径决定可见耗时。">
+  instruction execution cost
+</Term>
+
+“**making decisions is hard**”指 conditional branch 在结果产生前就要决定下一批 instructions 从哪里取。**branch prediction** 猜中时 pipeline 持续前进；猜错时 speculative work 被丢弃。稳定 pattern 通常易预测，data-dependent random branch 较难，但 branchless rewrite 也可能增加 instructions、load 或改变 numerical behavior。
+
+<Term def="处理器根据历史和地址模式预测控制流方向，以提前取指执行；误判会清空错误路径上的推测工作。">
+  branch prediction
+</Term>
+
+<OpcInstructionPipelineMap />
+
+```cpp
+std::size_t countAbove(std::span<const int> values, int threshold) {
+    std::size_t count = 0;
+    for (int value : values) {
+        if (value > threshold) {
+            ++count;
+        }
+    }
+    return count;
+}
+```
+
+不能只看这段 source 断言 branch expensive。compiler 可能生成 conditional set/vectorized compare；sorted、clustered、random input 的 predictability 也不同。应固定 data distribution，检查 optimized assembly/perf counters，并同时验证 throughput 与结果。
+
+## Statements Are Not Executed in Order
+
+**statements are not executed in order**：只要不改变架构可见结果，processor 可以让 operands ready 的 instructions 先执行，再按规则 retire。这样能用 independent work 覆盖某个 slow load；但链式 `a[i] -> node->next -> next` 每一步依赖前一步地址，几乎无可调度余量。
+
+<Term def="处理器在保留架构可见行为的前提下，按 operand readiness 调度 micro-operations，而非机械遵循源代码书写次序。">
+  out-of-order execution
+</Term>
+
+因此一次 loop unrolling 有时提升 instruction-level parallelism，有时只增加 code size；把多个 accumulators 分离可能打断 dependency chain，但 compiler 也可能已经完成。第 3 章的 measurement 必须回答“受 latency、throughput 还是 front end 限制”，而不是凭 source aesthetics 判断。
+
+## Multiple Streams 与 Operating-System Boundary
+
+**multiple streams of program execution** 包括 threads、tasks、processes，以及 device/async completion。它们可以在多个 cores 上并行、在一个 stream 等待时执行另一个，也会增加 scheduling、synchronization、coherence、queueing 和 nondeterministic tails。stream 数量超过 runnable resources 后不自动加速。
+
+<Term def="可被独立调度或并行推进的 thread、task、process 或 asynchronous operation；收益来自并行/重叠，代价来自协调与资源争用。">
+  multiple streams of program execution
+</Term>
+
+**calling into the operating system is expensive**，因为 file/socket/timer 等服务要跨 API boundary，验证参数、访问 kernel/device state，并可能 schedule/block。一次 syscall 的确切成本依 OS 与状态而异，可靠策略不是记一个纳秒数字，而是减少 round trips、buffer/batch、选择适合的 async API。
+
+<Term def="用户代码请求 kernel 服务时产生的边界转换、参数验证、调度、设备与潜在阻塞成本。">
+  operating-system call boundary
+</Term>
+
+<OpcExecutionBoundaryCostMap />
+
+逐 byte `read`、每条 log 单独 `write`、每个 packet 都新建 thread 都把固定 boundary cost 放大。batching 也有 trade-off：buffer 增加 memory 和等待时间，因此应同时测 throughput、p50/p99、CPU、syscall count 与 backpressure。
+
+## All Statements Are Not Equally Expensive
+
+**all statements are not equally expensive**：`x += 1`、cache-missing load、unpredictable branch、heap allocation、contended lock 和 blocking I/O 虽都可写成一行，成本可跨多个数量级。同一种 statement 也随 data/state 改变。因此 review 不能按“行数少”判断快慢，而要标注每行触发的 machine work 与 frequency。
+
+<Callout type="trap" title="陷阱：用固定延迟表代替测量">
+  latency table 能建立数量级直觉，却会随 CPU、cache state、NUMA、OS、compiler 和
+  workload 改变。不要写死“DRAM 永远 N ns”或“syscall 永远 M
+  ns”作为验收结论；用当前 target machine 的 counters、benchmark 和 production
+  trace 验证。
+</Callout>
+
+## 三步定位硬件行为
+
+<Stepper>
+  <Step title="第一步：画出数据移动路径">
+    标记 working set、访问顺序、每次实际使用的 bytes、复用距离和 owner core。先预测 cache-line/TLB/capacity 风险，再用小、典型、峰值数据集验证。
+
+    <OpcMemoryHierarchyAccessMap />
+
+  </Step>
+  <Step title="第二步：分解流水线受限原因">
+    区分 front-end、branch、dependency、execution port 与 memory stall；改变 input distribution 或制造 independent work，观察瓶颈是否按预测移动。
+
+    <OpcInstructionPipelineMap />
+
+  </Step>
+  <Step title="第三步：核算边界与并发成本">
+    记录 task/thread/syscall/device round trips、batch size、queue wait 与 contention。只有减少边界次数或重叠等待带来端到端收益时，才保留新的 stream/buffer。
+
+    <OpcExecutionBoundaryCostMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- C++ abstract machine 隐藏了 memory hierarchy、pipeline、execution streams 与 OS boundary，优化必须同时尊重两种模型
+- memory access 以 line/page 等粒度发生，locality、reuse 与 finite capacity 决定实际成本
+- big-endian/little-endian 是外部表示契约，应显式 decode/encode 而非泄露 native object representation
+- instruction cost 受 dependency、execution resources 和 slow load 影响，statement 数量不等于时间
+- branch prediction 隐藏常见 decision 成本，误判则丢弃推测工作；是否改写必须测 workload
+- out-of-order execution 能重排 ready work，却无法消除真正 dependency chain
+- multiple execution streams 可并行或重叠等待，也会带来 queue、synchronization 和 coherence 成本
+- system calls 与 external I/O 应优先 batch/amortize，并同时控制 latency 与 backpressure
+
+<Attribution
+  adaptedFrom="Optimized C++, First Edition, Chapter 2: Computer Behavior Affecting Optimization"
+  adaptedUrl="https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+/>
+
+<Glossary>
+  <GlossaryItem term="lies C++ believes about computers">
+    语言为可移植语义提供、但隐藏硬件成本的抽象模型。
+  </GlossaryItem>
+  <GlossaryItem term="truth about computers">
+    层级存储、流水线、预测、并发流和系统边界构成的执行现实。
+  </GlossaryItem>
+  <GlossaryItem term="memory is slow">
+    远端数据到达相对计算慢，依赖会暴露等待。
+  </GlossaryItem>
+  <GlossaryItem term="memory access granularity">
+    cache line、burst、page 等大于源代码 byte 的传输/管理单位。
+  </GlossaryItem>
+  <GlossaryItem term="nonuniform memory access cost">
+    cache/TLB/NUMA/alignment/coherence 状态造成的访问成本差异。
+  </GlossaryItem>
+  <GlossaryItem term="finite capacity">
+    高速层级容量有限，working set 超限会使命中率下降。
+  </GlossaryItem>
+  <GlossaryItem term="big-endian">
+    最高有效字节位于最低地址的字节序。
+  </GlossaryItem>
+  <GlossaryItem term="little-endian">
+    最低有效字节位于最低地址的字节序。
+  </GlossaryItem>
+  <GlossaryItem term="instruction execution cost">
+    指令在流水线、端口、带宽和依赖关键路径上的资源代价。
+  </GlossaryItem>
+  <GlossaryItem term="branch prediction">
+    提前猜测控制流并推测执行，误判时丢弃错误路径工作。
+  </GlossaryItem>
+  <GlossaryItem term="out-of-order execution">
+    在保留可见行为时按 operand readiness 调度工作。
+  </GlossaryItem>
+  <GlossaryItem term="multiple streams of program execution">
+    可独立调度或并行推进的 thread、task、process 或 async operation。
+  </GlossaryItem>
+  <GlossaryItem term="operating-system call boundary">
+    请求 kernel/device 服务产生的转换、验证、调度和阻塞成本。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：解释一次“算法没变却快 4 倍”的 layout 改造。** 原实现遍历 2M 个 128-byte records 只累加一个 4-byte field；新实现把该 field 放入 dense array。列出预测、指标与反例。
+
+<Answer question="怎样证明收益来自 data movement 而非偶然噪声？">
+  旧布局理论上每个 cache line 只消费少量 hot bytes，新布局提高 line
+  utilization、降低 working set 与 TLB pressure。固定 compiler/CPU/input，跨
+  L1、LLC、DRAM size 测 throughput，并记录 cache/TLB misses、bytes read、CPU
+  time；校验结果完全一致。若真实 operation 总是使用 record 全字段、改造增加
+  gather 或更新成本，则 AoS 可能更好，需按完整 read/write mix 决定。
+</Answer>
+
+2. **问题 2：比较 predictable 与 random branch。** 设计同一 `countAbove` 对 sorted、clustered、uniform-random data 的实验，并说明为什么不能直接宣布 branchless 必胜。
+
+<Answer question="实验如何隔离 branch prediction 影响？">
+  三组 data 保持 size、value count 与 memory layout 一致，只改变排列；warm up
+  后多次测 cycles/item、branch instructions/misses，并检查 optimized assembly
+  是否已经 vectorize 或用 conditional set。branchless 版本还要比较 instruction
+  count、load、vectorization 与 correctness。 若 loop 受 memory bandwidth
+  限制，branch-miss 差异可能不改变端到端时间。
+</Answer>
+
+3. **问题 3：修复每条日志一次 syscall 的 writer。** 给出 batching 方案及吞吐、尾延迟、丢失窗口和并发验收门。
+
+  <Answer question="为什么不能只把 buffer 调到越大越好？">
+    每 thread 先写 bounded user-space buffer，由单一/分片 writer 按 size 或 deadline 批量 flush，
+    并定义 shutdown/error/fsync/backpressure。记录 writes/record、bytes/write、CPU、throughput、
+    p50/p99 publish latency、queue depth 和 crash loss window。buffer 过大会延长低流量等待、占用
+    memory、扩大丢失窗口；writer 太少可能堵塞，太多又增加 contention，因此在目标约束内选择
+    最小足够 batch。
+  </Answer>
+</Exercises>

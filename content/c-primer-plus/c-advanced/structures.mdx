@@ -3,22 +3,23 @@ title: 结构和其他数据形式
 type: A
 section: C高级主题
 order: 14
-description: 掌握 struct 定义与成员访问、结构体数组、结构体指针、typedef、联合体 union 与枚举 enum 基础
+description: 掌握结构体声明与布局、嵌套和数组、函数传递、联合体判别、枚举、typedef与复合字面量
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/c-primer-plus-9780321928429"
 draft: false
 ---
 
+import { CPrimerAggregateContractDiagram } from "@/components/mdx/c-primer-plus/diagrams/structures";
 
 
 
 
 <Objectives>
 
-- 能定义 struct、用点号访问成员，并说明 sizeof 为何可能含 padding、结构体数组在内存中如何连续排布
-- 能声明结构体指针，区分 `.` 与 `->` 的适用场景，并用 typedef 为 struct/enum 起简短别名
-- 能解释 union 与 enum 的用途与陷阱，并回答：向 union 写入 int 后读 float 会发生什么？
+- 能定义、嵌套并指定初始化结构体，解释 padding、结构数组步长和复合字面量生存期
+- 能比较结构体按值传递、返回与 const 指针借用，并为函数接口选择点号或箭头访问
+- 能实现 enum 判别的 union，说明读取非当前成员为何不是数值转换且可能遇到陷阱表示
 
 </Objectives>
 
@@ -30,6 +31,8 @@ draft: false
 
 没有 struct，你只能传一长串参数或平行数组——维护成本高，也谈不上类型安全。这一章还介绍 **typedef**（起别名）、**union**（省内存的「多选一」存储）和 **enum**（可读常量）。
 
+<CPrimerAggregateContractDiagram />
+
 ## 定义 struct 与成员访问
 
 ```c
@@ -39,12 +42,14 @@ struct book {
     int pages;
 };
 
-struct book novel;
-novel.price = 29.9;
-strcpy(novel.title, "C Primer Plus");
+struct book novel = {
+    .title = "C Primer Plus",
+    .price = 29.9f,
+    .pages = 720
+};
 ```
 
-<Term def={'结构体实例内部的具名字段，通过 变量.成员 或 指针箭头成员 读写。'}>成员（member）</Term> 可以是任意类型，甚至嵌套另一个 struct。初始化可用 C99 指定初始化：
+<Term def={'结构体或联合体内部的具名字段，通过对象点号成员或指针箭头成员访问。成员类型须满足完整对象类型等声明约束。'}>成员（member）</Term> 可以是标量、数组或另一个完整结构体等对象类型；结构体最后还可按规则使用一个柔性数组成员。初始化可用 C99 指定初始化：
 
 ```c
 struct book gift = { .title = "Demo", .price = 0.0f, .pages = 120 };
@@ -52,7 +57,7 @@ struct book gift = { .title = "Demo", .price = 0.0f, .pages = 120 };
 
 <StructMemoryLayoutDiagram />
 
-编译器为满足 <Term def="CPU 访问内存时要求的地址边界；可能导致 struct 成员之间插入 padding 字节。">对齐（alignment）</Term> 会在成员间插入 padding。`sizeof(struct book)` 可能大于各成员 `sizeof` 之和——写二进制文件或跨平台通信时要格外小心。
+实现为满足 <Term def="对象类型对存储地址倍数的实现要求；实现可在结构成员之间和末尾插入填充以满足成员及结构数组元素的对齐。">对齐（alignment）</Term> 可以在成员间和结构尾部插入 padding。结构体开头不会有未命名填充，非位字段成员地址按声明顺序递增，但具体偏移与 `sizeof(struct book)` 由实现决定。序列化不能把字段大小简单相加来猜布局。
 
 ## 结构体数组
 
@@ -66,12 +71,34 @@ shelf[1].pages = 400;
 
 若 `sizeof(struct book)` 为 52，则 `shelf[1]` 的起始地址比 `shelf[0]` 大 52 字节。这与「数组元素等宽连续」的规则一致，只是元素类型变「宽」了。
 
-## 结构体指针：`.` 与 `->`
+### 嵌套结构：成员本身也是完整记录
 
-函数若按值传递 struct，会**拷贝整份**——大结构体开销高。更常见的是传 <Term def={'指向 struct 实例的指针；通过箭头运算符或 (*p).member 访问成员。'}>结构体指针</Term>：
+<Term def="把一个完整结构体对象声明为另一个结构体的成员；外层对象按值拥有内层对象，并用连续点号逐层访问。">嵌套结构</Term> 适合把可复用子记录组合起来：
 
 ```c
-void show_price(struct book *pb) {
+struct date {
+    int year, month, day;
+};
+
+struct loan {
+    struct book item;
+    struct date due;
+};
+
+struct loan current = {
+    .item = { .title = "C11", .price = 39.0f, .pages = 320 },
+    .due = { .year = 2026, .month = 7, .day = 31 }
+};
+```
+
+访问到期月份写 `current.due.month`。内层结构按值属于外层对象，不是自动分配的指针；复制 current 会连同 item 与 due 的成员一起复制。
+
+## 结构指针：`.` 与 `->`
+
+结构体可以按值传入函数，语义上得到独立副本；是否产生实际内存拷贝由优化器决定。需要观察同一对象或避免在接口中复制大记录时，可传 <Term def={'指向 struct 实例的指针；只有指向生存期内有效且满足对齐的对象时，才能通过箭头或先解引用后点号访问。'}>结构体指针</Term>：
+
+```c
+void show_price(const struct book *pb) {
     printf("%.2f\n", pb->price);
 }
 
@@ -88,13 +115,35 @@ show_price(&b);
   </Step>
   <Step title="第二步：取地址">
     <StructPointerAccessDiagram step={2} />
-    **`&b`** 得到指向 `b` 的指针 `struct book *pb`。`pb` 保存首成员所在地址。
+    **`&b`** 得到指向整个 b 对象的指针，类型为 struct book 指针。结构地址与其首个非位字段成员地址在适当转换后可比较相等，但两者类型和可访问范围不同。
   </Step>
   <Step title="第三步：箭头访问">
     <StructPointerAccessDiagram step={3} />
     对**指针**用 **`->`**：`pb->price` 等价于 `(*pb).price`。函数形参常用 `const struct book *` 避免修改且避免拷贝。
   </Step>
 </Stepper>
+
+## 函数与结构：值传递、返回值和指针借用
+
+<Term def="结构体对象可像标量一样作为实参按值传递、由函数返回或赋值；语义上复制成员值，源对象与目标对象随后独立。">结构体值传递</Term> 适合小型值对象：
+
+```c
+struct point { double x, y; };
+
+struct point translated(struct point value, double dx, double dy) {
+    value.x += dx;
+    value.y += dy;
+    return value;
+}
+
+int main(void) {
+    struct point origin = {0.0, 0.0};
+    struct point moved = translated(origin, 2.0, 3.0);
+    return origin.x != 0.0 || moved.x != 2.0;
+}
+```
+
+结构体赋值和传值包含数组成员的值，但 padding 字节不属于可移植值语义，不能用 memcmp 代替逐成员相等比较。对于借用接口，`const struct book *` 表示函数不经该指针修改对象；调用者仍负责保证指针非空（若契约要求）、对齐正确且在整个调用期间指向生存期内对象。需要函数修改调用方结构时，才传非 const 指针并在接口中说明修改哪些成员。
 
 ## typedef：给类型起别名
 
@@ -120,9 +169,25 @@ struct book { ... };
 
 对 enum 同样适用：`typedef enum { RED, GREEN } Color;`。别名不改变内存布局，只让声明更短、可读性更好。
 
+### 结构体复合字面量：在表达式里创建对象
+
+C99 的 <Term def="以括号类型名加初始化列表创建未命名结构体或联合体对象；块作用域对象具有自动存储期，可在包含块结束前取址使用。">结构体复合字面量</Term> 可以直接作为函数实参：
+
+```c
+void show_book(const struct book *value);
+
+show_book(&(struct book){
+    .title = "Temporary",
+    .price = 12.5f,
+    .pages = 96
+});
+```
+
+这不是“只活到分号”的临时值：块作用域复合字面量对象生存到包含块结束，文件作用域复合字面量则具有静态存储期。但保存其地址并在对应生存期结束后使用仍会悬空。
+
 ## 联合体 union：同一块内存，多种解释
 
-<Term def="所有成员共享同一起始地址；sizeof 等于最大成员；同一时刻只应有一种成员有效。">联合体（union）</Term> 与 struct 相反——成员**重叠**而非顺排：
+<Term def="所有成员重叠于同一存储并具有相同起始地址；大小足以容纳最大成员且还可能因对齐含尾部填充。">联合体（union）</Term> 与 struct 相反——成员重叠而非顺排：
 
 ```c
 union hold {
@@ -138,13 +203,15 @@ printf("%d\n", u.i);   /* 65 */
 
 <UnionMemoryDiagram />
 
-写入 `u.i` 后，若读 `u.f`，编译器会把**同一串字节**按 float 规则解释——通常得不到有意义的浮点数。程序员需自行记录「当前存的是哪种成员」（常见做法是配一个 enum 标签）。
+写入 `u.i` 后再读 `u.f` 不是把整数数值转换为浮点数，而是让另一成员类型解释相应对象表示。结果依赖 int 与 float 表示；若形成陷阱表示，求值可能产生未定义行为。只有联合体内若干结构共享的“共同初始序列”等标准特例可跨当前成员可靠观察。需要数值转换应写强制转换，需要可移植字节编码应定义格式并逐字段处理。
+
+联合体本身不记录“当前是哪种含义”，程序应使用 enum 判别字段构成 tagged union，并在写 payload 时同步更新标签、在读 payload 前先检查标签。
 
 典型用途：嵌入式寄存器位域、网络协议里多种 payload 互斥、在 int/float 间复用 4 字节以省内存。
 
 ## 枚举 enum：命名整数常量
 
-<Term def="一组命名整型常量；未赋值时从 0 递增；底层类型通常为 int。">枚举（enum）</Term> 替代魔法数字：
+<Term def="声明一组具名枚举常量并形成枚举类型；C11中各枚举常量具有int类型，枚举类型与char或某个有符号或无符号整数类型兼容，具体由实现选择。">枚举（enum）</Term> 替代魔法数字：
 
 ```c
 enum color { RED, GREEN, BLUE, YELLOW };
@@ -159,7 +226,7 @@ switch (c) {
 
 <EnumDiagram />
 
-可显式赋值：`enum { JAN = 1, FEB, MAR };` 则 FEB=2。C 里 enum 与 int 可隐式混用（C++ 更严格）；打印时用 `%d`。
+可显式赋值：`enum { JAN = 1, FEB, MAR };` 则 FEB=2。C11 要求枚举常量可表示为 int；枚举对象的兼容整数类型由实现选择。不要依赖 `sizeof(enum color) == sizeof(int)`，也不要把任意 int 都当成合法业务状态；进入 switch 前仍应验证外部数据。
 
 ## 代码详解：图书管理小片段
 
@@ -212,7 +279,7 @@ v.data.i = 42;
 <Callout type="trap">
   **现象**：`scanf("%s", s.title)` 写 struct 里的 char 数组，超长书名溢出。
   **原因**：`title` 只是定长数组，与单独 char 数组一样无边界保护。
-  **修法**：用宽度限制 `scanf("%39s", s.title)` 或改用 `fgets` + 解析。
+  **修法**：单词输入至少用与容量匹配的宽度并检查返回值，如 `scanf("%39s", s.title) == 1`；含空格标题使用 fgets，并检测换行或截断后再解析。
 </Callout>
 
 <Callout type="trap">
@@ -223,27 +290,29 @@ v.data.i = 42;
 
 <Callout type="trap">
   **现象**：union 写入 `u.i` 后读 `u.f`，得到奇怪的小数。
-  **原因**：成员**共享内存**，读 float 是把 int 的位模式当浮点解释，并非数值转换。
-  **修法**：只读与最后一次写入类型一致的成员；或用 enum 标签记录当前有效成员。
+  **原因**：成员共享存储，读取 float 是用 float 类型解释 int 写入后的对象表示，并非数值转换；结果依赖实现，甚至可能形成陷阱表示。
+  **修法**：业务变体用 enum 标签记录并验证当前成员；数值转换用显式转换，持久化编码则逐字段定义表示。
 </Callout>
 
 <Callout type="trap">
   **现象**：`fwrite(&s, sizeof s, 1, fp)` 在另一台机器 `fread` 后成员错乱。
-  **原因**：struct **padding、字节序** 因平台而异。
-  **修法**：跨平台用文本/JSON，或按字段逐字节序列化并约定 endian 与对齐。
+  **原因**：结构体有实现定义的 padding、成员宽度、字节序和浮点表示，指针成员更没有跨进程意义；未初始化 padding 还可能泄露内存片段。
+  **修法**：定义版本、字段宽度、字节序、长度和编码后逐字段序列化。文本格式也要定义字符编码、转义和数值语法。
 </Callout>
 
 ## 小结
 
 - **struct** 把相关成员打包；**`.`** 访问变量成员；数组元素连续存放
-- **struct *** 传参避免大拷贝；**`->`** 访问指针成员
+- 嵌套结构按值拥有子记录；结构体可赋值、传值和返回，padding 不参与可移植相等语义
+- const 结构体指针表达只读借用；**`->`** 访问指针成员且要求有效生存期
 - **typedef** 为 struct/enum 起别名，不新造类型
-- **union** 成员重叠，同一时刻只认一种有效解释
-- **enum** 提供可读整型常量，默认从 0 递增
+- 复合字面量创建有明确存储期的未命名对象，不一定只活到当前表达式
+- **union** 成员重叠但不自带标签；enum 判别字段决定当前允许读取的 payload
+- C11 枚举常量是 int，枚举类型的兼容整数类型由实现选择
 
 <Exercises>
 
-**练习 1（问答型）** `struct { char a; double b; }` 的 sizeof 为什么往往大于 9？
+**问题 1（问答型）** `struct { char a; double b; }` 的 sizeof 为什么往往大于 9？
 
 <Answer>
 
@@ -251,7 +320,7 @@ v.data.i = 42;
 
 </Answer>
 
-**练习 2（改代码型）** 下面哪里错了？如何改？
+**问题 2（改代码型）** 下面哪里错了？如何改？
 
 ```c
 struct Point { int x; int y; };
@@ -261,15 +330,23 @@ pp.x = 1;
 
 <Answer>
 
-`pp` 是指针，不能用 **`.`**。应改为 **`pp->x = 1;`**，且之前需 `pp = &某个 Point` 或 `malloc` 分配。未指向有效对象就写入是未定义行为。
+pp 是未初始化指针，既没有指向对象，又错误使用了点号。改成让它指向一个真实对象后使用箭头：
+
+```c
+struct Point point = {0, 0};
+struct Point *pp = &point;
+pp->x = 1;
+```
 
 </Answer>
 
-**练习 3（综合实现型）** 用 typedef 定义 `Student { char name[32]; int id; }`，声明含 3 个元素的数组，初始化第二名 id=1002，写函数 `void print_id(const Student *s)` 打印 id。
+**问题 3（综合实现型）** 用 typedef 定义 `Student { char name[32]; int id; }`，声明含 3 个元素的数组，初始化第二名 id=1002，写函数 `void print_id(const Student *s)` 打印 id。
 
 <Answer>
 
 ```c
+#include <stdio.h>
+
 typedef struct {
     char name[32];
     int id;
@@ -303,7 +380,7 @@ int main(void) {
 </GlossaryItem>
 
 <GlossaryItem term="对齐（alignment）">
-  CPU 访问内存的地址边界要求；导致 struct 中插入 padding，sizeof 变大。
+  类型对对象地址倍数的实现要求。实现可在结构成员之间和末尾插入 padding，以满足成员及结构数组元素的对齐。
 </GlossaryItem>
 
 <GlossaryItem term="结构体指针">
@@ -315,13 +392,25 @@ int main(void) {
 </GlossaryItem>
 
 <GlossaryItem term="联合体（union）">
-  成员共享同一内存；sizeof 为最大成员；同时只一种有效。见 UnionMemoryDiagram。
+  成员共享起始地址与存储，大小足以容纳最大成员且可能含尾部填充。业务代码通常用枚举标签记录当前允许读取的成员。
 </GlossaryItem>
 
 <GlossaryItem term="枚举（enum）">
-  命名整型常量集合，默认 0,1,2… 递增；用于 switch 与可读常量。见 EnumDiagram。
+  命名枚举常量集合。C11 枚举常量具有 int 类型，枚举类型与某种整数类型兼容，具体选择由实现决定。见 EnumDiagram。
+</GlossaryItem>
+
+<GlossaryItem term="嵌套结构">
+  一个结构体对象作为另一个结构体的成员。外层按值拥有内层记录，使用连续点号逐层访问，复制外层也复制内层成员值。
+</GlossaryItem>
+
+<GlossaryItem term="结构体值传递">
+  结构体可作为实参按值传递、作为返回值或用于赋值，语义上复制成员值。padding 字节不应参与可移植相等比较。
+</GlossaryItem>
+
+<GlossaryItem term="结构体复合字面量">
+  以 `(struct 类型){初始化项}` 创建未命名对象。块作用域对象生存到包含块结束，文件作用域对象具有静态存储期。
 </GlossaryItem>
 
 </Glossary>
 
-<Attribution />
+<Attribution title="C Primer Plus, Sixth Edition, Chapter 14: Structures and Other Data Forms" url="https://www.informit.com/store/c-primer-plus-9780321928429" />

@@ -1,0 +1,250 @@
+---
+title: "第9章：Classes"
+type: C
+section: "Part I · Basics"
+order: 9
+description: "用class和instance组织state与behavior，比较inheritance、composition、module和标准库边界。"
+demo: true
+math: false
+sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
+draft: false
+---
+
+import {
+  PccAttributeMutationLab,
+  PccClassDesignLab,
+  PccClassInstanceLab,
+} from "@/components/mdx/python-crash-course/diagrams/classes";
+
+<Objectives>
+
+- 能描述class、`__init__`、self、attributes和methods如何为多个instances建立独立状态
+- 能实现有invariant的attribute updates，比较direct assignment、update method与increment method
+- 能分析inheritance、composition、class imports和standard library依赖，设计可测试对象边界
+
+</Objectives>
+
+## 为什么class把state与behavior放在同一owner下
+
+dictionary能保存record，function能处理输入；class进一步让一组attributes与维护它们的methods共享明确owner。`Dog`描述构造和行为，`my_dog`、`your_dog`是不同instances，各自有name、age，却复用同一method implementation。
+
+先预测两个Dog实例中修改一个age是否影响另一个；method调用时self来自哪里；class body里的mutable list会不会被所有instances共享。理解instance identity后，inheritance与composition才不会变成只背语法。
+
+<Term def="由class构造、拥有独立identity与instance attributes，并通过methods接收self的运行时对象。">class instance</Term>
+
+## Creating and Using a Class
+
+`class Dog:`执行class body并创建class object。`__init__`在构造后初始化instance，首个parameter按约定叫self；调用`Dog("Willie", 6)`时Python自动把新instance绑定给self，再绑定其余arguments。
+
+<Stepper>
+  <Step title="切换两个Dog instances">
+    <PccClassInstanceLab />
+  </Step>
+  <Step title="区分class definition与instance state">
+    method code位于class，`self.name`和`self.age`位于每个instance；调用使用当前receiver。
+  </Step>
+  <Step title="用identity与state测试独立性">
+    修改my_dog.age后断言your_dog.age不变；若共享，检查是否误用了class-level mutable attribute。
+  </Step>
+</Stepper>
+
+<Term def="保存在具体instance上的命名状态，通过self.attribute读取和更新。">instance attribute</Term>
+
+```python
+class Dog:
+    """A simple model of a dog."""
+
+    def __init__(self, name: str, age: int) -> None:
+        self.name = name
+        self.age = age
+
+    def sit(self) -> str:
+        return f"{self.name} is now sitting."
+
+    def roll_over(self) -> str:
+        return f"{self.name} rolled over!"
+
+my_dog = Dog("Willie", 6)
+your_dog = Dog("Lucy", 3)
+print(my_dog.sit())
+print(your_dog.roll_over())
+```
+
+### `__init__`建立合法初始状态
+
+constructor不应只机械赋值。若age必须非负、name不能为空，应在创建时验证，避免系统中出现半合法instance。复杂I/O如network fetch通常不放在`__init__`，否则构造难测试且可能部分失败；可用classmethod factory或单独load function。
+
+`__init__`不返回domain value，必须返回None。需要创建不同配置时提供清晰factory methods，而不是用许多bool parameters控制构造路径。
+
+## Working with Classes and Instances
+
+instance attribute可直接赋值，也可通过method更新。direct assignment最短，但任何caller都能绕过规则；method可验证transition、记录原因并保持失败原子性。是否封装取决于state是否有invariant，不是所有attribute都必须写getter/setter。
+
+<Stepper>
+  <Step title="切换四种odometer更新">
+    <PccAttributeMutationLab />
+  </Step>
+  <Step title="先验证candidate，再commit state">
+    倒退里程应raise且原value不变；不要先赋值再发现非法。
+  </Step>
+  <Step title="让method name表达transition">
+    update设置absolute value，increment增加delta；调用者能从name读出语义。
+  </Step>
+</Stepper>
+
+<Term def="对象在任何public operation前后都必须保持的合法状态条件。">object invariant</Term>
+
+```python
+class Car:
+    def __init__(self, make: str, model: str, year: int) -> None:
+        self.make = make
+        self.model = model
+        self.year = year
+        self.odometer_reading = 0
+
+    def update_odometer(self, mileage: int) -> None:
+        if mileage < self.odometer_reading:
+            raise ValueError("odometer cannot roll back")
+        self.odometer_reading = mileage
+
+    def increment_odometer(self, miles: int) -> None:
+        if miles < 0:
+            raise ValueError("increment must be non-negative")
+        self.odometer_reading += miles
+```
+
+### class attribute与instance attribute
+
+在class body定义的name由class共享；通过self赋值通常创建instance attribute并遮蔽class value。共享immutable constant常合理，共享mutable list/dict容易让一个instance修改所有对象可见状态。每个instance需要独立collection时在`__init__`创建。
+
+查看`obj.__dict__`可帮助学习instance state，但业务代码不应绕过public methods直接依赖内部布局。下划线前缀表达internal，不提供强制privacy；真正边界来自API与团队约定。
+
+## Inheritance：只在真正is-a时扩展
+
+`class ElectricCar(Car)`继承base methods。subclass `__init__`先用`super().__init__`建立Car部分，再添加battery state；override可替换不适用behavior。subclass仍应能在期待Car的地方保持base contract，不能把参数、return或invariant改得互不兼容。
+
+<Term def="subclass复用并扩展base class，同时应维持其公开behavior contract的is-a关系。">inheritance contract</Term>
+
+```python
+class ElectricCar(Car):
+    def __init__(self, make: str, model: str, year: int) -> None:
+        super().__init__(make, model, year)
+        self.battery = Battery(75)
+
+    def fill_gas_tank(self) -> None:
+        raise RuntimeError("electric cars do not have gas tanks")
+```
+
+这个override暴露一个设计问题：如果所有Car API都假定有油箱，ElectricCar也许不是真正substitutable。可把能源行为拆成composition，或把共同base缩小到确实共享的移动/描述行为。继承层级不是复用代码的默认工具。
+
+### super不是“调用父类所有东西”
+
+`super()`按method resolution order查找下一个实现，支持multiple inheritance的协作调用。初学单继承中它通常调用base `__init__`，但不要把它理解为固定父对象。每层constructor使用兼容signature并恰好一次交接。
+
+## Composition：has-a关系让职责更聚焦
+
+Battery有独立state和behavior，把它作为ElectricCar attribute比继续把所有methods堆进ElectricCar更清楚。composition允许替换不同battery实现，测试也能单独验证range计算；owner负责创建或接收dependency。
+
+<Stepper>
+  <Step title="切换inheritance、composition、module或stdlib">
+    <PccClassDesignLab />
+  </Step>
+  <Step title="先描述is-a还是has-a">
+    只有consumer真正把subclass当base使用时继承才有价值；独立能力优先composition。
+  </Step>
+  <Step title="检查依赖如何进入与如何替换">
+    constructor创建简单value object；外部I/O、random等不确定依赖可注入以便测试。
+  </Step>
+</Stepper>
+
+<Term def="一个object通过attribute持有并委托另一个object，表达has-a而非is-a关系。">object composition</Term>
+
+```python
+class Battery:
+    def __init__(self, size_kwh: int = 40) -> None:
+        self.size_kwh = size_kwh
+
+    def estimated_range(self) -> int:
+        return 260 if self.size_kwh <= 40 else 315
+
+class ElectricCar(Car):
+    def __init__(self, make: str, model: str, year: int, battery: Battery) -> None:
+        super().__init__(make, model, year)
+        self.battery = battery
+```
+
+### dependency injection不等于复杂framework
+
+把Battery通过constructor传入就是最小dependency injection。测试可传fake/stub，production传真实object；ElectricCar不负责从配置或网络构造所有依赖。只有生命周期简单且实现固定的value object才适合内部创建。
+
+## Importing Classes与Modules
+
+一个module可存多个相关classes，`from car import Car, ElectricCar`导入具体names；`import car`保留`car.Car`namespace，来源更明显。随着项目增长，让module围绕一致职责，不必机械“一类一文件”，也不要把不相关classes塞进通用models.py。
+
+import应无交互side effect。演示代码放进main guard，公共class module只定义types和helpers。循环imports通常说明两个modules同时拥有彼此职责，应提取共同contract或调整dependency direction。
+
+## The Python Standard Library
+
+standard library提供random、pathlib、datetime等可靠模块。本章用`random.choice`或`randint`可做骰子和彩票，但random output使测试不稳定。把chooser作为dependency注入，或在测试固定seed并避免依赖具体全局调用顺序。
+
+```python
+from random import choice
+from collections.abc import Callable, Sequence
+
+def draw_ticket(pool: Sequence[str], choose: Callable = choice) -> str:
+    if not pool:
+        raise ValueError("pool must not be empty")
+    return choose(pool)
+```
+
+不要因为standard library可用就跳过边界：choice空sequence会IndexError，random不适合security token，时间与filesystem同样需要失败策略。工具来源可靠不等于调用永远成功。
+
+## Styling Classes
+
+class names用CapWords，instance和module用lowercase_with_underscores；class定义前后留blank lines。每个class写说明purpose的docstring，method按public到internal或生命周期顺序组织。composition attribute名字应表达role，不只表达concrete type。
+
+review class时先看invariant、state owner、public methods、failure atomicity，再看inheritance是否可替换、composition dependency是否可测试、imports是否单向。getter/setter数量不是封装质量指标，清晰contract才是。
+
+<Callout type="trap" title="在class body放空list可让每个instance拥有自己的列表">
+class-level mutable attribute被所有instances共享。每个对象需要独立list时在`__init__`中执行`self.items = []`，并用两个instances测试mutation隔离。
+</Callout>
+
+<Callout type="trap" title="为了复用几个methods就应该使用inheritance">
+inheritance声明is-a与substitutability，不只是代码复用。独立职责优先composition或helper function；subclass若频繁禁用base behavior，说明关系可能错误。
+</Callout>
+
+## 本章回顾：identity、invariant与关系
+
+1. class创建instances，每个instance通过self拥有独立attributes并调用共享methods。
+2. `__init__`建立合法初始state，object invariant应在public transitions前后成立。
+3. inheritance表达is-a并维持base contract，composition表达has-a并聚焦职责。
+4. class imports建立module namespace，standard library依赖仍需失败与测试边界。
+5. 设计质量由state owner、failure atomicity和可替换dependency决定，而非类层级深度。
+
+<Exercises>
+
+**问题 1：为什么class-level `items = []`会让instances互相污染？**
+
+<Answer>该list属于class object，未在instance上遮蔽时所有instances通过同一引用访问。任一instance append都会修改共享list。把`self.items = []`放进`__init__`，创建两个对象，向一个append并断言另一个仍为空。</Answer>
+
+**问题 2：如何让odometer更新在失败时保持atomic？**
+
+<Answer>先验证candidate mileage不小于当前值，非法则raise且不赋值；全部检查通过后一次commit `self.odometer_reading = mileage`。测试倒退、相等、增加和负increment，并断言异常后state仍为before。</Answer>
+
+**问题 3：ElectricCar的Battery应继承还是composition？为什么？**
+
+<Answer>Battery不是一种Car，而是ElectricCar拥有的部件，应composition。Battery独立维护size和range behavior，ElectricCar通过attribute委托；constructor可注入Battery让不同容量与测试double可替换。Car/ElectricCar只有在subclass维持共同contract时适合inheritance。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="class instance" definition="由class构造、拥有独立identity和attributes的运行时对象。" />
+  <GlossaryItem term="instance attribute" definition="保存在具体instance上并通过self访问的命名状态。" />
+  <GlossaryItem term="object invariant" definition="所有public operations前后都必须成立的合法状态条件。" />
+  <GlossaryItem term="inheritance contract" definition="subclass扩展base class并维持其公开行为的is-a约定。" />
+  <GlossaryItem term="object composition" definition="object通过attribute持有并委托另一object的has-a关系。" />
+</Glossary>
+
+<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 9: Classes" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />

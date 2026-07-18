@@ -1,0 +1,301 @@
+---
+title: "Chapter 9：TDD and Threading"
+type: A
+section: 现代 C++ 测试驱动开发 · 并发反馈
+order: 9
+description: 对齐原书 Chapter 9：以 GeoServer 和 ThreadPool 为主线，先驱动同步领域行为，再把性能需求转化为异步方案；使用 latch、状态谓词、客户端线程、压力与 sanitizer 暴露丢任务、竞态、死锁和串行伪装。
+demo: false
+math: false
+sourceUrl: "https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/"
+draft: false
+---
+
+import {
+  CtrConcurrencyFailureLab,
+  CtrDeterministicThreadTestFlow,
+  CtrThreadedTddArchitectureMap,
+} from "@/components/mdx/cpp-testing-recipes/diagrams/tdd-and-threading";
+
+<Objectives>
+
+- 能把 GeoServer 的纯查询行为、任务队列、ThreadPool 生命周期和客户端并发分层测试，避免从端到端线程场景一次驱动全部设计
+- 能把吞吐、并发进度和关闭语义写成可观察性能/并发需求，并用 latch、barrier 与状态谓词替代固定 sleep
+- 能主动暴露丢任务、数据竞争、死锁和串行伪装，组合确定性调度测试、客户端线程、压力重复和 ThreadSanitizer 证据
+
+</Objectives>
+
+## 并发测试先分离“算什么”和“何时算”
+
+GeoServer 接收位置查询并返回地理结果。查询计算本身可以是同步确定函数；只有吞吐或响应需求证明单线程不足时，才引入异步队列和线程池。若从一开始把领域逻辑、socket、队列和多个线程塞进同一测试，任何失败都难以定位。
+
+<Term def="以失败测试逐步建立线程边界、同步协议和生命周期，而不是先写完整并发实现再用压力测试碰运气。">
+  线程测试驱动
+</Term>
+
+测试驱动线程不意味着调度可完全预测。策略是把可确定的领域逻辑留在同步层，把并发层的契约收窄为任务接受、进度、互斥不变量、关闭和错误传播，再用受控同步点探索关键交错。
+
+<CtrThreadedTddArchitectureMap />
+
+## GeoServer 先有同步正确性基线
+
+<Term def="原书线程章节使用的地理查询服务示例，用于从同步请求处理演化到异步队列与线程池。">
+  GeoServer
+</Term>
+
+先对查询解析、距离计算、找最近点和错误输入写普通单元测试。同步版本提供正确性 oracle：后续并发批量结果应与同一输入的同步结果集合一致。这样并发测试无需复制领域算法。
+
+```cpp
+TEST(GeoQueryTest, FindsNearestLocation) {
+    GeoIndex index{knownLocations()};
+    EXPECT_EQ("north-station", index.nearestTo({31.23, 121.47}).id());
+}
+```
+
+结果顺序若不是契约，就比较按 request id 关联的集合，而非完成顺序。并发实现常改变调度顺序，测试不应把偶然顺序当行为。
+
+## 性能需求必须可测且不替代功能需求
+
+<Term def="以吞吐、并发度、延迟分位、队列容量或关闭时限表达，并给出代表负载与环境的非功能契约。">
+  性能需求
+</Term>
+
+“需要更快”不能驱动设计。写下基线与目标，例如：在 8 核参考环境、10000 个独立查询下，吞吐至少达到同步实现的 2 倍；队列满时 submit 在 10 ms 内返回拒绝；stop 后已接受任务全部完成并在 2 秒内 join。环境、负载和统计方法必须同时记录。
+
+```text
+functional: 每个 accepted request 恰好产生一个 success 或 failure
+progress:   至少两个阻塞任务能同时进入 started 状态
+capacity:   队列满时 submit 返回 rejected，不无限阻塞
+shutdown:   drain 模式完成已接受任务，cancel 模式明确报告取消
+performance: p95 与 throughput 在固定基准环境持续记录
+```
+
+单元测试适合功能、进度和生命周期契约；精确毫秒阈值易受机器噪声影响，应放入基准/性能环境并看分布趋势。不要把 `EXPECT_LT(elapsed, 5ms)` 塞进普通 CI 后制造随机失败。
+
+## 异步方案需要显式所有权和关闭协议
+
+<Term def="调用者提交任务后不在当前调用栈完成，由队列和 worker 在线程池中执行并通过 future、callback 或结果队列交付。">
+  异步方案
+</Term>
+
+ThreadPool 至少需要回答：任务由谁拥有，队列满怎么办，异常如何传出，stop 是否 drain，析构是否 join，stop 与 submit 并发时哪个赢。没有这些契约，测试只能追逐偶发现象。
+
+```cpp
+class ThreadPool {
+public:
+    explicit ThreadPool(std::size_t workerCount);
+    ~ThreadPool();
+
+    std::future<GeoResult> submit(GeoQuery query);
+    void stop(StopMode mode = StopMode::Drain);
+
+private:
+    std::mutex mutex_;
+    std::condition_variable ready_;
+    std::queue<Task> tasks_;
+    std::vector<std::jthread> workers_;
+    State state_{State::Running};
+};
+```
+
+接口示意把生命周期变成公开契约。实现可不同，但析构不能留下访问已销毁对象的线程；`submit` 在 stopped 状态应明确拒绝；任务异常应由 future 重抛或转为领域失败，不应终止 worker。
+
+<Callout type="trap" title="陷阱：析构时 detach 所有 worker">
+  detach 只丢失生命周期控制，线程仍可能访问已销毁队列和协作者。建立 stop/join 协议，测试析构或显式 stop 后没有任务和线程逃逸，并为阻塞任务提供可取消或可释放路径。
+</Callout>
+
+## 不用 sleep 判断线程“应该已经运行”
+
+固定睡眠依赖机器速度和调度：时间太短会随机失败，太长拖慢套件，成功也不能证明目标交错发生。测试应等待明确事件，并由测试控制何时释放。
+
+<Term def="通过 latch、barrier、condition variable 或记录型调度器让测试观察并控制线程到达指定事件，而不是猜测经过时间。">
+  受控同步测试
+</Term>
+
+```cpp
+TEST(ThreadPoolTest, StartsTwoTasksConcurrently) {
+    ThreadPool pool{2};
+    std::mutex mutex;
+    std::condition_variable startedChanged;
+    int started = 0;
+    std::latch release{1};
+
+    auto task = [&] {
+        {
+            std::lock_guard lock{mutex};
+            ++started;
+        }
+        startedChanged.notify_all();
+        release.wait();
+        return 1;
+    };
+
+    auto first = pool.submit(task);
+    auto second = pool.submit(task);
+    std::unique_lock lock{mutex};
+    const bool ranConcurrently = startedChanged.wait_for(
+        lock, std::chrono::seconds{1}, [&] { return started == 2; });
+    lock.unlock();
+    release.count_down();
+    ASSERT_TRUE(ranConcurrently);
+    EXPECT_EQ(1, first.get());
+    EXPECT_EQ(1, second.get());
+}
+```
+
+一秒只是防止测试永久挂起的失败上限，正确性来自状态谓词确认两个任务都已开始，而不是“睡一秒后大概开始了”。代码在断言前先释放 latch，保证失败路径也不会让 worker 永久阻塞；更复杂 fixture 可把释放和 join 封装进 RAII 清理。
+
+<CtrDeterministicThreadTestFlow />
+
+## 等待谓词必须抵抗虚假唤醒
+
+生产和测试都应使用带谓词的 condition variable 等待：在锁内检查队列非空或停止状态，循环处理虚假唤醒。测试不要断言一次 notify 就必定对应一个任务；调度器允许合并和提前通知。
+
+```cpp
+ready_.wait(lock, [this] {
+    return state_ != State::Running || !tasks_.empty();
+});
+```
+
+谓词是共享状态不变量的可执行表达。先写停止空队列、运行非空队列和停止仍有待 drain 任务等测试，再实现分支。
+
+## 客户端线程验证公共 API 的并发入口
+
+<Term def="在测试中由多个调用线程同时使用被测公共 API，用来验证 submit、查询或关闭入口的线程安全契约。">
+  客户端线程测试
+</Term>
+
+worker 并发不等于 submit 线程安全。创建多个客户端线程，在 barrier 后同时提交带唯一 id 的任务，最终核对 accepted、completed 和 unique id 集合。测试应捕获线程内异常并回传主线程，否则子线程终止可能直接结束进程。
+
+```cpp
+std::barrier start{clientCount};
+std::vector<std::jthread> clients;
+for (int client = 0; client < clientCount; ++client) {
+    clients.emplace_back([&, client] {
+        start.arrive_and_wait();
+        for (int i = 0; i < tasksPerClient; ++i) {
+            futures.add(pool.submit(queryFor(client, i)));
+        }
+    });
+}
+```
+
+`futures.add` 本身也必须线程安全，或每个 client 保存局部结果后主线程合并。测试基础设施若有 race，会把自身缺陷误判为产品缺陷。
+
+## 多 worker 的 ThreadPool 需要证明并行进度
+
+<Term def="包含两个及以上 worker、能够让独立任务同时取得进度，并满足任务唯一执行与安全关闭的不变量。">
+  多线程 ThreadPool
+</Term>
+
+只检查 100 个任务最终完成，单线程实现也能通过。要证明并行能力，阻塞第一个任务，确认第二个任务在第一个释放前已到达 started；要证明唯一执行，为每个 task id 使用原子计数或受锁集合，最终每个恰好一次。
+
+线程池核心不变量包括：accepted = completed + failed + cancelled；队列中任务有唯一 owner；每个 worker 在锁外执行任务；stop 后不再接受；析构前所有 worker join。测试围绕不变量，而不是内部 vector 大小。
+
+## 主动暴露并发问题
+
+<Term def="通过受控交错、高并发重复、状态计数和 sanitizer 主动放大数据竞争、丢任务、死锁或生命周期错误。">
+  暴露并发问题
+</Term>
+
+普通成功路径多跑一千次仍可能从未触发危险交错。针对共享状态，在关键点放 barrier：两个线程同时读取旧值，再同时写入；针对锁顺序，让两个路径各持一把锁后再继续；针对 submit/stop，固定二者交叉点并核对接受契约。
+
+<CtrConcurrencyFailureLab />
+
+ThreadSanitizer 能发现数据 race，但不能证明无死锁、无丢任务或业务顺序正确；受控测试能证明特定契约，却不能枚举所有调度。两者与代码审查、压力/长稳测试互补。
+
+```bash
+cmake -S . -B build-tsan -DENABLE_TSAN=ON -DCMAKE_BUILD_TYPE=Debug
+cmake --build build-tsan --parallel
+ctest --test-dir build-tsan -L threading --output-on-failure
+```
+
+sanitizer 构建较慢，可在 CI 专门任务运行。报告必须视为失败并保存完整栈，不能因为“重跑没出现”而忽略。
+
+## 时间测试与性能基准分开
+
+功能测试使用 latch 与谓词，不比较微小时长；性能基准使用固定环境、预热、重复样本和分位统计。吞吐变好也不能证明结果正确，功能全绿也不能证明达成性能目标。
+
+```cpp
+static void GeoQueries(benchmark::State& state) {
+    GeoServer server{static_cast<std::size_t>(state.range(0))};
+    for (auto _ : state) {
+        runBatch(server, representativeQueries());
+    }
+}
+BENCHMARK(GeoQueries)->Arg(1)->Arg(2)->Arg(4)->Arg(8);
+```
+
+线程数越多未必越快，锁竞争、缓存和调度开销会出现拐点。基准结果指导容量默认值，不要在单元测试里写死“8 线程必须比 4 线程快”。
+
+<Callout type="trap" title="陷阱：用一次耗时断言证明并行">
+  CI 机器负载会改变墙上时间，串行快任务也可能偶然达标。用阻塞任务和 started latch 证明同时进度；性能是否值得并行，另用代表负载基准和分布趋势验证。
+</Callout>
+
+## 错误、取消与关闭是线程设计的一部分
+
+任务抛异常时 worker 应继续服务后续任务，错误通过 future 或结果通道返回。取消需要定义未开始与已开始任务的差别；强行终止线程会破坏 C++ 栈展开和资源安全。stop 要幂等，多个线程同时调用也应得到一致状态。
+
+测试 stop 场景时用 latch 让一项任务运行、一项排队，再分别验证 Drain 与 CancelPending。不要依赖任务刚好处于某状态，测试必须先收到事件再调用 stop。
+
+## 先预测：四类错误各需要什么探针
+
+在查看实验图前，为丢任务、数据竞争、死锁和串行伪装各写一个不依赖 sleep 的探针。指出哪个用不变量计数，哪个用 sanitizer，哪个要双 barrier，哪个要阻塞首任务并观察第二任务 started。一个探针不能替代其他证据。
+
+<Stepper>
+  <Step title="第一步：分层驱动同步行为与线程边界">
+    用同步 Geo 查询建立正确性 oracle，再为队列容量、ThreadPool 生命周期和 GeoServer 请求编排分别写窄契约。
+
+    <CtrThreadedTddArchitectureMap />
+  </Step>
+  <Step title="第二步：用事件控制关键交错">
+    以 latch、barrier 和状态谓词确认线程到达，再由测试释放；超时只防挂死，所有后台线程必须在测试结束前收敛。
+
+    <CtrDeterministicThreadTestFlow />
+  </Step>
+  <Step title="第三步：组合探针暴露并发缺陷">
+    用 accepted/completed 不变量、受控锁交错、并行进度测试、客户端线程、高并发重复和 TSan 覆盖不同失效模式。
+
+    <CtrConcurrencyFailureLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 先把 GeoServer 的领域计算保持同步确定，再逐层测试队列、ThreadPool 与客户端并发
+- 性能需求要声明环境、负载和指标；功能、进度与关闭契约仍由确定性测试证明
+- 异步方案必须显式任务所有权、背压、异常、stop、cancel 和 join 语义
+- latch、barrier 与状态谓词控制事件，固定 sleep 既慢又不能证明目标交错
+- 多 worker 测试要证明同时进度和恰好一次执行，普通完成测试无法区分串行实现
+- 受控交错、客户端线程、压力和 ThreadSanitizer 互补，没有单一工具能证明并发正确
+
+<Exercises>
+  1. **问题 1：改写 sleep 测试。** 测试 submit 两个任务后 sleep 100 ms，再断言计数为 2，CI 偶发失败。怎样重写？
+
+  <Answer question="怎样用事件替代时间猜测？">每个任务进入时对 started latch count_down，再等待 release latch；测试等待两个 started，证明两项都获得进度，然后释放并 get 两个 future。设置超时只防永久挂起，并用 RAII 保证失败路径也释放和 join，不以 100 ms 作为正确性条件。</Answer>
+
+  2. **问题 2：证明多 worker。** 100 个任务最终都完成，为什么不能证明线程池并行？
+
+  <Answer question="怎样区分串行完成与并行进度？">单 worker 也能顺序完成 100 项。让第一任务到达 started 后阻塞，提交第二任务并要求它在第一项释放前也到达 started；只有至少两个 worker 或等价并行执行才能通过。另用任务 id 计数证明每项恰好一次。</Answer>
+
+  3. **问题 3：设计 submit/stop 测试。** 要验证 drain 模式不丢已接受任务且 stop 后拒绝新任务，应怎样固定交错？
+
+  <Answer question="怎样测试关闭不变量？">用 latch 让一个任务运行、另一个确认已入队，再从受控线程调用 stop(Drain)；在 stop 开始后尝试新 submit 并断言 rejected，释放运行任务，等待 stop 返回，核对 accepted 等于 completed 且所有 worker 已 join。不要靠队列时序猜测任务状态。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="线程测试驱动">以失败测试逐步建立线程边界、同步和生命周期契约的方法。</GlossaryItem>
+  <GlossaryItem term="GeoServer">用于从同步地理查询演化到异步线程池的服务示例。</GlossaryItem>
+  <GlossaryItem term="性能需求">以环境、负载和吞吐/延迟/容量等指标表达的可测契约。</GlossaryItem>
+  <GlossaryItem term="异步方案">任务由队列和 worker 在当前调用栈之外执行并交付结果的设计。</GlossaryItem>
+  <GlossaryItem term="受控同步测试">用事件和状态谓词观察控制线程交错的测试方式。</GlossaryItem>
+  <GlossaryItem term="客户端线程测试">由多个调用线程同时使用公开 API、验证入口线程安全的测试。</GlossaryItem>
+  <GlossaryItem term="多线程 ThreadPool">由多个 worker 提供并行进度并满足唯一执行与安全关闭的线程池。</GlossaryItem>
+  <GlossaryItem term="暴露并发问题">用受控交错、重复、计数和 sanitizer 放大并发缺陷的策略。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Modern C++ Programming with Test-Driven Development, Chapter 9 TDD and Threading"
+  adaptedUrl="https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/"
+/>

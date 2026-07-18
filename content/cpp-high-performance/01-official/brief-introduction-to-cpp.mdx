@@ -1,0 +1,244 @@
+---
+title: "第1章：C++概览与性能契约"
+type: A
+section: C++ High Performance · Chapter 1
+order: 1
+description: 对齐第一版第1章 A Brief Introduction to C++：零成本抽象、可移植性、值语义、const、显式所有权、严格接口、RAII 与错误处理。
+demo: false
+math: false
+sourceUrl: "https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
+draft: false
+---
+
+import {
+  ChpInterfaceFailureStateMap,
+  ChpValueOwnershipContractMap,
+  ChpZeroCostAbstractionMap,
+} from "@/components/mdx/cpp-high-performance/diagrams/brief-introduction-to-cpp";
+
+<Objectives>
+
+- 能解释 C++ 零成本抽象、可移植性与健壮性之间的性能边界
+- 能比较值语义、const correctness、reference 与显式对象所有权的接口契约
+- 能设计保持类不变量的严格接口，并分析 exception、error code 与 RAII 的失败路径
+
+</Objectives>
+
+## 从“高性能不是最快的一行代码”开始
+
+C++ 适合 performance-critical system，不是因为每段 C++ 自动最快，而是它允许 programmer 选择 representation、lifetime、allocation 和 dispatch，同时保留高层 abstraction。真正目标是：在可维护、可移植和正确的 codebase 中，让热点路径接近所选硬件模型的成本下界。
+
+<Term def="没有使用某种抽象时不为它支付运行时成本；使用时难以用手写低层代码普遍实现得更好。">
+  零成本抽象
+</Term>
+
+先预测一个 template algorithm、virtual interface 和未调用 helper 各会留下什么 runtime work，再用 optimized assembly 验证。不要把“能手写汇编”当作高性能能力；可重复测量、清晰 ownership 和可优化 interface 更能决定长期速度。
+
+## 为什么选择C++
+
+C++ 同时提供 value types、deterministic destruction、generic programming、manual or automatic ownership 和直接调用系统 API 的能力。它可以构建 tiny embedded path、realtime audio、graphics engine 和 large server，但 language freedom 也把 invalid lifetime、data race 与 undefined behavior 的责任交给开发者。
+
+```cpp
+template <typename Range, typename Operation>
+void applyAll(Range&& range, Operation operation) {
+    for (auto&& value : range) {
+        operation(value);
+    }
+}
+```
+
+当 Range/Operation concrete type 可见时，compiler 常能 inline iteration 与 callable，生成接近 hand-written loop 的 code。若换成 runtime type erasure 或 virtual callback，动态选择可能保留 indirect call。这不是哪种机制绝对优劣，而是“何时需要 runtime flexibility”的 design choice。
+
+## 零成本抽象与机器码
+
+<ChpZeroCostAbstractionMap />
+
+language abstractions 最终被 lowered 到 target instructions，但源码结构与 machine code 不一一对应。as-if rule 允许 compiler inline、constant-fold、vectorize、eliminate temporary，只要 observable behavior 等价。反过来，alias uncertainty、dynamic target、exception boundary 或 opaque external call 可能限制 optimization。
+
+<Term def="抽象在未使用时不产生额外运行时工作，使用时的成本与该能力本身必要成本相符的原则。">
+  zero-overhead principle
+</Term>
+
+“零成本”不等于 virtual call、allocation 或 exception throw 免费。动态 dispatch 本身表达 runtime choice；heap allocation 管理 dynamic lifetime；throw path 需要寻找 handler 和 unwind。原则要求不使用这些能力时不付费，并让使用者能够选择更静态的 alternative。
+
+<Callout
+  type="trap"
+  title="陷阱：C++是零成本抽象语言，所以任何标准库组件都没有运行时成本"
+>
+  abstraction 不隐藏物理成本。`std::function` 可能 type-erase/indirect
+  call，shared ownership 需要 reference count，dynamic allocation 需要
+  allocator。先明确需要的 semantics，再通过 profiler/benchmark 观察具体
+  implementation。
+</Callout>
+
+## 可移植性、健壮性与实现边界
+
+<Term def="同一源代码在多个 conforming platforms 上保持规定语义，同时把平台差异隔离在明确边界。">
+  可移植性
+</Term>
+
+portable C++ 依赖 standard semantics，不依赖 fixed object layout、integer width、endianness 或 one compiler extension。高性能 code 仍可使用 SIMD、intrinsics、alignment 和 OS API，但应放在 feature-detected implementation layer，提供 scalar/reference fallback 与 identical correctness tests。
+
+```cpp
+int dotProduct(std::span<const int> left, std::span<const int> right) {
+    if (left.size() != right.size()) {
+        throw std::invalid_argument("mismatched ranges");
+    }
+    return std::inner_product(left.begin(), left.end(), right.begin(), 0);
+}
+```
+
+robustness 首先来自明确 precondition 和 valid state，不是 blanket catch 或到处检查 null。span 把 pointer+extent 组合成 interface；size mismatch 在 mutation 前拒绝。后续可为特定 target 优化内层 calculation，而 public contract 保持不变。
+
+## 值语义与const correctness
+
+<Term def="对象拥有独立状态，可复制或移动为另一个值；lifetime 和变化不依赖隐藏共享身份。">
+  值语义
+</Term>
+
+value semantics 让 data locality、ownership 和 reasoning 更直接。container 以 value 管理 elements，scope end 自动 destruction；compiler 也更容易证明 aliases 有限并优化。copy 不是必然昂贵：copy elision、move semantics、small object representation 可改变实际成本，但 large value copy 仍应测量。
+
+const correctness 把“通过这个 handle 不修改对象”写进 type system。`const T&` 避免 copy 并表达 borrow-read，`T&` 表达 mutable borrow；plain pointer/reference lifetime 仍由 owner 保证。const 不自动线程安全，也不代表 object 一定存 read-only page。
+
+<Term def="用 const 限定接口，把可修改与只读访问在编译期区分并传播的设计纪律。">
+  const correctness
+</Term>
+
+## 对象所有权与引用
+
+<Term def="由谁结束对象 lifetime、释放资源，以及 borrower 在何种期限内可使用对象的显式契约。">
+  对象所有权
+</Term>
+
+C++ 不依赖单一 garbage collector 模型；automatic values、containers 和 RAII owners 在 deterministic scope/lifetime 上回收。`unique_ptr` 表达 exclusive dynamic owner，`shared_ptr` 表达 shared ownership，reference/span/view 通常表达 non-owning borrow。性能与正确性都要求别把这几种角色混成 raw pointer。
+
+<ChpValueOwnershipContractMap />
+
+reference 能避免 null state（在语言契约中必须绑定 object），却不能避免 dangling。若 API 允许“没有对象”，可用 pointer/optional/reference_wrapper 等显式表示；若 API 接受 reference，就让 caller 在 call duration 保证 lifetime。shared_ptr 不是默认参数类型：它会扩散 ownership semantics 和 atomic refcount cost。
+
+<Callout type="trap" title="陷阱：引用永不为空，所以引用接口永远安全且更快">
+  reference 仍可能悬空，也可能通过 ABI address 间接访问。安全来自 owner lifetime
+  与 alias contract；性能取决于 copy size、inline、alias analysis 和访问模式。小
+  value 按值传递常更简单、更易优化。
+</Callout>
+
+## 类接口、异常与有效状态
+
+<Term def="对象所有公开操作前后都必须满足的状态条件；失败路径也不能留下半有效对象。">
+  类不变量
+</Term>
+
+strict class interface 缩小 invalid states：constructor 完成即建立 invariant，member functions 只接受可验证 inputs，并确保成功/失败后 object 都可继续使用。不要暴露可任意修改内部 container 的 reference，让 caller 绕过 validation。
+
+```cpp
+class Connection {
+public:
+    static Connection open(const Endpoint& endpoint);
+    void send(std::span<const std::byte> payload);
+
+private:
+    explicit Connection(Socket socket) : socket_(std::move(socket)) {}
+    Socket socket_;
+};
+```
+
+factory 成功返回 valid Connection，失败可 throw 或返回 expected-like result；Socket owner 确保任何 early return/exception 都关闭 resource。send 只接受 byte range，不暴露 raw internal descriptor。清晰 interface 同时帮助 optimizer：fewer aliases、fewer impossible states、ownership visible。
+
+## 资源获取、异常与错误码
+
+<Term def="把 resource lifetime 绑定到 object lifetime，构造成功即拥有，析构无条件释放的资源管理方式。">
+  RAII
+</Term>
+
+<ChpInterfaceFailureStateMap />
+
+exception 适合无法在当前层处理的 exceptional failure，可跨多层传递并由 RAII unwinding 清理；error code/expected 适合 caller 预期分支、低层 ABI 或禁用异常环境。二者都必须携带足够 context，并确保 ignored error 不会让 invalid state 继续流动。
+
+exception 的 normal path 在常见 implementation 上可很轻，但 throw path 昂贵且 control flow non-local；error code 每层显式检查，容易被遗漏，也可能污染 success path。选择依据包括 failure frequency、latency constraints、binary boundary、toolchain 和 API composability，不是“一律异常”或“一律返回码”。
+
+## 与其他语言和库的比较
+
+C++ performance comparison 必须固定 workload、algorithm、compiler/runtime、warmup、allocation 和 I/O。managed/JIT language 可通过 runtime profiling 优化热点，也可能付 GC、bounds/type checks；Rust/Swift/Go 等有不同 ownership/runtime choices。不能由语言标签推导单个 program 速度。
+
+本书后续代码依赖标准 library、profiling/benchmark tools 和可复现 builds。优先用 library algorithms/containers 表达 intent，再在 measurement 指出的 hotspot 替换 representation。维护一份 scalar correct baseline，可防 platform-specific optimization 偏离 semantics。
+
+## 第1章验证清单
+
+1. 写出 abstraction 提供的 semantics 和实际可能成本。
+2. 区分 portable guarantee 与 compiler/ABI extension。
+3. 为每个 object 标注 value、exclusive owner、shared owner 或 borrower。
+4. 用 const/reference/span 表达 mutation、nullable 与 extent。
+5. 定义 class invariant、precondition 和 failure guarantee。
+6. 让 resource acquisition 立即进入 RAII owner。
+7. exception/error result 按 failure frequency 和 boundary 选择。
+8. benchmark 固定 workload/toolchain，并保留 correctness baseline。
+
+## 小结
+
+- C++ 高性能来自可选择 representation/lifetime/dispatch，不是每段源码自动最快
+- 零成本抽象要求未使用能力不付 runtime 成本，实际使用的动态能力仍有必要成本
+- 可移植优化把 platform-specific code 隔离并保留一致 reference implementation
+- 值语义和 const correctness 让 identity、mutation 与 optimization boundary 更清晰
+- 对象所有权必须区分 value、exclusive/shared owner 与 non-owning borrow
+- reference 排除 null binding，但不自动解决 dangling 或 alias cost
+- strict class interface 在成功和失败后都维护类不变量
+- RAII 让 exception、error return 和正常离开共享同一资源释放路径
+- 语言性能比较必须固定 workload/algorithm/runtime，不靠标签下结论
+
+<Attribution
+  adaptedFrom="C++ High Performance, First Edition, Chapter 1: A Brief Introduction to C++"
+  adaptedUrl="https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
+/>
+
+<Glossary>
+  <GlossaryItem term="零成本抽象">
+    未使用不付费、使用接近必要成本的抽象。
+  </GlossaryItem>
+  <GlossaryItem term="zero-overhead principle">
+    C++ 抽象的零额外开销原则。
+  </GlossaryItem>
+  <GlossaryItem term="可移植性">
+    跨平台保持标准语义并隔离特定实现。
+  </GlossaryItem>
+  <GlossaryItem term="值语义">
+    对象以独立值和确定 lifetime 表达状态。
+  </GlossaryItem>
+  <GlossaryItem term="const correctness">
+    在类型系统传播只读和可变访问。
+  </GlossaryItem>
+  <GlossaryItem term="对象所有权">
+    结束 lifetime 与释放资源的责任契约。
+  </GlossaryItem>
+  <GlossaryItem term="类不变量">
+    公开操作前后都成立的对象状态条件。
+  </GlossaryItem>
+  <GlossaryItem term="RAII">
+    资源 lifetime 绑定对象 lifetime 的管理方式。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：比较 template callable 与 std::function callback 的性能契约。** 写出 flexibility、inline、allocation 与 measurement 条件。
+
+<Answer question="怎样避免把零成本抽象解释为一律免费？">
+  template concrete type 可让 compiler direct call/inline，但会生成
+  specialization；std::function 提供 runtime type erasure，可能 indirect
+  call，capture 超过 small buffer 时还可能 allocation。是否有成本取决于
+  implementation/capture/hot path。固定 workload 和 toolchain
+  benchmark，并先决定是否真的需要 runtime replacement。
+</Answer>
+
+2. **问题 2：设计一个不会泄漏 Socket 的 Connection::open。** 比较 exception 与 expected-like error result。
+
+<Answer question="RAII 如何统一两个失败接口？">
+  获取 descriptor 后立即放入 Socket owner；后续 configuration 失败时，无论 throw
+  还是 return error，local owner destructor 都关闭。成功时 move owner 进入
+  Connection，constructor 建立 invariant。exception 适合 caller
+  不在当前层分支处理，expected 适合显式预期失败；两者不应复制 raw descriptor
+  ownership。
+</Answer>
+
+3. **问题 3：审计一个 shared_ptr 参数是否必要。** 给出按值、引用、unique_ptr 和 shared_ptr 四种选择标准。
+
+  <Answer question="接口怎样表达真实ownership？">小且独立的 value 按值；调用期间只读/修改但不接管 lifetime 用 const T&/T&；转移唯一动态 owner 用 unique_ptr by value；callee 确实需要参与共享 lifetime 才接 shared_ptr。若只借用却传 shared_ptr，会扩散 ownership、增加 refcount 和隐藏 lifetime design。最后用 profiling 判断这些成本是否处于热点。</Answer>
+</Exercises>

@@ -1,54 +1,62 @@
-/**
- * <Cg4FinalReviewDiagram>：总复习知识图谱
- *
- * 展示全书核心知识点的关联关系。
- */
+const contracts = [
+  ["System", "hardware / applications / input / display"],
+  ["Geometry", "primitives / transforms / hierarchy / splines"],
+  ["Sampling", "raster / visibility / texture / volume"],
+  ["Appearance", "color / local + global illumination"],
+  ["Evidence", "numeric / image / interaction / performance"],
+] as const;
+
+const evidenceRows = [
+  ["数学", "matrix、edge、basis、BRDF/integral", "已知输入与误差界"],
+  ["图像", "reference pixels/images、seams、silhouette", "空间与颜色正确"],
+  ["时域", "fixed-step、camera motion、aliasing", "动画稳定且可复现"],
+  ["交互", "DPI/viewport/picking/task", "输入语义正确"],
+  ["性能", "CPU/GPU timeline、counters、memory", "瓶颈有证据而非猜测"],
+] as const;
+
+function Frame({ caption, children }: { caption: string; children: React.ReactNode }) {
+  return (
+    <figure className="mdx-figure not-prose mx-auto my-6">
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption>
+    </figure>
+  );
+}
 
 export function Cg4FinalReviewDiagram() {
   return (
-    <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox="0 0 720 400" role="img" aria-label="计算机图形学总复习知识图谱" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x="360" y="30" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">计算机图形学 · 核心知识图谱</text>
-          <text x="360" y="50" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">从顶点到像素，从理论到实践</text>
-
-          {/* 中心节点 */}
-          <rect x="280" y="170" width="160" height="50" rx="8" fill="var(--accent)" fillOpacity="0.15" stroke="var(--accent)" strokeWidth="1.5" />
-          <text x="360" y="195" textAnchor="middle" fontSize="13" fontWeight="700" fill="var(--accent)">渲染管线</text>
-          <text x="360" y="210" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">核心主线</text>
-
-          {/* 四周知识点 */}
-          {/* 左上 */}
-          <line x1="280" y1="180" x2="160" y2="120" stroke="var(--border)" strokeWidth="1" />
-          <rect x="80" y="100" width="140" height="40" rx="6" fill="var(--success)" fillOpacity="0.1" stroke="var(--success)" strokeWidth="1" />
-          <text x="150" y="118" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--success)">几何变换</text>
-          <text x="150" y="132" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">Model/View/Proj</text>
-
-          {/* 右上 */}
-          <line x1="440" y1="180" x2="560" y2="120" stroke="var(--border)" strokeWidth="1" />
-          <rect x="500" y="100" width="140" height="40" rx="6" fill="var(--warning)" fillOpacity="0.1" stroke="var(--warning)" strokeWidth="1" />
-          <text x="570" y="118" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--warning)">光照着色</text>
-          <text x="570" y="132" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">Phong / BRDF</text>
-
-          {/* 左下 */}
-          <line x1="280" y1="210" x2="160" y2="280" stroke="var(--border)" strokeWidth="1" />
-          <rect x="80" y="260" width="140" height="40" rx="6" fill="var(--danger)" fillOpacity="0.1" stroke="var(--danger)" strokeWidth="1" />
-          <text x="150" y="278" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--danger)">光栅化</text>
-          <text x="150" y="292" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">扫描转换</text>
-
-          {/* 右下 */}
-          <line x1="440" y1="210" x2="560" y2="280" stroke="var(--border)" strokeWidth="1" />
-          <rect x="500" y="260" width="140" height="40" rx="6" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" strokeWidth="1" />
-          <text x="570" y="278" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--accent)">纹理映射</text>
-          <text x="570" y="292" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">UV / Mipmap</text>
-
-          {/* 底部：高级主题 */}
-          <rect x="120" y="340" width="480" height="40" rx="6" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="360" y="358" textAnchor="middle" fontSize="11" fontWeight="600" fill="var(--text-primary)">高级主题</text>
-          <text x="360" y="372" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">可见性(Z-Buffer) · 曲线曲面(Bezier) · 光线追踪 · 全局光照</text>
-        </svg>
+    <Frame caption="原书 22 章最终收敛为五类合同；渲染管线只是 Geometry/Sampling 中的一部分。">
+      <div role="img" aria-label="计算机图形学第四版五类验收合同" className="grid gap-3">
+        <strong className="border-b border-border pb-3 text-sm text-primary">22-unit acceptance stack</strong>
+        <div className="grid gap-3 lg:grid-cols-5">
+          {contracts.map(([name, detail], index) => (
+            <div key={name} className="min-h-36 rounded-control border border-border bg-bg/45 p-4">
+              <span className="mb-3 grid size-8 place-items-center rounded-full bg-accent/15 text-sm font-bold text-accent">{index + 1}</span>
+              <strong className="block text-sm text-primary">{name}</strong>
+              <p className="mb-0 mt-2 text-xs leading-5 text-secondary">{detail}</p>
+            </div>
+          ))}
+        </div>
       </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">全书核心知识图谱：渲染管线为中心，四大主题辐射展开</figcaption>
-    </figure>
+    </Frame>
+  );
+}
+
+export function Cg4ReviewEvidenceDiagram() {
+  return (
+    <Frame caption="章节通过要求数学、图像、时域、交互和性能证据与主题风险匹配。">
+      <div role="img" aria-label="计算机图形学综合验收证据矩阵" className="overflow-x-auto">
+        <div className="min-w-[720px] overflow-hidden rounded-control border border-border">
+          <div className="grid grid-cols-[1.1fr_2.2fr_2fr] gap-px bg-border text-xs">
+            {['证据', '样本', '证明'].map((label) => (
+              <strong key={label} className="bg-bg p-3 text-primary">{label}</strong>
+            ))}
+            {evidenceRows.flatMap((row) => row.map((cell, index) => (
+              <span key={`${row[0]}-${cell}`} className={index === 0 ? "bg-accent/10 p-3 font-semibold text-accent" : "bg-elevated p-3 leading-5 text-secondary"}>{cell}</span>
+            )))}
+          </div>
+        </div>
+      </div>
+    </Frame>
   );
 }

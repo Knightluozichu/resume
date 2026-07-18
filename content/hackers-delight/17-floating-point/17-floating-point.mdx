@@ -1,0 +1,356 @@
+---
+title: "Chapter 17 · Floating-Point"
+type: C
+section: "HD2 · 数值专题与附录"
+order: 17
+description: "按Hacker's Delight第二版第17章重建binary32格式、整数转换、整数运算比较、快速平方根倒数、首位数字分布与边界数值表。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/hackers-delight-9780321842688"
+draft: false
+---
+
+import { HD17Binary32FieldsLab, HD17CategoryLab, HD17ULPLab, HD17IntegerExactnessLab, HD17FloatToIntLab, HD17IntegerOrderKeyLab, HD17SpecialCompareLab, HD17RSqrtSeedLab, HD17RSqrtNewtonLab, HD17LeadingDigitsLab, HD17DistributionSampleLab, HD17MiscValuesLab, HD17ConversionContractLab, HD17FloatingCertificateLab } from "@/components/mdx/hackers-delight/diagrams/17-floating-point";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释IEEE Format的sign、biased exponent、fraction和special-value分类
+- 能计算ULP、整数精确阈值以及浮点数与整数转换的rounding/range结果
+- 能实现用整数运算比较浮点数的monotone key，并处理signed zero与NaN
+- 能分析approximate reciprocal square root的magic seed、Newton refinement与误差边界
+- 能设计leading-digit experiment、miscellaneous-value vectors和完整floating-point verification contract
+
+</Objectives>
+
+## 从“同一串32位为什么有多种意义”开始
+
+先预测：word `0x3F800000`若按unsigned integer读取是1065353216，按binary32读取却是1。Bit trick并未改变bits；它改变的是interpretation。可靠实现必须同时回答three questions：bits如何分区、每个区间怎样解释、哪些输入不属于算法domain。
+
+<Term def="IEEE 754 single-precision interchange format，由one sign bit、eight exponent bits和twenty-three fraction bits组成。">二进制浮点格式</Term>不是“带小数点的整数”。它把significand与scale分别编码，使有限bit budget覆盖极大dynamic range，但spacing随magnitude变化。Chapter 17的主线正是：先掌握representation，再把integer tricks应用到conversion、comparison和approximation，最后用distribution与boundary table检查直觉。
+
+<HD17Binary32FieldsLab />
+
+## 17.1 IEEE Format（IEEE格式）
+
+Binary32的fields为sign $s$、stored exponent $e$和fraction integer $f$。当$1\le e\le254$时，value是<Term def="Exponent既非all zero也非all one，significand拥有implicit leading one的finite floating-point value。">正规数</Term>：
+
+$$
+x=(-1)^s\left(1+\frac{f}{2^{23}}\right)2^{e-127}.
+$$
+
+Bias 127让negative and positive exponents都可存在unsigned exponent field中。Leading one不必存储，所以23 fraction bits提供24 bits precision。Bit layout并不等于numeric order：negative region的fraction越大，numeric value反而越小，这是后续integer comparison必须修正的地方。
+
+当$e=0$且$f\ne0$时，value是<Term def="Exponent field为zero、没有implicit leading one，用gradual underflow连接zero与minimum normal的finite value。">次正规数</Term>：
+
+$$
+x=(-1)^s\left(\frac{f}{2^{23}}\right)2^{-126}.
+$$
+
+当$e=0,f=0$时得到signed zero；当$e=255,f=0$时得到signed infinity；当$e=255,f\ne0$时得到NaN。NaN fraction还可携带payload。算法若只检查“exponent不是zero”便把infinity和NaN误当normal，因此分类必须同时看exponent与fraction。
+
+<HD17CategoryLab />
+
+### ULP and binades
+
+固定normal exponent的区间称为binade。相邻binary32的<Term def="Unit in the last place；在给定magnitude附近两个相邻representable values之间的spacing。">ULP</Term>为
+
+$$
+\operatorname{ulp}(x)=2^{E-23}
+\quad\text{for}\quad 2^E\le |x|\lt2^{E+1}.
+$$
+
+所以absolute error随scale增长，而normal range内relative spacing约为$2^{-23}$。比较误差时只写一个全局absolute epsilon通常不成立；应根据问题选ULP distance、relative tolerance或domain-specific absolute floor。
+
+<HD17ULPLab />
+
+<Callout type="trap" title="常见误区：把FLT_EPSILON当作所有数附近的间距">
+
+`FLT_EPSILON`描述1与next representable value的差，即$2^{-23}$。在$2^{20}$附近ULP是$2^{-3}$；在subnormal区spacing固定为$2^{-149}$。Tolerance必须与magnitude和业务意义一起定义。
+
+</Callout>
+
+## 17.2 Floating-Point To/From Integer Conversions（浮点数与整数转换）
+
+Binary32有效precision为24 bits，因此all integers from $-2^{24}$ through $2^{24}$ are exact。超过这个<Term def="Every integer up to magnitude 2^24 can be represented exactly in binary32；beyond it spacing exceeds one。">整数精确阈值</Term>后，adjacent representable integers先隔2，再隔4、8，依次增长。Consequently，integer 16777217 rounds back to 16777216 under round-to-nearest-even。
+
+<HD17IntegerExactnessLab />
+
+### Integer to binary32
+
+Unsigned integer转binary32可按representation反推：
+
+1. Use count-leading-zeros找到highest set bit $k$。
+2. Set biased exponent to $k+127$。
+3. 把remaining significant bits放入fraction，并收集guard、round、sticky bits。
+4. Apply selected rounding mode；若carry使significand overflow，则increment exponent。
+
+下面的reference version依赖platform conversion来执行current rounding policy，bit-pattern只是为了verification，而不是用strict-aliasing违规方式读取object：
+
+```cpp
+#include <bit>
+#include <cstdint>
+#include <limits>
+
+struct FloatWord {
+    float value;
+    std::uint32_t bits;
+    bool exact;
+};
+
+FloatWord to_binary32(std::uint32_t input) {
+    const float value = static_cast<float>(input);
+    const auto bits = std::bit_cast<std::uint32_t>(value);
+    const bool exact = static_cast<double>(value) ==
+                       static_cast<double>(input);
+    return {value, bits, exact};
+}
+```
+
+在pre-C++20 code中可用`memcpy`在same-size trivially copyable objects之间复制bits。用pointer cast把`float*`强行解释成`uint32_t*`会碰到aliasing和alignment问题，不应作为portable proof。
+
+### Binary32 to integer
+
+Float-to-integer不只是删掉fraction。Contract必须指定rounding direction，并在转换前处理NaN、infinity与out-of-range。C/C++ built-in cast向zero truncates finite fractional part，但当truncated value不能表示为destination integer时，不能假设它自动saturate。
+
+```cpp
+#include <cmath>
+#include <cstdint>
+#include <limits>
+#include <optional>
+
+std::optional<std::int32_t> checked_trunc_to_i32(float value) {
+    if (!std::isfinite(value)) return std::nullopt;
+    const double truncated = std::trunc(static_cast<double>(value));
+    if (truncated < -2147483648.0 || truncated > 2147483647.0) {
+        return std::nullopt;
+    }
+    return static_cast<std::int32_t>(truncated);
+}
+```
+
+这里先提升到double再比较bound，避免把2147483647转换为binary32后round成2147483648，导致upper-bound test失真。Production API还应决定negative zero是否保留、subnormal是否flush、rounding-mode是否可配置。
+
+<HD17FloatToIntLab />
+
+<HD17ConversionContractLab />
+
+## 17.3 Comparing Floating-Point Numbers Using Integer Operations（用整数运算比较浮点数）
+
+Positive finite binary32的unsigned bit pattern随numeric value增加；negative finite region则方向相反。可以把each encoding映射为<Term def="对finite non-NaN binary32按numeric order严格递增的unsigned transformed bit key。">单调整数键</Term>：
+
+$$
+K(u)=
+\begin{cases}
+\mathord{\sim}u, & \text{if sign bit is one},\\
+u\mathbin{\oplus}\mathtt{0x80000000}, & \text{otherwise}.
+\end{cases}
+$$
+
+Negative encodings are complemented；nonnegative encodings flip sign bit。Equivalent branch-free mask is `(-(u >> 31)) | 0x80000000`。
+
+```cpp
+#include <bit>
+#include <cstdint>
+
+std::uint32_t ordered_binary32_key(float value) {
+    const std::uint32_t bits = std::bit_cast<std::uint32_t>(value);
+    const std::uint32_t sign = bits >> 31;
+    const std::uint32_t mask = (0u - sign) | 0x80000000u;
+    return bits ^ mask;
+}
+```
+
+<HD17IntegerOrderKeyLab />
+
+This key naturally orders negative infinity beforefinite values and positive infinity afterthem，but signed zeros与NaNs需要contract。Numeric equality认为negative zero equals positive zero，key却把two encodings排成adjacent distinct values。NaN与itself unordered，而integer key必然给它一个位置。因此有three viable policies：
+
+- Numeric compare：先reject NaN，并canonicalize both zeros to one encoding。
+- Bitwise deterministic order：保留signed zero和NaN payload，但明确这不是ordinary numeric relation。
+- IEEE totalOrder：实现standard规定的complete ordering，包括NaN sign、quiet/signaling与payload规则。
+
+<HD17SpecialCompareLab />
+
+<Callout type="trap" title="常见误区：bit key可以直接替代全部浮点比较">
+
+Monotone transform只解决finite encoding的方向。它不会替你决定NaN policy、signed-zero equality，也不会修复input已经受rounding影响的问题。先写comparison contract，再选择key。
+
+</Callout>
+
+## 17.4 An Approximate Reciprocal Square Root Routine（近似平方根倒数）
+
+目标是positive normal binary32上的$y\approx1/\sqrt{x}$。Taking logarithms gives
+
+$$
+\log_2 y=-\frac{1}{2}\log_2 x.
+$$
+
+Binary32 exponent field让bit pattern粗略呈现affine log scale。Right-shifting input word approximately halves exponent；从tuned constant `0x5F375A82`减去它，便得到<Term def="由binary32 exponent/fraction的近似log-affine关系和tuned integer constant构造的reciprocal-square-root initial estimate。">魔数初值</Term>。
+
+```cpp
+#include <bit>
+#include <cstdint>
+
+float reciprocal_sqrt_seed(float x) {
+    std::uint32_t word = std::bit_cast<std::uint32_t>(x);
+    word = 0x5F375A82u - (word >> 1);
+    return std::bit_cast<float>(word);
+}
+
+float reciprocal_sqrt_refine(float x, float y) {
+    return y * (1.5f - 0.5f * x * y * y);
+}
+```
+
+The seed is only a coarse model。Apply<Term def="对equation 1/y^2 minus x equals zero迭代，得到y next equals y times 1.5 minus 0.5xy squared的quadratically convergent refinement。">牛顿修正</Term>
+
+$$
+y_{k+1}=y_k\left(1.5-0.5xy_k^2\right).
+$$
+
+在representative positive-normal sweep中，one refinement的maximum relative error约$1.75\times10^{-3}$，two refinements约$4.72\times10^{-6}$。Exact peak依赖constant、rounding sequence和whether intermediate operations fuse；这些数字应作为tested contract，不是无条件mathematical guarantee。
+
+### Domain and modern use
+
+This routine的core domain是positive normal finite inputs。Zero的mathematical result is infinity；negative input has no real result；subnormal、infinity和NaN都需要separate policy。Modern CPUs/GPUs可能提供hardware reciprocal-square-root estimate，再配合Newton refinement；standard library `sqrt`也可能更准确且足够快。Bit hack是否值得使用必须由target benchmark、error sweep与special-value test共同决定。
+
+<Stepper>
+  <Step title="Step 1 · 定义domain">
+    明确只接收positive normal，或为zero、subnormal、infinity、NaN逐一指定result。
+    <HD17RSqrtSeedLab />
+  </Step>
+  <Step title="Step 2 · 验证seed与refinement">
+    对exponent/fraction分层采样，记录zero、one、two Newton steps的maximum relative error与ULP error。
+    <HD17RSqrtNewtonLab />
+  </Step>
+  <Step title="Step 3 · 对照target implementation">
+    与hardware intrinsic和library sqrt在same compiler flags、same data distribution下比较latency、throughput和accuracy。
+  </Step>
+</Stepper>
+
+## 17.5 The Distribution of Leading Digits（首位数字分布）
+
+许多跨越multiple decades、近似scale-invariant的数据并非first digits uniformly distributed。<Term def="对适合的scale-spanning data，first decimal digit d出现概率为log base ten of one plus one over d的distribution。">本福分布</Term> predicts
+
+$$
+P(D=d)=\log_{10}\left(1+\frac{1}{d}\right),
+\qquad d\in\{1,2,\ldots,9\}.
+$$
+
+Digit 1 probability约30.1%，digit 9约4.58%。Reason可从fractional part of $log_{10}x$理解：若它在$[0,1)$近似uniform，first digit $d$对应interval from $log_{10}d$ to $log_{10}(d+1)$，interval length正是formula。
+
+<HD17LeadingDigitsLab />
+
+这不是“所有真实数据都服从Benford”的law。Telephone numbers、fixed-price catalog、human-imposed bounds、single narrow interval或uniform random integers都可能不符合。Powers of two会显示另一种structured pattern。The sampling mechanism decides distribution。
+
+<HD17DistributionSampleLab />
+
+<Stepper>
+  <Step title="Step 1 · 说明生成过程">
+    记录数据是否跨越several orders of magnitude，是否存在minimum、maximum、rounding或assigned identifiers。
+  </Step>
+  <Step title="Step 2 · 建立null model">
+    Benford、uniform或domain-specific model只能由生成过程选择，不能看完histogram再挑最好看的curve。
+  </Step>
+  <Step title="Step 3 · 报告偏差而非定罪">
+    First-digit deviation只是screening signal；还需independence、sample size和domain evidence，不能单独证明fraud或bug。
+  </Step>
+</Stepper>
+
+## 17.6 Table of Miscellaneous Values（杂项数值表）
+
+Chapter最后的table把representation landmarks集中起来。For binary32：
+
+$$
+\begin{aligned}
+\epsilon_1 &= 2^{-23},\\
+x_{\min,\mathrm{normal}} &= 2^{-126},\\
+x_{\min,\mathrm{subnormal}} &= 2^{-149},\\
+x_{\max} &= (2-2^{-23})2^{127}.
+\end{aligned}
+$$
+
+These values分别锚定spacing at one、normal/subnormal boundary、smallest positive value和overflow boundary。再加exact integer threshold $2^{24}$，就构成conversion和comparison的minimum known-vector set。
+
+<HD17MiscValuesLab />
+
+`nextafter`-style tests还应覆盖：largest subnormal的next value是minimum normal；one的next value word为`0x3F800001`；negative one向positive direction的next word为`0xBF7FFFFF`；maximum finite向positive direction进入infinity。Every landmark同时assert bits、classification和numeric relation，避免只检查printed decimal。
+
+## 17.7 Engineering contract and verification
+
+Floating bit trick的proof不能止于three hand examples。Recommended verification matrix：
+
+- Exact vectors：positive/negative zero、minimum/maximum subnormal、minimum normal、one、exact-integer boundary、maximum finite、infinities、several NaNs。
+- Metamorphic properties：finite monotone key preserves order；decode/encode round-trip preservesbits；`nextUp(x)` strictly advances one encoding step。
+- Error sweeps：按exponent分层并覆盖fraction endpoints，而不是只从small decimal range均匀抽样。
+- Compiler/target checks：fast-math、flush-to-zero、fused multiply-add和rounding mode都记录在test environment中。
+
+<HD17FloatingCertificateLab />
+
+### One decision sequence
+
+面对new floating trick，可依次问：
+
+1. 输入是numeric values还是raw interchange bits？
+2. 支持哪些classes，unsupported input怎样返回？
+3. Equality、ordering和rounding采用哪个standard contract？
+4. Error用absolute、relative还是ULP度量，maximum budget是多少？
+5. Clear reference implementation和optimized implementation是否逐bit或逐contract等价？
+
+这个sequence把clever constant变成reviewable engineering artifact。Representation知识给出candidate transform；domain contract与exhaustive boundary tests才给出可信度。
+
+## 小结
+
+IEEE binary32以sign、biased exponent和fraction编码normal、subnormal、zero、infinity与NaN；ULP随binade变化。Integer conversion必须显式处理rounding、range与special values。Finite non-NaN encodings经negative complement和positive sign flip可得到monotone integer key，但signed zero与NaN仍需policy。Approximate reciprocal square root由affine-log seed加Newton refinement构成，速度价值必须由target benchmark和full-range error sweep证明。Leading-digit distribution来自sampling process，miscellaneous-value table则提供boundary test anchors。
+
+<Exercises>
+
+1. 解码word `0xC1200000`的sign、stored exponent、fraction、class与decimal value，并写出normal formula的每一步。
+2. 解释为什么16777217不能被binary32 exact represent；给出它在round-to-nearest-even下的结果，并指出next exact integers的spacing。
+3. 为finite non-NaN binary32证明ordered-key transform在negative region、zero boundary和positive region分别monotone；说明为何numeric equality还需canonicalize signed zero。
+4. 设计reciprocal-square-root validation：列出domain partitions、known vectors、sampling strategy、one/two-step error metrics与acceptance threshold。
+
+<Answer>
+
+`0xC1200000`的sign为one，exponent为130，fraction为`0x200000`。Unbiased exponent是3，significand是$1+2^{-2}=1.25$，因此value为$-1.25\times2^3=-10$，class是normal。
+
+</Answer>
+
+<Answer>
+
+Binary32只有24 significant bits。At magnitude $2^{24}$，ULP becomes two；16777217恰在16777216与16777218中间，nearest-even选择low significand，结果16777216。该binade中representable integers spacing为two。
+
+</Answer>
+
+<Answer>
+
+Positive encodings按value递增，flip sign bit只把它们平移到upper key half。Negative encodings按magnitude递增却按value递减，bitwise complement reverses order并放入lower half。Negative zero key紧邻positive zero key但不相等，所以若contract采用ordinary numeric equality，先把both zeros映射成same canonical encoding。NaN必须reject或按separate total-order rule处理。
+
+</Answer>
+
+<Answer>
+
+Partition至少包含negative、both zeros、positive subnormal、positive normal、positive infinity和NaN；optimized core只在declared positive-normal domain运行。Known vectors覆盖powers of two、binade endpoints和miscellaneous table。For each exponent分层扫fraction endpoints与interior samples，记录seed、one-step、two-step maximum relative/ULP error，并assert outputs finite。Threshold可设one step below $1.8\times10^{-3}$、two steps below $5\times10^{-6}$，同时用target compiler/hardware重新标定。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="二进制浮点格式">IEEE binary32的one sign、eight exponent和twenty-three fraction fields及其interpretation rules。</GlossaryItem>
+  <GlossaryItem term="正规数">Exponent field between one and 254，使用implicit leading one的finite value。</GlossaryItem>
+  <GlossaryItem term="次正规数">Exponent zero且fraction nonzero，以gradual underflow接近zero的finite value。</GlossaryItem>
+  <GlossaryItem term="ULP">给定magnitude附近last represented place的unit，通常等于adjacent floating values的spacing。</GlossaryItem>
+  <GlossaryItem term="整数精确阈值">Binary32能连续exact represent all integers的magnitude boundary $2^{24}$。</GlossaryItem>
+  <GlossaryItem term="单调整数键">把finite non-NaN floating encoding转换成preserving numeric order的unsigned key。</GlossaryItem>
+  <GlossaryItem term="魔数初值">用tuned integer subtraction近似construct reciprocal-square-root seed。</GlossaryItem>
+  <GlossaryItem term="牛顿修正">以$y(1.5-0.5xy^2)$快速改善reciprocal-square-root estimate的iteration。</GlossaryItem>
+  <GlossaryItem term="本福分布">适合scale-spanning data的first-digit distribution $\log_{10}(1+1/d)$。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  source="Hacker's Delight, Second Edition"
+  author="Henry S. Warren, Jr."
+  license="本章为基于原书第17章官方主题的独立教学重构；代码、推导、交互和练习均为重新编写。"
+  url="https://www.informit.com/store/hackers-delight-9780321842688"
+/>

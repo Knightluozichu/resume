@@ -1,52 +1,46 @@
-/** 复习题库 · 全书学习地图（ico-learning-map）。《深度探索 C++ 对象模型》导论改编章节。 */
+/** 复习题库 · 官方七章学习地图（ico-learning-map）。 */
 
 import type { ReviewQuestion } from "./types";
 
 export const icoLearningMapQuestions: ReviewQuestion[] = [
-  // ── L1 认记：术语 / 定义 ──
   {
     id: "ico-lm-1",
     chapter: "ico-learning-map",
     level: 1,
-    question: `「C++ 对象模型」这本书研究的「对象模型」，到底指什么？`,
+    question: "第一版官方七章分别回答对象模型的哪一层问题？",
     answer:
-      `它研究的是 C++ 编译器如何把面向对象概念（类、对象、继承、虚函数等）落实到内存布局与运行期机制上——即对象在内存里长什么样、成员怎么存取、构造析构怎么展开、虚函数怎么实现多态。一句话：语言特性背后的「实现模型」。`,
-    tags: ["对象模型", "定义"],
+      "第1章建立 object model/static-dynamic view；第2章解释 default/copy constructor synthesis 与初始化变换；第3章讲 data binding/layout/access；第4章讲 member invocation、virtual/thunk/member pointer/inline；第5章讲完整 construction/copy/destruction state；第6章讲 storage、new/delete、temporary；第7章讲 template、exception、RTTI 与 DSO/shared-memory 边界。",
+    tags: ["官方七章", "学习路线"],
   },
-
-  // ── L2 理解：为什么 / 机制 ──
   {
     id: "ico-lm-2",
     chapter: "ico-learning-map",
     level: 2,
-    question: `为什么要去理解 C++ 对象模型的底层实现？「能用就行」不够吗？`,
+    question:
+      "为什么 representation、program transformation、lifetime state machine、deferred decisions 必须按依赖关系学习？",
     answer:
-      `因为同一份面向对象代码，在不同实现选择下（虚函数开销、对齐 padding、拷贝次数、虚继承间接）性能差异巨大，还暗藏未定义行为（如构造期调虚函数）。理解对象模型能帮你写出更省内存、更高效的代码；准确预测 sizeof、布局与开销；避开构造析构期、多重继承、RTTI 里的陷阱。它是从「会写 C++」到「写好 C++」的分水岭。`,
-    tags: ["为什么", "工程价值"],
+      "representation 先定义 object/subobject/metadata 在哪里；transformation 才能解释 this、constructor、slot/thunk 如何操作它；lifetime 决定这些 bytes 在哪个 phase 是合法 object；template/exception/RTTI 再在 compile/runtime 使用 metadata 做晚决议。跳过前层会把 vtable、new、RTTI 误解成孤立魔法。",
+    tags: ["机制依赖", "对象表示", "生命周期"],
   },
-
-  // ── L3 应用：场景 / 定位 ──
   {
     id: "ico-lm-3",
     chapter: "ico-learning-map",
     level: 3,
     question:
-      `你的程序里出现这些问题，分别该去翻本书哪一块？① sizeof 结果比想象大很多；② 基类构造函数里调虚函数没走到派生类覆写；③ dynamic_cast 总是返回空；④ 多重继承下访问共享基类成员报二义。`,
+      "如何用 language guarantee、implementation ABI、experimental evidence 三栏记录一次 virtual-call 实验？",
     answer:
-      `① 数据成员布局与对齐——属「构造语义」板块，调成员声明顺序压缩 padding。② 构造序列——属「构造语义」，构造期 vptr 先指向基类虚表，多态尚未生效。③ RTTI 机制——属「运行时机制」，多半是类没有虚函数或继承链不在同一条多态路径上。④ 多重继承——属「运行时机制」，普通菱形继承让共享基类存两份，需用虚继承共享一份。`,
-    tags: ["场景定位", "应用"],
+      "guarantee 写 base virtual call 必须产生 final overrider 的 observable behavior；ABI 栏写当前 target 预计通过 vptr/slot/可能 thunk 实现；experiment 固定 compiler/options，记录 base-view address、slot target、adjusted this、assembly 与 output。vptr offset/shape 只能归 ABI/实验，不能升格为语言规定。",
+    tags: ["证据边界", "ABI", "实验"],
   },
-
-  // ── L4 综合：陷阱 / 全流程 ──
   {
     id: "ico-lm-4",
     chapter: "ico-learning-map",
     level: 4,
     question:
-      `用一句话串起全书的逻辑主线，并说明「对象布局→构造语义→运行时机制」为什么必须按这个顺序学。`,
+      "设计一个同时覆盖 virtual base、copy、array-new failure 与 RTTI 的跨章节 probe，需要记录哪些工件？",
     answer:
-      `主线：对象在内存里长什么样 → 怎么被造出来 → 怎么调用与多态 → 怎么消亡。顺序由依赖关系决定：不先懂对象布局（数据成员、vptr），就看不懂构造时 vptr 为什么会被两次设置；不懂构造语义，就看不懂构造完成后多态才生效、析构期又退化的窗口；不懂运行时多态（虚表、RTTI），多重继承的 this 调整与虚继承就成了无源之水。跳级会把每一步都变成死记硬背。`,
-    tags: ["主线", "学习顺序", "综合"],
+      "先画唯一 virtual base/direct bases/members/vptr views；记录 constructor/copy/destructor counters 与 base address adjustment；array 第 k 个 throw 应只逆序销毁前 k 个 complete elements并释放 allocation；local polymorphic pointer/reference dynamic_cast 分别验证 success/null/bad_cast。把调用顺序归 language semantics，把 offsets/cookie/RTTI layout 归 ABI observation。",
+    tags: ["综合实验", "虚继承", "异常路径", "RTTI"],
   },
 ];
 

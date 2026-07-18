@@ -1,0 +1,280 @@
+---
+title: "Chapter 7：包、Crate 与模块（Packages, Crates, and Modules）"
+type: A
+section: Rust 程序设计语言 · 项目组织与 API 边界
+order: 7
+description: 对齐官方第 7 章：区分 package 与 crate，建立模块树、路径和隐私模型，掌握 use、pub use、外部依赖与跨文件模块拆分。
+demo: false
+math: false
+sourceUrl: "https://doc.rust-lang.org/book/ch07-00-managing-growing-projects-with-packages-crates-and-modules.html"
+draft: false
+---
+
+import {
+  RplPackageTopologyLab,
+  RplPathSurfaceLab,
+  RplVisibilityPathLab,
+} from "@/components/mdx/rust-programming-language/diagrams/packages-crates-and-modules";
+
+<Objectives>
+
+- 能区分 package、binary crate、library crate 与 crate root，并根据目录预测 Cargo 会建立多少编译单元
+- 能分析模块树中的绝对/相对路径和逐层隐私规则，判断 `crate`、`self`、`super` 与 `pub` 是否使访问成立
+- 能设计 `use`、`pub use` 和跨文件 `mod` 声明，分离内部实现结构、局部名称与稳定公共 API
+
+</Objectives>
+
+## 为什么大型程序需要多层组织边界
+
+代码增多后，单文件不只难浏览，还会把编译单元、命名作用域和公共契约混成一个问题。Rust 模块系统用四个相互配合的概念拆开它们：package 是 Cargo 构建和分发边界，crate 是编译器一次处理的模块树，module 组织作用域与隐私，path 为树中的 item 命名。
+
+<Term def="由 Cargo.toml 描述、包含至少一个 crate 的构建、测试和分发单元；可含多个二进制 crate，但最多一个库 crate。">package</Term>
+
+<Term def="rustc 一次考虑的最小代码单元，也是一棵以 crate root 为根的模块树；可生成库或可执行文件。">crate</Term>
+
+这几层不是同义词。一个 package 可有多个 crate；一个 crate 内可有多个 module；Cargo.toml 描述 package 并让 Cargo 决定把哪些 crate roots 交给 rustc。
+
+## Package 如何映射到 library 与 binary crates
+
+<Term def="包含 main 函数并编译为可执行程序的 crate；src/main.rs 和 src/bin 下的每个源文件都可成为二进制 crate root。">binary crate</Term>
+
+<Term def="没有 main 入口、提供可被其他 crate 复用功能的 crate；一个 package 最多有一个，惯例根文件为 src/lib.rs。">library crate</Term>
+
+Cargo 约定 `src/main.rs` 是与 package 同名的 binary crate root，`src/lib.rs` 是同名 library crate root，`src/bin/tool.rs` 各自建立额外 binary crate。package 必须至少含一个 crate，可以有任意多个 binary crates，但最多一个 library crate。
+
+```text
+app/
+├── Cargo.toml          # package 清单
+└── src/
+    ├── lib.rs          # library crate root: app
+    ├── main.rs         # binary crate root: app
+    └── bin/
+        ├── admin.rs    # binary crate root: admin
+        └── worker.rs   # binary crate root: worker
+```
+
+<Term def="编译器开始读取某个 crate 的源文件，并形成该 crate 根模块；库通常是 lib.rs，二进制通常是 main.rs。">crate root</Term>
+
+同名的 library crate 与 binary crate 仍是两个 crate。推荐把可复用业务模块树放在 lib.rs，main.rs 只解析进程入口并调用 library crate 的公共 API。这样二进制自身成为库的真实客户端，不能绕过 private 实现。
+
+<RplPackageTopologyLab />
+
+先预测三种目录各会产生多少 crate，再切换布局核对。注意 Cargo.toml 只有一个，不代表 rustc 只执行一个 crate 编译；每个 crate root 都启动独立模块树。
+
+<Callout type="trap" title="陷阱：把 package 名、crate 名和目录名视为永远相同">
+  Cargo 惯例会让默认 lib/main crate 与 package 同名，但 `src/bin` 可产生其他名称，清单也能显式配置 target。诊断依赖和可见性时先确认当前代码属于哪个 crate，而不是只看仓库目录名。
+</Callout>
+
+## mod 声明建立模块树
+
+<Term def="crate 内用于分组 item、创建命名作用域并控制实现可见性的节点；可包含函数、类型、常量、trait 和子模块。">模块</Term>
+
+```rust
+mod front_of_house {
+    mod hosting {
+        fn add_to_waitlist() {}
+        fn seat_at_table() {}
+    }
+
+    mod serving {
+        fn take_order() {}
+        fn take_payment() {}
+    }
+}
+```
+
+这段代码建立一棵树：隐式根 `crate` 的 child 是 `front_of_house`，其 children 是互为 sibling 的 `hosting` 与 `serving`。模块可以内联，也可把 body 放在文件中；无论物理位置如何，名称解析和隐私都基于模块树。
+
+<Term def="从 crate root 开始，由 mod 声明连接父、子和 sibling 模块及其中 item 的逻辑命名结构。">模块树</Term>
+
+## Path 先定位 item，再检查访问权限
+
+<Term def="用双冒号连接模块和 item 名称，在模块树中定位目标的名称序列；路径正确不代表隐私检查必然通过。">路径</Term>
+
+绝对路径从 crate root 开始：当前 crate 用字面量 `crate`，外部 crate 用其 crate 名。相对路径从当前 module 开始，可以使用当前作用域标识符、`self` 或 `super`。
+
+```rust
+pub fn eat_at_restaurant() {
+    crate::front_of_house::hosting::add_to_waitlist(); // absolute
+    front_of_house::hosting::add_to_waitlist();        // relative
+}
+```
+
+<Term def="以 crate 或外部 crate 名开头、从模块树根定位 item 的完整路径。">绝对路径</Term>
+
+<Term def="从当前模块开始，并可用 self 指当前模块、super 指父模块的路径。">相对路径</Term>
+
+绝对路径通常在调用方和定义方独立移动时更稳定；`super::deliver_order()` 则适合 child 与 parent 的关系会整体移动。`self` 常在嵌套 use 列表中指共同前缀本身，也能明确路径从当前模块开始。
+
+## Private by default 是逐层边界
+
+<Term def="item 默认只对当前模块及其后代实现可见；父模块不能自动进入子模块的私有内容。">模块隐私</Term>
+
+Rust 中 module、function、struct、enum、constant 等默认对 parent private。child 可以看见祖先模块中的 item，但 parent 进入 child 时，路径上的 module 与最终 item 都必须可访问。只把 module 标成 `pub mod` 不会递归公开其中 function。
+
+```rust
+mod front_of_house {
+    pub mod hosting {
+        pub fn add_to_waitlist() {}
+        fn seat_at_table() {}
+    }
+}
+```
+
+`hosting` 与 `add_to_waitlist` 都公开后，父模块路径才通过；`seat_at_table` 仍是实现细节。public API 是调用方可以依赖的契约，缩小公开面能保留内部重构自由。
+
+<RplVisibilityPathLab />
+
+分别打开 module 和 function 的 `pub`，观察父模块调用在哪一段失败；再切到子模块内部，比较后代可见祖先和自身私有实现的规则。
+
+<Callout type="trap" title="陷阱：认为 pub mod 会递归公开所有后代">
+  `pub` 只改变紧随其后的 item。路径上每一层都要单独设计；公开容器但保留内部函数 private 是常见封装，而不是编译器遗漏。
+</Callout>
+
+## Public struct 与 enum 的字段规则不同
+
+`pub struct Breakfast` 只公开类型名，字段仍逐个 private。若存在 private 字段，外部模块不能用 struct literal 构造完整值，类型应提供 public 关联函数维护不变量：
+
+```rust
+pub struct Breakfast {
+    pub toast: String,
+    seasonal_fruit: String,
+}
+
+impl Breakfast {
+    pub fn summer(toast: &str) -> Self {
+        Self {
+            toast: toast.into(),
+            seasonal_fruit: "peaches".into(),
+        }
+    }
+}
+```
+
+相反，`pub enum Appetizer { Soup, Salad }` 会公开所有 variants；枚举若公开类型却无法构造变体通常没有意义。struct 字段适合逐项封装，enum variants 则随 enum 的 public 状态公开。
+
+## use 创建当前作用域的名称快捷方式
+
+<Term def="把一个可访问路径绑定为当前作用域内的较短名称；它不移动定义、不绕过隐私，也不会自动对子模块生效。">use</Term>
+
+```rust
+use crate::front_of_house::hosting;
+
+pub fn eat_at_restaurant() {
+    hosting::add_to_waitlist();
+}
+```
+
+官方惯例倾向于把 function 的 parent module 引入，再写 `hosting::add_to_waitlist()`，让读者看出函数不是本地定义；struct、enum 等类型则常直接引入完整 item，例如 `use std::collections::HashMap;`。
+
+同名 item 可保留 parent module 区分，或使用 `as`：
+
+```rust
+use std::fmt::Result;
+use std::io::Result as IoResult;
+use std::{cmp::Ordering, io};
+use std::io::{self, Write};
+```
+
+嵌套路径用 `{}` 合并共同前缀，`self` 表示共同前缀本身。glob `use module::*` 会引入全部 public names，来源难追踪且依赖升级可能新增冲突，通常只在 prelude 或测试等边界明确场景谨慎使用。
+
+<Callout type="trap" title="陷阱：在父模块 use 后假定子模块自动继承快捷名">
+  use 只作用于声明所在 scope。子模块要自己 use、写 `super::shortcut`，或使用完整路径；编译器同时会把父模块未使用的 import 报为 warning。
+</Callout>
+
+## pub use 重塑调用方看到的 API
+
+<Term def="把路径引入当前作用域并从该位置公开重新导出，使外部代码可通过新的公共路径访问原 item。">pub use</Term>
+
+普通 `use` 的快捷名对外 private，`pub use crate::front_of_house::hosting;` 则让外部从 `restaurant::hosting` 访问它。内部目录可以按实现职责组织，公开 API 按用户领域组织；re-export 是兼容层和易用表面，不是复制代码。
+
+外部 package 依赖先写入 Cargo.toml，Cargo 才把对应 crate 提供给构建；源码再从外部 crate 名开始写路径或 use。清单解决“依赖是否属于构建图”，use 解决“当前 scope 用什么名字引用”。
+
+## 拆到文件不会改变模块树
+
+<Term def="用 `mod name;` 在模块树中的某个位置声明模块，并让编译器按约定查找对应源文件的操作。">跨文件模块声明</Term>
+
+```text
+src/lib.rs
+  mod front_of_house;
+
+src/front_of_house.rs
+  pub mod hosting;
+
+src/front_of_house/hosting.rs
+  pub fn add_to_waitlist() {}
+```
+
+编译器在 root 遇到 `mod front_of_house;` 后查找 `src/front_of_house.rs` 或旧式 `src/front_of_house/mod.rs`；该文件中的 `mod hosting;` 再查找子目录文件。一个文件只需在模块树中通过 mod 接入一次，其他代码用声明位置对应的 path 访问。`mod` 不是 C/C++ 式文本 include，多处重复声明会尝试建立不同模块关系而非共享一次粘贴。
+
+<RplPathSurfaceLab />
+
+切换 crate 绝对路径、super、use 和 pub use，观察“定义树、当前 scope 名称、外部 API”如何分别变化；右侧文件映射强调模块身份来自 mod 声明位置，不来自文件名本身。
+
+## 三步设计可维护的模块系统
+
+<Stepper>
+  <Step title="第一步：确认 package 与 crate 边界">
+    先列出 Cargo.toml 和所有 crate roots，判断哪些代码属于不同编译单元。可复用逻辑放 library crate，binary 保持薄入口。
+
+    <RplPackageTopologyLab />
+  </Step>
+  <Step title="第二步：画模块树并验证每层可见性">
+    从调用点选择 crate/self/super 起点，逐段解析 path；每次跨入 child 都核对对应 module 和最终 item 是否公开。
+
+    <RplVisibilityPathLab />
+  </Step>
+  <Step title="第三步：区分实现树、局部名称和 API">
+    用 mod/file 组织实现，用 use 缩短当前 scope 名称，用 pub use 只暴露希望用户依赖的入口。三者分别设计，避免目录结构泄漏成永久契约。
+
+    <RplPathSurfaceLab />
+  </Step>
+</Stepper>
+
+本章的官方主线是先区分 **包与 crate**，再构建 **模块树路径**、privacy，以及 **self 与 super** 的相对定位，最后完成 **模块拆分文件**；物理文件布局服务于 logical module API，而不取代它。
+
+## 小结
+
+- package 是 Cargo.toml 描述的构建分发单元；crate 是 rustc 编译的一棵模块树，package 可含多个 binary crate 和最多一个 library crate
+- crate root 建立根模块，mod 声明形成 module tree；文件只是模块 body 的存放位置，mod 不是文本 include
+- path 先按 crate/self/super 或当前标识符定位 item，再逐层执行隐私检查；private by default 保护实现细节
+- public struct 的 fields 仍默认 private，public enum 的 variants 全部 public；构造函数可维护含私有字段类型的不变量
+- use 创建 scope-local 快捷名，pub use 创建公共 re-export；它们都不绕过隐私，也不改变原定义位置
+
+<Exercises>
+  1. **问题 1：计算 crate 数量。** 一个 package 同时有 `src/lib.rs`、`src/main.rs`、`src/bin/import.rs` 和 `src/bin/export.rs`。它有多少 crate，各是什么类型？
+
+  <Answer question="Cargo 惯例如何从 crate roots 识别 targets？">共有四个 crate：lib.rs 是唯一 library crate；main.rs 是与 package 同名的 binary crate；src/bin 下两个文件分别是 import 与 export binary crates。它们共享一个 package 清单，但每个 crate root 都建立独立模块树。</Answer>
+
+  2. **问题 2：诊断 E0603。** 父模块能找到 `child::run`，`child` 已写成 `pub mod child`，为什么仍可能报 private function，最小修复是什么？
+
+  <Answer question="模块路径为什么要逐层公开？">pub mod 只允许父模块跨过 child 这一层，不递归公开内容；若 run 仍是 `fn run`，最终 item 检查失败。确实属于 API 时改为 `pub fn run`；若只应内部使用，则保留 private，并由 child 提供更窄的 public facade，而不是全量公开。</Answer>
+
+  3. **问题 3：稳定外部路径。** 内部希望把 `front_of_house::hosting` 拆分重组，但不想让用户改 `restaurant::hosting::add_to_waitlist()`。应怎样声明？
+
+  <Answer question="pub use 如何解耦实现树与 API 树？">在稳定的公共模块位置写 `pub use crate::front_of_house::hosting;`，并确保 re-export 路径上的目标可公开。内部仍可按职责组织，调用方只依赖 restaurant::hosting。普通 use 只服务当前 scope，不能建立这个外部契约。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="package">Cargo.toml 描述、至少包含一个 crate 的构建和分发单元。</GlossaryItem>
+  <GlossaryItem term="crate">rustc 一次编译的一棵模块树，可产生库或可执行文件。</GlossaryItem>
+  <GlossaryItem term="binary crate">含 main 并生成可执行程序的 crate。</GlossaryItem>
+  <GlossaryItem term="library crate">提供复用 API、不以 main 作为程序入口的 crate。</GlossaryItem>
+  <GlossaryItem term="crate root">编译器建立某个 crate 根模块的起始源文件。</GlossaryItem>
+  <GlossaryItem term="模块">在 crate 内分组 item、创建 scope 和隐私边界的节点。</GlossaryItem>
+  <GlossaryItem term="模块树">由 mod 声明连接、根为 crate 的逻辑名称结构。</GlossaryItem>
+  <GlossaryItem term="路径">用双冒号连接名称以定位模块树中 item 的序列。</GlossaryItem>
+  <GlossaryItem term="绝对路径">从 crate root 或外部 crate 名开始的路径。</GlossaryItem>
+  <GlossaryItem term="相对路径">从当前模块开始，可使用 self 或 super 的路径。</GlossaryItem>
+  <GlossaryItem term="模块隐私">item 默认只对当前模块及后代开放的可见性规则。</GlossaryItem>
+  <GlossaryItem term="use">为当前 scope 中的可访问路径创建快捷名。</GlossaryItem>
+  <GlossaryItem term="pub use">从新位置公开重新导出名称的声明。</GlossaryItem>
+  <GlossaryItem term="跨文件模块声明">用 mod 声明把约定位置的文件接入模块树。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Rust Programming Language, Chapter 7 Packages, Crates, and Modules"
+  adaptedUrl="https://doc.rust-lang.org/book/ch07-00-managing-growing-projects-with-packages-crates-and-modules.html"
+/>

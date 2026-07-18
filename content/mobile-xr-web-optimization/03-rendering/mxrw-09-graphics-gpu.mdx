@@ -1,0 +1,294 @@
+---
+title: "图形与 GPU：Draw Call、光照、LOD 与分辨率"
+type: C
+section: "GPU、光照与 Shader"
+order: 1
+description: "按 Unity 6 官方指南第 45—61 页复现 Draw Call、光照、LOD 与分辨率治理。"
+demo: true
+math: false
+draft: false
+sourceUrl: "https://unity.com/resources/mobile-xr-web-game-performance-optimization-unity-6"
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Mxrw09GraphicsGpuMapLab,
+  Mxrw09GraphicsGpuExperimentLab,
+  Mxrw09GraphicsGpuEvidenceLab,
+} from "@/components/mdx/mobile-xr-web-optimization/diagrams/mxrw-09-graphics-gpu";
+
+<Objectives>
+
+- 能解释官方单元 9在Unity 6官方跨平台优化流程中的责任与前后依赖
+- 能复现“GPU基准 → 渲染统计 → 提交与状态 → 光照可见性 → 分辨率实验 → 图像签发”并保存目标设备中间证据
+- 能设计失败实验，判断“每项渲染修改关联同一目标帧的CPU提交、GPU毫秒、工作量计数与图像合同，不能只报告Batches下降。”是否成立
+
+</Objectives>
+
+## 问题：怎样证明掌握的是官方单元 9，而不是背下一组技巧？
+
+先预测：若只报告修改后FPS，没有设备、构建、场景、输入、热状态和画面合同，另一位开发者能否证明收益来自这次修改？不能。跨平台优化首先是受控实验，其次才是技巧选择。
+
+GPU优化先基准与分流，再从提交、光照、可见性、分辨率和后处理减少真实工作。Draw Call数量不是唯一目标，GPU Resident Drawer与遮挡也必须用目标GPU时间和图像证明。
+
+<Mxrw09GraphicsGpuMapLab />
+
+## 官方目录边界
+
+本页严格对应Unity Technologies《Optimize your game performance for mobile, XR, and the web in Unity》Unity 6版第45—61页。以下目录项必须进入实现或证据：
+
+- **Graphics and GPU optimization**
+- **GPU optimization**
+- **Benchmark the GPU**
+- **Watch the rendering statistics**
+- **Reduce Draw Calls**
+- **Use draw call batching**
+- **GPU Resident Drawer**
+- **Use the Frame Debugger**
+- **Split Graphics Jobs**
+- **Avoid too many dynamic lights**
+- **Disable shadows**
+- **Bake your lighting into lightmaps**
+- **GPU light baking**
+- **Use Light Layers**
+- **Adaptive Probe Volumes**
+- **Use Level of Detail (LOD)**
+- **Use occlusion culling to remove hidden objects**
+- **GPU occlusion culling**
+- **Avoid mobile native resolution**
+- **Limit use of cameras**
+- **Spatial-Temporal Post-Processing**
+
+本站重新组织中文讲解、代码和实验，不逐字复制原文。平台API和包能力随Unity与设备版本变化，实际项目要固定版本并保存迁移差异。
+
+## 核心模型与不可变条件
+
+GPU优化先基准与分流，再从提交、光照、可见性、分辨率和后处理减少真实工作。Draw Call数量不是唯一目标，GPU Resident Drawer与遮挡也必须用目标GPU时间和图像证明。
+
+不可变条件是：**每项渲染修改关联同一目标帧的CPU提交、GPU毫秒、工作量计数与图像合同，不能只报告Batches下降。** 如果测试上下文、视觉或玩法结果发生变化，就不能把两次数字直接相减。先解释变化，再决定是否建立新基线。
+
+## 五个必须落到证据的术语
+
+<Term def="让兼容对象数据常驻GPU并减少CPU绘制提交的Unity 6功能">
+  GPU Resident Drawer
+</Term>
+
+它必须落到“GPU基准 → 渲染统计 → 提交与状态 → 光照可见性 → 分辨率实验 → 图像签发”的证据链，不能只作为术语记忆。
+
+<Term def="CPU向图形API提交一次绘制工作的命令">Draw Call</Term>
+
+它必须落到“GPU基准 → 渲染统计 → 提交与状态 → 光照可见性 → 分辨率实验 → 图像签发”的证据链，不能只作为术语记忆。
+
+<Term def="限制光源影响对象集合的渲染分层机制">Light Layers</Term>
+
+它必须落到“GPU基准 → 渲染统计 → 提交与状态 → 光照可见性 → 分辨率实验 → 图像签发”的证据链，不能只作为术语记忆。
+
+<Term def="以自适应探针体积提供烘焙间接光照的系统">Adaptive Probe Volumes</Term>
+
+它必须落到“GPU基准 → 渲染统计 → 提交与状态 → 光照可见性 → 分辨率实验 → 图像签发”的证据链，不能只作为术语记忆。
+
+<Term def="跳过被其他几何完全遮挡对象的可见性优化">Occlusion Culling</Term>
+
+它必须落到“GPU基准 → 渲染统计 → 提交与状态 → 光照可见性 → 分辨率实验 → 图像签发”的证据链，不能只作为术语记忆。
+
+## 从输入到发布的证据链
+
+主链为：**GPU基准 → 渲染统计 → 提交与状态 → 光照可见性 → 分辨率实验 → 图像签发**。每个节点保存平台、设备、浏览器或运行时、Unity与包版本、构建提交、场景检查点、预算、实际值和首个异常。后一节点只消费前一节点已验证事实。
+
+### 1. GPU基准
+
+在目标设备用Profiler和原生GPU工具测阶段耗时，分辨率实验帮助区分像素、几何或提交瓶颈。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 2. 提交
+
+Rendering统计和Frame Debugger解释Batches、SetPass与事件来源；合批、实例化或Resident Drawer按兼容条件选择。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 3. Graphics Jobs
+
+拆分渲染工作可利用多核，但调度、驱动和同步限制仍需看主线程与渲染线程Timeline。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 4. 光照
+
+动态光和阴影成本随对象、像素和Pass增长，烘焙Lightmap、Light Layers和APV用于减少实时工作。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 5. 可见性
+
+LOD按屏幕尺寸降几何，遮挡剔除跳过隐藏对象；CPU剔除成本和GPU节省必须共同测量。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 6. 分辨率相机
+
+移动原生像素可能超过视觉需要，Render Scale和相机数量直接影响填充、带宽与渲染目标。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+### 7. 后处理
+
+Spatial-Temporal Post-Processing和其他效果按像素付费，逐项禁用测量并检查运动、重建和画面稳定。
+
+复现这一项时，记录输入条件、观测工具、预算阈值和下一动作。输入决定数据是否可比，工具说明在哪个线程、对象、资源或平台阶段观察；阈值来自本项目合同，下一动作必须是一轮可反证的单变量实验。
+
+<Mxrw09GraphicsGpuExperimentLab />
+
+## 三步复现与分步观察
+
+<Stepper>
+  <Step title="1. 冻结平台合同与输入">
+    固定设备或浏览器、构建、场景、画质、预热、输入和结果合同，写出唯一假设及反证条件。
+    <Mxrw09GraphicsGpuMapLab />
+  </Step>
+  <Step title="2. 找首因并只改一个变量">
+    沿“GPU基准 → 渲染统计 → 提交与状态 → 光照可见性 → 分辨率实验 →
+    图像签发”保存中间值，在首个越界点停止下钻；一次只修改一个主要因素。
+    <Mxrw09GraphicsGpuExperimentLab />
+  </Step>
+  <Step title="3. 同输入复验并签发">
+    恢复相同热状态和检查点，重放基线输入，同时检查性能、内存、画面、玩法与维护副作用。
+    <Mxrw09GraphicsGpuEvidenceLab />
+  </Step>
+</Stepper>
+
+## 可执行实现骨架
+
+```csharp
+public readonly record struct RenderEvidence(
+    int DrawCalls, int SetPassCalls, long Vertices,
+    double CpuRenderMs, double GpuMs, string ColorHash);
+
+bool Better(RenderEvidence a, RenderEvidence b) =>
+    b.GpuMs < a.GpuMs && b.ColorHash == a.ColorHash;
+```
+
+每份采集都保存结构化上下文，报告与原始文件必须通过ID互相引用：
+
+```json
+{
+  "chapter": "mxrw-09-graphics-gpu",
+  "officialPages": "第45—61页",
+  "chain": [
+    "GPU基准",
+    "渲染统计",
+    "提交与状态",
+    "光照可见性",
+    "分辨率实验",
+    "图像签发"
+  ],
+  "platform": "mobile-web-or-xr",
+  "device": "representative-target",
+  "build": "commit-unity-packages",
+  "scenario": "fixed-checkpoint",
+  "normal": true,
+  "boundary": true,
+  "failureReplay": true
+}
+```
+
+自动门必须保留数值、结果合同和拒绝原因：
+
+```text
+PASS context=platform+device+build+scene+quality+input
+PASS chain=GPU基准 -> 渲染统计 -> 提交与状态 -> 光照可见性 -> 分辨率实验 -> 图像签发
+PASS invariant=每项渲染修改关联同一目标帧的CPU提交、GPU毫秒、工作量计数与图像合同，不能只报告Batches下降。
+REJECT changed-context | hidden-quality-loss | shifted-cost | missing-failure-replay
+```
+
+## 两个必须主动制造的失败样本
+
+<Callout type="trap" title="官方边界或测试上下文丢失">
+  为减少Draw
+  Call合并所有网格，导致剔除粒度消失、顶点工作和内存上升，GPU反而更慢。
+  保存错误结论、首个偏离节点和原始数据，再恢复官方边界与相同条件复验。
+</Callout>
+
+<Callout type="trap" title="数字变好但结果或维护成本恶化">
+  故意降低画质、跳过玩法工作、扩大永久缓存或增加难以维护的平台分支。若主指标改善但视觉、行为、内存、热量或发布可靠性变差，发布门必须拒绝。
+</Callout>
+
+## 证据矩阵与签发标准
+
+| 维度       | 正常样本         | 边界样本           | 失败样本         | 签发条件       |
+| ---------- | ---------------- | ------------------ | ---------------- | -------------- |
+| 平台上下文 | 代表设备固定构建 | 最低规格或长时运行 | 故意改变一项条件 | 差异可解释     |
+| 主证据链   | 六节点均记录     | 接近预算输入       | 首个节点注入偏差 | 能定位首因     |
+| 性能结果   | 达到预算         | 无长尾越界         | 主动制造回归     | 同输入可复验   |
+| 正确性     | 视觉玩法一致     | 生命周期完整       | 降质或转移成本   | 所有门同时通过 |
+
+<Mxrw09GraphicsGpuEvidenceLab />
+
+## 练习：把官方单元 9变成可审计交付
+
+<Exercises>
+
+**问题 1** 写出“GPU基准”到“图像签发”每一步的输入、观测工具、阈值和输出。
+
+<Answer>
+  每一步都引用同一测试上下文，输出包含数值、原始文件与下一动作理由，不能只写工具或设置名称。
+</Answer>
+
+**问题 2** 主动制造“为减少Draw Call合并所有网格，导致剔除粒度消失、顶点工作和内存上升，GPU反而更慢。”，保存错误结论与首个偏离节点，再用同一输入证明修复。
+
+<Answer>
+  合格答案包含故障上下文、反证实验、修复后原始数据，以及性能和正确性双重结果。
+</Answer>
+
+**问题 3** 为“每项渲染修改关联同一目标帧的CPU提交、GPU毫秒、工作量计数与图像合同，不能只报告Batches下降。”设计正常、预算边界和失败三组测试。
+
+<Answer>
+  三组测试只改变计划输入，统一记录平台、构建、设备、帧或快照ID、预算、实际值、首个异常和复验状态。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- 是否逐项覆盖本页官方目录，而没有用通用建议替代？
+- 是否沿“GPU基准 → 渲染统计 → 提交与状态 → 光照可见性 → 分辨率实验 → 图像签发”保存可追溯中间证据？
+- 是否在真实移动、浏览器或XR目标中验证，而非只看Editor？
+- 是否主动制造失败，并证明优化没有转移成本或破坏结果？
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="GPU Resident Drawer">
+    让兼容对象数据常驻GPU并减少CPU绘制提交的Unity 6功能。
+  </GlossaryItem>
+  <GlossaryItem term="Draw Call">
+    CPU向图形API提交一次绘制工作的命令。
+  </GlossaryItem>
+  <GlossaryItem term="Light Layers">
+    限制光源影响对象集合的渲染分层机制。
+  </GlossaryItem>
+  <GlossaryItem term="Adaptive Probe Volumes">
+    以自适应探针体积提供烘焙间接光照的系统。
+  </GlossaryItem>
+  <GlossaryItem term="Occlusion Culling">
+    跳过被其他几何完全遮挡对象的可见性优化。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Unity Technologies《Optimize your game performance for mobile, XR, and the web in Unity》(Unity 6 edition)，2024，101页"
+  adaptedUrl="https://unity.com/resources/mobile-xr-web-game-performance-optimization-unity-6"
+/>

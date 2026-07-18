@@ -1,0 +1,316 @@
+---
+title: "Chapter 4：理解所有权（Understanding Ownership）"
+type: A
+section: Rust 程序设计语言 · 内存安全核心
+order: 4
+description: 对齐官方第 4 章：从栈和堆、String 布局、move/clone/Copy/Drop 出发，掌握函数所有权传递、引用与借用规则、悬空引用以及字符串和数组 slice。
+demo: false
+math: false
+sourceUrl: "https://doc.rust-lang.org/book/ch04-00-understanding-ownership.html"
+draft: false
+---
+
+import {
+  RplBorrowCheckerLab,
+  RplOwnershipTransferLab,
+  RplSliceViewLab,
+} from "@/components/mdx/rust-programming-language/diagrams/understanding-ownership";
+
+<Objectives>
+
+- 能分析 `String` 的栈上元数据与堆缓冲，区分 move、clone、Copy、重新赋值和 Drop 对释放责任的影响
+- 能判断函数参数、返回值、共享引用和可变引用何时转移或借用所有权，并解释借用检查器为何拒绝重叠访问
+- 能设计返回 `&str` 或数组 slice 的 API，使视图范围、原 owner 生命周期和后续修改保持一致
+
+</Objectives>
+
+## 为什么所有权要回答“谁负责让资源只释放一次”
+
+没有垃圾回收器的语言必须决定堆内存何时归还。手工释放容易遗漏、过早释放或重复释放；运行时 GC 通过追踪可达性延后决定。Rust 选择第三条路径：编译器用所有权和借用规则证明资源有唯一释放责任，并在 owner 离开作用域时插入确定性清理。
+
+<Term def="一组由编译器检查的资源管理规则：每个值有一个 owner，同一时刻只有一个 owner，owner 离开作用域时值被 drop。">所有权</Term>
+
+三条规则必须一起读：**每个值有 owner；同一时刻只有一个 owner；owner 离开作用域时值被 drop**。它们约束的是值和释放责任，不意味着程序永远只有一个变量能读取数据；共享读取由引用实现，显式共享所有权则由 Chapter 15 的 `Rc<T>`/`Arc<T>` 等类型建模。
+
+## 栈与堆解释成本，不替代类型规则
+
+<Term def="按后进先出管理调用帧和固定大小局部状态的内存区域；入栈和出栈位置明确，访问通常具有良好局部性。">栈</Term>
+
+栈适合编译期已知固定大小的值，函数返回时整帧弹出。堆允许在运行时申请大小可变、寿命跨调用边界的数据，allocator 必须寻找空间并返回地址。指向堆数据的指针本身大小固定，可以放在栈上。
+
+<Term def="由 allocator 在运行时按请求寻找并管理的内存区域；调用方通过指针访问，所有权系统决定何时执行释放。">堆</Term>
+
+“类型在栈还是堆”不是所有权的完整判断。一个 `String` 值包含栈上固定大小的元数据和堆缓冲；`Box<T>` 在堆上放 T；结构体字段可以内联；编译器还会优化布局。真正需要追踪的是：哪些值拥有需要清理的资源，哪些操作转移了释放责任，哪些引用只临时借用。
+
+## String 让运行时分配可见
+
+字符串字面量 `&'static str` 的字节被写入程序二进制，内容已知且不可变；`String` 管理可增长 UTF-8 缓冲，容量在运行时决定。概念上，一个 `String` 有三段元数据：指针 `ptr`、当前字节长度 `len`、已申请容量 `capacity`，它们指向 allocator 提供的堆区域。
+
+<Term def="拥有一段可增长 UTF-8 堆缓冲的标准库类型，值中保存指针、长度和容量，owner 负责最终释放缓冲。">String</Term>
+
+```rust
+let literal: &str = "hello";
+
+let mut owned = String::from("hello");
+owned.push_str(", world");
+println!("len={}, capacity={}", owned.len(), owned.capacity());
+```
+
+`capacity` 可以大于 `len`，以减少后续增长时重新分配次数。两者单位是字节，不是 Unicode 字形数量。`String::from` 申请资源，owner 离开作用域时 `Drop` 实现把堆缓冲交还 allocator。
+
+## Move 转移元数据和释放责任
+
+```rust
+let s1 = String::from("hello");
+let s2 = s1;
+// println!("{s1}"); // E0382: borrow of moved value
+println!("{s2}");
+```
+
+赋值时，`ptr/len/capacity` 的位被复制到 `s2`，堆字节不会自动深拷贝。若 `s1` 仍有效，两者离开作用域时会对同一地址执行两次释放。Rust 因此把 `s1` 标记为已 move，只有 `s2` 继续承担释放责任。
+
+<Term def="把一个非 Copy 值的所有权和释放责任转交给另一个绑定；旧绑定不再有效，堆资源通常不被隐式深拷贝。">move</Term>
+
+move 不是传统语言中“两个都有效的浅拷贝”。它复制表示并让源失效，因此既保持 O(1) 转移，也排除 double free。编译器可能进一步消除物理复制，但语言层保证仍是源不可再用、目标拥有值。
+
+<Callout type="trap" title="陷阱：把 move 说成一定移动了堆字节">
+  `let s2 = s1` 通常只转移 String 元数据和所有权，堆缓冲地址不变。move 描述的是语言层的有效性和释放责任，不承诺具体机器指令，更不等于把数据搬到新的堆地址。
+</Callout>
+
+## Clone、Copy 与重新赋值有不同成本
+
+<Term def="显式创建独立值副本的操作；对 String 会新申请堆缓冲并复制字节，调用点明确暴露潜在成本。">clone</Term>
+
+```rust
+let s1 = String::from("hello");
+let s2 = s1.clone();
+println!("{s1} / {s2}"); // 两个独立 owner
+
+let x = 5;
+let y = x;
+println!("{x} / {y}"); // i32: Copy
+```
+
+实现 `Copy` 的类型在赋值和按值传参时复制，源绑定仍有效。常见标量和全部字段都为 Copy 的 tuple 可实现它；需要自定义 `Drop` 的类型不能同时 Copy，因为隐式复制会模糊资源释放。`clone` 则是普通 trait 方法，可执行昂贵逻辑，必须在源码显式出现。
+
+<Term def="允许赋值和按值传参进行隐式、轻量复制而不使源失效的 trait；需要 Drop 的类型不能实现 Copy。">Copy trait</Term>
+
+重新给一个可变绑定赋完整新值时，Rust 先结束旧值的所有权并 drop 它，再让绑定拥有新值；不必等到整个作用域末尾。
+
+```rust
+let mut message = String::from("hello");
+message = String::from("ahoy"); // 旧 hello 缓冲在此释放
+println!("{message}");
+```
+
+<RplOwnershipTransferLab />
+
+切换四种操作并先预测堆中有几份资源、哪个绑定仍有效、谁在何时释放。move 只有一份缓冲和一个有效 owner；clone 有两份；Copy 没有需要独占释放的堆资源；replace 会在赋新值时提前清理旧值。
+
+## 函数参数和返回值也执行 move 或 Copy
+
+按值传参等价于把值赋给参数绑定。`String` 会 move 到被调函数，`i32` 会 Copy；被调函数结束时，它拥有的值被 drop。返回值则把所有权 move 回调用方。
+
+```rust
+fn takes_ownership(value: String) {
+    println!("{value}");
+} // value drop
+
+fn makes_copy(value: i32) {
+    println!("{value}");
+}
+
+fn gives_ownership() -> String {
+    String::from("returned")
+}
+
+let text = String::from("hello");
+takes_ownership(text);
+// text 已失效
+
+let number = 7;
+makes_copy(number);
+println!("{number}");
+
+let returned = gives_ownership();
+```
+
+可以把参数再作为 tuple 返回来取回 owner，但这会把普通“读取数据”写成繁琐的所有权往返。引用就是为此提供的非拥有访问能力。
+
+## 引用借用值而不取得释放责任
+
+<Term def="指向某个有效 T 的非拥有访问值；创建引用称为 borrowing，引用离开作用域不会 drop 被引用的 T。">引用与借用</Term>
+
+```rust
+fn calculate_length(value: &String) -> usize {
+    value.len()
+}
+
+let text = String::from("hello");
+let length = calculate_length(&text);
+println!("{text}: {length}");
+```
+
+`&text` 创建共享引用，函数参数 `&String` 借用而不 move，调用后原 owner 仍有效。对于只需字符串内容的 API，`&str` 通常比 `&String` 更通用，因为它能接收 String 的 slice 和字符串字面量。
+
+共享引用默认不能修改目标。要修改必须同时满足 owner 绑定可变和引用为 `&mut T`。
+
+```rust
+fn append_world(value: &mut String) {
+    value.push_str(", world");
+}
+
+let mut text = String::from("hello");
+append_world(&mut text);
+```
+
+## 借用规则把数据竞争前置为编译错误
+
+<Term def="任一时刻对同一值允许多个共享引用，或一个独占可变引用；引用始终必须有效，冲突借用不能重叠。">借用规则</Term>
+
+多个 `&T` 只能读取，因此可共存；`&mut T` 可以写，必须独占。若共享读与写同时活跃，读者可能在值变化时观察不一致；两个写者则会发生无同步竞争。Rust 在单线程代码也执行同一规则，使未来并发安全建立在一致别名模型上。
+
+```rust
+let mut s = String::from("hello");
+let r1 = &s;
+let r2 = &s;
+println!("{r1} {r2}"); // 两个共享借用最后一次使用
+
+let r3 = &mut s;
+r3.push_str("!"); // NLL: r1/r2 已结束，所以这里可通过
+```
+
+现代借用检查使用 non-lexical lifetimes（NLL），引用的有效借用通常在最后一次使用后结束，不必机械延续到词法花括号末尾。但若在 `r3` 修改后仍使用 `r1`，共享和可变借用就真实重叠，编译器会拒绝。
+
+<RplBorrowCheckerLab />
+
+调整共享引用数量、打开可变借用，再决定旧共享引用是否在写后继续使用。关键不是源码行上“同时声明过”，而是活跃借用范围是否重叠；一个可变引用与任意活跃共享引用冲突。
+
+<Callout type="trap" title="陷阱：用 clone 绕过每个借用错误">
+  clone 可以让代码编译，但它改变语义为独立数据，并可能复制大量堆字节。先问是否只是借用范围过长、函数取得了不必要的所有权、或 API 参数应改为 `&str`；只有确实需要独立副本时才 clone。
+</Callout>
+
+## 引用必须永远指向有效数据
+
+Rust 不允许返回指向函数局部 owner 的引用。局部 String 在函数结束时 drop，若引用逃逸就会悬空；没有合法生命周期能证明返回值仍有效。
+
+```rust
+// fn dangling() -> &String {
+//     let value = String::from("hello");
+//     &value // E0106 / E0515: 返回对局部数据的引用
+// }
+
+fn owned() -> String {
+    String::from("hello") // move owner 给调用方
+}
+```
+
+<Term def="指向已被释放、移动或失效存储的引用；安全 Rust 的借用检查器在编译期阻止其形成和使用。">悬空引用</Term>
+
+修复方向不是“给引用随便写 `'static`”，而是让 owner 活得足够久、返回拥有值、或把输出借用关系明确绑定到输入。Chapter 10 会正式介绍生命周期标注。
+
+## Slice 把范围与原数据绑定
+
+若函数 `first_word(&String) -> usize` 只返回空格位置，调用方拿到索引后可以清空 String，旧索引仍是普通整数，编译器看不出它已失去业务意义。`&str` slice 同时保存范围视图和借用关系：slice 活跃时，owner 不能被不兼容地修改。
+
+<Term def="对一段连续序列的非拥有视图；字符串 slice 类型为 &str，概念上保存起点与长度，并借用原 UTF-8 数据。">slice</Term>
+
+```rust
+fn first_word(value: &str) -> &str {
+    for (index, byte) in value.bytes().enumerate() {
+        if byte == b' ' {
+            return &value[..index];
+        }
+    }
+    value
+}
+
+let mut text = String::from("hello world");
+let word = first_word(&text);
+println!("{word}");
+// text.clear(); // word 若之后还使用，则与可变借用冲突
+```
+
+范围语法 `&s[start..end]` 包含 start、不包含 end；省略 start 表示 0，省略 end 表示长度。字符串切片边界必须位于 UTF-8 code point 边界，否则运行时 panic，因此按字节扫描空格后切片是安全的，因为 ASCII 空格与索引都落在合法边界。
+
+数组也有 slice：`&[T]`。它让函数接收数组或 Vec 的连续部分，而不取得所有权。
+
+```rust
+fn sum(values: &[i32]) -> i32 {
+    values.iter().sum()
+}
+
+let numbers = [1, 2, 3, 4, 5];
+assert_eq!(sum(&numbers[1..4]), 9);
+```
+
+<RplSliceViewLab />
+
+拖动起止位置观察 slice 的 offset、length 和共享字节；关闭 owner 存活状态时，视图不会变成可用的裸地址，而是表示借用关系无法成立。slice 的价值正是让“索引仍在但数据已变”的逻辑错误进入类型检查范围。
+
+<Callout type="trap" title="陷阱：把 &str 视为拥有字符串">
+  `&str` 不负责释放底层字节，也不能让数据自动延寿。返回 slice 时必须能从输入或更长寿命存储证明其来源；需要独立保存时应返回或创建 String，并明确接受分配与复制成本。
+</Callout>
+
+## 三步形成所有权推导框架
+
+<Stepper>
+  <Step title="第一步：标出 owner 和释放点">
+    为每个需要 Drop 的值标出当前 owner，逐行跟踪 move、clone、Copy 和 replacement。任何时刻都应能回答哪一个绑定最终负责释放资源。
+
+    <RplOwnershipTransferLab />
+  </Step>
+  <Step title="第二步：画出借用重叠区间">
+    对 `&T` 与 `&mut T` 标出创建点和最后一次使用，判断是否存在共享读与独占写重叠。先缩短范围和收窄参数所有权，再考虑复制。
+
+    <RplBorrowCheckerLab />
+  </Step>
+  <Step title="第三步：把范围变成 slice">
+    当结果依赖原序列的一段内容时，优先返回 `&str` 或 `&[T]`，让 owner 生命周期和禁止修改关系进入类型系统；需要独立寿命再返回拥有值。
+
+    <RplSliceViewLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 所有权保证每个资源有唯一 owner，owner 离开作用域时 drop，从编译期排除 use-after-free 与 double free
+- String 以固定元数据指向可增长堆缓冲；move 转移所有权但不隐式深拷贝，clone 显式复制，Copy 只适用于无需 Drop 的轻量值
+- 按值传参和返回与赋值遵循同样 move/Copy 规则；引用允许函数借用而不取得释放责任
+- 同一时刻可有多个共享引用或一个可变引用，NLL 按最后使用缩短区间，但冲突借用不能真实重叠
+- slice 是依赖原 owner 的连续视图，把范围有效性和后续修改约束编码进类型关系
+
+<Exercises>
+  1. **问题 1：追踪三份 String。** `let a = String::from("x"); let b = a; let c = b.clone();` 后哪些绑定有效、堆中有几份缓冲、作用域末尾谁释放什么？
+
+  <Answer question="move 与 clone 如何组合释放责任？">a 已 move，不能再使用，也不释放缓冲；b 拥有原缓冲 A；clone 为 c 分配独立缓冲 B 并复制内容。作用域按逆序先 drop c 释放 B，再 drop b 释放 A。始终没有两个有效 owner 释放同一缓冲。</Answer>
+
+  2. **问题 2：诊断借用冲突。** 先创建 `let r = &s`，再创建 `let w = &mut s`。什么情况下 NLL 允许，什么情况下拒绝？
+
+  <Answer question="声明顺序为什么不等于借用重叠？">若 r 的最后一次使用发生在 w 创建前，共享借用已结束，NLL 可允许 w；若 w 创建或修改后还要使用 r，两者活跃区间重叠，同一值同时存在共享读和独占写，编译器拒绝。应移动最后使用、缩小作用域或重构 API，而非盲目 clone。</Answer>
+
+  3. **问题 3：选择索引还是 slice。** `first_word` 为什么返回 `&str` 比返回 `usize` 更能防止清空原 String 后继续使用旧结果？
+
+  <Answer question="slice 如何让业务依赖进入借用检查？">usize 只是与 owner 无类型关系的数字，String 被 clear 后仍可保存并误用。&str 直接借用原字节范围；只要 slice 之后还使用，clear 需要的可变借用就与它冲突，编译器拒绝。slice 同时携带范围和来源关系。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="所有权">每个值有唯一 owner，并在 owner 离开作用域时执行 drop 的编译期资源规则。</GlossaryItem>
+  <GlossaryItem term="栈">按后进先出保存调用帧和固定大小局部状态的内存区域。</GlossaryItem>
+  <GlossaryItem term="堆">由 allocator 在运行时寻找和管理、通过指针访问的内存区域。</GlossaryItem>
+  <GlossaryItem term="String">拥有指针、长度、容量和可增长 UTF-8 堆缓冲的标准库类型。</GlossaryItem>
+  <GlossaryItem term="move">转交非 Copy 值的所有权和释放责任，并使源绑定失效。</GlossaryItem>
+  <GlossaryItem term="clone">显式创建独立值副本，可能包含分配与深复制。</GlossaryItem>
+  <GlossaryItem term="Copy trait">允许轻量隐式复制且源继续有效的 trait，与自定义 Drop 不兼容。</GlossaryItem>
+  <GlossaryItem term="引用与借用">不取得释放责任而临时访问某个有效值的机制。</GlossaryItem>
+  <GlossaryItem term="借用规则">允许多个共享读或一个独占写，且所有引用必须有效的规则。</GlossaryItem>
+  <GlossaryItem term="悬空引用">指向已释放、移动或失效存储的引用，安全 Rust 会阻止它形成。</GlossaryItem>
+  <GlossaryItem term="slice">借用连续序列的起点和长度视图，类型为 &str 或 &[T] 等。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Rust Programming Language, Chapter 4 Understanding Ownership"
+  adaptedUrl="https://doc.rust-lang.org/book/ch04-00-understanding-ownership.html"
+/>

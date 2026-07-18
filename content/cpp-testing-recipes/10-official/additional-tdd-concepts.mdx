@@ -1,0 +1,256 @@
+---
+title: "Chapter 10：Additional TDD Concepts and Discussions"
+type: A
+section: 现代 C++ 测试驱动开发 · 证据层与启发式
+order: 10
+description: 对齐原书 Chapter 10：把性能目标纳入 TDD 反馈，区分单元、集成与验收测试的证据责任，理解 Transformation Priority Premise 如何指导小步变换，并用 assertions-first 从结果反推接口与准备。
+demo: false
+math: false
+sourceUrl: "https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/"
+draft: false
+---
+
+import {
+  CtrAssertionsFirstLab,
+  CtrTestScopeEvidenceMap,
+  CtrTransformationPriorityFlow,
+} from "@/components/mdx/cpp-testing-recipes/diagrams/additional-tdd-concepts";
+
+<Objectives>
+
+- 能把性能预算、代表负载和基准回归纳入 TDD，同时保持功能断言与统计性能证据分离
+- 能为单元、集成和验收测试分配不同问题、依赖和反馈节奏，避免用一个大端到端套件替代所有证据
+- 能用 Transformation Priority Premise 选择较小代码变换，并用 assertions-first 从可观察结果反推最窄 API、动作和准备
+
+</Objectives>
+
+## TDD 之外没有单一测试层
+
+前面章节主要使用快速单元测试推动设计，但产品还需要证明真实适配器、完整工作流和性能质量。本章把这些证据放回同一反馈系统，并提供两项小步启发式：Transformation Priority Premise 与 assertions-first。
+
+<Term def="在功能测试、集成契约、业务验收和性能基准之间安排反馈，使不同质量问题由合适证据回答的整体方法。">
+  扩展 TDD 反馈
+</Term>
+
+扩展不意味着每个红绿循环运行所有外层场景。核心是知道当前问题由哪一层回答，以及更外层失败如何下沉为更窄可复现测试。
+
+## 单元、集成与验收回答不同问题
+
+<Term def="快速验证窄行为和对象协作、通常以可控替身隔离进程外依赖的测试。">
+  单元测试
+</Term>
+
+<Term def="验证真实组件、适配器、数据映射或协议边界能否按契约协作的测试。">
+  集成测试
+</Term>
+
+<Term def="用业务方可理解的输入、动作和结果证明系统交付完整能力的可执行示例。">
+  验收测试
+</Term>
+
+单元测试告诉我们折扣规则是否正确；集成测试告诉我们数据库能否保存读取相同 Money 与时区；验收测试告诉我们用户付款后能否看到已支付收据。三者重叠一些路径，但失败定位、速度和责任不同。
+
+<CtrTestScopeEvidenceMap />
+
+<Callout type="trap" title="陷阱：只保留端到端测试，因为它覆盖更多">
+  一个端到端失败可能来自规则、映射、配置、网络或部署，反馈慢且难定位。保留少量高价值验收场景，同时用单元和集成契约把同一风险拆成快速、可诊断证据。
+</Callout>
+
+## 从验收例下沉到实现小步
+
+一个业务验收例可以先红，表示能力尚未交付；开发中再把它分解为多个单元红灯和必要集成契约。外层场景不必在每行代码后运行，但应在关键绿点和 CI 保持可见。
+
+```gherkin
+Scenario: Paying an order produces a receipt
+  Given an unpaid order totaling 42.00
+  When the customer pays with an accepted card
+  Then the order status is paid
+  And a receipt for 42.00 is available
+```
+
+这个场景不应指定 `PaymentService::charge` 被调用几次，那是内部实现；它描述用户价值。支付网关交互由集成/契约测试验证，订单状态转换由快速单元测试驱动。
+
+## 性能目标也可以形成红绿反馈
+
+<Term def="以可重复基准、代表负载和明确预算验证延迟、吞吐、分配或资源消耗，并用测量指导优化的过程。">
+  TDD 与性能
+</Term>
+
+性能红灯不是某次 CI 比昨天慢 1 ms。先声明场景、环境、样本和预算，建立基线，再让代表基准稳定显示不满足。功能测试保持全绿，优化只改变结构或性能，不改变结果语义。
+
+```cpp
+static void ParseInvoices(benchmark::State& state) {
+    const auto input = representativeInvoiceBatch();
+    for (auto _ : state) {
+        auto invoices = parseInvoices(input);
+        benchmark::DoNotOptimize(invoices);
+    }
+    state.SetItemsProcessed(state.iterations() * input.size());
+}
+BENCHMARK(ParseInvoices);
+```
+
+预算可以是 p95、吞吐、最大分配或内存峰值。微基准需隔离预热和机器噪声；系统性能测试需固定服务配置和数据规模。二者都保存趋势，不用一次样本做绝对判断。
+
+## 测量先于优化
+
+<Term def="通过 profiler、基准和代表生产数据定位真实瓶颈，而不是凭直觉提前改变算法或布局。">
+  性能证据
+</Term>
+
+先用 profiler 确认热点，再写能复现成本的基准；优化后比较分布并跑功能全套。若缓存提高吞吐却改变错误或一致性语义，功能测试应红。性能是契约的一部分，不凌驾于正确性。
+
+```text
+baseline: 100k invoices, p50 81 ms, p95 96 ms, allocations 1.8M
+budget:   p95 <= 70 ms, allocations <= 900k
+change:   reuse parser buffers
+result:   p50 51 ms, p95 63 ms, allocations 420k
+guard:    parser unit + JSON adapter contract remain green
+```
+
+<Callout type="trap" title="陷阱：把微基准阈值写进普通单元测试">
+  共享 CI 的短时波动会制造假红。功能测试验证结果，专用基准环境记录统计分布和趋势；只有在环境、样本和容忍策略明确时才把性能预算设为门禁。
+</Callout>
+
+## Transformation Priority Premise 指导更小变换
+
+<Term def="优先采用较简单、较少分支的代码变换，并由后续有区分力的例子逐步迫使变量、迭代和条件出现的 TDD 启发式。">
+  Transformation Priority Premise
+</Term>
+
+TPP 观察到，从无实现到常量、从常量到变量、从单个语句到序列处理，通常比直接加入复杂条件更容易保持小步。它帮助选择下一个测试：哪一个例子能以更低阶变换推动实现，而不是一次产生多个分支？
+
+<CtrTransformationPriorityFlow />
+
+图中是便于实践的代表性序列，不是必须背诵的完整固定表。TPP 是启发式：若领域规则本身就是明确边界，直接条件可能最清楚；不要为了遵守顺序写绕远代码。
+
+## 用 Fibonacci 看常量如何被例子推翻
+
+第一个例子 `fib(0) == 0` 可由常量满足；第二个 `fib(1) == 1` 迫使输入影响输出；第三个 `fib(2) == 1` 需要组合前值。每条测试选择能推翻当前过窄实现的最小差异。
+
+```cpp
+TEST(FibonacciTest, ZeroIsZero) {
+    EXPECT_EQ(0, fib(0));
+}
+
+TEST(FibonacciTest, OneIsOne) {
+    EXPECT_EQ(1, fib(1));
+}
+
+TEST(FibonacciTest, EachLaterValueSumsThePreviousTwo) {
+    EXPECT_EQ(1, fib(2));
+    EXPECT_EQ(2, fib(3));
+}
+```
+
+若一次从 0 测到 20，测试只会要求完整算法，无法显示从常量、变量到迭代的设计路径。规则稳定后当然可以参数化更多值；驱动阶段先保留变换意图。
+
+## TPP 不替代领域测试选择
+
+低阶变换有时会诱导过拟合。测试必须来自业务等价类和边界，不是为了让生产代码走某种语法顺序。三角测量的第二个例子应区分错误实现，TPP 只帮助估计哪条区分路径更小。
+
+重构阶段也不受 TPP 限制：全绿下可以把迭代替换为更清晰算法，只要行为保持。它指导从红到绿的增量，不定义最终结构。
+
+## Assertions-first 从最终观察反推测试
+
+<Term def="先写最关键期望或断言，再反推出执行动作、所需对象和最少 setup 的测试构造方法。">
+  assertions-first
+</Term>
+
+开发者常从大量 fixture setup 开始，写到最后才发现无法观察真正结果。先写 `EXPECT_EQ(4200, total.cents())`，会立刻暴露需要一个 Money 结果和计算入口；再反推调用 `invoice.total()`，最后只准备影响总价的订单行。
+
+```cpp
+TEST(InvoiceTest, TotalsItsLines) {
+    // Assert first: EXPECT_EQ(4200, total.cents());
+    Invoice invoice{line(1200), line(3000)};
+
+    const Money total = invoice.total();
+
+    EXPECT_EQ(4200, total.cents());
+}
+```
+
+注释只展示思考顺序，最终测试仍按 Arrange-Act-Assert 排列。assertions-first 是编写过程的反向推导，不要求最终源码把断言放在最上面。
+
+<CtrAssertionsFirstLab />
+
+## 交互测试也能 assertions-first
+
+先写“到期时发送含 order id 的通知”期望，再反推 Notifier 端口和 RecordingNotifier，最后准备到期订单与 FixedClock。若从 mock setup 开始，容易先指定无关调用顺序，忘记业务真正关心的消息。
+
+验收测试同样可以从 Then 开始：业务要看到什么，系统必须暴露何种查询或事件，When 是哪个用户动作，Given 最少需要什么状态。反向思考能防止场景被技术步骤占据。
+
+## 失败下沉：让外层红灯变成内层诊断
+
+验收测试发现收据金额错误后，先用最小输入在 Invoice 单元层复现；若单元正确，再检查 JSON/数据库适配器契约；只有前两层都绿，才继续调查部署与工作流。修复后保留能最窄复现根因的测试，并让原验收例恢复全绿。
+
+这不是删除外层回归。外层证明用户路径，内层让未来同类失败更快定位。每个生产缺陷都应改善证据分层。
+
+## 测试数量由风险而非几何图形决定
+
+快速单元测试通常数量多，因为组合便宜且定位清晰；集成与验收数量较少但覆盖关键边界和价值。不要为了某个比例强行写或删测试。高风险解析器可能需要大量契约样例，简单 CRUD 的单位逻辑可能很少。
+
+评审测试组合时问：重大业务规则是否有快证据，真实边界是否被契约验证，关键用户能力是否可执行，性能预算是否有代表基准。数量是结果，不是目标。
+
+## 先预测：从外层失败选择下一条证据
+
+假设验收场景“付款后收据为 42.00”得到 40.00。先写出三个假设：订单合计错误、数据库 Money 映射错误、收据工作流读取旧数据。为每个假设选择最窄测试层和最小输入；不要直接在端到端测试里加日志后反复猜测。
+
+<Stepper>
+  <Step title="第一步：为每项风险选择证据层">
+    规则与对象协作用单元测试，真实适配器用集成契约，用户价值用验收示例；外层失败逐步下沉到最窄可复现层。
+
+    <CtrTestScopeEvidenceMap />
+  </Step>
+  <Step title="第二步：用低阶变换选择下一小步">
+    从常量、变量到迭代/条件，选择能推翻当前实现的最小领域例子；TPP 只提供启发，不替代边界分析。
+
+    <CtrTransformationPriorityFlow />
+  </Step>
+  <Step title="第三步：从断言反推 API 与 setup">
+    先写用户真正关心的返回、异常、交互或 Then，再反推动作和最少准备；最终仍整理成清晰 Arrange-Act-Assert。
+
+    <CtrAssertionsFirstLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 扩展 TDD 反馈把单元、集成、验收和性能证据放在不同节奏中协作
+- 单元验证窄行为，集成验证真实边界，验收证明业务价值，任何一层都不能替代其他问题
+- 性能优化先有预算、代表基准和 profiler 证据，功能测试始终保护语义
+- Transformation Priority Premise 以低阶变换帮助选择小步，但不是固定算法或领域规则来源
+- assertions-first 先确定可观察结果，再反推接口、动作与最少准备
+- 外层失败应下沉为最窄复现测试，修复后所有层共同恢复全绿
+
+<Exercises>
+  1. **问题 1：分配测试层。** 折扣公式错误、PostgreSQL Money 映射错误、用户付款后看不到收据，分别由哪层先证明？
+
+  <Answer question="怎样按问题选择单元、集成和验收测试？">折扣公式用快速单元测试验证领域输入输出；PostgreSQL Money round-trip 用真实适配器集成/契约测试；付款后收据可见用业务验收场景。验收失败后按假设下沉到前两层复现，不能用一个端到端场景替代所有诊断。</Answer>
+
+  2. **问题 2：使用 TPP。** 第一个 `shipping(0) == 0` 由常量通过，下一步怎样选择有区分力例子而不一次实现所有区间？
+
+  <Answer question="怎样用低阶变换推动实现？">选择一个非零普通重量，使常量 0 失败并迫使结果依赖输入；只实现该线性或固定费用规则。随后用恰好阈值和超过阈值的独立例子再引入条件。例子来自运费领域边界，TPP 只帮助保持常量到变量再到条件的小步。</Answer>
+
+  3. **问题 3：assertions-first。** 要测试空栈 pop，怎样从结果反推最少测试结构？
+
+  <Answer question="怎样从异常断言反推 API 和准备？">先写 `EXPECT_THROW(stack.pop(), EmptyStack)`，由此得到需要公开 pop 和明确 EmptyStack 契约；动作就是 pop，准备只需默认空 Stack。不要先构建元素、容量或 mock，它们与目标观察无关。最终按 Arrange-Act/Assert 清晰排版。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="扩展 TDD 反馈">在功能、边界、业务和性能证据间安排不同反馈节奏的方法。</GlossaryItem>
+  <GlossaryItem term="单元测试">快速验证窄行为和可控对象协作的测试。</GlossaryItem>
+  <GlossaryItem term="集成测试">验证真实组件、适配器、映射或协议边界的测试。</GlossaryItem>
+  <GlossaryItem term="验收测试">以业务可理解示例证明完整系统能力的测试。</GlossaryItem>
+  <GlossaryItem term="TDD 与性能">用预算、代表基准和测量驱动性能改进并保持功能全绿的过程。</GlossaryItem>
+  <GlossaryItem term="性能证据">由 profiler、基准和代表数据产生的可复查性能信息。</GlossaryItem>
+  <GlossaryItem term="Transformation Priority Premise">优先较简单代码变换、由例子逐步迫使复杂度出现的启发式。</GlossaryItem>
+  <GlossaryItem term="assertions-first">先写关键观察，再反推 API、动作和最少准备的测试构造法。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Modern C++ Programming with Test-Driven Development, Chapter 10 Additional TDD Concepts and Discussions"
+  adaptedUrl="https://pragprog.com/titles/lotdd/modern-c-programming-with-test-driven-development/"
+/>

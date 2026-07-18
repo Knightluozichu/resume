@@ -3,120 +3,324 @@ title: "深入理解 OpenGL WebGL OpenGL ES 总复习"
 type: D
 section: "计算机图形学与渲染"
 order: 9
-description: "全书知识链串讲与黑屏诊断"
+description: "用六段帧契约和症状到回归的证据闭环，整合状态、着色器、FBO、移动、兼容与调试"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://registry.khronos.org/OpenGL/"
 draft: false
 ---
 
-import { DogFinalReviewDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-final-review";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  DogFinalReviewDiagram,
+  DogEvidenceLoopDiagram,
+} from "@/components/mdx/deep-opengl/diagrams/dog-final-review";
+import { DogStepFlowDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能把九章串成「设状态→喂数据→发绘制」的完整流程
-- 能诊断黑屏/性能差/兼容性三类典型问题
-- 能说出优化三大方向与各自手段
-- 能回答：从零做一个 WebGL 渲染器，关键决策点有哪些？
+
+- 能描述一次绘制从上下文能力到输出目标和测量证据的六段帧契约
+- 能分析黑屏、错误颜色、性能尖峰、移动发热和设备降级分别缺少哪类证据
+- 能设计从症状、假设、隔离、证据到回归的图形问题闭环
+- 能实现一个以资源代、pass 描述和能力报告为边界的最小跨平台渲染器骨架
+
 </Objectives>
 
 ## 直觉引入
 
-整本书浓缩成一句：设好状态、喂好数据、发一次绘制，GPU 按图形管线产出画面。复习就是把这条链上每个环节——上下文、缓冲、着色器、管线、优化、后处理、兼容、调试——重新串起来，并训练「看到症状就能定位到链上哪一环」的诊断力。
+全书不是一串 API，而是一份关于“绘制为何成立”的契约。drawElements 只是最后一个提交动作；它之前已经选定上下文和能力，链接 program，配置 VAO 与资源，建立光栅化/逐片元状态并绑定输出目标。它之后还要呈现、测量和在上下文丢失时重建。任意一段缺失，最终都可能只显示成黑屏。
 
-## 概念讲解
+总复习的目标不是背出所有枚举，而是建立两种能力：从代码正向证明一帧的每个前置条件；从症状反向找到第一处断点，并留下可回归证据。这样 OpenGL、OpenGL ES 与 WebGL 的差异会落在具体边界上，而不是变成三套互不关联的记忆。
 
-### 全书数据流
-取上下文 → 建 VAO/VBO/EBO → 编译链接着色器 → 设状态（useProgram/enable）→ drawElements →（可选）FBO 后处理 → 输出屏幕 → 上下文丢失时恢复。
+## 六段帧契约
 
-### 三大优化方向
-1. 减 draw call：批处理、实例化。
-2. 排状态：按 shader/纹理分组减少切换。
-3. 降带宽：纹理图集、压缩纹理、剔除、LOD。
+<Term def="一个 pass 在提交前必须满足的上下文、程序、顶点、状态、目标和证据条件集合">帧契约</Term>分六段：
 
-### 黑屏诊断三步
-查 getError → 查着色器日志 → 帧抓取逐 draw 核对管线状态。
-
-### 移动端要点
-TBDR 怕过度绘制；位置用 highp 防条纹；按能力分级降级。
-
-## 交互Demo
-
-> 猜一猜：画面黑屏，最快定位是「数据没传对」还是「着色器没编过」？
+1. **上下文与能力**：后端版本、核心限制、扩展对象、格式探针、绘图缓冲尺寸和当前资源代都有效。
+2. **程序接口**：shader 分别编译、program 链接，attribute/uniform/sampler/输出位置属于当前 program。
+3. **顶点获取**：VAO 属性启用、格式、VBO 关联、EBO 和实例 divisor 与 shader 输入一致。
+4. **光栅化与逐片元状态**：viewport、scissor、front face、剔除、深度、模板、混合和写掩码明确。
+5. **输出目标**：默认/FBO、附件、drawBuffers、多采样 resolve 和读写资源集合有效且无反馈环。
+6. **提交与证据**：draw 参数合法，错误/日志可追踪，CPU/GPU 查询异步，结果进入回归。
 
 <DogFinalReviewDiagram />
 
+这六段同样适用于三个 API 家族，只是实现边界不同：原生 OpenGL 要处理线程 current 与窗口系统；OpenGL ES 常通过 EGL 管理 Surface/Context；WebGL 把上下文绑定到 canvas 并增加浏览器安全与 context-lost 生命周期。
+
+## 八个规范单元如何汇合
+
+- **Context, Objects, and State** 提供对象生命周期、绑定点和 draw 的隐式输入模型；
+- **GLSL ES Shaders** 定义类型、精度、阶段接口、uniform 与采样器；
+- **WebGL Context and WebGL 1/2** 补上 canvas 像素、上下文属性、安全和丢失恢复；
+- **OpenGL ES Mobile Runtime** 把 EGL Surface/Context、tile 带宽和热稳态纳入帧契约；
+- **Framebuffer and Post-processing** 管理附件完整性、pass 目标、resolve 与 ping-pong；
+- **Draw-call and Rendering Optimization** 用 CPU/GPU/带宽/同步证据决定实例化、排序、剔除和格式；
+- **Feature Detection and Extensions** 用能力契约与格式探针选择可解释路径；
+- **Debugging and GPU Profiling** 用错误、日志、帧抓取和非阻塞计时完成证据链。
+
+学习地图和本章不替代这八个单元：前者建立依赖，本章把故障和工程决策重新映射回它们。
+
+## 从零设计渲染器的关键决策
+
+### 1. 后端与能力
+
+先决定最低后端：只支持 WebGL2/ES3，还是维护 WebGL1/ES2 适配。输出<Term def="记录版本、限制、扩展、格式探针和路径失败原因的结构化运行时证据">能力报告</Term>，再选 forward/deferred、HDR/LDR、实例化和后处理路径。版本字符串不能代替限制和最小 FBO/shader 探针。
+
+### 2. 资源描述与资源代
+
+CPU 侧保存 shader 源码、网格、纹理来源、材质和 pass 描述；GPU 句柄只属于当前<Term def="一次上下文有效期内创建、可一起失效并整体替换的一组 GPU 对象">资源代</Term>。WebGL restored 或 EGL_CONTEXT_LOST 后创建新一代 program、位置、buffer、texture、VAO/FBO，成功后原子替换。
+
+### 3. Pass 描述与状态所有权
+
+每个 pass 声明输入、输出、尺寸、program、VAO、clear/load、深度/模板/混合和 draw。状态缓存可以少发重复命令，但不能让 pass 依赖“前一个调用刚好留下”的状态。Render graph 还应拒绝同一纹理图像在一个 pass 中同时读写。
+
+### 4. 测量与验收
+
+正确性用固定三角形、已知纹理、像素差异和上下文丢失测试；性能用固定相机、P50/P95、CPU marker、disjoint GPU query 和工作量计数；移动端还要进入热稳态。优化只有在画质、总帧和资源预算都通过时成立。
+
+## 用数据描述 pass
+
+下面的结构不是完整引擎，但它强迫每个 pass 显式声明目标、尺寸、状态和资源代。提交前验证比 draw 后猜黑屏更便宜。
+
+```js
+function validatePass(gl, pass, generation) {
+  if (pass.generation !== generation) {
+    throw new Error(`${pass.name}: stale GPU resource generation`);
+  }
+  if (!pass.program || !pass.vao) {
+    throw new Error(`${pass.name}: missing program or VAO`);
+  }
+  if (pass.width < 1 || pass.height < 1) {
+    throw new Error(`${pass.name}: invalid viewport`);
+  }
+  const outputTextures = new Set(pass.outputs.map((item) => item.texture));
+  for (const input of pass.inputs) {
+    if (outputTextures.has(input.texture)) {
+      throw new Error(`${pass.name}: framebuffer feedback loop`);
+    }
+  }
+  if (pass.framebuffer) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, pass.framebuffer);
+    const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+    if (status !== gl.FRAMEBUFFER_COMPLETE) {
+      throw new Error(`${pass.name}: incomplete FBO 0x${status.toString(16)}`);
+    }
+  }
+}
+
+function executePass(gl, pass, generation) {
+  validatePass(gl, pass, generation);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, pass.framebuffer);
+  gl.viewport(0, 0, pass.width, pass.height);
+  applyRasterState(gl, pass.rasterState);
+  gl.useProgram(pass.program);
+  gl.bindVertexArray(pass.vao);
+  bindInputs(gl, pass.inputs);
+  issueDraw(gl, pass.draw);
+}
+```
+
+真实实现还要验证附件输出映射、索引范围和 uniform 接口，但这个边界已能捕获旧资源代、反馈环、零尺寸和缺失对象四类常见问题。
+
+## 症状必须转换成可证伪假设
+
+<Term def="从症状提出单一假设，用隔离实验收集日志、状态、像素和时间，再形成结论的可追踪过程">证据链</Term>不接受“可能是驱动”这种无法验证的终点。
+
+### 黑屏或错误颜色
+
+- 先看已知清屏色；看不到则查 surface/canvas、目标、viewport 和呈现；
+- 固定裁剪空间三角形 + 常量色；失败则查 program/输出/合法状态；
+- 恢复 VAO；失败则查属性、VBO/EBO、索引和 divisor；
+- 恢复矩阵/纹理/深度/混合；第一处变化就是断点；
+- Spector.js/RenderDoc 保存异常 draw 的状态和资源证据。
+
+### 性能差或尖峰
+
+- CPU 高、GPU 有空洞：提交、排序、上传或同步；
+- 降分辨率明显改善：片元或带宽；
+- 常量 shader 明显改善：着色/采样；
+- 降附件位宽/数量改善：带宽/load-store；
+- 移除 readback/finish/立即 query 改善：同步；
+- 移动冷机快、数分钟后慢：热降频与持续功耗。
+
+### 兼容或恢复失败
+
+- 保存能力报告、路径断言和格式探针，不只保存 VERSION；
+- 上下文恢复后 location/VAO/FBO 都属于新资源代，禁止复用旧句柄；
+- shader 后端、API 包装和资源格式必须随 WebGL1/2 或 ES 版本一起切换；
+- 黑名单必须含设备/驱动范围、证据和复测到期条件。
+
+<DogEvidenceLoopDiagram />
+
+## 分步完成一次故障闭环
+
+先预测：FBO resize 后画面黑屏，checkFramebufferStatus 完整，getError 也为 NO_ERROR。此时优先修改 shader，还是先检查 viewport、附件尺寸和 texel-size uniform？
+
 <Stepper>
-<Step title="第一步：串数据流">
-按 取上下文→建缓冲→着色器→设状态→绘制→后处理 的链路，判断 bug 出在哪一环。
+<Step title="第一步：把症状映射到契约段">
+<DogStepFlowDiagram
+  caption="第 1 步：FBO resize 涉及输出目标、viewport 和采样尺寸，先锁定对应契约。"
+  stage={1}
+  stages={["把症状映射到一段帧契约", "用最小实验与帧抓取取得证据", "修复后固化正确性和性能回归"]}
+/>
+
+FRAMEBUFFER_COMPLETE 只证明附件组合可绘制；不证明 viewport、投影和 1/textureSize 已更新。先检查目标尺寸链，而不是无证据改 shader。
 </Step>
-<Step title="第二步：对症状">
-黑屏查错误与着色器日志、性能差查瓶颈类型、兼容问题查扩展与降级、移动发热查过度绘制与精度。
+<Step title="第二步：运行最小隔离实验">
+<DogStepFlowDiagram
+  caption="第 2 步：清目标、画常量全屏三角形，再恢复采样，找到第一处变化。"
+  stage={2}
+  stages={["把症状映射到一段帧契约", "用最小实验与帧抓取取得证据", "修复后固化正确性和性能回归"]}
+/>
+
+若常量全屏输出正确、恢复纹理采样后错误，抓取 source texture 尺寸、sampler 单元和 texel-size uniform；若清屏都不对，继续查目标和 viewport。
 </Step>
-<Step title="第三步：回归定位">
-定位环节后回到对应章节核对（VAO 绑定顺序、着色器日志、viewport 同步、扩展检测），用帧抓取器验证后修复。
+<Step title="第三步：把修复变成回归">
+<DogStepFlowDiagram
+  caption="第 3 步：保存 resize 序列、目标尺寸、图像哈希和 GPU 时间阈值，防止同类问题复发。"
+  stage={3}
+  stages={["把症状映射到一段帧契约", "用最小实验与帧抓取取得证据", "修复后固化正确性和性能回归"]}
+/>
+
+测试依次切换 960×540、1920×1080 和高 DPI drawing buffer，比较固定图像容差，并确认旧资源被删除、新资源代被使用。
 </Step>
 </Stepper>
 
-## 代码对照
-
-WebGL2 最小可运行骨架（伪代码）：
+## 黑屏探针可以自动化
 
 ```js
-const gl = canvas.getContext("webgl2");          // 第4章 上下文
-const program = linkProgram(gl, vsSrc, fsSrc);   // 第3章 着色器
-// 第2章 缓冲对象
-const vao = setupVAO(gl, vertices, indices);
-// 第6章 优化：实例化/状态排序按需
-gl.useProgram(program);
-gl.enable(gl.DEPTH_TEST);                         // 状态机
-// 第7章 FBO 后处理（可选）：渲染到纹理再加工
-renderToFBO(gl, scene);
-postProcessToScreen(gl);
-gl.drawElements(gl.TRIANGLES, n, gl.UNSIGNED_SHORT, 0); // 触发管线
-// 第4章 上下文丢失恢复
-canvas.addEventListener("webglcontextlost", e => e.preventDefault());
-canvas.addEventListener("webglcontextrestored", rebuildAll);
-// 第9章 调试：每步查 getError 与着色器日志
+async function isolateBlackFrame(renderer) {
+  const probes = [
+    ["clear-default", () => renderer.clearDefault([1, 0, 1, 1])],
+    ["clear-target", () => renderer.clearSceneTarget([0, 1, 1, 1])],
+    ["constant-triangle", () => renderer.drawConstantTriangle()],
+    ["real-vao", () => renderer.drawRealGeometryWithConstantColor()],
+    ["real-material", () => renderer.drawRealMaterial()],
+    ["post-process", () => renderer.drawPostProcess()],
+  ];
+
+  const evidence = [];
+  for (const [name, run] of probes) {
+    run();
+    const pixel = renderer.readProbePixel();
+    const errors = renderer.drainErrors();
+    evidence.push({ name, pixel, errors });
+    if (!renderer.matchesExpected(name, pixel, errors)) break;
+  }
+  return evidence;
+}
 ```
 
-每个环节对应特定章节，bug 出现时跳到对应章节核对。
+自动化 readPixels 会同步，只应在离线回归或小探针区域使用，不应进入生产帧。它的价值是保存“最后正确步骤/第一错误步骤”，减少人工随机试错。
+
+## 优化回归同时保护画质
+
+<Term def="固定场景、输入、设备范围、指标和图像容差，用于判断修复或优化是否复发的测试">回归基准</Term>应同时比较时间和输出。
+
+```js
+function percentile(sorted, p) {
+  return sorted[Math.min(sorted.length - 1, Math.floor(sorted.length * p))];
+}
+
+function summarize(samples) {
+  const values = [...samples].sort((a, b) => a - b);
+  return {
+    p50: percentile(values, 0.50),
+    p95: percentile(values, 0.95),
+    p99: percentile(values, 0.99),
+  };
+}
+
+function acceptExperiment(before, after, limits) {
+  const cpu = summarize(after.cpuMs);
+  const gpu = summarize(after.gpuMs.filter((sample) => !sample.disjoint));
+  return {
+    pass:
+      cpu.p95 <= limits.cpuP95 &&
+      gpu.p95 <= limits.gpuP95 &&
+      after.imageDifference <= limits.imageDifference &&
+      after.memoryBytes <= limits.memoryBytes,
+    before: {
+      cpu: summarize(before.cpuMs),
+      gpu: summarize(before.gpuMs.filter((sample) => !sample.disjoint)),
+    },
+    after: { cpu, gpu },
+  };
+}
+```
+
+只降低 drawCount 但 GPU P95、内存或图像误差超限，应拒绝；只看一台冷机设备也不足以证明移动优化。
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** 复习只记 API，没建立数据流全局观，遇 bug 无从下手。
-**原因 →** 把各章当孤立知识点，没串成 设状态→喂数据→发绘制 的链。
-**修法 →** 用一张数据流图把九章串起来，每个 bug 先定位链上哪一环，再回对应章节核对。
+**现象 →** 总复习又回到“少 draw、用图集、全部 mediump”三条口诀。
+**原因 →** 把手段当结论，忘记图集不自动降采样带宽、精度收益依实现、少 draw 也可能增加 GPU 工作。
+**修法 →** 先定位 CPU/顶点/片元/带宽/同步瓶颈，再用单变量实验和整体帧预算决定是否采用手段。
 </Callout>
 
 <Callout type="trap">
-**现象 →** 移动端发热严重、桌面正常，却只优化着色器无效。
-**原因 →** 没意识到移动 TBDR 的头号杀手是过度绘制，而非着色器计算。
-**修法 →** 移动端先减透明、前向排序、early-z 降过度绘制；位置用 highp 防条纹；按能力分级降级。
+**现象 →** 修复黑屏后只做肉眼确认，没有保存触发尺寸、状态和异常 draw。
+**原因 →** 缺少回归基准，同一状态泄漏或 resize 生命周期问题会在其他设备复发。
+**修法 →** 保存最小场景、操作序列、能力报告、帧证据和像素容差，加入 context-lost/resize 自动化。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 把 WebGL、OpenGL ES 和桌面 OpenGL 当作函数名近似的同一后端。
+**原因 →** 忽略上下文生命周期、GLSL 版本、扩展入口、格式和安全边界。
+**修法 →** 共享渲染算法与 pass 描述，后端分别实现上下文、资源、shader 变体和能力探针，并用同一回归场景验收。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：把全书九章串成一条数据流，并说明每环节对应哪章。
+**问题 1**：FBO resize 后状态完整、无 GL error 但输出黑屏。请按帧契约给出前三个隔离步骤和每步能排除什么。
 
 <Answer>
-取上下文（第4章）→ 建 VAO/VBO/EBO（第2章）→ 编译链接着色器（第3章）→ 设状态 useProgram/enable（第2章状态机）→ drawElements 绘制（第1章管线）→ FBO 后处理（第7章）→ 输出屏幕；优化用批处理/实例化/排状态/降带宽（第6章）；移动端 TBDR 与精度（第5章）；跨平台检测降级（第8章）；调试用 getError/帧抓取/瓶颈定位（第9章）。
+先对目标 FBO 清青色并在最终合成显示，验证新附件、viewport 和目标链；再用常量全屏三角形写 FBO，排除真实场景 program/VAO；然后只恢复对新颜色纹理的采样，检查 texture 单元、尺寸和 texel-size uniform。清屏失败定位输出目标，常量输出失败定位 pass 状态/program，采样后失败才定位资源绑定与尺寸。
 </Answer>
 
-**问题**：画面黑屏，给出诊断三步与可能的根因。
+**问题 2**：设备支持 RGBA16F 颜色附件但不支持浮点混合，应该如何决定 HDR 路径，而不是直接降级 LDR？
 
 <Answer>
-三步：查 getError 错误码 → 查 getShaderInfoLog/getProgramInfoLog 着色器日志 → 用 Spector.js/RenderDoc 帧抓取逐 draw 核对管线状态。可能根因：着色器编译链接失败、VAO/VBO 绑定顺序错（属性指针没在 VAO 绑定时设）、uniform 没设、viewport/清屏错、深度测试状态不当、上下文丢失未恢复。逐一核对定位。
+逐 pass 检查是否真的在浮点目标上使用 blending。若场景不透明写 RGBA16F，tone mapping 覆盖写 RGBA8，则可保留 HDR；若 bloom/透明依赖浮点混合，可改为 shader 显式合成、换中间格式或只关闭对应效果。能力报告要分别记录可渲染、可过滤、可混合和附件数量，按算法真实需求选择。
+</Answer>
+
+**问题 3**：某实例化改动让 CPU P95 降 3 ms，但 GPU P95 升 5 ms、内存升 20%、画质一致。是否接受？还应检查什么？
+
+<Answer>
+若总帧关键路径因此变慢或 GPU 超预算，不应仅凭 CPU 改善接受。应检查实例化是否画了不可见实例、剔除粒度、顶点/片元工作量、移动热稳态和目标刷新率；尝试缩小实例批次或先压缩可见列表。最终以 CPU/GPU P95、内存、功耗和图像容差共同判定。
 </Answer>
 </Exercises>
 
+## 小结
+
+- 六段帧契约把上下文、程序、顶点、状态、目标和证据串成可正向证明的绘制链。
+- 八个规范单元分别补足语言、平台、后处理、优化、兼容和调试边界，共享模型但不共享错误假设。
+- 症状必须转成单一可证伪假设，再用已知输出、帧抓取、能力探针或单变量实验取得证据。
+- GPU 对象属于资源代，上下文恢复和后端切换都要重建 program、位置、VAO/FBO 与状态。
+- 修复和优化只有进入图像、性能、内存、设备范围与生命周期回归，才算完成闭环。
+
 <Glossary>
-<GlossaryItem term="数据流">取上下文→建缓冲→着色器→设状态→绘制→后处理→输出的完整链路，是诊断主线。</GlossaryItem>
-<GlossaryItem term="三大优化">减 draw call（批处理/实例化）、排状态（分组少切换）、降带宽（图集/压缩纹理/剔除/LOD）。</GlossaryItem>
-<GlossaryItem term="黑屏三步">查 getError → 查着色器日志 → 帧抓取逐 draw 核对管线状态。</GlossaryItem>
-<GlossaryItem term="移动端要点">TBDR 怕过度绘制、位置用 highp 防条纹、按能力分级降级。</GlossaryItem>
+<GlossaryItem term="帧契约">一个 pass 提交前必须满足的上下文、程序、顶点、状态、目标和证据条件集合。</GlossaryItem>
+<GlossaryItem term="能力报告">记录版本、限制、扩展、格式探针、选择路径和失败原因的结构化运行时证据。</GlossaryItem>
+<GlossaryItem term="资源代">一次上下文有效期内创建、可一起失效并整体替换的一组 GPU 对象和位置缓存。</GlossaryItem>
+<GlossaryItem term="证据链">从症状提出假设，用隔离实验收集日志、状态、像素和时间，再形成结论的过程。</GlossaryItem>
+<GlossaryItem term="回归基准">固定场景、输入、设备范围、指标和图像容差，用于防止修复或优化复发的测试。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="深入理解 OpenGL WebGL OpenGL ES" adaptedUrl="" />
+<Attribution
+  adaptedFrom="Khronos OpenGL, OpenGL ES, GLSL ES and WebGL specifications"
+  adaptedUrl="https://registry.khronos.org/OpenGL/"
+/>

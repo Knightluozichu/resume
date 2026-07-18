@@ -2,10 +2,7 @@
 
 import { useRef } from "react";
 
-import {
-  TEACHING_BEAT_MS,
-  TimelineControls,
-} from "../anim/timeline-controls";
+import { TEACHING_BEAT_MS, TimelineControls } from "../anim/timeline-controls";
 import {
   useTeachingTimeline,
   type TeachingStep,
@@ -260,12 +257,7 @@ export function AaAgentLoopDiagram() {
           >
             聊天机器人：一条直线，问完即止
           </text>
-          <text
-            x={LINE_LEFT}
-            y="56"
-            fontSize="11"
-            fill="var(--text-secondary)"
-          >
+          <text x={LINE_LEFT} y="56" fontSize="11" fill="var(--text-secondary)">
             一问一答，没有下一步——做不了需要多步推进的事
           </text>
 
@@ -438,7 +430,10 @@ export function AaAgentLoopDiagram() {
                   stroke={n.color}
                   strokeWidth="2"
                   opacity="0"
-                  style={{ transformBox: "fill-box", transformOrigin: "center" }}
+                  style={{
+                    transformBox: "fill-box",
+                    transformOrigin: "center",
+                  }}
                 />
                 <text
                   x={c.x}

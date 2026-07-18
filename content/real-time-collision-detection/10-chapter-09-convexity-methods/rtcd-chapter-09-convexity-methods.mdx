@@ -1,0 +1,403 @@
+---
+title: "Chapter 9 Convexity-based Methods"
+type: B
+section: "实时碰撞检测算法技术（清华2010 / Morgan Kaufmann 2005）"
+order: 10
+description: "本章用特征跟踪、层次凸体、线性/二次规划、GJK和分离向量求凸体距离与接触。 逐项覆盖21个权威目录坐标，并用退化几何、误差边界和目标机轨迹复核。"
+demo: true
+math: true
+sourceUrl: "https://www.oreilly.com/library/view/real-time-collision-detection/9781558607323/"
+draft: false
+---
+
+import {
+  RtcdChapter09ConvexityMethodsMapLab,
+  RtcdChapter09ConvexityMethodsExperimentLab,
+  RtcdChapter09ConvexityMethodsEvidenceLab,
+} from "@/components/mdx/real-time-collision-detection/diagrams/rtcd-chapter-09-convexity-methods";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释Chapter 9 Convexity-based Methods在15个正式单元、13章与357个目录节点中的位置
+- 能绘制“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”机制链并标出几何域、误差界和提前退出条件
+- 能推导最近点、区间重叠、层次代价与浮点容差，并复算复杂度
+- 能设计正常、退化、压力与故障实验，让第三方在目标机上独立复现
+
+</Objectives>
+
+## 为什么碰撞检测必须从查询合同开始
+
+本章用特征跟踪、层次凸体、线性/二次规划、GJK和分离向量求凸体距离与接触。 本课程不复制原书正文、插图或配套代码，而把公开目录中的算法组织成输入合同、几何谓词、交互实验、退化样本和验收证据。本页逐项覆盖21个目录坐标：Chapter 9 Convexity-based Methods、9.1 Boundary-based Collision Detection、9.2 Closest-features Algorithms、9.2.1 The V-Clip Algorithm、9.3 Hierarchical Polyhedron Representations、9.3.1 The Dobkin–Kirkpatrick Hierarchy、9.4 Linear and Quadratic Programming、9.4.1 Linear Programming、9.4.1.1 Fourier–Motzkin Elimination、9.4.1.2 Seidel’s Algorithm、9.4.2 Quadratic Programming、9.5 The Gilbert–Johnson–Keerthi Algorithm、9.5.1 The Gilbert–Johnson–Keerthi Algorithm、9.5.2 Finding the Point of Minimum Norm in a Simplex、9.5.3 GJK, Closest Points and Contact Manifolds、9.5.4 Hill Climbing for Extreme Vertices、9.5.5 Exploiting Coherence by Vertex Caching、9.5.6 Rotated Objects Optimization、9.5.7 GJK for Moving Objects、9.6 The Chung–Wang Separating-vector Algorithm、9.7 Summary。
+
+实时碰撞检测不是“两个盒子是否相交”的单一布尔问题。上层可能需要最近距离、命中顺序、首次接触时间、穿透方向或稳定接触流形；下层又受到坐标尺度、浮点误差、非流形网格、缓存布局和候选对规模约束。只有先冻结查询类型、输入域、边界包含规则和失败状态，才能比较算法是否正确且足够快。
+
+## 版次、目录与改编合同
+
+本路径同时固定原版与中译本：Christer Ericson《Real-Time Collision Detection》，Morgan Kaufmann，2005，ISBN 9781558607323；刘天慧译《实时碰撞检测算法技术》，清华大学出版社，2010年6月，ISBN 9787302224112。O’Reilly授权电子书目录与Morgan Kaufmann原书目录预览列出前置资料、13章所有层级小节，以及参考文献、索引和光盘说明，共357个正式目录节点。课程按15个正式单元逐项覆盖，另设学习地图与全书复核，共17页。
+
+原书代码与GPU接口来自2004至2005年前后的硬件和编译器语境。课程保留几何证明、数据结构和优化推理，但接口、SIMD宽度与GPU同步必须在当前目标平台重新测量；旧代码的运行结果不能替代今天的鲁棒性证据。
+
+## 五个贯穿全书的术语
+
+<Term def="上层调用者对输入几何、查询类型、边界语义、输出字段和失败状态的完整约定。">
+  查询合同
+</Term>
+、
+<Term def="用较廉价结构排除不可能相交对象后留下的待精确检测对象对。">
+  候选对
+</Term>
+、
+<Term def="依据方向、内外或区间关系做离散分类且带误差边界的计算。">
+  几何谓词
+</Term>
+、
+<Term def="移动对象在给定时间区间内第一次接触时对应的参数值。">
+  首次接触时间
+</Term>
+、
+<Term def="包含输入、构建、目标机、谓词轨迹、指标和最终分类的复现记录。">
+  碰撞证据包
+</Term>
+。
+
+查询合同决定算法；候选对连接粗筛与精算；几何谓词决定拓扑分类；首次接触时间避免高速穿透；碰撞证据包则让退化场景可以回放。类名和成功截图都不能代替这些状态合同。
+
+## 四个可复算模型
+
+点到线段的参数投影与钳制为：
+
+$$
+t=operatorname{clamp}left(rac{(p-a)cdot(b-a)}{lVert b-a
+Vert^2},0,1
+ight),qquad q=a+t(b-a)
+$$
+
+两个AABB在每个轴都重叠时才相交：
+
+$$
+A_{min}^{i}le B_{max}^{i};land;B_{min}^{i}le A_{max}^{i},qquad iin{x,y,z}
+$$
+
+BVH构建和遍历可用表面积启发式比较：
+
+$$
+C=C_t+rac{S_L}{S_P}N_LC_i+rac{S_R}{S_P}N_RC_i
+$$
+
+浮点比较的容差同时包含绝对项与相对项：
+
+$$
+|a-b|le arepsilon_{abs}+arepsilon_{rel}max(|a|,|b|)
+$$
+
+最近点必须处理零长度线段；AABB边界要明确相切是否算碰撞；SAH只是查询分布近似；容差不能脱离几何尺度。每项公式都要通过一般、退化和极端尺度样本复算。
+
+## 分步可视化：结构、规模与故障
+
+<Stepper>
+  <Step title="先画查询和数据依赖">
+    <RtcdChapter09ConvexityMethodsMapLab />
+  </Step>
+  <Step title="再改变图元与候选规模">
+    <RtcdChapter09ConvexityMethodsExperimentLab />
+  </Step>
+  <Step title="最后注入退化几何">
+    <RtcdChapter09ConvexityMethodsEvidenceLab />
+  </Step>
+</Stepper>
+
+### Chapter 9 Convexity-based Methods
+
+**目录节点 1/21。** 凸性允许用半空间和支持点简化查询；非凸几何通常先分解或交给层次结构。
+
+实现“Chapter 9 Convexity-based Methods”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把支持映射变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+### 9.1 Boundary-based Collision Detection
+
+**目录节点 2/21。** “9.1 Boundary-based Collision Detection”位于“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”链路中；实现时必须声明输入域、退化情况、误差界、输出状态与复杂度。
+
+实现“9.1 Boundary-based Collision Detection”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把最近特征变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+### 9.2 Closest-features Algorithms
+
+**目录节点 3/21。** V-Clip在顶点、边、面特征间沿Voronoi邻接走向最近对，缓存特征可利用帧间一致性。
+
+实现“9.2 Closest-features Algorithms”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把单纯形变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+### 9.2.1 The V-Clip Algorithm
+
+**目录节点 4/21。** V-Clip在顶点、边、面特征间沿Voronoi邻接走向最近对，缓存特征可利用帧间一致性。
+
+实现“9.2.1 The V-Clip Algorithm”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把接触流形变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+### 9.3 Hierarchical Polyhedron Representations
+
+**目录节点 5/21。** “9.3 Hierarchical Polyhedron Representations”位于“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”链路中；实现时必须声明输入域、退化情况、误差界、输出状态与复杂度。
+
+实现“9.3 Hierarchical Polyhedron Representations”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把顶点缓存变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+### 9.3.1 The Dobkin–Kirkpatrick Hierarchy
+
+**目录节点 6/21。** “9.3.1 The Dobkin–Kirkpatrick Hierarchy”位于“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”链路中；实现时必须声明输入域、退化情况、误差界、输出状态与复杂度。
+
+实现“9.3.1 The Dobkin–Kirkpatrick Hierarchy”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把支持映射变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+### 9.4 Linear and Quadratic Programming
+
+**目录节点 7/21。** 线性/二次规划把半空间约束和距离目标统一成小维优化问题，需处理不可行、无界和退化约束。
+
+实现“9.4 Linear and Quadratic Programming”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把最近特征变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+### 9.4.1 Linear Programming
+
+**目录节点 8/21。** 线性/二次规划把半空间约束和距离目标统一成小维优化问题，需处理不可行、无界和退化约束。
+
+实现“9.4.1 Linear Programming”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把单纯形变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+### 9.4.1.1 Fourier–Motzkin Elimination
+
+**目录节点 9/21。** 线性/二次规划把半空间约束和距离目标统一成小维优化问题，需处理不可行、无界和退化约束。
+
+实现“9.4.1.1 Fourier–Motzkin Elimination”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把接触流形变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+### 9.4.1.2 Seidel’s Algorithm
+
+**目录节点 10/21。** 线性/二次规划把半空间约束和距离目标统一成小维优化问题，需处理不可行、无界和退化约束。
+
+实现“9.4.1.2 Seidel’s Algorithm”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把顶点缓存变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+### 9.4.2 Quadratic Programming
+
+**目录节点 11/21。** 线性/二次规划把半空间约束和距离目标统一成小维优化问题，需处理不可行、无界和退化约束。
+
+实现“9.4.2 Quadratic Programming”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把支持映射变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+### 9.5 The Gilbert–Johnson–Keerthi Algorithm
+
+**目录节点 12/21。** GJK在Minkowski差中迭代支持点并更新包含原点的最小单纯形，终止条件必须避免重复支持点和停滞。
+
+实现“9.5 The Gilbert–Johnson–Keerthi Algorithm”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把最近特征变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+### 9.5.1 The Gilbert–Johnson–Keerthi Algorithm
+
+**目录节点 13/21。** GJK在Minkowski差中迭代支持点并更新包含原点的最小单纯形，终止条件必须避免重复支持点和停滞。
+
+实现“9.5.1 The Gilbert–Johnson–Keerthi Algorithm”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把单纯形变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+### 9.5.2 Finding the Point of Minimum Norm in a Simplex
+
+**目录节点 14/21。** GJK在Minkowski差中迭代支持点并更新包含原点的最小单纯形，终止条件必须避免重复支持点和停滞。
+
+实现“9.5.2 Finding the Point of Minimum Norm in a Simplex”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把接触流形变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+### 9.5.3 GJK, Closest Points and Contact Manifolds
+
+**目录节点 15/21。** 最近点查询先把参数投影到无限几何，再钳制到有效域；退化边、面和并行情况必须独立分支。
+
+实现“9.5.3 GJK, Closest Points and Contact Manifolds”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把顶点缓存变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+### 9.5.4 Hill Climbing for Extreme Vertices
+
+**目录节点 16/21。** 支持点山爬与顶点缓存利用凸网格邻接和帧间方向一致性，但拓扑或对象代际变化后必须失效。
+
+实现“9.5.4 Hill Climbing for Extreme Vertices”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把支持映射变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+### 9.5.5 Exploiting Coherence by Vertex Caching
+
+**目录节点 17/21。** 支持点山爬与顶点缓存利用凸网格邻接和帧间方向一致性，但拓扑或对象代际变化后必须失效。
+
+实现“9.5.5 Exploiting Coherence by Vertex Caching”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把最近特征变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+### 9.5.6 Rotated Objects Optimization
+
+**目录节点 18/21。** “9.5.6 Rotated Objects Optimization”位于“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”链路中；实现时必须声明输入域、退化情况、误差界、输出状态与复杂度。
+
+实现“9.5.6 Rotated Objects Optimization”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把单纯形变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+### 9.5.7 GJK for Moving Objects
+
+**目录节点 19/21。** 离散测试只检查采样时刻，连续测试在时间区间内求最早接触，必须定义速度模型和时间容差。
+
+实现“9.5.7 GJK for Moving Objects”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把接触流形变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+### 9.6 The Chung–Wang Separating-vector Algorithm
+
+**目录节点 20/21。** “9.6 The Chung–Wang Separating-vector Algorithm”位于“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”链路中；实现时必须声明输入域、退化情况、误差界、输出状态与复杂度。
+
+实现“9.6 The Chung–Wang Separating-vector Algorithm”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把顶点缓存变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+### 9.7 Summary
+
+**目录节点 21/21。** 小结应把“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”压缩成可检查的不变量、复杂度和失败边界。
+
+实现“9.7 Summary”时，沿“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”写出输入几何、坐标空间、参数区间、所有权和返回状态，并把支持映射变成可观测字段。至少覆盖一般位置、相切/共面、零尺寸、极端尺度和高速运动，任何提前退出都要能说明所依据的保守界。
+
+验收必须保存固定种子、原始几何、归一化尺度、中间谓词、误差界、迭代次数和最终接触。若不同优化路径给出不同分类，先定位第一处分支差异，再判断是数值误差、几何缺陷、缓存失效还是算法适用域被破坏。
+
+## 可迁移实现骨架
+
+返回值要携带分类、距离/时间、特征和诊断，不要让布尔值吞掉退化状态。
+
+```cpp
+struct CollisionResult {
+  enum class State { Separated, Touching, Penetrating, Degenerate } state;
+  double distance;
+  double toi;
+  Vec3 point_a, point_b, normal;
+  uint32_t iterations;
+  double error_bound;
+};
+```
+
+碰撞管线从稳定候选开始，精确查询可按类型分派，但所有实现共享同一边界语义。
+
+```text
+freeze transforms and geometry generations
+  -> update conservative bounding volumes
+  -> generate and deduplicate candidate pairs
+  -> run exact static or continuous query
+  -> record predicates, error bounds and first-contact state
+```
+
+机器可读证据让同一退化样本跨编译器、标量精度和优化版本比较。
+
+```json
+{
+  "seed": 7319,
+  "scale": 1000.0,
+  "query": "closest|overlap|ray|toi",
+  "expected": "touching",
+  "observed": "touching",
+  "errorBound": 1.2e-8
+}
+```
+
+## 本单元的验收工件
+
+第一件工件是查询合同：为“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”逐步写出输入域、坐标空间、边界包含、误差界、复杂度和返回状态。第二件是退化语料库：覆盖零长度、共线、共面、相切、近并行、巨大/微小尺度和高速跨越。第三件是目标机轨迹：记录对象数、候选对、节点访问、图元测试、迭代、缓存未命中和P50/P95/P99。第四件是差分报告：用高精度或独立实现作参照，定位第一处分歧而不是只统计最终错误率。
+
+<Callout type="trap" title="把固定epsilon当成鲁棒性">
+  单一常数无法同时适配厘米与公里尺度。容差应来自输入尺度和运算误差界，不确定时升级到区间或精确谓词。
+</Callout>
+
+<Callout type="trap" title="只测试随机一般位置">
+  随机数据几乎不会命中共线、共面、相切和零尺寸。必须定向构造退化样本并在微扰两侧检查分类连续性。
+</Callout>
+
+<Callout type="trap" title="微基准更快就宣布优化成功">
+  数据布局、SIMD和GPU卸载可能增加候选、同步或长尾。验收要看完整管线和真实查询分布，而不是孤立函数平均值。
+</Callout>
+
+## 先预测再运行
+
+运行交互前先预测：对象规模翻倍时候选对、节点访问还是精确测试先增长；几何接近共面时哪一个谓词先进入不确定区；SIMD宽度增加后数据整理和尾处理是否抵消收益。观察不一致时先检查查询合同、尺度归一、缓存代际和统计口径。
+
+## 本章回顾
+
+Chapter 9 Convexity-based Methods是“定义支持映射 → 追踪最近特征 → 求Minkowski单纯形 → 生成距离或接触 → 缓存时空一致性”中的完整算法合同。掌握本页意味着能逐项定位21个权威目录节点，解释支持映射、最近特征、单纯形、接触流形、顶点缓存的边界，复算几何与复杂度指标，并让一般、退化、压力和故障轨迹可重现。
+
+<Exercises>
+
+**问题 1：合同与退化。** 怎样为Chapter 9 Convexity-based Methods定义输入域和相切/共面语义？
+
+<Answer>
+  先声明坐标、标量、闭开边界、退化返回和误差界，再沿“定义支持映射 → 追踪最近特征
+  → 求Minkowski单纯形 → 生成距离或接触 →
+  缓存时空一致性”构造一般位置及边界两侧样本。无法区分Separated、Touching、Penetrating和Degenerate的接口不完整。
+</Answer>
+
+**问题 2：复杂度实验。** 怎样验证支持映射在真实查询分布下满足预算？
+
+<Answer>
+  固定目标机、构建、场景和种子，按对象数与尺度分层采样，记录候选对、节点访问、图元测试、迭代、缓存事件及P50/P95/P99，并和暴力或高精度参照核对正确性。
+</Answer>
+
+**问题 3：迁移复核。** 怎样证明Chapter 9 Convexity-based Methods不是只记住原书伪代码？
+
+<Answer>
+  更换数据布局、标量精度或后端实现，但保持查询合同、退化语料、误差界和证据字段；由独立复核者重放同一输入并得到一致分类与可解释性能边界。
+</Answer>
+
+</Exercises>
+
+## 术语复核
+
+<Glossary>
+  <GlossaryItem term="查询合同">
+    上层调用者对输入几何、查询类型、边界语义、输出字段和失败状态的完整约定。
+  </GlossaryItem>
+  <GlossaryItem term="候选对">
+    用较廉价结构排除不可能相交对象后留下的待精确检测对象对。
+  </GlossaryItem>
+  <GlossaryItem term="几何谓词">
+    依据方向、内外或区间关系做离散分类且带误差边界的计算。
+  </GlossaryItem>
+  <GlossaryItem term="首次接触时间">
+    移动对象在给定时间区间内第一次接触时对应的参数值。
+  </GlossaryItem>
+  <GlossaryItem term="碰撞证据包">
+    包含输入、构建、目标机、谓词轨迹、指标和最终分类的复现记录。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Real-Time Collision Detection / 实时碰撞检测算法技术"
+  adaptedUrl="https://www.oreilly.com/library/view/real-time-collision-detection/9781558607323/"
+/>
+
+## 阅读导航
+
+- [上一页：Chapter 8 BSP Tree Hierarchies](/learn/real-time-collision-detection/09-chapter-08-bsp-tree-hierarchies/rtcd-chapter-08-bsp-tree-hierarchies)
+- [下一页：Chapter 10 GPU-assisted Collision Detection](/learn/real-time-collision-detection/11-chapter-10-gpu-assisted/rtcd-chapter-10-gpu-assisted)

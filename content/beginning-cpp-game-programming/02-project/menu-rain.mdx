@@ -1,0 +1,389 @@
+---
+title: 第 19 章：交互菜单与雨效
+type: A
+section: Run! 项目
+order: 19
+description: 对齐官方第 3 版第 19 章：构建交互菜单，定义开始、暂停、重启、退出状态转换，并以 GameObject 的 Graphics 与 Update 组合实现可复现雨效。
+demo: false
+math: false
+sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+draft: false
+---
+
+import {
+  BcgpInteractiveMenuMap,
+  BcgpMenuRainFrameMap,
+  BcgpRainCompositionMap,
+} from "@/components/mdx/beginning-cpp-game-programming/diagrams/menu-rain";
+
+<Objectives>
+
+- 能设计 Home、Playing、Paused、GameOver 组成的交互菜单，并实现开始、暂停、重启、退出的合法转换
+- 能实现事件边沿驱动的菜单导航、焦点与确认命令，保证暂停和恢复不污染 Player 输入与帧时间
+- 能设计 RainUpdate 与 RainGraphics 的 GameObject 组合，以固定粒子池实现可复现、可批处理的雨效
+
+</Objectives>
+
+## 从“暂停不是盖一张图”开始
+
+<Term def="允许玩家导航选项、确认命令并得到清晰焦点反馈，同时遵守当前游戏阶段约束的菜单。">
+  交互菜单
+</Term>
+
+不仅是几行 Text。暂停画面即使盖住世界，若 Player、平台、计时器和雨滴仍在 update，恢复时世界已经变化。菜单必须与 GamePhase 共同决定谁拥有输入、谁推进时间、哪些转换合法。
+
+<Term def="Home、Playing、Paused 和 GameOver 等互斥阶段，以及阶段之间允许发生的转换。">
+  GamePhase 状态机
+</Term>
+
+把开始、暂停、重启、退出放入一张转换表，避免每个按键处理器各改一半状态。
+
+<BcgpInteractiveMenuMap />
+
+## 开始、暂停、重启、退出不是同一个动作
+
+官方的 start pause restart quit（开始 暂停 重启 退出）各有不同前置条件和副作用：
+
+- Start 只在 Home 创建一局完整世界，成功后进入 Playing。
+- Pause 只从 Playing 进入 Paused，保留世界与 elapsed。
+- Resume 从 Paused 返回 Playing，不重置世界，但重启帧时钟。
+- Restart 从 Paused 或 GameOver 重建全部局内状态，最后才进入 Playing。
+- Quit 请求关闭应用，不伪装成返回 Home，也不继续提交世界命令。
+
+<Term def="菜单确认后产生的开始、恢复、重启、返回首页或退出请求，本身不直接修改世界。">
+  MenuCommand
+</Term>
+
+让 UI 与状态控制分离。
+
+```cpp
+enum class MenuCommand { Start, Resume, Restart, Home, Quit };
+
+std::optional<GamePhase> nextPhase(GamePhase phase, MenuCommand command)
+{
+    if (phase == GamePhase::Home && command == MenuCommand::Start)
+        return GamePhase::Playing;
+    if (phase == GamePhase::Paused && command == MenuCommand::Resume)
+        return GamePhase::Playing;
+    if (phase == GamePhase::Playing && command == MenuCommand::Home)
+        return GamePhase::Paused;
+    if (command == MenuCommand::Restart &&
+        (phase == GamePhase::Paused || phase == GamePhase::GameOver))
+        return GamePhase::Playing;
+    return std::nullopt;
+}
+```
+
+上例只展示转换查询；Pause 应建成独立命令而不是借用 Home。非法命令不产生副作用，开发模式记录 phase 与 command。
+
+## 导航、焦点与确认使用事件边沿
+
+<Term def="菜单中当前由键盘或手柄选中、将接收确认操作的唯一可用条目。">
+  菜单焦点
+</Term>
+
+焦点索引只遍历可用项。隐藏或禁用 Restart 时，向下导航应跳过它；选项列表变化后重新验证焦点。
+
+```cpp
+void Menu::handle(const sf::Event& event)
+{
+    if (event.type != sf::Event::KeyPressed)
+        return;
+    if (event.key.code == sf::Keyboard::Up)
+        focusPreviousEnabled();
+    else if (event.key.code == sf::Keyboard::Down)
+        focusNextEnabled();
+    else if (event.key.code == sf::Keyboard::Enter)
+        pending_ = focusedCommand();
+}
+```
+
+<Term def="从未按到按下只出现一次的输入变化，用于菜单移动与确认，防止按住时每帧重复提交。">
+  菜单输入边沿
+</Term>
+
+按键重复策略要明确：可接受操作系统重复用于上下导航，但 Enter 确认必须去重。菜单打开时清除 PlayerIntent，避免暂停前按住方向键在恢复后立刻移动。
+
+<Callout type="trap">
+  **现象**：按一次 Enter 连续重启两局，或从暂停恢复后第一帧 Player
+  自动跳跃。**原因**：菜单同时读取事件与实时按键，并把旧 PlayerIntent
+  留到下一阶段。**修法**：确认只消费 KeyPressed 边沿，阶段转换时清输入缓冲，恢复
+  Playing 前重启帧时钟。
+</Callout>
+
+## 转换采用“准备后提交”
+
+<Term def="目标阶段所需资源、世界和界面全部准备成功后，才一次替换当前 GamePhase 的过程。">
+  状态提交
+</Term>
+
+Start 与 Restart 先在局部构建候选 World：Player、初始平台、相机、分数、声音、雨粒子池全部成功后再替换旧世界。失败则保留 Home 或 GameOver，并显示可恢复错误。
+
+```cpp
+bool Game::restart()
+{
+    World candidate{worldFactory_.createInitialWorld()};
+    sound_.reset();
+    input_.clearEdges();
+    world_ = std::move(candidate);
+    elapsed_ = 0.0F;
+    phase_ = GamePhase::Playing;
+    frameClock_.restart();
+    return true;
+}
+```
+
+<Term def="清除上一阶段的一次性输入、事件、声音和延迟命令，防止它们越过阶段边界。">
+  阶段隔离
+</Term>
+
+Quit 不需重建世界，但要让主循环在本帧余下阶段停止 update 和 draw，不能关闭窗口后继续访问 RenderTarget。
+
+## 暂停冻结逻辑时间而非界面
+
+<Term def="只在 Playing 推进并供物理、动画、雨效和计时器使用的受限时间步。">
+  逻辑时间
+</Term>
+
+Paused 仍轮询窗口事件、更新菜单焦点和绘制冻结快照，但不推进世界。恢复时 `frameClock.restart()`，丢弃暂停期间墙钟时长。
+
+先预测再运行：进入 Paused 后等待十秒，记下暂停前后的 Player 坐标、elapsed、活跃雨滴位置和恢复首帧 dt。正确结果应是前三项完全不变，恢复首帧 dt 接近正常帧时长；若雨滴变化，说明 RainUpdate 绕过了 GamePhase；若 dt 接近十秒，说明恢复前没有重启帧时钟。
+
+<Term def="进入 Paused 时保存的最后一次提交世界状态，用于持续绘制静止背景而不更新玩法。">
+  冻结快照
+</Term>
+
+可在其上绘制半透明遮罩和选项。不要把遮罩放进 main view；它属于 HUD View。
+
+## 雨效是对象组合而非 main 特例
+
+<Term def="由许多短寿命雨滴组成、在相机范围内生成移动并批量绘制的环境表现。">
+  雨效
+</Term>
+
+官方 making it rain 不是在 main 里写一段粒子循环。它沿第 15 章的 GameObject composition（GameObject 组合）使用 Graphics 与 Update：RainUpdate 管发射、位置、寿命和回收，RainGraphics 只读取提交后的实例生成顶点。
+
+<Term def="推进雨滴生成、速度、位置与寿命，不依赖窗口和纹理的更新行为。">
+  RainUpdate
+</Term>
+
+与
+
+<Term def="把可见雨滴快照转换为 VertexArray 并提交绘制的图形行为。">
+  RainGraphics
+</Term>
+
+共享 RainState，但所有权由 Rain GameObject 持有。
+
+<BcgpRainCompositionMap />
+
+## 固定池和发射累加器
+
+<Term def="预先分配固定数量雨滴槽位并反复激活回收，限制内存和最坏更新成本的容器。">
+  雨滴池
+</Term>
+
+避免每秒大量分配。发射率使用小数累加器，使 60 Hz 与 120 Hz 在相同秒数内产生近似相同数量。
+
+```cpp
+void RainUpdate::update(float dt, const sf::FloatRect& spawnBounds)
+{
+    spawnBudget_ += dropsPerSecond_ * dt;
+    while (spawnBudget_ >= 1.0F) {
+        if (RainDrop* drop = acquireInactive())
+            resetDrop(*drop, spawnBounds, rng_);
+        spawnBudget_ -= 1.0F;
+    }
+
+    for (RainDrop& drop : drops_) {
+        if (!drop.active)
+            continue;
+        drop.position += drop.velocity * dt;
+        drop.life -= dt;
+        if (drop.life <= 0.0F || outsideRecycleBounds(drop.position))
+            drop.active = false;
+    }
+}
+```
+
+<Term def="累积每秒发射率乘 dt 的小数余量，并在达到整数时生成粒子的值。">
+  发射累加器
+</Term>
+
+池满时丢弃本次生成，不无界扩容。雨效是可降级表现，不能让粒子不足阻塞玩法。
+
+## 生成区域跟随相机，速度属于世界
+
+<Term def="位于主相机可见区域上方并带横向余量，用于初始化新雨滴位置的世界矩形。">
+  雨滴生成区
+</Term>
+
+随 main Camera 移动，但雨滴生成后使用世界坐标继续下落。若每帧把所有雨滴绑回相机，它们会像 HUD 一样粘在屏幕上。
+
+```cpp
+sf::FloatRect rainSpawnBounds(const Camera& camera)
+{
+    const sf::FloatRect visible{camera.visibleBounds()};
+    return {
+        visible.left - 100.0F,
+        visible.top - 180.0F,
+        visible.width + 200.0F,
+        120.0F,
+    };
+}
+```
+
+<Term def="雨滴离开相机下方和侧方一定余量后失活的世界范围。">雨滴回收区</Term>
+
+应大于生成区，避免边缘雨滴反复激活失活。radar view 通常不画雨，避免辅助视图被噪声淹没。
+
+## 批处理而非每滴一次 draw
+
+<Term def="把所有可见雨滴几何集中到一个 VertexArray，以少量 draw calls 提交的策略。">
+  雨滴批处理
+</Term>
+
+每滴可用两点线段或四点窄四边形。RainGraphics 预留最大顶点容量，按活跃雨滴重写，颜色 alpha 随寿命变化。
+
+```cpp
+void RainGraphics::submit(const RainSnapshot& rain, DrawQueue& queue)
+{
+    vertices_.clear();
+    for (const RainDropView& drop : rain.activeDrops) {
+        appendStreak(vertices_, drop.position, drop.length, drop.alpha);
+    }
+    queue.push(DrawItem::worldOverlay(RenderLayer::Weather, vertices_));
+}
+```
+
+<Term def="绘制阶段只读的活跃雨滴位置、长度与透明度集合，不暴露粒子池写权限。">
+  RainSnapshot
+</Term>
+
+先测量活跃数、顶点数和 calls。把所有天气强行合成一个巨大系统未必更快，按真实瓶颈决定。
+
+<Callout type="trap">
+  **现象**：暂停时雨仍下落，恢复后突然跳过整屏；不同帧率下雨量明显不同。**原因**：RainUpdate
+  使用墙钟或每帧固定生成数量，没有遵守 GamePhase 与发射率。**修法**：只在
+  Playing 使用受限逻辑 dt，按每秒发射率累计，恢复前重启时钟。
+</Callout>
+
+## 菜单、世界与雨效的一帧顺序
+
+<Term def="当前阶段对事件路由、逻辑更新、状态提交与绘制顺序的统一约定。">
+  阶段帧协议
+</Term>
+
+轮询事件后，Home/Paused/GameOver 把导航事件交给 Menu，Playing 把意图交给 Player；任何阶段都处理关闭事件。只有 Playing 更新 World 和 RainUpdate。随后集中提交世界与菜单命令，生成 RenderSnapshot 与 RainSnapshot。绘制顺序为 main 世界、天气、radar、HUD、菜单覆盖层。
+
+<BcgpMenuRainFrameMap />
+
+状态转换发生后，本帧不再执行旧阶段剩余逻辑。尤其 Quit 后立即结束，Restart 后使用新世界快照，Resume 后从下一帧开始推进。
+
+## 可复现测试与验收
+
+<Term def="使用固定 seed、固定逻辑步长和同一输入序列时，雨滴与阶段转换产生相同结果的性质。">
+  雨效确定性
+</Term>
+
+雨效虽然不影响玩法，但可复现能定位池泄漏和帧率依赖。随机数生成器由局内 seed 构造，不使用每滴独立随机设备。
+
+- 对每个 GamePhase 枚举所有 MenuCommand，断言合法目标与副作用；非法组合保持原状态。
+- 按住 Enter 只确认一次；打开菜单时焦点落在可用项；禁用项不会收到确认。
+- Paused 持续十秒后 world、elapsed、雨滴位置不变，菜单焦点仍可移动。
+- Restart 重置 Player、平台、计时、声音、输入、命令队列和雨滴池，最后才进入 Playing。
+- 固定 seed 分别以不同渲染帧率运行相同固定逻辑步，比较活跃雨滴位置与数量。
+- 统计池容量、活跃峰值、顶点数和 draw calls，长时间运行不增加分配量。
+
+## 小结
+
+- 交互菜单与 GamePhase 共同定义开始、暂停、重启、退出的合法状态转换
+- 菜单导航使用事件边沿，阶段转换时清输入、事件和延迟命令
+- 暂停冻结逻辑时间和世界，但窗口事件、菜单与冻结快照仍工作
+- 雨效通过 RainUpdate 与 RainGraphics 实现 Graphics and Update 分离
+- 固定雨滴池、发射累加器和顶点批处理让效果有界、可复现、可测量
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 19"
+  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+/>
+
+<Glossary>
+  <GlossaryItem term="交互菜单">
+    支持导航、焦点、确认和状态约束的菜单。
+  </GlossaryItem>
+  <GlossaryItem term="GamePhase 状态机">
+    定义 Home、Playing、Paused、GameOver 与合法转换的模型。
+  </GlossaryItem>
+  <GlossaryItem term="MenuCommand">
+    菜单提交给状态控制器的开始、恢复、重启或退出请求。
+  </GlossaryItem>
+  <GlossaryItem term="菜单焦点">
+    当前由导航选中并接收确认的唯一可用条目。
+  </GlossaryItem>
+  <GlossaryItem term="菜单输入边沿">
+    用于导航与确认的一次性按键变化。
+  </GlossaryItem>
+  <GlossaryItem term="状态提交">
+    目标阶段准备成功后一次替换当前阶段的过程。
+  </GlossaryItem>
+  <GlossaryItem term="阶段隔离">
+    清除不能跨状态边界保留的输入、事件、声音和命令。
+  </GlossaryItem>
+  <GlossaryItem term="逻辑时间">只在 Playing 推进的游戏时间步。</GlossaryItem>
+  <GlossaryItem term="冻结快照">
+    暂停时用于继续绘制的最后一次提交世界状态。
+  </GlossaryItem>
+  <GlossaryItem term="雨效">
+    由短寿命雨滴组成并在相机范围生成、移动、批量绘制的效果。
+  </GlossaryItem>
+  <GlossaryItem term="RainUpdate">
+    管理雨滴生成、运动、寿命和回收的更新行为。
+  </GlossaryItem>
+  <GlossaryItem term="RainGraphics">
+    把雨滴快照转换为批量几何的图形行为。
+  </GlossaryItem>
+  <GlossaryItem term="雨滴池">固定容量并反复激活回收的粒子容器。</GlossaryItem>
+  <GlossaryItem term="发射累加器">
+    把每秒发射率按 dt 累积为粒子生成次数的值。
+  </GlossaryItem>
+  <GlossaryItem term="雨滴生成区">
+    主相机上方用于初始化雨滴位置的世界区域。
+  </GlossaryItem>
+  <GlossaryItem term="雨滴回收区">雨滴越界后失活的世界范围。</GlossaryItem>
+  <GlossaryItem term="雨滴批处理">
+    把可见雨滴合并到 VertexArray 的绘制策略。
+  </GlossaryItem>
+  <GlossaryItem term="RainSnapshot">
+    供绘制只读的活跃雨滴表现数据。
+  </GlossaryItem>
+  <GlossaryItem term="阶段帧协议">
+    按当前阶段规定输入、更新、提交和绘制顺序的约定。
+  </GlossaryItem>
+  <GlossaryItem term="雨效确定性">
+    固定 seed、步长和输入时得到相同雨滴结果的性质。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：设计菜单转换表。** 列出 Home、Playing、Paused、GameOver 对 Start、Pause、Resume、Restart、Quit 的合法性和副作用。
+
+<Answer question="交互菜单为何要先产生 MenuCommand，再由 GamePhase 控制器执行？">
+  Menu 只负责焦点与确认，不应知道如何重建 World。控制器可以按当前 phase
+  验证命令：Start 构建新局，Pause 保留世界，Resume 只恢复并重启时钟，Restart
+  重置所有局内系统，Quit 终止循环。非法命令无副作用，转换测试也不需要渲染 UI。
+</Answer>
+
+2. **问题 2：定位暂停污染。** 复现暂停十秒后恢复时 Player 瞬移、雨滴跳屏的问题，并给出修复顺序。
+
+<Answer question="暂停恢复后世界和雨滴跳变通常由什么导致，如何修复？">
+  若 update 使用暂停期间累积的墙钟 dt，恢复首帧会一次推进十秒；旧 PlayerIntent
+  还可能触发移动。Paused 不更新 World、elapsed 或
+  RainUpdate；恢复前清一次性输入和旧事件、重启 frameClock，从下一帧使用正常受限
+  dt，冻结快照只用于绘制。
+</Answer>
+
+3. **问题 3：验证雨效有界。** 设计一个覆盖发射率、池容量、确定性与 draw calls 的长时间测试。
+
+  <Answer question="如何证明雨效不会随运行时间持续增加资源并且不依赖渲染帧率？">固定池容量与随机 seed，使用固定逻辑步长运行数分钟，断言活跃数不超过容量、分配次数在初始化后不增长、离界雨滴回收。用不同渲染频率驱动相同逻辑步序列，比较快照一致；统计顶点数和 draw calls，确认 RainGraphics 批处理而非每滴提交一次。</Answer>
+</Exercises>

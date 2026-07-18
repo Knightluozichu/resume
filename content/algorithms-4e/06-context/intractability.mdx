@@ -1,0 +1,401 @@
+---
+title: "6.6 Intractability：P、NP、完全性与工程取舍"
+type: B
+section: "上下文"
+order: 29
+description: "按官方6.6重建计算复杂性、输入编码、多项式时间、certificate verifier、P与NP、NP完全性归约，以及精确、近似、参数化和特殊实例策略。"
+demo: true
+math: true
+sourceUrl: "https://algs4.cs.princeton.edu/66intractability/"
+draft: false
+---
+
+import { Algs4GrowthRaceLab, Algs4EncodingSizeLab, Algs4SearchDecisionLab, Algs4PolynomialVerifierLab, Algs4PvsNPMap, Algs4NPCompleteDefinitionMap, Algs4HardnessReductionLab, Algs4CircuitSatLab, Algs4TSPDecisionLab, Algs4CopingTriangleLab, Algs4ApproximationLab, Algs4SpecialCaseLab, Algs4ComplexityCertificateLab } from "@/components/mdx/algorithms-4e/diagrams/intractability";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释intractability、computational complexity、polynomial time、P and NP与NP-completeness
+- 能计算polynomial/exponential/factorial growth、bit-length input size、certificate size、verification cost与approximation ratio
+- 能实现SAT certificate verifier、TSP decision verifier、polynomial reduction skeleton与complexity-proof audit
+- 能分析P versus NP、NP-hard和NP-complete的区别、decision/search/optimization关系及reduction方向
+- 能设计coping with intractability方案，在worst-case time、optimality和arbitrary instances之间做可验证取舍
+
+</Objectives>
+
+## 从“硬件快一万亿倍，为什么仍救不了穷举”开始
+
+难解性（<Term def="问题不存在polynomial-time algorithm的性质；对NP-complete问题通常是在P不等于NP假设下讨论。">难解性</Term>，intractability）不是“当前程序写得慢”，而是关于**所有可能算法**的resource question。
+
+先预测：一台机器快 $10^{12}$ 倍，能把 $2^N$ brute force可处理的N提高多少？因为：
+
+$$
+2^{N+40}\approx 10^{12}\cdot2^N
+$$
+
+只增加约40个binary choices。对 $N!$ 的改善更有限。Exponential growth最终会吞掉硬件、并行度和常数优化。
+
+<Algs4GrowthRaceLab />
+
+但“exponential algorithm”不等于every input都慢，也不等于problem已被证明没有polynomial algorithm。Complexity theory研究worst-case resource class；工程上仍可能有大量easy instances。
+
+## 6.6.1 Computational complexity：从一个算法转向所有算法
+
+计算复杂性（<Term def="研究problem本身在指定computation model中所需time、space、randomness、communication等资源的理论。">计算复杂性</Term>，computational complexity）与algorithm analysis层次不同：
+
+- Algorithm analysis证明某个implementation的upper bound或lower bound。
+- Computational complexity试图证明任何conceivable algorithm都不能越过某resource boundary。
+- Complexity class把拥有共同resource bound的problems归组。
+
+Turing machine提供machine-independent formal model；polynomial changes of reasonable machine models通常不改变P这类粗粒度class。结论仍必须说明input encoding、deterministic或randomized、decision或search，以及worst-case或average-case。
+
+若当前best TSP algorithm是 $O(2^N N^2)$，这只是upper bound；trivial input-read给 $\Omega(N)$ lower bound。二者之间的巨大gap正是complexity研究的问题，不能因“尚未找到更快算法”就宣布lower bound。
+
+## 6.6.2 Input size是表示长度，不是数值大小
+
+整数N的binary encoding length：
+
+$$
+b=\lfloor\log_2N\rfloor+1
+$$
+
+Trial division到 $\sqrt N$ 需要约 $2^{b/2}$ candidates，因此是input bits b的exponential time，不是polynomial time。Complexity必须以读入的symbols数量计量。
+
+<Algs4EncodingSizeLab />
+
+类似地，knapsack dynamic programming的O(nW)若W用binary表示，可能对input length是pseudo-polynomial；若weights以unary encoding，W本身就是input length的一部分，分类会不同。
+
+<Callout type="trap" title="把数值N当作输入长度">
+“循环到N所以是O(N)”只描述numeric value。若N用log₂N bits输入，该循环相对encoding length是exponential。讨论复杂性前必须固定representation。
+</Callout>
+
+## 6.6.3 Polynomial time为何成为tractability边界
+
+多项式时间（<Term def="Running time被input length某个固定degree polynomial上界的算法资源类。">多项式时间</Term>，polynomial time）指存在constants c、k：
+
+$$
+T(n)\le c n^k
+$$
+
+Polynomial algorithms具备三项重要closure properties：compose仍是polynomial；reasonable encodings之间的polynomial conversion不改变分类；规模扩大时增长通常比exponential稳健。
+
+这不是“所有polynomial都实用”。$n^{100}$ 或 $10^{100}n^2$ 仍不可运行；而well-engineered exponential solver可能快速解决现实分布中的许多instances。Polynomiality是理论上的scalability surrogate，不是latency SLA。
+
+<Algs4GrowthRaceLab />
+
+Official 6.6把没有polynomial-time algorithm的问题称为intractable。对NP-complete problems，尚未证明它们不在P；准确表述是：若P不等于NP，则所有NP-complete problems都没有polynomial-time deterministic algorithm。
+
+## 6.6.4 Decision、search与optimization
+
+Decision problem输出YES/NO；search problem要找witness；optimization problem要找best feasible solution。以TSP为例：
+
+- Decision：是否存在cost至多L的tour？
+- Search：找一条cost至多L的tour。
+- Optimization：找minimum-cost tour。
+
+<Algs4SearchDecisionLab />
+
+Decision YES witness是一条tour，可快速验收。若edge weights是bounded integers，可对L做binary search找到optimal value，并通过self-reduction逐步固定edges恢复tour，因此三种forms常在polynomial factors内equivalent。
+
+```ts
+function tspDecision(graph: Graph, limit: number, tour: Vertex[]) {
+  if (tour.length !== graph.vertexCount + 1) return false;
+  if (tour[0] !== tour[tour.length - 1]) return false;
+  if (!visitsEveryVertexExactlyOnce(tour.slice(0, -1))) return false;
+  return cost(graph, tour) <= limit;
+}
+```
+
+Optimization certificate只给candidate objective，通常不能直接证明“没有更优答案”。Decision threshold把optimality转成existence query，便于放入NP框架。
+
+## 6.6.5 P：能高效求解
+
+P是deterministic machine能在polynomial time解决的decision problems。BFS reachability、sorting decision variants、GCD、shortest paths与linear equations都属于P。
+
+若solver在polynomial time返回answer，那么verifier当然也可运行solver或直接检查answer，所以：
+
+$$
+\mathrm{P}\subseteq\mathrm{NP}
+$$
+
+“P problem”不保证所有known implementations都快；它说明至少存在一个polynomial algorithm。Reduction也会扩大polynomial degree和constants，所以class membership比production performance更粗。
+
+## 6.6.6 NP：YES certificate可高效验证
+
+NP（<Term def="YES instances拥有polynomial-size certificate，且certificate能由deterministic polynomial-time verifier验收的decision problem class。">NP</Term>）是YES instances拥有polynomial-size certificate，且deterministic verifier在polynomial time接受的decision problems。形式上，language L属于NP，当且仅当存在polynomial p与verifier V：
+
+$$
+x\in L
+\iff
+\exists w,\ |w|\le p(|x|)
+\text{ and }V(x,w)=1
+$$
+
+重点是certificate长度也必须polynomial。若w本身长达 $2^n$，即便逐bit检查linear，也不能证明membership in NP。
+
+<Algs4PolynomialVerifierLab />
+
+SAT的witness是one Boolean value per variable。Verifier扫描clauses，只要每个clause至少有one true literal就accept，时间O(formula length)。
+
+```ts
+function verifyCNF(clauses: Literal[][], assignment: boolean[]) {
+  for (const clause of clauses) {
+    if (!clause.some(lit => evaluatesTrue(lit, assignment))) return false;
+  }
+  return true;
+}
+```
+
+TSP decision的witness是vertex permutation，检查uniqueness、edge existence、return-to-start与cost bound都可polynomial完成。
+
+<Algs4TSPDecisionLab />
+
+NP里的N来自nondeterministic polynomial time，不是“non-polynomial”。Nondeterministic machine可猜certificate再verify；certificate definition与该machine definition等价。
+
+## 6.6.7 P and NP：会验证是否等于会寻找
+
+P与NP（P and NP）的open question是：
+
+$$
+\mathrm{P}\stackrel{?}{=}\mathrm{NP}
+$$
+
+若相等，所有polynomially verifiable YES witnesses都能polynomially找到；若不等，至少有NP problems可快验却不能deterministically快解。
+
+<Algs4PvsNPMap />
+
+截至本章依据的官方框架，P versus NP仍未解决。不能把“几十年没人找到algorithm”当proof，也不能把某个solver在benchmark上很快当polynomial worst-case guarantee。
+
+co-NP关注NO instances是否有polynomial certificates。例如compositeness的YES witness是factor；primality则最终也被证明在P。NP与co-NP是否相等同样未知，不能凭YES verifier推断NO verifier。
+
+## 6.6.8 NP-hard与NP-complete
+
+NP完全性（<Term def="Problem既属于NP，又接收every NP problem的polynomial-time reduction，因而是NP中universal hardest problems。">NP完全性</Term>，NP-completeness）需要两部分：
+
+1. Membership：X in NP，给出polynomial certificate与verifier。
+2. Hardness：every problem in NP polynomially reduces to X。
+
+<Algs4NPCompleteDefinitionMap />
+
+NP-hard只要求“若它能polynomial解决，则P=NP”，problem可能是search、optimization，甚至不属于NP。NP-complete限定为NP内的decision problems。
+
+Cook-Levin theorem证明SAT是NP-complete：任意polynomial-time nondeterministic computation都可编码为polynomial-size Boolean formula，local clauses约束每个time-step/state/tape-cell transition，formula satisfiable恰好对应accepting computation。
+
+<Algs4CircuitSatLab />
+
+Universality的力量在于只需一个seed NP-complete problem。之后若SAT reduce to 3-SAT、3-SAT reduce to independent set、independent set reduce to vertex cover，就通过transitivity不断扩展catalog。
+
+## 6.6.9 如何正确证明新问题NP-complete
+
+若X已知NP-complete，要证明新问题Y：
+
+$$
+X\le_p Y
+$$
+
+然后独立证明Y in NP。方向是把known-hard instance编码进candidate Y。
+
+<Algs4HardnessReductionLab />
+
+```ts
+function proveCandidateY(instanceX: X): Y {
+  const y = polynomialMap(instanceX);
+  assert(isYesX(instanceX) === isYesY(y));
+  assert(encodedSize(y) <= polynomial(encodedSize(instanceX)));
+  return y;
+}
+```
+
+若反过来证明 $Y\le_p X$，只能说明Y不比X难，可能给Y一个upper bound；不能传入X的hardness。
+
+<Callout type="trap" title="只做归约就宣布NP-complete">
+Known NP-complete X reduce to Y只能证明Y是NP-hard。还必须给Y的polynomial-size YES certificate与polynomial verifier，才能得出Y in NP并闭合NP-complete定义。
+</Callout>
+
+## 6.6.10 3-SAT到Independent Set的证书保留
+
+给3-CNF formula的每个clause创建three literal vertices；同clause内全连接，互补literals之间也连edge。问是否有size等于clause count k的independent set。
+
+- 若formula satisfiable，每个clause选一个true literal；同clause只选一个，且不会同时选x与not-x，因此构成size-k independent set。
+- 若有size-k independent set，clause clique迫使每clause恰选一个，complement edges保证selected literals consistent，可扩展为satisfying assignment。
+
+Vertices与edges增长polynomial；construction和answer lift也polynomial。这同时证明YES equivalence与witness correspondence。
+
+Reduction verifier应检查clause gadgets、conflict edges、size target以及both directions of proof，而非只用几个examples测试。
+
+<Algs4ComplexityCertificateLab />
+
+## 6.6.11 TSP为何是典型难解问题
+
+TSP decision in NP，因为tour可快验；通过Hamiltonian cycle等known NP-complete problem可证明TSP decision NP-hard，所以它NP-complete。Optimization TSP通常称NP-hard。
+
+Brute force枚举tour约N!；Held-Karp dynamic programming约 $O(N^2 2^N)$，是巨大改进但仍非polynomial。NP-completeness不表示“没有algorithm”，只表示若P不等于NP，就没有能保证polynomial time解决all arbitrary instances的exact algorithm。
+
+<Algs4TSPDecisionLab />
+
+Complexity是worst-case statement。Branch-and-bound、cutting planes和modern SAT/ILP solvers可处理许多large structured instances，却仍可能遇到exponential cases。
+
+## 6.6.12 Coping with intractability：放松三项保证之一
+
+应对难解问题（coping with intractability）时，若P不等于NP，不能同时对NP-complete optimization保证：
+
+1. Polynomial worst-case time。
+2. Optimal solution。
+3. Arbitrary instances。
+
+<Algs4CopingTriangleLab />
+
+### 放松time guarantee：仍求exact
+
+对规模较小或实际instances友好的场景，可用branch-and-bound、meet-in-the-middle、dynamic programming、SAT/ILP encoding与constraint propagation。它们保留correctness和optimality，但worst case仍exponential。
+
+工程上应记录timeout、incumbent solution、lower bound和optimality gap；超时不能伪装成“无解”。
+
+### 放松optimality：approximation与heuristics
+
+Approximation algorithm在polynomial time给provable ratio。Minimization返回C，若：
+
+$$
+C\le \rho\cdot OPT
+$$
+
+则是rho-approximation。Heuristic可能表现好但无worst-case ratio，两者不能混称。
+
+<Algs4ApproximationLab />
+
+Lower bound必须valid，否则ratio没有certificate。Metric TSP有structure-dependent approximation；general TSP在缺乏triangle inequality时难以近似。
+
+Randomized local search、simulated annealing和genetic algorithms可产生high-quality candidates，但报告应分清empirical quality、probability guarantee和deterministic bound。
+
+### 放松generality：特殊结构与参数化
+
+若points都在circle boundary，optimal TSP按cyclic order访问；bounded treewidth、planarity、small integer weights或small parameter k也可能带来exact algorithms。
+
+<Algs4SpecialCaseLab />
+
+Fixed-parameter tractability把time写成：
+
+$$
+f(k)\,n^c
+$$
+
+Exponent c与k无关。即使f(k) exponential，只要domain保证k小，仍可形成可靠工程边界。Promise必须在入口验证，不能把general instance误送special solver。
+
+## 6.6.13 Unknown frontier与不能过度推断的结论
+
+Natural NP problems多数已分类为P或NP-complete，但仍有重要frontier。Factoring长期不知是否在P，也不认为已知NP-complete；若P不等于NP，Ladner theorem保证NP中存在neither P nor NP-complete的problems。
+
+3-SUM存在quadratic algorithm，但是否有truly subquadratic algorithm是fine-grained complexity问题。这里“hard”相对的是 $n^{2-\epsilon}$ threshold，而非P versus NP。
+
+Undecidable problems如halting problem不属于NP-complete：NP problems至少decidable并有polynomial certificates。Complexity讨论“需要多少资源”，computability先问“是否存在总会停机的algorithm”。
+
+Cryptography也利用believed hardness，但security需要average-case、adversarial和parameter assumptions，不能仅凭worst-case NP-hardness推出实际安全。
+
+## 6.6.14 Independent complexity certificate
+
+一份可复查的classification proof应列出：
+
+- Exact problem form：decision/search/optimization。
+- Encoding与input length。
+- YES certificate representation及size polynomial。
+- Verifier logic及time polynomial。
+- Reduction source、target、map和size growth。
+- YES if and only if YES的双向correctness proof。
+- 结论依赖的assumptions，例如P不等于NP。
+
+<Algs4ComplexityCertificateLab />
+
+对solver本身，还要分别报告worst-case class、instance distribution、timeout behavior、approximation ratio、observed quality与certificate。Theory不是替代benchmark，而是规定benchmark不能证明什么。
+
+## 6.6.15 逐步运行路线
+
+<Stepper>
+  <Step title="先固定输入编码与增长尺度" description="用bit length计量，不把numeric value混成input size；区分polynomial、exponential与factorial。">
+    <Algs4EncodingSizeLab />
+    <Algs4GrowthRaceLab />
+  </Step>
+  <Step title="把问题写成decision与certificate" description="明确YES witness长度、verifier步骤和time，区分search与optimization。">
+    <Algs4SearchDecisionLab />
+    <Algs4PolynomialVerifierLab />
+  </Step>
+  <Step title="分别证明membership与hardness" description="X in NP依赖certificate；NP-hardness依赖known-complete source到candidate的polynomial reduction。">
+    <Algs4NPCompleteDefinitionMap />
+    <Algs4HardnessReductionLab />
+  </Step>
+  <Step title="审计归约的双向正确性" description="检查map size、运行时间、YES equivalence、witness lift和edge-case promises。">
+    <Algs4CircuitSatLab />
+    <Algs4ComplexityCertificateLab />
+  </Step>
+  <Step title="选择可交付的难解策略" description="明确放松time、optimality或generality，并附timeout、gap、ratio或special-case certificate。">
+    <Algs4CopingTriangleLab />
+    <Algs4ApproximationLab />
+    <Algs4SpecialCaseLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Intractability是problem-level resource claim，不是某个implementation暂时慢。
+- Computational complexity研究all algorithms；结论必须绑定model、encoding与problem form。
+- Polynomial time是robust tractability surrogate，但不是现实性能的充分条件。
+- Input size按representation length计算，numeric-value loops可能是pseudo-polynomial或exponential。
+- P中的problems能polynomial solve；NP中的YES instances有polynomial certificate和verifier。
+- P and NP是否相等仍未知；NP不代表non-polynomial。
+- NP-completeness等于in NP加every NP problem reduces to it；NP-hard不要求membership。
+- Proving new NP-complete problem需要known-complete source reduce to candidate，并独立证明candidate in NP。
+- TSP decision是NP-complete，optimization是NP-hard；它们仍有exact exponential algorithms。
+- Coping with intractability要明确放松worst-case time、optimality或arbitrary instances。
+- Approximation、heuristic、parameterized和special-case algorithms提供不同、不可混淆的guarantees。
+- Complexity certificate记录encoding、witness、verifier、reduction与assumptions，使分类可独立复查。
+
+<Exercises>
+
+1. 一个algorithm对integer N执行到√N的trial division。以binary input length b表示其复杂度，并解释为什么O(√N)不是polynomial in b。
+2. 为Hamiltonian cycle decision写certificate与verifier，分析certificate size和verification time；再说明为什么这只证明problem in NP，不证明NP-hard。
+3. 已知3-SAT NP-complete。给出3-SAT到Independent Set的clause gadgets、conflict edges、target k，并证明YES equivalence的两个方向。
+4. 某exact TSP solver有timeout 10秒、返回tour cost 120和valid lower bound 100。计算gap与approximation-style ratio，并设计三种继续方案，分别放松time、optimality、generality。
+
+<Answer>
+
+N最多约为 $2^b$，所以√N约为 $2^{b/2}$。Trial divisions数量是 $O(2^{b/2})$，相对b为exponential。O(√N)只在把numeric value N当规模时成立；真实binary file只含b bits。若N用unary编码，表示长度约N，分类才会改变。
+
+</Answer>
+
+<Answer>
+
+Certificate是包含every vertex exactly once并回到start的vertex sequence，长度O(V log V) bits。Verifier用boolean seen array检查uniqueness与coverage，逐consecutive pair检查edge，最后检查closing edge，time O(V+E lookup cost)，在adjacency matrix下O(V)。这建立polynomial verifier，因此membership in NP；hardness还需known NP-complete problem到Hamiltonian cycle的polynomial reduction。
+
+</Answer>
+
+<Answer>
+
+每clause创建三个literal vertices并组成clique；任意互补literal pair跨clauses连conflict edge；令k为clause count。Satisfying assignment允许每clause挑一个true literal，selected vertices不同clause且不互补，所以independent。反向，size-k independent set因每个clause clique最多取一个而必须每clause恰取一个；无conflict保证literals consistent，可扩展成assignment并满足all clauses。Construction size polynomial。
+
+</Answer>
+
+<Answer>
+
+Candidate与lower bound ratio为120/100=1.20，relative gap为20%。放松time：继续exact branch-and-bound并保留lower bound，直到证明optimal或更长timeout。放松optimality：接受当前tour，并只在lower bound valid时报告不超过1.20倍的instance-specific certificate。放松generality：检测metric、Euclidean、bounded-treewidth或small-n structure，转交有exact polynomial或parameterized bound的special solver；若promise不满足则拒绝该路径。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="难解性">不存在polynomial-time algorithm的problem property；对NP-complete通常依赖P不等于NP假设。</GlossaryItem>
+  <GlossaryItem term="计算复杂性">研究problems在指定model下固有resource requirements的领域。</GlossaryItem>
+  <GlossaryItem term="多项式时间">由input length固定degree polynomial上界的running time。</GlossaryItem>
+  <GlossaryItem term="P">可由deterministic polynomial-time algorithm解决的decision problems。</GlossaryItem>
+  <GlossaryItem term="NP">YES instances具有polynomial-size certificate和polynomial-time verifier的decision problems。</GlossaryItem>
+  <GlossaryItem term="NP完全性">同时属于NP且every NP problem polynomially reduces to it。</GlossaryItem>
+  <GlossaryItem term="NP困难">Polynomial solve会推出P等于NP的hardness property，不要求problem属于NP。</GlossaryItem>
+  <GlossaryItem term="近似算法">Polynomial time返回带provable objective ratio的feasible solution。</GlossaryItem>
+  <GlossaryItem term="参数化算法">把complexity分离为parameter function与input-size polynomial的algorithm。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Algorithms, 4th Edition · Section 6.6 Intractability"
+  href="https://algs4.cs.princeton.edu/66intractability/"
+  author="Robert Sedgewick and Kevin Wayne"
+  license="本章按官方6.6页面重构computational complexity、polynomial time、P、NP、NP-completeness、TSP与coping with intractability，并补齐certificate、encoding、reduction direction、approximation和parameterized engineering checks；代码为教学化重新组织。"
+/>

@@ -1,0 +1,275 @@
+---
+title: "第6章：运行期语义"
+type: A
+section: Inside the C++ Object Model · Chapter 6
+order: 6
+description: 对齐原书第6章 Runtime Semantics：全局/局部静态对象、对象数组、new/delete 与 placement new，以及临时对象的物化、优化和生命周期。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/inside-the-c-plus-plus-object-model-9780201834543"
+draft: false
+---
+
+import {
+  IcoNewDeleteProtocolMap,
+  IcoStorageDurationLifecycleMap,
+  IcoTemporaryLifetimeMap,
+} from "@/components/mdx/inside-cpp-object-model/diagrams/runtime-semantics";
+
+<Objectives>
+
+- 能推导 global、local static、automatic 与 dynamic object construction and destruction 的触发点和顺序边界
+- 能解释 operators new/delete、new arrays 与 placement operator new 的分配、构造、异常回滚和释放责任
+- 能判断 temporary objects 何时物化、何时 lifetime extension、何时被 elide，并拆解 temporary myth
+
+</Objectives>
+
+## 从“有一块内存”不等于“有一个对象”开始
+
+runtime semantics 要区分 storage、lifetime 和 expression result。先预测 `malloc(sizeof(T))` 返回后 `T` 的 constructor 是否已经运行：没有。storage 只是可放 bytes 的区域；只有正确 initialization 开始 T lifetime 后，才能按 T object 使用。`new` expression 恰好把这两步组合成协议。
+
+<Term def="对象在运行期取得 storage、开始 lifetime、执行使用、结束 lifetime 并释放或复用 storage 的语言与实现规则。">
+  runtime semantics
+</Term>
+
+<IcoStorageDurationLifecycleMap />
+
+## 6.1 Object Construction and Destruction
+
+<Term def="依据 storage duration 与控制流，在规定时点开始对象 lifetime，并在正常退出、异常或程序终止时执行匹配 teardown。">
+  object construction and destruction
+</Term>
+
+### Global Objects
+
+<Term def="具有 static storage duration、在 namespace scope 或等价位置定义，其初始化可能分为静态初始化与动态初始化的对象。">
+  global objects
+</Term>
+
+global object 先经历 zero/constant initialization 能做的部分，再按规则执行 dynamic initialization。相同 translation unit 内有较强的顺序关系，跨 translation units 的动态初始化依赖可能不确定，形成 static initialization order problem。
+
+```cpp
+// config.cpp
+Config globalConfig = loadConfig();
+
+// registry.cpp
+Registry globalRegistry(globalConfig); // 跨 translation unit 依赖需重新设计
+```
+
+把依赖封装为 function-local static、显式 application bootstrap 或纯 constant initialization，可让顺序可见。termination 时只销毁成功构造并注册 teardown 的对象；跨 translation units 的 destruction dependency 同样危险。
+
+### Local Static Objects
+
+<Term def="在 block scope 声明、具有 static storage duration，但首次控制经过 declaration 时才初始化的对象。">
+  local static objects
+</Term>
+
+C++11 起，function-local static initialization 对并发首次进入提供线程安全保证；但 initializer 递归重入同一 declaration 仍是设计风险。它通常在 program termination 销毁，前提是 construction 成功完成。若第一次 construction 抛出，后续进入可再次尝试。
+
+```cpp
+Registry& registry() {
+    static Registry instance;
+    return instance;
+}
+```
+
+这能推迟初始化并把依赖集中到 call site，但不能自动解决 shutdown order：另一个 static destructor 若在 instance 已销毁后调用 `registry()`，仍会触发 lifetime bug。long-lived process 也可采用显式 owner 管理 teardown。
+
+<Callout
+  type="trap"
+  title="陷阱：function-local static解决所有全局生命周期问题"
+>
+  它解决首次使用初始化顺序并提供现代线程安全 guard，但不消除 hidden
+  dependency、reentrancy、 test isolation 和 termination order。需要明确谁在
+  shutdown 期间仍可访问该对象。
+</Callout>
+
+### Arrays of Objects
+
+<Term def="连续 storage 中按 index 从前向后构造、在 teardown 或部分失败时逆序析构的一组同类型对象。">
+  arrays of objects
+</Term>
+
+`T array[n]` 要为每个 element 执行对应 initialization。没有 element initializer 的 default construction 要求 `T` 有可访问 default constructor；若第 k 个 element constructor 抛出，前 k 个已构造 elements 逆序销毁，整个 array object 不成立。
+
+<Term def="在没有逐元素 initializer 时，为对象数组的每个 element 调用可用 default constructor 的要求。">
+  default constructors and arrays
+</Term>
+
+fixed array、`std::array` 与 `std::vector` 都表达元素集合，但 storage/size/exception protocol 不同。对动态数量优先 container owner，避免手工记住元素数和 matching delete form。
+
+## 6.2 Operators new and delete
+
+<Term def="可替换或重载的 raw storage allocation/deallocation functions；new/delete expressions 在其外还负责 construction/destruction。">
+  operators new and delete
+</Term>
+
+<IcoNewDeleteProtocolMap />
+
+`new T(args)` 先调用适用 `operator new` 取得 aligned storage，再在其中构造 T。constructor 抛出时，language 寻找 matching deallocation function 回收 storage。`delete pointer` 先执行 dynamic object destructor（要求 polymorphic base destructor 正确），再调用适用 `operator delete`。
+
+```cpp
+Widget* widget = new Widget(config);
+delete widget;
+
+Widget* many = new Widget[count];
+delete[] many;
+```
+
+single 与 array forms 必须匹配。现代代码用 `make_unique`、container 和 RAII owner 让 failure/early return 自动执行相同 protocol；直接 `new` 后再做会抛异常的工作，若没立即进入 owner 就可能泄漏。
+
+### The Semantics of new Arrays
+
+<Term def="array new 分配足够 storage 和可能的实现元数据，逐元素正序构造；delete-array 逐元素逆序析构再释放。">
+  semantics of new arrays
+</Term>
+
+implementation 可能保存 element count 的 array cookie，以便 `delete[]` 知道要析构多少个 nontrivial elements，但 cookie shape/位置不是标准 ABI 保证。若第 k 个 construction 失败，已完成 elements 逆序销毁并释放整块 allocation。用 scalar `delete` 处理 array pointer 是 undefined behavior，不是“少析构几个”的可控错误。
+
+### The Semantics of Placement Operator new
+
+<Term def="在 caller 提供且满足 size/alignment 的 storage 中开始对象 lifetime，不由标准 placement form 分配或释放该 storage。">
+  placement operator new
+</Term>
+
+```cpp
+alignas(Widget) std::byte storage[sizeof(Widget)];
+
+Widget* placed = new (storage) Widget(config);
+placed->run();
+placed->~Widget();
+```
+
+placement construction 成功后，storage 内才有 Widget lifetime；结束时显式调用 destructor，但不能对 `placed` 做普通 delete，因为 storage 不是 operator new 返回的。重复利用同一 storage 还要遵守旧 object lifetime 结束、alignment、pointer validity 和 `std::launder` 等现代规则。library code 可优先 `std::construct_at`/`destroy_at`。
+
+<Callout type="trap" title="陷阱：placement new返回的指针也能普通delete">
+  标准 placement form 没有拥有 storage；普通 delete 会尝试调用 deallocation
+  function 释放 stack/arena/buffer address，导致 undefined behavior。先显式
+  destroy object，再由原 storage owner 按自己的协议回收或复用。
+</Callout>
+
+## 6.3 Temporary Objects
+
+<Term def="为表达式求值、转换、返回或 reference binding 而物化、通常在 full-expression 结束时销毁的无名 class object。">
+  temporary objects
+</Term>
+
+<IcoTemporaryLifetimeMap />
+
+temporary 是否存在不能只看源码表面。class conversion、operator overload 和 reference binding 可能要求 materialization；返回 prvalue 在现代规则下可直接构造最终 result；optimizer 还可在 as-if rule 下移除无 observable effect 的对象。
+
+<Term def="把 prvalue 转换为有 identity、可绑定 reference 且具有明确 destruction point 的 temporary object。">
+  temporary materialization
+</Term>
+
+大多数 temporary 在包含它的 full-expression 结束时销毁。绑定到 local `const T&` 的某些 temporary 可延长到 reference lifetime；但从 function 返回对 temporary 的 reference 不会安全延长，得到 dangling reference。member/reference/new-initializer 等语境还有细则，必须按具体表达式判断。
+
+### A Temporary Myth
+
+<Term def="认为每个按值返回、转换或 operator expression 都必然产生昂贵可见临时对象，或相反认为 optimizer 会消除所有临时量的错误心智模型。">
+  temporary myth
+</Term>
+
+原书通过 program transformation 说明许多 apparent temporaries 可以由 compiler 合并；现代 copy elision 又强化了 direct construction。但 destructor side effects、reference binding、volatile/observable operations、unknown call boundary 等可能让 lifetime 有真实语义。正确顺序是：先按 language version 建模，再观察 optimized IR/assembly 与 constructor counters。
+
+temporary 成本也不只是一对 constructor/destructor：large buffer allocation、cache traffic、conversion chain 和 lost move/elision 都可能更大。API 设计可用 value return、view/reference、output owner 等不同 contract；选择由 ownership/lifetime correctness 和 profile 共同决定。
+
+## 第6章验证清单
+
+1. 分开 storage acquisition、object lifetime start、destruction 和 storage release。
+2. global/static dependency 同时检查 initialization 与 termination order。
+3. array construction 记录已成功 element count，并验证 failure reverse unwind。
+4. new-expression 拆成 operator new + constructor；delete 拆成 destructor + operator delete。
+5. single/array allocation 与 delete forms 严格匹配，不依赖 array cookie layout。
+6. placement construction 验证 size/alignment，显式 destruction，storage owner 单独回收。
+7. temporary 先判断 value category/materialization/full-expression，再判断 lifetime extension。
+8. 对 copy elision 和 temporary cost 使用当前 standard mode、counters 与 optimized output 验证。
+
+## 小结
+
+- runtime semantics 把 storage、object lifetime 与 expression evaluation 连接起来
+- global objects 有跨 translation unit 的 init/teardown dependency 风险
+- local static 推迟到首次使用并有线程安全 guard，但仍需设计 shutdown/reentrancy
+- object arrays 正序构造、逆序析构，部分失败只回滚已完成 elements
+- new/delete expressions 组合 allocation/lifetime，operator new/delete 本身只管理 raw storage
+- new arrays 可能用实现 cookie，scalar/array delete forms 不可混用
+- placement new 在外部 storage 开始 lifetime，必须显式 destroy 且不普通 delete
+- temporary myth 要靠 materialization、lifetime 与 elision 证据拆解，不能凭源码外观判断成本
+
+<Attribution
+  adaptedFrom="Inside the C++ Object Model, First Edition, Chapter 6: Runtime Semantics"
+  adaptedUrl="https://www.informit.com/store/inside-the-c-plus-plus-object-model-9780201834543"
+/>
+
+<Glossary>
+  <GlossaryItem term="runtime semantics">
+    运行期 storage、lifetime 与表达式行为规则。
+  </GlossaryItem>
+  <GlossaryItem term="object construction and destruction">
+    按 storage duration 建立和撤销对象。
+  </GlossaryItem>
+  <GlossaryItem term="global objects">
+    具有 static storage duration 的 namespace-scope 对象。
+  </GlossaryItem>
+  <GlossaryItem term="local static objects">
+    首次经过声明时初始化的 block-scope static 对象。
+  </GlossaryItem>
+  <GlossaryItem term="arrays of objects">
+    连续元素正序构造、逆序析构的对象集合。
+  </GlossaryItem>
+  <GlossaryItem term="default constructors and arrays">
+    无逐元素 initializer 时的默认构造要求。
+  </GlossaryItem>
+  <GlossaryItem term="operators new and delete">
+    管理 raw storage 的 allocation functions。
+  </GlossaryItem>
+  <GlossaryItem term="semantics of new arrays">
+    array allocation、逐元素构造与逆序释放协议。
+  </GlossaryItem>
+  <GlossaryItem term="placement operator new">
+    在 caller storage 中开始对象 lifetime。
+  </GlossaryItem>
+  <GlossaryItem term="temporary objects">
+    表达式求值中物化并按规则销毁的无名对象。
+  </GlossaryItem>
+  <GlossaryItem term="temporary materialization">
+    将 prvalue 物化为有 identity 的 temporary。
+  </GlossaryItem>
+  <GlossaryItem term="temporary myth">
+    把所有临时量一律视为昂贵或一律可消除的误解。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：审计四种 storage duration。** 为 global、local static、automatic、dynamic object 写出 lifetime start/end、exception path 和最可能的 dependency bug。
+
+<Answer question="storage duration怎样改变construction和teardown责任？">
+  global 在 static/dynamic initialization 阶段开始并在 termination 撤场，跨 TU
+  init/teardown dependency 最危险；local static 首次经过 declaration
+  构造，失败可重试， termination 顺序仍需审计；automatic 在 block
+  执行时构造，正常/exception scope exit 自动逆序析构；dynamic object 由 owner 在
+  allocation 后成功构造，并必须显式/RAII 触发 destruction 和 matching
+  deallocation。
+</Answer>
+
+2. **问题 2：展开三类 new 协议。** 对 single new、array new 第 k 个 element 抛异常、placement new，分别列 allocation、construction、rollback、destruction 与 deallocation。
+
+<Answer question="为什么三条路径不能共用同一个delete假设？">
+  single new 用 operator new 取 storage，constructor 失败调用 matching
+  deallocation； 成功后 delete 先析构再释放。array new 可能带 count
+  metadata，elements 正序构造，第 k 个失败则前 k 个逆序析构并 operator
+  delete[]；成功必须 delete[]。placement form 不分配 caller storage，失败由
+  caller 保留 storage；成功后显式 destructor，再由 arena/ buffer owner
+  处理，绝不能普通 delete。
+</Answer>
+
+3. **问题 3：判断四种 temporary lifetime。** 分析 direct prvalue return、local const-reference binding、conversion argument、return reference to temporary，并设计 constructor/destructor counter 验证。
+
+  <Answer question="怎样把temporary语义与优化证据分开？">
+    先按当前 language mode 判定：direct prvalue 可直接构造 final result；local const
+    reference 的适用 temporary 延长到 reference scope；conversion temporary 通常在
+    full-expression 末销毁；返回 temporary reference 不延长，结果 dangling。再以 side-effect
+    counters、关闭/开启可选 elision 的合法编译选项和 optimized output 比较，但不能由某个
+    compiler 的零次 copy 反推所有标准版本/表达式都无 temporary semantics。
+  </Answer>
+</Exercises>

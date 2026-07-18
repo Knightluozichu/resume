@@ -1,0 +1,235 @@
+---
+title: "Chapter 7：Functions: C++'s Programming Modules"
+type: A
+section: C++ Primer Plus 6e · 函数契约与数据形状
+order: 7
+description: 对齐第6版 Chapter 7：掌握函数原型、按值传递、数组/二维数组/C 字符串/结构体参数、递归与函数指针，并用前后置条件验证调用。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+draft: false
+---
+
+import {
+  EppFunctionCallLab,
+  EppFunctionContractMap,
+  EppFunctionParameterFlow,
+} from "@/components/mdx/cpp-primer-plus/diagrams/functions-programming-modules";
+
+<Objectives>
+
+- 能解释函数原型、调用和定义各自提供的证据，并写出参数范围、返回值、副作用与失败语义
+- 能实现函数与数组、二维数组、C 字符串、结构体、string/array 对象的参数契约，指出传递后丢失的形状信息
+- 能推导递归的基例、推进与栈深度，并使用函数指针把满足同一签名的操作作为参数传递
+
+</Objectives>
+
+## 为什么函数是契约而不只是代码片段
+
+函数把一项工作命名并形成调用边界。编译器能通过函数原型检查参数和返回类型，却不知道 `count` 是否匹配数组、指针是否可空、分数是否在 0–100、失败怎样报告。这些语义需要前置条件、后置条件和测试补齐。
+
+<Term def="调用前必须满足的输入与状态要求，以及成功或失败返回后保证的结果与副作用。">
+  函数契约
+</Term>
+
+<EppFunctionContractMap />
+
+## 函数原型让调用点可被独立检查
+
+函数原型声明名字、返回类型和参数类型。调用出现时，编译器据此检查实参数量与可转换性；定义可以位于另一个源文件，最终由链接器解析。
+
+<Term def="不提供函数体、只声明函数名字、返回类型和参数类型的接口声明。">
+  函数原型
+</Term>
+
+```cpp
+double average(const double values[], int count);  // prototype
+
+int main() {
+    double samples[3]{2.0, 4.0, 9.0};
+    std::cout << average(samples, 3) << '\n';
+}
+```
+
+参数名在原型中可省略，但写出有意义的名字能帮助读者理解单位和方向。声明与定义必须表示同一函数；返回类型差异或命名空间不一致可能让调用编译、链接却找不到匹配定义。
+
+## 按值传递建立独立形参对象
+
+普通参数按值传递：调用表达式先求实参值，再用它初始化函数调用帧中的形参。修改形参不改变调用者对象，除非值本身是指针且函数通过该地址修改 pointee。
+
+<Term def="以实参值初始化新的形参对象，函数修改形参本身不修改调用者原对象的传递方式。">
+  按值传递
+</Term>
+
+```cpp
+int increment(int value) {
+    return value + 1;
+}
+
+int original{4};
+int next{increment(original)};  // original == 4, next == 5
+```
+
+大 struct 按值会复制成员，但有独立性；只读大对象可在 Chapter 8 使用 const 引用。不要仅因“复制慢”把所有参数改指针，指针还引入可空、别名和生命周期契约。
+
+## 数组参数会调整为指针并丢失长度
+
+在函数参数中，`double values[]` 与 `double* values` 表示同一种参数形状。`sizeof(values)` 得到指针大小，不是调用数组总字节；函数必须另收 count，或使用携带长度的容器/视图。
+
+<Term def="数组参数声明在函数类型中调整为首元素指针，原数组长度不随参数自动传递的规则。">
+  数组参数调整
+</Term>
+
+```cpp
+double average(const double values[], int count) {
+    if (count <= 0) {
+        throw std::invalid_argument{"count must be positive"};
+    }
+    double total{0.0};
+    for (int i{0}; i < count; ++i) {
+        total += values[i];
+    }
+    return total / count;
+}
+```
+
+前置条件包括 values 指向至少 count 个存活 double、count 为正、每次访问在 `[0,count)`。`const` 防止通过该参数修改元素，但不证明非空和长度。
+
+<Callout type="trap" title="陷阱：函数体里的 sizeof(values) 能恢复调用数组长度">
+  参数已经调整为指针，类型不含原长度。显式传 count，或使用 `std::array<T,N>&`、vector/span 等携带范围的接口；不要从地址猜容量。
+</Callout>
+
+## 二维数组参数必须保留内层尺度
+
+`int grid[][3]` 调整为“指向含 3 个 int 的数组”的指针，列数 3 是指针步长的一部分，外层行数仍需另传。row/col 两层范围分别验证。
+
+```cpp
+int sum_grid(const int grid[][3], int rows) {
+    int total{0};
+    for (int row{0}; row < rows; ++row) {
+        for (int col{0}; col < 3; ++col) {
+            total += grid[row][col];
+        }
+    }
+    return total;
+}
+```
+
+若行列都运行时变化，内置二维数组参数不再合适；可以使用平坦 vector 加显式 strides，或封装矩阵类型让维度与数据共同移动。
+
+## C 字符串、struct 与标准对象保留不同信息
+
+C 字符串参数通常是 `const char*`，长度靠 `\0` 扫描，无法知道缓冲容量。struct 按值传递会复制全部成员；指向 struct 的指针只传地址。`std::string` 按值携带自己的长度和所有权，`std::array` 引用还能在类型中保留固定尺度。
+
+<Term def="函数参数在调用边界仍可获知的元素类型、长度、容量、成员、所有权与生命周期信息集合。">
+  参数形状
+</Term>
+
+<EppFunctionParameterFlow />
+
+设计接口时问：函数真正需要一个值、一个只读记录、一个可写对象、一个地址范围，还是一个文本视图？把所有情况都写成裸指针会抹平差异并增加前置条件。
+
+## 递归把问题缩小到基例
+
+递归函数直接或间接调用自身。正确递归需要可立即回答的基例，以及每次调用严格接近基例的推进量；否则调用帧持续增长直到栈资源耗尽。
+
+<Term def="函数通过调用自身解决更小实例，并由基例终止和回溯合成最终结果的控制结构。">
+  递归
+</Term>
+
+```cpp
+unsigned long long factorial(unsigned n) {
+    if (n <= 1) return 1;           // base case
+    return n * factorial(n - 1);    // progress
+}
+```
+
+数学递归正确不等于机器表示安全：factorial 很快溢出，n 来源也要限制。先预测调用树和最大深度，再测试 0、1、2、上界与上界外输入。
+
+<Callout type="trap" title="陷阱：有 if 就说明递归一定终止">
+  基例必须能从所有合法输入到达，递归参数每步都要严格推进。对负数或无变化参数，条件可能永远不到；写出度量和输入域才能证明。
+</Callout>
+
+## 函数指针把操作选择变成参数
+
+函数也有地址。函数指针类型包含返回类型和参数列表，调用者可把满足签名的目标传给高阶函数，实现排序比较、数值变换或回调。
+
+<Term def="保存特定函数签名目标地址、可通过间接调用选择行为的指针值。">
+  函数指针
+</Term>
+
+```cpp
+int square(int value) { return value * value; }
+int negate(int value) { return -value; }
+
+int apply(int value, int (*operation)(int)) {
+    return operation(value);
+}
+
+int result = apply(5, &square);
+```
+
+签名一致只证明类型形状，不证明目标语义、异常、副作用或线程要求。间接调用需要四套证据：签名匹配、目标非空、目标代码仍可执行，以及调用效果符合约定。
+
+<EppFunctionCallLab />
+
+先预测调用前后对象值、参数帧、范围和返回结果，再执行。对递归画出每一帧 n，对函数指针记录实际目标；“进入了同一个函数”不能说明复制、间接调用和范围契约相同。
+
+## 三步验收一个函数模块
+
+<Stepper>
+  <Step title="第一步：写原型与语义契约">
+    在调用前声明签名，并补充合法域、结果、副作用、所有权和失败行为；从同一头文件供声明与定义使用。
+
+    <EppFunctionContractMap />
+  </Step>
+  <Step title="第二步：标出参数形状损失">
+    对数组、二维数组、C 字符串和 struct 写出保留/丢失的信息，显式传 count、容量或 owner。
+
+    <EppFunctionParameterFlow />
+  </Step>
+  <Step title="第三步：追踪调用与故障">
+    测试按值不写回、空数组、非方二维数组、递归边界和 null callback；记录每帧和每个返回路径。
+
+    <EppFunctionCallLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 函数原型提供编译期调用检查，完整契约还需范围、副作用、所有权和失败语义
+- 按值传递建立独立参数，函数内修改不直接写回调用者
+- 数组参数调整为首元素 pointer 并丢失长度，二维数组只在类型中保留内层维度
+- C 字符串、string、array 和 struct 参数携带不同形状，参数形式应反映容量与写权限
+- 递归靠基例和推进终止，函数 pointer 靠完整签名与目标生命周期安全间接调用
+
+<Exercises>
+  1. **问题 1：数组契约。** `mean(values,count)` 对 count=0、null 和普通范围应怎样规定？
+
+  <Answer question="数组函数应如何定义空范围？">可规定 count=0 返回 0/optional/error 且不解引用 values；count>0 要求 values 非空并指向至少 count 个 int。普通循环只访问 [0,count)，测试空、一个、多个和 count 与存储不匹配的防护。</Answer>
+
+  2. **问题 2：二维参数。** 为什么 `const int (*grid)[3]` 仍要另传 rows？
+
+  <Answer question="二维数组参数保留了哪一维？">pointer 所指类型是含 3 个 int 的行数组，所以加一能跨过一整行并知道列宽；外层数组转换成首行 pointer 后，行数丢失，必须另传 rows。访问分别满足 row&lt;rows 与 col&lt;3。</Answer>
+
+  3. **问题 3：递归与 callback。** 设计 factorial 和 apply 的最小故障测试。
+
+  <Answer question="两种间接控制怎样验收？">factorial 测 0/1 基例、2/3 递推、最大不溢出值和超界拒绝，并记录深度；apply 测 square 正常目标、另一个同签名目标和 null 拒绝，确认参数/返回签名一致且目标代码生命周期覆盖调用。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="函数契约">函数调用前置条件、返回后保证、副作用与失败语义的约定。</GlossaryItem>
+  <GlossaryItem term="函数原型">声明函数名字、参数类型与返回类型以检查调用的接口。</GlossaryItem>
+  <GlossaryItem term="按值传递">以实参值初始化独立形参对象的传参机制。</GlossaryItem>
+  <GlossaryItem term="数组参数调整">数组形参转换为首元素 pointer、长度不随类型携带的规则。</GlossaryItem>
+  <GlossaryItem term="参数形状">调用边界仍保留的类型、维度、长度、容量和组合信息。</GlossaryItem>
+  <GlossaryItem term="递归">函数调用自身并以基例和推进量终止的控制结构。</GlossaryItem>
+  <GlossaryItem term="函数指针">保存匹配函数地址并支持间接调用的 pointer 类型。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++ Primer Plus, Sixth Edition, Chapter 7 Functions: C++'s Programming Modules"
+  adaptedUrl="https://www.informit.com/store/c-plus-plus-primer-plus-9780132781176"
+/>

@@ -1,168 +1,339 @@
 ---
-title: 序列化和反序列化二叉树
+title: "面试题37：序列化二叉树"
 type: C
-section: 树
-order: 2
-description: 设计字符串与二叉树的互转方案，支持空节点恢复。
+section: "第4章 解决面试题的思路"
+order: 41
+description: "以前序顺序写出节点值与美元符号空位，并让反序列化游标按同一递归结构逐记号消费，恢复唯一树形。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/37_SerializeBinaryTrees/SerializeBinaryTrees.cpp"
 draft: false
 ---
 
-{/* 知识点清单：先序遍历编码、空节点占位、反序列化递归恢复；原书章节：面试题37。 */}
+import { TreeSerializationTokenDiagram, NullMarkerAmbiguityMap, DeserializeCursorMap, SerializeTreesOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/serialize-binary-trees";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能解释为何序列化必须保留空节点边界。
-- 能给出确定性解码流程，保证一一对应。
-- 能处理空树与单节点树。
+- 能解释前序值序列为何必须配合空节点占位才能唯一恢复
+- 能计算完整树、偏斜树与空树的作者格式token流
+- 能实现作者流式读写及严格校验的现代解析器
+- 能分析截断、尾随token、整数溢出、缓冲区和资源释放边界
+- 能设计覆盖作者六组完整、偏斜、单点、空树与同值树测试
 
 </Objectives>
 
-## 直觉引入
+## 从“两个5为什么不能说明谁是左孩子”开始
 
-二叉树是有结构的“含空洞”对象。
-若不记录空子节点，就只能重建拓扑结构的一半。最稳定的是前序 + `#` 占位。
+先预测：根5只有左孩子5，与根5只有右孩子5，如果只写前序值都得到5、5。没有空位置，就无法知道第二个5在哪一侧，反序列化也不可能唯一选择。
 
-## 算法思路
+作者“**序列化二叉树**”采用<Term def="先写当前节点，再依次写左子树与右子树的遍历顺序。">前序遍历</Term>。非空节点写十进制整数和逗号；空节点写美元符号加逗号。旧页使用#是常见变体，但不是作者格式。
 
-1. 序列化：前序遍历。
-   - 非空节点写值。
-   - 空节点写 `#`。
-   - 以逗号分隔。
-2. 反序列化：按同样顺序消费 token。
-   - 遇到 `#` 返回空。
-   - 遇到数字新建节点，递归恢复左、右。
+<TreeSerializationTokenDiagram />
 
-<TreeDiagram />
+例如完整三层树得到`8,6,5,$,$,7,$,$,10,9,$,$,11,$,$,`。尾部逗号属于作者输出，每个token都由逗号终止。
 
-## 思考引导
+## 空节点占位符为何消除结构歧义
 
-### 1) 先问问题，不先序列化
-序列化本质是结构可恢复。你要先定义编码规则是否可唯一逆推，不是看起来像原样即可。
+<Term def="在值流中显式代表一个不存在的左或右孩子，作者使用美元符号。">空节点占位符</Term>`$`不携带节点值，却保存树形边界。遇到数字说明有节点并必须继续读取左右两棵子树；遇到`$`说明当前分支立即结束。
 
-### 2) 识别不变式
-遍历顺序 + 空节点标记必须共同确定树的拓扑。仅有值序列无法表达空位。
+<NullMarkerAmbiguityMap />
 
-### 3) 为什么它一定成立
-使用前序并显式表示空子节点，反序列化可逐步消费输入并恢复每一个分支。
+对n个真实节点，二叉树共有n减1条真实父子边；2n个孩子槽位中，空槽数量是2n减n减1，也就是n+1。因此完整编码有n个数字token和n+1个`$` token，共2n+1个。这也提供基本长度校验。
 
-### 4) 常见误区
-省略空标记会导致重建歧义，多路分支无法恢复到唯一树。
+Test6所有9个节点值都为5，仅看值完全无法区分形状；`$`分布仍能恢复每个左右空位。序列化不是压缩值，而是编码值与拓扑。
 
-### 5) 你能找到一个反例吗
-不同结构但值序列相同的树是反例源。若无法区分，序列化即失败。
+## 忠实还原作者流式格式
 
-### 6) 迁移到下一题
-RPC、持久化、快照传输都要求可逆；优先定义“可恢复格式”再谈压缩或美化。
-## 代码对照
+Serialize递归写ostream。空节点写`"$,"`后返回；非空先写值和逗号，再写左右子树。
 
-<CodeTabs>
-  <Tab label="C++">
 ```cpp
+#include <cstdlib>
+#include <istream>
+#include <ostream>
+
+struct BinaryTreeNode {
+    int m_nValue;
+    BinaryTreeNode* m_pLeft;
+    BinaryTreeNode* m_pRight;
+};
+
+void Serialize(const BinaryTreeNode* pRoot,
+               std::ostream& stream) {
+    if (pRoot == nullptr) {
+        stream << "$,";
+        return;
+    }
+
+    stream << pRoot->m_nValue << ',';
+    Serialize(pRoot->m_pLeft, stream);
+    Serialize(pRoot->m_pRight, stream);
+}
+
+bool ReadStream(std::istream& stream, int* number) {
+    if (stream.eof()) return false;
+
+    char buffer[32];
+    buffer[0] = '\0';
+    char ch;
+    stream >> ch;
+    int i = 0;
+    while (!stream.eof() && ch != ',') {
+        buffer[i++] = ch;
+        stream >> ch;
+    }
+
+    bool isNumeric = false;
+    if (i > 0 && buffer[0] != '$') {
+        *number = std::atoi(buffer);
+        isNumeric = true;
+    }
+    return isNumeric;
+}
+
+void Deserialize(BinaryTreeNode** pRoot,
+                 std::istream& stream) {
+    int number;
+    if (ReadStream(stream, &number)) {
+        *pRoot = new BinaryTreeNode{
+            number, nullptr, nullptr};
+        Deserialize(&((*pRoot)->m_pLeft), stream);
+        Deserialize(&((*pRoot)->m_pRight), stream);
+    }
+}
+```
+
+作者ReadStream把“读到数字”返回true，把`$`或EOF返回false。Deserialize只有数字时分配节点，孩子在递归前先设null；因此`$`分支无需额外写指针。
+
+<DeserializeCursorMap />
+
+这套代码用于可信示例文件。32字节buffer没有边界检查，超长token会写越界；atoi不报告非法字符或范围溢出；截断输入可能被当作空分支；函数也不拒绝完整树后的多余token。生产解析必须显式返回成功或失败。
+
+<Callout type="trap" title="把ReadStream的false同时当作合法$和任意解析失败">
+合法`$`空分支、文件提前结束、非法token都折叠为false，反序列化可能静默构造一棵截断树。严格格式需要区分Null、Number、End与Error四种状态。
+</Callout>
+
+## 严格解析器的格式契约
+
+把逗号分割后的字符串称为<Term def="编码流中一个完整的整数或空标记单位，由分隔符界定。">token</Term>。严格解析应拒绝空token、非法整数、数值越界、提前结束和根树之后的尾随token；构造失败时释放已分配前缀。
+
+下面用unique_ptr保证失败自动清理，并用from_chars做无区域设置、可检查的整数转换。它接受作者的尾随逗号，但不要求调用方通过文件流：
+
+```cpp
+#include <charconv>
+#include <memory>
 #include <string>
-#include <sstream>
+#include <string_view>
+#include <system_error>
 #include <vector>
 
 struct TreeNode {
-    int val;
-    TreeNode* left;
-    TreeNode* right;
-    TreeNode(int x) : val(x), left(nullptr), right(nullptr) {}
+    int value;
+    std::unique_ptr<TreeNode> left;
+    std::unique_ptr<TreeNode> right;
 };
 
-class Codec {
+class StrictCodec {
 public:
-    std::string serialize(TreeNode* root) {
-        std::string out;
-        pre(root, out);
-        return out;
-    }
+    bool deserialize(
+        std::string_view data,
+        std::unique_ptr<TreeNode>& output) {
+        tokens_.clear();
+        index_ = 0;
 
-    TreeNode* deserialize(const std::string& data) {
-        std::stringstream ss(data);
-        std::string token;
-        std::vector<std::string> items;
-        while (std::getline(ss, token, ',')) items.push_back(token);
-        int idx = 0;
-        return rebuild(items, idx);
+        std::size_t begin = 0;
+        while (begin < data.size()) {
+            const std::size_t comma = data.find(',', begin);
+            const std::size_t end =
+                comma == std::string_view::npos
+                    ? data.size() : comma;
+            if (end == begin) return false;
+            tokens_.push_back(data.substr(begin, end - begin));
+            if (comma == std::string_view::npos) break;
+            begin = comma + 1;
+        }
+
+        std::unique_ptr<TreeNode> candidate;
+        if (!parse(candidate) || index_ != tokens_.size()) {
+            return false;
+        }
+        output = std::move(candidate);
+        return true;
     }
 
 private:
-    void pre(TreeNode* node, std::string& out) {
-        if (!node) {
-            out += "#,";
-            return;
+    bool parse(std::unique_ptr<TreeNode>& output) {
+        if (index_ >= tokens_.size()) return false;
+        const std::string_view token = tokens_[index_++];
+        if (token == "$") {
+            output.reset();
+            return true;
         }
-        out += std::to_string(node->val) + ',';
-        pre(node->left, out);
-        pre(node->right, out);
+
+        int value = 0;
+        const auto [ptr, error] = std::from_chars(
+            token.data(), token.data() + token.size(), value);
+        if (error != std::errc{} ||
+            ptr != token.data() + token.size()) {
+            return false;
+        }
+
+        auto node = std::make_unique<TreeNode>();
+        node->value = value;
+        if (!parse(node->left) || !parse(node->right)) {
+            return false;
+        }
+        output = std::move(node);
+        return true;
     }
 
-    TreeNode* rebuild(const std::vector<std::string>& items, int& idx) {
-        if (idx >= (int)items.size() || items[idx] == "#") {
-            ++idx;
-            return nullptr;
-        }
-        auto* node = new TreeNode(std::stoi(items[idx++]));
-        node->left = rebuild(items, idx);
-        node->right = rebuild(items, idx);
-        return node;
-    }
+    std::vector<std::string_view> tokens_;
+    std::size_t index_ = 0;
 };
 ```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-class TreeNode {
-    val: number;
-    left: TreeNode | null;
-    right: TreeNode | null;
-    constructor(val: number) {
-        this.val = val;
-        this.left = null;
-        this.right = null;
-    }
+
+输入空字符串没有token，返回false；`"$,"`解析为合法空树。最后的index检查拒绝`"$,$,"`这类树后多余数据。若格式规定必须尾随逗号，还可额外检查data.back；这里兼容有无最后逗号，但序列化仍输出作者格式。
+
+把格式版本、字符编码、整数范围、最大节点数和最大深度写入<Term def="编码方与解码方共同遵守的标记、分隔、范围、错误和版本规则。">格式契约</Term>。否则同一字符串在不同实现中可能得到不同结果。
+
+## 反序列化为何能唯一恢复
+
+维护一个单调前进的<Term def="指向下一个尚未消费token的位置，每次递归恰消费当前子树完整编码。">解析游标</Term>。读到`$`返回空；读到数字创建根，然后递归消费左子树，再消费右子树。
+
+前序让根先出现，`$`又明确每个空分支，递归无需回看或猜测子树长度。一个数字token启动两个子解析，一个`$`结束一个子解析；完整树恰好平衡所有待填孩子槽位。
+
+若输入提前结束，仍有待填槽位，严格解析失败；若根完成后仍有token，说明输入包含第二棵树或垃圾，也失败。这是比“尽量构造”更适合持久化和网络协议的策略。
+
+## 作者六组往返测试
+
+Test1是8、6、10与5、7、9、11组成的完整三层树。Test2全左链5、4、3、2，Test3全右链5、4、3、2；两者验证`$`在每层不同方向的位置。Test4单节点5编码为`5,$,$,`，Test5空树编码为`$,`。
+
+Test6有9个值全为5的节点，左右结构不规则，专门验证空位而不是数值决定拓扑。每组都写入test.txt，再读回新树，并用isSameTree递归比较结构和值。源码总计六组。
+
+<SerializeTreesOfficialCaseLab />
+
+作者打印文件使用while(!eof())再提取字符，这是经典流读取反模式：最后一次提取失败后仍可能输出旧ch。正确打印应写while(fileIn >> ch)。这不影响Deserialize读取另一条新ifstream，但测试展示可能多一个末字符。
+
+```cpp
+#include <cassert>
+#include <memory>
+
+bool sameTree(const TreeNode* a, const TreeNode* b) {
+    if (a == nullptr || b == nullptr) return a == b;
+    return a->value == b->value &&
+           sameTree(a->left.get(), b->left.get()) &&
+           sameTree(a->right.get(), b->right.get());
 }
 
-function serialize(root: TreeNode | null): string {
-    const items: string[] = [];
-    const dfs = (node: TreeNode | null): void => {
-        if (!node) {
-            items.push('#');
-            return;
-        }
-        items.push(String(node.val));
-        dfs(node.left);
-        dfs(node.right);
-    };
-    dfs(root);
-    return items.join(',');
-}
+void testStrictCodec() {
+    StrictCodec codec;
+    std::unique_ptr<TreeNode> root;
 
-function deserialize(data: string): TreeNode | null {
-    const tokens = data.split(',');
-    let idx = 0;
+    assert(codec.deserialize(
+        "8,6,5,$,$,7,$,$,10,9,$,$,11,$,$,", root));
+    assert(root->value == 8);
+    assert(root->left->value == 6);
+    assert(root->right->right->value == 11);
 
-    const build = (): TreeNode | null => {
-        if (idx >= tokens.length || tokens[idx] === '#') {
-            idx++;
-            return null;
-        }
-        const node = new TreeNode(Number(tokens[idx++]));
-        node.left = build();
-        node.right = build();
-        return node;
-    };
+    assert(codec.deserialize("$,", root));
+    assert(root == nullptr);
 
-    return build();
+    assert(!codec.deserialize("5,$,", root));
+    assert(!codec.deserialize("5,x,$,$,", root));
+    assert(!codec.deserialize("5,$,$,9,$,$,", root));
 }
 ```
-  </Tab>
-</CodeTabs>
+
+自动往返还应断言serialize(deserialize(bytes))产生规范化同一字符串，称为<Term def="对象编码后解码保持结构和值相同，并可再次编码为同一规范格式。">往返一致性</Term>。对畸形输入则要断言失败且原output不被部分结果覆盖。
+
+畸形输入测试应按错误类别成组生成：删除合法流任意一个token验证截断；在完整根树后追加数字或`$`验证尾随数据；把整数替换为空串、字母、只有负号或超范围十进制验证词法检查；生成超过最大深度的连续单链验证资源限制。对每个失败用例，解析器都应返回false、保持调用方旧root不变，并由RAII释放临时节点。
+
+模糊测试可以先随机生成有限树，序列化后执行随机删除、插入和替换，再交给严格解析器。若变异串偶然仍是合法树，不能强行期待失败，而应验证重新序列化得到规范格式且再次解析同构。这样区分“无效输入被拒绝”和“另一份有效树被稳定接受”，避免把随机变异等同于错误标签。
+
+规范化还应规定整数是否允许前导加号、前导零和空白。作者ostream输出不会生成这些形式，严格解析可选择只接受规范十进制，减少同一树对应多种字节表示；若为了兼容放宽读取，写出端仍应只有一种标准形式。
+
+<Callout type="trap" title="只序列化非空节点的前序值">
+根左5与根右5都会编码成5,5，无法唯一恢复。即使所有值不同，某些序列仍可能对应不同形状；必须保存空孩子位置或配合另一种足以定形的结构信息。
+</Callout>
+
+## 复杂度、深度与安全上限
+
+序列化访问每个真实节点和每个空槽一次，时间O(n)，输出含2n+1个token，字符长度还取决于整数位数。反序列化同样O(n)加数字解析成本，创建n个节点。
+
+递归调用栈O(h)。偏斜树h等于n，可能栈溢出；网络输入可故意构造超深编码。严格解析应设置最大token数、最大深度、单token长度与总字节数，超限即拒绝。
+
+作者buffer只有32字节且i不受限，是内存安全风险；stream>>ch还跳过空白，意味着格式中的空白可能被忽略。协议应明确是否允许空白，最好逐token解析而非逐字符写固定数组。
+
+整数转换要检查正负号、前导形式和范围。from_chars不会接受空字符串并可报告result_out_of_range；若要跨语言稳定，还应规定32位有符号范围和十进制编码。
+
+## 树契约与版本演进
+
+输入必须是有限无环树。共享子节点的DAG会被序列化为两份独立子树，反序列化后共享身份丢失；成环会无限递归。若要保存对象图身份，需要节点ID和引用token，不是本题格式。
+
+协议升级不能随意把`$`改成`#`或删除尾逗号而不考虑旧数据。可在消息前增加版本与长度，或保持解析器向后兼容、序列化器只输出最新规范。
+
+敏感数据持久化还需校验完整性和来源。格式可逆不等于可信；反序列化是资源分配入口，应先限制大小，再构造对象，避免内存耗尽。
+
+## 正确性证明
+
+对树结构归纳。空树序列化为单个`$`，解析返回空，正确。非空树先写根值，再递归写左右编码；解析先读同一根值，再按相同顺序分别消费左右子编码。
+
+由归纳假设，左右子树均被唯一恢复。`$`明确每个递归分支终点，任何token既不遗漏也不跨子树消费。因此反序列化序列化结果得到与原树结构和值相同的树。
+
+反方向上，严格解析完整消费一个合法token流后，再按规范序列化，每个数字和`$`的位置由恢复树唯一决定，得到相同规范流。
+
+<Stepper>
+  <Step title="按前序写节点和值"><TreeSerializationTokenDiagram />每个非空节点后继续写左、右子树，每个token以逗号分隔。</Step>
+  <Step title="为空孩子写美元符号"><NullMarkerAmbiguityMap />相同值序列只有加入空位后才能区分左、右与不规则形状。</Step>
+  <Step title="让游标递归消费一棵子树"><DeserializeCursorMap />数字创建节点并消费两棵子树，`$`结束一个分支。</Step>
+  <Step title="跑完六组官方往返"><SerializeTreesOfficialCaseLab />完整、偏斜、单点、空树和全同值结构验证可逆性。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 作者使用前序遍历，非空写整数，空节点写`$`。
+2. 每个token后带逗号，空树规范编码为`$,`。
+3. 空节点占位符保存拓扑，值序列本身不能唯一恢复树形。
+4. 反序列化游标遇数字构造节点并递归左右，遇`$`返回空。
+5. 作者ReadStream适合可信示例，不区分截断、错误与合法空标记。
+6. 严格解析要拒绝非法整数、提前结束和尾随token，并自动清理失败前缀。
+7. 时间O(n)、递归空间O(h)，不可信输入还需节点、深度和字节上限。
+8. 六组官方测试中全同值不规则树证明`$`是结构可逆的关键。
+
+<Exercises>
+
+**问题 1：根5只有左孩子5与只有右孩子5分别如何编码？**
+
+<Answer>左孩子版本是`5,5,$,$,$,`；右孩子版本是`5,$,5,$,$,`。非空值顺序都为`5,5`，差异完全来自`$`位置。</Answer>
+
+**问题 2：为什么单节点5需要两个`$`？**
+
+<Answer>节点5启动左右两个子树槽位；它的左孩子和右孩子都为空，各由一个`$`结束，所以完整编码为`5,$,$,`。</Answer>
+
+**问题 3：严格解析为何要检查根完成后没有剩余token？**
+
+<Answer>递归成功只证明前缀能构成一棵树。剩余token可能是第二棵树或垃圾；若不检查，畸形或拼接数据会被静默接受。</Answer>
+
+**问题 4：Test6所有值都相同，怎样验证往返正确？**
+
+<Answer>不能只比较前序值，必须递归比较每个对应节点的值以及左右空状态。`$`序列恢复的每个空位一致，才说明不规则结构相同。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="前序遍历">按节点、左子树、右子树顺序访问的编码次序。</GlossaryItem>
+  <GlossaryItem term="空节点占位符">显式表示不存在孩子的token，作者使用美元符号。</GlossaryItem>
+  <GlossaryItem term="token">由逗号界定的一个完整整数或空标记单位。</GlossaryItem>
+  <GlossaryItem term="解析游标">指向下一个待消费token并随递归单调前进的位置。</GlossaryItem>
+  <GlossaryItem term="格式契约">编码标记、分隔、范围、错误和版本的共同规则。</GlossaryItem>
+  <GlossaryItem term="往返一致性">编码后解码保持对象，且可重新得到同一规范编码。</GlossaryItem>
+</Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题37"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/37_SerializeBinaryTrees/SerializeBinaryTrees.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

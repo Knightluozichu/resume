@@ -1,0 +1,365 @@
+---
+title: "Item 3：理解 decltype"
+type: A
+section: Chapter 1 · Deducing Types
+order: 3
+description: 对齐 Effective Modern C++ Item 3：掌握无括号名称、lvalue/xvalue/prvalue 的 decltype 规则，用 decltype(auto) 保留 indexing return 的 reference/proxy，并约束 forwarding access 的生命周期。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch01.html"
+draft: false
+---
+
+import {
+  EmcppDecltypeAutoReturnMap,
+  EmcppDecltypeRuleMap,
+  EmcppForwardingAccessLifetimeMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-03-understand-decltype";
+
+<Objectives>
+
+- 能区分 unparenthesized name/member access 与一般 expression 的 decltype 规则，并推导 T、T reference 或 T double ampersand
+- 能实现 decltype(auto) indexing accessor，保留 container operator 返回的 reference 或 proxy contract
+- 能分析 forwarding reference accessor 对 lvalue/rvalue containers 的 lifetime，并设计防悬空边界
+
+</Objectives>
+
+## 从“几乎原样报告类型”开始
+
+`decltype` 通常返回 name 或 expression 的精确类型，保留 const 和 reference，不像 template/auto by-value deduction 那样主动擦除外层修饰。
+
+<Term def="在不执行 expression 的情况下，由 compiler 查询名称或表达式类型的语言运算符。">
+  decltype
+</Term>
+
+<Term def="变量、参数或成员在 declaration 中明确写出并经别名展开后的类型。">
+  declared type
+</Term>
+
+Item 3 的原则是 Understand decltype（理解 decltype）。关键不是一句“得到表达式类型”，而是无括号 name 的特殊规则和一般 expression 的 value category 规则。
+
+<EmcppDecltypeRuleMap />
+
+先预测 `decltype(x)` 与 `decltype((x))`，只多一层括号却可能分别是 int 和 int reference。
+
+## 无括号名称返回 declared type
+
+```cpp
+const int answer = 42;
+const int& alias = answer;
+
+decltype(answer) a = 0; // const int
+decltype(alias) b = a;  // const int&
+```
+
+<Term def="单独的变量名或无括号 class member access，decltype 直接读取其声明类型。">
+  unparenthesized-name rule
+</Term>
+
+引用变量 alias 的 declared type 含 reference，因此结果保留 reference；const 对象 answer 的结果也保留 const。
+
+```cpp
+struct Record { double score; };
+const Record record{};
+
+decltype(record.score) x = 0.0; // double: member declared type
+```
+
+无括号 member access `record.score` 采用 score 的 declared type，不因 record 是 const 自动变成 const double。
+
+<Term def="无括号 object.member 或 pointer-to-member access 返回成员声明类型的特殊处理。">
+  member-access declared-type rule
+</Term>
+
+## 一般 expression 按 value category 返回 reference
+
+对不是无括号名称/member access 的 expression：
+
+- lvalue expression 产生 T reference
+- xvalue expression 产生 T double ampersand
+- prvalue expression 产生 T
+
+<Term def="拥有 identity、通常可取地址并可出现在赋值左侧的表达式类别。">
+  lvalue expression
+</Term>
+
+<Term def="表示可复用资源的将亡对象、拥有 identity 的右值表达式类别。">
+  xvalue expression
+</Term>
+
+<Term def="初始化临时结果、没有持久 identity 的纯右值表达式类别。">
+  prvalue expression
+</Term>
+
+```cpp
+int x = 0;
+
+static_assert(std::is_same_v<decltype((x)), int&>);
+static_assert(std::is_same_v<decltype(std::move(x)), int&&>);
+static_assert(std::is_same_v<decltype(x + 1), int>);
+```
+
+## 括号改变的是语法分类
+
+`x` 是 unparenthesized name，走特殊规则并得到 declared type int；`(x)` 不再是那种语法形式，作为一般 lvalue expression 得到 int reference。
+
+<Term def="给 name 添加括号后从 declared-type 特例切换到 expression value-category 规则。">
+  parenthesized-expression switch
+</Term>
+
+<Callout type="trap" title="陷阱：括号永远不影响 expression type">
+  对多数运行计算，冗余括号不改变值；对 decltype 的语法分类，`x` 与 `(x)`
+  可能分别产生 T 与 T reference。review `decltype(auto)` initializer/return
+  时尤其要警惕。
+</Callout>
+
+## decltype 不执行 expression
+
+```cpp
+Widget makeWidget();
+using Result = decltype(makeWidget().size());
+```
+
+<Term def="expression 只参与编译期类型分析，运行时 side effects 不发生的上下文。">
+  unevaluated operand
+</Term>
+
+`makeWidget()` 不会被调用。name lookup、overload resolution、access 和 expression validity 仍要成立；只是没有运行执行。
+
+## C++11 trailing return 保留 indexing 类型
+
+generic container `operator[]` 可能返回 T reference，也可能返回 proxy。C++11 可写：
+
+```cpp
+template<class Container, class Index>
+auto access(Container& container, Index index)
+    -> decltype(container[index]) {
+    return container[index];
+}
+```
+
+<Term def="在 parameter names 已进入作用域后，用箭头和 decltype 声明函数返回类型。">
+  trailing return type
+</Term>
+
+返回类型精确等于 indexing expression，可让 `access(values, 3) = 9` 修改原元素。
+
+## plain auto return 会擦除 reference
+
+C++14 允许：
+
+```cpp
+template<class Container, class Index>
+auto accessCopy(Container& container, Index index) {
+    return container[index];
+}
+```
+
+但 function auto return 使用 template deduction；若 expression 为 `T&`，推导结果通常是 T，返回 copy。
+
+<Term def="auto function return 使用模板推导，可能移除 return expression 的 reference 和 top-level cv。">
+  auto-return reference loss
+</Term>
+
+代码仍编译，行为却变成修改 temporary/copy，最危险的是测试只读取返回值而没验证 mutation。
+
+## decltype(auto) 把 decltype 规则交给 initializer/return
+
+```cpp
+template<class Container, class Index>
+decltype(auto) accessExact(Container& container, Index index) {
+    return container[index];
+}
+```
+
+<Term def="让 compiler 对 initializer 或 return expression 应用 decltype rules 的占位类型。">
+  decltype auto
+</Term>
+
+`decltype(auto)` 必须单独占据 type specifier，不能再添加 pointer/reference declarator。它保留 reference、cv 或 proxy type。
+
+<EmcppDecltypeAutoReturnMap />
+
+<Term def="容器为压缩存储或延迟写入返回的非普通 reference 轻量对象。">
+  indexing proxy result
+</Term>
+
+对 `vector<bool>` 一类接口，保留 proxy 与返回 bool copy 有完全不同的写入语义。
+
+## decltype(auto) variable 也受括号影响
+
+```cpp
+int x = 0;
+
+decltype(auto) v1 = x;   // int
+decltype(auto) v2 = (x); // int&
+```
+
+<Term def="变量 initializer 使用 decltype 规则，因此括号可能让 value variable 变成 reference variable。">
+  decltype-auto variable sensitivity
+</Term>
+
+<Callout type="trap" title="陷阱：为可读性给 decltype(auto) initializer 加括号">
+  这可能静默改变 ownership 与 lifetime。若要 value 明确写 auto/类型；若要
+  reference 明确写 reference 或以 static assertion 固定 contract。
+</Callout>
+
+## 完美转发 container 需要更完整版本
+
+```cpp
+template<class Container, class Index>
+decltype(auto) accessForward(Container&& container, Index index) {
+    return std::forward<Container>(container)[index];
+}
+```
+
+<Term def="以 forwarding reference 接收 container，并恢复调用者 value category 后执行索引。">
+  forwarding container access
+</Term>
+
+这允许 const/non-const、lvalue/rvalue containers 调用，并保留对应 overload 返回类型。
+
+## 类型精确不等于 lifetime 安全
+
+```cpp
+auto&& dangling = accessForward(std::vector<int>{1, 2, 3}, 0);
+```
+
+临时 vector 在 full expression 结束后销毁，返回 element reference 悬空。
+
+<Term def="函数返回指向临时 owner 内部的 reference/view，owner 销毁后失效。">
+  forwarded-owner dangling
+</Term>
+
+可选设计：只接受 lvalue container；rvalue overload 返回 value；或明确禁止保存结果。
+
+```cpp
+template<class Container, class Index>
+decltype(auto) accessSafe(Container& container, Index index) {
+    return container[index];
+}
+```
+
+<EmcppForwardingAccessLifetimeMap />
+
+<Term def="通过 reference-only 参数或 constraints 阻止临时 owner 产生借用返回。">
+  borrowed-return lifetime gate
+</Term>
+
+## return expression 括号也会改变结果
+
+```cpp
+decltype(auto) dangerous() {
+    int local = 0;
+    return (local); // int& dangling
+}
+```
+
+<Term def="decltype(auto) return 因括号把 local name 变成 lvalue expression 并返回悬空 reference。">
+  parenthesized local return bug
+</Term>
+
+compiler 可能 warning，但 API contract 应通过 code review/static analysis 直接禁止返回 local borrow。
+
+## 验证精确返回不能只打印类型
+
+1. `std::is_same_v` 验证 const/non-const/lvalue overload 的静态类型。
+2. mutation test 证明返回 reference 能更新 owner。
+3. proxy container test 验证 proxy behavior。
+4. compile-fail 拒绝 rvalue owner，或测试 rvalue overload 返回 value。
+5. sanitizer 检查 full-expression 后使用没有 dangling。
+
+<Term def="同时检查静态返回类型、写入行为、proxy 和 owner lifetime 的测试集合。">
+  exact-return contract matrix
+</Term>
+
+先预测 `decltype(name)`、`decltype((name))` 与三类 value categories，再用 static assertions 验证。
+
+## 小结
+
+- decltype 对无括号 name/member access 返回 declared type
+- 对一般 expression，lvalue 得 T reference、xvalue 得 T double ampersand、prvalue 得 T
+- plain auto return 采用模板推导，可能丢失 indexing reference
+- decltype(auto) 对 initializer/return 应用 decltype，保留 reference、cv 或 proxy
+- 精确 forwarding return 可能从临时 owner 返回悬空 reference，必须建立 lifetime gate
+- 括号能让 name 切换到 lvalue expression 规则，review 时不可视作无意义格式
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 3"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch01.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="decltype">不执行表达式而查询类型。</GlossaryItem>
+  <GlossaryItem term="declared type">名称在声明中的精确类型。</GlossaryItem>
+  <GlossaryItem term="unparenthesized-name rule">
+    无括号名称直接返回声明类型。
+  </GlossaryItem>
+  <GlossaryItem term="member-access declared-type rule">
+    无括号成员访问返回成员类型。
+  </GlossaryItem>
+  <GlossaryItem term="lvalue expression">
+    有 identity 的左值表达式。
+  </GlossaryItem>
+  <GlossaryItem term="xvalue expression">可移动的将亡值表达式。</GlossaryItem>
+  <GlossaryItem term="prvalue expression">产生临时结果的纯右值。</GlossaryItem>
+  <GlossaryItem term="parenthesized-expression switch">
+    括号切换到 value-category 规则。
+  </GlossaryItem>
+  <GlossaryItem term="unevaluated operand">
+    只分析类型而不运行的表达式。
+  </GlossaryItem>
+  <GlossaryItem term="trailing return type">
+    参数后用箭头声明返回类型。
+  </GlossaryItem>
+  <GlossaryItem term="auto-return reference loss">
+    auto return 擦除引用。
+  </GlossaryItem>
+  <GlossaryItem term="decltype auto">
+    使用 decltype 规则的占位类型。
+  </GlossaryItem>
+  <GlossaryItem term="indexing proxy result">
+    容器索引返回的代理对象。
+  </GlossaryItem>
+  <GlossaryItem term="decltype-auto variable sensitivity">
+    括号改变变量值/引用类型。
+  </GlossaryItem>
+  <GlossaryItem term="forwarding container access">
+    转发 container 值类别的索引。
+  </GlossaryItem>
+  <GlossaryItem term="forwarded-owner dangling">
+    临时 owner 销毁后的返回悬空。
+  </GlossaryItem>
+  <GlossaryItem term="borrowed-return lifetime gate">
+    阻止临时 owner 借用返回。
+  </GlossaryItem>
+  <GlossaryItem term="parenthesized local return bug">
+    括号导致返回 local reference。
+  </GlossaryItem>
+  <GlossaryItem term="exact-return contract matrix">
+    类型、行为和 lifetime 测试表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：比较 decltype(x) 和 decltype((x))。** x 是 const int variable。
+
+<Answer question="为什么结果不同？">
+  无括号 x 命中 name 特例，结果是 declared type const int；(x) 是一般 lvalue
+  expression，decltype 按 value category 返回 const int lvalue reference。用
+  is_same static assertions 固定两种结果，避免 runtime typeid 省略引用。
+</Answer>
+
+2. **问题 2：修复 generic indexing accessor。** plain auto 让赋值不再更新 vector。
+
+<Answer question="返回类型和测试怎样设计？">
+  C++14 用 decltype(auto) 并直接 return container[index]；C++11 用 trailing
+  return decltype(container[index])。static assertion 检查普通 vector 返回
+  element reference，mutation test 验证写回；另用 proxy container
+  验证不被错误转成 value。
+</Answer>
+
+3. **问题 3：accessForward 接受临时 vector 并返回 element reference。** 修复 lifetime。
+
+  <Answer question="有哪些安全边界？">最简单只接受 Container lvalue reference，rvalue 调用 compile-fail；或为 rvalue overload 返回 value/move result，lvalue overload 仍返回 decltype(auto)。用 sanitizer 和 full-expression 后访问测试证明无 dangling，并记录 borrowed return 不延长 owner lifetime。</Answer>
+</Exercises>

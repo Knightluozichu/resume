@@ -1,0 +1,236 @@
+---
+title: "Chapter 11：GC 模式与设置（GC Flavors and Settings）"
+type: A
+section: Pro .NET 内存管理（第2版）· 吞吐、延迟与内存约束
+order: 11
+description: 对齐原书第 11 章：比较 workstation/server 与 background/blocking，解释 foreground GC、延迟模式和 NoGCRegion，并以运行时配置、容器 hard limit 与可观测指标建立调优闭环。
+demo: false
+math: false
+sourceUrl: "https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_11"
+draft: false
+---
+
+import {
+  DnmBackgroundGcTimelineLab,
+  DnmGcFlavorMatrixMap,
+  DnmGcSettingsExperimentLab,
+} from "@/components/mdx/dotnet-memory/diagrams/gc-flavors-and-settings";
+
+<Objectives>
+
+- 能描述 workstation/server 与 background/blocking 两个正交维度的 heap、线程、暂停和资源差异，并识别 foreground GC
+- 能分析 Batch、Interactive、LowLatency、SustainedLowLatency 与 NoGCRegion 的适用窗口、失败条件和内存代价
+- 能设计单变量 GC 配置实验，核对实际生效值，并用吞吐、p95/p99、CPU、heap/working set、完整回收与 OOM 余量验收
+
+</Objectives>
+
+## 为什么 GC flavor 不是“服务器就选 Server”
+
+GC 自带动态预算和启发式，默认配置对多数应用已是合理起点。Flavor 调整的是 heap/线程拓扑与回收并发方式，不会修复静态缓存泄漏、错误对象生命周期或无界分配。只有负载、硬件与 SLO 都明确时，配置对照才有意义。
+
+<Term def="面向客户端与较低资源占用的 GC 主模式，通常使用单个逻辑 heap；前台回收工作主要由触发回收的应用线程执行。">工作站 GC</Term>
+
+<Term def="面向多核高吞吐负载的 GC 主模式，维护多个逻辑 heaps，并使用专用 GC 线程并行处理；它通常消耗更多 CPU 和内存。">服务器 GC</Term>
+
+<DnmGcFlavorMatrixMap />
+
+主 flavor 与 Gen 2 执行方式是两个维度：workstation/server 决定拓扑，background/non-concurrent 决定完整回收能否把部分工作与应用并发。机器只有一个逻辑 CPU 时会使用 workstation；托管宿主还可能覆盖应用默认设置。部署后必须读取实际值，不能只看项目文件。
+
+<Callout type="trap" title="陷阱：Server GC 一定让请求更快">
+  Server GC 适合高分配、多核吞吐，但多个 heaps、专用线程和更大预算可能抬高工作集，并与业务争用 CPU/内存带宽。低并发、小容器或响应性优先进程可能更适合 workstation。必须做同负载 A/B，而不是按机器名称选择。
+</Callout>
+
+## Server GC 怎样并行，又为何不会线性加速
+
+Server GC 通常为多个 heaps 配置专用 GC 工作线程，让不同 heap 的 mark/plan/compact 协同并行。应用线程可向与当前处理器关联的 heap 分配，降低单一分配锁争用。Heap count 可受运行时、可用 CPU、容器 CPU quota 与高级配置限制，并不承诺永远等于物理/逻辑核数。
+
+GC 大量扫描、复制和清零受内存带宽与缓存一致性限制。官方章节脚注特别提醒：四核并行处理同样内存不会得到四倍速度。提高 heap count 还增加 segment/region、free lists、card/mark 元数据与最小工作集。若 CPU 利用率不高但 GC 已打满内存带宽，继续加线程只会增加争用。
+
+```text
+possible throughput gain = parallel heap work - synchronization - bandwidth contention
+memory cost              = per-heap budget + committed regions + GC metadata
+acceptance               = requests/s, CPU, allocation rate, pause p99, heap + RSS
+```
+
+高级的 `System.GC.HeapCount`、affinity mask/ranges 只应在进程绑定、NUMA 或多个同机实例等已量化场景使用。错误限制 heaps 会压低吞吐，错误亲和性会让 GC 与业务集中到同一处理器；这些不是常规首选开关。
+
+## Background GC 如何与 Foreground GC 交错
+
+<Term def="把 Gen 2 的主要回收工作放到一个或多个专用线程，与托管应用执行部分并发的模式；它仍包含协调点和暂停。">后台 GC</Term>
+
+Background 只针对 Gen 2。后台 Gen 2 尚未结束时，应用仍在分配；年轻代预算到达后可请求 <Term def="后台 Gen 2 期间插入的 Gen 0/1 回收；后台 GC 线程在安全点让路，所有托管线程仍会为该年轻代回收暂停。">前台 GC</Term>。Foreground 完成后，应用与后台 Gen 2 再继续。它解决了旧式 concurrent GC 在长回收期间的分配限制，却不等于零 pause。
+
+<DnmBackgroundGcTimelineLab />
+
+先预测高分配率或小年轻代预算会插入多少 foreground collections，再调节参数。真实时间线要看 GC type/depth、PauseStart/Stop、SuspendEE/RestartEE 与 background phase 事件；高 `Suspend MSec` 还可能来自最慢线程迟迟不能到安全点，而不是 GC 算法工作本身。
+
+<Term def="在选定范围内把需要停止世界的回收工作集中完成的 non-concurrent 路径；托管应用线程在关键阶段无法继续执行。">阻塞回收</Term>
+
+Blocking Gen 2 集中暂停，但避免后台线程长期与业务竞争 CPU/带宽，批处理负载可能得到更好总吞吐。Background 往往缩短单次完整暂停，却可能延长总回收墙钟时间并保持更大 heap。选择依据应是吞吐、pause distribution 和资源曲线，不是“background”这个名字。
+
+## 延迟模式改变哪些回收倾向
+
+<Term def="通过 GCSettings.LatencyMode 在吞吐、完整回收侵入性、heap 增长与碎片之间调整的进程级运行策略。">延迟模式</Term>
+
+`Interactive` 是常见默认，平衡响应和吞吐；`Batch` 追求吞吐，会覆盖 concurrent 设置并采用更侵入的批式回收；`LowLatency` 只适用于 workstation 的短关键窗口，抑制 Gen 2；`SustainedLowLatency` 可用于 workstation/server 较长窗口，要求 background GC，抑制 foreground Gen 2，但允许 background Gen 2。
+
+Low latency 不是禁止所有回收：Gen 0/1 仍会发生，低内存信号或应用显式 `GC.Collect(2)` 仍可触发完整回收。抑制 Gen 2 会让 heap、碎片和晋升积累，关键窗口越长、分配越多，退出时的回收债务越大。
+
+```csharp
+using System.Runtime;
+
+GCLatencyMode previous = GCSettings.LatencyMode;
+try
+{
+    GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
+    ExecuteLatencyCriticalWindow(); // 仍应严格控制 SOH/LOH 分配
+}
+finally
+{
+    GCSettings.LatencyMode = previous;
+}
+```
+
+`LatencyMode` 是进程级状态，不是当前线程私有开关。多个组件同时切换会互相覆盖；应由明确所有者管理窗口，并在 `finally` 恢复。若 background 被禁用，SustainedLowLatency 不可按预期使用。
+
+## NoGCRegion 与 LowLatency 有何本质区别
+
+<Term def="应用预先声明可承受的总分配（可含 LOH）预算，运行时在预算和条件允许时临时避免 GC；预算不足会拒绝进入，期间越界或诱导回收会使结束失败。">无 GC 区域</Term>
+
+`GC.TryStartNoGCRegion(totalSize, lohSize, disallowFullBlockingGC)` 是带容量契约的短期机制。返回 `false` 表示运行时无法准备预算，应用必须正常退化；成功后仍不能无界分配。若分配超预算、其他线程诱导 GC 或条件被破坏，`EndNoGCRegion` 会报告失败。
+
+```csharp
+const long totalBudget = 64 * 1024 * 1024;
+const long lohBudget = 8 * 1024 * 1024;
+
+if (GC.TryStartNoGCRegion(totalBudget, lohBudget, disallowFullBlockingGC: true))
+{
+    try
+    {
+        ProcessBoundedFrameBatch();
+    }
+    finally
+    {
+        GC.EndNoGCRegion();
+    }
+}
+else
+{
+    ProcessWithNormalGc();
+}
+```
+
+预算必须覆盖进程中所有线程在窗口内的相关分配，而不只当前方法。进入前用 allocation trace 得到峰值并留裕量；结束异常要作为可观测失败处理。它适合有确定边界的极短实时段，不是“让服务永久无 GC”。
+
+## 启动配置与运行时 API 为什么不能混为一谈
+
+`System.GC.Server`、`System.GC.Concurrent`、heap hard limit、heap count、RetainVM 和 ConserveMemory 等通常只在 GC 初始化时读取。进程启动后修改环境变量不会改变当前实例。`.NET 6+` 环境变量统一推荐 `DOTNET_` 前缀，旧 `COMPlus_` 仍可能兼容；JSON 数值按十进制，环境变量数值常按十六进制解释，混用是常见事故源。
+
+```json
+{
+  "runtimeOptions": {
+    "configProperties": {
+      "System.GC.Server": true,
+      "System.GC.Concurrent": true,
+      "System.GC.HeapHardLimitPercent": 70,
+      "System.GC.ConserveMemory": 2
+    }
+  }
+}
+```
+
+与之不同，`GCSettings.LatencyMode` 是运行时 API，可在进程内改变。`GCSettings.IsServerGC` 与 `GC.GetConfigurationVariables()` 用于核对生效配置；发布产物、宿主、环境变量和容器设置都可能让实际值与源码意图不同。
+
+```csharp
+Console.WriteLine($"Server GC: {GCSettings.IsServerGC}");
+Console.WriteLine($"Latency: {GCSettings.LatencyMode}");
+
+foreach ((string name, object? value) in GC.GetConfigurationVariables())
+{
+    Console.WriteLine($"{name} = {value}");
+}
+```
+
+## Heap hard limit 怎样用于容器
+
+<Term def="GC heap 与其 bookkeeping 可提交内存的上限，可按字节或可用物理/容器限制百分比设置；它不是整个进程 RSS 上限。">堆硬限制</Term>
+
+在受限容器中，GC 会把容器 memory limit 视为可用物理内存基础；未显式设置时仍有运行时默认策略。`HeapHardLimitPercent` 必须给 JIT、线程栈、本机库、文件映射、socket buffers 和其他 native allocations 留余量。把 GC hard limit 直接设成容器 100% 会让进程在 GC 尚未越界前被 OOM kill。
+
+Per-object-heap limits 可分别约束 SOH/LOH/POH，但配置组合有完整性要求；误配可导致运行时初始化失败。先用总 hard limit 建立可解释边界，再只有在某一 heap 明确挤占预算时评估细分。
+
+`System.GC.ConserveMemory` 的 1–9 越高越积极缩小 heap，代价是更频繁、可能更长的回收；非零时还可能在 LOH 碎片较高时自动压缩。`RetainVM` 则在释放给 OS 与保留 standby 复用之间取舍。两个开关方向不同，不能同时改后只看一次 RSS。
+
+<DnmGcSettingsExperimentLab />
+
+图中的 workload preset 是实验起点，不是生产答案。先预测 server/background/conserve/hard-limit 对 CPU、pause 和 memory 的方向，再以真实版本/容器限额运行足够长的稳态压测。
+
+<Callout type="trap" title="陷阱：把 GC heap hard limit 当进程内存限额">
+  Hard limit 覆盖 GC heap commit 与 bookkeeping，不覆盖全部 native memory、线程栈和映射。容器验收必须同时看 `TotalCommittedBytes`、managed heap、process RSS、container working set/limit 与 OOM 事件，并保留本机内存安全余量。
+</Callout>
+
+## 怎样做单变量配置实验
+
+建立基线时固定运行时版本、CPU/memory limit、负载、预热、请求混合和时间窗。每轮只改一个维度：workstation/server、concurrent、latency window、hard limit 或 ConserveMemory。收集 requests/s、CPU、allocation MB/s、Gen 0/1/2 数量、GC type/reason、pause p50/p95/p99/max、heap/fragmentation/committed、RSS 与 OOM/超时。
+
+判断 server GC 时至少覆盖低并发与峰值并发；判断 background 时同时看单次 pause 与总 GC CPU/墙钟；判断低延迟时要包含进入、关键窗口、退出后的回收债务。配置若只改善平均值却让 p99 或 OOM 风险越过 SLO，应回滚。
+
+## 三步完成 GC flavor 调优闭环
+
+<Stepper>
+  <Step title="第一步：确认实际 flavor 与目标负载">
+    读取 IsServerGC、configuration variables、CPU quota 和 heap 数，先预测四种组合的资源/暂停差异，再选一个最小对照变量。
+
+    <DnmGcFlavorMatrixMap />
+  </Step>
+  <Step title="第二步：解释 background 时间线">
+    对齐后台 Gen 2、foreground Gen 0/1、SuspendEE 和业务请求；分开统计并发墙钟、暂停和 GC CPU，避免把高 suspend 全归因于 mark/compact。
+
+    <DnmBackgroundGcTimelineLab />
+  </Step>
+  <Step title="第三步：在真实约束下验收配置">
+    固定容器 limits 与负载，只改 server/concurrent、hard limit 或 ConserveMemory 之一；比较吞吐、p99、heap/RSS、完整回收和 OOM 余量并定义回滚线。
+
+    <DnmGcSettingsExperimentLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Workstation/server 决定 heap/线程拓扑，background/blocking 决定 Gen 2 执行方式；两个维度必须分开判断
+- Server GC 利用多 heap 和专用线程提高吞吐，但受内存带宽限制并增加资源占用，不保证所有服务器负载更快
+- Background Gen 2 允许应用并发，但年轻代 foreground GC 仍会暂停；高 Suspend 还可能来自线程协作
+- Latency modes 与 NoGCRegion 都以更大内存/回收债务换关键窗口响应，且都有触发例外、预算或模式约束
+- 启动配置要从运行实例核对；hard limit 不是进程 RSS，所有调优都应单变量、同负载、带回滚门槛
+
+<Exercises>
+  1. **问题 1：选择初始 flavor。** 一个 2 核、512 MB 容器中的低并发 API，开启 Server GC 后吞吐不变、RSS 增长 35%，应怎样分析？
+
+  <Answer question="为什么多核服务不自动适合 Server GC？">两核与低并发可能无法摊薄多 heaps/线程和预算开销，内存带宽及小容器又限制收益。先核对 CPU quota、实际 IsServerGC/heap count、allocation rate 和 pause，再与 workstation+background 做同负载 A/B；若吞吐/p99 无收益且 RSS 恶化，应回滚，而不是继续加 heap count。</Answer>
+
+  2. **问题 2：解释后台 GC 仍有暂停。** Trace 显示 background Gen 2 持续 200 ms，期间出现三次短暂停，这是否表示 background 失效？
+
+  <Answer question="Foreground GC 如何插入后台 Gen 2？">不表示失效。应用继续分配会耗尽年轻代预算，后台线程在安全点让路，Gen 0/1 foreground GC 暂停托管线程，完成后后台 Gen 2 与应用继续。应对齐每次 depth/type、SuspendEE 与 allocation rate，分别统计后台墙钟和 foreground pause。</Answer>
+
+  3. **问题 3：验收 SustainedLowLatency。** 关键交易窗口 p99 改善，但窗口结束后出现大 Gen 2 和工作集峰值，如何决定是否保留？
+
+  <Answer question="低延迟窗口要怎样计算回收债务？">同时比较窗口内 p99、Gen 0/1、分配与失败，窗口后的 Gen 2 pause/CPU、heap/fragmentation/RSS 和全天吞吐；缩短窗口并减少 LOH/pin/晋升，再测退出债务。只有关键 SLO 收益超过后续暂停和内存风险且有低内存退化策略时才保留。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="工作站 GC">单逻辑 heap、面向响应性和较低资源占用的主 GC 模式。</GlossaryItem>
+  <GlossaryItem term="服务器 GC">多 heaps 与专用并行线程、面向高吞吐的主 GC 模式。</GlossaryItem>
+  <GlossaryItem term="后台 GC">让 Gen 2 主要工作与应用部分并发执行的模式。</GlossaryItem>
+  <GlossaryItem term="前台 GC">后台 Gen 2 期间插入并暂停应用的年轻代回收。</GlossaryItem>
+  <GlossaryItem term="阻塞回收">把选定回收工作集中在停止世界区间完成的路径。</GlossaryItem>
+  <GlossaryItem term="延迟模式">调整完整回收侵入性、吞吐与 heap 增长倾向的进程级策略。</GlossaryItem>
+  <GlossaryItem term="无 GC 区域">以预先声明分配预算换取短窗口内避免 GC 的契约。</GlossaryItem>
+  <GlossaryItem term="堆硬限制">GC heap 与 bookkeeping 的提交上限，而非整个进程 RSS 上限。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Pro .NET Memory Management, Second Edition, Chapter 11 GC Flavors and Settings"
+  adaptedUrl="https://link.springer.com/chapter/10.1007/979-8-8688-0453-3_11"
+/>

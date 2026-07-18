@@ -6,9 +6,11 @@ order: 1
 description: 读完能设计线程安全的栈和队列（pop 返回 optional、condvar 阻塞队列），能用 hand-over-hand 交替加锁的细粒度链表和按 key 分桶的查找表提高并发，并知道为什么绝不能把指向内部受保护数据的指针或引用泄露到锁的作用域之外。
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://livebook.manning.com/book/c-plus-plus-concurrency-in-action-second-edition/chapter-6"
 draft: false
 ---
+
+import { LockBasedStructureMap } from "@/components/mdx/cpp-concurrency/diagrams/lock-based";
 
 {/* C 实战型第七章（《C++ 并发编程实战》第2版 §6 改编重写）：原书讲线程安全数据结构的设计原则、线程安全栈/队列（含 condvar 阻塞队列）、细粒度锁链表（hand-over-hand）、线程安全查找表（分桶 + shared_mutex 读写锁）。重心是代码对照(§6 ≥80% 关键码)与「粗 vs 细」对照动画(§5 主 Demo)，math:false。全程沿用「餐厅后厨」隐喻（粗粒度锁=整个后厨一把总钥匙谁进谁锁全场，细粒度锁=每个操作台一把小锁动不同台子的厨师可并行，hand-over-hand=沿一长条料理台逐格挪握住下一格才松开当前格，分桶=按食材种类分几个独立料理区各一把锁）。承接 ch3（已讲 mutex/lock_guard/接口竞态/死锁/SafeStack），本章把整套数据结构做完整。draft:true 待总监 review。 */}
 
@@ -18,15 +20,15 @@ draft: false
 
 <Objectives>
 
-- 能**写出**线程安全的栈和队列：把 `top` + `pop` 合并成返回 `std::optional` 的原子操作避免接口竞态，并用 `std::condition_variable` 做一个空了就阻塞等待的 `wait_and_pop` 队列
-- 能用**细粒度锁**提高并发：解释 hand-over-hand 交替加锁的链表、和按 key 分桶（每桶一把锁）的查找表各自如何在不锁全表的前提下让多线程并行，并能**把一个用一把大锁的结构改成细粒度**
+- 能写出没有 check-then-act 竞态的线程安全栈，以及支持关闭协议的阻塞队列，并解释双锁队列为何能让 push 与 pop 重叠
+- 能设计细粒度锁链表和分桶查找表，画出每把锁保护的不变量，并把跨分区操作改成固定锁序
 - 能回答：一个「每个成员函数都正确加了锁」的线程安全栈，为什么调用方写 `if(!s.empty()) v=s.top(); s.pop();` 仍然是错的？怎么改？
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；回答「解决什么问题/没有它会怎样」；类比固定用「餐厅后厨」，与前几章一致。 */}
 
-## 一把总钥匙，还是每台一把小锁
+## 从一把总钥匙开始拆分
 
 前几章你学会了给一块共享数据配「唯一的厨刀」（锁），让线程有序地碰它。可一旦要给整个栈、队列、链表、查找表这种**数据结构**做到多线程能安全共用，新问题来了：这把锁该锁多大？
 
@@ -44,6 +46,10 @@ draft: false
 - **别让接口竞态钻空子**：把「必须一气呵成」的复合操作（如「判空 + 取顶 + 弹出」）合并成**一个**加锁的成员，而不是让调用方分几步组合（这正是上面学习目标里那个自测题）。
 - **异常安全**：操作中途抛异常时，锁要正确释放、数据的不变量不能被留在破损状态（用 `lock_guard` 这类 RAII 锁，再小心安排「会抛的那步」的位置）。
 - **绝不把指向内部受保护数据的指针或引用泄露到锁外**：返回 `T&` 或内部容器的引用，调用方就能在锁之外访问它——保护被「漏」出了临界区，等于没锁。要么返回**值拷贝**，要么把要做的事以回调传进锁内执行。
+
+这就是**并发数据结构设计**的起点：先定义线程安全接口提供哪些原子语义，再决定所有权、锁分区和组合顺序。不能先把 mutex 撒进成员函数，再期待接口自然变安全。
+
+<LockBasedStructureMap />
 
 还有一条贯穿全章的取舍：**锁粒度**。
 
@@ -134,11 +140,13 @@ public:
 
 调用方只用一句 `if (auto v = s.pop()) use(*v);`——「查空 + 取顶 + 弹出」在同一把锁里完成，中间没有缝可钻。注意 `m` 声明为 `mutable`，这样 `const` 成员函数（如一个 `empty() const`）里也能锁它。
 
+泛型版本还要声明异常保证：若 `T` 的移动构造会抛出并修改源对象，`data.top()` 可能留下被部分移动的值。生产实现可要求 nothrow move，在可用时先复制，或返回预先构造好的 `std::shared_ptr<T>`，确保修改容器前返回对象已经安全建立。
+
 <Callout type="tip">
   为什么不像 `std::stack` 那样保留 `T& top()`？因为 `top()`
   返回的是**内部元素的引用**——调用方拿着它在锁外访问，别的线程一
   `pop`，这个引用就悬空了（违反「别把内部引用泄出锁外」红线）。所以线程安全容器一律返回**值拷贝**或
-  `optional`。
+  `optional`，或只读的共享所有权。接口选择必须同时说明生存期、可变性与异常保证。
 </Callout>
 
 ### 线程安全阻塞队列：condition_variable 的 wait_and_pop
@@ -148,7 +156,9 @@ public:
 ```cpp
 #include <condition_variable>
 #include <mutex>
+#include <optional>
 #include <queue>
+#include <stdexcept>
 #include <utility>
 
 template <typename T>
@@ -156,17 +166,27 @@ class ThreadSafeQueue {
     mutable std::mutex m;
     std::condition_variable cv;
     std::queue<T> data;
+    bool closed = false;
 public:
     void push(T value) {
         {
             std::lock_guard<std::mutex> g(m);
+            if (closed) throw std::logic_error("queue is closed");
             data.push(std::move(value));
         }
         cv.notify_one();          // 在锁外通知，唤醒一个等待者
     }
-    T wait_and_pop() {            // 阻塞：空就等到有元素
+    void close() {
+        {
+            std::lock_guard<std::mutex> g(m);
+            closed = true;
+        }
+        cv.notify_all();
+    }
+    std::optional<T> wait_and_pop() {
         std::unique_lock<std::mutex> lk(m);
-        cv.wait(lk, [this] { return !data.empty(); });
+        cv.wait(lk, [this] { return closed || !data.empty(); });
+        if (data.empty()) return std::nullopt;
         T value = std::move(data.front());
         data.pop();
         return value;
@@ -174,7 +194,7 @@ public:
 };
 ```
 
-注意 `wait_and_pop` 用 `unique_lock`（条件变量必须配它，因为 `wait` 内部要临时解锁再上锁）。而 `cv.wait(lk, pred)` 等价于 `while(!pred()) cv.wait(lk);`——被唤醒后**复查谓词**，这一步至关重要：
+`close()` 让等待者有可证明的退出路径：队列关闭且排空后返回 `nullopt`。没有关闭状态，析构前仍在 wait 的消费者无法有序离开。`wait_and_pop` 使用 `unique_lock`，因为 wait 要原子地释放锁并阻塞，醒来后再锁回并检查谓词。
 
 <Callout type="trap">
   **必须传谓词**。若写成 `cv.wait(lk)`（不带谓词），一次**虚假唤醒**（spurious
@@ -183,7 +203,7 @@ public:
   条件复查」绑在一起，杜绝这个坑。
 </Callout>
 
-同一个队列再加一个非阻塞的 `try_pop`：空就立刻返回 `nullopt`，不等待。这样调用方既能「等到有为止」，也能「拿不到就走」：
+同一个队列再加一个非阻塞的 `try_pop`：空就立刻返回 `nullopt`，不等待。关闭状态与“暂时为空”若需要由调用者区分，应返回枚举或结果类型，而不是让一个 `nullopt` 承担两种含义。
 
 ```cpp
 #include <mutex>
@@ -198,6 +218,66 @@ public:
         return value;
     }
 ```
+
+### 双锁队列：让生产端和消费端真正并行
+
+上面的单 mutex 队列适合先保证正确。原书进一步用**哨兵节点**把 head 和 tail 分离：最后一个空节点永远由 tail 指向，push 只修改尾端，pop 只移走头端。队列为空当且仅当 `head.get() == tail_snapshot()`。
+
+```cpp
+#include <condition_variable>
+#include <memory>
+#include <mutex>
+#include <utility>
+
+template <typename T>
+class TwoLockQueue {
+    struct Node {
+        std::shared_ptr<T> data;
+        std::unique_ptr<Node> next;
+    };
+    std::mutex head_mutex;
+    std::unique_ptr<Node> head;
+    std::mutex tail_mutex;
+    Node* tail;
+    std::condition_variable data_cv;
+
+    Node* tail_snapshot() {
+        std::lock_guard<std::mutex> lk(tail_mutex);
+        return tail;
+    }
+public:
+    TwoLockQueue() : head(std::make_unique<Node>()), tail(head.get()) {}
+```
+
+push 在尾哨兵写入数据并追加一个新哨兵；wait_and_pop 持有 head 锁，在谓词中短暂读取 tail。全类锁序只有 `head_mutex -> tail_mutex`，push 从不反向获取 head 锁，因此不会形成等待环。
+
+```cpp
+    void push(T value) {
+        auto item = std::make_shared<T>(std::move(value));
+        auto dummy = std::make_unique<Node>();
+        Node* new_tail = dummy.get();
+        {
+            std::lock_guard<std::mutex> lk(tail_mutex);
+            tail->data = std::move(item);
+            tail->next = std::move(dummy);
+            tail = new_tail;
+        }
+        {
+            std::lock_guard<std::mutex> handshake(head_mutex);
+        }
+        data_cv.notify_one();
+    }
+    std::shared_ptr<T> wait_and_pop() {
+        std::unique_lock<std::mutex> lk(head_mutex);
+        data_cv.wait(lk, [this] { return head.get() != tail_snapshot(); });
+        auto result = head->data;
+        head = std::move(head->next);
+        return result;
+    }
+};
+```
+
+这是**基于锁的队列**细化：一个生产者持 tail 锁时，消费者仍可处理已有 head。push 更新尾端后短暂获取并释放 head mutex，确保若消费者刚把谓词判断为假，生产者的 notify 会发生在消费者进入 wait 之后，避免错过通知。所有嵌套获取仍只有 `head -> tail`；push 在获取 head 前已释放 tail。生产版本还应把关闭状态纳入同一协议，并规定析构只能发生在所有调用者停止之后。
 
 ### 细粒度锁链表：hand-over-hand 的遍历
 
@@ -238,7 +318,7 @@ public:
 #include <utility>
 
     template <typename Predicate>
-    std::shared_ptr<T> find_first_if(Predicate p) {
+    std::shared_ptr<const T> find_first_if(Predicate p) {
         Node* current = &head;
         std::unique_lock<std::mutex> lk(head.m);        // 握住当前（头）
         while (Node* const next = current->next.get()) {
@@ -248,11 +328,11 @@ public:
             current = next;
             lk = std::move(next_lk);  // 下一个变「当前」，锁所有权移交
         }
-        return std::shared_ptr<T>();
+        return std::shared_ptr<const T>();
     }
 ```
 
-这里用 `unique_lock` 正是因为它能**提前解锁**和**移动转移**（`lk = std::move(next_lk)`）——`lock_guard` 做不到。返回的是 `shared_ptr<T>`（值拷贝的智能指针），而非节点内部引用，符合红线。
+这里用 `unique_lock` 是因为它能提前解锁和移动转移。返回 `shared_ptr<const T>`，让对象生存期独立于节点且不通过该接口暴露可变访问。谓词在节点锁内执行，因此契约必须要求它短小、不得重入本链表；否则会延长锁持有时间或自锁。若可接受复制 T，可在锁内复制快照后解锁再调用未知代码。
 
 <Callout type="trap">
   hand-over-hand 必须**单向逐节点**锁：永远「先持当前、再锁后继」。`remove_if` 摘除节点时也要保持这个顺序——持着 `current` 的锁去改 `current->next`，被摘的 `next` 节点等改完链接、解锁后再让其析构。若两个线程能以相反方向锁相邻节点，就会各持一把互等：死锁。
@@ -267,6 +347,7 @@ public:
 #include <list>
 #include <memory>
 #include <shared_mutex>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -283,6 +364,7 @@ class ThreadSafeLookupTable {
     }
 public:
     explicit ThreadSafeLookupTable(unsigned n = 19) : buckets(n) {
+        if (n == 0) throw std::invalid_argument("bucket count must be positive");
         for (auto& b : buckets) b.reset(new Bucket);
     }
     // ... value_for / add_or_update 见下 ...
@@ -313,7 +395,7 @@ public:
     }
 ```
 
-读用 `std::shared_lock`、写用 `std::unique_lock`，作用在**同一个桶的**那把 `shared_mutex` 上。落不同桶的访问拿的是不同的锁，天然并行；落同一桶时，多个读可并行、写则独占。读多写少时并发度远高于「整表一把 mutex」。
+读用 `std::shared_lock`、写用 `std::unique_lock`。桶数固定，所以没有并发 rehash；若要扩容，必须另行设计覆盖所有桶的全局协议。快照等跨桶操作要按桶索引固定顺序持有全部共享锁。`shared_mutex` 是否更快以及读写公平性由实现和负载决定，必须测量。
 
 {/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法；每个 ≤150 字；含返回内部引用、接口竞态、多节点加锁顺序不一致死锁、粒度太粗等于没并发。 */}
 
@@ -358,7 +440,7 @@ public:
 
 <Exercises>
 
-**练习 1（改代码型）** 下面这个「线程安全栈」用了 `std::stack` 的经典接口，把 `top` 和 `pop` 分开了，存在隐患。请把它改成**没有接口竞态**的版本（提示：合并 `top`+`pop`，空栈返回 `std::optional`）。
+**问题 1（改代码型）** 下面这个「线程安全栈」用了 `std::stack` 的经典接口，把 `top` 和 `pop` 分开了，存在隐患。请把它改成**没有接口竞态**的版本（提示：合并 `top`+`pop`，空栈返回 `std::optional`）。
 
 ```cpp
 #include <mutex>
@@ -421,7 +503,7 @@ public:
 
 </Answer>
 
-**练习 2（问答型）** 同事写细粒度锁链表的 `find` 时，为了「快点拿到下一个节点」，先锁住 `current->next`、再锁 `current`。他说反正都锁上了肯定安全。这样写有什么风险？正确的加锁顺序是什么？
+**问题 2（问答型）** 同事写细粒度锁链表的 `find` 时，为了「快点拿到下一个节点」，先锁住 `current->next`、再锁 `current`。他说反正都锁上了肯定安全。这样写有什么风险？正确的加锁顺序是什么？
 
 <Answer>
 
@@ -429,7 +511,7 @@ public:
 
 </Answer>
 
-**练习 3（独立实现型）** 实现一个线程安全的有界缓冲区（生产者-消费者用）`BoundedBuffer<T>`：成员 `put(T)`（缓冲满则阻塞等待）、`take()`（缓冲空则阻塞等待，返回取出的元素）。要求用一把 `std::mutex` + `std::condition_variable`（或两个 condvar）实现，容量在构造时给定。提示：满/空两个条件各需要被唤醒。
+**问题 3（独立实现型）** 实现一个线程安全的有界缓冲区 `BoundedBuffer<T>`：`put(T)` 在满时等待，`take()` 在空时等待，构造时拒绝零容量。要求用一把 mutex 和两个 condition variable，并说明生产关闭时还需增加什么协议。
 
 <Answer>
 
@@ -438,6 +520,7 @@ public:
 #include <cstddef>
 #include <mutex>
 #include <queue>
+#include <stdexcept>
 #include <utility>
 
 template <typename T>
@@ -448,7 +531,9 @@ class BoundedBuffer {
     std::queue<T> data;
     std::size_t cap;
 public:
-    explicit BoundedBuffer(std::size_t capacity) : cap(capacity) {}
+    explicit BoundedBuffer(std::size_t capacity) : cap(capacity) {
+        if (cap == 0) throw std::invalid_argument("capacity must be positive");
+    }
     void put(T v) {
         std::unique_lock<std::mutex> lk(m);
         not_full.wait(lk, [this] { return data.size() < cap; }); // 满则等
@@ -468,7 +553,7 @@ public:
 };
 ```
 
-要点：① 两个条件变量分别管「不满」和「不空」，避免无关的等待者被反复唤醒空转；② 两个 `wait` 都带**谓词**（防虚假唤醒、防通知早到）；③ `put` 后通知 `not_empty`、`take` 后通知 `not_full`，让另一端的等待者醒来；④ 用 `unique_lock`（条件变量要求），通知放在解锁之后减少「唤醒即争锁」。
+要点：两个条件变量分别管“不满”和“不空”，谓词和队列状态由同一 mutex 保护；零容量永远无法满足“不满”，所以构造时拒绝。完整生产接口还需 `closed` 状态：关闭后禁止 put、`notify_all` 唤醒双方，take 在“已关闭且已排空”时返回状态值，否则对象析构时仍可能有线程永久等待。
 
 </Answer>
 
@@ -505,6 +590,9 @@ public:
 
 </Glossary>
 
-{/* 9. 出处声明（spec §九）：本书为《C++ 并发编程实战》第2版改编重写，sourceUrl 为空，Attribution 标签空参自动渲染。缺失 = 必打回。 */}
+{/* 9. 出处声明（spec §九）：本书为《C++ 并发编程实战》第2版改编重写。 */}
 
-<Attribution />
+<Attribution
+  title="C++ Concurrency in Action, Second Edition, Chapter 6: Designing lock-based concurrent data structures"
+  url="https://livebook.manning.com/book/c-plus-plus-concurrency-in-action-second-edition/chapter-6"
+/>

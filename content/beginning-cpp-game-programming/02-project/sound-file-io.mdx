@@ -1,0 +1,368 @@
+---
+title: 第 14 章：音效、文件 I/O 与完成 Zombie Arena
+type: A
+section: Zombie Arena 项目
+order: 14
+description: 对齐官方第 3 版第 14 章：可靠保存和加载最高分，按规则事件播放音效，完成升级、新波次、重启与 Zombie Arena 收尾。
+demo: false
+math: false
+sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+draft: false
+---
+
+import {
+  BcgpHighScoreFileMap,
+  BcgpSoundEventMap,
+  BcgpWaveRestartMap,
+} from "@/components/mdx/beginning-cpp-game-programming/diagrams/sound-file-io";
+
+<Objectives>
+
+- 能实现完整解析、范围验证、临时写入、关闭检查和发布替换组成的最高分文件事务
+- 能设计由 Shot/Hit/Pickup/Death 规则事件驱动、Buffer 生命周期稳定且 voice 数量受限的音效层
+- 能实现波次清空、升级选择、新群体提交和完整重启，并验证所有子系统恢复一致
+
+</Objectives>
+
+## 从“游戏结束时哪些结果必须留下”开始
+
+Zombie Arena 已有战斗和 HUD。第 14 章完成
+
+<Term def="通过 C++ 流读取和写入持久文件，并检查打开、解析、传送、关闭和发布每一步结果的过程。">
+  文件 I/O
+</Term>
+、音效、升级和重启。最高分很小，但仍是不可信外部数据；直接 `ofstream(path) << score` 会先截断旧文件，后续失败可能同时丢失新旧结果。
+
+本章逐项对应官方目录的 Sound Effects、File I/O、Saving and Loading the High Score、Level Up and Spawning a New Wave、Restarting the Game；这些不是五个孤立功能，而是从一局结束到下一局开始的同一提交链。
+
+## 存档位置不是资源目录
+
+只读图片和音频随应用发布，用户最高分应写到平台用户数据目录。安装目录可能只读，当前工作目录也会因 IDE、快捷方式和启动器变化。
+
+<Term def="应用在当前用户权限下可写、用于保存配置和进度的平台目录。">
+  用户数据目录
+</Term>
+由平台适配层提供；核心 SaveService
+接收完整路径，测试使用临时目录。目录创建失败要报告，不应退回随机 cwd
+后制造多个存档。
+
+文件格式需要版本，即使当前只有一个整数。简单文本可写 `version=1` 和 `high_score=123`，未来扩展时能区分旧格式。不要把 C++ 对象内存直接转储为长期格式。
+
+## 加载最高分：完整解析后才提交
+
+<Term def="从存档读取、解析并验证得到的历史最大分数，缺文件时使用明确默认值。">
+  最高分
+</Term>
+只有在整份输入合法时更新内存状态。文件不存在与文件损坏是不同情况：首次运行缺文件正常，已有文件语法错应记录并保留备份或使用默认值。
+
+```cpp
+std::optional<int> loadHighScore(const std::filesystem::path& path)
+{
+    std::ifstream input{path};
+    if (!input)
+        return std::nullopt;
+
+    int score{};
+    if (!(input >> score))
+        throw std::runtime_error{"invalid high-score file"};
+
+    input >> std::ws;
+    if (!input.eof() || score < 0 || score > 1'000'000'000)
+        throw std::runtime_error{"high-score content out of contract"};
+    return score;
+}
+```
+
+<Term def="要求所有预期字段成功转换、范围合法且除允许空白外没有尾随未知内容的解析策略。">
+  完整解析
+</Term>
+避免 `123junk` 被接受为 123。打开失败还需区分不存在和权限错误；示例简化为
+optional，生产接口应返回结构化错误。
+
+<BcgpHighScoreFileMap />
+
+## 保存最高分：临时文件后发布
+
+只有当前分数超过内存 highScore 才保存。先在正式文件同目录写临时文件，检查 flush/close，再用平台适配的 rename/replace 发布。标准 `std::filesystem::rename` 在不同平台对覆盖已存在目标的行为不同，不能假装统一原子替换。
+
+```cpp
+bool writeHighScoreTemp(const std::filesystem::path& temporary, int score)
+{
+    std::ofstream output{temporary, std::ios::trunc};
+    if (!output)
+        return false;
+    output << score << '\n';
+    output.flush();
+    if (!output)
+        return false;
+    output.close();
+    return static_cast<bool>(output);
+}
+```
+
+<Term def="先把完整新内容写入同目录临时文件，成功关闭后再替换正式文件的保存协议。">
+  临时文件发布
+</Term>
+让写失败保留旧存档。物理断电持久化还需操作系统同步接口，普通流关闭不能提供最强保证；对单个最高分，可文档化所需级别。
+
+<Callout type="trap">
+  **现象**：磁盘满后最高分文件变成空文件。**原因**：直接以 trunc
+  打开正式文件，打开时旧内容已清除，写入失败没有回滚。**修法**：写同目录临时文件并检查关闭，成功后才替换；失败删除临时文件并保留旧正式文件。
+</Callout>
+
+## 音效从规则事件产生
+
+<Term def="由射击、命中、拾取、死亡和升级等一次性规则转换产生、供音频与视觉反馈消费的值。">
+  游戏事件
+</Term>
+让声音不再重新检查碰撞。规则层产生 `ShotFired` 只有在 Bullet 成功 shoot
+且弹药已扣时；池满拒绝发射就没有枪声。
+
+```cpp
+enum class SoundId { Shot, Hit, Pickup, Death, LevelUp };
+
+struct SoundEvent {
+    SoundId id;
+    float volume{100.0F};
+};
+
+std::vector<SoundEvent> soundEvents;
+if (bulletLaunched)
+    soundEvents.push_back({SoundId::Shot, 85.0F});
+```
+
+<Term def="按稳定声音标识查找预加载 SoundBuffer、取得可用 Sound voice 并开始一次播放的组件。">
+  音效层
+</Term>
+只消费事件，不修改伤害或分数。Buffer 由资源层拥有，Sound voice 借用它。
+
+<BcgpSoundEventMap />
+
+## voice 池与重复播放
+
+复用一个 `sf::Sound` 播放所有枪声会让新射击重启旧声音；为允许有限叠加，可为每个 SoundId 准备固定 voice 池，查找 Stopped 项。池满时丢弃最旧、拒绝新声或按优先级抢占，策略明确。
+
+<Term def="预创建并复用一组 sf::Sound 播放实例，使同类短音效可有限叠加而不在热路径分配。">
+  voice 池
+</Term>
+限制总 voice 防止爆音和资源增长。Hit
+每个死亡事件播放一次，不是每个碰撞候选；Death 优先级可高于普通 Shot。
+
+```cpp
+void SoundSystem::consume(std::span<const SoundEvent> events)
+{
+    for (const SoundEvent& event : events) {
+        if (sf::Sound* voice{findAvailableVoice(event.id)}) {
+            voice->setVolume(std::clamp(event.volume, 0.0F, 100.0F));
+            voice->play();
+        }
+    }
+}
+```
+
+本章普通二维音效不设置世界位置；空间音频留到第 20 章。无音频设备时可静音降级，战斗规则仍可测试。
+
+## 波次清空只触发一次升级
+
+<Term def="当前已发布僵尸群从至少一只存活转为零只存活的状态边沿。">
+  波次清空
+</Term>
+若只写 `if (aliveCount == 0) levelUp()`，零状态每帧重复进入。维护
+waveActive，或在删除提交后检测前后数量并立即转 LevelUp。
+
+```cpp
+const std::size_t aliveBefore{aliveCount};
+commitDeaths(horde, damageEvents);
+const std::size_t aliveAfter{countAlive(horde)};
+
+if (phase == GamePhase::Playing && aliveBefore > 0 && aliveAfter == 0) {
+    phase = GamePhase::LevelUp;
+    soundEvents.push_back({SoundId::LevelUp, 100.0F});
+}
+```
+
+<Term def="一波敌人全部消灭后冻结战斗、允许玩家选择能力并规划下一波的阶段。">
+  升级阶段
+</Term>
+只触发一次音效和面板。空初始群体属于构建错误，不应被误判为完成一波。
+
+## 难度规划与新波次
+
+<Term def="根据波次号计算敌人数量、速度、生命和生成约束，并有明确上限的配置。">
+  波次计划
+</Term>
+使用宽类型检查乘加，避免 `base + wave * growth`
+溢出；数量、速度与生命分别钳制，不让难度最终变成不可运行或生成器无法满足。
+
+```cpp
+WavePlan makeWavePlan(int wave)
+{
+    const int safeWave{std::clamp(wave, 1, 100)};
+    return {
+        .count = static_cast<std::size_t>(10 + safeWave * 3),
+        .health = std::min(1000, 50 + safeWave * 10),
+        .speed = std::min(400.0F, 80.0F + safeWave * 8.0F)
+    };
+}
+```
+
+<Term def="依据波次计划在局部候选容器完整生成敌人，成功后替换当前群体的提交过程。">
+  新波次生成
+</Term>
+复用第 11 章有上限生成器。失败停留在 LevelUp/Loading
+并显示可重试错误，不能带半群体进入 Playing。
+
+<BcgpWaveRestartMap />
+
+## 恢复 Playing 的顺序
+
+玩家选择升级后，先应用属性，再构建新群体，重置必要 Pickup 与 Bullet，清过期碰撞/音频事件，最后重启 frameClock 并设置 Playing。若构建失败，升级是否回滚要定义；更简单是先验证并构建候选，全部成功后同时提交升级与群体。
+
+<Term def="在多个对象均准备成功后一次替换游戏阶段、Player 属性和新群体，避免半升级状态可见。">
+  波次提交
+</Term>
+可用局部 `PendingWave` 保存候选。HUD 从提交后 snapshot 更新。
+
+随机地图不一定每波重建；若重建，Player、View、Pickup 与 Zombie 所有世界坐标一起切换，旧对象先销毁再释放旧纹理借用。
+
+## 完整重启 Zombie Arena
+
+<Term def="从 GameOver 或 Home 创建一局全新 Zombie Arena，恢复所有一局范围状态而保留应用级资源缓存和最高分。">
+  游戏重启
+</Term>
+必须覆盖 Player 生命弹药位置、分数、波次、horde、Bullet 池、Pickup
+冷却、相机、事件队列和回合声音。最高分属于跨局数据，不归零；TextureHolder
+属于应用级缓存，不必重载。
+
+```cpp
+void Game::restartRound()
+{
+    soundSystem_.stopRoundVoices();
+    bullets_.resetAll();
+    pickups_.resetAll();
+    player_.reset(initialPlayerState_);
+    score_ = 0;
+    wave_ = 1;
+    horde_ = buildHorde(makeWavePlan(wave_));
+    worldView_.setCenter(player_.position());
+    pendingEvents_.clear();
+    frameClock_.restart();
+    phase_ = GamePhase::Playing;
+}
+```
+
+phase 最后提交。若 buildHorde 可失败，函数应返回结果并保持 Home/GameOver，不执行最后两步。restart 不是简单把 bool 设回 true。
+
+### 重启游戏与应用重启不是一回事
+
+重启游戏只替换一局状态，窗口、TextureHolder、Font、SoundBuffer、用户设置和已加载最高分继续存在；若把应用级资源也重复加载，每次失败路径和加载停顿都会进入玩家操作。相反，回合对象中的 Zombie、Bullet、Pickup、临时音效 voice 和观察 id 必须全部清空，不能因资源缓存长寿就让玩法对象长寿。
+
+重启前保存新最高分，保存失败要向玩家报告但仍可按产品策略允许新局；内存 highScore 是否保留新值需明确。重启成功后用新 GameSnapshot 全量刷新 HUD，而不是依赖上一局脏标记。自动测试连续重启十次，断言容器数量、活跃子弹、声音 voice、事件队列和纹理加载计数都没有累计增长。
+
+若随机性需要“重新挑战同一地图”，保留 seed 并重建引擎；若新局应产生新地图，生成并记录新 seed。不能只复用已经推进到任意位置的旧随机引擎，让重放不可解释。
+
+<Callout type="trap">
+  **现象**：重启后第一帧子弹命中不存在的旧 Zombie。**原因**：上一局 pending
+  damage/target id 没清空，或 Bullet 池仍
+  active。**修法**：重启清除所有回合事件、对象池和观察
+  id，再构建新群体，最后进入 Playing。
+</Callout>
+
+## 完成 Zombie Arena 的验收
+
+文件测试覆盖缺文件默认值、合法值、负数、超大值、尾随垃圾、权限失败、临时写失败和发布失败；任何保存失败保留旧正式文件。使用临时目录，不污染真实用户数据。
+
+音频测试用 fake consumer 断言一次 Shot/Hit/Death 对应一次事件，池满策略稳定，重启停止回合 voice。无需真实音频设备即可验证规则；集成时再检查 Buffer 生命周期和实际播放。
+
+波次测试从一只 Zombie 到零只只进入一次 LevelUp，升级合法后新群数量和参数符合计划，生成失败不出现半波。重启后所有回合状态恢复，最高分保留并只在新纪录时保存。
+
+性能与体验验收包含多波稳定帧时间、voice 上限、存档不阻塞关键帧。小文件同步写可接受时也要测量；若异步写，快照值和关闭等待责任更复杂，不能无期限后台任务。
+
+> 先预测：直接打开正式最高分文件并 trunc，随后磁盘满会怎样？旧分数已丢而新分数未写完整；临时文件成功关闭后再发布，才能保留旧结果。
+
+## 小结
+
+- 最高分文件完整解析并验证范围，缺文件与损坏分开处理
+- 保存先写同目录临时文件并检查关闭，成功后按平台协议替换正式文件
+- 音效层消费一次性游戏事件，受限 voice 池允许叠加但不修改游戏规则
+- 波次从非空到零的边沿只进入一次升级阶段，空初始群体不是通关
+- 新波次按有上限计划在局部完整构建，Player 升级和群体成功后一起提交
+- 游戏重启清理所有回合状态与事件，但保留最高分和应用级纹理缓存
+
+<Exercises>
+
+**问题 1** 为什么最高分保存要写临时文件？列出从解析旧值到发布新值的失败不变量。
+
+<Answer>
+
+直接 trunc 正式文件会在后续写失败前丢旧值。读取时只有完整语法、范围和无尾随垃圾才提交；写同目录 temp，flush/close 任一步失败就删除 temp、保留正式文件；成功后按平台 replace/rename 发布，发布失败同样保留或恢复旧文件并报告路径与操作。
+
+</Answer>
+
+**问题 2** 为什么声音应消费事件而不是检查 `zombie.health <= 0`？voice 池满时怎么办？
+
+<Answer>
+
+持续条件每帧为真会反复重启声音，死亡边沿事件只产生一次。voice 池给有限叠加实例，满时按文档拒绝低优先级新声、抢占最旧或优先 Death；无论策略都不能无界分配，也不影响伤害和分数规则。
+
+</Answer>
+
+**问题 3** 从最后一只 Zombie 死亡到恢复 Playing，写出安全顺序。
+
+<Answer>
+
+提交死亡与一次分数后检测 alive 从正数到零，转 LevelUp 并冻结时间；玩家选择后验证升级，生成局部新 horde 与计划，成功后应用升级、替换群体、重置池和过期事件、刷新 HUD，重启 frameClock，最后设 Playing。任一步失败保持非 Playing 可恢复状态。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="文件 I/O">
+  用 C++ 流读写持久文件并检查打开、解析、传送、关闭和发布结果。
+</GlossaryItem>
+<GlossaryItem term="用户数据目录">
+  当前用户可写、用于应用配置和进度的平台目录。
+</GlossaryItem>
+<GlossaryItem term="最高分">
+  完整解析并验证后加载、跨局保留的历史最大分数。
+</GlossaryItem>
+<GlossaryItem term="完整解析">
+  所有字段转换、范围和尾随内容都符合格式才成功的策略。
+</GlossaryItem>
+<GlossaryItem term="临时文件发布">
+  完整新文件成功关闭后再替换正式文件的保存协议。
+</GlossaryItem>
+<GlossaryItem term="游戏事件">
+  由一次规则转换产生、供音频和视觉反馈消费的值。
+</GlossaryItem>
+<GlossaryItem term="音效层">
+  查找 Buffer、取得 voice 并按事件播放但不修改规则的组件。
+</GlossaryItem>
+<GlossaryItem term="voice 池">
+  预创建并复用有限 sf::Sound 实例的播放池。
+</GlossaryItem>
+<GlossaryItem term="波次清空">存活 Zombie 数从正数转为零的边沿。</GlossaryItem>
+<GlossaryItem term="升级阶段">
+  一波结束后冻结战斗、选择能力并规划下一波的阶段。
+</GlossaryItem>
+<GlossaryItem term="波次计划">
+  按波次计算且有上限的数量、生命、速度和生成配置。
+</GlossaryItem>
+<GlossaryItem term="新波次生成">
+  局部完整生成新 horde 并成功后替换当前群体的过程。
+</GlossaryItem>
+<GlossaryItem term="波次提交">
+  候选群体与 Player 升级均成功后一次发布的新阶段状态。
+</GlossaryItem>
+<GlossaryItem term="游戏重启">
+  恢复回合状态但保留最高分和应用级缓存的新局事务。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 14"
+  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+/>

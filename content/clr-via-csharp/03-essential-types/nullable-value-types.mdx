@@ -1,0 +1,198 @@
+---
+title: "Chapter 19. Nullable Value Types"
+type: C
+section: "CLR via C# 4e · Essential Types"
+order: 19
+description: "覆盖Nullable<T>双态、C#语法与coalescing、lifted operators、CLR boxing/unboxing、GetType/interface调用和边界建模。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcNullableBoundaryLab, CvcNullableBoxingLab, CvcNullableStateLab } from "@/components/mdx/clr-via-csharp/diagrams/nullable-value-types";
+
+<Objectives>
+
+- 能描述`Nullable<T>`的HasValue/Value状态、C# `T?`语法与lifted operator三值行为
+- 能分析nullable boxing/unboxing、GetType和interface call为何暴露underlying T而非`Nullable<T>`
+- 能设计coalescing、database/JSON mapping与missing/default/unknown语义，避免NRT概念混淆
+
+</Objectives>
+
+## 为什么Nullable不是“多一个Null引用”
+
+Value type实例本身不能为null；`Nullable<T>`是包含`bool hasValue`与`T value`语义的value type。无值时仍有一个nullable struct value，只是boxing特别处理成null reference。它解决“值或缺失”二态，不自动表达unknown/not-applicable/not-loaded/error等多种状态；如果业务需要多态原因，应使用显式discriminated result。
+
+先预测：`int? x=null; object o=x`是否产生box；`(int?)boxedInt`能否unbox；`nullable.GetType()`返回Nullable还是Int32；`int? == null`如何工作；`bool? & bool?`是否简单null传播；`T?`在值类型与nullable reference annotations中是否同一runtime机制。后文用state、boxing和boundary三层回答。
+
+<Term def="Nullable of T以HasValue区分缺失与存在，并在存在时携带一个完整underlying T的二态模型。">nullable value state</Term>
+
+## C#'s Support for Nullable Value Types
+
+对non-nullable value type T，`T?`语法等价`Nullable<T>`。可读`HasValue`，`Value`无值时抛InvalidOperationException，`GetValueOrDefault()`返回underlying value或default(T)。Pattern `x is int value`与`x is { } value`可同时检查并提取；不要先Value再catch表达普通absence。
+
+```csharp
+int? quantity = ParseOptionalQuantity(input);
+
+if (quantity is int present)
+{
+    Console.WriteLine($"quantity={present}");
+}
+else
+{
+    Console.WriteLine("quantity is absent");
+}
+```
+
+Default nullable无值；`new int?()`也无值；`new int?(0)`有值且underlying为0。两者业务含义不同，database NULL与0不可混。Nested nullable `Nullable<Nullable<T>>`不允许，因为T constraint要求non-nullable value type，二态不会自动叠成三态。
+
+<Term def="将underlying operator提升到nullable operands，并按有值/缺失规则产生nullable或bool结果的机制。">lifted operator semantics</Term>
+
+Arithmetic/comparison大多lift：任一operand无值时算术结果无值；relational `<`等返回false（除相等有专门规则）；`==`在都无值时true，一无一有false。`bool?`的`&`/`|`采用三值逻辑，有些组合即使一方null仍能确定false/true。不要用“null全部传播”代替truth table。
+
+```csharp
+int? left = 10;
+int? missing = null;
+
+Console.WriteLine(left + missing is null); // True
+Console.WriteLine(missing == null);        // True
+
+bool? unknown = null;
+Console.WriteLine(false & unknown);        // False
+Console.WriteLine(true | unknown);         // True
+```
+
+Custom value type operators也可lift，除非显式提供nullable overload。Checked/unchecked、conversion与user-defined operator规则仍适用。编写filter时特别注意SQL三值逻辑与C# bool?不同表达，ORM translation需测试。
+
+<Stepper>
+  <Step title="切换no value、has value、lifted operator与coalesce"><CvcNullableStateLab /></Step>
+  <Step title="填写Truth table">覆盖无/有值组合、0/default、==/!=、relational、bool? &/|和user-defined operators。</Step>
+  <Step title="验证业务含义">将missing、zero、unknown、not-applicable分别映射，若超过二态则升级显式result type。</Step>
+</Stepper>
+
+<Callout type="trap" title="Nullable没有Value时，所有Operator结果都一定是Null">
+Equality和bool?逻辑有专门规则：null==null为true，false&null为false，true|null为true。必须按具体lifted operator truth table推导。
+</Callout>
+
+## C#'s Null-Coalescing Operator
+
+`left ?? right`只计算left一次；有值返回underlying/compatible left，无值才lazy evaluate right。`??=`仅在left null时赋值。对nullable value与reference都可用，但类型推断/conversion不同。Fallback若昂贵/有副作用，lazy特性重要；如果null代表invalid input，不能用默认值静默掩盖。
+
+```csharp
+int retryCount = configuredRetryCount ?? policy.DefaultRetryCount;
+DateTimeOffset effectiveDeadline = suppliedDeadline
+    ?? clock.UtcNow.Add(policy.DefaultTimeout);
+
+if (retryCount is < 0 or > 10)
+    throw new ArgumentOutOfRangeException(nameof(configuredRetryCount));
+```
+
+`GetValueOrDefault`用underlying zero/default，`?? fallback`用业务fallback，两者不可互换。Operator chain要考虑precedence，复杂表达式加括号/局部变量。Configuration layering可用nullable表示“未指定”，但最终resolve后转non-nullable validated options，避免null扩散。
+
+<Term def="仅当nullable/reference左侧缺失时才求值右侧，并产出明确业务fallback的运算协议。">coalescing fallback</Term>
+
+## The CLR Has Special Support for Nullable Value Types
+
+CLR/JIT识别`Nullable<T>`布局与boxing、unboxing、constrained calls，避免让“无值”变成有对象header的普通box。Reflection/Activator/default generic也遵循特殊规则。`Nullable.GetUnderlyingType(type)`判断Type是否为closed nullable generic并返回T；`typeof(int?)`是合法Type，尽管boxed object永远不会GetType为它。
+
+Generic `where T:struct`与`T?`在不同C#版本/nullability语法可能有细节，API应固定language version。JIT可消除许多HasValue checks，但性能先benchmark；nullable arrays每element含状态/underlying layout，memory与cache成本取决T/alignment。
+
+## Boxing Nullable Value Types
+
+Boxing无值nullable返回null reference，不分配box；boxing有值nullable只box underlying T，不box `Nullable<T>` wrapper。因此`object o=(int?)42; o.GetType()==typeof(int)`。这让Object-based API自然把无值当null，却也丢失“静态上来自nullable”的信息。
+
+<Term def="Nullable无值box成null、有值box成underlying T对象，而不会产生runtime nullable wrapper盒子的特殊规则。">nullable boxing erasure</Term>
+
+```csharp
+int? none = null;
+int? some = 42;
+
+object? boxedNone = none;
+object? boxedSome = some;
+
+Console.WriteLine(boxedNone is null);                // True
+Console.WriteLine(boxedSome!.GetType() == typeof(int)); // True
+```
+
+Logging/serializer接收Object时无法仅从runtime object判断原变量是int还是int?有值；需要schema/declared Type一起传。Reflection invocation binder可能处理nullable parameter，但直接object collection只保留null/underlying box。
+
+## Unboxing Nullable Value Types
+
+CLR允许null reference unbox/cast到T?得到无值，也允许box of exact T转换到T?有值。仍要求underlying exact type：boxed Int32不能直接unbox成long?，先int再numeric conversion。Boxed nullable value事实上就是boxed T，所以`is int`成立，`is int?`pattern在C#有特定限制/等价行为，依赖明确Type检查更稳。
+
+<Stepper>
+  <Step title="切换box-null、box-value、unbox T?与wrong type"><CvcNullableBoxingLab /></Step>
+  <Step title="画Object边界">记录declared type、HasValue、boxed reference、runtime GetType和unbox target，不凭source问号猜。</Step>
+  <Step title="测试Exact type">覆盖null、boxed T、boxed other numeric、reflection parameter与generic Object collection。</Step>
+</Stepper>
+
+<Callout type="trap" title="有值Nullable被Box后，GetType会返回Nullable<T>">
+CLR只box underlying T；无值则null。所以有值int?的object.GetType返回System.Int32，runtime object不保留nullable wrapper身份。
+</Callout>
+
+## Calling GetType via a Nullable Value Type
+
+`someNullable.GetType()`在C#可调用Object method；有值时boxing underlying T并返回typeof(T)。无值时boxing为null，调用会抛NullReferenceException（compiler/nullability可能警告）。若要检查声明类型，用`typeof(T?)`/reflection ParameterInfo，不对value调用GetType推断nullable schema。
+
+`GetType`用于runtime object identity，nullable属于static/container type semantics。Serializer必须同时看declared type与runtime value，才能区分required int、optional int和null。
+
+## Calling Interface Methods via a Nullable Value Type
+
+若T实现interface，有值T?通过interface conversion会box underlying T并调用；无值boxing为null，interface call失败。Generic constrained code先检查HasValue/取Value，可对T constrained call。`Nullable<T>`本身实现的interfaces受CLR定义限制，不应假设它把T全部interfaces以wrapper方式实现。
+
+<Term def="Nullable跨Object、interface、reflection或serialization时，静态可空schema与runtime null/underlying box分离的边界。">nullable boundary erasure</Term>
+
+<Stepper>
+  <Step title="切换GetType、interface、database与NRT边界"><CvcNullableBoundaryLab /></Step>
+  <Step title="建立Schema+Value双账">同时记录declared nullable type、runtime object、database/JSON representation和absence原因。</Step>
+  <Step title="做Round-trip">验证null、default(T)、nondefault、unknown/missing经过Object/DB/JSON后不被错误合并。</Step>
+</Stepper>
+
+## Nullable Value Types vs. Nullable Reference Types
+
+`int?`在runtime是`Nullable<int>` struct；`string?`在启用nullable reference types时主要是compiler flow annotation，runtime仍是String reference，metadata用attributes表达上下文。NRT不改变Object layout或阻止reflection/deserializer传null；公共boundary仍运行时validate。不要用Nullable.GetUnderlyingType判断string?。
+
+Generic `T?`含义取决T constraints和language version，library authors要明确`where T:class`/struct/notnull并生成正确annotations。API docs同时说明absence语义，问号只表达可能null，不说明原因。
+
+## Database, JSON, and Domain Mapping
+
+Database NULL、JSON missing property、JSON explicit null、0和domain Unknown可能不同。ORM mapping为int?可接NULL，但partial update需要区分missing“不改”与null“清除”；使用`Patch<T>`三态wrapper。Serializer options还可能忽略null/default，round-trip会丢信息。
+
+进入domain后尽快解析：可选deadline用DateTimeOffset?合理；订单状态“未知原因”可能需要union；money amount为null也许表示not priced而非0。不要在计算末尾随便`??0`，这会把缺数据伪造成真实零并污染metrics。
+
+## 本章回顾：Absence必须保持到正确Decision Point
+
+1. `Nullable<T>`是HasValue+T二态，default无值，0/default(T)可以是有值。
+2. Lifted operators大多传播null，但equality和bool?逻辑有专门truth tables。
+3. Coalesce lazy选择fallback；只有业务确认缺失等价默认时才能`??`。
+4. Boxing无值为null、有值为underlying T box；GetType/interface/object边界会擦除nullable wrapper。
+5. Nullable value与NRT不同；DB/JSON missing/null/default必须按domain显式映射。
+
+<Exercises>
+
+**问题 1：为什么`object o=(int?)42`后`o.GetType()`是Int32？**
+
+<Answer>CLR对Nullable特殊boxing：HasValue=true时只box underlying Int32，false时得到null，不存在runtime `Nullable<int>` box。Declared schema若重要必须额外携带typeof(int?)；不能从object value恢复原变量是否nullable。</Answer>
+
+**问题 2：Partial Update怎样区分Property缺失与显式Null？**
+
+<Answer>普通T?只有null/值两态，无法表达missing“不修改”与null“清除”。使用`PatchField<T>`含IsSpecified与Value，或JSON DOM/source-generated patch model保留presence。进入domain时验证允许clear与业务invariant，再执行。</Answer>
+
+**问题 3：何时不应使用`value ?? 0`？**
+
+<Answer>当null表示未测量、未知、not applicable或数据错误时，0是实际观测值，会污染sum/average/decision。保留nullable到明确decision point，返回insufficient-data/result reason；只有domain规定缺失等价0时coalesce，并写测试/文档。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="nullable value state" definition="HasValue区分缺失与存在并携带T的二态。" />
+  <GlossaryItem term="lifted operator semantics" definition="Underlying operator提升到nullable operands后的结果规则。" />
+  <GlossaryItem term="coalescing fallback" definition="仅左侧缺失时lazy选择业务fallback的协议。" />
+  <GlossaryItem term="nullable boxing erasure" definition="无值box为null、有值box为underlying T。" />
+  <GlossaryItem term="nullable boundary erasure" definition="Object/interface边界擦除静态nullable wrapper信息。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 19: Nullable Value Types" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

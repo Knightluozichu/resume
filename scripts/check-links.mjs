@@ -61,7 +61,8 @@ function extractHrefs(html) {
   const re = /<a\b[^>]*?\shref=("([^"]*)"|'([^']*)')/gi;
   let m;
   while ((m = re.exec(html)) !== null) {
-    out.push(m[2] ?? m[3] ?? "");
+    const value = m[2] ?? m[3] ?? "";
+    out.push(Buffer.from(value, "utf8").toString("utf8"));
   }
   return out;
 }
@@ -69,17 +70,20 @@ function extractHrefs(html) {
 /** 提取一份 HTML 里所有元素的 id="..." 与 name="..."（用于锚点验证）。 */
 function extractAnchors(html) {
   const set = new Set();
+  // RegExp captures can retain the full multi-megabyte HTML backing string.
+  // Materialize each short anchor so the cache only keeps the value itself.
+  const copyValue = (value) => Buffer.from(value, "utf8").toString("utf8");
   const idRe = /\sid=("([^"]*)"|'([^']*)')/gi;
   let m;
   while ((m = idRe.exec(html)) !== null) {
     const v = m[2] ?? m[3] ?? "";
-    if (v) set.add(v);
+    if (v) set.add(copyValue(v));
   }
   // <a name="..."> 兼容老式锚点（站内极少用，但 KaTeX/部分组件可能产）
   const nameRe = /<a\b[^>]*?\sname=("([^"]*)"|'([^']*)')/gi;
   while ((m = nameRe.exec(html)) !== null) {
     const v = m[2] ?? m[3] ?? "";
-    if (v) set.add(v);
+    if (v) set.add(copyValue(v));
   }
   return set;
 }
@@ -136,6 +140,8 @@ function main() {
     if (fromUrl === null) continue; // _not-found / _global-error 等：不审核它们里头的 href
     const html = readFileSync(htmlPath, "utf8");
     const hrefs = extractHrefs(html);
+    const currentAnchors = extractAnchors(html);
+    anchorsCache.set(htmlPath, currentAnchors);
 
     for (const raw of hrefs) {
       let href = raw.trim();
@@ -162,8 +168,10 @@ function main() {
       // path 为空 = 同页锚点（#xxx）
       if (path === "") {
         if (!hash) continue; // 仅 `#` 不强校验
-        const anchors = anchorsOf(htmlPath);
-        if (!anchors.has(hash) && !anchors.has(decodeURIComponent(hash))) {
+        if (
+          !currentAnchors.has(hash) &&
+          !currentAnchors.has(decodeURIComponent(hash))
+        ) {
           failures.push({
             from: fromUrl,
             href: raw,

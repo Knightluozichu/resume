@@ -1,0 +1,381 @@
+---
+title: "Chapter 2 · Basics"
+type: C
+section: "HD2 · 基础与边界"
+order: 2
+description: "按Hacker's Delight第二版第2章重建最右位操作、溢出检测、循环移位、双字长运算与布尔分解。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/hackers-delight-9780321842688"
+draft: false
+---
+
+import { HD2RightmostOneLab, HD2RightmostZeroLab, HD2CarryPropagationLab, HD2AbsoluteValueLab, HD2AverageLab, HD2SignExtendLab, HD2SignedShiftLab, HD2CompareLab, HD2OverflowLab, HD2RotateLab, HD2DoubleWordAddLab, HD2DoubleWordShiftLab, HD2MinMaxLab, HD2BooleanDecompositionLab, HD2BooleanFunctionLab, HD2BasicsCertificateLab } from "@/components/mdx/hackers-delight/diagrams/02-basics";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释manipulating rightmost bits如何由减一、加一与two's-complement negation产生
+- 能计算进位分解、无溢出平均值、符号扩展、三值比较与signed/unsigned overflow predicates
+- 能实现rotate shifts、double-length operations及multi-byte addition的fixed-width reference
+- 能分析branchless absolute、XOR exchange和subtraction-based comparison的边界风险
+- 能设计以Boolean decomposition覆盖全部16个binary Boolean functions的验证表
+
+</Objectives>
+
+## 从“减一究竟翻转了哪些位”开始
+
+先预测：对8-bit word `10110100`减一，变化的不是任意suffix，而是最右侧1变成0、它右边的所有0变成1。于是原值与减一结果做AND、OR或XOR，就能把这段结构提取出来。Chapter 2的Basics不是一张孤立公式清单；它训练的是从carry chain、sign mask和per-bit truth table推导实现，再把公式放回fixed-width contract检查。
+
+<Term def="一个非零word中位置最低的1-bit，以及围绕该位置构造clear、isolate和suffix mask的方法。">最右1位</Term>与<Term def="一个非全1 word中位置最低的0-bit，以及由加一形成的trailing-one carry chain。">最右0位</Term>是本章第一组generators。后面的average、comparison、overflow detection、rotate shifts和double-length operations都在复用同一思路：先找哪些bits独立变化，再把跨bit信息显式搬运。
+
+## 2.1 Manipulating rightmost bits
+
+### Subtract one: expose the rightmost 1
+
+设$x\ne0$。若最右1位在position $k$，则$x-1$保留higher prefix，把position $k$清零，并把lower $k$ bits全部置一。因此
+
+$$
+x\mathbin{\&}(x-1)
+\quad\text{clears the rightmost 1-bit},
+\qquad
+x\mathbin{\&}(-x)
+\quad\text{isolates it}.
+$$
+
+第二式来自fixed-width two's complement：$-x=\operatorname{NOT}(x)+1$，higher bits在AND中消失，只留下carry停止处的one-hot bit。它也是lowbit、Fenwick tree步长和trailing-zero reasoning的基础。
+
+<HD2RightmostOneLab />
+
+`x ^ (x - 1)`把最右1及其lower suffix全部置一；`x | (x - 1)`只把该1以下置一。零输入需要单独定义：在modulo word中，`0 - 1`成为all ones，不能继续解释成“存在最右1”。
+
+```c
+#include <stdint.h>
+
+static uint32_t clear_rightmost_one(uint32_t x) { return x & (x - 1u); }
+static uint32_t isolate_rightmost_one(uint32_t x) { return x & (0u - x); }
+static uint32_t rightmost_one_suffix(uint32_t x) { return x ^ (x - 1u); }
+```
+
+### Add one: expose the rightmost 0
+
+对非全1 word加一，trailing ones归零，最右0变一。于是
+
+$$
+x\mathbin{|}(x+1)
+\quad\text{sets the rightmost 0-bit},
+\qquad
+(\operatorname{NOT}x)\mathbin{\&}(x+1)
+\quad\text{isolates it}.
+$$
+
+<HD2RightmostZeroLab />
+
+`x & (x + 1)`会一次clear全部trailing ones；`x ^ (x + 1)`给出从bit 0到最右0的suffix mask。全1输入加一回绕为0，所以“最右0”也必须先证明存在。Rightmost-bit identities的安全接口应写清precondition，而不是让特殊值偷偷继承一个看似合理的结果。
+
+## 2.2 Addition and logical operations
+
+逐bit看，XOR给出不含carry的sum，AND给出同时为1的位置，后者左移一位成为第一层carry：
+
+$$
+x+y
+=
+(x\mathbin{\oplus}y)+2(x\mathbin{\&}y).
+$$
+
+<Term def="把加法拆成XOR产生的无进位和与AND左移产生的进位，并迭代到carry为零。">进位分解</Term>可写成iterative adder：反复令sum为XOR、carry为shifted AND。每轮至少把尚未解决的carry向higher position推进一位，因此fixed $w$下至多$w$轮结束。
+
+<HD2CarryPropagationLab />
+
+这个identity解释“为什么成立”，却不表示software loop比hardware ADD更快。它的价值在于构造无ADD环境、分析carry propagation，或为后面的overflow与multiword arithmetic提供proof vocabulary。
+
+## 2.3 Inequalities among logical and arithmetic expressions
+
+对unsigned words，逐bit包含关系给出
+
+$$
+x\mathbin{\&}y
+\le x,
+\qquad
+x\le x\mathbin{|}y,
+\qquad
+x\mathbin{\oplus}y\le x\mathbin{|}y.
+$$
+
+而$x+y=(x\mathbin{\oplus}y)+2(x\mathbin{\&}y)$是在mathematical integers中的等式；若只观察low word，wraparound会破坏普通order。Signed interpretation又可能因最高位权重为负而反转直觉。因此任何inequality都要标注domain：mathematical nonnegative integers、unsigned fixed-width，还是signed two's complement。
+
+这些bounds可以做快速sanity check。例如若声称某个AND mask结果大于原unsigned operand，说明width、complement或comparison type至少有一处没有对齐。
+
+## 2.4–2.12 Sign, absolute value, averages, and predicates
+
+### Absolute value and average without a dangerous intermediate
+
+令arithmetic sign mask $m=x\mathbin{\mathrm{ashr}}(w-1)$，则nonnegative input给$m=0$，negative input给all ones：
+
+$$
+\operatorname{abs}(x)
+=
+(x\mathbin{\oplus}m)-m.
+$$
+
+<HD2AbsoluteValueLab />
+
+该式对minimum signed integer仍不可表示。它可以在unsigned word algebra中给出magnitude bits，却不能凭空扩大signed range。需要饱和、报错还是返回unsigned magnitude，必须由API contract决定。
+
+Unsigned floor average若直接先算$x+y$可能overflow。利用共享one bits和不同bits分解可得
+
+$$
+\left\lfloor\frac{x+y}{2}\right\rfloor
+=
+(x\mathbin{\&}y)
++
+((x\mathbin{\oplus}y)\mathbin{\mathrm{shr}}1).
+$$
+
+<HD2AverageLab />
+
+这不是把overflow藏起来，而是从不构造可能需要$w+1$ bits的intermediate。若要round-to-nearest或signed average，还需重新定义tie rule与negative rounding。
+
+### Sign extension and signed right shift from unsigned operations
+
+<Term def="把b-bit two's-complement field扩展到更宽word，同时保持其signed value。">符号扩展</Term>可先mask low $b$ bits，令$m=2^{b-1}$，再用
+
+$$
+\operatorname{sext}_b(x)
+=
+(x\mathbin{\oplus}m)-m.
+$$
+
+<HD2SignExtendLab />
+
+当只有logical right shift时，可先右移，再根据original sign bit OR一个high fill mask。关键是先用unsigned operations构造mask，避免依赖negative signed shift或invalid shift count。
+
+<HD2SignedShiftLab />
+
+Sign function常希望返回negative one、zero或positive one。可分别materialize predicates，再组合为`(x > 0) - (x < 0)`。这里comparison直接产生0或1，比先求`x - y`再看sign安全，因为subtraction itself可能signed overflow。
+
+<HD2CompareLab />
+
+把一个operand的sign传给另一个magnitude，本质仍是mask-select。先取得magnitude，再用sign mask条件negate；若magnitude等于signed minimum对应的unsigned value，output type必须能承载它。
+
+有些compact encodings约定zero bit pattern代表数学上的$2^n$，从而让range 1到$2^n$塞入$n$ bits。此时zero不再是ordinary zero，每个addition、comparison和decode boundary都必须经过representation mapping，不能混用native integer predicates。
+
+### Predicates and condition codes
+
+<Term def="把comparison或condition code规范化为0/1，再扩展成全0或全1mask用于selection。">谓词掩码</Term>把control decision变成dataflow。若predicate $p$属于集合${0,1}$，则$-p$在two's complement中正好是all-zero或all-one mask。
+
+Condition codes通常同时携带zero、negative、carry与overflow。它们不是同一个概念：carry回答unsigned result是否越过word，overflow回答signed exact result是否超出signed range。读取哪个flag取决于interpretation。
+
+## 2.13–2.15 Overflow detection and rotate shifts
+
+### Carry is not signed overflow
+
+<Term def="stored signed result与mathematical result不一致，且精确结果超出w-bit signed range的事件。">溢出检测</Term>必须区分unsigned和signed。Unsigned addition的carry可由stored sum $s$满足$s\lt x$判断。Signed addition仅在operands同号而result异号时overflow：
+
+$$
+\operatorname{ovAdd}(x,y,s)
+=
+\operatorname{msb}((s\mathbin{\oplus}x)\mathbin{\&}(s\mathbin{\oplus}y)).
+$$
+
+Signed subtraction则要求operands异号且difference与minuend异号：
+
+$$
+\operatorname{ovSub}(x,y,d)
+=
+\operatorname{msb}((x\mathbin{\oplus}y)\mathbin{\&}(d\mathbin{\oplus}x)).
+$$
+
+<HD2OverflowLab />
+
+```c
+typedef struct { uint32_t value; uint32_t carry; } add32_result;
+
+static add32_result add_with_carry(uint32_t x, uint32_t y) {
+    uint32_t sum = x + y;
+    return (add32_result){sum, sum < x};
+}
+
+static uint32_t signed_add_overflow_bits(uint32_t x, uint32_t y) {
+    uint32_t sum = x + y;
+    return ((sum ^ x) & (sum ^ y)) >> 31;
+}
+```
+
+这里用unsigned arithmetic形成stored bits，再检查sign bit，避免C signed overflow本身触发undefined behavior。若language提供checked-add或overflow intrinsics，应优先使用其明确contract。
+
+### Rotate shifts preserve bit population
+
+<Term def="把从word一端移出的bits重新插入另一端、不丢失bit population的置换。">循环移位</Term>（rotate shifts）对$0\lt n\lt w$满足
+
+$$
+\operatorname{rotl}_w(x,n)
+=
+((x\mathbin{\mathrm{shl}}n)
+\mathbin{|}
+(x\mathbin{\mathrm{shr}}(w-n)))
+\bmod2^w.
+$$
+
+<HD2RotateLab />
+
+Production implementation要把$n$归一化，并特殊处理$n=0$，否则第二个shift可能等于word width。Modern standard libraries和ISAs常已有rotate primitive，既表达intent，也让compiler选择single instruction。
+
+## 2.16–2.21 Double-length operations and selection
+
+### Add, subtract, and shift across word boundaries
+
+<Term def="用high和low两个w-bit words表示一个2w-bit value，并显式传递carry、borrow或cross-word bits。">双字长运算</Term>先计算low word。对addition，low sum若小于任一unsigned addend就产生carry，再把carry加入high sum：
+
+$$
+\begin{aligned}
+l'&=(l_x+l_y)\bmod2^w,\\
+c&=[l'\lt l_x],\\
+h'&=(h_x+h_y+c)\bmod2^w.
+\end{aligned}
+$$
+
+<HD2DoubleWordAddLab />
+
+Subtraction同理先得到low difference，并以`low_x < low_y`形成borrow。Multi-byte addition把这条recurrence从least significant byte向上重复；little-endian或big-endian只影响bytes在memory中的遍历方向，不改变arithmetic significance order。
+
+```c
+static void add_128(uint64_t ah, uint64_t al,
+                    uint64_t bh, uint64_t bl,
+                    uint64_t *rh, uint64_t *rl) {
+    uint64_t low = al + bl;
+    uint64_t carry = low < al;
+    *rl = low;
+    *rh = ah + bh + carry;
+}
+```
+
+Double-length shift必须搬运cross-word bits。Left shift by $n$时，low的high $n$ bits进入high的low side；right shift方向相反。Shift amount等于或超过word width时应走单独case，而不是把公式硬套给hardware masking rule。
+
+<HD2DoubleWordShiftLab />
+
+### Maximum, minimum, difference-or-zero, and exchange
+
+Max/min可先生成comparison mask，再在$x$和$y$之间逐bit select。Difference-or-zero（doz）把negative difference钳到zero，也应先用不会overflow的comparison决定mask，而非假设subtraction sign永远可靠。
+
+<HD2MinMaxLab />
+
+XOR exchange利用三次XOR在两个distinct storage locations之间恢复values；但若两arguments alias同一location，第一步就把value清零。现代compiler对ordinary temporary assignment通常能生成更清楚且同样好的code。
+
+Alternating-bit patterns如`0101...`和`1010...`可由word-width constants或division identity构造，用于even/odd bit lanes。必须显式声明width；对一个unbounded integer写complement不会得到期望的有限pattern。
+
+<Callout type="trap" title="XOR swap既安全又一定更快">
+当两个references指向同一storage时，第一次XOR会把value变为zero；额外dependencies也可能比temporary更慢。修法是使用普通交换，只有在明确ISA约束且证明non-alias时才评估特殊sequence。
+</Callout>
+
+<Callout type="trap" title="看差值符号就能比较任意signed integers">
+若x与y异号，x减y可能越过signed range，stored sign与mathematical sign不同，C/C++里还可能触发undefined behavior。修法是直接comparison，或用unsigned bits和overflow predicate修正。
+</Callout>
+
+## 2.22–2.23 Boolean decomposition and all 16 functions
+
+<Term def="按一个selector逐bit选择两个expressions，或按变量取0/1把任意Boolean function拆成两个cofactors。">布尔分解</Term>最实用的mask-select形式是
+
+$$
+\operatorname{select}(m,x,y)
+=
+(m\mathbin{\&}x)
+\mathbin{|}
+((\operatorname{NOT}m)\mathbin{\&}y).
+$$
+
+<HD2BooleanDecompositionLab />
+
+更一般地，对任意bitwise Boolean function $f(x,y)$，按$x$分解为
+
+$$
+f(x,y)
+=
+((\operatorname{NOT}x)\mathbin{\&}f(0,y))
+\mathbin{|}
+(x\mathbin{\&}f(1,y)).
+$$
+
+这是逐bit的Shannon expansion：在$x_i=0$和$x_i=1$两个cases分别取cofactor。它把复杂expression系统化，而不是靠猜测化简。
+
+两个input bits共有4行truth table，每行output独立取0或1，所以binary Boolean functions数量为
+
+$$
+2^{2^2}=16.
+$$
+
+<HD2BooleanFunctionLab />
+
+这16种包括constant zero、AND、$x$且非$y$、projection $x$、非$x$且$y$、projection $y$、XOR、OR、NOR、equivalence、NOT $y$、implication、NOT $x$、reverse implication、NAND与constant one。给function编号时必须声明truth-table row order，否则同一个4-bit code会被不同约定解释成不同operation。
+
+## 把基础技巧变成可交付实现
+
+<Stepper>
+<Step title="从bit transition推导identity">
+画出减一、加一、carry或shift跨边界时哪些positions改变，先预测zero、all-ones和minimum signed input。
+
+<HD2RightmostOneLab />
+</Step>
+<Step title="把跨位信息显式化">
+用carry、borrow、sign mask或wrapped fragment传递信息，并在unsigned fixed-width algebra中实现reference。
+
+<HD2DoubleWordAddLab />
+</Step>
+<Step title="穷举truth table与边界">
+对small width枚举全部patterns，核对Boolean decomposition、overflow flags和special inputs，再检查target primitive。
+
+<HD2BasicsCertificateLab />
+</Step>
+</Stepper>
+
+<HD2BasicsCertificateLab />
+
+## 小结
+
+Chapter 2 Basics从manipulating rightmost bits建立generative method：减一暴露最右1，加一暴露最右0；XOR与AND把sum和carry分离。Absolute value、safe average、sign extension、predicate masks与three-valued comparison都来自conditional complement或mask selection，但minimum signed value与overflow不能被公式省略。
+
+Overflow detection区分unsigned carry与signed range failure；rotate shifts保留全部bits，却必须处理zero/width shift counts。Double-length operations把carry、borrow和cross-word fragments显式传到相邻word。Boolean decomposition则把selection推广到任意function，并用4-row truth table穷尽全部16个binary Boolean operations。
+
+合格实现要同时提供identity proof、fixed-width unsigned reference、boundary tests和target primitive audit。Branchless形式只是dataflow表达，既不自动portable，也不自动faster。
+
+<Exercises>
+
+**问题 1**：对8-bit `x = 10110000`，`x & (x - 1)`和`x & -x`分别是什么？它们各表达什么？
+
+<Answer>
+减一得到10101111。AND结果为10100000，表示clear最右1；two's-complement负值为01010000，与原值AND得到00010000，表示isolate position 4的最右1。
+</Answer>
+
+**问题 2**：为什么unsigned average公式不会产生与直接x加y相同的intermediate overflow？
+
+<Answer>
+x AND y只保留双方共有的one bits，它们直接贡献平均值；x XOR y只保留不同bits，先右移再加入。两部分各自和最终floor average都处于word range，因此不需要先形成可能占w加1 bits的sum。
+</Answer>
+
+**问题 3**：8-bit signed addition中x为100、y为60。stored result与overflow flag分别是什么？unsigned carry又是什么？
+
+<Answer>
+Mathematical sum为160，low byte解释为signed负96。两个operands为positive而stored result为negative，所以signed overflow为true。按unsigned解释，100加60没有超过255，因此carry为false；两种flags回答不同问题。
+</Answer>
+
+**问题 4**：如何验证一个2-input bitwise Boolean expression确实实现目标function，而不依赖随机测试？
+
+<Answer>
+固定truth-table row order，枚举00、01、10、11四组input bits并比较output。Bitwise operation对每个position独立，所以四行全部一致就证明任意word pattern逐bit一致；实现层面再检查width与complement masking。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="最右1位">一个非零word中位置最低的1-bit，以及围绕该位置构造clear、isolate和suffix mask的方法。</GlossaryItem>
+<GlossaryItem term="最右0位">一个非全1 word中位置最低的0-bit，以及由加一形成的trailing-one carry chain。</GlossaryItem>
+<GlossaryItem term="进位分解">把加法拆成XOR产生的无进位和与AND左移产生的进位，并迭代到carry为零。</GlossaryItem>
+<GlossaryItem term="符号扩展">把b-bit two's-complement field扩展到更宽word，同时保持其signed value。</GlossaryItem>
+<GlossaryItem term="谓词掩码">把comparison或condition code规范化为0/1，再扩展成全0或全1mask用于selection。</GlossaryItem>
+<GlossaryItem term="溢出检测">stored signed result与mathematical result不一致，且精确结果超出w-bit signed range的事件。</GlossaryItem>
+<GlossaryItem term="循环移位">把从word一端移出的bits重新插入另一端、不丢失bit population的置换。</GlossaryItem>
+<GlossaryItem term="双字长运算">用high和low两个w-bit words表示一个2w-bit value，并显式传递carry、borrow或cross-word bits。</GlossaryItem>
+<GlossaryItem term="布尔分解">按一个selector逐bit选择两个expressions，或按变量取0/1把任意Boolean function拆成两个cofactors。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Hacker's Delight, Second Edition, Chapter 2 · Basics" adaptedUrl="https://www.informit.com/store/hackers-delight-9780321842688" />

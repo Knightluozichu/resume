@@ -1,0 +1,298 @@
+---
+title: "面试题58（一）：翻转单词顺序"
+type: C
+section: "第6章 面试中的各项能力"
+order: 68
+description: "先原地翻转整个句子以改变单词排列，再逐个翻转空格分隔的单词，恢复每个单词内部字符顺序。"
+demo: true
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/58_01_ReverseWordsInSentence/ReverseWordsInSentence.cpp"
+draft: false
+---
+
+import { ReverseWordsTwoPassDiagram, ReverseWordsPointerLab, ReverseWordsSpaceMap, ReverseWordsInvariantDiagram, ReverseWordsOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/reverse-words-in-sentence";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释两次不同范围的翻转为何只改变单词顺序
+- 能计算pBegin与pEnd识别单词边界的逐步状态
+- 能实现作者原地接口与修复空串边界的现代接口
+- 能分析连续空格、两端空格、标点、制表符和可写缓冲区契约
+- 能设计覆盖五组官方用例与指针边界的测试
+
+</Objectives>
+
+## 从“翻转句子”为什么会把单词也写反开始
+
+题目给出英文句子，要求“**翻转单词顺序**”，但每个单词内部字符顺序保持不变。输入“I am a student.”应变成“student. a am I”，标点按普通字母处理，仍跟着student这个单词。
+
+若只把整段字符首尾交换，会得到“.tneduts a ma I”：单词位置已经反转，但每个单词的字符也反了。此时再对每个单词各翻转一次，单词内部恢复，位置却不会再交换。两次不同作用域的反转正好抵消不需要的变化。
+
+<ReverseWordsTwoPassDiagram />
+
+先预测三个边界：“Wonderful”只有一个单词，会翻转两次回到原样；三个空格没有单词，仍是三个空格；“I  am”含两个连续空格，输出是“am  I”，作者不会压缩分隔符。
+
+## 整体翻转与局部翻转的组合
+
+把整段字符从首到尾交换称为<Term def="以整个可写字符串为闭区间进行首尾交换，使所有字符位置完全反向。">整体翻转</Term>。它同时完成两件事：把最后一个单词移到最前，把每个单词字符写反。
+
+随后扫描翻转后的字符串，遇到一个单词就只反转它自己的闭区间。这是<Term def="只对某个单词的首字符到尾字符执行反转，不移动分隔符。">局部翻转</Term>。每个单词经历整体翻转一次、局部翻转一次，内部字符恢复；单词之间只经历整体翻转，所以排列保持为逆序。
+
+“**先翻转整个句子**”与“**再翻转每个单词**”可写成三层状态：
+
+```text
+W1 空格 W2 空格 … 空格 Wk
+reverse(Wk) 空格 … 空格 reverse(W2) 空格 reverse(W1)
+Wk 空格 … 空格 W2 空格 W1
+```
+
+这里不需要拆分单词、额外数组或从后向前拼接。每个字符参与常数次交换，时间O(n)，除少量指针外额外空间O(1)。
+
+<ReverseWordsInvariantDiagram />
+
+## 作者如何找到每个单词
+
+作者先让pEnd从字符串开头移动到终止符，再退一格指向最后一个真实字符，调用公共Reverse辅助函数完成整句翻转。之后把pBegin与pEnd都放回开头并同步扫描。
+
+“**空格分隔单词**”在源码中是字面规则：只有字符空格才是边界。pBegin指向当前候选单词开头，pEnd向右寻找空格或终止符。若pBegin本身是空格，两个指针一起右移；若pEnd到边界，先退到单词尾再翻转该词。
+
+由词首、分隔符和终止符共同确定的范围称为<Term def="从第一个非空格字符开始，到下一个空格或字符串终止符之前结束的字符区间。">单词边界</Term>。扫描期间有三个稳定状态：两个指针都在空格上时同步跳过；pBegin在词首而pEnd在词中时只推进pEnd；pEnd抵达边界时闭合当前单词。每轮至少有一个指针向右移动，所以循环一定终止，也不会在连续空格处反复处理空区间。
+
+<ReverseWordsPointerLab />
+
+这种判断边界的规则称为<Term def="确定哪些字符算分隔符，并据此定义单词开始、结束以及连续分隔符行为。">分隔符契约</Term>。制表符、换行符不会被当成边界；逗号和句号也只是单词的一部分。
+
+## 忠实还原作者原地函数
+
+作者的StringUtil::Reverse接收两个可写char指针，交换闭区间中的字符。ReverseSentence返回传入的同一指针，输入内容在调用过程中直接改变。
+
+```cpp
+void Reverse(char* begin, char* end) {
+    if (begin == nullptr || end == nullptr)
+        return;
+
+    while (begin < end) {
+        const char temp = *begin;
+        *begin = *end;
+        *end = temp;
+        ++begin;
+        --end;
+    }
+}
+
+char* ReverseSentence(char* data) {
+    if (data == nullptr)
+        return nullptr;
+
+    char* begin = data;
+    char* end = data;
+    while (*end != '\0')
+        ++end;
+    --end;
+
+    Reverse(begin, end);
+
+    begin = end = data;
+    while (*begin != '\0') {
+        if (*begin == ' ') {
+            ++begin;
+            ++end;
+        } else if (*end == ' '
+                   || *end == '\0') {
+            Reverse(begin, --end);
+            begin = ++end;
+        } else {
+            ++end;
+        }
+    }
+    return data;
+}
+```
+
+在单词结束分支中，pEnd最初指向空格或终止符。前置递减把它移回单词最后一个字符，Reverse翻转闭区间；随后前置递增让pEnd回到边界，pBegin也指向同一位置。下一轮若是空格，两个指针越过它；若是终止符，循环结束。
+
+原地修改而不分配与输入等长的副本，称为<Term def="直接在调用者提供的可写缓冲区中交换字符，不创建完整结果副本。">原地变换</Term>。它节省空间，但也把“输入必须可写、生命周期足够、以终止符结尾”变成接口前提。
+
+终止符本身不参与任何交换。第一阶段把pEnd停在终止符后退到最后一个字符；第二阶段却允许pEnd再次走到终止符，因为它承担“最后一个单词结束标记”的角色。两处对pEnd的含义不同，是理解源码时最容易混淆的细节。若输入没有终止符，寻找末尾会越过缓冲区；若缓冲区与其他视图共享，原地交换也会让所有别名立即看到新顺序。因此长度和可写所有权必须由调用合同保证。
+
+<Callout type="trap" title="把字符串字面量传给 char* 原地修改">
+现代C++中的字符串字面量是只读字符数组，不能安全绑定到char*，更不能交换其中字符。调用者应使用char数组或std::string的可写存储；作者多数测试用char input[]正是为了提供可写缓冲区。
+</Callout>
+
+## 空串边界中的源码缺口
+
+空指针在入口直接返回nullptr，处理正确。空字符串却暴露了一个指针边界：pEnd一开始就指向终止符，寻找末尾的循环不移动，随后无条件执行减一，让指针跑到缓冲区开头之前。即使Reverse中的循环通常不会交换，形成并比较这个越界前指针也不符合标准C++定义。
+
+作者Test4还把空字符串字面量直接传给char*参数，这在现代标准C++中不能通过严格编译。旧编译器扩展可能让测试看似通过，但不能证明算法边界安全。
+
+修复很小：在寻找尾指针前先判断首字符是否为终止符。现代接口也可接收std::string引用，用索引表达范围，避免构造缓冲区前指针。
+
+```cpp
+#include <algorithm>
+#include <cstddef>
+#include <string>
+
+void reverseWordsInSentence(
+    std::string& text) {
+    if (text.empty())
+        return;
+
+    std::reverse(text.begin(), text.end());
+
+    std::size_t begin = 0;
+    while (begin < text.size()) {
+        if (text[begin] == ' ') {
+            ++begin;
+            continue;
+        }
+
+        std::size_t end = begin;
+        while (end < text.size()
+               && text[end] != ' ') {
+            ++end;
+        }
+        std::reverse(
+            text.begin() + begin,
+            text.begin() + end);
+        begin = end;
+    }
+}
+```
+
+std::reverse使用半开区间，因此第二个迭代器直接指向空格或字符串末尾，不必先减一。这个版本仍只把ASCII空格当分隔符，仍保留作者的输出语义，只修复空串和可写性表达。
+
+## 连续空格与两端空格会发生什么
+
+<ReverseWordsSpaceMap />
+
+作者不会解析“单词列表后重新用单空格拼接”，因此不会裁剪或压缩空格。整体翻转会把每个空格字符也映射到对称位置；逐词阶段不移动空格。所以连续空格数量保持，但原来的前导空格会变成尾随空格，原来的尾随空格会变成前导空格。
+
+例如两个前导空格加“hello world”再加一个尾随空格，整体反转后会有一个前导空格和两个尾随空格，逐词翻转只恢复world与hello。若业务想规范化空白，那是“拆词并重新拼接”的另一份合同，不能把它当作作者算法的自然结果。
+
+制表符不是字符空格，输入“I制表符am”会作为一个完整单词经历两次翻转，最终不变。中文或UTF-8内容按字节操作：只要词内每个字节都经历两次对称翻转，最终字节序可恢复，但算法仍不理解Unicode空白与字素边界，生产文本处理应使用明确的Unicode分词库。
+
+两遍过程的中间态可能暂时不是合法UTF-8，因为整体翻转会颠倒多字节编码；第二遍只在相同字节分组上再次翻转时才能恢复。若分隔符识别需要理解全角空格、不可断行空格或组合字符，按char扫描就不再足够。这里应把作者算法理解为受控英文句子上的字节置换，而不是通用自然语言排版器。
+
+## 正确性来自两次抵消
+
+设任意单词的字符序列为W。整体翻转后它变为reverse(W)，且单词块的次序反转。局部阶段再次应用reverse，利用反转的自反性恢复W。分隔空格从未参加局部翻转，因此只保留整体反转后的位置。
+
+这个证明不依赖单词长度：长度0对应连续空格，不进入局部翻转；长度1的单词翻转前后相同；长单词由首尾指针逐对交换。pBegin始终指向尚未处理区域的起点，pEnd只在当前词中前进，不会漏掉最后一个词，因为终止符同样触发闭合分支。
+
+<ReverseWordsInvariantDiagram />
+
+时间上，整句扫描一次找末尾、翻转一次、逐词扫描一次并让每个非空格字符再交换一次，总量仍是线性。输入越长不会产生嵌套重扫。
+
+## 五组官方测试与补充矩阵
+
+<ReverseWordsOfficialCaseLab />
+
+Test1复现“I am a student.”到“student. a am I”；Test2用“Wonderful”验证单词翻转两次后不变；Test3传nullptr；Test4期望空串不变，但正好暴露源码指针问题；Test5用三个空格验证没有单词时扫描稳定。
+
+现代测试应使用可写std::string或char数组，并补充连续空格、前导尾随空格、标点、制表符以及很长单词。若保留作者char*接口，还要断言返回地址与输入地址相同，确认没有悄悄分配新结果。
+
+```cpp
+#include <cassert>
+#include <string>
+
+void testReverseWords() {
+    std::string normal = "I am a student.";
+    reverseWordsInSentence(normal);
+    assert(normal == "student. a am I");
+
+    std::string one = "Wonderful";
+    reverseWordsInSentence(one);
+    assert(one == "Wonderful");
+
+    std::string empty;
+    reverseWordsInSentence(empty);
+    assert(empty.empty());
+
+    std::string spaces = "   ";
+    reverseWordsInSentence(spaces);
+    assert(spaces == "   ");
+
+    std::string repeated = "I  am";
+    reverseWordsInSentence(repeated);
+    assert(repeated == "am  I");
+}
+```
+
+<Callout type="trap" title="拆词后用一个空格重新连接">
+这种实现会丢失连续空格并裁剪两端空格，虽然普通样例相同，却改变了作者的逐字符原地合同。是否规范化空白应由题意明确决定。
+</Callout>
+
+## 从整句到每个单词的执行路径
+
+<Stepper>
+  <Step title="观察两层反转">
+    <ReverseWordsTwoPassDiagram />
+    先让单词块逆序，再把每个块内部字符恢复。
+  </Step>
+  <Step title="确认作用域不变式">
+    <ReverseWordsInvariantDiagram />
+    整体阶段移动所有字符，局部阶段只操作非空格区间。
+  </Step>
+  <Step title="移动两个边界指针">
+    <ReverseWordsPointerLab />
+    pBegin守住词首，pEnd寻找空格或终止符。
+  </Step>
+  <Step title="核对分隔符合同">
+    <ReverseWordsSpaceMap />
+    保留空格数量与标点，只认ASCII空格为词界。
+  </Step>
+  <Step title="覆盖作者五组测试">
+    <ReverseWordsOfficialCaseLab />
+    同时检查普通句、单词、空指针、空串和全空格。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 翻转单词顺序可分解为整体翻转与逐词局部翻转。
+2. 整体阶段同时翻转单词块顺序和块内字符，局部阶段只抵消块内翻转。
+3. pBegin定位词首，pEnd寻找ASCII空格或终止符形成闭区间。
+4. 作者原地修改char缓冲区，返回地址与输入相同，调用者必须提供可写存储。
+5. 连续空格不会压缩，两端空格会随整体反转交换到另一端。
+6. 标点属于相邻单词，制表符不是作者定义的分隔符。
+7. 空指针安全返回，但空字符串会让作者pEnd退到缓冲区之前，需要入口特判。
+8. 每个字符只参与常数次扫描和交换，时间O(n)，额外空间O(1)。
+9. 五组官方测试覆盖主路径和边界，现代版本还应补连续与两端空格。
+
+<Exercises>
+
+**问题 1：为什么整体翻转后还要逐个翻转单词？**
+
+<Answer>整体翻转已经把单词块顺序变成逆序，但也把每个单词字符写反。逐词再翻一次只恢复块内字符，不会改变块之间已经反转的排列。</Answer>
+
+**问题 2：“I  am”中的两个空格为什么仍保留？**
+
+<Answer>算法逐字符翻转，不拆词重组。空格参加整体翻转但不参加局部单词翻转，因此两个空格仍作为连续的两个字符出现在am与I之间。</Answer>
+
+**问题 3：作者空串实现的问题发生在哪一步？**
+
+<Answer>pEnd初始已指向终止符，寻找末尾循环不移动，随后无条件减一，产生缓冲区开头之前的指针。应在首字符为终止符时直接返回。</Answer>
+
+**问题 4：如何证明算法是O(n)而不是O(n平方)？**
+
+<Answer>寻找终止符、整句翻转和逐词扫描都是线性；所有单词区间互不重叠，局部翻转的字符总数不超过n，所以各线性阶段相加仍为O(n)。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="整体翻转">对整个字符串闭区间执行首尾交换。</GlossaryItem>
+  <GlossaryItem term="局部翻转">只反转一个单词内部的字符区间。</GlossaryItem>
+  <GlossaryItem term="分隔符契约">定义哪些字符划分单词以及空白如何保留的规则。</GlossaryItem>
+  <GlossaryItem term="原地变换">直接改写输入缓冲区，不创建完整结果副本。</GlossaryItem>
+  <GlossaryItem term="单词边界">由词首指针和空格或终止符共同确定的字符范围。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题58（一）"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/58_01_ReverseWordsInSentence/ReverseWordsInSentence.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
+/>

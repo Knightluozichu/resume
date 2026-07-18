@@ -1,14 +1,19 @@
 ---
-title: 实例化
+title: 实例化、批次边界与每实例矩阵
 type: C
 section: 高级OpenGL
 order: 10
-description: 要画一万个一模一样的小行星，逐个「画一个→吩咐一次」会喊一万遍（一万次 draw call，CPU 累死）。实例化是一次吩咐「照这个模子盖一万个，每个的位置看这张表」——一次 draw call 全画完。本章讲透 glDrawArraysInstanced / gl_InstanceID / 实例化数组 / glVertexAttribDivisor，并用 InstancingDemo 当场把实例数从 100 拖到 10000。
+description: 用实例化把同一网格/材质批次的重复提交压缩为一次：从 100 个 NDC 四边形、gl_InstanceID 和实例化数组，到行星带的 mat4 属性布局。讲透批次边界、divisor 与性能边界，并用可交互行星带观察实例数量变化。
 demo: true
 math: false
-sourceUrl: https://learnopengl-cn.github.io/04%20Advanced%20OpenGL/10%20Instancing/
+sourceUrl: https://learnopengl.com/Advanced-OpenGL/Instancing
 draft: false
 ---
+
+import {
+  InstancingBatchContractDiagram,
+  InstancingMatrixLayoutDiagram,
+} from "@/components/mdx/learnopengl/diagrams/instancing";
 
 {/* C 实战型章（HEL-76，高级OpenGL 篇第 10 篇）：原书「实例化 Instancing」。重心是代码对照(§6 覆盖≥80% 关键代码)：①glDrawArraysInstanced/glDrawElementsInstanced(带 instanceCount 一次画多个)；②gl_InstanceID 在顶点着色器取偏移(offsets[gl_InstanceID])+ uniform 数组上限；③实例化数组 + glVertexAttribDivisor(loc,1)(每实例一份变换/矩阵 mat4 占 4 个属性位)。math:false，§4 整节省略。类比固定「工厂流水线/盖章」库。主 viz 两个：InstancingDemo(R3F instancedMesh 行星带，滑块改 count 100~10000、draw call 对比) + AttribDivisorDiagram Stepper(divisor=0 逐顶点 vs divisor=1 每实例)。draft:true，老板验收后才发布(硬规则 7)。 */}
 
@@ -18,35 +23,39 @@ draft: false
 
 <Objectives>
 
-- 能用一次实例化绘制画出一大片相同网格：把 `glDrawArrays` 换成 `glDrawArraysInstanced(..., instanceCount)`，一次 draw call 画 `instanceCount` 个，而不是循环调用 `instanceCount` 次
-- 能改出「每个实例摆在不同位置」：用 `gl_InstanceID` 配 uniform 数组取偏移，或建一个`实例化数组`并 `glVertexAttribDivisor(loc, 1)`，让每个实例读到属于自己那一份的偏移 / 变换矩阵
-- 能回答：实例化数组的属性忘了设 `glVertexAttribDivisor(loc, 1)`，画面会变成什么样？为什么？
+- 能实现一次实例化绘制一大片相同网格：把 `glDrawArrays` 换成 `glDrawArraysInstanced(..., instanceCount)`，一次调用画 `instanceCount` 个，而不是循环调用 `instanceCount` 次
+- 能实现「每个实例摆在不同位置」：用 `gl_InstanceID` 配 uniform 数组取偏移，或建一个`实例化数组`并 `glVertexAttribDivisor(loc, 1)`，让每个实例读到属于自己那一份的偏移 / 变换矩阵
+- 能判断：实例化数组的属性忘了设 `glVertexAttribDivisor(loc, 1)`，画面会变成什么样？为什么？一个多子网格模型实际还会保留多少绘制批次？
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「工厂流水线 / 盖章」库。 */}
 
-## 一万次「吩咐」，还是一次
+## 为什么重复小网格会卡住 CPU
 
 想象你要在纸上印一万个一模一样的小图章。笨办法是：拿起图章、蘸墨、盖一个，再拿起、再蘸、再盖……重复一万次。盖图章这个动作本身很快，但**每次「拿起、吩咐手去盖」的来回**才是真正拖慢你的——一万次来回，胳膊先废了。
 
 聪明办法是：跟工厂说一句「照这一个模子，盖一万个，每个盖在哪、盖多大，看这张表」。模子只有一个，表上一行写一个位置。工厂一口气盖完一万个，而你**只吩咐了一遍**。
 
-这一章解决的就是：**要画很多个一模一样的东西时，怎么只「吩咐」一次、而不是一个一个地吩咐一万遍**。没有它，画一千个绕行星飞的小行星就得发起一千次绘制请求，CPU 光是反复「吩咐 GPU」就忙不过来，帧率掉到个位数；有了它，画上万个也能稳稳流畅。
+这一章解决的就是：**要画很多个一模一样的东西时，怎么只「吩咐」一次、而不是一个一个地吩咐一万遍**。没有它，画一千个绕行星飞的小行星就得发起一千次绘制请求，CPU 可能被反复提交命令拖成瓶颈；有了它，提交次数会显著减少。它不保证任何数量都流畅：GPU 仍要处理每个实例的顶点和片段，最终瓶颈要靠 profiler 判断。
 
 {/* 3. 概念讲解（spec §三，C 型把「是什么」压缩、篇幅让给第六节）：一节一概念；术语首现 <Term def> 高亮且进章末 Glossary；每概念配图或引用 Demo；顺序 是什么 → 为什么 → 在管线位置。 */}
 
 ## 实例化：一次 draw call 画一整片
 
-把「吩咐一次、盖一万个」翻译成图形术语，就是 <Term def="一种绘制技术：用一次绘制调用（一次 draw call）画出很多个相同的网格（同一份几何），而不是循环调用很多次。每个实例（instance）几何完全相同，只是各自的变换（位置/缩放/朝向）或某些属性不同。常用来画大量重复物体：草地、森林、粒子、行星带等。">实例化</Term>（instancing）。它的前提是：你要画的这一大片东西**几何完全一样**——同一个网格、同一份顶点数据。区别只在每个的位置、大小、朝向（统称「变换」）不同。实例化就是把「这一份几何」连同「每个实例各自的变换」一次性交给 GPU，让它一口气画完。
+把「吩咐一次、盖一万个」翻译成图形术语，就是 <Term def="一种绘制技术：用一次绘制调用（一次 draw call）画出很多个相同网格与兼容渲染状态的对象，而不是循环调用很多次。每个实例共享同一份顶点数据，只是各自的变换（位置/缩放/朝向）或某些属性不同。不同网格、材质或 pipeline 要分成不同实例化批次。常用来画大量重复物体：草地、森林、粒子、行星带等。">实例化</Term>（instancing）。它的前提是：你要画的这一大片东西在**同一个批次**里共享网格、材质和兼容状态。区别只在每个的位置、大小、朝向（统称「变换」）或每实例属性不同。实例化就是把「这一份几何」连同「每个实例各自的变换」一次性交给 GPU，让它一口气画完。
 
-为什么要这么做？关键在 <Term def="一次 draw call（绘制调用，如 glDrawArrays / glDrawElements）背后是一趟「CPU 把绘制命令和状态打包、发给 GPU」的通信。这趟通信本身有固定开销（驱动校验、状态切换、命令提交），和你画 3 个顶点还是 3000 个顶点关系不大。所以画大量小物体时，瓶颈往往不是 GPU 画三角形，而是 CPU 反复发起成千上万次 draw call 的通信开销。实例化把 N 次 draw call 压成 1 次，正是省这笔开销。">draw call 开销</Term>。每次你调用 `glDrawArrays` 或 `glDrawElements`，CPU 都要把绘制命令打包、发给 GPU——这趟「来回」本身就有固定成本，和你这次画 3 个顶点还是 3000 个顶点关系不大。所以画一千个小行星时，真正拖慢的不是 GPU 画三角形，而是 CPU **发起了一千次 draw call**。下面这张图把「N 次喊话 vs 1 次喊话」摆在一起：
+为什么要这么做？关键在 <Term def="一次 draw call（绘制调用，如 glDrawArrays / glDrawElements）背后是一趟「CPU 把绘制命令和状态打包、发给 GPU」的通信。这趟通信有驱动校验、状态切换和命令提交等成本；当每个物体都很小、而调用次数很大时，它往往比实际栅格化更早成为瓶颈。实例化把同一批次的 N 次 draw call 压成 1 次，正是省这笔 CPU 提交开销；它不让 GPU 少做每个实例的顶点和片段工作。">draw call 开销</Term>。每次你调用 `glDrawArrays` 或 `glDrawElements`，CPU 都要把绘制命令打包、发给 GPU。当每个物体很小而调用数很大时，这段提交成本常比实际栅格化更早成为瓶颈；实例化只针对这段 CPU 成本，不会让 GPU 少处理每个实例的顶点和片段。下面这张图把「N 次喊话 vs 1 次喊话」摆在一起：
 
 <DrawcallCompareDiagram />
 
-实例化把这 N 次 draw call 压成 **1 次**。你只调用一次带 `instanceCount` 的绘制函数，GPU 内部就把同一份几何重复画 `instanceCount` 遍。那「每个实例摆在哪」的信息怎么进去？这是接下来两节的事。先看这张「模子 + 每实例变换表 → 盖出 N 个」的总览：
+实例化把**同一个兼容批次**的 N 次 draw call 压成 **1 次**。你只调用一次带 `instanceCount` 的绘制函数，GPU 内部就把同一份几何重复画 `instanceCount` 遍。那「每个实例摆在哪」的信息怎么进去？这是接下来两节的事。先看这张「模子 + 每实例变换表 → 盖出 N 个」的总览：
 
 <InstancingDiagram />
+
+<InstancingBatchContractDiagram />
+
+这里的“1 次”有边界：同一个网格、材质和兼容渲染状态可组成一个实例化批次；不同网格、不同材质、不同 shader / pipeline 仍要分批。例如一个行星模型若有 `M` 个子网格，通常要对每个子网格各做一次 `glDrawElementsInstanced`。实例化减少的是 **CPU / 驱动提交次数**，不是让 GPU 少画 `instanceCount` 份三角形。
 
 ## 怎么让每个实例不一样：gl_InstanceID 与实例化数组
 
@@ -54,7 +63,29 @@ draft: false
 
 第一条路靠一个内置变量 <Term def="顶点着色器里的一个内置整数变量，表示「当前正在画的是第几个实例」，从 0 开始递增：第 0 个实例时它是 0、第 1 个实例时是 1……只在实例化绘制时有意义。常见用法是拿它当下标去取「每实例数据」，比如 offsets[gl_InstanceID]，给每个实例一个不同的偏移。">gl_InstanceID</Term>。在顶点着色器里，它告诉你「现在画的是第几个实例」——第 0 个实例时它是 `0`，第 1 个实例时是 `1`，依此类推。你可以拿它当下标去一个 uniform 数组里取偏移：`offsets[gl_InstanceID]`，于是第 `i` 个实例就读到 `offsets[i]`、摆到不同位置。简单直接，但有个硬上限：**uniform 数组不能太大**（受 GPU 的 uniform 容量限制），塞个一百个偏移还行，要塞一万个就爆了。
 
-第二条路没有这个上限，叫 <Term def="一种「每个实例一份」的顶点属性：把每实例的数据（比如每个实例的偏移向量、或整个变换矩阵）放进一个 VBO，像普通顶点属性那样用 glVertexAttribPointer 设好，再用 glVertexAttribDivisor(loc, 1) 告诉 GPU「这个属性每个实例才往下读一条、不是每个顶点」。这样想画多少实例就准备多少条数据，不受 uniform 数组大小限制，是画海量实例的标准做法。">实例化数组</Term>（instanced array）。思路是把「每实例的数据」（每个实例的偏移、甚至整个变换矩阵）放进一个 VBO，像普通顶点属性那样在着色器里 `in` 进来。但这里有个关键差别要交代清楚：普通顶点属性是**每个顶点**读一条，而实例化数组要的是**每个实例**才读一条。这个「多久读一条」的开关，就是下一节的主角。
+### 原书的第一个基准：一次调用画 100 个彩色四边形
+
+原教程先用最小案例建立直觉：一个四边形由 2 个三角形、共 6 个顶点组成；在 NDC 中准备一个 **10 x 10** 的 `translations[100]` 偏移表，顶点着色器用 `gl_InstanceID` 选自己的偏移。关键链路只有三步：
+
+```glsl
+// vertex shader
+uniform vec2 offsets[100];
+void main() {
+  vec2 offset = offsets[gl_InstanceID];
+  gl_Position = vec4(aPos + offset, 0.0, 1.0);
+  fColor = aColor;
+}
+```
+
+```cpp
+// CPU：生成 10 x 10 偏移并上传 offsets[0..99]
+glBindVertexArray(quadVAO);
+glDrawArraysInstanced(GL_TRIANGLES, 0, 6, 100);
+```
+
+这说明 `gl_InstanceID` 不是“第几个顶点”，而是**第几个四边形实例**：6 个顶点共享同一个 ID；下一个四边形的 6 个顶点才切换到下一个 ID。这个 uniform 数组版本适合学习和少量实例，后面才用 VBO 解决容量上限。
+
+第二条路没有这个 uniform 上限，叫 <Term def="一种「每个实例一份」的顶点属性：把每实例的数据（比如每个实例的偏移向量、或整个变换矩阵）放进一个 VBO，像普通顶点属性那样用 glVertexAttribPointer 设好，再用 glVertexAttribDivisor(loc, 1) 告诉 GPU「这个属性每个实例才往下读一条、不是每个顶点」。它不受 vertex uniform 容量限制，但仍受 VBO 内存、顶点属性槽和带宽约束。">实例化数组</Term>（instanced array）。思路是把「每实例的数据」（每个实例的偏移、甚至整个变换矩阵）放进一个 VBO，像普通顶点属性那样在着色器里 `in` 进来。但这里有个关键差别要交代清楚：普通顶点属性是**每个顶点**读一条，而实例化数组要的是**每个实例**才读一条。这个「多久读一条」的开关，就是下一节的主角。
 
 ## 核心难点：glVertexAttribDivisor —— 逐顶点还是逐实例
 
@@ -79,13 +110,13 @@ draft: false
 
 ## 动手：把实例数从 100 拖到 10000
 
-> 猜一猜：下面这块画布里是一整条「行星带」，成百上千颗小行星全是**同一个程序化小立方体**。现在拖动「实例数」滑块，把它从 100 一路拉到 10000——画面会**卡成幻灯片**吗？还是依旧丝般顺滑？先拖一下试试，再读解释。
+> 猜一猜：下面这块画布里是一整条「行星带」，成百上千颗小行星全是**同一个程序化小立方体**。现在拖动「实例数」滑块，把它从 100 一路拉到 10000：哪一项成本被保持为常数，哪一项仍在增长？先拖一下试试，再读解释。
 
 这块画布严格对应本章核心：所有小行星由**一个 `<instancedMesh>`** 画出（three.js 的实例化网格，底层就是 `gl.drawElementsInstanced` 一次 draw call）。同一份立方体几何只存一份，每颗小行星的位置 / 缩放 / 朝向由一份「每实例变换矩阵」决定，颜色按实例编号程序化生成——**没有任何外部模型或贴图**。拖动滑块改的只是「画多少个实例」（`mesh.count`），不重建任何几何：
 
-<InstancingDemo caption="一整条程序化『行星带』：成百上千颗小行星全是同一个小立方体，由一个 <instancedMesh> 一次 draw call 画出。拖动『实例数』滑块从 100 到 10000，画面始终流畅——因为无论多少颗，都只发起 1 次 draw call（右上角计数恒为 1）；而『不实例化』要发起的次数 = 实例数，几千几万次就会把 CPU 拖垮。拖动画布转视角、滚轮缩放。" />
+<InstancingDemo caption="一整条程序化『行星带』：这个演示只有一个 instancedMesh，因此它是一个兼容批次、提交数恒为 1。拖动『实例数』从 100 到 10000，可观察不实例化时的提交次数如何随实例数增长；实例化减少 CPU 提交，但 GPU 工作仍会增加。拖动画布转视角、滚轮缩放。" />
 
-拖到 10000，画面照样流畅——因为无论多少颗小行星，都只是**一次** draw call（看右上角，实例化的 draw call 计数恒为 `1`）。作为对比，旁边标着「不实例化需要的次数」会随滑块一路涨到一万：如果真的一颗一颗画，CPU 要发起一万次 draw call，那才会卡成幻灯片。**同一片小行星、同样的几何，差别全在「喊一遍」还是「喊一万遍」。**
+拖到 10000 时，这个演示仍维持**一个实例化网格**，因此右上角的示意提交数恒为 `1`。作为对比，旁边标着「不实例化需要的次数」会随滑块一路涨到一万：如果真的一颗一颗画，CPU 要发起一万次 draw call。这里的画布刻意只有一个网格和材质，用来隔离“提交次数”这个变量；真实模型有多个子网格 / 材质时，实例化提交数是**每个批次一次**，而不是全场景永远一次。GPU 的顶点、片段、带宽和过绘仍随实例数增加，是否卡顿要看设备和 profiler。
 
 {/* 5(主 viz 2). 交互 Demo（spec §五）：C 型 Stepper 讲核心难点 glVertexAttribDivisor——每步带图（满足「每步必带图示」，纯文字步=打回）。①divisor=0 逐顶点(AttribDivisorDiagram mode=divisor0)→②divisor=1 每实例(mode=divisor1)→③忘设 divisor=1 翻车(InstancingDiagram 提醒/对照)。猜一猜引导。 */}
 
@@ -299,14 +330,18 @@ void main() {
   </Tab>
 </CodeTabs>
 
-对照看：`mat4 instanceMatrix` 在着色器里只占一个 `layout(location = 3)`，但 CPU 端要把它拆成 **4 个 `vec4` 属性位**（`3`、`4`、`5`、`6`）逐个 `vertexAttribPointer` + `vertexAttribDivisor(., 1)`。配好后一句 `glDrawElementsInstanced(..., amount)`，整条行星带一次画完——这正是上面 Demo 的底层做法。
+对照看：`mat4 instanceMatrix` 在着色器里只占一个 `layout(location = 3)`，但 CPU 端要把它拆成 **4 个 `vec4` 属性位**（`3`、`4`、`5`、`6`）逐个 `vertexAttribPointer` + `vertexAttribDivisor(., 1)`。配好后每个兼容子网格调用一次 `glDrawElementsInstanced(..., amount)`，就能高效绘制整条行星带——这正是上面 Demo 抽象出的底层做法。
+
+<InstancingMatrixLayoutDiagram />
+
+原书的行星带在每颗小行星上预先生成一份 `mat4`：沿半径为 `radius` 的圆环平移，再加入有限范围的随机位移、缩放和旋转。上传矩阵 VBO 后，**每个 rock 子网格的 VAO**都必须记录这四个实例属性；渲染时按子网格循环调用 `glDrawElementsInstanced`。这既保留模型的多网格结构，也把“每颗小行星一次调用”降为“每种子网格一次调用”。
 
 {/* 7. 常见误区（spec §七）：C 型至少 3 个；固定格式 现象 → 原因 → 修法；每个 ≤150 字。①忘 glVertexAttribDivisor(loc,1) → 实例属性当逐顶点读、叠一起/错乱；②uniform 数组传偏移有上限 → 大量实例应改实例化数组；③以为实例化能画不同网格 → 实例化是同一网格的多份。再补一个 mat4 占 4 个属性位漏设的坑。 */}
 
 ## 容易踩的坑
 
 <Callout type="trap">
-  **现象**：实例化数组设好了，画出来的实例却**全叠在一起、或位置乱成一团**，根本排不成预期的阵列。**原因**：实例化数组属性**忘了设
+  **现象**：实例化数组设好了，实例却**位置错乱、网格扭曲，或读到缓冲区外的数据**，根本排不成预期的阵列。**原因**：实例化数组属性**忘了设
   `glVertexAttribDivisor(loc, 1)`——它默认 `divisor=0`、被当成普通逐顶点属性读，
   「每实例一份」的对应关系全错。**修法**：给每个实例化数组属性显式调
   `glVertexAttribDivisor(loc, 1)`；若是 `mat4` 占 4 个属性位，**4
@@ -319,13 +354,13 @@ void main() {
   数组有**大小上限**（受 `GL_MAX_VERTEX_UNIFORM_COMPONENTS`
   限制），`offsets[10000]` 远超容量。**修法**：大量实例别用 uniform
   数组，改用**实例化数组**（把每实例数据放进 VBO +
-  `divisor=1`），想画多少就准备多少条，不受 uniform 容量限制。
+  `divisor=1`）。它不再受 vertex uniform 容量限制，但仍要受缓冲内存、属性槽和带宽约束。
 </Callout>
 
 <Callout type="trap">
   **现象**：想用实例化「一次画一片**各不相同**的物体」（一棵树、一块石头、一栋房子混着画），结果发现做不到。**原因**：实例化画的是**同一个网格的多份**——所有实例**几何完全相同**，只能让变换
   /
-  属性不同，**不能换几何**。**修法**：不同的网格分别用各自的实例化绘制（每种网格一次
+  属性不同，**不能换几何**。同一调用也不能跨不同材质或不兼容状态。**修法**：不同的网格 / 材质批次分别用各自的实例化绘制（每个兼容批次一次
   `glDrawElementsInstanced`）；想真正混画不同几何，那是另一套技术（如多绘制
   `glMultiDrawElements`），不在实例化范畴。
 </Callout>
@@ -343,37 +378,39 @@ void main() {
 
 ## 小结
 
-- **实例化** = 一次 draw call 画很多个**相同网格**：把 `glDrawArrays` 换成 `glDrawArraysInstanced(..., instanceCount)`，省的是 CPU 反复发起 draw call 的**通信开销**
+- **实例化** = 一次 draw call 画一个兼容批次中的很多个**相同网格**：把 `glDrawArrays` 换成 `glDrawArraysInstanced(..., instanceCount)`，省的是 CPU 反复发起 draw call 的**通信开销**，不消除 GPU 的每实例工作
 - 让每个实例不一样有两条路：**`gl_InstanceID`** 当下标取 uniform 数组偏移（实例少时简单，有大小上限），或**实例化数组**（每实例一份属性，画海量实例）
 - **`glVertexAttribDivisor(loc, divisor)`** 是核心：`0` 逐顶点读、`1` 每实例读；实例化数组**必须设 `1`**，忘了就被当逐顶点、整片错乱
-- **行星带**用 `mat4` 实例化矩阵：一个 `mat4` 占 **4 个连续属性位**，每个都要 `divisor=1`，一次画完上万颗
-- 实例化只能画同一网格的多份（变换 / 属性可不同、几何不能换）
+- **行星带**用 `mat4` 实例化矩阵：一个 `mat4` 占 **4 个连续属性位**，每个都要 `divisor=1`；对每个 rock 子网格各提交一次实例化绘制
+- 实例化只能在同一调用内画同一网格 / 材质批次的多份（变换 / 属性可不同、几何不能换）
 
 <Exercises>
 
-**练习 1（改 Demo 代码）** 上面的 InstancingDemo 把实例数最高拖到 10000，画面仍流畅，因为始终只有 **1 次** draw call。现在假设有人「优化」掉了实例化、改成**循环逐个绘制**（每颗小行星调一次 `gl.drawElements`）。① 画 5000 颗时会发起多少次 draw call？② 用本章术语解释为什么这种写法会让画面卡顿，而实例化不会。
+**问题 1（改 Demo 代码）** 上面的 InstancingDemo 只有一个网格和材质，所以 10000 个实例仍属于 **1 个兼容批次**。现在假设有人去掉实例化、改成循环逐个绘制（每颗小行星调一次 `gl.drawElements`）。① 画 5000 颗时会发起多少次 draw call？② 这种写法优先放大了哪一段成本？③ 若真实小行星模型有 3 个兼容子网格，实例化后最少还要几次 draw call？
 
 <Answer>
 
 ① **5000 次** draw call（循环每次调一次 `drawElements`，5000 颗就调 5000 次；这正是 Demo 里「不实例化需要的次数」那个计数）。
 
-② 关键是 **draw call 开销**：每次 `drawElements` 都要 CPU 把绘制命令打包发给 GPU，这趟「来回通信」有固定成本，和这次画多少顶点关系不大。逐个绘制 = 5000 趟通信，CPU 光是反复发起 draw call 就忙不过来、成为瓶颈，帧率暴跌。而**实例化只发起 1 次** draw call（`gl.drawElementsInstanced(..., 5000)`），GPU 内部重复画 5000 遍——通信只有 1 趟，CPU 几乎没负担，所以拖到上万也流畅。省的不是 GPU 画三角形的活，是 CPU 反复喊话的开销。
+② 它优先放大 **draw call 开销**：每次 `drawElements` 都要 CPU 与驱动打包和提交命令。逐个绘制会产生 5000 次提交；实例化把同一兼容批次压为一次提交。省下的是 CPU / 驱动提交，不是 GPU 画 5000 份顶点、片段、带宽和过绘的工作，所以性能结论仍要用 profiler 量。
+
+③ **3 次**：三个子网格各是一个兼容批次，各调一次 `gl.drawElementsInstanced(..., 5000)`；“一次调用”从来不是整个场景的固定承诺。
 
 </Answer>
 
-**练习 2（排错题）** 某人写实例化数组：把每实例偏移 `vec2` 放进 VBO、`glVertexAttribPointer(2, 2, GL_FLOAT, ...)` 设好了 `location=2`，顶点着色器也写了 `layout(location=2) in vec2 aOffset;`，然后 `glDrawArraysInstanced(GL_TRIANGLES, 0, 6, 100)`。结果 100 个实例**全叠在了同一个位置**。他漏了哪一句？为什么这一句能解决问题？
+**问题 2（排错题）** 某人把每实例偏移 `vec2` 放进 VBO、`glVertexAttribPointer(2, 2, GL_FLOAT, ...)` 设好了 `location=2`，顶点着色器也写了 `layout(location=2) in vec2 aOffset;`，然后 `glDrawArraysInstanced(GL_TRIANGLES, 0, 6, 100)`。结果实例的位置错乱，若 VBO 只准备了 100 条偏移还可能发生越界属性读取。他漏了哪一句？为什么？
 
 <Answer>
 
 漏了 **`glVertexAttribDivisor(2, 1)`**。
 
-他设 `location=2` 时没改步进频率，`aOffset` 默认 `divisor=0`（**逐顶点**步进）。于是着色器画每个顶点都往下读一条偏移，根本不是「每实例一条」——「这是第几个实例就读第几条偏移」的对应关系彻底错位，结果所有实例读到的偏移乱套、挤在一起。
+他设 `location=2` 时没改步进频率，`aOffset` 默认 `divisor=0`（**逐顶点**步进）。于是着色器每处理一个顶点都前进一条偏移，根本不是「每实例一条」；一个六顶点四边形就会取六条偏移。100 条偏移不足以覆盖这次绘制要求的逐顶点取数时，结果也不应被当作可依赖的画面。
 
-加上 `glVertexAttribDivisor(2, 1)` 后，`aOffset` 变成**每实例**步进：第 0 个实例读 `translations[0]`、第 1 个读 `translations[1]`……同一个实例内的 6 个顶点共用同一条偏移，100 个实例就整整齐齐摆到 100 个不同位置。一句 `divisor=1` 之差。
+加上 `glVertexAttribDivisor(2, 1)` 后，`aOffset` 变成**每实例**步进：第 0 个实例读 `translations[0]`、第 1 个读 `translations[1]`……同一个实例内的 6 个顶点共用同一条偏移，100 条数据恰好对应 100 个实例。一句 `divisor=1` 之差。
 
 </Answer>
 
-**练习 3（独立实现题）** 你要画一片 1000 棵的草地，每棵草是同一个网格，但**位置不同、且各自有不同的随机朝向**（绕 Y 轴旋转一个随机角度）。问：① 每棵草的「位置 + 旋转」该用什么数据结构当实例化属性最合适？② 这个数据结构在 CPU 端配置 `vertexAttribPointer` 时有什么特别之处？
+**问题 3（独立实现题）** 你要画一片 1000 棵的草地，每棵草是同一个网格，但**位置不同、且各自有不同的随机朝向**（绕 Y 轴旋转一个随机角度）。问：① 每棵草的「位置 + 旋转」该用什么数据结构当实例化属性最合适？② 这个数据结构在 CPU 端配置 `vertexAttribPointer` 时有什么特别之处？
 
 <Answer>
 
@@ -391,16 +428,15 @@ void main() {
 
 <GlossaryItem term="实例化">
   一种绘制技术：用**一次** draw call
-  画出很多个相同的网格（同一份几何），而不是循环调用很多次。每个实例几何完全一样，只是各自的位置
+  画出一个兼容批次中很多个相同的网格（同一份几何），而不是循环调用很多次。每个实例几何完全一样，只是各自的位置
   / 缩放 /
-  朝向（变换）或某些属性不同。常用来画大量重复物体：草地、森林、粒子、行星带。详见本章「实例化」一节。
+  朝向（变换）或某些属性不同。不同网格、材质或不兼容状态仍要分批。常用来画大量重复物体：草地、森林、粒子、行星带。详见本章「实例化」一节。
 </GlossaryItem>
 
 <GlossaryItem term="draw call 开销">
   一次 draw call（如 `glDrawArrays`）背后是一趟「CPU 把绘制命令打包、发给
-  GPU」的通信，这趟通信本身有固定成本，和你画多少顶点关系不大。所以画大量小物体时，瓶颈往往是
-  CPU 反复发起成千上万次 draw call 的开销，而不是 GPU 画三角形。实例化把 N 次
-  draw call 压成 1 次，正是省这笔钱。详见本章「实例化：一次 draw call
+  GPU」的通信，含驱动校验、状态切换和命令提交等成本。当物体小而调用数大时，CPU 反复发起成千上万次 draw call 往往更早成为瓶颈；GPU 的顶点和片段工作仍取决于实际绘制量。实例化把一个兼容批次的 N 次
+  draw call 压成 1 次，正是省这笔提交成本。详见本章「实例化：一次 draw call
   画一整片」一节。
 </GlossaryItem>
 
@@ -414,9 +450,7 @@ void main() {
 <GlossaryItem term="实例化数组">
   一种「每个实例一份」的顶点属性：把每实例的数据（偏移向量、或整个变换矩阵）放进一个
   VBO，像普通顶点属性那样设好，再用 `glVertexAttribDivisor(loc, 1)` 告诉
-  GPU「这个属性每个实例才读一条、不是每个顶点」。想画多少实例就准备多少条，不受
-  uniform
-  数组大小限制，是画海量实例的标准做法。详见本章「怎么让每个实例不一样」一节。
+  GPU「这个属性每个实例才读一条、不是每个顶点」。它不受 vertex uniform 数组容量限制，但仍受 VBO 内存、顶点属性槽和传输带宽约束。详见本章「怎么让每个实例不一样」一节。
 </GlossaryItem>
 
 <GlossaryItem term="实例化步进 divisor">
@@ -428,8 +462,7 @@ void main() {
 
 <GlossaryItem term="行星带">
   实例化的经典案例：上千上万颗小行星绕一颗行星排成一圈飞。每颗是同一个网格，但位置
-  / 缩放 / 朝向各异，于是给每个实例一个 `mat4` 变换矩阵当实例化数组属性，一次
-  draw call 画完整条带。因为 `mat4` 太大，要占 **4 个连续属性位置**、各设
+  / 缩放 / 朝向各异，于是给每个实例一个 `mat4` 变换矩阵当实例化数组属性。每个兼容 rock 子网格各做一次实例化绘制；因为 `mat4` 太大，要占 **4 个连续属性位置**、各设
   `divisor=1`。详见本章「行星带」一节。
 </GlossaryItem>
 

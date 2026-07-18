@@ -2,13 +2,227 @@
 title: 生产化部署
 type: C
 section: 企业级应用
-order: 3
+order: 13
 description: 读完能说清一个 Agent 上线扛海量用户需要怎样的生产架构，掌握异步并发、超时重试、降级兜底等可靠性手段，并理解灰度发布与回滚怎么让上线更安全。
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
 draft: false
 ---
+
+import {
+  OfficialAiAgentDevProductionDeploymentMapLab,
+  OfficialAiAgentDevProductionDeploymentExperimentLab,
+  OfficialAiAgentDevProductionDeploymentEvidenceLab,
+} from "@/components/mdx/ai-agent-dev/diagrams/production-deployment";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+{/* OFFICIAL_COURSE_ENHANCEMENT */}
+
+<Objectives>
+
+- 能解释生产化部署的输入、核心结构、状态变化和输出合同
+- 能绘制并修改生产化部署的最小模型，比较至少一种替代方案
+- 能复现正常、边界和单故障样本，定位第一条证据分叉
+- 能根据成本与风险判断方案适用范围，并完成清理重建
+
+</Objectives>
+
+## 为什么只记结论不足以掌握生产化部署
+
+学习“生产化部署”时，第一步不是记住结论，而是冻结输入、上下文、版本和成功标准。只有这些条件明确，生产化部署的含义才不会随着样例变化。正文已有的概念说明要与结构图、运行轨迹和失败样本互相印证，不能只凭最终输出看似正确就宣布完成。
+
+结构分析从小特要从一个人，变成一支正规军开始：列出参与者、职责、连接方向、生命周期和所有权，再沿正常路径追踪数据或控制流。每一条边都要说明为什么存在、谁创建、谁消费、谁负责清理；如果边界被跨越，必须能在证据中找到第一处异常。
+
+机制验证要把生产架构：上线不是一个脚本，是一套架构写成可以执行的条件。正常样本证明主路径，恰好边界样本验证等号和空值，单故障样本只破坏一个假设。三类样本使用同一份观察指标，避免因为测试口径变化而把偶然结果误认成规律。
+
+成本分析同时记录时间、空间、延迟、耦合、可维护性和不可逆操作。并发与异步：海量请求同时来，一个个串着处理必死不是一句“可能失败”，而是可复现输入、预期停点、实际轨迹、错误分类与清理步骤。任何自动重试都要有次数、预算和幂等边界。
+
+方案比较不能只列优点。需要给出直接实现、当前方案和至少一个替代方案，逐项比较复杂度、扩展点、故障隔离和团队认知成本。当问题规模很小或变化轴稳定时，更简单的实现往往更好；模式与框架必须由真实变化压力证明。
+
+实现阶段把大结论拆成可检查的中间产物：配置快照、结构清单、状态转移、输入输出样本、日志摘要和测试结果。每个产物带来源与生成命令，下一阶段只消费已通过门禁的版本，避免旧缓存或隐式默认值污染结论。
+
+解释结果时必须区分相关性与因果性、接口承诺与实现细节、设计意图与运行事实。对“超时·降级·重试：生产里，调用一定会失败”的判断要由独立证据支持，并明确适用范围；一旦输入分布、版本、硬件或组织边界改变，就重新运行最小实验。
+
+复盘从首个分叉开始，而不是从最后一个报错倒推。先比较冻结输入，再比较第一份结构化中间产物，随后检查状态、约束和副作用。这样可以把复杂系统的排错范围收缩到一个阶段，避免在多个层次同时修改造成新的不确定性。
+
+迁移到真实项目时，先选择一个最小但有代表性的切片，保存改造前基线，再逐步引入“生产化部署”中的机制。每一步只改变一个变量并保留回滚点；性能、正确性、安全性和可理解性至少各有一项可量化指标。
+
+最终验收要求读者能脱离页面重新画出结构、口述关键链路、实现最小版本、构造一个反例并解释失败位置。若只能复述名词而不能预测中间状态，说明知识仍停留在识记层，需要回到图示和实验重新验证。
+
+本页用<Term def="生产化部署连接生产化部署的机制、边界与可复查证据。">生产化部署</Term>、
+
+<Term def="小特要从一个人，变成一支正规军连接生产化部署的机制、边界与可复查证据。">
+  小特要从一个人，变成一支正规军
+</Term>
+、
+<Term def="生产架构：上线不是一个脚本，是一套架构连接生产化部署的机制、边界与可复查证据。">
+  生产架构：上线不是一个脚本，是一套架构
+</Term>
+、
+<Term def="并发与异步：海量请求同时来，一个个串着处理必死连接生产化部署的机制、边界与可复查证据。">
+  并发与异步：海量请求同时来，一个个串着处理必死
+</Term>
+、
+<Term def="超时·降级·重试：生产里，调用一定会失败连接生产化部署的机制、边界与可复查证据。">
+  超时·降级·重试：生产里，调用一定会失败
+</Term>
+建立统一坐标。先预测这些概念在结构图和运行轨迹中的位置，再操作实验控件；如果结果与预测不一致，停止在首个分叉，不要用后续补丁掩盖早期错误。
+
+## 权威目录与核心概念逐项对照
+
+- 生产化部署
+- 小特要从一个人，变成一支正规军
+- 生产架构：上线不是一个脚本，是一套架构
+- 并发与异步：海量请求同时来，一个个串着处理必死
+- 超时·降级·重试：生产里，调用一定会失败
+- 灰度发布与回滚：新版本别一上来就全量
+- 动手玩：先当一回兜底工程师，再当一回发布负责人
+- 动手一：主模型超时了，一个做了降级的 Agent 会直接报错吗
+
+## 三视图实验：结构、变量与证据
+
+<Stepper>
+  <Step title="第一步：冻结结构并先预测">
+    先预测参与者、连接方向与关键状态，再点击结构节点核对。
+    <OfficialAiAgentDevProductionDeploymentMapLab />
+  </Step>
+  <Step title="第二步：只改变一个变量">
+    保持其他条件不变，移动覆盖率或风险滑块，观察门禁变化。
+    <OfficialAiAgentDevProductionDeploymentExperimentLab />
+  </Step>
+  <Step title="第三步：注入单故障并保存证据">
+    注入一个边界故障，记录第一处偏离、拒绝原因和恢复条件。
+    <OfficialAiAgentDevProductionDeploymentEvidenceLab />
+  </Step>
+</Stepper>
+
+<Callout type="trap">
+  <strong>误区：</strong>
+  看到最终结果正确就认为机制正确。中间状态可能已经偏离，只是被后续默认值或重试偶然修补。应保存首个结构化产物并逐阶段比较。
+</Callout>
+
+<Callout type="trap">
+  <strong>误区：</strong>
+  为了使用模式或框架而制造抽象。若变化轴、失败边界和替代方案没有写清，新增层次只会扩大认知成本和故障面。
+</Callout>
+
+## 可复现的最小实现
+
+先把决策记录写成机器可读结构：
+
+```json
+{
+  "unit": "生产化部署",
+  "inputFrozen": true,
+  "scenario": "normal | boundary | single-fault",
+  "firstDivergence": null,
+  "cleanupRequired": true
+}
+```
+
+再用同一条执行链处理三类样本：
+
+```ts
+type Evidence = { stage: string; expected: string; actual: string };
+
+function verify(sample: unknown, expected: readonly Evidence[]) {
+  const trace = runFromCleanState(sample);
+  return expected.find((item, index) => trace[index]?.actual !== item.expected);
+}
+```
+
+最后保存回归门禁，禁止失败样本静默通过：
+
+```text
+normal      -> complete, invariant preserved
+boundary    -> complete or explicit rejection
+singleFault -> stop at first divergence, no stale output
+```
+
+用统一评分解释实验结果：
+
+$$
+Q = C_{correct} + C_{trace} + C_{recover} - R_{residual}
+$$
+
+$$
+C_{coverage} = \frac{N_{verified}}{N_{official}}
+$$
+
+$$
+R_{residual} = P(failure) \times I(impact)
+$$
+
+$$
+Accept = (C_{coverage} \ge 0.90) \land (R_{residual} \le R_{budget})
+$$
+
+## 本章回顾
+
+- 生产化部署必须绑定冻结输入和明确成功标准。
+- 小特要从一个人，变成一支正规军必须能画成结构并沿边追踪责任。
+- 生产架构：上线不是一个脚本，是一套架构要由正常、边界和单故障样本共同验证。
+- 并发与异步：海量请求同时来，一个个串着处理必死必须保存第一处偏离和清理重建步骤。
+- 超时·降级·重试：生产里，调用一定会失败决定方案是否可以进入下一阶段。
+
+<Exercises>
+
+**问题 1**：为“生产化部署”写出最小输入合同，并指出一个不能省略的边界条件。
+
+<Answer>
+  输入合同至少包含样本身份、版本、配置、成功标准和清理方式；边界条件必须能改变结构或状态，而不是只换一段描述。
+</Answer>
+
+**问题 2**：构造一个只破坏“生产架构：上线不是一个脚本，是一套架构”的单故障样本，第一条预期证据是什么？
+
+<Answer>
+  先冻结正常轨迹，只改变该条件；第一条证据应是最早依赖它的结构化中间产物，而不是最终错误消息。
+</Answer>
+
+**问题 3**：什么情况下不应采用本页方案？
+
+<Answer>
+  当变化轴稳定、直接实现更清晰、额外层次无法降低风险或提供独立测试边界时，应选择更简单方案并记录重新评估触发条件。
+</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="生产化部署">
+    生产化部署用于描述“生产化部署”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  </GlossaryItem>
+  <GlossaryItem term="小特要从一个人，变成一支正规军">
+    小特要从一个人，变成一支正规军用于描述“生产化部署”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  </GlossaryItem>
+  <GlossaryItem term="生产架构：上线不是一个脚本，是一套架构">
+    生产架构：上线不是一个脚本，是一套架构用于描述“生产化部署”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  </GlossaryItem>
+  <GlossaryItem term="并发与异步：海量请求同时来，一个个串着处理必死">
+    并发与异步：海量请求同时来，一个个串着处理必死用于描述“生产化部署”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  </GlossaryItem>
+  <GlossaryItem term="超时·降级·重试：生产里，调用一定会失败">
+    超时·降级·重试：生产里，调用一定会失败用于描述“生产化部署”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="站内工程专题《AI Agent 开发实战》，依据Anthropic《Building effective agents》及生产评估资料，2026-07-18核定 · 独立教学重构"
+  adaptedUrl="https://www.anthropic.com/engineering/building-effective-agents"
+/>
 
 {/* C 实战型·企业级应用篇第 3 章（全书最后一章·收官）：小特要从「一个人服务你」变成「一支能扛海量用户的正规军」——架构、并发、可靠性、上线发布都得是生产级的。重心在代码对照(§6，≥80%)：异步入队 + 超时重试 + 降级兜底 + 限并发四段真实 Python。数学整节删(math:false)。知识点清单（≤4 核心）：① 生产架构（API 网关→队列→Agent 服务→缓存→可观测，一套有分工的架构而非一个脚本）= <ProductionArchDiagram /> anime 旗舰逐组件点亮 + 代码 §6a + Glossary；② 并发与异步（请求先入队、后台慢慢处理；队列削峰；并发控制别把下游打爆）= <ProductionArchDiagram />(队列那段) + 代码 §6a/§6d + Glossary；③ 超时·降级·重试（超时掐断、失败重试、主挂切备用 / 兜底答案）= <DegradationDemo />(三场景看降级路径) + 代码 §6b/§6c + Glossary；④ 灰度发布与回滚（新版本先 5% 流量盯指标→50%→100%，变差就回滚）= <CanaryRolloutDemo />(一档档放量或回滚) + Glossary。主隐喻：小特从个人助理变成扛海量用户的正规军。收官点题：⑧小结结尾呼应全书 14 章，给读者「学完整本书」的收束感。 */}
 

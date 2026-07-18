@@ -1,0 +1,198 @@
+---
+title: "第12章 数值类"
+type: C
+section: "たのしいRuby 第5版 · Ruby的类"
+order: 12
+description: "理解Numeric层次、字面量、算术、Math、转换、位运算、随机与计数，并用明确representation和rounding policy管理近似误差。"
+demo: true
+math: false
+sourceUrl: "https://tanoshiiruby.github.io/5/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RubyNumericTypesLab, RubyNumericOperationsLab, RubyNumericReliabilityLab } from "@/components/mdx/ruby-programming/diagrams/numeric";
+
+<Objectives>
+
+- 能比较Integer、Float、Rational与Complex的domain、字面量、转换和精度边界
+- 能分析除法、余数、Math与位运算在不同operand类型和符号下的结果
+- 能实现可注入随机数、计数Enumerator与明确rounding/tolerance策略的数值流程
+
+</Objectives>
+
+## 从“数字都是number”这个抽象泄漏开始
+
+Ruby用Numeric层次统一许多operator protocol，但Integer、Float、Rational与Complex表达不同domain。<Term def="数值类型必须能表示业务所需集合，并规定精度、范围、转换和错误。">numeric representation contract</Term>先于选择method。
+
+先预测：`5 / 2`为何不是2.5？两个Integer执行integer division；改成`5.fdiv(2)`或让一个operand为Float才得到2.5。Operator surface相同，不代表result domain相同。
+
+## 数值类的构成
+
+Numeric是抽象superclass，常见subclasses包括Integer、Float、Rational、Complex。Ruby 2.3已统一Fixnum/Bignum行为但class names仍可能可见，现代Ruby合并为Integer；业务代码不要依赖数值大小触发的内部class切换。
+
+Integer提供任意精度语义，memory/time随位数增长；它不会overflow成负数，却可能被恶意超长输入耗尽资源。Float通常基于IEEE 754 double，包含Infinity与NaN等边界。Rational精确保存整数比，Complex保存实部/虚部。
+
+<RubyNumericTypesLab />
+
+<Stepper>
+  <Step title="切换四类Numeric"><RubyNumericTypesLab /></Step>
+  <Step title="建立Representation表">记录可表示domain、precision、range、literal/parser、serialization和invalid input。</Step>
+  <Step title="让超长Integer进入Parser"><RubyNumericTypesLab /></Step>
+</Stepper>
+
+## 数值的字面量
+
+Integer literal可用十进制、`0x`十六进制、`0b`二进制、`0o`八进制与下划线分组；Float可用decimal point和exponent。<Term def="字面量的base、separator、sign与目标numeric class由Ruby grammar确定。">numeric literal boundary</Term>不同于运行时String parsing。
+
+```ruby
+p 1_000_000
+p 0xff
+p 0b1010
+p 6.02e23
+p Rational(1, 3)
+p Complex(2, 3)
+```
+
+External text不要用`to_i`默认吞掉invalid suffix和返回0；使用`Integer(text, 10)`、`Float(text)`并处理ArgumentError，再做length/range/domain validation。Leading zero与base自动识别可能引起歧义，协议中固定base。
+
+## 算术运算
+
+`+ - * / % **`调用receiver operator methods。Integer `/`是floor-style integer quotient，`div`明确整数除法，`fdiv`明确浮点除法；`%`/`modulo`与`remainder`在负数符号上可不同。<Term def="除法必须声明quotient domain、rounding方向、零除与remainder符号规则。">division semantics contract</Term>避免跨语言误迁移。
+
+```ruby
+p 5 / 2
+p 5.fdiv(2)
+p(-5.div(2))
+p(-5 % 2)
+p(-5.remainder(2))
+```
+
+ZeroDivisionError对Integer除零抛出；Float除零可能得到Infinity/NaN，取决于operation。检测finite?、nan?并在domain boundary拒绝无效结果。Exponent可能生成巨大Integer或overflow Float，输入指数必须限制。
+
+## Math模块
+
+Math提供`sqrt`、`sin`、`cos`、`log`等module functions，通常返回Float。输入domain错误会抛Math::DomainError或产生特殊值，目标版本需验证。Angle单位通常是radian；API边界明确degree conversion。
+
+Math函数的结果精度受Float限制。Scientific code应记录algorithm、tolerance、conditioning与library/runtime version；业务display rounding不应反向用于中间计算。
+
+<RubyNumericOperationsLab />
+
+<Stepper>
+  <Step title="切换Division、Modulo、Math和Bitwise"><RubyNumericOperationsLab /></Step>
+  <Step title="生成Sign矩阵">覆盖正负dividend/divisor、零、Float、NaN/Infinity和domain error。</Step>
+  <Step title="切换Integer与Float operand"><RubyNumericOperationsLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="Integer不会overflow，所以任意大整数输入都安全">
+Arbitrary precision避免固定宽度wraparound，却仍消耗CPU/memory；指数、factorial和超长文本可成为资源攻击。先限制digits、magnitude和operation budget。
+</Callout>
+
+## 数值类型转换
+
+`Integer(value)`与`Float(value)`执行较严格转换，`to_i`/`to_f`往往更宽松。<Term def="Parse负责语法合法，conversion确定representation，validation再限制业务范围的三阶段边界。">numeric conversion pipeline</Term>不应混成一个truthy check。
+
+Float转Integer的`to_i`向0截断；`floor`向负无穷，`ceil`向正无穷，`round`按版本/参数规则取整。金额、分页和坐标各有不同rounding policy，方法名或value object应体现，不要散落`.to_i`。
+
+跨JSON/CSV/database时记录decimal scale、large Integer范围和NaN/Infinity是否可表示。Round-trip test比只测一次parse更能发现precision loss。
+
+## 位运算
+
+Integer支持`& | ^ ~ << >>`。Ruby Integer不是固定32/64-bit register，负数位运算可按无限two's-complement直觉表现；与C protocol交互时显式mask width。<Term def="位字段必须声明word width、signedness、bit order、mask和外部serialization。">bit width contract</Term>把抽象Integer映射到协议。
+
+```ruby
+READ = 0b001
+WRITE = 0b010
+EXECUTE = 0b100
+
+permissions = READ | WRITE
+p((permissions & WRITE) != 0)
+p permissions ^ WRITE
+p((~permissions) & 0b111)
+```
+
+Shift count来自输入时限制范围；left shift可产生巨大Integer。Bit flag适合稳定紧凑protocol，但业务可读性需要named constants与encode/decode tests。
+
+## 随机数
+
+`rand`使用默认generator；`Random.new(seed)`创建独立可复现sequence。<Term def="随机算法明确generator owner、seed来源、分布、范围和是否要求密码学安全。">randomness contract</Term>区分simulation/test与security。
+
+```ruby
+rng = Random.new(12_345)
+samples = 5.times.map { rng.rand(1..6) }
+p samples
+```
+
+测试注入seeded Random，不修改process-global seed影响其它tests。Token、nonce、password reset使用`SecureRandom`等CSPRNG，不使用普通rand。统计需求还要验证distribution，不以五个样本证明均匀。
+
+## 计数
+
+Integer#times、upto、downto和step表达不同sequence；无block时返回Enumerator。<Term def="计数序列规定起点、终点是否包含、step方向、空序列和停止条件。">counting sequence contract</Term>避免off-by-one。
+
+`1.upto(3)`产生1,2,3；`3.downto(1)`产生3,2,1；`1.step(10, 3)`产生1,4,7,10。Float step会累积误差，优先按Integer index计算目标值或使用Rational/Decimal domain。
+
+## 近似值误差
+
+Binary Float无法精确表示多数decimal fraction，因此`0.1 + 0.2 == 0.3`通常false。<Term def="数值比较必须依据domain选择exact equality、absolute/relative tolerance或decimal/rational representation。">approximation error policy</Term>不能统一用round掩盖。
+
+```ruby
+actual = 0.1 + 0.2
+expected = 0.3
+tolerance = 1e-12
+
+p actual
+p((actual - expected).abs <= tolerance)
+```
+
+Tolerance应结合magnitude使用absolute+relative标准；near zero与大值策略不同。Money使用Integer最小单位或BigDecimal并固定rounding；geometry/physics记录单位和error accumulation。Round只在display、settlement或协议指定boundary执行，避免每步round扩大偏差。
+
+<RubyNumericReliabilityLab />
+
+<Stepper>
+  <Step title="切换Random、Counting、Rounding和Error"><RubyNumericReliabilityLab /></Step>
+  <Step title="写Precision预算">记录input error、每步operation、accumulation、comparison tolerance与最终display/settlement rounding。</Step>
+  <Step title="比较Money的Float与Integer cents"><RubyNumericReliabilityLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="每一步round到两位小数就能消除浮点误差">
+Repeated rounding会引入系统性偏差并丢失中间精度。先选择合适representation，在明确settlement/display boundary按指定mode rounding。
+</Callout>
+
+## 本章回顾：Representation决定可证明的数值语义
+
+1. Numeric subclasses覆盖不同domain；Integer arbitrary precision不等于无资源上界，Float不提供decimal exactness。
+2. Literal grammar与runtime parsing不同，外部输入按parse、convert、validate三阶段处理。
+3. Division、remainder、Math和bit operations要声明operand type、sign、width与error。
+4. Randomness声明seed/distribution/security，counting声明endpoint/step，便于复现和避免off-by-one。
+5. Approximate comparison依据domain使用tolerance或exact Decimal/Rational，rounding只发生在命名边界。
+
+<Exercises>
+
+**问题 1：如何安全解析用户提供的整数？**
+
+<Answer>先限制文本长度和允许字符，使用`Integer(text, 10)`并捕获ArgumentError，再验证业务min/max；不要用宽松to_i。测试空、sign、leading zero、suffix、超长digits和边界值。</Answer>
+
+**问题 2：怎样让随机算法可测试又不降低生产token安全？**
+
+<Answer>Simulation method注入Random interface，测试传seeded Random；生产simulation可使用独立seed策略。Security token走单独SecureRandom API，禁止把普通seeded generator注入该边界，并测试长度/encoding而非固定token。</Answer>
+
+**问题 3：何时使用tolerance，何时换representation？**
+
+<Answer>物理/图形等本质近似计算使用基于scale的absolute+relative tolerance；金额、计数、协议字段等要求exact decimal/integer语义时改用Integer最小单位、BigDecimal或Rational。记录rounding boundary和mode。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="numeric representation contract" definition="数值类型对domain、精度、范围与错误的约定。" />
+  <GlossaryItem term="numeric literal boundary" definition="Grammar决定base、separator与numeric class的字面量边界。" />
+  <GlossaryItem term="division semantics contract" definition="Quotient、rounding、零除与remainder符号规则。" />
+  <GlossaryItem term="numeric conversion pipeline" definition="Parse、representation conversion与domain validation三阶段。" />
+  <GlossaryItem term="bit width contract" definition="位字段的width、signedness、mask与serialization约定。" />
+  <GlossaryItem term="randomness contract" definition="Generator、seed、distribution与security要求。" />
+  <GlossaryItem term="counting sequence contract" definition="计数起止、包含、step与空序列规则。" />
+  <GlossaryItem term="approximation error policy" definition="Exact、tolerance或decimal/rational比较策略。" />
+</Glossary>
+
+<Attribution adaptedFrom="たのしいRuby 第5版 / Ruby基础教程（第5版），第12章 数值类" adaptedUrl="https://tanoshiiruby.github.io/5/" />

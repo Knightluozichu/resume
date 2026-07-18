@@ -1,0 +1,359 @@
+---
+title: "第 6 章 理解 Buffer"
+type: A
+section: "深入浅出 Node.js · Buffer 与网络"
+order: 6
+description: "从 Buffer 结构、内存分配、编码转换、跨块拼接与 string_decoder 解释二进制数据正确性。"
+demo: true
+math: false
+sourceUrl: "https://www.96192.com/product/detail/637599"
+draft: false
+---
+
+import {
+  Dnj06BufferMapLab,
+  Dnj06BufferExperimentLab,
+  Dnj06BufferEvidenceLab,
+} from "@/components/mdx/deep-nodejs/diagrams/dnj-06-buffer";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释第 6 章 理解 Buffer的核心职责，并说出它在原书 11 章 4 附录结构中的位置
+- 能描述本页每个公开目录条目的输入、Node API、异步边界、资源所有者与结束状态
+- 能实现最小正常样本，并注入分块、背压、断线、进程退出、版本或部署故障定位首个偏离点
+- 能比较正常、边界、失败和恢复轨迹，判断 2013 年历史接口与当前替代是否被清楚区分
+
+</Objectives>
+
+## 直觉起点
+
+<Term def="Buffer 是“第 6 章 理解 Buffer”的第 1 个运行时坐标，对应“识别字节来源”；需要同时登记输入、资源、错误、关闭与版本证据。">
+  Buffer
+</Term>
+、
+<Term def="字符编码 是“第 6 章 理解 Buffer”的第 2 个运行时坐标，对应“选择编码”；需要同时登记输入、资源、错误、关闭与版本证据。">
+  字符编码
+</Term>
+、
+<Term def="字节边界 是“第 6 章 理解 Buffer”的第 3 个运行时坐标，对应“分配受限缓冲区”；需要同时登记输入、资源、错误、关闭与版本证据。">
+  字节边界
+</Term>
+、
+<Term def="StringDecoder 是“第 6 章 理解 Buffer”的第 4 个运行时坐标，对应“处理跨块边界”；需要同时登记输入、资源、错误、关闭与版本证据。">
+  StringDecoder
+</Term>
+、
+<Term def="零拷贝 是“第 6 章 理解 Buffer”的第 5 个运行时坐标，对应“验证转换损失”；需要同时登记输入、资源、错误、关闭与版本证据。">
+  零拷贝
+</Term>
+共同构成本页的观察坐标。Buffer
+表示字节而不是字符；编码决定字节与文本的转换，流分块可能切断多字节字符，所以拼接必须在字节边界与解码器状态上保持正确。
+深入理解 Node 不是背诵 API，而是回答 JavaScript
+与系统之间如何传递数据、谁拥有异步资源、错误沿哪条边传播、何时能安全退出。
+
+<Dnj06BufferMapLab />
+
+## 六阶段执行链
+
+### 1. 识别字节来源
+
+固定 Node 版本、依赖锁、入口参数、环境变量和输入，先预测同步栈、异步资源与最终输出。没有版本证据，就无法区分原书历史行为和现代运行时。
+
+### 2. 选择编码
+
+明确数据是模块标识、字节、事件、请求、消息还是制品，并标出创建资源与接收完成通知的所有者。资源创建必须同时设计错误、超时和关闭。
+
+### 3. 分配受限缓冲区
+
+把正常路径压缩为最小可运行样本，只保留一个完成出口。回调、Promise、事件和进程消息不能为同一操作重复签发结果。
+
+### 4. 处理跨块边界
+
+注入一个边界：空输入、分块、慢消费者、权限、断线、Worker 退出、依赖升级或部署失败。停止在首个偏离点并保存状态。
+
+### 5. 验证转换损失
+
+检查 2013 年接口在当前 Node 的状态：仍支持、语义变化、弃用或移出生态。现代替代保持原问题身份，同时明确迁移不能自动保证的行为。
+
+### 6. 测量复制成本
+
+删除故障并重放同一输入，等待文件、套接字、队列、Worker、日志和连接排空。输出、退出码与资源计数共同收敛才算恢复。
+
+## 核心机制深挖
+
+Buffer 表示字节而不是字符；编码决定字节与文本的转换，流分块可能切断多字节字符，所以拼接必须在字节边界与解码器状态上保持正确。 所有案例统一记录六类证据：**输入表示、模块或协议边界、调度阶段、资源所有者、错误出口、关闭条件**。表示错误会造成编码或分帧歧义；调度理解错误会把同步事件误认为异步回调；所有权不清会留下描述符、Worker 与连接；关闭条件缺失会让进程悬挂或强行丢数据。
+
+本页签发不变量是：**任意分块方式都得到相同解码结果，分配大小受限且初始化明确，不使用已弃用的不安全 Buffer 构造器。**。代码必须回答正常路径完成什么、边界输入限制在哪里、失败由谁观察、取消怎样传播、关闭等待哪些资源，以及 2013 年接口在当前 Node 中是否仍适合新项目。成功输出不能独自证明这些条件。
+
+## 2013 版与现代 Node 的版本账本
+
+原书出版于 2013 年，覆盖早期 CommonJS、V8 分代回收、process.nextTick、setImmediate、node-heapdump、node-memwatch、旧 Buffer 构造器、cluster、node-inspector、AMD/CMD 和 CouchDB npm 仓库。重构保留 11 章 4 附录的知识身份，但现代示例采用安全且受支持的入口，并明确 `node:*` 模块、Promise/async、Buffer.alloc、N-API、Inspector、node:test、锁文件和当前供应链机制的对照关系。
+
+版本账本至少包含原书接口、当时用途、当前支持状态、替代入口、行为差异和移除兼容层的条件。事件循环、TCP 无消息边界、字节编码、资源所有权等稳定原理不会因版本改变；模块解析细节、V8 回收器、默认超时、cluster 调度和包仓库实现必须按当前版本重新验证。
+
+## 完整公开目录逐项讲解
+
+### 第6章 理解Buffer
+
+Buffer 保存字节，字符可能跨越数据块。StringDecoder 保留未完成多字节序列，避免逐块 toString 产生替换字符；分配必须使用 Buffer.alloc、allocUnsafe 或 from 的明确语义。
+
+实验从“识别字节来源”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+
+### 6.1 Buffer结构
+
+Buffer 保存字节，字符可能跨越数据块。StringDecoder 保留未完成多字节序列，避免逐块 toString 产生替换字符；分配必须使用 Buffer.alloc、allocUnsafe 或 from 的明确语义。
+
+实验从“选择编码”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+
+### 6.1.1 模块结构
+
+模块加载依次经历标识符解析、缓存检查、文件定位、包装编译与导出缓存。循环依赖得到的是当时已完成的部分导出；现代 ESM 与 CommonJS 要分别记录解析和缓存语义。
+
+实验从“分配受限缓冲区”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+
+### 6.1.2 Buffer对象
+
+Buffer 保存字节，字符可能跨越数据块。StringDecoder 保留未完成多字节序列，避免逐块 toString 产生替换字符；分配必须使用 Buffer.alloc、allocUnsafe 或 from 的明确语义。
+
+实验从“处理跨块边界”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+
+### 6.1.3 Buffer内存分配
+
+Buffer 保存字节，字符可能跨越数据块。StringDecoder 保留未完成多字节序列，避免逐块 toString 产生替换字符；分配必须使用 Buffer.alloc、allocUnsafe 或 from 的明确语义。
+
+实验从“验证转换损失”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+
+### 6.2 Buffer的转换
+
+Buffer 保存字节，字符可能跨越数据块。StringDecoder 保留未完成多字节序列，避免逐块 toString 产生替换字符；分配必须使用 Buffer.alloc、allocUnsafe 或 from 的明确语义。
+
+实验从“测量复制成本”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+
+### 6.2.1 字符串转Buffer
+
+Buffer 保存字节，字符可能跨越数据块。StringDecoder 保留未完成多字节序列，避免逐块 toString 产生替换字符；分配必须使用 Buffer.alloc、allocUnsafe 或 from 的明确语义。
+
+实验从“识别字节来源”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+
+### 6.2.2 Buffer转字符串
+
+Buffer 保存字节，字符可能跨越数据块。StringDecoder 保留未完成多字节序列，避免逐块 toString 产生替换字符；分配必须使用 Buffer.alloc、allocUnsafe 或 from 的明确语义。
+
+实验从“选择编码”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+
+### 6.2.3 Buffer不支持的编码类型
+
+Buffer 保存字节，字符可能跨越数据块。StringDecoder 保留未完成多字节序列，避免逐块 toString 产生替换字符；分配必须使用 Buffer.alloc、allocUnsafe 或 from 的明确语义。
+
+实验从“分配受限缓冲区”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+
+### 6.3 Buffer的拼接
+
+Buffer 保存字节，字符可能跨越数据块。StringDecoder 保留未完成多字节序列，避免逐块 toString 产生替换字符；分配必须使用 Buffer.alloc、allocUnsafe 或 from 的明确语义。
+
+实验从“处理跨块边界”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+
+### 6.3.1 乱码是如何产生的
+
+Buffer 保存字节，字符可能跨越数据块。StringDecoder 保留未完成多字节序列，避免逐块 toString 产生替换字符；分配必须使用 Buffer.alloc、allocUnsafe 或 from 的明确语义。
+
+实验从“验证转换损失”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+
+### 6.3.2 setEncoding()与string_decoder()
+
+Buffer 保存字节，字符可能跨越数据块。StringDecoder 保留未完成多字节序列，避免逐块 toString 产生替换字符；分配必须使用 Buffer.alloc、allocUnsafe 或 from 的明确语义。
+
+实验从“测量复制成本”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+
+### 6.3.3 正确拼接Buffer
+
+Buffer 保存字节，字符可能跨越数据块。StringDecoder 保留未完成多字节序列，避免逐块 toString 产生替换字符；分配必须使用 Buffer.alloc、allocUnsafe 或 from 的明确语义。
+
+实验从“识别字节来源”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+
+### 6.4 Buffer与性能
+
+Buffer 保存字节，字符可能跨越数据块。StringDecoder 保留未完成多字节序列，避免逐块 toString 产生替换字符；分配必须使用 Buffer.alloc、allocUnsafe 或 from 的明确语义。
+
+实验从“选择编码”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+
+### 6.5 总结
+
+6.5 总结 要放回“识别字节来源、选择编码、分配受限缓冲区、处理跨块边界、验证转换损失、测量复制成本”的完整运行链，先说明输入、资源、同步或异步边界，再说明错误与结束条件。
+
+实验从“分配受限缓冲区”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+
+### 6.6 参考资源
+
+6.6 参考资源 要放回“识别字节来源、选择编码、分配受限缓冲区、处理跨块边界、验证转换损失、测量复制成本”的完整运行链，先说明输入、资源、同步或异步边界，再说明错误与结束条件。
+
+实验从“处理跨块边界”开始：固定 Node 版本、入口、依赖锁、输入和资源上限，先预测执行顺序，再只改变一个边界条件。记录首个偏离点，恢复后重放同一输入并等待文件、套接字、Worker、日志和队列排空。
+
+## 资源与失败矩阵
+
+| 资源          | 正常完成           | 常见边界             | 失败出口        | 关闭证据     |
+| ------------- | ------------------ | -------------------- | --------------- | ------------ |
+| 模块与包      | 导出一次、依赖锁定 | 循环依赖、平台差异   | 解析或 ABI 错误 | 模块图可追溯 |
+| Buffer 与流   | 编码完整、背压生效 | 截断、跨字符、慢目标 | pipeline 拒绝   | 描述符关闭   |
+| 套接字与请求  | 响应一次           | 半包、断线、超时     | error 或 abort  | close 已观察 |
+| Worker 与制品 | 退出、接管或回滚   | 崩溃、重启风暴       | 非零码与报警    | 在途请求排空 |
+
+## 分步可视实验
+
+<Stepper>
+  <Step title="1. 建立输入与资源地图">
+    先预测模块、字节、事件、进程和结束状态，再启动固定版本的最小样本。
+    <Dnj06BufferMapLab />
+  </Step>
+  <Step title="2. 注入单一运行时故障">
+    改变分块、背压、超时、Worker、依赖或部署状态，在首个分叉处保存证据。
+    <Dnj06BufferExperimentLab />
+  </Step>
+  <Step title="3. 排空资源并签发">
+    删除故障，重放同一输入，确认回调、响应、队列、Worker 和制品只完成一次。
+    <Dnj06BufferEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小可运行实验
+
+```js
+import { StringDecoder } from "node:string_decoder";
+const decoder = new StringDecoder("utf8");
+const bytes = Buffer.from("节点");
+const text =
+  decoder.write(bytes.subarray(0, 2)) +
+  decoder.write(bytes.subarray(2)) +
+  decoder.end();
+console.log(text);
+```
+
+```yaml
+book: 深入浅出 Node.js
+edition: 2013-12
+page: dnj-06-buffer
+sample: normal | boundary | failure | recovery
+module_graph_fixed: true
+resource_owner_known: true
+single_completion: true
+close_observed: true
+```
+
+```text
+freeze node version + dependency lock + input
+predict sync stack + async resources + byte boundaries
+change exactly one boundary condition
+stop at the first divergent state
+remove fault and replay the same sample
+wait for files, sockets, workers, and logs to close
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：把异步理解成自动并行、自动高性能。** JavaScript
+  回调仍可阻塞主线程，无界并发会耗尽文件、套接字和内存。必须记录队列、并发上限、背压与资源关闭。
+</Callout>
+
+<Callout type="trap">
+  **误区二：用现代 Node 文档覆盖原书目录，或把 2013 年命令直接用于新项目。**
+  正确做法是保留 11 章、4 附录和 284
+  个条目，分别说明稳定原理、历史接口、当前状态与现代替代。
+</Callout>
+
+## 四类样本与验收
+
+| 样本 | 注入方式                         | 必查证据                  | 通过条件       |
+| ---- | -------------------------------- | ------------------------- | -------------- |
+| 正常 | 小输入、依赖健康                 | 字节、事件、响应、提交    | 只完成一次     |
+| 边界 | 空、长、分块、慢、并发           | 上限、背压、顺序          | 内存与延迟受控 |
+| 失败 | 权限、断线、Worker退出、部署失败 | 首个错误与所有者          | 错误不丢不重复 |
+| 恢复 | 删除故障后同样本重放             | close、exit、连接数、回滚 | 无悬挂资源     |
+
+<Dnj06BufferEvidenceLab />
+
+目录证据：第6章 理解Buffer、6.1 Buffer结构、6.1.1 模块结构、6.1.2 Buffer对象、6.1.3 Buffer内存分配、6.2 Buffer的转换、6.2.1 字符串转Buffer、6.2.2 Buffer转字符串、6.2.3 Buffer不支持的编码类型、6.3 Buffer的拼接、6.3.1 乱码是如何产生的、6.3.2 setEncoding()与string_decoder()、6.3.3 正确拼接Buffer、6.4 Buffer与性能、6.5 总结、6.6 参考资源。本页按完整公开目录独立教学重构，不复制原书正文；16 个条目全部进入输入、机制、失败、版本和关闭证据链。
+
+## 练习
+
+<Exercises>
+
+**问题 1** 为什么不能只用成功输出验收第 6 章 理解 Buffer？
+
+<Answer>
+  成功输出不显示模块解析、调度顺序、字节边界、背压、错误出口、资源所有权与关闭状态。必须注入单一边界，并确认恢复后无重复完成和悬挂句柄。
+</Answer>
+
+**问题 2** 如何把本页公开目录变成可执行证据？
+
+<Answer>
+  依次登记“第6章 理解Buffer、6.1 Buffer结构、6.1.1 模块结构、6.1.2
+  Buffer对象、6.1.3 Buffer内存分配、6.2 Buffer的转换、6.2.1
+  字符串转Buffer、6.2.2 Buffer转字符串、6.2.3 Buffer不支持的编码类型、6.3
+  Buffer的拼接、6.3.1 乱码是如何产生的、6.3.2
+  setEncoding()与string_decoder()、6.3.3 正确拼接Buffer、6.4 Buffer与性能、6.5
+  总结、6.6 参考资源”，为每项写出输入表示、Node
+  API、同步或异步边界、资源所有者、失败出口、关闭条件与当前版本状态，再用同一输入重放四类样本。
+</Answer>
+
+**问题 3** 本页最小通过条件是什么？
+
+<Answer>
+  任意分块方式都得到相同解码结果，分配大小受限且初始化明确，不使用已弃用的不安全
+  Buffer 构造器。
+  同时，正常、边界、失败和恢复轨迹可复现，最终无未关闭文件、套接字、Worker、重复响应或模糊版本依赖。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- Buffer：对应“识别字节来源”的核心观察量。
+- 字符编码：对应“选择编码”的核心观察量。
+- 字节边界：对应“分配受限缓冲区”的核心观察量。
+- StringDecoder：对应“处理跨块边界”的核心观察量。
+- 零拷贝：对应“验证转换损失”的核心观察量。
+- 16 个本页公开目录条目已全部映射到执行链与版本账本。
+- 先预测再运行；最终输出、错误传播和资源关闭共同决定是否通过。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="Buffer">
+    Buffer 对应“识别字节来源”，验收时连接 API
+    语义、资源所有权、失败传播、关闭顺序与版本状态。
+  </GlossaryItem>
+  <GlossaryItem term="字符编码">
+    字符编码 对应“选择编码”，验收时连接 API
+    语义、资源所有权、失败传播、关闭顺序与版本状态。
+  </GlossaryItem>
+  <GlossaryItem term="字节边界">
+    字节边界 对应“分配受限缓冲区”，验收时连接 API
+    语义、资源所有权、失败传播、关闭顺序与版本状态。
+  </GlossaryItem>
+  <GlossaryItem term="StringDecoder">
+    StringDecoder 对应“处理跨块边界”，验收时连接 API
+    语义、资源所有权、失败传播、关闭顺序与版本状态。
+  </GlossaryItem>
+  <GlossaryItem term="零拷贝">
+    零拷贝 对应“验证转换损失”，验收时连接 API
+    语义、资源所有权、失败传播、关闭顺序与版本状态。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="朴灵 · 深入浅出Node.js · 人民邮电出版社 · 2013-12 · 完整公开目录"
+  adaptedUrl="https://www.96192.com/product/detail/637599"
+/>

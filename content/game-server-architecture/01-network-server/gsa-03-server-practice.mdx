@@ -1,0 +1,229 @@
+---
+title: "第3章 服务器实作"
+type: C
+section: "游戏服务器架构与优化 · 网络和服务器"
+order: 3
+description: "以Python WebSocket握手和帧解析为主线，比较多线程、GIL、多进程、线程池、协程与gevent的并发边界。"
+demo: true
+math: false
+sourceUrl: "https://ebooks.cmpbook.com/detail?id=21197"
+draft: false
+---
+
+import {
+  Gsa03ServerPracticeMapLab,
+  Gsa03ServerPracticeExperimentLab,
+  Gsa03ServerPracticeEvidenceLab,
+} from "@/components/mdx/game-server-architecture/diagrams/gsa-03-server-practice";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+  - 能解释本页在12个编号章与附录A主线中的位置，并描述公开目录条目的因果关系 -
+  能比较正常、边界、失败和恢复样本，指出首个状态偏离节点 -
+  能实现最小网络、存储或服务实验，记录所有者、代际、容量与恢复动作 -
+  能设计证据回答“升级和帧解析严格校验；连接关闭后旧任务不能回写；工作队列有界；CPU任务不占用I/O循环。”是否成立
+</Objectives>
+
+## 直觉：先找唯一事实
+
+以Python WebSocket握手和帧解析为主线，比较多线程、GIL、多进程、线程池、协程与gevent的并发边界。 服务器实作必须把协议状态机与执行资源分开：连接归属不能随线程池调度漂移，慢任务也不能阻塞帧解析。 先预测：如果只保留最终成功截图，本页最可能隐藏哪一种重复执行、状态分叉或失主资源？
+
+<Gsa03ServerPracticeMapLab />
+
+## 权威目录定位
+
+本页依据机械工业出版社工程科技数字图书馆和得到电子书公开目录锁定范围。编号和名称用于一对一追踪，正文是独立教学重构，不复制原书段落；现代安全、可观察性与故障演练明确属于教学补充：
+
+- 3.1 构建Python Websocket服务器
+- 3.2 多线程服务器
+- 3.3 线程池
+
+本页共追踪 **3** 个公开目录条目。全书正式单元为：第1章 Python网络编程模块、第2章 通信加密、第3章 服务器实作、第4章 基础内容存储、第5章 存储方案、第6章 游戏服务器初探、第7章 游戏服务器的交互、第8章 游戏大厅、第9章 实时交互服务器、第10章 天梯和经济系统、第11章 服务器承载量和客户端优化方案、第12章 分布式服务器、附录A 不同语言之间的区别。出版社简介称全书13章，但公开目录把语言选型单元标作“附录A”；学习页面保留目录原标号，并在来源边界说明差异。
+
+## 核心概念与所有权
+
+<Term def="在HTTP升级后维持双向帧通信的长连接协议。">WebSocket</Term>、
+<Term def="验证升级头并协商从HTTP切换到WebSocket的过程。">握手</Term>、
+<Term def="按长度、掩码和操作码增量恢复消息的状态机。">帧解析器</Term>、
+<Term def="CPython中限制同一进程同时执行Python字节码的全局锁。">GIL</Term>、
+<Term def="复用固定数量工作线程并限制并发任务数量的执行器。">线程池</Term>
+。这些概念必须同时回答四个问题：谁创建输入，谁拥有可变状态，哪个代际拒绝旧结果，失败后谁回滚或补偿。
+
+|   # | 概念      | 工程含义                                            |
+| --: | --------- | --------------------------------------------------- |
+|   1 | WebSocket | 在HTTP升级后维持双向帧通信的长连接协议。            |
+|   2 | 握手      | 验证升级头并协商从HTTP切换到WebSocket的过程。       |
+|   3 | 帧解析器  | 按长度、掩码和操作码增量恢复消息的状态机。          |
+|   4 | GIL       | CPython中限制同一进程同时执行Python字节码的全局锁。 |
+|   5 | 线程池    | 复用固定数量工作线程并限制并发任务数量的执行器。    |
+
+## 目录主线与因果关系
+
+### 1. 握手只完成协议升级
+
+Sec-WebSocket-Key、版本和Upgrade头必须验证，成功后仍要限制帧长度、控制帧和消息累计上限。
+
+先预测：如果省略这一层，正常样本也许仍能成功，但边界或故障样本会在哪个状态首先偏离？
+
+### 2. GIL不等于线程无用
+
+I/O等待可以释放执行机会，但CPU密集任务仍要进程化或下沉；选择依据是测量过的等待比和复制成本。
+
+先预测：如果省略这一层，正常样本也许仍能成功，但边界或故障样本会在哪个状态首先偏离？
+
+### 3. 池化必须带背压
+
+无限任务队列只是把过载藏到内存。线程池、协程和gevent都要定义并发上限、超时、取消和连接关闭后的结果丢弃规则。
+
+先预测：如果省略这一层，正常样本也许仍能成功，但边界或故障样本会在哪个状态首先偏离？
+
+## 六阶段证据链
+
+本页可操作链条是：校验升级 → 签发连接代际 → 增量解帧 → 分类任务 → 有界调度 → 关闭回收。正常样本证明能力，边界样本证明预算，失败样本证明拒绝，恢复样本证明没有留下第二份事实。
+
+<Stepper>
+  <Step title="1. 校验升级">
+    固定版本、输入与状态所有者，再切换正常和边界样本，记录首个预算变化。
+    <Gsa03ServerPracticeMapLab />
+  </Step>
+  <Step title="2. 分类任务">
+    注入重复、乱序、依赖变慢或节点中断，要求状态机在首偏离点停止。
+    <Gsa03ServerPracticeExperimentLab />
+  </Step>
+  <Step title="3. 关闭回收">
+    清除故障后重放同一输入，核对状态摘要、资源数量、成本和责任人。
+    <Gsa03ServerPracticeEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小实现骨架
+
+下面是用于复现实验的独立骨架，不是原书代码复制；生产实现还需补齐平台差异、权限、安全和资源清理。
+
+```python
+def submit_frame(session, frame):
+    if frame.length > MAX_FRAME or session.queue.full():
+        return reject(session, 'capacity')
+    generation = session.generation
+    workers.submit(run_if_current, generation, frame)
+```
+
+证据记录必须把决策与原始指标放在一起：
+
+```yaml
+book: 游戏服务器架构与优化
+page: gsa-03-server-practice
+catalog_entries: 3
+sample: normal | boundary | failure | recovery
+state_owner: explicit
+first_divergence: null
+recovery_action: replay_same_input
+```
+
+故障脚本只改变一个变量，并保留恢复阶段：
+
+```text
+baseline -> inject(每条连接创建永久线程，空闲连接也持续消耗栈和调度资源。)
+observe -> stop_at_first_divergence
+recover -> replay_same_version_and_input
+assert -> no_duplicate_state && no_orphan_resource
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap" title="状态所有权被绕过">
+  每条连接创建永久线程，空闲连接也持续消耗栈和调度资源。
+  最终成功可能只是重试或覆盖掩盖了错误，必须保存每阶段状态摘要和拒绝原因。
+</Callout>
+
+<Callout type="trap" title="正常样本掩盖边界错误">
+  相信客户端声明的帧长度，攻击者用一个巨大长度拖垮内存。
+  必须补充边界、失败和恢复样本，证明错误没有跨入下一阶段。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 输入变化                     | 预期状态         | 通过条件               |
+| ---- | ---------------------------- | ---------------- | ---------------------- |
+| 正常 | 合法版本、身份、顺序和容量   | 六阶段顺序完成   | 状态摘要与所有权一致   |
+| 边界 | 临界时序、容量、重复或切换   | 达到预算但不越界 | 无无限队列和第二份事实 |
+| 失败 | 畸形、旧版本、断线或依赖失效 | 在首偏离点停止   | 明确拒绝、补偿或回滚   |
+| 恢复 | 修复后重放同一输入           | 收敛到正常轨迹   | 无幽灵状态和资源泄漏   |
+
+<Gsa03ServerPracticeEvidenceLab />
+
+本页签发不变量是：**升级和帧解析严格校验；连接关闭后旧任务不能回写；工作队列有界；CPU任务不占用I/O循环。** 任何单次演示、截图或平均指标都不能替代版本、状态摘要、首偏离点和恢复证据。
+
+## 练习
+
+<Exercises>
+
+**问题 1** 为什么本页不能只以最终结果正确作为验收？
+
+<Answer>
+  最终结果会隐藏重复处理、旧代际覆盖、跨节点竞争和资源泄漏。必须比较每阶段所有者、状态版本、预算与首偏离点。
+</Answer>
+
+**问题 2** 如何把公开目录变成可执行学习证据？
+
+<Answer>
+  按原编号建立追踪表，为每组条目写出输入、状态、输出、失败和恢复条件。本页覆盖：3.1
+  构建Python Websocket服务器、3.2 多线程服务器、3.3 线程池。
+</Answer>
+
+**问题 3** 本页的最小通过条件是什么？
+
+<Answer>
+  升级和帧解析严格校验；连接关闭后旧任务不能回写；工作队列有界；CPU任务不占用I/O循环。
+  并且相同版本、种子和输入可以重放正常、边界、失败与恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **WebSocket**：在HTTP升级后维持双向帧通信的长连接协议。
+- **握手**：验证升级头并协商从HTTP切换到WebSocket的过程。
+- **帧解析器**：按长度、掩码和操作码增量恢复消息的状态机。
+- **GIL**：CPython中限制同一进程同时执行Python字节码的全局锁。
+- **线程池**：复用固定数量工作线程并限制并发任务数量的执行器。
+- 六阶段机制链已经映射到正常、边界、失败和恢复证据。
+- 公开目录已逐项追踪，现代补充不会冒充原书分节。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="WebSocket">
+    在HTTP升级后维持双向帧通信的长连接协议。
+  </GlossaryItem>
+  <GlossaryItem term="握手">
+    验证升级头并协商从HTTP切换到WebSocket的过程。
+  </GlossaryItem>
+  <GlossaryItem term="帧解析器">
+    按长度、掩码和操作码增量恢复消息的状态机。
+  </GlossaryItem>
+  <GlossaryItem term="GIL">
+    CPython中限制同一进程同时执行Python字节码的全局锁。
+  </GlossaryItem>
+  <GlossaryItem term="线程池">
+    复用固定数量工作线程并限制并发任务数量的执行器。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="蔡能著，机械工业出版社，2018年4月，314页，ISBN 9787111595472；机械工业出版社工程科技数字图书馆与得到电子书公开12个编号章、53个节/附录条目；出版社简介称13章，而公开目录将语言比较单元标作附录A，本文保留目录原标号。正文为独立教学重构。"
+  adaptedUrl="https://ebooks.cmpbook.com/detail?id=21197"
+/>

@@ -1,0 +1,259 @@
+---
+title: "第4章 Trees：从二叉搜索到多路外存索引"
+type: C
+section: "线性结构与树"
+order: 3
+description: "按第3版八节完整重构树术语、二叉树、BST、AVL、Splay、遍历、B-Tree 及标准库 set/map，并核查高度、不变量与旋转。"
+demo: true
+math: true
+sourceUrl: "https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+draft: false
+---
+
+import { DsaTreeVocabularyDiagram, DsaBinaryTreeShapeLab, DsaBstOperationsLab, DsaAvlRotationLab, DsaSplayAccessLab, DsaTraversalOrderLab, DsaBTreePageLab, DsaSetMapSemanticsLab } from "@/components/mdx/dsa-cpp/diagrams/trees";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释 depth、height、path、subtree 与 traversal 的关系
+- 能计算二叉树、AVL、Splay 和 B-Tree 的路径成本
+- 能实现 BST 插删、AVL 四类旋转和标准树遍历
+- 能分析退化树、iterator/引用失效和 map 查询副作用
+- 能设计匹配内存访问、热点局部性或外存 I/O 的树结构
+
+</Objectives>
+
+## 从“树快不快取决于高度”开始
+
+tree preliminaries（<Term def="描述 root、parent、child、leaf、path、depth、height 与 subtree 的基础术语和关系。">树的预备知识</Term>）先建立成本坐标。树操作通常沿一条 root-to-node path 前进，时间取决于 height h，而不是只取决于节点数 N。
+
+先预测把1到10000按升序插入普通 BST。每个新 key 都落在最右侧，树退化成 linked list，最后一次 search 走近10000层；若保持平衡，height 约为 log2 10000，小于14。写“BST search O(log N)”而不附 balance condition 是错误的。
+
+官方八节依次为 **Tree Preliminaries、Binary Trees、Binary Search Trees、AVL Trees、Splay Trees、Tree Traversals、B-Trees、Sets and Maps in the Standard Library**。它们不是八种互斥容器，而是从通用层次结构逐步加入 arity、ordering、balance、access adaptation 与 storage-page constraints。
+
+<DsaTreeVocabularyDiagram />
+
+## 4.1 Preliminaries
+
+root 没有 parent；除 root 外每个 node 恰有一个 parent；从 ancestor 到 descendant 的 edges 构成 path。node depth 是从 root 到它的 edge 数，tree height 是最深 node 的 depth。leaf 没有 children，subtree 由某 node 及全部 descendants 构成。
+
+含 N 个 nodes 的 tree 恰有 N-1 条 parent-child edges。证明可从“除 root 外每个 node 各贡献一条 incoming edge”得到。这个关系用于检查 clone、serialize 和 deletion 是否丢边或成环。
+
+## 4.2 Binary Trees
+
+binary trees（<Term def="每个节点至多有 left 与 right 两个有序孩子的树。">二叉树</Term>）的左右位置有语义，即使只有一个 child 也要区分 left/right。height 为 h 的 binary tree：
+
+$$
+h+1 \le N \le 2^{h+1}-1
+$$
+
+左边是完全退化链，右边是每层填满的 full tree。反推任意 N-node binary tree 的最小可能 height 约为 log2 N，最大为 N-1。
+
+<DsaBinaryTreeShapeLab />
+
+binary expression tree 的 leaves 是 operands，internal nodes 是 operators；filesystem tree 通常不限两个 children，需要 first-child/next-sibling 或 child vector。树的 shape 与 node payload 是两个维度。
+
+## 4.3 The Search Tree ADT — Binary Search Trees
+
+binary search trees（<Term def="对每个节点保持 left keys 更小、right keys 更大的有序二叉搜索树。">二叉搜索树</Term>）把 comparison result 转成 path direction。第3版默认忽略 duplicate；若需要 multiset，必须把 count 或 tie policy 写入 invariant。
+
+<DsaBstOperationsLab />
+
+官方 `BinarySearchTree.h` 用 `BinaryNode*& t` 让递归 helper 能改写 parent 的 child pointer：
+
+```cpp
+void insert(const Comparable& x, BinaryNode*& t) {
+    if (t == nullptr)
+        t = new BinaryNode{x, nullptr, nullptr};
+    else if (x < t->element)
+        insert(x, t->left);
+    else if (t->element < x)
+        insert(x, t->right);
+}
+```
+
+deletion 分三种：
+
+1. leaf 直接删除并置 null；
+2. one child 让 parent link 绕过旧 node；
+3. two children 用 right subtree minimum 替换当前 key，再删除那个 successor。
+
+```cpp
+if (t->left && t->right) {
+    t->element = findMin(t->right)->element;
+    remove(t->element, t->right);
+} else {
+    BinaryNode* old = t;
+    t = t->left ? t->left : t->right;
+    delete old;
+}
+```
+
+replacement 必须来自 right minimum 或 left maximum，才能保持两侧 ordering。copy assignment 先 `makeEmpty`，再递归 `clone`，确保两个 tree 不共享 nodes。
+
+<Callout type="trap" title="把平均平衡当成结构保证">
+随机插入的 BST 平均高度可能 logarithmic，但 adversarial insertion order 可造出 height N-1。服务边界需要 AVL/红黑树等显式保证，不能依赖输入碰巧随机。
+</Callout>
+
+## 4.4 AVL Trees
+
+AVL trees（<Term def="每个节点左右子树高度差绝对值至多1，并用局部旋转恢复平衡的 BST。">AVL树</Term>）在 node 中保存 height。一次 insertion 先按 BST path 递归，再沿返回路径更新 height，找到第一个 imbalance。
+
+<DsaAvlRotationLab />
+
+若新 key 插入 left-left 或 right-right，single rotation；left-right 或 right-left，double rotation。rotation 必须同时保持 inorder key sequence 和重新计算受影响 nodes 的 heights。
+
+最少节点数 S(h) 满足：
+
+$$
+S(h)=S(h-1)+S(h-2)+1
+$$
+
+取空树高度为 -1、单节点高度为 0，则边界条件与第一次展开是：
+
+$$
+S(-1)=0,\qquad S(0)=1,\qquad S(1)=2
+$$
+
+它按 Fibonacci 速度增长，所以 h=O(log N)。search/insert worst-case logarithmic。忠实于第3版官方代码要注意：该 `AvlTree.h` 的 insertion 完整实现，但 `remove` 明确仍是 unimplemented；本章不能把删除代码假装成原书示例已提供。
+
+## 4.5 Splay Trees
+
+splay trees（<Term def="每次访问后把最后访问节点旋到 root，不保存平衡元数据而提供均摊对数性能的自调整 BST。">伸展树</Term>）允许单次操作 O(N)，但任意足够长操作序列的 amortized cost 是 O(log N)。重复访问热点 key 时，它会停在靠近 root 的位置。
+
+<DsaSplayAccessLab />
+
+zig 是 parent 为 root 的单旋；zig-zig 对同方向祖孙做两次同向旋转；zig-zag 对相反方向做两次相反旋转。第3版后续完整实现采用 top-down splay：搜索时把较小/较大 fragments 暂存在 header 两侧，最后一次性重组。
+
+Splay 适合 access locality、无需每 node height/color metadata；却不适合要求每次 operation latency 都有 logarithmic worst-case 的场景。amortized guarantee 不是 per-operation guarantee。
+
+## 4.6 Tree Traversals Revisited
+
+tree traversals（<Term def="按 root 与左右 subtree 的相对访问时机系统遍历所有节点。">树的遍历</Term>）把 recursive structure 映射成线性序列：
+
+- preorder：root、left、right，适合复制/前缀表示；
+- inorder：left、root、right，BST 输出 sorted keys；
+- postorder：left、right、root，适合释放 subtree；
+- level order：按 depth，用 Queue 做 BFS。
+
+<DsaTraversalOrderLab />
+
+官方 BST `printTree` 用 inorder；`makeEmpty` 用 postorder，必须先释放 children 再 delete parent。若先删 parent 再读取 child pointers，会 use-after-free。
+
+```cpp
+void makeEmpty(BinaryNode*& t) {
+    if (t != nullptr) {
+        makeEmpty(t->left);
+        makeEmpty(t->right);
+        delete t;
+    }
+    t = nullptr;
+}
+```
+
+recursive traversal 时间 Θ(N)，额外 stack 是 O(h)。对退化树 h=N，递归销毁也可能 stack overflow；这是 tree shape 与 implementation strategy 的共同风险。
+
+## 4.7 B-Trees
+
+B-trees（<Term def="每个磁盘页保存多个有序keys与children，并通过分裂/合并维持高fanout和平衡高度的多路搜索树。">B树</Term>）针对外部存储。binary tree node 只含一个 key，随机读取一条 path 会触发许多 page I/O；B-Tree 让一个 page 装 m-1 keys 与最多 m children，一次 I/O 排除更大范围。
+
+<DsaBTreePageLab />
+
+除 root 外节点至少半满；所有 leaves 位于同一 depth。insert 向 leaf 前进，full page split 并把 separator 提升 parent；delete 若 underflow，则从 sibling borrow 或 merge。高度约：
+
+$$
+O(\log_m N)
+$$
+
+fanout m 由 page size、key/pointer width 与 fill policy 决定。单纯增大 m 会增加 page 内 search cost，但通常可用 binary search；最重要的是减少慢层级访问。
+
+## 4.8 Sets and Maps in the Standard Library
+
+标准库set与map（<Term def="以有序唯一keys提供 logarithmic find/insert/erase 的关联容器；map 额外把key映射到value。">标准库set与map</Term>）通常由平衡搜索树实现，但标准只承诺 observable semantics 与 complexity，不承诺一定是某种红黑树布局。
+
+`set<Key>` 只保存 unique key；`map<Key,Value>` 的 iterator dereference 得到 pair，key 是 const，value 可改。ordered iteration 依据 comparator，而不是 insertion order。
+
+<DsaSetMapSemanticsLab />
+
+官方 `mapDemo.cpp` 演示了一个重要副作用：`salaries["Jan"]` 在 key 不存在时插入 default `double{}`，即0；只读存在性查询应使用 `find` 或现代 `contains`。在 const map 上也没有 mutating `operator[]`。
+
+<Callout type="trap" title="用 operator[] 做存在性检查">
+对 map 调 `m[key]` 会创建缺失项，改变 size，并可能触发 allocation/rebalance。只读路径应使用 find；需要插入时再用 try_emplace/insert_or_assign 明确意图。
+</Callout>
+
+## 统一选择：你需要哪一种高度保证
+
+<Stepper>
+  <Step title="先写 ordering 与 duplicate policy">
+    <DsaBstOperationsLab />
+    明确 comparator 是否 strict weak ordering，duplicate 是忽略、计数还是独立节点。
+  </Step>
+  <Step title="检查输入能否让普通 BST 退化">
+    <DsaBinaryTreeShapeLab />
+    测 sorted、reverse、all-equal 与随机序列，并报告最终 height。
+  </Step>
+  <Step title="需要单次上界时保持显式平衡">
+    <DsaAvlRotationLab />
+    每次 update 后验证 inorder sorted、balance factor 和 cached height。
+  </Step>
+  <Step title="热点访问可考虑自调整">
+    <DsaSplayAccessLab />
+    分开报告单次 tail latency 与长序列 amortized cost。
+  </Step>
+  <Step title="外存索引按 page fanout 设计">
+    <DsaBTreePageLab />
+    让 node 匹配 storage page，测 height、fill ratio、splits 与 page reads。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. Tree operation cost 通常由 height 控制，N 相同的不同 shape 可差一个数量级。
+2. Binary tree 每 node 至多两个 ordered children，height 介于 log N 和 N-1。
+3. BST ordering 支持定向 search；two-child deletion 用 successor/predecessor 保持顺序。
+4. 普通 BST 无平衡保证，sorted insertion 会退化。
+5. AVL 通过四类 rotation 保持 balance factor，给出 worst-case logarithmic height。
+6. Splay 把 accessed node 移到 root，提供 amortized 而非每次 logarithmic。
+7. Inorder 输出 BST sorted keys，postorder 适合安全释放。
+8. B-Tree 用 page-sized multiway nodes 降低外存 I/O path。
+9. std::set/map 承诺 ordered associative semantics；map operator[] 会插入缺失 key。
+
+<Exercises>
+
+**问题 1：height=3 的满二叉树有多少nodes与leaves？**
+
+<Answer>levels 0到3共有1+2+4+8=15个nodes，最底层有2³=8个leaves。公式为nodes=2^(h+1)-1、leaves=2^h。</Answer>
+
+**问题 2：删除 BST 中有两个children的node 50 时，为何可用right subtree minimum替换？**
+
+<Answer>该minimum大于所有left subtree keys，同时不大于right subtree其余keys；替换后ordering保持。随后在right subtree删除原minimum，它至多有一个right child，转成简单case。</Answer>
+
+**问题 3：插入30、10、20触发哪类AVL旋转？**
+
+<Answer>30的left child是10，新key 20落在10的right，属于LR。先对10做left rotation，再对30做right rotation，得到20为局部root、10与30为左右children。</Answer>
+
+**问题 4：为什么 `map<string,double> m; m["Jan"];` 会改变容器？**
+
+<Answer>non-const operator[] 必须返回可写value reference；缺失key时先插入pair，其中double value-initialize为0，再返回引用。只检查存在性应使用find并比较end。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="树的预备知识">root、parent、child、path、depth、height与subtree。</GlossaryItem>
+  <GlossaryItem term="二叉树">每节点最多两个有左右次序children的树。</GlossaryItem>
+  <GlossaryItem term="二叉搜索树">left keys较小、right keys较大的ordered binary tree。</GlossaryItem>
+  <GlossaryItem term="AVL树">以高度差和局部旋转保证平衡的BST。</GlossaryItem>
+  <GlossaryItem term="伸展树">访问后把节点旋到root并提供均摊保证的BST。</GlossaryItem>
+  <GlossaryItem term="树的遍历">pre/in/post/level order等系统访问顺序。</GlossaryItem>
+  <GlossaryItem term="B树">以高fanout page nodes降低外存路径的平衡多路树。</GlossaryItem>
+  <GlossaryItem term="标准库set与map">提供ordered unique-key关联语义的标准容器。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Data Structures and Algorithm Analysis in C++, 3rd Edition · Chapter 4 Trees"
+  href="https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+  author="Mark Allen Weiss"
+  license="原书与官方示例代码版权归作者及 Pearson/Addison-Wesley 所有；本章依据官方完整目录及作者公开的第3版 BinarySearchTree/AvlTree/SplayTree/map 示例独立重构教学内容"
+/>

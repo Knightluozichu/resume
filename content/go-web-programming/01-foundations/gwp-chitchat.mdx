@@ -1,0 +1,104 @@
+---
+title: "第2章 Go ChitChat"
+type: C
+section: "Go Web编程 · 基础与全景"
+order: 2
+description: "以完整论坛连接应用设计、数据模型、mux、静态文件、Cookie、模板、PostgreSQL与服务器启动。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/go-web-programming/chapter-2"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GwpChitchatArchitectureLab, GwpChitchatFlowLab, GwpChitchatDataLab } from "@/components/mdx/go-web-programming/diagrams/gwp-chitchat";
+
+<Objectives>
+- 能绘制ChitChat论坛从路由、handler、数据模型到模板的端到端架构
+- 能实现静态文件、Cookie访问控制、主题与回复处理，并说明所有权边界
+- 能复现数据库或模板失败，验证服务器不会返回伪成功
+</Objectives>
+
+## 从完整应用而不是API清单开始
+
+先预测：登录、发帖、回复和浏览能否只靠一个handler完成？技术上可以，结构上不可维护。ChitChat用完整论坛展示各部件协作。<Term def="以用户、会话、主题和回复为核心的端到端教学应用。">ChitChat application model</Term>是后续章节反复拆解的全景样本。
+
+<GwpChitchatArchitectureLab />
+
+## 应用设计与目录边界
+
+入口负责配置、数据库和路由装配，handler负责请求用例，data层负责持久化，template负责展示，public目录负责静态资源。<Term def="让进程装配、协议处理、数据访问和展示各自拥有单一职责的分层。">web application assembly boundary</Term>阻止全局数据库和模板解析散落。
+
+```text
+main -> mux -> handler -> data model -> PostgreSQL
+                 |-> template -> HTML
+                 |-> static files
+```
+
+## 数据模型
+
+User、Session、Thread和Post通过主键与外键连接。<Term def="论坛实体、标识、关系和持久化操作组成的领域协议。">forum data contract</Term>要求创建回复时同时证明主题存在和用户已授权，时间与ID由明确一层产生。
+
+<GwpChitchatDataLab />
+
+## 接收与处理请求
+
+Multiplexer根据path选择handler，静态文件走受限根目录，动态请求执行解析、授权、数据调用和响应。<Term def="由模式匹配把单个HTTP请求交给唯一处理器的分派规则。">multiplexer dispatch rule</Term>不应把业务授权藏在路径命名中。
+
+```go
+mux := http.NewServeMux()
+mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("public"))))
+mux.HandleFunc("/thread/create", createThread)
+```
+
+## 使用Cookie访问控制
+
+登录成功后服务器生成会话并设置Cookie，请求再用Cookie定位Session。<Term def="把浏览器Cookie中的不透明标识映射到服务端会话与用户的身份协议。">cookie session boundary</Term>需要HttpOnly、Secure、SameSite、过期和轮换策略；原书的简化实现是教学起点，不是完整安全方案。
+
+## 使用模板生成HTML
+
+Handler取得数据后执行已解析模板，模板失败必须在响应提交前处理。<Term def="模板名称、输入数据形状、转义上下文和输出状态共同组成的展示契约。">HTML response rendering contract</Term>要求启动期预解析并避免在模板中访问数据库。
+
+```go
+func index(w http.ResponseWriter, r *http.Request) {
+    threads, err := store.Threads(r.Context())
+    if err != nil { http.Error(w, "load failed", 500); return }
+    if err := templates.ExecuteTemplate(w, "index.html", threads); err != nil { log.Print(err) }
+}
+```
+
+<GwpChitchatFlowLab />
+
+<Stepper>
+  <Step title="画出部件"><GwpChitchatArchitectureLab /></Step>
+  <Step title="跟踪用例"><GwpChitchatFlowLab /></Step>
+  <Step title="验证数据关系">创建用户、会话、主题和回复，再注入缺失外键与重复提交。</Step>
+</Stepper>
+
+## 验收实验：四条用户旅程
+
+分别执行匿名浏览、登录、创建主题和回复，记录每步路由、Cookie、SQL与模板。关闭数据库后重复创建，确认返回失败且没有部分记录；破坏模板后确认日志包含模板名，且不会在已发送200后再尝试改状态。
+
+<Callout type="trap" title="Cookie本身就是登录状态">Cookie只是客户端携带的数据；可信身份应来自签名值或服务端会话，并经过过期与授权检查。</Callout>
+<Callout type="trap" title="FileServer可以指向仓库根目录">静态根过大会暴露源码和配置，应绑定专用public目录并限制路径。</Callout>
+
+## 本章回顾
+
+本章覆盖Go ChitChat、应用设计、数据模型、多路复用器、静态文件与处理函数、使用Cookie访问控制、使用模板生成HTML响应、PostgreSQL与数据库接口，以及启动服务器。它给出全景，后续章节逐层深化。
+
+<Exercises>
+**问题 1：为什么main不直接执行SQL？**<Answer>Main负责装配，数据访问应位于可替换、可测试的存储边界。</Answer>
+**问题 2：谁负责认证后的授权？**<Answer>Handler或用例层根据会话身份和目标资源执行授权。</Answer>
+**问题 3：模板何时解析？**<Answer>优先在启动期解析并因错误阻止启动，避免每次请求重复解析。</Answer>
+</Exercises>
+
+## 术语表
+<Glossary>
+  <GlossaryItem term="ChitChat application model" definition="论坛端到端教学应用。" />
+  <GlossaryItem term="web application assembly boundary" definition="进程装配与应用层边界。" />
+  <GlossaryItem term="forum data contract" definition="论坛实体关系与持久化协议。" />
+  <GlossaryItem term="multiplexer dispatch rule" definition="请求模式到唯一handler的分派规则。" />
+  <GlossaryItem term="cookie session boundary" definition="Cookie标识到服务端会话的身份边界。" />
+  <GlossaryItem term="HTML response rendering contract" definition="数据、模板和响应的展示契约。" />
+</Glossary>
+<Attribution adaptedFrom="Go Web Programming Chapter 2 Go ChitChat" adaptedUrl="https://livebook.manning.com/book/go-web-programming/chapter-2" />

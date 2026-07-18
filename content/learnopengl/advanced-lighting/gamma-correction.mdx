@@ -1,14 +1,19 @@
 ---
-title: Gamma 校正
+title: Gamma 校正、sRGB 边界与线性光照
 type: A
 section: 高级光照
 order: 2
 description: 搞懂为什么显示器天生「非线性」——同样的数字它点不出对应的亮度，于是你在线性空间辛苦算出的光照一上屏就发暗；学会在着色器里用 pow(color, 1/2.2) 把结果编码回去，让两盏灯叠加、衰减、混色都正确，还能讲清 sRGB 纹理为什么要先解码、以及怎么避开「校正两次」的双重 gamma 坑。
 demo: true
 math: true
-sourceUrl: https://learnopengl-cn.github.io/05%20Advanced%20Lighting/02%20Gamma%20Correction/
+sourceUrl: https://learnopengl.com/Advanced-Lighting/Gamma-Correction
 draft: false
 ---
+
+import {
+  GammaAttenuationContractDiagram,
+  GammaPipelineContractDiagram,
+} from "@/components/mdx/learnopengl/diagrams/gamma-correction";
 
 {/* A 概念型 + math:true 章（HEL-81，高级光照篇第 2 篇）：原书「Gamma 校正 Gamma Correction」。重心是概念讲解(spec A 列 §3 重)：显示器的非线性 gamma 响应（输出≈输入^2.2、源于 CRT、sRGB 沿用）、线性空间 vs sRGB/gamma 空间、为何光照运算必须在线性空间做、gamma 校正=输出前 pow(color,1/2.2) 编码回去、sRGB 纹理输入要先解码到线性。math:true 故 §4 数学要写（gamma 幂律 + 校正公式 + sRGB 纹理解码），但 A 型不喧宾夺主、display 公式 ≤8。承接上一篇 blinn-phong（已学 Phong/Blinn 镜面、点乘、世界空间光照），沿用「光与材质 / 相机与摄影」类比库。A 型段式：概念讲解(§3 重) + 数学(§4 写，math:true) + 代码对照(§6 选，输出前 pow 那段) + 误区(§7 ≥2，必含 双重 gamma + sRGB 没解码) + 小结含改 Demo 题(§8)。主 viz = GammaCurveDiagram（三条幂曲线，本章核心概念图）；交互 viz = ShaderDemo（黑到白渐变条，uCorrect 0/1 切校正、uGamma 滑块）；CompareSlider（左 GammaGradientBarDiagram corrected=false / 右 corrected=true，静态 SVG 渐变条对比，不塞 WebGL）。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -19,14 +24,14 @@ draft: false
 <Objectives>
 
 - 能解释**显示器为什么是非线性的**：同样的数字它点不出成比例的亮度，以及这件事在整条渲染管线里发生在**最后哪一步**——光照算完、上屏之前
-- 能在片段着色器里用 `pow(color, vec3(1.0/2.2))` 做 **gamma 校正**，并说出为什么不校正时两盏灯叠加、衰减、混色都会**偏暗失真**；还能说出 **sRGB 纹理**为什么得先解码到**线性空间**才能参与光照
+- 能实现片段着色器里用 `pow(color, vec3(1.0/2.2))` 做 **gamma 校正**，并说出为什么不校正时两盏灯叠加、衰减、混色都会**偏暗失真**；还能说出 **sRGB 纹理**为什么得先解码到**线性空间**才能参与光照
 - 能回答：一张已经是 sRGB 的贴图，采样后不解码、最后又做了一次 gamma 校正，画面会偏亮还是偏暗？这个坑叫什么？
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质 / 相机与摄影」库（承接同 section）。 */}
 
-## 你算对了光照，一上屏却发暗
+## 为什么你算对了光照，一上屏却发暗
 
 上一篇你把高光调得平滑漂亮。可你有没有遇到过这种怪事：明明按公式把两盏一样亮的灯叠在一起，画面却没有「两倍亮」，反而灰扑扑、中间调一团暗？或者把光源拉远，衰减得比你预想的快得多、暗得发脏？
 
@@ -73,6 +78,14 @@ draft: false
 校正管的是「出口」，可还有个「入口」常被漏掉：**纹理**。美术在屏幕上画贴图、相机拍照片，存出来的图片文件几乎都是 **sRGB 空间**的（它们本就是给屏幕看的）。你在着色器里 `texture()` 采样得到的颜色，已经是被提亮过的 sRGB 值——**直接拿去参与光照计算就错了**，因为光照要的是线性值。
 
 所以颜色类纹理进来后，得先**解码回线性**：要么手动 `pow(采样色, vec3(2.2))`（屏幕脾气的逆操作的逆操作——把 sRGB 压回线性），要么干脆用 **sRGB 纹理格式**让硬件采样时自动解码（WebGL2 里用 `gl.SRGB8` 等格式，更省事也更准）。一句话记牢这条流水线：**入口处把 sRGB 纹理解码进线性 → 全程在线性空间算光照 → 出口处 gamma 校正回 sRGB**。注意：只有**颜色/漫反射**贴图是 sRGB 要解码；法线贴图、镜面遮罩这类**存数据而非颜色**的贴图本来就是线性的，千万别解码（解码了反而毁掉数据），这个坑后面误区还会细说。
+
+<GammaPipelineContractDiagram step={3} />
+
+## 衰减也要回到线性空间重调
+
+原教程还指出一个容易被旧参数掩盖的变化：真实点光源的起点是平方反比 `1 / d^2`。未校正的显示器会额外把它压成近似 `(1 / d^2)^2.2`，看起来衰减过快，于是旧项目常改用 `1 / d` 或可调的经验曲线。进入线性工作流后，平方反比重新成为合理起点；可调衰减仍可保留，但参数要在校正后的画面里重新定。
+
+<GammaAttenuationContractDiagram />
 
 {/* 4. 数学推导（spec §四，math:true 要写但 A 型不喧宾夺主）：节首符号表 + gamma 幂律 display + 校正公式 + 显示器+校正抵消 + sRGB 纹理解码，共 4 个 display 公式（≤8）；每式后人话翻译、不跳步。 */}
 
@@ -187,6 +200,25 @@ void main() {
 
 把滑块拖到中线两侧对照那条「中间调（线性 0.5）」竖虚线：左边未校正，中段那几格明显偏黑、整条过渡挤向亮端；右边已校正，中段是均匀的中灰、黑白之间过渡顺滑。区别全在中间调——这就是「显示器把中间调压暗」与「gamma 校正把它提回来」的一体两面。
 
+## 单步检查：颜色到底在哪个空间
+
+> 猜一猜：同一个颜色值什么时候该做 `pow(c, 2.2)`，什么时候该做 `pow(c, 1/2.2)`？按颜色从纹理到屏幕走一遍，先标出边界再写代码。
+
+<Stepper>
+  <Step title="① 颜色纹理先解码，数据纹理不动">
+    <GammaPipelineContractDiagram step={1} />
+    漫反射和 albedo 贴图通常是 sRGB，采样后要转线性；法线、粗糙度和遮罩存的是数据，不应做 gamma 解码。
+  </Step>
+  <Step title="② 所有中间光照都保持线性">
+    <GammaPipelineContractDiagram step={2} />
+    光照累加、距离衰减、HDR、混合和中间 FBO 的值继续保持线性，不能在每个 pass 结束时随手编码。
+  </Step>
+  <Step title="③ 最终输出编码一次">
+    <GammaPipelineContractDiagram step={3} />
+    最后一张显示目标使用硬件 sRGB 编码，或最后一次 shader 手动 `pow(c, 1/2.2)`；两条路径只能选一条。
+  </Step>
+</Stepper>
+
 {/* 6. 代码对照（spec §六，A 型选讲，只贴最能说明概念的 1-3 段）：片段着色器输出前 pow(color, vec3(1.0/2.2)) 这段，C++/GLSL330 ↔ WebGL2/GLSL300es；单块 ≤30 行；块间有解说；version/precision 差异用 Callout。 */}
 
 ## 代码对照：出口那一行 pow
@@ -286,7 +318,7 @@ void main() {
 
 <Exercises>
 
-**练习 1（问答型）** 一盏灯把某处照到线性亮度 `0.5`。如果你**不做** gamma 校正、直接把 `0.5` 送屏，屏幕实际点出多少亮度？做了校正（`pow(0.5, 1/2.2)` 再上屏）之后，屏幕又点出多少？
+**问题 1（问答型）** 一盏灯把某处照到线性亮度 `0.5`。如果你**不做** gamma 校正、直接把 `0.5` 送屏，屏幕实际点出多少亮度？做了校正（`pow(0.5, 1/2.2)` 再上屏）之后，屏幕又点出多少？
 
 <Answer>
 
@@ -295,7 +327,7 @@ void main() {
 
 </Answer>
 
-**练习 2（改 Demo 代码型）** 在上面那条渐变 Demo 里，亲手造出**双重 gamma 校正**（发白过曝）的效果：把校正那行从只做一次改成连做两次。说出你怎么改，并解释为什么会发白。
+**问题 2（改 Demo 代码型）** 在上面那条渐变 Demo 里，亲手造出**双重 gamma 校正**（发白过曝）的效果：把校正那行从只做一次改成连做两次。说出你怎么改，并解释为什么会发白。
 
 <Answer>
 
@@ -310,7 +342,7 @@ outColor = pow(outColor, vec3(1.0 / uGamma)); // 又校正一次 → 双重 gamm
 
 </Answer>
 
-**练习 3（问答型）** 一张已经是 sRGB 的木箱漫反射贴图，你采样后**没解码**就拿去做光照，最后又对输出**做了一次** gamma 校正。这张木箱看起来会偏亮还是偏暗？问题出在入口还是出口？
+**问题 3（问答型）** 一张已经是 sRGB 的木箱漫反射贴图，你采样后**没解码**就拿去做光照，最后又对输出**做了一次** gamma 校正。这张木箱看起来会偏亮还是偏暗？问题出在入口还是出口？
 
 <Answer>
 

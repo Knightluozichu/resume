@@ -1,0 +1,254 @@
+---
+title: "第1章：Tutorial"
+type: C
+section: "Go 程序设计语言 · 从命令行到并发 Web"
+order: 1
+description: "对齐原书第 1 章：Hello World、命令行参数、重复行、Lissajous GIF、URL 抓取、并发抓取、Web Server 与语法线索。"
+demo: true
+math: false
+sourceUrl: "https://www.gopl.io/ch1.pdf"
+draft: false
+---
+
+import {
+  GoplArgsDuplicateLab,
+  GoplConcurrentFetchServerLab,
+  GoplLissajousLab,
+} from "@/components/mdx/go-programming-language/diagrams/tutorial";
+
+<Objectives>
+
+- 能实现 Hello World、os.Args 与 bufio.Scanner 文本程序，解释 package/import/main、slice/range、map zero value 和 stdin/file ownership
+- 能修改 Lissajous GIF generator，分析 nested loops、math/rand、palette、image.GIF frame/delay 与 streaming output 的关系
+- 能比较顺序/并发 URL fetch 与 net/http server，设计 goroutine/result channel、error/body close 和 handler request lifecycle
+
+</Objectives>
+
+## 为什么 Tutorial 先让程序做真实工作
+
+原书没有先列完整语法，而是用 file/text/graphics/network/concurrency/web 七类任务展示同一模式：从 package 取得输入，用 variables/control flow/data structures 转换，再把 output 写给 stdout、file、HTTP response 或 channel。
+
+<Term def="Go 程序从 package/import/main 开始，经输入、状态转换、错误处理和输出形成的最小可执行数据流。">Go executable data flow</Term>
+
+先预测：`os.Args` 是否包含 program name，map 中不存在的 key 做 `counts[line]++` 是否 panic，以及三个 URL 并发抓取的总时间更接近总和还是最大值；后面的实验逐一验证。
+
+## 1.1 Hello, World：package、import 与 main
+
+每个 Go source file 以 package declaration 开始；可执行程序属于 `package main` 并提供无参数无结果的 `func main()`。import 让 file 通过 package name 使用 exported identifiers，`gofmt` 统一布局。
+
+```go
+package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("Hello, 世界")
+}
+```
+
+```bash
+go run main.go
+go build -o hello main.go
+gofmt -w main.go
+```
+
+`go run` 构建临时 binary 并执行，`go build` 生成 artifact。unused import/local variable 是 compile error，迫使 source 保持明确依赖。
+
+## 1.2 Command-Line Arguments：slice 与 range
+
+`os.Args` 是 `[]string`，index 0 是 command name，真正参数通常是 `os.Args[1:]`。slice half-open range 包含 low、不含 high；range 每轮给 index/value。
+
+<Term def="共享或引用连续 array segment 的 descriptor，包含 pointer、length 与 capacity；os.Args[1:] 用它排除 program name。">slice view</Term>
+
+```go
+for i, arg := range os.Args[1:] {
+    fmt.Printf("%d\t%s\n", i, arg)
+}
+```
+
+只需要 value 时写 `_` 忽略 index。字符串拼接循环可用 `strings.Join(os.Args[1:], " ")` 表达更直接；先追求 clear code，再用 measurement 比较 allocation。
+
+## 1.3 Finding Duplicate Lines：Scanner、map 与多输入源
+
+重复行示例从 stdin 或多个 files 逐行读取，以 `map[string]int` 计数。不存在 key 的 value 是 int zero value，所以 `counts[line]++` 自然从 0 开始；map iteration order 未指定，测试不能依赖输出顺序。
+
+<Stepper>
+  <Step title="改变 os.Args slice 与重复词输入">
+    <GoplArgsDuplicateLab />
+  </Step>
+  <Step title="把输入源抽象为 io.Reader">
+    `countLines(file, counts)` 与 `countLines(os.Stdin, counts)` 共享 Scanner loop；caller 负责打开/关闭 file，callee 只消费 reader。
+  </Step>
+  <Step title="按 count 过滤并稳定输出">
+    只输出 count > 1 的 lines；需要 deterministic output 时收集 keys 后 sort，而不是假设 map 顺序。
+  </Step>
+</Stepper>
+
+```go
+func countLines(r io.Reader, counts map[string]int) error {
+    input := bufio.NewScanner(r)
+    for input.Scan() {
+        counts[input.Text()]++
+    }
+    return input.Err()
+}
+```
+
+Scanner 默认 token size 有上限；生产代码处理超长行时设置 buffer limit 或改用 `bufio.Reader`。错误应返回给 caller，不要把 EOF 与 I/O failure 混成“读取结束”。
+
+<Callout type="trap" title="在 helper 中 defer Close caller-owned reader">
+`io.Reader` interface 没有要求 Close。谁成功 Open/Create/HTTP Get，谁负责在明确 lifecycle 中 Close；helper 不应猜测 ownership。
+</Callout>
+
+## 1.4 Animated GIFs：Lissajous、loops 与 encoder
+
+Lissajous 示例用两个不同 frequency 的 sine waves 生成轨迹，外层生成 animation frames，内层按 t 采样 pixel；phase 随 frame 演进。`image.Paletted`、color palette、`gif.GIF{LoopCount, Delay, Image}` 组成 encoder input。
+
+```go
+for i := 0; i < nframes; i++ {
+    rect := image.Rect(0, 0, 2*size+1, 2*size+1)
+    img := image.NewPaletted(rect, palette)
+    for t := 0.0; t < cycles*2*math.Pi; t += res {
+        x := math.Sin(t)
+        y := math.Sin(t*freq + phase)
+        img.SetColorIndex(size+int(x*size+0.5), size+int(y*size+0.5), 1)
+    }
+    anim.Delay = append(anim.Delay, delay)
+    anim.Image = append(anim.Image, img)
+    phase += 0.1
+}
+```
+
+<Stepper>
+  <Step title="修改 cycles、frequency 与 phase">
+    <GoplLissajousLab />
+  </Step>
+  <Step title="从公式映射到 image coordinates">
+    sin output 在 [-1,1]，乘 size 并平移到 image center；坐标 conversion 要检查 rounding 与 bounds。
+  </Step>
+  <Step title="把 animation 编码到 io.Writer">
+    `gif.EncodeAll(out, &anim)` 只依赖 writer；main 可写 stdout，HTTP handler 可写 ResponseWriter，测试可写 bytes.Buffer。
+  </Step>
+</Stepper>
+
+<Term def="x=sin(t)、y=sin(t×frequency+phase) 的参数曲线；改变频率比与相位会生成不同闭合/漂移动画轨迹。">Lissajous curve</Term>
+
+随机 frequency 若不控制 seed，输出不可复现。测试使用固定 RNG source，demo 可显式传 seed；不要在核心函数里依赖隐式 global random state。
+
+## 1.5 Fetching a URL：status、body 与错误 ownership
+
+`http.Get` 返回 `*http.Response` 与 error。成功后 caller 必须关闭 `resp.Body`，即使只读部分 body；status code 不是 error return，需要单独检查。`io.Copy(dst, resp.Body)` 可流式转发，不必一次读入 memory。
+
+```go
+resp, err := http.Get(url)
+if err != nil {
+    return err
+}
+defer resp.Body.Close()
+
+if resp.StatusCode != http.StatusOK {
+    return fmt.Errorf("fetch %s: %s", url, resp.Status)
+}
+_, err = io.Copy(os.Stdout, resp.Body)
+return err
+```
+
+原书示例会给缺少 scheme 的 URL 补 `http://`。现代 production client 还应设置 timeout/context、body limit、redirect/TLS policy；默认 client 无 overall timeout 不适合无边界服务。
+
+## 1.6 Fetching URLs Concurrently：goroutine + channel
+
+顺序 fetch 总时间约为各请求延迟之和；每个 URL 一个 goroutine 时，unbuffered result channel 汇聚完成消息，总时间接近最慢请求。channel 不只是传 string，也提供 send/receive synchronization。
+
+<Term def="由 Go runtime 调度的轻量 concurrent function execution；用 go f(...) 启动，lifecycle 必须由 channel/context/wait contract 收敛。">goroutine task</Term>
+
+```go
+start := time.Now()
+ch := make(chan string)
+for _, url := range os.Args[1:] {
+    go fetch(url, ch)
+}
+for range os.Args[1:] {
+    fmt.Println(<-ch)
+}
+fmt.Printf("%.2fs elapsed\n", time.Since(start).Seconds())
+```
+
+goroutine 应始终发送一个 result，包括 error，否则 collector 永久等待。更健壮的 result 包含 URL、bytes、elapsed、status、error；取消由 context 传播。
+
+<Term def="把 value、source、timing、status 与 error 放进同一结果类型，并约定每个启动任务恰好发送一次；collector 因而能按任务数完成收敛。">typed result channel contract</Term>
+
+## 1.7 A Web Server：handler 的请求生命周期
+
+`http.HandleFunc` 注册 path handler，`http.ListenAndServe` 接受请求并并发调用 handlers。handler 接收 `http.ResponseWriter` 和 `*http.Request`；ResponseWriter 只在调用期间有效，不能保存给后台 goroutine 后继续写。
+
+<Stepper>
+  <Step title="比较 concurrent fetch 与 Web Server flow">
+    <GoplConcurrentFetchServerLab />
+  </Step>
+  <Step title="为 client 与 server 分别定义 owner">
+    client owns response body close；server runtime owns connection/request，handler owns response construction inside call lifetime。
+  </Step>
+  <Step title="把 error、timeout 与 cancellation 纳入 flow">
+    fetch goroutine 总会产出 result；handler 使用 request context 停止后台工作，并在写 body 前决定 status/header。
+  </Step>
+</Stepper>
+
+```go
+func handler(w http.ResponseWriter, r *http.Request) {
+    fmt.Fprintf(w, "URL.Path = %q\n", r.URL.Path)
+}
+
+func main() {
+    http.HandleFunc("/", handler)
+    log.Fatal(http.ListenAndServe("localhost:8000", nil))
+}
+```
+
+<Callout type="trap" title="在 handler 启动 goroutine 后直接返回，再写 ResponseWriter">
+handler return 后 ResponseWriter lifecycle 已结束。长任务应在 request context 内等待、stream with supported interfaces，或提交 job 后返回 job id；不要后台继续写已结束 response。
+</Callout>
+
+## 1.8 Loose Ends：第一章留下的语言线索
+
+Tutorial 已出现 declarations、short variable declarations、pointers（少量）、methods/interfaces（`io.Reader`/Writer）、packages、comments、control flow、goroutines/channels，但只给出使用直觉。第 2～7 章会分别建立 program structure、types、functions/methods/interfaces 的完整规则，第 8～9 章深化 concurrency。
+
+错误输出通常写 stderr，成功数据写 stdout，command exit status 区分成功/失败。示例为保持短小省略的 timeout、limits、deterministic order 和 cleanup，应在练习中补上，而不是把教学简化当 production contract。
+
+## 本章回顾：七个程序共享输入-转换-输出骨架
+
+1. package main/import/main 组成 executable entry，gofmt/go run/go build 形成最小工具链。
+2. os.Args slice、range 与 map zero value 支撑命令行和重复行统计。
+3. Lissajous 把 loops/math/image/gif/io.Writer 串成可视化输出。
+4. HTTP client 负责 status/error/body close，concurrent fetch 用 goroutine/channel 汇聚结果。
+5. HTTP server handler 的 ResponseWriter/request context 有严格调用生命周期。
+
+<Exercises>
+
+**问题 1：把 dup 改成读取多个文件时，怎样处理 file ownership、Scanner error 与稳定输出？**
+
+<Answer>main 逐个 os.Open，成功后调用只接收 io.Reader 的 countLines，并在该迭代明确 Close；不能在长循环里堆积 defer。countLines 扫描后返回 Scanner.Err，main关联filename报告。所有counts共享同一map；输出前收集count>1 keys并sort，避免依赖map iteration order。</Answer>
+
+**问题 2：并发 fetch 三个 URL 时，一个请求立即失败，如何保证 collector 不死锁？**
+
+<Answer>每个goroutine无论成功失败都恰好发送一个typed Result；Result包含url/bytes/elapsed/status/error。collector接收启动数量次，或由WaitGroup关闭channel后range。HTTP request使用context/timeout，成功response总是Close body；不要只在success path send。</Answer>
+
+**问题 3：把 Lissajous 作为 `/gif` handler 时，怎样保证并发请求互不干扰且可测试？**
+
+<Answer>核心函数接收io.Writer与显式Config/RNG，不读写global mutable animation/RNG；每个request创建独立gif.GIF/images，先设置Content-Type再EncodeAll。使用request context/size/cycle limits控制CPU和内存；测试传bytes.Buffer与fixed seed，验证GIF header/frame count，不依赖随机输出。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="Go executable data flow" definition="package/import/main 经输入、状态转换、错误与输出形成的最小程序骨架。" />
+  <GlossaryItem term="slice view" definition="带 pointer/length/capacity 的 array segment descriptor。" />
+  <GlossaryItem term="Lissajous curve" definition="由两个带频率比和相位差的正弦分量组成的参数曲线。" />
+  <GlossaryItem term="goroutine task" definition="由 Go runtime 调度并需用 channel/context 收敛 lifecycle 的并发函数执行。" />
+  <GlossaryItem term="typed result channel contract" definition="每个并发任务恰好发送一次包含成功或失败上下文的结构化结果约定。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Go Programming Language, Chapter 1: Tutorial"
+  adaptedUrl="https://www.gopl.io/ch1.pdf"
+/>

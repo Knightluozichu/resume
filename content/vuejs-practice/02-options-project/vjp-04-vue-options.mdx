@@ -1,0 +1,263 @@
+---
+title: "第 4 章 Vue选项"
+type: A
+section: "Vue.js从入门到项目实战 · 选项、组件与项目化"
+order: 4
+description: "区分data、props、methods、computed、watch与render的责任，并审视过滤器、指令、组件和混入的复用代价。"
+demo: true
+math: false
+sourceUrl: "https://www.tup.com.cn/bookscenter/book_08226301.html"
+draft: false
+---
+
+import {
+  Vjp04VueOptionsMapLab,
+  Vjp04VueOptionsExperimentLab,
+  Vjp04VueOptionsEvidenceLab,
+} from "@/components/mdx/vuejs-practice/diagrams/vjp-04-vue-options";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释第 4 章 Vue选项的核心机制，并把它放回11章、5个附录的学习主线
+- 能比较正常、边界、失败和恢复样本，指出首个状态、身份、任务或资源偏离点
+- 能实现本页最小Vue 2实验，记录运行时、输入、事件顺序、状态所有者与清理动作
+- 能设计证据回答“props、data和派生值只有一个事实来源，computed保持纯粹，watch副作用可取消，render与扩展的优先级和来源可追踪。”是否成立
+
+</Objectives>
+
+## 直觉：先画状态、身份与交付链
+
+区分data、props、methods、computed、watch与render的责任，并审视过滤器、指令、组件和混入的复用代价。 Vue选项不是并列配置项，而是数据所有权、派生计算、副作用、渲染入口和复用边界的责任划分。 真正掌握本页，不是让一次演示碰巧得到正确截图，而是能解释输入从哪里来、谁拥有可变状态、哪次事件触发更新、失败后如何停止，以及组件和外部资源何时释放。先预测：只看最终页面，最容易遗漏哪条陈旧请求、重复事件或错误身份？
+
+<Vjp04VueOptionsMapLab />
+
+## 权威目录定位
+
+本书依据清华大学出版社官方书目与官方目录核对：刘汉伟著，2019年4月出版，ISBN 9787302523888。原书处于Vue 2、Vue CLI、Vuex和当时webpack的技术语境；Vue 3、Pinia、Vite或Nuxt只会作为明确的迁移注记，不会冒充原书正式分节。
+
+本页按官方目录顺序逐项覆盖 **16** 个公开条目；目录名称只用于一对一追踪，正文为独立教学重构。
+
+- 4.1 数据和方法
+- 4.1.1 数据选项
+- 4.1.2 属性选项
+- 4.1.3 方法选项
+- 4.1.4 计算属性
+- 4.1.5 侦听属性
+- 4.2 DOM渲染
+- 4.2.1 指定被挂载元素
+- 4.2.2 视图的字符串模板
+- 4.2.3 渲染函数render
+- 4.2.4 选项的优先级
+- 4.3 封装复用
+- 4.3.1 过滤器
+- 4.3.2 自定义指令
+- 4.3.3 组件的注册
+- 4.3.4 混入的使用
+
+## 核心概念与所有权
+
+<Term def="根据响应式依赖派生值并按依赖缓存结果的实例属性。">计算属性</Term>、
+<Term def="在指定响应式值变化时执行异步操作或外部副作用的观察配置。">
+  侦听属性
+</Term>
+、
+<Term def="直接创建虚拟节点树、表达模板难以描述的动态结构的函数。">
+  渲染函数
+</Term>
+、<Term def="在元素生命周期上封装底层DOM行为的可复用扩展。">自定义指令</Term>、
+<Term def="把一组选项合并到多个组件中的复用机制，存在命名冲突和来源隐蔽成本。">
+  混入
+</Term>
+。这些概念不是孤立名词：每一个都要回答“输入由谁创建、状态保存在哪里、哪个事件可以修改、失败如何传播、离开页面后由谁清理”。
+
+|   # | 概念       | 工程含义                                                           |
+| --: | ---------- | ------------------------------------------------------------------ |
+|   1 | 计算属性   | 根据响应式依赖派生值并按依赖缓存结果的实例属性。                   |
+|   2 | 侦听属性   | 在指定响应式值变化时执行异步操作或外部副作用的观察配置。           |
+|   3 | 渲染函数   | 直接创建虚拟节点树、表达模板难以描述的动态结构的函数。             |
+|   4 | 自定义指令 | 在元素生命周期上封装底层DOM行为的可复用扩展。                      |
+|   5 | 混入       | 把一组选项合并到多个组件中的复用机制，存在命名冲突和来源隐蔽成本。 |
+
+## 机制拆解
+
+### 1. 数据、属性与方法的所有权
+
+props由父组件拥有，子组件只能提出更新；data由当前实例拥有；methods表示命令。把prop复制进data会制造两个事实来源，除非明确建立一次性初始化或编辑草稿边界。
+
+先预测：若省略这一层，状态、组件身份、异步任务或构建产物会在哪里首次偏离？
+
+### 2. computed和watch按问题选择
+
+computed回答由哪些状态可以纯粹推导当前值，并利用缓存避免重复计算；watch回答状态变化后要执行什么副作用，例如请求、持久化或第三方同步。用watch回写另一个状态常常意味着派生关系应改为computed。
+
+先预测：若省略这一层，状态、组件身份、异步任务或构建产物会在哪里首次偏离？
+
+### 3. 渲染与复用需要可追踪来源
+
+el、template和render存在优先级，最终都生成虚拟节点。过滤器适合简单展示转换，自定义指令只处理DOM细节，组件承担可组合界面。混入合并规则隐蔽，使用时要记录冲突、钩子顺序和迁移出口。
+
+先预测：若省略这一层，状态、组件身份、异步任务或构建产物会在哪里首次偏离？
+
+## 三阶段可视化推演
+
+<Stepper>
+  <Step title="1. 建立目录与状态地图">
+    固定Vue运行时、工具链、输入数据和初始URL，先画出正常路径与唯一状态所有者。
+    <Vjp04VueOptionsMapLab />
+  </Step>
+  <Step title="2. 注入边界与失败">
+    只改变一个变量，观察空值、重复事件、请求乱序、资源拒绝或旧缓存造成的首偏离点。
+    <Vjp04VueOptionsExperimentLab />
+  </Step>
+  <Step title="3. 清除故障并重放">
+    使用相同输入恢复，核对DOM摘要、状态版本、监听器、定时器、请求和构建资源是否收敛。
+    <Vjp04VueOptionsEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小可运行实验
+
+下面的最小实现聚焦本页核心。先在独立页面运行，再加入空输入、快速重复操作和销毁重建；不要直接把演示代码当成完整生产方案。
+
+```js
+new Vue({
+  props: { price: Number, quantity: Number },
+  computed: {
+    total() {
+      return this.price * this.quantity;
+    },
+  },
+  watch: {
+    total(value) {
+      analytics.record("total", value);
+    },
+  },
+});
+```
+
+证据记录必须同时保存目录坐标、运行时和状态摘要：
+
+```yaml
+book: Vue.js从入门到项目实战
+page: vjp-04-vue-options
+sample: normal | boundary | failure | recovery
+runtime: Vue 2.x + pinned toolchain
+input_fixture: fixed
+first_divergence: null
+cleanup_complete: true
+```
+
+故障脚本保持一次只改变一个变量：
+
+```text
+baseline -> run_same_input
+inject -> stale-state | duplicate-event | denied-resource | broken-build
+observe -> stop_at_first_divergence
+recover -> clear_fault_and_replay
+assert -> one_state_owner && stable_output && no_stale_task && no_resource_leak
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：用watch维护本可由computed推导的重复状态，更新顺序变化后两份值不一致。**
+  最终截图可能仍正确，但状态轨迹、资源数量或下一次交互已经偏离；必须保存首次偏离前后的输入与事件。
+</Callout>
+
+<Callout type="trap">
+  **误区二：大量混入注入同名字段和生命周期钩子，组件无法说明某个方法来自哪里。**
+  用正常样本无法暴露这一问题，要增加边界、失败和恢复样本，并在销毁后检查残留任务。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 输入与环境变化               | 预期状态       | 通过条件               |
+| ---- | ---------------------------- | -------------- | ---------------------- |
+| 正常 | 合法数据、稳定身份、固定版本 | 完成主链       | 输出与状态摘要一致     |
+| 边界 | 空值、极限数量、快速重复事件 | 有界退化       | 不越界、不重复、不阻塞 |
+| 失败 | 请求拒绝、旧缓存、资源缺失   | 首偏离点停止   | 错误显式传播或降级     |
+| 恢复 | 清除故障后重放同一输入       | 收敛到正常轨迹 | 无陈旧任务和资源泄漏   |
+
+<Vjp04VueOptionsEvidenceLab />
+
+本页签发不变量是：**props、data和派生值只有一个事实来源，computed保持纯粹，watch副作用可取消，render与扩展的优先级和来源可追踪。** 单次成功、平均耗时或最终截图不能代替运行时版本、事件轨迹、首偏离点和清理证据。
+
+## 练习
+
+<Exercises>
+
+**问题 1** 第 4 章 Vue选项的核心主张是什么？为什么只看最终页面不足以验收？
+
+<Answer>
+  Vue选项不是并列配置项，而是数据所有权、派生计算、副作用、渲染入口和复用边界的责任划分。
+  最终页面会隐藏重复副作用、旧任务覆盖、错误吞没和资源泄漏，所以必须比较输入、状态所有者、事件顺序、首偏离点与清理结果。
+</Answer>
+
+**问题 2** 如何把本页公开目录变成可执行学习证据？
+
+<Answer>
+  按官方顺序建立追踪表，为每组条目写出输入、状态、输出、失败与恢复条件。本页首先覆盖4.1
+  数据和方法、4.1.1 数据选项、4.1.2 属性选项、4.1.3 方法选项、4.1.4
+  计算属性、4.1.5 侦听属性、4.2 DOM渲染、4.2.1
+  指定被挂载元素；其余条目已在上方逐项列出。
+</Answer>
+
+**问题 3** 本页的最小通过条件是什么？
+
+<Answer>
+  props、data和派生值只有一个事实来源，computed保持纯粹，watch副作用可取消，render与扩展的优先级和来源可追踪。
+  并且同一运行时、输入与初始状态可以重放正常、边界、失败和恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **计算属性**：根据响应式依赖派生值并按依赖缓存结果的实例属性。
+- **侦听属性**：在指定响应式值变化时执行异步操作或外部副作用的观察配置。
+- **渲染函数**：直接创建虚拟节点树、表达模板难以描述的动态结构的函数。
+- **自定义指令**：在元素生命周期上封装底层DOM行为的可复用扩展。
+- **混入**：把一组选项合并到多个组件中的复用机制，存在命名冲突和来源隐蔽成本。
+- 本页已经把官方目录、机制链、最小实现、故障注入和恢复证据放在同一条验收路径上。
+- 原书Vue 2技术语境与现代迁移说明保持清晰边界。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="计算属性">
+    根据响应式依赖派生值并按依赖缓存结果的实例属性。
+  </GlossaryItem>
+  <GlossaryItem term="侦听属性">
+    在指定响应式值变化时执行异步操作或外部副作用的观察配置。
+  </GlossaryItem>
+  <GlossaryItem term="渲染函数">
+    直接创建虚拟节点树、表达模板难以描述的动态结构的函数。
+  </GlossaryItem>
+  <GlossaryItem term="自定义指令">
+    在元素生命周期上封装底层DOM行为的可复用扩展。
+  </GlossaryItem>
+  <GlossaryItem term="混入">
+    把一组选项合并到多个组件中的复用机制，存在命名冲突和来源隐蔽成本。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="刘汉伟著，清华大学出版社，2019年4月，ISBN 9787302523888。清华大学出版社官方书目与官方目录确认全书分为概念篇和实战篇，共11章、5个附录；正文为独立教学重构，不复制原书段落。"
+  adaptedUrl="https://www.tup.com.cn/bookscenter/book_08226301.html"
+/>
+
+官方目录：https://www.tup.com.cn/bookscenter/bookcatalog?id=08226301

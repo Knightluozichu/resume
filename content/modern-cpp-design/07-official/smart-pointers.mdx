@@ -1,0 +1,292 @@
+---
+title: "第7章：智能指针"
+type: A
+section: Modern C++ Design · Part II Components
+order: 7
+description: 对齐第一版第7章 Smart Pointers：存储与成员接口、所有权策略、取地址/裸指针转换、相等与排序、检查、const、数组、多线程，以及 Policy 组合后的 SmartPtr 完整契约。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+draft: false
+---
+
+import {
+  McdOwnershipTransitionMap,
+  McdSmartPointerBoundaryMap,
+  McdSmartPointerPolicyMap,
+} from "@/components/mdx/modern-cpp-design/diagrams/smart-pointers";
+
+<Objectives>
+
+- 能解释 Smart Pointers 101 中 pointer-like syntax 与 ownership/lifetime 的区别，并拆分 Storage/Ownership/Conversion/Checking Policies
+- 能实现 copy/release、dereference、conversion、comparison、const 与 array contract，识别 operator address-of 和 raw conversion 的隐藏风险
+- 能比较 DeepCopy、RefCounted、RefLinked、unique ownership 与标准库智能指针，并分析 control block、atomic count、pointee race 和 cycle
+
+</Objectives>
+
+## 为什么“像指针”不是设计的全部
+
+**Smart Pointers 101** 从 RAII 开始：object 持有 resource handle，constructor 建立 ownership，destructor 释放；`operator*`/`operator->` 提供 pointer-like access。这样 exception/early return 不再要求每条路径手写 delete。
+
+<Term def="以对象生命周期管理动态资源并提供受控 pointer-like access 的 RAII handle。">
+  smart pointer
+</Term>
+
+但 syntax 只回答“怎样访问”，不回答“copy 代表 clone、share 还是 transfer”“null 是否允许”“array 如何释放”“跨类型如何转换”。**The Deal** 是：智能指针不是一个类，而是一组相互约束的设计选择；Loki 用 Policies 把它们显式排列。
+
+<McdSmartPointerPolicyMap />
+
+## Smart Pointers' Storage
+
+**Storage of Smart Pointers** 决定底层表示和 primitive operations：保存 `T*` 还是 custom handle；怎样返回 pointer/reference；销毁用 `delete`、`delete[]`、`free` 或 custom deleter；null value 是什么。
+
+<Term def="定义 handle 表示、访问类型、空值与最终销毁操作的 SmartPtr 策略维度。">
+  StoragePolicy
+</Term>
+
+```cpp
+template<class T>
+class DefaultSPStorage {
+protected:
+    using StoredType = T*;
+    using PointerType = T*;
+    using ReferenceType = T&;
+
+    explicit DefaultSPStorage(T* p = nullptr) : pointee_(p) {}
+    PointerType getPointer() const noexcept { return pointee_; }
+    void destroy() noexcept { delete pointee_; }
+private:
+    StoredType pointee_;
+};
+```
+
+Storage 不应擅自决定 copy/share；它只提供资源表示与最终 release primitive。若 deleter 有状态，storage/layout 与 exception guarantees 会变化，empty-base optimization 或 `[[no_unique_address]]` 才可能消除空 deleter 成本。
+
+## Smart Pointer Member Functions
+
+**Smart Pointer Member Functions** 包括 constructor、copy/move、assignment、destructor、`operator*`、`operator->`、`get`、`swap` 与 boolean test。每个成员都横跨 Policies：copy 先让 OwnershipPolicy 获得新 handle，dereference 先调用 CheckingPolicy，destructor 由 ownership 判断是否最后 owner，再让 storage destroy。
+
+<Term def="在统一 public API 中按顺序编排 storage、ownership、checking 与 conversion 协议的操作集合。">
+  SmartPtr member protocol
+</Term>
+
+copy-and-swap 能统一 assignment 的 self-assignment 和 exception safety，但 ownership clone 可能抛，swap 必须同时交换所有 Policy state。只交换 raw pointer 而忘记 count/deleter/lock，会把资源与管理状态拆开。
+
+## Ownership-Handling Strategies
+
+**Ownership-Handling Strategies** 是最核心轴：
+
+- `DeepCopy`：copy 时调用 clone，每个 SmartPtr 拥有独立 object，表达 value semantics。
+- `RefCounted`：多个 handles 共享 object/control count，最后一个释放。
+- `RefLinked`：owners 构成环/链，最后 unlink 的 owner 删除资源。
+- `NoCopy`/destructive copy：禁止 copy 或把 source 清空，现代由 move semantics 正式表达。
+
+<Term def="规定复制、移动、共享、释放与最后 owner 判定如何改变资源身份的策略。">
+  OwnershipPolicy
+</Term>
+
+<McdOwnershipTransitionMap />
+
+```cpp
+template<class P>
+class RefCounted {
+protected:
+    explicit RefCounted(P) : count_(new std::size_t(1)) {}
+    P clone(P value) { ++*count_; return value; }
+    bool release(P) noexcept { return --*count_ == 0; }
+private:
+    std::size_t* count_;
+};
+```
+
+这个教学版本省略 exception、allocation coalescing、weak references 和 thread safety。现代 `shared_ptr` control block 同时保存 strong/weak counts 与 deleter，`make_shared` 可合并 object/control allocation；cycle 仍需 `weak_ptr` 打破。
+
+<Callout type="trap" title="陷阱：引用计数等于自动正确 ownership">
+  ref count 只能回答“还有多少 strong owners”，不能发现 cycle，也不能保证 pointee 线程安全，更不能修复 raw aliases。ownership graph 与 mutation synchronization 仍需单独设计。
+</Callout>
+
+## The Address-of Operator
+
+**The Address-of Operator** 对 SmartPtr 有双重含义：`&smart` 通常应取得 wrapper 自身地址；老式 COM/C API 却希望得到 `T**` 输出参数并覆盖内部 pointer。重载 `operator&` 返回内部地址会让普通泛型代码无法取得 wrapper address，还可能覆盖 live resource 而泄漏。
+
+<Term def="在 wrapper 地址与底层 handle 输出地址之间容易混淆、可能破坏现有 ownership 的 API 边界。">
+  address-of boundary
+</Term>
+
+现代做法是显式 `put()`/`release_and_get_address_of()`，或 C++23 `out_ptr` adapter：先按 contract release/reset，再把临时 `T**` 给 C API，返回时重建 owner。不要用隐式 operator 隐藏 destructive transition。
+
+## Implicit Conversion to Raw Pointer Types
+
+**Implicit Conversion to Raw Pointer Types** 让旧 API 调用方便，却让 ownership silently escape，并产生 overload ambiguity：SmartPtr 可同时转 `T*`、bool 或其他 pointer，编译器可能选择意外 overload。裸指针还能长期保存，超出 SmartPtr lifetime。
+
+<Term def="无需显式调用即可把 owning wrapper 变成 non-owning raw pointer 的转换，便利但弱化 lifetime 边界。">
+  raw-pointer conversion
+</Term>
+
+现代接口更偏好显式 `get()` 与 `explicit operator bool`。`get()` 让 code review 看见 borrow，但仍不延长 lifetime；callee 若要共享必须接 `shared_ptr` by value，若只观察则在调用期间接 `T*`/reference 并文档化。
+
+## Equality and Inequality
+
+**Equality and Inequality** 常比较 stored addresses：两个 SmartPtrs 指向同一 object 即 equal，无论 ownership/control block 是否同一。但 aliasing `shared_ptr` 可以共享 owner 而 `get()` 不同；两个独立 control blocks 又可能错误管理同一 address。
+
+<Term def="明确智能指针相等究竟比较 pointee address、resource identity 还是 ownership identity 的关系。">
+  pointer equality
+</Term>
+
+与 raw pointer、null、不同 `T/U` 比较时要限制 convertibility，避免创建 temporary owning pointer。标准库提供 `owner_before`/owner-based facilities 区分 control-block ordering；value comparison 应由 pointee 自身操作表达。
+
+## Ordering Comparisons
+
+**Ordering Comparisons** 若直接对 unrelated raw pointers 用 `<`，可移植语义受限；`std::less<T*>` 提供 strict total order 供 containers 使用。owner ordering 与 address ordering又不同：前者按 control block，后者按 pointee pointer。
+
+<Term def="为 associative containers 定义稳定 strict weak order，并明确按地址还是按 ownership 排序。">
+  smart-pointer ordering
+</Term>
+
+业务代码很少需要“哪个对象地址更小”。若真正要按 object key 排序，应比较 key；pointer order 多数只用于 map/set identity bookkeeping，必须选择与 equality 一致的 hash/order domain。
+
+## Checking and Error Reporting
+
+**Checking and Error Reporting** 在 dereference 前处理 null/invalid handle。`NoCheck` 信任 precondition，`AssertCheck` 在 debug abort，`RejectNull` 可抛异常，`RejectNullStatic` 试图限制 construction。Policy 让成本和失败语义可选。
+
+<Term def="在解引用或构造边界验证 handle precondition，并选择断言、异常、终止或无检查的策略。">
+  CheckingPolicy
+</Term>
+
+```cpp
+template<class T>
+struct RejectNull {
+    static void onDereference(T* p) {
+        if (!p) throw std::logic_error("null smart pointer dereference");
+    }
+};
+
+T* operator->() const {
+    CheckingPolicy<T>::onDereference(storage_.get());
+    return storage_.get();
+}
+```
+
+checking 只能检测 null，不能检测 dangling raw pointer、use-after-free 或 data race。若 type contract 不允许 null，现代可用 reference、`not_null` wrapper 或 constructor constraint，使 invalid state 不进入对象，而不是每次 dereference 才检查。
+
+<McdSmartPointerBoundaryMap />
+
+## Smart Pointers to const and const Smart Pointers
+
+**Smart Pointers to const and const Smart Pointers** 区分两个维度：`SmartPtr<const T>` 表示不能经 pointer 修改 pointee；`const SmartPtr<T>` 表示 wrapper 本身不能 reseat，但通常仍可修改 T，类似 `T* const`。
+
+<Term def="pointee constness 与 handle constness 两个独立限定：前者限制对象访问，后者限制 wrapper 重绑定。">
+  smart-pointer constness
+</Term>
+
+cross-type constructor 从 `SmartPtr<T>` 到 `SmartPtr<const T>` 通常安全，反向不安全；Derived 到 Base 还要确保 deleter/control state 保持正确。转换应由 `is_convertible<U*,T*>` 和 OwnershipPolicy compatibility 共同限制。
+
+## Arrays
+
+**Arrays** 不能由 scalar `delete` 释放，且 pointer 不携带 length。ArrayStorage 要用 `delete[]` 并可提供 `operator[]`，但不能自动 bounds check，除非另存 size。把 scalar/array 作为可切换 Policy 会产生误组合：同一 `T*` 看不出最初来自 new T 还是 new T[n]。
+
+<Term def="拥有一组同类型动态元素并要求 delete-array、索引与可选长度契约的智能资源形式。">
+  smart array ownership
+</Term>
+
+现代使用 `unique_ptr<T[]>` 表达独占数组，或优先 `vector<T>` 保存 size/capacity；`shared_ptr<T[]>` 也有专门支持。不要让 caller 通过运行时 flag 选择 delete/delete[]。
+
+## Smart Pointers and Multithreading
+
+**Smart Pointers and Multithreading** 必须分三层：不同 SmartPtr copies 是否可并发改 count；同一个 SmartPtr object 是否可并发 reseat；pointee 是否可并发 mutation。thread-safe RefCounted 只解决第一层的一部分。
+
+<Term def="分别约束 control state、handle object 与 pointee state 的并发访问，而不是笼统宣称智能指针线程安全。">
+  smart-pointer thread domains
+</Term>
+
+atomic reference count 让不同 copies 的增减安全，却不让 `*p` 的字段安全；同一个 shared_ptr variable 并发写仍需 atomic shared_ptr 或锁。RefLinked 修改 owner links 更难并发，粗锁可能让 copy hot path 退化。
+
+<Callout type="trap" title="陷阱：shared_ptr 使共享对象自动线程安全">
+  control block 的 count 通常线程安全；pointee 完全遵循自己的 synchronization。多个线程能安全延长 lifetime，不代表能无锁写同一个 vector、map 或业务对象。
+</Callout>
+
+## Putting It All Together
+
+**Putting It All Together** 时，SmartPtr public operations 成为 Policy orchestration：Storage 提供 handle，Ownership 处理 clone/release，Checking 守 dereference，Conversion 控 raw/cross-type boundary。constructor、copy、assignment、destructor、swap 要保持四者 state 一致。
+
+<Term def="把四个 Policy 的 state 与操作按统一 exception/lifetime contract 编排成完整 SmartPtr 类型。">
+  SmartPtr composition
+</Term>
+
+兼容性比“能编译”更严格：DeepCopy 需要 pointee clone，ArrayStorage 与 scalar ownership 不兼容，RejectNull 与 default-null constructor 冲突，threading state 也可能不能 copy。Host 应在 class boundary 用 constraints/static assertions 给出原因。
+
+## SmartPtr Quick Facts 与现代落点
+
+**SmartPtr Quick Facts**：先选 ownership semantics，再选 storage/deleter；implicit conversion 和 operator& 是高风险便利；const 与 thread safety 都有两个以上维度；Policy composition 能展示设计空间，但日常优先使用标准 fixed-semantics types。
+
+`unique_ptr` 表达独占与 move，`shared_ptr/weak_ptr` 表达共享图，`vector/span` 表达 owning/non-owning sequence。只有标准类型无法表达的 custom handle/deleter/checking contract 才考虑自定义 wrapper，并尽量减少 Policy combinations 暴露到公共 API。
+
+先预测：把 `shared_ptr` 改为 `unique_ptr` 不只少一次 atomic count，它会禁止共享，迫使 ownership graph 变清晰；若系统真实需要多个长期 owners，强行独占会转成更多 raw dangling aliases。性能选择必须先满足语义。
+
+<Stepper>
+  <Step title="第一步：画资源身份与 owner 图">
+    标记谁创建、谁最终释放、copy 意味着什么、是否允许 null/alias/cycle；先确定 OwnershipPolicy，再选择 storage。
+
+    <McdOwnershipTransitionMap />
+
+  </Step>
+  <Step title="第二步：审计危险操作边界">
+    对 dereference、get/raw conversion、out parameter、equality/order、const 与 arrays 逐项写 precondition 和 lifetime consequence。
+
+    <McdSmartPointerBoundaryMap />
+
+  </Step>
+  <Step title="第三步：组合并验证 Policy contract">
+    测 copy/move/self-assignment、constructor throw、last release、cross-type conversion、cycle、concurrent count 与 pointee race；非法组合在编译期拒绝。
+
+    <McdSmartPointerPolicyMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- Smart pointer 的 pointer-like syntax 只是表面，核心是 storage、ownership、conversion 与 checking 的组合契约
+- DeepCopy、RefCounted、RefLinked 与 unique ownership 对 copy/release 和资源身份给出不同语义
+- operator& 与 implicit raw conversion 会隐藏 destructive overwrite 或 borrow，应使用显式边界
+- equality、ordering、owner identity 与 pointee value 是不同关系，container contract 要一致
+- pointee const 与 handle const 独立；array ownership 需要 delete[] 和 length/index contract
+- ref-count thread safety 只覆盖 control block，不覆盖同一 handle variable 或 pointee mutation
+- Loki SmartPtr 展示 Policy 分解，现代生产代码应先选择 unique_ptr/shared_ptr/weak_ptr/vector/span 等固定语义标准类型
+
+<Exercises>
+  1. **问题 1：选择 ownership。** Texture cache 返回资源给多个 render objects，cache eviction 后仍可能使用；画 owner 图并比较 shared_ptr、weak cache 与 raw borrow。
+
+  <Answer question="怎样避免 cache 与使用者互相延长生命周期？">render objects 持 shared_ptr 保证正在使用的 texture live，cache 可存 weak_ptr，使 eviction/过期不成为永久 strong owner；lookup lock weak，失效则重建。raw borrow 只有在 render call 明确短于 cache lock/lifetime 时安全，跨 frame 保存会悬空。</Answer>
+
+  2. **问题 2：修复 C API 输出参数。** API `create_device(Device**)` 会覆盖 pointer；说明为什么 `&smart` 危险以及显式 adapter 的顺序。
+
+  <Answer question="out pointer adapter 必须做哪些事？">直接 `&smart` 可能覆盖 live handle 并泄漏，也改变普通 address-of 语义。adapter 应先按 contract reset/release 旧资源，提供临时 raw `Device**`，调用成功后把结果与正确 deleter 纳入 owner，失败则保持 null/原状态；最好使用 out_ptr-style 明确 API。</Answer>
+
+  3. **问题 3：区分三层线程安全。** 两线程各持 shared_ptr copy 并修改同一 pointee；第三线程同时给同一个 shared_ptr variable 赋值，逐层判断。
+
+  <Answer question="哪些操作安全？">不同 copies 的 strong count 增减由 control block 同步，lifetime 安全；两个线程修改同一 pointee 仍需 pointee mutex/atomic，不因 shared_ptr 安全；同一个 shared_ptr variable 的并发读写需 `atomic<shared_ptr>` 或外部锁。三层不能用一句“shared_ptr thread-safe”概括。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="smart pointer">以 RAII 管理资源并提供受控 pointer-like access 的 handle。</GlossaryItem>
+  <GlossaryItem term="StoragePolicy">定义 handle 表示、访问类型、空值和最终销毁 primitive 的策略。</GlossaryItem>
+  <GlossaryItem term="SmartPtr member protocol">编排四类 Policy 的 constructor、copy、access、swap 与 destruction 操作。</GlossaryItem>
+  <GlossaryItem term="OwnershipPolicy">定义 copy、share、transfer、release 与最后 owner 的策略。</GlossaryItem>
+  <GlossaryItem term="address-of boundary">wrapper 地址与底层输出 handle 地址容易混淆的危险边界。</GlossaryItem>
+  <GlossaryItem term="raw-pointer conversion">把 owning wrapper 隐式变成 non-owning raw pointer 的转换。</GlossaryItem>
+  <GlossaryItem term="pointer equality">明确按 address、resource 或 ownership identity 比较的关系。</GlossaryItem>
+  <GlossaryItem term="smart-pointer ordering">供容器使用并区分 address/owner domain 的 strict order。</GlossaryItem>
+  <GlossaryItem term="CheckingPolicy">在 dereference/construction 边界执行 null precondition 与失败策略。</GlossaryItem>
+  <GlossaryItem term="smart-pointer constness">pointee const 与 wrapper const 两个独立限定维度。</GlossaryItem>
+  <GlossaryItem term="smart array ownership">要求 delete-array 与索引/长度契约的动态 sequence ownership。</GlossaryItem>
+  <GlossaryItem term="smart-pointer thread domains">control block、handle object 与 pointee 三层并发约束。</GlossaryItem>
+  <GlossaryItem term="SmartPtr composition">把四个 Policy state 编排为一个一致资源管理类型。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Modern C++ Design, First Edition, Chapter 7: Smart Pointers"
+  adaptedUrl="https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+/>

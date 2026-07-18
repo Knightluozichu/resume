@@ -2,13 +2,229 @@
 title: 结构化输出
 type: C
 section: 驾驭大模型
-order: 3
+order: 5
 description: 读完能让模型稳定吐出可被程序解析的 JSON，并用 tinyagent 的 llm_json 做 schema 校验 + 解析失败自动重试。
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.anthropic.com/engineering/building-effective-agents"
 draft: false
 ---
+
+import {
+  OfficialAiAgentStructuredOutputMapLab,
+  OfficialAiAgentStructuredOutputExperimentLab,
+  OfficialAiAgentStructuredOutputEvidenceLab,
+} from "@/components/mdx/ai-agent/diagrams/structured-output";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+{/* OFFICIAL_COURSE_ENHANCEMENT */}
+
+<Objectives>
+
+- 能解释结构化输出的输入、核心结构、状态变化和输出合同
+- 能绘制并修改结构化输出的最小模型，比较至少一种替代方案
+- 能复现正常、边界和单故障样本，定位第一条证据分叉
+- 能根据成本与风险判断方案适用范围，并完成清理重建
+
+</Objectives>
+
+## 为什么只记结论不足以掌握结构化输出
+
+学习“结构化输出”时，第一步不是记住结论，而是冻结输入、上下文、版本和成功标准。只有这些条件明确，结构化输出的含义才不会随着样例变化。正文已有的概念说明要与结构图、运行轨迹和失败样本互相印证，不能只凭最终输出看似正确就宣布完成。
+
+结构分析从让天才不光会回话，还得「照表格填空」开始：列出参与者、职责、连接方向、生命周期和所有权，再沿正常路径追踪数据或控制流。每一条边都要说明为什么存在、谁创建、谁消费、谁负责清理；如果边界被跨越，必须能在证据中找到第一处异常。
+
+机制验证要把散文 vs 表格：先看整条「容错」流程写成可以执行的条件。正常样本证明主路径，恰好边界样本验证等号和空值，单故障样本只破坏一个假设。三类样本使用同一份观察指标，避免因为测试口径变化而把偶然结果误认成规律。
+
+成本分析同时记录时间、空间、延迟、耦合、可维护性和不可逆操作。为什么非要结构化：程序接不住散文不是一句“可能失败”，而是可复现输入、预期停点、实际轨迹、错误分类与清理步骤。任何自动重试都要有次数、预算和幂等边界。
+
+方案比较不能只列优点。需要给出直接实现、当前方案和至少一个替代方案，逐项比较复杂度、扩展点、故障隔离和团队认知成本。当问题规模很小或变化轴稳定时，更简单的实现往往更好；模式与框架必须由真实变化压力证明。
+
+实现阶段把大结论拆成可检查的中间产物：配置快照、结构清单、状态转移、输入输出样本、日志摘要和测试结果。每个产物带来源与生成命令，下一阶段只消费已通过门禁的版本，避免旧缓存或隐式默认值污染结论。
+
+解释结果时必须区分相关性与因果性、接口承诺与实现细节、设计意图与运行事实。对“怎么让它输出 JSON：递一张空表格”的判断要由独立证据支持，并明确适用范围；一旦输入分布、版本、硬件或组织边界改变，就重新运行最小实验。
+
+复盘从首个分叉开始，而不是从最后一个报错倒推。先比较冻结输入，再比较第一份结构化中间产物，随后检查状态、约束和副作用。这样可以把复杂系统的排错范围收缩到一个阶段，避免在多个层次同时修改造成新的不确定性。
+
+迁移到真实项目时，先选择一个最小但有代表性的切片，保存改造前基线，再逐步引入“结构化输出”中的机制。每一步只改变一个变量并保留回滚点；性能、正确性、安全性和可理解性至少各有一项可量化指标。
+
+最终验收要求读者能脱离页面重新画出结构、口述关键链路、实现最小版本、构造一个反例并解释失败位置。若只能复述名词而不能预测中间状态，说明知识仍停留在识记层，需要回到图示和实验重新验证。
+
+本页用<Term def="结构化输出连接结构化输出的机制、边界与可复查证据。">结构化输出</Term>、
+
+<Term def="让天才不光会回话，还得「照表格填空」连接结构化输出的机制、边界与可复查证据。">
+  让天才不光会回话，还得「照表格填空」
+</Term>
+、
+<Term def="散文 vs 表格：先看整条「容错」流程连接结构化输出的机制、边界与可复查证据。">
+  散文 vs 表格：先看整条「容错」流程
+</Term>
+、
+<Term def="为什么非要结构化：程序接不住散文连接结构化输出的机制、边界与可复查证据。">
+  为什么非要结构化：程序接不住散文
+</Term>
+、
+<Term def="怎么让它输出 JSON：递一张空表格连接结构化输出的机制、边界与可复查证据。">
+  怎么让它输出 JSON：递一张空表格
+</Term>
+建立统一坐标。先预测这些概念在结构图和运行轨迹中的位置，再操作实验控件；如果结果与预测不一致，停止在首个分叉，不要用后续补丁掩盖早期错误。
+
+## 权威目录与核心概念逐项对照
+
+- 结构化输出
+- 让天才不光会回话，还得「照表格填空」
+- 散文 vs 表格：先看整条「容错」流程
+- 为什么非要结构化：程序接不住散文
+- 怎么让它输出 JSON：递一张空表格
+- 用 schema 约束形状：表格的表头
+- 脏输出怎么救：剥壳容错 + 回灌重试
+- 动手：给 tinyagent 加上 llmjson
+
+## 三视图实验：结构、变量与证据
+
+<Stepper>
+  <Step title="第一步：冻结结构并先预测">
+    先预测参与者、连接方向与关键状态，再点击结构节点核对。
+    <OfficialAiAgentStructuredOutputMapLab />
+  </Step>
+  <Step title="第二步：只改变一个变量">
+    保持其他条件不变，移动覆盖率或风险滑块，观察门禁变化。
+    <OfficialAiAgentStructuredOutputExperimentLab />
+  </Step>
+  <Step title="第三步：注入单故障并保存证据">
+    注入一个边界故障，记录第一处偏离、拒绝原因和恢复条件。
+    <OfficialAiAgentStructuredOutputEvidenceLab />
+  </Step>
+</Stepper>
+
+<Callout type="trap">
+  <strong>误区：</strong>
+  看到最终结果正确就认为机制正确。中间状态可能已经偏离，只是被后续默认值或重试偶然修补。应保存首个结构化产物并逐阶段比较。
+</Callout>
+
+<Callout type="trap">
+  <strong>误区：</strong>
+  为了使用模式或框架而制造抽象。若变化轴、失败边界和替代方案没有写清，新增层次只会扩大认知成本和故障面。
+</Callout>
+
+## 可复现的最小实现
+
+先把决策记录写成机器可读结构：
+
+```json
+{
+  "unit": "结构化输出",
+  "inputFrozen": true,
+  "scenario": "normal | boundary | single-fault",
+  "firstDivergence": null,
+  "cleanupRequired": true
+}
+```
+
+再用同一条执行链处理三类样本：
+
+```ts
+type Evidence = { stage: string; expected: string; actual: string };
+
+function verify(sample: unknown, expected: readonly Evidence[]) {
+  const trace = runFromCleanState(sample);
+  return expected.find((item, index) => trace[index]?.actual !== item.expected);
+}
+```
+
+最后保存回归门禁，禁止失败样本静默通过：
+
+```text
+normal      -> complete, invariant preserved
+boundary    -> complete or explicit rejection
+singleFault -> stop at first divergence, no stale output
+```
+
+用统一评分解释实验结果：
+
+$$
+Q = C_{correct} + C_{trace} + C_{recover} - R_{residual}
+$$
+
+$$
+C_{coverage} = \frac{N_{verified}}{N_{official}}
+$$
+
+$$
+R_{residual} = P(failure) \times I(impact)
+$$
+
+$$
+Accept = (C_{coverage} \ge 0.90) \land (R_{residual} \le R_{budget})
+$$
+
+## 本章回顾
+
+- 结构化输出必须绑定冻结输入和明确成功标准。
+- 让天才不光会回话，还得「照表格填空」必须能画成结构并沿边追踪责任。
+- 散文 vs 表格：先看整条「容错」流程要由正常、边界和单故障样本共同验证。
+- 为什么非要结构化：程序接不住散文必须保存第一处偏离和清理重建步骤。
+- 怎么让它输出 JSON：递一张空表格决定方案是否可以进入下一阶段。
+
+<Exercises>
+
+**问题 1**：为“结构化输出”写出最小输入合同，并指出一个不能省略的边界条件。
+
+<Answer>
+  输入合同至少包含样本身份、版本、配置、成功标准和清理方式；边界条件必须能改变结构或状态，而不是只换一段描述。
+</Answer>
+
+**问题 2**：构造一个只破坏“散文 vs 表格：先看整条「容错」流程”的单故障样本，第一条预期证据是什么？
+
+<Answer>
+  先冻结正常轨迹，只改变该条件；第一条证据应是最早依赖它的结构化中间产物，而不是最终错误消息。
+</Answer>
+
+**问题 3**：什么情况下不应采用本页方案？
+
+<Answer>
+  当变化轴稳定、直接实现更清晰、额外层次无法降低风险或提供独立测试边界时，应选择更简单方案并记录重新评估触发条件。
+</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="结构化输出">
+    结构化输出用于描述“结构化输出”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  </GlossaryItem>
+  <GlossaryItem term="让天才不光会回话，还得「照表格填空」">
+    让天才不光会回话，还得「照表格填空」用于描述“结构化输出”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  </GlossaryItem>
+  <GlossaryItem term="散文 vs 表格：先看整条「容错」流程">
+    散文 vs
+    表格：先看整条「容错」流程用于描述“结构化输出”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  </GlossaryItem>
+  <GlossaryItem term="为什么非要结构化：程序接不住散文">
+    为什么非要结构化：程序接不住散文用于描述“结构化输出”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  </GlossaryItem>
+  <GlossaryItem term="怎么让它输出 JSON：递一张空表格">
+    怎么让它输出
+    JSON：递一张空表格用于描述“结构化输出”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="站内基础专题《从零构建 AI Agent》，依据Anthropic官方Agent工程指南，2026-07-18核定 · 独立教学重构"
+  adaptedUrl="https://www.anthropic.com/engineering/building-effective-agents"
+/>
 
 {/* C 实战型·篇 2「驾驭大模型」第 3 章（《从零构建 AI Agent》原创改编）：重心是 §6 代码（tinyagent 的 extract_json/validate/llm_json + 假 llm 演示重试，覆盖≥80%，单块≤30 行）。§3 概念压缩到位即可，篇幅让给代码。延续全书隐喻「失忆天才小屋」：让天才不仅回话，还得「按固定表格填空」，机器才好接着用。draft:false 已发布。 */}
 
@@ -80,7 +296,7 @@ draft: false
 
 上一章我们有了 `llm(messages, ...)`——能把组装好的纸条喂给模型、拿回一段**文本**。但文本不是程序能用的对象。这一章就在 `llm()` 之上加一层 `llm_json`：让它返回**校验过的结构化对象**。先写最底层的剥壳函数 `extract_json`，把脏文本里的 JSON 抠出来：
 
-```python
+````python
 import json
 import re
 
@@ -94,7 +310,7 @@ def extract_json(text):
     if not brace:
         raise ValueError("回话里找不到 JSON")
     return json.loads(brace.group(0))
-```
+````
 
 两步剥壳：①一个正则把 ` ```json ... ``` ` 围栏剥掉、抠出里层；②再用 `{.*}` 定位到第一段花括号，把前后的寒暄废话切干净，最后 `json.loads`。抠不到就抛 `ValueError`——这个错后面会被 `llm_json` 接住去触发重试。接着写「验收员」`validate`，按一份极简 schema 逐字段核对：
 
@@ -137,7 +353,7 @@ def llm_json(messages, schema, max_retries=2):
 
 这就是整章的主菜：`llm_json` 循环最多 `max_retries+1` 次——每次调 `llm()` 拿文本、`extract_json` 剥壳、`validate` 校验，过了就返回干净对象；任一步抛 `ValueError`，到上限就放弃，否则把「错在哪」连同上次回话一起回灌进 `messages`，让模型照着改、再答一遍。为了不依赖真模型就能验证它，用一个**假 `llm`**（stub）按轮次返回写死的回话来演示重试：
 
-```python
+````python
 def make_fake_llm(replies):  # 按被问的轮次依次返回写死的回话
     state = {"i": 0}
 
@@ -156,7 +372,7 @@ llm = make_fake_llm([
 ])
 print(llm_json([{"role": "user", "content": "上海天气"}], SCHEMA))
 # → {'city': '上海', 'temp': 26, 'rain': False}
-```
+````
 
 跑这段你会看到完整的「填错→退回→重填→通过」：第一轮模型把 JSON 裹在围栏里**且漏了 `rain`**——`extract_json` 顺利剥壳，但 `validate` 抓出缺字段、抛错；`llm_json` 没放弃，把错误回灌后再问，第二轮模型补齐字段、校验通过，返回干净对象。把假 `llm` 换成第一轮就合规的回话，会一次过；换成「永远缺字段」，则重试到 `max_retries` 上限后抛错。至此 tinyagent 的「拿回机器可用的结构化结果」这块砖就补齐了——下一篇的工具调用正是建在它之上。
 
@@ -169,11 +385,19 @@ print(llm_json([{"role": "user", "content": "上海天气"}], SCHEMA))
 </Callout>
 
 <Callout type="trap">
-  **现象**：只 `json.loads` 成功就当数据可用，结果下游代码取 `obj["rain"]` 时 `KeyError`，或拿 `temp` 做数值比较时报类型错。**原因**：`json.loads` 只保证「是合法 JSON」，**不保证字段齐、类型对**——模型可能漏字段、把数字填成字符串。**修法**：解析后必须再过一道 `validate`，按 schema 核对必填字段和类型，缺了 / 错了当场拦下。
+  **现象**：只 `json.loads` 成功就当数据可用，结果下游代码取 `obj["rain"]` 时
+  `KeyError`，或拿 `temp` 做数值比较时报类型错。**原因**：`json.loads`
+  只保证「是合法
+  JSON」，**不保证字段齐、类型对**——模型可能漏字段、把数字填成字符串。**修法**：解析后必须再过一道
+  `validate`，按 schema 核对必填字段和类型，缺了 / 错了当场拦下。
 </Callout>
 
 <Callout type="trap">
-  **现象**：校验失败就直接 `raise` 报错给用户，或干脆 `max_retries` 设得很大、不合规就无限重试。**原因**：模型偶尔填歪很正常，一失败就放弃太脆；但无上限重试又可能在它持续犯错时空转、烧 token。**修法**：用 `llm_json` 的回灌重试——把错误回灌让它改，但**设一个小上限**（如 2~3 次），到顶仍不合规才抛错，兼顾健壮与可控。
+  **现象**：校验失败就直接 `raise` 报错给用户，或干脆 `max_retries`
+  设得很大、不合规就无限重试。**原因**：模型偶尔填歪很正常，一失败就放弃太脆；但无上限重试又可能在它持续犯错时空转、烧
+  token。**修法**：用 `llm_json`
+  的回灌重试——把错误回灌让它改，但**设一个小上限**（如 2~3
+  次），到顶仍不合规才抛错，兼顾健壮与可控。
 </Callout>
 
 {/* 8. 小结与练习（spec §八）：小结 ≤5 条且与学习目标一一呼应；C 型练习含 1 道改代码题 + 1 道独立实现题；答案折叠。 */}
@@ -221,7 +445,7 @@ def validate(obj, schema):
 
 在原 `extract_json` 抠出 `{...}` 文本后，先直接 `json.loads`，失败则做一次「中文标点→英文」的清洗再试：
 
-```python
+````python
 def extract_json_safe(text):
     fenced = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL)
     body = fenced.group(1) if fenced else text
@@ -235,7 +459,7 @@ def extract_json_safe(text):
         # 兜底：中文逗号/冒号 → 英文，再试一次
         fixed = raw.replace("，", ",").replace("：", ":")
         return json.loads(fixed)  # 仍失败则抛 JSONDecodeError
-```
+````
 
 思路是「先按正常路径解析，失败再启动清洗兜底」——别一上来就无脑替换（可能误伤字符串值里本该是中文逗号的内容）。这也呼应了 §6 的容错精神：尽量把模型的小毛病在代码侧消化掉，而不是一失败就退回重试、白烧一轮 token。
 
@@ -254,8 +478,11 @@ def extract_json_safe(text):
 </GlossaryItem>
 
 <GlossaryItem term="JSON 模式（让模型输出 JSON）">
-  在提示里明确要求模型「只输出 JSON、不要任何多余文字」，并给出字段示例；许多模型还提供专门的 JSON
-  模式开关强制输出合法 JSON。本质是把「写散文」改成「照格式填空」。详见本章「怎么让它输出 JSON」一节。
+  在提示里明确要求模型「只输出
+  JSON、不要任何多余文字」，并给出字段示例；许多模型还提供专门的 JSON
+  模式开关强制输出合法
+  JSON。本质是把「写散文」改成「照格式填空」。详见本章「怎么让它输出
+  JSON」一节。
 </GlossaryItem>
 
 <GlossaryItem term="schema（模式约束）">
@@ -266,7 +493,8 @@ def extract_json_safe(text):
 <GlossaryItem term="解析容错（extract_json）">
   从模型可能不干净的回话里把那段真正的 JSON
   抠出来再解析：先剥掉代码围栏、切掉前后寒暄废话，定位到第一段花括号再
-  json.loads。让代码不会因为模型多说一句话就崩。详见本章「脏输出怎么救」与 §6 代码。
+  json.loads。让代码不会因为模型多说一句话就崩。详见本章「脏输出怎么救」与 §6
+  代码。
 </GlossaryItem>
 
 <GlossaryItem term="回灌重试（feed-back retry）">

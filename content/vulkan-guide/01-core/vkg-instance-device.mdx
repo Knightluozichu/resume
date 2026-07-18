@@ -1,204 +1,337 @@
 ---
-title: "实例与物理设备"
+title: "实例、物理设备与逻辑设备"
 type: C
 section: "计算机图形学与渲染"
 order: 2
-description: "创建 Vulkan 实例、枚举物理设备、选择队列族并建立逻辑设备连接"
+description: "从实例版本协商到设备资格筛选、feature 链和唯一队列族创建"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://docs.vulkan.org/guide/latest/initialization.html"
 draft: false
 ---
 
-import { VkgInstanceDeviceDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-instance-device";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  VkgInstanceDeviceDiagram,
+  VkgDeviceCandidateDiagram,
+} from "@/components/mdx/vulkan-guide/diagrams/vkg-instance-device";
+import { VkgStepFlowDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 理解 VkInstance 的作用与创建流程，掌握应用信息与扩展声明
-- 学会枚举物理设备并查询其属性、特性与队列族
-- 能够根据需求选择合适的队列族（图形/计算/传输）
-- 掌握逻辑设备（VkDevice）的创建与设备扩展启用
+
+- 能描述 loader、VkInstance、VkPhysicalDevice 与 VkDevice 的创建、枚举和生命周期关系
+- 能实现 required 条件与 preference 评分分离的物理设备选择器
+- 能比较同族与异族 graphics/present queue 配置的创建和所有权代价
+- 能解释 properties2/features2 pNext 链为何必须区分查询值与启用值
+
 </Objectives>
 
-## 直觉引入
+## 初始化的目标不是拿到一个句柄
 
-想象你要在一家大型工厂里开一条生产线。首先你得在工厂管理处「注册」你的公司（VkInstance），拿到入场许可。然后你实地考察工厂里的多条产线（物理设备），看哪条产线的设备能力（队列族）能满足你的生产需求。最后，你跟工厂签合同「租用」那条产线（VkDevice），正式开始生产。
+可靠初始化应产出一份**可复现设备合同**：应用最终选中了哪块 physical device、为什么它合格、启用了哪些 feature/extension、每种 queue 来自哪个 family、surface 使用哪些 format 与 present mode，以及兼容路径为何被选中。
 
-Vulkan 的实例—设备体系就是这套逻辑：先建立与 Vulkan 运行时的连接，再选择 GPU 硬件，最后创建逻辑设备开始实际工作。
+`vkEnumeratePhysicalDevices` 返回顺序不是性能排名，也不是稳定设备标识。直接取第一块设备、看到 discrete GPU 就加分，或只查 `VK_QUEUE_GRAPHICS_BIT`，都可能把故障推迟到 swapchain、pipeline 或 submit 阶段。正确流程先做资格判定，再在全部合格候选间做偏好排序。
 
-## 概念讲解
+## Loader 与实例版本协商
 
-### VkInstance：与 Vulkan 运行时的连接
+<Term def="Vulkan loader 创建的应用级句柄，用来枚举物理设备并承载实例扩展、validation 和 debug messenger">VkInstance</Term>不是 GPU context，也不绑定某一块显卡。它描述应用与 loader 的实例级合同。Vulkan 1.1 及以上 loader 可通过 `vkEnumerateInstanceVersion` 报告支持的最高实例版本；若入口不存在，应回退为 Vulkan 1.0。
 
-<Term def="VkInstance 是应用程序与 Vulkan 运行时之间的连接句柄，创建时需声明应用信息和启用的扩展/层。">VkInstance</Term> 是一切 Vulkan 操作的起点。创建实例时需要填充 `VkApplicationInfo`（应用名称、版本、API 版本）和 `VkInstanceCreateInfo`（启用的层与扩展）。
+`VkApplicationInfo::apiVersion` 表示应用打算使用的 Vulkan API 版本，不能高于 loader 支持范围。它也不能替代 physical device 的 `apiVersion` 或任何可选 feature 查询。
 
-```c
-VkApplicationInfo appInfo = {
-    .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-    .pApplicationName = "MyRenderer",
-    .applicationVersion = VK_MAKE_VERSION(1, 0, 0),
-    .apiVersion = VK_API_VERSION_1_3,
+```cpp
+uint32_t loaderVersion = VK_API_VERSION_1_0;
+if (vkEnumerateInstanceVersion != nullptr) {
+  VK_CHECK(vkEnumerateInstanceVersion(&loaderVersion));
+}
+
+const uint32_t requested = VK_API_VERSION_1_4;
+const uint32_t instanceVersion = std::min(loaderVersion, requested);
+
+VkApplicationInfo app{
+  .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+  .pApplicationName = "remuse-renderer",
+  .applicationVersion = VK_MAKE_API_VERSION(0, 1, 0, 0),
+  .pEngineName = "remuse",
+  .engineVersion = VK_MAKE_API_VERSION(0, 1, 0, 0),
+  .apiVersion = instanceVersion,
 };
 
-VkInstanceCreateInfo createInfo = {
-    .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
-    .pApplicationInfo = &appInfo,
-    .enabledLayerCount = 0,
-    .enabledExtensionCount = instanceExtensionCount,
-    .ppEnabledExtensionNames = instanceExtensions,
+auto instanceExtensions = window.requiredInstanceExtensions();
+appendIfAvailable(instanceExtensions, VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+
+VkInstanceCreateInfo info{
+  .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
+  .pApplicationInfo = &app,
+  .enabledLayerCount = validationLayers.size(),
+  .ppEnabledLayerNames = validationLayers.data(),
+  .enabledExtensionCount = instanceExtensions.size(),
+  .ppEnabledExtensionNames = instanceExtensions.data(),
 };
-
-VkInstance instance;
-vkCreateInstance(&createInfo, NULL, &instance);
+VK_CHECK(vkCreateInstance(&info, nullptr, &instance));
 ```
 
-### 物理设备枚举
+窗口库返回的平台 surface 扩展不能凭经验硬编码。macOS 上的 portability 实现还可能要求 `VK_KHR_portability_enumeration` 和 `VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR`；是否加入必须来自实例扩展枚举结果。
 
-创建实例后，需要查找系统中支持 Vulkan 的 GPU：
+## 稳健枚举与快照一致性
 
-```c
-uint32_t deviceCount = 0;
-vkEnumeratePhysicalDevices(instance, &deviceCount, NULL);
-VkPhysicalDevice* devices = malloc(deviceCount * sizeof(VkPhysicalDevice));
-vkEnumeratePhysicalDevices(instance, &deviceCount, devices);
-```
+<Term def="由 instance 枚举得到、代表一个 Vulkan 实现设备并用于查询属性能力的不可销毁句柄">VkPhysicalDevice</Term>由实现管理，应用不创建也不销毁。常见 Vulkan 枚举 API 先查询数量再填数组；两次调用之间集合可能变化，因此第二次可能返回 `VK_INCOMPLETE`。封装枚举器应重试，而不是假设第一次 count 永远精确。
 
-每个 <Term def="VkPhysicalDevice 代表系统中一个实际的 Vulkan 兼容 GPU，是不可修改的查询句柄。">VkPhysicalDevice</Term> 都可以查询 `VkPhysicalDeviceProperties`（名称、类型、驱动版本）和 `VkPhysicalDeviceFeatures`（几何着色器、tessellation 等能力）。
-
-### 队列族选择
-
-Vulkan 的命令通过队列提交执行，而队列属于特定的 <Term def="队列族是一组支持相同操作类型的命令队列集合，不同族可能支持图形、计算、传输等不同能力。">队列族（Queue Family）</Term>。选择设备时必须找到支持所需操作的队列族：
-
-```c
-uint32_t queueFamilyCount = 0;
-vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, NULL);
-VkQueueFamilyProperties* queueFamilies = malloc(queueFamilyCount * sizeof(VkQueueFamilyProperties));
-vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies);
-
-// 查找支持图形操作的队列族
-int graphicsFamily = -1;
-for (uint32_t i = 0; i < queueFamilyCount; i++) {
-    if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
-        graphicsFamily = i;
-        break;
+```cpp
+std::vector<VkPhysicalDevice> enumeratePhysicalDevices(VkInstance instance) {
+  for (;;) {
+    uint32_t count = 0;
+    VK_CHECK(vkEnumeratePhysicalDevices(instance, &count, nullptr));
+    std::vector<VkPhysicalDevice> devices(count);
+    VkResult result = vkEnumeratePhysicalDevices(instance, &count, devices.data());
+    if (result == VK_SUCCESS) {
+      devices.resize(count);
+      return devices;
     }
+    if (result != VK_INCOMPLETE) throw VulkanError(result);
+  }
 }
 ```
 
-### 逻辑设备创建
+空列表应产生明确错误：“未发现 Vulkan physical device”，并附 loader 版本与实例扩展，而不是继续访问 `devices[0]`。
 
-选定物理设备和队列族后，创建 <Term def="VkDevice 是逻辑设备句柄，代表应用程序对物理设备的租用，创建时指定启用的扩展、特性和队列。">VkDevice</Term>（逻辑设备）：
+## 资格门与偏好门
 
-```c
-float queuePriority = 1.0f;
-VkDeviceQueueCreateInfo queueCreateInfo = {
-    .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
-    .queueFamilyIndex = graphicsFamily,
-    .queueCount = 1,
-    .pQueuePriorities = &queuePriority,
-};
+设备选择分为两层：
 
-VkDeviceCreateInfo deviceCreateInfo = {
-    .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
-    .pQueueCreateInfos = &queueCreateInfo,
-    .queueCreateInfoCount = 1,
-    .enabledExtensionCount = deviceExtensionCount,
-    .ppEnabledExtensionNames = deviceExtensions,
-    .pEnabledFeatures = &deviceFeatures,
-};
+1. **资格门**检查所有 required 条件：最低 API 版本、feature、device extension、queue family、surface present support、surface format/present mode、目标 image/buffer format feature、limits 和必要 memory type；
+2. **偏好门**只在合格设备间比较：离散/集成类型、显存预算、专用 compute/transfer queue、可选扩展、功耗策略或用户显式选择。
 
-VkDevice device;
-vkCreateDevice(physicalDevice, &deviceCreateInfo, NULL, &device);
-```
-
-## 交互Demo
-
-> 猜一猜：如果你有两块 GPU（一块集成显卡、一块独立显卡），Vulkan 会怎么处理？
+“独显优先”只是可能的 preference。笔记本节能模式、统一内存、外接显示器连接关系或 compute-only 任务都可能让集显更合适。应用也可能向用户展示所有合格设备，而不是替用户决定。
 
 <VkgInstanceDeviceDiagram />
 
-<Stepper>
-  <Step title="创建实例">
-    填充 `VkApplicationInfo` 和 `VkInstanceCreateInfo`，调用 `vkCreateInstance`。这一步建立与 Vulkan 运行时的连接，声明你需要的扩展（如 `VK_KHR_surface`）。
-  </Step>
-  <Step title="选择物理设备与队列族">
-    调用 `vkEnumeratePhysicalDevices` 枚举所有 GPU，查询每个设备的属性和队列族。找到支持 `VK_QUEUE_GRAPHICS_BIT` 的队列族，并检查设备是否支持你需要的扩展（如 `VK_KHR_swapchain`）。
-  </Step>
-  <Step title="创建逻辑设备">
-    填充 `VkDeviceQueueCreateInfo`（指定队列族和优先级）和 `VkDeviceCreateInfo`（启用扩展和特性），调用 `vkCreateDevice`。之后通过 `vkGetDeviceQueue` 获取队列句柄，开始提交命令。
-  </Step>
-</Stepper>
+<VkgDeviceCandidateDiagram />
 
-## 代码对照
+```cpp
+struct Candidate {
+  VkPhysicalDevice device;
+  DeviceSnapshot snapshot;
+  int preferenceScore;
+};
 
-完整实例与设备初始化流程：
+std::optional<Candidate> qualify(VkPhysicalDevice device, VkSurfaceKHR surface) {
+  DeviceSnapshot s = queryDeviceSnapshot(device, surface);
 
-```c
-// 1. 创建实例
-VkInstance instance;
-VkResult result = vkCreateInstance(&createInfo, NULL, &instance);
-if (result != VK_SUCCESS) { /* 错误处理 */ }
+  if (s.apiVersion < VK_API_VERSION_1_3) return std::nullopt;
+  if (!s.features.dynamicRendering || !s.features.synchronization2 ||
+      !s.features.timelineSemaphore) return std::nullopt;
+  if (!s.extensions.contains(VK_KHR_SWAPCHAIN_EXTENSION_NAME)) return std::nullopt;
+  if (!s.queues.graphics || !s.queues.present) return std::nullopt;
+  if (s.surfaceFormats.empty() || s.presentModes.empty()) return std::nullopt;
+  if (!supportsRequiredDepthFormat(s)) return std::nullopt;
 
-// 2. 枚举物理设备
-uint32_t deviceCount = 0;
-vkEnumeratePhysicalDevices(instance, &deviceCount, NULL);
-VkPhysicalDevice physicalDevice;
-vkEnumeratePhysicalDevices(instance, &deviceCount, &physicalDevice);
-
-// 3. 查询设备属性
-VkPhysicalDeviceProperties props;
-vkGetPhysicalDeviceProperties(physicalDevice, &props);
-printf("GPU: %s\n", props.deviceName);
-
-// 4. 选择队列族
-uint32_t queueFamilyIndex = findGraphicsQueueFamily(physicalDevice);
-
-// 5. 创建逻辑设备
-VkDevice device;
-vkCreateDevice(physicalDevice, &deviceCreateInfo, NULL, &device);
-
-// 6. 获取队列
-VkQueue graphicsQueue;
-vkGetDeviceQueue(device, queueFamilyIndex, 0, &graphicsQueue);
+  int score = 0;
+  if (s.properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) score += 100;
+  if (s.queues.dedicatedTransfer) score += 10;
+  score += optionalFeatureScore(s);
+  return Candidate{device, std::move(s), score};
+}
 ```
+
+DeviceSnapshot 应保存形成决策所需的查询结果，避免资格检查和 device 创建分别使用不同假设。设备名称可用于日志，不能当稳定唯一标识；需要持久选择时应考虑 device UUID、LUID 或 PCI bus 信息，并处理驱动更新和设备缺失。
+
+## Properties2 与 Features2 链
+
+`vkGetPhysicalDeviceProperties2` 和 `vkGetPhysicalDeviceFeatures2` 通过 pNext 链一次收集核心及扩展结构。<Term def="以 sType 标识结构类型、通过 pNext 链接扩展结构的 Vulkan 可扩展结构协议">pNext 链</Term>允许 API 演进而不破坏旧结构布局，但每个结构只能在规范允许的链中出现，并且不能重复同一种 sType。
+
+查询链承载实现写回的 available 值；启用链承载应用选择的 enabled 值。把查询结构原样拿去创建设备，可能无意启用大量未测试 feature。更稳妥的做法是构造独立启用链，并对每个 true 字段保留代码层需求来源。
+
+```cpp
+VkPhysicalDeviceVulkan13Features available13{
+  .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+};
+VkPhysicalDeviceVulkan12Features available12{
+  .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+  .pNext = &available13,
+};
+VkPhysicalDeviceFeatures2 available{
+  .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+  .pNext = &available12,
+};
+vkGetPhysicalDeviceFeatures2(physicalDevice, &available);
+
+VkPhysicalDeviceVulkan13Features enabled13{
+  .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+  .synchronization2 = VK_TRUE,
+  .dynamicRendering = VK_TRUE,
+};
+VkPhysicalDeviceVulkan12Features enabled12{
+  .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+  .pNext = &enabled13,
+  .timelineSemaphore = VK_TRUE,
+};
+VkPhysicalDeviceFeatures2 enabled{
+  .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+  .pNext = &enabled12,
+};
+```
+
+将 `enabled` 接到 `VkDeviceCreateInfo::pNext` 时，旧字段 `pEnabledFeatures` 必须为 null。若应用支持 Vulkan 1.2 + 扩展兼容路径，还要按设备 API 版本选择核心 feature 结构或扩展 feature 结构，不能在不允许的版本链中混用。
+
+## Queue family 与逻辑设备创建
+
+<Term def="具有相同 queue capabilities 的队列集合；应用在设备创建时按 family 请求队列数量和优先级">Queue family</Term>可支持 graphics、compute、transfer 等 flags；present 支持则需要针对目标 surface 查询。graphics 与 present 可能同族，也可能分族。
+
+设备创建时，每个 family 最多出现一个 `VkDeviceQueueCreateInfo`。若 graphics/present 恰好是同一 index，重复提交两个 create info 属于错误。请求 queueCount 不能超过 `VkQueueFamilyProperties::queueCount`，每个优先级必须在 0 到 1 之间。
+
+```cpp
+std::set<uint32_t> uniqueFamilies = {
+  queues.graphicsFamily,
+  queues.presentFamily,
+};
+float priority = 1.0f;
+std::vector<VkDeviceQueueCreateInfo> queueInfos;
+for (uint32_t family : uniqueFamilies) {
+  queueInfos.push_back({
+    .sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO,
+    .queueFamilyIndex = family,
+    .queueCount = 1,
+    .pQueuePriorities = &priority,
+  });
+}
+
+const char* deviceExtensions[] = {VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+VkDeviceCreateInfo deviceInfo{
+  .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+  .pNext = &enabled,
+  .queueCreateInfoCount = static_cast<uint32_t>(queueInfos.size()),
+  .pQueueCreateInfos = queueInfos.data(),
+  .enabledExtensionCount = 1,
+  .ppEnabledExtensionNames = deviceExtensions,
+  .pEnabledFeatures = nullptr,
+};
+VK_CHECK(vkCreateDevice(physicalDevice, &deviceInfo, nullptr, &device));
+vkGetDeviceQueue(device, queues.graphicsFamily, 0, &graphicsQueue);
+vkGetDeviceQueue(device, queues.presentFamily, 0, &presentQueue);
+```
+
+`VkDevice`是所有 device-level 资源和 queue 的生命周期根。销毁时先确保相关 GPU 工作完成，再销毁 pipeline、descriptor、image/buffer、command pool、swapchain 和同步对象，最后 `vkDestroyDevice`。`vkDeviceWaitIdle` 适合受控 shutdown 或简单重建边界，不应成为每帧流程。
+
+## 多 GPU 与 device group
+
+Vulkan 不会把枚举到的两块 GPU 自动合成更快的逻辑设备。普通 `vkCreateDevice` 选择一个 physical device。若要显式使用 device group，需要枚举 `vkEnumeratePhysicalDeviceGroups`，确认设备组能力，并为资源绑定、命令执行 mask 与呈现行为设计专门路径。很多系统上的两块 GPU 不属于可用 device group。
+
+因此默认渲染器应把多 GPU 当“多个候选”，而不是“一份任务自动并行”。跨适配器复制、显示连接、内存可见性和同步成本通常决定 device group 是否值得。
+
+## 三步实现可解释选择
+
+<Stepper>
+<Step title="第一步：建立实例入口">
+
+协商 loader 版本，枚举并验证实例 layer/extension，加入窗口 surface 与可选 debug/portability 能力，创建 instance 和 surface。
+
+<VkgStepFlowDiagram
+  caption="实例阶段只建立应用级入口，不提前假设具体 GPU 能力。"
+  stage={1}
+  stages={["Instance contract：版本、平台扩展、validation 与 surface"]}
+/>
+
+</Step>
+<Step title="第二步：筛选并记录候选">
+
+稳健枚举 physical devices，为每个候选生成完整 snapshot；先执行 required 资格门，再按产品偏好排序，并记录淘汰原因。
+
+<VkgStepFlowDiagram
+  caption="资格门保证路径可运行，偏好门才决定合格设备中的先后顺序。"
+  stage={2}
+  stages={[
+    "Instance contract：版本、平台扩展、validation 与 surface",
+    "Device qualification：feature、extension、queue、format 与 limits",
+  ]}
+/>
+
+</Step>
+<Step title="第三步：创建最小设备合同">
+
+从 snapshot 构造独立 enabled feature 链，为唯一 queue families 生成 create infos，创建设备并把最终合同写入启动日志。
+
+<VkgStepFlowDiagram
+  caption="最终日志应足以解释为什么选中该设备以及启用了什么。"
+  stage={3}
+  stages={[
+    "Instance contract：版本、平台扩展、validation 与 surface",
+    "Device qualification：feature、extension、queue、format 与 limits",
+    "Logical device：最小 feature 链、唯一 queues 与可审计日志",
+  ]}
+/>
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-以为 `vkEnumeratePhysicalDevices` 第一次调用传 NULL 是 bug。实际上这是 Vulkan 的标准两步调用模式：第一次获取数量，第二次填充数组。几乎所有枚举 API 都遵循这个模式。
+**现象 →** 在某些双显卡机器上总选到不连显示器的独显，创建 swapchain 后失败。
+**原因 →** 只按 deviceType 排名，未把目标 surface 的 present support 与 format/present mode 放入资格门。
+**修法 →** 先淘汰不满足完整 WSI 条件的设备，再在合格候选中考虑独显偏好。
 </Callout>
 
 <Callout type="trap">
-忽略了设备扩展检查。即使物理设备支持图形队列族，也不一定支持 `VK_KHR_swapchain`（交换链）。在创建逻辑设备前必须用 `vkEnumerateDeviceExtensionProperties` 检查。
+**现象 →** vkCreateDevice 报 queue family index 重复或创建参数无效。
+**原因 →** graphics 与 present 为同一 family，却生成了两个 VkDeviceQueueCreateInfo。
+**修法 →** 对 family indices 去重，每个 family 只生成一个 create info；需要多个 queue 时增加该项 queueCount。
+</Callout>
+
+<Callout type="trap">
+**现象 →** feature 查询为 true，device 创建也成功，但使用时 validation 报 feature 未启用。
+**原因 →** available 查询链没有转化为独立 enabled 链，或漏接到 VkDeviceCreateInfo::pNext。
+**修法 →** 对每条渲染路径维护最小启用集合，并在启动日志输出 available/enabled 差异。
 </Callout>
 
 ## 练习
 
 <Exercises>
-1. 为什么在创建 `VkInstance` 时启用扩展，而在创建 `VkDevice` 时还要再次启用扩展？两者有何区别？
-   <Answer>
-   实例级扩展（如 `VK_KHR_surface`）是跨设备的全局功能，与 Vulkan 运行时相关；设备级扩展（如 `VK_KHR_swapchain`）与特定 GPU 硬件能力相关。两者作用域不同：实例扩展影响整个应用，设备扩展只影响对应逻辑设备。
-   </Answer>
 
-2. 某系统有两块 GPU，一块是集显（VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU），一块是独显（VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU）。如何选择最佳设备？
-   <Answer>
-   遍历所有物理设备，查询 `VkPhysicalDeviceProperties`，优先选择 `deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU` 的设备（性能更强）。同时检查该设备是否支持所需队列族和扩展，最后可参考 `limits` 和 `memory` 属性做进一步筛选。
-   </Answer>
+1. **选择策略：** 独显满足所有功能但功耗高，集显也满足且连接目标显示器。怎样避免把“最佳设备”写死？
+
+<Answer>
+先用同一 required 资格门确认两者都能运行，再把性能、功耗、显存预算、显示连接和用户选择写成可配置 preference。桌面高性能配置可偏向独显，电池配置可偏向集显，并允许命令行或设置覆盖。deviceType 只影响排序，不能跳过 surface、feature、format 和 limit 检查。
+</Answer>
+
+2. **Feature 链：** 查询到 timelineSemaphore、dynamicRendering 和 synchronization2 均为 true。创建设备时最少要做什么？
+
+<Answer>
+构造独立启用结构：VkPhysicalDeviceVulkan12Features 启用 timelineSemaphore，链接 VkPhysicalDeviceVulkan13Features 启用 dynamicRendering 与 synchronization2，再由 VkPhysicalDeviceFeatures2 承载该链并接到 VkDeviceCreateInfo::pNext；同时把 pEnabledFeatures 设为 null。若设备版本低于核心版本，则需按规范改用对应扩展结构和扩展名路径。
+</Answer>
+
+3. **队列审计：** graphicsFamily=3、presentFamily=3、transferFamily=7，各请求一个 queue。应生成几个 queue create info？
+
+<Answer>
+生成两个：family 3 一个、family 7 一个。graphics 与 present 共用 family 3，不能重复 create info；创建后可以分别调用 vkGetDeviceQueue(device, 3, 0, ...) 获得同一个 queue handle 用于 graphics/present，family 7 的 index 0 用于 transfer。若希望 family 3 内使用两个不同 queue，必须检查 queueCount 至少为 2，并在同一个 create info 中请求 2。
+</Answer>
+
 </Exercises>
 
+## 本章检查清单
+
+- 实例版本取 loader 与应用请求的交集，实例扩展来自枚举和窗口平台需求；
+- 设备资格门包含 feature、extension、queue、surface、format、limit 与 memory 条件；
+- 查询链与启用链分离，device create 只启用已验证且路径需要的能力；
+- queue family create infos 已去重，设备选择和淘汰原因可从日志复现。
+
+## 术语表
+
 <Glossary>
-  <GlossaryItem term="VkInstance">
-    应用与 Vulkan 运行时的连接句柄，创建时声明应用信息与实例级扩展/层。是所有 Vulkan 操作的根。
-  </GlossaryItem>
-  <GlossaryItem term="VkPhysicalDevice">
-    代表系统中一个实际的 Vulkan 兼容 GPU，是不可变的查询句柄，用于获取设备属性、特性和队列族信息。
-  </GlossaryItem>
-  <GlossaryItem term="队列族 (Queue Family)">
-    一组支持相同操作类型的命令队列集合。不同队列族可能支持图形、计算、传输等不同能力，选择合适的队列族是设备初始化的关键。
-  </GlossaryItem>
-  <GlossaryItem term="VkDevice">
-    逻辑设备句柄，代表应用对物理设备的租用。创建时指定队列配置、启用的扩展和特性，之后所有资源创建和命令提交都通过它进行。
-  </GlossaryItem>
+<GlossaryItem term="VkInstance">应用级 Vulkan 入口，用于枚举 physical devices 并承载实例扩展、validation 与 debug messenger。</GlossaryItem>
+<GlossaryItem term="VkPhysicalDevice">由实现枚举的设备查询句柄，应用不创建也不销毁。</GlossaryItem>
+<GlossaryItem term="pNext 链">以 sType 标识并通过 pNext 扩展 Vulkan 结构的协议，用于查询或启用核心及扩展能力。</GlossaryItem>
+<GlossaryItem term="Queue family">具有同类 queue capabilities 的队列集合；present 支持需针对 surface 单独查询。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Vulkan 学习指南" adaptedUrl="https://vulkan.lunarg.com/" />
+<Attribution adaptedFrom="Khronos Vulkan Guide" adaptedUrl="https://docs.vulkan.org/guide/latest/initialization.html" />

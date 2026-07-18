@@ -1,0 +1,271 @@
+---
+title: "第 24 章 网络请求与远程资源"
+type: A
+section: "JavaScript高级程序设计（第4版） · 数据、网络与存储"
+order: 24
+description: "XHR、Fetch、Beacon与WebSocket各自有不同流式、取消、凭据和生命周期语义，网络成功不等于业务成功。"
+demo: true
+math: false
+sourceUrl: "https://uat.store.wiley.com/en-us/professional-javascript-for-web-developers-4th-edition-p-9781119366577"
+draft: false
+---
+
+import {
+  Jpg24NetworkRequestsMapLab,
+  Jpg24NetworkRequestsExperimentLab,
+  Jpg24NetworkRequestsEvidenceLab,
+} from "@/components/mdx/javascript-pro-guide/diagrams/jpg-24-network-requests";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释第 24 章 网络请求与远程资源的核心机制，并把它放回28章与4个附录的主线
+- 能比较正常、边界、失败和恢复样本，指出首个执行或状态偏离点
+- 能实现最小JavaScript实验，记录浏览器版本、输入、任务顺序与资源所有权
+- 能设计证据回答“HTTP状态与业务状态分别检查；跨源权限最小化；取消重试幂等；长连接重连有退避、版本和恢复点。”是否成立
+
+</Objectives>
+
+## 直觉：先画执行与所有权
+
+XHR、Fetch、Beacon与WebSocket各自有不同流式、取消、凭据和生命周期语义，网络成功不等于业务成功。 真正的难点不是让一次示例得到预期输出，而是让绑定、对象、任务、权限和资源在异常、取消、重复与版本切换后仍可解释。先预测：若只保存最终截图，最可能隐藏哪一种陈旧状态？
+
+<Jpg24NetworkRequestsMapLab />
+
+## 权威目录定位
+
+本页依据 Wiley 第4版官方31页目录样章与中文版公开完整目录锁定范围。目录名称用于一对一追踪，正文为独立教学重构；新浏览器差异、安全与可观察性补充会明确披露：
+
+- 24.1 XMLHttpRequest对象
+- 24.1.1 使用XHR
+- 24.1.2 HTTP头部
+- 24.1.3 GET请求
+- 24.1.4 POST请求
+- 24.1.5 XMLHttpRequest Level 2
+- 24.2 进度事件
+- 24.2.1 load事件
+- 24.2.2 progress事件
+- 24.3 跨源资源共享
+- 24.3.1 预检请求
+- 24.3.2 凭据请求
+- 24.4 替代性跨源技术
+- 24.4.1 图片探测
+- 24.4.2 JSONP
+- 24.5 Fetch API
+- 24.5.1 基本用法
+- 24.5.2 常见Fetch请求模式
+- 24.5.3 Headers对象
+- 24.5.4 Request对象
+- 24.5.5 Response对象
+- 24.5.6 Request、Response及Body混入
+- 24.6 Beacon API
+- 24.7 Web Socket
+- 24.7.1 API
+- 24.7.2 发送和接收数据
+- 24.7.3 其他事件
+- 24.8 安全
+- 24.9 小结
+
+本页逐项覆盖 **29** 个公开目录条目，并纳入正常、边界、失败和恢复验收。
+
+## 核心概念与所有权
+
+<Term def="以事件和可变状态发起HTTP请求并支持进度通知的传统浏览器接口。">
+  XMLHttpRequest
+</Term>
+、
+<Term def="以Request、Response、Promise和流模型发起网络请求的现代接口。">
+  Fetch
+</Term>
+、<Term def="服务器通过响应头授权跨源脚本读取响应的浏览器安全协议。">CORS</Term>
+、
+<Term def="在页面卸载等场景异步排队少量数据、无需等待响应的提交接口。">
+  Beacon
+</Term>
+、
+<Term def="在一次HTTP升级后建立全双工消息通道的协议与浏览器接口。">
+  WebSocket
+</Term>
+。每个概念都要回答：谁创建输入，状态保存在哪里，哪个任务或版本可修改它，结束后由谁清理。
+
+|   # | 概念           | 工程含义                                                     |
+| --: | -------------- | ------------------------------------------------------------ |
+|   1 | XMLHttpRequest | 以事件和可变状态发起HTTP请求并支持进度通知的传统浏览器接口。 |
+|   2 | Fetch          | 以Request、Response、Promise和流模型发起网络请求的现代接口。 |
+|   3 | CORS           | 服务器通过响应头授权跨源脚本读取响应的浏览器安全协议。       |
+|   4 | Beacon         | 在页面卸载等场景异步排队少量数据、无需等待响应的提交接口。   |
+|   5 | WebSocket      | 在一次HTTP升级后建立全双工消息通道的协议与浏览器接口。       |
+
+## 机制拆解
+
+### 1. Fetch只拒绝网络失败
+
+HTTP 404或500仍会兑现为Response，调用方必须检查ok或status。响应体流通常只能消费一次，clone有缓存成本；超时要用AbortController，重试要限制在幂等操作。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+### 2. CORS是读取授权不是服务器防火墙
+
+简单请求也会发送，只是脚本可能无法读响应；预检验证方法和头。凭据模式、允许源和Vary必须匹配，不能在允许凭据时使用通配源，也不能把CORS当认证。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+### 3. 长连接需要应用层协议
+
+WebSocket提供有序消息但没有业务心跳、重连、去重和背压。协议应包含版本、消息类型、最大尺寸和操作ID；重连后重新认证并恢复订阅，关闭码区分正常、版本和容量原因。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+## 六阶段证据链
+
+可操作链条是：构造请求与凭据 → 通过同源或CORS检查 → 接收状态头与流 → 判定业务成功 → 处理取消重试 → 关闭连接与释放读取器。正常样本证明能力，边界样本证明预算，失败样本证明拒绝，恢复样本证明任务、状态和资源重新收敛。
+
+<Stepper>
+  <Step title="1. 构造请求与凭据与通过同源或CORS检查">
+    固定浏览器版本、输入、初始DOM与时钟，运行正常和边界样本。
+    <Jpg24NetworkRequestsMapLab />
+  </Step>
+  <Step title="2. 接收状态头与流与判定业务成功">
+    注入异常、取消、重复事件、权限拒绝或旧缓存，要求在首偏离点停止。
+    <Jpg24NetworkRequestsExperimentLab />
+  </Step>
+  <Step title="3. 处理取消重试与关闭连接与释放读取器">
+    清除故障后重放相同输入，核对输出、任务队列、DOM摘要、监听器与资源数量。
+    <Jpg24NetworkRequestsEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小可运行实验
+
+以下代码用于独立观察本页机制；生产实现还需加入输入验证、兼容策略、权限、取消与清理。
+
+```js
+const response = await fetch("/api/items", {
+  signal: AbortSignal.timeout(2000),
+});
+if (!response.ok) throw new Error(`HTTP ${response.status}`);
+const items = await response.json();
+```
+
+证据记录把目录、运行时与状态摘要放在一起：
+
+```yaml
+book: JavaScript高级程序设计（第4版）
+page: jpg-24-network-requests
+official_entries: 29
+sample: normal | boundary | failure | recovery
+browser_version: fixed
+input_fixture: fixed
+first_divergence: null
+cleanup_complete: true
+```
+
+故障脚本一次只改变一个变量：
+
+```text
+baseline -> inject(exception | cancel | duplicate | denied | stale-cache)
+observe -> stop_at_first_divergence
+recover -> replay_same_runtime_and_input
+assert -> one_state_owner && stable_output && no_stale_task && no_resource_leak
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：fetch返回fulfilled就当业务成功，500响应继续解析为正常数据。**
+  必须保存输入、任务顺序、状态摘要与首次拒绝原因，而不是只看最终页面。
+</Callout>
+
+<Callout type="trap">
+  **误区二：WebSocket断线后无限立即重连，形成客户端同步风暴。**
+  必须加入边界、失败与恢复样本，证明错误没有跨入下一阶段。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 输入与环境变化                   | 预期状态       | 通过条件                     |
+| ---- | -------------------------------- | -------------- | ---------------------------- |
+| 正常 | 合法输入、权限、顺序与版本       | 六阶段完成     | 输出和状态摘要一致           |
+| 边界 | 空值、极限容量、重复事件或慢任务 | 达到预算不越界 | 主线程与内存有界             |
+| 失败 | 异常、取消、拒权、断网或旧产物   | 首偏离点停止   | 明确传播、回滚或降级         |
+| 恢复 | 修复后重放同一输入               | 收敛到正常轨迹 | 无陈旧任务、监听器和资源泄漏 |
+
+<Jpg24NetworkRequestsEvidenceLab />
+
+本页签发不变量是：**HTTP状态与业务状态分别检查；跨源权限最小化；取消重试幂等；长连接重连有退避、版本和恢复点。** 单次成功、平均耗时或最终截图不能替代运行时版本、执行轨迹、首偏离点与清理证据。
+
+## 练习
+
+<Exercises>
+
+**问题 1** 为什么不能只以最终页面结果正确作为验收？
+
+<Answer>
+  最终结果会隐藏重复副作用、旧任务覆盖、错误吞没和资源泄漏。必须比较输入、执行顺序、状态所有者、首偏离点与清理结果。
+</Answer>
+
+**问题 2** 如何把本页公开目录变成可执行学习证据？
+
+<Answer>
+  按公开顺序建立追踪表，为每组条目写出输入、状态、输出、失败与恢复条件。本页重点包括：24.1
+  XMLHttpRequest对象、24.1.1 使用XHR、24.1.2 HTTP头部、24.1.3 GET请求、24.1.4
+  POST请求、24.1.5 XMLHttpRequest Level 2、24.2 进度事件、24.2.1
+  load事件；其余条目已在上方逐项列出。
+</Answer>
+
+**问题 3** 本页的最小通过条件是什么？
+
+<Answer>
+  HTTP状态与业务状态分别检查；跨源权限最小化；取消重试幂等；长连接重连有退避、版本和恢复点。
+  并且相同浏览器版本、输入与初始状态可以重放正常、边界、失败和恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **XMLHttpRequest**：以事件和可变状态发起HTTP请求并支持进度通知的传统浏览器接口。
+- **Fetch**：以Request、Response、Promise和流模型发起网络请求的现代接口。
+- **CORS**：服务器通过响应头授权跨源脚本读取响应的浏览器安全协议。
+- **Beacon**：在页面卸载等场景异步排队少量数据、无需等待响应的提交接口。
+- **WebSocket**：在一次HTTP升级后建立全双工消息通道的协议与浏览器接口。
+- 六阶段机制链已经映射到正常、边界、失败与恢复证据。
+- 官方目录逐项追踪，现代补充不会冒充原书正式分节。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="XMLHttpRequest">
+    以事件和可变状态发起HTTP请求并支持进度通知的传统浏览器接口。
+  </GlossaryItem>
+  <GlossaryItem term="Fetch">
+    以Request、Response、Promise和流模型发起网络请求的现代接口。
+  </GlossaryItem>
+  <GlossaryItem term="CORS">
+    服务器通过响应头授权跨源脚本读取响应的浏览器安全协议。
+  </GlossaryItem>
+  <GlossaryItem term="Beacon">
+    在页面卸载等场景异步排队少量数据、无需等待响应的提交接口。
+  </GlossaryItem>
+  <GlossaryItem term="WebSocket">
+    在一次HTTP升级后建立全双工消息通道的协议与浏览器接口。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Matt Frisbie 著，李松峰译，人民邮电出版社，2020年9月，866页，ISBN 9787115545381；英文原版 Professional JavaScript for Web Developers, 4th Edition，Wiley，2019年10月，1200页，印刷版 ISBN 9781119366447、电子版 ISBN 9781119366577。Wiley官方31页目录样章与中文版公开目录确认28章、4个附录和757个二三级目录条目。正文为独立教学重构。"
+  adaptedUrl="https://uat.store.wiley.com/en-us/professional-javascript-for-web-developers-4th-edition-p-9781119366577"
+/>

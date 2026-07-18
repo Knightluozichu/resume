@@ -1,0 +1,256 @@
+---
+title: "第2章：模板技术工具箱"
+type: A
+section: Modern C++ Design · Part I Techniques
+order: 2
+description: 对齐第一版第2章 Techniques：编译期断言、偏特化、局部类、Int2Type/Type2Type、类型选择、可转换与继承检测、type_info 封装、NullType/EmptyType 与 Type Traits。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+draft: false
+---
+
+import {
+  McdSpecializationSelectionMap,
+  McdTraitDecisionPipelineMap,
+  McdTypeMappingMap,
+} from "@/components/mdx/modern-cpp-design/diagrams/techniques";
+
+<Objectives>
+
+- 能解释 compile-time assertion、partial specialization 与 overload resolution 如何把错误和选择前移到编译期
+- 能实现 Int2Type、Type2Type、Select、convertibility detector 与基础 Type Traits，并读懂它们的实例化路径
+- 能比较书中 C++98 技法与 `static_assert`、`std::type_traits`、concepts 的现代等价物，保留设计意图而非机械复刻语法
+
+</Objectives>
+
+## 为什么需要一章 Techniques
+
+Policy 设计提出“让类型表达设计决定”，但 2001 年的 C++ 没有 `static_assert`、variadic templates、`std::type_traits` 或 concepts。第 2 章 **Techniques** 因而建立一套微型语言：把整数包装成类型、把类型包装成值、用 specialization 选择规则、用 overload resolution 探测表达式，再把结果送入类生成。
+
+这些技巧的历史语法有些已经过时，推理方法却仍是现代 generic library 的基础：什么信息能在 compile time 得到、怎样让错误路径不实例化、怎样把检测结果变成更好的接口。
+
+## Compile-Time Assertions
+
+<Term def="当编译期布尔条件为假时使程序形成清晰诊断，从而在模板实例化点阻止违反不变量的类型或常量。">
+  compile-time assertion
+</Term>
+
+书中的 **Compile-Time Assertions** 通过“只有 true 特化存在”的模板制造 incomplete type 错误。现代 C++ 应直接用 `static_assert(condition, message)`，因为诊断稳定、作用域清晰，也不会依赖负数组等非标准技巧。
+
+```cpp
+template<class T>
+struct BinaryPacket {
+    static_assert(std::is_trivially_copyable_v<T>,
+                  "BinaryPacket payload must be trivially copyable");
+    static_assert(sizeof(T) <= 64, "payload exceeds inline budget");
+    T value;
+};
+```
+
+断言应描述 violated contract，而不是重复表达式。`sizeof(T) == 4 failed` 不如 “wire field requires exactly 32 bits”；前者告诉结果，后者告诉设计原因。对可重载 API，concept/constraint 往往比函数体内 `static_assert` 更好，因为不合格候选能在选择阶段被排除。
+
+<Callout type="trap" title="陷阱：用 static_assert 模拟所有类型约束">
+  函数体内断言通常在 overload 已选中后才触发，可能阻止其他合法 overload；它也不能自然表达 requires-expression。能作为候选资格的条件优先写 concept，真正的内部不变量再写 static_assert。
+</Callout>
+
+## Partial Template Specialization
+
+**Partial Template Specialization** 为一类“类型形状”提供规则，例如任意 `T*`、`const T` 或 `Container<T, Alloc>`。primary template 是默认规则，partial specialization 比默认更具体，full specialization 则匹配一个确切参数集合。
+
+<Term def="在不指定全部模板实参的情况下，为满足某种类型或非类型参数形状的一族实例提供更具体实现。">
+  partial specialization
+</Term>
+
+```cpp
+template<class T>
+struct StorageTraits {
+    static constexpr bool indirect = false;
+    using Element = T;
+};
+
+template<class T>
+struct StorageTraits<T*> {
+    static constexpr bool indirect = true;
+    using Element = T;
+};
+```
+
+`StorageTraits<int*>` 选择 pointer 特化，不执行运行时判断。function templates 不能 partial-specialize，通常改用 overload、class helper 或 tag dispatch。特化还必须位于允许的 namespace，且规则重叠时要确保存在唯一“最特化”候选。
+
+<McdSpecializationSelectionMap />
+
+## Local Classes：靠近使用点的类型
+
+**Local Classes** 定义在函数体内，能把辅助类型限制在最小作用域。书中利用 local class 作为 algorithm 的临时 adapter 或 visitor，使实现细节不污染 namespace；旧标准对 local class 作为 template argument 有诸多限制，现代 C++ 已放宽，并常由 lambda 替代。
+
+<Term def="定义在函数块作用域内、仅在该作用域可见的类型，用于封装一次性适配状态或行为。">
+  local class
+</Term>
+
+选择 local class 还是 lambda 要看是否需要命名 nested types、多组成员函数、显式 constructor 或重复引用类型。单个 callable 通常 lambda 更直接；复杂协议的局部 adapter 仍可用 local struct。不要把“局部”误解为对象一定在 stack，storage duration 由实例的创建方式决定。
+
+## Mapping Integral Constants to Types
+
+普通函数 overload 依据参数类型，不依据某个运行时 `int` 的值。**Mapping Integral Constants to Types** 用 `Int2Type<N>` 把 compile-time integral constant 嵌入一个独特类型，使 `Int2Type<0>` 和 `Int2Type<1>` 进入不同 overload。
+
+<Term def="把编译期整数 N 包装为唯一类型 Int2Type&lt;N&gt;，以便 overload resolution 或 specialization 按值选择实现。">
+  Int2Type
+</Term>
+
+```cpp
+template<int N>
+struct Int2Type { static constexpr int value = N; };
+
+template<class T>
+void destroy(T* value, Int2Type<1>) { value->~T(); }
+
+template<class T>
+void destroy(T*, Int2Type<0>) {}
+
+template<class T>
+void destroy(T* value) {
+    destroy(value, Int2Type<!std::is_trivially_destructible_v<T>>{});
+}
+```
+
+这里空对象通常被优化掉；重要的是错误分支无需对目标类型成立。现代 `if constexpr` 常能更清楚地表达二分路径，但 tag dispatch 仍适用于 overload customization、旧标准兼容和多层扩展点。
+
+## Type-to-Type Mapping
+
+**Type-to-Type Mapping** 用 `Type2Type<T>` 把“要创建哪个类型”变成普通函数参数的类型。它解决 constructor 不能 virtual、函数不能只按 return type overload 的限制：调用者传一个空 tag，implementation 据 tag 选择创建逻辑。
+
+<Term def="把类型 T 包装成可传给函数的空标签 Type2Type&lt;T&gt;，让 overload resolution 显式选择目标类型。">
+  Type2Type
+</Term>
+
+例如 `create(Type2Type<Widget>{})` 与 `create(Type2Type<Gadget>{})` 可以拥有不同实现。现代 factory 也可写 `create<Widget>()`，但 Type2Type 在 visitor/customization-point 中仍能把目标类型随普通参数一起传递，并支持 ADL/overload extension。
+
+## Type Selection
+
+**Type Selection** 根据 compile-time boolean 返回 `Then` 或 `Else` 类型；Loki 的 `Select<flag, T, U>::Result` 对应今天的 `std::conditional_t<flag,T,U>`。它不是在两个已经构造的对象间选择，而是在定义 class layout、parameter type 或 policy base 前选定一种类型。
+
+<Term def="依据编译期布尔条件从两个候选中产生一个 Result 类型的元函数。">
+  type selection
+</Term>
+
+<McdTypeMappingMap />
+
+先预测：若 `Select<false, Valid, typename Broken<T>::type>` 的 `Broken<T>` 本身在形成模板实参时就非法，`Select` 未必能“保护”它。lazy selection 要把可能失败的计算延迟进尚未实例化的 class/template 分支；这也是 `std::conditional_t` 与 `if constexpr` 经常被误用的边界。
+
+## Detecting Convertibility and Inheritance at Compile Time
+
+书中通过重载两个 `Test` 函数：一个接受目标类型，返回小类型；fallback 接受 `...`，返回大类型；再比较 `sizeof`，实现 **Detecting Convertibility and Inheritance at Compile Time**。若 `From` 可转换到 `To`，更精确 overload 胜出。
+
+<Term def="在不执行转换的情况下，通过 substitution、overload resolution 或 requires-expression 判断 From 是否可形成 To，并由此推断部分继承关系。">
+  convertibility detection
+</Term>
+
+这个 detector 要处理 `void`、相同类型、private/ambiguous base、user-defined conversion 与 incomplete types 等边界。“可转换”也不等于“公开继承”：conversion operator 能制造非继承转换，private base 又可能使真实继承不可访问。现代代码使用 `std::is_convertible_v` 与 `std::is_base_of_v`，并按语义选择，而不是把二者混为一个 trait。
+
+## A Wrapper Around type_info
+
+`typeid(T)` 返回的 `std::type_info` 不能复制，直接存进 associative container 不便。**A Wrapper Around type_info**（Loki `TypeInfo`）保存 `const std::type_info*`，提供 copy、equality 与 ordering，从而可作为 factory/dispatcher 的运行时 key。现代标准有 `std::type_index` 完成同一角色。
+
+<Term def="把不可复制的 std::type_info 引用包装成可复制、可比较、可作为容器键的值对象。">
+  TypeInfo wrapper
+</Term>
+
+`type_info::before`/`type_index` 的 order 只服务进程内排序，不是跨运行、跨编译器稳定的 serialization ID。plugin protocol 若把 `name()` 写盘或过网络，会依赖 implementation-specific mangling；应另定义稳定 schema identifier。
+
+<Callout type="trap" title="陷阱：把 typeid 名称当永久类型 ID">
+  `type_info::name()` 的内容、可读性和稳定性都不由标准保证；共享库卸载还会影响相关类型元数据的生命周期。运行时 dispatcher 可用 type_index，持久化与跨模块协议必须使用显式版本化 ID。
+</Callout>
+
+## NullType and EmptyType
+
+**NullType and EmptyType** 都是空类，却承担不同语义。`NullType` 是类型链或递归生成的结束哨兵，表示“没有类型”；`EmptyType` 是可被继承/实例化的占位单元，表示“有一个无状态默认实现”。把二者混用会让 termination 与 behavior 的意图消失。
+
+<Term def="表示类型级递归结束或不存在类型的哨兵，不承担普通策略行为。">
+  NullType
+</Term>
+
+<Term def="可作为空基类、占位成员或默认策略单元的无状态类型；它存在但不提供业务状态。">
+  EmptyType
+</Term>
+
+empty class 在 C++ 中作为独立对象仍有非零大小，以保证不同对象地址；作为 base/member 则可能通过 empty-base optimization 或 `[[no_unique_address]]` 不增加 layout。是否优化是 object-model 问题，不能只看类中“没有字段”就断言零字节。
+
+## Type Traits：从事实到设计选择
+
+**Type Traits** 收集类型事实与相关类型：是否 pointer/POD、parameter type 应按值还是引用、去掉 const 后是什么、怎样销毁。书中的 `TypeTraits<T>` 通过多层 specialization 建立 taxonomy；现代 `<type_traits>` 提供标准、编译器支持的基础积木。
+
+<Term def="在编译期查询、变换或关联类型属性，并把结果送入算法、参数传递、存储和约束选择的元函数集合。">
+  Type Traits
+</Term>
+
+<McdTraitDecisionPipelineMap />
+
+Trait 的危险是把平台猜测包装成真理，例如“所有 fundamental type 按值传最快”忽略 ABI、register width 与 optimization。traits 应表达语义事实或经过证明的策略；性能选择仍需 measurement，公共 API 还要优先考虑 lifetime 与可读性。
+
+<Stepper>
+  <Step title="第一步：定义默认规则与例外形状">
+    从 primary template 写 conservative default，再用 partial specialization 覆盖 pointer、cv/ref 或容器形状；检查规则是否重叠以及哪一个最特化。
+
+    <McdSpecializationSelectionMap />
+
+  </Step>
+  <Step title="第二步：把编译期信息送进分派">
+    用 Int2Type、Type2Type、Select 或现代 tag/if constexpr，把值与类型事实转成 overload 或结构选择；确保未选路径真的延迟实例化。
+
+    <McdTypeMappingMap />
+
+  </Step>
+  <Step title="第三步：让检测结果改变真实契约">
+    先 normalize，再 classify/relate，最后用于 constraint、storage 或 algorithm；为 void、ambiguous base、incomplete type 与 user conversion 建边界测试。
+
+    <McdTraitDecisionPipelineMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- compile-time assertion 把不变量失败前移，候选资格优先用 constraints，内部事实再断言
+- partial specialization 对类型形状建立规则，function template 则常用 overload/tag helper
+- local class 把一次性 adapter 限制在使用点，现代单一 callable 常由 lambda 替代
+- Int2Type、Type2Type 和 Select 在值、类型、overload 与结构之间搭桥
+- convertibility 与 inheritance 是不同关系，现代代码应选择对应标准 trait
+- TypeInfo wrapper 让 RTTI key 可复制比较，但不提供跨运行稳定身份
+- NullType 是递归终点，EmptyType 是存在的空单元；语义不可互换
+- Type Traits 要把可证明事实送入设计，不应把未经测量的平台猜测伪装成普遍规则
+
+<Exercises>
+  1. **问题 1：为 serializer 设计 pointer 特化。** 默认序列化值本身，pointer 路径先检查空再序列化 pointee；说明 primary/partial specialization 的职责和 ownership 边界。
+
+  <Answer question="pointer partial specialization 应负责什么，不应负责什么？">primary template 定义普通值的保守规则，`Serializer<T*>` 识别 pointer 形状并决定空值表示与 pointee 调用。它不应暗自 delete、延长生命或假定 ownership；序列化只观察对象，lifetime contract 必须由调用者或独立 Policy 明确。</Answer>
+
+  2. **问题 2：选择 Int2Type、if constexpr 或 runtime branch。** 一个算法按 compile-time trait 决定是否调用 destructor，另一个按用户输入选择 codec，分别说明选择。
+
+  <Answer question="三个分派工具的边界是什么？">编译期 trait 且需支持旧标准或 overload extension 时用 Int2Type/tag dispatch；现代函数内部二分且未选路径不应实例化时用 if constexpr；用户输入在运行时才知道时必须 runtime branch/type erasure。把运行时选择模板化只会产生类型爆炸且无法响应输入。</Answer>
+
+  3. **问题 3：审计一个 TypeInfo registry。** registry 用 `typeid(T).name()` 写入缓存文件，并在下次启动恢复；指出错误并给出分层 ID 方案。
+
+  <Answer question="为什么 TypeInfo key 不能直接持久化？">type_info/type_index 适合当前进程内比较，`name()` 的格式与稳定性不受标准保证，跨编译器、构建和共享库都可能变化。进程内 dispatcher 可保留 type_index；持久化层另用显式 schema ID/version，并在注册时把 schema ID 映射到当前 type_index 与 creator。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="compile-time assertion">编译期条件失败即拒绝实例并给出契约诊断的机制。</GlossaryItem>
+  <GlossaryItem term="partial specialization">为一族模板参数形状提供比主模板更具体实现的规则。</GlossaryItem>
+  <GlossaryItem term="local class">定义在函数块内、只服务局部适配协议的类型。</GlossaryItem>
+  <GlossaryItem term="Int2Type">把整数常量包装成独特类型以参与重载和特化。</GlossaryItem>
+  <GlossaryItem term="Type2Type">把目标类型包装成普通函数可接收的空标签。</GlossaryItem>
+  <GlossaryItem term="type selection">依据编译期条件产生一个结果类型的元函数。</GlossaryItem>
+  <GlossaryItem term="convertibility detection">不执行转换而在编译期判断 From 是否可形成 To 的检测。</GlossaryItem>
+  <GlossaryItem term="TypeInfo wrapper">把 type_info 引用包装为可复制比较的进程内类型键。</GlossaryItem>
+  <GlossaryItem term="NullType">类型级递归的终止哨兵。</GlossaryItem>
+  <GlossaryItem term="EmptyType">可实例化或继承的无状态占位类型。</GlossaryItem>
+  <GlossaryItem term="Type Traits">查询或变换类型事实并驱动实现选择的元函数集合。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Modern C++ Design, First Edition, Chapter 2: Techniques"
+  adaptedUrl="https://www.informit.com/store/modern-c-plus-plus-design-generic-programming-and-design-9780133387629"
+/>

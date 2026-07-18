@@ -1,0 +1,373 @@
+---
+title: "6.3 Suffix Arrays：后缀排序、LCP、LRS与KWIC"
+type: B
+section: "上下文"
+order: 26
+description: "按官方6.3重建offset-based suffix array、suffix ordering、index/select/rank/lcp API、最长重复子串、KWIC连续区间、3-way优化、成本边界与独立证书。"
+demo: true
+math: true
+sourceUrl: "https://algs4.cs.princeton.edu/63suffix/"
+draft: false
+---
+
+import { Algs4SuffixSetMap, Algs4SuffixSortLab, Algs4OffsetRepresentationLab, Algs4LcpArrayLab, Algs4LongestRepeatedSubstringLab, Algs4SuffixRankLab, Algs4KwicLab, Algs4ThreeWaySuffixSortLab, Algs4SuffixCostLab, Algs4LcpCertificateLab, Algs4SuffixCertificateLab } from "@/components/mdx/algorithms-4e/diagrams/suffix-arrays";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释suffix arrays、suffix sorting、offset representation、rank/select与lexicographic order
+- 能计算adjacent longest common prefix、query rank、matching suffix interval与longest repeated substring
+- 能实现basic suffix comparator、suffix array、LCP scan、keyword in context和certificate oracle
+- 能分析substring-copy quadratic space、O(K log N) search、3-way radix worst case与Unicode unit contract
+- 能设计offset permutation、strict suffix order、exact LCP、rank/select inverse和application witness的独立验收
+
+</Objectives>
+
+## 从“所有substring问题，都能转成suffix之间的邻近关系吗”开始
+
+长度N的text有N个nonempty suffixes：
+
+$$
+S_i=text[i..N),\qquad 0\le i\lt N
+$$
+
+后缀数组（<Term def="把text的所有suffixes按lexicographic order排列后，按rank保存其original offsets的length-N integer array。">后缀数组</Term>，suffix arrays）把重叠的strings变成一个ordered index。
+
+先预测：`BANANA` 的最长重复substring `ANA` 出现在offsets 1与3。为何不必比较all \(O(N^2)\) suffix pairs？因为共享long prefix的suffixes在lexicographic order中聚在一起；最优重复prefix一定能在某对adjacent sorted suffixes之间看到。
+
+<Algs4SuffixSetMap />
+
+## 6.3.1 Offset view：不要复制N个suffix strings
+
+Naively materialize：
+
+$$
+\sum_{i=0}^{N-1}(N-i)=\frac{N(N+1)}2
+$$
+
+characters，space quadratic。Modern Java的`substring()`也不保证constant-time shared backing storage，所以不能依赖old Java 6 behavior。
+
+Official `SuffixArray`用small `Suffix` object保存same text reference和offset；`SuffixArrayX`更进一步只保存`int[] index`。Character access为 `text.charAt(offset + d)`。
+
+<Algs4OffsetRepresentationLab />
+
+```java
+private static class Suffix implements Comparable<Suffix> {
+    private final String text;
+    private final int index;
+
+    char charAt(int d) { return text.charAt(index + d); }
+    int length() { return text.length() - index; }
+}
+```
+
+Index itself是O(N) offsets；原文另占O(N)。`select(i)`若materialize string仍花suffix length time/space，所以官方建议主要用于debug。Production APIs优先返回offset+length view。
+
+## 6.3.2 Suffix sorting：lexicographic order与sentinel
+
+后缀排序（<Term def="按character lexicographic order排列text的N个suffixes，并以offset array记录rank-to-position mapping。">后缀排序</Term>，suffix sorting）比较两个offset i、j：
+
+1. 从d=0逐character比较 `text[i+d]` 与 `text[j+d]`。
+2. First mismatch决定order。
+3. 若一个suffix先结束，shorter suffix较小。
+
+```java
+int compareSuffix(int i, int j) {
+    int n = Math.min(text.length() - i, text.length() - j);
+    for (int d = 0; d < n; d++) {
+        if (text.charAt(i + d) < text.charAt(j + d)) return -1;
+        if (text.charAt(i + d) > text.charAt(j + d)) return +1;
+    }
+    return (text.length() - i) - (text.length() - j);
+}
+```
+
+<Algs4SuffixSortLab />
+
+SuffixArray API：
+
+- `length()`：N。
+- `index(i)`：rank i suffix的original offset，O(1)。
+- `select(i)`：rank i suffix string，cost proportional to suffix length。
+- `lcp(i)`：ranks i-1与i的longest common prefix length。
+- `rank(query)`：strictly less than query的suffix count，也就是insertion position。
+
+Core identity：
+
+$$
+\operatorname{rank}(\operatorname{select}(i))=i
+$$
+
+当all suffixes distinct时成立；suffixes因different end offsets天然distinct。Certificate可用它发现bad rank/search boundary。
+
+Character comparison unit必须明确。Official Java使用UTF-16 code units，不是Unicode code points、grapheme clusters或locale collation。Index offsets和context slicing必须使用同一unit。
+
+## 6.3.3 Construction choices与worst case
+
+Basic `SuffixArray`创建N个offset views后调用`Arrays.sort`。Comparator一次可能扫描long common prefix，worst-case character work可很大；all-same-character text使suffix comparisons expensive。
+
+`SuffixArrayX`在offset array上做3-way radix quicksort：
+
+```java
+char pivot = text[index[lo] + d];
+while (i <= gt) {
+    char current = text[index[i] + d];
+    if      (current < pivot) exch(lt++, i++);
+    else if (current > pivot) exch(i, gt--);
+    else                      i++;
+}
+sort(lo, lt - 1, d);
+if (pivot > 0) sort(lt, gt, d + 1);
+sort(gt + 1, hi, d);
+```
+
+它追加NUL sentinel并要求input不含NUL；equal partition才进入next character depth。
+
+<Algs4ThreeWaySuffixSortLab />
+
+该实现practice中快、memory少，但对N copies of same character可表现很差。Manber-Myers repeated doubling维护length \(2^k\) prefixes的ranks，每轮按rank pairs排序；配合合适sort可达O(N log N)。Kasai algorithm在suffix array已知后可O(N)构建完整LCP array。
+
+<Algs4SuffixCostLab />
+
+不能只标“suffix array O(N log N)”而不说明construction algorithm、alphabet、comparison cost与workspace。
+
+## 6.3.4 Longest common prefix array
+
+最长公共前缀（<Term def="两个strings从position 0开始连续相等的maximum character count；suffix-array LCP通常只存adjacent ranks。">最长公共前缀</Term>，longest common prefix）：
+
+$$
+\operatorname{lcp}(i)
+=\max\{\ell:S_{SA[i-1]}[0..\ell)=S_{SA[i]}[0..\ell)\}
+$$
+
+Basic implementation逐character扫adjacent suffixes，time proportional toactual LCP：
+
+```java
+int lcp(int leftOffset, int rightOffset) {
+    int length = 0;
+    while (leftOffset + length < N && rightOffset + length < N) {
+        if (text.charAt(leftOffset + length)
+            != text.charAt(rightOffset + length)) break;
+        length++;
+    }
+    return length;
+}
+```
+
+<Algs4LcpArrayLab />
+
+Exact LCP certificate需证明两面：
+
+1. 前length个characters确实equal。
+2. 下一characters different，或至少一个suffix结束。
+
+<Algs4LcpCertificateLab />
+
+只检查first condition会接受under-reported LCP，导致LRS过短；只检查next mismatch会接受prefix内部已不同的nonsense value。
+
+## 6.3.5 Longest repeated substring：最大adjacent LCP
+
+最长重复子串（<Term def="在text中至少出现两次的maximum-length contiguous substring；official client允许occurrences overlap。">最长重复子串</Term>，longest repeated substring）等于maximum adjacent LCP。
+
+```java
+String best = "";
+for (int i = 1; i < N; i++) {
+    int length = suffixArray.lcp(i);
+    if (length > best.length())
+        best = text.substring(suffixArray.index(i),
+                              suffixArray.index(i) + length);
+}
+```
+
+<Algs4LongestRepeatedSubstringLab />
+
+Why adjacent suffices：假设substring P是two suffixes A、B的common prefix。所有以P开头的suffixes在sorted order中形成contiguous interval；该interval中至少一对adjacent suffixes也共享P。因此global optimum出现在某个adjacent LCP。
+
+Overlapping occurrences合法，例如nine A characters的LRS是eight A characters。若application要求non-overlap，maximum LCP还不够，需同时约束offset distance：
+
+$$
+\ell\le |SA[i]-SA[j]|
+$$
+
+并可能考虑非adjacent witnesses。
+
+<Callout type="trap" title="只比较原文中相邻的suffix offsets">
+需要比较lexicographic-rank neighbors，不是offset i与i+1。共享long prefix的suffixes在原文位置可相距很远，却会在sorted suffix array中相邻。
+</Callout>
+
+## 6.3.6 Rank：query在suffix order中的lower bound
+
+`rank(query)`返回strictly smaller suffix count。Basic binary search每次比较query与middle suffix：
+
+```java
+int lo = 0, hi = N - 1;
+while (lo <= hi) {
+    int mid = lo + (hi - lo) / 2;
+    int cmp = compare(query, suffix[mid]);
+    if      (cmp < 0) hi = mid - 1;
+    else if (cmp > 0) lo = mid + 1;
+    else return mid;
+}
+return lo;
+```
+
+<Algs4SuffixRankLab />
+
+Query length K，每次comparison最多K characters，binary search O(log N) comparisons，所以basic cost O(K log N)。若缓存query与lo/hi suffix的LCP，可跳过已知equal prefixes；更完整LCP/RMQ machinery可实现O(K+log N) query。
+
+Rank不是substring occurrence本身；它给first possible lexicographic location。必须再检查suffix是否starts with query。
+
+## 6.3.7 Keyword in context：prefix matches形成连续区间
+
+上下文关键词查找（<Term def="在text中找出query的all occurrences，并输出每个offset左右bounded context window。">上下文关键词查找</Term>，keyword in context）也称KWIC/KWIK。
+
+Algorithm：
+
+1. `start = rank(query)`。
+2. 从start向右scan suffix ranks。
+3. 当suffix不再以query开头时stop。
+4. 对每个match offset输出clamped context window。
+
+```java
+for (int i = suffixArray.rank(query); i < N; i++) {
+    int offset = suffixArray.index(i);
+    int end = Math.min(N, offset + query.length());
+    if (!query.equals(text.substring(offset, end))) break;
+    print(text.substring(Math.max(0, offset - context),
+                         Math.min(N, offset + query.length() + context)));
+}
+```
+
+<Algs4KwicLab />
+
+All query-prefix suffixes contiguous，因为lexicographic order把same prefix聚在一起。Output order是suffix lexicographic order，不是original offset order；若UI要求document order，应收集offsets后numeric sort。
+
+<Callout type="trap" title="从rank开始后一直扫描到suffix array末尾">
+匹配只占一个contiguous prefix interval；遇到first non-prefix suffix必须停止。否则会输出false contexts并把query cost退化为全表扫描。
+</Callout>
+
+Text normalization也是contract。Official KWIK把whitespace runs压成single spaces，因此reported offsets属于normalized text，不是original file bytes。若需source highlighting，必须维护normalization-to-source offset map。
+
+## 6.3.8 Other adjacent-order applications
+
+Suffix array还支持：
+
+- Longest common substring：合并两texts并标记source，观察相邻cross-source suffixes的LCP。
+- k-gram frequency：对query prefix求lower/upper suffix ranks，区间size即count。
+- Longest k-repeated substring：LCP windows of k suffixes的minimum。
+- Burrows-Wheeler transform与FM-index的构建基础。
+- Shortest unique substring：结合neighbor LCP求超过both neighbors的minimum prefix。
+
+这些扩展共享同一证据链：offset permutation、suffix order与LCP must be correct；application只在该ordered substrate上聚合。
+
+## 6.3.9 Independent certificate
+
+Suffix-array candidate的independent validator：
+
+1. **Permutation**：array length N，每个offset 0至N-1 exactly once。
+2. **Order**：每对adjacent suffixes strictly increasing。
+3. **LCP exactness**：prefix equal + next mismatch/end。
+4. **Inverse**：`rank(select(i)) == i`。
+5. **Query**：rank是lower bound；all earlier suffixes less，all later suffixes not less。
+6. **Applications**：LRS substring有two witness offsets；KWIC每个context offset确实startsWith query。
+
+```ts
+assert(isPermutation(sa, 0, N));
+for (let i = 1; i < N; i++) {
+  assert(compareSuffix(sa[i - 1], sa[i]) < 0);
+  assert(lcp[i] === referenceLcp(sa[i - 1], sa[i]));
+}
+for (let i = 0; i < N; i++)
+  assert(rank(text.slice(sa[i])) === i);
+```
+
+<Algs4SuffixCertificateLab />
+
+Differential corpus应含empty、single character、all same, periodic, all distinct, NUL boundary、Unicode surrogate pairs与large repetitive text。Empty suffix是否included必须明确；official API只索引N个nonempty suffixes。
+
+## 6.3.10 逐步运行路线
+
+<Stepper>
+  <Step title="固定text与offset contract" description="明确character unit、normalization、empty suffix policy，并以offset view避免copying。">
+    <Algs4SuffixSetMap />
+    <Algs4OffsetRepresentationLab />
+  </Step>
+  <Step title="构建并核对suffix order" description="排序all offsets，逐adjacent pair用reference comparator验收strict order。">
+    <Algs4SuffixSortLab />
+  </Step>
+  <Step title="建立exact LCP" description="同时证明shared prefix和maximality，为LRS与accelerated queries提供证据。">
+    <Algs4LcpArrayLab />
+    <Algs4LcpCertificateLab />
+  </Step>
+  <Step title="执行rank与KWIC" description="Binary-search lower bound，再扫描startsWith query的contiguous suffix interval。">
+    <Algs4SuffixRankLab />
+    <Algs4KwicLab />
+  </Step>
+  <Step title="验收应用与全局索引" description="LRS提供two offsets，suffix array通过permutation、order、LCP和rank/select inverse。">
+    <Algs4LongestRepeatedSubstringLab />
+    <Algs4SuffixCertificateLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Suffix arrays保存all nonempty suffixes的lexicographic rank-to-offset mapping。
+- Offset views使index space O(N)；复制all suffix strings会产生quadratic characters。
+- Suffix sorting必须按明确character unit比较，shorter exhausted suffix排在longer prefix suffix之前。
+- Longest common prefix array记录adjacent sorted suffixes的exact shared-prefix lengths。
+- Longest repeated substring就是maximum adjacent LCP，official problem允许overlap。
+- Rank以binary search求query insertion position，basic cost O(K log N)。
+- Keyword in context从rank(query)开始扫描one contiguous startsWith interval。
+- Basic comparison sort、3-way radix和doubling algorithms有不同worst cases与memory tradeoffs。
+- Independent certificate检查offset permutation、strict suffix order、exact LCP和rank/select inverse。
+
+<Exercises>
+
+1. 为`BANANA`列出all suffix offsets、sorted suffix array与adjacent LCP array，指出LRS及其two witness offsets。
+2. 证明all suffixes starting withquery P在suffix array中形成contiguous interval；据此解释KWIC为何可在first nonmatch处停止。
+3. 比较materializing all suffix strings与storingN integer offsets的space，给出exact character sum与asymptotic bound。
+4. 设计mutation tests分别抓住swapped ranks、duplicate offset、under-reported LCP、over-reported LCP与wrong rank boundary。
+
+<Answer>
+
+Suffixes按order为offset5 `A`、3 `ANA`、1 `ANANA`、0 `BANANA`、4 `NA`、2 `NANA`，所以SA `[5,3,1,0,4,2]`。LCP为`[0,1,3,0,0,2]`。Maximum 3来自ranks1/2，对应offsets3与1，LRS是`ANA`。
+
+</Answer>
+
+<Answer>
+
+Lexicographic order中，任意以P开头的string都位于range `[P, successorPrefix(P))`。若两条P-prefix suffixes之间夹着非P-prefix suffix，该suffix必须在first differing position小于或大于P，从而不可能位于二者之间，矛盾。因此rank(P)定位first candidate，first non-prefix之后不会再出现match。
+
+</Answer>
+
+<Answer>
+
+Copied suffix characters为 \(N+(N-1)+\cdots+1=N(N+1)/2=\Theta(N^2)\)，还未计N个string objects。Offset array为N integers，即Theta(N) words，并与single original text共享characters。`select`按需materialize时才支付chosen suffix length。
+
+</Answer>
+
+<Answer>
+
+Swap adjacent ranks应触发strict-order failure；duplicate offset触发permutation failure；对每个LCP用reference scan同时检查prefix equal与next mismatch，分别抓under/over report；对每个i验证`rank(text[SA[i]..])=i`，并对random query核对lower-bound inequalities，抓binary-search boundary错误。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="后缀数组">按lexicographic rank排列的text suffix starting offsets。</GlossaryItem>
+  <GlossaryItem term="后缀排序">对all suffix views执行lexicographic ordering的index construction。</GlossaryItem>
+  <GlossaryItem term="后缀偏移">以single integer引用text[offset..N)而不复制substring的representation。</GlossaryItem>
+  <GlossaryItem term="最长公共前缀">两个strings从开头连续相等的maximum length。</GlossaryItem>
+  <GlossaryItem term="LCP数组">每个adjacent suffix-rank pair的longest-common-prefix length array。</GlossaryItem>
+  <GlossaryItem term="最长重复子串">至少出现twice的maximum-length contiguous substring。</GlossaryItem>
+  <GlossaryItem term="后缀排名">Strictly less than query的suffix count或suffix在sorted order中的position。</GlossaryItem>
+  <GlossaryItem term="上下文关键词查找">输出query all occurrences及左右bounded context的concordance search。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Algorithms, 4th Edition · Section 6.3 Suffix Arrays"
+  href="https://algs4.cs.princeton.edu/63suffix/"
+  author="Robert Sedgewick and Kevin Wayne"
+  license="本章按官方6.3及当前SuffixArray、SuffixArrayX、LongestRepeatedSubstring与KWIK实现重构offset representation、suffix ordering、index/select/lcp/rank、LRS、KWIC、3-way radix与performance caveats；代码为教学化摘写与重新组织。"
+/>

@@ -461,9 +461,10 @@ export function StatePatternDiagram() {
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        Context 将「当前状态」委托给一个 State
-        对象：状态切换只需调用 setState 换一个具体状态，同一 request
-        在不同状态下表现出不同行为——状态转换逻辑集中在具体状态类内部，Context 无需感知切换细节。
+        Context 将「当前状态」委托给一个 State 对象：状态切换只需调用 setState
+        换一个具体状态，同一 request
+        在不同状态下表现出不同行为——状态转换逻辑集中在具体状态类内部，Context
+        无需感知切换细节。
       </figcaption>
     </figure>
   );

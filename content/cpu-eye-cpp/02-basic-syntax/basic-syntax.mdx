@@ -1,0 +1,304 @@
+---
+title: "第2章：基础语法"
+type: A
+section: CPU眼里的C/C++ · 官方第2章
+order: 2
+description: 对齐原书第2章 2.1-2.10：从 main 的真实调用边界出发，把变量、分支、指针、数组、引用、递增和类型转换还原成寄存器、地址与控制流证据。
+demo: false
+math: false
+sourceUrl: "https://www.tup.com.cn/booksCenter/bookcatalog?id=09954301"
+draft: false
+---
+
+import {
+  CpuEyeBranchControlFlowMap,
+  CpuEyeIncrementConversionCostMap,
+  CpuEyePointerArrayAddressMap,
+} from "@/components/mdx/cpu-eye-cpp/diagrams/basic-syntax";
+
+<Objectives>
+
+- 能解释 CPU眼里的main函数、变量与 if else/goto 如何形成调用、数据和控制流
+- 能计算指针变量和数组索引的有效地址，并判断数组越界、悬空指针与引用生命周期风险
+- 能比较 i++与++i 的抽象语义，分析类型转换在位宽、符号和数值范围上的信息损失
+
+</Objectives>
+
+## 从“语法最终留下什么状态变化”开始
+
+C/C++ 的 `if`、数组下标和引用都不是 CPU 指令名称。compiler 必须把它们降级为三类可观察动作：改变 register value、读写 memory、改变下一条 instruction 的位置。学习基础语法时，不只问“这行代码是什么意思”，还要问“它要求实现保留哪些语义，哪些实现细节允许优化器改变”。
+
+<Term def="源码经过编译后形成的基本块与跳转边，描述每个条件可能选择的执行路径。">
+  控制流图
+</Term>
+
+先预测下面每段代码在 `-O0` 和 `-O2` 下是否仍需要 stack slot、branch 和 temporary；再看 assembly。预测与证据不一致的地方，才是最值得解释的知识点。
+
+## 2.1 CPU眼里的main函数
+
+`main` 是 C/C++ hosted program 的用户入口函数，但通常不是 executable 的第一条 CPU 指令。OS loader 把 instruction pointer 交给 runtime startup entry；startup code 初始化运行库、组织 `argc/argv`，再按当前 ABI 调用 `main`。`main` 的 return value 随后被 runtime 转换成 process exit status。
+
+<Term def="在进入 main 前准备运行库、参数和退出路径的启动代码；具体符号与步骤取决于平台。">
+  runtime startup
+</Term>
+
+```cpp
+int main(int argc, char** argv) {
+    return argc > 1 ? 0 : 2;
+}
+```
+
+在常见 x86-64 ABI 中，整数参数和返回值优先经过约定 registers，但这些 register 名不是 C++ 语言规则。`main` 返回也不等于直接关闭进程：控制先回到 caller，startup code 再执行清理与 exit 路径。若直接使用 `_Exit`、异常逃离边界或系统调用，路径又会不同。
+
+<Callout type="trap" title="陷阱：main 是可执行文件中的第一条指令">
+  main 是源码层的用户入口。真实 instruction entry 往往是 `_start` 一类 runtime
+  startup；它准备环境后才调用 main。反汇编时应同时寻找 executable entry、call
+  main 和 exit status 三个证据点。
+</Callout>
+
+## 2.2 CPU眼里的变量
+
+<Term def="一段具有类型、存储期和值语义的对象；实现可把其值放在内存、寄存器或直接消除。">
+  变量对象
+</Term>
+
+变量同时提供“值如何解释”和“对象何时存在”两层约束。`int count` 告诉编译器哪些 operations 合法、读取多少有效 bits 以及 overflow 规则；它不承诺变量一定有一个可见 memory address。没有取地址且行为可静态推导的 local，优化器可以长期放在 register，做 constant propagation，甚至完全删除。
+
+```cpp
+int score(int input) {
+    int doubled = input * 2;
+    int result = doubled + 1;
+    return result;
+}
+```
+
+`-O0` 可能让 `doubled` 和 `result` 各占 stack slot，形成多次 load/store；`-O2` 常把整个函数化简为一条地址计算。CPU 看见的是 values 与 dependencies，不是源码变量名。debugger 中 optimized local 显示为 optimized out，也不表示源程序语义丢失，而是中间存储不再需要。
+
+static/global、automatic local 和 dynamic object 的 storage duration 不同；`const` 限制通过该表达式修改，并不自动说明物理页面只读。是否放 `.rodata`、是否合并 constant、是否根本不分配地址，都属于实现选择。
+
+## 2.3 CPU眼里的goto、if else
+
+`goto` 明确给出一条无条件 control-flow edge；`if else` 给出依赖 condition 的两条候选 edge。机器层通常先比较 operands 或形成 predicate，再由 conditional jump 选择 basic block；一个分支完成后可能用 unconditional jump 越过另一分支，到 merge block 汇合。
+
+```cpp
+int classify(int score) {
+    if (score >= 60) {
+        return 1;
+    } else {
+        return 0;
+    }
+}
+```
+
+<CpuEyeBranchControlFlowMap />
+
+compiler 可以把条件取反、交换 fall-through block、用 `setcc`/conditional move 消除 branch，或因为 condition 恒真删除整条路径。因此“一个 if 必然对应一条某名字的 jump”不成立。`goto` 也不天然更快；性能取决于最终 control-flow layout、branch predictability、instruction cache 与周围工作。
+
+<Term def="只有一个入口、内部顺序执行并从末尾分支出去的一段指令，是控制流分析的基本节点。">
+  basic block
+</Term>
+
+复杂控制流的主要风险是 lifetime 与 invariant 难以追踪。C++ 限制跳转进入某些尚未完成初始化的 scope，正是为了防止对象生命周期被绕开。查看 assembly 前，先在源码画出 blocks、edges 和每条 edge 上成立的条件。
+
+## 2.4 CPU眼里的指针变量
+
+<Term def="保存某个对象或函数地址表示的变量；类型决定允许的地址运算和解引用解释。">
+  指针变量
+</Term>
+
+指针值用于标识 address；解引用要求该 address 在当前时刻指向一个允许访问的对象，并满足 alignment、lifetime 和 type rules。CPU 的 load/store instruction 通常只接收计算出的 effective address，它不会自动知道这个数最初来自合法对象、已释放 heap block，还是越界运算。
+
+```cpp
+int value = 42;
+int* pointer = &value;
+int observed = *pointer;
+```
+
+未优化代码可能先把 `&value` 写入 pointer 的 stack slot，再读回进行 indirect load；优化器知道 alias 与 lifetime 后，可直接把 `observed` 替换为 42。指针变量本身也有地址和值：`&pointer` 是 pointer object 的地址，`pointer` 是目标地址，`*pointer` 才是目标对象的值。这三层混淆会直接导致错误调试结论。
+
+## 2.5 CPU眼里的指针本质和风险
+
+<Term def="对象生命周期结束后仍保留其旧地址的指针；即使地址数值未变，也不能合法解引用。">
+  悬空指针
+</Term>
+
+指针本质和风险不能缩成“地址是一个整数”。在抽象机中，合法访问还依赖地址对应的 object identity、lifetime、bounds、alignment 和 effective type；整数碰巧等于某个地址，不自动获得全部访问权。常见风险包括：未初始化或 null dereference、对象销毁后的 dangling pointer、数组边界外访问、错误类型解释、未对齐访问，以及多个 aliases 破坏优化器可依赖的规则。
+
+<Callout type="trap" title="陷阱：地址看起来有效，解引用就一定安全">
+  内存映射仍存在只能说明 CPU 可能完成一次 load/store。若对象 lifetime
+  已结束、地址越界或 type/alignment 不满足，C/C++ 层仍是 undefined
+  behavior；程序偶尔读到旧值不是正确性证据。
+</Callout>
+
+硬件 protection 通常以 page 为粒度，而对象边界可能只有数个 bytes。越界访问如果仍落在已映射可写 page，CPU 不会触发 page fault，却可能悄悄覆盖另一个 local、allocator metadata 或 return path。AddressSanitizer 通过 redzones 和 runtime checks 增强观测，但它也不是语言语义本身。
+
+## 2.6 CPU眼里的数组
+
+数组由同类型 elements 连续排列。对于 `T values[N]`，有效元素 `values[i]` 的地址可抽象为 `base + i * sizeof(T)`；x86 addressing mode 常能在一条 instruction 中组合 base、scaled index 和 displacement。array-to-pointer conversion 常把表达式变成首元素 pointer，但数组类型本身仍携带元素数量，二者不能完全等同。
+
+<Term def="由基地址、索引乘比例因子和偏移量组合得到，供一次 load/store 使用的地址。">
+  有效地址
+</Term>
+
+```cpp
+int values[4] = {11, 22, 33, 44};
+int third = values[2];
+```
+
+`values[2]` 与 `*(values + 2)` 在语义上对应；pointer arithmetic 的步长按 element type 缩放，而不是固定加 1 byte。二维原生数组还需要 row stride：`matrix[r][c]` 先定位第 r 行，再按 c 定位元素；它与“指针数组”或任意 `int**` 的内存形状不同。
+
+<CpuEyePointerArrayAddressMap />
+
+## 2.7 CPU眼里的数组越界
+
+<Term def="访问数组对象有效范围之外的位置；C/C++ 通常不自动检查，行为未定义。">
+  数组越界
+</Term>
+
+标准允许形成指向数组最后元素之后的 one-past pointer，用作迭代终点和比较，但禁止解引用它。对四元素数组，index 0 至 3 可访问，`values + 4` 可作为 end，`values[4]` 已经解引用 one-past，属于 undefined behavior；继续计算更远地址也超出允许范围。
+
+```cpp
+for (int i = 0; i <= 4; ++i) { // bug: i == 4 is out of bounds
+    values[i] = i;
+}
+```
+
+是否立即 crash 取决于 address 是否落在受保护 page、优化结果和邻近布局。更危险的情况是“不 crash 但覆盖别的数据”。compiler 在假定 program 无 undefined behavior 的前提下优化，可能删除开发者以为会检测越界后的代码，所以不能用一次运行结果定义越界效果。容器的 `.at()`、span bounds discipline、sanitizers 和 fuzzing 能降低风险。
+
+## 2.8 CPU眼里的引用
+
+<Term def="绑定到已有对象的语言级别别名；必须遵守被引用对象的生命周期，具体实现不承诺一定占用地址槽。">
+  引用
+</Term>
+
+引用在语言层是 alias，不是可重新指向的 pointer object。函数参数 `int& value` 在常见 ABI 上通常传入 address，callee 通过 indirect access 修改 caller object；但 compiler 可 inline 调用并把引用完全消除。因此“引用底层就是 const pointer”可帮助初步理解 ABI，却不是精确语言定义。
+
+```cpp
+void increment(int& value) {
+    ++value;
+}
+```
+
+引用不会延长所有对象的 lifetime。把 local 绑定到返回引用、捕获已销毁对象，或让 view/reference 超过 owner 寿命，都会留下 dangling reference。`const T&` 对某些 temporary 有受规则限制的 lifetime extension，但不能泛化到所有转存和返回场景。判断引用安全时应画 owner lifetime，而不是只看语法中没有星号。
+
+## 2.9 CPU眼里的i++与++i
+
+前置 `++i` 先修改 i，再产生修改后的 lvalue；后置 `i++` 概念上保存旧值、修改 i，再产生旧值。对于内置 integer，如果表达式结果被丢弃，两者通常都只剩一次 increment，优化后常生成相同 code。只有旧值仍被后续消费时，后置语义才要求保留它。
+
+<Term def="后置递增为了产生修改前结果而形成的概念值；优化器可在该结果不可观察时消除它。">
+  旧值临时量
+</Term>
+
+对 user-defined iterator，prefix/postfix 是不同 overload；postfix 的伪参数 `int` 用于区分签名，实现往往需要复制旧 iterator，因此可能更贵。正确结论不是“++i 永远比 i++ 快”，而是：先看结果是否使用、类型是否内置、overload 如何实现，再检查 optimized assembly 或 benchmark。
+
+```cpp
+int old = index++;
+int now = ++index;
+index++;
+```
+
+第一行必须让 `old` 得到修改前值，第二行让 `now` 得到修改后值，第三行结果未使用。不要把 `i = i++` 这类混乱写法当性能实验；不同标准版本中的 sequencing 规则和可读性问题会掩盖真正主题。
+
+## 2.10 代码陷阱类型转换
+
+<Term def="把一个类型的值映射为另一类型；可能改变位宽、符号解释、精度、数值范围或对象访问规则。">
+  类型转换
+</Term>
+
+CPU registers 只保存 bit patterns，instruction 决定按 signed、unsigned、integer 或 floating-point 方式解释。compiler 根据源语言 conversion rules 选择 sign extension、zero extension、truncation 或 floating conversion。转换不是“换一个类型名字”：目标类型无法表示原值时，信息会丢失，某些转换结果依赖实现或直接越过语言允许边界。
+
+<CpuEyeIncrementConversionCostMap />
+
+```cpp
+double price = 19.95;
+int whole = static_cast<int>(price);       // 19, fractional part removed
+std::uint64_t wide = 0x1'0000'0001ULL;
+std::uint32_t narrow = static_cast<std::uint32_t>(wide); // high bits lost
+int signedValue = -1;
+bool surprising = signedValue < 1U;        // signed/unsigned conversion first
+```
+
+浮点转整数先截去小数部分，但超出目标整数可表示范围不是普通饱和；窄化位宽会丢弃无法表示的信息；signed/unsigned 混合比较可能先把负数转成很大的 unsigned value。pointer cast 还涉及 alignment、object representation 与 aliasing，`reinterpret_cast` 只表达低层意图，不保证解引用合法。
+
+<Callout type="trap" title="陷阱：static_cast 写出来就代表转换安全">
+  显式语法只说明开发者选择了转换，并不会证明 value 在目标 range
+  内。转换前应检查范围，接口上优先避免 signed/unsigned 混用；涉及 object
+  representation 时用标准允许的 byte view、bit_cast 或 memcpy 路径。
+</Callout>
+
+## 一套可复现的基础语法实验
+
+1. 固定 compiler、version、target ABI、language standard 与 `-O0/-O2`。
+2. 对 main 同时标记 executable entry、runtime call 和 exit status path。
+3. 对 variable 记录 address 是否被取用，再判断 stack slot 能否消失。
+4. 对 if/goto 先画 source control-flow graph，再对齐 basic blocks 与 branch edges。
+5. 对 pointer/array 手算 `base + index * sizeof(T)`，标出 lifetime 与合法 bounds。
+6. 对 i++/++i 分别测试结果使用和丢弃，区分 built-in 与 overloaded type。
+7. 对 conversion 同时写出 source value、source bits、target range 和 resulting bits。
+8. 每条结论注明是 standard semantics、ABI convention 还是一次 code-generation evidence。
+
+## 小结
+
+- CPU眼里的main函数由 runtime startup 调用，main 不是 executable 的普遍物理入口
+- 变量约束 value、type 和 lifetime，但 optimized value 不一定拥有独立 memory slot
+- goto 与 if else 形成 control-flow edges，编译器可翻转、合并或消除 branch
+- 指针变量保存地址表示，合法解引用还依赖 object lifetime、bounds、alignment 与 type
+- 数组 elements 连续排列，下标对应 base 加 scaled index；one-past 可比较但不可解引用
+- 数组越界是 undefined behavior，不保证 crash，也不保证保留开发者想象中的邻接写入
+- 引用是语言级 alias，ABI 上常以 address 传递，但可被 inline 和优化完全消除
+- i++与++i 的差别在表达式结果；结果未使用时内置类型常生成相同 code
+- 类型转换会改变精度、范围、符号或位模式解释，显式 cast 不等于安全证明
+- 所有汇编结论都要绑定 compiler、target、flags，并与 C/C++ 抽象语义分层记录
+
+<Attribution
+  adaptedFrom="CPU眼里的C/C++，第2章 基础语法"
+  adaptedUrl="https://www.tup.com.cn/booksCenter/bookcatalog?id=09954301"
+/>
+
+<Glossary>
+  <GlossaryItem term="控制流图">
+    由基本块和跳转边组成的执行路径模型。
+  </GlossaryItem>
+  <GlossaryItem term="runtime startup">
+    调用 main 前后的运行库启动与退出路径。
+  </GlossaryItem>
+  <GlossaryItem term="变量对象">具有类型、存储期和值语义的对象。</GlossaryItem>
+  <GlossaryItem term="basic block">单入口顺序执行的控制流节点。</GlossaryItem>
+  <GlossaryItem term="指针变量">保存对象或函数地址表示的变量。</GlossaryItem>
+  <GlossaryItem term="悬空指针">
+    目标对象寿命结束后仍保留旧地址的指针。
+  </GlossaryItem>
+  <GlossaryItem term="有效地址">
+    供一次内存访问使用的最终计算地址。
+  </GlossaryItem>
+  <GlossaryItem term="数组越界">访问数组有效对象范围以外的位置。</GlossaryItem>
+  <GlossaryItem term="引用">绑定已有对象的语言级别名。</GlossaryItem>
+  <GlossaryItem term="旧值临时量">后置递增语义产生的修改前结果。</GlossaryItem>
+  <GlossaryItem term="类型转换">
+    一个类型的值到另一类型值的规则映射。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：main、if else 与 goto 最终怎样连接成控制流？** 为一个参数检查程序画出 startup、main、pass/fail 和 exit 的路径，再与 `-O0/-O2` assembly 对齐。
+
+<Answer question="怎样区分语言入口与机器入口？">
+  executable header 给出 runtime entry，startup code 准备 argc/argv 后按 ABI
+  call main；main 内部 condition 形成 pass/fail edges，两个路径返回 exit
+  code，startup 再进入 process exit。 `-O2` 可能用 setcc、conditional move
+  或算术消除 branch，所以应对齐语义上的 blocks，而不是要求固定 jump mnemonic。
+</Answer>
+
+2. **问题 2：四元素 int 数组为何能访问 index 3，却不能解引用 index 4？** 写出地址公式，并说明为何越界不一定立即 crash。
+
+<Answer question="one-past 的边界在哪里？">
+  `&values[i] = base + i * sizeof(int)`；0 至 3 对应四个存活 elements。`base + 4
+  * sizeof(int)` 是 one-past，可用于 end comparison，但该地址没有数组
+  element，不能解引用。若它仍落在已映射 page，CPU 可能完成访问而没有 fault，但
+  C/C++ 行为已经未定义，可能覆盖邻接对象或被优化器重新解释。
+</Answer>
+
+3. **问题 3：比较 i++与++i，并审计三种类型转换。** 分别测试递增结果被使用和丢弃，再检查 double 到 int、负 int 与 unsigned 比较、64 位到 32 位的结果。
+
+  <Answer question="怎样从抽象语义走到机器证据？">前置产生新值，后置产生旧值；只有旧值可观察时才必须保留该 data dependency，内置类型在结果丢弃时通常相同。double 到 int 检查截断与范围，signed/unsigned 比较先写清 usual conversions，窄化检查被丢弃的高位。最后固定 compiler/ABI/flags 查看 conversion instructions，但不能把某条 instruction 当成跨平台规则。</Answer>
+</Exercises>

@@ -1,0 +1,406 @@
+---
+title: "Column 6 · Perspective on Performance：在正确层级寻找加速"
+type: B
+section: "Part II · Performance"
+order: 5
+description: "按第二版Column 6重建Andrew Appel的N-body case study、约400倍多层加速、problem definition、system structure、algorithms/data structures、code tuning、system software与hardware设计层级。"
+demo: true
+math: true
+sourceUrl: "https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+draft: false
+---
+
+import { PP2NBodyBaselineLab, PP2TreeApproximationLab, PP2AppelSpeedupLab, PP2AccuracyPerformanceLab, PP2DesignLevelsLab, PP2ProblemDefinitionLab, PP2SystemStructureLab, PP2AlgorithmLevelLab, PP2DependencyLab, PP2OptimizationPortfolioLab, PP2PerformanceCertificateLab } from "@/components/mdx/programming-pearls/diagrams/06-perspective-on-performance";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释Perspective on Performance、Appel N-body case study、design levels及“small speedup选最佳层、large speedup跨多层”的原则
+- 能计算direct pair interactions、$n\log n$ hierarchy work、independent speedup product、Amdahl bound与fixed-budget scaling
+- 能实现direct N-body baseline、aggregate-tree traversal、level-by-level benchmark ledger和accuracy gate
+- 能分析problem definition、system structure、algorithm/data structure、code tuning、system software、hardware之间的依赖与成本
+- 能设计performance target、baseline、level portfolio、accuracy envelope、dependency graph和end-to-end certificate
+
+</Objectives>
+
+## 从“性能问题到底属于哪一层”开始
+
+看到程序慢，常见反应是立刻改loop、换容器、开compiler flag或买更快机器。Column 6的Perspective on Performance要求先后退一步：computer system由多个design levels组成，同一个slow outcome可能来自错误的问题定义、chatty system decomposition、bad algorithm、hot code、runtime platform或hardware mismatch。
+
+先预测：一个workflow产生50份内容相同的purchase orders，是把database query调快20%，还是把需求改为one consolidated order更有效？再预测：需要400倍加速时，只在one loop里寻找400倍是否现实？
+
+Design Level（<Term def="Computer system从problem definition到hardware的一个决策层；每层都可改变work amount、execution cost或user outcome。">Design Level</Term>）不是严格taxonomy，而是搜索performance leverage的检查表。
+
+<PP2DesignLevelsLab />
+
+## 6.1 A Case Study：Andrew Appel的N-body simulation
+
+[Andrew W. Appel的原始研究](https://epubs.siam.org/doi/10.1137/0906008)模拟三维空间中$n$个objects在gravitational field中的相互作用。Input包括mass、initial position与velocity；output是objects随time演化的state。
+
+### Direct baseline
+
+朴素方法在每个time step计算every unordered pair的interaction：
+
+$$
+P(n)=\binom{n}{2}=\frac{n(n-1)}{2}=\Theta(n^2).
+$$
+
+当$n=10{,}000$时，每step接近50 million pairs；再乘hundreds of integration steps，run time进入months或year量级。
+
+```text
+for each time step:
+    for i in [0, n):
+        acceleration[i] = 0
+        for j in [0, n), j != i:
+            acceleration[i] += force(body[i], body[j])
+    integrate positions and velocities
+```
+
+<PP2NBodyBaselineLab />
+
+这个baseline很短、容易verify，却重复计算大量远距离individual interactions。Performance breakthrough不是先缩短`force`的instructions，而是改变远距离objects的representation。
+
+### Tree representation与aggregate interaction
+
+Appel把space中的bodies组织成hierarchical binary tree。Leaves是particles；internal nodes记录descendants的total mass与center of mass。对于足够远的cluster，target body不再分别访问every leaf，而用one aggregate interaction近似whole cluster。
+
+```text
+force_from(node, target):
+    if node is far enough:
+        return aggregate_force(node.mass, node.center, target)
+    if node is a leaf:
+        return direct_force(node.body, target)
+    return force_from(node.left, target)
+         + force_from(node.right, target)
+```
+
+在适合的distribution和acceptance rule下，work从$O(n^2)$降到estimated $O(n\log n)$：
+
+$$
+\frac{n^2}{n\log_2 n}=\frac{n}{\log_2 n}.
+$$
+
+10,000规模上，asymptotic ratio很大；实际算法受tree construction、constant factors、accuracy criterion与particle distribution影响，原案例测得algorithm/data-structure层约12倍，而非直接套用theoretical ratio。
+
+<PP2TreeApproximationLab />
+
+Performance和accuracy不可拆开。Opening criterion越宽松，aggregate interactions越多，work越少，但force approximation error可能上升。每个speedup都必须在domain-specific conservation、trajectory或error tolerance下验收。
+
+### Six coordinated changes
+
+原书case study总结六个层级的approximate factors：
+
+| Design level | Factor | Modification |
+|---|---:|---|
+| Algorithms and Data Structures | 12x | Binary tree把$O(n^2)$改为estimated $O(n\log n)$ |
+| Algorithm Tuning | 2x | 在不破坏accuracy时使用larger time steps |
+| Data Structure Reorganization | 2x | 形成更适合tree algorithm的clusters |
+| System-Independent Code Tuning | 2x | Tree-relative coordinates允许single precision |
+| System-Dependent Code Tuning | 2.5x | 用assembly重写profiled critical procedure |
+| Hardware | 2x | 使用floating-point accelerator |
+
+<PP2AppelSpeedupLab />
+
+列出的rounded factors直接相乘为480，而reported end-to-end result约400倍。这不是arithmetic error：factors来自measurements与近似，且不完全independent。核心结论是多层改进可以相乘：
+
+$$
+S_{\mathrm{total}}
+\approx
+\prod_{k=1}^{m} S_k,
+$$
+
+但只有在each factor基于same baseline chain且dependencies已说明时，这个product才有意义。
+
+10,000-body simulation由约one year降到约one day。代价也真实存在：simple baseline只有few dozen lines，fast version约1,200 lines Pascal，并消耗months of engineering。Performance claim必须同时记录speed、accuracy、complexity、development time和maintainability。
+
+### Dependencies are part of the design
+
+Tree structure不仅给出12倍：relative coordinates缩小numeric range，才使32-bit floating point可接受；cluster representation也支持local time steps。换言之，algorithm/data structure change是后续changes的enabler。
+
+Assembly rewrite和floating-point accelerator在该machine上更接近independent，但hardware仍会改变algorithm relative advantage。一个擅长pipelined all-pairs calculation的architecture，可能让tree algorithm的12倍缩小。
+
+<PP2DependencyLab />
+
+<Callout type="trap" title="把每个benchmark的speedup相乘就得到总加速">
+若两个changes优化同一hot fraction，第二个factor会在新baseline上缩水；若one change启用another，关闭前置change时后置factor甚至不存在。必须按actual sequence测end-to-end，并画出dependencies，不能只乘isolated microbenchmarks。
+</Callout>
+
+## 6.2 Design Levels
+
+### Problem Definition
+
+Problem Definition（<Term def="决定system真正必须交付的outcome、inputs、accuracy、latency与不必完成的work。">Problem Definition</Term>）可能在任何code运行前赢得performance battle。
+
+原书例子中，one organization的50个人分别发purchase orders，purchasing system被equivalent transactions淹没。把50 orders合并为one order，不只减轻administrative work，也让该computer workflow约快50倍。
+
+<PP2ProblemDefinitionLab />
+
+类似重定义包括：
+
+- 只求top 100而不是full sort all records。
+- 接受approximate aggregate而不是exact all-pairs interaction。
+- 预计算daily report而不是每次request重算history。
+- 改善compiler error recovery，虽然single compilation略慢，却减少用户反复compile的total time。
+- 删除用户并不需要的feature、format或precision。
+
+Eliminated work具有额外价值：不存在的component不产生latency、bugs、security surface、documentation与maintenance cost。
+
+### System Structure
+
+System Structure（<Term def="Modules、processes、services、storage与communication paths的decomposition，决定work在哪里发生以及跨多少boundaries。">System Structure</Term>）通常是large system performance最重要的factor。
+
+<PP2SystemStructureLab />
+
+同一algorithm若每item跨network boundary六次，local loop tuning几乎无关紧要。Batching、cache ownership、pipeline stages、partitioning、async flow和data locality必须在architecture阶段估算。
+
+End-to-end latency可分解为：
+
+$$
+T_{\mathrm{request}}
+=
+\sum_i T_{\mathrm{compute},i}
++
+\sum_j T_{\mathrm{queue},j}
++
+\sum_k T_{\mathrm{communication},k}.
+$$
+
+先画critical path与back-of-the-envelope budget，再决定profiling target。新系统中build performance比部署后retrofit更便宜。
+
+### Algorithm and Data Structure
+
+Algorithm and Data Structure（<Term def="决定module如何表示input/state以及operations的growth rate、locality和constant factors的核心设计层。">Algorithm and Data Structure</Term>）通常给出largest single module speedup。
+
+<PP2AlgorithmLevelLab />
+
+Appel案例用tree aggregate替代all pairs。其他典型changes包括：
+
+- Sequential scan换index或hashing。
+- Repeated sort换incremental priority queue。
+- Dense boolean set换bit vector。
+- Repeated graph traversal换precomputed reachability或cache。
+- Text copies换views/ropes，前提是lifetime contract可控。
+
+Asymptotic change会改变fixed time budget支持的problem size。若machine快1000倍，$O(n^2)$可把$n$扩大约$\sqrt{1000}\approx31.6$倍；$O(n\log n)$则可接近扩大hundreds of times，具体解需numerically compare。
+
+### Code Tuning
+
+Code Tuning（<Term def="在behavior与algorithm基本不变时，根据profile修改hot instructions、layout、branches或representation。">Code Tuning</Term>）应发生在profile之后。Appel将critical procedure重写为assembly得到约2.5倍，并通过single precision得到约2倍。
+
+```text
+baseline -> profile -> identify dominant procedure
+         -> propose one local change
+         -> verify numerical envelope
+         -> benchmark end-to-end
+         -> retain only measured improvements
+```
+
+Amdahl's law限制local tuning。若fraction $p$可加速$s$倍：
+
+$$
+S
+=
+\frac{1}{(1-p)+p/s}.
+$$
+
+若hot code只占20%，即使其无限快，system最多1.25倍。先测fraction，再决定是否值得引入SIMD、assembly、memory packing或branch tricks。
+
+### System Software
+
+有时换underlying software比改application更容易：
+
+- Compiler optimization与link-time optimization。
+- 更匹配query workload的database/index engine。
+- Different allocator、math library、runtime或garbage collector。
+- 更适合real-time constraint的OS/runtime configuration。
+- Compression、serialization、RPC或storage engine。
+
+Vendor claim或synthetic benchmark不等于your workload。必须保持same data、queries、correctness、warm state和resource budget做end-to-end comparison。
+
+### System and Hardware
+
+System and Hardware要一起看：CPU clock、memory bandwidth、multiprocessors、GPU/DSP、storage和network可降低execution cost，但software必须产生适合hardware的parallelism与locality。
+
+Appel使用floating-point accelerator约2倍。现代accelerator同样不是automatic speedup：transfer、kernel launch、data layout、precision和utilization可能吞掉收益。
+
+Hardware换代常是最短calendar path，但有purchase、energy、operations、portability和vendor-lock costs。若problem growth仍是$O(n^2)$，faster hardware只把同一scaling wall向右移动。
+
+<PP2AccuracyPerformanceLab />
+
+## 6.3 Choosing a level portfolio
+
+Performance Target（<Term def="绑定user-visible metric、workload、baseline、required improvement、accuracy与resource constraints的量化目标。">Performance Target</Term>）应写成：
+
+> 在production-like 95th percentile workload下，把end-to-end latency从800 ms降到200 ms，同时保持result error不超过0.1%、memory不超过2 GB、monthly cost不增加。
+
+这比“让模块更快”多出metric、distribution、target和constraints。
+
+### Small speedup：work at the best level
+
+若只需2倍，扫描all levels后选择gain/effort/risk最佳的一层。可能是batch calls、add index、enable compiler flag，也可能是删除unneeded calculation。不要因个人擅长code tuning就默认问题属于code level。
+
+### Large speedup：work at many levels
+
+若需100倍或400倍，通常要像Appel案例一样跨layers：redefine acceptable approximation、change representation、reduce iterations、tune hotspots、use suitable hardware。独立changes的gains multiply；dependent changes按sequence重新测量。
+
+<PP2OptimizationPortfolioLab />
+
+Portfolio ledger应记录：
+
+| Candidate | Level | Baseline | Gain | Accuracy/risk | Effort | Dependency |
+|---|---|---|---:|---|---:|---|
+| Aggregate clusters | algorithm/data | all pairs | measured 12x | approximation | high | enables next two |
+| Local time steps | algorithm tuning | global steps | measured 2x | integration error | medium | needs clusters |
+| Single precision | representation/code | double | measured 2x | numeric range | low | needs relative coordinates |
+| Accelerator | hardware | CPU FP | measured 2x | portability | medium | workload dependent |
+
+Prioritize measured end-to-end gain per total cost，而非largest isolated factor。
+
+## 6.4 Performance is multidimensional
+
+本栏集中runtime efficiency，但software performance还包括throughput、tail latency、memory、energy、cost、accuracy、fault tolerance、reliability、security和robustness to user error。
+
+优化one metric可能伤害another：
+
+- Larger time step提升speed但可能降低simulation accuracy。
+- Caching减少latency但引入staleness与memory。
+- Batching提升throughput但增加single-item latency。
+- Compression减少network bytes但增加CPU。
+- Assembly提升one platform速度但增加maintenance与portability cost。
+- Disabling checks可能提高microbenchmark，却降低diagnosability与safety。
+
+因此objective不是maximize speed，而是在constraints下优化user outcome：
+
+$$
+\min T
+\quad\text{subject to}\quad
+E\le E_{\max},\
+M\le M_{\max},\
+C\le C_{\max},\
+R\ge R_{\min}.
+$$
+
+其中$E$是error、$M$ memory、$C$ cost、$R$ reliability。
+
+<Callout type="trap" title="Correctness完成后，efficiency可以独立优化">
+Approximation、precision、concurrency、caching和retries都可能改变observable behavior。每个performance change都要重新运行correctness、accuracy、reliability与failure tests；“更快的错误答案”没有价值。
+</Callout>
+
+## 6.5 Principles
+
+1. Define the real performance problem and user metric before changing code。
+2. Remove unnecessary work and components first。
+3. Inspect every design level，不要被habit锁在one level。
+4. Use system estimates and profiles to locate leverage。
+5. Prefer algorithm/data-structure improvements whengrowth dominates。
+6. Tune code only wheremeasurements prove it matters。
+7. Treat system software and hardware as workload-dependent choices。
+8. For a small speedup，choose the best level；for a large speedup，coordinate many levels。
+9. Model dependencies before multiplying factors。
+10. Include accuracy、complexity、engineering effort和operations cost in the result。
+
+## 6.6 Performance certificate
+
+<PP2PerformanceCertificateLab />
+
+独立验收一项multi-level speedup：
+
+- **Outcome**：User-visible metric与workload明确。
+- **Baseline**：Revision、hardware、data、distribution和raw samples可重现。
+- **Level map**：Every proposed change归属一层并有reason。
+- **Dependency graph**：Enablement、overlap与hardware interaction已记录。
+- **Accuracy**：Numerical/functional envelope与failure tests通过。
+- **Attribution**：每步在current baseline上单独测量。
+- **End-to-end**：Final system达到target，不只microbenchmark。
+- **Cost**：Development、maintenance、hardware、energy和complexity纳入。
+- **Rollback**：Regression threshold与fallback明确。
+
+## 6.7 逐步运行路线
+
+<Stepper>
+  <Step title="先建立direct N-body baseline" description="计算all-pairs growth，并把run time、accuracy与problem size固定为可比较基线。">
+    <PP2NBodyBaselineLab />
+    <PP2TreeApproximationLab />
+  </Step>
+  <Step title="复原Appel的多层speedup ledger" description="逐项打开六个changes，区分rounded factors、reported total与engineering cost。">
+    <PP2AppelSpeedupLab />
+    <PP2DependencyLab />
+  </Step>
+  <Step title="扫描problem与system levels" description="先删除或合并work，再检查module boundaries、batching与critical path。">
+    <PP2ProblemDefinitionLab />
+    <PP2SystemStructureLab />
+    <PP2DesignLevelsLab />
+  </Step>
+  <Step title="比较algorithm、precision与hardware" description="观察growth curve，并把speedup放入accuracy和platform constraints中。">
+    <PP2AlgorithmLevelLab />
+    <PP2AccuracyPerformanceLab />
+  </Step>
+  <Step title="选择portfolio并签发certificate" description="Small target选best level，large target跨多层，同时验证dependencies、cost和end-to-end outcome。">
+    <PP2OptimizationPortfolioLab />
+    <PP2PerformanceCertificateLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Perspective on Performance把慢系统视为multi-level design problem，而非默认的code problem。
+- Appel的N-body case study从all pairs转向aggregate tree，并跨六层获得约400倍总加速。
+- Direct interaction是$\Theta(n^2)$；hierarchical approximation目标约$O(n\log n)$。
+- Rounded speedup factors不能盲乘，dependencies与new baselines必须记录。
+- Problem Definition可删除work，常比优化existing work更有杠杆。
+- System Structure决定communication、queue与module boundary cost。
+- Algorithm and Data Structure改变growth、locality并可能启用后续优化。
+- Code Tuning受profile和Amdahl bound约束。
+- System Software与Hardware必须用actual workload验证。
+- Small speedup选择best level；large speedup需要compatible multi-level portfolio。
+- Speed、accuracy、reliability、cost与maintainability必须一起验收。
+
+<Exercises>
+
+1. 对$n=10{,}000$计算direct unordered pairs与$n\log_2 n$ work proxy。解释为什么它们的ratio不等于原案例12倍measured speedup。
+2. 一个API p95 latency为800 ms，其中network round trips占55%、database占25%、application compute占20%。设计small 2倍和large 10倍目标的不同level portfolios，并用Amdahl law检查单层上限。
+3. 复核Appel六个factors：画dependency graph，说明为什么single precision依赖tree representation、为什么hardware与algorithm可能交互，并设计sequential benchmark ledger。
+4. 为image-search system编写performance certificate，覆盖problem definition、system structure、algorithm/data structure、code、system software与hardware，同时约束recall、cost和tail latency。
+
+<Answer>
+
+Direct unordered pairs为`10000*9999/2=49,995,000`。`n log2 n` proxy约`10000*13.2877=132,877`，ratio约376倍。Proxy忽略tree build/traversal constants、multiple node visits、acceptance criterion、memory locality和accuracy requirement；原案例的12倍是specific implementation与workload上的measured algorithm-level factor，不能由asymptotic expression直接替代。
+
+</Answer>
+
+<Answer>
+
+Small 2倍可优先batch/cache network calls：若network部分无限快，Amdahl ceiling为`1/(0.45)=2.22x`，存在达到2倍的可能，但仍需把network自身加速约11倍。Large 10倍不可能靠one fraction：即使network、database分别无限快，只剩20% compute，ceiling 5倍。需要problem-level减少requests、system batching、database index/denormalized read model、algorithm change和parallel hardware共同降低all fractions，并在每步重测p95。
+
+</Answer>
+
+<Answer>
+
+Tree algorithm是root；cluster reorganization、local time steps和relative-coordinate single precision由它启用。Assembly hotspot与FPA较独立，但tree traversal的branch/memory shape会改变hardware utilization。Ledger从direct baseline开始，依次记录tree、time-step、reorganization、precision、assembly、accelerator的current-baseline raw time、factor、accuracy与revision；每步还运行final end-to-end benchmark。不要把各change相对original baseline的factors相乘。
+
+</Answer>
+
+<Answer>
+
+Certificate先定义“在production query mix下p95不超过200 ms、recall@20不低于0.92、monthly cost不增加超过10%”。Problem level限制candidate universe和允许approximate retrieval；system levelbatch embeddings、cache hot queries并减少service crossings；algorithm/data level使用ANN index与quantized vectors；code levelprofile distance kernel；system software比较vector database/runtime；hardware比较CPU SIMD与GPU。记录baseline、dependency graph、recall/latency curves、memory、build time、tail samples、cost、failure behavior和rollback threshold。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Design Level">从problem definition到hardware的一层system decisions与optimization opportunities。</GlossaryItem>
+  <GlossaryItem term="Problem Definition">规定真实user outcome、inputs、accuracy、latency及可删除work的设计层。</GlossaryItem>
+  <GlossaryItem term="System Structure">Modules、services、storage和communication paths的decomposition。</GlossaryItem>
+  <GlossaryItem term="Algorithm and Data Structure">决定module representation、operations、growth与locality的核心层。</GlossaryItem>
+  <GlossaryItem term="Code Tuning">在algorithm基本不变时对profiled hot code做local implementation optimization。</GlossaryItem>
+  <GlossaryItem term="Performance Target">绑定metric、workload、baseline、target与constraints的量化目标。</GlossaryItem>
+  <GlossaryItem term="Speedup Dependency">一个optimization启用、削弱、重叠或改变另一个optimization收益的关系。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Programming Pearls, Second Edition · Column 6 Perspective on Performance"
+  href="https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+  author="Jon Bentley"
+  license="本章按Pearson官方第二版目录、官方样章与Column 6的Andrew Appel N-body case study、Design Levels及Principles主线重构；交互cost models、dependency audit、modern system examples与performance certificate为教学化扩展。"
+/>

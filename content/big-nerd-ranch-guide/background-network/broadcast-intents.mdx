@@ -6,9 +6,11 @@ order: 28
 description: 理解 Android 的广播机制：系统广播、自定义广播、动态注册与静态注册的区别，以及 Android 8.0+ 对隐式广播的限制和现代替代方案。
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.oreilly.com/library/view/android-programming-the/9780135257555/"
 draft: false
 ---
+
+import { BnrLifecycleLab, BnrFailureLab, BnrEvidenceLab } from "@/components/mdx/big-nerd-ranch-guide/diagrams/broadcast-intents";
 
 {/* C 实战型（《Android 编程权威指南》第28章改编）：重心在代码对照(§6)与常见误区(§7)。
    知识点清单：1)BroadcastReceiver基础（代码）2)系统广播一览（代码示例）
@@ -19,9 +21,10 @@ draft: false
 {/* 1. 学习目标（spec §一）：C 型必含「能改出 ___ 效果」 */}
 <Objectives>
 
-- 能独立创建一个 BroadcastReceiver，分别用动态注册和静态注册的方式监听系统广播
-- 能说出 Android 8.0+ 对隐式广播的三大限制，以及每条限制背后的设计意图
-- 能回答：LocalBroadcastManager 被弃用后，同一个 App 内的组件间通信用什么替代？
+- 能解释“第28章 Broadcast Intents”全部正式节点的组件所有者、生命周期、线程、状态来源与Android版本边界。
+- 能实现“比较普通Intent和广播，验证静态/动态Receiver、私有权限、有序结果与长任务限制”的最小垂直切片，并保存构建、设备操作、原始日志和断言。
+- 能比较正常创建、旋转、后台、进程重建、权限拒绝与外部故障下的行为差异。
+- 能设计推翻当前实现的反例，并凭前台通知过滤、广播权限表、有序结果轨迹、Receiver时限测试完成独立交接。
 
 </Objectives>
 
@@ -226,20 +229,23 @@ class CheckReceiver : BroadcastReceiver() {
 
 <Exercises>
 
-**练习 1（改代码型）** 编写一个 App，监听设备电量变化：低于 15% 时显示 "电量低！" 的 Snackbar，高于 90% 且正在充电时显示 "电量充足" 的提示。用动态注册实现，注意注册/注销位置。
-<Answer>
-实现要点：① `IntentFilter` 添加 `ACTION_BATTERY_LOW`、`ACTION_BATTERY_OKAY`、`ACTION_POWER_CONNECTED`。② 在 Receiver 的 `onReceive` 中也可以获取到 `BatteryManager.EXTRA_LEVEL` 等额外数据（通过 `registerReceiver(null, filter)` 获取 sticky intent——注意 sticky 广播也已被废弃）。③ `onResume` 注册，`onPause` 注销。④ 展示 Snackbar 时需要确保 Activity 的 root view 有效。
-</Answer>
+**问题 1**：“第28章 Broadcast Intents”覆盖哪些正式节点和项目主线？
+<Answer>覆盖7个节点，从“28. Broadcast Intents”到“For the More Curious: Detecting the Visibility of Your Fragment”。主线是比较普通Intent和广播，验证静态/动态Receiver、私有权限、有序结果与长任务限制，交付物是前台通知过滤、广播权限表、有序结果轨迹、Receiver时限测试。</Answer>
 
-**练习 2（改代码型）** 实现一个"自定义有序广播"的实验：创建三个 BroadcastReceiver（A、B、C），优先级分别为 100、50、0。A 检查一个条件，不通过则阻断广播；B 追加一段数据；C 打印最终结果。验证阻断和传递行为。
-<Answer>
-在 Manifest 中为三个 Receiver 分别设置 `android:priority="100"`、`"50"`、`"0"`。发送方用 `sendOrderedBroadcast(intent, null)`。接收方 A 中：`if (!checkPassed) abortBroadcast()`。接收方 B 中：`resultData = "Step B processed"`。接收方 C 中：在日志中打印 `resultData`。验证：当 A 的条件不通过时，B 和 C 均不执行；当 A 通过时，B 和 C 按顺序执行。
-</Answer>
+**问题 2**：怎样建立本页最小可执行实验？
+<Answer>固定JDK、SDK、Gradle、设备API、语言、权限和输入，完成一个从用户动作到可观察结果的垂直切片；保存干净构建、设备操作、原始日志、状态快照与断言。</Answer>
 
-**练习 3（探索型）** 查阅 Android 官方文档中"Implicit Broadcast Exceptions"白名单。列出至少 5 个在 Android 8.0+ 仍能通过静态注册接收的广播，并说明它们为什么能被豁免。
-<Answer>
-豁免广播列表（部分）：① `ACTION_BOOT_COMPLETED`（开机完成——App 需要开机初始化）；② `ACTION_LOCALE_CHANGED`（语言切换——影响所有 App UI）；③ `ACTION_TIMEZONE_CHANGED`（时区变化——影响所有 App 时间显示）；④ `ACTION_MY_PACKAGE_REPLACED`（本 App 更新——需要迁移数据）；⑤ `ACTION_POWER_CONNECTED`（充电连接——需要调整行为）。豁免原则：广播的触发频率低、App 未启动也需要感知（如开机初始化），或影响所有 App 的系统级事件。
-</Answer>
+**问题 3**：为什么只在正常点击路径运行不能证明完成？
+<Answer>它没有覆盖组件重建、进程死亡、异步取消、权限拒绝、外部输入失败、资源释放和版本变化。应逐项注入故障，并用前台通知过滤、广播权限表、有序结果轨迹、Receiver时限测试核对。</Answer>
+
+**问题 4**：怎样设计能推翻当前实现的反例？
+<Answer>保持其他变量不变，分别注入旋转、后台回收、进程死亡、拒权、断网、无效输入与重复操作；任何状态丢失、越权、崩溃、泄漏或重复副作用都推翻完成结论。</Answer>
+
+**问题 5**：从第4版语境迁移到现代目标SDK时如何控制变量？
+<Answer>先按原书还原机制并锁定基线，再查询目标SDK合同；一次只迁移组件导出、存储、权限、后台、通知或依赖之一，保存构建、行为、测试和回滚差异。</Answer>
+
+**问题 6**：本页达到独立交接标准需要什么？
+<Answer>需要版本与设备指纹、源码提交、输入、构建命令、生命周期轨迹、原始日志、失败测试、安全边界与发布产物，让他人凭前台通知过滤、广播权限表、有序结果轨迹、Receiver时限测试重放。</Answer>
 
 </Exercises>
 
@@ -262,3 +268,165 @@ class CheckReceiver : BroadcastReceiver() {
 </Glossary>
 
 <Attribution />
+
+
+{/* BNR4_AUTHORITY_SUPPLEMENT */}
+
+## 从生命周期、状态与证据开始
+
+第4版不是API词典，而是六个逐步扩展的应用实验。每一章都要回答：用户从哪里进入，哪个Android组件拥有工作，回调在哪个线程发生，哪些事实必须跨旋转或进程死亡恢复，外部系统怎样失败，资源在何时释放。<Term def="负责创建、取消并最终释放组件、任务或资源的明确作用域">生命周期所有者</Term>把Activity、Fragment视图、ViewModel、Worker、线程与资源的寿命连接起来；没有所有者的异步任务就是潜在泄漏。
+
+界面字段不是天然事实。<Term def="在配置变化或进程重建后，可从保存事实重新构造的最小用户状态">可恢复状态</Term>应根据数据大小与寿命放入saved instance state、ViewModel、数据库、文件或调度器，而不是全部塞进单例。Intent、文件、数据库、网络、系统服务和其他应用形成<Term def="跨边界交换数据时必须验证的action、类型、权限、大小、时序和失败约束">外部合同</Term>；正常响应只是合同中的一个样本。
+
+本书以2019年第四版、Android 5.0至8.1及其后续兼容实践为语境。<Term def="Android版本、targetSdk、设备形态、权限与依赖共同限定的行为适用范围">版本边界</Term>要求先还原书中机制，再查询现代目标SDK的权限、后台、存储、通知和组件导出合同。<Term def="由环境指纹、输入、操作、日志、状态快照和断言组成的可重放结论">证据链</Term>则保证“在我的模拟器能跑”不会冒充可交付结论。
+
+## 第4版正式目录逐节点映射
+
+### 28. Broadcast Intents
+
+**正式节点 1/7。** 先说明“28. Broadcast Intents”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“比较普通Intent和广播，验证静态/动态Receiver、私有权限、有序结果与长任务限制”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### Regular Intents vs Broadcast Intents
+
+**正式节点 2/7。** 先说明“Regular Intents vs Broadcast Intents”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“比较普通Intent和广播，验证静态/动态Receiver、私有权限、有序结果与长任务限制”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### Filtering Foreground Notifications
+
+**正式节点 3/7。** 先说明“Filtering Foreground Notifications”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“比较普通Intent和广播，验证静态/动态Receiver、私有权限、有序结果与长任务限制”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### Receivers and Long-Running Tasks
+
+**正式节点 4/7。** 先说明“Receivers and Long-Running Tasks”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“比较普通Intent和广播，验证静态/动态Receiver、私有权限、有序结果与长任务限制”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### For the More Curious: Local Events
+
+**正式节点 5/7。** 先说明“For the More Curious: Local Events”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“比较普通Intent和广播，验证静态/动态Receiver、私有权限、有序结果与长任务限制”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### For the More Curious: Limitations on Broadcast Receivers
+
+**正式节点 6/7。** 先说明“For the More Curious: Limitations on Broadcast Receivers”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“比较普通Intent和广播，验证静态/动态Receiver、私有权限、有序结果与长任务限制”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+### For the More Curious: Detecting the Visibility of Your Fragment
+
+**正式节点 7/7。** 先说明“For the More Curious: Detecting the Visibility of Your Fragment”解决的用户任务与平台合同，再标出组件所有者、回调线程、可恢复状态、外部输入和销毁点。实现必须服务于“比较普通Intent和广播，验证静态/动态Receiver、私有权限、有序结果与长任务限制”，并留下可在模拟器或真机重放的输入、操作、日志与断言。
+
+先预测旋转、后台、进程重建、权限拒绝、断网或目标SDK变化时会怎样，再只改变一个条件。若只能在正常点击路径运行，尚未掌握该节点。
+
+## 最小可执行切片
+
+先把状态转换与Android副作用分开。下面的Kotlin骨架不替代本章代码，而是让旋转、进程恢复与失败输入可单测：
+
+```kotlin
+sealed interface ScreenState {
+    data object Loading : ScreenState
+    data class Ready(val key: String) : ScreenState
+    data class Failed(val reason: String, val retryable: Boolean) : ScreenState
+}
+
+fun reduce(current: ScreenState, event: UiEvent): ScreenState = nextState(current, event)
+```
+
+固定JDK、SDK、Gradle、设备API、语言和输入，清理缓存后从命令行保存制品与日志：
+
+```bash
+./gradlew --no-daemon clean test assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+adb shell am force-stop com.example.app
+adb shell monkey -p com.example.app 1
+adb logcat -d -v threadtime > run.log
+```
+
+先写行为断言，再执行用户操作和故障注入：
+
+```gherkin
+Given a pinned build, device API, locale, permission state, and input
+When the owner is recreated after state saving or process death
+Then durable facts reconstruct the same user-visible state
+And cancelled work cannot update a destroyed owner
+And denied permission, offline input, and malformed data remain recoverable
+```
+
+三段代码分别约束状态模型、环境重放和行为结果。真实项目还要加入静态检查、单元测试、仪器测试、无障碍检查和发布构建；日志只能支持断言，不能代替断言。
+
+## 线程、状态与外部资源
+
+主线程负责输入、生命周期分发和大部分UI工作，磁盘、网络、图片解码与长计算不能阻塞帧。后台结果返回前必须确认所有者仍有效；Fragment的生命周期与其View生命周期不是一回事。每个实现都应列出入口、线程、事实源、取消点、关闭责任和用户可见失败六项。
+
+跨应用Intent、ContentProvider、WebView、网络响应、文件URI和深链都视为不可信输入。校验action、scheme、MIME、大小、授权与响应者；导出组件使用最小权限；日志、截图和测试数据库不得泄露令牌或个人数据。相机、音频、数据库、线程和回调注册必须在成功、异常与取消路径都释放。
+
+性能以用户任务衡量：启动看可交互时刻，列表看掉帧与绑定分配，网络看超时和取消，后台工作看约束、电量与重复调度。每次比较固定设备温度、构建类型、数据规模和网络条件，先采基线再改变一个变量。
+
+迁移现代目标SDK时，先在第4版语境中证明机制，再逐项处理组件导出、存储、通知、后台启动、权限、废弃API和依赖版本。每一步保存编译差异、行为差异、测试结果和回滚点；新API并不自动正确，旧API能编译也不代表仍符合平台政策。
+
+## 三步验证实验
+
+<Steps>
+  <Step title="1. 建立目录节点与生命周期图">
+    从“比较普通Intent和广播，验证静态/动态Receiver、私有权限、有序结果与长任务限制”选一个用户任务，标出入口、组件、所有者、回调线程、可恢复状态和销毁点。先预测旋转、后台和进程恢复后哪些对象消失、哪些事实必须重建。
+    <BnrLifecycleLab />
+  </Step>
+  <Step title="2. 注入生命周期与外部故障">
+    依次改变生命周期阶段、网络和权限，每次只改变一个条件；记录原始日志、界面状态、持久事实与资源计数，区分预期失败和未知状态。
+    <BnrFailureLab />
+  </Step>
+  <Step title="3. 通过交付证据门">
+    用前台通知过滤、广播权限表、有序结果轨迹、Receiver时限测试核对版本设备、生命周期、持久状态、失败安全、测试和发布。缺少任何一项时，不得把正常点击路径视为完成。
+    <BnrEvidenceLab />
+  </Step>
+</Steps>
+
+<Callout type="trap">**核心陷阱。** 只复述类名与回调，未说明所有者、状态来源、线程、取消和失败后果。修复时回到用户任务和状态机，注入旋转、进程死亡、拒权、断网与无效输入。</Callout>
+
+<Callout type="trap">**历史示例不等于当前平台政策。** 第4版准确反映出版时工具链；现代targetSdk可能改变组件导出、后台、存储、通知和权限。保留原书机制，再建立有证据的迁移层。</Callout>
+
+<Callout type="warning">**真机与数据安全。** 使用测试账号、样本媒体和最小权限；清理日志、数据库与截图。签名密钥、API密钥、联系人和真实位置不得写入仓库或公开证据。</Callout>
+
+## 本章回顾
+
+本页从“28. Broadcast Intents”覆盖到“For the More Curious: Detecting the Visibility of Your Fragment”，共7个正式目录节点。掌握标准不是记住API，而是能沿“比较普通Intent和广播，验证静态/动态Receiver、私有权限、有序结果与长任务限制”解释组件与数据边界，运行正常、重建和失败实验，并让另一位开发者仅凭前台通知过滤、广播权限表、有序结果轨迹、Receiver时限测试重放结论。
+
+<Exercises>
+
+**问题 1**：“第28章 Broadcast Intents”覆盖哪些正式节点和项目主线？
+<Answer>覆盖7个节点，从“28. Broadcast Intents”到“For the More Curious: Detecting the Visibility of Your Fragment”。主线是比较普通Intent和广播，验证静态/动态Receiver、私有权限、有序结果与长任务限制，交付物是前台通知过滤、广播权限表、有序结果轨迹、Receiver时限测试。</Answer>
+
+**问题 2**：怎样建立本页最小可执行实验？
+<Answer>固定JDK、SDK、Gradle、设备API、语言、权限和输入，完成一个从用户动作到可观察结果的垂直切片；保存干净构建、设备操作、原始日志、状态快照与断言。</Answer>
+
+**问题 3**：为什么只在正常点击路径运行不能证明完成？
+<Answer>它没有覆盖组件重建、进程死亡、异步取消、权限拒绝、外部输入失败、资源释放和版本变化。应逐项注入故障，并用前台通知过滤、广播权限表、有序结果轨迹、Receiver时限测试核对。</Answer>
+
+**问题 4**：怎样设计能推翻当前实现的反例？
+<Answer>保持其他变量不变，分别注入旋转、后台回收、进程死亡、拒权、断网、无效输入与重复操作；任何状态丢失、越权、崩溃、泄漏或重复副作用都推翻完成结论。</Answer>
+
+**问题 5**：从第4版语境迁移到现代目标SDK时如何控制变量？
+<Answer>先按原书还原机制并锁定基线，再查询目标SDK合同；一次只迁移组件导出、存储、权限、后台、通知或依赖之一，保存构建、行为、测试和回滚差异。</Answer>
+
+**问题 6**：本页达到独立交接标准需要什么？
+<Answer>需要版本与设备指纹、源码提交、输入、构建命令、生命周期轨迹、原始日志、失败测试、安全边界与发布产物，让他人凭前台通知过滤、广播权限表、有序结果轨迹、Receiver时限测试重放。</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="生命周期所有者">负责创建、取消并最终释放组件、任务或资源的明确作用域。</GlossaryItem>
+  <GlossaryItem term="可恢复状态">在配置变化或进程重建后，可从保存事实重新构造的最小用户状态。</GlossaryItem>
+  <GlossaryItem term="外部合同">Intent、文件、数据库、网络、系统服务或其他应用与本组件交换数据时的可验证约束。</GlossaryItem>
+  <GlossaryItem term="版本边界">Android版本、targetSdk、设备形态、权限与依赖共同限定的行为适用范围。</GlossaryItem>
+  <GlossaryItem term="证据链">由环境指纹、输入、操作、日志、状态快照和断言组成的可重放结论。</GlossaryItem>
+</Glossary>
+
+[← 上一页：第27章 WorkManager](/learn/big-nerd-ranch-guide/background-network/workmanager) · [下一页：第29章 Browsing the Web and WebView →](/learn/big-nerd-ranch-guide/advanced-ui-animation/webview)
+
+<Attribution adaptedFrom="Android Programming: The Big Nerd Ranch Guide, 4th Edition" adaptedUrl="https://www.oreilly.com/library/view/android-programming-the/9780135257555/" />

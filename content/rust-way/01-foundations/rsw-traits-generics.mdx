@@ -1,0 +1,123 @@
+---
+title: "第3章 类型系统"
+type: C
+section: "Rust之道 · 基础与类型"
+order: 3
+description: "从类型分类、多态、大小与推导进入泛型和Trait，掌握关联类型、标记Trait、转换、孤儿规则与表达能力边界。"
+demo: true
+math: false
+sourceUrl: "https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53297"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RswPolymorphismLab, RswTraitBoundLab, RswConversionLab } from "@/components/mdx/rust-way/diagrams/rsw-traits-generics";
+
+<Objectives>
+- 能区分静态与动态类型、Sized与动态大小类型，并解释推导何时需要显式标注
+- 能实现泛型、Trait bound、关联类型和标记Trait，比较静态分派与动态分派
+- 能选择From、TryFrom、Deref和as转换，并判断孤儿规则、代码复用与表达能力边界
+</Objectives>
+
+## 从“能不能调用这个方法”开始
+
+类型系统不是给变量贴标签，而是限制哪些程序状态和操作能够构造。Rust在编译期为每个表达式确定类型，再检查方法、运算、move、borrow、线程传递和布局前提。<Term def="由类型、子类型关系、推导、约束和转换规则共同决定合法程序集合的机制。">static type contract</Term>让库作者把“必须可排序”“必须跨线程移动”等要求写进API，而不是等运行期探测。
+
+先预测：一个函数只调用`write_all`，签名应要求具体`File`，还是要求实现`Write`？后者表达真正能力，也允许内存buffer和测试替身进入。
+
+## 类型的作用、分类与多态
+
+Rust有标量、复合、指针、函数、闭包、结构体、枚举、Trait object等类型。多数值采用静态类型，`dyn Trait`仍有已知的trait-object静态类型，只把具体实现留到运行期。<Term def="同一接口在不同类型或实现上保持统一调用方式的能力。">polymorphism model</Term>包含参数多态、按实现选择的特设多态和trait object动态分派。
+
+```rust
+trait Describe { fn describe(&self) -> String; }
+
+fn static_show<T: Describe>(value: &T) -> String { value.describe() }
+fn dynamic_show(value: &dyn Describe) -> String { value.describe() }
+```
+
+泛型函数通常单态化，可能增加代码体积但省去vtable跳转；`dyn Trait`用data pointer和vtable形成胖指针，适合异构集合与稳定二进制边界。对象安全规则限制哪些Trait能形成object。
+
+<RswPolymorphismLab />
+
+## 类型大小、动态大小类型与推导
+
+普通泛型参数隐含`Sized`，编译器需要知道值占多少字节才能按值传递和分配栈槽。`str`和`[T]`是动态大小类型，只能放在引用或Box等指针后；指针metadata保存长度或vtable。<Term def="编译器从字面量、操作、函数签名和上下文约束求出唯一类型的过程。">constraint-based type inference</Term>减少标注，却不会跨越无法判定的歧义。
+
+```rust
+let numbers = [1_u16, 2, 3];
+let total: u32 = numbers.iter().map(|&n| u32::from(n)).sum();
+assert_eq!(total, 6);
+```
+
+整数默认、`collect`目标和闭包参数常需要上下文。标注应放在最能说明边界的位置，例如公开签名、parse目标和集合结果，而不是给每个局部值重复写类型。
+
+## 泛型：把变化参数化
+
+泛型可参数化函数、结构体、枚举、impl和Trait。真正的抽象不是把具体类型改成`T`，而是声明函数体所需的最小能力。<Term def="对类型参数必须实现哪些Trait、生命周期或关联类型关系的静态要求。">generic capability bound</Term>使调用点承担证明责任，函数体只依赖已声明能力。
+
+```rust
+fn max_by_key<T, K: Ord>(items: &[T], mut key: impl FnMut(&T) -> K) -> Option<&T> {
+    items.iter().max_by_key(|item| key(item))
+}
+```
+
+`impl Trait`在参数位置是匿名泛型，在返回位置表示一个由实现选择但对调用者隐藏的具体类型；它与`dyn Trait`不是同义词。
+
+## 深入Trait：接口、关联类型与标记
+
+Trait提供方法、默认实现、supertrait和关联item。关联类型适合“每个实现只选择一个Item”的关系；泛型参数适合一个类型可实现多组关系。<Term def="没有业务方法、只声明类型具备某种可由编译器依赖属性的Trait。">marker trait proof</Term>以Send和Sync最典型：unsafe实现必须证明内部指针与别名规则真的支持线程边界。
+
+<RswTraitBoundLab />
+
+## 类型转换：Deref、as、From与Into
+
+`From`和`Into`表达可靠语义转换，`TryFrom`和`TryInto`表达可能失败；`Deref`支持智能指针样式访问和受控coercion；`as`用于数值、指针等显式低层转换，可能截断。<Term def="在源类型、目标类型、所有权动作、失败可能和信息损失之间建立的转换协议。">conversion semantics</Term>要求调用者先选择语义，再选择语法。
+
+<RswConversionLab />
+
+<Stepper>
+  <Step title="选择多态方式"><RswPolymorphismLab /></Step>
+  <Step title="写出最小Bound">删掉泛型签名中的每个bound并编译，保留函数体真正需要的能力和关系。</Step>
+  <Step title="审计转换成本"><RswConversionLab /></Step>
+</Stepper>
+
+## 类型系统的限制、孤儿规则与代码复用
+
+孤儿规则要求Trait或实现目标类型至少有一个属于当前crate，避免不同库为同一外部类型和外部Trait提供冲突实现。Newtype可在本地类型上建立合法实现，也能表达单位和不变量。Rust不提供类继承式实现复用，通常用组合、默认Trait方法、泛型委托和宏。表达能力越强，编译时间、错误复杂度和代码体积越需要测量。
+
+<Callout type="trap" title="泛型总比dyn Trait快">
+静态分派有优化机会，也会增加实例和指令缓存压力；动态分派可能更小、更稳定。必须以调用频率、集合异构性、二进制边界和实测结果选择。
+</Callout>
+
+<Callout type="trap" title="实现Send只需让编译器停止报错">
+`unsafe impl Send`是对所有安全调用者的全局承诺。若内部裸指针指向线程局部或允许无同步别名，错误实现会让safe代码触发未定义行为。
+</Callout>
+
+## 本章回顾
+
+本章覆盖类型系统的作用、类型分类与多态，类型大小与推导，泛型，Trait约束与抽象类型，标记Trait，Deref、as、From与Into，以及孤儿规则、代码复用和表达能力。先写能力契约，再选择分派、转换和封装方式。
+
+<Exercises>
+**问题 1：何时使用关联类型而不是Trait泛型参数？**
+<Answer>当每个实现对该关系只有一个自然选择，例如Iterator的Item，用关联类型；若同一类型要以不同参数实现多组关系，使用泛型参数更合适。</Answer>
+
+**问题 2：为什么`str`不能按值作为普通局部变量？**
+<Answer>`str`长度运行期才知道，是动态大小类型；栈槽和按值调用需要静态size。应通过`&str`、`Box<str>`等携带pointer与length metadata的指针使用。</Answer>
+
+**问题 3：外部Trait和外部类型都不能直接实现时怎么办？**
+<Answer>定义本地newtype包装外部类型，再为newtype实现Trait；同时显式提供构造、Deref或转换边界，避免把语义包装变成无约束透明代理。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="static type contract" definition="决定表达式、操作和状态是否合法的静态类型约束。" />
+  <GlossaryItem term="polymorphism model" definition="统一接口适用于不同类型和实现的分派模型。" />
+  <GlossaryItem term="constraint-based type inference" definition="由上下文约束求解表达式类型的过程。" />
+  <GlossaryItem term="generic capability bound" definition="泛型参数必须满足的能力和关系。" />
+  <GlossaryItem term="marker trait proof" definition="以无业务方法Trait声明可由编译器依赖的类型属性。" />
+  <GlossaryItem term="conversion semantics" definition="源、目标、owner、失败与信息损失组成的转换协议。" />
+</Glossary>
+
+<Attribution adaptedFrom="《Rust编程之道》第3章 类型系统" adaptedUrl="https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53297" />

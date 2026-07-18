@@ -30,7 +30,7 @@ export function AdvancedFeatureTable() {
       keyword: "typeid / dynamic_cast",
       purpose: "运行时识别/安全向下转型",
       scenario: "基类指针→派生类特有操作",
-      caution: "需要虚函数（vtable）",
+      caution: "动态检查要求多态源类型",
     },
     {
       name: "enum class",
@@ -49,7 +49,7 @@ export function AdvancedFeatureTable() {
     {
       name: "成员指针",
       keyword: "int C::*p = &C::m",
-      purpose: "指向类成员的偏移量",
+      purpose: "表示类的数据或函数成员",
       scenario: "回调表、命令映射",
       caution: "语法复杂——.* 和 ->*",
     },
@@ -58,7 +58,7 @@ export function AdvancedFeatureTable() {
       keyword: "class Outer { class Inner {...} }",
       purpose: "隐藏实现细节的辅助类",
       scenario: "迭代器、节点、策略类",
-      caution: "不自动访问封闭类私有成员",
+      caution: "无隐式封闭类对象",
     },
   ];
 

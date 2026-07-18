@@ -1,0 +1,272 @@
+---
+title: "第1章：优化全景"
+type: A
+section: Optimized C++ · Chapter 1
+order: 1
+description: 对齐第一版第1章 An Overview of Optimization：优化属于开发、优化有效且合理、纳秒规模效应，以及编译器/算法/库/分配/计算/数据结构/并发/内存管理八类策略。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+draft: false
+---
+
+import {
+  OpcOptimizationDevelopmentGateMap,
+  OpcOptimizationScaleMap,
+  OpcOptimizationStrategyPortfolioMap,
+} from "@/components/mdx/optimized-cpp/diagrams/overview-of-optimization";
+
+<Objectives>
+
+- 能解释 optimization is part of software development、effective 且合理的条件，并识别“过早优化”口号的适用边界
+- 能计算 “a nanosecond here, a nanosecond there” 在 hot loop 与 fleet scale 中的累计价值
+- 能比较 better compiler/algorithm/library、减少 allocation/copy/computation、better data structure、concurrency 与 memory management 八类策略
+
+</Objectives>
+
+## 从“优化不是项目最后一周”开始
+
+optimization 的对象不是“能运行但随便写的代码”，而是 correct、可维护、已有明确需求的 C++ program。性能约束和 correctness 一样属于 product contract：frame 必须在 16.7 ms 内、request p99 小于 100 ms、embedded task 不超能耗/内存预算。若直到发布前才检查，这些约束往往已被 architecture 固化。
+
+<Term def="在需求、设计、实现、测试和发布各阶段持续管理 latency、throughput、memory、energy 等性能约束。">
+  optimization is part of software development
+</Term>
+
+优化并不意味着每一行都手工调节。它意味着：在 design 时选择可扩展 algorithm/data ownership，在 implementation 时让 compiler 看得清，在 test 时保存 baseline，在 production 中监控真实 workload。后续章节会给出 measurement 细节；本章先建立策略空间和数量级意识。
+
+## Optimization Is Effective
+
+<Term def="通过减少 work、改变增长级别、改善 locality 或使用硬件并行，使目标 workload 的资源消耗产生可重复下降。">
+  optimization is effective
+</Term>
+
+性能并非不可控“黑盒”。算法从 quadratic 改为 near-linear、把每次 request 的 allocation 从千次降到十次、批量 I/O 减少 system calls，都能产生显著且解释得通的收益。关键是目标 metric 和 workload 可重复，改动前后 correctness 相同。
+
+```cpp
+bool containsDuplicate(const std::vector<int>& values) {
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        for (std::size_t j = i + 1; j < values.size(); ++j) {
+            if (values[i] == values[j]) return true;
+        }
+    }
+    return false;
+}
+```
+
+这段代码在 large n 下应优先比较 sort+adjacent 或 hash set，而不是先修改内层 `if`。order-of-growth change 可以超过任何 instruction-level tweak；但小 n、memory limit、input distribution 仍可能改变最佳 choice，因此最终要测 representative range。
+
+## It Is OK to Optimize
+
+<Term def="在 correctness test、明确目标、profile/cost evidence 和可回滚设计约束下进行的受控性能改造。">
+  it is ok to optimize
+</Term>
+
+“premature optimization is the root of all evil” 反对的是在不知道 bottleneck/requirements 时牺牲 clarity，不是禁止性能工程。用 linear algorithm 代替 quadratic、避免无意义复制、选择 release optimizer 都可以同时提高 clarity。真正危险的是 obscure trick 没有 benchmark、依赖 undefined behavior 或把 ownership 变成悬空 view。
+
+<Callout type="trap" title="陷阱：为了避免过早优化，先不设任何性能预算">
+  architecture-level choices（data layout、algorithm、I/O protocol、parallel
+  boundary）后期可能 很难改。早期应设 target 与 baseline；延后的是无证据
+  micro-tuning，不是延后性能需求和 scalable design。
+</Callout>
+
+## A Nanosecond Here, a Nanosecond There
+
+<Term def="单次极小成本乘以巨大执行次数后成为显著总耗时/容量，冷路径大改进则可能因低频而无系统价值的规模原则。">
+  nanosecond aggregation
+</Term>
+
+总成本可用粗模型 `cost_per_operation × operation_count` 先排序。一个 hash probe 少 5 ns，每秒执行 2 亿次就是约 1 CPU-second/s 的量级；一个 startup helper 快 5 ms 但每天运行一次，对 server capacity 几乎无影响。粗模型不是 benchmark 替代，而是决定先实验哪条 hypothesis。
+
+```cpp
+struct CostEstimate {
+    double nanoseconds_per_call;
+    std::uint64_t calls_per_second;
+};
+
+double cpuSecondsPerSecond(CostEstimate estimate) {
+    return estimate.nanoseconds_per_call *
+           static_cast<double>(estimate.calls_per_second) / 1e9;
+}
+```
+
+还要考虑 tail latency、cache/contention 和 energy：平均只省一点的改动，若消除 p99 allocator stall 可能价值更高；在 battery device 上，CPU-seconds reduction 也是 energy budget。所有估算都应在第 3 章转成 measured baseline。
+
+## C++ 优化策略组合
+
+<Term def="从 compiler、algorithm、library、work elimination、data representation、parallelism 和 allocator 中选择最高杠杆组合。">
+  optimization strategy portfolio
+</Term>
+
+### Use a Better Compiler, Use Your Compiler Better
+
+<Term def="使用成熟 optimizer、正确 target/release options、link-time/profile information，并让 source 保持 defined behavior 和可见语义。">
+  use a better compiler
+</Term>
+
+先比较当前 toolchain 的 optimized build，而不是用 debug build 评判 language feature。检查 target CPU、inlining/LTO/PGO、sanitizer 与 release reproducibility。compiler 可以 constant-fold、vectorize、devirtualize，却不能安全猜测 undefined behavior、hidden alias 或 opaque module semantics。
+
+```cpp
+double dot(std::span<const double> left,
+           std::span<const double> right) {
+    double result = 0.0;
+    for (std::size_t i = 0; i < left.size(); ++i) {
+        result += left[i] * right[i];
+    }
+    return result;
+}
+```
+
+清晰 contiguous ranges、matching sizes 和 visible loop 比手写奇怪 pointer arithmetic 更容易优化。若 numeric semantics 允许 reassociation/vectorization，要把 accuracy contract 和 compiler flags 写进 experiment。
+
+### Use Better Algorithms and Better Libraries
+
+<Term def="通过降低时间/空间增长或利用 input properties 移除数量级 work，而不是只缩小常数。">
+  better algorithms
+</Term>
+
+algorithm 是最高杠杆之一；library 则把 tuned algorithm、SIMD、platform knowledge 和 correctness 集中复用。优先使用标准/成熟库表达 intent，但不要盲信任何 abstraction：检查 complexity、allocation、iterator category、exception 和 data layout 是否匹配 workload。
+
+### Reduce Memory Allocation and Copying
+
+<Term def="减少 dynamic object 创建、reallocation、deep copy 和 memory traffic，同时保持 ownership/lifetime 明确。">
+  reduce allocation and copying
+</Term>
+
+reserve/preallocate、move/value return、borrowed view、arena/batch 都可能减少 allocator 与 bytes moved。不能为了零 copy 返回 dangling reference，也不能把 unique ownership 变 shared ownership。第 4、6、13 章会分别从 strings、dynamic variables 和 memory manager 深挖。
+
+### Remove Computation and Use Better Data Structures
+
+<Term def="通过 precompute/cache/skip/batch/closed form 让 operation 不发生或更少发生，并维护 invalidation correctness。">
+  remove computation
+</Term>
+
+cache 与 precompute 用 memory/complexity 换 repeated work；batching 用 latency/queue 换 amortized cost。data structure 决定 lookup/update complexity 与 locality。选择必须同时覆盖 reads、writes、iteration、size distribution、stable references 和 memory ceiling。
+
+### Increase Concurrency and Optimize Memory Management
+
+<Term def="把足够大且独立的 work 分配给可用 execution resources，并把 synchronization/communication 控制在收益以内。">
+  increase concurrency
+</Term>
+
+parallelism 不能修复低效 algorithm，反而增加 queue、lock、cache coherence 和 failure complexity。先优化 single-task work，再按 Amdahl limit 识别 parallel fraction。memory manager 优化则适合 allocation 确实是 hotspot、size/lifetime pattern 稳定的场景；arena/fixed block 的 policy 必须记录 alignment、thread safety、fragmentation 和 bulk teardown。
+
+<Callout type="trap" title="陷阱：策略越底层，优化越专业、收益越大">
+  汇编、custom allocator、lock-free code 的复杂度高，却不保证高杠杆。better
+  algorithm、移除 work、批量调用或使用成熟 library 往往收益更大且风险更低。按
+  measured system effect 排序， 不按技巧炫目程度排序。
+</Callout>
+
+## 三步建立优化决策
+
+<Stepper>
+  <Step title="第一步：把性能写进开发门禁">
+    先为 correctness、latency、throughput、memory 与 energy 写出可验收目标，再标明需求、设计、实现、测试和生产各阶段的负责人及证据。不要先猜某一行代码是否“够快”。
+
+    <OpcOptimizationDevelopmentGateMap />
+
+  </Step>
+  <Step title="第二步：用调用规模筛选候选">
+    对每个候选计算 `单次成本 × 调用次数`，同时记录 p99、contention、energy 等无法由平均值替代的约束。先预测哪项改动的系统上限最大，再进入第 3 章的实测流程。
+
+    <OpcOptimizationScaleMap />
+
+  </Step>
+  <Step title="第三步：从高杠杆策略开始实验">
+    依次检查能否移除 work、降低 complexity、复用成熟 compiler/library、改善 representation/traffic，最后才评估 concurrency 与 custom memory management。每次只改变一个主要变量，并准备 correctness test 与 rollback。
+
+    <OpcOptimizationStrategyPortfolioMap />
+
+  </Step>
+</Stepper>
+
+## 第1章策略选择清单
+
+1. 写出 correctness contract 与 target latency/throughput/memory/energy。
+2. 用单次成本 × 执行次数估算候选 upper bound。
+3. 先问能否删除 work、降低 complexity 或减少 traffic。
+4. 比较 compiler/library 已有能力，避免维护重复低层实现。
+5. allocation/copy 优化必须保留 ownership 与 exception safety。
+6. data structure 用完整 read/write/iteration distribution 评估。
+7. concurrency 先算 serial fraction、coordination 和 core budget。
+8. 每个策略准备 baseline、A/B、correctness test 和 rollback。
+
+## 小结
+
+- optimization 是 software development 的性能约束管理，不是发布前临时活动
+- optimization 在减少 work、traffic 或增长级别时有效，必须保持 correctness 可重复验证
+- 有目标和证据的优化是合理工程；反对 premature tuning 不等于忽略性能预算
+- nanosecond 价值由 execution count 放大，冷路径毫秒改进也可能无系统价值
+- better compiler、algorithm 和 library 通常先于手工低层技巧
+- allocation/copy、computation 和 data structure 决定大量 C++ workload 的核心成本
+- concurrency 只有在 work 足够独立且 coordination 更小时才加速
+- memory manager 是 pattern-specific 策略，需同时审计 lifetime、fragmentation 和 thread safety
+
+<Attribution
+  adaptedFrom="Optimized C++, First Edition, Chapter 1: An Overview of Optimization"
+  adaptedUrl="https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+/>
+
+<Glossary>
+  <GlossaryItem term="optimization is part of software development">
+    全生命周期管理性能约束。
+  </GlossaryItem>
+  <GlossaryItem term="optimization is effective">
+    通过减少 work/traffic 产生可重复收益。
+  </GlossaryItem>
+  <GlossaryItem term="it is ok to optimize">
+    有正确性、目标和证据约束的性能改造。
+  </GlossaryItem>
+  <GlossaryItem term="nanosecond aggregation">
+    单次成本由执行次数放大的规模效应。
+  </GlossaryItem>
+  <GlossaryItem term="optimization strategy portfolio">
+    按最高杠杆组合多类优化手段。
+  </GlossaryItem>
+  <GlossaryItem term="use a better compiler">
+    正确使用成熟 optimizer 和 target 信息。
+  </GlossaryItem>
+  <GlossaryItem term="better algorithms">
+    通过增长级别或 input properties 移除数量级工作。
+  </GlossaryItem>
+  <GlossaryItem term="reduce allocation and copying">
+    减少 dynamic allocation、reallocation 和 memory traffic。
+  </GlossaryItem>
+  <GlossaryItem term="remove computation">
+    用 skip/cache/precompute/batch 让工作更少发生。
+  </GlossaryItem>
+  <GlossaryItem term="increase concurrency">
+    在 coordination 可控时并行独立工作。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：为日志聚合服务选择前三个优化策略。** 已知 CPU 60% 在 quadratic duplicate scan，25% 在 string allocation，5% 在 system calls；说明排序与拒绝项。
+
+<Answer question="为什么不是先并发或custom allocator？">
+  第一改 duplicate algorithm/data structure，可能消除数量级 work；第二减少
+  string construction/copy，考虑 reserve/view/batch 且保持 ownership；第三批量
+  I/O 降 system calls。concurrency 只会并行浪费 quadratic work并增加
+  contention，custom allocator 只能改善 allocation 常数且维护成本高。每一步单独
+  baseline/A-B，确认 bottleneck shift 后再选下一步。
+</Answer>
+
+2. **问题 2：估算一个 3 ns 改动的价值。** hot operation 每秒 4 亿次、服务有 200 个实例；startup path 同样快 10 ms、每实例每天一次。比较 fleet CPU 与用户价值。
+
+<Answer question="怎样用规模模型决定实验优先级？">
+  hot path 理论节省 1.2 CPU-seconds/s/instance，200 实例约 240 CPU cores
+  的量级，值得 优先验证；还要确认 overlap/vectorization 和真实 count。startup
+  总节省只有每天 2 seconds fleet，除非 startup latency 有明确
+  SLO，否则容量价值很低。粗估用于排序，最终以 production-like benchmark/profile
+  验证。
+</Answer>
+
+3. **问题 3：审计一个“零拷贝+并发”提案。** 团队把 owning strings 改为 string_view，并让 64 threads 共享 cache；列出 correctness/performance gates。
+
+  <Answer question="为什么两个听起来更快的策略可能共同制造回归？">
+    view 要证明 backing owner 覆盖所有 async tasks，reallocation/eviction 不使其 dangling；
+    cache 要定义 invalidation 与 key/value lifetime。64 threads 先比较 core count、serial
+    fraction、queue/lock contention、false sharing 和 memory bandwidth。建立旧/新 correctness
+    tests、ASan/TSan、allocation/copy counters、throughput/p99/CPU/RSS。若 lifetime
+    无法证明或 contention 抵消收益，就保留 owning value、shard cache 或限制 runnable tasks。
+  </Answer>
+</Exercises>

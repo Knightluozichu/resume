@@ -36,7 +36,7 @@ export function LiteralTypesDiagram() {
         { code: "3.14f", desc: "float（f/F 后缀）" },
         { code: "3.14L", desc: "long double（l/L 后缀）" },
         { code: "1e-10", desc: "科学计数法 =1×10⁻¹⁰" },
-        { code: '3.14e0F', desc: "科学计数法 + float", accent: true },
+        { code: "3.14e0F", desc: "科学计数法 + float", accent: true },
       ],
     },
     {
@@ -71,7 +71,7 @@ export function LiteralTypesDiagram() {
     { esc: "\\t", meaning: "水平制表（Tab）" },
     { esc: "\\\\", meaning: "反斜杠本身" },
     { esc: "\\'", meaning: "单引号" },
-    { esc: "\\\"", meaning: "双引号" },
+    { esc: '\\"', meaning: "双引号" },
     { esc: "\\0", meaning: "空字符（字符串终" },
     { esc: "\\xhh", meaning: "十六进制字符值" },
   ];
@@ -137,7 +137,9 @@ export function LiteralTypesDiagram() {
                 {/* 卡片条目 */}
                 {card.items.map((item, ii) => {
                   const iy = cy + 48 + ii * 28;
-                  const codeFill = item.accent ? "var(--accent)" : "var(--text-primary)";
+                  const codeFill = item.accent
+                    ? "var(--accent)"
+                    : "var(--text-primary)";
                   return (
                     <g key={item.code}>
                       <text
@@ -237,13 +239,16 @@ export function LiteralTypesDiagram() {
             fontSize="10"
             fill="var(--text-secondary)"
           >
-            换行 \n(0x0A)、回车 \r(0x0D)、制表 \t(0x09)——它们之所以叫"转义"，就是把普通字符转成特殊控制含义。
+            换行 \n(0x0A)、回车 \r(0x0D)、制表
+            \t(0x09)——它们之所以叫&quot;转义&quot;，就是把普通字符转成特殊控制含义。
           </text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        C++ 字面值常量的分类：整型（可带进制前缀+后缀）、浮点（小数或科学计数法+后缀 f/L）、
-        字符（单引号括起）、字符串（双引号括起，以 \0 结尾）；转义序列给不可见字符起名字。
+        C++
+        字面值常量的分类：整型（可带进制前缀+后缀）、浮点（小数或科学计数法+后缀
+        f/L）、 字符（单引号括起）、字符串（双引号括起，以 \0
+        结尾）；转义序列给不可见字符起名字。
       </figcaption>
     </figure>
   );

@@ -1,0 +1,309 @@
+---
+title: "第6章：Classes"
+type: C
+section: "Essential C# 7.0 · Object-Oriented Foundations"
+order: 6
+description: "掌握class实例化、instance members、access modifiers、properties、constructors、static/extension members、encapsulation及nested/partial classes。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-c-sharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7ConstructionPropertyLab, Ec7InstanceIdentityLab, Ec7MemberOwnershipLab } from "@/components/mdx/essential-csharp-7/diagrams/classes";
+
+<Objectives>
+
+- 能解释class declaration、new expression、object identity、instance field/method与this之间的关系
+- 能设计access modifiers、properties和constructor chaining以维护可测试的class invariant
+- 能比较instance、static、extension、nested与partial组织方式并判断其state ownership边界
+
+</Objectives>
+
+## 为什么class的核心是“始终有效”
+
+class不只是把fields和methods放在同一个文件。它定义哪些state可存在、谁能改变、每次operation前后什么必须成立，以及多个references是否共享同一object。若caller能随意写public fields，constructor允许半初始化，static state与instance state混在一起，method再多也没有真正封装。
+
+先预测：两个`new Account()`是否共享balance；`accountB = accountA`后调用B的method会改变谁；parameterless constructor怎样复用带参数constructor；auto-property是否自动validation；extension method能否访问private field；partial class是否在runtime产生两个types。随后沿identity、construction和member ownership三条轨迹验证。
+
+<Term def="一个reference定位的具体class object及其独立instance state；alias references可共享同一identity。">instance identity</Term>
+
+## Declaring and Instantiating a Class
+
+class declaration创建reference type蓝图，包含name、accessibility、members和constraints。`new` expression选择constructor、分配并初始化object，成功后返回reference；variable保存reference而不是嵌入完整object。两个独立new expressions通常产生不同identity，即使fields相等。
+
+```csharp
+public sealed class Account
+{
+    private decimal balance;
+
+    public decimal GetBalance() => balance;
+    public void Deposit(decimal amount) => balance += amount;
+}
+
+var first = new Account();
+var second = new Account();
+second.Deposit(10M); // first remains 0
+
+second = first;      // now both references identify first's object
+```
+
+reference可为null；调用instance member前必须保证存在object。object initializer仍先运行constructor，再依次设置可访问members，不会绕过setter logic，但若多个setters之间有跨field invariant，可能暴露短暂或最终invalid combinations，应提供更强constructor/factory。
+
+## Instance Fields, Methods, and this
+
+instance field为每个object保存state；instance method通过隐式`this`访问当前receiver。`this`可消除parameter与field同名歧义、传递当前object或调用另一个constructor，但不能在static context使用。method应让operation name表达行为，并在修改前验证input。
+
+<Stepper>
+  <Step title="切换独立instances与shared alias">
+    <Ec7InstanceIdentityLab />
+  </Step>
+  <Step title="通过accountB调用instance method">
+    method内this指向receiver object，而不是variable name本身；alias时A/B观察同一state。
+  </Step>
+  <Step title="区分identity与value equality">
+    balance相等不代表同一object；reference相同才表示共享identity和mutation。
+  </Step>
+</Stepper>
+
+```csharp
+public void Deposit(decimal amount)
+{
+    if (amount <= 0M)
+        throw new ArgumentOutOfRangeException(nameof(amount));
+
+    this.balance += amount;
+}
+```
+
+field declaration可提供initializer，它在constructor body前参与instance initialization。不要让同一state在field initializer、多个constructors和setters中各有一套不同规则；把共享validation集中到一个路径。
+
+## Access Modifiers and the Public Surface
+
+`public`允许所有可访问containing type的code使用；`private`只允许containing type；`internal`限制在同一assembly。`protected`为当前type及derived types开放，继承章节再深入。top-level class本身常见public/internal，nested types还可private。
+
+accessibility不是security boundary，reflection、serialization或native code可能绕过普通source access；它是compile-time API boundary，用来缩小coupling和可变surface。默认从最窄访问开始，只为明确use case开放。
+
+<Term def="class对外承诺的可访问members集合，以及内部实现可在不破坏callers前提下变化的边界。">public surface</Term>
+
+```csharp
+public sealed class Temperature
+{
+    private double celsius;
+    internal int SensorChannel { get; }
+
+    public double Celsius => celsius;
+
+    public void UpdateFromSensor(double value)
+    {
+        if (double.IsNaN(value)) throw new ArgumentException(nameof(value));
+        celsius = value;
+    }
+}
+```
+
+不要为了测试方便把private state改public。测试应通过public behavior观察invariant，或把真正需要assembly协作的member明确设internal并记录原因。
+
+## Properties: Behavior Behind Member Syntax
+
+property看起来像field access，但由getter/setter methods实现。computed property可无backing field；auto-implemented property由compiler生成隐藏storage；accessors可有不同accessibility，例如public getter与private setter。property不能靠语法承诺“廉价且无副作用”，但API惯例要求getter快速、稳定且不做惊讶的I/O。
+
+<Term def="getter和setter对读取、转换、validation、mutation与accessibility作出的member级约定。">property contract</Term>
+
+```csharp
+public sealed class Person
+{
+    private string name;
+
+    public string Name
+    {
+        get { return name; }
+        set
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                throw new ArgumentException("name is required", nameof(value));
+            name = value.Trim();
+        }
+    }
+
+    public DateTime CreatedAt { get; private set; }
+    public string DisplayName => Name.ToUpperInvariant();
+}
+```
+
+auto-property适合无需额外invariant的state；一旦需要validation或normalization，可换成explicit backing field而保持caller syntax。setter每次只验证单个value时，不一定能维护跨多个properties的atomic invariant，复杂更新应提供method。
+
+<Callout type="trap" title="property和public field完全一样，只是写法更长">
+property能执行validation、计算、限制setter accessibility并保持未来实现弹性；field直接暴露storage。即使auto-property当前简单，它仍建立member contract而不是裸露representation。
+</Callout>
+
+## Constructors and Chaining
+
+constructor与class同名、没有return type，在new期间建立初始invariant。若未声明任何instance constructor，compiler可提供parameterless default constructor；一旦声明constructor，这个implicit one通常不再生成。constructor failure抛exception，caller得不到正常可用object。
+
+`this(...)`在同一class constructors间chaining，必须是constructor initializer；共享初始化应收敛到一个primary path。`base(...)`选择base constructor，第7章展开。执行大致从field initializers与base construction进入constructor body，不能把顺序当作随意的文本排列。
+
+<Term def="从new expression、constructor selection、initializer/chaining、validation到发布有效object的建立过程。">construction pipeline</Term>
+
+<Stepper>
+  <Step title="选择default、带值、invalid或property路径">
+    <Ec7ConstructionPropertyLab />
+  </Step>
+  <Step title="跟踪constructor chaining">
+    parameterless path委托给带参数path，确保validation与assignment只有一个authoritative实现。
+  </Step>
+  <Step title="确认失败不发布object">
+    invalid input在construction期间throw；不要catch后留下违反invariant的instance。
+  </Step>
+</Stepper>
+
+```csharp
+public sealed class Account
+{
+    private decimal balance;
+
+    public Account() : this(0M) { }
+
+    public Account(decimal openingBalance)
+    {
+        if (openingBalance < 0M)
+            throw new ArgumentOutOfRangeException(nameof(openingBalance));
+        balance = openingBalance;
+    }
+}
+```
+
+constructor不应执行无法回滚的重型network/I/O work；factory method可用更清晰name、async workflow或result type表达复杂creation。constructor parameter names与validation errors应直接对应caller输入。
+
+## Encapsulating Data and Maintaining Invariants
+
+encapsulation不是“fields全写private”就完成，而是所有公开operations都维护同一组invariants。例如balance不能低于overdraft limit，name不能为空，end不能早于start。constructor建立invariant，methods/properties保持，query members读取但不泄漏可变内部representation。
+
+<Term def="每个public operation开始和成功结束时都必须成立，并由class唯一控制的state规则。">encapsulation invariant</Term>
+
+```csharp
+public void Withdraw(decimal amount)
+{
+    if (amount <= 0M)
+        throw new ArgumentOutOfRangeException(nameof(amount));
+    if (amount > balance)
+        throw new InvalidOperationException("insufficient balance");
+
+    balance -= amount;
+}
+```
+
+若返回内部mutable list，caller可绕过methods直接修改。应返回copy、read-only view或以query methods暴露需要的信息。封装的验收不是看keywords，而是尝试从每个public path构造invalid state。
+
+## Static Members and Static Classes
+
+static member属于type而非某个instance，没有`this`。static field在该closed type/runtime context中共享，适合constants、stateless operations或经过明确同步的global state。static constructor在首次使用前由runtime执行一次，用于type-level initialization，但failure会使type后续不可用。
+
+static class不能实例化，只能包含static members，也隐式sealed。它适合纯helpers或extension method container；若operation需要可替换dependency、per-request state或测试隔离，instance service通常更合适。
+
+```csharp
+public sealed class Account
+{
+    private static int openCount;
+    public static int OpenCount => openCount;
+
+    public Account()
+    {
+        openCount++;
+    }
+}
+```
+
+shared mutable static state涉及thread safety与test ordering，不能因为访问方便就使用。count increment也可能需要synchronization；第19-20章会系统处理。
+
+## Extension Methods
+
+extension method声明在non-generic static class中的static method，第一个parameter带`this` modifier；调用语法像instance method，但仍是compile-time绑定的static call。它不能获得private access privilege，也不能真正向type添加storage/member metadata；同名applicable instance member优先。
+
+```csharp
+public static class AccountExtensions
+{
+    public static bool IsOverdrawn(this Account account)
+    {
+        if (account == null) throw new ArgumentNullException(nameof(account));
+        return account.GetBalance() < 0M;
+    }
+}
+
+bool state = account.IsOverdrawn();
+```
+
+extension receiver可为null，因为语法最终是static call；method必须决定是否guard。它适合为不能修改的type提供基于public API的cohesive helper，不应掩盖本应属于type自身invariant的核心behavior。
+
+<Callout type="trap" title="extension method像instance method，所以会做virtual dispatch并访问private fields">
+它是static method的调用语法糖，按compile-time type与in-scope namespaces解析；没有特殊private access，也不会覆盖真正instance member。
+</Callout>
+
+## Nested and Partial Classes
+
+nested class声明在另一个type内，可访问containing type的private members；它表达紧密implementation relationship与name scoping，但nested instance不会自动携带outer instance，需要显式reference。对外公开nested type会让API naming更复杂，应有明确理由。
+
+partial class允许同一type declaration分散在多个source files，compiler把parts合并为一个type。所有parts必须使用`partial`并对关键modifiers/base contracts保持一致。它常用于generated code与handwritten extension分离，不是runtime composition、inheritance或module boundary。
+
+<Stepper>
+  <Step title="切换instance/static/extension/nested/partial">
+    <Ec7MemberOwnershipLab />
+  </Step>
+  <Step title="确认declared owner与call syntax">
+    不因`account.Extension()`的点号语法误判storage owner或private access。
+  </Step>
+  <Step title="确认compile-time组织结果">
+    partial parts成为一个type；nested建立scope关系；两者都不自动创建object relationship。
+  </Step>
+</Stepper>
+
+```csharp
+public partial class Account
+{
+    private sealed class StatementLine
+    {
+        public decimal Amount { get; set; }
+    }
+}
+
+public partial class Account
+{
+    private void ValidateAmount(decimal amount) { /* shared type body */ }
+}
+```
+
+## 本章回顾：State必须有明确Owner
+
+1. new建立class instance identity；instance method中的this指向receiver object。
+2. access modifiers缩小public surface，property以member syntax维护读取与写入contract。
+3. constructor pipeline必须让每条成功路径发布有效object，失败路径不留下半初始化结果。
+4. encapsulation由所有public operations共同维护invariant，不等于简单使用private keyword。
+5. static、extension、nested和partial解决不同ownership/organization问题，不能因语法相似混用。
+
+<Exercises>
+
+**问题 1：怎样证明一个Account class真正封装了balance invariant？**
+
+<Answer>列出所有能建立或修改balance的public paths：每个constructor、property setter、Deposit/Withdraw以及返回内部state的query。验证constructor拒绝invalid opening value，每个mutation先validate且成功后仍满足invariant，query不泄漏可变representation。仅检查field为private不够。</Answer>
+
+**问题 2：何时使用instance、static或extension method？**
+
+<Answer>operation依赖或改变某个object state时用instance；属于type且不需this的stateless operation或明确shared state时用static；无法修改原type、只基于其public API提供cohesive helper时可用extension。extension没有private privilege/virtual dispatch，shared mutable static还需并发和测试隔离设计。</Answer>
+
+**问题 3：constructor、property setter和factory怎样分工维护复杂creation？**
+
+<Answer>constructor负责同步、必要且可快速完成的初始invariant，并通过this chaining集中规则；property setter维护单member每次赋值contract，但不适合跨多个properties的atomic creation；需要named variants、I/O、async或可恢复failure时用factory，返回明确result或throw而不发布半初始化object。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="instance identity" definition="reference定位的具体object及其每实例state，多个aliases可共享。" />
+  <GlossaryItem term="public surface" definition="callers可访问并依赖、实现必须长期维护的members集合。" />
+  <GlossaryItem term="property contract" definition="getter/setter对读取、validation、mutation与accessibility的约定。" />
+  <GlossaryItem term="construction pipeline" definition="new到constructor chaining、validation及发布有效object的路径。" />
+  <GlossaryItem term="encapsulation invariant" definition="由class控制并在每个public operation前后保持成立的state规则。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 6: Classes" adaptedUrl="https://www.informit.com/store/essential-c-sharp-7.0-9781509303618" />

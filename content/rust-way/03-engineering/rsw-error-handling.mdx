@@ -1,0 +1,127 @@
+---
+title: "第9章 构建健壮的程序"
+type: C
+section: "Rust之道 · 工程与并发"
+order: 9
+description: "先用类型与不变量消除失败，再区分Option、Result和panic，设计错误上下文、来源链与第三方库翻译边界。"
+demo: true
+math: false
+sourceUrl: "https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53297"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RswFailureEliminationLab, RswErrorChannelLab, RswThirdPartyErrorLab } from "@/components/mdx/rust-way/diagrams/rsw-error-handling";
+
+<Objectives>
+- 能通过新类型、私有字段和受检构造器消除无效状态，减少可发生失败的路径
+- 能区分Option、Result与panic，设计稳定错误enum、上下文、source chain和恢复边界
+- 能封装I/O、解析与第三方库错误，并测试失败注入、状态不污染和诊断完整性
+</Objectives>
+
+## 从“这个失败能否被设计掉”开始
+
+健壮程序不是给每行代码包一层catch，而是缩小无效状态空间。若端口必须非零，就在构造边界验证并产生`NonZeroU16`；若状态互斥，用enum代替多个bool；若字段必须同时有效，保持私有并提供受检构造器。<Term def="通过类型、构造器和状态机让无效输入或状态无法进入核心逻辑。">failure elimination design</Term>使后续函数只处理已证明数据。
+
+先预测：`Option<u16>`无法区分缺失与非法文本；解析边界应先返回Result，再按业务决定是否把缺失表示为Option。
+
+<RswFailureEliminationLab />
+
+## Option：表达缺失而非失败原因
+
+Option适合“有或没有”且None不需要详细原因，例如查找未命中。组合子`map`、`and_then`、`filter`和`ok_or_else`可逐步转换；`unwrap`只应在测试、示例或已由附近不变量证明Some时使用。<Term def="以Some承载值、以None表达单一缺失语义的显式可选通道。">optional value channel</Term>不应承担权限拒绝、解析错误和I/O失败等多个原因。
+
+```rust
+fn extension(path: &str) -> Option<&str> {
+    path.rsplit_once('.').map(|(_, ext)| ext).filter(|ext| !ext.is_empty())
+}
+
+assert_eq!(extension("report.csv"), Some("csv"));
+assert_eq!(extension("README"), None);
+```
+
+## Result与问号传播
+
+Result用Ok和Err构成穷尽失败通道。`?`在Err时提前返回，并通过From完成兼容错误转换；它不等于忽略错误。<Term def="由稳定variant、操作上下文、底层来源和调用者恢复策略组成的错误API。">typed error contract</Term>应该让调用者能匹配需要恢复的类别，同时保留诊断来源。
+
+```rust
+use std::{fs, num::ParseIntError};
+
+fn read_limit(path: &str) -> Result<u64, Box<dyn std::error::Error>> {
+    let raw = fs::read_to_string(path)?;
+    let value: u64 = raw.trim().parse::<u64>()?;
+    Ok(value)
+}
+```
+
+应用顶层可以用通用错误聚合，公共库更适合稳定enum。路径、记录号和操作名应在最接近边界的位置补充，不能只留下“invalid input”。
+
+## Panic：不变量破坏与不可恢复路径
+
+panic适合程序缺陷、内部不变量被破坏或当前API无法合理继续的状态。Unwind会执行多数Drop，abort直接终止；FFI边界不能让unwind随意跨越未知ABI。<Term def="区分调用者可处理失败与程序自身不变量崩溃的决策线。">panic recovery boundary</Term>要求库对普通外部输入返回Result，而不是panic。
+
+<RswErrorChannelLab />
+
+## 错误上下文与来源链
+
+同一个`io::Error`只有在附加“读取哪个路径、执行什么操作”后才可定位。错误wrapper应实现`source`或使用透明包装保留底层类型；Display面向用户，Debug和source chain面向诊断。<Term def="从领域错误逐层追到最初系统或依赖错误，并保留每层操作坐标的因果链。">error source chain</Term>不能被一次`map_err(|_| "failed")`截断。
+
+```rust
+#[derive(Debug)]
+enum ConfigError {
+    MissingField(&'static str),
+    InvalidPort(ParseIntError),
+}
+```
+
+## 第三方库错误的翻译边界
+
+直接暴露依赖错误会把依赖版本变成公共API；全部转String又丢失结构。边界层应把需要稳定处理的类别映射为领域variant，对不需匹配的底层来源保留source。<Term def="把依赖内部失败转换为领域可承诺语义，同时保留原始原因的适配层。">third-party error translation</Term>还应避免把token、密码或完整敏感输入写进上下文。
+
+<RswThirdPartyErrorLab />
+
+<Stepper>
+  <Step title="先消除无效状态"><RswFailureEliminationLab /></Step>
+  <Step title="选择失败通道">逐个失败判断：仅缺失用Option，可恢复且需原因用Result，不变量崩溃才考虑panic。</Step>
+  <Step title="翻译依赖错误"><RswThirdPartyErrorLab /></Step>
+</Stepper>
+
+## 失败注入与状态原子性
+
+测试不能只断言happy path。应注入不存在文件、权限拒绝、非法UTF-8、解析溢出、写到一半失败和依赖超时；同时断言旧状态未被部分修改、临时文件被清理、错误链含路径和source。先构造新状态并验证，最后一次交换提交，比边读边改共享状态更稳健。
+
+<Callout type="trap" title="unwrap只要不会真的失败就可以">
+“不会失败”必须由局部可见不变量证明。外部输入、文件、网络和时间都可能变化；无证明的unwrap把可恢复失败变成进程panic。
+</Callout>
+
+<Callout type="trap" title="所有错误统一Box或String最简单">
+应用顶层聚合可以简化传播，领域边界仍需可匹配类别和source。String无法可靠区分重试、用户修正、权限和程序缺陷。
+</Callout>
+
+## 本章回顾
+
+本章覆盖构建健壮的程序、消除失败、Option、Result、panic和第三方库错误。顺序是先让无效状态不可构造，再选择失败通道，补充上下文和来源链，最后通过失败注入验证资源清理与状态原子性。
+
+<Exercises>
+**问题 1：何时把Option转换为Result？**
+<Answer>当None越过边界后需要失败原因或上下文时，用`ok_or`或`ok_or_else`转为领域Error；若缺失就是正常查询结果，保留Option。</Answer>
+
+**问题 2：公共库为何不应随意暴露第三方错误类型？**
+<Answer>它会把依赖及版本细节变成公共契约。库应翻译稳定领域类别并保留source，调用者无需随依赖升级重写匹配。</Answer>
+
+**问题 3：怎样验证一次配置重载不会污染旧状态？**
+<Answer>先在临时对象中读取、解析、校验全部配置，成功后原子替换；对各阶段注入失败，断言live配置仍是旧版本且错误链定位到阶段和输入。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="failure elimination design" definition="用类型与构造边界排除无效状态。" />
+  <GlossaryItem term="optional value channel" definition="以Some或None表达单一缺失语义。" />
+  <GlossaryItem term="typed error contract" definition="由variant、上下文、source和恢复策略组成的错误API。" />
+  <GlossaryItem term="panic recovery boundary" definition="区分可恢复失败和不变量崩溃的决策线。" />
+  <GlossaryItem term="error source chain" definition="从领域错误回溯到最初系统错误的因果链。" />
+  <GlossaryItem term="third-party error translation" definition="把依赖失败映射为稳定领域语义并保留来源。" />
+</Glossary>
+
+<Attribution adaptedFrom="《Rust编程之道》第9章 构建健壮的程序" adaptedUrl="https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53297" />

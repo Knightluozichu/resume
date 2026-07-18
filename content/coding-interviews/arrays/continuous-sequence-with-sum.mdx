@@ -1,129 +1,396 @@
 ---
-title: 和为 S 的连续正数序列
+title: "面试题57（二）：和为s的连续正数序列"
 type: C
-section: 数组
-order: 15
-description: 运用滑动窗口在正数序列中找所有和为目标值的连续区间。
+section: "第6章 面试中的各项能力"
+order: 67
+description: "以small和big维护连续正整数窗口，利用扩张增和、收缩减和的单调性打印全部目标序列。"
 demo: true
 math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/57_02_ContinuousSquenceWithSum/ContinuousSquenceWithSum.cpp"
 draft: false
 ---
 
-{/* 知识点清单：滑动窗口、窗口和单调变化、双指针；原书章节：和为 S 的连续正数序列。 */}
+import { ContinuousSequenceWindowDiagram, ContinuousSequenceTraceLab, ContinuousSequenceMovementMap, ContinuousSequenceContractDiagram, ContinuousSequenceOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/continuous-sequence-with-sum";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能说明窗口和在右移/左移时为何只需加减一次。
-- 能用双指针在 $O(n)$ 找到所有连续正数序列。
-- 能分析窗口为空、sum 无解、边界值下的正确性。
+- 能解释正整数如何保证窗口扩张与收缩的单调方向
+- 能计算作者对目标15的全部窗口和与打印时机
+- 能实现作者直接打印版和返回区间集合的稳健版本
+- 能分析中点终止、至少两项、整数溢出和输出规模
+- 能设计覆盖作者6个演示输入并自动核对序列的测试
 
 </Objectives>
 
-## 直觉引入
+## 从“15为何有三种拆法”开始
 
-所有数都是正数时，窗口和随右端增加必定增大；随左端收缩必定减小。这种单调性让“连续区间和”非常适合双指针。
+先预测：15可以写成1到5、4到6、7到8三组连续正整数之和。题目要求打印全部**和为s的连续正数序列**，每组至少包含两个数字。
 
-## 概念讲解
+作者不枚举每个起点和终点，而是用**small和big两个指针**维护一个<Term def="由small到big之间所有连续正整数构成的闭区间。">正整数窗口</Term>。初始small为1、big为2，最小合法窗口正好包含两个数。
 
-定义 `l=1, r=1, sum=0`（若用值域内数字），不断扩展 `r` 累加，`sum>target` 则移动 `l`。  
-当 `sum==target` 时记录窗口 `[l, r-1]` 并继续右移尝试其他解。  
-复杂度是每个元素进/出窗口一次，故为 $O(n)$。
+<ContinuousSequenceWindowDiagram />
 
-## 思考引导
+窗口内所有值之和称为<Term def="当前闭区间small到big中全部连续整数的总和。">窗口和</Term>。它只需在边界移动时加一个新big或减一个旧small，无需每轮重新求和。
 
-### 1) 先问问题，不先枚举
-你不是在问“有几个子序列”，而是在问“给定正数，如何让区间和定位到 S”。只要元素都为正，窗口天然具备单调收缩性。
+## 等差序列公式锁定问题结构
 
-### 2) 识别不变式
-滑动窗口维护 [l,r] 和当前和。左边界只会右移，和只会在扩张/收缩下有单调变化。这个单调行为是你每次决策正确性的基础。
+从正整数a到b的连续序列长度为b减a加1，首尾平均数乘长度就是总和：
 
-### 3) 为什么它一定成立
-在正数组中，添加正数和移除左端都只会改变和的方向性，没机会出现“移除后又更小于目标但又增加其他复杂状态”。
+$$
+\operatorname{sum}(a,b)
+= \frac{(a+b)(b-a+1)}{2}.
+$$
 
-### 4) 常见误区
-把它当作两重循环会退化到 O(n^2)。另一个常见错是没在和大于 S 时持续收缩，导致卡在某段区间上。
+令长度为L，且b等于a加L减1，可得到：
 
-### 5) 你能找到一个反例吗
-数组 [1,2,3,4] S=3。若只在单次循环里收缩一次，你可能错过窗口 [1,2]。边界条件要用 while 而非 if。
+$$
+2s = L(2a+L-1).
+$$
 
-### 6) 迁移到下一题
-这类“连续 + 约束可单调”的问题，优先考虑窗口而不是枚举。把“移动次数”当核心指标，会自然把复杂度压下去。
-## 交互 Demo
+这个式子说明每个答案既可由窗口搜索，也可由长度因子枚举推导。作者选择窗口，因为只做加减、容易按起点顺序打印，并自然利用正数单调性。
 
-滑动窗口的 `sum` 随两个指针移动呈现“可控上升/下降”，适合直观看到为什么不会回退扫描。
+至少两个数意味着L不小于2。若起点a已经太大，最短窗口a与a加1之和也会超过s：
 
-<RecursionDiagram />
+$$
+2a+1 \le s
+\quad\Longrightarrow\quad
+a \le \frac{s-1}{2}.
+$$
 
-## 实现代码
+作者令middle等于1加s后除2，并在small小于middle时继续，正好排除只剩单元素或最短两项已过大的起点。
+
+## 正数保证两个方向可控
+
+big加1并把新big加入窗口时，加入的是正数，窗口和严格增加；移除small并让small加1时，减去的是正数，窗口和严格减少。
+
+这两条性质就是“**正数保证单调移动**”。扩张行为称为<Term def="big只向右移动，每次加入一个更大的正整数，使窗口和严格增加。">单调扩张</Term>；收缩行为称为<Term def="small只向右移动，每次移除当前最小正整数，使窗口和严格减少。">单调收缩</Term>。
+
+<ContinuousSequenceMovementMap />
+
+若允许0或负数，扩张可能不增加、收缩也可能反向改变和，当前比较就无法决定唯一移动方向。一般含负数的连续子数组和应使用前缀和与哈希等方法，不能直接套本题窗口。
+
+## 忠实还原作者控制流
+
+作者在sum小于3时直接返回，因为最小的两个连续正整数1加2已经等于3。
 
 ```cpp
-#include <vector>
+void PrintContinuousSequence(
+    int small,
+    int big);
 
-class Solution {
-public:
-    std::vector<std::vector<int>> findContinuousSequences(int target) {
-        std::vector<std::vector<int>> result;
-        if (target < 3) return result;
+void FindContinuousSequence(int sum) {
+    if (sum < 3) {
+        return;
+    }
 
-        int left = 1, right = 1, sum = 0;
-        while (left <= target / 2) {
-            if (sum < target) {
-                sum += right;
-                ++right;
-            } else if (sum > target) {
-                sum -= left;
-                ++left;
-            } else {
-                std::vector<int> seq;
-                for (int v = left; v < right; ++v) seq.push_back(v);
-                result.push_back(seq);
+    int small = 1;
+    int big = 2;
+    int middle = (1 + sum) / 2;
+    int curSum = small + big;
 
-                sum -= left;
-                ++left;
+    while (small < middle) {
+        if (curSum == sum) {
+            PrintContinuousSequence(
+                small, big);
+        }
+
+        while (curSum > sum &&
+               small < middle) {
+            curSum -= small;
+            ++small;
+
+            if (curSum == sum) {
+                PrintContinuousSequence(
+                    small, big);
             }
         }
-        return result;
+
+        ++big;
+        curSum += big;
     }
-};
-```
+}
 
-```typescript
-function findContinuousSequences(target: number): number[][] {
-  const result: number[][] = [];
-  if (target < 3) return result;
-
-  let left = 1;
-  let right = 1;
-  let sum = 0;
-
-  while (left <= target / 2) {
-    if (sum < target) {
-      sum += right;
-      right++;
-    } else if (sum > target) {
-      sum -= left;
-      left++;
-    } else {
-      const seq: number[] = [];
-      for (let v = left; v < right; v++) seq.push(v);
-      result.push(seq);
-      sum -= left;
-      left++;
+void PrintContinuousSequence(
+    int small,
+    int big) {
+    for (int i = small;
+         i <= big;
+         ++i) {
+        printf(\"%d \", i);
     }
-  }
-
-  return result;
+    printf(\"\\n\");
 }
 ```
 
-<Callout type="trap">
-  <strong>现象 →</strong> `sum==target` 后直接 `right++`，漏掉下一组解。  
-  <strong>原因 →</strong> 需要先记录当前解，再缩小窗口继续搜索。  
-  <strong>修复 →</strong> 记录后执行 `sum -= left; left++`。
+这段源码与旧页模板不同。作者在curSum等于目标后只打印，不立刻收缩；当前外层末尾仍让big加1。扩张后和通常变大，下一轮内层while再连续移动small，并可能在收缩途中打印另一个答案。
+
+## 手算目标15的三个命中
+
+初始窗口1到2，和3。外层依次把big扩到3、4、5，窗口和成为6、10、15；下一轮开头打印1到5。
+
+随后big扩到6，和21。内层依次减1、2、3，small变4且和回到15，于是收缩途中打印4到6。
+
+再扩到7，和22；减4、5后窗口6到7和13。扩到8后和21；下一轮减6得到15，打印7到8。
+
+<ContinuousSequenceTraceLab />
+
+之后继续移动，直到small到达middle。三个序列按起点1、4、7递增输出。
+
+<Callout type="trap" title="把等于目标后的动作误记成作者立即缩左端">
+立即缩左端是可行的另一种窗口模板，但不是本仓库源码。作者先打印，再在外层末尾扩张big；下一轮才根据过大的和持续收缩small。
 </Callout>
 
+## 为什么不会漏解
+
+循环不变式是small和big始终界定一个至少两个数的连续正整数窗口，curSum准确等于该窗口总和。
+
+curSum小于s时，固定small再缩小右端只会让和更小；要达到目标只能扩张big。curSum大于s时，固定big再扩大左侧范围只会更大；要降低只能移除small。
+
+每次移动都排除了不可能的窗口边界，而且small、big从不回退。任意合法窗口最终会成为当前窗口并在外层检查或内层收缩检查中被打印。
+
+作者在内层每减一次small后立即检查相等，不能等全部收缩完才检查；否则可能跨过恰好等于s的中间窗口。
+
+## 返回区间比直接打印更易测试
+
+作者函数以printf为输出副作用，没有返回值。应用代码通常先返回端点区间，再由展示层决定展开数字或格式化。
+
+```cpp
+#include <cstdint>
+#include <utility>
+#include <vector>
+
+std::vector<std::pair<
+    std::int64_t, std::int64_t>>
+findContinuousSequences(
+    std::int64_t target) {
+    std::vector<std::pair<
+        std::int64_t, std::int64_t>> result;
+    if (target < 3) {
+        return result;
+    }
+
+    std::int64_t small = 1;
+    std::int64_t big = 2;
+    std::int64_t current = 3;
+    const std::int64_t middle =
+        (target + 1) / 2;
+
+    while (small < middle) {
+        if (current == target) {
+            result.emplace_back(small, big);
+        }
+        while (current > target &&
+               small < middle) {
+            current -= small;
+            ++small;
+            if (current == target) {
+                result.emplace_back(
+                    small, big);
+            }
+        }
+        ++big;
+        current += big;
+    }
+    return result;
+}
+```
+
+返回端点对每个答案只占O(1)空间；调用方需要具体数字时再生成small到big。若直接把每个序列全部展开，存储与打印成本取决于答案总长度。
+
+设K为所有输出序列包含的数字总数，这个随答案变化、无法被算法内部省略的数量称为<Term def="全部结果实际展开、存储或打印的元素总数，复杂度分析必须单独计入。">输出规模</Term>。搜索和输出成本可分开写为：
+
+$$
+T(s)=O(s)+O(K), \qquad
+M_{\text{work}}=O(1).
+$$
+
+收集端点时额外空间是O(r)，r为序列数量；展开全部数字则是O(K)。忽略输出规模会低估“打印所有答案”的真实成本。
+
+## int溢出与终止中点
+
+源码middle使用1加sum后除2。sum等于INT_MAX时，1加sum先溢出；curSum在big持续增长时也可能溢出。现代版使用int64_t，但若目标本身接近int64上限，target加1仍需用差值写法或更宽中间类型。
+
+可将middle写成target除2加target模2，避免直接加1。窗口和也可在加big前检查是否超过类型上限。
+
+<Callout type="trap" title="用int处理接近上限的目标">
+一旦curSum溢出为负数，单调比较全部失效，指针可能继续错误扩张。类型提升必须覆盖目标、中点、边界和窗口和整个数据流。
+</Callout>
+
+作者while条件small小于middle，保证序列至少两项。若写成小于等于，奇数target可能把单元素target本身或超界窗口纳入检查，改变题意。
+
+<ContinuousSequenceContractDiagram />
+
+## 数学枚举是另一条验证路径
+
+由二倍目标等于L乘2a加L减1，可以枚举长度L，从2开始；若二倍目标能被L整除，解出a并检查a为正整数。
+
+```cpp
+#include <cstdint>
+#include <utility>
+#include <vector>
+
+std::vector<std::pair<
+    std::int64_t, std::int64_t>>
+findByLength(std::int64_t target) {
+    std::vector<std::pair<
+        std::int64_t, std::int64_t>> result;
+    const std::int64_t twice =
+        target * 2;
+
+    for (std::int64_t length = 2;
+         length * (length + 1)
+             <= twice;
+         ++length) {
+        if (twice % length != 0) {
+            continue;
+        }
+        const std::int64_t numerator =
+            twice / length
+            - length + 1;
+        if (numerator > 0 &&
+            numerator % 2 == 0) {
+            const std::int64_t start =
+                numerator / 2;
+            result.emplace_back(
+                start,
+                start + length - 1);
+        }
+    }
+    return result;
+}
+```
+
+这版按长度而非起点生成，输出顺序可能不同，且target乘2、length平方都要防溢出。它适合作为独立参考与数学解释，不是作者实现。
+
+长度枚举不仅要求二倍目标能被length整除，还要求二倍目标除以length再减length加1后为正偶数；为偶数才能除以2得到整数起点，为正才能保证序列从正整数开始。只检查整除会误收起点为半整数或非正数的候选。
+
+最小起点为1时，长度L的最小和是1到L之和。随着L增长，这个最小和按平方量级增加，所以候选长度只需检查到约根号二倍目标，而不是一直到target。长度法可用较少候选直接定位区间；作者窗口法则按small和big单调移动，控制流更直观，也天然按起点排序。
+
+连续正整数表示还与目标的奇偶因子有关：奇数长度以整数中点对称，偶数长度的平均数是半整数。某些目标没有任何长度满足整除与奇偶条件，例如4；这解释了为什么窗口会走完却不打印，而不是实现漏解。自动测试同时使用窗口与长度法对拍，可以让两种独立推导互相检验。
+
+## 作者6个演示输入
+
+作者Test函数只打印标题并调用FindContinuousSequence，没有expected参数，也不判断Passed或Failed。因此以下是预期展示，不是源码自动断言：
+
+1. sum为1，小于3，输出为空。
+2. sum为3，输出1到2。
+3. sum为4，没有至少两项连续正整数解。
+4. sum为9，输出2到4和4到5。
+5. sum为15，输出1到5、4到6、7到8。
+6. sum为100，输出9到16和18到22。
+
+<ContinuousSequenceOfficialCaseLab />
+
+要自动化测试，应让核心函数返回端点，再比较集合；不要依赖捕获printf文本中的空格和换行。
+
+```cpp
+#include <cassert>
+#include <utility>
+#include <vector>
+
+void testContinuousSequences() {
+    using Pair =
+        std::pair<std::int64_t,
+                  std::int64_t>;
+    assert(findContinuousSequences(1)
+           .empty());
+    assert(findContinuousSequences(3)
+           == std::vector<Pair>{{1, 2}});
+    assert(findContinuousSequences(4)
+           .empty());
+    assert(findContinuousSequences(9)
+           == std::vector<Pair>{
+               {2, 4}, {4, 5}});
+    assert(findContinuousSequences(15)
+           == std::vector<Pair>{
+               {1, 5},
+               {4, 6},
+               {7, 8}});
+    assert(findContinuousSequences(100)
+           == std::vector<Pair>{
+               {9, 16},
+               {18, 22}});
+}
+```
+
+每个返回区间还应检查起点为正、终点大于起点、等差求和确实等于target。随机小目标可与二重枚举或长度公式版对拍。
+
+## 输出顺序与重复
+
+small只向右移动，所以作者按起点递增打印。每个起点在窗口中只经过一次，不会重复输出同一端点对。
+
+不同序列可以共享数字，例如sum为9的2到4与4到5都包含4，这不构成重复答案。题目按完整区间区分序列，不要求各结果互斥。
+
+若目标很大，输出数字本身可能很多。日志接口还需考虑限流、取消与背压；核心搜索返回惰性端点迭代器可避免一次构建所有展开序列。
+
+<Stepper>
+  <Step title="建立至少两项的正整数窗口">
+    <ContinuousSequenceWindowDiagram />
+    small从1、big从2开始，curSum维护闭区间总和。
+  </Step>
+  <Step title="按和的大小移动单一边界">
+    <ContinuousSequenceMovementMap />
+    正数让扩张只增、收缩只减，两个指针无需回退。
+  </Step>
+  <Step title="复盘目标15的三次命中">
+    <ContinuousSequenceTraceLab />
+    作者在外层开头或内层收缩后立即打印。
+  </Step>
+  <Step title="核对中点、位宽与输出成本">
+    <ContinuousSequenceContractDiagram />
+    至少两项、int溢出和打印规模都属于接口边界。
+  </Step>
+  <Step title="核对作者6个演示输入">
+    <ContinuousSequenceOfficialCaseLab />
+    原Test只展示输出，现代测试应返回端点自动断言。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 和为s的连续正数序列可由small和big两个指针维护。
+2. 窗口和只在边界移动时加big或减small，无需重复求和。
+3. 正数保证单调移动：扩张增和、收缩减和。
+4. 作者命中后先打印并继续扩张，不是立即收缩模板。
+5. small小于middle保证每组至少两个数，sum小于3直接返回。
+6. 搜索O(s)，打印所有数字还要加输出规模O(K)。
+7. 源码int可能在中点和窗口和处溢出，现代版应整体提升类型。
+8. 作者6个Test只打印演示，没有自动验证期望结果。
+
+<Exercises>
+
+**问题 1：为什么sum小于3时一定无解？**
+
+<Answer>序列必须至少含两个正整数，最小连续序列是1、2，和为3。目标1或2都无法由至少两个连续正整数组成。</Answer>
+
+**问题 2：作者发现1到5等于15后为何可以先扩张big？**
+
+<Answer>该窗口已经打印。加入6后和变大，下一轮通过连续收缩small寻找同一右端或后续右端的其他解；small和big仍单向移动，不会漏掉4到6。</Answer>
+
+**问题 3：含负数的连续数组为何不能沿用同一窗口？**
+
+<Answer>加入负数可能让和减小，移除负数可能让和增大，当前和与目标的比较不再决定唯一移动方向。应改用前缀和等方法。</Answer>
+
+**问题 4：为什么测试端点对优于捕获打印文本？**
+
+<Answer>端点是算法语义，可直接验证和、长度与集合；打印文本混入空格、换行和展示顺序。核心返回结构化数据后，展示层可独立测试。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="正整数窗口">small到big构成的连续正整数闭区间。</GlossaryItem>
+  <GlossaryItem term="窗口和">当前窗口中全部整数的总和。</GlossaryItem>
+  <GlossaryItem term="单调扩张">big右移并加入正数，使窗口和严格增加。</GlossaryItem>
+  <GlossaryItem term="单调收缩">small右移并移除正数，使窗口和严格减少。</GlossaryItem>
+  <GlossaryItem term="输出规模">所有结果实际打印或存储的元素总量。</GlossaryItem>
+</Glossary>
+
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题57（二）"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/57_02_ContinuousSquenceWithSum/ContinuousSquenceWithSum.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

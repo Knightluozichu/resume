@@ -598,7 +598,8 @@ export function FactoryMethodDiagram() {
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        简单工厂用 if-else 集中判断类型，新增产品要改工厂代码；工厂方法把判断下沉到子类，
+        简单工厂用 if-else
+        集中判断类型，新增产品要改工厂代码；工厂方法把判断下沉到子类，
         每个子类只负责创建一种产品，符合开闭原则。
       </figcaption>
     </figure>

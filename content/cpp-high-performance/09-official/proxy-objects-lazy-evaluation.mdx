@@ -1,0 +1,267 @@
+---
+title: "第9章：代理对象与惰性求值"
+type: A
+section: C++ High Performance · Chapter 9
+order: 9
+description: 对齐第一版第9章 Proxy Objects and Lazy Evaluation：eager/lazy边界、string proxy延迟连接、DistProxy推迟sqrt，以及operator overloading构造pipe和infix语法。
+demo: false
+math: false
+sourceUrl: "https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
+draft: false
+---
+
+import {
+  ChpDistanceOperatorPipelineMap,
+  ChpLazyMaterializationDecisionMap,
+  ChpStringProxyLifetimeMap,
+} from "@/components/mdx/cpp-high-performance/diagrams/proxy-objects-lazy-evaluation";
+
+<Objectives>
+
+- 能比较eager evaluation与lazy evaluation的工作量、物化时机、重复求值和异常边界
+- 能设计安全的string proxy与DistProxy，并推导operand lifetime和隐式转换发生的位置
+- 能分析operator overloading构造的pipe operator与infix operator，判断语法收益是否覆盖隐藏成本
+
+</Objectives>
+
+## 从“结果何时必须成为真实对象”开始
+
+eager evaluation在表达式出现时立即计算并产生结果；lazy evaluation先保存operation与operands，只有consumer真正请求value时才计算。惰性可以跳过未使用结果、融合多个operation、减少temporary和expensive work，但也会把成本、异常与lifetime推迟到看似无害的dereference或conversion处。
+
+<Term def="表达式执行时立即完成计算并产生可独立使用的结果对象，即使后续可能不会消费该结果。">
+  eager evaluation
+</Term>
+
+<Term def="先保存计算描述和依赖，在结果被观察、转换或物化时才执行实际工作。">
+  lazy evaluation
+</Term>
+
+先预测consumer需要什么：完整value、一次comparison、前几个元素、还是可能完全不用。再标出materialization boundary、operand ownership和evaluation count。若结果一定马上使用且计算便宜，eager value通常更简单；若只需部分信息或中间结果昂贵，proxy才可能有意义。
+
+<ChpLazyMaterializationDecisionMap />
+
+lazy不等于cached。普通proxy每次conversion都可能重新计算；memoization才保存第一次结果，并引入mutable state、同步、memory和invalidation问题。API必须说明是single evaluation、repeatable expression还是cache-once value，不能让调用者猜。
+
+## proxy objects保存“如何得到值”
+
+proxy objects表现得像目标value或reference，却内部保存operation、operand handles或compressed state。标准库中`vector<bool>::reference`是bit proxy，expression template node也是value proxy。proxy可在operator chain中避免中间物化，但它的reference category、copy behavior与addressability可能不同于真正`T&`。
+
+<Term def="代替真实value/reference参与接口的轻量对象，保存位置或表达式，并在读取、写入或转换时执行实际操作。">
+  proxy object
+</Term>
+
+generic code若写`auto& ref = *it`，可能拒绝返回temporary proxy的iterator；若写`auto value = *it`，又可能复制proxy而不是materialized value。应从expression type和documented concept推理，不要假定dereference永远返回`T&`。proxy的operator应尽量small、inline且明确value category。
+
+<Callout
+  type="trap"
+  title="陷阱：proxy可以完全伪装成真实reference而不影响generic code"
+>
+  proxy可能不能取稳定地址、conversion会执行工作、copy后仍引用原storage，且`auto`会保留proxy
+  type。为generic
+  algorithm测试read、write、swap、lifetime和exception，不只测试一条赋值语句。
+</Callout>
+
+## concatenated strings与temporary成本
+
+连续string `operator+`的直觉实现会为每个中间结果取得storage并复制prefix；但现代library可利用rvalue overload、move、capacity和small-string optimization，不能声称每个加号必然allocate。可靠baseline是预计算总长度、一次reserve并依次append，再与目标实现实测。
+
+```cpp
+std::string concatenate(std::string_view a,
+                        std::string_view b,
+                        std::string_view c) {
+    std::string result;
+    result.reserve(a.size() + b.size() + c.size());
+    result.append(a).append(b).append(c);
+    return result;
+}
+```
+
+concatenated strings的lazy方案让每个`+`返回string proxy/expression node，只记录operands；最终转换到`std::string`时遍历expression tree，先求total size，再一次allocate并copy leaves。若最终只比较length或写入stream，consumer还可直接遍历leaves，不必产生contiguous string。
+
+<Term def="保存字符串片段或连接表达式、在最终需要连续字符串时才统一分配和复制的代理。">
+  string proxy
+</Term>
+
+## string proxy的ownership与lifetime
+
+最简单proxy可保存`string_view`，但只安全借用lifetime覆盖evaluation的字符串。若expression被保存，而operand来自temporary、local buffer或随后改变的string，proxy可能悬空或观察到意外内容。完善实现通常按value category区分：lvalue存borrow/reference wrapper，rvalue按值move进入node；所有nodes本身再按值组成expression tree。
+
+```cpp
+struct StringProxy {
+    std::string_view left;
+    std::string_view right;
+
+    std::string materialize() const {
+        std::string value;
+        value.reserve(left.size() + right.size());
+        value.append(left).append(right);
+        return value;
+    }
+};
+
+std::string first = "render";
+std::string second = " graph";
+auto expression = StringProxy{first, second}; // both owners outlive expression
+auto value = expression.materialize();
+```
+
+这个示例刻意只展示borrowed lvalues，不支持temporary。生产接口若接受`std::string&&`却仍保存view就是bug。另一种保守设计是node总按值own strings，lifetime简单但可能复制；或使用shared ownership，代价是allocation/reference count。最优representation取决于operand size、expression存活时间和materialization频率。
+
+<ChpStringProxyLifetimeMap />
+
+expression tree也可能增长很深，导致type explosion、compile time和巨大closure。可用small flat segment list、rope或threshold materialization控制深度。若source string在materialize前被修改，borrow semantics是否允许观察新值必须写清；value semantics则应capture旧值。
+
+<Callout type="trap" title="陷阱：string_view让string proxy天然零拷贝且安全">
+  `string_view`只携带地址和长度，不拥有字符。来自temporary
+  string、局部buffer或reallocation前地址的view会悬空。proxy必须约束只在full
+  expression内消费，或根据value category拥有rvalue
+  operand，并用sanitizer和延迟物化测试验证。
+</Callout>
+
+## postponing sqrt：DistProxy案例
+
+二维距离通常返回`sqrt(dx*dx + dy*dy)`。排序、比较阈值或找nearest时，sqrt是monotonic transformation：比较非负距离可直接比较squared distance，只有最终显示真实长度时才开方。`DistProxy`可以保存squared value，让comparison使用它，conversion/materialize才调用sqrt。
+
+```cpp
+class DistProxy {
+public:
+    explicit DistProxy(double squared) : squared_(squared) {}
+
+    double squared() const { return squared_; }
+    double value() const { return std::sqrt(squared_); }
+
+    friend bool operator<(DistProxy a, DistProxy b) {
+        return a.squared_ < b.squared_;
+    }
+
+private:
+    double squared_;
+};
+
+DistProxy distance(Point a, Point b) {
+    const auto dx = a.x - b.x;
+    const auto dy = a.y - b.y;
+    return DistProxy{dx * dx + dy * dy};
+}
+```
+
+<Term def="保存平方距离并在比较时避免开方、只在请求实际距离值时计算sqrt的distance proxy。">
+  DistProxy
+</Term>
+
+显式`value()`比隐式`operator double()`更容易看见昂贵边界；若为便利提供conversion，必须避免意外触发多次sqrt。threshold比较应把threshold平方，但要考虑overflow、NaN、negative input和unit。整数坐标的`dx*dx`可能在转换double前先整数overflow，应先扩展类型。
+
+postponing sqrt只有在consumer不总需要真实distance时有收益。若每个proxy立刻转double，额外wrapper不减少工作；若compiler本就能消除或vectorize，差异也可能很小。benchmark应包含comparison-only、mixed与always-materialize三种workload，并统计sqrt call count。
+
+## operator overloading构造表达式语言
+
+operator overloading可让proxy chain接近domain notation。pipe operator常重载`operator|`，把左侧value交给右侧adaptor/function；每一段可返回新proxy，实现filter/transform/materialize。它受C++既有precedence和associativity约束，不能定义新operator或改变求值规则。
+
+```cpp
+template <class Function>
+struct Pipe {
+    Function function;
+};
+
+template <class Value, class Function>
+decltype(auto) operator|(Value&& value, const Pipe<Function>& pipe) {
+    return pipe.function(std::forward<Value>(value));
+}
+
+auto doubled = Pipe{[](int value) { return value * 2; }};
+auto result = 21 | doubled;
+```
+
+<Term def="通过重载竖线运算符把左侧结果依次传给右侧adaptor，形成从左到右的数据处理表达式。">
+  pipe operator
+</Term>
+
+infix operator技巧常借两个可重载operator拼成`lhs <op> rhs`一类语法：第一个operator返回包含lhs和operation的中间proxy，第二个接收rhs并计算。这不是自定义真正的新运算符，precedence由`<`、`>`等原符号决定，短路行为也不会自动出现。为了“像自然语言”引入模糊precedence和临时lifetime，通常不如named function。
+
+<Term def="利用已有运算符和中间代理模拟`lhs operation rhs`形式的命名二元表达式，实际仍遵循原运算符优先级。">
+  infix operator
+</Term>
+
+<ChpDistanceOperatorPipelineMap />
+
+operator API必须保持expectation：`+`通常不修改operands并像value operation，`|`通常表示pipeline；重载`,`、`&&`等会让读者误判sequencing/short-circuit。隐藏allocation、I/O、lock或远程调用尤其危险。proxy DSL适合边界清晰、团队熟悉且有profile收益的domain，不是减少字符数的游戏。
+
+## eager与lazy的决策协议
+
+选择lazy前回答六个问题：结果有多大/多贵，多少结果会被跳过，能否fusion，operand由谁own，expression会evaluate几次，异常和debug stack应出现在哪里。再比较eager baseline、lazy proxy和手工fused implementation的allocation、bytes copied、operation count、compile time和binary size。
+
+若lazy object跨thread，还要处理borrowed data同步、memoization race和exception transport。若proxy出现在public ABI，implementation type explosion会泄漏给caller并增加rebuild。可在module boundary materialize value，把lazy限定在hot expression内部。
+
+## 第9章实验协议
+
+1. 比较`a+b+c+d`、reserve+append与string proxy，按长度分布记录allocation和bytes copied。
+2. 让string proxy分别借用lvalue、接收temporary、跨scope保存，用ASan验证lifetime设计。
+3. 对proxy重复materialize两次，确认是重复计算还是明确memoization。
+4. 用DistProxy执行nearest search，统计comparison与sqrt call count，再比较直接distance。
+5. 覆盖integer overflow、NaN和threshold-squared，验证distance ordering contract。
+6. 为pipe chain记录每段return type、ownership与materialization boundary。
+7. 给infix语法混合算术/比较运算符，加括号前后检查precedence是否符合阅读预期。
+8. 同时记录runtime、allocation、compile time、binary size和diagnostic complexity。
+
+## 小结
+
+- eager立即产生value，lazy保存expression并在观察边界计算；lazy不自动等于cache
+- proxy object可避免temporary或提供reference-like访问，但可能改变address、copy与conversion语义
+- concatenated strings可通过string proxy一次计算长度和物化，operand lifetime是首要约束
+- DistProxy比较平方距离并postpone sqrt，只有部分consumer需要真实距离时才节省工作
+- 隐式conversion可能隐藏重复materialization，显式value接口更易审计
+- pipe operator适合从左到右composition；infix operator只是已有符号加中间proxy
+- operator overloading不能改变precedence或凭空获得short-circuit
+- lazy方案必须同时测runtime、allocation、compile time、binary和维护成本
+
+<Attribution
+  adaptedFrom="C++ High Performance, First Edition, Chapter 9: Proxy Objects and Lazy Evaluation"
+  adaptedUrl="https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
+/>
+
+<Glossary>
+  <GlossaryItem term="eager evaluation">
+    表达式出现时立即计算并生成独立结果。
+  </GlossaryItem>
+  <GlossaryItem term="lazy evaluation">
+    保存计算描述并在观察结果时执行。
+  </GlossaryItem>
+  <GlossaryItem term="proxy object">
+    代替真实值或引用、在访问时执行操作的对象。
+  </GlossaryItem>
+  <GlossaryItem term="string proxy">
+    延迟字符串连接并在最终物化时统一复制的代理。
+  </GlossaryItem>
+  <GlossaryItem term="DistProxy">
+    保存平方距离并按需执行sqrt的距离代理。
+  </GlossaryItem>
+  <GlossaryItem term="pipe operator">
+    用竖线重载组合从左到右数据处理的语法。
+  </GlossaryItem>
+  <GlossaryItem term="infix operator">
+    用已有运算符和中间proxy模拟命名二元操作。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：为什么保存两个string_view的StringProxy不能安全接受temporary string？** 设计lvalue/rvalue策略。
+
+<Answer question="proxy应怎样表达borrow与ownership？">
+  string_view不拥有字符，temporary在full
+  expression后销毁，保存proxy再materialize会悬空。factory按value
+  category处理：lvalue以reference/view借用并要求owner覆盖expression；rvalue按值move进node。或者限制proxy只在完整表达式内立即消费。测试temporary、source
+  reallocation、copy/move proxy和延迟物化，并用ASan证明无悬空。
+</Answer>
+
+2. **问题 2：nearest-point只需要返回最近对象，DistProxy怎样减少sqrt？** 给出正确性和性能证据。
+
+<Answer question="平方距离比较有哪些前置条件？">
+  对非负有限距离，sqrt单调，因此遍历时只比较dx*dx+dy*dy，选出winner后如UI需要再调用一次sqrt；sqrt
+  count从每candidate一次降为最多一次。先把整数差扩展到足够宽类型，处理overflow/NaN，并让threshold比较使用同单位的平方值。benchmark
+  comparison-only、mixed和always-value三种场景，记录sqrt calls与总time。
+</Answer>
+
+3. **问题 3：一个pipe/infix DSL何时比named functions更危险？** 审计precedence、隐藏工作和lifetime。
+
+  <Answer question="怎样决定保留operator语法？">列出每个符号原有precedence/associativity，给混合表达式加compile tests；检查每段proxy拥有还是借用operand、是否多次evaluate、是否隐藏allocation/I/O/lock。与named function chain比较可读性、diagnostic、codegen和profile。若需要大量括号、团队误判short-circuit或成本边界不可见，应退回named API；只有domain约定稳定且测得fusion收益时保留。</Answer>
+</Exercises>

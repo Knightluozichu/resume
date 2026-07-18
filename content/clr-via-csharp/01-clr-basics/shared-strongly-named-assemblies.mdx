@@ -1,0 +1,190 @@
+---
+title: "Chapter 3. Shared Assemblies and Strongly Named Assemblies"
+type: C
+section: "CLR via C# 4e · CLR Basics"
+order: 3
+description: "区分私有与共享程序集、强名称身份与发布者信任，重建GAC、延迟签名、绑定解析和publisher policy的证据链。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcAssemblyIdentityLab, CvcBindingResolutionLab, CvcPublisherPolicyLab } from "@/components/mdx/clr-via-csharp/diagrams/shared-strongly-named-assemblies";
+
+<Objectives>
+
+- 能区分private/shared deployment、simple/strong name、Authenticode与package signing的责任边界
+- 能描述Framework loader从AssemblyRef、配置策略、GAC/探测路径到最终类型解析的完整过程
+- 能设计强名称密钥、延迟签名、版本策略与兼容回滚流程，并判断现代.NET中的替代机制
+
+</Objectives>
+
+## 为什么Strong Name最容易被误解
+
+Strong name把assembly simple name、version、culture和public key组合成更强的CLR identity，并对内容计算签名。它解决的是共享环境中的唯一命名、reference精确性与篡改检测语义，不回答“发布者是否值得信任”“代码是否有权限”“包是否来自批准仓库”。把身份、完整性、来源信任和执行隔离混成“签了名就安全”，会制造错误安全结论。
+
+先预测：两个内容相同但public key不同的assembly是否同一identity；强命名DLL能否私有部署；GAC中的新版本是否自动替代旧引用；拿到私钥的攻击者签出的恶意DLL能否通过strong-name验证；binding redirect成功后API是否一定兼容。答案分别揭示identity、location、policy、key custody与behavior是五条独立证据链。
+
+<Term def="由simple name、version、culture与public key token组成，并由内容签名约束的CLR程序集身份。">strong-name identity</Term>
+
+## Two Kinds of Assemblies, Two Kinds of Deployment
+
+原书把weakly named assembly通常放在应用私有目录，把strongly named assembly既可私有部署也可安装到Global Assembly Cache。私有部署由单个应用拥有，复制/回滚简单；共享部署试图让多应用复用一个机器级组件，因此必须解决同名冲突、side-by-side版本、管理员策略和servicing。Strong name是进入Framework GAC的前提之一，不是强制使用GAC的理由。
+
+现代.NET不再以GAC作为普通应用依赖模型，PackageReference、shared framework和应用发布目录承担更多责任。仍应学习原书模型，因为旧.NET Framework系统、COM/Office宿主和企业桌面应用仍可能依赖它；更重要的是，它训练我们把“引用身份”“解析位置”和“升级策略”分开。
+
+## Giving an Assembly a Strong Name
+
+生成密钥对后，compiler/linker把public key写入manifest，先对除签名槽外的assembly内容hash，再用private key签名。Consumer metadata记录被引用assembly的identity；public key token是public key的缩短表示，便于显示但不是独立信任锚。更换key会改变identity，即使API和文件名完全不变。
+
+```xml
+<PropertyGroup>
+  <SignAssembly>true</SignAssembly>
+  <AssemblyOriginatorKeyFile>build/Contoso.Runtime.snk</AssemblyOriginatorKeyFile>
+  <PublicSign Condition="'$(CI)' != 'true'">true</PublicSign>
+</PropertyGroup>
+```
+
+私钥不应长期放在repository。真实流水线通常由HSM/key vault或受限signing service完成正式签名，开发构建使用public signing或专用测试key。日志记录key id、签名工具版本和artifact hash，但不能泄露private material。密钥轮换等同identity迁移，要提供双版本兼容期和consumer重建计划。
+
+<Stepper>
+  <Step title="切换simple name、strong name、Authenticode与package"><CvcAssemblyIdentityLab /></Step>
+  <Step title="绘制身份矩阵">为每种签名记录它保护的对象、验证者、密钥owner、撤销方式、失败行为和是否进入CLR type identity。</Step>
+  <Step title="执行替换实验">分别改变内容、AssemblyVersion、public key和publisher certificate，观察reference、loader、OS和package client各自如何反应。</Step>
+</Stepper>
+
+<Callout type="trap" title="Strong name证明程序集来自可信公司">
+Strong-name验证只能说明内容与对应private key一致；它不建立证书链、组织身份或授权。Publisher trust通常由Authenticode/package签名、仓库策略和密钥治理共同提供。
+</Callout>
+
+## The Global Assembly Cache
+
+GAC是.NET Framework机器级strongly named assembly仓库，按完整identity保存side-by-side版本，并由受控安装工具维护。不能把GAC当普通目录复制文件：安装需要管理员与缓存协议，卸载还可能影响多个应用。GAC residency有利于共享servicing和磁盘复用，却把应用部署变成机器状态的一部分，降低可移植性与回滚局部性。
+
+<Term def="强命名程序集在.NET Framework机器级缓存中的受管理存在状态及其共享服务责任。">GAC residency</Term>
+
+诊断必须记录完整display name和实际codebase，而不是只看`Some.dll`。一台机器有多个版本并不冲突，真正决定结果的是consumer AssemblyRef与effective binding policy。干净机测试很重要：开发机GAC里残留组件会掩盖发布目录缺失，CI agent也可能因全局状态污染产生不可复现结果。
+
+## Building an Assembly That References a Strongly Named Assembly
+
+编译器读取reference manifest，把被引用assembly的name/version/culture/public key token写入AssemblyRef。Consumer自身是否必须强命名取决于关系：强命名assembly不能静态引用weakly named assembly，因为这会让其闭包身份不稳定；weak consumer可以引用strong dependency。构建时文件位置只是编译输入，运行时仍按recorded identity与loader policy解析。
+
+```csharp
+AssemblyName referenced = typeof(SharedContract).Assembly.GetName();
+Console.WriteLine(referenced.FullName);
+Console.WriteLine(Convert.ToHexString(referenced.GetPublicKeyToken() ?? []));
+
+foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+    Console.WriteLine($"{assembly.FullName} -> {assembly.Location}");
+```
+
+保存consumer的AssemblyRef evidence比查看项目声明更可靠。Package升级可能改变compile asset与runtime asset，binding redirect可能改变实际版本；只有把“编译记录的identity”和“运行加载的identity”并排，才能解释现场。
+
+## Strongly Named Assemblies Are Tamper-Resistant
+
+内容改变会使strong-name signature与hash不匹配，正常验证应拒绝或暴露错误。这提供tamper evidence，但不是加密，IL仍可读取；也不是漏洞防护，合法签名代码仍可有任意缺陷。某些历史开发配置允许跳过特定key的验证，这会削弱保证，生产基线应审计并清除。
+
+完整供应链还需package hash/signature、来源仓库、TLS、SBOM、malware/政策扫描和Authenticode等层。Strong name只覆盖单个assembly内容与CLR identity，不覆盖旁边config、native DLL或数据文件，release manifest必须补齐整体artifact closure。
+
+## Delayed Signing
+
+Delayed signing适用于开发团队需要用public key固定最终identity，但private key只允许受控发布流程访问的场景。开发构建预留签名空间并写public key，最终signing authority再对冻结artifact完成签名。延迟签名的中间件不能作为正式可信产物流出；测试若关闭验证，也必须限制在隔离环境。
+
+<Term def="先用public key固定assembly identity并预留签名，待受控发布阶段再用private key完成签名的流程。">delay-signing ceremony</Term>
+
+签名前任何IL rewrite、resource injection或obfuscation都会改变hash，因此流水线顺序必须是compile/link、deterministic transformations、finalize metadata/resources、sign、verify、package。签名后只允许外部封装，不再原地改DLL。Ceremony应记录approver、key id、input/output hash和verification result。
+
+<Callout type="trap" title="Delay-signed程序集已经拥有正式签名保护">
+它只有最终identity和签名槽，尚未有private-key签名。依赖关闭验证才能运行的中间产物不能进入生产或公共缓存。
+</Callout>
+
+## Privately Deploying Strongly Named Assemblies
+
+Strongly named assembly完全可以放进应用目录。这样保留精确identity和tamper evidence，同时让应用独立携带版本、原子发布和回滚。Loader通常先应用policy，再从GAC/codebase/private probing等位置解析；“文件就在旁边”不代表一定优先，也不代表identity不检查。
+
+对于不需要多应用共享servicing的组件，私有部署往往减少机器级耦合。现代.NET更倾向应用本地或shared framework，而非自建GAC式仓库。选择依据应是ownership、升级协调、磁盘/内存复用、漏洞servicing和rollback blast radius，而不是“strong name所以必须全局”。
+
+## How the Runtime Resolves Type References
+
+方法IL中的type token可能指向当前module的TypeDef，也可能经TypeRef指向另一个assembly。Loader解析时先读取AssemblyRef requested identity，再合并application config、publisher policy与machine config等Framework-era policy，得到post-policy identity；随后检查已加载程序集、GAC、codebase和private probing，最终验证候选manifest identity并加载。
+
+<Term def="把编译时requested identity经配置、publisher与机器规则映射到运行时selected identity的显式规则。">binding policy</Term>
+
+解析失败要保留四类证据：原始requested identity、每层policy变换、每个probe location与拒绝原因、最终selected file/hash。只记录“找不到DLL”无法区分文件缺失、version/token不符、架构错误、坏image或依赖的依赖失败。
+
+<Stepper>
+  <Step title="切换reference、policy、probe、load与type use"><CvcBindingResolutionLab /></Step>
+  <Step title="制作binding ledger">记录AssemblyRef、app/publisher/machine policy、GAC与private candidates、最终FullName/Location。</Step>
+  <Step title="复现冷启动">在没有开发机GAC和缓存污染的干净虚拟机启动，打开bind log并逐条验证resolver结论。</Step>
+</Stepper>
+
+## Advanced Administrative Control (Configuration)
+
+Application configuration可用bindingRedirect把某个oldVersion范围映射到newVersion，也可用codeBase、probing等控制Framework loader。Redirect解决“选择哪个identity”，不保证新assembly在API、序列化、配置、性能和行为上兼容。范围过宽会把从未测试的旧consumer全部指向新版本；范围过窄则留下分裂行为。
+
+```xml
+<runtime>
+  <assemblyBinding xmlns="urn:schemas-microsoft-com:asm.v1">
+    <dependentAssembly>
+      <assemblyIdentity name="Contoso.Runtime"
+                        publicKeyToken="32ab4ba45e0a69a1"
+                        culture="neutral" />
+      <bindingRedirect oldVersion="1.0.0.0-1.9.9.9"
+                       newVersion="1.9.9.9" />
+    </dependentAssembly>
+  </assemblyBinding>
+</runtime>
+```
+
+每条redirect都应关联兼容测试与owner，记录为何存在、哪些consumer覆盖、何时删除。配置合并后要采集effective policy；否则应用、publisher、machine三层谁生效很难判断。现代.NET的dependency resolution模型不同，不能把Framework bindingRedirect原样移植，但仍要保留requested/selected identity与compatibility evidence。
+
+## Publisher Policy Control
+
+Publisher policy assembly允许组件发布者在GAC中声明某旧版本应重定向到新版本，适合发布者确信兼容且需要集中servicing的Framework场景。它影响机器上多个应用，blast radius远大于应用本地redirect。Application可以在必要时绕过publisher policy，以保护已验证组合。
+
+<Term def="由组件发布者提供、在.NET Framework共享环境中集中改变版本绑定的机器级策略。">publisher policy</Term>
+
+发布者不能只凭SemVer宣称兼容：要测试public API、binary signature、exception、serialization、COM/native ABI、配置和性能。管理员应用policy前应保留旧版本与撤销方案，监控按consumer分组。安全更新可能要求统一升级，但也要承认无法兼容的应用需要隔离或迁移，而不是用全局redirect强压。
+
+<Stepper>
+  <Step title="切换exact、redirect、publisher与bypass"><CvcPublisherPolicyLab /></Step>
+  <Step title="建立兼容矩阵">横轴列consumer版本，纵轴列candidate assembly，验证load、API、serialization、配置和关键行为。</Step>
+  <Step title="演练policy回滚">发布到测试机，观察effective bind和业务指标；再移除policy，确认旧identity与旧文件仍可恢复。</Step>
+</Stepper>
+
+## 本章回顾：Identity、Trust与Compatibility不可互换
+
+1. Private/shared描述部署ownership，simple/strong name描述CLR identity；strong assembly也可私有部署。
+2. GAC是Framework机器级共享缓存，带来side-by-side与集中servicing，也带来全局状态和回滚耦合。
+3. Strong name提供identity与tamper evidence，不提供publisher trust、恶意代码判断或sandbox。
+4. Loader从AssemblyRef经过binding policy和probe选择实际文件，完整bind ledger才是诊断证据。
+5. Redirect与publisher policy只改变选择，行为兼容必须由consumer矩阵测试证明。
+
+<Exercises>
+
+**问题 1：强命名插件通过签名校验，是否可以在主进程内当作可信代码运行？**
+
+<Answer>不可以。校验只证明内容与对应private key一致，除非另有可信key登记与发布流程，也不能证明发布者；即使发布者可信，代码仍可能有漏洞。还需package/source policy、签名key治理、权限与能力审查。对不可信插件应使用进程/容器边界，AssemblyLoadContext或strong name都不是sandbox。</Answer>
+
+**问题 2：升级GAC组件后某应用失败，如何重建解析链？**
+
+<Answer>从consumer metadata提取原始AssemblyRef，收集application、publisher、machine配置计算post-policy identity；打开Fusion/bind log查看GAC、codebase与private probes，记录最终文件FullName/hash。再用兼容矩阵复现失败。必要时由应用bypass publisher policy或恢复side-by-side旧版本，而非随机复制DLL。</Answer>
+
+**问题 3：怎样在不向开发者暴露正式私钥的前提下保持稳定identity？**
+
+<Answer>开发阶段使用public key和delay/public signing固定identity，测试产物明确标记且限制环境；发布流水线冻结所有IL/resource变换后，将hash交给HSM或受控signing service完成正式签名。验证签名、记录key id与审计信息，再package。轮换key时按新identity迁移并重建consumer。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="strong-name identity" definition="由名称、版本、culture和public key token构成的CLR身份。" />
+  <GlossaryItem term="GAC residency" definition="程序集在Framework全局缓存中的存在与共享服务责任。" />
+  <GlossaryItem term="delay-signing ceremony" definition="先固定身份、后由受控私钥完成正式签名的流程。" />
+  <GlossaryItem term="binding policy" definition="把requested identity映射到selected identity的配置规则。" />
+  <GlossaryItem term="publisher policy" definition="发布者在Framework共享环境中提供的集中版本策略。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 3: Shared Assemblies and Strongly Named Assemblies" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

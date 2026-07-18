@@ -1,105 +1,330 @@
 ---
-title: 股票的最大利润
+title: "面试题63：股票的最大利润"
 type: C
-section: 数组
-order: 18
-description: 单次遍历维护最低买入点，计算当前价差并更新最大收益。
+section: "第6章 面试中的各项能力"
+order: 75
+description: "在必须完成一次先买后卖的契约下，维护卖出日前的最低价格，一次扫描得到最大利润或最小亏损。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/63_MaximalProfit/MaximalProfit.cpp"
 draft: false
 ---
 
-{/* 知识点清单：贪心扫面、最低值维护、一次遍历；原书章节：股票的最大利润。 */}
+import { MaximalProfitTimelineDiagram, MaximalProfitScanLab, MaximalProfitInvariantMap, MaximalProfitContractDiagram, MaximalProfitOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/maximal-profit";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能解释为何只需维护“截至当前的最低价格”。
-- 能给出 O(n) 解并与暴力法对比。
-- 能处理全递减序列收益为 0 的边界。
+- 能解释买入必须早于卖出如何约束可比较的价格对
+- 能计算每个卖出时刻相对此前最低价的候选利润
+- 能实现作者强制一次交易语义与允许不交易的变体
+- 能分析入口逻辑、短数组、差值溢出和扫描下标边界
+- 能设计递增、递减、相等、两元素和随机暴力对拍
 
 </Objectives>
 
-## 直觉引入
+## 从“后来的最低价不能买过去的最高价”开始
 
-如果你希望一次买入一次卖出，任何时刻的最佳收益只和两件事有关：  
-历史最低买入价和当前位置卖出价。  
-前者不断更新，后者滚动计算即可。
+价格按时间为9、11、5、7、16、1、4、2。全数组最低价是1、最高价是16，但1出现在16之后，不能先以1买入再回到过去以16卖出。合法最大利润来自先以5买入、后以16卖出，结果11。
 
-## 概念讲解
+数组顺序代表不可逆的<Term def="价格数组下标对应时间先后，买入下标必须严格小于卖出下标。">价格时序</Term>。问题“**股票的最大利润**”本质上是在所有先买后卖的下标对中寻找最大差值，而不是简单求全局最大值减全局最小值。
 
-遍历价格数组：
-- 更新 `minPrice = min(minPrice, price)`；
-- 更新 `maxProfit = max(maxProfit, price - minPrice)`。  
-一次扫描完成，时间 $O(n)$，空间 $O(1)$。
+$$
+\operatorname{profit}
+  =\max_{0\le b\lt s\lt n}
+     \bigl(P_s-P_b\bigr)
+$$
 
-## 思考引导
+<MaximalProfitTimelineDiagram />
 
-### 1) 先问问题，不先追峰谷
-买卖股票一次的利润，本质是时序状态选择：每天选择持有/非持有两种状态中的更优。不是简单找局部转折。
+先预测全递减价格16、11、7、4、2、1的结果。作者期望-1，而不是0：他要求从两个不同时间点完成一次交易，最佳选择是以2买入、以1卖出，承受最小亏损1。
 
-### 2) 识别不变式
-每个时刻只要记录 “截至今天不持股的最大收益” 与 “持股后的最大收益” 两个状态，就足够转移。
+## “只能买卖一次”在源码中的真实含义
 
-### 3) 为什么它一定成立
-因为动作集合只有买、卖、空手三类，且历史收益可压缩为这两个状态。状态机是最小充分表示。
+原章概念“**只能买卖一次**”容易被理解成“最多一次，可以不交易”。但作者用两个价格4、2期望-2，并对严格递减序列期望-1，证明这里采用的是<Term def="必须选择一个买入日和更晚的卖出日，即使所有合法交易都亏损。">强制交易</Term>：恰好完成一次买入和一次卖出。
 
-### 4) 常见误区
-以为能多次交易时不需要额外状态，结果一旦允许多次买卖就会混淆。这里只是单次时的最小状态模型。
+如果产品允许放弃交易，答案应与0取最大值；那是常见平台变体，不是作者测试定义。两种契约只差初始化和无交易候选，却会在递减输入上产生完全不同的结果。
 
-### 5) 你能找到一个反例吗
-[3,2,6,5,0,3] 如果只取局部低谷高峰，会错过整体更优组合。状态转移能稳住这种情况。
+<MaximalProfitContractDiagram />
 
-### 6) 迁移到下一题
-资源开关、库存持有、会话状态都能抽象成这种“两个状态动态更新”。关键是确认动作是否对状态闭合。
-## 交互 Demo
+少于两个价格时不存在合法交易。作者对空输入返回0作为哨兵，但生产接口最好返回optional或错误状态，因为0也可能是两天同价产生的真实利润，单个整数无法区分“无交易可做”和“恰好不赚不亏”。
 
-图上可观察到买入低谷和潜在卖点在同一遍扫描中交替出现。
+## 暴力枚举为何有重复工作
 
-<DynamicProgrammingDiagram />
+最直接的方法枚举买入日b，再枚举所有更晚卖出日s，比较每个差值。它正确但要检查n乘n量级的价格对，时间O(n平方)、额外空间O(1)。
+
+对一个固定卖出日s，最佳买入价一定是它之前所有价格的最小值；未来卖出日也只需要这个最小值，不关心更贵的历史价格。因此可以把每个前缀压缩成一个<Term def="当前卖出日之前所有价格的最小值，只能服务当前及未来卖出。">此前最低价</Term>。
+
+$$
+M_s=\min_{0\le b\lt s}P_b,
+\qquad
+D_s=P_s-M_s,
+\qquad
+\operatorname{answer}=\max_{1\le s\lt n}D_s
+$$
+
+这就是原章的“**维护此前最小价格**”与“**当前价格减最小价格**”。每个卖出日只生成一个最优<Term def="把当前价格作为卖价、此前最低价作为买价得到的当日最佳差值。">候选利润</Term>，再与全局最佳比较。
+
+## 一次扫描的不变式
+
+扫描到下标i并准备计算当天卖出利润时，minimum必须等于下标0到i-1的最低价格；maxDiff必须等于此前所有合法买卖对的最大差值。这个条件称为<Term def="每轮开始时最低价只来自当前日之前，最大差值覆盖所有已处理卖出日。">扫描不变式</Term>。
+
+<MaximalProfitInvariantMap />
+
+先用minimum计算当前差值，再把当前价格纳入下一轮最低价，能最直接维持不变式。作者写法等价：循环从i等于2开始，每轮先把numbers[i-1]纳入min，再用numbers[i]卖出；首个交易numbers[1]-numbers[0]已在循环前初始化。
+
+$$
+\begin{aligned}
+\text{before day }i:\quad
+  &M=\min(P_0,\ldots,P_{i-1}),\\
+\text{candidate}:\quad
+  &D=P_i-M,\\
+\text{after day }i:\quad
+  &B=\max(B,D).
+\end{aligned}
+$$
+
+不能先把P_i更新进minimum再计算差值。在允许不交易的版本中，这会产生0并可能看似无害；在作者强制交易版本中，它会让递减序列错误地用“同一天买卖”得到0，覆盖真实的负利润。
+
+## 忠实还原作者代码
+
+作者以第0天价格初始化min，以第1天减第0天初始化maxDiff。这一步建立了第一个买入日严格早于卖出日的合法交易，也让答案允许为负数。
 
 ```cpp
-#include <vector>
-#include <algorithm>
-#include <climits>
-
-class Solution {
-public:
-    int maxProfit(const std::vector<int>& prices) {
-        if (prices.size() < 2) return 0;
-
-        int minPrice = prices[0];
-        int best = 0;
-        for (int i = 1; i < (int)prices.size(); ++i) {
-            best = std::max(best, prices[i] - minPrice);
-            minPrice = std::min(minPrice, prices[i]);
-        }
-        return best;
+int MaxDiff(const int* numbers,
+            unsigned length) {
+    if (numbers == nullptr &&
+        length < 2) {
+        return 0;
     }
-};
-```
 
-```typescript
-function maxProfit(prices: number[]): number {
-  if (prices.length < 2) return 0;
+    int min = numbers[0];
+    int maxDiff = numbers[1] - min;
 
-  let minPrice = prices[0];
-  let best = 0;
-  for (let i = 1; i < prices.length; i++) {
-    best = Math.max(best, prices[i] - minPrice);
-    minPrice = Math.min(minPrice, prices[i]);
-  }
-  return best;
+    for (int i = 2;
+         i < length;
+         ++i) {
+        if (numbers[i - 1] < min)
+            min = numbers[i - 1];
+
+        int currentDiff =
+            numbers[i] - min;
+        if (currentDiff > maxDiff)
+            maxDiff = currentDiff;
+    }
+
+    return maxDiff;
 }
 ```
 
-<Callout type="trap">
-  <strong>现象 →</strong> 结果出现负数。  
-  <strong>原因 →</strong> 默认要做一次买一次卖，不能强制成交。  
-  <strong>修复 →</strong> `best` 初始化为 0，并在每步 `max` 保持非负。
+源码入口存在明确逻辑错误：空指针与长度不足使用了逻辑与。只有numbers为空且length小于2时才返回；非空但长度0或1会访问numbers[0]或numbers[1]，空指针但伪造length大于等于2也会解引用空地址。正确保护应在任一条件成立时返回，也就是使用逻辑或。
+
+<Callout type="trap" title="复制源码入口的逻辑与">
+“指针为空”与“元素不足两个”任一情况都不能读取首对价格。官方只测试nullptr加长度0，恰好让错误条件通过；必须补非空长度1与空指针长度2测试。
 </Callout>
 
+循环变量是int而length为unsigned，极端长度超过INT_MAX时i自增会溢出；价格差也可能在两个int极值相减时溢出。真实股票价格通常范围有限，但通用库接口应使用size_t遍历并在更宽类型中计算差值。
+
+## 现代强制交易接口
+
+下面的实现把“无合法交易”与利润0分开，以optional返回；输入价格使用64位整数，并把每一天作为卖出候选后才更新minimum。
+
+```cpp
+#include <algorithm>
+#include <cstdint>
+#include <optional>
+#include <span>
+
+std::optional<std::int64_t>
+maximalProfit(
+    std::span<const std::int64_t> prices) {
+    if (prices.size() < 2)
+        return std::nullopt;
+
+    std::int64_t minimum = prices[0];
+    std::int64_t best =
+        prices[1] - prices[0];
+
+    for (std::size_t i = 1;
+         i < prices.size();
+         ++i) {
+        best = std::max(
+            best,
+            prices[i] - minimum);
+        minimum = std::min(
+            minimum,
+            prices[i]);
+    }
+    return best;
+}
+```
+
+循环从1开始会再次计算首对差值，但不影响结果，代码顺序更容易读。若64位价格也可能取完整极值，减法仍可能超出64位；可用更宽中间类型或在接口层限制价格范围。
+
+<MaximalProfitScanLab />
+
+在9、11、5、7、16、1、4、2上，扫描16时此前最低为5，候选利润11刷新best。后来出现1，只能成为未来4和2的买入价，不能反向配对已经过去的16。
+
+## 允许不交易的变体
+
+若题意是“最多交易一次”，把best初始化为0即可把“不交易”加入候选集合。仍然要维持买入早于卖出的不变式；这不是动态规划状态机所必需的复杂问题，一份前缀最低值已经是最小充分状态。
+
+```cpp
+std::int64_t maxProfitOrSkip(
+    std::span<const std::int64_t> prices) {
+    if (prices.size() < 2)
+        return 0;
+
+    std::int64_t minimum = prices[0];
+    std::int64_t best = 0;
+
+    for (std::size_t i = 1;
+         i < prices.size();
+         ++i) {
+        best = std::max(
+            best,
+            prices[i] - minimum);
+        minimum = std::min(
+            minimum,
+            prices[i]);
+    }
+    return best;
+}
+```
+
+旧页采用的正是这个语义，并明确让全递减序列收益为0；它本身是常见解法，但与作者Test3和Test7冲突，不能标成原章复刻。多次交易、交易手续费、冷冻期又是其他问题，需要更多状态，不能从这里的单次扫描直接推断。
+
+<Callout type="trap" title="把best固定为0却声称还原作者">
+best等于0会让所有负利润被“不交易”覆盖。作者用首个合法差值初始化，因此递减价格返回负数；选择哪种初始化必须由交易契约决定。
+</Callout>
+
+## 正确性证明
+
+对任意卖出日s，所有合法买入日都位于0到s-1。minimum保存其中最低价格，因此P_s减minimum不小于同一天卖出时任何其他买入选择的利润，D_s就是该卖出日的最优候选。
+
+全局最优交易必然有某个卖出日s。算法会在扫描到s时生成这个卖出日的最优候选，并把它纳入best；反过来，算法生成的每个候选都由一个更早买入日和当前卖出日组成，是合法交易。因此最终best既不会漏掉最优解，也不会来自非法时序。
+
+$$
+\max_{0\le b\lt s\lt n}(P_s-P_b)
+=\max_{1\le s\lt n}
+  \left(P_s-\min_{0\le b\lt s}P_b\right)
+$$
+
+时间O(n)，额外空间O(1)。算法只返回利润；若还要买卖下标，应在minimum更新时保存minIndex，在best更新时同时保存当前买入和卖出下标。相同利润的并列策略也要明确，例如优先最早卖出或最短持有期。
+
+## 返回买卖时刻与并列策略
+
+只返回差值时，相同最低价或相同最大利润选哪一对都不影响答案；一旦接口还返回买卖时刻，比较符号就成为契约。更新最低价时使用严格小于，会保留最早出现的同价买点；使用小于等于，则改为最近的同价买点。更新best时使用严格大于，会保留首个达到最大利润的交易；使用大于等于，会让较晚交易覆盖此前结果。
+
+例如价格2、2、5有两组利润3。若要求最早买入，应保留第0天；若要求最短持有期，应在第二个2出现时更新买点，返回第1天到第2天。再如1、4、1、4有两组最大利润3，优先最早卖出与优先最新交易会返回不同下标。
+
+实现时必须在候选利润刷新best的同一分支中复制minIndex和当前卖出下标，不能循环结束后再根据最终minimum寻找买点，因为最终最低价可能出现在最佳卖出之后。测试也要同时断言利润与下标，才能锁定并列策略；只断言利润无法发现时序信息被后续低价覆盖。
+
+## 八组官方测试逐项核对
+
+作者Test把MaxDiff结果与expected比较。Test1是普通波动，Test2严格递增，Test3严格递减，Test4全部相等，Test5包含后来的更低价，Test6和Test7是仅有一个合法交易的两元素数组，Test8为空。
+
+<MaximalProfitOfficialCaseLab />
+
+最能锁定契约的是Test7：4、2只有一对先买后卖，结果-2。Test3的-1则证明递减序列应选相邻末尾2、1以最小化亏损。Test8只覆盖了错误入口条件恰好为真的组合，没有覆盖保护逻辑的另外两条危险路径。
+
+现代测试除复现官方结果，还应使用O(n平方)暴力法对拍随机短数组。暴力参考要枚举严格满足b小于s的全部下标对，并以首对初始化，不能把0偷偷加入强制交易候选。
+
+```cpp
+#include <array>
+#include <cassert>
+
+void testMaximalProfit() {
+    assert(maximalProfit(
+        std::array<std::int64_t, 5>{
+            4, 1, 3, 2, 5}) == 4);
+    assert(maximalProfit(
+        std::array<std::int64_t, 6>{
+            16, 11, 7, 4, 2, 1}) == -1);
+    assert(maximalProfit(
+        std::array<std::int64_t, 2>{
+            4, 2}) == -2);
+    assert(maximalProfit(
+        std::array<std::int64_t, 5>{
+            16, 16, 16, 16, 16}) == 0);
+    assert(!maximalProfit(
+        std::array<std::int64_t, 1>{4}));
+    assert(maxProfitOrSkip(
+        std::array<std::int64_t, 2>{
+            4, 2}) == 0);
+}
+```
+
+对拍时还应核对输入未被修改、重复最低价与重复最高价的并列策略，以及极端价格差是否处于所选整数类型范围。
+
+<Stepper>
+  <Step title="确认价格时序">
+    <MaximalProfitTimelineDiagram />
+    全局最低价若出现在高价之后，就不能组成合法买卖对。
+  </Step>
+  <Step title="逐日生成候选利润">
+    <MaximalProfitScanLab />
+    当前价格作为卖价，只减去此前日期中的最低价格。
+  </Step>
+  <Step title="维持扫描不变式">
+    <MaximalProfitInvariantMap />
+    先计算当天卖出利润，再把当天纳入未来最低价。
+  </Step>
+  <Step title="区分两种交易契约">
+    <MaximalProfitContractDiagram />
+    作者强制交易可返回负数，允许不交易版本的下界为0。
+  </Step>
+  <Step title="复现八组官方输入">
+    <MaximalProfitOfficialCaseLab />
+    特别用递减与两元素亏损锁定作者初始化语义。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 股票的最大利润必须尊重时间，买入下标严格早于卖出下标。
+2. 作者“只能买卖一次”的源码语义是必须完成一次交易，递减序列返回负数。
+3. 对每个卖出日维护此前最小价格，当前价格减最小价格就是该日最佳候选。
+4. 以首个合法差值初始化best，才能保留全亏损输入中的最小亏损。
+5. 先计算候选再更新最低价，避免同一天买卖和未来低价配过去高价。
+6. 作者入口误用逻辑与，正确短数组保护必须使用逻辑或或optional契约。
+7. 线性解时间O(n)、空间O(1)，可用O(n平方)暴力枚举独立对拍。
+8. 允许不交易、多次交易与作者题目是不同契约，必须分别实现和测试。
+9. 作者八组测试中4、2期望-2，是辨别旧页偏差的关键证据。
+
+<Exercises>
+
+**问题 1：为什么数组9、11、5、7、16、1、4、2不能用1买、16卖？**
+
+<Answer>价格1的下标晚于16，违反买入必须早于卖出的时序。合法最佳是先以5买入，再以16卖出，利润11。</Answer>
+
+**问题 2：严格递减序列为什么作者返回-1而不是0？**
+
+<Answer>作者要求完成一次交易，没有“不交易”候选。所有交易都亏损时选择损失最小的一对；16、11、7、4、2、1中是2买1卖，利润-1。</Answer>
+
+**问题 3：为什么当天价格不能先更新minimum再计算利润？**
+
+<Answer>那会允许同一天既买又卖，生成0。强制交易要求买入日严格早于卖出日，minimum在计算当天候选时只能覆盖此前价格。</Answer>
+
+**问题 4：作者入口条件为什么没有被官方空输入测试发现？**
+
+<Answer>官方恰好传nullptr与长度0，使错误的逻辑与也为真。它没有测试非空长度1或nullptr长度2，这两种会绕过保护并发生越界访问。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="价格时序">数组下标表示不可逆时间，买入必须发生在卖出之前。</GlossaryItem>
+  <GlossaryItem term="强制交易">必须选择两个不同日期完成一次买入和卖出，结果可以为负。</GlossaryItem>
+  <GlossaryItem term="此前最低价">当前卖出日前所有价格的最小值。</GlossaryItem>
+  <GlossaryItem term="候选利润">当前卖价减去此前最低买入价得到的当日最佳差值。</GlossaryItem>
+  <GlossaryItem term="扫描不变式">每轮最低价只来自此前，最大差值覆盖已扫描卖出日。</GlossaryItem>
+</Glossary>
+
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题63"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/63_MaximalProfit/MaximalProfit.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

@@ -1,114 +1,222 @@
 ---
-title: "光照与材质"
+title: "光照模型、空间合同与阴影"
 type: B
 section: "计算机图形学与渲染"
 order: 5
-description: "OpenGL光照模型与材质系统"
+description: "从法线变换和 Phong/Blinn-Phong，到距离衰减、聚光、阴影映射、偏差与过滤"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/opengl-programming-guide-the-official-guide-to-learning-9780134495552"
 draft: false
 ---
 
-import { GlrLightingDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-lighting";
+import { GlrLightingDiagram, GlrLightingSpacesDiagram, GlrShadowMapDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-lighting";
+import { GlrStepFlowDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 在OpenGL中实现Phong光照
-- 掌握材质属性(环境/漫反射/镜面)
-- 学会光源类型(平行光/点光/聚光)
-- 理解法线矩阵与法线变换
+
+- 能在统一坐标和线性颜色空间中推导环境、漫反射与镜面局部光照项
+- 能解释非均匀缩放下法线矩阵、插值后归一化和切线基的必要性
+- 能实现方向光、点光和聚光的几何量、衰减与材质参数
+- 能实现 shadow mapping 的光空间变换、深度比较、偏差、PCF 与常见伪影诊断
+
 </Objectives>
 
-## 直觉引入
+## 直觉：光照是几何、单位和采样合同的交点
 
-在OpenGL中实现光照就像搭舞台——灯光(光源)、演员(物体材质)和导演(着色器)。灯光决定光从哪来什么颜色，材质决定物体如何反射光，着色器把两者结合计算最终颜色。
+OpenGL 没有“自动光照”。shader 接收位置、法线、材质和光源，选择一个 lighting model 输出颜色。若向量不在同一空间、颜色未在线性域计算、法线未正确变换，公式看似完整也没有物理或几何意义。
 
-## 概念讲解
+先预测：模型带非均匀缩放时，直接用 `mat3(model)` 变换法线会只改变法线长度，还是也改变方向？会改变方向，并破坏与切平面的垂直关系。
 
-<Term def="物体表面反射光的属性(环境/漫反射/镜面系数和光泽度)">材质</Term><Term def="mat3(transpose(inverse(model))))，正确变换法线">法线矩阵</Term><Term def="平行光(方向)、点光(位置+衰减)、聚光(位置+方向+锥角)">光源类型</Term><Term def="用纹理控制材质属性，如漫反射贴图、镜面贴图">光照贴图</Term>
-
-### Phong光照实现
-顶点着色器：变换法线和位置到世界空间。片段着色器：计算ambient+diffuse+specular。
-
-### 法线变换
-法线需用normalMatrix=transpose(inverse(mat3(model)))变换，不能直接用model矩阵。
-
-### 光源类型
-平行光(只有方向)、点光(位置+距离衰减)、聚光(位置+方向+内外锥角)
-
-## 交互Demo
-
-> 猜一猜：为什么法线不能直接用model矩阵变换？
+<Term def="在单个表面点用光源、视线、法线和材质近似直接光贡献，而不求解场景多次反射的着色关系">局部光照模型</Term>包括经典 Phong/Blinn-Phong 等；常数 ambient 只是间接光近似，不是 global illumination。
 
 <GlrLightingDiagram />
 
-<Stepper>
-<Step title="第一步：变换法线">
-在顶点着色器中用法线矩阵将法线变换到世界空间。法线矩阵=transpose(inverse(mat3(model)))。
-</Step>
-<Step title="第二步：计算光照">
-在片段着色器中计算Phong三分量：环境光+漫反射(N.L)+镜面反射。
-</Step>
-<Step title="第三步：支持多光源">
-循环遍历所有光源累加光照贡献。不同光源类型有不同计算公式。
-</Step>
-</Stepper>
+## 空间与法线矩阵
 
-## 代码对照
+位置、法线、光向量和视向量必须统一到世界或观察空间。模型线性部分为 $M$ 时，为保持法线 $mathbf n$ 与切线 $mathbf t$ 的垂直关系，法线变换为：
+
+$$
+N=(M^{-1})^T,\qquad (N\mathbf n)\cdot(M\mathbf t)=\mathbf n\cdot\mathbf t=0.
+$$
+
+<Term def="模型线性变换逆矩阵的转置，用于在一般仿射变换下保持法线与变换后切平面垂直">法线矩阵</Term>在刚体或统一缩放时可简化，但一般实现不应无条件使用 model matrix。顶点法线经过插值后长度不再为一，片段阶段需重新 normalize。
+
+<GlrLightingSpacesDiagram />
+
+## Diffuse 与 Specular
+
+令单位法线 $mathbf n$、指向光的单位向量 $mathbf l$、指向观察者的 $mathbf v$。Lambert 漫反射：
+
+$$
+L_d=k_d\odot I\,\max(\mathbf n\cdot\mathbf l,0).
+$$
+
+Blinn-Phong 使用半程向量 $mathbf h=\frac{\mathbf l+\mathbf v}{\|\mathbf l+\mathbf v\|}$：
+
+$$
+L_s=k_s\odot I\,\max(\mathbf n\cdot\mathbf h,0)^p.
+$$
+
+<Term def="控制经验镜面瓣宽度的指数；指数越高高光越窄，但它不等同于跨模型通用的物理粗糙度">光泽指数</Term>不可直接当 PBR roughness。Phong/Blinn-Phong 是教学与风格化模型，不自动能量守恒，也不应宣称 Blinn 一定更快或更自然。
 
 ```glsl
-// 顶点着色器
-#version 330 core
-layout(location=0) in vec3 aPos;
-layout(location=1) in vec3 aNormal;
-out vec3 Normal;
-out vec3 FragPos;
-uniform mat4 model, view, projection;
-void main() {
-    FragPos = vec3(model * vec4(aPos, 1.0));
-    Normal = mat3(transpose(inverse(model))) * aNormal;
-    gl_Position = projection * view * vec4(FragPos, 1.0);
+vec3 shadeLocal(Surface s, Light light, vec3 eye) {
+    vec3 n = normalize(s.worldNormal);
+    vec3 l = normalize(light.position - s.worldPosition);
+    vec3 v = normalize(eye - s.worldPosition);
+    vec3 h = normalize(l + v);
+    float ndotl = max(dot(n, l), 0.0);
+    float spec = ndotl > 0.0 ? pow(max(dot(n, h), 0.0), s.shininess) : 0.0;
+    return light.radiance * (s.diffuse * ndotl + s.specular * spec);
 }
 ```
 
-法线矩阵=transpose(inverse(mat3(model)))确保非均匀缩放时法线方向正确。多光源循环累加。
+所有颜色运算应在线性空间进行，最后再编码到 sRGB 显示目标。把 sRGB texel 数字直接相乘会低估或扭曲能量。
+
+## 光源类型与衰减
+
+方向光只有方向，无距离衰减；点光由位置产生 $mathbf l$ 和距离 $r$；聚光再乘锥角权重。物理点光近似按：
+
+$$
+E(r)=\frac{I}{r^2}.
+$$
+
+实时应用常用 $1/(k_c+k_lr+k_qr^2)$ 做艺术控制，但参数和有效范围必须记录。$r\to0$ 时需半径/最小距离避免奇异值。
+
+聚光可在内外圆锥余弦之间 smoothstep，不能直接对角度线性插值后忘记单位。光源方向、位置和表面数据仍需同空间。
+
+## 材质与法线细节
+
+<Term def="描述表面如何响应光的参数集合，可含 diffuse/specular、shininess、法线/凹凸贴图和遮罩；它不是 OpenGL 固定对象">材质</Term>可通过 UBO/SSBO、纹理和实例 id 组织。材质参数的颜色空间、范围和缺省值必须固定。
+
+Normal mapping 把纹理方向从切线空间通过 TBN 转到着色空间。TBN 要处理 UV 镜像 handedness，并在插值后正交化；高度 bump mapping 则由高度偏导扰动法线。二者改变着色法线，不改变几何轮廓或真实遮挡。
+
+## Shadow mapping：从光源判断可见性
+
+<Term def="先从光源视角记录最近深度，再在相机绘制时把表面投影到光空间并比较深度的阴影算法">阴影映射</Term>把可见性问题离散为深度纹理查询。
+
+```cpp
+// Pass 1: light depth
+glBindFramebuffer(GL_DRAW_FRAMEBUFFER, shadowFbo);
+glViewport(0, 0, shadowSize, shadowSize);
+glClear(GL_DEPTH_BUFFER_BIT);
+drawScene(lightDepthProgram);
+
+// Pass 2: camera shading
+glBindFramebuffer(GL_DRAW_FRAMEBUFFER, cameraFbo);
+glBindTextureUnit(5, shadowDepth);
+drawScene(litProgram);
+```
+
+相机 pass 中计算：
+
+$$
+\mathbf q=Bias\,P_LV_L\mathbf p_W,
+\qquad shadow=[q_z-bias>d(q_x,q_y)].
+$$
+
+必须检查 $q$ 是否在有效投影域。方向光常用正交投影，聚光用透视，点光可用 cubemap 六面深度。
+
+<GlrShadowMapDiagram />
+
+## Bias、过滤与伪影
+
+shadow acne 来自有限深度精度和表面自比较；常数 bias 过大又造成 peter-panning。可结合 slope-scaled polygon offset、法线/斜率相关 bias，并用正反面策略谨慎减少自阴影。
+
+PCF 在邻域做多次二值比较再平均，软化采样边缘但不是物理半影。分辨率、光投影范围和 texel footprint 决定 aliasing；扩大方向光范围会降低单位世界面积的 texel 密度。级联阴影解决大视距分配问题，同时引入 split 和级联接缝合同。
+
+```glsl
+float shadowPCF(sampler2DShadow map, vec3 q, vec2 texel) {
+    float sum = 0.0;
+    for (int y=-1; y<=1; ++y)
+      for (int x=-1; x<=1; ++x)
+        sum += texture(map, vec3(q.xy + vec2(x,y)*texel, q.z));
+    return sum / 9.0;
+}
+```
+
+## 三步光照验证
+
+<Stepper>
+<Step title="第一步：证明空间与输入">
+
+输出世界位置、编码法线、N·L、距离和材质 id 调试附件；用非均匀缩放和镜像 UV 测边界。
+
+<GlrStepFlowDiagram caption="先证明向量空间和输入范围，再看最终颜色。" stage={1} stages={["Inputs：spaces、normal matrix、material、linear color"]} />
+
+</Step>
+<Step title="第二步：证明光照项">
+
+分别显示 diffuse、specular、attenuation 和 spotlight weight，与 CPU 对已知点计算比较。
+
+<GlrStepFlowDiagram caption="分项输出避免一个错误被另一个项掩盖。" stage={2} stages={["Inputs：spaces、normal matrix、material、linear color", "Lighting：N·L、N·H、attenuation、cone"]} />
+
+</Step>
+<Step title="第三步：证明阴影采样">
+
+显示 shadow depth、投影坐标、比较结果与 PCF；扫描 bias、分辨率和光投影范围并保存参考图。
+
+<GlrStepFlowDiagram caption="阴影验收同时覆盖几何变换、深度精度和过滤足迹。" stage={3} stages={["Inputs：spaces、normal matrix、material、linear color", "Lighting：N·L、N·H、attenuation、cone", "Shadow：light depth、projection、bias、PCF"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** 直接用model矩阵变换法线。
-**原因 →** model矩阵能变换顶点就能变换法线。
-**修法 →** 非均匀缩放时model矩阵会使法线方向错误。必须用法线矩阵。
+**现象 →** 非均匀缩放模型上的高光方向漂移。
+**原因 →** 法线直接乘 model matrix，且插值后未归一化。
+**修法 →** 使用 inverse-transpose 法线矩阵，并在统一空间内片段归一化。
 </Callout>
 
 <Callout type="trap">
-**现象 →** 所有物体用相同的材质参数。
-**原因 →** 简化处理用一个材质。
-**修法 →** 不同物体应有不同材质。用材质结构体或纹理控制每物体材质属性。
+**现象 →** shadow acne 消失后物体像悬浮。
+**原因 →** 用过大常数 bias 掩盖精度和斜率问题。
+**修法 →** 缩紧光投影范围，提高有效精度，并按斜率/法线调 bias，用参考场景扫描阈值。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 开启 sRGB 纹理后材质突然变暗或高光错误。
+**原因 →** 采样解码、shader 线性计算和 framebuffer 编码合同不一致。
+**修法 →** 颜色数据按 sRGB 解码，法线/参数保持线性，在线性空间光照和混合，输出阶段统一编码。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：为什么法线不能直接用model矩阵变换？
+
+**问题 1：为什么法线用 inverse-transpose？**
 
 <Answer>
-非均匀缩放时model矩阵会扭曲法线方向。法线矩阵=transpose(inverse(mat3(model)))是保证法线正确的数学变换。
+法线是切平面的协向量。inverse-transpose 保证变换后法线仍与所有变换后切线垂直；直接乘一般 model 线性部分在非均匀缩放下不满足该不变量。
 </Answer>
 
-**问题**：点光源的衰减如何计算？
+**问题 2：Phong ambient 为什么不等于全局光照？**
 
 <Answer>
-衰减=1.0/(constant+linear*distance+quadratic*distance^2)。constant通常1.0，linear和quadratic根据距离范围选择。
+常数 ambient 不追踪遮挡、方向、多次反射或材质间能量交换，只是避免无直接光区域全黑的经验项。全局光照需要求解或近似间接光传输。
 </Answer>
+
+**问题 3：如何区分 shadow acne、peter-panning 与 aliasing？**
+
+<Answer>
+acne 是表面自比较条纹，随 bias 增大减弱；peter-panning 是 bias 过大导致阴影脱离；aliasing 是光空间 texel 密度不足导致阶梯/闪烁。分别扫描 bias、观察接触边和调整投影范围/分辨率诊断。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+光照正确性从统一空间和法线不变量开始，并在线性颜色空间逐项计算材质响应；阴影映射再用光空间深度近似可见性。模型、偏差和过滤各有边界，必须通过分项附件和参数扫描验证，而不是以“看起来有立体感”验收。
+
 <Glossary>
-<GlossaryItem term="材质">物体反射光属性：环境/漫反射/镜面系数和光泽度。</GlossaryItem>
-<GlossaryItem term="法线矩阵">transpose(inverse(mat3(model)))，正确变换法线。</GlossaryItem>
-<GlossaryItem term="光源类型">平行光(方向)、点光(位置+衰减)、聚光(位置+方向+锥角)。</GlossaryItem>
-<GlossaryItem term="光照贴图">用纹理控制材质属性如漫反射贴图、镜面贴图。</GlossaryItem>
+<GlossaryItem term="局部光照模型">在单点近似直接光与材质响应的着色关系。</GlossaryItem>
+<GlossaryItem term="法线矩阵">一般仿射变换下用于保持法线与切平面垂直的逆转置矩阵。</GlossaryItem>
+<GlossaryItem term="光泽指数">控制经验镜面高光瓣宽度的指数参数。</GlossaryItem>
+<GlossaryItem term="材质">描述表面对光响应和细节参数的集合。</GlossaryItem>
+<GlossaryItem term="阴影映射">以光源深度纹理比较近似光可见性的两阶段算法。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="OpenGL 红宝书" adaptedUrl="" />
+<Attribution adaptedFrom="OpenGL Programming Guide, 9th Edition, Chapter 7" adaptedUrl="https://www.informit.com/store/opengl-programming-guide-the-official-guide-to-learning-9780134495552" />

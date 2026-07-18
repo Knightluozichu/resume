@@ -1,0 +1,475 @@
+---
+title: "Chapter 7 Authorization and Authentication"
+type: C
+section: "Mastering Bitcoin（第3版）"
+order: 8
+description: "贯通脚本栈、P2PKH、多签、P2SH、OP_RETURN、时间锁、条件流、SegWit、MAST、P2C、Taproot与Tapscript。"
+demo: true
+math: true
+sourceUrl: "https://github.com/bitcoinbook/bitcoinbook/tree/third_edition_print1"
+draft: false
+---
+
+import {
+  Mbt307AuthorizationAuthenticationFlowLab,
+  Mbt307AuthorizationAuthenticationExperimentLab,
+  Mbt307AuthorizationAuthenticationEvidenceLab,
+} from "@/components/mdx/mastering-bitcoin/diagrams/mbt3-07-authorization-authentication";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释Script、P2SH、时间锁各自负责的对象、验证规则和信任边界
+- 能推导价值、哈希或签名约束、状态转移与发布门禁四组表达式
+- 能实现并运行三段最小代码，追踪正常、边界和单故障样本
+- 能设计独立复核并证明“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”
+
+</Objectives>
+
+## 为什么从可验证状态开始
+
+比特币脚本验证某个输入是否满足被引用输出的花费条件。无状态、非图灵完备和资源限制收窄攻击面；P2SH与SegWit改变承诺位置，Taproot把密钥路径和脚本树组合成可选择的验证路径。
+
+比特币最容易被界面和术语掩盖：钱包余额是UTXO视图，地址是脚本编码，交易哈希只是候选对象标识，矿工出块也不代表全节点必须接受。要判断实现是否正确，必须追踪前状态、被引用输出、规范序列化、脚本与签名、节点策略、区块承诺、累计工作量和后状态。只保存最终余额或区块高度，会漏掉错误网络、冲突交易、脚本失败、重组与索引视图滞后。
+
+本页先手算最小实例，再运行工具。正常样本证明主路径；边界样本取零值、最大金额、恰好费用、最短证明或时间锁边界；单故障样本只改变网络前缀、字节、签名、outpoint、脚本、target或确认中的一项。三组样本共享源码标签、节点、创世状态和观察点，使首个差异可以归因，而不是靠重复广播或刷新页面碰运气。
+
+每次实验生成机器可读证据：官方印刷标签、软件提交、网络与创世哈希、输入原文、解析对象、验证结果、错误、前后UTXO或链状态和确认区块。独立复核者从空目录重放，若字段缺失、节点未同步或结果绑定到不同哈希，门禁明确失败。涉及密钥的示例只使用公开测试向量、regtest或signet，不把教学代码连接真实资产。
+
+官方标题层级还要转成可检查任务：章标题定义端到端目标，节标题定义机制与对象，小节标题定义算法、字段、异常或部署选择。每个标题至少对应一个输入、一个不变量、一个可观察结果和一个失败样本；多个标题可以共享实验环境，但不能因主题相近而合并掉独立语义。这样既保留原书结构，也让读者能从目录逐项证明掌握程度。
+
+## 版次、对象与验收合同
+
+<Term def="Script是Chapter 7 Authorization and Authentication的第1个复核坐标，必须绑定对象、协议、状态和失败证据。">
+  Script
+</Term>
+、
+<Term def="P2SH是Chapter 7 Authorization and Authentication的第2个复核坐标，必须绑定对象、协议、状态和失败证据。">
+  P2SH
+</Term>
+、
+<Term def="时间锁是Chapter 7 Authorization and Authentication的第3个复核坐标，必须绑定对象、协议、状态和失败证据。">
+  时间锁
+</Term>
+、
+<Term def="SegWit是Chapter 7 Authorization and Authentication的第4个复核坐标，必须绑定对象、协议、状态和失败证据。">
+  SegWit
+</Term>
+、
+<Term def="Taproot是Chapter 7 Authorization and Authentication的第5个复核坐标，必须绑定对象、协议、状态和失败证据。">
+  Taproot
+</Term>
+共同构成本页复核坐标。贯通脚本栈、P2PKH、多签、P2SH、OP_RETURN、时间锁、条件流、SegWit、MAST、P2C、Taproot与Tapscript。
+
+本书锁定Andreas M. Antonopoulos、David A. Harding《Mastering Bitcoin: Programming the Open Blockchain》第3版，O'Reilly Media，2023年，402页，ISBN 9781098150082。官方GitHub标签 third_edition_print1 对应第三版首印，公开前言、14章和附录A至C的完整源码，按二至五级标题解析得到333个正式节点；O'Reilly页面交叉核对作者、2023年、402页与ISBN。学习地图和总复习不计入原书分母。本文按CC BY-SA 4.0来源做独立中文教学重构，不复制原书正文。
+
+<Callout type="info">
+  **验收命题：**
+  能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。
+</Callout>
+
+## 核心约束与推导
+
+$$
+authorized(T,U)=execute(inputScript \Vert outputScript)=true
+$$
+
+$$
+spendable=signature \land timelock \land consensusRules
+$$
+
+$$
+S_{t+1}=apply(S_t,T_t), \quad valid(T_t,S_t)=1
+$$
+
+$$
+gate=source \times version \times replay \times boundary \times failureEvidence
+$$
+
+前两式对应本页的密码、交易、费用、网络、区块或二层核心不变量。状态转移式要求候选对象先通过当前状态验证，再原子地产生后状态；失败保留原状态。证据门禁使用乘法语义，来源、版本、重放、边界或失败证据任一缺失，整条结论都不能发布。
+
+## 三段可运行骨架
+
+```typescript
+type Evidence = {
+  version: string;
+  before: string;
+  input: string;
+  after?: string;
+  error?: string;
+};
+
+function evidenceGate(run: Evidence) {
+  const complete = Boolean(
+    run.version && run.before && run.input && (run.after || run.error),
+  );
+  return { complete, page: "mbt3-07-authorization-authentication", run };
+}
+```
+
+```python
+def apply_candidate(state, candidate, verify):
+    if not verify(state, candidate):
+        return {"accepted": False, "state": state, "reason": "invalid"}
+    next_state = state.copy()
+    next_state.update(candidate["changes"])
+    return {"accepted": True, "state": next_state, "reason": None}
+```
+
+```python
+def verify_value_conservation(inputs, outputs, fee):
+    if len(inputs) != len({item["outpoint"] for item in inputs}):
+        return False
+    return sum(item["value"] for item in inputs) == sum(outputs) + fee
+```
+
+第一段把成功与失败放进同一证据结构；第二段证明拒绝路径不污染原状态；第三段验证本页最小协议对象。生产系统必须使用成熟密码、序列化和节点库，并补充资源限制、并发、持久化、超时、隐私与密钥隔离。
+
+## 正式标题逐项讲解
+
+### Chapter 7 Authorization and Authentication
+
+“Chapter 7 Authorization and Authentication”位于本页正式标题坐标 1/38。比特币脚本验证某个输入是否满足被引用输出的花费条件。无状态、非图灵完备和资源限制收窄攻击面；P2SH与SegWit改变承诺位置，Taproot把密钥路径和脚本树组合成可选择的验证路径。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Transaction Scripts and Script Language
+
+“Transaction Scripts and Script Language”位于本页正式标题坐标 2/38。Script以栈机组合数据和操作码，输出脚本定义条件，输入或见证提供满足数据。P2SH承诺赎回脚本，多签要同时检查阈值、密钥顺序和历史CHECKMULTISIG额外栈项。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Turing Incompleteness
+
+“Turing Incompleteness”位于本页正式标题坐标 3/38。Script故意限制循环和全局状态，使验证工作可预测。每个输入只依赖交易、被花费输出和共识上下文，仍需设置脚本大小、操作数和签名检查限制。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Stateless Verification
+
+“Stateless Verification”位于本页正式标题坐标 4/38。Script故意限制循环和全局状态，使验证工作可预测。每个输入只依赖交易、被花费输出和共识上下文，仍需设置脚本大小、操作数和签名检查限制。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Script Construction
+
+“Script Construction”位于本页正式标题坐标 5/38。Script以栈机组合数据和操作码，输出脚本定义条件，输入或见证提供满足数据。P2SH承诺赎回脚本，多签要同时检查阈值、密钥顺序和历史CHECKMULTISIG额外栈项。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### The script execution stack
+
+“The script execution stack”位于本页正式标题坐标 6/38。Script以栈机组合数据和操作码，输出脚本定义条件，输入或见证提供满足数据。P2SH承诺赎回脚本，多签要同时检查阈值、密钥顺序和历史CHECKMULTISIG额外栈项。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### A simple script
+
+“A simple script”位于本页正式标题坐标 7/38。Script以栈机组合数据和操作码，输出脚本定义条件，输入或见证提供满足数据。P2SH承诺赎回脚本，多签要同时检查阈值、密钥顺序和历史CHECKMULTISIG额外栈项。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Separate execution of output and input scripts
+
+“Separate execution of output and input scripts”位于本页正式标题坐标 8/38。输入引用先前交易哈希和输出索引，并提供满足锁定条件的数据。节点还要检查被引用输出存在、尚未花费、金额有效和脚本成功，不能只验证签名。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Pay to Public Key Hash
+
+“Pay to Public Key Hash”位于本页正式标题坐标 9/38。比特币脚本验证某个输入是否满足被引用输出的花费条件。无状态、非图灵完备和资源限制收窄攻击面；P2SH与SegWit改变承诺位置，Taproot把密钥路径和脚本树组合成可选择的验证路径。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Scripted Multisignatures
+
+“Scripted Multisignatures”位于本页正式标题坐标 10/38。Script以栈机组合数据和操作码，输出脚本定义条件，输入或见证提供满足数据。P2SH承诺赎回脚本，多签要同时检查阈值、密钥顺序和历史CHECKMULTISIG额外栈项。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### An Oddity in CHECKMULTISIG Execution
+
+“An Oddity in CHECKMULTISIG Execution”位于本页正式标题坐标 11/38。Script以栈机组合数据和操作码，输出脚本定义条件，输入或见证提供满足数据。P2SH承诺赎回脚本，多签要同时检查阈值、密钥顺序和历史CHECKMULTISIG额外栈项。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Pay to Script Hash
+
+“Pay to Script Hash”位于本页正式标题坐标 12/38。Script以栈机组合数据和操作码，输出脚本定义条件，输入或见证提供满足数据。P2SH承诺赎回脚本，多签要同时检查阈值、密钥顺序和历史CHECKMULTISIG额外栈项。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### P2SH Addresses
+
+“P2SH Addresses”位于本页正式标题坐标 13/38。地址是输出脚本模板的网络编码提示，不是链上账户。解析先验证字符集、校验和和网络，再转换为脚本；复制错误、网络错误或错误脚本类型都可能造成不可逆支付。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Benefits of P2SH
+
+“Benefits of P2SH”位于本页正式标题坐标 14/38。Script以栈机组合数据和操作码，输出脚本定义条件，输入或见证提供满足数据。P2SH承诺赎回脚本，多签要同时检查阈值、密钥顺序和历史CHECKMULTISIG额外栈项。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Redeem Script and Validation
+
+“Redeem Script and Validation”位于本页正式标题坐标 15/38。Script以栈机组合数据和操作码，输出脚本定义条件，输入或见证提供满足数据。P2SH承诺赎回脚本，多签要同时检查阈值、密钥顺序和历史CHECKMULTISIG额外栈项。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Data Recording Output (OP_RETURN)
+
+“Data Recording Output (OP_RETURN)”位于本页正式标题坐标 16/38。输出由聪金额和锁定脚本组成，创建新的UTXO。支付、找零和数据输出具有不同经济与脚本语义；金额范围、尘埃策略和脚本标准性要分别验证。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Transaction Lock Time Limitations
+
+“Transaction Lock Time Limitations”位于本页正式标题坐标 17/38。nLockTime设置交易最早可进入区块的高度或时间，并与输入sequence共同决定是否启用。它不是未来执行计划，交易仍需届时被广播和挖矿。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Check Lock Time Verify (OP_CLTV)
+
+“Check Lock Time Verify (OP_CLTV)”位于本页正式标题坐标 18/38。nLockTime设置交易最早可进入区块的高度或时间，并与输入sequence共同决定是否启用。它不是未来执行计划，交易仍需届时被广播和挖矿。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Relative Timelocks
+
+“Relative Timelocks”位于本页正式标题坐标 19/38。绝对时间锁绑定高度或时间，相对时间锁绑定被花费输出的确认年龄。CLTV与CSV在脚本内检查条件，失败时拒绝花费而不是延迟执行。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Relative Timelocks with OP_CSV
+
+“Relative Timelocks with OP_CSV”位于本页正式标题坐标 20/38。绝对时间锁绑定高度或时间，相对时间锁绑定被花费输出的确认年龄。CLTV与CSV在脚本内检查条件，失败时拒绝花费而不是延迟执行。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Scripts with Flow Control (Conditional Clauses)
+
+“Scripts with Flow Control (Conditional Clauses)”位于本页正式标题坐标 21/38。Script以栈机组合数据和操作码，输出脚本定义条件，输入或见证提供满足数据。P2SH承诺赎回脚本，多签要同时检查阈值、密钥顺序和历史CHECKMULTISIG额外栈项。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Conditional Clauses with VERIFY Opcodes
+
+“Conditional Clauses with VERIFY Opcodes”位于本页正式标题坐标 22/38。IF/ELSE允许同一输出提供多条花费路径，VERIFY把布尔失败转成脚本失败。每条分支都要独立测试栈形状、签名和时间条件，避免不可达或意外旁路。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Using Flow Control in Scripts
+
+“Using Flow Control in Scripts”位于本页正式标题坐标 23/38。Script以栈机组合数据和操作码，输出脚本定义条件，输入或见证提供满足数据。P2SH承诺赎回脚本，多签要同时检查阈值、密钥顺序和历史CHECKMULTISIG额外栈项。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Complex Script Example
+
+“Complex Script Example”位于本页正式标题坐标 24/38。Script以栈机组合数据和操作码，输出脚本定义条件，输入或见证提供满足数据。P2SH承诺赎回脚本，多签要同时检查阈值、密钥顺序和历史CHECKMULTISIG额外栈项。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Segregated Witness Output and Transaction Examples
+
+“Segregated Witness Output and Transaction Examples”位于本页正式标题坐标 25/38。输出由聪金额和锁定脚本组成，创建新的UTXO。支付、找零和数据输出具有不同经济与脚本语义；金额范围、尘埃策略和脚本标准性要分别验证。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Pay to witness public key hash (P2WPKH)
+
+“Pay to witness public key hash (P2WPKH)”位于本页正式标题坐标 26/38。比特币脚本验证某个输入是否满足被引用输出的花费条件。无状态、非图灵完备和资源限制收窄攻击面；P2SH与SegWit改变承诺位置，Taproot把密钥路径和脚本树组合成可选择的验证路径。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Wallet construction of P2WPKH
+
+“Wallet construction of P2WPKH”位于本页正式标题坐标 27/38。钱包管理密钥、派生路径和交易构造，并不存放链上币。恢复需要种子或恢复码、可选口令、派生路径、脚本类型和账户元数据一致；托管钱包则把控制权交给第三方。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Pay to witness script hash (P2WSH)
+
+“Pay to witness script hash (P2WSH)”位于本页正式标题坐标 28/38。Script以栈机组合数据和操作码，输出脚本定义条件，输入或见证提供满足数据。P2SH承诺赎回脚本，多签要同时检查阈值、密钥顺序和历史CHECKMULTISIG额外栈项。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Differentiating between P2WPKH and P2WSH
+
+“Differentiating between P2WPKH and P2WSH”位于本页正式标题坐标 29/38。比特币脚本验证某个输入是否满足被引用输出的花费条件。无状态、非图灵完备和资源限制收窄攻击面；P2SH与SegWit改变承诺位置，Taproot把密钥路径和脚本树组合成可选择的验证路径。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Upgrading to Segregated Witness
+
+“Upgrading to Segregated Witness”位于本页正式标题坐标 30/38。交易延展性指不改变花费效果却改变标识或签名承诺。SegWit把见证移出legacy txid并定义新签名摘要，解决第三方延展性，但签名者仍可能按允许范围创建不同交易。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Embedding segregated witness inside P2SH
+
+“Embedding segregated witness inside P2SH”位于本页正式标题坐标 31/38。交易延展性指不改变花费效果却改变标识或签名承诺。SegWit把见证移出legacy txid并定义新签名摘要，解决第三方延展性，但签名者仍可能按允许范围创建不同交易。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Nested pay to witness public key hash
+
+“Nested pay to witness public key hash”位于本页正式标题坐标 32/38。比特币脚本验证某个输入是否满足被引用输出的花费条件。无状态、非图灵完备和资源限制收窄攻击面；P2SH与SegWit改变承诺位置，Taproot把密钥路径和脚本树组合成可选择的验证路径。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Nested pay to witness script hash
+
+“Nested pay to witness script hash”位于本页正式标题坐标 33/38。Script以栈机组合数据和操作码，输出脚本定义条件，输入或见证提供满足数据。P2SH承诺赎回脚本，多签要同时检查阈值、密钥顺序和历史CHECKMULTISIG额外栈项。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Merklized Alternative Script Trees (MAST)
+
+“Merklized Alternative Script Trees (MAST)”位于本页正式标题坐标 34/38。Script以栈机组合数据和操作码，输出脚本定义条件，输入或见证提供满足数据。P2SH承诺赎回脚本，多签要同时检查阈值、密钥顺序和历史CHECKMULTISIG额外栈项。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Pay to Contract (P2C)
+
+“Pay to Contract (P2C)”位于本页正式标题坐标 35/38。Taproot输出承诺聚合密钥和可选脚本树，正常密钥路径只揭示一个Schnorr签名，脚本路径揭示所用叶与Merkle证明。Tapscript定义叶脚本的新验证语义。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Scriptless Multisignatures and Threshold Signatures
+
+“Scriptless Multisignatures and Threshold Signatures”位于本页正式标题坐标 36/38。Script以栈机组合数据和操作码，输出脚本定义条件，输入或见证提供满足数据。P2SH承诺赎回脚本，多签要同时检查阈值、密钥顺序和历史CHECKMULTISIG额外栈项。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Taproot
+
+“Taproot”位于本页正式标题坐标 37/38。Taproot输出承诺聚合密钥和可选脚本树，正常密钥路径只揭示一个Schnorr签名，脚本路径揭示所用叶与Merkle证明。Tapscript定义叶脚本的新验证语义。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+### Tapscript
+
+“Tapscript”位于本页正式标题坐标 38/38。Script以栈机组合数据和操作码，输出脚本定义条件，输入或见证提供满足数据。P2SH承诺赎回脚本，多签要同时检查阈值、密钥顺序和历史CHECKMULTISIG额外栈项。
+
+复核时固定网络、软件、前状态与原始输入，保存解析、验证、传播或执行的中间对象；失败必须给出首个拒绝规则并保持原状态。通过标准是“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”，结果必须绑定固定对象哈希、网络和官方第三版来源。
+
+## 正常、边界与故障矩阵
+
+| 样本   | 只改变的变量                    | 预期结果               | 必存证据                     |
+| ------ | ------------------------------- | ---------------------- | ---------------------------- |
+| 正常   | 有效UTXO、脚本、费用与网络      | 状态转移并达到确认条件 | 原始对象、前后状态、区块哈希 |
+| 边界   | 零值、最大值、恰好阈值或时间锁  | 按明确规则接受或拒绝   | 边界值、判断分支、资源成本   |
+| 单故障 | 网络、字节、签名、引用或PoW一项 | 首个无效规则处拒绝     | 错误、首差、原状态与回退点   |
+
+先写出预期字节、栈、金额或哈希，再运行节点和解析器。若钱包、区块浏览器与本地节点给出不同答案，以固定网络上的原始交易、被花费输出、区块头和本地共识验证为坐标；第三方展示不能覆盖本地可验证事实。
+
+## 三步交互实验
+
+<Stepper>
+  <Step title="追踪交易与证明">
+    先预测当前阶段的输入、验证依据与后状态，再拖动阶段滑块定位首个分叉。
+    <Mbt307AuthorizationAuthenticationFlowLab />
+  </Step>
+  <Step title="改变费用与确认条件">
+    一次只调整输入数、费率或确认阈值，观察重量、传播与最终性怎样变化。
+    <Mbt307AuthorizationAuthenticationExperimentLab />
+  </Step>
+  <Step title="注入单一故障">
+    注入网络、签名、脚本、区块链接或证据故障，要求门禁在提交前拒绝并给出回退点。
+    <Mbt307AuthorizationAuthenticationEvidenceLab />
+  </Step>
+</Stepper>
+
+## 常见失败与回退
+
+<Callout type="trap">
+  **把地址当账户、哈希当确认：**
+  地址提示锁定脚本，交易哈希标识序列化对象；二者都不证明UTXO未花费、脚本成功或交易已进入累计工作量链。
+</Callout>
+
+<Callout type="trap">
+  **把策略拒绝当共识无效：**
+  尘埃、最低中继费和内存池限制可能只是节点策略。复核必须区分序列化、脚本和区块共识规则与本地中继策略。
+</Callout>
+
+<Callout type="tip">
+  **回退顺序：** 第三版标签 -> 网络与创世哈希 -> 字节序和序列化 -> UTXO与价值 -> 脚本和签名 -> 节点策略 -> 区块PoW与链选择 -> 钱包或二层视图。首个差异未解释前不比较余额。
+</Callout>
+
+## 本章回顾
+
+贯通脚本栈、P2PKH、多签、P2SH、OP_RETURN、时间锁、条件流、SegWit、MAST、P2C、Taproot与Tapscript。 比特币脚本验证某个输入是否满足被引用输出的花费条件。无状态、非图灵完备和资源限制收窄攻击面；P2SH与SegWit改变承诺位置，Taproot把密钥路径和脚本树组合成可选择的验证路径。 掌握标准是能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。。独立复核必须从官方第三版标签、固定测试网络和原始协议对象重放正常、边界与单故障样本。
+
+<Glossary>
+
+<GlossaryItem term="Script">
+  “Script”定位Chapter 7 Authorization and
+  Authentication的第1类证据；定义包含输入、验证规则、状态变化、网络版本与拒绝路径。
+</GlossaryItem>
+
+<GlossaryItem term="P2SH">
+  “P2SH”定位Chapter 7 Authorization and
+  Authentication的第2类证据；定义包含输入、验证规则、状态变化、网络版本与拒绝路径。
+</GlossaryItem>
+
+<GlossaryItem term="时间锁">
+  “时间锁”定位Chapter 7 Authorization and
+  Authentication的第3类证据；定义包含输入、验证规则、状态变化、网络版本与拒绝路径。
+</GlossaryItem>
+
+<GlossaryItem term="SegWit">
+  “SegWit”定位Chapter 7 Authorization and
+  Authentication的第4类证据；定义包含输入、验证规则、状态变化、网络版本与拒绝路径。
+</GlossaryItem>
+
+<GlossaryItem term="Taproot">
+  “Taproot”定位Chapter 7 Authorization and
+  Authentication的第5类证据；定义包含输入、验证规则、状态变化、网络版本与拒绝路径。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+1. 如何为Chapter 7 Authorization and Authentication建立最小可重放基线？
+
+<Answer>
+  固定官方第三版标签、节点版本、网络、创世哈希、前状态、输入、验证规则和确认条件，保存解析、判断、输出与拒绝原因。
+</Answer>
+
+2. 如何证明“能逐步执行P2PKH、时间锁与Taproot测试花费的栈变化，区分授权、认证和条件满足，并定位首个失败操作码。”不是一次偶然成功？
+
+<Answer>
+  先手算最小对象，再对同一合同执行正常、边界和单故障样本；由独立节点读取原始交易、区块和后状态，逐项一致才通过。
+</Answer>
+
+3. 修复Chapter 7 Authorization and Authentication后怎样回归？
+
+<Answer>
+  先重放原失败，再运行相邻边界与正常基线，按版本、网络、序列化、UTXO、脚本、签名、策略和链选择定位首个差异，全部不变量通过后发布。
+</Answer>
+
+</Exercises>
+
+## 前后导航
+
+- [上一页：Chapter 6 Transactions](/learn/mastering-bitcoin/07-06-transactions/mbt3-06-transactions)
+- [下一页：Chapter 8 Digital Signatures](/learn/mastering-bitcoin/09-08-digital-signatures/mbt3-08-digital-signatures)
+
+<Attribution
+  adaptedFrom="Andreas M. Antonopoulos、David A. Harding《Mastering Bitcoin: Programming the Open Blockchain》第3版，O'Reilly Media，2023年，402页，ISBN 9781098150082 · 官方第三版源码采用CC BY-SA 4.0 · 基于333个正式标题节点的独立中文教学重构"
+  adaptedUrl="https://github.com/bitcoinbook/bitcoinbook/tree/third_edition_print1"
+/>

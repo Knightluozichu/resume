@@ -1,0 +1,79 @@
+---
+title: "第6章 并发"
+type: C
+section: "Go实战 · 并发"
+order: 6
+description: "区分并发并行，理解goroutine调度，检测竞态，并用原子、互斥锁和无缓冲或有缓冲channel同步。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/go-in-action/chapter-6"
+draft: false
+---
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GiaSchedulerLab, GiaRaceLab, GiaChannelLab } from "@/components/mdx/go-in-action/diagrams/gia-goroutines";
+
+<Objectives>
+- 能区分并发与并行，并解释Go调度器的G、M、P角色
+- 能分析race detector报告，并判断atomic或Mutex是否保护完整不变量
+- 能比较无缓冲与有缓冲channel，设计发送、关闭和退出协议
+</Objectives>
+
+## 从独立函数怎样推进开始
+先预测：两个goroutine无同步递增共享计数器，最终值是否稳定？不稳定，并且属于data race。
+并发允许函数独立推进，并行允许同时执行。<Term def="任务结构独立推进与硬件同时执行之间的区别。">concurrency parallelism distinction</Term>阻止把goroutine数量当吞吐。
+
+<GiaSchedulerLab />
+
+## Goroutine与Go调度器
+G是goroutine，M是OS线程，P持有执行Go代码所需资源。<Term def="运行时把可运行G分配给P和M，并处理阻塞与抢占的模型。">GMP scheduler model</Term>调度次序不承诺。
+
+```go
+go func() { work() }()
+```
+
+## 竞态条件
+无同步共享读写且至少一方写会形成data race。<Term def="并发访问同一内存且缺少happens-before关系的错误。">data race condition</Term>用`go test -race ./...`获取证据。
+
+```sh
+go test -race ./...
+```
+
+## 原子函数与互斥锁
+Atomic适合单值计数或flag，复合状态在同一Mutex临界区维护。<Term def="一组字段从旧合法状态到新合法状态不可被中间观察的要求。">locked state invariant</Term>还需统一锁顺序。
+
+同步不仅避免两个写操作撞在一起，还建立内存可见性的先后关系。若一个goroutine写入数据后只修改普通布尔值，另一个goroutine看到布尔值时仍不能据此推导数据已可见；锁、原子操作或channel收发才提供可依赖的同步边。
+
+<GiaRaceLab />
+
+## Channel与CSP
+Channel传值并同步goroutine。<Term def="发送者、接收者、容量、关闭者和退出条件组成的通信协议。">channel ownership protocol</Term>要求发送方关闭，接收方不关闭。
+
+```go
+values := make(chan int, 1)
+values <- 7
+close(values)
+fmt.Println(<-values)
+```
+
+## 无缓冲与有缓冲
+无缓冲发送接收握手，有缓冲在容量内解耦；容量改变阻塞点，不消除背压与关闭。<Term def="channel容量耗尽后生产者必须阻塞、丢弃或取消的策略。">channel backpressure boundary</Term>必须显式。
+
+<GiaChannelLab />
+<Stepper><Step title="观察调度"><GiaSchedulerLab /></Step><Step title="运行Race">制造共享计数错误并修复。</Step><Step title="切换容量"><GiaChannelLab /></Step></Stepper>
+
+## 验收实验：同一任务三种同步
+先让两个goroutine无同步更新计数并保存race报告；再分别用atomic和Mutex修复，说明atomic只覆盖单值，而锁可保护复合状态。最后改成channel转移owner，分别设容量0、1和有界值，记录发送阻塞点、关闭者与退出路径。三种实现结果相同，证明方式和背压位置不同。
+
+<Callout type="trap" title="加Sleep可以等待Goroutine">Sleep不是完成协议，应使用channel或WaitGroup。</Callout>
+<Callout type="trap" title="缓冲越大越不会阻塞">只推迟阻塞并增加内存与延迟。</Callout>
+
+## 本章回顾
+本章覆盖并发与并行、goroutine、Go调度器、竞态条件、锁定共享资源、原子函数与互斥锁、通道，以及无缓冲与有缓冲通道。关闭、背压和退出与发送接收同等重要。
+<Exercises>
+**问题 1：Race detector通过是否证明无竞态？**<Answer>只证明执行覆盖路径未观察到，仍需设计同步和扩大测试覆盖。</Answer>
+**问题 2：谁关闭channel？**<Answer>知道不会再发送的生产侧协调者。</Answer>
+**问题 3：Mutex适合什么？**<Answer>需要共同维护多个字段复合不变量时。</Answer>
+</Exercises>
+## 术语表
+<Glossary><GlossaryItem term="concurrency parallelism distinction" definition="并发结构与并行执行区别。" /><GlossaryItem term="GMP scheduler model" definition="G、M、P运行时调度模型。" /><GlossaryItem term="data race condition" definition="缺少同步的同址并发读写。" /><GlossaryItem term="locked state invariant" definition="锁保护的复合状态迁移。" /><GlossaryItem term="channel ownership protocol" definition="发送接收关闭退出协议。" /><GlossaryItem term="channel backpressure boundary" definition="容量耗尽后的处理策略。" /></Glossary>
+<Attribution adaptedFrom="Go in Action Chapter 6 Concurrency" adaptedUrl="https://livebook.manning.com/book/go-in-action/chapter-6" />

@@ -1,0 +1,437 @@
+---
+title: "Column 14 · Heaps：从局部修复函数组装优先队列与原地排序"
+type: B
+section: "Part III · The Product"
+order: 13
+description: "按第二版Column 14重建heap order/shape、1-based implicit tree、siftup/siftdown invariants、priority queue ADT、pqsort与in-place Heapsort。"
+demo: true
+math: true
+sourceUrl: "https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+draft: false
+---
+
+import { PP2HeapShapeLab, PP2ArrayIndexLab, PP2SiftUpLab, PP2SiftDownLab, PP2HeapInvariantLab, PP2PriorityQueueLab, PP2PQTradeoffLab, PP2PQSortLab, PP2HeapSortPartitionLab, PP2HeapBuildLab, PP2HeapCertificateLab } from "@/components/mdx/programming-pearls/diagrams/14-heaps";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释Heap Data Structure的order/shape properties、1-based array mapping与root minimum consequence
+- 能计算heap height、siftup/siftdown path bound、priority queue operation cost与Heapsort worst-case complexity
+- 能实现带loop invariant的siftup、siftdown、heap-backed priority queue、pqsort和in-place Heapsort
+- 能分析min/max orientation、sorted/unsorted sequence alternatives、incremental/bottom-up build与Quicksort tradeoffs
+- 能设计heap invariant checker、priority queue differential oracle、Heapsort partition proof与release certificate
+
+</Objectives>
+
+## 从两个问题共用一对函数开始
+
+Column 14要解决两个重要问题。Priority Queues支持插入与取出minimum，每次worst case $O(\log n)$；Heapsort以few extra words在worst case $O(n\log n)$内排序。它们并不是两个无关recipes，而是共用Heap Data Structure与Two Critical Functions：`siftup`修复bottom，`siftdown`修复top。
+
+先预测：一个12-node heap最多要交换多少次才能把新元素送到正确位置？若array已有一百万items，为什么“完整binary tree”比arbitrary pointer tree更关键？
+
+<PP2HeapShapeLab />
+
+Heaps（<Term def="同时满足complete-tree shape与parent-before-child order的集合表示，可在root访问extreme element并沿single path恢复结构。">Heaps</Term>）采用bottom-up组织：先精确定义representation和局部repair，再把它们封装成priority queue与sort。掌握这一栏的标准不是背诵formula，而是能从precondition推到postcondition。
+
+## 14.1 The Data Structure
+
+原书的12个integers构成min-heap：
+
+```text
+                         12
+                 20              15
+             29      23      17      22
+           35  40  26  51  19
+```
+
+Heap Data Structure（<Term def="以complete binary tree的shape property和parent key不大于children的order property共同定义的min-oriented structure。">Heap Data Structure</Term>）拥有两条independent properties。
+
+### Order property
+
+Min-heap中每个node value不大于children。对1-based array `x[1..n]`：
+
+$$
+\operatorname{heap}(1,n)
+\iff
+\forall i\in\{2,\ldots,n\},\quad x[\lfloor i/2\rfloor]\le x[i].
+$$
+
+它立刻推出root `x[1]`是global minimum，却不要求siblings互相有序，也不要求one subtree的所有values都小于another subtree。Heap是partial order，不是sorted tree。
+
+### Shape property
+
+所有terminal nodes只处于最多two adjacent levels，bottom level从left向right填充，tree无holes。含$n$ nodes时，任何node离root不超过$\lfloor\log_2 n\rfloor$ edges。这个balance不是rotation维持的，而是array representation自动提供的。
+
+<PP2ArrayIndexLab />
+
+原书使用1-based array，因此：
+
+```text
+root(i)       = 1
+value(i)      = x[i]
+leftchild(i)  = 2*i
+rightchild(i) = 2*i+1
+parent(i)     = i/2
+null(i)       = i < 1 or i > n
+```
+
+Implicit Tree（<Term def="用array index arithmetic表达complete-tree topology，不为parent/child links分配pointers的representation。">Implicit Tree</Term>）让shape property由valid index range保证。C/C++最直观做法是allocate `n+1`项并空置`x[0]`；生产代码也可用0-based mapping，但proof与boundary必须整体转换，不能混用。
+
+<Callout type="trap" title="Heap就是完全排序的array">
+Heap只保证ancestor不大于descendant。`[12,20,15,...]`合法，即使index 2的20大于index 3的15。Binary search不能直接用于heap；heap擅长访问root extreme与局部更新。
+</Callout>
+
+## 14.2 Two Critical Functions
+
+Two Critical Functions（<Term def="在heap property只可能于bottom-parent edge或top-child edges破坏时，沿单一路径恢复完整heap的siftup与siftdown。">Two Critical Functions</Term>）每次最多走tree height，因而都是$O(\log n)$。关键不是“交换到合适位置”的直觉，而是possible violation始终被限制在active node周围。
+
+### siftup: repair a new last item
+
+Precondition为`heap(1,n-1)`，新value已放在`x[n]`。除`i`与parent之间外，所有edges保持order。若`i`到root，或parent不大于它，heap完成；否则swap with parent，violation随`i`向上移动。
+
+原书例子把13附加到原12-element heap：
+
+```text
+index 13: 13 swaps with parent 17 at index 6
+index  6: 13 swaps with parent 15 at index 3
+index  3: parent 12 <= 13, stop
+```
+
+<PP2SiftUpLab />
+
+对应min-heap code：
+
+```cpp
+void siftup(int n) {
+    // pre: n > 0 and heap(1, n-1)
+    int i = n;
+    for (;;) {
+        // invariant: heap(1,n), except perhaps i and parent(i)
+        if (i == 1) break;
+        int p = i / 2;
+        if (x[p] <= x[i]) break;
+        swap(x[p], x[i]);
+        i = p;
+    }
+    // post: heap(1,n)
+}
+```
+
+Progress measure是node depth：每次swap把`i`设成`i/2`，strictly向root移动，最多$\lfloor\log_2 n\rfloor$次。Swap后旧parent下沉；它原本不大于除active child外的children，而active value更小，因此其他edges仍合法。
+
+### siftdown: repair a replaced root
+
+Precondition为`heap(2,n)`：root可能任意，但root之外的forest已满足heap order。Active `i`若有children，必须与lesser child比较。若`x[i]`已不大于lesser child，它也不大于另一个child，可以停止；否则swap并沿chosen child继续。
+
+原书例子把root换成18：
+
+```text
+18 compares with children 20 and 15 -> swap with 15
+18 compares with children 17 and 22 -> swap with 17
+18 compares with only child 19       -> 18 <= 19, stop
+```
+
+<PP2SiftDownLab />
+
+完整function：
+
+```cpp
+void siftdown(int n) {
+    // pre: heap(2,n)
+    int i = 1;
+    for (;;) {
+        // invariant: heap(1,n), except perhaps i and its children
+        int c = 2 * i;
+        if (c > n) break;
+        if (c + 1 <= n && x[c + 1] < x[c]) ++c;
+        if (x[i] <= x[c]) break;
+        swap(x[c], x[i]);
+        i = c;
+    }
+    // post: heap(1,n)
+}
+```
+
+每轮`i`至少doubling，最多走height：
+
+$$
+\text{sift cost}\le \lfloor\log_2 n\rfloor
+\text{ swaps and } O(\log n)\text{ comparisons}.
+$$
+
+必须选择lesser child。若与larger child交换，smaller child仍小于new parent，order violation留在原地；若只有left child，不能读取`x[c+1]`。
+
+<PP2HeapInvariantLab />
+
+Heap Invariant（<Term def="complete shape与每条parent-child order edge持续成立，并在sift期间只允许active path附近出现可控例外的证明条件。">Heap Invariant</Term>）分两层：shape/order是data structure invariants；“except perhaps active edge”是repair loop invariant。函数可假设precondition，必须交付postcondition。
+
+## 14.3 Priority Queues
+
+Priority Queues（<Term def="维护initially empty multiset，支持insert(t)与extractmin()，并由operation contract隐藏内部representation的abstract data type。">Priority Queues</Term>）的abstract set $S$允许duplicates：
+
+```text
+insert(t)
+  pre  |S| < maxsize
+  post current S = original S union one occurrence of t
+
+extractmin()
+  pre  |S| > 0
+  post result = min(original S)
+       and original S = current S union one occurrence of result
+```
+
+Heap implementation恰好把两个operations映射到局部repair：
+
+```cpp
+void insert(T t) {
+    if (n == maxsize) throw overflow_error(\"priority queue full\");
+    x[++n] = t;
+    siftup(n);
+}
+
+T extractmin() {
+    if (n == 0) throw underflow_error(\"priority queue empty\");
+    T result = x[1];
+    x[1] = x[n--];
+    if (n > 0) siftdown(n);
+    return result;
+}
+```
+
+<PP2PriorityQueueLab />
+
+`insert` append到complete tree的next slot，所以shape preserved；`siftup`恢复order。`extractmin`先保存root，再把last item搬到root并缩短array，所以shape仍complete；除root edges外原heap关系未变，`siftdown`足够。
+
+### Why a heap balances the operation pair
+
+原书比较三种representation：
+
+| Structure | One insert | One extractmin | n of each |
+|---|---:|---:|---:|
+| Sorted sequence | $O(n)$ | $O(1)$ | $O(n^2)$ |
+| Heap | $O(\log n)$ | $O(\log n)$ | $O(n\log n)$ |
+| Unsorted sequence | $O(1)$ | $O(n)$ | $O(n^2)$ |
+
+<PP2PQTradeoffLab />
+
+Sorted sequence在insert时付费，unsorted sequence在extract时付费；heap把成本平衡到root path。若workload是many inserts、one extract，unsorted array可能更好；若queue始终很小，linear scan常数可能获胜。ADT定义behavior，representation选择仍依赖operation mix。
+
+Capacity与empty checks不能像原书compact teaching class那样省略。Comparator也必须形成consistent strict weak order；NaN、mutable priorities与overflowing subtraction comparator会破坏“minimum”语义。
+
+## 14.4 A Sorting Algorithm
+
+### Sorting through the ADT
+
+最直接的Sorting Algorithm是把所有items插入min-priority queue，再依次`extractmin`写回：
+
+```cpp
+template<class T>
+void pqsort(T v[], int n) {
+    priqueue<T> pq(n);
+    for (int i = 0; i < n; ++i) pq.insert(v[i]);
+    for (int i = 0; i < n; ++i) v[i] = pq.extractmin();
+}
+```
+
+它time为$O(n\log n)$，但queue额外存$n$ items。这个version展示abstraction reuse，却没有利用input array在build后可被覆写。
+
+<PP2PQSortLab />
+
+### Overlay heap and output: Heapsort
+
+Heapsort（<Term def="在同一array上建立max-heap，反复把root maximum换到sorted suffix，并siftdown缩小heap的in-place comparison sort。">Heapsort</Term>）把orientation反过来：max-heap的root是largest，适合从array right端填充ascending suffix。
+
+原书先用repeated `siftup`建立max-heap：
+
+```cpp
+for (int i = 2; i <= n; ++i) {
+    // pre: maxheap(1,i-1)
+    siftup_max(i);
+    // post: maxheap(1,i)
+}
+
+for (int i = n; i >= 2; --i) {
+    swap(x[1], x[i]);       // move current maximum to final position
+    siftdown_max(1, i - 1); // restore the shrinking prefix
+}
+```
+
+这里`max` variants只把comparisons反向：`siftup_max`在parent smaller时swap；`siftdown_max`选择larger child。不要拿min-heap的`extractmin` comparisons直接贴进max-Heapsort。
+
+<PP2HeapSortPartitionLab />
+
+Extraction loop的完整invariant：
+
+```text
+maxheap(1,i)
+sorted(i+1,n)
+every x[1..i] <= every x[i+1..n]
+```
+
+Swap后旧root进入`x[i]`，它是active heap maximum，因此suffix依旧sorted且dominates prefix。Last suffix boundary每轮向left推进一项；`siftdown_max`只重建prefix heap，不接触final positions。
+
+Build执行$n-1$次siftup，sort执行$n-1$次siftdown，每次最多$O(\log n)$：
+
+$$
+T(n)=O(n\log n),\qquad S_{\mathrm{extra}}(n)=O(1).
+$$
+
+Guarantee对sorted、reverse、equal与adversarial arrays都成立，recursive stack也不需要linear growth。代价是Heapsort通常unstable，访问pattern不如sequential merge，且typical data上fast Heapsort往往仍慢于Column 11的simple Quicksort；worst-case guarantee不是“所有机器上最快”。
+
+### Faster bottom-up construction
+
+原书Problem 2把`siftdown(l,u)`推广为：
+
+```text
+pre  heap(l+1,u)
+post heap(l,u)
+```
+
+从最后一个internal node `n/2`倒序到1调用，可在$O(n)$构建heap。原因是大多数nodes靠近leaves：约$n/2$ nodes height 0，$n/4$ height 1，依次递减：
+
+$$
+\sum_{h\ge 0}\frac{n}{2^{h+1}}\,h=O(n).
+$$
+
+<PP2HeapBuildLab />
+
+Bottom-up heapify减少build work与code；sorting extraction仍为$\Theta(n\log n)$，所以overall asymptotic不变，但constant更好。它也说明逐项operation bound不能总是简单相乘：bulk construction能利用whole-tree height distribution。
+
+## 14.5 Principles
+
+### Efficiency from representation
+
+Shape property保证root path logarithmic；array arithmetic删除pointers；Heapsort把heap prefix与sorted suffixoverlay在one array，避免pqsort的$n$ extra items。Efficiency来自representation、invariant与operation sequence同时配合。
+
+### Correctness from explicit invariants
+
+写sift loop前先声明可能坏在哪里，再证明每轮preserve other edges、缩短remaining path、最终消除exception。Heapsort还需要cross-region relation；只证明prefix是heap、suffix sorted仍不足，因为两区可能值域交错。
+
+### Procedural abstraction
+
+Procedural Abstraction（<Term def="只依赖siftup/siftdown的precondition与postcondition组装higher-level algorithm，而把repair loop细节封装在函数内部。">Procedural Abstraction</Term>）让priority queue与Heapsort复用same conceptual tools。Caller不关心sift如何交换，只关心它修复哪一端。
+
+### Abstract data types
+
+Priority queue user只看到`insert`与`extractmin` specification。它可由heap、sorted sequence、unsorted sequence或library implementation替换。Abstraction不消除performance impact，却把correctness reasoning从implementation details中解耦。
+
+<Callout type="trap" title="有了O(log n)单次操作，heap在所有优先队列上都更快">
+Small queues、偏斜operation mix、bounded dense integer priorities或batch workloads可能适合linear sequence、bucket queue或bulk sort。先用library baseline与real trace测量，再选择representation。
+</Callout>
+
+## 14.6 Problems
+
+原书Problems从代码调优扩展到heap-based modeling：
+
+- 把heap priority queue调到最快，找出它超过sequential structures的实际$n$ threshold。
+- 实现general `siftdown(l,u)`，从`n/2`到1构建$O(n)$ heap，再简化并加速Heapsort。
+- 与Column 11的sorting table公平比较，包括random、sorted、duplicates、comparison cost和extra space。
+- 用priority queue构造Huffman code；每轮extract two minimum weights，merge后insert。
+- 为large floating-point set求和时先合并small magnitudes，减少catastrophic cancellation，但仍需定义NaN与rounding policy。
+- 从disk上的billion values中找million largest：维护size-one-million min-heap，只让超过root的candidate进入。
+- 合并many sorted files：heap保存each file current head，extract后只推进对应file，得到$O(N\log k)$。
+- 为first-fit bin packing设计heap-like summary tree，让node保存subtree maximum remaining capacity。
+- 证明comparison model下insert与extractmin不可能同时asymptotically优于logarithmic；否则重复insert/extract会打破comparison sorting的$\Omega(n\log n)$ lower bound。
+- 研究C++ Standard Library中的heap algorithms与priority queue adapter，核对comparator orientation。
+
+这些applications保留的共同结构是“root给出下一项，one update只破坏one path”。若operation会同时任意修改many priorities，plain heap可能缺少handles/decrease-key support，应选择indexed heap或其他ADT。
+
+## 14.7 Further Reading
+
+原书推荐Knuth *The Art of Computer Programming, Volume 3: Sorting and Searching* Section 5.2.3，以及Sedgewick *Algorithms*中priority queues与Heapsort章节。它们继续讨论bottom-up construction、comparison counts、d-ary heaps与optimized sinking。
+
+现代library阅读应从specification开始：heap algorithms对range维持partial order，priority queue adapter封装container与comparator。特别注意C++ `std::priority_queue`默认把largest放在top，而本栏14.3的teaching ADT是extract-min；用`std::greater`或反向key时要通过small oracle确认orientation。
+
+## 本栏实验路径
+
+<Stepper>
+  <Step title="建立shape与order模型" description="在1-based implicit tree中核对parent/children arithmetic、complete shape和root minimum。">
+    <PP2HeapShapeLab />
+    <PP2ArrayIndexLab />
+  </Step>
+  <Step title="证明两项局部修复" description="跟踪13的siftup与18的siftdown，把possible violation限制在active path。">
+    <PP2SiftUpLab />
+    <PP2SiftDownLab />
+    <PP2HeapInvariantLab />
+  </Step>
+  <Step title="封装priority queue" description="用append/root replacement组装insert/extractmin，并比较sorted、heap、unsorted representations。">
+    <PP2PriorityQueueLab />
+    <PP2PQTradeoffLab />
+  </Step>
+  <Step title="从pqsort压缩到Heapsort" description="移除n-item extra queue，在同一array上维护shrinking max-heap与growing sorted suffix。">
+    <PP2PQSortLab />
+    <PP2HeapSortPartitionLab />
+  </Step>
+  <Step title="优化构建并关闭证据" description="比较incremental与bottom-up heapify，验证boundary、oracle、partition和performance baseline。">
+    <PP2HeapBuildLab />
+    <PP2HeapCertificateLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Heap由order与shape共同定义；min-heap root是minimum，但array并非fully sorted。
+- Complete shape让height不超过$\lfloor\log_2 n\rfloor$，1-based array用`i/2`、`2i`、`2i+1`表达topology。
+- `siftup`从new last item向root修复，只有active-parent edge可能违反order。
+- `siftdown`必须选择lesser child修复min-heap，只有active-child edges可能违反order。
+- Two Critical Functions每次最多沿one root path，worst case为$O(\log n)$。
+- Priority queue的insert是append plus siftup，extractmin是root replacement plus siftdown。
+- Heap平衡insert与extractmin，n次各自操作总计$O(n\log n)$。
+- `pqsort`复用ADT但需要n-item extra space。
+- Heapsort改用max-heap，把maximum逐项放进right sorted suffix，只需constant extra space。
+- Heapsort invariant同时包含heap prefix、sorted suffix与cross-region order。
+- Incremental siftup build为$O(n\log n)$；bottom-up siftdown heapify利用height distribution达到$O(n)$。
+- Heapsort对任何input都有$O(n\log n)$ worst case，但typical throughput不必然超过Quicksort。
+- Procedural abstraction封装repair functions，priority queue ADT封装behavior，两者都让correctness与implementation分层。
+- Production evidence必须覆盖shape/order、empty/full、duplicates、orientation、library oracle与real workload baseline。
+
+<Exercises>
+
+1. 对1-based min-heap `[12,20,15,29,23,17,22,35,40,26,51,19]`插入13。列出每次`i,p`与swap，证明终止后所有parent-child edges满足order。
+2. 从同一heap中执行`extractmin`，把last value 19放到root。列出`siftdown`选择的children、comparisons与最终array，并解释为何必须选lesser child。
+3. 证明bottom-up heapify从`floor(n/2)`到1执行`siftdown`为$O(n)$而非$O(n\log n)$；再说明为什么完整Heapsort仍为$\Theta(n\log n)$。
+4. 设计priority queue/Heapsort test harness：包含library differential oracle、random operation trace、empty/full、duplicates、all-equal、sorted/reverse和partition invariant。给出failure triage顺序。
+
+<Answer>
+
+先写13到index 13，`i=13,p=6`，因`17 > 13`交换；现在`i=6,p=3`，因`15 > 13`交换；现在`i=3,p=1`，因`12 <= 13`停止。New path变为`12 -> 13 -> 15 -> 17`，其余edges未变。每次上移后，downward-moving old parent原本不大于自己的other children，且不小于new active value，因此新child edges仍合法；active node与next parent是唯一待查edge。
+
+</Answer>
+
+<Answer>
+
+保存result 12，把last 19放到root并令$n=11$。Root children 20、15，选择15并swap；active index 3的children 17、22，选择17并swap；index 6已无child，结束。Final array为`[15,20,17,29,23,19,22,35,40,26,51]`。若第一步与20交换，root会是20而另一个child 15更小，violation仍停在root，因此选择lesser child是postcondition所必需。
+
+</Answer>
+
+<Answer>
+
+Leaves有约$n/2$个且height 0；height至少1的nodes至多$n/2$，至少2的至多$n/4$。把每个node repair cost按height求和，可写成$n/2+ n/4+ n/8+\cdots < n$的level charges，故heapify为$O(n)$。Sorting phase仍做$n-1$次root extraction，其中线性数量的operations需要$\Theta(\log n)$ path，所以总time仍为$\Theta(n\log n)$。
+
+</Answer>
+
+<Answer>
+
+PQ oracle用`std::multiset`或正确orientation的library queue；随机trace逐步比较size、top/extract与remaining multiset。Boundary先测empty extract、capacity overflow、one item、duplicates与comparator equality。Heapsort对每个swap/sift阶段检查max-heap prefix、sorted suffix及prefix不大于suffix，并最终同时检查sortedness与permutation。Failure先固定seed复现，再查index/orientation、boundary、sift invariant、ADT state，最后才查benchmark与allocator effects。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Heaps">满足complete shape与parent-before-child order、可在root访问extreme并沿single path修复的结构。</GlossaryItem>
+  <GlossaryItem term="Heap Data Structure">由shape property和order property共同定义、通常用implicit array实现的binary heap。</GlossaryItem>
+  <GlossaryItem term="Implicit Tree">用array indexes计算parent/children、不存pointer links的complete-tree representation。</GlossaryItem>
+  <GlossaryItem term="Two Critical Functions">分别从bottom向上与从top向下恢复heap order的siftup和siftdown。</GlossaryItem>
+  <GlossaryItem term="Heap Invariant">shape/order始终成立，并在repair loop中只允许active path附近有controlled exception。</GlossaryItem>
+  <GlossaryItem term="Priority Queues">支持insert与extract-min/max、隐藏内部representation的abstract data type。</GlossaryItem>
+  <GlossaryItem term="Heapsort">在同一array中overlay max-heap prefix和sorted suffix的in-place worst-case n log n sort。</GlossaryItem>
+  <GlossaryItem term="Procedural Abstraction">通过pre/postconditions使用repair functions，而不依赖其内部交换步骤。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Programming Pearls, Second Edition · Column 14 Heaps"
+  href="https://www.informit.com/store/programming-pearls-9780201657883"
+  author="Jon Bentley"
+  license="本章按Pearson官方第二版目录、官方配套Column 14教学材料与priqueue/Heapsort源码，重建heap shape/order、1-based implicit representation、siftup/siftdown、priority queues、pqsort、in-place Heapsort、principles、problems与further reading；现代boundary handling、library differential tests与release certificate为教学化扩展。"
+/>

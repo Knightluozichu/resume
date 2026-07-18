@@ -1,0 +1,368 @@
+---
+title: "Chapter 17：异步编程基础（Fundamentals of Asynchronous Programming）"
+type: A
+section: Rust 程序设计语言 · Future、Stream 与任务调度
+order: 17
+description: 对齐官方第 17 章：async/await 与 runtime、Future 组合和取消、任意数量 Future、Stream、poll/Waker/Pin，以及 async task 与 OS thread 的协作边界。
+demo: false
+math: false
+sourceUrl: "https://doc.rust-lang.org/book/ch17-00-async-await.html"
+draft: false
+---
+
+import {
+  RplFutureCompositionLab,
+  RplFuturePollLab,
+  RplStreamTaskBoundaryLab,
+} from "@/components/mdx/rust-programming-language/diagrams/fundamentals-of-asynchronous-programming";
+
+<Objectives>
+
+- 能实现由 runtime 驱动的 `async fn`，解释 Future 惰性、postfix await、状态机和每个 await point 的暂停条件
+- 能比较顺序 await、join、select、spawn task、异步 channel 与任意数量 Future 的完成、所有权、公平性和 cancellation 契约
+- 能设计 Stream consumer，并依据 I/O-bound、CPU-bound、阻塞调用、Pin/Unpin 和背压要求选择 async task、blocking pool 或 OS thread
+
+</Objectives>
+
+## 为什么等待型工作需要异步
+
+视频编码会持续消耗 CPU/GPU，是 <Term def="吞吐主要受 processor 计算能力限制的工作，增加可独立并行的 core 往往有帮助。">CPU-bound</Term>；网络下载大部分时间在等 socket、磁盘或设备，是 <Term def="吞吐主要受外部输入输出延迟或带宽限制、processor 经常处于等待状态的工作。">I/O-bound</Term>。两类工作都“耗时”，却不应使用同一种调度策略。
+
+<Term def="多个工作在时间上交错推进；单 core 也能在暂停点之间切换，因此不要求同一时刻执行。">concurrency</Term>
+
+<Term def="多个工作在同一时刻由不同计算资源真正执行，通常依赖多个 core。">parallelism</Term>
+
+异步编程让代码声明潜在暂停点和最终结果，runtime 决定暂停期间推进哪项工作。它通常用少量 thread 承载大量等待型 task，适合高连接数 I/O；它不会自动把 CPU 计算分到多个 core，也不会抢占一段没有 await 的长同步代码。
+
+<Term def="调用期间占住当前 OS thread，结果未准备好时该 thread 也不能执行其他工作。">blocking operation</Term>
+
+<Term def="等待尚未完成时把控制交回调度器，让承载 thread 可推进其他 task 的操作。">non-blocking wait</Term>
+
+第 16 章的 thread 是 OS 管理的执行边界；本章的 Future 是可暂停计算，task 是 runtime 管理 Future 的调度边界。真实系统常把 I/O 留给 async，把 CPU-heavy 或 legacy blocking API 交给专用 thread 或 blocking pool。
+
+## 17.1 Futures 与 async 语法
+
+<Term def="可能尚未准备好、但将来会产生 Output 的惰性计算值；每个实例保存自己的进度。">Future</Term>
+
+调用普通函数会立即执行函数体；调用 `async fn` 只创建一个实现 Future 的匿名值。没有 await、spawn 或 `block_on` 触发 poll，函数体不会开始。这种 <Term def="构造计算描述时不立即运行，只有 consumer 主动推进时才执行的性质。">Future laziness</Term> 与 iterator adapter 的惰性相似。
+
+```rust
+async fn page_title(url: &str) -> Option<String> {
+    let response = trpl::get(url).await;
+    let html = response.text().await;
+    parse_title(&html)
+}
+
+// 概念上近似：
+fn page_title_expanded(url: &str)
+    -> impl Future<Output = Option<String>>
+{
+    async move { /* 相同工作 */ }
+}
+```
+
+<Term def="把 block 或 function 编译为匿名 Future 状态机的关键字；它描述可暂停计算，不启动 executor。">async</Term>
+
+<Term def="在 async context 中推进一个 Future；若它 Pending 则当前 task 可暂停并把控制交回 runtime。">await</Term>
+
+Rust 的 await 是 postfix keyword，所以可写 `trpl::get(url).await.text().await`。每个 await 是潜在暂停点，不是必然切换点：子 Future 若立刻 Ready，当前 task 可以继续；只有 Pending 才需要 runtime 以后再推进。
+
+编译器把 async body 变成状态机。状态保存当前程序位置、尚未完成的子 Future，以及跨 await 仍要使用的局部值。普通 ownership、borrow 和 lifetime 规则继续检查这些字段，因此引用不能因暂停逃过生命周期约束。
+
+<Term def="async 状态机可能暂停并在以后恢复的位置，通常对应一次 await；跨越它的局部值必须被状态保存。">await point</Term>
+
+Rust 标准库定义 Future，但不替应用选择 executor、I/O reactor 或 timer。官方章节用 `trpl` 教学 facade，它主要包装 futures 与 Tokio；真实项目需按平台、I/O 生态、嵌入式约束和调度特性选择 runtime。
+
+<Term def="提供 executor、I/O readiness、timer 和 task API，负责让 Future 实际推进的库级系统。">async runtime</Term>
+
+```rust
+fn main() {
+    trpl::block_on(async {
+        if let Some(title) = page_title("https://www.rust-lang.org").await {
+            println!("{title}");
+        }
+    });
+}
+```
+
+<Term def="从同步边界启动 runtime，并阻塞当前 thread 直到给定顶层 Future 完成的桥接操作。">block_on</Term>
+
+特殊的 `main` 本身不是 executor；runtime macro 所允许的 `async fn main` 也会展开成普通 main 加 runtime 启动代码。应用应让同步/异步边界少而清楚，避免在已经运行的 async context 中随意嵌套 `block_on`。
+
+<Callout type="trap" title="陷阱：调用 async fn 就会在后台执行">
+  async fn 调用只返回惰性 Future。把它赋值后直接丢弃，body 通常从未运行；compiler 的 unused Future warning 正是在提示这类遗漏。必须 await、交给 runtime spawn，或从同步边界 block_on。
+</Callout>
+
+## 17.2 用 async 实现并发
+
+<Term def="runtime 管理的一组异步操作；它可在 Future Pending 时挂起，并由 executor 以后重新调度。">async task</Term>
+
+`spawn_task` 与 `thread::spawn` 形状相似，却不是“一 task 一 OS thread”。spawn 返回 task handle；handle 自身是 Future，await 它才能把 task 的完成纳入当前协议。main 或 runtime 退出时，未完成 task 不应被假定会自动收尾。
+
+```rust
+trpl::block_on(async {
+    let handle = trpl::spawn_task(async {
+        fetch_catalog().await
+    });
+
+    render_cached_view().await;
+    let catalog = handle.await?;
+    use_catalog(catalog);
+});
+```
+
+若两个操作不需要独立 task 生命周期，可先构造两个 async blocks，再用 join 同时推进。<Term def="并发 poll 多个 Future，等全部 Ready 后保留并返回每个 Output 的组合操作。">join</Term> 与“先 await A，再 await B”不同：后者在 A 完成前根本不会 poll B。
+
+异步 channel 也延续 message passing，但 receive 返回 Future：同步 `recv` 会阻塞 thread，异步 `recv().await` 在无消息时暂停 task。发送端是否需要 await 取决于 channel 类型；unbounded send 可同步完成，bounded send 可能因容量产生背压并返回 Future。
+
+```rust
+let (tx, mut rx) = trpl::channel();
+
+let producer = async move {
+    for value in ["one", "two", "three"] {
+        tx.send(value)?;
+        trpl::sleep(Duration::from_millis(100)).await;
+    }
+    Ok::<_, SendError>(())
+};
+
+let consumer = async {
+    while let Some(value) = rx.recv().await {
+        println!("{value}");
+    }
+};
+
+trpl::join(producer, consumer).await;
+```
+
+把 send 和 receive 放在同一个 async block 中并按顺序写，不会凭空并发：该 block 仍从上到下执行，可能先发送完才开始接收，甚至因有界 channel 填满而自锁。分成两个 Future 并 join，runtime 才能在各自 await point 之间交错推进。
+
+`async move` 与 move closure 一样，把捕获值的 ownership 放进 Future。它既可让 spawned task 满足更长 lifetime，也可在最后一个 tx 随 Future Drop 时关闭 channel。clone sender 后，receiver 只有在所有 sender owners 都 Drop 后才会收到结束；遗漏的一份 tx 会让 receive loop 永远等待。
+
+<Term def="把 async block 捕获的外部值按所有权放入生成的 Future，使其不再借用外层 stack frame。">async move capture</Term>
+
+## 17.3 处理任意数量 Future
+
+<Term def="只返回最先完成分支结果、使调用方能对多个进行中 Future 竞速的组合操作。">select</Term>
+
+join 是“全部完成”，select 是“任一先完成”。竞速两个 URL、timeout 与主操作、shutdown signal 与 worker 都属于 select；返回后，未选分支通常会被 Drop，而不是在隐藏后台自动跑完。
+
+<Term def="Future 在任意暂停点被 Drop 后仍保持外部状态一致、以后重试不会丢失或重复不可恢复动作的性质。">cancellation safety</Term>
+
+例如“先从 socket 读完整 frame，再修改队列”比“每读一个字节就提交全局 offset”更容易保证取消安全。select loop 中应明确：loser 是保留到下一轮继续 poll，还是被丢弃重建；资源 guard、partial I/O 和 transaction 分别如何收尾。
+
+每个 async block 都有独一匿名类型，即使源码看似相同，也不能直接放进要求单一元素类型的 Vec。需要任意数量时，可使用库提供的 `join_all`/collection combinator，或把不同 Future 擦除到统一 trait object，并在移动限制需要时 pin：
+
+```rust
+use std::{future::Future, pin::Pin};
+
+let jobs: Vec<Pin<Box<dyn Future<Output = u32>>>> = vec![
+    Box::pin(async { fetch_count("/a").await }),
+    Box::pin(async { fetch_count("/b").await }),
+];
+
+let counts = trpl::join_all(jobs).await;
+```
+
+<Term def="把不同 concrete Future 隐藏为统一 dyn Future interface，以便放进同一种 collection 的技术。">Future type erasure</Term>
+
+async 是协作式：runtime 只能在 task 返回 Pending 时调度其他工作。await 一个立即 Ready 的 Future 不一定让出；在 await 之间执行长计算或调用 `std::thread::sleep` 会占住 executor worker，造成 <Term def="一个 Future 长时间不交还控制，使同一 executor 上其他 ready Future 得不到 poll 的活性问题。">task starvation</Term>。
+
+短循环可用 runtime 的 `yield_now` 主动让出，真正 CPU-heavy 或 blocking work 应进入 `spawn_blocking`、计算 thread pool 或专用 thread。随意插入 1ms async sleep 只是在猜调度，不能替代正确边界。
+
+<Callout type="trap" title="陷阱：select 结束后 loser 会继续完成">
+  select 的常见契约是 first-ready；返回时其余 Future 可能被 Drop。若 loser 必须完成，应 spawn 并保留 handle，或用 join；若允许取消，则审查 partial I/O、guard、transaction 和重试语义，不能只看最终返回值。
+</Callout>
+
+## 17.4 Stream：随时间产生的一串 Future 结果
+
+Iterator 的 `next` 立即返回下一项或 None；<Term def="把异步 readiness 与一串 Item 结合，每次 poll_next 可产生一项、Pending 或序列结束的抽象。">Stream</Term> 表达消息队列、网络 chunk、文件分块和 UI event 等“值随时间到达”的序列。
+
+Stream 核心接口偏底层，生态通常用 <Term def="为 Stream 提供 next、map、filter、timeout 等高层组合方法的扩展 trait；使用方法前必须导入 scope。">StreamExt</Term>。`next().await` 返回 Option：Some 表示一项，None 表示永久结束，Pending 只表示当前尚未准备好，不等于序列结束。
+
+```rust
+use trpl::StreamExt;
+
+let values = [1, 2, 3, 4];
+let mut stream = trpl::stream_from_iter(values.into_iter());
+
+while let Some(value) = stream.next().await {
+    process(value).await;
+}
+```
+
+组合 stream 时要同时考虑 item 语义和时间语义：map 改值，filter 筛选，timeout 约束等待，throttle 限制速率，merge 合并来源。producer 比 consumer 快时，unbounded queue 会增长；bounded channel、批处理、丢弃策略或上游暂停形成 <Term def="consumer 处理能力反向限制 producer 速率，避免队列和内存无界增长的流量控制。">backpressure</Term>。
+
+## 17.5 深入 Future、Waker、Pin 与 Stream trait
+
+Future 的最小接口把调度协议压缩成一次 poll：
+
+```rust
+use std::pin::Pin;
+use std::task::{Context, Poll};
+
+trait Future {
+    type Output;
+    fn poll(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Self::Output>;
+}
+```
+
+<Term def="一次推进检查的结果：Ready 携带最终 Output，Pending 表示尚未完成且应在被唤醒后再检查。">Poll</Term>
+
+返回 Pending 前，Future 必须安排在状态变化时唤醒当前 task；否则 executor 没理由再 poll，它可能永久睡眠。反过来，executor 不应在没有通知时忙循环 poll，否则空耗 CPU。
+
+<Term def="poll 时由 runtime 提供的调度上下文，其中包含当前 task 的 Waker。">Context</Term>
+
+<Term def="资源状态变化时通知 executor 将对应 task 重新放入 ready queue 的句柄；wake 本身不执行 Future。">Waker</Term>
+
+生成的 async 状态机可能保存一个子 Future，同时另一字段持有指向该状态内部数据的 reference。若 poll 后再移动整个状态，内部地址关系可能失效。<Term def="包装指针并承诺其指向值在被 pin 的有效期内不会再被移动，从而保护地址相关 invariant。">Pin</Term> 让 `poll` 能依赖稳定位置。
+
+<Term def="表示一个类型即使在 pin 后移动也仍安全的 auto trait；多数普通类型实现它，自引用 Future 往往不实现。">Unpin</Term>
+
+Pin 不是“把所有数据放到 heap”，也不自动让内容 immutable；它约束通过该 pinned pointer 移动整个值。`Box::pin` 在 heap 上建立稳定位置，`pin!` 可在当前 scope 建立 stack pin。普通 async 业务大多只 await；编写 combinator、手动 poll、把 Future/Stream 放进 collection 或遇到 Unpin bound 时才需直接处理。
+
+Stream 的概念接口把 Iterator 的序列与 Future 的时间结合：
+
+```rust
+trait Stream {
+    type Item;
+    fn poll_next(
+        self: Pin<&mut Self>,
+        cx: &mut Context<'_>,
+    ) -> Poll<Option<Self::Item>>;
+}
+```
+
+`Ready(Some(item))` 是一项，`Pending` 是稍后再来，`Ready(None)` 是永久结束。StreamExt::next 把手动 poll 包成 Future；某些 next 实现要求 Unpin，不满足时应先 pin stream，而不是用 unsafe 强行移动。
+
+## 17.6 Futures、tasks 与 threads 一起工作
+
+Future 是最细粒度可暂停计算，可组成 Future tree；task 是 executor 调度一组 Future 的边界；thread 是 OS 调度同步代码的边界。runtime 可在一个 thread 上轮询许多 tasks，也可用多线程 executor 和 work stealing 把 ready tasks 分布到多个 worker。
+
+<Term def="executor worker 从其他 worker 的 ready queue 取得 task，以平衡利用率的多线程调度策略。">work stealing</Term>
+
+经验规则不是“永远 async”或“永远 thread”：
+
+- 大量独立 I/O 等待、连接和 timer：async task 通常减少 per-thread 资源
+- 可切分 CPU 计算：OS thread、Rayon 或计算 pool 更能利用 parallel cores
+- 阻塞库调用但任务短且偶发：runtime blocking pool 可保护 executor worker
+- 长寿命 blocking loop、特殊 thread affinity 或隔离需求：专用 thread 更清楚
+- 同一系统同时有两类：thread 做同步/CPU 工作，通过 channel 把结果送给 async consumer
+
+```rust
+let (tx, mut rx) = trpl::channel();
+
+std::thread::spawn(move || {
+    for value in blocking_sensor_loop() {
+        tx.send(value).expect("receiver alive");
+    }
+});
+
+trpl::block_on(async {
+    while let Some(value) = rx.recv().await {
+        publish(value).await;
+    }
+});
+```
+
+<Callout type="trap" title="陷阱：async 代码里调用 blocking API 也会自动让出">
+  runtime 只能理解返回 Pending 的 Future；`std::thread::sleep`、同步文件/网络 I/O 和长 CPU loop 不会自动 yield。它们会占住 executor worker。改用 runtime 的 async API，或明确交给 blocking pool、计算 pool 或专用 thread。
+</Callout>
+
+## 三步设计可关闭、可取消、可观测的异步链路
+
+<Stepper>
+  <Step title="第一步：画清 Future 与完成语义">
+    标出哪些调用只创建惰性 Future，哪些由 await、spawn 或 block_on 驱动；对每组并发工作选择 sequential、join 或 select，并写明全部完成还是 first-ready。
+
+    先预测只 poll、I/O wake、再次 poll 三个动作各会落在哪个状态，再逐步操作验证。wake 只重新排队，最终 Output 仍由下一次 poll 产生。
+
+    <RplFuturePollLab />
+  </Step>
+  <Step title="第二步：定义暂停、取消与流量协议">
+    逐个检查 await point 前是否有 blocking/CPU-heavy 代码，select loser 在 Drop 时是否安全，channel/Stream 何时关闭，producer 过快时由 bounded queue、backpressure、batch 或 drop 哪一种控制。
+
+    切换逐个 await、join 和 select，预测总耗时与保留结果；再打开首个 await 前阻塞，观察组合器不能抢占正在运行的同步代码。
+
+    <RplFutureCompositionLab />
+  </Step>
+  <Step title="第三步：匹配执行资源并验证活性">
+    I/O 留在 async task，CPU 与 blocking work 移到合适 thread/pool；记录 queue depth、poll latency、task duration、timeout/cancel 和 shutdown，使用压力测试证明无 starvation 与无界积压。
+
+    调整 producer/consumer 速率并观察 queue 变化，再切换 I/O/CPU 与执行边界。解释为什么“能 await”不代表资源选择正确。
+
+    <RplStreamTaskBoundaryLab />
+  </Step>
+</Stepper>
+
+**异步并发** 由多个 Futures 交错获得 poll 机会形成，不自动提供 CPU parallelism；比较 **Future 任务与线程** 后，join/select、任务调度与 blocking boundary 才能决定实际推进方式。
+
+## 小结
+
+- async fn 返回惰性 Future；await 是可能暂停的 postfix 操作，runtime 通过 block_on 或 task 执行状态机
+- 同一 async block 仍顺序执行；join 等全部，select 取先完成并引出 cancellation safety，spawn 建立独立 task 生命周期
+- await 之间是同步代码；长计算和 blocking API 会让同 executor 的其他 task starvation
+- Stream 是异步序列，StreamExt 提供 next 等高层 API，生产消费速率差需要明确 backpressure
+- Future::poll 以 Ready/Pending 表达进度，Context/Waker 负责重新调度，Pin/Unpin 保护状态机地址 invariant
+- Future、task、thread 是不同层级；I/O-bound、CPU-bound 与阻塞边界决定应组合使用 async 和 threads
+
+<Exercises>
+  1. **问题 1：诊断“并发下载”仍串行。** 程序依次写 `download(a).await` 和 `download(b).await`，总耗时接近两者之和。为什么第二个 Future 没有并发推进？若必须拿到两个结果、若只要最快结果，分别怎样组合？
+
+  <Answer question="await、join 与 select 的启动和完成契约是什么？">第一个 await 完成前控制流不会构造或 poll 到第二个调用，所以是顺序执行。需要两个结果时先构造两个 Future 并 join，让 runtime 并发推进且等待全部；只需最快结果时 select，但必须明确未选 Future 会被保留、重试还是 Drop，并审核取消安全。</Answer>
+
+  2. **问题 2：解释 timeout 后数据错位。** select 在 `read_frame` 与 timer 间竞速；`read_frame` 每读一个 chunk 就更新全局 offset，timeout 后调用方重建它。为什么可能跳过数据，怎样改进？
+
+  <Answer question="什么使一个 Future cancellation-safe？">select 返回后 loser 可能在任意 Pending 点被 Drop；若 partial read 已提交全局 offset，重建 Future 会从新位置开始，丢失尚未形成完整 frame 的字节。应把中间进度留在 Future 局部，完整 frame 成功后再原子提交，或让 buffer/reader owner 跨轮次保留同一 Future 状态，并为取消定义显式 rollback。</Answer>
+
+  3. **问题 3：评审遥测 Stream。** producer 每秒 500 条，consumer 在 async task 中同步压缩只能处理 120 条，使用 unbounded channel。代码能运行但延迟和内存持续增长。应改哪些边界，怎样证明修复有效？
+
+  <Answer question="执行资源和 backpressure 应如何配合？">同步压缩是 CPU-bound，会占住 executor worker，应交给有界计算 pool、spawn_blocking 或专用 workers；channel 改为 bounded，并按业务选择上游等待、批处理、采样或丢弃。监控 queue depth、oldest-item latency、producer wait/drop、compression duration、task poll latency 和 shutdown drain，在超过入口峰值的压力下验证队列有上界且其他 I/O task 不 starvation。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="CPU-bound">性能主要受 processor 计算吞吐限制的工作。</GlossaryItem>
+  <GlossaryItem term="I/O-bound">性能主要受网络、磁盘或设备等待限制的工作。</GlossaryItem>
+  <GlossaryItem term="concurrency">多个工作在时间上交错推进，不要求真正同时执行。</GlossaryItem>
+  <GlossaryItem term="parallelism">多个工作在同一时刻由不同计算资源执行。</GlossaryItem>
+  <GlossaryItem term="blocking operation">等待期间占住当前 OS thread 的调用。</GlossaryItem>
+  <GlossaryItem term="non-blocking wait">等待未完成时把控制交回调度器的操作。</GlossaryItem>
+  <GlossaryItem term="Future">可被 poll 推进、最终产生 Output 的惰性计算值。</GlossaryItem>
+  <GlossaryItem term="Future laziness">Future 被消费前不执行其计算的性质。</GlossaryItem>
+  <GlossaryItem term="async">把 function 或 block 编译为 Future 状态机的关键字。</GlossaryItem>
+  <GlossaryItem term="await">在 async context 中推进 Future，并在 Pending 时允许 task 暂停。</GlossaryItem>
+  <GlossaryItem term="await point">async 状态机可能暂停和恢复的位置。</GlossaryItem>
+  <GlossaryItem term="async runtime">提供 executor、I/O readiness、timer 与 task 管理的库。</GlossaryItem>
+  <GlossaryItem term="block_on">从同步边界运行顶层 Future 到完成的桥接操作。</GlossaryItem>
+  <GlossaryItem term="async task">由 runtime 调度的一组异步操作。</GlossaryItem>
+  <GlossaryItem term="executor">runtime 中负责 ready queue 和 poll Future 的调度部分。</GlossaryItem>
+  <GlossaryItem term="task">runtime 管理的一组异步操作和 Future tree。</GlossaryItem>
+  <GlossaryItem term="Poll">Future 一次进度检查得到的 Ready 或 Pending 结果。</GlossaryItem>
+  <GlossaryItem term="Poll::Ready">Future 已完成并携带最终 Output。</GlossaryItem>
+  <GlossaryItem term="Poll::Pending">Future 尚未完成，等待后续 wake 再 poll。</GlossaryItem>
+  <GlossaryItem term="Context">poll 调用携带的 task 调度上下文。</GlossaryItem>
+  <GlossaryItem term="Waker">资源就绪时把 task 重新安排到 executor 的通知句柄。</GlossaryItem>
+  <GlossaryItem term="Pin">保证被指向值不再移动的 pointer invariant。</GlossaryItem>
+  <GlossaryItem term="Unpin">表示类型不依赖 pinned address、移动仍安全的 auto trait。</GlossaryItem>
+  <GlossaryItem term="join">并发推进多个 Future，并等待所有 Output。</GlossaryItem>
+  <GlossaryItem term="async move capture">把捕获值 ownership 放入 async block 生成 Future 的方式。</GlossaryItem>
+  <GlossaryItem term="select">竞速多个 Future，返回 first-ready 分支。</GlossaryItem>
+  <GlossaryItem term="cancellation safety">Future 在暂停点被 Drop 后仍保持可恢复外部状态的性质。</GlossaryItem>
+  <GlossaryItem term="Future type erasure">把不同 concrete Future 隐藏成统一 dyn Future interface 的技术。</GlossaryItem>
+  <GlossaryItem term="Stream">随时间异步产生多个 Item 的序列抽象。</GlossaryItem>
+  <GlossaryItem term="StreamExt">在 Stream 之上提供 next 和组合器的扩展 trait。</GlossaryItem>
+  <GlossaryItem term="backpressure">consumer 能力反向限制 producer 速率的流量协议。</GlossaryItem>
+  <GlossaryItem term="task starvation">某 Future 长时间不交还控制，导致其他 task 得不到 poll。</GlossaryItem>
+  <GlossaryItem term="spawn_blocking">把阻塞或 CPU-heavy closure 移到 runtime blocking pool 的桥接 API。</GlossaryItem>
+  <GlossaryItem term="work stealing">多线程 executor 在 workers 之间迁移 ready task 的负载均衡策略。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Rust Programming Language, Chapter 17 Fundamentals of Asynchronous Programming"
+  adaptedUrl="https://doc.rust-lang.org/book/ch17-00-async-await.html"
+/>

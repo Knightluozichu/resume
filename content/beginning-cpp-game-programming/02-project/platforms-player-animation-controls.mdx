@@ -1,0 +1,371 @@
+---
+title: 第 18 章：平台、Player 控制与 Animator
+type: A
+section: Run! 项目
+order: 18
+description: 对齐官方第 3 版第 18 章：生成可达平台地形，实现 Player 控制和落地解算，并用 Animator 类、动画片段与动画帧驱动玩家动画。
+demo: false
+math: false
+sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+draft: false
+---
+
+import {
+  BcgpAnimatorFramesMap,
+  BcgpPlatformLifecycleMap,
+  BcgpPlayerControlMap,
+} from "@/components/mdx/beginning-cpp-game-programming/diagrams/platforms-player-animation-controls";
+
+<Objectives>
+
+- 能设计满足最大跳距、宽度和高度约束的平台地形生成器，并安全提交、碰撞和回收平台
+- 能实现设备输入到 PlayerIntent、运动积分和落地解算的玩家控制链路，保证跳跃只触发一次
+- 能实现 Animator 类和动画片段，以 animation frames 表达玩家动画并正确处理循环、切换与完成事件
+
+</Objectives>
+
+## 从“随机平台为何可能让游戏无解”开始
+
+Run! 的
+
+<Term def="承载玩家、参与从上方落地碰撞并随进程持续生成回收的地形对象。">
+  平台地形
+</Term>
+
+不能只随机 x、y。若间隙超过 Player 的水平可达距离，程序仍能运行但关卡必死。生成器必须把物理参数转成约束，再在约束内加入变化。
+
+<Term def="在给定起跳速度、重力、水平速度和高度差下，Player 能安全落到下一平台的空间范围。">
+  可达区域
+</Term>
+
+是生成契约。先预测：提高重力但不改平台间距，哪一类平台组合会首先变得不可达？
+
+<BcgpPlatformLifecycleMap />
+
+## 从跳跃物理推导生成边界
+
+<Term def="规划下一平台起点、宽度和高度，并把合法候选交给 Factory 的服务。">
+  PlatformGenerator
+</Term>
+
+使用与 PlayerUpdate 相同的配置来源。平地近似下，总腾空时间约为起跳上升和下落之和，最大水平距离还要乘安全系数，为输入延迟和边缘落脚留余量。
+
+```cpp
+struct Reachability {
+    float maximumGap;
+    float maximumRise;
+    float minimumWidth;
+};
+
+Reachability deriveReachability(const PlayerConfig& player)
+{
+    const float flight{2.0F * player.jumpSpeed / player.gravity};
+    return {
+        player.runSpeed * flight * 0.75F,
+        player.jumpSpeed * player.jumpSpeed /
+            (2.0F * player.gravity) * 0.65F,
+        player.colliderWidth * 1.5F,
+    };
+}
+```
+
+<Term def="小于理论极限的倍率，为帧离散、反应时间和边缘碰撞误差保留可玩余量。">
+  可达安全系数
+</Term>
+
+配置必须验证 gravity 为正。生成后再用离散模拟跑一次候选轨迹，能发现连续公式没有覆盖的固定步长误差。
+
+## 平台提交与回收
+
+<Term def="描述平台类型、位置、尺寸和资源键，经过验证后在安全点生成对象的命令。">
+  平台生成命令
+</Term>
+
+由生成器追加，Factory 构造完整 GameObject，世界统一加入对象容器与碰撞索引。任何资源失败都不发布半平台。
+
+```cpp
+void PlatformGenerator::ensureAhead(const Camera& camera,
+                                    CommandBuffer& commands)
+{
+    while (lastRight_ < camera.visibleBounds().left + lookAhead_) {
+        PlatformSpec next{planNext(lastRight_, lastHeight_)};
+        validateReachable(next);
+        commands.push_back(SpawnPlatform{next});
+        lastRight_ = next.left + next.width;
+        lastHeight_ = next.top;
+    }
+}
+```
+
+<Term def="位于主相机后方一定距离的世界边界，越过后平台可请求销毁。">
+  回收线
+</Term>
+
+不能刚离屏就删除，因为雷达或短暂回看仍可能需要它。若使用对象池，复用前重置 Transform、碰撞状态、外观、旧 id 关联和事件标记；池化不应改变玩法语义。
+
+<Callout type="trap">
+  **现象**：长时间运行后偶尔出现无法跨越的大坑。**原因**：生成器分别随机 gap 与
+  height，却没有用同一 Player
+  物理配置验证组合可达性。**修法**：先从物理推导边界，再对候选做离散轨迹验证，属性测试覆盖大量随机种子。
+</Callout>
+
+## 玩家控制从设备状态变成意图
+
+<Term def="把键盘或手柄输入映射为水平轴和跳跃边沿，再交给 Player 规则的适配层。">
+  玩家控制
+</Term>
+
+官方 player controls 不应散落在 Player、窗口循环和 Animator。InputMapper 读取设备，输出第 16 章的 PlayerIntent。
+
+```cpp
+PlayerIntent InputMapper::sample(const InputState& input) const
+{
+    float axis{input.right - input.left};
+    axis = std::clamp(axis, -1.0F, 1.0F);
+    return {
+        axis,
+        input.pressed(Action::Jump),
+    };
+}
+```
+
+<Term def="从未按到按下只持续一个逻辑帧的输入变化，用于跳跃等一次动作。">
+  输入边沿
+</Term>
+
+与“当前按住”分开。键位重映射只改 InputMapper；回放记录意图，不记录平台相关键码。
+
+<BcgpPlayerControlMap />
+
+## 运动积分与落地解算
+
+<Term def="根据速度、重力和受限时间步计算 Player 候选位置的过程。">
+  运动积分
+</Term>
+
+先保存上一帧脚底，计算候选位置，再查询可能接触的平台。落地要求上一帧脚底不低于平台顶面、当前帧跨过顶面、水平范围重叠且竖直速度向下。
+
+```cpp
+if (velocity.y >= 0.0F &&
+    previousBottom <= platform.top &&
+    candidateBottom >= platform.top &&
+    overlapsHorizontally(playerBounds, platform.bounds)) {
+    transform.position.y = platform.top - colliderHeight;
+    velocity.y = 0.0F;
+    if (!grounded)
+        events.push_back(PlayerLanded{ownerId, platform.id});
+    grounded = true;
+}
+```
+
+<Term def="碰撞解算确认 Player 由空中转为站在平台上的提交状态。">
+  grounded 状态
+</Term>
+
+不能由动画帧或按键设置。离开平台边缘后，若没有支撑接触则转为空中；状态边沿驱动声音与动画。
+
+<Callout type="trap">
+  **现象**：Player
+  从平台下方上升时被吸到顶面，或高速下落穿透。**原因**：只检查当前 AABB
+  重叠，未考虑运动方向与上一帧位置。**修法**：用顶部跨越条件判断单向平台，高速场景使用扫掠或子步进，并限制最大
+  dt。
+</Callout>
+
+## Animator 类管理时间，不决定玩法
+
+<Term def="保存当前动画片段、帧索引和累计时间，并按 dt 采样动画帧的组件。">
+  Animator 类
+</Term>
+
+Animator 不读取键盘，也不修改 grounded。它接收 Player 已提交的动画状态，输出 texture rect。
+
+<Term def="一组有序帧矩形、各帧时长以及循环策略，描述一个完整视觉动作。">
+  AnimationClip
+</Term>
+
+资源加载时验证帧非空、时长为正且矩形落在纹理范围内。
+
+```cpp
+struct AnimationFrame {
+    sf::IntRect textureRect;
+    float duration;
+};
+
+struct AnimationClip {
+    std::vector<AnimationFrame> frames;
+    bool looping{};
+};
+```
+
+<Term def="精灵表中某一时刻使用的纹理矩形及持续时间，是动画片段的最小采样单元。">
+  动画帧
+</Term>
+
+不同帧可有不同持续时间。Graphics 只读取 Animator 当前矩形，不在 draw 中推进时间。
+
+## 正确跨越多帧
+
+<Term def="当前片段已经消耗但尚未用于切换帧的时间。">动画累计时间</Term>
+
+若一帧 dt 大于单帧时长，必须用循环跨过多个 animation frames，而不是只前进一次。
+
+```cpp
+void Animator::update(float dt)
+{
+    remaining_ += std::max(0.0F, dt);
+    while (remaining_ >= currentFrame().duration) {
+        remaining_ -= currentFrame().duration;
+        if (frameIndex_ + 1 < clip_->frames.size()) {
+            ++frameIndex_;
+        } else if (clip_->looping) {
+            frameIndex_ = 0;
+        } else {
+            remaining_ = 0.0F;
+            finishOnce();
+            break;
+        }
+    }
+}
+```
+
+<Term def="非循环片段首次到达最后一帧时产生一次、用于切换后续表现的事实。">
+  动画完成事件
+</Term>
+
+不能每帧重复发送。极端 dt 应有最大循环次数保护，资源验证则保证 duration 不为零。
+
+<BcgpAnimatorFramesMap />
+
+## 玩家动画状态机
+
+<Term def="根据已提交速度、grounded 和规则事件选择 Idle、Run、Jump、Fall、Land 片段的表现状态机。">
+  玩家动画状态机
+</Term>
+
+玩家动画由玩法状态派生：grounded 且水平速度明显为零选 Idle；grounded 且移动选 Run；空中向上选 Jump；空中向下选 Fall；PlayerLanded 可触发一次 Land。
+
+<Term def="从一个 AnimationClip 切到另一个时，规定是否重置帧索引与累计时间的策略。">
+  片段切换策略
+</Term>
+
+目标状态与当前状态相同就不重置，否则 Run 每帧都会回到首帧。进入一次性 Land 时重置；完成后回到 Idle 或 Run。面向方向只翻转 Graphics，不复制另一套动画资源。
+
+## 三条链路的提交顺序
+
+<Term def="平台生成、Player 运动碰撞和动画选择在同一帧中的固定先后协议。">
+  行动帧协议
+</Term>
+
+先采样意图；生成相机前方平台候选；更新 Player 候选运动；用已提交平台集合解算接触；集中提交移动、生成和回收；从最终速度与 grounded 派生动画状态；更新 Animator；最后生成 RenderSnapshot。这样新平台不会在碰撞查询中以半构造状态出现，动画也不会领先玩法。
+
+## 测试与故障诊断
+
+<Term def="用大量随机种子验证每个连续平台组合都满足可达约束的自动化测试。">
+  生成属性测试
+</Term>
+
+固定 PlayerConfig 生成上万段，断言尺寸合法、id 唯一、相邻平台通过离散轨迹验证。记录失败 seed，确保可复现。控制测试覆盖按住 jump 只产生一个边沿、空中跳跃被拒绝、离开边缘 grounded 清除、高速下落不穿透。
+
+动画测试用可控 dt：恰好一帧时长前进一次，跨三帧时正确保留余量，循环片段回绕，非循环片段只发送一次完成事件。若角色“滑行但播放 Idle”，同时记录 PlayerIntent、最终 velocity、grounded、动画状态和 clip 名，沿提交顺序找第一处不一致。
+
+## 调参与可复现性
+
+平台难度、Player 手感和动画节奏必须能分别调整，但共享事实不能分叉。`PlayerConfig` 保存 runSpeed、jumpSpeed、gravity 和 collider；PlatformGenerator 从这份配置派生可达边界，不复制一组“看起来相同”的常量。`AnimationConfig` 保存各片段与帧时长，只消费最终速度和 grounded，不反向改变物理。这样修改跳跃高度时，生成器会重新计算合法间隙，而 Animator 只改变何时选择 Jump/Fall，不会悄悄延长腾空时间。
+
+调试快照应包含随机 seed、固定步编号、当前与上一 Transform、速度、支撑平台 id、PlayerIntent、待提交命令、最终事件、动画状态和 frameIndex。发现一次穿透或不可达组合后，把该快照保存成回归用例；仅记录屏幕视频不足以还原随机平台和帧时间。重放时使用固定时间步与同一配置版本，逐步比较命令和事件序列，第一处差异就是调查起点。
+
+输入手感还需要明确容错协议。可以加入短暂的“土狼时间”，允许 Player 刚离开边缘后的少量时间内跳跃；也可加入输入缓冲，让落地前稍早按下 jump 在落地后触发。但这两个窗口必须属于 Player 规则，并用逻辑时间推进，不能由 Animator 帧或真实墙钟决定。测试精确覆盖窗口内外边界，确保暂停时窗口不消耗、重启时全部清零。
+
+碰撞容差也应使用命名配置。过大的 epsilon 会让 Player 悬浮或隔空落地，过小则在浮点误差下抖动。记录接触法线、穿透深度和修正量，断言修正后脚底接近平台顶面且速度不再向下。连续多帧站立时保持同一支撑 id；平台回收前必须确认 Player 不再依赖它，否则先销毁平台会把 grounded 留在无主状态。
+
+最后做组合验收：使用固定 seed 连续跑数分钟，随机打乱非语义相关的对象存储顺序，比较 Player 轨迹、平台 id 序列和动画状态序列。三者应完全一致；渲染帧率可以变化，但逻辑结果不能变化。只有这种可复现闭环，才说明平台、控制和动画真正通过明确协议协作。
+
+## 小结
+
+- 平台先按 Player 物理推导可达区域，再随机生成、验证和安全提交
+- 玩家控制把设备输入变为意图，落地由上一帧到当前帧的顶部跨越确认
+- Animator 类只推进动画时间，玩家动画状态来自已提交玩法状态
+- animation frames 允许独立时长，跨帧循环必须保留累计余量
+- 平台、控制和动画按固定行动帧协议协作，测试结果可由 seed 与意图复现
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 18"
+  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+/>
+
+<Glossary>
+  <GlossaryItem term="平台地形">
+    承载玩家并持续生成回收的 Run 世界对象。
+  </GlossaryItem>
+  <GlossaryItem term="可达区域">
+    给定物理参数时 Player 能安全落到下一平台的空间范围。
+  </GlossaryItem>
+  <GlossaryItem term="PlatformGenerator">
+    规划平台规格并提交合法候选的服务。
+  </GlossaryItem>
+  <GlossaryItem term="可达安全系数">
+    为离散误差和反应时间缩小理论极限的倍率。
+  </GlossaryItem>
+  <GlossaryItem term="平台生成命令">
+    请求世界在安全点构造并加入平台的值。
+  </GlossaryItem>
+  <GlossaryItem term="回收线">相机后方用于判断平台可销毁的边界。</GlossaryItem>
+  <GlossaryItem term="玩家控制">
+    把设备输入映射为意图并交给 Player 规则的适配层。
+  </GlossaryItem>
+  <GlossaryItem term="输入边沿">
+    从未按到按下、只持续一个逻辑帧的变化。
+  </GlossaryItem>
+  <GlossaryItem term="运动积分">
+    按速度、重力和 dt 计算候选位置的过程。
+  </GlossaryItem>
+  <GlossaryItem term="grounded 状态">
+    碰撞提交确认 Player 获得平台支撑的状态。
+  </GlossaryItem>
+  <GlossaryItem term="Animator 类">
+    按 dt 管理片段、帧索引和累计时间的组件。
+  </GlossaryItem>
+  <GlossaryItem term="AnimationClip">
+    有序帧、持续时间和循环策略组成的视觉动作。
+  </GlossaryItem>
+  <GlossaryItem term="动画帧">精灵表中的纹理矩形和持续时间。</GlossaryItem>
+  <GlossaryItem term="动画累计时间">尚未用于切帧的剩余时间。</GlossaryItem>
+  <GlossaryItem term="动画完成事件">
+    非循环片段首次结束时产生一次的事实。
+  </GlossaryItem>
+  <GlossaryItem term="玩家动画状态机">
+    从速度和 grounded 派生视觉片段的状态机。
+  </GlossaryItem>
+  <GlossaryItem term="片段切换策略">
+    切换片段时是否重置帧和时间的规则。
+  </GlossaryItem>
+  <GlossaryItem term="行动帧协议">
+    平台、运动碰撞和动画在一帧中的固定顺序。
+  </GlossaryItem>
+  <GlossaryItem term="生成属性测试">
+    大量随机种子验证平台组合可达性的测试。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：约束平台生成。** 从 Player 速度、跳速和重力说明最大 gap 的来源，并设计随机属性测试。
+
+<Answer question="平台生成器如何避免产生理论上无法跨越的组合？">
+  从与 PlayerUpdate 相同的 runSpeed、jumpSpeed、gravity
+  推导腾空时间和理论水平距离，乘安全系数得到
+  maximumGap，同时限制上升高度和最小宽度；每个候选再用固定步长轨迹验证。属性测试遍历大量
+  seed，断言每对相邻平台可达并保存失败 seed。
+</Answer>
+
+2. **问题 2：修复单向平台。** Player 从下方被吸到平台顶面，写出正确接触条件。
+
+<Answer question="单向平台落地为何需要上一帧位置和运动方向？">
+  只有竖直速度向下、上一帧脚底位于平台顶面上方或相等、当前候选脚底跨过顶面且水平范围重叠，才能把
+  Player 修正到顶面。只看当前 AABB
+  重叠无法区分从下方上升和从上方下落，高速时还需扫掠或子步进。
+</Answer>
+
+3. **问题 3：验证 Animator。** 设计覆盖大 dt、循环和一次性片段的测试。
+
+  <Answer question="Animator 的时间推进至少要验证哪些边界？">dt 恰好等于帧时长时前进一帧；大 dt 跨越多帧后 frameIndex 和剩余时间正确；循环片段末尾回到首帧；非循环片段停在末帧且完成事件只发一次；重复设置同一状态不重置，而真正切换按策略清零。</Answer>
+</Exercises>

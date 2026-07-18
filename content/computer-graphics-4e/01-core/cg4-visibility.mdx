@@ -1,111 +1,270 @@
 ---
-title: "可见性与深度缓冲"
+title: "可见面检测、深度精度与遮挡"
 type: B
 section: "计算机图形学与渲染"
 order: 4
-description: "Z-Buffer算法与可见性判定"
+description: "从裁剪、背面与 Z-buffer，到深度量化、Early-Z/Hi-Z、预处理和透明可见性"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://www.pearson.com/en-gb/subject-catalog/p/computer-graphics-with-open-gl-pearson-new-international-edition/P200000004424/9781292037196"
 draft: false
 ---
 
-import { Cg4VisibilityDiagram } from "@/components/mdx/computer-graphics-4e/diagrams/cg4-visibility";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  Cg4VisibilityDiagram,
+  Cg4VisibilityMethodsDiagram,
+} from "@/components/mdx/computer-graphics-4e/diagrams/cg4-visibility";
+import { Cg4StepFlowDiagram } from "@/components/mdx/computer-graphics-4e/diagrams/cg4-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 理解深度缓冲的工作原理
-- 掌握Z-fighting的成因与解决
-- 对比画家算法与Z-Buffer
-- 了解深度预处理优化策略
+
+- 能描述 view-volume clipping、back-face culling、coarse occlusion 与 per-sample depth test 的不同拒绝边界
+- 能实现 conventional 与 Reverse-Z 两种一致的 projection、clear、compare 和深度重建配置
+- 能推导透视深度量化为何使远处世界空间分辨率下降，并设计 Z-fighting 实验
+- 能比较 Z-buffer、Painter/BSP、Hierarchical Z 与透明 OIT 方法的适用条件
+
 </Objectives>
 
-## 直觉引入
+## 可见性不是一个 Z 比较
 
-深度缓冲就像一群人排队——后面的人被前面的挡住。Z-Buffer逐像素记录最近物体的深度，新来的片段如果更远就被丢弃，更近就替换。这比按深度排序（画家算法）简单得多，且天然适合GPU并行。
+**Visible-Surface Detection Methods / 可见面检测**解决“哪些表面对观察者有贡献”。现代渲染器通常分层减少候选：观察体外对象、背向图元、被粗层次完全遮挡的对象，最后才是每 sample 深度/模板。
 
-## 概念讲解
-
-<Term def="与帧缓冲大小相同的缓冲区，存储每像素深度值">深度缓冲</Term><Term def="两个面非常接近时深度精度不足导致交替显示">Z-fighting</Term><Term def="按深度从远到近排序图元再绘制的算法">画家算法</Term><Term def="在片段着色器执行前做深度测试以提前剔除">Early-Z</Term>
-
-### Z-Buffer算法
-初始化深度缓冲为最大值。每个片段与当前深度比较：若fragment.z < zbuffer[x][y]，更新颜色和深度；否则丢弃。
-
-### Z-fighting
-透视投影后深度值近处密集远处稀疏，接近的面因精度不足交替显示。解决：增大近裁剪面、减小远裁剪面、polygon offset。
-
-### 性能优化
-Early-Z在片段着色前做深度测试；Z-Prepass先用简单着色器渲染深度再用复杂着色器渲染。
-
-## 交互Demo
-
-> 猜一猜：为什么Z-Buffer不需要排序图元就能正确处理遮挡？
+<Term def="通过几何、空间层次和每样本深度等多级判据，确定表面是否能对当前观察结果产生贡献">可见面检测</Term>必须保守：优化层可以漏剔除并交给后级处理，不能错误剔除真正可见对象。
 
 <Cg4VisibilityDiagram />
 
-<Stepper>
-<Step title="第一步：初始化">
-深度缓冲初始化为最大深度值（1.0），帧缓冲初始化为背景色。
-</Step>
-<Step title="第二步：逐片段比较">
-每个片段的深度与深度缓冲比较。更近则写入颜色和深度，更远则丢弃。
-</Step>
-<Step title="第三步：结果输出">
-所有图元处理完毕后，帧缓冲中每像素保留最近片段的颜色。
-</Step>
-</Stepper>
+## Clipping、Culling 与 Occlusion 分工
 
-## 代码对照
+- **Frustum/view-volume clipping**：对象或图元位于观察体外；它与是否被其他物体遮挡无关。
+- **Back-face culling**：对绕序一致的闭合表面，背向图元通常不贡献 opaque 外表；双面材质、镜像变换和开放表面需另行处理。
+- **Occlusion culling**：对象在观察体内但被其他表面完全挡住；必须使用保守 bounds 和上一帧/当前帧深度证据。
+- **Depth test**：光栅后对同一 sample 的候选深度比较，决定当前片段是否通过。
+
+把四者统称“看不见就剔除”会导致错误：透明背面可能需要，投影屏幕很小的对象仍可能高亮，上一帧被遮挡的快速移动对象本帧可能出现。
+
+## Z-buffer 的顺序无关边界
+
+<Term def="为每个 framebuffer sample 保存当前胜出深度，并按深度比较函数更新 depth 和可能的 color/stencil 的 image-space 方法">深度缓冲</Term>对 opaque、比较关系一致的片段近似顺序无关。
+
+软件参考的 conventional depth 可以写为：
 
 ```cpp
-// OpenGL 深度测试配置
-glEnable(GL_DEPTH_TEST);
-glDepthFunc(GL_LESS);
-glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-// Z-Prepass优化
-glColorMask(GL_FALSE, GL_FALSE, GL_FALSE, GL_FALSE);
-renderScene(simpleShader);
-glColorMask(GL_TRUE, GL_TRUE, GL_TRUE, GL_TRUE);
-renderScene(complexShader);
+void testAndWrite(Fragment f, Buffers& b) {
+  if (f.depth < b.depth[f.sample]) {
+    b.depth[f.sample] = f.depth;
+    b.color[f.sample] = shade(f);
+  }
+}
 ```
 
-Early-Z由硬件自动执行（当片段着色器不修改深度时）。Z-Prepass是软件策略，多一次几何遍历但减少片段着色执行。
+但“clear=1、LESS”不是普遍规则。Reverse-Z 常使用 clear=0、GREATER；自定义 depth range 或等值 pass 也不同。正确配置必须是一组合同：projection mapping、clip/depth range、clear value、compare op、depth write 和重建公式。
+
+Depth buffer 不保存完整排序，只保存当前最优深度。它不能直接给出第二层表面，也不能单独正确混合多个透明层。
+
+## 透视深度为何远处难区分
+
+标准 perspective mapping 可抽象为 view depth $d>0$ 到：
+
+$$
+z_{buffer}=A+\frac{B}{d},
+$$
+
+其中 A、B 由 near/far 和 API range 决定。导数大小：
+
+$$
+\left|\frac{dz_{buffer}}{dd}\right|=\frac{|B|}{d^2}.
+$$
+
+固定深度量化步长 $\Delta z$ 对应的世界深度间隔近似：
+
+$$
+\Delta d\approx\frac{d^2}{|B|}\Delta z.
+$$
+
+距离越远，同一个 depth code 覆盖越大的世界空间区间，因此共面或近共面表面更易量化到相同/相邻值。<Term def="两个几何表面投影深度差接近深度量化/数值误差时，胜出关系随样本或帧变化而闪烁的现象">Z-fighting</Term>是整个几何、投影和量化链的结果，不只是“缓冲位数低”。
+
+提高 near（不要无意义接近 0）、合理缩短 far、避免重复共面几何、为 decal 使用经过推导的 offset，都是针对性修复。盲加 polygon offset 会在不同斜率/分辨率产生新错误。
+
+## Reverse-Z 与浮点深度
+
+<Term def="让远平面映射到较小深度、近平面映射到较大深度，并配合 GREATER 比较的深度约定">Reverse-Z</Term>配合 floating-point depth，可利用浮点在 0 附近更密集的表示抵消 perspective $1/d$分布，显著改善远处精度，尤其 infinite far projection。
+
+```cpp
+struct DepthConvention {
+  float clearValue;
+  CompareOp compare;
+  Mat4 projection;
+};
+
+DepthConvention reverseZ(const Camera& c) {
+  return {
+    .clearValue = 0.0f,
+    .compare = CompareOp::Greater,
+    .projection = makeReverseInfinitePerspective(c.fovY, c.aspect, c.nearPlane),
+  };
+}
+```
+
+迁移必须同步修改：projection、clip control/depth range、clear、compare、depth pyramid reduction、depth reconstruction、shadow/SSAO/post effects。只把 LESS 改 GREATER 会让整个场景错误。
+
+## Early Tests、Hi-Z 与 Shader 行为
+
+<Term def="在 fragment shader 之前利用已有 depth/stencil 结果拒绝确定失败的候选，以避免不必要着色的优化机会">Early depth testing</Term>是实现优化，不改变 API 正确性语义。硬件可进行 early test、late test，或先保守判定再延后写入。
+
+写 fragment depth、discard、side effects、sample masks 等行为会限制某些 early test/update，但不能简单断言“使用 discard 就完全没有 Early-Z”。具体优化由 API 语义、shader 声明和实现决定，应看 profiler/counters。
+
+Hierarchical Z（Hi-Z）把 depth 聚合为 tile/mip 层次，用保守 min/max 快速拒绝整块。Reduction 方向取决于 LESS/GREATER convention。Depth pyramid 做对象 occlusion 时，投影 bounds、mip 选择、屏幕边界、上一帧延迟和相机运动都要保守处理。
+
+## Depth Prepass 是成本交换
+
+<Term def="先以低成本只写深度，再在正式着色 pass 利用深度相等/可见性减少昂贵 fragment shading 的策略">深度预处理</Term>增加一次几何变换、raster、depth bandwidth 和 command cost，可能在高 overdraw、昂贵 pixel shader 场景收益，低 overdraw 或几何受限时反而更慢。
+
+```cpp
+// Pass 1: depth only
+setColorWrites(false);
+setDepthWrite(true);
+setDepthCompare(convention.nearWins); // LESS or GREATER
+drawOpaque(depthOnlyPipeline);
+
+// Pass 2: shade the same opaque geometry
+setColorWrites(true);
+setDepthWrite(false);
+setDepthCompare(CompareOp::Equal); // 数值路径一致时；否则选择经过验证的策略
+drawOpaque(materialPipelines);
+```
+
+Prepass 与正式 pass 的 vertex deformation、alpha-tested geometry、LOD 和 depth calculation 必须一致，否则 EQUAL 会漏像素。Alpha cutout 常需要两次 texture/discard，收益需单独测量。
+
+Front-to-back opaque sorting 可在无需完整 prepass 的情况下提高 early rejection；但排序增加 CPU/state 成本，应与材质 batching 权衡。
+
+## Painter、BSP 与透明表面
+
+<Term def="按远到近绘制图元，使后绘制的近表面覆盖或混合前面结果的顺序法">Painter algorithm</Term>直观但遇到循环遮挡或相交 polygon 时无法靠全局排序解决，可能需要 split 或 BSP。
+
+标准 alpha blending 非交换，透明表面通常先画 opaque（depth write on），再将透明对象近似 back-to-front 排序、depth test on、depth write off。对象中心排序无法解决相交透明几何和单对象内部顺序。
+
+Order-independent transparency（OIT）方法以更多内存/近似换取顺序鲁棒：depth peeling 保存多层，per-pixel linked list 精确收集后排序，weighted blended OIT 更便宜但近似。没有一种方法对所有透明、折射和体积情况都精确且低成本。
+
+<Cg4VisibilityMethodsDiagram />
+
+## 三步建立可见性实验
+
+<Stepper>
+<Step title="第一步：验证深度合同">
+
+分别建立 conventional 和 Reverse-Z，检查 near/far 映射、clear/compare、深度重建和已知遮挡像素。
+
+<Cg4StepFlowDiagram
+  caption="Depth convention 必须整组切换，不能只改 compare。"
+  stage={1}
+  stages={["Depth contract：projection、range、clear、compare、reconstruction"]}
+/>
+
+</Step>
+<Step title="第二步：构造精度与遮挡场景">
+
+放置远近共面网格、微小间隔 decals、大遮挡体和相机快速运动；记录 depth values、Hi-Z bounds 和误拒绝。
+
+<Cg4StepFlowDiagram
+  caption="数值实验把 Z-fighting 与 occlusion 错误分开定位。"
+  stage={2}
+  stages={[
+    "Depth contract：projection、range、clear、compare、reconstruction",
+    "Visibility probes：coplanar gaps、occluders、motion、Hi-Z bounds",
+  ]}
+/>
+
+</Step>
+<Step title="第三步：比较路径成本">
+
+对无 prepass、front-to-back、depth prepass、Hi-Z culling 和透明 OIT 记录 CPU、vertex、fragment、bandwidth 与图像差异。
+
+<Cg4StepFlowDiagram
+  caption="可见性优化以未误剔除为前提，再比较真正节省的工作。"
+  stage={3}
+  stages={[
+    "Depth contract：projection、range、clear、compare、reconstruction",
+    "Visibility probes：coplanar gaps、occluders、motion、Hi-Z bounds",
+    "Evidence：image correctness、overdraw、pipeline stats、GPU timings",
+  ]}
+/>
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** Z-fighting：两个接近的面交替闪烁。
-**原因 →** 深度精度不足无法区分。
-**修法 →** 增大近裁剪面距离、减小远裁剪面、对共面物体加polygon offset、使用浮点深度缓冲。
+**现象 →** 改成 GREATER 后所有物体消失或后处理深度反向。
+**原因 →** 只改 compare，没有同步 projection、clear、depth pyramid 和重建公式。
+**修法 →** 把 depth convention 封装为不可拆配置，对 near/far 已知点做数值测试，再逐 pass 接入。
 </Callout>
 
 <Callout type="trap">
-**现象 →** 认为深度测试必须在片段着色后。
-**原因 →** 管线图通常把深度测试画在片段着色器之后。
-**修法 →** 现代GPU支持Early-Z——在片段着色前做深度测试。但如果片段着色器修改深度或使用discard，Early-Z失效。
+**现象 →** Z-prepass 开启后 GPU 时间增加。
+**原因 →** 场景 overdraw/fragment cost 不高，却重复 vertex、raster 和 depth bandwidth；或 alpha cutout 纹理被采样两次。
+**修法 →** 分别测 vertex/fragment/bandwidth，按材质或场景启用；先测试 front-to-back 和 Hi-Z 是否足够。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 透明玻璃即使开启 depth test 仍出现层次错误。
+**原因 →** Z-buffer只保留最近层，标准 alpha blend 依赖顺序；depth write 还可能阻止后续透明层。
+**修法 →** opaque 与 transparent 分离，透明近似 back-to-front 且通常关闭 depth write；相交/复杂场景选择合适 OIT。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：什么是深度缓冲？它解决什么问题？
+
+1. **精度推导：** 由 $z=A+B/d$说明为什么固定 depth code 间隔对应的世界距离随 d 增大而恶化。
 
 <Answer>
-深度缓冲是存储每像素深度值的缓冲区。当多个片段映射到同一像素时，比较深度保留更近的片段。解决可见性问题——遮挡关系无需排序即可正确处理。
+导数绝对值为 $|B|/d^2$。一个量化步长 $\Delta z$ 对应 $\Delta d\approx\Delta z/(|dz/dd|)=d^2\Delta z/|B|$，随距离平方增长。因此远处两个表面要有更大世界间隔才能映射到不同 depth code，易 Z-fighting。
 </Answer>
 
-**问题**：为什么透视投影后远处Z-fighting更严重？
+2. **Prepass 判定：** 场景像素 shader 很便宜、三角形很多、overdraw 1.1×。是否应默认做 depth prepass？
 
 <Answer>
-透视投影后深度值非线性分布——近处密集远处稀疏。远处物体的深度值集中在1.0附近，区分度低，两个接近的面更容易因精度不足产生Z-fighting。
+通常没有明显理由。Prepass 会重复几何处理和 depth bandwidth，而仅能避免少量便宜 shader。先测无 prepass、front-to-back 与 prepass 的 vertex/fragment/GPU 时间；只有目标设备和场景有净收益才启用，不能把 Early-Z 存在当成 prepass 必然有效。
 </Answer>
+
+3. **透明循环：** 三个相交半透明三角形存在 A 在 B 前、B 在 C 前、C 又在 A 前的区域。Painter 全局排序能否解决？
+
+<Answer>
+不能形成一致全局顺序。可按交线 split polygon 后局部排序/BSP，或使用 depth peeling/per-pixel linked list 收集多层后每 pixel 排序；weighted blended OIT 可近似但不保证精确。普通 Z-buffer 只保留最近层，也无法计算所有透明贡献。
+</Answer>
+
 </Exercises>
 
+## 本章回顾
+
+- Frustum、back-face、occlusion 与 depth test 是不同粒度的保守拒绝层；
+- Depth mapping、clear、compare、reconstruction 必须形成完整 conventional/Reverse-Z 合同；
+- Z-fighting 来自 perspective mapping 与量化，修复要针对 near/far、几何和格式；
+- Z-prepass/Hi-Z 是实测优化，透明可见性需要排序或 OIT，不能只靠最近深度。
+
+## 术语表
+
 <Glossary>
-<GlossaryItem term="深度缓冲">逐像素存储深度值的缓冲区，通过比较深度确定可见表面。</GlossaryItem>
-<GlossaryItem term="Z-fighting">两个接近的面因深度精度不足交替显示的现象。</GlossaryItem>
-<GlossaryItem term="画家算法">按深度从远到近排序图元再绘制的可见性算法。</GlossaryItem>
-<GlossaryItem term="Early-Z">在片段着色器执行前做深度测试以提前剔除被遮挡片段的技术。</GlossaryItem>
+<GlossaryItem term="可见面检测">通过几何、空间层次和每样本深度等判据确定表面贡献的过程。</GlossaryItem>
+<GlossaryItem term="深度缓冲">为每个 sample 保存当前胜出深度，并按比较函数更新深度及相关输出的 image-space 方法。</GlossaryItem>
+<GlossaryItem term="Z-fighting">表面深度差接近量化或数值误差时，胜出关系不稳定而闪烁的现象。</GlossaryItem>
+<GlossaryItem term="Reverse-Z">远处映射小深度、近处映射大深度并配合 GREATER 的深度约定。</GlossaryItem>
+<GlossaryItem term="Early depth testing">在 shader 前利用已有 depth/stencil 保守拒绝失败候选的优化机会。</GlossaryItem>
+<GlossaryItem term="深度预处理">先低成本只写深度，再利用深度结果减少昂贵着色的策略。</GlossaryItem>
+<GlossaryItem term="Painter algorithm">按远到近顺序绘制表面的可见性方法。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="计算机图形学第4版" adaptedUrl="" />
+<Attribution adaptedFrom="Computer Graphics with OpenGL, 4th Edition" adaptedUrl="https://www.pearson.com/en-gb/subject-catalog/p/computer-graphics-with-open-gl-pearson-new-international-edition/P200000004424/9781292037196" />

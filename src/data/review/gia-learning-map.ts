@@ -1,37 +1,37 @@
 import type { ReviewQuestion } from "./types";
 
-/** 学习地图 复习题 */
+/** 《Go in Action》官方九章路线复习题。 */
 export const giaLearningMapQuestions: ReviewQuestion[] = [
   {
     id: "gia-learning-map-1",
     chapter: "gia-learning-map",
     level: 1,
-    question: `Go 语言实战全书分为哪四大板块？`,
-    answer: `Go 入门（环境与哲学）、核心类型（数组与切片、Map 与 Struct）、并发模型（Goroutine、Channel、并发模式）、工程实践（测试打包、标准库、总复习）。`,
-    tags: ["全书结构", "学习路径"],
+    question: `原书九章的准确顺序是什么？`,
+    answer: `1 Go语言介绍；2 Go快速入门；3 包与工具；4 数组、切片和映射；5 Go语言的类型系统；6 并发；7 并发模式；8 标准库；9 测试和性能。导览与总复习是本站教学层，不冒充原书章节。`,
+    tags: ["官方目录", "九章", "学习路径"],
   },
   {
     id: "gia-learning-map-2",
     chapter: "gia-learning-map",
     level: 2,
-    question: `Go 的「少即是多」哲学体现在哪些方面？带来了什么好处？`,
-    answer: `体现：25 个关键字、无继承（用组合+嵌入替代）、1.18 前无泛型（用 interface 替代）、无异常（用 error 返回值）、无构造函数、gofmt 强制统一格式。好处：学习曲线平缓（新人一周上手）、大团队协作顺畅（风格统一）、编译极快（秒级构建百万行项目）、工具链统一（go build/test/fmt/vet/mod 一套命令）。克制换来工程效率最大化。`,
-    tags: ["少即是多", "设计哲学"],
+    question: `为什么第2章完整搜索程序要放在第3章包工具之前？`,
+    answer: `第2章先让读者看到 main、包、类型、接口、goroutine、channel 和错误怎样在一个程序中协作；第3章再解释这些源码单元如何命名、初始化、构建、检查和管理依赖。先建立整体运行模型，再补工程工具细节。`,
+    tags: ["第2章", "第3章", "递进关系"],
   },
   {
     id: "gia-learning-map-3",
     chapter: "gia-learning-map",
     level: 3,
-    question: `为什么说并发是 Go 的灵魂？跳过并发直接写 CRUD 有什么问题？`,
-    answer: `并发是语言一等公民：go 关键字启动 goroutine，channel 是内置类型，select 是内置语句——无需第三方库。跳过并发的问题：Go 标准库（net/http、database/sql）底层都是 goroutine+channel，不理解就读不懂标准库行为；HTTP handler 的 r.Context() 需正确传递，否则客户端断开后 goroutine 泄漏。即使写 CRUD，context 的取消传播也至关重要。并发不是可选技能。`,
-    tags: ["并发原生", "CSP", "工程实践"],
+    question: `第4至7章怎样从值语义递进到并发生命周期？`,
+    answer: `第4章先判断数组复制、切片别名和 map 描述符；第5章再把复制、方法集和接口组成类型行为；第6章讨论这些值跨 goroutine 共享或通过 channel 转移时如何同步；第7章把同步机制封装成 Runner、Pool 和 Work 生命周期模式。`,
+    tags: ["值语义", "类型系统", "并发模式"],
   },
   {
     id: "gia-learning-map-4",
     chapter: "gia-learning-map",
     level: 4,
-    question: `对比 Go 与 Java 在面向对象与错误处理上的设计差异，说明 Go 之道的取舍。`,
-    answer: `面向对象：Java 用 class 继承（is-a）+ 显式 implements 接口；Go 用 struct 嵌入组合（has-a）+ 隐式接口（鸭子类型编译期检查）。Go 无继承链，避免脆弱基类问题。错误处理：Java 用异常（控制流跳转，可能被空 catch 吞掉）；Go 用 error 返回值（显式处理，if err != nil 重复但可预测）。Go 之道的取舍：牺牲语法简洁（error 重复）和表达力（无继承），换取显式性、可预测性、编译速度和协作顺畅——一切为大规模工程协作服务。`,
-    tags: ["语言对比", "面向对象", "错误处理", "综合"],
+    question: `完成全书的最小验收证据链是什么？`,
+    answer: `从干净检出开始，固定 Go 版本与依赖，运行格式、vet、测试和构建；对并发路径运行 race detector；对 I/O 注入 EOF、短读写和关闭失败；对 benchmark 保存多样本与分配数据。最后能把每个失败定位回九章中的具体契约。`,
+    tags: ["验收", "证据链", "综合"],
   },
 ];

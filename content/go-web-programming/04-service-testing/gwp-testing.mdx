@@ -1,0 +1,108 @@
+---
+title: "第8章 测试应用"
+type: C
+section: "Go Web编程 · 服务与验证"
+order: 8
+description: "用testing、httptest、test double与dependency injection验证函数、handler、client和失败路径。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/go-web-programming/chapter-8"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GwpTestBoundaryLab, GwpHttpTestLab, GwpDependencyLab } from "@/components/mdx/go-web-programming/diagrams/gwp-testing";
+
+<Objectives>
+- 能实现表驱动单元测试并输出可定位的case名称、实际值和期望值
+- 能比较ResponseRecorder与httptest.Server，选择正确HTTP测试边界
+- 能设计接口、测试替身与依赖注入，复现数据库和外部服务失败
+</Objectives>
+
+## 从测试要证明哪一层开始
+
+先预测：启动真实服务器、数据库和外网服务的测试是否更接近真实，所以一定更好？不一定；它会增加慢、脆弱和难定位。<Term def="由要证明的行为决定最小依赖范围和观察点的测试选择。">test boundary selection</Term>先选边界，再选工具。
+
+<GwpTestBoundaryLab />
+
+## Go测试库
+
+testing提供Test、Benchmark和示例基础，httptest提供HTTP请求、Recorder和本地Server。<Term def="由文件命名、函数签名、失败报告和进程退出状态组成的Go测试协议。">Go testing contract</Term>使`go test ./...`成为统一入口。
+
+```go
+func TestNormalize(t *testing.T) {
+    if got := Normalize(" Go "); got != "go" { t.Fatalf("got %q", got) }
+}
+```
+
+## 单元测试
+
+表驱动case应包含name、input、want和wantErr，subtest隔离失败。<Term def="同一行为的输入、期望与诊断以数据行组织的测试结构。">table driven case contract</Term>覆盖正常、边界、空值和错误，不以覆盖率数字替代断言质量。
+
+## HTTP测试
+
+Recorder直接调用handler，Server通过真实本地HTTP测试client。<Term def="method、path、header、status和body组成的HTTP断言集合。">HTTP test oracle</Term>要求测试协议可见行为，不绑定内部函数调用次序。
+
+```go
+req := httptest.NewRequest(http.MethodGet, "/threads/7", nil)
+rr := httptest.NewRecorder()
+handler.ServeHTTP(rr, req)
+if rr.Code != http.StatusOK { t.Fatalf("status=%d", rr.Code) }
+```
+
+<GwpHttpTestLab />
+
+## Test Double
+
+Stub返回固定值，fake实现轻量行为，spy记录调用，mock预设交互。<Term def="在测试中替代慢、随机或不可用依赖的可控实现。">test double contract</Term>应满足同一接口并聚焦外部契约，不复制生产实现。
+
+## Dependency Injection
+
+Handler通过构造参数接收Store、Clock或Sender。<Term def="由调用方提供依赖实现，使业务逻辑不创建具体外部资源的设计。">dependency injection boundary</Term>让成功、未找到、超时与提交失败成为测试输入。
+
+```go
+type ThreadStore interface { Thread(context.Context, int) (Thread, error) }
+type App struct { store ThreadStore }
+func NewApp(store ThreadStore) *App { return &App{store: store} }
+```
+
+<GwpDependencyLab />
+
+## 第三方测试库
+
+原书介绍check和Ginkgo等扩展库。<Term def="在标准testing之上增加断言、fixture或行为描述语法的工具层。">third party test layer</Term>应保持`go test`入口和清晰失败输出；不要因语法方便隐藏控制流。
+
+<Stepper>
+  <Step title="选择测试层"><GwpTestBoundaryLab /></Step>
+  <Step title="验证HTTP"><GwpHttpTestLab /></Step>
+  <Step title="注入故障">用Store替身返回成功、ErrNotFound、超时和任意错误，检查状态映射。</Step>
+</Stepper>
+
+## 验收实验：同一Handler三层测试
+
+先用fake Store直接单测用例，再用Recorder测handler协议，最后用Server测client往返。三层共享行为表但观察点不同。故意让Store变慢、返回坏数据和失败，确认测试快速、确定且能指出责任层。
+
+<Callout type="trap" title="Mock越多单元测试越纯">过度mock会绑定实现细节；优先小接口和有行为的fake，只有交互本身是契约时才验证调用。</Callout>
+<Callout type="trap" title="覆盖率100表示测试充分">覆盖率只说明代码执行过，不证明边界、断言和失败路径有效。</Callout>
+
+## 本章回顾
+
+本章覆盖Go测试库、单元测试、HTTP测试、test double、dependency injection和第三方Go测试库。测试价值来自边界选择、可控输入和可诊断输出，而不是工具数量。
+
+<Exercises>
+**问题 1：何时用Recorder？**<Answer>直接验证handler的请求到响应协议时。</Answer>
+**问题 2：何时用Server？**<Answer>验证HTTP client、传输或真实往返时。</Answer>
+**问题 3：依赖注入带来什么？**<Answer>外部依赖由调用方提供，测试可替换实现并主动注入失败。</Answer>
+</Exercises>
+
+## 术语表
+<Glossary>
+  <GlossaryItem term="test boundary selection" definition="按待证明行为选择最小测试范围。" />
+  <GlossaryItem term="Go testing contract" definition="Go测试发现、执行与报告协议。" />
+  <GlossaryItem term="table driven case contract" definition="数据化输入期望与诊断结构。" />
+  <GlossaryItem term="HTTP test oracle" definition="HTTP可见行为断言集合。" />
+  <GlossaryItem term="test double contract" definition="替代外部依赖的可控实现。" />
+  <GlossaryItem term="dependency injection boundary" definition="调用方提供依赖实现的边界。" />
+  <GlossaryItem term="third party test layer" definition="标准testing之上的扩展工具层。" />
+</Glossary>
+<Attribution adaptedFrom="Go Web Programming Chapter 8 Testing your application" adaptedUrl="https://livebook.manning.com/book/go-web-programming/chapter-8" />

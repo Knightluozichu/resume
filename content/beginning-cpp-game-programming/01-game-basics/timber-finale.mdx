@@ -1,0 +1,334 @@
+---
+title: 第 5 章：碰撞、音效与 Timber 终局
+type: A
+section: Timber!!! 项目
+order: 5
+description: 对齐官方第 3 版第 5 章：补齐玩家、斧头与木头精灵，处理砍树输入、枝条碰撞、死亡和超时，加入音效并完成首个可玩游戏。
+demo: false
+math: false
+sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+draft: false
+---
+
+import {
+  BcgpChopTransactionMap,
+  BcgpEndConditionMap,
+  BcgpSoundLifetimeMap,
+} from "@/components/mdx/beginning-cpp-game-programming/diagrams/timber-finale";
+
+<Objectives>
+
+- 能实现玩家左右换边、斧击、枝条移位、计分和飞行木头组成的单次砍树事务
+- 能设计树枝碰撞、时间耗尽和死亡状态的终局优先级，并验证重启恢复全部一局状态
+- 能解释 `sf::SoundBuffer` 与 `sf::Sound` 的所有权，实现只在状态边沿触发且资源失败可诊断的简单音效
+
+</Objectives>
+
+## 从“一次按键只改变一次世界”开始
+
+前四章已经建立窗口、动画、HUD 和树枝数组。第 5 章把它们组合成第一款可玩游戏：玩家在树左右切换并砍击，枝条向下生长，最底枝条若与玩家同侧就结束游戏；时间也持续减少，成功砍击增加分数并让木头飞出。
+
+<Term def="从一次合法输入边沿开始，按固定顺序更新玩家侧、枝条、分数、碰撞、木头和声音，并只提交一次的状态变换。">
+  砍树事务
+</Term>
+必须与渲染帧数分离。一个 `KeyPressed`
+产生一个命令，更新阶段消费一次；绘制阶段只显示结果，不能再次加分或移位。
+
+<BcgpChopTransactionMap />
+
+## 玩家、斧头与墓碑精灵
+
+<Term def="玩家角色、斧头、飞行木头和墓碑等具有纹理引用、位置和变换的 SFML 可绘制对象。">
+  游戏精灵
+</Term>
+仍遵守纹理长于精灵的借用关系。玩家左右位置、斧头左右位置和木头起点应集中成命名常量，避免输入分支散落坐标。
+
+```cpp
+enum class Side { Left, Right };
+
+constexpr float playerLeftX{260.0F};
+constexpr float playerRightX{920.0F};
+constexpr float playerY{610.0F};
+
+Side playerSide{Side::Left};
+playerSprite.setPosition(playerLeftX, playerY);
+axeSprite.setPosition(playerLeftX + 110.0F, playerY + 30.0F);
+```
+
+逻辑侧是事实来源，精灵坐标由它派生。若只移动玩家却忘记斧头，下一次碰撞仍可能按另一套状态判定。可写 `placePlayer(side)` 函数一次设置玩家、斧头和木头起点；本章练习函数组合而非复制分支。
+
+墓碑只在 Dead 状态绘制，普通玩家只在非 Dead 阶段绘制。不要用把精灵移到 `(-2000,-2000)` 的方式表达死亡，它让可见性隐藏在坐标副作用中。
+
+## 事件边沿生成砍树命令
+
+<Term def="在某一帧由输入阶段产生、由更新阶段恰好消费一次的玩法意图，例如 ChopLeft 或 ChopRight。">
+  游戏命令
+</Term>
+可先用 `std::optional<Side>` 表达本帧是否砍击。只在 Playing 阶段接收左右键；Waiting、Paused、Expired、Dead 都不生成命令。
+
+```cpp
+#include <optional>
+
+std::optional<Side> chopSide;
+
+if (event.type == sf::Event::KeyPressed && phase == GamePhase::Playing) {
+    if (event.key.code == sf::Keyboard::Left)
+        chopSide = Side::Left;
+    else if (event.key.code == sf::Keyboard::Right)
+        chopSide = Side::Right;
+}
+```
+
+同一帧收到左右两条事件时，必须定义策略。示例后事件覆盖前事件；也可只接受第一条。多人或回放系统会保留有序命令队列，但 Timber 每帧最多一次砍击已经足够。关键是规则明确且可测。
+
+<Callout type="trap">
+  **现象**：按住方向键时一帧砍多次，枝条瞬间到底。**原因**：输入、更新和绘制多个位置都检查按键状态并执行玩法副作用。**修法**：事件阶段只生成命令，更新阶段单一消费点执行一次事务，提交后清空命令。
+</Callout>
+
+## 枝条碰撞：比较逻辑状态而非像素猜测
+
+<Term def="危险枝条进入玩家所在最低槽且方向与玩家侧相同时触发的规则碰撞。">
+  树枝碰撞
+</Term>
+不需要通用像素碰撞：树枝数组已经提供更稳定的语义。移位后检查最后槽的
+BranchSide，与玩家 Side 显式比较。
+
+```cpp
+bool branchHitsPlayer(BranchSide branch, Side player)
+{
+    if (branch == BranchSide::None)
+        return false;
+    if (branch == BranchSide::Left)
+        return player == Side::Left;
+    return player == Side::Right;
+}
+```
+
+判定顺序是先移位，再检查新进入危险槽的枝条。若先检查旧末槽，会晚一拍死亡；规则并非物理引擎限制，而是事务顺序。测试 Left/Left、Right/Right 必须命中，交叉侧和 None 不命中。
+
+<Term def="两个对象或规则区域满足接触条件后产生玩法结果的检测过程；应选择与游戏表示一致的最简单碰撞模型。">
+  碰撞检测
+</Term>
+在本章采用槽位状态，后续 Pong 才使用 AABB
+几何；不要为了复用而把简单离散规则强行转成矩形相交。
+
+## 飞行木头：短生命周期反馈对象
+
+<Term def="砍击后从树干起点沿玩家相反方向飞出，越过屏幕后停用的视觉反馈精灵。">
+  飞行木头
+</Term>
+需要 active、位置和速度。砍击事务设置初值，后续帧只在 active
+时推进；离屏后停止更新和绘制。
+
+```cpp
+bool logActive{false};
+float logX{0.0F};
+float logY{0.0F};
+float logVelocityX{0.0F};
+float logVelocityY{-1500.0F};
+
+if (chopSide) {
+    logActive = true;
+    logX = 640.0F;
+    logY = 720.0F;
+    logVelocityX = *chopSide == Side::Left ? 1000.0F : -1000.0F;
+}
+
+if (logActive) {
+    logX += logVelocityX * dt;
+    logY += logVelocityY * dt;
+    logSprite.setPosition(logX, logY);
+    if (logY + logHeight < 0.0F)
+        logActive = false;
+}
+```
+
+每次新砍击可重新发射同一木头，意味着高频输入不会同时显示多个木块。若设计需要多个并发木块，应使用对象池或容器，并明确容量；不要在每次按键中无界分配。
+
+## 终局条件：同一帧只能提交一个结果
+
+<Term def="时间耗尽或玩家被枝条压中后，从 Playing 转入 Expired 或 Dead 并冻结玩法副作用的状态转换。">
+  结束条件
+</Term>
+可能在同一帧同时满足。必须定义优先级，例如先消费砍击和碰撞，命中则
+Dead；未死亡再扣时，归零则 Expired。另一顺序也可以，但测试和玩家反馈必须一致。
+
+<BcgpEndConditionMap />
+
+```cpp
+if (phase == GamePhase::Playing) {
+    if (chopSide) {
+        playerSide = *chopSide;
+        shiftBranches(branches, chooseBranch(randomEngine));
+        ++score;
+        if (branchHitsPlayer(branches.back(), playerSide))
+            phase = GamePhase::Dead;
+    }
+
+    if (phase == GamePhase::Playing) {
+        remainingSeconds = std::max(0.0F, remainingSeconds - dt);
+        if (remainingSeconds == 0.0F)
+            phase = GamePhase::Expired;
+    }
+}
+chopSide.reset();
+```
+
+<Term def="玩家被危险枝条命中后的终局状态，停止砍击和计分，切换死亡视觉与提示并等待重启。">
+  死亡处理
+</Term>
+只在进入 Dead 的边沿播放死亡声、显示墓碑。若每帧 `phase == Dead` 都调用
+`play()`，声音会不停回到开头。
+
+<Callout type="trap">
+  **现象**：终局声音只有爆音或第一小段。**原因**：Dead
+  条件每帧为真，每帧重启同一个 Sound。**修法**：比较前后状态，只在
+  `previousPhase != Dead && phase == Dead` 的转换边沿触发一次。
+</Callout>
+
+## 简单音效：Buffer 拥有数据，Sound 管播放
+
+<Term def="SFML 加载并拥有完整短音频样本数据的资源对象，必须覆盖所有借用它的 Sound 播放生命周期。">
+  sf::SoundBuffer
+</Term>
+适合斧击、死亡和超时等短音效。
+<Term def="引用 SoundBuffer 并保存音量、音高、循环和播放游标的 SFML 播放对象，不拥有样本数据。">
+  sf::Sound
+</Term>
+与 Sprite/Text 的借用模式一致。
+
+```cpp
+sf::SoundBuffer chopBuffer;
+sf::SoundBuffer deathBuffer;
+
+if (!chopBuffer.loadFromFile("assets/sound/chop.wav") ||
+    !deathBuffer.loadFromFile("assets/sound/death.wav")) {
+    std::cerr << "failed to load required Timber sound effects\n";
+    return EXIT_FAILURE;
+}
+
+sf::Sound chopSound{chopBuffer};
+sf::Sound deathSound{deathBuffer};
+```
+
+这里音效被定义为必需资源，失败就停止；也可选择静音降级，但要记录并保持玩法可运行。长音乐通常使用流式 `sf::Music`，不应全部装入 SoundBuffer。
+
+砍击事务调用一次 `chopSound.play()`；进入 Dead 边沿调用一次 `deathSound.play()`；重启先停止终局声音。多个快速斧击若复用同一个 Sound，会重启同一播放；若需要叠加，应维护受限 Sound 实例池并控制混音音量。
+
+<BcgpSoundLifetimeMap />
+
+## 绘制层次与完成条件
+
+绘制顺序可以是背景、云、树、树枝、玩家或墓碑、斧头、飞行木头、时间条、分数和消息。只有 active 木头绘制，只有非 None 枝条绘制，Dead 状态用墓碑替换玩家。视觉条件全部从状态派生。
+
+<Term def="Timber 能从等待开始进入游玩，接受砍击、计分、移动树枝、判定死亡或超时、播放反馈并完整重启的首个端到端版本。">
+  可玩版本
+</Term>
+不等于功能很多，而是主路径和失败路径闭环：缺资源有诊断、关闭窗口有效、暂停不扣时、终局不再计分、新局无旧状态泄漏。
+
+改进应以可验证增量进行：增加难度曲线时把速度或枝条概率写成分数函数；增加连击时定义时间窗；增加最高分时明确文件错误；不要一次同时改输入、随机和碰撞，导致回归无法定位。
+
+## 改进游戏和代码：先保住规则再扩展
+
+原章完成 Timber 后要求继续思考改进。优先把重复的重置、玩家放置和 HUD 同步提取为函数，再添加玩法：分数越高时缩短总时间或提高危险枝条概率，必须设置上限，避免难度函数产生零时间或必死序列；增加最高分时，文件读取失败应回退默认值而不是阻止启动。
+
+每项改进先写不变验收：一次命令仍只加一分和移位一次，任何难度下都保留可反应窗口，重启仍清空上一局状态，静音模式不改变碰撞结果。性能优化也先测量，纹理和音频只加载一次，但不要为了减少函数调用把输入、更新与绘制重新揉进一个不可测试分支。
+
+为每次改进保留固定输入回放和终局截图，确保玩法变化不会悄悄破坏状态顺序与视觉反馈。
+
+## 重启事务与测试矩阵
+
+<Term def="从终局或等待状态创建一局干净游戏状态的操作，恢复分数、计时、玩家、枝条、木头、提示和音频。">
+  完整重启
+</Term>
+应先停止旧声音，再设置 Playing。数组全部 None，木头
+inactive，玩家回初始侧，分数归零，时间恢复总量，HUD 由新状态刷新。
+
+测试包括：左右各砍一次只加一分；同侧最低枝条死亡、异侧和 None 安全；死亡后输入不加分；时间到零不再更新枝条；重启后六个槽全空、木头不显示、旧死亡声停止；音频文件缺失按策略失败或静音降级。
+
+用固定分支序列比随机等待更可靠。直接把 `[None, Left]` 变换到危险槽，分别设置玩家左右侧验证。用注入 dt 把时间推进到零，确保终局只触发一次。
+
+> 先预测：若碰撞检查发生在树枝移位之前，刚落入最低槽的危险枝条何时生效？会晚到下一次砍击，玩家画面上已被枝条覆盖却仍存活；事务顺序必须先提交移位再判定。
+
+## 小结
+
+- 输入事件只生成一次砍树命令，更新阶段按固定顺序消费，绘制不产生玩法副作用
+- 玩家侧、斧头与碰撞共享同一逻辑枚举，精灵位置只是状态投影
+- 树枝碰撞使用最低槽方向与玩家侧比较，不需要像素级检测
+- 飞行木头有明确 active 生命周期，离屏停用；并发反馈需要受限对象池
+- 死亡与超时是互斥终局转换，同帧优先级明确，终局期间停止计分和机制更新
+- Sound 借用 SoundBuffer，声音只在转换边沿触发；完整重启恢复所有一局状态
+
+<Exercises>
+
+**问题 1** 写出一次 ChopLeft 的事务顺序，并说明为什么碰撞必须在移位后、声音必须在边沿触发。
+
+<Answer>
+
+验证 Playing 后设置玩家左侧与视觉，移位枝条并生成新顶槽，增加分数，检查新最低槽是否为 Left，设置飞行木头初值，播放一次斧击声；若碰撞则转 Dead 并只在进入边沿播放死亡声。移位后判定才能让刚落入危险槽的枝条立即生效；边沿触发避免 Dead 条件每帧重启声音。
+
+</Answer>
+
+**问题 2** 同一帧既砍到危险枝条又让时间归零，怎样避免同时显示 Dead 和 Expired？
+
+<Answer>
+
+定义单一优先级并让 phase 是互斥枚举。示例先消费砍击并判定碰撞，若进入 Dead 就跳过时间终局；只有仍为 Playing 才扣时并可能转 Expired。测试构造两条件同帧成立，断言最终只有 Dead、只触发死亡反馈且不会再覆盖为 Expired。
+
+</Answer>
+
+**问题 3** 列出完整重启至少要恢复的状态，并解释 SoundBuffer 与 Sound 的生命周期。
+
+<Answer>
+
+恢复分数、总时间、玩家初始侧和位置、全部 None 枝条、随机或设计起点、飞行木头 inactive、HUD 消息和时间条，停止旧终局声音，最后提交 Playing。SoundBuffer 拥有音频样本，Sound 借用它并持有播放状态；Buffer 必须比 Sound 和其播放期更长，重启可停止 Sound 但无需重载 Buffer。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="砍树事务">
+  一次合法输入按固定顺序更新玩家、枝条、分数、碰撞、木头和声音且只提交一次的变换。
+</GlossaryItem>
+<GlossaryItem term="游戏精灵">
+  玩家、斧头、木头和墓碑等带纹理引用与变换的 SFML 可绘制对象。
+</GlossaryItem>
+<GlossaryItem term="游戏命令">
+  输入阶段产生并由更新阶段恰好消费一次的玩法意图。
+</GlossaryItem>
+<GlossaryItem term="树枝碰撞">
+  最低危险槽方向与玩家侧相同时触发死亡的离散规则碰撞。
+</GlossaryItem>
+<GlossaryItem term="碰撞检测">
+  判断对象或规则区域满足接触条件并产生玩法结果的过程。
+</GlossaryItem>
+<GlossaryItem term="飞行木头">
+  砍击后沿玩家反方向飞出、离屏后停用的短生命周期视觉反馈。
+</GlossaryItem>
+<GlossaryItem term="结束条件">
+  时间耗尽或枝条命中后从 Playing 提交到一个互斥终局状态的规则。
+</GlossaryItem>
+<GlossaryItem term="死亡处理">
+  进入 Dead 后冻结玩法、切换视觉和消息并只触发一次死亡反馈。
+</GlossaryItem>
+<GlossaryItem term="sf::SoundBuffer">
+  加载并拥有短音频样本的 SFML 资源，必须覆盖借用 Sound 的播放期。
+</GlossaryItem>
+<GlossaryItem term="sf::Sound">
+  借用 SoundBuffer 并管理音量、循环和播放游标的播放对象。
+</GlossaryItem>
+<GlossaryItem term="可玩版本">
+  开始、输入、计分、危险、反馈、终局和重启全部闭环的端到端游戏版本。
+</GlossaryItem>
+<GlossaryItem term="完整重启">
+  恢复一局所有逻辑、视觉与音频状态后再提交 Playing 的事务。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 5"
+  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+/>

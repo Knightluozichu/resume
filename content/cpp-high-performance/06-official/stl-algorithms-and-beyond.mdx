@@ -1,0 +1,227 @@
+---
+title: "第6章：STL算法及其扩展"
+type: A
+section: C++ High Performance · Chapter 6
+order: 6
+description: 对齐第一版第6章 STL Algorithms and Beyond：标准算法积木、iterator区间、predicate/comparator契约、partial sorting，以及ranges、views与actions的组合模型。
+demo: false
+math: false
+sourceUrl: "https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
+draft: false
+---
+
+import {
+  ChpAlgorithmContractPipelineMap,
+  ChpPartialOrderingDecisionMap,
+  ChpRangesCompositionMap,
+} from "@/components/mdx/cpp-high-performance/diagrams/stl-algorithms-and-beyond";
+
+<Objectives>
+
+- 能解释STL algorithms如何以iterator half-open区间、predicate和复杂度保证组成可复用积木
+- 能比较标准算法与手写for-loop的语义、优化和future-proofing，并识别错误comparator
+- 能设计只排序所需数据的partial sorting方案，再区分ranges library中的views与actions
+
+</Objectives>
+
+## 从“代码声明要完成什么”开始
+
+循环描述控制流：初始化index、判断边界、递增、分支、更新结果。算法描述意图：find、count、transform、partition、sort、reduce。两者最终都可能生成循环，但algorithm name让reviewer和compiler看到更稳定的semantic unit，也把边界、iterator category和complexity contract集中到标准接口。
+
+<Term def="把查找、变换、排序、分区和归约等通用操作实现为独立函数，并通过iterator区间复用于不同数据结构。">
+  STL algorithms as building blocks
+</Term>
+
+先预测输出、mutation、order requirement和最弱iterator category，再选algorithm。不要从“如何写循环”出发硬套名字，也不要为了避免一行清晰循环而拼出难读组合。性能来自正确算法、数据布局与可优化callable，而不是函数名字本身。
+
+## algorithms operate on iterators
+
+经典generic algorithm接收 `[first, last)`：first指向first element，last指向one past最后元素且不可dereference。empty range满足`first == last`，相邻ranges可用同一boundary拼接。算法操作iterators而非container，因此vector、list、array、raw pointer和custom range只要满足requirement即可复用。
+
+```cpp
+const auto firstLarge = std::find_if(
+    readings.cbegin(), readings.cend(),
+    [threshold](const Reading& value) { return value.level > threshold; });
+
+if (firstLarge != readings.cend()) {
+    report(*firstLarge);
+}
+```
+
+<Term def="由first element与one-past end组成的半开iterator区间，end只用于比较而不能解引用。">
+  half-open iterator range
+</Term>
+
+input iterator足以支持single-pass find，sort则需要random-access iterator和可交换元素。算法签名、documentation和category共同规定前置条件；把list iterators传给sort并不会因为语法相似就合法。output iterator可以只写不读，inserter adaptors还能把assignment映射为container insertion。
+
+<ChpAlgorithmContractPipelineMap />
+
+算法通常返回iterator、count、partition point或output end。必须阅读返回值语义：`std::remove_if`只把保留元素移到前部并返回new logical end，不会改变container size；erase-remove组合才真正删除尾部。忽略return value会留下valid但错误的数据状态。
+
+## predicate与custom comparator是契约
+
+<Term def="对元素返回布尔判定的callable，用于筛选、查找、计数或分区；算法可能按未指定次数和顺序调用它。">
+  predicate
+</Term>
+
+predicate不应依赖未声明的调用顺序或在比较过程中破坏range invariant。允许算法复制callable，所以mutable internal counters不能作为可靠业务结果；需要观测时显式引用stable state，并保证线程/执行策略下安全。pure、small concrete lambda通常更易inline和推理。
+
+sorting comparator必须定义strict weak ordering：`comp(x, x)`为false；若`comp(a,b)`为true则`comp(b,a)`为false；transitivity与equivalence也必须一致。使用`<=`而非`<`会破坏irreflexivity，结果不只是“顺序稍有不同”，而是违反algorithm precondition。
+
+```cpp
+const auto byScoreThenId = [](const Record& a, const Record& b) {
+    return std::tie(a.score, a.id) < std::tie(b.score, b.id);
+};
+
+std::sort(records.begin(), records.end(), byScoreThenId);
+```
+
+<Term def="为排序或有序查找定义元素先后关系的callable；必须满足strict weak ordering，并与后续查询使用同一关系。">
+  custom comparator
+</Term>
+
+comparison cost会乘上调用次数。若每次比较都parse string、计算昂贵key或访问远端state，应先decorate/cache key，再sort compact indices或records，最后按需重排。这里要同时比较额外memory、key construction与更便宜comparison的收益。
+
+<Callout type="trap" title="陷阱：sort comparator写a <= b更符合自然语言">
+  `<=`让comp(a,a)为true，违反strict weak ordering。algorithm可以假定该契约成立并据此重排或终止；违反前置条件后结果不可依赖。用property tests检查irreflexive、asymmetric和transitive，并覆盖相等key。
+</Callout>
+
+## complexity guarantees约束增长
+
+标准algorithm给出复杂度上界或数量级，如find最多线性比较，sort通常 $O(n\log n)$ comparisons，binary_search为对数比较但要求range已按相同ordering排序。复杂度只约束某类操作次数，不包含comparator本身成本、iterator movement、allocation或cache behavior。
+
+<Term def="标准为算法规定的比较、应用predicate、交换或iterator操作次数上界，使调用者能推理随输入规模的增长。">
+  complexity guarantee
+</Term>
+
+选择算法时先匹配precondition与保证：若range未排序，binary search的低复杂度没有意义；若只要一个extreme，用`min_element`比全sort更合适；若要求stable order，`stable_sort`与`stable_partition`可能需要不同memory和operation cost。读algorithm contract比凭名字猜实现更可靠。
+
+## 标准算法与手写for-loop
+
+STL algorithms versus handcrafted for-loops的第一差异是语义边界。`std::transform`明确每个input产生output，`std::partition`明确按predicate分组；手写循环可把查找、日志、修改和计数混在一起，增加alias、early-exit和off-by-one风险。标准algorithm也经过广泛测试，并允许library针对iterator/value properties优化。
+
+```cpp
+std::transform(
+    samples.cbegin(), samples.cend(), normalized.begin(),
+    [scale, offset](float value) { return value * scale + offset; });
+```
+
+future-proofing不是保证未来版本自动更快，而是让意图保持在可替换抽象边界。algorithm call更容易切换到range overload、execution policy或specialized implementation；但任何parallel/vectorized变体都带来callable purity、associativity、iterator与data race等新preconditions，不能只加一个policy就假定等价。
+
+手写loop仍适合多个紧密状态更新、复杂early exit或算法组合造成多次遍历/temporary的场景。决定依据是correctness clarity与measured codegen：先写最清楚的semantic form，再检查allocation、pass count和assembly/profile。algorithm组合若生成三次完整遍历，fusion或range view可能更合适。
+
+## sorting only data you need
+
+全量sort会建立所有元素的total order；如果只需要最小值、前k个或第k个分界，它做了多余工作。`min_element`线性找极值；`nth_element`把nth放到完整排序时的位置，并partition两侧，平均线性但两侧内部无序；`partial_sort(first, middle, last)`让前k个按序，成本约与 $n\log k$ 相关；heap可维护streaming top-k。
+
+<ChpPartialOrderingDecisionMap />
+
+<Term def="只建立查询所需的一部分顺序，如top-k或第k分位，避免为无关元素建立完整total order。">
+  partial sorting
+</Term>
+
+目标是“显示最高10项”时，先明确是否需要结果有序、输入可否修改、k相对n大小、是否streaming。`nth_element`后若前k仍需有序，可只sort那一段；若数据不断到达且不能保存全部，用bounded heap。还可sorting only data you need：排序small index/key pair而非large payload，减少move与cache traffic，再按indices读取原数据。
+
+<Callout type="trap" title="陷阱：先完整sort再取前k最简单所以成本可以忽略">
+  当k远小于n或payload很大时，全sort进行大量无关comparison与move。先选择min、nth_element、partial_sort或heap，再用真实n/k、comparator和element
+  size测量；若n很小，常数项也可能使简单sort胜出。
+</Callout>
+
+## ranges library连接数据与操作
+
+第一版讨论的ranges library强调composability：algorithm接收range而不是反复手写begin/end；views惰性描述filter/transform/take等适配，不立即own或materialize元素；actions则对range执行eager mutation，例如sort。后来标准库吸收了许多ranges/views思想，但具体namespace、action支持与返回类型随range-v3和C++版本不同，代码应对照项目依赖。
+
+```cpp
+// range-v3 style: exact names depend on the pinned library version
+auto visibleScores = players
+    | ranges::views::filter([](const Player& p) { return p.visible; })
+    | ranges::views::transform([](const Player& p) { return p.score; })
+    | ranges::views::take(10);
+```
+
+<Term def="对underlying range进行惰性适配的轻量对象，按需产生元素而不默认拥有或立即物化整个结果。">
+  view
+</Term>
+
+view composition可把filter和transform融合进一次消费，但每次dereference可能重新计算；重复遍历、昂贵transform或需要stable storage时，materialize结果可能更好。view通常borrow underlying data，temporary与capture lifetime必须审计；lazy不等于free，adaptor state、branch和iterator category可能影响后续algorithm。
+
+<Term def="对range立即执行并通常修改或物化结果的操作，与惰性view形成语义对照。">
+  action
+</Term>
+
+<ChpRangesCompositionMap />
+
+range pipeline应让数据流更可读，而不是把side effects藏进predicate。pure views组成query，明确的terminal algorithm/action产生结果或mutation。若需要多次使用中间结果，可命名view或materialized container，并以profile决定fusion、cache reuse与recomputation的取舍。
+
+## 第6章实验协议
+
+1. 把手写find/count/transform循环改成标准算法，对比边界、return value和generated code。
+2. 为custom comparator做strict-weak-order property tests，覆盖相等key与随机三元组。
+3. 比较昂贵on-demand key comparator与decorate-sort-undecorate，记录time、moves和memory。
+4. 对同一n/k比较full sort、nth_element+sort prefix、partial_sort与bounded heap。
+5. 分别处理k=1、k接近n和streaming input，验证算法选择不会固定化。
+6. 构建filter-transform-take view，确认underlying lifetime与重复dereference成本。
+7. 比较view fusion与materialized intermediate的pass count、allocation和cache reuse。
+8. 为algorithm升级execution policy前审计callable purity、associativity和data race。
+
+## 小结
+
+- STL algorithms以iterator half-open range复用查找、变换、分区、排序与归约
+- predicate和custom comparator是语义契约；sorting comparator必须满足strict weak ordering
+- complexity guarantees约束操作增长，但不替代callable、memory和cache测量
+- 标准算法通常比手写loop更清楚地表达意图并提供future-proofing边界
+- 只需要极值、分位或top-k时应选择min、nth_element、partial_sort或heap
+- ranges提高composability；views惰性适配，actions立即执行或修改
+- lazy pipeline仍需审计lifetime、recomputation、category和side effects
+
+<Attribution
+  adaptedFrom="C++ High Performance, First Edition, Chapter 6: STL Algorithms and Beyond"
+  adaptedUrl="https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
+/>
+
+<Glossary>
+  <GlossaryItem term="STL algorithms as building blocks">
+    以iterator复用通用操作的标准算法积木。
+  </GlossaryItem>
+  <GlossaryItem term="half-open iterator range">
+    由first和不可解引用one-past end组成的区间。
+  </GlossaryItem>
+  <GlossaryItem term="predicate">为元素返回布尔判定的callable。</GlossaryItem>
+  <GlossaryItem term="custom comparator">
+    定义strict weak ordering的排序callable。
+  </GlossaryItem>
+  <GlossaryItem term="complexity guarantee">
+    标准约束的关键操作次数增长上界。
+  </GlossaryItem>
+  <GlossaryItem term="partial sorting">
+    只建立查询所需部分顺序的方法。
+  </GlossaryItem>
+  <GlossaryItem term="view">惰性适配underlying range的数据视图。</GlossaryItem>
+  <GlossaryItem term="action">
+    立即执行并通常修改或物化range的操作。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：审查一个用`<=`作为sort comparator的实现并修复。** 给出契约测试与性能验证。
+
+<Answer question="comparator修复需要哪些证据？">
+  改用严格关系，例如tie(a.score,a.id)&lt;tie(b.score,b.id)，确保comp(x,x)为false、asymmetry和transitivity成立；对相等score明确equivalence或secondary
+  key。用随机三元组做property
+  tests，并让sort与后续lower_bound使用同一comparator。若key昂贵，比较预计算key和每次comparison计算的call
+  count、time与memory。
+</Answer>
+
+2. **问题 2：从一百万条large records取分数最高100条，怎样避免全量排序？** 比较三种候选。
+
+<Answer question="top-k选择依赖哪些条件？">
+  输入可修改且前100需有序，可partial_sort；只需找到分界后再处理，可nth_element并只sort前100；streaming或不能保存全部时维护size为100的heap。large
+  payload应考虑排序index或compact key+index，减少move。用真实n/k、key
+  distribution和record size测comparisons、moves、time和memory；k接近n时full
+  sort可能重新占优。
+</Answer>
+
+3. **问题 3：filter-transform-take view为何可能比中间vector快，也可能更慢？** 设计验证协议。
+
+  <Answer question="惰性组合的收益和风险是什么？">view可融合遍历并避免intermediate allocation，只为消费的元素执行transform；但重复dereference可能重算昂贵transform，branch/adaptor会影响优化，且borrowed data/captures可能悬空。比较单次消费、多次消费和昂贵transform三种workload，记录pass、calls、allocation、time与cache；需要复用时物化中间结果。检查project固定的range-v3或std::ranges版本，不混用views与actions API。</Answer>
+</Exercises>

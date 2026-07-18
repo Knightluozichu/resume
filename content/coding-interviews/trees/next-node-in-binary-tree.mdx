@@ -1,0 +1,238 @@
+---
+title: "面试题8：二叉树的下一个节点"
+type: C
+section: "第2章 面试需要的基础知识"
+order: 9
+description: "利用右子树和父指针两条路径，在O(h)时间、O(1)额外空间内求一般二叉树节点的中序后继。"
+demo: true
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/08_NextNodeInBinaryTrees/NextNodeInBinaryTrees.cpp"
+draft: false
+---
+
+import { InorderSuccessorCaseMap, AncestorClimbDiagram, SuccessorTraceLab, SuccessorTestLab } from "@/components/mdx/coding-interviews/diagrams/next-node-in-binary-tree";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释中序遍历中“下一个节点”的确切含义，并区分它与二叉搜索树后继
+- 能判断有右子树时为何答案是右子树的最左节点
+- 能实现无右子树时沿父节点向上寻找首个合适祖先的循环
+- 能分析算法的时间、空间、结构前提以及父子指针不一致带来的风险
+- 能设计完整树、全左树、全右树、单节点和末尾节点等边界测试
+
+</Objectives>
+
+## 从完整中序序列的下一项开始
+
+先预测：在二叉树的中序序列`5, 6, 7, 8, 9, 10, 11`中，节点8的下一项是9，节点7的下一项是8，节点11没有下一项。若只拿到目标节点指针，怎样不从根重新遍历整棵树就找到这些答案？
+
+这道“二叉树的下一个节点”给每个节点增加一个指向父节点的指针，要求返回该节点在<Term def="按左子树、根节点、右子树顺序访问节点的遍历。">中序遍历</Term>中的下一个节点。这个节点称为<Term def="在整棵树的中序访问序列中紧跟在当前节点之后的节点；序列末尾没有后继。">中序后继</Term>。题目没有说这是一棵二叉搜索树，因此不能比较节点值，答案只由树的结构决定。
+
+中序顺序是“左、根、右”。访问完当前节点后，未访问区域只有两种位置：若有右子树，下一个节点在右子树内部；若没有右子树，就必须回到尚未访问的祖先。作者源码正是把问题分成这两个互斥分支。
+
+<InorderSuccessorCaseMap />
+
+## 有右子树时为何一路向左
+
+设当前节点为`node`。中序遍历访问`node`之后会进入它的右子树，而右子树自身仍按“左、根、右”访问。因此右子树中最先出现的节点必然是从右孩子出发不断沿`left`走到尽头的节点，即<Term def="从当前节点的右孩子出发，反复访问左孩子，直到没有左孩子时得到的节点。">右子树最左节点</Term>。
+
+例如节点8的右孩子是10，10还有左孩子9，所以8的后继是9而不是10。若右孩子本身没有左孩子，例如全右树中的节点2，那么右孩子3就是后继。这里“最左”描述拓扑方向，不意味着它的数值最小。
+
+作者实现保持一个`next`指针，并在右子树分支中向左扫描：
+
+```cpp
+struct BinaryTreeNode {
+    int value;
+    BinaryTreeNode* left;
+    BinaryTreeNode* right;
+    BinaryTreeNode* parent;
+};
+
+BinaryTreeNode* getNext(BinaryTreeNode* node) {
+    if (node == nullptr) return nullptr;
+
+    BinaryTreeNode* next = nullptr;
+    if (node->right != nullptr) {
+        BinaryTreeNode* cursor = node->right;
+        while (cursor->left != nullptr) {
+            cursor = cursor->left;
+        }
+        next = cursor;
+    } else {
+        BinaryTreeNode* current = node;
+        BinaryTreeNode* parent = node->parent;
+        while (parent != nullptr && current == parent->right) {
+            current = parent;
+            parent = parent->parent;
+        }
+        next = parent;
+    }
+    return next;
+}
+```
+
+第一分支最多下降树高`h`层。它不需要递归、栈或容器，额外空间为`O(1)`。即使右子树内部有很多节点，也无需完整遍历，因为中序最先访问的位置只由连续左边确定。
+
+<SuccessorTraceLab />
+
+## 无右子树时沿父节点向上寻找
+
+节点没有右子树时，它自己的子树已经访问完。此时<Term def="节点中用于从孩子回到直接父节点的反向链接。">父指针</Term>让算法沿祖先链回退。关键不是找到任意父节点，而是找到第一个满足“当前路径从它的左孩子一侧上来”的祖先。
+
+如果`current == parent->left`，那么父节点尚未被中序访问，父节点就是后继。例如叶子5是6的左孩子，5的后继直接是6。若`current == parent->right`，说明父节点及父节点的左子树都已经访问过，父节点不可能再次成为后继，必须把`current`提升为`parent`继续向上。
+
+这就是<Term def="当前节点无右子树时，沿父链越过连续的右孩子关系，直到找到来自左分支的首个祖先。">祖先上爬</Term>。节点7是6的右孩子，所以先越过6；而6是8的左孩子，于是8是7的后继。节点11一路以右孩子身份回到根8，根之上没有父节点，因此11是<Term def="中序序列最后访问的节点；它不存在下一个节点。">中序最后节点</Term>。
+
+<AncestorClimbDiagram />
+
+循环不变量是：被跨过的每个`parent`及其左侧区域都已经访问完，真正的后继只可能在更高处。循环结束有两种原因：找到当前路径来自左分支的父节点，这个父节点就是答案；或父指针变为空，说明不存在后继。
+
+## 正确性证明要覆盖两个互斥分支
+
+对有右子树的节点，中序规则规定访问当前节点后立即遍历右子树。右子树的第一项是它的最左节点，所以第一分支返回的节点既位于当前节点之后，又不存在更早候选。
+
+对没有右子树的节点，当前节点以下不存在未访问区域。沿父链向上时，只要当前节点是父节点的右孩子，该父节点早已在进入右子树前被访问，不能成为答案；第一个让当前节点位于其左分支的祖先尚未被访问，而且在访问完这条左分支后立刻被访问，所以它是最近后继。若这样的祖先不存在，当前节点位于根的整条最右结束路径上，因而没有后继。
+
+两种情况由`node->right`是否为空完全划分，没有遗漏也不会重叠。算法只沿一条向下路径或一条向上路径移动，时间复杂度是`O(h)`，其中`h`是树高；平衡树为`O(log n)`，退化树最坏为`O(n)`，额外空间始终为`O(1)`。
+
+<Callout type="trap" title="看到后继就按二叉搜索树比较值">
+一般二叉树没有“左边小、右边大”的约束。即使示例恰好使用递增数字，也只是为了让中序结果直观；实现若比较`value`，换一组乱序值就会失败。
+</Callout>
+
+<Callout type="trap" title="没有右子树就直接返回父节点">
+只有当前节点是父节点的左孩子时，父节点才尚未访问。当前节点是右孩子时，父节点已经访问过，必须继续上爬。节点7的父节点是6，但正确后继是8；这正是上爬循环不能省略的反例。
+</Callout>
+
+## 把两条规则写成有限状态过程
+
+面试现场可以把算法记为三个状态，而不是背一段条件嵌套。状态一“向右进入”：只执行一次，从当前节点进入右孩子；状态二“向左下降”：只要还有左孩子就继续，停点就是答案；状态三“沿父链回退”：当前无右子树时启动，只要自己是父节点的右孩子就越过父节点。前两个状态处理右子树分支，第三个状态处理祖先分支。
+
+这种拆分也能防止变量角色混乱。下降阶段的游标始终位于右子树内部；上爬阶段则同时维护`current`与`parent`，因为每提升一层都要重新判断两者的父子关系。若只移动`parent`而不移动`current`，下一轮仍拿原节点与更高祖先比较，条件不再表达“当前路径来自哪一侧”。
+
+还可以用一次完整中序遍历作为测试预言机：把节点地址按访问顺序收集，对每个下标`i`检查`getNext(sequence[i])`等于下一地址，末项检查为空。预言机实现虽然是`O(n)`，却与被测局部算法采用不同思路，适合随机生成树和重复值树的性质测试；这样能发现手写少量样例遗漏的深层祖先组合。
+
+## 父指针是输入契约的一部分
+
+函数局部逻辑很短，但它依赖每条父子链接双向一致：若`parent->left == child`或`parent->right == child`，那么`child->parent`必须回到同一父节点。构造树时只设置孩子指针、忘记设置父指针，会让第二分支提前返回空或跳到错误祖先。
+
+生产代码若接收不可信结构，还要防止父链循环。比如节点的`parent`错误指向自己，或两个祖先互相指向，原始循环永远不会结束。可以在树构造或反序列化阶段一次性验证无环和双向一致，而不是让每次查询承担整树校验；需要防御性接口时，可增加步数预算或快慢指针检测。
+
+下面的调试校验只验证目标节点经过的局部父链，并用集合拒绝循环：
+
+```cpp
+#include <stdexcept>
+#include <unordered_set>
+
+BinaryTreeNode* checkedGetNext(BinaryTreeNode* node) {
+    std::unordered_set<BinaryTreeNode*> seen;
+    for (auto* current = node; current != nullptr;
+         current = current->parent) {
+        if (!seen.insert(current).second) {
+            throw std::invalid_argument("parent cycle");
+        }
+        if (current->parent != nullptr &&
+            current->parent->left != current &&
+            current->parent->right != current) {
+            throw std::invalid_argument("broken parent link");
+        }
+    }
+    return getNext(node);
+}
+```
+
+这个包装器使用`O(h)`额外空间，不再满足原题的`O(1)`目标，因此适合边界检查、调试或不可信输入。若树由受控构造器维护不变量，正式查询仍应使用作者的常数空间实现。
+
+## 没有父指针时需要换取什么
+
+若只有目标节点而没有根指针和父指针，算法无法知道自己处于哪个祖先的左侧或右侧，一般不能确定无右子树节点的后继。额外给出根指针后，可以从根搜索到目标并记录祖先候选，但一般二叉树不能按值定向搜索，最坏要遍历`O(n)`个节点。
+
+若整棵树是二叉搜索树且值唯一，可以从根按键值下降：每次目标值小于当前值时，把当前节点记为候选并向左；否则向右。那是利用搜索树序的另一道算法，不应混入本题的一般二叉树契约。若允许修改节点结构，父指针把祖先信息分散保存在每个节点，使单次查询只访问与树高相关的路径。
+
+批量查询时还可以先做一次完整中序遍历，将节点按顺序存入数组或建立`node → successor`映射。预处理时间和空间都是`O(n)`，之后每次查询平均`O(1)`。选择父指针、逐次遍历还是预处理，应根据树是否频繁变化、查询次数和内存预算决定。
+
+## 测试要覆盖形状与分支边界
+
+作者官方源码包含16组断言。第一组完整树以8为根，左右孩子为6和10，叶子为5、7、9、11，逐一验证`8→9`、`6→7`、`10→11`、`5→6`、`7→8`、`9→10`以及`11→null`。这七个位置覆盖右子树下降、直接父节点、多层上爬和中序末尾。
+
+全左树`5←4←3←2`验证根5没有后继，而4、3、2的后继都是直接父节点。全右树`2→3→4→5`验证2、3、4的后继是右孩子，末端5连续上爬后为空。单节点树验证最小非空结构也没有后继。
+
+测试不应只比较节点值；若值重复，值相同不能证明返回了正确对象。应直接比较节点地址或稳定ID。还应单独测试空输入返回空，并在防御性包装器中覆盖断裂父链和父链循环。
+
+```cpp
+#include <cassert>
+
+void testCompleteTree() {
+    BinaryTreeNode n5{5}, n6{6}, n7{7}, n8{8};
+    BinaryTreeNode n9{9}, n10{10}, n11{11};
+
+    n8.left = &n6;   n6.parent = &n8;
+    n8.right = &n10; n10.parent = &n8;
+    n6.left = &n5;   n5.parent = &n6;
+    n6.right = &n7;  n7.parent = &n6;
+    n10.left = &n9;  n9.parent = &n10;
+    n10.right = &n11; n11.parent = &n10;
+
+    assert(getNext(&n8) == &n9);
+    assert(getNext(&n5) == &n6);
+    assert(getNext(&n7) == &n8);
+    assert(getNext(&n11) == nullptr);
+    assert(getNext(nullptr) == nullptr);
+}
+```
+
+<SuccessorTestLab />
+
+<Stepper>
+  <Step title="先看当前节点是否有右子树"><InorderSuccessorCaseMap />有右子树时，进入右孩子并连续向左；不需要查看父链或节点值。</Step>
+  <Step title="无右子树时检查父子关系"><AncestorClimbDiagram />当前是右孩子就越过父节点，当前是左孩子时父节点就是首个未访问祖先。</Step>
+  <Step title="用局部轨迹验证循环不变量"><SuccessorTraceLab />每次上爬都排除一个已经访问完的祖先区域，父指针为空代表中序结束。</Step>
+  <Step title="用不同树形覆盖所有出口"><SuccessorTestLab />完整、全左、全右、单节点、空输入和末尾节点共同覆盖下降、上爬与空结果。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 二叉树的下一个节点是整棵树中序遍历序列中紧跟当前节点的对象。
+2. 当前节点有右子树时，后继是右子树的最左节点。
+3. 当前节点无右子树时，应沿父节点向上寻找首个来自其左分支的祖先。
+4. 连续以右孩子身份上爬到根外，说明当前节点是中序最后节点，返回空。
+5. 算法不依赖节点值，也不要求二叉搜索树；比较值会偷换题目条件。
+6. 单次查询时间为`O(h)`、额外空间为`O(1)`，退化树最坏访问`O(n)`层。
+7. 父指针和孩子指针必须双向一致，非可信结构还要防止父链循环。
+8. 官方16组断言通过完整树、全左树、全右树和单节点覆盖两个分支及空后继。
+
+<Exercises>
+
+**问题 1：节点有右孩子时，为什么后继不是固定等于右孩子？**
+
+<Answer>中序进入右子树后仍要先访问这棵子树的左侧。只有右孩子没有左孩子时，它才是第一项；否则必须从右孩子继续向左到尽头，得到右子树最左节点。</Answer>
+
+**问题 2：节点7没有右子树，且它是6的右孩子，为什么答案是8？**
+
+<Answer>6在进入右孩子7之前已经被访问，所以不能再次成为后继。沿父链继续上爬后，6是8的左孩子，说明8尚未被访问；完成8的左分支后立刻访问8，因此8是后继。</Answer>
+
+**问题 3：没有父指针但给了根节点，能否仍求一般二叉树后继？**
+
+<Answer>可以从根遍历并记录到目标的祖先路径，或生成完整中序序列后定位目标；但一般二叉树不能按值定向查找，最坏需要`O(n)`时间，并使用`O(h)`路径空间或遍历栈。</Answer>
+
+**问题 4：为什么测试重复值树时必须比较节点身份？**
+
+<Answer>两个不同节点可以有相同`value`。若函数错误返回另一个同值节点，值断言仍会通过；比较地址或唯一ID才能证明返回的是中序序列中正确的下一个节点对象。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="中序遍历">按左子树、根节点、右子树顺序访问节点的遍历。</GlossaryItem>
+  <GlossaryItem term="中序后继">整棵树的中序序列中紧跟当前节点之后的节点。</GlossaryItem>
+  <GlossaryItem term="右子树最左节点">从右孩子出发沿左孩子链走到尽头得到的节点。</GlossaryItem>
+  <GlossaryItem term="父指针">从孩子节点回到直接父节点的反向链接。</GlossaryItem>
+  <GlossaryItem term="祖先上爬">无右子树时沿父链越过连续右孩子关系的过程。</GlossaryItem>
+  <GlossaryItem term="中序最后节点">中序序列末项，不存在中序后继的节点。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="《剑指Offer（第2版）》面试题8及何海涛官方源码 NextNodeInBinaryTrees.cpp"
+  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/08_NextNodeInBinaryTrees/NextNodeInBinaryTrees.cpp"
+/>

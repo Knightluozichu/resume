@@ -1,157 +1,330 @@
 ---
-title: "图论"
+title: "补充导读：图模型、遍历与路径问题"
 type: B
-section: "离散数学"
+section: "数学女孩系列 · 跨卷导读"
 order: 5
-description: "欧拉路径、哈密顿回路与树——离散关系的数学语言"
+description: "明确标记为非原书章节的图论补充：从建图合同、握手定理、BFS/DFS和树，走到欧拉路径、哈密顿回路、最小生成树与前四卷中的决策树、随机漫步和状态矩阵。"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://www.hyuki.com/girl/"
 draft: false
 ---
 
-import { MglGraphTheoryDiagram } from "@/components/mdx/math-girl/diagrams/mgl-graph-theory";
+import { MglGraphTheoryDiagram, MglGraphModelLab, MglTraversalTreeLab, MglEulerHamiltonMstLab } from "@/components/mdx/math-girl/diagrams/mgl-graph-theory";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 理解图论的基本概念：顶点、边、度、连通性
-- 掌握欧拉路径与欧拉回路的判定条件
-- 了解哈密顿回路与旅行商问题
-- 理解树是特殊的图及其在数据结构中的应用
+
+- 能解释顶点、边、方向、重边、自环与连通分量，并选择不丢信息的图表示
+- 能推导握手定理与树的等价性质，比较BFS和DFS交付的遍历证据
+- 能判断无向多重图是否存在欧拉开路径或回路，并复现连通性反例
+- 能比较欧拉、哈密顿、最小生成树和TSP的对象、难度与保证条件
+- 能解释图模型在前四卷中的补充位置，并避免把本页计作原书章节
+
 </Objectives>
 
-## 直觉引入
+## 从“这不是原书图论章”开始
 
-哥尼斯堡七桥问题：城市有 4 块陆地、7 座桥，能否每座桥走一次且仅走一次？欧拉在 1736 年证明了不可能，并由此创立了图论。
+先预测：《数学女孩》前四卷权威目录中是否有一章标题为“图论”？
 
-把陆地看作顶点，桥看作边，问题变成：能否在图上找到一条经过每条边恰好一次的路径？这就是欧拉路径问题。图论就是用顶点和边来描述关系，是网络、路由、社交分析的数学基础。
+没有。本页是<Term def="为理解原书中的树、状态转移和算法结构而增加，且明确不计入原书卷章的编辑性页面。">补充导读</Term>。它服务于四个真实桥梁：
 
-## 概念讲解
+- 第1卷卷积与卡特兰数会计数二叉树；
+- 第4卷排序分析使用比较决策树；
+- 第4卷随机漫步把状态和转移看成图；
+- 第4卷随机3-SAT在真假分配构成的超立方体上做局部翻转；
+- 第4卷矩阵用转移矩阵记录图的一步关系。
 
-### 图论基本概念
+图论的价值是把对象压成<Term def="由顶点集合V和边集合E组成、用边表达对象间关系的离散结构。">图</Term>`G=(V,E)`。但“画几个点和线”还不是建模：必须先说每个点代表什么、每条边代表什么、关系是否有方向、是否允许平行边与自环。
 
 <MglGraphTheoryDiagram />
 
-<Term def="图 G=(V,E) 由顶点集 V 和边集 E 组成，边连接顶点表示关系">
-图
-</Term>
+<Callout type="trap" title="补充导读也是原书的一章">
+本页帮助理解多个原章中的结构，但不在前四卷权威目录内。它不能增加原书章节总数，也不能替代第1卷卡特兰数或第4卷矩阵、随机漫步、排序等章节。
+</Callout>
 
-- **度**：与顶点相连的边数。
-- **连通图**：任意两个顶点之间都有路径。
-- **树**：无环的连通图。$n$ 个顶点的树恰好有 $n-1$ 条边。
+## 建图合同：先决定允许什么
 
-### 欧拉路径与回路
+### 简单图、多重图与有向图
+
+<Term def="边没有方向，连接关系对两个端点对称的图。">无向图</Term>适合表达互相连接；<Term def="每条边有起点和终点、关系可能不对称的图。">有向图</Term>适合表达依赖、调用或状态转移。<Term def="同一对顶点之间允许存在多条不同边的图。">多重图</Term>可表示两块陆地间多座桥；若用邻接集合去重，就会在算法开始前丢掉桥。
+
+<Term def="两个端点为同一顶点的边，在无向图的顶点度中贡献2。">自环</Term>也必须进入模型合同。哥尼斯堡七桥是无向多重图：桥是独立边，即使端点相同也不能合并。
+
+### 度与握手定理
+
+无向多重图中，顶点`v`的<Term def="与顶点关联的边端数量；无向自环贡献两个边端。">度</Term>记作`deg(v)`。每条非自环边给两个端点各贡献1，自环给同一顶点贡献2，所以：
+
+$$
+\sum_{v\in V}\deg(v)=2|E|.
+$$
+
+这就是<Term def="无向图全部顶点度数之和等于边数两倍的恒等式。">握手定理</Term>。右边是偶数，因此奇度顶点数量必为偶数。
+
+### 路径与连通分量
+
+<Term def="相邻顶点之间由边连接形成的顶点与边序列。">路径</Term>表达可达性。若任意两顶点互相可达，图连通；一般图会分成若干<Term def="内部任意两点可达且不能再加入其他顶点的最大连通子图。">连通分量</Term>。孤立顶点度为0，在“是否能走遍所有已有边”的欧拉问题中可以忽略，但不能在“访问所有顶点”的哈密顿问题中忽略。
+
+<MglGraphModelLab />
 
 <Stepper>
-<Step title="欧拉路径的判定">
-一条经过每条边恰好一次的路径。存在条件：图连通，且**恰好有 0 个或 2 个奇度顶点**。0 个奇度顶点时起点终点相同（欧拉回路），2 个时起点终点不同。
-</Step>
-<Step title="哥尼斯堡七桥">
-4 块陆地的度数分别是 3, 3, 3, 5——全是奇数，有 4 个奇度顶点。不满足「0 个或 2 个奇度顶点」的条件，所以欧拉路径不存在。这就是欧拉证明「不可能」的方法。
-</Step>
-<Step title="欧拉回路">
-经过每条边一次且回到起点的回路。条件：图连通且**所有顶点度数为偶数**。 Fleury 算法或 Hierholzer 算法可构造欧拉回路。
-</Step>
+  <Step title="声明顶点与边"><MglGraphModelLab />切换选择图模型，为桥梁、网页链接和状态转移分别决定方向、重边和自环。</Step>
+  <Step title="检查表示是否丢边">用两顶点三条平行边测试邻接集合与带边ID邻接表，比较边数是否保留。</Step>
+  <Step title="核对握手定理">对含自环的无向图计算每个顶点度，确认自环贡献2且度数和等于2|E|。</Step>
+  <Step title="找出连通分量">从每个未访问非零度顶点启动遍历，记录分量数量和孤立点。</Step>
 </Stepper>
 
-### 哈密顿回路与旅行商
+<Callout type="trap" title="邻接表用Set更方便，所以任何图都能去重">
+若问题允许平行边，集合会把多条边压成一条，顶点度、欧拉路径和边权选择都会改变。表示结构必须忠实于模型，不应为编码方便修改数学对象。
+</Callout>
 
-<Term def="哈密顿回路是经过每个顶点恰好一次并回到起点的回路，判定是 NP 完全问题">
-哈密顿回路
-</Term>
+## BFS、DFS与遍历证据
 
-哈密顿回路要求经过每个**顶点**一次（欧拉要求经过每条**边**一次）。判定一个图是否有哈密顿回路是 NP 完全问题——没有已知的多项式算法。
+### 广度优先搜索
 
-**旅行商问题（TSP）**：访问所有城市各一次再返回，求最短路径。是哈密顿回路的优化版本，也是 NP 困难。实际中用近似算法（如最近邻、模拟退火）求解。
+<Term def="用队列按距起点边数逐层访问图顶点的遍历算法。">广度优先搜索</Term>简称BFS。在无权图中，顶点第一次被发现时的层数就是从起点出发的最短边数。它应输出：
 
-### 树与生成树
+- `distance[v]`：最短边数；
+- `parent[v]`：一条最短路径树中的父节点；
+- 访问状态，防止重复入队。
 
-**树**是连通无环图，是最重要的图结构之一。$n$ 个顶点的树有 $n-1$ 条边，任意两点间路径唯一。**生成树**是连通图的子图，包含所有顶点且是树。**最小生成树**（MST）是边权之和最小的生成树，用 Kruskal 或 Prim 算法求解。
+### 深度优先搜索
 
-## 代码对照
+<Term def="沿未访问邻接点不断深入，无法继续时回退的遍历算法。">深度优先搜索</Term>简称DFS。它适合寻找连通分量、检测环、建立拓扑结构。递归实现依赖调用栈，深图中可能栈溢出；显式栈实现更容易控制资源。
 
-```python
-# 判断图是否有欧拉路径/回路
-def has_eulerian(graph):
-    """
-    graph: 邻接表 {顶点: [邻居列表]}
-    返回: 'circuit'（欧拉回路）/ 'path'（欧拉路径）/ 'none'
-    """
-    # 统计每个顶点的度
-    degrees = {v: len(neighbors) for v, neighbors in graph.items()}
+无论BFS还是DFS，邻接表上的时间复杂度都是：
 
-    # 检查连通性（简化：假设已检查）
-    # 统计奇度顶点数
-    odd_count = sum(1 for d in degrees.values() if d % 2 == 1)
+$$
+\Theta(|V|+|E|),
+$$
 
-    if odd_count == 0:
-        return 'circuit'  # 所有度数为偶数 → 欧拉回路
-    elif odd_count == 2:
-        return 'path'     # 恰好 2 个奇度顶点 → 欧拉路径
-    else:
-        return 'none'     # 其他情况 → 不存在
+前提是每个顶点和每条边只被常数次处理。多重无向边若在两个端点邻接表都出现，仍只是`2|E|`个边端。
 
-# 哥尼斯堡七桥：度数 [3, 3, 3, 5] → 4 个奇度 → 不存在
-konigsberg = {'A': ['B','B','C'], 'B': ['A','A','C'], 'C': ['A','B','D'], 'D': ['C','C','C']}
-print(has_eulerian(konigsberg))  # 'none'
+```ts
+export function bfs(
+  adjacency: ReadonlyArray<ReadonlyArray<number>>,
+  start: number,
+): { distance: number[]; parent: Array<number | null> } {
+  const distance = Array<number>(adjacency.length).fill(-1);
+  const parent = Array<number | null>(adjacency.length).fill(null);
+  const queue = [start];
+  distance[start] = 0;
 
-# Hierholzer 算法求欧拉回路
-def find_euler_circuit(graph, start):
-    circuit = []
-    def visit(node):
-        while graph[node]:
-            neighbor = graph[node].pop()
-            graph[neighbor].remove(node)  # 双向删除边
-            visit(neighbor)
-        circuit.append(node)
-    visit(start)
-    return circuit[::-1]  # 逆序输出
+  for (let head = 0; head < queue.length; head += 1) {
+    const vertex = queue[head];
+    for (const neighbor of adjacency[vertex]) {
+      if (distance[neighbor] !== -1) continue;
+      distance[neighbor] = distance[vertex] + 1;
+      parent[neighbor] = vertex;
+      queue.push(neighbor);
+    }
+  }
 
-# 最小生成树（Kruskal 算法）核心思路：
-# 1. 所有边按权值排序
-# 2. 从小到大选边，不形成环就加入
-# 3. 用并查集检测环
+  return { distance, parent };
+}
 ```
 
-## 常见误区
+验收不只看访问顺序，还要对每条树边检查`distance[child]=distance[parent]+1`，并对每条图边检查两个端点层数差至多1。
 
-<Callout type="trap">
-**误区：混淆欧拉路径和哈密顿回路。**
-欧拉路径要求经过每条**边**一次，判定条件简单（奇度顶点数 0 或 2）。哈密顿回路要求经过每个**顶点**一次，判定是 NP 完全问题（没有简单条件）。一个图可能有欧拉路径但没哈密顿回路，反之亦然。
+## 树：多个条件在何时等价
+
+在有限无向简单图中，以下条件对`n≥1`等价：
+
+1. 图连通且无环；
+2. 任意两顶点间恰有一条简单路径；
+3. 图连通且边数为`n-1`；
+4. 图无环且边数为`n-1`。
+
+满足这些条件的图叫<Term def="有限无向图中连通且无环的图。">树</Term>。只说“有`n-1`条边”不够：一个三角形加一个孤立点有4个顶点、3条边，却不是树。
+
+树的边数关系可单独写成：
+
+$$
+|E|=|V|-1.
+$$
+
+它既可用删除叶节点归纳证明，也可从“每加入一个新顶点，恰好用一条边连接且不成环”理解。反向使用时必须同时带上连通或无环条件。
+
+第1卷卡特兰数计数某些有根有序二叉树；第4卷比较排序的<Term def="内部节点表示一次比较、分支表示比较结果、叶子表示最终排列的树。">比较决策树</Term>用叶子数量推导比较下界。这里的“树”共享无环分支结构，但节点语义不同。
+
+<MglTraversalTreeLab />
+
+<Stepper>
+  <Step title="复现BFS层次"><MglTraversalTreeLab />切换BFS，记录队列、距离和父节点，重建一条最短路径。</Step>
+  <Step title="复现DFS回退">用显式栈保存下一邻接位置，记录发现边、树边和回退时刻。</Step>
+  <Step title="检验树的等价条件">分别构造“n-1条边但不连通”和“连通但有环”的反例，确认附加条件不可少。</Step>
+  <Step title="连接原章结构">比较卡特兰二叉树、比较决策树和随机状态图中顶点、边各自表示什么。</Step>
+</Stepper>
+
+<Callout type="trap" title="n个顶点、n-1条边的图一定是树">
+还必须加连通或无环条件。边数只给总量，不排除一个分量含环、另一个分量孤立的情况。
 </Callout>
 
-<Callout type="trap">
-**误区：认为旅行商问题有最优解的高效算法。**
-TSP 是 NP 困难问题，没有已知的多项式时间最优算法。精确解法（如动态规划 Held-Karp）是 $O(n^2 2^n)$，只能处理小规模。大规模问题用近似算法（如 Christofides 算法保证 1.5 倍近似比）或启发式算法（模拟退火、遗传算法）。
+## 欧拉路径：过边问题
+
+<Term def="在一次行走中恰好使用图中每条边一次的路径。">欧拉路径</Term>关心边，不要求每个顶点只出现一次。对于有限无向多重图：
+
+- 所有度数非零的顶点必须在同一个连通分量；
+- 恰有0个奇度顶点时存在<Term def="使用每条边一次并回到起点的欧拉路径。">欧拉回路</Term>；
+- 恰有2个奇度顶点时存在起终点不同的欧拉开路径；
+- 其他情况不存在。
+
+必要性来自中间顶点每次进入都要用另一条未用边离开，所以使用的边端成对；开路径只有起点和终点各留下一个奇数边端。充分性可由Hierholzer算法构造。
+
+哥尼斯堡七桥的四个陆地顶点度数为`3,3,3,5`，有4个奇度顶点，因此不可能每桥恰走一次。
+
+下面的分类函数显式检查非零度顶点连通，并用独立边列表保留平行边和自环：
+
+```ts
+type Edge = { u: number; v: number };
+
+export function classifyEulerTrail(
+  vertexCount: number,
+  edges: ReadonlyArray<Edge>,
+): "circuit" | "open-trail" | "none" {
+  const degree = Array<number>(vertexCount).fill(0);
+  const adjacency = Array.from({ length: vertexCount }, () => [] as number[]);
+
+  edges.forEach(({ u, v }, edgeId) => {
+    degree[u] += 1;
+    degree[v] += 1;
+    adjacency[u].push(edgeId);
+    adjacency[v].push(edgeId);
+  });
+
+  const start = degree.findIndex((value) => value > 0);
+  if (start === -1) return "circuit";
+
+  const visited = new Set<number>([start]);
+  const stack = [start];
+  while (stack.length > 0) {
+    const vertex = stack.pop()!;
+    for (const edgeId of adjacency[vertex]) {
+      const { u, v } = edges[edgeId];
+      const neighbor = u === vertex ? v : u;
+      if (!visited.has(neighbor)) {
+        visited.add(neighbor);
+        stack.push(neighbor);
+      }
+    }
+  }
+
+  if (degree.some((value, vertex) => value > 0 && !visited.has(vertex))) {
+    return "none";
+  }
+
+  const oddCount = degree.filter((value) => value % 2 === 1).length;
+  return oddCount === 0 ? "circuit" : oddCount === 2 ? "open-trail" : "none";
+}
+```
+
+自环在边列表中令`u=v`，两次执行度数加一，正确贡献2。
+
+## 哈密顿、TSP与最小生成树
+
+### 哈密顿回路：过点问题
+
+<Term def="经过图中每个顶点恰好一次并回到起点的回路。">哈密顿回路</Term>关心顶点。一般图的哈密顿回路判定是NP完全问题，不能套用欧拉问题的奇偶度条件。给出一条候选回路后，可以在多项式时间验证顶点不重复、全部覆盖且相邻项有边；高效寻找候选则是另一回事。
+
+### 旅行商问题
+
+<Term def="在带权完全图中寻找访问每个顶点一次并回到起点的最小权重回路。">旅行商问题</Term>简称TSP，是优化问题且一般情形NP困难。精确算法、近似算法和启发式要区分：
+
+- Held-Karp动态规划仍需指数级状态；
+- Christofides算法只对满足对称性和三角不等式的<Term def="边权非负、对称且满足三角不等式的旅行商实例。">度量TSP</Term>保证不超过最优值的1.5倍；
+- 最近邻、局部搜索和模拟退火可能实用，但没有同样的一般最坏近似保证。
+
+### 最小生成树
+
+<Term def="包含连通带权图全部顶点、无环且总边权最小的子图。">最小生成树</Term>不要求形成回路，也不要求顶点访问顺序。Kruskal按边权排序并用并查集避免成环；Prim从已连接顶点集合跨割选择最轻边。正确性依赖<Term def="任意割上某条最轻跨割边可以安全加入某棵最小生成树的性质。">割性质</Term>，不是“每次选最短边”这一句直觉。
+
+<MglEulerHamiltonMstLab />
+
+<Stepper>
+  <Step title="先区分过边还是过点"><MglEulerHamiltonMstLab />切换三类问题，写清必须恰好一次的是边、顶点还是连接关系。</Step>
+  <Step title="为欧拉问题检查连通">先忽略孤立点检查非零度分量，再统计奇度顶点，顺序不能颠倒后省略第一步。</Step>
+  <Step title="验证哈密顿证书">给出顶点排列，检查每个顶点恰好一次以及相邻顶点和首尾之间都有边。</Step>
+  <Step title="声明TSP保证前提">写明是否对称、是否满足三角不等式，再决定能否引用1.5近似比。</Step>
+</Stepper>
+
+<Callout type="trap" title="图连通且奇度顶点为0或2个就总有欧拉路径">
+准确条件只要求非零度顶点位于同一分量；若存在两个各自含边的分量，即使总奇度数为0，也无法一次行走覆盖两边。连通性检查不可省略。
 </Callout>
+
+## 与矩阵和随机漫步的连接
+
+对顶点编号后，<Term def="第i行第j列记录顶点i到j是否有边或边数的矩阵。">邻接矩阵</Term>`A`把一步关系写成代数。矩阵幂`(Aᵏ)ᵢⱼ`在适当图模型下计数从`i`到`j`长度为`k`的游走。
+
+随机漫步则用<Term def="第i行第j列记录状态i一步转移到状态j概率的矩阵。">转移矩阵</Term>`P`：
+
+$$
+\mathbf p_{t+1}=P\mathbf p_t.
+$$
+
+第4卷孤零零随机漫步正是二状态图；特征值解释分布如何趋向稳定。图提供关系，矩阵提供可重复复合的运算表示。
+
+## 本章回顾：先建对图，再选算法
+
+1. 本页是补充导读，不属于前四卷权威章节。
+2. 建图必须声明顶点、边、方向、平行边和自环。
+3. 无向自环对顶点度贡献2，握手定理给出度数和等于两倍边数。
+4. 奇度顶点数必为偶数。
+5. BFS提供无权最短层次，DFS提供深入与回退结构。
+6. 在有限无向简单图中，连通无环、唯一路径和连通且n-1边等价。
+7. 只有n-1条边不能单独推出是树。
+8. 欧拉路径过边，必须同时检查非零度连通性和奇度数。
+9. 哈密顿回路过点，一般判定为NP完全。
+10. TSP寻找最短哈密顿回路，一般优化问题为NP困难。
+11. Christofides的1.5保证只适用于度量对称TSP。
+12. 最小生成树由割性质支撑，不等同于TSP。
+13. 邻接矩阵和转移矩阵把图关系接到第4卷矩阵与随机漫步。
 
 <Exercises>
-**问题 1**：一个连通图有 4 个顶点，度数分别为 2, 3, 3, 4。它有欧拉路径吗？有欧拉回路吗？
 
-<Answer>
-奇度顶点有 2 个（度数为 3 的两个顶点），满足欧拉路径的条件（恰好 2 个奇度顶点），所以有欧拉路径。但不满足欧拉回路的条件（需要所有顶点度数为偶数），所以没有欧拉回路。欧拉路径的起点和终点分别是两个奇度顶点。
-</Answer>
+**问题 1：一个无向图由一个四边形分量和一个三角形分量组成。所有顶点度都为2，它有欧拉回路吗？**
 
-**问题 2**：$n$ 个顶点的树有多少条边？为什么？
+<Answer>没有覆盖全部边的单个欧拉回路。虽然奇度顶点数为0，但所有非零度顶点不在同一连通分量，无法从一个分量走到另一个分量。</Answer>
 
-<Answer>
-$n$ 个顶点的树有 $n-1$ 条边。证明：树是连通无环图。从任意顶点开始，每加一个新顶点恰好需要一条边连接（连通且不形成环），所以 $n$ 个顶点需要 $n-1$ 条边。反过来，$n-1$ 条边的连通图一定是树（无环）。这个性质在最小生成树算法中至关重要。
-</Answer>
+**问题 2：证明无向图奇度顶点数量必为偶数。**
+
+<Answer>握手定理给`Σdeg(v)=2|E|`，总和为偶数。偶度顶点贡献偶数，剩余奇度顶点的奇数之和也必须为偶数；奇数个奇数之和为奇数，因此奇度顶点个数只能是偶数。</Answer>
+
+**问题 3：构造一个有4个顶点、3条边但不是树的简单无向图。**
+
+<Answer>让三个顶点组成三角形，第四个顶点孤立。总顶点数4、边数3等于n-1，但图不连通且含环，因此不是树。</Answer>
+
+**问题 4：为什么不能把Christofides的1.5近似比用于任意TSP？**
+
+<Answer>证明依赖边权对称与三角不等式，以便用最小生成树、奇度顶点匹配和捷径化控制代价。非度量或非对称实例不满足这些步骤的代价上界，因此保证不成立。</Answer>
+
 </Exercises>
 
 <Glossary>
-<GlossaryItem term="欧拉路径">
-经过图中每条边恰好一次的路径。存在条件：图连通且奇度顶点数为 0 或 2。
-</GlossaryItem>
-<GlossaryItem term="哈密顿回路">
-经过图中每个顶点恰好一次并回到起点的回路。判定是 NP 完全问题，无简单充要条件。
-</GlossaryItem>
-<GlossaryItem term="树">
-连通无环图。n 个顶点的树有 n-1 条边，任意两点间路径唯一。是数据结构中树（BST、堆）的数学基础。
-</GlossaryItem>
-<GlossaryItem term="最小生成树">
-连通图中边权之和最小的生成树。Kruskal 算法（按边权排序+并查集）和 Prim 算法（贪心扩展）可在 O(E log V) 求解。
-</GlossaryItem>
+  <GlossaryItem term="补充导读">不计入原书卷章、用于补足跨章工具的编辑性页面。</GlossaryItem>
+  <GlossaryItem term="图">由顶点集合和边集合组成的关系结构。</GlossaryItem>
+  <GlossaryItem term="无向图">边没有方向的图。</GlossaryItem>
+  <GlossaryItem term="有向图">边具有起点和终点的图。</GlossaryItem>
+  <GlossaryItem term="多重图">同一顶点对之间允许平行边的图。</GlossaryItem>
+  <GlossaryItem term="自环">两个端点相同的边。</GlossaryItem>
+  <GlossaryItem term="度">与顶点关联的边端数量。</GlossaryItem>
+  <GlossaryItem term="握手定理">无向图度数和等于边数两倍。</GlossaryItem>
+  <GlossaryItem term="路径">由相邻边连接形成的顶点与边序列。</GlossaryItem>
+  <GlossaryItem term="连通分量">互相可达且极大的顶点集合。</GlossaryItem>
+  <GlossaryItem term="广度优先搜索">用队列逐层访问图的遍历算法。</GlossaryItem>
+  <GlossaryItem term="深度优先搜索">沿路径深入并在尽头回退的遍历算法。</GlossaryItem>
+  <GlossaryItem term="树">有限无向图中连通且无环的图。</GlossaryItem>
+  <GlossaryItem term="比较决策树">用节点表示比较、分支表示结果的算法树。</GlossaryItem>
+  <GlossaryItem term="欧拉路径">恰好使用每条边一次的路径。</GlossaryItem>
+  <GlossaryItem term="欧拉回路">使用每条边一次并回到起点的路径。</GlossaryItem>
+  <GlossaryItem term="哈密顿回路">经过每个顶点一次并回到起点的回路。</GlossaryItem>
+  <GlossaryItem term="旅行商问题">寻找访问全部顶点一次并回起点的最短带权回路问题。</GlossaryItem>
+  <GlossaryItem term="度量TSP">边权对称、非负且满足三角不等式的TSP。</GlossaryItem>
+  <GlossaryItem term="最小生成树">连接全部顶点且总边权最小的生成树。</GlossaryItem>
+  <GlossaryItem term="割性质">最轻跨割边可安全进入某棵最小生成树的性质。</GlossaryItem>
+  <GlossaryItem term="邻接矩阵">用矩阵记录顶点间边关系或边数。</GlossaryItem>
+  <GlossaryItem term="转移矩阵">用矩阵记录状态一步转移概率。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="数学女孩（结城浩）" adaptedUrl="https://www.ituring.com.cn/" />
+<Attribution source="《数学女孩》前四卷权威目录（结城浩）">
+本页是非原书章节的补充导读，用图模型连接第1卷卡特兰树与第4卷比较决策树、随机漫步、3-SAT分配空间和转移矩阵；它不计作原书章节。
+</Attribution>

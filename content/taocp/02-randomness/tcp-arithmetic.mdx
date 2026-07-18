@@ -1,142 +1,268 @@
 ---
-title: "浮点算术与进制转换"
+title: "Volume 2 · Chapter 4 · Arithmetic"
 type: B
-section: "随机数"
-order: 5
-description: "浮点表示、精度损失与进制转换——TAOCP 中数值计算的基础"
+section: "TAOCP · Volume 2"
+order: 4
+description: "重建TAOCP Volume 2 Chapter 4：位置记数制、浮点算术、多精度算术、基数转换、有理数算术、多项式算术与可复核的数值契约。"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/art-of-computer-programming-volume-2-seminumerical-9780133488807"
 draft: false
 ---
 
-import { TcpArithmeticDiagram } from "@/components/mdx/taocp/diagrams/tcp-arithmetic";
+import { TcpPositionalLab, TcpFloatFormatLab, TcpRoundingLab, TcpCancellationLab, TcpCompensatedSumLab, TcpMultiplePrecisionAddLab, TcpMultiplePrecisionMultiplyLab, TcpModularLab, TcpRadixConversionLab, TcpRationalLab, TcpEuclidLab, TcpHornerLab, TcpPowerSeriesLab, TcpArithmeticCertificateLab } from "@/components/mdx/taocp/diagrams/tcp-arithmetic";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能解释 IEEE 754 浮点数的表示格式并计算表示范围与精度
-- 能分析浮点运算中精度损失的原因并给出缓解策略
-- 能手算十进制到二进制的转换以及任意进制间的转换
-- 能回答：为什么 0.1 + 0.2 ≠ 0.3 在浮点运算中？
+
+- 能解释位置记数制如何把数字串解释为关于基数的多项式
+- 能比较浮点舍入、消去误差与补偿求和的误差传播
+- 能实现多精度加法、经典乘法、模逆与基数转换
+- 能推导有理数规范化和欧几里得算法的循环不变量
+- 能设计多项式求值、幂级数截断与独立校验组成的算术证书
+
 </Objectives>
 
-## 直觉引入
+## 从“数学上相等，机器上为何不等”开始
 
-超市找零时，1 元减 9 角 9 分应该剩 1 分。但如果你的计算器只能精确到角，1 元就变成了 10 角，减 9.9 角... 剩 0.1 角？这就是浮点数的困境——有限的位数无法精确表示所有实数。
+先预测：把同一个整数写成十进制`173`、八进制`255`和十六进制`AD`，改变的是值还是表示？再预测：公式 $\sqrt{1+\delta}-1$ 与 $\delta/(\sqrt{1+\delta}+1)$ 数学上相等，当 $\delta$ 很小时，机器结果是否仍相等？Chapter 4 的主题不是罗列计算技巧，而是为每次**算术（arithmetic）**建立四层契约：对象如何表示、基本运算如何执行、中间结果怎样舍入、最后怎样独立复核。
 
-浮点算术的核心矛盾是**范围与精度的权衡**：你要么能表示很大的数（但精度低），要么能精确表示小数（但范围小）。理解这个权衡是数值计算的基础。
+这里的主线依次覆盖官方章节中的 positional number systems（位置记数制）、floating point arithmetic（浮点算术）、multiple precision arithmetic（多精度算术）、radix conversion（基数转换）、rational arithmetic（有理数算术）和 polynomial arithmetic（多项式算术）。这些主题看似分散，其实都在回答同一个问题：有限机器怎样保存一个数学对象，并让误差或进位保持可追踪。
 
-## 概念讲解
+<TcpArithmeticCertificateLab />
 
-### 浮点数表示
+## 位置记数制：数字串是基数的多项式
 
-<Term def="浮点数是用科学计数法表示实数的方式：±d₀.d₁d₂...d_p × b^e，其中 p 是精度，b 是基数，e 是指数">浮点数</Term>的核心是科学计数法。IEEE 754 双精度格式用 1 位符号、11 位指数、52 位尾数，能表示约 $\pm 10^{308}$ 的范围和约 15-16 位有效数字。
+<Term def="位置记数制用每一位数字与基数幂的乘积之和表示数值；位的意义由位置和基数共同决定">位置记数制</Term>不是字符替换规则。对基数 $b$ 和数字 $d_k\ldots d_1d_0$，其值由下式定义：
 
-### 精度损失
+$$
+(d_k\ldots d_1d_0)_b=\sum_{i=0}^{k}d_i b^i,\qquad 0\le d_i\lt b.
+$$
 
-<Term def="机器 epsilon 是浮点数系中 1 与下一个可表示数之间的差，衡量浮点运算的相对精度">机器 epsilon</Term>是衡量浮点精度的关键指标。双精度的 $\epsilon \approx 2.2 \times 10^{-16}$。
+这个定义给出两个方向的算法。解码时从最高位执行 Horner 递推`value = value * b + digit`；编码非负整数时反复除以 $b$，每一步余数给出当前最低位。负数符号、定点小数点和补码属于额外表示层，不应与数字串本身混为一谈。
 
-浮点运算不满足结合律：
+<TcpPositionalLab />
 
-$$(a + b) + c \neq a + (b + c)$$
+表示的第一个不变量是“前缀值”。读完前 $j$ 个数字后，累积量必须恰好等于该前缀的数值。第二个不变量是数字范围：每一位都必须落在零到 $b-1$。这两条足以抓住非法数字、位序颠倒和错误基数三类常见实现错误。
 
-因为中间结果的舍入方向不同。这就是 0.1 + 0.2 ≠ 0.3 的根本原因——0.1 和 0.2 在二进制中是无限循环小数，截断后产生误差。
-
-### 进制转换
-
-<Term def="进制转换是在不同基数表示之间转换数值的过程，核心是除法（整数部分）和乘法（小数部分）">进制转换</Term>的关键区分整数和小数部分。整数部分用「除基取余法」，小数部分用「乘基取整法」。
-
-## 交互 Demo
-
-<TcpArithmeticDiagram />
-
-<Stepper>
-<Step title="第一步：分离整数和小数">
-将 12.375 分离为整数部分 12 和小数部分 0.375。整数部分用除 2 取余法转换。
-</Step>
-<Step title="第二步：转换整数部分">
-12 ÷ 2 = 6 余 0，6 ÷ 2 = 3 余 0，3 ÷ 2 = 1 余 1，1 ÷ 2 = 0 余 1。从下往上读：1100。
-</Step>
-<Step title="第三步：转换小数部分">
-0.375 × 2 = 0.75 取 0，0.75 × 2 = 1.5 取 1，0.5 × 2 = 1.0 取 1。从上往下读：011。合在一起：1100.011。注意：0.1 的二进制是无限循环 0.000110011...，无法精确表示。
-</Step>
-</Stepper>
-
-## 代码对照
-
-```python
-# 浮点精度问题演示
-print(0.1 + 0.2)        # 0.30000000000000004 ≠ 0.3
-print(0.1 + 0.2 == 0.3) # False
-
-# 原因：0.1 和 0.2 在二进制中是无限循环小数
-from decimal import Decimal
-print(Decimal(0.1))  # 0.1000000000000000055511151231257827021181583404541015625
-
-# 缓解方案1：用 decimal 模块（任意精度）
-from decimal import Decimal, getcontext
-getcontext().prec = 50
-print(Decimal('0.1') + Decimal('0.2'))  # 0.3 精确
-
-# 缓解方案2：用误差容忍比较
-def almost_equal(a, b, eps=1e-10):
-    return abs(a - b) < eps
-
-# 进制转换
-def dec_to_bin_fraction(n, bits=20):
-    # 十进制小数转二进制小数
-    result = []
-    for _ in range(bits):
-        n *= 2
-        if n >= 1:
-            result.append('1')
-            n -= 1
-        else:
-            result.append('0')
-    return '0.' + ''.join(result)
-
-print(dec_to_bin_fraction(0.1))  # 0.00011001100110011...（无限循环）
+```ts
+function decode(digits: number[], radix: number) {
+  let value = 0;
+  for (const digit of digits) {
+    if (digit < 0 || digit >= radix) throw new Error("invalid digit");
+    value = value * radix + digit;
+  }
+  return value;
+}
 ```
 
-## 常见误区
+## 浮点算术：范围、间距与舍入契约
+
+<Term def="浮点算术把数表示为符号、有效数和带偏置指数，并把每次精确结果舍入到有限集合中的可表示数">浮点算术</Term>把实数近似为 $(-1)^s\times m\times b^e$。以规范化二进制格式为例，有效数通常把最高的`1`隐含起来，指数域保存带偏置值，特殊指数编码零、次正规数、无穷和非数。理解格式不能只背“1+11+52”；还要能从位域恢复数值，并知道同一指数区间内相邻数的间距随指数成倍变化。
+
+$$
+x=(-1)^s\left(1+\frac{f}{2^p}\right)2^{E-\mathrm{bias}}.
+$$
+
+<TcpFloatFormatLab />
+
+单精度与双精度的根本差异是有效位和指数位预算，不是“一个快、一个慢”的简单标签。有效位决定相对分辨率，指数位决定动态范围。次正规数牺牲相对精度来填补零附近的断层；无穷和非数则让异常结果继续参与受规则约束的传播。任何数值接口都应明确是否允许这些特殊值。
+
+### 舍入与机器精度
+
+<Term def="舍入把精确结果映射到可表示集合；模式决定选择最近值、朝零或朝某个无穷方向">舍入</Term>是每个基本运算的一部分。最近偶数舍入降低长期统计偏差，定向舍入可构造区间界，朝零舍入则常见于整数转换。若只说“误差很小”而不声明模式、精度和溢出策略，就没有完整的运算语义。
+
+<TcpRoundingLab />
+
+机器 epsilon 描述`1`附近的间距，但它不是所有数附近的绝对误差上界。常用模型把一次正常舍入写成：
+
+$$
+\operatorname{fl}(x\circ y)=(x\circ y)(1+\delta),\qquad |\delta|\le u,
+$$
+
+其中 $u$ 是单位舍入误差，符号 $\circ$ 代表一次基本运算。这个模型要排除溢出、下溢和特殊值，并且不能直接把每一步的相对误差机械相加；算法结构会放大或抵消误差。
+
+## 消去误差与稳定等价式
+
+当两个接近的近似数相减时，高位相同部分被消掉，原本藏在低位的输入误差占据结果的大部分有效位，这就是灾难性消去。问题不在“减法实现错了”，而在问题条件数和公式选择共同放大了已有误差。应先做代数变换，再考虑提高精度。
+
+<TcpCancellationLab />
+
+上面的有理化公式避开了两个接近平方根的直接相减。类似策略包括用`log1p(x)`代替`log(1+x)`、用`expm1(x)`代替`exp(x)-1`、为二次方程选择不会相消的根公式。稳定算法不是让误差消失，而是让计算误差与输入扰动处于同一量级。
+
+### 累加顺序与补偿求和
+
+大量不同尺度的项相加时，小项可能被舍掉。按绝对值从小到大累加、成对归约和补偿求和是三种不同策略。Kahan 补偿求和维护一个低位修正量：本轮加法丢掉的部分在下一轮重新注入。它通常显著改善误差，却不能恢复输入时已经丢失的信息，也不能替代问题本身的条件分析。
+
+<TcpCompensatedSumLab />
+
+```python
+def compensated_sum(values):
+    total = 0.0
+    correction = 0.0
+    for value in values:
+        adjusted = value - correction
+        next_total = total + adjusted
+        correction = (next_total - total) - adjusted
+        total = next_total
+    return total
+```
+
+## 多精度算术：把长整数拆成 limb
+
+<Term def="多精度算术用可变数量的固定基数 limb 保存超出机器字长的整数或小数，并显式管理进位、借位和规范化">多精度算术</Term>把整数写成 $x=\sum_i x_iB^i$，其中基数 $B$ 选择为机器字能够安全承载中间乘积的大小。最低 limb 在前便于从低位传播进位；最高 limb 非零形成规范表示。符号通常单独存储，不能把负号混进每个 limb。
+
+$$
+s_i=x_i+y_i+c_i,\quad z_i=s_i\bmod B,\quad c_{i+1}=\left\lfloor s_i/B\right\rfloor.
+$$
+
+<TcpMultiplePrecisionAddLab />
+
+加法的循环不变量是：已经写出的低位 limb 等于两输入对应低位之和模 $B^j$，当前 carry 正是尚未写入高位的商。减法把进位换成借位，并要求先比较绝对值。实现时若中间类型与 limb 同宽，`x_i+y_i+c_i`本身就可能先溢出，因此类型宽度也是正确性条件。
+
+### 经典乘法、模算术与更快算法
+
+经典长乘法为每对 limb 形成部分积，并按索引和落到同一对角线，复杂度为 $O(nm)$。Karatsuba 用三次半长乘法替代四次，FFT 类方法则把卷积变为点值乘法；但规模小、内存局部性重要时，经典算法往往更合适。算法切换阈值必须由目标平台测量，而不是从渐近式猜测。
+
+<TcpMultiplePrecisionMultiplyLab />
+
+<TcpModularLab />
+
+模算术把结果限制在剩余类中。加法和乘法可在每步约减，除法却只在除数与模数互素时有意义。扩展欧几里得算法给出 $ax+my=\gcd(a,m)$；当最大公因数为一时，系数 $x$ 就是 $a$ 的模逆。这个等式同时是结果证书，不应只返回一个未经验证的数字。
+
+```ts
+function addLimbs(a: number[], b: number[], base: number) {
+  const out: number[] = [];
+  let carry = 0;
+  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+    const sum = (a[i] ?? 0) + (b[i] ?? 0) + carry;
+    out.push(sum % base);
+    carry = Math.floor(sum / base);
+  }
+  if (carry) out.push(carry);
+  return out;
+}
+```
+
+## 基数转换：余数顺序与精度预算
+
+<Term def="基数转换在保持数值不变的前提下改变表示基数；整数常用反复除基取余，小数常用反复乘基取整">基数转换</Term>对整数执行欧几里得除法 $n=qb+r$。余数 $r$ 是最低位，商 $q$ 继续分解，所以余数必须逆序输出。对于大整数，更高效的实现会按目标基数的一个大幂分块，减少昂贵的全长除法次数。
+
+<TcpRadixConversionLab />
+
+小数部分用反复乘基取整，但并非所有有理数都能终止。约分后分母的素因子如果都属于目标基数，展开才有限；十进制`0.1`的分母含因子五，因此二进制展开循环。转换接口必须接收“最多生成多少位”或“允许多大误差”，否则循环展开没有停止契约。
+
+<Stepper>
+  <Step title="第一步：固定表示与不变量">
+    写明源基数、目标基数、数字范围和符号策略。先用位置多项式解码，再检查同一个整数在不同基数下的值保持不变。
+    <TcpPositionalLab />
+  </Step>
+  <Step title="第二步：记录每次欧几里得除法">
+    每行保留被除数、商和余数，验证被除数等于商乘基数加余数；最后只反转余数，不反转每个数字内部的表示。
+    <TcpRadixConversionLab />
+  </Step>
+  <Step title="第三步：用独立方向回算">
+    把得到的目标数字串再用 Horner 法解码。若涉及浮点小数，还要同时报告位数预算、舍入模式和绝对或相对误差。
+    <TcpArithmeticCertificateLab />
+  </Step>
+</Stepper>
+
+## 有理数算术与欧几里得算法
+
+<Term def="有理数算术把数保存为整数分子与非零整数分母，并通过最大公因数约分维持唯一规范形式">有理数算术</Term>可以精确表示分数，但若每次运算后不约分，分子分母会迅速膨胀。规范形式通常要求分母为正，且分子分母互素。加法前先交叉约分还能降低中间乘积，例如用分母最大公因数拆解公共因子，而不是先无条件相乘。
+
+<TcpRationalLab />
+
+欧几里得算法依赖不变量 $\gcd(a,b)=\gcd(b,a\bmod b)$。余数严格减小且非负，因此循环终止；连续 Fibonacci 数会产生一串商一，构成除法步数的极端形状。复杂度与较小输入的位数成线性关系，而不是与输入数值本身成线性关系。
+
+$$
+a=q b+r\quad\Longrightarrow\quad \gcd(a,b)=\gcd(b,r).
+$$
+
+<TcpEuclidLab />
+
+因数分解和素性问题建立在这套整除算术上，但“试除直到平方根”只是基线。工程实现还需区分素性测试、寻找一个因子和完整分解三个目标，并为概率型算法记录随机源与重复轮数。
+
+## 多项式算术与幂级数
+
+<Term def="多项式算术对系数序列执行加法、乘法、除法、因式分解和求值，并明确系数环与次数规范">多项式算术</Term>首先要声明系数域：整数、有理数、浮点数或有限域上的“除法”含义不同。系数数组应去掉最高端的零以保持唯一次数；零多项式则需要单独约定次数。朴素乘法仍是卷积，多项式长除法则反复消去当前最高项。
+
+### Horner 求值
+
+直接计算每个 $x^i$ 会重复工作。Horner 形式从最高系数开始维护已处理前缀的多项式值：
+
+$$
+P(x)=(((a_nx+a_{n-1})x+a_{n-2})x+\cdots)x+a_0.
+$$
+
+<TcpHornerLab />
+
+Horner 法使用恰好 $n$ 次乘法和 $n$ 次加法，也容易与浮点融合乘加配合。但操作数很大或需要并行时，分治求值可能更合适；“运算次数最少”不自动等于“舍入误差最小”。验证时可用高精度代入或在多个随机点比较两种表示。
+
+### 形式幂级数与截断
+
+幂级数可以作为形式对象操作，也可以作为函数近似。前者只关心系数代数，后者必须给出收敛区间和截断误差。计算 $e^x$ 时，相邻项满足 $t_{k+1}=t_kx/(k+1)$，因此无需反复计算幂和阶乘。项数增加会减小截断误差，直到舍入误差或项下溢成为主导。
+
+<TcpPowerSeriesLab />
+
+对于交错级数可用下一项控制误差；对于同号级数可用余项界或区间算术。停止条件不能只判断“新项等于零”，还应同时考虑目标容差、最大项数和异常值。否则一个看似收敛的循环可能只是在当前精度下停滞。
+
+## 检验矩阵与失败复现
+
+一个可复核的 Chapter 4 实现应覆盖以下互相独立的证据：位置表示做解码再编码的往返；浮点实验同时报告格式、舍入模式和误差尺度；多精度操作与语言大整数或另一实现交叉比对；有理数结果检查分母为正且最大公因数为一；多项式在多个点比较原式与变换式。只放几个“看起来合理”的示例不能覆盖进位链、零、负数、边界指数和非互素模数。
+
+<TcpArithmeticCertificateLab />
 
 <Callout type="trap">
-**误区：认为浮点数运算满足结合律和分配律。**
-浮点运算不满足结合律：(a+b)+c ≠ a+(b+c)，因为中间结果的舍入不同。也不满足分配律：a×(b+c) ≠ a×b+a×c。在数值算法中，运算顺序会影响结果精度——这就是数值稳定性分析的核心。
+**误区：提高精度就能修复所有数值问题。** 条件很差的问题会放大输入中的任何扰动，更多位数只能推迟失败。应先分析条件数与公式稳定性，再决定是否增加精度。对接近数相减，代数重写通常比盲目换成更宽浮点更有效。
 </Callout>
 
 <Callout type="trap">
-**误区：认为 double 精度足够所有场景。**
-double 有约 15-16 位有效数字，但累积误差可以让结果完全失真。例如用 naive 方法对 $10^{16}$ 个接近 1 的数求和，误差可以达到 1 的量级。金融计算、科学模拟等场景需要 arbitrary-precision arithmetic。
+**误区：多精度整数只需把数组变长。** limb 基数、中间类型、进位方向、符号、零的规范形式和最高零 limb 都是表示契约。任何一项缺失都可能让局部样例通过而在长进位链或乘法对角线上失败。
 </Callout>
+
+## 练习
 
 <Exercises>
-**问题 1**：为什么 0.1 + 0.2 ≠ 0.3 在浮点运算中？
+
+**问题 1**：把十进制`347`转换为十六进制，并用位置多项式回算。
 
 <Answer>
-0.1 和 0.2 在二进制中是无限循环小数（0.1₁₀ = 0.0001100110011...₂），浮点数用有限位数存储时会截断产生误差。两个有误差的数相加后，误差累积，结果与 0.3 的二进制表示（也是无限循环小数的截断）不完全相同。具体来说，0.1 存储为约 0.1000000000000000056，0.2 存储为约 0.2000000000000000111，相加得 0.30000000000000004，而 0.3 存储为约 0.2999999999999999889。
+连续除以十六得到余数序列`B, 5, 1`，逆序为`15B`。回算为 $1\times16^2+5\times16+11=256+80+11=347$。每步还可检查被除数等于商乘十六加余数，因此编码和解码提供了两个方向的证据。
 </Answer>
 
-**问题 2**：手算十进制 12.375 的二进制表示。
+**问题 2**：解释为什么 $\sqrt{1+10^{-16}}-1$ 可能得到零，而有理化形式仍能给出约 $5\times10^{-17}$。
 
 <Answer>
-整数部分 12：12÷2=6余0，6÷2=3余0，3÷2=1余1，1÷2=0余1，从下往上读 = 1100。小数部分 0.375：0.375×2=0.75取0，0.75×2=1.5取1，0.5×2=1.0取1，从上往下读 = 011。合在一起 = 1100.011₂。验证：8+4+0.25+0.125 = 12.375 ✓。
+在双精度中，`1 + 10^-16`可能先舍入回`1`，或平方根结果舍入得极接近`1`，随后相减丢掉有效位。有理化后分子直接保留小量，分母约为二，所以结果约为该小量的一半。两式数学等价，但中间舍入路径不同。
 </Answer>
+
+**问题 3**：以基数一千的 limb 表示`987654 + 456789`，写出进位。
+
+<Answer>
+输入为`[987,654]`和`[456,789]`。低 limb 相加得`1443`，写`443`并进位一；高 limb 得`987+456+1=1444`，写`444`并再产生最高进位一。结果为`[1,444,443]`，即十进制`1,444,443`。
+</Answer>
+
+**问题 4**：用 Horner 法计算 $P(x)=2x^3-3x^2+5x-7$ 在 $x=3$ 的值，并写出阶段量。
+
+<Answer>
+从最高系数二开始：第一阶段为 $2\times3-3=3$；第二阶段为 $3\times3+5=14$；第三阶段为 $14\times3-7=35$。阶段不变量是每次都得到已读系数前缀在当前 $x$ 处的值，所以最终 $P(3)=35$。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+Chapter 4 把机器算术统一为“表示、算法、误差、证书”四件事。位置记数制给出表示的多项式语义；浮点算术用有限集合和舍入换取范围；多精度算术显式传播 limb 进位；基数转换保持数值不变量；有理数算术以最大公因数维持规范形式；多项式算术通过卷积、Horner 递推和幂级数截断组织计算。真正掌握这一章的标准不是会按计算器，而是能在失败时指出哪一层契约被破坏。
+
 <Glossary>
-<GlossaryItem term="浮点数">
-用科学计数法表示实数的方式：±d₀.d₁d₂...d_p × b^e。IEEE 754 双精度用 64 位存储，约 15-16 位有效数字。
-</GlossaryItem>
-<GlossaryItem term="机器 epsilon">
-浮点数系中 1 与下一个可表示数之间的差，衡量浮点运算的相对精度。双精度约 2.2×10⁻¹⁶。
-</GlossaryItem>
-<GlossaryItem term="精度损失">
-浮点运算中因有限位数截断导致的误差。0.1 等十进制小数在二进制中是无限循环，截断后产生系统性误差。
-</GlossaryItem>
-<GlossaryItem term="进制转换">
-在不同基数表示间转换数值的过程。整数部分用除基取余法，小数部分用乘基取整法。
-</GlossaryItem>
+  <GlossaryItem term="位置记数制">用数字与基数幂的加权和解释数字串；同一数值可有不同基数表示。</GlossaryItem>
+  <GlossaryItem term="浮点算术">以符号、有效数和指数表示近似实数，并按规定模式舍入每次运算结果。</GlossaryItem>
+  <GlossaryItem term="舍入">把精确结果映射到有限可表示集合的规则，包括最近、朝零和定向模式。</GlossaryItem>
+  <GlossaryItem term="多精度算术">用多个固定基数 limb 表示超出机器字长的数，并显式处理进位、借位与规范化。</GlossaryItem>
+  <GlossaryItem term="基数转换">在数值保持不变的条件下改变表示基数，整数通常采用反复除基取余。</GlossaryItem>
+  <GlossaryItem term="有理数算术">用规范化的整数分子和非零分母精确表示并运算分数。</GlossaryItem>
+  <GlossaryItem term="多项式算术">在声明的系数环上对系数序列执行加、乘、除、因式分解、求值和级数操作。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="计算机程序设计艺术（Donald E. Knuth）" adaptedUrl="https://www-cs-faculty.stanford.edu/~knuth/taocp.html" />
+<Attribution adaptedFrom="The Art of Computer Programming, Volume 2: Seminumerical Algorithms, Chapter 4 · Arithmetic" adaptedUrl="https://www.informit.com/store/art-of-computer-programming-volume-2-seminumerical-9780133488807" />

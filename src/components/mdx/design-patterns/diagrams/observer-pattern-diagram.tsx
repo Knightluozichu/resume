@@ -326,13 +326,15 @@ export function ObserverPatternDiagram() {
             fontSize="12"
             fill={secondary}
           >
-            Subject 状态变化时自动通知所有注册的 Observer——Observer 主动订阅，Subject 被动通知
+            Subject 状态变化时自动通知所有注册的 Observer——Observer
+            主动订阅，Subject 被动通知
           </text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        Subject 持有观察者列表并提供 attach/detach 管理注册；状态改变时
-        notify 遍历列表调用每个 Observer 的 update——订阅方与被观察者通过接口解耦，互不感知具体实现。
+        Subject 持有观察者列表并提供 attach/detach 管理注册；状态改变时 notify
+        遍历列表调用每个 Observer 的
+        update——订阅方与被观察者通过接口解耦，互不感知具体实现。
       </figcaption>
     </figure>
   );

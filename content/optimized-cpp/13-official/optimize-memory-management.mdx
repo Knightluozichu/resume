@@ -1,0 +1,341 @@
+---
+title: "第13章：优化内存管理"
+type: C
+section: Optimized C++ · Chapter 13
+order: 13
+description: "对齐第一版第13章 Optimize Memory Management：动态变量生命周期与 new/delete/显式析构，高性能/类专用管理器、固定块/arena/operator new、性能变体与非线程安全，以及 C++11/C++98 标准库 allocator 和字符串。"
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+draft: false
+---
+
+import {
+  OpcAllocatorIntegrationMap,
+  OpcDynamicVariableLifecycleMap,
+  OpcMemoryManagerDecisionMap,
+} from "@/components/mdx/optimized-cpp/diagrams/optimize-memory-management";
+
+<Objectives>
+
+- 能解释 raw storage 与 object lifetime，匹配 new/delete 或 construct/destroy/deallocate 的完整 API
+- 能设计 class-specific/fixed-block/arena manager，并验证 alignment、capacity、exception、thread 与 lifetime
+- 能实现 minimal C++11 allocator adapter，比较 legacy C++98/standard container/string 的 propagation 与收益
+
+</Objectives>
+
+## 从 Storage 与 Object Lifetime 分离开始
+
+**memory management API** 不只有“拿一块 bytes”：它要定义 size/alignment、failure、owner、object construction/destruction、release 与 thread policy。**life cycle of dynamic variables** 是 acquire raw storage → begin object lifetime → use/transfer → destroy → release。
+
+<Term def="取得/释放 raw storage、开始/结束 object lifetime、表达 ownership/alignment/failure/thread policy 的接口集合。">
+  memory management API
+</Term>
+
+<Term def="动态对象从 storage acquisition、construction、use/ownership 到 destruction 与 storage release 的完整阶段。">
+  life cycle of dynamic variables
+</Term>
+
+**allocate and free memory** 只管理 raw storage，不必自动构造/析构 C++ object；普通 high-level code 应优先 RAII container/smart pointer。手工分离只在 allocator/container/object pool 等低层 abstraction 内进行。
+
+<OpcDynamicVariableLifecycleMap />
+
+<Callout type="trap" title="陷阱：拿到 void* 后直接当 T* 写">
+  alignment、storage size 和 object lifetime 都可能不满足；对
+  non-implicit-lifetime type 必须正确 construction， 访问受 alias/lifetime rule
+  约束。使用标准 allocator_traits/construct_at/destroy_at 等机制，并以
+  sanitizer、over-aligned/throwing constructor tests 验证。
+</Callout>
+
+## New-Expressions、Delete-Expressions 与显式析构
+
+**new-expressions** 通常先调用 allocation function 获得 storage，再执行 constructor；constructor throw 时要调用 matching deallocation。**delete-expressions** 对 object 调 destructor，再调用 matching deallocation；`delete[]` 必须匹配 `new[]`。
+
+<Term def="组合 storage allocation 与 object construction 的表达式；constructor failure 必须正确释放刚取得 storage。">
+  new-expressions
+</Term>
+
+<Term def="组合 object destruction 与 matching storage deallocation 的表达式；scalar/array 和 class-specific API 必须匹配。">
+  delete-expressions
+</Term>
+
+**explicit destructor calls** 只在 object placement-constructed 到 caller-managed storage、需要结束 lifetime 但暂不释放 storage 时使用。显式调用 destructor 后再普通 `delete` 会 double-destroy；对 virtual dispatch/most-derived object 也要谨慎，现代代码优先 `std::destroy_at`。
+
+<Term def="在 caller-managed storage 中显式结束已构造 object lifetime 的低层操作，不会自动释放 raw storage。">
+  explicit destructor calls
+</Term>
+
+```cpp
+template <class T, class... Args>
+T* constructIn(std::span<std::byte> storage, Args&&... args) {
+    void* address = storage.data();
+    std::size_t space = storage.size();
+    if (std::align(alignof(T), sizeof(T), address, space) == nullptr) {
+        throw std::bad_alloc{};
+    }
+    return std::construct_at(
+        static_cast<T*>(address),
+        std::forward<Args>(args)...);
+}
+
+// owner later calls std::destroy_at(object); storage itself has a separate owner.
+```
+
+示例强调 alignment 和两个 owner：object lifetime owner 与 backing storage owner。exception 前 object 不存在，成功后必须 exactly-once destroy；storage 不能先于 object 消失。
+
+## High-Performance 与 Class-Specific Memory Managers
+
+**high-performance memory managers** 通过稳定 pattern 删除通用工作：fixed size 无需 size metadata/coalescing，phase lifetime 可 bulk reset，thread-local pool 可避免 global lock。收益是 context-specific，不是 universal replacement。
+
+<Term def="针对特定 size/lifetime/thread workload 简化 metadata、search、synchronization 或 teardown 的 storage manager。">
+  high-performance memory managers
+</Term>
+
+**class-specific memory managers** 只服务一个 class/related hierarchy，可通过 **class-specific operator new** 接入；必须同时实现 matching delete forms/over-alignment/array policy（按 language/version需求），处理 derived size，不要让 base pool 给 larger derived object 分错 block。
+
+<Term def="只为特定 class 的 size/alignment/lifetime pattern 分配和回收 storage 的 manager/operator new-delete 方案。">
+  class-specific memory managers
+</Term>
+
+<OpcMemoryManagerDecisionMap />
+
+## Fixed-Size-Block Manager 与 Block Arena
+
+**fixed-size-block memory manager** 预分配同尺寸/alignment blocks，用 free list `allocate/deallocate`；**block arena** 则从 large blocks bump allocate，常在 phase end bulk release。前者支持单对象回收，后者用 coarse lifetime 换极低 allocation cost。
+
+<Term def="把 storage 切成等尺寸对齐 slots，并用 free list 常数级取得/归还 slot 的管理器。">
+  fixed-size-block memory manager
+</Term>
+
+<Term def="从一组大 blocks 顺序分配，并在共同 phase/request 生命周期结束时批量释放的 arena。">
+  block arena
+</Term>
+
+```cpp
+template <std::size_t BlockSize, std::size_t Alignment>
+class FixedBlockPool {
+public:
+    explicit FixedBlockPool(std::span<std::byte> storage) {
+        initializeAlignedFreeList(storage);
+    }
+
+    void* allocate() {
+        if (free_ == nullptr) throw std::bad_alloc{};
+        Node* node = std::exchange(free_, free_->next);
+        return node;
+    }
+
+    void deallocate(void* address) noexcept {
+        auto* node = static_cast<Node*>(address);
+        node->next = free_;
+        free_ = node;
+    }
+
+private:
+    struct alignas(Alignment) Node { Node* next; };
+    static_assert(BlockSize >= sizeof(Node));
+    void initializeAlignedFreeList(std::span<std::byte> storage);
+    Node* free_{};
+};
+```
+
+这只是核心示意：生产实现要验证 address 属于 pool、未 double-free、block stride 同时满足 `BlockSize`/Alignment、capacity/exhaustion、poison/debug、object destruction 与 pool lifetime。
+
+## Performance、Variations 与 Non-Thread-Safe Managers
+
+**performance of the fixed-block memory manager** 要与实际 general allocator 比：allocation/free latency distribution、throughput、RSS/fragmentation、cache, peak, construction/destruction；只测 empty object 可能夸大 allocator 占比。Amdahl 仍适用。
+
+**variations** 包括 multiple size classes/slabs、chunk growth、thread-local caches、generation/poison、bulk reset、fallback upstream。每项都改变 memory retention、cross-thread free、debug 与 worst-case。
+
+<Term def="固定块方案的 size classes、chunk growth、thread cache、debug metadata、fallback 与 bulk-reset 等策略变体。">
+  fixed-block manager variations
+</Term>
+
+**non-thread safe memory managers** 在 thread confinement/externally synchronized scope 内可删除 atomic/lock；一旦 block 跨线程 free 或 manager shared 就是 race。类型/API 要绑定 owner thread 或明确 transfer queue，不能只在注释写“通常单线程”。
+
+<Term def="内部不做并发同步、只允许线程封闭或由外部完整加锁访问的 manager；跨线程操作会构成 race。">
+  non-thread-safe memory managers
+</Term>
+
+<Callout type="trap" title="陷阱：thread_local pool 自动解决并发">
+  object 可能在另一个 thread 销毁，直接归还到原 pool 会 cross-thread
+  access/lifetime bug；thread exit 还可能 先销毁 pool。定义 remote-free
+  queue、owner handoff 或禁止跨线程；测试 worker churn、shutdown、cross-thread
+  delete，不能只测 steady-state allocation/s。
+</Callout>
+
+## Custom Standard Library Allocators
+
+**custom standard library allocators** 把 container 的 storage requests 适配到 manager。allocator object 的 equality 表示一个 allocator 分配的 storage 是否可由另一个 deallocate；propagation traits 影响 copy/move/swap。错误声明 equality/propagation 会在 container move/swap 后用错 resource。
+
+<Term def="满足 allocator_traits 协议、把 container storage 请求转交自定义 resource/manager 的 adapter。">
+  custom standard library allocators
+</Term>
+
+**minimal C++11 allocator** 通常需 `value_type`、converting constructor、`allocate/deallocate` 与 equality（其余由 `allocator_traits` 补足）；实际标准/version contract 要按 toolchain验证。**C++98 allocator** 需要更多 typedef、rebind、construct/destroy boilerplate，只有 legacy compatibility 才维护。
+
+```cpp
+template <class T>
+class ResourceAllocator {
+public:
+    using value_type = T;
+
+    explicit ResourceAllocator(MemoryResource& resource) noexcept
+        : resource_(&resource) {}
+
+    template <class U>
+    ResourceAllocator(const ResourceAllocator<U>& other) noexcept
+        : resource_(&other.resource()) {}
+
+    T* allocate(std::size_t count) {
+        return static_cast<T*>(
+            resource_->allocate(count * sizeof(T), alignof(T)));
+    }
+
+    void deallocate(T* address, std::size_t count) noexcept {
+        resource_->deallocate(address, count * sizeof(T), alignof(T));
+    }
+
+    MemoryResource& resource() const noexcept { return *resource_; }
+
+private:
+    template <class> friend class ResourceAllocator;
+    MemoryResource* resource_;
+};
+```
+
+还要定义 cross-type equality、overflow (`count * sizeof(T)`)、propagation/always_equal 按 resource identity，测试 vector/list/string allocate/deallocate/move/swap/copy/exception。现代项目也可优先 `std::pmr` 现成 protocol，而非重复造 adapter。
+
+<OpcAllocatorIntegrationMap />
+
+## Fixed-Block Allocator 与 Strings
+
+**fixed-block allocator** 适合 container 恰好请求匹配 block pattern；node container 每次一个 node 可能适配，vector/string 请求 varying contiguous counts，单一 fixed block 往往不匹配。allocator 看到的 `T` 也可能是 rebound internal node，不是用户 value size。
+
+<Term def="以固定尺寸 slots 为底层 resource 的 allocator adapter；只有 container 的实际请求 size/alignment 分布匹配才有效。">
+  fixed-block allocator
+</Term>
+
+**allocator for strings** 要考虑 SSO、capacity growth、temporary、allocator propagation 和 output lifetime。短 strings 可能根本不调用 allocator；long strings 请求 varying sizes。monotonic arena 适合一批 strings 同时销毁，若单 string 反复 grow/erase，旧 blocks 不回收会增加 retention。
+
+<Term def="为 basic_string character storage 提供 resource 的 allocator，收益取决于 SSO、长度/增长与共同 lifetime。">
+  allocator for strings
+</Term>
+
+## 三步评估内存管理优化
+
+<Stepper>
+  <Step title="第一步：画完整 storage/object 生命周期">
+    先预测成本在 allocation 还是 construction/work；标出 raw storage owner、alignment、new/delete 或 construct/destroy/deallocate 匹配、throw 和 exactly-once path。
+
+    <OpcDynamicVariableLifecycleMap />
+
+  </Step>
+  <Step title="第二步：匹配 manager 与 pattern">
+    对 general、class-specific、fixed-block、arena 比较 size/lifetime/thread/capacity；测 latency、throughput、RSS/fragmentation、exhaustion 与 cross-thread/shutdown。
+
+    <OpcMemoryManagerDecisionMap />
+
+  </Step>
+  <Step title="第三步：用 allocator protocol 接入容器">
+    先验证 manager，再实现/复用 C++11/pmr adapter；测试 equality/propagation/rebind/alignment/exception，并用真实 container/string request 分布做端到端 A/B。
+
+    <OpcAllocatorIntegrationMap />
+
+  </Step>
+</Stepper>
+
+## 小结
+
+- memory management API 必须同时管理 raw storage 与 object lifetime，new/delete 和 placement path 要严格匹配
+- explicit destructor 只结束 object lifetime，不释放 caller-managed storage，不能与普通 delete 重复
+- high-performance/class-specific manager 只适合稳定 size/lifetime/thread hotspot
+- fixed-block 支持 individual reuse，arena 支持共同 lifetime bulk release；两者 alignment/capacity/destructor 都要证明
+- manager performance 要测 latency/RSS/fragmentation/teardown；non-thread-safe 只能在线程封闭/外部同步下使用
+- custom allocator 是 adapter，equality/propagation/rebind 与 resource lifetime 决定 container correctness
+- fixed-block allocator 不一定匹配 vector/string varying-size request，string 还受 SSO/growth/lifetime 影响
+
+<Attribution
+  adaptedFrom="Optimized C++, First Edition, Chapter 13: Optimize Memory Management"
+  adaptedUrl="https://www.oreilly.com/library/view/optimized-c/9781491922057/"
+/>
+
+<Glossary>
+  <GlossaryItem term="memory management API">
+    管理 storage/object lifetime/owner/alignment/failure/thread 的接口。
+  </GlossaryItem>
+  <GlossaryItem term="life cycle of dynamic variables">
+    acquire/construct/use/destroy/release 的完整动态对象阶段。
+  </GlossaryItem>
+  <GlossaryItem term="new-expressions">
+    组合 storage allocation 与 object construction 的表达式。
+  </GlossaryItem>
+  <GlossaryItem term="delete-expressions">
+    组合 object destruction 与 matching deallocation 的表达式。
+  </GlossaryItem>
+  <GlossaryItem term="explicit destructor calls">
+    只结束 placement object lifetime、不自动释放 storage 的操作。
+  </GlossaryItem>
+  <GlossaryItem term="high-performance memory managers">
+    对特定 size/lifetime/thread pattern 简化通用工作的 manager。
+  </GlossaryItem>
+  <GlossaryItem term="class-specific memory managers">
+    为特定 class pattern 服务的 storage manager。
+  </GlossaryItem>
+  <GlossaryItem term="fixed-size-block memory manager">
+    以等尺寸对齐 slots 和 free list 管理 storage。
+  </GlossaryItem>
+  <GlossaryItem term="block arena">
+    从大 blocks 顺序分配并在共同 phase 批量释放的 arena。
+  </GlossaryItem>
+  <GlossaryItem term="fixed-block manager variations">
+    size class/chunk/thread cache/debug/fallback/bulk-reset 等变体。
+  </GlossaryItem>
+  <GlossaryItem term="non-thread-safe memory managers">
+    只允许线程封闭或完整外部同步的 manager。
+  </GlossaryItem>
+  <GlossaryItem term="custom standard library allocators">
+    将 container storage request 适配到 resource 的 allocator_traits 协议。
+  </GlossaryItem>
+  <GlossaryItem term="fixed-block allocator">
+    以 fixed slots resource 为底层的 container allocator adapter。
+  </GlossaryItem>
+  <GlossaryItem term="allocator for strings">
+    为 basic_string character storage 提供 resource 的 allocator。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：为每 request 20k 个 AST nodes 选择 manager。** nodes 有 4 个 size classes、共同 request lifetime、构造可能 throw、并行 requests。设计 arena/pool 与验收。
+
+<Answer question="共同 lifetime 如何改变分配和销毁策略？">
+  每 request 独占 arena，可按 alignment/size class 从 chunks bump
+  allocate，避免跨 request/thread sharing；若 nodes 有 nontrivial
+  destructors，记录 destructor stack或保证 arena objects trivially
+  destructible，exception 时 unwind 已构造 objects。request end bulk
+  release，限制/max/fallback防恶意输入。测 allocations、latency/p99、RSS
+  retention、 fragmentation、throw/cancel/shutdown；与成熟 monotonic/pmr
+  baseline 比，不先自写。
+</Answer>
+
+2. **问题 2：审计 class-specific operator new。** base 可被继承，pool block=sizeof(Base)，只实现 scalar new/delete；代码会 `new Derived`、over-aligned type 和 constructor throw。列问题。
+
+<Answer question="matching API 与 derived size 为什么会破坏 pool？">
+  `new Derived` 可调用 inherited class operator new 并请求
+  `sizeof(Derived)`，固定 Base block 不够；over-alignment也
+  可能不满足。constructor throw 需要 matching delete；array/sized/aligned forms
+  依使用/version必须一致。可禁止继承/ class final并 static assert
+  size/alignment，或 operator new 按 size fallback general manager；实现对应
+  delete， 用 derived/aligned/throw/double-free sanitizer tests。不能只靠 happy
+  path benchmark。
+</Answer>
+
+3. **问题 3：为百万短字符串换 fixed-block allocator。** p95 长度 12、p99 80，字符串跨批次独立销毁；判断是否值得。
+
+  <Answer question="SSO 与 varying request 为什么可能让 fixed block 无效？">
+    长度12可能落 SSO，allocator 根本未调用；80-byte strings 和 growth 请求 varying capacity，单一 fixed block 浪费或
+    不匹配。先记录 actual allocator calls/sizes/lifetimes、SSO distribution、temporary/copies；先消除 temporary/reserve。
+    若一批同寿命，pmr pool/monotonic 按 size class 可能适配，但独立销毁使 monotonic retention 不佳。比较 allocations、
+    latency、RSS/fragmentation、move/swap/propagation 与输出 correctness，收益不足就保留 default。
+  </Answer>
+</Exercises>

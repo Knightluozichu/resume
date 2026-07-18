@@ -1,52 +1,47 @@
-/** 复习题库 · 总复习（ico-final-review）。《深度探索 C++ 对象模型》全书串联改编章节。 */
+/** 复习题库 · 官方七章综合复盘（ico-final-review）。 */
 
 import type { ReviewQuestion } from "./types";
 
 export const icoFinalReviewQuestions: ReviewQuestion[] = [
-  // ── L1 认记：术语 / 定义 ──
   {
     id: "ico-fr-1",
     chapter: "ico-final-review",
     level: 1,
-    question: `用一句话概括《深度探索 C++ 对象模型》全书的五大主题。`,
+    question:
+      "跨进程共享内存中的 polymorphic object bytes 为什么不能在 host 直接调用？",
     answer:
-      `全书围绕五条主线：① 对象在内存里的布局（数据成员、对齐、空类）；② 对象怎么被构造出来（构造序列、成员初始化、vptr 两次设置）；③ 成员函数怎么被调用（this、非虚/虚/静态模型）；④ 运行时多态怎么实现（虚表、虚调用、RTTI）；⑤ 继承与生命周期（多重继承 this 调整、虚继承、对象从分配到释放）。`,
-    tags: ["全书主线", "五大主题"],
+      "bytes 含 source-process vptr、raw/member pointers、allocator-owned resources 与 ABI-specific virtual-base metadata；ASLR/mapping/code/type identity 和 object lifetime 在 host 都不同。共享格式只能传 versioned values、stable IDs、relative offsets，host/plugin 各自在本进程构造 local behavior object。",
+    tags: ["foreign representation", "shared memory", "ABI"],
   },
-
-  // ── L2 理解：为什么 / 机制 ──
   {
     id: "ico-fr-2",
     chapter: "ico-final-review",
     level: 2,
-    question: `把「vptr」放到全书脉络里：它在哪些阶段被设置、又被谁用到？`,
+    question:
+      "为什么 constructor virtual hook 和 raw-copy object pool 是同一 lifecycle 错误的两个方向？",
     answer:
-      `vptr 贯穿构造、使用、析构三阶段。构造期：先设为指向基类虚表（步骤①），基类构造完、成员构造完、构造体执行完后再改指向派生类虚表（步骤⑤）。使用期：虚调用经对象的 vptr 查 vtable 槽位、间接调到正确版本，多态生效；RTTI 也靠 vptr 找到挂在虚表上的 type_info。析构期：先改回指向基类虚表再析构派生部分，析构期虚函数退化为基类版本。可见 vptr 是「布局—构造—多态—生命」四大主题的共同枢纽。`,
-    tags: ["vptr", "主线串联", "机制"],
+      "constructor hook 试图在 derived subobjects/invariant 尚未建立时使用最终 dynamic behavior；raw copy 则在没有执行 target construction 时伪造已完成 object。前者越过 lifetime start 的阶段，后者绕过它。正确方案是 complete construction 后发布/start，pool 用 aligned storage + placement construct + matching destroy callback 管理真实 lifetime。",
+    tags: ["construction phase", "object pool", "copy semantics"],
   },
-
-  // ── L3 应用：读代码 / 排错 ──
   {
     id: "ico-fr-3",
     chapter: "ico-final-review",
     level: 3,
     question:
-      `一段代码同时踩了三个坑：① 基类析构非虚却 delete 基类指针；② 构造函数里调了虚函数期望走派生覆写；③ 多重继承菱形未虚继承导致访问基类成员二义。逐个用对象模型知识解释并给修法。`,
+      "`Renderable*` 指向 multiple-inheritance Derived 的 secondary base，virtual call 崩溃时怎样区分 slot、thunk、this 与 foreign-vptr 问题？",
     answer:
-      `① 基类析构非虚：delete 基类指针编译期绑定基类析构，派生部分不析构、资源泄漏，UB。修法：基类析构声明 virtual，经 vptr 走到派生析构完成反向析构链。② 构造期调虚函数：构造期 vptr 先指向基类虚表，派生覆写还没接上，调用退化为基类版本。修法：别在构造里调虚函数做「多态初始化」，改为构造后显式调 init，或把逻辑下放到派生构造体本身。③ 菱形未虚继承：共享基类存两份，访问其成员编译器不知走哪份，二义。修法：B1、B2 用 virtual 继承 Base，共享 Base 只存一份，经 vbptr 间接定位。`,
-    tags: ["综合排错", "虚析构", "构造期虚函数", "虚继承"],
+      "先确认 pointer 来自合法 local Derived-to-Renderable conversion 且 lifetime active；记录 Derived/Renderable addresses。合法 base vptr 的 slot 可指向 thunk，thunk 固定/动态调整 this 后进 Derived body。若 slot address 不在 loaded module、plugin 已 unload、object 来自 memcpy/shared bytes，则先修 representation/lifetime；不能手改 vptr 掩盖 string/virtual-base 未构造。",
+    tags: ["multiple inheritance", "thunk", "虚调用"],
   },
-
-  // ── L4 综合：陷阱 / 全流程 ──
   {
     id: "ico-fr-4",
     chapter: "ico-final-review",
     level: 4,
     question:
-      `设计一个高性能的多态对象池，需要兼顾：虚函数多态、紧凑内存布局、避免构造期陷阱、正确析构。从对象模型角度给出设计要点。`,
+      "为动态库多态节点系统设计稳定 ABI：template registration、exception、RTTI、create/destroy 和 shared record 分别如何处理？",
     answer:
-      `要点：① 多态：基类提供虚接口（含虚析构），派生类覆写；通过基类指针调用走虚表，运行期多态。② 紧凑布局：成员按对齐值从大到小排列压 padding；把「热」数据聚在前一个缓存行；若对象小且频繁按值拷贝，评估能否用 SOA（结构数组转数组结构）。③ 对象池：预分配一大块连续内存，对象在其中 placement new 构造、显式析构——但注意池里对象的 vptr 仍由 placement new 正确设置，构造序列不变。④ 避免构造期陷阱：构造函数里不调虚函数做派生行为；若需初始化后置行为，提供单独 init 在构造完成后调用。⑤ 析构：归还池时显式调析构（不 delete 内存），析构链虚析构保证派生部分正确清理；析构期同样不调虚函数做派生行为。⑥ 生命周期：池管理内存分配/释放（阶段①⑤），对象的构造/析构（阶段②④）仍按 C++ 规则走，多态窗口（阶段③）只在构造完成后到析构开始前。`,
-    tags: ["对象池", "综合设计", "全流程"],
+      "跨界用 versioned C function table 与 opaque handle；create/destroy 在同一 creator module 配对，function entries noexcept 并把 exception catch-and-translate 为 status/error。template 只在 module 内生成 mapping，跨界交换 schema 分配的 stable type ID，不用 typeid hash/address。RTTI/dynamic_cast 仅在兼容 local hierarchy 内。shared record 含 size/version/values/relative offsets，不含 native object bytes。",
+    tags: ["plugin ABI", "template", "exception", "RTTI"],
   },
 ];
 

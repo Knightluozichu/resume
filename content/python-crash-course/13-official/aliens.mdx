@@ -1,0 +1,260 @@
+---
+title: "第13章：Aliens!"
+type: C
+section: "Part II · Projects · Alien Invasion"
+order: 13
+description: "建立Alien fleet的布局、移动、collision与game-over闭环，把多个Sprite组织成可验证状态机。"
+demo: true
+math: false
+sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
+draft: false
+---
+
+import {
+  PccCollisionStateLab,
+  PccFleetLayoutLab,
+  PccFleetMotionLab,
+} from "@/components/mdx/python-crash-course/diagrams/aliens";
+
+<Objectives>
+
+- 能计算Alien fleet的rows与columns，实现由screen、ship和alien尺寸决定的二维布局
+- 能分析edge detection、fleet_direction与drop speed的协作，实现整队移动且不穿越screen boundary
+- 能设计bullet-alien、alien-ship和bottom collision的状态转换，并验证repopulate、ship limit与game_active
+
+</Objectives>
+
+## 为什么多个 Aliens 需要 fleet 级规则
+
+单个Alien只需要image、rect和水平update；一支fleet还需要formation、共享direction、edge transition和整体重建。若每个Alien独立随机换向，队形会散开；若每个对象碰边都执行一次drop，同一帧可能下移多次。正确层次是：Alien报告自己是否到edge，AlienInvasion聚合结果并对全Group执行一次fleet transition。
+
+先预测三个场景：screen变窄时一行数量怎样变化；最右Alien碰边时左侧Alien是否也应换向；最后一个Alien被击中后下一帧应为空还是重建fleet。把答案写成formation与state invariants，再运行交互图观察变化。
+
+<Term def="按统一间距、方向与下移规则组织的一组Alien Sprite。">alien fleet</Term>
+
+本章仍沿用第12章主循环：check events、update ship、update bullets、update aliens、draw。新增复杂度来自Groups之间的关系，而不是另起一套loop。每个transition只发生在一个owner中，才能判断对象为何消失、life为何减少或game为何停止。
+
+## Creating the Alien Class
+
+`Alien`继承`Sprite`，加载image并取得rect；初始位置可放在左上margin，`x`保存float horizontal position。它只知道settings与screen，不直接知道ship lives、score或整个fleet。局部职责越小，后面collision删除Sprite时越少隐藏副作用。
+
+```python
+class Alien(pygame.sprite.Sprite):
+    def __init__(self, game) -> None:
+        super().__init__()
+        self.screen = game.screen
+        self.settings = game.settings
+        self.image = pygame.image.load("images/alien.bmp")
+        self.rect = self.image.get_rect()
+        self.rect.x = self.rect.width
+        self.rect.y = self.rect.height
+        self.x = float(self.rect.x)
+
+    def update(self) -> None:
+        self.x += self.settings.alien_speed * self.settings.fleet_direction
+        self.rect.x = self.x
+
+    def check_edges(self) -> bool:
+        screen_rect = self.screen.get_rect()
+        return self.rect.right >= screen_rect.right or self.rect.left <= 0
+```
+
+`fleet_direction`使用1和-1，把方向与speed magnitude分开。不要把left speed写成负配置、right speed写成正配置并在多个位置翻转；共享sign提供单一source of truth。`check_edges()`是query，不修改direction，这让聚合者可先检查再统一transition。
+
+## Building the Alien Fleet：从可用空间推导行列
+
+一行不是硬编码8只。可用horizontal space等于screen width减去左右margin，书中以alien width作为margin和spacing单位：
+
+```python
+available_space_x = settings.screen_width - (2 * alien_width)
+number_aliens_x = available_space_x // (2 * alien_width)
+
+available_space_y = (
+    settings.screen_height - (3 * alien_height) - ship_height
+)
+number_rows = available_space_y // (2 * alien_height)
+```
+
+integer division只创建完整可容纳的slot，余数留作边缘空间。每个Alien的位置由column与row确定：`x = alien_width + 2 * alien_width * column`，`y = alien_height + 2 * alien_height * row`。这里的2倍包含对象自身width和一个width的gap。
+
+<Stepper>
+  <Step title="调整screen并推导fleet shape">
+    <PccFleetLayoutLab />
+  </Step>
+  <Step title="先计算capacity再创建Sprites">
+    用一个prototype Alien取得真实rect尺寸；不要假设image像素与配置常量永远一致。
+  </Step>
+  <Step title="验证formation invariant">
+    每个rect在screen内，任意相邻列间距一致，最后一行不会覆盖ship的初始区域。
+  </Step>
+</Stepper>
+
+<Term def="由可用screen空间、Sprite尺寸和间距共同决定的fleet二维排列。">formation layout</Term>
+
+```python
+def _create_fleet(self) -> None:
+    alien = Alien(self)
+    alien_width, alien_height = alien.rect.size
+    current_x, current_y = alien_width, alien_height
+
+    while current_y < self.settings.screen_height - 3 * alien_height:
+        while current_x < self.settings.screen_width - 2 * alien_width:
+            self._create_alien(current_x, current_y)
+            current_x += 2 * alien_width
+        current_x = alien_width
+        current_y += 2 * alien_height
+```
+
+第三版可用while按实际space创建，也可先算columns/rows后嵌套range；两者核心相同：layout来自geometry。测试不同screen尺寸、不同alien image和极小可用空间，确保不会创建负数或screen外对象。
+
+## Moving the Fleet：检测一次，整队改变一次
+
+每帧更新Aliens前，先遍历Group检查是否任一成员到edge。若是，所有Aliens向下移动`fleet_drop_speed`，然后`fleet_direction *= -1`；再执行Group update产生下一步horizontal movement。若先update再check，对象可能已穿过boundary；若每发现一个edge Alien都调用drop，多个边缘成员会重复下移。
+
+<Term def="任一Alien接近左右screen boundary时触发的整支fleet下移并翻转方向。">edge transition</Term>
+
+```python
+def _check_fleet_edges(self) -> None:
+    for alien in self.aliens.sprites():
+        if alien.check_edges():
+            self._change_fleet_direction()
+            break
+
+def _change_fleet_direction(self) -> None:
+    for alien in self.aliens.sprites():
+        alien.rect.y += self.settings.fleet_drop_speed
+    self.settings.fleet_direction *= -1
+
+def _update_aliens(self) -> None:
+    self._check_fleet_edges()
+    self.aliens.update()
+```
+
+`break`非常关键：一个frame最多发生一次edge transition。direction放在settings是本书的简洁做法，但它属于可重置dynamic state；新game必须恢复为1，否则上一局game over时的方向会泄漏到下一局。第14章会把动态速度与方向统一初始化。
+
+<Stepper>
+  <Step title="逐帧执行drop-and-reverse">
+    <PccFleetMotionLab />
+  </Step>
+  <Step title="检查最左与最右成员">
+    edge query必须使用rect footprint；只检查center会让半个image越界。
+  </Step>
+  <Step title="证明每帧至多一次transition">
+    给多个Aliens同时放在edge，调用一次update后fleet y只增加一个drop speed，direction只翻转一次。
+  </Step>
+</Stepper>
+
+## Bullet Collisions：Groups之间的批量关系
+
+`pygame.sprite.groupcollide(bullets, aliens, True, True)`检查两个Groups，返回collision dictionary，并按两个boolean删除碰撞双方。对于一发bullet消灭一只Alien，双方删除合理；若设计穿透弹，则第一个delete flag应为false。API参数表达game rule，不是固定模板。
+
+<Term def="两个Sprite或Group的rect重叠并触发对象删除、生命变化或得分等规则。">collision resolution</Term>
+
+```python
+def _update_bullets(self) -> None:
+    self.bullets.update()
+    for bullet in self.bullets.copy():
+        if bullet.rect.bottom <= 0:
+            bullet.kill()
+
+    pygame.sprite.groupcollide(
+        self.bullets, self.aliens, True, True
+    )
+
+    if not self.aliens:
+        self.bullets.empty()
+        self._create_fleet()
+```
+
+collision必须在bullets位置更新后检查，否则命中使用上一帧位置。fleet为空时清空残余bullets再重建，避免屏幕上方旧bullet立即击中新fleet。`if not self.aliens`依赖Group的truthiness；日志最好记录before count、collision count和after count，能区分“没检测到”与“已删完并重建”。
+
+### 高速对象与tunneling边界
+
+基础项目用rect overlap离散检测。如果bullet每帧位移大于alien高度，它可能从一侧跳到另一侧而从未重叠，这叫tunneling。入门配置速度足够小；扩展时可限制step、substep update或做swept collision。理解这个边界能避免误判Group API失效。
+
+## Ship Collisions and Bottom Boundary
+
+`spritecollideany(ship, aliens)`检测任一Alien是否撞ship。另一个失败条件是Alien到达screen bottom；遍历Aliens，只要`rect.bottom >= screen_rect.bottom`就调用同一个`_ship_hit()`。两条检测路径必须汇聚到同一transition，避免一条减少life而另一条忘记清空objects。
+
+`_ship_hit()`的顺序是：若仍有ships，`ships_left -= 1`；清空Aliens和Bullets；创建新fleet；ship重新center；暂停短暂时间。暂停发生前应drain/控制输入，否则按住space可能在恢复瞬间创建多发bullet。更成熟实现可用timer state而不是blocking sleep，但本书checkpoint强调可见反馈。
+
+<Stepper>
+  <Step title="选择collision path并追踪状态">
+    <PccCollisionStateLab />
+  </Step>
+  <Step title="复用ship-hit transition">
+    alien碰ship和到达bottom都调用同一helper；测试两条入口产生一致的clear、recenter与life结果。
+  </Step>
+  <Step title="区分life consumed与game over">
+    有剩余life时重建round；减到0时停止world update并显示可重新开始的inactive状态。
+  </Step>
+</Stepper>
+
+## Game Over：停止更新而不是销毁主循环
+
+`game_active`控制world是否更新：inactive时仍要处理event并绘制静态screen，窗口才能响应下一章的Play button。不要退出main loop后期待screen继续处理点击。game state从active经最后一次hit变inactive，restart会重置dynamic settings、statistics、Groups和ship位置，再设为active。
+
+<Term def="决定游戏world是否继续update，同时保留窗口事件与静态绘制的运行状态。">game active state</Term>
+
+```python
+while self.running:
+    self._check_events()
+    if self.stats.game_active:
+        self.ship.update()
+        self._update_bullets()
+        self._update_aliens()
+    self._update_screen()
+    self.clock.tick(60)
+```
+
+inactive期间不移动fleet或bullets，但event queue仍每帧读取。mouse cursor可重新显示，为第14章restart入口做准备。测试最后一条life：碰撞前`ships_left=1, game_active=True`，调用transition后应是0与false，且下一帧alien position不再变化。
+
+## 按状态不变量调试整个章节
+
+formation invariant：所有Alien rect在screen内且spacing一致。motion invariant：一帧最多一次drop，所有成员共享direction。collision invariant：被删除Sprite不再留在Group。life invariant：一次hit只消耗一条ship，0时game inactive。repopulation invariant：fleet清空后恰好创建一支新fleet并移除旧bullets。
+
+若出现偶发多减life，记录每帧调用`_ship_hit()`次数，通常是ship overlap持续多个frames或同一帧bottom与ship两条路径都触发。transition后立即clear Groups并return，可防止重复入口。若fleet突然跳很远，记录edge aliens数量和drop调用次数，检查是否遗漏`break`。
+
+<Callout type="trap" title="每个Alien碰边时各自翻转方向">
+fleet direction是共享规则。若成员独立翻转，队形会散开；若循环中每个edge成员都让整队drop，同一帧会重复下移。聚合一次edge结果，只执行一次transition并break。
+</Callout>
+
+<Callout type="trap" title="game over时退出主循环最简单">
+退出loop后窗口不再处理event，也无法接收restart。用game_active停止world update，但继续event与draw；真正关闭窗口只由QUIT控制。
+</Callout>
+
+## 本章回顾：从对象集合到可验证状态机
+
+1. Alien负责局部geometry与horizontal update，fleet规则由game聚合。
+2. rows与columns由screen、ship和alien尺寸推导，而不是硬编码数量。
+3. edge transition一帧只执行一次：整队drop，再翻转共享direction。
+4. groupcollide与spritecollideany把重叠映射到删除、重建与life变化。
+5. game_active停止world update但保留event loop，为restart提供入口。
+
+<Exercises>
+
+**问题 1：如何验证fleet layout在不同screen和image尺寸下仍正确？**
+
+<Answer>由available width/height和alien rect推导columns与rows，检查每个rect都在screen内、相邻间距一致、最后一行不侵入ship区域。测试窄屏、宽屏、不同alien尺寸和只能容纳一列的边界，不用固定期望数量代替geometry invariant。</Answer>
+
+**问题 2：多个Aliens同帧到edge时，为什么只能执行一次drop-and-reverse？**
+
+<Answer>edge是fleet级事件。遍历成员发现第一个true就调用一次_change_fleet_direction并break；否则同一帧会按edge成员数量重复下移或把direction翻转偶数次。测试同时放两个成员在boundary，断言y只加一个drop speed且direction只乘一次-1。</Answer>
+
+**问题 3：最后一条ship被撞后应检查哪些状态？**
+
+<Answer>一次collision只让ships_left从1到0，game_active变false，world后续帧不再移动；event与draw仍运行。Aliens和Bullets按restart policy清理，ship重新定位或等待重启；mouse可见。bottom collision与direct ship collision必须得到同一结果。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="alien fleet" definition="按统一间距、方向与下移规则组织的一组Alien Sprite。" />
+  <GlossaryItem term="formation layout" definition="由可用screen、Sprite尺寸和间距推导出的二维排列。" />
+  <GlossaryItem term="edge transition" definition="任一成员触边时整队下移并翻转方向的转换。" />
+  <GlossaryItem term="collision resolution" definition="rect重叠后执行对象删除、life变化或得分的规则。" />
+  <GlossaryItem term="game active state" definition="停止或继续world update，同时保留窗口event和draw的状态。" />
+</Glossary>
+
+<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 13: Aliens!" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />

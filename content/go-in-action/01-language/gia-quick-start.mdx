@@ -1,0 +1,96 @@
+---
+title: "第2章 Go快速入门"
+type: C
+section: "Go实战 · 语言与工具"
+order: 2
+description: "解剖原书RSS搜索程序，从main、search package、feed和matcher追踪类型、接口、goroutine、错误与输出。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/go-in-action/chapter-2"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GiaArchitectureLab, GiaSearchFlowLab, GiaMatcherLab } from "@/components/mdx/go-in-action/diagrams/gia-quick-start";
+
+<Objectives>
+- 能绘制RSS搜索程序的main、search package、feed、matcher和display执行链
+- 能解释类型、变量、函数、方法、接口和错误如何落在完整程序中
+- 能实现goroutine并发搜索与channel汇聚，并验证生产者完成和关闭顺序
+</Objectives>
+
+## 从完整程序而不是语法清单开始
+先预测：若一个worker网络失败，结果channel是否仍能正常关闭？只有错误、WaitGroup和唯一关闭者协议完整时才可以。
+
+Go快速入门用一个真实搜索器读取feed配置，并发抓取内容，按类型选择matcher，最后显示结果。<Term def="入口、领域包、外部feed、matcher、并发结果和输出之间的职责结构。">search program architecture</Term>让每个语法点都有owner和失败位置。
+
+<GiaArchitectureLab />
+
+## Main包：装配与进程边界
+
+Main package提供进程入口，解析搜索词、加载配置、调用search并决定日志与退出。<Term def="只负责配置、依赖装配、顶层错误和进程生命周期的入口层。">main composition root</Term>不应包含RSS解析细节。
+
+```go
+func main() {
+    if err := search.Run("golang"); err != nil { log.Fatal(err) }
+}
+```
+
+## Search包：类型、变量、函数与方法
+
+`Feed`描述源配置，`Result`描述命中，函数负责流程，方法把行为附着到类型。<Term def="把feed输入、matcher选择、抓取、匹配和结果发送连接起来的领域边界。">search package contract</Term>隐藏实现并公开最小API。
+
+```go
+type Feed struct { Name, URI, Type string }
+type Result struct { Field, Content string }
+```
+
+## search.go、feed.go、match.go与default.go
+
+这些文件同属search包：search.go协调，feed.go加载配置，match.go定义接口与注册表，default.go提供fallback。<Term def="按职责拆文件但共享同一包作用域和包级初始化的组织方式。">single-package file split</Term>不是四个可独立部署模块。
+
+## RSS Matcher与接口
+
+Matcher接口只声明搜索行为；RSS实现负责XML与内容规则。具体类型隐式满足接口，注册表按feed Type选择。<Term def="按输入类型找到具体Matcher，找不到时使用明确默认实现的分派协议。">matcher registry contract</Term>必须处理重复注册和未知类型。
+
+```go
+type Matcher interface { Search(Feed, string) ([]Result, error) }
+```
+
+<GiaMatcherLab />
+
+## Goroutine、Channel与错误
+
+每个feed可启动goroutine，结果发送到channel；WaitGroup知道生产者何时完成，由单独协调者关闭channel。错误是普通值，不能在worker里静默丢失。<Term def="生产者数量、发送结果、错误传递、等待完成和唯一关闭者组成的协议。">result fan-in lifecycle</Term>防止send on closed channel与永久阻塞。
+
+<GiaSearchFlowLab />
+
+<Stepper>
+  <Step title="查看程序架构"><GiaArchitectureLab /></Step>
+  <Step title="追踪一个Feed">记录decode、matcher选择、网络错误、结果发送和display。</Step>
+  <Step title="切换Matcher"><GiaMatcherLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="按文件名就能判断包边界">同目录同package文件共享作用域；真正边界由package和import graph决定。</Callout>
+<Callout type="trap" title="接收者负责关闭结果Channel">通常发送方最清楚何时不再发送；多个worker时由等待所有producer的协调者关闭。</Callout>
+
+## 本章回顾
+
+本章覆盖程序架构、main包、search包、search.go、feed.go、match.go与default.go、RSS匹配器，以及类型、变量、函数和方法、goroutine、接口与错误。完整链比孤立语法更能暴露边界。
+
+<Exercises>
+**问题 1：main应保留什么？**<Answer>配置、装配、顶层调用、日志和退出；领域搜索与RSS解析留在包内。</Answer>
+**问题 2：为何要有默认Matcher？**<Answer>让未知feed类型有明确fallback或错误，而不是nil调用和隐式失败。</Answer>
+**问题 3：谁关闭结果channel？**<Answer>等待所有生产者结束的协调者，且只能关闭一次。</Answer>
+</Exercises>
+
+## 术语表
+<Glossary>
+  <GlossaryItem term="search program architecture" definition="搜索器端到端职责结构。" />
+  <GlossaryItem term="main composition root" definition="进程装配与顶层错误入口。" />
+  <GlossaryItem term="search package contract" definition="搜索领域包的最小公开契约。" />
+  <GlossaryItem term="single-package file split" definition="同一包按职责拆分源码文件。" />
+  <GlossaryItem term="matcher registry contract" definition="类型到Matcher及fallback的分派协议。" />
+  <GlossaryItem term="result fan-in lifecycle" definition="生产、等待、关闭和汇聚结果的生命周期。" />
+</Glossary>
+<Attribution adaptedFrom="Go in Action Chapter 2 Go quick-start" adaptedUrl="https://livebook.manning.com/book/go-in-action/chapter-2" />

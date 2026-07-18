@@ -1,0 +1,105 @@
+---
+title: "第4章 处理请求内容"
+type: C
+section: "Go Web编程 · 请求与响应"
+order: 4
+description: "处理Request、HTML表单、ResponseWriter、Cookie和基于Cookie的Flash消息。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/go-web-programming/chapter-4"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GwpRequestLab, GwpFormLab, GwpCookieLab } from "@/components/mdx/go-web-programming/diagrams/gwp-processing-requests";
+
+<Objectives>
+- 能区分URL查询、Form、PostForm与MultipartForm，并实现容量限制和错误处理
+- 能写出正确ResponseWriter提交顺序，判断header与状态何时冻结
+- 能设计Cookie与Flash消息的写入、读取、验证和失效协议
+</Objectives>
+
+## 从同名参数来自哪里开始
+
+先预测：查询字符串和POST body都有`name`时，`r.FormValue("name")`能否说明值来源？不能，它合并来源并隐藏解析错误。<Term def="method、URL、header、body和连接上下文组成的服务端请求视图。">request processing envelope</Term>要求按协议来源读取数据。
+
+<GwpRequestLab />
+
+## Request与Response结构
+
+Request保存method、URL、header、body、host、remote address等信息；ResponseWriter负责header、状态与body。<Term def="在body写入前确定响应header和状态的一次性提交规则。">response commit boundary</Term>一旦首次Write发生，默认200和当前header即被提交。
+
+```go
+w.Header().Set("Content-Type", "application/json")
+w.WriteHeader(http.StatusCreated)
+_, _ = w.Write(payload)
+```
+
+## HTML表单
+
+URL encoded表单与multipart表单需要不同解析路径。<Term def="查询与表单字段被解析到Form、PostForm或MultipartForm的来源规则。">form source contract</Term>区分重复键、缺失键、空字符串和文件字段；解析前要限制body大小。
+
+```go
+r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+if err := r.ParseMultipartForm(1 << 20); err != nil {
+    http.Error(w, "invalid form", http.StatusBadRequest)
+    return
+}
+```
+
+<GwpFormLab />
+
+## Form、PostForm与MultipartForm
+
+Form可合并URL查询和已解析表单，PostForm只表示body表单，MultipartForm还包含Value与File。<Term def="在解析前设置的请求体和内存上限，超出后显式失败。">request body budget</Term>防止不受控内存与临时文件消耗。
+
+## ResponseWriter
+
+WriteHeader只能有效一次，Write可能返回短写或错误。<Term def="状态码、header和body写入顺序必须保持一致的输出协议。">response writer invariant</Term>要求在进入流式输出前完成所有可预检失败；已提交响应不能再改成500。
+
+## Cookie
+
+Cookie是header中的客户端状态。<Term def="名称、值、Path、Domain、Expires、MaxAge、Secure、HttpOnly和SameSite组成的客户端状态协议。">cookie attribute contract</Term>敏感值需签名或只保存不透明会话ID，并验证长度、编码和过期。
+
+```go
+http.SetCookie(w, &http.Cookie{
+    Name: "flash", Value: signedValue, Path: "/",
+    HttpOnly: true, Secure: true, SameSite: http.SameSiteLaxMode,
+})
+```
+
+<GwpCookieLab />
+
+<Stepper>
+  <Step title="选择参数来源"><GwpRequestLab /></Step>
+  <Step title="限制并解析表单"><GwpFormLab /></Step>
+  <Step title="验证Flash">写入一次性Cookie，读取后立即发送过期Cookie并确认下一请求消失。</Step>
+</Stepper>
+
+## 验收实验：容量、提交与失效
+
+发送查询、urlencoded、multipart、超限body和坏边界，记录各字段集合与状态；再先Write后尝试WriteHeader，验证状态已冻结。最后篡改Flash Cookie、重复读取和跨Path读取，确认签名、作用域与删除策略生效。
+
+<Callout type="trap" title="FormValue适合所有输入">它忽略解析错误并合并来源；安全边界应显式Parse并读取目标字段集合。</Callout>
+<Callout type="trap" title="HttpOnly会加密Cookie">HttpOnly只阻止脚本读取，不提供传输加密、完整性或服务端授权。</Callout>
+
+## 本章回顾
+
+本章覆盖Request与Response、HTML表单、Form、PostForm、MultipartForm、ResponseWriter、Cookie，以及使用Cookie实现Flash消息。正确处理依赖来源、容量、提交时点与失效，而不只是调用便捷函数。
+
+<Exercises>
+**问题 1：PostForm包含查询参数吗？**<Answer>不包含，它只表示body中的表单字段。</Answer>
+**问题 2：何时不能再改状态码？**<Answer>调用WriteHeader或第一次Write之后。</Answer>
+**问题 3：Flash消息为何要删除？**<Answer>它是一次性跨请求消息，读取后应失效避免重复展示。</Answer>
+</Exercises>
+
+## 术语表
+<Glossary>
+  <GlossaryItem term="request processing envelope" definition="服务端结构化请求视图。" />
+  <GlossaryItem term="response commit boundary" definition="响应状态与header的一次提交点。" />
+  <GlossaryItem term="form source contract" definition="字段来源到表单集合的解析规则。" />
+  <GlossaryItem term="request body budget" definition="请求体和解析内存上限。" />
+  <GlossaryItem term="response writer invariant" definition="状态、header和body的写入不变量。" />
+  <GlossaryItem term="cookie attribute contract" definition="Cookie值与作用域安全属性协议。" />
+</Glossary>
+<Attribution adaptedFrom="Go Web Programming Chapter 4 Processing requests" adaptedUrl="https://livebook.manning.com/book/go-web-programming/chapter-4" />

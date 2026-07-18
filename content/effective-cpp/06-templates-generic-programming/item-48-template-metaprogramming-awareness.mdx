@@ -1,0 +1,351 @@
+---
+title: "Item 48：认识 template metaprogramming"
+type: A
+section: Chapter 7 · Templates and Generic Programming
+order: 48
+description: 对齐 Effective C++ 第三版 Item 48：用 Factorial 的递归与 specialization 理解 TMP 编译期计算，分析 type selection、policy choices、维度安全和定制代码生成，并权衡运行收益、构建成本与现代 constexpr 工具。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppTmpAdoptionDecisionMap,
+  EcppTmpExecutionPipelineMap,
+  EcppTmpFactorialRecursionMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-48-template-metaprogramming-awareness";
+
+<Objectives>
+
+- 能解释 template metaprogramming 如何用 specialization 表示条件、recursive instantiation 表示循环并产生编译期结果
+- 能推导 Factorial 的实例化链，并设计 type selection、policy choices 或 dimensional safety 的静态模型
+- 能比较 TMP、constexpr 与 runtime 实现的执行成本、编译成本、诊断和可维护性
+
+</Objectives>
+
+## 从运行前已经完成的程序开始
+
+template metaprogram 是由 compiler 执行的程序。输入通常是 types 和 compile-time constants，输出是新的 types、constants 或选定的 C++ declarations。
+
+<Term def="利用 templates、specializations 和实例化规则在编译期执行计算或生成类型与代码的技术。">
+  template metaprogramming
+</Term>
+
+<Term def="程序运行前由 compiler 根据静态输入求出值、类型或实现选择。">
+  compile-time computation
+</Term>
+
+Item 48 的原则是 Be aware of template metaprogramming（认识模板元编程）。重点是理解其能力和成本，不是把所有逻辑改成 templates。
+
+<EcppTmpExecutionPipelineMap />
+
+先预测：把工作移到 compile time 是否等于“免费”？运行时间可能减少，但编译 CPU、内存、诊断与 binary instantiations 都会增加。
+
+## Factorial：递归与终止特化
+
+```cpp
+template<unsigned N>
+struct Factorial {
+    static constexpr unsigned value = N * Factorial<N - 1>::value;
+};
+
+template<>
+struct Factorial<0> {
+    static constexpr unsigned value = 1;
+};
+
+static_assert(Factorial<5>::value == 120);
+```
+
+<Term def="template definition 为解决当前问题继续请求更小参数 specialization 的展开。">
+  recursive instantiation
+</Term>
+
+<Term def="为特定 arguments 提供独立定义，在 TMP 中常承担递归终止或条件分支。">
+  terminal specialization
+</Term>
+
+一般模板相当于递归公式，`Factorial<0>` 完全特化相当于 base case。compiler 实例化到 0 后向上折叠结果。
+
+<EcppTmpFactorialRecursionMap />
+
+<Term def="compiler 把由模板常量表达式组成的结果归约为最终 compile-time value。">
+  instantiation result folding
+</Term>
+
+这里没有 runtime recursive function，也没有 runtime loop；120 可直接进入 array bound、non-type argument 或 machine constant。
+
+## TMP 的条件、循环与变量是什么
+
+传统 TMP 没有普通 mutable variables。状态通过 template arguments 传递，循环通过递归实例化，条件通过 specialization 或类型选择表达。
+
+```cpp
+template<bool Condition, class Then, class Else>
+struct Select { using type = Then; };
+
+template<class Then, class Else>
+struct Select<false, Then, Else> { using type = Else; };
+```
+
+<Term def="根据 compile-time boolean 在两个候选 types 之间选择结果的元函数。">
+  type selection
+</Term>
+
+<Term def="接收 types/constants 并通过 nested type 或 value 返回编译期结果的模板结构。">
+  metafunction
+</Term>
+
+现代 `std::conditional_t` 提供相同能力；理解这种模型有助于阅读 traits、enable_if 和标准库实现。
+
+## 运行成本前移，不是消失
+
+TMP 可把重复 runtime decisions 前移到编译阶段。例如 serializer 根据 type traits 选择 fixed-size path，最终函数不需要每个对象都分支。
+
+<Term def="根据静态类型属性生成仅包含适用路径的具体实现。">
+  custom code generation
+</Term>
+
+<Term def="把原本运行期重复执行的类型判断或组合选择转为编译期工作。">
+  runtime-to-build-time shift
+</Term>
+
+收益可能包括更少 branch、更多 inlining、常量传播和非法状态无法表达。代价包括更慢 build、更高 compiler memory、更长 errors 和更多 instantiations。
+
+<Callout type="trap" title="陷阱：编译期执行就没有成本">
+  成本从用户运行转移到开发和构建基础设施。高频增量编译、CI 并发和 header fan-out
+  都可能受影响；必须同时测 build time 与 runtime。
+</Callout>
+
+## policy choices 组合行为
+
+```cpp
+template<class LockPolicy, class CheckPolicy>
+class Buffer : private LockPolicy, private CheckPolicy {
+public:
+    void write(std::size_t index, std::byte value) {
+        typename LockPolicy::Guard guard(*this);
+        CheckPolicy::check(index);
+        data_[index] = value;
+    }
+private:
+    std::array<std::byte, 256> data_{};
+};
+```
+
+<Term def="由 template arguments 选择锁、检查、分配等正交行为的编译期配置。">
+  policy choices
+</Term>
+
+<Term def="compiler 为一组 policy arguments 形成只包含对应行为的具体 class。">
+  policy-composed type
+</Term>
+
+不同 policies 产生不同 types，compiler 可 inline policy calls，空 policy 还可能经 EBO 不增加对象大小。代价是每种组合都可能形成新的 instantiation 和 binary code。
+
+## dimensional safety 把单位错误变成类型错误
+
+```cpp
+template<int Length, int Time>
+class Quantity {
+public:
+    explicit constexpr Quantity(double value) : value_(value) {}
+private:
+    double value_;
+};
+
+using Distance = Quantity<1, 0>;
+using Duration = Quantity<0, 1>;
+using Speed = Quantity<1, -1>;
+```
+
+<Term def="把物理量维度编码到 type arguments，使不兼容单位无法参与错误运算。">
+  dimensional type safety
+</Term>
+
+multiplication/division 可在 template arguments 上加减指数，compiler 生成结果 type。距离与时间不能直接相加，错误在 build 时暴露，而不是以错误数值进入运行。
+
+<Term def="通过类型系统在程序运行前拒绝违反领域规则的表达式。">
+  compile-time invariant enforcement
+</Term>
+
+## expression templates 与延迟表达式树
+
+矩阵表达式 `a = b + c + d` 若每个 operator 立即构造 temporary，会产生多次遍历。expression templates 可让 operators 返回 lightweight expression node types，最终 assignment 一次遍历求值。
+
+<Term def="用嵌套模板类型记录尚未执行的运算结构，在最终消费点统一求值。">
+  expression template
+</Term>
+
+<Term def="不立即创建中间结果，而把计算推迟到目标上下文的策略。">
+  lazy expression evaluation
+</Term>
+
+这是 custom code generation：expression type 编码操作树，compiler 为该树生成融合 loop。风险是 dangling references、巨大类型、诊断复杂和 compile-time 爆炸。
+
+<Callout type="trap" title="陷阱：expression template 总比 temporary 快">
+  小对象、SIMD library、cache、aliasing 或 compiler 已有优化都可能反转结果。只有
+  profile 证明 temporary 成本显著时才值得增加类型复杂度。
+</Callout>
+
+## 编译期循环的资源上限
+
+Factorial 很小，真实元程序可能触发深层递归和大量 specializations。compiler 有 template instantiation depth 限制，也受内存和错误回溯长度影响。
+
+<Term def="元程序递归展开的层数，过深会触发 compiler limit 或高资源消耗。">
+  template instantiation depth
+</Term>
+
+<Term def="同一构建中形成的不同 template specializations 数量。">
+  instantiation cardinality
+</Term>
+
+用 alias templates 分段命名中间结果、减少重复实例、把稳定实现移入非模板 helper，并对 compile time 建立基准。
+
+## 现代 constexpr 更适合值计算
+
+```cpp
+consteval unsigned factorial(unsigned n) {
+    unsigned result = 1;
+    for (unsigned i = 2; i <= n; ++i) result *= i;
+    return result;
+}
+
+static_assert(factorial(5) == 120);
+```
+
+<Term def="可在常量求值中使用普通变量、循环和分支的函数。">
+  constexpr computation
+</Term>
+
+<Term def="要求每次调用都在 compile time 求值的函数声明。">
+  consteval boundary
+</Term>
+
+对纯值计算，constexpr/consteval 通常比递归 template 更可读、diagnostics 更好。TMP 仍擅长生成/选择 types、检测 expressions 和组合 policies。
+
+## concepts 改善元程序入口
+
+concepts 可为 requirements 命名，让非法输入在入口处失败，而不是在数十层 specialization 后报错。
+
+<Term def="用命名 constraints 把模板合法输入边界前移并缩短诊断。">
+  constrained metaprogram boundary
+</Term>
+
+但 concept 本身也属于 compile-time programming。不要把“现代语法”误认为没有复杂度；仍需控制 dependency、instantiation 和 overload set。
+
+## 一套采用 TMP 的决策流程
+
+1. 输入是否在 compile time 已知，且不会依赖 runtime data。
+2. 目标是生成 types、拒绝非法组合，还是消除可测 runtime 热点。
+3. 普通 constexpr、overload、variant 或 runtime branch 是否更清楚。
+4. instantiation cardinality、build time、binary size 是否在预算内。
+5. 错误能否通过 concepts、aliases 和 static assertions 清晰呈现。
+6. 用 compile benchmark、runtime benchmark 与 contract tests 同时验收。
+
+<Term def="从静态输入、收益、替代方案、构建预算和诊断共同判断元编程必要性。">
+  TMP adoption decision
+</Term>
+
+<EcppTmpAdoptionDecisionMap />
+
+先预测 Factorial、单位类型和 policy Buffer 各自输出的是 value、type 还是 concrete code，再查看 compiler 生成的 symbols 与诊断。
+
+## 小结
+
+- TMP 在编译期以 types/constants 为输入，通过 specialization 和 recursive instantiation 计算
+- Factorial 展示一般模板递归与完全特化终止，结果可折叠为 compile-time constant
+- TMP 可做 type selection、policy choices、dimensional safety 和 custom code generation
+- 运行工作前移能消除分支和非法状态，但增加 build time、instantiation 与诊断成本
+- expression templates 能融合运算，也可能引入 dangling、代码膨胀和复杂错误
+- 现代值计算优先考虑 constexpr/consteval，types 与结构选择仍是 TMP 强项
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 48"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="template metaprogramming">
+    由 compiler 执行的模板程序。
+  </GlossaryItem>
+  <GlossaryItem term="compile-time computation">
+    运行前求出值、类型或选择。
+  </GlossaryItem>
+  <GlossaryItem term="recursive instantiation">
+    通过更小参数 specialization 表示递归。
+  </GlossaryItem>
+  <GlossaryItem term="terminal specialization">
+    终止递归或条件的特化。
+  </GlossaryItem>
+  <GlossaryItem term="instantiation result folding">
+    把模板结果归约为最终常量。
+  </GlossaryItem>
+  <GlossaryItem term="type selection">按静态条件选择结果类型。</GlossaryItem>
+  <GlossaryItem term="metafunction">
+    以 nested type/value 返回结果的模板。
+  </GlossaryItem>
+  <GlossaryItem term="custom code generation">
+    按类型属性生成适用实现。
+  </GlossaryItem>
+  <GlossaryItem term="runtime-to-build-time shift">
+    把运行判断前移到构建阶段。
+  </GlossaryItem>
+  <GlossaryItem term="policy choices">用模板参数选择正交行为。</GlossaryItem>
+  <GlossaryItem term="policy-composed type">
+    由策略组合形成的具体类型。
+  </GlossaryItem>
+  <GlossaryItem term="dimensional type safety">
+    把物理维度编码进类型。
+  </GlossaryItem>
+  <GlossaryItem term="compile-time invariant enforcement">
+    构建时拒绝领域非法表达式。
+  </GlossaryItem>
+  <GlossaryItem term="expression template">
+    以模板类型记录延迟运算树。
+  </GlossaryItem>
+  <GlossaryItem term="lazy expression evaluation">
+    推迟到消费点统一求值。
+  </GlossaryItem>
+  <GlossaryItem term="template instantiation depth">
+    元程序递归展开层数。
+  </GlossaryItem>
+  <GlossaryItem term="instantiation cardinality">
+    构建生成的不同 specializations 数量。
+  </GlossaryItem>
+  <GlossaryItem term="constexpr computation">
+    常量求值中的普通函数计算。
+  </GlossaryItem>
+  <GlossaryItem term="consteval boundary">
+    强制编译期调用的函数边界。
+  </GlossaryItem>
+  <GlossaryItem term="constrained metaprogram boundary">
+    用 concepts 前移合法输入检查。
+  </GlossaryItem>
+  <GlossaryItem term="TMP adoption decision">
+    权衡收益与构建成本的决策。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：手工展开 Factorial 4。** 写出实例化链、终止点和最终 value。
+
+<Answer question="compiler 如何得到 24？">
+  Factorial 4 请求 4 乘 Factorial 3，依次展开到 1 乘 Factorial 0；完全特化
+  Factorial 0 返回 1，随后折叠为 1、2、6、24。一般模板是递归步骤，完全特化是
+  base case，全过程不产生 runtime loop。
+</Answer>
+
+2. **问题 2：为长度和时间建立单位安全类型。** 要让 distance 除以 duration 得到 speed，并拒绝二者直接相加。
+
+<Answer question="模板参数和测试应怎样设计？">
+  用长度指数和时间指数作为 non-type parameters；乘除分别加减指数，addition
+  只接受完全相同维度。定义 Distance、Duration、Speed aliases，用 static
+  assertions 验证结果 type，并用 compile-fail test 证明 Distance 加 Duration
+  被约束拒绝。
+</Answer>
+
+3. **问题 3：递归 TMP 让增量编译变慢，功能只是计算整数表。** 设计替代与验收。
+
+  <Answer question="何时改用 constexpr，怎样证明改造有效？">纯 value computation 不生成 types 时优先 constexpr/consteval loop，保留同样 static assertions 和 overflow 边界。比较 clean/incremental build time、compiler memory、diagnostic 长度、runtime symbols 与结果；确认无运行回退且构建成本下降后替换递归 TMP。</Answer>
+</Exercises>

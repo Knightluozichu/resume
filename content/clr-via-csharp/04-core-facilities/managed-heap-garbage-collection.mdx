@@ -1,0 +1,230 @@
+---
+title: "Chapter 21. The Managed Heap and Garbage Collection"
+type: C
+section: "CLR via C# 4e · Core Facilities"
+order: 21
+description: "覆盖托管堆分配与GC算法、代际/触发/LOH/模式/监控、Dispose/SafeHandle/finalization、依赖与弱引用/GCHandle/内存压力。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcGcAlgorithmLab, CvcLifetimeControlLab, CvcResourceCleanupLab } from "@/components/mdx/clr-via-csharp/diagrams/managed-heap-garbage-collection";
+
+<Objectives>
+
+- 能描述allocation pointer、roots、mark/compact、generations、LOH与GC modes并用trace验证
+- 能设计IDisposable/SafeHandle/finalizer ownership，使native资源确定释放且不依赖终结时机
+- 能分析weak references、ConditionalWeakTable、GCHandle/pinning和memory pressure的正确适用边界
+
+</Objectives>
+
+## 为什么GC回收的是不可达Memory，不是所有Resource
+
+CLR GC自动管理managed memory：从roots追踪object graph，不可达对象占用的heap space可回收。File handle、socket、GPU resource、native allocation等有外部稀缺性，必须Dispose/SafeHandle确定释放；finalizer只是最后安全网。把“有GC”理解成“不需要lifetime owner”会造成handle耗尽、延迟flush和插件无法卸载。
+
+先预测：local离开scope是否立即回收；Dispose是否释放managed object memory；finalizer何时执行；对象从Gen0升Gen2是否因年龄而非可达；LOH是否永不compact；GC.Collect能否修复memory leak；WeakReference检查IsAlive后Target是否稳定；pinning为何影响compaction。后文以reachability、resource和manual controls回答。
+
+<Term def="由stack/register/static/handle/finalizer等roots出发可追踪到的object graph，决定对象是否存活。">managed reachability graph</Term>
+
+## Managed Heap Basics
+
+Managed heap按segments组织，allocation通常在当前generation/region bump pointer前进，速度接近指针递增；对象含header/type关联与fields。线程可有allocation context减少竞争。Heap不是“所有对象一个连续数组”，实现随server/workstation、runtime版本和GC mode变化；不要依赖地址稳定，GC会移动对象。
+
+Roots包括thread stack/register references、static fields、GC handles、finalization queue等。JIT liveness可让local在source scope结束前后被视为dead，`GC.KeepAlive(obj)`仅在interop确需延长到调用点时使用。Object address不是业务identity。
+
+## Allocating Resources from the Managed Heap
+
+`new`对象、arrays、boxing、closures、strings、delegates和async state都可能分配。Allocation本身便宜不等于免费：稍后GC需扫描/reclaim/promote，survivor成本高。Value type也可因boxing、作为class field、array或closure而进入heap，源语法无`new`也可能分配。
+
+```csharp
+static long Sum(ReadOnlySpan<int> values)
+{
+    long total = 0;
+    foreach (int value in values)
+        total += value;
+    return total;
+}
+
+// 用dotnet-counters/trace或BenchmarkDotNet验证allocation，而不是数new。
+```
+
+优化先找allocation rate/top types/stack与survival。Pool/cache可能降低allocation却增加retention、复杂ownership和working set；只有trace证明GC是瓶颈再引入。
+
+## The Garbage Collection Algorithm
+
+GC在安全点暂停/协调managed threads，枚举roots，标记reachable objects；不可达回收，survivors可compact并更新所有references。Concurrent/background GC让部分mark与应用并发，但仍有暂停。Write barriers/card tables跟踪老代指向年轻对象，避免每次扫描全部heap。
+
+<Term def="从roots标记存活对象、回收不可达空间并可移动压缩survivors的GC核心过程。">tracing collection cycle</Term>
+
+Objects有finalizer时，首次不可达通常先进入ready-to-finalize并被重新视为可达，执行后下一次GC才回收，因而至少多活一轮并promote。Cycles只要无root也能回收，reference counting式循环泄漏不是tracing GC问题；真实managed leak是仍有root。
+
+<Stepper>
+  <Step title="切换allocate、mark、compact与promote"><CvcGcAlgorithmLab /></Step>
+  <Step title="画Root path">从static/event/task/handle/thread到目标对象逐边记录，区分合理lifetime与泄漏。</Step>
+  <Step title="关联GC trace">对照allocation stack、generation size、pause、promoted bytes、pinned objects和survivors。</Step>
+</Stepper>
+
+<Callout type="trap" title="Memory持续增长就说明GC没有运行">
+可能是对象仍被root、cache设计、LOH/fragmentation、native memory或正常working set。先分managed committed/live、native和root paths，不先强制Collect。
+</Callout>
+
+## Garbage Collections and Debugging
+
+Debugger/JIT优化会改变local liveness与timing，观察对象可能延长存活。Debug build变量通常更久，Release更早dead；finalizer/WeakReference tests应放non-inlined helper退出scope后运行，不能靠`obj=null`保证。GC nondeterministic，测试要验证eventual lifetime而非具体collection编号。
+
+Dump/heap工具显示types、sizes、roots、generation。Snapshot diff要在相似load/GC状态比较；大量dead objects尚未collected不等于leak，关键是full GC后live set和root growth。Native memory需进程/allocator工具另查。
+
+## Generations: Improving Performance
+
+Generational hypothesis认为多数objects很快死亡。Gen0频繁小收集，survivors升Gen1，进一步升Gen2；generation表示survival history/collection policy，不是对象“重要性”。Long-lived cache/event subscription会让临时graph被promote，清理后也需后续collection才回收。
+
+Gen2/full collection扫描范围大，pause/CPU更显著；background server GC减轻部分影响。减少promotion比单纯减少小allocation有时更重要：不要让request objects被static queue/backlog长期root。
+
+## Garbage Collection Triggers
+
+Allocation budget耗尽、low memory、explicit GC.Collect、host/runtime decisions等可触发。Budget自适应，不能假设每X MB固定collect。GC notifications/latency settings只是hints/advanced controls，应用不应以collection count驱动业务。
+
+`GC.Collect`通常使性能更差并promote survivors，不能修复rooted leak。极少数已知大阶段结束且有测量的desktop/workload可考虑，但需`GCCollectionMode`、latency与before/after evidence，library绝不擅自collect全进程。
+
+## Large Objects
+
+大对象（历史阈值约85KB，具体实现可演进）进入LOH，通常随Gen2收集，copy/compaction成本高，默认可能不频繁compact。Large arrays/strings造成fragmentation和pause；反复分配可用chunking/pooling/streaming，但pool会保留大buffers。Pinned large objects也影响布局。
+
+LOH问题看allocation size distribution、live/fragmented bytes和full GC，不只看总heap。现代runtime支持LOH compaction request等，但一次性选项不是长期修复。控制message/image/buffer上限先于调GC参数。
+
+## Garbage Collection Modes
+
+Workstation/server GC、background/concurrent、latency modes面向interactive throughput/latency/CPU core权衡。Server GC可为多个heaps/threads提高throughput也增加memory；SustainedLowLatency/NoGCRegion有严格budget和结束责任，超预算仍可能collect/fail。配置按生产trace和SLO，不按“server一定更好”。
+
+Container CPU/memory limits与heap hard limit会改变行为。部署清单记录runtime/GCCpuGroup/heap settings，压测真实core/memory limit。Mode调整不能掩盖unbounded queue/cache。
+
+## Forcing Garbage Collections
+
+手动collection适合tests证明collectible context/WeakReference，或极特殊阶段性应用；生产库不调用。`GC.WaitForPendingFinalizers`可能执行任意finalizer并阻塞，不在request path。Finalizer测试通常Collect、Wait、Collect，但必须先让strong refs真实离开JIT liveness scope。
+
+## Monitoring Your Application's Memory Usage
+
+指标分配率、heap size、committed、generation sizes、GC count/pause/time%、LOH、pinned、finalization queue、working set、native bytes。Counter用于趋势，trace用于allocation stacks/time correlation，dump用于root graph。把变化对齐traffic/deploy/cache/backlog，不用单snapshot下结论。
+
+```csharp
+long allocatedBefore = GC.GetTotalAllocatedBytes(precise: false);
+int[] collectionsBefore = [
+    GC.CollectionCount(0),
+    GC.CollectionCount(1),
+    GC.CollectionCount(2),
+];
+
+await RunMeasuredWorkloadAsync();
+
+GCMemoryInfo info = GC.GetGCMemoryInfo();
+Console.WriteLine($"allocated-delta={GC.GetTotalAllocatedBytes(false) - allocatedBefore}");
+Console.WriteLine($"heap={info.HeapSizeBytes} fragmented={info.FragmentedBytes}");
+Console.WriteLine($"collections={string.Join(',', Enumerable.Range(0, 3).Select(i => GC.CollectionCount(i) - collectionsBefore[i]))}");
+```
+
+这类进程内快照用于给实验建立前后界线，不能替代持续counters和allocation trace；并发workload会混入其它请求，生产归因必须结合时间线与activity。
+
+<Term def="通过allocation、live set、roots、generation、pause、LOH、pin与native memory共同形成的内存证据链。">memory evidence chain</Term>
+
+## Working with Types Requiring Special Cleanup
+
+Owned resource type实现IDisposable，Dispose可多次调用，释放children并使后续成员抛ObjectDisposed。Caller用using/finally；依赖注入container/host按scope dispose。Async cleanup实现IAsyncDisposable，不同步阻塞。Dispose不让object立刻GC，它只释放资源/解除roots。
+
+```csharp
+public sealed class NativeBuffer : IDisposable
+{
+    private SafeNativeBufferHandle _handle;
+
+    public NativeBuffer(nuint size) => _handle = NativeMethods.Allocate(size);
+
+    public void Dispose()
+    {
+        _handle.Dispose();
+        GC.SuppressFinalize(this); // 本类无finalizer时通常由SafeHandle内部处理
+    }
+}
+```
+
+若只持有SafeHandle，不必自己finalizer；SafeHandle封装critical release。Dispose managed collaborators only when owned，borrowed dependency不释放。Ownership写在constructor/factory/field name和tests。
+
+## Using a Type That Wraps a Native Resource
+
+推荐SafeHandle派生类型实现`ReleaseHandle`，P/Invoke直接接收SafeHandle，runtime在call期间保持handle有效并处理finalization。避免IntPtr public exposure和手写finalizer race。Native method返回ownership、invalid sentinel、duplicate/close、thread affinity都要明确。
+
+<Term def="Managed wrapper通过Dispose/SafeHandle确定释放native resource，并明确borrowed/owned关系的协议。">resource ownership boundary</Term>
+
+## An Interesting Dependency Issue
+
+Finalizer ordering不保证普通managed collaborators仍可用；两个finalizable objects依赖彼此会出现一方先finalize。CriticalFinalizerObject/SafeHandle提供更可靠顺序层，但业务finalizer不应调用logger/stream/other object。Dispose路径可以按明确顺序协作，finalizer只释放直接native handle。
+
+Object可能在native call期间被JIT视为dead，finalizer提前运行关闭handle；SafeHandle参数或GC.KeepAlive(owner)解决特定interop lifetime。不要随意KeepAlive到方法末尾扩大retention，证明确切last use。
+
+## Other GC Features for Use with Native Resources
+
+`GC.AddMemoryPressure/RemoveMemoryPressure`让大量native allocation影响GC scheduling，数值必须近似且成对；滥报会过度collect，漏报会让GC低估。GCHandle可Normal/Weak/Pinned，传callback context；每个Allocate必须finally Free。Pinned Object Heap/Memory等现代选择仍需scope/evidence。
+
+## Finalization Internals
+
+含finalizer type实例登记finalization queue；不可达后移到freachable queue，finalizer thread执行，之后才可回收。`GC.SuppressFinalize`在successful Dispose后移除需要，`ReRegisterForFinalize`极少用。Finalizer不可预测顺序、线程和时间，必须短、no-block/no-throw；异常可能终止process。
+
+<Stepper>
+  <Step title="切换Dispose、SafeHandle、finalizer与resurrection"><CvcResourceCleanupLab /></Step>
+  <Step title="画Cleanup路径">分别列正常Dispose、constructor partial failure、漏Dispose-finalizer、process exit，说明每条释放保证。</Step>
+  <Step title="注入Handle故障">并发Dispose/native call、double dispose、finalizer thread、invalid handle和shutdown，验证无double-free/use-after-close。</Step>
+</Stepper>
+
+<Callout type="trap" title="Finalizer等同于稍晚自动调用Dispose">
+Finalizer时机/顺序不定，不能安全访问任意managed collaborators，也不保证进程退出前执行。它只做direct native safety net，正常路径必须Dispose。
+</Callout>
+
+## Monitoring and Controlling the Lifetime of Objects Manually
+
+WeakReference允许target被GC回收，`TryGetTarget`一次获取local strong ref后使用，不能先IsAlive再Target竞态。ConditionalWeakTable把value生命周期附着于weak key，适合外部metadata，不是可枚举通用cache。Weak cache命中不确定，factory可能重复，要保证幂等。
+
+GCHandle用于interop保留/弱引用/pin，必须Free；static dictionary/event是strong root，需remove。Object resurrection在finalizer把this存static，复杂且通常禁止；若re-register还会多次finalize。Manual lifetime controls都应小范围封装并有WeakReference/handle count tests。
+
+<Term def="通过WeakReference、weak table、GCHandle、pin与memory pressure改变默认可达性/GC决策的高级控制。">manual lifetime control</Term>
+
+<Stepper>
+  <Step title="切换WeakReference、ConditionalWeakTable、GCHandle与memory pressure"><CvcLifetimeControlLab /></Step>
+  <Step title="记录Control ledger">每个handle/pressure add/weak value记录owner、scope、Free/Remove、重复factory与卸载影响。</Step>
+  <Step title="执行Race测试">Target在检查间回收、callback并发、handle double-free、collectible context unload与native pressure波动。</Step>
+</Stepper>
+
+## 本章回顾：GC只依据Reachability，Owner负责Resource
+
+1. Managed allocation快但collection按roots追踪；leak是仍可达，不是GC忘记对象。
+2. Generations/LOH/modes/triggers是性能策略，先用counter/trace/dump建立证据。
+3. Dispose确定释放，SafeHandle管理native handle，finalizer只做短小安全网。
+4. Static/event/task/handle可延长graph和阻止unload；root path是诊断核心。
+5. Weak/GCHandle/pin/memory pressure是高级控制，必须成对owner、限制scope并做竞态测试。
+
+<Exercises>
+
+**问题 1：GC.Collect后对象仍存在，怎样判断Leak？**
+
+<Answer>在相似load下full GC后看live set与root path。若由static cache/event/task/GCHandle持续root且超过设计lifetime，是managed leak；若只是dead未收集或pool容量，不同。区分managed committed/live、LOH fragmentation与native memory，不用反复Collect当修复。</Answer>
+
+**问题 2：包装Native handle应自己写Finalizer还是用SafeHandle？**
+
+<Answer>优先SafeHandle派生类封装invalid/release，owner实现IDisposable持有它，P/Invoke使用SafeHandle保证call lifetime。通常wrapper无需finalizer；SafeHandle提供critical safety net。测试double dispose、concurrent call、constructor failure和process shutdown。</Answer>
+
+**问题 3：Weak cache为何偶尔重复创建Value？**
+
+<Answer>Weak target可在任何无strong ref时回收，两个线程也可能同时miss/factory。获取后用TryGetTarget的local strong reference；factory必须幂等或用per-key synchronization。若value必须稳定存在，weak cache不符合contract，应由明确owner强持有和evict。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="managed reachability graph" definition="从GC roots可追踪到的对象图，决定存活。" />
+  <GlossaryItem term="tracing collection cycle" definition="Mark、reclaim、compact与promote的GC过程。" />
+  <GlossaryItem term="memory evidence chain" definition="Allocation、live roots、generations、pause、LOH与native的证据。" />
+  <GlossaryItem term="resource ownership boundary" definition="Dispose/SafeHandle对native resource的owned/borrowed释放协议。" />
+  <GlossaryItem term="manual lifetime control" definition="Weak、handle、pin和pressure对默认GC生命周期的高级控制。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 21: The Managed Heap and Garbage Collection" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

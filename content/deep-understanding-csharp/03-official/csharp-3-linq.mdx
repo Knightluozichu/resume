@@ -1,0 +1,158 @@
+---
+title: "Chapter 3. C# 3: LINQ and everything that comes with it"
+type: C
+section: "C# in Depth 4e · C# 2-5"
+order: 3
+description: "覆盖Automatically implemented properties、Implicit typing、Initializers、Anonymous types、Lambda、Extension methods、Query expressions与LINQ整合。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-3"
+draft: false
+---
+
+import { DcsCsharp3ConstructionLab, DcsLambdaBindingLab, DcsQueryTranslationLab } from "@/components/mdx/deep-understanding-csharp/diagrams/csharp-3-linq";
+
+<Objectives>
+
+- 能分析auto property、implicit local、initializer和anonymous type的compiler output、evaluation order与contract scope
+- 能比较lambda转换为delegate或expression tree，并判断extension/overload resolution选择的实际调用目标
+- 能推导query clauses到standard operator calls，复现Enumerable/Queryable与terminal execution差异
+
+</Objectives>
+
+## 为什么C# 3的许多小Feature最终汇聚成LINQ
+
+C# 3不是只加入query syntax。Auto property让data carrier简洁，`var`让anonymous type可命名于local scope，initializer让sample data易构建，lambda提供inline behavior，extension methods让operators看似属于source，expression tree让provider读取code structure。缺少任意一环，统一query experience都会更笨重。
+
+先预测：`var`是否改变runtime type；object initializer是否绕过constructor；lambda是否天然是delegate；query expression是否由runtime解释。答案都是否。
+
+<Term def="多个独立language features为同一个higher-level capability提供data shape、behavior和binding基础的设计方式。">feature convergence</Term>
+
+## Automatically implemented properties
+
+Auto property由compiler生成backing field与accessors，public contract仍是property。它适合没有额外validation的state；一旦需要invariant、computed value或observable mutation，就显式实现accessor。Compiler-generated field name不是reflection/serialization的stable contract。
+
+Property initializer与`init`/required等是后续版本演进，不能倒写成C# 3原始能力。现代代码可使用它们，但应区分“原书解释auto property”与“当前API选择immutability”。
+
+## Implicit typing
+
+`var`要求initializer并在compile time得到exact static type；之后赋值和member resolution都按该type进行。它使anonymous type与复杂generic query可用，不等于`dynamic`。当右侧清楚揭示type时减少重复；当method name隐藏precision或abstraction时显式type更好。
+
+## Object and collection initializers
+
+Object initializer先调用constructor，再按source order调用setters/field assignments；collection initializer翻译为一系列`Add` calls。若中途setter/Add抛异常，对象可能已经产生side effects但expression未返回。Constructor仍应建立最低valid invariant，initializer不是required-state验证的替代。
+
+```csharp
+var order = new Order("A-42")
+{
+    Customer = customer,
+    Priority = Priority.High,
+};
+```
+
+## Anonymous types
+
+Anonymous type提供compiler-generated immutable properties、structural equality与useful `ToString`，适合local projection/composite key。Its identity受property names、types与order影响，不能在public signature中直接命名，也不应跨assembly当wire contract。需要长期domain meaning时提升为named record/class。
+
+<Term def="由anonymous type的property name、static type和order共同决定equality与compiler type identity的局部结构。">anonymous structural shape</Term>
+
+<Stepper>
+  <Step title="切换property、var、initializer与anonymous type"><DcsCsharp3ConstructionLab /></Step>
+  <Step title="展开generated members与ordered calls">写出backing field/accessor、constructor后assignments/Add及anonymous properties。</Step>
+  <Step title="注入setter fault并检查scope">让第二个assignment失败，确认invariant/side effect；尝试跨public boundary暴露anonymous shape并观察compile限制。</Step>
+</Stepper>
+
+<Callout type="trap" title="Initializer让constructor validation不再必要">
+Object在initializer执行前已经完成constructor；任何setter fault都发生在其后。Required invariant仍应由constructor/factory保证，initializer只补optional mutation。
+</Callout>
+
+## Lambda expressions
+
+Lambda没有独立runtime type；它必须转换到compatible delegate或expression-tree target。Delegate路径生成可执行method并可能生成closure，expression path构建描述parameters、operations与calls的object graph。Provider只能翻译其理解的nodes，不能执行任意C#。
+
+Overload resolution会根据candidate target types尝试lambda conversion，因此相同text在不同call site得到不同meaning。Statement lambda通常不能直接成为expression tree；optional/ref等signature也受版本规则限制。遇到ambiguity时显式声明target type比cast result更清楚。
+
+## Extension methods
+
+Extension method是带`this`首参数的static method，并由using namespace与receiver static type参与compile-time resolution。Instance member优先，extension没有virtual dispatch，也不能访问private state。它让`source.Where(...)`形成fluent vocabulary，但真正调用仍是`Enumerable.Where(source, ...)`或`Queryable.Where(...)`。
+
+```csharp
+Func<Order, bool> local = order => order.Total > 100m;
+Expression<Func<Order, bool>> remote = order => order.Total > 100m;
+```
+
+<Term def="lambda依据target type被lower成可执行delegate，或被构造成provider可检查的expression object graph。">target-typed lambda conversion</Term>
+
+<Term def="extension candidate按namespace与receiver static type在compile time选择，最终仍调用static method。">extension binding</Term>
+
+<Stepper>
+  <Step title="切换delegate、expression、extension与overload"><DcsLambdaBindingLab /></Step>
+  <Step title="写出target type和selected method">先列candidate signatures，再决定lambda output与receiver static type，不能从lambda body单独推断。</Step>
+  <Step title="检查capture、tree nodes与instance precedence">修改captured storage，dump expression，并添加同名instance member观察binding变化。</Step>
+</Stepper>
+
+<Callout type="trap" title="Expression tree就是可随处执行的完整C# AST">
+它只表示受支持的expression nodes，provider还需翻译；statement body、local helper或新syntax可能无法表示/翻译。必须用目标provider集成测试。
+</Callout>
+
+## Query expressions
+
+Query expression是compiler translation syntax。`from/where/select`映射到`SelectMany`、`Where`、`Select`等method calls；transparent identifiers帮助多`from`/`let`保留range variables。Translation发生在compile time，不是SQL parser嵌入C#。
+
+Query syntax在join、group、continuation等relational shape上常更清楚；method syntax对短pipeline或无query-clause对应的operators更直接。二者可混用，选择可读性而非performance myth，因为最终operator chain才决定behavior。
+
+## The end result: LINQ
+
+LINQ统一operators与lambda/query composition，不统一data source。`IEnumerable<T>`接收delegates并在process内enumerate；`IQueryable<T>`接收expression trees并让provider翻译。Deferred/eager、ordering、null semantics、string comparison与supported methods都由operator/provider contract决定。
+
+```csharp
+var query =
+    from order in orders
+    where order.Total > minimum
+    orderby order.CreatedAt
+    select new { order.Id, order.Total };
+```
+
+<Term def="compiler把query clauses转换为standard query method calls，并使用transparent identifiers维护range variables。">query expression translation</Term>
+
+<Stepper>
+  <Step title="切换where、select、join/group与完整LINQ"><DcsQueryTranslationLab /></Step>
+  <Step title="手动展开operator chain">标注每个lambda target是delegate还是expression，以及哪个terminal开始执行。</Step>
+  <Step title="对local与remote source分别验收">记录enumeration count；检查provider generated command、round trips、ordering和unsupported nodes。</Step>
+</Stepper>
+
+## 本章回顾：LINQ是Feature Convergence而非单一语法
+
+1. Auto property、var、initializer与anonymous type共同降低data shaping ceremony。
+2. `var`保留exact static type；initializer仍在constructor之后按顺序mutation。
+3. Lambda由target type决定delegate或expression tree，capture与translation contract不同。
+4. Extension按compile-time static resolution，instance member优先且没有virtual dispatch。
+5. Query expression映射到methods；Enumerable/Queryable与terminal决定执行引擎、时机和成本。
+
+<Exercises>
+
+**问题 1：为何anonymous type、var与LINQ projection常一起出现？**
+
+<Answer>Projection产生无预先named class的structural shape；anonymous type提供properties/equality，var让local variable能持有其exact static type，lambda/query构造projection。它适合local pipeline；跨public/wire boundary应提升为named type并显式version contract。</Answer>
+
+**问题 2：同一lambda传给List和EF query，为何测试策略不同？**
+
+<Answer>List overload接收delegate并执行任意CLR code；IQueryable overload接收expression tree，由provider翻译有限nodes。前者测capture、enumeration与side effects，后者还要测tree shape、generated command、server/client boundary、indexes和round trips。</Answer>
+
+**问题 3：如何判断query syntax与method syntax的选择没有改变行为？**
+
+<Answer>把query clauses按spec展开为method chain，确认source static type、selected overloads、operator order、lambda target和terminal完全对应；对local source记录结果/order/enumeration，对remote provider比较generated command。可读性可变，operator contract不能变。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="feature convergence" definition="多个language features共同支撑一个higher-level capability。" />
+  <GlossaryItem term="anonymous structural shape" definition="由property names/types/order定义的local anonymous type结构。" />
+  <GlossaryItem term="target-typed lambda conversion" definition="lambda按target变成delegate或expression tree。" />
+  <GlossaryItem term="extension binding" definition="extension按namespace与receiver static type做compile-time resolution。" />
+  <GlossaryItem term="query expression translation" definition="query clauses到standard operator method calls的compiler mapping。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# in Depth, Fourth Edition, Chapter 3: C# 3: LINQ and everything that comes with it" adaptedUrl="https://livebook.manning.com/book/c-sharp-in-depth-fourth-edition/chapter-3" />

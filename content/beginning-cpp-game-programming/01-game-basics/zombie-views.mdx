@@ -1,0 +1,367 @@
+---
+title: 第 8 章：Zombie Arena 与 SFML View
+type: A
+section: Zombie Arena 项目
+order: 8
+description: 对齐官方第 3 版第 8 章：规划 Zombie Arena，建立 Player 类和游戏引擎骨架，用 worldView 与 hudView 分离滚动世界和固定 HUD。
+demo: false
+math: false
+sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+draft: false
+---
+
+import {
+  BcgpDualViewMap,
+  BcgpPlayerWorldMap,
+  BcgpZombieLoopMap,
+} from "@/components/mdx/beginning-cpp-game-programming/diagrams/zombie-views";
+
+<Objectives>
+
+- 能设计 Zombie Arena 的窗口、竞技场、Player、世界视图与 HUD 视图所有权边界
+- 能实现 Player 类的归一化移动、世界边界、精灵同步与世界坐标瞄准接口
+- 能解释 SFML View 如何映射世界到窗口，并写出先更新玩家、再跟随相机、最后分层绘制的主循环
+
+</Objectives>
+
+## 从“世界比屏幕大”开始
+
+Timber 和 Pong 的场地接近一个窗口大小。第三个项目
+
+<Term def="本书的僵尸生存射击项目，世界可扩展到多个屏幕，玩家在竞技场中移动、瞄准并对抗不断生成的僵尸。">
+  Zombie Arena
+</Term>
+要求相机跟随玩家，同时分数、弹药和提示固定在屏幕上。解决办法不是移动所有地图对象，而是改变观察世界的
+View。
+
+本章先建立 Player、竞技场边界、worldView、hudView 和主循环。僵尸群、纹理管理、子弹与碰撞在后续章节加入；现在的验收是玩家能在大世界移动、相机正确跟随、HUD 不滚动、鼠标瞄准坐标一致。
+
+## 项目边界与游戏引擎骨架
+
+<Term def="协调窗口、资源、输入、更新、视图和渲染阶段的 Zombie Arena 应用层，不替代 Player 等对象维护自身不变量。">
+  僵尸游戏引擎
+</Term>
+当前可以由 `main` 和少量函数组成，不必先设计庞大 Engine
+基类。窗口拥有图形上下文，游戏层拥有 Player
+与视图，资源对象比引用它们的精灵活得更久。
+
+```text
+ZombieArena/
+  src/main.cpp
+  src/Player.hpp
+  src/Player.cpp
+  assets/graphics/player.png
+  assets/fonts/hud.ttf
+```
+
+构建目标列出 `main.cpp` 与 `Player.cpp`，资源复制到产物目录。初始化顺序是创建窗口、加载必需资源、构造有效竞技场和 Player、配置 View；任一步失败都不进入循环。
+
+<Term def="定义游戏世界合法位置范围的矩形，Player、僵尸与相机约束都使用同一世界坐标契约。">
+  竞技场边界
+</Term>
+例如 3000x3000
+世界单位，不等于窗口像素尺寸。把边界作为值传给更新，而不是散落全局常量。
+
+## Player 类：输入意图与世界状态分开
+
+<Term def="封装玩家位置、移动速度、朝向和精灵表示，并在世界边界内维护逻辑与视觉一致的对象。">
+  Player 类
+</Term>
+不直接读取全局键盘或窗口。主循环把设备状态转换成二维移动意图和世界瞄准点，Player
+只处理游戏数据，测试无需真实输入设备。
+
+```cpp
+class Player {
+public:
+    Player(const sf::Texture& texture, sf::Vector2f spawn, float speed);
+
+    void update(float dt, sf::Vector2f moveIntent,
+                sf::Vector2f aimWorld, const sf::FloatRect& arena);
+
+    [[nodiscard]] sf::Vector2f position() const noexcept;
+    [[nodiscard]] const sf::Sprite& sprite() const noexcept;
+
+private:
+    sf::Vector2f position_;
+    float speed_;
+    sf::Sprite sprite_;
+};
+```
+
+Player 的 Sprite 借用外部 Texture，因此游戏资源层必须覆盖 Player 生命周期。若不希望构造后纹理更换，构造参数和所有权文档要明确。返回 const Sprite 只用于绘制，外部不能绕过类移动它。
+
+<BcgpPlayerWorldMap />
+
+## 归一化移动避免斜向加速
+
+WASD 同时按两个正交方向时，原始向量 `(1,1)` 长度约 1.414。直接乘速度会让斜向比水平快。先在非零时归一化，再乘每秒速度和 dt。
+
+```cpp
+sf::Vector2f moveIntent{0.0F, 0.0F};
+if (sf::Keyboard::isKeyPressed(sf::Keyboard::W)) moveIntent.y -= 1.0F;
+if (sf::Keyboard::isKeyPressed(sf::Keyboard::S)) moveIntent.y += 1.0F;
+if (sf::Keyboard::isKeyPressed(sf::Keyboard::A)) moveIntent.x -= 1.0F;
+if (sf::Keyboard::isKeyPressed(sf::Keyboard::D)) moveIntent.x += 1.0F;
+
+const float lengthSquared{moveIntent.x * moveIntent.x +
+                          moveIntent.y * moveIntent.y};
+if (lengthSquared > 0.0F) {
+    const float inverseLength{1.0F / std::sqrt(lengthSquared)};
+    moveIntent *= inverseLength;
+}
+```
+
+<Term def="把非零方向向量缩放为长度一，使多轴组合只改变方向而不改变移动速率。">
+  方向归一化
+</Term>
+不能对零向量除长度。相反方向键同时按下会互相抵消为零，符合明确规则。
+
+## Player 更新、边界与朝向
+
+更新先积分候选位置，再按完整玩家包围盒钳制。Sprite 原点放在角色中心后，边界公式要使用半宽半高；若原点仍在左上，则使用完整宽高。两种模型不能混用。
+
+```cpp
+void Player::update(float dt, sf::Vector2f moveIntent,
+                    sf::Vector2f aimWorld, const sf::FloatRect& arena)
+{
+    position_ += moveIntent * speed_ * dt;
+
+    const sf::FloatRect local{sprite_.getLocalBounds()};
+    const float halfWidth{local.width * 0.5F};
+    const float halfHeight{local.height * 0.5F};
+    position_.x = std::clamp(position_.x,
+                             arena.left + halfWidth,
+                             arena.left + arena.width - halfWidth);
+    position_.y = std::clamp(position_.y,
+                             arena.top + halfHeight,
+                             arena.top + arena.height - halfHeight);
+
+    const sf::Vector2f aim{aimWorld - position_};
+    const float angle{std::atan2(aim.y, aim.x) * 180.0F / std::numbers::pi_v<float>};
+    sprite_.setPosition(position_);
+    sprite_.setRotation(angle);
+}
+```
+
+<Term def="玩家和游戏对象使用的逻辑位置空间，独立于窗口像素并由 View 映射到可见区域。">
+  世界坐标
+</Term>
+中的 `aimWorld` 必须由当前 worldView 映射得到。竞技场小于玩家尺寸时 clamp
+上下界会反转，构造关卡时应拒绝该配置，而不是让 update 接受非法范围。
+
+<Callout type="trap">
+  **现象**：相机移动后准星和玩家朝向越来越偏。**原因**：用窗口像素直接减世界位置，混合两个坐标空间。**修法**：通过
+  `mapPixelToCoords(mousePixel, worldView)` 把鼠标映射到世界，再计算方向。
+</Callout>
+
+## SFML View 改变观察，不改变世界
+
+<Term def="SFML 定义二维相机中心、尺寸、旋转和归一化视口的对象，用于把世界坐标映射到渲染目标区域。">
+  SFML View
+</Term>
+不会修改 Player 或地图坐标。`setCenter` 只是让之后在该 View
+下绘制的世界从另一个位置观察。
+
+```cpp
+sf::View worldView;
+worldView.setSize(1280.0F, 720.0F);
+worldView.setCenter(player.position());
+
+sf::View hudView;
+hudView.setSize(1280.0F, 720.0F);
+hudView.setCenter(640.0F, 360.0F);
+```
+
+<Term def="以玩家或目标位置为中心、显示可滚动游戏世界的 View；地图和实体都在此视图下绘制。">
+  worldView
+</Term>
+每帧在 Player 更新后跟随。
+<Term def="使用固定逻辑屏幕坐标绘制分数、弹药和提示的 View，不随世界相机中心移动。">
+  hudView
+</Term>
+保持固定。
+
+<BcgpDualViewMap />
+
+## 世界相机边界
+
+相机若无条件以玩家为中心，玩家靠近地图边缘时 View 会显示竞技场外空白。可把 View 中心钳制到 `arena.left + viewWidth/2` 与 `arena.right - viewWidth/2` 之间。若地图比 View 小，应将相机固定在地图中心或采用 letterbox 策略。
+
+```cpp
+sf::Vector2f cameraCenter{player.position()};
+const sf::Vector2f viewSize{worldView.getSize()};
+cameraCenter.x = std::clamp(cameraCenter.x,
+                            arena.left + viewSize.x * 0.5F,
+                            arena.left + arena.width - viewSize.x * 0.5F);
+cameraCenter.y = std::clamp(cameraCenter.y,
+                            arena.top + viewSize.y * 0.5F,
+                            arena.top + arena.height - viewSize.y * 0.5F);
+worldView.setCenter(cameraCenter);
+```
+
+<Term def="限制相机中心使整个 View 保持在地图合法范围内，避免显示世界边界外区域。">
+  相机钳制
+</Term>
+前置条件是竞技场尺寸不小于 View；关卡配置阶段先验证，否则 clamp 范围无效。
+
+## 像素到世界的输入映射
+
+<Term def="把窗口像素位置按指定 View 逆变换为逻辑坐标的过程，用于鼠标瞄准、选择和世界命中测试。">
+  坐标映射
+</Term>
+必须显式传 worldView。窗口当前激活 View 可能刚切到
+HUD，依赖隐式当前状态会导致调用顺序改变输入结果。
+
+```cpp
+const sf::Vector2i mousePixel{sf::Mouse::getPosition(window)};
+const sf::Vector2f mouseWorld{
+    window.mapPixelToCoords(mousePixel, worldView)};
+
+player.update(dt, moveIntent, mouseWorld, arena);
+```
+
+HUD 点击则用 hudView 映射。记录日志时标注 pixel/world/hud，不能只打印 `x,y`。窗口 resize 后 View 的逻辑尺寸与 viewport 策略改变，输入映射自动跟随相同 View 才能保持一致。
+
+## 主游戏循环：先 Player，后相机
+
+<Term def="持续处理窗口事件、采样输入、更新玩家和世界、更新相机并分层绘制的 Zombie Arena 帧循环。">
+  主游戏循环
+</Term>
+顺序很重要：若先设置 View 中心再更新
+Player，相机会永远落后一帧；高速移动时产生可见拖尾。
+
+```cpp
+while (window.isOpen()) {
+    const float dt{std::min(frameClock.restart().asSeconds(), 0.05F)};
+    while (window.pollEvent(event)) {
+        if (event.type == sf::Event::Closed)
+            window.close();
+    }
+
+    const sf::Vector2f aimWorld{
+        window.mapPixelToCoords(sf::Mouse::getPosition(window), worldView)};
+    player.update(dt, moveIntent, aimWorld, arena);
+    worldView.setCenter(clampedCameraCenter(player.position()));
+
+    window.clear();
+    window.setView(worldView);
+    window.draw(arenaBackground);
+    window.draw(player.sprite());
+    window.setView(hudView);
+    window.draw(ammoText);
+    window.draw(scoreText);
+    window.display();
+}
+```
+
+示例中的 `moveIntent` 和 `clampedCameraCenter` 由前述逻辑产生。一次 clear、一次 display，中间按层切换 View；切 View 不会清空已绘制内容。
+
+<BcgpZombieLoopMap />
+
+## 文件组织与职责
+
+Player.hpp 只暴露构造、update 和查询；Player.cpp 包含数学与 SFML 实现；main 负责设备输入、窗口、Views 和阶段顺序。未来 Zombie、TextureHolder 和 Level 模块按相同边界增加，不把所有对象塞回 main。
+
+这不是要求每个类一个“管理器”。只有真正拥有生命周期或协调跨对象规则时才引入新边界。View 由游戏层拥有，因为它协调 Player、地图、HUD 与窗口；Player 不应该偷偷改变全局 View。
+
+资源加载和关卡构造在循环前完成。后续大地图会使用 VertexArray 降低 draw call，但属于第 9 章；本章先确保坐标和相机契约正确。
+
+<Callout type="trap">
+  **现象**：HUD 跟着玩家滚动或完全消失。**原因**：画 HUD 前没有切回
+  hudView，文本仍按世界坐标解释。**修法**：明确世界绘制和 HUD
+  绘制两个区段，每段开头设置对应 View，并用截图验证玩家跨越一屏时 HUD
+  像素位置不变。
+</Callout>
+
+## 验证双 View 与 Player
+
+逻辑测试给 Player 固定 dt 和输入：单轴与斜向一秒位移长度相同，零输入不动，四边都按完整包围盒钳制，世界瞄准点改变旋转但不改变位置。非法竞技场尺寸在初始化时失败。
+
+集成测试让玩家从世界中心移动超过一个屏幕：worldView 中心跟随且不越过地图边界，背景和玩家滚动，HUD 在同一屏幕位置。固定一个世界点，窗口 resize 和相机移动后用 mapPixelToCoords 反算鼠标，瞄准方向仍指向该点。
+
+调试时同时绘制 View 可见矩形、竞技场边界和 Player bounds。记录 Player position、camera center、mouse pixel、mouse world 四组值。错误截图要带窗口尺寸与 View 尺寸，避免把 letterbox 空白误判为地图错位。
+
+> 先预测：在绘制 HUD 后才调用不指定 View 的 `mapPixelToCoords`，得到的鼠标位置属于哪个空间？它会依赖窗口当前 hudView，而非世界；输入转换必须显式指定 worldView。
+
+## 小结
+
+- Zombie Arena 世界大于屏幕，Player 与地图保持世界坐标，SFML View 负责观察映射
+- Player 接收移动意图、dt 和世界瞄准点，归一化斜向输入并维护竞技场边界
+- worldView 跟随玩家并受地图边界钳制，hudView 使用固定逻辑屏幕坐标
+- 鼠标像素经指定 worldView 映射后才能与 Player 世界位置计算瞄准
+- 主循环先更新 Player，再更新相机，最后一次 clear 中分世界/HUD 两层绘制并 display
+- 游戏引擎骨架协调窗口、资源、视图和阶段，不侵入 Player 的内部不变量
+
+<Exercises>
+
+**问题 1** 玩家同时按 W+D 时为何要归一化？若速度 300、dt 0.5 秒，归一化前后位移长度分别是多少？
+
+<Answer>
+
+原方向 `(1,-1)` 长度为根号二，直接乘速度和 dt 的位移长度约 212.1，而单轴只有 150，斜向更快。归一化为单位向量后乘 300\*0.5，位移长度也是 150；零向量必须跳过除法。
+
+</Answer>
+
+**问题 2** 为什么 HUD 和世界需要两个 View？写出正确绘制顺序和鼠标瞄准映射。
+
+<Answer>
+
+世界 View 中心随玩家移动，HUD 必须固定在逻辑屏幕坐标，若共用会一起滚动。顺序是 clear，setView(worldView) 画地图和实体，setView(hudView) 画文字与提示，最后 display。瞄准用 `mapPixelToCoords(mousePixel, worldView)`，不能依赖最后激活的 hudView。
+
+</Answer>
+
+**问题 3** 主循环先更新相机再更新 Player 会产生什么现象？怎样测试相机和地图边界？
+
+<Answer>
+
+相机中心使用上一帧 Player 位置，会稳定落后一帧，高速移动时像拖尾。测试先更新 Player 再计算 camera center；让玩家走到四角，断言 View 整体不越出 arena。地图小于 View 时初始化选择固定居中策略，不能调用上下界反转的 clamp。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="Zombie Arena">
+  世界可扩展到多个屏幕、玩家移动瞄准并对抗僵尸的第三个项目。
+</GlossaryItem>
+<GlossaryItem term="僵尸游戏引擎">
+  协调窗口、资源、输入、更新、视图和渲染阶段的应用层。
+</GlossaryItem>
+<GlossaryItem term="竞技场边界">
+  定义 Player、实体与相机合法世界范围的矩形。
+</GlossaryItem>
+<GlossaryItem term="Player 类">
+  维护玩家位置、速度、朝向、精灵同步和边界不变量的对象。
+</GlossaryItem>
+<GlossaryItem term="方向归一化">
+  把非零移动方向缩放到长度一，消除斜向速度增益。
+</GlossaryItem>
+<GlossaryItem term="世界坐标">
+  独立于窗口像素、由 View 映射到显示区域的游戏逻辑位置空间。
+</GlossaryItem>
+<GlossaryItem term="SFML View">
+  定义二维相机中心、尺寸、旋转和 viewport 的世界到窗口映射对象。
+</GlossaryItem>
+<GlossaryItem term="worldView">
+  跟随 Player 并绘制地图和实体的世界相机视图。
+</GlossaryItem>
+<GlossaryItem term="hudView">
+  使用固定逻辑屏幕坐标绘制分数、弹药与提示的视图。
+</GlossaryItem>
+<GlossaryItem term="相机钳制">
+  限制 View 中心，使整个可见矩形保持在地图合法范围内。
+</GlossaryItem>
+<GlossaryItem term="坐标映射">
+  用指定 View 把窗口像素逆变换为世界或 HUD 逻辑坐标。
+</GlossaryItem>
+<GlossaryItem term="主游戏循环">
+  按事件、输入、Player 更新、相机更新和双层渲染顺序持续执行的帧循环。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 8"
+  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+/>

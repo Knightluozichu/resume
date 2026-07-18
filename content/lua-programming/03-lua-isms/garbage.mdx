@@ -1,0 +1,206 @@
+---
+title: "Chapter 23. Garbage"
+type: C
+section: "Programming in Lua 4e · Lua-isms"
+order: 23
+description: "掌握weak tables、memoization、object attributes、ephemerons、finalizers与Lua 5.3 GC控制，并建立reachability和资源生命周期边界。"
+demo: true
+math: false
+sourceUrl: "https://www.lua.org/pil/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PilWeakReachabilityLab, PilFinalizerLifecycleLab, PilGarbageCollectorPaceLab } from "@/components/mdx/lua-programming/diagrams/garbage";
+
+<Objectives>
+
+- 能解释strong/weak reachability、weak key/value与ephemeron语义，并判断cache和metadata是否泄漏
+- 能设计memoization、object attributes和default-value tables，验证entry消失、identity与recreation
+- 能分析finalizer与incremental collector生命周期，比较pause、step、full collect和显式close
+
+</Objectives>
+
+## 为什么Garbage首先是Reachability问题
+
+Lua GC不判断“业务上不用了”，只判断从roots是否还能沿strong references到达object。Global、stack/local/upvalue、registry、table key/value、C references都可能成为路径。Weak table允许某些association不构成ownership，但entry可在任何collection后消失。
+
+先预测：weak-key table的value反向引用key是否泄漏；number/string作为weak key何时消失；memoized result没人用时weak value是否能重算；public object被private-state map强引用会怎样；`__gc`何时注册；GC停掉后memory如何；full collect能否回收仍被global cache引用的objects。先画root graph。
+
+<Term def="Object只有在从Lua/C roots经strong edges可达时必须保留，weak association不单独建立ownership。">reachability ownership graph</Term>是排查memory问题的证据。Allocated增长可能是正常live set、fragmentation或leak，不能仅看一次`collectgarbage("count")`下结论。
+
+## Weak Tables
+
+Metatable字段`__mode`包含`k`让keys weak，包含`v`让values weak，两者都含则双方weak。只有可collectable objects受影响；boolean/number等immediate values不会因weakness消失，strings还有implementation/interning细节，不应用其弱回收时机做业务逻辑。
+
+<Term def="Weak table不以指定key/value edge保持collectable object存活，entry可在GC后自动移除且lookup必须允许miss。">weak-association contract</Term>适合cache/metadata，不适合唯一业务存储。Mode在table使用前固定，所有owners知道entry ephemeral。
+
+<PilWeakReachabilityLab />
+
+<Stepper>
+  <Step title="切换Weak Keys、Weak Values、Weak Both和Ephemeron"><PilWeakReachabilityLab /></Step>
+  <Step title="画Strong Roots">为cache、key、value和back-reference画所有roots；逐条移除并在forced collection后验证entry是否存在。</Step>
+  <Step title="测试Recreation">Weak miss后重新计算object，确认identity是否允许变化、旧external reference仍有效且无重复resource owner。</Step>
+</Stepper>
+
+<Callout type="trap" title="把Cache设为Weak就一定不会Memory Leak">
+其它globals、closures、C registry或value-to-key paths仍可能保持对象；weak mode选错也会保留另一侧。用reachability graph和heap/profile证据定位strong root。
+</Callout>
+
+## Memorize Functions
+
+原书标题使用“Memorize”，工程中常称memoize。Memoization按arguments缓存result；cache ownership取决于语义。Weak values允许没人引用result时回收并重算；weak keys适合table identity argument离开后删除entry。Scalar/string keys可能长期存在，需size/TTL/LRU等其它bounded policy。
+
+<Term def="Memoization cache明确key equality、result ownership、weak side、miss recreation、error/nil caching与容量上限。">memoization reachability policy</Term>防止把nil failure当miss、把mutable argument内容变化当同key、把unbounded scalar inputs永久保存。
+
+```lua
+local function memoize_by_identity(compute)
+  local cache = setmetatable({}, { __mode = "k" })
+  return function(key)
+    local value = cache[key]
+    if value == nil then
+      value = assert(compute(key))
+      cache[key] = value
+    end
+    return value
+  end
+end
+
+local describe = memoize_by_identity(function(object)
+  return { label = tostring(object.name) }
+end)
+local object = { name = "lua" }
+assert(describe(object) == describe(object))
+```
+
+上述cache value不反向引用key；若引用，Lua 5.3 weak-key ephemeron语义仍需理解。Errors是否缓存要显式；并发/reentrant compute可能重复或cycle。
+
+## Object Attributes
+
+不能/不想修改object时，可用weak-key table `attributes[object]=metadata`。<Term def="External attribute map以object identity为weak key，metadata生命周期不应超过object，且不改变object自身shape。">external object-attribute map</Term>适合annotations、debug IDs和private state。
+
+Metadata若存回object、或global另有strong object list，会改变reachability。Copy/serialization不会自动带attributes；identity重建后需显式迁移。Weak-key lookup只按identity，不按content equality。
+
+## Revisiting Tables with Default Values
+
+第20章每个table一个closure/metatable可产生大量metatables。可共享一个`__index` function，再用weak-key map记录每个table的default。Table不可达后default entry应删除；value/default若引用table，要依靠ephemeron语义避免cycle retention。
+
+```lua
+local defaults = setmetatable({}, { __mode = "k" })
+local default_metatable = {
+  __index = function(target)
+    return defaults[target]
+  end,
+}
+
+local function set_default(target, value)
+  defaults[target] = value
+  return setmetatable(target, default_metatable)
+end
+
+local first = set_default({}, 0)
+local second = set_default({}, "missing")
+assert(first.any == 0 and second.any == "missing")
+```
+
+Default不写入target，pairs看不到；mutable default identity可能共享。Map本身必须private，否则caller可篡改策略。
+
+## Ephemeron Tables
+
+Weak-key table按ephemeron处理：value只有在key从table外被证明reachable后才作为strong reachable；value单独反向引用key不会让key靠这一entry自保。<Term def="Ephemeron entry先判断weak key是否由外部强路径可达，只有可达时value才参与后续mark。">ephemeron reachability rule</Term>解决object到private state、state回指object的常见cycle。
+
+Ephemeron不是general cycle collector替代，Lua GC本身会收普通unreachable cycles；它解决的是weak-key association中value回指key的条件reachability。复杂chain可能需要多个mark convergence rounds，由collector负责。
+
+## Finalizers
+
+Table/userdata在满足Lua版本注册规则时可有`__gc`。Metatable附加时`__gc`应已存在，否则object可能不被标记finalizable。Object变unreachable后finalizer在不可预测时机运行；顺序、进程退出覆盖和错误处理不应成为业务协议。
+
+<Term def="Finalizer是对象不可达后的非确定性best-effort hook，不提供及时、顺序、重复或transactional cleanup保证。">finalizer fallback contract</Term>要求files/sockets/locks显式close。Finalizer只做idempotent minimal native release或报警，不yield、不复杂调用。
+
+```lua
+local events = {}
+local finalizable = setmetatable({}, {
+  __gc = function()
+    events[#events + 1] = "finalized"
+  end,
+})
+
+finalizable = nil
+collectgarbage("collect")
+-- A test may observe the event in this controlled runtime, but production
+-- code must never wait on finalizer timing for correctness.
+assert(#events <= 1)
+```
+
+Finalizer可resurrect object，之后通常不应期待第二次同样finalization。Finalizer closure本身也可能捕获roots；设计时审计reachability。测试不能因GC timing跨implementation flaky。
+
+<PilFinalizerLifecycleLab />
+
+<Stepper>
+  <Step title="切换Register、Unreachable、Finalize和Resurrect"><PilFinalizerLifecycleLab /></Step>
+  <Step title="画Resource Lifecycle">区分explicit open/close、owner error cleanup、finalizer fallback与process exit；correctness只依赖前两者。</Step>
+  <Step title="注入Finalizer Failure">覆盖double close、error、allocation、resurrection与shutdown，确认不覆盖primary error、不作为完成信号。</Step>
+</Stepper>
+
+<Callout type="trap" title="有__gc就不需要显式关闭File或Socket">
+Finalizer时机不确定，进程退出也未必完整执行；资源可能在GC前耗尽。Owner在success/error/cancel路径显式close，__gc只作最后保险且必须idempotent。
+</Callout>
+
+## The Garbage Collector
+
+Lua 5.3主要使用incremental collector，在allocation与显式step之间推进mark/sweep。`collectgarbage("count")`给近似Lua memory KB，`collect`做full cycle，`stop/restart`控制自动运行，`isrunning`查询状态。Host allocator、native memory与fragmentation可能不包含在Lua count中。
+
+Collector能回收unreachable cycles，不需要reference counting式手工断所有cycle；但清理large references可缩短lifetime并减少live set。C API必须正确anchor objects，少anchor会use-after-collect，多anchor会leak。
+
+## Controlling the Pace of Collection
+
+`setpause`影响完成cycle后允许heap增长多少再开始新cycle；`setstepmul`影响collector相对allocation的工作强度；`step`手动执行一部分。具体units/返回值按Lua 5.3 manual与build测量，不写死跨版本数字。
+
+<Term def="GC tuning以peak memory、allocation rate、throughput和tail latency为证据调整pause/step，并保留安全回退。">collector pace contract</Term>先修reachable leak，再调pace。Stop GC只用于极短受控critical section并用finally-style restart；忘记restart会无界增长。
+
+<PilGarbageCollectorPaceLab />
+
+<Stepper>
+  <Step title="切换Pause、Step Multiplier、Manual Step和Full Collect"><PilGarbageCollectorPaceLab /></Step>
+  <Step title="建立Baseline">记录allocation rate、live set、peak count、frame/request p50/p99与full-cycle pause，再单变量调参。</Step>
+  <Step title="验证Rollback">Workload变化、OOM pressure、GC stop/error路径都恢复safe defaults；不要把benchmark参数直接推广生产。</Step>
+</Stepper>
+
+## 本章回顾：GC管理不可达Memory，不管理业务Owner
+
+1. Strong roots决定object存活，weak associations不建立指定方向ownership且entry可消失。
+2. Memoization明确key/result identity、weak side、nil/error与bounded capacity。
+3. Weak-key attributes/default maps让metadata生命周期跟随object，ephemeron处理value回指key。
+4. Finalizer时机与顺序不确定，只作best-effort fallback，资源必须explicit close。
+5. Incremental collector回收unreachable cycles；Lua count不等于全部process memory。
+6. Pause/step tuning需memory/latency evidence，不能回收仍reachable leak。
+
+<Exercises>
+
+**问题 1：Weak-key Cache的Value引用Key时为何需要Ephemeron语义？**
+
+<Answer>普通“value强、key弱”的naive mark会从table到value再回key，使entry自保。Ephemeron先要求key从table外可达，才mark value；只有entry内部cycle时key/value一起可回收。</Answer>
+
+**问题 2：为什么String-key Memo Cache仍可能无限增长？**
+
+<Answer>Weak keys不保证interned/scalar-like string按业务预期消失，且输入域可能无限。对scalar/text keys使用size/TTL/LRU或explicit invalidation；weakness不能替代容量政策。</Answer>
+
+**问题 3：Full GC后Memory仍高应先查什么？**
+
+<Answer>先画globals、upvalues、registries、queues、caches和C anchors的strong reachability，区分live set与native allocator/fragmentation。Full collect不能回收reachable objects；修owner/leak后再调pace。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="reachability ownership graph" definition="从Lua/C roots沿strong edges决定object必须存活的引用图。" />
+  <GlossaryItem term="weak-association contract" definition="指定key/value edge不保持collectable object存活且允许entry消失的协议。" />
+  <GlossaryItem term="memoization reachability policy" definition="Cache规定key equality、weak side、recreation、error与容量的策略。" />
+  <GlossaryItem term="external object-attribute map" definition="以object identity作weak key保存外部metadata的映射。" />
+  <GlossaryItem term="ephemeron reachability rule" definition="Key由外部可达后才让对应value参与mark的弱键规则。" />
+  <GlossaryItem term="finalizer fallback contract" definition="不可达后非确定性执行且不替代explicit cleanup的hook协议。" />
+  <GlossaryItem term="collector pace contract" definition="以memory、allocation、throughput和latency证据调整GC pace的规则。" />
+</Glossary>
+
+<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 23: Garbage" adaptedUrl="https://www.lua.org/pil/" />

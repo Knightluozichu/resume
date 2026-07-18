@@ -1,0 +1,195 @@
+---
+title: "Chapter 11. Other XML and JSON Technologies"
+type: C
+section: "C# 10 Nutshell · .NET and Data"
+order: 11
+description: "覆盖XmlReader/Writer层级流处理与Utf8JsonReader/Writer、JsonDocument/JsonNode，建立token、buffer、schema和resource契约。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch11.html"
+draft: false
+---
+
+import { CtcJsonChoiceLab, CtcJsonModelLab, CtcXmlStreamStateLab } from "@/components/mdx/csharp-10-core/diagrams/xml-json-technologies";
+
+<Objectives>
+
+- 能实现XmlReader/XmlWriter forward state machine，分析depth、empty element、namespace与subtree positioning
+- 能比较Utf8JsonReader/Writer、JsonDocument与JsonNode的buffer/dispose/mutation lifetime
+- 能设计typed/stream/inspect/edit数据模型选择，验证schema evolution、limits、unknown与round-trip
+
+</Objectives>
+
+## 为什么Streaming API首先是State Machine
+
+DOM让你随机访问tree，streaming reader只暴露当前token/node并向前移动。正确代码必须知道当前位置、depth、当前value buffer何时有效、谁拥有input/output和遇到unknown如何skip。JSON DOM又分read-only pooled JsonDocument与mutable JsonNode，不能按“都是JSON对象”混用lifetime。
+
+先预测：XmlReader.ReadElementContentAsString后仍停在start element吗；Utf8JsonReader可以作为class field长期保存吗；JsonElement在Document Dispose后仍安全吗；JsonNode自动保持property顺序为协议保证吗；Skip unknown永远安全兼容。答案都是否。
+
+<Term def="Forward reader每次Read后current token、depth与parent/child positioning如何变化的可验证状态机。">stream cursor contract</Term>
+
+## XmlReader
+
+XmlReader forward-only读取node types：Element/EndElement/Text/Attribute/Comment等。Read推进，MoveToAttribute改变attribute cursor，MoveToElement返回owner element；IsEmptyElement表示self-closing，不会再出现独立end element。ReadStartElement/ReadEndElement与ReadElementContentAs...会推进位置，调用后condition必须明确。
+
+```csharp
+using var reader = XmlReader.Create(stream, settings);
+while (reader.Read())
+{
+    if (reader.NodeType == XmlNodeType.Element &&
+        reader.LocalName == "order" &&
+        reader.NamespaceURI == OrdersNamespace)
+    {
+        using var subtree = reader.ReadSubtree();
+        ProcessOrder(subtree);
+    }
+}
+```
+
+Settings关闭不需要DTD/resolver并限制document chars。Reader owns input由CloseInput决定，通常caller显式using。Async methods需Async setting且不并发调用同reader。
+
+## XmlWriter
+
+XmlWriter维护document/element/attribute stack，保证well-formed escaping。StartElement后才能attribute/content，EndElement平衡；WriteString转义，WriteRaw要求already-valid并高风险。Settings控制encoding/indent/declaration/close output；TextWriter的encoding仍主导actual bytes。
+
+Exception/cancellation中未完成document不可发布，写临时stream/file后atomic replace。Large output可逐record写，不建DOM。Namespace prefix由writer/manage，identity仍URI。
+
+## Working with Hierarchical Data
+
+Streaming处理nested schema通常使用depth和subtree reader，把已知record局部materialize；parent reader在subtree关闭后位置需测试。Unknown element可Skip，但若其语义影响required invariant，静默跳过会错误兼容。Version policy区分optional extension与unsupported major schema。
+
+<Stepper>
+  <Step title="切换read、subtree、write与bridge"><CtcXmlStreamStateLab /></Step>
+  <Step title="画cursor transitions">Start/attribute/text/end/empty与ReadSubtree返回后的parent位置逐步记录。</Step>
+  <Step title="注入malformed/deep/unknown">验证limits、cleanup、partial output和unknown schema policy，不只happy path。</Step>
+</Stepper>
+
+<Callout type="trap" title="Skip所有Unknown字段就是Forward Compatible">
+Unknown optional extension可忽略；unknown discriminator/required semantic可能改变整个record含义。Schema定义哪些可skip，unsupported major version应明确拒绝。
+</Callout>
+
+## Working with JSON
+
+System.Text.Json处理UTF-8 JSON，typed serializer适合已知schema，reader/writer适合streaming/custom protocol，Document/Node适合dynamic inspection/edit。Options决定property naming、case、number handling、comments/trailing commas、reference与converter；options实例应集中/复用并版本治理。
+
+JSON区分missing、null、number/string/bool/object/array；duplicate property、number range与order policy需明确。默认case-sensitive与web defaults可能不同。Golden payloads覆盖old/new/unknown/null/large/deep。
+
+<Term def="Missing/null/unknown/duplicate property、number precision与schema version在JSON reader/writer间的一致映射。">JSON schema boundary</Term>
+
+## Utf8JsonReader
+
+Utf8JsonReader是ref struct，读取ReadOnlySpan/ReadOnlySequence并保持JsonReaderState；不能跨await/heap capture。ValueSpan/ValueSequence引用input buffer，仅在buffer有效期内使用。TokenType/CurrentDepth驱动state machine，TryGet/typed getters验证类型/range。
+
+```csharp
+var reader = new Utf8JsonReader(payload, new JsonReaderOptions
+{
+    CommentHandling = JsonCommentHandling.Disallow,
+    MaxDepth = 64
+});
+
+while (reader.Read())
+{
+    if (reader.TokenType == JsonTokenType.PropertyName && reader.ValueTextEquals("id"))
+    {
+        reader.Read();
+        id = reader.GetGuid();
+    }
+}
+```
+
+Incremental buffers保留unconsumed bytes与CurrentState，不能丢token across segment。Copy string/bytes if needed after buffer recycle。Malformed/partial input与final block分别测试。
+
+## Utf8JsonWriter
+
+Writer向IBufferWriter/Stream输出UTF-8并维护object/array nesting。WritePropertyName/Write...顺序必须合法，Dispose/Flush完成buffer但不一定拥有stream。SkipValidation只在生成逻辑被严格证明时用；默认validation避免invalid JSON。
+
+Large output逐item写array；failure时不要暴露partial response/file。Escaping/Encoder policy影响HTML/security contexts，JSON不是直接可嵌入script的安全保证。
+
+<Term def="Utf8 reader/writer引用caller buffer、保存incremental state并在flush/dispose时完成输出的所有权规则。">UTF-8 buffer lifetime</Term>
+
+## JsonDocument
+
+JsonDocument解析为read-only DOM，JsonElement是指向document backing storage的struct view；Document需Dispose，Element之后不可用。Clone element可独立保留。EnumerateObject/Array与TryGetProperty读取；Get...要求token type/range。
+
+Document适合读取任意subset且保留raw JSON，不适合频繁mutation。Parse options/MaxDepth与payload size限制。不要返回Element超出document owner scope，除非Clone或共同owner。
+
+## JsonNode
+
+JsonNode/JsonObject/JsonArray/JsonValue提供mutable DOM，可构建/patch/dynamic schema。Node通常只能有一个parent，插入已parent node需deep clone。Indexer missing与explicit null需区分。Mutation不是thread-safe，版本/ownership由caller控制。
+
+```csharp
+JsonNode root = JsonNode.Parse(payload)!;
+var customer = root["customer"]?.AsObject()
+    ?? throw new JsonException("customer missing");
+
+customer["normalizedName"] = Normalize(customer["name"]?.GetValue<string>());
+string output = root.ToJsonString(serializerOptions);
+```
+
+Patch前validate shape，输出后typed/schema validation。Property order不要当semantic identity，digital signing使用canonicalization方案。
+
+<Stepper>
+  <Step title="切换Utf8Reader、Utf8Writer、JsonDocument与JsonNode"><CtcJsonModelLab /></Step>
+  <Step title="标buffer/tree owner">Input span/sequence、document pooled memory、node parent与output writer分别写dispose/escape。</Step>
+  <Step title="做lifetime-negative tests">Dispose后Element、recycled buffer span、node double-parent和partial writer逐项触发并修复。</Step>
+</Stepper>
+
+<Callout type="trap" title="JsonElement是Value Type所以可脱离Document保存">
+它只是指向document backing data的view；Document Dispose后访问失败。使用Clone或把Document lifetime一并返回/拥有。
+</Callout>
+
+## Choosing typed, streaming, and DOM models
+
+Known stable schema优先JsonSerializer + typed DTO/converters/source generation；large/incremental选择Utf8 reader/writer；read arbitrary subset用JsonDocument；dynamic patch/build用JsonNode。可混合：reader定位record，再Deserialize当前value；Document局部节点转typed model。
+
+<Term def="按schema knownness、payload size、random access、mutation与allocation选择typed serializer、streaming或DOM。">serialization model matrix</Term>
+
+<Stepper>
+  <Step title="切换typed、stream、inspect与edit"><CtcJsonChoiceLab /></Step>
+  <Step title="填写model matrix">Schema、size、access、mutation、unknown policy、lifetime和performance逐项比较。</Step>
+  <Step title="用同一golden corpus验收">四种model读取相同payload，比较domain result、unknown/null、round trip和resource peak。</Step>
+</Stepper>
+
+## Security, limits, and evolution gate
+
+XML/JSON input是不可信的：限制bytes/depth/items/string length，取消/timeout，拒绝不需要DTD/comments/trailing，typed converters不得递归无界。Error返回path/line/byte position但redact payload。Output使用atomic publish或buffered response避免partial artifact。
+
+Schema版本、discriminator、required/optional/unknown规则进入consumer matrix。Old reader/new writer和new reader/old payload双向测试；number precision和Date/Guid format固定。
+
+## 本章回顾：Token与Buffer都有Owner
+
+1. XmlReader/Writer是forward state machine，position/depth/empty/subtree必须逐步验证。
+2. JSON typed、streaming、read-only DOM与mutable DOM解决不同问题。
+3. Utf8 reader value引用input buffer；JsonElement依赖JsonDocument lifetime。
+4. Unknown/missing/null/duplicate与schema version必须明确，不能统一Skip。
+5. Input limits、partial output、resource cleanup和golden round trip构成生产门禁。
+
+<Exercises>
+
+**问题 1：如何安全返回JsonElement？**
+
+<Answer>要么返回拥有Document的wrapper并由caller Dispose，要么对Element调用Clone生成独立backing data；不能Dispose document后返回原view。测试owner scope结束后的访问。</Answer>
+
+**问题 2：Incremental Utf8JsonReader需要保留什么？**
+
+<Answer>保留JsonReaderState与未消费的partial token bytes，下一buffer拼接后以isFinalBlock继续；ValueSpan/Sequence在原buffer回收前copy。测试token跨segment、UTF-8 multibyte跨segment与truncated final。</Answer>
+
+**问题 3：什么时候不能忽略Unknown字段？**
+
+<Answer>Unknown discriminator、major schema、影响security/invariant的字段不能静默跳过；仅声明为optional extension的字段可忽略。建立version/allowlist policy并测试old/new producer-consumer组合。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="stream cursor contract" definition="Forward reader token/depth/position状态机。" />
+  <GlossaryItem term="JSON schema boundary" definition="Missing/null/unknown/number/version映射。" />
+  <GlossaryItem term="UTF-8 buffer lifetime" definition="Reader/writer input output buffer与state ownership。" />
+  <GlossaryItem term="serialization model matrix" definition="Typed/stream/DOM按schema,size,access选择。" />
+  <GlossaryItem term="partial-output gate" definition="Fault时不暴露未完成XML/JSON artifact。" />
+</Glossary>
+
+<Term def="Writer在成功完成前把output隔离在buffer/temp artifact，fault/cancel时不发布半成品的门禁。">partial-output gate</Term>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 11: Other XML and JSON Technologies" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch11.html" />

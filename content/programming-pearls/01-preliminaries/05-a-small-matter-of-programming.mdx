@@ -1,0 +1,427 @@
+---
+title: "Column 5 · A Small Matter of Programming：用脚手架建立可信证据"
+type: C
+section: "Part I · Preliminaries"
+order: 4
+description: "按第二版Column 5重建From Pseudocode to C、test harness、assertions、automated testing、timing、complete program与Debugging侧栏，把已证明算法变成可测试、可计时、可集成的程序。"
+demo: true
+math: true
+sourceUrl: "https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+draft: false
+---
+
+import { PP2PseudocodeToCLab, PP2ProbeHarnessLab, PP2AssertionLayerLab, PP2AutomatedTestMatrixLab, PP2MutationKillLab, PP2TimingExperimentLab, PP2BenchmarkValidityLab, PP2CompleteProgramLab, PP2DebuggingLoopLab, PP2OracleLab, PP2TrustCertificateLab } from "@/components/mdx/programming-pearls/diagrams/05-a-small-matter-of-programming";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释为什么verified pseudocode仍不等于trustworthy component，以及scaffolding、assertion、oracle与benchmark分别提供什么证据
+- 能计算exhaustive small-domain cases、binary-search comparison bound、clock resolution与normalized time per search
+- 能实现faithful C++ translation、interactive probe、generated boundary suite、independent oracle和multi-mode driver
+- 能分析type conversion、disabled assertion、shared-bug oracle、timer noise、optimizer removal与non-reproducible debugging
+- 能设计pre/invariant/post assertions、mutation tests、timing protocol、failure reduction和integration certificate
+
+</Objectives>
+
+## 从“算法已经证明，为什么还不能直接上线”开始
+
+Column 4已经给binary search写出contract、loop invariant和termination proof。现在剩下的似乎只是把pseudocode改写成C/C++，再塞进大系统。危险恰在“只是”二字：abstract integers会变成bounded machine types，array bounds会变成memory safety，logical preconditions会变成caller obligations，程序还要面对compiler、test data、timer和integration environment。
+
+先预测：一段对all mathematical states都正确的pseudocode，若翻译时用unsigned `size_t high = n - 1`，当$n=0$时会发生什么？再预测：若只在大型应用中点击几个功能入口，哪一种binary-search boundary path最可能永远没有被触发？
+
+Scaffolding（<Term def="为目标函数提供直接输入、可见输出、断言、测试生成与计时入口的临时或长期support code。">Scaffolding</Term>）让small function在进入big system前可被单独操纵。原书用binary search贯穿本栏：先忠实翻译，再probe、assert、bombard with tests，最后测量running time。
+
+<PP2CompleteProgramLab />
+
+## 5.1 From Pseudocode to C
+
+### 先固定machine-level interface
+
+Pseudocode中的`DataType`可以映射为integer、floating point或其他ordered value；comparison semantics必须与sortedness contract一致。原书为压缩scaffolding使用global array与length；现代实现可用`std::span`把storage ownership留给caller，同时把view与size绑定。
+
+```cpp
+#include <cassert>
+#include <cstddef>
+#include <span>
+
+int binary_search_exact(std::span<const int> x, int target) {
+    std::ptrdiff_t low = 0;
+    std::ptrdiff_t high = static_cast<std::ptrdiff_t>(x.size()) - 1;
+
+    while (low <= high) {
+        assert(0 <= low);
+        assert(high < static_cast<std::ptrdiff_t>(x.size()));
+        const std::ptrdiff_t mid = low + (high - low) / 2;
+
+        if (x[mid] < target) low = mid + 1;
+        else if (x[mid] > target) high = mid - 1;
+        else return static_cast<int>(mid);
+    }
+    return -1;
+}
+```
+
+Faithful Translation（<Term def="保持source algorithm的contract、state meaning和control decisions，同时显式处理target language types与runtime rules的实现过程。">Faithful Translation</Term>）不等于逐字替换符号。每一处representation都要审查：
+
+- `std::ptrdiff_t`能表示empty array所需的`-1`，unsigned `n - 1`不能。
+- Public result用`int`意味着可接受input size需要上界；更一般接口可返回optional index。
+- `low + (high - low) / 2`避免先求large positive sum。
+- Comparator要定义与input sorting相同的ordering。
+- Array在search期间必须保持stable，不能被另一个thread重排。
+
+<PP2PseudocodeToCLab />
+
+Machine-level contract可写成：
+
+$$
+0\le n\le \operatorname{PTRDIFF\_MAX}
+\quad\land\quad
+\forall i\in[1,n),\ x[i-1]\le x[i].
+$$
+
+这比“输入有序”多了size representability，也比“代码看起来像pseudocode”更接近真实可执行条件。
+
+<Callout type="trap" title="逐行翻译不会引入新错误">
+Language会引入pseudocode没有的signed/unsigned conversion、overflow、out-of-bounds、lifetime和undefined behavior。Faithful的标准是semantic obligations保持，而不是源代码行数和语句形状相似。
+</Callout>
+
+## 5.2 A Test Harness
+
+Test Harness（<Term def="负责准备inputs、调用subject、收集outputs并以可重复方式比较expectations的executable driver。">Test Harness</Term>）首先要支持probe：选择size和target，打印array、result、comparison trace，并与一个明显正确的方法比较。
+
+<PP2ProbeHarnessLab />
+
+最小command driver：
+
+```cpp
+void probe(std::span<const int> x) {
+    int target = 0;
+    while (std::cin >> target) {
+        const int result = binary_search_exact(x, target);
+        std::cout << "target=" << target
+                  << " result=" << result << '\n';
+    }
+}
+```
+
+Probe不是完整verification，但它缩短了observation loop。开发者不必启动UI、登录、加载database再猜内部发生了什么；target function的inputs和outputs就在眼前。
+
+Harness还应能够选择多个algorithm variants。只把one function name硬编码进driver，会在比较optimized version、reference version或mutant时复制整套test/timing code，增加evidence drift。
+
+## 5.3 The Art of Assertion
+
+Assertion（<Term def="在程序特定位置检查developer belief；若predicate为false立即暴露broken assumption与local state。">Assertion</Term>）把Column 4的proof statements变成runtime tripwires：
+
+$$
+\text{precondition}
+\xRightarrow{\text{initialize}}
+\text{invariant}
+\xRightarrow{\text{loop}}
+\text{postcondition}.
+$$
+
+<PP2AssertionLayerLab />
+
+### 三层断言
+
+1. **Entry**：input range、sortedness、size/type compatibility。Expensive sortedness check可保留在test/debug build，而公共API仍要说明caller obligation。
+2. **Loop**：index bounds、midpoint bounds、candidate invariant、variant progress。Debug mode可记录old interval size并断言new size更小。
+3. **Exit**：nonnegative result指向target；absence result由independent scan或test oracle确认。
+
+```cpp
+const auto old_size = high - low + 1;
+// perform one non-returning update
+const auto new_size = high >= low ? high - low + 1 : 0;
+assert(0 <= new_size);
+assert(new_size < old_size);
+```
+
+Good assertion的predicate没有side effects，message包含reproduction state，failure立即终止或可靠上报。不要在`assert(read(file))`中执行必须发生的operation，因为release build可能移除整个expression。
+
+Assertions用于developer errors与internal invariants，不应替代untrusted input validation。用户上传unsorted data需要正常error handling；内部排序模块承诺输出sorted却失败，适合assertion。
+
+### 断言本身也可能错
+
+若assertion与code共享同一错误assumption，例如两者都把closed interval的`high`误认为$n$，它可能始终通过。Review必须同时挑战program和assertion；debugging后也应修复错误的code与错误或缺失的assertion。
+
+## 5.4 Automated Testing
+
+原书的关键提升是让computer执行boring repetition。对small sizes从0到10枚举，可自然覆盖：
+
+- Empty array。
+- One、two、three elements等高风险sizes。
+- Powers of two。
+- 比power of two少一或多一的sizes。
+- Every successful position。
+- Below minimum、above maximum和between adjacent values的unsuccessful searches。
+
+若对每个size $n$测试$n$个hits、$n-1$个interior misses和2个exterior misses，则单个nonempty size有：
+
+$$
+n+(n-1)+2=2n+1
+$$
+
+个semantically distinct probes。枚举$n=1$到$m$，再加empty case，测试数随$m^2$增长，但$m$很小时成本微不足道。
+
+<PP2AutomatedTestMatrixLab />
+
+### Independent oracle
+
+Test Oracle（<Term def="独立于subject implementation、为给定input产生或检查expected behavior的reference mechanism。">Test Oracle</Term>）可以是linear search。它是$O(n)$，但简单且容易review；测试small function时，clarity比oracle speed更重要。
+
+```cpp
+int linear_oracle(std::span<const int> x, int target) {
+    for (std::size_t i = 0; i < x.size(); ++i) {
+        if (x[i] == target) return static_cast<int>(i);
+    }
+    return -1;
+}
+
+void check_case(std::span<const int> x, int target) {
+    const int got = binary_search_exact(x, target);
+    const int expected = linear_oracle(x, target);
+    assert(got == expected); // valid because generated data has distinct keys
+}
+```
+
+若duplicates允许返回any occurrence，不能直接要求index等于linear oracle的first index。Oracle应检查：returned index in bounds且value equal；若`-1`则linear scan也absent。Expected predicate必须与contract一致。
+
+<PP2OracleLab />
+
+### Generated tests
+
+```cpp
+void exhaustive_small_sizes(int max_n) {
+    std::vector<int> x;
+    for (int n = 0; n <= max_n; ++n) {
+        x.clear();
+        for (int i = 0; i < n; ++i) x.push_back(10 * i);
+
+        for (int i = 0; i < n; ++i) check_case(x, 10 * i);      // hits
+        for (int i = 1; i < n; ++i) check_case(x, 10 * i - 5);  // gaps
+        check_case(x, -5);                                      // below
+        check_case(x, 10 * n + 5);                              // above
+    }
+}
+```
+
+Deterministic boundary enumeration应先于large random fuzzing。Random generation适合扩展values、duplicates和size distributions，但failure必须打印seed或完整input，确保reproducible。
+
+### Tests是否真的敏感
+
+Mutation Test（<Term def="对程序注入small plausible faults，并要求test suite至少有一个case拒绝每个fault的sensitivity check。">Mutation Test</Term>）回答“这些tests能发现什么”。将`<=`改成`<`、删除`+1`、把`high`初值改成$n$，suite都应快速失败。
+
+<PP2MutationKillLab />
+
+Mutation survived不一定表示production bug，但说明suite、oracle或contract至少有一处blind spot。先查missing boundary，再查equivalent mutation。
+
+## 5.5 Timing
+
+Correctness evidence足够后，才能检查binary search是否表现出expected logarithmic behavior。对distinct array中每个element执行successful search，重复`numtests`轮，可把work放大到timer resolution以上。
+
+```cpp
+const auto start = std::chrono::steady_clock::now();
+std::uint64_t checksum = 0;
+for (int test = 0; test < repetitions; ++test) {
+    for (int value : x) {
+        const int result = binary_search_exact(x, value);
+        assert(result >= 0 && x[result] == value);
+        checksum += static_cast<std::uint64_t>(result);
+    }
+}
+const auto elapsed = std::chrono::steady_clock::now() - start;
+report(elapsed, x.size(), repetitions, checksum);
+```
+
+若elapsed为$E$ nanoseconds，共执行$R\cdot n$次search，则：
+
+$$
+\operatorname{ns/search}
+=
+\frac{E}{R\,n}.
+$$
+
+同时报告raw elapsed、$n$、$R$和normalized result。只有normalized number而无raw value时，无法发现measurement仅有one timer tick；只有raw ticks又无法跨workload比较。
+
+<PP2TimingExperimentLab />
+
+Binary search的comparison ceiling约为：
+
+$$
+C(n)\le \lfloor\log_2 n\rfloor+1.
+$$
+
+但wall time不必精确呈现smooth logarithm：cache、branch prediction、compiler optimization、data layout和timer noise都会影响constant factors。用多个geometric sizes观察trend，并与linear search或另一个binary-search variant对照。
+
+### Valid benchmark protocol
+
+<PP2BenchmarkValidityLab />
+
+- 用monotonic clock。
+- Repetitions足够让elapsed明显高于resolution。
+- 保留result checksum或其他observable use，避免dead-code elimination。
+- Correctness checks可在preflight完整执行；timed loop可保留cheap checksum，避免assertion cost主导测量。
+- 固定compiler flags、machine state、input distribution与seed。
+- 先看raw samples，再看median、spread和normalized metric。
+- 不从single run声称speedup。
+
+<Callout type="trap" title="计时数字越精确，结论越可靠">
+打印到小数点后三位不等于有三位有效精度。若总测量接近timer resolution、work被optimizer删除、输入只命中one branch或没有检查result，漂亮数字可能完全没有解释价值。
+</Callout>
+
+## 5.6 The Complete Program
+
+完整scaffolding应让same search function在三种mode下运行：
+
+1. **Probe**：developer输入target，查看result与trace。
+2. **Test**：生成small-domain matrix、properties和mutations，failure打印reproduction。
+3. **Time**：读取algorithm id、size和repetition count，先preflight correctness，再测量raw与normalized cost。
+
+重要的是subject implementation保持same code。若timing mode复制一份“去掉checks的fast version”，测试通过的不是被测程序；若probe mode另写search logic，manual observation也不再构成evidence。
+
+<PP2CompleteProgramLab />
+
+Program应将configuration和result记录为machine-readable fields：algorithm revision、compiler、flags、input size、distribution、seed、repetitions、raw duration、checksum和failures。这样experiment可复跑，也能比较后续optimized variants。
+
+## 5.7 Principles
+
+Column 5的principles形成一条从idea到integration的证据链：
+
+1. Translate verified pseudocode carefully；language details属于correctness。
+2. Build scaffolding so the function can be exercised outside the full system。
+3. Assert beliefs at boundaries and state transitions。
+4. Let computers automate repetitive boundary cases。
+5. Use an independent simple oracle，避免expected logic复制subject bug。
+6. Challenge tests with plausible mutations。
+7. Establish correctness before interpreting timing。
+8. Report raw and normalized measurements with reproducible configuration。
+9. Keep probe、test和time modes on the same implementation。
+10. Preserve each discovered bug as a smaller regression test and stronger assertion。
+
+## 5.8 Debugging：把神秘现象还原成逻辑解释
+
+Debugging侧栏的核心态度是：无论system behavior多么古怪，都存在可追踪的logical explanation。有效流程不是随机改代码，而是：
+
+1. **Observe**：记录exact symptom、input、revision、environment。
+2. **Reproduce**：从big system提取到scaffolding。
+3. **Reduce**：缩成smallest failing array与target。
+4. **Hypothesize**：提出可证伪解释，例如variant不降。
+5. **Experiment**：只增加能区分hypotheses的trace/assertion。
+6. **Repair**：修code，也修false/missing assertion。
+7. **Retain**：把minimal counterexample加入automated suite。
+
+<PP2DebuggingLoopLab />
+
+对于hang，先记录`low/high/mid`并设iteration cap；若state重复，progress obligation已被证伪。对于wrong result，先问contract是any occurrence还是first occurrence。对于timing anomaly，先打印raw elapsed与checksum，检查zero-work或optimizer removal。
+
+Large logs不是自动等于visibility。围绕invariant、variant和postcondition选择three or four decisive values，通常比打印entire process更快定位fault。
+
+### Timing and Debugging共用同一证据通道
+
+Timing and Debugging不是两个孤立的收尾动作：raw duration、checksum、algorithm id、input size、seed和revision既解释performance，也用于重放异常。一次timing anomaly若不能还原成exact input与configuration，就无法判断它来自算法、measurement protocol还是environment。
+
+## 5.9 Trust certificate
+
+<PP2TrustCertificateLab />
+
+集成前的独立验收：
+
+- **Translation**：type、empty input、midpoint与casts已审计。
+- **Access**：probe无需启动full application。
+- **Assertions**：precondition、bounds、progress与postcondition各有tripwire。
+- **Automation**：sizes、hits、gaps与outside range由program生成。
+- **Oracle**：reference逻辑独立且与duplicate contract一致。
+- **Sensitivity**：boundary mutations被suite拒绝。
+- **Timing**：correctness preflight、raw samples、normalization与checksum完整。
+- **Debugging**：failure含seed/input/revision，能reproduce并reduce。
+- **Identity**：test、timing与production调用same subject implementation。
+
+## 5.10 逐步运行路线
+
+<Stepper>
+  <Step title="先做semantics-preserving translation" description="逐项审查type、empty input、bounds、midpoint与return representation。">
+    <PP2PseudocodeToCLab />
+    <PP2AssertionLayerLab />
+  </Step>
+  <Step title="用probe让small function可直接观察" description="控制size和target，显示subject result并与简单oracle比较。">
+    <PP2ProbeHarnessLab />
+    <PP2OracleLab />
+  </Step>
+  <Step title="自动枚举boundary families" description="覆盖empty、small sizes、hits、gaps、outside values和power-of-two neighbors。">
+    <PP2AutomatedTestMatrixLab />
+    <PP2MutationKillLab />
+  </Step>
+  <Step title="在正确性之后设计timing experiment" description="放大work、保留checksum、报告raw duration与normalized cost。">
+    <PP2TimingExperimentLab />
+    <PP2BenchmarkValidityLab />
+  </Step>
+  <Step title="把证据链接入完整program" description="共享one subject implementation，并让每个failure可复现、缩减和转为regression。">
+    <PP2CompleteProgramLab />
+    <PP2DebuggingLoopLab />
+    <PP2TrustCertificateLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- Verified pseudocode到production component之间仍有types、memory、toolchain和integration gap。
+- Faithful Translation保持semantic obligations，同时处理target language的machine rules。
+- Scaffolding把small function从big system中暴露出来，支持probe、test与time。
+- Assertions把precondition、invariant、progress和postcondition变成executable checks。
+- Automated Testing让computer覆盖boring但高价值的small boundary families。
+- Independent oracle应简单、独立，并与duplicate semantics一致。
+- Mutation testing验证suite会拒绝plausible wrong programs。
+- Timing必须建立在correctness上，并同时保留raw evidence和normalized metrics。
+- Complete Program让三种driver复用same subject implementation。
+- Debugging通过reproduce、reduce、hypothesis与experiment寻找logical explanation。
+- 每个bug都应留下minimal regression与更强assertion。
+
+<Exercises>
+
+1. 将Column 4的exact binary search翻译成Rust、Java或C。列出至少五个target-language obligations，并设计entry、loop与exit assertions。
+2. 为sizes 0到32生成distinct sorted arrays，测试all hits、all interior gaps和two exterior misses。计算case总数，并加入一个independent oracle。
+3. 设计一个mutation matrix，至少包含loop relation、initial high、left/right update和midpoint四类fault。为每个mutation给出最小killing case与对应proof obligation。
+4. 写一份benchmark protocol比较binary与linear search。给出input distributions、sizes、repetitions、timer、checksum、raw report与statistical summary，并说明哪些结论不能从结果推出。
+
+<Answer>
+
+以Java为例，obligations包括array reference non-null、sorted comparator semantics、`high=n-1`在empty input得到-1、midpoint sum不overflow、returned int index可表示、search期间array不变。Entry检查non-null与debug sortedness；loop检查`0<=low`、`high<n`、mid in range和candidate invariant；non-returning update后检查interval size严格下降；exit检查result为-1或in-bounds equal value。Untrusted caller error要正常返回，而非依赖可关闭assertions。
+
+</Answer>
+
+<Answer>
+
+对每个nonempty n，hits为n、interior gaps为n-1、exterior misses为2，共2n+1。n从1到32之和为`2*(32*33/2)+32=1088`；empty size再测试below/above两个targets，总数1090。Oracle用linear scan；distinct keys下要求exact index equality。每次failure打印n、array、target、got和expected。
+
+</Answer>
+
+<Answer>
+
+`while(low<high)`由singleton hit杀死，对应最后candidate postcondition；`high=n`由empty或above-maximum case配合bounds sanitizer杀死，对应safety；`low=mid`由two-element right hit加iteration cap杀死，对应variant strict decrease；unsafe `(low+high)/2`用near-maximum synthetic indexes或checked arithmetic杀死，对应machine-integer assumption。Suite若不能杀死某个non-equivalent mutation，应补case或更正oracle。
+
+</Answer>
+
+<Answer>
+
+使用distinct sorted arrays，sizes按geometric sequence增长；分别测successful、absent和mixed queries。每个configuration先与linear oracle做correctness preflight，再重复到raw elapsed远高于timer resolution。用steady monotonic clock，累积result checksum，记录compiler、flags、machine、seed、n、query distribution、repetitions、raw durations及ns/search；报告multiple samples的median和spread。结果可比较该environment下这些implementations与distributions，不能直接证明all hardware、all inputs或asymptotic claim，也不能把微小difference解释为普遍speedup。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="Scaffolding">为目标函数提供直接操纵、观察、测试与计时能力的support code。</GlossaryItem>
+  <GlossaryItem term="Faithful Translation">在target language中保持source algorithm的contract与state semantics并处理machine rules。</GlossaryItem>
+  <GlossaryItem term="Test Harness">准备inputs、调用subject、收集outputs并比较expectations的driver。</GlossaryItem>
+  <GlossaryItem term="Assertion">在特定程序点检查developer belief并快速暴露broken assumption的predicate。</GlossaryItem>
+  <GlossaryItem term="Test Oracle">独立产生或验证expected behavior的reference mechanism。</GlossaryItem>
+  <GlossaryItem term="Mutation Test">通过注入plausible faults检查suite是否能拒绝错误程序的方法。</GlossaryItem>
+  <GlossaryItem term="Benchmark">在明确workload、environment和measurement protocol下比较performance的experiment。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Programming Pearls, Second Edition · Column 5 A Small Matter of Programming"
+  href="https://www.pearson.com/en-ca/subject-catalog/p/programming-pearls/P200000000127/9780201657883"
+  author="Jon Bentley"
+  license="本章按Pearson官方第二版目录与Column 5的From Pseudocode to C、test harness、assertions、automated testing、timing、complete program和Debugging主线重构；现代C++接口、mutation testing、benchmark protocol与交互证书为教学化扩展。"
+/>

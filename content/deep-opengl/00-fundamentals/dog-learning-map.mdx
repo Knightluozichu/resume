@@ -3,125 +3,324 @@ title: "深入理解 OpenGL WebGL OpenGL ES 全书学习地图"
 type: A
 section: "计算机图形学与渲染"
 order: 0
-description: "十章脉络——从状态机到跨平台渲染的完整学习路径"
+description: "以 Khronos 官方规范为基线，从上下文、状态、着色器到跨平台诊断的十章学习路径"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://registry.khronos.org/OpenGL/"
 draft: false
 ---
 
-import { DogLearningMapDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-learning-map";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  DogLearningMapDiagram,
+  DogApiBaselineDiagram,
+} from "@/components/mdx/deep-opengl/diagrams/dog-learning-map";
+import { DogStepFlowDiagram } from "@/components/mdx/deep-opengl/diagrams/dog-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能说出 OpenGL / WebGL / OpenGL ES 三者的关系与差异
-- 能描述图形管线的核心阶段与可编程着色点
-- 能根据目标平台选择合适的 API 子集
-- 能回答：为什么 OpenGL 被称为「状态机」？
+
+- 能比较 OpenGL、OpenGL ES 与 WebGL 的规范基线、运行环境和能力边界
+- 能描述从上下文状态、对象绑定到图形管线提交绘制的完整数据流
+- 能判断一个渲染特性是否能在目标平台使用，并写出能力探测步骤
+- 能实现一个带编译、链接和能力检查的最小 WebGL2 三角形
+
 </Objectives>
 
 ## 直觉引入
 
-把 GPU 想象成一台流水线工厂：原料（顶点数据）从一端进，成品（屏幕像素）从另一端出。OpenGL/WebGL/OpenGL ES 就是操控这条流水线的「遥控器」——你设置好机器状态（用什么着色器、开不开深度测试），再把数据喂进去，流水线就按你的设定产出画面。
+把 GPU 想成一座必须先配置再开工的流水线工厂。顶点缓冲是原料仓，着色器程序是工艺卡，纹理和帧缓冲是输入输出设备；一次绘制调用并不携带全部配置，而是读取上下文里当时绑定的对象和启用的状态。很多“没有报错但屏幕全黑”的问题，正是因为工厂开工时拿到的状态不是程序员以为的状态。
 
-这三个 API 是同一套理念的不同化身：OpenGL 是桌面原版，OpenGL ES 是为手机精简的子集，WebGL 是把 OpenGL ES 搬进浏览器。学会一个，另两个大同小异，差异主要在着色器语言和可用扩展上。
+OpenGL、OpenGL ES 和 WebGL 共享这套对象、状态与管线模型，但它们不是可以逐函数替换的三个名字。桌面 OpenGL 由版本与 profile 定义能力；OpenGL ES 面向嵌入式设备收紧接口与资源假设；WebGL 以 OpenGL ES 的语义为基础，又为浏览器安全、可移植性和初始化行为增加限制。真正可迁移的是渲染模型，不能直接假设全部 API、扩展和着色器源码都可迁移。
 
-## 概念讲解
+## 权威规范基线
 
-<Term def="以固定顺序处理顶点到像素的 GPU 渲染流程">图形管线</Term>分阶段：顶点输入 → 顶点着色器 → 图元装配 → 光栅化 → 片元着色器 → 逐片元测试（深度/模板）→ 帧缓冲。其中<Term def="用 GLSL 编写、运行在 GPU 的可编程阶段">可编程着色器</Term>主要有顶点与片元两个。
+本路径不是把三套 API 混成一份“常用函数表”，而是以 Khronos 注册表中的 OpenGL、OpenGL ES、GLSL ES 与 WebGL 规范为共同证据源。阅读时先确定规范版本，再查核心能力、限制值和扩展，最后才写平台分支。
 
-### 三 API 关系
-- **OpenGL**：桌面全功能版，版本最高 4.6。
-- **<Term def="OpenGL 的移动精简子集">OpenGL ES</Term>**：嵌入式精简版，主流 3.0/3.2。
-- **WebGL**：浏览器版，本质是 OpenGL ES 的 JS 绑定，1.0≈ES2、2.0≈ES3。
+<DogApiBaselineDiagram />
 
-### 状态机本质
-OpenGL 是<Term def="通过设置当前状态来影响后续所有绘制的编程模型">状态机</Term>：你「绑定」一个缓冲、「使用」一个程序、「开启」深度测试后，这些设置一直生效直到被改。绘制命令本身不带配置，全靠当前状态决定行为。
+- **OpenGL 4.6**：桌面核心规范的当前终版。实际上下文还要区分 core/compatibility profile，并检查驱动暴露的扩展。
+- **OpenGL ES 3.2**：嵌入式规范主线。它与桌面 OpenGL 共享大量对象和命令语义，但不是桌面规范的机械子集。
+- **WebGL 1.0**：以 OpenGL ES 2.0 为起点，经浏览器规范重新定义可见行为与限制。
+- **WebGL 2.0**：以 OpenGL ES 3.0 为起点，采用 GLSL ES 3.00，并继续施加浏览器安全和可移植性约束。
 
-## 交互Demo
+这里的“以某版本为起点”比“约等于”更准确。实现必须遵守 WebGL 规范列出的差异，浏览器还可能因硬件、驱动或安全策略不暴露某项扩展。因此，跨平台代码应以共同能力集合为基线，而不是以开发机上恰好成功的调用为基线。
 
-> 猜一猜：在 WebGL 里写一段顶点着色器，能直接拿到 OpenGL 桌面上跑吗？
+## 共同的执行模型
+
+### 1. 上下文拥有状态
+
+渲染命令总是在一个上下文中执行。上下文记录当前程序、当前顶点数组对象、各绑定点上的缓冲和纹理、混合/深度/模板开关、视口以及清屏值等状态。OpenGL 被称为<Term def="后续命令读取并修改当前上下文状态，状态持续到被再次改变的编程模型">状态机</Term>，不是说内部只有一个巨大变量，而是强调命令行为依赖隐式的当前状态。
+
+对象名本身不等于对象内容。调用 bind 把对象接到某个目标或绑定点，随后的 bufferData、vertexAttribPointer 或 texImage2D 才会修改当前绑定对象。调试时必须同时问：“对象是否创建成功？”和“命令执行时绑定的是不是这个对象？”
+
+### 2. 数据经过图形管线
+
+<Term def="把顶点输入依次变换为图元、片元并写入帧缓冲的一组有序阶段">图形管线</Term>从顶点获取开始，经过顶点着色、图元装配、裁剪、光栅化、片元着色和逐片元测试，最后更新颜色、深度或模板附件。桌面 OpenGL 还能暴露细分与几何等阶段；WebGL 2 的核心可编程阶段仍是顶点和片元。
+
+<Term def="由应用提供源码并在 GPU 上执行的管线程序阶段">可编程着色器</Term>不能脱离接口契约独立存在。顶点着色器输出必须与片元着色器输入按名称、类型和插值规则匹配；应用侧顶点属性的位置、分量数、类型、步长与偏移也必须与着色器输入一致。链接成功只证明着色器阶段之间能组成程序，不证明顶点布局和绘制状态正确。
+
+### 3. 绘制写入目标
+
+默认帧缓冲由窗口系统或浏览器提供。WebGL 中它对应 canvas 的<Term def="浏览器为 WebGL 上下文提供、最终合成到页面的颜色深度模板存储">绘图缓冲</Term>；离屏渲染则由应用创建 framebuffer 并挂接纹理或 renderbuffer。drawArrays/drawElements 只是提交边界：它读取当前程序、VAO、缓冲、纹理、测试状态和帧缓冲，把这些状态组合成一次工作。
+
+## 从规范到可移植实现
+
+跨平台渲染的核心不是维护三个完全独立的渲染器，而是建立<Term def="启动时探测并记录版本、限制值、格式与扩展，运行时只使用已证明能力的约束集合">能力契约</Term>：
+
+1. **请求上下文**：明确需要 WebGL 2、ES 3.x 或桌面 core profile，创建失败要有降级或终止路径。
+2. **读取身份与限制**：记录版本、着色语言版本、纹理尺寸、顶点属性数、统一变量块和颜色附件数量等限制。
+3. **枚举扩展**：扩展必须先探测再使用；名字相似也不能假定不同 API 上语义完全一致。
+4. **选择资源格式与着色器变体**：按能力选择纹理格式、精度限定符、宏和渲染路径。
+5. **验证结果**：检查着色器编译、程序链接、帧缓冲完整性和关键错误；在真实目标设备上运行基准场景。
+
+这套流程把“平台兼容”从编译期猜测变成运行时证据。它也是后续跨平台、调试和性能章节的共同主线。
+
+## 十章与八个规范单元
+
+当前十章覆盖八个可核查单元，章节数量与规范单元不是一一对应：学习地图负责建立依赖，总复习负责故障定位，中间八章承载实现。
+
+1. **上下文、对象与状态**：架构与状态机一章解释对象生命周期、绑定点和 draw call 的隐式输入。
+2. **GLSL ES 着色器**：着色器语言一章覆盖类型、接口、精度、编译和链接边界。
+3. **WebGL 上下文与 WebGL 1/2**：WebGL 基础一章覆盖 canvas、上下文丢失、绘图缓冲和浏览器约束。
+4. **OpenGL ES 移动运行时**：移动端适配一章处理生命周期、EGL/平台表面、带宽和精度。
+5. **帧缓冲与后处理**：FBO 一章建立附件完整性、离屏渲染和全屏后处理。
+6. **绘制与渲染优化**：优化一章区分 CPU 提交、GPU 执行、带宽和同步瓶颈。
+7. **能力探测与扩展**：跨平台一章把版本、限制、格式和扩展收敛为能力表。
+8. **调试与 GPU 分析**：调试一章用错误、调试回调、计时查询和帧捕获定位问题。
 
 <DogLearningMapDiagram />
 
+## 分步建立第一条绘制链
+
+先预测：如果程序成功链接、VBO 也上传了数据，但没有绑定包含属性格式的 VAO，drawArrays 会稳定画出三角形吗？带着这个问题观察三步中的“当前状态”如何逐层完整。
+
 <Stepper>
-<Step title="第一步：设状态">
-绑定 VAO/VBO、编译链接着色器程序、开启深度测试——这些「当前状态」决定后续绘制行为。
+<Step title="第一步：建立上下文并确定能力">
+<DogStepFlowDiagram
+  caption="第 1 步：先得到上下文并读取能力，渲染器才知道允许创建什么。"
+  stage={1}
+  stages={["建立上下文并确定能力", "创建对象并建立数据接口", "按当前状态提交绘制并检查输出"]}
+/>
+
+请求目标版本的上下文，检查失败路径，读取版本、限制和扩展。此时还没有可绘制几何，但已经确定后续资源和着色器能否成立。
 </Step>
-<Step title="第二步：喂数据">
-把顶点属性数组上传到缓冲，设定顶点布局（位置、法线、UV），告诉管线如何读取。
+<Step title="第二步：创建对象并建立接口">
+<DogStepFlowDiagram
+  caption="第 2 步：程序、VAO 与 VBO 共同把应用数据接到着色器输入。"
+  stage={2}
+  stages={["建立上下文并确定能力", "创建对象并建立数据接口", "按当前状态提交绘制并检查输出"]}
+/>
+
+编译并链接程序，创建 VAO/VBO，上传顶点数据，再把属性位置、格式和缓冲绑定记录进 VAO。任何一步失败都应立即输出诊断。
 </Step>
-<Step title="第三步：发绘制">
-调用 drawArrays/drawElements 触发管线，顶点经着色器、光栅化、片元着色、测试，写入帧缓冲成画。
+<Step title="第三步：提交绘制并核对目标">
+<DogStepFlowDiagram
+  caption="第 3 步：drawArrays 读取完整当前状态，并把片元写入绘图缓冲。"
+  stage={3}
+  stages={["建立上下文并确定能力", "创建对象并建立数据接口", "按当前状态提交绘制并检查输出"]}
+/>
+
+设置视口和清屏值，绑定程序与 VAO，提交 drawArrays。若没有图像，按“上下文 → 程序 → 顶点接口 → 光栅化状态 → 帧缓冲”的顺序检查，而不是随机改参数。
 </Step>
 </Stepper>
 
-## 代码对照
+## 可运行的 WebGL2 最小程序
 
-WebGL2 最小绘制骨架（JS）：
+先准备一个有稳定尺寸的绘图目标。浏览器会把 drawing buffer 的结果合成到这个 canvas。
 
-```js
-// 1. 获取上下文
-const gl = canvas.getContext("webgl2");
-
-// 2. 编译着色器
-const vs = gl.createShader(gl.VERTEX_SHADER);
-gl.shaderSource(vs, `#version 300 es
-  in vec2 a_pos;
-  void main(){ gl_Position = vec4(a_pos, 0.0, 1.0); }`);
-gl.compileShader(vs);
-// 片元着色器同理，链接成 program ...
-
-// 3. 上传顶点数据
-const vbo = gl.createBuffer();
-gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
-gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([...]), gl.STATIC_DRAW);
-
-// 4. 设置状态并绘制
-gl.useProgram(program);
-gl.enable(gl.DEPTH_TEST);            // 状态机：开启深度测试
-gl.clearColor(0, 0, 0, 1);
-gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-gl.drawArrays(gl.TRIANGLES, 0, 3);   // 触发管线
+```html
+<canvas id="gl-canvas" width="640" height="360"></canvas>
+<script type="module" src="./triangle.js"></script>
 ```
 
-每个 `gl.enable/bind/use` 都在改「当前状态」，`drawArrays` 只负责按当前状态跑一遍管线。
+`triangle.js` 包含完整的失败检查。把两个文件放在同一目录并通过本地 HTTP 服务打开，应该看到深色背景上的橙色三角形。
+
+```js
+const canvas = document.querySelector("#gl-canvas");
+if (!(canvas instanceof HTMLCanvasElement)) {
+  throw new Error("找不到 #gl-canvas");
+}
+
+const gl = canvas.getContext("webgl2");
+if (!gl) throw new Error("当前环境不支持 WebGL 2");
+
+function compileShader(type, source) {
+  const shader = gl.createShader(type);
+  if (!shader) throw new Error("无法创建着色器");
+  gl.shaderSource(shader, source);
+  gl.compileShader(shader);
+  if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+    const log = gl.getShaderInfoLog(shader) ?? "未知编译错误";
+    gl.deleteShader(shader);
+    throw new Error(log);
+  }
+  return shader;
+}
+
+function createProgram(vertexSource, fragmentSource) {
+  const program = gl.createProgram();
+  if (!program) throw new Error("无法创建程序");
+  const vertexShader = compileShader(gl.VERTEX_SHADER, vertexSource);
+  const fragmentShader = compileShader(gl.FRAGMENT_SHADER, fragmentSource);
+  gl.attachShader(program, vertexShader);
+  gl.attachShader(program, fragmentShader);
+  gl.linkProgram(program);
+  gl.deleteShader(vertexShader);
+  gl.deleteShader(fragmentShader);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    const log = gl.getProgramInfoLog(program) ?? "未知链接错误";
+    gl.deleteProgram(program);
+    throw new Error(log);
+  }
+  return program;
+}
+
+const program = createProgram(
+  `#version 300 es
+  in vec2 a_position;
+  void main() {
+    gl_Position = vec4(a_position, 0.0, 1.0);
+  }`,
+  `#version 300 es
+  precision highp float;
+  out vec4 outColor;
+  void main() {
+    outColor = vec4(0.95, 0.45, 0.12, 1.0);
+  }`,
+);
+
+const vertices = new Float32Array([
+   0.0,  0.75,
+  -0.75, -0.65,
+   0.75, -0.65,
+]);
+
+const vao = gl.createVertexArray();
+const vbo = gl.createBuffer();
+if (!vao || !vbo) throw new Error("无法创建 VAO/VBO");
+
+gl.bindVertexArray(vao);
+gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+
+const positionLocation = gl.getAttribLocation(program, "a_position");
+if (positionLocation < 0) throw new Error("a_position 未激活");
+gl.enableVertexAttribArray(positionLocation);
+gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
+
+gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+gl.clearColor(0.04, 0.05, 0.08, 1.0);
+gl.clear(gl.COLOR_BUFFER_BIT);
+gl.useProgram(program);
+gl.bindVertexArray(vao);
+gl.drawArrays(gl.TRIANGLES, 0, 3);
+```
+
+这段程序体现了状态依赖：vertexAttribPointer 读取当时绑定的 ARRAY_BUFFER，并把属性格式记录到当前 VAO；drawArrays 又读取当前程序、VAO、视口和绘图目标。交换 bind 的顺序不会总是产生语法错误，却可能改变最终被记录或读取的对象。
+
+## 能力探测与验收
+
+不要用 UA 字符串猜 GPU 能力。下面的报告可以作为启动日志的一部分，在桌面浏览器、Android WebView 和不同 GPU 上对比。
+
+```js
+function capabilityReport(gl) {
+  const limits = {
+    maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+    maxVertexAttribs: gl.getParameter(gl.MAX_VERTEX_ATTRIBS),
+    maxDrawBuffers: gl.getParameter(gl.MAX_DRAW_BUFFERS),
+    maxColorAttachments: gl.getParameter(gl.MAX_COLOR_ATTACHMENTS),
+  };
+  return {
+    version: gl.getParameter(gl.VERSION),
+    shadingLanguage: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
+    renderer: gl.getParameter(gl.RENDERER),
+    limits,
+    extensions: gl.getSupportedExtensions() ?? [],
+  };
+}
+
+console.table(capabilityReport(gl).limits);
+console.log(capabilityReport(gl));
+```
+
+验收时至少保留以下证据：
+
+- canvas 中能看见三角形，调整 canvas 尺寸后同步更新 viewport；
+- 故意删掉片元着色器的分号，能够从编译日志看到具体错误；
+- 把 a_position 改成未使用输入，程序能在 location 为 -1 时主动失败；
+- 输出版本、着色语言、四个限制值与扩展列表，不用“我的机器支持”代替证据；
+- 切换到不支持 WebGL2 的环境时走明确失败路径，而不是继续访问 null 上下文。
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** 以为 WebGL 和桌面 OpenGL 函数完全一样，直接搬桌面代码到浏览器报错。
-**原因 →** WebGL 基于 OpenGL ES，是精简子集，缺少很多桌面扩展（如几何着色器、多重采样默认支持差异）。
-**修法 →** 以 OpenGL ES 3.0 为基线查函数可用性，桌面独有的特性需用扩展或换方案在 WebGL 实现。
+**现象 →** 把 WebGL 2 当成“OpenGL ES 3.0 加一层 JavaScript”，桌面或移动代码逐行翻译后仍出现格式、扩展或初始化差异。
+**原因 →** WebGL 以 ES 语义为基线，但规范为浏览器安全和跨实现一致性重新约束可见行为。
+**修法 →** 以 WebGL 规范为最终契约，逐项核对核心能力、限制和扩展；不要用“约等于”推导可用性。
 </Callout>
 
 <Callout type="trap">
-**现象 →** 改了 VBO 数据但画面没变，或上一帧状态泄漏到下一帧。
-**原因 →** 忘记 OpenGL 是状态机，绑定/状态在帧间持续生效，没显式重设就被沿用。
-**修法 →** 每帧绘制前显式设定所需状态（bind、use、enable/disable），不要依赖「上一次留下的状态」。
+**现象 →** 着色器编译和程序链接都成功，drawArrays 也没有明显错误，但画面全黑。
+**原因 →** 链接只验证程序内部接口，不能证明 VAO 属性格式、viewport、裁剪空间位置或绘图目标正确。
+**修法 →** 使用固定三角形和常量片元颜色，从程序、VAO/VBO、视口、剔除/深度状态到帧缓冲逐层排查。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 在高端桌面浏览器测试通过后，直接认定移动 WebView 和 ES 设备都支持同一路径。
+**原因 →** 平台可能暴露不同限制值、纹理格式与扩展，移动端还受到内存带宽和上下文生命周期约束。
+**修法 →** 启动时生成能力报告，按共同能力选择路径，并在每类真实目标设备上保存基准场景结果。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：OpenGL、OpenGL ES、WebGL 三者是什么关系？为什么说「学会一个另两个大同小异」？
+**问题 1**：为什么“WebGL 2 以 OpenGL ES 3.0 为基线”不能写成“WebGL 2 就是 ES 3.0”？
 
 <Answer>
-三者同源：OpenGL 是桌面全功能原版；OpenGL ES 是为移动/嵌入式精简的子集；WebGL 是 OpenGL ES 的浏览器 JS 绑定（WebGL1≈ES2、WebGL2≈ES3）。它们共享图形管线理念与 GLSL 着色器语言，差异主要在可用 API 子集、着色器版本和扩展。学会一个的管线与状态机模型，另两个只需查差异表即可上手。
+“基线”说明大量对象、命令和 GLSL ES 3.00 语义来自 ES 3.0；“就是”却错误地暗示两者接口、扩展、初始化和错误行为完全相同。WebGL 还要满足浏览器安全与跨平台一致性要求，因此会增加限制、禁止某些行为，并通过 JavaScript 与 DOM 暴露上下文。可移植实现必须以 WebGL 规范为最终契约。
 </Answer>
 
-**问题**：为什么说 OpenGL 是「状态机」？这给编程带来什么注意点？
+**问题 2**：最小三角形程序中，为什么 vertexAttribPointer 必须在正确的 VAO 与 ARRAY_BUFFER 绑定之后调用？
 
 <Answer>
-OpenGL 通过「当前状态」（绑定的缓冲、使用的程序、开启的测试等）决定绘制行为，绘制命令本身不带配置。注意点是状态在帧间持续生效：忘记重设会沿用上次状态导致泄漏，所以每帧绘制前要显式设定所需状态，不能依赖隐式残留。
+vertexAttribPointer 不只是描述两个 float，它还读取当前 ARRAY_BUFFER 绑定，并把缓冲关联、格式、步长和偏移记录到当前 VAO 的属性槽。若绑定顺序错误，VAO 可能记录错误缓冲或没有有效属性；之后即使重新绑定 VBO，drawArrays 读取的仍是 VAO 里先前记录的状态。
+</Answer>
+
+**问题 3**：设计一个跨桌面浏览器和移动 WebView 的启动验收流程，至少列出四项证据。
+
+<Answer>
+先确认 WebGL2 上下文是否创建成功；记录 VERSION 与 SHADING_LANGUAGE_VERSION；读取 MAX_TEXTURE_SIZE、MAX_VERTEX_ATTRIBS、MAX_DRAW_BUFFERS 等限制；枚举并保存所需扩展；编译链接固定着色器并保留日志；绘制固定三角形并验证像素输出；最后模拟上下文创建失败或丢失路径。只有这些证据都成立，才能选择对应渲染路径。
 </Answer>
 </Exercises>
 
+## 小结
+
+- 三套 API 共享对象、状态和图形管线模型，但规范版本、运行环境和能力边界不同。
+- 上下文状态是 draw call 的隐式输入；程序、VAO/VBO、纹理、测试状态和帧缓冲必须在提交时共同正确。
+- 跨平台实现应建立能力契约：请求上下文、读取限制、探测扩展、选择变体、验证结果。
+- 最小三角形不是玩具，而是隔离上下文、着色器、顶点接口和绘图目标问题的基准场景。
+- 后续八个实现专题分别深入状态、GLSL ES、WebGL、OpenGL ES、FBO、优化、跨平台与调试，总复习负责把故障重新映射到这条链路。
+
 <Glossary>
-<GlossaryItem term="图形管线">GPU 以固定顺序处理顶点到像素的流程，含顶点着色、光栅化、片元着色、测试等阶段。</GlossaryItem>
-<GlossaryItem term="可编程着色器">用 GLSL 编写、运行在 GPU 的阶段，主要有顶点与片元着色器。</GlossaryItem>
-<GlossaryItem term="OpenGL ES">OpenGL 的移动精简子集，主流 3.0/3.2，是 WebGL 的底层基础。</GlossaryItem>
-<GlossaryItem term="状态机">通过设置当前状态影响后续所有绘制的编程模型，状态持续生效直到被改。</GlossaryItem>
+<GlossaryItem term="状态机">命令读取并修改当前上下文状态，设置会持续生效直到被后续命令改变；绘制结果因此依赖提交时的完整状态。</GlossaryItem>
+<GlossaryItem term="图形管线">从顶点获取、着色、装配、裁剪、光栅化到片元测试和帧缓冲写入的一组有序阶段。</GlossaryItem>
+<GlossaryItem term="可编程着色器">由应用提供源码并在 GPU 上执行的管线阶段，必须与相邻阶段和应用侧数据接口匹配。</GlossaryItem>
+<GlossaryItem term="绘图缓冲">WebGL 上下文最终提交给浏览器合成的颜色、深度和模板存储，其实际像素尺寸由 drawingBufferWidth/Height 给出。</GlossaryItem>
+<GlossaryItem term="能力契约">由实际版本、限制值、格式和扩展组成的可用能力集合，渲染路径只能依赖已经探测并验证的部分。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="深入理解 OpenGL WebGL OpenGL ES" adaptedUrl="" />
+<Attribution
+  adaptedFrom="Khronos OpenGL, OpenGL ES, GLSL ES and WebGL specifications"
+  adaptedUrl="https://registry.khronos.org/OpenGL/"
+/>

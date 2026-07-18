@@ -1,198 +1,284 @@
 ---
-title: "高级特性与扩展"
+title: "Compute 与高级扩展能力合同"
 type: D
 section: "计算机图形学与渲染"
 order: 8
-description: "对比理解 Vulkan 高级扩展：光线追踪、网格着色器、描述符索引与可变速率着色"
+description: "从扩展依赖和 feature/limit 查询，到 compute、descriptor indexing、ray tracing、mesh shader 与 VRS 分层"
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://docs.vulkan.org/guide/latest/extensions.html"
 draft: false
 ---
 
-import { VkgAdvancedFeaturesDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-advanced-features";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import {
+  VkgAdvancedFeaturesDiagram,
+  VkgCapabilityTiersDiagram,
+} from "@/components/mdx/vulkan-guide/diagrams/vkg-advanced-features";
+import { VkgStepFlowDiagram } from "@/components/mdx/vulkan-guide/diagrams/vkg-step-flow";
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 理解 Vulkan 扩展系统的层级与版本演进机制
-- 掌握光线追踪管线的核心概念（BLAS/TLAS/着色器绑定表）
-- 理解网格着色器对传统管线的替代与优势
-- 对比描述符索引（Bindless）与可变速率着色（VRS）的应用场景
+
+- 能描述 API 版本、extension、feature、properties/limits、命令入口与依赖组成的能力合同
+- 能实现 baseline、compute、bindless、mesh、ray tracing 与 shading-rate 的独立 capability tiers
+- 能比较 compute/graphics queue、descriptor indexing、mesh shader、ray tracing 与 VRS 的收益和同步代价
+- 能解释扩展提升进核心、依赖变化和回退路径如何影响设备创建与 shader 变体
+
 </Objectives>
 
-## 直觉引入
+## 扩展名不是可用能力
 
-Vulkan 的核心 API 像是一台标准相机——功能完备但基础。扩展系统则是这台相机的「镜头生态」：你可以在标准机身上加装长焦镜头（光线追踪）、微距镜头（网格着色器）或可变光圈（VRS）。每个扩展都有特定的 `VK_KHR_*` / `VK_EXT_*` 前缀，需要在使用前检查设备支持并启用。成熟的扩展会被「提升」进核心 API（如 Vulkan 1.3 把动态渲染和同步2提升为核心）。
+<Term def="在 Vulkan 核心版本之外增加结构、命令、枚举或行为，并带明确作用域与依赖规则的规范单元">Vulkan extension</Term>可能是 instance 或 device 级，名称前缀表示标准化来源，不表示性能等级。KHR、EXT 或 vendor extension 可能被提升进核心、被其他扩展替代、长期并存或保持原状；不存在“vendor → EXT → KHR → core”的固定晋级流水线。
 
-## 概念讲解
+判断一条高级路径可用至少经过四层：
 
-### Vulkan 扩展系统
-
-<Term def="Vulkan 扩展是 API 功能的增量包，分实例级和设备级，通过扩展名启用，成熟后可被提升进核心版本。">Vulkan 扩展（Extension）</Term> 分为：
-
-- **KHR 扩展**（`VK_KHR_*`）：Khronos 官方认可，跨厂商广泛支持
-- **EXT 扩展**（`VK_EXT_*`）：多厂商扩展，支持度不一
-- **厂商扩展**（`VK_NV_*`、`VK_AMD_*`）：特定厂商专有
-
-使用前必须用 `vkEnumerateDeviceExtensionProperties` 检查支持，并在 `VkDeviceCreateInfo` 中启用。
-
-### 光线追踪
-
-<Term def="VK_KHR_ray_tracing_pipeline 扩展提供硬件加速光线追踪能力，通过加速结构（BLAS/TLAS）和着色器绑定表（SBT）实现。">光线追踪管线</Term> 的核心组件：
-
-```c
-// 加速结构
-// BLAS (Bottom-Level AS): 几何体加速结构（三角形/ AABB）
-// TLAS (Top-Level AS): 实例加速结构，引用多个 BLAS
-
-// 着色器绑定表 (SBT): 光线追踪着色器的函数指针表
-// 包含 raygen / miss / closest-hit / any-hit 着色器
-
-vkCmdTraceRaysKHR(cmdBuffer,
-    &raygenShaderBindingTable,
-    &missShaderBindingTable,
-    &hitShaderBindingTable,
-    &callableShaderBindingTable,
-    width, height, depth);
-```
-
-光线追踪着色器类型：`raygen`（生成光线）、`closest-hit`（最近命中）、`miss`（未命中）、`any-hit`（任意命中）、`intersection`（自定义相交）。
-
-### 网格着色器
-
-<Term def="VK_EXT_mesh_shader 扩展用网格着色器替代传统顶点输入/装配/曲面细分阶段，以线程组为单位直接生成图元。">网格着色器（Mesh Shader）</Term> 重新设计了几何处理管线：
-
-```glsl
-// mesh shader: 线程组直接输出顶点和三角形
-#version 460
-#extension GL_EXT_mesh_shader : require
-
-layout(local_size_x = 32) in;
-layout(triangles, max_vertices = 64, max_primitives = 124) out;
-
-void main() {
-    // 程序化生成几何体，无需顶点缓冲
-    SetMeshOutputsEXT(vertexCount, primitiveCount);
-    // ... 填充顶点和索引
-}
-```
-
-### 描述符索引（Bindless）
-
-<Term def="VK_EXT_descriptor_indexing 扩展允许着色器通过动态索引访问大型描述符数组，实现 bindless 资源绑定。">描述符索引</Term> 解放了描述符数量的硬限制：
-
-```glsl
-// Bindless 纹理数组
-layout(binding = 0) uniform sampler2D textures[];
-
-void main() {
-    // 通过实例索引或顶点数据动态选择纹理
-    vec4 color = texture(textures[materialIndex], uv);
-}
-```
-
-### 可变速率着色（VRS）
-
-<Term def="VK_KHR_fragment_shading_rate 扩展允许按图元或屏幕区域降低片段着色率，在低重要性区域节省 GPU 算力。">可变速率着色（VRS）</Term>：
-
-```c
-// 按图元设置着色率
-VkGraphicsPipelineShaderStageCreateInfo...
-vkCmdSetFragmentShadingRateKHR(cmdBuffer,
-    &fragmentShadingRate, &shadingRateCombinerOps);
-// 可选速率：1x1, 1x2, 2x1, 2x2, 4x4 等
-```
-
-## 交互Demo
-
-> 猜一猜：光线追踪和网格着色器能否在同一个渲染管线中混用？
+1. API 版本和 extension properties 表明名称/核心入口可见；
+2. Features2 查询表明具体布尔 feature 为 true；Properties2 给出 limits、alignment 和支持模式；
+3. Device create 启用所需 extension 名称和独立 enabled feature pNext 链；
+4. 命令入口加载成功，资源 usage、同步、shader capability 和测试均满足。
 
 <VkgAdvancedFeaturesDiagram />
 
-<Stepper>
-  <Step title="检查扩展支持">
-    枚举设备扩展，检查 `VK_KHR_ray_tracing_pipeline`、`VK_EXT_mesh_shader`、`VK_EXT_descriptor_indexing` 等是否支持。在 `VkDeviceCreateInfo` 中启用所需扩展，并查询相关特性（如 `VkPhysicalDeviceRayTracingPipelineFeaturesKHR`）。
-  </Step>
-  <Step title="选择高级特性组合">
-    根据场景需求组合：光线追踪用于反射/阴影/全局光照；网格着色器用于程序化几何或 LOD；Bindless 用于大量纹理的材质系统；VRS 用于 VR 或低性能区域降采样。
-  </Step>
-  <Step title="实现与回退">
-    实现核心路径后，为不支持扩展的设备提供回退方案（如用计算着色器模拟光线追踪，用传统管线替代网格着色器）。用特性查询而非版本号判断支持度。
-  </Step>
-</Stepper>
+提升进核心后，某版本设备可能无需再启用旧 extension 名称，但仍要查询并启用对应核心 feature；低版本设备则可能通过 extension 路径提供同一能力。扩展依赖也可能随 API 版本变化，代码应以规范依赖和生成的 capability table 为依据，而不是手写“版本大于 1.2 就全支持”。
 
-## 代码对照
+## 查询链与启用链仍要分离
 
-扩展启用与特性查询：
+高级 feature 常来自多个结构。Ray tracing 需要 acceleration structure、ray tracing pipeline、buffer device address 等一组能力；descriptor indexing 又由多个独立 feature 位组成。一个总布尔 `supportsRayTracing`只能是完整合同检查后的派生结果。
 
-```c
-// 查询光线追踪特性
-VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtFeatures = {
-    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
+```cpp
+VkPhysicalDeviceMeshShaderFeaturesEXT meshAvailable{
+  .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MESH_SHADER_FEATURES_EXT,
 };
-VkPhysicalDeviceFeatures2 features2 = {
-    .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
-    .pNext = &rtFeatures,
+VkPhysicalDeviceRayTracingPipelineFeaturesKHR rtAvailable{
+  .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
+  .pNext = &meshAvailable,
 };
-vkGetPhysicalDeviceFeatures2(physicalDevice, &features2);
-
-if (!rtFeatures.rayTracingPipeline) {
-    // 回退到光栅化或计算着色器方案
-}
-
-// 启用扩展
-const char* deviceExtensions[] = {
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-    VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-    VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
-    VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
+VkPhysicalDeviceAccelerationStructureFeaturesKHR asAvailable{
+  .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR,
+  .pNext = &rtAvailable,
 };
-
-VkDeviceCreateInfo deviceInfo = {
-    ...
-    .pNext = &features2,  // 链入特性结构体
-    .enabledExtensionCount = 4,
-    .ppEnabledExtensionNames = deviceExtensions,
+VkPhysicalDeviceFragmentShadingRateFeaturesKHR vrsAvailable{
+  .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FRAGMENT_SHADING_RATE_FEATURES_KHR,
+  .pNext = &asAvailable,
 };
+VkPhysicalDeviceFeatures2 available{
+  .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+  .pNext = &vrsAvailable,
+};
+vkGetPhysicalDeviceFeatures2(physicalDevice, &available);
+
+CapabilityTiers tiers = qualifyTiers(
+    apiVersion, extensionNames, available, queriedProperties, queueSnapshot);
+// 另建 enabled 链，只开启用户配置选择且完整合格的 tiers。
 ```
+
+Properties 链同样关键：ray tracing shader group handle size/alignment、AS scratch alignment、mesh workgroup/output limits、descriptor update-after-bind limits、fragment shading rate texel size 等都决定实现参数。
+
+## Compute 是核心高级路径
+
+Compute pipeline 不要求高级 extension。它由 compute shader、pipeline layout、storage/uniform descriptors 和 `vkCmdDispatch`组成，可用于 culling、particles、post-processing、mipmap、prefix sum 等通用工作。
+
+Compute queue 可能与 graphics 同族，也可能有专用 family。专用 queue 不自动带来异步收益：若工作与 graphics 有强依赖，semaphore、ownership transfer 和缓存/带宽竞争可能抵消并行。先在 graphics-capable queue 建立正确路径，再用 timestamp 和 queue overlap 验证是否值得拆分。
+
+```cpp
+vkCmdBindPipeline(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE, computePipeline);
+vkCmdBindDescriptorSets(computeCmd, VK_PIPELINE_BIND_POINT_COMPUTE,
+    computeLayout, 0, 1, &computeSet, 0, nullptr);
+vkCmdDispatch(computeCmd, divideRoundUp(itemCount, localSizeX), 1, 1);
+
+VkBufferMemoryBarrier2 computeToDraw{
+  .sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER_2,
+  .srcStageMask = VK_PIPELINE_STAGE_2_COMPUTE_SHADER_BIT,
+  .srcAccessMask = VK_ACCESS_2_SHADER_STORAGE_WRITE_BIT,
+  .dstStageMask = VK_PIPELINE_STAGE_2_DRAW_INDIRECT_BIT,
+  .dstAccessMask = VK_ACCESS_2_INDIRECT_COMMAND_READ_BIT,
+  .buffer = indirectBuffer,
+  .offset = 0,
+  .size = VK_WHOLE_SIZE,
+};
+pipelineBarrier(computeCmd, computeToDraw);
+```
+
+若 compute 和 graphics 位于不同 queues，则 barrier 的一半不能跨 queue 自动完成全部依赖；需要 release/acquire ownership（EXCLUSIVE 时）和 semaphore submission dependency。
+
+## Descriptor indexing 不是无限 Bindless
+
+<Term def="允许 shader 对 descriptor arrays 使用运行时长度、非 uniform 索引、部分绑定和受控更新等能力的一组独立 features">Descriptor indexing</Term>在 Vulkan 1.2 有核心 feature 路径，但不是一个单独开关。常见 bindless texture table 可能需要：
+
+- runtimeDescriptorArray；
+- shaderSampledImageArrayNonUniformIndexing；
+- descriptorBindingPartiallyBound；
+- descriptorBindingVariableDescriptorCount；
+- 需要 pending 时更新才启用相应 update-after-bind feature 和 flags。
+
+每项都要查询并在 layout binding flags、descriptor pool flags 和 shader 中配套。GLSL 中由不同 invocation 产生的动态索引通常需要 `nonuniformEXT(index)`，避免编译器错误假设 subgroup 内索引一致。
+
+Descriptor 数量仍受每 stage、每 set、update-after-bind 和设备实现 limits。资源槽回收也需等所有引用 generation 完成；“bindless”不会消除资源生命周期或 descriptor 同步。
+
+```glsl
+#extension GL_EXT_nonuniform_qualifier : require
+layout(set = 1, binding = 0) uniform sampler2D textures[];
+layout(location = 0) flat in uint materialTextureIndex;
+layout(location = 0) out vec4 outColor;
+
+void main() {
+    outColor = texture(textures[nonuniformEXT(materialTextureIndex)], uv);
+}
+```
+
+## Ray tracing 是一组依赖和内存规则
+
+<Term def="由 geometry 构建的底层加速结构和引用其实例的顶层加速结构，用于硬件遍历相交查询">BLAS/TLAS</Term>只是路径的一部分。Khronos ray tracing pipeline 通常还涉及 acceleration structure、deferred host operations、buffer device address、SPIR-V/float controls 版本依赖，以及 ray tracing pipeline 扩展自身。
+
+实现必须：
+
+- 查询 build sizes，按 acceleration-structure storage 与 scratch usage 创建对齐 buffer；
+- 建立 geometry input → AS build、BLAS → TLAS、AS build → trace 的 stage/access barriers；
+- 按 build/update flags 决定能否 refit，不能假设 TLAS 每帧重建或 BLAS 永远静态；
+- 根据 shaderGroupHandleSize、shaderGroupHandleAlignment 与 shaderGroupBaseAlignment 构造 SBT regions；
+- 保持 device addresses 指向的 buffers 与 AS 在 trace 完成前有效。
+
+Ray tracing pipeline 的 raygen、miss、hit/callable groups 通过 SBT 选择；也可使用 ray query 在 graphics/compute shader 中查询。回退可以是 raster approximation、screen-space、probe 或 compute software path，但它们质量和成本不同，不应宣称功能等价。
+
+## Mesh shader 重构几何前端
+
+<Term def="以 workgroup 直接输出顶点和图元、可由可选 task shader 生成工作负载的可编程几何阶段">Mesh shader</Term>替代传统 vertex input/vertex/tessellation/geometry 前端，之后仍进入 rasterization 和 fragment processing。它可以从 storage buffer、device address 或程序化数据读取 meshlets，不等于“无需任何几何 buffer”。
+
+使用前查询 taskShader/meshShader features，以及 maxMeshWorkGroupInvocations、maxMeshOutputVertices、maxMeshOutputPrimitives、preferred invocations 等 properties。Shader 声明与 dispatch dimensions 必须在 limits 内。Meshlet culling 可能减少无效几何，但重打包、workgroup occupancy 和输出限制也会增加成本；传统 indexed draw 仍是必要 baseline。
+
+Mesh shader 与 ray tracing 可以在同一帧甚至共享场景数据，但不是同一个 pipeline 中“把两个阶段串起来”：mesh pipeline 产生 raster primitives，ray tracing pipeline/queries 消费 acceleration structures。共享资源要有明确生产、同步和生命周期。
+
+## Fragment shading rate 是质量合同
+
+<Term def="允许一个 fragment shader invocation 覆盖多个 framebuffer 像素区域，并通过 pipeline、primitive 或 attachment 机制组合的能力">Fragment shading rate</Term>不保证支持任意 1×2、2×2、4×4。应用应枚举 `vkGetPhysicalDeviceFragmentShadingRatesKHR`结果，查询 pipelineFragmentShadingRate、primitiveFragmentShadingRate、attachmentFragmentShadingRate features 和相关 properties。
+
+VRS 可减少 fragment shader invocations，但会改变细节、边缘、derivatives 和后处理输入质量。UI、文字、透明边缘、镜面高光或速度敏感区域可能要求 1×1；foveated rendering、运动模糊或低对比区域可尝试较粗 rate。必须做画质差异图与 GPU counter 验证。
+
+动态命令 `vkCmdSetFragmentShadingRateKHR`需要对应 feature 和 pipeline dynamic state；attachment-based VRS 还需创建特定 usage/format 的 shading-rate image，并按 properties 要求选择 texel size、layout 和 synchronization。
+
+<VkgCapabilityTiersDiagram />
+
+## Capability tier 而非条件散点
+
+将高级能力集中为不可变启动报告：每个 tier 记录 required version/extensions/features/properties/queues、启用结果、shader variant、资源路径、回退与测试 ID。渲染代码只读取 `tiers.rayTracing`等最终决定，不在各处重复枚举扩展名。
+
+Vulkan Profiles 可帮助表达并验证一组 capability 要求，但 runtime 仍需处理 profile 不满足、用户禁用、驱动问题和产品回退。一个设备可同时启用多个 tier，也可只启用 baseline + compute。
+
+## 三步交付高级路径
+
+<Stepper>
+<Step title="第一步：生成完整能力快照">
+
+查询 API 版本、extension names、feature/property pNext 链、queues、formats 和 limits；按规范解析 promotion 与依赖。
+
+<VkgStepFlowDiagram
+  caption="能力快照保存原始证据，不直接把扩展名折叠成 supports 布尔。"
+  stage={1}
+  stages={["Snapshot：version、extensions、features、properties、queues、formats"]}
+/>
+
+</Step>
+<Step title="第二步：资格化并启用 tiers">
+
+对每条路径检查完整依赖，构造最小 enabled feature 链和 extension list；选择 shader/resource/sync 变体与 baseline fallback。
+
+<VkgStepFlowDiagram
+  caption="每个 tier 独立失败和回退，避免一个可选扩展拖垮基础设备。"
+  stage={2}
+  stages={[
+    "Snapshot：version、extensions、features、properties、queues、formats",
+    "Qualify + enable：dependency closure、limits、pNext、fallback",
+  ]}
+/>
+
+</Step>
+<Step title="第三步：用运行证据发布">
+
+加载命令入口，执行最小功能测试、validation、GPU 时间与画质比较；只有正确性和收益达标才默认开启 tier。
+
+<VkgStepFlowDiagram
+  caption="Supported 是设备事实，Enabled 是应用选择，Operational 才是交付结论。"
+  stage={3}
+  stages={[
+    "Snapshot：version、extensions、features、properties、queues、formats",
+    "Qualify + enable：dependency closure、limits、pNext、fallback",
+    "Operational proof：commands、sync、validation、performance、quality",
+  ]}
+/>
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-用 API 版本号判断扩展支持。Vulkan 1.3 包含了部分被提升的扩展（如 descriptor_indexing、dynamic_rendering），但很多扩展（如 ray_tracing_pipeline、mesh_shader）永远不会被提升进核心，必须通过扩展查询判断。始终用 `vkEnumerateDeviceExtensionProperties` 检查。
+**现象 →** 枚举到 ray tracing pipeline 扩展，vkCreateDevice 或 AS build 仍失败。
+**原因 →** 只检查一个扩展名，漏掉 acceleration structure/dependency features、buffer device address 或 properties alignment。
+**修法 →** 对完整依赖闭包建立 feature/property 合同，并用独立 enabled 链和最小 AS/trace 测试验证。
 </Callout>
 
 <Callout type="trap">
-在 Bindless 场景中忘记启用 `shaderSampledImageArrayNonUniformIndexing` 特性。当着色器中根据非 uniform 数据（如 `gl_InstanceID`）索引纹理数组时，必须启用此特性。否则验证层会报错，且某些 GPU 上会出现未定义行为。
+**现象 →** Bindless 在部分材质上采样错误，validation 报未绑定 descriptor 或 non-uniform 索引问题。
+**原因 →** 把 descriptor indexing 当单一 feature，漏启用 partiallyBound/nonUniform/runtimeArray，或 shader 未标记 nonuniformEXT。
+**修法 →** 逐 feature 资格化，并让 layout flags、pool flags、allocation count 与 shader qualifier 成套生成。
+</Callout>
+
+<Callout type="trap">
+**现象 →** 开启 mesh shader/VRS 后 GPU 时间反而增加或画质明显下降。
+**原因 →** 只看到 feature 支持，没有检查 workload、limits、occupancy、着色瓶颈和质量敏感区域。
+**修法 →** 保留传统 baseline，在同一场景比较 GPU counters、frame time 和差异图后再决定默认 tier。
 </Callout>
 
 ## 练习
 
 <Exercises>
-1. 光线追踪管线中的 BLAS 和 TLAS 分别是什么？为什么要分两级？
-   <Answer>
-   BLAS（Bottom-Level AS）是几何体级别的加速结构，直接包含三角形或 AABB 数据，构建开销大但可复用。TLAS（Top-Level AS）是实例级别，引用多个 BLAS 并包含实例变换矩阵，构建快且可每帧重建。分两级的原因：场景中同一模型可能被多次实例化（如一片森林用同一棵树），BLAS 只构建一次，TLAS 每帧更新实例变换即可，避免重复构建几何加速结构。
-   </Answer>
 
-2. 网格着色器相比传统顶点管线有什么优势？适用于什么场景？
-   <Answer>
-   优势：1) 以线程组为单位直接输出顶点和图元，跳过顶点输入/装配/曲面细分等固定阶段，减少状态管理开销；2) 支持程序化几何生成，无需顶点缓冲；3) 更适合 GPU 驱动的渲染管线，减少 CPU-GPU 数据传输；4) 线程组内可共享数据，便于 LOD 和剔除。适用于：大规模粒子/植被渲染、GPU 驱动管线、程序化地形、点云渲染等场景。
-   </Answer>
+1. **能力合同：** 设备枚举到 VK_EXT_mesh_shader，但 meshShader=true、taskShader=false。能否启用 mesh 路径？
+
+<Answer>
+可以启用不依赖 task shader 的 mesh-only 路径，前提是启用 meshShader feature、扩展依赖和命令入口，并且 workgroup/output properties 满足 shader。若现有 shader pipeline 强制需要 task stage，则该具体 tier 不合格，应选择 mesh-only 变体或传统 vertex pipeline。扩展名存在不等于所有子 feature 都可用。
+</Answer>
+
+2. **跨队列 compute：** compute queue 写 indirect draw buffer，graphics queue 随后读取。需要哪些依赖？
+
+<Answer>
+Compute submission 内或结尾建立 shader-storage-write 的 release；若 EXCLUSIVE 且 family 不同，做 queue family ownership transfer。用 semaphore 连接 compute signal 与 graphics wait，graphics 侧 acquire 后让 DRAW_INDIRECT/INDIRECT_COMMAND_READ 可见。若同一 queue，可用 buffer barrier 从 COMPUTE_SHADER/SHADER_STORAGE_WRITE 到 DRAW_INDIRECT/INDIRECT_COMMAND_READ。
+</Answer>
+
+3. **Tier 设计：** 某设备支持 descriptor indexing 与 VRS，不支持 ray tracing/mesh。应用启动和 shader 选择应怎样表现？
+
+<Answer>
+Baseline 与 compute 正常启用；bindless tier 按完整 indexing feature/limit 合同启用，VRS tier按支持 rates 和质量策略启用；ray tracing 和 mesh tier 标记不可用并选择 raster/vertex fallback。Device create 只启用最终选择的 features/extensions，shader registry 选择 bindless+VRS 兼容变体，启动报告列出每个 tier 的证据和回退原因。
+</Answer>
+
 </Exercises>
 
+## 本章检查清单
+
+- 每个高级 tier 都有 version/extension dependency、features、properties/limits、commands 和 queue/format 证据；
+- 查询链与启用链分离，promotion/alias 路径按 API 版本处理，未把名称存在当可用；
+- compute/AS/mesh/VRS 资源访问有准确 barrier、semaphore、ownership 和生命周期；
+- 所有可选路径都有 baseline fallback，并通过 correctness、performance 和 quality 比较后发布。
+
+## 术语表
+
 <Glossary>
-  <GlossaryItem term="Vulkan 扩展 (Extension)">
-    API 功能的增量包，分实例级和设备级。KHR 扩展跨厂商认可，EXT 扩展多厂商支持，厂商扩展特定设备专有。成熟扩展可被提升进核心 API。
-  </GlossaryItem>
-  <GlossaryItem term="BLAS/TLAS">
-    光线追踪的两级加速结构。BLAS 是几何体级（三角形/AABB），构建慢可复用；TLAS 是实例级，引用 BLAS 并含变换矩阵，构建快可每帧更新。
-  </GlossaryItem>
-  <GlossaryItem term="网格着色器 (Mesh Shader)">
-    替代传统顶点管线的可编程阶段，以线程组为单位直接输出顶点和图元。支持程序化几何和 GPU 驱动渲染，无需顶点缓冲。
-  </GlossaryItem>
-  <GlossaryItem term="可变速率着色 (VRS)">
-    允许按图元或屏幕区域降低片段着色率的机制。在低重要性区域（如边缘、运动模糊区）减少着色调用，节省 GPU 算力，适用于 VR 和性能敏感场景。
-  </GlossaryItem>
+<GlossaryItem term="Vulkan extension">在核心版本之外增加结构、命令、枚举或行为，并带作用域与依赖规则的规范单元。</GlossaryItem>
+<GlossaryItem term="Descriptor indexing">为 descriptor arrays 提供运行时长度、非 uniform 索引、部分绑定和受控更新的一组 features。</GlossaryItem>
+<GlossaryItem term="BLAS/TLAS">由 geometry 构建的底层加速结构，以及引用其实例的顶层加速结构。</GlossaryItem>
+<GlossaryItem term="Mesh shader">以 workgroup 直接输出顶点和图元、可配合 task shader 的可编程几何阶段。</GlossaryItem>
+<GlossaryItem term="Fragment shading rate">允许一个 fragment invocation 覆盖多个像素区域并由多种机制组合的着色率能力。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Vulkan 学习指南" adaptedUrl="https://vulkan.lunarg.com/" />
+<Attribution adaptedFrom="Khronos Vulkan Guide" adaptedUrl="https://docs.vulkan.org/guide/latest/extensions.html" />

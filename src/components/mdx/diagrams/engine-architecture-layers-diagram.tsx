@@ -61,7 +61,8 @@ export const EngineArchitectureLayersDiagram: FC = () => (
         游戏引擎在软件栈中的位置
       </h4>
       <p className="mt-1 text-xs leading-5 text-secondary">
-        引擎不是最底层，也不是最顶层——它是游戏代码和硬件之间的"翻译官 + 工具箱"。
+        引擎不是最底层，也不是最顶层——它是游戏代码和硬件之间的&quot;翻译官 +
+        工具箱&quot;。
       </p>
     </figcaption>
 

@@ -1,0 +1,324 @@
+---
+title: "第18章：Getting Started with Django"
+type: C
+section: "Part II · Projects · Web Applications"
+order: 18
+description: "从virtual environment创建Learning Log，建立Topic/Entry模型、migrations、admin与URL-view-template请求链。"
+demo: true
+math: false
+sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
+draft: false
+---
+
+import {
+  PccDjangoProjectAppLab,
+  PccDjangoRequestFlowLab,
+  PccMigrationWorkflowLab,
+} from "@/components/mdx/python-crash-course/diagrams/getting-started-with-django";
+
+<Objectives>
+
+- 能区分Django project与app职责，创建virtual environment、runserver并诊断interpreter或configuration错误
+- 能实现Topic与Entry的ForeignKey models，执行makemigrations/migrate并验证admin与shell中的database state
+- 能分析URL pattern、view、ORM query、template与inheritance请求链，实现index、topics和topic页面
+
+</Objectives>
+
+## 为什么先画 Learning Log 的数据与请求边界
+
+Learning Log让用户创建learning topics，并在每个topic下记录entries。最小spec包含两条关系：一个Topic有多条Entry，每条Entry只属于一个Topic；三类页面分别是home、topic list和topic detail。先定义model与URL行为，Django commands才有目标，不会变成照抄目录。
+
+先预测：只改models.py而不执行migrate时database会怎样；`/topics/7/`找不到id时应返回500还是404；child template未声明`{% extends %}`时navigation是否出现。预测帮助区分model state、routing和presentation错误。
+
+<Term def="包含site级settings、root URLs、WSGI/ASGI入口并协调多个apps的Django容器。">project boundary</Term>
+
+本章先完成read-only vertical slice。第19章再加入forms与users，第20章处理style与deployment。每一步都保留可运行server、可查询database与可追踪request。
+
+## Setting Up a Project and Virtual Environment
+
+在project directory创建`.venv`，用同一environment安装Django并记录version。activation只修改当前shell的PATH；真正证据是`sys.executable`与`python -m django --version`。editor、terminal和deployment应明确使用哪个interpreter。
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install django
+python -c "import sys; print(sys.executable)"
+python -m django --version
+```
+
+spec先写出entities、pages与用户动作。不要一开始加入authentication、rich editor和cloud database；范围过大时无法从migration、template或permission中定位最早错误。
+
+## Creating the Django Project
+
+`django-admin startproject learning_log .`在当前directory创建`manage.py`和project package。`.`避免再嵌套一层同名folder。`python manage.py runserver`执行system checks、启动development server并监听本地端口。
+
+```bash
+django-admin startproject learning_log .
+python manage.py migrate
+python manage.py runserver
+```
+
+第一次`migrate`应用Django内置auth、admin、sessions等migrations。development server只用于本地，自动reload虽方便，却可能让module import执行两次；不要在import时启动background job或写data。
+
+server错误先分类：command找不到通常environment未激活；`No module named django`是interpreter/package；settings import是cwd或project layout；port occupied则换port或停止旧process。不要通过重复安装掩盖path问题。
+
+## Starting an App and Understanding Ownership
+
+`python manage.py startapp learning_logs`创建domain app。把`"learning_logs"`加入`INSTALLED_APPS`，Django才会发现models、migrations与templates。project可包含多个apps；app应围绕可复用capability，而不是每个页面一个app。
+
+<Term def="封装一组domain models、views、URLs、templates与migrations的Django功能模块。">app boundary</Term>
+
+<Stepper>
+  <Step title="选择project与app文件职责">
+    <PccDjangoProjectAppLab />
+  </Step>
+  <Step title="验证app已被project发现">
+    `python manage.py check`无错误，makemigrations能发现models，template loader能找到namespaced path。
+  </Step>
+  <Step title="避免双重configuration owner">
+    site database与middleware放project settings；Topic/Entry behavior放learning_logs app，不在两处复制。
+  </Step>
+</Stepper>
+
+## Defining Models: Topic and Entry
+
+Model class描述domain fields与relationships。Topic有短text和date_added；Entry有指向Topic的ForeignKey、long text与date_added。`on_delete=models.CASCADE`表示删除Topic时其Entries一起删除，这是明确data lifecycle rule，不只是语法参数。
+
+<Term def="通过ForeignKey把many端records连接到one端object，并定义删除与反向查询语义的ORM关系。">ORM relationship</Term>
+
+```python
+from django.db import models
+
+class Topic(models.Model):
+    text = models.CharField(max_length=200)
+    date_added = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return self.text
+
+class Entry(models.Model):
+    topic = models.ForeignKey(Topic, on_delete=models.CASCADE)
+    text = models.TextField()
+    date_added = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name_plural = "entries"
+
+    def __str__(self) -> str:
+        return f"{self.text[:50]}..."
+```
+
+`__str__`影响admin与shell可读性，不应返回敏感或无限长content。`entry.topic`访问parent，`topic.entry_set.all()`使用默认reverse manager；成熟design可设置`related_name="entries"`，但应与书中代码和templates保持一致。
+
+### Model invariants and query cost
+
+Entry没有Topic就不合法，database ForeignKey维持referential integrity。一个topic detail页面访问entries时产生query；列表中逐个访问related objects可能形成N+1，后续可用`select_related`/`prefetch_related`优化。本章先通过Django debug/log理解query来源，不提前复杂化。
+
+## Activating Models with Migrations
+
+`makemigrations learning_logs`比较当前models与migration graph，生成versioned operations file；`migrate`按dependency把operations应用到database。migration file是source-controlled schema history，不能只在本机生成却不提交。
+
+<Term def="把model state变化记录为有序operations，并可重复应用到database schema的版本步骤。">migration</Term>
+
+```bash
+python manage.py makemigrations learning_logs
+python manage.py sqlmigrate learning_logs 0001
+python manage.py migrate
+python manage.py showmigrations learning_logs
+```
+
+<Stepper>
+  <Step title="切换model、migration与database状态">
+    <PccMigrationWorkflowLab />
+  </Step>
+  <Step title="区分生成与应用">
+    makemigrations只创建file，migrate才改变database；两步之间可用sqlmigrate审查SQL。
+  </Step>
+  <Step title="验证所有environment同一migration graph">
+    local、test与deployment从同一files应用；禁止手改production table后不补migration。
+  </Step>
+</Stepper>
+
+常见`no such column`表示code预期新schema但database未migrate；`No changes detected`可能app未加入INSTALLED_APPS或编辑了错误model。先用showmigrations和migration files读取事实，不删除database作为默认修复。
+
+## The Django Admin Site
+
+创建superuser并在`admin.py`注册Topic、Entry，admin提供经过authentication的CRUD界面。它适合site operators录入初始data，不是最终user experience。
+
+```bash
+python manage.py createsuperuser
+```
+
+```python
+from django.contrib import admin
+from .models import Entry, Topic
+
+admin.site.register(Topic)
+admin.site.register(Entry)
+```
+
+若admin看不到model，检查registration、INSTALLED_APPS与server reload；若保存失败，读取form errors和database exception。superuser credentials不应写进repository或共享文档。
+
+## Exploring Data in the Django Shell
+
+`python manage.py shell`加载project settings与Django app registry，可通过ORM查询实际database。shell用于验证models与relationships，不应成为不可复现的production data migration工具；重要操作写成data migration或management command。
+
+```python
+from learning_logs.models import Topic
+
+topics = Topic.objects.all()
+topic = Topic.objects.get(id=1)
+entries = topic.entry_set.order_by("-date_added")
+print(topic, entries.count())
+```
+
+`.get()`预期恰好一个object，0个抛DoesNotExist，多于一个抛MultipleObjectsReturned；view中按primary key通常用`get_object_or_404`映射成HTTP 404。`.filter()`则返回可能为空的QuerySet，二者表达不同contract。
+
+## Pages and URLs: Request Dispatch
+
+root `learning_log/urls.py`把空前缀include到app URLs；app定义`app_name`和named patterns。命名后template使用`{% url 'learning_logs:topics' %}`反向生成path，route调整时link无需手改。
+
+<Term def="Django按ordered URL patterns匹配request path、提取parameters并调用对应view的过程。">request dispatch</Term>
+
+```python
+# learning_log/urls.py
+from django.contrib import admin
+from django.urls import include, path
+
+urlpatterns = [
+    path("admin/", admin.site.urls),
+    path("", include("learning_logs.urls")),
+]
+
+# learning_logs/urls.py
+from django.urls import path
+from . import views
+
+app_name = "learning_logs"
+urlpatterns = [
+    path("", views.index, name="index"),
+    path("topics/", views.topics, name="topics"),
+    path("topics/<int:topic_id>/", views.topic, name="topic"),
+]
+```
+
+patterns自上而下匹配。动态converter `<int:topic_id>`先验证path segment是integer并作为keyword传给view；不匹配返回404而不会调用view。route name是public navigation contract，应在tests中反向解析。
+
+## Views, ORM Queries, and Context
+
+view把HTTP request映射到response。它查询models、构造context并调用`render()`；不要在template中执行复杂business logic。topic detail使用`get_object_or_404`并按date排序entries。
+
+```python
+from django.shortcuts import get_object_or_404, render
+from .models import Topic
+
+def index(request):
+    return render(request, "learning_logs/index.html")
+
+def topics(request):
+    topics = Topic.objects.order_by("date_added")
+    return render(request, "learning_logs/topics.html", {"topics": topics})
+
+def topic(request, topic_id):
+    topic = get_object_or_404(Topic, id=topic_id)
+    entries = topic.entry_set.order_by("-date_added")
+    context = {"topic": topic, "entries": entries}
+    return render(request, "learning_logs/topic.html", context)
+```
+
+context keys是view-template contract。改名后template会渲染空值而不一定抛明显error；tests应assert response context和关键content。404是expected client-visible outcome，不应被broad except变成200 empty page。
+
+## Templates and Template Inheritance
+
+base template定义site title、navigation与`{% block content %}`；child template首先`{% extends "learning_logs/base.html" %}`，再填充block。extends必须是template首个tag附近，避免前置HTML形成意外输出。
+
+```django
+{# base.html #}
+<p><a href="{% url 'learning_logs:index' %}">Learning Log</a></p>
+{% block content %}{% endblock content %}
+```
+
+```django
+{# topics.html #}
+{% extends "learning_logs/base.html" %}
+{% block content %}
+  <p>Topics</p>
+  <ul>
+    {% for topic in topics %}
+      <li><a href="{% url 'learning_logs:topic' topic.id %}">{{ topic.text }}</a></li>
+    {% empty %}
+      <li>No topics have been added yet.</li>
+    {% endfor %}
+  </ul>
+{% endblock content %}
+```
+
+`{% empty %}`明确处理empty QuerySet，避免blank page。Django默认escape `{{ topic.text }}`，不要用`safe`显示user input。template inheritance复用structure，不意味着所有页面塞进一个巨大base；blocks应对应稳定layout regions。
+
+<Stepper>
+  <Step title="切换三条request路径">
+    <PccDjangoRequestFlowLab />
+  </Step>
+  <Step title="定位404、500与空页面">
+    pattern不匹配或object不存在是404；view exception是500；context key错误可能是200但content缺失，三者证据不同。
+  </Step>
+  <Step title="验证inheritance与reverse URLs">
+    每个child包含base navigation，named route能reverse，修改path后templates仍生成有效links。
+  </Step>
+</Stepper>
+
+## Testing the Read-Only Vertical Slice
+
+model tests创建Topic/Entry并验证relationship与string representation；URL tests用`reverse()`检查names；view tests通过Django test client检查200、template、context ordering与missing topic 404。test database由Django隔离，不能依赖手工admin data。
+
+```python
+def test_topic_page_returns_404_for_missing_topic(client):
+    response = client.get("/topics/999999/")
+    assert response.status_code == 404
+```
+
+runserver手测补充浏览器layout，但不替代自动contract。每次model变化先migration，再tests；每次route变化检查reverse；每次template变化检查empty与nonempty states。
+
+<Callout type="trap" title="models.py改完并保存，database schema会自动同步">
+Django不会自动改table。先makemigrations生成operations，再migrate应用；用showmigrations确认environment状态，不能把删除database当常规同步方法。
+</Callout>
+
+<Callout type="trap" title="template显示为空说明database没有data">
+也可能是view context key错误、QuerySet filter错误或child未填正确block。检查response context、query和rendered template，再判断database。
+</Callout>
+
+## 本章回顾：从schema到HTML的完整路径
+
+1. project协调site settings与root routes，app封装Learning Log domain。
+2. Topic与Entry通过ForeignKey表达one-to-many及cascade lifecycle。
+3. makemigrations记录model变化，migrate把migration graph应用到database。
+4. admin与shell验证实际ORM state，但重要data操作应可复现。
+5. request经URL pattern、view、ORM、context和template inheritance生成response。
+
+<Exercises>
+
+**问题 1：修改Entry增加字段后出现no such column，应如何诊断？**
+
+<Answer>检查app在INSTALLED_APPS、models.py变更和migration files；运行makemigrations生成operations，用sqlmigrate审查，再migrate应用，并用showmigrations确认标记。不要先删除database，因为那会丢data且掩盖migration history问题。</Answer>
+
+**问题 2：`/topics/7/`从request到HTML经过哪些contract？**
+
+<Answer>root router include app URLs，int converter提取topic_id=7，view用get_object_or_404查询Topic并取得ordered entries，context提供topic/entries，child template extends base并填content block，render返回HTML。route missing/object missing为404，view异常为500。</Answer>
+
+**问题 3：如何自动验证template inheritance和empty state？**
+
+<Answer>用test client访问named URL，assert 200、使用预期child/base templates、页面包含base navigation；无Topics时显示empty message，有data时按顺序显示links并可reverse detail URL。还要检查missing topic 404，不能只在runserver手看。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="project boundary" definition="包含site settings、root URLs和server entry并协调apps的Django容器。" />
+  <GlossaryItem term="app boundary" definition="封装domain models、views、URLs、templates和migrations的功能模块。" />
+  <GlossaryItem term="ORM relationship" definition="通过ForeignKey连接many端与one端并定义删除、反向查询语义的关系。" />
+  <GlossaryItem term="migration" definition="把model变化记录为operations并应用到database schema的版本步骤。" />
+  <GlossaryItem term="request dispatch" definition="按URL patterns匹配path、提取parameters并调用view的过程。" />
+</Glossary>
+
+<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 18: Getting Started with Django" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />

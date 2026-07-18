@@ -3,12 +3,12 @@
 import { usePathname } from "next/navigation";
 import { useId, useState } from "react";
 
-import { type LearningPathTree } from "@/lib/content";
+import { type LibraryNavigationTree } from "@/lib/content";
 
 import { BookNavItem } from "./book-nav-item";
 
 function pathContainsBook(
-  path: LearningPathTree[number],
+  path: LibraryNavigationTree[number],
   bookSlug: string | null,
 ) {
   if (!bookSlug) return false;
@@ -20,7 +20,7 @@ function pathContainsBook(
 }
 
 function stageContainsBook(
-  stage: LearningPathTree[number]["stages"][number],
+  stage: LibraryNavigationTree[number]["stages"][number],
   bookSlug: string | null,
 ) {
   if (!bookSlug) return false;
@@ -29,7 +29,7 @@ function stageContainsBook(
   );
 }
 
-function pathBookCount(path: LearningPathTree[number]) {
+function pathBookCount(path: LibraryNavigationTree[number]) {
   return path.stages.reduce(
     (total, stage) =>
       total + stage.items.filter((item) => item.kind === "book").length,
@@ -37,7 +37,7 @@ function pathBookCount(path: LearningPathTree[number]) {
   );
 }
 
-export function ChapterNav({ paths }: { paths: LearningPathTree }) {
+export function ChapterNav({ paths }: { paths: LibraryNavigationTree }) {
   const pathname = usePathname();
   const currentBookSlug = pathname.split("/")[2] ?? null;
   const instanceId = useId().replace(/:/g, "");
@@ -113,21 +113,21 @@ export function ChapterNav({ paths }: { paths: LearningPathTree }) {
               className={`${pathButtonClass} ${
                 isCurrentPath ? "text-accent" : "text-primary hover:text-accent"
               }`}
-              >
-                <span
+            >
+              <span
                 aria-hidden="true"
                 className="inline-block shrink-0 text-xs text-secondary transition-transform duration-(--duration-expand) ease-standard"
                 style={{
                   transform: isPathOpen ? "rotate(0deg)" : "rotate(-90deg)",
                 }}
-                >
-                  ▾
-                </span>
-                <span className="min-w-0 truncate">{path.title}</span>
-                <span className="ml-auto shrink-0 font-mono text-xs font-normal tabular-nums text-secondary">
-                  {pathBookCount(path)} 本
-                </span>
-              </button>
+              >
+                ▾
+              </span>
+              <span className="min-w-0 truncate">{path.title}</span>
+              <span className="ml-auto shrink-0 font-mono text-xs font-normal tabular-nums text-secondary">
+                {pathBookCount(path)} 本
+              </span>
+            </button>
 
             {isPathOpen && (
               <div id={pathPanelId} className="mt-2 flex flex-col gap-2.5 pl-4">

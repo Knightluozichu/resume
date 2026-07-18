@@ -1,0 +1,6 @@
+"use client";
+import { OfficialDavSeriesLab } from "./official-dav-series-lab";
+const props={unitTitle:"卷II 第7章 深入理解ContentProvider",focus:"从MediaProvider启动进入SQLite、跨进程Cursor、关闭与文件描述符传递",nodes:["第7章 深入理解ContentProvider","7.1 概述","7.2 MediaProvider的启动及创建","7.2.1 Context的getContentResolver函数分析","7.2.2 MediaStore.Images.Media的query函数分析","7.2.3 MediaProvider的启动及创建总结","7.3 SQLite创建数据库分析","7.3.1 SQLite及SQLiteDatabase家族","7.3.2 MediaProvider创建数据库分析","7.3.3 SQLiteDatabase创建数据库的分析总结","7.4 Cursor的query函数实现分析","7.4.1 提取query关键点","7.4.2 MediaProvider的query分析","7.4.3 query关键点分析","7.4.4 Cursor query实现分析总结","7.5 Cursor close函数实现分析","7.5.1 客户端close分析","7.5.2 服务端close分析","7.5.3 finalize函数分析","7.5.4 Cursor close函数总结","7.6 ContentResolver openAssetFileDescriptor函数分析","7.6.1 openAssetFileDescriptor之客户端调用分析","7.6.2 ContentProvider的openTypedAssetFile函数分析","7.6.3 跨进程传递文件描述符的探讨","7.6.4 openAssetFileDescriptor函数分析总结","7.7 本章学习指导","7.8 本章小结"],versions:["卷I / Android 2.2","卷II / Android 4.0.1","卷III / Android 4.2.2"]};
+export function DavSeriesPipelineLab(){return <OfficialDavSeriesLab mode="pipeline" {...props}/>;}
+export function DavSeriesExperimentLab(){return <OfficialDavSeriesLab mode="experiment" {...props}/>;}
+export function DavSeriesEvidenceLab(){return <OfficialDavSeriesLab mode="evidence" {...props}/>;}

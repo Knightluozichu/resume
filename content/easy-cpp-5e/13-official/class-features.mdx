@@ -1,0 +1,258 @@
+---
+title: "Lesson 13：类的功能"
+type: A
+section: Easy C++（第5版）· 对象生命周期
+order: 13
+description: 对齐原书 Lesson 13「クラスの機能」：掌握构造、成员初始化、析构、this、static 成员与运算符重载，让对象自动维护资源和不变量。
+demo: false
+math: false
+sourceUrl: "https://www.sbcr.jp/product/4797392593/"
+draft: false
+---
+
+import {
+  EcpClassFeaturesLifecycleFlow,
+  EcpClassFeaturesOperatorLab,
+  EcpClassFeaturesOwnershipMap,
+} from "@/components/mdx/easy-cpp-5e/diagrams/class-features";
+
+<Objectives>
+
+- 能解释构造函数、成员初始化顺序和析构函数如何包围对象有效生命周期
+- 能实现 this 与 static 成员的正确用法，区分每对象状态和类共享状态
+- 能分析运算符重载的操作数、结果与不变量，发现对称性、const 和资源所有权错误
+
+</Objectives>
+
+## 为什么对象不能先无效再慢慢补字段
+
+如果调用者必须默认创建对象，再依次调用三个 setter 才能使用，那么这三个调用之间对象处于什么状态并不清楚。构造函数把建立首个有效状态变成对象创建协议：构造成功后，所有公开操作都可以依赖类不变量。
+
+<Term def="创建对象时执行、负责初始化成员并建立首个合法状态的特殊成员函数。">构造函数</Term>
+
+```cpp
+class Account {
+public:
+    Account(std::string owner, int balance)
+        : owner_(std::move(owner)),
+          balance_(balance >= 0 ? balance : 0) {}
+
+private:
+    std::string owner_;
+    int balance_;
+};
+```
+
+构造函数与类同名、没有普通返回类型。冒号后的成员初始化列表直接初始化成员，不是先默认构造再赋值；引用成员、const 成员和没有默认构造的成员尤其必须在这里初始化。
+
+<EcpClassFeaturesLifecycleFlow />
+
+## 初始化顺序由成员声明顺序决定
+
+即使初始化列表写成另一顺序，成员仍按类中声明顺序初始化。若 `second_` 的初始化依赖 `first_`，却把声明顺序颠倒，就可能读取尚未初始化的成员。
+
+<Term def="构造函数中位于冒号后的成员初始化器集合，用于在进入函数体前直接构造成员。">成员初始化列表</Term>
+
+```cpp
+class Range {
+public:
+    Range(int start, int length)
+        : start_(start), end_(start_ + length) {}
+
+private:
+    int start_;
+    int end_;
+};
+```
+
+让初始化列表顺序与声明顺序一致，既符合真实执行，也减少编译警告和误读。构造函数体适合额外验证与动作，但成员进入函数体前已经完成初始化。
+
+<Callout type="trap" title="陷阱：初始化列表写在前面的成员一定先初始化">
+  C++ 固定按成员声明顺序初始化，与列表书写顺序无关。依赖关系必须反映在声明顺序中，并让列表保持同序便于审查。
+</Callout>
+
+## 析构函数结束对象持有的责任
+
+析构函数在对象生命周期结束时执行，用于释放类直接拥有的资源。名称是 `~ClassName`，没有参数和返回类型。自动对象离开作用域时自动析构，动态对象在正确 delete 时析构。
+
+<Term def="对象生命周期结束时执行、负责释放该对象直接拥有资源的特殊成员函数。">析构函数</Term>
+
+```cpp
+class Trace {
+public:
+    explicit Trace(std::string name) : name_(std::move(name)) {
+        std::cout << "enter " << name_ << '\n';
+    }
+    ~Trace() {
+        std::cout << "leave " << name_ << '\n';
+    }
+
+private:
+    std::string name_;
+};
+```
+
+资源获取与释放绑定对象生命周期称为 RAII。若成员本身是 string、vector 或智能指针，它们已经自动管理资源，类通常不应手写 delete。越少直接拥有裸资源，复制、异常和提前 return 越容易正确。
+
+## this 指向当前对象而非类本身
+
+普通成员函数调用时有隐含的 this 指针。它让函数区分当前实例，返回 `*this` 还能支持链式调用；但链式接口应返回有效对象引用，且不能超出对象生命周期。
+
+```cpp
+class Counter {
+public:
+    Counter& add(int amount) {
+        this->value_ += amount;
+        return *this;
+    }
+
+private:
+    int value_ = 0;
+};
+```
+
+const 成员函数中的 this 指向 const 当前对象，因而不能修改普通成员。`mutable` 是少量缓存或同步场景的例外，不应拿来绕过 const 设计。
+
+## static 成员属于类的共享状态
+
+普通数据成员每个对象一份，静态成员由类的所有对象共享；其中 static 成员函数没有当前对象，因此没有 this，只能直接访问 static 数据成员。
+
+<Term def="属于类整体而非每个实例的共享成员；static 成员函数没有 this。">static 成员</Term>
+
+```cpp
+class Ticket {
+public:
+    Ticket() : id_(++issued_) {}
+    int id() const { return id_; }
+    static int issued() { return issued_; }
+
+private:
+    int id_;
+    inline static int issued_ = 0;
+};
+```
+
+共享计数在并发创建对象时需要同步，测试之间也会保留状态。不要把“很多方法都想用”当作 static 的理由；共享状态必须有明确进程范围、初始化和并发契约。
+
+<EcpClassFeaturesOwnershipMap />
+
+<Callout type="trap" title="陷阱：static 成员天然线程安全且每个对象各一份">
+  static 数据恰好相反：所有对象共享同一实体，普通读写不会自动同步。并发更新可能数据竞争，测试也可能互相影响；需要显式同步或消除可变共享状态。
+</Callout>
+
+## 运算符重载把类型接入自然表达式
+
+运算符重载为用户定义类型规定 `+ == <<` 等语法含义。它不是创建新优先级或改变操作数个数；重载后的语义应与运算符惯例一致，让读者能预测结果和副作用。
+
+<Term def="为至少一个用户定义类型的操作数提供已有运算符语义的函数机制。">运算符重载</Term>
+
+```cpp
+class Point {
+public:
+    Point(int x, int y) : x_(x), y_(y) {}
+
+    Point& operator+=(const Point& other) {
+        x_ += other.x_;
+        y_ += other.y_;
+        return *this;
+    }
+
+private:
+    int x_;
+    int y_;
+};
+
+Point operator+(Point left, const Point& right) {
+    left += right;
+    return left;
+}
+```
+
+`+=` 修改左操作数并返回引用，`+` 以副本计算新值而不修改原操作数。用复合赋值实现二元加法可以保持两者规则一致。
+
+## 成员还是非成员取决于左操作数与对称性
+
+赋值、下标、调用与箭头等运算符必须是成员；对称的二元算术和比较常做非成员，使左右两侧转换机会一致。输入输出运算符左侧是流，也通常做非成员。
+
+```cpp
+std::ostream& operator<<(std::ostream& out, const Point& point);
+```
+
+返回流引用支持连续输出。运算符不应做读者意料外的网络访问、全局注册或修改右操作数；若操作不具自然运算语义，命名函数更清楚。
+
+## 复制资源拥有者必须定义一致策略
+
+若类直接保存 `new` 返回的裸指针并在析构中 delete，编译器生成的默认复制只复制地址，两个对象析构时会重复释放。此时必须实现正确复制、禁止复制，或改用值成员/智能指针表达所有权。
+
+```cpp
+class Buffer {
+public:
+    Buffer(const Buffer&) = delete;
+    Buffer& operator=(const Buffer&) = delete;
+};
+```
+
+本章不展开完整复制控制，但要建立检查：一旦类有自定义析构或直接资源所有权，就必须审计复制构造和赋值。最好的简化通常是让标准库成员自动完成资源管理。
+
+## 先预测生命周期与操作结果
+
+<EcpClassFeaturesOperatorLab />
+
+先预测构造、复制/禁止复制、运算、离开作用域的调用顺序；再验证 `a+b` 是否保持 a/b 不变、`a+=b` 是否只修改 a、static 计数是否按对象创建增长。观察应对应具体契约，而不是只打印“调用了函数”。
+
+## 三步审计类的高级功能
+
+<Stepper>
+  <Step title="第一步：包围有效生命周期">
+    列出成员声明顺序、构造前置条件与析构责任，确保构造一完成不变量成立，任何退出路径都会释放直接拥有资源。
+
+    <EcpClassFeaturesLifecycleFlow />
+  </Step>
+  <Step title="第二步：区分每对象与共享状态">
+    标出 this 可访问的实例成员和 static 共享成员，为共享写入定义并发、重置和测试隔离策略。
+
+    <EcpClassFeaturesOwnershipMap />
+  </Step>
+  <Step title="第三步：验证运算符代数语义">
+    先预测修改对象、返回类型、const 要求和左右对称性，再运行 +、+=、输出与边界输入；资源类同时审计复制。
+
+    <EcpClassFeaturesOperatorLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- 构造函数建立首个合法状态，成员按声明顺序初始化，初始化列表直接构造成员
+- 析构函数结束对象直接拥有的资源责任，优先让标准库成员实现 RAII
+- this 指向当前对象，const 成员限制通过当前对象修改；static 成员属于类共享状态且无 this
+- 运算符重载应保持惯用副作用、返回类型与对称性，不能发明违背直觉的隐藏行为
+- 类若直接拥有裸资源或自定义析构，必须同时审计复制与赋值；值成员通常能消除手工控制
+
+<Exercises>
+  1. **问题 1：判断顺序。** 初始化列表顺序与成员声明顺序冲突时，谁决定真实初始化顺序？
+
+  <Answer question="成员真实初始化顺序由什么决定？">由类中成员声明顺序决定，与初始化列表书写顺序无关。依赖成员必须先声明，列表也应保持同序；进入构造函数体前所有成员已经完成初始化。</Answer>
+
+  2. **问题 2：区分状态。** 普通成员、this 与 static 成员之间是什么关系？
+
+  <Answer question="实例成员和 static 成员如何区分？">普通成员每个对象一份，成员调用的 this 指向当前实例；static 数据成员整个类共享一份，static 成员函数没有 this。共享状态不会自动线程安全，需要并发和测试隔离策略。</Answer>
+
+  3. **问题 3：审计加法。** 为什么 `+=` 常修改左值并返回引用，而 `+` 返回新值且不修改两侧？
+
+  <Answer question="Point 的 += 与 + 应保持什么惯例？">复合赋值表示就地更新左操作数并返回 *this 以支持链式使用；普通加法表示从两个输入产生新值，不修改原对象。可用复制左值再调用 +=，让两种运算共享实现和不变量。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="构造函数">创建对象时建立首个合法状态的特殊成员函数。</GlossaryItem>
+  <GlossaryItem term="成员初始化列表">在构造函数体前直接初始化成员的初始化器集合。</GlossaryItem>
+  <GlossaryItem term="析构函数">对象生命周期结束时释放其直接拥有资源的特殊成员函数。</GlossaryItem>
+  <GlossaryItem term="static 成员">属于类整体、由所有对象共享的成员。</GlossaryItem>
+  <GlossaryItem term="运算符重载">为用户定义类型提供已有运算符语义的函数机制。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="やさしいC++ 第5版, Lesson 13 クラスの機能"
+  adaptedUrl="https://www.sbcr.jp/product/4797392593/"
+/>

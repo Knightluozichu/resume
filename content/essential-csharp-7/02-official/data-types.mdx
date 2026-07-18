@@ -1,0 +1,234 @@
+---
+title: "第2章：Data Types"
+type: C
+section: "Essential C# 7.0 · Language Foundations"
+order: 2
+description: "掌握numeric、bool、char、string、null/void、literal与implicit/explicit conversion边界。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/essential-c-sharp-7.0-9781509303618"
+draft: false
+---
+
+import { Ec7ConversionDecisionLab, Ec7NumericTypeLab, Ec7TextAndScalarLab } from "@/components/mdx/essential-csharp-7/diagrams/data-types";
+
+<Objectives>
+
+- 能比较integer、floating-point与decimal的range、precision、literal suffix和checked overflow行为
+- 能分析bool、char、string interpolation、string immutability、null与void的不同value contracts
+- 能设计implicit conversion、checked explicit cast、Parse/TryParse与runtime cast策略并验证失败路径
+
+</Objectives>
+
+## 为什么类型选择是domain contract
+
+`int`、`double`和`decimal`都能“存数字”，但表示集合、precision与operations不同。用double处理货币会产生binary approximation，用int接收long可能溢出，用char表示一个emoji可能只拿到UTF-16的一半。类型不是storage装饰，而是程序允许哪些值、怎样运算以及如何失败的contract。
+
+先预测：`0.1 + 0.2 == 0.3`对double是否可靠；`int.MaxValue + 1`在checked/unchecked中分别怎样；`string`执行`+=`是否修改原对象。先写期望，再用code和runtime evidence验证。
+
+<Term def="一个type可表示的value集合、有效operations、precision与failure行为的约定。">value domain</Term>
+
+## Type Name Forms and Static Meaning
+
+预定义type可用keyword如`int`，其CLR name是`System.Int32`；两者指同一type。alias有助语言可读性，full name有助理解CLI type system。variable的static type决定compile-time member lookup和conversion，即使runtime value更具体也不能随意调用未暴露members。
+
+```csharp
+int count = 42;
+System.Int32 sameType = count;
+Console.WriteLine(count.GetType() == typeof(int)); // True
+```
+
+不要从“通常在stack/heap”推导全部语义；storage placement受context和runtime optimization影响。稳定规则是value/reference category、copy behavior、nullable ability与operations，第3章再完整展开。
+
+## Fundamental Numeric Types
+
+integral types按signed/unsigned与8/16/32/64位区分；`int`是多数whole-number literals和arithmetic的default。`long`扩大range，`byte`适合raw bytes但一般arithmetic仍提升为int。native-sized types不是本版核心，应保持C# 7.0边界。
+
+binary floating types`float`/`double`表示近似实数，precision是significant digits而不是固定decimal places。`decimal`使用base-10表示，适合金额与需要十进制定点语义的计算，但range、speed和interop不同。
+
+<Term def="numeric type能表示的最小/最大值与有效significant digits共同形成的数值边界。">range and precision</Term>
+
+<Stepper>
+  <Step title="切换numeric type与checked mode">
+    <Ec7NumericTypeLab />
+  </Step>
+  <Step title="按domain而不是最大range选择">
+    count用int/long，bytes用byte，scientific approximation用double，base-10 money用decimal。
+  </Step>
+  <Step title="验证boundary和overflow">
+    测试min/max附近、negative、fraction与checked conversion，不只测试小正数。
+  </Step>
+</Stepper>
+
+```csharp
+int visits = 1_000_000;
+long population = 8_100_000_000L;
+float temperature = 21.5F;
+double ratio = 1.0 / 3.0;
+decimal price = 19.99M;
+
+checked
+{
+    int next = visits + 1;
+}
+```
+
+`checked`影响integral arithmetic/conversions，不能让floating-point变exact。对financial total还需明确rounding mode和currency minor units；选择decimal只是第一步。
+
+## Literal Values
+
+literal的syntax参与type inference：whole literal通常取能容纳的int/uint/long/ulong，real literal默认double；`F`和`M`显式指定float/decimal，`L`指定long。digit separator提高可读性，不改变value。
+
+```csharp
+int mask = 0b_1010_0110;
+int color = 0x_FF_80_00;
+long distance = 9_000_000_000L;
+decimal taxRate = 0.075M;
+```
+
+suffix是source contract。`decimal tax = 0.1;`不能implicit convert double literal，必须写`0.1M`；这防止approximate value悄悄进入decimal domain。
+
+## Boolean and Character Types
+
+`bool`只有true/false，C#不把0/1或任意reference隐式当condition。这个限制让branch intent可见。`&&`/`||`short-circuit，右侧可能不执行；若右侧有side effect，行为依赖左侧。
+
+`char`是一个UTF-16 code unit，不保证等于完整Unicode user-perceived character。BMP字符可单char，supplementary code point使用surrogate pair。处理文本长度、截断和validation时优先string/Rune-aware API，而不是假设`Length`等于可见字符数。
+
+<Term def="char和string使用UTF-16 code units表示文本，而一个用户可见字符可能由多个units组成。">text representation boundary</Term>
+
+## Strings, Interpolation, and Immutability
+
+string是reference type但immutable。任何concat、Replace、ToUpper等“修改”都返回新string；原instance不变。immutability支持安全共享与hash stability，但loop中反复`+=`会产生intermediate objects，适合用StringBuilder。
+
+<Stepper>
+  <Step title="切换bool、char、string与null/void">
+    <Ec7TextAndScalarLab />
+  </Step>
+  <Step title="观察string identity与content">
+    保存before reference和result；确认operation返回新value，不能忽略return。
+  </Step>
+  <Step title="选择interpolation或StringBuilder">
+    少量组合优先interpolation；未知次数loop累积用mutable builder并在末尾ToString。
+  </Step>
+</Stepper>
+
+```csharp
+string original = "Ada";
+string changed = original.ToUpperInvariant();
+Console.WriteLine(original); // Ada
+
+var builder = new System.Text.StringBuilder();
+foreach (string part in new[] { "A", "B", "C" })
+{
+    builder.Append(part);
+}
+string combined = builder.ToString();
+```
+
+interpolation `$"{value:N2}"`把expression和format靠近，实际输出受format string与culture影响。machine-readable protocols应指定InvariantCulture，UI可使用用户culture。
+
+## null and void Are Different Absences
+
+`null`是某些reference/nullable values可取的absence；访问null member会失败。C# 7.0未默认启用nullable reference analysis，reference variable在compile time通常不能表达“绝不null”，因此public boundary要主动validate。
+
+`void`不是可存入variable的value；它表示method不返回结果。`return;`可退出void method，但不能写`void x`。不要把“没有object”和“没有return value”混为一谈。
+
+<Term def="null表示允许为空的value状态，void表示method没有result value；两者属于不同type contexts。">absence contract</Term>
+
+```csharp
+static void Log(string message)
+{
+    if (message == null) throw new ArgumentNullException(nameof(message));
+    Console.WriteLine(message);
+}
+```
+
+## Conversions between Data Types
+
+implicit conversion只在language认定无需显式意图、通常不会丢失range/meaning时可用，例如int到long。explicit cast表示开发者接受风险，不保证runtime成功；numeric narrowing可能overflow，reference cast可能InvalidCastException。
+
+string到number不是cast，而是parse。trusted fixed input可`Parse`并让invalid成为exception；user/file/network input通常用TryParse并提供失败branch。Convert APIs有自己的null/rounding rules，使用前写出policy。
+
+<Term def="从source type到target type时对range、precision、runtime type与invalid input作出的显式转换策略。">conversion policy</Term>
+
+<Stepper>
+  <Step title="选择source、target与trust boundary">
+    <Ec7ConversionDecisionLab />
+  </Step>
+  <Step title="区分conversion与parsing">
+    numeric types间可cast；text需要grammar parse；object/interface需要runtime type check。
+  </Step>
+  <Step title="验证failure而非只看成功值">
+    覆盖out-of-range、fraction truncation、bad text、null与wrong runtime type。
+  </Step>
+</Stepper>
+
+```csharp
+long total = int.MaxValue + 100L;
+
+try
+{
+    int narrowed = checked((int)total);
+}
+catch (OverflowException)
+{
+    Console.WriteLine("value is outside Int32 range");
+}
+
+if (!int.TryParse(Console.ReadLine(), out int parsed))
+{
+    Console.WriteLine("enter a valid Int32 value");
+}
+```
+
+floating到integral cast会截断fraction，不是round；若要round，用Math.Round并明确MidpointRounding，再checked cast。每个conversion都应回答是否lossless、失败如何表达、culture如何影响。
+
+## Choosing and Testing a Type
+
+选择清单：domain允许值；range；exact还是approximate；unit/currency；null是否有意义；外部format；interop/storage；performance。测试清单：min/max、zero、negative、NaN/Infinity（floating）、fraction、bad text、culture与overflow context。
+
+不要为“节省几个bytes”把identifier或count压成short，也不要把所有数字都用decimal。type应让非法状态更难表示，并让conversion发生在少数明确boundary。
+
+<Callout type="trap" title="double range很大，所以最适合金额">
+range不等于decimal exactness。binary floating无法精确表示多数十进制小数；金额通常用decimal或最小货币单位integer，并明确rounding。
+</Callout>
+
+<Callout type="trap" title="explicit cast表示编译器已经保证转换安全">
+cast只表示开发者显式请求。narrowing可overflow、fraction可截断、reference cast可失败；用checked、type test或TryParse覆盖风险。
+</Callout>
+
+## 本章回顾：类型决定可表示状态与失败方式
+
+1. numeric type同时定义range、precision、literal和overflow行为。
+2. bool不隐式数值化，char是UTF-16 code unit而非总是完整字符。
+3. string immutable，interpolation负责表达，StringBuilder适合重复累积。
+4. null是absence value，void是no-result method contract。
+5. implicit、explicit、parse与runtime cast必须有清晰conversion policy。
+
+<Exercises>
+
+**问题 1：金额、科学测量和大型计数分别怎样选type？**
+
+<Answer>金额通常decimal或最小货币单位integer，并声明rounding；科学测量通常double，接受IEEE approximation并处理NaN/Infinity；大型whole count根据上界选long。选择依据是domain/range/precision，不是一个type覆盖全部场景。</Answer>
+
+**问题 2：为什么string immutability会影响loop中的拼接设计？**
+
+<Answer>每次concat都产生新string，旧content需复制，未知次数loop会创建大量intermediate objects。少量固定组合用interpolation最清晰，循环累积使用StringBuilder，末尾ToString；同时不能忽略Replace/ToUpper等返回值。</Answer>
+
+**问题 3：如何安全处理用户输入的long到int转换？**
+
+<Answer>先用long.TryParse区分text grammar/range，若目标必须int，再用checked cast或先比较int.MinValue/MaxValue；失败返回明确validation outcome。不能用unchecked cast让大值wrap，也不能把Parse exception当正常交互流程。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="value domain" definition="type可表示的values、operations、precision与failure行为。" />
+  <GlossaryItem term="range and precision" definition="numeric type的最小/最大值与有效significant digits边界。" />
+  <GlossaryItem term="text representation boundary" definition="UTF-16 units与用户可见字符之间的表示边界。" />
+  <GlossaryItem term="absence contract" definition="null value state与void no-result method的不同语义。" />
+  <GlossaryItem term="conversion policy" definition="source到target时对loss、range、runtime type和invalid input的策略。" />
+</Glossary>
+
+<Attribution adaptedFrom="Essential C# 7.0, 6th Edition, Chapter 2: Data Types" adaptedUrl="https://www.informit.com/store/essential-c-sharp-7.0-9781509303618" />

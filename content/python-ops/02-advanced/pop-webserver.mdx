@@ -1,0 +1,123 @@
+---
+title: "第8章 从零开发一个轻量级WebServer"
+type: C
+section: "Python自动化运维 · 高级篇"
+order: 8
+description: "按刘天斯原书第8章重建：轻量级WebServer、Yorserver配置与架构、HTTP缓存与压缩、HTTP SSL与目录列表、动态CGI功能。"
+demo: true
+math: false
+sourceUrl: "https://github.com/yorkoliu/pyauto"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PopWebserverModelLab, PopWebserverBoundaryLab, PopWebserverEvidenceLab } from "@/components/mdx/python-ops/diagrams/pop-webserver";
+
+<Objectives>
+- 能解释轻量级WebServer的执行链与运维价值
+- 能区分Yorserver配置与架构和HTTP缓存与压缩的责任与失败语义
+- 能实现并复现HTTP SSL与目录列表到动态CGI功能的安全实验
+</Objectives>
+
+## 从一次运维变更开始
+
+先预测：脚本在一台测试机成功，是否就能安全用于批量生产？不能。还要说明目标、权限、超时、部分失败、证据和回滚。<Term def="轻量级WebServer章节通过Yorserver串联套接字、请求解析和功能分派。教学实现用来理解协议边界，不应直接暴露到生产；请求行、header大小、路径和超时都必须有限制。">轻量级WebServer</Term>必须落进可观察的执行链。
+
+<PopWebserverModelLab />
+
+## 核心模型与责任
+
+轻量级WebServer章节通过Yorserver串联套接字、请求解析和功能分派。教学实现用来理解协议边界，不应直接暴露到生产；请求行、header大小、路径和超时都必须有限制。 <Term def="Yorserver配置与架构把监听、静态文件、缓存、压缩、TLS、目录和CGI拆成模块。配置在启动时验证，运行期只读取不可变快照，重载失败继续保留旧配置。">Yorserver配置与架构</Term>
+
+本章按照原书核心模块建立最小实验，再用现代Python和安全默认重写边界。工具版本可以变化，但目标选择、输入验证、结果聚合和审计证据不能消失。
+
+## 机制一：采集或控制入口
+
+Yorserver配置与架构把监听、静态文件、缓存、压缩、TLS、目录和CGI拆成模块。配置在启动时验证，运行期只读取不可变快照，重载失败继续保留旧配置。 <Term def="HTTP缓存与压缩依据Cache-Control、ETag、If-None-Match和Accept-Encoding协商。压缩只用于合适内容类型并设置Vary，缓存键必须包含会影响表示的请求维度。">HTTP缓存与压缩</Term>
+
+```python
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+server = ThreadingHTTPServer(('127.0.0.1', 8080), SimpleHTTPRequestHandler)
+try: server.serve_forever()
+finally: server.server_close()
+```
+
+运行前固定测试目标与时间窗，运行后保存结构化结果、耗时和异常类型。不要把打印了几行输出当成成功，也不要让示例凭据进入源码。
+
+## 机制二：状态、网络与批量
+
+HTTP缓存与压缩依据Cache-Control、ETag、If-None-Match和Accept-Encoding协商。压缩只用于合适内容类型并设置Vary，缓存键必须包含会影响表示的请求维度。 <Term def="HTTP SSL与目录列表的安全边界包括现代TLS配置、证书轮换和路径规范化。目录列表默认关闭；若开启，根目录固定、HTML转义文件名并拒绝父目录逃逸。">HTTP SSL与目录列表</Term>
+
+<PopWebserverBoundaryLab />
+
+```python
+from hashlib import sha256
+def etag(payload: bytes) -> str:
+    return '"' + sha256(payload).hexdigest() + '"'
+if request.headers.get('If-None-Match') == etag(body):
+    send_status(304)
+```
+
+批量任务要先预览匹配目标，再限制并发并逐目标汇总。成功、失败、超时和未返回是不同状态；只展示总成功率会掩盖关键主机失败。
+
+## 机制三：证据与恢复
+
+HTTP SSL与目录列表的安全边界包括现代TLS配置、证书轮换和路径规范化。目录列表默认关闭；若开启，根目录固定、HTML转义文件名并拒绝父目录逃逸。 <Term def="动态CGI功能用子进程环境与标准输入输出连接脚本，风险包括命令注入、资源耗尽和权限扩大。现代服务通常使用WSGI或ASGI进程模型，但仍需理解网关如何隔离请求。">动态CGI功能</Term>
+
+动态CGI功能用子进程环境与标准输入输出连接脚本，风险包括命令注入、资源耗尽和权限扩大。现代服务通常使用WSGI或ASGI进程模型，但仍需理解网关如何隔离请求。 <Term def="验证从零开发一个轻量级WebServer的授权、结果和失败路径。">从零开发一个轻量级WebServer验收边界</Term>
+
+```python
+from pathlib import Path
+ROOT = Path('/srv/public').resolve()
+def safe_path(raw):
+    target = (ROOT / raw.lstrip('/')).resolve()
+    if ROOT not in target.parents and target != ROOT:
+        raise PermissionError('path escapes document root')
+    return target
+```
+
+<PopWebserverEvidenceLab />
+
+## 分步验收
+
+<Stepper>
+  <Step title="建立执行链"><PopWebserverModelLab /></Step>
+  <Step title="注入边界"><PopWebserverBoundaryLab /></Step>
+  <Step title="证明可恢复">用正常、超时、权限拒绝和部分失败四组输入运行；核对状态、日志、临时资源与回滚点，并保留可复查证据。</Step>
+</Stepper>
+
+## 实战验证清单
+
+在隔离环境执行三段代码：先只读采集，再模拟一台目标超时，最后验证失败不会改变未授权对象。记录命令或API参数、开始结束时间、目标清单、返回码、标准错误、制品摘要和回滚结果。涉及网络扫描、远程命令或配置发布时，必须使用经过批准的测试资产。
+
+## 常见误区
+
+<Callout type="trap" title="只要轻量级WebServer能运行就可以批量">
+单机成功没有证明目标选择、并发预算、部分失败和回滚。扩大范围前必须完成预览、限流、逐主机结果与停止条件。
+</Callout>
+
+<Callout type="trap" title="原书工具API可以原样用于今天的生产">
+原书出版于2014年，部分工具和安全默认已经变化。应保留架构思想，依据当前官方文档迁移API、主机密钥、TLS、权限和依赖版本。
+</Callout>
+
+## 本章回顾
+
+官方核心单元核对：轻量级WebServer；Yorserver配置与架构；HTTP缓存与压缩；HTTP SSL与目录列表；动态CGI功能。本章把原书模块放进现代运维闭环：先授权与预览，再执行与收集，最后判断、审计和恢复。
+
+<Exercises>
+**问题 1：如何解释“轻量级WebServer”的执行链？**<Answer>轻量级WebServer章节通过Yorserver串联套接字、请求解析和功能分派。教学实现用来理解协议边界，不应直接暴露到生产；请求行、header大小、路径和超时都必须有限制。 Yorserver配置与架构把监听、静态文件、缓存、压缩、TLS、目录和CGI拆成模块。配置在启动时验证，运行期只读取不可变快照，重载失败继续保留旧配置。</Answer>
+**问题 2：HTTP缓存与压缩与HTTP SSL与目录列表如何协作？**<Answer>HTTP缓存与压缩依据Cache-Control、ETag、If-None-Match和Accept-Encoding协商。压缩只用于合适内容类型并设置Vary，缓存键必须包含会影响表示的请求维度。 HTTP SSL与目录列表的安全边界包括现代TLS配置、证书轮换和路径规范化。目录列表默认关闭；若开启，根目录固定、HTML转义文件名并拒绝父目录逃逸。</Answer>
+**问题 3：如何验收动态CGI功能？**<Answer>动态CGI功能用子进程环境与标准输入输出连接脚本，风险包括命令注入、资源耗尽和权限扩大。现代服务通常使用WSGI或ASGI进程模型，但仍需理解网关如何隔离请求。 增加正常、超时、权限拒绝和部分失败输入，核对目标、返回码、证据和回滚。</Answer>
+</Exercises>
+
+## 术语表
+<Glossary>
+  <GlossaryItem term="轻量级WebServer" definition="轻量级WebServer章节通过Yorserver串联套接字、请求解析和功能分派。" />
+  <GlossaryItem term="Yorserver配置与架构" definition="Yorserver配置与架构把监听、静态文件、缓存、压缩、TLS、目录和CGI拆成模块。" />
+  <GlossaryItem term="HTTP缓存与压缩" definition="HTTP缓存与压缩依据Cache-Control、ETag、If-None-Match和Accept-Encoding协商。" />
+  <GlossaryItem term="HTTP SSL与目录列表" definition="HTTP SSL与目录列表的安全边界包括现代TLS配置、证书轮换和路径规范化。" />
+  <GlossaryItem term="动态CGI功能" definition="动态CGI功能用子进程环境与标准输入输出连接脚本，风险包括命令注入、资源耗尽和权限扩大。" />
+  <GlossaryItem term="从零开发一个轻量级WebServer验收边界" definition="验证从零开发一个轻量级WebServer的授权、结果和失败路径。" />
+</Glossary>
+
+<Attribution adaptedFrom="刘天斯《Python自动化运维：技术与最佳实践》第8章 从零开发一个轻量级WebServer" adaptedUrl="https://github.com/yorkoliu/pyauto" />

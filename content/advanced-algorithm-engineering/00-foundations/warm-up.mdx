@@ -1,0 +1,341 @@
+---
+title: "第2章 A Warm-up：最大子数组和"
+type: B
+section: "基础与模型"
+order: 1
+description: "以股票差分的最大子数组和为热身，从三次方枚举、二次方增量复用推进到两种线性扫描，并分析密度阈值片段变体。"
+demo: true
+math: true
+sourceUrl: "https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+draft: false
+---
+
+import { PaeStockAbstractionDiagram, PaeComplexityLadderDiagram, PaeKadaneTraceLab, PaePrefixMinimumLab, PaeDensityReductionDiagram } from "@/components/mdx/advanced-algorithm-engineering/diagrams/warm-up";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释股票买卖问题如何抽象为最大子数组和
+- 能计算三次方与二次方方案重复工作的来源
+- 能实现负前缀剪枝与最小前缀和两种线性算法
+- 能分析全负数组、并列最优和缓存无关扫描边界
+- 能设计密度阈值到区间和阈值的归约方案
+
+</Objectives>
+
+## 从股价本身换成逐日差分开始
+
+给定股票每天相对前一天的涨跌 D[1,n]，在第 b 天开盘买入、第 s 天收盘卖出的收益，就是连续差分 D[b,s] 的总和。初始股价是多少并不影响最佳日期；决定收益的是买卖窗口中的变化量。
+
+原章示例为 4、-6、3、1、3、-2、3、-4、1、-9、6。先预测最佳窗口：单日最大涨幅是6，但最优并不是只选这一天；D[3,7] 的和为8，虽然中间包含-2，仍优于任何更短的纯正数片段。
+
+<PaeStockAbstractionDiagram />
+
+这一步把业务问题抽象为 <Term def="在含正数和负数的数组中，寻找元素和最大的非空连续子数组及其端点。">最大子数组和</Term>：
+
+$$
+(b^\star,s^\star)
+=
+\arg\max_{1\le b\le s\le n}
+\sum_{i=b}^{s}D[i]
+$$
+
+“非空”是重要契约。若全部元素为负，原章要求仍然买入并卖出，因此答案是数值最大的单元素，而不是和为0的空片段。若全部为正，答案则是整个数组。
+
+## 三次方时间算法：把定义直接翻译成程序
+
+最直接的三次方时间算法枚举每个起点 b、终点 s，再从 b 到 s 重算一次区间和。它检查所有 n(n+1)/2 个非空区间，正确性几乎来自穷举定义。
+
+```cpp
+Result cubic_max_subarray(
+    const std::vector<long long>& values) {
+    Result best{std::numeric_limits<long long>::lowest(), 0, 0};
+    for (std::size_t begin = 0;
+         begin != values.size();
+         ++begin) {
+        for (std::size_t end = begin;
+             end != values.size();
+             ++end) {
+            long long sum = 0;
+            for (std::size_t i = begin;
+                 i <= end;
+                 ++i)
+                sum += values[i];
+            if (sum > best.sum)
+                best = {sum, begin, end};
+        }
+    }
+    return best;
+}
+```
+
+上界容易看出是 O(n 的三次方)。原章还说明它确实是 Theta(n 的三次方)，而不是一个松上界：长度为 L 的区间有 n-L+1 个，所有区间实际执行的加法量为：
+
+$$
+\sum_{L=1}^{n}(n-L+1)L
+=
+\frac{n(n+1)(n+2)}{6}
+=
+\Theta(n^3)
+$$
+
+即使只看长度位于 n/4 到 n/2 的区间，也有 Theta(n) 种长度；每种长度至少有 Theta(n) 个区间，每个区间至少做 Theta(n) 次相加，因此得到 Omega(n 的三次方) 下界。
+
+这个方案的价值不是可部署，而是建立完整预言机。对几十个元素的随机输入，它逻辑独立、容易审查，可用于验证更快算法的端点和总和。
+
+## 二次方时间算法：复用相邻终点的和
+
+固定起点 b 后，终点从 s 移到 s+1 时，新区间只多了 D[s+1]。无需重读 D[b,s]，只要把新元素加进当前和。这种 <Term def="相邻候选共享大部分计算时，只更新新增或移除部分，避免从头重算。">增量复用</Term>消除了最内层循环。
+
+$$
+\operatorname{Sum}(b,s+1)
+=
+\operatorname{Sum}(b,s)+D[s+1]
+$$
+
+```cpp
+Result quadratic_max_subarray(
+    const std::vector<long long>& values) {
+    Result best{std::numeric_limits<long long>::lowest(), 0, 0};
+    for (std::size_t begin = 0;
+         begin != values.size();
+         ++begin) {
+        long long sum = 0;
+        for (std::size_t end = begin;
+             end != values.size();
+             ++end) {
+            sum += values[end];
+            if (sum > best.sum)
+                best = {sum, begin, end};
+        }
+    }
+    return best;
+}
+```
+
+现在每个端点对只做一次增量加法，总候选数仍是 n(n+1)/2，所以是 Theta(n 的二次方)。从三次方时间算法到二次方时间算法，只移动了一行初始化并删除一层重算，却把可处理规模提高了一个数量级。
+
+<PaeComplexityLadderDiagram />
+
+但二次方方案仍检查所有区间。要达到线性时间，必须证明绝大多数区间不可能成为最优，而不是仅靠循环技巧。
+
+## 第一种线性时间算法：负前缀不值得携带
+
+设最优片段是 D[b*,s*]。原章给出两个结构性质：
+
+1. 紧邻 b* 左边、终点为 b*-1 的任何后缀都不可能严格为正，否则把它接到最优片段前会得到更大和。
+2. 最优片段从 b* 开始的任何前缀都不可能严格为负，否则删掉这个前缀会得到更大和。
+
+据此，从左向右维护一个以当前 s 结尾的候选。先把 D[s] 加入并与历史最优比较；若候选和变成负数，就把它丢弃，让下一候选从 s+1 开始。这是 <Term def="当前连续候选的总和为负时，未来任何延伸都不如从下一个位置重新开始。">负前缀剪枝</Term>。
+
+$$
+\operatorname{candidate}_s
+=
+\max\left(D[s],
+\operatorname{candidate}_{s-1}+D[s]\right)
+$$
+
+上式常被称为 Kadane 递推，但原章的端点版本把“何时重启”写得更直观。
+
+```cpp
+Result streaming_max_subarray(
+    const std::vector<long long>& values) {
+    Result best{std::numeric_limits<long long>::lowest(), 0, 0};
+    long long candidate_sum = 0;
+    std::size_t candidate_begin = 0;
+
+    for (std::size_t end = 0;
+         end != values.size();
+         ++end) {
+        candidate_sum += values[end];
+
+        if (candidate_sum > best.sum)
+            best = {candidate_sum, candidate_begin, end};
+
+        if (candidate_sum < 0) {
+            candidate_sum = 0;
+            candidate_begin = end + 1;
+        }
+    }
+    return best;
+}
+```
+
+<PaeKadaneTraceLab />
+
+示例在 s 等于2时累计和为-2，于是下一个候选从3开始；从3到7的每个前缀都非负，算法不会提前重启，到 s 等于7时恰好检查到和为8的最优片段。
+
+正确性可对最优端点直接证明：性质1保证扫描到 b*-1 时，所有阻碍 b* 成为候选起点的负和已经被丢弃；性质2保证从 b* 扫到 s* 的过程中候选不会被重置。因此算法必在 s* 处比较最优和。
+
+<Callout type="trap" title="候选为负时先归零，再更新历史最优">
+若输入全为负，先归零会把不存在的空片段0当成答案。必须先用当前非空候选更新 best，再决定是否为下一轮归零，且 best 初值应为负无穷或首元素。
+</Callout>
+
+候选和等于0时，原章不重启。这样会保留较早起点；若业务要求最短并列答案，可以在等于0时重启，但必须同时明确并列规则。比较使用严格大于也意味着最早发现的最大和窗口被保留。
+
+## 为什么一次顺序扫描也是 I/O 最优
+
+这是一种线性时间算法，也是一种 streaming algorithm（流式算法）：每个元素只读一次，只保留常数状态。若数组在外存，顺序读入页面只需：
+
+$$
+\operatorname{IO}(n)
+=
+\Theta\left(\frac{n}{B}\right)
+$$
+
+任何正确算法都必须检查每个元素，因为一个未读位置可能单独变成新最优，所以需要 Omega(n) 次元素检查，也至少需要 Omega(n/B) 次页面传输。
+
+算法代码没有使用 B，却对任意页面大小都达到扫描界。原章用这个简单例子引出 <Term def="算法设计不依赖具体缓存容量 M 与块大小 B，却能在多级存储上获得渐进最优传输复杂度。">缓存无关</Term>思想：模型参数出现在分析里，不一定出现在实现里。
+
+## 第二种线性时间算法：当前前缀减历史最小前缀
+
+另一种设计从代数出发。定义 <Term def="从数组起点到当前位置的累计和，约定 P[0] 等于0。">前缀和</Term> P[s] 为 D[1,s] 的总和，则区间 D[b,s] 的和是 P[s]-P[b-1]。固定卖出日 s，最佳起点就是让此前 P[b-1] 最小的位置：
+
+$$
+\max_{b\le s}\operatorname{Sum}(b,s)
+=
+P[s]-\min_{0\le j<s}P[j]
+$$
+
+<PaePrefixMinimumLab />
+
+可以先构造 P 和历史最小数组 M，再扫描差值，时间 O(n)、额外空间 O(n)。利用 min 与 max 的结合性，也可在一次扫描中用 current_prefix 保存 P[s]、用 min_prefix 保存 s 之前的最小前缀，并记录该最小值之后的位置作为候选起点。
+
+```cpp
+Result prefix_min_max_subarray(
+    const std::vector<long long>& values) {
+    Result best{std::numeric_limits<long long>::lowest(), 0, 0};
+    long long prefix = 0;
+    long long min_prefix = 0;
+    std::size_t min_after = 0;
+
+    for (std::size_t end = 0;
+         end != values.size();
+         ++end) {
+        prefix += values[end];
+        const long long sum = prefix - min_prefix;
+        if (sum > best.sum)
+            best = {sum, min_after, end};
+
+        if (prefix < min_prefix) {
+            min_prefix = prefix;
+            min_after = end + 1;
+        }
+    }
+    return best;
+}
+```
+
+注意更新顺序：先用“此前最小前缀”计算结束于当前点的非空区间，再把当前 prefix 纳入未来的最小值。这样同样正确处理全负数组。两种线性解状态不同，但本质都在证明一个起点何时永远不必再考虑。
+
+## 最大密度片段：小改动可能改变问题难度
+
+原章最后讨论 DNA 中 GC-rich 片段。把 A、T 赋为0，把 C、G 赋为1，片段中 C 与 G 的比例就是平均密度。若只要求最大密度，任何单个 C 或 G 都得到密度1，问题退化为无意义的单字符答案，因此必须引入长度下界或长度范围。
+
+这形成 <Term def="在长度约束下寻找平均值或目标符号占比最高的连续片段问题。">最大密度片段</Term>。它与最大和看似只差一个除以长度，实际需要更复杂的结构；“指定长度范围内最大和”也不能直接套用前面的无约束线性扫描。
+
+<PaeDensityReductionDiagram />
+
+另一个变体是：给定密度阈值 t，寻找密度至少为 t 的最长片段。对0/1数组 D，区间平均值约束可以平移为区间和非负：
+
+$$
+\frac{\sum_{k=x}^{y}D[k]}{y-x+1}\ge t
+\quad\Longleftrightarrow\quad
+\sum_{k=x}^{y}(D[k]-t)\ge0
+$$
+
+于是把每项减去 t，就把密度约束归约为和约束。但目标已从“最大和”变成“满足阈值的最长长度”，不能直接返回 Kadane 结果。
+
+原章给出的线性思路以 P 为平移后数组的前缀和。在扫描右端 i 时，若已有最佳长度为 L，就只需寻找足够靠左、能产生更长窗口的起点。候选起点按“前缀中的最左最小值”向左串成 LMin 链；候选值沿链单调，使不可能满足阈值的更左位置可以整体排除。
+
+某次沿 LMin 链走 j 步可能不是常数时间，但它同时把当前最长答案至少扩展 j 个位置。答案长度最多增长到 n，所以所有昂贵步数总和是 O(n)。这种把少数昂贵迭代的代价分摊到全程进展上的证明叫 <Term def="不要求每次操作都便宜，而证明全部操作累计成本受一个全局势能或单调进展界限制。">摊还分析</Term>。
+
+<Callout type="trap" title="只改目标函数文字，却沿用原算法">
+最大和、最大平均密度、密度达标的最长片段、密度达标的最短片段以及带长度范围的最大和是不同问题。单字符答案、端点可行域和可剪枝条件都会变化，必须重新定义规格并证明算法。
+</Callout>
+
+## 从热身题得到的算法工程方法
+
+这章的重点不是记住四段代码，而是观察每次降阶依据什么证据：
+
+- 三次方方案直接覆盖全部定义域，适合小规模预言机；
+- 二次方方案发现相邻区间共享前缀，用增量复用删除重算；
+- 第一种线性方案证明负候选不可能帮助未来答案；
+- 第二种线性方案把区间和分解成当前前缀减历史最小前缀；
+- 密度变体先做代数归约，再为新的“最长”目标设计候选链与摊还证明。
+
+工程测试应让三种实现对短随机数组逐项对拍，并额外覆盖全正、全负、含零、多个并列最优、单元素和接近整数范围的输入。大规模基准再比较二次方与线性增长、顺序吞吐和页面传输；不要让小输入上的常数差掩盖增长率。
+
+<Stepper>
+  <Step title="从业务变化量得到连续片段">
+    <PaeStockAbstractionDiagram />
+    把买卖收益写成逐日差分的连续区间和，并明确非空与并列规则。
+  </Step>
+  <Step title="定位重复工作">
+    <PaeComplexityLadderDiagram />
+    从重算每个区间和，推进到固定起点后的增量累加。
+  </Step>
+  <Step title="用结构性质剪掉候选">
+    <PaeKadaneTraceLab />
+    先更新非空最优，再在候选和为负时重启，保证最优片段会被检查。
+  </Step>
+  <Step title="换一种代数分解">
+    <PaePrefixMinimumLab />
+    固定右端点，用当前前缀减此前最小前缀，滚动维护到 O(1) 空间。
+  </Step>
+  <Step title="重审现实问题的目标">
+    <PaeDensityReductionDiagram />
+    密度阈值可平移成和阈值，但长度目标改变后必须重做候选结构与证明。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 股票差分把最佳买卖窗口转成非空最大子数组和。
+2. 三次方时间算法枚举端点并重算区间和，复杂度严格为 Theta(n 的三次方)。
+3. 二次方时间算法固定起点后增量加入新终点，消除一层重复扫描。
+4. 负前缀无法改善任何未来延伸，支持一次扫描的线性时间算法。
+5. 必须先比较非空候选再归零，才能正确返回全负数组中的最大元素。
+6. 顺序线性扫描只需 Theta(n/B) 次 I/O，且实现不依赖具体 B。
+7. 另一种线性解用当前前缀和减此前最小前缀，并可滚动到常数额外空间。
+8. 最大密度片段需要长度限制，密度阈值可通过每项减 t 归约成区间和阈值。
+9. 最长阈值片段可借助前缀最小候选链与摊还分析达到线性总成本。
+
+<Exercises>
+
+**问题 1：输入 -5、-2、-7 时，为什么答案是 -2 而不是0？**
+
+<Answer>问题要求非空连续子数组。best 从负无穷开始，并在候选归零前更新，所以三个单元素都被比较，最大值-2被保留；0只代表为下一轮重启的内部状态，不是合法空答案。</Answer>
+
+**问题 2：固定起点 b 后，二次方方案为何无需重算 D[b,s+1]？**
+
+<Answer>D[b,s+1] 与 D[b,s] 只差新元素 D[s+1]，所以在当前和上加一个值即可。每个端点对变成一次常数更新，总候选仍为 Theta(n 的二次方)。</Answer>
+
+**问题 3：前缀最小值方案中，为什么必须先计算当前答案再更新 min_prefix？**
+
+<Answer>当前 prefix 对应 P[s]，合法起点需要 P[b-1] 且 b不大于s，也就是此前前缀。若先把当前 P[s] 纳入最小值，会允许空区间 P[s]-P[s]，破坏非空契约和全负输入。</Answer>
+
+**问题 4：将0/1序列每项减0.6后，一个片段的和大于等于0说明什么？**
+
+<Answer>变换后总和等于原片段中1的数量减去0.6乘片段长度；它非负等价于1的比例至少0.6。这个归约只转换可行性约束，若目标是最长片段仍需专门算法。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="最大子数组和">在数组中寻找元素和最大的非空连续片段及其端点。</GlossaryItem>
+  <GlossaryItem term="增量复用">利用相邻候选共享的计算结果，只处理新增或删除部分。</GlossaryItem>
+  <GlossaryItem term="负前缀剪枝">候选总和为负后丢弃整段，因为它只会拖累未来延伸。</GlossaryItem>
+  <GlossaryItem term="缓存无关">实现不依赖 M、B 等缓存参数，却能在不同存储层级取得渐进最优传输界。</GlossaryItem>
+  <GlossaryItem term="前缀和">从数组起点累计到当前位置的总和，支持用两个前缀之差表示区间和。</GlossaryItem>
+  <GlossaryItem term="最大密度片段">在长度约束下寻找平均值或目标符号占比最高的连续片段。</GlossaryItem>
+  <GlossaryItem term="摊还分析">通过全局单调进展证明一系列操作的累计成本，而非要求每次操作同价。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Pearls of Algorithm Engineering · Chapter 2 A Warm-up"
+  href="https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+  author="Paolo Ferragina"
+  license="原书版权归作者与 Cambridge University Press 所有；本章依据官方目录与作者课程资料独立重构教学内容"
+/>

@@ -1,0 +1,225 @@
+---
+title: "第 6 章 行为树在游戏中的运用：节点语义与案例回放"
+type: A
+section: "Unity 3D 实战核心技术详解 · 玩法与AI"
+order: 6
+description: "按原书第6章从行为树插件概念进入案例，掌握节点状态、Tick、黑板、打断和调试证据。"
+demo: true
+math: false
+sourceUrl: "https://m.bookschina.com/7380713.htm"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Uct06BehaviorTreesMapLab,
+  Uct06BehaviorTreesExperimentLab,
+  Uct06BehaviorTreesEvidenceLab,
+} from "@/components/mdx/unity-core-tech/diagrams/uct-06-behavior-trees";
+
+<Objectives>
+
+- 能解释 Selector、Sequence、Decorator 与叶节点的返回状态
+
+- 能设计带黑板、Running 生命周期和中断策略的行为树案例
+
+- 能分析树图看似正确但运行顺序错误的 Tick 证据
+
+</Objectives>
+
+## 问题：为什么把 if-else 画成树并不会自动得到可维护 AI？
+
+先预测：节点连线正确，AI 是否就一定按预期执行？不一定。行为树的核心是每次 Tick 的选择顺序、Success、Failure、Running 三态、节点进入退出和条件变化后的中断。原书第六章先介绍插件再讲案例，复现时要从插件界面抽离出可验证语义。
+
+<Uct06BehaviorTreesMapLab />
+
+## 原书边界与目录小节
+
+本页严格对应完整目录中的以下单元；这些单元只在本页计算原章覆盖，现代扩展不替代原书位置：
+
+- **行为树插件介绍**
+- **案例讲解**
+
+书籍身份由图书馆题录核对，章节边界由完整目录核对。本站重新组织解释、代码、实验和证据，不逐字复制原文；导读与总复习不重复计入十四个正文章。
+
+## 从可视化节点到确定执行模型
+
+Sequence 从左到右执行，遇到 Failure 停止，全部成功才 Success；Selector 遇到 Success 停止，全部失败才 Failure；Decorator 修改子树条件或结果。Action 和 Condition 是叶节点，不能把副作用藏在条件里，否则每次重评估都会重复执行。
+
+Running 表示跨帧任务仍在进行，需要保存当前子节点和局部状态，并在退出或中断时清理导航、动画与临时订阅。无状态地从根每帧重跑会重复播放动作，有状态地永不重评估又会错过高优先级威胁。
+
+黑板保存感知与决策共享数据，应有键类型、写入者和有效期。感知系统更新目标位置，决策树读取快照，动作节点驱动 NavMeshAgent 或技能；不要让任意节点随意查场景并修改全局状态。
+
+案例调试记录每次 Tick 的访问节点、返回状态、黑板差异和中断原因。用固定随机种子和录制感知输入回放，才能区分树结构错误、动作系统故障与时序抖动。
+
+<Uct06BehaviorTreesExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="节点每次执行返回 Success、Failure 或 Running 的三态协议。">
+  行为状态
+</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="按优先级选择第一个成功或运行子节点的组合节点。">Selector</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="要求子节点依次成功，任一失败即整体失败的组合节点。">Sequence</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="在感知、决策和动作之间传递带所有权数据的共享上下文。">黑板</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="高优先级条件变化时停止当前运行节点并清理其副作用。">中断</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+这些术语组成一份最小领域模型。读者需要为每个对象写出所有者、生命周期、正常值、边界值和故意失败后的第一条可观察信号，才能把概念转成工程判断。
+
+## 关键对象与数据流
+
+感知系统把可见目标、距离和生命值写入黑板快照，调度器以固定频率 Tick 根节点，组合节点选择路径，Action 驱动移动或技能并返回状态；跟踪器记录访问路径和黑板差异。输出是行为命令与可回放决策轨迹。
+
+每次实验只改变一个输入，先保存版本、参数与预期，再比较输出、日志、内存或帧时间。最终结果偶然正确但中间契约不符合预测，仍不能签发，因为隐藏缓存、默认值或执行顺序可能掩盖根因。
+
+## 三步可重复实验
+
+动手前先预测：改变当前步骤的一项输入后，哪个对象、数值、像素、状态或版本标记应最先变化？固定 Unity 版本、目标平台、资产提交和测试场景。
+
+<Stepper>
+  <Step title="定义三态节点契约">
+    <Uct06BehaviorTreesMapLab />
+
+先实现无 Unity 依赖的节点接口和 Sequence 单元测试，覆盖首项失败、中项 Running 与全部成功。
+
+```csharp
+public enum Status { Success, Failure, Running }
+public interface INode
+{
+    Status Tick(Context context);
+    void Abort(Context context);
+}
+```
+
+  </Step>
+  <Step title="构造巡逻追击案例">
+    <Uct06BehaviorTreesExperimentLab />
+
+根 Selector 的高优先级子树处理可见敌人，低优先级子树巡逻；固定感知时间线，检查每帧访问节点和状态。
+
+```text
+Root Selector
+  Sequence: HasTarget -> MoveToTarget -> Attack
+  Sequence: ChoosePatrolPoint -> Patrol
+```
+
+  </Step>
+  <Step title="注入中断和抖动">
+    <Uct06BehaviorTreesEvidenceLab />
+
+在 MoveToTarget 运行时移除目标，再让可见条件在阈值附近抖动；验证 Abort 清理、冷却或滞回以及轨迹可重放。
+
+```csharp
+if (!blackboard.HasTarget && activeNode != null)
+{
+    activeNode.Abort(context);
+    activeNode = null;
+}
+```
+
+  </Step>
+</Stepper>
+
+## 正常、边界与故障注入
+
+正常样本证明主路径，边界样本说明适用范围，故障样本证明诊断检查确实会在最早契约处拒绝。三类样本必须使用同一观测方式，避免只为成功路径保留证据。
+
+<Callout type="trap">
+  **因果陷阱**：条件节点执行动画或扣血等副作用，会因重评估而重复触发，条件应尽量纯粹。
+</Callout>
+
+<Callout type="trap">
+  **边界陷阱**：中断 Running
+  节点却不停止导航、协程或订阅，会让旧行为在新分支后台继续运行。
+</Callout>
+
+## 从原书版本迁移到当前 Unity
+
+具体插件界面和序列化格式可能变化，但三态、组合节点、黑板、Tick 和 Abort 是稳定核心；迁移时先用无引擎测试锁定语义。
+
+现代 Unity 可用自研、Behavior Graph 或第三方方案，选择依据应是调试轨迹、版本控制差异、运行时开销和扩展边界，而非节点数量。
+
+迁移账本使用五列：原书载体、稳定不变量、当前实现、不可等价处、重放证据。允许 API、插件和渲染管线变化，不允许用新名词删除原章问题或把编辑器成功当成目标平台成功。
+
+## 验收证据
+
+验收包含节点三态单元测试、巡逻追击树图、固定感知时间线、逐 Tick 访问轨迹、黑板差异、中断清理证明、阈值抖动测试和目标平台性能数据。
+
+证据包还要记录文件路径、构建版本、设备、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不是看过。
+
+<Uct06BehaviorTreesEvidenceLab />
+
+## 小结
+
+- 行为树的本体是执行语义而不是可视化界面
+- Running 节点必须拥有进入、持续和中断生命周期
+- 黑板需要类型、写入者和有效期
+- 固定输入的轨迹回放是 AI 验收核心
+
+<Exercises>
+
+**问题 1** 第 6 章 行为树在游戏中的运用的关键输入和输出分别是什么？
+
+<Answer>
+  感知系统把可见目标、距离和生命值写入黑板快照，调度器以固定频率 Tick
+  根节点，组合节点选择路径，Action
+  驱动移动或技能并返回状态；跟踪器记录访问路径和黑板差异。输出是行为命令与可回放决策轨迹。
+</Answer>
+
+**问题 2** 本章最有诊断价值的故障注入是什么？
+
+<Answer>
+  条件节点执行动画或扣血等副作用，会因重评估而重复触发，条件应尽量纯粹。需要保存失败输入和第一条偏离信号，再修复后重放。
+</Answer>
+
+**问题 3** 迁移到当前 Unity 时必须保留什么？
+
+<Answer>
+  具体插件界面和序列化格式可能变化，但三态、组合节点、黑板、Tick 和 Abort
+  是稳定核心；迁移时先用无引擎测试锁定语义。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="行为状态">
+    节点每次执行返回 Success、Failure 或 Running 的三态协议。
+  </GlossaryItem>
+  <GlossaryItem term="Selector">
+    按优先级选择第一个成功或运行子节点的组合节点。
+  </GlossaryItem>
+  <GlossaryItem term="Sequence">
+    要求子节点依次成功，任一失败即整体失败的组合节点。
+  </GlossaryItem>
+  <GlossaryItem term="黑板">
+    在感知、决策和动作之间传递带所有权数据的共享上下文。
+  </GlossaryItem>
+  <GlossaryItem term="中断">
+    高优先级条件变化时停止当前运行节点并清理其副作用。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="姜雪伟《Unity 3D实战核心技术详解》目录与书籍身份资料"
+  adaptedUrl="https://m.bookschina.com/7380713.htm"
+/>

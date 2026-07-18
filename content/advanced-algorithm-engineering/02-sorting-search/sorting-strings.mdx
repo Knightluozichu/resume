@@ -1,0 +1,267 @@
+---
+title: "第7章 Sorting Strings：字符串排序"
+type: B
+section: "排序、集合与搜索"
+order: 6
+description: "以区分前缀刻画字符读取下界，比较 MSD/LSD 基数排序与多关键字快速排序，并分析变长字符串在两级存储中的拆分模型。"
+demo: true
+math: true
+sourceUrl: "https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+draft: false
+---
+
+import { PaeStringPointerCostDiagram, PaeDistinguishingPrefixLab, PaeMsdRadixTrieDiagram, PaeLsdStabilityLab, PaeMultikeyQuicksortLab, PaeStringIoModelMap } from "@/components/mdx/advanced-algorithm-engineering/diagrams/sorting-strings";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释字符串排序下界为何取决于区分前缀而非总长度
+- 能计算 MSD 与 LSD 基数排序的字符处理成本
+- 能实现多关键字快速排序的三路字符递归
+- 能分析稳定性、结束哨兵、Unicode 与重复前缀边界
+- 能设计符合两级存储字符串拆分模型的排序方案
+
+</Objectives>
+
+## 从“交换指针很便宜”为何仍然很慢开始
+
+sorting strings（<Term def="给定 n 个总字符数为 N 的变长字符串，按规定字符序和字典序重新排列。">字符串排序</Term>）与第5章原子项排序不同。字符串通常由指针数组引用，比较两个指针指向的正文时，要从头逐字符找首个 mismatch。
+
+<PaeStringPointerCostDiagram />
+
+普通 Mergesort 或 Quicksort 做 Theta(n log n) 次字符串比较；若平均字符串长 L=N/n，每次最坏读 O(L) 字符，粗略上界达到 O(N log n)。更糟的是，同一公共前缀会在不同比较中反复读取，字符串正文与指针数组还会争夺缓存。
+
+先预测 all、ally、also、alter 四个词是否必须全部读完才能排序。all 与 ally 在前三个字符后由“结束”与 y 区分；also 读到第三个字符 s 已与 ll 分开；alter 也只需读到 t 附近。字符尾部若不再影响与其他字符串的相对顺序，就没有信息论理由继续读取。
+
+## 区分前缀给出更细的下界
+
+对字符串 s，令 d_s 为能把它与集合中其余字符串区分开的最短前缀长度。<Term def="每个字符串足以与其余字符串区分的最短前缀长度之和，记为 d。">区分前缀</Term>总量为：
+
+$$
+d
+=
+\sum_{s\in S}d_s
+$$
+
+任何正确算法至少要检查这些字符，否则无法排除两个字符串仍共享未读前缀；同时，比较模型仍需决定 n 个对象的顺序。因此 string sorting lower bound（字符串排序下界）为：
+
+$$
+\Omega(d+n\log n)
+$$
+
+<PaeDistinguishingPrefixLab />
+
+这可以小于读取全部 N 个字符。当字符串有很长、互不影响排序的尾部时，d 远小于 N。相反，n 个字符串共享很长前缀、只在末尾区分时，d 与 N 同阶；普通比较排序仍可能重复公共前缀达 log n 次，比下界多一个对数。
+
+下界中的字符“比较”还取决于编码与 collation 规则。按 UTF-8 字节排序、按 Unicode code point 排序、按语言区域排序会给出不同顺序；算法必须先固定字符命名和结束符次序。
+
+## MSD-first 基数排序：只深入仍有冲突的桶
+
+RADIXSORT（<Term def="把字符映射为有限整数 digit，按字符位置分桶或稳定排序，而不是用任意两字符串比较驱动顺序。">基数排序</Term>）先把字母表命名为0到 sigma-1的有序整数。
+
+MSD-first 从最显著字符，也就是字符串开头处理。按偏移 i 的 digit 分到 sigma 个桶；单元素桶已确定，只有多元素桶递归到 i+1。连接各桶即得到字典序。
+
+<PaeMsdRadixTrieDiagram />
+
+```text
+MSDRadix(strings, offset):
+  if strings has at most one item: return
+  buckets = distribute by char_at(string, offset)
+  for bucket in character order:
+    if bucket is not END:
+      MSDRadix(bucket, offset + 1)
+  concatenate buckets
+```
+
+递归分桶隐式构造 sigma 叉 trie：所有经过同一节点的字符串共享该前缀，分支节点对应首个不同字符。若每个节点直接分配 sigma 槽数组，时间和空间可达 O(d sigma)；改用按实际边数分配的哈希表，再排序每个节点的边，可得到平均 O(d log sigma) 时间、O(d) 空间。
+
+压缩连续单孩子路径可把 trie 结构空间进一步接近 O(n)，路径标签保存被压缩前缀长度；第9章会把它作为搜索结构展开。
+
+<Callout type="trap" title="把字符串结束当成普通缺失值">
+若一个字符串是另一个的前缀，字典序要求较短者先出现。char_at 必须返回一个小于所有真实字符的 END 哨兵，并让 END 桶停止递归；否则 all 与 ally 可能顺序错误或越界读取。
+</Callout>
+
+## LSD-first 基数排序：稳定性把低位次序带到高位
+
+LSD-first 从最低位向最高位逐列排序。它适合等长字符串；变长字符串可在左侧逻辑补小于真实 digit 的哨兵，使短串与长串对齐，但实现必须与目标字典序一致。
+
+每一列必须使用 <Term def="键相等的项目在输出中保持其输入相对次序的排序性质。">稳定排序</Term>。当前高位相等时，前一阶段按低位建立的相对顺序才能保留。
+
+<PaeLsdStabilityLab />
+
+长度都为 L、字母表大小 sigma 时，CountingSort 每轮 O(n+sigma)，总时间：
+
+$$
+T_{\mathrm{LSD}}
+=
+O(L(n+\sigma))
+=
+O(N+L\sigma)
+$$
+
+若字符串各有 b 个二进制位，每轮处理 r 位 digit，需要 b/r 轮，每轮桶数 2 的 r 次方：
+
+$$
+T(r)
+=
+\Theta\left(
+\frac{b}{r}(n+2^r)
+\right)
+$$
+
+r 远小于 log n 时轮数过多；r 远大于 log n 时桶数组爆炸。取 r 为 Theta(log n) 平衡二者，时间约 O(bn/log n)，但 CountingSort 需要 Theta(n) 辅助空间。
+
+<Callout type="trap" title="每一位使用不稳定的快速排序">
+低位阶段建立的次序必须在后续相等高位中保持。不稳定 sorter 会任意打乱相等 digit，最终结果可能不是字典序；LSD 的正确性证明直接依赖稳定性。
+</Callout>
+
+MSD 可在区分后跳过尾部，LSD 无论内容都扫描所有 digit；但 LSD 是规则的全量 pass，没有 trie 动态分配，连续内存上可能有更低常数。应根据 d/N、固定长度、字母表和内存预算选择。
+
+## 多关键字快速排序：比较字符而不是整串
+
+multi-key QUICKSORT（<Term def="在字符偏移 i 选择 pivot 字符做三路划分，小于和大于桶保持 i，等于桶推进到 i+1的字符串快排。">多关键字快速排序</Term>）把第5章三路 Quicksort 提升到字符级。
+
+对字符串集合 R 和偏移 i，随机选 pivot string p，以 p[i] 为 pivot 字符，划分：
+
+- R_less 的第 i 字符较小，递归仍用 i；
+- R_equal 的第 i 字符相同，递归推进 i+1；
+- R_greater 的第 i 字符较大，递归仍用 i。
+
+<PaeMultikeyQuicksortLab />
+
+```text
+MultikeyQS(R, i):
+  if size(R) <= 1: return R
+  p = random string from R
+  pivot = char_at(p, i)
+  (less, equal, greater) =
+      three_way_partition(R, i, pivot)
+  A = MultikeyQS(less, i)
+  B = pivot == END ? equal : MultikeyQS(equal, i + 1)
+  C = MultikeyQS(greater, i)
+  return concatenate(A, B, C)
+```
+
+正确性不变式是：进入 MultikeyQS(R,i) 时，R 中字符串在前 i 个字符之前已共享或已按字典序分组。小/大桶只知道当前字符相对 pivot 的方向，桶内仍需比较 i；相等桶已共享当前字符，才能推进。
+
+对每个字符串，偏移最多推进到其区分前缀，集合规模在良好 pivot 下最多缩小 O(log n) 次。平均字符比较：
+
+$$
+O(d+n\log n)
+$$
+
+与比较模型下界匹配。用确定性线性选择中位字符可转为最坏界；实践中随机 pivot 或小样本中位数更简单。算法不建立显式 trie，只重排指针并携带偏移，空间通常更紧凑。
+
+<Term def="任一字符串都不是另一字符串前缀的集合；可通过追加全局最小 END 字符逻辑实现。">前缀自由</Term>假设让每对字符串最终存在 mismatch。真实代码通常不修改字符串，而是让 char_at 在长度位置返回 END；重复字符串则落入 END 相等桶，必须直接结束而非无限推进。
+
+## MSD 与多关键字快排的树形对应
+
+MSD RadixSort 构造 sigma 叉 trie；多关键字快排对应 ternary search tree：每个节点有低、等、高三条路径。低/高子树保持字符偏移，等子树推进一个字符。
+
+平衡 ternary tree 搜索长度 p 的模式，需要至多 p+log n 次字符比较：p 次沿等边消费模式，log n 次在同一偏移上走低/高平衡树。这个结构解释了多关键字快排为何同时具有“按前缀推进”和“按集合规模缩小”两部分成本。
+
+## 两级存储模型中字符串能否拆分很关键
+
+two-level memory model（两级存储模型）分析字符串时，变长记录是否可以在外存拆成字符不是小实现细节。原章区分：
+
+- Model A：字符串在外存基本不可分，只允许长串按 B 大块移动；
+- Model B：读入内部存储后可以拆字符，外存仍按完整记录/块管理；
+- Model C：内外存都可拆分，允许对片段做随机哈希等操作。
+
+<PaeStringIoModelMap />
+
+Model A 倾向用多路 Mergesort 和内部 lazy trie 引导比较。令 n_s、N_s 为短于 B 的字符串数与总长，n_l、N_l 为长串对应量，其最优 I/O 包含排序短串字符、排序长串首块与读取全部数据三部分：
+
+$$
+\Theta\left(
+\frac{N_s}{B}\log_{M/B}\frac{N_s}{B}
++n_l\log_{M/B}n_l
++\frac{N_s+N_l}{B}
+\right)
+$$
+
+Model B 允许在内存拆字符，长串排序的对数底数可从 M/B 提升到 M，证明细粒度比较有实质价值。Model C 更强，可随机哈希片段缩短字符串，但 hash 不保持字典序，必须在排序流程中谨慎选择片段并最终验证次序。
+
+工程实现要记录字符串布局：正文连续还是分散分配、指针宽度、长度前缀、跨页字符串比例、重复前缀长度和缓存 miss。只报告比较次数会漏掉真正 I/O。
+
+## 正确性与性能一起验证
+
+正确性预言机可以用语言标准库在明确 comparator 下排序，再逐项比较结果。测试覆盖空串、前缀链、重复字符串、全相同长前缀、单字符、大字母表、嵌入零字节和极长字符串。
+
+Unicode 必须先选语义：若目标是二进制键序，按 unsigned byte 比较；若是用户语言顺序，需要正规化、locale collation key 和稳定版本。不能把 UTF-8 某个字节误当完整字符，也不能在多字节序列中间切 digit。
+
+基准除时间外记录读取字符数、重复前缀字符数、分配次数、峰值空间、页读取、连续/随机比例与 d/N。这样才能验证算法是否真的接近区分前缀下界，而不是仅在短字符串样例上更快。
+
+<Stepper>
+  <Step title="先识别指针与正文两类访问">
+    <PaeStringPointerCostDiagram />
+    普通比较排序交换指针，但每次比较会随机追踪正文并重读公共前缀。
+  </Step>
+  <Step title="用区分前缀定义必要字符">
+    <PaeDistinguishingPrefixLab />
+    统计每个字符串最短可区分前缀，目标下界是 d+n log n。
+  </Step>
+  <Step title="按高位递归仍冲突的桶">
+    <PaeMsdRadixTrieDiagram />
+    MSD 只深入多元素桶，隐式构造按字符分支的 trie。
+  </Step>
+  <Step title="用稳定性从低位累积次序">
+    <PaeLsdStabilityLab />
+    LSD 每轮稳定保留旧次序，digit 宽度平衡轮数与桶数。
+  </Step>
+  <Step title="用三路字符快排匹配下界">
+    <PaeMultikeyQuicksortLab />
+    小/大桶保持偏移，等桶推进字符，获得 O(d+n log n)。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 字符串排序的成本包括指针重排与变长正文字符访问。
+2. 区分前缀总量 d 刻画必须读取的字符，下界为 Omega(d+n log n)。
+3. MSD-first 按高位分桶，只对仍冲突的桶继续读取下一字符。
+4. MSD 的递归树是 trie，稀疏边、哈希与路径压缩可降低结构空间。
+5. LSD-first 必须使用稳定 digit sorter，并扫描所有位置。
+6. r 位 digit 的 LSD 成本为 (b/r)(n+2^r)，r 约 log n 时平衡。
+7. 多关键字快排按第 i 字符三分，只有等桶推进 i，匹配比较下界。
+8. END 哨兵处理前缀和重复串，必须小于真实字符并停止递归。
+9. 外存模型 A/B/C 对字符串可拆分能力不同，决定可达 I/O 界。
+
+<Exercises>
+
+**问题 1：集合 cat、car、dog 中，各字符串最短区分前缀是什么？**
+
+<Answer>cat 与 car 共享 ca，需要读到第三字符，区分前缀分别是 cat、car；dog 的首字符 d 已与另外两个的 c 不同，所以最短区分前缀是 d。总 d 为3+3+1等于7。</Answer>
+
+**问题 2：为什么 LSD 排完个位后看起来错误并不影响最终正确性？**
+
+<Answer>低位只决定高位相同项目之间的次序。后续更高位不同会重新决定主顺序；高位相等时稳定排序保留此前低位次序。逐位归纳到最高位后就是完整字典序。</Answer>
+
+**问题 3：多关键字快排的 less 桶为什么不能递归 i+1？**
+
+<Answer>less 中所有字符串只知道第i字符小于 pivot 字符，它们彼此第i字符可能不同；桶内顺序仍由该字符决定。只有 equal 桶保证所有第i字符相同，才能安全推进。</Answer>
+
+**问题 4：all 与 ally 应怎样用 END 比较？**
+
+<Answer>偏移3时 all 返回 END，ally 返回字符y；END定义为小于所有真实字符，因此all先于ally。equal END 桶不再推进，避免越界或无限递归。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="字符串排序">按指定字符序和字典序排列变长字符串。</GlossaryItem>
+  <GlossaryItem term="区分前缀">足以把某字符串与集合中其余字符串区分的最短前缀，所有长度之和为 d。</GlossaryItem>
+  <GlossaryItem term="基数排序">把字符视为有限整数 digit，按位置分桶或稳定排序。</GlossaryItem>
+  <GlossaryItem term="稳定排序">相等键在输出中保持输入相对次序的排序。</GlossaryItem>
+  <GlossaryItem term="多关键字快速排序">按字符偏移三路划分，并只在相等桶推进字符的字符串快排。</GlossaryItem>
+  <GlossaryItem term="前缀自由">任一字符串都不是另一字符串前缀的集合性质，可用 END 逻辑实现。</GlossaryItem>
+  <GlossaryItem term="外存字符串模型">按字符串在内外存是否可拆成字符划分的 A/B/C 模型。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Pearls of Algorithm Engineering · Chapter 7 Sorting Strings"
+  href="https://www.cambridge.org/core/product/identifier/9781009128933/type/book"
+  author="Paolo Ferragina"
+  license="原书版权归作者与 Cambridge University Press 所有；本章依据官方目录与作者课程资料独立重构教学内容"
+/>

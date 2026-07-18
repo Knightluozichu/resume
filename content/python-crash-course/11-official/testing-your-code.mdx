@@ -1,0 +1,242 @@
+---
+title: "第11章：Testing Your Code"
+type: C
+section: "Part I · Basics"
+order: 11
+description: "使用pytest验证函数与class，读取失败报告，并以fixture和regression test维持隔离。"
+demo: true
+math: false
+sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
+draft: false
+---
+
+import {
+  PccFixtureLifecycleLab,
+  PccPytestResultLab,
+  PccRegressionExpansionLab,
+} from "@/components/mdx/python-crash-course/diagrams/testing-your-code";
+
+<Objectives>
+
+- 能区分pytest的pass、failure和collection error，并确认pytest安装到当前Python interpreter
+- 能实现function test与regression expansion，读取expected/actual diff并判断修code还是修contract
+- 能设计class tests和fresh fixture，分析shared mutable state导致的顺序依赖
+
+</Objectives>
+
+## 为什么测试是可执行contract而不是“证明没有bug”
+
+test提供example input、expected behavior和可重复oracle。一个passing test只说明当前实现对已覆盖case满足断言，不证明所有输入都正确；failing test则提供具体反例。高质量测试让修改者知道哪些行为必须保留、哪些新需求尚未实现。
+
+第三版使用pytest而不是unittest。pytest以简单assert、自动discovery和fixture降低样板，但工具不能替你选择有意义的boundary。先预测：module import失败时test body是否执行；新增需求的test如果第一次就pass，是否证明test有效。
+
+<Term def="用明确input、operation和expected result描述并自动检查一条behavior contract的函数。">test case</Term>
+
+## Installing pytest with pip
+
+使用当前interpreter执行`python -m pip install pytest`，避免`pip`指向另一个Python。安装后同时记录`python -c "import sys; print(sys.executable)"`与`python -m pytest --version`；这把第1章environment evidence延伸到third-party library。
+
+```bash
+python3 -m pip install --upgrade pip
+python3 -m pip install pytest
+python3 -m pytest --version
+python3 -c "import sys, pytest; print(sys.executable); print(pytest.__version__)"
+```
+
+项目应记录dependency version，CI与本地使用同一lock/requirements。全局安装可完成练习，但长期项目使用virtual environment隔离。ImportError先查interpreter和environment，不要在test里修改sys.path掩盖package结构。
+
+<Term def="pytest按文件和函数命名规则自动找到tests并在执行前import modules的过程。">test discovery</Term>
+
+## Testing a Function
+
+pytest通常发现`test_*.py`或`*_test.py`文件中的`test_*`functions。每个test按Arrange准备input、Act调用一次主要behavior、Assert比较结果；不是格式强制，但有助于让失败原因集中。
+
+<Stepper>
+  <Step title="切换pass、failure与collection error">
+    <PccPytestResultLab />
+  </Step>
+  <Step title="确认test是否真正执行">
+    collection error发生在import/discovery阶段；assertion failure说明body执行并得到unexpected result。
+  </Step>
+  <Step title="读取最小失败证据">
+    先看failed test name、exception/diff、project frame，再决定implementation还是expected contract错误。
+  </Step>
+</Stepper>
+
+<Term def="把actual与expected比较并在不满足时产生可定位failure report的检查。">test oracle</Term>
+
+```python
+# city_functions.py
+def city_country(city: str, country: str) -> str:
+    return f"{city.title()}, {country.title()}"
+
+# test_cities.py
+from city_functions import city_country
+
+def test_city_country() -> None:
+    actual = city_country("santiago", "chile")
+    assert actual == "Santiago, Chile"
+```
+
+test name描述scenario与expected behavior，例如`test_city_country_includes_optional_population`。只叫`test_function`会让report无法扫描。一个test聚焦一个behavior，但可有多个相关assertions验证同一result shape。
+
+### A Passing Test与A Failing Test
+
+pass说明oracle接受actual；若assert写错或根本没执行核心function，绿色没有价值。故意破坏实现，确认test转红，再恢复，这叫mutation sanity check。新增test先观察它因预期原因失败，才能证明它覆盖缺口。
+
+failure不是立即修改expected让它变绿。先判断contract是否改变：若新需求明确，更新test与code；若旧行为仍应保留，修implementation。保留failure diff是决策证据。
+
+## Adding New Tests and Regression Protection
+
+增加population parameter时，旧city/country test锁住backward compatibility，新test定义扩展格式。先写new test并看到failure，再实现optional parameter，让两者都pass。这个red-green sequence不是仪式，而是证明test对缺失behavior敏感。
+
+<Stepper>
+  <Step title="切换baseline、new requirement、implementation与regression">
+    <PccRegressionExpansionLab />
+  </Step>
+  <Step title="保留旧test并添加新case">
+    修改signature不能只覆盖新call；旧caller仍是contract的一部分，除非明确breaking change。
+  </Step>
+  <Step title="制造一次regression验证保护能力">
+    删除comma或改错误format，旧test应失败；若仍pass，oracle太弱或没有执行正确path。
+  </Step>
+</Stepper>
+
+<Term def="把曾经正确或曾经失败过的behavior固定为自动test，阻止后续修改悄悄破坏。">regression protection</Term>
+
+```python
+def city_country(city: str, country: str, population: int | None = None) -> str:
+    result = f"{city.title()}, {country.title()}"
+    if population is not None:
+        result += f" - population {population}"
+    return result
+
+def test_city_country_population() -> None:
+    assert city_country("santiago", "chile", 5_000_000) == (
+        "Santiago, Chile - population 5000000"
+    )
+```
+
+### 选择boundary而不是随机example
+
+optional population至少测None、0、正值和非法负值policy；string normalization测空白、大小写与空string。每个case对应一条决策规则。参数化能减少样板，但不要把不同failure原因塞进难读巨表。
+
+测试不应依赖真实网络、当前时间或全局random，否则结果不稳定。第12–20章项目会用dependency boundary、temporary path和Django test client隔离外部state。
+
+## Testing a Class
+
+class test创建instance，调用method，再断言state与return。`AnonymousSurvey.store_response`应改变responses list；Employee raise应改变salary且拒绝非法delta。既验证成功transition，也验证exception后object invariant保持。
+
+```python
+class AnonymousSurvey:
+    def __init__(self, question: str) -> None:
+        self.question = question
+        self.responses: list[str] = []
+
+    def store_response(self, response: str) -> None:
+        self.responses.append(response)
+
+def test_store_single_response() -> None:
+    survey = AnonymousSurvey("What language did you first learn?")
+    survey.store_response("English")
+    assert survey.responses == ["English"]
+```
+
+直接assert internal list在学习阶段能展示state；成熟API更倾向通过public query验证，减少tests和内部layout耦合。若responses就是公开contract，直接assert合理；关键是团队明确边界。
+
+### test independence
+
+每个test单独运行与任意顺序运行都应得到相同结果。共享module-level instance、固定output file或未重置global random会造成order-dependent failures。失败时用`pytest --random-order`需plugin，基础做法是fresh setup和temporary resources。
+
+<Term def="每个test拥有独立initial state，不依赖其他tests先后或残留副作用的属性。">test isolation</Term>
+
+## Using Fixtures
+
+fixture把重复setup集中，并通过parameter注入test。pytest默认function scope，每个test获得fresh fixture result；scope扩大到module/session会提高速度，也会引入共享state，只有immutable或明确reset的expensive resource才考虑。
+
+<Stepper>
+  <Step title="选择survey、employee或shared-state mistake">
+    <PccFixtureLifecycleLab />
+  </Step>
+  <Step title="标出fixture create与test consume">
+    fixture负责合法initial state，test只表达behavior difference；不要在fixture预先执行被测operation。
+  </Step>
+  <Step title="证明fresh state与顺序无关">
+    单独运行每个test、交换顺序并重复；任何leaked response/salary都表示scope或mutable default错误。
+  </Step>
+</Stepper>
+
+```python
+import pytest
+
+@pytest.fixture
+def language_survey() -> AnonymousSurvey:
+    return AnonymousSurvey("What language did you first learn?")
+
+def test_store_single_response(language_survey: AnonymousSurvey) -> None:
+    language_survey.store_response("English")
+    assert language_survey.responses == ["English"]
+
+def test_store_three_responses(language_survey: AnonymousSurvey) -> None:
+    for response in ["English", "Spanish", "Mandarin"]:
+        language_survey.store_response(response)
+    assert language_survey.responses == ["English", "Spanish", "Mandarin"]
+```
+
+fixture可用yield在test后cleanup，例如temporary server，但pytest已有`tmp_path`等built-ins优先使用。cleanup必须在assert失败时也执行；不要让test残留file、environment variable或database row。
+
+## Reading the Pytest Report
+
+summary显示passed/failed/errors/skipped；failure section给test node、source context、assert diff与captured output。先修最早的root failure，后续可能是cascade。使用`-q`简化正常输出，排错可`-vv`、`-x`或针对单test node运行。
+
+不要依赖print判断pass；assert才是machine-checkable oracle。需要诊断时logging/captured output提供context，但最终条件仍应明确。测试偶发失败时保存seed、input、environment和完整report，不要只重跑到绿色。
+
+## 测试覆盖什么，不覆盖什么
+
+本章最小suite覆盖normal、boundary、invalid和state transition。coverage percentage只说明代码行被执行，不能证明assert正确或需求完整。20个无意义examples不如5个代表不同规则的边界。
+
+测试也不是implementation mirror。若test逐行复制算法，两个实现可一起犯错；oracle来自独立规则、手算结果或已知example。对sorting可断言order与input preservation，对file load断言不同failure classes，对object transition断言before/after invariant。
+
+<Callout type="trap" title="所有tests都pass就说明程序没有bug">
+pass只覆盖已执行inputs和oracles。还需审查missing boundaries、assert质量、外部依赖与需求覆盖；先故意破坏行为验证test确实会失败。
+</Callout>
+
+<Callout type="trap" title="module-level共享instance可以减少fixture开销">
+mutable shared state让tests顺序相关。默认function-scoped fresh fixture；只有昂贵且可隔离资源才扩大scope，并提供可靠reset/transaction boundary。
+</Callout>
+
+## 本章回顾：让失败提供信息
+
+1. pytest必须安装在当前interpreter，discovery/import error与test failure不同。
+2. test case以input、operation和oracle表达behavior contract。
+3. new behavior先看到test按预期失败，再实现并重跑regression suite。
+4. class tests验证return与state transition，fixture维持test isolation。
+5. pass不是无bug证明；边界、oracle质量和可重复report共同决定可信度。
+
+<Exercises>
+
+**问题 1：pytest显示collection error与assertion failure分别说明什么？**
+
+<Answer>collection error发生在test body前，常是文件命名、syntax或import/environment问题；assertion failure说明test已执行，actual不满足expected。先修discovery/import才能评价行为，不要把两者都叫“测试失败”而采用同一修复。</Answer>
+
+**问题 2：为city_country新增population时如何建立regression protection？**
+
+<Answer>保留旧city/country test，新增population test并先观察它因缺少格式而失败；实现optional parameter后两者都pass。再故意破坏旧comma确认旧test转红。覆盖None、0、正值和非法policy。</Answer>
+
+**问题 3：fixture如何保证class tests不受顺序影响？**
+
+<Answer>使用function-scoped fixture每个test创建fresh instance，不在module-level共享mutable object。单独运行、交换顺序和重复执行，断言initial state为空/默认；若扩大scope，必须显式reset并证明cleanup在failure时执行。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="test case" definition="以input、operation和expected behavior自动检查一条contract的函数。" />
+  <GlossaryItem term="test discovery" definition="pytest按命名规则发现并import tests的过程。" />
+  <GlossaryItem term="test oracle" definition="比较actual与expected并产生可定位failure的检查。" />
+  <GlossaryItem term="regression protection" definition="把既有或曾失败behavior固定为自动test的保护。" />
+  <GlossaryItem term="test isolation" definition="test拥有独立initial state且不依赖执行顺序的属性。" />
+</Glossary>
+
+<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 11: Testing Your Code" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />

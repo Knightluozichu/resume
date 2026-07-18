@@ -1,0 +1,6 @@
+"use client";
+import { OfficialDavSeriesLab } from "./official-dav-series-lab";
+const props={unitTitle:"《深入理解Android》Framework三卷总复习",focus:"用同一启动、Binder、音频、窗口与输入案例跨越2.2、4.0.1和4.2.2完成证据交接",nodes:["卷I 第1章 阅读前的准备工作","卷I 第2章 深入理解JNI","卷I 第3章 深入理解init","卷I 第4章 深入理解zygote","卷I 第5章 深入理解常见类","卷I 第6章 深入理解Binder","卷I 第7章 深入理解Audio系统","卷I 第8章 深入理解Surface系统","卷I 第9章 深入理解Vold和Rild","卷I 第10章 深入理解MediaScanner","卷II 第1章 搭建Android源码工作环境","卷II 第2章 深入理解Java Binder和MessageQueue","卷II 第3章 深入理解SystemServer","卷II 第4章 深入理解PackageManagerService","卷II 第5章 深入理解PowerManagerService","卷II 第6章 深入理解ActivityManagerService","卷II 第7章 深入理解ContentProvider","卷II 第8章 深入理解ContentService和AccountManagerService","卷III 第1章 开发环境部署","卷III 第2章 深入理解Java Binder和MessageQueue","卷III 第3章 深入理解AudioService","卷III 第4章 深入理解WindowManagerService","卷III 第5章 深入理解Android输入系统","卷III 第6章 深入理解控件系统","卷III 第7章 深入理解SystemUI","卷III 第8章 深入理解Android壁纸"],versions:["卷I / Android 2.2","卷II / Android 4.0.1","卷III / Android 4.2.2"]};
+export function DavSeriesPipelineLab(){return <OfficialDavSeriesLab mode="pipeline" {...props}/>;}
+export function DavSeriesExperimentLab(){return <OfficialDavSeriesLab mode="experiment" {...props}/>;}
+export function DavSeriesEvidenceLab(){return <OfficialDavSeriesLab mode="evidence" {...props}/>;}

@@ -1,0 +1,428 @@
+---
+title: "Item 6：明确拒绝不想要的编译器生成函数"
+type: A
+section: Chapter 2 · Constructors, Destructors, and Assignment Operators
+order: 6
+description: 对齐 Effective C++ 第三版 Item 6：用 private 未定义声明、Uncopyable 基类与现代 deleted functions 拒绝复制或移动，并以类型能力矩阵和负向编译测试验证。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppCopyMovePolicyMap,
+  EcppCopyPreventionTechniquesMap,
+  EcppDeletedFunctionDiagnosticMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-06-disallow-generated-functions";
+
+<Objectives>
+
+- 能解释 private 未定义 copy、Uncopyable base 与 `= delete` 在访问控制、诊断阶段和 friend 调用上的差异
+- 能设计值对象、独占所有者、共享所有者、身份对象和 view 的 copy/move 能力矩阵
+- 能实现 deleted copy/move 与 deleted overload，并使用 type traits、concepts 和 compile-fail 测试证明禁止契约
+
+</Objectives>
+
+## 从“门锁为什么不该被复制”开始
+
+现实中的 HomeForSale、mutex、thread、数据库事务或注册身份通常没有合理复制语义。若类未声明 copy，Item 5 说明编译器可能生成 public memberwise copy。
+
+<Term def="类型明确声明某些构造或赋值表达式不合法，使误用在编译期失败的接口约束。">
+  禁止复制契约
+</Term>
+
+不能只在文档写“请勿复制”，也不应让复制先发生再在运行时抛异常。
+
+<Term def="由编译器隐式产生但类型语义不希望调用方使用的复制、赋值或其他函数。">
+  unwanted compiler-generated function
+</Term>
+
+Item 6 的目标是 explicitly disallow compiler-generated functions you do not want（明确拒绝不想要的编译器生成函数）。
+
+<EcppCopyPreventionTechniquesMap />
+
+## 原书方法：private 声明但不定义
+
+<Term def="在 private 区域声明 copy constructor 和 copy assignment，且故意不提供函数体的旧式禁拷贝技术。">
+  private undefined copy
+</Term>
+
+```cpp
+class HomeForSale {
+public:
+    HomeForSale() = default;
+private:
+    HomeForSale(const HomeForSale&);
+    HomeForSale& operator=(const HomeForSale&);
+};
+```
+
+普通调用方因 private 在编译期失败；member 或 friend 有访问权，调用能编译，却在链接时因没有定义而失败。
+
+<Term def="名称可见但因 private/protected 无权使用而产生的编译期限制。">
+  access-control failure
+</Term>
+
+与
+
+<Term def="声明被调用却找不到函数定义，通常在链接阶段报告 unresolved symbol 的失败。">
+  link-time failure
+</Term>
+
+分属不同阶段。原书方法有效，但错误可能离调用点更远。
+
+## Uncopyable base 把链接错误提前
+
+<Term def="把 copy constructor 与 copy assignment 声明为 private，让派生隐式 copy 无法调用的基类。">
+  Uncopyable base
+</Term>
+
+```cpp
+class Uncopyable {
+protected:
+    Uncopyable() = default;
+    ~Uncopyable() = default;
+private:
+    Uncopyable(const Uncopyable&);
+    Uncopyable& operator=(const Uncopyable&);
+};
+
+class HomeForSale : private Uncopyable {};
+```
+
+编译器尝试生成 HomeForSale copy 时，需要调用基类 copy，但派生无权访问 private，因此在编译期失败。
+
+<Term def="外层类型的隐式特殊成员因某个 base/member 操作 deleted 或 inaccessible 而自动不可用。">
+  capability propagation
+</Term>
+
+是组合与继承的自然效果。旧代码常见 boost::noncopyable 也是这一思路。
+
+<Callout type="trap">
+  **现象**：只声明 private copy
+  后，普通测试通过，就认为所有复制都被编译期禁止。**原因**：member/friend
+  有访问权，误调用会延迟成链接错误。**修法**：现代代码用 public `=
+  delete`，旧代码为 member/friend 增加负向链接测试或 Uncopyable base。
+</Callout>
+
+## 现代方法：deleted functions
+
+<Term def="以 `= delete` 明确声明不可调用、仍参与重载解析并在被选择时编译失败的函数。">
+  deleted function
+</Term>
+
+```cpp
+class HomeForSale {
+public:
+    HomeForSale() = default;
+    HomeForSale(const HomeForSale&) = delete;
+    HomeForSale& operator=(const HomeForSale&) = delete;
+};
+```
+
+通常放 public，调用方、member、friend 都得到“use of deleted function”诊断，文档工具和 type traits 也能直接看到契约。
+
+<Term def="在函数声明处写 `= delete` 明确阻止任何调用，而非依赖访问或缺少定义。">
+  explicit deletion
+</Term>
+
+比 private 更准确表达“不存在合法调用者”。
+
+## copy 与 move 分开决定
+
+<Term def="类型从左值源创建或覆盖独立对象的能力。">copy capability</Term>
+
+<Term def="类型从右值源转移表示，并让源保持可析构可赋值状态的能力。">
+  move capability
+</Term>
+
+独占 owner 常禁止 copy 但允许 move：
+
+```cpp
+class FileHandle {
+public:
+    explicit FileHandle(NativeHandle handle) noexcept : handle_{handle} {}
+    ~FileHandle() { close_if_valid(handle_); }
+
+    FileHandle(const FileHandle&) = delete;
+    FileHandle& operator=(const FileHandle&) = delete;
+    FileHandle(FileHandle&&) noexcept;
+    FileHandle& operator=(FileHandle&&) noexcept;
+private:
+    NativeHandle handle_{};
+};
+```
+
+身份对象则可能 copy/move 都删除：移动 mutex 或被外部注册地址的对象会破坏身份关系。
+
+<Term def="资源或外部关系依赖对象地址、线程或注册身份，因此不能安全复制或移动的语义。">
+  stable identity semantics
+</Term>
+
+不要为了能放进 vector 就虚构 move；可改用 `unique_ptr<Identity>` 保存稳定地址。
+
+<EcppCopyMovePolicyMap />
+
+## 值、所有者、view 的能力矩阵
+
+<Term def="复制后得到独立等价值、修改一方不意外改变另一方的类型。">
+  value object
+</Term>
+
+通常 copy/move 都支持。若资源成员使用 string/vector，rule of zero 即可。
+
+<Term def="独占某资源并确保只有一个对象负责释放，但所有权可通过 move 转移的类型。">
+  unique owner
+</Term>
+
+删除 copy、支持 noexcept move。
+
+<Term def="复制增加共享计数，多个对象共同延长同一资源生命周期的类型。">
+  shared owner
+</Term>
+
+可 copy，但复制语义是共享不是深拷贝，必须明确。
+
+<Term def="不拥有资源、只保存借用位置或范围，复制便宜但受 owner 生命周期约束的类型。">
+  view type
+</Term>
+
+如 span/string_view 常可 copy；禁止 copy 反而降低可用性。
+
+## 多态基类的复制不是普通 copy
+
+<Term def="通过基类引用复制实际派生对象并保留动态类型的显式虚拟构造接口。">
+  polymorphic clone
+</Term>
+
+按值复制抽象基类会 slicing。常见设计让基类 copy ctor protected/default 或 deleted，并提供 clone：
+
+```cpp
+class Shape {
+public:
+    virtual ~Shape() = default;
+    virtual std::unique_ptr<Shape> clone() const = 0;
+protected:
+    Shape() = default;
+    Shape(const Shape&) = default;
+    Shape& operator=(const Shape&) = default;
+};
+```
+
+派生 clone 可以调用自己的 copy constructor。对外禁止基类值复制，对内保留实现能力。
+
+<Term def="派生对象按基类值复制时丢失派生部分，只剩基类子对象的错误。">
+  object slicing
+</Term>
+
+不能仅靠 deleted copy 自动提供 clone 的异常保证，还需逐派生测试。
+
+## deleted function 不只用于特殊成员
+
+任何函数都可删除，用于阻止危险隐式转换：
+
+```cpp
+bool isLucky(int number);
+bool isLucky(char) = delete;
+bool isLucky(bool) = delete;
+bool isLucky(double) = delete;
+```
+
+<Term def="本可由转换进入某重载，却通过更精确的 deleted overload 明确拒绝的调用。">
+  forbidden conversion
+</Term>
+
+若只保留 `int`，char/bool/double 会隐式转换；deleted overload 被选中后给出清晰失败。
+
+还可删除模板实例族：
+
+```cpp
+template<class T>
+void processPointer(T* pointer);
+
+template<>
+void processPointer<void>(void*) = delete;
+```
+
+<Term def="针对某些类型实参明确禁止模板调用的 deleted specialization 或 constrained overload。">
+  deleted template case
+</Term>
+
+现代 concepts 也能在约束层排除，但 deleted overload 往往提供更具体诊断。
+
+<EcppDeletedFunctionDiagnosticMap />
+
+## 容器需求不会改变类型语义
+
+<Term def="标准库容器某个操作对元素 default/copy/move/destruct 等能力提出的编译期要求。">
+  container element requirement
+</Term>
+
+`vector<T>` 类型声明不一定立即需要 copy，但某个操作可能需要 move insertable。不要先给 T 增加错误 copy 来满足容器；选择符合语义的容器或间接所有权。
+
+```cpp
+static_assert(!std::copy_constructible<FileHandle>);
+static_assert(std::move_constructible<FileHandle>);
+
+std::vector<FileHandle> files;
+files.emplace_back(open_native("data.bin"));
+```
+
+如果 move 可能抛，vector 的强保证路径可能受限。独占 handle move 通常可 noexcept，因为只交换标量句柄。
+
+<Callout type="trap">
+  **现象**：为让身份对象进入 vector，添加“复制 mutex 状态”的 copy
+  constructor。**原因**：容器便利覆盖了真实类型语义。**修法**：删除
+  copy/move，容器保存 unique_ptr 或稳定节点；先保持身份不变量，再选存储方式。
+</Callout>
+
+## 禁止契约的编译期测试
+
+<Term def="刻意编写应无法编译的表达式，并把特定编译失败作为测试成功条件。">
+  compile-fail test
+</Term>
+
+traits 检查能力矩阵：
+
+```cpp
+static_assert(!std::is_copy_constructible_v<FileHandle>);
+static_assert(!std::is_copy_assignable_v<FileHandle>);
+static_assert(std::is_nothrow_move_constructible_v<FileHandle>);
+static_assert(std::is_nothrow_move_assignable_v<FileHandle>);
+```
+
+<Term def="使用 requires 表达式或标准 concept 查询某个源代码表达式是否良构。">
+  expression capability test
+</Term>
+
+可验证 `copy_constructible<T>`、`movable<T>` 或自定义 cloneable。traits 不足以证明禁止转换的具体诊断，因此再保留 compile-fail fixture。
+
+先预测：`isLucky('a')` 在只有 int overload 时会发生什么，加入 deleted char overload 后重载选择如何变化？运行编译测试比较错误位置。
+
+- 普通调用、member 和 friend 都不能 copy deleted 类型。
+- 派生隐式 copy 因基类 deleted copy 自动不可用。
+- unique owner move 后源为空且可析构，目标独占资源。
+- identity object copy/move traits 全为 false。
+- forbidden conversion 精确在调用点指向 deleted overload。
+
+## 迁移旧式不可复制代码
+
+<Term def="把 private undefined copy 或 Uncopyable base 改为直接 deleted 声明，并保持 ABI 与调用失败语义的过程。">
+  noncopyable migration
+</Term>
+
+先搜索 member/friend 是否偷偷复制；旧代码可能依赖链接失败或从未实例化。改为 `= delete` 后错误提前暴露。再决定 move：原 C++03 noncopyable 类型在现代不应自动假定可移动，必须根据资源/身份语义选择。
+
+若移除 Uncopyable base 会改变对象布局或 ABI，库边界需要版本策略；内部代码可直接删除继承，减少空基类与继承噪声。
+
+## 小结
+
+- 不合理复制应成为编译期类型契约，而不是文档或运行时异常
+- 原书 private undefined copy 对普通调用编译失败，但 member/friend 可能延迟到链接失败
+- Uncopyable base 利用基类能力传播；现代 `= delete` 直接、统一且诊断更清楚
+- copy 与 move 必须按值、独占、共享、view 或身份语义分别决定
+- deleted functions 还能禁止隐式转换和特定模板调用
+- traits、concepts 与 compile-fail tests 共同证明禁止能力和诊断位置
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 6"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="禁止复制契约">
+    让不合法复制表达式在编译期失败的类型约束。
+  </GlossaryItem>
+  <GlossaryItem term="unwanted compiler-generated function">
+    语义不希望使用的编译器生成函数。
+  </GlossaryItem>
+  <GlossaryItem term="private undefined copy">
+    private 声明但不定义复制操作的旧式技术。
+  </GlossaryItem>
+  <GlossaryItem term="access-control failure">
+    因无权访问 private/protected 名称而编译失败。
+  </GlossaryItem>
+  <GlossaryItem term="link-time failure">
+    调用有声明无定义函数时发生的链接失败。
+  </GlossaryItem>
+  <GlossaryItem term="Uncopyable base">
+    以 private copy 让派生隐式复制失败的基类。
+  </GlossaryItem>
+  <GlossaryItem term="capability propagation">
+    base/member 不可操作使外层特殊成员不可用。
+  </GlossaryItem>
+  <GlossaryItem term="deleted function">
+    以 = delete 声明并在调用选择时失败的函数。
+  </GlossaryItem>
+  <GlossaryItem term="explicit deletion">
+    在声明处明确阻止函数调用的语言机制。
+  </GlossaryItem>
+  <GlossaryItem term="copy capability">
+    从左值创建或覆盖独立对象的能力。
+  </GlossaryItem>
+  <GlossaryItem term="move capability">
+    从右值转移表示并保持源有效的能力。
+  </GlossaryItem>
+  <GlossaryItem term="stable identity semantics">
+    对象地址或外部关系不能安全复制移动的语义。
+  </GlossaryItem>
+  <GlossaryItem term="value object">复制后得到独立等价值的类型。</GlossaryItem>
+  <GlossaryItem term="unique owner">
+    独占资源但可通过 move 转移所有权的类型。
+  </GlossaryItem>
+  <GlossaryItem term="shared owner">
+    复制后共享并共同延长资源生命周期的类型。
+  </GlossaryItem>
+  <GlossaryItem term="view type">
+    不拥有资源、复制便宜但受 owner 生命周期约束的类型。
+  </GlossaryItem>
+  <GlossaryItem term="polymorphic clone">
+    保留动态类型的显式虚拟复制接口。
+  </GlossaryItem>
+  <GlossaryItem term="object slicing">
+    按基类值复制导致派生部分丢失。
+  </GlossaryItem>
+  <GlossaryItem term="forbidden conversion">
+    通过 deleted overload 阻止的危险隐式转换。
+  </GlossaryItem>
+  <GlossaryItem term="deleted template case">
+    对特定模板实参明确删除的调用。
+  </GlossaryItem>
+  <GlossaryItem term="container element requirement">
+    容器操作对元素构造复制移动能力的要求。
+  </GlossaryItem>
+  <GlossaryItem term="compile-fail test">
+    以预期编译失败作为成功条件的负向测试。
+  </GlossaryItem>
+  <GlossaryItem term="expression capability test">
+    用 requires 或 concept 查询表达式是否良构。
+  </GlossaryItem>
+  <GlossaryItem term="noncopyable migration">
+    把旧式不可复制技巧迁移到 deleted 声明的过程。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：设计三类能力。** 为配置值、文件句柄和线程会话分别决定 default/copy/move，并解释每个 delete/default。
+
+<Answer question="三类对象的 copy/move 策略应如何设计？">
+  配置值由 string/vector 等值成员组成，rule of zero 支持 copy/move；文件句柄是
+  unique owner，删除 copy，提供 noexcept move
+  和析构；线程会话若外部注册依赖地址或线程身份，copy/move 均删除，容器用
+  unique_ptr 保存稳定地址。策略来自语义，不是统一套 rule of five。
+</Answer>
+
+2. **问题 2：迁移旧式 Uncopyable。** 一个库类 private 继承 Uncopyable，并有 friend 工厂，迁移到 `= delete` 时要验证什么？
+
+<Answer question="从 Uncopyable 迁移 deleted copy 的检查步骤是什么？">
+  搜索普通、member、friend 和模板实例中的复制；在类 public 区直接 delete copy
+  ctor/assignment，让所有调用点编译失败；根据资源语义单独决定
+  move，不能自动添加；用 traits 和 compile-fail fixtures 验证。若对外 ABI
+  稳定，评估移除基类是否改变布局，必要时留到版本边界。
+</Answer>
+
+3. **问题 3：阻止隐式转换。** `bool isLucky(int)` 意外接受 char、bool、double，设计 deleted overload 与测试。
+
+  <Answer question="deleted overload 如何阻止原本会转换到 int 的实参？">保留 isLucky(int)，再声明 char、bool、double overload 为 delete。重载解析优先选择精确类型的 deleted 函数，因此在调用点报告 use of deleted function，而不是转换到 int。compile-fail 测试分别覆盖三种类型，正向测试确认 int 仍工作；若还需阻止其他算术类型，可用 constrained deleted template。</Answer>
+</Exercises>

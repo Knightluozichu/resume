@@ -1,0 +1,230 @@
+---
+title: "Chapter 22. CLR Hosting and AppDomains"
+type: C
+section: "CLR via C# 4e · Core Facilities"
+order: 22
+description: "忠实覆盖Framework CLR hosting/AppDomain跨域、卸载/监控/first-chance与宿主案例，并映射现代AssemblyLoadContext/进程隔离。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcDomainCrossingLab, CvcHostingLayersLab, CvcIsolationLifecycleLab } from "@/components/mdx/clr-via-csharp/diagrams/clr-hosting-appdomains";
+
+<Objectives>
+
+- 能描述native host选择/启动CLR与Framework AppDomain的配置、加载、执行和卸载职责
+- 能比较marshal-by-reference/value/non-marshalable跨域identity、serialization和failure语义
+- 能设计AppDomain-era隔离到AssemblyLoadContext或worker process的迁移，并验证监控、卸载与恢复
+
+</Objectives>
+
+## 为什么本章必须同时保留2012与现代语境
+
+第四版以.NET Framework AppDomain为核心：一个process可有多个managed application domains，分别配置/加载/unload，并通过remoting proxy或serialization跨域。现代.NET Core/5+不支持创建同等隔离AppDomains；AssemblyLoadContext解决dependency universe与cooperative unload，真正fault/security/resource isolation依赖process/container。忠实学习原模型时，必须给每个机制标注runtime版本，不能把历史API直接用于新项目。
+
+先预测：AppDomain是否等于OS process；跨域MarshalByRefObject是否复制对象；AppDomain.Unload如何处理domain threads；AssemblyLoadContext能否阻止插件读host文件；unload ALC为何需要GC；first-chance exception能否说明异常最终未处理；host拿回线程控制是否能安全abort任意managed work。后文按hosting、crossing、lifecycle回答。
+
+<Term def="Process host、CLR、AppDomain/load context与worker process各自拥有的配置、依赖、故障和生命周期范围。">runtime hosting boundary</Term>
+
+## CLR Hosting
+
+Native executable/host通过Framework hosting interfaces或现代hostfxr/nethost选择runtime、提供configuration并启动managed entrypoint。Host可决定runtime version、GC settings、assembly probing、thread/task integration和shutdown；CLR内部提供loader/JIT/GC/exception/threading。普通apphost/dotnet已实现默认hosting，只有SQL Server、游戏引擎、native application embedding等才需自定义。
+
+```csharp
+// Managed side entrypoint exposed to a native/modern host.
+public static class HostedEntry
+{
+    public static int Run(nint context, int contextSize)
+    {
+        ReadOnlySpan<byte> payload = new((void*)context, contextSize);
+        return ExecuteValidated(payload);
+    }
+}
+```
+
+自定义host是ABI与lifetime设计：runtime初始化一次还是复用、managed delegate能用多久、native线程如何attach、exception如何跨边界、shutdown期间谁还能回调。Modern host API具体签名按官方runtime docs实现，本章代码只强调managed boundary，不复制过时COM hosting boilerplate。
+
+<Stepper>
+  <Step title="切换process host、CLR、AppDomain与load context"><CvcHostingLayersLab /></Step>
+  <Step title="建立Hosting ledger">记录runtime/version、config、GC、entry delegate、native thread、assembly universe、shutdown与diagnostics owner。</Step>
+  <Step title="验证重复生命周期">启动、调用、并发、异常、shutdown、再次启动需求逐项测试，不假设runtime可任意重置。</Step>
+</Stepper>
+
+<Callout type="trap" title="AssemblyLoadContext就是现代AppDomain替代品，隔离能力完全相同">
+ALC主要隔离managed dependency identity并支持合作卸载，不提供AppDomain remoting、thread abort、安全沙箱或独立故障边界。高风险插件使用worker process。
+</Callout>
+
+## AppDomains
+
+.NET Framework process启动default AppDomain，可创建其它domains并提供AppDomainSetup（ApplicationBase、configuration等）。每domain有独立assembly loading universe/static state（共享runtime/process资源），可整体Unload。AppDomain不是OS memory protection：native code、process environment与某些resources共享，历史CAS sandbox也不应作为现代安全方案。
+
+<Term def=".NET Framework进程内用于assembly/static/config隔离和整体卸载的managed application domain。">framework application domain</Term>
+
+Domain boundary影响type identity与static singleton；相同assembly在两domains有各自loaded state。跨域引用必须marshal。Thread可进入多个domains执行，不能把domain简单当固定thread group。Runtime host负责创建、调用和卸载。
+
+## Accessing Objects Across AppDomain Boundaries
+
+三类：MarshalByRefObject保留源domain对象并在目标domain拿transparent proxy，method calls跨域；Serializable对象marshal-by-value，序列化graph在目标domain重建copy；两者都不满足则不能跨。Boundary有latency、failure、version和lifetime lease，不应像本地call设计chatty API。
+
+```csharp
+public sealed class RemoteCalculator : MarshalByRefObject
+{
+    public int Add(int left, int right) => checked(left + right);
+
+    // Framework-era lifetime service override was often used to control leases.
+    public override object? InitializeLifetimeService() => null;
+}
+
+[Serializable]
+public sealed record CalculationRequest(int Left, int Right);
+```
+
+现代项目不要新建BinaryFormatter/remoting方案。跨process使用明确RPC/message DTO；跨ALC共享host contract/DTO，不让plugin implementation Type穿越。Identity、exception与cancellation在boundary显式翻译。
+
+<Term def="跨隔离边界时对象保持远程identity代理、复制为独立value，或被拒绝的选择。">cross-domain identity policy</Term>
+
+## Demo #1: Cross-AppDomain Communication Using Marshal-by-Reference
+
+Framework中在child domain创建RemoteCalculator，host拿proxy；每次call在child执行，target state留在child，unload后proxy调用失败。Proxy隐藏transport但不能消除cost/failure。Lease/sponsor防永久remote object，复杂且是legacy remoting概念。
+
+现代映射：worker process RPC stub，或host-defined interface由plugin ALC implementation直接进程内调用（没有真正remoting）。前者有failure isolation，后者只是dependency boundary。
+
+## Demo #2: Cross-AppDomain Communication Using Marshal-by-Value
+
+Serializable request/result graph被formatter复制，目标修改不影响源。Copy要求全部reachable graph可序列化，type identity/version匹配；private layout耦合且不可信deserialization危险。今天用explicit DTO+JSON/protobuf等schema serializer，不持久化任意runtime graph。
+
+## Demo #3: Cross-AppDomain Communication Using Non-Marshalable Types
+
+普通对象既非MarshalByRefObject也非Serializable，跨域返回会抛SerializationException/remoting failure。这个失败提醒API boundary必须设计，而不是任意Object泄露。Modern ALC虽可直接传同一contract type object，但若type由不同contexts定义会cast失败，且引用会阻止unload；仍应限制DTO/interface。
+
+<Stepper>
+  <Step title="切换marshal-by-reference、marshal-by-value、non-marshalable与message DTO"><CvcDomainCrossingLab /></Step>
+  <Step title="绘制Identity图">标出object owner、proxy/copy、defining assembly/context、serialization schema、exception和lifetime。</Step>
+  <Step title="故障测试">Domain/process unload、version mismatch、network timeout、nonserializable field和host reference leak逐项验证。</Step>
+</Stepper>
+
+<Callout type="trap" title="Transparent Proxy让Cross-Domain调用与Local调用等价">
+语法相似但有boundary latency、serialization、lease、domain unload和remote exception。接口应粗粒度、幂等、可取消，并把failure视为正常协议。
+</Callout>
+
+## AppDomain Unloading
+
+Framework `AppDomain.Unload`请求停止domain执行，可能向threads注入ThreadAbortException，运行finally后卸载assemblies/static state；无法及时结束可能CannotUnloadAppDomainException。Thread abort/critical regions使行为复杂，host不能把它当温和cancellation。Unmanaged state和process-global side effects不会自动回滚。
+
+现代ALC unload是cooperative：调用Unload只取消context owner，必须停止tasks/threads、退订events、清reflection/delegate/static caches、释放native callbacks，然后所有context objects不可达，GC才完成。Worker process termination更确定地回收memory/handles，但durable state仍需恢复协议。
+
+<Term def="停止新工作、取消并等待执行、解除跨界roots、释放资源，最后证明domain/context/process消失的协议。">isolation unload protocol</Term>
+
+## AppDomain Monitoring
+
+Framework可启用MonitoringIsEnabled并读取每domain CPU、allocated/survived memory等（版本/成本需注意）。这不是resource quota或强隔离，shared process CPU/GC/native memory仍难归属。Host还应记录loaded assemblies、threads、exceptions和work queues。
+
+Modern用EventPipe/counters/traces、ALC inventory和process metrics。若需每tenant/plugin硬CPU/memory quota，用独立process/container/cgroup/job object。Metrics只观察，不执行限制。
+
+## AppDomain First-Chance Exception Notifications
+
+`FirstChanceException`在每次exception开始搜索handler时通知，哪怕稍后被catch。适合诊断throw rate/rare failure，量大且handler本身必须轻、不可抛/阻塞。它不说明unhandled，也不替代正常logging；采样并保护敏感message。
+
+## How Hosts Use AppDomains
+
+Framework hosts用domains隔离应用/config/assemblies并回收：ASP.NET app recycle、SQL CLR、add-ins等。每种host定义何时create/unload、跨域协议和failure。学习重点是host owns lifecycle，不让library自行创建global domains/abort threads。
+
+## Executable Applications
+
+普通Framework EXE在default domain运行，config和base directory决定binding。Modern apphost/dotnet启动CoreCLR与default ALC；应用可建custom ALC处理plugins。大多数程序不需要自定义CLR host，只需要正确process startup/shutdown与dependency deployment。
+
+## Microsoft Silverlight Rich Internet Applications
+
+Silverlight以受限浏览器/桌面host和application domains提供隔离，是已终止历史技术。保留它是为了理解host可限制API surface与lifecycle；现代web sandbox由browser/WebAssembly/process模型承担，不能部署Silverlight方案。
+
+## Microsoft ASP.NET and XML Web Services Applications
+
+Classic ASP.NET按application virtual directory使用AppDomain，bin/config变化触发recycle，静态状态随domain丢失，in-flight request受影响。Modern ASP.NET Core以process/host/DI scopes运行，deploy/restart而非AppDomain recycle。Session/durable work不应只放static memory。
+
+## Microsoft SQL Server
+
+SQL Server CLR hosting在数据库process内加载managed code，host控制runtime、permissions、resource与AppDomains（Framework-era）。代码必须避免阻塞/线程/静态全局等破坏host假设。Modern SQL CLR支持矩阵与安全配置按产品版本核实；高风险逻辑外移service/process。
+
+## Your Own Imagination
+
+自定义host可用于native app embedding、scripting、game/editor plugins、multi-tenant worker，但先问普通child process/RPC是否更简单安全。Hosting API维护成本高，runtime upgrade/AOT/diagnostics都需专门测试。不要因“一个进程更快”牺牲failure/security isolation。
+
+## Advanced Host Control
+
+Framework host interfaces可控制GC manager、threading、assembly loading、security等深层集成；现代hosting通过hostfxr/runtime delegates等提供初始化与managed entry。Advanced control与runtime implementation耦合，版本矩阵、ABI、shutdown和supportability是发布门槛。只配置GC用runtimeconfig/environment，不必写host。
+
+## Managing the CLR by Using Managed Code
+
+Managed host controller可创建domains、执行assembly、监听events、监控和unload；但最外层runtime启动仍由native/standard host。现代managed controller用AssemblyLoadContext/Process API/IPC管理workers。把controller与guest contract分离，guest不能拿到controller internals。
+
+```csharp
+sealed class PluginLoadContext : AssemblyLoadContext
+{
+    private readonly AssemblyDependencyResolver _resolver;
+
+    public PluginLoadContext(string mainPath)
+        : base(isCollectible: true) => _resolver = new(mainPath);
+
+    protected override Assembly? Load(AssemblyName name)
+    {
+        string? path = _resolver.ResolveAssemblyToPath(name);
+        return path is null ? null : LoadFromAssemblyPath(path);
+    }
+}
+```
+
+Contract assembly通常由Default共享，自定义context不私载副本。Resolver canonicalize路径并限制plugin root。ALC不是权限sandbox，不可信guest启worker process。
+
+## Writing a Robust Host Application
+
+Robust host限制guest input/work/time/memory（硬限制需process），捕获boundary exceptions并终止guest unit，持久化checkpoint，提供health/metrics，支持cancel/drain/kill/restart。Guest callback不在host lock中执行；native/managed crossings保存delegate lifetime。升级用side-by-side worker、health后切流、旧版drain。
+
+## How a Host Gets Its Thread Back
+
+Framework host可能用AppDomain unload/thread abort让managed execution终止并回到native host，但arbitrary abort会破坏invariants/locks/native calls。Cooperative cancellation优先；超过deadline就终止隔离process，而不是在shared process硬abort thread。ALC unload不会停止线程，必须guest配合。
+
+<Stepper>
+  <Step title="切换create、monitor、unload与recover"><CvcIsolationLifecycleLab /></Step>
+  <Step title="建立Guest ledger">记录threads/tasks/timers/events/handles/static/reflection caches、durable state和deadline。</Step>
+  <Step title="演练不合作Guest">忽略cancel、阻塞native、泄漏delegate/Type；证明ALC失败时可升级process kill并恢复。</Step>
+</Stepper>
+
+## 本章回顾：选择与风险相匹配的Isolation
+
+1. Host选择runtime/config/entry，CLR执行；Framework AppDomain是历史进程内domain，不是OS隔离。
+2. 跨域MBR保留remote identity，MBV复制graph，non-marshalable失败；现代使用explicit DTO/messages。
+3. AppDomain unload可中止domain执行，ALC需cooperative GC，process termination提供更强回收。
+4. Monitoring/first-chance是观测，不是quota或恢复；host必须持有guest lifecycle。
+5. 新系统按需求选择Default/custom ALC或worker process，不把ALC当security/fault sandbox。
+
+<Exercises>
+
+**问题 1：Legacy AppDomain plugin迁移现代.NET，应如何映射？**
+
+<Answer>只需dependency version隔离与可合作卸载，用collectible AssemblyLoadContext、共享contract、resolver和WeakReference unload test；需要权限、crash、CPU/memory或不合作thread隔离，改worker process+RPC DTO。不要移植MarshalByRef/BinaryFormatter remoting。</Answer>
+
+**问题 2：为什么调用ALC.Unload后DLL仍被占用/Context存活？**
+
+<Answer>Unload只启动过程。检查host static/event/delegate、Type/MethodInfo cache、task/thread/timer、GCHandle/native callback和plugin instance roots；停止/退订/Dispose并让locals退出scope，再测试WeakReference。无法合作就使用process boundary。</Answer>
+
+**问题 3：Host如何处理Guest忽略Cancellation？**
+
+<Answer>先停止新请求、发送cancel并给drain deadline；ALC/shared process不能安全强停任意thread。高风险guest预先放worker process，超时terminate process，回收OS resources，再从durable checkpoint/outbox重启。记录forced termination与未完成work。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="runtime hosting boundary" definition="Host、CLR、domain/context与process各自的配置故障生命周期边界。" />
+  <GlossaryItem term="framework application domain" definition="Framework进程内的assembly/static/config隔离与卸载domain。" />
+  <GlossaryItem term="cross-domain identity policy" definition="对象跨域以proxy、copy或拒绝保持身份的规则。" />
+  <GlossaryItem term="isolation unload protocol" definition="停止、取消、去root、释放并证明隔离单元消失的流程。" />
+  <GlossaryItem term="guest recovery boundary" definition="Host可终止并从durable state重建guest的最小隔离单元。" />
+</Glossary>
+
+<Term def="Host能够安全停止并从durable state重新创建guest的最小隔离与故障范围。">guest recovery boundary</Term>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 22: CLR Hosting and AppDomains" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

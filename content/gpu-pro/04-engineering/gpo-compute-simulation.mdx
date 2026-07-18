@@ -1,0 +1,151 @@
+---
+title: "GPU计算、物理模拟与数值算法：9篇复现"
+type: B
+section: "GPU Pro 1-7 · 计算与工程"
+order: 10
+description: "以出版社目录和现代GPU证据复现9篇GPU Pro核心技术。"
+demo: true
+math: true
+sourceUrl: "https://www.routledge.com/GPU-Pro-Advanced-Rendering-Techniques-1st-Edition/Engel/p/book/9780429108426"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GpoComputeSimulationMapLab, GpoComputeSimulationTradeoffLab, GpoComputeSimulationEvidenceLab } from "@/components/mdx/gpu-pro/diagrams/gpo-compute-simulation";
+
+<Objectives>
+- 能解释GPU Resident、Parallel Primitive与Numerical Residual的生产者到消费者关系
+- 能绘制原篇方案、历史GPU载体和现代实现之间的等价或近似边界
+- 能判断计算证书是否包含正确性、兼容、性能和失败重放证据
+</Objectives>
+
+## 先预测，再建立证据
+
+先预测：如果只把原篇API名替换成现代接口，哪些数学关系、数据顺序、精度和性能假设可能已经悄悄改变？distance field、fluid、Poisson、particle、hair、rigid body、quadtree和CUDA filter必须同时证明数值关系、并行安全与规模交叉点。 本页用<Term def="状态更新、约束、压缩和绘制尽量留在GPU，避免同步回读。">GPU Resident</Term>、<Term def="scan、sort、bin、reduce和solver构成复杂算法的并行积木。">Parallel Primitive</Term>、<Term def="用方程残差和守恒量判断模拟是否正确而非只看动画。">Numerical Residual</Term>、<Term def="由GPU产生后续工作量和绘制参数，保持流水并行。">Indirect Dispatch</Term>、<Term def="报告参考解、稳定性、竞争、占用率、传输和端到端时间。">计算证书</Term>固定范围与验收语言。
+
+<GpoComputeSimulationMapLab />
+
+## 官方范围与唯一归属
+
+来源：[GPU Pro 1 publisher TOC](https://www.routledge.com/GPU-Pro-Advanced-Rendering-Techniques-1st-Edition/Engel/p/book/9780429108426) · [GPU Pro 2 publisher TOC](https://www.routledge.com/product/isbn/9781568817187) · [GPU Pro 5 publisher TOC](https://www.routledge.com/GPU-Pro-5-Advanced-Rendering-Techniques/Engel/p/book/9781482208634) · [GPU Pro 7 publisher TOC](https://www.routledge.com/GPU-Pro-7-Advanced-Rendering-Techniques-1st-Edition/Engel/p/book/9780429160035)。以下原篇只在本主题拥有一个主归属；其他页面可以引用，但不得重复计入覆盖。
+
+### GPU Pro 1 · 2篇
+
+- **GPO-V1-37 · Parallelized Implementation of Universal Visual Computer**：拆分通用视觉算子和并行调度，验证数据布局、依赖和CPU/GPU分工。
+- **GPO-V1-41 · Real-Time Interaction between Particles and the Dynamic Mesh on the GPU**：在GPU检测粒子与动态mesh交互，检查空间分桶、竞争和接触稳定。
+
+### GPU Pro 2 · 3篇
+
+- **GPO-V2-25 · 2D Distance Field Generation with the GPU**：并行传播或扫描最近边界距离，比较解析形状误差、符号和收敛pass数。
+- **GPO-V2-27 · Simple and Fast Fluids**：按advection、force、pressure和projection更新流体，报告散度残差、边界和耗散。
+- **GPO-V2-28 · A Fast Poisson Solver for OpenCL using Multigrid Methods**：实现多层restriction、smoothing与prolongation，比较残差收敛和层级同步。
+
+### GPU Pro 5 · 3篇
+
+- **GPO-V5-24 · Hair Simulation in TressFX**：用约束链更新毛发动力学并生成follow hair，验证伸长、碰撞和绘制消费。
+- **GPO-V5-26 · Quadtrees on the GPU**：在GPU构建与查询quadtree，检查并行分配、深度不均和更新成本。
+- **GPO-V5-27 · Two-Level Constraint Solver and Pipelined Local Batching for Rigid Body Simulation on GPUs**：分批求解刚体约束并控制写冲突，比较穿透、收敛和批次利用率。
+
+### GPU Pro 7 · 1篇
+
+- **GPO-V7-17 · Interactive Sparse Eulerian Fluid**：按advection、force、pressure和projection更新流体，报告散度残差、边界和耗散。
+
+## 核心模型与不变量
+
+distance field、fluid、Poisson、particle、hair、rigid body、quadtree和CUDA filter必须同时证明数值关系、并行安全与规模交叉点。 先从输入、输出、坐标或数据域、迭代顺序和误差判据写模型，再讨论API迁移。任何优化都必须能指出它保持、近似或放弃了哪条关系。
+
+$$
+state_next = integrate(state, forces, dt)
+$$
+
+$$
+residual = norm(A * x - b)
+$$
+
+$$
+work = activeElements * iterations
+$$
+
+$$
+endToEnd = upload + kernels + barriers + download
+$$
+
+公式中的量必须给出范围、单位、空间、精度和生产者。画面相似不代表算法等价；数值一致也不代表带宽、时序和设备边界相同。
+
+## 最小现代探针
+
+```hlsl
+DispatchIndirect(simulationKernel, gpuGeneratedWorkCount);
+```
+
+探针只暴露一个变量或阶段。先用常量、解析输入和小规模CPU参考确认正确，再逐步恢复纹理、变体、并行和时间复用。
+
+<GpoComputeSimulationTradeoffLab />
+
+## 历史载体到现代路径
+
+```text
+original: volume + article + API/hardware assumptions
+invariant: equation + data dependency + boundary
+reference: CPU, analytic, offline, or original trend
+modern: shader/compute path + explicit translation
+proof: intermediate buffers + image/numeric diff + GPU capture
+```
+
+迁移报告必须区分完全等价、受控近似和不可直接迁移。旧式fragment pass、DirectX 9、OpenGL ES、CUDA或OpenCL接口可以变化，但读写重叠、同步、采样边界和精度不能被省略。
+
+## 性能、兼容与失败边界
+
+固定设备、驱动、分辨率、场景、帧阶段和统计窗口，分别报告CPU提交、GPU时间、外存流量、显存峰值和画质误差。对移动、桌面和多GPU路径使用各自真实设备，不用名称推断快慢。
+
+```json
+{"source":"official article id","correctness":"reference diff","compatibility":"api and device matrix","performance":"end-to-end metrics","failure":"minimal replay"}
+```
+
+<GpoComputeSimulationEvidenceLab />
+
+## 三步复现实验
+
+<Stepper>
+  <Step title="还原原篇问题与假设"><GpoComputeSimulationMapLab /></Step>
+  <Step title="建立参考与现代双路径"><GpoComputeSimulationTradeoffLab /></Step>
+  <Step title="捕获边界、失败和成本"><GpoComputeSimulationEvidenceLab /></Step>
+</Stepper>
+
+1. 固定卷号、篇名、来源、原始平台和输入输出。
+2. 写出核心不变量、CPU或离线参考以及现代GPU路径。
+3. 构造正常、边界、退化和超容量输入，保存中间证据。
+4. 在目标设备重放，记录图像或数值误差和端到端成本。
+
+## 常见误区
+
+<Callout type="trap" title="范围或身份错误">kernel时间快就宣布GPU加速，忽略上传、回读和barrier。</Callout>
+
+<Callout type="trap" title="证据或边界缺失">模拟画面稳定就认为正确，没有残差、守恒和时间步扫描。</Callout>
+
+## 练习
+
+<Exercises>
+**问题1：如何从GPU Resident建立最小可核查实验？**
+<Answer>固定官方篇章身份，列出输入、输出和一条核心关系；先用解析或CPU参考验证单阶段，再加入GPU并保存中间缓冲和误差。</Answer>
+
+**问题2：怎样证明现代实现没有偷换Parallel Primitive？**
+<Answer>对相同输入比较历史模型与现代路径的数据顺序、精度、边界和中间量；差异必须标记为等价、近似或不支持，并给出容差。</Answer>
+
+**问题3：计算证书至少包含什么？**
+<Answer>包含来源与版本、参考结果、实现配置、正确性差异、兼容矩阵、GPU捕获、端到端指标以及最小失败配置和修复重放。</Answer>
+</Exercises>
+
+## 本章回顾
+
+GPU计算、物理模拟与数值算法页承载9篇唯一原文；每篇都回到问题、不变量、现代实现、边界和证据。
+
+<Glossary>
+  <GlossaryItem term="GPU Resident" definition="状态更新、约束、压缩和绘制尽量留在GPU，避免同步回读。" />
+  <GlossaryItem term="Parallel Primitive" definition="scan、sort、bin、reduce和solver构成复杂算法的并行积木。" />
+  <GlossaryItem term="Numerical Residual" definition="用方程残差和守恒量判断模拟是否正确而非只看动画。" />
+  <GlossaryItem term="Indirect Dispatch" definition="由GPU产生后续工作量和绘制参数，保持流水并行。" />
+  <GlossaryItem term="计算证书" definition="报告参考解、稳定性、竞争、占用率、传输和端到端时间。" />
+</Glossary>
+
+<Attribution adaptedFrom="GPU Pro 1-7 official A K Peters/CRC Press tables of contents" adaptedUrl="https://www.routledge.com/GPU-Pro-Advanced-Rendering-Techniques-1st-Edition/Engel/p/book/9780429108426" />

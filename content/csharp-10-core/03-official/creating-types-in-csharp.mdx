@@ -1,0 +1,189 @@
+---
+title: "Chapter 3. Creating Types in C#"
+type: C
+section: "C# 10 Nutshell · Language"
+order: 3
+description: "覆盖class、inheritance、object、struct、access、interface、enum、nested type与generics，以identity、dispatch和constraint设计稳定类型。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch03.html"
+draft: false
+---
+
+import { CtcDispatchResolutionLab, CtcGenericContractLab, CtcTypeChoiceLab } from "@/components/mdx/csharp-10-core/diagrams/creating-types-in-csharp";
+
+<Objectives>
+
+- 能比较class、struct、interface和enum的identity/copy/default/versioning语义，设计合法construction boundary
+- 能分析overload、virtual override、member hiding与interface dispatch，写出compile-time和runtime选择证据
+- 能设计generic constraints与variance方向，用positive/negative compile fixtures验证公开API
+
+</Objectives>
+
+## 为什么创建Type等于创建长期Contract
+
+Type一旦被其他assembly、serializer、ORM或plugin消费，constructor、accessibility、virtual slots、generic constraints与enum values都会成为演进约束。先确定identity、invariants、copy和substitution，再选择class/struct/interface；只根据“数据用struct、行为用class”会漏掉default value、boxing和versioning。
+
+先预测：readonly struct一定deep immutable吗；protected member能保护业务invariant吗；新增interface member永远binary breaking吗；enum不会出现未声明值吗；`where T : class`能保证T非null吗。答案都是否。
+
+<Term def="Type唯一允许创建合法实例的constructor/factory路径，以及所有路径共同执行的invariant规则。">construction invariant boundary</Term>
+
+## Classes
+
+Class是reference type，instances有identity、fields/properties/methods和lifetime。Fields承载storage，properties是methods contract，不应假装零成本；static members属于type，instance members依赖receiver。Constructor建立initial invariant，object initializer在constructor后逐项赋值，required/init只改善compile-time construction flow，不自动验证跨field关系。
+
+```csharp
+public sealed class Account
+{
+    public AccountId Id { get; }
+    public Money Balance { get; private set; }
+
+    private Account(AccountId id, Money balance) => (Id, Balance) = (id, balance);
+
+    public static Account Open(AccountId id, Money initial) =>
+        initial.IsNegative ? throw new ArgumentOutOfRangeException(nameof(initial)) : new(id, initial);
+}
+```
+
+Canonical constructor/factory收敛validation，public setters避免绕过。Partial class只拆source，不拆runtime type/ownership。Finalizer只用于直接拥有unmanaged resource且通常配合SafeHandle；普通class不要靠finalizer做业务cleanup。
+
+## Inheritance
+
+Inheritance同时带来implementation reuse与substitutability。Derived必须满足base observable contract，不能收紧precondition、放宽invalid result或改变thread/resource语义。Virtual method在constructor调用会分派到尚未完成初始化的derived override，是高风险路径。Prefer composition unless真实is-a与替换测试成立。
+
+Overload在compile time按method group/arguments选择；override在runtime按actual receiver dispatch；`new` hiding根据static receiver type选择。三者组合容易产生“调用了错误方法”的误判，测试要改变static/actual types建立matrix。
+
+<Term def="Derived instance在所有base contract场景中可替换base而不破坏precondition、result与side-effect约定。">substitution contract</Term>
+
+<Stepper>
+  <Step title="切换overload、virtual、hide与interface"><CtcDispatchResolutionLab /></Step>
+  <Step title="标选择阶段">候选集合/overload写compile time，virtual/interface slot写runtime，避免用单一“多态”描述。</Step>
+  <Step title="做static/actual matrix">Base变量/Derived对象、Derived变量与interface变量分别调用，断言target和side effects。</Step>
+</Stepper>
+
+<Callout type="trap" title="复用几行代码就应该继承">
+Inheritance把protected surface、construction、virtual evolution和substitution一起绑定。若只是复用algorithm/dependency，composition或static helper通常成本更低。
+</Callout>
+
+## The object Type
+
+所有types最终可转换为object；value type会boxing成独立object representation。`GetType`返回runtime type，`typeof`取得compile-time named type metadata。默认`ToString`、Equals与GetHashCode对class/struct意义不同；自定义equality必须保持reflexive/symmetric/transitive以及equal objects equal hash。
+
+Object不是“无类型容器”：取回时仍需cast/pattern，boxing影响identity/allocation。Generic API通常优于object API。Logging/diagnostic调用ToString不应泄露secret或作为stable serialization format。
+
+## Structs
+
+Struct是value type，assignment/parameter pass默认复制整个value；适合small、immutable、value-equal、default有意义的对象。Mutable struct在property/collection/readonly receiver中可能被defensive copy，修改临时副本后看似无效。Large struct频繁copy也可能比class更慢。
+
+```csharp
+public readonly record struct Percentage
+{
+    public decimal Value { get; }
+    public Percentage(decimal value) =>
+        Value = value is >= 0 and <= 1 ? value : throw new ArgumentOutOfRangeException(nameof(value));
+}
+```
+
+`default(T)`始终可产生zeroed struct，即使parameterless constructor有逻辑，也要让default可接受或明确guard。Ref struct受escape/boxing/async限制，用于Span等stack-only lifetime；它不是普通struct的性能开关。
+
+<Term def="Type的assignment、pass、equality与default行为围绕独立value而非object identity组织的语义。">value semantics contract</Term>
+
+## Access Modifiers
+
+Public/internal/protected/private控制source可访问性，不是security boundary；reflection、serialization和同process code可能绕过。`protected`扩大derived coupling，`protected internal`与`private protected`有不同assembly/inheritance组合。Friend assembly通过InternalsVisibleTo暴露internal，签名/strong-name配置也需治理。
+
+最小surface降低兼容负担。Public getter返回mutable collection即泄露write alias，即使setter private；返回readonly interface也不一定immutable。Capability设计、defensive copy与immutable types共同保护invariant。
+
+## Interfaces
+
+Interface描述capability与substitution，不承载instance state。Explicit implementation可隐藏只在interface view下出现的member；default interface methods帮助演进但有dispatch/diamond/version兼容规则，不能把interface变成随意增长的base class。
+
+Interface contract需声明nullability、exceptions、idempotency、thread safety、resource ownership和sync/async。Consumer-driven small interfaces通常比“一个类型一个大接口”更可替换。Struct实现interface可能boxing，generic constrained call可避免部分boxing。
+
+<Stepper>
+  <Step title="切换class、struct、interface与enum"><CtcTypeChoiceLab /></Step>
+  <Step title="填写identity/copy/default表">每个候选写assignment、equality、null/default、boxing、serialization与evolution。</Step>
+  <Step title="做contract tests">对所有implementations运行相同suite，覆盖invalid input、exception、concurrency与dispose语义。</Step>
+</Stepper>
+
+## Enums
+
+Enum为integral values命名，但cast/deserialize可产生未声明numeric value。Zero value应定义None/Unknown或明确拒绝；Flags使用powers of two并验证组合。不要用Enum.IsDefined验证Flags组合。Wire/database值一旦发布不可随意重排复用。
+
+Switch必须有unknown branch，尤其跨版本client/server。若每个case携带data/behavior，discriminated records+pattern matching比enum + parallel dictionaries更安全。
+
+## Nested Types
+
+Nested type用于把implementation detail/name scope靠近owner；它仍是独立metadata type，可有自己的accessibility，并能访问containing type的private members。Nested并不自动持有outer instance，需显式reference。Public nested type会进入API naming/version surface。
+
+过深nesting降低发现性并可能暴露owner internals。Private comparer/builder/enumerator适合nested；domain concept若独立被消费，应提升为namespace-level type。
+
+## Generics
+
+Generics让type parameter在compile time保留，避免object cast与许多boxing。Constraints声明T可用operations：class/struct/notnull/unmanaged/base/interface/new()等；它们影响API capability和future evolution。`new()`只能调用public parameterless constructor，常不如factory function明确。
+
+```csharp
+static T Max<T>(T left, T right) where T : IComparable<T> =>
+    left.CompareTo(right) >= 0 ? left : right;
+
+interface IProducer<out T> { T Produce(); }
+interface IConsumer<in T> { void Consume(T value); }
+```
+
+Covariance `out`只允许T用于output positions，支持producer Derived到producer Base；contravariance `in`只允许input positions，支持consumer Base到consumer Derived；同时输入输出则invariant。Variance只适用于reference conversions，不改变constructed value types。
+
+<Term def="Generic type parameter被允许的operations、null/value category与construction能力的compile-time声明。">generic capability contract</Term>
+
+<Stepper>
+  <Step title="切换constraint、covariant、contravariant与invariant"><CtcGenericContractLab /></Step>
+  <Step title="标T的input/output positions">Return/property getter为output，parameter/setter为input，nested generic按自身variance继续计算。</Step>
+  <Step title="运行compile matrix">合法/非法type arguments与assignments都保留fixture，API升级时防止constraint/variance破坏。</Step>
+</Stepper>
+
+<Callout type="trap" title="where T : class就保证参数运行时非Null">
+在nullable context中还要区分`class`、`class?`与annotations；generic caller仍可能来自oblivious/legacy code。Runtime invariant需ArgumentNullException或domain validation。
+</Callout>
+
+## Type evolution gate
+
+Public type演进建立consumer matrix：新增overload可能造成ambiguity；新增virtual member改变derived behavior；改变struct layout影响interop；新增enum值要求unknown handling；收紧generic constraint会让旧type argument不再编译。Source、binary、serialization与behavior compatibility分别验证。
+
+Golden payloads、old consumer compile/run、reflection snapshot和contract suite构成证据。Internal type也可能被DI/serializer/reflection按name使用，先盘点实际consumers再重构。
+
+## 本章回顾：先定义Semantics，再选择Type Kind
+
+1. Class围绕reference identity，struct围绕value copy/default，interface围绕capability，enum围绕named codes。
+2. Overload、virtual override、hiding与interface dispatch发生在不同阶段。
+3. Access modifier缩小source surface，不构成security或deep immutability。
+4. Generic constraints声明capability，variance声明安全reference conversion方向。
+5. Type演进同时考虑source、binary、serialization与behavior compatibility。
+
+<Exercises>
+
+**问题 1：怎样判断Money应为class还是struct？**
+
+<Answer>若它是small immutable、value equality、频繁嵌入且default可明确处理，readonly struct/record struct合适；若需identity、null、subtyping或copy成本大，用class。测试copy/equality/default/boxing与hot-path measurement。</Answer>
+
+**问题 2：新增overload为何可能破坏旧代码？**
+
+<Answer>旧call site/method group在新candidate加入后可能变ambiguous或解析到更优不同target。用旧consumer source与delegate target compile fixtures验证；公共边界可用named method/adapter而非密集overload。</Answer>
+
+**问题 3：怎样验证IProducer和IConsumer的variance？**
+
+<Answer>Producer只返回T，验证IProducer&lt;Dog&gt;可赋给IProducer&lt;Animal&gt;；Consumer只接收T，验证IConsumer&lt;Animal&gt;可赋给IConsumer&lt;Dog&gt;。反向和混合input/output应保留compile-negative cases。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="construction invariant boundary" definition="所有合法实例都经过的canonical construction规则。" />
+  <GlossaryItem term="substitution contract" definition="Derived/implementation可替换base/interface的行为约定。" />
+  <GlossaryItem term="value semantics contract" definition="围绕copy、value equality和default组织的type语义。" />
+  <GlossaryItem term="generic capability contract" definition="Constraints允许T执行哪些operations的声明。" />
+  <GlossaryItem term="type evolution matrix" definition="Source、binary、serialization和behavior兼容验证表。" />
+</Glossary>
+
+<Term def="对public type change分别验证source、binary、serialization和behavior consumer兼容性的表。">type evolution matrix</Term>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 3: Creating Types in C#" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch03.html" />

@@ -1,0 +1,356 @@
+---
+title: "Item 16：让 const 成员函数线程安全"
+type: A
+section: Chapter 3 · Moving to Modern C++
+order: 16
+description: 对齐 Effective Modern C++ Item 16：识别 mutable cache 在并发 const 调用中的数据竞争，使用 mutex 保护复合不变量、atomic 保护单变量状态，并区分 bitwise constness 与 logical constness。
+demo: false
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch03.html"
+draft: false
+---
+
+import {
+  EmcppAtomicMutexDecisionMap,
+  EmcppConstCacheRaceTimeline,
+  EmcppLogicalConstSynchronizationMap,
+} from "@/components/mdx/effective-modern-cpp/diagrams/item-16-const-thread-safe";
+
+<Objectives>
+
+- 能分析 mutable cache（mutable 缓存）在两个并发 const calls 中的读写交错，并复现 data race
+- 能比较 mutex（互斥锁）与 atomic（原子）的适用边界，为单变量统计和多字段 cache invariant 选择同步机制
+- 能区分 bitwise constness 与 logical constness（逻辑 const），设计 const member functions thread safe（const 成员函数线程安全）的接口契约
+
+</Objectives>
+
+## 从“const 允许并发调用，但不自动提供同步”开始
+
+Item 16 的原则是 Make const member functions thread safe（让 const 成员函数线程安全）。调用者看到 const member，通常会认为多个线程只读同一 object 是安全的；但实现可能通过 `mutable` 更新 cache、统计或 lazy state。
+
+<Term def="多个线程同时调用同一对象的 const member 时，不发生 data race 且保持对象不变量。">
+  const member thread safety
+</Term>
+
+<Term def="允许 const member 修改的派生状态，用于缓存昂贵计算结果。">
+  mutable cache
+</Term>
+
+```cpp
+class Polynomial {
+public:
+    Roots roots() const {
+        if (!rootsAreValid) {
+            rootValues = computeRoots();
+            rootsAreValid = true;
+        }
+        return rootValues;
+    }
+
+private:
+    mutable bool rootsAreValid{false};
+    mutable Roots rootValues;
+};
+```
+
+先预测两个线程同时第一次调用 `roots()`：它们都可能看到 false，并并发写 rootValues 与 flag。
+
+<EmcppConstCacheRaceTimeline />
+
+## mutable 只放宽类型系统的写限制
+
+`mutable` 让 const member 能修改某个 data member，不会生成 lock、memory ordering 或 happens-before relationship。
+
+<Term def="允许成员在 const object/member function 中被修改的声明说明符，不包含同步语义。">
+  mutable specifier
+</Term>
+
+<Term def="两个线程无同步地访问同一 memory location，至少一个是写操作，导致未定义行为。">
+  data race
+</Term>
+
+即使两个线程计算出数学上相同的 roots，对 `std::vector`/heap state 的并发 assignment 仍是 data race；“结果相同”不能使未同步写合法。
+
+<Callout type="trap" title="陷阱：cache 只是性能状态，竞争最多重复计算">
+  重复计算只是一个后果。并发写 vector/string、valid flag 与 allocator metadata
+  属于 data race，可造成 未定义行为、部分构造可见或内存破坏；必须按共享 mutable
+  state 处理。
+</Callout>
+
+## bitwise constness 不等于 logical constness
+
+C++ 的 const member 默认禁止修改 non-mutable bits，这是一种物理/bitwise 约束。API 设计常采用 logical constness：只要外部可观察的抽象值不改变，就允许更新 cache。
+
+<Term def="从对象存储位角度禁止修改 non-mutable members 的语言 const 模型。">
+  bitwise constness
+</Term>
+
+<Term def="允许修改 cache、统计或同步状态，只要对象对调用者呈现的抽象值不变。">
+  logical constness
+</Term>
+
+mutable 是实现 logical constness 的工具，但逻辑上“不可观察”不代表线程上“私有”。同一对象的 cache 仍被所有调用者共享。
+
+## mutex 保护复合 cache invariant
+
+cache 的 `valid` 与 `value` 必须作为一个状态机：valid 为 true 时，value 必须完整对应当前 object state。mutex 可把 check、compute、publish 形成一个 critical section。
+
+```cpp
+class Polynomial {
+public:
+    Roots roots() const {
+        std::lock_guard<std::mutex> guard(mutex);
+        if (!rootsAreValid) {
+            rootValues = computeRoots();
+            rootsAreValid = true;
+        }
+        return rootValues;
+    }
+
+private:
+    mutable std::mutex mutex;
+    mutable bool rootsAreValid{false};
+    mutable Roots rootValues;
+};
+```
+
+<Term def="由 mutex 保护、同一时刻只允许一个线程执行的共享状态更新区域。">
+  cache critical section
+</Term>
+
+<Term def="valid flag 与 cached value 必须一致发布和读取的多字段约束。">
+  cache publication invariant
+</Term>
+
+先写 value，再写 valid；reader 在同一 lock 下观察，保证不会看到“valid 但 value 尚未完成”。
+
+## 不要在锁内保留不必要的工作
+
+若 computeRoots 很慢，可先在 lock 外计算候选，再在 lock 内 publish；但需要允许重复计算，并确认 object source state 不会并发变化。
+
+<Term def="缩短持锁时间，将可重复的纯计算移出 critical section，只同步最终发布。">
+  compute-then-publish pattern
+</Term>
+
+```cpp
+Roots roots() const {
+    {
+        std::lock_guard<std::mutex> guard(mutex);
+        if (rootsAreValid) return rootValues;
+    }
+
+    auto computed = computeRoots();
+
+    std::lock_guard<std::mutex> guard(mutex);
+    if (!rootsAreValid) {
+        rootValues = std::move(computed);
+        rootsAreValid = true;
+    }
+    return rootValues;
+}
+```
+
+这采用 double-check under lock；两个线程可能都计算，但只有一个 publish。若 object 有 mutation API，还要让 mutation 与 snapshot/version 进入同一同步协议。
+
+## atomic 适合独立单变量状态
+
+调用计数器不与其他 fields 组成复合 invariant，可用 atomic：
+
+```cpp
+class Point {
+public:
+    double distanceFromOrigin() const noexcept {
+        ++callCount;
+        return std::hypot(x, y);
+    }
+
+private:
+    double x{0.0};
+    double y{0.0};
+    mutable std::atomic<unsigned> callCount{0};
+};
+```
+
+<Term def="对单个对象执行不可分割读改写，并通过 memory ordering 参与线程同步的类型。">
+  atomic state
+</Term>
+
+如果 count 只作 telemetry，relaxed ordering 可能足够：
+
+```cpp
+callCount.fetch_add(1, std::memory_order_relaxed);
+```
+
+<Term def="只保证 atomic object 自身操作原子性，不为其他 memory locations 建立顺序的内存序。">
+  relaxed counter ordering
+</Term>
+
+选择 memory order 必须来自跨变量可见性需求，而非“relaxed 更快”的习惯。
+
+## 两个 atomics 不等于一个事务
+
+把 `rootsAreValid` 改 atomic 仍不足：rootValues 不是 atomic，且 valid/value 发布顺序需要同步。
+
+```cpp
+mutable std::atomic<bool> rootsAreValid{false};
+mutable Roots rootValues; // still shared mutable state
+```
+
+<Term def="多个 atomic/non-atomic fields 之间的组合不变量不能仅靠每个变量独立原子操作保证。">
+  multi-field atomicity gap
+</Term>
+
+正确 lock-free publication 需要 immutable snapshot、release/acquire、lifetime reclamation 等完整设计；对普通 cache，mutex 更清楚可靠。
+
+<EmcppAtomicMutexDecisionMap />
+
+<Callout type="trap" title="陷阱：把 valid flag 改成 atomic 就修复了 cache">
+  atomic flag 只消除 flag 自身的 data race。cached value 的并发写、发布顺序和
+  lifetime 仍未解决； 多字段 invariant 应由 mutex 或完整的 immutable publication
+  protocol 保护。
+</Callout>
+
+## synchronization members 也应 mutable
+
+const member 需要 lock mutex，而 `lock()` 会修改 mutex 内部状态，因此 mutex 通常声明 mutable。
+
+<Term def="不属于对象抽象值、但为 const operations 提供同步的 mutable mutex/once flag 等成员。">
+  mutable synchronization state
+</Term>
+
+这符合 logical constness：lock acquisition 不改变 Polynomial 的数学意义，却保证其 cache 正确。
+
+<EmcppLogicalConstSynchronizationMap />
+
+## mutex 会影响 copy 与 move 生成
+
+`std::mutex` 不可 copy/move。把 mutex 加入 class 后，compiler-generated copy/move operations 可能被删除。
+
+<Term def="同步成员使默认 special member operations 不可用，需要重新决定对象 ownership 与复制语义。">
+  synchronization ownership impact
+</Term>
+
+可选设计：对象本就不应复制，显式 delete；复制只复制 logical value、重新初始化 cache/mutex；或将共享 state 放入受同步的 pimpl。不能为了恢复 copyability 而把 mutex 变成未受控 global。
+
+## const thread-safe 不代表所有操作可并发
+
+Item 的默认期望是同一对象的 const operations 可并发。const 与 non-const operation 并发是否安全，取决于 class contract；多数普通 containers 在写入同时读取并不安全。
+
+<Term def="明确哪些 const/const、const/mutating、mutating/mutating 调用组合允许并发的接口表。">
+  operation concurrency matrix
+</Term>
+
+API 文档和 tests 应区分：多个 roots calls；roots 与 coefficient update；两个 updates。若不支持某组合，caller 必须用外部 synchronization 或使用更高层 synchronized object。
+
+## const overload 共享实现也要共享锁策略
+
+const/non-const accessors 若复用 helper，不能让一条路径加锁、另一条路径绕过。锁的 ownership 和 reentrancy 应明确，避免同一 mutex 二次 lock。
+
+<Term def="所有访问同一 mutable state 的 overloads 遵守同一个 lock ownership 与调用层次。">
+  synchronization path consistency
+</Term>
+
+最好把 `_unlocked` helper 设 private，并只从已持锁 wrapper 调用；名称与 review rule 明确前置条件。
+
+## 线程安全验收矩阵
+
+<Term def="覆盖首次 cache、重复读取、并发发布、mutation 交错、atomic counter 和 special members 的测试集合。">
+  const-thread-safety contract matrix
+</Term>
+
+1. ThreadSanitizer 下多个线程首次调用 cache 无 race。
+2. compute 结果只 publish 一份，所有 readers 观察一致 value。
+3. atomic counter 最终计数正确，且不被误用作其他状态同步。
+4. mutation/cache invalidation 使用同一 protocol。
+5. copy/move traits 与 class 设计一致。
+6. const/const 与 const/mutating 并发组合按 operation matrix 验证。
+
+先绘制所有 mutable fields 与访问路径，再选择 atomic 或 mutex；仅给函数加 const 不能成为线程安全证据。
+
+## 小结
+
+- const member 可通过 mutable 修改 cache；const 语法不会自动生成 synchronization
+- 两个线程并发写 mutable cache 构成 data race，即使计算结果数学上相同
+- bitwise constness 控制存储位修改，logical constness 允许不改变抽象值的 cache/sync state
+- valid flag 与 value 是复合 invariant，应由 mutex 形成原子 check/compute/publish
+- atomic 适合独立 counter；多个 atomics 不自动形成跨字段事务
+- mutable mutex 符合 logical const，但会影响 class 的 copy/move generation
+- const/const 并发安全不等于读写并发安全，必须给出 operation concurrency matrix
+- 最终验收应运行 TSan、首次发布与 mutation 交错测试
+
+<Attribution
+  adaptedFrom="Effective Modern C++, Item 16"
+  adaptedUrl="https://www.oreilly.com/library/view/effective-modern-c/9781491908419/ch03.html"
+/>
+
+<Glossary>
+  <GlossaryItem term="const member thread safety">
+    并发 const 调用无 race。
+  </GlossaryItem>
+  <GlossaryItem term="mutable cache">
+    const member 可更新的派生缓存。
+  </GlossaryItem>
+  <GlossaryItem term="mutable specifier">
+    豁免 const 写限制但不提供同步。
+  </GlossaryItem>
+  <GlossaryItem term="data race">无同步冲突访问同一内存位置。</GlossaryItem>
+  <GlossaryItem term="bitwise constness">从对象存储位限制修改。</GlossaryItem>
+  <GlossaryItem term="logical constness">
+    保持抽象值不变的 const 模型。
+  </GlossaryItem>
+  <GlossaryItem term="cache critical section">
+    mutex 保护的缓存更新区。
+  </GlossaryItem>
+  <GlossaryItem term="cache publication invariant">
+    valid 与 value 一致可见的约束。
+  </GlossaryItem>
+  <GlossaryItem term="compute-then-publish pattern">
+    锁外计算、锁内发布的模式。
+  </GlossaryItem>
+  <GlossaryItem term="atomic state">单变量原子共享状态。</GlossaryItem>
+  <GlossaryItem term="relaxed counter ordering">
+    仅保证计数器自身原子性。
+  </GlossaryItem>
+  <GlossaryItem term="multi-field atomicity gap">
+    独立原子操作无法形成复合事务。
+  </GlossaryItem>
+  <GlossaryItem term="mutable synchronization state">
+    const 操作使用的同步成员。
+  </GlossaryItem>
+  <GlossaryItem term="synchronization ownership impact">
+    同步成员对复制移动语义的影响。
+  </GlossaryItem>
+  <GlossaryItem term="operation concurrency matrix">
+    操作组合的并发支持表。
+  </GlossaryItem>
+  <GlossaryItem term="synchronization path consistency">
+    共享状态路径采用一致锁协议。
+  </GlossaryItem>
+  <GlossaryItem term="const-thread-safety contract matrix">
+    const 并发与缓存发布测试表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：复现 Polynomial roots cache race。** 两线程同时首次调用。
+
+<Answer question="具体交错和修复是什么？">
+  两线程都读取 valid=false，分别 compute 并并发 assignment rootValues，再写
+  flag；vector/cache storage 发生 data race。用 mutable mutex 包住
+  check、compute、value publish 与 flag publish；TSan 运行 barrier
+  对齐的首次调用，验证无 race 且所有结果一致。
+</Answer>
+
+2. **问题 2：调用计数和 roots cache 分别选 atomic 还是 mutex。** 解释依据。
+
+<Answer question="为什么不能都用 atomic flag？">
+  独立调用计数不与其他字段构成 invariant，可用 atomic fetch-add，纯 telemetry
+  可考虑 relaxed；roots 的 valid 与 value 必须事务一致，atomic flag 不保护 value
+  或 publication lifetime，应使用 mutex。 分别测试最终计数和并发 cache
+  首次发布。
+</Answer>
+
+3. **问题 3：加入 mutable mutex 后 class 不再可复制。** 设计 copy contract。
+
+  <Answer question="有哪些合理方案？">若 object identity/cache 不应复制，显式 delete copy/move；若数学值可复制，custom copy 在锁保护下复制 logical coefficients，并为目标重新创建 mutex、使 cache invalid；共享昂贵 state 时可用 synchronized pimpl。用 type traits 和并发 copy/mutation tests 固定选择，不能直接复制 mutex。</Answer>
+</Exercises>

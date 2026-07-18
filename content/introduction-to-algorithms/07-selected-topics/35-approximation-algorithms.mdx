@@ -1,0 +1,343 @@
+---
+title: "Chapter 35 · Approximation Algorithms"
+type: C
+section: "CLRS4 · 专题"
+order: 35
+description: "按CLRS第四版第35章重建近似保证、顶点覆盖、旅行商、集合覆盖、随机化/线性规划与子集和FPTAS。"
+demo: true
+math: true
+sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+draft: false
+---
+
+import { CLRS4ApproximationRatioLab, CLRS4VertexCoverMatchingLab, CLRS4VertexCoverBoundLab, CLRS4TriangleInequalityLab, CLRS4MSTTourLab, CLRS4PreorderShortcutLab, CLRS4GreedySetCoverLab, CLRS4SetCoverChargingLab, CLRS4RandomAssignmentLab, CLRS4ConditionalExpectationLab, CLRS4LPRelaxationLab, CLRS4RandomizedRoundingLab, CLRS4SubsetSumListLab, CLRS4SubsetSumTrimLab, CLRS4FPTASLab, CLRS4ApproximationCertificateLab } from "@/components/mdx/introduction-to-algorithms/diagrams/35-approximation-algorithms";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释approximation algorithms、approximation ratio、PTAS与FPTAS各自承诺的保证
+- 能计算vertex-cover、metric TSP、set-covering、MAX-3-CNF与subset-sum的近似界
+- 能实现maximal-matching cover、MST preorder tour、greedy set cover和trimmed subset-sum
+- 能分析triangle inequality、lower bound、expectation、LP relaxation与trimming error等证明前提
+- 能设计包含feasibility、OPT bound、ratio、runtime、random guarantee和assumptions的近似证书
+
+</Objectives>
+
+## 从“求不到最优，怎样仍给出可证明答案”开始
+
+先预测：面对NP-hard optimization problem，输出一个feasible solution并不困难，真正困难的是回答“它离最优有多远”。<Term def="在polynomial time内输出feasible solution，并对其objective value与optimal value的距离给出worst-case guarantee的算法。">近似算法</Term>不以“看起来不错”为验收标准，而是把solution、bound与proof一起交付。
+
+近似结论至少包含四层：problem version、feasibility、performance ratio、running time。Randomized algorithm还要说明保证是expectation还是high probability；scheme还要说明accuracy parameter如何进入runtime。遗漏这些限定，经验结果再漂亮也不能替代理论保证。
+
+### Approximation ratio
+
+<Term def="对所有instances比较algorithm solution value与optimal value所得的worst-case multiplicative bound。">近似比</Term>通常取$\rho(n)\ge1$。Minimization要求$C_A\le\rho(n)C^*$；maximization要求$C_A\ge C^*/\rho(n)$。也可统一写为
+
+$$
+\max\left(
+\frac{C_A}{C^*},
+\frac{C^*}{C_A}
+\right)
+\le \rho(n).
+$$
+
+<CLRS4ApproximationRatioLab />
+
+Ratio是multiplicative，不等同于absolute error。若optimal value接近0，additive error小也可能对应巨大ratio；反过来，大规模instance上的constant ratio可能容许很大absolute gap。交付时最好同时报告objective、proven ratio、independent lower bound与observed gap。
+
+### Schemes
+
+Polynomial-time approximation scheme（PTAS）对任意fixed $\epsilon>0$给出$1+\epsilon$ minimization guarantee或$1-\epsilon$ maximization guarantee，且对fixed $\epsilon$按input size为polynomial。Fully polynomial-time approximation scheme（FPTAS）进一步要求runtime同时对input size和$1/\epsilon$为polynomial。
+
+PTAS的runtime可以是$n^{1/\epsilon}$，所以不是FPTAS。Accuracy越高通常越慢；用户选定$\epsilon$后，certificate必须记录该值、实际runtime和最终bound。
+
+## 35.1 The vertex-cover problem
+
+### Maximal matching construction
+
+<Term def="在undirected graph中选择尽量少的vertices，使每条edge至少有一个endpoint被选择的optimization problem。">顶点覆盖问题</Term>（vertex-cover problem）是minimum vertex cover。一个简单algorithm反复选择任意uncovered edge $(u,v)$，把两个endpoints都放入cover，并删除所有incident edges。
+
+```text
+APPROX-VERTEX-COVER(G)
+1  C = empty set
+2  E' = copy of G.edges
+3  while E' is not empty
+4      choose any edge (u, v) from E'
+5      add u and v to C
+6      delete every edge incident on u or v from E'
+7  return C
+```
+
+<CLRS4VertexCoverMatchingLab />
+
+Selected edges彼此不共享endpoint，因此形成matching $M$。Algorithm输出两个endpoints，所以$|C|=2|M|$。任意vertex cover必须触碰$M$中的每条edge；matching edges disjoint，至少需要$|M|$个different vertices。
+
+$$
+|M|
+\le |C^*|
+\quad\Longrightarrow\quad
+|C|=2|M|
+\le 2|C^*|.
+$$
+
+<CLRS4VertexCoverBoundLab />
+
+这是2-approximation。Proof的核心不是“每轮看起来合理”，而是algorithm同时构造了一个可验证lower bound $|M|$。Matching只需maximal，不需maximum；选择顺序可改变具体cover和实际size，但worst-case factor保持2。
+
+<Callout type="trap" title="Maximal matching就是maximum matching">
+Maximal只表示不能再加入edge，maximum才表示cardinality全局最大。2-approx proof只用selected edges彼此disjoint以及cover必须hit每条selected edge，不依赖matching最大。
+</Callout>
+
+Weighted vertex cover不能直接按“两个endpoint都选”沿用同一cardinality proof。可使用LP relaxation、rounding或primal-dual方法，但bound必须按weights重新建立。
+
+## 35.2 The traveling-salesperson problem
+
+### Why metric structure matters
+
+<Term def="寻找访问每个vertex恰好一次并返回起点的minimum-cost tour；可近似性强烈依赖edge costs是否满足metric。">旅行商问题</Term>（traveling-salesperson problem，TSP）在arbitrary nonnegative costs下很难获得一般finite factor：missing graph edges可被编码为极大cost，任何承诺较小factor的algorithm都会区分是否存在Hamiltonian cycle。
+
+Metric TSP要求complete undirected graph、nonnegative symmetric costs并满足triangle inequality：
+
+$$
+c(u,v)
+\le c(u,w)+c(w,v).
+$$
+
+<CLRS4TriangleInequalityLab />
+
+Triangle inequality允许shortcut repeated vertices而不增加cost，这是MST-based proof的关键，不是可省略的数据“常识”。现实distance若asymmetric、受turn restrictions影响或随time变化，就不能直接套用metric guarantee。
+
+### MST preorder 2-approximation
+
+先求minimum spanning tree $T$。任意optimal tour删除一条edge后是spanning tree，因此
+
+$$
+c(T)\le c(C^*).
+$$
+
+把$T$中每条edge走两次得到Eulerian walk，cost为$2c(T)$。按preorder或Euler walk首次出现顺序访问vertices，跳过already visited vertices，并用direct edge shortcut；triangle inequality保证cost不增加。
+
+<CLRS4MSTTourLab />
+
+<CLRS4PreorderShortcutLab />
+
+最终tour $C$满足
+
+$$
+c(C)
+\le 2c(T)
+\le 2c(C^*).
+$$
+
+Algorithm的三个证据互相独立：MST提供lower bound，doubling提供可遍历walk，metric shortcut把walk转成Hamiltonian tour。若只报告最终tour，无法确认factor；若没有triangle inequality，shortcut甚至可能使cost变大。
+
+```text
+APPROX-METRIC-TSP(G)
+1  compute a minimum spanning tree T
+2  walk an Euler tour of the graph formed by doubling every T edge
+3  list vertices in order of first appearance
+4  shortcut repeated vertices using direct metric edges
+5  close the tour and return it
+```
+
+更精细的metric TSP方法可改善2这个factor，但本节要掌握的是lower bound加feasible transformation的证明模板，而不是只记一个常数。
+
+## 35.3 The set-covering problem
+
+### Greedy by uncovered gain
+
+<Term def="从sets family中选择尽量少或总cost尽量低的sets，使其union覆盖universe全部elements。">集合覆盖问题</Term>（set-covering problem）给定universe $X$和subsets family $\mathcal{F}$。Unweighted greedy每轮选择覆盖最多uncovered elements的set；weighted version选择cost除以newly covered count最小的set。
+
+```text
+GREEDY-SET-COVER(X, F)
+1  U = copy of X
+2  C = empty collection
+3  while U is not empty
+4      choose S in F maximizing |S intersect U|
+5      add S to C
+6      remove every element of S from U
+7  return C
+```
+
+<CLRS4GreedySetCoverLab />
+
+注意gain只计算尚未覆盖的elements。一个large set如果大部分内容已covered，当前marginal gain可能很小；按original set size排序会破坏greedy proof。
+
+### Charging proof
+
+当greedy选择覆盖$k$个new elements的set时，向每个new element收取$1/k$。每个selected set的charges总和为1，所以总charge就是algorithm选取sets数量。
+
+考虑optimal solution中的任意set $S$，按其中elements被greedy覆盖的顺序观察。覆盖第$i$个remaining element时，$S$本身仍能覆盖至少$|S|-i+1$个new elements，因此greedy选择的set gain不小于它，该element charge至多$1/(|S|-i+1)$。于是一个optimal set承担的charges至多harmonic number。
+
+$$
+H_n
+=
+\sum_{i=1}^{n}\frac1i
+\le \ln n+1.
+$$
+
+<CLRS4SetCoverChargingLab />
+
+把optimal sets的charges相加，得到greedy使用至多$H_{|X|}\cdot OPT$个sets。更紧的bound可用maximum set size，但$\ln|X|+1$已清楚显示：set cover有logarithmic而非constant guarantee。
+
+## 35.4 Randomization and linear programming
+
+### Random assignment for MAX-3-CNF
+
+<Term def="利用random choices的expectation或由LP relaxation得到的fractional bound来设计和分析近似算法的方法族。">随机化与线性规划</Term>（randomization and linear programming）提供两类通用工具：随机化让global objective等于local indicator expectations之和；LP relaxation把discrete feasible region扩展为fractional region，得到可计算bound，再通过rounding恢复integral solution。
+
+在MAX-3-CNF中，目标是满足尽量多clauses。若每个clause含三个distinct variables且无trivial tautology，uniform independent assignment使特定clause失败的概率为$1/8$，满足概率为$7/8$。Linearity of expectation不要求clauses彼此independent：
+
+$$
+\mathbb{E}[X]
+=
+\sum_{j=1}^{m}\Pr[\text{clause }j\text{ satisfied}]
+=
+\frac78m
+\ge
+\frac78OPT.
+$$
+
+<CLRS4RandomAssignmentLab />
+
+这是expected guarantee，不表示每次sample都满足至少$7m/8$ clauses。可做independent restarts并保留best run提高success probability；也可用method of conditional expectation依次固定variables，每步选择不降低conditional expected value的一侧，得到deterministic solution。
+
+<CLRS4ConditionalExpectationLab />
+
+### LP relaxation and rounding
+
+Integer program用$x_i\in\{0,1\}$表达选择；LP relaxation把它改为$0\le x_i\le1$。对于minimization，relaxed feasible region更大，所以LP optimum是integer optimum的lower bound。Rounding不是任意取整：必须证明rounded result feasible，并证明cost相对LP bound至多扩大某factor。
+
+$$
+OPT_{\mathrm{LP}}
+\le
+OPT_{\mathrm{integer}}
+\le
+C_{\mathrm{rounded}}.
+$$
+
+<CLRS4LPRelaxationLab />
+
+Vertex cover LP含每条edge constraint $x_u+x_v\ge1$。选择所有$x_v\ge1/2$的vertices会cover每条edge，cost至多fractional objective的2倍，从而得到2-approximation。这个proof也说明LP的价值：它既指导selection rule，又提供与未知OPT相连的lower bound。
+
+Randomized rounding把fractional coordinate解释为selection probability。Expected cost容易由linearity计算，但feasibility可能只以某个probability成立，需要repetition、alteration或concentration bound。报告必须写清expected cost、failure probability和repair step。
+
+<CLRS4RandomizedRoundingLab />
+
+<Callout type="trap" title="Expected 7/8就表示每次都至少7/8">
+Expectation是对algorithm randomness的平均，不是per-run lower bound。修法是明确随机保证，记录seed与distribution；若需要deterministic bound，使用conditional expectation或其他derandomization。
+</Callout>
+
+## 35.5 The subset-sum problem
+
+### Exact list dynamic programming
+
+<Term def="从positive integers中选择subset，使sum不超过target并尽量接近target的optimization problem。">子集和问题</Term>（subset-sum problem）可维护所有不超过target $t$的reachable sums。处理item $x_i$时，把旧list $L_{i-1}$与每项加$x_i$后的list合并、去重、排序，并删除超过$t$的values。
+
+<CLRS4SubsetSumListLab />
+
+Exact list可能每轮接近翻倍，最终包含exponentially many sums。若按target建boolean table，runtime又可能对numeric target polynomial、对binary encoding pseudo-polynomial。这两种现象解释了为什么需要controlled approximation。
+
+### Trimming near-duplicate sums
+
+TRIM按sorted order保留第一个value，之后只保留比last retained value大超过multiplicative factor $1+\delta$的values。每个discarded value都有一个不大于它、又在multiplicative neighborhood内的representative。
+
+```text
+APPROX-SUBSET-SUM(S, target, epsilon)
+1  L = [0]
+2  delta = epsilon / (2 * |S|)
+3  for each item x in S
+4      L = sorted unique merge of L and [y + x for y in L]
+5      L = TRIM(L, delta)
+6      delete values greater than target
+7  return the largest value in L
+```
+
+<CLRS4SubsetSumTrimLab />
+
+每轮trimming引入small multiplicative loss；选择$\delta=\epsilon/(2n)$控制$n$轮累计误差。最终output $z$保持feasible且
+
+$$
+z
+\ge
+\frac{OPT}{1+\epsilon}.
+$$
+
+<Term def="对input size与inverse accuracy 1/epsilon都保持polynomial runtime的approximation scheme。">全多项式时间近似方案</Term>（FPTAS）要求list length也被polynomially bounded。Positive sums在multiplicative buckets中逐步增长，bucket count依赖$\log t$和$1/\delta$，所以runtime对binary input length与$1/\epsilon$为polynomial。
+
+<CLRS4FPTASLab />
+
+Trimming不能保留大于target的representative代替较小feasible value；因此先保证representative不大于被discarded value，再删除超过target的values。Zeros、duplicate items和empty set也要定义清楚。
+
+## 一份可复查的近似证书
+
+不同算法的bound来源不同：vertex cover用matching lower bound，metric TSP用MST lower bound与triangle inequality，set cover用charging，MAX-3-CNF用expectation，LP rounding用relaxation bound，subset sum用trimming invariant。统一交付模板是feasible output、OPT proxy、ratio derivation、runtime和assumptions。
+
+<CLRS4ApproximationCertificateLab />
+
+<Stepper>
+<Step title="先固定problem与可行性">
+声明min或max、exact constraints、weights/metric/encoding，并用独立checker验证output确实feasible。
+
+<CLRS4ApproximationRatioLab />
+</Step>
+<Step title="构造连接OPT的bound">
+寻找matching、MST、LP、charging、expectation或DP invariant；不能只把heuristic result与未知OPT直接比较。
+
+<CLRS4VertexCoverBoundLab />
+</Step>
+<Step title="写清ratio、runtime与前提">
+把每个inequality的方向、random guarantee、epsilon依赖和failure boundary记录到certificate。
+
+<CLRS4ApproximationCertificateLab />
+</Step>
+</Stepper>
+
+## 小结
+
+Chapter 35 Approximation Algorithms把“polynomial time内求不到exact optimum”转成“polynomial time内交付可证明距离”。Approximation ratio需要feasible solution与OPT bound；PTAS对fixed accuracy polynomial，FPTAS还对$1/\epsilon$ polynomial。
+
+Vertex-cover problem通过maximal matching构造2-approximation。Metric traveling-salesperson problem通过MST、doubling与triangle-inequality shortcut得到2-approximation。Set-covering problem的greedy algorithm用charging得到$H_n$ bound。Randomization用linearity of expectation分析MAX-3-CNF，conditional expectation可derandomize；linear programming用relaxation和rounding连接fractional lower bound与integral solution。Subset-sum problem用multiplicative trimming控制state explosion并形成FPTAS。
+
+所有结论都依赖明确前提。没有metric就不能shortcut，没有lower bound就没有ratio，只给expectation不能声称每次成功，只说“用了LP”不能保证rounded feasibility。完整近似结果必须同时交付solution、checker、bound、proof、runtime和assumptions。
+
+<Exercises>
+
+**问题 1**：Vertex-cover 2-approximation为什么不需要maximum matching？
+
+<Answer>
+Proof只要求selected edges彼此endpoint-disjoint。任意cover必须为每条selected edge至少选一个different endpoint，所以matching size下界OPT；algorithm选每条edge两个endpoints，size恰为下界两倍。Maximal construction已足够让剩余edges全部被覆盖。
+</Answer>
+
+**问题 2**：MST preorder TSP在不满足triangle inequality时哪一步失效？
+
+<Answer>
+MST仍可能lower-bound an optimal tour，doubling也仍产生Euler walk；但把repeated vertex的detour替换为direct edge时，direct cost可能更高。于是shortcut不再保证nonincreasing，最终Hamiltonian tour也失去2倍bound。
+</Answer>
+
+**问题 3**：MAX-3-CNF expected satisfaction为$7m/8$，如何得到deterministic solution？
+
+<Answer>
+依次固定variables。每一步比较令当前variable为true或false后的conditional expected number of satisfied clauses，选择不低于固定前expectation的一侧。全部固定后expectation变成实际score，且从未下降，因此保留原bound。
+</Answer>
+
+**问题 4**：Subset-sum trimming为什么能成为FPTAS而不仅是PTAS？
+
+<Answer>
+设置delta与epsilon除以item count成比例，累计multiplicative error控制在1加epsilon内；同时multiplicatively separated representatives数量对log target和1/delta为polynomial。因而runtime同时对binary input size和1/epsilon polynomial。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="近似算法">在polynomial time内输出feasible solution，并对其objective value与optimal value的距离给出worst-case guarantee的算法。</GlossaryItem>
+<GlossaryItem term="近似比">对所有instances比较algorithm solution value与optimal value所得的worst-case multiplicative bound。</GlossaryItem>
+<GlossaryItem term="顶点覆盖问题">在undirected graph中选择尽量少的vertices，使每条edge至少有一个endpoint被选择的optimization problem。</GlossaryItem>
+<GlossaryItem term="旅行商问题">寻找访问每个vertex恰好一次并返回起点的minimum-cost tour；可近似性强烈依赖edge costs是否满足metric。</GlossaryItem>
+<GlossaryItem term="集合覆盖问题">从sets family中选择尽量少或总cost尽量低的sets，使其union覆盖universe全部elements。</GlossaryItem>
+<GlossaryItem term="随机化与线性规划">利用random choices的expectation或由LP relaxation得到的fractional bound来设计和分析近似算法的方法族。</GlossaryItem>
+<GlossaryItem term="子集和问题">从positive integers中选择subset，使sum不超过target并尽量接近target的optimization problem。</GlossaryItem>
+<GlossaryItem term="全多项式时间近似方案">对input size与inverse accuracy 1/epsilon都保持polynomial runtime的approximation scheme。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Chapter 35 · Approximation Algorithms" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

@@ -100,11 +100,13 @@ const OUT_NODE: FlowNode = {
 const STEPS: readonly TeachingStep[] = [
   {
     label: "model",
-    caption: "① 模型回话可能不干净——把 JSON 包在 ```json 围栏里，或前后多说一句废话",
+    caption:
+      "① 模型回话可能不干净——把 JSON 包在 ```json 围栏里，或前后多说一句废话",
   },
   {
     label: "extract",
-    caption: "② extract_json 剥壳：从围栏和废话里抠出那段 JSON 文本，再 json.loads 解析",
+    caption:
+      "② extract_json 剥壳：从围栏和废话里抠出那段 JSON 文本，再 json.loads 解析",
   },
   {
     label: "validate",
@@ -112,11 +114,13 @@ const STEPS: readonly TeachingStep[] = [
   },
   {
     label: "retry",
-    caption: "④ 不合规就把「错在哪」回灌进 messages 再问一遍（回边回到①），到上限才放弃",
+    caption:
+      "④ 不合规就把「错在哪」回灌进 messages 再问一遍（回边回到①），到上限才放弃",
   },
   {
     label: "object",
-    caption: "⑤ 一旦校验通过，就产出一个干净的结构化对象，交给下游程序或 Agent 直接用",
+    caption:
+      "⑤ 一旦校验通过，就产出一个干净的结构化对象，交给下游程序或 Agent 直接用",
   },
 ];
 
@@ -270,7 +274,8 @@ export function AaStructuredOutputFlowDiagram() {
             脏输出怎么变成干净结构化对象：剥壳 → 校验 → 不合规回灌重试
           </text>
           <text x={LEFT} y="50" fontSize="11" fill="var(--text-secondary)">
-            模型回话 → extract_json 剥壳 → schema 校验 →（不合规回灌再试 / 合规产出对象）
+            模型回话 → extract_json 剥壳 → schema 校验 →（不合规回灌再试 /
+            合规产出对象）
           </text>
 
           {/* ===== 主行节点间箭头（先画，落在节点之下，不穿字）===== */}

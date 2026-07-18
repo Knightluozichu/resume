@@ -1,0 +1,218 @@
+---
+title: "第3章：Basic Data Types"
+type: C
+section: "Go 程序设计语言 · 数值、文本与常量"
+order: 3
+description: "对齐原书第 3 章：Integers、Floating-Point Numbers、Complex Numbers、Booleans、Strings 与 Constants。"
+demo: true
+math: false
+sourceUrl: "https://www.gopl.io/"
+draft: false
+---
+
+import {
+  GoplFloatingComplexLab,
+  GoplIntegerRepresentationLab,
+  GoplUtf8ConstantLab,
+} from "@/components/mdx/go-programming-language/diagrams/basic-data-types";
+
+<Objectives>
+
+- 能解释 signed/unsigned integer types 的选择依据，推导 conversion、overflow、bitwise operation、shift 与 formatted output 的结果
+- 能分析 float32/float64 rounding、Inf/NaN、complex64/complex128 与 bool short-circuit 的边界
+- 能区分 string bytes、UTF-8 rune traversal、conversion 与 Unicode packages，并判断 iota/untyped constants 的 representability
+
+</Objectives>
+
+## 为什么 Basic Data Types 是“值域 + 运算 contract”
+
+type 不只是 memory width。它同时规定 value set、zero value、合法 operators、comparison、conversion 与 formatting。原书按 Integers、Floating-Point Numbers、Complex Numbers、Booleans、Strings、Constants 展开，从机器数值走到 Unicode 和 compile-time precision。
+
+<Term def="int8/16/32/64 与 uint8/16/32/64 这类明确指定位宽和 signedness 的 integer type；用于 wire/storage 边界时比 machine-sized int 更可预测。">fixed-width integer</Term>
+
+先预测：byte pattern `10000010` 作为 int8 与 uint8 各是什么，`math.NaN() == math.NaN()` 是否成立，`len("语言")` 返回 2 还是 6，以及 `const x = 1 << 100` 为什么可以声明却不能赋给 uint64。
+
+## 3.1 Integers：width、signedness 与 bit operations
+
+Go 提供 signed `int8`、`int16`、`int32`、`int64`，unsigned `uint8`、`uint16`、`uint32`、`uint64`，以及 machine-sized `int`、`uint`、address-sized `uintptr`。`byte` 是 uint8 alias，`rune` 是 int32 alias。即使 int 与 int64 width 在某平台相同，它们也是不同 types，assignment 需要 conversion。
+
+<Stepper>
+  <Step title="切换同一 8-bit pattern 的 signedness">
+    <GoplIntegerRepresentationLab />
+  </Step>
+  <Step title="执行 shift 并区分数学值与截断值">
+    shift expression 可先产生更大 untyped/typed value；赋回 fixed-width target 时必须检查 range 与 overflow contract。
+  </Step>
+  <Step title="把 value 以 decimal、hex 与 binary 格式化">
+    `fmt.Printf("%d %[1]x %[1]b\n", x)` 对同一 operand 给出十进制、十六进制和二进制证据。
+  </Step>
+</Stepper>
+
+```go
+var u uint8 = 255
+fmt.Println(u, u+1, u*u) // 255 0 1: modulo 2^8
+
+var x uint8 = 1<<1 | 1<<5
+fmt.Printf("%08b\n", x)
+x &^= 1 << 1 // bit clear
+```
+
+binary arithmetic/comparison operands 通常必须是同 type。signed to unsigned conversion 保留 bit pattern modulo target width，不是“负数自动报错”；循环若倒序使用 uint，`i >= 0` 永远为 true，容易 underflow。长度、索引和一般计数优先 int；只有 bit set、protocol field 或 modular arithmetic 明确需要时才选 unsigned。
+
+operator precedence 把 multiplicative、additive、comparison、logical 分层；不确定时用 parentheses 表达意图。left/right shift 的右 operand 可以是 unsigned integer，结果 type 通常跟左 operand；对 signed negative value 做 bit reasoning 时先明确 two's-complement 与 conversion target。
+
+<Callout type="trap" title="用 uint 表示绝不为负的业务数量">
+unsigned 不能替代 validation。两个合法数量相减仍可能 underflow，而且 int/uint conversion 会污染索引和标准库 API；先验证 domain，再选择与运算链匹配的 type。
+</Callout>
+
+## 3.2 Floating-Point Numbers：rounding、Inf 与 NaN
+
+Go 的 floating-point types 是 `float32` 与 `float64`，遵循 IEEE 754 表示。float32 约 6 位十进制精度，float64 约 15 位；除图像等受限 storage 外通常优先 float64，避免中间计算过早 rounding。literal 可用 decimal 或 scientific notation。
+
+<Term def="IEEE 754 中的 +Inf、-Inf 与 NaN；它们可由 math.Inf/math.NaN 创建，必须用 math.IsInf/math.IsNaN 分类，不能用普通 equality 判断 NaN。">floating special value</Term>
+
+```go
+for x := 0; x < 8; x++ {
+    fmt.Printf("x = %d e^x = %8.3f\n", x, math.Exp(float64(x)))
+}
+
+nan := math.NaN()
+fmt.Println(nan == nan, nan < nan, nan > nan) // false false false
+```
+
+floating value 只近似多数 decimal fractions，因此 money/identity key 不应依赖 exact float equality。比较测量结果时定义 absolute/relative tolerance 与 NaN policy。division by zero 是否产生 Inf 取决于 operands 与 compile-time context；不要通过故意除零构造 special values，使用 math package 并显式检查。
+
+## 3.3 Complex Numbers：二维数值与 complex plane
+
+`complex64` 由两个 float32 构成，`complex128` 由两个 float64 构成；builtins `complex(real, imag)`、`real(z)`、`imag(z)` 建立和拆解值，`math/cmplx` 提供 Abs、Sqrt、Exp 等运算。imaginary literal 可写 `3i`。
+
+<Stepper>
+  <Step title="比较 finite、Inf 与 NaN 的 equality">
+    <GoplFloatingComplexLab />
+  </Step>
+  <Step title="切换 complex mode 并移动 real/imaginary components">
+    point `(real, imag)` 在 complex plane 上形成 vector，magnitude 由 hypot 给出，phase 由 atan2 给出。
+  </Step>
+  <Step title="选择 complex64 或 complex128">
+    两者的 component precision 分别对应 float32/float64；转换会同时舍入 real 与 imaginary parts。
+  </Step>
+</Stepper>
+
+<Term def="由 real 与 imaginary components 组成的数值；complex64/complex128 分别以 float32/float64 保存两部分，可在 complex plane 上解释。">complex number</Term>
+
+Mandelbrot 等 fractal renderer 会对每个 pixel 映射 complex coordinate，反复迭代 `z = z*z + c`，按 escape speed 着色。这里 type boundary 仍重要：pixel coordinates 是 integers，normalized plane coordinates 是 floats，迭代 state 是 complex；每一步 conversion 都应有清晰含义。
+
+## 3.4 Booleans：条件而非整数标志
+
+`bool` values 只有 `true` 与 `false`，zero value 是 false。Go 不允许把 0/1 隐式转换为 bool，也不允许把 bool 当 integer arithmetic。`&&` 与 `||` 从左到右 short-circuit，所以可安全写 `s != "" && s[0] == 'x'`。
+
+```go
+func btoi(b bool) int {
+    if b { return 1 }
+    return 0
+}
+
+func itob(i int) bool { return i != 0 }
+```
+
+显式 helper 比散落 conversion trick 更清楚。boolean expression 应直接表达 predicate，避免 `if condition == true`。short-circuit 右侧若有 side effect 会让执行依赖左值；更稳妥的设计让 predicates pure，把副作用拆成 statements。
+
+## 3.5 Strings：immutable bytes、UTF-8 与 rune
+
+string 是 immutable byte sequence，不保证 bytes 一定是 valid UTF-8。`len(s)` 返回 byte count，`s[i]` 取第 i 个 byte，slice `s[i:j]` 也按 byte offsets；index 越界 panic。immutability 允许多个 string values 安全共享 underlying bytes。
+
+<Term def="用 range 或 utf8.DecodeRuneInString 按 Unicode code point 解码 string 的过程；它与 byte indexing 不同，遇到 invalid encoding 会产生 RuneError。">UTF-8 rune traversal</Term>
+
+<Stepper>
+  <Step title="输入 ASCII 与中文并比较 bytes/runes">
+    <GoplUtf8ConstantLab />
+  </Step>
+  <Step title="用 range 记录 byte index 与 decoded rune">
+    range 的 index 是每个 rune 起始 byte offset，不是第几个字符；组合字符还可能让 user-perceived character 与 rune 数不同。
+  </Step>
+  <Step title="把 untyped shift constant 放入 uint8 context">
+    constant 保持精确值，assignment 时才检查 target representability；`1 << 8` 因 256 超出 uint8 而编译失败。
+  </Step>
+</Stepper>
+
+```go
+s := "Hello, 世界"
+fmt.Println(len(s))                    // bytes
+fmt.Println(utf8.RuneCountInString(s)) // runes
+for i, r := range s {
+    fmt.Printf("%d\t%q\t%[2]d\n", i, r)
+}
+```
+
+string literal 可用 interpreted quotes，支持 escapes；raw string 用 backquotes，内容基本按原样保留，适合 regex/HTML/template fragments。conversion `[]rune(s)` 解码 code points，`[]byte(s)` 复制 raw bytes，`string(runes)` 编码 UTF-8。频繁构造文本用 `strings.Builder` 或 bytes.Buffer，避免 quadratic concatenation。
+
+标准库按层分工：`strings` 操作 strings，`bytes` 操作 byte slices，`strconv` 做 number/bool quoting conversion，`unicode` 按 rune category/case，`unicode/utf8` 编解码 UTF-8。normalize、grapheme cluster 与 locale rules 不由 rune count 自动解决。
+
+<Callout type="trap" title="把 s[i] 当第 i 个字符">
+index 返回 byte；对 multibyte UTF-8 直接切片可能截断 encoding。按 code point 用 range/utf8，按用户可见字符需要额外 grapheme segmentation，并先定义 invalid UTF-8 policy。
+</Callout>
+
+## 3.6 Constants：compile-time expression、iota 与 untyped precision
+
+constant expression 在 compile time 求值，值必须是 boolean、string 或 number。constants 不可取 address。多个 const declarations 可共享 initializer；`iota` 在每个 const declaration group 从 0 开始逐行递增，常用于 enum/bit flags/size constants。
+
+<Term def="尚未固定为具体 machine type 的 compile-time boolean/string/numeric value；它可保持更高精度，进入 typed context 时按 default type 或 target representability 决定类型。">untyped constant</Term>
+
+```go
+type Weekday int
+const (
+    Sunday Weekday = iota
+    Monday
+    Tuesday
+)
+
+const (
+    _ = 1 << (10 * iota)
+    KiB
+    MiB
+    GiB
+)
+```
+
+untyped constants 的 default types 通常是 bool、rune、int、float64、complex128、string，但在 assignment/call/binary expression context 可适配目标 type，只要 value 可表示。`const huge = 1 << 100` 本身合法；赋给 uint64 时 compile-time overflow。typed constant 则从声明起受其 type range/operators 约束。
+
+不要让 iota 编号成为持久化 wire contract，除非显式固定值并测试兼容性；中间插入一行会改变后续隐式编号。bit flags 可用 `1 << iota`，但要预留 width、组合 mask 和 unknown-bit policy。
+
+## 本章回顾：每个值都带着边界
+
+1. integer width/signedness 决定 range、overflow 与 bit interpretation；conversion 不是 validation。
+2. float32/float64 有 rounding、Inf、NaN contract；complex64/128 把两个 floating components 组成 plane value。
+3. bool 不与 integer 隐式互换，logical operators short-circuit。
+4. string 是 immutable bytes；UTF-8 rune traversal、byte offset 与用户可见字符是三种不同粒度。
+5. constants 在 compile time 求值，iota 生成序列，untyped constant 到 typed context 才接受可表示性检查。
+
+<Exercises>
+
+**问题 1：解析 8-bit protocol flag 时，为什么应使用 uint8 而不是 int8，怎样清除第 3 位并保留其他位？**
+
+<Answer>protocol field定义的是8个bits而非有符号数量，uint8让shift、mask和formatting不受sign extension干扰。清除bit index 3写`flags &^= 1 << 3`；读取写`flags&(1<<3) != 0`。接收更宽integer时先验证0..255再conversion，不能依赖截断。</Answer>
+
+**问题 2：怎样同时验证 floating computation 与 complex renderer，避免 NaN 悄悄扩散？**
+
+<Answer>先为输入定义finite/range policy，每个关键阶段用math.IsNaN/IsInf分类；普通`x==x`不能替代IsNaN。比较finite结果使用明确absolute/relative tolerance。complex值分别检查real/imag或cmplx.Abs，pixel mapping还要验证integerbounds；出现special value时记录输入与stage并停止着色传播。</Answer>
+
+**问题 3：一个 API 接收 UTF-8 用户名并分配自增 role flags，string/rune/iota 各有哪些稳定性风险？**
+
+<Answer>先决定invalidUTF-8、normalization、grapheme和byte/rune长度限制；len是bytes，range是runes，二者都不等于用户可见字符。username比较需要一致normalization/case policy。iota若作为持久化role bit，必须显式固定每个值、预留width并测试unknown bits，不能因中间插项改变既有wire/storage含义。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="fixed-width integer" definition="明确指定位宽与 signedness 的 integer type。" />
+  <GlossaryItem term="floating special value" definition="IEEE 754 的 +Inf、-Inf 与 NaN 分类值。" />
+  <GlossaryItem term="complex number" definition="由 real 与 imaginary floating components 组成的二维数值。" />
+  <GlossaryItem term="UTF-8 rune traversal" definition="按 Unicode code point 解码 string，而不是逐 byte 索引。" />
+  <GlossaryItem term="untyped constant" definition="进入 typed context 前保持 compile-time 精确值的常量。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="The Go Programming Language, Chapter 3: Basic Data Types"
+  adaptedUrl="https://www.gopl.io/"
+/>

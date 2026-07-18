@@ -1,0 +1,269 @@
+---
+title: "第3章 Lists, Stacks, and Queues：线性结构的接口与表示"
+type: C
+section: "线性结构与树"
+order: 2
+description: "按第3版原章从 ADT 与 List 语义出发，对照 STL vector/list，拆解二者实现，再用 Stack 与 Queue 验证受限接口和表示选择。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+draft: false
+---
+
+import { DsaAdtBoundaryDiagram, DsaVectorGrowthLab, DsaListSentinelLab, DsaIteratorInvalidationLab, DsaStackExpressionLab, DsaQueueRingLab, DsaContainerChoiceLab } from "@/components/mdx/dsa-cpp/diagrams/lists-stacks-queues";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释 ADT、container representation 与 iterator 之间的边界
+- 能计算 vector 扩容、list 插删、stack 与 queue 操作的成本
+- 能实现具有 size/capacity 不变量的动态数组和哨兵双向链表
+- 能分析 iterator invalidation、边界状态与异常语义
+- 能设计适配随机访问、局部插删、LIFO 或 FIFO 工作负载的容器
+
+</Objectives>
+
+## 从“List 不是 linked list”开始
+
+abstract data types（<Term def="只规定值域、操作和语义，不规定数组、节点或内存布局的抽象数据类型。">抽象数据类型</Term>）先回答“调用者能做什么”。representation 才回答“怎样存”。把 List ADT 直接等同 linked list，会把一种实现误当接口本身；连续 vector 同样可以实现 sequence。
+
+先预测一个日志 buffer：需要按下标读取、主要尾部追加、很少在中间插入。linked list 的中间 insert 若已有 iterator 是 O(1)，却要为每个节点分配内存，随机下标是 O(N)，遍历还伴随 pointer chasing；vector 偶尔扩容 O(N)，但顺序读和尾插通常更快。选择数据结构必须看完整 operation mix。
+
+官方目录的七节是 **Abstract Data Types (ADTs)、The List ADT、vector and list in the STL、Implementation of vector、Implementation of list、The Stack ADT、The Queue ADT**。本章沿这个顺序，从语义走到两种表示，再由受限 ADT 检查是否真正理解了接口。
+
+<DsaAdtBoundaryDiagram />
+
+## 3.1 Abstract Data Types (ADTs)
+
+一个 ADT 由 objects 与 operations 定义。List 的 objects 是有序元素序列，常见 operations 包括 size、find、insert、erase；Stack 只暴露一端；Queue 从一端进入、另一端离开。ADT 的正确性不依赖 C++ class，但 class 可以把 contract 与 private state 绑定。
+
+每个 operation 还要写：
+
+- precondition，例如 `pop` 需要非空；
+- postcondition，例如 insert 后 size 增1且原相对次序保持；
+- failure policy，例如抛 `UnderflowException`；
+- complexity promise，例如 iterator 已知时 list erase 是 constant。
+
+同一个 big-O 可能隐藏不同条件。“list insert O(1)”假设已经持有 insertion iterator；若先按下标走到第 i 个节点，定位仍是 O(i)。
+
+## 3.2 The List ADT
+
+List ADT（<Term def="保存有序元素序列并支持位置遍历、插入和删除的接口，不绑定具体存储。">表ADT</Term>）的核心不变量是 logical order。array representation 用 index 表位置；linked representation 用 node/iterator 表位置。
+
+对 sequence `[a,b,c]`，在 b 前 insert x 后必须得到 `[a,x,b,c]`；erase b 后其他元素顺序不变。随机 access、iterator stability、insert cost 和 memory overhead 由 representation 决定，不属于抽象序列本身。
+
+iterator 把 traversal position 封装成可复制对象。`begin()` 指向首元素，`end()` 是 one-past-the-end marker，不能 dereference；half-open range `[begin,end)` 允许空序列自然满足 begin==end。
+
+## 3.3 vector and list in the STL
+
+STL中的vector与list（<Term def="分别提供连续动态数组和双向链表语义，并共享 iterator/range 风格的标准容器。">STL中的vector与list</Term>）有共同接口，却有不同 guarantee。
+
+| 操作 | `vector` | `list` |
+|---|---:|---:|
+| `operator[]` | O(1) | 不提供 |
+| 尾部 `push_back` | 均摊 O(1) | O(1) |
+| 已知位置 insert/erase | O(N) 搬移 | O(1) 重连 |
+| 顺序遍历 | 连续、cache 友好 | 节点跳转 |
+| iterator stability | reallocation/erase 会失效 | 通常只有 erased element 失效 |
+
+<DsaIteratorInvalidationLab />
+
+STL algorithm 通过 iterator category 工作。vector iterator 支持 random access，list iterator 只 bidirectional；对 list 调 `std::advance` 前进 k 步仍要 O(k)。泛型接口相同不代表 capability 与 cost 相同。
+
+<Callout type="trap" title="看到 O(1) insert 就选 list">
+若没有现成 iterator，先定位位置可能 O(N)；节点 allocation、额外双指针与 cache miss 也会支配。必须把定位、修改和后续遍历作为端到端 operation 计费。
+</Callout>
+
+## 3.4 Implementation of vector
+
+vector实现（<Term def="用连续动态数组、logical size、allocated capacity 和倍增扩容实现的序列容器。">vector实现</Term>）维护三个核心字段：`theSize`、`theCapacity`、`objects`。始终满足：
+
+1. 0 ≤ theSize ≤ theCapacity；
+2. `[0,theSize)` 是已使用元素；
+3. `[theSize,theCapacity)` 是 spare storage；
+4. `objects` 拥有一段 capacity 大小的数组。
+
+<DsaVectorGrowthLab />
+
+官方第3版 `push_back` 在满容量时调用 `reserve(2 * theCapacity + 1)`，随后写入新元素：
+
+```cpp
+void push_back(const Object& x) {
+    if (theSize == theCapacity)
+        reserve(2 * theCapacity + 1);
+    objects[theSize++] = x;
+}
+```
+
+一次 reallocation 要分配新数组、复制 size 个元素、释放旧数组，因此 worst case O(N)。但 capacity 倍增后，在下一次扩容前可完成约 N 次 constant pushes。N 次 push 的总复制量是几何级数，小于2N，所以 amortized O(1)。
+
+`reserve` 改 capacity 而不凭空增加 logical elements；`resize` 改 size，必要时先扩 capacity。把两者混用会让未构造/无效元素进入可见范围。
+
+```cpp
+void reserve(int newCapacity) {
+    if (newCapacity <= theCapacity) return;
+    Object* old = objects;
+    objects = new Object[newCapacity];
+    for (int i = 0; i < theSize; ++i)
+        objects[i] = old[i];
+    theCapacity = newCapacity;
+    delete[] old;
+}
+```
+
+第3版教学代码手写 Big Three；现代 `std::vector` 还处理 allocator、move、exception guarantee 和 element destruction。教学实现的价值是暴露 size/capacity 与 invalidation 的因果关系，不应当直接替代标准库。
+
+## 3.5 Implementation of list
+
+list实现（<Term def="用双向节点、head/tail 哨兵、size 与 iterator 实现的序列容器。">list实现</Term>）为每个 node 保存 data、prev、next。head/tail 不保存业务元素，空表也始终有：
+
+```text
+head.next == tail
+tail.prev == head
+size == 0
+```
+
+<DsaListSentinelLab />
+
+在 iterator itr 指向的节点 p 前插入 x，只需创建一个 node 并改四条 links：
+
+```cpp
+iterator insert(iterator itr, const Object& x) {
+    Node* p = itr.current;
+    ++theSize;
+    return iterator(
+        p->prev = p->prev->next = new Node(x, p->prev, p)
+    );
+}
+
+iterator erase(iterator itr) {
+    Node* p = itr.current;
+    iterator next(p->next);
+    p->prev->next = p->next;
+    p->next->prev = p->prev;
+    delete p;
+    --theSize;
+    return next;
+}
+```
+
+返回 successor iterator 让 range erase 能写成 `itr = erase(itr)`，避免递增已经失效的 iterator。`clear` 反复 pop_front，destructor 再 delete 两个 sentinels；copy assignment 先 clear，再逐个 push_back，保证目标与源节点独立。
+
+<Callout type="trap" title="erase 后继续使用原 iterator">
+被删 node 已释放，原 iterator 的 current 是 dangling pointer。即使 successor 地址看起来仍可访问，也属于未定义行为；必须使用 erase 返回的新位置。
+</Callout>
+
+## 3.6 The Stack ADT
+
+Stack ADT（<Term def="只允许最近压入元素最先弹出的 LIFO 受限序列。">栈ADT</Term>）暴露 push、pop、top、empty。限制接口是优势：调用者不能随意访问中间元素，representation 可由 vector back 或 list end 实现。
+
+典型应用包括 function call stack、balanced delimiters、infix-to-postfix conversion、postfix evaluation 和 undo history。对 postfix `3 4 + 2 *`：
+
+1. 数字压栈；
+2. 运算符弹出右、左 operands；
+3. 计算后结果压回；
+4. 最终栈恰有一个值14。
+
+<DsaStackExpressionLab />
+
+operand 顺序不能反。对 subtraction/division，第一次 pop 是 rhs，第二次是 lhs。underflow 和最终剩余多个值都表示 expression malformed。
+
+## 3.7 The Queue ADT
+
+Queue ADT（<Term def="按先入先出 FIFO 规则从 rear 入队、从 front 出队的受限序列。">队列ADT</Term>）用于 event loop、BFS、producer/consumer buffer 和 scheduling。linked list 可在 tail insert、head erase；array 版本不能每次 dequeue 都左移全部元素，应使用 circular indices。
+
+<DsaQueueRingLab />
+
+capacity 为 C 时，第 i 个逻辑元素位于 `(front+i) mod C`。保存 size 可区分 empty 与 full；另一种方案牺牲一个 slot，用 `front==back` 表 empty。两种都行，但 invariants 与 tests 必须一致。
+
+```cpp
+void enqueue(const Object& x) {
+    if (size == capacity) grow();
+    data[(front + size) % capacity] = x;
+    ++size;
+}
+
+void dequeue() {
+    if (size == 0) throw UnderflowException{};
+    front = (front + 1) % capacity;
+    --size;
+}
+```
+
+## 从操作组合选择表示
+
+<DsaContainerChoiceLab />
+
+<Stepper>
+  <Step title="先写 ADT 语义">
+    <DsaAdtBoundaryDiagram />
+    固定操作、空状态、失败策略和次序保证，再讨论数组或节点。
+  </Step>
+  <Step title="连续序列核对 size/capacity">
+    <DsaVectorGrowthLab />
+    测满容量 push、reserve smaller/larger、copy 和 reallocation 后 iterator。
+  </Step>
+  <Step title="链式序列核对四条 links">
+    <DsaListSentinelLab />
+    空表、首尾插删、单元素删除都必须保持 sentinels 与 size 一致。
+  </Step>
+  <Step title="受限接口验证操作顺序">
+    <DsaStackExpressionLab />
+    Stack 检查 LIFO operand order；Queue 检查 wrap-around 后 FIFO 次序。
+  </Step>
+  <Step title="按完整 workload 选择容器">
+    <DsaContainerChoiceLab />
+    同时计定位、修改、遍历、allocation、cache 和 iterator stability。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. ADT 规定对象与操作语义，representation 决定布局和成本。
+2. List 是有序 sequence 抽象，不等于 linked list。
+3. vector 连续且支持 O(1) indexing，list 用节点换取已知位置 O(1) relink。
+4. vector 以 size/capacity 分离和倍增扩容实现 amortized O(1) push_back。
+5. list 的 head/tail sentinels 消除首尾特判，erase 返回 successor iterator。
+6. iterator stability 是容器契约的一部分，不能把 iterator 当永久 pointer。
+7. Stack 限制为 LIFO，Queue 限制为 FIFO；限制接口让不变量更强。
+8. ring buffer 用 modulo 复用数组空间，避免 dequeue 搬移所有元素。
+
+<Exercises>
+
+**问题 1：capacity=8、size=8 的 vector 连续执行一次 push 后为何是 worst-case O(N)，却仍称 push_back 均摊 O(1)？**
+
+<Answer>这次要分配更大数组并复制8个元素，所以是O(N)。但倍增后获得约N个spare slots；从容量1到N的所有复制量形成1+2+4+…的小于2N级数，分摊到N次push后每次常数。</Answer>
+
+**问题 2：双向哨兵 list 删除 p 时必须更新哪些连接？**
+
+<Answer>令before=p.prev、after=p.next，需要before.next=after与after.prev=before，然后释放p并减少size。因为before/after可以是head/tail哨兵，首尾删除无需额外null分支。</Answer>
+
+**问题 3：postfix `8 3 - 2 /` 的结果是多少，为什么弹栈顺序重要？**
+
+<Answer>遇到减号先弹3作rhs，再弹8作lhs，得到5并压栈；遇到除号先弹2，再弹5，整数除法结果2。若反转operand顺序会算3-8或2/5，语义错误。</Answer>
+
+**问题 4：ring queue capacity=8、front=6、size=4 时元素占哪些physical slots，back在哪里？**
+
+<Answer>logical indices 0..3 映射到(6+i) mod 8，即slots 6、7、0、1；下一个enqueue位置back=(6+4) mod 8=2。wrap-around不改变FIFO逻辑顺序。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="抽象数据类型">规定值与操作语义但隐藏表示的接口。</GlossaryItem>
+  <GlossaryItem term="表ADT">支持有序遍历、位置插入与删除的sequence抽象。</GlossaryItem>
+  <GlossaryItem term="STL中的vector与list">连续动态数组与双向链表标准容器。</GlossaryItem>
+  <GlossaryItem term="vector实现">由size、capacity和连续owned array构成的动态序列。</GlossaryItem>
+  <GlossaryItem term="list实现">由双向nodes、head/tail sentinels和iterators构成的序列。</GlossaryItem>
+  <GlossaryItem term="栈ADT">最近进入元素最先离开的LIFO接口。</GlossaryItem>
+  <GlossaryItem term="队列ADT">最早进入元素最先离开的FIFO接口。</GlossaryItem>
+  <GlossaryItem term="iterator失效">容器操作后位置对象不再指向合法元素的状态。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  name="Data Structures and Algorithm Analysis in C++, 3rd Edition · Chapter 3 Lists, Stacks, and Queues"
+  href="https://www.informit.com/store/data-structures-and-algorithm-analysis-in-c-plus-plus-9780321441461"
+  author="Mark Allen Weiss"
+  license="原书与官方示例代码版权归作者及 Pearson/Addison-Wesley 所有；本章依据官方完整目录及作者公开的第3版 Vector.h/List.h 独立重构教学内容"
+/>

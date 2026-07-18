@@ -1,0 +1,184 @@
+---
+title: "Chapter 1. The CLR's Execution Model"
+type: C
+section: "CLR via C# 4e · CLR Basics"
+order: 1
+description: "从托管模块与程序集一路追到CLR装载、IL验证、JIT本机码、CTS/CLS/FCL和非托管互操作，建立可验证的执行模型。"
+demo: true
+math: false
+sourceUrl: "https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457"
+draft: false
+---
+
+import { CvcCompilationPipelineLab, CvcIlVerificationLab, CvcRuntimeContractLab } from "@/components/mdx/clr-via-csharp/diagrams/clr-execution-model";
+
+<Objectives>
+
+- 能描述从C#源文件、托管模块、程序集、CLR装载到JIT本机码的完整执行链
+- 能区分metadata合法、IL可验证、unsafe互操作与运行期检查四种边界
+- 能分析CLR、CTS、CLS、FCL各自负责的契约，并设计跨语言与非托管接口
+
+</Objectives>
+
+## 为什么先建立Execution Model
+
+阅读CLR代码时，最容易犯的错误是把“编译成功”“程序集能加载”“方法能JIT”“业务行为正确”当成同一个结论。它们其实属于不同阶段：编译器只对源语言负责，metadata描述静态结构，loader解析identity与依赖，verifier推理类型安全，JIT针对当前进程生成本机码，GC和异常系统再维护运行期语义。只要把失败放回正确阶段，`FileLoadException`、`TypeLoadException`、`InvalidProgramException`、`BadImageFormatException`以及本机崩溃就不再混成一团。
+
+先预测：IL相同的程序集在x64和Arm64上生成的机器指令是否必须相同；程序集通过强名称签名后是否自然安全；方法从未调用时是否一定已经JIT；`unsafe`是否意味着CLR完全不管理该方法；CLS不兼容的私有成员是否会破坏跨语言公共API。把答案写下，再用本章三条证据链纠正直觉。
+
+<Term def="包含PE/CLR头、metadata、IL和可选资源，但不一定独立定义部署身份的编译输出。">managed module</Term>
+
+## Compiling Source Code into Managed Modules
+
+C#编译器读取源代码和references，完成词法、语义、重载、泛型约束与可访问性检查，然后输出PE/COFF格式的托管模块。模块里有CLR header、metadata tables、strings/blobs/guids heaps和方法IL；对纯托管方法而言，它通常还没有最终CPU指令。`TypeDef`、`MethodDef`、`Field`记录定义，`TypeRef`、`MemberRef`记录对外部定义的引用，token只是表号与行号编码，必须在所属模块中解释。
+
+编译时引用与运行时加载要分开：编译器看到reference assembly就足以检查API，但部署时CLR需要找到实现assembly。反过来，部署目录存在一个DLL，也不代表metadata中已引用或执行一定触及它。诊断时保存编译命令、目标框架、reference列表、输出hash和PDB，才能回答“代码是如何被生产的”。
+
+```csharp
+using System.Reflection;
+
+Assembly current = typeof(Program).Assembly;
+Module module = current.ManifestModule;
+
+Console.WriteLine(current.GetName().FullName);
+Console.WriteLine(module.Name);
+Console.WriteLine(module.ModuleVersionId); // 每次模块构建的MVID证据
+```
+
+## Combining Managed Modules into Assemblies
+
+Assembly manifest把一个或多个module、resource和外部assembly reference组织成部署与版本身份。第四版介绍的多模块assembly和Assembly Linker在现代SDK项目中不常见，但它揭示了关键事实：module是物理metadata/IL容器，assembly才是CLR名称、版本、culture与public key的身份单位。一个文件程序集只是常见简化，不是概念等价。
+
+<Term def="名称、版本、区域性、公钥信息以及加载上下文共同形成的程序集与类型解析边界。">assembly identity</Term>
+
+当consumer IL含有`AssemblyRef`和`TypeRef`时，loader先解析目标assembly，再在其中解析type。相同namespace与type name若来自不同assembly identity，或被不同load context私有加载，运行时仍可视为不同类型。因此排查cast失败不能只打印`FullName`，还要打印定义assembly与load context。
+
+<Stepper>
+  <Step title="切换source、module、assembly与native code"><CvcCompilationPipelineLab /></Step>
+  <Step title="建立产物账本">记录源文件、编译器版本、target framework、module MVID、assembly identity、references和资源。</Step>
+  <Step title="追踪首次执行">从入口方法开始记录依赖何时解析、类型何时初始化、方法何时首次编译，以及异常落在哪一层。</Step>
+</Stepper>
+
+## Loading the Common Language Runtime
+
+可执行托管程序先由host读取应用配置，选择并初始化合适CLR，再把入口assembly交给loader。现代`.NET`常由`dotnet`或apphost结合`.runtimeconfig.json`与`.deps.json`选择framework与dependency graph；本书第四版主要描述.NET Framework时代的MSCORWKS/CLR hosting，但“host先选择runtime，runtime再加载应用”的分层仍成立。
+
+Framework版本、runtime版本和C#语言版本并不相同。新编译器可以生成面向旧目标框架的代码，只要所需runtime语义与API存在；反之，机器安装了新runtime也不会自动让旧二进制拥有新reference API。部署诊断要同时报告编译器、TFM、runtime、RID/架构和host选择结果。
+
+## Executing Your Assembly's Code
+
+Loader为类型和方法建立运行时结构，但通常按需编译方法。首次调用可能经过precode/stub进入JIT；JIT读取IL、metadata signature、generic context和CPU能力，执行优化并分配native code。后续调用可直接进入已编译代码；分层编译还可能先生成快速的Tier 0，再根据热度生成优化Tier 1，所以“一个方法只有一份永不变化的机器码”不是可靠假设。
+
+<Term def="JIT依据实际架构、运行时版本、泛型实例和性能画像把同一IL专门化为当前进程的本机代码。">JIT specialization</Term>
+
+```csharp
+static long Sum(ReadOnlySpan<int> values)
+{
+    long total = 0;
+    foreach (int value in values)
+        total += value;
+    return total;
+}
+
+// IL表达托管语义；最终是否内联、向量化及使用哪些寄存器由当前JIT决定。
+Console.WriteLine(Sum([1, 2, 3, 4]));
+```
+
+预编译也不等于完全绕开runtime。ReadyToRun/AOT image仍带有metadata、fixup与兼容策略，某些泛型或动态代码可能需要JIT。本书的NGen代表同一类“提前生成本机代码、降低启动编译成本”的权衡，但现代部署应把NGen视为Framework时代机制，不直接照搬命令。
+
+## IL and Verification
+
+IL是基于求值栈的中间指令集，metadata signature给每个操作数、参数、返回值和局部变量提供类型背景。验证器尝试证明所有控制流汇合处栈形状一致，引用转换安全，初始化和可访问性规则成立。可验证代码使runtime无需信任编译器也能维持类型安全；metadata结构合法却仍可能包含不可验证IL，因此“能读取”与“可安全执行”是两道门。
+
+<Term def="从metadata结构合法、IL类型安全到运行期检查逐层确认代码可执行语义的证据边界。">verification boundary</Term>
+
+```il
+.method private hidebysig static int32 Add(int32 a, int32 b) cil managed
+{
+  .maxstack 2
+  ldarg.0
+  ldarg.1
+  add
+  ret
+}
+```
+
+这个方法入口栈为空，两个`ldarg`压入`int32`，`add`消费两个并压回一个，`ret`消费与返回类型相符的值。真正分析复杂IL时，要为每个basic block记录入口栈、异常区域和所有分支汇合，不要只顺序阅读文本。
+
+<Stepper>
+  <Step title="切换metadata、verifiable IL、unsafe与runtime guard"><CvcIlVerificationLab /></Step>
+  <Step title="手算求值栈">对一个含分支和异常处理的方法，为每条路径写出stack height与元素类型，检查汇合是否一致。</Step>
+  <Step title="归类失败证据">把bad image、type load、invalid program、cast、bounds和native crash分别放到结构、验证、运行期或ABI边界。</Step>
+</Stepper>
+
+<Callout type="trap" title="IL是平台无关的，所以执行性能也平台无关">
+IL携带可移植托管语义，JIT/AOT仍依据CPU、ABI、runtime版本、tier和profile生成本机代码。同一IL的布局、指令选择、内联和GC safe point都可能不同。
+</Callout>
+
+## Unsafe Code and Interoperability with Unmanaged Code
+
+`unsafe`允许指针、fixed buffer、stackalloc和绕过部分可验证规则，但代码仍在CLR方法、异常和GC世界中执行。危险在于GC可移动对象、native API遵循外部ABI、allocator与lifetime可能跨边界。Pinning只能暂时稳定地址，不能自动保证结构布局、字符编码、calling convention、线程亲和或回调寿命。
+
+托管到非托管调用通常通过P/Invoke；COM interop则加入identity、apartment和reference-counting适配。每个接口都要写清binary name、entry point、calling convention、参数宽度/符号、struct packing、字符串编码、buffer长度、所有权、错误码和回调线程。只要其中一项含糊，错误可能在调用后很久才表现为heap corruption。
+
+<Callout type="trap" title="unsafe只影响当前几行，不会改变系统设计">
+一处裸指针会引入pinning、ABI、所有权和故障隔离义务。代码块很小，验证与运维边界却可能扩大到整个进程。
+</Callout>
+
+## The Native Code Generator Tool: NGen.exe
+
+NGen把assembly安装为与特定runtime/机器条件相关的native image，以换取较少的启动JIT成本；代价是安装维护、磁盘占用、版本失效与优化信息不足。它不是源代码优化器，也不会免除loader、metadata、GC或异常服务。评估这类机制必须先测启动/稳态CPU、工作集、部署复杂度和更新频率，再决定是否值得。
+
+现代.NET常用ReadyToRun、crossgen2或Native AOT处理相似问题，但能力边界不同。学习原书时应保留NGen解释的成本模型，再把工具映射到当前目标runtime，而不是把2012年的具体部署命令当作今天的默认方案。
+
+## The Framework Class Library
+
+FCL/BCL提供字符串、集合、I/O、网络、反射、并发等库类型，它们建立在CLR类型、内存、异常和线程服务之上。Runtime能执行IL，不代表某个库API必然存在；API availability由目标框架和部署包决定。平台专属实现还可能在Windows、Linux和浏览器环境表现不同，所以公共库应把OS能力检测与fallback写进契约。
+
+## The Common Type System and The Common Language Specification
+
+CTS定义所有CLR语言共享的类型系统：类型成员种类、继承、可见性、调用约定、值类型与引用类型、装箱、泛型等。C#语法只是映射到CTS的一种前端。CLS则是面向跨语言公共API的保守子集，例如仅按大小写区分的两个公共成员、无符号类型暴露或某些重载可能让其他语言难以消费。私有实现可使用完整CTS，公共surface再接受CLS约束。
+
+<Term def="面向多种CLR语言消费者的公共API兼容子集，而不是完整CTS能力清单。">CLS surface</Term>
+
+<Stepper>
+  <Step title="切换CLR、CTS、CLS与FCL"><CvcRuntimeContractLab /></Step>
+  <Step title="审计公共API">列出public/protected签名，检查类型、名称、重载、异常和可空性是否适合目标语言消费者。</Step>
+  <Step title="做跨语言验证">从第二种CLR语言引用程序集，编译、调用、处理事件/泛型并观察真实metadata，而非只相信C#视角。</Step>
+</Stepper>
+
+## 本章回顾：每一层都要有证据
+
+1. 编译器把源代码变成含IL与metadata的managed module，manifest再把模块和资源组织成assembly identity。
+2. Host选择CLR，loader解析程序集与类型，JIT/AOT才生成目标相关的native code。
+3. Metadata合法、IL可验证、unsafe ABI正确和运行期行为正确是四个不同结论。
+4. CLR提供执行服务，CTS定义公共类型语义，CLS约束跨语言surface，FCL提供版本化API。
+5. 非托管边界必须明确布局、编码、所有权、线程与失败协议；小段unsafe也需要系统级证据。
+
+<Exercises>
+
+**问题 1：一个DLL能被metadata工具读取，却在调用某方法时抛InvalidProgramException，应如何定位？**
+
+<Answer>先确认文件结构和assembly references可解析，再反汇编失败方法，按basic block计算求值栈与类型，检查分支汇合、返回值、异常区域和generic signature。能读取metadata只证明结构门通过；InvalidProgramException通常要求检查IL/运行时生成器，而不是继续搜索部署路径。</Answer>
+
+**问题 2：如何证明某个性能回归来自JIT而不是源代码或I/O？**
+
+<Answer>固定输入、runtime与机器，采集方法tier、首次调用与稳态耗时、JIT事件和native disassembly；比较同一IL在不同runtime/配置下的代码大小、内联和指令。把I/O移出测量并预热，若IL相同而native code/tier证据变化，才有资格归因JIT。</Answer>
+
+**问题 3：设计一个公开给C#与另一CLR语言使用的native包装库，要验收哪些边界？**
+
+<Answer>内部P/Invoke明确ABI、布局、编码、buffer与所有权；public API只暴露稳定托管类型，检查CLS兼容、异常翻译、可空性和资源释放。分别从两种语言编译调用，覆盖成功、边界长度、取消、native错误与回调线程，并记录目标框架和平台矩阵。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="managed module" definition="承载CLR头、metadata、IL与可选资源的编译模块。" />
+  <GlossaryItem term="assembly identity" definition="由程序集名称等身份信息与加载边界共同决定的解析身份。" />
+  <GlossaryItem term="verification boundary" definition="结构、类型安全与运行期检查分层形成的验证边界。" />
+  <GlossaryItem term="JIT specialization" definition="JIT针对当前目标和画像把IL具体化为本机代码。" />
+  <GlossaryItem term="CLS surface" definition="供多种CLR语言可靠消费的公共API子集。" />
+</Glossary>
+
+<Attribution adaptedFrom="CLR via C#, Fourth Edition, Chapter 1: The CLR's Execution Model" adaptedUrl="https://www.microsoftpressstore.com/store/clr-via-c-sharp-9780735667457" />

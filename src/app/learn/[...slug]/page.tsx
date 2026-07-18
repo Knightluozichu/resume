@@ -11,6 +11,7 @@ import remarkMath from "remark-math";
 
 import { Comments } from "@/components/chapter/comments";
 import { Attribution } from "@/components/mdx/attribution";
+import { getChapterMdxComponents } from "@/components/mdx/chapter-component-registry";
 import { mdxComponents } from "@/components/mdx/mdx-components";
 import { getAdjacentChapters, getAllChapters, getChapter } from "@/lib/content";
 import {
@@ -99,6 +100,11 @@ export default async function ChapterPage({
   // rehypeCollectHeadings 就地填充本数组：编译时从正文 h2/h3 提取本页 TOC，
   // 已排除自定义组件容器内部的标题（如 Objectives 的「学习目标」）。
   const headings: TocHeading[] = [];
+  const chapterMdxComponents = await getChapterMdxComponents(
+    chapter.bookSlug,
+    chapter.sectionSlug,
+    chapter.chapterSlug,
+  );
 
   const { content } = await compileMDX({
     source: chapter.source,
@@ -108,6 +114,7 @@ export default async function ChapterPage({
     // 不再需要把 frontmatter 作为 scope 暴露给 MDX 表达式（scope 已移除）。
     components: {
       ...mdxComponents,
+      ...chapterMdxComponents,
       Attribution: (props) => (
         <Attribution sourceUrl={chapter.frontmatter.sourceUrl} {...props} />
       ),

@@ -1,0 +1,222 @@
+---
+title: "第 4 章 Event-driven Programming：从轮询到事件架构"
+type: A
+section: "Unity 脚本设计 · 世界与事件"
+order: 4
+description: "覆盖事件、事件管理与代码区域，建立发布者、管理器、订阅者、生命周期和性能证据。"
+demo: true
+math: false
+sourceUrl: "https://www.packtpub.com/en-us/product/mastering-unity-scripting-9781784390655"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Usc04EventDrivenProgrammingMapLab,
+  Usc04EventDrivenProgrammingExperimentLab,
+  Usc04EventDrivenProgrammingEvidenceLab,
+} from "@/components/mdx/unity-scripting/diagrams/usc-04-event-driven-programming";
+
+<Objectives>
+
+- 能解释轮询与事件驱动在触发时机、耦合和 CPU 成本上的差异
+
+- 能实现发布者、事件管理器和订阅者并配对完整订阅生命周期
+
+- 能复现并验证重复订阅、销毁后回调、顺序依赖和异常隔离的边界
+
+</Objectives>
+
+## 问题：为什么把所有检查放进 Update 会让正确逻辑逐渐变成性能问题
+
+先预测：1000 个监听对象每帧询问“门是否打开”，与门只在状态改变时发布一次事件，调用次数会差多少？事件驱动把工作从时间轮询转成状态变化触发，但它也引入订阅生命周期、顺序、重入和隐藏消费者。原章用 Events、Event management 和 MonoDevelop 的 #region 折叠建立这一转变。
+
+<Usc04EventDrivenProgrammingMapLab />
+
+## 原书边界与官方小节
+
+官方目录只有三个主小节：Events、Event management、Code folding in MonoDevelop with #region and #endregion。范围虽短，核心却是把高频 Update 工作迁移成事件，并集中管理事件关系。#region 是可读性工具，不应被误写成模块系统或性能优化。
+
+- **Events**
+- **Event management**
+- **Code folding in MonoDevelop with #region and #endregion**
+
+这些小节按官方目录唯一归属。本站重新组织解释、代码和实验，不逐字复制原文；现代补充必须放在迁移段，不能替换或重复计算原始单元。
+
+## 发布者到订阅者的生命周期契约
+
+发布者拥有状态并在真实变化时发出不可变载荷，事件管理层决定通道和可见范围，订阅者在启用期间注册并在禁用时注销。事件只说明“发生了什么”，不应让发布者知道每个消费者。调用是同步还是排队、顺序是否有语义、异常是否阻断后续监听者，都要成为显式契约。#region 只能折叠文件视觉，不能替代组件和程序集边界。
+
+<Usc04EventDrivenProgrammingExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="拥有状态并在变化发生时发布通知的对象。">事件源</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="描述已发生事实、供消费者读取的参数对象。">事件载荷</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="监听器注册、有效、注销与销毁之间的时间边界。">订阅生命周期</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="集中定义或路由多个事件通道的协调对象。">事件管理器</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="事件处理期间再次触发同一或相关事件导致嵌套执行的现象。">重入</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+术语若不能落到具体对象、状态和观测点，就仍停留在记忆层。读者应能为每个术语写出生产者、变换规则、消费者、正常值、边界值和失败信号。
+
+## 关键对象与数据流
+
+实验先用 Update 轮询门状态并统计检查次数，再改为门在 Opened 变化时发布事件。加入 UI、音频和任务三个订阅者，记录调用顺序和耗时；禁用其中一个对象，验证它不再响应；故意重复订阅和在回调中再次开门，保存重复调用与重入失败。最后用事件载荷取代消费者回查全局状态。
+
+排查时从最早可控输入开始，逐段检查中间状态和最终消费者。最终结果正确但中间链不符合预测，也不能立即签发，因为它可能依赖未记录的缓存、时序或 Editor 状态。
+
+## 三步可重复实验
+
+动手前先预测：只改变当前步骤的一项输入后，哪个日志、状态或像素应最先变化？实验期间固定 Unity 版本、场景、对象数量、时间步与目标平台，避免多个变量一起漂移。
+
+<Stepper>
+  <Step title="测量轮询基线">
+    <Usc04EventDrivenProgrammingMapLab />
+
+让多个消费者在 Update 读取同一状态，统计十秒检查次数、真正变化次数和 CPU 时间，固定对象数量与场景。
+
+```csharp
+public event Action<DoorOpened> Opened;
+public void Open() { if (isOpen) return; isOpen = true; Opened?.Invoke(new DoorOpened(name, Time.frameCount)); }
+```
+
+  </Step>
+  <Step title="迁移事件通道">
+    <Usc04EventDrivenProgrammingExperimentLab />
+
+由状态拥有者只在变化时发布带上下文载荷的事件，消费者在 OnEnable/OnDisable 成对订阅，比较调用次数。
+
+```csharp
+void OnEnable() => door.Opened += HandleOpened;
+void OnDisable() => door.Opened -= HandleOpened;
+```
+
+  </Step>
+  <Step title="破坏生命周期与顺序">
+    <Usc04EventDrivenProgrammingEvidenceLab />
+
+重复注册、禁用监听器、让回调抛异常或重入，记录后续消费者、状态一致性与修复策略。
+
+```csharp
+public readonly record struct DoorOpened(string DoorId, int Frame);
+```
+
+  </Step>
+</Stepper>
+
+## 事件契约必须写清四件事
+
+事件名称只描述“发生了什么”还不够，契约还要说明谁发布、载荷代表变化前还是变化后、允许在哪个生命周期阶段触发、消费者是否依赖顺序。例如 HealthChanged 应明确携带旧值、新值和来源，而不是让 UI 在回调中再次查询一个可能已变化的全局对象。发布者拥有事实，订阅者拥有反应；消费者不应反向修改发布者并立即触发同一事件，否则容易形成递归和隐蔽顺序依赖。
+
+订阅与注销应选择成对生命周期。场景组件通常在 OnEnable 注册、OnDisable 注销；长期服务需要在初始化和 Dispose 或销毁阶段配对。匿名 lambda 若没有保存引用，就无法用等价新 lambda 注销。静态事件会持有订阅者引用，使已销毁场景对象仍被托管委托保留。测试应反复启用、禁用、加载场景并统计监听者与回调次数，而不是只看一次点击。
+
+## 与轮询做公平对照
+
+- 固定事件源数量、消费者数量和状态变化频率，分别记录每帧查询次数与实际回调次数。
+- 测试消费者晚订阅时是否需要当前快照，避免只收到未来变化而错过初始状态。
+- 故意让一个消费者抛错，验证异常是否阻断后续消费者以及错误由谁隔离。
+- 连续发布相反状态，记录事件是否需要合并、排队或保持严格顺序。
+- 保存发布者销毁、消费者销毁和场景切换后三种监听者计数。
+
+#region 与 #endregion 只影响编辑器折叠，不能替代类型、接口或程序集边界。若一个事件管理器文件需要大量区域才能阅读，应检查它是否聚合了不相关领域。签发证据要包含事件时间线、载荷快照、监听者数量和一次故障注入，证明架构不仅减少 Update 轮询，也保留了可追踪因果链。
+
+还要专门验证“事件发生在订阅之前”的启动边界。场景加载时，配置服务可能先发布 Ready，随后启用的 UI 永远收不到这次通知；解决方法不是盲目延迟一帧，而是区分瞬时事件与可查询状态。瞬时输入只通知未来变化，长期状态则由所有者保存当前快照，新订阅者注册后主动读取。测试分别交换发布者和订阅者的启用顺序，确认界面、音效和任务系统都能得到一致初值。对于跨线程或异步来源，还必须把回调调度回允许访问 Unity 对象的主线程，并记录排队时刻、执行时刻和取消条件；否则事件架构表面解耦，实际却引入更难重放的时序错误。
+
+高频事件若每次都立即广播，还可能让消费者在同一帧重复计算。应明确哪些事实必须逐条保留，哪些状态变化可以在帧末合并，并为队列设置容量、丢弃与告警规则。压力测试连续发布千次位置变化和一次关键死亡事件，确认合并策略不会吞掉不可丢失的领域事实，时间线仍能解释最终状态。
+
+同时记录峰值队列长度、处理延迟和被合并数量，才能证明优化没有用静默丢失换取表面流畅。
+
+## 正常、边界与失败样本
+
+每章至少保存一个正常样本、一个极端边界和一个故意破坏配置。正常样本证明主路径，边界样本说明适用范围，失败样本证明诊断方法真的能抓到错误。
+
+<Callout type="trap">
+  **因果陷阱**：匿名 lambda
+  若没有保存引用，注销时可能创建了另一个委托，导致监听器持续残留。
+</Callout>
+
+<Callout type="trap">
+  **版本陷阱**：事件减少轮询不代表免费；高频事件、重载荷和同步长回调仍会阻塞主线程。
+</Callout>
+
+## 从 2015 年到现代 Unity
+
+现代 C# event、UnityEvent、ScriptableObject event channel 与消息总线都可实现事件驱动，但应按类型安全、序列化、性能和生命周期选择。#region 仍可用，却不应掩盖过大的类；真正边界应由组件、命名空间、程序集和测试体现。现代迁移保留“只在状态变化时通知”的原章不变量。
+
+迁移记录采用五列：原书载体、稳定不变量、现代实现、不可等价处、目标平台证据。允许替换工具和 API，不允许抹去原始问题或倒写历史。
+
+## 验收证据
+
+验收对比轮询与事件版的检查次数、实际通知次数、Profiler 时间和行为一致性。必须包含重复订阅、消费者禁用、异常监听器和重入样本，并证明场景卸载后监听器归零。
+
+证据包同时记录场景路径、代码版本、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜测隐藏状态即可重放，才算掌握而不只是读完。
+
+## 小结
+
+- 事件把高频询问改成状态变化通知
+- 发布者、载荷、订阅者和生命周期必须有明确契约
+- 同步事件仍可能产生阻塞、顺序和重入问题
+- #region 是代码阅读工具，不是运行时架构
+
+<Exercises>
+
+**问题 1** 为什么订阅常放 OnEnable/OnDisable？
+
+<Answer>
+  监听有效期与组件启用状态一致，禁用对象不会继续响应，重复启用也能成对管理。
+</Answer>
+
+**问题 2** 事件载荷为何应描述事实而非让消费者回查全局？
+
+<Answer>不可变上下文让消费者看到同一时刻的数据，减少竞态和隐藏依赖。</Answer>
+
+**问题 3** 怎样验证轮询迁移真的节省工作？
+
+<Answer>
+  固定场景后比较检查次数、变化次数、CPU marker 和行为结果，而不是只看代码行数。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="事件源">
+    拥有状态并在变化发生时发布通知的对象。
+  </GlossaryItem>
+  <GlossaryItem term="事件载荷">
+    描述已发生事实、供消费者读取的参数对象。
+  </GlossaryItem>
+  <GlossaryItem term="订阅生命周期">
+    监听器注册、有效、注销与销毁之间的时间边界。
+  </GlossaryItem>
+  <GlossaryItem term="事件管理器">
+    集中定义或路由多个事件通道的协调对象。
+  </GlossaryItem>
+  <GlossaryItem term="重入">
+    事件处理期间再次触发同一或相关事件导致嵌套执行的现象。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Alan Thorn《Mastering Unity Scripting》第一版官方目录与中文版身份资料"
+  adaptedUrl="https://www.packtpub.com/en-us/product/mastering-unity-scripting-9781784390655"
+/>

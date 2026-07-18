@@ -1,114 +1,270 @@
 ---
-title: 栈的压入、弹出序列
+title: "面试题31：栈的压入、弹出序列"
 type: C
-section: 栈和队列
-order: 3
-description: 使用辅助栈模拟给定压栈序列，判断一个弹出序列是否可能由合法栈操作产生。
+section: "第4章 解决面试题的思路"
+order: 33
+description: "按目标弹出值驱动辅助栈模拟，证明匹配时立即弹出不会丢失合法方案，并定位输入耗尽后的首个栈顶阻塞。"
 demo: true
-math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviews
+math: false
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/31_StackPushPopOrder/StackPushPopOrder.cpp"
 draft: false
 ---
 
+import { StackSequenceSimulationDiagram, StackTargetDecisionMap, StackSequenceCounterexampleDiagram, StackPushPopOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/stack-push-pop-order";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
 <Objectives>
 
-- 能用辅助栈完整模拟压入与弹出过程。
-- 掌握“只要栈顶等于下一个待弹出值，就持续弹出”的贪心规则。
-- 能判断非法序列产生的原因，而不是只背结论。
-- 能处理长度不一致、空序列、重复值等输入边界。
+- 能解释栈顶匹配目标时立即弹出为何不会丢失合法方案
+- 能计算合法与非法序列的逐步辅助栈状态和阻塞位置
+- 能实现作者指针版本及长度安全的现代容器版本
+- 能分析空序列契约、互异数字前提、重复值和空间上界
+- 能设计覆盖作者七组合法、非法、单元素与空指针测试
 
 </Objectives>
 
-## 核心思路
+## 从“元素集合相同就一定合法吗”开始
 
-给定压栈序列 `pushed = [1, 2, 3, 4, 5]`，判断 `popped = [4, 5, 3, 2, 1]` 是否可能。
+先预测：压入顺序为1、2、3、4、5，目标弹出顺序为4、3、5、1、2。两边元素完全相同，前3个目标也都能实现，整个序列合法吗？不合法。弹完5后辅助栈从底到顶剩1、2，下一目标却是1；2挡在1上方，栈不允许跨过2取1。
 
-我们不需要猜所有操作组合，只要按 `pushed` 顺序模拟：
+“**栈的压入、弹出序列**”问题考查的不是集合成员，而是后进先出约束。给定互不相同的压入数字后，判断第二个序列能否由某组合法push/pop交错产生。作者不枚举所有交错方式，而是使用<Term def="按给定压入顺序暂存尚未匹配元素，用栈顶尝试匹配下一个目标值的工作栈。">辅助栈</Term>逐个满足目标弹出值。
 
-1. 依次把 `pushed` 的元素压入辅助栈。
-2. 每压入一个元素后，检查辅助栈栈顶是否等于 `popped` 中下一个待弹出的元素。
-3. 如果相等，就持续弹出，并移动 `popped` 指针。
-4. 所有压入结束后，如果辅助栈为空，说明弹出序列合法。
+<StackSequenceCounterexampleDiagram />
 
-<StackPushPopOrderDiagram />
+一旦某个较晚压入的元素留在较早元素上方，它就必须更早弹出。非法序列的证据通常不是“结果不一样”，而是某个目标位于辅助栈内部、栈顶又无法再被新输入改变。
 
-## 为什么这个模拟是正确的？
+## 目标驱动的辅助栈模拟
 
-栈的弹出只有一个合法来源：当前栈顶。给定压入顺序后，每一步可选择的动作只有：
+维护两个指针：pNextPush指向下一个尚未压入的数字，pNextPop指向下一个必须弹出的目标。对当前目标重复执行以下规则：
 
-- 继续压入下一个元素。
-- 如果栈顶正好等于下一个目标弹出值，就弹出它。
+1. 如果辅助栈为空，或栈顶不等于目标，继续压入pNextPush。
+2. 若所有输入都已压入，栈顶仍不等于目标，判定false。
+3. 栈顶等于目标时，弹出栈顶并移动pNextPop。
+4. 所有目标处理完后，作者还要求<Term def="全部目标消费完成后，工作栈中不再残留任何已压入元素的终态。">辅助栈最终为空</Term>，才返回true。
 
-一旦栈顶等于目标弹出值，立刻弹出不会损失任何可能性；如果不弹，它仍然挡在栈顶，后续元素压上来只会让它更晚弹出。因此这个贪心模拟足以覆盖所有合法情况。
+<StackTargetDecisionMap />
 
-## 代码对照
+这正对应原书概念“**栈顶不等于下一个弹出数字时继续压栈**”。继续压入不是随意试探，而是当前无法弹目标时唯一可能让目标出现于栈顶的动作；输入一旦耗尽，栈顶覆盖关系再也无法改变。
 
-<CodeTabs>
-  <Tab label="C++">
+## 合法序列怎样被逐步消费
+
+以压入1、2、3、4、5，弹出4、5、3、2、1为例。为得到4，先压1到4并弹4；目标变5，压5并弹5；此时3、2、1已经依次位于栈顶，不再压入，连续弹出即可。
+
+<StackSequenceSimulationDiagram />
+
+把尚未弹出的目标称为<Term def="弹出序列中当前必须最先满足的元素；后续目标不能越过它提前处理。">下一弹出数字</Term>。算法始终只处理这一个目标。不能因为辅助栈顶恰好等于后面的目标就提前弹出，否则实际输出顺序已经改变。
+
+## 忠实还原作者的指针实现
+
+作者接口接收两个int数组首指针和一个共同长度nLength。它不能表达两边长度不同；调用方必须保证两个数组至少都有nLength个元素。空指针或非正长度直接返回false。
+
 ```cpp
-#include <vector>
 #include <stack>
+
+bool IsPopOrder(const int* pPush,
+                const int* pPop,
+                int nLength) {
+    bool possible = false;
+
+    if (pPush != nullptr && pPop != nullptr && nLength > 0) {
+        const int* pNextPush = pPush;
+        const int* pNextPop = pPop;
+        std::stack<int> stackData;
+
+        while (pNextPop - pPop < nLength) {
+            while (stackData.empty() ||
+                   stackData.top() != *pNextPop) {
+                if (pNextPush - pPush == nLength) {
+                    break;
+                }
+                stackData.push(*pNextPush);
+                ++pNextPush;
+            }
+
+            if (stackData.top() != *pNextPop) {
+                break;
+            }
+
+            stackData.pop();
+            ++pNextPop;
+        }
+
+        if (stackData.empty() &&
+            pNextPop - pPop == nLength) {
+            possible = true;
+        }
+    }
+    return possible;
+}
+```
+
+内层循环可能因栈顶匹配退出，也可能因输入耗尽break。随后比较栈顶与目标：不等就终止外层；相等就弹出并处理下一目标。在共同长度、每次目标成功都恰好弹一个元素的前提下，若还有未处理目标且全部输入已耗尽，辅助栈不可能为空，否则已弹数量会等于已压数量nLength，目标也应全部处理完。因此作者直接调用top在其契约内可达路径上是安全的；现代代码仍适合把empty检查写出来，让局部安全性更清晰。
+
+原题说明压入数字互不相同。互异性让每个值唯一标识一次push，证明和反例都没有身份歧义。若允许重复值，按“值序列是否存在某种合法操作”解释时同一贪心仍可工作；若每个对象身份不同但比较时只看值，答案可能掩盖身份顺序，接口应改用唯一ID。
+
+<Callout type="trap" title="只比较排序结果或频次表">
+两个序列元素相同只是必要条件。4、3、5、1、2与压入序列拥有相同集合，却要求1越过栈顶2先离开。必须模拟栈顶约束才能判定顺序可达性。
+</Callout>
+
+## 为什么匹配时立即弹出是安全的
+
+假设栈顶等于下一弹出数字x。任何合法操作序列最终都必须在输出其他目标之前弹出x，因为目标序列已经固定。若此刻不弹而继续push，新元素只会盖在x上方；这些新元素又不能先于x输出，只能先被弹掉但那会违反目标顺序。因此延迟x既没有创造新方案，也可能增加无用操作。
+
+反过来，栈顶不等于x时不能pop，因为那会输出错误值；唯一合法动作是继续按压入序列push。于是每一步动作由当前状态强制决定，所谓<Term def="在栈顶匹配时立即执行目标弹出、无需回溯搜索的局部选择规则。">强制贪心</Term>不是经验启发，而是由固定输出顺序推出。
+
+可用交换论证表达：若某个合法方案在x已位于栈顶时先执行若干不会输出的操作，再弹x，那么这些额外push最终必须在x前撤销，却撤销时会产生输出；与x是下一目标矛盾。因此合法方案都可规范化为立即弹x，算法不会漏解。
+
+## 长度安全的现代容器版本
+
+vector接口先比较两个长度，避免作者共同nLength掩盖越界。下面保留目标驱动结构，并明确选择“两个空序列视为合法”的现代约定；若要一比一复现作者，只需在empty时返回false。
+
+```cpp
+#include <cstddef>
+#include <stack>
+#include <vector>
 
 bool validateStackSequences(
     const std::vector<int>& pushed,
-    const std::vector<int>& popped
-) {
-    if (pushed.size() != popped.size()) return false;
+    const std::vector<int>& popped) {
+    if (pushed.size() != popped.size()) {
+        return false;
+    }
+    if (pushed.empty()) {
+        return true;  // API policy; author returns false for length 0.
+    }
 
     std::stack<int> helper;
-    int popIndex = 0;
+    std::size_t nextPush = 0;
 
-    for (int value : pushed) {
-        helper.push(value);
-
-        while (!helper.empty() &&
-               popIndex < static_cast<int>(popped.size()) &&
-               helper.top() == popped[popIndex]) {
-            helper.pop();
-            ++popIndex;
+    for (int target : popped) {
+        while ((helper.empty() || helper.top() != target) &&
+               nextPush < pushed.size()) {
+            helper.push(pushed[nextPush]);
+            ++nextPush;
         }
-    }
 
-    return helper.empty() && popIndex == static_cast<int>(popped.size());
+        if (helper.empty() || helper.top() != target) {
+            return false;
+        }
+        helper.pop();
+    }
+    return helper.empty() && nextPush == pushed.size();
 }
 ```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-function validateStackSequences(pushed: number[], popped: number[]): boolean {
-  if (pushed.length !== popped.length) return false;
 
-  const stack: number[] = [];
-  let popIndex = 0;
+也可以遍历pushed：每压入一个值，就在栈顶连续匹配popped。两种写法等价；作者版本更直接体现“当前目标不在栈顶就继续压”，按push遍历版则更容易保证不读取空栈。无论哪种，都要检查pop索引没有越界。
 
-  for (const value of pushed) {
-    stack.push(value);
+时间复杂度O(n)：每个输入至多压入一次、弹出一次，内层while虽嵌套但总迭代不超过n。辅助栈最坏O(n)，例如目标是与压入顺序相同但最后才可判某些不匹配，或合法目标完全逆序前需要先压完。不能把嵌套循环误判为O(n²)。
 
-    while (
-      stack.length > 0 &&
-      popIndex < popped.length &&
-      stack[stack.length - 1] === popped[popIndex]
-    ) {
-      stack.pop();
-      popIndex++;
-    }
-  }
-
-  return stack.length === 0 && popIndex === popped.length;
-}
-```
-  </Tab>
-</CodeTabs>
-
-## 常见误区
-
-<Callout type="trap">
-  <strong>现象 →</strong> 只比较两个序列的集合或排序结果，认为元素相同就合法。
-  <strong>原因 →</strong> 栈有严格的后进先出约束，元素集合相同只是必要条件，不是充分条件。
-  <strong>修法 →</strong> 必须模拟栈顶是否能按目标顺序弹出。
+<Callout type="trap" title="把两个空序列的答案当成无条件共识">
+作者先要求两个指针非空且nLength大于0，所以Test7的nullptr、nullptr、0返回false。现代数学或平台题常把空序列视为合法。两种都可设计，但必须写进接口契约和测试，不能在复刻作者时静默改义。
 </Callout>
 
+## 作者七组测试的覆盖边界
+
+Test1验证4、5、3、2、1为true；Test2验证3、5、4、2、1也为true，说明合法答案不唯一。Test3的4、3、5、1、2与Test4的3、5、4、1、2都在目标1处被栈顶2阻塞，返回false。
+
+Test5压入单元素1却要求弹2，返回false；Test6压1弹1，返回true；Test7传两个nullptr和长度0，返回false。源码总计七组，不包含长度不等，也不包含重复值，因为接口和题目前提分别排除了这两类。
+
+<StackPushPopOfficialCaseLab />
+
+测试不能只断言最终布尔值，还可记录<Term def="第一次出现输入耗尽且栈顶不等于目标的位置，用于解释非法序列。">阻塞点</Term>。对Test3，已消费目标4、3、5，下一目标1，辅助栈顶2，nextPush已经到末尾；这是一份可复核失败证据。
+
+```cpp
+#include <cassert>
+#include <vector>
+
+void testStackSequences() {
+    const std::vector<int> pushed{1, 2, 3, 4, 5};
+
+    assert(validateStackSequences(
+        pushed, {4, 5, 3, 2, 1}));
+    assert(validateStackSequences(
+        pushed, {3, 5, 4, 2, 1}));
+    assert(!validateStackSequences(
+        pushed, {4, 3, 5, 1, 2}));
+    assert(!validateStackSequences(
+        pushed, {3, 5, 4, 1, 2}));
+    assert(!validateStackSequences({1}, {2}));
+    assert(validateStackSequences({1}, {1}));
+    assert(validateStackSequences({}, {}));  // Modern policy.
+    assert(!validateStackSequences({1, 2}, {2}));
+}
+```
+
+若测试作者函数，最后两个现代契约用例不能直接套用：作者没有独立长度参数，且空序列预期false。应分别测试两个API，不要用同一断言掩盖约定差异。
+
+## 输入验证、重复值与工程扩展
+
+长度相同但元素多重集合不同，模拟最终也会返回false；提前用哈希表检查频次可给出更早、更明确的“元素不一致”错误，但会额外占O(n)空间，布尔接口并不需要。若输入来自不可信网络，先限制n避免辅助栈内存耗尽。
+
+对重复值，若只关心值序列，辅助栈按值匹配给出某个可行解释。例如压入1、2、1，弹出1、1、2可以先弹第一个1，再压2和第二个1。若两个1携带不同订单ID，仅比较金额1会丢失身份约束；应比较完整对象或稳定键。
+
+若需要返回一条具体push/pop操作轨迹，可在每次压入记录P(value)，每次匹配记录O(value)。算法结束为true时轨迹长度恰为2n；失败时返回阻塞目标、当前栈顶与尚未压入位置。这样的诊断接口比单个false更适合教学可视化和生产校验。
+
+流式输入也可工作：pushed由迭代器逐个读取，popped逐个给出目标；为满足目标不断拉取push流。若push流结束仍不匹配即失败。要最终确认没有额外输入，处理完所有目标后还需探测push流是否结束，并要求辅助栈为空。
+
+并发环境下，给定的两个序列应是不可变快照。若另一个线程在验证过程中修改vector，索引与元素关系失效。验证器本身只有局部辅助栈，可重入；共享诊断收集器则需同步或由调用方提供独立实例。
+
+## 正确性证明
+
+循环不变量是：进入某个目标x的处理前，pNextPush之前的元素都已按序压入过；pNextPop之前的目标都已按序合法弹出；辅助栈从底到顶恰保存已压入但尚未弹出的元素。
+
+栈顶等于x时弹出，保持目标顺序并从辅助栈删除同一元素；栈顶不等时继续压入下一个输入，保持压入顺序和未弹集合。若输入耗尽仍不匹配，x位于栈内非顶端或根本不存在，任何合法栈操作都无法先输出x，所以false必要。
+
+若所有目标都处理完且辅助栈为空，每个输入恰压入一次并按popped顺序弹出，构造出合法轨迹，所以true充分。结合强制贪心安全性，算法返回true当且仅当目标是给定压入序列的可行弹出序列。
+
+<Stepper>
+  <Step title="先定位下一个目标"><StackTargetDecisionMap />只比较辅助栈顶与当前目标，不能提前处理后续弹出值。</Step>
+  <Step title="不匹配就继续按序压入"><StackSequenceSimulationDiagram />目标4需要压到4，目标5再压5，之后历史栈顶连续恢复。</Step>
+  <Step title="输入耗尽时给出阻塞证据"><StackSequenceCounterexampleDiagram />目标1被栈顶2覆盖，既不能弹2也无新输入可改变状态。</Step>
+  <Step title="跑完七组官方测试"><StackPushPopOfficialCaseLab />同时核对两种合法交错、两种非法阻塞、单元素和空指针契约。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 元素集合相同不能保证满足栈的后进先出顺序。
+2. 辅助栈保存已压入但尚未按目标弹出的元素。
+3. 栈顶匹配下一目标时立即弹出，不匹配时唯一希望是继续压入。
+4. 输入耗尽仍不匹配就是不可恢复的阻塞点。
+5. 所有目标消费且辅助栈最终为空，构成合法操作轨迹。
+6. 每个元素至多压入、弹出一次，时间O(n)、辅助空间O(n)。
+7. 作者七组测试把nullptr与长度0判为false，现代接口可另定空序列策略。
+8. 原题数字互异；重复值若涉及对象身份，必须使用稳定ID比较。
+
+<Exercises>
+
+**问题 1：为什么4、3、5、1、2不合法？**
+
+<Answer>弹完4、3、5后，辅助栈从底到顶为1、2，输入也已耗尽。下一目标1位于2下方，不能越过栈顶2弹出，因此在目标1处阻塞。</Answer>
+
+**问题 2：栈顶等于目标时，先继续压入会创造新方案吗？**
+
+<Answer>不会。新元素会盖住目标，而目标必须先于所有后续目标输出；新元素既不能先弹，也无法绕过，最终仍要先恢复到当前状态。立即弹目标不丢失任何合法方案。</Answer>
+
+**问题 3：作者为何无法直接检测两个数组长度不同？**
+
+<Answer>接口只接收共同的nLength，没有分别传入pushLength与popLength。调用方负责保证两段内存都至少有nLength个元素；现代容器版可读取各自size并先比较。</Answer>
+
+**问题 4：怎样返回比false更有用的诊断？**
+
+<Answer>记录首次失败的目标索引、目标值、当前栈顶、nextPush位置和辅助栈快照。对合法输入同时返回P/O操作轨迹，就能复现一条具体的压入弹出过程。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="辅助栈">暂存已按序压入但尚未匹配目标弹出的元素。</GlossaryItem>
+  <GlossaryItem term="辅助栈最终为空">所有目标完成后没有残留元素的成功终态。</GlossaryItem>
+  <GlossaryItem term="下一弹出数字">目标序列中当前必须最先满足、不可被后续值越过的元素。</GlossaryItem>
+  <GlossaryItem term="强制贪心">栈顶匹配时立即弹出、不匹配时继续压入的无回溯规则。</GlossaryItem>
+  <GlossaryItem term="阻塞点">输入耗尽后栈顶仍与当前目标不等的首个失败状态。</GlossaryItem>
+</Glossary>
+
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题31"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/31_StackPushPopOrder/StackPushPopOrder.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

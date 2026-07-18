@@ -1,0 +1,228 @@
+---
+title: "第 3 章 Singletons, Statics, GameObjects, and the World"
+type: A
+section: "Unity 脚本设计 · 世界与事件"
+order: 3
+description: "覆盖 GameObject、组件交互、世界坐标、时间与更新、跨场景对象、单例和静态状态的责任边界。"
+demo: true
+math: false
+sourceUrl: "https://www.packtpub.com/en-us/product/mastering-unity-scripting-9781784390655"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Usc03SingletonsStaticsGameobjectsWorldMapLab,
+  Usc03SingletonsStaticsGameobjectsWorldExperimentLab,
+  Usc03SingletonsStaticsGameobjectsWorldEvidenceLab,
+} from "@/components/mdx/unity-scripting/diagrams/usc-03-singletons-statics-gameobjects-world";
+
+<Objectives>
+
+- 能解释 GameObject、Component、场景、坐标与时间怎样共同形成脚本上下文
+
+- 能比较直接引用、搜索、static、singleton 与跨场景对象的生命周期
+
+- 能复现并验证重复单例、静态残留、坐标误用和帧率依赖的失败边界
+
+</Objectives>
+
+## 问题：为什么全局可访问不等于全局状态应该由单例拥有
+
+先预测：返回主菜单再进入游戏后分数翻倍，是 DontDestroyOnLoad 重复对象、静态字段残留，还是两个监听器同时消费事件？第三章把 GameObject 与世界、time/update、immortal objects、singleton 和 statics 放在一起，重点是访问范围与生命周期必须同时设计。单例解决发现入口，却不会自动解决初始化顺序、场景重复或测试隔离。
+
+<Usc03SingletonsStaticsGameobjectsWorldMapLab />
+
+## 原书边界与官方小节
+
+官方小节为 The GameObject、Component interactions、GameObjects and the world、The world, time, and updates、Immortal objects、Understanding singleton objects and statics。原章不是泛泛介绍组件，而是分析脚本怎样查找、组织、更新世界对象，以及怎样管理跨场景和全局状态。
+
+- **The GameObject；Component interactions**
+- **GameObjects and the world**
+- **The world, time, and updates**
+- **Immortal objects**
+- **Understanding singleton objects and statics**
+
+这些小节按官方目录唯一归属。本站重新组织解释、代码和实验，不逐字复制原文；现代补充必须放在迁移段，不能替换或重复计算原始单元。
+
+## 访问范围、所有权和生命周期三角
+
+GameObject 是组件容器，场景决定对象集合，Transform 把对象放进统一坐标空间，Update 与 deltaTime 推进世界。直接引用最明确，搜索把依赖推迟到运行时，static 把状态绑定到类型，singleton 提供唯一入口，DontDestroyOnLoad 延长实例生命周期。每种方案都要回答谁创建、何时可用、谁销毁、场景切换后是否重置、测试之间是否泄漏。
+
+<Usc03SingletonsStaticsGameobjectsWorldExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="组件通过缓存引用、接口或事件交换状态和命令的方式。">组件交互</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="所有场景对象共享的全局位置、方向和尺度参考系。">世界坐标</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="使用 deltaTime 让按秒变化不依赖每秒帧数的更新方式。">
+  帧率无关更新
+</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="通过 DontDestroyOnLoad 等方式在场景加载后继续存活的实例。">
+  跨场景对象
+</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+<Term def="限制并公开一个全局实例入口的对象创建与访问模式。">单例</Term>
+必须放回本章责任链：指出输入来自哪里、状态由谁拥有、结果由谁消费，以及错误时先观察哪一个信号。
+
+术语若不能落到具体对象、状态和观测点，就仍停留在记忆层。读者应能为每个术语写出生产者、变换规则、消费者、正常值、边界值和失败信号。
+
+## 关键对象与数据流
+
+世界状态实验创建场景 A/B，各自可能生成管理器。启动时记录 instance ID、scene、static counter 与监听器数量；切换场景后检查唯一性和重置策略。移动对象分别在 30/60/120 FPS 下运行同样秒数，验证 deltaTime。最后把运行时搜索替换成序列化或构造注入，比较缺失依赖如何被更早发现。
+
+排查时从最早可控输入开始，逐段检查中间状态和最终消费者。最终结果正确但中间链不符合预测，也不能立即签发，因为它可能依赖未记录的缓存、时序或 Editor 状态。
+
+## 三步可重复实验
+
+动手前先预测：只改变当前步骤的一项输入后，哪个日志、状态或像素应最先变化？实验期间固定 Unity 版本、场景、对象数量、时间步与目标平台，避免多个变量一起漂移。
+
+<Stepper>
+  <Step title="追踪对象身份">
+    <Usc03SingletonsStaticsGameobjectsWorldMapLab />
+
+为组件、GameObject 和 Scene 记录 instance ID 与生命周期，比较直接引用、GetComponent、Find 和静态入口的发现时机。
+
+```csharp
+public sealed class Session : MonoBehaviour {
+    public static Session Instance { get; private set; }
+    void Awake() { if (Instance && Instance != this) { Destroy(gameObject); return; } Instance = this; DontDestroyOnLoad(gameObject); }
+}
+```
+
+  </Step>
+  <Step title="验证世界与时间">
+    <Usc03SingletonsStaticsGameobjectsWorldExperimentLab />
+
+在不同帧率限制下移动同一距离，分别使用固定每帧增量和 deltaTime，记录十秒后的世界坐标误差。
+
+```csharp
+void Update() => transform.position += direction * speed * Time.deltaTime;
+```
+
+  </Step>
+  <Step title="破坏跨场景唯一性">
+    <Usc03SingletonsStaticsGameobjectsWorldEvidenceLab />
+
+让两个场景都携带管理器，重放 A-B-A，检查重复实例、静态字段、事件监听和销毁顺序，再实现明确的所有权规则。
+
+```csharp
+[SerializeField] private Health health;
+void Awake() => Debug.Assert(health != null, "Health dependency missing", this);
+```
+
+  </Step>
+</Stepper>
+
+## 先确定状态归谁，再选择访问方式
+
+GameObject 提供场景身份和 Transform，Component 提供可组合行为；两者都不是天然的全局服务。角色生命值应由角色组件拥有，关卡规则可由场景上下文拥有，跨场景音频或会话状态才可能需要长生命周期对象。static 适合无实例纯函数、常量或明确重置的进程级状态；singleton 适合确实只能存在一个的运行时服务，但仍要定义创建、重复检测、销毁和测试重置策略。
+
+DontDestroyOnLoad 只阻止对象随场景卸载，并不会阻止新场景再创建一个同类预制体。可靠实验需要依次加载 A、B、A 场景，记录 instance ID、根对象所属场景、订阅数量和静态字段值。若关闭 Domain Reload，还要验证停止再播放后 static 是否残留。只有在这组状态转换中保持唯一，才能称为跨场景对象，而不是第一次运行恰好没有重复。
+
+## 世界状态的四个常见混淆
+
+- **局部与世界坐标**：子对象位置必须通过 Transform 变换解释，不能把 localPosition 当作世界位置比较。
+- **每帧与固定步长**：视觉更新通常按 deltaTime，物理状态由 FixedUpdate 和固定步长管理。
+- **查找与所有权**：Find 或全局搜索只解决定位，不证明谁负责创建、销毁和替换对象。
+- **访问与生命周期**：能从静态入口访问对象，不代表对象在当前场景阶段已经初始化或仍然有效。
+- **持久与永久**：跨场景存活仍须在退出会话、返回主菜单或测试结束时明确清理。
+
+签发样本应同时改变帧率、父节点缩放、场景加载顺序和播放模式重载选项。运动距离要按真实秒数比较，坐标结果要在父子变换后验证，单例计数和订阅计数要在每次场景切换后归一。这样可以把时间尺度、坐标空间和对象寿命三个容易互相掩盖的问题分开。
+
+## 正常、边界与失败样本
+
+每章至少保存一个正常样本、一个极端边界和一个故意破坏配置。正常样本证明主路径，边界样本说明适用范围，失败样本证明诊断方法真的能抓到错误。
+
+<Callout type="trap">
+  **因果陷阱**：DontDestroyOnLoad 只延长实例生命，不会阻止新场景再创建同类对象。
+</Callout>
+
+<Callout type="trap">
+  **版本陷阱**：关闭 Domain Reload 的现代 Editor 设置可能保留 static
+  状态，测试不能假设每次 Play 都自动清零。
+</Callout>
+
+## 从 2015 年到现代 Unity
+
+现代 Unity 可用 FindFirstObjectByType、SceneManager、依赖注入或 SubsystemRegistration 改善对象发现和静态重置，但原章的所有权问题不变。旧 FindObjectOfType 名称与性能特征应映射到当前 API；进入 Play Mode 选项会改变静态与场景重载，必须加入现代边界测试。
+
+迁移记录采用五列：原书载体、稳定不变量、现代实现、不可等价处、目标平台证据。允许替换工具和 API，不允许抹去原始问题或倒写历史。
+
+## 验收证据
+
+验收包含三种帧率下相同位移、A-B-A 场景切换、重复管理器销毁、静态重置和监听器数量。每个全局对象都要有创建者、唯一键、销毁点与测试清理；若只能靠 Hierarchy 肉眼确认唯一性，不算闭环。
+
+证据包同时记录场景路径、代码版本、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜测隐藏状态即可重放，才算掌握而不只是读完。
+
+## 小结
+
+- GameObject 世界同时受场景、坐标、时间和组件关系约束
+- 访问方便与状态所有权是不同问题
+- 单例、static 和跨场景对象必须明确创建、重置与销毁
+- 帧率和 Play Mode 配置都属于世界状态的测试输入
+
+<Exercises>
+
+**问题 1** 单例对象为何会在切场景后重复？
+
+<Answer>
+  DontDestroyOnLoad 保留旧实例，而新场景又实例化预制体；Awake
+  必须检测并销毁重复，最好由唯一启动场景拥有。
+</Answer>
+
+**问题 2** static 与 singleton 实例状态有何不同？
+
+<Answer>
+  static 绑定类型且不依赖对象，singleton 状态存于一个实例并有 Unity
+  生命周期；两者重置边界都需明确。
+</Answer>
+
+**问题 3** 如何证明移动逻辑帧率无关？
+
+<Answer>
+  固定持续时间和输入，在多种帧率下比较最终世界位置，误差应在预设容限内。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="组件交互">
+    组件通过缓存引用、接口或事件交换状态和命令的方式。
+  </GlossaryItem>
+  <GlossaryItem term="世界坐标">
+    所有场景对象共享的全局位置、方向和尺度参考系。
+  </GlossaryItem>
+  <GlossaryItem term="帧率无关更新">
+    使用 deltaTime 让按秒变化不依赖每秒帧数的更新方式。
+  </GlossaryItem>
+  <GlossaryItem term="跨场景对象">
+    通过 DontDestroyOnLoad 等方式在场景加载后继续存活的实例。
+  </GlossaryItem>
+  <GlossaryItem term="单例">
+    限制并公开一个全局实例入口的对象创建与访问模式。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="Alan Thorn《Mastering Unity Scripting》第一版官方目录与中文版身份资料"
+  adaptedUrl="https://www.packtpub.com/en-us/product/mastering-unity-scripting-9781784390655"
+/>

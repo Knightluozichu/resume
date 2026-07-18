@@ -1,0 +1,291 @@
+---
+title: "第12章：A Ship That Fires Bullets"
+type: C
+section: "Part II · Projects · Alien Invasion"
+order: 12
+description: "以Pygame建立Alien Invasion的可运行垂直切片，掌握主循环、连续移动与bullet生命周期。"
+demo: true
+math: false
+sourceUrl: "https://nostarch.com/python-crash-course-3rd-edition"
+draft: false
+---
+
+import {
+  PccBulletLifecycleLab,
+  PccGameLoopLab,
+  PccShipMovementLab,
+} from "@/components/mdx/python-crash-course/diagrams/a-ship-that-fires-bullets";
+
+<Objectives>
+
+- 能分析Pygame game loop的event、update、draw和Clock.tick顺序，并定位窗口无响应或帧率异常
+- 能实现Ship的KEYDOWN/KEYUP movement flags、连续movement与screen boundary约束
+- 能设计Bullet Sprite与Group的spawn、update、limit和cleanup生命周期，并验证对象不会无限累积
+
+</Objectives>
+
+## 为什么 Planning the Project 要先定义可运行垂直切片
+
+Alien Invasion不是从“完整游戏”一次写成。第一个checkpoint只承诺：打开window、显示ship、允许左右连续移动、按space发射有限数量的bullets、正常退出。alien、collision、score留给后续章节。这个范围让每次改动都能从input到screen得到observable feedback。
+
+先预测两个结果再运行：只处理KEYDOWN而不处理KEYUP时ship会怎样；发射100次且从不cleanup时Group size会怎样增长。把预测写成可检查的不变量，运行中的差异才会指向具体设计缺口。
+
+先写行为表：QUIT应终止；KEYDOWN RIGHT开始右移；KEYUP RIGHT停止右移；SPACE在数量低于limit时spawn bullet；每帧bullet向上；离开top boundary后从collection删除。再把职责分给`AlienInvasion`、`Settings`、`Ship`和`Bullet`，避免所有state堆进一个function。
+
+<Term def="持续读取输入、更新游戏状态、绘制当前状态并控制帧率的循环。">game loop</Term>
+
+项目按可验证顺序增长：
+
+1. 空window能打开、刷新、退出；
+2. ship image能按`rect.midbottom`放在底部中央；
+3. 一次keypress变成可持续且可停止的movement state；
+4. bullet能创建、移动、绘制、限制数量并在越界后清理。
+
+每一步都先运行再继续。若同时加入窗口、图片、移动和发射，黑屏时无法判断是asset path、event loop、draw order还是object state错误。
+
+## Installing Pygame：安装到正在运行项目的interpreter
+
+与pytest相同，使用`python -m pip`把Pygame安装到当前interpreter。命令成功不等于editor与terminal使用同一环境；同时打印executable、Pygame version和display driver，保存可复现证据。
+
+```bash
+python3 -m pip install pygame
+python3 -c "import sys, pygame; print(sys.executable); print(pygame.version.ver)"
+python3 alien_invasion.py
+```
+
+在无desktop display的远程环境中，import可成功但window创建失败；这不是package安装问题。asset加载也应基于`Path(__file__)`构造稳定路径，而不是依赖launch时的current working directory。初期先用简单surface或确认存在的`ship.bmp`，把资源问题与loop问题分开。
+
+## Game Window and User Input：窗口为何会“未响应”
+
+`pygame.init()`初始化subsystems，`display.set_mode()`创建screen surface，`display.flip()`把本帧绘制结果展示出来。操作系统把关闭、键盘和鼠标事件放入queue；程序必须持续drain它。如果main thread长时间计算或完全不调用`pygame.event.get()`，window manager会判断应用未处理消息。
+
+<Term def="操作系统与Pygame之间暂存QUIT、KEYDOWN、KEYUP等输入消息的队列。">event queue</Term>
+
+```python
+import pygame
+
+class AlienInvasion:
+    def __init__(self) -> None:
+        pygame.init()
+        self.clock = pygame.time.Clock()
+        self.screen = pygame.display.set_mode((1200, 800))
+        pygame.display.set_caption("Alien Invasion")
+        self.running = True
+
+    def run_game(self) -> None:
+        while self.running:
+            self._check_events()
+            self._update_screen()
+            self.clock.tick(60)
+
+    def _check_events(self) -> None:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+
+    def _update_screen(self) -> None:
+        self.screen.fill((230, 230, 230))
+        pygame.display.flip()
+```
+
+退出用state transition比在深层helper直接`sys.exit()`更容易测试和清理：事件处理把`running`改为false，loop自然结束，最后执行`pygame.quit()`。两种方式都能工作，但一个project应保持一致的ownership。
+
+### KEYDOWN、KEYUP与输入状态
+
+`KEYDOWN`表示按键从up变down，`KEYUP`表示down变up；它们是edge events，不是每帧位置增量。只在`KEYDOWN`中改变`rect.x`会依赖系统key repeat，移动会先停顿再跳跃，并因平台设置不同而变化。
+
+正确模型把event转换成persistent state：RIGHT down令`moving_right=True`，RIGHT up令其false；每帧`Ship.update()`读取flags。event frequency与render/update frequency因此解耦。
+
+## Controlling the Frame Rate：一帧的职责与预算
+
+主循环的稳定顺序是process events、update world、draw world、flip、tick。若先draw后update，screen总显示上一帧state；若在update中再次读取event queue，输入ownership分散；若不tick，空场景会尽可能快地循环，CPU占用升高且基于“每帧移动多少”的速度随机器变化。
+
+<Stepper>
+  <Step title="切换FPS并逐阶段检查主循环">
+    <PccGameLoopLab />
+  </Step>
+  <Step title="定位frame budget超支">
+    60 FPS约有16.7 ms预算。若event、update和draw总耗时超过预算，Clock.tick不能补回时间，只能让实际FPS下降。
+  </Step>
+  <Step title="确认draw来自同一帧状态">
+    一帧只做一次world update和一次display flip；不要让Ship或Bullet各自调用flip。
+  </Step>
+</Stepper>
+
+`Clock.tick(60)`设置上限，并返回上一帧耗时milliseconds。书中项目使用固定的每帧速度配合60 FPS，便于入门；若扩展为不同帧率仍保持相同物理速度，可使用`dt_seconds = tick_ms / 1000`并把速度定义为pixels/second。两种模型不能混用，否则会重复缩放。
+
+## Settings Class：集中参数，不隐藏运行状态
+
+`Settings`保存screen width/height、background color、ship speed、bullet dimensions、bullet speed和允许bullet数量。这些是configuration；当前按键、active bullets和score是runtime state，不应塞进settings。集中配置使第14章提高难度时能有明确入口。
+
+```python
+class Settings:
+    def __init__(self) -> None:
+        self.screen_width = 1200
+        self.screen_height = 800
+        self.bg_color = (230, 230, 230)
+        self.ship_speed = 1.5
+        self.bullet_speed = 2.5
+        self.bullet_width = 3
+        self.bullet_height = 15
+        self.bullet_color = (60, 60, 60)
+        self.bullets_allowed = 3
+```
+
+settings object由composition传给需要参数的objects。不要让每个module各自创建Settings，否则测试修改一份时其他objects仍读取另一份。对初期项目，直接保存reference足够；后续动态difficulty还要区分static settings与可重置dynamic settings。
+
+<Term def="由KEYDOWN和KEYUP维护、供每帧update读取以产生连续移动的布尔输入状态。">movement flag</Term>
+
+## Ship Class：位置、图像与边界必须一致
+
+`Ship`拥有image、rect、screen rect与高精度horizontal position。Pygame `Rect`只存integer coordinates，而`ship_speed=1.5`需要float accumulator；若直接执行`rect.x += 1.5`，小数会被截断，实际速度不是配置值。update先改`self.x`，再把结果写回`rect.x`。
+
+```python
+class Ship:
+    def __init__(self, game) -> None:
+        self.screen = game.screen
+        self.settings = game.settings
+        self.image = pygame.image.load("images/ship.bmp")
+        self.rect = self.image.get_rect()
+        self.screen_rect = self.screen.get_rect()
+        self.rect.midbottom = self.screen_rect.midbottom
+        self.x = float(self.rect.x)
+        self.moving_right = False
+        self.moving_left = False
+
+    def update(self) -> None:
+        if self.moving_right and self.rect.right < self.screen_rect.right:
+            self.x += self.settings.ship_speed
+        if self.moving_left and self.rect.left > 0:
+            self.x -= self.settings.ship_speed
+        self.rect.x = self.x
+
+    def blitme(self) -> None:
+        self.screen.blit(self.image, self.rect)
+```
+
+边界条件用`rect.right < screen_rect.right`与`rect.left > 0`，验证的是ship footprint，不是中心点。更严格的实现先计算candidate float position，再clamp到`[0, screen_width - rect.width]`，可避免较大speed一步越界。无论使用哪种写法，float position与rect必须在每次update后同步。
+
+<Stepper>
+  <Step title="组合KEYDOWN与KEYUP状态">
+    <PccShipMovementLab />
+  </Step>
+  <Step title="比较tap、hold与同时按键">
+    tap只跨少数帧；hold在每帧继续移动；左右同时为true时应明确采用净方向0或固定优先级。
+  </Step>
+  <Step title="验证screen boundary invariant">
+    每帧断言`0 <= rect.left`且`rect.right <= screen_rect.right`，并检查float position没有继续漂到screen外。
+  </Step>
+</Stepper>
+
+输入handler只更新flags与触发command，不直接承担连续movement。这样测试无需制造操作系统key repeat：设置flag、调用三次update、检查位移，再清除flag、调用一次update、确认位置保持。
+
+## Shooting Bullets：从command到Sprite Group
+
+SPACE是离散command：每次允许的KEYDOWN创建一个Bullet。Bullet继承`pygame.sprite.Sprite`，拥有narrow rectangle、float y和`update()`；`pygame.sprite.Group`集中保存active bullets，能调用所有成员的update并统一draw。
+
+<Term def="持有同类active Sprite并批量调用update或draw的Pygame容器。">sprite group</Term>
+
+```python
+class Bullet(pygame.sprite.Sprite):
+    def __init__(self, game) -> None:
+        super().__init__()
+        self.screen = game.screen
+        self.settings = game.settings
+        self.color = self.settings.bullet_color
+        self.rect = pygame.Rect(0, 0, self.settings.bullet_width,
+                                self.settings.bullet_height)
+        self.rect.midtop = game.ship.rect.midtop
+        self.y = float(self.rect.y)
+
+    def update(self) -> None:
+        self.y -= self.settings.bullet_speed
+        self.rect.y = self.y
+
+    def draw_bullet(self) -> None:
+        pygame.draw.rect(self.screen, self.color, self.rect)
+```
+
+在game初始化时创建一次`self.bullets = pygame.sprite.Group()`。发射函数先检查`len(self.bullets) < bullets_allowed`，构造bullet并add；主循环每帧调用group update，然后遍历副本或安全地kill越界成员。
+
+```python
+def _fire_bullet(self) -> None:
+    if len(self.bullets) < self.settings.bullets_allowed:
+        self.bullets.add(Bullet(self))
+
+def _update_bullets(self) -> None:
+    self.bullets.update()
+    for bullet in self.bullets.copy():
+        if bullet.rect.bottom <= 0:
+            self.bullets.remove(bullet)
+```
+
+为什么在update后cleanup？因为刚越过top的bullet本帧才满足删除条件。为什么迭代`copy()`？遍历原Group时修改collection容易跳过元素或依赖容器实现。也可调用`bullet.kill()`让Sprite从所属Groups移除，但应选择一种明确policy。
+
+<Term def="对象从创建、参与每帧更新到越界移除的完整资源管理过程。">lifecycle cleanup</Term>
+
+<Stepper>
+  <Step title="操作spawn、update、limit与cleanup">
+    <PccBulletLifecycleLab />
+  </Step>
+  <Step title="检查发射上限是active count">
+    上限只统计仍在Group中的bullets；旧bullet越界删除后应恢复发射能力。
+  </Step>
+  <Step title="验证长期运行不会累积不可见对象">
+    连续推进足够帧后Group size应回到0；只看screen不可见不能证明对象已释放。
+  </Step>
+</Stepper>
+
+绘制顺序通常为fill background、ship.blitme、逐个bullet.draw_bullet、display.flip。bullet是纯色Rect，不能直接使用Group.draw，除非每个Sprite提供`image`；理解这个contract比机械换API重要。
+
+## 把模块连接成可诊断系统
+
+推荐文件边界为`alien_invasion.py`负责orchestration，`settings.py`负责configuration，`ship.py`与`bullet.py`负责各自state和render。对象依赖从game注入，形成一份shared screen、settings与ship reference。循环中每项职责有唯一owner：events由game处理，ship position由Ship更新，bullet lifecycle由game协调Group完成。
+
+诊断时从最小证据前进：window不出现先检查interpreter和`set_mode`；出现但冻结检查event drain；ship不显示检查asset path、rect与draw order；按键只跳一下检查是否只有KEYDOWN mutation；bullet不可见检查spawn location、direction与draw；运行越久越慢检查Group size与cleanup。
+
+项目每个checkpoint都保留可运行状态。新增feature前记录当前FPS、active object count和输入行为；修改后复测退出、边界、同时按键与bullet limit。这个习惯会在第13章fleet和collision数量增长时显著缩小故障范围。
+
+<Callout type="trap" title="在KEYDOWN中直接移动ship就能实现连续控制">
+KEYDOWN是edge event，持续移动会依赖操作系统key repeat并产生停顿。事件只维护movement flag，每帧update读取flag；KEYUP必须清除对应状态。
+</Callout>
+
+<Callout type="trap" title="bullet离开screen后看不见，所以无需删除">
+不可见不等于不存在。对象仍留在Group中，每帧继续update，并占用发射limit与内存；update后按boundary显式cleanup，并以Group size验证。
+</Callout>
+
+## 本章回顾：一个小切片包含完整实时系统
+
+1. Pygame安装、asset path和display环境是三个不同failure boundary。
+2. game loop每帧处理event、更新world、绘制、flip并由Clock.tick限制FPS。
+3. Settings集中configuration，runtime state由拥有它的game objects维护。
+4. KEYDOWN/KEYUP维护movement flags，Ship每帧更新float position并约束rect边界。
+5. Bullet通过Sprite与Group形成spawn、update、draw、limit和cleanup闭环。
+
+<Exercises>
+
+**问题 1：为什么按住RIGHT时不能只在KEYDOWN事件中修改ship位置？**
+
+<Answer>KEYDOWN只表示up到down的边缘，后续重复事件受操作系统delay和repeat rate影响。应在KEYDOWN设置moving_right，在KEYUP清除；每帧Ship.update读取flag并移动。测试tap、hold、左右同时按与release后停止。</Answer>
+
+**问题 2：60 FPS下窗口偶尔卡顿，应如何区分loop order、超时和输入阻塞？**
+
+<Answer>记录event、update、draw各阶段耗时与每帧总耗时；60 FPS预算约16.7 ms。确认每帧drain event queue且只有一次flip；Clock.tick只能限制过快循环，不能修复超过预算的update。保存最慢帧的active object count定位增长。</Answer>
+
+**问题 3：如何证明bullet lifecycle既遵守数量上限又不会泄漏？**
+
+<Answer>连续发射到bullets_allowed，断言额外command不spawn；推进直到旧bullets的rect.bottom小于等于0，执行cleanup后Group size回到0并恢复发射能力。长时间重复spawn/update/cleanup，最大active count不超过limit且不可见对象不残留。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="game loop" definition="持续处理输入、更新状态、绘制并控制帧率的循环。" />
+  <GlossaryItem term="event queue" definition="暂存QUIT、KEYDOWN、KEYUP等操作系统输入消息的队列。" />
+  <GlossaryItem term="movement flag" definition="由按键边缘事件维护、供每帧update读取的持续输入状态。" />
+  <GlossaryItem term="sprite group" definition="持有active Sprite并批量update或draw的Pygame容器。" />
+  <GlossaryItem term="lifecycle cleanup" definition="对象从spawn、update到越界移除的完整资源管理过程。" />
+</Glossary>
+
+<Attribution adaptedFrom="Python Crash Course, Third Edition, Chapter 12: A Ship That Fires Bullets" adaptedUrl="https://nostarch.com/python-crash-course-3rd-edition" />

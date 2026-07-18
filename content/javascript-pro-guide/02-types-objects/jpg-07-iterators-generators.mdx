@@ -1,0 +1,262 @@
+---
+title: "第 7 章 迭代器与生成器"
+type: A
+section: "JavaScript高级程序设计（第4版） · 类型与对象"
+order: 7
+description: "迭代协议把数据来源与消费方式解耦，生成器再把暂停、恢复和双向传值变成可组合状态机。"
+demo: true
+math: false
+sourceUrl: "https://uat.store.wiley.com/en-us/professional-javascript-for-web-developers-4th-edition-p-9781119366577"
+draft: false
+---
+
+import {
+  Jpg07IteratorsGeneratorsMapLab,
+  Jpg07IteratorsGeneratorsExperimentLab,
+  Jpg07IteratorsGeneratorsEvidenceLab,
+} from "@/components/mdx/javascript-pro-guide/diagrams/jpg-07-iterators-generators";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释第 7 章 迭代器与生成器的核心机制，并把它放回28章与4个附录的主线
+- 能比较正常、边界、失败和恢复样本，指出首个执行或状态偏离点
+- 能实现最小JavaScript实验，记录浏览器版本、输入、任务顺序与资源所有权
+- 能设计证据回答“每次迭代获得独立状态；done语义稳定；自然结束、异常与提前退出都执行资源清理。”是否成立
+
+</Objectives>
+
+## 直觉：先画执行与所有权
+
+迭代协议把数据来源与消费方式解耦，生成器再把暂停、恢复和双向传值变成可组合状态机。 真正的难点不是让一次示例得到预期输出，而是让绑定、对象、任务、权限和资源在异常、取消、重复与版本切换后仍可解释。先预测：若只保存最终截图，最可能隐藏哪一种陈旧状态？
+
+<Jpg07IteratorsGeneratorsMapLab />
+
+## 权威目录定位
+
+本页依据 Wiley 第4版官方31页目录样章与中文版公开完整目录锁定范围。目录名称用于一对一追踪，正文为独立教学重构；新浏览器差异、安全与可观察性补充会明确披露：
+
+- 7.1 理解迭代
+- 7.2 迭代器模式
+- 7.2.1 可迭代协议
+- 7.2.2 迭代器协议
+- 7.2.3 自定义迭代器
+- 7.2.4 提前终止迭代器
+- 7.3 生成器
+- 7.3.1 生成器基础
+- 7.3.2 通过yield中断执行
+- 7.3.3 生成器作为默认迭代器
+- 7.3.4 提前终止生成器
+- 7.4 小结
+
+本页逐项覆盖 **12** 个公开目录条目，并纳入正常、边界、失败和恢复验收。
+
+## 核心概念与所有权
+
+<Term def="对象通过Symbol.iterator返回迭代器、从而可被for-of等语法消费的契约。">
+  可迭代协议
+</Term>
+、
+<Term def="next返回包含value与done结果对象、可选return负责提前清理的契约。">
+  迭代器协议
+</Term>
+、
+<Term def="调用后返回生成器对象、执行可在yield处暂停和恢复的特殊函数。">
+  生成器
+</Term>
+、
+<Term def="在生成器中产出值并暂停执行、下次恢复时接收输入的表达式。">
+  yield
+</Term>
+、
+<Term def="消费者停止迭代时通过return通知生产者执行清理的协议路径。">
+  提前终止
+</Term>
+。每个概念都要回答：谁创建输入，状态保存在哪里，哪个任务或版本可修改它，结束后由谁清理。
+
+|   # | 概念       | 工程含义                                                            |
+| --: | ---------- | ------------------------------------------------------------------- |
+|   1 | 可迭代协议 | 对象通过Symbol.iterator返回迭代器、从而可被for-of等语法消费的契约。 |
+|   2 | 迭代器协议 | next返回包含value与done结果对象、可选return负责提前清理的契约。     |
+|   3 | 生成器     | 调用后返回生成器对象、执行可在yield处暂停和恢复的特殊函数。         |
+|   4 | yield      | 在生成器中产出值并暂停执行、下次恢复时接收输入的表达式。            |
+|   5 | 提前终止   | 消费者停止迭代时通过return通知生产者执行清理的协议路径。            |
+
+## 机制拆解
+
+### 1. 协议比循环语法更基础
+
+for-of、扩展运算符和Array.from都先请求Symbol.iterator，再反复调用next。自定义集合只要实现协议即可接入这些消费者，同时必须决定重复迭代是创建新游标还是共享状态。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+### 2. 生成器是显式暂停状态机
+
+生成器函数调用时不执行正文，第一次next才进入；yield把局部变量和指令位置一起保存。next传值、throw注入异常、return提前结束构成三种恢复通道，适合建模惰性序列和协作流程。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+### 3. 资源迭代需要return
+
+读取文件、游标或订阅的迭代器若被break提前终止，应通过return释放资源。生成器的finally可承接这一责任；测试要主动提前退出，而不是只验证自然耗尽。
+
+先预测：若省略这一层，哪个绑定、任务、权限或资源会先偏离？
+
+## 六阶段证据链
+
+可操作链条是：请求默认迭代器 → 创建迭代状态 → 调用next推进 → 产出value/done → 处理提前return → 证明资源清理。正常样本证明能力，边界样本证明预算，失败样本证明拒绝，恢复样本证明任务、状态和资源重新收敛。
+
+<Stepper>
+  <Step title="1. 请求默认迭代器与创建迭代状态">
+    固定浏览器版本、输入、初始DOM与时钟，运行正常和边界样本。
+    <Jpg07IteratorsGeneratorsMapLab />
+  </Step>
+  <Step title="2. 调用next推进与产出value/done">
+    注入异常、取消、重复事件、权限拒绝或旧缓存，要求在首偏离点停止。
+    <Jpg07IteratorsGeneratorsExperimentLab />
+  </Step>
+  <Step title="3. 处理提前return与证明资源清理">
+    清除故障后重放相同输入，核对输出、任务队列、DOM摘要、监听器与资源数量。
+    <Jpg07IteratorsGeneratorsEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小可运行实验
+
+以下代码用于独立观察本页机制；生产实现还需加入输入验证、兼容策略、权限、取消与清理。
+
+```js
+function* range(end) {
+  try {
+    for (let i = 0; i < end; i += 1) yield i;
+  } finally {
+    console.log("closed");
+  }
+}
+for (const value of range(3)) {
+  if (value === 1) break;
+}
+```
+
+证据记录把目录、运行时与状态摘要放在一起：
+
+```yaml
+book: JavaScript高级程序设计（第4版）
+page: jpg-07-iterators-generators
+official_entries: 12
+sample: normal | boundary | failure | recovery
+browser_version: fixed
+input_fixture: fixed
+first_divergence: null
+cleanup_complete: true
+```
+
+故障脚本一次只改变一个变量：
+
+```text
+baseline -> inject(exception | cancel | duplicate | denied | stale-cache)
+observe -> stop_at_first_divergence
+recover -> replay_same_runtime_and_input
+assert -> one_state_owner && stable_output && no_stale_task && no_resource_leak
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：让Symbol.iterator返回同一个已消费迭代器，第二次遍历为空。**
+  必须保存输入、任务顺序、状态摘要与首次拒绝原因，而不是只看最终页面。
+</Callout>
+
+<Callout type="trap">
+  **误区二：只实现next，消费者break后文件句柄或订阅没有清理。**
+  必须加入边界、失败与恢复样本，证明错误没有跨入下一阶段。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 输入与环境变化                   | 预期状态       | 通过条件                     |
+| ---- | -------------------------------- | -------------- | ---------------------------- |
+| 正常 | 合法输入、权限、顺序与版本       | 六阶段完成     | 输出和状态摘要一致           |
+| 边界 | 空值、极限容量、重复事件或慢任务 | 达到预算不越界 | 主线程与内存有界             |
+| 失败 | 异常、取消、拒权、断网或旧产物   | 首偏离点停止   | 明确传播、回滚或降级         |
+| 恢复 | 修复后重放同一输入               | 收敛到正常轨迹 | 无陈旧任务、监听器和资源泄漏 |
+
+<Jpg07IteratorsGeneratorsEvidenceLab />
+
+本页签发不变量是：**每次迭代获得独立状态；done语义稳定；自然结束、异常与提前退出都执行资源清理。** 单次成功、平均耗时或最终截图不能替代运行时版本、执行轨迹、首偏离点与清理证据。
+
+## 练习
+
+<Exercises>
+
+**问题 1** 为什么不能只以最终页面结果正确作为验收？
+
+<Answer>
+  最终结果会隐藏重复副作用、旧任务覆盖、错误吞没和资源泄漏。必须比较输入、执行顺序、状态所有者、首偏离点与清理结果。
+</Answer>
+
+**问题 2** 如何把本页公开目录变成可执行学习证据？
+
+<Answer>
+  按公开顺序建立追踪表，为每组条目写出输入、状态、输出、失败与恢复条件。本页重点包括：7.1
+  理解迭代、7.2 迭代器模式、7.2.1 可迭代协议、7.2.2 迭代器协议、7.2.3
+  自定义迭代器、7.2.4 提前终止迭代器、7.3 生成器、7.3.1
+  生成器基础；其余条目已在上方逐项列出。
+</Answer>
+
+**问题 3** 本页的最小通过条件是什么？
+
+<Answer>
+  每次迭代获得独立状态；done语义稳定；自然结束、异常与提前退出都执行资源清理。
+  并且相同浏览器版本、输入与初始状态可以重放正常、边界、失败和恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **可迭代协议**：对象通过Symbol.iterator返回迭代器、从而可被for-of等语法消费的契约。
+- **迭代器协议**：next返回包含value与done结果对象、可选return负责提前清理的契约。
+- **生成器**：调用后返回生成器对象、执行可在yield处暂停和恢复的特殊函数。
+- **yield**：在生成器中产出值并暂停执行、下次恢复时接收输入的表达式。
+- **提前终止**：消费者停止迭代时通过return通知生产者执行清理的协议路径。
+- 六阶段机制链已经映射到正常、边界、失败与恢复证据。
+- 官方目录逐项追踪，现代补充不会冒充原书正式分节。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="可迭代协议">
+    对象通过Symbol.iterator返回迭代器、从而可被for-of等语法消费的契约。
+  </GlossaryItem>
+  <GlossaryItem term="迭代器协议">
+    next返回包含value与done结果对象、可选return负责提前清理的契约。
+  </GlossaryItem>
+  <GlossaryItem term="生成器">
+    调用后返回生成器对象、执行可在yield处暂停和恢复的特殊函数。
+  </GlossaryItem>
+  <GlossaryItem term="yield">
+    在生成器中产出值并暂停执行、下次恢复时接收输入的表达式。
+  </GlossaryItem>
+  <GlossaryItem term="提前终止">
+    消费者停止迭代时通过return通知生产者执行清理的协议路径。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Matt Frisbie 著，李松峰译，人民邮电出版社，2020年9月，866页，ISBN 9787115545381；英文原版 Professional JavaScript for Web Developers, 4th Edition，Wiley，2019年10月，1200页，印刷版 ISBN 9781119366447、电子版 ISBN 9781119366577。Wiley官方31页目录样章与中文版公开目录确认28章、4个附录和757个二三级目录条目。正文为独立教学重构。"
+  adaptedUrl="https://uat.store.wiley.com/en-us/professional-javascript-for-web-developers-4th-edition-p-9781119366577"
+/>

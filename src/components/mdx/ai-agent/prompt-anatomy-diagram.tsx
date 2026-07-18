@@ -211,8 +211,9 @@ export function AaPromptAnatomyDiagram() {
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        一条好提示由四个区组成：角色（system 岗位说明书）定身份与规矩、指令说清要做什么、
-        few-shot 示例教它照样子做、输入（user）给本次待处理内容——缺一块都容易让模型跑偏。
+        一条好提示由四个区组成：角色（system
+        岗位说明书）定身份与规矩、指令说清要做什么、 few-shot
+        示例教它照样子做、输入（user）给本次待处理内容——缺一块都容易让模型跑偏。
       </figcaption>
     </figure>
   );

@@ -1,79 +1,266 @@
 ---
-title: 深度探索 C++ 对象模型学习地图
+title: "深度探索 C++ 对象模型：官方七章学习地图"
 type: A
-section: 对象模型基础
+section: Inside the C++ Object Model · Learning Map
 order: 0
-description: 全书三大板块与推荐学习路径，回答「C++ 对象模型到底研究什么、为什么要学」。
+description: 依据 1996 年第一版官方目录组织七章路线，把对象表示、程序变换、生命周期与模板/异常/RTTI 边缘机制连成证据驱动学习系统。
 demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/inside-the-c-plus-plus-object-model-9780201834543"
 draft: false
 ---
 
-import { IcoBookMap } from "@/components/mdx/inside-cpp-object-model/diagrams/ico-book-map";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  IcoEvidenceBoundaryMap,
+  IcoMechanismDependencyMap,
+  IcoOfficialChapterRouteMap,
+} from "@/components/mdx/inside-cpp-object-model/diagrams/learning-map";
 
 <Objectives>
 
-- 能说出全书三大板块各自研究什么、彼此如何衔接
-- 能复述「对象布局→构造语义→运行时机制」的推荐学习路径及其递进逻辑
-- 能回答：为什么 C++ 程序员需要理解对象模型的底层实现？
+- 能描述第一版 7 个 official chapters 各自的核心问题、输入证据与学习产物
+- 能解释 representation、program transformation、lifetime state machine 与 deferred decisions 的依赖关系
+- 能设计一份区分 language guarantee、implementation/ABI 和 experiment 的对象模型验证记录
 
 </Objectives>
 
-## 这本书研究什么
+## 从“语法背后留下什么”开始
 
-打开《深度探索 C++ 对象模型》，你面对的不是又一本语法手册，而是一组追问：`class` 写出来的对象在内存里到底长什么样？成员函数存在哪、怎么被找到？虚函数凭什么能在运行期决定调用哪个版本？构造和析构的那一连串动作，编译器替你做了什么？Stanley Lippman 这本书的核心，是把面向对象的语言概念翻译成编译器的实现机制——也就是「对象模型」。
+《Inside the C++ Object Model》不是一本重讲 class syntax 的书。它追问 `class`、inheritance、virtual、constructor、template、exception 和 RTTI 被 compiler 接受后，object bytes、hidden parameters、tables、generated calls 与 lifetime protocol 怎样共同满足语言语义。
 
-理解对象模型，意味着你不再把 `sizeof`、虚函数开销、对齐 padding、多重继承的二义性当成黑魔法，而是能预测、能解释、能动手优化。
+<Term def="C++ 对 object-oriented semantics 的语言支持，以及 compiler/ABI 为实现这些语义采用的底层 representation 与 transformation。">
+  C++ object model
+</Term>
 
-<IcoBookMap />
+先预测一个 polymorphic derived object 至少包含哪些 subobjects/metadata，再用 layout dump 和 call output 验证。目标不是记住“vptr 在 offset 0”这种 target-specific 结论，而是能从 static/dynamic type、hierarchy 和 lifetime phase 推导合法行为，并知道哪些 bytes 需要实测。
 
-## 三大板块
+## 官方第一版七章路线
 
-全书围绕三大板块展开。第一板块「对象模型基础」回答「对象长什么样」——从简单对象模型、表格驱动模型到 C++ 对象模型的演化，看清数据成员如何内联、虚函数为何要付一次间接代价。这是地基，后续一切机制都建立在这套布局之上。
+<IcoOfficialChapterRouteMap />
 
-第二板块「构造语义」回答「对象怎么被造出来」——构造函数的展开序列、成员的初始化顺序、vptr 在构造期被两次设置的秘密，以及数据成员的对齐与 padding。这块决定了对象「成型」的全过程。
+<Term def="Addison-Wesley Professional 1996 年第一版按 Object Lessons 到 On the Cusp of the Object Model 排列的七章结构。">
+  official seven-chapter route
+</Term>
 
-第三板块「运行时机制」回答「对象造好后怎么行为、怎么消亡」——成员函数的调用模型、虚表与虚调用、RTTI 与 `dynamic_cast`、多重继承的内存布局、对象从分配到释放的完整生命周期。这是多态真正发生的现场。
+### 第1章：Object Lessons
 
-## 学习路径
+建立全书 vocabulary：simple、table-driven 与 prevailing C++ model；encapsulation 是否改变 layout；base subobject 如何加入；`struct/class` 的真实差异；pointer static type 与 object dynamic type 怎样产生 polymorphism。
 
-推荐路径是一条依赖链：先懂对象布局，才看得懂构造时 vptr 为什么被两次设置；懂了构造语义，才理解多态生效的窗口只在「构造完成到析构开始」之间；懂了运行时多态，多重继承的 this 调整与虚继承才不会沦为死记硬背。
+```cpp
+struct Base {
+    int data = 1;
+    virtual int value() const { return data; }
+};
 
-## 一个统一视角
+struct Derived : Base {
+    int extra = 2;
+    int value() const override { return data + extra; }
+};
+```
 
-这条路径背后还有一个更深的统一视角：对象模型的所有机制，本质上都在回答「编译器替你做了什么」。你写下一行 `Derived d;`，编译器在背后展开了构造序列、设置了 vptr、按对齐规则插入了 padding；你写下 `ptr->f()`，编译器要决定是直接绑定到某个函数、还是经虚表间接查找。读这本书的方法，不是去记忆一条条结论，而是不断追问「这一步编译器替我做了什么、它为什么这么做」。
+学习产物是第一张 object sketch：标出 Base subobject、Derived member、可能的 vptr、`Base*` view，以及 data/nonvirtual/virtual 三类访问的决议时机。
 
-带着这个追问去读每个机制，你会发现虚函数、RTTI、虚继承这些看似分散的主题，其实是同一套实现哲学的不同切面——在抽象能力与运行效率之间，为每一个语言特性找到最合适的落地方式。C++ 选择了「不为用不到的特性付费」的原则：你不用虚函数，对象就不带 vptr；你不用虚继承，就不引入 vbptr 的间接。理解了这套哲学，你就能在面对性能与抽象的权衡时，做出和编译器设计者同样清晰的判断。
+### 第2章：The Semantics of Constructors
 
-<Callout type="tip">
-<strong>建议 →</strong> 每学完一块，挑一个机制动手验证。比如学完对象布局，写个小程序打印不同成员顺序下的 `sizeof`；学完虚表，用基类指针调虚函数观察实际命中的版本。机制是死的，只有动手验证才能内化。
+判断 compiler 何时需要 synthesis：member/base default construction、virtual representation、virtual base；default memberwise copy 何时能 bitwise lower；explicit、argument、return value initialization 如何变换；member initializer list 的真实顺序。
+
+学习产物是一份 constructor expansion：对每个 hidden/generated action 写明触发语义，不把“compiler 自动生成”误解为“所有 scalar 清零”或“必有一次 copy”。
+
+### 第3章：The Semantics of Data
+
+把 member name binding、data layout 与 address calculation 拆开；比较 static/nonstatic access；沿 ordinary、polymorphic、multiple、virtual inheritance 追踪 data；理解 pointer-to-data-member 是 class-relative locator。
+
+学习产物是一张 target-scoped layout table：size/alignment、member/base offsets、fixed/runtime adjustment 与 ABI caveat 分栏记录。
+
+### 第4章：The Semantics of Function
+
+把 nonstatic call 改写为 hidden `this`；理解 name mangling 与 overload linkage；展开 virtual slot；在 multiple/virtual inheritance 中追踪 thunk 和 this/result adjustment；最后比较 member-function pointer 与 inline formal/local expansion。
+
+```cpp
+using Action = void (Controller::*)(int);
+
+Action action = &Controller::start;
+(controller.*action)(2);
+```
+
+学习产物是一条 call trace：static lookup -> symbol/slot -> incoming object view -> adjustment -> target body，并记录 optimizer 是否 devirtualize/inline。
+
+### 第5章：Semantics of Construction, Destruction, and Copy
+
+从 class declaration 契约进入完整 lifecycle：pure virtual destructor 仍需 definition；const virtual 必须匹配；most-derived object 从 virtual/direct bases 到 vptr/members/body 建立；copy 不 raw-copy dynamic identity；destruction 逆序退场。
+
+学习产物是一张 phase state machine，能解释 constructor/destructor 中 virtual call 为什么只看到 active class，以及 exception 时为何只 unwind 已成功 subobjects。
+
+### 第6章：Runtime Semantics
+
+storage duration 决定 global/local-static/automatic/dynamic object 的触发边界；new-expression 组合 allocation 与 construction；array new 管理逐元素 rollback；placement new 在 external storage 开始 lifetime；temporary 按 materialization/full-expression/elision 推导。
+
+```cpp
+alignas(Node) std::byte storage[sizeof(Node)];
+Node* node = new (storage) Node(args);
+node->~Node();
+```
+
+学习产物是一份 ownership protocol：谁提供 storage、谁开始 lifetime、constructor throw 谁回滚、谁调用 destructor、谁最终 deallocate。
+
+### 第7章：On the Cusp of the Object Model
+
+template 把 dependent name/member body 推迟到 instantiation；exception runtime 创建 thrown object、搜索 try/catch 并 unwind；RTTI 通过 dynamic metadata 检查 cast/typeid；固定 layout/vtable 又形成 DSO/shared-memory ABI 边界。
+
+学习产物是一份 late-decision matrix：definition/instantiation/runtime/link-load/process boundary 各自允许使用哪些 type/layout identity。
+
+## 四层机制依赖
+
+<IcoMechanismDependencyMap />
+
+<Term def="base subobjects、nonstatic data、padding、vptr 与 virtual-base metadata 共同形成的对象字节/元数据结构。">
+  object representation
+</Term>
+
+第 1/3 章提供 representation，第 2/4 章把 source operations lower 到这份 representation，第 5/6 章规定 representation 在何时有效、复制和撤销，第 7 章才使用 compile/runtime metadata 做更晚决议。跳过 dependency 会出现典型误解：只画 vtable 不画 incoming base view；只说 new 分配内存不说 lifetime；只说 RTTI 查类型不说 DSO identity。
+
+<Term def="compiler 为保持 object semantics 而插入 hidden this/result、base/member constructor、vptr setup、thunk、cleanup 等动作。">
+  program transformation
+</Term>
+
+<Term def="object/subobjects 从未构造、逐层有效、完整动态状态、逐层析构到 lifetime 结束的有序阶段。">
+  lifetime state machine
+</Term>
+
+<Term def="把 name/type/handler/target 的最终选择从 definition 推迟到 template instantiation、throw 或 runtime type query。">
+  deferred decision
+</Term>
+
+## 三栏证据法
+
+<IcoEvidenceBoundaryMap />
+
+<Term def="由 C++ language rules 保证、在 conforming implementations 间应保持相同 observable behavior 的结论。">
+  language guarantee
+</Term>
+
+<Term def="特定 compiler、target、calling convention 与 binary interface 为实现语言语义采用的布局和符号协议。">
+  implementation ABI
+</Term>
+
+<Term def="固定 toolchain/options/workload 后，通过 layout、symbols、assembly、counters 或 profiler 得到的可复现实测事实。">
+  experimental evidence
+</Term>
+
+每份笔记至少三栏：标准保证什么；当前 ABI 怎样做；本次实验观察到什么。比如“virtual call 选 final overrider”是 language guarantee，“对象首字段为 vptr”不是；“当前 Itanium ABI build 在 offset 0 放 vptr”可以是 experiment+ABI conclusion。
+
+<Callout type="trap" title="陷阱：把书中主流实现模型当成标准规定">
+  本书解释 prevalent implementation，帮助推导成本；C++ standard 不规定 vptr
+  位置、vtable shape、member-pointer bytes 或 exception table。引用任何 layout
+  数字时都附 compiler、target ABI、language mode 和 options。
 </Callout>
 
-<Callout type="trap">
-<strong>现象 →</strong> 跳过构造语义直接学多重继承，结果对着 this 指针调整和虚继承的 vbptr 一头雾水。<strong>原因 →</strong> 多重继承的复杂度大多来自构造期的 vptr 设置与基类子对象拼接，没学构造语义就缺了前因。<strong>修法 →</strong> 按板块顺序学习，先把构造序列和 vptr 行为吃透，再进入运行时机制。
+## 七章学习循环
+
+每章使用同一闭环：
+
+1. 写出 source-level contract 与预测行为；
+2. 画 object/subobject/call/lifetime representation；
+3. 写最小 probe，记录 output、addresses、counts；
+4. 查看 optimized assembly/symbol/layout 或 runtime metadata；
+5. 把 observation 归类为 language、ABI 或 optimizer choice；
+6. 用 exercise 迁移到 multiple/virtual inheritance、failure path 或 boundary case；
+7. 将结论写成带适用范围的 engineering decision。
+
+<Term def="先预测语义与实现路径，再用最小实验和优化后证据验证，最后限定结论适用边界的学习方式。">
+  predict-observe-bound loop
+</Term>
+
+<Callout type="trap" title="陷阱：只看一次sizeof或反汇编就宣称掌握对象模型">
+  单一 observation 不能覆盖 construction phase、multiple
+  inheritance、copy/elision、 exception path 或跨 module
+  ABI。至少改变一个关键维度并重跑；若结论随 ABI/options 变化，就把它保留为
+  implementation fact，不推广为 language rule。
 </Callout>
 
-## 小结与练习
+## 完成标准
 
-- 全书三大板块：对象模型基础奠基、构造语义立柱、运行时机制贯通
-- 推荐路径：布局→构造→运行时，顺序由依赖关系决定，跳级会断层
-- 一条主线：对象在内存里长什么样→怎么造出来→怎么调用与多态→怎么消亡
-- 理解对象模型 = 从「会写 C++」到「写好 C++」的分水岭
+完成这条路线后，应能对一个陌生 hierarchy 输出四份工件：object layout sketch、member call lowering、construction/copy/destruction state machine、ABI boundary review。答案必须同时解释 correctness 与 cost，且每个 target-specific 结论都有可重复证据。
 
-<Exercises>
-  <Answer question="为什么 C++ 程序员需要理解对象模型的底层实现？能用就行不够吗？">因为同一份面向对象代码，在不同实现选择下性能差异巨大，还暗藏未定义行为：虚函数的间接开销、对齐 padding 撑大对象、构造期调虚函数不走派生覆写、多重继承的二义性。理解对象模型能帮你写出更省内存、更高效的代码，准确预测 sizeof 与布局，避开构造析构期、多重继承、RTTI 里的陷阱。它是从「会写」到「写好」的分水岭。</Answer>
-  <Answer question="全书三大板块为什么必须按「布局→构造→运行时」的顺序学？">顺序由依赖关系决定：不先懂对象布局（数据成员、vptr），就看不懂构造时 vptr 为什么被两次设置；不懂构造语义，就看不懂多态只在构造完成后到析构开始前生效；不懂运行时多态，多重继承的 this 调整和虚继承就成了无源之水。跳级会把每一步都变成死记硬背。</Answer>
-</Exercises>
+## 小结
 
-## 名词解释
+- 官方第一版是 7 章，不是按 vtable/RTTI 等零散主题拼出的 8 页摘要
+- 第 1/3 章建立 representation，第 2/4 章解释 compiler transformations
+- 第 5/6 章把 representation 放入完整 object/storage lifetime
+- 第 7 章处理 template、exception、RTTI 的 deferred decisions 与 ABI 边界
+- language guarantee、implementation ABI、experimental evidence 必须分栏
+- vptr/vtable 是常见实现，不是标准固定 bytes
+- predict-observe-bound loop 让每个结论既可验证又不过度推广
+- 最终产物是 layout、call、lifecycle、boundary 四份机制证据，而不是术语背诵
+
+<Attribution
+  adaptedFrom="Inside the C++ Object Model, First Edition: official seven-chapter organization"
+  adaptedUrl="https://www.informit.com/store/inside-the-c-plus-plus-object-model-9780201834543"
+/>
 
 <Glossary>
-  <GlossaryItem term="对象模型">编译器把面向对象概念（类、对象、继承、虚函数）落实到内存布局与运行期机制的方式，即语言特性背后的实现模型。</GlossaryItem>
-  <GlossaryItem term="三大板块">全书的主干划分：对象模型基础（对象长什么样）、构造语义（对象怎么造出来）、运行时机制（对象怎么行为与消亡）。</GlossaryItem>
-  <GlossaryItem term="vptr">对象内存里指向所属类虚表的指针，是布局、构造、多态、生命周期的共同枢纽。</GlossaryItem>
-  <GlossaryItem term="推荐学习路径">由布局→构造→运行时递进而成的学习链，顺序由各板块间的依赖关系决定，跳级会导致知识断层。</GlossaryItem>
+  <GlossaryItem term="C++ object model">
+    对象语义及其底层表示与程序变换。
+  </GlossaryItem>
+  <GlossaryItem term="official seven-chapter route">
+    第一版从 Object Lessons 到对象模型边缘的七章路线。
+  </GlossaryItem>
+  <GlossaryItem term="object representation">
+    subobjects、data 与 runtime metadata 的组合布局。
+  </GlossaryItem>
+  <GlossaryItem term="program transformation">
+    compiler 为保持语义插入的 hidden/generated actions。
+  </GlossaryItem>
+  <GlossaryItem term="lifetime state machine">
+    subobjects 逐层建立和逆序撤销的阶段。
+  </GlossaryItem>
+  <GlossaryItem term="deferred decision">
+    把最终决议推迟到实例化或运行期。
+  </GlossaryItem>
+  <GlossaryItem term="language guarantee">
+    跨 conforming implementation 保持的可观察语义。
+  </GlossaryItem>
+  <GlossaryItem term="implementation ABI">
+    特定 toolchain/target 的二进制实现协议。
+  </GlossaryItem>
+  <GlossaryItem term="experimental evidence">
+    固定环境下可重复观察的 layout/call/lifetime 事实。
+  </GlossaryItem>
+  <GlossaryItem term="predict-observe-bound loop">
+    预测、观察并限定结论边界的学习闭环。
+  </GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Inside the C++ Object Model (Stanley Lippman)" adaptedUrl="https://www.oreilly.com/" />
+<Exercises>
+  1. **问题 1：为七章各写一份验收工件。** 不能只写章节摘要，要给 output 名称、输入和能推翻错误假设的证据。
+
+<Answer question="七章如何形成连续而非碎片化的学习路线？">
+  Ch1 object sketch；Ch2 generated-constructor/copy expansion；Ch3 layout/offset
+  table；Ch4 call/slot/thunk trace；Ch5 lifecycle phase state machine；Ch6
+  storage/allocation/temporary ownership protocol；Ch7
+  instantiation/exception/RTTI/ABI boundary matrix。每份工件都以上一层
+  representation 为输入，并含一个 counterexample： secondary base、virtual
+  base、throw、temporary 或 DSO boundary。
+</Answer>
+
+2. **问题 2：拆分一条“virtual函数慢”的说法。** 分别写 language guarantee、ABI hypothesis、experiment 和 design decision。
+
+<Answer question="怎样把模糊性能判断改成可验证结论？">
+  guarantee 是 dynamic call 必须产生 final overrider 的 observable result；ABI
+  hypothesis 是 vptr+slot+可能 thunk；experiment 固定 target
+  distribution/body，记录 devirtualization、 indirect branch、this
+  adjustment、branch miss 与 wall time。若热点 tiny body 且多 target
+  导致明显回归，可考虑 variant/static dispatch；若 compiler 已 devirtualize 或
+  body 主导，则保留 hierarchy。结论只适用于该 workload/toolchain。
+</Answer>
+
+3. **问题 3：设计一个跨章节 probe。** hierarchy 同时含 virtual base、virtual method、copy、array new 和 failed constructor；写出预期 trace 与证据分类。
+
+  <Answer question="一个实验怎样覆盖representation、transformation和lifetime？">
+    先画唯一 virtual base、direct bases、members 与 vptr views；记录 constructor calls 应从
+    virtual base 到 direct bases/members，virtual dispatch 受 active phase 限制。copy
+    建立 target vptr/virtual base，不 raw-copy identity。array 第 k 个 throw 时仅逆序销毁前
+    k 个完整 elements，再释放 allocation。call order 属 language semantics，具体 vptr/
+    offsets/cookie 属 ABI observation；计数与 addresses 是本次 experimental evidence。
+  </Answer>
+</Exercises>

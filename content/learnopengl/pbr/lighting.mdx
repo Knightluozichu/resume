@@ -1,14 +1,16 @@
 ---
-title: PBR 光照
+title: PBR 光照、Cook-Torrance 与线性 HDR 输出
 type: C
 section: PBR
 order: 2
 description: 把上一章推导的 Cook-Torrance 反射率方程写进 GLSL——在片段着色器里跑起来，实时渲染一个 PBR 球阵（粗糙度×金属度梯度），亲手拖参数看 D/G/F 三项怎么把数学变成画面。
 demo: true
 math: false
-sourceUrl: https://learnopengl-cn.github.io/07%20PBR/02%20Lighting/
+sourceUrl: https://learnopengl.com/PBR/Lighting
 draft: false
 ---
+
+import { PbrLightingContractDiagram } from "@/components/mdx/learnopengl/diagrams/lighting";
 
 {/* C 实战型章（HEL-163，PBR 篇第 2 篇）：原书「PBR 光照 Lighting」。重心是代码实现（spec C 列）：把上一章推导的 Cook-Torrance 反射率方程翻译成 GLSL，在片段着色器里跑起来，渲染一个 PBR 球。C 型段式：概念讲解(§3 压缩) + 交互 Demo(§5 必，ShaderDemo) + 代码对照(§6 核心，≥80% 覆盖) + 误区(§7 ≥3) + 练习(§8 含实现题)。主 viz = ShaderDemo（ray-sphere PBR 球，roughness/metallic 可调）+ 3 张 Server SVG diagram。draft:true，老板验收后才发布（硬规则 7）。 */}
 
@@ -19,14 +21,14 @@ draft: false
 <Objectives>
 
 - 能改出一个 PBR 球的**粗糙度和金属度**效果：在片段着色器里实现完整的 Cook-Torrance BRDF（D/G/F 三项 + 漫反射 + 镜面反射），拖 roughness 和 metallic 两个滑块看高光和颜色变化
-- 能说出逐片段 PBR 光照循环的完整流程：对每盏点光源算辐射度 → 算 D/G/F → 组合 Cook-Torrance 镜面项 → 累加 Lo → 加环境光 → Reinhard 色调映射 → gamma 校正
+- 能实现并说出逐片段 PBR 光照循环的完整流程：对每盏点光源算辐射度 → 算 D/G/F → 组合 Cook-Torrance 镜面项 → 累加 Lo → 加环境光 → Reinhard 色调映射 → gamma 校正
 - 能回答：如果你在 sRGB 空间（而不是线性空间）做了光照计算，渲染出来的球会有什么问题？色调映射那一步在防止什么？
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段、每段 ≤120 字、零术语（专业名词最早第 3 节）、回答「解决什么问题 / 没有它会怎样」、类比固定用「光与材质」库。 */}
 
-## 让公式亮起来
+## 为什么公式要在线性 HDR 中亮起来
 
 上一章把物理规律拆成了公式——什么样的表面反多少光、从哪个角度更亮。但公式写在纸上不会发光。这一章要做的就是：**把纸上的公式一行一行翻译成着色器代码，让 GPU 真正算出每个像素该多亮多暗**。
 
@@ -59,6 +61,28 @@ radiance = lightColor * (1.0 / (distance * distance))
 PBR 要求**所有光照运算在线性空间中进行**。线性空间意味着数值翻倍 = 亮度翻倍，物理上才算对。但光源辐射度可以很大（比如 150.0），累加后颜色值远超 1.0——这就是 <Term def="HDR（High Dynamic Range，高动态范围）：颜色值允许超过 1.0 的渲染方式。PBR 场景中光源辐射度通常很大，累积后的 Lo 可能远超 1.0。最后通过色调映射（tone mapping）把高动态范围压缩到显示器能显示的 0~1 范围。">HDR</Term>。最后用<Term def="色调映射（Tone Mapping）：把 HDR 高动态范围的颜色值压缩到 0~1 的低动态范围，以便在显示器上正确显示。常用算法：Reinhard（c / (c + 1)），简单有效。还有 ACES、Uncharted 2 等更高级的映射曲线。">色调映射</Term>把 HDR 压缩到 0~1，再做 gamma 校正输出到屏幕：
 
 <LinearHdrPipelineDiagram />
+
+## 单步确认：从材质参数到像素输出
+
+把一大段 PBR 着色器拆成三段检查，就能定位绝大多数“像塑料、发灰或过曝”的问题。
+
+<Stepper>
+  <Step title="先定金属与非金属的能量分配">
+    <PbrLightingContractDiagram step={1} />
+
+    `F0` 决定正看时的镜面基础反射率；`kD = (1-kS)*(1-metallic)` 确保金属不再错误地产生漫反射。
+  </Step>
+  <Step title="逐灯累加同一套 BRDF">
+    <PbrLightingContractDiagram step={2} />
+
+    每盏灯都使用相同的 N、V、L、H 与材质参数。不同灯只改变方向、距离衰减和入射辐射度，贡献在线性空间相加。
+  </Step>
+  <Step title="最后才做显示变换">
+    <PbrLightingContractDiagram step={3} />
+
+    色调映射与 gamma 都在光照循环之后。提前压缩或把 sRGB 值直接相加，都会破坏灯光混色与能量关系。
+  </Step>
+</Stepper>
 
 {/* 5. 交互 Demo（spec §五）：C 型主 Demo = ShaderDemo。ray-sphere PBR 球，roughness/metallic 可调。 */}
 
@@ -334,7 +358,7 @@ FragColor = vec4(color, 1.0);
 
 ## 常见误区
 
-<Callout type="warn">
+<Callout type="trap">
 
 **在 sRGB 空间做光照计算（应该在线性空间）**
 
@@ -342,7 +366,7 @@ sRGB 是显示器用的非线性编码——中间灰实际只有 0.18 而不是
 
 </Callout>
 
-<Callout type="warn">
+<Callout type="trap">
 
 **漏掉分母的 0.0001 防除零导致黑点**
 
@@ -350,7 +374,7 @@ Cook-Torrance 分母 `4 * NdotV * NdotL` 在掠射角时可能为零（光线或
 
 </Callout>
 
-<Callout type="warn">
+<Callout type="trap">
 
 **忘记乘 NdotL 余弦项导致场景过亮**
 
@@ -358,7 +382,7 @@ Cook-Torrance 分母 `4 * NdotV * NdotL` 在掠射角时可能为零（光线或
 
 </Callout>
 
-<Callout type="warn">
+<Callout type="trap">
 
 **对金属漏乘 (1 - metallic) 导致金属有漫反射**
 
@@ -409,7 +433,7 @@ PBR 的光照循环对每盏灯独立计算辐射度和 BRDF 贡献，然后**�
 <Attribution
   title="PBR - 光照"
   author="Joey de Vries"
-  url="https://learnopengl-cn.github.io/07%20PBR/02%20Lighting/"
+  url="https://learnopengl.com/PBR/Lighting"
   license="CC BY-NC 4.0"
 />
 

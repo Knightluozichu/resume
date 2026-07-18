@@ -1,0 +1,251 @@
+---
+title: "第9章 排序"
+type: C
+section: "大话数据结构 · 查找与排序"
+order: 9
+description: "以稳定性、内外排序和统一记录模型比较冒泡、选择、插入、希尔、堆、归并与快速排序，验证正确性、空间和最坏输入。"
+demo: true
+math: false
+sourceUrl: "https://www.tup.tsinghua.edu.cn/bookscenter/bookcatalog?id=08952301"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { DsvSimpleSortLab, DsvImprovedSortLab, DsvSortSelectionLab } from "@/components/mdx/data-structures-visual/diagrams/sorting";
+
+<Objectives>
+
+- 能描述排序key、稳定性、内排序/外排序与正确性条件，并用带原始序号记录验证结果
+- 能实现冒泡、选择、插入、堆、归并和快速排序的核心操作，推导希尔gap与各自时间/空间边界
+- 能比较七类算法的稳定性、自适应性、最坏界、内存和I/O，并设计混合与外排序方案
+
+</Objectives>
+
+## 从“有序”还不够开始
+
+排序把记录按一个或多个key重新排列。只检查key非递减只能证明结果有序，不能证明没有丢失/重复记录，也不能证明相等key的原次序是否保持。统一验收至少包含sorted、permutation和stable（若承诺）三项。
+
+官方第9章覆盖排序的基本概念、稳定性、内排序与外排序，冒泡排序，简单选择排序，直接插入排序，希尔排序，堆排序，归并排序，快速排序与优化，以及排序复杂度与适用场景比较。
+
+先预测：选择排序为什么可能改变相等key次序；归并时相等key应从左run还是右run取才稳定；快速排序为何在有序输入和坏pivot下退化；堆排序为何最坏稳定却不“稳定”。
+
+<Term def="把一组记录按一个或多个key及比较器重新排列为指定次序的过程。">排序</Term>必须固定比较器是严格弱序；不一致比较器会让任何算法失去正确含义。
+
+## 排序的基本概念、稳定性与分类
+
+<Term def="若两个记录key相等，排序后仍保持它们排序前的相对次序。">排序稳定性</Term>对多关键字分阶段排序和事件同时间顺序很重要。稳定是算法与具体实现的性质；归并若tie时先取右边就会变不稳定。
+
+<Term def="待排序记录及主要工作区都能放入内存的排序。">内排序</Term>主要计比较、移动、cache和辅助空间。<Term def="数据无法一次装入内存、需要在外存与内存间分批处理的排序。">外排序</Term>主要成本是块I/O，常用run generation加多路归并。
+
+```c
+#include <stdbool.h>
+#include <stddef.h>
+
+typedef struct {
+    int key;
+    size_t original_order;
+    int payload;
+} SortRecord;
+
+bool sorted_and_stable(const SortRecord *a, size_t n) {
+    for (size_t i = 1; i < n; ++i) {
+        if (a[i - 1].key > a[i].key) return false;
+        if (a[i - 1].key == a[i].key
+            && a[i - 1].original_order > a[i].original_order) return false;
+    }
+    return true;
+}
+```
+
+Permutation可在小输入排序 `(key,original_order)` 对照，或使用multiset/hash加独立计数；checksum alone可能碰撞，不能作为唯一证明。
+
+## 简单排序：冒泡、选择与插入
+
+<DsvSimpleSortLab />
+
+<Stepper>
+  <Step title="切换三种简单排序"><DsvSimpleSortLab /></Step>
+  <Step title="逐趟跟踪">对`5a,3,5b,2`记录比较、交换/移动、已排序区和相等项顺序。</Step>
+  <Step title="覆盖输入形态">空、单项、有序、逆序、全等、重复、锯齿和近乎有序，并计数比较/移动。</Step>
+</Stepper>
+
+### 冒泡排序
+
+<Term def="反复比较相邻记录并交换逆序对，使极值逐趟移动到未排序区边界。">冒泡排序</Term>若只在严格大于时交换，相等项不跨越，算法稳定。每趟若无交换可提前结束，已排序最好`Theta(n)`；逆序最坏比较/交换`Theta(n^2)`。
+
+```c
+static void swap_record(SortRecord *left, SortRecord *right) {
+    SortRecord temp = *left; *left = *right; *right = temp;
+}
+
+void bubble_sort(SortRecord *a, size_t n) {
+    for (size_t end = n; end > 1; --end) {
+        bool swapped = false;
+        for (size_t i = 1; i < end; ++i) {
+            if (a[i - 1].key > a[i].key) {
+                swap_record(&a[i - 1], &a[i]);
+                swapped = true;
+            }
+        }
+        if (!swapped) break;
+    }
+}
+```
+
+更进一步可记录最后一次交换位置缩短下一趟边界，但必须证明其后缀已有序。
+
+### 简单选择排序
+
+<Term def="每趟在未排序区选择最小记录，与未排序区首位交换。">简单选择排序</Term>比较次数近似固定`n(n-1)/2`，但最多`n-1`次交换，适合写入昂贵而比较便宜的小数组。直接交换会让跨过的相等记录改变次序，因此通常不稳定；用稳定抽取并移动可稳定但增加移动成本。
+
+### 直接插入排序
+
+<Term def="逐项把当前记录插入已排序前缀的正确位置，并右移较大记录。">直接插入排序</Term>若while只移动严格大于key的记录，相等项保持顺序。已排序只需线性比较；逆序移动`Theta(n^2)`。对小数组和近乎有序输入常有低常数，也常作为混合排序的小段终结器。
+
+<Callout type="trap" title="所有相邻交换算法都天然稳定">
+只有相等key不被跨越时稳定。若条件写成`>=`也交换相等项，冒泡会破坏稳定；比较器是否把两个记录视为相等同样关键。
+</Callout>
+
+## 希尔排序
+
+<Term def="按递减gap把记录分组，对各gap子序列做插入排序，最后gap为1。">希尔排序</Term>让远距离逆序较早移动，突破简单插入的逐位移动。Gap sequence决定性能；必须最终含1，且每次只比较同一gap链。
+
+希尔通常原地且不稳定，因为远距离移动可跨过相等key。经典`n/2`递减易实现但不是最佳；复杂度依赖gap，不能笼统写一个保证。验证除最终有序外，要对每个gap pass检查各子序列有序，并用不同n覆盖gap边界。
+
+## 堆排序
+
+<Term def="利用完全二叉堆选择极值：先建堆，再反复把堆顶交换到末尾并恢复堆。">堆排序</Term>升序用最大堆。数组0-based下孩子`2i+1/2i+2`；sift-down选择更大孩子，与root比较并下沉。
+
+```c
+static void sift_down(SortRecord *a, size_t root, size_t end) {
+    while (root <= (end - 1) / 2 && end > 0) {
+        size_t child = root * 2 + 1;
+        if (child + 1 < end && a[child].key < a[child + 1].key) ++child;
+        if (a[root].key >= a[child].key) return;
+        swap_record(&a[root], &a[child]);
+        root = child;
+    }
+}
+
+void heap_sort(SortRecord *a, size_t n) {
+    if (n < 2) return;
+    for (size_t i = n / 2; i > 0; --i) sift_down(a, i - 1, n);
+    for (size_t end = n; end > 1; --end) {
+        swap_record(&a[0], &a[end - 1]);
+        sift_down(a, 0, end - 1);
+    }
+}
+```
+
+建堆为`Theta(n)`，`n-1`次提取各`O(log n)`，总`Theta(n log n)`最坏，额外空间`O(1)`。跨距离交换使其不稳定。代码中`end`是半开界，先处理0避免无符号下溢。
+
+## 归并排序
+
+<Term def="把序列分成有序子序列，再线性合并成更大有序序列的分治排序。">归并排序</Term>合并两个run时比较头项，取较小者；tie先取左run保持稳定。递归top-down和迭代bottom-up都为`Theta(n log n)`，数组版通常需`Theta(n)`buffer。
+
+```c
+void merge_runs(const SortRecord *source, SortRecord *target,
+                size_t left, size_t middle, size_t right) {
+    size_t i = left, j = middle, out = left;
+    while (i < middle && j < right) {
+        if (source[i].key <= source[j].key) target[out++] = source[i++];
+        else target[out++] = source[j++];
+    }
+    while (i < middle) target[out++] = source[i++];
+    while (j < right) target[out++] = source[j++];
+}
+```
+
+Bottom-up每轮run width翻倍，source/target buffer交换，最后若结果在temp需复制/转移owner。Width倍增要防溢出。链表归并可通过改链接减少元素复制，但随机访问与cache不同。
+
+## 快速排序与优化
+
+<Term def="选择pivot，把记录分为小于、等于和大于区域，再递归处理未定区域的分区排序。">快速排序</Term>平均`Theta(n log n)`且cache友好，常见in-place实现不稳定；坏pivot在有序/重复/adversarial输入可退化`Theta(n^2)`并产生深递归。
+
+Hoare/Lomuto/三路分区有不同边界，不能拼接不变量。重复key很多时三路partition把等于区一次完成。Pivot可随机、三数取中或采样；先递归较小partition、循环处理较大侧可把辅助栈限制在`O(log n)`，即使比较仍可能退化。
+
+工程化优化包括小partition改插入、检测递归深度超限后切heap（introsort）、避免已排序坏pivot。优化前保留partition property test：左区小于/不大于pivot，中区等于，右区大于/不小于，元素permutation不变。
+
+<DsvImprovedSortLab />
+
+<Stepper>
+  <Step title="切换四种改进排序"><DsvImprovedSortLab /></Step>
+  <Step title="跟踪结构不变量">希尔检查gap有序；堆检查parent>=children；归并检查run；快速检查partition区间。</Step>
+  <Step title="注入最坏输入">有序/逆序、全等、organ-pipe、重复聚簇、大记录与昂贵比较器。</Step>
+</Stepper>
+
+<Callout type="trap" title="快速排序平均最快，所以可以忽略最坏情况">
+不可信输入可针对固定pivot制造二次时间和线性递归深度。随机/采样pivot、三路分区、深度限制与heap fallback把性能风险纳入契约。
+</Callout>
+
+## 外排序与算法选择
+
+外排序先把内存可容纳chunk读入、内排序后写成有序run，再用priority queue做k路归并。Fan-in受内存buffer与文件句柄限制；每个run保存count/range/checksum，失败时不替换最终文件。多pass I/O量往往比比较次数更重要。
+
+<DsvSortSelectionLab />
+
+<Stepper>
+  <Step title="切换稳定、内存、输入与外存"><DsvSortSelectionLab /></Step>
+  <Step title="写Decision Record">记录n、record/key大小、稳定要求、输入形态、内存、最坏延迟和外存限制。</Step>
+  <Step title="运行统一矩阵">同一dataset/oracle比较正确性、稳定性、比较/移动、峰值空间和wall time。</Step>
+</Stepper>
+
+## 排序复杂度与适用场景比较
+
+冒泡/选择/插入最坏平方，插入对近有序自适应；希尔取决gap；堆最坏`n log n`且原地不稳定；归并稳定最坏`n log n`但需buffer；快速平均`n log n`、通常常数好但需防二次最坏。现实标准库常用混合算法，不是教科书单一实现。
+
+比较昂贵时缓存key或Schwartzian transform可减少重复计算，但要维护record关联和额外空间。大record排序索引/指针再重排可减少移动，却改变cache与owner。稳定需求能用 `(key, original_order)` 作为复合key模拟，但增加比较和存储，不等于算法本身稳定。
+
+选择时先排除违反硬约束的候选：要求稳定就不能直接采用普通选择、希尔、堆或原地快速排序；内存只能容纳常数个记录时，数组归并不合适；输入超过内存时，任何只讨论内排序比较次数的结论都不完整。剩余候选再按数据形态区分：小段或逆序对很少时优先插入，必须保证最坏`n log n`且希望原地时考虑堆，需要稳定且可分配buffer时考虑归并，追求内存中平均吞吐时使用带防退化措施的快速/混合排序。
+
+算法名称仍不能替代测量。记录很大但key很小，移动次数可能比比较次数更重要；比较器要读取磁盘或执行复杂规范化时，缓存key的收益可能高于更换排序算法；大量重复key会放大二路快速分区的缺陷，却适合三路分区。基准数据应保留真实重复率、局部有序度、记录尺寸和比较成本，并把p50吞吐、p99延迟、峰值内存和最坏输入结果同时写入决策记录。
+
+稳定多关键字排序还有一个方向性细节。若先按次关键字稳定排序，再按主关键字稳定排序，最终主关键字优先且同主关键字内保留次关键字次序；若第二趟不稳定，第一趟建立的关系会被破坏。测试时可使用`(部门, 年龄, original_order)`，逐组检查主次关键字和原序，避免只看最终key串似乎有序。
+
+## 统一验收：Sorted、Permutation、Stable
+
+用可信标准库或小规模穷举作oracle；每个算法验证sorted和permutation，稳定算法再验证相等key的original_order递增。Property-based生成空、重复和极端key；比较器测试反自反、反对称/传递等序性质。故障注入临时buffer分配失败，原数组是否保持由API保证级别决定。
+
+性能测试先校验结果，固定编译/硬件，覆盖几何n与输入形态，分别计比较、移动、分配和峰值空间。单个随机数组不能代表排序算法。
+
+## 本章回顾：没有脱离约束的最佳排序
+
+1. 排序验收包含有序、元素multiset不变与承诺的稳定性；内外排序成本模型不同。
+2. 冒泡、选择、插入都是平方级简单排序，但交换、稳定与自适应性不同。
+3. 希尔按gap预排序；堆给原地最坏界；归并给稳定顺序合并；快速给高平均局部性但需防最坏。
+4. 外排序以有序runs和多路归并控制块I/O，并需要可恢复manifest。
+5. 选择算法要同时看n、输入形态、稳定性、内存、比较/移动成本和最坏延迟。
+
+<Exercises>
+
+**问题 1：怎样自动验证一个排序实现稳定？**
+
+<Answer>给每个记录保存original_order，用仅比较key的算法排序；先验证key非递减和元素permutation，再对每组相等key断言original_order递增。使用多组交错重复key，不能只测全唯一。</Answer>
+
+**问题 2：为什么堆排序最坏Theta(n log n)却通常不稳定？**
+
+<Answer>建堆Theta(n)，每次提取sift-down对数，共n次；但堆顶与末尾的远距离交换、sift-down会让相等key跨越彼此，不能保持原相对次序。复杂度与稳定性是两条独立性质。</Answer>
+
+**问题 3：怎样防守快速排序的最坏输入与深递归？**
+
+<Answer>随机/采样pivot、重复多时三路分区；总是递归较小侧并循环处理大侧限制栈；跟踪深度超过阈值切heap形成introsort，小段用插入。测试有序、逆序、全等和adversarial模式。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="排序" definition="按key和比较器把记录重新排列为指定次序。" />
+  <GlossaryItem term="排序稳定性" definition="相等key记录排序后保持原相对次序。" />
+  <GlossaryItem term="内排序" definition="记录和主要工作区都位于内存的排序。" />
+  <GlossaryItem term="外排序" definition="数据超内存并以分批外存I/O完成的排序。" />
+  <GlossaryItem term="冒泡排序" definition="相邻逆序交换并逐趟移动极值的排序。" />
+  <GlossaryItem term="简单选择排序" definition="逐趟选择未排序区最小记录到边界。" />
+  <GlossaryItem term="直接插入排序" definition="把当前项插入已排序前缀并移动较大项。" />
+  <GlossaryItem term="希尔排序" definition="按递减gap对子序列做插入排序的方法。" />
+  <GlossaryItem term="堆排序" definition="建堆并反复提取堆顶到有序后缀的排序。" />
+  <GlossaryItem term="归并排序" definition="分解为有序runs并线性合并的排序。" />
+  <GlossaryItem term="快速排序" definition="围绕pivot分区并递归处理各区的排序。" />
+</Glossary>
+
+<Attribution adaptedFrom="大话数据结构（溢彩加强版），第9章 排序" adaptedUrl="https://www.tup.tsinghua.edu.cn/bookscenter/bookcatalog?id=08952301" />

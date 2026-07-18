@@ -1,0 +1,196 @@
+---
+title: "Chapter 13. Diagnostics"
+type: C
+section: "C# 10 Nutshell · Runtime Services"
+order: 13
+description: "覆盖条件编译、Debug/Trace、调试器集成、进程线程与堆栈、事件日志、性能计数器、Stopwatch及跨平台诊断工具，建立低扰动证据链。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch13.html"
+draft: false
+---
+
+import { CtcDiagnosticSignalLab, CtcDiagnosticToolchainLab, CtcProcessStackLab } from "@/components/mdx/csharp-10-core/diagrams/diagnostics";
+
+<Objectives>
+
+- 能设计log、metric、trace、stack和dump的分级采集方案，并限制开销与敏感信息
+- 能分析process、thread、StackTrace和wait evidence，判断CPU、hang与crash的首个故障点
+- 能比较Windows与跨平台诊断工具，复现同一build和负载下的before/after证据
+
+</Objectives>
+
+## 为什么Diagnostics必须从Question开始
+
+“应用很慢”不是可测试假设。先限定时间窗、版本、实例、endpoint、负载与症状，再选择最便宜且能回答问题的证据：counter看趋势，structured log看单次事件，distributed trace看因果和延迟，sampled stack看CPU，dump看某一时刻的运行时状态。采集本身也会改变系统，所以必须记录provider、level、sampling、duration与工具版本。
+
+先预测：Release build完全没有Debug调用成本吗；StackTrace总能还原源代码行吗；Stopwatch使用DateTime wall clock吗；PerformanceCounter跨平台统一可用吗；先抓完整dump总是最快。答案都是否。
+
+<Term def="把症状、时间窗、build identity、采集配置与可复现结论串成一条可审计链。">diagnostic evidence chain</Term>
+
+## Conditional Compilation
+
+`#if`根据编译符号选择source branch，适合平台、目标框架或真正的编译期能力差异；大量业务分支会产生难以测试的build variants。`[Conditional("DEBUG")]`让调用点在未定义符号时被编译器省略，方法本身必须返回void，参数求值也随调用消失；它不等于runtime level filtering。
+
+```csharp
+static class Probe
+{
+    [Conditional("DEBUG")]
+    public static void AssertOrder(Order order)
+        => Debug.Assert(order.Total >= 0, "negative total");
+}
+
+#if WINDOWS
+WindowsEventLogBridge.Register();
+#endif
+```
+
+每个支持的configuration都应编译和测试。Portable逻辑优先capability abstraction，而非散落`#if`。Release中需要的production telemetry不能放进只在DEBUG存在的路径。
+
+## Debug and Trace Classes
+
+Debug面向开发断言和调试输出，许多方法带Conditional("DEBUG")；Trace面向可配置listener和production-compatible tracing，其调用通常仍编译。Assert表达程序员不变量，不处理外部输入错误；失败策略不得依赖用户一定附加debugger。
+
+TraceSource/TraceListener提供source、level与sink；现代应用常使用ILogger、EventSource/DiagnosticSource和OpenTelemetry，但核心契约相同：结构化字段、correlation id、level policy与redaction。高基数字段和逐请求大payload会放大成本。
+
+<Term def="在生产功能保持不变的前提下，限定provider、level、sampling与duration的可控观测开销。">bounded observability</Term>
+
+## Debugger Integration
+
+Debugger.IsAttached只说明当前有managed debugger，不能决定业务正确性。Debugger.Break在附加时触发breakpoint，Launch会尝试启动调试器，生产服务中应极谨慎。DebuggerDisplay、DebuggerTypeProxy和DebuggerBrowsable改善对象查看，但表达式不得产生副作用或昂贵I/O。
+
+Portable PDB把IL offset映射到source；优化、inlining、tail calls、async state machine和trim/AOT都会改变可见frames与locals。诊断包必须记录binary、PDB、commit、runtime和deployment hash，避免拿错误symbols解释stack。
+
+<Stepper>
+  <Step title="切换log、metric、trace与dump"><CtcDiagnosticSignalLab /></Step>
+  <Step title="填写问题到证据矩阵">为latency、error、CPU、hang和memory growth选择最低成本的一手证据。</Step>
+  <Step title="设采集预算">明确level、sampling、duration、disk/network上限、PII redaction与自动停止条件。</Step>
+</Stepper>
+
+<Callout type="trap" title="诊断越详细，定位一定越快">
+无限日志会改变时序、淹没关键事件并泄露数据；无边界trace/dump会耗尽磁盘。先定义问题和预算，再逐级升级证据。
+</Callout>
+
+## Processes and Process Threads
+
+System.Diagnostics.Process可枚举/启动进程，读取PID、start time、exit code、modules和ProcessThread集合。PID会复用，identity应至少包含machine/container、PID、start time与build。启动子进程时重定向stdout/stderr必须并发drain，否则pipe填满会导致双方等待；argument使用ArgumentList避免手工quote。
+
+```csharp
+using var process = new Process
+{
+    StartInfo = new ProcessStartInfo("dotnet")
+    {
+        RedirectStandardOutput = true,
+        RedirectStandardError = true,
+        UseShellExecute = false
+    }
+};
+process.StartInfo.ArgumentList.Add("--info");
+process.Start();
+
+Task<string> stdout = process.StandardOutput.ReadToEndAsync();
+Task<string> stderr = process.StandardError.ReadToEndAsync();
+await process.WaitForExitAsync(ct);
+```
+
+ProcessThread暴露OS thread的部分priority、state和timing，权限与平台支持不同。Managed task不等于thread；async等待时通常不占用线程。CPU调查把process CPU、thread samples和managed/native stacks按同一时间窗关联。
+
+## StackTrace and StackFrame
+
+StackTrace捕获当前或exception stack，StackFrame可提供method、IL/native offset和可用时的file/line。创建stack trace昂贵，不应在热路径逐次采集。Exception.ToString通常已包含type、message、inner exception和stack；`throw;`保留原stack，`throw ex;`会重置当前throw位置。
+
+Async/iterator编译为state machine，显示的MoveNext需通过symbols/工具还原logical async frames。Inlining和optimization可能隐藏frame，source line也可能因PDB不匹配而错误。Hang分析必须抓所有线程多次，区分持续相同wait、进展缓慢与采样偶然。
+
+<Term def="把线程当前frame、等待对象、锁owner和跨线程依赖连接起来解释hang/deadlock的图。">wait-for graph</Term>
+
+<Stepper>
+  <Step title="切换hot CPU、hang、crash与child process"><CtcProcessStackLab /></Step>
+  <Step title="建立thread table">记录OS/managed thread id、CPU、state、top frames、wait resource和owner。</Step>
+  <Step title="用重复快照验证">间隔采集多组stacks，判断frame是否进展，并与request/trace时间线对齐。</Step>
+</Stepper>
+
+## Windows Event Logs
+
+Windows Event Log提供按log/source/event id/level记录的持久事件，读取和创建source常需权限，部署时应预注册而非请求路径动态创建。Message template、event id和payload schema需要版本化；敏感输入不得直接写入。远程读取、retention和rotation由运维策略控制。
+
+跨平台应用把Event Log封装成sink，核心domain只产生结构化事件。Linux通常进入journald/syslog/container stdout，云环境进入集中日志系统；不要让平台sink失败阻断主业务。
+
+## Performance Counters
+
+Windows Performance Counters提供OS/应用category、counter与instance，采样值常需前后两个sample计算rate。Instance name会冲突或变化，部署权限和counter安装需治理。它们不是统一跨平台API；现代.NET runtime metrics通常经EventCounters/Meters和OpenTelemetry输出。
+
+Counter命名必须说明unit、aggregation和scope。Gauge、cumulative counter与rate不能混读；高cardinality label会使监控系统失控。Alert基于用户影响和持续窗口，而非单点瞬时尖峰。
+
+## The Stopwatch Class
+
+Stopwatch使用平台高分辨率单调计时源，适合elapsed duration，不受wall-clock调整影响。IsHighResolution/Frequency描述底层计时器；ElapsedTicks不是TimeSpan ticks，转换应使用Elapsed或按Stopwatch.Frequency计算。Microbenchmark仍受JIT、tiering、GC、CPU frequency和dead-code elimination影响，正式benchmark优先BenchmarkDotNet。
+
+```csharp
+var samples = new long[31];
+for (int i = 0; i < samples.Length; i++)
+{
+    long start = Stopwatch.GetTimestamp();
+    await HandleBatchAsync(batch, ct);
+    samples[i] = Stopwatch.GetElapsedTime(start).Ticks;
+}
+Array.Sort(samples);
+Console.WriteLine(TimeSpan.FromTicks(samples[samples.Length / 2]));
+```
+
+一次测量不代表分布。Warm up后固定input，记录median和tail，隔离I/O或明确包含它；同时保存build/runtime/hardware配置。
+
+## Cross-Platform Diagnostic Tools
+
+`dotnet-counters`低开销查看runtime和自定义Meter/EventCounter；`dotnet-trace`通过EventPipe采集限时trace；`dotnet-dump`收集/分析managed dump；`dotnet-gcdump`聚焦heap graph；`dotnet-stack`在可用平台抓stacks。容器中需匹配PID namespace、socket与权限，生产采集要加超时、大小上限和加密传输。
+
+先counter确认CPU/GC/exception/thread-pool趋势，再按假设升级到trace；hang/crash/retention才进入dump。每个artifact附incident id、UTC window、host/process identity、commit、runtime、command/providers和checksum。修复后用相同scenario再次采集，结论必须体现症状和证据都改变。
+
+<Stepper>
+  <Step title="切换counters、trace、dump与gcdump"><CtcDiagnosticToolchainLab /></Step>
+  <Step title="编写escalation runbook">给每种症状定义trigger、首选工具、duration、provider、artifact上限和fallback。</Step>
+  <Step title="执行before/after复现">固定build以外变量，比较counter趋势、hot stack、pause或retention path，并归档证据。</Step>
+</Stepper>
+
+<Callout type="trap" title="有Stack Trace就已证明Root Cause">
+Stack只是某时刻的执行位置。必须结合时间窗、线程状态、输入、版本和重复采样，排除正常等待与错误symbols后才形成因果结论。
+</Callout>
+
+<Term def="从低成本counter/log逐级升级到bounded trace、stack和dump，并在每一级设置停止条件。">diagnostic escalation ladder</Term>
+
+## 本章回顾：先定义问题，再采集最小充分证据
+
+1. Conditional compilation改变build surface，production telemetry不能依赖DEBUG调用。
+2. Debug/Trace与现代telemetry都需要结构化字段、correlation、redaction和开销预算。
+3. Process/thread/stack证据要与build identity和时间窗绑定，async/optimization会改变frames。
+4. Event Logs与Performance Counters偏Windows；跨平台运行时证据用EventPipe、Meters和dotnet工具。
+5. 修复验收必须在相同负载下比较before/after，而不是只说“代码看起来合理”。
+
+<Exercises>
+
+**问题 1：线上P99延迟突然升高，第一轮采集什么？**
+
+<Answer>先固定UTC窗口、版本、实例与endpoint，查看低开销request latency/error、CPU、GC、thread-pool和dependency metrics，并抽样correlated traces。只有证据指向CPU、GC、blocking或下游后才分别升级sampled trace、GC trace、all-thread stacks或dependency capture。</Answer>
+
+**问题 2：怎样证明服务发生deadlock而非正常等待？**
+
+<Answer>间隔抓取多组all-thread stacks，建立wait-for graph，找到资源owner和循环依赖；确认相关请求无进展且不是外部timeout内的合法等待。记录symbols/build并结合lock/task状态，修复后同场景应不再形成循环且吞吐恢复。</Answer>
+
+**问题 3：一个诊断artifact需要哪些最小元数据？**
+
+<Answer>Incident id、UTC开始结束、host/container与PID/start time、commit/build/runtime、采集命令和provider/level/sampling、工具版本、大小/checksum及redaction级别。这样证据可关联、可复现并避免用错symbols。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="diagnostic evidence chain" definition="症状、身份、采集配置到结论的证据链。" />
+  <GlossaryItem term="bounded observability" definition="有level、sampling、duration与数据边界的观测。" />
+  <GlossaryItem term="wait-for graph" definition="线程等待资源与owner构成的依赖图。" />
+  <GlossaryItem term="diagnostic escalation ladder" definition="从低成本signal逐级升级到trace或dump。" />
+  <GlossaryItem term="build identity" definition="Binary、symbols、commit、runtime和部署版本的唯一组合。" />
+</Glossary>
+
+<Term def="确保binary、PDB、source commit、runtime与部署哈希属于同一产物的诊断身份。">build identity</Term>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 13: Diagnostics" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch13.html" />

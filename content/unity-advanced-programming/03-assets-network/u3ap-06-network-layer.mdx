@@ -1,0 +1,198 @@
+---
+title: "第6章 网络层"
+type: C
+section: "Unity3D 高级编程之进阶主程 · 第6章"
+order: 6
+description: "网络层不是 Socket API 集合，而是根据消息语义选择传输，定义帧边界、序列化、超时、重试和同步权威。TCP、UDP 与 HTTP 各自解决不同问题，协议必须在粘包、乱序、丢包和重连下仍可解释。"
+demo: true
+math: false
+sourceUrl: "https://www.cnblogs.com/ZhYQ-Note/articles/15493562.html"
+draft: false
+---
+
+import {
+  Objectives, Callout, Attribution, Glossary, GlossaryItem, Term,
+  Exercises, Answer, Stepper, Step,
+} from "@/components/mdx/mdx-components";
+import {
+  U3ap06NetworkLayerArchitectureLab, U3ap06NetworkLayerRuntimeLab, U3ap06NetworkLayerReleaseLab,
+} from "@/components/mdx/unity-advanced-programming/diagrams/u3ap-06-network-layer";
+
+<Objectives>
+- 能解释TCP 还是 UDP的成本与适用边界
+- 能比较实现 TCP和实现 UDP的证据差异
+- 能设计第6章的正常、边界和失败样本
+- 能复现“声明消息语义 → 选择传输 → 编码协议帧 → 注入网络故障 → 重建权威状态 → 统计延迟一致性”全链轨迹
+- 能判断第6章是否满足主程交接门
+</Objectives>
+
+## 从连载位置与先预测开始
+
+本页对应陆泽西（Jesse Lu）《Unity3D 高级编程之进阶主程》的第6章。该作品是在线技术连载，不是有 ISBN 的正式出版书；原作者旧站已不可作为稳定入口，因此以保存下来的完整文章索引核对章节，并保留原始标题与编号。
+
+网络层不是 Socket API 集合，而是根据消息语义选择传输，定义帧边界、序列化、超时、重试和同步权威。TCP、UDP 与 HTTP 各自解决不同问题，协议必须在粘包、乱序、丢包和重连下仍可解释。
+
+<Callout type="note" title="先预测">
+  在运行实验前，先预测“声明消息语义”经过“选择传输”后最先变化的模块、状态或指标，并写出一个会推翻预测的结果。
+</Callout>
+
+<U3ap06NetworkLayerArchitectureLab />
+
+## 原连载文章覆盖矩阵
+
+| # | 原文章主题或本页检查点 | 可观察解释 |
+| ---: | --- | --- |
+| 1 | TCP 还是 UDP | 按可靠性、时序、延迟和消息价值选择传输。 |
+| 2 | 实现 TCP | 处理连接、流式帧边界、半包、粘包与断线。 |
+| 3 | 实现 UDP | 处理数据报边界、丢包、乱序、重复和 MTU。 |
+| 4 | 封装 HTTP | 统一请求、响应、取消、超时、重试和错误映射。 |
+| 5 | 数据协议原理 | 定义消息头、长度、类型、版本和序列化边界。 |
+| 6 | 网络同步解决方案 | 选择帧同步或状态同步并声明服务器权威与校正。 |
+
+TCP 还是 UDP、实现 TCP、实现 UDP、封装 HTTP、数据协议原理、网络同步解决方案 不是随意补充的主程知识清单，而是沿“声明消息语义 → 选择传输 → 编码协议帧 → 注入网络故障 → 重建权威状态 → 统计延迟一致性”建立因果关系。每个条目都要能定位到实验输入、首个状态变化和最终门禁。
+
+## 核心模型与技术边界
+
+网络层不是 Socket API 集合，而是根据消息语义选择传输，定义帧边界、序列化、超时、重试和同步权威。TCP、UDP 与 HTTP 各自解决不同问题，协议必须在粘包、乱序、丢包和重连下仍可解释。
+
+连载写作年代与今天的 Unity、.NET 后端和渲染管线存在差异。复现时保留作者要解释的机制，同时记录旧 API、当前替代路径、运行时版本和验证结果。没有版本映射的“更新版结论”不能覆盖原文章，也不能把今天的默认行为倒推成当年的事实。
+
+<Term def="按可靠性、时序、延迟和消息价值选择传输。">TCP 还是 UDP</Term>必须在本页留下输入、内部状态和输出证据，不能只作为术语出现。
+
+<Term def="处理连接、流式帧边界、半包、粘包与断线。">实现 TCP</Term>必须在本页留下输入、内部状态和输出证据，不能只作为术语出现。
+
+<Term def="处理数据报边界、丢包、乱序、重复和 MTU。">实现 UDP</Term>必须在本页留下输入、内部状态和输出证据，不能只作为术语出现。
+
+<Term def="统一请求、响应、取消、超时、重试和错误映射。">封装 HTTP</Term>必须在本页留下输入、内部状态和输出证据，不能只作为术语出现。
+
+<Term def="定义消息头、长度、类型、版本和序列化边界。">数据协议原理</Term>必须在本页留下输入、内部状态和输出证据，不能只作为术语出现。
+
+## 六阶段主程证据链
+
+<Stepper>
+  <Step title="1. 声明消息语义 → 选择传输">
+    固定 Unity、脚本后端、平台、数据规模和输入。先保存结构快照，再运行正常样本，禁止同时修改多个策略。
+    <U3ap06NetworkLayerArchitectureLab />
+  </Step>
+  <Step title="2. 编码协议帧 → 注入网络故障">
+    加入边界与故障样本，记录首个偏离节点。最终画面或平均值不能代替协议、分配、重建、决策或路径轨迹。
+    <U3ap06NetworkLayerRuntimeLab />
+  </Step>
+  <Step title="3. 重建权威状态 → 统计延迟一致性">
+    确认门禁能拒绝故障，修复后用同一输入复测，并归档版本、日志、捕获、截图和结论。
+    <U3ap06NetworkLayerReleaseLab />
+  </Step>
+</Stepper>
+
+## 可复现实验
+
+用同一移动命令经过 TCP 流和 UDP 数据报传输，固定种子注入延迟、丢包、乱序和重复。先预测客户端状态，再检查协议解析与服务器校正轨迹。
+
+最小实现只暴露本章关键状态，不把因果藏进通用框架。
+
+```csharp
+public readonly record struct PacketHeader(
+    ushort Version, ushort Type, uint Sequence, int PayloadLength);
+
+static bool IsValid(PacketHeader h, int available)
+{
+    return h.Version == 1 && h.PayloadLength >= 0 && h.PayloadLength <= available;
+}
+```
+
+统一证据契约把结构、版本和故障计划放在同一结果中。
+
+```ts
+type LeadProgramEvidence = {
+  chapter: "u3ap-06-network-layer";
+  runtimeVersion: string;
+  sample: "baseline" | "boundary" | "failure";
+  stages: readonly string[];
+  firstDeviation: string | null;
+  decision: "pass" | "rejected";
+};
+
+function canRelease(run: LeadProgramEvidence): boolean {
+  return run.stages.length === 6 &&
+    (run.sample !== "failure" || run.decision === "rejected");
+}
+```
+
+证据日志至少保留下列字段，并与捕获文件使用同一运行编号。
+
+```text
+stage,name,sample,input,observation,result
+1,声明消息语义,baseline,planned,observed,pass
+2,选择传输,baseline,planned,observed,pass
+3,编码协议帧,baseline,planned,observed,pass
+4,注入网络故障,baseline,planned,observed,pass
+5,重建权威状态,baseline,planned,observed,pass
+6,统计延迟一致性,baseline,planned,observed,pass
+```
+
+## 两个必须主动制造的失败
+
+<Callout type="trap" title="局部结论没有运行证据">
+  假设一次 Receive 就是一条完整消息，或把 UDP 当成更快的 TCP，没有序号、确认、重放保护和超时策略。必须保存故障版本和首个偏离节点，再用相同输入验证修复。
+</Callout>
+
+<Callout type="trap" title="指标改善但系统边界退化">
+  故意让一个平均指标变好，同时删除版本、长尾、内存、协议、画质或交接证据。只要“相同命令序列和故障计划能重放出相同协议轨迹，非法帧被拒绝，最终状态收敛到声明的权威。”不成立，即使演示成功也必须拒绝。
+</Callout>
+
+## 验收矩阵
+
+| 维度 | 正常样本 | 边界样本 | 失败样本 | 通过条件 |
+| --- | --- | --- | --- | --- |
+| 连载 | 原主题逐项定位 | 相邻文章交叉 | 故意漏一项 | 无主题空洞 |
+| 结构 | 依赖和状态可见 | 极限规模与阈值 | 注入错误边界 | 首偏离可定位 |
+| 运行 | 固定输入可回放 | 长尾与平台差异 | 故障计划 | 结果可复现 |
+| 交接 | 他人按证据复验 | 干净环境 | 删除隐含依赖 | 不变量成立 |
+
+## 练习
+
+<Exercises>
+
+**问题 1** 第6章覆盖哪些原连载主题？选择三个写出因果链。
+
+<Answer>
+  本页覆盖 TCP 还是 UDP、实现 TCP、实现 UDP、封装 HTTP、数据协议原理、网络同步解决方案。合格答案要沿“声明消息语义 → 选择传输 → 编码协议帧 → 注入网络故障 → 重建权威状态 → 统计延迟一致性”写清上游输入、中间状态和下游证据，不能只复述标题。
+</Answer>
+
+**问题 2** 怎样制造“假设一次 Receive 就是一条完整消息，或把 UDP 当成更快的 TCP，没有序号、确认、重放保护和超时策略。”并证明修复有效？
+
+<Answer>
+  固定运行时版本、平台、数据规模和输入，只注入该故障；保存首个偏离节点。修复后用相同条件复测正常、边界和失败组，并确认门禁从拒绝恢复为通过。
+</Answer>
+
+**问题 3** 为什么“相同命令序列和故障计划能重放出相同协议轨迹，非法帧被拒绝，最终状态收敛到声明的权威。”是第6章的签发不变量？
+
+<Answer>
+  因为主程交付的是可演进系统，不是一次演示。缺少该不变量时，局部指标可能改善，却会把成本转移到其他模块、平台、团队或线上故障。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- 已覆盖 TCP 还是 UDP、实现 TCP、实现 UDP、封装 HTTP、数据协议原理、网络同步解决方案，没有用自拟的热更新或 CI/CD 目录替代原连载。
+- 已沿“声明消息语义 → 选择传输 → 编码协议帧 → 注入网络故障 → 重建权威状态 → 统计延迟一致性”保存正常、边界、失败与修复证据。
+- 已记录原写作年代与当前 Unity 的版本映射。
+- 已以“相同命令序列和故障计划能重放出相同协议轨迹，非法帧被拒绝，最终状态收敛到声明的权威。”作为交接门。
+
+## 术语表
+
+<Glossary>
+<GlossaryItem term="TCP 还是 UDP">按可靠性、时序、延迟和消息价值选择传输。</GlossaryItem>
+<GlossaryItem term="实现 TCP">处理连接、流式帧边界、半包、粘包与断线。</GlossaryItem>
+<GlossaryItem term="实现 UDP">处理数据报边界、丢包、乱序、重复和 MTU。</GlossaryItem>
+<GlossaryItem term="封装 HTTP">统一请求、响应、取消、超时、重试和错误映射。</GlossaryItem>
+<GlossaryItem term="数据协议原理">定义消息头、长度、类型、版本和序列化边界。</GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="陆泽西（Jesse Lu）在线连载《Unity3D 高级编程之进阶主程》；现存完整文章索引由博客园保存，原作者旧站入口已失效"
+  adaptedUrl="https://www.cnblogs.com/ZhYQ-Note/articles/15493562.html"
+/>

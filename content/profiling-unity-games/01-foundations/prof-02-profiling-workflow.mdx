@@ -1,0 +1,283 @@
+---
+title: "端到端 Profiling 工作流与性能基线"
+type: C
+section: "基础概念与方法"
+order: 2
+description: "按Unity 6官方指南第19—25页复现官方单元 2，建立可测量、可反证、可回归的性能证据。"
+demo: true
+math: false
+draft: false
+sourceUrl: "https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Prof02ProfilingWorkflowMapLab,
+  Prof02ProfilingWorkflowExperimentLab,
+  Prof02ProfilingWorkflowEvidenceLab,
+} from "@/components/mdx/profiling-unity-games/diagrams/prof-02-profiling-workflow";
+
+<Objectives>
+
+- 能解释官方单元 2在官方Unity 6性能分析流程中的位置与责任边界
+- 能复现“冻结条件 → 预热设备 → 录制基线 → 提出假设 → 单变量修改 → 同输入复验”并保存可比较的中间证据
+- 能设计一个反证实验，判断“基线与候选必须使用同一目标设备、构建类型、场景检查点、质量设置和输入脚本，且保存原始采样而非只保存截图。”是否成立
+
+</Objectives>
+
+## 问题：怎样证明掌握的是官方单元 2，而不是记住几个工具名？
+
+先预测：如果只看到最终帧率或一张截图，不知道设备、构建、场景、输入和采样方式，能否判断修改真的有效？不能。性能结果是测试上下文与程序行为共同产生的，脱离上下文的数字既不能复现，也不能指导下一步。
+
+可靠工作流先冻结设备、构建、场景、画质和输入，再从高层总量下钻到具体标记。每次修改只验证一个假设，并用相同条件重放，避免把温度、后台任务或内容差异当成优化收益。
+
+<Prof02ProfilingWorkflowMapLab />
+
+## 官方目录边界
+
+本页严格对应Unity Technologies的《Ultimate guide to profiling Unity games (Unity 6 edition)》第19—25页。以下目录项必须在实现、实验或证据中出现：
+
+- **From high- to low-level profiling**
+- **Profile early**
+- **Establish a profiling methodology**
+- **Are you within frame budget?**
+- **If your game is in frame budget**
+- **Development Build**
+- **Autoconnect Profiler**
+
+本站以中文重新组织解释、代码和实验，不逐字复制原文。API示例以Unity 6思路为准；具体包版本和目标平台能力仍要在项目清单中固定。
+
+## 核心模型与不可变条件
+
+可靠工作流先冻结设备、构建、场景、画质和输入，再从高层总量下钻到具体标记。每次修改只验证一个假设，并用相同条件重放，避免把温度、后台任务或内容差异当成优化收益。
+
+本单元的不可变条件是：**基线与候选必须使用同一目标设备、构建类型、场景检查点、质量设置和输入脚本，且保存原始采样而非只保存截图。** 只要输入条件、观测边界或结果合同有一项改变，就不能把两次测量直接相减。先解释变化来源，再决定是否建立新的基线。
+
+## 五个必须落到证据的术语
+
+<Term def="修改前在固定测试条件下保存的可重复测量">性能基线</Term>
+
+它在本单元中不是孤立名词，而要落到“冻结条件 → 预热设备 → 录制基线 → 提出假设 → 单变量修改 → 同输入复验”的数据链，并能由一次保存的采样或状态记录验证。
+
+<Term def="设备构建场景画质和输入等影响结果的条件集合">测试上下文</Term>
+
+它在本单元中不是孤立名词，而要落到“冻结条件 → 预热设备 → 录制基线 → 提出假设 → 单变量修改 → 同输入复验”的数据链，并能由一次保存的采样或状态记录验证。
+
+<Term def="先看总帧时间和模块级趋势而不急于钻入函数">高层分析</Term>
+
+它在本单元中不是孤立名词，而要落到“冻结条件 → 预热设备 → 录制基线 → 提出假设 → 单变量修改 → 同输入复验”的数据链，并能由一次保存的采样或状态记录验证。
+
+<Term def="每轮只改变一个性能因素并保持其他条件不变">单变量实验</Term>
+
+它在本单元中不是孤立名词，而要落到“冻结条件 → 预热设备 → 录制基线 → 提出假设 → 单变量修改 → 同输入复验”的数据链，并能由一次保存的采样或状态记录验证。
+
+<Term def="另一位开发者可用记录条件重现的性能判断">可复验结论</Term>
+
+它在本单元中不是孤立名词，而要落到“冻结条件 → 预热设备 → 录制基线 → 提出假设 → 单变量修改 → 同输入复验”的数据链，并能由一次保存的采样或状态记录验证。
+
+## 从输入到结论的诊断链
+
+主链为：**冻结条件 → 预热设备 → 录制基线 → 提出假设 → 单变量修改 → 同输入复验**。每个节点保存构建提交、设备ID、场景检查点、帧号或快照ID、当前预算、实际值和首个异常。下一节点只消费上一节点已验证的事实，不能用“感觉更流畅”跨过中间归因。
+
+### 1. From high- to low-level profiling
+
+从高层到低层意味着先看帧是否超预算、CPU还是GPU受限、内存是否逼近上限，再进入Timeline、Hierarchy或平台捕获。直接搜索最慢函数会错过真正的系统限制。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 2. Profile early
+
+尽早分析能在架构和内容规模尚可调整时暴露风险。原型若要求同屏一万个敌人，就应先在最低目标硬件验证，而不是等美术和玩法完成后再补救。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 3. Establish a profiling methodology
+
+方法记录至少包括设备型号、操作系统、热状态、Unity版本、脚本后端、构建提交、场景、相机路径、画质、目标帧率和采样帧范围。缺一项都可能让差异失去解释力。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 4. Are you within frame budget?
+
+Development Build便于连接Unity Profiler，但它不是最终发布性能。结论要区分诊断构建用于定位和发布候选用于验收，两者不能直接比较绝对数。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 5. If your game is in frame budget
+
+Autoconnect Profiler适合快速连线；网络不稳定或多设备并行时应显式选择目标并确认采样来源。文件名和证据记录要包含设备ID，避免把另一台设备的数据混入。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 6. Development Build
+
+若游戏已在预算内，仍要检查长尾帧、内存余量和热稳态，不必为了更高无意义FPS牺牲开发时间。优化优先级由用户体验、平台认证和余量风险决定。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+### 7. Autoconnect Profiler
+
+一次有效修改要写清假设、改动、预计影响指标和反证条件。若主要指标改善但内存、画面或功耗恶化，结论应标记为权衡而不是无条件成功。
+
+复现时把这一项写成“输入条件—观测位置—判断阈值—下一动作”四列记录。输入条件决定数据是否可比，观测位置说明要看哪个线程、模块、对象或平台计数器；阈值来自本项目预算，下一动作必须能指向一次单变量实验。
+
+<Prof02ProfilingWorkflowExperimentLab />
+
+## 三步复现与分步观察
+
+<Stepper>
+  <Step title="1. 冻结输入与预算合同">
+    记录设备、构建、场景、画质、目标帧率、预热和输入脚本；写出本页要证明的唯一假设以及反证条件。
+    <Prof02ProfilingWorkflowMapLab />
+  </Step>
+  <Step title="2. 采集、分流并只改一个变量">
+    沿“冻结条件 → 预热设备 → 录制基线 → 提出假设 → 单变量修改 →
+    同输入复验”保存中间值，在首个越界节点停止下钻；一次只修改一个主要因素。
+    <Prof02ProfilingWorkflowExperimentLab />
+  </Step>
+  <Step title="3. 同输入复验并签发证据">
+    恢复相同热状态和场景检查点，重放基线输入；同时核对帧、内存、画面或玩法副作用。
+    <Prof02ProfilingWorkflowEvidenceLab />
+  </Step>
+</Stepper>
+
+## 可执行实现骨架
+
+下面的代码只承担本单元的数据所有权或测量边界。真正项目应把阈值放入版本化配置，并让证据文件引用同一个配置哈希。
+
+```csharp
+public readonly record struct BenchmarkContext(
+    string DeviceId, string BuildCommit, string Scene,
+    string Quality, int TargetFps, int WarmupSeconds);
+
+bool Comparable(BenchmarkContext a, BenchmarkContext b) =>
+    a.DeviceId == b.DeviceId &&
+    a.Scene == b.Scene &&
+    a.Quality == b.Quality &&
+    a.TargetFps == b.TargetFps;
+```
+
+每次采集都保存结构化元数据，避免报告与原始文件失联：
+
+```json
+{
+  "chapter": "prof-02-profiling-workflow",
+  "officialPages": "第19—25页",
+  "chain": [
+    "冻结条件",
+    "预热设备",
+    "录制基线",
+    "提出假设",
+    "单变量修改",
+    "同输入复验"
+  ],
+  "device": "target-low-tier-01",
+  "build": "commit-and-unity-version",
+  "scenario": "fixed-checkpoint",
+  "baseline": "capture-before.data",
+  "candidate": "capture-after.data",
+  "normal": true,
+  "boundary": true,
+  "failureReplay": true
+}
+```
+
+自动门输出必须同时保留通过值和拒绝原因，而不是只给一个绿色图标：
+
+```text
+PASS context=device+build+scene+quality+input
+PASS chain=冻结条件 -> 预热设备 -> 录制基线 -> 提出假设 -> 单变量修改 -> 同输入复验
+PASS invariant=基线与候选必须使用同一目标设备、构建类型、场景检查点、质量设置和输入脚本，且保存原始采样而非只保存截图。
+REJECT missing-raw-data | changed-context | hidden-quality-loss | unreplayed-failure
+```
+
+## 两个必须主动制造的失败样本
+
+<Callout type="trap" title="官方边界或测量上下文丢失">
+  在编辑器里测基线、在真机Release测候选，或同时改分辨率、AI和资源加载后把全部收益归给某一行代码。
+  先保存错误结论、首个偏离节点和原始数据，再恢复官方目录边界与相同测试条件复验。
+</Callout>
+
+<Callout type="trap" title="数字改善但工作被转移或结果改变">
+  故意降低画质、跳过玩法工作、扩大永久缓存或把任务推迟到下一帧。若主指标改善但GPU、内存、热量、图像或玩法合同变差，发布门必须拒绝。
+</Callout>
+
+## 证据矩阵与签发标准
+
+| 维度   | 正常样本       | 边界样本           | 失败样本           | 签发条件       |
+| ------ | -------------- | ------------------ | ------------------ | -------------- |
+| 上下文 | 固定设备与构建 | 最低档或长时间运行 | 故意改变一项条件   | 差异可解释     |
+| 主链   | 六节点均有记录 | 预算附近输入       | 在首个节点注入偏差 | 能定位首因     |
+| 结果   | 达到性能合同   | 无长尾越界         | 主动制造回归       | 同输入可复验   |
+| 副作用 | 画面玩法一致   | 生命周期完整       | 降质或转移成本     | 所有门同时通过 |
+
+<Prof02ProfilingWorkflowEvidenceLab />
+
+## 练习：把官方单元 2变成可审计交付
+
+<Exercises>
+
+**问题 1** 写出“冻结条件”到“同输入复验”每一步的输入、观测工具、阈值和输出。
+
+<Answer>
+  每一步都要引用同一测试上下文，输出必须包含数值、原始文件和下一步选择理由；不能只写工具名称。
+</Answer>
+
+**问题 2** 主动制造“在编辑器里测基线、在真机Release测候选，或同时改分辨率、AI和资源加载后把全部收益归给某一行代码。”，保存错误结论与首个偏离节点，再用同一输入证明修复。
+
+<Answer>
+  合格答案包含错误样本、上下文差异、反证实验、修复后原始数据以及性能和正确性双重结果。
+</Answer>
+
+**问题 3** 为不可变条件“基线与候选必须使用同一目标设备、构建类型、场景检查点、质量设置和输入脚本，且保存原始采样而非只保存截图。”设计正常、预算边界和失败三组测试。
+
+<Answer>
+  三组测试只改变计划中的输入，统一记录构建、设备、帧或快照ID、预算、实际值、首个异常和复验状态。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- 是否能逐项指出本页覆盖的官方目录项，而没有用通用性能建议替代？
+- 是否沿“冻结条件 → 预热设备 → 录制基线 → 提出假设 → 单变量修改 → 同输入复验”保存了可追溯中间证据？
+- 是否区分定位工具的干扰与发布构建的真实预算？
+- 是否主动制造失败，并在相同输入下证明修复没有转移成本？
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="性能基线">
+    修改前在固定测试条件下保存的可重复测量。
+  </GlossaryItem>
+  <GlossaryItem term="测试上下文">
+    设备构建场景画质和输入等影响结果的条件集合。
+  </GlossaryItem>
+  <GlossaryItem term="高层分析">
+    先看总帧时间和模块级趋势而不急于钻入函数。
+  </GlossaryItem>
+  <GlossaryItem term="单变量实验">
+    每轮只改变一个性能因素并保持其他条件不变。
+  </GlossaryItem>
+  <GlossaryItem term="可复验结论">
+    另一位开发者可用记录条件重现的性能判断。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Unity Technologies《Ultimate guide to profiling Unity games (Unity 6 edition)》，2025，93页"
+  adaptedUrl="https://unity.com/resources/ultimate-guide-to-profiling-unity-games-unity-6"
+/>

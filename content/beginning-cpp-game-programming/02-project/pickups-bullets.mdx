@@ -1,0 +1,376 @@
+---
+title: 第 12 章：子弹、拾取物与战斗碰撞
+type: A
+section: Zombie Arena 项目
+order: 12
+description: 对齐官方第 3 版第 12 章：实现 Bullet 与 Pickup 类、世界坐标准星、子弹-僵尸、玩家-僵尸和玩家-拾取物碰撞及安全提交。
+demo: false
+math: false
+sourceUrl: "https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+draft: false
+---
+
+import {
+  BcgpBulletLifecycleMap,
+  BcgpCombatCollisionMap,
+  BcgpPickupStateMap,
+} from "@/components/mdx/beginning-cpp-game-programming/diagrams/pickups-bullets";
+
+<Objectives>
+
+- 能实现固定池中的 Bullet 发射、归一化方向、按秒更新、命中停用和射程/场外回收
+- 能设计 Health/Ammo Pickup 的隐藏、合法生成、一次收集、上限钳制与冷却重生状态机
+- 能分析玩家、僵尸、子弹三类碰撞的检测与提交顺序，避免遍历中删除、重复伤害和重复计分
+
+</Objectives>
+
+## 从“按下鼠标后哪一个对象拥有这次射击”开始
+
+第 11 章已经生成僵尸群。第 12 章加入
+
+<Term def="封装活跃状态、位置、速度、剩余射程与可绘制形状，并可从对象池反复发射和停用的类。">
+  Bullet 类
+</Term>
+、准星和拾取物。战斗逻辑要把输入、对象更新、碰撞检测、伤害提交和删除分阶段，否则一次命中可能在同一帧被重复处理。
+
+## 世界准星与枪口方向
+
+<Term def="显示玩家瞄准位置的屏幕图形，其逻辑目标由鼠标像素经 worldView 映射到世界坐标得到。">
+  准星
+</Term>
+可绘制在世界层或 HUD 层：若贴合世界目标，使用
+worldView；若始终跟随鼠标像素，使用 hudView，但射击目标仍要映射到世界。
+
+```cpp
+const sf::Vector2i mousePixel{sf::Mouse::getPosition(window)};
+const sf::Vector2f aimWorld{
+    window.mapPixelToCoords(mousePixel, worldView)};
+
+crosshairSprite.setPosition(aimWorld);
+window.setMouseCursorVisible(false);
+```
+
+隐藏系统光标要在暂停、失焦或退出菜单时恢复，避免用户失去指针反馈。窗口外鼠标与失焦输入也要定义策略：通常不发射，只继续处理事件。
+
+<Term def="子弹创建时使用的世界位置，通常来自玩家枪械或角色前方，而不是鼠标像素。">
+  枪口位置
+</Term>
+与 aimWorld 相减产生方向。两点重合时方向长度为零，应拒绝发射而不是除零。
+
+## Bullet 的完整状态
+
+Bullet 在池中始终存在，但只有 active 时更新、碰撞和绘制。
+
+<Term def="对象当前是否参与游戏更新、碰撞和绘制的有限状态；停用对象保留存储等待复用。">
+  活跃状态
+</Term>
+比把子弹移到屏外更清楚。
+
+```cpp
+class Bullet {
+public:
+    bool shoot(sf::Vector2f start, sf::Vector2f target,
+               float speed, float maximumRange);
+    void update(float dt, const sf::FloatRect& arena);
+    void stop() noexcept;
+
+    [[nodiscard]] bool active() const noexcept;
+    [[nodiscard]] sf::FloatRect bounds() const noexcept;
+    [[nodiscard]] const sf::RectangleShape& shape() const noexcept;
+
+private:
+    bool active_{false};
+    sf::Vector2f position_{};
+    sf::Vector2f velocity_{};
+    float travelled_{0.0F};
+    float maximumRange_{0.0F};
+    sf::RectangleShape shape_{{12.0F, 4.0F}};
+};
+```
+
+构造后 inactive，旧位置没有玩法意义。shoot 验证速度和射程为正，方向非零，然后一次提交全部字段；失败保持 inactive。
+
+<BcgpBulletLifecycleMap />
+
+## 发射方向与实际路程
+
+<Term def="从枪口指向世界目标并缩放为长度一的向量，用于乘每秒速度得到子弹速度。">
+  发射方向
+</Term>
+按欧氏长度归一化。射程累计本帧位移长度，而不是简单累计 dt
+后假设速度永不变化；未来若子弹减速或反弹，实际路程仍正确。
+
+```cpp
+bool Bullet::shoot(sf::Vector2f start, sf::Vector2f target,
+                   float speed, float maximumRange)
+{
+    const sf::Vector2f delta{target - start};
+    const float length{std::sqrt(delta.x * delta.x + delta.y * delta.y)};
+    if (active_ || length <= 0.0001F || speed <= 0.0F || maximumRange <= 0.0F)
+        return false;
+
+    position_ = start;
+    velocity_ = delta / length * speed;
+    travelled_ = 0.0F;
+    maximumRange_ = maximumRange;
+    active_ = true;
+    shape_.setPosition(position_);
+    return true;
+}
+```
+
+`active_` 最后设置，保证其它字段先完成。浮点长度用小阈值避免极短方向放大误差；阈值单位属于世界坐标，应与玩法尺度匹配。
+
+## 更新、射程与对象池
+
+<Term def="预先创建固定数量对象，运行时在 inactive/active 状态间复用，避免热路径频繁分配释放。">
+  子弹池
+</Term>
+可用 `std::array<Bullet, 100>`。射击寻找首个 inactive 槽，没有槽位就拒绝或按策略回收最旧子弹，不能越界写。
+
+```cpp
+void Bullet::update(float dt, const sf::FloatRect& arena)
+{
+    if (!active_)
+        return;
+
+    const sf::Vector2f step{velocity_ * dt};
+    position_ += step;
+    travelled_ += std::sqrt(step.x * step.x + step.y * step.y);
+    shape_.setPosition(position_);
+
+    if (travelled_ >= maximumRange_ || !arena.intersects(bounds()))
+        stop();
+}
+```
+
+离开 arena 的规则要考虑“部分相交还是完整离开”。上例只要 bounds 与 arena 不相交才回收。stop 清 active、速度和命中临时状态；不必擦除 shape，但绘制过滤 inactive。
+
+<Callout type="trap">
+  **现象**：子弹命中后下一帧又伤害另一只僵尸。**原因**：碰撞只标记 Zombie
+  受伤，未立即把 Bullet 设 inactive。**修法**：首次有效命中立即
+  stop，并在内层循环 break；一颗普通子弹一次只产生一个伤害事件。
+</Callout>
+
+## Pickup 是有时间的状态机
+
+<Term def="在竞技场中提供生命或弹药效果、被玩家收集后隐藏并在冷却结束后重新生成的类。">
+  Pickup 类
+</Term>
+至少有类型、状态、位置、效果量和冷却。`bool active` 加 timer 可实现，但枚举
+Hidden/Available 更清楚。
+
+```cpp
+enum class PickupType { Health, Ammo };
+enum class PickupState { Hidden, Available };
+
+class Pickup {
+public:
+    void update(float dt, const SpawnContext& context);
+    void collect(Player& player);
+    [[nodiscard]] bool available() const noexcept;
+    [[nodiscard]] sf::FloatRect bounds() const noexcept;
+
+private:
+    PickupType type_;
+    PickupState state_{PickupState::Hidden};
+    float cooldownLeft_{0.0F};
+    float respawnSeconds_;
+    int effectAmount_;
+};
+```
+
+<Term def="拾取物被收集后到再次可用之间按游戏时间递减的时长。">重生冷却</Term>
+暂停期间是否递减由游戏时间策略决定，通常冻结。Hidden
+不绘制不碰撞，冷却到零后只生成一次。
+
+<BcgpPickupStateMap />
+
+## 合法生成与一次收集
+
+生成点来自地图可走区域，避开墙、玩家安全距离和不可见死角，并设最大尝试次数。生成失败保持 Hidden，稍后重试或报告关卡配置错误，不能无限循环。
+
+```cpp
+void Pickup::collect(Player& player)
+{
+    if (state_ != PickupState::Available)
+        return;
+
+    if (type_ == PickupType::Health)
+        player.addHealth(effectAmount_);
+    else
+        player.addAmmo(effectAmount_);
+
+    state_ = PickupState::Hidden;
+    cooldownLeft_ = respawnSeconds_;
+}
+```
+
+Player 的 addHealth/addAmmo 自己钳制最大值，Pickup 不重复对象不变量。状态先后可让效果成功后再隐藏；如果效果可能失败，collect 返回结果并定义是否消耗 Pickup。
+
+<Term def="把生命、弹药等数值限制在零到配置最大值，避免拾取造成溢出或超过 UI/玩法范围。">
+  属性钳制
+</Term>
+应使用足够宽的有符号类型并先检查加法溢出，不能先溢出再 clamp。
+
+## 三类碰撞的数据流
+
+<Term def="检查玩家、僵尸、子弹和拾取物边界是否满足交互条件，并生成伤害、收集或死亡事件的阶段。">
+  碰撞检测
+</Term>
+本章主要用 AABB。检测读取稳定集合，提交阶段才删除死亡 Zombie；否则 vector erase
+会让循环索引和指针失效。
+
+<BcgpCombatCollisionMap />
+
+### 子弹与僵尸
+
+遍历 active Bullet，再遍历 alive Zombie。首次 AABB 命中时 stop Bullet、记录 `{zombieId, damage}` 并 break。随后按 id 提交伤害；Zombie 血量归零只产生一次死亡和分数事件。
+
+```cpp
+for (Bullet& bullet : bullets) {
+    if (!bullet.active())
+        continue;
+
+    for (Zombie& zombie : horde) {
+        if (!zombie.alive())
+            continue;
+        if (bullet.bounds().intersects(zombie.bounds())) {
+            damageEvents.push_back({zombie.id(), bulletDamage});
+            bullet.stop();
+            break;
+        }
+    }
+}
+```
+
+普通子弹只命中一只；穿透弹则保留 active 并记录已命中 id 集合，规则不同不能隐式混用。
+
+### 玩家与僵尸
+
+持续 AABB 重叠若每帧扣血，会让伤害取决于 FPS。使用
+
+<Term def="玩家受伤后短时间内拒绝新的接触伤害，使持续重叠不会每帧重复扣血。">
+  受伤冷却
+</Term>
+或无敌帧。首次伤害设置 cooldown，后续游戏时间递减；暂停不递减。
+
+多个 Zombie 同帧接触时要定义叠加上限：每只都伤害、只取一次或按总量封顶。规则层聚合后调用 Player 一次，音效和闪烁也只触发一次。
+
+### 玩家与拾取物
+
+只检查 Available Pickup。碰撞后 collect 立即转 Hidden，所以同帧后续检测不会重复；HUD 根据 Player 新数值刷新。若 Player 已满血，设计可选择仍消耗或保留，必须由 collect 返回结果表达。
+
+## 删除、计分与音效集中提交
+
+检测阶段只记录事件和状态标记。提交顺序可为：应用 Bullet 伤害；把新死亡 Zombie 标记并加分；应用玩家接触伤害；处理 Pickup；帧尾 `erase_if` 删除死亡 Zombie。任何已删除对象的指针不进入下一阶段。
+
+<Term def="在稳定集合检测完成后集中应用伤害、死亡、分数、音效和删除的阶段。">
+  碰撞提交
+</Term>
+让一次事件只产生一次副作用。分数由 Zombie 从 alive 变 dead 的边沿增加，不由 `health <= 0` 持续条件每帧增加。
+
+声音也消费事件：枪声在成功 shoot 时，命中声在有效 damage 时，拾取声在 collect 成功时。不能在每帧重叠条件中重启 Sound。
+
+<Callout type="trap">
+  **现象**：删除第一只死亡僵尸后，下一只僵尸被跳过或崩溃。**原因**：在按索引/迭代器遍历
+  vector 时 erase，后续元素移动且位置失效。**修法**：检测阶段只标记或记录
+  id，帧尾统一 erase_if；删除后清除本帧观察地址。
+</Callout>
+
+## 性能边界与空间划分
+
+子弹数 B 与僵尸数 Z 的双循环是 O(BZ)。当前规模可能足够；数量增长后可用均匀网格按世界单元登记 Zombie，只检测子弹所在及相邻单元。空间划分必须保持更新与删除同步，否则漏碰撞比慢更严重。
+
+先用计数器记录每帧候选对、实际重叠和耗时，再决定优化。AABB 是粗筛，旋转精灵可能有空白误差；Zombie 射击通常不需像素级精判。高速 Bullet 仍有离散穿透问题，可用固定步长或线段/扫掠检测。
+
+对象池减少分配，不减少碰撞候选；inactive Bullet 应在外层立即 continue。绘制也只提交 active 和可见对象。
+
+## 端到端验证
+
+Bullet 测试零方向拒绝、发射字段一次提交、不同 dt 总路程一致、射程和场外停用、首次命中后不再伤害。池满时按策略拒绝且弹药不应错误扣除，或只有成功 shoot 才扣弹药。
+
+Pickup 测试 Hidden 不绘制不碰撞、冷却冻结于暂停、重生点合法、连续重叠只生效一次、生命弹药不超过上限。不可满足生成约束在尝试上限后失败而不死循环。
+
+碰撞矩阵覆盖玩家-僵尸、子弹-僵尸、玩家-Pickup，明确不存在 Zombie-Pickup 等无规则组合。一次 Zombie 死亡只计一次分，删除后目标锁定失效，HUD 与音效读取提交后事件。
+
+> 先预测：Bullet 命中后只在帧尾删除，内层循环又继续检查其它 Zombie 会怎样？一颗普通子弹可能同帧造成多次伤害；命中时立即 inactive 并 break，删除/复用留到安全阶段。
+
+## 小结
+
+- 准星像素经 worldView 映射为世界目标，枪口到目标归一化形成 Bullet 速度
+- Bullet 从固定池取得，发射一次建立完整状态，首次命中、射程耗尽或场外后停用
+- Pickup 在 Hidden/Available 间转换，一次 collect 后立即隐藏并启动游戏时间冷却
+- 玩家、僵尸、子弹碰撞先读取稳定集合生成事件，再集中提交伤害、死亡、分数和删除
+- 玩家接触伤害使用冷却，避免持续重叠导致 FPS 相关扣血；属性增加在 Player 内钳制
+- vector 遍历中不 erase，帧尾统一清理；性能优化以候选计数和实际耗时为证据
+
+<Exercises>
+
+**问题 1** Bullet 发射与首次命中分别要维护哪些不变量？为什么零长度方向必须拒绝？
+
+<Answer>
+
+发射成功后 active、position/shape 在枪口、velocity 为归一方向乘正速度、travelled 为零、range 为正；零方向无法归一会除零并产生 NaN。首次命中立即 stop、只记录一个伤害事件并退出内层循环，之后不更新、不绘制、不再碰撞，直到池复用重新完整初始化。
+
+</Answer>
+
+**问题 2** Health Pickup 与 Player 持续重叠三帧，怎样保证只加一次血且不超过上限？
+
+<Answer>
+
+只有 Available 参与碰撞；第一帧 collect 调用 Player::addHealth，由 Player 在安全算术后钳到 maxHealth，然后 Pickup 立即转 Hidden 并设置 cooldown。后两帧 Hidden 不检测。若已满血是否消耗由 collect 返回策略明确，不能靠多帧条件猜测。
+
+</Answer>
+
+**问题 3** 为什么碰撞检测阶段不能直接 erase 死亡 Zombie？给出安全提交顺序。
+
+<Answer>
+
+vector erase 会移动后续元素，使当前迭代器、索引后的引用和目标指针失效。先在稳定集合检测并记录 damage id，提交伤害和 alive-to-dead 边沿、增加一次分数和反馈，再处理玩家/Pickup，最后 erase_if 删除死亡对象并清除观察地址。
+
+</Answer>
+
+</Exercises>
+
+<Glossary>
+
+<GlossaryItem term="Bullet 类">
+  维护活跃、位置、速度、射程和形状并可从池复用的子弹对象。
+</GlossaryItem>
+<GlossaryItem term="准星">
+  显示瞄准点的图形，射击目标由像素经 worldView 映射到世界。
+</GlossaryItem>
+<GlossaryItem term="枪口位置">子弹发射的世界起点。</GlossaryItem>
+<GlossaryItem term="活跃状态">
+  决定对象是否参与更新、碰撞和绘制的状态。
+</GlossaryItem>
+<GlossaryItem term="发射方向">枪口指向世界目标并归一化的向量。</GlossaryItem>
+<GlossaryItem term="子弹池">
+  预创建固定数量 Bullet 并以 active/inactive 复用的存储。
+</GlossaryItem>
+<GlossaryItem term="Pickup 类">
+  提供生命或弹药、收集后隐藏并冷却重生的对象。
+</GlossaryItem>
+<GlossaryItem term="重生冷却">
+  拾取后到再次可用之间按游戏时间递减的时长。
+</GlossaryItem>
+<GlossaryItem term="属性钳制">
+  把生命弹药等限制到零和配置上限之间的操作。
+</GlossaryItem>
+<GlossaryItem term="碰撞检测">
+  检查对象边界并生成伤害、收集或死亡事件的阶段。
+</GlossaryItem>
+<GlossaryItem term="受伤冷却">
+  一次接触伤害后短期拒绝新伤害的时间窗。
+</GlossaryItem>
+<GlossaryItem term="碰撞提交">
+  稳定检测后集中应用伤害、死亡、分数、音效和删除的阶段。
+</GlossaryItem>
+
+</Glossary>
+
+<Attribution
+  adaptedFrom="Beginning C++ Game Programming, Third Edition, Chapter 12"
+  adaptedUrl="https://subscription.packtpub.com/book/game-development/9781835081747/pref/preflvl1sec03/what-this-book-covers"
+/>

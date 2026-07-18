@@ -1,0 +1,288 @@
+---
+title: "第3章 · 万变中的不变——随机"
+type: C
+section: "穷举、贪心与随机"
+order: 3
+description: "按图解版第3章重建蒲丰投针、随机游走、大小数据抽样、期望时间、随机准确性、字符串哈希、碰撞风险，以及贪心加随机的可复现实验方法。"
+demo: true
+math: true
+sourceUrl: "https://www.tenlong.com.tw/products/9787522615059?list_name=rd"
+draft: false
+---
+
+import { CAIBuffonNeedleLab, CAIMazeRandomWalkLab, CAIReservoirSamplingLab, CAIExpectedRuntimeLab, CAIDominoProgressionLab, CAILivingCostLab, CAIHashMappingLab, CAIHashCollisionLab, CAIRandomGreedyLab, CAIReproducibilityLab } from "@/components/mdx/competitive-algorithms/diagrams/03-randomness";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释随机的方法、伪随机序列、随机游走、抽样和随机重启分别改变了算法的哪一部分
+- 能计算蒲丰投针估计式、蓄水池保留概率、期望成本、哈希桶负载与碰撞概率
+- 能实现可复现随机数、蓄水池抽样、字符串哈希和带确定性验证的随机多起点
+- 能分析随机的时间复杂度与随机的准确性，区分期望时间、失败概率和确定性结论
+- 能设计包含seed记录、置信度、碰撞处理、oracle和重复策略的随机算法实验
+
+</Objectives>
+
+## 从“随机结果不能复现”开始
+
+先预测：若程序使用随机数后偶尔出错，最重要的日志是什么？不是“它随机坏了”，而是随机数生成器、seed、调用顺序、输入与失败判据。计算机里的随机通常由确定性状态机生成；只要这些条件相同，失败就能逐步重放。
+
+<Term def="由确定性算法从有限内部状态生成、统计上模拟随机但可由seed完整重放的数值序列。">伪随机数</Term>让同一程序拥有两个看似矛盾的能力：不同seed探索不同轨迹，同一seed精确复现同一轨迹。
+
+<CAIReproducibilityLab />
+
+## 3.1 随机的方法
+
+随机的方法不是统一模板。它可能用于：
+
+- **估计量**：随机抽样近似总体性质；
+- **选择顺序**：随机pivot避免固定输入模式触发坏路径；
+- **搜索空间探索**：随机起点越过局部最优；
+- **指纹压缩**：随机或混合hash把大对象映射到小范围；
+- **对抗输入解耦**：让输入难以预知算法内部选择。
+
+设计时要明确随机变量、概率空间和成功事件。若“随机选择”没有分布定义，期望与失败概率都无从计算。
+
+### 3.1.1 巧算圆周率——蒲丰投针实验
+
+巧算圆周率——蒲丰投针实验把针随机投到间距为$t$的平行线上。针长$L\le t$，针中心到最近线的距离均匀分布在$[0,t/2]$，针与平行线夹角均匀分布在$[0,\pi]$。相交概率为：
+
+$$
+p=\frac{2L}{\pi t}
+$$
+
+若做$N$次独立实验、相交$C$次，用$\hat p=C/N$估计：
+
+$$
+\hat\pi=\frac{2LN}{tC}
+$$
+
+<CAIBuffonNeedleLab />
+
+这是<Term def="用有限随机样本给出近似答案，并允许以可量化的小概率偏离真实值的算法。">蒙特卡洛算法</Term>：增加样本通常缩小误差，但不会让某次有限实验自动变成数学证明。若$C=0$，估计式甚至无定义，代码必须处理小样本边界。
+
+### 3.1.2 迷宫的十字路口
+
+迷宫的十字路口展示随机游走：每到分岔点随机选择一个可走方向。它不需要维护完整搜索树，能用极少状态持续探索；但可能反复回到旧位置，命中出口时间具有长尾。
+
+<CAIMazeRandomWalkLab />
+
+若图是有限、连通、无吸收陷阱，随机游走最终访问目标的概率可以很高，甚至为1；这不意味着有小的确定性步数上界。加入visited偏好、回退栈或启发式后，它逐渐接近随机化搜索，而不再是纯随机游走。
+
+```cpp
+std::mt19937_64 rng(seed);
+std::uniform_int_distribution<int> pick(0, degree - 1);
+int next = neighbors[pick(rng)];
+```
+
+必须使用与目标范围匹配的均匀分布，而不是简单`rng() % degree`；当生成器范围不能被`degree`整除时，取模会产生轻微偏差。
+
+### 3.1.3 大数据与小数据
+
+大数据与小数据的矛盾是：总体太大，无法全部保存或反复扫描，但仍想得到无偏样本。蓄水池抽样维护$k$个位置。第$i$个元素到来时，以$k/i$概率进入reservoir，并均匀替换一个旧元素。
+
+```cpp
+template<class T, class URBG>
+std::vector<T> reservoir_sample(Stream<T>& stream, std::size_t k, URBG& rng) {
+    std::vector<T> sample;
+    T value;
+    std::size_t seen = 0;
+    while (stream.read(value)) {
+        ++seen;
+        if (sample.size() < k) sample.push_back(value);
+        else {
+            std::uniform_int_distribution<std::size_t> pick(0, seen - 1);
+            const std::size_t j = pick(rng);
+            if (j < k) sample[j] = value;
+        }
+    }
+    return sample;
+}
+```
+
+<CAIReservoirSamplingLab />
+
+对任意早期元素，它先进入reservoir，之后每一步留下的概率连乘：
+
+$$
+\frac{k}{i}\prod_{j=i+1}^{n}\left(1-\frac1j\right)=\frac{k}{n}
+$$
+
+因此最终每个元素具有相同保留概率。这个证明比“看起来抽得挺散”更重要。
+
+## 3.2 随机的时间复杂度
+
+<Term def="对固定输入，关于算法内部随机选择求平均得到的运行成本；它不等于每次运行成本，也不自动是输入平均。">期望时间复杂度</Term>必须说明期望对谁求。随机快速排序通常固定任意输入排列，只对随机pivot求期望；这与假设输入本身均匀随机不同。
+
+<CAIExpectedRuntimeLab />
+
+若一次尝试以概率$q$成功，失败后独立重试，则尝试次数$X$服从几何分布：
+
+$$
+\mathbb E[X]=\frac1q
+$$
+
+期望是长期平均，单次仍可能连续失败。工程上要同时给出重试上限、尾部概率和fallback。
+
+### 3.2.1 多米诺骨牌上的等差数列
+
+多米诺骨牌上的等差数列可用来观察“随机探测发现结构”的速度。等差数列相邻差为$d$；随机抽到若干项后，观测差值的最大公因数可能是$d$，也可能是$d$的倍数，因为样本可能只落在每隔两项、三项的位置。
+
+<CAIDominoProgressionLab />
+
+随机样本能快速提出候选$d$，但还需用边界、成员关系或额外样本验证。算法可以把昂贵的完整搜索替换为“随机提出候选 + 确定性检查”；只要检查严格，随机性影响时间，不影响最终正确性。
+
+### 3.2.2 小算的生活费
+
+小算的生活费说明抽样平均的直觉：从许多天的支出中随机抽取若干天，用样本均值估计总体均值。异常支出会增大方差，小样本尤其不稳定。
+
+<CAILivingCostLab />
+
+若样本独立同分布、方差为$\sigma^2$，样本均值方差为：
+
+$$
+\operatorname{Var}(\bar X)=\frac{\sigma^2}{k}
+$$
+
+标准误差只按$1/\sqrt{k}$下降；想把典型误差减半，样本量约要增至四倍。若抽样有周期偏差，例如只抽工作日，增加样本也不能修复偏差。
+
+## 3.3 随机的准确性
+
+随机的准确性要区分三类合同：
+
+1. **答案始终正确，时间随机**：Las Vegas风格，例如随机pivot但完整验证的选择算法。
+2. **时间有界，答案小概率错误**：Monte Carlo风格，例如只比较有限位指纹。
+3. **近似优化**：始终返回可行解，但最优差距由概率或经验描述。
+
+概率相乘还要求独立性或可证明的条件概率上界。仅把seed依次加1，不保证不同运行在统计上独立；较差的生成器可能让相邻seed产生相关前缀。需要严格失败界时，应选有明确质量保证的生成器、从足够宽的seed空间独立取样，并把“每次失败概率至多多少”的前提写进结论。
+
+### 3.3.1 从字符串到数字——哈希算法
+
+从字符串到数字——哈希算法依靠<Term def="把任意长度对象映射到固定范围整数，并尽量让不同输入均匀分散的函数。">哈希函数</Term>把任意长度字符串映射到固定整数范围。多项式rolling hash可写成：
+
+$$
+h_{i+1}=(Bh_i+c_i)\bmod M
+$$
+
+<CAIHashMappingLab />
+
+```cpp
+std::uint64_t hash_string(std::string_view text) {
+    std::uint64_t hash = 0;
+    for (unsigned char ch : text) {
+        hash = hash * 131 + ch;
+    }
+    return hash;
+}
+```
+
+无符号整数溢出按$2^{64}$取模定义，适合作为快速fingerprint；但hash相等不能证明字符串相等。哈希表还必须通过开放寻址或链地址处理碰撞。
+
+### 3.3.2 哈希算法的隐患
+
+哈希算法的隐患首先是碰撞不可消除：从无限字符串集合映射到有限整数集合，由抽屉原理必有不同字符串同hash。若把hash相等当作对象相等，程序会得到概率错误。
+
+<CAIHashCollisionLab />
+
+在理想均匀模型中，把$m$个键放入$M$个桶，至少一次碰撞的近似概率为：
+
+$$
+1-\exp\left(-\frac{m(m-1)}{2M}\right)
+$$
+
+这就是生日效应。即使$m$远小于$M$，碰撞也可能已经明显。面对不可信输入，还要考虑攻击者构造大量碰撞使哈希表退化；可随机化seed、使用抗攻击hash，或改用有最坏上界的树结构。
+
+<Callout type="trap" title="双hash就等于零碰撞">
+两个独立大模数会显著降低随机碰撞概率，但“极低”仍不是“数学不可能”。需要确定性正确时，hash匹配后必须比较原字符串或执行完整验证。
+</Callout>
+
+<Callout type="trap" title="固定seed性能好就宣布期望复杂度好">
+一个seed只是一条随机轨迹。修法是分离开发复现seed与统计实验seed，运行足够多的独立样本，报告分位数和最坏观测，并保留确定性超时保护。
+</Callout>
+
+## 3.4 贪心+随机——探索最优解
+
+贪心+随机——探索最优解常采用随机多起点：每次随机打乱候选或扰动评分，再按贪心规则构造可行解，最后保留目标值最好的结果。
+
+<CAIRandomGreedyLab />
+
+<Term def="从多个随机初始状态或随机顺序重复执行局部构造或改进，并保留最佳已验证结果的搜索策略。">随机重启</Term>能降低一次坏起点的影响，却不能证明全局最优。若单次命中目标区域概率至少为$p$，独立重启$r$次全部失败概率为：
+
+$$
+(1-p)^r
+$$
+
+问题在于$p$通常未知。因此输出必须明确是“当前最好可行解”，并用上界、下界或小规模oracle评估差距。
+
+```cpp
+Solution best;
+for (int run = 0; run < restarts; ++run) {
+    auto order = candidates;
+    std::shuffle(order.begin(), order.end(), rng);
+    Solution current = greedy_construct(order);
+    verify_feasible(current);
+    if (!best.valid() || current.score() > best.score()) best = current;
+}
+```
+
+<Stepper>
+<Step title="定义随机变量与成功事件">
+说明随机的是输入、pivot、样本还是初始顺序，并给出分布与成功判据。
+
+<CAIBuffonNeedleLab />
+</Step>
+<Step title="分离候选与验证">
+随机过程可快速提出候选；确定性检查负责阻止概率错误穿过最终边界。
+
+<CAIHashCollisionLab />
+</Step>
+<Step title="记录seed与统计证据">
+失败保存seed成为回归测试；性能报告均值、分位数、尾部和重试上限。
+
+<CAIReproducibilityLab />
+</Step>
+</Stepper>
+
+## 小结
+
+本章从随机的方法出发，借蒲丰投针实验理解概率估计，借迷宫的十字路口理解随机游走，借大数据与小数据理解均匀抽样。多米诺骨牌上的等差数列与小算的生活费进一步区分了快速提出结构和统计估计的不确定性。
+
+随机的时间复杂度回答“平均要做多少工作”，随机的准确性回答“答案错的概率与验证边界是什么”。字符串哈希说明从字符串到数字的效率，也暴露哈希算法的隐患。最后，贪心加随机通过多起点扩展探索，但最优性仍需证据，随机不能替代证明。
+
+<Exercises>
+
+**问题 1**：蒲丰投针中$L=0.8,t=1,N=10000,C=5100$，$\pi$估计是多少？为什么不能把它当作证明？
+
+<Answer>
+$\hat\pi=2LN/(tC)=16000/5100\approx3.1373$。它是由有限随机样本得到的估计，另一批样本会不同；只有结合抽样模型和误差分析才能描述可靠程度，不能由一次接近真实值的结果推出恒等式。
+</Answer>
+
+**问题 2**：证明蓄水池抽样处理完$n$项后，每项进入大小为$k$的样本概率为$k/n$。
+
+<Answer>
+第$i$项进入时概率为$k/i$。之后在第$j$步不被替换的概率为$1-1/j=(j-1)/j$。连乘得到$(k/i)\cdot i/(i+1)\cdots(n-1)/n=k/n$。最初前$k$项进入概率为1，之后存活概率同样连乘为$k/n$。
+</Answer>
+
+**问题 3**：为什么64位字符串hash相等仍不能直接判定字符串相等？
+
+<Answer>
+字符串集合远大于$2^{64}$个hash值，抽屉原理保证存在碰撞。64位只让非对抗碰撞概率很低，不会消除碰撞。确定性判等应先用hash快速过滤，再比较长度和原始字符。
+</Answer>
+
+**问题 4**：设计一个可复现的随机多起点实验报告。
+
+<Answer>
+固定并记录生成器类型、程序版本、输入、seed列表、每次目标值和运行时间；每个候选先做确定性可行性检查；报告最好值、均值、中位数、95分位和重试次数；失败seed进入回归测试。小规模输入再与穷举oracle比较最优差距。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="伪随机数">由确定性算法从有限内部状态生成、统计上模拟随机但可由seed完整重放的数值序列。</GlossaryItem>
+<GlossaryItem term="蒙特卡洛算法">用有限随机样本给出近似答案，并允许以可量化的小概率偏离真实值的算法。</GlossaryItem>
+<GlossaryItem term="期望时间复杂度">对固定输入，关于算法内部随机选择求平均得到的运行成本。</GlossaryItem>
+<GlossaryItem term="哈希函数">把任意长度对象映射到固定范围整数，并尽量让不同输入均匀分散的函数。</GlossaryItem>
+<GlossaryItem term="随机重启">从多个随机初始状态或随机顺序重复执行局部构造或改进，并保留最佳已验证结果的搜索策略。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="《深入浅出算法竞赛（图解版）》第3章“万变中的不变——随机”" adaptedUrl="https://www.tenlong.com.tw/products/9787522615059?list_name=rd" />

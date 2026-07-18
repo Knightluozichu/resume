@@ -1,0 +1,191 @@
+---
+title: "Chapter 24. Coroutines"
+type: C
+section: "Programming in Lua 4e · Lua-isms"
+order: 24
+description: "掌握Lua coroutine状态、resume/yield双向协议、控制权、iterator封装和event-driven调度，并验证错误、取消与资源生命周期。"
+demo: true
+math: false
+sourceUrl: "https://www.lua.org/pil/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PilCoroutineStateLab, PilCoroutineControlLab, PilCoroutineSchedulerLab } from "@/components/mdx/lua-programming/diagrams/coroutines";
+
+<Objectives>
+
+- 能解释suspended/running/normal/dead状态与resume/yield多结果，复现错误和dead-resume行为
+- 能推导asymmetric control、first/later resume参数与wrap差异，判断取消和yield boundary
+- 能设计coroutine iterator与event scheduler，验证fairness、non-blocking I/O、cleanup和backpressure
+
+</Objectives>
+
+## 为什么Coroutine首先是可暂停的Control Flow
+
+Coroutine保留自己的Lua stack和locals，可在`yield`处暂停，再从同一点继续。它不是OS thread：不会抢占、不并行执行CPU code，也不自动等待socket。谁调用resume，谁决定何时运行；coroutine只有主动yield或结束才交回控制。
+
+先预测：create后body是否执行；first resume arguments去哪里；yield values由谁接收；next resume arguments在coroutine里是什么；function正常返回后status；error是否由resume抛出；同一coroutine能否两个owners交错resume；long loop不yield会不会阻塞其它tasks。先画状态与数据箭头。
+
+<Term def="Coroutine由独立Lua execution stack、当前状态、唯一resumer关系与每次resume/yield结果协议共同定义。">coroutine execution contract</Term>要求每个task只有一个scheduler owner，避免double resume与资源归属不清。
+
+## Coroutine Basics
+
+`coroutine.create(function)`创建suspended coroutine，不执行body。`coroutine.resume(co,args...)`第一次把args传给function parameters；成功返回true加yielded或final returned values，失败返回false加error object。`coroutine.status`观察suspended/running/normal/dead。
+
+<Term def="Resume首boolean表示执行是否raise，后续是yield/return values或error object，必须先检查status再解码。">resume-result tuple</Term>与pcall类似。正常业务首结果false仍是`true,false,...`。Failed/returned coroutine变dead，再resume返回failure。
+
+```lua
+local worker = coroutine.create(function(initial)
+  local command, value = coroutine.yield("ready", initial * 2)
+  assert(command == "add")
+  return value + 1, "done"
+end)
+
+local ok, state, doubled = coroutine.resume(worker, 5)
+assert(ok and state == "ready" and doubled == 10)
+assert(coroutine.status(worker) == "suspended")
+
+local finished, result, tag = coroutine.resume(worker, "add", 20)
+assert(finished and result == 21 and tag == "done")
+assert(coroutine.status(worker) == "dead")
+assert(not coroutine.resume(worker))
+```
+
+Yield call在next resume时返回其arguments，因此数据是双向的。Error不会自动带完整cross-coroutine traceback；失败时结合`debug.traceback(co,error)`保存诊断，且不要丢弃coroutine identity后再找。
+
+<PilCoroutineStateLab />
+
+<Stepper>
+  <Step title="切换Suspended、Running、Normal和Dead"><PilCoroutineStateLab /></Step>
+  <Step title="填写State Ledger">每次create/resume/yield/return/error记录before/after status、caller、arguments和result tuple。</Step>
+  <Step title="注入Failure">覆盖error before first yield、after yield、normal false result、resume dead和nested resume，保留trace与owner。</Step>
+</Stepper>
+
+<Callout type="trap" title="Resume返回False说明Coroutine正常返回了业务False">
+Resume首false表示coroutine raised或不可resume；业务false在成功时位于第二位置，即`true,false`。先检查execution status，再按task protocol解码。
+</Callout>
+
+## Who Is the Boss?
+
+Lua coroutines是asymmetric：resume从caller转入coroutine，yield只能回到直接resumer。<Term def="Resumer拥有何时运行、输入、取消与再次resume的调度权，coroutine只能yield/return/error交还控制。">asymmetric scheduling ownership</Term>让producer/consumer可反转：producer每次yield item，consumer决定何时请求下一项。
+
+`coroutine.wrap(fn)`返回普通function，调用时内部resume；yield/return values直接成为wrapper results，error通常传播。它更简洁，但隐藏thread identity/status，scheduler需要取消、trace和inspection时优先create/resume。
+
+Yieldability受C/API boundary影响：不是所有host callbacks允许从其下层yield；Lua C continuation API可显式支持。Library若可能yield必须声明，caller protected/host boundary需测试目标runtime。
+
+<PilCoroutineControlLab />
+
+<Stepper>
+  <Step title="切换First Resume、Yield、Next Resume和Wrap"><PilCoroutineControlLab /></Step>
+  <Step title="画Boss Arrow">每个时刻标running stack、direct resumer、谁能cancel和yield返回点；nested coroutines显示normal state。</Step>
+  <Step title="比较Create与Wrap">同一success/yield/error脚本分别实现，比较result、trace、status visibility和cleanup能力。</Step>
+</Stepper>
+
+## Coroutines as Iterators
+
+Factory创建coroutine，遍历逻辑每发现item就yield；wrapper function每次resume并返回item。<Term def="Coroutine iterator把复杂nested traversal stack保存在suspended coroutine中，每次yield一个item并以return终止。">coroutine iterator state</Term>比手写state machine直观，但每itemresume有成本。
+
+```lua
+local function tree_values(root)
+  return coroutine.wrap(function()
+    local function visit(node)
+      if not node then return end
+      visit(node.left)
+      coroutine.yield(node.value)
+      visit(node.right)
+    end
+    visit(root)
+  end)
+end
+
+local tree = { value = 2, left = { value = 1 }, right = { value = 3 } }
+local output = {}
+for value in tree_values(tree) do output[#output + 1] = value end
+assert(table.concat(output, ",") == "1,2,3")
+```
+
+Generic for以首nil终止，因此iterator不能yield nil作为item control；用index/tag加data。Loop提前break会遗留suspended coroutine及captured resources，纯memory traversal可由GC处理，file/socket iterator必须显式close/cancel owner。
+
+Recursive traversal仍可能Lua stack overflow；coroutine不消除其内部recursion depth。Untrusted tree用explicit stack与node/depth budget。
+
+## Event-Driven Programming
+
+Coroutine让async workflow写成linear code：task发出I/O request descriptor并yield；event loop注册socket/timer，ready后resume task并传result。<Term def="Task只yield typed wait requests，scheduler统一拥有poller、ready queue、deadline、cancel和resume结果处理。">event-request protocol</Term>把host I/O和业务control分离。
+
+Scheduler必须使用non-blocking APIs；一个blocking DNS/file/socket call会阻塞所有tasks。Fairness要求每次resume做bounded work，ready queue轮转；backpressure限制queued tasks、buffers和outstanding requests。Timeout/cancel是typed resume result，task在finally-style path关闭资源。
+
+```lua
+local function await(kind, resource)
+  local ok, value = coroutine.yield({ kind = kind, resource = resource })
+  if not ok then error(value, 0) end
+  return value
+end
+
+local task = coroutine.create(function()
+  local payload = await("read", "socket-1")
+  return #payload
+end)
+
+local started, request = coroutine.resume(task)
+assert(started and request.kind == "read")
+local resumed, length = coroutine.resume(task, true, "hello")
+assert(resumed and length == 5 and coroutine.status(task) == "dead")
+```
+
+示例只演示request/response；真实dispatcher验证descriptor、保存task到wait set、poll readiness、清理registration并处理resume false。Task error不能让整个event loop退出，除非policy如此；日志保留task trace与operation ID。
+
+<PilCoroutineSchedulerLab />
+
+<Stepper>
+  <Step title="切换Request、Wait、Resume和Finish"><PilCoroutineSchedulerLab /></Step>
+  <Step title="画Scheduler Queues">标ready/waiting/timer/cancelled/dead集合、唯一owner与每次transition的resource registration。</Step>
+  <Step title="做Fairness与Backpressure测试">一个CPU-heavy task、慢consumer、大量ready tasks和timeout同时发生，验证bounded slice、queue limit与cleanup。</Step>
+</Stepper>
+
+<Callout type="trap" title="用了Coroutine后，任何Blocking I/O都会自动并发">
+Coroutine只在显式yield时切换；blocking host call不yield就冻结整个Lua thread。必须用non-blocking operation、readiness poller或把blocking work移到受控worker thread/process。
+</Callout>
+
+## Errors、Cancellation与Structured Lifetime
+
+Scheduler为task建立parent/owner，child tasks在scope结束前完成或cancel，避免detached work持有资源。Cancel不能强杀任意Lua instruction；cooperative task在yield/resume boundary接收cancel，CPU loop需instruction hook/隔离runtime。
+
+Task error状态dead，resume返回error；捕获trace、remove wait registration、close resources、通知parent。Cleanup自身失败附加而不覆盖primary。Coroutine object被GC不等于业务task完成。
+
+## 本章回顾：Coroutine把Stack变成Scheduler管理的State
+
+1. Create只创建suspended task；resume首boolean区分执行成功，后续为yield/return或error。
+2. Yield values流向resumer，next resume arguments成为yield results，形成双向协议。
+3. Lua coroutine不抢占，resumer掌握调度；wrap简洁但隐藏status和thread identity。
+4. Coroutine iterator保存复杂traversal stack，提前break时仍要处理captured resources。
+5. Event task yield typed request，scheduler负责non-blocking wait、fairness、timeout、cancel和cleanup。
+6. Coroutines提供concurrency而非parallelism，blocking call和CPU loop仍会阻塞。
+
+<Exercises>
+
+**问题 1：第二次Resume传入的Arguments在Coroutine哪里出现？**
+
+<Answer>它们成为上一次`coroutine.yield(...)`调用的返回值；第一次resume arguments才成为coroutine function参数。用multiple assignment分别测试yield values与resume-back values。</Answer>
+
+**问题 2：为什么Coroutine Iterator提前Break可能泄漏Resource？**
+
+<Answer>Break停止consumer调用，coroutine仍suspended，finally/close代码未执行并继续捕获handle。让外层owner用protected cleanup/cancel显式关闭，或提供iterator close协议；不要等GC/finalizer。</Answer>
+
+**问题 3：Event Loop如何处理Task Error而不崩掉所有Tasks？**
+
+<Answer>每次resume检查status；false时立即抓task traceback，移除poll/timer registration，执行owner cleanup并发布typed failure，然后继续ready queue。是否升级为process failure由supervisor policy决定。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="coroutine execution contract" definition="独立stack、state、唯一resumer与resume/yield结果组成的任务协议。" />
+  <GlossaryItem term="resume-result tuple" definition="Resume以执行status开头，后跟yield/return values或error object。" />
+  <GlossaryItem term="asymmetric scheduling ownership" definition="Resumer控制运行/输入/取消而coroutine以yield交回的调度关系。" />
+  <GlossaryItem term="coroutine iterator state" definition="Suspended coroutine保存复杂遍历stack并逐次yield item的状态。" />
+  <GlossaryItem term="event-request protocol" definition="Task yield typed waits而scheduler管理poll、deadline、cancel和resume的协议。" />
+</Glossary>
+
+<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 24: Coroutines" adaptedUrl="https://www.lua.org/pil/" />

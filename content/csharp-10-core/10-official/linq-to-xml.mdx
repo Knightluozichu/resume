@@ -1,0 +1,201 @@
+---
+title: "Chapter 10. LINQ to XML"
+type: C
+section: "C# 10 Nutshell · .NET and Data"
+order: 10
+description: "覆盖X-DOM架构、加载保存、functional construction、导航更新、value/document/namespace/annotation与streaming projection。"
+demo: true
+math: false
+sourceUrl: "https://www.oreilly.com/library/view/c-10-in/9781098121945/ch10.html"
+draft: false
+---
+
+import { CtcXDomLifecycleLab, CtcXDomMutationLab, CtcXmlNamespaceStreamLab } from "@/components/mdx/csharp-10-core/diagrams/linq-to-xml";
+
+<Objectives>
+
+- 能绘制X-DOM load/construct/query/save生命周期，设计secure parser与encoding/round-trip contract
+- 能分析navigation、live/deferred enumeration、child/attribute update和deep-clone ownership行为
+- 能设计expanded-name/default namespace、annotation与streaming projection，验证大文档memory和reader lifetime
+
+</Objectives>
+
+## 为什么XML DOM的难点是Identity与Ownership
+
+LINQ to XML以XDocument/XElement/XAttribute/XNode构造对象树，查询体验像LINQ collections，但node有single parent、expanded name由namespace URI+local name组成，序列化还有declaration/encoding/whitespace。把prefix当identity、边枚举边修改或对超大文件全量Load，都会产生错误。
+
+先预测：相同prefix一定表示相同namespace吗；插入已有parent的XElement会移动原node吗；`element.Value`只读直接文本吗；default namespace也作用于无prefix attribute吗；Save到TextWriter会遵循XML declaration encoding吗。答案都是否。
+
+<Term def="XML element/attribute由namespace URI与local name组成expanded name，prefix仅是序列化别名的规则。">expanded-name identity</Term>
+
+## Architectural Overview
+
+DOM把完整document表示为memory object graph，支持random navigation/update；streaming reader/writer按forward events处理，memory低但访问受限。LINQ to XML是轻量X-DOM，节点类围绕content、parent、names与LINQ axes。选择取决于document size、mutation、random access和latency。
+
+```text
+XDocument
+  +- XDeclaration (separate property)
+  +- XElement root
+       +- XAttribute*
+       +- XNode* (XElement, XText, XComment, ...)
+```
+
+Schema validation不是DOM自动保证；DTD/external entity security由reader settings。Untrusted XML设置size/depth limits并禁用不需要resolver。
+
+## X-DOM Overview
+
+XObject是annotation/change event基类，XNode是有序content节点，XContainer可含children，XElement有name/attributes/content，XDocument有root/declaration。Attribute不是XNode，不能有children。Node最多一个parent，tree order决定document order。
+
+XName/XNamespace interned-like value semantics让name比较高效；不要按string prefix比较。Events/annotations可附加状态，但会增加lifetime/coupling。
+
+## Loading and Parsing
+
+Load从file/stream/reader，Parse从string；LoadOptions可保留whitespace、base URI、line info。Parser读取完整input并可能抛XmlException。Encoding由byte stream BOM/declaration/reader决定；若传string，bytes已被解码，declaration不再控制原始decode。
+
+Untrusted input使用configured XmlReader：DtdProcessing.Prohibit、XmlResolver null、MaxCharactersInDocument等。Resource由caller/using拥有；Load完成后DOM独立于stream。
+
+## Saving and Serializing
+
+Save写file/stream/TextWriter/XmlWriter；Writer settings控制indent、declaration、encoding和newline。TextWriter自身encoding决定actual bytes，XML declaration必须一致。`ToString`通常不含declaration且用于display，不是完整wire contract。
+
+```csharp
+var settings = new XmlWriterSettings
+{
+    Encoding = new UTF8Encoding(false),
+    Indent = true,
+    OmitXmlDeclaration = false
+};
+
+using var writer = XmlWriter.Create(stream, settings);
+document.Save(writer);
+```
+
+Round-trip tests比较semantic tree而非format whitespace，若digital signature/canonicalization则使用专门canonical XML流程。
+
+<Term def="Parser settings、encoding/declaration、whitespace与semantic tree round trip共同定义的XML输入输出契约。">XML round-trip contract</Term>
+
+<Stepper>
+  <Step title="切换load、construct、query与save"><CtcXDomLifecycleLab /></Step>
+  <Step title="标byte/text/tree边界">Input bytes由谁decode、declaration何时读取、DOM何时独立、writer谁决定encoding。</Step>
+  <Step title="运行security/round-trip corpus">DTD/entity、invalid encoding、whitespace、comments/mixed content与large size逐项验证。</Step>
+</Stepper>
+
+<Callout type="trap" title="Parse String仍会按XML Declaration重新解码">
+String已经是Unicode text，原始bytes/encoding信息丢失；declaration不能重做decode。需要验证encoding时从byte stream读取。
+</Callout>
+
+## Functional Construction
+
+XElement constructor接受name和params content，可嵌套nodes、attributes、sequences/scalars；null忽略，scalar转text。把LINQ projection直接作为content可声明式生成tree。已有parent的node作为content时LINQ to XML通常deep clone，避免一个node两个parents。
+
+```csharp
+XNamespace ns = "urn:orders:v1";
+var document = new XDocument(
+    new XElement(ns + "orders",
+        orders.Select(order =>
+            new XElement(ns + "order",
+                new XAttribute("id", order.Id),
+                new XElement(ns + "total", order.Total)))));
+```
+
+Functional style仍可能enumerate source多次/抛错，先validate domain data。Large projection可stream输出而非build full DOM。
+
+## Navigating and Querying
+
+`Element(s)`只看direct child，`Descendant(s)`递归，Ancestors/Parent/Nodes/Attributes构成axes。多数axes deferred并按document order；修改tree后再枚举可能看到变化，边枚举边Remove需先ToList或使用Remove extension的safe pattern。
+
+Name查询必须含namespace；无namespace literal只匹配empty namespace。`Nodes`包括text/comments，`Elements`只element。Mixed content处理中不要把所有text拼接后丢structure。
+
+## Updating an X-DOM
+
+SetElementValue/SetAttributeValue可insert/update/remove（null often removes），Add/ReplaceWith/Remove改变tree。Mutation触发Changing/Changed events，handler可重入。Node single-parent/deep clone semantics影响identity/annotations。
+
+<Term def="Node parent、document order、live axes、mutation events与clone行为共同形成的tree ownership规则。">X-DOM ownership contract</Term>
+
+<Stepper>
+  <Step title="切换value、child、attribute与clone"><CtcXDomMutationLab /></Step>
+  <Step title="保留before/after tree">记录parent/order/annotations与enumerator，执行set/add/remove/replace后逐项比较。</Step>
+  <Step title="注入live-enumeration">直接枚举修改与先materialize两种路径，验证skip/exception/expected output。</Step>
+</Stepper>
+
+<Callout type="trap" title="Axes返回的是固定Snapshot">
+Many axes are deferred and read current tree. 定义query后修改DOM再枚举会变化；mutation loop先materialize并测试。
+</Callout>
+
+## Working with Values
+
+XElement.Value连接descendant text，mixed content可能丢边界；XAttribute.Value是string。Explicit casts到int/DateTime/nullable等使用XML lexical conversions，missing node与invalid text行为不同。`(int?)element`可表达missing/nullable conversion，但domain validation仍需范围/format。
+
+Empty element、missing element、xsi:nil和empty text是不同states。Schema/version contract明确映射，避免ValueOrDefault合并。
+
+## Documents and Declarations
+
+XDocument包含单root及可选declaration、doctype/comments；declaration不是普通child node。Fragment可只用XElement。XML version/encoding/standalone与actual writer保持一致。Document order中doctype/root constraints由API/parser维护。
+
+若API接受fragment，不伪造document；signature/canonicalization保留comments/whitespace需求。Golden files覆盖declaration有无和stream encoding。
+
+## Names and Namespaces
+
+`XNamespace ns = "uri"; ns + "local"`创建expanded name。Default namespace声明是xmlns attribute，只影响serialized unprefixed elements，不自动修改已创建XName；unprefixed attributes仍empty namespace。Prefix可变，semantic query不依赖它。
+
+Namespace migration不是简单换prefix，而是schema identity change。Reader可同时支持old/new URIs，writer输出canonical current。Tests用不同prefix但相同URI证明语义相同。
+
+## Annotations
+
+AddAnnotation把任意object附到XObject，Annotation/Annotations读取；不序列化，clone是否保留需按API验证，且annotation object可能保留大graph。适合line mapping、domain link或processing state，不作为wire data。
+
+<Term def="附着在XObject上的out-of-band runtime metadata，不属于XML infoset且默认不进入serialization的状态。">annotation boundary</Term>
+
+## Streaming a Projection
+
+大文件使用XmlReader forward扫描，遇目标element用ReadFrom/ReadSubtree加载单个subtree，处理后释放，再继续；输出用XmlWriter逐项写。Iterator必须保持reader/stream lifetime覆盖enumeration，partial consumption仍dispose。
+
+<Term def="以forward reader逐个materialize有限subtree并及时释放，使memory由最大record而非整文档决定的策略。">streaming projection boundary</Term>
+
+<Stepper>
+  <Step title="切换expanded name、default、annotation与stream"><CtcXmlNamespaceStreamLab /></Step>
+  <Step title="变换prefix不变URI">使用两个prefix序列化同一expanded names，query结果必须相同；再改变URI验证不匹配。</Step>
+  <Step title="测large-file memory">生成large repeated elements，记录full Load与stream projection peak、partial break/dispose和malformed tail。</Step>
+</Stepper>
+
+## XML production gate
+
+建立schema/version、namespace URI、required/optional/missing/null、size/depth和parser security表。Golden corpus含old/new documents、prefix variation、encoding/BOM、mixed content与unknown extension。Writer输出canonical current version，reader兼容声明版本。
+
+Large input load test验证peak memory/time；errors返回line/position但对外redact raw sensitive XML。XPath/DOM不是安全验证替代。
+
+## 本章回顾：Prefix不是Identity，DOM不是Stream
+
+1. X-DOM适合random query/update，streaming适合large forward processing。
+2. Load/Save需明确parser security、encoding/declaration与semantic round trip。
+3. Axes通常deferred，mutation前materialize并理解node parent/clone。
+4. Expanded name是URI+local，default namespace不作用于unprefixed attributes。
+5. Annotation不序列化，stream projection需把reader lifetime绑定enumeration。
+
+<Exercises>
+
+**问题 1：为什么`root.Elements("order")`找不到有default namespace的节点？**
+
+<Answer>Element identity是namespace URI+local name；string literal创建empty namespace XName。使用`XNamespace ns="urn:..."; root.Elements(ns+"order")`，并测试不同prefix相同URI仍匹配。</Answer>
+
+**问题 2：怎样安全删除满足条件的descendants？**
+
+<Answer>不要边枚举live axis边逐个Remove；先`Where(...).ToList()`再Remove，或使用LINQ to XML提供的Remove extension对materialized semantics。测试相邻matches、nested nodes和change events。</Answer>
+
+**问题 3：何时选择streaming projection？**
+
+<Answer>文档很大且只需顺序处理独立records、不需要全局random update时。XmlReader扫描并单个subtree materialize，stream/reader由iterator owner dispose；测peak memory、partial break与malformed input。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="expanded-name identity" definition="Namespace URI+local name决定XML name。" />
+  <GlossaryItem term="XML round-trip contract" definition="Parser、encoding、whitespace与semantic reserialize约定。" />
+  <GlossaryItem term="X-DOM ownership contract" definition="Parent/order/live axes/events与clone规则。" />
+  <GlossaryItem term="annotation boundary" definition="不属于XML serialization的runtime metadata。" />
+  <GlossaryItem term="streaming projection boundary" definition="Forward reader逐个materialize bounded subtree。" />
+</Glossary>
+
+<Attribution adaptedFrom="C# 10 in a Nutshell, Chapter 10: LINQ to XML" adaptedUrl="https://www.oreilly.com/library/view/c-10-in/9781098121945/ch10.html" />

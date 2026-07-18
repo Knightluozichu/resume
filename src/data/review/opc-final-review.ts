@@ -1,41 +1,44 @@
 import type { ReviewQuestion } from "./types";
 
-/** C++ 性能优化指南 · 总复习复习题 */
+/** Optimized C++ · 十三章综合复盘题 */
 export const opcFinalReviewQuestions: ReviewQuestion[] = [
   {
     id: "opc-final-review-1",
     chapter: "opc-final-review",
     level: 1,
-    question: `《C++ 性能优化指南》全书的核心方法论是什么？请用一句话概括。`,
+    question: "如何把一个 p99 性能事故映射到官方 13 章，而不是列优化技巧？",
     answer:
-      `核心方法论：测量驱动的闭环优化——先用 benchmark 建立基线，用剖析器定位热点，针对热点优化，再回到 benchmark 验证提升且无回归，不达标则迭代。\n\n一句话：先测量再优化，每一步都拿数据说话，禁止凭直觉改代码。`,
-    tags: ["核心方法论", "测量驱动", "闭环"],
+      "先用第1-3章定义目标、机器机制和可复现测量；第4-8章分解 string/algorithm/allocation/dispatch/library work；第9-10章核算 key/lookup/container 完整生命周期；第11-13章审计 I/O boundary、execution/queue/backpressure 与 storage/object lifetime。每个 cause 都要有 counter-experiment 和系统上限。",
+    tags: ["十三章", "事故分析", "因果分解"],
   },
   {
     id: "opc-final-review-2",
     chapter: "opc-final-review",
     level: 2,
-    question: `全书讲了哪些「低风险高收益」的优化手段？为什么它们风险低？`,
+    question:
+      "为什么 parse、lookup、I/O、queue、allocator 应分成多个 optimization waves？",
     answer:
-      `低风险高收益手段：\n\n1. 字符串优化：\`string_view\` 替代值传递、\`reserve\` 预分配、\`move\`/RVO 转移所有权。改动小（改参数类型/加一行 reserve），不改变逻辑，风险极低，但字符串是最高频操作，收益大。\n\n2. 算法与数据结构选择：\`list\` 换 \`vector\`（缓存友好）、小数据用插入排序、\`unordered_map\` 换排序 vector。改的是容器/算法，逻辑不变，风险低。\n\n3. 减少动态分配：栈替代堆、对象池复用、\`thread_local\` 缓冲。改的是内存管理策略，不改算法逻辑。\n\n4. \`unique_ptr\` 替代 \`shared_ptr\`：去掉不必要的原子引用计数。所有权语义更清晰，风险低。\n\n它们风险低的原因：不改变程序逻辑和正确性，只改变实现方式（数据布局、内存管理、传参方式）。编译器能帮你验证大部分正确性（类型系统、所有权检查）。\n\n对比：并发优化（无锁结构）、模板元编程风险高——容易引入数据竞争、编译错误难调试。`,
-    tags: ["低风险", "高收益", "字符串", "数据结构", "内存"],
+      "每波只改变一个主要 mechanism，才能归因 effect、定位 correctness regression 并独立回滚。顺序从删除 parse/string work、替换 lookup/layout、batch I/O+bounded queue，到 allocation 仍 material 时才 specialize storage。每波结束必须重新 profile/Amdahl；旧占比不能预先决定后续。",
+    tags: ["wave", "单变量", "reprofile"],
   },
   {
     id: "opc-final-review-3",
     chapter: "opc-final-review",
     level: 3,
-    question: `如果只能选三个优化手段应用到现有项目中，你会选哪三个？为什么？`,
+    question:
+      "一个 lookup microbenchmark 快 3 倍，但端到端只省 4 ms、RSS 超预算，应该怎样处理？",
     answer:
-      `选择标准：收益大、风险低、适用面广。\n\n1. 测量驱动的工作流（perf + google-benchmark）：\n这是一切优化的前提。没有测量，其他优化都是瞎猜。先建立基线和热点定位能力，才知道该优化哪里。适用面：所有项目。\n\n2. 字符串优化（string_view + reserve + move）：\n字符串操作是几乎所有 C++ 程序的最高频操作。改传参方式（值→string_view）、加 reserve、确保 move/RVO，改动极小但全局收益。适用面：99% 的 C++ 项目。\n\n3. 减少热路径动态分配（对象池/thread_local 缓冲）：\nmalloc 是最昂贵的常见操作之一。热路径中的临时分配换成预分配缓冲或对象池，往往能拿到数量级提升。适用面：性能敏感的服务端/游戏/实时系统。\n\n为什么不选并发优化？并发优化风险高（数据竞争、死锁），需要剖析确认单线程已极致后才值得做。为什么不选 I/O 优化？只对 I/O 密集型项目适用，不如前三个通用。\n\n三个手段按实施顺序：先建测量能力（1）→ 再改字符串（2，低风险高收益）→ 再优化热路径分配（3，需剖析定位）。`,
-    tags: ["优先级", "应用", "测量", "字符串", "分配"],
+      "拒绝并回滚：它未通过 material performance 和 resource gate。分解 RSS 来自 duplicated keys、buckets、dual index 或 retention，再把透明 lookup、compact key/flat structure 作为新的单变量候选。局部倍数不能覆盖端到端 Amdahl 上限、RSS、build/update/export 与 correctness contract。",
+    tags: ["发布门", "局部优化", "资源预算"],
   },
   {
     id: "opc-final-review-4",
     chapter: "opc-final-review",
     level: 4,
-    question: `综合分析：一个 C++ 项目从「能跑」到「高性能」，应该遵循怎样的优化路线图？每一步的判断标准是什么？`,
+    question:
+      "达到 product goal 后，什么条件下还允许做 lock-free queue 或 custom arena？",
     answer:
-      `五阶段优化路线图：\n\n阶段 1：建立测量基础设施\n- 动作：集成 google-benchmark、配置 perf/Valgrind、建立 CI 性能回归检测。\n- 判断标准：能一键运行 benchmark 并输出基线报告；能对任意函数做 perf 剖析。\n- 不做优化的原因：没有测量能力，优化是盲目的。\n\n阶段 2：低垂果实（低风险高收益）\n- 动作：字符串优化（string_view/reserve/move）、数据结构选择（vector 替代 list）、unique_ptr 替代 shared_ptr。\n- 判断标准：benchmark 显示热点函数提速；端到端性能改善 >10%；无功能回归。\n- 为什么先做：改动小、风险低、全局收益。\n\n阶段 3：内存与分配优化\n- 动作：热路径去 malloc（对象池/arena/thread_local 缓冲）、数据布局扁平化（AoS→SoA）、减少临时对象。\n- 判断标准：剖析显示 malloc 占比从 >20% 降到 <5%；cache miss 率下降。\n- 前提：阶段 2 的热点已优化，瓶颈转移到内存分配。\n\n阶段 4：算法与缓存优化\n- 动作：选对算法（数据规模驱动）、缓存友好布局（连续内存/分块）、SIMD 向量化。\n- 判断标准：热点函数复杂度或常数改善；IPC（指令/周期）提升。\n- 前提：分配已优化，瓶颈转移到计算本身。\n\n阶段 5：并发与 I/O\n- 动作：单线程极致后上多核（分段锁/无锁）、异步 I/O（io_uring/epoll）、零拷贝。\n- 判断标准：多核加速比 > N×0.7（N 核）；I/O 吞吐提升 >2 倍。\n- 前提：单线程已吃满（否则并行只是把烂代码跑多份）；风险最高，需充分测试。\n\n跨阶段原则：\n1. 每阶段都先剖析再动手，不在非热点上浪费时间。\n2. 每次优化后回到 benchmark 验证，不达标回滚或继续。\n3. 把 benchmark 纳入 CI 防止回归。\n4. 优化到「够用」就停——过度优化的代码可维护性差，边际收益递减。`,
-    tags: ["综合", "路线图", "五阶段", "判断标准"],
+      "默认停止并写 regression guard。只有新目标/容量预测显示不足，且新 profile 证明 queue/allocation 是 material hotspot、Amdahl ceiling 覆盖 correctness/maintenance 风险，才各开独立 wave。lock-free 需 memory-order/reclamation/MPMC tests；arena 需 alignment/lifetime/thread/throw tests；都要端到端 A/B 和 rollback。",
+    tags: ["停止规则", "高风险优化", "守卫"],
   },
 ];

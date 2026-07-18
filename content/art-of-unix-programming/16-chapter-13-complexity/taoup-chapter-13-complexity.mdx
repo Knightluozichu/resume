@@ -1,0 +1,333 @@
+---
+title: "第13章 复杂度：尽可能简单，但别简单过了头"
+type: B
+section: "UNIX编程艺术（2012中文版）"
+order: 16
+description: "区分本质、可选与偶然复杂度，以五种编辑器案例判断软件的适度规模。"
+demo: true
+math: true
+sourceUrl: "https://www.catb.org/~esr/writings/taoup/html/"
+draft: false
+---
+
+import {
+  TaoupChapter13ComplexityCompositionLab,
+  TaoupChapter13ComplexityRepresentationLab,
+  TaoupChapter13ComplexityEvidenceLab,
+} from "@/components/mdx/art-of-unix-programming/diagrams/taoup-chapter-13-complexity";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释第13章 复杂度：尽可能简单，但别简单过了头在31个正式单元、383个目录节点与四部分路径中的职责和前后依赖
+- 能绘制“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”因果链，并比较本质复杂度、偶然复杂度、映射复杂度、编辑器、适度规模
+- 能计算组合成本、接口耦合、诊断能力与移植余量，验证正常、恰好边界和单故障样本
+- 能设计独立复核并解释如何证明“能为一个系统绘制复杂度账本，删除一项偶然复杂度且不把代价转嫁给用户。”，而不是只复述Unix格言
+
+</Objectives>
+
+## 为什么这一单元不可压缩
+
+本页依据Eric S. Raymond《UNIX编程艺术》，姜宏、何源、蔡晓骏译，电子工业出版社，2012年8月，ISBN 9787121176654，530页的中文完整目录和 Eric S. Raymond 的送印版在线目录，独立重构 **第13章 复杂度：尽可能简单，但别简单过了头**（13. Complexity）。区分本质、可选与偶然复杂度，以五种编辑器案例判断软件的适度规模。课程不复制原书正文、插图、案例代码或练习答案，而把目录命题转写为新的模型、命令行切片、交互实验、失败样本和复核证据。
+
+2012年中文版目录逐项列出序、4部分、20章、4个附录、Colophon和索引，共31个正式单元。作者官网 Revision 1.0 标记为2003年9月19日送往 Addison-Wesley 的版本，其目录含381个层级节点；中文版末尾另列Colophon和索引，因此课程的核心目录分母是383。旧内容把它压成8个主题页，遗漏了多道程序设计、微型语言、生成、配置、语言、工具、重用、可移植性、文档与开放源码等正式章，无法复刻全书路径。
+
+时代边界同样不可省略。书中讨论的具体桌面、IPC、脚本语言、版本控制和文档工具反映2003年前后的生态；模块化、文本协议、透明诊断、进程组合、开放标准与社区协作仍是可迁移的判断框架。学习时要分别记录“历史机制”“稳定原则”和“当前替代”，不能把某个旧工具的流行度误当原则本身。
+
+## 版次、对象与验收合同
+
+<Term def="13. Complexity是第13章 复杂度：尽可能简单，但别简单过了头的第1个复核坐标；必须绑定输入、接口、表示、失败边界与可重放证据。">
+  13. Complexity
+</Term>
+、
+<Term def="Complexity是第13章 复杂度：尽可能简单，但别简单过了头的第2个复核坐标；必须绑定输入、接口、表示、失败边界与可重放证据。">
+  Complexity
+</Term>
+、
+<Term def="Speaking of Complexity是第13章 复杂度：尽可能简单，但别简单过了头的第3个复核坐标；必须绑定输入、接口、表示、失败边界与可重放证据。">
+  Speaking of Complexity
+</Term>
+、
+<Term def="The Three Sources of Complexity是第13章 复杂度：尽可能简单，但别简单过了头的第4个复核坐标；必须绑定输入、接口、表示、失败边界与可重放证据。">
+  The Three Sources of Complexity
+</Term>
+、
+<Term def="Tradeoffs between Interface and Implementation Complexity是第13章 复杂度：尽可能简单，但别简单过了头的第5个复核坐标；必须绑定输入、接口、表示、失败边界与可重放证据。">
+  Tradeoffs between Interface and Implementation Complexity
+</Term>
+
+贯穿案例是一条可组合命令行工具链：读取文本事件，规范化字段，按规则筛选，输出机器可读结果，并把诊断写到独立通道。输入合同包含编码、记录分隔、字段模式、排序规则、退出码和资源预算；输出合同包含标准输出、标准错误、退出状态、临时文件、时间与内存。每个模块只做一件可命名的事，但“做一件事”必须由接口和测试证明。
+
+验收标准是 **能为一个系统绘制复杂度账本，删除一项偶然复杂度且不把代价转嫁给用户。**。正常样本覆盖常见记录；恰好边界覆盖空输入、最大字段、最后一个合法选项或刚好达到延迟预算；单故障样本只改变编码、管道一段、配置来源、依赖版本或权限中的一项。故障必须尽早、清楚地暴露，不能把部分输出伪装成成功。
+
+## 四个可手算模型
+
+组合链的总成本由每段处理成本、接口转换与失败放大共同决定：
+
+$$
+C_p = \sum_i c_i + \sum_j x_j + f
+$$
+
+接口耦合用共享状态、隐式假设和接口宽度近似：
+
+$$
+K = s + a + w
+$$
+
+诊断能力取决于可见状态、确定性和故障定位粒度，并被隐藏状态削弱：
+
+$$
+D = v + r + g - h
+$$
+
+发布门禁采用乘法含义：目录覆盖、正常、边界、故障和独立复核任一缺失，整体都不能通过。
+
+$$
+G = c \times n \times e \times f \times r
+$$
+
+这些式子用于公开假设而非冒充精确预测。先给变量定义、单位和预期主导项，再运行实验。若缩短单段耗时却增加格式转换、共享状态或故障恢复，整体组合成本可能反而上升；这正是局部优化必须放回系统边界复核的原因。
+
+## 权威目录坐标与核心知识
+
+### 13. Complexity
+
+这是本单元的正式单元或一级主题，原目录坐标为 [complexitychapter.html](https://www.catb.org/~esr/writings/taoup/html/complexitychapter.html)。把它放入“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”主链时，首先核对 **本质复杂度**：写出当前对象、输入、Unix时代假设、今天的替代机制和可观察结果。正常样本证明机制可用，恰好边界确定何时停止扩张，单故障样本定位第一处失配。
+
+#### Speaking of Complexity
+
+这是本单元的细分规则、案例或比较坐标，原目录坐标为 [ch13s01.html](https://www.catb.org/~esr/writings/taoup/html/ch13s01.html)。把它放入“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”主链时，首先核对 **偶然复杂度**：写出当前对象、输入、Unix时代假设、今天的替代机制和可观察结果。正常样本证明机制可用，恰好边界确定何时停止扩张，单故障样本定位第一处失配。
+
+#### The Three Sources of Complexity
+
+这是本单元的细分规则、案例或比较坐标，原目录坐标为 [ch13s01.html#id2964646](https://www.catb.org/~esr/writings/taoup/html/ch13s01.html#id2964646)。把它放入“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”主链时，首先核对 **映射复杂度**：写出当前对象、输入、Unix时代假设、今天的替代机制和可观察结果。正常样本证明机制可用，恰好边界确定何时停止扩张，单故障样本定位第一处失配。
+
+#### Tradeoffs between Interface and Implementation Complexity
+
+这是本单元的细分规则、案例或比较坐标，原目录坐标为 [ch13s01.html#id2964843](https://www.catb.org/~esr/writings/taoup/html/ch13s01.html#id2964843)。把它放入“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”主链时，首先核对 **编辑器**：写出当前对象、输入、Unix时代假设、今天的替代机制和可观察结果。正常样本证明机制可用，恰好边界确定何时停止扩张，单故障样本定位第一处失配。
+
+#### Essential, Optional, and Accidental Complexity
+
+这是本单元的细分规则、案例或比较坐标，原目录坐标为 [ch13s01.html#id2961759](https://www.catb.org/~esr/writings/taoup/html/ch13s01.html#id2961759)。把它放入“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”主链时，首先核对 **适度规模**：写出当前对象、输入、Unix时代假设、今天的替代机制和可观察结果。正常样本证明机制可用，恰好边界确定何时停止扩张，单故障样本定位第一处失配。
+
+#### Mapping Complexity
+
+这是本单元的细分规则、案例或比较坐标，原目录坐标为 [ch13s01.html#id2961870](https://www.catb.org/~esr/writings/taoup/html/ch13s01.html#id2961870)。把它放入“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”主链时，首先核对 **本质复杂度**：写出当前对象、输入、Unix时代假设、今天的替代机制和可观察结果。正常样本证明机制可用，恰好边界确定何时停止扩张，单故障样本定位第一处失配。
+
+#### When Simplicity Is Not Enough
+
+这是本单元的细分规则、案例或比较坐标，原目录坐标为 [ch13s01.html#id2963237](https://www.catb.org/~esr/writings/taoup/html/ch13s01.html#id2963237)。把它放入“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”主链时，首先核对 **偶然复杂度**：写出当前对象、输入、Unix时代假设、今天的替代机制和可观察结果。正常样本证明机制可用，恰好边界确定何时停止扩张，单故障样本定位第一处失配。
+
+#### A Tale of Five Editors
+
+这是本单元的细分规则、案例或比较坐标，原目录坐标为 [ch13s02.html](https://www.catb.org/~esr/writings/taoup/html/ch13s02.html)。把它放入“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”主链时，首先核对 **映射复杂度**：写出当前对象、输入、Unix时代假设、今天的替代机制和可观察结果。正常样本证明机制可用，恰好边界确定何时停止扩张，单故障样本定位第一处失配。
+
+#### ed
+
+这是本单元的细分规则、案例或比较坐标，原目录坐标为 [ch13s02.html#id2963445](https://www.catb.org/~esr/writings/taoup/html/ch13s02.html#id2963445)。把它放入“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”主链时，首先核对 **编辑器**：写出当前对象、输入、Unix时代假设、今天的替代机制和可观察结果。正常样本证明机制可用，恰好边界确定何时停止扩张，单故障样本定位第一处失配。
+
+#### vi
+
+这是本单元的细分规则、案例或比较坐标，原目录坐标为 [ch13s02.html#vi_complexity](https://www.catb.org/~esr/writings/taoup/html/ch13s02.html#vi_complexity)。把它放入“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”主链时，首先核对 **适度规模**：写出当前对象、输入、Unix时代假设、今天的替代机制和可观察结果。正常样本证明机制可用，恰好边界确定何时停止扩张，单故障样本定位第一处失配。
+
+#### Sam
+
+这是本单元的细分规则、案例或比较坐标，原目录坐标为 [ch13s02.html#id2963798](https://www.catb.org/~esr/writings/taoup/html/ch13s02.html#id2963798)。把它放入“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”主链时，首先核对 **本质复杂度**：写出当前对象、输入、Unix时代假设、今天的替代机制和可观察结果。正常样本证明机制可用，恰好边界确定何时停止扩张，单故障样本定位第一处失配。
+
+#### Emacs
+
+这是本单元的细分规则、案例或比较坐标，原目录坐标为 [ch13s02.html#emacs_editing](https://www.catb.org/~esr/writings/taoup/html/ch13s02.html#emacs_editing)。把它放入“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”主链时，首先核对 **偶然复杂度**：写出当前对象、输入、Unix时代假设、今天的替代机制和可观察结果。正常样本证明机制可用，恰好边界确定何时停止扩张，单故障样本定位第一处失配。
+
+#### Wily
+
+这是本单元的细分规则、案例或比较坐标，原目录坐标为 [ch13s02.html#id2967110](https://www.catb.org/~esr/writings/taoup/html/ch13s02.html#id2967110)。把它放入“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”主链时，首先核对 **映射复杂度**：写出当前对象、输入、Unix时代假设、今天的替代机制和可观察结果。正常样本证明机制可用，恰好边界确定何时停止扩张，单故障样本定位第一处失配。
+
+#### The Right Size for an Editor
+
+这是本单元的细分规则、案例或比较坐标，原目录坐标为 [ch13s03.html](https://www.catb.org/~esr/writings/taoup/html/ch13s03.html)。把它放入“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”主链时，首先核对 **编辑器**：写出当前对象、输入、Unix时代假设、今天的替代机制和可观察结果。正常样本证明机制可用，恰好边界确定何时停止扩张，单故障样本定位第一处失配。
+
+#### Identifying the Complexity Problems
+
+这是本单元的细分规则、案例或比较坐标，原目录坐标为 [ch13s03.html#id2967267](https://www.catb.org/~esr/writings/taoup/html/ch13s03.html#id2967267)。把它放入“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”主链时，首先核对 **适度规模**：写出当前对象、输入、Unix时代假设、今天的替代机制和可观察结果。正常样本证明机制可用，恰好边界确定何时停止扩张，单故障样本定位第一处失配。
+
+#### Compromise Doesn't Work
+
+这是本单元的细分规则、案例或比较坐标，原目录坐标为 [ch13s03.html#id2967642](https://www.catb.org/~esr/writings/taoup/html/ch13s03.html#id2967642)。把它放入“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”主链时，首先核对 **本质复杂度**：写出当前对象、输入、Unix时代假设、今天的替代机制和可观察结果。正常样本证明机制可用，恰好边界确定何时停止扩张，单故障样本定位第一处失配。
+
+#### Is Emacs an Argument against the Unix Tradition?
+
+这是本单元的细分规则、案例或比较坐标，原目录坐标为 [ch13s03.html#id2967765](https://www.catb.org/~esr/writings/taoup/html/ch13s03.html#id2967765)。把它放入“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”主链时，首先核对 **偶然复杂度**：写出当前对象、输入、Unix时代假设、今天的替代机制和可观察结果。正常样本证明机制可用，恰好边界确定何时停止扩张，单故障样本定位第一处失配。
+
+#### The Right Size of Software
+
+这是本单元的细分规则、案例或比较坐标，原目录坐标为 [ch13s04.html](https://www.catb.org/~esr/writings/taoup/html/ch13s04.html)。把它放入“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”主链时，首先核对 **映射复杂度**：写出当前对象、输入、Unix时代假设、今天的替代机制和可观察结果。正常样本证明机制可用，恰好边界确定何时停止扩张，单故障样本定位第一处失配。
+
+## 从原则到可执行裁决
+
+本单元的最小裁决链是“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”。每个节点写五栏：正在解决的问题、成立语境、候选机制、可观察后果、撤回条件。1. 本质复杂度至少绑定一个正常指标和一个拒绝阈值；2. 偶然复杂度至少绑定一个正常指标和一个拒绝阈值；3. 映射复杂度至少绑定一个正常指标和一个拒绝阈值；4. 编辑器至少绑定一个正常指标和一个拒绝阈值；5. 适度规模至少绑定一个正常指标和一个拒绝阈值。这种记录把格言变成工程决策，也允许后来者发现原假设已经过期。
+
+Unix风格不等于所有功能都拆成进程，也不等于所有表示都必须是人类可读文本。若数据量、延迟、安全或事务一致性让文本和进程边界付出不可接受代价，可以选择二进制格式、库调用或单体模块；但必须保留清晰接口、检查工具、版本策略和故障证据。原则指导比较，不替代测量。
+
+## 三视图交互验证
+
+<Callout type="info" title="先预测，再操作">
+  先预测模块数量、接口宽度或文本比例变化时哪项指标最先越界，再切换正常、恰好边界和单故障。每次只改一个变量，并保存首差与回退状态。
+</Callout>
+
+<Stepper>
+  <Step title="1. 冻结组合拓扑">
+    从“复杂度来源”走到“简化验证”，标出进程、库、文件和配置边界，确认每个接口的输入、输出与失败语义。
+    <TaoupChapter13ComplexityCompositionLab />
+  </Step>
+  <Step title="2. 改变表示压力">
+    保持业务语义不变，只调整模块数量、接口宽度和文本表示比例；观察胶合负担、隐藏状态与可移植性如何变化。
+    <TaoupChapter13ComplexityRepresentationLab />
+  </Step>
+  <Step title="3. 注入一个故障">
+    固定前两步，只破坏一段管道、一个配置来源或一种编码；检查退出码、诊断通道、部分输出和恢复点是否按合同被拒绝。
+    <TaoupChapter13ComplexityEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小可重放实现
+
+第一段把数据和诊断分流，让成功输出保持可管道化：
+
+```sh
+set -eu
+normalize_events < input.tsv \
+  | select_events --status active \
+  | sort -t "$(printf '\t')" -k2,2 > result.tsv
+printf '%s\n' "records written" >&2
+```
+
+第二段用一个小过滤器固定输入模式、输出模式和失败状态：
+
+```python
+import json, sys
+
+for number, line in enumerate(sys.stdin, 1):
+    try:
+        event = json.loads(line)
+        if event.get("active") is True:
+            print(json.dumps(event, sort_keys=True, separators=(",", ":")))
+    except (ValueError, TypeError) as error:
+        raise SystemExit(f"line {number}: {error}")
+```
+
+第三段把构建步骤声明为依赖关系，使干净检出可重复生成：
+
+```make
+.PHONY: verify clean
+result.tsv: input.tsv normalize_events select_events
+	./pipeline.sh
+verify: result.tsv
+	cmp --silent result.tsv fixtures/expected.tsv
+clean:
+	rm -f result.tsv
+```
+
+这三段不是唯一实现。真正需要保留的是单向数据流、稳定格式、独立诊断、非零失败状态和显式依赖。迁移到容器、云任务或流处理平台时，应逐项映射这些合同；若平台隐藏了退出状态或重试，必须用追踪与幂等证据补回可观察性。
+
+## 选择矩阵与时代迁移
+
+| 决策轴 | Unix风格候选               | 需要替代时                   | 必留证据                     |
+| ------ | -------------------------- | ---------------------------- | ---------------------------- |
+| 组合   | 小工具、管道、重定向       | 高频内存内调用或原子事务     | 数据流、退出码、部分失败     |
+| 表示   | 行文本、记录格式、开放协议 | 超大载荷、严格模式或安全边界 | 模式、版本、检查与转换工具   |
+| 状态   | 文件、显式配置、独立进程   | 强一致共享状态               | 所有权、生命周期、恢复点     |
+| 接口   | CLI、过滤器、源、汇        | 交互可视任务或无障碍需求     | 最小立异、脚本入口、错误语义 |
+| 协作   | 开放标准、补丁、可重建发布 | 受监管或闭源依赖             | 许可证、来源、评审、退出计划 |
+
+迁移顺序是观测、包裹、比较、切换、删除：先记录旧工具输入输出和故障；再用适配器固定合同；以影子运行比较语义；只切换一个调用方；最后删除旧路径。不要同时更换格式、进程边界和配置机制，否则无法定位第一个语义差异。
+
+<Callout type="trap" title="陷阱：把小程序数量当成模块化">
+  进程很多但共享同一数据库细节、环境变量或临时文件，仍然高度耦合。模块化要由职责、接口、状态所有权和独立测试证明，而不是由可执行文件计数证明。
+</Callout>
+
+<Callout type="trap" title="陷阱：把文本化当成拒绝模式与版本">
+  人能打开文件不代表格式可安全演化。字段转义、编码、未知键、排序、原子写入和版本迁移都必须明确；否则“简单文本”只是把解析复杂度推给所有调用者。
+</Callout>
+
+## 可重放证据与独立复核
+
+每次实验保存中文版版次、官方目录坐标、需求、代码哈希、工具与系统版本、locale、时区、输入、初始文件权限、单位和资源限制；随后保存预期管道、实际管道、标准输出、标准错误、退出码、耗时、首差和回退点。网络或外部服务要记录响应摘要和契约版本，不把敏感原文塞进证据。
+
+独立复核者只接收合同、输入和干净检出。他先手算组合成本和耦合，再重建工具链，运行正常、边界与单故障；双方必须在相同节点接受或拒绝，并能解释差异来自Unix原则、时代假设、工具实现还是环境。无法从干净环境重建的演示不算完成。
+
+## 本章回顾
+
+第13章 复杂度：尽可能简单，但别简单过了头不是一个孤立格言，而是“复杂度来源 → 接口实现 → 案例比较 → 规模裁决 → 简化验证”中的完整决策单元。掌握它意味着能比较候选、公开时代边界、写出接口与失败合同，并以组合、表示和证据三视图重放。课程最终要求读者既能说明Unix传统为何有效，也能在条件不成立时有证据地拒绝它。
+
+<Glossary>
+
+<GlossaryItem term="13. Complexity">
+  13.
+  Complexity在本单元中对应第1类Unix工程判断。使用时要写明它降低了什么复杂度、把代价移到哪里、如何观察以及何时应当拒绝。
+</GlossaryItem>
+
+<GlossaryItem term="Complexity">
+  Complexity在本单元中对应第2类Unix工程判断。使用时要写明它降低了什么复杂度、把代价移到哪里、如何观察以及何时应当拒绝。
+</GlossaryItem>
+
+<GlossaryItem term="Speaking of Complexity">
+  Speaking of
+  Complexity在本单元中对应第3类Unix工程判断。使用时要写明它降低了什么复杂度、把代价移到哪里、如何观察以及何时应当拒绝。
+</GlossaryItem>
+
+<GlossaryItem term="The Three Sources of Complexity">
+  The Three Sources of
+  Complexity在本单元中对应第4类Unix工程判断。使用时要写明它降低了什么复杂度、把代价移到哪里、如何观察以及何时应当拒绝。
+</GlossaryItem>
+
+<GlossaryItem term="Tradeoffs between Interface and Implementation Complexity">
+  Tradeoffs between Interface and Implementation
+  Complexity在本单元中对应第5类Unix工程判断。使用时要写明它降低了什么复杂度、把代价移到哪里、如何观察以及何时应当拒绝。
+</GlossaryItem>
+
+</Glossary>
+
+<Exercises>
+
+1. 如何为第13章 复杂度：尽可能简单，但别简单过了头建立最小可重放基线？
+
+<Answer>
+  固定2012年中文版和作者送印版目录坐标、代码与工具版本、输入、locale、权限、初始状态和单位，先画“复杂度来源
+  → 接口实现 → 案例比较 → 规模裁决 →
+  简化验证”预期，再保存正常、边界与单故障轨迹。
+</Answer>
+
+2. 怎样证明“能为一个系统绘制复杂度账本，删除一项偶然复杂度且不把代价转嫁给用户。”不是一次偶然成功？
+
+<Answer>
+  先手算组合成本、接口耦合、诊断能力和移植余量，再让独立复核者从干净检出重建；双方必须在相同首差拒绝故障，并保留一致的退出码、诊断和回退状态。
+</Answer>
+
+3. 修复一个失败后怎样做相邻回归？
+
+<Answer>
+  先重放原失败，再运行相邻边界和正常基线；逐项检查本质复杂度、偶然复杂度、映射复杂度、编辑器、适度规模，确认输入输出、错误通道、版本与资源证据没有新首差后才进入下一页。
+</Answer>
+
+</Exercises>
+
+## 前后导航
+
+- [上一页：第12章 优化](/learn/art-of-unix-programming/15-chapter-12-optimization/taoup-chapter-12-optimization)
+- [下一页：第三部分 实现](/learn/art-of-unix-programming/17-part-03/taoup-part-03)
+
+<Attribution
+  adaptedFrom="Eric S. Raymond《UNIX编程艺术》，姜宏、何源、蔡晓骏译，电子工业出版社，2012年8月，ISBN 9787121176654，530页 · 作者送印版381个目录节点与中文版Colophon、索引合并为383个节点 · 基于公开目录独立中文教学重构，不复制原书正文、插图、案例代码或练习答案"
+  adaptedUrl="https://www.catb.org/~esr/writings/taoup/html/"
+/>

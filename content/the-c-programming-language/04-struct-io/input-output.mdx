@@ -1,77 +1,397 @@
 ---
-title: 输入与输出
+title: 标准 I/O、格式化与文件错误
 type: A
 section: 结构体与IO
 order: 7
-description: 标准流、格式化 I/O、文件访问、行 I/O 与缓冲机制。
+description: 复刻 K&R 第七章：标准流、printf 与可变参数、scanf 输入契约、文件访问、错误处理和可靠行 I/O。
 demo: false
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/content/images/9780131103627/samplepages/0131103628.pdf"
 draft: false
 ---
 
-import { KrcIoStreamsDiagram } from "@/components/mdx/kr-c-language/diagrams/krc-io-streams";
-import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer } from "@/components/mdx/mdx-components";
+import {
+  KrFileLifecycleMap,
+  KrFormatContractMap,
+  KrStreamStateMap,
+} from "@/components/mdx/the-c-programming-language/diagrams/input-output";
 
 <Objectives>
 
-- 能说出三个标准流及各自的特点（缓冲模式、文件描述符）
-- 能解释 printf/scanf 格式化 I/O 的工作原理，以及变参函数为什么不做类型检查
-- 能回答：为什么 `printf("hello"); while(1);` 重定向到文件后看不到输出？如何解决？
+- 能解释标准输入输出流的方向、缓冲、文件尾和错误状态，并判断何时需要显式刷写
+- 能比较 `printf` 与 `scanf` 的格式契约，实现边界受控的文本输出和输入解析
+- 能设计完整的文件访问生命周期，区分正常文件尾、格式失败、设备错误与关闭失败
 
 </Objectives>
 
-## 程序与外界的通道
+## 从“每次 I/O 都可能只完成协议的一步”开始
 
-没有 I/O，程序只能在内存里自说自话。C 语言的标准 I/O 库（`<stdio.h>`）提供了从简单的 printf/scanf 到复杂的文件操作的完整工具链。K&R 第 7 章系统讲解了标准 I/O，核心抽象是 `FILE *`——一个封装了文件描述符和缓冲区的结构体指针。
+C 标准库用
 
-<KrcIoStreamsDiagram />
+<Term def="由标准 I/O 库管理的流对象类型；程序通过 FILE 指针和库函数访问，其内部结构与是否使用操作系统描述符都不属于 ISO C 接口。">
+  FILE
+</Term>
+表示外部字符序列。流不仅有当前位置，还可能有方向、文本或二进制模式、缓冲区、文件尾指示器和错误指示器。`FILE
+*` 是访问句柄，不应解引用其内部成员，也不能假设它必然包装 Unix 文件描述符。
 
-## 核心概念
+程序启动时可使用
 
-程序启动时自动打开三个标准流：<Term def="标准输入流，文件描述符 0，默认连接终端键盘，行缓冲。">stdin</Term>（fd 0，标准输入）、<Term def="标准输出流，文件描述符 1，默认连接终端屏幕，终端模式下行缓冲、管道/文件模式下全缓冲。">stdout</Term>（fd 1，标准输出）、<Term def="标准错误流，文件描述符 2，默认连接终端屏幕，无缓冲（保证错误信息立即输出）。">stderr</Term>（fd 2，标准错误）。它们都是 `FILE *` 类型，由标准库自动打开和关闭。
+<Term def="程序启动时预定义的标准输入流宏，通常连接交互输入或重定向来源，但具体设备和底层编号由宿主环境决定。">
+  stdin
+</Term>
+、
+<Term def="程序启动时预定义的标准输出流宏，通常承载正常结果，可被宿主环境重定向。">
+  stdout
+</Term>
+和
+<Term def="程序启动时预定义的标准错误流宏，用于诊断；标准只保证它在初始状态不是完全缓冲，不保证固定 Unix 描述符。">
+  stderr
+</Term>
+。它们是标准流宏，不是 ISO C 规定的描述符
+0、1、2。终端、文件、管道与设备的连接方式属于宿主环境。
 
-<Term def="标准库对文件描述符的封装，内部维护缓冲区和文件位置，减少系统调用次数。FILE* 是指向该结构体的指针。">FILE*</Term>是标准 I/O 的核心抽象。它封装了底层文件描述符（fd），加上一块用户态缓冲区。每次 fread/fwrite 不一定触发系统调用——数据先攒在缓冲区，满了或主动 fflush 时才调用底层 read/write。这把昂贵的系统调用从「逐字节」降为「批量」，性能提升可达百倍。
+<KrStreamStateMap />
 
-缓冲机制有三种：<Term def="缓冲区满才触发刷写，适合磁盘文件等块设备。">全缓冲</Term>（缓冲区满才刷写，磁盘文件默认）、<Term def="遇到换行符就触发刷写，适合终端交互。">行缓冲</Term>（遇换行符刷写，终端 stdout 默认）、<Term def="每次操作立即刷写，不缓冲，适合错误输出。">无缓冲</Term>（立即刷写，stderr 默认）。缓冲模式决定了「数据什么时候真正写到内核」——这是 I/O 行为差异的根源。
+## 标准输入输出与缓冲边界
 
-格式化 I/O 是标准库最常用的功能。`printf` 把数据按格式串转换成文本写入 stdout，`scanf` 从 stdin 按格式串读取并解析。`fprintf/fscanf` 可指定目标流，`sprintf/sscanf` 操作字符串而非流。格式串中的占位符（`%d`、`%f`、`%s` 等）必须与参数类型严格匹配——但 printf 是<Term def="参数个数和类型可变的函数，如 printf。编译器无法检查变参部分的类型匹配，需调用方自行保证。">变参函数</Term>，编译器无法检查，错了不报错但输出乱码。
+<Term def="在程序和宿主环境之间经 stdin、stdout、stderr 或其他 FILE 流传送字符的标准库接口。">
+  标准输入输出
+</Term>
+把调用者与具体设备隔开。库可以分批传送字符以减少外部操作次数，这称为缓冲。完全缓冲通常在缓冲区填满时传送；行缓冲通常在遇到换行等规定时机传送；不缓冲则尽快传送字符。具体默认行为受流和环境影响，不能从“当前在命令行运行”推导所有实现都相同。
 
-行 I/O 用 `fgets` 和 `fputs`。`fgets(buf, n, fp)` 最多读 n-1 个字符，遇到换行符或 EOF 停止，保留换行符在 buf 中。它比危险的 `gets`（已从 C11 移除）安全得多——gets 不限长度，必然缓冲区溢出。
+程序需要输出在继续运行前对外可见时，应检查输出操作，再调用
 
-<Callout type="tip">
-<strong>建议 →</strong> 调试时如果 printf 输出看不到，在 printf 后加 `fflush(stdout);` 主动刷写缓冲区。或者在格式串末尾加 `\n`（终端行缓冲模式下触发刷写）。程序崩溃时输出丢失，几乎都是缓冲区没刷写导致的。
-</Callout>
+<Term def="请求把输出流尚未传送的字符交给宿主环境的函数；成功只表示完成标准库层操作，不等于数据已持久化到物理介质。">
+  fflush
+</Term>
+。换行只对行缓冲流具有特定作用，对重定向后的完全缓冲流不能替代显式同步。ISO C 的
+`fflush` 面向输出流或满足规定状态的更新流；用 `fflush(stdin)`
+试图丢弃输入不具可移植定义。
 
-## 常见误区
+```c
+#include <stdio.h>
+
+int ask_to_continue(void)
+{
+    int answer;
+
+    if (fputs("continue? [y/n] ", stdout) == EOF)
+        return EOF;
+    if (fflush(stdout) == EOF)
+        return EOF;
+    answer = getchar();
+    return answer;
+}
+```
+
+这里显式刷写是因为程序马上等待输入，而提示文字没有换行。`fflush` 成功也不等于磁盘已经断电安全；物理持久化需要操作系统特定接口，不属于 K&R 本章的标准 I/O 保证。
 
 <Callout type="trap">
-<strong>现象 →</strong> `printf("hello"); while(1);` 在终端能看到 hello，但 `./a.out > file.txt` 重定向后文件里没有。<strong>原因 →</strong> 终端模式 stdout 是行缓冲，程序阻塞时某些实现会刷写。重定向到文件后 stdout 变成全缓冲，hello 存在用户态缓冲区还没满，while(1) 死循环让程序永不退出，缓冲区永远不刷写。<strong>修法 →</strong> 加 `fflush(stdout);` 主动刷写，或 `setbuf(stdout, NULL)` 关闭缓冲。
+  **现象**：`printf("working");`
+  后程序长时间计算，重定向文件中暂时没有文字。**原因**：字符仍可能留在输出缓冲，且没有换行的输出不能依赖行缓冲时机。**修法**：把可见性作为协议，在输出返回成功后显式
+  `fflush(stdout)`，并处理失败；不要用死循环或崩溃测试推断通用默认缓冲规则。
 </Callout>
+
+## 格式化输出：格式串就是类型契约
+
+<Term def="按格式串把后续值转换成字符并写入流的操作，以 printf、fprintf 等函数为代表。">
+  格式化输出
+</Term>
+由转换说明决定如何取得每个实参。`printf` 是
+<Term def="固定参数之后还可接收数量和类型由调用协议决定的实参列表；额外参数经历默认实参提升且不携带运行时类型标签。">
+  可变参数
+</Term>
+函数：`float` 会提升为 `double`，`char` 和 `short`
+通常经整数提升，但指针不会自动改成另一种指针。格式说明与提升后的实际类型不匹配，行为未定义，不是“读取部分字节后输出乱码”这么可预测。
+
+```c
+#include <stdio.h>
+
+int print_measurement(FILE *stream, const char *name, long count,
+                      double average)
+{
+    int written;
+
+    written = fprintf(stream, "%s: count=%ld average=%.3f\n",
+                      name, count, average);
+    if (written < 0)
+        return 0;
+    return 1;
+}
+```
+
+`%ld` 对应 `long`，`%f` 在 `printf` 家族中取得经提升的 `double`，精度 `.3` 控制小数位显示而非计算精度。`fprintf` 返回写入字符数，失败时返回负值；仍可能存在后续刷写或关闭才报告的延迟错误。
+
+外部文本绝不能直接作为格式串。`printf(user_text)` 会让其中的 `%` 触发参数读取，可能造成未定义行为与安全漏洞；应写 `printf("%s", user_text)`。宽度和精度也要避免无界放大输出；从 `*` 取得的宽度与精度仍属于可变参数契约。
+
+<KrFormatContractMap />
+
+## 用 vfprintf 实现可变参数包装
+
+自定义日志包装器应使用 `<stdarg.h>` 中的 `va_list`、`va_start`、`va_end` 与接收列表的 `vfprintf`，而不是猜测调用栈布局。每次 `va_start` 后都必须在同一函数中 `va_end`；一个列表被某个 `v` 函数消费后的状态不能随意重用。
+
+```c
+#include <stdarg.h>
+#include <stdio.h>
+
+int report_error(const char *format, ...)
+{
+    int result;
+    va_list arguments;
+
+    if (fputs("error: ", stderr) == EOF)
+        return -1;
+    va_start(arguments, format);
+    result = vfprintf(stderr, format, arguments);
+    va_end(arguments);
+    return result;
+}
+```
+
+编译器可能识别标准 `printf` 调用并发出格式警告，但语言层契约仍由调用者负责。项目应启用格式警告并把警告当错误；自定义包装器若使用编译器属性，那是额外工具能力，不是 ISO C 语法。
+
+## 格式化输入：写入地址比输出更危险
+
+<Term def="按格式串从流中匹配字符并把转换结果写入调用者提供对象的操作，以 scanf、fscanf 等函数为代表。">
+  格式化输入
+</Term>
+取得的是目标对象指针。`%d` 需要 `int *`，`%ld` 需要 `long *`，而读取 `double`
+必须用 `%lf` 和 `double *`；这与 `printf` 中 `%f` 取得 `double`
+不同。指针类型不匹配会向错误大小或表示的对象写入，行为未定义。
+
+`scanf` 返回成功赋值的输入项数；到达文件尾或在首次转换前发生读取错误时返回 `EOF`。返回 1 只证明一个转换成功，不证明整行没有尾随垃圾。转换说明中的空白会消费任意长度空白，`%c` 默认不跳过空白，格式串末尾的空白可能等待下一枚非空白字符。
+
+```c
+#include <stdio.h>
+
+int read_pair(FILE *stream, int *left, int *right)
+{
+    int assigned;
+
+    assigned = fscanf(stream, "%d %d", left, right);
+    if (assigned == 2)
+        return 1;
+    if (assigned == EOF)
+        return feof(stream) ? 0 : -1;
+    return -2;
+}
+```
+
+这里把完整成功、正常文件尾、读取错误和格式不匹配分开。格式不匹配时，未匹配字符可能仍留在流中；若调用者不消费或放弃该记录，重复调用会在同一字符上再次失败。
+
+`%s` 不知道数组容量，必须给字段宽度并为结尾空字符留一格，例如 `char word[32]; scanf("%31s", word)`。但它仍以空白分词，无法可靠读取含空格记录，也不方便判断整行是否超长。复杂输入优先先读一行，再做受控解析。
 
 <Callout type="trap">
-<strong>现象 →</strong> `printf("%d", 3.14);` 输出乱码大整数而非 3。<strong>原因 →</strong> printf 是变参函数，编译器不检查格式串与参数类型匹配。`%d` 让 printf 把下一个参数当 int（4 字节）读，但实际传的是 double（8 字节）——只读了 double 二进制表示的前 4 字节当 int 解读。<strong>修法 →</strong> 格式串占位符必须与参数类型严格匹配：`%d` 对应 int、`%f` 对应 double、`%s` 对应 char*。编译时开 `-Wformat` 警告可检测大部分不匹配。
+  **现象**：循环写 `while (!feof(stream)) fscanf(stream, "%d",
+  &value);`，最后一个值被处理两次。**原因**：文件尾指示器只有读取尝试越过末尾后才设置，`feof`
+  不能预言下一次操作。**修法**：以 `fscanf` 或 `fgets`
+  的返回值驱动循环，失败后再用 `feof` 与 `ferror` 分类。
 </Callout>
 
-## 小结与练习
+## 行输入输出：边界内读到的不一定是整行
 
-- 三个标准流：stdin（fd 0）、stdout（fd 1）、stderr（fd 2），自动打开关闭
-- FILE* 封装 fd + 缓冲区，三种缓冲模式：全缓冲（文件）、行缓冲（终端 stdout）、无缓冲（stderr）
-- printf/scanf 是变参函数，格式串占位符必须与参数类型严格匹配，否则输出乱码且不报错
-- fgets 比 gets 安全（有长度限制），gets 已从 C11 移除；调试时 fflush(stdout) 防止输出丢失
+<Term def="以一行或一段字符为单位的标准 I/O；fgets 受容量限制读取并在有空间时写入结尾空字符，fputs 输出字符串但不自动补换行。">
+  行输入输出
+</Term>
+通常比直接 `scanf` 更容易建立记录边界。`fgets(buffer, size, stream)` 最多存入
+`size - 1`
+个字符，若读到换行会保留它；返回空指针表示没有读到字符。缓冲中没有换行可能表示末行无换行，也可能表示一条长行只读到一段，必须结合容量和下一次读取判断。
+
+```c
+#include <stdio.h>
+#include <string.h>
+
+#define LINE_CAPACITY 128
+
+int copy_lines(FILE *input, FILE *output)
+{
+    char line[LINE_CAPACITY];
+
+    while (fgets(line, sizeof line, input) != NULL) {
+        if (fputs(line, output) == EOF)
+            return 0;
+    }
+    if (ferror(input))
+        return 0;
+    return 1;
+}
+```
+
+这段复制允许长行分多次传送，所以不丢数据；若业务要求“一次得到完整记录”，就要在未见换行时继续累积或报告超长，并消费剩余片段以恢复下一条记录边界。`gets` 没有容量参数，无法阻止溢出，不能使用。
+
+先用 `fgets` 取得记录，再用 `strtol` 等函数解析，可检查无数字、范围错误和尾随字符。`sscanf` 虽然把读取限制在字符串内，仍需宽度和完整消费检查；“不会越过行”不等于“业务格式严格”。
+
+> 先预测：128 字节缓冲调用一次 `fgets` 成功，是否证明读到完整一行？不证明；若未读到换行，可能只是长行片段，也可能是文件末尾的最后一行。
+
+## 文件访问：从 fopen 到 fclose 都要检查
+
+<Term def="通过 fopen 取得流、按模式传送数据、检查状态并通过 fclose 释放流的完整生命周期。">
+  文件访问
+</Term>
+从 `fopen(path, mode)`
+开始。失败返回空指针；成功后模式决定读、写、追加或更新权限。带 `b`
+的二进制模式在某些系统与文本模式相同，在另一些系统会影响换行翻译、可定位位置或特殊字符解释，跨平台二进制数据应明确使用它。
+
+<KrFileLifecycleMap />
+
+```c
+#include <stdio.h>
+
+int copy_file(const char *source_path, const char *target_path)
+{
+    unsigned char buffer[4096];
+    FILE *source;
+    FILE *target;
+    size_t count;
+    int ok = 1;
+
+    source = fopen(source_path, "rb");
+    if (source == NULL)
+        return 0;
+    target = fopen(target_path, "wb");
+    if (target == NULL) {
+        fclose(source);
+        return 0;
+    }
+
+    while ((count = fread(buffer, 1, sizeof buffer, source)) != 0)
+        if (fwrite(buffer, 1, count, target) != count) {
+            ok = 0;
+            break;
+        }
+    if (ferror(source))
+        ok = 0;
+    if (fclose(source) == EOF)
+        ok = 0;
+    if (fclose(target) == EOF)
+        ok = 0;
+    return ok;
+}
+```
+
+`fread` 的短读可能是文件尾或错误，所以循环后检查 `ferror(source)`。`fwrite` 短写直接失败。目标流的最后一批数据可能直到 `fclose` 才交付，因此关闭结果属于写入事务，不能忽略。示例为了聚焦 I/O 返回布尔结果；实际工具还应报告是哪条路径、哪一步失败，并考虑失败时是否删除不完整目标或采用临时文件后重命名。
+
+更新模式同时允许读写，但方向切换有同步规则：输出后读取前通常需要 `fflush` 或定位操作，输入后输出前通常需要定位操作，除非输入已遇文件尾。最稳妥的接口会集中管理方向切换，而不是让任意调用者交错操作同一流。
+
+## 错误处理：文件尾、格式和设备错误不是一回事
+
+<Term def="在 I/O 操作返回失败后读取流状态或 errno，并携带操作与资源上下文向调用者传播的过程。">
+  错误处理
+</Term>
+先从函数返回值判断失败，再检查附加状态。`feof` 只报告流的文件尾指示器，`ferror`
+报告错误指示器；`clearerr` 可清除二者，但不会修复底层原因。`errno`
+只有在某个文档化为设置它的函数已经报告失败时才有意义，成功调用后不能据旧值判断错误。
+
+`perror("open config")` 会把调用上下文与当前 `errno` 描述写到 `stderr`。若之后的关闭或清理可能改变 `errno`，需要先保存它。错误消息应包含操作、路径或记录号，而不只打印“failed”；库函数通常返回错误给上层，不应在深层随意终止整个进程。
+
+`exit(status)` 执行正常终止流程，包括调用已注册的终止函数并关闭流；写入仍可能失败，但 `exit` 没有逐个把关闭结果交回业务逻辑。因此关键输出应在调用 `exit` 前显式刷写或关闭并检查。异常终止、进程崩溃和断电都不能保证普通输出缓冲被提交。
+
+<Callout type="trap">
+  **现象**：`fprintf` 都返回成功，程序也以 0
+  退出，但输出文件缺少末尾数据。**原因**：设备空间耗尽等错误可能在延迟刷写或关闭时才出现，而代码忽略了
+  `fflush`/`fclose`
+  结果。**修法**：把关闭成功纳入提交条件，传播失败；需要原子替换时写临时文件、验证关闭，再使用平台适当的重命名协议。
+</Callout>
+
+## 字符、字符串与其他标准库接口
+
+K&R 第 7 章还把 I/O 与常用库函数连接起来。`getc`/`fgetc` 返回 `int`，是为了同时表示所有 `unsigned char` 值和负的 `EOF`；若先存进 `char`，可能丢失区分能力。`putc`/`fputc` 成功时返回写入字符，失败返回 `EOF`。`ungetc` 只应依赖标准保证的最小回退能力，并在成功后按流状态规则继续读取。
+
+字符分类函数如 `isspace` 的参数必须是 `EOF` 或可表示为 `unsigned char` 的值。普通 `char` 可能有符号，直接传负值会违反前置条件；应写 `isspace((unsigned char)ch)`，但保留 `int` 读取结果并先排除 `EOF`。
+
+字符串、数学、转换和存储管理函数各有独立失败与范围协议。学习标准库的通用方法是：先看参数对象和容量，再看返回值，再看是否设置流状态或 `errno`，最后确认资源释放。函数名相似不代表错误语义相同。
+
+## 小结
+
+- `FILE` 是标准库管理的流对象，内部布局、底层描述符和标准流连接设备都不是 ISO C 保证
+- 缓冲改变传送时机；需要可见性时检查输出并显式 `fflush`，不能用 `fflush(stdin)` 清输入
+- `printf` 取得经默认提升的值，`scanf` 写入精确指针类型；格式不匹配会导致未定义行为
+- 输入循环以操作返回值驱动，失败后再用 `feof` 和 `ferror` 区分正常文件尾与设备错误
+- `fgets` 受容量限制但一次成功不保证完整行；文件写入只有检查 `fclose` 后才算完成
+- 错误处理要带操作和资源上下文，`errno` 只能在相应函数已经报告失败后解释
 
 <Exercises>
-  <Answer question='为什么 `printf("%d", 3.14);` 输出乱码而不是 3？编译器为什么不报错？'>因为 printf 是变参函数，编译器无法在编译期检查格式串与参数类型的匹配。%d 让 printf 把参数当 int（4 字节）读，但实际传的是 double（8 字节）——printf 只取了 double 二进制表示的前 4 字节当 int 解读，得到无关的整数。gcc/clang 可通过 -Wformat 警告检测，但标准不强制。</Answer>
-  <Answer question='`printf("hello"); while(1);` 重定向到文件后看不到输出，为什么？如何解决？'>重定向到文件后 stdout 从行缓冲变成全缓冲，hello 存在用户态缓冲区还没满，while(1) 让程序永不退出，缓冲区永远不刷写到文件。解决：① `fflush(stdout)` 主动刷写 ② 格式串加 `\n`（行缓冲模式下触发，全缓冲不保证） ③ `setbuf(stdout, NULL)` 关闭缓冲。最可靠的是 fflush。</Answer>
+
+**问题 1** 为什么 `printf("%d", 3.14)` 不能描述成“取 double 的前四字节”？给出输出 `long`、`double` 和不可信字符串的正确调用。
+
+<Answer>
+
+可变参数不携带运行时类型标签，格式说明决定 `printf` 按什么类型取得实参；说明与默认提升后的真实类型不匹配时行为未定义，ABI 可能把整数和浮点参数放在完全不同位置，不能预测成固定取字节。正确示例是 `printf("%ld %.3f %s", count, average, user_text)`，其中 `count` 为 `long`、`average` 为 `double`，外部文本只作为 `%s` 的数据参数。
+
+</Answer>
+
+**问题 2** 设计读取整数记录的状态：怎样区分完整成功、格式不匹配、正常文件尾和设备错误？为什么不能先检查 `feof`？
+
+<Answer>
+
+先调用 `fscanf` 并检查成功赋值项数：全部项成功才处理记录；返回 0 或不足项数表示格式不匹配，需要决定消费坏记录还是停止；首次转换前返回 `EOF` 后，再由 `feof` 判断正常末尾、由 `ferror` 判断读取错误。文件尾指示器只在读取尝试触及末尾后设置，事先检查无法预测下一次操作，还可能导致旧值被重复处理。
+
+</Answer>
+
+**问题 3** 文件复制已经逐次检查 `fread` 与 `fwrite`，为什么还必须检查源错误状态和两个 `fclose`？若目标关闭失败，应怎样向上层表达？
+
+<Answer>
+
+`fread` 返回短计数既可能是正常末尾也可能是错误，循环后要用 `ferror(source)` 分类。输出可能缓冲，设备空间不足等失败可能直到最后刷写或 `fclose(target)` 才暴露；源关闭也可能失败，虽通常不影响已读数据，仍应按接口策略记录。目标关闭失败表示复制事务未成功，必须返回失败并携带目标路径与操作上下文；若使用临时文件，不能把它当成完整结果发布。
+
+</Answer>
+
 </Exercises>
 
-## 名词解释
-
 <Glossary>
-  <GlossaryItem term="FILE*">标准库对文件描述符的封装结构体指针。内部维护 fd、用户态缓冲区、文件位置、错误标志。fopen 返回 FILE*，所有标准 I/O 函数都通过它操作。fileno(fp) 可取出底层 fd。</GlossaryItem>
-  <GlossaryItem term="全缓冲 / 行缓冲 / 无缓冲">全缓冲：缓冲区满才刷写（磁盘文件默认）。行缓冲：遇换行符刷写（终端 stdout 默认）。无缓冲：每次操作立即刷写（stderr 默认）。缓冲模式决定数据何时真正写入内核。</GlossaryItem>
-  <GlossaryItem term="变参函数">参数个数和类型可变的函数，如 printf/scanf。通过 `...` 和 `<stdarg.h>` 实现。编译器无法检查变参部分的类型匹配，调用方需自行保证格式串与参数一致。</GlossaryItem>
-  <GlossaryItem term="fflush">主动将 FILE* 的输出缓冲区刷写到内核（底层 write 系统调用）。程序崩溃前如果不 fflush，缓冲区中的数据会丢失。fclose 会自动 fflush。</GlossaryItem>
+
+<GlossaryItem term="FILE">
+  标准 I/O 库管理的流对象类型；内部表示不公开，也不保证包装操作系统文件描述符。
+</GlossaryItem>
+
+<GlossaryItem term="stdin">
+  程序启动时可用的标准输入流宏，实际连接的设备或重定向来源由宿主环境决定。
+</GlossaryItem>
+
+<GlossaryItem term="stdout">
+  程序启动时可用的标准输出流宏，承载正常结果并可由宿主环境重定向。
+</GlossaryItem>
+
+<GlossaryItem term="stderr">
+  标准错误流宏；初始状态不是完全缓冲，但 ISO C 不为它规定 Unix 描述符编号。
+</GlossaryItem>
+
+<GlossaryItem term="标准输入输出">
+  通过标准库流在程序与宿主环境之间传送字符的接口，屏蔽具体设备操作细节。
+</GlossaryItem>
+
+<GlossaryItem term="fflush">
+  请求传送输出流待处理字符的函数；它同步标准库缓冲，但不等同于物理介质持久化。
+</GlossaryItem>
+
+<GlossaryItem term="格式化输出">
+  按格式串把值转换成字符的操作；转换说明必须匹配默认提升后的实际参数类型。
+</GlossaryItem>
+
+<GlossaryItem term="可变参数">
+  固定参数后由调用协议决定数量和类型的参数列表，不携带可供被调函数自动检查的类型标签。
+</GlossaryItem>
+
+<GlossaryItem term="格式化输入">
+  按格式串匹配字符并写入目标对象的操作，要求每个转换说明匹配准确的指针类型。
+</GlossaryItem>
+
+<GlossaryItem term="行输入输出">
+  以一行或受限片段为单位的输入输出；`fgets` 保留读到的换行，`fputs`
+  不自动添加换行。
+</GlossaryItem>
+
+<GlossaryItem term="文件访问">
+  从打开流、按模式传送与检查状态，到验证关闭结果的完整资源生命周期。
+</GlossaryItem>
+
+<GlossaryItem term="错误处理">
+  在操作已经报告失败后区分文件尾、格式和设备状态，并携带上下文传播或恢复的过程。
+</GlossaryItem>
+
 </Glossary>
 
-<Attribution adaptedFrom="The C Programming Language (Kernighan & Ritchie)" adaptedUrl="https://www.prenticehall.com/" />
+<Attribution
+  adaptedFrom="The C Programming Language, Second Edition, Chapter 7: Input and Output"
+  adaptedUrl="https://www.informit.com/content/images/9780131103627/samplepages/0131103628.pdf"
+/>

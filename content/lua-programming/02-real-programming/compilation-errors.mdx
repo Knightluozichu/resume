@@ -1,0 +1,197 @@
+---
+title: "Chapter 16. Compilation, Execution, and Errors"
+type: C
+section: "Programming in Lua 4e · Real Programming"
+order: 16
+description: "掌握load/loadfile/dofile、precompiled chunks、error/assert、pcall/xpcall与traceback，并建立编译、执行、清理和诊断边界。"
+demo: true
+math: false
+sourceUrl: "https://www.lua.org/pil/"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { PilLoadPipelineLab, PilProtectedCallLab, PilTracebackLab } from "@/components/mdx/lua-programming/diagrams/compilation-errors";
+
+<Objectives>
+
+- 能区分source compilation、chunk execution与precompiled code，解释mode、environment、compatibility和trust边界
+- 能实现error/assert、pcall/xpcall协议，推导status后的multiple results与错误对象位置
+- 能设计traceback、context、cleanup和rethrow流程，复现栈展开后证据丢失与primary error覆盖
+
+</Objectives>
+
+## 为什么Compile Success不等于Program Success
+
+Lua source先编译成function，再调用该function执行chunk。Syntax error发生在编译阶段；访问nil、业务validation或显式`error`发生在执行阶段；cleanup与error handler还可能再次失败。把这些阶段混成“运行失败”，就无法决定重试、用户提示、日志和资源释放。
+
+先预测：`load("return missing.x")`会立刻失败还是调用后失败；load返回几个failure values；`pcall(f)`成功时第一个结果是什么；f返回`false,"reason"`时pcall status是否为false；`string.dump`是否保存closure upvalue values；先pcall再`debug.traceback()`能否看到f的完整stack。先画阶段与result tuple。
+
+<Term def="Source读取、语法编译、chunk执行、错误转换、cleanup与diagnostic formatting是可分别失败并拥有不同结果协议的阶段。">compile-execute boundary</Term>让loader不替application做错误政策。Compiled chunk就是function value，可保存、传递或多次调用，但side effects每次执行都可能不同。
+
+## Compilation
+
+`load(source, chunkname, mode, environment)`从string或reader function编译chunk，成功返回function，失败返回nil与syntax error message。Reader每次返回source piece，nil/empty表示结束；reader自身不得违反load的调用约束。Chunkname进入error messages，使用stable virtual name便于定位，避免敏感绝对路径。
+
+Mode可为`"t"` text、`"b"` binary或`"bt"`两者。对配置/脚本source用text-only拒绝意外binary。Environment为chunk的global environment；load不会捕获调用点的ordinary locals。<Term def="Dynamic chunk只获得显式environment table作为global namespace，任何暴露value及其reachable graph都是执行capability。">chunk environment capability</Term>与第15章一样，不等于资源sandbox。
+
+```lua
+local environment = { input = 21 }
+local chunk, syntax_error = load(
+  "local doubled = input * 2; return doubled",
+  "@generated/double.lua",
+  "t",
+  environment
+)
+assert(chunk, syntax_error)
+assert(chunk() == 42)
+
+local broken, message = load("return )", "@generated/broken.lua", "t", {})
+assert(broken == nil and type(message) == "string")
+```
+
+`loadfile(path, mode, env)`只load文件并返回chunk；`dofile(path)`load后立即execute并返回chunk results，失败直接传播，且不提供同样明确的mode/env API。Library更适合loadfile后在受控protected boundary调用。Dynamic code cache要把source/version/environment contract纳入key，不能只按path。
+
+<PilLoadPipelineLab />
+
+<Stepper>
+  <Step title="切换load、loadfile、dofile和Binary Chunk"><PilLoadPipelineLab /></Step>
+  <Step title="填写Phase Ledger">对read error、syntax error、first execution error、second execution side effect和environment missing逐项写owner与result shape。</Step>
+  <Step title="限制Dynamic Code">固定text mode、source bytes、chunkname、environment allowlist与process instruction/memory budget；untrusted input优先parser。</Step>
+</Stepper>
+
+<Callout type="trap" title="Load成功证明代码安全且可执行">
+Load只证明source符合syntax并生成function；global lookup、range、I/O和业务错误要到调用chunk时才发生。还必须限制capability与resources，编译成功不提供安全保证。
+</Callout>
+
+## Precompiled Code
+
+`string.dump(function, strip)`可生成binary representation，strip可移除部分debug information；load以binary mode恢复兼容runtime中的function。<Term def="Precompiled chunk只面向兼容Lua version、integer/number sizes、endianness与build，且不作为跨平台或长期存档格式。">binary-chunk compatibility</Term>要求cache可失效并从source重建。
+
+Dump主要保存function prototype/bytecode，不是general closure serialization；upvalue values、open resources和environment不能按普通object snapshot期待恢复。加载main chunk时environment处理有专门规则，其它upvalues可能重新初始化，必须在target runtime测试。
+
+Lua manual明确不应加载untrusted malformed binary chunk；一致性检查不是security validator，恶意bytecode可能使runtime崩溃。网络、插件市场或用户文件只允许source经policy编译，或使用签名且由完全受信任build产生的bytecode；即便签名也不解决代码本身capabilities。
+
+## Errors
+
+Lua code可`error(object, level)`抛出任意error object；常见string只是约定。Level 1把位置归因当前函数，2归因caller，0不添加position信息。Public validation helper可用level 2让message指向调用点，但结构化context不应只塞进字符串。
+
+`assert(value, message, ...)`在value false/nil时raise message，成功时返回所有arguments。它适合programmer invariants，不适合需要typed user error的普通分支。<Term def="错误边界明确哪些情况raise、哪些返回typed result，以及error object的shape、blame level和可公开信息。">error-object contract</Term>防止string/nil/table混合导致handler再次错误。
+
+Error不是process crash：它沿Lua call chain传播直到protected call或host C boundary。没有protected boundary时Lua state的调用失败由host处理；嵌入环境必须把Lua error转换为host result并保持stack balance。
+
+## Error Handling and Exceptions
+
+`pcall(function, args...)`protected execute。成功返回true加function全部results；失败返回false加error object。Function正常返回false不等于pcall失败：结果是`true,false,...`。<Term def="Protected call第一个boolean只描述执行是否raised，后续位置才是业务results或error object，二者不可合并判断。">protected-result tuple</Term>要求先branch status再decode。
+
+```lua
+local function divide(numerator, denominator)
+  assert(denominator ~= 0, "division-by-zero")
+  return numerator / denominator, "computed"
+end
+
+local ok, value, tag = pcall(divide, 8, 2)
+assert(ok and value == 4 and tag == "computed")
+
+local failed, error_object = pcall(divide, 8, 0)
+assert(not failed and type(error_object) == "string")
+
+local normal, business_false = pcall(function() return false, "not-found" end)
+assert(normal and business_false == false)
+```
+
+`xpcall(function, message_handler, args...)`在error发生且原stack仍存在时调用handler，适合添加traceback/structured context。Handler本身必须minimal and reliable；若handler出错，会产生error-in-error状态并丢失primary evidence。不要在handler执行复杂I/O、serialization或业务callbacks。
+
+Protected call是异常边界，不自动rollback side effects。Function可能写一半文件/table再raise；需要transaction、staging或idempotency。Recovery只在知道state invariant时进行，否则annotate后rethrow/return failure。
+
+<PilProtectedCallLab />
+
+<Stepper>
+  <Step title="切换Direct Call、pcall、xpcall和assert/error"><PilProtectedCallLab /></Step>
+  <Step title="展开Result Tuples">覆盖zero/multiple results、normal false/nil、string/table error和handler error，逐位置写type与owner。</Step>
+  <Step title="审计Side Effects">在每个raise point标已完成writes与owned resources，决定rollback、retry、partial status或不可恢复。</Step>
+</Stepper>
+
+## Error Messages and Tracebacks
+
+`debug.traceback(message, level)`生成stack traceback；可在xpcall message handler中调用，因为stack尚未unwind。先用pcall接住后再在caller调用traceback，只能看到caller当前stack，失去failure frames。<Term def="Traceback必须在错误stack展开前捕获，并与原error object、cause和安全context一起保存，之后再决定日志或rethrow。">pre-unwind traceback capture</Term>是诊断保真的关键。
+
+Traceback是developer evidence，不是stable API：格式、paths和frames可能随Lua/build变化，且可能泄露source、filesystem和arguments。外部返回stable error code/message；内部日志保存redacted trace、operation ID与version。不要用字符串匹配trace决定业务逻辑。
+
+```lua
+local function trace_error(error_object)
+  local rendered = type(error_object) == "string" and error_object
+    or ("error<" .. type(error_object) .. ">")
+  return { cause = error_object, trace = debug.traceback(rendered, 2) }
+end
+
+local function run_with_cleanup(open_resource, operation)
+  local resource = assert(open_resource())
+  local ok, result = xpcall(function() return operation(resource) end, trace_error)
+  local close_ok, close_error = resource:close()
+  if not ok then
+    if not close_ok then result.cleanup = close_error end
+    return nil, result
+  end
+  if not close_ok then return nil, { code = "close-failed", cause = close_error } end
+  return result
+end
+```
+
+示例假设operation只返回一个result，真实helper若要透明保留multiple results需table.pack/unpack。Cleanup在success/failure都执行；primary operation error不被close error覆盖，cleanup error附加。Open失败发生在owned resource建立前，应由外层protected boundary决定是否捕获。
+
+<PilTracebackLab />
+
+<Stepper>
+  <Step title="切换Capture、Annotate、Cleanup和Rethrow"><PilTracebackLab /></Step>
+  <Step title="注入每层Failure">在open、operation、message handler、close和logger逐项失败，验证primary cause、trace与cleanup evidence不丢失。</Step>
+  <Step title="建立Redaction Gate">扫描trace/context中的absolute path、token和personal data；外部只返回stable code与correlation ID。</Step>
+</Stepper>
+
+<Callout type="trap" title="Pcall失败后再调用debug.traceback就能得到原始栈">
+Pcall返回时failing stack已经unwind。需要原始frames时用xpcall message handler在展开前调用debug.traceback，并让handler足够简单，避免二次失败。
+</Callout>
+
+## Cleanup、Rethrow与Boundary Placement
+
+Protected boundary放在能做policy的层：request/job/plugin entry，而不是每个helper都pcall后吞错。内部函数保持raise或typed-result一致；边界统一capture、cleanup、map code、log和retry。过密pcall会把stack与ownership切碎。
+
+Rethrow若用`error(new_message)`会创建新location并可能丢cause；可保留structured trace object、用level 0避免重复prefix，或由host error type保存cause chain。规则需一致并测试，不追求模拟另一语言的exception classes。
+
+## 本章回顾：错误处理是一条有阶段的Data Flow
+
+1. Load/loadfile编译并返回function，dofile立即执行；syntax success不证明runtime success。
+2. Binary chunks只用于compatible trusted runtime cache，不可移植，也不能接受untrusted bytes。
+3. Error object可为任意value；assert成功返回参数，失败raise，blame level要明确。
+4. Pcall/xpcall首boolean是execution status，后续才是normal results或error object。
+5. Original traceback必须由xpcall handler在stack unwind前抓取，并与外部stable error contract分离。
+6. Cleanup成功/失败都执行，primary与cleanup errors不互相覆盖，boundary负责最终policy。
+
+<Exercises>
+
+**问题 1：`pcall(function() return false,"missing" end)`为什么不是Failure？**
+
+<Answer>Function没有raise，所以pcall第一个结果为true；false是业务首结果，missing是第二业务结果。Caller先检查execution status，再按function contract解码，不能写`if not select(2,pcall(...))`混合两层状态。</Answer>
+
+**问题 2：为什么Precompiled Chunk不能当跨平台发布格式？**
+
+<Answer>Bytecode依赖Lua version、integer/number sizes、endianness与build，dump也不通用保存closure upvalues/resources。把它当可失效cache并保留source；只加载compatible trusted output，绝不把malformed untrusted binary交给loader。</Answer>
+
+**问题 3：Operation和Close都失败时应返回哪个错误？**
+
+<Answer>保留operation failure为primary cause与原trace，把close failure附加为cleanup evidence；若operation成功而close失败，则close成为primary，因为write可能未完成。测试两者同时失败，确保logger/formatter不会再覆盖。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="compile-execute boundary" definition="Source、compile、execute、error conversion、cleanup与format分别处理的阶段。" />
+  <GlossaryItem term="chunk environment capability" definition="Dynamic chunk的globals由显式environment及其reachable graph提供的能力。" />
+  <GlossaryItem term="binary-chunk compatibility" definition="Precompiled code只适配特定Lua version、sizes、endianness与build的约束。" />
+  <GlossaryItem term="error-object contract" definition="Raise/return选择、error shape、blame level与公开信息的错误协议。" />
+  <GlossaryItem term="protected-result tuple" definition="Protected call以status开头，后跟normal results或error object的结果形状。" />
+  <GlossaryItem term="pre-unwind traceback capture" definition="在错误stack展开前由message handler捕获trace和cause的规则。" />
+</Glossary>
+
+<Attribution adaptedFrom="Programming in Lua, Fourth Edition, Chapter 16: Compilation, Execution, and Errors" adaptedUrl="https://www.lua.org/pil/" />

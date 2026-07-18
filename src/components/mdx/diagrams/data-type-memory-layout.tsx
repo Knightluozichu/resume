@@ -18,10 +18,10 @@ interface DataTypeMemoryLayoutProps {
 
 export function DataTypeMemoryLayout({ step = 1 }: DataTypeMemoryLayoutProps) {
   const allTypes = [
-    { label: "char", size: 1, color: "rgb(99,179,237)", note: "1 字节：存单个字符或 −128~127 的小整数" },
-    { label: "short", size: 2, color: "rgb(99,237,179)", note: "2 字节：存 −32,768~32,767 的整数" },
-    { label: "int", size: 4, color: "var(--accent)", note: "4 字节：最常用的整数类型" },
-    { label: "double", size: 8, color: "rgb(237,137,99)", note: "8 字节：双精度浮点数，约 15 位有效数字" },
+    { label: "char", size: 1, color: "rgb(99,179,237)", note: "示例：1 个 C 字节" },
+    { label: "short", size: 2, color: "rgb(99,237,179)", note: "示例 ABI：sizeof(short)=2" },
+    { label: "int", size: 4, color: "var(--accent)", note: "示例 ABI：sizeof(int)=4" },
+    { label: "double", size: 8, color: "rgb(237,137,99)", note: "示例 ABI：sizeof(double)=8" },
   ];
 
   // 如果 step 是特定值，只展示该 step 对应的那一行
@@ -47,7 +47,7 @@ export function DataTypeMemoryLayout({ step = 1 }: DataTypeMemoryLayoutProps) {
         >
           {/* 标题 */}
           <text x="310" y="24" fontSize="14" fontWeight="700" fill="var(--text-primary)" textAnchor="middle">
-            不同数据类型在内存中占用的空间
+            示例 ABI 的数据类型存储大小
           </text>
 
           {/* 内存示意图例 */}
@@ -141,16 +141,15 @@ export function DataTypeMemoryLayout({ step = 1 }: DataTypeMemoryLayoutProps) {
             fontSize="11"
             fill="var(--text-secondary)"
           >
-            每种类型的 sizeof 值取决于编译器和平台——short ≤ int ≤ long，
-            float ≤ double ≤ long double。
+            格子只展示一种常见实现；实际值由当前编译目标的 sizeof 给出。
           </text>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        {step === 1 && "第一步：char 只占 1 字节，相当于一个小格子。"}
-        {step === 2 && "第二步：short 占 2 字节，比 char 宽一倍。"}
-        {step === 3 && "第三步：int 占 4 字节——最常见的整型。"}
-        {step === 4 && "第四步：double 占 8 字节——内存中的大块头。"}
+        {step === 1 && "第一步：sizeof(char) 按定义为 1；CHAR_BIT 决定该字节含多少位。"}
+        {step === 2 && "第二步：图示实现的 short 为 2 字节，其他实现可能不同。"}
+        {step === 3 && "第三步：图示实现的 int 为 4 字节，标准只规定最低范围。"}
+        {step === 4 && "第四步：图示实现的 double 为 8 字节，表示与精度仍要查询实现。"}
       </figcaption>
     </figure>
   );

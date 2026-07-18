@@ -1,0 +1,277 @@
+---
+title: "第7章：单个服务的基本结构"
+type: A
+section: "C++ 服务器开发精髓 · EventLoop、连接、缓冲与定时器"
+order: 7
+description: "对齐原书第 7 章：服务模型演化、Reactor/one thread one loop、正确收发与缓冲、网络库分层、定时器和经典服务结构。"
+demo: true
+math: false
+sourceUrl: "https://book.douban.com/subject/35491437/"
+draft: false
+---
+
+import {
+  CseConnectionBufferLab,
+  CseEventLoopWakeupLab,
+  CseServerModelLab,
+} from "@/components/mdx/cpp-server-essence/diagrams/single-service-structure";
+
+<Objectives>
+
+- 能比较原始串行、一连接一线程、Reactor 与 one thread one loop 的 ownership、阻塞传播和资源成本，选择服务并发结构
+- 能设计 EventLoop 的 I/O、wakeup、handle_other_things、timer 与 thread 分工，使同一 socket 的收发、关闭和 buffer state 由单 owner 推进
+- 能分析 Session/Connection/Buffer 分层、主动/被动关闭、长短连接、侵入式定时器和 high-water backpressure，定位服务性能瓶颈
+
+</Objectives>
+
+## 为什么高性能服务首先是 ownership 设计
+
+epoll、线程池和 lock-free queue 都不能替代明确 owner。若多个线程可同时 send、close、改 output offset 和移除 timer，任何局部优化都会扩大竞态。稳定结构先规定每个 listening fd、connected fd、Connection、Session、Buffer 与 Timer 由谁在哪条线程修改。
+
+<Term def="一个 event-loop thread 独占一组连接的可变 I/O state，其他线程通过 command queue 与 wakeup 请求它执行变更。">single-loop ownership</Term>
+
+原书第 7 章从通信效率和服务模型出发，最终落到 one thread one loop、正确收发、缓冲区、网络库分层、定时器与经典结构。这些不是孤立技巧，而是同一个 ownership graph 的不同切面。
+
+## 7.1 网络通信组件的效率、关闭与连接长度
+
+网络通信组件的效率取决于 syscall 数、copy/allocation、event dispatch、cache locality、lock contention、protocol parsing 与 backpressure，不只取决于 fd 数。先用 throughput、tail latency、event-loop lag、queue depth 和 CPU profile 找瓶颈。
+
+<Term def="本端主动调用 shutdown/close 并驱动 FIN 的连接结束路径；需要完成 output drain 或明确丢弃策略。">active close</Term>
+
+<Term def="recv 返回 0 或 event 表明 peer FIN 后，本端进入的连接结束路径；可能仍允许 half-close 后发送剩余数据。">passive close</Term>
+
+主动关闭与被动关闭要分开记录。RST、timeout、protocol error、server drain 也各有原因码。long-lived connection 摊薄握手成本，但占用 connection state、需要 heartbeat/idle timeout；short-lived connection 隔离简单，却增加 handshake、TIME_WAIT 与 TLS 开销。
+
+<Term def="跨多个 request 持续复用同一 transport/session 的长连接，以及每次少量交互后关闭的短连接策略。">long versus short connection</Term>
+
+## 7.2 原始服务器结构：accept 后同步处理
+
+最原始结构在单线程中 `accept → recv → process → send → close`。代码直观，但任一慢 client、blocking business 或 partial I/O 都阻塞后续连接。它适合教学、低并发管理工具或受控批处理，不是通用高并发基础。
+
+```cpp
+for (;;) {
+  int client = accept(listen_fd, nullptr, nullptr);
+  if (client < 0) continue;
+  handle_connection_blocking(client);
+  close(client);
+}
+```
+
+## 7.3 一个连接对应一个线程
+
+thread-per-connection 把阻塞隔离到各连接，开发简单；连接数高时 thread stack memory、scheduler context switch、run queue、per-thread cache 和 lock contention 快速增加。任务大量 idle 时，用一个 OS thread 表达一个等待连接浪费明显。
+
+## 7.4 Reactor：readiness 到 handler 的分派
+
+<Term def="由事件源、I/O demultiplexer、dispatcher 与 handler 组成，按 readiness 在少量线程中分派非阻塞 I/O 的架构模式。">Reactor pattern</Term>
+
+Reactor 将 fd 注册到 select/poll/epoll/kqueue，poller 返回 ready events，dispatcher 调用 accept/read/write/error handlers。readiness 只表示可推进，不表示完整 request；handler 必须短小、nonblocking，并维护 per-connection state。
+
+先预测：1000 个连接中只有 20 个活跃时，thread-per-connection 与 4 个 event loops 各需要多少 OS threads；若 handler 内执行阻塞数据库调用，停顿会传播到哪些连接？
+
+<Stepper>
+  <Step title="比较四种服务并发模型">
+    <CseServerModelLab />
+  </Step>
+  <Step title="画出 connection 到 owner thread 的映射">
+    serial/thread-per-connection 都隐含 owner；Reactor/one-loop 需要显式保存 EventLoop pointer 或 shard id，跨线程请求通过 queue 路由。
+  </Step>
+  <Step title="把阻塞域移出 event handler">
+    CPU/slow I/O task 提交到受限 worker pool；result 作为 command 回到原 owner loop，先验证 connection generation/lifetime 再发送。
+  </Step>
+</Stepper>
+
+## 7.5 one thread one loop：线程分工、唤醒与 other things
+
+<Term def="每个 I/O thread 运行一个独立 EventLoop，并独占其注册连接、poller、pending tasks 与 timers 的结构。">one thread one loop</Term>
+
+常见分工：acceptor loop 接入后按 round-robin/hash/load 把 connected fd 移交 I/O loops；I/O loop 负责 recv/send/close/timer；business workers 处理耗时计算，不能直接操作 socket。connection 一旦分配到 loop，通常不迁移，以保持 cache locality 和无锁单 owner。
+
+跨线程提交 command 时，producer 先把 task push 到 thread-safe queue，再写 `eventfd`/pipe/socketpair 唤醒 poller；loop drain wakeup fd 后执行 tasks。只 enqueue 不 wake 会等到下一个 I/O/timer；只 wake 不正确发布 queue 会丢任务或空转。
+
+<Term def="eventfd、pipe 或 socketpair 把跨线程 pending task 转成 poller 可观察 readable event 的机制。">event-loop wakeup</Term>
+
+<Stepper>
+  <Step title="选择 I/O、timer 或跨线程事件">
+    <CseEventLoopWakeupLab />
+  </Step>
+  <Step title="固定一轮 loop 的阶段顺序">
+    计算 timer timeout、poll、分发 I/O、expire timers、执行 pending commands；每阶段设置 budget，防止海量任务饿死 socket。
+  </Step>
+  <Step title="定义 handle_other_things 的边界">
+    `handle_other_things` 处理轻量 command、deferred destruction 与 metrics flush，不执行未知阻塞 callback；超预算任务分批留到下一轮。
+  </Step>
+</Stepper>
+
+```cpp
+void EventLoop::run() {
+  while (!stopping_) {
+    const auto now = clock_.sample();
+    auto events = poller_.wait(timers_.timeout(now));
+    dispatch_io(events);
+    timers_.expire(now);
+    handle_other_things(kTaskBudget);
+  }
+}
+```
+
+## 7.6 收发数据的正确做法：single reader / single writer state
+
+nonblocking recv 循环读取到 EAGAIN，append 到 input buffer，再循环 decode 完整 frames。send 先尝试 immediate write；partial/would-block 的 suffix 加入 output buffer并注册 writable；flush 完后取消 write interest，避免 busy loop。
+
+<Term def="同一 socket 的 recv/send offset、interest mask 与 close state 只由 owner EventLoop thread 修改的约束。">single-writer socket state</Term>
+
+```cpp
+void Connection::send(Buffer message) {
+  if (!loop_->in_owner_thread()) {
+    loop_->post([self = shared_from_this(), message = std::move(message)]() mutable {
+      self->send_in_loop(std::move(message));
+    });
+    return;
+  }
+  send_in_loop(std::move(message));
+}
+```
+
+“不要多个线程同时利用一个 socket 收（发）数据”不仅因为 byte order 会交叉，还因为一个线程可能 close/reuse fd，另一个仍持旧 integer。command 应携带 stable connection id/generation，而不是只携带裸 fd。
+
+<Callout type="trap" title="业务线程直接 send，失败后再加 mutex">
+mutex 只能串行 syscall，无法自动解决 output ordering、partial offset、event interest、close 与 fd reuse。把所有 I/O state 回送 owner loop，而不是给裸 socket 加锁。
+</Callout>
+
+## 7.7 发送、接收缓冲区与慢对端
+
+input buffer 解耦 recv chunks 与 protocol frames；output buffer 保存 partial writes。Buffer API 要有 readable/writable region、append/peek/consume、capacity limit 与 compaction policy。频繁 memmove 可用 prependable/readable/writable indexes、chain 或 slab 优化，但先测量。
+
+<Term def="output pending bytes 达到阈值时触发停止读取、拒绝新消息、降级或关闭连接的慢消费者保护线。">output high-water mark</Term>
+
+<Stepper>
+  <Step title="调整 output 积压与跨线程发送">
+    <CseConnectionBufferLab />
+  </Step>
+  <Step title="到 high-water 立即改变 admission">
+    不要继续无界 append；按协议选择暂停 upstream read、返回 overload、丢弃可丢消息或关闭 slow consumer，并记录 pending bytes/duration。
+  </Step>
+  <Step title="close 时按依赖逆序注销">
+    先标记 closing，停止新任务，从 poller/timer/map 移除，处理当前 event batch 的 deferred release，最后关闭 fd 和销毁 buffers。
+  </Step>
+</Stepper>
+
+对端一直不接收时，kernel send buffer 填满，send would-block，应用 output queue 随业务产生而增长。TCP 无法替你限制业务积压；high-water/timeout 是服务内存生存边界。
+
+## 7.8 网络库分层：Poller、Channel、Connection、Session
+
+一种可解释分层：Poller 封装 OS readiness；Channel 保存 fd/interests/callback；EventLoop 串行 dispatch；Connection 管 transport state 和 buffers；Codec 做 framing；Session 管 protocol/auth/business identity；Service 组织业务。
+
+<Term def="在 transport Connection 之上保存 protocol phase、authentication、request correlation 与业务 identity 的会话层。">Session layer</Term>
+
+```text
+Service / Handler
+Session + Codec
+Connection + Buffers
+Channel + EventLoop
+Poller (epoll/kqueue/IOCP adapter)
+```
+
+Session 进一步分层可把 protocol state 与 user/business state 分开；避免让 Connection 知道 login、order 或 room。每层 ownership 和 callback direction 明确，lower layer 不反向持有任意 upper object 的 raw pointer。
+
+connection info 保存 owner EventLoop/thread，所有变更路由到它。global map 可做 lookup，但不能因此允许任意线程改 connection internals。
+
+## 7.9 后端服务中的定时器与时间缓存
+
+简单定时器可每轮扫描所有 entries，规模大时用 min-heap、ordered tree、timing wheel 或分层 wheel。timer API 要定义 one-shot/repeating、cancel race、callback ownership、monotonic deadline 与 clock jump。
+
+<Term def="按 monotonic deadline 管理 timeout/periodic callback，并能在 connection 关闭时安全取消的 event-loop 子系统。">event-loop timer</Term>
+
+```cpp
+TimerId id = loop.run_after(30s, [weak = weak_from_this()] {
+  if (auto self = weak.lock()) self->on_idle_timeout();
+});
+```
+
+每次业务字段格式化都调用 clock syscall 会有成本，可在一轮 event loop 缓存 monotonic/wall time；monotonic 用于 timeout，wall clock 用于日志。缓存粒度会降低精度，不能用于需要严格当前值的安全/计费判断。
+
+<Term def="每轮事件循环采样一次 clock 并复用，减少重复系统调用，同时明确允许的时间精度误差。">time caching</Term>
+
+## 7.10 业务数据是否一定单开线程
+
+不一定。短小、无阻塞、预算明确的 parsing/routing 可在 I/O loop 完成，减少 queue/context switch；CPU-heavy、blocking、不可控 callback 必须移出。判断依据是 event-loop lag 与 worst-case duration，而不是“业务”标签。
+
+worker result 回 loop 时，connection 可能已关闭或 generation 改变；通过 weak handle/id 检查，不能捕获 raw `this`。
+
+## 7.11 侵入式与非侵入式结构
+
+<Term def="container linkage node 直接嵌入业务对象，减少 wrapper allocation/lookup，但要求对象严格遵守入链、移除与 lifetime contract。">intrusive structure</Term>
+
+non-intrusive container 持独立 entry/value，ownership 清晰、可让同一 object 多种索引，但有额外 allocation/indirection。intrusive timer/list 将 node 嵌入 Connection，可 O(1) remove 并改善 locality；对象销毁前必须从所有 intrusive containers 解除，一份 node 不能同时入同一类多条链。
+
+## 7.12 经典服务器结构与性能瓶颈
+
+listen fd 应 nonblocking：readiness 到实际 `accept` 之间可能被其他 consumer、error 或状态变化消耗；blocking accept 会卡住 loop。ET 下 accept 循环到 EAGAIN，并处理 EMFILE/ENFILE/backoff。
+
+```cpp
+for (;;) {
+  int fd = accept4(listen_fd, nullptr, nullptr, SOCK_NONBLOCK | SOCK_CLOEXEC);
+  if (fd >= 0) { choose_loop(fd).adopt(fd); continue; }
+  if (errno == EINTR) continue;
+  if (errno == EAGAIN || errno == EWOULDBLOCK) break;
+  handle_accept_error(errno);
+  break;
+}
+```
+
+经典 one thread one loop server：acceptor → I/O loops/Poller → Connection/Buffer/Codec/Session → bounded business pool → result command/wakeup → owner loop；timer 与 deferred destruction 也在 owner loop。
+
+<Term def="限制吞吐或 tail latency 的最窄资源/阶段，可能位于 CPU、lock、allocator、syscall、network、queue、database 或 downstream。">server performance bottleneck</Term>
+
+<Callout type="trap" title="看到 CPU 未满就继续加连接线程">
+服务可能被单 loop、lock、memory bandwidth、downstream、queue wait 或 packet loss 限制。用 per-stage latency、queue、off-CPU、flame graph 和 load test 证明瓶颈，再改变线程/loop 数。
+</Callout>
+
+## 本章回顾：一条连接只有一个可变状态 owner
+
+1. Reactor/one thread one loop 用少量线程 multiplex I/O，但 handler 必须 nonblocking、有预算。
+2. 跨线程只 enqueue command + wakeup，socket/buffer/close/timer state 回 owner loop 修改。
+3. input/output buffer 解决 partial I/O；high-water 和 timeout 解决慢消费者的内存风险。
+4. Poller/EventLoop/Connection/Codec/Session/Service 分层隔离 OS、transport、protocol 与业务。
+5. timer、intrusive link、deferred destruction 和 fd reuse 都必须纳入 connection lifetime。
+
+<Exercises>
+
+**问题 1：业务线程完成请求后直接对 fd 调用 send；与此同时 I/O loop 因 peer FIN close 该 fd。为什么加 mutex 仍不充分？**
+
+<Answer>mutex 只能串行两次调用，无法防止 close 后 fd integer 被 OS 复用给新连接，也不统一 partial-write offset、POLLOUT interest 和消息顺序。业务线程应提交带 stable connection id/generation 的 message 到 owner loop；loop 验证仍 alive，再 append/flush output buffer，close 也由同一 owner 串行。</Answer>
+
+**问题 2：对端不再读取，服务仍每秒产生 10 MiB 响应。Connection 应怎样避免拖垮进程？**
+
+<Answer>send would-block 后只保存未发送 suffix，并注册 writable；为每连接和全局 output pending 设 high-water、hard limit 和 duration timeout。达到阈值后停止 admission/读取、返回 overload、丢弃可丢数据或关闭 slow consumer；指标记录 pending bytes、持续时间和原因。无界 queue 只把网络阻塞转成 OOM。</Answer>
+
+**问题 3：设计 one thread one loop 的 shutdown 顺序，怎样处理 timer、worker result 和当前 event batch？**
+
+<Answer>先停止 accept/admission，标记 service draining；各 loop 拒绝新 command并决定 drain/cancel output；取消 timers、从 poller/map 注销 connection。worker result 回来用 weak id/generation 检查并丢弃过期结果；当前 event batch 可能仍持引用，因此使用 deferred destruction，在本轮 dispatch 后释放；最后停止 loop并 join threads。</Answer>
+
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="single-loop ownership" definition="一个 EventLoop thread 独占其连接的可变 I/O state。" />
+  <GlossaryItem term="active close" definition="本端主动 shutdown/close 并驱动结束的路径。" />
+  <GlossaryItem term="passive close" definition="观察 peer FIN/recv zero 后进入的关闭路径。" />
+  <GlossaryItem term="long versus short connection" definition="复用 transport 的长连接与交互后关闭的短连接策略。" />
+  <GlossaryItem term="Reactor pattern" definition="按 readiness 由 demultiplexer/dispatcher 调用 handlers 的模式。" />
+  <GlossaryItem term="one thread one loop" definition="每个 I/O thread 运行独立 EventLoop 并拥有一组连接。" />
+  <GlossaryItem term="event-loop wakeup" definition="用 eventfd/pipe 将跨线程 task 转为 poller event。" />
+  <GlossaryItem term="single-writer socket state" definition="同一 socket 的收发、interest 和 close state 只由 owner loop 修改。" />
+  <GlossaryItem term="output high-water mark" definition="output 积压触发 backpressure/close 的阈值。" />
+  <GlossaryItem term="Session layer" definition="Connection 之上承载协议阶段、认证与业务 identity 的层。" />
+  <GlossaryItem term="event-loop timer" definition="按 monotonic deadline 运行并可安全取消的 timer subsystem。" />
+  <GlossaryItem term="time caching" definition="一轮 loop 复用一次 clock sample 的优化。" />
+  <GlossaryItem term="intrusive structure" definition="link node 嵌入业务对象并依赖严格 lifetime contract 的容器。" />
+  <GlossaryItem term="server performance bottleneck" definition="限制服务吞吐或 tail latency 的最窄阶段或资源。" />
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++服务器开发精髓，第7章 单个服务的基本结构"
+  adaptedUrl="https://book.douban.com/subject/35491437/"
+/>

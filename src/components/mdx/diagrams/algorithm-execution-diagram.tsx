@@ -25,11 +25,27 @@ export function AlgorithmExecutionDiagram({ step = 1 }: { step?: number }) {
 
   const stepMeta: Record<number, { title: string; algorithm: string }> = {
     1: { title: "初始数组", algorithm: "std::find(v, 7)" },
-    2: { title: "find 第 1 步：检查 3 → 不匹配，继续", algorithm: "std::find(v.begin(), v.end(), 7)" },
-    3: { title: "find 第 2 步：检查 7 → 找到！", algorithm: "std::find(v.begin(), v.end(), 7)" },
-    4: { title: "std::count：统计 7 出现次数 = 2", algorithm: "std::count(v.begin(), v.end(), 7)" },
-    5: { title: "std::fill：区间填充为 0", algorithm: "std::fill(v.begin(), v.begin()+4, 0)" },
-    6: { title: "std::transform：每个元素 ×2", algorithm: "transform(src.begin(), src.end(), dst.begin(), [](int x){return x*2;})" },
+    2: {
+      title: "find 第 1 步：检查 3 → 不匹配，继续",
+      algorithm: "std::find(v.begin(), v.end(), 7)",
+    },
+    3: {
+      title: "find 第 2 步：检查 7 → 找到！",
+      algorithm: "std::find(v.begin(), v.end(), 7)",
+    },
+    4: {
+      title: "std::count：统计 7 出现次数 = 2",
+      algorithm: "std::count(v.begin(), v.end(), 7)",
+    },
+    5: {
+      title: "std::fill：区间填充为 0",
+      algorithm: "std::fill(v.begin(), v.begin()+4, 0)",
+    },
+    6: {
+      title: "std::transform：每个元素 ×2",
+      algorithm:
+        "transform(src.begin(), src.end(), dst.begin(), [](int x){return x*2;})",
+    },
   };
 
   const meta = stepMeta[step];
@@ -52,10 +68,24 @@ export function AlgorithmExecutionDiagram({ step = 1 }: { step?: number }) {
           aria-label={`算法执行过程第 ${step} 步：${meta.title}`}
           className="mx-auto block h-auto w-full max-w-[760px]"
         >
-          <text x={w / 2} y="24" fontSize="13" fontWeight="700" fill={primary} textAnchor="middle">
+          <text
+            x={w / 2}
+            y="24"
+            fontSize="13"
+            fontWeight="700"
+            fill={primary}
+            textAnchor="middle"
+          >
             {meta.title}
           </text>
-          <text x={w / 2} y="44" fontSize="11" fill={secondary} textAnchor="middle" fontFamily="monospace">
+          <text
+            x={w / 2}
+            y="44"
+            fontSize="11"
+            fill={secondary}
+            textAnchor="middle"
+            fontFamily="monospace"
+          >
             算法：{meta.algorithm}
           </text>
 
@@ -80,18 +110,38 @@ export function AlgorithmExecutionDiagram({ step = 1 }: { step?: number }) {
                 let cellFill = accent;
                 let cOpacity = 0.15;
                 let cellStroke = accent;
-                let isMatch = step === 4 && val === target;
-                let isFound = step === 3 && i === 1;
-                let isChecked = step === 2 && i < 1;
-                let isCurrent = step === 2 && i === 1;
-                let isFilled = step === 5 && i < 4;
+                const isMatch = step === 4 && val === target;
+                const isFound = step === 3 && i === 1;
+                const isChecked = step === 2 && i < 1;
+                const isCurrent = step === 2 && i === 1;
+                const isFilled = step === 5 && i < 4;
 
-                if (isMatch) { cellFill = good; cOpacity = 0.2; cellStroke = good; }
-                if (isFound) { cellFill = good; cOpacity = 0.3; cellStroke = good; }
-                if (isChecked) { cOpacity = 0.06; }
-                if (isFilled) { cellFill = warn; cOpacity = 0.2; cellStroke = warn; }
+                if (isMatch) {
+                  cellFill = good;
+                  cOpacity = 0.2;
+                  cellStroke = good;
+                }
+                if (isFound) {
+                  cellFill = good;
+                  cOpacity = 0.3;
+                  cellStroke = good;
+                }
+                if (isChecked) {
+                  cOpacity = 0.06;
+                }
+                if (isFilled) {
+                  cellFill = warn;
+                  cOpacity = 0.2;
+                  cellStroke = warn;
+                }
 
-                const textColor = isFound ? good : (isMatch ? good : (isFilled ? warn : accent));
+                const textColor = isFound
+                  ? good
+                  : isMatch
+                    ? good
+                    : isFilled
+                      ? warn
+                      : accent;
                 const displayVal = isFilled ? 0 : val;
 
                 return (
@@ -148,17 +198,20 @@ export function AlgorithmExecutionDiagram({ step = 1 }: { step?: number }) {
                         ✓找到
                       </text>
                     )}
-                    {(isChecked || isFound) && step <= 3 && !isCurrent && !isFound && (
-                      <text
-                        x={startX + i * (cellW + gap) + cellW / 2}
-                        y={startY + cellH + 20}
-                        fontSize="8"
-                        fill={secondary}
-                        textAnchor="middle"
-                      >
-                        已检查≠
-                      </text>
-                    )}
+                    {(isChecked || isFound) &&
+                      step <= 3 &&
+                      !isCurrent &&
+                      !isFound && (
+                        <text
+                          x={startX + i * (cellW + gap) + cellW / 2}
+                          y={startY + cellH + 20}
+                          fontSize="8"
+                          fill={secondary}
+                          textAnchor="middle"
+                        >
+                          已检查≠
+                        </text>
+                      )}
                   </g>
                 );
               })}
@@ -183,8 +236,24 @@ export function AlgorithmExecutionDiagram({ step = 1 }: { step?: number }) {
           {/* count 结果 */}
           {step === 4 && (
             <g>
-              <rect x={startX + totalW / 2 - 70} y={startY + cellH + 40} width="140" height="32" rx="8" fill={good} opacity="0.08" stroke={good} />
-              <text x={startX + totalW / 2} y={startY + cellH + 62} fontSize="14" fontWeight="700" fill={good} textAnchor="middle">
+              <rect
+                x={startX + totalW / 2 - 70}
+                y={startY + cellH + 40}
+                width="140"
+                height="32"
+                rx="8"
+                fill={good}
+                opacity="0.08"
+                stroke={good}
+              />
+              <text
+                x={startX + totalW / 2}
+                y={startY + cellH + 62}
+                fontSize="14"
+                fontWeight="700"
+                fill={good}
+                textAnchor="middle"
+              >
                 count = 2
               </text>
             </g>
@@ -193,7 +262,15 @@ export function AlgorithmExecutionDiagram({ step = 1 }: { step?: number }) {
           {/* transform 双行 */}
           {step === 6 && (
             <>
-              <text x={startX - 56} y={startY + cellH / 2 + 4} fontSize="11" fontWeight="600" fill={secondary} textAnchor="end" fontFamily="monospace">
+              <text
+                x={startX - 56}
+                y={startY + cellH / 2 + 4}
+                fontSize="11"
+                fontWeight="600"
+                fill={secondary}
+                textAnchor="end"
+                fontFamily="monospace"
+              >
                 src:
               </text>
               {[1, 2, 3, 4].map((val, i) => (
@@ -235,7 +312,15 @@ export function AlgorithmExecutionDiagram({ step = 1 }: { step?: number }) {
                 </g>
               ))}
               {/* dst 行 */}
-              <text x={startX - 56} y={startY + cellH + 80 + cellH / 2 + 4} fontSize="11" fontWeight="600" fill={good} textAnchor="end" fontFamily="monospace">
+              <text
+                x={startX - 56}
+                y={startY + cellH + 80 + cellH / 2 + 4}
+                fontSize="11"
+                fontWeight="600"
+                fill={good}
+                textAnchor="end"
+                fontFamily="monospace"
+              >
                 dst:
               </text>
               {[2, 4, 6, 8].map((val, i) => (
@@ -267,7 +352,13 @@ export function AlgorithmExecutionDiagram({ step = 1 }: { step?: number }) {
           )}
 
           {/* 底部说明 */}
-          <text x={w / 2} y={h - 20} fontSize="10" fill={secondary} textAnchor="middle">
+          <text
+            x={w / 2}
+            y={h - 20}
+            fontSize="10"
+            fill={secondary}
+            textAnchor="middle"
+          >
             {step <= 3
               ? "find 算法：遍历 [begin, end)，逐个比对元素值与目标值，找到即返回迭代器，未找到返回 end()"
               : step === 4
@@ -278,14 +369,22 @@ export function AlgorithmExecutionDiagram({ step = 1 }: { step?: number }) {
           </text>
 
           <defs>
-            <marker id="arrDownS" markerWidth="6" markerHeight="6" refX="3" refY="5" orient="auto">
+            <marker
+              id="arrDownS"
+              markerWidth="6"
+              markerHeight="6"
+              refX="3"
+              refY="5"
+              orient="auto"
+            >
               <polygon points="1,0 3,5 5,0" fill={accent} />
             </marker>
           </defs>
         </svg>
       </div>
       <figcaption className="mt-2 text-center text-xs text-secondary">
-        泛型算法在容器元素上逐步执行的过程。算法通过迭代器遍历范围 [begin, end)，不感知底层容器的具体类型——vector、list、deque 均可用同一算法操作。
+        泛型算法在容器元素上逐步执行的过程。算法通过迭代器遍历范围 [begin,
+        end)，不感知底层容器的具体类型——vector、list、deque 均可用同一算法操作。
       </figcaption>
     </figure>
   );

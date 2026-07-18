@@ -1,0 +1,230 @@
+---
+title: "第5章 对象复制（Object Replication）"
+type: A
+section: "Multiplayer Game Programming · 对象复制"
+order: 5
+description: "复制系统要把对象创建、状态更新、RPC和销毁绑定到统一网络身份与权威顺序。"
+demo: true
+math: false
+sourceUrl: "https://www.informit.com/store/multiplayer-game-programming-architecting-networked-9780134034331"
+draft: false
+---
+
+import {
+  Mgp05ObjectReplicationMapLab,
+  Mgp05ObjectReplicationExperimentLab,
+  Mgp05ObjectReplicationEvidenceLab,
+} from "@/components/mdx/multiplayer-game-programming/diagrams/mgp-05-object-replication";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释对象复制的核心机制，并把它放回全书13章与附录A的主线
+- 能比较正常、边界、失败和恢复样本，指出首个状态或时间偏离点
+- 能实现最小C++或协议实验，记录网络身份、版本、所有权与预算
+- 能设计证据回答“网络ID在生命周期内唯一；创建先于更新、销毁终止后续消息；状态与事件使用符合语义的交付策略。”是否成立
+
+</Objectives>
+
+## 直觉：先找唯一事实
+
+复制系统要把对象创建、状态更新、RPC和销毁绑定到统一网络身份与权威顺序。 真正的难点不是让一次理想样本跑通，而是让消息身份、世界版本、状态权威和时间预算在丢包、乱序、重复与断线后仍可解释。先预测：如果只保存最终成功画面，本页最可能隐藏哪一种分歧？
+
+<Mgp05ObjectReplicationMapLab />
+
+## 权威目录定位
+
+本页依据 Addison-Wesley / InformIT 官方书目与官方目录样章锁定范围。英文标题用于一对一追踪，中文正文为独立教学重构；现代平台差异、安全强化和可观察性补充会明确披露：
+
+- The State of the World
+- Replicating an Object
+- Naïve World State Replication
+- Changes in World State
+- RPCs as Serialized Objects
+- Custom Solutions
+- Summary
+- Review Questions
+- Additional Readings
+
+本页逐项覆盖9个公开目录条目，并纳入同一套正常、边界、失败与恢复验收。
+
+## 核心概念与所有权
+
+<Term def="在某个模拟时刻决定所有网络对象可观察行为的数据集合。">世界状态</Term>、
+<Term def="跨端点稳定标识同一复制对象的协议级身份。">网络ID</Term>、
+<Term def="把对象创建、字段变化和销毁传播到远端代理的机制。">对象复制</Term>、
+<Term def="把远端应执行的命令及参数编码成消息并受权威规则约束的调用。">RPC</Term>、
+<Term def="自上次确认或发送以来发生变化、需要重新编码的字段集合。">脏状态</Term>。每个概念都要回答：谁创建输入，谁拥有可变状态，哪个序号或版本拒绝旧结果，断线后由谁恢复。
+
+| # | 概念 | 工程含义 |
+| -: | --- | --- |
+| 1 | 世界状态 | 在某个模拟时刻决定所有网络对象可观察行为的数据集合。 |
+| 2 | 网络ID | 跨端点稳定标识同一复制对象的协议级身份。 |
+| 3 | 对象复制 | 把对象创建、字段变化和销毁传播到远端代理的机制。 |
+| 4 | RPC | 把远端应执行的命令及参数编码成消息并受权威规则约束的调用。 |
+| 5 | 脏状态 | 自上次确认或发送以来发生变化、需要重新编码的字段集合。 |
+
+## 机制拆解
+
+### 1. 朴素全量复制建立正确性基线
+
+先周期性发送完整世界，能暴露对象身份、创建顺序和销毁语义；它虽不经济，却是比较增量方案的基线。若没有可重放的全量快照，就难以证明增量丢失后能否重新收敛。
+
+先预测：若省略这一层，哪一个序号、所有权或时间预算会最先失真？
+
+### 2. 状态与事件不能混为一谈
+
+位置、生命值等状态可被较新快照覆盖，开火、拾取等RPC通常需要恰好一次或可判定重复的语义。为两者使用同一“可靠”开关会造成过期状态阻塞或事件重复；应按可替代性和时效性分别建通道。
+
+先预测：若省略这一层，哪一个序号、所有权或时间预算会最先失真？
+
+### 3. 自定义复制仍需统一不变量
+
+针对不同对象选择字段掩码、优先级和频率能节省带宽，但网络ID、所有权和版本检查不能各自实现。创建前更新、销毁后RPC和ID复用是三个关键乱序样本，必须在注册表边界拒绝。
+
+先预测：若省略这一层，哪一个序号、所有权或时间预算会最先失真？
+
+## 六阶段证据链
+
+可操作链条是：分配网络ID → 发送创建描述 → 建立远端代理 → 传播脏字段 → 排序RPC → 确认销毁与回收。正常样本证明能力，边界样本证明预算，失败样本证明拒绝，恢复样本证明状态与资源重新收敛。
+
+<Stepper>
+  <Step title="1. 分配网络ID与发送创建描述">
+    固定协议版本、网络种子、输入序号与状态所有者，运行正常和边界样本。
+    <Mgp05ObjectReplicationMapLab />
+  </Step>
+  <Step title="2. 建立远端代理与传播脏字段">
+    注入延迟、抖动、丢包、重复或责任节点中断，要求在首偏离点停止。
+    <Mgp05ObjectReplicationExperimentLab />
+  </Step>
+  <Step title="3. 排序RPC与确认销毁与回收">
+    清除故障后重放相同输入，核对世界摘要、对象数量、消息债务与资源租约。
+    <Mgp05ObjectReplicationEvidenceLab />
+  </Step>
+</Stepper>
+
+## 最小实现骨架
+
+以下代码是独立复现实验骨架，不复制原书代码。序号比较必须处理回绕，生产实现还需补齐平台错误、认证、容量与资源清理。
+
+```cpp
+struct NetworkEvidence {
+  std::uint32_t sequence;
+  std::uint32_t worldVersion;
+  std::uint64_t objectId;
+  double sentAtMs;
+  double appliedAtMs;
+};
+
+bool accepts(const NetworkEvidence& next, const NetworkEvidence& current) {
+  return next.objectId == current.objectId &&
+         next.worldVersion >= current.worldVersion;
+}
+```
+
+证据记录把目录、时序与状态摘要放在一起：
+
+```yaml
+book: Multiplayer Game Programming
+page: mgp-05-object-replication
+official_entries: 9
+sample: normal | boundary | failure | recovery
+protocol_version: fixed
+network_seed: fixed
+state_owner: explicit
+first_divergence: null
+```
+
+故障脚本一次只改变一个变量：
+
+```text
+baseline -> inject(delay | jitter | loss | duplicate | disconnect)
+observe -> stop_at_first_divergence
+recover -> replay_same_version_seed_and_input
+assert -> one_authority && converged_state && no_orphan_resource
+```
+
+## 常见误区与故障注入
+
+<Callout type="trap">
+  **误区一：优化掉全量基线后，只能看到局部更新，无法证明丢包后重新收敛。** 必须保存消息序号、世界版本和首次拒绝原因，而不是只看最终画面。
+</Callout>
+
+<Callout type="trap">
+  **误区二：让状态更新和一次性RPC共享相同队列与重试语义，造成队头阻塞或重复副作用。** 必须加入边界、失败与恢复样本，证明错误没有跨入下一阶段。
+</Callout>
+
+## 验收矩阵
+
+| 样本 | 网络与输入变化 | 预期状态 | 通过条件 |
+| --- | --- | --- | --- |
+| 正常 | 合法版本、顺序、身份与容量 | 六阶段完成 | 权威摘要与对象身份一致 |
+| 边界 | 临界延迟、抖动、回绕或满载 | 达到预算不越界 | 队列有界且无永久饥饿 |
+| 失败 | 丢包、重复、畸形、断线或节点失效 | 首偏离点停止 | 明确拒绝、回滚或接管 |
+| 恢复 | 清除故障后重放同一输入 | 收敛到正常轨迹 | 无双权威、幽灵对象和资源泄漏 |
+
+<Mgp05ObjectReplicationEvidenceLab />
+
+本页签发不变量是：**网络ID在生命周期内唯一；创建先于更新、销毁终止后续消息；状态与事件使用符合语义的交付策略。** 单次演示、平均延迟或最终截图不能替代序号、版本、首偏离点和恢复证据。
+
+## 练习
+
+<Exercises>
+
+**问题 1** 为什么不能只以最终世界状态正确作为验收？
+
+<Answer>
+  最终状态会隐藏重复副作用、旧版本覆盖、瞬时双权威和资源泄漏。必须比较消息序号、对象身份、状态所有者、时间预算与首偏离点。
+</Answer>
+
+**问题 2** 如何把本页公开目录变成可执行学习证据？
+
+<Answer>
+  先按公开顺序建立目录追踪表，再为每个主题写出输入、状态、输出、失败与恢复条件。本页重点包括：The State of the World、Replicating an Object、Naïve World State Replication、Changes in World State、RPCs as Serialized Objects、Custom Solutions；其余条目已在上方逐项列出并纳入验收。
+</Answer>
+
+**问题 3** 本页的最小通过条件是什么？
+
+<Answer>
+  网络ID在生命周期内唯一；创建先于更新、销毁终止后续消息；状态与事件使用符合语义的交付策略。 并且相同协议版本、网络种子和输入可重放正常、边界、失败与恢复轨迹。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- **世界状态**：在某个模拟时刻决定所有网络对象可观察行为的数据集合。
+- **网络ID**：跨端点稳定标识同一复制对象的协议级身份。
+- **对象复制**：把对象创建、字段变化和销毁传播到远端代理的机制。
+- **RPC**：把远端应执行的命令及参数编码成消息并受权威规则约束的调用。
+- **脏状态**：自上次确认或发送以来发生变化、需要重新编码的字段集合。
+- 六阶段机制链已经映射到正常、边界、失败和恢复证据。
+- 官方目录逐项追踪，现代补充不会冒充原书正式分节。
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="世界状态">在某个模拟时刻决定所有网络对象可观察行为的数据集合。</GlossaryItem>
+  <GlossaryItem term="网络ID">跨端点稳定标识同一复制对象的协议级身份。</GlossaryItem>
+  <GlossaryItem term="对象复制">把对象创建、字段变化和销毁传播到远端代理的机制。</GlossaryItem>
+  <GlossaryItem term="RPC">把远端应执行的命令及参数编码成消息并受权威规则约束的调用。</GlossaryItem>
+  <GlossaryItem term="脏状态">自上次确认或发送以来发生变化、需要重新编码的字段集合。</GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="Josh Glazer、Sanjay Madhav 著，Addison-Wesley Professional，第一版，2015年10月出版、版权年2016，384页，eBook ISBN 9780134034331，印刷版 ISBN 9780134034300；InformIT官方书目与官方Pearson目录样章确认13章、附录A及112个公开目录条目。正文为独立教学重构。"
+  adaptedUrl="https://www.informit.com/store/multiplayer-game-programming-architecting-networked-9780134034331"
+/>

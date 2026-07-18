@@ -1,0 +1,126 @@
+---
+title: "第4章 内存管理"
+type: C
+section: "Rust之道 · 基础与类型"
+order: 4
+description: "从栈、堆和静态区追踪变量与函数，推导size、alignment和复合类型布局，并用智能指针、RAII与泄漏案例验证资源模型。"
+demo: true
+math: false
+sourceUrl: "https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53297"
+draft: false
+---
+
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { RswMemoryRegionLab, RswLayoutLab, RswRaiiLab } from "@/components/mdx/rust-way/diagrams/rsw-lifetimes";
+
+<Objectives>
+- 能区分栈、堆与静态区中的值、handle和buffer，并描述函数调用前后的内存变化
+- 能计算和验证size、alignment、padding、枚举tag与胖指针metadata组成的内存布局
+- 能使用Box、Rc、Weak和RAII管理资源，并分析引用环、forget和外部资源造成的泄漏
+</Objectives>
+
+## 从一个String到底放在哪里开始
+
+`String`变量常被笼统描述为“放在堆上”，实际是栈上的handle保存pointer、length与capacity，字符buffer位于堆；move通常复制handle并让旧绑定失效，不复制buffer。<Term def="把一个逻辑值拆成栈上handle、堆上payload、静态数据和引用metadata的表示图。">memory representation map</Term>能避免把变量位置、资源位置和owner位置混为一谈。
+
+先预测：move一个1GB String是否复制1GB字符？通常不会；真正复制发生在`clone`或显式构造新buffer时。
+
+<RswMemoryRegionLab />
+
+## 栈：调用帧与确定大小的局部值
+
+函数调用建立frame，保存参数、局部值、返回信息和编译器决定的临时数据；返回时frame失效。栈是概念模型，优化器可能把值放进寄存器或消除存储。<Term def="一次函数调用中局部存储、控制信息和清理责任的逻辑范围。">call frame lifetime</Term>解释了为什么不能返回局部数组的引用：引用可能仍有地址，但指向的frame已经结束。
+
+```rust
+fn sum_pair(pair: (u32, u32)) -> u32 {
+    let (left, right) = pair;
+    left + right
+}
+
+assert_eq!(sum_pair((20, 22)), 42);
+```
+
+## 堆：动态容量与allocator契约
+
+Box、Vec、String等owner通过allocator获得堆区，并在Drop时归还。分配成本包含查找空间、metadata、同步和缓存影响；小对象不一定适合逐个Box。<Term def="分配者、容量、初始化范围、对齐和最终释放者之间的资源协议。">heap allocation contract</Term>在自定义allocator和FFI中特别重要：谁分配就应由兼容allocator释放。
+
+## 变量、函数与移动后的内存
+
+Copy类型按位复制后两个值独立可用；非Copy值move转移逻辑owner。编译器用drop flag追踪哪些位置仍初始化，避免部分构造或提前返回时重复释放。引用只借用目标，不拥有目标；函数返回owned值可以通过返回值优化消除物理复制，但语义仍是owner转移。
+
+```rust
+fn build_message() -> String {
+    let mut text = String::with_capacity(32);
+    text.push_str("memory");
+    text.push_str(" model");
+    text
+}
+
+assert_eq!(build_message(), "memory model");
+```
+
+## Size、Alignment与Padding
+
+`size_of`给出值数组中相邻元素的步长，`align_of`给出地址对齐要求；结构体可能插入padding。字段重排、niche优化和target差异意味着默认Rust布局不是稳定协议。<Term def="类型的size、alignment、字段offset、padding、tag与metadata的完整安排。">compound layout contract</Term>只有在ABI、序列化或unsafe确实需要时才依赖，并用`repr(C)`等明确表示。
+
+```rust
+use std::mem::{align_of, size_of};
+
+assert_eq!(size_of::<u8>(), 1);
+assert!(size_of::<(u8, u32)>() >= 5);
+assert!(align_of::<u32>() >= align_of::<u8>());
+```
+
+<RswLayoutLab />
+
+## 智能指针与RAII
+
+Box拥有一个堆值，Rc与Arc共享owner，Weak观察但不增加强计数；智能指针还可通过Deref提供引用视图。<Term def="让资源获取与owner构造绑定、资源释放与owner析构绑定的管理模式。">RAII cleanup guarantee</Term>覆盖正常返回、`?`提前返回和大多数panic unwind。文件、锁guard、临时目录都可用同一模式，不只管理内存。
+
+## 泄漏：安全不等于一定回收
+
+Rust允许`Rc`强引用环、`mem::forget`、进程退出前未flush或外部API遗失handle。它们通常不造成悬垂引用，却会让资源无法回收。<Term def="资源保持可达或被有意遗忘，导致其清理逻辑无法在期望时间运行。">logical resource leak</Term>需要Weak回边、拓扑owner、显式shutdown和监控解决。
+
+<RswRaiiLab />
+
+<Stepper>
+  <Step title="拆开Handle与Payload"><RswMemoryRegionLab /></Step>
+  <Step title="测量实际布局">为目标target打印关键类型的size与alignment，再对比源码假设和FFI协议。</Step>
+  <Step title="注入清理失败"><RswRaiiLab /></Step>
+</Stepper>
+
+<Callout type="trap" title="所有局部变量物理上都在栈中">
+栈是有用语义模型，但优化器可把值放寄存器、合并或消除。正确性不能依赖未经repr与ABI保证的临时地址和布局。
+</Callout>
+
+<Callout type="trap" title="Safe Rust不会内存泄漏">
+内存安全主要防止非法访问，不保证所有分配最终可回收。Rc环和forget都是安全操作；泄漏仍会造成长期服务资源耗尽。
+</Callout>
+
+## 本章回顾
+
+本章覆盖内存管理中的栈与堆、内存布局、变量与函数的内存、智能指针与RAII、内存泄漏和复合类型内存布局。分析时先拆handle与payload，再确认size、alignment、初始化和释放者，最后验证正常与失败路径的Drop行为。
+
+<Exercises>
+**问题 1：为什么move String通常是常数成本？**
+<Answer>move复制栈上pointer、length、capacity等handle并转移释放责任，堆buffer不随之复制。`clone`才通常分配并复制字符。</Answer>
+
+**问题 2：`repr(C)`解决了哪些问题，没解决哪些？**
+<Answer>它让字段布局遵循目标C ABI的相关规则，适合FFI；仍需双方一致的target、字段类型、alignment、enum表示、ownership和allocator协议，也不自动保证跨平台序列化稳定。</Answer>
+
+**问题 3：怎样修复树结构中的Rc父子环？**
+<Answer>父节点用Rc强拥有子节点，子节点用Weak观察父节点；访问父节点时upgrade并处理已释放情况。这样根释放后强计数能归零。</Answer>
+</Exercises>
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="memory representation map" definition="拆分handle、payload、静态数据与metadata的表示图。" />
+  <GlossaryItem term="call frame lifetime" definition="一次调用的局部存储与清理责任范围。" />
+  <GlossaryItem term="heap allocation contract" definition="分配、容量、初始化、对齐与释放者协议。" />
+  <GlossaryItem term="compound layout contract" definition="size、alignment、offset、padding、tag和metadata安排。" />
+  <GlossaryItem term="RAII cleanup guarantee" definition="资源获取绑定构造、释放绑定析构的清理保证。" />
+  <GlossaryItem term="logical resource leak" definition="资源因可达环或遗忘而不在预期时间清理。" />
+</Glossary>
+
+<Attribution adaptedFrom="《Rust编程之道》第4章 内存管理" adaptedUrl="https://www.phei.com.cn/module/goods/wssd_content.jsp?bookid=53297" />

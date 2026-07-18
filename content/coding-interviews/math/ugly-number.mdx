@@ -1,105 +1,421 @@
 ---
-title: 丑数
+title: "面试题49：丑数"
 type: C
-section: 数学
-order: 6
-description: 使用三指针动态生成只含 2、3、5 质因子的递增丑数序列。
-demo: false
+section: "第5章 优化时间和空间效率"
+order: 53
+description: "从反复除尽2、3、5的逐数判断出发，推导三条有序候选流及三个指针的线性生成算法。"
+demo: true
 math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviews
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/49_UglyNumber/UglyNumber.cpp"
 draft: false
 ---
 
+import { UglyFactorizationDiagram, UglyCandidateMergeLab, UglyThreeStreamMap, UglyApproachComparisonDiagram, UglyNumberOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/ugly-number";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
 <Objectives>
 
-- 理解丑数定义：只包含质因子 2、3、5 的正整数。
-- 掌握用三个指针分别追踪下一个乘 2、乘 3、乘 5 候选值。
-- 能处理重复候选值，例如 `6 = 2 * 3 = 3 * 2`。
-- 能写出求第 `n` 个丑数的 $O(n)$ 时间实现。
+- 能解释丑数定义、1的约定与14不是丑数的原因
+- 能计算前15个丑数及每轮2倍、3倍、5倍候选
+- 能实现作者逐数判断法和三个指针的按序生成法
+- 能分析重复候选、index为0、IsUgly接收0和整数溢出边界
+- 能设计覆盖作者13次调用并避免运行超慢基线的分层测试
 
 </Objectives>
 
-## 核心思路
+## 从“14为什么不是”开始
 
-丑数序列从 `1` 开始。后续每个丑数都可以由前面的某个丑数乘以 `2`、`3` 或 `5` 得到。
+先预测：6是2乘3，8是2的三次方，它们都只由允许因子组成；14虽然能被2整除，但除完还剩7，因此不是<Term def="正整数的全部质因子都只来自2、3、5；题目另行约定1也属于该序列。">丑数</Term>。
 
-维护数组 `ugly`，以及三个指针：
+题目表述为“**只包含因子2、3和5**”，准确含义是除1外没有其他质因子，而不是要求2、3、5必须全部出现。2、9、25都合法；7、14、21含其他质因子，不合法。习惯上把1作为第一个丑数。
 
-| 指针 | 含义 |
-|---|---|
-| `p2` | 下一个候选值 `ugly[p2] * 2` |
-| `p3` | 下一个候选值 `ugly[p3] * 3` |
-| `p5` | 下一个候选值 `ugly[p5] * 5` |
+对任意正整数n，丑数条件可写成<Term def="把正整数唯一写成若干质数幂乘积；丑数的非零指数只允许出现在2、3、5上。">规范分解</Term>：
 
-每轮取三个候选值的最小值作为下一个丑数。然后所有等于这个最小值的指针都向前移动。
+$$
+n = 2^a 3^b 5^c,\qquad
+a,b,c \in \mathbb{Z}_{\ge 0}.
+$$
 
-为什么要“所有相等指针都移动”？因为同一个丑数可能从不同路径生成，比如 `6` 可以由 `3 * 2` 或 `2 * 3` 得到。如果只移动一个指针，下一轮会重复生成 `6`。
+当a、b、c全为0时n等于1，正好对应题目的基例。
 
-## 代码对照
+<UglyFactorizationDiagram />
 
-<CodeTabs>
-  <Tab label="C++">
+## 作者算法1：逐个自然数判断
+
+最直接的方法从1开始逐个增加number。每个候选都反复除以2，再除以3，再除以5；若最终恰好剩1，它的规范分解中没有其他质因子，计数加1。找到第index个时返回当前number。
+
 ```cpp
-#include <vector>
-#include <algorithm>
+bool IsUgly(int number) {
+    while (number % 2 == 0) {
+        number /= 2;
+    }
+    while (number % 3 == 0) {
+        number /= 3;
+    }
+    while (number % 5 == 0) {
+        number /= 5;
+    }
+    return number == 1;
+}
 
-int getUglyNumber(int n) {
-    if (n <= 0) return 0;
-
-    std::vector<int> ugly(n);
-    ugly[0] = 1;
-    int p2 = 0, p3 = 0, p5 = 0;
-
-    for (int i = 1; i < n; ++i) {
-        int next2 = ugly[p2] * 2;
-        int next3 = ugly[p3] * 3;
-        int next5 = ugly[p5] * 5;
-        int next = std::min(next2, std::min(next3, next5));
-
-        ugly[i] = next;
-
-        while (ugly[p2] * 2 <= next) ++p2;
-        while (ugly[p3] * 3 <= next) ++p3;
-        while (ugly[p5] * 5 <= next) ++p5;
+int GetUglyNumber_Solution1(int index) {
+    if (index <= 0) {
+        return 0;
     }
 
-    return ugly[n - 1];
+    int number = 0;
+    int uglyFound = 0;
+    while (uglyFound < index) {
+        ++number;
+        if (IsUgly(number)) {
+            ++uglyFound;
+        }
+    }
+    return number;
 }
 ```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-function getUglyNumber(n: number): number {
-  if (n <= 0) return 0;
 
-  const ugly = new Array<number>(n);
-  ugly[0] = 1;
-  let p2 = 0;
-  let p3 = 0;
-  let p5 = 0;
+这个入口先把number从0增加到1，所以不会调用IsUgly(0)。直接调用辅助函数IsUgly(0)却会死循环：0对2取余为0，0除以2仍是0，第一个while永远无法退出。
 
-  for (let i = 1; i < n; i++) {
-    const next = Math.min(ugly[p2] * 2, ugly[p3] * 3, ugly[p5] * 5);
-    ugly[i] = next;
-
-    while (ugly[p2] * 2 <= next) p2++;
-    while (ugly[p3] * 3 <= next) p3++;
-    while (ugly[p5] * 5 <= next) p5++;
-  }
-
-  return ugly[n - 1];
-}
-```
-  </Tab>
-</CodeTabs>
-
-<Callout type="trap">
-  <strong>现象 →</strong> 序列里出现重复的 6、10、15。
-  <strong>原因 →</strong> 三个候选值有相等时，只移动了其中一个指针。
-  <strong>修法 →</strong> 对所有满足 `candidate <= next` 的指针都前移。
+<Callout type="trap" title="把IsUgly当成任意整数的安全谓词">
+源码辅助函数只在Solution1内部接收从1递增的正数。若公开复用，必须先拒绝number小于或等于0；否则0不会返回false，而是卡在除2循环。
 </Callout>
 
+设目标是第k个丑数，其数值为U_k。算法1检查1到U_k的每个整数；单次反复除法最坏与候选位数同阶，因此可给出上界：
+
+$$
+T_1(k) = O\!\left(U_k \log U_k\right),
+\qquad S_1(k)=O(1).
+$$
+
+这个上界不是说每个候选都做满对数次除法，而是揭示运行时间依赖答案数值而非仅依赖序号。第1500个丑数为859963392，逐个扫描到它会浪费绝大多数工作。
+
+## 从“判断所有数”转为“只生成合法数”
+
+任意大于1的丑数至少含一个2、3或5。除去其中一个因子后，剩下仍是更小的丑数。因此每个非1丑数必能由一个已经生成的丑数乘2、乘3或乘5得到。
+
+反过来，已有丑数乘2、3或5不会引入其他质因子，结果仍是丑数。于是所有待生成值来自三条递增<Term def="把已生成丑数分别乘2、乘3、乘5形成的三条非严格递增候选序列。">候选流</Term>：
+
+$$
+\{2U_j\}_{j\ge 0},\qquad
+\{3U_j\}_{j\ge 0},\qquad
+\{5U_j\}_{j\ge 0}.
+$$
+
+任务变成三路有序合并并去重，而不是在自然数海洋中逐个判断。
+
+<UglyThreeStreamMap />
+
+这正是原书要求的“**按顺序生成而不是逐个判断**”。空间换时间的关键不是把IsUgly写得更快，而是彻底不访问不可能成为答案的7、11、13、14等候选。
+
+## 三个指针各自指向什么
+
+保存已生成数组U，并维护p2、p3、p5**三个指针**。对乘数m，它指向第一个满足m乘U[p_m]严格大于最后已输出值的位置；对应乘积就是该流的<Term def="某条候选流中第一个严格大于当前已输出最大值、尚未合并进结果的数。">最小未输出候选</Term>。
+
+若当前最后输出U_k，指针定义可写为：
+
+$$
+p_m = \min\{j \mid mU_j > U_k\},
+\qquad m\in\{2,3,5\}.
+$$
+
+下一项取三条流头部的最小值：
+
+$$
+U_{k+1} =
+\min\!\left(
+2U_{p_2},
+3U_{p_3},
+5U_{p_5}
+\right).
+$$
+
+输出后，对所有乘积小于或等于新值的指针继续前移，重新建立上述<Term def="每个乘数指针始终停在其乘积严格大于最后输出值的最早数组位置。">指针不变式</Term>。
+
+<UglyCandidateMergeLab />
+
+拖动序号可看到第6项6同时来自3乘2与2乘3，所以p2、p3都要推进；第9项10来自5乘2与2乘5，所以p2、p5都推进。并列来源称为<Term def="同一丑数可由不同的已生成丑数和允许乘数组合得到，例如6来自2乘3与3乘2。">重复来源</Term>。
+
+## 作者算法2：数组与指针
+
+作者用三个裸指针直接指向pUglyNumbers数组元素，而不是保存整数下标。每轮先取三种乘积最小值写入下一格，再分别用while跳过所有不大于新值的乘积。
+
+```cpp
+int Min(int number1, int number2, int number3) {
+    int min = number1 < number2
+        ? number1
+        : number2;
+    return min < number3 ? min : number3;
+}
+
+int GetUglyNumber_Solution2(int index) {
+    if (index <= 0) {
+        return 0;
+    }
+
+    int* pUglyNumbers = new int[index];
+    pUglyNumbers[0] = 1;
+    int nextUglyIndex = 1;
+
+    int* pMultiply2 = pUglyNumbers;
+    int* pMultiply3 = pUglyNumbers;
+    int* pMultiply5 = pUglyNumbers;
+
+    while (nextUglyIndex < index) {
+        const int min = Min(
+            *pMultiply2 * 2,
+            *pMultiply3 * 3,
+            *pMultiply5 * 5);
+        pUglyNumbers[nextUglyIndex] = min;
+
+        while (*pMultiply2 * 2 <=
+               pUglyNumbers[nextUglyIndex]) {
+            ++pMultiply2;
+        }
+        while (*pMultiply3 * 3 <=
+               pUglyNumbers[nextUglyIndex]) {
+            ++pMultiply3;
+        }
+        while (*pMultiply5 * 5 <=
+               pUglyNumbers[nextUglyIndex]) {
+            ++pMultiply5;
+        }
+        ++nextUglyIndex;
+    }
+
+    const int ugly =
+        pUglyNumbers[nextUglyIndex - 1];
+    delete[] pUglyNumbers;
+    return ugly;
+}
+```
+
+第一个数组元素必须显式设为1。它不能由“更早丑数乘2、3、5”生成，却是所有三条候选流的共同种子。index等于1时生成循环不进入，直接返回该基例。
+
+三个while看似嵌套在主循环中，但每个指针从数组开头只向右走，整个函数里各自最多推进index次。摊还复杂度是：
+
+$$
+T_2(k)=O(k),
+\qquad S_2(k)=O(k).
+$$
+
+## 为什么必须推进所有并列指针
+
+假设生成6时只推进2倍流，3倍流仍停在2乘3等于6。下一轮三路最小值仍会选6，序列出现重复，且若继续只推进单一路，错误可能持续。
+
+源码使用三个独立while，而不是if、else if链。只要某条流当前候选小于或等于刚输出值，就推进到严格更大。这样既消除多个来源的相等值，也防止任何过期候选留在流头。
+
+<Callout type="trap" title="最小候选来自哪一路就只移动哪一路">
+6、10、12、15等都有多个生成来源。应对三条流分别检查并推进，不能用互斥分支；否则输出不再严格递增，第k项含义随之失效。
+</Callout>
+
+为什么条件写小于或等于，而不只写等于？在正确不变式下选最小值前没有候选小于最后输出值，等于通常足够；小于或等于更直接表达“跳过所有已输出候选”，也让不变式在维护时更稳健。
+
+## 完备性、有序性与不重复证明
+
+**只生成合法值。** 初始1按题意合法；归纳假设数组现有值都是丑数，新值是其中一个乘2、3或5，规范分解只增加允许质因子的指数，因此仍合法。
+
+**不会漏掉。** 设x是尚未输出的最小丑数。x大于1，可除去一个允许因子m得到更小丑数y。按最小性和归纳假设，y已经输出，因此x等于m乘y，必出现在某条候选流中。三路流头取最小不可能越过x。
+
+**保持有序。** 每个指针都停在乘积严格大于最后输出值的位置，三者最小值也严格更大。
+
+**消除重复。** 输出新值后，所有能产生该值的流都越过它；下一轮不可能再次选到同一数。
+
+这四步合起来说明数组恰好按严格递增顺序包含全部丑数。
+
+## 前15项逐轮核算
+
+序列开头为：
+
+```text
+序号:  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+数值:  1  2  3  4  5  6  8  9 10 12 15 16 18 20 24
+```
+
+7被跳过，所以第7项是8；14含因子7，所以11之后不是14而是15。生成12时2倍流给出6乘2，3倍流给出4乘3，两指针同时推进。生成15时3倍流与5倍流并列；生成20时2倍流与5倍流并列。
+
+<UglyApproachComparisonDiagram />
+
+算法1保持常数空间，却让耗时取决于U_k；算法2保存前k项，直接让耗时随k线性。题目位于“优化时间和空间效率”章节，意图正是识别这种空间换时间。
+
+## 整数溢出与现代实现
+
+作者的目标第1500项859963392能装入32位有符号int，但通用index继续增大时，数组元素乘2、3、5可能先溢出。带符号溢出在C++中是未定义行为，负候选还可能破坏最小值和指针边界。
+
+现代版本可先用uint64_t计算并在乘法前检查，或使用大整数。只把结果变量改成64位不够，候选乘法的两个操作数也必须在64位类型中。
+
+```cpp
+#include <algorithm>
+#include <cstdint>
+#include <limits>
+#include <stdexcept>
+#include <vector>
+
+std::uint64_t uglyNumber(std::size_t index) {
+    if (index == 0) {
+        return 0;
+    }
+
+    std::vector<std::uint64_t> values(index);
+    values[0] = 1;
+    std::size_t p2 = 0;
+    std::size_t p3 = 0;
+    std::size_t p5 = 0;
+
+    const auto checkedMultiply =
+        [](std::uint64_t value,
+           std::uint64_t factor) {
+            if (value >
+                std::numeric_limits<
+                    std::uint64_t>::max() /
+                    factor) {
+                throw std::overflow_error(
+                    "ugly number overflow");
+            }
+            return value * factor;
+        };
+
+    for (std::size_t next = 1;
+         next < index;
+         ++next) {
+        const auto c2 =
+            checkedMultiply(values[p2], 2);
+        const auto c3 =
+            checkedMultiply(values[p3], 3);
+        const auto c5 =
+            checkedMultiply(values[p5], 5);
+        values[next] = std::min({c2, c3, c5});
+
+        while (checkedMultiply(
+                   values[p2], 2) <=
+               values[next]) {
+            ++p2;
+        }
+        while (checkedMultiply(
+                   values[p3], 3) <=
+               values[next]) {
+            ++p3;
+        }
+        while (checkedMultiply(
+                   values[p5], 5) <=
+               values[next]) {
+            ++p5;
+        }
+    }
+    return values.back();
+}
+```
+
+这个版本在无法表示下一项时抛错，而不是静默回绕。若接口需要支持任意index，应换用大整数；若只支持到某个上限，应在契约中给出最大index并测试边界。
+
+## 作者13次测试调用
+
+main依次调用Test：
+
+1. index 1期望1。
+2. index 2到6依次期望2、3、4、5、6。
+3. index 7到11依次期望8、9、10、12、15，覆盖跳过7、11、13、14。
+4. index 1500期望859963392。
+5. index 0期望0，两个公开入口都立即返回。
+
+合计13次Test，每次都先执行Solution1，再执行Solution2，并只打印passed或failed。
+
+<UglyNumberOfficialCaseLab />
+
+第1500项让算法1从1扫描到859963392，在常规自动化测试中极不经济。忠实度审查要记录作者确实这样调用，但工程测试不应每天重复这个慢基线；可让小index两版对拍，第1500项只运行算法2，并把算法1的大规模测试放入显式性能任务或禁用清单。
+
+```cpp
+#include <cassert>
+
+void testUglyNumbers() {
+    const int expected[] = {
+        1, 2, 3, 4, 5, 6,
+        8, 9, 10, 12, 15,
+    };
+    for (int i = 1; i <= 11; ++i) {
+        assert(GetUglyNumber_Solution1(i) ==
+               expected[i - 1]);
+        assert(GetUglyNumber_Solution2(i) ==
+               expected[i - 1]);
+    }
+
+    assert(GetUglyNumber_Solution2(1500) ==
+           859963392);
+    assert(GetUglyNumber_Solution1(0) == 0);
+    assert(GetUglyNumber_Solution2(0) == 0);
+}
+```
+
+还应单独测试安全包装后的IsUgly：负数与0返回false，1返回true，6与8返回true，14返回false。不要直接对原版IsUgly(0)写单元测试，否则测试进程会永久停住。
+
+<Stepper>
+  <Step title="先按质因子定义判断">
+    <UglyFactorizationDiagram />
+    除尽2、3、5后剩1才合法；1是题目约定的序列起点。
+  </Step>
+  <Step title="看清逐数扫描的浪费">
+    <UglyApproachComparisonDiagram />
+    算法1检查到答案数值，算法2只生成所需的index项。
+  </Step>
+  <Step title="把合法值拆成三条流">
+    <UglyThreeStreamMap />
+    每个非1丑数必来自已有值乘2、3或5。
+  </Step>
+  <Step title="维护三个最小未输出候选">
+    <UglyCandidateMergeLab />
+    取三路最小值，并推进所有小于或等于新值的指针。
+  </Step>
+  <Step title="分层执行作者测试">
+    <UglyNumberOfficialCaseLab />
+    小序号两版对拍，第1500项避免让逐数法拖慢日常门禁。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 丑数除1外只包含因子2、3和5，1按约定是第一项。
+2. 算法1逐个增加自然数，并反复除尽三个允许因子判断。
+3. 原版IsUgly不接受0；直接传0会陷入无限除2循环。
+4. 每个非1丑数都来自更小丑数乘2、3或5，因此可按顺序生成而不是逐个判断。
+5. 三个指针分别维护三条候选流的最小未输出乘积。
+6. 候选并列时所有相关指针都要推进，保证严格递增和去重。
+7. 算法2时间O(index)、空间O(index)，优于依赖答案数值的扫描。
+8. 作者执行第1500项的两版测试；工程门禁应保留语义但隔离极慢基线。
+
+<Exercises>
+
+**问题 1：为什么1是丑数，却不能由三条候选流生成？**
+
+<Answer>题目单独约定1为第一项；它的规范分解中2、3、5指数全为0。三条流都用已有值乘大于1的因子，只能生成大于1的后续项，所以数组必须把1作为显式种子。</Answer>
+
+**问题 2：生成6时为什么p2和p3都要推进？**
+
+<Answer>6既来自3乘2，也来自2乘3。若只推进一条流，另一条流下一轮仍以6为候选，序列会重复；两个候选都必须越过已输出值。</Answer>
+
+**问题 3：原版IsUgly(0)会发生什么，为什么公开Solution1(0)却能返回？**
+
+<Answer>IsUgly的第一个while会反复执行0除以2，number始终为0，因而死循环。Solution1先检查index小于或等于0并直接返回0，不会调用IsUgly。</Answer>
+
+**问题 4：为什么第7个丑数是8而不是7？**
+
+<Answer>前六项是1、2、3、4、5、6。7含质因子7，不符合定义；下一合法值8等于2的三次方，所以它是第7项。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="丑数">质因子只可能是2、3、5的正整数，另约定1也在序列中。</GlossaryItem>
+  <GlossaryItem term="规范分解">正整数唯一的质数幂乘积表示。</GlossaryItem>
+  <GlossaryItem term="候选流">已有丑数分别乘2、3、5形成的三条有序候选序列。</GlossaryItem>
+  <GlossaryItem term="最小未输出候选">某条流中第一个严格大于最后输出值的乘积。</GlossaryItem>
+  <GlossaryItem term="指针不变式">每个指针始终停在其流的最小未输出候选位置。</GlossaryItem>
+  <GlossaryItem term="重复来源">同一丑数由多个乘数与已有丑数组合生成的现象。</GlossaryItem>
+</Glossary>
+
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviews"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题49"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/49_UglyNumber/UglyNumber.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

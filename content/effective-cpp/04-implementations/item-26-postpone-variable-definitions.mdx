@@ -1,0 +1,458 @@
+---
+title: "Item 26：尽可能延后变量定义"
+type: A
+section: Chapter 5 · Implementations
+order: 26
+description: 对齐 Effective C++ 第三版 Item 26：把变量定义延后到具备有效初值且即将使用的位置，消除失败路径的构造析构和默认构造后赋值，并量化循环内外变量的成本与作用域取舍。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppDirectInitializationFlowMap,
+  EcppLoopVariableTradeoffMap,
+  EcppWastedLifetimeCostMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-26-postpone-variable-definitions";
+
+<Objectives>
+
+- 能解释变量定义隐含的 constructor/destructor cost，并识别异常早退路径中的无用生命周期
+- 能修改 default-construct-then-assign 为验证后 direct initialization，使对象从定义起满足业务语义
+- 能比较 loop variable 在循环内构造与循环外复用的 assignment cost、作用域和状态风险
+
+</Objectives>
+
+## 从一个从未使用却被析构的字符串开始
+
+密码加密函数先定义结果，再验证输入：
+
+```cpp
+std::string encryptPassword(const std::string& password) {
+    std::string encrypted;
+
+    if (password.length() < minimumPasswordLength) {
+        throw LogicError{"password too short"};
+    }
+
+    encrypted = password;
+    encrypt(encrypted);
+    return encrypted;
+}
+```
+
+若密码无效，`encrypted` 从未参与业务，却已经执行 default constructor，并在 stack unwinding 时执行 destructor。
+
+<Term def="对象从构造完成到析构开始之间占有资源并可被观察的时间区间。">
+  object lifetime interval
+</Term>
+
+Item 26 的原则是 Postpone variable definitions as long as possible（尽可能延后变量定义）。这里的“定义”不是写一个名字，而是开始对象生命周期并支付构造责任。
+
+<Term def="把对象定义推迟到其所有有效初始化信息已具备且即将首次使用的位置。">
+  postponed variable definition
+</Term>
+
+<EcppWastedLifetimeCostMap />
+
+## 定义变量就会产生构造析构成本
+
+对 class type，变量定义通常调用 constructor；每个成功构造的自动对象在离开 scope 时都调用 destructor，即使函数提前 return 或抛异常。
+
+<Term def="一次对象生命周期中 constructor 与 destructor 执行、资源取得释放及其副作用的总成本。">
+  constructor destructor cost
+</Term>
+
+成本可能包含 allocation、reference count、lock、registration、file handle 或日志。编译器能消除某些纯临时对象，却不能假设所有有副作用构造都可删。
+
+<Term def="控制流在对象首次有意义使用前 return、throw 或跳过该分支，导致对象只构造和析构。">
+  unused lifetime path
+</Term>
+
+先预测每个 guard clause 是否经过变量定义；只在真正需要对象的路径定义它。
+
+## 延后到验证通过之后
+
+修复第一步是把定义移到所有不依赖该对象的检查之后：
+
+```cpp
+std::string encryptPassword(const std::string& password) {
+    if (password.length() < minimumPasswordLength) {
+        throw LogicError{"password too short"};
+    }
+
+    std::string encrypted;
+    encrypted = password;
+    encrypt(encrypted);
+    return encrypted;
+}
+```
+
+<Term def="在昂贵对象创建前执行、失败时立即离开函数的输入或状态检查。">
+  preconstruction guard
+</Term>
+
+异常路径不再构造 encrypted，但成功路径仍然 default construct 后 assignment。
+
+<Term def="先建立空/默认状态，随后用赋值操作替换为实际初值的两阶段模式。">
+  default-then-assign pattern
+</Term>
+
+这通常比直接以最终值构造多做工作，也让对象短暂处于不具业务意义的状态。
+
+## 延后到可以直接初始化的位置
+
+更完整的写法在定义时就给出初值：
+
+```cpp
+std::string encryptPassword(const std::string& password) {
+    if (password.length() < minimumPasswordLength) {
+        throw LogicError{"password too short"};
+    }
+
+    std::string encrypted(password);
+    encrypt(encrypted);
+    return encrypted;
+}
+```
+
+<Term def="对象在生命周期开始时直接由最终输入建立状态，不先经过默认对象和赋值。">
+  direct initialization
+</Term>
+
+一次 copy construction 代替 default construction 加 copy assignment；对象从定义起就有正确业务值。
+
+<Term def="对象构造完成后立即满足类型不变量与当前函数所需领域语义。">
+  meaningful initial state
+</Term>
+
+<EcppDirectInitializationFlowMap />
+
+<Callout type="trap">
+  **现象**：把定义移过验证语句后就停止优化。**原因**：仍保留
+  default-then-assign，成功路径多一次状态建立和替换。**修法**：继续延后到构造参数齐备，以
+  direct initialization 一次建立最终初值。
+</Callout>
+
+## 最小作用域降低状态推理成本
+
+变量越早定义，后续可修改它的语句越多，读者需要跟踪的状态区间越长。延后定义也在改善正确性。
+
+<Term def="从变量定义到离开 lexical block 的可见范围，决定哪些语句能读写该变量。">
+  lexical variable scope
+</Term>
+
+```cpp
+if (request.requiresSignature()) {
+    const Signature signature = signer.sign(request.payload());
+    request.attach(signature);
+}
+```
+
+signature 不应提前到 if 外；否则无签名路径也构造，并让后续代码误以为它总有意义。
+
+<Term def="只有实际执行某个控制流分支时才存在、且不泄漏到其他路径的局部状态。">
+  branch-local state
+</Term>
+
+最小 scope 减少 accidental reuse、stale value 和错误 alias。
+
+## 分支结果优先表达为值
+
+不要为了在 if 后使用而先定义空对象，再在每个 branch assignment：
+
+```cpp
+const Config config = [&]() -> Config {
+    if (useCache()) {
+        return loadCachedConfig();
+    }
+    return fetchConfig();
+}();
+```
+
+<Term def="每个控制流分支直接产生完整值，最终变量只定义和初始化一次的结构。">
+  branch-produced value
+</Term>
+
+也可提取 named factory，使错误模型更清楚。关键是每条成功路径产生完整 Config，而不是共享一个可变 placeholder。
+
+<Term def="为了让多个分支稍后填充而提前创建、初始语义不完整的对象。">
+  placeholder object
+</Term>
+
+若使用 optional 表达真正的“可能尚无值”，要确保 absence 是领域状态，而不是绕开作用域设计的工具。
+
+## RAII guard 不能延后到失去保护
+
+“尽可能晚”受正确性约束。lock guard、transaction guard、temporary file owner 必须在需要保护的第一条操作之前建立。
+
+<Term def="从资源取得或临界区开始前建立，并在所有退出路径自动执行清理的对象。">
+  protective RAII guard
+</Term>
+
+```cpp
+validateKey(key);                 // 不访问 shared state
+std::scoped_lock lock(mutex_);    // 保护从这里开始
+auto it = cache_.find(key);
+```
+
+验证可以在 lock 前减少持锁时间；一旦访问 cache，guard 不能再晚。
+
+<Term def="对象不得晚于其不变量、资源或并发保护首次生效所要求的位置。">
+  correctness-constrained postponement
+</Term>
+
+<Callout type="trap">
+  **现象**：为缩短 lifetime，把 transaction/lock guard
+  移到第一次写之后。**原因**：误把“首次读取变量名”当成“保护责任开始”。**修法**：延后到最晚的安全边界，而不是越过需要
+  RAII 保证的首个副作用。
+</Callout>
+
+## 循环变量有两种成本模型
+
+原书特别比较 loop variable（循环变量）。方案 A 在循环外定义并每轮赋值：
+
+```cpp
+Widget widget;
+for (int i = 0; i < n; ++i) {
+    widget = makeWidget(i);
+    process(widget);
+}
+```
+
+成本大致是 1 次 constructor、1 次 destructor 和 n 次 assignment。
+
+<Term def="循环外保留同一对象 identity，并在每次迭代以赋值替换状态的策略。">
+  cross-iteration reuse
+</Term>
+
+方案 B 在循环内直接定义：
+
+```cpp
+for (int i = 0; i < n; ++i) {
+    Widget widget = makeWidget(i);
+    process(widget);
+}
+```
+
+成本大致是 n 次 constructor 和 n 次 destructor，没有对既存对象 assignment。
+
+<Term def="每次迭代创建独立对象，迭代结束立即析构的最小作用域策略。">
+  per-iteration construction
+</Term>
+
+<EcppLoopVariableTradeoffMap />
+
+## assignment cost 不一定低于重新构造
+
+assignment 要先处理旧状态，再接收新状态；可能释放资源、保留 capacity、处理 self-alias 或维护 identity。constructor 从空 storage 建立对象，路径可能更简单。
+
+<Term def="用新值替换已有对象时处理旧资源、capacity 与不变量所需的工作。">
+  assignment cost
+</Term>
+
+若 Widget assignment 能复用大 buffer，循环外可能更快；若 assignment 比 constructor+destructor 更复杂，循环内更好。必须 benchmark 真实类型和数据分布。
+
+<Term def="根据实际 constructor、destructor、assignment、allocation 与 cache 行为测量循环策略。">
+  lifecycle cost benchmark
+</Term>
+
+默认优先循环内最小 scope，因为语义清楚；只有热点证据支持时才扩大 lifetime 复用。
+
+## 循环外复用会携带跨迭代状态
+
+对象在迭代间存活，意味着未被 assignment 覆盖的成员、cache、error flag 或 observer 也会延续。
+
+<Term def="上一轮对象状态意外影响下一轮处理的风险。">
+  cross-iteration state leakage
+</Term>
+
+```cpp
+for (...) {
+    parser.reset(input); // reset 是否真的清除所有 diagnostics/cache？
+    parser.parse();
+}
+```
+
+若 reset contract 不完整，复用会产生顺序相关 bug。per-iteration construction 通过新对象天然隔离。
+
+<Term def="每次迭代拥有独立对象 identity，使结果不依赖前一轮残留状态。">
+  iteration isolation
+</Term>
+
+性能优化必须同时测试重复顺序、失败后下一轮和不同输入组合。
+
+## 延后昂贵的 cold-path 对象
+
+日志字符串、诊断报告、回滚 snapshot 常只在错误路径需要，应在条件成立后构造。
+
+<Term def="执行概率低的错误、诊断或降级控制流分支。">cold path</Term>
+
+```cpp
+if (!result) {
+    Diagnostic report = buildDiagnostic(request, result.error());
+    sink.write(report);
+}
+```
+
+不要在 hot path 开头预建 report “以备使用”。这减少 allocation，也让成功路径代码更聚焦。
+
+<Term def="高频执行且对延迟、allocation 和 cache 行为敏感的主控制流。">
+  hot path
+</Term>
+
+注意诊断所需数据是否在 later point 仍有效；需要 snapshot 时，在生命周期丢失前保存最小信息，而不是提前构造完整报告。
+
+## 现代返回值优化不改变作用域原则
+
+factory 按值返回时，copy elision/move 常消除传递成本：
+
+```cpp
+const auto session = Session::connect(endpoint);
+```
+
+<Term def="编译器直接在目标 storage 构造返回对象，省略中间 copy/move 的优化。">
+  return value elision
+</Term>
+
+这让“在需要处直接初始化”更自然。无需提前 default construct 再让 factory 填 output parameter。
+
+<Term def="函数把完整结果作为返回值提供，而不是修改调用者提前创建的输出对象。">
+  value-returning factory
+</Term>
+
+错误可用 exception 或 Result 表达，成功值仍在检查后一次初始化。
+
+## 用构造轨迹和控制流矩阵验收
+
+先预测每条 return/throw/branch 会执行哪些 lifecycle operations，再建立门禁：
+
+- instrumented type 记录 constructor、assignment、destructor 与 allocation 次数。
+- invalid input/early return 证明昂贵变量从未构造。
+- success path 证明 direct initialization 替代 default-then-assign。
+- branch tests 证明变量只存在于真实使用路径且没有 placeholder 状态。
+- RAII tests 验证所有受保护副作用都位于 guard lifetime 内。
+- loop benchmark 比较 n 次 ctor+dtor 与 n 次 assignment，包括 capacity reuse。
+- sequence tests 验证循环外复用无 cross-iteration leakage。
+- compiler optimization report 检查 value-returning factory 的 elision，但不把优化当正确性前提。
+
+<Term def="记录控制流路径与对象构造、赋值、析构、分配事件对应关系的测试。">
+  variable lifetime trace
+</Term>
+
+只有成本和 scope 同时缩小，延后定义才真正完成。
+
+## 小结
+
+- variable definition 会开始对象 lifetime，失败或早退路径也承担 constructor/destructor cost
+- 先执行不依赖对象的 validation，再在参数齐备处 direct initialize
+- 避免 default-then-assign 和跨分支 placeholder，让对象从诞生起具有 meaningful state
+- RAII guard 延后到最晚安全边界，但不能越过它必须保护的首个副作用
+- loop 外复用是一次构造加 n 次 assignment，loop 内定义是 n 次构造析构，应按语义和实测选择
+- 最小 scope 减少跨迭代状态、误用窗口和 cold-path 无效工作
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 26"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="object lifetime interval">
+    对象构造完成到析构开始的存在区间。
+  </GlossaryItem>
+  <GlossaryItem term="postponed variable definition">
+    推迟到初值齐备且即将使用时定义。
+  </GlossaryItem>
+  <GlossaryItem term="constructor destructor cost">
+    对象构造释放及资源副作用的总成本。
+  </GlossaryItem>
+  <GlossaryItem term="unused lifetime path">
+    首次有意义使用前就退出的对象路径。
+  </GlossaryItem>
+  <GlossaryItem term="preconstruction guard">
+    昂贵构造前执行的失败检查。
+  </GlossaryItem>
+  <GlossaryItem term="default-then-assign pattern">
+    默认构造后再赋实际初值的模式。
+  </GlossaryItem>
+  <GlossaryItem term="direct initialization">
+    以最终输入直接开始对象生命周期。
+  </GlossaryItem>
+  <GlossaryItem term="meaningful initial state">
+    构造后立即满足当前领域语义的状态。
+  </GlossaryItem>
+  <GlossaryItem term="lexical variable scope">
+    变量定义到 block 结束的可见范围。
+  </GlossaryItem>
+  <GlossaryItem term="branch-local state">
+    只在实际分支存在的局部状态。
+  </GlossaryItem>
+  <GlossaryItem term="branch-produced value">
+    各分支直接产生完整结果值的结构。
+  </GlossaryItem>
+  <GlossaryItem term="placeholder object">
+    等待后续路径填充的无完整语义对象。
+  </GlossaryItem>
+  <GlossaryItem term="protective RAII guard">
+    覆盖资源或临界区并自动清理的对象。
+  </GlossaryItem>
+  <GlossaryItem term="correctness-constrained postponement">
+    不得越过保护责任起点的延后边界。
+  </GlossaryItem>
+  <GlossaryItem term="cross-iteration reuse">
+    循环外保留对象并每轮赋值复用。
+  </GlossaryItem>
+  <GlossaryItem term="per-iteration construction">
+    每轮创建并销毁独立对象。
+  </GlossaryItem>
+  <GlossaryItem term="assignment cost">
+    替换已有状态与旧资源的成本。
+  </GlossaryItem>
+  <GlossaryItem term="lifecycle cost benchmark">
+    测量构造析构赋值分配的循环基准。
+  </GlossaryItem>
+  <GlossaryItem term="cross-iteration state leakage">
+    前一轮残留状态影响下一轮。
+  </GlossaryItem>
+  <GlossaryItem term="iteration isolation">
+    每轮独立 identity 带来的状态隔离。
+  </GlossaryItem>
+  <GlossaryItem term="cold path">低概率错误、诊断或降级路径。</GlossaryItem>
+  <GlossaryItem term="hot path">高频且对延迟敏感的主路径。</GlossaryItem>
+  <GlossaryItem term="return value elision">
+    直接在目标 storage 构造返回结果。
+  </GlossaryItem>
+  <GlossaryItem term="value-returning factory">
+    以返回值提供完整对象的创建函数。
+  </GlossaryItem>
+  <GlossaryItem term="variable lifetime trace">
+    控制流与 lifecycle 事件的对应轨迹。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：重构 encryptPassword。** 写出 invalid/success 两条路径的 lifecycle 事件，并消除无用操作。
+
+<Answer question="变量应移动到哪里，成本怎样变化？">
+  先执行 length/format validation；通过后用 password 直接构造 encrypted，再原地
+  encrypt。invalid path 从一次 default construction 加 destructor
+  降为零对象事件；success path 从 default construction、copy
+  assignment、destructor 改为一次 copy construction 与 destructor，并缩短可变
+  scope。用 instrumented string wrapper 验证事件计数。
+</Answer>
+
+2. **问题 2：选择循环变量位置。** Widget 构造会分配 buffer，assignment 可复用 capacity，但 reset 可能残留 diagnostics，请设计决策实验。
+
+<Answer question="循环内构造和循环外复用怎样比较？">
+  循环内方案是 n 次 constructor/destructor，天然 iteration
+  isolation；循环外是一次 constructor/destructor 加 n 次 assignment，可能复用
+  capacity，但扩大 scope 并有状态泄漏风险。benchmark
+  allocation、峰值容量与耗时；sequence/failure tests 检查 diagnostics/cache 全部
+  reset。只有性能收益明确且 reset contract 完整才复用。
+</Answer>
+
+3. **问题 3：审查 lock guard 延后。** 函数先验证 key，再读取 shared cache、随后才建 lock，请给出最晚安全位置。
+
+  <Answer question="RAII guard 的延后边界如何确定？">不访问 shared state 的 key validation 可在 lock 前完成；guard 必须位于第一次 cache read/write 之前，并覆盖迭代器、引用和所有依赖共享 invariant 的操作。不能以“首次修改”为边界，因为无锁读取也可能 race。并发测试覆盖 validation failure、cache miss/hit、异常和提前 return，确认每个共享访问都在 guard lifetime 内。</Answer>
+</Exercises>

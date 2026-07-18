@@ -164,7 +164,9 @@ export function AaPromptComparePlayground() {
               {q.level}
             </span>
           </p>
-          <p className="mt-2 text-xs leading-relaxed text-secondary">{q.note}</p>
+          <p className="mt-2 text-xs leading-relaxed text-secondary">
+            {q.note}
+          </p>
         </div>
 
         <p className="mt-3 text-xs text-secondary">

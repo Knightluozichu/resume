@@ -1,0 +1,157 @@
+---
+title: "第1部分 Kotlin简介"
+description: "依据Manning与电子工业出版社第1版完整目录覆盖1个节点：先建立Kotlin 1.0的语言目标、基本语法、类、lambda与类型系统，再判断它如何复用既有Java平台"
+type: C
+section: "Kotlin实战（第1版 / Kotlin 1.0）"
+draft: false
+math: false
+sourceUrl: "https://livebook.manning.com/book/kotlin-in-action/table-of-contents"
+demo: true
+order: 0
+---
+
+import { Kia1StructureLab, Kia1ExecutionLab, Kia1EvidenceLab } from "@/components/mdx/kotlin-in-action/diagrams/kia1-part1-kotlin-introduction";
+
+# 第1部分 Kotlin简介
+
+本页依据Dmitry Jemerov与Svetlana Isakova合著的《Kotlin in Action》第1版独立重构，不复制原文。版本锁定Manning 2017年2月版、360页、ISBN 9781617293290；中文版锁定电子工业出版社2017年8月第1版、覃宇等译、ISBN 9787121321580。语言基线是Kotlin 1.0，书中只在少数位置提示当时仍在开发的1.1变化。
+
+第1版只有2个分部、11章和附录A至C，没有协程、Flow或并发编程分部。现代Kotlin、Gradle、Android、协程及第2版新增内容只能放入迁移对照，不能替换第1版节点后仍声称忠实覆盖。
+
+<Objectives>
+
+- 能解释“第1部分 Kotlin简介”全部1个正式节点的静态类型、编译解析、JVM运行行为与Java互操作边界。
+- 能实现“先建立Kotlin 1.0的语言目标、基本语法、类、lambda与类型系统，再判断它如何复用既有Java平台”的最小可执行切片，并保存版本、源码、构建、调用点、输出和断言。
+- 能比较正常、空值、类型擦除、Java调用与错误抽象，分析“把第1部分读成语法速查表，跳过空安全、静态类型和Java互操作背后的设计约束”。
+- 能设计反例并凭版本卡、六章依赖图、Java互操作边界、最小工程和概念回收表完成独立复现、口述与交接。
+
+</Objectives>
+
+## 从类型、解析和运行时开始
+
+Kotlin的<Term def="编译器在运行前确定表达式、参数、返回值与成员约束的类型系统">静态类型</Term>不是额外负担，而是重构、自动补全和跨Java边界推理的证据。每个例子先写输入类型、可空性和期望输出，再判断调用在编译期选中了成员、扩展、约定还是函数值；不能从短小语法直接猜测运行语义。
+
+<Term def="把可能为空与保证非空写入类型并要求调用点显式处理的语言合同">空安全</Term>把许多失败前移到编译期，但平台类型、反射、反序列化和非空断言仍可把风险带回运行时。课程要求为每个边界保留null输入、缺失字段、错误类型和Java未标注返回值，不能用一次正常输出证明安全。
+
+<Term def="在不修改既有类的前提下以静态解析方式提供额外函数或属性的声明">扩展声明</Term>服务于调用点可读性，却不会真正向接收者类注入虚方法。<Term def="接收函数作为参数或返回函数，并让行为能够组合的函数">高阶函数</Term>可以消除重复，但还要解释捕获、对象分配、内联和控制流。<Term def="Kotlin与Java在类型、调用约定、集合、异常和字节码层双向协作的能力">Java互操作</Term>贯穿全书，是判断设计是否成立的最终边界。
+
+本单元主线是先建立Kotlin 1.0的语言目标、基本语法、类、lambda与类型系统，再判断它如何复用既有Java平台。先用结构图选中正式节点，再在执行实验中切换Kotlin调用、Java调用、null边界、擦除与反射，最后以证据门确认目录、类型、运行时、互操作和版本均可重放。
+
+<Kia1StructureLab />
+
+## 权威目录逐节点映射
+
+### 第1部分 Kotlin简介
+
+**正式节点 1/1，单元层。** “第1部分 Kotlin简介”必须放回“先建立Kotlin 1.0的语言目标、基本语法、类、lambda与类型系统，再判断它如何复用既有Java平台”这条因果链中理解：先确定输入与静态类型，再写出编译期解析，随后观察生成的JVM调用、对象或控制流，最后从Java调用点验证边界。只记语法外观，不能说明所有者、求值时机、空值、异常与互操作结果，不算覆盖。
+
+为该节点准备一个成功输入、一个边界输入和一个会推翻实现的反例。保存源码、编译器版本、调用点、输出与断言，并说明结论属于Kotlin 1.0、第1版出版语境还是现代迁移对照。这样可把目录标题变成可执行知识，而不是摘要列表。
+
+## 最小可执行切片
+
+先预测以下代码的静态类型、求值顺序和输出，再运行。样例刻意保留可空输入、集合变换、扩展与Java友好入口，便于把语法表象还原为调用合同。
+
+```kotlin
+data class Record(val id: Int, val label: String?)
+
+fun Record.display(): String = label?.trim()?.takeIf { it.isNotEmpty() } ?: "#$id"
+
+fun select(records: List<Record>, predicate: (Record) -> Boolean): List<String> =
+    records.asSequence().filter(predicate).map(Record::display).toList()
+
+fun main() {
+    val input = listOf(Record(1, " Kotlin "), Record(2, null))
+    check(select(input) { it.id > 0 } == listOf("Kotlin", "#2"))
+}
+```
+
+固定第1版语境并把版本、编译、测试和字节码证据一起保存。当前工具链可用于运行迁移实验，但报告必须明确它不是2017年的原始构建环境。
+
+```bash
+kotlinc -version
+./gradlew --no-daemon clean test
+javap -classpath build/classes/kotlin/main -c -p example.MainKt > bytecode.txt
+./gradlew --no-daemon dokkaHtml
+```
+
+把知识写成会失败的行为合同，而不是“能编译”或“页面能打开”的弱断言。
+
+```gherkin
+Given Kotlin 1.0 language semantics, an explicit JVM target, typed inputs, and a Java caller
+When the smallest scenario for "kia1-part1-kotlin-introduction" crosses nullability, dispatch, generic, or reflection boundaries
+Then compile-time selection, generated calls, output, exceptions, and side effects match the prediction
+And invalid nulls, erased types, ambiguous receivers, and malformed data remain observable
+And modern Kotlin differences are recorded separately from the first-edition conclusion
+```
+
+这三段材料分别约束源码、环境和行为。若没有保存编译器版本、完整调用点和失败输出，读者无法判断结果来自语言规则、标准库实现、JVM擦除、Java注解还是偶然输入。
+
+## 五层机制与反例证明
+
+**类型层。** 为输入、接收者、参数、返回值、类型实参和可空性逐项标注。类型推导可以减少重复，但解释时必须还原推导结果。遇到平台类型，不假定非空；先在Java声明、注解和真实返回值上建立证据，再决定边界校验位置。
+
+**解析层。** 写出成员函数、扩展函数、运算符约定、函数值或反射调用的选择规则。扩展按静态接收者类型解析，默认参数由Kotlin调用点处理，具名参数不能直接照搬到Java；每项结论都要用最小重载或双向调用反例验证。
+
+**运行时层。** 检查闭包捕获、序列惰性、装箱、泛型擦除、内联展开、反射与对象创建。用计数器、字节码、调用顺序和异常类型区分“语法更短”与“执行更少”。性能结论必须有输入规模与测量方法，不能从API名称推断。
+
+**API设计层。** 以调用点为中心比较普通函数、扩展、运算符、带接收者lambda和DSL。先写合法句子与禁止句子，再决定抽象；如果接收者不清、顺序隐蔽、副作用不可见或错误消息恶化，普通API通常更合适。
+
+**互操作与版本层。** 从Java调用同一能力，并检查空值注解、静态入口、函数接口、集合可变性、异常和反射。先保存Kotlin 1.0基线，再一次只改变编译器、标准库、JVM目标、Gradle插件或新版语言特性之一；协程与Flow属于后续版本，不得倒填进本书目录。
+
+围绕“把第1部分读成语法速查表，跳过空安全、静态类型和Java互操作背后的设计约束”预写推翻条件：编译选择与预测不符、Java调用合同改变、null穿透边界、擦除导致错误转换、求值次数异常、资源未释放或DSL产生歧义中的任一项出现，都表示当前解释不成立。最终交付版本卡、六章依赖图、Java互操作边界、最小工程和概念回收表，使另一位开发者无需口头提示即可重放。
+
+### 跨章纵向验收
+
+分部验收还要做一次跨章纵向切片：从第2章的可空属性出发，经第3章扩展函数、第4章数据类、第5章集合lambda到第6章平台类型，让同一份数据先由Kotlin处理，再由Java调用。记录每一步静态类型、生成入口、空值责任和最终断言；若任何一章只能孤立演示而不能进入这条链，说明依赖关系仍未真正掌握。
+
+## 三步交互实验
+
+<Steps>
+  <Step title="1. 建立目录与类型图">逐个连接1个正式节点，标出接收者、输入、输出、可空性、编译解析和Java入口；先预测调用结果。<Kia1StructureLab /></Step>
+  <Step title="2. 切换运行时边界">分别运行Kotlin、Java、null、擦除和反射场景，每次只改变一个条件；记录输出、异常、对象或求值次数。<Kia1ExecutionLab /></Step>
+  <Step title="3. 通过可重放证据门">用版本卡、六章依赖图、Java互操作边界、最小工程和概念回收表核对目录、类型、运行时、互操作和版本；缺项时不得把简短语法或正常输出视为完成。<Kia1EvidenceLab /></Step>
+</Steps>
+
+<Callout type="trap">**本单元核心陷阱。** 把第1部分读成语法速查表，跳过空安全、静态类型和Java互操作背后的设计约束。修复时先还原静态类型、解析位置、运行时代价和Java调用合同，再写能推翻当前解释的测试。</Callout>
+
+<Callout type="trap">**版本混淆。** 本书基线是Kotlin 1.0，第1版没有协程和Flow章节。新版编译器可用于验证迁移，但必须单列差异，不能用第2版知识替换第1版目录。</Callout>
+
+<Callout type="warning">反射、序列化、构建日志和Java互操作样例只使用合成数据。输出不得包含真实账号、令牌、用户内容或私有依赖地址。</Callout>
+
+## 本章回顾
+
+本页从“第1部分 Kotlin简介”覆盖到“第1部分 Kotlin简介”，共1个正式节点。掌握标准是能沿“先建立Kotlin 1.0的语言目标、基本语法、类、lambda与类型系统，再判断它如何复用既有Java平台”解释静态类型、编译解析、JVM行为和Java边界，运行正常与失败实验，并让另一位开发者凭版本卡、六章依赖图、Java互操作边界、最小工程和概念回收表重放结论。
+
+<Exercises>
+
+**问题 1**：“第1部分 Kotlin简介”覆盖哪些正式节点与机制主线？
+<Answer>覆盖1个节点，从“第1部分 Kotlin简介”到“第1部分 Kotlin简介”；主线是先建立Kotlin 1.0的语言目标、基本语法、类、lambda与类型系统，再判断它如何复用既有Java平台。</Answer>
+
+**问题 2**：怎样建立本单元最小可执行切片？
+<Answer>锁定Kotlin与JVM版本，写明输入、静态类型、调用点和期望结果，同时从Kotlin与Java运行成功、边界和失败输入，保存版本卡、六章依赖图、Java互操作边界、最小工程和概念回收表。</Answer>
+
+**问题 3**：本单元最需要推翻的错误假设是什么？
+<Answer>错误假设是“把第1部分读成语法速查表，跳过空安全、静态类型和Java互操作背后的设计约束”。保持其他条件不变，只改变null、静态接收者、泛型实参、Java调用或反射输入；结果偏离即推翻。</Answer>
+
+**问题 4**：为什么一次正常输出不能证明语言机制？
+<Answer>它没有证明编译选择、求值次数、JVM擦除、Java调用、异常和版本边界；必须保留源码、字节码或调用轨迹以及失败断言。</Answer>
+
+**问题 5**：怎样使用现代Kotlin而不改写第1版？
+<Answer>先按Kotlin 1.0保存原书行为基线，再一次只改变编译器、标准库、JVM目标、构建插件或新版特性之一；协程与Flow只进入差异账本。</Answer>
+
+**问题 6**：达到独立交接标准需要什么？
+<Answer>需要版本卡、完整源码、构建命令、Kotlin与Java调用点、正常和失败输出、类型与运行时解释、目录节点映射以及版本卡、六章依赖图、Java互操作边界、最小工程和概念回收表。</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="静态类型">编译器在运行前确定表达式、参数、返回值与成员约束的类型系统。</GlossaryItem>
+  <GlossaryItem term="空安全">把可能为空与保证非空写入类型并要求调用点显式处理的语言合同。</GlossaryItem>
+  <GlossaryItem term="扩展声明">在不修改既有类的前提下以静态解析方式提供额外函数或属性的声明。</GlossaryItem>
+  <GlossaryItem term="高阶函数">接收函数作为参数或返回函数，并让行为能够组合的函数。</GlossaryItem>
+  <GlossaryItem term="Java互操作">Kotlin与Java在类型、调用约定、集合、异常和字节码层双向协作的能力。</GlossaryItem>
+</Glossary>
+
+[← 上一页：《Kotlin实战》第1版权威学习地图](/learn/kotlin-in-action/00-official-learning-map/kia1-official-learning-map) · [下一页：第1章 Kotlin：定义和目的 →](/learn/kotlin-in-action/02-chapter-01/kia1-01-kotlin-what-and-why)
+
+<Attribution adaptedFrom="Dmitry Jemerov、Svetlana Isakova《Kotlin in Action》第一版" adaptedUrl="https://livebook.manning.com/book/kotlin-in-action/table-of-contents" />

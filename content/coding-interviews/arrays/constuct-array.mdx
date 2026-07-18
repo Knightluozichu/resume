@@ -1,134 +1,328 @@
 ---
-title: 构建乘积数组
+title: "面试题66：构建乘积数组"
 type: C
-section: 数组
-order: 20
-description: 在不使用除法的条件下，用左右乘积预处理构造 B[i]=A[0]*...*A[i-1]*A[i+1]*...*A[n-1]。
+section: "第6章 面试中的各项能力"
+order: 78
+description: "把每个排除自身的乘积拆成左侧前缀积与右侧后缀积，用两次方向相反的扫描在不除法条件下构建结果。"
 demo: true
 math: true
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/66_ConstuctArray/ConstuctArray.cpp"
 draft: false
 ---
 
-{/* 知识点清单：前后缀乘积、常数空间优化、乘法归一化陷阱；原书章节：构建乘积数组。 */}
+import { ConstructArrayMatrixDiagram, ConstructArrayPrefixLab, ConstructArraySuffixLab, ConstructArrayZeroMap, ConstructArrayOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/constuct-array";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能理解为什么不能直接用“全积除以自身”解决。
-- 能在 $O(n)$ 时间内给出左右乘积预处理方案。
-- 能处理包含 0 的边界，并在代码中避免越界。
+- 能解释每个输出为何等于排除自身后的左积乘右积
+- 能计算两次扫描中前缀数组与滚动后缀的逐步状态
+- 能实现作者预分配输出接口与现代返回值接口
+- 能分析零、负数、单元素、别名和浮点误差边界
+- 能设计暴力对拍、长度契约和五组官方测试
 
 </Objectives>
 
-## 直觉引入
+## 从“总积除以自己”为何不被允许开始
 
-若题目允许除法，`total / A[i]` 很快，但存在两个坑：`A[i]=0` 的场景会让结果不可逆，且题目常常明确“不能用除法”。  
-更稳定的办法是把每个位置的贡献拆成“左侧累计积”和“右侧累计积”。
+输入A为1、2、3、4、5时，所有元素总积120，看似可以用120除以A中每一项得到B。但题目明确“**不能使用除法**”，而且输入含0时总积变为0，零位置需要的“其余元素积”无法通过0除以0恢复。
 
-## 概念讲解
+“**构建乘积数组**”要求每个B[i]等于除A[i]之外所有输入元素的乘积：
 
-定义：
+$$
+B_i=\prod_{\substack{0\le j\lt n\\j\ne i}}A_j
+$$
 
-$$left[i]=A[0]\times\cdots\times A[i-1],\quad right[i]=A[i+1]\times\cdots\times A[n-1]$$
+不使用除法意味着不能先把被排除项乘进去再尝试逆操作。应从一开始就只乘索引i左边和右边的元素。
 
-那么答案是 `B[i]=left[i]*right[i]`。  
-`left` 可以从左到右一次算完，`right` 可在从右到左算，或者直接在结果数组上复用第二次遍历。
+<ConstructArrayMatrixDiagram />
 
-## 思考引导
+先预测输入1、2、0、4、5的结果：只有零所在的B[2]不乘这个0，可以得到1乘2乘4乘5等于40；其余每个输出都会包含A[2]的0，所以为0。
 
-### 1) 先问问题，不先写除法
-这题问的是“每个位置排除自己后的乘积”，不是问“能不能除掉一个总积”。如果数组包含 0，或题目禁止除法，直接算总积是故障点。
+## 把排除自身拆成左右两段
 
-### 2) 识别不变式
-每个 B[i] 实际是左边积与右边积的乘积。左右积各自只与边界方向有关，能独立预处理，这就是你能降到线性时间的核心结构不变式。
+对于位置i，所有被保留元素天然分成A[0]到A[i-1]与A[i+1]到A[n-1]。把左段乘积记为L_i、右段乘积记为R_i，则B_i等于两者相乘。
 
-### 3) 为什么它一定成立
-乘积运算对序列有“区间可拆分”属性。把 A 切成 [0..i-1] 与 [i+1..n-1] 两段后，结果重组不依赖于中间项。
+$$
+L_i=\prod_{j=0}^{i-1}A_j,
+\qquad
+R_i=\prod_{j=i+1}^{n-1}A_j,
+\qquad
+B_i=L_iR_i
+$$
 
-### 4) 常见误区
-把“非零前提”默认为真或者把前后缀混用在一次乘法里，都会在含零数据上失真；另一个坑是下标循环方向没对齐导致重复乘。
+当某一侧没有元素时，乘法单位元是1。这个<Term def="没有任何因子的乘积，按乘法单位元定义为1。">空积</Term>定义让边界无需特殊公式：$L_0=1$，$R_{n-1}=1$。
 
-### 5) 你能找到一个反例吗
-数组 [1,0,3,4] 下，任何一次“总积除法”都失效。若左/右不对称就会让某些位置永远 0 或错乘。
+矩阵图中每行对应一个B，主对角线A[i]被排除；对角线左下方是左侧因子，右上方是右侧因子。这就是原章的“**下三角连乘与上三角连乘**”。
 
-### 6) 迁移到下一题
-遇到“排除自身”或“共享同一前后缀信息”的场景，先问是否能拆成两个独立累积方向。不要一上来就触及除法和重复遍历。
-## 交互 Demo
+## 第一遍写入前缀积
 
-每次迭代都在“左前缀”和“右前缀”之间回填，图上可看到某个 `i` 的值如何等于两侧乘积拼接。
+<Term def="位置i之前所有输入元素的乘积，不包含A[i]本身。">前缀积</Term>L_i可从左到右递推。先把output[0]设为1；对每个i从1开始，output[i]等于output[i-1]乘A[i-1]。
 
-<RecursionDiagram />
+$$
+L_0=1,
+\qquad
+L_i=L_{i-1}A_{i-1}
+\quad(1\le i\lt n)
+$$
 
-## 实现代码
+<ConstructArrayPrefixLab />
 
-### C++ 实现
+输入1、2、3、4、5经过第一遍后，output是1、1、2、6、24。此时它还不是最终B，只保存每个位置左边的乘积。
+
+这一步不会读output中尚未写入的位置，也不需要额外前缀数组；结果容器本身就是中间存储。
+
+## 第二遍把后缀积乘回结果
+
+<Term def="位置i之后所有输入元素的乘积，不包含A[i]本身。">后缀积</Term>从右到左递推。作者不再申请一整个R数组，只用temp维护当前右侧累计积；每向左移动一格，先把A[i+1]乘入temp，再将temp乘入output[i]。
+
+$$
+R_{n-1}=1,
+\qquad
+R_i=A_{i+1}R_{i+1},
+\qquad
+B_i\leftarrow B_iR_i
+$$
+
+这种只用一个变量保存当前右积的方式称为<Term def="从右向左扫描时用单个temp保存当前位置之后所有元素的乘积。">滚动后缀</Term>。末项B[n-1]在第一遍已经是全部左积，右侧为空积1，所以第二遍从n-2开始。
+
+<ConstructArraySuffixLab />
+
+两遍合起来就是“**前缀积与后缀积**”：第一遍填下三角连乘，第二遍用temp填上三角连乘，最终每行恰好跳过对角元素。
+
+## 忠实还原作者函数
+
+作者输入和输出都是双精度vector引用。调用者必须预先创建与输入等长的output；只有长度相等且大于1时函数才写结果，否则静默保持output原值。
 
 ```cpp
-#include <vector>
+void BuildProductionArray(
+    const std::vector<double>& input,
+    std::vector<double>& output) {
+    int inputLength =
+        static_cast<int>(input.size());
+    int outputLength =
+        static_cast<int>(output.size());
 
-class Solution {
-public:
-    std::vector<int> constructArr(const std::vector<int>& nums) {
-        int n = nums.size();
-        if (n == 0) return {};
-
-        std::vector<long long> ans(n, 1);
-        long long left = 1;
-        for (int i = 0; i < n; ++i) {
-            ans[i] = left;
-            left *= nums[i];
+    if (inputLength == outputLength &&
+        outputLength > 1) {
+        output[0] = 1;
+        for (int i = 1;
+             i < inputLength;
+             ++i) {
+            output[i] =
+                output[i - 1]
+              * input[i - 1];
         }
 
-        long long right = 1;
-        for (int i = n - 1; i >= 0; --i) {
-            ans[i] *= right;
-            right *= nums[i];
+        double temp = 1;
+        for (int i = inputLength - 2;
+             i >= 0;
+             --i) {
+            temp *= input[i + 1];
+            output[i] *= temp;
         }
-
-        return std::vector<int>(ans.begin(), ans.end());
     }
-};
-```
-
-### TypeScript 实现
-
-```typescript
-function constructArray(nums: number[]): number[] {
-  const n = nums.length;
-  if (n === 0) return [];
-
-  const ans = new Array<number>(n).fill(1);
-  let left = 1;
-  for (let i = 0; i < n; i++) {
-    ans[i] = left;
-    left *= nums[i];
-  }
-
-  let right = 1;
-  for (let i = n - 1; i >= 0; i--) {
-    ans[i] *= right;
-    right *= nums[i];
-  }
-
-  return ans;
 }
 ```
 
-## 常见误区
+函数名写作Production而不是Product，是作者源码命名；算法仍然构建乘积数组。时间O(n)，除输出数组外额外空间O(1)。若把输出本身计入总空间，则为O(n)，因为题目本来就要求返回n个结果。
 
-<Callout type="trap">
-  <strong>现象 →</strong> 遇到 0 时答案全错。  
-  <strong>原因 →</strong> “全积/除法”会把 0 覆盖成异常情况。  
-  <strong>修复 →</strong> 使用左右乘积拆解，即便有 0 也可正确计算（多个 0 时更是如此）。
+作者把size_t长度缩窄为int，超大vector可能失真；正常面试规模无碍。更重要的是input和output不能是同一个vector：第一遍写output会同时改掉后续还要读取的input，破坏算法。源码没有检测这种别名。
+
+<Callout type="trap" title="让 input 与 output 指向同一个 vector">
+算法依赖两遍都读取原始A。若两个引用绑定同一对象，第一遍写前缀积会覆盖输入，第二遍再读到的已不是原数组。返回新vector或明确禁止别名。
 </Callout>
 
-<Callout type="trap">
-  <strong>现象 →</strong> 写出 `int` 版本后大规模测试随机溢出。  
-  <strong>原因 →</strong> 乘积规模可快速超过 32 位。  
-  <strong>修复 →</strong> 按题目约束选 `long long` 或大整数表示，若需要则返回溢出版本说明。
+## 作者长度契约与数学边界
+
+长度不一致时作者不返回错误，也不调整output；长度0或1即使相等，也因为大于1条件不成立而不写。官方最短输入是两个元素。
+
+数学上，空输入自然返回空数组；单元素输入的B[0]排除唯一元素后是空积1。现代API可以直接返回新容器，从而明确支持这两个边界并消除预分配、长度不匹配与输入输出别名问题。
+
+```cpp
+#include <cstddef>
+#include <vector>
+
+std::vector<long double>
+constructProductArray(
+    const std::vector<long double>& input) {
+    const std::size_t n = input.size();
+    if (n == 0)
+        return {};
+
+    std::vector<long double> output(n, 1.0L);
+
+    for (std::size_t i = 1;
+         i < n;
+         ++i) {
+        output[i] =
+            output[i - 1] * input[i - 1];
+    }
+
+    long double suffix = 1.0L;
+    for (std::size_t i = n - 1;
+         i > 0;
+         --i) {
+        suffix *= input[i];
+        output[i - 1] *= suffix;
+    }
+
+    return output;
+}
+```
+
+无符号下标反向循环容易写错。上面让i表示尚未乘入的右侧元素下标，从n-1递减到1，每轮更新output[i-1]，避免size_t减到0后继续回绕。n等于1时循环不进入，output保持1。
+
+## 零无需任何特殊分支
+
+双扫描从未计算总积，也从未除以A[i]，所以零会自然传播：
+
+<ConstructArrayZeroMap />
+
+一个零时，只有零位置的左右两段都不包含零，得到其余元素乘积；其他位置至少一侧包含零。两个或更多零时，排除任何单一位置后仍至少保留一个零，所有结果为0。
+
+<Callout type="trap" title="先算总积再按零数量打补丁">
+可以额外统计零来实现，但分支更多，且偏离题目“不用除法”的结构训练。前后缀双扫描统一处理无零、单零、多零和负数，不需要特判。
 </Callout>
+
+负数同样无需特殊逻辑。每个B的符号由“除自身外负数个数”的奇偶性决定，两遍普通乘法自然得到作者Test4的120、-60、40、-30、24。
+
+## 下三角与上三角的正确性
+
+第一遍结束后，可用归纳证明output[i]等于A[0]到A[i-1]的乘积：i等于0是空积1；若i-1成立，再乘A[i-1]就得到i的左积。
+
+第二遍从右向左时，temp在乘入A[i+1]后等于A[i+1]到A[n-1]的乘积。output[i]原本是左积，乘temp后恰好得到排除A[i]的全部因子。两个不变式共同证明每个位置正确。
+
+这里的<Term def="在乘积矩阵每一行跳过A[i]所在主对角位置，只组合其左下与右上因子。">对角排除</Term>不是额外数据结构，而是一种理解两遍扫描为何没有漏乘或重复乘的图形化方法。
+
+整个算法读取每个输入元素至多两次，写每个输出有限次，时间线性；相比每个i重新扫描其余n-1项的O(n平方)暴力法，复用了相邻位置共有的前后缀信息。
+
+空间复用成立的关键不是“没有中间状态”，而是两个阶段需要的状态方向互补：反向扫描开始时，output[i]中的前缀积已经定稿，后续只会再乘一次右积；temp则只代表当前边界右侧的原始输入乘积。只要输入保持只读，覆盖output不会影响尚未计算的位置。这个读写依赖也解释了为什么独立输出容器可行、输入输出别名却会失败。面试中应把这条依赖说清，而不只是背诵O(1)额外空间。
+
+## 浮点与整数乘积边界
+
+作者用double并在测试中以绝对误差1e-7比较。乘法顺序不同会产生浮点舍入差异；绝对容差对极大或极小量未必合理，工程测试通常结合相对误差。
+
+改用long long只改变范围，不消除溢出；乘积增长很快。整数业务需要约束输入、检测乘法溢出或使用大整数。浮点业务还要考虑正负零、无穷、NaN和上溢下溢。
+
+“不能使用除法”也避免了浮点总积除自身可能放大舍入误差，但前后缀乘积仍会因结合顺序不同产生微小差异。结果精度契约应独立于算法复杂度说明。
+
+## 五组官方测试与测试代码问题
+
+作者准备五组输入：无零、一个零、两个零、两个负数，以及长度2。期望分别检查普通结果、零传播、符号和最小有效长度。
+
+<ConstructArrayOfficialCaseLab />
+
+原测试函数把output声明为非常量左值引用，却在调用时直接传临时vector；还用char指针接收字符串字面量。现代标准C++不能把临时量绑定到非常量左值引用，字符串字面量也不应转成char指针，因此测试外壳依赖旧编译器扩展。核心BuildProductionArray算法不受这个语法问题影响。
+
+现代测试应创建命名output变量，或直接测试返回vector的新接口。暴力预言机对每个i单独乘所有j不等于i的元素，虽然O(n平方)，但逻辑独立，适合随机短数组对拍。
+
+```cpp
+#include <cassert>
+#include <vector>
+
+std::vector<long double> bruteProduct(
+    const std::vector<long double>& input) {
+    std::vector<long double> output(
+        input.size(), 1.0L);
+    for (std::size_t i = 0;
+         i < input.size();
+         ++i) {
+        for (std::size_t j = 0;
+             j < input.size();
+             ++j) {
+            if (i != j)
+                output[i] *= input[j];
+        }
+    }
+    return output;
+}
+
+void testProductArray() {
+    assert(constructProductArray({}).empty());
+    assert(constructProductArray({7}) ==
+           std::vector<long double>{1});
+    assert(constructProductArray(
+        {1, 2, 0, 4, 5}) ==
+        std::vector<long double>{
+            0, 0, 40, 0, 0});
+    assert(constructProductArray(
+        {1, 2, 0, 4, 0}) ==
+        std::vector<long double>{
+            0, 0, 0, 0, 0});
+}
+```
+
+浮点随机对拍应使用容差而非vector精确相等；上述小整数可精确表示，直接比较是安全的。还要测试作者旧接口在长度不匹配时保持output不变，以锁定其实际契约。
+
+<Stepper>
+  <Step title="把每行拆成两个三角">
+    <ConstructArrayMatrixDiagram />
+    主对角A[i]被排除，左下与右上因子分别累积。
+  </Step>
+  <Step title="从左写入前缀积">
+    <ConstructArrayPrefixLab />
+    output先保存每个位置之前的全部乘积。
+  </Step>
+  <Step title="从右乘入滚动后缀">
+    <ConstructArraySuffixLab />
+    temp维护当前位置之后的乘积，与已有前缀相乘。
+  </Step>
+  <Step title="用零数量检查结构">
+    <ConstructArrayZeroMap />
+    单零只有零位置可非零，多零则所有输出为零。
+  </Step>
+  <Step title="复现五组官方测试">
+    <ConstructArrayOfficialCaseLab />
+    同时核对无零、单零、双零、负数和两元素。
+  </Step>
+</Stepper>
+
+## 本章回顾
+
+1. 构建乘积数组要求B[i]等于除A[i]外全部元素乘积，不能使用除法。
+2. 每一行可拆为下三角连乘与上三角连乘，也就是前缀积与后缀积。
+3. 空积定义为1，使首项左积、末项右积和单元素结果统一。
+4. 第一遍从左写前缀，第二遍从右用temp滚动后缀并乘回output。
+5. 两遍时间O(n)，除输出外额外空间O(1)。
+6. 零和负数无需特殊分支；一个零只有其位置可能非零，两个零使结果全零。
+7. 作者要求output预分配、等长且长度大于1，长度不符时静默不写。
+8. 输入输出别名会破坏算法，现代返回值接口可消除这类契约风险。
+9. 作者五组测试逻辑完整，但临时vector绑定非常量引用依赖旧编译器扩展。
+
+<Exercises>
+
+**问题 1：为什么一个零时只有零所在位置可能非零？**
+
+<Answer>其他位置排除的是非零元素，剩余因子仍包含那个零；零位置排除零本身，左右积只包含其他非零元素，因此可得到它们的乘积。</Answer>
+
+**问题 2：第一遍结束后output[i]保存什么？**
+
+<Answer>保存A[0]到A[i-1]的前缀积，不含A[i]。output[0]是空积1，每个后续位置由前一前缀乘A[i-1]得到。</Answer>
+
+**问题 3：为什么现代size_t反向循环写成更新output[i-1]？**
+
+<Answer>size_t不能递减到负数。让i从n-1到1，每轮把input[i]加入suffix并更新前一位置，可在i等于1后自然结束，避免0再减1回绕。</Answer>
+
+**问题 4：作者接口为什么不能让input与output是同一个vector？**
+
+<Answer>第一遍会把output改成前缀积；若它与input别名，原始输入同时被覆盖，后续前缀与后缀读取到错误数据。应禁止别名或返回新容器。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="空积">没有因子的乘积，定义为乘法单位元1。</GlossaryItem>
+  <GlossaryItem term="前缀积">当前位置左侧全部输入元素的乘积。</GlossaryItem>
+  <GlossaryItem term="后缀积">当前位置右侧全部输入元素的乘积。</GlossaryItem>
+  <GlossaryItem term="滚动后缀">反向扫描中用单个变量维护右侧累计积。</GlossaryItem>
+  <GlossaryItem term="对角排除">乘积矩阵每行跳过A[i]所在主对角元素。</GlossaryItem>
+</Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题66"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/66_ConstuctArray/ConstuctArray.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

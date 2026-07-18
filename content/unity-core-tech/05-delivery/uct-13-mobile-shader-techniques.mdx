@@ -1,0 +1,226 @@
+---
+title: "第 13 章 移动端 Shader 技术：可编程管线与顶点片元案例"
+type: A
+section: "Unity 3D 实战核心技术详解 · 移动端视觉"
+order: 13
+description: "按原书第13章讲清可编程渲染管线、顶点 Shader、片元 Shader 以及移动案例的质量成本权衡。"
+demo: true
+math: false
+sourceUrl: "https://m.bookschina.com/7380713.htm"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Uct13MobileShaderTechniquesMapLab,
+  Uct13MobileShaderTechniquesExperimentLab,
+  Uct13MobileShaderTechniquesEvidenceLab,
+} from "@/components/mdx/unity-core-tech/diagrams/uct-13-mobile-shader-techniques";
+
+<Objectives>
+
+- 能解释网格属性从顶点阶段插值到片元输出的数据链
+
+- 能实现并分析一个受移动精度和带宽约束的顶点片元案例
+
+- 能比较变体、Overdraw、纹理采样与算术成本的证据
+
+</Objectives>
+
+## 问题：为什么桌面编辑器里只占零点几毫秒的 Shader，放到移动设备可能成为整帧瓶颈？
+
+先预测：同一 Shader 源码在桌面和移动 GPU 上是否具有相同精度、带宽和填充成本？没有保证。原书第十三章从可编程管线进入顶点与片元阶段再落到案例，学习重点是每个数据在哪个阶段产生、被插值多少次、采样多少纹理以及在目标设备花费什么。
+
+<Uct13MobileShaderTechniquesMapLab />
+
+## 原书边界与目录小节
+
+本页严格对应完整目录中的以下单元；这些单元只在本页计算原章覆盖，现代扩展不替代原书位置：
+
+- **可编程渲染管线**
+- **顶点Shader**
+- **片元Shader**
+- **Shader案例**
+
+书籍身份由图书馆题录核对，章节边界由完整目录核对。本站重新组织解释、代码、实验和证据，不逐字复制原文；导读与总复习不重复计入十四个正文章。
+
+## 把每个视觉结果追溯到管线阶段和成本
+
+CPU 提交 Mesh、Material 和常量，顶点 Shader 读取位置、法线、UV 等属性并输出裁剪空间位置与 varying，光栅化器插值 varying，片元 Shader 采样纹理、计算光照并输出颜色。深度测试、混合和剔除位于固定功能阶段。
+
+顶点阶段按顶点执行，适合空间变换和可插值的低频计算；片元阶段按覆盖样本执行，屏幕面积和 Overdraw 会放大成本。把不需要逐像素的运算移到顶点要评估插值误差，而不是机械迁移。
+
+移动精度 mediump、纹理格式、分支一致性和带宽与桌面不同。半精度能降低部分成本，但世界坐标、深度或大范围 UV 可能溢出；要用故意扩大场景和极端相机验证精度边界。
+
+案例从无光纹理开始，逐项加入顶点摆动、法线光照、颜色、透明和雾，每一步记录 Shader 变体数、编译结果、采样数、Overdraw 和 GPU 时间。最终质量档位通过关键字或不同 Shader 控制，避免不可控变体爆炸。
+
+<Uct13MobileShaderTechniquesExperimentLab />
+
+## 五个核心术语与责任边界
+
+<Term def="对每个输入顶点执行变换并输出裁剪位置与插值数据的阶段。">
+  顶点阶段
+</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="对覆盖样本执行纹理、光照和颜色计算的可编程阶段。">片元阶段</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="从顶点输出并由光栅化器插值后交给片元阶段的数据。">Varying</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="同一屏幕像素被多个片元重复着色的现象。">Overdraw</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+<Term def="由关键字、平台或管线配置生成的不同编译程序组合。">Shader 变体</Term>
+它必须落到本章的具体输入、变换、输出和失败信号，不能只作为名词记忆。
+
+这些术语组成一份最小领域模型。读者需要为每个对象写出所有者、生命周期、正常值、边界值和故意失败后的第一条可观察信号，才能把概念转成工程判断。
+
+## 关键对象与数据流
+
+Mesh 属性和材质常量进入顶点阶段，裁剪位置与 varying 经光栅化插值进入片元阶段，纹理与光照生成颜色，深度与混合决定最终像素；构建过程生成目标平台变体。输出是画面以及编译、变体、Overdraw 和 GPU 捕获。
+
+每次实验只改变一个输入，先保存版本、参数与预期，再比较输出、日志、内存或帧时间。最终结果偶然正确但中间契约不符合预测，仍不能签发，因为隐藏缓存、默认值或执行顺序可能掩盖根因。
+
+## 三步可重复实验
+
+动手前先预测：改变当前步骤的一项输入后，哪个对象、数值、像素、状态或版本标记应最先变化？固定 Unity 版本、目标平台、资产提交和测试场景。
+
+<Stepper>
+  <Step title="建立最小管线案例">
+    <Uct13MobileShaderTechniquesMapLab />
+
+只传位置和 UV，输出一张纹理；显示裁剪空间坐标和 UV 作为调试色，确认顶点到片元的插值链。
+
+```hlsl
+Varyings Vert(Attributes input)
+{
+    Varyings output;
+    output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
+    output.uv = input.uv;
+    return output;
+}
+```
+
+  </Step>
+  <Step title="逐项增加视觉特性">
+    <Uct13MobileShaderTechniquesExperimentLab />
+
+加入顶点摆动、法线漫反射和纹理颜色，每次只改一项；记录顶点数、采样数、指令与 GPU 时间。
+
+```hlsl
+half4 Frag(Varyings input) : SV_Target
+{
+    half4 albedo = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, input.uv);
+    return albedo * input.lighting;
+}
+```
+
+  </Step>
+  <Step title="验证移动边界与变体">
+    <Uct13MobileShaderTechniquesEvidenceLab />
+
+在低中高设备测试大坐标、透明叠层和关键字组合；构建日志必须列出保留变体，运行捕获确认实际 Shader。
+
+```text
+feature matrix -> compile variants -> strip unused combinations
+scene overdraw -> GPU capture -> device tiers -> quality decision
+```
+
+  </Step>
+</Stepper>
+
+## 正常、边界与故障注入
+
+正常样本证明主路径，边界样本说明适用范围，故障样本证明诊断检查确实会在最早契约处拒绝。三类样本必须使用同一观测方式，避免只为成功路径保留证据。
+
+<Callout type="trap">
+  **因果陷阱**：只看三角形数量而忽略大面积透明层，会低估片元次数与带宽成本。
+</Callout>
+
+<Callout type="trap">
+  **边界陷阱**：为每个功能添加独立关键字会组合出大量变体，拉长构建并增加运行时内存。
+</Callout>
+
+## 从原书版本迁移到当前 Unity
+
+书中 ShaderLab 和 Built-in 内置变量可迁移到 URP HLSL 库，但顶点、插值、片元、深度和混合的阶段模型保持不变。
+
+Shader Graph 可生成代码但不消除成本；现代复现仍需检查生成 Shader、变体剥离和目标设备 GPU 捕获，不能只看节点图。
+
+迁移账本使用五列：原书载体、稳定不变量、当前实现、不可等价处、重放证据。允许 API、插件和渲染管线变化，不允许用新名词删除原章问题或把编辑器成功当成目标平台成功。
+
+## 验收证据
+
+验收包含最小顶点片元 Shader、逐特性画面对照、精度边界样本、Overdraw 视图、变体清单、构建剥离日志、低中高设备 GPU 时间与一次帧捕获。
+
+证据包还要记录文件路径、构建版本、设备、参数、复现步骤、预期和实际结果。交给另一位读者后不需要猜隐藏状态即可重放，才算掌握而不是看过。
+
+<Uct13MobileShaderTechniquesEvidenceLab />
+
+## 小结
+
+- 可编程管线把顶点数据逐步变成片元颜色
+- 移动成本同时受顶点、片元、带宽和 Overdraw 影响
+- 精度选择必须用极端输入验证
+- Shader Graph 也要以生成代码和真机证据验收
+
+<Exercises>
+
+**问题 1** 第 13 章 移动端 Shader 技术的关键输入和输出分别是什么？
+
+<Answer>
+  Mesh 属性和材质常量进入顶点阶段，裁剪位置与 varying
+  经光栅化插值进入片元阶段，纹理与光照生成颜色，深度与混合决定最终像素；构建过程生成目标平台变体。输出是画面以及编译、变体、Overdraw
+  和 GPU 捕获。
+</Answer>
+
+**问题 2** 本章最有诊断价值的故障注入是什么？
+
+<Answer>
+  只看三角形数量而忽略大面积透明层，会低估片元次数与带宽成本。需要保存失败输入和第一条偏离信号，再修复后重放。
+</Answer>
+
+**问题 3** 迁移到当前 Unity 时必须保留什么？
+
+<Answer>
+  书中 ShaderLab 和 Built-in 内置变量可迁移到 URP HLSL
+  库，但顶点、插值、片元、深度和混合的阶段模型保持不变。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+  <GlossaryItem term="顶点阶段">
+    对每个输入顶点执行变换并输出裁剪位置与插值数据的阶段。
+  </GlossaryItem>
+  <GlossaryItem term="片元阶段">
+    对覆盖样本执行纹理、光照和颜色计算的可编程阶段。
+  </GlossaryItem>
+  <GlossaryItem term="Varying">
+    从顶点输出并由光栅化器插值后交给片元阶段的数据。
+  </GlossaryItem>
+  <GlossaryItem term="Overdraw">
+    同一屏幕像素被多个片元重复着色的现象。
+  </GlossaryItem>
+  <GlossaryItem term="Shader 变体">
+    由关键字、平台或管线配置生成的不同编译程序组合。
+  </GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="姜雪伟《Unity 3D实战核心技术详解》目录与书籍身份资料"
+  adaptedUrl="https://m.bookschina.com/7380713.htm"
+/>

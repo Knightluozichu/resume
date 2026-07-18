@@ -1,0 +1,295 @@
+---
+title: "第2章：C++ 后端开发必备工具与调试"
+type: A
+section: "C++ 服务器开发精髓 · 构建、符号与 GDB 证据链"
+order: 2
+description: "对齐原书第 2 章：SSH/FTP、Make/CMake、Visual Studio 源码阅读、GDB 命令、多线程与多进程调试、TUI/cgdb/VisualGDB。"
+demo: true
+math: false
+sourceUrl: "https://book.douban.com/subject/35491437/"
+draft: false
+---
+
+import {
+  CseConcurrentDebugTargetLab,
+  CseDebugArtifactLab,
+  CseGdbExecutionControlLab,
+} from "@/components/mdx/cpp-server-essence/diagrams/backend-tools-debugging";
+
+<Objectives>
+
+- 能比较 Make/CMake、Debug/RelWithDebInfo/Release 与 strip 对 postmortem 的影响，并构建匹配 source revision、debug info 与 build-id 的后端 artifact
+- 能复现并定位 state corruption，组合 run/continue/break/backtrace/frame/info/list/print/step/next/finish/watch/disassemble，而不靠随机单步
+- 能设计多线程、多进程与 signal 调试策略，明确 inferior/thread/fork/scheduler policy，并选择 TUI、cgdb、VisualGDB 或纯 CLI 的适用边界
+
+</Objectives>
+
+## 为什么调试不是“程序崩了再开 GDB”
+
+服务器故障常发生在远端 Linux、优化构建、多线程/多进程、运行数小时之后。若上线时没有保存符号、build-id、source revision 与启动参数，core dump 只剩地址；若调试时没定义 signal/fork/thread policy，breakpoint 本身会改变调度，得到的“证据”可能与故障不同。
+
+<Term def="从 source commit、compiler flags、binary、debug symbols、build-id 到部署实例一一可追溯的调试输入链。">debug artifact chain</Term>
+
+原书第 2 章把连接工具、构建系统、源码阅读和 GDB 放在同一章，因为调试起点不是命令，而是可复现环境。
+
+后半章分别落实 **GDB 调试多线程**、**GDB 调试多进程**与**调试 Nginx**式 fork/worker 场景：每次停止都先确认 thread、inferior、signal 和 scheduler policy。
+
+## 2.1 SSH、FTP 与远端操作边界
+
+<Term def="通过加密 channel 登录远端主机、执行 command、转发 port 与传输文件的 Secure Shell 协议。">SSH workflow</Term>
+
+SSH/Xshell 用于 shell、port forwarding 和会话管理；文件传输应优先 scp/sftp/rsync 等基于 SSH 的方案。传统 FTP control/data channel 默认无加密，不应用于传输 credentials、core dump 或 production config。
+
+```bash
+ssh -L 16379:127.0.0.1:6379 user@server
+scp build/server.sym user@server:/srv/symbols/
+rsync -av --checksum config/ user@server:/srv/app/config/
+```
+
+<Term def="连接远端时同时记录 host、user、working directory、environment、limits 与 binary identity 的可复现会话。">remote debug context</Term>
+
+进入机器后先收集 `pwd`、`ulimit -a`、environment、`ps`、binary checksum/build-id，再 attach；直接覆盖线上 binary 或随意复制 library 会破坏证据。
+
+## 2.2 Makefile 与 CMake：debuggability 在构建时决定
+
+<Term def="按 targets、dependencies 与 recipes 描述增量构建关系的 Make 输入文件。">Makefile dependency graph</Term>
+
+Make 判断 timestamp/dependency 后执行 recipe；header dependency 若未自动生成，修改 header 可能留下 stale object。常用 compiler depfile flags 或让 CMake/Ninja 管理。
+
+<Term def="生成 native build system 的跨平台 project description，表达 targets、sources、usage requirements 与 configuration。">CMake target model</Term>
+
+```cmake
+add_executable(server main.cpp session.cpp)
+target_compile_features(server PRIVATE cxx_std_17)
+target_compile_options(server PRIVATE
+  $<$<CONFIG:RelWithDebInfo>:-fno-omit-frame-pointer>)
+```
+
+现代 CMake 把 include path/definitions/options 绑定到 target 和 visibility，不用全局 flags 污染所有 modules。单配置 generator 用 `CMAKE_BUILD_TYPE`，多配置 generator 在 build 时用 `--config`；混用会让你以为启用了 Debug 实际没有。
+
+<Term def="带优化且保留 debug info 的构建配置，接近 production behavior 又可做 source-level symbolization。">RelWithDebInfo artifact</Term>
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=RelWithDebInfo
+cmake --build build -j
+readelf -n build/server | grep "Build ID"
+file build/server
+```
+
+`-g` 生成 DWARF，optimization 会 inline/reorder/eliminate variables；strip 删除 binary 内 symbols/debug sections。production 可部署 stripped binary，但必须按 build-id 保存未剥离 symbol artifact。core、binary、symbols 和 source 必须来自同一次 build。
+
+<Callout type="trap" title="陷阱：本地用同一份源码重新编译就能分析线上 core">
+  compiler version、flags、link order、dependencies 或 commit 任一变化都可能改变 addresses/layout。应以 build-id/sha 校验部署 binary 与 symbol package，而不是事后“差不多重编一份”。
+</Callout>
+
+## 2.3 Visual Studio 管理与阅读大型源码
+
+Visual Studio solution/project 可用于 Windows build/debug，也可只作为 source navigator。导入开源项目时应以真实 CMake/compile database 为 source of truth；IDE 自建 include/macro 若与 CI 不同，会出现“IDE 能跳转/编译，服务器构建失败”。
+
+<Term def="记录每个 translation unit 的 compiler、working directory、flags 与 includes，供 IDE/indexer 重现真实解析环境的 JSON。">compile_commands database</Term>
+
+```bash
+cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+```
+
+源码阅读先从 process entry、event loop、ownership type 和 call sites 建图，再借 IDE Find All References/Class View；不要只沿文件树顺序阅读。
+
+## 2.4 GDB 启动、参数与停止条件
+
+<Term def="让 compiler 生成 source line、type、variable 与 machine address 对应信息的调试元数据。">debug information</Term>
+
+```bash
+gdb --args ./server --config server.conf --port 9000
+(gdb) show args
+(gdb) run
+```
+
+也可 `set args` 改参数；attach 用 `gdb -p PID`，core 用 `gdb ./server core`。attach 会暂停 process，生产环境先评估 watchdog/traffic impact。
+
+### break、tbreak、condition 与 commands
+
+<Term def="程序执行到 address/source/function 且条件成立时暂停的 debugger stop point。">breakpoint condition</Term>
+
+```text
+(gdb) break Session::on_read if fd_ == 42
+(gdb) tbreak main
+(gdb) info breakpoints
+(gdb) disable 3
+(gdb) commands 1
+> silent
+> printf "fd=%d\n", fd_
+> continue
+> end
+```
+
+tbreak 命中一次后自动删除；condition 缩小高频 handler；commands 可自动打印/continue，形成低干预 probe。breakpoint 添加失败时检查 function 是否 inline、symbol 名称/namespace、shared library 是否加载，以及 binary 是否带符号。
+
+### backtrace、frame、list、print 与 ptype
+
+<Term def="当前 thread 从最内层到入口的 call frames 列表，用于恢复 failure path。">call stack backtrace</Term>
+
+```text
+(gdb) backtrace full
+(gdb) frame 2
+(gdb) info args
+(gdb) info locals
+(gdb) list
+(gdb) print session
+(gdb) ptype Session
+```
+
+先固定 thread/frame，再读变量；否则你可能在错误 context 解释同名 local。`set print elements 0` 可完整显示 string/array，但巨大 buffer 会拖慢 GDB；先看 length/header，再按范围打印。
+
+## 2.5 执行控制：next、step、until、finish、return、jump
+
+<Term def="运行当前 source line 并停在同一 frame 的下一行，通常整体越过 function call。">next semantics</Term>
+
+<Term def="运行到下一条 source-mapped statement，可能进入被调 function。">step semantics</Term>
+
+continue 跑到 breakpoint/signal/watchpoint；finish 跑到当前 function return；until 运行到 source line 或跳出当前 loop；return 强制当前 frame 返回；jump 改 instruction pointer。后两者会跳过正常 side effects/cleanup，只适合实验假设，不能把修改后的行为当原始故障证据。
+
+```text
+(gdb) disassemble /m Session::on_read
+(gdb) info registers
+(gdb) x/32xb buffer.data()
+```
+
+高优化下 source line 不再一一对应 instructions，local 可能 `<optimized out>`。此时结合 disassembly、register、memory 和 inlining 信息，不把跳行误判为 debugger defect。
+
+## 2.6 watch、display、dir 与动态库源码
+
+<Term def="被监视 memory location 的 value 发生写入时暂停，常由有限 hardware debug registers 实现。">hardware watchpoint</Term>
+
+```text
+(gdb) watch session.state_
+(gdb) rwatch buffer.size_
+(gdb) display /x errno
+(gdb) dir /workspace/source
+(gdb) set substitute-path /build/agent/src /workspace/source
+```
+
+watchpoint 比在所有 writers 下断点更直接，但 object move/free 后 address 含义会变；范围过大可能退化 software watch 并极慢。dir/substitute-path 只修 source lookup，不会修 binary-symbol mismatch。
+
+## 2.7 多线程调试：先确认 selected thread
+
+<Term def="GDB 对一个 process 中各 execution threads 的编号、状态与当前 selected frame 的控制视图。">thread debug context</Term>
+
+```text
+(gdb) info threads
+(gdb) thread 7
+(gdb) thread apply all bt
+(gdb) set scheduler-locking step
+```
+
+`thread apply all bt` 是 deadlock 首证据：找哪些 threads 持锁/等待，沿 lock order 建 wait-for graph。scheduler-locking step 只在单步时限制其他 threads，能降低噪声也会改变 race/timing；复现 race 时应先保存无干预 evidence，再选择性冻结。
+
+<Term def="多个 threads 因持有并等待对方资源形成环、没有任何 thread 能继续的 wait-for 状态。">deadlock wait graph</Term>
+
+## 2.8 多进程、fork 与 signal
+
+<Term def="GDB 管理的一个 process execution entity；fork 后 parent/child 可成为不同 inferiors。">GDB inferior</Term>
+
+```text
+(gdb) set follow-fork-mode child
+(gdb) set detach-on-fork off
+(gdb) info inferiors
+(gdb) inferior 2
+(gdb) handle SIGPIPE stop print nopass
+```
+
+follow-fork-mode 决定 fork 后 selected parent/child；detach-on-fork off 保留两者供切换。调 Nginx 等 master/worker 时，先确认 breakpoint 属于哪个 process 与 module。
+
+<Term def="规定 signal 到达时 GDB 是否 stop、print，并是否继续传给 inferior 的策略。">signal handling policy</Term>
+
+服务器常故意处理 SIGPIPE/SIGTERM/SIGUSR1。若 GDB 吞掉或额外停止，行为会变化；用 handle 明确 stop/print/pass。调用 function、set variable、return/jump 都会改变 inferior，更改前记录 backtrace/register/memory。
+
+<Callout type="trap" title="陷阱：单步后问题消失，说明代码没问题">
+  breakpoint、scheduler-locking 与 print 都改变 timing/cache/lock interleaving，race 可能被观察行为掩盖。用 core、日志、rr/perf/eBPF 等低干预证据缩小窗口，再用 GDB 验证，不把不可复现当修复。
+</Callout>
+
+## 2.9 GDB TUI、cgdb 与 VisualGDB
+
+<Term def="GDB 内置的 source/assembly/register/cmd windows 布局，可在 CLI 中同步显示当前执行位置。">GDB TUI</Term>
+
+`layout src`、`layout asm`、`layout regs`、`focus cmd` 用于切换窗口；显示未刷新可 redraw。cgdb 提供更强 source navigation，但底层调试语义仍是 GDB。VisualGDB 把远端 Linux build/attach 与 Visual Studio UI 连接，适合团队已用 VS；必须校验 remote binary/symbol/source mapping，不把 GUI 绿色箭头当证据来源。
+
+<Term def="在不改变 inferior 的前提下，把重复的 breakpoint、logging、thread dump 或 pretty-print 流程封装成 GDB command。">custom GDB command</Term>
+
+`.gdbinit`/Python extensions 很有价值，但项目配置来自不可信目录时不要自动 source；调试脚本可以执行 code，需纳入版本与 review。
+
+<Callout type="trap" title="陷阱：GUI 调试器比 CLI 更准确">
+  TUI、cgdb、VisualGDB 只是不同前端。准确性取决于同一个 deployed binary、matching symbols、source mapping、inferior/thread context 与 stop policy；UI 无法补回缺失的 debug artifact chain。
+</Callout>
+
+## 三步建立可复现调试证据
+
+<Stepper>
+  <Step title="第一步：从构建 artifact 开始">
+    先预测 Debug、RelWithDebInfo、Release、strip 和 frame pointer 对 source/stack 的影响，再切换验证。保存 build-id、symbols 与 commit，而不是事故后临时重编。
+
+    <CseDebugArtifactLab />
+  </Step>
+  <Step title="第二步：为每条 GDB 命令写停止条件">
+    比较 next、step、continue、finish 与 watch，说明会停在哪里、frame 怎样移动。开启优化后观察 source stepping 为什么不再直观。
+
+    <CseGdbExecutionControlLab />
+  </Step>
+  <Step title="第三步：明确 process、thread 与 signal policy">
+    切换 follow-fork、detach、scheduler-locking 和 signal pass，核对当前 inferiors/threads。任何 backtrace 都必须带 context 才可解释。
+
+    <CseConcurrentDebugTargetLab />
+  </Step>
+</Stepper>
+
+## 小结
+
+- SSH/FTP 工具首先是远端证据边界；生产 artifact、symbols、source 与 build-id 必须匹配
+- Makefile/CMake 决定 targets、dependencies 与 compile flags；RelWithDebInfo 常兼顾线上相似性和可调试性
+- Visual Studio/IDE 应消费真实 CMake/compile_commands，不能另造一套宏与 include truth
+- GDB 先固定 stop condition、thread/frame，再读取 variables；next/step/continue/finish/watch 语义不同
+- optimized code 需结合 disassembly/register/memory，source line 和 locals 不保证一一保留
+- 多线程先采集 all-thread backtrace；多进程明确 follow-fork/detach/inferior；signals 明确 stop/print/pass
+- GDB TUI、cgdb、VisualGDB 是前端，不能替代 matching artifacts 与 context
+
+<Exercises>
+  1. **问题 1：线上 core 只能看到地址。** 团队有相同 tag 的本地源码，为什么仍不足，下一版交付链怎样修复？
+
+  <Answer question="postmortem 最少要保存哪些 artifact？">tag 不证明 compiler、flags、dependencies、link order 与 binary 相同。应为每次 build 保存 deployed binary 或 build-id、未 strip symbol file、source commit/submodules、toolchain/flags、dependency versions 与 startup config；core 用同一 binary/symbol 加载并校验 build-id。RelWithDebInfo 保留 DWARF，线上可 strip 但符号包必须归档。</Answer>
+
+  2. **问题 2：状态偶发被改坏。** 在所有 setters 下 break 与 watchpoint 相比如何选择，优化构建下还要注意什么？
+
+  <Answer question="怎样从写入事件反查真正 writer？">对稳定 address 的小字段先 hardware watch，命中时立即保存 selected thread、backtrace、frame/args；比遍历所有可能 writers 更直接。若 object move/free，重新绑定 address；hardware slots 有限且大范围可能极慢。优化会 inline/eliminate locals，结合 disassemble/register/memory 与 matching symbols解释，不把 optimized-out 当没有 value。</Answer>
+
+  3. **问题 3：master fork worker 后 breakpoint 不命中，SIGPIPE 又被 GDB 截停。** 写出诊断顺序。
+
+  <Answer question="fork 与 signal 调试先确认哪些状态？">先 set follow-fork-mode child 或按目标选 parent，detach-on-fork off 以保留双方；info inferiors/threads 并切到真正执行 handler 的 worker；确认 shared library 已加载与 symbols 匹配，再下 pending/function breakpoint。用 handle SIGPIPE 明确 stop/print/pass 或 nopass，保持与 production policy一致。最后记录 PID/inferior/thread/frame，避免在 master context 解释 worker data。</Answer>
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="debug artifact chain">source、flags、binary、symbols、build-id 与部署实例的追溯链。</GlossaryItem>
+  <GlossaryItem term="SSH workflow">加密远端 shell、port forwarding 与文件传输流程。</GlossaryItem>
+  <GlossaryItem term="remote debug context">host/user/cwd/env/limits/binary identity 组成的远端上下文。</GlossaryItem>
+  <GlossaryItem term="Makefile dependency graph">targets、dependencies 与 recipes 的增量构建关系。</GlossaryItem>
+  <GlossaryItem term="CMake target model">把 sources/options/includes 绑定到 target/config 的模型。</GlossaryItem>
+  <GlossaryItem term="RelWithDebInfo artifact">优化并保留 debug info 的交付构建。</GlossaryItem>
+  <GlossaryItem term="compile_commands database">每个 translation unit 的真实 compiler invocation 数据库。</GlossaryItem>
+  <GlossaryItem term="debug information">source/type/variable 与 machine address 的调试元数据。</GlossaryItem>
+  <GlossaryItem term="breakpoint condition">address/source/function 且条件成立时暂停的 stop point。</GlossaryItem>
+  <GlossaryItem term="call stack backtrace">selected thread 从当前 frame 到入口的调用链。</GlossaryItem>
+  <GlossaryItem term="next semantics">越过 call 并停在同一 frame 下一 source line 的执行控制。</GlossaryItem>
+  <GlossaryItem term="step semantics">运行到下一语句且可进入 callee 的执行控制。</GlossaryItem>
+  <GlossaryItem term="hardware watchpoint">目标 memory value 被访问/写入时由硬件触发暂停。</GlossaryItem>
+  <GlossaryItem term="thread debug context">selected process/thread/frame 及其他 threads 状态。</GlossaryItem>
+  <GlossaryItem term="deadlock wait graph">threads 持有并等待资源形成的环。</GlossaryItem>
+  <GlossaryItem term="GDB inferior">GDB 管理的一个 process execution entity。</GlossaryItem>
+  <GlossaryItem term="signal handling policy">signal 的 stop/print/pass 行为约定。</GlossaryItem>
+  <GlossaryItem term="GDB TUI">source/asm/register/cmd windows 的 GDB 内置界面。</GlossaryItem>
+  <GlossaryItem term="custom GDB command">版本化封装重复调试操作的命令或脚本。</GlossaryItem>
+</Glossary>
+
+<Attribution
+  adaptedFrom="C++服务器开发精髓，第2章 C++后端开发必备的工具和调试知识"
+  adaptedUrl="https://book.douban.com/subject/35491437/"
+/>

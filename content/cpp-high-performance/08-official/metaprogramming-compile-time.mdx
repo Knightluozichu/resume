@@ -1,0 +1,284 @@
+---
+title: "第8章：元编程与编译期求值"
+type: A
+section: C++ High Performance · Chapter 8
+order: 8
+description: 对齐第一版第8章 Metaprogramming and Compile-Time Evaluation：TMP与traits/detection、constexpr分支、异构容器，以及reflection、safe cast和compile-time hash。
+demo: false
+math: false
+sourceUrl: "https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
+draft: false
+---
+
+import {
+  ChpCompileTimeSelectionMap,
+  ChpDetectionTraitsMap,
+  ChpHeterogeneousReflectionMap,
+} from "@/components/mdx/cpp-high-performance/diagrams/metaprogramming-compile-time";
+
+<Objectives>
+
+- 能推导template metaprogramming、integral_constant、constexpr和if constexpr在何时产生编译期结果
+- 能实现type traits、decltype、enable_if与is_detected约束，并解释substitution和discarded branch
+- 能比较tuple、variadic template、any、variant的异构表示，再设计safe cast与compile-time hash边界
+
+</Objectives>
+
+## 从“哪些事实能在编译期证明”开始
+
+元编程不是把运行期代码机械搬到compiler，而是利用type、non-type template argument和constant expression生成类型、值或合法性证据。收益包括提前拒绝错误、消除不可能分支、针对具体类型生成代码；成本包括compile time、diagnostic complexity、binary size和过多实例化。
+
+<Term def="在template instantiation期间用类型、特化和常量递归计算类型或值，并据此生成程序结构的技术。">
+  template metaprogramming
+</Term>
+
+先预测一个条件是否真正只依赖compile-time input。配置来自network、file或用户操作时必须保留runtime path；type capability、array extent和literal通常可在编译期处理。`constexpr`允许编译期求值，不保证每次调用都发生在编译期；只有constant-evaluation context和满足规则的arguments才会得到常量结果。
+
+## template metaprogramming与static_assert
+
+传统TMP通过class template specialization递归。base specialization终止递归，primary template组合前一步结果。`static_assert`把computed predicate变成编译期contract，错误在实例化点暴露，而不是让无效状态流到runtime。
+
+```cpp
+template <std::size_t N>
+struct Factorial
+    : std::integral_constant<std::size_t, N * Factorial<N - 1>::value> {};
+
+template <>
+struct Factorial<0> : std::integral_constant<std::size_t, 1> {};
+
+static_assert(Factorial<5>::value == 120);
+```
+
+<Term def="把类型T和一个T类型编译期常量封装成type，同时提供value与转换接口的标准元编程积木。">
+  integral_constant
+</Term>
+
+TMP能生成specialized representation，但递归深度与实例化数量会增加compiler memory/time。type-dependent逻辑若可用普通`constexpr` function表达，后者通常更接近日常C++并产生更清晰diagnostic。metaprogram只应编码确实需要type-level结果的部分。
+
+<ChpCompileTimeSelectionMap />
+
+<Callout
+  type="trap"
+  title="陷阱：constexpr函数意味着所有调用都在编译期且没有运行时成本"
+>
+  `constexpr`表示函数可参与constant evaluation；传入runtime
+  value时仍可生成runtime
+  code。若必须证明结果是常量，可用于`static_assert`、non-type template
+  argument或`constexpr` variable，并检查compile-time输入与失败诊断。
+</Callout>
+
+## type traits与decltype读取类型事实
+
+type traits把type property编码为type/value，例如`is_integral_v<T>`、`is_trivially_copyable_v<T>`、`remove_reference_t<T>`。它们适合选择合法实现或优化路径，但标准trait只承诺定义中的property；trivially copyable不等于业务上可任意serialize，不同process/ABI仍有padding、endianness和version问题。
+
+<Term def="在编译期查询或转换类型属性的模板接口，通常提供value布尔结果或嵌套type。">
+  type trait
+</Term>
+
+`decltype(expr)`根据表达式形式和值类别得到type；对unparenthesized name与一般表达式规则不同，额外括号可能让结果变成reference。`std::declval<T>()`只在unevaluated context构造“假想表达式”，无需真的创建T，就能检查member operation的类型。
+
+```cpp
+template <class T, class = void>
+struct has_reserve : std::false_type {};
+
+template <class T>
+struct has_reserve<
+    T,
+    std::void_t<decltype(std::declval<T&>().reserve(std::size_t{}))>>
+    : std::true_type {};
+
+static_assert(has_reserve<std::vector<int>>::value);
+static_assert(!has_reserve<std::list<int>>::value);
+```
+
+trait结果只是expression well-formed证据，不证明semantic或complexity。检测到`reserve(n)`不保证调用后capacity恰等于n，也不保证操作便宜。capability-based generic code必须同时写清语义precondition。
+
+## enable_if、SFINAE与is_detected
+
+template argument substitution遇到某些依赖类型/表达式失败时，candidate可从overload set移除而不是让整个program立即报错，这就是SFINAE。`std::enable_if_t<condition, T>`把boolean condition映射为存在/不存在的type，常用于return type、template parameter或function parameter来约束candidate。
+
+<Term def="在模板替换阶段某个依赖表达式无效时，让候选从overload resolution中消失而非立刻形成hard error的规则。">
+  SFINAE
+</Term>
+
+detection idiom把`void_t + decltype`模式抽象为`is_detected<Operation, Args...>`，统一询问expression是否well-formed。它能检测member、operator或nested type，并可取得detected result type。diagnostic与overload ambiguity仍需设计：多个enable_if条件同时为true会产生竞争，fallback太宽也可能吞掉真正错误。
+
+<ChpDetectionTraitsMap />
+
+<Term def="用void_t、decltype和模板替换判断某个类型相关表达式是否well-formed的通用检测模式。">
+  is_detected
+</Term>
+
+现代concepts可更直接表达constraint，但理解traits/SFINAE仍有价值：第一版代码、标准库实现和C++17项目广泛使用它。升级时应保持同一semantic contract，不要仅把`enable_if`机械改写成名字更漂亮的constraint。
+
+## constexpr与if constexpr
+
+`constexpr` variable必须由constant expression初始化；`constexpr` function既能编译期也能运行期调用。C++17 `if constexpr`要求condition可在编译期决定，在template instantiation中discard不选择的branch，因此branch可以包含只对当前type集合另一侧合法的代码。
+
+```cpp
+template <class To, class From>
+constexpr To safe_numeric_cast(From value) {
+    static_assert(std::is_arithmetic_v<To> && std::is_arithmetic_v<From>);
+
+    if constexpr (std::is_same_v<To, From>) {
+        return value;
+    } else {
+        if (!std::in_range<To>(value)) {
+            throw std::range_error("numeric cast out of range");
+        }
+        return static_cast<To>(value);
+    }
+}
+```
+
+上例用C++20的`std::in_range`说明检查点；C++17项目需自行正确处理signed/unsigned和floating/integer边界，不能简单比较`numeric_limits<To>::min/max`后忽略conversion rules。`if constexpr`移除无效branch，但selected branch仍要正确，throw也使该调用在越界constant evaluation中失败。
+
+<Term def="由编译期常量条件选择并丢弃未选模板分支的C++17语句，使不同类型只实例化合法路径。">
+  if constexpr
+</Term>
+
+preprocessor `#if`在token进入compiler前裁剪，适合平台/build feature；runtime `if`两侧都需编译，条件运行时求值；`if constexpr`拥有type context并在instantiation时选择。三者作用阶段不同，不能因为都写“if”就互换。
+
+## heterogeneous containers的类型集合
+
+heterogeneous containers保存不同类型值，但“不同”有多种边界。`std::tuple<Ts...>`是compile-time fixed positions/types；variadic template可遍历parameter pack并为每个位置生成代码。`std::variant<Ts...>`是closed alternatives，一次只active一个type；`std::any`是open set type erasure，runtime才检查具体type。
+
+```cpp
+using Field = std::variant<std::int64_t, double, std::string>;
+
+std::string render(const Field& field) {
+    return std::visit(
+        [](const auto& value) {
+            using T = std::decay_t<decltype(value)>;
+            if constexpr (std::is_same_v<T, std::string>) return value;
+            else return std::to_string(value);
+        },
+        field);
+}
+```
+
+<Term def="参数数量和类型由模板实参包决定，可展开生成tuple操作、调用序列或类型列表的模板。">
+  variadic template
+</Term>
+
+tuple适合字段位置有静态意义的product type；variant适合closed sum type并支持exhaustive visitor；any适合plugin metadata等open extension boundary，但可能allocation且`any_cast`有runtime failure。不要用tuple index替代有名字的domain type，也不要用any绕开本可静态列举的alternatives。
+
+## reflection、safe cast与compile-time hash
+
+C++17没有通用standard reflection，可通过traits表、member pointer tuple、registration macro或generated metadata暴露有限结构。这样的“反射”只看到显式注册内容，需处理inheritance、private member、rename和schema version。compile-time metadata能生成serializer/dispatcher，但不能凭空读取任意class布局。
+
+<Term def="让程序取得类型名称、成员或注册元数据并据此生成通用操作的能力；在无标准反射时通常由显式traits或代码生成模拟。">
+  reflection
+</Term>
+
+safe cast的目标不是包装`static_cast`，而是在compile time拒绝不支持的type pair，并在runtime检查依赖value的range/tag。downcast可用`dynamic_cast`承接polymorphic RTTI contract；numeric cast检查range与signedness；variant extraction用`get_if`。不同cast风险不同，不应由一个unchecked模板统一隐藏。
+
+compile-time hash可把string literal在constant evaluation中变成integer ID，用于switch-like dispatch或registry key。hash不是unique proof：collision仍可能发生，外部输入还需比较原string或使用collision resolution；跨版本持久化也要固定algorithm与encoding。
+
+```cpp
+constexpr std::uint64_t fnv1a(std::string_view text) {
+    std::uint64_t value = 14695981039346656037ull;
+    for (const unsigned char byte : text) {
+        value ^= byte;
+        value *= 1099511628211ull;
+    }
+    return value;
+}
+
+static_assert(fnv1a("render") == fnv1a(std::string_view{"render"}));
+```
+
+<ChpHeterogeneousReflectionMap />
+
+compile-time hash把重复计算移出runtime并可参与case/table generation，但binary中仍需处理untrusted runtime key。若只用hash决定类型或权限，collision会变成correctness/security bug。生成registry时可`static_assert`已知keys互异，runtime仍保留secondary equality。
+
+<Callout type="trap" title="陷阱：编译期hash等于零碰撞的类型ID">
+  固定宽度hash必然存在碰撞可能；编译期只让已知literal提前计算，不提供数学唯一性。对封闭key集合可在build时检查重复，对外部key必须保留原值比较或bucket
+  collision处理，并固定版本/encoding。
+</Callout>
+
+## 编译期性能也要测量
+
+每个template argument组合可能产生新instantiation，带来compile time、object file与instruction-cache成本。specialization有利于inline/vectorization，也可能code bloat。用compiler time trace、binary size、symbol map和runtime profile共同判断；把type-independent核心移到non-template function、限制instantiation set或explicit instantiation都是可选手段。
+
+metaprogram的错误成本还包括diagnostic。把低层substitution failure包在named trait/concept后，用static_assert给出domain message；为unsupported type写negative compile tests。可维护性不是性能之外的问题，因为难以验证的元程序更容易留下隐藏runtime fallback或实例化爆炸。
+
+## 第8章实验协议
+
+1. 分别用TMP recursion、constexpr function计算同一常量，比较diagnostic和compile trace。
+2. 为traits/detection覆盖有member、无member、private/incompatible signature与proxy return。
+3. 用enable_if构造两个候选，验证条件互斥并保留明确fallback error。
+4. 对if constexpr的两种type实例化，确认discarded branch可含另一侧专属operation。
+5. 比较tuple、variant、any的object size、visit/cast、allocation与failure path。
+6. 为safe numeric cast覆盖signed/unsigned、boundary、NaN、fraction与constant evaluation。
+7. 对compile-time hash的closed keys做collision static check，runtime key保留equality验证。
+8. 扩大template type组合，记录compile time、binary size、hot code与runtime收益。
+
+## 小结
+
+- template metaprogramming在instantiation期间计算type/value，static_assert把结果变成contract
+- integral_constant和type traits把编译期值/类型事实统一成可组合接口
+- decltype、void_t、enable_if与is_detected判断expression是否well-formed，但不证明语义
+- constexpr允许常量求值；if constexpr按type/value条件丢弃未选实例化分支
+- tuple/variadic表示静态异构product，variant表示closed alternatives，any表示open runtime type set
+- C++17 reflection依赖显式metadata；safe cast必须匹配numeric、RTTI或variant风险
+- compile-time hash仍会碰撞，外部key必须保留collision resolution
+- 编译期工作也消耗compile time、binary size和diagnostic预算
+
+<Attribution
+  adaptedFrom="C++ High Performance, First Edition, Chapter 8: Metaprogramming and Compile-Time Evaluation"
+  adaptedUrl="https://www.packtpub.com/en-ID/product/c-high-performance-9781787120952/chapter/preface-pref/section/what-this-book-covers-preflvl1sec03"
+/>
+
+<Glossary>
+  <GlossaryItem term="template metaprogramming">
+    在模板实例化期间计算类型、值和程序结构。
+  </GlossaryItem>
+  <GlossaryItem term="integral_constant">
+    把编译期常量和值类型封装成type的标准积木。
+  </GlossaryItem>
+  <GlossaryItem term="type trait">
+    编译期查询或转换类型属性的模板接口。
+  </GlossaryItem>
+  <GlossaryItem term="SFINAE">
+    替换失败时移除模板候选而非立即hard error的规则。
+  </GlossaryItem>
+  <GlossaryItem term="is_detected">
+    判断依赖表达式是否well-formed的detection idiom。
+  </GlossaryItem>
+  <GlossaryItem term="if constexpr">
+    按编译期条件丢弃未选实例化分支的语句。
+  </GlossaryItem>
+  <GlossaryItem term="variadic template">
+    接受并展开任意数量类型或值参数包的模板。
+  </GlossaryItem>
+  <GlossaryItem term="reflection">
+    通过标准或显式metadata取得类型结构的能力。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：has_reserve为true后能否直接假定reserve(n)不分配且capacity等于n？** 区分表达式检测与语义。
+
+<Answer question="detection idiom究竟证明了什么？">
+  decltype/void_t只证明给定表达式在substitution
+  context中well-formed，并可得到return
+  type；不证明复杂度、postcondition或异常。generic
+  function还需写明reserve-like语义，必要时限制已知container或接受policy。测试vector等目标类型的capacity至少达到请求、allocation行为与异常，同时保留无reserve类型的合法fallback。
+</Answer>
+
+2. **问题 2：设计支持signed/unsigned integral types的safe cast。** 说明compile-time与runtime检查边界。
+
+<Answer question="如何避免比较本身先发生错误转换？">
+  compile
+  time用traits限制To/From为支持的integral集合，并按same-signedness、signed-to-unsigned、unsigned-to-signed分别选择if
+  constexpr分支；在安全common
+  representation中检查negative和max，再cast。constant input越界应让constant
+  evaluation失败，runtime
+  input则返回optional/expected或throw。覆盖min/max、-1、0和目标边界，不用先把value转成To再检查。
+</Answer>
+
+3. **问题 3：用compile-time hash构建命令dispatcher时怎样处理collision和版本？** 同时考虑封闭literal与外部输入。
+
+  <Answer question="hash何时只是加速索引？">对编译期已知commands生成hash table并static_assert所有已知pair不碰撞；固定algorithm、byte encoding和version。runtime输入先hash定位bucket，再比较原command string确认，碰撞走同bucket或error，不能只按integer执行权限操作。benchmark比较runtime hashing、lookup与string comparison；若命令集很小，普通sorted table可能更简单且足够快。</Answer>
+</Exercises>

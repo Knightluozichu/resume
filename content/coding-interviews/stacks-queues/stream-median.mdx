@@ -1,255 +1,339 @@
 ---
-title: 数据流中的中位数
+title: "面试题41：数据流中的中位数"
 type: C
-section: 栈和队列
-order: 3
-description: 流式插入数据并随时查询中位数。
+section: "第5章 优化时间和空间效率"
+order: 45
+description: "以最大堆保存较小一半、最小堆保存较大一半，由插入前的奇偶性决定目标堆，并在O(log n)插入后O(1)读取中位数。"
 demo: true
 math: false
-sourceUrl: https://github.com/zhedahht/CodingInterviewChinese2
+sourceUrl: "https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/41_StreamMedian/StreamMedian.cpp"
 draft: false
 ---
 
-{/* 知识点清单：上半区最大堆、下半区最小堆、分治平衡；原书章节：面试题41。 */}
+import { StreamMedianHeapInvariantDiagram, StreamMedianInsertionLab, StreamMedianRoutingDiagram, StreamMedianContractDiagram, StreamMedianOfficialCaseLab } from "@/components/mdx/coding-interviews/diagrams/stream-median";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能描述“左大右小”堆划分的核心不变量。
-- 能保持两个堆大小差不超过 1。
-- 能写 C++ 与 TypeScript 的数据流中位数结构。
+- 能解释双堆为何只需暴露两个根节点就能得到中位数
+- 能计算作者九次连续插入后的堆边界与中位数
+- 能实现由总数奇偶驱动的跨堆插入和边界转移
+- 能分析模板除法、加法溢出、空流异常与并发查询风险
+- 能设计覆盖作者十个检查时点及随机参考排序的测试
 
 </Objectives>
 
-## 直觉引入
+## 从“中间两项才重要”开始
 
-中位数要在有序序列中间附近。可以不维护完整排序，只维持一个分界：
+先预测：数字5、2、3、4依次到来。每次都重新排序能得到中位数，但会重复处理已经排好的大量关系。真正需要长期维护的只有一条分界：较小一半的最大值，以及较大一半的最小值。
 
-- 左边（`maxHeap`）放较小的一半，根是最大元素；
-- 右边（`minHeap`）放较大的一半，根是最小元素。
+作者用两个vector配合标准堆算法实现“**数据流中的中位数**”。源码变量 `max` 是最大堆，保存较小一半；变量 `min` 是最小堆，保存较大一半。名称按堆顶性质而不是数值区间命名，读反这两个变量会把奇数中位数放错边。
 
-## 算法思路
+<StreamMedianHeapInvariantDiagram />
 
-1. 新值 `x`：若 `x <= maxHeap.top()`，放入 `maxHeap`，否则放入 `minHeap`。
-2. 平衡两个堆大小：`maxHeap.size()` 与 `minHeap.size()` 相差最多 1。
-3. 偶数总数时中位数是两个根平均；奇数时是 `maxHeap` 根。
+## 三条必须同时成立的不变量
 
-<StreamStateDiagram />
+第一条是顺序边界：最大堆保存较小一半，根 `max[0]` 是<Term def="较小一半中最大的元素，也是偶数中位数的左边界。">下半最大值</Term>；最小堆保存较大一半，根 `min[0]` 是<Term def="较大一半中最小的元素，也是奇数中位数和偶数右边界。">上半最小值</Term>。所有下半元素都不大于所有上半元素。
 
-## 思考引导
+第二条是数量平衡：**两个堆大小差不超过1**。作者进一步固定方向，min的大小只能等于max，或比max多1。因此总数为奇数时，多出来的那项永远在min，中位数就是min根；总数为偶数时两堆等大，中位数是两个根的平均。
 
-### 1) 先问问题，不先找平均
-中位数是秩统计，不是平均值。先定义 “左边有多少数”“右边有多少数”，再考虑取值。
+第三条是元素守恒：每个输入恰好留在一个堆中。跨堆调整只能移动边界元素，不能复制或丢失。三条合起来，两个堆根节点就夹住全体数据的中点。
 
-### 2) 识别不变式
-`左堆最大值 <= 右堆最小值`，且堆大小差不超过 1。这是每次插入后需要恢复的结构不变式。
+作者这种<Term def="偶数插入前让新项最终进入min，奇数插入前让新项最终进入max，从而固定上半堆可多一个。">奇偶配额</Term>与“让最大堆多一个”的常见写法都可以正确，但查询规则必须与配额方向一致。旧页采用另一方向，却声称是在还原作者，这是需要纠正的。
 
-### 3) 为什么它一定成立
-中位数定义由顺序决定。两堆把全体划分为“低半边”和“高半边”，可在平衡后直接读出中位。
+## 插入前为偶数：目标是最小堆
 
-### 4) 常见误区
-插入后不平衡会使中位数偏移；有些实现忽略了奇偶长度差，读值规则乱掉。
+当当前总数为偶数，两堆等大。插入后总数变奇数，作者要求min多一个，所以新元素最终必须进入min。
 
-### 5) 你能找到一个反例吗
-插入序列 1,2,3,4 后若每次都把新值入左堆再简单交换，可能破坏堆序。
+若num不小于max根，它本来就属于上半区，直接push到min。若num小于max根，它属于下半区：先push进max，新的max根就是下半区最大边界；再pop这个根，把它作为num推入min。这样较小的新值留在max，原边界被提升到min。
 
-### 6) 迁移到下一题
-在线监控分位数、本地流指标估计都先建“上下分桶/堆”模型，再决定是否近似优化。
-## 代码对照
+这个“先进入正确数值半区，再把边界送往配额目标堆”的动作称为<Term def="新值落入非目标半区时，弹出该堆靠近中位数的根并送到另一堆。">边界转移</Term>。一次转移同时恢复顺序和数量，不需要反复交换。
 
-<CodeTabs>
-  <Tab label="C++">
+## 插入前为奇数：目标是最大堆
+
+此时min比max多一个。插入后总数变偶数，两堆必须等大，所以新元素最终进入max。
+
+若num不大于min根，它属于下半区，直接push到max。若num大于min根，它属于上半区：先push到min，再弹出min根送入max。较大的新值留在上半区，原上半最小值下降为新的下半最大值。
+
+<StreamMedianRoutingDiagram />
+
 ```cpp
-#include <queue>
-#include <vector>
+#include <algorithm>
 #include <functional>
+#include <vector>
 
-class MedianFinder {
+template <typename T>
+class DynamicArray {
 public:
-    void addNum(int num) {
-        if (maxHeap.empty() || num <= maxHeap.top()) {
-            maxHeap.push(num);
-        } else {
-            minHeap.push(num);
-        }
+    void Insert(T num) {
+        if (((min.size() + max.size()) & 1) == 0) {
+            if (max.size() > 0 && num < max[0]) {
+                max.push_back(num);
+                std::push_heap(
+                    max.begin(), max.end(),
+                    std::less<T>());
 
-        if ((int)maxHeap.size() > (int)minHeap.size() + 1) {
-            minHeap.push(maxHeap.top());
-            maxHeap.pop();
-        } else if ((int)minHeap.size() > (int)maxHeap.size()) {
-            maxHeap.push(minHeap.top());
-            minHeap.pop();
+                num = max[0];
+                std::pop_heap(
+                    max.begin(), max.end(),
+                    std::less<T>());
+                max.pop_back();
+            }
+
+            min.push_back(num);
+            std::push_heap(
+                min.begin(), min.end(),
+                std::greater<T>());
+        } else {
+            if (min.size() > 0 && min[0] < num) {
+                min.push_back(num);
+                std::push_heap(
+                    min.begin(), min.end(),
+                    std::greater<T>());
+
+                num = min[0];
+                std::pop_heap(
+                    min.begin(), min.end(),
+                    std::greater<T>());
+                min.pop_back();
+            }
+
+            max.push_back(num);
+            std::push_heap(
+                max.begin(), max.end(),
+                std::less<T>());
         }
     }
 
-    double findMedian() const {
-        if (maxHeap.size() == minHeap.size()) {
-            return (maxHeap.top() + minHeap.top()) / 2.0;
+    T GetMedian() {
+        const int size =
+            static_cast<int>(min.size() + max.size());
+        if (size == 0) {
+            throw std::exception(
+                "No numbers are available");
         }
-        return maxHeap.top();
+
+        if ((size & 1) == 1) {
+            return min[0];
+        }
+        return (min[0] + max[0]) / 2;
     }
 
 private:
-    std::priority_queue<int> maxHeap;
-    std::priority_queue<int, std::vector<int>, std::greater<int>> minHeap;
+    std::vector<T> min;
+    std::vector<T> max;
 };
 ```
-  </Tab>
-  <Tab label="TypeScript">
-```typescript
-class MaxHeap {
-    private data: number[] = [];
 
-    get size(): number {
-        return this.data.length;
-    }
+上面忠实保留作者结构与分支。`push_heap`要求加入的新元素先放到vector尾部；`pop_heap`把根交换到尾部，再由 `pop_back` 真正删除。比较器 `less` 产生最大堆，`greater` 产生最小堆。
 
-    peek(): number {
-        return this.data[0];
-    }
+<Callout type="trap" title="只把值推入目标堆，再按大小随便搬根">
+如果较小值直接进入上半最小堆，可能让min根小于max根，顺序边界立即破坏。作者先按数值归属放堆，再移动靠近中位数的根，才能同时满足边界与配额。
+</Callout>
 
-    push(v: number): void {
-        this.data.push(v);
-        this.siftUp(this.data.length - 1);
-    }
+## 逐次回放作者序列
 
-    pop(): number {
-        const top = this.data[0];
-        const last = this.data.pop() as number;
+作者用 `DynamicArray<double>`，依次插入5、2、3、4、1、6、7、0、8。交互图按数值边界展示两半，不声称是vector内部唯一堆排列；堆只保证根和父子关系，兄弟顺序可以不同。
 
-        if (this.data.length > 0) {
-            this.data[0] = last;
-            this.siftDown(0);
-        }
+<StreamMedianInsertionLab />
 
-        return top;
-    }
+插入5后min为5，奇数中位数5。插入2后max根2、min根5，平均3.5。插入3时两堆原本等大，3直接进入min并成为根，中位数3。
 
-    private siftUp(idx: number): void {
-        let i = idx;
-        while (i > 0) {
-            const parent = (i - 1) >> 1;
-            if (this.data[parent] >= this.data[i]) {
-                break;
-            }
-            [this.data[parent], this.data[i]] = [this.data[i], this.data[parent]];
-            i = parent;
-        }
-    }
+插入4前总数为3，4大于min根3，于是4先进入min，再把根3转移到max，两个根是3与4，中位数3.5。插入1前两堆等大，1小于max根3，于是1先进入max，再把根3转移到min，中位数回到3。
 
-    private siftDown(idx: number): void {
-        let i = idx;
-        while (true) {
-            let largest = i;
-            const left = i * 2 + 1;
-            const right = left + 1;
+余下6、7、0、8重复相同规则，中位数依次为3.5、4、3.5、4。这个过程说明堆内不必完整排序，每次只维护边界根。
 
-            if (left < this.data.length && this.data[left] > this.data[largest]) {
-                largest = left;
-            }
-            if (right < this.data.length && this.data[right] > this.data[largest]) {
-                largest = right;
-            }
-            if (largest === i) break;
-            [this.data[i], this.data[largest]] = [this.data[largest], this.data[i]];
-            i = largest;
-        }
-    }
-}
+## 插入与查询复杂度
 
-class MedianFinder {
-    private maxHeap = new MaxHeap();
-    private minHeap = new MinHeap();
+每次插入最多向一个堆push，再从该堆pop并向另一堆push，常数次堆操作均为O(log n)，所以插入O(log n)。每个数字永久保存在一个堆中，空间O(n)。
 
-    addNum(num: number): void {
-        if (this.maxHeap.size === 0 || num <= this.maxHeap.peek()) {
-            this.maxHeap.push(num);
+查询只读一个或两个根，时间O(1)。这正是<Term def="数据逐项到达时持续维护结构，使任意插入后都能立即查询当前中位数。">在线中位数</Term>结构相对“查询时排序”的优势：维护成本分摊到每次写入，读取不再扫描历史数据。
+
+若写入远多于查询，可以把所有值追加到数组，在查询时用选择算法；若每次写入后都要查询，双堆更稳定。算法选择取决于写查比例，不是见到中位数就固定用堆。
+
+## 模板名不等于任意类型都正确
+
+<StreamMedianContractDiagram />
+
+作者官方实例是double，所以偶数中位数保留0.5。若实例化为int，`(min[0] + max[0]) / 2` 使用整数除法，5与2会得到3而不是3.5；若T是大整数，先相加还可能溢出。模板语法通过不代表统计语义自动泛化。
+
+空流查询抛异常。作者源码的 `std::exception("...")` 构造依赖Visual C++实现，标准可移植C++中 `std::exception` 没有消息字符串构造；可用 `std::logic_error`，或返回optional。
+
+<Callout type="trap" title="用整数T直接计算偶数中位数">
+模板返回T会强制结果落回输入类型。即使堆维护完全正确，2与5也可能得到截断的3；中位数返回类型应独立于元素类型，并在相加前提升精度。
+</Callout>
+
+现代接口可固定存储double并返回optional，或为整数输入以long double计算平均。priority_queue直接封装堆操作，减少比较器与push_heap调用配对错误。
+
+```cpp
+#include <functional>
+#include <optional>
+#include <queue>
+#include <vector>
+
+class MedianStream {
+public:
+    void insert(long long value) {
+        if (upper.empty() ||
+            value >= upper.top()) {
+            upper.push(value);
         } else {
-            this.minHeap.push(num);
+            lower.push(value);
         }
 
-        if (this.maxHeap.size > this.minHeap.size + 1) {
-            this.minHeap.push(this.maxHeap.pop());
-        } else if (this.minHeap.size > this.maxHeap.size) {
-            this.maxHeap.push(this.minHeap.pop());
+        if (upper.size() < lower.size()) {
+            upper.push(lower.top());
+            lower.pop();
+        } else if (
+            upper.size() > lower.size() + 1) {
+            lower.push(upper.top());
+            upper.pop();
         }
     }
 
-    findMedian(): number {
-        if (this.maxHeap.size === this.minHeap.size) {
-            return (this.maxHeap.peek() + this.minHeap.peek()) / 2;
+    std::optional<long double> median() const {
+        if (upper.empty()) {
+            return std::nullopt;
         }
-        return this.maxHeap.peek();
+        if (upper.size() != lower.size()) {
+            return static_cast<long double>(
+                upper.top());
+        }
+        return (
+            static_cast<long double>(upper.top()) +
+            static_cast<long double>(lower.top())
+        ) / 2.0L;
     }
+
+private:
+    std::priority_queue<long long> lower;
+    std::priority_queue<
+        long long,
+        std::vector<long long>,
+        std::greater<long long>> upper;
+};
+```
+
+这版仍让上半最小堆多一个，但采用“先按边界入堆，再按数量搬根”的等价写法。它可能比作者奇偶分支多一次尺寸判断，语义更直观；两者都要用不变量测试证明。
+
+## 作者十个检查时点
+
+源码先对空结构调用GetMedian，期望捕获exception。随后每插入一个数字就调用Test，以绝对误差小于0.0000001比较double结果：
+
+1. 空流查询抛异常。
+2. 插入5，中位数5。
+3. 再插入2，中位数3.5。
+4. 再插入3，中位数3。
+5. 再插入4，中位数3.5。
+6. 再插入1，中位数3。
+7. 再插入6，中位数3.5。
+8. 再插入7，中位数4。
+9. 再插入0，中位数3.5。
+10. 再插入8，中位数4。
+
+<StreamMedianOfficialCaseLab />
+
+源码中的显示名称Test5与Test6顺序交换：插入4调用 `Test("Test6")`，插入1调用 `Test("Test5")`。这只是标签问题，执行顺序与期望值如上；重构测试时应按插入步编号，避免日志误导。
+
+官方序列覆盖新值落在两侧和多个奇偶切换，但没有重复值、负数、极值、整数模板、NaN、无穷大或并发访问。随机属性测试可在每次插入后复制前缀、排序并计算参考中位数，再比较双堆结果；同时检查两个堆大小和根边界。
+
+```cpp
+#include <algorithm>
+#include <cassert>
+#include <vector>
+
+long double referenceMedian(
+    std::vector<long long> values) {
+    std::sort(values.begin(), values.end());
+    const std::size_t middle = values.size() / 2;
+    if ((values.size() & 1U) == 1U) {
+        return values[middle];
+    }
+    return (
+        static_cast<long double>(values[middle - 1]) +
+        static_cast<long double>(values[middle])
+    ) / 2.0L;
 }
 
-class MinHeap {
-    private data: number[] = [];
+void testMedianStream() {
+    MedianStream stream;
+    assert(!stream.median().has_value());
 
-    get size(): number {
-        return this.data.length;
-    }
-
-    peek(): number {
-        return this.data[0];
-    }
-
-    push(v: number): void {
-        this.data.push(v);
-        this.siftUp(this.data.length - 1);
-    }
-
-    pop(): number {
-        const top = this.data[0];
-        const last = this.data.pop() as number;
-
-        if (this.data.length > 0) {
-            this.data[0] = last;
-            this.siftDown(0);
-        }
-
-        return top;
-    }
-
-    private siftUp(idx: number): void {
-        let i = idx;
-        while (i > 0) {
-            const parent = (i - 1) >> 1;
-            if (this.data[parent] <= this.data[i]) {
-                break;
-            }
-            [this.data[parent], this.data[i]] = [this.data[i], this.data[parent]];
-            i = parent;
-        }
-    }
-
-    private siftDown(idx: number): void {
-        let i = idx;
-        while (true) {
-            let smallest = i;
-            const left = i * 2 + 1;
-            const right = left + 1;
-
-            if (left < this.data.length && this.data[left] < this.data[smallest]) {
-                smallest = left;
-            }
-            if (right < this.data.length && this.data[right] < this.data[smallest]) {
-                smallest = right;
-            }
-            if (smallest === i) break;
-            [this.data[i], this.data[smallest]] = [this.data[smallest], this.data[i]];
-            i = smallest;
-        }
+    std::vector<long long> prefix;
+    for (long long value :
+         {5LL,2LL,3LL,4LL,1LL,6LL,7LL,0LL,8LL}) {
+        prefix.push_back(value);
+        stream.insert(value);
+        assert(stream.median().value() ==
+               referenceMedian(prefix));
     }
 }
 ```
-  </Tab>
-</CodeTabs>
 
-<Callout type="tip">
-  <strong>备注：</strong> 示例里为了突出流程，TypeScript 的堆实现可复用通用二叉堆实现；上生产环境建议直接复用已验证的堆组件而不是重复手写。
-</Callout>
+对重复值可测2、2、2；对极值可测long long最大值和最小值，确认先转换long double再相加不会整数溢出。若输入允许NaN，普通大小比较不形成全序，必须在入口拒绝或定义NaN放置策略。
+
+## 服务化与并发边界
+
+作者类没有同步。插入会修改两个vector并执行多步转移，查询若并发读取，可能在“已从一堆弹出、尚未推入另一堆”的瞬间观察到不平衡，甚至与vector扩容形成数据竞争。最简单的工程方案是插入和查询共享同一互斥锁；读多写少时可在写锁内发布中位数快照，让查询只读原子快照。
+
+分布式分片不能只把每个分片的中位数再求中位数，那会忽略分片大小和分布。精确全局中位数需要可合并的秩结构、完整数据或协调选择；双堆状态本身不能仅凭四个根无损合并。
+
+删除旧数据形成滑动窗口时，priority_queue不支持删除任意过期项。可用双堆加延迟删除哈希表，或两个multiset维护边界；这已是另一问题，必须新增“过期元素何时真正清除”的不变量。
+
+持久化时，若只保存两个根就无法恢复后续插入；要保存两个堆全部元素或重放事件日志。恢复后还要校验元素总数、数量差和根边界，防止损坏快照把错误中位数静默带入服务。
+
+<Stepper>
+  <Step title="把流拆成较小半和较大半"><StreamMedianHeapInvariantDiagram />最大堆保存较小一半，最小堆保存较大一半。</Step>
+  <Step title="由插入前奇偶确定目标堆"><StreamMedianRoutingDiagram />偶数前最终进min，奇数前最终进max，必要时转移边界根。</Step>
+  <Step title="逐次核对根节点和中位数"><StreamMedianInsertionLab />回放5、2、3、4、1、6、7、0、8的全部状态。</Step>
+  <Step title="明确数值与空流契约"><StreamMedianContractDiagram />double测试正确不代表int模板、极值和并发场景自动安全。</Step>
+  <Step title="跑完十个作者检查时点"><StreamMedianOfficialCaseLab />先验证空流异常，再验证每次插入后的期望值。</Step>
+</Stepper>
+
+## 本章回顾
+
+1. 最大堆max保存较小一半，根是偶数中位数左边界。
+2. 最小堆min保存较大一半，根是奇数中位数或偶数右边界。
+3. 作者固定min数量等于max或多1，两个堆大小差不超过1。
+4. 插入前总数为偶数时新值最终进min，奇数时最终进max。
+5. 新值越过边界时先入所属半区，再把根转移到目标堆。
+6. 插入O(log n)、查询O(1)、存储O(n)。
+7. 作者用double；int模板会截断偶数中位数，极值相加可能溢出。
+8. 官方十个检查点包含空流和九次连续插入，但缺少随机与并发验证。
+
+<Exercises>
+
+**问题 1：作者插入5后，为什么它在min而不是max？**
+
+<Answer>插入前总数0为偶数，作者规定新值最终进入上半最小堆min，使奇数总量时min比max多1；因此中位数直接读取min[0]。</Answer>
+
+**问题 2：已有max根2、min根3与5时插入4，怎样转移？**
+
+<Answer>插入前总数3为奇数，新值最终要进max以恢复等大；但4大于min根3，先把4推入min，再弹出新的min根3送入max。结果下半边界3、上半边界4，中位数3.5。</Answer>
+
+**问题 3：为什么两个堆大小差不超过1仍不足以证明正确？**
+
+<Answer>还必须保证顺序边界。若max里有100而min里有1，即使数量相等，两个根平均也不是中位数；所有下半元素都不大于所有上半元素才行。</Answer>
+
+**问题 4：怎样避免最大和最小long long求偶数中位数时溢出？**
+
+<Answer>在加法前分别转换到更宽的long double，再相加除以2；不要先以long long相加后再转换，因为溢出已经发生。</Answer>
+
+</Exercises>
+
+## 名词解释
+
+<Glossary>
+  <GlossaryItem term="下半最大值">较小一半的最大元素，由最大堆根提供。</GlossaryItem>
+  <GlossaryItem term="上半最小值">较大一半的最小元素，由最小堆根提供。</GlossaryItem>
+  <GlossaryItem term="奇偶配额">按当前总数奇偶决定新项最终进入哪个堆的数量规则。</GlossaryItem>
+  <GlossaryItem term="边界转移">新值越界时在所属堆插入，再把靠近中位数的根移到目标堆。</GlossaryItem>
+  <GlossaryItem term="在线中位数">每次数据到达后无需重排全部历史即可立即查询的中位数。</GlossaryItem>
+</Glossary>
 
 <Attribution
-  adaptedFrom="Coding Interviews, Second Edition"
-  adaptedUrl="https://github.com/zhedahht/CodingInterviewChinese2"
+  name="《剑指Offer：名企面试官精讲典型编程题（第2版）》面试题41"
+  href="https://github.com/zhedahht/CodingInterviewChinese2/blob/2d6eb6d9127d1ad728ba60bb25bc5a5e91e519ac/41_StreamMedian/StreamMedian.cpp"
+  author="何海涛"
+  license="BSD 许可示例代码；本章为独立重构讲解"
 />

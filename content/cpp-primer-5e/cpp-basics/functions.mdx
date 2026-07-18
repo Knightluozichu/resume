@@ -6,9 +6,11 @@ order: 6
 description: 掌握函数的定义、调用、参数传递（值/引用/指针/const）、返回类型、重载与内联——把代码组织成可复用的模块
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/c-plus-plus-primer-9780321714114"
 draft: false
 ---
+
+import { CppFunctionContractDiagram } from "@/components/mdx/cpp-primer-5e/diagrams/functions";
 
 {/* C 实战型（C++ Primer §6 改编）：函数定义/调用、参数传递（值/引用/指针/const）、数组形参、重载、内联/constexpr。
    重心在交互 Demo Stepper(§5)+ 代码对照(§6)，概念讲解(§3)压缩，数学省略(math:false)。
@@ -26,14 +28,14 @@ draft: false
 <Objectives>
 
 - 能正确定义和调用一个函数——写出返回类型、形参列表和函数体，并能解释实参到形参的值传递过程
-- 能根据场景正确选择值传递、引用传递或 const 引用传递，并通过重载为同一个操作提供不同参数类型的版本
+- 能比较并选择值传递、引用传递或 const 引用传递，并通过重载为同一个操作提供不同参数类型的版本
 - 能回答：`void reset(int &x) { x = 0; }` 和 `void reset(int x) { x = 0; }` 在调用 `int a = 5; reset(a);` 之后，a 的值分别是什么？为什么？
 
 </Objectives>
 
 {/* 2. 直觉引入（spec §二）：≤3 段 × ≤120 字；零术语；类比用①空间与地图——函数像加工车间，你把原材料送进去，拿到成品出来。 */}
 
-## 你的代码需要一个「加工车间」
+## 直觉：你的代码需要一个“加工车间”
 
 到目前为止你写的程序都可以装在一个 `main()` 里面——所有代码从上到下一口气跑完。但真实世界的软件不是这样的：一个程序可能有几千行甚至几百万行代码——如果全挤在一个大块里，你找不到哪段代码在干什么、也没法说「同样的逻辑别写两遍，下次直接调用」。
 
@@ -190,9 +192,9 @@ int main() {
 
 ## 特殊车间：内联函数和编译期函数
 
-普通的函数调用有开销——压栈、跳转、返回。对于特别短小的函数（比如一行 `return a + b`），调用开销可能比函数体本身还大。C++ 提供了两个机制让它变快：
+普通函数调用可能涉及参数传递、跳转与返回，但是否把函数体展开是优化器的决定。C++ 的 `inline` 首先是跨 translation unit 的 ODR/定义可见性机制，`constexpr` 则允许在常量表达式上下文中求值；二者都不承诺某种机器指令形态。
 
-<Term def="用 inline 关键字声明的函数——建议编译器在调用点直接展开函数体，省去 push/call/ret 的栈帧开销。inline 只是对编译器的建议而非强制命令——编译器可以拒绝内联复杂函数。现代编译器会自动内联简单函数，不写 inline 也可能被内联。inline 函数必须定义在头文件中（每个编译单元都要看到完整定义）。">内联函数（inline function）</Term>——**就是把车间拆了，加工工序直接搬到使用它的地方**。适合体积极小、调用频繁的工具函数。
+<Term def="允许同一函数定义出现在多个 translation units，只要各定义相同；编译器可选择是否在调用点展开，与关键字本身无强制关系。">内联函数（inline function）</Term>通常定义在头文件中。它消除的是跨 translation units 重复定义的 ODR 障碍，不是强制消除调用开销。
 
 <Term def="用 constexpr 关键字声明的函数——暗示编译器在编译期就能算出结果。要求函数体足够简单（C++11 只允许一条 return 语句，C++14 放宽了），返回值和所有形参都必须是字面值类型。如果所有实参都是常量，编译器在编译期直接算出结果——零运行时开销。如果实参中有变量，退化为普通函数在运行时执行。">constexpr 函数</Term>——**就是在工厂开工之前就把结果算好了**。适合需要在编译阶段就确定值的场景——比如数组大小、模板参数。
 
@@ -219,6 +221,39 @@ int main() {
 <Callout type="tip">
   inline 和 constexpr 可以组合：`constexpr` 函数隐式也是 `inline` 的——因为编译期求值和调用点展开都要求编译器能在当前编译单元看到函数定义。所以 constexpr 函数同样需要放在头文件里。现代 C++ 的趋势是：小工具函数优先用 constexpr 而非 inline——编译期求值比运行期内联更好。
 </Callout>
+
+## 官方 Chapter 6 的完整函数契约
+
+原书还要求 separate compilation、command-line options、varying parameters、复杂 return type、default arguments、debugging aids 与 pointers to functions。它们共同决定函数能否跨文件、跨调用形态稳定使用。
+
+<CppFunctionContractDiagram />
+
+<Term def="把声明放入头文件、定义放入源文件，并分别编译为目标文件后由链接器组合的组织方式。">分离式编译</Term>要求所有调用点看到相同 function declaration，且程序中 non-inline definition 只有一个。修改头文件通常需要重编译包含它的 translation units；只修改 `.cpp` implementation 可缩小重编译范围。Declaration 中 parameter names 可省略，但 return/parameter types、`constexpr` 等契约必须一致。
+
+<Term def="让函数接收数量可变的同类型实参；C++11 首选 initializer_list，省略号仅用于兼容特定低级接口。">可变形参</Term>包括 `std::initializer_list<T>` 和 ellipsis。前者元素类型统一、可安全范围遍历；`main(int argc, char* argv[])` 是固定的命令行参数接口，不是普通 variadic function。C 风格 `...` 丢失静态类型信息，应限制在兼容接口。
+
+<Term def="返回引用、指针或数组指针等需要额外声明语法和生命周期证明的返回形式。">复杂返回类型</Term>必须先证明对象在函数返回后仍存在。返回 local object 的 reference/pointer 会悬空；按值返回通常由 copy elision 或 move 高效完成。返回数组指针可用 type alias 或 trailing return：
+
+```cpp
+using Row = int[10];
+Row* chooseRow(int (&matrix)[4][10], std::size_t index);
+auto chooseRow2(int (&matrix)[4][10], std::size_t index) -> int (*)[10];
+```
+
+<Term def="在函数声明中为末尾形参提供的调用点默认值；调用省略对应实参时才使用，且同一作用域只指定一次。">默认实参</Term>必须从 parameter list 右侧连续提供。Default expression 在调用时求值，名字按 declaration 所在 scope 绑定；不要在后续 declaration 重复写同一默认值。`inline`、`constexpr`、`assert` 与 `NDEBUG` 则属于 specialized uses：`assert(expr)` 在未定义 `NDEBUG` 时检查条件，不能承载必须发生的 side effect。
+
+<Term def="保存具有特定返回类型和形参列表的函数地址，可作为参数传递、选择并通过指针间接调用。">函数指针</Term>类型由 return 与 parameter types 决定：
+
+```cpp
+bool shorter(const std::string&, const std::string&);
+using Compare = bool (*)(const std::string&, const std::string&);
+
+Compare comparator = shorter;
+bool result = comparator("alpha", "beta");
+void sortWords(std::vector<std::string>& words, Compare compare);
+```
+
+函数名在多数表达式中自动转换为 pointer。若名字 overloaded，目标 pointer type 可帮助选择唯一版本；否则要用 `static_cast` 明确。函数指针参数也可写成 function type，但形参会调整为 pointer type。
 
 {/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
 
@@ -370,7 +405,7 @@ int main() {
 }
 ```
 
-编译器根据实参类型自动选择匹配的版本。`print(42)` 里 42 是 `int` 字面值，选 `print(int)`。`print("hello")` 不行——`"hello"` 是 `const char[6]`，不会自动变成 `std::string`——需要显式转换或调 `print(std::string("hello"))`。这提示我们重载时要注意隐式转换的边界。
+编译器根据实参类型自动选择匹配的版本。`print(42)` 里 42 是 `int` 字面值，选 `print(int)`。`print("hello")` 可以经 `std::string` 的非 explicit constructor 做一次 user-defined conversion，匹配 `print(const std::string&)`；若同时存在更好的 `print(const char*)`，则后者会胜出。这提示我们重载时要比较完整 conversion sequence。
 
 ### 用 constexpr 在编译期算阶乘
 
@@ -454,11 +489,11 @@ int main() {
 - 参数传递有三种：值传递（改副本不动原值）、引用传递（改别名动原值）、const 引用（不拷贝只读）——90% 场景选 const T& 或 T&
 - 数组作为形参退化为指针——函数内部永远不知道数组长度，必须单独传 n——或用 `std::vector`/`std::array`
 - 函数重载允许同名函数经形参列表区分——编译器通过「候选→可行→最佳」三步匹配，无法唯一选出就是编译错误
-- inline 消除短函数调用开销、constexpr 让编译期算出结果——现代 C++ 优先考虑 constexpr
+- inline 主要解决头文件定义的 ODR 规则，不保证调用点展开；constexpr 在常量上下文中允许编译期求值
 
 <Exercises>
 
-**练习 1（改代码型）** 下面这段代码试图写一个函数 `doubleArray` 把数组里每个元素翻倍。但它有 bug——找出并写出修正后的代码。
+**问题 1（改代码型）** 下面这段代码试图写一个函数 `doubleArray` 把数组里每个元素翻倍。但它有 bug——找出并写出修正后的代码。
 
 ```cpp
 #include <iostream>
@@ -499,7 +534,7 @@ int main() {
 
 </Answer>
 
-**练习 2（独立实现题）** 设计并实现一个函数 `read_numbers`，从标准输入读取一组整数存进 `std::vector<int>` 返回。要求：(1) 读到非整数或 EOF 时停止——用 while 循环 (2) 返回 `vector<int>`（不是引用、不是用引用参数输出）(3) 在 main 中用范围 for 循环打印每个元素及其下标。提示：用 `while (std::cin >> val)` 判断是否成功读到数。
+**问题 2（独立实现题）** 设计并实现一个函数 `read_numbers`，从标准输入读取一组整数存进 `std::vector<int>` 返回。要求：(1) 读到非整数或 EOF 时停止——用 while 循环 (2) 返回 `vector<int>`（不是引用、不是用引用参数输出）(3) 在 main 中用范围 for 循环打印每个元素及其下标。提示：用 `while (std::cin >> val)` 判断是否成功读到数。
 
 <Answer>
 
@@ -525,15 +560,15 @@ int main() {
 }
 ```
 
-为什么返回 `vector<int>` 而不是用引用参数 `vector<int> &out`？因为返回值语义更清晰——调用方直接 `auto nums = read_numbers()` 就能用，不关心内部怎么构建。C++11 移动语义消除了「返回大对象拷贝」的顾虑——局部 vector 返回时内部指针直接移交给调用方，零拷贝。
+为什么返回 `vector<int>` 而不是用引用参数 `vector<int> &out`？因为返回值语义更清晰——调用方直接 `auto nums = read_numbers()` 就能用，不关心内部怎么构建。编译器通常进行 NRVO/copy elision；未消除时也可使用 `vector` 的 move constructor 转移资源，因此不应为害怕大对象返回而牺牲接口。
 
 </Answer>
 
-**练习 3（问答型）** 本章 §5 Stepper 演示了值传递——形参 x 是实参 3 的副本。如果把 `int add(int x, int y)` 改成 `int add(const int &x, const int &y)`，函数的调用栈会发生什么变化？形参 x 和 y 还会被「拷贝」吗？修改 x 在 const 引用下能通过编译吗？
+**问题 3（问答型）** 本章 §5 Stepper 演示了值传递——形参 x 是实参 3 的副本。如果把 `int add(int x, int y)` 改成 `int add(const int &x, const int &y)`，函数的抽象语义会发生什么变化？形参 x 和 y 还会被「拷贝」吗？修改 x 在 const 引用下能通过编译吗？
 
 <Answer>
 
-改成 `const int &x` 和 `const int &y` 后：① 形参 x 和 y 不再是实参的副本——它们直接引用调用方传入的 3 和 5 的临时对象。② 栈帧里不再分配两个 int 的存储空间——只存两个引用（各 8 字节）到临时对象。③ `x = 100` 之类修改代码编译失败——const 保证只读。④ 因为 `add` 不修改形参，用 const 引用传递更高效——省了两个 int 的拷贝（对 int 来说差别微乎其微，对大型对象是质的差别）。⑤ 但 `add` 的语义和返回值没有任何变化——8 照样输出到 main。这就是为什么「只读不拷」的形参应该用 const T&。
+改成 `const int &x` 和 `const int &y` 后，形参绑定到两个 literal 产生的临时 `const int` 对象，不再按值初始化独立 parameter object；`x = 100` 会因 const 编译失败，返回值仍是 8。具体是否占栈槽、引用大小多少属于 ABI/优化实现，语言不保证。对 `int` 这类小型 trivially copyable type，按值通常更简单且至少同样高效；`const T&` 的主要收益在大型、复制昂贵且只读的对象。
 </Answer>
 
 </Exercises>
@@ -569,15 +604,35 @@ int main() {
 </GlossaryItem>
 
 <GlossaryItem term="内联函数（inline function）">
-  用 `inline` 关键字声明的函数——建议编译器在调用点直接展开函数体，省去压栈/跳转/返回开销。`inline int max(int a, int b) { return a > b ? a : b; }`。inline 是请求而非命令——复杂函数可被编译器拒绝内联。必须定义在头文件中。详见本章「内联函数」一节。
+  可在多个 translation units 中出现相同定义的函数，通常定义在头文件。关键字不强制机器码在调用点展开；优化器可内联没有该关键字的函数，也可保留 inline 函数调用。
 </GlossaryItem>
 
 <GlossaryItem term="constexpr 函数">
   用 `constexpr` 声明的函数——当所有实参都是常量表达式时编译器在编译期就能算出结果。`constexpr int factorial(int n) { return n <= 1 ? 1 : n * factorial(n - 1); }` 可在编译期计算并用于数组大小等场景。如果实参中有变量则退化为普通运行时函数。constexpr 函数隐式是 inline 的。详见本章「constexpr 函数」一节的编译期与运行时对照示例。
 </GlossaryItem>
 
+<GlossaryItem term="分离式编译">
+  声明放头文件、定义放源文件，各 translation unit 独立编译为目标文件后再链接的组织方式；函数签名必须在所有使用处一致。
+</GlossaryItem>
+
+<GlossaryItem term="可变形参">
+  接收数量可变实参的机制；同类型集合优先使用 `initializer_list`，C 风格省略号因缺乏静态类型信息只用于必要兼容。
+</GlossaryItem>
+
+<GlossaryItem term="复杂返回类型">
+  返回引用、指针或数组指针等形式；除声明语法外，还必须证明被引用对象在函数返回后继续存活。
+</GlossaryItem>
+
+<GlossaryItem term="默认实参">
+  声明中为末尾形参提供的调用默认值；省略实参时在调用点使用，且同一作用域不能重复指定同一默认值。
+</GlossaryItem>
+
+<GlossaryItem term="函数指针">
+  保存特定函数类型地址的指针，可作为值传递并间接调用；overloaded function 需要目标类型帮助选择唯一版本。
+</GlossaryItem>
+
 </Glossary>
 
 {/* 9. 出处声明（spec §九）：sourceUrl 为空字符串（原创章节），Attribution 标签自动处理。 */}
 
-<Attribution />
+<Attribution adaptedFrom="C++ Primer, Fifth Edition, Chapter 6: Functions" adaptedUrl="https://www.informit.com/store/c-plus-plus-primer-9780321714114" />

@@ -1,120 +1,223 @@
 ---
-title: "高级 GI 技术"
+title: "混合全局光照算法"
 type: B
 section: "计算机图形学与渲染"
 order: 8
-description: "MLT、辐照度缓存、自适应采样——GI方法的进阶组合"
+description: "复刻第 7 章：final gathering、multipass、双向追踪、MLT、辐照度缓存、光子映射、instant radiosity 与 lightcuts"
 demo: true
 math: true
-sourceUrl: ""
+sourceUrl: "https://books.google.com/books?id=KodRAAAAMAAJ"
 draft: false
 ---
 
-import { GilAdvancedTechniquesDiagram } from "@/components/mdx/global-illumination/diagrams/gil-advanced-techniques";
+import { GilAdvancedTechniquesDiagram, GilBidirectionalMltDiagram, GilReuseHierarchyDiagram } from "@/components/mdx/global-illumination/diagrams/gil-advanced-techniques";
+import { GilStepFlowDiagram } from "@/components/mdx/global-illumination/diagrams/gil-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能解释Metropolis光线传输(MLT)的工作原理
-- 能描述辐照度缓存的空间插值策略
-- 能说出自适应采样如何分配采样预算
-- 能回答为什么现代渲染器混合多种GI技术？
+
+- 能描述第 7 章八类 hybrid algorithm 各自生成、存储与重建的传输状态
+- 能推导 bidirectional tracing 的连接贡献与 MLT 接受概率
+- 能比较 final gathering、irradiance caching、photon mapping 和 VPL 方法的误差
+- 能设计避免 double counting、漏路径和不受控 bias 的混合估计器
+
 </Objectives>
 
-## 直觉引入
+## 直觉：混合不是把多个结果直接相加
 
-想象你在黑暗中找钥匙。随机摸索（路径追踪）可能很久找不到。但如果你找到过一次，就知道大概位置，下次在附近找（MLT变异）。或者你记得客厅灯开关的位置，直接去摸（辐照度缓存）。又或者你在钥匙可能多的地方多摸几把（自适应采样）。
+先预测：若 path tracer 已通过 NEE 估计直接光，又把 instant radiosity 的所有 VPL 贡献完整相加，图像为什么可能过亮？因为两个算法可能覆盖同一 path family。混合算法首先要划分或加权路径空间，再决定谁生成、谁缓存、谁重建；不是按材质写几条 `if` 就完成。
 
-高级GI技术就是这些「聪明策略」——MLT在找到好路径后局部探索，辐照度缓存复用已有结果，自适应采样把预算花在刀刃上。现代渲染器不是用一种方法，而是组合多种取长补短。
-
-## 概念讲解
-
-### 高级GI技术
+第 7 章 Hybrid Algorithms 汇总了 final gathering、multipass methods、bidirectional tracing、Metropolis light transport、irradiance caching、photon mapping、instant radiosity 与 lightcuts。它们分别复用平滑照明场、相机/光源子路径、路径空间邻域、photon 或 virtual point light 集合，以降低某类难采路径的 variance 或重复计算。
 
 <GilAdvancedTechniquesDiagram />
 
-<Term def="Metropolis光线传输(MLT)用马尔可夫链在路径空间中探索，找到高贡献路径后局部变异">MLT</Term>擅长难以采样的间接光路径。
+<Term def="把两种以上路径生成、连接、缓存或重建策略放在同一估计器中，并明确它们的路径覆盖和权重">混合算法</Term>必须声明：每个 component 的 target integral、sample space、PDF、stored state、reconstruction kernel、bias 与 resource lifetime。若这些契约说不清，就无法证明结果守恒。
 
-<Term def="辐照度缓存(Irradiance Cache)在稀疏点上计算漫反射间接光，用插值填充中间区域">辐照度缓存</Term>大幅加速漫反射GI。
+## Final gathering 与 multipass
 
-<Term def="自适应采样(Adaptive Sampling)在噪声大的区域增加采样数，在平滑区域减少采样数">自适应采样</Term>优化采样预算分配。
+<Term def="在可见表面点从局部半球发射最终一组高质量查询，从预计算或粗糙全局解中重建间接照明">最终聚集</Term>（final gathering）把“全局能量分布”与“相机可见重建”分离。第一 pass 可用 photon、coarse radiosity 或 light path 填充场景；第二 pass 只在 camera-visible points 做 hemisphere integration，改善阴影边界、材质与可见性。
 
-<Term def="多路径采样(Multi-path)在一个渲染中组合路径追踪、光子映射、辐照度缓存等多种方法">混合渲染</Term>是现代渲染器的标准架构。
+对 diffuse point $x$，final gather 估计：
 
-## 交互Demo
+$$
+L_o(x)=L_e(x)+\frac{\rho(x)}{\pi N}
+\sum_{k=1}^{N}\frac{L_i(x,\omega_k)|n\cdot\omega_k|}{p(\omega_k)}.
+$$
 
-<Stepper>
-<Step title="第一步：MLT局部探索">MLT用马尔可夫链：找到一条高贡献路径后，通过小变异（扰动方向/距离）在附近探索更多类似路径。对困难间接光（如门缝透光）效率远超纯随机。</Step>
-<Step title="第二步：辐照度缓存">
-漫反射间接光在空间上平滑变化——邻近点的间接光几乎相同。辐照度缓存只在稀疏点计算间接光，中间点用插值。计算量减少10-100倍。
-<GilAdvancedTechniquesDiagram />
-</Step>
-<Step title="第三步：自适应与混合">自适应采样先低采样预览全图，在噪声大的区域增加采样。混合渲染器按场景特征选择：直接光用NEE，焦散用光子映射，漫反射间接用缓存，光泽间接用路径追踪。</Step>
-</Stepper>
+若 $L_i$ 来自 biased cache/photon estimate，final gather 不会自动消除其 bias；它只把重建移到可见点并重新查询近场 transport。Multipass method 还必须明确 pass 边界：direct、specular、caustic、diffuse-indirect 是否互斥，或以 MIS 合并。
 
-## 代码对照
+## Bidirectional tracing：连接两端子路径
+
+<Term def="分别从光源和相机生成子路径，再枚举兼容顶点连接，以多种策略覆盖同一完整路径的算法">双向追踪</Term>（bidirectional tracing）生成 light subpath $y_0\ldots y_{s-1}$ 和 camera subpath $z_0\ldots z_{t-1}$，连接端点得到 $(s,t)$ strategy。其估计形式为：
+
+$$
+\widehat I=\sum_{s,t}\frac{w_{s,t}(\bar x)f(\bar x)}{p_{s,t}(\bar x)},
+\qquad \sum_{s,t}w_{s,t}(\bar x)=1.
+$$
+
+<GilBidirectionalMltDiagram />
+
+每个 $p_{s,t}$ 必须转到共同 path measure；forward/reverse PDF、Russian-roulette probability 和 endpoint selection 都要计入。Delta vertex 不能任意连接，某些策略密度为零。BDPT 擅长“从一端难、从两端连接容易”的路径，但 `S-D-S` specular chain 等 manifold constraint 仍可能困难。
+
+## Metropolis light transport
+
+<Term def="在完整路径空间构造马尔可夫链，以 mutation proposal 从当前路径产生候选，并按贡献与转移概率接受或拒绝">梅特罗波利斯光传输</Term>（Metropolis light transport, MLT）不要求每个样本独立。给定目标密度 $\pi(X)\propto f(X)$ 与 proposal $T(X\to Y)$，Metropolis-Hastings 接受率为：
+
+$$
+a(X\to Y)=\min\left(1,
+\frac{f(Y)T(Y\to X)}{f(X)T(X\to Y)}\right).
+$$
+
+Small-step mutation 在已发现的高贡献路径附近高效探索，large step 负责跨 mode。MLT 对门缝照明、复杂 caustic 等稀有路径有效，但样本相关、bootstrap normalization、chain initialization 和 image-space splat 都会影响误差。若某 mode 从未被找到，局部 mutation 无法凭空发现它。
+
+Acceptance rate 过高可能步子太小、mixing 慢；过低则 proposal 不匹配。应输出 chain contribution、mutation type、accept/reject、autocorrelation 和多链差异，而不是只报 SPP。
+
+## Irradiance caching
+
+<Term def="在稀疏表面记录点计算 diffuse indirect irradiance，并按位置、法线与有效半径加权插值复用结果">辐照度缓存</Term>（irradiance caching）利用 diffuse irradiance 通常局部平滑。一个常见启发式权重为：
+
+$$
+w_i(x)=\left(\frac{\|x-x_i\|}{R_i}+\sqrt{1-n\cdot n_i}\right)^{-1},
+\qquad E(x)\approx\frac{\sum_iw_iE_i}{\sum_iw_i}.
+$$
+
+$R_i$ 可由 harmonic mean distance to nearby geometry 估计。位置接近、法线相似并不保证同一 visibility region；墙两侧、门框、薄片与阴影边界最易 leak。Gradient-enhanced cache 可预测平滑变化，仍需 error threshold、record validity 和 fallback gather。
+
+动态场景中 cache lifetime 由几何、光源和材质 dependency 决定。复用旧记录会形成 temporal bias；全部每帧重建又失去价值。原书的核心是空间插值假设和误差控制，不是简单宣称“快 10-100 倍”。
+
+## Photon mapping 的章节位置
+
+Photon mapping 从 light 端追踪 photons，存位置、入射方向和 flux，再以 kernel density estimate 重建。它在第 7 章承担 density-based hybrid 的一部分，尤其适合 caustic；本项目的 `gil-photon-mapping` 专页进一步讲 tracing、kd-tree、radius/bias、global/caustic maps 与 final gathering。
+
+此页只保留组合边界：direct lighting 通常单独估计，specular camera chain 直接追踪，caustic photon map 重建 `L-S*-D-E` 类路径，global map 可作 final-gather support。若 global photon estimate 与 path-traced diffuse bounce 同时覆盖同一路径，必须划分 bounce/path class 或推导权重。
+
+## Instant radiosity 与 VPL
+
+<Term def="把从光源随机追踪路径上的顶点转成 virtual point lights，再以大量直接光查询近似多次 diffuse transport">即时辐射度</Term>（instant radiosity）生成 VPL 集合。对 shading point $x$，近似：
+
+$$
+L_o(x)\approx L_{direct}(x)+
+\sum_{v=1}^{M} f_r(x,\omega_v,\omega_o)
+\frac{V(x,y_v)I_v\cos\theta_x\cos\theta_v}{\|x-y_v\|^2}.
+$$
+
+VPL 把 indirect bounce 变成 many-light direct query，适合可并行 visibility；但近距离 $1/r^2$ singularity 会产生亮斑，clamp 会引入 bias，有限 VPL 会有结构噪声。VPL 代表的是带 direction/material context 的 path prefix，不是无条件 point light。
+
+## Lightcuts：对许多虚拟光源做层次裁剪
+
+<GilReuseHierarchyDiagram />
+
+<Term def="把大量真实/虚拟光源组织成层次树，对每个着色点用贡献上界自适应选择一组光源簇 cut 进行估计">Lightcuts</Term>避免逐点遍历全部 VPL。每个 cluster 保存 spatial/intensity bounds；若 cluster contribution 的 upper/lower bound 相对当前 estimate 足够小，就用 representative light 近似，否则展开 children。
+
+Cut 是树上互不祖先覆盖的节点集合，代表所有 lights 恰好一次。误差 bound 若忽略 visibility 或 glossy BRDF variation 会失效；conservative bound 太松又导致 cut 过大。Scalable rendering 的关键因此是 hierarchy quality、bound tightness、representative sampling 和 per-shading-point cut refinement。
+
+## 如何证明组合没有重复计数
+
+为每个 component 建 path-class table。例如：
+
+| Component | Example path | Generation | Reconstruction |
+|---|---|---|---|
+| NEE | `L-D-E` | light sample | point evaluation |
+| Caustic photon | `L-S+-D-E` | light random walk | surface kernel |
+| Final gather | `L-*-D-E` | camera hemisphere query | sample average |
+| VPL/Lightcuts | `L-D+-D-E` | light prefix | many-light sum |
+| BDPT/MLT | general compatible paths | connect / mutate | MIS / chain splat |
+
+若两个 component 的 path class 重叠，选择三种合法处理之一：明确排除；在共同 measure 上 MIS；或让一个仅作 proposal/cache、最终贡献由另一个 estimator 计算。直接相加不是第四种选择。
 
 ```cpp
-// 混合渲染器架构
-Spectrum Li(Ray ray, Scene scene) {
-    Spectrum L(0);
-    SurfaceInteraction si = scene.Intersect(ray);
-    
-    // 1. 直接光: NEE + MIS
-    L += estimateDirectNEE(si, scene);
-    
-    // 2. 漫反射间接: 辐照度缓存
-    if (si.bsdf->isDiffuse()) {
-        if (cache.isValid(si))
-            L += cache.interpolate(si);  // 有偏但快
-        else {
-            Spectrum irr = pathTraceDiffuse(si);
-            cache.add(si, irr);  // 计算并缓存
-            L += irr;
-        }
-    }
-    
-    // 3. 焦散: 光子映射
-    L += photonMap.estimateCaustics(si);
-    
-    // 4. 光泽间接: 路径追踪
-    if (si.bsdf->isGlossy())
-        L += pathTraceGlossy(si);
-    
-    return L;
+Contribution evaluateHybrid(const CameraVertex& x) {
+    Contribution c;
+    c += nee.estimate(pathClass("L-D-E"), x);
+    c += causticMap.estimate(pathClass("L-S+-D-E"), x);
+    c += finalGather.estimateExcludingCaustics(x);
+    c.auditNoOverlap();
+    return c;
 }
 ```
+
+## 三步设计混合算法
+
+<Stepper>
+<Step title="第一步：枚举路径覆盖">
+
+用 endpoint/event notation 列出每个 component 能生成的路径和零概率路径，标记重叠与空洞。
+
+<GilStepFlowDiagram caption="混合前先证明积分域被覆盖且不重复。" stage={1} stages={["Partition：path classes → component support → overlap / gap"]} />
+
+</Step>
+<Step title="第二步：声明状态与重建">
+
+为 subpath、cache record、photon、VPL/cluster 或 Markov state 记录生成 PDF、lifetime、kernel/bound 与 invalidation。
+
+<GilStepFlowDiagram caption="每种复用状态都要有生成和消费契约。" stage={2} stages={["Partition：path classes → component support → overlap / gap", "Contract：state → PDF → reconstruction → lifetime / invalidation"]} />
+
+</Step>
+<Step title="第三步：分别测误差和资源">
+
+固定 reference，逐项开关 component，测 bias、variance、autocorrelation、memory/build/query cost，再验收组合能量。
+
+<GilStepFlowDiagram caption="先单独证明每个组件，再验证组合不是偶然看起来正确。" stage={3} stages={["Partition：path classes → component support → overlap / gap", "Contract：state → PDF → reconstruction → lifetime / invalidation", "Validate：component error → overlap audit → total energy / cost"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**误区：认为MLT是万能的。**
-辐照度缓存的插值假设间接光空间平滑，但在几何突变处（如角落、边缘）失效，导致漏光或漏暗。需要梯度引导的插值和遮挡检测。
+**现象 →** 混合方法逐项相加后整体偏亮。**原因 →** 多个 estimator 覆盖同一路径族。**修法 →** 建 path-class table，互斥划分或在共同测度下使用 MIS。
 </Callout>
 
 <Callout type="trap">
-**误区：辐照度缓存总是安全的。**
-辐照度缓存的插值假设间接光在空间上平滑变化。但在几何突变处（角落、门框边缘）间接光变化剧烈，插值会导致漏光或暗斑。好的实现需要遮挡检测和梯度引导插值，在平滑区域用缓存，在突变区域回退到完整计算。
+**现象 →** MLT 找到一块亮区后长期忽略其他区域。**原因 →** local mutation mixing 差或 bootstrap 没覆盖其他 mode。**修法 →** 混合 large step、多链与独立初始化，并分析 autocorrelation 和 chain-to-chain variance。
 </Callout>
 
+<Callout type="trap">
+**现象 →** cache/VPL 在墙角或近距离产生漏光、亮斑。**原因 →** 平滑插值或点光近似跨越 discontinuity/singularity。**修法 →** 加 validity/bound，细化或 fallback；clamp 必须明确记录 bias。
+</Callout>
+
+## 练习
+
 <Exercises>
-**问题 1**：MLT的工作原理是什么？它解决了路径追踪的什么问题？
+
+**问题 1：final gathering 为什么不自动让 photon map 无偏？**
 
 <Answer>
-因为不同GI技术各有擅长：路径追踪通用但焦散差，光子映射擅长焦散但直接光差，辐照度缓存快但只适合漫反射，MLT擅长困难光路但收敛不均。混合渲染器按场景特征分工：直接光用NEE+MIS（高效无噪声），漫反射间接光用辐照度缓存（插值快10-100倍），焦散用光子映射（正向追踪天然处理），光泽间接光用路径追踪（BRDF采样高效），困难光路用MLT补充。每种技术只做自己擅长的部分，整体效率和质量远超单一方法。
+Final gather 重新积分可见点的 incoming radiance，但若查询的 incoming field 本身由有限 kernel photon estimate 提供，kernel bias 仍存在。只有随预算收缩 kernel、增加 photons 并正确处理边界，才可能一致。
 </Answer>
 
-**问题 2**：为什么现代渲染器混合多种GI技术？举例说明各技术的分工。
+**问题 2：BDPT 的多个 $(s,t)$ strategy 为什么需要共同 path measure？**
 
 <Answer>
-不同GI技术各有擅长和短板。混合渲染器按场景特征分工：1)直接光用NEE+MIS——高效无噪声；2)漫反射间接用辐照度缓存——插值快10-100倍；3)焦散用光子映射——正向追踪天然处理；4)光泽间接用路径追踪——BRDF采样高效；5)困难光路用MLT补充——局部探索高效。每种技术只做擅长的部分，整体效率和质量远超单一方法。代价是系统复杂度增加——需要管理多种算法的接口和数据结构。
+它们生成同一完整路径但采用不同方向/面积变量。MIS 权重要比较各策略对同一路径的 density；若不通过 geometry Jacobian 转到同一 measure，PDF 数值不可比较，权重和也无法保证为 1。
 </Answer>
+
+**问题 3：MLT 的 small step 和 large step 分别解决什么？**
+
+<Answer>
+Small step 保持路径结构，在已知高贡献 mode 周围高接受率探索；large step 重新生成较多变量，用于跨越相隔很远的 mode 和恢复遍历性。只有 small step 会困在局部，只有 large step 则退化为独立采样。
+</Answer>
+
+**问题 4：Lightcuts 如何避免漏算或重复 VPL？**
+
+<Answer>
+Cut 由层次树上一组互不为祖先/后代的节点组成，并共同覆盖所有叶子一次。每个 cut node 用代表光近似其整个 cluster；误差 bound 不满足时用 children 替换该 node，覆盖关系保持不变。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+第 7 章的混合算法围绕“复用什么传输状态”展开：final gathering/multipass 重算可见端，BDPT 连接双端子路径，MLT 相关探索 path space，irradiance cache 插值平滑场，photon map 重建密度，instant radiosity 把 path prefix 变成 VPL，lightcuts 以层次误差界裁剪 many-light sum。真正的组合必须证明路径覆盖、PDF/measure、重建 bias、状态生命周期和总能量。
+
 <Glossary>
-<GlossaryItem term="Metropolis光线传输(MLT)">用马尔可夫链在路径空间局部变异探索，擅长困难间接光路径的GI方法。</GlossaryItem>
-<GlossaryItem term="辐照度缓存">在稀疏点计算漫反射间接光并插值填充中间区域，大幅加速漫反射GI。</GlossaryItem>
-<GlossaryItem term="自适应采样">在噪声大的区域增加采样数、平滑区域减少采样数的预算优化策略。</GlossaryItem>
-<GlossaryItem term="混合渲染">在一个渲染器中组合路径追踪、光子映射、辐照度缓存等多种GI技术的架构。</GlossaryItem>
+<GlossaryItem term="混合算法">组合多种路径生成、缓存或重建策略并明确覆盖权重的方法。</GlossaryItem>
+<GlossaryItem term="最终聚集">在可见点发射最终查询以重建预计算全局照明的方法。</GlossaryItem>
+<GlossaryItem term="双向追踪">从光源和相机生成子路径并枚举兼容连接的算法。</GlossaryItem>
+<GlossaryItem term="梅特罗波利斯光传输">用路径 mutation 和接受拒绝构造贡献导向马尔可夫链的方法。</GlossaryItem>
+<GlossaryItem term="辐照度缓存">以稀疏记录和位置法线权重插值 diffuse irradiance 的方法。</GlossaryItem>
+<GlossaryItem term="即时辐射度">把光源路径顶点变为虚拟点光源近似间接光的方法。</GlossaryItem>
+<GlossaryItem term="Lightcuts">以光源层次和误差上界自适应选择代表光簇的方法。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="Advanced Global Illumination" adaptedUrl="https://www.amazon.com/dp/1568813074" />
+<Attribution adaptedFrom="Advanced Global Illumination, Second Edition, Chapter 7: Hybrid Algorithms" adaptedUrl="https://books.google.com/books?id=KodRAAAAMAAJ" />

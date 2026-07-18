@@ -1,59 +1,63 @@
-/**
- * <Cg4TransformationsDiagram>：几何变换与坐标系示意图
- *
- * 展示模型→世界→视图→投影的坐标变换链。
- */
+const spaces = [
+  ["Local", "object coordinates", "M"],
+  ["World", "shared scene coordinates", "V"],
+  ["View", "camera-relative coordinates", "P"],
+  ["Clip", "homogeneous view volume", "÷ w"],
+  ["NDC/Screen", "viewport + depth mapping", "sample"],
+] as const;
 
-export function Cg4TransformationsDiagram() {
-  const spaces = [
-    { label: "模型空间", sub: "Object Space", x: 90 },
-    { label: "世界空间", sub: "World Space", x: 260 },
-    { label: "视图空间", sub: "View Space", x: 430 },
-    { label: "裁剪空间", sub: "Clip Space", x: 600 },
-  ];
+const transformRows = [
+  ["Point", "w=1", "平移、旋转、缩放"],
+  ["Direction", "w=0", "无平移；线性部分"],
+  ["Normal", "covector", "inverse-transpose linear part"],
+  ["Camera", "frame transform", "world matrix 的逆"],
+  ["Child node", "local frame", "parentWorld × childLocal"],
+] as const;
 
+function Frame({ caption, children }: { caption: string; children: React.ReactNode }) {
   return (
     <figure className="mdx-figure not-prose mx-auto my-6">
-      <div className="overflow-hidden rounded-card border border-border bg-elevated p-5">
-        <svg viewBox="0 0 720 400" role="img" aria-label="几何变换与坐标系" className="mx-auto block h-auto w-full max-w-[720px]">
-          <text x="360" y="30" textAnchor="middle" fontSize="16" fontWeight="700" fill="var(--text-primary)">坐标变换链</text>
-          <text x="360" y="50" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">顶点在不同坐标系间的变换流程</text>
-
-          {spaces.map((s, i) => (
-            <g key={s.label}>
-              <rect x={s.x - 65} y="100" width="130" height="60" rx="8" fill="var(--accent)" fillOpacity="0.1" stroke="var(--accent)" strokeWidth="1.2" />
-              <text x={s.x} y="128" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--text-primary)">{s.label}</text>
-              <text x={s.x} y="144" textAnchor="middle" fontSize="10" fill="var(--text-secondary)">{s.sub}</text>
-              {i < spaces.length - 1 && (
-                <g>
-                  <line x1={s.x + 65} y1="130" x2={spaces[i + 1].x - 65} y2="130" stroke="var(--text-secondary)" strokeWidth="1.5" markerEnd="url(#cg4-trans-arrow)" />
-                  <text x={(s.x + spaces[i + 1].x) / 2} y="120" textAnchor="middle" fontSize="9" fill="var(--text-secondary)">
-                    {i === 0 ? "Model" : i === 1 ? "View" : "Projection"}
-                  </text>
-                  <text x={(s.x + spaces[i + 1].x) / 2} y="110" textAnchor="middle" fontSize="9" fill="var(--accent)">Matrix</text>
-                </g>
-              )}
-            </g>
-          ))}
-
-          {/* 矩阵公式区 */}
-          <rect x="48" y="200" width="624" height="120" rx="8" fill="var(--bg)" stroke="var(--border)" strokeWidth="1" />
-          <text x="360" y="224" textAnchor="middle" fontSize="12" fontWeight="600" fill="var(--text-primary)">变换矩阵组合</text>
-          <text x="360" y="252" textAnchor="middle" fontSize="13" fill="var(--accent)" fontFamily="monospace">v_clip = M_projection x M_view x M_model x v_local</text>
-          <text x="360" y="280" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">模型矩阵：局部→世界位置</text>
-          <text x="360" y="296" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">视图矩阵：世界→摄像机视角</text>
-          <text x="360" y="312" textAnchor="middle" fontSize="11" fill="var(--text-secondary)">投影矩阵：3D→2D 裁剪空间（透视/正交）</text>
-
-          <text x="360" y="370" textAnchor="middle" fontSize="11" fill="var(--text-primary)">变换顺序：右乘矩阵从右向左作用于顶点</text>
-
-          <defs>
-            <marker id="cg4-trans-arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
-              <path d="M0 0 L6 3 L0 6 z" fill="var(--text-secondary)" />
-            </marker>
-          </defs>
-        </svg>
-      </div>
-      <figcaption className="mt-2 text-center text-sm text-secondary">顶点经过模型、视图、投影三次矩阵变换完成坐标空间转换</figcaption>
+      <div className="overflow-hidden rounded-card border border-border bg-elevated p-4 sm:p-5">{children}</div>
+      <figcaption className="mt-2 text-center text-sm text-secondary">{caption}</figcaption>
     </figure>
+  );
+}
+
+export function Cg4TransformationsDiagram() {
+  return (
+    <Frame caption="每条箭头是坐标合同；Clip 到 NDC 的除 w 不可提前，也不是普通仿射矩阵。">
+      <div role="img" aria-label="模型世界观察裁剪屏幕坐标链" className="grid gap-3">
+        <strong className="border-b border-border pb-3 text-sm text-primary">Coordinate-space chain</strong>
+        <div className="grid gap-3 lg:grid-cols-5">
+          {spaces.map(([name, meaning, next], index) => (
+            <div key={name} className="min-h-36 rounded-control border border-border bg-bg/45 p-4">
+              <span className="mb-3 grid size-8 place-items-center rounded-full bg-accent/15 text-sm font-bold text-accent">{index + 1}</span>
+              <strong className="block text-sm text-primary">{name}</strong>
+              <p className="mb-0 mt-2 text-xs leading-5 text-secondary">{meaning}</p>
+              {index < spaces.length - 1 && <code className="mt-2 block text-xs text-accent">next: {next}</code>}
+            </div>
+          ))}
+        </div>
+      </div>
+    </Frame>
+  );
+}
+
+export function Cg4TransformRolesDiagram() {
+  return (
+    <Frame caption="点、方向、法线、相机和层次节点不是同一种变换对象，不能统一乘同一 4×4 后结束。">
+      <div role="img" aria-label="几何对象变换规则矩阵" className="overflow-x-auto">
+        <div className="min-w-[680px] overflow-hidden rounded-control border border-border">
+          <div className="grid grid-cols-[1.2fr_1.2fr_2fr] gap-px bg-border text-xs">
+            {['对象', '表示', '正确变换'].map((label) => (
+              <strong key={label} className="bg-bg p-3 text-primary">{label}</strong>
+            ))}
+            {transformRows.flatMap((row) => row.map((cell, index) => (
+              <span key={`${row[0]}-${cell}`} className={index === 0 ? "bg-accent/10 p-3 font-semibold text-accent" : "bg-elevated p-3 leading-5 text-secondary"}>{cell}</span>
+            )))}
+          </div>
+        </div>
+      </div>
+    </Frame>
   );
 }

@@ -1,118 +1,215 @@
 ---
-title: "帧缓冲与混合"
+title: "片段操作、帧缓冲与混合"
 type: B
 section: "计算机图形学与渲染"
 order: 6
-description: "FBO离屏渲染与Alpha混合"
+description: "逐片段测试、颜色写入、FBO 完整性、MRT、MSAA resolve、像素读回与正确 Alpha 合成"
 demo: true
-math: false
-sourceUrl: ""
+math: true
+sourceUrl: "https://www.informit.com/store/opengl-programming-guide-the-official-guide-to-learning-9780134495552"
 draft: false
 ---
 
-import { GlrFramebufferDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-framebuffer";
+import { GlrFramebufferDiagram, GlrFragmentOpsDiagram, GlrMsaaResolveDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-framebuffer";
+import { GlrStepFlowDiagram } from "@/components/mdx/opengl-redbook/diagrams/glr-step-flow";
 import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 理解帧缓冲对象(FBO)的原理
-- 掌握离屏渲染与Render Target
-- 学会Alpha混合与混合方程
-- 了解后处理基础
+
+- 能按顺序解释 scissor、stencil、depth、blending、logic op、mask 等逐片段操作
+- 能创建并验证颜色/深度/模板、多渲染目标和 layered framebuffer attachment
+- 能区分 multisample sample storage、coverage、per-sample shading 与 resolve
+- 能推导直通与预乘 Alpha 混合，并设计透明、读回和离屏渲染验收
+
 </Objectives>
 
-## 直觉引入
+## 直觉：Fragment shader 输出还不是 framebuffer 最终值
 
-帧缓冲就像画家的画板——默认画板是屏幕，但你可以准备额外的画板(FBO)在后台画东西(如阴影贴图、后处理)，画完后再贴到屏幕上。Alpha混合就像水彩调色——新颜色和已有颜色按透明度混合。
+光栅化产生覆盖样本，fragment shader 计算候选值；随后一系列逐片段测试和写掩码决定颜色、深度、模板是否以及怎样进入附件。FBO 只是附件集合和路由状态，不是“屏幕后备图片”。
 
-## 概念讲解
+先预测：fragment shader 确实输出红色，但颜色附件仍是清屏色。只检查 shader 够吗？不够，还要检查 scissor、sample coverage、depth/stencil、draw buffers、color mask 和 FBO 完整性。
 
-<Term def="帧缓冲对象，自定义渲染目标，可附加颜色/深度/模板缓冲">FBO</Term><Term def="FBO中的渲染输出目标，可附加纹理或Renderbuffer">Render Target</Term><Term def="根据Alpha值将源色与目标色混合">Alpha混合</Term><Term def="可直接渲染但不能采样的缓冲，适合深度/模板">Renderbuffer</Term>
-
-### FBO创建
-glGenFramebuffers->glBindFramebuffer->glFramebufferTexture2D(颜色)->glFramebufferRenderbuffer(深度)->检查完整性
-
-### Alpha混合
-glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-result = src*srcAlpha + dst*(1-srcAlpha)
-
-### FBO用途
-阴影映射、后处理、反射、拾取
-
-## 交互Demo
-
-> 猜一猜：为什么透明物体必须从后向前排序渲染？
+<Term def="由一组颜色、深度、模板附件及 draw/read buffer 路由组成的渲染目标容器；它引用纹理或 renderbuffer 存储而不复制内容">帧缓冲对象</Term>（FBO）的完整性依赖附件尺寸、样本数、层次与格式组合。
 
 <GlrFramebufferDiagram />
 
-<Stepper>
-<Step title="第一步：创建FBO">
-glGenFramebuffers生成FBO，绑定后附加纹理(颜色)和Renderbuffer(深度)。检查完整性。
-</Step>
-<Step title="第二步：离屏渲染">
-绑定FBO后所有绘制输出到FBO附件而非屏幕。
-</Step>
-<Step title="第三步：混合渲染">
-渲染半透明物体时启用Alpha混合，按深度排序从后向前绘制。
-</Step>
-</Stepper>
+## Attachment 与完整性
 
-## 代码对照
+纹理附件可被后续采样；renderbuffer 只作为渲染存储，接口更窄但不能笼统宣称总是更快。DSA 可在不绑定的情况下创建、附加和检查 named framebuffer。
 
 ```cpp
-GLuint fbo;
-glGenFramebuffers(1, &fbo);
-glBindFramebuffer(GL_FRAMEBUFFER, fbo);
-GLuint texColor;
-glGenTextures(1, &texColor);
-glBindTexture(GL_TEXTURE_2D, texColor);
-glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, 800, 600, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, texColor, 0);
-GLuint rbo;
-glGenRenderbuffers(1, &rbo);
-glBindRenderbuffer(GL_RENDERBUFFER, rbo);
-glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, 800, 600);
-glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, rbo);
-if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-    std::cout << "FBO incomplete!";
+glCreateFramebuffers(1, &fbo);
+glCreateTextures(GL_TEXTURE_2D, 1, &color);
+glTextureStorage2D(color, 1, GL_RGBA16F, width, height);
+glNamedFramebufferTexture(fbo, GL_COLOR_ATTACHMENT0, color, 0);
+
+glCreateRenderbuffers(1, &depth);
+glNamedRenderbufferStorage(depth, GL_DEPTH24_STENCIL8, width, height);
+glNamedFramebufferRenderbuffer(fbo, GL_DEPTH_STENCIL_ATTACHMENT,
+                               GL_RENDERBUFFER, depth);
+if (glCheckNamedFramebufferStatus(fbo, GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+    fail("incomplete framebuffer");
 ```
 
-FBO颜色附件用纹理(可采样)，深度附件可用Renderbuffer(不可采样但更高效)。必须检查完整性。
+<Term def="附件格式、尺寸、层次、样本数、layered 状态和路由满足规范组合要求，FBO 才可作为读写目标的条件">帧缓冲完整性</Term>必须在每次重建尺寸/附件后检查。无颜色附件的 shadow FBO 应显式把 draw/read buffer 设为 `GL_NONE`。
+
+## MRT、draw/read framebuffer 与路由
+
+fragment shader 可写多个 location，`glNamedFramebufferDrawBuffers` 把 location 路由到 color attachment。location 未路由不会自动写入同名附件。
+
+`GL_DRAW_FRAMEBUFFER` 是绘制目标，`GL_READ_FRAMEBUFFER` 是 read/blit 来源；两者可不同。`glReadPixels` 的格式/type、pack alignment 和同步成本要显式控制。异步读回常用 PBO + fence，避免 CPU 立刻阻塞等待整条 GPU 队列。
+
+```glsl
+layout(location=0) out vec4 outColor;
+layout(location=1) out vec2 outNormalOct;
+layout(location=2) out uint outObjectId;
+```
+
+整数附件不能用浮点输出或普通 blend；object ID/picking 通常关闭混合和过滤，并用对应 integer read format。
+
+## 逐片段操作链
+
+<Term def="fragment shader 之后按 coverage、scissor、stencil、depth、blend、logic operation 与 write mask 等状态决定每个样本结果的阶段集合">逐片段操作</Term>不是完全固定的串行软件列表，实现可做 early tests；但可观察结果必须符合规范依赖。
+
+深度测试比较候选 $z_s$ 与附件 $z_d$。常规 `GL_LESS` 下通过条件为：
+
+$$
+pass=z_s<z_d.
+$$
+
+写 `gl_FragDepth`、使用 discard、image/SSBO 副作用或某些状态会影响 early-Z 优化。`layout(early_fragment_tests)` 强制部分测试在 shader 前发生，但也改变 shader 副作用是否执行，不能只当性能开关。
+
+<GlrFragmentOpsDiagram />
+
+Stencil 由 compare mask、reference、stencil value 决定测试，再按 stencil-fail/depth-fail/depth-pass 三种结果更新。Color/depth/stencil write mask 最后还可能阻止写入；“测试通过”不等于附件一定改变。
+
+## Blending 与预乘 Alpha
+
+<Term def="把源颜色和目标附件颜色分别乘以 blend factor，再按加、减、最小或最大方程组合的逐样本操作">混合</Term>对直通（straight）Alpha 的常见 RGB 公式是：
+
+$$
+C_o=\alpha_s C_s+(1-\alpha_s)C_d.
+$$
+
+若颜色已预乘，即存储 $C'_s=\alpha_sC_s$，则：
+
+$$
+C'_o=C'_s+(1-\alpha_s)C'_d,
+\quad glBlendFunc(GL_ONE,GL_ONE_MINUS_SRC_ALPHA).
+$$
+
+预乘 Alpha 在过滤和边缘合成上更稳健，但整个资产、shader 和 blend state 必须一致。混合通常不交换，因此传统透明需按深度后到前；不能说“所有透明物体都必须排序”，加法混合、alpha-to-coverage 或 OIT 有不同合同。
+
+## MSAA：覆盖样本与 Resolve
+
+<Term def="每像素保存多个 coverage/depth/stencil/color 样本，光栅化按样本覆盖并在显示或复制前合成为单样本结果的抗锯齿方式">多重采样</Term>与 SSAA 不同：fragment shader 通常可按像素频率执行并把结果复制到覆盖样本，除非启用 sample shading 或使用 sample-qualified 输入。
+
+颜色 resolve 常近似样本平均：
+
+$$
+C_{pixel}=\frac{1}{N}\sum_{i=0}^{N-1} C_i.
+$$
+
+整数/深度附件不能盲目按颜色平均；需要选择样本、做 min/max 或自定义 shader resolve。MSAA FBO 所有相关附件样本数和 fixed sample locations 必须兼容。
+
+```cpp
+glCreateTextures(GL_TEXTURE_2D_MULTISAMPLE, 1, &msColor);
+glTextureStorage2DMultisample(msColor, 4, GL_RGBA16F, width, height, GL_TRUE);
+glNamedFramebufferTexture(msFbo, GL_COLOR_ATTACHMENT0, msColor, 0);
+
+glBlitNamedFramebuffer(msFbo, resolvedFbo,
+  0, 0, width, height, 0, 0, width, height,
+  GL_COLOR_BUFFER_BIT, GL_NEAREST);
+```
+
+<GlrMsaaResolveDiagram />
+
+## Feedback loop 与尺寸重建
+
+同一 draw 中从正在写入的同一纹理子资源采样通常形成未定义 feedback loop。ping-pong 两张纹理、分离 mip/layer 并满足规则，或使用规范允许的 texture barrier 场景；不要因某驱动“看起来可用”就依赖。
+
+窗口 resize 时，颜色、深度、MSAA 与 resolve 附件要按 framebuffer 像素尺寸一致重建，并重新检查完整性、viewport 和 projection。删除旧 attachment object 前确认不再被 in-flight 工作使用。
+
+## 三步 FBO 验证
+
+<Stepper>
+<Step title="第一步：证明附件与路由">
+
+列出每个 attachment 的对象、format、level/layer、尺寸、sample count；检查完整性和 draw/read buffer 路由。
+
+<GlrStepFlowDiagram caption="先证明 shader location 有合法且匹配的写入目标。" stage={1} stages={["Target：attachments、formats、samples、draw/read routing"]} />
+
+</Step>
+<Step title="第二步：证明逐样本状态">
+
+逐一关闭/开启 scissor、stencil、depth、blend 与 masks，用固定覆盖图案读取颜色、深度和模板样本。
+
+<GlrStepFlowDiagram caption="逐项切换找出第一处阻止或改变写入的状态。" stage={2} stages={["Target：attachments、formats、samples、draw/read routing", "Fragment ops：coverage、tests、blend、masks"]} />
+
+</Step>
+<Step title="第三步：证明 resolve 与读回">
+
+比较 1x/4x 样本边缘、straight/premultiplied 透明和自定义 resolve；PBO 读回检查像素哈希与 stall。
+
+<GlrStepFlowDiagram caption="最终证据同时覆盖离屏存储、合成结果和 CPU 可观察值。" stage={3} stages={["Target：attachments、formats、samples、draw/read routing", "Fragment ops：coverage、tests、blend、masks", "Validate：resolve、readback、reference image、timing"]} />
+
+</Step>
+</Stepper>
 
 ## 常见误区
 
 <Callout type="trap">
-**现象 →** 透明物体未排序就渲染。
-**原因 →** 开启混合就行。
-**修法 →** Alpha混合不透明排序依赖——必须从后向前渲染透明物体。先渲染不透明(写深度)再排序渲染透明(开混合)。
+**现象 →** FBO 完整且 shader 输出正确，某 MRT 附件仍为空。
+**原因 →** 没有把输出 location 加入 draw-buffer 路由，或 color mask 关闭。
+**修法 →** 同时核对 shader location、`glDrawBuffers`、附件格式类别和写掩码。
 </Callout>
 
 <Callout type="trap">
-**现象 →** FBO创建后不检查完整性。
-**原因 →** 创建后就能用。
-**修法 →** FBO可能不完整(格式不兼容、缺少附件)。必须用glCheckFramebufferStatus检查。
+**现象 →** 预乘纹理边缘出现暗边。
+**原因 →** 资产已预乘，仍使用 `SRC_ALPHA` 再乘一次，或在线性/非线性空间混合错误。
+**修法 →** 统一资产与 shader 表示，预乘源使用 ONE，并在线性颜色空间完成合成。
+</Callout>
+
+<Callout type="trap">
+**现象 →** MSAA color resolve 正常，object ID 却变成无意义值。
+**原因 →** 把整数标识附件当连续颜色平均。
+**修法 →** 为离散数据选择明确样本或自定义 resolve，并独立验收边缘归属规则。
 </Callout>
 
 ## 练习
 
 <Exercises>
-**问题**：FBO和默认帧缓冲的区别？
+
+**问题 1：FBO complete 为什么仍可能没有任何颜色写入？**
 
 <Answer>
-默认帧缓冲是屏幕，FBO是自定义渲染目标。FBO可以附加纹理(可采样)或Renderbuffer(高效不可采样)。
+完整性只证明附件组合可用，不证明 draw-buffer 路由、shader location、逐片段测试或 color mask 允许写入。需要沿输出 location 到附件，再到测试和写掩码逐项验证。
 </Answer>
 
-**问题**：Alpha混合如何配置？
+**问题 2：straight 与 premultiplied Alpha 的关键差异是什么？**
 
 <Answer>
-glEnable(GL_BLEND); glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)。result=src*alpha+dst*(1-alpha)。
+straight 存未乘颜色，混合时用 SRC_ALPHA；premultiplied 已把 RGB 乘 Alpha，混合时源因子用 ONE。后者更适合过滤边缘，但生产和消费必须使用同一约定。
 </Answer>
+
+**问题 3：设计 MSAA FBO 的验收。**
+
+<Answer>
+绘制穿过像素中心和边界的已知三角形，读取每样本 coverage/color/depth，比较 1x 与 4x resolve。对 HDR、整数 ID 和深度分别定义 resolve，测试 resize 后样本数一致与完整性。
+</Answer>
+
 </Exercises>
 
+## 小结
+
+FBO 定义附件和路由，fragment shader 只生成候选值，逐片段操作决定最终样本，resolve 再把多样本变成后续可用表示。完整性、测试、混合、样本语义和读回是五个独立门槛，不能用“FBO 创建成功”替代整条输出链验收。
+
 <Glossary>
-<GlossaryItem term="FBO">帧缓冲对象，OpenGL中自定义的渲染目标。</GlossaryItem>
-<GlossaryItem term="Render Target">FBO中的渲染输出目标，可附加纹理或Renderbuffer。</GlossaryItem>
-<GlossaryItem term="Alpha混合">根据Alpha值将源色与目标色混合的过程。</GlossaryItem>
-<GlossaryItem term="Renderbuffer">可直接渲染但不能采样的缓冲对象，适合深度/模板。</GlossaryItem>
+<GlossaryItem term="帧缓冲对象">引用颜色、深度和模板附件并定义读写目标的容器。</GlossaryItem>
+<GlossaryItem term="帧缓冲完整性">附件组合满足尺寸、样本、层次、格式和路由规则的条件。</GlossaryItem>
+<GlossaryItem term="逐片段操作">在 shader 后决定样本测试、混合和写入的状态阶段。</GlossaryItem>
+<GlossaryItem term="混合">按源/目标因子和方程组合候选颜色与附件颜色。</GlossaryItem>
+<GlossaryItem term="多重采样">每像素存储多个覆盖与附件样本并在后续 resolve 的方式。</GlossaryItem>
 </Glossary>
 
-<Attribution adaptedFrom="OpenGL 红宝书" adaptedUrl="" />
+<Attribution adaptedFrom="OpenGL Programming Guide, 9th Edition, Chapters 4 and 6" adaptedUrl="https://www.informit.com/store/opengl-programming-guide-the-official-guide-to-learning-9780134495552" />

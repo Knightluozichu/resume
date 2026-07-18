@@ -1,0 +1,77 @@
+---
+title: "第7章 并发模式"
+type: C
+section: "Go实战 · 并发"
+order: 7
+description: "用Runner控制超时和中断，用Pooling复用有限资源，用Work构建固定goroutine工作池。"
+demo: true
+math: false
+sourceUrl: "https://livebook.manning.com/book/go-in-action/chapter-7"
+draft: false
+---
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+import { GiaRunnerLab, GiaPoolLab, GiaWorkLab } from "@/components/mdx/go-in-action/diagrams/gia-concurrency-patterns";
+
+<Objectives>
+- 能实现Runner并协调完成、超时与中断，控制程序生命周期
+- 能实现可复用资源池并保证每次获取恰有一次归还或销毁
+- 能实现固定goroutine工作池并验证队列关闭、panic和Wait
+</Objectives>
+
+## 从并发机制到可复用生命周期开始
+先预测：worker阻塞在外部I/O时，仅关闭任务channel能否退出？不能，还需要取消、timeout或关闭底层资源。
+并发模式不是更多channel语法，而是对停止和资源责任的封装。<Term def="把启动、超时、取消、资源归还、队列关闭与等待封装为可复用结构。">concurrency pattern contract</Term>。
+
+## Runner：控制程序寿命
+Runner顺序执行任务，同时select完成、timeout与interrupt。<Term def="完成、超时和系统中断三类事件竞争决定退出的协议。">runner termination protocol</Term>必须停止接收新工作并等待已启动任务。
+
+```go
+select { case <-done: case <-timeout: case <-interrupt: }
+```
+
+<GiaRunnerLab />
+
+## Pooling：借出有限资源
+Buffered channel保存可用资源，Acquire借出，Release归还。<Term def="成功获取后调用者恰好执行一次归还或销毁的责任。">resource return obligation</Term>防止池枯竭。
+
+```go
+resource := <-pool
+defer func(){ pool <- resource }()
+```
+
+## 损坏资源与关闭
+使用失败的连接不应归还；Pool关闭后拒绝新Acquire并关闭空闲资源。<Term def="区分健康归还、损坏销毁和池整体关闭的资源状态机。">pool health state</Term>要求并发close幂等。
+
+<GiaPoolLab />
+
+## Work：固定Goroutine工作池
+固定worker从队列消费，限制并发度并Wait。<Term def="任务提交、worker消费、队列关闭、错误和完成等待组成的工作协议。">worker pool lifecycle</Term>要处理worker panic和生产者提前退出。
+
+```go
+for i := 0; i < workers; i++ { go run(jobs, &wg) }
+close(jobs); wg.Wait()
+```
+
+<GiaWorkLab />
+
+<Stepper><Step title="选择Runner"><GiaRunnerLab /></Step><Step title="注入资源损坏"><GiaPoolLab /></Step><Step title="关闭Work"><GiaWorkLab /></Step></Stepper>
+
+## 验收实验：在每个边界注入停止
+Runner分别注入完成、timeout和interrupt；Pool测试创建失败、使用损坏、重复Release、Close后Acquire；Work测试空队列、队列满、worker panic和生产者提前结束。每次记录谁拥有资源、谁发送停止、谁关闭channel、谁等待完成，确保没有goroutine或句柄遗留。
+
+## 模式选择
+<Term def="按程序寿命、资源稀缺或任务并发上限选择Runner、Pool或Work。">pattern selection rule</Term>。三者可组合，但关闭顺序必须从入口到worker再到资源池。
+
+<Callout type="trap" title="把资源放回channel就完成Pool">还需损坏、double release、close与Acquire竞争规则。</Callout>
+<Callout type="trap" title="关闭任务队列会自动停止所有worker">Worker还可能阻塞外部I/O，需要取消或timeout。</Callout>
+
+## 本章回顾
+本章覆盖并发模式、Runner、程序生命周期超时与中断、Pooling、可复用资源池、Work和goroutine工作池。三种模式最终都必须回答正常、失败和关闭路径由谁收束，不能只展示启动代码。
+<Exercises>
+**问题 1：Runner超时后还要做什么？**<Answer>停止新任务并等待或取消已启动任务。</Answer>
+**问题 2：损坏资源如何处理？**<Answer>销毁而非归还，并按策略补充。</Answer>
+**问题 3：如何停止worker？**<Answer>关闭任务源、发取消并Wait。</Answer>
+</Exercises>
+## 术语表
+<Glossary><GlossaryItem term="concurrency pattern contract" definition="可复用并发生命周期。" /><GlossaryItem term="runner termination protocol" definition="完成超时中断协议。" /><GlossaryItem term="resource return obligation" definition="获取后的归还或销毁责任。" /><GlossaryItem term="pool health state" definition="资源健康与池关闭状态机。" /><GlossaryItem term="worker pool lifecycle" definition="任务worker关闭等待协议。" /><GlossaryItem term="pattern selection rule" definition="按约束选择并发模式。" /></Glossary>
+<Attribution adaptedFrom="Go in Action Chapter 7 Concurrency patterns" adaptedUrl="https://livebook.manning.com/book/go-in-action/chapter-7" />

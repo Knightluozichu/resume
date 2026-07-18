@@ -1,0 +1,242 @@
+---
+title: "第5章 脚本与UI系统"
+type: A
+section: "Unity 3D 脚本编程与游戏开发 · 数学与界面"
+order: 5
+description: "掌握RectTransform、常用控件、事件系统、动态绑定、画布适配、背包与血条。"
+demo: true
+math: false
+sourceUrl: "https://www.dedao.cn/ebook/detail?id=z4R9BQ7pP4ZEaXYkx8KvRdljeyqo608g25w1m2bMAO9NnDL7gBGQr5VzJqrvmEVN"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Usg05UiSystemMapLab,
+  Usg05UiSystemExperimentLab,
+  Usg05UiSystemEvidenceLab,
+} from "@/components/mdx/unity-scripting-game-dev/diagrams/usg-05-ui-system";
+
+<Objectives>
+
+- 能解释第5章在原书13章结构中的责任与前后依赖
+- 能实现“游戏状态、视图模型、控件绑定”之间可观察、可回放的数据链
+- 能比较原书实现与当前Unity迁移方案，并设计失败注入证据
+
+</Objectives>
+
+## 问题：怎样证明自己复现的是第5章，而不是一个同名教程？
+
+先预测：如果删掉原章标题、命名实例和系统边界，只留一段能运行的C#代码，另一位读者还能反推出本章吗？不能。UI脚本应从状态读取不可变快照，更新Image、Text、Button、Toggle、Slider、InputField与ScrollRect；用户输入转换为命令再交回玩法层。锚点和Canvas Scaler负责设备适配。
+
+<Usg05UiSystemMapLab />
+
+## 原书边界与目录单元
+
+本页严格对应2021年版目录中的以下单元。现代API和工程补充可以解决版本差异，但不能替代这些原目录位置：
+
+- **矩形变换（Rect Transform）组件**
+- **图片（Image）组件**
+- **文本（Text）组件**
+- **按钮（Button）组件**
+- **单选框（Toggle）组件**
+- **滑动条（Slider）组件**
+- **输入框（Input Field）组件**
+- **滚动区域（Scroll Rect）组件**
+- **脚本与事件系统**
+- **常用输入事件**
+- **动态添加事件响应方法**
+- **事件触发器（Event Trigger）**
+- **动态绑定事件的高级技巧**
+- **实例：界面制作与适配**
+- **设置UI画布**
+- **制作游戏界面**
+- **制作背包界面**
+- **利用进度条制作血条**
+
+详细章目采用得到电子书目录；作者、ISBN与出版社信息由教材采选系统交叉核对。本站重新组织讲解、代码、实验和证据，不逐字复制原文。导读和总复习不重复计入13个正文章。
+
+## 核心模型与行为不变量
+
+UI脚本应从状态读取不可变快照，更新Image、Text、Button、Toggle、Slider、InputField与ScrollRect；用户输入转换为命令再交回玩法层。锚点和Canvas Scaler负责设备适配。
+
+先写功能切片：输入来自哪里，哪个对象拥有状态，在哪个Unity回调更新，调用哪个引擎系统，输出由谁消费，失败时第一条信号是什么。脚本、Inspector引用和场景对象都必须能回到同一个切片编号。
+
+不同宽高比下控件不遮挡，重复打开界面不重复订阅，背包和血条只展示权威状态。 这条不变量要在正常、边界和失败三组输入下成立。最终画面正确但中间所有权、时序或资源生命周期错误，仍不能签发。
+
+## 五个核心术语
+
+<Term def="规定RectTransform相对父矩形的定位、拉伸和边距行为">锚点合同</Term>
+它必须落到第5章的输入、状态、输出与失败信号，不能只作为名词记忆。
+
+<Term def="按参考分辨率与匹配策略把设计尺寸映射到设备屏幕">画布缩放</Term>
+它必须落到第5章的输入、状态、输出与失败信号，不能只作为名词记忆。
+
+<Term def="由EventSystem把指针、选择和提交输入路由到目标控件的消息">
+  UI事件
+</Term>
+它必须落到第5章的输入、状态、输出与失败信号，不能只作为名词记忆。
+
+<Term def="把物品数据转换为格子状态而不让UI拥有游戏事实">背包视图模型</Term>
+它必须落到第5章的输入、状态、输出与失败信号，不能只作为名词记忆。
+
+<Term def="把生命值比例稳定映射到Slider或Image填充量的过程">血条投影</Term>
+它必须落到第5章的输入、状态、输出与失败信号，不能只作为名词记忆。
+
+术语连成模型后，再记录对象的创建、启用、禁用、销毁和场景切换行为。Unity回调不是任意函数名，而是引擎调度合同；在错误阶段读取输入、推进物理或释放资源，会产生偶发且难以回放的故障。
+
+## 从输入到结果的数据链
+
+本章主链是：游戏状态 → 视图模型 → 控件绑定 → 输入事件 → 布局适配 → 界面反馈。每个节点保存切片ID、帧号、对象ID和状态版本。表现系统只能呈现玩法事实，资源与数据系统必须通过租约或快照管理生命周期。
+
+```csharp
+void Bind(PlayerSnapshot snapshot)
+{
+    healthSlider.SetValueWithoutNotify(snapshot.Health / snapshot.MaxHealth);
+    goldText.text = snapshot.Gold.ToString();
+    inventoryView.Render(snapshot.Items);
+}
+```
+
+旧输入API、Text、AssetBundle或LitJSON可以迁移到Input System、TextMeshPro、Addressables或System.Text.Json，但迁移账本必须写明原书问题、替代实现、保留不变量和对照证据。
+
+<Usg05UiSystemExperimentLab />
+
+## 三步复现与中间检查
+
+<Stepper>
+  <Step title="1. 固定原章边界和切片合同">
+    把“矩形变换（Rect
+    Transform）组件、图片（Image）组件、文本（Text）组件”映射为输入、所有者、时钟、输出和失败信号；缺少原目录映射的功能不进入实现。
+    <Usg05UiSystemMapLab />
+  </Step>
+  <Step title="2. 单变量实现并注入故障">
+    按游戏状态、视图模型、控件绑定、输入事件推进，每次只改变一个变量，保存状态快照和首条错误日志。
+    <Usg05UiSystemExperimentLab />
+  </Step>
+  <Step title="3. 回放案例并签发证据">
+    在编辑器和目标构建中执行正常、边界、失败三组输入，核对结果、生命周期和现代迁移差异。
+    <Usg05UiSystemEvidenceLab />
+  </Step>
+</Stepper>
+
+## 两个必须主动制造的失败样本
+
+<Callout type="trap" title="目录或案例漂移">
+  按钮每次打开面板都AddListener却不移除，或用绝对坐标摆放背包导致窄屏越界。
+  这种实现即使运行正常，也没有覆盖第5章的原书边界。先恢复目录与命名实例，再讨论扩展。
+</Callout>
+
+<Callout type="trap" title="结果正确、时序错误">
+  故意在低帧率、重复触发、对象禁用和场景卸载时回放。若出现重复结算、旧协程继续运行、事件未退订或资源提前释放，说明状态所有权仍不合格。
+</Callout>
+
+## 当前Unity迁移表
+
+| 原书对象            | 当前实现                           | 必须保留的证据                 |
+| ------------------- | ---------------------------------- | ------------------------------ |
+| 旧输入、UI或资源API | 当前官方包或兼容层                 | 原案例输入、状态和结果对照     |
+| MonoBehaviour回调   | 明确时钟与状态所有者的组件         | Awake到Destroy的顺序日志       |
+| 场景公开引用        | SerializeField、稳定ID或运行时注入 | 缺失引用检查和场景重载回放     |
+| 手工创建销毁        | 仅在证据支持时使用对象池或租约     | 创建、复位、唯一释放和峰值数据 |
+
+现代迁移不能把原书内容改写为通用最佳实践清单。每章首先复现其具体系统和实例，再补充版本差异、性能风险和可测试接口。
+
+## 证据包与自动检查
+
+每次运行至少保存原章、案例、构建号、输入序列、状态版本、首个失败信号、截图或日志哈希以及修复后同输入回放。跨系统案例还要保存对象和资源的创建释放记录。
+
+```json
+{
+  "chapter": "第5章",
+  "unit": "矩形变换（Rect Transform）组件",
+  "flow": [
+    "游戏状态",
+    "视图模型",
+    "控件绑定",
+    "输入事件",
+    "布局适配",
+    "界面反馈"
+  ],
+  "normal": true,
+  "boundary": true,
+  "failureReplay": true
+}
+```
+
+```text
+PASS chapter=第5章 ownership=true timing=true result=true
+PASS invariant=不同宽高比下控件不遮挡，重复打开界面不重复订阅，背包和血条只展示权威状态。
+REJECT missing-unit | duplicate-event | stale-reference | premature-release
+```
+
+<Usg05UiSystemEvidenceLab />
+
+## 练习：把知识变成可审计交付
+
+<Exercises>
+
+**问题 1** 为“矩形变换（Rect Transform）组件”写出输入、状态所有者、更新时钟、输出和失败信号。
+
+<Answer>
+  合同必须从游戏状态追踪到界面反馈，并能定位唯一责任对象。
+</Answer>
+
+**问题 2** 制造“按钮每次打开面板都AddListener却不移除，或用绝对坐标摆放背包导致窄屏越界。”，保存首个偏离节点，并用同一输入证明修复。
+
+<Answer>
+  故障证书要同时保留版本、输入、首条日志、修复和复验。
+</Answer>
+
+**问题 3** 列出三项可迁移API和三项不可改变的不变量，附编辑器与构建回放证据。
+
+<Answer>
+  API、包名与序列化工具可替换；原目录单元、案例行为、状态所有权和可观察结果不可删除。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- 是否能逐项指出本页覆盖的原目录单元与命名实例？
+- 是否能解释锚点合同、画布缩放、UI事件之间的关系？
+- 是否保存正常、边界、失败三组回放和现代迁移差异？
+- 是否验证对象禁用、场景重载和资源释放后的状态？
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="锚点合同">
+    规定RectTransform相对父矩形的定位、拉伸和边距行为。
+  </GlossaryItem>
+  <GlossaryItem term="画布缩放">
+    按参考分辨率与匹配策略把设计尺寸映射到设备屏幕。
+  </GlossaryItem>
+  <GlossaryItem term="UI事件">
+    由EventSystem把指针、选择和提交输入路由到目标控件的消息。
+  </GlossaryItem>
+  <GlossaryItem term="背包视图模型">
+    把物品数据转换为格子状态而不让UI拥有游戏事实。
+  </GlossaryItem>
+  <GlossaryItem term="血条投影">
+    把生命值比例稳定映射到Slider或Image填充量的过程。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="《Unity 3D脚本编程与游戏开发》马遥、沈琰，人民邮电出版社，2021，ISBN 9787115558756"
+  adaptedUrl="https://www.dedao.cn/ebook/detail?id=z4R9BQ7pP4ZEaXYkx8KvRdljeyqo608g25w1m2bMAO9NnDL7gBGQr5VzJqrvmEVN"
+/>

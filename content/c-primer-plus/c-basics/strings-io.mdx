@@ -6,9 +6,11 @@ order: 4
 description: 掌握C语言中字符串的本质——字符数组+空字符，以及scanf/printf的格式化输入输出，包含常用格式说明的完整用法
 demo: true
 math: false
-sourceUrl: ""
+sourceUrl: "https://www.informit.com/store/c-primer-plus-9780321928429"
 draft: false
 ---
+
+import { CPrimerStringsIOContractsDiagram } from "@/components/mdx/c-primer-plus/diagrams/strings-io";
 
 {/* C 实战型第 4 章（C Primer Plus §4 改编）：讲 C 字符串本质、printf 格式化、scanf 陷阱、字符串函数预览、gets 弃用。
    重心是代码对照(§6) + 常见误区(§7)，数学省略(math:false)，概念讲解压缩(§3)。
@@ -25,7 +27,7 @@ draft: false
 
 <Objectives>
 
-- 能正确声明、初始化和输出 C 字符串，解释 strlen() 和 sizeof() 对同一字符串为什么差 1
+- 能区分字符数组容量、字符串首个空字符前的长度与指针大小，并说明何时 `sizeof array == strlen(array) + 1`
 - 能用 printf 的各种格式标志（宽度、精度、对齐、前缀）精确控制输出格式
 - 能回答：用 scanf("%d", &n) 读完一个整数后紧接着用 getchar()，为什么读到的不是下一个字符而是换行符？
 
@@ -41,17 +43,19 @@ draft: false
 
 **如果没有这种精确控制呢？** 那 printf 输出 3.14159 时你不知道该显示 2 位还是 10 位小数，scanf 不知道把读到的 42 存到哪个变量——数据就在缓冲区里漂着，进不了你的程序，你也看不见正确的输出。这一章就教你掌握 C 输入输出的"格式标签"，把数据在程序和外部世界之间精确搬运。
 
+<CPrimerStringsIOContractsDiagram />
+
 {/* 3. 概念讲解（spec §三，C 实战型压缩"是什么"）：一节一概念；术语首现 <Term def> 高亮；每概念配图或引用 Demo。 */}
 
 ## C 字符串的本质——char 数组加一个看不见的尾巴
 
-在 C 语言里没有专门的"字符串类型"。<Term def="C 语言中表示文本的方式：连续排列的字符加上结尾的空字符 \0。">字符串（string）</Term> 就是一个字符数组，只不过最后多了一个看不见的 <Term def="ASCII 码为 0 的特殊字符，写作 \0。它的作用是告诉 C：字符串数据到这里就结束了。">空字符（null character）</Term>——写作 `\0`。
+在 C 语言里没有独立的字符串类型。<Term def="由字符序列和终止空字符组成的数据约定。处理字符串的函数必须能在可访问对象边界内找到首个空字符，否则调用不满足接口前提。">字符串（string）</Term> 依赖末尾的 <Term def="数值为零的字符，写作 \0，用作 C 字符串终止标记；它不同于字符 '0'，也不依赖执行字符集是否为 ASCII。">空字符（null character）</Term> `\0` 判断结束。
 
 <CStringMemoryDiagram />
 
 字符串字面值（双引号包围的文本，如 `"Hello"`）在编译时就被处理成带有 `\0` 的字符数组。你写 `char str[] = "Hello";`，编译器自动分配 6 个字节而不是 5 个——多出来的那一个就是末尾的 `\0`。
 
-<Term def={'C 标准库函数，返回字符串中字符的个数——注意它数到 \\0 就停止，所以返回的长度永远比 sizeof 少 1。需要包含 string.h 头文件。'}>strlen</Term> 函数（声明在 `<string.h>` 中）可以告诉你字符串"实际有多长"——它从第一个字符开始数，数到 `\0` 就停。所以 `strlen("Hello")` 返回 5，而 `sizeof("Hello")` 返回 6——差的那 1 个字节就是尾部的 `\0`。
+<Term def={'string.h 中的函数，从给定地址开始查找到首个空字符并返回此前字符数。调用者必须提供有效且已终止的字符串；它不知道数组容量。'}>strlen</Term> 对 `"Hello"` 返回 5，而 `sizeof "Hello"` 返回包含终止字符的数组大小 6。这个“差 1”只适用于数组恰好由该字符串初始化且首个空字符位于最后一格的情形；数组有额外容量、内部更早出现空字符或表达式已退化为指针时都不成立。
 
 ```c
 #include <stdio.h>
@@ -139,8 +143,8 @@ int main(void) {
   </Step>
   <Step title="第三步：缓冲区残留——经典 bug 来源">
     <ScanfInputDiagram step={3} />
-    扫描完成后，scanf 留下了"剩菜"在缓冲区——格式串只匹配了 `42` 和 `3.14`，但后面的回车符 `\n` 还留在缓冲区。如果你紧接着再调用一次 `scanf` 或 `getchar()`，它会首先读到这个残留的 `\n`！
-    **这是 C 初学者最常见的"输入失灵"bug：** 你以为 getchar() 在等你输入，但它瞬间就读到了上一次 scanf 剩下的换行符。解决办法：在 scanf 后加一行 `getchar();` 或者用 `scanf(" %c", &ch)`（百分号前加一个空格）来跳过残留空白。
+    扫描完成后，行尾换行通常仍在流中。下一次 `%d`、`%f`、`%s` 会自动跳过前导空白，但 `%c`、`%[` 和 `getchar()` 不会，因此它们可能立即取得该换行。
+    读取单个非空白字符可用 `scanf(" %c", &ch)`；需要可靠处理整行时应统一用 `fgets`，再用 `strtol` 等函数解析。单独调用一次 `getchar()` 只消费一个字符，不能保证清理含多余输入的整行。
   </Step>
 </Stepper>
 
@@ -148,9 +152,9 @@ int main(void) {
 
 <IOMemoryBufferDiagram />
 
-缓冲区的概念不仅仅影响 scanf——printf 也有输出缓冲区。如果你写 `printf("Hello")` 但没写 `\n`，程序结束时这段文字可能还没从缓冲区刷新到控制台——你根本看不到它。加 `\n` 通常能触发刷新；你也可以用 `fflush(stdout)` 强制刷新。
+缓冲区也影响输出可见时机。正常程序终止会关闭并刷新输出流；但没有换行的交互提示可能在程序等待输入时仍留在缓冲区。终端上的 `stdout` 常为行缓冲但不是无条件保证，需立即显示提示时调用 `fflush(stdout)`。
 
-**记忆口诀：printf 输出靠 \n 刷新；scanf 输入留 \n 惹祸。** 这两条规则帮你避过 90% 的输入输出困惑。
+不要把“换行必刷新”或“所有 scanf 都不吃换行”当成规则。应根据流缓冲模式、具体转换说明是否跳过空白以及函数返回值判断状态。
 
 {/* 4. 数学推导（spec §四）：math:false，整节省略。 */}
 
@@ -181,7 +185,7 @@ int main(void) {
 }
 ```
 
-三种方式有细微差别：方式②在栈上分配可变字符数组（字母可以改），方式③的指针指向的是**只读的字符串字面值**——试图 `s3[0] = 'h';` 在大多数平台上会崩溃。`%s` 格式说明让 printf 从给定地址开始、遇到 `\0` 就停——它不关心字符串是怎么声明的。
+三种方式有细微差别：方式②创建可修改数组，其存储期取决于声明位置；方式③指向字符串字面量。通过该指针修改字面量的行为未定义，无论目标平台是否把它放在只读段。`%s` 会从地址读取直到首个空字符，因此调用者必须保证对象边界内存在终止符。
 
 ### 场景二：printf 格式组合——宽度、精度、标志一起上
 
@@ -212,14 +216,17 @@ int main(void) {
     char name[20];
 
     printf("请输入：姓名 年龄 身高\n");
-    scanf("%s %d %f", name, &age, &height);
+    if (scanf("%19s %d %f", name, &age, &height) != 3) {
+        fputs("输入格式错误\n", stderr);
+        return 1;
+    }
 
     printf("%s，%d 岁，身高 %.2f 米\n", name, age, height);
     return 0;
 }
 ```
 
-`name` 是数组名——**数组名本身就是地址**，所以不需要写 `&name`。但 `age` 和 `height` 是普通变量，**必须加 `&`**。%s 读取字符串时遇到空白字符（空格、回车）就停——所以这个程序读不到带空格的姓名（比如 "Li Hua" 只会读到 "Li"）。%d 读到空格或回车停止，%f 同理。
+在此函数实参中 `name` 转换为首元素指针，所以不写 `&name`；`age` 和 `height` 则传对象地址。`%19s` 最多写入 19 个非空白字符并追加空字符，匹配 `name[20]` 的容量。返回值 3 表示三个转换都成功；不检查返回值就可能继续读取未赋值对象。
 
 ### 场景四：gets 的危险与 fgets 的安全替代
 
@@ -240,10 +247,10 @@ int main(void) {
 }
 ```
 
-`gets()` 函数从 C11 标准起已被正式**删除**——它不知道目标数组有多长，用户输入超过数组大小的内容会覆盖栈上其他数据，这是著名的"缓冲区溢出"安全漏洞。`fgets()` 接受三个参数：目标数组、最大长度（含 `\0`）、输入源（`stdin` 就是标准输入）。`fgets` 会在遇到换行符时也把它读入数组（保留 `\n`），而 `puts` 的输出末尾自动换行。`fgets` + `fputs` 是 C 中安全的行输入输出组合。
+`gets()` 在 C11 中被删除，因为接口无法获知目标容量。`fgets()` 接受数组、最大写入数量和输入流，成功时最多存 `n-1` 个字符并追加空字符。若换行在容量内会一并保存；长行只读到一段，EOF 前最后一行也可能没有换行。调用者必须检查返回值并决定是否继续读取剩余片段。
 
 <Callout type="trap">
-  `fgets` 读入的字符串末尾会包含换行符 `\n`（除非一行刚好填满缓冲区）。如果你不需要这个换行符，可以用 `line[strcspn(line, "\n")] = '\0';` 把它去掉——`strcspn` 函数找到 `\n` 的位置，你在那个位置放一个 `\0` 就把换行符"截断"了。
+  `fgets` 只有在本次读取遇到换行且容量足够时才保存 `\n`。可先确认返回值，再用 `strcspn` 去掉已读到的换行；若数组中没有换行且尚未到 EOF，说明输入行可能被截成多段，需要继续读取或报告过长。
 </Callout>
 
 {/* 7. 常见误区（spec §七，C 型 ≥3）：固定格式 现象→原因→修法。 */}
@@ -251,26 +258,26 @@ int main(void) {
 ## 容易踩的坑
 
 <Callout type="trap">
-  **现象**：`char str[5] = "Hello";` 编译通过，但 `printf("%s", str);` 输出 `Hello` 后面跟一串乱码。
-  **原因**：`"Hello"` 需要 6 个字节——5 个字符 + 1 个 `\0`。你只分配了 5 个字节，编译器把 `H` `e` `l` `l` `o` 塞进去，**没有空间放 `\0`**。printf 按 `%s` 输出时，读不到 `\0` 就一直往后读——把紧跟 str 的内存空间里的内容当字符串输出，直到偶然遇到一个值为 0 的字节才停。
+  **现象**：`char str[5] = "Hello";` 可能只得到五个非空字符；再以 `%s` 输出时行为不可预测。
+  **原因**：初始化器有五个可见字符和一个终止符，而数组只有五格。C 允许字符数组在大小不足终止符时省略它，但结果不是有效 C 字符串；`%s` 随后越界查找空字符会产生未定义行为。
   **修法**：声明字符数组时永远给 `\0` 留一个位置——`char str[6] = "Hello";` 或者直接不写大小让编译器算：`char str[] = "Hello";`。
 </Callout>
 
 <Callout type="trap">
   **现象**：`int n; scanf("%d", n);` 程序直接崩溃——段错误（Segmentation Fault）。
-  **原因**：scanf 的格式参数后面必须给出变量的**地址**，而不是变量本身。`scanf("%d", n)` 把 n 的**值**（未初始化，可能是随机的）当作内存地址去写——这是往一个随机的、不属于你的内存地址写数据，操作系统会立刻杀死你的程序。
+  **原因**：`%d` 要求对应参数是 `int *`，实际却传了经默认提升后的 `int` 值，且该值还未初始化。可变参数类型不匹配会产生未定义行为，不保证表现为段错误。
   **修法**：给 scanf 传地址——`scanf("%d", &n);`。唯一的例外是数组名和指针：`char name[20]; scanf("%s", name);` 不需要 `&`，因为数组名本身就是地址。
 </Callout>
 
 <Callout type="trap">
   **现象**：`scanf("%d", &n); char ch; scanf("%c", &ch);` ——第一次输完 `42` 回车后，`ch` 瞬间变成了 `\n`，根本不等你输入。
   **原因**：scanf 在第一轮把 `42` 读走，但回车符 `\n` 留在缓冲区。第二轮 `scanf("%c", &ch)` 立刻从缓冲区读到了这个残留的 `\n`——%c 不跳过空白。这就是经典的"输入被跳过"现象。
-  **修法**：三种方案——① 在第二个 scanf 的 `%c` 前加一个空格（`" %c"`），这个空格告诉 scanf 跳过前面的空白；② 在两轮 scanf 之间加 `getchar()` 吃掉残留的 `\n`；③ 统一用 `fgets` 做所有输入，不用 scanf 读取字符。
+  **修法**：若目标是下一个非空白字符，在 `%c` 前加空格；若目标是下一整行，统一用 `fgets` 读取并解析。不要假设一次 `getchar()` 能清理任意残留输入。
 </Callout>
 
 <Callout type="trap">
-  **现象**：`printf("进度 %d%", 80);` 输出 `进度 80%` 的后面跟了一堆乱码；或者 `printf("值: %d\n", 3.14159);` 输出 `1374389535` 而不是 `3`。
-  **原因**：第一条 `%` 在 printf 格式串里是特殊字符——`%%` 才是"输出一个百分号"。单独的 `%` 被 printf 当成了不完整的格式说明开头，吞掉了后面的逗号和参数，输出就乱了。第二条 `%d` 告诉 printf"下一个参数是 4 字节的 int"，但 3.14159 是 8 字节的 double——printf 只取了 double 二进制的前半截当 int 解读，当然不是你要的值。
+  **现象**：`printf("进度 %d%", 80);` 或 `printf("值: %d\n", 3.14159);` 的输出不可依赖。
+  **原因**：格式串以孤立 `%` 结束，或转换说明要求的类型与提升后的实参类型不匹配，行为未定义；不能用固定字节读取方式解释结果。
   **修法**：第一条把 `%d%` 改成 `%d%%`。第二条 `printf("值: %f\n", 3.14159);`——类型和格式说明必须一一对应：int 用 %d、double 用 %f、char* 用 %s。
 </Callout>
 
@@ -278,20 +285,20 @@ int main(void) {
 
 ## 小结
 
-- C 字符串 = char 数组 + 结尾 \0——strlen 不算 \0，sizeof 算上 \0，差 1 不是 bug
+- C 字符串以空字符终止；`strlen` 找首个终止符，`sizeof` 查询数组或指针本身，两者只在特定数组初始化场景差 1
 - printf 的格式通式 %[标志][宽度][.精度]类型 —— 组合这些字段就能完成日常所有输出格式需求
 - scanf 必须传变量地址（&），从输入缓冲区按格式匹配读取——跟 printf 方向相反但格式体系相同
-- 输入缓冲区的残留（\n 等未匹配字符）是"输入失灵"的根源——%c 前加空格、加 getchar() 或改用 fgets 都能解决
+- 输入残留要按目标协议处理：非空白字符可在 `%c` 前加空格，整行输入应统一用 `fgets` 并检查完整性
 - 永远不用 gets——用 fgets(name, sizeof(name), stdin) 安全替代；puts/fputs 做行输出
 
 <Exercises>
 
-**练习 1（改代码型）** 下面这段程序有六处错误或隐患。找出每一处并修正，写出完整的改正后代码。
+**问题 1（改代码型）** 下面程序至少有七处错误或隐患。找出并修正，且检查每次输入的返回值。
 
 ```c
 #include <stdio.h>
 int main(void) {
-    char name[5] = "Xiao";
+    char name[5] = "Xiaow";
     int age;
     float score;
     char grade;
@@ -306,18 +313,20 @@ int main(void) {
 
 <Answer>
 
-六处问题：
-① `char name[5]="Xiao"`——"Xiao" 需要 5 字节 + \0 = 6 字节，数组太小。改正为 `char name[20];` 或不写大小。
+七处问题：
+① `char name[5]="Xiaow"`——五个可见字符还需要一个终止空字符，数组太小。改成容量更大的数组。
 ② `gets(name)`——gets 已从 C11 删除且极度危险。改正为 `fgets(name, sizeof(name), stdin);`。
 ③ `scanf("%f", score)`——漏了 `&`，scanf 需要变量地址。改正为 `scanf("%f", &score);`。
-④ `scanf("%c", &grade)` 前没有处理缓冲区残留——前面的 scanf 留下的 \n 会被 %c 立即读到。改正为 `scanf(" %c", &grade);`（%c 前加空格）。
-⑤ `printf` 里 `%c` 对应 `age`——但 age 是 int，应该用 `%d`。
-⑥ `printf` 里 `%d` 对应 `score`——但 score 是 float，应该用 `%f`。
+④ `age` 从未成功读取便被输出，读取其不确定值会导致未定义行为。
+⑤ `scanf("%c", &grade)` 会读到前一次转换留下的空白，可按需求改成 `" %c"`。
+⑥ `printf` 里 `%c` 对应 `age`，类型不匹配，应使用 `%d`。
+⑦ `printf` 里 `%d` 对应经提升后的 `score`，应使用 `%f`。
 
 修正后：
 
 ```c
 #include <stdio.h>
+#include <string.h>
 int main(void) {
     char name[20];
     int age;
@@ -325,22 +334,23 @@ int main(void) {
     char grade;
 
     printf("请输入姓名：");
-    fgets(name, sizeof(name), stdin);
+    if (!fgets(name, sizeof(name), stdin)) return 1;
+    name[strcspn(name, "\n")] = '\0';
 
     printf("请输入年龄和成绩：");
-    scanf("%d %f", &age, &score);
+    if (scanf("%d %f", &age, &score) != 2) return 1;
 
     printf("请输入等级：");
-    scanf(" %c", &grade);   // 注意 %c 前面的空格！
+    if (scanf(" %c", &grade) != 1) return 1;
 
-    printf("姓名: %s年龄: %d 成绩: %.1f 等级: %c\n", name, age, score, grade);
+    printf("姓名: %s 年龄: %d 成绩: %.1f 等级: %c\n", name, age, score, grade);
     return 0;
 }
 ```
 
 </Answer>
 
-**练习 2（问答型）** 读下面的程序，写出每一行 printf 的输出结果（共 6 行），并逐一解释为什么。
+**问题 2（问答型）** 读下面程序，写出前五行结果，并说明为什么第六行没有可移植答案。
 
 ```c
 #include <stdio.h>
@@ -363,12 +373,12 @@ int main(void) {
 ② 输出 `sizeof = 5`——数组 `str` 分配了 5 个字节（C/P/r/o/\0），sizeof 算上 \0。
 ③ 输出 `|      CPro|`——%10s 总宽度 10，字符串只有 4 字符，默认右对齐，左边填 6 个空格。
 ④ 输出 `|CPro      |`——%-10s 左对齐，右边填 6 个空格。
-⑤ 输出 `str[4] = 0`——数组第 5 个元素（下标 4）是 \0，它的 ASCII 码就是 0。
+⑤ 输出 `str[4] = 0`——数组第 5 个元素是数值为零的空字符，与执行字符集是否 ASCII 无关。
 ⑥ 输出 `str[5] = ...`——**这句有 bug！** 数组只有 5 个元素（下标 0~4），`str[5]` 越界访问，行为未定义——可能输出随机值，也可能崩溃。
 
 </Answer>
 
-**练习 3（综合实现型）** 写一段程序：声明一个最多存 64 个字符的字符数组，用 `fgets` 读取用户输入的一整行文字，然后用 `strlen` 输出这一行文字的长度，用 `printf` 的 `%s` 和宽度标志分别以默认、右对齐（宽度 50）、左对齐（宽度 30）三种格式输出这行文字。
+**问题 3（综合实现型）** 用 64 字节数组读取一行，检查是否完整，去掉已读换行，再按默认、右对齐和左对齐格式输出。
 
 <Answer>
 
@@ -379,24 +389,23 @@ int main(void) {
     char line[64];
 
     printf("请输入一行文字（最多 63 字符）：");
-    fgets(line, sizeof(line), stdin);
+    if (!fgets(line, sizeof(line), stdin)) return 1;
+    size_t cut = strcspn(line, "\n");
+    int complete = line[cut] == '\n';
+    line[cut] = '\0';
 
-    printf("\n你输入了 %zu 个字符（含末尾 \\n）\n", strlen(line));
+    printf("\n你输入了 %zu 个字符，完整行=%s\n",
+           strlen(line), complete ? "yes" : "no");
 
-    printf("默认输出:  %s", line);
-    printf("右对齐50:  %50s", line);
-    printf("左对齐30:  %-30s", line);
+    printf("默认输出:  |%s|\n", line);
+    printf("右对齐50:  |%50s|\n", line);
+    printf("左对齐30:  |%-30s|\n", line);
 
     return 0;
 }
 ```
 
-> 输入 `Hello C!` 后：
-> 默认输出:  `Hello C!\n`
-> 右对齐50:（前 40 个空格）`          Hello C!\n`
-> 左对齐30: `Hello C!`（后面填空格）`\n`
-
-`fgets` 读入的内容里包含用户敲的回车符（末尾的 `\n`），所以 strlen 比你以为的字符个数多 1。刚才的练习 1 中提到可以用 `line[strcspn(line, "\n")] = '\0'` 把它去掉。
+`strcspn` 找到首个换行或字符串末尾。若没有读到换行，可能是 EOF 前最后一行，也可能只是长行的第一段；生产代码还应结合 `feof(stdin)` 决定是否继续读取。
 
 </Answer>
 
@@ -413,11 +422,11 @@ int main(void) {
 </GlossaryItem>
 
 <GlossaryItem term="空字符（null character）">
-  ASCII 码为 0 的字符，写作 \0。它不像换行符 \n 那样有"可见效果"——它的唯一作用就是告诉 C："字符串到这里结束，后面不用再读"。strlen 数到它就停，printf 的 %s 读到它就不继续输出。详见本章「C 字符串的本质」一节。
+  数值为零的字符，写作 `\0`，用于终止 C 字符串；它与字符 `'0'` 不同，也不依赖 ASCII。
 </GlossaryItem>
 
 <GlossaryItem term="strlen">
-  C 标准库 `<string.h>` 里的函数：接收一个字符串（char 数组），返回从第一个字符到 \0 之前的字符个数。\0 本身不计入。由于 \0 不算在内，sizeof 返回的结果永远比 strlen 大 1——这 1 个字节就是结尾的 \0。详见本章「C 字符串的本质」示例代码。
+  从给定字符串起点查找到首个空字符并返回此前字符数。它不知道数组容量；`sizeof` 与它只在特定数组初始化情形下恰好差 1。
 </GlossaryItem>
 
 <GlossaryItem term="printf()">
@@ -429,19 +438,19 @@ int main(void) {
 </GlossaryItem>
 
 <GlossaryItem term="scanf">
-  C 标准库的格式化输入函数（`<stdio.h>`）。和 printf 相反——它从输入缓冲区里按格式说明读数据，存到变量里。核心差异：储你给 scanf 的不是变量本身，而是变量的**地址**（写 `&n` 而不是 `n`）——只有数组名不需要加 &（因为数组名本身就是地址）。详见本章「scanf 的用法」一节和 ScanfInputDiagram Stepper 图示。
+  按格式从输入流执行转换并写入目标对象的函数。数值转换传对象地址；数组表达式在函数实参中通常转换为首元素指针。应限制字符串字段宽度并检查成功转换项数。
 </GlossaryItem>
 
 <GlossaryItem term="取地址运算符（&）">
-  一元运算符，放在变量名前面，返回变量在内存中的地址。`&n` 的意思不是"引用 n 的值"，而是"n 在内存里的门牌号"。scanf 需要用这个地址来知道"把读到的数据写到哪一块内存"。忘记写 & 会导致 scanf 往错误的地址写数据——程序崩溃。详见本章「scanf 的用法」一节。
+  返回对象地址的一元运算符。`scanf` 的 `%d` 等转换要求匹配的对象指针；传值而非地址会造成可变参数类型不匹配和未定义行为。
 </GlossaryItem>
 
 <GlossaryItem term="输入缓冲区（input buffer）">
-  键盘和程序之间的中转站。用户敲的每个字符先到这里排队——scanf 或 getchar 从缓冲区读取，而不是直接从键盘读。scanf 按格式匹配时只取走自己需要的内容，不匹配的字符（如多余的换行符）留在缓冲区作为"剩菜"——下一次读取时会被意外读到，造成"输入被跳过"的经典 bug。详见 ScanfInputDiagram Stepper 和 IOMemoryBufferDiagram 图示。
+  标准 I/O 实现为输入流维护的暂存状态。格式转换只消费匹配所需字符；未消费字符会供后续读取使用，而不同转换对前导空白的处理不同。
 </GlossaryItem>
 
 </Glossary>
 
 {/* 9. 出处声明（spec §九）：sourceUrl 为空字符串（原创章节），Attribution 标签自动处理。 */}
 
-<Attribution />
+<Attribution source="C Primer Plus, Sixth Edition, Chapter 4: Character Strings and Formatted Input/Output" />

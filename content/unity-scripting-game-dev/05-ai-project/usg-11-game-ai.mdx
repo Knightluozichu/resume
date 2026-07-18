@@ -1,0 +1,241 @@
+---
+title: "第11章 脚本与游戏AI"
+type: A
+section: "Unity 3D 脚本编程与游戏开发 · AI 与完整项目"
+order: 11
+description: "连接AI层次、导航网格、代理、障碍、链接、有限状态机、视觉感知和综合敌人。"
+demo: true
+math: false
+sourceUrl: "https://www.dedao.cn/ebook/detail?id=z4R9BQ7pP4ZEaXYkx8KvRdljeyqo608g25w1m2bMAO9NnDL7gBGQr5VzJqrvmEVN"
+draft: false
+---
+
+import {
+  Objectives,
+  Callout,
+  Attribution,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+} from "@/components/mdx/mdx-components";
+import {
+  Usg11GameAiMapLab,
+  Usg11GameAiExperimentLab,
+  Usg11GameAiEvidenceLab,
+} from "@/components/mdx/unity-scripting-game-dev/diagrams/usg-11-game-ai";
+
+<Objectives>
+
+- 能解释第11章在原书13章结构中的责任与前后依赖
+- 能实现“采样目标、视锥遮挡、状态转换”之间可观察、可回放的数据链
+- 能比较原书实现与当前Unity迁移方案，并设计失败注入证据
+
+</Objectives>
+
+## 问题：怎样证明自己复现的是第11章，而不是一个同名教程？
+
+先预测：如果删掉原章标题、命名实例和系统边界，只留一段能运行的C#代码，另一位读者还能反推出本章吗？不能。AI先从感知层生成快照，再由FSM选择巡逻、警戒、追击或攻击，导航代理执行路径。视野必须同时满足距离、方向和遮挡，导航障碍与链接则决定路径可达性。
+
+<Usg11GameAiMapLab />
+
+## 原书边界与目录单元
+
+本页严格对应2021年版目录中的以下单元。现代API和工程补充可以解决版本差异，但不能替代这些原目录位置：
+
+- **游戏AI综述**
+- **游戏AI的特点**
+- **常用AI技术**
+- **AI的层次**
+- **脚本与导航系统**
+- **导航系统相关组件**
+- **构建导航网格**
+- **创建导航代理**
+- **导航障碍物**
+- **导航链接**
+- **导航综合实例**
+- **游戏AI的编程方法**
+- **有限状态机的概念**
+- **模拟AI视觉**
+- **游戏AI实例**
+- **扩展AI状态机**
+- **其他AI编程技术**
+
+详细章目采用得到电子书目录；作者、ISBN与出版社信息由教材采选系统交叉核对。本站重新组织讲解、代码、实验和证据，不逐字复制原文。导读和总复习不重复计入13个正文章。
+
+## 核心模型与行为不变量
+
+AI先从感知层生成快照，再由FSM选择巡逻、警戒、追击或攻击，导航代理执行路径。视野必须同时满足距离、方向和遮挡，导航障碍与链接则决定路径可达性。
+
+先写功能切片：输入来自哪里，哪个对象拥有状态，在哪个Unity回调更新，调用哪个引擎系统，输出由谁消费，失败时第一条信号是什么。脚本、Inspector引用和场景对象都必须能回到同一个切片编号。
+
+相同感知快照产生确定状态转换，目标丢失后按记忆时间退出追击，路径失败有可观察退路。 这条不变量要在正常、边界和失败三组输入下成立。最终画面正确但中间所有权、时序或资源生命周期错误，仍不能签发。
+
+## 五个核心术语
+
+<Term def="在一次决策中固定目标位置、可见性、距离和时间的信息集合">
+  感知快照
+</Term>
+它必须落到第11章的输入、状态、输出与失败信号，不能只作为名词记忆。
+
+<Term def="在NavMesh上规划路径并按速度、半径和加速度移动的实体">导航代理</Term>
+它必须落到第11章的输入、状态、输出与失败信号，不能只作为名词记忆。
+
+<Term def="连接不能连续行走区域并表达跳跃或攀爬的特殊边">导航链接</Term>
+它必须落到第11章的输入、状态、输出与失败信号，不能只作为名词记忆。
+
+<Term def="用明确状态、进入退出动作和转换条件组织AI行为">有限状态机</Term>
+它必须落到第11章的输入、状态、输出与失败信号，不能只作为名词记忆。
+
+<Term def="结合距离、点积和遮挡射线判断目标是否可见的流程">视锥判定</Term>
+它必须落到第11章的输入、状态、输出与失败信号，不能只作为名词记忆。
+
+术语连成模型后，再记录对象的创建、启用、禁用、销毁和场景切换行为。Unity回调不是任意函数名，而是引擎调度合同；在错误阶段读取输入、推进物理或释放资源，会产生偶发且难以回放的故障。
+
+## 从输入到结果的数据链
+
+本章主链是：采样目标 → 视锥遮挡 → 状态转换 → 路径规划 → 动作执行 → 结果反馈。每个节点保存切片ID、帧号、对象ID和状态版本。表现系统只能呈现玩法事实，资源与数据系统必须通过租约或快照管理生命周期。
+
+```csharp
+bool CanSee(Target target)
+{
+    Vector3 delta = target.Eye - eye.position;
+    if (delta.sqrMagnitude > viewRange * viewRange) return false;
+    if (Vector3.Dot(eye.forward, delta.normalized) < viewCos) return false;
+    return !Physics.Raycast(eye.position, delta.normalized, delta.magnitude, obstacleMask);
+}
+```
+
+旧输入API、Text、AssetBundle或LitJSON可以迁移到Input System、TextMeshPro、Addressables或System.Text.Json，但迁移账本必须写明原书问题、替代实现、保留不变量和对照证据。
+
+<Usg11GameAiExperimentLab />
+
+## 三步复现与中间检查
+
+<Stepper>
+  <Step title="1. 固定原章边界和切片合同">
+    把“游戏AI综述、游戏AI的特点、常用AI技术”映射为输入、所有者、时钟、输出和失败信号；缺少原目录映射的功能不进入实现。
+    <Usg11GameAiMapLab />
+  </Step>
+  <Step title="2. 单变量实现并注入故障">
+    按采样目标、视锥遮挡、状态转换、路径规划推进，每次只改变一个变量，保存状态快照和首条错误日志。
+    <Usg11GameAiExperimentLab />
+  </Step>
+  <Step title="3. 回放案例并签发证据">
+    在编辑器和目标构建中执行正常、边界、失败三组输入，核对结果、生命周期和现代迁移差异。
+    <Usg11GameAiEvidenceLab />
+  </Step>
+</Stepper>
+
+## 两个必须主动制造的失败样本
+
+<Callout type="trap" title="目录或案例漂移">
+  只比较距离就看穿墙壁，或每帧重置NavMesh目的地和状态，造成寻路抖动与转换风暴。
+  这种实现即使运行正常，也没有覆盖第11章的原书边界。先恢复目录与命名实例，再讨论扩展。
+</Callout>
+
+<Callout type="trap" title="结果正确、时序错误">
+  故意在低帧率、重复触发、对象禁用和场景卸载时回放。若出现重复结算、旧协程继续运行、事件未退订或资源提前释放，说明状态所有权仍不合格。
+</Callout>
+
+## 当前Unity迁移表
+
+| 原书对象            | 当前实现                           | 必须保留的证据                 |
+| ------------------- | ---------------------------------- | ------------------------------ |
+| 旧输入、UI或资源API | 当前官方包或兼容层                 | 原案例输入、状态和结果对照     |
+| MonoBehaviour回调   | 明确时钟与状态所有者的组件         | Awake到Destroy的顺序日志       |
+| 场景公开引用        | SerializeField、稳定ID或运行时注入 | 缺失引用检查和场景重载回放     |
+| 手工创建销毁        | 仅在证据支持时使用对象池或租约     | 创建、复位、唯一释放和峰值数据 |
+
+现代迁移不能把原书内容改写为通用最佳实践清单。每章首先复现其具体系统和实例，再补充版本差异、性能风险和可测试接口。
+
+## 证据包与自动检查
+
+每次运行至少保存原章、案例、构建号、输入序列、状态版本、首个失败信号、截图或日志哈希以及修复后同输入回放。跨系统案例还要保存对象和资源的创建释放记录。
+
+```json
+{
+  "chapter": "第11章",
+  "unit": "游戏AI综述",
+  "flow": [
+    "采样目标",
+    "视锥遮挡",
+    "状态转换",
+    "路径规划",
+    "动作执行",
+    "结果反馈"
+  ],
+  "normal": true,
+  "boundary": true,
+  "failureReplay": true
+}
+```
+
+```text
+PASS chapter=第11章 ownership=true timing=true result=true
+PASS invariant=相同感知快照产生确定状态转换，目标丢失后按记忆时间退出追击，路径失败有可观察退路。
+REJECT missing-unit | duplicate-event | stale-reference | premature-release
+```
+
+<Usg11GameAiEvidenceLab />
+
+## 练习：把知识变成可审计交付
+
+<Exercises>
+
+**问题 1** 为“游戏AI综述”写出输入、状态所有者、更新时钟、输出和失败信号。
+
+<Answer>
+  合同必须从采样目标追踪到结果反馈，并能定位唯一责任对象。
+</Answer>
+
+**问题 2** 制造“只比较距离就看穿墙壁，或每帧重置NavMesh目的地和状态，造成寻路抖动与转换风暴。”，保存首个偏离节点，并用同一输入证明修复。
+
+<Answer>
+  故障证书要同时保留版本、输入、首条日志、修复和复验。
+</Answer>
+
+**问题 3** 列出三项可迁移API和三项不可改变的不变量，附编辑器与构建回放证据。
+
+<Answer>
+  API、包名与序列化工具可替换；原目录单元、案例行为、状态所有权和可观察结果不可删除。
+</Answer>
+
+</Exercises>
+
+## 小结
+
+- 是否能逐项指出本页覆盖的原目录单元与命名实例？
+- 是否能解释感知快照、导航代理、导航链接之间的关系？
+- 是否保存正常、边界、失败三组回放和现代迁移差异？
+- 是否验证对象禁用、场景重载和资源释放后的状态？
+
+## 术语表
+
+<Glossary>
+  <GlossaryItem term="感知快照">
+    在一次决策中固定目标位置、可见性、距离和时间的信息集合。
+  </GlossaryItem>
+  <GlossaryItem term="导航代理">
+    在NavMesh上规划路径并按速度、半径和加速度移动的实体。
+  </GlossaryItem>
+  <GlossaryItem term="导航链接">
+    连接不能连续行走区域并表达跳跃或攀爬的特殊边。
+  </GlossaryItem>
+  <GlossaryItem term="有限状态机">
+    用明确状态、进入退出动作和转换条件组织AI行为。
+  </GlossaryItem>
+  <GlossaryItem term="视锥判定">
+    结合距离、点积和遮挡射线判断目标是否可见的流程。
+  </GlossaryItem>
+</Glossary>
+
+## 来源与改编边界
+
+<Attribution
+  adaptedFrom="《Unity 3D脚本编程与游戏开发》马遥、沈琰，人民邮电出版社，2021，ISBN 9787115558756"
+  adaptedUrl="https://www.dedao.cn/ebook/detail?id=z4R9BQ7pP4ZEaXYkx8KvRdljeyqo608g25w1m2bMAO9NnDL7gBGQr5VzJqrvmEVN"
+/>

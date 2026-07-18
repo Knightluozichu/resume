@@ -1,0 +1,362 @@
+---
+title: "Chapter 31 · Number-Theoretic Algorithms"
+type: C
+section: "CLRS4 · 专题"
+order: 31
+description: "按CLRS第四版第31章重建初等数论、Euclid、模算术、CRT、快速幂、RSA与素数测试。"
+demo: true
+math: true
+sourceUrl: "https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf"
+draft: false
+---
+
+import { CLRS4DivisibilityLab, CLRS4EuclidLab, CLRS4BezoutLab, CLRS4CongruenceLab, CLRS4ModularInverseLab, CLRS4ModularEquationLab, CLRS4CRTLab, CLRS4RepeatedSquaringLab, CLRS4ElementOrderLab, CLRS4RSALab, CLRS4RSAKeyLab, CLRS4FermatPitfallLab, CLRS4MillerRabinLab, CLRS4NumberTheoryCertificateLab } from "@/components/mdx/introduction-to-algorithms/diagrams/31-number-theoretic-algorithms";
+import { Objectives, Callout, Attribution, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step } from "@/components/mdx/mdx-components";
+
+<Objectives>
+
+- 能解释divisibility、gcd、congruence class、unit group、element order与Euler theorem的关系
+- 能计算Euclidean trace、Bézout coefficients、modular inverse、linear congruence solutions与CRT reconstruction
+- 能实现extended Euclid、square-and-multiply、textbook RSA arithmetic与Miller–Rabin witness test
+- 能分析inverse不存在、negative remainder、overflow、Fermat pseudoprime和RSA misuse
+- 能设计包含domain assumptions、independent identities、witnesses与protocol boundaries的数论证书
+
+</Objectives>
+
+## 从“输入有一千位，循环到n不算快”开始
+
+先预测：整数$n$若用binary表示，input length只有$\Theta(\log n)$ bits。一个循环执行$n$次，看似“线性于n”，实际上对input bits是exponential。数论算法的cost必须围绕bit length、big-integer arithmetic和modular reduction来理解。
+
+<Term def="在整数divisibility、gcd、congruences、finite multiplicative groups与primes上进行高效计算的一组算法。">数论算法</Term>把elementary identities转成可执行证书：Euclid给gcd与Bézout coefficients，Bézout给inverse和linear congruences，CRT组合residues，repeated squaring支撑RSA与primality testing。
+
+<CLRS4DivisibilityLab />
+
+## 31.1 Elementary number-theoretic notions
+
+### Divisibility and primes
+
+<Term def="关于divisibility、prime factorization、gcd、congruence与finite groups的基础定义和定理。">初等数论概念</Term>从$a\mid b$开始：存在integer $k$使$b=ak$。Prime只有positive divisors 1与自身；composite有nontrivial factor。Fundamental theorem of arithmetic说明大于1的integer有唯一prime factorization（忽略factor顺序）。
+
+GCD把共同divisors压成一个最大positive representative，LCM与GCD满足
+
+$$
+\gcd(a,b)\operatorname{lcm}(a,b)=|ab|
+$$
+
+（非零情形）。但直接factor large inputs再算gcd是错误依赖：factorization可能困难，Euclid无需factor即可高效求gcd。
+
+### Residue classes and groups
+
+若$n$整除$a-b$，记$a\equiv b\pmod n$。Congruence与addition、subtraction、multiplication相容，因此可在classes $\mathbb{Z}_n$上运算。可逆classes形成
+
+$$
+\mathbb{Z}_n^*=\{[a]_n:\gcd(a,n)=1\},
+$$
+
+在multiplication modulo $n$下构成finite group，size为Euler totient $\phi(n)$。Group structure会在element powers、RSA与primality testing中反复出现。
+
+## 31.2 Greatest common divisor
+
+### Euclidean algorithm
+
+<Term def="整除a和b的最大positive integer；Euclid利用gcd(a,b)=gcd(b,a mod b)计算它。">最大公约数</Term>保持invariant：
+
+$$
+\gcd(a,b)=\gcd(b,a\bmod b).
+$$
+
+<CLRS4EuclidLab />
+
+```text
+EUCLID(a, b)
+1  while b != 0
+2      (a, b) = (b, a mod b)
+3  return |a|
+```
+
+Remainders快速缩小；Lamé analysis把worst case与Fibonacci numbers联系起来，division step数量为$O(\log b)$。实际bit complexity还要乘上division cost，不能把large-integer division当unit operation。
+
+### Extended Euclid
+
+Extended version同时维护linear combination，返回$d,x,y$满足
+
+$$
+d=\gcd(a,b)=ax+by.
+$$
+
+<CLRS4BezoutLab />
+
+```ts
+function extendedGcd(a: bigint, b: bigint): [bigint, bigint, bigint] {
+  if (b === 0n) return [a, 1n, 0n];
+  const [d, x1, y1] = extendedGcd(b, a % b);
+  return [d, y1, x1 - (a / b) * y1];
+}
+```
+
+Bézout identity不仅解释gcd，还提供modular inverse：若$\gcd(a,n)=1$，则$ax+ny=1$，取mod $n$便有$ax\equiv1\pmod n$。
+
+## 31.3 Modular arithmetic
+
+### Canonical residues
+
+<Term def="在congruence classes modulo n上定义addition、multiplication、powers与inverses的运算体系。">模算术</Term>实现时应把residue规范到$0,\ldots,n-1$。许多languages的remainder保留dividend sign，所以negative input需要二次normalization。
+
+<CLRS4CongruenceLab />
+
+Addition与multiplication可以随时reduce：
+
+$$
+(a+b)\bmod n
+=
+\bigl((a\bmod n)+(b\bmod n)\bigr)\bmod n,
+$$
+
+乘法同理。但fixed-width type中先算$a b$可能在mod之前overflow；需要wider intermediate、Montgomery/Barrett reduction或overflow-safe multiply。
+
+### Inverses and cancellation
+
+$a^{-1}\pmod n$存在当且仅当$\gcd(a,n)=1$。Extended Euclid给Bézout coefficient，再canonicalize为inverse。
+
+<CLRS4ModularInverseLab />
+
+Modular division不是ordinary integer division。Congruence两侧能否“约掉$a$”取决于$a$是否是unit；若$\gcd(a,n)>1$，cancellation可能丢解或制造错误结论。
+
+<Callout type="trap" title="把a移到等式右边就写成除以a">
+Modulo n中只有units可逆。修法是先计算d=gcd(a,n)：d为1才直接乘inverse；d大于1时使用modular linear equation的existence与multiple-solutions规则。
+</Callout>
+
+## 31.4 Solving modular linear equations
+
+<Term def="寻找所有residue x使ax congruent to b modulo n，并根据gcd(a,n)判定存在性与解数。">模线性方程</Term>
+
+$$
+ax\equiv b\pmod n
+$$
+
+有解当且仅当$d=\gcd(a,n)$整除$b$。若有解，则modulo $n$恰有$d$个solutions。
+
+<CLRS4ModularEquationLab />
+
+把$a,b,n$同时除以$d$，得到coprime equation
+
+$$
+\frac{a}{d}x\equiv\frac{b}{d}\pmod{n/d}.
+$$
+
+Reduced coefficient有inverse，得到一个base solution $x_0$ modulo $n/d$；全部solutions为
+
+$$
+x_0+k(n/d)\pmod n,\qquad k=0,\ldots,d-1.
+$$
+
+```text
+MODULAR-LINEAR-EQUATION(a, b, n)
+1  (d, x, _) = EXTENDED-GCD(a, n)
+2  if b is not divisible by d, return no solutions
+3  x0 = x * (b/d) mod n
+4  return x0 + k*(n/d) mod n for k = 0..d-1
+```
+
+Verification应逐个检查$a x\bmod n=b\bmod n$，并确认solution count为$d$；只返回第一解会丢失合法classes。
+
+## 31.5 The Chinese remainder theorem
+
+<Term def="对pairwise-coprime moduli，把residue tuple与其product modulus下的唯一residue建立一一对应的定理。">中国余数定理</Term>设$n_1,\ldots,n_k$ pairwise coprime，$N=\prod_i n_i$。System
+
+$$
+x\equiv a_i\pmod{n_i}
+$$
+
+在modulo $N$下有唯一solution。
+
+<CLRS4CRTLab />
+
+Constructive formula令$N_i=N/n_i$，求$M_i=N_i^{-1}\pmod{n_i}$：
+
+$$
+x\equiv\sum_{i=1}^{k}a_iN_iM_i\pmod N.
+$$
+
+每一term在自己的modulus等于$a_i$，在其他moduli因含对应factor而为0。CRT可把large-modulus arithmetic拆成independent smaller moduli，也可重建exact integer coefficients；若moduli不pairwise coprime，需检查residues在共同gcd上的compatibility。
+
+## 31.6 Powers of an element
+
+### Square-and-multiply
+
+<Term def="按exponent binary expansion反复平方并选择性相乘，在logarithmic次group operations内求a的幂。">元素的幂</Term>不能执行$e-1$次multiplication来算$a^e$。Binary expansion把exponent halved at every step：
+
+```text
+MODULAR-EXPONENTIATION(a, e, n)
+1  result = 1; base = a mod n
+2  while e > 0
+3      if e is odd, result = result * base mod n
+4      base = base * base mod n
+5      e = floor(e/2)
+6  return result
+```
+
+<CLRS4RepeatedSquaringLab />
+
+算法做$O(\log e)$ modular squarings/multiplications。Cryptographic implementation还要处理timing与power side channels；data-dependent branch的教学伪代码不应直接用于secret exponent。
+
+### Order and Euler theorem
+
+在finite group中，element $a$的order是最小positive $t$使$a^t=1$。Lagrange theorem说明order整除group size。
+
+<CLRS4ElementOrderLab />
+
+因此对$a\in\mathbb{Z}_n^*$：
+
+$$
+a^{\phi(n)}\equiv1\pmod n.
+$$
+
+当$n=p$为prime时，$\phi(p)=p-1$，得到Fermat little theorem。它们解释exponent reduction与RSA correctness，也提供primality tests的necessary condition，但necessary不等于sufficient。
+
+## 31.7 The RSA public-key cryptosystem
+
+### Key arithmetic
+
+<Term def="基于composite modulus上的modular exponentiation构造public encryption exponent与private inverse exponent的公钥系统。">RSA公钥密码系统</Term>选择distinct large primes $p,q$，令$n=pq$、$\phi(n)=(p-1)(q-1)$。选择$\gcd(e,\phi(n))=1$，再以extended Euclid求
+
+$$
+d\equiv e^{-1}\pmod{\phi(n)}.
+$$
+
+Public key为$(n,e)$，private information包括$d$及通常保留的$p,q$。
+
+<CLRS4RSAKeyLab />
+
+Textbook arithmetic对message representative $m$计算
+
+$$
+c\equiv m^e\pmod n,
+\qquad
+m'\equiv c^d\pmod n.
+$$
+
+<CLRS4RSALab />
+
+因为$ed=1+k\phi(n)$，对coprime messages由Euler theorem有$m^{ed}\equiv m$；一般message可分别mod $p,q$证明后用CRT合并。Encryption/decryption都用square-and-multiply；private operation常用CRT分别mod $p,q$加速。
+
+### Security boundary
+
+Textbook RSA是algebra lesson，不是secure protocol。Deterministic encryption泄漏equality且可被malleate；production encryption必须使用标准方案如RSA-OAEP，signatures使用RSA-PSS，并使用成熟library、constant-time private operations、large approved key sizes与secure randomness。不要自己生成primes、padding或side-channel defenses。
+
+<Callout type="trap" title="m^e mod n能round-trip，所以可以直接上线">
+Round-trip只证明代数关系，不提供semantic security、integrity或side-channel resistance。修法是使用经过审查的cryptographic library和标准padding/protocol，并把textbook RSA仅用于理解与测试小例子。
+</Callout>
+
+## 31.8 Primality testing
+
+### Fermat is not enough
+
+<Term def="用deterministic certificate或randomized witnesses判定integer为prime或证明其composite的算法问题。">素数测试</Term>不能对所有potential divisors逐一trial divide到$\sqrt n$，因为相对bit length仍是exponential。
+
+Fermat test随机选与$n$ coprime的$a$，检查
+
+$$
+a^{n-1}\equiv1\pmod n.
+$$
+
+Failure直接证明composite，但pass只说明$a$不是Fermat witness。Carmichael numbers对所有coprime bases都pass。
+
+<CLRS4FermatPitfallLab />
+
+### Miller–Rabin witnesses
+
+对odd $n>2$，写
+
+$$
+n-1=2^s d,\qquad d\text{ odd}.
+$$
+
+先算$x=a^d\bmod n$。若$x=1$或$x=n-1$，本轮non-witness；否则反复square至$s-1$次，若途中出现$n-1$则non-witness，否则$a$证明$n$ composite。
+
+<CLRS4MillerRabinLab />
+
+```text
+MILLER-RABIN-WITNESS(a, n)
+1  write n-1 = 2^s * d with d odd
+2  x = a^d mod n
+3  if x is 1 or n-1, return non-witness
+4  repeat s-1 times
+5      x = x^2 mod n
+6      if x is n-1, return non-witness
+7  return composite witness
+```
+
+Prime总是pass。对odd composite，随机base成为strong liar的fraction至多$1/4$；独立重复$r$轮，错误upper bound为$4^{-r}$。这概率来自random base selection，不是说number本身“有某概率为prime”。若需要deterministic proof，应使用适合范围的proved base set或certifying primality algorithm。
+
+## 数论证书与实现边界
+
+Number-theory bug经常藏在domain mismatch：negative remainder、nonexistent inverse、fixed-width overflow、non-coprime CRT moduli、secret-dependent branches。每个algorithm应先check preconditions，再用independent identity验证output。
+
+<CLRS4NumberTheoryCertificateLab />
+
+<Stepper>
+<Step title="先算gcd与domain">
+判断coprimality、inverse existence、linear congruence解数和CRT compatibility；统一canonical residue convention。
+
+<CLRS4ModularInverseLab />
+</Step>
+<Step title="用logarithmic arithmetic">
+Euclid替代factorization，square-and-multiply替代linear exponent loop，并使用overflow-safe big-integer modular multiplication。
+
+<CLRS4RepeatedSquaringLab />
+</Step>
+<Step title="交付witness或identity">
+验证Bézout identity、每个congruence、RSA round-trip和Miller–Rabin witness chain；cryptographic deployment必须回到标准library。
+
+<CLRS4NumberTheoryCertificateLab />
+</Step>
+</Stepper>
+
+## 小结
+
+Chapter 31 Number-Theoretic Algorithms从elementary notions进入greatest common divisor：Euclid无需factorization，extended Euclid给Bézout coefficients。Modular arithmetic中的inverse存在性由gcd决定；modular linear equations可能无解或有多个解；Chinese remainder theorem把coprime residue systems与product modulus一一对应。
+
+Powers of an element用binary repeated squaring降到logarithmic group operations。RSA public-key cryptosystem把public exponent和private modular inverse结合，但textbook arithmetic不等于secure protocol。Primality testing从Fermat necessary condition推进到Miller–Rabin strong witnesses，以可量化的一侧错误概率快速筛除composites。所有结果都应以identity、solution set或witness而非单个数字交付。
+
+<Exercises>
+
+**问题 1**：Extended Euclid返回$1=5\cdot3+7\cdot(-2)$。5 modulo 7的inverse是什么？
+
+<Answer>
+Coefficient 3满足5乘3加7的整数倍等于1，所以5乘3 congruent to 1 modulo 7；inverse是canonical residue 3。
+</Answer>
+
+**问题 2**：方程$14x\equiv30\pmod{100}$为何有两个解？
+
+<Answer>
+d=gcd(14,100)=2且2整除30，所以存在解并恰有d个classes。约分得7x congruent to 15 modulo 50，base solution为45 modulo 50；提升到modulo 100得到45和95。
+</Answer>
+
+**问题 3**：CRT system $x\equiv2\pmod3$、$x\equiv3\pmod5$、$x\equiv2\pmod7$的解是什么？
+
+<Answer>
+23同时给remainders 2、3、2，所以x congruent to 23 modulo 105。因为3、5、7 pairwise coprime，该class在product modulus 105下唯一。
+</Answer>
+
+**问题 4**：Miller–Rabin连续$r$轮都返回non-witness，能否说$n$已经被证明prime？
+
+<Answer>
+Randomized版本仍给probably prime，而非deterministic proof；若n为odd composite，独立uniform bases全部被骗的概率至多4的负r次方。要声称proved prime，需使用对该范围已证明充分的deterministic bases或certifying primality algorithm。
+</Answer>
+
+</Exercises>
+
+<Glossary>
+<GlossaryItem term="数论算法">在整数divisibility、gcd、congruences、finite multiplicative groups与primes上进行高效计算的一组算法。</GlossaryItem>
+<GlossaryItem term="初等数论概念">关于divisibility、prime factorization、gcd、congruence与finite groups的基础定义和定理。</GlossaryItem>
+<GlossaryItem term="最大公约数">整除a和b的最大positive integer；Euclid利用gcd(a,b)=gcd(b,a mod b)计算它。</GlossaryItem>
+<GlossaryItem term="模算术">在congruence classes modulo n上定义addition、multiplication、powers与inverses的运算体系。</GlossaryItem>
+<GlossaryItem term="模线性方程">寻找所有residue x使ax congruent to b modulo n，并根据gcd(a,n)判定存在性与解数。</GlossaryItem>
+<GlossaryItem term="中国余数定理">对pairwise-coprime moduli，把residue tuple与其product modulus下的唯一residue建立一一对应的定理。</GlossaryItem>
+<GlossaryItem term="元素的幂">按exponent binary expansion反复平方并选择性相乘，在logarithmic次group operations内求a的幂。</GlossaryItem>
+<GlossaryItem term="RSA公钥密码系统">基于composite modulus上的modular exponentiation构造public encryption exponent与private inverse exponent的公钥系统。</GlossaryItem>
+<GlossaryItem term="素数测试">用deterministic certificate或randomized witnesses判定integer为prime或证明其composite的算法问题。</GlossaryItem>
+</Glossary>
+
+<Attribution adaptedFrom="Introduction to Algorithms, Fourth Edition, Chapter 31 · Number-Theoretic Algorithms" adaptedUrl="https://mitp-content-server.mit.edu/books/content/sectbyfn/books_pres_0/11599/4e_toc.pdf" />

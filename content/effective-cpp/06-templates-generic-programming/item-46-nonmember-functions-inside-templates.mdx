@@ -1,0 +1,355 @@
+---
+title: "Item 46：需要类型转换时在 template 内定义 non-member function"
+type: A
+section: Chapter 7 · Templates and Generic Programming
+order: 46
+description: 对齐 Effective C++ 第三版 Item 46：解释 Rational 混合乘法为何在 template argument deduction 阶段拒绝隐式转换，并通过 class template 内定义 hidden friend 让 ADL 找到具体非模板函数，再执行对称类型转换。
+demo: false
+math: false
+sourceUrl: "https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+draft: false
+---
+
+import {
+  EcppFriendHelperFactoringMap,
+  EcppHiddenFriendConversionMap,
+  EcppTemplateDeductionConversionMap,
+} from "@/components/mdx/effective-cpp/diagrams/item-46-nonmember-functions-inside-templates";
+
+<Objectives>
+
+- 能复现 `Rational<int> * int` 的 function template deduction 失败，并解释用户定义转换为何尚未参与
+- 能实现 class template 内定义的 non-template friend operator，让 ADL、普通 overload resolution 和隐式转换按顺序工作
+- 能设计对称操作、helper factoring 与正反编译测试，避免链接错误、过宽转换和重复重实现
+
+</Objectives>
+
+## 从一个“明明能转换”的失败开始
+
+```cpp
+template<class T>
+class Rational {
+public:
+    Rational(const T& numerator = 0, const T& denominator = 1)
+        : numerator_(numerator), denominator_(denominator) {}
+private:
+    T numerator_;
+    T denominator_;
+};
+
+template<class T>
+Rational<T> operator*(const Rational<T>& lhs, const Rational<T>& rhs);
+```
+
+```cpp
+Rational<int> oneHalf(1, 2);
+auto value = oneHalf * 2; // deduction failure
+```
+
+`Rational<int>` 有可接收 int 的 non-explicit constructor，直觉上 2 可转换为 Rational。但调用仍失败。
+
+<Term def="compiler 从函数调用实参和参数模式反推出 function template parameters 的阶段。">
+  template argument deduction
+</Term>
+
+<Term def="由非 explicit constructor 或 conversion function 提供、普通调用中可自动采用的转换。">
+  user-defined conversion
+</Term>
+
+Item 46 的原则是 Define non-member functions inside templates when type conversions are desired（需要类型转换时在模板内定义非成员函数）。
+
+<EcppTemplateDeductionConversionMap />
+
+先预测：第一参数已经把 T 推成 int，为什么第二参数仍不能先转成 Rational？因为 deduction 要先让整个 function template specialization 成为候选。
+
+## deduction 与 conversion 有严格顺序
+
+对第一参数，模式 `const Rational<T>&` 与 `Rational<int>` 匹配，得到 T=int。对第二参数，模式仍是 `const Rational<T>&`，实际是 int；template argument deduction 不考虑用户定义转换来弥合这个差异。
+
+<Term def="先完成 template 参数推导并形成函数候选，再对具体函数参数执行隐式转换序列的顺序。">
+  deduction-before-conversion
+</Term>
+
+<Term def="因某个函数模板参数位置无法从实参直接匹配而不能形成 specialization。">
+  deduction candidate failure
+</Term>
+
+即使另一参数似乎已经确定 T，deduction 仍按规则检查参与推导的参数；不能把普通函数调用的 conversion 规则提前借给 template deduction。
+
+<Callout type="trap" title="陷阱：显式写出 T 证明接口已经正确">
+  `operator*<int>(oneHalf, 2)` 可能允许后续转换，但 operator syntax 的客户不会这样写，也破坏自然对称 API。应修复候选形成方式，而不是要求客户绕过 deduction。
+</Callout>
+
+## 为什么 operator 应是 non-member
+
+若把 multiplication 写成 member：
+
+```cpp
+template<class T>
+class Rational {
+public:
+    Rational operator*(const Rational& rhs) const;
+};
+```
+
+`oneHalf * 2` 可把 rhs 转为 Rational，但 `2 * oneHalf` 不可行，因为左 operand 不是 Rational，无法选择 member operator。
+
+<Term def="二元运算允许左右两侧以相同规则参与 conversion，不偏向某个 receiver 的性质。">
+  symmetric operand conversion
+</Term>
+
+non-member operator 让两个 operands 都是普通函数参数，因此两侧都可转换。这延续 Item 24 的接口原则，但 class template 又增加 deduction 问题。
+
+## 在 class template 内定义 non-template friend
+
+```cpp
+template<class T>
+class Rational {
+public:
+    Rational(const T& n = 0, const T& d = 1) : n_(n), d_(d) {}
+
+    friend Rational operator*(const Rational& lhs, const Rational& rhs) {
+        return Rational(lhs.n_ * rhs.n_, lhs.d_ * rhs.d_);
+    }
+
+private:
+    T n_;
+    T d_;
+};
+```
+
+<Term def="在 class definition 内声明并定义、但自身不是 member 的普通 friend function。">
+  friend function
+</Term>
+
+<Term def="只通过 argument-dependent lookup 通常可见、不污染普通 namespace 查找的 class 内 friend。">
+  hidden friend
+</Term>
+
+当 compiler 实例化 `Rational<int>`，会形成具体函数：概念上是接收两个 `const Rational<int>&` 的 ordinary non-template operator。它不再需要推导 T。
+
+<EcppHiddenFriendConversionMap />
+
+## ADL 如何找到 hidden friend
+
+`oneHalf * 2` 等价于无限定 operator 调用。Rational 是一个 operand 的类型，argument-dependent lookup 会检查其关联 class，在其中找到 friend operator。
+
+<Term def="根据实参类型的关联 classes 与 namespaces 扩展无限定函数候选集合的查找。">
+  argument-dependent lookup
+</Term>
+
+<Term def="class specialization 生成的参数类型已确定、无需 function template deduction 的普通函数。">
+  specialization-bound ordinary function
+</Term>
+
+候选确定为 `operator*(Rational<int>, Rational<int>)` 后，普通 overload resolution 才为第二参数采用 `Rational<int>(2)` conversion。
+
+```cpp
+auto a = oneHalf * 2; // rhs converts
+auto b = 2 * oneHalf; // lhs converts
+```
+
+这同时恢复了两个 operand directions。
+
+## 声明 friend 不等于定义可链接函数
+
+```cpp
+friend Rational operator*(const Rational&, const Rational&);
+```
+
+只有 declaration 时，编译可能通过，但最终需要对应 concrete definition；若 namespace function template 与这个 non-template declaration 不是同一实体，容易产生 undefined reference。
+
+<Term def="候选和调用编译成功，但 concrete friend 缺少函数体导致的链接失败。">
+  friend definition link gap
+</Term>
+
+Item 46 强调在 template 内定义 non-member function，确保每个使用到的 class specialization 都提供对应 ordinary friend body。class 内定义的 friend 隐含 inline，可跨 translation units 合法出现等价定义。
+
+<Term def="class definition 内定义的函数可在多个 translation units 出现而遵守 ODR 的属性。">
+  implicit inline friend
+</Term>
+
+## friend 不必直接承载重算法
+
+若 operation 很重，可让 thin friend 调用 namespace helper template。
+
+```cpp
+template<class T>
+Rational<T> doMultiply(const Rational<T>& lhs, const Rational<T>& rhs) {
+    return Rational<T>(
+        lhs.numerator() * rhs.numerator(),
+        lhs.denominator() * rhs.denominator());
+}
+
+template<class T>
+class Rational {
+public:
+    friend Rational operator*(const Rational& lhs, const Rational& rhs) {
+        return doMultiply(lhs, rhs);
+    }
+};
+```
+
+<Term def="由具体 ordinary friend 调用、承载可复用重实现的外部 function template。">
+  friend implementation helper
+</Term>
+
+friend 负责 ADL 与 conversion boundary，helper 负责算法。这样也能减少每个 class body 中的大段实现，便于单独测试。
+
+<EcppFriendHelperFactoringMap />
+
+## helper 的访问边界
+
+helper 不是 friend，默认不能读取 Rational private state。可以让 Rational 提供 public observers，或把 helper 也声明为 friend template；前者通常耦合更小。
+
+<Term def="friend wrapper 通过 public observers 向 helper 提供数据而不扩大 private 访问的设计。">
+  observer-based helper boundary
+</Term>
+
+```cpp
+const T& numerator() const noexcept { return n_; }
+const T& denominator() const noexcept { return d_; }
+```
+
+若 operation 必须维护 private canonical form，friend 可先校验/归一化，再调用低层 helper。
+
+## conversion constructor 的 explicit 策略
+
+本例依赖 int 到 Rational 的隐式 conversion，因此 constructor 必须允许它。若 constructor 是 explicit，hidden friend 仍被找到，但普通参数 binding 不会自动构造 Rational。
+
+<Term def="是否允许 scalar 自动形成 domain value，从而参与对称 non-member operations 的接口选择。">
+  domain conversion policy
+</Term>
+
+这不是要求所有 single-argument constructors 都 non-explicit。只有当 scalar 到 Rational 是自然、无损且符合领域语义时才开放；否则提供显式 factory 或混合类型 overload。
+
+<Callout type="trap" title="陷阱：为了让 operator 好用而开放所有隐式转换">
+  转换会参与整个 overload
+  set，可能制造歧义和意外临时对象。逐个审查方向、成本、精度和语义，不要把 hidden
+  friend 当作放宽类型系统的理由。
+</Callout>
+
+## mixed underlying types 是另一个问题
+
+`Rational<int> * Rational<double>` 不是 Item 46 这套同 T conversion 自动解决的场景。两个 class specializations 各生成自己的 same-T friend，目标公共类型需要额外设计。
+
+<Term def="两个 operands 的 underlying template arguments 不同，需要确定公共结果类型的运算。">
+  heterogeneous rational operation
+</Term>
+
+可声明受约束的 heterogeneous operator template，结果使用 `common_type_t<T,U>`；但它重新进入 function template deduction，需要明确 constraints、promotion、precision 和 overload ambiguity。
+
+```cpp
+template<class T, class U>
+auto multiply(const Rational<T>& lhs, const Rational<U>& rhs)
+    -> Rational<std::common_type_t<T, U>>;
+```
+
+不要把 same-T scalar conversion 与 heterogeneous promotion 混在一个无边界模板里。
+
+## 验证顺序而不是只看最终成功
+
+测试矩阵至少包括：
+
+1. Rational 与 Rational 同类型运算。
+2. Rational 与 scalar 两种 operand orders。
+3. 不可转换 scalar 被拒绝。
+4. explicit conversion policy 下自动调用被拒绝。
+5. helper definition 跨多个 translation units 无 ODR/link 错误。
+6. mixed underlying types 按明确 policy 接受或拒绝。
+
+<Term def="覆盖查找、转换方向、链接与混合类型边界的 friend operator 检查表。">
+  hidden-friend test matrix
+</Term>
+
+先预测失败发生在 lookup、deduction、conversion 还是 link，再执行 compile-fail 与运行测试；错误阶段本身就是对语言模型的验收。
+
+## 小结
+
+- function template argument deduction 不使用用户定义转换来匹配参数模式
+- Rational 的 namespace operator template 因 scalar 参数无法完成 deduction
+- class template 内定义的 non-template friend 随 specialization 形成 concrete ordinary function
+- ADL 找到 hidden friend 后，普通 overload resolution 才能对任一 operand 执行 Rational conversion
+- friend declaration 必须有对应定义；class 内定义隐含 inline，可避免 link gap
+- thin friend 可把重算法委托 helper，同时保留对称转换和清晰封装
+
+<Attribution
+  adaptedFrom="Effective C++, Third Edition, Item 46"
+  adaptedUrl="https://www.informit.com/store/effective-c-plus-plus-55-specific-ways-to-improve-your-9780321334879"
+/>
+
+<Glossary>
+  <GlossaryItem term="template argument deduction">
+    从调用反推函数模板参数。
+  </GlossaryItem>
+  <GlossaryItem term="user-defined conversion">
+    constructor 或 conversion function 提供的转换。
+  </GlossaryItem>
+  <GlossaryItem term="deduction-before-conversion">
+    先推导候选再执行普通转换。
+  </GlossaryItem>
+  <GlossaryItem term="deduction candidate failure">
+    参数模式无法直接匹配导致候选失败。
+  </GlossaryItem>
+  <GlossaryItem term="symmetric operand conversion">
+    左右 operands 以相同规则参与转换。
+  </GlossaryItem>
+  <GlossaryItem term="friend function">
+    class 内声明但自身不是 member 的函数。
+  </GlossaryItem>
+  <GlossaryItem term="hidden friend">
+    通常只由 ADL 找到的 class 内 friend。
+  </GlossaryItem>
+  <GlossaryItem term="argument-dependent lookup">
+    按实参关联作用域扩展查找。
+  </GlossaryItem>
+  <GlossaryItem term="specialization-bound ordinary function">
+    绑定具体 class specialization 的非模板函数。
+  </GlossaryItem>
+  <GlossaryItem term="friend definition link gap">
+    声明可调用但缺 concrete 函数体的链接问题。
+  </GlossaryItem>
+  <GlossaryItem term="implicit inline friend">
+    class 内 friend 定义的 inline 属性。
+  </GlossaryItem>
+  <GlossaryItem term="friend implementation helper">
+    承载重实现的外部辅助模板。
+  </GlossaryItem>
+  <GlossaryItem term="observer-based helper boundary">
+    经 public observers 向 helper 提供数据。
+  </GlossaryItem>
+  <GlossaryItem term="domain conversion policy">
+    领域值是否允许自动构造的策略。
+  </GlossaryItem>
+  <GlossaryItem term="heterogeneous rational operation">
+    不同底层参数之间的有理数运算。
+  </GlossaryItem>
+  <GlossaryItem term="hidden-friend test matrix">
+    查找到链接的友元运算测试表。
+  </GlossaryItem>
+</Glossary>
+
+<Exercises>
+  1. **问题 1：解释 `oneHalf * 2` 的失败阶段。** namespace 中只有 operator function template。
+
+<Answer question="为什么 converting constructor 没有被调用？">
+  operator template 必须先从两个参数模式完成 T deduction；第二个 int 与 Rational
+  的模板参数模式不直接匹配，用户定义 conversion 不参与 deduction，所以 candidate
+  尚未形成，普通 conversion sequence 无机会执行。显式模板实参只是绕过，不是自然
+  operator API 修复。
+</Answer>
+
+2. **问题 2：实现对称 scalar multiplication。** 要支持两个 operand orders 且跨 translation units 正确链接。
+
+<Answer question="hidden friend 应怎样定义？">
+  在 Rational class template 内直接定义接收两个当前 Rational specialization 的
+  non-template friend operator。实例化底层类型为 int 的 Rational 时产生 concrete
+  inline friend；ADL 从 Rational operand 找到它，另一 scalar operand再经
+  constructor 转换。分别编译和运行 Rational*int、int*Rational，并做多 TU link
+  test。
+</Answer>
+
+3. **问题 3：operator 实现很大且需要维护 normalized invariant。** 设计 friend/helper 边界。
+
+  <Answer question="怎样兼顾转换、封装与代码维护？">保留 thin hidden friend 作为 ADL/conversion 入口，由它检查或恢复 private invariant，再调用接收 Rational observers/values 的 doMultiply helper template。helper 不必获得全部 private 权限。测试 canonical result、异常、不同 T 实例、symbol size 与 helper 跨 TU ODR。</Answer>
+</Exercises>
