@@ -75,6 +75,7 @@ rsync -az -e "ssh ${SSH_OPTS[*]}" deploy/ecosystem.config.cjs "$SSH_HOST:$APP_DI
 
 CANDIDATE_NAME="remuse-candidate-${COMMIT_SHA:0:12}"
 CANDIDATE_STARTED=false
+RELEASE_SUCCESS=false
 ssh "${SSH_OPTS[@]}" "$SSH_HOST" \
   "pm2 delete '$CANDIDATE_NAME' >/dev/null 2>&1 || true; cd '$RELEASE_DIR' && PORT='$CANDIDATE_PORT' HOSTNAME=127.0.0.1 pm2 start server.js --name '$CANDIDATE_NAME' --cwd '$RELEASE_DIR' --update-env >/dev/null"
 CANDIDATE_STARTED=true
@@ -84,7 +85,13 @@ cleanup_candidate() {
     CANDIDATE_STARTED=false
   fi
 }
-trap cleanup_candidate EXIT
+cleanup_failed_release() {
+  cleanup_candidate
+  if [[ "${RELEASE_SUCCESS:-false}" != "true" ]]; then
+    ssh "${SSH_OPTS[@]}" "$SSH_HOST" "rm -rf -- '$RELEASE_DIR'" || true
+  fi
+}
+trap cleanup_failed_release EXIT
 
 check_remote_routes() {
   local port="$1"
@@ -113,7 +120,7 @@ check_remote_routes "$CANDIDATE_PORT"
 STATIC_ASSET="$(ssh "${SSH_OPTS[@]}" "$SSH_HOST" \
   "find '$RELEASE_DIR/.next/static' -type f | head -n 1")"
 [[ "$STATIC_ASSET" == "$RELEASE_DIR"/* ]] || { echo "✗ 候选 release 缺少静态资源" >&2; exit 1; }
-STATIC_ROUTE="/${STATIC_ASSET#"$RELEASE_DIR/"}"
+STATIC_ROUTE="/_next/static/${STATIC_ASSET#"$RELEASE_DIR/.next/static/"}"
 ssh "${SSH_OPTS[@]}" "$SSH_HOST" \
   "curl -fsS -o /dev/null --max-time 15 'http://127.0.0.1:${CANDIDATE_PORT}${STATIC_ROUTE}'"
 cleanup_candidate
@@ -167,5 +174,6 @@ ssh "${SSH_OPTS[@]}" "$SSH_HOST" "
   done
 "
 node scripts/mark-book-published.mjs --book "$BOOK_SLUG" --release "$RELEASE_ID" --commit "$COMMIT_SHA"
+RELEASE_SUCCESS=true
 trap - EXIT
 echo "✓ 发布成功：book=${BOOK_SLUG} commit=${COMMIT_SHA} release=${RELEASE_ID} url=${PUBLIC_URL}"
