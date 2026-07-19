@@ -96,7 +96,7 @@ const context = await linear(
   apiKey,
   `query QualityContext($master: String!) {
     issue(id: $master) {
-      id identifier
+      id identifier title url
       project { id name }
       team {
         id key
@@ -125,6 +125,7 @@ let parent = master.children.nodes.find(
     issue.title === parentTitle ||
     issue.description?.includes(`bookSlug: ${args.book}`),
 );
+let sharedWithMaster = false;
 const createMutation = `mutation CreateQualityIssue($input: IssueCreateInput!) {
   issueCreate(input: $input) {
     success
@@ -132,36 +133,48 @@ const createMutation = `mutation CreateQualityIssue($input: IssueCreateInput!) {
   }
 }`;
 if (!parent) {
-  const created = await linear(apiKey, createMutation, {
-    input: {
-      teamId: master.team.id,
-      projectId: master.project.id,
-      parentId: master.id,
-      stateId: inProgress.id,
-      labelIds: [contentLabel.id],
-      title: parentTitle,
-      description: [
-        `bookSlug: ${args.book}`,
-        `范围：${chapters.length} 个 MDX 页面，按质量 v2 SOP 逐章整改、逐章审查，整书通过后原子增量发布。`,
-        "来源模式：independent-rewrite；目录限定范围，作者官网/官方模式目录/出版社资料核对事实。",
-        "通过条件：总分 ≥90、各维度 ≥80%、无硬阻断项，桌面与移动端视觉及交互复位均通过。",
-      ].join("\n\n"),
-    },
-  });
-  if (!created.issueCreate.success) throw new Error("创建父任务失败");
-  parent = created.issueCreate.issue;
-  console.log(`created ${parent.identifier} ${parent.title}`);
+  try {
+    const created = await linear(apiKey, createMutation, {
+      input: {
+        teamId: master.team.id,
+        projectId: master.project.id,
+        parentId: master.id,
+        stateId: inProgress.id,
+        labelIds: [contentLabel.id],
+        title: parentTitle,
+        description: [
+          `bookSlug: ${args.book}`,
+          `范围：${chapters.length} 个 MDX 页面，按质量 v2 SOP 逐章整改、逐章审查，整书通过后原子增量发布。`,
+          "来源模式：independent-rewrite；目录限定范围，作者官网/官方模式目录/出版社资料核对事实。",
+          "通过条件：总分 ≥90、各维度 ≥80%、无硬阻断项，桌面与移动端视觉及交互复位均通过。",
+        ].join("\n\n"),
+      },
+    });
+    if (!created.issueCreate.success) throw new Error("创建父任务失败");
+    parent = created.issueCreate.issue;
+    console.log(`created ${parent.identifier} ${parent.title}`);
+  } catch (error) {
+    if (!/USAGE_LIMIT_EXCEEDED|usage limit exceeded/i.test(String(error)))
+      throw error;
+    parent = master;
+    sharedWithMaster = true;
+    console.warn(
+      `Linear 免费额度已满：《${args.title}》及其 ${chapters.length} 个章节临时复用总任务 ${master.identifier}；章级提交与本地稳定键仍独立保存`,
+    );
+  }
 }
 
-const parentContext = await linear(
-  apiKey,
-  `query ParentChildren($id: String!) {
-    issue(id: $id) {
-      children(first: 250) { nodes { id identifier title description url } }
-    }
-  }`,
-  { id: parent.id },
-);
+const parentContext = sharedWithMaster
+  ? { issue: { children: { nodes: [] } } }
+  : await linear(
+      apiKey,
+      `query ParentChildren($id: String!) {
+        issue(id: $id) {
+          children(first: 250) { nodes { id identifier title description url } }
+        }
+      }`,
+      { id: parent.id },
+    );
 const existingChildren = parentContext.issue.children.nodes;
 const issueByKey = new Map();
 for (const issue of existingChildren) {
@@ -175,6 +188,16 @@ for (let index = 0; index < chapters.length; index += 1) {
   const chapter = chapters[index];
   let issue = issueByKey.get(chapter.key);
   let sharedWithParent = false;
+  if (sharedWithMaster) {
+    chapterIssues[chapter.key] = {
+      id: master.id,
+      identifier: master.identifier,
+      title: master.title,
+      url: master.url,
+      sharedWithMaster: true,
+    };
+    continue;
+  }
   if (!issue) {
     const number = String(index + 1).padStart(2, "0");
     try {
@@ -237,8 +260,14 @@ fs.writeFileSync(
         url: parent.url,
       },
       chapters: chapterIssues,
-      trackingConstraint:
-        sharedParentFallbacks > 0
+      trackingConstraint: sharedWithMaster
+        ? {
+            code: "linear-free-issue-limit",
+            sharedMasterFallbacks: chapters.length,
+            remediation:
+              "额度升级后补建书级父任务和章级子任务，并以稳定键及章级提交回填映射。",
+          }
+        : sharedParentFallbacks > 0
           ? {
               code: "linear-free-issue-limit",
               sharedParentFallbacks,
@@ -256,5 +285,6 @@ console.log(
     parent: parent.identifier,
     chapters: chapters.length,
     sharedParentFallbacks,
+    sharedMasterFallbacks: sharedWithMaster ? chapters.length : 0,
   }),
 );

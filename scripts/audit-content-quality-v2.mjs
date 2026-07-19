@@ -450,11 +450,17 @@ function parseChapter(filePath, manifests, visualResults) {
   const unitEvidence = [];
   if (role === "chapter") {
     const manifestUnits = manifest?.units ?? [];
-    const titleMatchedUnits = manifestUnits.filter(
-      (unit) =>
-        normalized(parsed.data.title).includes(normalized(unit.title)) ||
-        normalized(unit.title).includes(normalized(parsed.data.title)),
-    );
+    // v2 manifest 的 unit id 与章节 slug 是稳定的一对一键。优先使用它，
+    // 避免“表目录”误命中“核对表目录”之类的标题子串。
+    const idMatchedUnit = manifestUnits.find((unit) => unit.id === chapterSlug);
+    const titleMatchedUnits = idMatchedUnit
+      ? [idMatchedUnit]
+      : manifestUnits.filter(
+          (unit) =>
+            normalized(parsed.data.title) === normalized(unit.title) ||
+            normalized(parsed.data.title).startsWith(normalized(unit.title)) ||
+            normalized(unit.title).startsWith(normalized(parsed.data.title)),
+        );
     for (const unit of titleMatchedUnits.length > 0
       ? titleMatchedUnits
       : manifestUnits) {

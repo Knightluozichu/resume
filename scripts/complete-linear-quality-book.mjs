@@ -86,6 +86,12 @@ const ledger = JSON.parse(
   ),
 );
 const chapterEntries = Object.entries(mapping.chapters);
+const sharedMasterEntries = chapterEntries.filter(
+  ([, issue]) => issue.sharedWithMaster,
+);
+const directChapterEntries = chapterEntries.filter(
+  ([, issue]) => !issue.sharedWithMaster,
+);
 const releaseMarker = `release: ${args.release}`;
 
 const commitByIssue = new Map();
@@ -135,7 +141,7 @@ const updateAndComment = `mutation UpdateAndComment(
 }`;
 
 await eachWithConcurrency(
-  chapterEntries,
+  directChapterEntries,
   5,
   async ([stableKey, localIssue]) => {
     const remoteIssue = localIssue.sharedWithParent
@@ -177,6 +183,12 @@ await eachWithConcurrency(
   },
 );
 
+for (const [stableKey] of sharedMasterEntries) {
+  const entry = ledger.chapters[stableKey];
+  if (!entry || entry.status !== "published")
+    throw new Error(`章节尚未 published: ${stableKey}`);
+}
+
 const entries = chapterEntries.map(([key]) => ledger.chapters[key]);
 const unitEvidence = entries.flatMap((entry) => entry.unitEvidence ?? []);
 const officialUnits = unitEvidence.length;
@@ -192,16 +204,41 @@ const parentBody = [
   `- checks: MDX 4373/0 errors；links 4375/0 errors；build 4604 routes；visual ${entries.length}/${entries.length} chapters × 2 viewports`,
   `- manifest: ${officialUnits} 个正式单元、${officialConcepts} 个目录节点均具出现/解释/视觉/练习证据`,
   "- public: 首页、首章、中章、复习页、Pagefind 资源均 200，无错误 LearnOpenGL 归因",
+  ...(sharedMasterEntries.length > 0
+    ? [
+        `- tracking: Linear 免费版总任务数上限，${sharedMasterEntries.length} 个章节暂共享总任务；每章仍保留独立稳定键与提交`,
+        "- chapter commits:",
+        ...sharedMasterEntries.map(([stableKey]) => {
+          const entry = ledger.chapters[stableKey];
+          const chapterCommit = execFileSync(
+            "git",
+            ["log", "-1", "--format=%H", "--", entry.path],
+            { cwd: ROOT, encoding: "utf8" },
+          ).trim();
+          return `  - ${stableKey}: ${chapterCommit}`;
+        }),
+      ]
+    : []),
 ].join("\n");
 const parentHasComment = context.parent.comments.nodes.some((comment) =>
   comment.body.includes(releaseMarker),
 );
-await linear(apiKey, updateAndComment, {
-  id: context.parent.id,
-  update: { stateId: reviewState.id },
-  comment: { issueId: context.parent.id, body: parentBody },
-  writeComment: !parentHasComment,
-});
+if (sharedMasterEntries.length === 0) {
+  await linear(apiKey, updateAndComment, {
+    id: context.parent.id,
+    update: { stateId: reviewState.id },
+    comment: { issueId: context.parent.id, body: parentBody },
+    writeComment: !parentHasComment,
+  });
+} else if (!parentHasComment) {
+  await linear(
+    apiKey,
+    `mutation CommentSharedMaster($input: CommentCreateInput!) {
+      commentCreate(input: $input) { success }
+    }`,
+    { input: { issueId: context.parent.id, body: parentBody } },
+  );
+}
 
 const allLedgerEntries = Object.values(ledger.chapters);
 const published = allLedgerEntries.filter(
@@ -228,7 +265,8 @@ if (!masterHasComment)
 console.log(
   JSON.stringify({
     parent: mapping.parent.identifier,
-    state: "In Review",
+    state:
+      sharedMasterEntries.length > 0 ? "master-state-preserved" : "In Review",
     chapters: chapterEntries.length,
     release: args.release,
   }),
