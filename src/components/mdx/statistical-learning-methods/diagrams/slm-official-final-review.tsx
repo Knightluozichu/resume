@@ -1,154 +1,50 @@
 import { OfficialStatisticalLearningLab } from "./official-statistical-learning-lab";
 
-export function SlmOfficialFinalReviewMapLab() {
-  return (
-    <OfficialStatisticalLearningLab
-      title="《统计学习方法（第2版）》全书总复习"
-      label="SLM-24"
-      color="#0f766e"
-      soft="#ccfbf1"
-      chain={[
-        "冻结样本与符号",
-        "写出模型空间",
-        "核对学习策略",
-        "执行优化算法",
-        "独立评价风险",
-        "定位首个分叉",
-      ]}
-      concepts={[
-        "第1篇 监督学习",
-        "第1章 统计学习及监督学习概论",
-        "第2章 感知机",
-        "第3章 k近邻法",
-        "第4章 朴素贝叶斯法",
-        "第5章 决策树",
-        "第6章 逻辑斯谛回归与最大熵模型",
-        "第7章 支持向量机",
-        "第8章 提升方法",
-        "第9章 EM算法及其推广",
-        "第10章 隐马尔可夫模型",
-        "第11章 条件随机场",
-        "第12章 监督学习方法总结",
-        "第2篇 无监督学习",
-        "第13章 无监督学习概论",
-        "第14章 聚类方法",
-        "第15章 奇异值分解",
-        "第16章 主成分分析",
-        "第17章 潜在语义分析",
-        "第18章 概率潜在语义分析",
-        "第19章 马尔可夫链蒙特卡罗法",
-        "第20章 潜在狄利克雷分配",
-        "第21章 PageRank算法",
-        "第22章 无监督学习方法总结",
-        "附录 A 梯度下降法",
-        "附录 B 牛顿法和拟牛顿法",
-        "附录 C 拉格朗日对偶性",
-        "附录 D 矩阵的基本子空间",
-        "附录 E KL散度的定义和狄利克雷分布的性质",
-      ]}
-      view="map"
-    />
-  );
-}
+const props = {
+  "unitId": "slm-official-final-review",
+  "title": "《统计学习方法（第2版）》全书总复习",
+  "concepts": [
+    "监督学习三要素",
+    "概率与隐变量",
+    "几何间隔与核",
+    "矩阵分解与表示",
+    "采样与话题模型",
+    "图随机游走与独立评价"
+  ],
+  "chain": [
+    "冻结数据与符号",
+    "写出模型",
+    "核对目标",
+    "执行一步算法",
+    "独立评价与反例"
+  ],
+  "model": {
+    "studio": "全书模型答辩台",
+    "axisA": {
+      "label": "故障来源",
+      "levels": [
+        "概率",
+        "几何/矩阵",
+        "优化/采样"
+      ]
+    },
+    "axisB": {
+      "label": "验证层级",
+      "levels": [
+        "定义",
+        "极小手算",
+        "独立风险与反例"
+      ]
+    },
+    "fault": "只展示最终分数，无法回退到第一条错误中间量",
+    "practiceMode": "diagnosis",
+    "metric": "全书模型答辩台命中率",
+    "risk": "验证层级偏差风险",
+    "invariant": "最终答案必须区分模型、策略和算法，区分训练目标与应用质量，并能从任何异常结果回退到第一条概率、几何、矩阵、优化或采样证据。",
+    "task": "手算概率与隐变量的关键量，并保存基线、边界、修复与复位证据。"
+  }
+} as const;
 
-export function SlmOfficialFinalReviewExperimentLab() {
-  return (
-    <OfficialStatisticalLearningLab
-      title="《统计学习方法（第2版）》全书总复习"
-      label="SLM-24"
-      color="#0f766e"
-      soft="#ccfbf1"
-      chain={[
-        "冻结样本与符号",
-        "写出模型空间",
-        "核对学习策略",
-        "执行优化算法",
-        "独立评价风险",
-        "定位首个分叉",
-      ]}
-      concepts={[
-        "第1篇 监督学习",
-        "第1章 统计学习及监督学习概论",
-        "第2章 感知机",
-        "第3章 k近邻法",
-        "第4章 朴素贝叶斯法",
-        "第5章 决策树",
-        "第6章 逻辑斯谛回归与最大熵模型",
-        "第7章 支持向量机",
-        "第8章 提升方法",
-        "第9章 EM算法及其推广",
-        "第10章 隐马尔可夫模型",
-        "第11章 条件随机场",
-        "第12章 监督学习方法总结",
-        "第2篇 无监督学习",
-        "第13章 无监督学习概论",
-        "第14章 聚类方法",
-        "第15章 奇异值分解",
-        "第16章 主成分分析",
-        "第17章 潜在语义分析",
-        "第18章 概率潜在语义分析",
-        "第19章 马尔可夫链蒙特卡罗法",
-        "第20章 潜在狄利克雷分配",
-        "第21章 PageRank算法",
-        "第22章 无监督学习方法总结",
-        "附录 A 梯度下降法",
-        "附录 B 牛顿法和拟牛顿法",
-        "附录 C 拉格朗日对偶性",
-        "附录 D 矩阵的基本子空间",
-        "附录 E KL散度的定义和狄利克雷分布的性质",
-      ]}
-      view="experiment"
-    />
-  );
-}
-
-export function SlmOfficialFinalReviewEvidenceLab() {
-  return (
-    <OfficialStatisticalLearningLab
-      title="《统计学习方法（第2版）》全书总复习"
-      label="SLM-24"
-      color="#0f766e"
-      soft="#ccfbf1"
-      chain={[
-        "冻结样本与符号",
-        "写出模型空间",
-        "核对学习策略",
-        "执行优化算法",
-        "独立评价风险",
-        "定位首个分叉",
-      ]}
-      concepts={[
-        "第1篇 监督学习",
-        "第1章 统计学习及监督学习概论",
-        "第2章 感知机",
-        "第3章 k近邻法",
-        "第4章 朴素贝叶斯法",
-        "第5章 决策树",
-        "第6章 逻辑斯谛回归与最大熵模型",
-        "第7章 支持向量机",
-        "第8章 提升方法",
-        "第9章 EM算法及其推广",
-        "第10章 隐马尔可夫模型",
-        "第11章 条件随机场",
-        "第12章 监督学习方法总结",
-        "第2篇 无监督学习",
-        "第13章 无监督学习概论",
-        "第14章 聚类方法",
-        "第15章 奇异值分解",
-        "第16章 主成分分析",
-        "第17章 潜在语义分析",
-        "第18章 概率潜在语义分析",
-        "第19章 马尔可夫链蒙特卡罗法",
-        "第20章 潜在狄利克雷分配",
-        "第21章 PageRank算法",
-        "第22章 无监督学习方法总结",
-        "附录 A 梯度下降法",
-        "附录 B 牛顿法和拟牛顿法",
-        "附录 C 拉格朗日对偶性",
-        "附录 D 矩阵的基本子空间",
-        "附录 E KL散度的定义和狄利克雷分布的性质",
-      ]}
-      view="evidence"
-    />
-  );
-}
+export function SlmOfficialFinalReviewMapLab() { return <OfficialStatisticalLearningLab {...props} view="map" />; }
+export function SlmOfficialFinalReviewExperimentLab() { return <OfficialStatisticalLearningLab {...props} view="experiment" />; }
+export function SlmOfficialFinalReviewEvidenceLab() { return <OfficialStatisticalLearningLab {...props} view="evidence" />; }
