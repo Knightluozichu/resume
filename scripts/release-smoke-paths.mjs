@@ -34,14 +34,33 @@ for (const sectionSlug of fs.readdirSync(bookDir)) {
   }
 }
 chapters.sort(
-  (a, b) => a.order - b.order || a.sectionSlug.localeCompare(b.sectionSlug),
+  (a, b) =>
+    a.sectionSlug.localeCompare(b.sectionSlug, "en", { numeric: true }) ||
+    a.order - b.order ||
+    a.chapterSlug.localeCompare(b.chapterSlug, "en", { numeric: true }),
 );
 if (chapters.length === 0) throw new Error(`图书没有可发布章节：${bookSlug}`);
+
+const searchableText = (chapter) =>
+  `${chapter.sectionSlug} ${chapter.chapterSlug} ${chapter.title}`;
+const learningMaps = chapters.filter((chapter) =>
+  /learning-map|official-guide|学习地图|导学/i.test(searchableText(chapter)),
+);
+const reviews = chapters.filter((chapter) =>
+  /final-review|book-review|全书复习|总复习|全书验收/i.test(
+    searchableText(chapter),
+  ),
+);
+const auxiliary = new Set([...learningMaps, ...reviews]);
+const formalChapters = chapters.filter((chapter) => !auxiliary.has(chapter));
+const core = formalChapters.length > 0 ? formalChapters : chapters;
 const selected = [
-  chapters[0],
-  chapters[Math.floor(chapters.length / 2)],
-  chapters.at(-1),
-];
+  learningMaps[0],
+  core[0],
+  core[Math.floor(core.length / 2)],
+  core.at(-1),
+  reviews.at(-1),
+].filter(Boolean);
 for (const chapter of new Map(
   selected.map((item) => [`${item.sectionSlug}/${item.chapterSlug}`, item]),
 ).values()) {
