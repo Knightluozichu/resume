@@ -3466,6 +3466,428 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       CvcThreadSchedulingLab: module0.CvcThreadSchedulingLab,
     } as ChapterMdxComponents;
   },
+  "code-complete-2e/00-map/cc2e-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-official-learning-map");
+    return {
+      Cc2eOfficialLearningMapMechanismLab:
+        module0.Cc2eOfficialLearningMapMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/01-preface/cc2e-preface": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-preface");
+    return {
+      Cc2ePrefaceMechanismLab: module0.Cc2ePrefaceMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/02-acknowledgments/cc2e-acknowledgments": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-acknowledgments");
+    return {
+      Cc2eAcknowledgmentsMechanismLab: module0.Cc2eAcknowledgmentsMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/03-checklist-index/cc2e-checklist-index": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-checklist-index");
+    return {
+      Cc2eChecklistIndexMechanismLab: module0.Cc2eChecklistIndexMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/04-table-index/cc2e-table-index": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-table-index");
+    return {
+      Cc2eTableIndexMechanismLab: module0.Cc2eTableIndexMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/05-figure-index/cc2e-figure-index": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-figure-index");
+    return {
+      Cc2eFigureIndexMechanismLab: module0.Cc2eFigureIndexMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/06-foundations/cc2e-part-01-foundations": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-part-01-foundations");
+    return {
+      Cc2ePart01FoundationsMechanismLab:
+        module0.Cc2ePart01FoundationsMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/07-construction-world/cc2e-01-construction-world":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-01-construction-world");
+      return {
+        Cc2e01ConstructionWorldMechanismLab:
+          module0.Cc2e01ConstructionWorldMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/08-software-metaphors/cc2e-02-software-metaphors":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-02-software-metaphors");
+      return {
+        Cc2e02SoftwareMetaphorsMechanismLab:
+          module0.Cc2e02SoftwareMetaphorsMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/09-prerequisites/cc2e-03-prerequisites": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-03-prerequisites");
+    return {
+      Cc2e03PrerequisitesMechanismLab: module0.Cc2e03PrerequisitesMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/10-construction-decisions/cc2e-04-construction-decisions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-04-construction-decisions");
+      return {
+        Cc2e04ConstructionDecisionsMechanismLab:
+          module0.Cc2e04ConstructionDecisionsMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/11-high-quality-code/cc2e-part-02-high-quality-code":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-part-02-high-quality-code");
+      return {
+        Cc2ePart02HighQualityCodeMechanismLab:
+          module0.Cc2ePart02HighQualityCodeMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/12-design-in-construction/cc2e-05-design-in-construction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-05-design-in-construction");
+      return {
+        Cc2e05DesignInConstructionMechanismLab:
+          module0.Cc2e05DesignInConstructionMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/13-working-classes/cc2e-06-working-classes": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-06-working-classes");
+    return {
+      Cc2e06WorkingClassesMechanismLab:
+        module0.Cc2e06WorkingClassesMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/14-high-quality-routines/cc2e-07-high-quality-routines":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-07-high-quality-routines");
+      return {
+        Cc2e07HighQualityRoutinesMechanismLab:
+          module0.Cc2e07HighQualityRoutinesMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/15-defensive-programming/cc2e-08-defensive-programming":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-08-defensive-programming");
+      return {
+        Cc2e08DefensiveProgrammingMechanismLab:
+          module0.Cc2e08DefensiveProgrammingMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/16-pseudocode-programming-process/cc2e-09-pseudocode-programming-process":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-09-pseudocode-programming-process");
+      return {
+        Cc2e09PseudocodeProgrammingProcessMechanismLab:
+          module0.Cc2e09PseudocodeProgrammingProcessMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/17-variables/cc2e-part-03-variables": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-part-03-variables");
+    return {
+      Cc2ePart03VariablesMechanismLab: module0.Cc2ePart03VariablesMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/18-general-variable-use/cc2e-10-general-variable-use":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-10-general-variable-use");
+      return {
+        Cc2e10GeneralVariableUseMechanismLab:
+          module0.Cc2e10GeneralVariableUseMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/19-power-of-variable-names/cc2e-11-power-of-variable-names":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-11-power-of-variable-names");
+      return {
+        Cc2e11PowerOfVariableNamesMechanismLab:
+          module0.Cc2e11PowerOfVariableNamesMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/20-fundamental-data-types/cc2e-12-fundamental-data-types":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-12-fundamental-data-types");
+      return {
+        Cc2e12FundamentalDataTypesMechanismLab:
+          module0.Cc2e12FundamentalDataTypesMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/21-unusual-data-types/cc2e-13-unusual-data-types":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-13-unusual-data-types");
+      return {
+        Cc2e13UnusualDataTypesMechanismLab:
+          module0.Cc2e13UnusualDataTypesMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/22-statements/cc2e-part-04-statements": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-part-04-statements");
+    return {
+      Cc2ePart04StatementsMechanismLab:
+        module0.Cc2ePart04StatementsMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/23-straight-line-code/cc2e-14-straight-line-code":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-14-straight-line-code");
+      return {
+        Cc2e14StraightLineCodeMechanismLab:
+          module0.Cc2e14StraightLineCodeMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/24-conditionals/cc2e-15-conditionals": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-15-conditionals");
+    return {
+      Cc2e15ConditionalsMechanismLab: module0.Cc2e15ConditionalsMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/25-loops/cc2e-16-loops": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-16-loops");
+    return {
+      Cc2e16LoopsMechanismLab: module0.Cc2e16LoopsMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/26-unusual-control-structures/cc2e-17-unusual-control-structures":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-17-unusual-control-structures");
+      return {
+        Cc2e17UnusualControlStructuresMechanismLab:
+          module0.Cc2e17UnusualControlStructuresMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/27-table-driven-methods/cc2e-18-table-driven-methods":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-18-table-driven-methods");
+      return {
+        Cc2e18TableDrivenMethodsMechanismLab:
+          module0.Cc2e18TableDrivenMethodsMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/28-general-control-issues/cc2e-19-general-control-issues":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-19-general-control-issues");
+      return {
+        Cc2e19GeneralControlIssuesMechanismLab:
+          module0.Cc2e19GeneralControlIssuesMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/29-code-improvement/cc2e-part-05-code-improvement":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-part-05-code-improvement");
+      return {
+        Cc2ePart05CodeImprovementMechanismLab:
+          module0.Cc2ePart05CodeImprovementMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/30-software-quality-landscape/cc2e-20-software-quality-landscape":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-20-software-quality-landscape");
+      return {
+        Cc2e20SoftwareQualityLandscapeMechanismLab:
+          module0.Cc2e20SoftwareQualityLandscapeMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/31-collaborative-construction/cc2e-21-collaborative-construction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-21-collaborative-construction");
+      return {
+        Cc2e21CollaborativeConstructionMechanismLab:
+          module0.Cc2e21CollaborativeConstructionMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/32-developer-testing/cc2e-22-developer-testing":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-22-developer-testing");
+      return {
+        Cc2e22DeveloperTestingMechanismLab:
+          module0.Cc2e22DeveloperTestingMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/33-debugging/cc2e-23-debugging": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-23-debugging");
+    return {
+      Cc2e23DebuggingMechanismLab: module0.Cc2e23DebuggingMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/34-refactoring/cc2e-24-refactoring": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-24-refactoring");
+    return {
+      Cc2e24RefactoringMechanismLab: module0.Cc2e24RefactoringMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/35-code-tuning-strategies/cc2e-25-code-tuning-strategies":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-25-code-tuning-strategies");
+      return {
+        Cc2e25CodeTuningStrategiesMechanismLab:
+          module0.Cc2e25CodeTuningStrategiesMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/36-code-tuning-techniques/cc2e-26-code-tuning-techniques":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-26-code-tuning-techniques");
+      return {
+        Cc2e26CodeTuningTechniquesMechanismLab:
+          module0.Cc2e26CodeTuningTechniquesMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/37-system-considerations/cc2e-part-06-system-considerations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-part-06-system-considerations");
+      return {
+        Cc2ePart06SystemConsiderationsMechanismLab:
+          module0.Cc2ePart06SystemConsiderationsMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/38-program-size/cc2e-27-program-size": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-27-program-size");
+    return {
+      Cc2e27ProgramSizeMechanismLab: module0.Cc2e27ProgramSizeMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/39-managing-construction/cc2e-28-managing-construction":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-28-managing-construction");
+      return {
+        Cc2e28ManagingConstructionMechanismLab:
+          module0.Cc2e28ManagingConstructionMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/40-integration/cc2e-29-integration": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-29-integration");
+    return {
+      Cc2e29IntegrationMechanismLab: module0.Cc2e29IntegrationMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/41-programming-tools/cc2e-30-programming-tools":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-30-programming-tools");
+      return {
+        Cc2e30ProgrammingToolsMechanismLab:
+          module0.Cc2e30ProgrammingToolsMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/42-software-craftsmanship/cc2e-part-07-software-craftsmanship":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-part-07-software-craftsmanship");
+      return {
+        Cc2ePart07SoftwareCraftsmanshipMechanismLab:
+          module0.Cc2ePart07SoftwareCraftsmanshipMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/43-layout-and-style/cc2e-31-layout-and-style": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-31-layout-and-style");
+    return {
+      Cc2e31LayoutAndStyleMechanismLab:
+        module0.Cc2e31LayoutAndStyleMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/44-self-documenting-code/cc2e-32-self-documenting-code":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-32-self-documenting-code");
+      return {
+        Cc2e32SelfDocumentingCodeMechanismLab:
+          module0.Cc2e32SelfDocumentingCodeMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/45-personal-character/cc2e-33-personal-character":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-33-personal-character");
+      return {
+        Cc2e33PersonalCharacterMechanismLab:
+          module0.Cc2e33PersonalCharacterMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/46-software-craftsmanship/cc2e-34-software-craftsmanship":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/code-complete-2e/diagrams/cc2e-34-software-craftsmanship");
+      return {
+        Cc2e34SoftwareCraftsmanshipMechanismLab:
+          module0.Cc2e34SoftwareCraftsmanshipMechanismLab,
+      } as ChapterMdxComponents;
+    },
+  "code-complete-2e/47-more-information/cc2e-35-more-information": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-35-more-information");
+    return {
+      Cc2e35MoreInformationMechanismLab:
+        module0.Cc2e35MoreInformationMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/48-references/cc2e-references": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-references");
+    return {
+      Cc2eReferencesMechanismLab: module0.Cc2eReferencesMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/49-index/cc2e-index": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-index");
+    return {
+      Cc2eIndexMechanismLab: module0.Cc2eIndexMechanismLab,
+    } as ChapterMdxComponents;
+  },
+  "code-complete-2e/50-review/cc2e-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/code-complete-2e/diagrams/cc2e-official-final-review");
+    return {
+      Cc2eOfficialFinalReviewMechanismLab:
+        module0.Cc2eOfficialFinalReviewMechanismLab,
+    } as ChapterMdxComponents;
+  },
   "code-quality-refactoring/00-intro/intro": async () => {
     const module0 =
       await import("@/components/mdx/code-quality-refactoring/diagrams/intro");
