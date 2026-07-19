@@ -1,18 +1,27 @@
-import { OfficialPoeaa24Lab } from "./official-poeaa24-lab";
+import { PoeaaDecisionLab } from "./poeaa-decision-lab";
 
-const props = {
+const profile = {
   unitId: "poeaa24-pattern-08-data-mapper",
   title: "10.4 数据映射器",
+  family: "mapping",
   nodes: ["领域调用", "数据边界", "查询命令", "映射", "持久化"],
   focuses: ["SQL隔离", "对象身份", "行为位置", "映射成本", "测试替身"],
+  concepts: ["10.4 数据映射器"],
+  decision:
+    "能在不修改领域对象的情况下替换存储结构，并用映射测试证明身份、关系和更新正确",
+  healthy: "10.4 数据映射器 的约束仍成立",
+  failure: "10.4 数据映射器 在“SQL隔离”处拒绝",
 } as const;
 
+// 对象关系映射：三个视图分别验证责任、取舍和失败恢复，不再复用全书统一指标。
 export function Poeaa24Pattern08DataMapperBoundaryLab() {
-  return <OfficialPoeaa24Lab {...props} mode="boundary" />;
+  return <PoeaaDecisionLab {...profile} mode="boundary" />;
 }
+
 export function Poeaa24Pattern08DataMapperMappingLab() {
-  return <OfficialPoeaa24Lab {...props} mode="mapping" />;
+  return <PoeaaDecisionLab {...profile} mode="tradeoff" />;
 }
+
 export function Poeaa24Pattern08DataMapperTransactionLab() {
-  return <OfficialPoeaa24Lab {...props} mode="transaction" />;
+  return <PoeaaDecisionLab {...profile} mode="failure" />;
 }
