@@ -1,7 +1,77 @@
-import { JctContractMapLab, JctCapacityExperimentLab, JctFailureEvidenceLab } from "./official-jct-lab";
+import { OfficialJct25Studio } from "./official-jct-lab";
 
-const stages = ["声明合同", "建立模型", "运行探针", "注入失败", "交接证据"];
+const props = {
+  "unitId": "jct-14e-v1-10-concurrency",
+  "title": "卷I 第10章 并发",
+  "concepts": [
+    "Chapter 10: Concurrency",
+    "10.1 Running Threads",
+    "10.2 Thread States",
+    "10.3 Thread Properties",
+    "10.4 Coordinating Tasks",
+    "10.5 Synchronization",
+    "10.6 Thread-Safe Collections",
+    "10.7 Asynchronous Computations",
+    "10.8 Processes"
+  ],
+  "stages": [
+    "定义任务",
+    "选择线程",
+    "协调状态",
+    "传播取消",
+    "验证关闭"
+  ],
+  "focuses": [
+    "虚拟线程",
+    "线程状态",
+    "happens-before",
+    "锁与原子性",
+    "CompletableFuture",
+    "Process"
+  ],
+  "model": {
+    "studio": "并发任务与关闭轨迹台",
+    "axisA": {
+      "label": "线程模型",
+      "levels": [
+        "单平台线程",
+        "固定线程池",
+        "每任务虚拟线程"
+      ]
+    },
+    "axisB": {
+      "label": "共享状态保护",
+      "levels": [
+        "无同步",
+        "锁或原子",
+        "隔离状态"
+      ]
+    },
+    "outcomes": {
+      "success": "任务完成率",
+      "risk": "竞争与泄漏风险",
+      "evidence": "可重放证据"
+    },
+    "fault": "把虚拟线程当成共享状态安全方案，或取消后仍留下线程、锁和外部连接",
+    "task": "对阻塞任务切换线程模型并注入取消，核对结果、共享计数与关闭状态",
+    "invariant": "任务结果、取消传播和资源关闭在所有线程模型下语义一致",
+    "probe": "Thread.startVirtualThread(task)",
+    "practiceMode": "simulation",
+    "riskEffects": [
+      1,
+      -1
+    ]
+  }
+} as const;
 
-export function Jct14eV110ConcurrencyMapLab() { return <JctContractMapLab title="卷I 第10章 并发 · 合同图" focus="比较平台线程与虚拟线程，建立任务协调、同步、线程安全集合、异步计算和进程边界" stages={stages} />; }
-export function Jct14eV110ConcurrencyExperimentLab() { return <JctCapacityExperimentLab title="卷I 第10章 并发 · 容量实验" focus="线程模型决策、happens-before 图、压力测试与关闭验收" stages={stages} />; }
-export function Jct14eV110ConcurrencyEvidenceLab() { return <JctFailureEvidenceLab title="卷I 第10章 并发 · 失败证据" focus="把虚拟线程当作共享状态安全方案，或忽略取消、超时、背压和资源上限" stages={stages} />; }
+export function Jct14eV110ConcurrencyMapLab() {
+  return <OfficialJct25Studio {...props} mode="map" />;
+}
+
+export function Jct14eV110ConcurrencyExperimentLab() {
+  return <OfficialJct25Studio {...props} mode="experiment" />;
+}
+
+export function Jct14eV110ConcurrencyEvidenceLab() {
+  return <OfficialJct25Studio {...props} mode="evidence" />;
+}
