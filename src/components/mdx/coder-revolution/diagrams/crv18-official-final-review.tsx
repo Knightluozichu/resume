@@ -1,18 +1,18 @@
-import { OfficialCrv18Lab } from "./official-crv18-lab";
+import { CoderMechanismLab } from "./coder-mechanism-lab";
 
-const props = {
+const profile = {
   unitId: "crv18-official-final-review",
   title: "《码农翻身》全书综合复核",
-  nodes: ["系统基础", "Java机制", "Web链路", "工程过程", "迁移与成长"],
-  focuses: ["跨章因果", "边界条件", "替代方案", "单故障", "独立复核"],
+  family: "book",
+  nodes: ["用户请求", "运行时处理", "状态持久化", "变更发布", "反馈复盘"],
+  concepts: [],
+  mechanism:
+    "总复习用一次线上请求和一次可审查变更贯穿 CPU、线程、TCP、TLS、Java、数据库、Git、构建、测试和复盘",
+  success: "《码农翻身》全书综合复核 的输入、机制、输出与复位轨迹一致",
+  failure:
+    "《码农翻身》全书综合复核 在“能复述每章名词，却不能从用户现象定位到协议、运行时、数据或变更链的最早偏离点”处拒绝",
 } as const;
 
-export function Crv18OfficialFinalReviewModelLab() {
-  return <OfficialCrv18Lab {...props} mode="model" />;
-}
-export function Crv18OfficialFinalReviewFlowLab() {
-  return <OfficialCrv18Lab {...props} mode="flow" />;
-}
-export function Crv18OfficialFinalReviewEvidenceLab() {
-  return <OfficialCrv18Lab {...props} mode="evidence" />;
+export function Crv18OfficialFinalReviewLab() {
+  return <CoderMechanismLab {...profile} />;
 }
