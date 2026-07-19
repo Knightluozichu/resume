@@ -21716,6 +21716,318 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       McdMultimethodProblemMap: module0.McdMultimethodProblemMap,
     } as ChapterMdxComponents;
   },
+  "multiagent-systems/00-map/mas-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/multiagent-systems/diagrams/mas-official-learning-map");
+    return {
+      MasOfficialLearningMapModelLab: module0.MasOfficialLearningMapModelLab,
+      MasOfficialLearningMapInteractionLab:
+        module0.MasOfficialLearningMapInteractionLab,
+      MasOfficialLearningMapEvidenceLab:
+        module0.MasOfficialLearningMapEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "multiagent-systems/01-preface/mas-preface": async () => {
+    const module0 =
+      await import("@/components/mdx/multiagent-systems/diagrams/mas-preface");
+    return {
+      MasPrefaceModelLab: module0.MasPrefaceModelLab,
+      MasPrefaceInteractionLab: module0.MasPrefaceInteractionLab,
+      MasPrefaceEvidenceLab: module0.MasPrefaceEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "multiagent-systems/02-part-01-setting-scene/mas-part-01-setting-scene":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/multiagent-systems/diagrams/mas-part-01-setting-scene");
+      return {
+        MasPart01SettingSceneModelLab: module0.MasPart01SettingSceneModelLab,
+        MasPart01SettingSceneInteractionLab:
+          module0.MasPart01SettingSceneInteractionLab,
+        MasPart01SettingSceneEvidenceLab:
+          module0.MasPart01SettingSceneEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "multiagent-systems/03-01-introduction/mas-01-introduction": async () => {
+    const module0 =
+      await import("@/components/mdx/multiagent-systems/diagrams/mas-01-introduction");
+    return {
+      Mas01IntroductionModelLab: module0.Mas01IntroductionModelLab,
+      Mas01IntroductionInteractionLab: module0.Mas01IntroductionInteractionLab,
+      Mas01IntroductionEvidenceLab: module0.Mas01IntroductionEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "multiagent-systems/04-part-02-intelligent-autonomous-agents/mas-part-02-intelligent-autonomous-agents":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/multiagent-systems/diagrams/mas-part-02-intelligent-autonomous-agents");
+      return {
+        MasPart02IntelligentAutonomousAgentsModelLab:
+          module0.MasPart02IntelligentAutonomousAgentsModelLab,
+        MasPart02IntelligentAutonomousAgentsInteractionLab:
+          module0.MasPart02IntelligentAutonomousAgentsInteractionLab,
+        MasPart02IntelligentAutonomousAgentsEvidenceLab:
+          module0.MasPart02IntelligentAutonomousAgentsEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "multiagent-systems/05-02-intelligent-agents/mas-02-intelligent-agents":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/multiagent-systems/diagrams/mas-02-intelligent-agents");
+      return {
+        Mas02IntelligentAgentsModelLab: module0.Mas02IntelligentAgentsModelLab,
+        Mas02IntelligentAgentsInteractionLab:
+          module0.Mas02IntelligentAgentsInteractionLab,
+        Mas02IntelligentAgentsEvidenceLab:
+          module0.Mas02IntelligentAgentsEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "multiagent-systems/06-03-deductive-reasoning-agents/mas-03-deductive-reasoning-agents":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/multiagent-systems/diagrams/mas-03-deductive-reasoning-agents");
+      return {
+        Mas03DeductiveReasoningAgentsModelLab:
+          module0.Mas03DeductiveReasoningAgentsModelLab,
+        Mas03DeductiveReasoningAgentsInteractionLab:
+          module0.Mas03DeductiveReasoningAgentsInteractionLab,
+        Mas03DeductiveReasoningAgentsEvidenceLab:
+          module0.Mas03DeductiveReasoningAgentsEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "multiagent-systems/07-04-practical-reasoning-agents/mas-04-practical-reasoning-agents":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/multiagent-systems/diagrams/mas-04-practical-reasoning-agents");
+      return {
+        Mas04PracticalReasoningAgentsModelLab:
+          module0.Mas04PracticalReasoningAgentsModelLab,
+        Mas04PracticalReasoningAgentsInteractionLab:
+          module0.Mas04PracticalReasoningAgentsInteractionLab,
+        Mas04PracticalReasoningAgentsEvidenceLab:
+          module0.Mas04PracticalReasoningAgentsEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "multiagent-systems/08-05-reactive-hybrid-agents/mas-05-reactive-hybrid-agents":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/multiagent-systems/diagrams/mas-05-reactive-hybrid-agents");
+      return {
+        Mas05ReactiveHybridAgentsModelLab:
+          module0.Mas05ReactiveHybridAgentsModelLab,
+        Mas05ReactiveHybridAgentsInteractionLab:
+          module0.Mas05ReactiveHybridAgentsInteractionLab,
+        Mas05ReactiveHybridAgentsEvidenceLab:
+          module0.Mas05ReactiveHybridAgentsEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "multiagent-systems/09-part-03-communication-cooperation/mas-part-03-communication-cooperation":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/multiagent-systems/diagrams/mas-part-03-communication-cooperation");
+      return {
+        MasPart03CommunicationCooperationModelLab:
+          module0.MasPart03CommunicationCooperationModelLab,
+        MasPart03CommunicationCooperationInteractionLab:
+          module0.MasPart03CommunicationCooperationInteractionLab,
+        MasPart03CommunicationCooperationEvidenceLab:
+          module0.MasPart03CommunicationCooperationEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "multiagent-systems/10-06-understanding-each-other/mas-06-understanding-each-other":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/multiagent-systems/diagrams/mas-06-understanding-each-other");
+      return {
+        Mas06UnderstandingEachOtherModelLab:
+          module0.Mas06UnderstandingEachOtherModelLab,
+        Mas06UnderstandingEachOtherInteractionLab:
+          module0.Mas06UnderstandingEachOtherInteractionLab,
+        Mas06UnderstandingEachOtherEvidenceLab:
+          module0.Mas06UnderstandingEachOtherEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "multiagent-systems/11-07-communicating/mas-07-communicating": async () => {
+    const module0 =
+      await import("@/components/mdx/multiagent-systems/diagrams/mas-07-communicating");
+    return {
+      Mas07CommunicatingModelLab: module0.Mas07CommunicatingModelLab,
+      Mas07CommunicatingInteractionLab:
+        module0.Mas07CommunicatingInteractionLab,
+      Mas07CommunicatingEvidenceLab: module0.Mas07CommunicatingEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "multiagent-systems/12-08-working-together/mas-08-working-together":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/multiagent-systems/diagrams/mas-08-working-together");
+      return {
+        Mas08WorkingTogetherModelLab: module0.Mas08WorkingTogetherModelLab,
+        Mas08WorkingTogetherInteractionLab:
+          module0.Mas08WorkingTogetherInteractionLab,
+        Mas08WorkingTogetherEvidenceLab:
+          module0.Mas08WorkingTogetherEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "multiagent-systems/13-09-methodologies/mas-09-methodologies": async () => {
+    const module0 =
+      await import("@/components/mdx/multiagent-systems/diagrams/mas-09-methodologies");
+    return {
+      Mas09MethodologiesModelLab: module0.Mas09MethodologiesModelLab,
+      Mas09MethodologiesInteractionLab:
+        module0.Mas09MethodologiesInteractionLab,
+      Mas09MethodologiesEvidenceLab: module0.Mas09MethodologiesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "multiagent-systems/14-10-applications/mas-10-applications": async () => {
+    const module0 =
+      await import("@/components/mdx/multiagent-systems/diagrams/mas-10-applications");
+    return {
+      Mas10ApplicationsModelLab: module0.Mas10ApplicationsModelLab,
+      Mas10ApplicationsInteractionLab: module0.Mas10ApplicationsInteractionLab,
+      Mas10ApplicationsEvidenceLab: module0.Mas10ApplicationsEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "multiagent-systems/15-part-04-multiagent-decision-making/mas-part-04-multiagent-decision-making":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/multiagent-systems/diagrams/mas-part-04-multiagent-decision-making");
+      return {
+        MasPart04MultiagentDecisionMakingModelLab:
+          module0.MasPart04MultiagentDecisionMakingModelLab,
+        MasPart04MultiagentDecisionMakingInteractionLab:
+          module0.MasPart04MultiagentDecisionMakingInteractionLab,
+        MasPart04MultiagentDecisionMakingEvidenceLab:
+          module0.MasPart04MultiagentDecisionMakingEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "multiagent-systems/16-11-multiagent-interactions/mas-11-multiagent-interactions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/multiagent-systems/diagrams/mas-11-multiagent-interactions");
+      return {
+        Mas11MultiagentInteractionsModelLab:
+          module0.Mas11MultiagentInteractionsModelLab,
+        Mas11MultiagentInteractionsInteractionLab:
+          module0.Mas11MultiagentInteractionsInteractionLab,
+        Mas11MultiagentInteractionsEvidenceLab:
+          module0.Mas11MultiagentInteractionsEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "multiagent-systems/17-12-making-group-decisions/mas-12-making-group-decisions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/multiagent-systems/diagrams/mas-12-making-group-decisions");
+      return {
+        Mas12MakingGroupDecisionsModelLab:
+          module0.Mas12MakingGroupDecisionsModelLab,
+        Mas12MakingGroupDecisionsInteractionLab:
+          module0.Mas12MakingGroupDecisionsInteractionLab,
+        Mas12MakingGroupDecisionsEvidenceLab:
+          module0.Mas12MakingGroupDecisionsEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "multiagent-systems/18-13-forming-coalitions/mas-13-forming-coalitions":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/multiagent-systems/diagrams/mas-13-forming-coalitions");
+      return {
+        Mas13FormingCoalitionsModelLab: module0.Mas13FormingCoalitionsModelLab,
+        Mas13FormingCoalitionsInteractionLab:
+          module0.Mas13FormingCoalitionsInteractionLab,
+        Mas13FormingCoalitionsEvidenceLab:
+          module0.Mas13FormingCoalitionsEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "multiagent-systems/19-14-allocating-scarce-resources/mas-14-allocating-scarce-resources":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/multiagent-systems/diagrams/mas-14-allocating-scarce-resources");
+      return {
+        Mas14AllocatingScarceResourcesModelLab:
+          module0.Mas14AllocatingScarceResourcesModelLab,
+        Mas14AllocatingScarceResourcesInteractionLab:
+          module0.Mas14AllocatingScarceResourcesInteractionLab,
+        Mas14AllocatingScarceResourcesEvidenceLab:
+          module0.Mas14AllocatingScarceResourcesEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "multiagent-systems/20-15-bargaining/mas-15-bargaining": async () => {
+    const module0 =
+      await import("@/components/mdx/multiagent-systems/diagrams/mas-15-bargaining");
+    return {
+      Mas15BargainingModelLab: module0.Mas15BargainingModelLab,
+      Mas15BargainingInteractionLab: module0.Mas15BargainingInteractionLab,
+      Mas15BargainingEvidenceLab: module0.Mas15BargainingEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "multiagent-systems/21-16-arguing/mas-16-arguing": async () => {
+    const module0 =
+      await import("@/components/mdx/multiagent-systems/diagrams/mas-16-arguing");
+    return {
+      Mas16ArguingModelLab: module0.Mas16ArguingModelLab,
+      Mas16ArguingInteractionLab: module0.Mas16ArguingInteractionLab,
+      Mas16ArguingEvidenceLab: module0.Mas16ArguingEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "multiagent-systems/22-17-logical-foundations/mas-17-logical-foundations":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/multiagent-systems/diagrams/mas-17-logical-foundations");
+      return {
+        Mas17LogicalFoundationsModelLab:
+          module0.Mas17LogicalFoundationsModelLab,
+        Mas17LogicalFoundationsInteractionLab:
+          module0.Mas17LogicalFoundationsInteractionLab,
+        Mas17LogicalFoundationsEvidenceLab:
+          module0.Mas17LogicalFoundationsEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "multiagent-systems/23-coda/mas-coda": async () => {
+    const module0 =
+      await import("@/components/mdx/multiagent-systems/diagrams/mas-coda");
+    return {
+      MasCodaModelLab: module0.MasCodaModelLab,
+      MasCodaInteractionLab: module0.MasCodaInteractionLab,
+      MasCodaEvidenceLab: module0.MasCodaEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "multiagent-systems/24-appendix-a-history-lesson/mas-appendix-a-history-lesson":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/multiagent-systems/diagrams/mas-appendix-a-history-lesson");
+      return {
+        MasAppendixAHistoryLessonModelLab:
+          module0.MasAppendixAHistoryLessonModelLab,
+        MasAppendixAHistoryLessonInteractionLab:
+          module0.MasAppendixAHistoryLessonInteractionLab,
+        MasAppendixAHistoryLessonEvidenceLab:
+          module0.MasAppendixAHistoryLessonEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "multiagent-systems/25-appendix-b-afterword/mas-appendix-b-afterword":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/multiagent-systems/diagrams/mas-appendix-b-afterword");
+      return {
+        MasAppendixBAfterwordModelLab: module0.MasAppendixBAfterwordModelLab,
+        MasAppendixBAfterwordInteractionLab:
+          module0.MasAppendixBAfterwordInteractionLab,
+        MasAppendixBAfterwordEvidenceLab:
+          module0.MasAppendixBAfterwordEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "multiagent-systems/26-review/mas-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/multiagent-systems/diagrams/mas-official-final-review");
+    return {
+      MasOfficialFinalReviewModelLab: module0.MasOfficialFinalReviewModelLab,
+      MasOfficialFinalReviewInteractionLab:
+        module0.MasOfficialFinalReviewInteractionLab,
+      MasOfficialFinalReviewEvidenceLab:
+        module0.MasOfficialFinalReviewEvidenceLab,
+    } as ChapterMdxComponents;
+  },
   "multiplayer-game-architecture/00-guide/mga-official-learning-map":
     async () => {
       const module0 =
