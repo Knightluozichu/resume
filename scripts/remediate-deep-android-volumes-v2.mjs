@@ -804,6 +804,11 @@ manifest.factSources = {
     label: "AOSP system/core android-2.2_r1",
     url: "https://android.googlesource.com/platform/system/core/+/android-2.2_r1/",
   },
+  froyoHardwareRil: {
+    kind: "official-tagged-source",
+    label: "AOSP hardware/ril android-2.2_r1",
+    url: "https://android.googlesource.com/platform/hardware/ril/+/android-2.2_r1/",
+  },
   icsFrameworks: {
     kind: "official-tagged-source",
     label: "AOSP frameworks/base android-4.0.1_r1",
@@ -858,6 +863,7 @@ for (const unit of manifest.units) {
       : volume === "v2"
         ? "icsFrameworks"
         : "jellyBeanFrameworks",
+    ...(unit.id === "dav-v1-09-vold-rild" ? ["froyoHardwareRil"] : []),
     "currentArchitecture",
   ];
 }
