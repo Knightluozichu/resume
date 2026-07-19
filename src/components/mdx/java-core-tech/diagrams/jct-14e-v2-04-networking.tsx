@@ -1,7 +1,75 @@
-import { JctContractMapLab, JctCapacityExperimentLab, JctFailureEvidenceLab } from "./official-jct-lab";
+import { OfficialJct25Studio } from "./official-jct-lab";
 
-const stages = ["声明合同", "建立模型", "运行探针", "注入失败", "交接证据"];
+const props = {
+  "unitId": "jct-14e-v2-04-networking",
+  "title": "卷II 第4章 网络",
+  "concepts": [
+    "Chapter 4: Networking",
+    "4.1 Connecting to a Server",
+    "4.2 Implementing Servers",
+    "4.3 Getting Web Data",
+    "4.4 The HTTP Client",
+    "4.5 The Simple HTTP Server",
+    "4.6 Sending E-Mail"
+  ],
+  "stages": [
+    "解析地址",
+    "建立连接",
+    "交换协议",
+    "处理超时",
+    "关闭会话"
+  ],
+  "focuses": [
+    "Socket",
+    "ServerSocket",
+    "URI",
+    "HttpClient",
+    "超时",
+    "SMTP边界"
+  ],
+  "model": {
+    "studio": "网络请求状态机",
+    "axisA": {
+      "label": "连接方式",
+      "levels": [
+        "原始Socket",
+        "HTTP Client",
+        "本地HTTP Server"
+      ]
+    },
+    "axisB": {
+      "label": "失败预算",
+      "levels": [
+        "无限等待",
+        "连接超时",
+        "端到端截止时间"
+      ]
+    },
+    "outcomes": {
+      "success": "协议完成率",
+      "risk": "挂起与重试风险",
+      "evidence": "可重放证据"
+    },
+    "fault": "没有超时地等待远端，或对非幂等请求自动重试造成重复副作用",
+    "task": "注入DNS失败、连接拒绝与慢响应，区分错误阶段并验证关闭与重试决议",
+    "invariant": "每个请求都有截止时间、响应上限与明确关闭责任",
+    "probe": "HttpRequest.newBuilder(uri).timeout(timeout)",
+    "practiceMode": "simulation",
+    "riskEffects": [
+      1,
+      -1
+    ]
+  }
+} as const;
 
-export function Jct14eV204NetworkingMapLab() { return <JctContractMapLab title="卷II 第4章 网络 · 合同图" focus="设计客户端/服务器、HTTP 客户端和内置服务器的超时、协议、并发与关闭合同" stages={stages} />; }
-export function Jct14eV204NetworkingExperimentLab() { return <JctCapacityExperimentLab title="卷II 第4章 网络 · 容量实验" focus="协议状态机、超时预算、HTTP 证据与服务端压力/关闭测试" stages={stages} />; }
-export function Jct14eV204NetworkingEvidenceLab() { return <JctFailureEvidenceLab title="卷II 第4章 网络 · 失败证据" focus="把一次读取当完整消息，或没有连接、请求、空闲超时与响应大小上限" stages={stages} />; }
+export function Jct14eV204NetworkingMapLab() {
+  return <OfficialJct25Studio {...props} mode="map" />;
+}
+
+export function Jct14eV204NetworkingExperimentLab() {
+  return <OfficialJct25Studio {...props} mode="experiment" />;
+}
+
+export function Jct14eV204NetworkingEvidenceLab() {
+  return <OfficialJct25Studio {...props} mode="evidence" />;
+}
