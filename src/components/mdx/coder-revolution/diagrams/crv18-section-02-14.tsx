@@ -1,18 +1,27 @@
-import { OfficialCrv18Lab } from "./official-crv18-lab";
+import { CoderMechanismLab } from "./coder-mechanism-lab";
 
-const props = {
+const profile = {
   unitId: "crv18-section-02-14",
   title: "2.14 Spring 的本质",
-  nodes: ["业务问题", "稳定接口", "运行时机制", "基础设施协作", "验收证据"],
-  focuses: ["抽象动机", "接口合同", "运行时状态", "替换边界", "回归结果"],
+  family: "java",
+  nodes: ["读取Bean定义", "创建实例", "解析依赖", "生成代理", "调用业务"],
+  concepts: [
+    "2.14 Spring 的本质",
+    "问题来源",
+    "设计模式：模板方法",
+    "设计模式：装饰者",
+    "AOP",
+    "实现AOP",
+    "对象的创建",
+    "IoC与DI",
+  ],
+  mechanism:
+    "Spring 容器依据定义创建并注入 bean，IoC 把对象装配权交给容器；AOP 通常通过代理在连接点应用横切通知",
+  success: "2.14 Spring 的本质 的输入、机制、输出与复位轨迹一致",
+  failure:
+    "2.14 Spring 的本质 在“同一类内部自调用绕过代理入口，导致预期的事务或通知没有执行”处拒绝",
 } as const;
 
-export function Crv18Section0214ModelLab() {
-  return <OfficialCrv18Lab {...props} mode="model" />;
-}
-export function Crv18Section0214FlowLab() {
-  return <OfficialCrv18Lab {...props} mode="flow" />;
-}
-export function Crv18Section0214EvidenceLab() {
-  return <OfficialCrv18Lab {...props} mode="evidence" />;
+export function Crv18Section0214Lab() {
+  return <CoderMechanismLab {...profile} />;
 }
