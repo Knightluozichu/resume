@@ -1,18 +1,18 @@
-import { OfficialCrv18Lab } from "./official-crv18-lab";
+import { CoderMechanismLab } from "./coder-mechanism-lab";
 
-const props = {
+const profile = {
   unitId: "crv18-section-01-11",
   title: "1.11 一个翻译家族的发家史",
-  nodes: ["输入事件", "状态转换", "资源调度", "边界条件", "可见结果"],
-  focuses: ["对象身份", "状态所有权", "调度顺序", "资源上限", "故障证据"],
+  family: "language",
+  nodes: ["高级源码", "编译目标", "汇编机器码", "链接符号", "装载执行"],
+  concepts: ["1.11 一个翻译家族的发家史", "机器语言", "汇编语言", "高级语言"],
+  mechanism:
+    "编译器把高级语言翻译为汇编或目标代码，汇编器生成机器指令，链接器解析符号，加载器建立运行映像",
+  success: "1.11 一个翻译家族的发家史 的输入、机制、输出与复位轨迹一致",
+  failure:
+    "1.11 一个翻译家族的发家史 在“把编译成功当成符号已链接且程序必能装载，忽略外部库和运行时环境”处拒绝",
 } as const;
 
-export function Crv18Section0111ModelLab() {
-  return <OfficialCrv18Lab {...props} mode="model" />;
-}
-export function Crv18Section0111FlowLab() {
-  return <OfficialCrv18Lab {...props} mode="flow" />;
-}
-export function Crv18Section0111EvidenceLab() {
-  return <OfficialCrv18Lab {...props} mode="evidence" />;
+export function Crv18Section0111Lab() {
+  return <CoderMechanismLab {...profile} />;
 }
