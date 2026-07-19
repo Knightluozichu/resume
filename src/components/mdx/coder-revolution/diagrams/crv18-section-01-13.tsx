@@ -1,18 +1,18 @@
-import { OfficialCrv18Lab } from "./official-crv18-lab";
+import { CoderMechanismLab } from "./coder-mechanism-lab";
 
-const props = {
+const profile = {
   unitId: "crv18-section-01-13",
   title: "1.13 绕不开的加法器",
-  nodes: ["输入事件", "状态转换", "资源调度", "边界条件", "可见结果"],
-  focuses: ["对象身份", "状态所有权", "调度顺序", "资源上限", "故障证据"],
+  family: "hardware",
+  nodes: ["输入位", "半加和", "生成进位", "合并进位", "输出多位"],
+  concepts: ["1.13 绕不开的加法器"],
+  mechanism:
+    "半加器用 XOR 产生和、AND 产生进位；全加器再合并输入进位，多个全加器串接构成多位加法",
+  success: "1.13 绕不开的加法器 的输入、机制、输出与复位轨迹一致",
+  failure:
+    "1.13 绕不开的加法器 在“只计算每一位的 XOR 而未把低位进位送到高位，遇到 1+1 即失败”处拒绝",
 } as const;
 
-export function Crv18Section0113ModelLab() {
-  return <OfficialCrv18Lab {...props} mode="model" />;
-}
-export function Crv18Section0113FlowLab() {
-  return <OfficialCrv18Lab {...props} mode="flow" />;
-}
-export function Crv18Section0113EvidenceLab() {
-  return <OfficialCrv18Lab {...props} mode="evidence" />;
+export function Crv18Section0113Lab() {
+  return <CoderMechanismLab {...profile} />;
 }
