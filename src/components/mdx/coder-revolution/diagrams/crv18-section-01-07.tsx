@@ -1,18 +1,25 @@
-import { OfficialCrv18Lab } from "./official-crv18-lab";
+import { CoderMechanismLab } from "./coder-mechanism-lab";
 
-const props = {
+const profile = {
   unitId: "crv18-section-01-07",
   title: "1.7 我是一个键盘",
-  nodes: ["输入事件", "状态转换", "资源调度", "边界条件", "可见结果"],
-  focuses: ["对象身份", "状态所有权", "调度顺序", "资源上限", "故障证据"],
+  family: "hardware",
+  nodes: ["按键扫描", "控制器缓冲", "中断通知", "驱动读取", "进程消费"],
+  concepts: [
+    "1.7 我是一个键盘",
+    "二等公民",
+    "总线和端口",
+    "轮询（程序式I/O）",
+    "中断",
+    "DMA",
+  ],
+  mechanism:
+    "键盘经控制器和总线产生输入；轮询由 CPU 主动检查，中断在事件到来时通知，DMA 则让大块数据不必逐字节占用 CPU",
+  success: "1.7 我是一个键盘 的输入、机制、输出与复位轨迹一致",
+  failure:
+    "1.7 我是一个键盘 在“把中断与 DMA 都解释成设备直接执行应用代码，遗漏驱动和内核的边界”处拒绝",
 } as const;
 
-export function Crv18Section0107ModelLab() {
-  return <OfficialCrv18Lab {...props} mode="model" />;
-}
-export function Crv18Section0107FlowLab() {
-  return <OfficialCrv18Lab {...props} mode="flow" />;
-}
-export function Crv18Section0107EvidenceLab() {
-  return <OfficialCrv18Lab {...props} mode="evidence" />;
+export function Crv18Section0107Lab() {
+  return <CoderMechanismLab {...profile} />;
 }
