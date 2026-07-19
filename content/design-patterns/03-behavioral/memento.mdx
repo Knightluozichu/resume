@@ -1,372 +1,267 @@
 ---
-title: 备忘录模式
+title: "备忘录模式"
 type: A
-section: 行为型模式
+section: "行为型模式"
 order: 21
-description: 保存对象状态的快照，以便日后恢复——撤销功能的核心模式。
+description: "备忘录模式：在不破坏封装的前提下捕获对象内部状态，以便之后恢复"
 demo: true
 math: false
-sourceUrl: >-
-  https://www.pearson.com/en-us/subject-catalog/p/design-patterns-elements-of-reusable-object-oriented-software/P200000009480/9780321700698
+sourceUrl: "https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
 draft: false
 ---
 
-import { MementoDiagram } from "@/components/mdx/design-patterns/diagrams/memento-diagram";
 import {
-  OfficialDesignPatternsMementoMapLab,
-  OfficialDesignPatternsMementoExperimentLab,
-  OfficialDesignPatternsMementoEvidenceLab,
+  MementoStructureLab,
+  MementoChangeLab,
+  MementoEvidenceLab,
 } from "@/components/mdx/design-patterns/diagrams/memento";
 import {
   Objectives,
   Callout,
-  Attribution,
+  Term,
   Glossary,
   GlossaryItem,
-  Term,
   Exercises,
   Answer,
   Stepper,
   Step,
+  Attribution,
 } from "@/components/mdx/mdx-components";
-
-{/* OFFICIAL_COURSE_ENHANCEMENT */}
 
 <Objectives>
 
-- 能解释备忘录模式的输入、核心结构、状态变化和输出合同
-- 能绘制并修改备忘录模式的最小模型，比较至少一种替代方案
-- 能复现正常、边界和单故障样本，定位第一条证据分叉
-- 能根据成本与风险判断方案适用范围，并完成清理重建
+- 能从“画布编辑器要保存撤销快照，但历史管理器不能直接修改画布私有结构”识别 备忘录模式 真正处理的变化轴
+- 能解释 CanvasOriginator、CanvasMemento、HistoryCaretaker 的引用方向与协作责任
+- 能修改 TypeScript 最小实现，并验证“恢复任一历史版本后，画布内容与捕获时一致且历史快照仍不可变”
+- 能用“把可变状态对象直接放进历史栈，会让旧快照随当前编辑一起改变”作为拒绝或简化方案的信号
 
 </Objectives>
 
-## 为什么只记结论不足以掌握备忘录模式
+## 直觉：从变化压力出发，而不是从模式名称出发
 
-学习“备忘录模式”时，第一步不是记住结论，而是冻结输入、上下文、版本和成功标准。只有这些条件明确，备忘录模式的含义才不会随着样例变化。正文已有的概念说明要与结构图、运行轨迹和失败样本互相印证，不能只凭最终输出看似正确就宣布完成。
+让历史栈读取所有私有字段会破坏封装，手写逆操作又可能遗漏状态 因此，备忘录模式 的第一步不是画类图，而是写清 **画布编辑器要保存撤销快照，但历史管理器不能直接修改画布私有结构** 中哪项变化会扩散、现有结构怎样承担成本，以及什么观察足以拒绝模式。
 
-结构分析从意图开始：列出参与者、职责、连接方向、生命周期和所有权，再沿正常路径追踪数据或控制流。每一条边都要说明为什么存在、谁创建、谁消费、谁负责清理；如果边界被跨越，必须能在证据中找到第一处异常。
+在实验前先预测：沿 捕获状态 → 封装备忘录 → 保存历史 → 选择版本 → 恢复状态 运行时，哪条依赖最先暴露变化；随后只调整一个参与者或连接，保存代码结果和拒绝原因，最后重置到相同基线。
 
-机制验证要把适用性写成可以执行的条件。正常样本证明主路径，恰好边界样本验证等号和空值，单故障样本只破坏一个假设。三类样本使用同一份观察指标，避免因为测试口径变化而把偶然结果误认成规律。
+<Callout type="info" title="来源范围与独立教学重写">
+  [InformIT
+  官方页面](https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610)确认四位作者、1994
+  年第一版、23 个模式、完整目录，并提供获授权的模式样章与示例代码；[Pearson
+  书目页](https://www.pearson.com/en-us/subject-catalog/p/design-patterns-elements-of-reusable-object-oriented-software/P200000009480/9780321700698)用于交叉核对版本，[GoF
+  作者回顾](https://www.informit.com/articles/article.aspx?p=1327762)用于理解后续评价，[TypeScript
+  官方手册](https://www.typescriptlang.org/docs/handbook/2/classes.html)用于核对本站代码语法。项目没有原书完整正文，本页不翻译或复现原书；中文解释、TypeScript
+  实现、交互与练习均为独立教学重写。
+</Callout>
 
-成本分析同时记录时间、空间、延迟、耦合、可维护性和不可逆操作。结构不是一句“可能失败”，而是可复现输入、预期停点、实际轨迹、错误分类与清理步骤。任何自动重试都要有次数、预算和幂等边界。
+## 问题合同与术语
 
-方案比较不能只列优点。需要给出直接实现、当前方案和至少一个替代方案，逐项比较复杂度、扩展点、故障隔离和团队认知成本。当问题规模很小或变化轴稳定时，更简单的实现往往更好；模式与框架必须由真实变化压力证明。
+**意图。** 在不破坏封装的前提下捕获对象内部状态，以便之后恢复。**适用边界。** 需要快照恢复，而且暴露状态细节会破坏对象边界或不变量。本页验收不变量是：**恢复任一历史版本后，画布内容与捕获时一致且历史快照仍不可变**。
 
-实现阶段把大结论拆成可检查的中间产物：配置快照、结构清单、状态转移、输入输出样本、日志摘要和测试结果。每个产物带来源与生成命令，下一阶段只消费已通过门禁的版本，避免旧缓存或隐式默认值污染结论。
+<Term def={"备忘录模式在备忘录模式中用于检查捕获状态阶段的责任与证据。"}>
+  备忘录模式
+</Term>
+、
+<Term
+  def={"CanvasOriginator在备忘录模式中用于检查封装备忘录阶段的责任与证据。"}
+>
+  CanvasOriginator
+</Term>
+、
+<Term def={"CanvasMemento在备忘录模式中用于检查保存历史阶段的责任与证据。"}>
+  CanvasMemento
+</Term>
+、
+<Term def={"HistoryCaretaker在备忘录模式中用于检查选择版本阶段的责任与证据。"}>
+  HistoryCaretaker
+</Term>
+、
+<Term def={"变化轴在备忘录模式中用于检查恢复状态阶段的责任与证据。"}>
+  变化轴
+</Term>
+、
+<Term def={"拒绝条件在备忘录模式中用于检查捕获状态阶段的责任与证据。"}>
+  拒绝条件
+</Term>
 
-解释结果时必须区分相关性与因果性、接口承诺与实现细节、设计意图与运行事实。对“协作”的判断要由独立证据支持，并明确适用范围；一旦输入分布、版本、硬件或组织边界改变，就重新运行最小实验。
+## 官方目录结构的逐项解释
 
-复盘从首个分叉开始，而不是从最后一个报错倒推。先比较冻结输入，再比较第一份结构化中间产物，随后检查状态、约束和副作用。这样可以把复杂系统的排错范围收缩到一个阶段，避免在多个层次同时修改造成新的不确定性。
+下面的目录字段采用 GoF 模式目录的标准描述结构来组织独立讲解。每个字段都要连接当前问题、页面专属实验与练习证据；字段名称出现本身不算覆盖。
 
-迁移到真实项目时，先选择一个最小但有代表性的切片，保存改造前基线，再逐步引入“备忘录模式”中的机制。每一步只改变一个变量并保留回滚点；性能、正确性、安全性和可理解性至少各有一项可量化指标。
+### 模式名称与分类
 
-最终验收要求读者能脱离页面重新画出结构、口述关键链路、实现最小版本、构造一个反例并解释失败位置。若只能复述名词而不能预测中间状态，说明知识仍停留在识记层，需要回到图示和实验重新验证。
+“备忘录模式”归入行为型模式，名称只用于定位 在不破坏封装的前提下捕获对象内部状态，以便之后恢复，不能替代问题证据。 对“画布编辑器要保存撤销快照，但历史管理器不能直接修改画布私有结构”先保存基线，再改变一个条件；若出现“把可变状态对象直接放进历史栈，会让旧快照随当前编辑一起改变”，就拒绝 备忘录模式 方案并回到更简单结构。
 
-本页用<Term def="备忘录模式连接备忘录模式的机制、边界与可复查证据。">备忘录模式</Term>、
+### 意图
 
-<Term def="意图连接备忘录模式的机制、边界与可复查证据。">意图</Term>、
-<Term def="适用性连接备忘录模式的机制、边界与可复查证据。">适用性</Term>、
-<Term def="结构连接备忘录模式的机制、边界与可复查证据。">结构</Term>、
-<Term def="协作连接备忘录模式的机制、边界与可复查证据。">协作</Term>
-建立统一坐标。先预测这些概念在结构图和运行轨迹中的位置，再操作实验控件；如果结果与预测不一致，停止在首个分叉，不要用后续补丁掩盖早期错误。
+“意图”回答模式想改变什么：在不破坏封装的前提下捕获对象内部状态，以便之后恢复。 对“画布编辑器要保存撤销快照，但历史管理器不能直接修改画布私有结构”先保存基线，再改变一个条件；若出现“把可变状态对象直接放进历史栈，会让旧快照随当前编辑一起改变”，就拒绝 备忘录模式 方案并回到更简单结构。
 
-## 权威目录与核心概念逐项对照
+### 别名
 
-- 备忘录模式
-- 意图
-- 适用性
-- 结构
-- 协作
-- 后果
-- 实现
-- 相关模式
+“别名”在本页处理为：没有需要单独记忆的稳定别名；评审时使用目录中的正式名称，避免用近似称呼混淆责任。 对“画布编辑器要保存撤销快照，但历史管理器不能直接修改画布私有结构”先保存基线，再改变一个条件；若出现“把可变状态对象直接放进历史栈，会让旧快照随当前编辑一起改变”，就拒绝 备忘录模式 方案并回到更简单结构。
 
-## 三视图实验：结构、变量与证据
+### 动机
+
+“动机”从具体压力出发：让历史栈读取所有私有字段会破坏封装，手写逆操作又可能遗漏状态。 对“画布编辑器要保存撤销快照，但历史管理器不能直接修改画布私有结构”先保存基线，再改变一个条件；若出现“把可变状态对象直接放进历史栈，会让旧快照随当前编辑一起改变”，就拒绝 备忘录模式 方案并回到更简单结构。
+
+### 适用性
+
+“适用性”要求同时满足：需要快照恢复，而且暴露状态细节会破坏对象边界或不变量。 对“画布编辑器要保存撤销快照，但历史管理器不能直接修改画布私有结构”先保存基线，再改变一个条件；若出现“把可变状态对象直接放进历史栈，会让旧快照随当前编辑一起改变”，就拒绝 备忘录模式 方案并回到更简单结构。
+
+### 结构
+
+“结构”由 CanvasOriginator、CanvasMemento、HistoryCaretaker 以及它们之间的引用方向共同确定。 对“画布编辑器要保存撤销快照，但历史管理器不能直接修改画布私有结构”先保存基线，再改变一个条件；若出现“把可变状态对象直接放进历史栈，会让旧快照随当前编辑一起改变”，就拒绝 备忘录模式 方案并回到更简单结构。
+
+### 参与者
+
+“参与者”逐一说明 CanvasOriginator、CanvasMemento、HistoryCaretaker 谁保存状态、谁发起调用以及谁承担变化。 对“画布编辑器要保存撤销快照，但历史管理器不能直接修改画布私有结构”先保存基线，再改变一个条件；若出现“把可变状态对象直接放进历史栈，会让旧快照随当前编辑一起改变”，就拒绝 备忘录模式 方案并回到更简单结构。
+
+### 协作
+
+“协作”的运行协议是：Originator 创建并读取 Memento，Caretaker 只保存而不解释内容。 对“画布编辑器要保存撤销快照，但历史管理器不能直接修改画布私有结构”先保存基线，再改变一个条件；若出现“把可变状态对象直接放进历史栈，会让旧快照随当前编辑一起改变”，就拒绝 备忘录模式 方案并回到更简单结构。
+
+### 后果
+
+“后果”必须连同收益和成本记录：恢复职责清楚，但大快照占用内存，版本迁移和外部资源很难复制。 对“画布编辑器要保存撤销快照，但历史管理器不能直接修改画布私有结构”先保存基线，再改变一个条件；若出现“把可变状态对象直接放进历史栈，会让旧快照随当前编辑一起改变”，就拒绝 备忘录模式 方案并回到更简单结构。
+
+### 实现
+
+“实现”落地时遵守：让备忘录不可变并带版本，采用增量快照时验证完整恢复链。 对“画布编辑器要保存撤销快照，但历史管理器不能直接修改画布私有结构”先保存基线，再改变一个条件；若出现“把可变状态对象直接放进历史栈，会让旧快照随当前编辑一起改变”，就拒绝 备忘录模式 方案并回到更简单结构。
+
+### 示例代码
+
+“示例代码”使用本页 TypeScript 最小切片验证“恢复任一历史版本后，画布内容与捕获时一致且历史快照仍不可变”，代码是独立教学示例。 对“画布编辑器要保存撤销快照，但历史管理器不能直接修改画布私有结构”先保存基线，再改变一个条件；若出现“把可变状态对象直接放进历史栈，会让旧快照随当前编辑一起改变”，就拒绝 备忘录模式 方案并回到更简单结构。
+
+### 已知应用
+
+“已知应用”可在这些场景识别：编辑器撤销、游戏存档、事务检查点和配置回滚常保存封装快照，但名称相似不构成采用证据。 对“画布编辑器要保存撤销快照，但历史管理器不能直接修改画布私有结构”先保存基线，再改变一个条件；若出现“把可变状态对象直接放进历史栈，会让旧快照随当前编辑一起改变”，就拒绝 备忘录模式 方案并回到更简单结构。
+
+### 相关模式
+
+“相关模式”用于比较边界：命令可保存补偿操作；原型复制新对象身份而备忘录用于恢复原对象。 对“画布编辑器要保存撤销快照，但历史管理器不能直接修改画布私有结构”先保存基线，再改变一个条件；若出现“把可变状态对象直接放进历史栈，会让旧快照随当前编辑一起改变”，就拒绝 备忘录模式 方案并回到更简单结构。
+
+## TypeScript 最小实现与变更实验
+
+以下代码只承担 备忘录模式 的一条协作切片。先运行基线，再替换 CanvasMemento 或注入非法 revision；如果调用者必须认识具体实现，或者“恢复任一历史版本后，画布内容与捕获时一致且历史快照仍不可变”不再成立，就记录失败而不是继续增加抽象。
+
+```ts
+interface CanvasMemento {
+  apply(input: Readonly<{ revision: number; payload: string }>): string;
+}
+
+class HistoryCaretaker implements CanvasMemento {
+  apply(input: Readonly<{ revision: number; payload: string }>) {
+    if (input.revision < 1) throw new Error("invalid revision");
+    return `Memento:${input.revision}:${input.payload}`;
+  }
+}
+
+class CanvasOriginator {
+  constructor(private readonly collaborator: CanvasMemento) {}
+  run(payload: string) {
+    return this.collaborator.apply({ revision: 1, payload });
+  }
+}
+```
+
+修改任务：增加一个与 HistoryCaretaker 同合同的新实现，只改扩展点与装配位置；随后故意绕过 CanvasOriginator，比较编译错误、运行结果和依赖传播。让备忘录不可变并带版本，采用增量快照时验证完整恢复链。
+
+## 三视图模式实验
 
 <Stepper>
-  <Step title="第一步：冻结结构并先预测">
-    先预测参与者、连接方向与关键状态，再点击结构节点核对。
-    <OfficialDesignPatternsMementoMapLab />
+  <Step title="1. 参与者结构">
+    先点选 封装备忘录 与不同重构，解释
+    CanvasOriginator、CanvasMemento、HistoryCaretaker
+    中谁拥有状态、谁可替换、谁负责拒绝。
+    <MementoStructureLab />
   </Step>
-  <Step title="第二步：只改变一个变量">
-    保持其他条件不变，移动覆盖率或风险滑块，观察门禁变化。
-    <OfficialDesignPatternsMementoExperimentLab />
+  <Step title="2. 变更传播">
+    切到“新增变化”和“误用反例”，观察 备忘录模式 的耦合、成本与可追踪性怎样联动。
+    <MementoChangeLab />
   </Step>
-  <Step title="第三步：注入单故障并保存证据">
-    注入一个边界故障，记录第一处偏离、拒绝原因和恢复条件。
-    <OfficialDesignPatternsMementoEvidenceLab />
+  <Step title="3. 权衡证据">
+    保存一次通过轨迹和一次拒绝轨迹，再重置；最终判断必须能解释
+    恢复职责清楚，但大快照占用内存，版本迁移和外部资源很难复制。
+    <MementoEvidenceLab />
   </Step>
 </Stepper>
 
-<Callout type="trap">
-  <strong>误区：</strong>
-  看到最终结果正确就认为机制正确。中间状态可能已经偏离，只是被后续默认值或重试偶然修补。应保存首个结构化产物并逐阶段比较。
+## 常见误区与反例
+
+<Callout type="trap" title="备忘录模式 的拒绝信号">
+  把可变状态对象直接放进历史栈，会让旧快照随当前编辑一起改变。出现该信号时，删除一层结构并重跑
+  捕获状态 → 封装备忘录 → 保存历史 → 选择版本 →
+  恢复状态；模式名称不能成为保留复杂度的理由。
 </Callout>
 
-<Callout type="trap">
-  <strong>误区：</strong>
-  为了使用模式或框架而制造抽象。若变化轴、失败边界和替代方案没有写清，新增层次只会扩大认知成本和故障面。
-</Callout>
-
-## 可复现的最小实现
-
-先把决策记录写成机器可读结构：
-
-```json
-{
-  "unit": "备忘录模式",
-  "inputFrozen": true,
-  "scenario": "normal | boundary | single-fault",
-  "firstDivergence": null,
-  "cleanupRequired": true
-}
-```
-
-再用同一条执行链处理三类样本：
-
-```ts
-type Evidence = { stage: string; expected: string; actual: string };
-
-function verify(sample: unknown, expected: readonly Evidence[]) {
-  const trace = runFromCleanState(sample);
-  return expected.find((item, index) => trace[index]?.actual !== item.expected);
-}
-```
-
-最后保存回归门禁，禁止失败样本静默通过：
-
-```text
-normal      -> complete, invariant preserved
-boundary    -> complete or explicit rejection
-singleFault -> stop at first divergence, no stale output
-```
-
-用统一评分解释实验结果：
-
-$$
-Q = C_{correct} + C_{trace} + C_{recover} - R_{residual}
-$$
-
-$$
-C_{coverage} = \frac{N_{verified}}{N_{official}}
-$$
-
-$$
-R_{residual} = P(failure) \times I(impact)
-$$
-
-$$
-Accept = (C_{coverage} \ge 0.90) \land (R_{residual} \le R_{budget})
-$$
-
-## 本章回顾
-
-- 备忘录模式必须绑定冻结输入和明确成功标准。
-- 意图必须能画成结构并沿边追踪责任。
-- 适用性要由正常、边界和单故障样本共同验证。
-- 结构必须保存第一处偏离和清理重建步骤。
-- 协作决定方案是否可以进入下一阶段。
-
-<Exercises>
-
-**问题 1**：为“备忘录模式”写出最小输入合同，并指出一个不能省略的边界条件。
-
-<Answer>
-  输入合同至少包含样本身份、版本、配置、成功标准和清理方式；边界条件必须能改变结构或状态，而不是只换一段描述。
-</Answer>
-
-**问题 2**：构造一个只破坏“适用性”的单故障样本，第一条预期证据是什么？
-
-<Answer>
-  先冻结正常轨迹，只改变该条件；第一条证据应是最早依赖它的结构化中间产物，而不是最终错误消息。
-</Answer>
-
-**问题 3**：什么情况下不应采用本页方案？
-
-<Answer>
-  当变化轴稳定、直接实现更清晰、额外层次无法降低风险或提供独立测试边界时，应选择更简单方案并记录重新评估触发条件。
-</Answer>
-
-</Exercises>
+另一个易错点是把结构相似当作语义相同。命令可保存补偿操作；原型复制新对象身份而备忘录用于恢复原对象；比较时必须同时写出谁触发变化、谁持有状态、失败如何传播，以及替代方案是否更小。
 
 ## 术语表
 
 <Glossary>
   <GlossaryItem term="备忘录模式">
-    备忘录模式用于描述“备忘录模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+    备忘录模式 在“捕获状态”阶段使用的可复核术语。
   </GlossaryItem>
-  <GlossaryItem term="意图">
-    意图用于描述“备忘录模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  <GlossaryItem term="CanvasOriginator">
+    备忘录模式 在“封装备忘录”阶段使用的可复核术语。
   </GlossaryItem>
-  <GlossaryItem term="适用性">
-    适用性用于描述“备忘录模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  <GlossaryItem term="CanvasMemento">
+    备忘录模式 在“保存历史”阶段使用的可复核术语。
   </GlossaryItem>
-  <GlossaryItem term="结构">
-    结构用于描述“备忘录模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  <GlossaryItem term="HistoryCaretaker">
+    备忘录模式 在“选择版本”阶段使用的可复核术语。
   </GlossaryItem>
-  <GlossaryItem term="协作">
-    协作用于描述“备忘录模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  <GlossaryItem term="变化轴">
+    备忘录模式 在“恢复状态”阶段使用的可复核术语。
+  </GlossaryItem>
+  <GlossaryItem term="拒绝条件">
+    备忘录模式 在“捕获状态”阶段使用的可复核术语。
   </GlossaryItem>
 </Glossary>
 
-<Attribution
-  adaptedFrom="Erich Gamma、Richard Helm、Ralph Johnson、John Vlissides著《Design Patterns: Elements of Reusable Object-Oriented Software》，Addison-Wesley，1994，ISBN 9780201633610 · 独立教学重构"
-  adaptedUrl="https://www.pearson.com/en-us/subject-catalog/p/design-patterns-elements-of-reusable-object-oriented-software/P200000009480/9780321700698"
-/>
+## 练习与答案
 
-<Objectives>
+<Exercises>
 
-- 理解备忘录模式如何保存和恢复对象状态
-- 掌握三角色的职责分离
-- 能用备忘录模式实现撤销功能
+1. **目录字段复核。** 用当前案例逐项说明 模式名称与分类、意图、别名、动机、适用性、结构、参与者、协作、后果、实现、示例代码、已知应用、相关模式；每项至少给出一个对象、一次调用或一条可观察后果。
 
-</Objectives>
+<Answer>
+  备忘录模式
+  的复核从“画布编辑器要保存撤销快照，但历史管理器不能直接修改画布私有结构”开始。模式名称与分类定位行为型模式；意图是在不破坏封装的前提下捕获对象内部状态，以便之后恢复；别名边界为没有需要单独记忆的稳定别名；评审时使用目录中的正式名称；动机来自让历史栈读取所有私有字段会破坏封装，手写逆操作又可能遗漏状态；适用性要求需要快照恢复，而且暴露状态细节会破坏对象边界或不变量；结构和参与者是CanvasOriginator、CanvasMemento、HistoryCaretaker；协作规则为Originator
+  创建并读取 Memento，Caretaker
+  只保存而不解释内容；后果是恢复职责清楚，但大快照占用内存，版本迁移和外部资源很难复制；实现遵循让备忘录不可变并带版本，采用增量快照时验证完整恢复链；示例代码验证恢复任一历史版本后，画布内容与捕获时一致且历史快照仍不可变；已知应用包括编辑器撤销、游戏存档、事务检查点和配置回滚常保存封装快照；相关模式比较为命令可保存补偿操作；原型复制新对象身份而备忘录用于恢复原对象。
+</Answer>
 
-## 痛点场景：文本编辑器撤销
+2. **代码变更。** 为 CanvasMemento 增加一个实现，并证明主流程不需要识别它的具体类；再注入“把可变状态对象直接放进历史栈，会让旧快照随当前编辑一起改变”。
 
-文本编辑器需要支持撤销（Ctrl+Z）。每次操作前要保存当前状态，撤销时恢复。
+<Answer>
+  新实现只遵守最小合同并由装配处选择，CanvasOriginator 继续沿 捕获状态 →
+  封装备忘录 → 保存历史 → 选择版本 → 恢复状态
+  工作。误用场景必须让实验的因果可追踪下降或让不变量失败；修复后重置并复跑同一输入，不能更换验收条件。
+</Answer>
 
-不封装状态：
+3. **方案判断。** 在什么情况下应拒绝 备忘录模式，选择直接代码或相邻模式？
 
-```typescript
-class Editor {
-  text = "";
-  history: string[] = [];
+<Answer>
+  当需要快照恢复，而且暴露状态细节会破坏对象边界或不变量不成立，或简单方案已经让“恢复任一历史版本后，画布内容与捕获时一致且历史快照仍不可变”可验证时，应拒绝额外层次。命令可保存补偿操作；原型复制新对象身份而备忘录用于恢复原对象；最终决定同时登记采用收益、恢复职责清楚，但大快照占用内存，版本迁移和外部资源很难复制、删除测试和回退方案。
+</Answer>
 
-  type(text: string) {
-    this.history.push(this.text); // 保存
-    this.text += text;
-  }
+</Exercises>
 
-  undo() {
-    this.text = this.history.pop() ?? ""; // 恢复
-  }
-}
-```
+## 本章小结
 
-问题：Editor 自己管理历史，违反 SRP。而且历史栈暴露了内部状态，不安全。
+备忘录模式 把“画布编辑器要保存撤销快照，但历史管理器不能直接修改画布私有结构”收敛为 CanvasOriginator、CanvasMemento、HistoryCaretaker 的协作合同。学习结果不是能复述定义，而是能修改代码、触发“把可变状态对象直接放进历史栈，会让旧快照随当前编辑一起改变”这一反例、重置实验，并根据 恢复职责清楚，但大快照占用内存，版本迁移和外部资源很难复制 接受或拒绝方案。
 
-## 解决方案：封装状态快照
+## 前后导航
 
-```typescript
-// 备忘录（不可变的状态快照）
-class EditorMemento {
-  constructor(private readonly text: string) {}
-  getText(): string {
-    return this.text;
-  }
-}
-
-// 发起人（创建和恢复备忘录）
-class Editor {
-  private text = "";
-
-  setText(text: string) {
-    this.text = text;
-  }
-  getText() {
-    return this.text;
-  }
-
-  save(): EditorMemento {
-    return new EditorMemento(this.text);
-  }
-  restore(m: EditorMemento) {
-    this.text = m.getText();
-  }
-}
-
-// 管理者（只存不读备忘录内容）
-class History {
-  private snapshots: EditorMemento[] = [];
-
-  push(m: EditorMemento) {
-    this.snapshots.push(m);
-  }
-  pop(): EditorMemento | undefined {
-    return this.snapshots.pop();
-  }
-}
-```
-
-使用：
-
-```typescript
-const editor = new Editor();
-const history = new History();
-
-editor.setText("Hello");
-history.push(editor.save()); // 快照 1
-
-editor.setText("Hello World");
-history.push(editor.save()); // 快照 2
-
-editor.setText("Hello World!");
-// 撤销
-editor.restore(history.pop()!); // 恢复到 "Hello World"
-editor.restore(history.pop()!); // 恢复到 "Hello"
-```
-
-<MementoDiagram />
-
-## 三角色
-
-| 角色       | 职责                                 | 示例          |
-| ---------- | ------------------------------------ | ------------- |
-| Originator | 创建备忘录（保存状态）、从备忘录恢复 | Editor        |
-| Memento    | 封装状态快照，不可变                 | EditorMemento |
-| Caretaker  | 管理备忘录的生命周期，不读取内容     | History       |
-
-<Callout type="tip">
-  关键约束：Caretaker 不能读取或修改 Memento
-  的内容。它只负责「存」和「还」。这保证了状态的封装性。
-</Callout>
-
-## 常见误区
-
-### 误区 1：备忘录太多消耗内存
-
-每次保存都是完整状态快照。如果对象大且操作频繁，内存消耗巨大。解决方案：① 增量快照（只存 diff）；② 限制历史长度；③ 序列化到磁盘。
-
-### 误区 2：备忘录可变
-
-备忘录应该是**不可变**的。如果 Caretaker 能修改备忘录内容，撤销后恢复的状态可能被篡改。用 `readonly` 或构造后不暴露 setter。
-
-### 误区 3：深拷贝问题
-
-如果状态包含引用类型（数组、对象），备忘录需要深拷贝。否则恢复时修改的是同一引用，快照会被意外修改。
-
-## 小结
-
-- 备忘录 = 状态快照 + 封装 + 可恢复
-- 三角色：Originator（创建/恢复）、Memento（快照）、Caretaker（管理）
-- 核心价值：在不破坏封装的前提下保存和恢复对象状态
-- 适合：撤销/重做、事务回滚、游戏存档、检查点
+- [上一页：中介者模式](/learn/design-patterns/03-behavioral/mediator)
+- [下一页：模板方法模式](/learn/design-patterns/03-behavioral/template-method)
 
 <Attribution
-  source="GoF《设计模式》+ Head First Design Patterns"
-  license="原创转述"
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Erich Gamma, Richard Helm, Ralph Johnson, John Vlissides, Design Patterns: Elements of Reusable Object-Oriented Software"
+  adaptedUrl="https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
 />
-
-<Glossary>
-
-<GlossaryItem term="备忘录模式">
-
-在不破坏封装性的前提下，捕获一个对象的内部状态，并在该对象之外保存这个状态，以便以后当需要时能将该对象恢复到原先保存的状态。
-
-</GlossaryItem>
-
-<GlossaryItem term="发起人">
-
-创建备忘录并存储其内部状态的对象。也是从备忘录恢复状态的对象。
-
-</GlossaryItem>
-
-<GlossaryItem term="管理者">
-
-负责保存备忘录但不能修改或检查备忘录内容的对象。只负责备忘录的生命周期管理。
-
-</GlossaryItem>
-
-</Glossary>
