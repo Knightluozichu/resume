@@ -29,15 +29,37 @@ export function HttpTransactionLab(props: Props) {
     if (validator) return { label: "需要再验证", action: "发送条件请求" };
     return { label: "缓存未命中", action: "重新获取完整响应" };
   }, [age, lifetime, validator]);
+  const reset = () => {
+    setSelected(0);
+    setAge(40);
+    setLifetime(120);
+    setValidator(true);
+    setChecked(gates.map(() => false));
+  };
+  const resetButton = (
+    <button
+      type="button"
+      onClick={reset}
+      className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center border border-zinc-300 px-3 text-sm font-semibold dark:border-zinc-700"
+      aria-label="重置 HTTP 实验"
+    >
+      重置
+    </button>
+  );
 
   if (mode === "message") {
     const hop = hops[selected] ?? hops[0];
     return (
-      <section className={shell} aria-label={title + "HTTP报文路径"}>
-        <p className="text-xs font-semibold text-cyan-700 dark:text-cyan-300">
-          HTTP/1.1事务路径
-        </p>
-        <h3 className="mt-1 text-base font-semibold">{title}</h3>
+      <section className={shell} aria-label={title + "HTTP报文路径实验"}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold text-cyan-700 dark:text-cyan-300">
+              HTTP/1.1事务路径
+            </p>
+            <h3 className="mt-1 text-base font-semibold">{title}</h3>
+          </div>
+          {resetButton}
+        </div>
         <p className="mt-2 text-xs leading-5 text-zinc-600 dark:text-zinc-300">
           {focus}
         </p>
@@ -84,9 +106,12 @@ export function HttpTransactionLab(props: Props) {
   if (mode === "decision") {
     return (
       <section className={shell} aria-label={title + "缓存决策实验"}>
-        <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
-          单变量缓存与连接实验
-        </p>
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+            单变量缓存与连接实验
+          </p>
+          {resetButton}
+        </div>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <label className="text-xs font-semibold">
             当前年龄：{age}s
@@ -137,15 +162,18 @@ export function HttpTransactionLab(props: Props) {
 
   const complete = checked.filter(Boolean).length;
   return (
-    <section className={shell} aria-label={title + "HTTP证据门"}>
+    <section className={shell} aria-label={title + "HTTP证据门实验"}>
       <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">
         独立事务证据门
       </p>
       <div className="mt-1 flex items-center justify-between gap-3">
         <h3 className="text-base font-semibold">{title}</h3>
-        <span className="text-xs font-semibold">
-          {complete}/{gates.length}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-semibold">
+            {complete}/{gates.length}
+          </span>
+          {resetButton}
+        </div>
       </div>
       <div className="mt-4 grid gap-2 sm:grid-cols-2">
         {gates.map((gate, index) => (

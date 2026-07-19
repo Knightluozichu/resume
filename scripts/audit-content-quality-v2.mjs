@@ -141,6 +141,15 @@ OFFICIAL_COURSE_ENHANCEMENT
     { id: "auto/c/three", sentenceFingerprints: [repeated] },
   ]);
   assert.equal(owners.get(normalized(repeated))?.size, 3);
+  const withinChapterTemplate = Array.from(
+    { length: 10 },
+    (_, index) =>
+      `围绕“节点${index + 1}”固定同一套输入，只替换标题而不解释具体机制；这种段落即使很长，也不能被字数或目录覆盖率掩盖，还会让不同知识点得到完全相同的实验因果与验收结论。`,
+  );
+  assert.equal(
+    maxWithinChapterTemplateCopies(withinChapterTemplate),
+    10,
+  );
   console.log(
     JSON.stringify({
       version: 2,
@@ -149,6 +158,7 @@ OFFICIAL_COURSE_ENHANCEMENT
         "legacy-car-template-hard-fails",
         "remediated-car-template-clean",
         "cross-chapter-copy-detected",
+        "within-chapter-template-copy-detected",
       ],
     }),
   );
@@ -326,6 +336,21 @@ function sentenceFingerprint(paragraphs) {
     .map((sentence) => sentence.replace(/\s+/g, " ").trim())
     .filter((sentence) => sentence.length >= 70 && sentence.length <= 500);
   return [...new Set(sentences)];
+}
+
+function maxWithinChapterTemplateCopies(paragraphs) {
+  const counts = new Map();
+  for (const paragraph of paragraphs) {
+    if (paragraph.length < 70) continue;
+    const fingerprint = normalized(
+      paragraph
+        .replace(/“[^”]+”/g, "“主题”")
+        .replace(/\d+(?:\.\d+)*/g, "#"),
+    );
+    if (fingerprint.length < 45) continue;
+    counts.set(fingerprint, (counts.get(fingerprint) ?? 0) + 1);
+  }
+  return counts.size ? Math.max(...counts.values()) : 0;
 }
 
 function parseChapter(filePath, manifests, visualResults) {
@@ -595,6 +620,7 @@ function parseChapter(filePath, manifests, visualResults) {
     stepVisuals,
     headings,
     sentenceFingerprints: sentenceFingerprint(paragraphs),
+    withinChapterTemplateCopies: maxWithinChapterTemplateCopies(paragraphs),
     uniqueVisuals,
     interactiveComponents,
     imports,
@@ -639,6 +665,8 @@ function scoreChapter(chapter, sentenceOwners) {
     hardBlockers.push("attribution-block-count");
   if (repeatedSentences.length >= 3)
     hardBlockers.push("cross-chapter-template-copy");
+  if (chapter.withinChapterTemplateCopies >= 10)
+    hardBlockers.push("within-chapter-template-copy");
   if (chapter.qualityVersion !== 2) hardBlockers.push("quality-v2-unreviewed");
   if (chapter.qualityVersion === 2 && !chapter.practiceMode)
     hardBlockers.push("practice-mode-missing");
