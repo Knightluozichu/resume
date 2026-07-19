@@ -1,17 +1,69 @@
-import { OfficialJvt2Lab } from "./official-jvt2-lab";
+import { OfficialJvt2Studio } from "./official-jvt2-lab";
 
-const nodes = [
-  "Appendices"
-];
+const props = {
+  "unitId": "jvt-2e-appendices",
+  "unitTitle": "附录总览",
+  "concepts": [
+    "Appendices"
+  ],
+  "stages": [
+    "准备工具",
+    "打开项目",
+    "补齐知识",
+    "核对线程",
+    "核对内存"
+  ],
+  "focuses": [
+    "工具版本",
+    "构建命令",
+    "阅读来源",
+    "线程模型",
+    "内存区域",
+    "参考身份"
+  ],
+  "model": {
+    "studio": "附录就绪度检查台",
+    "axisA": {
+      "label": "环境就绪度",
+      "levels": [
+        "只有源码",
+        "可构建",
+        "可复现故障"
+      ]
+    },
+    "axisB": {
+      "label": "基础知识",
+      "levels": [
+        "名词",
+        "状态图",
+        "可运行反例"
+      ]
+    },
+    "outcomes": {
+      "signal": "调查就绪率",
+      "risk": "基础缺口率",
+      "evidence": "证据闭环度"
+    },
+    "fault": "没有项目版本和运行命令就直接比较不同人的剖析结果",
+    "task": "提交一份新调查者可在30分钟内复现的工具与项目清单",
+    "invariant": "未参与准备的人能从空环境重建同一基线",
+    "command": "java --version && git rev-parse HEAD",
+    "practiceMode": "design",
+    "riskEffects": [
+      1,
+      -1
+    ]
+  }
+} as const;
 
-export function Jvt2InvestigationLab() {
-  return <OfficialJvt2Lab mode="investigation" unitTitle="附录总览" focus="把工具、项目打开方式、延伸阅读、线程基础、内存管理与参考资料组织为调查时可回查的前置知识" nodes={nodes} />;
+export function Jvt2eAppendicesInvestigationLab() {
+  return <OfficialJvt2Studio {...props} mode="investigation" />;
 }
 
-export function Jvt2TimelineLab() {
-  return <OfficialJvt2Lab mode="timeline" unitTitle="附录总览" focus="随机抽取一次线程或堆症状，说明应回查哪个附录、需要什么前置证据、何时返回主线" nodes={nodes} />;
+export function Jvt2eAppendicesTimelineLab() {
+  return <OfficialJvt2Studio {...props} mode="timeline" />;
 }
 
-export function Jvt2EvidenceLab() {
-  return <OfficialJvt2Lab mode="evidence" unitTitle="附录总览" focus="附录索引、前置能力自测、工具版本卡、术语交叉引用" nodes={nodes} />;
+export function Jvt2eAppendicesEvidenceLab() {
+  return <OfficialJvt2Studio {...props} mode="evidence" />;
 }
