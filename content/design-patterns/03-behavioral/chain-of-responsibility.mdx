@@ -1,356 +1,266 @@
 ---
-title: 责任链模式
+title: "责任链模式"
 type: A
-section: 行为型模式
+section: "行为型模式"
 order: 18
-description: 请求沿链传递，直到被处理或到达链尾——审批流程、中间件管道的核心模式。
+description: "责任链模式：让请求沿有序处理者链传播，直到某个节点处理或明确报告无人处理"
 demo: true
 math: false
-sourceUrl: >-
-  https://www.pearson.com/en-us/subject-catalog/p/design-patterns-elements-of-reusable-object-oriented-software/P200000009480/9780321700698
+sourceUrl: "https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
 draft: false
 ---
 
-import { ChainOfResponsibilityDiagram } from "@/components/mdx/design-patterns/diagrams/chain-of-responsibility-diagram";
 import {
-  OfficialDesignPatternsChainOfResponsibilityMapLab,
-  OfficialDesignPatternsChainOfResponsibilityExperimentLab,
-  OfficialDesignPatternsChainOfResponsibilityEvidenceLab,
+  ChainOfResponsibilityStructureLab,
+  ChainOfResponsibilityChangeLab,
+  ChainOfResponsibilityEvidenceLab,
 } from "@/components/mdx/design-patterns/diagrams/chain-of-responsibility";
 import {
   Objectives,
   Callout,
-  Attribution,
+  Term,
   Glossary,
   GlossaryItem,
-  Term,
   Exercises,
   Answer,
   Stepper,
   Step,
+  Attribution,
 } from "@/components/mdx/mdx-components";
-
-{/* OFFICIAL_COURSE_ENHANCEMENT */}
 
 <Objectives>
 
-- 能解释责任链模式的输入、核心结构、状态变化和输出合同
-- 能绘制并修改责任链模式的最小模型，比较至少一种替代方案
-- 能复现正常、边界和单故障样本，定位第一条证据分叉
-- 能根据成本与风险判断方案适用范围，并完成清理重建
+- 能从“支持请求按身份、配额和路由依次检查，并需要定位在哪个环节被拒绝”识别 责任链模式 真正处理的变化轴
+- 能解释 RequestHandler、QuotaHandler、RouteHandler 的引用方向与协作责任
+- 能修改 TypeScript 最小实现，并验证“每个请求最终只能得到一次处理成功或一个可追踪的拒绝结果”
+- 能用“链尾静默丢弃请求会把配置错误伪装成正常无响应”作为拒绝或简化方案的信号
 
 </Objectives>
 
-## 为什么只记结论不足以掌握责任链模式
+## 直觉：从变化压力出发，而不是从模式名称出发
 
-学习“责任链模式”时，第一步不是记住结论，而是冻结输入、上下文、版本和成功标准。只有这些条件明确，责任链模式的含义才不会随着样例变化。正文已有的概念说明要与结构图、运行轨迹和失败样本互相印证，不能只凭最终输出看似正确就宣布完成。
+请求发送者若认识所有规则及顺序，每次增删规则都会修改入口代码 因此，责任链模式 的第一步不是画类图，而是写清 **支持请求按身份、配额和路由依次检查，并需要定位在哪个环节被拒绝** 中哪项变化会扩散、现有结构怎样承担成本，以及什么观察足以拒绝模式。
 
-结构分析从意图开始：列出参与者、职责、连接方向、生命周期和所有权，再沿正常路径追踪数据或控制流。每一条边都要说明为什么存在、谁创建、谁消费、谁负责清理；如果边界被跨越，必须能在证据中找到第一处异常。
+在实验前先预测：沿 进入链条 → 校验身份 → 检查配额 → 尝试路由 → 处理或拒绝 运行时，哪条依赖最先暴露变化；随后只调整一个参与者或连接，保存代码结果和拒绝原因，最后重置到相同基线。
 
-机制验证要把适用性写成可以执行的条件。正常样本证明主路径，恰好边界样本验证等号和空值，单故障样本只破坏一个假设。三类样本使用同一份观察指标，避免因为测试口径变化而把偶然结果误认成规律。
+<Callout type="info" title="来源范围与独立教学重写">
+  [InformIT
+  官方页面](https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610)确认四位作者、1994
+  年第一版、23 个模式、完整目录，并提供获授权的模式样章与示例代码；[Pearson
+  书目页](https://www.pearson.com/en-us/subject-catalog/p/design-patterns-elements-of-reusable-object-oriented-software/P200000009480/9780321700698)用于交叉核对版本，[GoF
+  作者回顾](https://www.informit.com/articles/article.aspx?p=1327762)用于理解后续评价，[TypeScript
+  官方手册](https://www.typescriptlang.org/docs/handbook/2/classes.html)用于核对本站代码语法。项目没有原书完整正文，本页不翻译或复现原书；中文解释、TypeScript
+  实现、交互与练习均为独立教学重写。
+</Callout>
 
-成本分析同时记录时间、空间、延迟、耦合、可维护性和不可逆操作。结构不是一句“可能失败”，而是可复现输入、预期停点、实际轨迹、错误分类与清理步骤。任何自动重试都要有次数、预算和幂等边界。
+## 问题合同与术语
 
-方案比较不能只列优点。需要给出直接实现、当前方案和至少一个替代方案，逐项比较复杂度、扩展点、故障隔离和团队认知成本。当问题规模很小或变化轴稳定时，更简单的实现往往更好；模式与框架必须由真实变化压力证明。
+**意图。** 让请求沿有序处理者链传播，直到某个节点处理或明确报告无人处理。**适用边界。** 多个候选对象可能处理请求，集合与顺序需要在运行时组合。本页验收不变量是：**每个请求最终只能得到一次处理成功或一个可追踪的拒绝结果**。
 
-实现阶段把大结论拆成可检查的中间产物：配置快照、结构清单、状态转移、输入输出样本、日志摘要和测试结果。每个产物带来源与生成命令，下一阶段只消费已通过门禁的版本，避免旧缓存或隐式默认值污染结论。
+<Term def={"责任链模式在责任链模式中用于检查进入链条阶段的责任与证据。"}>
+  责任链模式
+</Term>
+、
+<Term def={"RequestHandler在责任链模式中用于检查校验身份阶段的责任与证据。"}>
+  RequestHandler
+</Term>
+、
+<Term def={"QuotaHandler在责任链模式中用于检查检查配额阶段的责任与证据。"}>
+  QuotaHandler
+</Term>
+、
+<Term def={"RouteHandler在责任链模式中用于检查尝试路由阶段的责任与证据。"}>
+  RouteHandler
+</Term>
+、
+<Term def={"变化轴在责任链模式中用于检查处理或拒绝阶段的责任与证据。"}>
+  变化轴
+</Term>
+、
+<Term def={"拒绝条件在责任链模式中用于检查进入链条阶段的责任与证据。"}>
+  拒绝条件
+</Term>
 
-解释结果时必须区分相关性与因果性、接口承诺与实现细节、设计意图与运行事实。对“协作”的判断要由独立证据支持，并明确适用范围；一旦输入分布、版本、硬件或组织边界改变，就重新运行最小实验。
+## 官方目录结构的逐项解释
 
-复盘从首个分叉开始，而不是从最后一个报错倒推。先比较冻结输入，再比较第一份结构化中间产物，随后检查状态、约束和副作用。这样可以把复杂系统的排错范围收缩到一个阶段，避免在多个层次同时修改造成新的不确定性。
+下面的目录字段采用 GoF 模式目录的标准描述结构来组织独立讲解。每个字段都要连接当前问题、页面专属实验与练习证据；字段名称出现本身不算覆盖。
 
-迁移到真实项目时，先选择一个最小但有代表性的切片，保存改造前基线，再逐步引入“责任链模式”中的机制。每一步只改变一个变量并保留回滚点；性能、正确性、安全性和可理解性至少各有一项可量化指标。
+### 模式名称与分类
 
-最终验收要求读者能脱离页面重新画出结构、口述关键链路、实现最小版本、构造一个反例并解释失败位置。若只能复述名词而不能预测中间状态，说明知识仍停留在识记层，需要回到图示和实验重新验证。
+“责任链模式”归入行为型模式，名称只用于定位 让请求沿有序处理者链传播，直到某个节点处理或明确报告无人处理，不能替代问题证据。 对“支持请求按身份、配额和路由依次检查，并需要定位在哪个环节被拒绝”先保存基线，再改变一个条件；若出现“链尾静默丢弃请求会把配置错误伪装成正常无响应”，就拒绝 责任链模式 方案并回到更简单结构。
 
-本页用<Term def="责任链模式连接责任链模式的机制、边界与可复查证据。">责任链模式</Term>、
+### 意图
 
-<Term def="意图连接责任链模式的机制、边界与可复查证据。">意图</Term>、
-<Term def="适用性连接责任链模式的机制、边界与可复查证据。">适用性</Term>、
-<Term def="结构连接责任链模式的机制、边界与可复查证据。">结构</Term>、
-<Term def="协作连接责任链模式的机制、边界与可复查证据。">协作</Term>
-建立统一坐标。先预测这些概念在结构图和运行轨迹中的位置，再操作实验控件；如果结果与预测不一致，停止在首个分叉，不要用后续补丁掩盖早期错误。
+“意图”回答模式想改变什么：让请求沿有序处理者链传播，直到某个节点处理或明确报告无人处理。 对“支持请求按身份、配额和路由依次检查，并需要定位在哪个环节被拒绝”先保存基线，再改变一个条件；若出现“链尾静默丢弃请求会把配置错误伪装成正常无响应”，就拒绝 责任链模式 方案并回到更简单结构。
 
-## 权威目录与核心概念逐项对照
+### 别名
 
-- 责任链模式
-- 意图
-- 适用性
-- 结构
-- 协作
-- 后果
-- 实现
-- 相关模式
+“别名”在本页处理为：没有需要单独记忆的稳定别名；评审时使用目录中的正式名称，避免用近似称呼混淆责任。 对“支持请求按身份、配额和路由依次检查，并需要定位在哪个环节被拒绝”先保存基线，再改变一个条件；若出现“链尾静默丢弃请求会把配置错误伪装成正常无响应”，就拒绝 责任链模式 方案并回到更简单结构。
 
-## 三视图实验：结构、变量与证据
+### 动机
+
+“动机”从具体压力出发：请求发送者若认识所有规则及顺序，每次增删规则都会修改入口代码。 对“支持请求按身份、配额和路由依次检查，并需要定位在哪个环节被拒绝”先保存基线，再改变一个条件；若出现“链尾静默丢弃请求会把配置错误伪装成正常无响应”，就拒绝 责任链模式 方案并回到更简单结构。
+
+### 适用性
+
+“适用性”要求同时满足：多个候选对象可能处理请求，集合与顺序需要在运行时组合。 对“支持请求按身份、配额和路由依次检查，并需要定位在哪个环节被拒绝”先保存基线，再改变一个条件；若出现“链尾静默丢弃请求会把配置错误伪装成正常无响应”，就拒绝 责任链模式 方案并回到更简单结构。
+
+### 结构
+
+“结构”由 RequestHandler、QuotaHandler、RouteHandler 以及它们之间的引用方向共同确定。 对“支持请求按身份、配额和路由依次检查，并需要定位在哪个环节被拒绝”先保存基线，再改变一个条件；若出现“链尾静默丢弃请求会把配置错误伪装成正常无响应”，就拒绝 责任链模式 方案并回到更简单结构。
+
+### 参与者
+
+“参与者”逐一说明 RequestHandler、QuotaHandler、RouteHandler 谁保存状态、谁发起调用以及谁承担变化。 对“支持请求按身份、配额和路由依次检查，并需要定位在哪个环节被拒绝”先保存基线，再改变一个条件；若出现“链尾静默丢弃请求会把配置错误伪装成正常无响应”，就拒绝 责任链模式 方案并回到更简单结构。
+
+### 协作
+
+“协作”的运行协议是：Handler 处理或把请求交给 successor，链尾负责显式未处理结果。 对“支持请求按身份、配额和路由依次检查，并需要定位在哪个环节被拒绝”先保存基线，再改变一个条件；若出现“链尾静默丢弃请求会把配置错误伪装成正常无响应”，就拒绝 责任链模式 方案并回到更简单结构。
+
+### 后果
+
+“后果”必须连同收益和成本记录：发送者与处理者解耦，但顺序依赖、掉单和跨节点诊断更困难。 对“支持请求按身份、配额和路由依次检查，并需要定位在哪个环节被拒绝”先保存基线，再改变一个条件；若出现“链尾静默丢弃请求会把配置错误伪装成正常无响应”，就拒绝 责任链模式 方案并回到更简单结构。
+
+### 实现
+
+“实现”落地时遵守：统一 pass/handle/reject 结果，防止循环链并记录每次传递原因。 对“支持请求按身份、配额和路由依次检查，并需要定位在哪个环节被拒绝”先保存基线，再改变一个条件；若出现“链尾静默丢弃请求会把配置错误伪装成正常无响应”，就拒绝 责任链模式 方案并回到更简单结构。
+
+### 示例代码
+
+“示例代码”使用本页 TypeScript 最小切片验证“每个请求最终只能得到一次处理成功或一个可追踪的拒绝结果”，代码是独立教学示例。 对“支持请求按身份、配额和路由依次检查，并需要定位在哪个环节被拒绝”先保存基线，再改变一个条件；若出现“链尾静默丢弃请求会把配置错误伪装成正常无响应”，就拒绝 责任链模式 方案并回到更简单结构。
+
+### 已知应用
+
+“已知应用”可在这些场景识别：中间件、日志过滤、事件冒泡和审批流程常按链传递请求，但名称相似不构成采用证据。 对“支持请求按身份、配额和路由依次检查，并需要定位在哪个环节被拒绝”先保存基线，再改变一个条件；若出现“链尾静默丢弃请求会把配置错误伪装成正常无响应”，就拒绝 责任链模式 方案并回到更简单结构。
+
+### 相关模式
+
+“相关模式”用于比较边界：命令把请求对象化；装饰器通常所有层都执行而责任链可提前停止。 对“支持请求按身份、配额和路由依次检查，并需要定位在哪个环节被拒绝”先保存基线，再改变一个条件；若出现“链尾静默丢弃请求会把配置错误伪装成正常无响应”，就拒绝 责任链模式 方案并回到更简单结构。
+
+## TypeScript 最小实现与变更实验
+
+以下代码只承担 责任链模式 的一条协作切片。先运行基线，再替换 QuotaHandler 或注入非法 revision；如果调用者必须认识具体实现，或者“每个请求最终只能得到一次处理成功或一个可追踪的拒绝结果”不再成立，就记录失败而不是继续增加抽象。
+
+```ts
+interface QuotaHandler {
+  apply(input: Readonly<{ revision: number; payload: string }>): string;
+}
+
+class RouteHandler implements QuotaHandler {
+  apply(input: Readonly<{ revision: number; payload: string }>) {
+    if (input.revision < 1) throw new Error("invalid revision");
+    return `ChainOfResponsibility:${input.revision}:${input.payload}`;
+  }
+}
+
+class RequestHandler {
+  constructor(private readonly collaborator: QuotaHandler) {}
+  run(payload: string) {
+    return this.collaborator.apply({ revision: 1, payload });
+  }
+}
+```
+
+修改任务：增加一个与 RouteHandler 同合同的新实现，只改扩展点与装配位置；随后故意绕过 RequestHandler，比较编译错误、运行结果和依赖传播。统一 pass/handle/reject 结果，防止循环链并记录每次传递原因。
+
+## 三视图模式实验
 
 <Stepper>
-  <Step title="第一步：冻结结构并先预测">
-    先预测参与者、连接方向与关键状态，再点击结构节点核对。
-    <OfficialDesignPatternsChainOfResponsibilityMapLab />
+  <Step title="1. 参与者结构">
+    先点选 校验身份 与不同重构，解释 RequestHandler、QuotaHandler、RouteHandler
+    中谁拥有状态、谁可替换、谁负责拒绝。
+    <ChainOfResponsibilityStructureLab />
   </Step>
-  <Step title="第二步：只改变一个变量">
-    保持其他条件不变，移动覆盖率或风险滑块，观察门禁变化。
-    <OfficialDesignPatternsChainOfResponsibilityExperimentLab />
+  <Step title="2. 变更传播">
+    切到“新增变化”和“误用反例”，观察 责任链模式 的耦合、成本与可追踪性怎样联动。
+    <ChainOfResponsibilityChangeLab />
   </Step>
-  <Step title="第三步：注入单故障并保存证据">
-    注入一个边界故障，记录第一处偏离、拒绝原因和恢复条件。
-    <OfficialDesignPatternsChainOfResponsibilityEvidenceLab />
+  <Step title="3. 权衡证据">
+    保存一次通过轨迹和一次拒绝轨迹，再重置；最终判断必须能解释
+    发送者与处理者解耦，但顺序依赖、掉单和跨节点诊断更困难。
+    <ChainOfResponsibilityEvidenceLab />
   </Step>
 </Stepper>
 
-<Callout type="trap">
-  <strong>误区：</strong>
-  看到最终结果正确就认为机制正确。中间状态可能已经偏离，只是被后续默认值或重试偶然修补。应保存首个结构化产物并逐阶段比较。
+## 常见误区与反例
+
+<Callout type="trap" title="责任链模式 的拒绝信号">
+  链尾静默丢弃请求会把配置错误伪装成正常无响应。出现该信号时，删除一层结构并重跑
+  进入链条 → 校验身份 → 检查配额 → 尝试路由 →
+  处理或拒绝；模式名称不能成为保留复杂度的理由。
 </Callout>
 
-<Callout type="trap">
-  <strong>误区：</strong>
-  为了使用模式或框架而制造抽象。若变化轴、失败边界和替代方案没有写清，新增层次只会扩大认知成本和故障面。
-</Callout>
-
-## 可复现的最小实现
-
-先把决策记录写成机器可读结构：
-
-```json
-{
-  "unit": "责任链模式",
-  "inputFrozen": true,
-  "scenario": "normal | boundary | single-fault",
-  "firstDivergence": null,
-  "cleanupRequired": true
-}
-```
-
-再用同一条执行链处理三类样本：
-
-```ts
-type Evidence = { stage: string; expected: string; actual: string };
-
-function verify(sample: unknown, expected: readonly Evidence[]) {
-  const trace = runFromCleanState(sample);
-  return expected.find((item, index) => trace[index]?.actual !== item.expected);
-}
-```
-
-最后保存回归门禁，禁止失败样本静默通过：
-
-```text
-normal      -> complete, invariant preserved
-boundary    -> complete or explicit rejection
-singleFault -> stop at first divergence, no stale output
-```
-
-用统一评分解释实验结果：
-
-$$
-Q = C_{correct} + C_{trace} + C_{recover} - R_{residual}
-$$
-
-$$
-C_{coverage} = \frac{N_{verified}}{N_{official}}
-$$
-
-$$
-R_{residual} = P(failure) \times I(impact)
-$$
-
-$$
-Accept = (C_{coverage} \ge 0.90) \land (R_{residual} \le R_{budget})
-$$
-
-## 本章回顾
-
-- 责任链模式必须绑定冻结输入和明确成功标准。
-- 意图必须能画成结构并沿边追踪责任。
-- 适用性要由正常、边界和单故障样本共同验证。
-- 结构必须保存第一处偏离和清理重建步骤。
-- 协作决定方案是否可以进入下一阶段。
-
-<Exercises>
-
-**问题 1**：为“责任链模式”写出最小输入合同，并指出一个不能省略的边界条件。
-
-<Answer>
-  输入合同至少包含样本身份、版本、配置、成功标准和清理方式；边界条件必须能改变结构或状态，而不是只换一段描述。
-</Answer>
-
-**问题 2**：构造一个只破坏“适用性”的单故障样本，第一条预期证据是什么？
-
-<Answer>
-  先冻结正常轨迹，只改变该条件；第一条证据应是最早依赖它的结构化中间产物，而不是最终错误消息。
-</Answer>
-
-**问题 3**：什么情况下不应采用本页方案？
-
-<Answer>
-  当变化轴稳定、直接实现更清晰、额外层次无法降低风险或提供独立测试边界时，应选择更简单方案并记录重新评估触发条件。
-</Answer>
-
-</Exercises>
+另一个易错点是把结构相似当作语义相同。命令把请求对象化；装饰器通常所有层都执行而责任链可提前停止；比较时必须同时写出谁触发变化、谁持有状态、失败如何传播，以及替代方案是否更小。
 
 ## 术语表
 
 <Glossary>
   <GlossaryItem term="责任链模式">
-    责任链模式用于描述“责任链模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+    责任链模式 在“进入链条”阶段使用的可复核术语。
   </GlossaryItem>
-  <GlossaryItem term="意图">
-    意图用于描述“责任链模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  <GlossaryItem term="RequestHandler">
+    责任链模式 在“校验身份”阶段使用的可复核术语。
   </GlossaryItem>
-  <GlossaryItem term="适用性">
-    适用性用于描述“责任链模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  <GlossaryItem term="QuotaHandler">
+    责任链模式 在“检查配额”阶段使用的可复核术语。
   </GlossaryItem>
-  <GlossaryItem term="结构">
-    结构用于描述“责任链模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  <GlossaryItem term="RouteHandler">
+    责任链模式 在“尝试路由”阶段使用的可复核术语。
   </GlossaryItem>
-  <GlossaryItem term="协作">
-    协作用于描述“责任链模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  <GlossaryItem term="变化轴">
+    责任链模式 在“处理或拒绝”阶段使用的可复核术语。
+  </GlossaryItem>
+  <GlossaryItem term="拒绝条件">
+    责任链模式 在“进入链条”阶段使用的可复核术语。
   </GlossaryItem>
 </Glossary>
 
-<Attribution
-  adaptedFrom="Erich Gamma、Richard Helm、Ralph Johnson、John Vlissides著《Design Patterns: Elements of Reusable Object-Oriented Software》，Addison-Wesley，1994，ISBN 9780201633610 · 独立教学重构"
-  adaptedUrl="https://www.pearson.com/en-us/subject-catalog/p/design-patterns-elements-of-reusable-object-oriented-software/P200000009480/9780321700698"
-/>
+## 练习与答案
 
-<Objectives>
+<Exercises>
 
-- 理解责任链模式如何让多个对象有机会处理同一个请求
-- 掌握「链式传递」的解耦价值
-- 能用责任链模式设计审批流程
+1. **目录字段复核。** 用当前案例逐项说明 模式名称与分类、意图、别名、动机、适用性、结构、参与者、协作、后果、实现、示例代码、已知应用、相关模式；每项至少给出一个对象、一次调用或一条可观察后果。
 
-</Objectives>
+<Answer>
+  责任链模式
+  的复核从“支持请求按身份、配额和路由依次检查，并需要定位在哪个环节被拒绝”开始。模式名称与分类定位行为型模式；意图是让请求沿有序处理者链传播，直到某个节点处理或明确报告无人处理；别名边界为没有需要单独记忆的稳定别名；评审时使用目录中的正式名称；动机来自请求发送者若认识所有规则及顺序，每次增删规则都会修改入口代码；适用性要求多个候选对象可能处理请求，集合与顺序需要在运行时组合；结构和参与者是RequestHandler、QuotaHandler、RouteHandler；协作规则为Handler
+  处理或把请求交给
+  successor，链尾负责显式未处理结果；后果是发送者与处理者解耦，但顺序依赖、掉单和跨节点诊断更困难；实现遵循统一
+  pass/handle/reject
+  结果，防止循环链并记录每次传递原因；示例代码验证每个请求最终只能得到一次处理成功或一个可追踪的拒绝结果；已知应用包括中间件、日志过滤、事件冒泡和审批流程常按链传递请求；相关模式比较为命令把请求对象化；装饰器通常所有层都执行而责任链可提前停止。
+</Answer>
 
-## 痛点场景：审批流程
+2. **代码变更。** 为 QuotaHandler 增加一个实现，并证明主流程不需要识别它的具体类；再注入“链尾静默丢弃请求会把配置错误伪装成正常无响应”。
 
-报销审批：金额 < 1000 组长审批，< 10000 经理审批，≥ 10000 总监审批。
+<Answer>
+  新实现只遵守最小合同并由装配处选择，RequestHandler 继续沿 进入链条 → 校验身份
+  → 检查配额 → 尝试路由 → 处理或拒绝
+  工作。误用场景必须让实验的因果可追踪下降或让不变量失败；修复后重置并复跑同一输入，不能更换验收条件。
+</Answer>
 
-不用模式：
+3. **方案判断。** 在什么情况下应拒绝 责任链模式，选择直接代码或相邻模式？
 
-```typescript
-function approve(amount: number) {
-  if (amount < 1000) {
-    teamLeader.approve(amount);
-  } else if (amount < 10000) {
-    manager.approve(amount);
-  } else {
-    director.approve(amount);
-  }
-}
-```
+<Answer>
+  当多个候选对象可能处理请求，集合与顺序需要在运行时组合不成立，或简单方案已经让“每个请求最终只能得到一次处理成功或一个可追踪的拒绝结果”可验证时，应拒绝额外层次。命令把请求对象化；装饰器通常所有层都执行而责任链可提前停止；最终决定同时登记采用收益、发送者与处理者解耦，但顺序依赖、掉单和跨节点诊断更困难、删除测试和回退方案。
+</Answer>
 
-每加一个审批级别或调整金额阈值，都要改这段代码——**违反 OCP**。
+</Exercises>
 
-## 解决方案：链式传递
+## 本章小结
 
-```typescript
-abstract class Approver {
-  protected next: Approver | null = null;
+责任链模式 把“支持请求按身份、配额和路由依次检查，并需要定位在哪个环节被拒绝”收敛为 RequestHandler、QuotaHandler、RouteHandler 的协作合同。学习结果不是能复述定义，而是能修改代码、触发“链尾静默丢弃请求会把配置错误伪装成正常无响应”这一反例、重置实验，并根据 发送者与处理者解耦，但顺序依赖、掉单和跨节点诊断更困难 接受或拒绝方案。
 
-  setNext(approver: Approver): Approver {
-    this.next = approver;
-    return approver; // 支持链式设置
-  }
+## 前后导航
 
-  approve(amount: number): void {
-    if (this.canApprove(amount)) {
-      this.doApprove(amount);
-    } else if (this.next) {
-      this.next.approve(amount);
-    } else {
-      console.log(`无法审批 ${amount}：超出所有审批权限`);
-    }
-  }
-
-  protected abstract canApprove(amount: number): boolean;
-  protected abstract doApprove(amount: number): void;
-}
-
-class TeamLeader extends Approver {
-  protected canApprove(amount: number) {
-    return amount < 1000;
-  }
-  protected doApprove(amount: number) {
-    console.log(`组长审批 ${amount}`);
-  }
-}
-class Manager extends Approver {
-  protected canApprove(amount: number) {
-    return amount < 10000;
-  }
-  protected doApprove(amount: number) {
-    console.log(`经理审批 ${amount}`);
-  }
-}
-class Director extends Approver {
-  protected canApprove(amount: number) {
-    return true;
-  }
-  protected doApprove(amount: number) {
-    console.log(`总监审批 ${amount}`);
-  }
-}
-```
-
-使用：
-
-```typescript
-const chain = new TeamLeader();
-chain.setNext(new Manager()).setNext(new Director());
-
-chain.approve(500); // 组长审批 500
-chain.approve(5000); // 经理审批 5000
-chain.approve(50000); // 总监审批 50000
-```
-
-<ChainOfResponsibilityDiagram />
-
-## 常见误区
-
-### 误区 1：请求一定被处理
-
-责任链不保证请求一定被处理。如果链尾没有兜底处理器，请求可能被丢弃。设计时需考虑：是否需要默认处理？还是允许请求「落空」？
-
-### 误区 2：链太长影响性能
-
-请求可能遍历整条链。如果链很长且大部分处理器都「不处理」，性能会下降。可以在链头加快速判断，或用 Map 直接路由。
-
-### 误区 3：纯责任链 vs 管道
-
-纯责任链：只有一个处理器处理请求，其余跳过。管道（Pipeline/Filter）：每个处理器都处理一遍请求。两者结构相似但语义不同，不要混淆。
-
-## 小结
-
-- 责任链 = 请求沿链传递，直到被处理或到达链尾
-- 核心价值：发送者与接收者解耦，发送者不知道谁会处理
-- 适合：审批流程、中间件（Express/Koa）、事件冒泡、异常处理链
-- 注意：请求可能不被处理、链过长影响性能
+- [上一页：代理模式](/learn/design-patterns/02-structural/proxy)
+- [下一页：迭代器模式](/learn/design-patterns/03-behavioral/iterator)
 
 <Attribution
-  source="GoF《设计模式》+ Head First Design Patterns"
-  license="原创转述"
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Erich Gamma, Richard Helm, Ralph Johnson, John Vlissides, Design Patterns: Elements of Reusable Object-Oriented Software"
+  adaptedUrl="https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
 />
-
-<Glossary>
-
-<GlossaryItem term="责任链模式">
-
-使多个对象都有机会处理请求，从而避免请求的发送者和接收者之间的耦合关系。将这些对象连成一条链，并沿着这条链传递请求，直到有一个对象处理它为止。
-
-</GlossaryItem>
-
-<GlossaryItem term="处理器">
-
-责任链中的一个节点，决定是否处理请求或将请求传递给下一个处理器。
-
-</GlossaryItem>
-
-<GlossaryItem term="管道模式">
-
-与责任链结构相似但语义不同：管道中每个处理器都处理请求（如中间件），责任链中只有一个处理器处理请求。
-
-</GlossaryItem>
-
-</Glossary>
