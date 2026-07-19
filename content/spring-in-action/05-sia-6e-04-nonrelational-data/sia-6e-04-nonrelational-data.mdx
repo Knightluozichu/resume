@@ -1,131 +1,50 @@
 ---
-title: "第4章 使用非关系数据"
-description: "依据Craig Walls《Spring in Action》第6版官方目录重构：从查询与一致性需求反推Cassandra分区模型和MongoDB文档边界，而非照搬关系实体"
+title: 第4章 使用非关系数据
+description: 第4章 使用非关系数据覆盖11个正式目录节点，以章专属代码、边界交互、故障恢复和版本迁移证据验收。
 type: C
-section: "Spring in Action（第6版 / Spring 5.3与Boot 2.4基线）"
+section: Spring in Action（第6版 / Spring 5.3与Boot 2.4基线）
 draft: false
 math: true
 demo: true
 order: 0
-sourceUrl: "https://www.manning.com/books/spring-in-action-sixth-edition"
+sourceUrl: 'https://www.manning.com/books/spring-in-action-sixth-edition'
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
 ---
-
-import { Sia6ArchitectureLab, Sia6FlowLab, Sia6EvidenceLab } from "@/components/mdx/spring-in-action/diagrams/sia-6e-04-nonrelational-data";
-
-# 第4章 使用非关系数据
-
-本页对应官方目录中的 **4 Working with nonrelational data**。学习目标不是逐行复制原文，而是在Taco Cloud连续案例中一比一覆盖核心节点，并为每个设计留下可运行客户端、失败反例、可观察信号和回滚条件。核心任务是：从查询与一致性需求反推Cassandra分区模型和MongoDB文档边界，而非照搬关系实体。
-
-<Callout type="info">**版本边界。** 原书由Manning于2022年1月出版，520页，ISBN 9781617297571，技术基线为Spring Framework 5.3与Spring Boot 2.4。课程先还原该语境，再以2026年7月的Spring Framework 7.0.7、Spring Boot 4.0.7复核迁移；现代注记不是原书新增章节。</Callout>
-
-## 可验收学习目标
+import { Sia604NonrelationalDataMapLab, Sia604NonrelationalDataExperimentLab, Sia604NonrelationalDataEvidenceLab } from "@/components/mdx/spring-in-action/diagrams/sia-6e-04-nonrelational-data";
+import { Objectives, Callout, Glossary, GlossaryItem, Term, Exercises, Answer, Stepper, Step, Attribution } from "@/components/mdx/mdx-components";
 
 <Objectives>
-- 能解释本单元全部11个正式目录节点在连续案例中的责任与前置关系。
-- 能实现一个最小垂直切片，使输入、Spring边界、领域不变量和外部副作用均可观察。
-- 能比较原书基线与当前版本，列出稳定合同、API迁移点和不可机械替换项。
-- 能设计成功、边界、故障与回滚四条路径，并让另一位读者仅凭证据重放结论。
+
+- 能解释第4章 使用非关系数据全部11个正式目录节点的输入、Spring边界、状态和失败语义
+- 能运行“Cassandra与Mongo建模台”，一次只改变存储模型或查询模式
+- 能阅读并修改本页章专属代码，以测试、日志、指标或代理记录证明结果
+- 能注入“把关系模型原样搬入Cassandra或Mongo，导致跨分区扫描和无界文档”，清空派生状态后重放并恢复“数据模型由访问模式与一致性边界驱动，Repository不掩盖存储差异”
+
 </Objectives>
 
-预期交付是“查询优先模型、分区热点实验、文档增长预算和仓储合同测试”。最危险的误区是“只替换Repository依赖，保留关系模型思维，最终得到跨分区扫描、超大文档或不可预测一致性”。
+{/* SIA_QUALITY_V2 */}
 
-## 官方目录逐节点复刻
+## 为什么从“Cassandra与Mongo建模台”开始
 
-### 4 Working with nonrelational data
+第4章 使用非关系数据不是starter、注解或API清单，而是一条从“aggregate access pattern → partition/document → repository”到业务结果的可执行合同。Cassandra与Mongo建模台把框架决策和领域结果放在同一时间线，先预测第一处变化，再运行、反证、恢复和复位。
 
-**正式节点 1/11。** 在“4 Working with nonrelational data”中先声明聚合、查询、事务与一致性，再选择Spring Data抽象。记录真实查询、索引、映射与回滚，避免Repository外观掩盖数据库差异。
+第4章 使用非关系数据的单变量实验固定提交、JDK、依赖、输入和外部服务，只改变存储模型或查询模式；面板中的方向性数字用于比较条件，不冒充真实压测、生产SLA或安全证明。
 
-验收时将该节点绑定到“查询优先模型、分区热点实验、文档增长预算和仓储合同测试”，并写出一个能够推翻当前设计的条件。若只能复述API名称，不能从失败症状定位到边界，则返回本节点补做实验。
+## 来源、版次与独立重写边界
 
-### 4.1 Working with Cassandra repositories
+第4章 使用非关系数据依据Manning[第6版产品页](https://www.manning.com/books/spring-in-action-sixth-edition)核定作者、2022年、520页和ISBN 9781617297571，并用[官方liveBook完整目录](https://livebook.manning.com/book/spring-in-action-sixth-edition/contents)定位4个Part、18章、附录及255个正式节点。第4章 使用非关系数据未取得出版正文授权，目录只限定范围，中文解释、代码、图示、实验、故障与答案均为独立教学重写。
 
-**正式节点 2/11。** 在“4.1 Working with Cassandra repositories”中先声明聚合、查询、事务与一致性，再选择Spring Data抽象。记录真实查询、索引、映射与回滚，避免Repository外观掩盖数据库差异。
+第4章 使用非关系数据保留原书Spring Framework 5·3 / Boot 2·4历史语境；迁移复核以[Spring Framework 7·0·8参考](https://docs.spring.io/spring-framework/reference/index.html)、[Spring Boot 4·1·0系统要求](https://docs.spring.io/spring-boot/system-requirements.html)、[Spring Security](https://docs.spring.io/spring-security/reference/index.html)、[Spring Data](https://docs.spring.io/spring-data/commons/reference/index.html)、[Spring Integration](https://docs.spring.io/spring-integration/reference/index.html)与[Reactor](https://projectreactor.io/docs/core/release/reference/index.html)官方资料为事实依据。当前注记不冒充原书内容，也不允许把新API机械回填到旧基线。
 
-验收时将该节点绑定到“查询优先模型、分区热点实验、文档增长预算和仓储合同测试”，并写出一个能够推翻当前设计的条件。若只能复述API名称，不能从失败症状定位到边界，则返回本节点补做实验。
+## 本章合同、版本与代码
 
-### 4.1.1 Enabling Spring Data Cassandra
+<Term def="aggregate access pattern → partition/document → repository是第4章 使用非关系数据中连接冻结输入与版本与可反证结果的章专属坐标，必须同时记录输入、版本、状态与失败。">aggregate access pattern → partition/document → repository</Term>、<Term def="存储模型是第4章 使用非关系数据中连接解释容器决策与可反证结果的章专属坐标，必须同时记录输入、版本、状态与失败。">存储模型</Term>、<Term def="查询模式是第4章 使用非关系数据中连接执行边界合同与可反证结果的章专属坐标，必须同时记录输入、版本、状态与失败。">查询模式</Term>、<Term def="查询计划、分区键与文档尺寸是第4章 使用非关系数据中连接注入失败与恢复与可反证结果的章专属坐标，必须同时记录输入、版本、状态与失败。">查询计划、分区键与文档尺寸</Term>、<Term def="查询优先模型、分区热点实验、文档增长预算和仓储合同测试是第4章 使用非关系数据中连接保存发布证据与可反证结果的章专属坐标，必须同时记录输入、版本、状态与失败。">查询优先模型、分区热点实验、文档增长预算和仓储合同测试</Term>。
 
-**正式节点 3/11。** 在“4.1.1 Enabling Spring Data Cassandra”中先声明聚合、查询、事务与一致性，再选择Spring Data抽象。记录真实查询、索引、映射与回滚，避免Repository外观掩盖数据库差异。
+第4章 使用非关系数据的通过不变量是“数据模型由访问模式与一致性边界驱动，Repository不掩盖存储差异”。第4章 使用非关系数据的实验档案至少保存commit、Java/Framework/Boot版本、配置来源、输入、关联ID、领域结果、外部副作用、终止原因和回滚触发器；版本迁移一次只改Java、Framework、Boot或第三方依赖中的一项。
 
-验收时将该节点绑定到“查询优先模型、分区热点实验、文档增长预算和仓储合同测试”，并写出一个能够推翻当前设计的条件。若只能复述API名称，不能从失败症状定位到边界，则返回本节点补做实验。
-
-### 4.1.2 Understanding Cassandra data modeling
-
-**正式节点 4/11。** 在“4.1.2 Understanding Cassandra data modeling”中先声明聚合、查询、事务与一致性，再选择Spring Data抽象。记录真实查询、索引、映射与回滚，避免Repository外观掩盖数据库差异。
-
-验收时将该节点绑定到“查询优先模型、分区热点实验、文档增长预算和仓储合同测试”，并写出一个能够推翻当前设计的条件。若只能复述API名称，不能从失败症状定位到边界，则返回本节点补做实验。
-
-### 4.1.3 Mapping domain types for Cassandra persistence
-
-**正式节点 5/11。** 在“4.1.3 Mapping domain types for Cassandra persistence”中先声明聚合、查询、事务与一致性，再选择Spring Data抽象。记录真实查询、索引、映射与回滚，避免Repository外观掩盖数据库差异。
-
-验收时将该节点绑定到“查询优先模型、分区热点实验、文档增长预算和仓储合同测试”，并写出一个能够推翻当前设计的条件。若只能复述API名称，不能从失败症状定位到边界，则返回本节点补做实验。
-
-### 4.1.4 Writing Cassandra repositories
-
-**正式节点 6/11。** 在“4.1.4 Writing Cassandra repositories”中先声明聚合、查询、事务与一致性，再选择Spring Data抽象。记录真实查询、索引、映射与回滚，避免Repository外观掩盖数据库差异。
-
-验收时将该节点绑定到“查询优先模型、分区热点实验、文档增长预算和仓储合同测试”，并写出一个能够推翻当前设计的条件。若只能复述API名称，不能从失败症状定位到边界，则返回本节点补做实验。
-
-### 4.2 Writing MongoDB repositories
-
-**正式节点 7/11。** 在“4.2 Writing MongoDB repositories”中先声明聚合、查询、事务与一致性，再选择Spring Data抽象。记录真实查询、索引、映射与回滚，避免Repository外观掩盖数据库差异。
-
-验收时将该节点绑定到“查询优先模型、分区热点实验、文档增长预算和仓储合同测试”，并写出一个能够推翻当前设计的条件。若只能复述API名称，不能从失败症状定位到边界，则返回本节点补做实验。
-
-### 4.2.1 Enabling Spring Data MongoDB
-
-**正式节点 8/11。** 在“4.2.1 Enabling Spring Data MongoDB”中先声明聚合、查询、事务与一致性，再选择Spring Data抽象。记录真实查询、索引、映射与回滚，避免Repository外观掩盖数据库差异。
-
-验收时将该节点绑定到“查询优先模型、分区热点实验、文档增长预算和仓储合同测试”，并写出一个能够推翻当前设计的条件。若只能复述API名称，不能从失败症状定位到边界，则返回本节点补做实验。
-
-### 4.2.2 Mapping domain types to documents
-
-**正式节点 9/11。** 把“4.2.2 Mapping domain types to documents”放回Part 1. Foundational Spring的连续案例，明确输入、Spring边界、领域不变量、外部副作用和验收证据。先预测一次条件缺失或依赖失败，再运行最小切片验证。
-
-验收时将该节点绑定到“查询优先模型、分区热点实验、文档增长预算和仓储合同测试”，并写出一个能够推翻当前设计的条件。若只能复述API名称，不能从失败症状定位到边界，则返回本节点补做实验。
-
-### 4.2.3 Writing MongoDB repository interfaces
-
-**正式节点 10/11。** 在“4.2.3 Writing MongoDB repository interfaces”中先声明聚合、查询、事务与一致性，再选择Spring Data抽象。记录真实查询、索引、映射与回滚，避免Repository外观掩盖数据库差异。
-
-验收时将该节点绑定到“查询优先模型、分区热点实验、文档增长预算和仓储合同测试”，并写出一个能够推翻当前设计的条件。若只能复述API名称，不能从失败症状定位到边界，则返回本节点补做实验。
-
-### Summary
-
-**正式节点 11/11。** 把“Summary”放回Part 1. Foundational Spring的连续案例，明确输入、Spring边界、领域不变量、外部副作用和验收证据。先预测一次条件缺失或依赖失败，再运行最小切片验证。
-
-验收时将该节点绑定到“查询优先模型、分区热点实验、文档增长预算和仓储合同测试”，并写出一个能够推翻当前设计的条件。若只能复述API名称，不能从失败症状定位到边界，则返回本节点补做实验。
-
-## 从运行症状开始
-
-Spring应用可视为一组由容器建立、由请求或消息驱动、受配置和身份约束、向外部系统产生副作用的组件图。先用<Term def="根据类路径、Bean、属性和运行环境决定是否创建组件的机制">条件装配</Term>解释Bean为什么存在，再用<Term def="跨Web、业务、数据或消息边界保持的可观察承诺">边界合同</Term>限定输入输出；只有这样，自动配置才是可检查的决策，不是魔法。
-
-对每条执行链记录五种状态：尚未接收、已验证、已改变领域状态、已提交外部副作用、已向调用方确认。同步HTTP、事务数据库、消息代理和响应式流对这些状态的确认时点不同。设计必须指出哪个状态可以重试、哪个需要<Term def="重复执行仍得到相同业务结果的性质">幂等</Term>键、哪个需要补偿，以及超时发生时调用方究竟知道什么。
-
-测试按由窄到宽排列：纯领域测试证明不变量，Spring切片测试证明框架边界，容器化集成测试证明真实驱动或代理合同，端到端测试只保留关键旅程。测试上下文启动得越多，反馈越慢且故障定位越宽；但过度mock也会跳过序列化、事务、过滤链和条件装配。每层都要写明它能证明什么、不能证明什么。
-
-可观察性同样属于设计。日志回答单次事件，指标回答时间序列，追踪回答跨边界因果，审计回答谁在何时做了什么。任何一项都不能替代业务结果。为第4章 使用非关系数据选择低基数标签、稳定关联ID和失败分类，并用<Term def="在受控位置制造依赖、延迟、权限或资源异常以验证系统行为">故障注入</Term>确认信号确实出现，而不是只配置采集器。
-
-最后建立<Term def="从原书技术组合迁往当前Spring世代时逐项记录合同、API、运行与回滚差异的清单">版本迁移账本</Term>。每项变化标注编译期、启动期、请求期或生产运行期风险；先建立第6版可重复基线，再一次只改变Java、Framework、Boot或外部组件中的一项。否则迁移成功也无法判断是哪项变化生效，失败更难定位。
-
-## 证据链最小档案
-
-每次实验创建一条不可变记录，至少包含提交版本、JDK、Framework、Boot、外部组件、配置摘要、输入数据、开始与结束时间、关联ID、预期结果、实际结果和回滚触发器。日志片段只保留定位所需字段，指标必须注明单位与聚合窗口，追踪必须指出采样策略；否则不同环境的数字不能直接比较。
-
-把成功和失败放在同一时间线上：请求何时被接收，身份何时建立，事务何时开始，外部调用何时发出，状态何时提交，响应或消息何时确认。超时尤其要记录“调用方不知道什么”，因为未知结果会决定能否自动重试。对于重复执行，保存业务幂等键、数据库约束和代理确认三层证据，不能只依赖内存标志。
-
-交接前做一次冷启动重放和一次依赖降级重放。冷启动检查类路径扫描、条件装配、配置绑定、模式迁移和就绪信号；降级重放检查超时预算、线程或连接释放、错误分类、告警和恢复。若另一个环境无法用同一命令得到相同合同结果，先修复可复现性，再讨论性能或框架优化。
-
-## 原书基线与现代复核
-
-**第6版基线：** 按原书分别建立Spring Data Cassandra与MongoDB仓储。先保存依赖树、自动配置报告、数据库或代理版本、测试结果和关键运行信号，形成可重复参照。
-
-**当前复核：** 使用当前Spring Data发行列车重新核对驱动、映射与观察能力，同时保持原书的数据建模原则。Spring Framework 7建立在Jakarta EE 11之上，Boot 4进行了模块化并支持Java 25，同时保留Java 17基线。迁移不能只修改版本号；需要检查<code>javax</code>到<code>jakarta</code>、Security DSL、序列化、驱动、管理端点和第三方项目兼容性。
-
-**保持不变的判断：** 为同一业务明确分区键、文档聚合、查询路径、一致性与迁移成本。框架API会变化，但输入验证、最小权限、事务边界、消息交付、背压、资源释放和回滚证据仍是稳定验收面。
-
-独立教学示例先展示本单元的最小公开边界：
+本页从旧实现中保留并重新验收的章专属最小边界如下；第4章 使用非关系数据要求读者修改它、触发失败并用查询计划、分区键与文档尺寸证明结果，而不是只阅读代码：
 
 ```java
 @Document("orders")
@@ -134,105 +53,106 @@ record OrderDocument(@Id String id, String customerId, List<LineItem> items) {}
 interface OrderDocuments extends MongoRepository<OrderDocument, String> {}
 ```
 
-客户端合同测试不复制实现，只观察结果和副作用：
+<Callout type="info" title="版本迁移不是搜索替换">第4章 使用非关系数据从5·3/2·4迁往7·0·8/4·1·0时要单独核对Java 17+、javax到jakarta、Security DSL、AOT/原生镜像、驱动与第三方项目兼容性；原基线和迁移基线必须能分别重放。</Callout>
 
-```java
-@Test
-void boundaryKeepsFailureObservable() {
-  var evidence = runScenario("baseline", "boundary", "failure", "rollback");
-  assertAll(
-      () -> assertTrue(evidence.contractVisible()),
-      () -> assertTrue(evidence.failureClassified()),
-      () -> assertTrue(evidence.rollbackReplayed())
-  );
-}
-```
+## 先预测，再操作三层章专属实验
 
-交接验收使用同一条行为描述：
+<Stepper>
+  <Step title="1. 目录—边界地图">选择正式节点，标出入口、容器决策、状态、副作用与信号。<Sia604NonrelationalDataMapLab /></Step>
+  <Step title="2. 单变量代码实验">固定版本和输入，只切换存储模型或查询模式。<Sia604NonrelationalDataExperimentLab /></Step>
+  <Step title="3. 故障、恢复与复位">注入“把关系模型原样搬入Cassandra或Mongo，导致跨分区扫描和无界文档”，从第一处错误边界修复并同条件重放。<Sia604NonrelationalDataEvidenceLab /></Step>
+</Stepper>
 
-```gherkin
-Feature: 4 Working with nonrelational data
-  Scenario: replay the Spring boundary with evidence
-    Given the original version, input contract, dependencies, and expected side effects
-    When the success path and one controlled failure are executed
-    Then state, identity, resource use, and external effects are observable
-    And a reviewer can keep, narrow, migrate, or roll back the design
-```
+## 官方目录逐项深读
 
-## 定量预算而非直觉
+### 4 Working with nonrelational data
 
-端到端延迟先按串行关键路径建模，异步只改变等待位置，不会让成本消失：
+**四级证据 1/11。** 第4章 使用非关系数据中的4 Working with nonrelational data：声明聚合、访问模式、事务与一致性，执行一次真实查询并用失败约束证明回滚。在第4章 使用非关系数据中固定查询模式为“范围”，只把存储模型从“关系迁移”切到“Mongo文档”，用查询计划、分区键与文档尺寸找到第一项因果变化；该节点的练习断言是“数据模型由访问模式与一致性边界驱动，Repository不掩盖存储差异”。
 
-$$
-L_{e2e}=L_{queue}+L_{spring}+L_{domain}+L_{io}+L_{serialize}
-$$
+### 4.1 Working with Cassandra repositories
 
-若一次请求产生多个远程或数据库调用，最小调用放大为：
+**四级证据 2/11。** 第4章 使用非关系数据中的4.1 Working with Cassandra repositories：声明聚合、访问模式、事务与一致性，执行一次真实查询并用失败约束证明回滚。在第4章 使用非关系数据中固定查询模式为“范围”，只把存储模型从“关系迁移”切到“Mongo文档”，用查询计划、分区键与文档尺寸找到第一项因果变化；该节点的练习断言是“数据模型由访问模式与一致性边界驱动，Repository不掩盖存储差异”。
 
-$$
-A=N_{request}\times(C_{db}+C_{remote}+C_{message})
-$$
+### 4.1.1 Enabling Spring Data Cassandra
 
-响应式或消息消费者的安全在途量受处理速率与确认延迟约束：
+**四级证据 3/11。** 第4章 使用非关系数据中的4.1.1 Enabling Spring Data Cassandra：声明聚合、访问模式、事务与一致性，执行一次真实查询并用失败约束证明回滚。在第4章 使用非关系数据中固定查询模式为“范围”，只把存储模型从“关系迁移”切到“Mongo文档”，用查询计划、分区键与文档尺寸找到第一项因果变化；该节点的练习断言是“数据模型由访问模式与一致性边界驱动，Repository不掩盖存储差异”。
 
-$$
-I_{safe}\leq R_{consume}\times T_{ack}
-$$
+### 4.1.2 Understanding Cassandra data modeling
 
-证据完整度不是平均分；任一关键门禁缺失都不能交付：
+**四级证据 4/11。** 第4章 使用非关系数据中的4.1.2 Understanding Cassandra data modeling：声明聚合、访问模式、事务与一致性，执行一次真实查询并用失败约束证明回滚。在第4章 使用非关系数据中固定查询模式为“范围”，只把存储模型从“关系迁移”切到“Mongo文档”，用查询计划、分区键与文档尺寸找到第一项因果变化；该节点的练习断言是“数据模型由访问模式与一致性边界驱动，Repository不掩盖存储差异”。
 
-$$
-G=G_{contract}\land G_{failure}\land G_{observe}\land G_{rollback}
-$$
+### 4.1.3 Mapping domain types for Cassandra persistence
 
-这些公式用于提出预测。真实结论必须由固定数据集、预热、并发、版本和故障条件下的测量支持，并报告P50、P95、P99、错误率、资源占用与恢复时间。
+**四级证据 5/11。** 第4章 使用非关系数据中的4.1.3 Mapping domain types for Cassandra persistence：声明聚合、访问模式、事务与一致性，执行一次真实查询并用失败约束证明回滚。在第4章 使用非关系数据中固定查询模式为“范围”，只把存储模型从“关系迁移”切到“Mongo文档”，用查询计划、分区键与文档尺寸找到第一项因果变化；该节点的练习断言是“数据模型由访问模式与一致性边界驱动，Repository不掩盖存储差异”。
 
-先预测：在运行实验前写下延迟、调用放大、在途量和失败位置的方向性变化；运行后只允许用保存的证据修正模型，不能删除不符合预期的样本。
+### 4.1.4 Writing Cassandra repositories
 
-## 三步实验闭环
+**四级证据 6/11。** 第4章 使用非关系数据中的4.1.4 Writing Cassandra repositories：声明聚合、访问模式、事务与一致性，执行一次真实查询并用失败约束证明回滚。在第4章 使用非关系数据中固定查询模式为“范围”，只把存储模型从“关系迁移”切到“Mongo文档”，用查询计划、分区键与文档尺寸找到第一项因果变化；该节点的练习断言是“数据模型由访问模式与一致性边界驱动，Repository不掩盖存储差异”。
 
-<Steps>
-  <Step title="声明边界与预测">写出改变租户基数、订单增长和查询模式，观察分区倾斜、文档大小、索引代价与一致性窗口的输入、前置条件、状态变化、外部副作用和预期信号；禁止先运行再解释。<Sia6ArchitectureLab /></Step>
-  <Step title="只改变一个条件">保持数据、版本和负载固定，只切换一项配置、实现、失败或版本，保存日志、指标、追踪、数据库与代理证据。<Sia6FlowLab /></Step>
-  <Step title="反证、回滚与交接">主动寻找推翻当前方案的边界；若触发“只替换Repository依赖，保留关系模型思维，最终得到跨分区扫描、超大文档或不可预测一致性”，缩小适用域或回滚，并让未参与实现的人重放。<Sia6EvidenceLab /></Step>
-</Steps>
+### 4.2 Writing MongoDB repositories
 
-## 高频陷阱
+**四级证据 7/11。** 第4章 使用非关系数据中的4.2 Writing MongoDB repositories：声明聚合、访问模式、事务与一致性，执行一次真实查询并用失败约束证明回滚。在第4章 使用非关系数据中固定查询模式为“范围”，只把存储模型从“关系迁移”切到“Mongo文档”，用查询计划、分区键与文档尺寸找到第一项因果变化；该节点的练习断言是“数据模型由访问模式与一致性边界驱动，Repository不掩盖存储差异”。
 
-<Callout type="trap">**把starter或注解当功能证明。** 类路径只触发候选配置；还要检查条件评估、实际Bean、过滤链、驱动与运行信号。</Callout>
+### 4.2.1 Enabling Spring Data MongoDB
 
-<Callout type="trap">**只测成功路径。** 只替换Repository依赖，保留关系模型思维，最终得到跨分区扫描、超大文档或不可预测一致性。至少加入错误输入、依赖超时、重复请求或消息、权限不足与资源耗尽中的适用项。</Callout>
+**四级证据 8/11。** 第4章 使用非关系数据中的4.2.1 Enabling Spring Data MongoDB：声明聚合、访问模式、事务与一致性，执行一次真实查询并用失败约束证明回滚。在第4章 使用非关系数据中固定查询模式为“范围”，只把存储模型从“关系迁移”切到“Mongo文档”，用查询计划、分区键与文档尺寸找到第一项因果变化；该节点的练习断言是“数据模型由访问模式与一致性边界驱动，Repository不掩盖存储差异”。
 
-<Callout type="trap">**把升级编译通过当迁移完成。** Framework 7与Boot 4改变Jakarta基线、模块和部分API；必须重放公开合同、数据、身份、观测和关闭流程。</Callout>
+### 4.2.2 Mapping domain types to documents
 
-## 本章回顾
+**四级证据 9/11。** 第4章 使用非关系数据中的4.2.2 Mapping domain types to documents：把入口、容器决策、领域状态、外部副作用和验收信号连成可重放的最小切片。在第4章 使用非关系数据中固定查询模式为“范围”，只把存储模型从“关系迁移”切到“Mongo文档”，用查询计划、分区键与文档尺寸找到第一项因果变化；该节点的练习断言是“数据模型由访问模式与一致性边界驱动，Repository不掩盖存储差异”。
 
-第4章 使用非关系数据的主线是“从查询与一致性需求反推Cassandra分区模型和MongoDB文档边界，而非照搬关系实体”。完成标准不是示例启动，而是形成查询优先模型、分区热点实验、文档增长预算和仓储合同测试，并证明“为同一业务明确分区键、文档聚合、查询路径、一致性与迁移成本”。若证据无法由他人复现，就回到官方节点补齐条件、反例和可观察结果。
+### 4.2.3 Writing MongoDB repository interfaces
+
+**四级证据 10/11。** 第4章 使用非关系数据中的4.2.3 Writing MongoDB repository interfaces：声明聚合、访问模式、事务与一致性，执行一次真实查询并用失败约束证明回滚。在第4章 使用非关系数据中固定查询模式为“范围”，只把存储模型从“关系迁移”切到“Mongo文档”，用查询计划、分区键与文档尺寸找到第一项因果变化；该节点的练习断言是“数据模型由访问模式与一致性边界驱动，Repository不掩盖存储差异”。
+
+### Summary
+
+**四级证据 11/11。** 第4章 使用非关系数据中的Summary：把入口、容器决策、领域状态、外部副作用和验收信号连成可重放的最小切片。在第4章 使用非关系数据中固定查询模式为“范围”，只把存储模型从“关系迁移”切到“Mongo文档”，用查询计划、分区键与文档尺寸找到第一项因果变化；该节点的练习断言是“数据模型由访问模式与一致性边界驱动，Repository不掩盖存储差异”。
+
+## 三个必须主动触发的误区
+
+<Callout type="trap" title="框架外观不等于业务证明">第4章 使用非关系数据即使能够启动、返回200或创建Repository，也可能存在错误状态、重复副作用、越权、阻塞或不可恢复失败；必须沿“aggregate access pattern → partition/document → repository”逐段保存证据。</Callout>
+
+<Callout type="trap" title="章专属失败样本">第4章 使用非关系数据主动触发“只替换Repository依赖，保留关系模型思维，最终得到跨分区扫描、超大文档或不可预测一致性”，并进一步注入“把关系模型原样搬入Cassandra或Mongo，导致跨分区扫描和无界文档”；若查询计划、分区键与文档尺寸没有变化，先修复观测和边界，不得用最终页面或平均分掩盖。</Callout>
+
+<Callout type="trap" title="迁移编译通过不等于迁移完成">第4章 使用非关系数据升级后仍需重放身份、配置、数据、消息、响应式终止、管理暴露和关闭流程中的适用合同；只有原反例继续被拒绝，迁移结论才成立。</Callout>
+
+## 练习、答案与255节点验证
 
 <Exercises>
 
-**问题 1**：如何为第4章 使用非关系数据建立最小可执行切片？
+**问题1：代码改变。** 如何隔离存储模型对查询计划、分区键与文档尺寸的因果影响？
 
-<Answer>选择一个真实输入，明确Spring边界、领域不变量与外部副作用；按“改变租户基数、订单增长和查询模式，观察分区倾斜、文档大小、索引代价与一致性窗口”执行成功和失败对照，把结果写入查询优先模型、分区热点实验、文档增长预算和仓储合同测试。</Answer>
+<Answer>第4章 使用非关系数据固定提交、版本、输入、查询模式和外部依赖，只把存储模型从“Cassandra分区”切到“Mongo文档”；保存合同前后状态、失败分类和查询计划、分区键与文档尺寸，然后重置并确认基线可重复。</Answer>
 
-**问题 2**：为什么能启动或收到200响应仍不足以证明本单元正确？
+**问题2：四级证据。** 怎样证明本页11个目录节点不是只出现标题？
 
-<Answer>启动只证明部分条件成立，200也可能掩盖错误状态、重复副作用、越权或阻塞。还需验证边界合同、失败分类、运行信号与回滚，并覆盖“只替换Repository依赖，保留关系模型思维，最终得到跨分区扫描、超大文档或不可预测一致性”。</Answer>
+<Answer>
+1. 4 Working with nonrelational data：解释Spring决策，运行章专属切片，注入一项失败，并用查询计划、分区键与文档尺寸断言恢复。
+2. 4.1 Working with Cassandra repositories：解释Spring决策，运行章专属切片，注入一项失败，并用查询优先模型、分区热点实验、文档增长预算和仓储合同测试断言恢复。
+3. 4.1.1 Enabling Spring Data Cassandra：解释Spring决策，运行章专属切片，注入一项失败，并用查询计划、分区键与文档尺寸断言恢复。
+4. 4.1.2 Understanding Cassandra data modeling：解释Spring决策，运行章专属切片，注入一项失败，并用查询优先模型、分区热点实验、文档增长预算和仓储合同测试断言恢复。
+5. 4.1.3 Mapping domain types for Cassandra persistence：解释Spring决策，运行章专属切片，注入一项失败，并用查询计划、分区键与文档尺寸断言恢复。
+6. 4.1.4 Writing Cassandra repositories：解释Spring决策，运行章专属切片，注入一项失败，并用查询优先模型、分区热点实验、文档增长预算和仓储合同测试断言恢复。
+7. 4.2 Writing MongoDB repositories：解释Spring决策，运行章专属切片，注入一项失败，并用查询计划、分区键与文档尺寸断言恢复。
+8. 4.2.1 Enabling Spring Data MongoDB：解释Spring决策，运行章专属切片，注入一项失败，并用查询优先模型、分区热点实验、文档增长预算和仓储合同测试断言恢复。
+9. 4.2.2 Mapping domain types to documents：解释Spring决策，运行章专属切片，注入一项失败，并用查询计划、分区键与文档尺寸断言恢复。
+10. 4.2.3 Writing MongoDB repository interfaces：解释Spring决策，运行章专属切片，注入一项失败，并用查询优先模型、分区热点实验、文档增长预算和仓储合同测试断言恢复。
+11. Summary：解释Spring决策，运行章专属切片，注入一项失败，并用查询计划、分区键与文档尺寸断言恢复。
+</Answer>
 
-**问题 3**：从第6版迁移到当前Spring世代时应怎样控制变量？
+**问题3：故障恢复。** 如何证明“把关系模型原样搬入Cassandra或Mongo，导致跨分区扫描和无界文档”已经被真正修复？
 
-<Answer>先固定原书基线和证据，一次只升级Java、Framework、Boot或外部组件之一；核对Jakarta、Security、驱动、管理端点和第三方兼容，原反例全部通过后再进入下一步。</Answer>
+<Answer>第4章 使用非关系数据沿冻结输入与版本、解释容器决策、执行边界合同、注入失败与恢复、保存发布证据找到第一处偏离，只修改最小因果条件；丢弃缓存、上下文、连接、事务、offset或订阅等适用派生状态，以同输入重放，直到“数据模型由访问模式与一致性边界驱动，Repository不掩盖存储差异”恢复且查询优先模型、分区热点实验、文档增长预算和仓储合同测试能够由他人复核。</Answer>
 
 </Exercises>
 
 <Glossary>
-  <GlossaryItem term="条件装配">依据类路径、Bean、属性与环境决定配置是否生效，并能由条件报告解释。</GlossaryItem>
-  <GlossaryItem term="边界合同">跨Web、业务、数据、消息或管理边界保持的输入、输出、状态和失败承诺。</GlossaryItem>
-  <GlossaryItem term="幂等">同一业务意图重复执行仍产生一次有效状态变化，是重试设计的前提之一。</GlossaryItem>
-  <GlossaryItem term="故障注入">在可控位置制造延迟、拒绝、断线、资源耗尽或无效输入以验证恢复与观测。</GlossaryItem>
-  <GlossaryItem term="版本迁移账本">逐项记录原书与当前版本间合同、API、运行证据、风险和回滚条件。</GlossaryItem>
+  <GlossaryItem term="aggregate access pattern → partition/document → repository">aggregate access pattern → partition/document → repository是第4章 使用非关系数据中连接冻结输入与版本与可反证结果的章专属坐标，必须同时记录输入、版本、状态与失败。</GlossaryItem>
+  <GlossaryItem term="存储模型">存储模型是第4章 使用非关系数据中连接解释容器决策与可反证结果的章专属坐标，必须同时记录输入、版本、状态与失败。</GlossaryItem>
+  <GlossaryItem term="查询模式">查询模式是第4章 使用非关系数据中连接执行边界合同与可反证结果的章专属坐标，必须同时记录输入、版本、状态与失败。</GlossaryItem>
+  <GlossaryItem term="查询计划、分区键与文档尺寸">查询计划、分区键与文档尺寸是第4章 使用非关系数据中连接注入失败与恢复与可反证结果的章专属坐标，必须同时记录输入、版本、状态与失败。</GlossaryItem>
+  <GlossaryItem term="查询优先模型、分区热点实验、文档增长预算和仓储合同测试">查询优先模型、分区热点实验、文档增长预算和仓储合同测试是第4章 使用非关系数据中连接保存发布证据与可反证结果的章专属坐标，必须同时记录输入、版本、状态与失败。</GlossaryItem>
 </Glossary>
 
-[← 上一页：第3章 使用关系数据](/learn/spring-in-action/04-sia-6e-03-working-with-data/sia-6e-03-working-with-data) · [下一页：第5章 保护Spring应用 →](/learn/spring-in-action/06-sia-6e-05-securing-spring/sia-6e-05-securing-spring)
-
-<Attribution adaptedFrom="Craig Walls, Spring in Action, Sixth Edition" adaptedUrl="https://www.manning.com/books/spring-in-action-sixth-edition" />
+<Attribution mode="independent-rewrite" sourceBasis="outline-only" workTitle="Craig Walls《Spring in Action》第6版" adaptedUrl="https://www.manning.com/books/spring-in-action-sixth-edition" />
