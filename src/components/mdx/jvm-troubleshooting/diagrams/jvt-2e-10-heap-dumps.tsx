@@ -1,24 +1,76 @@
-import { OfficialJvt2Lab } from "./official-jvt2-lab";
+import { OfficialJvt2Studio } from "./official-jvt2-lab";
 
-const nodes = [
-  "10 Investigating memory problems with heap dumps",
-  "10.1 Obtaining a heap dump",
-  "10.1.1 Configuring an app to generate a heap dump when it encounters a memory problem",
-  "10.1.2 Obtaining a heap dump using a profiler",
-  "10.1.3 Obtaining a heap dump with the command line",
-  "10.2 Reading a heap dump",
-  "10.3 Using the OQL console to query a heap dump",
-  "Summary"
-];
+const props = {
+  "unitId": "jvt-2e-10-heap-dumps",
+  "unitTitle": "第10章 用堆转储调查内存问题",
+  "concepts": [
+    "10 Investigating memory problems with heap dumps",
+    "10.1 Obtaining a heap dump",
+    "10.1.1 Configuring an app to generate a heap dump when it encounters a memory problem",
+    "10.1.2 Obtaining a heap dump using a profiler",
+    "10.1.3 Obtaining a heap dump with the command line",
+    "10.2 Reading a heap dump",
+    "10.3 Using the OQL console to query a heap dump",
+    "Summary"
+  ],
+  "stages": [
+    "检查容量",
+    "生成转储",
+    "载入分析",
+    "追踪GC Root",
+    "验证释放"
+  ],
+  "focuses": [
+    "HeapDumpOnOutOfMemoryError",
+    "jcmd",
+    "dominator tree",
+    "retained size",
+    "GC Roots",
+    "OQL"
+  ],
+  "model": {
+    "studio": "堆图持有路径分析台",
+    "axisA": {
+      "label": "转储触发",
+      "levels": [
+        "OOM自动",
+        "维护窗口",
+        "故障现场"
+      ]
+    },
+    "axisB": {
+      "label": "分析视角",
+      "levels": [
+        "浅大小",
+        "保留大小",
+        "GC Root路径"
+      ]
+    },
+    "outcomes": {
+      "signal": "持有者定位率",
+      "risk": "敏感数据暴露",
+      "evidence": "证据闭环度"
+    },
+    "fault": "只按shallow size排序，或把含口令和个人数据的hprof上传到非授权服务",
+    "task": "从大对象集合追到GC Root，说明谁负责释放并验证修复后基线",
+    "invariant": "堆转储的采集、传输、存储和销毁均受容量与访问控制保护",
+    "command": "jcmd <pid> GC.heap_dump filename=incident.hprof",
+    "practiceMode": "diagnosis",
+    "riskEffects": [
+      1,
+      -1
+    ]
+  }
+} as const;
 
-export function Jvt2InvestigationLab() {
-  return <OfficialJvt2Lab mode="investigation" unitTitle="第10章 用堆转储调查内存问题" focus="规划OOM自动采集、剖析器与命令行采集，读取支配树和GC根引用，并用OQL验证对象群假设" nodes={nodes} />;
+export function Jvt2e10HeapDumpsInvestigationLab() {
+  return <OfficialJvt2Studio {...props} mode="investigation" />;
 }
 
-export function Jvt2TimelineLab() {
-  return <OfficialJvt2Lab mode="timeline" unitTitle="第10章 用堆转储调查内存问题" focus="让带业务键的对象被监听器意外保留，用OQL筛选并沿最短GC根路径找到注册表所有者" nodes={nodes} />;
+export function Jvt2e10HeapDumpsTimelineLab() {
+  return <OfficialJvt2Studio {...props} mode="timeline" />;
 }
 
-export function Jvt2EvidenceLab() {
-  return <OfficialJvt2Lab mode="evidence" unitTitle="第10章 用堆转储调查内存问题" focus="采集运行手册、转储校验和与访问控制、支配树、GC根路径、OQL查询与修复对照" nodes={nodes} />;
+export function Jvt2e10HeapDumpsEvidenceLab() {
+  return <OfficialJvt2Studio {...props} mode="evidence" />;
 }
