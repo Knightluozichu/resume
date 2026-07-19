@@ -22614,6 +22614,309 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
         module0.MseOfficialFinalReviewEvidenceLab,
     } as ChapterMdxComponents;
   },
+  "mythical-man-month/00-map/tmm40-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/mythical-man-month/diagrams/tmm40-official-learning-map");
+    return {
+      Tmm40OfficialLearningMapDependencyLab:
+        module0.Tmm40OfficialLearningMapDependencyLab,
+      Tmm40OfficialLearningMapScheduleLab:
+        module0.Tmm40OfficialLearningMapScheduleLab,
+      Tmm40OfficialLearningMapEvidenceLab:
+        module0.Tmm40OfficialLearningMapEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "mythical-man-month/01-translator-preface/tmm40-translator-preface":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/mythical-man-month/diagrams/tmm40-translator-preface");
+      return {
+        Tmm40TranslatorPrefaceDependencyLab:
+          module0.Tmm40TranslatorPrefaceDependencyLab,
+        Tmm40TranslatorPrefaceScheduleLab:
+          module0.Tmm40TranslatorPrefaceScheduleLab,
+        Tmm40TranslatorPrefaceEvidenceLab:
+          module0.Tmm40TranslatorPrefaceEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "mythical-man-month/02-20th-preface/tmm40-20th-anniversary-preface":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/mythical-man-month/diagrams/tmm40-20th-anniversary-preface");
+      return {
+        Tmm4020thAnniversaryPrefaceDependencyLab:
+          module0.Tmm4020thAnniversaryPrefaceDependencyLab,
+        Tmm4020thAnniversaryPrefaceScheduleLab:
+          module0.Tmm4020thAnniversaryPrefaceScheduleLab,
+        Tmm4020thAnniversaryPrefaceEvidenceLab:
+          module0.Tmm4020thAnniversaryPrefaceEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "mythical-man-month/03-first-preface/tmm40-first-edition-preface":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/mythical-man-month/diagrams/tmm40-first-edition-preface");
+      return {
+        Tmm40FirstEditionPrefaceDependencyLab:
+          module0.Tmm40FirstEditionPrefaceDependencyLab,
+        Tmm40FirstEditionPrefaceScheduleLab:
+          module0.Tmm40FirstEditionPrefaceScheduleLab,
+        Tmm40FirstEditionPrefaceEvidenceLab:
+          module0.Tmm40FirstEditionPrefaceEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "mythical-man-month/04-01-tar-pit/tmm40-01-tar-pit": async () => {
+    const module0 =
+      await import("@/components/mdx/mythical-man-month/diagrams/tmm40-01-tar-pit");
+    return {
+      Tmm4001TarPitDependencyLab: module0.Tmm4001TarPitDependencyLab,
+      Tmm4001TarPitScheduleLab: module0.Tmm4001TarPitScheduleLab,
+      Tmm4001TarPitEvidenceLab: module0.Tmm4001TarPitEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "mythical-man-month/05-02-man-month/tmm40-02-man-month": async () => {
+    const module0 =
+      await import("@/components/mdx/mythical-man-month/diagrams/tmm40-02-man-month");
+    return {
+      Tmm4002ManMonthDependencyLab: module0.Tmm4002ManMonthDependencyLab,
+      Tmm4002ManMonthScheduleLab: module0.Tmm4002ManMonthScheduleLab,
+      Tmm4002ManMonthEvidenceLab: module0.Tmm4002ManMonthEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "mythical-man-month/06-03-surgical-team/tmm40-03-surgical-team": async () => {
+    const module0 =
+      await import("@/components/mdx/mythical-man-month/diagrams/tmm40-03-surgical-team");
+    return {
+      Tmm4003SurgicalTeamDependencyLab:
+        module0.Tmm4003SurgicalTeamDependencyLab,
+      Tmm4003SurgicalTeamScheduleLab: module0.Tmm4003SurgicalTeamScheduleLab,
+      Tmm4003SurgicalTeamEvidenceLab: module0.Tmm4003SurgicalTeamEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "mythical-man-month/07-04-conceptual-integrity/tmm40-04-conceptual-integrity":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/mythical-man-month/diagrams/tmm40-04-conceptual-integrity");
+      return {
+        Tmm4004ConceptualIntegrityDependencyLab:
+          module0.Tmm4004ConceptualIntegrityDependencyLab,
+        Tmm4004ConceptualIntegrityScheduleLab:
+          module0.Tmm4004ConceptualIntegrityScheduleLab,
+        Tmm4004ConceptualIntegrityEvidenceLab:
+          module0.Tmm4004ConceptualIntegrityEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "mythical-man-month/08-05-second-system-effect/tmm40-05-second-system-effect":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/mythical-man-month/diagrams/tmm40-05-second-system-effect");
+      return {
+        Tmm4005SecondSystemEffectDependencyLab:
+          module0.Tmm4005SecondSystemEffectDependencyLab,
+        Tmm4005SecondSystemEffectScheduleLab:
+          module0.Tmm4005SecondSystemEffectScheduleLab,
+        Tmm4005SecondSystemEffectEvidenceLab:
+          module0.Tmm4005SecondSystemEffectEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "mythical-man-month/09-06-passing-the-word/tmm40-06-passing-the-word":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/mythical-man-month/diagrams/tmm40-06-passing-the-word");
+      return {
+        Tmm4006PassingTheWordDependencyLab:
+          module0.Tmm4006PassingTheWordDependencyLab,
+        Tmm4006PassingTheWordScheduleLab:
+          module0.Tmm4006PassingTheWordScheduleLab,
+        Tmm4006PassingTheWordEvidenceLab:
+          module0.Tmm4006PassingTheWordEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "mythical-man-month/10-07-babel/tmm40-07-babel": async () => {
+    const module0 =
+      await import("@/components/mdx/mythical-man-month/diagrams/tmm40-07-babel");
+    return {
+      Tmm4007BabelDependencyLab: module0.Tmm4007BabelDependencyLab,
+      Tmm4007BabelScheduleLab: module0.Tmm4007BabelScheduleLab,
+      Tmm4007BabelEvidenceLab: module0.Tmm4007BabelEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "mythical-man-month/11-08-calling-the-shot/tmm40-08-calling-the-shot":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/mythical-man-month/diagrams/tmm40-08-calling-the-shot");
+      return {
+        Tmm4008CallingTheShotDependencyLab:
+          module0.Tmm4008CallingTheShotDependencyLab,
+        Tmm4008CallingTheShotScheduleLab:
+          module0.Tmm4008CallingTheShotScheduleLab,
+        Tmm4008CallingTheShotEvidenceLab:
+          module0.Tmm4008CallingTheShotEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "mythical-man-month/12-09-ten-pounds/tmm40-09-ten-pounds": async () => {
+    const module0 =
+      await import("@/components/mdx/mythical-man-month/diagrams/tmm40-09-ten-pounds");
+    return {
+      Tmm4009TenPoundsDependencyLab: module0.Tmm4009TenPoundsDependencyLab,
+      Tmm4009TenPoundsScheduleLab: module0.Tmm4009TenPoundsScheduleLab,
+      Tmm4009TenPoundsEvidenceLab: module0.Tmm4009TenPoundsEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "mythical-man-month/13-10-documentary-hypothesis/tmm40-10-documentary-hypothesis":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/mythical-man-month/diagrams/tmm40-10-documentary-hypothesis");
+      return {
+        Tmm4010DocumentaryHypothesisDependencyLab:
+          module0.Tmm4010DocumentaryHypothesisDependencyLab,
+        Tmm4010DocumentaryHypothesisScheduleLab:
+          module0.Tmm4010DocumentaryHypothesisScheduleLab,
+        Tmm4010DocumentaryHypothesisEvidenceLab:
+          module0.Tmm4010DocumentaryHypothesisEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "mythical-man-month/14-11-plan-to-throw-one-away/tmm40-11-plan-to-throw-one-away":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/mythical-man-month/diagrams/tmm40-11-plan-to-throw-one-away");
+      return {
+        Tmm4011PlanToThrowOneAwayDependencyLab:
+          module0.Tmm4011PlanToThrowOneAwayDependencyLab,
+        Tmm4011PlanToThrowOneAwayScheduleLab:
+          module0.Tmm4011PlanToThrowOneAwayScheduleLab,
+        Tmm4011PlanToThrowOneAwayEvidenceLab:
+          module0.Tmm4011PlanToThrowOneAwayEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "mythical-man-month/15-12-sharp-tools/tmm40-12-sharp-tools": async () => {
+    const module0 =
+      await import("@/components/mdx/mythical-man-month/diagrams/tmm40-12-sharp-tools");
+    return {
+      Tmm4012SharpToolsDependencyLab: module0.Tmm4012SharpToolsDependencyLab,
+      Tmm4012SharpToolsScheduleLab: module0.Tmm4012SharpToolsScheduleLab,
+      Tmm4012SharpToolsEvidenceLab: module0.Tmm4012SharpToolsEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "mythical-man-month/16-13-whole-and-parts/tmm40-13-whole-and-parts":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/mythical-man-month/diagrams/tmm40-13-whole-and-parts");
+      return {
+        Tmm4013WholeAndPartsDependencyLab:
+          module0.Tmm4013WholeAndPartsDependencyLab,
+        Tmm4013WholeAndPartsScheduleLab:
+          module0.Tmm4013WholeAndPartsScheduleLab,
+        Tmm4013WholeAndPartsEvidenceLab:
+          module0.Tmm4013WholeAndPartsEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "mythical-man-month/17-14-hatching-catastrophe/tmm40-14-hatching-catastrophe":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/mythical-man-month/diagrams/tmm40-14-hatching-catastrophe");
+      return {
+        Tmm4014HatchingCatastropheDependencyLab:
+          module0.Tmm4014HatchingCatastropheDependencyLab,
+        Tmm4014HatchingCatastropheScheduleLab:
+          module0.Tmm4014HatchingCatastropheScheduleLab,
+        Tmm4014HatchingCatastropheEvidenceLab:
+          module0.Tmm4014HatchingCatastropheEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "mythical-man-month/18-15-other-face/tmm40-15-other-face": async () => {
+    const module0 =
+      await import("@/components/mdx/mythical-man-month/diagrams/tmm40-15-other-face");
+    return {
+      Tmm4015OtherFaceDependencyLab: module0.Tmm4015OtherFaceDependencyLab,
+      Tmm4015OtherFaceScheduleLab: module0.Tmm4015OtherFaceScheduleLab,
+      Tmm4015OtherFaceEvidenceLab: module0.Tmm4015OtherFaceEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "mythical-man-month/19-16-no-silver-bullet/tmm40-16-no-silver-bullet":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/mythical-man-month/diagrams/tmm40-16-no-silver-bullet");
+      return {
+        Tmm4016NoSilverBulletDependencyLab:
+          module0.Tmm4016NoSilverBulletDependencyLab,
+        Tmm4016NoSilverBulletScheduleLab:
+          module0.Tmm4016NoSilverBulletScheduleLab,
+        Tmm4016NoSilverBulletEvidenceLab:
+          module0.Tmm4016NoSilverBulletEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "mythical-man-month/20-17-no-silver-bullet-refired/tmm40-17-no-silver-bullet-refired":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/mythical-man-month/diagrams/tmm40-17-no-silver-bullet-refired");
+      return {
+        Tmm4017NoSilverBulletRefiredDependencyLab:
+          module0.Tmm4017NoSilverBulletRefiredDependencyLab,
+        Tmm4017NoSilverBulletRefiredScheduleLab:
+          module0.Tmm4017NoSilverBulletRefiredScheduleLab,
+        Tmm4017NoSilverBulletRefiredEvidenceLab:
+          module0.Tmm4017NoSilverBulletRefiredEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "mythical-man-month/21-18-propositions/tmm40-18-propositions": async () => {
+    const module0 =
+      await import("@/components/mdx/mythical-man-month/diagrams/tmm40-18-propositions");
+    return {
+      Tmm4018PropositionsDependencyLab:
+        module0.Tmm4018PropositionsDependencyLab,
+      Tmm4018PropositionsScheduleLab: module0.Tmm4018PropositionsScheduleLab,
+      Tmm4018PropositionsEvidenceLab: module0.Tmm4018PropositionsEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "mythical-man-month/22-19-twenty-years-later/tmm40-19-twenty-years-later":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/mythical-man-month/diagrams/tmm40-19-twenty-years-later");
+      return {
+        Tmm4019TwentyYearsLaterDependencyLab:
+          module0.Tmm4019TwentyYearsLaterDependencyLab,
+        Tmm4019TwentyYearsLaterScheduleLab:
+          module0.Tmm4019TwentyYearsLaterScheduleLab,
+        Tmm4019TwentyYearsLaterEvidenceLab:
+          module0.Tmm4019TwentyYearsLaterEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "mythical-man-month/23-notes-references/tmm40-notes-references": async () => {
+    const module0 =
+      await import("@/components/mdx/mythical-man-month/diagrams/tmm40-notes-references");
+    return {
+      Tmm40NotesReferencesDependencyLab:
+        module0.Tmm40NotesReferencesDependencyLab,
+      Tmm40NotesReferencesScheduleLab: module0.Tmm40NotesReferencesScheduleLab,
+      Tmm40NotesReferencesEvidenceLab: module0.Tmm40NotesReferencesEvidenceLab,
+    } as ChapterMdxComponents;
+  },
+  "mythical-man-month/24-appendix-practice/tmm40-appendix-practice":
+    async () => {
+      const module0 =
+        await import("@/components/mdx/mythical-man-month/diagrams/tmm40-appendix-practice");
+      return {
+        Tmm40AppendixPracticeDependencyLab:
+          module0.Tmm40AppendixPracticeDependencyLab,
+        Tmm40AppendixPracticeScheduleLab:
+          module0.Tmm40AppendixPracticeScheduleLab,
+        Tmm40AppendixPracticeEvidenceLab:
+          module0.Tmm40AppendixPracticeEvidenceLab,
+      } as ChapterMdxComponents;
+    },
+  "mythical-man-month/25-review/tmm40-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/mythical-man-month/diagrams/tmm40-official-final-review");
+    return {
+      Tmm40OfficialFinalReviewDependencyLab:
+        module0.Tmm40OfficialFinalReviewDependencyLab,
+      Tmm40OfficialFinalReviewScheduleLab:
+        module0.Tmm40OfficialFinalReviewScheduleLab,
+      Tmm40OfficialFinalReviewEvidenceLab:
+        module0.Tmm40OfficialFinalReviewEvidenceLab,
+    } as ChapterMdxComponents;
+  },
   "nodejs-definitive-guide/00-guide/ndg-official-learning-map": async () => {
     const module0 =
       await import("@/components/mdx/nodejs-definitive-guide/diagrams/ndg-official-learning-map");
