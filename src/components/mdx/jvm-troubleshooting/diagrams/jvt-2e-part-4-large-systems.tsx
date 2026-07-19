@@ -1,17 +1,69 @@
-import { OfficialJvt2Lab } from "./official-jvt2-lab";
+import { OfficialJvt2Studio } from "./official-jvt2-lab";
 
-const nodes = [
-  "Part 4 Finding problems in large systems"
-];
+const props = {
+  "unitId": "jvt-2e-part-4-large-systems",
+  "unitTitle": "Part 4 在大型系统中寻找问题",
+  "concepts": [
+    "Part 4 Finding problems in large systems"
+  ],
+  "stages": [
+    "传播标识",
+    "串联跨度",
+    "核对协议",
+    "识别级联",
+    "对账恢复"
+  ],
+  "focuses": [
+    "trace id",
+    "span",
+    "schema version",
+    "retry",
+    "timeout",
+    "reconciliation"
+  ],
+  "model": {
+    "studio": "跨服务故障关联门",
+    "axisA": {
+      "label": "关联范围",
+      "levels": [
+        "单日志",
+        "单服务trace",
+        "跨服务与数据"
+      ]
+    },
+    "axisB": {
+      "label": "故障传播",
+      "levels": [
+        "单点",
+        "重试放大",
+        "级联与恢复"
+      ]
+    },
+    "outcomes": {
+      "signal": "端到端还原度",
+      "risk": "局部归因风险",
+      "evidence": "证据闭环度"
+    },
+    "fault": "只优化最慢服务，却忽略上游超时和重试造成的系统放大",
+    "task": "为一次跨服务失败画出时间线、重试次数、状态变更和补偿动作",
+    "invariant": "同一业务动作可从入口追踪到每个副作用及最终对账结果",
+    "command": "trace-id -> spans -> audit-event -> reconciliation",
+    "practiceMode": "design",
+    "riskEffects": [
+      1,
+      -1
+    ]
+  }
+} as const;
 
-export function Jvt2InvestigationLab() {
-  return <OfficialJvt2Lab mode="investigation" unitTitle="Part 4 在大型系统中寻找问题" focus="把单JVM证据扩展到跨服务通信、追踪、序列化、系统性失败、事务与最终一致性" nodes={nodes} />;
+export function Jvt2ePart4LargeSystemsInvestigationLab() {
+  return <OfficialJvt2Studio {...props} mode="investigation" />;
 }
 
-export function Jvt2TimelineLab() {
-  return <OfficialJvt2Lab mode="timeline" unitTitle="Part 4 在大型系统中寻找问题" focus="在一条跨三服务流程中注入超时与重复消息，确认追踪、幂等和对账能重建真实结果" nodes={nodes} />;
+export function Jvt2ePart4LargeSystemsTimelineLab() {
+  return <OfficialJvt2Studio {...props} mode="timeline" />;
 }
 
-export function Jvt2EvidenceLab() {
-  return <OfficialJvt2Lab mode="evidence" unitTitle="Part 4 在大型系统中寻找问题" focus="服务拓扑、端到端预算、失败传播图、业务不变量和对账策略" nodes={nodes} />;
+export function Jvt2ePart4LargeSystemsEvidenceLab() {
+  return <OfficialJvt2Studio {...props} mode="evidence" />;
 }
