@@ -1,247 +1,478 @@
 ---
-title: "卷III 第5章 深入理解Android输入系统"
-description: "依据三卷完整目录覆盖28个节点：贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈"
+title: 卷III 第5章 深入理解Android输入系统
+description: >-
+  卷III 第5章
+  深入理解Android输入系统：贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈，以android-4.2.2_r1源码、全节点机制图和故障恢复证据完成验收。
 type: C
-section: "深入理解Android（Framework卷I-III / Android 2.2-4.2.2）"
+section: 深入Android三卷 · 卷III UI系统
 draft: false
 math: false
 sourceUrl: "https://discx.libtop.com/book/7031561197875"
 demo: true
-order: 0
+order: 3
+qualityVersion: 2
+practiceMode: diagnosis
+sourceMode: independent-rewrite
 ---
 
-import { DavSeriesPipelineLab, DavSeriesExperimentLab, DavSeriesEvidenceLab } from "@/components/mdx/deep-android-volumes/diagrams/dav-v3-05-input-system";
-
-# 卷III 第5章 深入理解Android输入系统
-
-本页对应张大伟《深入理解Android》卷III，机械工业出版社2015年8月第1版、539页、ISBN 9787111507369，源码基线为Android 4.2.2。本页依据公开书目独立重构，不复制原文；三卷合计26个正式章节、525个章/节/小节节点，另设学习地图与总复习，共28页。
-
-三卷不是按“Java、Native、核心服务”随意分组：卷I以Native Framework为主，卷II研究UI与Window之外的Java Framework服务，卷III补完AudioService和UI Framework。版本结论不得跨卷拼接，现代AOSP变化只进入迁移账本。
+import {
+  DavSeriesPipelineLab,
+  DavSeriesExperimentLab,
+  DavSeriesEvidenceLab,
+} from "@/components/mdx/deep-android-volumes/diagrams/dav-v3-05-input-system";
+import {
+  Objectives,
+  Callout,
+  Glossary,
+  GlossaryItem,
+  Term,
+  Exercises,
+  Answer,
+  Stepper,
+  Step,
+  Attribution,
+} from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能解释“卷III 第5章 深入理解Android输入系统”全部28个目录节点的入口、线程进程、数据与状态所有权。
-- 能复现Android 4.2.2基线上的“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”，保存版本卡、命令、产物、对象身份与日志。
-- 能区分源码事实、运行证据和跨版本变化，并用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时完成验收。
-- 能设计反例推翻“只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态”，写出现代迁移、风险和回退条件。
+- 能在android-4.2.2_r1单一历史标签内解释贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈，不跨卷拼接文件与接口身份。
+- 能操作全节点机制图，让本页 28 个坐标都具备出现、解释、实验和练习四级证据。
+- 能使用章专属诊断切片保存入口、PID/TID、对象或状态、正常结果、错误返回与资源释放。
+- 能主动制造“只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态”，再凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时定位、恢复、复位并以同输入重放。
 
 </Objectives>
 
-## 从版本与断点开始
+{/* DEEP_ANDROID_VOLUMES_QUALITY_V2 */}
 
-<Term def="把源码标签、构建目标、工具链、设备映像与产物哈希绑定为一次可复现分析的记录">版本基线</Term>、<Term def="从公开入口沿线程、进程、JNI、Binder或内核边界保存输入输出和对象身份">调用证据</Term>、<Term def="说明服务、线程、队列、窗口、缓冲区、文件描述符由谁创建、迁移与释放">状态所有权</Term>、<Term def="通过进程死亡、超时、错误输入或资源耗尽暴露机制边界的位置">失败断点</Term>、<Term def="逐项记录历史版本机制、现代替代、行为差异、验证结果与回退条件的清单">迁移账本</Term>构成本页的分析协议。先预测调用跨过哪些线程、进程、JNI、Binder、驱动或设备边界，再在边界两侧保存同一对象的身份、输入、输出与释放结果；没有标签和断点的流程图不能交接。
+## 从一个可失败的问题开始
 
-本单元主线是贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈。目录管线可以逐项选择正式节点；故障实验用于切换版本错配、线程停滞、进程死亡与状态损坏；证据门要求目录、版本、调用、所有权和迁移同时通过。
+卷III 第5章 深入理解Android输入系统不是类名清单，而是在android-4.2.2_r1中回答：贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈。先预测请求经过的线程、进程与对象所有者，再运行正常样本；如果event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时不能指出首个变化，本页结论仍不可交接。
 
-<DavSeriesPipelineLab />
+本章不变量是在android-4.2.2_r1固定输入下，贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈的入口身份、状态拥有者、成功结果、错误返回和资源释放均可重复观察。将“只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态”作为反例，必须在同一版本、同一输入下看到确定的错误或状态分叉，并能恢复到基线。
 
-## 权威目录逐节点映射
+## 来源范围、历史标签与当前迁移
+
+卷III 第5章 深入理解Android输入系统以[卷III图书馆书目](https://discx.libtop.com/book/7031561197875)和[零售书目](https://www.yami.com/zh/p/android-3/3118023101)交叉核对Android 4.2.2目录；未取得原书正文，不作忠实性宣称。
+
+[AOSP版本与构建号表](https://source.android.com/docs/setup/reference/build-numbers)用于核对2.2/API 8、4.0.1/API 14、4.2.2/API 17及正式源码标签；[android-4.2.2_r1源码树](https://android.googlesource.com/platform/frameworks/base/+/android-4.2.2_r1/)提供本页历史机制的一手坐标。当前[Android架构文档](https://source.android.com/docs/core/architecture)只用于迁移对照，ART、Treble、稳定AIDL、模块化系统服务和现代构建工具不得倒填为三卷历史实现。
+
+## 六个机制检查点
+
+<Term def="版本基线在本页用于锁定android-4.2.2_r1的事实坐标与允许输入。">
+  版本基线
+</Term>
+、
+<Term def="正常轨迹在本页用于标出贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈由谁创建、修改与释放状态。">
+  正常轨迹
+</Term>
+、
+<Term def="首错断点在本页用于保存能复现正常路径的对象身份和时序。">
+  首错断点
+</Term>
+、
+<Term def="对象所有权在本页用于暴露只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态发生的第一个边界。">
+  对象所有权
+</Term>
+、
+<Term def="恢复条件在本页用于声明故障后重新接收请求所需的恢复条件。">
+  恢复条件
+</Term>
+、
+<Term def="回归证据在本页用于让独立读者凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时得到同一结论。">
+  回归证据
+</Term>
+。这六项把贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈落到event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时，防止目录词出现却没有运行解释。
+
+## 先预测，再操作三个专属实验
+
+预测本页哪一个对象最先改变、故障应在哪个边界暴露、恢复后哪份证据必须回到原值；然后按全节点、版本因果、故障恢复的顺序操作。
+
+<Stepper>
+  <Step title="1. 全节点机制与可执行探针">
+    选择任一目录节点与处理阶段，比较章专属机制说明和探针；列表完整保留，不截断节点。
+
+    <DavSeriesPipelineLab />
+
+  </Step>
+  <Step title="2. 同输入版本与故障边界">
+    保持输入不变，只切换正常、标签错配、所有者死亡或线程停滞，解释可见结果为何变化。
+
+    <DavSeriesExperimentLab />
+
+  </Step>
+  <Step title="3. 基线、首错、恢复与复位">
+    保存首个分叉后恢复历史合同，以同输入重放；点击重置，确认状态和输出都回到初始值。
+
+    <DavSeriesEvidenceLab />
+
+  </Step>
+</Stepper>
+
+## 正式目录逐项深读
 
 ### 第5章 深入理解Android输入系统
 
-**章节合同 1/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+第5章 深入理解Android输入系统在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任要翻译成一个可推翻的运行合同：明确入口、线程或进程、状态拥有者、正常结果和首个错误返回，再由event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时复核。
+
+处理 第5章 深入理解Android输入系统 时先执行“锁定历史基线”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“复现正常轨迹”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 第5章 深入理解Android输入系统 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.1 初识Android输入系统
 
-**机制边界 2/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.1 初识Android输入系统在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任是界定分析分母和结论边界。先列出它包含的入口、对象和退出条件，再用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时排除只凭类名或流程图得出的结论。
+
+处理 5.1 初识Android输入系统 时先执行“复现正常轨迹”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“注入单一故障”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.1 初识Android输入系统 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.1.1 getevent与sendevent工具
 
-**机制边界 3/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.1.1 getevent与sendevent工具在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任是把源码标签、主机工具链、产品目标和运行映像绑定成可复现坐标。产物、符号与设备指纹必须都指向android-4.2.2_r1，否则立即停止比较。
+
+处理 5.1.1 getevent与sendevent工具 时先执行“注入单一故障”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“定位首个分叉”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.1.1 getevent与sendevent工具 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.1.2 Android输入系统简介
 
-**机制边界 4/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.1.2 Android输入系统简介在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任要翻译成一个可推翻的运行合同：明确入口、线程或进程、状态拥有者、正常结果和首个错误返回，再由event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时复核。
+
+处理 5.1.2 Android输入系统简介 时先执行“定位首个分叉”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“恢复同输入重放”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.1.2 Android输入系统简介 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.1.3 IMS的构成
 
-**机制边界 5/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.1.3 IMS的构成在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任要翻译成一个可推翻的运行合同：明确入口、线程或进程、状态拥有者、正常结果和首个错误返回，再由event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时复核。
+
+处理 5.1.3 IMS的构成 时先执行“恢复同输入重放”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“锁定历史基线”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.1.3 IMS的构成 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.2 原始事件的读取与加工
 
-**机制边界 6/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.2 原始事件的读取与加工在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任要翻译成一个可推翻的运行合同：明确入口、线程或进程、状态拥有者、正常结果和首个错误返回，再由event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时复核。
+
+处理 5.2 原始事件的读取与加工 时先执行“锁定历史基线”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“复现正常轨迹”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.2 原始事件的读取与加工 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.2.1 基础知识：INotify与Epoll
 
-**机制边界 7/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.2.1 基础知识：INotify与Epoll在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任由队列头时间、消费线程和唤醒源共同决定。固定消息与时钟后延迟一次消费，比较入队、唤醒、执行和释放四个时间点，不能把容器结构当调度语义。
+
+处理 5.2.1 基础知识：INotify与Epoll 时先执行“复现正常轨迹”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“注入单一故障”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.2.1 基础知识：INotify与Epoll 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.2.2 InputReader的总体流程
 
-**机制边界 8/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.2.2 InputReader的总体流程在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任从设备事件进入读取、策略、派发与完成反馈。给同一输入事件绑定序号，核对焦点窗口、通道、finish信号和ANR计时，丢失反馈即不能宣称处理完成。
+
+处理 5.2.2 InputReader的总体流程 时先执行“注入单一故障”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“定位首个分叉”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.2.2 InputReader的总体流程 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.2.3 深入理解EventHub
 
-**机制边界 9/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.2.3 深入理解EventHub在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任从设备事件进入读取、策略、派发与完成反馈。给同一输入事件绑定序号，核对焦点窗口、通道、finish信号和ANR计时，丢失反馈即不能宣称处理完成。
+
+处理 5.2.3 深入理解EventHub 时先执行“定位首个分叉”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“恢复同输入重放”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.2.3 深入理解EventHub 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.2.4 深入理解InputReader
 
-**机制边界 10/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.2.4 深入理解InputReader在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任从设备事件进入读取、策略、派发与完成反馈。给同一输入事件绑定序号，核对焦点窗口、通道、finish信号和ANR计时，丢失反馈即不能宣称处理完成。
+
+处理 5.2.4 深入理解InputReader 时先执行“恢复同输入重放”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“锁定历史基线”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.2.4 深入理解InputReader 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.2.5 原始事件的读取与加工总结
 
-**机制边界 11/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.2.5 原始事件的读取与加工总结在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任是界定分析分母和结论边界。先列出它包含的入口、对象和退出条件，再用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时排除只凭类名或流程图得出的结论。
+
+处理 5.2.5 原始事件的读取与加工总结 时先执行“锁定历史基线”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“复现正常轨迹”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.2.5 原始事件的读取与加工总结 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.3 输入事件的派发
 
-**机制边界 12/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.3 输入事件的派发在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任要翻译成一个可推翻的运行合同：明确入口、线程或进程、状态拥有者、正常结果和首个错误返回，再由event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时复核。
+
+处理 5.3 输入事件的派发 时先执行“复现正常轨迹”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“注入单一故障”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.3 输入事件的派发 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.3.1 通用事件派发流程
 
-**机制边界 13/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.3.1 通用事件派发流程在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任要翻译成一个可推翻的运行合同：明确入口、线程或进程、状态拥有者、正常结果和首个错误返回，再由event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时复核。
+
+处理 5.3.1 通用事件派发流程 时先执行“注入单一故障”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“定位首个分叉”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.3.1 通用事件派发流程 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.3.2 按键事件的派发
 
-**机制边界 14/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.3.2 按键事件的派发在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任从设备事件进入读取、策略、派发与完成反馈。给同一输入事件绑定序号，核对焦点窗口、通道、finish信号和ANR计时，丢失反馈即不能宣称处理完成。
+
+处理 5.3.2 按键事件的派发 时先执行“定位首个分叉”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“恢复同输入重放”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.3.2 按键事件的派发 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.3.3 DispatcherPolicy与InputFilter
 
-**机制边界 15/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.3.3 DispatcherPolicy与InputFilter在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任从设备事件进入读取、策略、派发与完成反馈。给同一输入事件绑定序号，核对焦点窗口、通道、finish信号和ANR计时，丢失反馈即不能宣称处理完成。
+
+处理 5.3.3 DispatcherPolicy与InputFilter 时先执行“恢复同输入重放”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“锁定历史基线”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.3.3 DispatcherPolicy与InputFilter 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.3.4 输入事件的派发总结
 
-**机制边界 16/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.3.4 输入事件的派发总结在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任是界定分析分母和结论边界。先列出它包含的入口、对象和退出条件，再用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时排除只凭类名或流程图得出的结论。
+
+处理 5.3.4 输入事件的派发总结 时先执行“锁定历史基线”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“复现正常轨迹”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.3.4 输入事件的派发总结 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.4 输入事件的发送、接收与反馈
 
-**机制边界 17/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.4 输入事件的发送、接收与反馈在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任要翻译成一个可推翻的运行合同：明确入口、线程或进程、状态拥有者、正常结果和首个错误返回，再由event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时复核。
+
+处理 5.4 输入事件的发送、接收与反馈 时先执行“复现正常轨迹”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“注入单一故障”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.4 输入事件的发送、接收与反馈 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.4.1 深入理解InputChannel
 
-**机制边界 18/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.4.1 深入理解InputChannel在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任从设备事件进入读取、策略、派发与完成反馈。给同一输入事件绑定序号，核对焦点窗口、通道、finish信号和ANR计时，丢失反馈即不能宣称处理完成。
+
+处理 5.4.1 深入理解InputChannel 时先执行“注入单一故障”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“定位首个分叉”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.4.1 深入理解InputChannel 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.4.2 连接InputDispatcher和窗口
 
-**机制边界 19/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.4.2 连接InputDispatcher和窗口在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任横跨窗口身份、缓冲区所有权与合成时序。以同一帧记录生产、提交、层级、消费和移除，改变Z序或所有者后检查旧Surface是否仍可见或占用资源。
+
+处理 5.4.2 连接InputDispatcher和窗口 时先执行“定位首个分叉”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“恢复同输入重放”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.4.2 连接InputDispatcher和窗口 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.4.3 事件的发送
 
-**机制边界 20/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.4.3 事件的发送在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任要翻译成一个可推翻的运行合同：明确入口、线程或进程、状态拥有者、正常结果和首个错误返回，再由event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时复核。
+
+处理 5.4.3 事件的发送 时先执行“恢复同输入重放”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“锁定历史基线”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.4.3 事件的发送 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.4.4 事件的接收
 
-**机制边界 21/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.4.4 事件的接收在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任要翻译成一个可推翻的运行合同：明确入口、线程或进程、状态拥有者、正常结果和首个错误返回，再由event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时复核。
+
+处理 5.4.4 事件的接收 时先执行“锁定历史基线”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“复现正常轨迹”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.4.4 事件的接收 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.4.5 事件的反馈与发送循环
 
-**机制边界 22/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.4.5 事件的反馈与发送循环在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任要翻译成一个可推翻的运行合同：明确入口、线程或进程、状态拥有者、正常结果和首个错误返回，再由event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时复核。
+
+处理 5.4.5 事件的反馈与发送循环 时先执行“复现正常轨迹”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“注入单一故障”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.4.5 事件的反馈与发送循环 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.4.6 输入事件的发送、接收与反馈总结
 
-**机制边界 23/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.4.6 输入事件的发送、接收与反馈总结在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任是界定分析分母和结论边界。先列出它包含的入口、对象和退出条件，再用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时排除只凭类名或流程图得出的结论。
+
+处理 5.4.6 输入事件的发送、接收与反馈总结 时先执行“注入单一故障”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“定位首个分叉”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.4.6 输入事件的发送、接收与反馈总结 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.5 关于输入系统的其他重要话题
 
-**机制边界 24/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.5 关于输入系统的其他重要话题在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任要翻译成一个可推翻的运行合同：明确入口、线程或进程、状态拥有者、正常结果和首个错误返回，再由event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时复核。
+
+处理 5.5 关于输入系统的其他重要话题 时先执行“定位首个分叉”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“恢复同输入重放”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.5 关于输入系统的其他重要话题 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.5.1 输入事件ANR的产生
 
-**机制边界 25/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.5.1 输入事件ANR的产生在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任要连接system_server记录、调度队列和目标进程回调。保存记录对象与进程身份，制造超时或死亡后检查队列推进、死亡清理和后续请求是否恢复。
+
+处理 5.5.1 输入事件ANR的产生 时先执行“恢复同输入重放”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“锁定历史基线”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.5.1 输入事件ANR的产生 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.5.2 焦点窗口的确定
 
-**机制边界 26/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.5.2 焦点窗口的确定在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任要区分控制策略与音频数据平面。保存流、设备、缓冲区指针、处理线程和回调结果，注入欠载或路由变化后检查声音之外的状态恢复。
+
+处理 5.5.2 焦点窗口的确定 时先执行“锁定历史基线”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“复现正常轨迹”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.5.2 焦点窗口的确定 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.5.3 以软件方式模拟用户操作
 
-**机制边界 27/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.5.3 以软件方式模拟用户操作在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任要翻译成一个可推翻的运行合同：明确入口、线程或进程、状态拥有者、正常结果和首个错误返回，再由event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时复核。
+
+处理 5.5.3 以软件方式模拟用户操作 时先执行“复现正常轨迹”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“注入单一故障”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
+
+该节点的四级证据是：保留 5.5.3 以软件方式模拟用户操作 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
 ### 5.6 本章小结
 
-**机制边界 28/28。** 把本节点接入“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”主线：先定位入口和版本，再标出调用线程、服务进程、关键对象与持久状态；最后用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时验证成功、失败和释放路径。
+5.6 本章小结在“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”中的责任是界定分析分母和结论边界。先列出它包含的入口、对象和退出条件，再用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时排除只凭类名或流程图得出的结论。
 
-## 机制推演：入口、状态与反馈
+处理 5.6 本章小结 时先执行“注入单一故障”：在 android-4.2.2_r1 中定位真实入口，把PID/TID、对象身份和输入写入记录。进入“定位首个分叉”后仅改变一个条件，观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中哪一项先偏离。
 
-先从公开入口建立调用表，而不是从熟悉的类名倒推结论。每一行至少记录调用方进程和线程、目标对象、同步或异步语义、跨边界的数据形态、成功返回以及错误返回。对于贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈，入口可能经过Java API、JNI、Binder代理、system_server服务、Native守护进程或内核设备；只有在Android 4.2.2同一标签中找到连续路径，才算完成一次机制证明。
+该节点的四级证据是：保留 5.6 本章小结 这一目录坐标；解释它如何参与贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈；在全节点机制图中选中它并操作阶段反馈；最后在练习中凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复同输入结果。
 
-第二张表记录状态与所有权。把服务记录、队列节点、窗口、缓冲区、引用计数、文件描述符或持久化文件绑定到创建者、当前持有者和释放者。正常路径之外，主动结束调用方或服务进程、延迟队列消费、破坏输入或耗尽资源，并观察event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时是否出现确定的错误和回收结果。若旧对象仍能影响新请求，说明身份或生命周期边界尚未厘清。
-
-第三张表记录反馈闭环。异步机制不能以“请求已发出”作为成功：必须追踪接收、处理、完成通知和调用方状态更新；同步机制也要区分业务失败、Binder/系统调用失败与超时。把时间戳、PID/TID、对象句柄和结果码放在一条时间线上，才能判断问题发生在调度、传输、状态机、资源竞争还是版本差异。
-
-最后建立跨卷对照。卷I给出183个Native Framework目录节点，卷II给出164个非UI Java Framework目录节点，卷III给出178个UI Framework目录节点。同名Binder、MessageQueue或系统服务在2.2、4.0.1和4.2.2中的职责与文件位置可能变化；迁移时保持输入和故障样本不变，一次只替换一层，并明确哪些历史行为仍成立、哪些已经被重构。
-
-## 最小复现实验
+## 章专属复现实验
 
 ```bash
+mkdir -p aosp-android-4.2.2_r1
+cd aosp-android-4.2.2_r1
 repo init -u https://android.googlesource.com/platform/manifest -b android-4.2.2_r1
 repo sync -c
-source build/envsetup.sh
-# 为“卷III 第5章 深入理解Android输入系统”选择匹配版本的产品并保存构建指纹、入口和失败日志
+
+# 只在可恢复的同版本模拟器或测试机采集
+adb shell getevent
+adb shell dumpsys input
 ```
 
-先固定manifest、标签、主机工具链、产品目标和设备映像。每次实验只改变一个条件，输出至少包含PID/TID、关键对象或缓冲区、状态迁移、返回值和释放结果。
+运行前保存主机工具链、manifest与产品目标；这些历史分支通常需要隔离的旧工具链环境。诊断命令只在可恢复模拟器或测试机执行，账号、媒体与设备标识使用隔离样本；现代设备输出不得冒充android-4.2.2_r1结果。
 
-```text
-checkpoint=dav-v3-05-input-system
-source_tag=android-4.2.2_r1
-entry=卷III 第5章 深入理解Android输入系统
-success_evidence=event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时
-failure=version-mismatch | stalled-thread | dead-owner | corrupt-state
-```
+<Callout type="trap" title="本章核心陷阱">
+  只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态。先恢复android-4.2.2_r1的真实入口、对象身份和失败返回，再讨论当前Android迁移。
+</Callout>
 
-```text
-acceptance=目录节点全部映射 + 单版本调用链 + 所有权闭环 + 失败可复现
-migration=保持输入/错误/释放不变量，一次替换一层
-rollback=任一不变量失败即恢复历史基线并记录差异
-```
+<Callout type="trap" title="跨卷同名不等于同一实现">
+  卷III 第5章
+  深入理解Android输入系统只在自己的历史标签中成立；Binder、MessageQueue、SystemServer、Audio或窗口机制跨卷复用名称时，必须分别核对文件路径、线程责任和错误语义。
+</Callout>
 
-## 三步交互实验
+<Callout type="warning" title="系统实验安全边界">
+  刷机、Root、系统映像、gdb、getevent与输入注入仅用于可恢复测试环境。先备份，再记录回滚条件；任何真实用户数据都不得进入截图、日志或练习答案。
+</Callout>
 
-<Stepper>
-  <Step title="1. 锁定目录与版本">逐项连接28个正式节点，标出源码标签、入口和跨层边界；先预测最早失败断点。<DavSeriesPipelineLab /></Step>
-  <Step title="2. 注入单变量故障">切换错误标签、线程停滞、进程死亡或状态损坏，一次只改变一个条件并保存前后状态。<DavSeriesExperimentLab /></Step>
-  <Step title="3. 通过五项证据门">用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时核对目录、版本、调用、所有权与迁移；任一缺项都退回研究阶段。<DavSeriesEvidenceLab /></Step>
-</Stepper>
-
-<Callout type="trap">**核心陷阱。** 只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态。修复时先恢复本卷版本、真实入口、对象身份和失败返回，再补现代迁移。</Callout>
-
-<Callout type="trap">**跨卷错位。** 卷I是Android 2.2 Native Framework，卷II是Android 4.0.1非UI Java Framework，卷III是Android 4.2.2 UI Framework；同名机制必须分别验证后才能比较。</Callout>
-
-<Callout type="warning">刷机、Root、系统映像、gdb与输入注入实验只在可恢复测试设备或模拟器上进行。日志、账户、媒体、密钥和用户数据必须使用隔离样本。</Callout>
-
-## 证据解释
-
-第一份是版本证据：manifest、AOSP标签、构建目标、构建指纹和产物哈希必须一致。目录或类名相同不代表行为相同；Android 2.2、4.0.1和4.2.2之间的进程职责、接口参数、队列实现和源码路径都可能变化，跨版本拼接只能形成假流程。
-
-第二份是调用证据：从“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”的公开入口前向跟踪，每跨线程、进程、JNI、Binder或内核边界，都记录双方身份、数据格式、事务或函数编号、时序与错误。event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时必须让另一位读者在相同标签停到相同断点。
-
-第三份是所有权证据：请求结束、调用方死亡、服务重启、超时或输入损坏时，对象、队列节点、缓冲区、文件描述符、锁和持久状态必须有确定归宿。只画“谁调用谁”而不回答“谁释放、谁恢复”，无法解释泄漏、死锁、迟到回调和陈旧状态。
-
-第四份是迁移证据：现代Android可能以ART、Treble、AIDL稳定接口、新窗口/输入架构或新构建工具替代历史机制。迁移时保留相同输入、故障与验收条件，一次只替换一个边界；功能、线程、错误、性能或释放语义变化时，先记录差异和回退，再更新课程结论。
-
-## 本章回顾
-
-从一个真实输入开始，依次回答它属于哪个源码标签、入口在哪里、跨过哪些线程进程、每层保存什么状态、错误如何返回、资源由谁释放。再用event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放成功和失败路径；不能在单一版本独立复现的结论不得交付。
-
-## 复习与独立交接
+## 练习、答案与四级证据
 
 <Exercises>
-**问题 1**：为什么本页必须保留28个目录节点？
-<Answer>这些节点共同构成“贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈”的入口、机制、边界与证据链；删去节点会使三卷的正式目录分母或调用链断裂。</Answer>
 
-**问题 2**：本页的最小正确性合同是什么？
-<Answer>同一源码标签、构建目标与输入下，功能、线程进程、错误和资源释放必须确定，并由event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时证明。</Answer>
+**问题 1：历史边界。** 怎样证明本页没有把当前Android实现倒灌到 android-4.2.2_r1？
 
-**问题 3**：怎样设计能推翻错误理解的反例？
-<Answer>先让“只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态”成立，再分别注入版本错配、线程停滞、进程死亡和状态损坏；出现错序、泄漏、迟到回调或不可复现即失败。</Answer>
+<Answer>
+  从[官方标签表](https://source.android.com/docs/setup/reference/build-numbers)锁定版本，只引用[该标签源码](https://android.googlesource.com/platform/frameworks/base/+/android-4.2.2_r1/)解释历史文件与接口；当前架构另列迁移记录。若同名对象路径、职责或返回语义改变，就保留差异而不是拼接流程。
+</Answer>
 
-**问题 4**：为什么类名和静态流程图不够？
-<Answer>它们不能证明运行标签、线程进程、对象身份、队列时序、错误返回与释放结果，必须结合构建产物和运行日志。</Answer>
+**问题 2：逐节点证据。** 本页 28 个正式坐标如何通过出现、解释、实验与练习四级验收？
 
-**问题 5**：怎样从历史卷迁移到现代AOSP？
-<Answer>先保存Android 4.2.2行为基线，再保持输入和故障样本不变，一次替换一层，比较功能、线程、错误、性能与释放并保留回退。</Answer>
+<Answer>
+  - **第5章
+  深入理解Android输入系统**：在“锁定历史基线”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.1
+  初识Android输入系统**：在“复现正常轨迹”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.1.1
+  getevent与sendevent工具**：在“注入单一故障”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.1.2
+  Android输入系统简介**：在“定位首个分叉”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.1.3
+  IMS的构成**：在“恢复同输入重放”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.2
+  原始事件的读取与加工**：在“锁定历史基线”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.2.1
+  基础知识：INotify与Epoll**：在“复现正常轨迹”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.2.2
+  InputReader的总体流程**：在“注入单一故障”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.2.3
+  深入理解EventHub**：在“定位首个分叉”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.2.4
+  深入理解InputReader**：在“恢复同输入重放”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.2.5
+  原始事件的读取与加工总结**：在“锁定历史基线”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.3
+  输入事件的派发**：在“复现正常轨迹”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.3.1
+  通用事件派发流程**：在“注入单一故障”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.3.2
+  按键事件的派发**：在“定位首个分叉”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.3.3
+  DispatcherPolicy与InputFilter**：在“恢复同输入重放”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.3.4
+  输入事件的派发总结**：在“锁定历史基线”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.4
+  输入事件的发送、接收与反馈**：在“复现正常轨迹”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.4.1
+  深入理解InputChannel**：在“注入单一故障”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.4.2
+  连接InputDispatcher和窗口**：在“定位首个分叉”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.4.3
+  事件的发送**：在“恢复同输入重放”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.4.4
+  事件的接收**：在“锁定历史基线”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.4.5
+  事件的反馈与发送循环**：在“复现正常轨迹”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.4.6
+  输入事件的发送、接收与反馈总结**：在“注入单一故障”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.5
+  关于输入系统的其他重要话题**：在“定位首个分叉”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.5.1
+  输入事件ANR的产生**：在“恢复同输入重放”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.5.2
+  焦点窗口的确定**：在“锁定历史基线”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.5.3
+  以软件方式模拟用户操作**：在“复现正常轨迹”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+  - **5.6
+  本章小结**：在“注入单一故障”保存入口与状态，注入只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态后恢复，并以event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时重放。
+</Answer>
 
-**问题 6**：独立交接需要哪些材料？
-<Answer>需要三卷书目与版本卡、完整目录映射、构建命令和产物、event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时、失败实验、迁移账本和回退条件。</Answer>
+**问题 3：故障恢复。** 面对只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态，如何确认修复而不是掩盖症状？
+
+<Answer>
+  先保存event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时中的正常基线，再只注入一个错误条件并记录首个分叉。恢复真实标签、状态所有者或消费路径后，以完全相同输入重放；只有在android-4.2.2_r1固定输入下，贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈的入口身份、状态拥有者、成功结果、错误返回和资源释放均可重复观察重新成立且实验可重置，才算通过。
+</Answer>
+
 </Exercises>
 
+## 术语复核与本章回顾
+
 <Glossary>
-  <GlossaryItem term="版本基线">把源码标签、构建目标、工具链、设备映像与产物哈希绑定为一次可复现分析的记录。</GlossaryItem>
-  <GlossaryItem term="调用证据">从公开入口沿线程、进程、JNI、Binder或内核边界保存输入输出和对象身份。</GlossaryItem>
-  <GlossaryItem term="状态所有权">说明服务、线程、队列、窗口、缓冲区、文件描述符由谁创建、迁移与释放。</GlossaryItem>
-  <GlossaryItem term="失败断点">通过进程死亡、超时、错误输入或资源耗尽暴露机制边界的位置。</GlossaryItem>
-  <GlossaryItem term="迁移账本">逐项记录历史版本机制、现代替代、行为差异、验证结果与回退条件的清单。</GlossaryItem>
+  <GlossaryItem term="版本基线">
+    版本基线在本页用于锁定android-4.2.2_r1的事实坐标与允许输入。
+  </GlossaryItem>
+  <GlossaryItem term="正常轨迹">
+    正常轨迹在本页用于标出贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈由谁创建、修改与释放状态。
+  </GlossaryItem>
+  <GlossaryItem term="首错断点">
+    首错断点在本页用于保存能复现正常路径的对象身份和时序。
+  </GlossaryItem>
+  <GlossaryItem term="对象所有权">
+    对象所有权在本页用于暴露只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态发生的第一个边界。
+  </GlossaryItem>
+  <GlossaryItem term="恢复条件">
+    恢复条件在本页用于声明故障后重新接收请求所需的恢复条件。
+  </GlossaryItem>
+  <GlossaryItem term="回归证据">
+    回归证据在本页用于让独立读者凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时得到同一结论。
+  </GlossaryItem>
 </Glossary>
+
+完成卷III 第5章 深入理解Android输入系统意味着：能解释贯通Linux事件、EventHub、InputReader、InputDispatcher、InputChannel到窗口反馈，能操作全节点图与诊断切片，能制造只追踪触摸到View，遗漏设备发现、策略过滤、反馈和超时状态，还能凭event设备、原始/映射事件、焦点窗口、派发队列、socket通道、finish信号、ANR计时恢复、复位和交接，而不是只在目录中找到关键词。
+
+## 阅读导航
 
 [← 上一页：卷III 第4章 深入理解WindowManagerService](/learn/deep-android-volumes/22-v3-04/dav-v3-04-window-manager-service) · [下一页：卷III 第6章 深入理解控件系统 →](/learn/deep-android-volumes/24-v3-06/dav-v3-06-view-system)
 
-<Attribution adaptedFrom="《深入理解Android》Framework卷I-III" adaptedUrl="https://discx.libtop.com/book/7031561197875" />
+<Attribution
+  mode="independent-rewrite"
+  sourceBasis="outline-only"
+  workTitle="张大伟《深入理解Android：卷III》（机械工业出版社，2015，Android 4.2.2）"
+  adaptedUrl="https://discx.libtop.com/book/7031561197875"
+/>
