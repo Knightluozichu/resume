@@ -1,367 +1,264 @@
 ---
-title: 代理模式
+title: "代理模式"
 type: A
-section: 结构型模式
+section: "结构型模式"
 order: 17
-description: 控制对对象的访问——延迟加载、权限校验、远程访问，代理替你把关。
+description: "代理模式：提供与真实对象相同的替身，以控制访问、延迟创建或跨边界调用"
 demo: true
 math: false
-sourceUrl: >-
-  https://www.pearson.com/en-us/subject-catalog/p/design-patterns-elements-of-reusable-object-oriented-software/P200000009480/9780321700698
+sourceUrl: "https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
 draft: false
 ---
 
-import { ProxyPatternDiagram } from "@/components/mdx/design-patterns/diagrams/proxy-pattern-diagram";
 import {
-  OfficialDesignPatternsProxyMapLab,
-  OfficialDesignPatternsProxyExperimentLab,
-  OfficialDesignPatternsProxyEvidenceLab,
+  ProxyStructureLab,
+  ProxyChangeLab,
+  ProxyEvidenceLab,
 } from "@/components/mdx/design-patterns/diagrams/proxy";
 import {
   Objectives,
   Callout,
-  Attribution,
+  Term,
   Glossary,
   GlossaryItem,
-  Term,
   Exercises,
   Answer,
   Stepper,
   Step,
+  Attribution,
 } from "@/components/mdx/mdx-components";
-
-{/* OFFICIAL_COURSE_ENHANCEMENT */}
 
 <Objectives>
 
-- 能解释代理模式的输入、核心结构、状态变化和输出合同
-- 能绘制并修改代理模式的最小模型，比较至少一种替代方案
-- 能复现正常、边界和单故障样本，定位第一条证据分叉
-- 能根据成本与风险判断方案适用范围，并完成清理重建
+- 能从“图片查看器要在进入视口时才加载远端大图，并对失败提供可重试状态”识别 代理模式 真正处理的变化轴
+- 能解释 ImageSubject、LazyImageProxy、RemoteImage 的引用方向与协作责任
+- 能修改 TypeScript 最小实现，并验证“代理显示成功时必须对应已校验的真实图片版本，而非半加载占位数据”
+- 能用“代理吞掉网络失败并返回旧数据，会让相同接口产生不可见的一致性差异”作为拒绝或简化方案的信号
 
 </Objectives>
 
-## 为什么只记结论不足以掌握代理模式
+## 直觉：从变化压力出发，而不是从模式名称出发
 
-学习“代理模式”时，第一步不是记住结论，而是冻结输入、上下文、版本和成功标准。只有这些条件明确，代理模式的含义才不会随着样例变化。正文已有的概念说明要与结构图、运行轨迹和失败样本互相印证，不能只凭最终输出看似正确就宣布完成。
+客户端直接创建远端图片会在首屏承担网络延迟，也重复处理缓存和失败 因此，代理模式 的第一步不是画类图，而是写清 **图片查看器要在进入视口时才加载远端大图，并对失败提供可重试状态** 中哪项变化会扩散、现有结构怎样承担成本，以及什么观察足以拒绝模式。
 
-结构分析从意图开始：列出参与者、职责、连接方向、生命周期和所有权，再沿正常路径追踪数据或控制流。每一条边都要说明为什么存在、谁创建、谁消费、谁负责清理；如果边界被跨越，必须能在证据中找到第一处异常。
+在实验前先预测：沿 请求显示 → 检查缓存 → 延迟加载 → 委托真实对象 → 返回或失败 运行时，哪条依赖最先暴露变化；随后只调整一个参与者或连接，保存代码结果和拒绝原因，最后重置到相同基线。
 
-机制验证要把适用性写成可以执行的条件。正常样本证明主路径，恰好边界样本验证等号和空值，单故障样本只破坏一个假设。三类样本使用同一份观察指标，避免因为测试口径变化而把偶然结果误认成规律。
+<Callout type="info" title="来源范围与独立教学重写">
+  [InformIT
+  官方页面](https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610)确认四位作者、1994
+  年第一版、23 个模式、完整目录，并提供获授权的模式样章与示例代码；[Pearson
+  书目页](https://www.pearson.com/en-us/subject-catalog/p/design-patterns-elements-of-reusable-object-oriented-software/P200000009480/9780321700698)用于交叉核对版本，[GoF
+  作者回顾](https://www.informit.com/articles/article.aspx?p=1327762)用于理解后续评价，[TypeScript
+  官方手册](https://www.typescriptlang.org/docs/handbook/2/classes.html)用于核对本站代码语法。项目没有原书完整正文，本页不翻译或复现原书；中文解释、TypeScript
+  实现、交互与练习均为独立教学重写。
+</Callout>
 
-成本分析同时记录时间、空间、延迟、耦合、可维护性和不可逆操作。结构不是一句“可能失败”，而是可复现输入、预期停点、实际轨迹、错误分类与清理步骤。任何自动重试都要有次数、预算和幂等边界。
+## 问题合同与术语
 
-方案比较不能只列优点。需要给出直接实现、当前方案和至少一个替代方案，逐项比较复杂度、扩展点、故障隔离和团队认知成本。当问题规模很小或变化轴稳定时，更简单的实现往往更好；模式与框架必须由真实变化压力证明。
+**意图。** 提供与真实对象相同的替身，以控制访问、延迟创建或跨边界调用。**适用边界。** 访问真实对象需要控制成本、权限、位置或生命周期，且替身能遵守同一合同。本页验收不变量是：**代理显示成功时必须对应已校验的真实图片版本，而非半加载占位数据**。
 
-实现阶段把大结论拆成可检查的中间产物：配置快照、结构清单、状态转移、输入输出样本、日志摘要和测试结果。每个产物带来源与生成命令，下一阶段只消费已通过门禁的版本，避免旧缓存或隐式默认值污染结论。
+<Term def={"代理模式在代理模式中用于检查请求显示阶段的责任与证据。"}>
+  代理模式
+</Term>
+、
+<Term def={"ImageSubject在代理模式中用于检查检查缓存阶段的责任与证据。"}>
+  ImageSubject
+</Term>
+、
+<Term def={"LazyImageProxy在代理模式中用于检查延迟加载阶段的责任与证据。"}>
+  LazyImageProxy
+</Term>
+、
+<Term def={"RemoteImage在代理模式中用于检查委托真实对象阶段的责任与证据。"}>
+  RemoteImage
+</Term>
+、
+<Term def={"变化轴在代理模式中用于检查返回或失败阶段的责任与证据。"}>
+  变化轴
+</Term>
+、
+<Term def={"拒绝条件在代理模式中用于检查请求显示阶段的责任与证据。"}>
+  拒绝条件
+</Term>
 
-解释结果时必须区分相关性与因果性、接口承诺与实现细节、设计意图与运行事实。对“协作”的判断要由独立证据支持，并明确适用范围；一旦输入分布、版本、硬件或组织边界改变，就重新运行最小实验。
+## 官方目录结构的逐项解释
 
-复盘从首个分叉开始，而不是从最后一个报错倒推。先比较冻结输入，再比较第一份结构化中间产物，随后检查状态、约束和副作用。这样可以把复杂系统的排错范围收缩到一个阶段，避免在多个层次同时修改造成新的不确定性。
+下面的目录字段采用 GoF 模式目录的标准描述结构来组织独立讲解。每个字段都要连接当前问题、页面专属实验与练习证据；字段名称出现本身不算覆盖。
 
-迁移到真实项目时，先选择一个最小但有代表性的切片，保存改造前基线，再逐步引入“代理模式”中的机制。每一步只改变一个变量并保留回滚点；性能、正确性、安全性和可理解性至少各有一项可量化指标。
+### 模式名称与分类
 
-最终验收要求读者能脱离页面重新画出结构、口述关键链路、实现最小版本、构造一个反例并解释失败位置。若只能复述名词而不能预测中间状态，说明知识仍停留在识记层，需要回到图示和实验重新验证。
+“代理模式”归入结构型模式，名称只用于定位 提供与真实对象相同的替身，以控制访问、延迟创建或跨边界调用，不能替代问题证据。 对“图片查看器要在进入视口时才加载远端大图，并对失败提供可重试状态”先保存基线，再改变一个条件；若出现“代理吞掉网络失败并返回旧数据，会让相同接口产生不可见的一致性差异”，就拒绝 代理模式 方案并回到更简单结构。
 
-本页用<Term def="代理模式连接代理模式的机制、边界与可复查证据。">代理模式</Term>、
+### 意图
 
-<Term def="意图连接代理模式的机制、边界与可复查证据。">意图</Term>、
-<Term def="适用性连接代理模式的机制、边界与可复查证据。">适用性</Term>、
-<Term def="结构连接代理模式的机制、边界与可复查证据。">结构</Term>、
-<Term def="协作连接代理模式的机制、边界与可复查证据。">协作</Term>
-建立统一坐标。先预测这些概念在结构图和运行轨迹中的位置，再操作实验控件；如果结果与预测不一致，停止在首个分叉，不要用后续补丁掩盖早期错误。
+“意图”回答模式想改变什么：提供与真实对象相同的替身，以控制访问、延迟创建或跨边界调用。 对“图片查看器要在进入视口时才加载远端大图，并对失败提供可重试状态”先保存基线，再改变一个条件；若出现“代理吞掉网络失败并返回旧数据，会让相同接口产生不可见的一致性差异”，就拒绝 代理模式 方案并回到更简单结构。
 
-## 权威目录与核心概念逐项对照
+### 别名
 
-- 代理模式
-- 意图
-- 适用性
-- 结构
-- 协作
-- 后果
-- 实现
-- 相关模式
+“别名”在本页处理为：没有需要单独记忆的稳定别名；评审时使用目录中的正式名称，避免用近似称呼混淆责任。 对“图片查看器要在进入视口时才加载远端大图，并对失败提供可重试状态”先保存基线，再改变一个条件；若出现“代理吞掉网络失败并返回旧数据，会让相同接口产生不可见的一致性差异”，就拒绝 代理模式 方案并回到更简单结构。
 
-## 三视图实验：结构、变量与证据
+### 动机
+
+“动机”从具体压力出发：客户端直接创建远端图片会在首屏承担网络延迟，也重复处理缓存和失败。 对“图片查看器要在进入视口时才加载远端大图，并对失败提供可重试状态”先保存基线，再改变一个条件；若出现“代理吞掉网络失败并返回旧数据，会让相同接口产生不可见的一致性差异”，就拒绝 代理模式 方案并回到更简单结构。
+
+### 适用性
+
+“适用性”要求同时满足：访问真实对象需要控制成本、权限、位置或生命周期，且替身能遵守同一合同。 对“图片查看器要在进入视口时才加载远端大图，并对失败提供可重试状态”先保存基线，再改变一个条件；若出现“代理吞掉网络失败并返回旧数据，会让相同接口产生不可见的一致性差异”，就拒绝 代理模式 方案并回到更简单结构。
+
+### 结构
+
+“结构”由 ImageSubject、LazyImageProxy、RemoteImage 以及它们之间的引用方向共同确定。 对“图片查看器要在进入视口时才加载远端大图，并对失败提供可重试状态”先保存基线，再改变一个条件；若出现“代理吞掉网络失败并返回旧数据，会让相同接口产生不可见的一致性差异”，就拒绝 代理模式 方案并回到更简单结构。
+
+### 参与者
+
+“参与者”逐一说明 ImageSubject、LazyImageProxy、RemoteImage 谁保存状态、谁发起调用以及谁承担变化。 对“图片查看器要在进入视口时才加载远端大图，并对失败提供可重试状态”先保存基线，再改变一个条件；若出现“代理吞掉网络失败并返回旧数据，会让相同接口产生不可见的一致性差异”，就拒绝 代理模式 方案并回到更简单结构。
+
+### 协作
+
+“协作”的运行协议是：Proxy 接收 Subject 调用，处理访问策略后创建或委托 RealSubject。 对“图片查看器要在进入视口时才加载远端大图，并对失败提供可重试状态”先保存基线，再改变一个条件；若出现“代理吞掉网络失败并返回旧数据，会让相同接口产生不可见的一致性差异”，就拒绝 代理模式 方案并回到更简单结构。
+
+### 后果
+
+“后果”必须连同收益和成本记录：客户端接口稳定，但额外跳转会隐藏延迟、远程失败或权限决策。 对“图片查看器要在进入视口时才加载远端大图，并对失败提供可重试状态”先保存基线，再改变一个条件；若出现“代理吞掉网络失败并返回旧数据，会让相同接口产生不可见的一致性差异”，就拒绝 代理模式 方案并回到更简单结构。
+
+### 实现
+
+“实现”落地时遵守：保持错误与异步语义可见，避免让远程调用伪装成无成本本地属性。 对“图片查看器要在进入视口时才加载远端大图，并对失败提供可重试状态”先保存基线，再改变一个条件；若出现“代理吞掉网络失败并返回旧数据，会让相同接口产生不可见的一致性差异”，就拒绝 代理模式 方案并回到更简单结构。
+
+### 示例代码
+
+“示例代码”使用本页 TypeScript 最小切片验证“代理显示成功时必须对应已校验的真实图片版本，而非半加载占位数据”，代码是独立教学示例。 对“图片查看器要在进入视口时才加载远端大图，并对失败提供可重试状态”先保存基线，再改变一个条件；若出现“代理吞掉网络失败并返回旧数据，会让相同接口产生不可见的一致性差异”，就拒绝 代理模式 方案并回到更简单结构。
+
+### 已知应用
+
+“已知应用”可在这些场景识别：虚拟加载、远程服务、权限检查、缓存与引用计数都可用代理，但名称相似不构成采用证据。 对“图片查看器要在进入视口时才加载远端大图，并对失败提供可重试状态”先保存基线，再改变一个条件；若出现“代理吞掉网络失败并返回旧数据，会让相同接口产生不可见的一致性差异”，就拒绝 代理模式 方案并回到更简单结构。
+
+### 相关模式
+
+“相关模式”用于比较边界：装饰器增加职责；适配器改变接口；外观提供更高层的子系统入口。 对“图片查看器要在进入视口时才加载远端大图，并对失败提供可重试状态”先保存基线，再改变一个条件；若出现“代理吞掉网络失败并返回旧数据，会让相同接口产生不可见的一致性差异”，就拒绝 代理模式 方案并回到更简单结构。
+
+## TypeScript 最小实现与变更实验
+
+以下代码只承担 代理模式 的一条协作切片。先运行基线，再替换 LazyImageProxy 或注入非法 revision；如果调用者必须认识具体实现，或者“代理显示成功时必须对应已校验的真实图片版本，而非半加载占位数据”不再成立，就记录失败而不是继续增加抽象。
+
+```ts
+interface LazyImageProxy {
+  apply(input: Readonly<{ revision: number; payload: string }>): string;
+}
+
+class RemoteImage implements LazyImageProxy {
+  apply(input: Readonly<{ revision: number; payload: string }>) {
+    if (input.revision < 1) throw new Error("invalid revision");
+    return `Proxy:${input.revision}:${input.payload}`;
+  }
+}
+
+class ImageSubject {
+  constructor(private readonly collaborator: LazyImageProxy) {}
+  run(payload: string) {
+    return this.collaborator.apply({ revision: 1, payload });
+  }
+}
+```
+
+修改任务：增加一个与 RemoteImage 同合同的新实现，只改扩展点与装配位置；随后故意绕过 ImageSubject，比较编译错误、运行结果和依赖传播。保持错误与异步语义可见，避免让远程调用伪装成无成本本地属性。
+
+## 三视图模式实验
 
 <Stepper>
-  <Step title="第一步：冻结结构并先预测">
-    先预测参与者、连接方向与关键状态，再点击结构节点核对。
-    <OfficialDesignPatternsProxyMapLab />
+  <Step title="1. 参与者结构">
+    先点选 检查缓存 与不同重构，解释 ImageSubject、LazyImageProxy、RemoteImage
+    中谁拥有状态、谁可替换、谁负责拒绝。
+    <ProxyStructureLab />
   </Step>
-  <Step title="第二步：只改变一个变量">
-    保持其他条件不变，移动覆盖率或风险滑块，观察门禁变化。
-    <OfficialDesignPatternsProxyExperimentLab />
+  <Step title="2. 变更传播">
+    切到“新增变化”和“误用反例”，观察 代理模式 的耦合、成本与可追踪性怎样联动。
+    <ProxyChangeLab />
   </Step>
-  <Step title="第三步：注入单故障并保存证据">
-    注入一个边界故障，记录第一处偏离、拒绝原因和恢复条件。
-    <OfficialDesignPatternsProxyEvidenceLab />
+  <Step title="3. 权衡证据">
+    保存一次通过轨迹和一次拒绝轨迹，再重置；最终判断必须能解释
+    客户端接口稳定，但额外跳转会隐藏延迟、远程失败或权限决策。
+    <ProxyEvidenceLab />
   </Step>
 </Stepper>
 
-<Callout type="trap">
-  <strong>误区：</strong>
-  看到最终结果正确就认为机制正确。中间状态可能已经偏离，只是被后续默认值或重试偶然修补。应保存首个结构化产物并逐阶段比较。
+## 常见误区与反例
+
+<Callout type="trap" title="代理模式 的拒绝信号">
+  代理吞掉网络失败并返回旧数据，会让相同接口产生不可见的一致性差异。出现该信号时，删除一层结构并重跑
+  请求显示 → 检查缓存 → 延迟加载 → 委托真实对象 →
+  返回或失败；模式名称不能成为保留复杂度的理由。
 </Callout>
 
-<Callout type="trap">
-  <strong>误区：</strong>
-  为了使用模式或框架而制造抽象。若变化轴、失败边界和替代方案没有写清，新增层次只会扩大认知成本和故障面。
-</Callout>
-
-## 可复现的最小实现
-
-先把决策记录写成机器可读结构：
-
-```json
-{
-  "unit": "代理模式",
-  "inputFrozen": true,
-  "scenario": "normal | boundary | single-fault",
-  "firstDivergence": null,
-  "cleanupRequired": true
-}
-```
-
-再用同一条执行链处理三类样本：
-
-```ts
-type Evidence = { stage: string; expected: string; actual: string };
-
-function verify(sample: unknown, expected: readonly Evidence[]) {
-  const trace = runFromCleanState(sample);
-  return expected.find((item, index) => trace[index]?.actual !== item.expected);
-}
-```
-
-最后保存回归门禁，禁止失败样本静默通过：
-
-```text
-normal      -> complete, invariant preserved
-boundary    -> complete or explicit rejection
-singleFault -> stop at first divergence, no stale output
-```
-
-用统一评分解释实验结果：
-
-$$
-Q = C_{correct} + C_{trace} + C_{recover} - R_{residual}
-$$
-
-$$
-C_{coverage} = \frac{N_{verified}}{N_{official}}
-$$
-
-$$
-R_{residual} = P(failure) \times I(impact)
-$$
-
-$$
-Accept = (C_{coverage} \ge 0.90) \land (R_{residual} \le R_{budget})
-$$
-
-## 本章回顾
-
-- 代理模式必须绑定冻结输入和明确成功标准。
-- 意图必须能画成结构并沿边追踪责任。
-- 适用性要由正常、边界和单故障样本共同验证。
-- 结构必须保存第一处偏离和清理重建步骤。
-- 协作决定方案是否可以进入下一阶段。
-
-<Exercises>
-
-**问题 1**：为“代理模式”写出最小输入合同，并指出一个不能省略的边界条件。
-
-<Answer>
-  输入合同至少包含样本身份、版本、配置、成功标准和清理方式；边界条件必须能改变结构或状态，而不是只换一段描述。
-</Answer>
-
-**问题 2**：构造一个只破坏“适用性”的单故障样本，第一条预期证据是什么？
-
-<Answer>
-  先冻结正常轨迹，只改变该条件；第一条证据应是最早依赖它的结构化中间产物，而不是最终错误消息。
-</Answer>
-
-**问题 3**：什么情况下不应采用本页方案？
-
-<Answer>
-  当变化轴稳定、直接实现更清晰、额外层次无法降低风险或提供独立测试边界时，应选择更简单方案并记录重新评估触发条件。
-</Answer>
-
-</Exercises>
+另一个易错点是把结构相似当作语义相同。装饰器增加职责；适配器改变接口；外观提供更高层的子系统入口；比较时必须同时写出谁触发变化、谁持有状态、失败如何传播，以及替代方案是否更小。
 
 ## 术语表
 
 <Glossary>
   <GlossaryItem term="代理模式">
-    代理模式用于描述“代理模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+    代理模式 在“请求显示”阶段使用的可复核术语。
   </GlossaryItem>
-  <GlossaryItem term="意图">
-    意图用于描述“代理模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  <GlossaryItem term="ImageSubject">
+    代理模式 在“检查缓存”阶段使用的可复核术语。
   </GlossaryItem>
-  <GlossaryItem term="适用性">
-    适用性用于描述“代理模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  <GlossaryItem term="LazyImageProxy">
+    代理模式 在“延迟加载”阶段使用的可复核术语。
   </GlossaryItem>
-  <GlossaryItem term="结构">
-    结构用于描述“代理模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  <GlossaryItem term="RemoteImage">
+    代理模式 在“委托真实对象”阶段使用的可复核术语。
   </GlossaryItem>
-  <GlossaryItem term="协作">
-    协作用于描述“代理模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  <GlossaryItem term="变化轴">
+    代理模式 在“返回或失败”阶段使用的可复核术语。
+  </GlossaryItem>
+  <GlossaryItem term="拒绝条件">
+    代理模式 在“请求显示”阶段使用的可复核术语。
   </GlossaryItem>
 </Glossary>
 
-<Attribution
-  adaptedFrom="Erich Gamma、Richard Helm、Ralph Johnson、John Vlissides著《Design Patterns: Elements of Reusable Object-Oriented Software》，Addison-Wesley，1994，ISBN 9780201633610 · 独立教学重构"
-  adaptedUrl="https://www.pearson.com/en-us/subject-catalog/p/design-patterns-elements-of-reusable-object-oriented-software/P200000009480/9780321700698"
-/>
+## 练习与答案
 
-<Objectives>
+<Exercises>
 
-- 理解代理模式如何控制对象访问
-- 掌握虚代理、远程代理、保护代理的区别
-- 能用虚代理实现图片懒加载
+1. **目录字段复核。** 用当前案例逐项说明 模式名称与分类、意图、别名、动机、适用性、结构、参与者、协作、后果、实现、示例代码、已知应用、相关模式；每项至少给出一个对象、一次调用或一条可观察后果。
 
-</Objectives>
+<Answer>
+  代理模式
+  的复核从“图片查看器要在进入视口时才加载远端大图，并对失败提供可重试状态”开始。模式名称与分类定位结构型模式；意图是提供与真实对象相同的替身，以控制访问、延迟创建或跨边界调用；别名边界为没有需要单独记忆的稳定别名；评审时使用目录中的正式名称；动机来自客户端直接创建远端图片会在首屏承担网络延迟，也重复处理缓存和失败；适用性要求访问真实对象需要控制成本、权限、位置或生命周期，且替身能遵守同一合同；结构和参与者是ImageSubject、LazyImageProxy、RemoteImage；协作规则为Proxy
+  接收 Subject 调用，处理访问策略后创建或委托
+  RealSubject；后果是客户端接口稳定，但额外跳转会隐藏延迟、远程失败或权限决策；实现遵循保持错误与异步语义可见，避免让远程调用伪装成无成本本地属性；示例代码验证代理显示成功时必须对应已校验的真实图片版本，而非半加载占位数据；已知应用包括虚拟加载、远程服务、权限检查、缓存与引用计数都可用代理；相关模式比较为装饰器增加职责；适配器改变接口；外观提供更高层的子系统入口。
+</Answer>
 
-## 痛点场景：图片加载
+2. **代码变更。** 为 LazyImageProxy 增加一个实现，并证明主流程不需要识别它的具体类；再注入“代理吞掉网络失败并返回旧数据，会让相同接口产生不可见的一致性差异”。
 
-APP 要显示一个图片列表，每张图片 5MB。如果一次性全部加载，首屏卡顿严重。
+<Answer>
+  新实现只遵守最小合同并由装配处选择，ImageSubject 继续沿 请求显示 → 检查缓存 →
+  延迟加载 → 委托真实对象 → 返回或失败
+  工作。误用场景必须让实验的因果可追踪下降或让不变量失败；修复后重置并复跑同一输入，不能更换验收条件。
+</Answer>
 
-```typescript
-// 不用代理：所有图片立即加载
-const images = urls.map((url) => new Image(url)); // 每张 5MB，卡死
-```
+3. **方案判断。** 在什么情况下应拒绝 代理模式，选择直接代码或相邻模式？
 
-## 解决方案：延迟加载
+<Answer>
+  当访问真实对象需要控制成本、权限、位置或生命周期，且替身能遵守同一合同不成立，或简单方案已经让“代理显示成功时必须对应已校验的真实图片版本，而非半加载占位数据”可验证时，应拒绝额外层次。装饰器增加职责；适配器改变接口；外观提供更高层的子系统入口；最终决定同时登记采用收益、客户端接口稳定，但额外跳转会隐藏延迟、远程失败或权限决策、删除测试和回退方案。
+</Answer>
 
-```typescript
-// Subject 接口
-interface Image {
-  display(): void;
-}
+</Exercises>
 
-// RealSubject：真正加载图片
-class RealImage implements Image {
-  private data: Buffer | null = null;
+## 本章小结
 
-  constructor(private url: string) {
-    this.loadFromDisk(); // 构造时就加载
-  }
+代理模式 把“图片查看器要在进入视口时才加载远端大图，并对失败提供可重试状态”收敛为 ImageSubject、LazyImageProxy、RemoteImage 的协作合同。学习结果不是能复述定义，而是能修改代码、触发“代理吞掉网络失败并返回旧数据，会让相同接口产生不可见的一致性差异”这一反例、重置实验，并根据 客户端接口稳定，但额外跳转会隐藏延迟、远程失败或权限决策 接受或拒绝方案。
 
-  private loadFromDisk() {
-    console.log(`从磁盘加载 ${this.url}...（5MB）`);
-    this.data = Buffer.alloc(5 * 1024 * 1024);
-  }
+## 前后导航
 
-  display() {
-    console.log(`显示 ${this.url}`);
-  }
-}
-
-// Proxy：延迟加载
-class ProxyImage implements Image {
-  private realImage: RealImage | null = null;
-
-  constructor(private url: string) {}
-
-  display() {
-    if (!this.realImage) {
-      this.realImage = new RealImage(this.url); // 第一次 display 才加载
-    }
-    this.realImage.display();
-  }
-}
-```
-
-使用：
-
-```typescript
-// 创建代理列表——不加载任何图片
-const images = urls.map((url) => new ProxyImage(url));
-
-// 只有滚动到可见的才 display，触发加载
-images[0].display(); // 加载第一张
-// images[1] 还没 display，不加载
-```
-
-<ProxyPatternDiagram />
-
-## 三种代理
-
-| 类型     | 用途                       | 示例                       |
-| -------- | -------------------------- | -------------------------- |
-| 虚代理   | 延迟创建昂贵的对象         | 图片懒加载、数据库连接延迟 |
-| 远程代理 | 访问远程对象（像本地一样） | RPC stub、gRPC client      |
-| 保护代理 | 控制访问权限               | 权限校验后才允许调用       |
-
-<Callout type="tip">
-  代理模式在 Web 开发中无处不在：HTTP 代理、CDN、Nginx 反向代理、JavaScript
-  Proxy 对象——都是「在中间加一层控制」的思想。
-</Callout>
-
-## 代理 vs 装饰器
-
-| 维度     | 代理模式                      | 装饰器模式             |
-| -------- | ----------------------------- | ---------------------- |
-| 结构     | 几乎一样                      | 几乎一样               |
-| 意图     | 控制访问                      | 增强功能               |
-| 创建者   | 代理自己创建/获取 RealSubject | 客户端显式包装         |
-| 生命周期 | RealSubject 可能永远不创建    | 装饰器一定包裹已有对象 |
-
-<Callout type="warn">
-  面试高频：代理和装饰器结构几乎一样，区别在**意图**——代理是「控制访问」，装饰器是「增强功能」。
-</Callout>
-
-## 常见误区
-
-### 误区 1：代理加功能
-
-代理的核心是**控制访问**，不是加功能。如果代理在 display() 前加了缓存逻辑，它更像是装饰器。不过两者边界模糊，实践中混用常见。
-
-### 误区 2：代理必须和 RealSubject 同接口
-
-代理实现 Subject 接口是为了对客户端透明。但有时代理需要额外方法（如 `preload()`），这会破坏透明性。视场景权衡。
-
-### 误区 3：虚代理忘记线程安全
-
-多线程下虚代理的延迟创建可能有竞态条件（两个线程同时检查 null）。需要双重检查锁或同步机制。
-
-## 小结
-
-- 代理 = 控制对象访问，在客户端和 RealSubject 之间加一层
-- 三种类型：虚代理（延迟）、远程代理（跨网络）、保护代理（权限）
-- 与装饰器结构相似，但意图不同：代理控制访问，装饰器增强功能
-- 适合：懒加载、权限控制、远程调用、缓存
+- [上一页：享元模式](/learn/design-patterns/02-structural/flyweight)
+- [下一页：责任链模式](/learn/design-patterns/03-behavioral/chain-of-responsibility)
 
 <Attribution
-  source="GoF《设计模式》+ Head First Design Patterns"
-  license="原创转述"
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Erich Gamma, Richard Helm, Ralph Johnson, John Vlissides, Design Patterns: Elements of Reusable Object-Oriented Software"
+  adaptedUrl="https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
 />
-
-<Glossary>
-
-<GlossaryItem term="代理模式">
-
-为其他对象提供一种代理以控制对这个对象的访问。
-
-</GlossaryItem>
-
-<GlossaryItem term="虚代理">
-
-延迟创建昂贵对象的代理。只有真正需要使用对象时才创建，节省资源。
-
-</GlossaryItem>
-
-<GlossaryItem term="远程代理">
-
-代表一个位于不同地址空间的对象，使客户端可以像访问本地对象一样访问远程对象。
-
-</GlossaryItem>
-
-<GlossaryItem term="保护代理">
-
-控制对象访问权限的代理。在调用前检查调用者是否有权限。
-
-</GlossaryItem>
-
-</Glossary>
