@@ -1,18 +1,18 @@
-import { OfficialCrv18Lab } from "./official-crv18-lab";
+import { CoderMechanismLab } from "./coder-mechanism-lab";
 
-const props = {
+const profile = {
   unitId: "crv18-official-learning-map",
   title: "《码农翻身》权威学习地图",
-  nodes: ["计算机基础", "Java平台", "Web后端", "工程反馈", "语言与成长"],
-  focuses: ["版次", "目录覆盖", "前置依赖", "实验顺序", "总体验收"],
+  family: "book",
+  nodes: ["系统基础", "Java运行时", "Web协议", "工程变更", "语言与成长"],
+  concepts: [],
+  mechanism:
+    "学习地图把 60 个正式单元按计算机基础、Java、Web、代码管理、编程语言和职业精进连接成先机制后应用的依赖路线",
+  success: "《码农翻身》权威学习地图 的输入、机制、输出与复位轨迹一致",
+  failure:
+    "《码农翻身》权威学习地图 在“按标题随机跳读，遇到 Web 或框架问题时无法回到线程、协议和运行时前置模型”处拒绝",
 } as const;
 
-export function Crv18OfficialLearningMapModelLab() {
-  return <OfficialCrv18Lab {...props} mode="model" />;
-}
-export function Crv18OfficialLearningMapFlowLab() {
-  return <OfficialCrv18Lab {...props} mode="flow" />;
-}
-export function Crv18OfficialLearningMapEvidenceLab() {
-  return <OfficialCrv18Lab {...props} mode="evidence" />;
+export function Crv18OfficialLearningMapLab() {
+  return <CoderMechanismLab {...profile} />;
 }
