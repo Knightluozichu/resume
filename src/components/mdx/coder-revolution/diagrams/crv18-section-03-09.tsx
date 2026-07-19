@@ -1,18 +1,18 @@
-import { OfficialCrv18Lab } from "./official-crv18-lab";
+import { CoderMechanismLab } from "./coder-mechanism-lab";
 
-const props = {
+const profile = {
   unitId: "crv18-section-03-09",
   title: "3.9 什么是框架",
-  nodes: ["客户端意图", "协议边界", "服务处理", "数据与扩展", "响应证据"],
-  focuses: ["身份与信任", "消息语义", "并发模型", "扩展策略", "失败恢复"],
+  family: "engineering",
+  nodes: ["启动框架", "读取配置", "创建扩展", "回调应用", "统一收尾"],
+  concepts: ["3.9 什么是框架"],
+  mechanism:
+    "框架提供生命周期、默认控制流和扩展点，应用代码在约定时机被回调；库则通常由应用主动调用",
+  success: "3.9 什么是框架 的输入、机制、输出与复位轨迹一致",
+  failure:
+    "3.9 什么是框架 在“绕过框架生命周期私建关键对象，导致配置、资源释放或横切能力失效”处拒绝",
 } as const;
 
-export function Crv18Section0309ModelLab() {
-  return <OfficialCrv18Lab {...props} mode="model" />;
-}
-export function Crv18Section0309FlowLab() {
-  return <OfficialCrv18Lab {...props} mode="flow" />;
-}
-export function Crv18Section0309EvidenceLab() {
-  return <OfficialCrv18Lab {...props} mode="evidence" />;
+export function Crv18Section0309Lab() {
+  return <CoderMechanismLab {...profile} />;
 }
