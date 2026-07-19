@@ -2,42 +2,283 @@
 
 import { useMemo, useState } from "react";
 
-type LabProps = { title: string; focus: string; stages: string[] };
-const evidenceModes = {
-  contract: { label: "合同", result: "可解释", note: "输入、类型、所有权与输出均已声明。" },
-  boundary: { label: "边界", result: "需分段", note: "容量、版本、区域或失败条件改变结论。" },
-  handoff: { label: "交接", result: "待复现", note: "由另一环境重建结果，差异即进入修订。" },
-} as const;
+type Mode = "map" | "experiment" | "evidence";
+type Scenario = "baseline" | "fault" | "recovery";
 
-export function JctContractMapLab({ title, focus, stages }: LabProps) {
-  const [selected, setSelected] = useState(0);
-  return <section className="my-6 overflow-hidden rounded-md border border-emerald-300 bg-white dark:border-emerald-800 dark:bg-zinc-950">
-    <header className="border-b border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/40"><p className="text-sm font-semibold text-emerald-950 dark:text-emerald-100">{title}</p><p className="mt-1 text-xs text-emerald-800 dark:text-emerald-300">工程焦点：{focus}</p></header>
-    <div className="grid gap-2 p-4 sm:grid-cols-5">{stages.map((stage, index) => <button key={stage} type="button" aria-pressed={selected === index} onClick={() => setSelected(index)} className={"min-h-20 rounded border px-2 py-3 text-left text-xs transition " + (selected === index ? "border-emerald-600 bg-emerald-100 text-emerald-950 dark:bg-emerald-950 dark:text-emerald-100" : "border-zinc-200 bg-zinc-50 text-zinc-700 hover:border-emerald-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300")}><span className="block font-mono text-[11px]">0{index + 1}</span><span className="mt-2 block font-semibold">{stage}</span></button>)}</div>
-    <div className="grid min-h-28 gap-2 border-t border-zinc-200 p-4 sm:grid-cols-4 dark:border-zinc-800" aria-live="polite">{[["source", "冻结输入"], ["type/runtime", stages[selected]], ["resource", "明确所有者"], ["evidence", "命令+输出"]].map(([label, value]) => <div key={label} className="rounded border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900"><p className="font-mono text-[11px] text-zinc-500">{label}</p><p className="mt-2 text-sm font-semibold text-zinc-800 dark:text-zinc-200">{value}</p></div>)}</div>
-  </section>;
-}
+type LabModel = {
+  studio: string;
+  axisA: { label: string; levels: readonly [string, string, string] };
+  axisB: { label: string; levels: readonly [string, string, string] };
+  outcomes: { success: string; risk: string; evidence: string };
+  fault: string;
+  task: string;
+  invariant: string;
+  probe: string;
+  practiceMode: string;
+  riskEffects: readonly [number, number];
+};
 
-export function JctCapacityExperimentLab({ title, focus }: LabProps) {
-  const [items, setItems] = useState(1000);
-  const [workers, setWorkers] = useState(4);
-  const [latency, setLatency] = useState(20);
-  const metrics = useMemo(() => { const work = items * latency; const ideal = work / workers; const coordination = Math.max(0, workers - 1) * Math.log2(items + 1); return { work, ideal, coordination, total: ideal + coordination }; }, [items, workers, latency]);
-  return <section className="my-6 overflow-hidden rounded-md border border-amber-300 bg-white dark:border-amber-800 dark:bg-zinc-950">
-    <header className="border-b border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/30"><p className="text-sm font-semibold text-amber-950 dark:text-amber-100">{title}</p><p className="mt-1 text-xs text-amber-800 dark:text-amber-300">验收工件：{focus}</p></header>
-    <div className="grid gap-5 p-4 lg:grid-cols-[1fr_1.1fr]"><div className="space-y-4">
-      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">数据项：{items}<input className="mt-2 w-full accent-emerald-600" type="range" min="100" max="10000" step="100" value={items} onChange={(event) => setItems(Number(event.target.value))} /></label>
-      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">工作单元：{workers}<input className="mt-2 w-full accent-amber-600" type="range" min="1" max="16" value={workers} onChange={(event) => setWorkers(Number(event.target.value))} /></label>
-      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">单项成本：{latency}<input className="mt-2 w-full accent-sky-600" type="range" min="1" max="100" value={latency} onChange={(event) => setLatency(Number(event.target.value))} /></label>
-    </div><div className="grid grid-cols-2 gap-2" aria-live="polite">{[["总工作", metrics.work.toFixed(0)], ["理想分摊", metrics.ideal.toFixed(1)], ["协调成本", metrics.coordination.toFixed(1)], ["估算总量", metrics.total.toFixed(1)]].map(([label, value]) => <div key={label} className="min-h-24 rounded border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900"><p className="text-xs text-zinc-500">{label}</p><p className="mt-2 font-mono text-lg font-semibold text-zinc-900 dark:text-zinc-100">{value}</p></div>)}</div></div>
-  </section>;
-}
+type Props = {
+  unitId: string;
+  title: string;
+  concepts: readonly string[];
+  stages: readonly string[];
+  focuses: readonly string[];
+  model: LabModel;
+  mode: Mode;
+};
 
-export function JctFailureEvidenceLab({ title, focus }: LabProps) {
-  const [mode, setMode] = useState<keyof typeof evidenceModes>("contract"); const current = evidenceModes[mode];
-  return <section className="my-6 overflow-hidden rounded-md border border-sky-300 bg-white dark:border-sky-800 dark:bg-zinc-950">
-    <header className="border-b border-sky-200 bg-sky-50 px-4 py-3 dark:border-sky-900 dark:bg-sky-950/30"><p className="text-sm font-semibold text-sky-950 dark:text-sky-100">{title}</p><p className="mt-1 text-xs text-sky-800 dark:text-sky-300">风险焦点：{focus}</p></header>
-    <div className="grid grid-cols-3 border-b border-zinc-200 dark:border-zinc-800">{(Object.keys(evidenceModes) as Array<keyof typeof evidenceModes>).map((key) => <button key={key} type="button" aria-pressed={mode === key} onClick={() => setMode(key)} className={"min-h-11 border-r border-zinc-200 px-2 text-sm last:border-r-0 dark:border-zinc-800 " + (mode === key ? "bg-sky-100 font-semibold text-sky-950 dark:bg-sky-950 dark:text-sky-100" : "bg-white text-zinc-600 dark:bg-zinc-950 dark:text-zinc-300")}>{evidenceModes[key].label}</button>)}</div>
-    <div className="grid min-h-32 gap-3 p-4 sm:grid-cols-[10rem_1fr]" aria-live="polite"><div className="rounded border border-sky-200 bg-sky-50 p-3 dark:border-sky-900 dark:bg-sky-950/30"><p className="text-xs text-sky-700 dark:text-sky-300">当前判定</p><p className="mt-2 text-sm font-semibold text-sky-950 dark:text-sky-100">{current.result}</p></div><p className="self-center text-sm text-zinc-700 dark:text-zinc-300">{current.note} 证据必须绑定 Java 25、源码版本、输入、命令、实际输出与适用边界。</p></div>
-  </section>;
+const scenarioLabels: Record<Scenario, string> = {
+  baseline: "正常输入",
+  fault: "故障输入",
+  recovery: "修复重放",
+};
+
+const clamp = (value: number) => Math.max(0, Math.min(100, value));
+
+export function OfficialJct25Studio({
+  unitId,
+  title,
+  concepts,
+  stages,
+  focuses,
+  model,
+  mode,
+}: Props) {
+  const [conceptIndex, setConceptIndex] = useState(0);
+  const [axisA, setAxisA] = useState(1);
+  const [axisB, setAxisB] = useState(1);
+  const [scenario, setScenario] = useState<Scenario>("baseline");
+  const [runs, setRuns] = useState(0);
+
+  const result = useMemo(() => {
+    const scenarioSuccess =
+      scenario === "fault" ? -24 : scenario === "recovery" ? 10 : 0;
+    const scenarioRisk =
+      scenario === "fault" ? 31 : scenario === "recovery" ? -16 : 0;
+    const correctness = clamp(44 + axisA * 15 + axisB * 11 + scenarioSuccess);
+    const risk = clamp(
+      34 +
+        model.riskEffects[0] * axisA * 10 +
+        model.riskEffects[1] * axisB * 9 +
+        scenarioRisk,
+    );
+    const evidence = clamp(
+      49 + axisB * 13 + runs * 5 - (scenario === "fault" ? 7 : 0),
+    );
+    return {
+      correctness,
+      risk,
+      evidence,
+      accepted: correctness >= 60 && risk <= 64 && evidence >= 60,
+    };
+  }, [axisA, axisB, model.riskEffects, runs, scenario]);
+
+  const reset = () => {
+    setConceptIndex(0);
+    setAxisA(1);
+    setAxisB(1);
+    setScenario("baseline");
+    setRuns(0);
+  };
+
+  const currentConcept = concepts[conceptIndex] ?? concepts[0];
+  const currentStage = stages[conceptIndex % stages.length];
+  const currentFocus = focuses[conceptIndex % focuses.length];
+
+  return (
+    <section
+      className="my-6 overflow-hidden rounded-md border border-zinc-300 bg-white text-zinc-950 shadow-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+      aria-label={`${title} · ${model.studio}实验`}
+      data-jct-unit={unitId}
+    >
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 bg-zinc-50 px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+            Java 25 · {model.studio} ·{" "}
+            {mode === "map"
+              ? "语义与运行链"
+              : mode === "experiment"
+                ? "单变量代码实验"
+                : "故障与恢复证据"}
+          </p>
+          <h3 className="break-words text-base font-semibold">{title}</h3>
+        </div>
+        <button
+          type="button"
+          onClick={reset}
+          className="inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded border border-zinc-300 bg-white px-3 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950 dark:hover:bg-zinc-800"
+          aria-label={`重置${model.studio}`}
+        >
+          <span aria-hidden="true">↺</span>
+        </button>
+      </header>
+
+      <div className="grid min-w-0 lg:grid-cols-[minmax(0,1.12fr)_minmax(280px,0.88fr)]">
+        <div className="min-w-0 border-b border-zinc-200 p-4 lg:border-r lg:border-b-0 dark:border-zinc-800">
+          {mode === "map" ? (
+            <>
+              <p className="mb-3 text-sm text-zinc-600 dark:text-zinc-300">
+                选择正式目录节点，核对它落在语义、运行时与证据链的哪一步。
+              </p>
+              <div className="max-h-72 overflow-y-auto rounded border border-zinc-200 p-2 dark:border-zinc-800">
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {concepts.map((concept, index) => (
+                    <button
+                      key={concept}
+                      type="button"
+                      onClick={() => setConceptIndex(index)}
+                      aria-pressed={index === conceptIndex}
+                      className={`min-h-11 min-w-0 rounded border px-3 py-2 text-left text-xs leading-5 [overflow-wrap:anywhere] ${
+                        index === conceptIndex
+                          ? "border-amber-600 bg-amber-50 text-amber-950 dark:bg-amber-950 dark:text-amber-50"
+                          : "border-zinc-300 bg-white hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900"
+                      }`}
+                    >
+                      {concept}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <ol className="mt-4 grid gap-2 sm:grid-cols-5">
+                {stages.map((stage, index) => (
+                  <li
+                    key={stage}
+                    className={`min-w-0 border p-2 text-xs [overflow-wrap:anywhere] ${
+                      stage === currentStage
+                        ? "border-blue-500 bg-blue-50 dark:bg-blue-950"
+                        : "border-zinc-200 dark:border-zinc-800"
+                    }`}
+                  >
+                    <span className="block font-mono font-semibold">
+                      0{index + 1}
+                    </span>
+                    {stage}
+                  </li>
+                ))}
+              </ol>
+            </>
+          ) : mode === "experiment" ? (
+            <div className="space-y-5">
+              {[
+                [model.axisA, axisA, setAxisA],
+                [model.axisB, axisB, setAxisB],
+              ].map(([axis, value, setter]) => {
+                const typedAxis = axis as LabModel["axisA"];
+                return (
+                  <fieldset key={typedAxis.label}>
+                    <legend className="mb-2 text-sm font-semibold">
+                      {typedAxis.label}
+                    </legend>
+                    <div className="grid grid-cols-3 gap-2">
+                      {typedAxis.levels.map((level, index) => (
+                        <button
+                          key={level}
+                          type="button"
+                          onClick={() =>
+                            (setter as (next: number) => void)(index)
+                          }
+                          aria-pressed={value === index}
+                          className={`min-h-11 min-w-0 rounded border px-2 py-2 text-xs [overflow-wrap:anywhere] ${
+                            value === index
+                              ? "border-blue-600 bg-blue-50 font-semibold text-blue-950 dark:bg-blue-950 dark:text-blue-50"
+                              : "border-zinc-300 dark:border-zinc-700"
+                          }`}
+                        >
+                          {level}
+                        </button>
+                      ))}
+                    </div>
+                  </fieldset>
+                );
+              })}
+              <div className="rounded border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900">
+                <p className="text-xs font-semibold text-zinc-500">最小探针</p>
+                <code className="mt-2 block whitespace-pre-wrap text-xs [overflow-wrap:anywhere]">
+                  {model.probe}
+                </code>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <p className="text-sm text-zinc-600 dark:text-zinc-300">
+                故障路径必须留下首错，然后进入修复重放，最后用重置核对初值。
+              </p>
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {(Object.keys(scenarioLabels) as Scenario[]).map((key) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setScenario(key)}
+                    aria-pressed={scenario === key}
+                    className={`min-h-11 rounded border px-2 py-2 text-xs ${
+                      scenario === key
+                        ? "border-zinc-950 bg-zinc-950 font-semibold text-white dark:border-white dark:bg-white dark:text-zinc-950"
+                        : "border-zinc-300 dark:border-zinc-700"
+                    }`}
+                  >
+                    {scenarioLabels[key]}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-4 rounded border border-rose-300 bg-rose-50 p-3 text-sm text-rose-950 dark:border-rose-800 dark:bg-rose-950 dark:text-rose-50">
+                <strong>故障注入</strong>
+                <p className="mt-1 [overflow-wrap:anywhere]">{model.fault}</p>
+              </div>
+              <div className="mt-3 rounded border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950 dark:text-emerald-50">
+                <strong>必须守住的不变量</strong>
+                <p className="mt-1 [overflow-wrap:anywhere]">
+                  {model.invariant}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="min-w-0 p-4">
+          <p className="text-xs font-semibold text-zinc-500">当前证据坐标</p>
+          <p className="mt-1 text-sm font-semibold [overflow-wrap:anywhere]">
+            {currentConcept}
+          </p>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">
+            {currentStage} → {currentFocus}
+          </p>
+          <dl className="mt-4 grid grid-cols-3 gap-2 text-xs">
+            {[
+              [model.outcomes.success, result.correctness],
+              [model.outcomes.risk, result.risk],
+              [model.outcomes.evidence, result.evidence],
+            ].map(([label, value]) => (
+              <div
+                key={String(label)}
+                className="min-w-0 border border-zinc-200 p-2 dark:border-zinc-800"
+              >
+                <dt className="min-h-10 [overflow-wrap:anywhere]">{label}</dt>
+                <dd className="mt-1 text-lg font-semibold">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          <div
+            className={`mt-3 border p-3 text-sm ${
+              result.accepted
+                ? "border-emerald-500 bg-emerald-50 text-emerald-950 dark:bg-emerald-950 dark:text-emerald-50"
+                : "border-amber-500 bg-amber-50 text-amber-950 dark:bg-amber-950 dark:text-amber-50"
+            }`}
+          >
+            <strong>
+              {result.accepted ? "本轮证据可接受" : "拒绝或缩小结论"}
+            </strong>
+            <p className="mt-1 [overflow-wrap:anywhere]">{model.task}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setRuns((value) => value + 1)}
+            className="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded bg-blue-700 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+          >
+            运行并保存 Java 25 轨迹 #{runs + 1}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
 }
