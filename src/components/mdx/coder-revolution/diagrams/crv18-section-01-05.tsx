@@ -1,18 +1,29 @@
-import { OfficialCrv18Lab } from "./official-crv18-lab";
+import { CoderMechanismLab } from "./coder-mechanism-lab";
 
-const props = {
+const profile = {
   unitId: "crv18-section-01-05",
   title: "1.5 我是一个进程",
-  nodes: ["输入事件", "状态转换", "资源调度", "边界条件", "可见结果"],
-  focuses: ["对象身份", "状态所有权", "调度顺序", "资源上限", "故障证据"],
+  family: "os",
+  nodes: ["装载程序", "创建进程", "映射页面", "调度线程", "退出回收"],
+  concepts: [
+    "1.5 我是一个进程",
+    "批处理系统",
+    "多道程序",
+    "地址重定位",
+    "分时系统",
+    "分块装入内存",
+    "虚拟内存：分页",
+    "分段 分页",
+    "程序的装载",
+    "线程",
+  ],
+  mechanism:
+    "进程提供隔离的虚拟地址空间和资源身份，页表把虚拟页映射到物理页，线程则在该进程资源内执行",
+  success: "1.5 我是一个进程 的输入、机制、输出与复位轨迹一致",
+  failure:
+    "1.5 我是一个进程 在“把指针值当成物理地址，或让两个进程未经共享映射直接访问同一虚拟地址”处拒绝",
 } as const;
 
-export function Crv18Section0105ModelLab() {
-  return <OfficialCrv18Lab {...props} mode="model" />;
-}
-export function Crv18Section0105FlowLab() {
-  return <OfficialCrv18Lab {...props} mode="flow" />;
-}
-export function Crv18Section0105EvidenceLab() {
-  return <OfficialCrv18Lab {...props} mode="evidence" />;
+export function Crv18Section0105Lab() {
+  return <CoderMechanismLab {...profile} />;
 }
