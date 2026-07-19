@@ -198,8 +198,30 @@ async function inspectViewport(page, chapter, viewport, baseUrl) {
       if (!drawer) return false;
       return drawer.getBoundingClientRect().right <= 0;
     };
+    const insideHorizontalScroller = (element) => {
+      let ancestor = element.parentElement;
+      while (ancestor && ancestor.closest("article")) {
+        const style = getComputedStyle(ancestor);
+        const rect = ancestor.getBoundingClientRect();
+        if (
+          /auto|scroll/.test(style.overflowX) &&
+          ancestor.scrollWidth > ancestor.clientWidth + 1 &&
+          rect.left >= -1 &&
+          rect.right <= viewportWidth + 1
+        )
+          return true;
+        ancestor = ancestor.parentElement;
+      }
+      return false;
+    };
     const overflowElements = [...document.querySelectorAll("article *")]
-      .filter((element) => isVisible(element) && !inClosedDrawer(element))
+      .filter(
+        (element) =>
+          isVisible(element) &&
+          !inClosedDrawer(element) &&
+          !element.closest(".katex-mathml") &&
+          !insideHorizontalScroller(element),
+      )
       .map((element) => {
         const rect = element.getBoundingClientRect();
         return {

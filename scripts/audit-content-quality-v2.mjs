@@ -369,9 +369,10 @@ function parseChapter(filePath, manifests, visualResults) {
     .filter(Boolean)
     .map((modulePath) => ({ modulePath, source: moduleCorpus(modulePath) }));
   const importedCorpus = importedSources.map((item) => item.source).join("\n");
-  const genericWrapper = /OfficialCourseLab|OfficialPoeaa24Lab/.test(
-    importedCorpus,
-  );
+  const genericWrapper =
+    /OfficialCourseLab|OfficialPoeaa24Lab|OfficialDeZeroLab/.test(
+      importedCorpus,
+    );
   const visualComponents = jsxNames.filter((name) => VISUAL_NAME.test(name));
   const interactiveComponents = jsxNames.filter((name) =>
     INTERACTIVE_NAME.test(name),
