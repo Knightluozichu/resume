@@ -1,18 +1,24 @@
-import { OfficialCrv18Lab } from "./official-crv18-lab";
+import { CoderMechanismLab } from "./coder-mechanism-lab";
 
-const props = {
+const profile = {
   unitId: "crv18-section-01-01",
   title: "1.1 我是一个线程",
-  nodes: ["输入事件", "状态转换", "资源调度", "边界条件", "可见结果"],
-  focuses: ["对象身份", "状态所有权", "调度顺序", "资源上限", "故障证据"],
+  family: "os",
+  nodes: ["创建线程", "就绪队列", "获得CPU", "等待资源", "结束回收"],
+  concepts: [
+    "1.1 我是一个线程",
+    "初生牛犊",
+    "渐入佳境",
+    "虎口脱险",
+    "江湖再见",
+  ],
+  mechanism:
+    "同一进程内的线程共享地址空间和进程资源，却各有调用栈与调度上下文；调度器在可运行线程间切换",
+  success: "1.1 我是一个线程 的输入、机制、输出与复位轨迹一致",
+  failure:
+    "1.1 我是一个线程 在“两个线程把读—改—写当成一个原子动作，导致共享计数丢失更新”处拒绝",
 } as const;
 
-export function Crv18Section0101ModelLab() {
-  return <OfficialCrv18Lab {...props} mode="model" />;
-}
-export function Crv18Section0101FlowLab() {
-  return <OfficialCrv18Lab {...props} mode="flow" />;
-}
-export function Crv18Section0101EvidenceLab() {
-  return <OfficialCrv18Lab {...props} mode="evidence" />;
+export function Crv18Section0101Lab() {
+  return <CoderMechanismLab {...profile} />;
 }
