@@ -42,13 +42,49 @@ export function OfficialUnixNetworkProgrammingLab({
   const [load, setLoad] = useState(4);
 
   const evidence = useMemo(() => {
-    const penalties = { baseline: 0, boundary: 13, fault: 39, recovery: 5 };
-    const penalty = penalties[mode] + stage * 2 + Math.max(0, load - 8);
+    const faultErrnos = [
+      "EINPROGRESS",
+      "EAGAIN",
+      "EINTR",
+      "ECONNRESET",
+      "EMSGSIZE",
+      "ETIMEDOUT",
+    ];
+    const pressure = load * (stage + 1);
+    const boundaryReached = pressure > 24;
     return {
-      confidence: Math.max(16, 99 - penalty),
-      calls: load * (stage + 1),
-      errno: mode === "fault" ? "EINTR" : mode === "boundary" ? "EAGAIN" : "0",
-      open: mode === "fault" ? 1 : 0,
+      events: pressure,
+      result:
+        mode === "fault"
+          ? "-1"
+          : mode === "boundary" && boundaryReached
+            ? "短计数"
+            : "0",
+      errno:
+        mode === "fault"
+          ? faultErrnos[stage % faultErrnos.length]
+          : mode === "boundary" && boundaryReached
+            ? "EAGAIN"
+            : "0",
+      queue:
+        mode === "fault"
+          ? "停在首错"
+          : mode === "recovery"
+            ? "已清空"
+            : mode === "boundary"
+              ? `${Math.min(100, pressure * 3)}%`
+              : `${Math.min(40, pressure)}%`,
+      wire:
+        mode === "fault"
+          ? stage % 2 === 0
+            ? "未发包"
+            : "RST/丢包"
+          : mode === "recovery"
+            ? "同输入重放"
+            : mode === "boundary"
+              ? "延迟/重传"
+              : "与预测一致",
+      leak: mode === "fault" ? 1 : 0,
       status:
         mode === "fault"
           ? "首错已捕获"
@@ -94,6 +130,7 @@ export function OfficialUnixNetworkProgrammingLab({
             type="button"
             onClick={reset}
             className="flex size-9 items-center justify-center border border-zinc-300 text-zinc-700 dark:border-zinc-700 dark:text-zinc-200"
+            style={{ minWidth: 44, minHeight: 44 }}
             title="重置实验"
             aria-label="重置实验"
           >
@@ -116,7 +153,8 @@ export function OfficialUnixNetworkProgrammingLab({
                 key={item}
                 type="button"
                 onClick={() => setMode(item)}
-                className="min-h-10 border-r border-zinc-300 px-2 text-xs font-semibold last:border-r-0 dark:border-zinc-700"
+                aria-pressed={mode === item}
+                className="min-h-11 border-r border-zinc-300 px-2 text-xs font-semibold last:border-r-0 dark:border-zinc-700"
                 style={{
                   background: mode === item ? soft : undefined,
                   color: mode === item ? color : undefined,
@@ -133,6 +171,7 @@ export function OfficialUnixNetworkProgrammingLab({
                 <button
                   type="button"
                   onClick={() => setStage(index)}
+                  aria-pressed={index === stage}
                   className="flex min-h-20 w-full items-start gap-3 border p-3 text-left"
                   style={{
                     borderColor: index === stage ? color : "#d4d4d8",
@@ -145,7 +184,10 @@ export function OfficialUnixNetworkProgrammingLab({
                   >
                     {index + 1}
                   </span>
-                  <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                  <span
+                    className="text-sm font-medium text-zinc-900 dark:text-zinc-100"
+                    style={{ color: index === stage ? color : undefined }}
+                  >
                     {node}
                   </span>
                 </button>
@@ -155,7 +197,7 @@ export function OfficialUnixNetworkProgrammingLab({
 
           {view !== "map" ? (
             <label className="mt-5 block text-xs font-semibold text-zinc-700 dark:text-zinc-200">
-              网络事件样本：{load}
+              并发或事件负载：{load}
               <input
                 type="range"
                 min="1"
@@ -205,20 +247,30 @@ export function OfficialUnixNetworkProgrammingLab({
             </div>
             <div className="grid grid-cols-4 gap-2 border-y border-zinc-200 py-3 text-center dark:border-zinc-700">
               <div>
-                <dt className="text-[11px] text-zinc-500">置信</dt>
-                <dd className="font-bold">{evidence.confidence}%</dd>
+                <dt className="text-[11px] text-zinc-500">事件</dt>
+                <dd className="font-bold">{evidence.events}</dd>
               </div>
               <div>
-                <dt className="text-[11px] text-zinc-500">调用</dt>
-                <dd className="font-bold">{evidence.calls}</dd>
+                <dt className="text-[11px] text-zinc-500">返回</dt>
+                <dd className="font-bold">{evidence.result}</dd>
               </div>
               <div>
                 <dt className="text-[11px] text-zinc-500">errno</dt>
                 <dd className="font-bold">{evidence.errno}</dd>
               </div>
               <div>
-                <dt className="text-[11px] text-zinc-500">未关</dt>
-                <dd className="font-bold">{evidence.open}</dd>
+                <dt className="text-[11px] text-zinc-500">队列</dt>
+                <dd className="font-bold">{evidence.queue}</dd>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="border border-zinc-200 p-2 dark:border-zinc-700">
+                <dt className="text-zinc-500">线上分组</dt>
+                <dd className="mt-1 font-semibold">{evidence.wire}</dd>
+              </div>
+              <div className="border border-zinc-200 p-2 dark:border-zinc-700">
+                <dt className="text-zinc-500">未回收描述符</dt>
+                <dd className="mt-1 font-semibold">{evidence.leak}</dd>
               </div>
             </div>
           </dl>
