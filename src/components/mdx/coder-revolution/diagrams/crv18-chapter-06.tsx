@@ -1,18 +1,18 @@
-import { OfficialCrv18Lab } from "./official-crv18-lab";
+import { CoderMechanismLab } from "./coder-mechanism-lab";
 
-const props = {
+const profile = {
   unitId: "crv18-chapter-06",
   title: "第6章 老司机的精进",
-  nodes: ["真实问题", "原理模型", "刻意实践", "书面表达", "反馈修正"],
-  focuses: ["学习目标", "抽象能力", "实践节奏", "表达质量", "领导责任"],
+  family: "growth",
+  nodes: ["选择能力", "设计实践", "产出作品", "获得反馈", "复盘迭代"],
+  concepts: ["第6章 老司机的精进"],
+  mechanism:
+    "职业精进依赖可持续的行动、基础模型、作品输出、反馈和复盘；经验年限本身不能替代这些证据",
+  success: "第6章 老司机的精进 的输入、机制、输出与复位轨迹一致",
+  failure:
+    "第6章 老司机的精进 在“只收集课程和观点而没有输出、复现或外部反馈”处拒绝",
 } as const;
 
-export function Crv18Chapter06ModelLab() {
-  return <OfficialCrv18Lab {...props} mode="model" />;
-}
-export function Crv18Chapter06FlowLab() {
-  return <OfficialCrv18Lab {...props} mode="flow" />;
-}
-export function Crv18Chapter06EvidenceLab() {
-  return <OfficialCrv18Lab {...props} mode="evidence" />;
+export function Crv18Chapter06Lab() {
+  return <CoderMechanismLab {...profile} />;
 }
