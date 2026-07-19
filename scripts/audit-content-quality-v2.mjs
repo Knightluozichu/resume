@@ -29,6 +29,15 @@ const DIMENSION_FLOORS = {
   ux: 8,
   engineering: 8,
 };
+const DIMENSION_MAXES = {
+  source: 15,
+  knowledge: 20,
+  pedagogy: 15,
+  visual: 20,
+  practice: 10,
+  ux: 10,
+  engineering: 10,
+};
 const GENERIC_PATTERNS = [
   ["content-missing", /content_missing|目录驱动工程框架|材料尚未进入项目/i],
   [
@@ -233,6 +242,27 @@ function sourceAccessFor(manifest) {
   return "secondary-only";
 }
 
+function sourceDomainsFor(manifest) {
+  const factSources = Array.isArray(manifest?.factSources)
+    ? manifest.factSources
+    : Object.values(manifest?.factSources ?? {});
+  const urls = [
+    manifest?.sourceUrl,
+    ...(manifest?.secondarySourceUrls ?? []),
+    ...factSources.map((source) => source.url),
+  ].filter(Boolean);
+  return new Set(
+    urls.flatMap((value) => {
+      try {
+        const hostname = new URL(value).hostname.replace(/^www\./, "");
+        return hostname ? [hostname] : [];
+      } catch {
+        return [];
+      }
+    }),
+  );
+}
+
 function resolveImportedModule(modulePath, importer = null) {
   let base = null;
   if (modulePath.startsWith("@/"))
@@ -339,7 +369,9 @@ function parseChapter(filePath, manifests, visualResults) {
     .filter(Boolean)
     .map((modulePath) => ({ modulePath, source: moduleCorpus(modulePath) }));
   const importedCorpus = importedSources.map((item) => item.source).join("\n");
-  const genericWrapper = /OfficialCourseLab/.test(importedCorpus);
+  const genericWrapper = /OfficialCourseLab|OfficialPoeaa24Lab/.test(
+    importedCorpus,
+  );
   const visualComponents = jsxNames.filter((name) => VISUAL_NAME.test(name));
   const interactiveComponents = jsxNames.filter((name) =>
     INTERACTIVE_NAME.test(name),
@@ -390,11 +422,20 @@ function parseChapter(filePath, manifests, visualResults) {
   const qualityVersion = parsed.data.qualityVersion ?? 1;
   const practiceMode = parsed.data.practiceMode ?? null;
   const sourceMode = parsed.data.sourceMode ?? null;
-  const factSourceLinks = countMatches(
-    source,
-    /https?:\/\/(?:www\.)?(?:energy\.gov|afdc\.energy\.gov|nhtsa\.gov|bosch-mobility\.com|toyota-global\.com)\//g,
-  );
   const manifest = manifests[bookSlug] ?? null;
+  const sourceDomains = sourceDomainsFor(manifest);
+  const factSourceLinks = [
+    ...source.matchAll(/https?:\/\/[^\s)"'<>]+/g),
+  ].filter((match) => {
+    try {
+      const hostname = new URL(match[0]).hostname.replace(/^www\./, "");
+      return [...sourceDomains].some(
+        (domain) => hostname === domain || hostname.endsWith(`.${domain}`),
+      );
+    } catch {
+      return false;
+    }
+  }).length;
   const sourceAccess = sourceAccessFor(manifest);
   const role = /learning-map/.test(chapterSlug)
     ? "learning-map"
@@ -720,7 +761,7 @@ function scoreChapter(chapter, sentenceOwners) {
       ? 2
       : 0) +
     (chapter.imports.length > 0 || chapter.uniqueVisuals.length > 0 ? 3 : 1);
-  const dimensions = {
+  const rawDimensions = {
     source,
     knowledge,
     pedagogy,
@@ -729,6 +770,12 @@ function scoreChapter(chapter, sentenceOwners) {
     ux,
     engineering,
   };
+  const dimensions = Object.fromEntries(
+    Object.entries(rawDimensions).map(([key, value]) => [
+      key,
+      Math.min(DIMENSION_MAXES[key], value),
+    ]),
+  );
   const score = Object.values(dimensions).reduce(
     (sum, value) => sum + value,
     0,

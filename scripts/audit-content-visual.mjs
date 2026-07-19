@@ -16,11 +16,10 @@ const VIEWPORTS = [
   { name: "desktop", width: 1440, height: 900 },
   { name: "mobile", width: 390, height: 844 },
 ];
-const LOCAL_CHROME_CANDIDATES = [
-  process.env.CHROME_PATH,
+const SYSTEM_CHROME_CANDIDATES = [
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
   "/Applications/Chromium.app/Contents/MacOS/Chromium",
-].filter(Boolean);
+];
 
 function parseArgs(argv) {
   const args = {
@@ -102,6 +101,40 @@ function ensureDirectory(directory) {
 
 function digest(buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
+}
+
+function findHeadlessShell(chromeExecutablePath) {
+  const marker = `${path.sep}chrome${path.sep}`;
+  const markerIndex = chromeExecutablePath.indexOf(marker);
+  if (markerIndex < 0) return null;
+  const cacheRoot = chromeExecutablePath.slice(0, markerIndex);
+  const buildDirectory = chromeExecutablePath
+    .slice(markerIndex + marker.length)
+    .split(path.sep)[0];
+  const shellRoot = path.join(
+    cacheRoot,
+    "chrome-headless-shell",
+    buildDirectory,
+  );
+  const visit = (directory, depth = 0) => {
+    if (!fs.existsSync(directory) || depth > 5) return null;
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const entryPath = path.join(directory, entry.name);
+      if (
+        entry.isFile() &&
+        ["chrome-headless-shell", "chrome-headless-shell.exe"].includes(
+          entry.name,
+        )
+      )
+        return entryPath;
+      if (entry.isDirectory()) {
+        const nested = visit(entryPath, depth + 1);
+        if (nested) return nested;
+      }
+    }
+    return null;
+  };
+  return visit(shellRoot);
 }
 
 async function inspectViewport(page, chapter, viewport, baseUrl) {
@@ -235,20 +268,62 @@ async function inspectViewport(page, chapter, viewport, baseUrl) {
       visualCount,
       canvasCount,
       fallbackText,
+      footerText: (document.querySelector("footer")?.textContent ?? "").trim(),
       pageHeight: document.documentElement.scrollHeight,
     };
   });
 
-  const visualHandle = await page.$(
-    "article .prose figure, article .prose section.not-prose, article .prose svg, article .prose canvas",
-  );
-  if (visualHandle) await visualHandle.screenshot({ path: corePath });
-  else await page.screenshot({ path: corePath });
+  const coreTarget = await page.evaluate(() => {
+    const isVisible = (element) => {
+      const style = getComputedStyle(element);
+      const rect = element.getBoundingClientRect();
+      return (
+        style.visibility !== "hidden" &&
+        style.display !== "none" &&
+        Number(style.opacity) > 0 &&
+        rect.width > 0 &&
+        rect.height > 0
+      );
+    };
+    const candidates = [
+      ...document.querySelectorAll(
+        "article .prose section[aria-label*='实验'], article .prose figure, article .prose section.not-prose, article .prose canvas, article .prose svg",
+      ),
+    ].filter(isVisible);
+    const target =
+      candidates.find((element) =>
+        element.matches("section[aria-label*='实验']"),
+      ) ??
+      candidates
+        .map((element) => ({
+          element,
+          area:
+            element.getBoundingClientRect().width *
+            element.getBoundingClientRect().height,
+        }))
+        .sort((left, right) => right.area - left.area)[0]?.element ??
+      null;
+    if (!target) return null;
+    target.scrollIntoView({ block: "center", inline: "nearest" });
+    const rect = target.getBoundingClientRect();
+    return {
+      tag: target.tagName,
+      label: target.getAttribute("aria-label") ?? "",
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
+    };
+  });
+  await new Promise((resolve) => setTimeout(resolve, 100));
+  await page.screenshot({ path: corePath });
 
   let interactionChanged = null;
-  const interactiveHandles = await page.$$(
-    "article .prose .not-prose button:not([disabled]), article .prose .not-prose input[type=range], article .prose .not-prose select",
+  let interactiveHandles = await page.$$(
+    "article .prose section[aria-label*='实验'] button:not([disabled]), article .prose section[aria-label*='实验'] input[type=range], article .prose section[aria-label*='实验'] select",
   );
+  if (interactiveHandles.length === 0)
+    interactiveHandles = await page.$$(
+      "article .prose .not-prose button:not([disabled]), article .prose .not-prose input[type=range], article .prose .not-prose select",
+    );
   const teachingHandles = [];
   for (const handle of interactiveHandles) {
     const isReset = await handle.evaluate((element) =>
@@ -258,56 +333,110 @@ async function inspectViewport(page, chapter, viewport, baseUrl) {
     );
     if (!isReset) teachingHandles.push(handle);
   }
-  // 选择组的第一个按钮往往正是默认选中项。优先点击第二个教学按钮，
-  // 避免先触发 range 中点和多个连续状态变更，保证检查本身不干扰 React。
+  // 优先操作显式声明为未选中的按钮，避免重复点击默认状态产生假阴性。
   const buttonHandles = [];
   const otherHandles = [];
   for (const handle of teachingHandles) {
     const tagName = await handle.evaluate((element) => element.tagName);
     (tagName === "BUTTON" ? buttonHandles : otherHandles).push(handle);
   }
-  const orderedHandles =
-    buttonHandles.length > 1
-      ? [
-          buttonHandles[1],
-          ...buttonHandles.slice(2),
-          buttonHandles[0],
-          ...otherHandles,
-        ]
-      : [...buttonHandles, ...otherHandles];
-  if (orderedHandles.length > 0) {
+  const orderedHandles = [...buttonHandles, ...otherHandles];
+  const preferredHandles = [];
+  for (const handle of orderedHandles) {
+    const isUnselected = await handle.evaluate(
+      (element) => element.getAttribute("aria-pressed") === "false",
+    );
+    if (isUnselected) preferredHandles.push(handle);
+  }
+  const candidates = [
+    ...preferredHandles,
+    ...orderedHandles.filter((handle) => !preferredHandles.includes(handle)),
+  ];
+  let resetRestored = null;
+  if (candidates.length > 0) {
     interactionChanged = false;
-    for (const handle of orderedHandles.slice(0, 3)) {
+    for (const handle of candidates.slice(0, 3)) {
       try {
         const container = await handle.evaluateHandle(
           (element) =>
-            element.closest(".not-prose") || element.parentElement || element,
+            element.closest("section[aria-label*='实验']") ||
+            element.closest(".not-prose") ||
+            element.parentElement ||
+            element,
         );
-        const before = await container.asElement()?.screenshot();
-        await handle.click();
+        const containerElement = container.asElement();
+        if (!containerElement) continue;
+        const experimentSelector = "article .prose section[aria-label*='实验']";
+        const experimentIndex = await containerElement.evaluate(
+          (element, selector) =>
+            [...document.querySelectorAll(selector)].indexOf(element),
+          experimentSelector,
+        );
+        const currentContainer = async () => {
+          if (experimentIndex < 0) return containerElement;
+          return (await page.$$(experimentSelector))[experimentIndex] ?? null;
+        };
+        const stateSignature = (elementHandle) =>
+          elementHandle.evaluate((element) =>
+            JSON.stringify({
+              controls: [
+                ...element.querySelectorAll("button, input, select, textarea"),
+              ].map((control) => ({
+                text: (control.textContent ?? "").trim(),
+                value: "value" in control ? control.value : null,
+                pressed: control.getAttribute("aria-pressed"),
+                className: control.getAttribute("class"),
+              })),
+              status: [...element.querySelectorAll("[role='status']")].map(
+                (status) => (status.textContent ?? "").trim(),
+              ),
+            }),
+          );
+        const beforeState = await stateSignature(containerElement);
+        const before = await containerElement.screenshot();
+        const tagName = await handle.evaluate((element) => element.tagName);
+        if (tagName === "BUTTON")
+          await handle.evaluate((element) => element.click());
+        else await handle.click();
         await new Promise((resolve) => setTimeout(resolve, 250));
-        const after = await container.asElement()?.screenshot();
-        if (before && after && digest(before) !== digest(after)) {
+        const afterContainer = await currentContainer();
+        if (!afterContainer) continue;
+        const afterState = await stateSignature(afterContainer);
+        const after = await afterContainer.screenshot();
+        if (
+          beforeState !== afterState &&
+          before &&
+          after &&
+          digest(before) !== digest(after)
+        ) {
           interactionChanged = true;
+          const resetHandles = await afterContainer.$$("button");
+          const resetHandle = await (async () => {
+            for (const candidate of resetHandles) {
+              const isReset = await candidate.evaluate((element) =>
+                /重置|reset/i.test(
+                  `${element.getAttribute("aria-label") ?? ""} ${element.textContent ?? ""}`,
+                ),
+              );
+              if (isReset) return candidate;
+            }
+            return null;
+          })();
+          if (resetHandle) {
+            await resetHandle.evaluate((element) => element.click());
+            await new Promise((resolve) => setTimeout(resolve, 250));
+            const resetContainer = await currentContainer();
+            resetRestored = Boolean(
+              resetContainer &&
+              (await stateSignature(resetContainer)) === beforeState,
+            );
+          } else resetRestored = false;
           break;
         }
       } catch {
         // 当前控件可能因前一次操作重绘而失效，继续尝试下一个。
       }
     }
-    const resetHandle = await page.evaluateHandle(() => {
-      const controls = [
-        ...document.querySelectorAll("article .prose .not-prose button"),
-      ];
-      return (
-        controls.find((element) =>
-          /重置|reset/i.test(
-            `${element.getAttribute("aria-label") ?? ""} ${element.textContent ?? ""}`,
-          ),
-        ) ?? null
-      );
-    });
-    if (resetHandle.asElement()) await resetHandle.asElement().click();
   }
 
   await page.evaluate(() =>
@@ -355,6 +484,12 @@ async function inspectViewport(page, chapter, viewport, baseUrl) {
       code: "chapter-visual-missing",
       detail: "页面没有章节视觉",
     });
+  if (!coreTarget || coreTarget.width < 200 || coreTarget.height < 120)
+    findings.push({
+      severity: "high",
+      code: "core-evidence-target-invalid",
+      detail: coreTarget ?? "没有可截图的核心教学区",
+    });
   if (metrics.controlCount > 0 && metrics.resetCount === 0)
     findings.push({
       severity: "high",
@@ -367,11 +502,26 @@ async function inspectViewport(page, chapter, viewport, baseUrl) {
       code: "interaction-no-visible-change",
       detail: "首个教学控件操作前后没有可见变化",
     });
+  if (interactionChanged === true && resetRestored !== true)
+    findings.push({
+      severity: "high",
+      code: "interaction-reset-failed",
+      detail: "教学控件改变后未恢复初始状态",
+    });
   if (metrics.canvasCount > 0 && !metrics.fallbackText)
     findings.push({
       severity: "high",
       code: "canvas-fallback-undocumented",
       detail: `canvas=${metrics.canvasCount}`,
+    });
+  if (
+    chapter.bookSlug !== "learnopengl" &&
+    /改编自\s*LearnOpenGL/i.test(metrics.footerText)
+  )
+    findings.push({
+      severity: "high",
+      code: "global-attribution-mismatch",
+      detail: "非 LearnOpenGL 书籍错误继承了 LearnOpenGL 授权声明",
     });
   const evidence = [topPath, corePath, endPath].map((filePath) =>
     path.relative(ROOT, filePath).replaceAll(path.sep, "/"),
@@ -390,19 +540,22 @@ async function inspectViewport(page, chapter, viewport, baseUrl) {
       visualCount: metrics.visualCount,
       controlCount: metrics.controlCount,
       pageHeight: metrics.pageHeight,
+      coreTarget,
     },
     interactionChanged,
+    resetRestored,
   };
 }
 
 async function inspectChapter(browser, chapter, baseUrl) {
-  const page = await browser.newPage();
   const viewports = [];
-  try {
-    for (const viewport of VIEWPORTS)
+  for (const viewport of VIEWPORTS) {
+    const page = await browser.newPage();
+    try {
       viewports.push(await inspectViewport(page, chapter, viewport, baseUrl));
-  } finally {
-    await page.close();
+    } finally {
+      await page.close();
+    }
   }
   const findings = viewports.flatMap((result) =>
     result.findings.map((finding) => ({
@@ -423,13 +576,25 @@ async function inspectChapter(browser, chapter, baseUrl) {
 
 const args = parseArgs(process.argv.slice(2));
 const chapters = chaptersFor(args);
-const executablePath = LOCAL_CHROME_CANDIDATES.find((candidate) =>
-  fs.existsSync(candidate),
-);
+const pinnedChromePath = await puppeteer.executablePath();
+const executablePath = [
+  process.env.CHROME_PATH,
+  findHeadlessShell(pinnedChromePath),
+  pinnedChromePath,
+  ...SYSTEM_CHROME_CANDIDATES,
+].find((candidate) => candidate && fs.existsSync(candidate));
 const browser = await puppeteer.launch({
   headless: true,
+  timeout: 60000,
   ...(executablePath ? { executablePath } : {}),
-  args: ["--no-sandbox", "--disable-dev-shm-usage"],
+  args: [
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--disable-gpu",
+    // macOS 可能在读取登录钥匙串时阻塞无头浏览器；巡检不需要真实凭据。
+    "--use-mock-keychain",
+    "--password-store=basic",
+  ],
 });
 const previous = fs.existsSync(RESULT_PATH)
   ? JSON.parse(fs.readFileSync(RESULT_PATH, "utf8"))

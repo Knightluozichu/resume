@@ -114,7 +114,7 @@ export function Stepper({
               type="button"
               onClick={() => go(i)}
               aria-label={`跳到第 ${i + 1} 步：${s.title}`}
-              className={`rounded-control border px-2 py-1 text-xs transition-colors duration-(--duration-hover) ease-standard ${
+              className={`min-h-11 min-w-11 rounded-control border px-2 py-1 text-xs transition-colors duration-(--duration-hover) ease-standard ${
                 i === index
                   ? "border-accent text-accent"
                   : i < index
