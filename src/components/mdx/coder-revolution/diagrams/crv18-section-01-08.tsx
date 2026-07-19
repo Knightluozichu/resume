@@ -1,18 +1,26 @@
-import { OfficialCrv18Lab } from "./official-crv18-lab";
+import { CoderMechanismLab } from "./coder-mechanism-lab";
 
-const props = {
+const profile = {
   unitId: "crv18-section-01-08",
   title: "1.8 数据库的奇妙之旅",
-  nodes: ["输入事件", "状态转换", "资源调度", "边界条件", "可见结果"],
-  focuses: ["对象身份", "状态所有权", "调度顺序", "资源上限", "故障证据"],
+  family: "data",
+  nodes: ["定义模式", "开始事务", "读取版本", "写入约束", "提交或回滚"],
+  concepts: [
+    "1.8 数据库的奇妙之旅",
+    "无纸化办公",
+    "数据的冗余和不一致",
+    "李氏查询",
+    "并发访问",
+    "原子性问题",
+    "安全",
+  ],
+  mechanism:
+    "数据库用模式、约束、事务与访问控制集中管理数据；并发控制需要让提交历史满足声明的一致性级别",
+  success: "1.8 数据库的奇妙之旅 的输入、机制、输出与复位轨迹一致",
+  failure:
+    "1.8 数据库的奇妙之旅 在“两个会话先读后写同一余额却没有锁、版本检查或可串行化隔离，产生丢失更新”处拒绝",
 } as const;
 
-export function Crv18Section0108ModelLab() {
-  return <OfficialCrv18Lab {...props} mode="model" />;
-}
-export function Crv18Section0108FlowLab() {
-  return <OfficialCrv18Lab {...props} mode="flow" />;
-}
-export function Crv18Section0108EvidenceLab() {
-  return <OfficialCrv18Lab {...props} mode="evidence" />;
+export function Crv18Section0108Lab() {
+  return <CoderMechanismLab {...profile} />;
 }
