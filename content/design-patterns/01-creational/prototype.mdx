@@ -1,343 +1,263 @@
 ---
-title: 原型模式
+title: "原型模式"
 type: A
-section: 创建型模式
+section: "创建型模式"
 order: 11
-description: 通过克隆已有对象来创建新对象——当 new 太贵或需要保留状态时使用。
+description: "原型模式：通过复制原型创建对象，让运行时实例决定新对象的初始结构"
 demo: true
 math: false
-sourceUrl: >-
-  https://www.pearson.com/en-us/subject-catalog/p/design-patterns-elements-of-reusable-object-oriented-software/P200000009480/9780321700698
+sourceUrl: "https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
 draft: false
 ---
 
-import { PrototypePatternDiagram } from "@/components/mdx/design-patterns/diagrams/prototype-pattern-diagram";
 import {
-  OfficialDesignPatternsPrototypeMapLab,
-  OfficialDesignPatternsPrototypeExperimentLab,
-  OfficialDesignPatternsPrototypeEvidenceLab,
+  PrototypeStructureLab,
+  PrototypeChangeLab,
+  PrototypeEvidenceLab,
 } from "@/components/mdx/design-patterns/diagrams/prototype";
 import {
   Objectives,
   Callout,
-  Attribution,
+  Term,
   Glossary,
   GlossaryItem,
-  Term,
   Exercises,
   Answer,
   Stepper,
   Step,
+  Attribution,
 } from "@/components/mdx/mdx-components";
-
-{/* OFFICIAL_COURSE_ENHANCEMENT */}
 
 <Objectives>
 
-- 能解释原型模式的输入、核心结构、状态变化和输出合同
-- 能绘制并修改原型模式的最小模型，比较至少一种替代方案
-- 能复现正常、边界和单故障样本，定位第一条证据分叉
-- 能根据成本与风险判断方案适用范围，并完成清理重建
+- 能从“图形编辑器要复制带样式与子节点的模板，同时保持新对象身份独立”识别 原型模式 真正处理的变化轴
+- 能解释 ShapePrototype、CloneRegistry、DiagramClient 的引用方向与协作责任
+- 能修改 TypeScript 最小实现，并验证“修改克隆图形的可变子节点不得改变登记的原始模板”
+- 能用“含数据库连接或外部句柄的对象不能靠字段拷贝获得独立资源”作为拒绝或简化方案的信号
 
 </Objectives>
 
-## 为什么只记结论不足以掌握原型模式
+## 直觉：从变化压力出发，而不是从模式名称出发
 
-学习“原型模式”时，第一步不是记住结论，而是冻结输入、上下文、版本和成功标准。只有这些条件明确，原型模式的含义才不会随着样例变化。正文已有的概念说明要与结构图、运行轨迹和失败样本互相印证，不能只凭最终输出看似正确就宣布完成。
+客户端若认识所有图形构造细节，就无法动态加载新的模板类型 因此，原型模式 的第一步不是画类图，而是写清 **图形编辑器要复制带样式与子节点的模板，同时保持新对象身份独立** 中哪项变化会扩散、现有结构怎样承担成本，以及什么观察足以拒绝模式。
 
-结构分析从意图开始：列出参与者、职责、连接方向、生命周期和所有权，再沿正常路径追踪数据或控制流。每一条边都要说明为什么存在、谁创建、谁消费、谁负责清理；如果边界被跨越，必须能在证据中找到第一处异常。
+在实验前先预测：沿 登记原型 → 选择模板 → 执行克隆 → 修复引用 → 分配身份 运行时，哪条依赖最先暴露变化；随后只调整一个参与者或连接，保存代码结果和拒绝原因，最后重置到相同基线。
 
-机制验证要把适用性写成可以执行的条件。正常样本证明主路径，恰好边界样本验证等号和空值，单故障样本只破坏一个假设。三类样本使用同一份观察指标，避免因为测试口径变化而把偶然结果误认成规律。
+<Callout type="info" title="来源范围与独立教学重写">
+  [InformIT
+  官方页面](https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610)确认四位作者、1994
+  年第一版、23 个模式、完整目录，并提供获授权的模式样章与示例代码；[Pearson
+  书目页](https://www.pearson.com/en-us/subject-catalog/p/design-patterns-elements-of-reusable-object-oriented-software/P200000009480/9780321700698)用于交叉核对版本，[GoF
+  作者回顾](https://www.informit.com/articles/article.aspx?p=1327762)用于理解后续评价，[TypeScript
+  官方手册](https://www.typescriptlang.org/docs/handbook/2/classes.html)用于核对本站代码语法。项目没有原书完整正文，本页不翻译或复现原书；中文解释、TypeScript
+  实现、交互与练习均为独立教学重写。
+</Callout>
 
-成本分析同时记录时间、空间、延迟、耦合、可维护性和不可逆操作。结构不是一句“可能失败”，而是可复现输入、预期停点、实际轨迹、错误分类与清理步骤。任何自动重试都要有次数、预算和幂等边界。
+## 问题合同与术语
 
-方案比较不能只列优点。需要给出直接实现、当前方案和至少一个替代方案，逐项比较复杂度、扩展点、故障隔离和团队认知成本。当问题规模很小或变化轴稳定时，更简单的实现往往更好；模式与框架必须由真实变化压力证明。
+**意图。** 通过复制原型创建对象，让运行时实例决定新对象的初始结构。**适用边界。** 具体类型在运行时配置，创建成本高或希望避开与具体类平行的工厂层次。本页验收不变量是：**修改克隆图形的可变子节点不得改变登记的原始模板**。
 
-实现阶段把大结论拆成可检查的中间产物：配置快照、结构清单、状态转移、输入输出样本、日志摘要和测试结果。每个产物带来源与生成命令，下一阶段只消费已通过门禁的版本，避免旧缓存或隐式默认值污染结论。
+<Term def={"原型模式在原型模式中用于检查登记原型阶段的责任与证据。"}>
+  原型模式
+</Term>
+、
+<Term def={"ShapePrototype在原型模式中用于检查选择模板阶段的责任与证据。"}>
+  ShapePrototype
+</Term>
+、
+<Term def={"CloneRegistry在原型模式中用于检查执行克隆阶段的责任与证据。"}>
+  CloneRegistry
+</Term>
+、
+<Term def={"DiagramClient在原型模式中用于检查修复引用阶段的责任与证据。"}>
+  DiagramClient
+</Term>
+、
+<Term def={"变化轴在原型模式中用于检查分配身份阶段的责任与证据。"}>变化轴</Term>
+、
+<Term def={"拒绝条件在原型模式中用于检查登记原型阶段的责任与证据。"}>
+  拒绝条件
+</Term>
 
-解释结果时必须区分相关性与因果性、接口承诺与实现细节、设计意图与运行事实。对“协作”的判断要由独立证据支持，并明确适用范围；一旦输入分布、版本、硬件或组织边界改变，就重新运行最小实验。
+## 官方目录结构的逐项解释
 
-复盘从首个分叉开始，而不是从最后一个报错倒推。先比较冻结输入，再比较第一份结构化中间产物，随后检查状态、约束和副作用。这样可以把复杂系统的排错范围收缩到一个阶段，避免在多个层次同时修改造成新的不确定性。
+下面的目录字段采用 GoF 模式目录的标准描述结构来组织独立讲解。每个字段都要连接当前问题、页面专属实验与练习证据；字段名称出现本身不算覆盖。
 
-迁移到真实项目时，先选择一个最小但有代表性的切片，保存改造前基线，再逐步引入“原型模式”中的机制。每一步只改变一个变量并保留回滚点；性能、正确性、安全性和可理解性至少各有一项可量化指标。
+### 模式名称与分类
 
-最终验收要求读者能脱离页面重新画出结构、口述关键链路、实现最小版本、构造一个反例并解释失败位置。若只能复述名词而不能预测中间状态，说明知识仍停留在识记层，需要回到图示和实验重新验证。
+“原型模式”归入创建型模式，名称只用于定位 通过复制原型创建对象，让运行时实例决定新对象的初始结构，不能替代问题证据。 对“图形编辑器要复制带样式与子节点的模板，同时保持新对象身份独立”先保存基线，再改变一个条件；若出现“含数据库连接或外部句柄的对象不能靠字段拷贝获得独立资源”，就拒绝 原型模式 方案并回到更简单结构。
 
-本页用<Term def="原型模式连接原型模式的机制、边界与可复查证据。">原型模式</Term>、
+### 意图
 
-<Term def="意图连接原型模式的机制、边界与可复查证据。">意图</Term>、
-<Term def="适用性连接原型模式的机制、边界与可复查证据。">适用性</Term>、
-<Term def="结构连接原型模式的机制、边界与可复查证据。">结构</Term>、
-<Term def="协作连接原型模式的机制、边界与可复查证据。">协作</Term>
-建立统一坐标。先预测这些概念在结构图和运行轨迹中的位置，再操作实验控件；如果结果与预测不一致，停止在首个分叉，不要用后续补丁掩盖早期错误。
+“意图”回答模式想改变什么：通过复制原型创建对象，让运行时实例决定新对象的初始结构。 对“图形编辑器要复制带样式与子节点的模板，同时保持新对象身份独立”先保存基线，再改变一个条件；若出现“含数据库连接或外部句柄的对象不能靠字段拷贝获得独立资源”，就拒绝 原型模式 方案并回到更简单结构。
 
-## 权威目录与核心概念逐项对照
+### 别名
 
-- 原型模式
-- 意图
-- 适用性
-- 结构
-- 协作
-- 后果
-- 实现
-- 相关模式
+“别名”在本页处理为：没有需要单独记忆的稳定别名；评审时使用目录中的正式名称，避免用近似称呼混淆责任。 对“图形编辑器要复制带样式与子节点的模板，同时保持新对象身份独立”先保存基线，再改变一个条件；若出现“含数据库连接或外部句柄的对象不能靠字段拷贝获得独立资源”，就拒绝 原型模式 方案并回到更简单结构。
 
-## 三视图实验：结构、变量与证据
+### 动机
+
+“动机”从具体压力出发：客户端若认识所有图形构造细节，就无法动态加载新的模板类型。 对“图形编辑器要复制带样式与子节点的模板，同时保持新对象身份独立”先保存基线，再改变一个条件；若出现“含数据库连接或外部句柄的对象不能靠字段拷贝获得独立资源”，就拒绝 原型模式 方案并回到更简单结构。
+
+### 适用性
+
+“适用性”要求同时满足：具体类型在运行时配置，创建成本高或希望避开与具体类平行的工厂层次。 对“图形编辑器要复制带样式与子节点的模板，同时保持新对象身份独立”先保存基线，再改变一个条件；若出现“含数据库连接或外部句柄的对象不能靠字段拷贝获得独立资源”，就拒绝 原型模式 方案并回到更简单结构。
+
+### 结构
+
+“结构”由 ShapePrototype、CloneRegistry、DiagramClient 以及它们之间的引用方向共同确定。 对“图形编辑器要复制带样式与子节点的模板，同时保持新对象身份独立”先保存基线，再改变一个条件；若出现“含数据库连接或外部句柄的对象不能靠字段拷贝获得独立资源”，就拒绝 原型模式 方案并回到更简单结构。
+
+### 参与者
+
+“参与者”逐一说明 ShapePrototype、CloneRegistry、DiagramClient 谁保存状态、谁发起调用以及谁承担变化。 对“图形编辑器要复制带样式与子节点的模板，同时保持新对象身份独立”先保存基线，再改变一个条件；若出现“含数据库连接或外部句柄的对象不能靠字段拷贝获得独立资源”，就拒绝 原型模式 方案并回到更简单结构。
+
+### 协作
+
+“协作”的运行协议是：Client 从 Registry 取得 Prototype，调用 clone 后再设置本次实例属性。 对“图形编辑器要复制带样式与子节点的模板，同时保持新对象身份独立”先保存基线，再改变一个条件；若出现“含数据库连接或外部句柄的对象不能靠字段拷贝获得独立资源”，就拒绝 原型模式 方案并回到更简单结构。
+
+### 后果
+
+“后果”必须连同收益和成本记录：动态扩展方便，但深浅复制、循环图、资源句柄与唯一身份很难处理。 对“图形编辑器要复制带样式与子节点的模板，同时保持新对象身份独立”先保存基线，再改变一个条件；若出现“含数据库连接或外部句柄的对象不能靠字段拷贝获得独立资源”，就拒绝 原型模式 方案并回到更简单结构。
+
+### 实现
+
+“实现”落地时遵守：明确拥有与共享字段，为对象图建立复制表，并在克隆后生成新身份。 对“图形编辑器要复制带样式与子节点的模板，同时保持新对象身份独立”先保存基线，再改变一个条件；若出现“含数据库连接或外部句柄的对象不能靠字段拷贝获得独立资源”，就拒绝 原型模式 方案并回到更简单结构。
+
+### 示例代码
+
+“示例代码”使用本页 TypeScript 最小切片验证“修改克隆图形的可变子节点不得改变登记的原始模板”，代码是独立教学示例。 对“图形编辑器要复制带样式与子节点的模板，同时保持新对象身份独立”先保存基线，再改变一个条件；若出现“含数据库连接或外部句柄的对象不能靠字段拷贝获得独立资源”，就拒绝 原型模式 方案并回到更简单结构。
+
+### 已知应用
+
+“已知应用”可在这些场景识别：图形模板、游戏实体、预配置文档和昂贵对象快照常从原型复制，但名称相似不构成采用证据。 对“图形编辑器要复制带样式与子节点的模板，同时保持新对象身份独立”先保存基线，再改变一个条件；若出现“含数据库连接或外部句柄的对象不能靠字段拷贝获得独立资源”，就拒绝 原型模式 方案并回到更简单结构。
+
+### 相关模式
+
+“相关模式”用于比较边界：备忘录保存恢复状态而不一定创建新身份；抽象工厂可用原型实现产品创建。 对“图形编辑器要复制带样式与子节点的模板，同时保持新对象身份独立”先保存基线，再改变一个条件；若出现“含数据库连接或外部句柄的对象不能靠字段拷贝获得独立资源”，就拒绝 原型模式 方案并回到更简单结构。
+
+## TypeScript 最小实现与变更实验
+
+以下代码只承担 原型模式 的一条协作切片。先运行基线，再替换 CloneRegistry 或注入非法 revision；如果调用者必须认识具体实现，或者“修改克隆图形的可变子节点不得改变登记的原始模板”不再成立，就记录失败而不是继续增加抽象。
+
+```ts
+interface CloneRegistry {
+  apply(input: Readonly<{ revision: number; payload: string }>): string;
+}
+
+class DiagramClient implements CloneRegistry {
+  apply(input: Readonly<{ revision: number; payload: string }>) {
+    if (input.revision < 1) throw new Error("invalid revision");
+    return `Prototype:${input.revision}:${input.payload}`;
+  }
+}
+
+class ShapePrototype {
+  constructor(private readonly collaborator: CloneRegistry) {}
+  run(payload: string) {
+    return this.collaborator.apply({ revision: 1, payload });
+  }
+}
+```
+
+修改任务：增加一个与 DiagramClient 同合同的新实现，只改扩展点与装配位置；随后故意绕过 ShapePrototype，比较编译错误、运行结果和依赖传播。明确拥有与共享字段，为对象图建立复制表，并在克隆后生成新身份。
+
+## 三视图模式实验
 
 <Stepper>
-  <Step title="第一步：冻结结构并先预测">
-    先预测参与者、连接方向与关键状态，再点击结构节点核对。
-    <OfficialDesignPatternsPrototypeMapLab />
+  <Step title="1. 参与者结构">
+    先点选 选择模板 与不同重构，解释
+    ShapePrototype、CloneRegistry、DiagramClient
+    中谁拥有状态、谁可替换、谁负责拒绝。
+    <PrototypeStructureLab />
   </Step>
-  <Step title="第二步：只改变一个变量">
-    保持其他条件不变，移动覆盖率或风险滑块，观察门禁变化。
-    <OfficialDesignPatternsPrototypeExperimentLab />
+  <Step title="2. 变更传播">
+    切到“新增变化”和“误用反例”，观察 原型模式 的耦合、成本与可追踪性怎样联动。
+    <PrototypeChangeLab />
   </Step>
-  <Step title="第三步：注入单故障并保存证据">
-    注入一个边界故障，记录第一处偏离、拒绝原因和恢复条件。
-    <OfficialDesignPatternsPrototypeEvidenceLab />
+  <Step title="3. 权衡证据">
+    保存一次通过轨迹和一次拒绝轨迹，再重置；最终判断必须能解释
+    动态扩展方便，但深浅复制、循环图、资源句柄与唯一身份很难处理。
+    <PrototypeEvidenceLab />
   </Step>
 </Stepper>
 
-<Callout type="trap">
-  <strong>误区：</strong>
-  看到最终结果正确就认为机制正确。中间状态可能已经偏离，只是被后续默认值或重试偶然修补。应保存首个结构化产物并逐阶段比较。
+## 常见误区与反例
+
+<Callout type="trap" title="原型模式 的拒绝信号">
+  含数据库连接或外部句柄的对象不能靠字段拷贝获得独立资源。出现该信号时，删除一层结构并重跑
+  登记原型 → 选择模板 → 执行克隆 → 修复引用 →
+  分配身份；模式名称不能成为保留复杂度的理由。
 </Callout>
 
-<Callout type="trap">
-  <strong>误区：</strong>
-  为了使用模式或框架而制造抽象。若变化轴、失败边界和替代方案没有写清，新增层次只会扩大认知成本和故障面。
-</Callout>
-
-## 可复现的最小实现
-
-先把决策记录写成机器可读结构：
-
-```json
-{
-  "unit": "原型模式",
-  "inputFrozen": true,
-  "scenario": "normal | boundary | single-fault",
-  "firstDivergence": null,
-  "cleanupRequired": true
-}
-```
-
-再用同一条执行链处理三类样本：
-
-```ts
-type Evidence = { stage: string; expected: string; actual: string };
-
-function verify(sample: unknown, expected: readonly Evidence[]) {
-  const trace = runFromCleanState(sample);
-  return expected.find((item, index) => trace[index]?.actual !== item.expected);
-}
-```
-
-最后保存回归门禁，禁止失败样本静默通过：
-
-```text
-normal      -> complete, invariant preserved
-boundary    -> complete or explicit rejection
-singleFault -> stop at first divergence, no stale output
-```
-
-用统一评分解释实验结果：
-
-$$
-Q = C_{correct} + C_{trace} + C_{recover} - R_{residual}
-$$
-
-$$
-C_{coverage} = \frac{N_{verified}}{N_{official}}
-$$
-
-$$
-R_{residual} = P(failure) \times I(impact)
-$$
-
-$$
-Accept = (C_{coverage} \ge 0.90) \land (R_{residual} \le R_{budget})
-$$
-
-## 本章回顾
-
-- 原型模式必须绑定冻结输入和明确成功标准。
-- 意图必须能画成结构并沿边追踪责任。
-- 适用性要由正常、边界和单故障样本共同验证。
-- 结构必须保存第一处偏离和清理重建步骤。
-- 协作决定方案是否可以进入下一阶段。
-
-<Exercises>
-
-**问题 1**：为“原型模式”写出最小输入合同，并指出一个不能省略的边界条件。
-
-<Answer>
-  输入合同至少包含样本身份、版本、配置、成功标准和清理方式；边界条件必须能改变结构或状态，而不是只换一段描述。
-</Answer>
-
-**问题 2**：构造一个只破坏“适用性”的单故障样本，第一条预期证据是什么？
-
-<Answer>
-  先冻结正常轨迹，只改变该条件；第一条证据应是最早依赖它的结构化中间产物，而不是最终错误消息。
-</Answer>
-
-**问题 3**：什么情况下不应采用本页方案？
-
-<Answer>
-  当变化轴稳定、直接实现更清晰、额外层次无法降低风险或提供独立测试边界时，应选择更简单方案并记录重新评估触发条件。
-</Answer>
-
-</Exercises>
+另一个易错点是把结构相似当作语义相同。备忘录保存恢复状态而不一定创建新身份；抽象工厂可用原型实现产品创建；比较时必须同时写出谁触发变化、谁持有状态、失败如何传播，以及替代方案是否更小。
 
 ## 术语表
 
 <Glossary>
   <GlossaryItem term="原型模式">
-    原型模式用于描述“原型模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+    原型模式 在“登记原型”阶段使用的可复核术语。
   </GlossaryItem>
-  <GlossaryItem term="意图">
-    意图用于描述“原型模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  <GlossaryItem term="ShapePrototype">
+    原型模式 在“选择模板”阶段使用的可复核术语。
   </GlossaryItem>
-  <GlossaryItem term="适用性">
-    适用性用于描述“原型模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  <GlossaryItem term="CloneRegistry">
+    原型模式 在“执行克隆”阶段使用的可复核术语。
   </GlossaryItem>
-  <GlossaryItem term="结构">
-    结构用于描述“原型模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  <GlossaryItem term="DiagramClient">
+    原型模式 在“修复引用”阶段使用的可复核术语。
   </GlossaryItem>
-  <GlossaryItem term="协作">
-    协作用于描述“原型模式”中的输入、结构、约束或证据边界，必须能在实验记录中定位。
+  <GlossaryItem term="变化轴">
+    原型模式 在“分配身份”阶段使用的可复核术语。
+  </GlossaryItem>
+  <GlossaryItem term="拒绝条件">
+    原型模式 在“登记原型”阶段使用的可复核术语。
   </GlossaryItem>
 </Glossary>
 
-<Attribution
-  adaptedFrom="Erich Gamma、Richard Helm、Ralph Johnson、John Vlissides著《Design Patterns: Elements of Reusable Object-Oriented Software》，Addison-Wesley，1994，ISBN 9780201633610 · 独立教学重构"
-  adaptedUrl="https://www.pearson.com/en-us/subject-catalog/p/design-patterns-elements-of-reusable-object-oriented-software/P200000009480/9780321700698"
-/>
+## 练习与答案
 
-<Objectives>
+<Exercises>
 
-- 理解原型模式通过克隆创建对象的优势
-- 掌握深拷贝与浅拷贝的区别
-- 能用原型模式设计游戏中的怪物生成系统
+1. **目录字段复核。** 用当前案例逐项说明 模式名称与分类、意图、别名、动机、适用性、结构、参与者、协作、后果、实现、示例代码、已知应用、相关模式；每项至少给出一个对象、一次调用或一条可观察后果。
 
-</Objectives>
+<Answer>
+  原型模式
+  的复核从“图形编辑器要复制带样式与子节点的模板，同时保持新对象身份独立”开始。模式名称与分类定位创建型模式；意图是通过复制原型创建对象，让运行时实例决定新对象的初始结构；别名边界为没有需要单独记忆的稳定别名；评审时使用目录中的正式名称；动机来自客户端若认识所有图形构造细节，就无法动态加载新的模板类型；适用性要求具体类型在运行时配置，创建成本高或希望避开与具体类平行的工厂层次；结构和参与者是ShapePrototype、CloneRegistry、DiagramClient；协作规则为Client
+  从 Registry 取得 Prototype，调用 clone
+  后再设置本次实例属性；后果是动态扩展方便，但深浅复制、循环图、资源句柄与唯一身份很难处理；实现遵循明确拥有与共享字段，为对象图建立复制表，并在克隆后生成新身份；示例代码验证修改克隆图形的可变子节点不得改变登记的原始模板；已知应用包括图形模板、游戏实体、预配置文档和昂贵对象快照常从原型复制；相关模式比较为备忘录保存恢复状态而不一定创建新身份；抽象工厂可用原型实现产品创建。
+</Answer>
 
-## 痛点场景：怪物生成
+2. **代码变更。** 为 CloneRegistry 增加一个实现，并证明主流程不需要识别它的具体类；再注入“含数据库连接或外部句柄的对象不能靠字段拷贝获得独立资源”。
 
-游戏中要生成大量怪物。每只怪物有复杂的状态（血量、装备、AI 参数、技能列表）。用 `new` 创建要从头初始化所有字段，性能差且代码冗长。
+<Answer>
+  新实现只遵守最小合同并由装配处选择，ShapePrototype 继续沿 登记原型 → 选择模板
+  → 执行克隆 → 修复引用 → 分配身份
+  工作。误用场景必须让实验的因果可追踪下降或让不变量失败；修复后重置并复跑同一输入，不能更换验收条件。
+</Answer>
 
-```typescript
-class Monster {
-  constructor(
-    hp: number, maxHp: number,
-    equipment: Equipment[],
-    skills: Skill[],
-    aiParams: AIConfig,
-    // ...几十个字段
-  ) {}
-}
+3. **方案判断。** 在什么情况下应拒绝 原型模式，选择直接代码或相邻模式？
 
-// 每次都要传几十个参数
-const goblin1 = new Monster(100, 100, [...], [...], {...});
-const goblin2 = new Monster(100, 100, [...], [...], {...});
-```
+<Answer>
+  当具体类型在运行时配置，创建成本高或希望避开与具体类平行的工厂层次不成立，或简单方案已经让“修改克隆图形的可变子节点不得改变登记的原始模板”可验证时，应拒绝额外层次。备忘录保存恢复状态而不一定创建新身份；抽象工厂可用原型实现产品创建；最终决定同时登记采用收益、动态扩展方便，但深浅复制、循环图、资源句柄与唯一身份很难处理、删除测试和回退方案。
+</Answer>
 
-## 解决方案：克隆已有对象
+</Exercises>
 
-```typescript
-interface Prototype {
-  clone(): Prototype;
-}
+## 本章小结
 
-class Monster implements Prototype {
-  hp: number;
-  maxHp: number;
-  equipment: Equipment[];
-  skills: Skill[];
-  aiParams: AIConfig;
+原型模式 把“图形编辑器要复制带样式与子节点的模板，同时保持新对象身份独立”收敛为 ShapePrototype、CloneRegistry、DiagramClient 的协作合同。学习结果不是能复述定义，而是能修改代码、触发“含数据库连接或外部句柄的对象不能靠字段拷贝获得独立资源”这一反例、重置实验，并根据 动态扩展方便，但深浅复制、循环图、资源句柄与唯一身份很难处理 接受或拒绝方案。
 
-  clone(): Monster {
-    // 深拷贝
-    const copy = Object.create(this);
-    copy.hp = this.hp;
-    copy.maxHp = this.maxHp;
-    copy.equipment = this.equipment.map((e) => e.clone());
-    copy.skills = this.skills.map((s) => ({ ...s }));
-    copy.aiParams = { ...this.aiParams };
-    return copy;
-  }
-}
+## 前后导航
 
-// 创建原型
-const goblinPrototype = new Monster(100, 100, [sword], [slash], aggressiveAI);
-
-// 快速克隆
-const goblin1 = goblinPrototype.clone();
-const goblin2 = goblinPrototype.clone();
-goblin2.hp = 80; // 修改副本不影响原型
-```
-
-<PrototypePatternDiagram />
-
-## 深拷贝 vs 浅拷贝
-
-| 维度     | 浅拷贝                   | 深拷贝               |
-| -------- | ------------------------ | -------------------- |
-| 基本类型 | 复制值                   | 复制值               |
-| 引用类型 | 复制引用（共享对象）     | 递归复制（独立对象） |
-| 速度     | 快                       | 慢                   |
-| 安全性   | 修改引用对象会影响原对象 | 完全独立             |
-
-<Callout type="warn">
-  原型模式通常需要**深拷贝**——否则克隆出的对象与原型共享内部引用（如 equipment
-  数组），修改一个会影响另一个。这是原型模式最容易出 bug 的地方。
-</Callout>
-
-## 常见误区
-
-### 误区 1：忘了深拷贝
-
-最常见的 bug：浅拷贝后修改克隆体的数组/对象，原型也跟着变。所有引用类型字段都要递归拷贝。
-
-### 误区 2：循环引用导致无限递归
-
-如果对象 A 引用 B，B 又引用 A，深拷贝会无限递归。解决方案：用 `WeakMap` 记录已拷贝的对象。
-
-### 误区 3：所有场景都用原型
-
-原型模式适合：创建成本高（需要数据库查询、网络请求、复杂计算）、需要保留已有状态、大量相似对象的场景。如果 `new` 就够快，不必用原型。
-
-## 小结
-
-- 原型 = 通过克隆已有对象创建新对象
-- 核心价值：避免昂贵的初始化，快速复制已有状态
-- 关键注意点：深拷贝 vs 浅拷贝、循环引用
-- 适合：游戏对象生成、配置复制、缓存快照
+- [上一页：建造者模式](/learn/design-patterns/01-creational/builder)
+- [下一页：适配器模式](/learn/design-patterns/02-structural/adapter)
 
 <Attribution
-  source="GoF《设计模式》+ Head First Design Patterns"
-  license="原创转述"
+  mode="independent-rewrite"
+  sourceBasis="authorized-sample"
+  workTitle="Erich Gamma, Richard Helm, Ralph Johnson, John Vlissides, Design Patterns: Elements of Reusable Object-Oriented Software"
+  adaptedUrl="https://www.informit.com/store/design-patterns-elements-of-reusable-object-oriented-software-9780201633610"
 />
-
-<Glossary>
-
-<GlossaryItem term="原型模式">
-
-用原型实例指定创建对象的种类，并且通过拷贝这些原型来创建新对象。
-
-</GlossaryItem>
-
-<GlossaryItem term="深拷贝">
-
-递归复制对象的所有字段，包括引用类型字段指向的对象。克隆体与原对象完全独立。
-
-</GlossaryItem>
-
-<GlossaryItem term="浅拷贝">
-
-只复制对象的基本类型字段，引用类型字段仍指向原对象。克隆体与原对象共享引用对象。
-
-</GlossaryItem>
-
-</Glossary>
