@@ -48,7 +48,7 @@ const GENERIC_PATTERNS = [
     "generic-quality-prose",
     /冻结输入、上下文、版本和成功标准|第一条证据分叉|单故障样本/,
   ],
-  ["placeholder-copy", /TODO|TBD|待补充|占位内容|lorem ipsum/i],
+  ["placeholder-copy", /\b(?:TODO|TBD)\b|待补充|占位内容|lorem ipsum/i],
 ];
 const VISUAL_NAME =
   /(Diagram|Viz|Figure|Demo|Chart|Scene|Canvas|Slider|Timeline|Anatomy|Flow|Lab|Map)$/;
@@ -133,6 +133,22 @@ OFFICIAL_COURSE_ENHANCEMENT
 `;
   assert.deepEqual(regressionBlockers(remediatedCarChapter), []);
 
+  const validKotlinIdentifier = `
+<Objectives><li>解析数值</li></Objectives>
+val value = raw.toDoubleOrNull()
+<Attribution />
+`;
+  assert.equal(
+    regressionBlockers(validKotlinIdentifier).includes("placeholder-copy"),
+    false,
+  );
+  assert.equal(
+    regressionBlockers(
+      validKotlinIdentifier.replace("val value", "TODO val value"),
+    ).includes("placeholder-copy"),
+    true,
+  );
+
   const repeated =
     "同一段模板话术如果跨三章反复出现，就必须作为跨章复制阻断，而不能用字数平均掉。";
   const owners = duplicateSentenceOwners([
@@ -146,10 +162,7 @@ OFFICIAL_COURSE_ENHANCEMENT
     (_, index) =>
       `围绕“节点${index + 1}”固定同一套输入，只替换标题而不解释具体机制；这种段落即使很长，也不能被字数或目录覆盖率掩盖，还会让不同知识点得到完全相同的实验因果与验收结论。`,
   );
-  assert.equal(
-    maxWithinChapterTemplateCopies(withinChapterTemplate),
-    10,
-  );
+  assert.equal(maxWithinChapterTemplateCopies(withinChapterTemplate), 10);
   console.log(
     JSON.stringify({
       version: 2,
@@ -159,6 +172,7 @@ OFFICIAL_COURSE_ENHANCEMENT
         "remediated-car-template-clean",
         "cross-chapter-copy-detected",
         "within-chapter-template-copy-detected",
+        "placeholder-boundary-detected-without-kotlin-false-positive",
       ],
     }),
   );
@@ -343,9 +357,7 @@ function maxWithinChapterTemplateCopies(paragraphs) {
   for (const paragraph of paragraphs) {
     if (paragraph.length < 70) continue;
     const fingerprint = normalized(
-      paragraph
-        .replace(/“[^”]+”/g, "“主题”")
-        .replace(/\d+(?:\.\d+)*/g, "#"),
+      paragraph.replace(/“[^”]+”/g, "“主题”").replace(/\d+(?:\.\d+)*/g, "#"),
     );
     if (fingerprint.length < 45) continue;
     counts.set(fingerprint, (counts.get(fingerprint) ?? 0) + 1);

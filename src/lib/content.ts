@@ -1826,6 +1826,16 @@ export const SECTION_ORDER = [
   "第四篇 · DirectX游戏编程应用",
   "第五篇 · 引擎与进阶",
   "全书验收",
+  // Kotlin Programming: The Big Nerd Ranch Guide（第1版）
+  "Kotlin权威指南 · 学习地图",
+  "Kotlin权威指南 · 导论",
+  "Kotlin权威指南 · 语言基础",
+  "Kotlin权威指南 · 函数与空安全",
+  "Kotlin权威指南 · 值与集合",
+  "Kotlin权威指南 · 对象模型",
+  "Kotlin权威指南 · 互操作与协程",
+  "Kotlin权威指南 · 参考与挑战",
+  "Kotlin权威指南 · 全书验收",
   // 代码质量与重构
   "代码质量入门",
   "整洁代码",
