@@ -26314,9 +26314,11 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-official-learning-map");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia6OfficialLearningMapMapLab: module0.Sia6OfficialLearningMapMapLab,
+        Sia6OfficialLearningMapExperimentLab:
+          module0.Sia6OfficialLearningMapExperimentLab,
+        Sia6OfficialLearningMapEvidenceLab:
+          module0.Sia6OfficialLearningMapEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/01-sia-6e-part-1-foundational-spring/sia-6e-part-1-foundational-spring":
@@ -26324,9 +26326,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-part-1-foundational-spring");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia6Part1FoundationalSpringMapLab:
+          module0.Sia6Part1FoundationalSpringMapLab,
+        Sia6Part1FoundationalSpringExperimentLab:
+          module0.Sia6Part1FoundationalSpringExperimentLab,
+        Sia6Part1FoundationalSpringEvidenceLab:
+          module0.Sia6Part1FoundationalSpringEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/02-sia-6e-01-getting-started/sia-6e-01-getting-started":
@@ -26334,9 +26339,11 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-01-getting-started");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia601GettingStartedMapLab: module0.Sia601GettingStartedMapLab,
+        Sia601GettingStartedExperimentLab:
+          module0.Sia601GettingStartedExperimentLab,
+        Sia601GettingStartedEvidenceLab:
+          module0.Sia601GettingStartedEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/03-sia-6e-02-developing-web-applications/sia-6e-02-developing-web-applications":
@@ -26344,9 +26351,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-02-developing-web-applications");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia602DevelopingWebApplicationsMapLab:
+          module0.Sia602DevelopingWebApplicationsMapLab,
+        Sia602DevelopingWebApplicationsExperimentLab:
+          module0.Sia602DevelopingWebApplicationsExperimentLab,
+        Sia602DevelopingWebApplicationsEvidenceLab:
+          module0.Sia602DevelopingWebApplicationsEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/04-sia-6e-03-working-with-data/sia-6e-03-working-with-data":
@@ -26354,9 +26364,11 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-03-working-with-data");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia603WorkingWithDataMapLab: module0.Sia603WorkingWithDataMapLab,
+        Sia603WorkingWithDataExperimentLab:
+          module0.Sia603WorkingWithDataExperimentLab,
+        Sia603WorkingWithDataEvidenceLab:
+          module0.Sia603WorkingWithDataEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/05-sia-6e-04-nonrelational-data/sia-6e-04-nonrelational-data":
@@ -26364,9 +26376,11 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-04-nonrelational-data");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia604NonrelationalDataMapLab: module0.Sia604NonrelationalDataMapLab,
+        Sia604NonrelationalDataExperimentLab:
+          module0.Sia604NonrelationalDataExperimentLab,
+        Sia604NonrelationalDataEvidenceLab:
+          module0.Sia604NonrelationalDataEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/06-sia-6e-05-securing-spring/sia-6e-05-securing-spring":
@@ -26374,9 +26388,11 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-05-securing-spring");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia605SecuringSpringMapLab: module0.Sia605SecuringSpringMapLab,
+        Sia605SecuringSpringExperimentLab:
+          module0.Sia605SecuringSpringExperimentLab,
+        Sia605SecuringSpringEvidenceLab:
+          module0.Sia605SecuringSpringEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/07-sia-6e-06-configuration-properties/sia-6e-06-configuration-properties":
@@ -26384,9 +26400,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-06-configuration-properties");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia606ConfigurationPropertiesMapLab:
+          module0.Sia606ConfigurationPropertiesMapLab,
+        Sia606ConfigurationPropertiesExperimentLab:
+          module0.Sia606ConfigurationPropertiesExperimentLab,
+        Sia606ConfigurationPropertiesEvidenceLab:
+          module0.Sia606ConfigurationPropertiesEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/08-sia-6e-part-2-integrated-spring/sia-6e-part-2-integrated-spring":
@@ -26394,9 +26413,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-part-2-integrated-spring");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia6Part2IntegratedSpringMapLab:
+          module0.Sia6Part2IntegratedSpringMapLab,
+        Sia6Part2IntegratedSpringExperimentLab:
+          module0.Sia6Part2IntegratedSpringExperimentLab,
+        Sia6Part2IntegratedSpringEvidenceLab:
+          module0.Sia6Part2IntegratedSpringEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/09-sia-6e-07-creating-rest-services/sia-6e-07-creating-rest-services":
@@ -26404,9 +26426,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-07-creating-rest-services");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia607CreatingRestServicesMapLab:
+          module0.Sia607CreatingRestServicesMapLab,
+        Sia607CreatingRestServicesExperimentLab:
+          module0.Sia607CreatingRestServicesExperimentLab,
+        Sia607CreatingRestServicesEvidenceLab:
+          module0.Sia607CreatingRestServicesEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/10-sia-6e-08-securing-rest/sia-6e-08-securing-rest":
@@ -26414,9 +26439,10 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-08-securing-rest");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia608SecuringRestMapLab: module0.Sia608SecuringRestMapLab,
+        Sia608SecuringRestExperimentLab:
+          module0.Sia608SecuringRestExperimentLab,
+        Sia608SecuringRestEvidenceLab: module0.Sia608SecuringRestEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/11-sia-6e-09-asynchronous-messaging/sia-6e-09-asynchronous-messaging":
@@ -26424,9 +26450,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-09-asynchronous-messaging");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia609AsynchronousMessagingMapLab:
+          module0.Sia609AsynchronousMessagingMapLab,
+        Sia609AsynchronousMessagingExperimentLab:
+          module0.Sia609AsynchronousMessagingExperimentLab,
+        Sia609AsynchronousMessagingEvidenceLab:
+          module0.Sia609AsynchronousMessagingEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/12-sia-6e-10-integrating-spring/sia-6e-10-integrating-spring":
@@ -26434,9 +26463,11 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-10-integrating-spring");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia610IntegratingSpringMapLab: module0.Sia610IntegratingSpringMapLab,
+        Sia610IntegratingSpringExperimentLab:
+          module0.Sia610IntegratingSpringExperimentLab,
+        Sia610IntegratingSpringEvidenceLab:
+          module0.Sia610IntegratingSpringEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/13-sia-6e-part-3-reactive-spring/sia-6e-part-3-reactive-spring":
@@ -26444,9 +26475,11 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-part-3-reactive-spring");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia6Part3ReactiveSpringMapLab: module0.Sia6Part3ReactiveSpringMapLab,
+        Sia6Part3ReactiveSpringExperimentLab:
+          module0.Sia6Part3ReactiveSpringExperimentLab,
+        Sia6Part3ReactiveSpringEvidenceLab:
+          module0.Sia6Part3ReactiveSpringEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/14-sia-6e-11-introducing-reactor/sia-6e-11-introducing-reactor":
@@ -26454,9 +26487,11 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-11-introducing-reactor");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia611IntroducingReactorMapLab: module0.Sia611IntroducingReactorMapLab,
+        Sia611IntroducingReactorExperimentLab:
+          module0.Sia611IntroducingReactorExperimentLab,
+        Sia611IntroducingReactorEvidenceLab:
+          module0.Sia611IntroducingReactorEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/15-sia-6e-12-reactive-apis/sia-6e-12-reactive-apis":
@@ -26464,9 +26499,10 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-12-reactive-apis");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia612ReactiveApisMapLab: module0.Sia612ReactiveApisMapLab,
+        Sia612ReactiveApisExperimentLab:
+          module0.Sia612ReactiveApisExperimentLab,
+        Sia612ReactiveApisEvidenceLab: module0.Sia612ReactiveApisEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/16-sia-6e-13-reactive-persistence/sia-6e-13-reactive-persistence":
@@ -26474,9 +26510,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-13-reactive-persistence");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia613ReactivePersistenceMapLab:
+          module0.Sia613ReactivePersistenceMapLab,
+        Sia613ReactivePersistenceExperimentLab:
+          module0.Sia613ReactivePersistenceExperimentLab,
+        Sia613ReactivePersistenceEvidenceLab:
+          module0.Sia613ReactivePersistenceEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/17-sia-6e-14-working-with-rsocket/sia-6e-14-working-with-rsocket":
@@ -26484,9 +26523,11 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-14-working-with-rsocket");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia614WorkingWithRsocketMapLab: module0.Sia614WorkingWithRsocketMapLab,
+        Sia614WorkingWithRsocketExperimentLab:
+          module0.Sia614WorkingWithRsocketExperimentLab,
+        Sia614WorkingWithRsocketEvidenceLab:
+          module0.Sia614WorkingWithRsocketEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/18-sia-6e-part-4-deployed-spring/sia-6e-part-4-deployed-spring":
@@ -26494,9 +26535,11 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-part-4-deployed-spring");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia6Part4DeployedSpringMapLab: module0.Sia6Part4DeployedSpringMapLab,
+        Sia6Part4DeployedSpringExperimentLab:
+          module0.Sia6Part4DeployedSpringExperimentLab,
+        Sia6Part4DeployedSpringEvidenceLab:
+          module0.Sia6Part4DeployedSpringEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/19-sia-6e-15-spring-boot-actuator/sia-6e-15-spring-boot-actuator":
@@ -26504,9 +26547,11 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-15-spring-boot-actuator");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia615SpringBootActuatorMapLab: module0.Sia615SpringBootActuatorMapLab,
+        Sia615SpringBootActuatorExperimentLab:
+          module0.Sia615SpringBootActuatorExperimentLab,
+        Sia615SpringBootActuatorEvidenceLab:
+          module0.Sia615SpringBootActuatorEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/20-sia-6e-16-administering-spring/sia-6e-16-administering-spring":
@@ -26514,9 +26559,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-16-administering-spring");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia616AdministeringSpringMapLab:
+          module0.Sia616AdministeringSpringMapLab,
+        Sia616AdministeringSpringExperimentLab:
+          module0.Sia616AdministeringSpringExperimentLab,
+        Sia616AdministeringSpringEvidenceLab:
+          module0.Sia616AdministeringSpringEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/21-sia-6e-17-monitoring-with-jmx/sia-6e-17-monitoring-with-jmx":
@@ -26524,9 +26572,11 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-17-monitoring-with-jmx");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia617MonitoringWithJmxMapLab: module0.Sia617MonitoringWithJmxMapLab,
+        Sia617MonitoringWithJmxExperimentLab:
+          module0.Sia617MonitoringWithJmxExperimentLab,
+        Sia617MonitoringWithJmxEvidenceLab:
+          module0.Sia617MonitoringWithJmxEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/22-sia-6e-18-deploying-spring/sia-6e-18-deploying-spring":
@@ -26534,9 +26584,11 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-18-deploying-spring");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia618DeployingSpringMapLab: module0.Sia618DeployingSpringMapLab,
+        Sia618DeployingSpringExperimentLab:
+          module0.Sia618DeployingSpringExperimentLab,
+        Sia618DeployingSpringEvidenceLab:
+          module0.Sia618DeployingSpringEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/23-sia-6e-appendix-bootstrapping/sia-6e-appendix-bootstrapping":
@@ -26544,9 +26596,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-appendix-bootstrapping");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia6AppendixBootstrappingMapLab:
+          module0.Sia6AppendixBootstrappingMapLab,
+        Sia6AppendixBootstrappingExperimentLab:
+          module0.Sia6AppendixBootstrappingExperimentLab,
+        Sia6AppendixBootstrappingEvidenceLab:
+          module0.Sia6AppendixBootstrappingEvidenceLab,
       } as ChapterMdxComponents;
     },
   "spring-in-action/24-sia-6e-official-final-review/sia-6e-official-final-review":
@@ -26554,9 +26609,11 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/spring-in-action/diagrams/sia-6e-official-final-review");
       return {
-        Sia6ArchitectureLab: module0.Sia6ArchitectureLab,
-        Sia6FlowLab: module0.Sia6FlowLab,
-        Sia6EvidenceLab: module0.Sia6EvidenceLab,
+        Sia6OfficialFinalReviewMapLab: module0.Sia6OfficialFinalReviewMapLab,
+        Sia6OfficialFinalReviewExperimentLab:
+          module0.Sia6OfficialFinalReviewExperimentLab,
+        Sia6OfficialFinalReviewEvidenceLab:
+          module0.Sia6OfficialFinalReviewEvidenceLab,
       } as ChapterMdxComponents;
     },
   "sql-ten-minutes/00-learning-map/sqt-official-learning-map": async () => {
