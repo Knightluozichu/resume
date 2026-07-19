@@ -1,43 +1,110 @@
-import { OfficialWindowsJourneyLab } from "./official-windows-journey-lab";
+import {
+  WindowsJourneyMigrationLab,
+  WindowsJourneyPipelineLab,
+  WindowsJourneyRecoveryLab,
+  type WindowsJourneyCausalModel,
+  type WindowsJourneyCoverageNode,
+} from "./official-windows-journey-book-lab";
 
-const data = {
-  title: "第14章 绘制出质感的世界—光照与材质",
-  label: "第三篇 · DirectX游戏编程基础",
-  color: "#047857",
-  soft: "#ecfdf5",
-  chain: [
-    "准备法线",
-    "定义材质",
-    "配置光源",
-    "计算光照分量",
-    "绘制几何体",
-    "检查空间与归一化",
-  ],
-  concepts: [
-    "第14章 绘制出质感的世界—光照与材质",
-    "14.1 引言",
-    "14.2 四大光照类型",
-    "14.3 三大光源类型",
-    "14.4 材质",
-    "14.5 关于顶点法线",
-    "14.6 总结与升华",
-    "14.7 几何体的快捷绘制",
-    "14.7.1 D3D中内置的几何体概述",
-    "14.7.2 D3D中几种内置的几何体绘制四步曲",
-    "14.7.3 D3D中几种内置几何体的创建",
-    "14.8 示例程序D3Ddemo7",
-    "14.9 章节小憩",
-  ],
-} as const;
+const title = "第14章 绘制出质感的世界—光照与材质";
+const focus = "分离光源、法线、材质反射分量与固定功能逐顶点光照";
+const stages = [
+  "准备法线",
+  "变换光向",
+  "计算漫反射",
+  "计算镜面",
+  "合成材质"
+];
+const nodes = [
+  {
+    "label": "第14章 绘制出质感的世界—光照与材质",
+    "mechanism": "围绕分离光源、法线、材质反射分量与固定功能逐顶点光照，对 第14章 绘制出质感的世界—光照与材质，必须给出可复算中间量，先在纸面预测空间或像素结果，再用点积、各光照分量、法线长度和最终颜色查找首个数值分叉。",
+    "probe": "记录点积、各光照分量、法线长度和最终颜色"
+  },
+  {
+    "label": "14.1 引言",
+    "mechanism": "围绕分离光源、法线、材质反射分量与固定功能逐顶点光照，14.1 引言 限定本章的一个知识坐标；独立解释围绕“在同一空间计算环境光、漫反射和镜面项，再由材质决定反射比例”展开，并以“光照结果能由法线、光向、视向和材质参数逐项复算”结束。",
+    "probe": "记录点积、各光照分量、法线长度和最终颜色"
+  },
+  {
+    "label": "14.2 四大光照类型",
+    "mechanism": "围绕分离光源、法线、材质反射分量与固定功能逐顶点光照，对 14.2 四大光照类型，必须给出可复算中间量，先在纸面预测空间或像素结果，再用点积、各光照分量、法线长度和最终颜色查找首个数值分叉。",
+    "probe": "记录点积、各光照分量、法线长度和最终颜色"
+  },
+  {
+    "label": "14.3 三大光源类型",
+    "mechanism": "围绕分离光源、法线、材质反射分量与固定功能逐顶点光照，14.3 三大光源类型 限定本章的一个知识坐标；独立解释围绕“在同一空间计算环境光、漫反射和镜面项，再由材质决定反射比例”展开，并以“光照结果能由法线、光向、视向和材质参数逐项复算”结束。",
+    "probe": "记录点积、各光照分量、法线长度和最终颜色"
+  },
+  {
+    "label": "14.4 材质",
+    "mechanism": "围绕分离光源、法线、材质反射分量与固定功能逐顶点光照，对 14.4 材质，必须给出可复算中间量，先在纸面预测空间或像素结果，再用点积、各光照分量、法线长度和最终颜色查找首个数值分叉。",
+    "probe": "记录点积、各光照分量、法线长度和最终颜色"
+  },
+  {
+    "label": "14.5 关于顶点法线",
+    "mechanism": "围绕分离光源、法线、材质反射分量与固定功能逐顶点光照，14.5 关于顶点法线 限定本章的一个知识坐标；独立解释围绕“在同一空间计算环境光、漫反射和镜面项，再由材质决定反射比例”展开，并以“光照结果能由法线、光向、视向和材质参数逐项复算”结束。",
+    "probe": "记录点积、各光照分量、法线长度和最终颜色"
+  },
+  {
+    "label": "14.6 总结与升华",
+    "mechanism": "围绕分离光源、法线、材质反射分量与固定功能逐顶点光照，对 14.6 总结与升华，收尾不是装饰，而是要求用点积、各光照分量、法线长度和最终颜色复盘“光照结果能由法线、光向、视向和材质参数逐项复算”是否在正常和失败路径同时成立。",
+    "probe": "记录点积、各光照分量、法线长度和最终颜色"
+  },
+  {
+    "label": "14.7 几何体的快捷绘制",
+    "mechanism": "围绕分离光源、法线、材质反射分量与固定功能逐顶点光照，14.7 几何体的快捷绘制 限定本章的一个知识坐标；独立解释围绕“在同一空间计算环境光、漫反射和镜面项，再由材质决定反射比例”展开，并以“光照结果能由法线、光向、视向和材质参数逐项复算”结束。",
+    "probe": "记录点积、各光照分量、法线长度和最终颜色"
+  },
+  {
+    "label": "14.7.1 D3D中内置的几何体概述",
+    "mechanism": "围绕分离光源、法线、材质反射分量与固定功能逐顶点光照，对 14.7.1 D3D中内置的几何体概述，API 名称属于具体年代；学习重点是输入、返回值、所有权和失败出口，技术事实以微软文档核对。",
+    "probe": "记录点积、各光照分量、法线长度和最终颜色"
+  },
+  {
+    "label": "14.7.2 D3D中几种内置的几何体绘制四步曲",
+    "mechanism": "围绕分离光源、法线、材质反射分量与固定功能逐顶点光照，对 14.7.2 D3D中几种内置的几何体绘制四步曲，API 名称属于具体年代；学习重点是输入、返回值、所有权和失败出口，技术事实以微软文档核对。",
+    "probe": "记录点积、各光照分量、法线长度和最终颜色"
+  },
+  {
+    "label": "14.7.3 D3D中几种内置几何体的创建",
+    "mechanism": "围绕分离光源、法线、材质反射分量与固定功能逐顶点光照，对 14.7.3 D3D中几种内置几何体的创建，API 名称属于具体年代；学习重点是输入、返回值、所有权和失败出口，技术事实以微软文档核对。",
+    "probe": "记录点积、各光照分量、法线长度和最终颜色"
+  },
+  {
+    "label": "14.8 示例程序D3Ddemo7",
+    "mechanism": "围绕分离光源、法线、材质反射分量与固定功能逐顶点光照，对 14.8 示例程序D3Ddemo7，把前述机制装入一个可运行场景：固定构建、资源和输入，仅改变一个条件，并保留点积、各光照分量、法线长度和最终颜色。",
+    "probe": "记录点积、各光照分量、法线长度和最终颜色"
+  },
+  {
+    "label": "14.9 章节小憩",
+    "mechanism": "围绕分离光源、法线、材质反射分量与固定功能逐顶点光照，对 14.9 章节小憩，收尾不是装饰，而是要求用点积、各光照分量、法线长度和最终颜色复盘“光照结果能由法线、光向、视向和材质参数逐项复算”是否在正常和失败路径同时成立。",
+    "probe": "记录点积、各光照分量、法线长度和最终颜色"
+  }
+] satisfies WindowsJourneyCoverageNode[];
+const model = {
+  "historicalLabel": "D3D9 固定光照",
+  "modernLabel": "着色器显式光照",
+  "unit": "颜色误差",
+  "historicalBase": 19,
+  "historicalSlope": 6.5,
+  "modernBase": 10,
+  "modernSlope": 1.7,
+  "faultPenalty": 26,
+  "invariant": "光照结果能由法线、光向、视向和材质参数逐项复算",
+  "fault": "非均匀缩放后法线未正确变换或归一化",
+  "evidence": "点积、各光照分量、法线长度和最终颜色"
+} satisfies WindowsJourneyCausalModel;
+const props = { title, focus, stages, nodes, model };
 
 export function Wj14LightingMaterialsMapLab() {
-  return <OfficialWindowsJourneyLab {...data} view="map" />;
+  return <WindowsJourneyPipelineLab {...props} />;
 }
 
 export function Wj14LightingMaterialsExperimentLab() {
-  return <OfficialWindowsJourneyLab {...data} view="experiment" />;
+  return <WindowsJourneyMigrationLab {...props} />;
 }
 
 export function Wj14LightingMaterialsEvidenceLab() {
-  return <OfficialWindowsJourneyLab {...data} view="evidence" />;
+  return <WindowsJourneyRecoveryLab {...props} />;
 }
