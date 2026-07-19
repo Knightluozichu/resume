@@ -1,18 +1,18 @@
-import { OfficialCrv18Lab } from "./official-crv18-lab";
+import { CoderMechanismLab } from "./coder-mechanism-lab";
 
-const props = {
+const profile = {
   unitId: "crv18-section-05-02",
   title: "5.2 Node.js：我只需要一个店小二",
-  nodes: ["问题表达", "语言语义", "翻译执行", "运行时权衡", "行为证据"],
-  focuses: ["抽象层级", "类型与状态", "链接边界", "并发模型", "表达代价"],
+  family: "language",
+  nodes: ["接收事件", "发起异步I/O", "系统等待", "回调入队", "事件循环执行"],
+  concepts: ["5.2 Node.js：我只需要一个店小二"],
+  mechanism:
+    "Node.js 让 JavaScript 回调在事件循环阶段运行，许多 I/O 委托给系统后在就绪时回调；长时间 CPU 任务仍会阻塞该线程的其他回调",
+  success: "5.2 Node.js：我只需要一个店小二 的输入、机制、输出与复位轨迹一致",
+  failure:
+    "5.2 Node.js：我只需要一个店小二 在“在请求回调内执行大规模同步计算，使所有连接的事件处理一起延迟”处拒绝",
 } as const;
 
-export function Crv18Section0502ModelLab() {
-  return <OfficialCrv18Lab {...props} mode="model" />;
-}
-export function Crv18Section0502FlowLab() {
-  return <OfficialCrv18Lab {...props} mode="flow" />;
-}
-export function Crv18Section0502EvidenceLab() {
-  return <OfficialCrv18Lab {...props} mode="evidence" />;
+export function Crv18Section0502Lab() {
+  return <CoderMechanismLab {...profile} />;
 }
