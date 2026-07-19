@@ -1,20 +1,69 @@
-import { OfficialCc2eBookLab } from "./official-cc2e-book-lab";
+import { ConstructionMechanismLab } from "./construction-mechanism-lab";
 
-const props = {
+const profile = {
   unitId: "cc2e-31-layout-and-style",
   title: "第31章：布局与风格",
   nodes: ["阅读任务", "格式规则", "自动格式化", "差异审查", "风格维护"],
-  focuses: ["基本原则", "技术", "风格", "控制结构", "文件布局"],
+  concepts: [
+    "第31章 布局与风格",
+    "31.1 基本原则",
+    "布局的极端情况",
+    "格式化的基本原理",
+    "人和计算机对程序的解读",
+    "好布局有什么用？",
+    "把布局作为一种信仰",
+    "良好布局的目标",
+    "31.2 布局技术",
+    "空白区",
+    "括号",
+    "31.3 布局风格",
+    "纯块结构",
+    "模仿纯块结构",
+    "使用begin - end对（大括号）指定块边界",
+    "行尾布局",
+    "哪种风格最优？",
+    "31.4 控制结构的布局",
+    "格式化控制结构块的要点",
+    "其他考虑",
+    "31.5 单条语句的布局",
+    "语句长度",
+    "用空格使语句显得清楚",
+    "格式化后续行",
+    "每行仅写一条语句",
+    "数据声明的布局",
+    "31.6 注释的布局",
+    "31.7 子程序的布局",
+    "31.8 类的布局",
+    "类接口的布局",
+    "类实现的布局",
+    "文件和程序布局",
+    "更多资源",
+    "关键点",
+  ],
+  mechanism:
+    "布局以暴露结构和差异为目标，空白、括号、换行和文件组织由自动格式化保持一致，例外必须改善真实阅读任务",
+  success: "第31章：布局与风格 的机制链、结果和复位轨迹与预测一致",
+  failure:
+    "第31章：布局与风格 在“手工对齐制造巨大无意义 diff，或用格式隐藏复杂表达式”处拒绝",
+  model: {
+    primaryLabel: "基本原则",
+    primaryUnit: "项",
+    primaryInitial: 9,
+    primaryMax: 45,
+    primaryWeight: 1.5,
+    secondaryLabel: "技术",
+    secondaryUnit: "处",
+    secondaryInitial: 2,
+    secondaryMax: 21,
+    secondaryWeight: 8,
+    basePressure: 8,
+    boundaryPenalty: 14,
+    faultPenalty: 18,
+    limit: 60,
+    metricLabel: "风格压力",
+  },
 } as const;
 
-export function Cc2e31LayoutAndStyleStructureLab() {
-  return <OfficialCc2eBookLab {...props} mode="structure" />;
-}
-
-export function Cc2e31LayoutAndStyleTestLab() {
-  return <OfficialCc2eBookLab {...props} mode="test" />;
-}
-
-export function Cc2e31LayoutAndStyleEvidenceLab() {
-  return <OfficialCc2eBookLab {...props} mode="evidence" />;
+export function Cc2e31LayoutAndStyleMechanismLab() {
+  return <ConstructionMechanismLab {...profile} />;
 }
