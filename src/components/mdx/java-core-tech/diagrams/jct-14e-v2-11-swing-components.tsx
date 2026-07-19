@@ -1,7 +1,77 @@
-import { JctContractMapLab, JctCapacityExperimentLab, JctFailureEvidenceLab } from "./official-jct-lab";
+import { OfficialJct25Studio } from "./official-jct-lab";
 
-const stages = ["声明合同", "建立模型", "运行探针", "注入失败", "交接证据"];
+const props = {
+  "unitId": "jct-14e-v2-11-swing-components",
+  "title": "卷II 第11章 Swing 用户界面组件",
+  "concepts": [
+    "Chapter 11: User Interface Components with Swing",
+    "11.1 Swing and the Model-View-Controller Design Pattern",
+    "11.2 Introduction to Layout Management",
+    "11.3 Text Input",
+    "11.4 Choice Components",
+    "11.5 Menus",
+    "11.6 The Grid Bag Layout",
+    "11.7 Custom Layout Managers",
+    "11.8 Dialog Boxes"
+  ],
+  "stages": [
+    "定义模型",
+    "选择布局",
+    "绑定输入",
+    "响应选择",
+    "弹出对话"
+  ],
+  "focuses": [
+    "MVC",
+    "LayoutManager",
+    "Document",
+    "ButtonModel",
+    "Action",
+    "Dialog"
+  ],
+  "model": {
+    "studio": "Swing 组件模型与布局台",
+    "axisA": {
+      "label": "布局策略",
+      "levels": [
+        "绝对坐标",
+        "标准Layout",
+        "自定义约束"
+      ]
+    },
+    "axisB": {
+      "label": "状态位置",
+      "levels": [
+        "视图即模型",
+        "组件Model",
+        "领域Model"
+      ]
+    },
+    "outcomes": {
+      "success": "布局适应率",
+      "risk": "状态耦合风险",
+      "evidence": "可重放证据"
+    },
+    "fault": "使用绝对坐标，在字体缩放或翻译变长后裁切控件，并把视图当唯一业务状态",
+    "task": "改变字体、窗口宽度和Locale，检查布局、键盘焦点与模型状态是否保持",
+    "invariant": "内容变化与窗口缩放不破坏操作顺序和模型值",
+    "probe": "component.getPreferredSize()",
+    "practiceMode": "design",
+    "riskEffects": [
+      1,
+      -1
+    ]
+  }
+} as const;
 
-export function Jct14eV211SwingComponentsMapLab() { return <JctContractMapLab title="卷II 第11章 Swing 用户界面组件 · 合同图" focus="用 MVC、布局、输入、选择、菜单、GridBag、自定义布局和对话框组织可适配界面" stages={stages} />; }
-export function Jct14eV211SwingComponentsExperimentLab() { return <JctCapacityExperimentLab title="卷II 第11章 Swing 用户界面组件 · 容量实验" focus="组件模型图、布局约束表、键盘/缩放/对话框测试" stages={stages} />; }
-export function Jct14eV211SwingComponentsEvidenceLab() { return <JctFailureEvidenceLab title="卷II 第11章 Swing 用户界面组件 · 失败证据" focus="使用绝对坐标假装布局完成，或把视图组件当作业务模型唯一状态源" stages={stages} />; }
+export function Jct14eV211SwingComponentsMapLab() {
+  return <OfficialJct25Studio {...props} mode="map" />;
+}
+
+export function Jct14eV211SwingComponentsExperimentLab() {
+  return <OfficialJct25Studio {...props} mode="experiment" />;
+}
+
+export function Jct14eV211SwingComponentsEvidenceLab() {
+  return <OfficialJct25Studio {...props} mode="evidence" />;
+}
