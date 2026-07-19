@@ -1,7 +1,77 @@
-import { JctContractMapLab, JctCapacityExperimentLab, JctFailureEvidenceLab } from "./official-jct-lab";
+import { OfficialJct25Studio } from "./official-jct-lab";
 
-const stages = ["声明合同", "建立模型", "运行探针", "注入失败", "交接证据"];
+const props = {
+  "unitId": "jct-14e-v2-13-foreign-functions-memory",
+  "title": "卷II 第13章 外部函数与内存 API",
+  "concepts": [
+    "Chapter 13: The Foreign Functions and Memory API",
+    "13.1 Using JNI to Call C Code from a Java Program",
+    "13.2 Using FFM to Call a Foreign Function",
+    "13.3 Arenas",
+    "13.4 Memory Segments",
+    "13.5 Memory Layout",
+    "13.6 Looking Up and Invoking Foreign Functions",
+    "13.7 Callbacks",
+    "13.8 Advanced Topics"
+  ],
+  "stages": [
+    "确认ABI",
+    "建立布局",
+    "分配Arena",
+    "调用外部函数",
+    "关闭与回调"
+  ],
+  "focuses": [
+    "JNI",
+    "Linker",
+    "Arena",
+    "MemorySegment",
+    "MemoryLayout",
+    "upcall"
+  ],
+  "model": {
+    "studio": "FFM ABI 与生命周期台",
+    "axisA": {
+      "label": "互操作方式",
+      "levels": [
+        "JNI桥接",
+        "FFM downcall",
+        "FFM upcall"
+      ]
+    },
+    "axisB": {
+      "label": "Arena寿命",
+      "levels": [
+        "global",
+        "shared",
+        "confined"
+      ]
+    },
+    "outcomes": {
+      "success": "ABI匹配率",
+      "risk": "越界与悬垂风险",
+      "evidence": "可重放证据"
+    },
+    "fault": "MemorySegment逃逸已关闭Arena，或按错误字节序和布局调用本地函数",
+    "task": "改变布局或提前关闭Arena，观察Java侧检查与本地边界，并恢复正确ABI合同",
+    "invariant": "每个外部地址的布局、线程可达性和寿命覆盖完整调用窗口",
+    "probe": "segment.scope().isAlive()",
+    "practiceMode": "diagnosis",
+    "riskEffects": [
+      1,
+      1
+    ]
+  }
+} as const;
 
-export function Jct14eV213ForeignFunctionsMemoryMapLab() { return <JctContractMapLab title="卷II 第13章 外部函数与内存 API · 合同图" focus="比较 JNI 与 FFM，管理 Arena、MemorySegment、MemoryLayout、下调句柄和回调生命周期" stages={stages} />; }
-export function Jct14eV213ForeignFunctionsMemoryExperimentLab() { return <JctCapacityExperimentLab title="卷II 第13章 外部函数与内存 API · 容量实验" focus="ABI 合同、内存布局图、Arena 生命周期与越界/回调压力测试" stages={stages} />; }
-export function Jct14eV213ForeignFunctionsMemoryEvidenceLab() { return <JctFailureEvidenceLab title="卷II 第13章 外部函数与内存 API · 失败证据" focus="让 MemorySegment 逃逸 Arena，或以错误 ABI 布局调用本地函数造成内存破坏" stages={stages} />; }
+export function Jct14eV213ForeignFunctionsMemoryMapLab() {
+  return <OfficialJct25Studio {...props} mode="map" />;
+}
+
+export function Jct14eV213ForeignFunctionsMemoryExperimentLab() {
+  return <OfficialJct25Studio {...props} mode="experiment" />;
+}
+
+export function Jct14eV213ForeignFunctionsMemoryEvidenceLab() {
+  return <OfficialJct25Studio {...props} mode="evidence" />;
+}
