@@ -1,40 +1,74 @@
-import { OfficialJvt2Lab } from "./official-jvt2-lab";
+import { OfficialJvt2Studio } from "./official-jvt2-lab";
 
-const nodes = [
-  "Part 1 Revisiting the foundation for code investigation",
-  "1 Starting to know your apps",
-  "2 Understanding your app’s logic through debugging techniques",
-  "3 Finding problem root causes using advanced debugging techniques",
-  "4 Making the most of logs: Auditing an app’s behavior",
-  "Part 2 Deep diagnosing an app’s execution",
-  "5 Identifying resource consumption problems using profiling techniques",
-  "6 Finding hidden problems using profiling techniques",
-  "7 Investigating locks in multithreaded architectures",
-  "8 Investigating deadlocks with thread dumps",
-  "Part 3 Diagnosing memory-related problems",
-  "9 Profiling memory-related problems",
-  "10 Investigating memory problems with heap dumps",
-  "11 Analyzing potential JVM problems with GC logs",
-  "Part 4 Finding problems in large systems",
-  "12 Uncovering system-level failures and service communication problems",
-  "13 Measuring data consistency and transactions",
-  "Appendices",
-  "Appendix A: Tools you’ll need",
-  "Appendix B: Opening a project",
-  "Appendix C: Recommended further reading",
-  "Appendix D: Understanding Java threads",
-  "Appendix E: Memory management in Java apps",
-  "Appendix F: references"
-];
+const props = {
+  "unitId": "jvt-2e-official-final-review",
+  "unitTitle": "《Troubleshooting Java（第2版）》全书总复习",
+  "concepts": [
+    "Freeze the incident baseline",
+    "Build competing root-cause hypotheses",
+    "Capture low-overhead runtime evidence",
+    "Escalate to thread or heap artifacts safely",
+    "Correlate services and data side effects",
+    "Replay the original failure"
+  ],
+  "stages": [
+    "冻结事件",
+    "建立时间线",
+    "定位首错",
+    "修复反证",
+    "恢复交接"
+  ],
+  "focuses": [
+    "baseline",
+    "logs",
+    "JFR",
+    "dump",
+    "trace",
+    "reconciliation"
+  ],
+  "model": {
+    "studio": "Java故障综合答辩台",
+    "axisA": {
+      "label": "证据层级",
+      "levels": [
+        "单JVM",
+        "资源与转储",
+        "跨服务与数据"
+      ]
+    },
+    "axisB": {
+      "label": "闭环程度",
+      "levels": [
+        "定位",
+        "修复",
+        "同输入重放与恢复"
+      ]
+    },
+    "outcomes": {
+      "signal": "根因复现率",
+      "risk": "证据缺口率",
+      "evidence": "证据闭环度"
+    },
+    "fault": "修复后只看告警消失，没有重放原负载、反例和数据对账",
+    "task": "向未参与者交付可独立推翻或复现根因的完整事件包",
+    "invariant": "原始症状由最小修复消失且正常基线、资源和数据状态全部恢复",
+    "command": "incident bundle: versions + timeline + raw evidence + replay",
+    "practiceMode": "diagnosis",
+    "riskEffects": [
+      1,
+      -1
+    ]
+  }
+} as const;
 
-export function Jvt2InvestigationLab() {
-  return <OfficialJvt2Lab mode="investigation" unitTitle="《Troubleshooting Java（第2版）》全书总复习" focus="用一次跨线程、内存和服务边界的综合事故答辩串联138个正式目录节点，并证明结论可复现可推翻" nodes={nodes} />;
+export function Jvt2eOfficialFinalReviewInvestigationLab() {
+  return <OfficialJvt2Studio {...props} mode="investigation" />;
 }
 
-export function Jvt2TimelineLab() {
-  return <OfficialJvt2Lab mode="timeline" unitTitle="《Troubleshooting Java（第2版）》全书总复习" focus="随机抽取一个正式节点，将其嵌入综合事故，要求另一位读者仅凭档案重放并尝试推翻结论" nodes={nodes} />;
+export function Jvt2eOfficialFinalReviewTimelineLab() {
+  return <OfficialJvt2Studio {...props} mode="timeline" />;
 }
 
-export function Jvt2EvidenceLab() {
-  return <OfficialJvt2Lab mode="evidence" unitTitle="《Troubleshooting Java（第2版）》全书总复习" focus="事故档案、假设演化、原始证据、修复对照、恢复演练、预防项与复核日期" nodes={nodes} />;
+export function Jvt2eOfficialFinalReviewEvidenceLab() {
+  return <OfficialJvt2Studio {...props} mode="evidence" />;
 }
