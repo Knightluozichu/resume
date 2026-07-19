@@ -1,7 +1,76 @@
-import { JctContractMapLab, JctCapacityExperimentLab, JctFailureEvidenceLab } from "./official-jct-lab";
+import { OfficialJct25Studio } from "./official-jct-lab";
 
-const stages = ["声明合同", "建立模型", "运行探针", "注入失败", "交接证据"];
+const props = {
+  "unitId": "jct-14e-v1-09-collections",
+  "title": "卷I 第9章 集合",
+  "concepts": [
+    "Chapter 9: Collections",
+    "9.1 The Java Collections Framework",
+    "9.2 Interfaces in the Collections Framework",
+    "9.3 Concrete Collections",
+    "9.4 Maps",
+    "9.5 Copies and Views",
+    "9.6 Algorithms",
+    "9.7 Legacy Collections"
+  ],
+  "stages": [
+    "声明操作",
+    "选择接口",
+    "选择实现",
+    "执行算法",
+    "验证视图"
+  ],
+  "focuses": [
+    "List",
+    "Set",
+    "Map",
+    "迭代器",
+    "视图",
+    "复杂度"
+  ],
+  "model": {
+    "studio": "集合结构选择器",
+    "axisA": {
+      "label": "主要访问模式",
+      "levels": [
+        "顺序遍历",
+        "成员查询",
+        "键值聚合"
+      ]
+    },
+    "axisB": {
+      "label": "数据语义",
+      "levels": [
+        "允许重复",
+        "保持唯一",
+        "保持排序"
+      ]
+    },
+    "outcomes": {
+      "success": "操作匹配度",
+      "risk": "语义错配成本",
+      "evidence": "可重放证据"
+    },
+    "fault": "在遍历期间结构性修改集合，或把受支持的视图误当成独立副本",
+    "task": "为同一数据分别选择List、Set和Map，测量操作并解释哪种语义改变了结果",
+    "invariant": "实现选择必须守住接口语义与所需复杂度",
+    "probe": "map.merge(key, 1, Integer::sum)",
+    "practiceMode": "code",
+    "riskEffects": [
+      1,
+      -1
+    ]
+  }
+} as const;
 
-export function Jct14eV109CollectionsMapLab() { return <JctContractMapLab title="卷I 第9章 集合 · 合同图" focus="按顺序、唯一性、键值、并发和算法复杂度选择集合及视图" stages={stages} />; }
-export function Jct14eV109CollectionsExperimentLab() { return <JctCapacityExperimentLab title="卷I 第9章 集合 · 容量实验" focus="集合决策表、equals/hashCode 性质测试与视图修改轨迹" stages={stages} />; }
-export function Jct14eV109CollectionsEvidenceLab() { return <JctFailureEvidenceLab title="卷I 第9章 集合 · 失败证据" focus="只按熟悉度选择 ArrayList/HashMap，忽略顺序、重复、视图联动和复杂度边界" stages={stages} />; }
+export function Jct14eV109CollectionsMapLab() {
+  return <OfficialJct25Studio {...props} mode="map" />;
+}
+
+export function Jct14eV109CollectionsExperimentLab() {
+  return <OfficialJct25Studio {...props} mode="experiment" />;
+}
+
+export function Jct14eV109CollectionsEvidenceLab() {
+  return <OfficialJct25Studio {...props} mode="evidence" />;
+}
