@@ -1836,6 +1836,15 @@ export const SECTION_ORDER = [
   "Kotlin权威指南 · 互操作与协程",
   "Kotlin权威指南 · 参考与挑战",
   "Kotlin权威指南 · 全书验收",
+  // 《深入理解Android》Framework三卷
+  "深入Android三卷 · 学习地图",
+  "深入Android三卷 · 卷I Native基础",
+  "深入Android三卷 · 卷I 媒体与设备",
+  "深入Android三卷 · 卷II Java基础",
+  "深入Android三卷 · 卷II 核心服务",
+  "深入Android三卷 · 卷III UI基础",
+  "深入Android三卷 · 卷III UI系统",
+  "深入Android三卷 · 全书验收",
   // 代码质量与重构
   "代码质量入门",
   "整洁代码",

@@ -59,7 +59,7 @@ export function PageToc({ headings }: { headings: TocHeading[] }) {
               <a
                 href={`#${h.id}`}
                 aria-current={active ? "location" : undefined}
-                className={`block rounded-control px-2 py-1 transition-colors duration-(--duration-hover) ease-standard ${
+                className={`block break-words rounded-control px-2 py-1 [overflow-wrap:anywhere] transition-colors duration-(--duration-hover) ease-standard ${
                   active ? "text-accent" : "text-secondary hover:text-primary"
                 }`}
               >
