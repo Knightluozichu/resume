@@ -1,18 +1,25 @@
-import { OfficialCrv18Lab } from "./official-crv18-lab";
+import { CoderMechanismLab } from "./coder-mechanism-lab";
 
-const props = {
+const profile = {
   unitId: "crv18-section-01-06",
   title: "1.6 我是一块硬盘",
-  nodes: ["输入事件", "状态转换", "资源调度", "边界条件", "可见结果"],
-  focuses: ["对象身份", "状态所有权", "调度顺序", "资源上限", "故障证据"],
+  family: "hardware",
+  nodes: ["解析路径", "读取元数据", "定位数据块", "设备传输", "同步持久化"],
+  concepts: [
+    "1.6 我是一块硬盘",
+    "内部结构",
+    "文件",
+    "文件的存放",
+    "管理空闲块",
+    "文件系统",
+  ],
+  mechanism:
+    "文件系统把名称解析为元数据与数据块，并用空闲空间结构分配块；磁盘或块设备只负责持久化块读写",
+  success: "1.6 我是一块硬盘 的输入、机制、输出与复位轨迹一致",
+  failure:
+    "1.6 我是一块硬盘 在“断电前只写目录项而未持久化数据与元数据顺序，恢复后得到悬空或旧内容”处拒绝",
 } as const;
 
-export function Crv18Section0106ModelLab() {
-  return <OfficialCrv18Lab {...props} mode="model" />;
-}
-export function Crv18Section0106FlowLab() {
-  return <OfficialCrv18Lab {...props} mode="flow" />;
-}
-export function Crv18Section0106EvidenceLab() {
-  return <OfficialCrv18Lab {...props} mode="evidence" />;
+export function Crv18Section0106Lab() {
+  return <CoderMechanismLab {...profile} />;
 }
