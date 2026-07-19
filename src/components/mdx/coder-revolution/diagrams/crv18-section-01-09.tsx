@@ -1,18 +1,18 @@
-import { OfficialCrv18Lab } from "./official-crv18-lab";
+import { CoderMechanismLab } from "./coder-mechanism-lab";
 
-const props = {
+const profile = {
   unitId: "crv18-section-01-09",
   title: "1.9 搞清楚Socket",
-  nodes: ["输入事件", "状态转换", "资源调度", "边界条件", "可见结果"],
-  focuses: ["对象身份", "状态所有权", "调度顺序", "资源上限", "故障证据"],
+  family: "network",
+  nodes: ["创建端点", "绑定监听", "建立连接", "收发字节", "关闭连接"],
+  concepts: ["1.9 搞清楚Socket"],
+  mechanism:
+    "socket 是进程访问网络协议栈的端点接口；服务器 bind/listen/accept，客户端 connect，连接由地址、端口和协议状态共同区分",
+  success: "1.9 搞清楚Socket 的输入、机制、输出与复位轨迹一致",
+  failure:
+    "1.9 搞清楚Socket 在“把监听 socket 与 accept 返回的已连接 socket 混为一个状态，导致生命周期和并发处理错误”处拒绝",
 } as const;
 
-export function Crv18Section0109ModelLab() {
-  return <OfficialCrv18Lab {...props} mode="model" />;
-}
-export function Crv18Section0109FlowLab() {
-  return <OfficialCrv18Lab {...props} mode="flow" />;
-}
-export function Crv18Section0109EvidenceLab() {
-  return <OfficialCrv18Lab {...props} mode="evidence" />;
+export function Crv18Section0109Lab() {
+  return <CoderMechanismLab {...profile} />;
 }
