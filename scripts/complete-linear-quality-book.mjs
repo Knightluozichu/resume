@@ -171,13 +171,19 @@ await eachWithConcurrency(
 );
 
 const entries = chapterEntries.map(([key]) => ledger.chapters[key]);
+const unitEvidence = entries.flatMap((entry) => entry.unitEvidence ?? []);
+const officialUnits = unitEvidence.length;
+const officialConcepts = unitEvidence.reduce(
+  (sum, unit) => sum + (unit.total ?? 0),
+  0,
+);
 const parentBody = [
   `《${mapping.bookTitle}》${entries.length}/${entries.length} 章已通过并原子发布。`,
   `- commit: ${args.commit}`,
   `- ${releaseMarker}`,
   `- scores: ${Math.min(...entries.map((entry) => entry.score))}–${Math.max(...entries.map((entry) => entry.score))}`,
-  "- checks: MDX 4373/0 errors；links 4375/0 errors；build 4604 routes；visual 78/78 chapters × 2 viewports",
-  "- manifest: 76 个正式单元、119 个目录节点均具出现/解释/视觉/练习证据",
+  `- checks: MDX 4373/0 errors；links 4375/0 errors；build 4604 routes；visual ${entries.length}/${entries.length} chapters × 2 viewports`,
+  `- manifest: ${officialUnits} 个正式单元、${officialConcepts} 个目录节点均具出现/解释/视觉/练习证据`,
   "- public: 首页、首章、中章、复习页、Pagefind 资源均 200，无错误 LearnOpenGL 归因",
 ].join("\n");
 const parentHasComment = context.parent.comments.nodes.some((comment) =>
