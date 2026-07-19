@@ -138,7 +138,9 @@ await eachWithConcurrency(
   chapterEntries,
   5,
   async ([stableKey, localIssue]) => {
-    const remoteIssue = remoteChildren.get(localIssue.identifier);
+    const remoteIssue = localIssue.sharedWithParent
+      ? context.parent
+      : remoteChildren.get(localIssue.identifier);
     if (!remoteIssue)
       throw new Error(`父任务中找不到章节任务 ${localIssue.identifier}`);
     const entry = ledger.chapters[stableKey];

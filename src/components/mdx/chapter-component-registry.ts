@@ -3599,6 +3599,440 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
           module0.OfficialCodeQualityRefactoringRefactoringTechniquesEvidenceLab,
       } as ChapterMdxComponents;
     },
+  "coder-revolution/00-map/crv18-official-learning-map": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-official-learning-map");
+    return {
+      Crv18OfficialLearningMapLab: module0.Crv18OfficialLearningMapLab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/01-preface/crv18-preface": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-preface");
+    return {
+      Crv18PrefaceLab: module0.Crv18PrefaceLab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/02-chapter-01/crv18-chapter-01": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-chapter-01");
+    return {
+      Crv18Chapter01Lab: module0.Crv18Chapter01Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/03-section-01-01/crv18-section-01-01": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-01-01");
+    return {
+      Crv18Section0101Lab: module0.Crv18Section0101Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/04-section-01-02/crv18-section-01-02": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-01-02");
+    return {
+      Crv18Section0102Lab: module0.Crv18Section0102Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/05-section-01-03/crv18-section-01-03": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-01-03");
+    return {
+      Crv18Section0103Lab: module0.Crv18Section0103Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/06-section-01-04/crv18-section-01-04": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-01-04");
+    return {
+      Crv18Section0104Lab: module0.Crv18Section0104Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/07-section-01-05/crv18-section-01-05": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-01-05");
+    return {
+      Crv18Section0105Lab: module0.Crv18Section0105Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/08-section-01-06/crv18-section-01-06": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-01-06");
+    return {
+      Crv18Section0106Lab: module0.Crv18Section0106Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/09-section-01-07/crv18-section-01-07": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-01-07");
+    return {
+      Crv18Section0107Lab: module0.Crv18Section0107Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/10-section-01-08/crv18-section-01-08": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-01-08");
+    return {
+      Crv18Section0108Lab: module0.Crv18Section0108Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/11-section-01-09/crv18-section-01-09": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-01-09");
+    return {
+      Crv18Section0109Lab: module0.Crv18Section0109Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/12-section-01-10/crv18-section-01-10": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-01-10");
+    return {
+      Crv18Section0110Lab: module0.Crv18Section0110Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/13-section-01-11/crv18-section-01-11": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-01-11");
+    return {
+      Crv18Section0111Lab: module0.Crv18Section0111Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/14-section-01-12/crv18-section-01-12": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-01-12");
+    return {
+      Crv18Section0112Lab: module0.Crv18Section0112Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/15-section-01-13/crv18-section-01-13": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-01-13");
+    return {
+      Crv18Section0113Lab: module0.Crv18Section0113Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/16-section-01-14/crv18-section-01-14": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-01-14");
+    return {
+      Crv18Section0114Lab: module0.Crv18Section0114Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/17-chapter-02/crv18-chapter-02": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-chapter-02");
+    return {
+      Crv18Chapter02Lab: module0.Crv18Chapter02Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/18-section-02-01/crv18-section-02-01": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-02-01");
+    return {
+      Crv18Section0201Lab: module0.Crv18Section0201Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/19-section-02-02/crv18-section-02-02": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-02-02");
+    return {
+      Crv18Section0202Lab: module0.Crv18Section0202Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/20-section-02-03/crv18-section-02-03": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-02-03");
+    return {
+      Crv18Section0203Lab: module0.Crv18Section0203Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/21-section-02-04/crv18-section-02-04": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-02-04");
+    return {
+      Crv18Section0204Lab: module0.Crv18Section0204Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/22-section-02-05/crv18-section-02-05": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-02-05");
+    return {
+      Crv18Section0205Lab: module0.Crv18Section0205Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/23-section-02-06/crv18-section-02-06": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-02-06");
+    return {
+      Crv18Section0206Lab: module0.Crv18Section0206Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/24-section-02-07/crv18-section-02-07": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-02-07");
+    return {
+      Crv18Section0207Lab: module0.Crv18Section0207Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/25-section-02-08/crv18-section-02-08": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-02-08");
+    return {
+      Crv18Section0208Lab: module0.Crv18Section0208Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/26-section-02-09/crv18-section-02-09": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-02-09");
+    return {
+      Crv18Section0209Lab: module0.Crv18Section0209Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/27-section-02-10/crv18-section-02-10": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-02-10");
+    return {
+      Crv18Section0210Lab: module0.Crv18Section0210Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/28-section-02-11/crv18-section-02-11": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-02-11");
+    return {
+      Crv18Section0211Lab: module0.Crv18Section0211Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/29-section-02-12/crv18-section-02-12": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-02-12");
+    return {
+      Crv18Section0212Lab: module0.Crv18Section0212Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/30-section-02-13/crv18-section-02-13": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-02-13");
+    return {
+      Crv18Section0213Lab: module0.Crv18Section0213Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/31-section-02-14/crv18-section-02-14": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-02-14");
+    return {
+      Crv18Section0214Lab: module0.Crv18Section0214Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/32-chapter-03/crv18-chapter-03": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-chapter-03");
+    return {
+      Crv18Chapter03Lab: module0.Crv18Chapter03Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/33-section-03-01/crv18-section-03-01": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-03-01");
+    return {
+      Crv18Section0301Lab: module0.Crv18Section0301Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/34-section-03-02/crv18-section-03-02": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-03-02");
+    return {
+      Crv18Section0302Lab: module0.Crv18Section0302Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/35-section-03-03/crv18-section-03-03": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-03-03");
+    return {
+      Crv18Section0303Lab: module0.Crv18Section0303Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/36-section-03-04/crv18-section-03-04": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-03-04");
+    return {
+      Crv18Section0304Lab: module0.Crv18Section0304Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/37-section-03-05/crv18-section-03-05": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-03-05");
+    return {
+      Crv18Section0305Lab: module0.Crv18Section0305Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/38-section-03-06/crv18-section-03-06": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-03-06");
+    return {
+      Crv18Section0306Lab: module0.Crv18Section0306Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/39-section-03-07/crv18-section-03-07": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-03-07");
+    return {
+      Crv18Section0307Lab: module0.Crv18Section0307Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/40-section-03-08/crv18-section-03-08": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-03-08");
+    return {
+      Crv18Section0308Lab: module0.Crv18Section0308Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/41-section-03-09/crv18-section-03-09": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-03-09");
+    return {
+      Crv18Section0309Lab: module0.Crv18Section0309Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/42-section-03-10/crv18-section-03-10": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-03-10");
+    return {
+      Crv18Section0310Lab: module0.Crv18Section0310Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/43-chapter-04/crv18-chapter-04": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-chapter-04");
+    return {
+      Crv18Chapter04Lab: module0.Crv18Chapter04Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/44-section-04-01/crv18-section-04-01": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-04-01");
+    return {
+      Crv18Section0401Lab: module0.Crv18Section0401Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/45-section-04-02/crv18-section-04-02": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-04-02");
+    return {
+      Crv18Section0402Lab: module0.Crv18Section0402Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/46-section-04-03/crv18-section-04-03": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-04-03");
+    return {
+      Crv18Section0403Lab: module0.Crv18Section0403Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/47-section-04-04/crv18-section-04-04": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-04-04");
+    return {
+      Crv18Section0404Lab: module0.Crv18Section0404Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/48-section-04-05/crv18-section-04-05": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-04-05");
+    return {
+      Crv18Section0405Lab: module0.Crv18Section0405Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/49-chapter-05/crv18-chapter-05": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-chapter-05");
+    return {
+      Crv18Chapter05Lab: module0.Crv18Chapter05Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/50-section-05-01/crv18-section-05-01": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-05-01");
+    return {
+      Crv18Section0501Lab: module0.Crv18Section0501Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/51-section-05-02/crv18-section-05-02": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-05-02");
+    return {
+      Crv18Section0502Lab: module0.Crv18Section0502Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/52-section-05-03/crv18-section-05-03": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-05-03");
+    return {
+      Crv18Section0503Lab: module0.Crv18Section0503Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/53-section-05-04/crv18-section-05-04": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-05-04");
+    return {
+      Crv18Section0504Lab: module0.Crv18Section0504Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/54-section-05-05/crv18-section-05-05": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-05-05");
+    return {
+      Crv18Section0505Lab: module0.Crv18Section0505Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/55-chapter-06/crv18-chapter-06": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-chapter-06");
+    return {
+      Crv18Chapter06Lab: module0.Crv18Chapter06Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/56-section-06-01/crv18-section-06-01": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-06-01");
+    return {
+      Crv18Section0601Lab: module0.Crv18Section0601Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/57-section-06-02/crv18-section-06-02": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-06-02");
+    return {
+      Crv18Section0602Lab: module0.Crv18Section0602Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/58-section-06-03/crv18-section-06-03": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-06-03");
+    return {
+      Crv18Section0603Lab: module0.Crv18Section0603Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/59-section-06-04/crv18-section-06-04": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-06-04");
+    return {
+      Crv18Section0604Lab: module0.Crv18Section0604Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/60-section-06-05/crv18-section-06-05": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-section-06-05");
+    return {
+      Crv18Section0605Lab: module0.Crv18Section0605Lab,
+    } as ChapterMdxComponents;
+  },
+  "coder-revolution/61-review/crv18-official-final-review": async () => {
+    const module0 =
+      await import("@/components/mdx/coder-revolution/diagrams/crv18-official-final-review");
+    return {
+      Crv18OfficialFinalReviewLab: module0.Crv18OfficialFinalReviewLab,
+    } as ChapterMdxComponents;
+  },
   "coding-interviews/00-interview-process/interview-process": async () => {
     const module0 =
       await import("@/components/mdx/coding-interviews/diagrams/interview-process");

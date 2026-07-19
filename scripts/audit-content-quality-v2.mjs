@@ -370,7 +370,7 @@ function parseChapter(filePath, manifests, visualResults) {
     .map((modulePath) => ({ modulePath, source: moduleCorpus(modulePath) }));
   const importedCorpus = importedSources.map((item) => item.source).join("\n");
   const genericWrapper =
-    /OfficialCourseLab|OfficialPoeaa24Lab|OfficialDeZeroLab/.test(
+    /OfficialCourseLab|OfficialPoeaa24Lab|OfficialDeZeroLab|OfficialCrv18Lab/.test(
       importedCorpus,
     );
   const visualComponents = jsxNames.filter((name) => VISUAL_NAME.test(name));

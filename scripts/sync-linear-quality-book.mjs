@@ -103,7 +103,7 @@ const context = await linear(
         states { nodes { id name } }
         labels { nodes { id name } }
       }
-      children(first: 250) { nodes { id identifier title description } }
+      children(first: 250) { nodes { id identifier title description url } }
     }
   }`,
   { master: args.master },
@@ -170,36 +170,53 @@ for (const issue of existingChildren) {
 }
 
 const chapterIssues = {};
+let sharedParentFallbacks = 0;
 for (let index = 0; index < chapters.length; index += 1) {
   const chapter = chapters[index];
   let issue = issueByKey.get(chapter.key);
+  let sharedWithParent = false;
   if (!issue) {
     const number = String(index + 1).padStart(2, "0");
-    const created = await linear(apiKey, createMutation, {
-      input: {
-        teamId: master.team.id,
-        projectId: master.project.id,
-        parentId: parent.id,
-        stateId: inProgress.id,
-        labelIds: [contentLabel.id],
-        title: `章节 ${number}/${chapters.length}｜${chapter.title}`,
-        description: [
-          `stableKey: ${chapter.key}`,
-          `文件：${chapter.path}`,
-          "验收：来源/范围、知识深度、教学设计、专属视觉、实践闭环、可访问性、工程质量；自动审计与 1440×900、390×844 人工验收均通过后进入 In Review。",
-        ].join("\n\n"),
-      },
-    });
-    if (!created.issueCreate.success)
-      throw new Error(`创建章节任务失败: ${chapter.key}`);
-    issue = created.issueCreate.issue;
-    console.log(`created ${issue.identifier} ${chapter.key}`);
+    try {
+      const created = await linear(apiKey, createMutation, {
+        input: {
+          teamId: master.team.id,
+          projectId: master.project.id,
+          parentId: parent.id,
+          stateId: inProgress.id,
+          labelIds: [contentLabel.id],
+          title: `章节 ${number}/${chapters.length}｜${chapter.title}`,
+          description: [
+            `stableKey: ${chapter.key}`,
+            `文件：${chapter.path}`,
+            "验收：来源/范围、知识深度、教学设计、专属视觉、实践闭环、可访问性、工程质量；自动审计与 1440×900、390×844 人工验收均通过后进入 In Review。",
+          ].join("\n\n"),
+        },
+      });
+      if (!created.issueCreate.success)
+        throw new Error(`创建章节任务失败: ${chapter.key}`);
+      issue = created.issueCreate.issue;
+      console.log(`created ${issue.identifier} ${chapter.key}`);
+    } catch (error) {
+      const usageLimited = /USAGE_LIMIT_EXCEEDED|usage limit exceeded/i.test(
+        String(error),
+      );
+      const isFinalReview = index === chapters.length - 1;
+      if (!usageLimited || !isFinalReview) throw error;
+      issue = parent;
+      sharedWithParent = true;
+      sharedParentFallbacks += 1;
+      console.warn(
+        `Linear 免费额度已满：${chapter.key} 临时复用父任务 ${parent.identifier} 作为审查入口`,
+      );
+    }
   }
   chapterIssues[chapter.key] = {
     id: issue.id,
     identifier: issue.identifier,
     title: issue.title,
     url: issue.url,
+    ...(sharedWithParent ? { sharedWithParent: true } : {}),
   };
 }
 
@@ -220,11 +237,24 @@ fs.writeFileSync(
         url: parent.url,
       },
       chapters: chapterIssues,
+      trackingConstraint:
+        sharedParentFallbacks > 0
+          ? {
+              code: "linear-free-issue-limit",
+              sharedParentFallbacks,
+              remediation:
+                "额度升级后为 sharedWithParent 页面补建独立子任务并替换映射。",
+            }
+          : null,
     },
     null,
     2,
   )}\n`,
 );
 console.log(
-  JSON.stringify({ parent: parent.identifier, chapters: chapters.length }),
+  JSON.stringify({
+    parent: parent.identifier,
+    chapters: chapters.length,
+    sharedParentFallbacks,
+  }),
 );

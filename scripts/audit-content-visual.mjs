@@ -220,6 +220,10 @@ async function inspectViewport(page, chapter, viewport, baseUrl) {
           isVisible(element) &&
           !inClosedDrawer(element) &&
           !element.closest(".katex-mathml") &&
+          // SVG path/circle/line 的局部坐标会在 getBoundingClientRect 中包含
+          // viewBox 变换前的巨大几何范围；实际裁切边界由外层 <svg> 决定。
+          // 保留 svg 与 text 的检查，只排除不会独立形成页面溢出的几何图元。
+          !(element instanceof SVGGeometryElement) &&
           !insideHorizontalScroller(element),
       )
       .map((element) => {
