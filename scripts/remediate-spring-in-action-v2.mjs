@@ -130,7 +130,8 @@ function profilesFor(manifest, saved) {
 }
 
 function wrapper(profile) {
-  const props = { unitId: profile.chapterSlug, title: profile.title, concepts: profile.concepts, chain: profile.chain, model: profile.model };
+  const labConcepts = profile.concepts.length > 1 ? profile.concepts : [profile.concepts[0], `${profile.title}：受控失败边界`, `${profile.title}：恢复与发布证据`];
+  const props = { unitId: profile.chapterSlug, title: profile.title, concepts: labConcepts, chain: profile.chain, model: profile.model };
   return `import { OfficialSiaLab } from "./official-sia6-lab";\n\nconst props = ${JSON.stringify(props, null, 2)} as const;\n\nexport function ${profile.componentBase}MapLab() { return <OfficialSiaLab {...props} view="map" />; }\nexport function ${profile.componentBase}ExperimentLab() { return <OfficialSiaLab {...props} view="experiment" />; }\nexport function ${profile.componentBase}EvidenceLab() { return <OfficialSiaLab {...props} view="evidence" />; }\n`;
 }
 

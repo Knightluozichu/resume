@@ -4,7 +4,9 @@ const props = {
   "unitId": "sia-6e-part-3-reactive-spring",
   "title": "Part 3 响应式Spring",
   "concepts": [
-    "Part 3. Reactive Spring"
+    "Part 3. Reactive Spring",
+    "Part 3 响应式Spring：受控失败边界",
+    "Part 3 响应式Spring：恢复与发布证据"
   ],
   "chain": [
     "冻结输入与版本",

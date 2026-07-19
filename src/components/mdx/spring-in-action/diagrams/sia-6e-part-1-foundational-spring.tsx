@@ -4,7 +4,9 @@ const props = {
   "unitId": "sia-6e-part-1-foundational-spring",
   "title": "Part 1 基础Spring",
   "concepts": [
-    "Part 1. Foundational Spring"
+    "Part 1. Foundational Spring",
+    "Part 1 基础Spring：受控失败边界",
+    "Part 1 基础Spring：恢复与发布证据"
   ],
   "chain": [
     "冻结输入与版本",

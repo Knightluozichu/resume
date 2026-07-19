@@ -4,7 +4,9 @@ const props = {
   "unitId": "sia-6e-part-4-deployed-spring",
   "title": "Part 4 部署Spring",
   "concepts": [
-    "Part 4. Deployed Spring"
+    "Part 4. Deployed Spring",
+    "Part 4 部署Spring：受控失败边界",
+    "Part 4 部署Spring：恢复与发布证据"
   ],
   "chain": [
     "冻结输入与版本",

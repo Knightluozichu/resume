@@ -4,7 +4,9 @@ const props = {
   "unitId": "sia-6e-part-2-integrated-spring",
   "title": "Part 2 集成Spring",
   "concepts": [
-    "Part 2. Integrated Spring"
+    "Part 2. Integrated Spring",
+    "Part 2 集成Spring：受控失败边界",
+    "Part 2 集成Spring：恢复与发布证据"
   ],
   "chain": [
     "冻结输入与版本",
