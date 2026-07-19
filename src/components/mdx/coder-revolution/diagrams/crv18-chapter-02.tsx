@@ -1,18 +1,18 @@
-import { OfficialCrv18Lab } from "./official-crv18-lab";
+import { CoderMechanismLab } from "./coder-mechanism-lab";
 
-const props = {
+const profile = {
   unitId: "crv18-chapter-02",
   title: "第2章 Java帝国",
-  nodes: ["业务问题", "稳定接口", "运行时机制", "基础设施协作", "验收证据"],
-  focuses: ["抽象动机", "接口合同", "运行时状态", "替换边界", "回归结果"],
+  family: "java",
+  nodes: ["Java源码", "编译类文件", "类加载", "对象装配", "运行服务"],
+  concepts: ["第2章 Java帝国"],
+  mechanism:
+    "Java 生态用字节码、类加载、接口、容器与库把平台差异和对象装配隔离在稳定合同之后",
+  success: "第2章 Java帝国 的输入、机制、输出与复位轨迹一致",
+  failure:
+    "第2章 Java帝国 在“把框架、虚拟机与语言语法混为同一层，出现问题时无法确定责任边界”处拒绝",
 } as const;
 
-export function Crv18Chapter02ModelLab() {
-  return <OfficialCrv18Lab {...props} mode="model" />;
-}
-export function Crv18Chapter02FlowLab() {
-  return <OfficialCrv18Lab {...props} mode="flow" />;
-}
-export function Crv18Chapter02EvidenceLab() {
-  return <OfficialCrv18Lab {...props} mode="evidence" />;
+export function Crv18Chapter02Lab() {
+  return <CoderMechanismLab {...profile} />;
 }
