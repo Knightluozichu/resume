@@ -3,225 +3,182 @@ title: "步骤43 神经网络"
 type: B
 section: "第4阶段 · 神经网络"
 order: 43
-description: "步骤43 神经网络覆盖5个权威目录层级，以可执行框架合同、数学推导、交互实验和失败对照重建核心。"
+description: "步骤43 神经网络：从“线性回归只能拟合直线”到“非线性网络拟合弯曲决策面”，用独立计算、代码和故障注入验证。"
 demo: true
 math: true
-sourceUrl: "https://www.oreilly.co.jp/books/9784873119069/toc.html"
+sourceUrl: "https://www.oreilly.co.jp/books/9784873119069/"
+qualityVersion: 2
+practiceMode: code
+sourceMode: independent-rewrite
 draft: false
 ---
 
-import {
-  Dl2Step43NeuralNetworkMapLab,
-  Dl2Step43NeuralNetworkExperimentLab,
-  Dl2Step43NeuralNetworkEvidenceLab,
-} from "@/components/mdx/deep-learning-from-scratch-2/diagrams/dl2-step-43-neural-network";
+import { Dl2Step43NeuralNetworkLab } from "@/components/mdx/deep-learning-from-scratch-2/diagrams/dl2-step-43-neural-network";
 import {
   Objectives,
   Callout,
+  Term,
   Glossary,
   GlossaryItem,
-  Term,
   Exercises,
   Answer,
-  Stepper,
-  Step,
   Attribution,
 } from "@/components/mdx/mdx-components";
 
 <Objectives>
 
-- 能解释步骤43 神经网络新增的接口、对象关系、数学规则和适用边界
-- 能计算四个核心方程中的forward值、shape、局部导数或参数更新
-- 能复现三个互动视图，并定位第一条图连接、数值、梯度或模式证据分叉
-- 能判断“张量函数的forward与backward保持shape合同，广播反向用sum_to还原原shape；参数由Layer递归收集并只由Optimizer更新。”是否成立
+- 能说明 步骤43 神经网络 相对前一步新增的责任：非线性网络拟合弯曲决策面
+- 能依据本页数学与状态合同完成推导或验证，并写清输入、输出与 shape
+- 能运行本页最小代码草图，观察 取批数据、模型前向、计算损失、反向传播、参数更新 的因果链
+- 能注入“省略激活函数时多层线性层仍等价于单层线性变换”并在首个错误证据处停止
 
 </Objectives>
 
-## 为什么先冻结框架合同
+## 为什么这一步不能跳过
 
-<Term def="张量是本页第1个核查坐标，用于连接框架接口、数值状态、计算图和失败边界。">
-  张量
-</Term>
-、
-<Term def="shape是本页第2个核查坐标，用于连接框架接口、数值状态、计算图和失败边界。">
-  shape
-</Term>
-、
-<Term def="广播是本页第3个核查坐标，用于连接框架接口、数值状态、计算图和失败边界。">
-  广播
-</Term>
-、
-<Term def="Parameter是本页第4个核查坐标，用于连接框架接口、数值状态、计算图和失败边界。">
-  Parameter
-</Term>
-、
-<Term def="证据重放是本页第5个核查坐标，用于连接框架接口、数值状态、计算图和失败边界。">
-  证据重放
-</Term>
-共同构成本页坐标。步骤43
-神经网络沿“输入合同、前向状态、反向规则、独立测试”扩展DeZero，并保持张量函数的forward与backward保持shape合同，广播反向用sum_to还原原shape；参数由Layer递归收集并只由Optimizer更新。
+步骤43 神经网络 的增量不是 API 名称，而是把 **线性回归只能拟合直线** 变为 **非线性网络拟合弯曲决策面**。它的核心机制是：Linear 与 sigmoid 组合出两层网络，非线性激活使模型超越单一仿射映射。
 
-自制框架的难点不是写出一个能返回数字的函数，而是让自然Python表达式、动态图、反向传播、内存和模式在同一合同下工作。实验先冻结Python/NumPy版本、输入与参数数组、对象身份、随机种子和上一版测试，再预测新能力应最先改变的中间量。
+这一步验收时固定输入数组、随机种子、DeZero 前一步版本与运行设备。先写出预期的 forward、shape、creator 或状态变化，再执行实现；backward 后清空派生梯度并从相同输入重放。这样才能区分本步能力与缓存、旧图或随机性的偶然结果。
 
-每次forward保存输出值、shape、dtype、creator和generation；每次backward保存上游梯度、局部导数、输入梯度和参数梯度。若最终损失下降但对象连接、梯度累加或模式切换错误，训练结果不能采信。修复后清空grad、图、优化器与循环状态，从原始输入完整重放。
+<Callout type="info" title="本步硬合同">
+  前向证据、反向证据和重置后重放必须同时一致。省略激活函数时多层线性层仍等价于单层线性变换
+  时，即使最终 loss 或输出合理，也应判定 步骤43 神经网络 失败。
+</Callout>
 
-## 数学骨架
+## 数学与状态合同
 
 $$
-Y=XW+b
+y=W_2\sigma(W_1x+b_1)+b_2
 $$
 
-$$
-dX=dYW^{\top},\quad dW=X^{\top}dY
-$$
+对 步骤43 神经网络，公式中的每个量都要绑定到实际数组或对象：记录 dtype、shape、设备、creator/generation 或训练模式。若发生广播、归约、转置、时间递推或设备迁移，反向结果必须回到每个输入原有的语义边界。
 
-$$
-L=-\frac1N\sum_n\log p_{n,t_n}
-$$
-
-$$
-\theta_{t+1}=\theta_t-\eta\nabla_{\theta}L
-$$
-
-方程进入代码前先声明输入输出shape、轴和对象所有权。解析梯度与中心差分比较相对误差，参数更新后用新forward独立重算；高阶、GPU或时序模式还要记录是否建图、设备和状态边界。
-
-## 核心机制
-
-1. linear执行仿射变换，激活引入非线性，多层组合由Model统一调用。
-2. 隐藏宽度、输出宽度和任务标签一致，逐层保存shape与激活范围。
-3. 标量自动微分扩展到张量后，每个函数都要明确axis、keepdims与广播语义。forward能运行不代表backward shape正确，必须逐层断言。
-4. reshape与transpose只改变视图或轴顺序，sum压缩轴，broadcast_to扩展单位轴；反向分别执行逆形状、逆置换、广播和sum_to。
-5. Parameter标记可训练Variable，Layer递归发现参数，Model组织层，Optimizer只消费参数与梯度。职责分离使保存、迁移和更新可统一实现。
-6. Dataset与DataLoader把样本访问、预处理、打乱和批量组装分离。训练循环冻结数据折分，并保存批次索引、损失、准确率和更新状态。
-
-## DeZero实现合同
-
-1. **对象合同：** Variable只承载数据、梯度与图连接，Function负责数值变换与局部导数；便利API最终委托核心函数，不能绕过creator设置。
-2. **shape合同：** forward与backward逐轴对称。前向广播、求和、转置或reshape后，反向必须恢复每个输入的原shape，并对重复路径累加。
-3. **顺序合同：** 动态图按实际运行创建，反向按generation拓扑逆序；同一函数只处理一次，同一变量可从多条路径接收贡献。
-4. **模式合同：** no_grad、create_graph、train/test与设备上下文使用成对进入和恢复，异常退出也不能污染全局状态。
-5. **资源合同：** 不需要的中间梯度及时释放，weakref打破循环引用；保存加载、CPU/GPU和DataLoader都保留稳定键、dtype与样本身份。
-6. **测试合同：** 每个新函数至少有forward例、解析backward、数值梯度、shape边界和失败样本；上一版本测试必须继续通过。
-
-## 权威目录逐项讲解
+## 目录单元到教学证据
 
 ### 步骤43 神经网络
 
-linear执行仿射变换，激活引入非线性，多层组合由Model统一调用。 隐藏宽度、输出宽度和任务标签一致，逐层保存shape与激活范围。 验收时保存输入、输出、creator或状态、局部梯度和失败边界，并核对“张量函数的forward与backward保持shape合同，广播反向用sum_to还原原shape；参数由Layer递归收集并只由Optimizer更新。”是否成立。
+在 **步骤43 神经网络** 中，**步骤43 神经网络** 把“线性回归只能拟合直线”推进到“非线性网络拟合弯曲决策面”。本单元的可观察机制是：Linear 与 sigmoid 组合出两层网络，非线性激活使模型超越单一仿射映射。
 
-先预测该单元改变后最早变化的是对象连接、forward值、shape、generation、内存、梯度还是模式，再运行固定小样本。若末端结果合理但首个证据没有出现，应停止并从上一个通过测试的DeZero版本重放。
+核对 **步骤43 神经网络** 时先记录“取批数据”的输入、输出、shape、对象连接或运行模式，再注入反例“省略激活函数时多层线性层仍等价于单层线性变换”。如果最终数值看似合理但这一处首先分叉，实验必须停止并恢复基线。
 
 ### 43.1 DeZero中的linear函数
 
-Function调用先标准化输入，再执行forward，包装输出并设置creator；backward按输入顺序返回局部梯度。 函数连续调用形成动态图，必须用对象身份连接而不是复制数值，否则回溯会失去来源。 验收时保存输入、输出、creator或状态、局部梯度和失败边界，并核对“张量函数的forward与backward保持shape合同，广播反向用sum_to还原原shape；参数由Layer递归收集并只由Optimizer更新。”是否成立。
+在 **步骤43 神经网络** 中，**43.1 DeZero中的linear函数** 把“线性回归只能拟合直线”推进到“非线性网络拟合弯曲决策面”。本单元的可观察机制是：Linear 与 sigmoid 组合出两层网络，非线性激活使模型超越单一仿射映射。
 
-先预测该单元改变后最早变化的是对象连接、forward值、shape、generation、内存、梯度还是模式，再运行固定小样本。若末端结果合理但首个证据没有出现，应停止并从上一个通过测试的DeZero版本重放。
+核对 **43.1 DeZero中的linear函数** 时先记录“模型前向”的输入、输出、shape、对象连接或运行模式，再注入反例“省略激活函数时多层线性层仍等价于单层线性变换”。如果最终数值看似合理但这一处首先分叉，实验必须停止并恢复基线。
 
 ### 43.2 非线性数据集
 
-该步骤把上一阶段的最小接口扩展为可组合框架功能，先固定输入输出和状态所有权，再实现便利API。 验证同时覆盖数值、shape、对象连接、内存和异常边界，任何便利性都不能改变自动微分语义。 验收时保存输入、输出、creator或状态、局部梯度和失败边界，并核对“张量函数的forward与backward保持shape合同，广播反向用sum_to还原原shape；参数由Layer递归收集并只由Optimizer更新。”是否成立。
+在 **步骤43 神经网络** 中，**43.2 非线性数据集** 把“线性回归只能拟合直线”推进到“非线性网络拟合弯曲决策面”。本单元的可观察机制是：Linear 与 sigmoid 组合出两层网络，非线性激活使模型超越单一仿射映射。
 
-先预测该单元改变后最早变化的是对象连接、forward值、shape、generation、内存、梯度还是模式，再运行固定小样本。若末端结果合理但首个证据没有出现，应停止并从上一个通过测试的DeZero版本重放。
+核对 **43.2 非线性数据集** 时先记录“计算损失”的输入、输出、shape、对象连接或运行模式，再注入反例“省略激活函数时多层线性层仍等价于单层线性变换”。如果最终数值看似合理但这一处首先分叉，实验必须停止并恢复基线。
 
 ### 43.3 激活函数和神经网络
 
-Function调用先标准化输入，再执行forward，包装输出并设置creator；backward按输入顺序返回局部梯度。 函数连续调用形成动态图，必须用对象身份连接而不是复制数值，否则回溯会失去来源。 验收时保存输入、输出、creator或状态、局部梯度和失败边界，并核对“张量函数的forward与backward保持shape合同，广播反向用sum_to还原原shape；参数由Layer递归收集并只由Optimizer更新。”是否成立。
+在 **步骤43 神经网络** 中，**43.3 激活函数和神经网络** 把“线性回归只能拟合直线”推进到“非线性网络拟合弯曲决策面”。本单元的可观察机制是：Linear 与 sigmoid 组合出两层网络，非线性激活使模型超越单一仿射映射。
 
-先预测该单元改变后最早变化的是对象连接、forward值、shape、generation、内存、梯度还是模式，再运行固定小样本。若末端结果合理但首个证据没有出现，应停止并从上一个通过测试的DeZero版本重放。
+核对 **43.3 激活函数和神经网络** 时先记录“反向传播”的输入、输出、shape、对象连接或运行模式，再注入反例“省略激活函数时多层线性层仍等价于单层线性变换”。如果最终数值看似合理但这一处首先分叉，实验必须停止并恢复基线。
 
 ### 43.4 神经网络的实现
 
-linear执行仿射变换，激活引入非线性，多层组合由Model统一调用。 隐藏宽度、输出宽度和任务标签一致，逐层保存shape与激活范围。 验收时保存输入、输出、creator或状态、局部梯度和失败边界，并核对“张量函数的forward与backward保持shape合同，广播反向用sum_to还原原shape；参数由Layer递归收集并只由Optimizer更新。”是否成立。
+在 **步骤43 神经网络** 中，**43.4 神经网络的实现** 把“线性回归只能拟合直线”推进到“非线性网络拟合弯曲决策面”。本单元的可观察机制是：Linear 与 sigmoid 组合出两层网络，非线性激活使模型超越单一仿射映射。
 
-先预测该单元改变后最早变化的是对象连接、forward值、shape、generation、内存、梯度还是模式，再运行固定小样本。若末端结果合理但首个证据没有出现，应停止并从上一个通过测试的DeZero版本重放。
+核对 **43.4 神经网络的实现** 时先记录“参数更新”的输入、输出、shape、对象连接或运行模式，再注入反例“省略激活函数时多层线性层仍等价于单层线性变换”。如果最终数值看似合理但这一处首先分叉，实验必须停止并恢复基线。
 
-## 三步交互实验
+## 最小实现草图
 
-先预测单变量变化会最早影响对象图、forward、shape、梯度还是独立测试，再切换基线、边界和失败模式。
+```python
+# 神经网络：每轮都从干净梯度开始
+model.cleargrads()
+pred = model(batch_x)
+loss = objective(pred, batch_t)
+loss.backward()
+optimizer.update()
+```
 
-<Stepper>
-  <Step title="画出对象与计算图">
-    标出Variable、Function、creator、参数、数据或循环状态的所有权与连接。
-    <Dl2Step43NeuralNetworkMapLab />
-  </Step>
-  <Step title="运行单变量实验">
-    固定输入、参数和上一版代码，只改变一个接口、shape、模式或设备条件。
-    <Dl2Step43NeuralNetworkExperimentLab />
-  </Step>
-  <Step title="核对独立证据">
-    比较forward、解析/数值梯度、对象存活、更新与重放测试，定位第一处分叉。
-    <Dl2Step43NeuralNetworkEvidenceLab />
-  </Step>
-</Stepper>
+这段草图不复制原书实现；它只保留 步骤43 神经网络 的可验证接口。实际练习要补齐输入构造、断言和失败样本，并用作者官方仓的对应 step 文件核对行为边界，而不是照抄代码行。
 
-## 常见失败与边界
+## 单变量因果实验
 
-<Callout type="trap">
-  **便利接口绕过核心图：**
-  运算结果数值正确，但输出未设置creator，后续backward在中途停止。所有运算符和包装函数必须委托Function调用。
+先预测改变一个输入后，取批数据 → 模型前向 → 计算损失 → 反向传播 → 参数更新 中哪一项最先变化。操作基线、边界和故障三种场景；保存证据后点击“重置实验”，确认所有状态回到初始值。
+
+<Dl2Step43NeuralNetworkLab />
+
+## 故障诊断
+
+<Callout type="trap" title="误区：省略激活函数时多层线性层仍等价于单层线性变换">
+  这会破坏 步骤43 神经网络 的“非线性网络拟合弯曲决策面”。先检查 取批数据，再沿
+  模型前向、计算损失、反向传播、参数更新
+  顺序定位第一处分叉；不要用最终输出掩盖局部错误。
 </Callout>
 
-<Callout type="trap">
-  **只看训练终点：**
-  错误广播、梯度覆盖、旧缓存、错误模式或测试泄漏可能暂时得到较低损失；必须核对最早中间证据。
+<Callout type="tip" title="恢复顺序">
+  恢复固定输入与模式 → 清空 grad/缓存/隐藏状态 → 重建当前计算图 → 重跑 forward →
+  重跑 backward → 与独立公式或 shape 断言比较。
 </Callout>
 
-<Callout type="tip">
-  **最小重放顺序：**
-  在标量或极小数组上先手算forward与局部导数，再做中心差分、组合图和长训练。首错出现后清空全部派生状态。
-</Callout>
+## 本步小结
 
-## 本章回顾
+步骤43 神经网络 的完成标准是：能从“线性回归只能拟合直线”解释到“非线性网络拟合弯曲决策面”，能用本页数学与状态合同算出或验证关键量，并能诊断“省略激活函数时多层线性层仍等价于单层线性变换”。只出现目录词、只跑通最终 loss 或只展示一张通用计算图都不算通过。
 
-步骤43 神经网络沿“输入合同、前向状态、反向规则、独立测试”扩展DeZero，并保持张量函数的forward与backward保持shape合同，广播反向用sum_to还原原shape；参数由Layer递归收集并只由Optimizer更新。 验收底线是：张量函数的forward与backward保持shape合同，广播反向用sum_to还原原shape；参数由Layer递归收集并只由Optimizer更新。。完成标准是能预测首个中间变化、重放实现、解释失败样本，并证明新能力没有破坏此前测试。
+本步需要准确使用这些术语：<Term def="在 步骤43 神经网络 中对应“取批数据”的可验证对象或状态">步骤43 神经网络</Term>、<Term def="在 步骤43 神经网络 中对应“模型前向”的可验证对象或状态">43.1 DeZero中的linear函数</Term>、<Term def="在 步骤43 神经网络 中对应“计算损失”的可验证对象或状态">43.2 非线性数据集</Term>、<Term def="在 步骤43 神经网络 中对应“反向传播”的可验证对象或状态">43.3 激活函数和神经网络</Term>、<Term def="在 步骤43 神经网络 中对应“参数更新”的可验证对象或状态">43.4 神经网络的实现</Term>。它们必须落到本页实验的数值、shape、对象连接或运行状态上。
 
 <Glossary>
 
-<GlossaryItem term="张量">
-  “张量”对应“冻结输入与版本”：记录对象身份、shape、前向缓存、局部梯度、模式和数值容差；仅有最终输出不足以证明框架正确。
+<GlossaryItem term="步骤43 神经网络">
+  在 步骤43 神经网络 中，步骤43 神经网络
+  对应“取批数据”；验收时必须给出实际数值、shape 或对象状态，不能只复述名称。
 </GlossaryItem>
 
-<GlossaryItem term="shape">
-  “shape”对应“执行forward”：记录对象身份、shape、前向缓存、局部梯度、模式和数值容差；仅有最终输出不足以证明框架正确。
+<GlossaryItem term="43.1 DeZero中的linear函数">
+  在 步骤43 神经网络 中，43.1 DeZero中的linear函数
+  对应“模型前向”；验收时必须给出实际数值、shape 或对象状态，不能只复述名称。
 </GlossaryItem>
 
-<GlossaryItem term="广播">
-  “广播”对应“保存图与shape”：记录对象身份、shape、前向缓存、局部梯度、模式和数值容差；仅有最终输出不足以证明框架正确。
+<GlossaryItem term="43.2 非线性数据集">
+  在 步骤43 神经网络 中，43.2 非线性数据集
+  对应“计算损失”；验收时必须给出实际数值、shape 或对象状态，不能只复述名称。
 </GlossaryItem>
 
-<GlossaryItem term="Parameter">
-  “Parameter”对应“执行backward”：记录对象身份、shape、前向缓存、局部梯度、模式和数值容差；仅有最终输出不足以证明框架正确。
+<GlossaryItem term="43.3 激活函数和神经网络">
+  在 步骤43 神经网络 中，43.3 激活函数和神经网络
+  对应“反向传播”；验收时必须给出实际数值、shape 或对象状态，不能只复述名称。
 </GlossaryItem>
 
-<GlossaryItem term="证据重放">
-  “证据重放”对应“核对数值梯度”：记录对象身份、shape、前向缓存、局部梯度、模式和数值容差；仅有最终输出不足以证明框架正确。
+<GlossaryItem term="43.4 神经网络的实现">
+  在 步骤43 神经网络 中，43.4 神经网络的实现
+  对应“参数更新”；验收时必须给出实际数值、shape 或对象状态，不能只复述名称。
 </GlossaryItem>
 
 </Glossary>
 
 <Exercises>
 
-1. 如何为步骤43 神经网络建立最小可手算的forward/backward测试？
+1. 步骤43 神经网络 相对前一步改变了哪个合同？请用一个最小输入指出最先变化的证据。
 
 <Answer>
-固定一个标量或极小数组、对象身份和上一版实现，按“冻结输入与版本 -> 执行forward -> 保存图与shape -> 执行backward -> 核对数值梯度 -> 独立重放测试”保存中间证据。手算四个方程，并用中心差分比较解析梯度；shape、creator、generation和模式都应符合合同。
+  它把“线性回归只能拟合直线”推进为“非线性网络拟合弯曲决策面”。固定输入后先检查 取批数据，再核对 模型前向 与 计算损失；机制应符合“Linear 与 sigmoid 组合出两层网络，非线性激活使模型超越单一仿射映射”。
+
+目录单元逐项验收：步骤43 神经网络（核对 取批数据）；43.1 DeZero中的linear函数（核对 模型前向）；43.2 非线性数据集（核对 计算损失）；43.3 激活函数和神经网络（核对 反向传播）；43.4 神经网络的实现（核对 参数更新）。每项都要写下预期、实测与复位后的重放证据。
+
 </Answer>
 
-2. 如何证明新便利接口没有绕过DeZero计算图或改变梯度？
+2. 使用本页数学与状态合同做一次手算或 shape 推演，并说明代码中对应的数组或对象。
 
 <Answer>
-  让核心函数与便利写法共享同一输入，逐项比较输出、creator链、generation、解析梯度和数值梯度。两条路径必须在容差内一致，并继续通过所有旧测试。
+  先给公式中的输入标注数值、shape 与设备，得到预期结果后再运行最小草图。步骤43
+  神经网络 的 forward 结果和
+  backward/状态证据必须同时匹配，不能只比较一个最终标量。
 </Answer>
 
-3. 为“张量函数的forward与backward保持shape合同，广播反向用sum_to还原原shape；参数由Layer递归收集并只由Optimizer更新。”构造失败样本并指出停止位置。
+3. 注入“省略激活函数时多层线性层仍等价于单层线性变换”后，如何证明重置真的恢复了实验？
 
 <Answer>
-  可以故意断开creator、覆盖梯度、交换shape轴、复用旧图、忘记恢复模式或混用CPU/GPU。运行前预测第一条被破坏的证据，在该处停止，清空grad、缓存、优化器和状态后重放。
+  保存故障前的输入、取批数据
+  和最终状态；注入故障定位首错后执行本页恢复顺序。重置后的
+  forward、梯度/shape、模式与证据轨迹都应回到基线，随后再次运行得到相同结果。
 </Answer>
 
 </Exercises>
 
-<Attribution
-  adaptedFrom="斋藤康毅著、郑明智译《深度学习入门2：自制框架》，人民邮电出版社，2023年3月，ISBN 9787115607515；原版《ゼロから作るDeep Learning ❸》，O'Reilly Japan，2020年4月20日，552页，ISBN 9784873119069 · 基于官方5阶段、60步骤、207个编号小节与3个附录完整目录的独立教学重构"
-  adaptedUrl="https://www.oreilly.co.jp/books/9784873119069/toc.html"
-/>
+<Attribution />
