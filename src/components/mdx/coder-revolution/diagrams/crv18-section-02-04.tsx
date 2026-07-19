@@ -1,18 +1,26 @@
-import { OfficialCrv18Lab } from "./official-crv18-lab";
+import { CoderMechanismLab } from "./coder-mechanism-lab";
 
-const props = {
+const profile = {
   unitId: "crv18-section-02-04",
   title: "2.4 JDBC的诞生",
-  nodes: ["业务问题", "稳定接口", "运行时机制", "基础设施协作", "验收证据"],
-  focuses: ["抽象动机", "接口合同", "运行时状态", "替换边界", "回归结果"],
+  family: "java",
+  nodes: ["取得连接", "准备语句", "绑定参数", "读取结果", "提交关闭"],
+  concepts: [
+    "2.4 JDBC的诞生",
+    "谈判",
+    "统一接口",
+    "面向接口编程",
+    "简单工厂",
+    "数据驱动",
+    "工厂方法",
+  ],
+  mechanism:
+    "JDBC 以 Driver/DataSource、Connection、PreparedStatement 与 ResultSet 统一关系数据库访问，并把事务提交权留给连接边界",
+  success: "2.4 JDBC的诞生 的输入、机制、输出与复位轨迹一致",
+  failure:
+    "2.4 JDBC的诞生 在“拼接用户输入形成 SQL，既破坏参数类型也引入注入风险”处拒绝",
 } as const;
 
-export function Crv18Section0204ModelLab() {
-  return <OfficialCrv18Lab {...props} mode="model" />;
-}
-export function Crv18Section0204FlowLab() {
-  return <OfficialCrv18Lab {...props} mode="flow" />;
-}
-export function Crv18Section0204EvidenceLab() {
-  return <OfficialCrv18Lab {...props} mode="evidence" />;
+export function Crv18Section0204Lab() {
+  return <CoderMechanismLab {...profile} />;
 }
