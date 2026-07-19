@@ -95,7 +95,7 @@ for (const line of execFileSync("git", ["log", "--format=%H%x09%s", "--all"], {
   maxBuffer: 64 * 1024 * 1024,
 }).split(/\r?\n/)) {
   const [hash, subject = ""] = line.split("\t", 2);
-  const issue = subject.match(/\((HEL-\d+)\)$/)?.[1];
+  const issue = subject.match(/(?:\(|\b)(HEL-\d+)\)?$/)?.[1];
   if (hash && issue && !commitByIssue.has(issue))
     commitByIssue.set(issue, hash);
 }
