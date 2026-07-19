@@ -1,18 +1,27 @@
-import { OfficialPoeaa24Lab } from "./official-poeaa24-lab";
+import { PoeaaDecisionLab } from "./poeaa-decision-lab";
 
-const props = {
+const profile = {
   unitId: "poeaa24-pattern-06-row-data-gateway",
   title: "10.2 行数据入口",
+  family: "mapping",
   nodes: ["领域调用", "数据边界", "查询命令", "映射", "持久化"],
   focuses: ["SQL隔离", "对象身份", "行为位置", "映射成本", "测试替身"],
+  concepts: ["10.2 行数据入口"],
+  decision:
+    "能维护一行一对象的身份和更新语义，并证明业务规则没有被错误塞进入口",
+  healthy: "10.2 行数据入口 的约束仍成立",
+  failure: "10.2 行数据入口 在“SQL隔离”处拒绝",
 } as const;
 
+// 对象关系映射：三个视图分别验证责任、取舍和失败恢复，不再复用全书统一指标。
 export function Poeaa24Pattern06RowDataGatewayBoundaryLab() {
-  return <OfficialPoeaa24Lab {...props} mode="boundary" />;
+  return <PoeaaDecisionLab {...profile} mode="boundary" />;
 }
+
 export function Poeaa24Pattern06RowDataGatewayMappingLab() {
-  return <OfficialPoeaa24Lab {...props} mode="mapping" />;
+  return <PoeaaDecisionLab {...profile} mode="tradeoff" />;
 }
+
 export function Poeaa24Pattern06RowDataGatewayTransactionLab() {
-  return <OfficialPoeaa24Lab {...props} mode="transaction" />;
+  return <PoeaaDecisionLab {...profile} mode="failure" />;
 }
