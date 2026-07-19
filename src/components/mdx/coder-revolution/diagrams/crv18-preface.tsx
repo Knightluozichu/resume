@@ -1,18 +1,17 @@
-import { OfficialCrv18Lab } from "./official-crv18-lab";
+import { CoderMechanismLab } from "./coder-mechanism-lab";
 
-const props = {
+const profile = {
   unitId: "crv18-preface",
   title: "前言",
-  nodes: ["作者动机", "故事方法", "读者对象", "使用边界", "勘误反馈"],
-  focuses: ["Why优先", "类比边界", "基础要求", "独立阅读", "错误修正"],
+  family: "book",
+  nodes: ["故事问题", "真实对象", "状态变化", "边界反例", "迁移复核"],
+  concepts: ["前言"],
+  mechanism:
+    "故事负责建立动机，机制图负责列出对象、状态、边界和可推翻的证据；两者通过一张类比拆解表连接",
+  success: "前言 的输入、机制、输出与复位轨迹一致",
+  failure: "前言 在“复述人物行为却说不出真实组件的输入、状态和失败条件”处拒绝",
 } as const;
 
-export function Crv18PrefaceModelLab() {
-  return <OfficialCrv18Lab {...props} mode="model" />;
-}
-export function Crv18PrefaceFlowLab() {
-  return <OfficialCrv18Lab {...props} mode="flow" />;
-}
-export function Crv18PrefaceEvidenceLab() {
-  return <OfficialCrv18Lab {...props} mode="evidence" />;
+export function Crv18PrefaceLab() {
+  return <CoderMechanismLab {...profile} />;
 }
