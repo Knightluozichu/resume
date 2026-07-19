@@ -1,18 +1,24 @@
-import { OfficialCrv18Lab } from "./official-crv18-lab";
+import { CoderMechanismLab } from "./coder-mechanism-lab";
 
-const props = {
+const profile = {
   unitId: "crv18-section-03-10",
   title: "3.10 HTTP Server：一个差生的逆袭",
-  nodes: ["客户端意图", "协议边界", "服务处理", "数据与扩展", "响应证据"],
-  focuses: ["身份与信任", "消息语义", "并发模型", "扩展策略", "失败恢复"],
+  family: "web",
+  nodes: ["监听连接", "注册兴趣", "等待就绪", "非阻塞读写", "更新兴趣"],
+  concepts: [
+    "3.10 HTTP Server：一个差生的逆袭",
+    "HTTP Server 1.0",
+    "HTTP Server 2.0：多进程",
+    "HTTP Server 3.0：select模型",
+    "HTTP Server 4.0：epoll模型",
+  ],
+  mechanism:
+    "多进程为连接隔离执行上下文，select 扫描描述符集合，epoll 维护关注集合并返回就绪事件；就绪只表示现在可尝试 I/O",
+  success: "3.10 HTTP Server：一个差生的逆袭 的输入、机制、输出与复位轨迹一致",
+  failure:
+    "3.10 HTTP Server：一个差生的逆袭 在“收到可读事件后阻塞读取完整请求，把事件循环卡在一个慢连接上”处拒绝",
 } as const;
 
-export function Crv18Section0310ModelLab() {
-  return <OfficialCrv18Lab {...props} mode="model" />;
-}
-export function Crv18Section0310FlowLab() {
-  return <OfficialCrv18Lab {...props} mode="flow" />;
-}
-export function Crv18Section0310EvidenceLab() {
-  return <OfficialCrv18Lab {...props} mode="evidence" />;
+export function Crv18Section0310Lab() {
+  return <CoderMechanismLab {...profile} />;
 }
