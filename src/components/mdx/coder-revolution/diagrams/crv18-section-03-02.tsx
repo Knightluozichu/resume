@@ -1,18 +1,18 @@
-import { OfficialCrv18Lab } from "./official-crv18-lab";
+import { CoderMechanismLab } from "./coder-mechanism-lab";
 
-const props = {
+const profile = {
   unitId: "crv18-section-03-02",
   title: "3.2 两个程序的爱情故事",
-  nodes: ["客户端意图", "协议边界", "服务处理", "数据与扩展", "响应证据"],
-  focuses: ["身份与信任", "消息语义", "并发模型", "扩展策略", "失败恢复"],
+  family: "network",
+  nodes: ["构造请求", "连接服务", "传输消息", "处理状态", "接收响应"],
+  concepts: ["3.2 两个程序的爱情故事", "好感", "分离", "网络", "Web"],
+  mechanism:
+    "客户端和服务器是独立进程，借助 socket 与应用协议交换带边界的消息；网络会延迟、重复、丢失或中断连接",
+  success: "3.2 两个程序的爱情故事 的输入、机制、输出与复位轨迹一致",
+  failure:
+    "3.2 两个程序的爱情故事 在“客户端超时后重试非幂等请求，服务器实际已成功而产生两次副作用”处拒绝",
 } as const;
 
-export function Crv18Section0302ModelLab() {
-  return <OfficialCrv18Lab {...props} mode="model" />;
-}
-export function Crv18Section0302FlowLab() {
-  return <OfficialCrv18Lab {...props} mode="flow" />;
-}
-export function Crv18Section0302EvidenceLab() {
-  return <OfficialCrv18Lab {...props} mode="evidence" />;
+export function Crv18Section0302Lab() {
+  return <CoderMechanismLab {...profile} />;
 }
