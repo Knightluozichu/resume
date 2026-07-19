@@ -146,7 +146,12 @@ await eachWithConcurrency(
     const entry = ledger.chapters[stableKey];
     if (!entry || entry.status !== "published")
       throw new Error(`章节尚未 published: ${stableKey}`);
-    const chapterCommit = commitByIssue.get(localIssue.identifier);
+    const chapterCommit = localIssue.sharedWithParent
+      ? execFileSync("git", ["log", "-1", "--format=%H", "--", entry.path], {
+          cwd: ROOT,
+          encoding: "utf8",
+        }).trim()
+      : commitByIssue.get(localIssue.identifier);
     if (!chapterCommit)
       throw new Error(`找不到 ${localIssue.identifier} 对应的章级提交`);
     const body = [
