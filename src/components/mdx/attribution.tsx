@@ -50,6 +50,8 @@ export interface AttributionProps {
   mode?: "licensed-adaptation" | "independent-rewrite" | "original";
   /** independent-rewrite 模式下显示的参考书名。 */
   workTitle?: string;
+  /** v2 独立重写实际使用的来源层级。 */
+  sourceBasis?: "full-text" | "authorized-sample" | "outline-only";
 }
 
 export function Attribution({
@@ -58,6 +60,7 @@ export function Attribution({
   adaptedUrl,
   mode,
   workTitle,
+  sourceBasis = "outline-only",
 }: AttributionProps) {
   const cnUrl = sourceUrl?.trim();
 
@@ -82,6 +85,12 @@ export function Attribution({
     const title =
       adaptedFrom?.trim() || workTitle?.trim() || "本章所列参考资料";
     const url = adaptedUrl?.trim() || cnUrl;
+    const basisText =
+      sourceBasis === "full-text"
+        ? "公开完整正文核定章节范围、事实坐标与时代语境"
+        : sourceBasis === "authorized-sample"
+          ? "合法公开试读核定可见范围，并以目录限定未公开部分"
+          : "权威目录界定学习范围";
     return (
       <footer
         aria-label="资料与写作方式声明"
@@ -97,7 +106,8 @@ export function Attribution({
           ) : (
             title
           )}
-          的权威目录界定学习范围，并结合正文列出的技术资料独立重写；不宣称复现原书正文，也不沿用原作表述。
+          的{basisText}
+          ，并结合正文列出的技术资料独立重写；不宣称复现原书正文，也不沿用原作表述。
         </p>
         <p className="mt-2">
           原作版权归作者与出版社所有；本站原创教学结构与表述仅供学习交流。
