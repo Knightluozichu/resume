@@ -18427,9 +18427,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-official-learning-map");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2eOfficialLearningMapInvestigationLab:
+          module0.Jvt2eOfficialLearningMapInvestigationLab,
+        Jvt2eOfficialLearningMapTimelineLab:
+          module0.Jvt2eOfficialLearningMapTimelineLab,
+        Jvt2eOfficialLearningMapEvidenceLab:
+          module0.Jvt2eOfficialLearningMapEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/01-jvt-2e-part-1-foundation/jvt-2e-part-1-foundation":
@@ -18437,9 +18440,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-part-1-foundation");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2ePart1FoundationInvestigationLab:
+          module0.Jvt2ePart1FoundationInvestigationLab,
+        Jvt2ePart1FoundationTimelineLab:
+          module0.Jvt2ePart1FoundationTimelineLab,
+        Jvt2ePart1FoundationEvidenceLab:
+          module0.Jvt2ePart1FoundationEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/02-jvt-2e-01-starting-to-know-apps/jvt-2e-01-starting-to-know-apps":
@@ -18447,9 +18453,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-01-starting-to-know-apps");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2e01StartingToKnowAppsInvestigationLab:
+          module0.Jvt2e01StartingToKnowAppsInvestigationLab,
+        Jvt2e01StartingToKnowAppsTimelineLab:
+          module0.Jvt2e01StartingToKnowAppsTimelineLab,
+        Jvt2e01StartingToKnowAppsEvidenceLab:
+          module0.Jvt2e01StartingToKnowAppsEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/03-jvt-2e-02-debugging-techniques/jvt-2e-02-debugging-techniques":
@@ -18457,9 +18466,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-02-debugging-techniques");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2e02DebuggingTechniquesInvestigationLab:
+          module0.Jvt2e02DebuggingTechniquesInvestigationLab,
+        Jvt2e02DebuggingTechniquesTimelineLab:
+          module0.Jvt2e02DebuggingTechniquesTimelineLab,
+        Jvt2e02DebuggingTechniquesEvidenceLab:
+          module0.Jvt2e02DebuggingTechniquesEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/04-jvt-2e-03-advanced-debugging/jvt-2e-03-advanced-debugging":
@@ -18467,9 +18479,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-03-advanced-debugging");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2e03AdvancedDebuggingInvestigationLab:
+          module0.Jvt2e03AdvancedDebuggingInvestigationLab,
+        Jvt2e03AdvancedDebuggingTimelineLab:
+          module0.Jvt2e03AdvancedDebuggingTimelineLab,
+        Jvt2e03AdvancedDebuggingEvidenceLab:
+          module0.Jvt2e03AdvancedDebuggingEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/05-jvt-2e-04-logs-auditing/jvt-2e-04-logs-auditing":
@@ -18477,9 +18492,10 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-04-logs-auditing");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2e04LogsAuditingInvestigationLab:
+          module0.Jvt2e04LogsAuditingInvestigationLab,
+        Jvt2e04LogsAuditingTimelineLab: module0.Jvt2e04LogsAuditingTimelineLab,
+        Jvt2e04LogsAuditingEvidenceLab: module0.Jvt2e04LogsAuditingEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/06-jvt-2e-part-2-deep-diagnosing/jvt-2e-part-2-deep-diagnosing":
@@ -18487,9 +18503,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-part-2-deep-diagnosing");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2ePart2DeepDiagnosingInvestigationLab:
+          module0.Jvt2ePart2DeepDiagnosingInvestigationLab,
+        Jvt2ePart2DeepDiagnosingTimelineLab:
+          module0.Jvt2ePart2DeepDiagnosingTimelineLab,
+        Jvt2ePart2DeepDiagnosingEvidenceLab:
+          module0.Jvt2ePart2DeepDiagnosingEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/07-jvt-2e-05-resource-profiling/jvt-2e-05-resource-profiling":
@@ -18497,9 +18516,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-05-resource-profiling");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2e05ResourceProfilingInvestigationLab:
+          module0.Jvt2e05ResourceProfilingInvestigationLab,
+        Jvt2e05ResourceProfilingTimelineLab:
+          module0.Jvt2e05ResourceProfilingTimelineLab,
+        Jvt2e05ResourceProfilingEvidenceLab:
+          module0.Jvt2e05ResourceProfilingEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/08-jvt-2e-06-hidden-profiling/jvt-2e-06-hidden-profiling":
@@ -18507,9 +18529,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-06-hidden-profiling");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2e06HiddenProfilingInvestigationLab:
+          module0.Jvt2e06HiddenProfilingInvestigationLab,
+        Jvt2e06HiddenProfilingTimelineLab:
+          module0.Jvt2e06HiddenProfilingTimelineLab,
+        Jvt2e06HiddenProfilingEvidenceLab:
+          module0.Jvt2e06HiddenProfilingEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/09-jvt-2e-07-thread-locks/jvt-2e-07-thread-locks":
@@ -18517,9 +18542,10 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-07-thread-locks");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2e07ThreadLocksInvestigationLab:
+          module0.Jvt2e07ThreadLocksInvestigationLab,
+        Jvt2e07ThreadLocksTimelineLab: module0.Jvt2e07ThreadLocksTimelineLab,
+        Jvt2e07ThreadLocksEvidenceLab: module0.Jvt2e07ThreadLocksEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/10-jvt-2e-08-deadlocks-thread-dumps/jvt-2e-08-deadlocks-thread-dumps":
@@ -18527,9 +18553,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-08-deadlocks-thread-dumps");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2e08DeadlocksThreadDumpsInvestigationLab:
+          module0.Jvt2e08DeadlocksThreadDumpsInvestigationLab,
+        Jvt2e08DeadlocksThreadDumpsTimelineLab:
+          module0.Jvt2e08DeadlocksThreadDumpsTimelineLab,
+        Jvt2e08DeadlocksThreadDumpsEvidenceLab:
+          module0.Jvt2e08DeadlocksThreadDumpsEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/11-jvt-2e-part-3-memory/jvt-2e-part-3-memory":
@@ -18537,9 +18566,10 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-part-3-memory");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2ePart3MemoryInvestigationLab:
+          module0.Jvt2ePart3MemoryInvestigationLab,
+        Jvt2ePart3MemoryTimelineLab: module0.Jvt2ePart3MemoryTimelineLab,
+        Jvt2ePart3MemoryEvidenceLab: module0.Jvt2ePart3MemoryEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/12-jvt-2e-09-memory-profiling/jvt-2e-09-memory-profiling":
@@ -18547,9 +18577,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-09-memory-profiling");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2e09MemoryProfilingInvestigationLab:
+          module0.Jvt2e09MemoryProfilingInvestigationLab,
+        Jvt2e09MemoryProfilingTimelineLab:
+          module0.Jvt2e09MemoryProfilingTimelineLab,
+        Jvt2e09MemoryProfilingEvidenceLab:
+          module0.Jvt2e09MemoryProfilingEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/13-jvt-2e-10-heap-dumps/jvt-2e-10-heap-dumps":
@@ -18557,18 +18590,19 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-10-heap-dumps");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2e10HeapDumpsInvestigationLab:
+          module0.Jvt2e10HeapDumpsInvestigationLab,
+        Jvt2e10HeapDumpsTimelineLab: module0.Jvt2e10HeapDumpsTimelineLab,
+        Jvt2e10HeapDumpsEvidenceLab: module0.Jvt2e10HeapDumpsEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/14-jvt-2e-11-gc-logs/jvt-2e-11-gc-logs": async () => {
     const module0 =
       await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-11-gc-logs");
     return {
-      Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-      Jvt2TimelineLab: module0.Jvt2TimelineLab,
-      Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+      Jvt2e11GcLogsInvestigationLab: module0.Jvt2e11GcLogsInvestigationLab,
+      Jvt2e11GcLogsTimelineLab: module0.Jvt2e11GcLogsTimelineLab,
+      Jvt2e11GcLogsEvidenceLab: module0.Jvt2e11GcLogsEvidenceLab,
     } as ChapterMdxComponents;
   },
   "jvm-troubleshooting/15-jvt-2e-part-4-large-systems/jvt-2e-part-4-large-systems":
@@ -18576,9 +18610,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-part-4-large-systems");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2ePart4LargeSystemsInvestigationLab:
+          module0.Jvt2ePart4LargeSystemsInvestigationLab,
+        Jvt2ePart4LargeSystemsTimelineLab:
+          module0.Jvt2ePart4LargeSystemsTimelineLab,
+        Jvt2ePart4LargeSystemsEvidenceLab:
+          module0.Jvt2ePart4LargeSystemsEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/16-jvt-2e-12-system-failures/jvt-2e-12-system-failures":
@@ -18586,9 +18623,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-12-system-failures");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2e12SystemFailuresInvestigationLab:
+          module0.Jvt2e12SystemFailuresInvestigationLab,
+        Jvt2e12SystemFailuresTimelineLab:
+          module0.Jvt2e12SystemFailuresTimelineLab,
+        Jvt2e12SystemFailuresEvidenceLab:
+          module0.Jvt2e12SystemFailuresEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/17-jvt-2e-13-consistency-transactions/jvt-2e-13-consistency-transactions":
@@ -18596,18 +18636,21 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-13-consistency-transactions");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2e13ConsistencyTransactionsInvestigationLab:
+          module0.Jvt2e13ConsistencyTransactionsInvestigationLab,
+        Jvt2e13ConsistencyTransactionsTimelineLab:
+          module0.Jvt2e13ConsistencyTransactionsTimelineLab,
+        Jvt2e13ConsistencyTransactionsEvidenceLab:
+          module0.Jvt2e13ConsistencyTransactionsEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/18-jvt-2e-appendices/jvt-2e-appendices": async () => {
     const module0 =
       await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-appendices");
     return {
-      Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-      Jvt2TimelineLab: module0.Jvt2TimelineLab,
-      Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+      Jvt2eAppendicesInvestigationLab: module0.Jvt2eAppendicesInvestigationLab,
+      Jvt2eAppendicesTimelineLab: module0.Jvt2eAppendicesTimelineLab,
+      Jvt2eAppendicesEvidenceLab: module0.Jvt2eAppendicesEvidenceLab,
     } as ChapterMdxComponents;
   },
   "jvm-troubleshooting/19-jvt-2e-appendix-a-tools/jvt-2e-appendix-a-tools":
@@ -18615,9 +18658,10 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-appendix-a-tools");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2eAppendixAToolsInvestigationLab:
+          module0.Jvt2eAppendixAToolsInvestigationLab,
+        Jvt2eAppendixAToolsTimelineLab: module0.Jvt2eAppendixAToolsTimelineLab,
+        Jvt2eAppendixAToolsEvidenceLab: module0.Jvt2eAppendixAToolsEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/20-jvt-2e-appendix-b-opening-project/jvt-2e-appendix-b-opening-project":
@@ -18625,9 +18669,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-appendix-b-opening-project");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2eAppendixBOpeningProjectInvestigationLab:
+          module0.Jvt2eAppendixBOpeningProjectInvestigationLab,
+        Jvt2eAppendixBOpeningProjectTimelineLab:
+          module0.Jvt2eAppendixBOpeningProjectTimelineLab,
+        Jvt2eAppendixBOpeningProjectEvidenceLab:
+          module0.Jvt2eAppendixBOpeningProjectEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/21-jvt-2e-appendix-c-reading/jvt-2e-appendix-c-reading":
@@ -18635,9 +18682,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-appendix-c-reading");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2eAppendixCReadingInvestigationLab:
+          module0.Jvt2eAppendixCReadingInvestigationLab,
+        Jvt2eAppendixCReadingTimelineLab:
+          module0.Jvt2eAppendixCReadingTimelineLab,
+        Jvt2eAppendixCReadingEvidenceLab:
+          module0.Jvt2eAppendixCReadingEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/22-jvt-2e-appendix-d-threads/jvt-2e-appendix-d-threads":
@@ -18645,9 +18695,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-appendix-d-threads");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2eAppendixDThreadsInvestigationLab:
+          module0.Jvt2eAppendixDThreadsInvestigationLab,
+        Jvt2eAppendixDThreadsTimelineLab:
+          module0.Jvt2eAppendixDThreadsTimelineLab,
+        Jvt2eAppendixDThreadsEvidenceLab:
+          module0.Jvt2eAppendixDThreadsEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/23-jvt-2e-appendix-e-memory/jvt-2e-appendix-e-memory":
@@ -18655,9 +18708,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-appendix-e-memory");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2eAppendixEMemoryInvestigationLab:
+          module0.Jvt2eAppendixEMemoryInvestigationLab,
+        Jvt2eAppendixEMemoryTimelineLab:
+          module0.Jvt2eAppendixEMemoryTimelineLab,
+        Jvt2eAppendixEMemoryEvidenceLab:
+          module0.Jvt2eAppendixEMemoryEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/24-jvt-2e-appendix-f-references/jvt-2e-appendix-f-references":
@@ -18665,9 +18721,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-appendix-f-references");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2eAppendixFReferencesInvestigationLab:
+          module0.Jvt2eAppendixFReferencesInvestigationLab,
+        Jvt2eAppendixFReferencesTimelineLab:
+          module0.Jvt2eAppendixFReferencesTimelineLab,
+        Jvt2eAppendixFReferencesEvidenceLab:
+          module0.Jvt2eAppendixFReferencesEvidenceLab,
       } as ChapterMdxComponents;
     },
   "jvm-troubleshooting/25-jvt-2e-official-final-review/jvt-2e-official-final-review":
@@ -18675,9 +18734,12 @@ const chapterComponentLoaders: Record<string, ChapterComponentLoader> = {
       const module0 =
         await import("@/components/mdx/jvm-troubleshooting/diagrams/jvt-2e-official-final-review");
       return {
-        Jvt2InvestigationLab: module0.Jvt2InvestigationLab,
-        Jvt2TimelineLab: module0.Jvt2TimelineLab,
-        Jvt2EvidenceLab: module0.Jvt2EvidenceLab,
+        Jvt2eOfficialFinalReviewInvestigationLab:
+          module0.Jvt2eOfficialFinalReviewInvestigationLab,
+        Jvt2eOfficialFinalReviewTimelineLab:
+          module0.Jvt2eOfficialFinalReviewTimelineLab,
+        Jvt2eOfficialFinalReviewEvidenceLab:
+          module0.Jvt2eOfficialFinalReviewEvidenceLab,
       } as ChapterMdxComponents;
     },
   "kafka-definitive-guide/00-learning-map/kfk-official-learning-map":
